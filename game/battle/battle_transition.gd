@@ -1,13 +1,14 @@
 class_name Gen2BattleTransition
 extends RefCounted
 
-## `DoBattleTransition` (engine/battle/battle_transition.asm): what the overworld
-## does between the encounter and the battle screen. Four animations, picked by
-## the lead's level against the opponent's and by the environment, three passes of
-## a palette flash, then one of four ways of going black. The jumptable is walked
-## one entry per frame, which is `.loop`'s own `DelayFrame`. Node-free: it answers
-## with a screen of cells, a DMG palette order and a per-scanline offset, so a
-## whole transition can be stepped headless.
+## `DoBattleTransition` (engine/battle/battle_transition.asm) and Generation 1's
+## `BattleTransition` (engine/battle/battle_transitions.asm): what the overworld
+## does between the encounter and the battle screen. Node-free, so a whole one
+## steps headless, answering with a screen of cells, a DMG palette order and a
+## per-scanline offset. Crystal walks a jumptable an entry a frame and
+## Generation 1 is straight-line, but `BattleTransition_CircleData1` to `...5`
+## are [constant WEDGES] byte for byte and the two half-circle tables cover
+## [constant SPIN_QUADRANTS]' twenty positions.
 
 const COLUMNS: int = 20
 const ROWS: int = 18
@@ -95,6 +96,67 @@ const WEDGES: Dictionary = {
 	4: [4, 1, 4, 0, 3, 1, 3, 0, 2, 1, 2, 0, 1, -1],
 	5: [4, 0, 3, 0, 3, 0, 2, 0, 2, 0, 1, 0, 1, 0, 1, -1],
 }
+## `BattleTransitions`, the jumptable `GetBattleTransitionID_WildOrTrainer`,
+## `..._CompareLevels` and `..._IsDungeonMap` index with one bit each. Only the
+## four wild rows have a caller: nothing puts a Generation 1 trainer on a map,
+## and `..._Shrink` and `..._Split` move the map's own tiles rather than blacking
+## cells, so they want a screen of them.
+const GEN1_TRAINER_BIT: int = 1
+const GEN1_STRONGER_BIT: int = 2
+const GEN1_DUNGEON_BIT: int = 4
+const GEN1_SCENES: Dictionary = {
+	0: [&"gen1_init", &"gen1_flash", &"gen1_double_circle"],
+	GEN1_STRONGER_BIT: [&"gen1_init", &"gen1_flash", &"gen1_circle"],
+	GEN1_DUNGEON_BIT: [&"gen1_init", &"gen1_stripes"],
+	GEN1_DUNGEON_BIT | GEN1_STRONGER_BIT: [&"gen1_init", &"gen1_stripes"],
+}
+
+## `BattleTransition_HalfCircle1` and `...2`, with the Y quadrant their caller
+## passes folded into [method _draw_wedge]'s own two bits: the first table is
+## always drawn downward and the second upward.
+const GEN1_HALF_CIRCLE_1: Array = [
+	[UPPER_RIGHT, 1, 18, 6], [UPPER_RIGHT, 2, 19, 3], [UPPER_RIGHT, 3, 18, 0],
+	[UPPER_RIGHT, 4, 14, 0], [UPPER_RIGHT, 5, 10, 0],
+	[UPPER_LEFT, 5, 9, 0], [UPPER_LEFT, 4, 5, 0], [UPPER_LEFT, 3, 1, 0],
+	[UPPER_LEFT, 2, 0, 3], [UPPER_LEFT, 1, 1, 6],
+]
+const GEN1_HALF_CIRCLE_2: Array = [
+	[LOWER_LEFT, 1, 1, 11], [LOWER_LEFT, 2, 0, 14], [LOWER_LEFT, 3, 1, 17],
+	[LOWER_LEFT, 4, 5, 17], [LOWER_LEFT, 5, 9, 17],
+	[LOWER_RIGHT, 5, 10, 17], [LOWER_RIGHT, 4, 14, 17], [LOWER_RIGHT, 3, 18, 17],
+	[LOWER_RIGHT, 2, 19, 14], [LOWER_RIGHT, 1, 18, 11],
+]
+
+## `BattleTransition_HorizontalStripes` and `..._VerticalStripes`: two cursors
+## from opposite corners, each blacking every second cell of its row or column.
+## A row is the step count, where each cursor starts, what a step moves it by,
+## and the run a cursor writes as a step and a count.
+const GEN1_STRIPES_HORIZONTAL: Array = [
+	20, Vector2i(0, 0), Vector2i(1, 0), Vector2i(19, 1), Vector2i(-1, 0),
+	Vector2i(0, 2), 9,
+]
+const GEN1_STRIPES_VERTICAL: Array = [
+	18, Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 17), Vector2i(0, -1),
+	Vector2i(2, 0), 10,
+]
+
+## `BattleTransition_FlashScreen`'s `ld b, $3` over [constant FLASH_PALETTES]'
+## twelve, two frames each, where Generation 2 walks them as three scenes.
+const GEN1_FLASH_PALETTES: int = 12
+const GEN1_FLASH_FRAMES: int = GEN1_FLASH_PALETTES * 2 * 3
+
+## `BattleTransition_TransferDelay3`, the whole cost of a step of all four: the
+## tiles are written between frames and `Delay3` spends the rest.
+const GEN1_STEP_FRAMES: int = 3
+
+## What `BattleTransition` spends in front of the animation: its caller's
+## `DelayFrame`, then `Delay3`, `DelayFrame` and `Delay3` around the OAM clear.
+const GEN1_LEAD_FRAMES: int = 8
+
+## `BattleTransition_BlackScreen` writes `rBGP`, `rOBP0` and `rOBP1` rather than
+## filling the tilemap, so every colour on screen is drawn as colour 3.
+const GEN1_BLACK_ORDER: int = 0xFF
+
 ## `ld c, 2 / DelayFrames` between wedges, and the three `DelayFrame`s
 ## `.end` spends before it hands to `BATTLETRANSITION_FINISH`.
 ## `StartTrainerBattle_SpeckleToBlack.done` spends the same three; the zoom and
@@ -163,6 +225,9 @@ var _darkness: bool = false
 var _order: int = IDENTITY
 var _ball_drawn: bool = false
 var _sprites: int = SPRITES_ALL
+## Which stripe plan is running, and whether this is `BattleTransition`.
+var _gen1_stripes: Array = []
+var _gen1: bool = false
 var _cells: PackedByteArray = PackedByteArray()
 var _sine: PackedByteArray = PackedByteArray()
 var _rng: RandomNumberGenerator = null
@@ -201,8 +266,24 @@ static func create_outro(rng: RandomNumberGenerator = null) -> Gen2BattleTransit
 	return out
 
 
-## Which scene of the jumptable is running, for a test or a trace: `ball`,
-## `bgmap`, `flash`, `next`, one of the four setups or one of the four outros.
+## `BattleTransition`. [param index] is the three bits the three
+## `GetBattleTransitionID_*` routines set, and a row [constant GEN1_SCENES] does
+## not carry answers null, which is every trainer row.
+static func create_gen1(index: int) -> Gen2BattleTransition:
+	if not GEN1_SCENES.has(index):
+		return null
+	var out := Gen2BattleTransition.new()
+	out._gen1 = true
+	out._scene = GEN1_SCENES[index]
+	out._gen1_stripes = GEN1_STRIPES_VERTICAL if (index & GEN1_STRONGER_BIT) != 0 \
+		else GEN1_STRIPES_HORIZONTAL
+	out._rng = RandomNumberGenerator.new()
+	out._cells = PackedByteArray()
+	out._cells.resize(COLUMNS * ROWS)
+	return out
+
+
+## Which scene is running, for a test or a trace: a key of [constant SCENE_STEPS].
 func scene() -> StringName:
 	if _finished or _step >= _scene.size():
 		return &""
@@ -268,45 +349,58 @@ func advance_frame() -> bool:
 	return true
 
 
+## Which method runs a scene, so a jumptable stays a table.
+const SCENE_STEPS: Dictionary = {
+	&"init": &"_lead_in", &"ball": &"_load_poke_ball_graphics",
+	&"bgmap": &"_begin_bg_map", &"flash": &"_flash", &"next": &"_next",
+	&"wavy_setup": &"_wavy_setup", &"sine": &"_sine_wave_step",
+	&"spin_setup": &"_outro_setup", &"spin": &"_spin_step",
+	&"scatter_setup": &"_scatter_setup", &"scatter": &"_scatter_step",
+	&"zoom": &"_zoom_outro",
+	&"gen1_init": &"_gen1_lead_in", &"gen1_flash": &"_gen1_flash",
+	&"gen1_circle": &"_gen1_circle_step",
+	&"gen1_double_circle": &"_gen1_double_circle_step",
+	&"gen1_stripes": &"_gen1_stripes_step",
+}
+
+
 func _run() -> void:
 	if _step >= _scene.size():
 		_finished = true
 		return
-	match StringName(_scene[_step]):
-		&"init":
-			_delay = LEAD_FRAMES
-			_next()
-		&"ball":
-			_load_poke_ball_graphics()
-		&"bgmap":
-			_counter = 0
-			_next()
-		&"flash":
-			_flash()
-		&"next":
-			_next()
-		&"wavy_setup":
-			_respawn()
-			_counter = 0
-			_sine_offset = 0
-			_next()
-		&"sine":
-			_sine_wave_step()
-		&"spin_setup":
-			_respawn()
-			_counter = 0
-			_next()
-		&"spin":
-			_spin_step()
-		&"scatter_setup":
-			_respawn()
-			_counter = SCATTER_FRAMES
-			_next()
-		&"scatter":
-			_scatter_step()
-		&"zoom":
-			_respawn()
-			_zoom_step()
+	call(SCENE_STEPS[StringName(_scene[_step])])
+
+
+func _lead_in() -> void:
+	_delay = LEAD_FRAMES
+	_next()
+
+
+func _begin_bg_map() -> void:
+	_counter = 0
+	_next()
+
+
+func _wavy_setup() -> void:
+	_outro_setup()
+	_sine_offset = 0
+
+
+func _outro_setup() -> void:
+	_respawn()
+	_counter = 0
+	_next()
+
+
+func _scatter_setup() -> void:
+	_respawn()
+	_counter = SCATTER_FRAMES
+	_next()
+
+
+func _zoom_outro() -> void:
+	_respawn()
+	_zoom_step()
 
 
 ## `RespawnPlayerAndOpponent`, which every one of the four outros opens with:
@@ -398,10 +492,73 @@ func _spin_step() -> void:
 		_delay = SPIN_END_FRAMES
 		_finish()
 		return
-	var entry: Array = SPIN_QUADRANTS[_counter]
-	_draw_wedge(int(entry[0]), int(entry[1]), Vector2i(int(entry[2]), int(entry[3])))
+	_wedge_row(SPIN_QUADRANTS[_counter])
 	_counter += 1
 	_delay = SPIN_STEP_FRAMES
+
+
+## A row of [constant SPIN_QUADRANTS] or of a half-circle table, same columns.
+func _wedge_row(entry: Array) -> void:
+	_draw_wedge(int(entry[0]), int(entry[1]), Vector2i(int(entry[2]), int(entry[3])))
+
+
+## `BattleTransition`'s prologue. Its OAM clear keeps the player's block and the
+## enemy trainer's, which Generation 2 only reaches at its outro.
+func _gen1_lead_in() -> void:
+	_sprites = SPRITES_BATTLERS
+	_delay = GEN1_LEAD_FRAMES
+	_next()
+
+
+## `BattleTransition_FlashScreen_`. Its last write is `dc 3, 2, 1, 0`, so `rBGP`
+## is back at [constant IDENTITY] by the time the wipe starts.
+func _gen1_flash() -> void:
+	@warning_ignore("integer_division")
+	_order = int(FLASH_PALETTES[(_counter / 2) % GEN1_FLASH_PALETTES])
+	_counter += 1
+	if _counter < GEN1_FLASH_FRAMES:
+		return
+	_counter = 0
+	_next()
+
+
+## `BattleTransition_Circle`: `HalfCircle1` whole, then `HalfCircle2`.
+func _gen1_circle_step() -> void:
+	var first: int = GEN1_HALF_CIRCLE_1.size()
+	if _counter >= first + GEN1_HALF_CIRCLE_2.size():
+		_finish()
+		return
+	_wedge_row(GEN1_HALF_CIRCLE_1[_counter] if _counter < first \
+		else GEN1_HALF_CIRCLE_2[_counter - first])
+	_counter += 1
+	_delay = GEN1_STEP_FRAMES - 1
+
+
+## `BattleTransition_DoubleCircle`: the same twenty wedges, a pair a step.
+func _gen1_double_circle_step() -> void:
+	if _counter >= GEN1_HALF_CIRCLE_1.size():
+		_finish()
+		return
+	_wedge_row(GEN1_HALF_CIRCLE_1[_counter])
+	_wedge_row(GEN1_HALF_CIRCLE_2[_counter])
+	_counter += 1
+	_delay = GEN1_STEP_FRAMES - 1
+
+
+## Whichever of the two stripe plans [method create_gen1] seated.
+func _gen1_stripes_step() -> void:
+	if _counter >= int(_gen1_stripes[0]):
+		_finish()
+		return
+	var run: Vector2i = _gen1_stripes[5]
+	for cursor: int in 2:
+		var at: Vector2i = (_gen1_stripes[1 + cursor * 2] as Vector2i) \
+			+ (_gen1_stripes[2 + cursor * 2] as Vector2i) * _counter
+		for _cell: int in int(_gen1_stripes[6]):
+			_write(at.x, at.y, CELL_BLACK)
+			at += run
+	_counter += 1
+	_delay = GEN1_STEP_FRAMES - 1
 
 
 ## `.load`: a run of cells blacked out along a row, then a step back and down
@@ -472,10 +629,12 @@ func _zoom_step() -> void:
 ## zero, which is what takes whatever the outro left to black.
 func _finish() -> void:
 	## Added rather than assigned: [constant SPIN_END_FRAMES] belongs to the outro.
-	_delay += TAIL_FRAMES
+	## Generation 1 adds none: `BattleTransition_BlackScreen` writes three
+	## palette registers and returns.
+	_delay += 0 if _gen1 else TAIL_FRAMES
 	_finished = true
 	_sprites = SPRITES_NONE
-	_order = IDENTITY
+	_order = GEN1_BLACK_ORDER if _gen1 else IDENTITY
 	_cells.fill(CELL_BLACK)
 
 

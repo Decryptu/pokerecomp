@@ -14,6 +14,7 @@ extends SceneTree
 ## which is the pack's USE on that item.
 const KIND_HELP: Dictionary = {
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
+	&"battle_transition": "frames, index: DoBattleTransition over the map. 1 is the trainer branch; a Generation 1 cartridge reads BattleTransitions' own index, 0 the double circle, 2 the circle, 4 the horizontal stripes, 6 the vertical",
 	&"battle": "frames: the wild fight preview_battle_request starts, settled past its transition",
 	&"battle_caught": "frames: the same fight against a species the dex already holds",
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in",
@@ -29,6 +30,12 @@ const KIND_HELP: Dictionary = {
 	&"sign": "none: DisplayTextID's box, read by facing up from where the player stands",
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
+	&"level_evolution": "frames: EvolveAfterBattle's screen that many frames in, each box pressed past as it lands",
+	&"egg_hatch": "frames, slot: OverworldHatchEgg on that party slot, that many frames in",
+	&"whiteout": "presses, frames: Script_Whiteout. 0 the faint line, 1 the first page of _WhitedOutText, 3 the map woken on; a second number stops that many frames into .PlayPoisonSFX instead",
+	&"elevator": "DOWN presses: the floor list bg_event 3's elevator opens, read from the cell below the panel",
+	&"start_menu": "rows down, contest: SetUpMenuItems' list. A second number of 1 runs the Bug Catching Contest and 2 has something caught",
+	&"mailbox": "rows down, A presses: the bedroom PC's MAILBOX",
 	&"magnet_train": "frames, direction: special MagnetTrain, that many frames in. Direction 1 rides to Goldenrod",
 	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
 	&"pet_actor_arc": "cell: the same actor mid-ledge, at the top of the arc its span names",
@@ -505,9 +512,11 @@ func _stage_catch_tutorial() -> void:
 ## `DoBattleTransition` over the map it runs on. The first of the two numbers is how
 ## many frames into it to photograph rather than a cell, since a transition is two
 ## hundred of them and every one is a different picture; the second is 1 for a
-## trainer's, which is the branch that draws the Poke Ball and floods the map.
+## trainer's, which is the branch that draws the Poke Ball and floods the map, and
+## on a Generation 1 cartridge is `BattleTransitions`' own index: 0 the double
+## circle, 2 the circle, 4 the horizontal stripes and 6 the vertical ones.
 func _stage_battle_transition() -> void:
-	_screen.preview_battle_transition(_cell.x, _cell.y != 0)
+	_screen.preview_battle_transition(_cell.x, _cell.y)
 
 
 ## One of the five fade specials over the map it runs on. The first number is the

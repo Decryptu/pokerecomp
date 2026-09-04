@@ -30,8 +30,19 @@ const OAM_YFLIP: int = 1 << 6
 const OAM_XFLIP: int = 1 << 5
 const OAM_PALETTE: int = 0x07
 
-## The white the hardware fills the battle background with.
+## The white the hardware fills the battle background with; Generation 1 fills it
+## with `SuperPalettes`' own, from [method gen1_screen_palette].
 const BACKGROUND: Color = Color.WHITE
+
+## `BlkPacket_Battle`'s five blocks name one of four Super Game Boy palettes for
+## every cell of a Generation 1 battle and `SetPal_Battle` fills them: 0 and 1
+## are `PAL_GREENBAR` plus each side's HP bar colour, 2 and 3 are
+## `DeterminePaletteID`'s. Block 1 gives rows 12 to 17 palette 2 and everything
+## outside them palette 0.
+const GEN1_PAL_PLAYER_BAR: int = 0
+const GEN1_PAL_ENEMY_BAR: int = 1
+const GEN1_PAL_PLAYER_MON: int = 2
+const GEN1_PAL_ENEMY_MON: int = 3
 
 var _data: GameData = null
 var _hud: Gen2BattleHud = null
@@ -110,7 +121,11 @@ func set_battle_data(data: GameData) -> bool:
 	if _hud == null:
 		return false
 
-	add_child(Gen2Screen.Field.create(BACKGROUND))
+	## Palette 0's colour 0, the same white in all three bar rows.
+	var field: Color = BACKGROUND
+	if data.generation == RomRegistry.GEN1:
+		field = data.bar_palette(GameData.HP_BAR_PALETTE_NAMES[0])[0]
+	add_child(Gen2Screen.Field.create(field))
 
 	_enemy_pic = _new_layer()
 	_player_pic = _new_layer()
@@ -578,6 +593,23 @@ func _battler_palette(species: int, slot: int, shiny: bool) -> PackedColorArray:
 	return _remap(_data.palette(species, shiny), _palette_map("bg_palette_maps", slot))
 
 
+## One of `SetPal_Battle`'s four. Every `SuperPalettes` row shares colour 0 and
+## colour 3, so a 1bpp surface reads the same white and near-black out of
+## whichever block covers it; only the bars and the pictures read the two
+## between.
+func gen1_screen_palette(slot: int) -> PackedColorArray:
+	var player: bool = slot == GEN1_PAL_PLAYER_BAR or slot == GEN1_PAL_PLAYER_MON
+	if slot == GEN1_PAL_PLAYER_MON or slot == GEN1_PAL_ENEMY_MON:
+		return _data.palette(
+			int(_view.get("player_species" if player else "enemy_species", 0)),
+			bool(_view.get("player_shiny" if player else "enemy_shiny", false))
+		)
+	return _hp_palette(
+		int(_view.get("player_hp" if player else "enemy_hp", 0)),
+		int(_view.get("player_max_hp" if player else "enemy_max_hp", 0))
+	)
+
+
 ## `_CGB_BattleGrayscale`'s palette while the view says the battle is still in
 ## it, which is every frame up to `GetSGBLayout SCGB_BATTLE_COLORS`. Empty once
 ## the colours are loaded, which is what every other palette here answers to.
@@ -648,9 +680,12 @@ func _draw_panels() -> void:
 				panels, Gen2Screen.WIDTH, player_name, player_level, player_hp, player_max_hp
 			)
 		_draw_trainer_hud_border(panels, border)
+		## Blocks 3 and 2 name palettes 0 and 1 for the two panels; both are
+		## 1bpp, so one layer serves.
 		_show_layer(
 			_panels, panels,
-			PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+			gen1_screen_palette(GEN1_PAL_PLAYER_BAR) if _gen1()
+			else PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 		)
 
 	if _layer_changed(&"enemy_bar", [enemy_hp, enemy_max_hp, enemy_hud, raster]):

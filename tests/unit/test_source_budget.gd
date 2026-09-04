@@ -17,11 +17,11 @@ const MAX_COMMENT_BLOCK: int = 8
 ## it whenever a pass leaves room. It moves up only while a generation the tree
 ## did not carry is being brought in, and then by what that generation's own
 ## files cost: `game/gen1`, `game/rom/rom_import.gd` and `tools/checks/gen1_*`
-## are 655 lines of the 38732 here, and Generation 1's colour, sprites, wild
-## tables, walk, text box, encounter roll, shop, Pokemon Center and battle added
-## 361 more to the shared battle, collision, palette, world, encounter, text,
-## save and renderer code. Four sweeps found no restatement left to pay with.
-const MAX_COMMENT_LINES: int = 38732
+## are 678 lines of the 38876 here, and Generation 1 has added 482 more to the
+## shared battle, world, palette, text, save and renderer code, 121 of them the
+## battle transition, the four split effect routines and `BlkPacket_Battle`.
+## Five sweeps have found no restatement left to pay with.
+const MAX_COMMENT_LINES: int = 38876
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than

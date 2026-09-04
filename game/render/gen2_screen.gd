@@ -437,9 +437,13 @@ func _on_backdrop_source_gone() -> void:
 ## setter, so a fade that recolours the field takes the surround with it without
 ## the screen doing the fade knowing this exists.
 class Field extends ColorRect:
+	## Quantised the way a picture beside it is: a 15-bit colour kept as a float
+	## is truncated on its way into an image and rounded on its way through a
+	## ColorRect, so a surround and the screen over it can be a unit apart in one
+	## channel. `SuperPalettes`' own white is one such colour.
 	static func create(of_color: Color) -> Field:
 		var out := Field.new()
-		out.color = of_color
+		out.color = Gen2PicImage.quantized(PackedColorArray([of_color]))[0]
 		out.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		out.size = Vector2(WIDTH, HEIGHT)
 		return out

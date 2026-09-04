@@ -52,6 +52,9 @@ const STOPPED_BY: Dictionary = {
 	&"recharge": "must recharge!",
 	&"disabled": "is disabled!",
 	&"attract": "is immobilized by love!",
+	## `_CantMoveText`, Generation 1's alone: the target of a trapping move
+	## spends every turn of it held in place.
+	&"held_in_place": "can't move!",
 }
 
 const INFLICTED: Dictionary = {
@@ -5381,6 +5384,7 @@ const LINES: Dictionary = {
 		&"name:side",
 		&"type:type_number",
 	],
+	Gen2Battle.TYPE_COPIED: ["Converted type to %s's!", &"name:target"],
 	Gen2Battle.DISABLE_INFLICTED: [
 		"%s's %s was disabled!",
 		&"name:target",
@@ -5520,6 +5524,7 @@ const LINE_HANDLERS: Dictionary = {
 	Gen2Battle.WEATHER_CONTINUES: &"_weather_text",
 	Gen2Battle.WEATHER_ENDED: &"_weather_text",
 	Gen2Battle.TRAPPED: &"_trapped_text",
+	Gen2Battle.ATTACK_CONTINUES: &"_attack_continues_text",
 	Gen2Battle.SCREEN_SET: &"_screen_set_text",
 	Gen2Battle.SCREEN_FADED: &"_screen_faded_text",
 	Gen2Battle.FLED: &"_fled_text",
@@ -5603,6 +5608,11 @@ func _cannot_move_text(event: Dictionary) -> String:
 		_battler_name(int(event.get("side", Gen2Battle.PLAYER))),
 		STOPPED_BY.get(event["reason"], "cannot move!"),
 	]
+
+
+## `_AttackContinuesText`, printed by `.MultiturnMoveCheck` in front of the hit.
+func _attack_continues_text(event: Dictionary) -> String:
+	return "%s's\nattack continues!" % _battler_name(int(event["side"]))
 
 
 func _status_inflicted_text(event: Dictionary) -> String:
@@ -6088,6 +6098,19 @@ func _enemy_trainer_name() -> String:
 	return String(_data.trainer_party(_enemy_trainer_class, _enemy_trainer_index).get("name", ""))
 
 
+## `BlkPacket_Battle`'s message box block names palette 2, so the box a
+## Generation 1 battle prints in wears the player's own Pokemon's colours.
+func _push_gen1_text_palette() -> void:
+	if _box == null or _data == null or _data.generation != RomRegistry.GEN1:
+		return
+	## A renderer of a mod's own that does not answer leaves it white and black.
+	if _renderer == null or not _renderer.has_method("gen1_screen_palette"):
+		return
+	_box.palette = _renderer.gen1_screen_palette(
+		Gen2BattleRenderer.GEN1_PAL_PLAYER_MON
+	)
+
+
 ## Pushes the current display values to the renderer. Plain values only, never
 ## the battle engine: a turn resolves at once and is then shown an event at a
 ## time, so what is drawn deliberately lags where the battle has got to.
@@ -6095,6 +6118,7 @@ func _push_view() -> void:
 	_update_low_health_alarm()
 	if not _renderer_ready:
 		return
+	_push_gen1_text_palette()
 	_renderer.set_view({
 		"enemy_species": _enemy, "player_species": _player,
 		"enemy_unown_form": _enemy_unown_form,
