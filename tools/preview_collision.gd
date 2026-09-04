@@ -105,10 +105,9 @@ func _draw_map(
 func _tile_palettes(
 	data: GameData, map: Gen2WorldMap, tileset: Gen2WorldTileset, last_map: int
 ) -> Array:
-	if data.generation == RomRegistry.GEN1:
-		return Gen2WorldPalette.gen1_tile_palettes(data, map, tileset, last_map)
 	return Gen2WorldPalette.tile_palettes(
-		data, map, tileset, Gen2WorldPalette.TIME_DAY, -1, -1
+		data, map, tileset, Gen2WorldPalette.TIME_DAY, -1, -1,
+		Gen2WorldPalette.FADE_IDENTITY, false, last_map
 	)
 
 

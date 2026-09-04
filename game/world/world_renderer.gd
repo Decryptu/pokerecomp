@@ -349,6 +349,7 @@ func _tile_palettes_for(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Array:
 		_animation.cave_palette_color() if _animation != null else -1,
 		_fade_order,
 		_fade_white_fill,
+		_world.gen1_last_map(),
 	)
 	if _transition_order == Gen2BattleTransition.IDENTITY:
 		return rows
@@ -916,7 +917,18 @@ func _sprite_palette(palette: int) -> PackedColorArray:
 	if not _transition_palette.is_empty() \
 		and palette in [Gen2WorldEffects.PAL_OW_TREE, Gen2WorldEffects.PAL_OW_ROCK]:
 		return _transition_palette
-	return _world.data.overworld_sprite_palette(palette, _time_of_day)
+	return _overworld_sprite_colors(palette)
+
+
+## A Generation 1 map has no sprite palettes: `BlkPacket_WholeScreen` gives its
+## objects the four colours the background is drawn in, through `GBPalNormal`'s
+## own `rOBP0`.
+func _overworld_sprite_colors(palette: int) -> PackedColorArray:
+	if _world.data.generation != RomRegistry.GEN1:
+		return _world.data.overworld_sprite_palette(palette, _time_of_day)
+	return Gen2WorldPalette.gen1_object_colors(Gen2WorldPalette.gen1_map_colors(
+		_world.data, _world.current_map, _world.gen1_last_map()
+	))
 
 
 func _actor_texture(
@@ -1026,7 +1038,7 @@ func _draw_emote(emote_id: int, pixel: Vector2) -> void:
 ## front of the object covers its legs.
 func _in_grass(cell: Vector2i) -> bool:
 	return _world != null and _world.current_map != null \
-		and Gen2WorldCollision.is_grass(_world.collision_code_at(cell))
+		and Gen2WorldCollision.is_grass(_world.gen2_code_at(cell))
 
 
 ## Redraws the map over the bottom half of a sprite drawn at [param pixel], with
@@ -1347,7 +1359,7 @@ func _draw_fly_mon(sprite: Dictionary, anchor: Vector2) -> void:
 func _effect_palette(sheet: Dictionary, palette_index: int, rotation_step: int) -> PackedColorArray:
 	var own: PackedColorArray = sheet.get("colors", PackedColorArray())
 	if own.is_empty():
-		return _world.data.overworld_sprite_palette(palette_index, _time_of_day)
+		return _overworld_sprite_colors(palette_index)
 	var rotated := PackedColorArray()
 	for slot: int in own.size():
 		rotated.append(own[(slot + rotation_step) % own.size()])

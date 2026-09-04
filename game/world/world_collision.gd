@@ -479,3 +479,122 @@ static func tile_collision_std_index(collision_code: int, is_crystal: bool) -> i
 	var table: Dictionary = TILE_COLLISION_STD_INDEX_CRYSTAL if is_crystal \
 		else TILE_COLLISION_STD_INDEX_GOLD_SILVER
 	return int(table.get(collision_code, -1))
+
+
+## Generation 1 keeps no permission table. `CheckTilePassable` walks the
+## tileset's own list of walkable tiles and the six tables below are the rest of
+## what one step reads. Every byte is the same in Red, Blue and Yellow but for
+## the two rows Yellow adds, each named where it sits.
+
+## `TilePairCollisionsLand` and `TilePairCollisionsWater`, by tileset: two tiles
+## the player may not cross between, in either order.
+const GEN1_TILE_PAIRS_LAND: Dictionary = {
+	3: [[0x30, 0x2E], [0x52, 0x2E], [0x55, 0x2E], [0x56, 0x2E], [0x20, 0x2E],
+		[0x5E, 0x2E], [0x5F, 0x2E]],
+	17: [[0x20, 0x05], [0x41, 0x05], [0x2A, 0x05], [0x05, 0x21]],
+}
+const GEN1_TILE_PAIRS_WATER: Dictionary = {
+	3: [[0x14, 0x2E], [0x48, 0x2E]],
+	17: [[0x14, 0x05]],
+}
+
+## `LedgeTiles`: the facing, the tile stood on and the ledge tile. Its fourth
+## column is the press the hop needs, which is the facing again in all eight
+## rows. `HandleLedges` returns before reading the table off any tileset but
+## OVERWORLD.
+const GEN1_LEDGES: Array = [
+	[FACE_DOWN, 0x2C, 0x37], [FACE_DOWN, 0x39, 0x36], [FACE_DOWN, 0x39, 0x37],
+	[FACE_LEFT, 0x2C, 0x27], [FACE_LEFT, 0x39, 0x27],
+	[FACE_RIGHT, 0x2C, 0x0D], [FACE_RIGHT, 0x2C, 0x1D], [FACE_RIGHT, 0x39, 0x0D],
+]
+
+## `WarpTileListPointers`, the carpets `IsWarpTileInFrontOfPlayer` accepts, keyed
+## by the facing rather than by the tileset.
+const GEN1_WARP_CARPETS: Dictionary = {
+	FACE_DOWN: [0x01, 0x12, 0x17, 0x3D, 0x04, 0x18, 0x33],
+	FACE_UP: [0x01, 0x5C],
+	FACE_LEFT: [0x1A, 0x4B],
+	FACE_RIGHT: [0x0F, 0x4E],
+}
+
+## `WarpTileIDPointers`: the tiles `IsPlayerStandingOnDoorTileOrWarpTile` calls a
+## warp. A tileset with no row of its own warps from nowhere.
+const GEN1_WARP_TILES: Dictionary = {
+	0: [0x1B, 0x58], 1: [0x1A, 0x1C], 2: [0x5E], 3: [0x5A, 0x5C, 0x3A],
+	4: [0x1A, 0x1C], 5: [0x4A], 6: [0x5E], 7: [0x4A], 8: [0x54, 0x5C, 0x32],
+	9: [0x3B, 0x1A, 0x1C], 10: [0x3B, 0x1A, 0x1C], 11: [0x13],
+	12: [0x3B, 0x1A, 0x1C], 13: [0x37, 0x39, 0x1E, 0x4A], 15: [0x1B, 0x13],
+	16: [0x15, 0x55, 0x04], 17: [0x18, 0x1A, 0x22], 18: [0x1A, 0x1C, 0x38],
+	19: [0x1A, 0x1C, 0x53], 20: [0x34], 22: [0x43, 0x58, 0x20, 0x1B, 0x13],
+	23: [0x1B, 0x3B],
+}
+
+## `DoorTileIDPointers`, which is the other half of that question and the half
+## `PlayMapChangeSound` and the step out of a door read. INTERIOR is Yellow's
+## own row; every other one is in all three.
+const GEN1_DOOR_TILES: Dictionary = {
+	0: [0x1B, 0x58], 2: [0x5E], 3: [0x3A], 8: [0x54], 9: [0x3B], 10: [0x3B],
+	12: [0x3B], 13: [0x1E], 16: [0x04, 0x15], 18: [0x1C, 0x38, 0x1A],
+	19: [0x1A, 0x1C, 0x53], 20: [0x34], 22: [0x43, 0x58, 0x1B], 23: [0x3B, 0x1B],
+}
+
+## `DungeonTilesets`: `LoadTilesetHeader` skips `LoadDestinationWarpPosition`
+## when the map entered keeps the tileset already loaded and that tileset is not
+## one of these. All 162 same-tileset warp pairs the corpus ships are dungeon
+## ones, so only a mod-authored map reaches the other branch.
+const GEN1_DUNGEON_TILESETS: Array[int] = [3, 7, 10, 12, 13, 15, 17, 18, 19, 20, 22]
+
+
+## `CheckTilePassable`, with `IsNextTileShoreOrWater`'s own test in front of it,
+## as the permission a Generation 2 collision code would have answered. Tile $14
+## is water only on a `WaterTilesets` row: elsewhere it is Red's own doormat.
+static func gen1_permission(tileset: Gen2WorldTileset, tile: int) -> int:
+	if tileset == null or tile < 0:
+		return WALL_TILE
+	if tileset.water and tile == Gen1Layout.WATER_TILE:
+		return WATER_TILE
+	return LAND_TILE if tileset.tile_passable(tile) else WALL_TILE
+
+
+## `CheckForTilePairCollisions`: whether the pair of tiles stood on and faced is
+## one the tileset forbids crossing. Surfing reads the second table.
+static func gen1_pair_blocked(
+	tileset_number: int, standing: int, ahead: int, surfing: bool
+) -> bool:
+	var table: Dictionary = GEN1_TILE_PAIRS_WATER if surfing else GEN1_TILE_PAIRS_LAND
+	for pair: Array in table.get(tileset_number, []):
+		if standing == pair[0] and ahead == pair[1]:
+			return true
+		if standing == pair[1] and ahead == pair[0]:
+			return true
+	return false
+
+
+## `HandleLedges`, which runs before the passability check and hops on a match.
+static func gen1_allows_hop(
+	tileset_number: int, standing: int, ahead: int, direction: Vector2i
+) -> bool:
+	if tileset_number != Gen1Layout.TILESET_OVERWORLD:
+		return false
+	var face: int = face_mask_for_direction(direction)
+	for row: Array in GEN1_LEDGES:
+		if row[0] == face and row[1] == standing and row[2] == ahead:
+			return true
+	return false
+
+
+static func gen1_is_warp_tile(tileset_number: int, tile: int) -> bool:
+	return (GEN1_WARP_TILES.get(tileset_number, []) as Array).has(tile)
+
+
+static func gen1_is_door_tile(tileset_number: int, tile: int) -> bool:
+	return (GEN1_DOOR_TILES.get(tileset_number, []) as Array).has(tile)
+
+
+static func gen1_is_warp_carpet(direction: Vector2i, tile: int) -> bool:
+	var face: int = face_mask_for_direction(direction)
+	return (GEN1_WARP_CARPETS.get(face, []) as Array).has(tile)
+
+
+static func gen1_is_dungeon_tileset(tileset_number: int) -> bool:
+	return GEN1_DUNGEON_TILESETS.has(tileset_number)
