@@ -89,6 +89,8 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_trainer_names,
 	_verify_palettes,
 	_verify_pic_pointers,
+	_verify_font,
+	_verify_text_box,
 ]
 
 
@@ -260,6 +262,73 @@ static func _verify_pic_pointers(rom: RomFile, layout: Dictionary) -> Dictionary
 	return _ok()
 
 
+## Neither sheet carries a name or a number, so the charmap checks them: one read
+## a tile early or late loses a glyph and gains one in the $C0 to $DF hole.
+static func _verify_font(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var length: int = Gen1Layout.FONT_TILES * PokeTiles.TILE_1BPP_BYTES
+	if not rom.in_bounds(int(layout["font"]), length):
+		return _fail("FontGraphics runs past the end of the dump.")
+
+	for run: Array in Gen1Layout.FONT_INK_RUNS:
+		for code: int in range(int(run[0]), int(run[1]) + 1):
+			if _font_rows(rom, layout, code).count(0) == PokeTiles.TILE_1BPP_BYTES:
+				return _fail("FontGraphics: code $%02X (%s) has no glyph." % [
+					code, Gen1Text.character(code),
+				])
+	for run: Array in Gen1Layout.FONT_BLANK_RUNS:
+		for code: int in range(int(run[0]), int(run[1]) + 1):
+			if _font_rows(rom, layout, code).count(0) != PokeTiles.TILE_1BPP_BYTES:
+				return _fail("FontGraphics: code $%02X has a glyph but no character." % code)
+
+	# Every character leaves its spacing column clear, so a solid row is graphics.
+	for i: int in length:
+		if rom.u8(int(layout["font"]) + i) == 0xFF:
+			return _fail("FontGraphics: solid row at byte %d; not font data." % i)
+	return _ok()
+
+
+## The 2bpp half: every tile draws but the space, and the border's own column is
+## eight rows of one pattern no neighbouring sheet reproduces.
+static func _verify_text_box(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not rom.in_bounds(
+		int(layout["text_box"]), Gen1Layout.FONT_EXTRA_TILES * PokeTiles.TILE_BYTES
+	):
+		return _fail("TextBoxGraphics runs past the end of the dump.")
+
+	var last: int = Gen1Layout.FONT_EXTRA_FIRST_CODE + Gen1Layout.FONT_EXTRA_TILES - 1
+	for code: int in range(Gen1Layout.FONT_EXTRA_FIRST_CODE, last + 1):
+		var blank: bool = _text_box_rows(rom, layout, code).count(0) \
+			== PokeTiles.TILE_1BPP_BYTES
+		if blank != (code == Gen1Layout.SPACE_CODE):
+			return _fail("TextBoxGraphics: code $%02X is %s." % [
+				code, "blank" if blank else "drawn",
+			])
+
+	var vertical: Array[int] = _text_box_rows(rom, layout, Gen1Layout.FRAME_VERTICAL_CODE)
+	if vertical.count(Gen1Layout.FRAME_VERTICAL_ROW) != PokeTiles.TILE_1BPP_BYTES:
+		return _fail("TextBoxGraphics: $%02X is not the border's own column." % \
+			Gen1Layout.FRAME_VERTICAL_CODE)
+	return _ok()
+
+
+## One tile as eight row masks, a set bit per lit pixel; the 2bpp sheet folds
+## its two planes together.
+static func _font_rows(rom: RomFile, layout: Dictionary, code: int) -> Array[int]:
+	var at: int = Gen1Layout.font_glyph_offset(layout, code)
+	var rows: Array[int] = []
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
+		rows.append(rom.u8(at + row))
+	return rows
+
+
+static func _text_box_rows(rom: RomFile, layout: Dictionary, code: int) -> Array[int]:
+	var at: int = Gen1Layout.text_box_glyph_offset(layout, code)
+	var rows: Array[int] = []
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
+		rows.append(rom.u8(at + 2 * row) | rom.u8(at + 2 * row + 1))
+	return rows
+
+
 static func _verify_trainer_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var names: PackedStringArray = Gen1Text.decode_sequence(
 		rom.bytes(), int(layout["trainer_names"]), Gen1Layout.TRAINER_CLASS_COUNT,
@@ -418,6 +487,11 @@ func import_rom(
 		result["message"] = "Could not decode every picture."
 		return result
 	await _breathe(yield_ms)
+	var tiles: Dictionary = _import_tiles(rom, layout)
+	if tiles.is_empty():
+		result["message"] = "Could not write the font."
+		return result
+	await _breathe(yield_ms)
 
 	var sections: Dictionary = {
 		RomCache.species_path(directory): species,
@@ -445,6 +519,7 @@ func import_rom(
 		"matchup_count": matchups.size(),
 		"trainer_count": trainers.size(),
 		"atlases": pics,
+		"tiles": tiles,
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -734,6 +809,44 @@ func _import_pics(
 		if not RomCache.write_indices(RomCache.pic_path(directory, name), atlas["pixels"]):
 			return {}
 		out[name] = PokeTiles.atlas_record(atlas)
+	return out
+
+
+## The two sheets as strips, the shape [GameData] reads either generation's
+## through: `first_code` is the code the first tile draws.
+func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var data: PackedByteArray = rom.bytes()
+	var sheets: Dictionary = {
+		"font": {
+			"offset": int(layout["font"]),
+			"tiles": Gen1Layout.FONT_TILES,
+			"first_code": Gen1Layout.FONT_FIRST_CODE,
+			"bits": 1,
+		},
+		"font_extra": {
+			"offset": int(layout["text_box"]),
+			"tiles": Gen1Layout.FONT_EXTRA_TILES,
+			"first_code": Gen1Layout.FONT_EXTRA_FIRST_CODE,
+			"bits": 2,
+		},
+	}
+	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
+	var out: Dictionary = {}
+	for name: String in sheets:
+		var sheet: Dictionary = sheets[name]
+		var count: int = int(sheet["tiles"])
+		var indices: PackedByteArray = PokeTiles.decode_strip(
+			data, int(sheet["offset"]), count, int(sheet["bits"])
+		)
+		if not RomCache.write_indices(RomCache.tile_path(directory, name), indices):
+			return {}
+		out[name] = {
+			"width": count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
+			"tiles": count,
+			"first_code": int(sheet["first_code"]),
+			"bits": int(sheet["bits"]),
+		}
 	return out
 
 

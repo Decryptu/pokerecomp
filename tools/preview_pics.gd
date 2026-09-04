@@ -11,7 +11,7 @@ const ATLASES: PackedStringArray = [
 	"front", "back", "unown_front", "unown_back", "trainers", "player_back",
 ]
 const SHEETS: PackedStringArray = [
-	"font", "frames", "battle_font", "enemy_hud", "player_hud", "exp_bar",
+	"font", "font_extra", "frames", "battle_font", "enemy_hud", "player_hud", "exp_bar",
 ]
 
 ## Tiles per row when a strip is folded for viewing.
@@ -57,7 +57,11 @@ func _initialize() -> void:
 	elif atlases.has(atlas_name):
 		image = _render(directory, _manifest, atlases[atlas_name], atlas_name, shiny)
 	else:
-		push_error("Nothing named %s in this cache." % atlas_name)
+		var held: PackedStringArray = PackedStringArray(atlases.keys())
+		held.append_array(PackedStringArray(sheets.keys()))
+		push_error("Nothing named %s in this cache. It holds %s." % [
+			atlas_name, ", ".join(held),
+		])
 		quit(1)
 		return
 

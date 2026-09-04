@@ -7471,10 +7471,8 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 
 
 static func _decode_strip(data: PackedByteArray, sheet: Dictionary) -> PackedByteArray:
-	if int(sheet["bits"]) == 1:
-		return PokeTiles.decode_1bpp_strip(data, int(sheet["offset"]), int(sheet["tiles"]))
-	var strip: PackedByteArray = PokeTiles.decode_2bpp_strip(
-		data, int(sheet["offset"]), int(sheet["tiles"])
+	var strip: PackedByteArray = PokeTiles.decode_strip(
+		data, int(sheet["offset"]), int(sheet["tiles"]), int(sheet["bits"])
 	)
 	## Only the card pic carries a column count, and only Crystal stores it that
 	## way; Gold and Silver hold the same picture row-major already.

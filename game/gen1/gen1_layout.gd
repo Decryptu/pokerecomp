@@ -112,6 +112,25 @@ const PIC_INDEX_MEW: int = 0x15
 const PIC_INDEX_FOSSIL_KABUTOPS: int = 0xB6
 const PIC_BANK_FOSSIL_KABUTOPS: int = 0x0B
 
+## `FontGraphics` and `TextBoxGraphics`, which `LoadFontTilePatterns` and
+## `LoadTextBoxTilePatterns` copy to `vFont` and `vChars2 tile $60`. Both are
+## indexed by character code: a byte is already the tile that draws it. The text
+## box's six border tiles at $79 are inside the second, where Generation 2 keeps
+## a table of eight frames of its own.
+const FONT_TILES: int = 128
+const FONT_FIRST_CODE: int = 0x80
+const FONT_EXTRA_TILES: int = 32
+const FONT_EXTRA_FIRST_CODE: int = 0x60
+
+## What checks the two offsets: every code [Gen1Text] draws has ink, the hole
+## between "'v" and "'" has none, the space is the text box's only blank tile,
+## and the border's column is eight rows of one pattern.
+const FONT_INK_RUNS: Array = [[0x80, 0xBF], [0xE0, 0xFF]]
+const FONT_BLANK_RUNS: Array = [[0xC0, 0xDF]]
+const SPACE_CODE: int = 0x7F
+const FRAME_VERTICAL_CODE: int = 0x7C
+const FRAME_VERTICAL_ROW: int = 0b00101000
+
 ## `NUM_TRAINERS`, the trainer classes rather than the individual trainers.
 const TRAINER_CLASS_COUNT: int = 47
 
@@ -156,6 +175,8 @@ const RED_BLUE: Dictionary = {
 	"cries": 0x39446,
 	"trainer_pics": 0x39914,
 	"trainer_pics_bank": 0x13,
+	"font": 0x11A80,
+	"text_box": 0x12288,
 	"pic_player_back": 0x33E0A,
 	"pic_old_man_back": 0x33E9A,
 }
@@ -184,6 +205,8 @@ const YELLOW: Dictionary = {
 	"cries": 0x39462,
 	"trainer_pics": 0x39893,
 	"trainer_pics_bank": 0x13,
+	"font": 0x10600,
+	"text_box": 0x10E18,
 	## Yellow moved both back pics out of "Pics 4" and into their own bank.
 	"pic_player_back": 0xF43B1,
 	"pic_old_man_back": 0xF4441,
@@ -243,6 +266,16 @@ static func cry_offset(layout: Dictionary, index: int) -> int:
 static func trainer_pic_offset(rom: RomFile, layout: Dictionary, trainer_class: int) -> int:
 	var row: int = int(layout["trainer_pics"]) + (trainer_class - 1) * TRAINER_PIC_SIZE
 	return RomFile.linear(int(layout["trainer_pics_bank"]), rom.u16le(row))
+
+
+## The tile one character code draws from: `FontGraphics` is 1bpp from $80,
+## `TextBoxGraphics` 2bpp from $60.
+static func font_glyph_offset(layout: Dictionary, code: int) -> int:
+	return int(layout["font"]) + (code - FONT_FIRST_CODE) * PokeTiles.TILE_1BPP_BYTES
+
+
+static func text_box_glyph_offset(layout: Dictionary, code: int) -> int:
+	return int(layout["text_box"]) + (code - FONT_EXTRA_FIRST_CODE) * PokeTiles.TILE_BYTES
 
 
 ## `NUM_POKEMON + 1` rows in dex order with MISSINGNO's first, so the dex number

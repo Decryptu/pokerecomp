@@ -100,6 +100,16 @@ static func decode_2bpp_strip(data: PackedByteArray, offset: int, count: int) ->
 	return out
 
 
+## Either depth, chosen by what the cartridge stores, so a caller holding a sheet
+## record hands over its `bits` rather than branching on them.
+static func decode_strip(
+	data: PackedByteArray, offset: int, count: int, bits: int
+) -> PackedByteArray:
+	if bits == 1:
+		return decode_1bpp_strip(data, offset, count)
+	return decode_2bpp_strip(data, offset, count)
+
+
 ## Decodes a Pokemon or trainer pic into a row-major index buffer
 ## [param columns] * 8 wide and [param rows] * 8 tall. Pics store tiles
 ## column-major, the whole left column top to bottom then the next, because the
