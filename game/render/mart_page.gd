@@ -329,6 +329,107 @@ func _blit_gen1_list(image: Image, state: Dictionary) -> void:
 	_blit_panel(image, indices, GEN1_LIST_SIZE, GEN1_LIST_AT)
 
 
+## `VendingMachineMenu`'s box: `TextBoxBorder hlcoord 0, 3` at eight by twelve,
+## `DrinkText` on the menu's rows and `DrinkPriceText` on the rows between them,
+## placed rather than right aligned, which is what fits a price in a box six
+## columns narrower than the shop's. Beside it is `BuyMenu`'s own `MONEY_BOX`.
+const GEN1_VENDING_AT: Vector2i = Vector2i(0, 3)
+const GEN1_VENDING_SIZE: Vector2i = Vector2i(14, 10)
+const GEN1_VENDING_NAME_AT: Vector2i = Vector2i(2, 5)
+const GEN1_VENDING_PRICE_AT: Vector2i = Vector2i(9, 6)
+const GEN1_VENDING_CURSOR_COLUMN: int = 1
+
+
+func render_gen1_vending(state: Dictionary) -> Image:
+	if font == null:
+		return null
+	var image := Image.create_empty(
+		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	_blit_gen1_money(image, int(state.get("money", 0)))
+	var indices: PackedByteArray = _panel(GEN1_VENDING_SIZE)
+	var width: int = GEN1_VENDING_SIZE.x * TILE
+	font.draw_box(
+		frame_style, indices, width, 0, 0, GEN1_VENDING_SIZE.x, GEN1_VENDING_SIZE.y
+	)
+	var rows: Array = state.get("rows", [])
+	var name_at: Vector2i = GEN1_VENDING_NAME_AT - GEN1_VENDING_AT
+	var price_at: Vector2i = GEN1_VENDING_PRICE_AT - GEN1_VENDING_AT
+	for index: int in rows.size():
+		var row: Dictionary = rows[index]
+		var step := Vector2i(0, index * ROW_STEP)
+		_text(indices, width, String(row.get("name", "")), name_at + step)
+		_text(indices, width, "¥%d" % int(row.get("price", 0)), price_at + step)
+	_text(indices, width, CANCEL, name_at + Vector2i(0, rows.size() * ROW_STEP))
+	var cursor: int = int(state.get("cursor", -1))
+	if cursor >= 0 and cursor <= rows.size():
+		_code(indices, width, CURSOR_CODE, Vector2i(
+			GEN1_VENDING_CURSOR_COLUMN - GEN1_VENDING_AT.x,
+			name_at.y + cursor * ROW_STEP
+		))
+	_blit_panel(image, indices, GEN1_VENDING_SIZE, GEN1_VENDING_AT)
+	return image
+
+
+## `CeladonPrizeMenu`'s box: `TextBoxBorder hlcoord 0, 2` at eight by sixteen,
+## with `PrintPrizePrice`'s COIN panel where the shop puts its money. A cost is
+## `PrintBCDNumber`'s two bytes with leading zeroes, so always four digits.
+const GEN1_PRIZE_AT: Vector2i = Vector2i(0, 2)
+const GEN1_PRIZE_SIZE: Vector2i = Vector2i(18, 10)
+const GEN1_PRIZE_NAME_AT: Vector2i = Vector2i(2, 4)
+const GEN1_PRIZE_COST_AT: Vector2i = Vector2i(13, 5)
+const GEN1_PRIZE_CURSOR_COLUMN: int = 1
+const GEN1_PRIZE_DIGITS: int = 4
+const GEN1_COIN_LABEL: String = "COIN"
+const GEN1_COIN_LABEL_AT: Vector2i = Vector2i(12, 0)
+const GEN1_COIN_AT: Vector2i = Vector2i(13, 1)
+const GEN1_NO_THANKS: String = "NO THANKS"
+
+
+func render_gen1_prizes(state: Dictionary) -> Image:
+	if font == null:
+		return null
+	var image := Image.create_empty(
+		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	_blit_gen1_coins(image, int(state.get("coins", 0)))
+	var indices: PackedByteArray = _panel(GEN1_PRIZE_SIZE)
+	var width: int = GEN1_PRIZE_SIZE.x * TILE
+	font.draw_box(frame_style, indices, width, 0, 0, GEN1_PRIZE_SIZE.x, GEN1_PRIZE_SIZE.y)
+	var rows: Array = state.get("rows", [])
+	var name_at: Vector2i = GEN1_PRIZE_NAME_AT - GEN1_PRIZE_AT
+	var cost_at: Vector2i = GEN1_PRIZE_COST_AT - GEN1_PRIZE_AT
+	for index: int in rows.size():
+		var row: Dictionary = rows[index]
+		var step := Vector2i(0, index * ROW_STEP)
+		_text(indices, width, String(row.get("name", "")), name_at + step)
+		_text(indices, width, String.num_int64(
+			maxi(int(row.get("cost", 0)), 0)
+		).lpad(GEN1_PRIZE_DIGITS, "0"), cost_at + step)
+	_text(indices, width, GEN1_NO_THANKS, name_at + Vector2i(0, rows.size() * ROW_STEP))
+	var cursor: int = int(state.get("cursor", -1))
+	if cursor >= 0 and cursor <= rows.size():
+		_code(indices, width, CURSOR_CODE, Vector2i(
+			GEN1_PRIZE_CURSOR_COLUMN - GEN1_PRIZE_AT.x, name_at.y + cursor * ROW_STEP
+		))
+	_blit_panel(image, indices, GEN1_PRIZE_SIZE, GEN1_PRIZE_AT)
+	return image
+
+
+## `PrintPrizePrice`: the money box's corners with COIN on the border row.
+func _blit_gen1_coins(image: Image, coins: int) -> void:
+	var indices: PackedByteArray = _panel(MONEY_SIZE)
+	var width: int = MONEY_SIZE.x * TILE
+	font.draw_box(frame_style, indices, width, 0, 0, MONEY_SIZE.x, MONEY_SIZE.y)
+	_text(indices, width, GEN1_COIN_LABEL, GEN1_COIN_LABEL_AT - MONEY_AT)
+	_text(
+		indices, width,
+		String.num_int64(maxi(coins, 0)).lpad(GEN1_PRIZE_DIGITS, "0"),
+		GEN1_COIN_AT - MONEY_AT
+	)
+	_blit_panel(image, indices, MONEY_SIZE, MONEY_AT)
+
+
 static func _panel(size: Vector2i) -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(size.x * TILE * size.y * TILE)

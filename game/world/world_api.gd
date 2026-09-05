@@ -3653,6 +3653,7 @@ var _gen1_last_map: int = -1
 ## The [method GameData.special_text] run `DisplayPokemonCenterDialogue_`'s own
 ## boxes are imported under.
 const GEN1_POKECENTER_RUN: String = "pokecenter"
+const GEN1_CABLE_CLUB_RUN: String = "cable_club"
 
 ## `wRivalName`, which no Generation 1 save model holds yet.
 var gen1_rival_name: String = Gen2WorldScriptRunner.UNNAMED
@@ -3707,7 +3708,7 @@ func _gen1_interact() -> Array:
 	if text_id <= 0:
 		text_id = _gen1_text_id_at(object_facing_cell(), &"objects")
 	var row: Dictionary = current_map.text_at(text_id)
-	_gen1_steps = _gen1_facility_steps(row)
+	_gen1_steps = _gen1_facility_steps(row, text_id)
 	if _gen1_steps.is_empty():
 		var text: String = Gen2TextStream.fill_names(String(row.get("text", "")), {
 			"player": _player_name if not _player_name.is_empty() \
@@ -3722,13 +3723,78 @@ func _gen1_interact() -> Array:
 
 ## `DisplayTextID`'s own dispatch, which reads the first byte of the text a
 ## pointer stands at: a `TX_SCRIPT_*` id runs a routine and prints nothing.
-func _gen1_facility_steps(row: Dictionary) -> Array:
+func _gen1_facility_steps(row: Dictionary, text_id: int = 0) -> Array:
 	match int(row.get("command", 0)):
 		Gen1Layout.TEXT_SCRIPT_MART:
 			return _gen1_mart_steps(row)
 		Gen1Layout.TEXT_SCRIPT_POKECENTER_NURSE:
 			return _gen1_nurse_steps()
+		Gen1Layout.TEXT_SCRIPT_CABLE_CLUB:
+			return _gen1_cable_club_steps()
+		Gen1Layout.TEXT_SCRIPT_VENDING_MACHINE:
+			return _gen1_vending_steps()
+		Gen1Layout.TEXT_SCRIPT_PRIZE_VENDOR:
+			return _gen1_prize_steps(text_id)
 	return []
+
+
+## `GetPrizeMenuId` subtracts `TEXT_GAMECORNERPRIZEROOM_PRIZE_VENDOR_1` from the
+## id that opened it, so a vendor's list is their place among the map's own
+## prize rows.
+func _gen1_prize_steps(text_id: int) -> Array:
+	var menus: Array = data.prize_menus() if data != null else []
+	var first: int = _gen1_first_prize_text()
+	var menu: int = text_id - first
+	if first <= 0 or menu < 0 or menu >= menus.size():
+		return []
+	var chosen: Dictionary = menus[menu]
+	return [{"type": &"request", "values": {
+		"kind": &"prize_requested",
+		"values": {
+			"menu": menu,
+			"tms": bool(chosen.get("tms", false)),
+			"rows": (chosen.get("rows", []) as Array).duplicate(true),
+		},
+	}}]
+
+
+func _gen1_first_prize_text() -> int:
+	if current_map == null:
+		return 0
+	for index: int in current_map.texts.size():
+		if int((current_map.texts[index] as Dictionary).get("command", 0)) \
+			== Gen1Layout.TEXT_SCRIPT_PRIZE_VENDOR:
+			return index + 1
+	return 0
+
+
+## `VendingMachineMenu`, whose list is `VendingPrices` rather than a shelf and
+## whose greeting is the box the menu stands over.
+func _gen1_vending_steps() -> Array:
+	var rows: Array = data.vending_rows() if data != null else []
+	if rows.is_empty():
+		return []
+	return [{"type": &"request", "values": {
+		"kind": &"vending_requested", "values": {"rows": rows},
+	}}]
+
+
+## `CableClubNPC`. Without the Pokedex it is the welcome, sixty frames and
+## `CableClubNPCMakingPreparationsText`; with it, `.establishConnectionLoop`
+## spends `wLinkTimeoutCounter` on a partner that is not there and lands on
+## `.failedToEstablishConnection`. Nothing past that has a caller.
+func _gen1_cable_club_steps() -> Array:
+	var linked: bool = state != null \
+		and state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX)
+	return [
+		_gen1_facility_box(GEN1_CABLE_CLUB_RUN, "welcome"),
+		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_TIMEOUT_FRAMES \
+			if linked else Gen1Layout.CABLE_CLUB_PREPARING_FRAMES),
+		_gen1_facility_box(
+			GEN1_CABLE_CLUB_RUN,
+			"area_reserved" if linked else "making_preparations"
+		),
+	]
 
 
 ## `MartDialog`'s counter is the whole of a Generation 1 shop, so the request
@@ -3763,6 +3829,7 @@ func _gen1_nurse_steps() -> Array:
 				{"type": &"request", "values": {
 					"kind": &"party_heal_requested", "values": {},
 				}},
+				_gen1_heal_machine_step(),
 				_gen1_pokecenter_box("fighting_fit"),
 			] + farewell,
 			"no": farewell,
@@ -3770,12 +3837,51 @@ func _gen1_nurse_steps() -> Array:
 	]
 
 
+## `farcall AnimateHealingMachine`, the step behind `predef HealParty`, which the
+## dialogue waits out before its last two lines. No Generation 1 audio driver, so
+## the sound each ball is placed with plays nothing.
+func _gen1_heal_machine_step() -> Dictionary:
+	var balls: int = int(_party_summary.get("count", 0))
+	var frames: int = balls * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES \
+		+ Gen2WorldEffects.HEAL_MACHINE_FLASHES \
+		* Gen2WorldEffects.HEAL_MACHINE_FLASH_INTERVAL
+	return _gen1_wait_step(&"heal_machine_anim", frames, {
+		"machine_type": 0, "balls": balls, "sounds": [],
+	})
+
+
+## A counted wait, with the `presentation_special_applied` event a screen would
+## start it from when [param presentation] names one.
+func _gen1_wait_step(
+	kind: StringName, frames: int, presentation: Dictionary = {}
+) -> Dictionary:
+	var step: Dictionary = {"type": &"wait", "values": {
+		"type": &"wait",
+		"wait": Gen2WorldScriptRunner.WAIT_FRAMES,
+		"kind": kind,
+		"frames": frames,
+	}}
+	if not presentation.is_empty():
+		var event: Dictionary = presentation.duplicate(true)
+		event["type"] = &"presentation_special_applied"
+		event["kind"] = kind
+		step["events"] = [event]
+	return step
+
+
 func _gen1_pokecenter_box(name: String) -> Dictionary:
-	return {"type": &"text", "text": _gen1_pokecenter_text(name)}
+	return _gen1_facility_box(GEN1_POKECENTER_RUN, name)
 
 
 func _gen1_pokecenter_text(name: String) -> String:
 	return data.special_text(GEN1_POKECENTER_RUN, name) if data != null else ""
+
+
+func _gen1_facility_box(run: String, name: String) -> Dictionary:
+	return {
+		"type": &"text",
+		"text": data.special_text(run, name) if data != null else "",
+	}
 
 
 func _gen1_text_id_at(cell: Vector2i, kind: StringName) -> int:
@@ -3951,6 +4057,13 @@ func _gen1_result() -> Array:
 		}]
 	if type == &"choice":
 		return [{"ok": true, "status": &"waiting", "event": {"type": &"choice"}}]
+	## A counted wait and whatever it starts on the frame it opens on.
+	if type == &"wait":
+		return [{
+			"ok": true, "status": &"waiting",
+			"event": (step["values"] as Dictionary).duplicate(true),
+			"events": (step.get("events", []) as Array).duplicate(true),
+		}]
 	## `AfterDisplayingTextID` ends every box on `WaitForTextScrollButtonPress`,
 	## whatever the string's last byte said.
 	return [{
@@ -4040,6 +4153,9 @@ func pending_script_input() -> Dictionary:
 ## [method pending_runtime_request] because no host answers it: only frames do,
 ## through [method advance_script_wait].
 func pending_script_wait() -> Dictionary:
+	var step: Dictionary = _gen1_step(&"wait")
+	if not step.is_empty():
+		return (step["values"] as Dictionary).duplicate(true)
 	return _active_script.pending_wait() if _active_script != null else {}
 
 
@@ -6122,6 +6238,8 @@ func _complete_script_wait() -> Array:
 	## `WaitScript` and `WaitScriptMovement` both run `UnfreezeAllObjects` the
 	## frame their wait ends, before they hand the script back to `SCRIPT_READ`.
 	unfreeze_all_objects()
+	if not _gen1_step(&"wait").is_empty():
+		return _gen1_advance(-1)
 	if _active_script == null:
 		return []
 	var advanced: Dictionary = _active_script.complete_wait()

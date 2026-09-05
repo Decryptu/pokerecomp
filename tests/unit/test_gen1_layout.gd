@@ -31,10 +31,18 @@ func test_a_gen2_game_has_none() -> void:
 	assert_true(Gen1Layout.for_id(&"emerald").is_empty())
 
 
-func test_red_and_blue_share_one_table() -> void:
-	# The two are one source built twice and every table this layout names is at
-	# the same offset in both; only bank $1D's map scripts move.
-	assert_eq(Gen1Layout.for_id(RomRegistry.RED), Gen1Layout.for_id(RomRegistry.BLUE))
+func test_red_and_blue_share_every_table_but_bank_1d() -> void:
+	# The two are one source built twice, so every table sits at the same offset
+	# in both. Bank $1D is the exception: its 668 symbols are the map scripts,
+	# and everything in it is one byte later on Blue.
+	var red: Dictionary = Gen1Layout.for_id(RomRegistry.RED)
+	var blue: Dictionary = Gen1Layout.for_id(RomRegistry.BLUE)
+	assert_eq(red.size(), blue.size())
+	for key: String in red:
+		if Gen1Layout.BLUE_ONLY.has(key):
+			assert_eq(int(blue[key]), int(red[key]) + 1, "%s moved by more than a byte" % key)
+			continue
+		assert_eq(blue[key], red[key], key)
 
 
 func test_every_layout_is_complete_and_inside_the_cartridge() -> void:

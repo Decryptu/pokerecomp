@@ -31,17 +31,52 @@ const HEAL_MACHINE_COLORS: Array[int] = [0x7FFF, 0x2A7F, 0x04FF, 0x0000]
 var _first: Dictionary = {}
 
 
+## The one sheet Generation 1 draws over the map. It wears `rOBP1` rather than a
+## palette of its own, and its monitor is three rows of $7E where Crystal's is two.
+const GEN1_EXPECTED: Array = [["heal_machine", 2, 0x7C]]
+
+## `PokeCenterOAMData` read back to the pixel each object reaches the screen at:
+## the monitor, then six balls in two mirrored columns five rows apart.
+const GEN1_OAM: Array = [
+	[Vector2i(44, 20), 0, false],
+	[Vector2i(40, 27), 1, false], [Vector2i(48, 27), 1, true],
+	[Vector2i(40, 32), 1, false], [Vector2i(48, 32), 1, true],
+	[Vector2i(40, 37), 1, false], [Vector2i(48, 37), 1, true],
+]
+
+
 func run(r: RefCounted) -> void:
 	_r = r
 	_first = {}
 	_r.each_game(_check_game)
+	_first = {}
+	_r.each_game_of(RomRegistry.GEN1, _check_gen1_game)
+
+
+## The same sheet checks, plus the OAM table and the two `rOBP1` bytes.
+func _check_gen1_game() -> void:
+	_check_sheets(GEN1_EXPECTED)
+	_r.check(
+		Gen2WorldEffects.gen1_heal_machine_oam() == GEN1_OAM,
+		"the heal machine OAM is %s." % [Gen2WorldEffects.gen1_heal_machine_oam()]
+	)
+	## `ld a, $e0 / ldh [rOBP1]` and `ld d, $28 / call FlashSprite8Times`: the
+	## xor swaps the two inner shades and leaves the ends alone.
+	_r.check(
+		Gen1Layout.HEAL_MACHINE_SHADES == [[0, 0, 2, 3], [0, 2, 0, 3]],
+		"the heal machine shades are %s." % [Gen1Layout.HEAL_MACHINE_SHADES]
+	)
 
 
 func _check_game() -> void:
-	var lit: int = 0
 	var expected: Array = EXPECTED.duplicate()
 	if Gen2WorldState.is_crystal_profile(_r.data):
 		expected.append_array(CRYSTAL_ONLY)
+	_check_sheets(expected)
+
+
+func _check_sheets(expected: Array) -> void:
+	var lit: int = 0
 	for row: Array in expected:
 		var name: String = String(row[0])
 		var sheet: Dictionary = _r.data.overworld_effect(name)
@@ -80,7 +115,7 @@ func _check_game() -> void:
 		else:
 			_first[name] = indices
 		var colors: PackedColorArray = sheet.get("colors", PackedColorArray())
-		if name == "heal_machine":
+		if name == "heal_machine" and _r.data.generation == RomRegistry.GEN2:
 			if _r.check(
 				colors.size() == HEAL_MACHINE_COLORS.size(),
 				"the heal machine carries %d colours, not four." % colors.size()

@@ -1339,6 +1339,126 @@ func test_every_ball_kurt_makes_can_be_thrown() -> void:
 		assert_eq(_world.state.item_quantity(ball), 0, "and the ball was spent")
 
 
+## Generation 1 numbers its bag its own way, so the balls a battle offers are
+## `ItemUsePtrTable`'s rows rather than Crystal's: read off the Crystal list, the
+## number that is POKE_BALL there is a TOWN MAP here and the ball itself is not
+## offered at all.
+func test_generation_one_offers_the_cartridges_own_ball_numbers() -> void:
+	_world.state.apply_changes({}, {}, {"items": {0x01: 1, 0x04: 1, 0x05: 1}})
+	assert_eq(
+		Gen2WorldPartyHost.owned_capture_balls(_world), [0x05, 0x04, 0x01] as Array[int]
+	)
+	_data.generation = RomRegistry.GEN1
+	assert_eq(
+		Gen2WorldPartyHost.owned_capture_balls(_world), [0x04, 0x01, 0x08] as Array[int],
+		"POKE_BALL is 4, the 5 beside it is a TOWN MAP, and 8 is the SAFARI_BALL"
+	)
+
+
+## `ItemUseBall` has one bag rather than four pockets, so nothing an item row
+## says about a pocket may refuse a Generation 1 throw. The seam is what
+## `ItemUsePtrTable` says instead, and the cache carries no pocket at all.
+func test_a_generation_one_throw_reads_no_pocket() -> void:
+	_data.generation = RomRegistry.GEN1
+	_world.state.apply_changes({}, {}, {"items": {0x04: 1}})
+	var wild: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
+	)
+	var thrown: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x04, _random, 42, false
+	)
+	assert_true(bool(thrown.get("ok", false)), JSON.stringify(thrown))
+	assert_eq(_world.state.item_quantity(0x04), 0, "and the ball was spent")
+	var refused: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x05, _random, 42, false
+	)
+	assert_eq(
+		StringName(refused.get("reason", &"")), &"unsupported_ball_effect",
+		"the TOWN MAP has no ItemUseBall row"
+	)
+
+
+## `.loop` rerolls anything over the ball's own ceiling, which is the whole of
+## what a Great Ball buys before the arithmetic starts. A roll it refuses costs
+## nothing but the number.
+func test_a_great_ball_rerolls_a_number_over_two_hundred() -> void:
+	var case: Dictionary = {
+		"catch_rate": 45, "max_hp": 100, "current_hp": 100, "status": 0,
+	}
+	assert_eq(
+		_gen1_throw(0x03, case, [255, 201, 60, 255]),
+		_gen1_throw(0x03, case, [60, 255]),
+		"the two refused rolls change nothing"
+	)
+	assert_ne(
+		_gen1_throw(0x04, case, [255, 255]), _gen1_throw(0x03, case, [255, 255]),
+		"and a Poke Ball keeps the 255 a Great Ball throws away"
+	)
+
+
+## `.checkForAilments` subtracts before it compares, so a roll under the status
+## term is caught with no arithmetic at all: 25 asleep or frozen, 12 otherwise.
+func test_a_sleeping_wild_is_caught_outright_below_the_status_term() -> void:
+	var case: Dictionary = {
+		"catch_rate": 1, "max_hp": 100, "current_hp": 100,
+		"status": Gen2Status.SLEEP_MASK & 3,
+	}
+	assert_true(bool(_gen1_throw(0x04, case, [24, 255])["caught"]))
+	assert_false(bool(_gen1_throw(0x04, case, [25, 255])["caught"]))
+	case["status"] = Gen2Status.POISON
+	assert_true(bool(_gen1_throw(0x04, case, [11, 255])["caught"]))
+	assert_false(bool(_gen1_throw(0x04, case, [12, 255])["caught"]))
+
+
+func _gen1_throw(ball: int, case: Dictionary, rolls: Array) -> Dictionary:
+	var queue: Array = rolls.duplicate()
+	return Gen2WorldPartyHost.gen1_ball_outcome(
+		ball, case,
+		func() -> int: return int(queue.pop_front()) if not queue.is_empty() else 0
+	)
+
+
+## `_DoYouWantToNicknameText` and `_ItemUseBallText08`, which are their own
+## words. The Generation 1 box line is the one `EVENT_MET_BILL` has not replaced,
+## no Generation 1 event model holding that flag.
+func test_generation_one_says_its_own_catch_lines() -> void:
+	assert_string_contains(
+		Gen2WorldPartyHost.capture_nickname_question("PIKACHU", RomRegistry.GEN1),
+		"Do you want to"
+	)
+	assert_string_contains(
+		Gen2WorldPartyHost.sent_to_box_text("PIKACHU", RomRegistry.GEN1),
+		"someone's PC!"
+	)
+	assert_string_contains(
+		Gen2WorldPartyHost.sent_to_box_text("PIKACHU"), "BILL's PC."
+	)
+
+
+## `GivePokemon`, which the Game Corner's prize counter reaches with a species
+## and `GetPrizeMonLevel`'s level. A full party boxes it; neither having room
+## writes nothing, which is what leaves the coins alone.
+func test_a_prize_pokemon_joins_the_party_and_a_full_one_goes_to_a_box() -> void:
+	var given: Dictionary = Gen2WorldPartyHost.give_pokemon(
+		_world, _save, 25, 9, false, _random
+	)
+	assert_true(bool(given.get("ok", false)), JSON.stringify(given))
+	assert_eq(_save.party.size(), 3)
+	assert_eq(_save.party[2].species, 25)
+	assert_eq(_save.party[2].level, 9)
+	while _save.party.size() < Gen2SaveData.MAX_PARTY:
+		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	assert_true(bool(Gen2WorldPartyHost.give_pokemon(
+		_world, _save, 25, 9, false, _random
+	).get("ok", false)), "a full party boxes it")
+	assert_eq(_save.party.size(), Gen2SaveData.MAX_PARTY)
+	assert_eq(
+		StringName(Gen2WorldPartyHost.give_pokemon(
+			_world, _save, 0, 9, false, _random
+		).get("reason", &"")), &"unknown_species"
+	)
+
+
 ## `SendMonIntoBox` writes `sBoxCount`, which is the open box and no other, and
 ## `ShiftBoxMon` puts what it wrote at the head of it. A full open box refuses
 ## the throw with the other thirteen still empty, which is

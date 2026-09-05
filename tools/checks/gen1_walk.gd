@@ -53,6 +53,48 @@ const VIRIDIAN_MART: int = 42
 const MART_COUNTER := Vector2i(2, 5)
 const MART_CLERK := Vector2i(0, 5)
 
+## `ViridianPokecenter_Object`'s nurse, reached over her counter from the cell
+## two below her, and the party she is handed.
+const VIRIDIAN_POKECENTER: int = 41
+const NURSE_COUNTER := Vector2i(3, 3)
+const NURSE_PARTY: int = 4
+
+## `SPRITE_LINK_RECEPTIONIST` at 11,2, faced from the cell below her, and the 12
+## rows the corpus stands at `TX_SCRIPT_CABLE_CLUB`.
+const CABLE_CLUB_COUNTER := Vector2i(11, 3)
+const CABLE_CLUB_ROWS: int = 12
+
+## `CeladonMartRoof_Object`'s three `bg_event` machines, read from below.
+const CELADON_MART_ROOF: int = 126
+const VENDING_MACHINE := Vector2i(10, 2)
+const VENDING_MACHINES: int = 3
+## `VendingPrices`: FRESH_WATER, SODA_POP and LEMONADE at 200, 300 and 350.
+const VENDING_PRICES: Array = [[0x3C, 200], [0x3D, 300], [0x3E, 350]]
+const VENDING_PURSE: int = 1000
+
+## `GameCornerPrizeRoom_Object`'s three vendors, read from below, and
+## `PrizeDifferentMenuPtrs`' lists as [name, cost, level]. All three cartridges
+## stock a different set of Pokemon and the same three TMs.
+const PRIZE_ROOM: int = 137
+const PRIZE_VENDORS: Array = [Vector2i(2, 3), Vector2i(4, 3), Vector2i(6, 3)]
+const PRIZE_MENUS: Dictionary = {
+	&"red": [
+		[["ABRA", 180, 9], ["CLEFAIRY", 500, 8], ["NIDORINA", 1200, 17]],
+		[["DRATINI", 2800, 18], ["SCYTHER", 5500, 25], ["PORYGON", 9999, 26]],
+		[["TM23", 3300, 0], ["TM15", 5500, 0], ["TM50", 7700, 0]],
+	],
+	&"blue": [
+		[["ABRA", 120, 6], ["CLEFAIRY", 750, 12], ["NIDORINO", 1200, 17]],
+		[["PINSIR", 2500, 20], ["DRATINI", 4600, 24], ["PORYGON", 6500, 18]],
+		[["TM23", 3300, 0], ["TM15", 5500, 0], ["TM50", 7700, 0]],
+	],
+	&"yellow": [
+		[["ABRA", 230, 15], ["VULPIX", 1000, 18], ["WIGGLYTUFF", 2680, 22]],
+		[["SCYTHER", 6500, 30], ["PINSIR", 6500, 30], ["PORYGON", 9999, 26]],
+		[["TM23", 3300, 0], ["TM15", 5500, 0], ["TM50", 7700, 0]],
+	],
+}
+
 var _r: RefCounted = null
 
 
@@ -66,6 +108,56 @@ func _one_game() -> void:
 	_check_ledges()
 	_check_last_map_round_trip()
 	_check_text_boxes()
+	_check_the_nurse_heals()
+	_check_the_cable_club()
+	_check_the_vending_machine()
+	_check_the_prize_counter()
+
+
+## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
+## counted wait rather than a box, so what proves it is there is the world
+## standing in one for its own frames.
+func _check_the_nurse_heals() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_POKECENTER, NURSE_COUNTER)
+	if world == null:
+		return
+	world.set_party_summary(NURSE_PARTY, false)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	if not _r.check(not world.interact().is_empty(), "the nurse said nothing."):
+		return
+	## The welcome, then the YES/NO, then the line in front of the heal.
+	world.run_event_queue(true)
+	if not _r.check(world.script_input_waiting(), "the nurse asked nothing."):
+		return
+	world.choose_script_input(0)
+	world.run_event_queue(true)
+	var request: Dictionary = world.pending_runtime_request()
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"party_heal_requested",
+		"the nurse asked for %s." % [request.get("kind", &"nothing")]
+	):
+		return
+	world.complete_runtime_request({"ok": true})
+	var wait: Dictionary = world.pending_script_wait()
+	var frames: int = NURSE_PARTY * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES \
+		+ Gen2WorldEffects.HEAL_MACHINE_FLASHES \
+		* Gen2WorldEffects.HEAL_MACHINE_FLASH_INTERVAL
+	_r.check(
+		StringName(wait.get("kind", &"")) == &"heal_machine_anim"
+			and int(wait.get("frames", 0)) == frames,
+		"the heal machine waited on %s." % [wait]
+	)
+	_r.check(world.party_holder() == &"heal_machine", "the machine held no party.")
+	var spent: int = 0
+	while not world.pending_script_wait().is_empty() and spent <= frames:
+		world.advance_script_wait_frame()
+		spent += 1
+	_r.check(spent == frames, "the machine ran for %d frames, not %d." % [spent, frames])
+	## `PokemonFightingFitText` and `PokemonCenterFarewellText` behind it.
+	_r.check(world.script_busy(), "nothing was said once the machine had stopped.")
+	world.run_event_queue(true)
+	world.run_event_queue(true)
+	_r.check(not world.script_busy(), "the nurse never finished.")
 
 
 ## Every warp on every map: its destination resolves, it fires from some facing,
@@ -223,3 +315,146 @@ func _box_text(world: Gen2WorldAPI) -> String:
 	if results.is_empty():
 		return ""
 	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+
+
+## `CableClubNPC` from both sides of `EVENT_GOT_POKEDEX`, each with its own
+## count of frames.
+func _check_the_cable_club() -> void:
+	var rows: int = 0
+	for map: Gen2WorldMap in _r.data.world_maps():
+		for row: Dictionary in map.texts:
+			rows += 1 if int(row["command"]) == Gen1Layout.TEXT_SCRIPT_CABLE_CLUB else 0
+	_r.check(rows == CABLE_CLUB_ROWS, "%d receptionists stand on a TX_SCRIPT row." % rows)
+	_walk_the_receptionist(false, Gen1Layout.CABLE_CLUB_PREPARING_FRAMES, "making_preparations")
+	_walk_the_receptionist(true, Gen1Layout.CABLE_CLUB_TIMEOUT_FRAMES, "area_reserved")
+
+
+func _walk_the_receptionist(dex: bool, frames: int, said: String) -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_POKECENTER, CABLE_CLUB_COUNTER)
+	if world == null:
+		return
+	world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, dex)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var opened: Array = world.interact()
+	if not _r.check(not opened.is_empty(), "the receptionist said nothing."):
+		return
+	_r.check(
+		_event_text(opened) == _r.data.special_text("cable_club", "welcome"),
+		"the receptionist opened with %s." % [_event_text(opened)]
+	)
+	world.run_event_queue(true)
+	var wait: Dictionary = world.pending_script_wait()
+	_r.check(int(wait.get("frames", 0)) == frames, "she waited %s frames." % [wait.get("frames", 0)])
+	var spent: int = 0
+	while not world.pending_script_wait().is_empty() and spent <= frames:
+		var landed: Array = world.advance_script_wait_frame()
+		spent += 1
+		if not landed.is_empty():
+			_r.check(
+				_event_text(landed) == _r.data.special_text("cable_club", said),
+				"she finished with %s." % [_event_text(landed)]
+			)
+	_r.check(spent == frames, "she waited %d frames rather than %d." % [spent, frames])
+	world.run_event_queue(true)
+	_r.check(not world.script_busy(), "the receptionist never finished.")
+
+
+func _event_text(results: Array) -> String:
+	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+
+
+## `VendingMachineMenu`'s three `VendingPrices` rows and the purchase
+## `HasEnoughMoney` gates. The box drawn is the screen's.
+func _check_the_vending_machine() -> void:
+	var machines: int = 0
+	for map: Gen2WorldMap in _r.data.world_maps():
+		for row: Dictionary in map.texts:
+			machines += 1 if int(row["command"]) \
+				== Gen1Layout.TEXT_SCRIPT_VENDING_MACHINE else 0
+	_r.check(machines == VENDING_MACHINES, "%d machines stand on the map." % machines)
+	var rows: Array = _r.data.vending_rows()
+	for index: int in VENDING_PRICES.size():
+		var pinned: Array = VENDING_PRICES[index]
+		var row: Dictionary = rows[index] if index < rows.size() else {}
+		_r.check(
+			int(row.get("item", 0)) == int(pinned[0])
+				and int(row.get("price", 0)) == int(pinned[1]),
+			"machine row %d is %s." % [index, row]
+		)
+	var world: Gen2WorldAPI = _r.open_world(0, CELADON_MART_ROOF, VENDING_MACHINE)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	if not _r.check(not world.interact().is_empty(), "the machine offered nothing."):
+		return
+	var request: Dictionary = world.pending_runtime_request()
+	_r.check(
+		StringName(request.get("kind", &"")) == &"vending_requested"
+			and (request.get("values", {}).get("rows", []) as Array).size() == rows.size(),
+		"the machine asked for %s." % [request.get("kind", &"nothing")]
+	)
+	world.state.apply_changes({}, {}, {
+		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_PURSE},
+	})
+	var drink: Dictionary = rows[0]
+	var bought: Dictionary = Gen2WorldMartHost.vend(world, null, drink, false)
+	_r.check(bool(bought.get("ok", false)), "the first drink refused: %s." % [bought])
+	_r.check(
+		world.state.item_quantity(int(drink["item"])) == 1
+			and world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
+				== VENDING_PURSE - int(drink["price"]),
+		"the drink cost %d." % [VENDING_PURSE - world.state.money(
+			Gen2WorldMartHost.MONEY_ACCOUNT
+		)]
+	)
+	## `HasEnoughMoney` refuses before `GiveItem` does.
+	world.state.apply_changes({}, {}, {"money": {Gen2WorldMartHost.MONEY_ACCOUNT: 0}})
+	_r.check(
+		StringName(Gen2WorldMartHost.vend(world, null, drink, false).get("reason", &""))
+			== &"insufficient_money",
+		"an empty purse bought a drink."
+	)
+	world.complete_runtime_request({"ok": true})
+	_r.check(not world.script_busy(), "the machine never closed.")
+
+
+## `PrizeDifferentMenuPtrs`' three lists with `PrizeMonLevelDictionary`'s level
+## on every Pokemon row, and the vendor whose place picks each one.
+func _check_the_prize_counter() -> void:
+	var pinned: Array = PRIZE_MENUS[_r.game_id]
+	var menus: Array = _r.data.prize_menus()
+	if not _r.check(menus.size() == pinned.size(), "%d prize menus." % menus.size()):
+		return
+	for index: int in pinned.size():
+		var menu: Dictionary = menus[index]
+		_r.check(
+			bool(menu["tms"]) == (index == Gen1Layout.PRIZE_TM_MENU),
+			"menu %d is the wrong kind." % index
+		)
+		var rows: Array = menu["rows"]
+		for row: int in (pinned[index] as Array).size():
+			var want: Array = (pinned[index] as Array)[row]
+			var got: Dictionary = rows[row]
+			var name: String = _r.data.item_name(int(got["item"])) if bool(menu["tms"]) \
+				else String(_r.data.species(int(got["item"])).get("name", ""))
+			_r.check(
+				[name, int(got["cost"]), int(got["level"])] == want,
+				"prize %d/%d is %s, pinned %s." % [
+					index, row, [name, int(got["cost"]), int(got["level"])], want,
+				]
+			)
+	for index: int in PRIZE_VENDORS.size():
+		var world: Gen2WorldAPI = _r.open_world(0, PRIZE_ROOM, PRIZE_VENDORS[index])
+		if world == null:
+			return
+		world.player_facing = Gen2WorldSprite.FACING_UP
+		if not _r.check(not world.interact().is_empty(), "vendor %d said nothing." % index):
+			continue
+		var values: Dictionary = world.pending_runtime_request().get("values", {})
+		_r.check(
+			int(values.get("menu", -1)) == index
+				and (values.get("rows", []) as Array).size() == Gen1Layout.PRIZE_ROWS,
+			"vendor %d opened menu %s." % [index, values.get("menu", -1)]
+		)
+		world.complete_runtime_request({"ok": true})
+		_r.check(not world.script_busy(), "vendor %d never closed." % index)

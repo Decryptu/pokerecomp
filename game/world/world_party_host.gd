@@ -189,6 +189,15 @@ const CAPTURE_BALLS: Array[int] = [
 	ITEM_FRIEND_BALL, ITEM_MOON_BALL, ITEM_LOVE_BALL,
 ]
 
+## `ItemUsePtrTable`'s own rows, whose numbering is not Crystal's: POKE_BALL is
+## 4 there and 5 here, and SAFARI_BALL is reachable where Crystal's number for it
+## collides with MOON_STONE.
+const GEN1_CAPTURE_BALLS: Array[int] = [
+	Gen1Layout.ITEM_POKE_BALL, Gen1Layout.ITEM_GREAT_BALL,
+	Gen1Layout.ITEM_ULTRA_BALL, Gen1Layout.ITEM_MASTER_BALL,
+	Gen1Layout.ITEM_SAFARI_BALL,
+]
+
 ## `HeavyBallMultiplier.WeightsTable`: the high byte of the converted weight the
 ## row applies below, and what it adds to the catch rate there. The `.lightmon`
 ## branch in front of it takes 20 off below `HIGH(1024)`.
@@ -229,8 +238,9 @@ const WOBBLE_PROBABILITIES: Array = [
 
 ## Returns the ball items whose capture effects are implemented by this host.
 ## The order follows the ordinary ball pocket order used by the source menu.
-static func capture_ball_items() -> Array[int]:
-	return CAPTURE_BALLS.duplicate()
+static func capture_ball_items(generation: int = RomRegistry.GEN2) -> Array[int]:
+	return GEN1_CAPTURE_BALLS.duplicate() if generation == RomRegistry.GEN1 \
+		else CAPTURE_BALLS.duplicate()
 
 
 ## Returns owned supported balls without making the battle scene aware of world
@@ -239,10 +249,14 @@ static func owned_capture_balls(world: Gen2WorldAPI) -> Array[int]:
 	var out: Array[int] = []
 	if world == null or world.state == null:
 		return out
-	for ball: int in CAPTURE_BALLS:
+	for ball: int in capture_ball_items(_generation(world.data)):
 		if world.state.item_quantity(ball) > 0:
 			out.append(ball)
 	return out
+
+
+static func _generation(data: GameData) -> int:
+	return data.generation if data != null else RomRegistry.GEN2
 
 
 static func complete_runtime_request(
@@ -968,7 +982,15 @@ static func caught_nickname_question(species_name: String) -> String:
 ## `_AskGiveNicknameText`, which is `PokeBallEffect`'s own question and not
 ## `GiveANickname_YesNo`'s: a caught Pokemon is asked about by name alone, where
 ## a received one is [method caught_nickname_question]'s longer line.
-static func capture_nickname_question(species_name: String) -> String:
+## `_DoYouWantToNicknameText` is Generation 1's, asked by `AskName` from inside
+## `AddPartyMon` and so never asked of a catch that goes to the box.
+static func capture_nickname_question(
+	species_name: String, generation: int = RomRegistry.GEN2
+) -> String:
+	if generation == RomRegistry.GEN1:
+		return "Do you want to\ngive a nickname%sto %s?" % [
+			Gen2TextStream.SCROLL_BREAK, species_name,
+		]
 	return "Give a nickname to\n%s?" % species_name
 
 
@@ -980,7 +1002,16 @@ static func capture_nickname_question(species_name: String) -> String:
 const SENT_TO_BOX_FORMAT: String = "%s was\nsent to BILL's PC."
 
 
-static func sent_to_box_text(species_name: String) -> String:
+## `_ItemUseBallText08` for Generation 1. `EVENT_MET_BILL` picks
+## `_ItemUseBallText07` and its BILL's PC over it; no Generation 1 event model
+## holds that flag, so what is said is the routine's own clear-flag answer.
+static func sent_to_box_text(
+	species_name: String, generation: int = RomRegistry.GEN2
+) -> String:
+	if generation == RomRegistry.GEN1:
+		return "%s was\ntransferred to%ssomeone's PC!" % [
+			species_name, Gen2TextStream.SCROLL_BREAK,
+		]
 	return SENT_TO_BOX_FORMAT % species_name
 
 
@@ -1275,9 +1306,13 @@ static func _capture_refusal(
 	var definition: Dictionary = world.data.item(ball)
 	if definition.is_empty():
 		return _failure(&"unknown_ball", {"ball": ball})
-	if int(definition.get("pocket", 0)) != Gen2Layout.ITEM_POCKET_BALL:
+	var generation: int = _generation(world.data)
+	## Generation 1 has one bag rather than four pockets, so the ball list below
+	## is the whole test there: `ItemUsePtrTable` is what says an item is a ball.
+	if generation != RomRegistry.GEN1 \
+		and int(definition.get("pocket", 0)) != Gen2Layout.ITEM_POCKET_BALL:
 		return _failure(&"item_is_not_a_ball", {"ball": ball})
-	if ball not in CAPTURE_BALLS:
+	if ball not in capture_ball_items(generation):
 		return _failure(&"unsupported_ball_effect", {"ball": ball})
 	if world.state == null or world.state.item_quantity(ball) <= 0:
 		return _failure(&"insufficient_ball_quantity", {"ball": ball})
@@ -1488,6 +1523,43 @@ static func _apply_party_request(
 	if kind == &"trade_requested":
 		return _apply_trade_request(world, candidate, request, result, random)
 	return {"ok": false, "reason": &"unsupported_party_request"}
+
+
+## `GivePokemon`, which the prize counter reaches with `GetPrizeMonLevel`'s
+## level: everything `givepoke` does with no script behind it. Neither the party
+## nor the box having room writes nothing, which is what `.giveMon`'s `ret nc`
+## leaves the coins on.
+static func give_pokemon(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	species: int,
+	level: int,
+	persist: bool = true,
+	random: RandomNumberGenerator = null
+) -> Dictionary:
+	if world == null or save == null or world.data == null:
+		return _failure(&"missing_world", {})
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return _failure(StringName(opened["reason"]), opened.get("details", {}))
+	var candidate: Gen2SaveData = opened["candidate"]
+	var generator: RandomNumberGenerator = random if random != null else RandomNumberGenerator.new()
+	if random == null:
+		generator.randomize()
+	var applied: Dictionary = _apply_pokemon_request(world, candidate, {
+		"kind": &"pokemon_requested",
+		"values": {"pokemon": species, "level": level},
+	}, {}, generator)
+	if not bool(applied.get("ok", false)) or not bool(applied.get("accepted", true)):
+		return _failure(StringName(applied.get("reason", &"storage_full")), applied)
+	var before: Gen2WorldSnapshot = world.snapshot()
+	_register_caught(world, int(applied.get("register_caught", 0)))
+	var committed: Dictionary = Gen2WorldTransaction.commit(
+		world, save, candidate, before, persist
+	)
+	if not bool(committed.get("ok", false)):
+		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	return {"ok": true, "species": species, "level": level}
 
 
 ## `Script_givepoke` and `Script_giveegg`.
@@ -2204,6 +2276,8 @@ static func _capture_outcome(
 ) -> Dictionary:
 	if ball == ITEM_MASTER_BALL or battle_type == Gen2Battle.BATTLETYPE_TUTORIAL:
 		return {"caught": true, "catch_rate": 255, "wobbles": 3}
+	if _generation(data) == RomRegistry.GEN1:
+		return _gen1_capture_outcome(data, wild, ball, random)
 	var max_hp: int = maxi(wild.max_hp(), 1)
 	var final_rate: int = final_catch_rate(data, ball, {
 		"base_rate": clampi(int(data.species(wild.species).get("catch_rate", 0)), 1, 255),
@@ -2226,12 +2300,103 @@ static func _capture_outcome(
 	}
 
 
+## `ItemUseBall`, which settles no catch rate at all. `.setAnimData`'s $10, the
+## ball that cannot be thrown at a ghost, has no caller: nothing puts a Pokemon
+## Tower ghost on the screen. The Safari Zone's branch spends `wNumSafariBalls`
+## rather than the bag and changes nothing else.
+static func _gen1_capture_outcome(
+	data: GameData, wild: Gen2BattleMon, ball: int, random: RandomNumberGenerator
+) -> Dictionary:
+	var max_hp: int = maxi(wild.max_hp(), 1)
+	return gen1_ball_outcome(ball, {
+		"catch_rate": int(data.species(wild.species).get("catch_rate", 0)),
+		"max_hp": max_hp,
+		"current_hp": clampi(wild.hp, 0, max_hp),
+		"status": wild.status,
+	}, Callable(random, "randi_range").bind(0, 0xFF))
+
+
+## Everything `ItemUseBall` decides, split out from the throw the way [method
+## final_catch_rate] is: [param rolls] is `call Random` and [param case] the WRAM
+## bytes, so the oracle's `battle/gen1_catch.py` can put the same row to a dump.
+static func gen1_ball_outcome(
+	ball: int, case: Dictionary, rolls: Callable
+) -> Dictionary:
+	var row: Array = Gen1Layout.BALL_ROLL.get(ball, Gen1Layout.BALL_ROLL_OTHER)
+	var catch_rate: int = int(case["catch_rate"])
+	var status: int = int(case.get("status", Gen2Status.NONE))
+	var roll: int = _gen1_first_roll(int(row[0]), rolls)
+	var penalty: int = _gen1_status_term(status, Gen1Layout.BALL_STATUS_SUBTRACT)
+	if roll < penalty:
+		return {"caught": true, "catch_rate": catch_rate, "wobbles": 3}
+	roll -= penalty
+	var health: int = _gen1_health_term(
+		int(case["max_hp"]), int(case["current_hp"]), int(row[1])
+	)
+	var capped: int = mini(health, 0xFF)
+	## Rand2 is rolled only where the cartridge rolls it: a rate under Rand1 and
+	## a W over 255 each answer in front of it.
+	if catch_rate >= roll and (health > 0xFF or int(rolls.call()) <= capped):
+		return {"caught": true, "catch_rate": catch_rate, "wobbles": 3}
+	return {
+		"caught": false,
+		"catch_rate": catch_rate,
+		"wobbles": _gen1_shakes(status, catch_rate, capped, int(row[2])),
+	}
+
+
+## `.loop`: Rand1 is rerolled until it is at or under the ball's ceiling, which
+## is the whole of what makes a Great Ball better than a Poke Ball here.
+static func _gen1_first_roll(ceiling: int, rolls: Callable) -> int:
+	var roll: int = int(rolls.call())
+	while roll > ceiling:
+		roll = int(rolls.call())
+	return roll
+
+
+## `.checkForAilments` and `.addAilmentValue` read the byte the same way:
+## [param terms] is [any status, frozen or asleep].
+static func _gen1_status_term(status: int, terms: Array[int]) -> int:
+	if status == Gen2Status.NONE:
+		return 0
+	return terms[1] if Gen2Status.has(status, Gen2Status.FREEZE) \
+		or Gen2Status.is_asleep(status) else terms[0]
+
+
+## W, floored twice and uncapped: `.skip3` clamps only the byte the shakes read.
+static func _gen1_health_term(max_hp: int, current_hp: int, factor: int) -> int:
+	var quarter: int = maxi(current_hp >> 2, 1)
+	@warning_ignore("integer_division")
+	var scaled: int = maxi(max_hp, 1) * 0xFF / factor
+	@warning_ignore("integer_division")
+	var out: int = scaled / quarter
+	return out
+
+
+## `.failedToCapture`: Y off the ball's second factor, Z out of X and Y, then the
+## ladder. A Y above 255 cannot happen, the largest being `255 * 100 / 150`.
+static func _gen1_shakes(status: int, catch_rate: int, x: int, factor: int) -> int:
+	@warning_ignore("integer_division")
+	var y: int = catch_rate * 100 / factor
+	if y > 0xFF:
+		return 3
+	@warning_ignore("integer_division")
+	var scaled: int = x * y / 0xFF
+	var z: int = scaled + _gen1_status_term(status, Gen1Layout.BALL_STATUS_ADD)
+	var shakes: int = 0
+	for threshold: int in Gen1Layout.BALL_SHAKE_THRESHOLDS:
+		if z < threshold:
+			return shakes
+		shakes += 1
+	return shakes
+
+
 ## `wFinalCatchRate`: everything `PokeBallEffect` settles between `ld a,
 ## [wEnemyMonCatchRate]` and the `call Random` that reads the answer. Split out
-## from the throw because the cartridge can be asked the same question directly:
-## Running those instructions on a real dump
-## for a grid of cases, and [param case] is that grid's own row. The keys are
-## the bytes the routine reads, named for the WRAM labels it reads them from.
+## from the throw because the cartridge can be asked the same question directly,
+## which the oracle's `battle/catch_rate.py` does for a grid of cases; [param
+## case] is one row of that grid, keyed by the WRAM labels the routine reads its
+## bytes from.
 static func final_catch_rate(data: GameData, ball: int, case: Dictionary) -> int:
 	var catch_rate: int = _ball_multiplier(data, ball, int(case["base_rate"]), case)
 	## `.skip_or_return_from_ball_fn`'s own `cp LEVEL_BALL`: a Level Ball jumps

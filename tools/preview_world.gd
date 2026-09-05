@@ -29,6 +29,8 @@ const KIND_HELP: Dictionary = {
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
 	&"sign": "none: DisplayTextID's box, read by facing up from where the player stands",
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
+	&"vending": "presses, rows down: VendingMachineMenu, read by facing up from the cell below one. 0 the list, 1 the box the chosen row lands in",
+	&"prizes": "presses, rows down: CeladonPrizeMenu, read the same way. 0 the list, 1 SoYouWantPrizeText's YES/NO, 2 the box YES lands in",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"level_evolution": "frames: EvolveAfterBattle's screen that many frames in, each box pressed past as it lands",
 	&"egg_hatch": "frames, slot: OverworldHatchEgg on that party slot, that many frames in",
@@ -157,7 +159,8 @@ const STAGED_FRAMES: int = 2
 ## `sign` spends the whole reveal: no press finishes a page early.
 const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"cut": 12, &"waterfall_use": 26, &"sign": BOX_REVEAL_FRAMES,
-	&"nurse": BOX_REVEAL_FRAMES,
+	&"nurse": BOX_REVEAL_FRAMES, &"vending": BOX_REVEAL_FRAMES,
+	&"prizes": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
 const BOX_REVEAL_FRAMES: int = 120
@@ -401,6 +404,8 @@ const STAGERS: Dictionary = {
 	&"pokepic": &"_stage_pokepic",
 	&"sign": &"_stage_sign",
 	&"nurse": &"_stage_nurse",
+	&"vending": &"_stage_vending",
+	&"prizes": &"_stage_prizes",
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
@@ -410,6 +415,10 @@ const STAGERS: Dictionary = {
 	&"pokemon_center_pc": &"_stage_pc",
 	&"mom_bank": &"_stage_mom_bank",
 }
+
+
+## The kinds `preview_effect_sprites` answers by name.
+const EFFECT_SPRITE_KINDS: Array[StringName] = [&"cut", &"fly", &"heal_machine"]
 
 
 ## Puts the screen in the state the picture wants. Called once, on the frame the
@@ -431,7 +440,10 @@ func _stage_kind() -> void:
 		if String(_kind).ends_with("_use") or String(_kind).ends_with("_question"):
 			_screen.call(SCREEN_DRIVER % _kind)
 		return
-	if not _bare:
+	## The fall-through stages a pile of debug sprites and an emote, which a bare
+	## capture does not want; the three kinds named ahead of it are pictures of
+	## their own, and skipping those photographed an empty map.
+	if _kind in EFFECT_SPRITE_KINDS or not _bare:
 		_screen.preview_effect_sprites(_kind)
 
 
@@ -448,7 +460,9 @@ func _process(_delta: float) -> bool:
 		_choose_view()
 	if _frames == 2:
 		_stage_kind()
-		if not _bare and _kind not in SELF_DRIVEN_KINDS:
+		## `bare` takes the readout off and nothing else: skipping these caught
+		## a staged box on the frame it opened, which is an empty box.
+		if _kind not in SELF_DRIVEN_KINDS:
 			for _frame: int in int(STAGED_FRAMES_BY_KIND.get(_kind, STAGED_FRAMES)):
 				_screen.advance_frame()
 	if _frames < 18:
@@ -912,6 +926,39 @@ func _stage_nurse() -> void:
 		for _frame: int in BOX_REVEAL_FRAMES:
 			_screen.advance_frame()
 		_screen.press_button(PokeButton.A)
+
+
+## The machine, faced from the cell below it, with money for any of its rows.
+func _stage_vending() -> void:
+	_stage_counter({"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY}})
+
+
+## The prize counter, with the COIN CASE it opens on and coins for any row.
+func _stage_prizes() -> void:
+	_stage_counter({
+		"items": {Gen1Layout.ITEM_COIN_CASE: 1}, "coins": Gen2WorldInventory.MAX_COINS,
+	})
+
+
+## A counter faced from the cell below it: presses, then rows down first.
+func _stage_counter(purse: Dictionary) -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if world != null:
+		world.state.apply_changes({}, {}, purse)
+	_screen.press_button(PokeButton.UP)
+	for _frame: int in TEXT_SETTLE_FRAMES:
+		_screen.advance_frame()
+	_screen.interact()
+	for _step: int in maxi(_cell.y, 0):
+		_screen.press_button(PokeButton.DOWN)
+	for _press: int in maxi(_cell.x, 0):
+		for _frame: int in BOX_REVEAL_FRAMES:
+			_screen.advance_frame()
+		_screen.press_button(PokeButton.A)
+
+
+## Enough for every row of `VendingPrices` and not enough to widen the money box.
+const VENDING_MONEY: int = 1000
 
 
 ## `_UnownPrinter`'s browser: the first number is the slot, where 26 is the vacant

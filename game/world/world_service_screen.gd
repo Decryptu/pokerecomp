@@ -25,6 +25,7 @@ enum MODE {
 	PC_OAK_ASK,
 	PC_SAVE,
 	ELEVATOR,
+	VENDING, PRIZE,
 }
 
 ## `ElevatorFloorNames`, in `FLOOR_*` order (constants/script_constants.asm).
@@ -336,6 +337,12 @@ func open_pending(
 	if StringName(request.get("kind", &"")) == &"mom_bank_dial_requested":
 		_open_mom_bank(request.get("values", {}))
 		return true
+	if StringName(request.get("kind", &"")) == &"vending_requested":
+		_open_vending((request.get("values", {}) as Dictionary).get("rows", []))
+		return true
+	if StringName(request.get("kind", &"")) == &"prize_requested":
+		_open_prizes(request.get("values", {}))
+		return true
 	var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(_world, request)
 	if not bool(resolved.get("ok", false)):
 		_show_error("Service unavailable: %s" % String(resolved.get("reason", "unknown")))
@@ -418,6 +425,12 @@ func handle_button(button: int) -> bool:
 		return true
 	if _mode == MODE.ELEVATOR:
 		_press_elevator(button)
+		return true
+	if _mode == MODE.VENDING:
+		_press_vending(button)
+		return true
+	if _mode == MODE.PRIZE:
+		_press_prize(button)
 		return true
 	if _mode == MODE.MART:
 		_press_mart(button)
@@ -628,6 +641,254 @@ func _open_menu(input: Dictionary) -> void:
 	_render_rows()
 
 
+## `VendingMachineMenu`. The greeting stands in its own box while the list is up,
+## and the routine returns after one drink: the box the choice lands in is the
+## last thing the machine says.
+const GEN1_VENDING_RUN: String = "vending"
+
+var _vending_rows: Array = []
+var _vending_said: String = ""
+
+
+func _open_vending(rows: Array) -> void:
+	_mode = MODE.VENDING
+	_vending_rows = rows.duplicate(true)
+	_vending_said = ""
+	_cursor = 0
+	_set_overlay_open(true)
+	_open_map_overlay_view()
+	_render_vending()
+
+
+## `HandleMenuInput` watches A and B with no wrapping, and B answers the way the
+## CANCEL row does.
+func _press_vending(button: int) -> void:
+	if not _vending_said.is_empty():
+		if button in [PokeButton.A, PokeButton.B]:
+			_finish_runtime({"ok": true, "script_value": 0})
+		return
+	if button == PokeButton.UP or button == PokeButton.DOWN:
+		_cursor = clampi(
+			_cursor + (-1 if button == PokeButton.UP else 1), 0, _vending_rows.size()
+		)
+		_render_vending()
+		return
+	if button != PokeButton.A and button != PokeButton.B:
+		return
+	if button == PokeButton.B or _cursor >= _vending_rows.size():
+		_vending_said = _vending_text("not_thirsty")
+		_render_vending()
+		return
+	var bought: Dictionary = Gen2WorldMartHost.vend(
+		_world, _save, _vending_rows[_cursor], _persist
+	)
+	_vending_said = _vending_bought_text(bought)
+	_render_vending()
+
+
+## `.enoughMoney`'s three landings: `VendingMachineText5` names the drink,
+## `...Text4` is `HasEnoughMoney`'s refusal and `...Text6` `GiveItem`'s.
+func _vending_bought_text(bought: Dictionary) -> String:
+	if not bool(bought.get("ok", false)):
+		return _vending_text("no_money") \
+			if StringName(bought.get("reason", &"")) == &"insufficient_money" \
+			else _vending_text("bag_full")
+	return Gen2TextStream.fill_marker(
+		_vending_text("here_you_go"), Gen2TextStream.RAM_MARKER,
+		String(bought.get("name", ""))
+	)
+
+
+func _vending_text(slot: String) -> String:
+	return _data.special_text(GEN1_VENDING_RUN, slot) if _data != null else ""
+
+
+func _render_vending() -> void:
+	if _mart_view == null or _data == null:
+		return
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
+	if _mart_page == null:
+		_mart_page = Gen2MartPage.from_data(_data)
+	if _service_page == null or _mart_page == null:
+		return
+	var image: Image = _service_page.render(
+		"", "", [], -1,
+		_vending_said if not _vending_said.is_empty() else _vending_text("greeting")
+	)
+	var overlay: Image = _mart_page.render_gen1_vending({
+		"money": _world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
+		"rows": _vending_named_rows(),
+		"cursor": _cursor,
+	})
+	if image != null and overlay != null:
+		image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
+	Gen2PicImage.show(_mart_view, image)
+
+
+## `DrinkText`, which the import has already checked against `ItemNames`.
+func _vending_named_rows() -> Array:
+	var out: Array = []
+	for row: Dictionary in _vending_rows:
+		out.append({
+			"name": _data.item_name(int(row.get("item", 0))),
+			"price": int(row.get("price", 0)),
+		})
+	return out
+
+
+const GEN1_PRIZE_RUN: String = "prizes"
+const GEN1_PRIZE_RUN_2: String = "prizes_2"
+
+## `CeladonPrizeMenu`: the coin case, the list, `SoYouWantPrizeText`'s YES/NO and
+## one prize. `.noChoice` says nothing, which is what B and NO THANKS reach.
+var _prize_rows: Array = []
+var _prize_tms: bool = false
+var _prize_said: String = ""
+var _prize_asking: bool = false
+var _prize_confirm: int = 0
+
+
+func _open_prizes(values: Dictionary) -> void:
+	_mode = MODE.PRIZE
+	_prize_rows = (values.get("rows", []) as Array).duplicate(true)
+	_prize_tms = bool(values.get("tms", false))
+	_prize_said = ""
+	_prize_asking = false
+	_prize_confirm = 0
+	_cursor = 0
+	_set_overlay_open(true)
+	_open_map_overlay_view()
+	## `IsItemInBag COIN_CASE`, and the only box a player without one is shown.
+	if _world.state.item_quantity(Gen1Layout.ITEM_COIN_CASE) <= 0:
+		_prize_said = _prize_text("require_coin_case")
+	_render_prizes()
+
+
+func _press_prize(button: int) -> void:
+	if not _prize_said.is_empty():
+		if button in [PokeButton.A, PokeButton.B]:
+			_finish_runtime({"ok": true, "script_value": 0})
+		return
+	if _prize_asking:
+		_press_prize_confirm(button)
+		return
+	if button == PokeButton.UP or button == PokeButton.DOWN:
+		_cursor = clampi(
+			_cursor + (-1 if button == PokeButton.UP else 1), 0, _prize_rows.size()
+		)
+		_render_prizes()
+		return
+	if button == PokeButton.B or _cursor >= _prize_rows.size():
+		if button in [PokeButton.A, PokeButton.B]:
+			_finish_runtime({"ok": true, "script_value": 0})
+		return
+	if button != PokeButton.A:
+		return
+	_prize_asking = true
+	_prize_confirm = 0
+	_render_prizes()
+
+
+## `SoYouWantPrizeText`'s `YesNoChoice`. NO is `.printOhFineThen`.
+func _press_prize_confirm(button: int) -> void:
+	match button:
+		PokeButton.UP, PokeButton.DOWN:
+			_prize_confirm = 1 - _prize_confirm
+		PokeButton.B:
+			_prize_asking = false
+			_prize_said = _prize_text("oh_fine_then", GEN1_PRIZE_RUN_2)
+		PokeButton.A:
+			_prize_asking = false
+			if _prize_confirm == 1:
+				_prize_said = _prize_text("oh_fine_then", GEN1_PRIZE_RUN_2)
+			else:
+				_prize_said = _buy_prize(_prize_rows[_cursor])
+				## `HandlePrizeChoice` falls into `.noChoice` and the routine
+				## returns, so a prize that was handed over says nothing at all.
+				if _prize_said.is_empty():
+					_finish_runtime({"ok": true, "script_value": 0})
+					return
+		_:
+			return
+	_render_prizes()
+
+
+## `HasEnoughCoins` first, then `GiveItem` or `GivePokemon`; no room leaves the
+## coins alone.
+func _buy_prize(row: Dictionary) -> String:
+	var cost: int = int(row.get("cost", 0))
+	if _world.state.coins() < cost:
+		return _prize_text("need_more_coins", GEN1_PRIZE_RUN_2)
+	var number: int = int(row.get("item", 0))
+	if _prize_tms:
+		var owned: int = _world.state.item_quantity(number)
+		if owned + 1 > Gen2WorldMartHost.MAX_ITEM_STACK:
+			return _prize_text("bag_full", GEN1_PRIZE_RUN_2)
+		_world.state.apply_changes({}, {}, {"items": {number: owned + 1}})
+	elif not bool(Gen2WorldPartyHost.give_pokemon(
+		_world, _save, number, int(row.get("level", 1)), _persist
+	).get("ok", false)):
+		return ""
+	Gen2WorldInventory.new(_data, _world.state).change_coins(-cost)
+	return ""
+
+
+func _prize_text(slot: String, run: String = GEN1_PRIZE_RUN) -> String:
+	return _data.special_text(run, slot) if _data != null else ""
+
+
+func _render_prizes() -> void:
+	if _mart_view == null or _data == null:
+		return
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
+	if _mart_page == null:
+		_mart_page = Gen2MartPage.from_data(_data)
+	if _service_page == null or _mart_page == null:
+		return
+	var image: Image = _service_page.render("", "", [], -1, _prize_box_text())
+	var overlay: Image = _mart_page.render_gen1_prizes({
+		"coins": _world.state.coins(),
+		"rows": _prize_named_rows(),
+		"cursor": _cursor,
+	})
+	if image != null and overlay != null:
+		image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
+	## `YesNoChoice` opens over the list rather than under it.
+	if _prize_asking and image != null:
+		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _prize_confirm)
+	Gen2PicImage.show(_mart_view, image)
+
+
+## `ExchangeCoinsForPrizesText` is printed with the delay off and `WhichPrizeText`
+## over it in the same frame, so the box standing under the list is the question.
+func _prize_box_text() -> String:
+	if not _prize_said.is_empty():
+		return _prize_said
+	if _prize_asking:
+		return Gen2TextStream.fill_marker(
+			_prize_text("so_you_want", GEN1_PRIZE_RUN_2), Gen2TextStream.RAM_MARKER,
+			_prize_name(_prize_rows[_cursor])
+		)
+	return _prize_text("which_prize")
+
+
+func _prize_named_rows() -> Array:
+	var out: Array = []
+	for row: Dictionary in _prize_rows:
+		out.append({"name": _prize_name(row), "cost": int(row.get("cost", 0))})
+	return out
+
+
+## `.putMonName`'s `cp 2`: the third list is `GetItemName`'s and the two in front
+## of it are `GetMonName`'s.
+func _prize_name(row: Dictionary) -> String:
+	var number: int = int(row.get("item", 0))
+	return _data.item_name(number) if _prize_tms \
+		else String(_data.species(number).get("name", ""))
+
+
 ## The shop. `MartDialog` opens on the map: `MENU_BACKUP_TILES` on the welcome
 ## box and on `MenuHeader_BuySell`, and no `BuyMenu` screen until BUY is chosen.
 func _open_mart(mart: Dictionary) -> void:
@@ -642,14 +903,7 @@ func _open_mart(mart: Dictionary) -> void:
 	_mart_message = PackedStringArray()
 	_cursor = 0
 	_set_overlay_open(true)
-	if _mart_view == null and _service_hardware != null:
-		_mart_view = TextureRect.new()
-		_mart_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		_mart_view.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
-		_mart_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		## After the panel's own view, which is [method Gen2Screen.display]'s
-		## z-order: the menu behind the shop is hidden anyway.
-		_service_hardware.display(_mart_view)
+	_open_map_overlay_view()
 	_refresh_mart_sell_entries()
 	## `.HowMayIHelpYou` hands the loop to `.TopMenu`; every other shop type
 	## prints its intro through `MartTextbox`, which waits before `BuyMenu`.
@@ -1104,6 +1358,18 @@ func _sell_mart_selection() -> void:
 		}),
 		MART_SELL if not _mart_sell_entries.is_empty() else MART_TOP
 	)
+
+
+## The view every counter standing over the map draws into, after the panel's
+## own: the menu behind a counter is hidden anyway.
+func _open_map_overlay_view() -> void:
+	if _mart_view != null or _service_hardware == null:
+		return
+	_mart_view = TextureRect.new()
+	_mart_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_mart_view.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
+	_mart_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_service_hardware.display(_mart_view)
 
 
 func _close_mart() -> void:

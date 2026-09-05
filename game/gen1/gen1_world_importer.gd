@@ -36,6 +36,12 @@ static func import_to_cache(
 	for path: String in sections:
 		if not RomCache.write_json(path, sections[path]):
 			return _error("Could not write %s." % path.get_file())
+	if not RomCache.write_section(
+		RomCache.overworld_effects_path(directory),
+		RomCache.blob_path(RomCache.overworld_effects_path(directory)),
+		result["effects"]
+	):
+		return _error("Could not write overworld effect sprites.")
 	var graphics: Dictionary = result["graphics"]
 	for number: int in graphics:
 		if not RomCache.write_indices(RomCache.world_tile_path(directory, number), graphics[number]):
@@ -72,6 +78,9 @@ static func read_world(
 	var encounters: Dictionary = _read_encounters(rom, layout)
 	if not bool(encounters["ok"]):
 		return encounters
+	var effects: Dictionary = _read_overworld_effects(rom, layout)
+	if not bool(effects["ok"]):
+		return effects
 	var water: PackedByteArray = _read_list(rom, int(layout["water_tilesets"]))
 	var tilesets: Array = []
 	var graphics: Dictionary = {}
@@ -111,7 +120,40 @@ static func read_world(
 		"sprites": sprites["sprites"],
 		"sprite_graphics": sprites["graphics"],
 		"encounters": encounters["encounters"],
+		"effects": effects["effects"],
 	}
+
+
+## `PokeCenterFlashingMonitorAndHealBall` and `PokeCenterOAMData` behind it, the
+## one effect Generation 1 draws over the map. Both are checked against the bytes
+## the pinned sources build, so a moved offset is refused rather than decoded.
+static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout.get("heal_machine_gfx", -1))
+	var bytes: int = Gen1Layout.HEAL_MACHINE_TILES * PokeTiles.TILE_BYTES
+	var oam: int = Gen1Layout.HEAL_MACHINE_OAM.size() * Gen1Layout.HEAL_MACHINE_OAM_SIZE
+	if at < 0 or not rom.in_bounds(at, bytes + oam):
+		return _error("The heal machine graphics are outside the cartridge.")
+	if rom.slice(at, bytes) != PackedByteArray(Gen1Layout.HEAL_MACHINE_BYTES):
+		return _error("The heal machine sheet is not the monitor and its ball.")
+	for row: int in Gen1Layout.HEAL_MACHINE_OAM.size():
+		var entry: int = at + bytes + row * Gen1Layout.HEAL_MACHINE_OAM_SIZE
+		var pinned: Array = Gen1Layout.HEAL_MACHINE_OAM[row]
+		## The attribute byte carries a Game Boy Color palette on Yellow and not
+		## on Red or Blue, so only the flip is compared.
+		var flipped: bool = (rom.u8(entry + 3) & Gen1Layout.HEAL_MACHINE_OAM_XFLIP) != 0
+		if [rom.u8(entry), rom.u8(entry + 1), rom.u8(entry + 2), flipped] != pinned:
+			return _error("Heal machine OAM row %d is not %s." % [row, pinned])
+	var pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(
+		rom.slice(at, bytes), 0, Gen1Layout.HEAL_MACHINE_TILES
+	)
+	if pixels.size() != Gen1Layout.HEAL_MACHINE_TILES * PokeTiles.TILE_PIXELS:
+		return _error("The heal machine graphics did not decode.")
+	return {"ok": true, "effects": [{
+		"name": "heal_machine",
+		"tiles": Gen1Layout.HEAL_MACHINE_TILES,
+		"vtile": Gen1Layout.HEAL_MACHINE_VTILE,
+		"bytes": Array(pixels),
+	}]}
 
 
 static func _error(message: String) -> Dictionary:

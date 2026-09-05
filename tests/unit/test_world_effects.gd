@@ -464,6 +464,27 @@ func test_the_heal_machine_rotates_its_palette_once_the_balls_are_placed() -> vo
 	)
 
 
+## `AnimateHealingMachine` places the monitor before its own party loop and has
+## one table and one position: no machine type moves it, and the six balls are
+## `PokeCenterOAMData`'s two mirrored columns rather than Crystal's.
+func test_generation_one_places_its_own_machine_and_takes_no_shift() -> void:
+	var effects := Gen2WorldEffects.new()
+	effects.start_heal_machine(
+		Gen2WorldEffects.HEAL_MACHINE_ELMS_LAB, 2, RomRegistry.GEN1
+	)
+	var oam: Array = Gen2WorldEffects.gen1_heal_machine_oam()
+	var tiles: Array = effects.sprites()[0]["tiles"]
+	assert_eq(tiles.size(), 2, "The monitor and the first ball.")
+	assert_eq(tiles[0]["offset"], (oam[0] as Array)[0], "Elm's Lab does not move it.")
+	assert_eq(tiles[1]["offset"], (oam[1] as Array)[0])
+	assert_false(bool(tiles[1]["flip_x"]))
+	for _frame: int in Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES:
+		effects.advance_frame()
+	tiles = effects.sprites()[0]["tiles"]
+	assert_eq(tiles.size(), 3, "The second ball, thirty frames behind the first.")
+	assert_true(bool(tiles[2]["flip_x"]), "The right column is the left one mirrored.")
+
+
 ## `ld a, [wPartyCount] / and a / ret z`: an empty party draws nothing at all.
 func test_the_heal_machine_draws_nothing_for_an_empty_party() -> void:
 	var effects := Gen2WorldEffects.new()
