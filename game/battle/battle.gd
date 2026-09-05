@@ -782,10 +782,16 @@ func init_enemy_trainer(trainer_class: int, rewarded: bool = true) -> void:
 	_gain_gym_battle_happiness(trainer_class)
 
 
+## `wAmountMoneyWon`, the three packed-decimal bytes
+## `ReadTrainerParty.LastLoop` adds `wTrainerBaseMoney` into once a level, where
+## `ComputeTrainerReward`'s `Multiply` is read two binary ones wide.
+const GEN1_REWARD_CEILING: int = 999999
+
+
 ## `ComputeTrainerReward`, which `ReadTrainerParty` runs once the whole party is
 ## in: `wCurPartyLevel` is still the last member's, so a reward is the class's
 ## base times the level of whoever the trainer sends out last rather than of
-## whoever is strongest. `Multiply`'s product is read two bytes wide.
+## whoever is strongest.
 func _compute_trainer_reward(base_reward: int) -> void:
 	battle_reward = 0
 	if base_reward <= 0:
@@ -796,7 +802,11 @@ func _compute_trainer_reward(base_reward: int) -> void:
 	var last: Gen2BattleMon = mons[mons.size() - 1]
 	if last == null:
 		return
-	battle_reward = (base_reward * last.level) & 0xFFFF
+	var product: int = base_reward * last.level
+	if data != null and data.generation == RomRegistry.GEN1:
+		battle_reward = mini(product, GEN1_REWARD_CEILING)
+		return
+	battle_reward = product & 0xFFFF
 
 
 ## `InitEnemyTrainer`'s `.partyloop`, which runs on the frame the trainer's pic

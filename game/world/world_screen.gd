@@ -4985,13 +4985,20 @@ func _build_battle_transition(request: Dictionary) -> Gen2BattleTransition:
 ## `..._CompareLevels` and `..._IsDungeonMap` over `DungeonMaps1` and
 ## `DungeonMaps2`. The level read is `wCurEnemyLevel`, this battle's own, where
 ## Crystal reads the previous fight's `wEnemyMonLevel`.
+## `wCurEnemyLevel`, which `InitBattleEnemyParameters` writes for a wild battle
+## and not for a trainer one, so the level a trainer transition is picked by is
+## whatever wild the player last met.
+var _gen1_cur_enemy_level: int = 0
+
+
 func _build_gen1_battle_transition(values: Dictionary) -> Gen2BattleTransition:
+	_gen1_cur_enemy_level = int(values.get("level", _gen1_cur_enemy_level))
 	var map_id: int = _world.current_map.number if _world.current_map != null else 0
 	var index: int = 0
 	if int(values.get("trainer_class", 0)) > 0:
 		index |= Gen2BattleTransition.GEN1_TRAINER_BIT
 	if _battle_lead_level() + Gen2BattleTransition.STRONGER_MARGIN \
-		<= int(values.get("level", 0)):
+		<= int(values.get("level", _gen1_cur_enemy_level)):
 		index |= Gen2BattleTransition.GEN1_STRONGER_BIT
 	if Gen1Layout.is_dungeon_map(map_id):
 		index |= Gen2BattleTransition.GEN1_DUNGEON_BIT
@@ -5086,6 +5093,7 @@ func _apply_battle_transition() -> void:
 		## alone, so this is the background's order and not the map fade's:
 		## the sprites standing over the wedges keep their own colours.
 		_battle_transition.palette_order(),
+		_battle_transition.source_cells(),
 	)
 
 

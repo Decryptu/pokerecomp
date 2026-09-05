@@ -524,11 +524,47 @@ func test_a_generation_1_wipe_opens_with_the_battlers_alone() -> void:
 	])
 
 
-## `BattleTransition_Spiral`, `..._Shrink` and `..._Split` are the four trainer
-## rows, and the last two move the map's own tiles rather than blacking cells.
-func test_the_generation_1_trainer_rows_have_no_animation_yet() -> void:
-	for index: int in [1, 3, 5, 7]:
-		assert_null(Gen2BattleTransition.create_gen1(index))
+## `BattleTransition_Spiral`'s two directions, `..._Shrink` and `..._Split`: the
+## four trainer rows, each driven to its own end the same way.
+const GEN1_TRAINER_FRAMES: Dictionary = {1: 163, 3: 130, 5: 74, 7: 74}
+
+
+func test_every_generation_1_trainer_wipe_ends_black_in_its_own_frame_count() -> void:
+	for index: int in GEN1_TRAINER_FRAMES:
+		var ran: Dictionary = _run_gen1_transition(index)
+		assert_eq(int(ran["frames"]), int(GEN1_TRAINER_FRAMES[index]),
+			"row %d spends its own frames" % index)
+		assert_eq(int(ran["black"]),
+			Gen2BattleTransition.COLUMNS * Gen2BattleTransition.ROWS,
+			"BattleTransition_BlackScreen leaves nothing showing")
+		assert_eq(int(ran["order"]), Gen2BattleTransition.GEN1_BLACK_ORDER)
+
+
+## `BattleTransition_CopyTiles1` and `..._CopyTiles2` move `wTileMap` rather than
+## writing the black tile over it, so only the two squeezes answer a source cell
+## for every cell of the screen, and only the halves that moved answer one that
+## is not their own.
+func test_only_the_two_generation_1_squeezes_move_the_map() -> void:
+	for index: int in [1, 3]:
+		assert_true(Gen2BattleTransition.create_gen1(index).source_cells().is_empty(),
+			"row %d blacks cells out" % index)
+	for index: int in [5, 7]:
+		var transition: Gen2BattleTransition = Gen2BattleTransition.create_gen1(index)
+		var seeded: PackedInt32Array = transition.source_cells()
+		assert_eq(seeded.size(), Gen2BattleTransition.COLUMNS * Gen2BattleTransition.ROWS)
+		for cell: int in seeded.size():
+			assert_eq(int(seeded[cell]), cell, "row %d opens on the map itself" % index)
+			break
+		for _step: int in 40:
+			transition.advance_frame()
+		var moved: int = 0
+		var filled: int = 0
+		for cell: int in transition.source_cells().size():
+			var source: int = int(transition.source_cells()[cell])
+			moved += 1 if source >= 0 and source != cell else 0
+			filled += 1 if source < 0 else 0
+		assert_true(moved > 0, "row %d moved the map" % index)
+		assert_true(filled > 0, "row %d filled the edge it moved off" % index)
 
 
 ## `BattleTransition_CircleData1` to `...5` are `.wedge1` to `.wedge5` byte for

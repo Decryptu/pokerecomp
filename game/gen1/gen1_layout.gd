@@ -509,6 +509,21 @@ const OBJECT_ITEM_BYTES: int = 1
 ## `InitBattleEnemyParameters`' `cp OPP_ID_OFFSET`: the extra byte is this plus
 ## a trainer class, or below it a species, and the next its number or level.
 const OPPONENT_ID_OFFSET: int = 200
+## `trainer`'s twelve bytes, which a `text_asm` row's `ld hl` names: the bit
+## `TrainerFlagAction` counts off the address behind it, the range
+## `CheckSpriteCanSeePlayer` compares in pixels, then three texts and a spare.
+const TRAINER_HEADER_SIZE: int = 12
+const TRAINER_HEADER_AT: Dictionary = {
+	"flag_bit": 0, "range": 1, "flag_address": 2,
+	"before": 4, "after": 6, "end": 8,
+}
+const TRAINER_HEADER_END: int = 0xFF
+const TRAINER_RANGE_SHIFT: int = 4
+## `text_asm`, `ld hl, nn`, then either `call TalkToTrainer` or a `jr` onto one.
+const TRAINER_TEXT_ASM: int = 0x08
+const TRAINER_TEXT_LD_HL: int = 0x21
+const TRAINER_TEXT_CALL: int = 0xCD
+const TRAINER_TEXT_JR: int = 0x18
 ## `MAX_WARP_EVENTS`, `MAX_BG_EVENTS` and `MAX_OBJECT_EVENTS`.
 const MAX_WARP_EVENTS: int = 32
 const MAX_SIGN_EVENTS: int = 16
@@ -639,6 +654,9 @@ const TRAINER_CLASS_COUNT: int = 47
 ## money as three packed-decimal bytes. Every trainer picture is in the one bank
 ## the layout records, and `ChiefPic` and `ScientistPic` are the same address.
 const TRAINER_PIC_SIZE: int = 5
+## `ReadTrainerParty`'s `cp $ff`: a party opening on this stores a level in
+## front of every species instead of one for the whole team.
+const TRAINER_PARTY_LEVELS: int = 0xFF
 
 ## Sides in tiles: `_LoadTrainerPic`'s `ld a, $77`, the widest front pic, and
 ## every back pic, which `ScaleSpriteByTwo` doubles before a battle draws it.
@@ -677,6 +695,13 @@ const RED_BLUE: Dictionary = {
 	"cries": 0x39446,
 	"trainer_pics": 0x39914,
 	"trainer_pics_bank": 0x13,
+	## `TrainerDataPointers` and the `TrainerAI` that bounds the last class.
+	"trainer_parties": 0x39D3B,
+	"trainer_parties_end": 0x3A52E,
+	## What a trainer header is read through, and what one of its texts may be.
+	"talk_to_trainer": 0x31CC,
+	"print_text": 0x3C49,
+	"event_flags": 0xD747,
 	## `DisplayPokemartDialogue`'s own greeting and the head of the two facility
 	## text runs [constant MART_TEXT_AT] and its neighbour walk. Every offset
 	## here is `pokered.sym`'s, which builds both dumps.
@@ -746,6 +771,11 @@ const YELLOW: Dictionary = {
 	"cries": 0x39462,
 	"trainer_pics": 0x39893,
 	"trainer_pics_bank": 0x13,
+	"trainer_parties": 0x39DD1,
+	"trainer_parties_end": 0x3A5B2,
+	"talk_to_trainer": 0x3168,
+	"print_text": 0x3C36,
+	"event_flags": 0xD746,
 	"mart_greeting": 0x02938,
 	"mart_text": 0x06B91,
 	"pokecenter_text": 0x06ED0,

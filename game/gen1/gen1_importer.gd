@@ -19,6 +19,9 @@ const FIRST_TYPE_NAME: String = "NORMAL"
 const LAST_TYPE_NAME: String = "DRAGON"
 const FIRST_TRAINER_NAME: String = "YOUNGSTER"
 
+## `YoungsterData`'s first party, the Route 3 pair, as levels and dex numbers.
+const FIRST_TRAINER_PARTY: Array = [[11, 19], [11, 23]]
+
 ## Bulbasaur's whole `BaseStats` row, which says the record size and member
 ## order are both right.
 const FIRST_STATS: Array[int] = [45, 49, 49, 45, 65]
@@ -111,6 +114,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_dex_order,
 	_verify_dex_entries,
 	_verify_trainer_names,
+	_verify_trainer_parties,
 	_verify_palettes,
 	_verify_wild_constants,
 	_verify_pic_pointers,
@@ -498,6 +502,31 @@ static func _verify_trainer_names(rom: RomFile, layout: Dictionary) -> Dictionar
 	)
 	if names.size() != Gen1Layout.TRAINER_CLASS_COUNT or names[0] != FIRST_TRAINER_NAME:
 		return _fail("Trainer names open on '%s'." % (names[0] if not names.is_empty() else ""))
+	return _ok()
+
+
+## Every class points inside the table's own bank, the spans do not go back, and
+## Youngster opens on the pair Route 3 stands the player in front of.
+static func _verify_trainer_parties(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var table: int = int(layout["trainer_parties"])
+	var bank: int = RomFile.bank_of(table)
+	var end: int = int(layout["trainer_parties_end"])
+	var previous: int = table
+	for trainer_class: int in Gen1Layout.TRAINER_CLASS_COUNT:
+		var at: int = Gen1Layout.banked(
+			bank, rom.u16le(table + trainer_class * Gen1Layout.POINTER_SIZE)
+		)
+		if at < previous or at >= end:
+			return _fail("Trainer class %d's party is at $%05X." % [trainer_class + 1, at])
+		previous = at
+	var classes: Array = _read_trainer_parties(rom, layout)
+	if (classes[0] as Array).is_empty() or (classes[-1] as Array).is_empty():
+		return _fail("A trainer class at the end of the table carries no parties.")
+	var read: Array = []
+	for member: Dictionary in ((classes[0] as Array)[0] as Dictionary)["party"]:
+		read.append([int(member["level"]), int(member["species"])])
+	if read != FIRST_TRAINER_PARTY:
+		return _fail("Youngster's first party reads %s." % str(read))
 	return _ok()
 
 
@@ -1075,6 +1104,7 @@ func _import_trainers(rom: RomFile, layout: Dictionary) -> Array:
 		rom.bytes(), int(layout["trainer_names"]), Gen1Layout.TRAINER_CLASS_COUNT,
 		MAX_NAME_LENGTH,
 	)
+	var parties: Array = _read_trainer_parties(rom, layout)
 	var out: Array = []
 	for trainer_class: int in range(1, Gen1Layout.TRAINER_CLASS_COUNT + 1):
 		var row: int = int(layout["trainer_pics"]) \
@@ -1082,9 +1112,58 @@ func _import_trainers(rom: RomFile, layout: Dictionary) -> Array:
 		out.append({
 			"number": trainer_class,
 			"name": names[trainer_class - 1],
-			# `GetTrainerInformation`: times the last enemy's level.
-			"base_money": _bcd3(rom, row + Gen1Layout.POINTER_SIZE),
+			# `ReadTrainerParty.LastLoop` adds it once a level, which is what
+			# `Gen2Battle._compute_trainer_reward` multiplies.
+			"attributes": {
+				"base_reward": _bcd3(rom, row + Gen1Layout.POINTER_SIZE),
+			},
+			"trainers": parties[trainer_class - 1],
 		})
+	return out
+
+
+## `TrainerDataPointers`: one span a class, each a run of parties. A party opens
+## on one level every member shares, or on `$FF` and then a level a member.
+static func _read_trainer_parties(rom: RomFile, layout: Dictionary) -> Array:
+	var table: int = int(layout["trainer_parties"])
+	var bank: int = RomFile.bank_of(table)
+	var starts: Array[int] = []
+	for trainer_class: int in Gen1Layout.TRAINER_CLASS_COUNT:
+		starts.append(Gen1Layout.banked(
+			bank, rom.u16le(table + trainer_class * Gen1Layout.POINTER_SIZE)
+		))
+	starts.append(int(layout["trainer_parties_end"]))
+	var out: Array = []
+	for trainer_class: int in Gen1Layout.TRAINER_CLASS_COUNT:
+		out.append(_read_trainer_class_parties(
+			rom, layout, starts[trainer_class], starts[trainer_class + 1]
+		))
+	return out
+
+
+static func _read_trainer_class_parties(
+	rom: RomFile, layout: Dictionary, start: int, end: int
+) -> Array:
+	var out: Array = []
+	var at: int = start
+	while at < end:
+		var level: int = rom.u8(at)
+		at += 1
+		var party: Array = []
+		while at < end and rom.u8(at) != 0:
+			var member_level: int = level
+			if level == Gen1Layout.TRAINER_PARTY_LEVELS:
+				member_level = rom.u8(at)
+				at += 1
+			party.append({
+				"level": member_level,
+				"species": Gen1Layout.dex_of_index(rom, layout, rom.u8(at)),
+				"item": 0,
+				"moves": [],
+			})
+			at += 1
+		at += 1
+		out.append({"name": "", "type": Gen2Layout.TRAINER_MON_NORMAL, "party": party})
 	return out
 
 

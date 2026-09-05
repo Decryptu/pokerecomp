@@ -72,6 +72,9 @@ func set_world(world: Gen2WorldAPI, animation: Gen2WorldAnimation = null) -> voi
 ## draws them with and the palette it floods the map with, or an empty one when
 ## it floods nothing.
 var _transition_cells: PackedByteArray = PackedByteArray()
+## Which screen cell each cell draws its map tile from, for a squeeze that moves
+## `wTileMap` rather than blacking it out.
+var _transition_sources: PackedInt32Array = PackedInt32Array()
 var _transition_tiles: PackedByteArray = PackedByteArray()
 var _transition_palette: PackedColorArray = PackedColorArray()
 ## Which map objects the transition has left in OAM, and which of them is the
@@ -408,10 +411,12 @@ func _palette_tables(palettes: Array) -> Array:
 func set_transition(
 	cells: PackedByteArray, tiles: PackedByteArray, palette: PackedColorArray,
 	sprites: int = Gen2BattleTransition.SPRITES_ALL, opponent: int = -1,
-	order: int = Gen2BattleTransition.IDENTITY
+	order: int = Gen2BattleTransition.IDENTITY,
+	sources: PackedInt32Array = PackedInt32Array()
 ) -> void:
 	var was: PackedColorArray = _transition_palette
 	var was_order: int = _transition_order
+	_transition_sources = sources
 	_transition_cells = cells
 	_transition_tiles = tiles
 	_transition_palette = palette
@@ -432,6 +437,7 @@ func clear_transition() -> void:
 		return
 	var was_flooding: bool = not _transition_palette.is_empty()
 	_transition_cells = PackedByteArray()
+	_transition_sources = PackedInt32Array()
 	_transition_tiles = PackedByteArray()
 	_transition_palette = PackedColorArray()
 	_transition_sprites = Gen2BattleTransition.SPRITES_ALL
@@ -486,8 +492,12 @@ func _draw_transition(
 		)
 	for y: int in range(maxi(first.y, 0), last.y + 1):
 		for x: int in range(maxi(first.x, 0), last.x + 1):
-			var cell: int = int(_transition_cells[y * Gen2BattleTransition.COLUMNS + x])
-			if cell == Gen2BattleTransition.CELL_NONE:
+			var index: int = y * Gen2BattleTransition.COLUMNS + x
+			var cell: int = int(_transition_cells[index])
+			## A cell the squeeze filled is black whatever it was drawing before.
+			var source: int = -1 if cell == Gen2BattleTransition.CELL_BLACK \
+				else _transition_source(index)
+			if cell == Gen2BattleTransition.CELL_NONE and source < 0:
 				continue
 			var at := Rect2(
 				origin + Vector2(x * PokeTiles.TILE_WIDTH, y * PokeTiles.TILE_HEIGHT),
@@ -495,6 +505,9 @@ func _draw_transition(
 			)
 			var covered: Rect2 = at if not priority else at.intersection(clip)
 			if covered.size.x <= 0.0 or covered.size.y <= 0.0:
+				continue
+			if source >= 0:
+				_draw_moved_tile(screen_tile, source, at, covered)
 				continue
 			var palette: PackedColorArray = flood
 			if palette.is_empty():
@@ -510,6 +523,37 @@ func _draw_transition(
 			draw_texture_rect_region(
 				texture, covered, Rect2(covered.position - at.position, covered.size)
 			)
+
+
+## Where the cell at [param index] takes its map tile from, or -1 for its own.
+func _transition_source(index: int) -> int:
+	if index >= _transition_sources.size():
+		return -1
+	var source: int = int(_transition_sources[index])
+	return -1 if source < 0 or source == index else source
+
+
+## The map tile another screen cell was drawing, painted over this one.
+func _draw_moved_tile(
+	screen_tile: Vector2i, source: int, at: Rect2, covered: Rect2
+) -> void:
+	if _atlas == null:
+		return
+	@warning_ignore("integer_division")
+	var tile: int = _drawn_tile_at(
+		screen_tile.x + source % Gen2BattleTransition.COLUMNS,
+		screen_tile.y + source / Gen2BattleTransition.COLUMNS,
+	)
+	if tile < 0:
+		return
+	draw_texture_rect_region(
+		_atlas,
+		covered,
+		Rect2(
+			Vector2(tile * PokeTiles.TILE_WIDTH, 0) + (covered.position - at.position),
+			covered.size,
+		),
+	)
 
 
 ## `BATTLETRANSITION_SQUARE`, the one tile of the pair that has a pattern in it.
@@ -1140,7 +1184,8 @@ func _transition_wrote(at: Vector2) -> bool:
 		return false
 	var index: int = y * Gen2BattleTransition.COLUMNS + x
 	return index < _transition_cells.size() \
-		and int(_transition_cells[index]) != Gen2BattleTransition.CELL_NONE
+		and (int(_transition_cells[index]) != Gen2BattleTransition.CELL_NONE
+			or _transition_source(index) >= 0)
 
 
 ## The same strip as the atlas with the cartridge's transparent index left out,
