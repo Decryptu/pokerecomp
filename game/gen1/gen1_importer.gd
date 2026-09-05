@@ -36,6 +36,16 @@ const FIRST_DEX_HEIGHT_FEET: int = 2
 const FIRST_DEX_HEIGHT_INCHES: int = 4
 const FIRST_DEX_WEIGHT: int = 150
 
+## `KeyItemFlags`' first byte: the four balls are free and the Town Map, the
+## Bicycle, the Surfboard and the Safari Ball are not.
+const KEY_ITEM_FIRST_BYTE: int = 0xF0
+## The first item and the row count of `UsableItems_PartyMenu` and
+## `UsableItems_CloseMenu`, both identical on all three cartridges.
+const USABLE_ITEM_FIRST: Dictionary = {
+	"usable_items_party": [0x0A, 36],
+	"usable_items_close": [0x1D, 6],
+}
+
 ## `TechnicalMachines`' first and last rows: TM01 is Mega Punch and HM05 is Flash.
 const FIRST_TM_MOVE: int = 0x05
 const LAST_HM_MOVE: int = 0x94
@@ -110,6 +120,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_type_names,
 	_verify_type_effects,
 	_verify_item_names,
+	_verify_item_attributes,
 	_verify_tmhm_moves,
 	_verify_dex_order,
 	_verify_dex_entries,
@@ -156,6 +167,8 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"prizes": ["prize_text", Gen1Layout.PRIZE_TEXT_AT],
 	"prizes_2": ["prize_text_2", Gen1Layout.PRIZE_TEXT_2_AT],
 	"pick_up_item": ["found_item_text", Gen1Layout.PICK_UP_TEXT_AT],
+	"item_use": ["item_use_text", Gen1Layout.ITEM_USE_TEXT_AT],
+	"toss": ["toss_text", Gen1Layout.TOSS_TEXT_AT],
 }
 
 
@@ -271,6 +284,21 @@ static func _verify_item_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	)
 	if names.size() != Gen1Layout.ITEM_COUNT or names[0] != FIRST_ITEM_NAME:
 		return _fail("Item names open on '%s'." % (names[0] if not names.is_empty() else ""))
+	return _ok()
+
+
+## The three tables `StartMenu_Item` reads an item's own behaviour out of. Each
+## opens on a row a wrong offset would not: the Town Map is the first key item,
+## the party run on the Moon Stone and the closing run on the Escape Rope.
+static func _verify_item_attributes(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var flags: int = int(layout["key_item_flags"])
+	if rom.u8(flags) != KEY_ITEM_FIRST_BYTE:
+		return _fail("KeyItemFlags opens on $%02X." % rom.u8(flags))
+	for key: String in USABLE_ITEM_FIRST:
+		var run: Dictionary = read_usable_items(rom, layout, key)
+		if run.size() != int(USABLE_ITEM_FIRST[key][1]) \
+			or not run.has(int(USABLE_ITEM_FIRST[key][0])):
+			return _fail("%s holds %d rows." % [key, run.size()])
 	return _ok()
 
 
@@ -1046,6 +1074,8 @@ func _import_items(rom: RomFile, layout: Dictionary) -> Array:
 	var names: PackedStringArray = Gen1Text.decode_sequence(
 		rom.bytes(), int(layout["item_names"]), Gen1Layout.ITEM_COUNT, MAX_NAME_LENGTH
 	)
+	var party_use: Dictionary = read_usable_items(rom, layout, "usable_items_party")
+	var close_use: Dictionary = read_usable_items(rom, layout, "usable_items_close")
 	## `GetMachineName` spells an HM's or a TM's name from its own number and
 	## `GetMachinePrice` reads a nybble table an HM never reaches, so the two
 	## runs above `ItemNames` are built rather than read. The table is dense
@@ -1057,8 +1087,49 @@ func _import_items(rom: RomFile, layout: Dictionary) -> Array:
 			"number": item,
 			"name": _item_name(names, item),
 			"price": _item_price(rom, layout, item),
+			"pocket": Gen1Layout.BAG_POCKET,
+			"permissions": _item_permissions(rom, layout, item),
+			"field_menu": _item_field_menu(item, party_use, close_use),
 		})
 	return out
+
+
+## `IsKeyItem_`: `KeyItemFlags` decides everything below HM01 and `IsItemHM`
+## everything above, so an HM is a key item and a TM is not. Nothing registers an
+## item on SELECT there, so `CANT_SELECT` is set on the whole table.
+static func _item_permissions(rom: RomFile, layout: Dictionary, item: int) -> int:
+	var key: bool = Gen1Layout.is_hm_item(item)
+	if item <= Gen1Layout.ITEM_COUNT:
+		var index: int = item - 1
+		@warning_ignore("integer_division")
+		var byte: int = rom.u8(int(layout["key_item_flags"]) + index / 8)
+		key = (byte & (1 << (index % 8))) != 0
+	var permissions: int = Gen2Layout.ITEM_ATTRIBUTE_CANT_SELECT
+	return permissions | (Gen2Layout.ITEM_ATTRIBUTE_CANT_TOSS if key else 0)
+
+
+## `StartMenu_Item`'s own ladder as the nibble [Gen2WorldPack] branches on: the
+## Bicycle and `UsableItems_CloseMenu` quit the menu, an HM, a TM and
+## `UsableItems_PartyMenu` open the party list, the rest leave the list standing.
+static func _item_field_menu(item: int, party_use: Dictionary, close_use: Dictionary) -> int:
+	if item == Gen1Layout.ITEM_BICYCLE or close_use.has(item):
+		return Gen2Layout.ITEMMENU_CLOSE
+	if Gen1Layout.machine_number(item) > 0 or party_use.has(item):
+		return Gen2Layout.ITEMMENU_PARTY
+	return Gen2Layout.ITEMMENU_CURRENT
+
+
+## One `db`-terminated item run as a set. Empty when the run does not end inside
+## [constant Gen1Layout.USABLE_ITEMS_MAX] rows, which is what a wrong offset does.
+static func read_usable_items(rom: RomFile, layout: Dictionary, key: String) -> Dictionary:
+	var at: int = int(layout.get(key, 0))
+	var out: Dictionary = {}
+	for step: int in Gen1Layout.USABLE_ITEMS_MAX:
+		var item: int = rom.u8(at + step)
+		if item == Gen1Layout.USABLE_ITEMS_END:
+			return out
+		out[item] = true
+	return {}
 
 
 static func _item_name(names: PackedStringArray, item: int) -> String:

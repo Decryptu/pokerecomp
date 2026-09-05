@@ -20,12 +20,18 @@ const CANCELLED: StringName = &"cancelled"
 var maximum: int = 1
 ## `wItemQuantityChange`, which every caller opens on 1.
 var value: int = 1
+## `DisplayChooseQuantityMenu`'s `.waitForKeyPressLoop` reads A, B, UP and DOWN
+## and nothing else, so Generation 1's dial has no ten-step on left and right.
+var page_steps: bool = true
 
 
-static func open(available: int) -> Gen2WorldQuantityPrompt:
+static func open(
+	available: int, generation: int = RomRegistry.GEN2
+) -> Gen2WorldQuantityPrompt:
 	var prompt := Gen2WorldQuantityPrompt.new()
 	prompt.maximum = maxi(1, available)
 	prompt.value = 1
+	prompt.page_steps = generation != RomRegistry.GEN1
 	return prompt
 
 
@@ -49,9 +55,11 @@ func press(button: int) -> StringName:
 		PokeButton.DOWN:
 			_step_down()
 		PokeButton.LEFT:
-			_page_down()
+			if page_steps:
+				_page_down()
 		PokeButton.RIGHT:
-			_page_up()
+			if page_steps:
+				_page_up()
 	return PENDING
 
 

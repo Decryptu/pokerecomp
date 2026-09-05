@@ -462,3 +462,72 @@ func test_a_coin_game_names_the_first_thing_missing() -> void:
 		Gen2WorldPack.coin_game_refusal_line(50, 0), Gen2WorldPack.NO_COIN_CASE_TEXT
 	)
 	assert_eq(Gen2WorldPack.coin_game_refusal_line(1, 1), "")
+
+
+## `StartMenu_Item` opens `DisplayListMenuID` on `wNumBagItems` and nothing else,
+## so there is one pocket, its rows are USE and TOSS, and nothing is held.
+func test_a_generation_1_bag_is_one_pocket_with_a_use_toss_submenu() -> void:
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	data.generation = RomRegistry.GEN1
+	assert_eq(Gen2WorldPack.pocket_order(data), [Gen2WorldPack.TYPE_ITEM] as Array[int])
+	var state := Gen2WorldState.new({}, {}, {ITEM_POTION: 3})
+	var pockets: Array = Gen2WorldPack.build(data, state)
+	assert_eq(pockets.size(), 1)
+	assert_eq(((pockets[0]["items"] as Array)[0] as Dictionary)["item"], ITEM_POTION)
+	var actions: Array = []
+	for entry: Dictionary in Gen2WorldPack.item_submenu(data, ITEM_POTION):
+		actions.append(StringName(entry.get("action", &"")))
+	assert_eq(actions, [Gen2WorldPack.ACTION_USE, Gen2WorldPack.ACTION_TOSS])
+	assert_false(Gen2WorldPack.can_hold(data, ITEM_POTION))
+
+
+## `.useItem_closeMenu`'s rows carry Generation 1's own item numbers, which share
+## none of Crystal's: $06 is a Bicycle there and a Town Map here.
+func test_a_generation_1_field_effect_reads_its_own_item_numbers() -> void:
+	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
+	for raw: Dictionary in items:
+		raw["pocket"] = Gen1Layout.BAG_POCKET
+		raw["permissions"] = Gen2WorldPack.CANT_SELECT
+		raw["field_menu"] = Gen2WorldPack.ITEMMENU_CURRENT
+		if int(raw.get("number", 0)) == Gen1Layout.ITEM_BICYCLE:
+			raw["field_menu"] = Gen2WorldPack.ITEMMENU_CLOSE
+	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	data.generation = RomRegistry.GEN1
+	assert_eq(
+		Gen2WorldPack.field_effect(data, Gen1Layout.ITEM_BICYCLE),
+		Gen2WorldPack.FIELD_EFFECT_BICYCLE
+	)
+	assert_eq(
+		Gen2WorldPack.field_effect(data, Gen2WorldPack.ITEM_BICYCLE),
+		Gen2WorldPack.FIELD_EFFECT_NONE
+	)
+
+
+## `PrintListMenuEntries` prints four names and `IsKeyItem` decides which of them
+## carry a count, where `ScrollingMenu_UpdateDisplay` writes five and asks
+## `_CheckTossableItem` for the same thing.
+func test_a_generation_1_listing_is_four_rows_and_hides_a_key_item_count() -> void:
+	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
+	for raw: Dictionary in items:
+		raw["pocket"] = Gen1Layout.BAG_POCKET
+		raw["permissions"] = Gen2WorldPack.CANT_SELECT
+		if int(raw.get("number", 0)) == ITEM_BICYCLE:
+			raw["permissions"] = Gen2WorldPack.CANT_SELECT | Gen2WorldPack.CANT_TOSS
+	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	data.generation = RomRegistry.GEN1
+	var owned: Array = []
+	for item: int in range(1, 7):
+		owned.append({"item": item, "name": "ITEM%d" % item, "quantity": 2})
+	var rows: Array = Gen2WorldPack.list_rows(
+		data, Gen1Layout.BAG_POCKET, owned, 0, true, Gen2MartPage.GEN1_LIST_HEIGHT
+	)
+	assert_eq(rows.size(), Gen2MartPage.GEN1_LIST_HEIGHT)
+	assert_true(bool((rows[0] as Dictionary)["show_quantity"]))
+	assert_false(bool((rows[ITEM_BICYCLE - 1] as Dictionary)["show_quantity"]))
+	var tail: Array = Gen2WorldPack.list_rows(
+		data, Gen1Layout.BAG_POCKET, owned, 4, true, Gen2MartPage.GEN1_LIST_HEIGHT
+	)
+	assert_eq(tail.size(), 3)
+	assert_true(bool((tail[2] as Dictionary).get("cancel", false)))

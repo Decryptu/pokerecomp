@@ -78,6 +78,23 @@ const SOURCE_ENTRIES: Array[Dictionary] = [
 	{"kind": ITEM_LAUNCHER, "label": "HOME", "available": true, "gate": GATE_NO_CONTEST},
 ]
 
+## `DrawStartMenu` (engine/menus/draw_start_menu.asm), which prints its labels
+## as literal characters rather than through the `#` and `<POKE>` markers
+## Generation 2's charmap holds. Its list has no Pokegear and no contest, and
+## `StartMenu_Pokemon` is drawn whatever `wPartyCount` says: the row itself
+## returns on an empty party. `EVENT_GOT_POKEDEX` is the only gate, read here
+## off the same engine flag [Gen2WorldAPI] holds it in.
+const GEN1_ENTRIES: Array[Dictionary] = [
+	{"kind": ITEM_POKEDEX, "label": "POKéDEX", "available": true, "gate": GATE_POKEDEX},
+	{"kind": ITEM_POKEMON, "label": "POKéMON", "available": true, "gate": &""},
+	{"kind": ITEM_PACK, "label": "ITEM", "available": true, "gate": &""},
+	{"kind": ITEM_PLAYER, "label": "<PLAYER>", "available": true, "gate": &""},
+	{"kind": ITEM_SAVE, "label": "SAVE", "available": true, "gate": &""},
+	{"kind": ITEM_OPTION, "label": "OPTION", "available": true, "gate": &""},
+	{"kind": ITEM_EXIT, "label": "EXIT", "available": true, "gate": &""},
+	{"kind": ITEM_LAUNCHER, "label": "HOME", "available": true, "gate": &""},
+]
+
 ## `.Items`' third column, the one MENU ACCOUNT draws under the list
 ## (`.MenuDesc`), as imported. A mod's entry has none, which is what the empty
 ## answer means, and so does a cache imported before the run was.
@@ -101,6 +118,7 @@ static func build(
 	player_name: String = "",
 	field_moves: bool = false,
 	bug_contest: bool = false,
+	generation: int = RomRegistry.GEN2,
 ) -> Gen2WorldStartMenu:
 	var menu := Gen2WorldStartMenu.new()
 	var passes: Dictionary = {
@@ -110,7 +128,9 @@ static func build(
 		GATE_NO_CONTEST: not bug_contest,
 	}
 	var rows: Array = []
-	for entry: Dictionary in SOURCE_ENTRIES:
+	for entry: Dictionary in (
+		GEN1_ENTRIES if generation == RomRegistry.GEN1 else SOURCE_ENTRIES
+	):
 		var gate: StringName = StringName(entry.get("gate", &""))
 		if not String(gate).is_empty() and not bool(passes.get(gate, false)):
 			continue
@@ -162,6 +182,7 @@ static func from_world(world: Gen2WorldAPI, previous_cursor: int = 0) -> Gen2Wor
 		world.player_name(),
 		not world.item_field_move_offers().is_empty(),
 		world.bug_contest_active(),
+		world.data.generation if world.data != null else RomRegistry.GEN2,
 	)
 	menu.load_descriptions(world.data)
 	return menu

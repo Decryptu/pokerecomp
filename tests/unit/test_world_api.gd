@@ -6951,6 +6951,32 @@ func test_fishing_requires_the_matching_inventory_item() -> void:
 	)["ok"])
 
 
+## `ItemUsePtrTable`'s three rod rows are $4C to $4E, which are a Dire Hit, a
+## Guard Spec and a Max Repel in Crystal's numbering, so a bag read through the
+## wrong run reports a rod nobody owns.
+func test_a_generation_1_rod_is_the_item_its_own_cartridge_numbers() -> void:
+	assert_eq(
+		Gen2WorldInventory.item_for_rod(
+			Gen2WorldEncounter.METHOD_OLD_ROD, RomRegistry.GEN1
+		),
+		Gen1Layout.ITEM_OLD_ROD
+	)
+	assert_eq(
+		Gen2WorldInventory.rod_for_item(Gen1Layout.ITEM_SUPER_ROD, RomRegistry.GEN1),
+		Gen2WorldEncounter.METHOD_SUPER_ROD
+	)
+	assert_eq(
+		Gen2WorldInventory.rod_for_item(
+			Gen2WorldInventory.ITEM_OLD_ROD, RomRegistry.GEN1
+		),
+		&""
+	)
+	assert_eq(
+		Gen2WorldInventory.rod_for_item(Gen2WorldInventory.ITEM_OLD_ROD),
+		Gen2WorldEncounter.METHOD_OLD_ROD
+	)
+
+
 func test_inventory_adapter_changes_items_and_currency_atomically() -> void:
 	var world := _world(Vector2i(8, 6), Gen2WorldState.new())
 	assert_true(world.inventory.set_item_quantity(1, 2)["ok"])

@@ -321,7 +321,7 @@ func field_hm_items() -> Array[int]:
 	var count: int = _data.tmhm_moves().size()
 	for number: int in count:
 		var item: int = Gen2Layout.item_for_tmhm_number(number + 1, count)
-		if not Gen2WorldTMHM.is_hm(item):
+		if not Gen2WorldTMHM.is_hm(item, _data.generation):
 			continue
 		if Gen2WorldFieldMove.is_field_move(_data.tmhm_move(number + 1)):
 			out.append(item)
@@ -344,7 +344,7 @@ func badge_for_hm_item(item: int) -> int:
 
 ## The field move [param item] teaches, or 0 for anything that is not a field HM.
 func move_for_hm_item(item: int) -> int:
-	if _data == null or not Gen2WorldTMHM.is_hm(item):
+	if _data == null or not Gen2WorldTMHM.is_hm(item, _data.generation):
 		return 0
 	var move: int = Gen2WorldTMHM.move_for_item(_data, item)
 	return move if Gen2WorldFieldMove.is_field_move(move) else 0

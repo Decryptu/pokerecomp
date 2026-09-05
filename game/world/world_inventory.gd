@@ -8,6 +8,13 @@ extends RefCounted
 const ITEM_OLD_ROD: int = 0x3A
 const ITEM_GOOD_ROD: int = 0x3B
 const ITEM_SUPER_ROD: int = 0x3D
+## The same three rods in `item_constants.asm`'s Generation 1 numbering, which
+## shares no number with the run above: $3A is a Dire Hit there.
+const GEN1_RODS: Dictionary = {
+	Gen2WorldEncounter.METHOD_OLD_ROD: Gen1Layout.ITEM_OLD_ROD,
+	Gen2WorldEncounter.METHOD_GOOD_ROD: Gen1Layout.ITEM_GOOD_ROD,
+	Gen2WorldEncounter.METHOD_SUPER_ROD: Gen1Layout.ITEM_SUPER_ROD,
+}
 const MAX_MONEY: int = 999999
 const MAX_COINS: int = 9999
 
@@ -20,7 +27,9 @@ func _init(game_data: GameData, world_state: Gen2WorldState) -> void:
 	state = world_state
 
 
-static func item_for_rod(rod: StringName) -> int:
+static func item_for_rod(rod: StringName, generation: int = RomRegistry.GEN2) -> int:
+	if generation == RomRegistry.GEN1:
+		return int(GEN1_RODS.get(rod, 0))
 	match rod:
 		Gen2WorldEncounter.METHOD_OLD_ROD:
 			return ITEM_OLD_ROD
@@ -31,7 +40,12 @@ static func item_for_rod(rod: StringName) -> int:
 	return 0
 
 
-static func rod_for_item(item: int) -> StringName:
+static func rod_for_item(item: int, generation: int = RomRegistry.GEN2) -> StringName:
+	if generation == RomRegistry.GEN1:
+		for rod: StringName in GEN1_RODS:
+			if int(GEN1_RODS[rod]) == item:
+				return rod
+		return &""
 	match item:
 		ITEM_OLD_ROD:
 			return Gen2WorldEncounter.METHOD_OLD_ROD
@@ -55,7 +69,7 @@ func owned_rods() -> Array[StringName]:
 
 
 func owns_rod(rod: StringName) -> bool:
-	var item: int = item_for_rod(rod)
+	var item: int = item_for_rod(rod, data.generation if data != null else RomRegistry.GEN2)
 	return item > 0 and item_quantity(item) > 0
 
 

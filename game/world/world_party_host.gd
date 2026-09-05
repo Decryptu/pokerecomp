@@ -720,7 +720,7 @@ static func teach_tm_hm(
 	var before: Gen2WorldSnapshot = world.snapshot()
 	## `IsHM` returns before both the happiness change and `ConsumeTM`, so an HM
 	## costs nothing and moves nothing; a TM does both, in that order.
-	var consumed: bool = not Gen2WorldTMHM.is_hm(item)
+	var consumed: bool = not Gen2WorldTMHM.is_hm(item, world.data.generation)
 	var happiness: int = learner.happiness
 	if consumed:
 		learner.happiness = change_happiness(

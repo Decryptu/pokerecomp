@@ -40,6 +40,7 @@ const KIND_HELP: Dictionary = {
 	&"whiteout": "presses, frames: Script_Whiteout. 0 the faint line, 1 the first page of _WhitedOutText, 3 the map woken on; a second number stops that many frames into .PlayPoisonSFX instead",
 	&"elevator": "DOWN presses: the floor list bg_event 3's elevator opens, read from the cell below the panel",
 	&"start_menu": "rows down, contest: SetUpMenuItems' list. A second number of 1 runs the Bug Catching Contest and 2 has something caught",
+	&"pack": "presses, rows down: the bag opened off the start menu, seeded with one row of each shape. The rows are walked after the first press, so 0 4 scrolls the list, 1 0 is USE/TOSS, 2 1 the TOSS dial and 4 1 the box it ends in",
 	&"mailbox": "rows down, A presses: the bedroom PC's MAILBOX",
 	&"magnet_train": "frames, direction: special MagnetTrain, that many frames in. Direction 1 rides to Goldenrod",
 	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
@@ -129,6 +130,27 @@ const FIELD_ITEMS: Dictionary = {
 	&"squirtbottle": Gen2WorldPack.ITEM_SQUIRTBOTTLE,
 	&"card_key": Gen2WorldPack.ITEM_CARD_KEY,
 	&"basement_key": Gen2WorldPack.ITEM_BASEMENT_KEY,
+}
+## The three of those Generation 1 ships, under its own numbering. A kind not
+## named here is Crystal's alone and is refused rather than granting whatever
+## item that number happens to be.
+const GEN1_FIELD_ITEMS: Dictionary = {
+	&"field_item": Gen1Layout.ITEM_ITEMFINDER,
+	&"bike": Gen1Layout.ITEM_BICYCLE,
+	&"coin_case": Gen1Layout.ITEM_COIN_CASE,
+}
+
+## One row of each shape the bag draws, by generation: a stack that shows its
+## count, two rows that show none, a machine, and enough rows that the list
+## scrolls past the four `PrintListMenuEntries` prints.
+const PACK_ROWS: Dictionary = {
+	RomRegistry.GEN1: {
+		0x14: 5, 0x0F: 2, 0x05: 1, 0x06: 1, 0x4C: 1, 0xC9: 1,
+	},
+	RomRegistry.GEN2: {
+		Gen2WorldPartyHost.ITEM_POTION: 5, Gen2WorldPartyHost.ITEM_REPEL: 2,
+		Gen2WorldPack.ITEM_BICYCLE: 1,
+	},
 }
 
 ## The three whose effect reads what the player is facing. Each is photographed
@@ -416,6 +438,7 @@ const STAGERS: Dictionary = {
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
+	&"pack": &"_stage_pack",
 	&"bills_pc": &"_stage_pc",
 	&"players_pc": &"_stage_pc",
 	&"mailbox": &"_stage_pc",
@@ -437,7 +460,7 @@ func _stage_kind() -> void:
 	if FIELD_ITEMS.has(_kind):
 		if _kind in FACE_UP_FIRST:
 			_screen.move_up()
-		_screen.preview_field_item(int(FIELD_ITEMS[_kind]))
+		_screen.preview_field_item(int(_field_item_number()))
 		return
 	if _screen.has_method(SCREEN_DRIVER % _kind):
 		## The screen's own `preview_*` drivers, by their name without the
@@ -1074,6 +1097,35 @@ func _stage_start_menu() -> void:
 ## `_BillsPC`, which no preview cell reaches: the first number is how many rows down
 ## the top menu to stand and the second how many A presses to spend from there, so `1
 ## 1` is the DEPOSIT list and `1 2` its submenu on the first party member.
+## `StartMenu_Item`'s own list, which no map cell reaches. The rows are walked
+## down after the first A press, so a first number of 0 scrolls the list itself
+## and anything above it walks the submenu that press opened.
+func _stage_pack() -> void:
+	_screen.preview_pack(PACK_ROWS.get(_generation(), {}))
+	if _cell.x >= 1:
+		_screen.press_button(PokeButton.A)
+		_screen.advance_frame()
+	for _down: int in maxi(_cell.y, 0):
+		_screen.press_button(PokeButton.DOWN)
+		_screen.advance_frame()
+	for _press: int in maxi(_cell.x - 1, 0):
+		_screen.press_button(PokeButton.A)
+		_screen.advance_frame()
+
+
+## The item a field kind grants on this cartridge, or 0 where Generation 1 has
+## no row for it at all.
+func _field_item_number() -> int:
+	if _generation() != RomRegistry.GEN1:
+		return int(FIELD_ITEMS[_kind])
+	return int(GEN1_FIELD_ITEMS.get(_kind, 0))
+
+
+func _generation() -> int:
+	var data: GameData = _screen.get("_data")
+	return data.generation if data != null else RomRegistry.GEN2
+
+
 func _stage_pc() -> void:
 	_screen.call(SCREEN_DRIVER % _kind)
 	for _down: int in maxi(_cell.x, 0):
