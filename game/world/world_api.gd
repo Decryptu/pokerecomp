@@ -3763,11 +3763,29 @@ func _gen1_nurse_steps() -> Array:
 				{"type": &"request", "values": {
 					"kind": &"party_heal_requested", "values": {},
 				}},
+				_gen1_heal_machine_step(),
 				_gen1_pokecenter_box("fighting_fit"),
 			] + farewell,
 			"no": farewell,
 		},
 	]
+
+
+## `farcall AnimateHealingMachine`, the step behind `predef HealParty`, which the
+## dialogue waits out before its last two lines. No Generation 1 audio driver, so
+## the sound each ball is placed with plays nothing.
+func _gen1_heal_machine_step() -> Dictionary:
+	var balls: int = int(_party_summary.get("count", 0))
+	return {"type": &"wait", "values": {
+		"type": &"wait",
+		"wait": Gen2WorldScriptRunner.WAIT_FRAMES,
+		"kind": &"heal_machine_anim",
+		"machine_type": 0,
+		"balls": balls,
+		"frames": balls * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES
+			+ Gen2WorldEffects.HEAL_MACHINE_FLASHES
+			* Gen2WorldEffects.HEAL_MACHINE_FLASH_INTERVAL,
+	}}
 
 
 func _gen1_pokecenter_box(name: String) -> Dictionary:
@@ -3951,6 +3969,18 @@ func _gen1_result() -> Array:
 		}]
 	if type == &"choice":
 		return [{"ok": true, "status": &"waiting", "event": {"type": &"choice"}}]
+	if type == &"wait":
+		var values: Dictionary = step["values"]
+		return [{
+			"ok": true, "status": &"waiting", "event": values.duplicate(true),
+			"events": [{
+				"type": &"presentation_special_applied",
+				"kind": StringName(values["kind"]),
+				"machine_type": int(values["machine_type"]),
+				"balls": int(values["balls"]),
+				"sounds": [],
+			}],
+		}]
 	## `AfterDisplayingTextID` ends every box on `WaitForTextScrollButtonPress`,
 	## whatever the string's last byte said.
 	return [{
@@ -4040,6 +4070,9 @@ func pending_script_input() -> Dictionary:
 ## [method pending_runtime_request] because no host answers it: only frames do,
 ## through [method advance_script_wait].
 func pending_script_wait() -> Dictionary:
+	var step: Dictionary = _gen1_step(&"wait")
+	if not step.is_empty():
+		return (step["values"] as Dictionary).duplicate(true)
 	return _active_script.pending_wait() if _active_script != null else {}
 
 
@@ -6122,6 +6155,8 @@ func _complete_script_wait() -> Array:
 	## `WaitScript` and `WaitScriptMovement` both run `UnfreezeAllObjects` the
 	## frame their wait ends, before they hand the script back to `SCRIPT_READ`.
 	unfreeze_all_objects()
+	if not _gen1_step(&"wait").is_empty():
+		return _gen1_advance(-1)
 	if _active_script == null:
 		return []
 	var advanced: Dictionary = _active_script.complete_wait()

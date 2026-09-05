@@ -53,6 +53,24 @@ const HEAL_MACHINE_HOF_BALLS: Array = [
 	[Vector2i(65, 41), 1, false],
 	[Vector2i(85, 41), 1, false],
 ]
+## `PokeCenterOAMData` in the same shape. `AnimateHealingMachine` places the
+## monitor before its party loop, so the first row is the machine itself, and
+## its counts are Crystal's to the frame.
+static func gen1_heal_machine_oam() -> Array:
+	var out: Array = []
+	for row: Array in Gen1Layout.HEAL_MACHINE_OAM:
+		out.append([
+			Vector2i(int(row[1]) - OAM_X_ORIGIN, int(row[0]) - OAM_Y_ORIGIN),
+			int(row[2]) - Gen1Layout.HEAL_MACHINE_VTILE,
+			bool(row[3]),
+		])
+	return out
+
+
+## Where a hardware object counts from.
+const OAM_X_ORIGIN: int = 8
+const OAM_Y_ORIGIN: int = 16
+
 ## `.PlaceHealingMachineTile`'s `bcpixel 2, 4`, added to every entry of the table
 ## on Elm's Lab alone; the other two machine types add nothing.
 const HEAL_MACHINE_ELMS_LAB_OFFSET := Vector2i(16, 32)
@@ -63,6 +81,9 @@ const HEAL_MACHINE_HALL_OF_FAME: int = 2
 const HEAL_MACHINE_BALL_FRAMES: int = 30
 const HEAL_MACHINE_FLASH_INTERVAL: int = 10
 const HEAL_MACHINE_FLASHES: int = 8
+## A palette of the sprite's own rather than one of the map's: `.LoadPalettes`
+## in Crystal and `rOBP1` in Generation 1.
+const HEAL_MACHINE_PALETTE: int = -1
 
 const FLY_FROM_FRAMES: int = 128
 const FLY_TO_FRAMES: int = 64
@@ -275,7 +296,9 @@ func start_boulder_dust(object_index: int, cell: Vector2i, direction: Vector2i, 
 ##
 ## [param balls] is `wPartyCount`; the source returns before writing anything
 ## when it is zero.
-func start_heal_machine(machine_type: int, balls: int) -> void:
+func start_heal_machine(
+	machine_type: int, balls: int, generation: int = RomRegistry.GEN2
+) -> void:
 	if balls <= 0:
 		return
 	_sprites.append({
@@ -283,12 +306,13 @@ func start_heal_machine(machine_type: int, balls: int) -> void:
 		"cell": Vector2i.ZERO,
 		"object_index": -1,
 		"screen": true,
-		"palette": -1,
+		"palette": HEAL_MACHINE_PALETTE,
 		"frame": 0,
 		"duration": balls * HEAL_MACHINE_BALL_FRAMES
 			+ HEAL_MACHINE_FLASHES * HEAL_MACHINE_FLASH_INTERVAL,
 		"machine_type": clampi(machine_type, 0, HEAL_MACHINE_HALL_OF_FAME),
 		"balls": mini(balls, HEAL_MACHINE_BALLS.size()),
+		"generation": generation,
 	})
 
 
@@ -514,32 +538,7 @@ func _tiles_for(sprite: Dictionary) -> Array:
 				{"offset": at + Vector2i(8, 0), "tile": 0, "flip_x": true},
 			]
 		SPRITE_HEAL_MACHINE:
-			## One ball a party member, thirty frames apart, and the machine's
-			## own two tiles under them for every type but the Hall of Fame.
-			## Nothing is taken away again: the flashes run over the finished
-			## picture.
-			var machine_type: int = int(sprite["machine_type"])
-			var shown: int = clampi(
-				int(float(frame) / float(HEAL_MACHINE_BALL_FRAMES)) + 1,
-				0, int(sprite["balls"])
-			)
-			var entries: Array = []
-			if machine_type != HEAL_MACHINE_HALL_OF_FAME:
-				entries.append_array(HEAL_MACHINE_BAR)
-				entries.append_array(HEAL_MACHINE_BALLS.slice(0, shown))
-			else:
-				entries.append_array(HEAL_MACHINE_HOF_BALLS.slice(0, shown))
-			var shift := Vector2i.ZERO
-			if machine_type == HEAL_MACHINE_ELMS_LAB:
-				shift = HEAL_MACHINE_ELMS_LAB_OFFSET
-			var machine: Array = []
-			for entry: Array in entries:
-				machine.append({
-					"offset": (entry[0] as Vector2i) + shift,
-					"tile": int(entry[1]),
-					"flip_x": bool(entry[2]),
-				})
-			return machine
+			return _heal_machine_tiles(sprite, frame)
 		SPRITE_BOULDER_DUST:
 			## `SetFacingBoulderDust` swaps FACING_BOULDER_DUST_1 and _2 on bit 1
 			## of the step frame, and each draws its one tile four times in a
@@ -637,6 +636,38 @@ func _fly_leaf_tile(spawned: int, age: int) -> Dictionary:
 		"tile": 0,
 		"flip_x": false,
 	}
+
+
+## One ball a party member, thirty frames apart, over the machine's own tiles.
+## Nothing is taken away again: the flashes run over the finished picture.
+## Generation 1 has one machine and one table, so no machine type reaches it and
+## none of them may move it.
+func _heal_machine_tiles(sprite: Dictionary, frame: int) -> Array:
+	var machine_type: int = int(sprite["machine_type"])
+	var gen1: bool = int(sprite.get("generation", RomRegistry.GEN2)) == RomRegistry.GEN1
+	var shown: int = clampi(
+		int(float(frame) / float(HEAL_MACHINE_BALL_FRAMES)) + 1, 0, int(sprite["balls"])
+	)
+	var entries: Array = []
+	if gen1:
+		var oam: Array = gen1_heal_machine_oam()
+		entries.append(oam[0])
+		entries.append_array(oam.slice(1, shown + 1))
+	elif machine_type != HEAL_MACHINE_HALL_OF_FAME:
+		entries.append_array(HEAL_MACHINE_BAR)
+		entries.append_array(HEAL_MACHINE_BALLS.slice(0, shown))
+	else:
+		entries.append_array(HEAL_MACHINE_HOF_BALLS.slice(0, shown))
+	var shift: Vector2i = HEAL_MACHINE_ELMS_LAB_OFFSET \
+		if machine_type == HEAL_MACHINE_ELMS_LAB and not gen1 else Vector2i.ZERO
+	var machine: Array = []
+	for entry: Array in entries:
+		machine.append({
+			"offset": (entry[0] as Vector2i) + shift,
+			"tile": int(entry[1]),
+			"flip_x": bool(entry[2]),
+		})
+	return machine
 
 
 ## `.FlashPalettes` rotates the four colours of the palette left by one and

@@ -3277,7 +3277,10 @@ func preview_effect_sprites(kind: StringName = &"effects") -> void:
 		## the colours can be read off.
 		if _effects != null:
 			var balls: int = Gen2WorldEffects.HEAL_MACHINE_BALLS.size()
-			_effects.start_heal_machine(Gen2WorldEffects.HEAL_MACHINE_ELMS_LAB, balls)
+			_effects.start_heal_machine(
+				Gen2WorldEffects.HEAL_MACHINE_ELMS_LAB, balls,
+				_data.generation if _data != null else RomRegistry.GEN2
+			)
 			for _frame: int in balls * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES - 1:
 				_effects.advance_frame()
 		_script_prompt = "Debug heal machine preview"
@@ -8529,7 +8532,8 @@ func _start_heal_machine_sounds(event: Dictionary) -> void:
 	_start_sound_schedule((event.get("sounds", []) as Array).duplicate(true))
 	if _effects != null:
 		_effects.start_heal_machine(
-			int(event.get("machine_type", 0)), int(event.get("balls", 0))
+			int(event.get("machine_type", 0)), int(event.get("balls", 0)),
+			_data.generation if _data != null else RomRegistry.GEN2
 		)
 	_advance_sound_schedule()
 

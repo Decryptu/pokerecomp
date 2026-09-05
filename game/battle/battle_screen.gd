@@ -1878,6 +1878,8 @@ const NEW_DEX_DATA_TEXT: String = "%s's data\nwas newly added to\nthe #DEX."
 const BALL_BLOCKED_TEXT: String = "The trainer\nblocked the BALL!"
 const BALL_DONT_BE_A_THIEF_TEXT: String = "Don't be a thief!"
 const BALL_BOX_FULL_TEXT: String = "The #MON BOX\nis full. That\ncan't be used now."
+## `_BoxFullCannotThrowBallText`, `BoxFullCannotThrowBall`'s own words.
+const GEN1_BALL_BOX_FULL_TEXT: String = "The #MON BOX\nis full! Can't%suse that item!"
 ## `anim_if_param_equal NO_ITEM`, `BattleAnim_ThrowPokeBall`'s own first branch
 ## and the one `UseBallInTrainerBattle` sets `wBattleAnimParam` to.
 const ANIM_PARAM_NO_ITEM: int = 0
@@ -1888,6 +1890,20 @@ const BREAK_FREE_TEXT: Array[String] = [
 	"Aargh!\nAlmost had it!",
 	"Shoot! It was so\nclose too!",
 ]
+
+## `ItemUseBallText01` to `...04`, which `ItemUseBall` picks off
+## `wPokeBallAnimData` rather than off a wobble count: a ball that rocks no times
+## at all is a miss here and a break-out there.
+const GEN1_BREAK_FREE_TEXT: Array[String] = [
+	"You missed the\n#MON!",
+	"Darn! The #MON\nbroke free!",
+	"Aww! It appeared\nto be caught!",
+	"Shoot! It was so\nclose too!",
+]
+
+## `Text_GotchaMonWasCaught` and `_ItemUseBallText05`.
+const CAUGHT_TEXT: String = "Gotcha! %s was caught!"
+const GEN1_CAUGHT_TEXT: String = "All right! %s was\ncaught!"
 
 ## `SendOutMonText`'s four texts, in [constant Gen2Battle.SEND_OUT_GO]'s order.
 const SEND_OUT_LINES: Array[String] = [
@@ -3191,7 +3207,7 @@ func complete_capture(result: Dictionary) -> Dictionary:
 		_capture_result.clear()
 		_capture_spent_turn = {}
 		show_message(
-			BALL_BOX_FULL_TEXT if StringName(result.get("reason", &"")) == &"storage_full"
+			_ball_box_full_text() if StringName(result.get("reason", &"")) == &"storage_full"
 			else "The capture could not be completed."
 		)
 		if _capture_origin == &"pack" and not _pack_rows.is_empty():
@@ -3213,7 +3229,10 @@ func complete_capture(result: Dictionary) -> Dictionary:
 	var wobbles: int = clampi(int(result.get("wobbles", 0)), 0, 3)
 	var caught: bool = bool(result.get("caught", false))
 	if caught:
-		_capture_messages.append("Gotcha! %s was caught!" % _name_of(_enemy))
+		_capture_messages.append(
+			(GEN1_CAUGHT_TEXT if _generation() == RomRegistry.GEN1 else CAUGHT_TEXT)
+			% _name_of(_enemy)
+		)
 		## `.catch_bug_contest_mon` runs after `Text_GotchaMonWasCaught`, and
 		## `BugContest_SetCaughtContestMon`'s `.firstcatch` says a second line.
 		## A catch that has one to replace says `DisplayAlreadyCaughtText`
@@ -3224,9 +3243,18 @@ func complete_capture(result: Dictionary) -> Dictionary:
 		_capture_terminal = true
 		_capture_caught_event = _caught_event(result)
 	else:
-		_capture_messages.append(BREAK_FREE_TEXT[wobbles])
+		_capture_messages.append(
+			GEN1_BREAK_FREE_TEXT[wobbles] if _generation() == RomRegistry.GEN1
+			else BREAK_FREE_TEXT[wobbles]
+		)
 	_begin_capture_animation(result_ball, wobbles, caught)
 	return result
+
+
+func _ball_box_full_text() -> String:
+	if _generation() != RomRegistry.GEN1:
+		return BALL_BOX_FULL_TEXT
+	return GEN1_BALL_BOX_FULL_TEXT % Gen2TextStream.SCROLL_BREAK
 
 
 ## `PokeBallEffect`'s own `PlayBattleAnim` on `ANIM_THROW_POKE_BALL`: the throw,
@@ -3348,6 +3376,10 @@ func _item_name(item: int) -> String:
 ## the click are the animation behind this line, and the next thing said is
 ## already the outcome.
 func _item_used_text(item: int) -> String:
+	if _generation() == RomRegistry.GEN1:
+		## `_ItemUseText001` and `_ItemUseText002` with the name between them:
+		## one line, no "the", and an exclamation where Crystal has a stop.
+		return "%s used %s!" % [_player_label(), _item_name(item)]
 	return "%s used the\n%s." % [_player_label(), _item_name(item)]
 
 
@@ -3398,17 +3430,24 @@ func _open_capture_nickname() -> bool:
 	## keyboard on screen halfway through "Gotcha! X was caught!".
 	if _box != null and (_box.is_revealing() or _box.has_pages_left()):
 		return true
+	var destination: Dictionary = _capture_result.get("destination", {})
+	var boxed: bool = StringName(destination.get("destination", &"")) == &"box"
+	## `AskName` is reached from inside `AddPartyMon`, so Generation 1 names only
+	## the catch that joins the party and answers a boxed one with the transfer
+	## line alone.
+	if boxed and _generation() == RomRegistry.GEN1:
+		_capture_nickname_asked = true
+		show_message(Gen2WorldPartyHost.sent_to_box_text(species_name, RomRegistry.GEN1))
+		return true
 	_capture_nickname_asked = true
 	_capture_nickname = species_name
 	var host := Gen2NicknamePromptScreen.new()
 	## `.SendToPC` prints `BallSentToPCText` behind the naming and the party
 	## branch prints nothing, which is the one difference between the two.
-	var destination: Dictionary = _capture_result.get("destination", {})
 	host.set_context(
 		_data, species_name,
-		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT \
-			if StringName(destination.get("destination", &"")) == &"box" else "",
-		Gen2WorldPartyHost.capture_nickname_question(species_name),
+		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if boxed else "",
+		Gen2WorldPartyHost.capture_nickname_question(species_name, _generation()),
 		## A Nuzlocke nicknames every catch, so the question is not asked.
 		_rules().is_nuzlocke()
 	)

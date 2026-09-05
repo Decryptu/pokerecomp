@@ -291,10 +291,31 @@ const ANIM_ID_ULTRATOSS: int = 0xC6
 const ANIM_ID_SHAKE_SCREEN: int = 0xC7
 const ANIM_ID_HIDEPIC: int = 0xC8
 
-## The three ball items `TossBallAnimation` picks a throw off.
+## `ItemUsePtrTable`'s five `ItemUseBall` rows, which `TossBallAnimation` also
+## picks a throw off.
+const ITEM_MASTER_BALL: int = 0x01
 const ITEM_ULTRA_BALL: int = 0x02
 const ITEM_GREAT_BALL: int = 0x03
 const ITEM_POKE_BALL: int = 0x04
+const ITEM_SAFARI_BALL: int = 0x08
+
+## `ItemUseBall`'s three per-ball numbers: the ceiling Rand1 is rerolled above,
+## `BallFactor` and `BallFactor2`. SAFARI_BALL takes the fall-through below.
+const BALL_ROLL: Dictionary = {
+	ITEM_POKE_BALL: [255, 12, 255],
+	ITEM_GREAT_BALL: [200, 8, 200],
+	ITEM_ULTRA_BALL: [150, 12, 150],
+}
+const BALL_ROLL_OTHER: Array[int] = [150, 12, 150]
+
+## `.checkForAilments` takes the first off Rand1 and `.addAilmentValue` adds the
+## second to the shakes, each [any other status, frozen or asleep].
+const BALL_STATUS_SUBTRACT: Array[int] = [12, 25]
+const BALL_STATUS_ADD: Array[int] = [5, 10]
+
+## `.setAnimData`'s ladder over Z: under ten the ball misses, and each threshold
+## passed is one more rock.
+const BALL_SHAKE_THRESHOLDS: Array[int] = [10, 30, 70]
 
 ## What pins the two sheets: the edge under both panels is two solid rows in
 ## the middle of six blank ones, and the empty bar is a rule top and bottom.
@@ -315,6 +336,35 @@ const FRAME_FIRST_CODE: int = 0x79
 const FRAME_LAST_CODE: int = 0x7E
 const FRAME_VERTICAL_CODE: int = FRAME_FIRST_CODE + Gen2Layout.FRAME_VERTICAL
 const FRAME_VERTICAL_ROW: int = 0b00101000
+
+## `PokeCenterFlashingMonitorAndHealBall`: the monitor and one ball.
+## `AnimateHealingMachine` copies three tiles where the sheet is two, so the
+## third is `PokeCenterOAMData` read as pixels at $7e, which nothing draws.
+const HEAL_MACHINE_TILES: int = 2
+const HEAL_MACHINE_VTILE: int = 0x7C
+const HEAL_MACHINE_BYTES: Array[int] = [
+	0x00, 0x00, 0x00, 0x00, 0x7E, 0x00, 0x7E, 0x00,
+	0x7E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C, 0x12, 0x1E,
+	0x21, 0x3F, 0x33, 0x2D, 0x1E, 0x12, 0x0C, 0x0C,
+]
+
+## `PokeCenterOAMData`'s seven rows as the cartridge stores them: y, x, tile and
+## whether the attribute byte flips it. Yellow sets a Game Boy Color palette in
+## that byte too, so only bit 5 is read.
+const HEAL_MACHINE_OAM_SIZE: int = 4
+const HEAL_MACHINE_OAM: Array = [
+	[0x24, 0x34, 0x7C, false],
+	[0x2B, 0x30, 0x7D, false], [0x2B, 0x38, 0x7D, true],
+	[0x30, 0x30, 0x7D, false], [0x30, 0x38, 0x7D, true],
+	[0x35, 0x30, 0x7D, false], [0x35, 0x38, 0x7D, true],
+]
+const HEAL_MACHINE_OAM_XFLIP: int = 0x20
+
+## `rOBP1` as `AnimateHealingMachine` writes it, and the same byte once
+## `FlashSprite8Times` has xored $28 into it: two shades swap places where
+## Crystal rotates all four.
+const HEAL_MACHINE_SHADES: Array = [[0, 0, 2, 3], [0, 2, 0, 3]]
 
 ## `TX_SCRIPT_*`: a text pointer standing at one of these opens a facility
 ## rather than a box, `DisplayTextID` dispatching before it prints.
@@ -592,6 +642,7 @@ const RED_BLUE: Dictionary = {
 	"tilesets": 0x0C7BE,
 	"water_tilesets": 0x0E8E0,
 	"overworld_sprites": 0x17B27,
+	"heal_machine_gfx": 0x704B7,
 	"wild_data": 0x0CEEB,
 	"wild_chances": 0x13918,
 	"good_rod": 0x0E27F,
@@ -652,6 +703,7 @@ const YELLOW: Dictionary = {
 	"tilesets": 0x0C558,
 	"water_tilesets": 0x0E834,
 	"overworld_sprites": 0x142A9,
+	"heal_machine_gfx": 0x7050B,
 	"wild_data": 0x0CB95,
 	"wild_chances": 0x138E2,
 	"good_rod": 0x0E12C,

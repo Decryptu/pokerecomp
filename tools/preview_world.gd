@@ -412,6 +412,10 @@ const STAGERS: Dictionary = {
 }
 
 
+## The kinds `preview_effect_sprites` answers by name.
+const EFFECT_SPRITE_KINDS: Array[StringName] = [&"cut", &"fly", &"heal_machine"]
+
+
 ## Puts the screen in the state the picture wants. Called once, on the frame the
 ## screen is ready.
 func _stage_kind() -> void:
@@ -431,7 +435,10 @@ func _stage_kind() -> void:
 		if String(_kind).ends_with("_use") or String(_kind).ends_with("_question"):
 			_screen.call(SCREEN_DRIVER % _kind)
 		return
-	if not _bare:
+	## The fall-through stages a pile of debug sprites and an emote, which a bare
+	## capture does not want; the three kinds named ahead of it are pictures of
+	## their own, and skipping those photographed an empty map.
+	if _kind in EFFECT_SPRITE_KINDS or not _bare:
 		_screen.preview_effect_sprites(_kind)
 
 

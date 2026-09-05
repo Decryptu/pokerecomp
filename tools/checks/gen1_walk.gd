@@ -53,6 +53,12 @@ const VIRIDIAN_MART: int = 42
 const MART_COUNTER := Vector2i(2, 5)
 const MART_CLERK := Vector2i(0, 5)
 
+## `ViridianPokecenter_Object`'s nurse, reached over her counter from the cell
+## two below her, and the party she is handed.
+const VIRIDIAN_POKECENTER: int = 41
+const NURSE_COUNTER := Vector2i(3, 3)
+const NURSE_PARTY: int = 4
+
 var _r: RefCounted = null
 
 
@@ -66,6 +72,53 @@ func _one_game() -> void:
 	_check_ledges()
 	_check_last_map_round_trip()
 	_check_text_boxes()
+	_check_the_nurse_heals()
+
+
+## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
+## counted wait rather than a box, so what proves it is there is the world
+## standing in one for its own frames.
+func _check_the_nurse_heals() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_POKECENTER, NURSE_COUNTER)
+	if world == null:
+		return
+	world.set_party_summary(NURSE_PARTY, false)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	if not _r.check(not world.interact().is_empty(), "the nurse said nothing."):
+		return
+	## The welcome, then the YES/NO, then the line in front of the heal.
+	world.run_event_queue(true)
+	if not _r.check(world.script_input_waiting(), "the nurse asked nothing."):
+		return
+	world.choose_script_input(0)
+	world.run_event_queue(true)
+	var request: Dictionary = world.pending_runtime_request()
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"party_heal_requested",
+		"the nurse asked for %s." % [request.get("kind", &"nothing")]
+	):
+		return
+	world.complete_runtime_request({"ok": true})
+	var wait: Dictionary = world.pending_script_wait()
+	var frames: int = NURSE_PARTY * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES \
+		+ Gen2WorldEffects.HEAL_MACHINE_FLASHES \
+		* Gen2WorldEffects.HEAL_MACHINE_FLASH_INTERVAL
+	_r.check(
+		StringName(wait.get("kind", &"")) == &"heal_machine_anim"
+			and int(wait.get("balls", 0)) == NURSE_PARTY
+			and int(wait.get("frames", 0)) == frames,
+		"the heal machine waited on %s." % [wait]
+	)
+	var spent: int = 0
+	while not world.pending_script_wait().is_empty() and spent <= frames:
+		world.advance_script_wait_frame()
+		spent += 1
+	_r.check(spent == frames, "the machine ran for %d frames, not %d." % [spent, frames])
+	## `PokemonFightingFitText` and `PokemonCenterFarewellText` behind it.
+	_r.check(world.script_busy(), "nothing was said once the machine had stopped.")
+	world.run_event_queue(true)
+	world.run_event_queue(true)
+	_r.check(not world.script_busy(), "the nurse never finished.")
 
 
 ## Every warp on every map: its destination resolves, it fires from some facing,
