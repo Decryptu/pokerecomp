@@ -146,6 +146,14 @@ const MUSEUM_AMBER_OBJECT: int = 4
 const OLD_AMBER: int = 0x1F
 const MUSEUM_GIFT_BOX: String = "Take this to a\nPOKéMON LAB"
 
+## `CeladonMansionRoofHouseEeveePokeballText`: `lb bc, EEVEE, 25` and the
+## `jr nc` behind `GivePokemon`, which hides the ball only when the gift landed.
+const EEVEE_HOUSE: int = 0x84
+const EEVEE_BALL_CELL := Vector2i(4, 3)
+const EEVEE_BALL_OBJECT: int = 1
+const EEVEE_DEX: int = 133
+const EEVEE_LEVEL: int = 25
+
 ## Yellow's `CeruleanBadgeHouse` melanie, the corpus's one box that owes no
 ## press: `DisableWaitingAfterTextDisplay` runs before her last `PrintText`.
 const MELANIE_MAP: int = 63
@@ -172,6 +180,7 @@ func _one_game() -> void:
 	_check_an_object_starts_hidden()
 	if _r.game_id != RomRegistry.YELLOW:
 		_check_a_script_hides_an_object()
+	_check_a_script_gives_a_pokemon()
 	_check_the_nurse_heals()
 	_check_the_cable_club()
 	_check_the_vending_machine()
@@ -495,6 +504,40 @@ func _check_a_script_hides_an_object() -> void:
 		"the museum scientist said %s." % [said])
 	_r.check(world.state.item_quantity(OLD_AMBER) == 1, "the OLD AMBER never landed.")
 	_r.check(not _object_active(world, MUSEUM_AMBER_OBJECT), "the OLD AMBER is still drawn.")
+
+
+## The corpus's one `call GivePokemon` a text row reaches: the request the world
+## raises, and the two sides of the caller's own `jr nc`. Both are walked on the
+## same map, since only the answer differs.
+func _check_a_script_gives_a_pokemon() -> void:
+	for accepted: bool in [true, false]:
+		var world: Gen2WorldAPI = _facing_up(EEVEE_HOUSE, EEVEE_BALL_CELL + Vector2i.DOWN)
+		if world == null:
+			return
+		var results: Array = world.interact()
+		var request: Dictionary = _runtime_request(results)
+		_r.check(
+			StringName(request.get("kind", &"")) == &"pokemon_requested"
+			and int((request.get("values", {}) as Dictionary).get("pokemon", 0)) == EEVEE_DEX
+			and int((request.get("values", {}) as Dictionary).get("level", 0)) == EEVEE_LEVEL,
+			"the EEVEE ball raised %s." % [request]
+		)
+		world.complete_runtime_request({"ok": true, "accepted": accepted})
+		_r.check(
+			_object_active(world, EEVEE_BALL_OBJECT) != accepted,
+			"the EEVEE ball is %sdrawn after a gift that was %saccepted." % [
+				"" if accepted else "still ", "" if accepted else "not ",
+			]
+		)
+
+
+## The request the first waiting result of [param results] carries, or empty.
+func _runtime_request(results: Array) -> Dictionary:
+	for row: Dictionary in results:
+		var event: Dictionary = row.get("event", {})
+		if StringName(event.get("type", &"")) == &"runtime_request":
+			return event.get("request", {})
+	return {}
 
 
 func _facing_up(map: int, cell: Vector2i) -> Gen2WorldAPI:

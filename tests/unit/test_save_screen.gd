@@ -906,6 +906,53 @@ func test_the_move_screen_refuses_to_change_pokemon_while_a_move_is_held() -> vo
 	assert_eq(screen.cursor(), 1)
 
 
+## `PokemonMenuEntries` and `GetMonFieldMoves` in front of it: Generation 1's
+## submenu is the member's own field moves and then those three, with no MOVE
+## row and no ITEM row at all.
+func test_a_generation_1_member_is_offered_its_field_moves_stats_switch_and_cancel() -> void:
+	var gen1: GameData = Fixture.build(
+		RomCache.directory_for(&"gen1screentest", "0123456789abcdef"),
+		"testgame", RomRegistry.GEN1
+	)
+	var mon := Gen2SaveMon.new()
+	mon.species = Fixture.BULBASAUR
+	mon.moves = [
+		Gen2WorldFieldMove.MOVE_CUT, Fixture.TACKLE,
+		Gen2WorldFieldMove.MOVE_STRENGTH, 0,
+	]
+	var labels: Array = []
+	for row: Dictionary in Gen2PartyScreen.submenu_items_for(gen1, mon):
+		labels.append(String(row.get("label", "")))
+	assert_eq(labels.slice(2), ["STATS", "SWITCH", "CANCEL"])
+	assert_eq(labels.size(), 5)
+	RomCache.clear(RomCache.directory_for(&"gen1screentest", "0123456789abcdef"))
+
+
+## `DisplayFieldMoveMonMenu`: `hlcoord 11, 11` with no field move at all, and
+## every one after that raising the top two rows and widening the box to the
+## smallest `FieldMoveDisplayData` column its moves name. STRENGTH's is $0A.
+func test_the_generation_1_submenu_box_grows_with_the_field_moves_in_it() -> void:
+	var bare: Gen2MenuBox = Gen2PartyScreen.gen1_mon_menu_box([])
+	assert_eq(Vector2i(bare.left, bare.top), Vector2i(11, 11))
+	assert_eq(bare.item_position(0), Vector2i(13, 12))
+	assert_eq(bare.cursor_position(0), Vector2i(12, 12))
+
+	var cut: Gen2MenuBox = Gen2PartyScreen.gen1_mon_menu_box([
+		{"kind": &"field_move", "move": Gen2WorldFieldMove.MOVE_CUT},
+	])
+	assert_eq(Vector2i(cut.left, cut.top), Vector2i(11, 8))
+	assert_eq(cut.item_position(0), Vector2i(13, 10))
+
+	var strength: Gen2MenuBox = Gen2PartyScreen.gen1_mon_menu_box([
+		{"kind": &"field_move", "move": Gen2WorldFieldMove.MOVE_CUT},
+		{"kind": &"field_move", "move": Gen2WorldFieldMove.MOVE_STRENGTH},
+	])
+	assert_eq(Vector2i(strength.left, strength.top), Vector2i(9, 6))
+	assert_eq(strength.item_position(0), Vector2i(11, 8))
+	## Four rows of two, the last landing on the interior's own bottom row.
+	assert_eq(strength.item_position(4), Vector2i(11, 16))
+
+
 ## `ManagePokemonMoves`' own `cp EGG`, and `MonMenuOptions`' egg row set, which
 ## offers STATS and SWITCH and nothing else.
 func test_an_egg_is_offered_stats_and_switch_and_no_move_row() -> void:

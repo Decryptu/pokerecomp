@@ -3792,6 +3792,16 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 			"pick_up_item":
 				if not _gen1_pick_up_item(steps, run):
 					return false
+			"give_pokemon":
+				if not _gen1_resolve_gift_pokemon(node, steps, run):
+					return false
+			"pokedex":
+				## `_DisplayPokedex` opens on one entry and the page the world
+				## already has for `pokedex_entry_requested` is that same one.
+				steps.append({"type": &"request", "values": {
+					"kind": &"pokedex_entry_requested",
+					"values": {"species": int(node["species"])},
+				}})
 			"choice":
 				return _gen1_script_choice(node, steps, run)
 			_:
@@ -3803,6 +3813,27 @@ func _gen1_resolve_side(
 	node: Dictionary, taken: bool, steps: Array, run: Dictionary
 ) -> bool:
 	return _gen1_resolve_script(node["then" if taken else "else"] as Array, steps, run)
+
+
+## `_GivePokemon`, whose carry the caller's own `jr nc` reads: the party first,
+## the box behind it, and no room at all is the one answer that clears it. Only
+## the screen holding the save knows which, so both sides are resolved here and
+## the request carries them until it comes back.
+func _gen1_resolve_gift_pokemon(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var step: Dictionary = {"type": &"request", "values": {
+		"kind": &"pokemon_requested",
+		"values": {"pokemon": int(node["species"]), "level": int(node["level"])},
+	}}
+	if node.has("ok"):
+		var taken: Array = []
+		var full: Array = []
+		if not _gen1_resolve_script(node["ok"] as Array, taken, _gen1_run_copy(run)) \
+			or not _gen1_resolve_script(node["full"] as Array, full, _gen1_run_copy(run)):
+			return false
+		step["ok"] = taken
+		step["full"] = full
+	steps.append(step)
+	return true
 
 
 ## `AddItemToInventory` and its carry; only a gift that landed is named.
@@ -4356,6 +4387,11 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 	if StringName(step.get("type", &"")) == &"choice":
 		var branch: Array = step.get("yes" if choice == 0 else "no", [])
 		_gen1_steps = branch.duplicate(true) + _gen1_steps
+	elif step.has("ok"):
+		## `accepted` is the carry `_GivePokemon` answers in.
+		_gen1_steps = (step[
+			"ok" if bool(result.get("accepted", false)) else "full"
+		] as Array).duplicate(true) + _gen1_steps
 	_gen1_battle_won(step, result)
 	return _gen1_result()
 

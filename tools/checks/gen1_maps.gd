@@ -130,20 +130,24 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 198, "text": 199, "branch": 74, "choice": 7, "flag": 25,
-		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 36,
-		"pick_up_item": 104, "toggle_object": 4},
-	&"blue": {"rows": 198, "text": 199, "branch": 74, "choice": 7, "flag": 25,
-		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 36,
-		"pick_up_item": 104, "toggle_object": 4},
-	&"yellow": {"rows": 185, "text": 158, "branch": 66, "choice": 6, "flag": 15,
-		"give_item": 17, "has_item": 7, "take_item": 3, "unknown": 39,
-		"pick_up_item": 108, "toggle_object": 1},
+	&"red": {"rows": 204, "text": 206, "branch": 74, "choice": 7, "flag": 25,
+		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 34,
+		"pick_up_item": 104, "toggle_object": 5, "pokedex": 7, "give_pokemon": 1},
+	&"blue": {"rows": 204, "text": 206, "branch": 74, "choice": 7, "flag": 25,
+		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 34,
+		"pick_up_item": 104, "toggle_object": 5, "pokedex": 7, "give_pokemon": 1},
+	&"yellow": {"rows": 191, "text": 165, "branch": 66, "choice": 6, "flag": 15,
+		"give_item": 17, "has_item": 7, "take_item": 3, "unknown": 37,
+		"pick_up_item": 108, "toggle_object": 2, "pokedex": 7, "give_pokemon": 1},
 }
 ## Three `predef HideObject` rows reach no node: `MtMoonB2F`'s two fossils and
 ## `PokemonTower7F`'s Mr. Fuji each write `wCurMapScript` behind it, which is a
-## map script index and means nothing without an interpreter, and
-## `CeladonMansionRoofHouse`'s Eevee is a `GivePokemon`.
+## map script index and means nothing without an interpreter. The eighth
+## `call DisplayPokedex` in the source is `SilphCo11FPorygonText`, which no map
+## text row names and which the disassembly marks unreferenced. The other four
+## `call GivePokemon` rows are reached past machine code this decoder does not
+## read: the Fighting Dojo's two through `CheckEitherEventSet`, the Magikarp
+## salesman's through `HasEnoughMoney` and the Lapras through `wStatusFlags4`.
 
 ## `ToggleableObjectStates` as the corpus carries it: the objects a row lands on
 ## and how many start ON. Three rows name an object their map has not got.
@@ -336,7 +340,8 @@ func _texts() -> void:
 ## every box has to draw, and the ghost girl has to keep both her answers.
 func _scripts(font: Gen2Font) -> void:
 	var census: Dictionary = {"rows": 0, "text": 0, "branch": 0, "choice": 0,
-		"flag": 0, "give_item": 0, "has_item": 0, "take_item": 0, "unknown": 0}
+		"flag": 0, "give_item": 0, "has_item": 0, "take_item": 0, "unknown": 0,
+		"pokedex": 0, "give_pokemon": 0}
 	var wrong: Array[String] = []
 	for map: Gen2WorldMap in _maps.values():
 		for row: Dictionary in map.texts:

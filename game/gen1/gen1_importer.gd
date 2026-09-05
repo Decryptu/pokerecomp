@@ -168,6 +168,8 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"prizes_2": ["prize_text_2", Gen1Layout.PRIZE_TEXT_2_AT],
 	"pick_up_item": ["found_item_text", Gen1Layout.PICK_UP_TEXT_AT],
 	"item_use": ["item_use_text", Gen1Layout.ITEM_USE_TEXT_AT],
+	"coin_case": ["coin_case_text", Gen1Layout.COIN_CASE_TEXT_AT],
+	"party_menu": ["party_menu_text", Gen1Layout.PARTY_MENU_TEXT_AT],
 	"toss": ["toss_text", Gen1Layout.TOSS_TEXT_AT],
 }
 
@@ -620,21 +622,22 @@ static func read_evos_moves(rom: RomFile, layout: Dictionary, index: int) -> Dic
 	return {"evolutions": evolutions, "learnset": learnset}
 
 
-## The evolved species is stored as an internal index and the cache speaks dex
-## numbers, so it is translated here rather than by every reader.
+## Written in [method GameData.evolutions]' own words, the evolved species
+## translated from its internal index. An `EVOLVE_ITEM` row carries a minimum
+## level between its item and its species and every shipped row sets it to 1; a
+## trade asks for no held item, so its parameter is the `$FF` `.trade` reads.
 static func _evolution_row(
 	rom: RomFile, layout: Dictionary, at: int, method: int, size: int
 ) -> Dictionary:
 	var target: int = rom.u8(at + size - 1)
-	var row: Dictionary = {"method": method, "species": Gen1Layout.dex_of_index(rom, layout, target)}
-	if method == Gen1Layout.EVOLVE_LEVEL:
-		row["level"] = rom.u8(at + 1)
-	elif method == Gen1Layout.EVOLVE_ITEM:
-		row["item"] = rom.u8(at + 1)
-		row["level"] = rom.u8(at + 2)
-	else:
-		row["level"] = rom.u8(at + 1)
-	return row
+	var parameter: int = rom.u8(at + 1)
+	if method == Gen1Layout.EVOLVE_TRADE:
+		parameter = Gen2Evolution.TRADE_NO_ITEM
+	return {
+		"method": method,
+		"parameter": parameter,
+		"target": Gen1Layout.dex_of_index(rom, layout, target),
+	}
 
 
 ## Reads the cartridge into its cache. Answers the same { ok, message, ... }
@@ -1083,14 +1086,21 @@ func _import_items(rom: RomFile, layout: Dictionary) -> Array:
 	## between the two runs are the ones no `item_constants.asm` row names.
 	var out: Array = []
 	for item: int in range(1, Gen1Layout.TM_FIRST_ITEM + Gen1Layout.TM_COUNT):
-		out.append({
+		var row: Dictionary = {
 			"number": item,
 			"name": _item_name(names, item),
 			"price": _item_price(rom, layout, item),
 			"pocket": Gen1Layout.BAG_POCKET,
 			"permissions": _item_permissions(rom, layout, item),
 			"field_menu": _item_field_menu(item, party_use, close_use),
-		})
+		}
+		## `ItemUseMedicine` branches on the item number rather than reading a
+		## table, so the two amounts are `Gen1Layout`'s and land the same way.
+		if Gen1Layout.ITEM_HEAL_AMOUNTS.has(item):
+			row["heal_amount"] = int(Gen1Layout.ITEM_HEAL_AMOUNTS[item])
+		if Gen1Layout.ITEM_STATUS_MASKS.has(item):
+			row["status_mask"] = int(Gen1Layout.ITEM_STATUS_MASKS[item])
+		out.append(row)
 	return out
 
 
@@ -1111,7 +1121,11 @@ static func _item_permissions(rom: RomFile, layout: Dictionary, item: int) -> in
 ## `StartMenu_Item`'s own ladder as the nibble [Gen2WorldPack] branches on: the
 ## Bicycle and `UsableItems_CloseMenu` quit the menu, an HM, a TM and
 ## `UsableItems_PartyMenu` open the party list, the rest leave the list standing.
+## A row `UseItem` refuses outside a battle answers before any of them, which is
+## what keeps the four X stats off the party list they are listed on.
 static func _item_field_menu(item: int, party_use: Dictionary, close_use: Dictionary) -> int:
+	if Gen1Layout.ITEM_BATTLE_ONLY.has(item):
+		return Gen2Layout.ITEMMENU_NOUSE
 	if item == Gen1Layout.ITEM_BICYCLE or close_use.has(item):
 		return Gen2Layout.ITEMMENU_CLOSE
 	if Gen1Layout.machine_number(item) > 0 or party_use.has(item):

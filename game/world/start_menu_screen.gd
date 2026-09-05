@@ -147,8 +147,10 @@ const TEXT_TOO_IMPORTANT: String = "too_important"
 ## The same four boxes on Generation 1, which keeps them in
 ## `engine/items/item_effects.asm` rather than in a pack of its own.
 ## `AskQuantityThrowAwayText` has no counterpart: the dial opens over no question.
+const TEXT_COIN_CASE: String = "coin_case"
 const GEN1_PACK_TEXTS: Dictionary = {
 	TEXT_OAK: ["item_use", "not_time"],
+	TEXT_COIN_CASE: ["coin_case", "coins"],
 	TEXT_TOSS_ASK_QUANTITY: ["toss", "ok_to_toss"],
 	TEXT_TOSS_THREW: ["toss", "threw_away"],
 	TEXT_TOO_IMPORTANT: ["toss", "too_important"],
@@ -542,10 +544,13 @@ func _move_wrapped(step: int, at: StringName, rows: int, render: StringName) -> 
 
 ## `InitPartyMenuWithCancel`: CANCEL is the row after the last member and the
 ## cursor wraps around it, which is `w2DMenuNumRows` being the party count plus
-## one.
+## one. Generation 1's `PartyMenuInit` stops at `wPartyCount - 1` instead and
+## leaves B as the only way out, so its list is the members and nothing else.
 func _target_rows() -> int:
 	var targets: Array = _party_targets()
-	return 0 if targets.is_empty() else targets.size() + 1
+	if targets.is_empty():
+		return 0
+	return targets.size() if _gen1_pack() else targets.size() + 1
 
 
 ## w2DMenuNumCols is 1, so only vertical input moves the move list.
@@ -1479,14 +1484,50 @@ func _confirm_use() -> void:
 			_show_pack_result(_pack_text(TEXT_OAK), false)
 
 
-## `UseItem`'s jumptable on Generation 1. Neither `DisplayPartyMenu` nor the
-## `ItemUse*` routine behind it is built, so `.Party` and `.Current` answer
-## `ItemUseNotTime` the way a `.Field` row with no effect does.
+## `UseItem_`'s jumptable on Generation 1, reached through the same three menu
+## answers `StartMenu_Item` picks between. `cp HM01` stands in front of the
+## table, so every machine is `ItemUseTMHM` rather than an `ItemEffects` row.
 func _confirm_gen1_use(item: int) -> void:
-	if Gen2WorldPack.field_use_kind(_data, item) == Gen2WorldPack.ITEMMENU_CLOSE:
-		_use_field_item(item)
-		return
-	_show_pack_result(_pack_text(TEXT_OAK), false)
+	match Gen2WorldPack.field_use_kind(_data, item):
+		Gen2WorldPack.ITEMMENU_CLOSE:
+			_use_field_item(item)
+		Gen2WorldPack.ITEMMENU_PARTY:
+			if Gen2WorldTMHM.is_tm_hm(item, RomRegistry.GEN1):
+				_open_teach_mode(item)
+				return
+			if _party_targets().is_empty():
+				## `ItemUseMedicine`'s own `.emptyParty`, which no other
+				## `.Party` routine has: the rest open the menu on nothing.
+				_show_pack_result(_pack_text(TEXT_NO_MON), false)
+				return
+			_open_target_mode()
+		Gen2WorldPack.ITEMMENU_CURRENT:
+			_confirm_gen1_current(item)
+		_:
+			_show_pack_result(_pack_text(TEXT_OAK), false)
+
+
+## The `.Current` rows that are neither `UnusableItem` nor battle-only.
+## `ItemUsePokedex` is a predef the world owns, `ItemUseCoinCase` prints over
+## the pack, and `ItemUseOaksParcel` is the one refusal with a text of its own.
+## The rest land on `ItemUseNotTime`, the box `.Oak` prints.
+func _confirm_gen1_current(item: int) -> void:
+	match item:
+		Gen1Layout.ITEM_POKEDEX:
+			action_chosen.emit(Gen2WorldStartMenu.ITEM_POKEDEX, &"")
+		Gen1Layout.ITEM_COIN_CASE:
+			_show_pack_result(_coin_case_text(), true)
+		Gen1Layout.ITEM_OAKS_PARCEL:
+			_show_pack_result(
+				_data.special_text("item_use", "not_yours"), false
+			)
+		_:
+			## `ItemUseRepel` and its two siblings are the only other rows with
+			## an effect out of battle, and the effect table is what says so.
+			if Gen2WorldPartyHost.item_effects(_data)["repel"].has(item):
+				_use_selected_item(-1)
+				return
+			_show_pack_result(_pack_text(TEXT_OAK), false)
 
 
 ## `.Field`: `DoItemEffect` and then `wItemEffectSucceeded`. The effects that run
@@ -1618,6 +1659,12 @@ func _target_quality_text(mon: Gen2SaveMon) -> String:
 ## PARTYMENUACTION_GIVE_ITEM, and the PARTYMENUACTION_HEALING_ITEM every
 ## `.Party` item effect writes.
 func _target_prompt() -> String:
+	## `PartyMenuMessagePointers` on Generation 1, picked by the
+	## `wPartyMenuTypeOrMessageID` each entrance writes: `ItemUseTMHM`'s
+	## TMHM_PARTY_MENU and the USE_ITEM_PARTY_MENU every medicine writes. There
+	## is no GIVE there, the bag holding nothing a Pokemon can carry.
+	if _gen1_pack():
+		return _data.special_text("party_menu", "use_tm" if _teaching else "item_use")
 	if _teaching:
 		return Gen2PartyScreen.PROMPT_TEACH_WHICH
 	return Gen2PartyScreen.PROMPT_TO_WHICH if _giving \
@@ -1821,7 +1868,7 @@ func _teach_refusal(reason: StringName, party_index: int) -> String:
 
 func _open_target_mode() -> void:
 	_mode = Mode.PACK_TARGET
-	_target_cursor = clampi(_target_cursor, 0, _party_targets().size())
+	_target_cursor = clampi(_target_cursor, 0, _target_rows() - 1)
 	## `InitPartyMenuGFX` respawns one icon struct per member every time the list
 	## is opened, which is what puts the icons on the page at all.
 	if _party_menu_page() != null:
@@ -1835,10 +1882,6 @@ func _open_target_mode() -> void:
 
 
 func _render_targets() -> void:
-	## The panel fallback carries the same CANCEL row the hardware page draws, so
-	## the cursor means one thing whichever of the two is up.
-	var rows: Array = _party_targets()
-	rows.append({"cancel": true})
 	_render_hardware()
 
 
@@ -1951,7 +1994,9 @@ func _use_refusal(reason: StringName, item: int) -> String:
 		return _pack_text(TEXT_OAK)
 	match reason:
 		&"item_has_no_effect":
-			return "It won't have any effect."
+			## `ItemUseNoEffect`'s box, which Generation 1's cache carries.
+			return _data.special_text("item_use", "no_effect") if _gen1_pack() \
+				else "It won't have any effect."
 		&"insufficient_item_quantity":
 			return "You have none of those."
 		&"pp_up_unsupported":
@@ -2072,7 +2117,8 @@ func _press_toss_quantity(button: int) -> bool:
 ## `TextCommands` and the cartridge executes whatever follows, which is
 ## `docs/bugs_and_glitches.md`'s own Coin Case entry. Those two keep the wording.
 func _coin_case_text() -> String:
-	var text: String = _data.menu_text("coin_case") if _data != null else ""
+	var text: String = _pack_text(TEXT_COIN_CASE) if _gen1_pack() \
+		else (_data.menu_text("coin_case") if _data != null else "")
 	if text.is_empty():
 		return "Coins:\n%4d" % _coins()
 	return Gen2TextStream.fill_marker(
@@ -2573,7 +2619,7 @@ func _target_quality() -> StringName:
 		return &"tmhm"
 	return &"evo_stone" if int(_selected_item().get(
 		"item", 0
-	)) in Gen2Evolution.STONE_ITEMS else &""
+	)) in Gen2Evolution.stone_items(_data) else &""
 
 
 func _mod_rows_image() -> Image:

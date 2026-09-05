@@ -93,6 +93,30 @@ const ICON_ITEM_TILE: int = Gen2Layout.HELD_ITEM_ICON_ITEM
 const ICON_MAIL_TILE: int = Gen2Layout.HELD_ITEM_ICON_MAIL
 const ICON_ITEM_QUADRANT: int = 2
 
+## Generation 1's own columns and first rows, from `DrawPartyMenu_`: the
+## nickname at `hlcoord 3, 0`, `PrintLevel` ten columns on and
+## `PrintStatusCondition` fourteen, with `DrawHPBar` a row below at
+## `hlcoord 4, 1` and `DrawHP2`'s fraction nine columns past the bar's own left
+## end. `ErasePartyMenuCursors` walks `hlcoord 0, 1` two rows at a time, so the
+## arrow stands beside the bar rather than the nickname, and there is no CANCEL
+## row: `PartyMenuInit` stops the list at `wPartyCount - 1` and B is the way out.
+const GEN1_NICKNAME: Vector2i = Vector2i(3, 0)
+const GEN1_LEVEL: Vector2i = Vector2i(13, 0)
+const GEN1_STATUS: Vector2i = Vector2i(17, 0)
+const GEN1_HP_BAR: Vector2i = Vector2i(4, 1)
+const GEN1_HP_DIGITS: Vector2i = Vector2i(13, 1)
+const GEN1_CURSOR_ROW: int = 1
+## `MESSAGE_BOX` in `data/text_boxes.asm` and `PrintText`'s own `bccoord 1, 14`.
+const GEN1_TEXTBOX: Vector2i = Vector2i(0, 12)
+const GEN1_TEXTBOX_ROWS: int = 6
+const GEN1_PROMPT: Vector2i = Vector2i(1, 14)
+## `WriteMonPartySpriteOAM`: X is `$10` flat and Y the slot shifted four with
+## `$10` added, and both name the block's top-left rather than a centre.
+const GEN1_ICON_AT: Vector2i = Vector2i(0x10, 0x10)
+## `PartyMonSpeeds` with `wOnSGB` set, the V-blanks one frame lasts on a green,
+## yellow and red bar. Crystal's row is added to a duration; this one is it.
+const GEN1_ICON_SPEEDS: Array[int] = [5, 16, 32]
+
 ## `PlaceStatusString`'s three-letter strings, in the order
 ## `PlaceNonFaintStatus` tests them. FNT comes first because
 ## `PlaceStatusString` checks the health before it ever looks at the byte.
@@ -105,6 +129,25 @@ const FAINTED_STRING: String = "FNT"
 var font: Gen2Font = null
 var hud: Gen2BattleHud = null
 var data: GameData = null
+
+## Read through the instance so one drawing routine serves both generations,
+## the way [Gen2BattleTiles] carries its own tile numbers.
+var gen1: bool = false
+var nickname_at: Vector2i = NICKNAME
+var hp_bar_at: Vector2i = HP_BAR
+var hp_digits_at: Vector2i = HP_DIGITS
+var level_at: Vector2i = LEVEL
+var status_at: Vector2i = STATUS
+var quality_at: Vector2i = QUALITY
+var cursor_row: int = NICKNAME.y
+var textbox_at: Vector2i = TEXTBOX
+var textbox_rows: int = TEXTBOX_ROWS
+var prompt_at: Vector2i = PROMPT
+
+## `wAnimCounter` and the `wCurrentMenuItem` its reset is keyed on, which
+## Generation 1 keeps for the whole menu rather than one per icon.
+var _gen1_counter: int = 0
+var _gen1_cursor: int = -1
 
 ## One sprite anim struct per member, in party order:
 ## `{icon, item, speed, frame, duration, var1, x, y_offset}`. Empty until
@@ -135,7 +178,26 @@ static func from_data(source: GameData) -> Gen2PartyMenuPage:
 	out.hud = panels
 	out.data = source
 	out.frame_style = Gen2OptionsStore.current().textbox_frame
+	if source.generation == RomRegistry.GEN1:
+		out._use_gen1_layout()
 	return out
+
+
+func _use_gen1_layout() -> void:
+	gen1 = true
+	nickname_at = GEN1_NICKNAME
+	hp_bar_at = GEN1_HP_BAR
+	hp_digits_at = GEN1_HP_DIGITS
+	level_at = GEN1_LEVEL
+	status_at = GEN1_STATUS
+	## `.teachMoveMenu` and `.evolutionStoneMenu` both print at the nickname's
+	## own `SCREEN_WIDTH + 9`, which is where `PlacePartyMonTMHMCompatibility`
+	## prints too.
+	quality_at = GEN1_NICKNAME + QUALITY - NICKNAME
+	cursor_row = GEN1_CURSOR_ROW
+	textbox_at = GEN1_TEXTBOX
+	textbox_rows = GEN1_TEXTBOX_ROWS
+	prompt_at = GEN1_PROMPT
 
 
 ## The whole screen, with the arrow on [param cursor] counting CANCEL as the row
@@ -156,15 +218,15 @@ func render(
 
 	for index: int in rows.size():
 		_draw_member(page, width, index, rows[index], quality)
-	if cancel:
+	if cancel and not gen1:
 		font.draw_text(
 			Gen2BattleSwitchMenu.cancel_label(), page, width,
-			CANCEL_COLUMN * TILE, (NICKNAME.y + rows.size() * ROW_STEP) * TILE
+			CANCEL_COLUMN * TILE, (nickname_at.y + rows.size() * ROW_STEP) * TILE
 		)
 	if held >= 0 and held < rows.size():
 		font.draw_code(
 			HELD_CODE, page, width,
-			CURSOR_COLUMN * TILE, (NICKNAME.y + held * ROW_STEP) * TILE
+			CURSOR_COLUMN * TILE, (cursor_row + held * ROW_STEP) * TILE
 		)
 	_draw_cursor(page, width, cursor)
 	_draw_prompt(page, width, prompt)
@@ -189,10 +251,40 @@ func render(
 func advance(rows: Array, cursor: int) -> void:
 	if _icons.size() != rows.size():
 		reset(rows)
+	if gen1:
+		_advance_gen1(cursor)
+		return
 	for index: int in _icons.size():
 		var icon: Dictionary = _icons[index]
 		_step_icon_sequence(icon, index == cursor)
 		_step_icon_frame(icon)
+
+
+## `AnimatePartyMon` behind `GetAnimationSpeed`: one counter for the whole menu,
+## which `HandleMenuInput_` zeroes every time it redraws the cursor, and only
+## the chosen row moved. `.resetSprites` puts every icon back on its first frame
+## at zero and `.animateSprite` swaps the chosen one at the speed its bar colour
+## names, so the counter runs to twice that. A ball or a helix takes
+## `.editCoords` and shakes a pixel down where the rest change tile.
+func _advance_gen1(cursor: int) -> void:
+	if cursor != _gen1_cursor:
+		_gen1_cursor = cursor
+		_gen1_counter = 0
+	for icon: Dictionary in _icons:
+		icon["frame"] = 0
+		icon["y_offset"] = 0
+	if cursor < 0 or cursor >= _icons.size():
+		return
+	var chosen: Dictionary = _icons[cursor]
+	var speed: int = GEN1_ICON_SPEEDS[int(chosen["speed"])]
+	var shown: int = _gen1_counter
+	_gen1_counter = 0 if shown + 1 >= speed * 2 else shown + 1
+	if shown < speed:
+		return
+	if bool(chosen["shakes"]):
+		chosen["y_offset"] = 1
+	else:
+		chosen["frame"] = 1
 
 
 ## `InitPartyMenuGFX`: one struct per member, spawned in party order. FRAME
@@ -210,6 +302,9 @@ func reset(rows: Array) -> void:
 		## green one, rather than a stale byte no save can reproduce.
 		if bool(member.get("egg", false)):
 			speed = 0
+		var icon: int = data.mon_menu_icon(
+			int(member.get("species", 0)), bool(member.get("egg", false))
+		) if data != null else 0
 		_icons.append({
 			## The strip is asked for by species rather than by icon number, so a
 			## mod species drawing indices of its own animates with the rest.
@@ -219,12 +314,16 @@ func reset(rows: Array) -> void:
 			"item": int(member.get("item", 0)) != 0,
 			"mail": Gen2HeldItem.is_mail(int(member.get("item", 0))),
 			"speed": speed,
-			"frame": -1,
+			"shakes": gen1 and Gen1Layout.MON_ICON_SHAKING.has(icon - 1),
+			"symmetric": gen1 and icon - 1 != Gen1Layout.MON_ICON_HELIX,
+			"frame": -1 if not gen1 else 0,
 			"duration": 0,
 			"var1": 0,
 			"x": ICON_X,
 			"y_offset": 0,
 		})
+	_gen1_counter = 0
+	_gen1_cursor = -1
 
 
 ## What the icons would draw right now, so a host caching its layer knows when
@@ -268,7 +367,7 @@ func _step_icon_frame(icon: Dictionary) -> void:
 func _blend_icons(pixels: PackedInt32Array, count: int) -> void:
 	if data == null or _icons.is_empty():
 		return
-	var colors: PackedColorArray = data.party_menu_icon_palette()
+	var colors: PackedColorArray = _icon_palette()
 	if colors.size() != PokePalette.COLORS_PER_PIC:
 		return
 	var held: PackedByteArray = data.held_item_icon_indices()
@@ -281,35 +380,64 @@ func _blend_icons(pixels: PackedInt32Array, count: int) -> void:
 		var strip: PackedByteArray = icon["strip"]
 		if strip.is_empty():
 			continue
-		var at := Vector2i(
-			int(icon["x"]) - ICON_TILE - OAM_ORIGIN.x,
-			ICON_FIRST_Y + index * ICON_ROW_STEP + int(icon["y_offset"])
-				- ICON_TILE - OAM_ORIGIN.y
-		)
+		var at: Vector2i = _icon_corner(icon, index)
 		var first: int = int(icon["frame"]) * ICON_FRAME_TILES
 		for quadrant: int in ICON_FRAME_TILES:
 			var source: PackedByteArray = strip
 			var tile: int = first + quadrant
-			if quadrant == ICON_ITEM_QUADRANT and bool(icon["item"]) and not held.is_empty():
+			var flip: bool = false
+			if gen1:
+				## `WriteSymmetricMonPartySpriteOAM` writes each row's one tile
+				## twice, the second time X-flipped; the helix's own writer walks
+				## all four in raster order.
+				flip = bool(icon["symmetric"]) and quadrant % 2 == 1
+				tile = first + (quadrant & 2) if bool(icon["symmetric"]) else tile
+			elif quadrant == ICON_ITEM_QUADRANT and bool(icon["item"]) and not held.is_empty():
 				source = held
 				tile = ICON_MAIL_TILE if bool(icon["mail"]) else ICON_ITEM_TILE
 			blend_tile(
 				pixels, source, tile, colors,
-				at + Vector2i((quadrant & 1) * ICON_TILE, (quadrant >> 1) * ICON_TILE)
+				at + Vector2i((quadrant & 1) * ICON_TILE, (quadrant >> 1) * ICON_TILE), flip
 			)
+
+
+## `PartyMenuOBPals` on Crystal. Generation 1 has no object palette table: the
+## icons stand in the two columns `BlkPacket_PartyMenu` gives PAL_MEWMON, read
+## through `GBPalNormal`'s own `rOBP0`.
+func _icon_palette() -> PackedColorArray:
+	if not gen1:
+		return data.party_menu_icon_palette()
+	return Gen2WorldPalette.gen1_object_colors(
+		data.world_palette(Gen1Layout.PAL_MEWMON)
+	)
+
+
+## The block's top-left on screen. Generation 1's OAM coordinates are the
+## corner itself; Crystal's name the middle of `.OAMData_RedWalk`'s four tiles,
+## which sit a tile up and left of it.
+func _icon_corner(icon: Dictionary, index: int) -> Vector2i:
+	if gen1:
+		return Vector2i(
+			GEN1_ICON_AT.x, GEN1_ICON_AT.y + index * ICON_ROW_STEP + int(icon["y_offset"])
+		) - OAM_ORIGIN
+	return Vector2i(
+		int(icon["x"]) - ICON_TILE - OAM_ORIGIN.x,
+		ICON_FIRST_Y + index * ICON_ROW_STEP + int(icon["y_offset"])
+			- ICON_TILE - OAM_ORIGIN.y
+	)
 
 
 ## One 8x8 tile of an index strip, clipped to the screen. Static and public
 ## because the move screen composes the same icon over its own page.
 static func blend_tile(
 	pixels: PackedInt32Array, strip: PackedByteArray, tile: int,
-	colors: PackedColorArray, at: Vector2i
+	colors: PackedColorArray, at: Vector2i, flip_x: bool = false
 ) -> void:
 	@warning_ignore("integer_division")
 	var tiles: int = strip.size() / PokeTiles.TILE_PIXELS
 	Gen2PicImage.blit_tile(
 		pixels, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, strip, tiles, tile,
-		at.x, at.y, Gen2PicImage.lookup(colors), false, false, 0
+		at.x, at.y, Gen2PicImage.lookup(colors), flip_x, false, 0
 	)
 
 
@@ -323,7 +451,7 @@ func _draw_member(
 
 	font.draw_text(
 		String(row.get("name", "")), page, width,
-		NICKNAME.x * TILE, (NICKNAME.y + step) * TILE
+		nickname_at.x * TILE, (nickname_at.y + step) * TILE
 	)
 	## Every quality below `PlacePartyNicknames` opens its loop with
 	## `PartyMenuCheckEgg` and steps past the row, so an egg is a nickname and
@@ -334,22 +462,21 @@ func _draw_member(
 	if quality:
 		font.draw_text(
 			String(row.get("quality", "")), page, width,
-			QUALITY.x * TILE, (QUALITY.y + step) * TILE
+			quality_at.x * TILE, (quality_at.y + step) * TILE
 		)
 	else:
 		font.draw_text(
 			"%s/%s" % [
 				str(hp).lpad(HP_NUMBER_DIGITS), str(max_hp).lpad(HP_NUMBER_DIGITS),
 			],
-			page, width, HP_DIGITS.x * TILE, (HP_DIGITS.y + step) * TILE
+			page, width, hp_digits_at.x * TILE, (hp_digits_at.y + step) * TILE
 		)
 		hud.draw_bar_frame(
-			page, width, Vector2i(HP_BAR.x, HP_BAR.y + step),
-			Gen2BattleTiles.HP_BAR_END
+			page, width, Vector2i(hp_bar_at.x, hp_bar_at.y + step), hud.tiles.hp_bar_end
 		)
-	hud.draw_level(page, width, Vector2i(LEVEL.x, LEVEL.y + step), int(row.get("level", 0)))
+	hud.draw_level(page, width, Vector2i(level_at.x, level_at.y + step), int(row.get("level", 0)))
 	font.draw_text(
-		_status_string(row), page, width, STATUS.x * TILE, (STATUS.y + step) * TILE
+		_status_string(row), page, width, status_at.x * TILE, (status_at.y + step) * TILE
 	)
 
 
@@ -367,8 +494,8 @@ func _blend_bar(pixels: PackedInt32Array, index: int, row: Dictionary) -> void:
 	buffer.resize(width * TILE)
 	var hp: int = int(row.get("hp", 0))
 	var max_hp: int = int(row.get("max_hp", 0))
-	var top: int = HP_BAR.y + index * ROW_STEP
-	hud.draw_hp_bar(buffer, width, Vector2i(HP_BAR.x, 0), hp, max_hp)
+	var top: int = hp_bar_at.y + index * ROW_STEP
+	hud.draw_hp_bar(buffer, width, Vector2i(hp_bar_at.x, 0), hp, max_hp)
 
 	var lit: int = Gen2BattleHud.bar_pixels(
 		hp, max_hp, Gen2BattleHud.HP_BAR_TILES * TILE
@@ -376,7 +503,7 @@ func _blend_bar(pixels: PackedInt32Array, index: int, row: Dictionary) -> void:
 	var table: PackedInt32Array = Gen2PicImage.lookup(
 		data.bar_palette(GameData.hp_bar_palette_name(lit)), true
 	)
-	var left: int = (HP_BAR.x + 2) * TILE
+	var left: int = (hp_bar_at.x + 2) * TILE
 	for y: int in TILE:
 		var from: int = y * width
 		var to: int = (top * TILE + y) * width
@@ -402,13 +529,20 @@ func _draw_cursor(page: PackedByteArray, width: int, cursor: int) -> void:
 		return
 	font.draw_code(
 		Gen2MenuPage.CURSOR_CODE, page, width,
-		CURSOR_COLUMN * TILE, (NICKNAME.y + cursor * ROW_STEP) * TILE
+		CURSOR_COLUMN * TILE, (cursor_row + cursor * ROW_STEP) * TILE
 	)
 
 
 func _draw_prompt(page: PackedByteArray, width: int, prompt: String) -> void:
 	font.draw_box(
-		frame_style, page, width, TEXTBOX.x * TILE, TEXTBOX.y * TILE,
-		TEXTBOX_COLUMNS, TEXTBOX_ROWS
+		frame_style, page, width, textbox_at.x * TILE, textbox_at.y * TILE,
+		TEXTBOX_COLUMNS, textbox_rows
 	)
-	font.draw_text(prompt, page, width, PROMPT.x * TILE, PROMPT.y * TILE)
+	## `PlacePartyMenuText`'s string is one line and every `PartyMenuMessagePointers`
+	## box is two, so a break is a row two down, which is where `<LINE>` lands.
+	var line: int = 0
+	for row: String in prompt.split("\n", false):
+		font.draw_text(
+			row, page, width, prompt_at.x * TILE, (prompt_at.y + line * ROW_STEP) * TILE
+		)
+		line += 1

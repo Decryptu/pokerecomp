@@ -62,18 +62,23 @@ const PINNED_EFFECTS: Dictionary = {
 ## What `StartMenu_Item`'s three tables come to over the whole 250-row table:
 ## `KeyItemFlags`' own 31 rows with the five HMs behind `IsItemHM`, the Bicycle
 ## and `UsableItems_CloseMenu` quitting the menu, and `UsableItems_PartyMenu`
-## with all 55 machines opening the party list. Identical on all three.
+## with all 55 machines opening the party list. The 15 rows `UseItem` refuses
+## outside a battle answer in front of all three, four of them X stats that are
+## on the party list and never open it. Identical on all three cartridges.
 const KEY_ITEM_COUNT: int = 36
 const FIELD_MENU_CENSUS: Dictionary = {
+	Gen2Layout.ITEMMENU_NOUSE: 15,
 	Gen2Layout.ITEMMENU_CLOSE: 7,
-	Gen2Layout.ITEMMENU_PARTY: 91,
-	Gen2Layout.ITEMMENU_CURRENT: 152,
+	Gen2Layout.ITEMMENU_PARTY: 87,
+	Gen2Layout.ITEMMENU_CURRENT: 141,
 }
 ## One row of each shape: the item, its field menu and whether `IsKeyItem` says
 ## yes. The Town Map and the Poke Ball are both `call UseItem` rows, one of them
-## a key item and one not.
+## a key item and one not, and `ItemUseBall`'s own `ld a, [wIsInBattle]` is why
+## only one of the two does anything on a map.
 const PINNED_ITEM_ATTRIBUTES: Dictionary = {
-	0x04: [Gen2Layout.ITEMMENU_CURRENT, false],
+	0x04: [Gen2Layout.ITEMMENU_NOUSE, false],
+	0x41: [Gen2Layout.ITEMMENU_NOUSE, false],
 	0x05: [Gen2Layout.ITEMMENU_CURRENT, true],
 	0x06: [Gen2Layout.ITEMMENU_CLOSE, true],
 	0x14: [Gen2Layout.ITEMMENU_PARTY, false],
@@ -199,12 +204,18 @@ func _evolutions(name: String, evolutions: Array) -> void:
 	for row: Dictionary in evolutions:
 		var method: int = int(row["method"])
 		_r.check(Gen1Layout.EVOLVE_SIZES.has(method), "%s evolves by method %d" % [name, method])
-		var species: int = int(row["species"])
+		var species: int = int(row["target"])
 		_r.check(species >= 1 and species <= SPECIES_COUNT,
 			"%s evolves into species %d" % [name, species])
+		var parameter: int = int(row["parameter"])
 		if method == Gen1Layout.EVOLVE_ITEM:
-			var item: int = int(row["item"])
-			_r.check(item >= 1 and item <= ITEM_COUNT, "%s evolves with item %d" % [name, item])
+			_r.check(parameter >= 1 and parameter <= ITEM_COUNT,
+				"%s evolves with item %d" % [name, parameter])
+			_r.check(Gen1Layout.STONE_ITEMS.has(parameter),
+				"%s evolves with item %d, which is no stone" % [name, parameter])
+		elif method == Gen1Layout.EVOLVE_TRADE:
+			_r.check(parameter == Gen2Evolution.TRADE_NO_ITEM,
+				"%s trades holding item %d" % [name, parameter])
 
 
 func _moves() -> void:

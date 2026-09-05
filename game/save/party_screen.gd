@@ -96,6 +96,9 @@ const MESSAGE_NO_EFFECT: String = "It won't have any effect."
 ## `MonSubmenu.MenuHeader`'s `menu_coords 6, 0, SCREEN_WIDTH - 1,
 ## SCREEN_HEIGHT - 1` with `.GetTopCoord`'s own top:
 ## `1 + bottom - 2 * (count + 1)`, so the box grows upward from the bottom row.
+## `DisplayFieldMoveMonMenu`'s `ld [hl], 12` and its `hlcoord 11, 11`.
+const GEN1_SUBMENU_COLUMN: int = 12
+const GEN1_SUBMENU_TOP: int = 11
 const SUBMENU_LEFT: int = 6
 const SUBMENU_RIGHT: int = 19
 const SUBMENU_BOTTOM: int = 17
@@ -270,7 +273,7 @@ static func submenu_items_for(
 		items.append(_option_entry(OPTION_CANCEL, "CANCEL"))
 		return items
 	for move: int in mon.moves:
-		if move == 0 or not Gen2WorldFieldMove.is_field_move(move):
+		if move == 0 or not Gen2WorldFieldMove.is_field_move(move, data):
 			continue
 		items.append({
 			"kind": &"field_move",
@@ -281,6 +284,11 @@ static func submenu_items_for(
 	## `SwitchPartyMons` makes its own `cp 2` refusal rather than being greyed
 	## out, so the row is offered whatever the party holds.
 	items.append(_option_entry(OPTION_SWITCH, "SWITCH"))
+	## `PokemonMenuEntries` is those two and CANCEL: Generation 1 reorders no
+	## moveset from here and its party carries nothing to give or take.
+	if data != null and data.generation == RomRegistry.GEN1:
+		items.append(_option_entry(OPTION_CANCEL, "CANCEL"))
+		return items
 	items.append(_option_entry(OPTION_MOVE, "MOVE"))
 	## `GetMonSubmenuItems`: `ItemIsMail` decides between the two rows, so a
 	## member holding mail has no ITEM row at all.
@@ -846,8 +854,19 @@ func _prompt() -> String:
 	if _selecting:
 		return _select_prompt
 	if _switch_from >= 0:
-		return PROMPT_MOVE_TO_WHERE
-	return PROMPT_USE_ON_WHICH if _heal_user >= 0 else PROMPT_CHOOSE
+		return prompt_text(_data, &"swap", PROMPT_MOVE_TO_WHERE)
+	return prompt_text(_data, &"item_use", PROMPT_USE_ON_WHICH) if _heal_user >= 0 \
+		else prompt_text(_data, &"normal", PROMPT_CHOOSE)
+
+
+## `PartyMenuStrings` on Crystal and `PartyMenuMessagePointers` on Generation 1,
+## whose boxes are imported: the constants here spell POKéMON with the `#` only
+## Crystal's charmap has a glyph for, so a Generation 1 font drew "?MON".
+static func prompt_text(data: GameData, row: StringName, crystal: String) -> String:
+	if data == null or data.generation != RomRegistry.GEN1:
+		return crystal
+	var text: String = data.special_text("party_menu", String(row))
+	return text if not text.is_empty() else crystal
 
 
 func _render_hardware() -> void:
@@ -932,6 +951,8 @@ func _submenu_box() -> Gen2MenuBox:
 			_fixed_menu_box.position.x, _fixed_menu_box.position.y,
 			_fixed_menu_box.end.x, _fixed_menu_box.end.y, Gen2MenuBox.STATICMENU_CURSOR
 		)
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		return gen1_mon_menu_box(_submenu_items)
 	return mon_menu_box(_submenu_items.size())
 
 
@@ -943,6 +964,33 @@ static func mon_menu_box(count: int) -> Gen2MenuBox:
 	return Gen2MenuBox.from_coords(
 		SUBMENU_LEFT, SUBMENU_BOTTOM + 1 - 2 * (maxi(count, 0) + 1),
 		SUBMENU_RIGHT, SUBMENU_BOTTOM, Gen2MenuBox.STATICMENU_CURSOR
+	)
+
+
+## `DisplayFieldMoveMonMenu`. `wFieldMovesLeftmostXCoord` drops to the smallest
+## `FieldMoveDisplayData` column the member's moves name, so a box holding
+## STRENGTH is two columns wider and one holding SOFTBOILED four. Each field
+## move raises the top two rows, with one more for the blank row above the first
+## name that a box with no field move never spends: that one opens on
+## `hlcoord 11, 11` and its first row is the next, `STATICMENU_NO_TOP_SPACING`.
+static func gen1_mon_menu_box(items: Array) -> Gen2MenuBox:
+	var moves: int = 0
+	var left: int = GEN1_SUBMENU_COLUMN
+	for entry: Dictionary in items:
+		if StringName(entry.get("kind", &"")) != &"field_move":
+			continue
+		moves += 1
+		left = mini(left, int(Gen2WorldFieldMove.GEN1_FIELD_MOVES.get(
+			int(entry.get("move", 0)), GEN1_SUBMENU_COLUMN
+		)))
+	if moves == 0:
+		return Gen2MenuBox.from_coords(
+			GEN1_SUBMENU_COLUMN - 1, GEN1_SUBMENU_TOP, SUBMENU_RIGHT, SUBMENU_BOTTOM,
+			Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
+		)
+	return Gen2MenuBox.from_coords(
+		left - 1, GEN1_SUBMENU_TOP - 1 - 2 * moves, SUBMENU_RIGHT, SUBMENU_BOTTOM,
+		Gen2MenuBox.STATICMENU_CURSOR
 	)
 
 
