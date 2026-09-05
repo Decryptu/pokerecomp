@@ -28,6 +28,7 @@ const KIND_HELP: Dictionary = {
 	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
 	&"sign": "none: DisplayTextID's box, read by facing up from where the player stands",
+	&"trainer": "presses, frames: TalkToTrainer on the map's first trainer, faced from the cell below. 0 the before-battle box, 1 the fight the press behind it opens; a second number stops that many frames into the transition instead",
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
 	&"vending": "presses, rows down: VendingMachineMenu, read by facing up from the cell below one. 0 the list, 1 the box the chosen row lands in",
 	&"prizes": "presses, rows down: CeladonPrizeMenu, read the same way. 0 the list, 1 SoYouWantPrizeText's YES/NO, 2 the box YES lands in",
@@ -403,6 +404,7 @@ const STAGERS: Dictionary = {
 	&"mod_page": &"_stage_mod_page",
 	&"pokepic": &"_stage_pokepic",
 	&"sign": &"_stage_sign",
+	&"trainer": &"_stage_trainer",
 	&"nurse": &"_stage_nurse",
 	&"vending": &"_stage_vending",
 	&"prizes": &"_stage_prizes",
@@ -906,6 +908,32 @@ func _stage_mod_page() -> void:
 
 func _stage_pokepic() -> void:
 	_screen.preview_pokepic(POKEPIC_SPECIES)
+
+
+## `TalkToTrainer` on the first trainer the map carries, stood below and faced.
+## One press opens the fight; a frame count stops inside `BattleTransition`.
+func _stage_trainer() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if world == null or world.current_map == null:
+		return
+	for object: Gen2WorldObject in world.objects:
+		if object.object_type != Gen2WorldObject.OBJECTTYPE_TRAINER:
+			continue
+		world.player_cell = object.cell + Vector2i.DOWN
+		break
+	_screen.press_button(PokeButton.UP)
+	for _frame: int in TEXT_SETTLE_FRAMES:
+		_screen.advance_frame()
+	_screen.interact()
+	for _frame: int in BOX_REVEAL_FRAMES:
+		_screen.advance_frame()
+	if _cell.x <= 0:
+		return
+	_screen.press_button(PokeButton.A)
+	for _frame: int in maxi(_cell.y, TEXT_SETTLE_FRAMES):
+		_screen.advance_frame()
+	if _cell.y <= 0:
+		_screen.settle_battle_transition()
 
 
 ## `DisplayTextID`'s box, read by facing the cell above the `x y` argument.

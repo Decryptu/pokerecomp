@@ -3654,6 +3654,10 @@ var _gen1_last_map: int = -1
 ## boxes are imported under.
 const GEN1_POKECENTER_RUN: String = "pokecenter"
 const GEN1_CABLE_CLUB_RUN: String = "cable_club"
+## `EndTrainerBattle`'s `cp LOST_BATTLE`, which a catch also passes.
+const GEN1_TRAINER_BEATEN: Array[StringName] = [
+	Gen2WorldBattleAdapter.OUTCOME_WON, Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
+]
 
 ## `wRivalName`, which no Generation 1 save model holds yet.
 var gen1_rival_name: String = Gen2WorldScriptRunner.UNNAMED
@@ -3704,11 +3708,14 @@ func gen1_last_map() -> int:
 func _gen1_interact() -> Array:
 	if current_map == null:
 		return []
-	var text_id: int = _gen1_text_id_at(facing_cell(), &"bg_events")
-	if text_id <= 0:
-		text_id = _gen1_text_id_at(object_facing_cell(), &"objects")
+	var event: Dictionary = _gen1_event_at(facing_cell(), &"bg_events")
+	if event.is_empty():
+		event = _gen1_event_at(object_facing_cell(), &"objects")
+	var text_id: int = int(event.get("text", 0))
 	var row: Dictionary = current_map.text_at(text_id)
-	_gen1_steps = _gen1_facility_steps(row, text_id)
+	_gen1_steps = _gen1_trainer_steps(row, event)
+	if _gen1_steps.is_empty():
+		_gen1_steps = _gen1_facility_steps(row, text_id)
 	if _gen1_steps.is_empty():
 		var text: String = Gen2TextStream.fill_names(String(row.get("text", "")), {
 			"player": _player_name if not _player_name.is_empty() \
@@ -3884,11 +3891,61 @@ func _gen1_facility_box(run: String, name: String) -> Dictionary:
 	}
 
 
-func _gen1_text_id_at(cell: Vector2i, kind: StringName) -> int:
+func _gen1_event_at(cell: Vector2i, kind: StringName) -> Dictionary:
 	for event: Dictionary in _active_events_at(cell):
 		if event.get("kind", &"") == kind and int(event.get("text", 0)) > 0:
-			return int(event["text"])
-	return 0
+			return event
+	return {}
+
+
+## `TalkToTrainer`: the flag first, then the after-battle line or the
+## before-battle one and `StartTrainerBattle`. The same header stands behind the
+## standing wild Pokemon of the Power Plant, Victory Road and the two caves.
+func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
+	var raw: Variant = row.get("trainer", {})
+	if not raw is Dictionary or (raw as Dictionary).is_empty():
+		return []
+	var header: Dictionary = raw as Dictionary
+	var flag: int = int(header["event_flag"])
+	if event_flag_active(flag):
+		return [{"type": &"text", "text": String(header["after"])}]
+	return [
+		{"type": &"text", "text": String(header["before"])},
+		{
+			"type": &"request",
+			"values": {
+				"kind": &"battle_requested",
+				"values": _gen1_battle_values(header, event),
+			},
+			"trainer_flag": flag,
+			"object_index": int(event.get("object_index", -1)),
+		},
+	]
+
+
+## `InitBattleEnemyParameters` splits the object's two bytes on `OPP_ID_OFFSET`:
+## above it a trainer class and party, below a species and a level.
+func _gen1_battle_values(header: Dictionary, event: Dictionary) -> Dictionary:
+	if not event.has("trainer_class"):
+		return {
+			"kind": &"wild",
+			"pokemon": int(event.get("species", 0)),
+			"level": int(event.get("level", 0)),
+		}
+	var trainer_class: int = int(event["trainer_class"])
+	var spoken: Dictionary = {"text": "%s: %s" % [
+		data.trainer_name(trainer_class) if data != null else "",
+		String(header["end"]),
+	]}
+	return {
+		"kind": &"trainer",
+		"trainer_group": trainer_class,
+		"trainer_class": trainer_class,
+		"trainer_id": maxi(int(event.get("trainer_number", 1)) - 1, 0),
+		"object_index": int(event.get("object_index", -1)),
+		"win_text": spoken,
+		"loss_text": spoken,
+	}
 
 
 ## A Generation 2 collision code at [param cell], or -1 on a Generation 1 map,
@@ -4074,12 +4131,25 @@ func _gen1_result() -> Array:
 
 ## Spends the head step and answers with whatever the next one waits on.
 ## [param choice] is the row a YES/NO was answered with.
-func _gen1_advance(choice: int) -> Array:
+func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 	var step: Dictionary = _gen1_steps.pop_front()
 	if StringName(step.get("type", &"")) == &"choice":
 		var branch: Array = step.get("yes" if choice == 0 else "no", [])
 		_gen1_steps = branch.duplicate(true) + _gen1_steps
+	_gen1_battle_won(step, result)
 	return _gen1_result()
+
+
+## `EndTrainerBattle` flags a beaten opponent, and its `cp OPP_ID_OFFSET` skips
+## `HideObject` for a trainer, so only a standing wild goes off the map.
+func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
+	var flag: int = int(step.get("trainer_flag", -1))
+	if flag < 0 or state == null:
+		return
+	if StringName(result.get("outcome", &"")) not in GEN1_TRAINER_BEATEN:
+		return
+	state.set_event_flag(flag)
+	load_object_masks()
 
 
 ## Whether the script holding the world is one that stops the map around it.
@@ -4389,7 +4459,7 @@ func complete_runtime_request(result: Dictionary) -> Array:
 	## `AfterDisplayingTextID` returns to `HandleMap` with nothing behind it, so
 	## a Generation 1 facility walks its own list instead of resuming a script.
 	if not _gen1_step(&"request").is_empty():
-		return _gen1_advance(-1)
+		return _gen1_advance(-1, result)
 	if _active_script == null:
 		return []
 	var results: Array = []

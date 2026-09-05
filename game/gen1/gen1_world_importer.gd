@@ -491,6 +491,9 @@ static func _read_map(
 	if not bool(events.get("ok", false)):
 		return events
 
+	var texts: Array = _read_texts(rom, layout, bank, rom.u16le(header + 5), events)
+	_carry_trainer_headers(events["objects"], texts)
+
 	return {
 		"ok": true,
 		"group": 0,
@@ -512,7 +515,7 @@ static func _read_map(
 			"scenes": [],
 			"callbacks": [],
 		},
-		"texts": _read_texts(rom, bank, rom.u16le(header + 5), events),
+		"texts": texts,
 		"events": {
 			"bank": bank,
 			"address": rom.u16le(object_address),
@@ -708,20 +711,43 @@ static func _read_objects(
 	return {"ok": true, "events": out, "at": at}
 
 
+## The header an object's text row carries, copied onto the object so a flag
+## read reaches it without the text.
+static func _carry_trainer_headers(objects: Array, texts: Array) -> void:
+	for object: Dictionary in objects:
+		var id: int = int(object.get("text", 0))
+		if id < 1 or id > texts.size():
+			continue
+		var header: Variant = (texts[id - 1] as Dictionary).get("trainer", {})
+		if not header is Dictionary or (header as Dictionary).is_empty():
+			continue
+		## `EndTrainerBattle` hides only below `OPP_ID_OFFSET`, by that bit.
+		if not object.has("trainer_class"):
+			object["event_flag"] = int((header as Dictionary)["event_flag"])
+			continue
+		object["object_type"] = Gen2WorldObject.OBJECTTYPE_TRAINER
+		object["sight_range"] = int((header as Dictionary)["sight_range"])
+		object["trainer"] = {"event_flag": int((header as Dictionary)["event_flag"])}
+
+
 ## `<Map>_TextPointers`, which `DisplayTextID` indexes with a text id. A row is
 ## machine code; only `text_far` and `text_start` are a text, and the rest keep
 ## the byte naming them. The table has no end, so the map's own events bound it.
-static func _read_texts(rom: RomFile, bank: int, address: int, events: Dictionary) -> Array:
+static func _read_texts(
+	rom: RomFile, layout: Dictionary, bank: int, address: int, events: Dictionary
+) -> Array:
 	var table: int = Gen1Layout.banked(bank, address)
 	var out: Array = []
 	for id: int in _highest_text_id(events):
-		out.append(_read_text(rom, bank, rom.u16le(table + id * 2)))
+		out.append(_read_text(rom, layout, bank, rom.u16le(table + id * 2)))
 	return out
 
 
 ## A `TX_SCRIPT_*` row keeps its own inventory where it has one, so nothing
 ## downstream has to read the cartridge again to open the shop.
-static func _read_text(rom: RomFile, bank: int, pointer: int) -> Dictionary:
+static func _read_text(
+	rom: RomFile, layout: Dictionary, bank: int, pointer: int
+) -> Dictionary:
 	var at: int = Gen1Layout.banked(bank, pointer)
 	var decoded: Dictionary = Gen1Text.decode_stream(rom, at)
 	var row: Dictionary = {"command": rom.u8(at), "text": ""}
@@ -731,9 +757,62 @@ static func _read_text(rom: RomFile, bank: int, pointer: int) -> Dictionary:
 		elif String(decoded.get("reason", "")) != "text_script":
 			row["reason"] = String(decoded.get("reason", "invalid_text"))
 		return row
+	var header: int = _asm_operand(rom, bank, at, int(layout["talk_to_trainer"]))
+	if header >= 0:
+		row["trainer"] = _read_trainer_header(rom, layout, bank, header)
+		return row
 	row["text"] = String(decoded["text"])
 	row["prompt"] = bool(decoded.get("prompt", false))
 	return row
+
+
+## Where a `text_asm` row's `ld hl` points when the code behind it calls
+## [param target], or -1 for any other machine code. `TalkToTrainer` is 322 of
+## the corpus's 626 such rows; a map sharing one landing `jr`s onto it.
+static func _asm_operand(rom: RomFile, bank: int, at: int, target: int) -> int:
+	if rom.u8(at) != Gen1Layout.TRAINER_TEXT_ASM \
+		or rom.u8(at + 1) != Gen1Layout.TRAINER_TEXT_LD_HL:
+		return -1
+	var landing: int = at + 4
+	if rom.u8(landing) == Gen1Layout.TRAINER_TEXT_JR:
+		## `jr` counts from the byte after its own operand.
+		var hop: int = rom.u8(landing + 1)
+		landing += 2 + (hop - 0x100 if hop > 0x7F else hop)
+	if rom.u8(landing) != Gen1Layout.TRAINER_TEXT_CALL \
+		or rom.u16le(landing + 1) != target:
+		return -1
+	return Gen1Layout.banked(bank, rom.u16le(at + 2))
+
+
+## One `trainer` row. `TrainerFlagAction` counts the bit off the address two
+## bytes in, so the flag is that address's distance from `wEventFlags` in bits
+## plus the stored bit.
+static func _read_trainer_header(
+	rom: RomFile, layout: Dictionary, bank: int, at: int
+) -> Dictionary:
+	var offsets: Dictionary = Gen1Layout.TRAINER_HEADER_AT
+	var flag_address: int = rom.u16le(at + int(offsets["flag_address"]))
+	var out: Dictionary = {
+		"event_flag": (flag_address - int(layout["event_flags"])) * 8
+			+ rom.u8(at + int(offsets["flag_bit"])),
+		"sight_range": rom.u8(at + int(offsets["range"])) >> Gen1Layout.TRAINER_RANGE_SHIFT,
+	}
+	for name: String in ["before", "after", "end"]:
+		out[name] = _read_trainer_text(
+			rom, layout, bank, rom.u16le(at + int(offsets[name]))
+		)
+	return out
+
+
+## One of a header's three texts. `RocketHideoutB4FRocket3AfterBattleText` is
+## the corpus's one that is machine code, and says its `PrintText` operand.
+static func _read_trainer_text(
+	rom: RomFile, layout: Dictionary, bank: int, pointer: int
+) -> String:
+	var at: int = Gen1Layout.banked(bank, pointer)
+	var printed: int = _asm_operand(rom, bank, at, int(layout["print_text"]))
+	var decoded: Dictionary = Gen1Text.decode_stream(rom, at if printed < 0 else printed)
+	return String(decoded["text"]) if bool(decoded.get("ok", false)) else ""
 
 
 ## `script_mart`'s inline list, which `LoadItemList` copies straight out of the

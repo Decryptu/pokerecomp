@@ -98,18 +98,52 @@ const WEDGES: Dictionary = {
 }
 ## `BattleTransitions`, the jumptable `GetBattleTransitionID_WildOrTrainer`,
 ## `..._CompareLevels` and `..._IsDungeonMap` index with one bit each. Only the
-## four wild rows have a caller: nothing puts a Generation 1 trainer on a map,
-## and `..._Shrink` and `..._Split` move the map's own tiles rather than blacking
-## cells, so they want a screen of them.
+## circles flash; the other six open on the wipe itself.
+## `wBattleTransitionSpiralDirection` is 1 when the lead is stronger, which is
+## the trainer row that spirals inward.
 const GEN1_TRAINER_BIT: int = 1
 const GEN1_STRONGER_BIT: int = 2
 const GEN1_DUNGEON_BIT: int = 4
 const GEN1_SCENES: Dictionary = {
 	0: [&"gen1_init", &"gen1_flash", &"gen1_double_circle"],
+	GEN1_TRAINER_BIT: [&"gen1_init", &"gen1_spiral_in"],
 	GEN1_STRONGER_BIT: [&"gen1_init", &"gen1_flash", &"gen1_circle"],
+	GEN1_TRAINER_BIT | GEN1_STRONGER_BIT: [&"gen1_init", &"gen1_spiral_out"],
 	GEN1_DUNGEON_BIT: [&"gen1_init", &"gen1_stripes"],
+	GEN1_DUNGEON_BIT | GEN1_TRAINER_BIT: [&"gen1_init", &"gen1_shrink"],
 	GEN1_DUNGEON_BIT | GEN1_STRONGER_BIT: [&"gen1_init", &"gen1_stripes"],
+	GEN1_DUNGEON_BIT | GEN1_STRONGER_BIT | GEN1_TRAINER_BIT: [&"gen1_init", &"gen1_split"],
 }
+
+## `BattleTransition_InwardSpiral`: down, right, up and left from `hlcoord 0, 0`.
+const GEN1_SPIRAL_DIRECTIONS: Array[int] = [COLUMNS, 1, -COLUMNS, -1]
+const GEN1_SPIRAL_FIRST_ARM: int = ROWS - 1
+## `wInwardSpiralUpdateScreenCounter`: cells written between two `Delay3`s.
+const GEN1_SPIRAL_TRANSFER: int = 7
+
+## `BattleTransition_Spiral.outwardSpiral`: three `..._OutwardSpiral_` calls a
+## frame from `hlcoord 10, 10`. A probe past `wTileMap` never reads its tile.
+const GEN1_OUTWARD_AT := Vector2i(10, 10)
+const GEN1_OUTWARD_DIRECTION: int = 3
+const GEN1_OUTWARD_FRAMES: int = 120
+const GEN1_OUTWARD_PER_FRAME: int = 3
+## Probe, then the cell kept to, per `wOutwardSpiralCurrentDirection`.
+const GEN1_OUTWARD_STEPS: Array[Vector2i] = [
+	Vector2i(-1, -COLUMNS), Vector2i(COLUMNS, -1),
+	Vector2i(1, COLUMNS), Vector2i(-COLUMNS, 1),
+]
+
+## Both squeezes as their `BattleTransition_CopyTiles` calls.
+const GEN1_SHRINK_ROWS: Array = [[7, 8, -2], [10, 9, 2]]
+const GEN1_SHRINK_COLUMNS: Array = [[8, 9, -2], [11, 10, 2]]
+const GEN1_SPLIT_ROWS: Array = [[16, 17, -2], [1, 0, 2]]
+const GEN1_SPLIT_COLUMNS: Array = [[18, 19, -2], [1, 0, 2]]
+const GEN1_SQUEEZE_PASSES: int = ROWS / 2
+const GEN1_ROW_COPIES: int = 8
+const GEN1_COLUMN_COPIES: int = 9
+## Shrink's `ld c, 6`, which is Split's two `Delay3`s.
+const GEN1_SQUEEZE_STEP_FRAMES: int = 6
+const GEN1_SQUEEZE_END_FRAMES: int = 10
 
 ## `BattleTransition_HalfCircle1` and `...2`, with the Y quadrant their caller
 ## passes folded into [method _draw_wedge]'s own two bits: the first table is
@@ -228,6 +262,13 @@ var _sprites: int = SPRITES_ALL
 ## Which stripe plan is running, and whether this is `BattleTransition`.
 var _gen1_stripes: Array = []
 var _gen1: bool = false
+## `wTileMap` as a squeeze moves it: the cell each one draws, or -1 for black.
+var _gen1_map: PackedInt32Array = PackedInt32Array()
+## Where either spiral has reached, and which way the outward one faces.
+var _gen1_arms: Array = []
+var _gen1_arm: int = 0
+var _gen1_cursor: int = 0
+var _gen1_direction: int = 0
 var _cells: PackedByteArray = PackedByteArray()
 var _sine: PackedByteArray = PackedByteArray()
 var _rng: RandomNumberGenerator = null
@@ -280,7 +321,38 @@ static func create_gen1(index: int) -> Gen2BattleTransition:
 	out._rng = RandomNumberGenerator.new()
 	out._cells = PackedByteArray()
 	out._cells.resize(COLUMNS * ROWS)
+	out._gen1_direction = GEN1_OUTWARD_DIRECTION
+	out._gen1_arms = _gen1_spiral_arms()
+	if out._scene.has(&"gen1_spiral_out"):
+		out._gen1_cursor = GEN1_OUTWARD_AT.y * COLUMNS + GEN1_OUTWARD_AT.x
+	if out._scene.has(&"gen1_shrink") or out._scene.has(&"gen1_split"):
+		out._gen1_map.resize(COLUMNS * ROWS)
+		for cell: int in COLUMNS * ROWS:
+			out._gen1_map[cell] = cell
 	return out
+
+
+## The arms as `(direction, length)`, in the order the calls run.
+static func _gen1_spiral_arms() -> Array:
+	var arms: Array = [[0, GEN1_SPIRAL_FIRST_ARM]]
+	var arm: int = GEN1_SPIRAL_FIRST_ARM + 1
+	while true:
+		arm += 1
+		arms.append([1, arm])
+		arm -= 2
+		arms.append([2, arm])
+		arm += 1
+		arms.append([3, arm])
+		arm -= 2
+		if arm <= 0:
+			return arms
+		arms.append([0, arm])
+	return arms
+
+
+## Which screen cell each cell draws, empty for a transition moving none.
+func source_cells() -> PackedInt32Array:
+	return _gen1_map
 
 
 ## Which scene is running, for a test or a trace: a key of [constant SCENE_STEPS].
@@ -361,6 +433,9 @@ const SCENE_STEPS: Dictionary = {
 	&"gen1_circle": &"_gen1_circle_step",
 	&"gen1_double_circle": &"_gen1_double_circle_step",
 	&"gen1_stripes": &"_gen1_stripes_step",
+	&"gen1_spiral_in": &"_gen1_inward_spiral_step",
+	&"gen1_spiral_out": &"_gen1_outward_spiral_step",
+	&"gen1_shrink": &"_gen1_shrink_step", &"gen1_split": &"_gen1_split_step",
 }
 
 
@@ -559,6 +634,102 @@ func _gen1_stripes_step() -> void:
 			at += run
 	_counter += 1
 	_delay = GEN1_STEP_FRAMES - 1
+
+
+## `BattleTransition_InwardSpiral_`: seven cells, then the `Delay3` they trip.
+func _gen1_inward_spiral_step() -> void:
+	for _cell: int in GEN1_SPIRAL_TRANSFER:
+		while _gen1_arm < _gen1_arms.size() and int((_gen1_arms[_gen1_arm] as Array)[1]) <= 0:
+			_gen1_arm += 1
+		if _gen1_arm >= _gen1_arms.size():
+			_finish()
+			return
+		var arm: Array = _gen1_arms[_gen1_arm]
+		if _gen1_cursor >= 0 and _gen1_cursor < _cells.size():
+			_cells[_gen1_cursor] = CELL_BLACK
+		_gen1_cursor += GEN1_SPIRAL_DIRECTIONS[int(arm[0])]
+		arm[1] = int(arm[1]) - 1
+	_delay = GEN1_STEP_FRAMES - 1
+
+
+## Each direction turns into the cell ninety degrees off it while it is map.
+func _gen1_outward_spiral_step() -> void:
+	if _counter >= GEN1_OUTWARD_FRAMES:
+		_finish()
+		return
+	for _pass: int in GEN1_OUTWARD_PER_FRAME:
+		var steps: Vector2i = GEN1_OUTWARD_STEPS[_gen1_direction]
+		var probe: int = _gen1_cursor + steps.x
+		if _gen1_written(probe):
+			_gen1_cursor += steps.y
+		else:
+			_gen1_cursor = probe
+			_gen1_direction = (_gen1_direction + 1) % GEN1_OUTWARD_STEPS.size()
+		if _gen1_cursor >= 0 and _gen1_cursor < _cells.size():
+			_cells[_gen1_cursor] = CELL_BLACK
+	_counter += 1
+	_delay = 0
+
+
+func _gen1_written(cell: int) -> bool:
+	return cell >= 0 and cell < _cells.size() and int(_cells[cell]) == CELL_BLACK
+
+
+## `BattleTransition_Shrink`: both halves of each axis move toward the middle.
+func _gen1_shrink_step() -> void:
+	_gen1_squeeze(GEN1_SHRINK_ROWS, GEN1_SHRINK_COLUMNS)
+
+
+## `BattleTransition_Split`: the halves move apart and the middle fills.
+func _gen1_split_step() -> void:
+	_gen1_squeeze(GEN1_SPLIT_ROWS, GEN1_SPLIT_COLUMNS)
+
+
+func _gen1_squeeze(rows: Array, columns: Array) -> void:
+	if _counter >= GEN1_SQUEEZE_PASSES:
+		_delay += GEN1_SQUEEZE_END_FRAMES
+		_finish()
+		return
+	for row: Array in rows:
+		_gen1_copy(int(row[0]) * COLUMNS, int(row[1]) * COLUMNS, int(row[2]) * COLUMNS,
+			GEN1_ROW_COPIES, 1, COLUMNS)
+	for column: Array in columns:
+		_gen1_copy(int(column[0]), int(column[1]), int(column[2]),
+			GEN1_COLUMN_COPIES, COLUMNS, ROWS)
+	_gen1_publish()
+	_counter += 1
+	_delay = GEN1_SQUEEZE_STEP_FRAMES - 1
+
+
+## `BattleTransition_CopyTiles1` and `..._CopyTiles2`, one routine with two
+## strides: its `pop hl / pop de` swaps the pointers every pass, and `de` ends
+## on the run to fill.
+func _gen1_copy(
+	source: int, destination: int, offset: int, passes: int, stride: int, length: int
+) -> void:
+	for _pass: int in passes:
+		for cell: int in length:
+			_gen1_write(destination + cell * stride, _gen1_read(source + cell * stride))
+		var next: int = destination + offset
+		destination = source
+		source = next
+	for cell: int in length:
+		_gen1_write(destination + cell * stride, -1)
+
+
+func _gen1_read(cell: int) -> int:
+	return int(_gen1_map[cell]) if cell >= 0 and cell < _gen1_map.size() else -1
+
+
+func _gen1_write(cell: int, value: int) -> void:
+	if cell >= 0 and cell < _gen1_map.size():
+		_gen1_map[cell] = value
+
+
+## The filled cells, so a renderer taking no source map still draws them.
+func _gen1_publish() -> void:
+	for cell: int in _cells.size():
+		_cells[cell] = CELL_BLACK if int(_gen1_map[cell]) < 0 else CELL_NONE
 
 
 ## `.load`: a run of cells blacked out along a row, then a step back and down

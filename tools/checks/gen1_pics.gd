@@ -141,8 +141,7 @@ func _species_pics() -> void:
 func _trainer_pics() -> void:
 	var shared: Array[PackedByteArray] = []
 	for trainer_class: int in range(1, TRAINER_COUNT + 1):
-		var entry: Dictionary = _r.data.trainer(trainer_class)
-		var money: int = int(entry.get("base_money", 0))
+		var money: int = int(_r.data.trainer_attributes(trainer_class).get("base_reward", 0))
 		var pinned: int = int(PINNED_MONEY.get(trainer_class, 0))
 		if pinned > 0:
 			_r.check(money == pinned, "trainer class %d pays %d, pinned %d." % [
