@@ -80,6 +80,14 @@ const FIELD_MOVES: Array[int] = [
 	MOVE_FLY, MOVE_SOFTBOILED, MOVE_MILK_DRINK,
 ]
 
+## `FieldMoveDisplayData` (`data/moves/field_moves.asm`), the whole of
+## `GetMonFieldMoves`: the move, and the column `DisplayFieldMoveMonMenu` starts
+## its name one past. `ANIM_B4`'s row is the unused one and names no move.
+const GEN1_FIELD_MOVES: Dictionary = {
+	MOVE_CUT: 0x0C, MOVE_FLY: 0x0C, MOVE_SURF: 0x0C, MOVE_STRENGTH: 0x0A,
+	MOVE_FLASH: 0x0C, MOVE_DIG: 0x0C, MOVE_TELEPORT: 0x0A, MOVE_SOFTBOILED: 0x08,
+}
+
 ## engine/overworld/tile_events.asm's CheckCutCollision, entry for entry: the
 ## four grass codes are LAND_TILE and cuttable, so this is not the permission.
 const CUTTABLE_COLLISIONS: Array[int] = [
@@ -190,7 +198,9 @@ static func move_boulders_text(user: String) -> String:
 	return MOVE_BOULDERS_TEXT % user
 
 
-static func is_field_move(move: int) -> bool:
+static func is_field_move(move: int, data: GameData = null) -> bool:
+	if data != null and data.generation == RomRegistry.GEN1:
+		return GEN1_FIELD_MOVES.has(move)
 	return FIELD_MOVES.has(move)
 
 

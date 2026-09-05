@@ -1870,24 +1870,26 @@ static func _apply_item_effect(
 	var definition: Dictionary = data.item(item)
 	if definition.is_empty():
 		return {"ok": false, "reason": &"unknown_item", "item": item}
-	if REPEL_STEPS.has(item):
+	var effects: Dictionary = item_effects(data)
+	var repels: Dictionary = effects["repel"]
+	if repels.has(item):
 		## `UseRepel`'s `ld a, [wRepelEffect] / and a / jp nz, PrintText`: the
 		## line is said and `UseDisposableItem` never reached.
 		if repel_steps > 0:
 			return {"ok": false, "reason": &"repel_still_in_effect", "item": item}
-		return {"ok": true, "effect": &"repel", "repel_steps": REPEL_STEPS[item]}
-	if item == Gen2WorldPack.ITEM_SACRED_ASH:
+		return {"ok": true, "effect": &"repel", "repel_steps": int(repels[item])}
+	if item == int(effects["sacred_ash"]):
 		return _apply_sacred_ash(data, save)
 	if party_index < 0 or party_index >= save.party.size():
 		return {"ok": false, "reason": &"party_member_required"}
 	var mon: Gen2SaveMon = save.party[party_index]
 	if mon == null or mon.is_egg:
 		return {"ok": false, "reason": &"invalid_party_member"}
-	if item == ITEM_RARE_CANDY:
+	if item == int(effects["rare_candy"]):
 		return _apply_rare_candy(data, mon, time_of_day)
-	if PP_RESTORE_ITEMS.has(item):
-		return _apply_pp_restore(data, mon, item, move_slot)
-	if item == ITEM_PP_UP:
+	if (effects["pp_restore"] as Dictionary).has(item):
+		return _apply_pp_restore(data, mon, item, move_slot, effects)
+	if item == int(effects["pp_up"]):
 		## `ApplyPPUp` raises `PP_UP_MASK`, the top two bits of a move's own PP
 		## byte, which [Gen2SaveMon] does not keep: its `pp` is the current value
 		## alone and every `max_pp` in the game is the move's base. Building this
@@ -1896,11 +1898,12 @@ static func _apply_item_effect(
 	var evolution: Dictionary = _apply_item_evolution(data, mon, item)
 	if not evolution.is_empty():
 		return evolution
-	var vitamin: Dictionary = _apply_vitamin(data, mon, item)
+	var vitamin: Dictionary = _apply_vitamin(data, mon, item, effects["vitamin"])
 	if not vitamin.is_empty():
 		return vitamin
-	if REVIVE_ITEMS.has(item):
-		return _apply_revive(data, mon, item)
+	var revives: Dictionary = effects["revive"]
+	if revives.has(item):
+		return _apply_revive(data, mon, item, bool(revives[item]))
 	return _apply_heal(data, mon, definition, item)
 
 
@@ -1909,15 +1912,63 @@ const REPEL_STEPS: Dictionary = {
 	ITEM_REPEL: 100, ITEM_SUPER_REPEL: 200, ITEM_MAX_REPEL: 250,
 }
 ## `RevivePokemon`'s own `cp REVIVE / jr z, .revive_half_hp`: REVIVE is the only
-## half, so MAX_REVIVE and REVIVAL_HERB both reach `ReviveFullHP`.
-const REVIVE_ITEMS: Array[int] = [ITEM_REVIVE, ITEM_MAX_REVIVE, ITEM_REVIVAL_HERB]
+## half, so MAX_REVIVE and REVIVAL_HERB both reach `ReviveFullHP`. Generation 1
+## has the pair and no herb, and `.setCurrentHPToHalfMaxHP` is the same split.
+const REVIVE_ITEMS: Dictionary = {
+	ITEM_REVIVE: true, ITEM_MAX_REVIVE: false, ITEM_REVIVAL_HERB: false,
+}
+const GEN1_REVIVE_ITEMS: Dictionary = {
+	Gen1Layout.ITEM_REVIVE: true, Gen1Layout.ITEM_MAX_REVIVE: false,
+}
+
+## Every table `_apply_item_effect` branches on, by generation. The two
+## cartridges share no item number, so each branch reads through
+## [method item_effects]: Crystal's numbering on a Generation 1 map is what once
+## had Red's bag hold a Dire Hit the world reported as an Old Rod.
+const ITEM_EFFECT_TABLES: Dictionary = {
+	RomRegistry.GEN2: {
+		"repel": REPEL_STEPS,
+		"revive": REVIVE_ITEMS,
+		"vitamin": VITAMINS,
+		"pp_restore": PP_RESTORE_ITEMS,
+		"pp_max": PP_RESTORE_MAX_ITEMS,
+		"pp_steps": PP_RESTORE_STEPS,
+		"rare_candy": ITEM_RARE_CANDY,
+		"pp_up": ITEM_PP_UP,
+		"sacred_ash": Gen2WorldPack.ITEM_SACRED_ASH,
+	},
+	RomRegistry.GEN1: {
+		"repel": Gen1Layout.ITEM_REPEL_STEPS,
+		"revive": GEN1_REVIVE_ITEMS,
+		"vitamin": Gen1Layout.ITEM_VITAMINS,
+		"pp_restore": Gen1Layout.ITEM_PP_RESTORE,
+		"pp_max": Gen1Layout.ITEM_PP_RESTORE_MAX,
+		"pp_steps": Gen1Layout.ITEM_PP_RESTORE_STEPS,
+		"rare_candy": Gen1Layout.ITEM_RARE_CANDY,
+		"pp_up": Gen1Layout.ITEM_PP_UP,
+		## `SacredAshEffect` is Crystal's; nothing in Generation 1 revives a
+		## party, and item 0 is the empty bag slot.
+		"sacred_ash": 0,
+	},
+}
 
 
-static func _apply_revive(data: GameData, mon: Gen2SaveMon, item: int) -> Dictionary:
+## The row of [constant ITEM_EFFECT_TABLES] a cache reads through. Public so
+## `tools/checks/pack.gd` sweeps the same branches `_apply_item_effect` picks.
+static func item_effects(data: GameData) -> Dictionary:
+	return ITEM_EFFECT_TABLES[
+		RomRegistry.GEN1 if data != null and data.generation == RomRegistry.GEN1
+		else RomRegistry.GEN2
+	]
+
+
+static func _apply_revive(
+	data: GameData, mon: Gen2SaveMon, item: int, half: bool
+) -> Dictionary:
 	if mon.hp > 0:
 		return {"ok": false, "reason": &"item_has_no_effect"}
 	var max_hp: int = _max_hp(data, mon)
-	mon.hp = maxi(max_hp / 2, 1) if item == ITEM_REVIVE else max_hp
+	mon.hp = maxi(max_hp / 2, 1) if half else max_hp
 	return _with_bitterness(
 		data, mon, item, {"ok": true, "effect": &"revive", "healed": mon.hp}
 	)
@@ -2016,12 +2067,12 @@ static func _apply_rare_candy(
 ## other three need the slot `MoveSelectionScreen` chose. A move already at its
 ## ceiling is `.dont_restore`, and nothing restored is `WontHaveAnyEffectMessage`.
 static func _apply_pp_restore(
-	data: GameData, mon: Gen2SaveMon, item: int, move_slot: int
+	data: GameData, mon: Gen2SaveMon, item: int, move_slot: int, effects: Dictionary
 ) -> Dictionary:
-	var all_moves: bool = bool(PP_RESTORE_ITEMS[item])
+	var all_moves: bool = bool((effects["pp_restore"] as Dictionary)[item])
 	if not all_moves and (move_slot < 0 or move_slot >= Gen2SaveMon.MAX_MOVES):
 		return {"ok": false, "reason": &"move_slot_required", "item": item}
-	var full: bool = item in PP_RESTORE_MAX_ITEMS
+	var full: bool = item in (effects["pp_max"] as Array)
 	var restored: int = 0
 	for slot: int in Gen2SaveMon.MAX_MOVES:
 		if not all_moves and slot != move_slot:
@@ -2033,7 +2084,7 @@ static func _apply_pp_restore(
 		var current: int = int(mon.pp[slot])
 		if current >= maximum:
 			continue
-		var step: int = int(PP_RESTORE_STEPS.get(item, 0))
+		var step: int = int((effects["pp_steps"] as Dictionary).get(item, 0))
 		var next: int = maximum if full else mini(maximum, current + step)
 		restored += next - current
 		mon.pp[slot] = next
@@ -2047,10 +2098,12 @@ static func _apply_pp_restore(
 ## stats below it and nothing else, so an HP UP raises the maximum and heals
 ## nothing; here every one of those is derived from the stat experience, which
 ## leaves the raise and the happiness row as the whole effect.
-static func _apply_vitamin(data: GameData, mon: Gen2SaveMon, item: int) -> Dictionary:
-	if not VITAMINS.has(item):
+static func _apply_vitamin(
+	data: GameData, mon: Gen2SaveMon, item: int, vitamins: Dictionary
+) -> Dictionary:
+	if not vitamins.has(item):
 		return {}
-	var stat: String = VITAMINS[item]
+	var stat: String = vitamins[item]
 	var raised: int = int(mon.stat_exp.get(stat, 0))
 	if raised >= VITAMIN_CAP:
 		return {"ok": false, "reason": &"item_has_no_effect"}
@@ -2112,7 +2165,7 @@ static func _apply_sacred_ash(data: GameData, save: Gen2SaveData) -> Dictionary:
 static func _apply_item_evolution(data: GameData, mon: Gen2SaveMon, item: int) -> Dictionary:
 	var declared: Dictionary = data.item(item).get("evolution", {}) as Dictionary
 	var method: int = int(declared.get("method", 0))
-	if method == 0 and item not in Gen2Evolution.STONE_ITEMS:
+	if method == 0 and item not in Gen2Evolution.stone_items(data):
 		return {}
 	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, mon)
 	if battle_mon == null:

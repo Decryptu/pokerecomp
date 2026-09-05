@@ -2321,6 +2321,13 @@ const GEN1_TOSS_TEXT: Dictionary = {
 const GEN1_ITEM_USE_TEXT: Dictionary = {
 	"not_time": "OAK: <PLAYER>!\nThis isn't the\ntime to use that!",
 }
+## `PartyMenuMessagePointers`' USE_ITEM_PARTY_MENU row, which every
+## `ItemUseMedicine` writes before `DisplayPartyMenu`.
+const GEN1_PARTY_MENU_TEXT: Dictionary = {
+	"item_use": "Use item on which\nPOKéMON?",
+}
+## `UnusableItem`, a `.Current` row with no effect at all.
+const GEN1_NUGGET: int = 0x31
 
 
 ## The fixture's items in Generation 1 shape: one bag pocket, nothing
@@ -2337,6 +2344,10 @@ func _open_gen1_world() -> void:
 			GEN1_POTION:
 				raw["name"] = "POTION"
 				raw["field_menu"] = Gen2WorldPack.ITEMMENU_PARTY
+				## `.addHealAmount`'s `ld b, 20` for a POTION.
+				raw["heal_amount"] = 15
+			GEN1_NUGGET:
+				raw["name"] = "NUGGET"
 			GEN1_BICYCLE:
 				raw["name"] = "BICYCLE"
 				raw["permissions"] = Gen2WorldPack.CANT_SELECT | Gen2WorldPack.CANT_TOSS
@@ -2349,13 +2360,14 @@ func _open_gen1_world() -> void:
 	var manifest: Dictionary = RomCache.read_manifest(Fixture.directory())
 	manifest["special_text"] = {
 		"toss": GEN1_TOSS_TEXT, "item_use": GEN1_ITEM_USE_TEXT,
+		"party_menu": GEN1_PARTY_MENU_TEXT,
 	}
 	RomCache.write_json(RomCache.manifest_path(Fixture.directory()), manifest)
 	_data = GameData.open_directory(Fixture.directory())
 	_data.generation = RomRegistry.GEN1
 	await _open_world()
 	_world_screen._world.state.apply_changes({}, {}, {"items": {
-		GEN1_BICYCLE: 1, GEN1_POTION: 3, GEN1_OLD_ROD: 1,
+		GEN1_BICYCLE: 1, GEN1_POTION: 3, GEN1_OLD_ROD: 1, GEN1_NUGGET: 1,
 	}})
 
 
@@ -2376,7 +2388,7 @@ func test_a_generation_1_bag_lists_one_pocket_and_offers_use_and_toss() -> void:
 	var host: Gen2StartMenuScreen = await _gen1_pack()
 	assert_eq((host.get("_pack_pockets") as Array).size(), 1)
 	var rows: Array = host.call("_current_pocket_items")
-	assert_eq(rows.size(), 4)
+	assert_eq(rows.size(), 5)
 	host.handle_button(PokeButton.A)
 	var actions: Array = []
 	for entry: Dictionary in host.get("_item_actions"):
@@ -2415,13 +2427,35 @@ func test_the_generation_1_bicycle_opens_no_submenu() -> void:
 	assert_ne(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_ITEM)
 
 
-## `.useItem_partyMenu` opens `DisplayPartyMenu`, which this port has no
-## Generation 1 screen for, so a USE that would reach it says `ItemUseNotTime`
-## rather than opening Generation 2's party list over a Generation 1 map.
+## `.useItem_partyMenu` opens `DisplayPartyMenu`, and `ItemUseMedicine` applies
+## to the row chosen there. The list has no CANCEL: `PartyMenuInit` stops at
+## `wPartyCount - 1` and B is the only way back out.
+func test_a_generation_1_use_opens_the_party_list_and_heals_the_row_chosen() -> void:
+	await _open_gen1_world()
+	var save: Gen2SaveData = _world_screen.get("_injected_save")
+	(save.party[0] as Gen2SaveMon).hp = maxi((save.party[0] as Gen2SaveMon).hp - 15, 1)
+	var before: int = (save.party[0] as Gen2SaveMon).hp
+	var host: Gen2StartMenuScreen = await _gen1_pack()
+	assert_true(bool(host.call("_select_pack_item", GEN1_POTION)))
+	_choose_action(host, Gen2WorldPack.ACTION_USE)
+	await get_tree().process_frame
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TARGET)
+	assert_eq(int(host.call("_target_rows")), save.party.size())
+	assert_eq(String(host.call("_target_prompt")), GEN1_PARTY_MENU_TEXT["item_use"])
+	assert_eq((save.party[0] as Gen2SaveMon).hp, before, "nothing until a row is chosen")
+
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	assert_eq((save.party[0] as Gen2SaveMon).hp, before + 15)
+	assert_eq(_world_screen._world.state.item_quantity(GEN1_POTION), 2)
+
+
+## `UseItem_`'s jumptable answers `.Oak` for every row with no effect out of a
+## battle, which is `ItemUseNotTime`'s own box.
 func test_a_generation_1_use_that_reaches_no_effect_says_oaks_line() -> void:
 	await _open_gen1_world()
 	var host: Gen2StartMenuScreen = await _gen1_pack()
-	assert_true(bool(host.call("_select_pack_item", GEN1_POTION)))
+	assert_true(bool(host.call("_select_pack_item", GEN1_NUGGET)))
 	_choose_action(host, Gen2WorldPack.ACTION_USE)
 	await get_tree().process_frame
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)

@@ -323,7 +323,7 @@ func field_hm_items() -> Array[int]:
 		var item: int = Gen2Layout.item_for_tmhm_number(number + 1, count)
 		if not Gen2WorldTMHM.is_hm(item, _data.generation):
 			continue
-		if Gen2WorldFieldMove.is_field_move(_data.tmhm_move(number + 1)):
+		if Gen2WorldFieldMove.is_field_move(_data.tmhm_move(number + 1), _data):
 			out.append(item)
 	_field_hms = out
 	return out
@@ -347,7 +347,7 @@ func move_for_hm_item(item: int) -> int:
 	if _data == null or not Gen2WorldTMHM.is_hm(item, _data.generation):
 		return 0
 	var move: int = Gen2WorldTMHM.move_for_item(_data, item)
-	return move if Gen2WorldFieldMove.is_field_move(move) else 0
+	return move if Gen2WorldFieldMove.is_field_move(move, _data) else 0
 
 
 ## Every item some check in this catalog hands over, as a set. An item outside it

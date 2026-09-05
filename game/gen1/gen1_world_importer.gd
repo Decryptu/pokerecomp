@@ -9,6 +9,10 @@ extends RefCounted
 
 const LIST_END: int = Gen1Layout.TILESET_LIST_END
 
+## The two gifts whose carry the branch behind them reads: `AddItemToInventory`'s
+## and `_GivePokemon`'s.
+const GIFT_OPS: Array[String] = ["give_item", "give_pokemon"]
+
 
 static func verify_layout(rom: RomFile) -> Dictionary:
 	var result: Dictionary = read_world(rom, Gen1Layout.for_id(rom.id))
@@ -52,12 +56,23 @@ static func import_to_cache(
 			RomCache.overworld_sprite_path(directory, number), sheets[number]
 		):
 			return _error("Could not write overworld sprite %d." % number)
+	var icons: Dictionary = result["icons"]
+	for number: int in icons:
+		if not RomCache.write_indices(
+			RomCache.overworld_icon_path(directory, number), icons[number]
+		):
+			return _error("Could not write party menu icon %d." % number)
+	if not RomCache.write_indices(
+		RomCache.mon_menu_icons_path(directory), result["icon_species"]
+	):
+		return _error("Could not write the species icon table.")
 
 	return {
 		"ok": true,
 		"maps": (result["maps"] as Array).size(),
 		"tilesets": tilesets.size(),
 		"sprites": sprites.size(),
+		"icons": (result["icons"] as Dictionary).size(),
 		"encounters": (result["encounters"]["grass"] as Dictionary).size()
 			+ (result["encounters"]["water"] as Dictionary).size(),
 	}
@@ -81,6 +96,9 @@ static func read_world(
 	var effects: Dictionary = _read_overworld_effects(rom, layout)
 	if not bool(effects["ok"]):
 		return effects
+	var icons: Dictionary = _read_mon_icons(rom, layout)
+	if not bool(icons["ok"]):
+		return icons
 	var water: PackedByteArray = _read_list(rom, int(layout["water_tilesets"]))
 	var tilesets: Array = []
 	var graphics: Dictionary = {}
@@ -121,7 +139,96 @@ static func read_world(
 		"sprite_graphics": sprites["graphics"],
 		"encounters": encounters["encounters"],
 		"effects": effects["effects"],
+		"icons": icons["icons"],
+		"icon_species": icons["icon_species"],
 	}
+
+
+## `LoadMonPartySpriteGfx` over `MonPartySpritePointers`: every row copied into
+## one tile strip, then read back out as each icon's two four-tile frames.
+## `MonPartyData` names one icon per dex number, two nybbles to a byte with the
+## odd number in the high half, and the cache numbers species by dex number.
+static func _read_mon_icons(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var bank := PackedByteArray()
+	var width: int = Gen1Layout.MON_ICON_VRAM_TILES * PokeTiles.TILE_WIDTH
+	bank.resize(width * PokeTiles.TILE_HEIGHT)
+	var filled: PackedByteArray = PackedByteArray()
+	filled.resize(Gen1Layout.MON_ICON_VRAM_TILES)
+	var at: int = int(layout["mon_icons"])
+	for row: int in Gen1Layout.mon_icon_header_count(rom.id):
+		var header: int = at + row * Gen1Layout.MON_ICON_HEADER_SIZE
+		if not rom.in_bounds(header, Gen1Layout.MON_ICON_HEADER_SIZE):
+			return _error("Icon header %d is outside the ROM." % row)
+		var tiles: int = rom.u8(header + 2)
+		var source: int = RomFile.linear(rom.u8(header + 3), rom.u16le(header))
+		@warning_ignore("integer_division")
+		var first: int = (rom.u16le(header + 4) - Gen1Layout.MON_ICON_VRAM_AT) \
+			/ PokeTiles.TILE_BYTES
+		if first < 0 or first + tiles > Gen1Layout.MON_ICON_VRAM_TILES:
+			return _error("Icon header %d lands outside the icon strip." % row)
+		var raw: PackedByteArray = rom.slice(source, tiles * PokeTiles.TILE_BYTES)
+		if raw.size() != tiles * PokeTiles.TILE_BYTES:
+			return _error("Icon header %d's graphics are truncated." % row)
+		var pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(raw, 0, tiles)
+		for tile: int in tiles:
+			_copy_icon_tile(pixels, tiles, tile, bank, width, first + tile)
+			filled[first + tile] = 1
+	return _slice_mon_icons(rom, layout, bank, filled)
+
+
+## One 8x8 tile from one strip into another, both being one row of tiles wide.
+static func _copy_icon_tile(
+	from: PackedByteArray, from_tiles: int, from_tile: int,
+	into: PackedByteArray, into_width: int, into_tile: int
+) -> void:
+	var from_width: int = from_tiles * PokeTiles.TILE_WIDTH
+	for row: int in PokeTiles.TILE_HEIGHT:
+		var read: int = row * from_width + from_tile * PokeTiles.TILE_WIDTH
+		var write: int = row * into_width + into_tile * PokeTiles.TILE_WIDTH
+		for column: int in PokeTiles.TILE_WIDTH:
+			into[write + column] = from[read + column]
+
+
+## The strip split back into icons, and the species table beside it. An icon is
+## kept only when both of its frames carry the tiles its own OAM writer reads,
+## which is what leaves the nybbles no cartridge names out of the cache.
+static func _slice_mon_icons(
+	rom: RomFile, layout: Dictionary, bank: PackedByteArray, filled: PackedByteArray
+) -> Dictionary:
+	var frame: int = Gen1Layout.MON_ICON_FRAME_TILES
+	var icons: Dictionary = {}
+	for icon: int in Gen1Layout.MON_ICON_NYBBLES:
+		var first: int = icon * frame
+		var second: int = Gen1Layout.MON_ICON_FRAME_OFFSET + first
+		var whole: bool = true
+		for tile: int in Gen1Layout.mon_icon_tiles_read(icon):
+			whole = whole and filled[first + tile] != 0 and filled[second + tile] != 0
+		if not whole:
+			continue
+		var strip := PackedByteArray()
+		strip.resize(frame * 2 * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)
+		for tile: int in frame:
+			_copy_icon_tile(
+				bank, Gen1Layout.MON_ICON_VRAM_TILES, first + tile,
+				strip, frame * 2 * PokeTiles.TILE_WIDTH, tile
+			)
+			_copy_icon_tile(
+				bank, Gen1Layout.MON_ICON_VRAM_TILES, second + tile,
+				strip, frame * 2 * PokeTiles.TILE_WIDTH, frame + tile
+			)
+		icons[icon + 1] = strip
+
+	var species: PackedByteArray = PackedByteArray()
+	species.resize(Gen1Layout.SPECIES_COUNT)
+	var table: int = int(layout["mon_icon_species"])
+	for dex: int in range(1, Gen1Layout.SPECIES_COUNT + 1):
+		@warning_ignore("integer_division")
+		var byte: int = rom.u8(table + (dex - 1) / 2)
+		var icon: int = (byte >> 4) if dex % 2 == 1 else (byte & 0x0F)
+		if not icons.has(icon + 1):
+			return _error("Dex number %d is drawn with icon %d." % [dex, icon])
+		species[dex - 1] = icon + 1
+	return {"ok": true, "icons": icons, "icon_species": species}
 
 
 ## `PokeCenterFlashingMonitorAndHealBall` with `PokeCenterOAMData` behind it, and
@@ -1052,6 +1159,10 @@ static func _script_call(
 			return _script_far(layout, state, out, next)
 		"predef":
 			return _script_predef(ctx, state, out, next)
+		"display_pokedex":
+			return _script_pokedex(ctx, state, out, next)
+		"give_pokemon":
+			return _script_gift_pokemon(ctx, state, out, next)
 		"play_cry", "wait_for_sound":
 			return next
 	return SCRIPT_UNREAD
@@ -1062,6 +1173,40 @@ static func _script_routine(layout: Dictionary, target: int) -> String:
 		if int(layout.get(name, -1)) == target:
 			return name
 	return ""
+
+
+## `DisplayPokedex` writes `a` to `wPokedexNum` and opens that page, which is the
+## eight Safari Zone signs. The register holds an internal index and the cache
+## speaks dex numbers, so it is translated the way an evolution's target is.
+static func _script_pokedex(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int
+) -> int:
+	if not state.has("a"):
+		return SCRIPT_UNREAD
+	var dex: int = Gen1Layout.dex_of_index(ctx["rom"], ctx["layout"], int(state["a"]))
+	if dex < 1:
+		return SCRIPT_UNREAD
+	out.append({"op": "pokedex", "species": dex})
+	state.erase("a")
+	return next
+
+
+## `GivePokemon` reads the species in b and the level in c and answers in carry,
+## which `_GivePokemon` clears only when the party and the box are both full.
+## The register holds an internal index; the cache speaks dex numbers.
+static func _script_gift_pokemon(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int
+) -> int:
+	if not state.has("b") or not state.has("c") or int(state["c"]) < 1:
+		return SCRIPT_UNREAD
+	var dex: int = Gen1Layout.dex_of_index(ctx["rom"], ctx["layout"], int(state["b"]))
+	if dex < 1:
+		return SCRIPT_UNREAD
+	out.append({"op": "give_pokemon", "species": dex, "level": int(state["c"])})
+	state.erase("b")
+	state.erase("c")
+	state["tests"] = SCRIPT_TESTS_CARRY
+	return next
 
 
 ## `GiveItem` reads the item in b and the count in c, answers in carry, drops bc.
@@ -1186,7 +1331,7 @@ static func _script_node(
 
 ## The carry belongs to the gift in front of it, so both sides fold onto it.
 static func _script_receipt(out: Array, taken: Array, fell: Array) -> Variant:
-	if out.is_empty() or String((out[-1] as Dictionary)["op"]) != "give_item":
+	if out.is_empty() or String((out[-1] as Dictionary)["op"]) not in GIFT_OPS:
 		return null
 	var gift: Dictionary = out.pop_back()
 	gift["ok"] = taken

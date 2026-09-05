@@ -9,6 +9,15 @@ const HAPPINESS_TO_EVOLVE: int = 220
 const EVERSTONE: int = 70
 ## Item effects.asm dispatches every one of these through EvoStoneEffect.
 const STONE_ITEMS: Array[int] = [8, 0x16, 0x17, 0x18, 0x22, 0xA9]
+
+
+## The same rows on either cartridge. Generation 1 numbers its items the other
+## way up and shares only $22 with the run above, where it is a Water Stone and
+## a Sun Stone respectively.
+static func stone_items(data: GameData) -> Array[int]:
+	if data != null and data.generation == RomRegistry.GEN1:
+		return Gen1Layout.STONE_ITEMS
+	return STONE_ITEMS
 ## A trade evolution's parameter when it asks for no held item: `inc a / jr z`.
 const TRADE_NO_ITEM: int = 0xFF
 

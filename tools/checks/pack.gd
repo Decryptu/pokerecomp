@@ -60,8 +60,10 @@ const REGISTERABLE_KEY_ITEMS: Dictionary = {
 const ITEM_ROWS: int = 255
 const NO_DEPOSIT_ROWS: Array[int] = [1, 2, 3]
 ## The TM and HM rows, whose ITEMMENU_PARTY nibble is `TeachTMHM` rather than an
-## `ItemEffects` entry.
+## `ItemEffects` entry. Generation 1 has fifty and five and no dummy row inside
+## them, and `StartMenu_Item`'s `cp HM01` is what sends all of them there.
 const TM_HM_PARTY_ROWS: int = 57
+const GEN1_TM_HM_PARTY_ROWS: int = Gen1Layout.TM_COUNT + Gen1Layout.HM_COUNT
 
 ## What fits between the text box's own borders: `Textbox`'s interior is 18
 ## columns and `PrintItemDescription` is handed the cell one in from the left.
@@ -80,9 +82,14 @@ func run(r: RefCounted) -> void:
 		_verify_field_effects(game_id, data)
 		_verify_deposit_rule(game_id, data)
 		_verify_key_item_effects(game_id, data)
-		_verify_party_item_effects(game_id, data)
+		_verify_party_item_effects(game_id, data, TM_HM_PARTY_ROWS)
 		_verify_screen(game_id, data)
 		_verify_descriptions(game_id, data)
+	## `UseItem`'s jumptable is the same three answers on Generation 1, and the
+	## pack that reads it is this one, so its `.Party` rows are swept here too.
+	_r.each_game_of(RomRegistry.GEN1, func() -> void:
+		_verify_party_item_effects(_r.game_id, _r.data, GEN1_TM_HM_PARTY_ROWS)
+	)
 
 
 ## `CheckSelectableItem` over the real rows. The eight named key items are the
@@ -248,7 +255,9 @@ func _verify_deposit_rule(game_id: StringName, data: GameData) -> void:
 ## `ItemEffects` over every ITEMMENU_PARTY row of a real cache. A row
 ## `_apply_item_effect` has no branch for answers "It won't have any effect"
 ## where the cartridge does something; MYSTERYBERRY was one.
-func _verify_party_item_effects(game_id: StringName, data: GameData) -> void:
+func _verify_party_item_effects(
+	game_id: StringName, data: GameData, machine_rows: int
+) -> void:
 	var unhandled: Array[String] = []
 	var covered: int = 0
 	var machines: int = 0
@@ -258,10 +267,10 @@ func _verify_party_item_effects(game_id: StringName, data: GameData) -> void:
 			continue
 		if Gen2WorldPack.field_use_kind(data, number) != Gen2WorldPack.ITEMMENU_PARTY:
 			continue
-		if int(definition.get("pocket", 0)) == Gen2WorldPack.TYPE_TM_HM:
+		if Gen2WorldTMHM.is_tm_hm(number, data.generation):
 			machines += 1
 			continue
-		if _party_effect_branch(number, definition):
+		if _party_effect_branch(number, definition, data):
 			covered += 1
 			continue
 		unhandled.append("$%02X (%s)" % [number, data.item_name(number)])
@@ -273,8 +282,8 @@ func _verify_party_item_effects(game_id: StringName, data: GameData) -> void:
 		]
 	)
 	_r.check(
-		machines == TM_HM_PARTY_ROWS,
-		"%s: %d TM/HM party rows, expected %d" % [game_id, machines, TM_HM_PARTY_ROWS]
+		machines == machine_rows,
+		"%s: %d TM/HM party rows, expected %d" % [game_id, machines, machine_rows]
 	)
 	print("%s: %d party-menu item effects, %d TM/HM rows beside them." % [
 		game_id, covered, machines,
@@ -282,17 +291,16 @@ func _verify_party_item_effects(game_id: StringName, data: GameData) -> void:
 
 
 ## The branches `_apply_item_effect` picks between, read off the host's own
-## tables, so a table that loses a row takes this check red with it.
-func _party_effect_branch(item: int, definition: Dictionary) -> bool:
-	if item == Gen2WorldPartyHost.ITEM_RARE_CANDY or item == Gen2WorldPartyHost.ITEM_PP_UP:
+## tables, so a table that loses a row takes this check red with it. Both
+## generations are swept through the same seam they run through.
+func _party_effect_branch(item: int, definition: Dictionary, data: GameData) -> bool:
+	var effects: Dictionary = Gen2WorldPartyHost.item_effects(data)
+	if item == int(effects["rare_candy"]) or item == int(effects["pp_up"]):
 		return true
-	if Gen2WorldPartyHost.PP_RESTORE_ITEMS.has(item):
-		return true
-	if Gen2WorldPartyHost.VITAMINS.has(item):
-		return true
-	if item in Gen2WorldPartyHost.REVIVE_ITEMS:
-		return true
-	if item in Gen2Evolution.STONE_ITEMS \
+	for key: String in ["pp_restore", "vitamin", "revive"]:
+		if (effects[key] as Dictionary).has(item):
+			return true
+	if item in Gen2Evolution.stone_items(data) \
 		or int((definition.get("evolution", {}) as Dictionary).get("method", 0)) != 0:
 		return true
 	return int(definition.get("heal_amount", 0)) > 0 \

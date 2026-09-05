@@ -100,6 +100,9 @@ const SUPER_PALETTE_COUNT_YELLOW: int = 40
 const PAL_ROUTE: int = 0x00
 const PAL_PALLET: int = 0x01
 const PAL_GRAYMON: int = 0x19
+## `PalPacket_PartyMenu`'s first row, which `BlkPacket_PartyMenu` gives the two
+## columns the party menu's icons stand in and nothing else.
+const PAL_MEWMON: int = 0x10
 const PAL_CAVE: int = 0x23
 ## The three rows `GetHealthBarColor` picks between, under the names
 ## [method GameData.bar_palette] takes them by. Generation 1 has no exp bar.
@@ -306,9 +309,62 @@ const ITEM_ESCAPE_ROPE: int = 0x1D
 ## `IsItemInBag COIN_CASE`, which `CeladonPrizeMenu` opens on.
 const ITEM_COIN_CASE: int = 0x45
 const ITEM_ITEMFINDER: int = 0x47
+const ITEM_TOWN_MAP: int = 0x05
+const ITEM_POKEDEX: int = 0x09
+const ITEM_MOON_STONE: int = 0x0A
+const ITEM_FULL_RESTORE: int = 0x10
+const ITEM_REVIVE: int = 0x35
+const ITEM_MAX_REVIVE: int = 0x36
+const ITEM_RARE_CANDY: int = 0x28
+const ITEM_OAKS_PARCEL: int = 0x46
+const ITEM_PP_UP: int = 0x4F
 const ITEM_OLD_ROD: int = 0x4C
 const ITEM_GOOD_ROD: int = 0x4D
 const ITEM_SUPER_ROD: int = 0x4E
+
+## `ItemUseEvoStone`'s five rows of `ItemUsePtrTable`. Crystal numbers its own
+## six differently, and [method Gen2Evolution.stone_items] is the one seam that
+## tells the two apart.
+const STONE_ITEMS: Array[int] = [ITEM_MOON_STONE, 0x20, 0x21, 0x22, 0x2F]
+
+## `.addHealAmount`'s ladder, with `.setCurrentHPToMaxHp`'s own `cp HYPER_POTION`
+## in front of it: FULL_RESTORE and MAX_POTION are set to the maximum whatever
+## the byte said, which is what a heal past [constant Gen2Stats.MAX_STAT_VALUE]
+## means to [method Gen2WorldPartyHost.use_item].
+const ITEM_HEAL_AMOUNTS: Dictionary = {
+	ITEM_FULL_RESTORE: 999, 0x11: 999, 0x12: 200, 0x13: 50, 0x14: 20,
+	0x3C: 50, 0x3D: 60, 0x3E: 80,
+}
+## `.cureStatusAilment`'s own five and the `$ff` its fall-through carries, which
+## FULL_HEAL takes and which `.doneHealingPartyHP` gives FULL_RESTORE too.
+const ITEM_STATUS_MASKS: Dictionary = {
+	0x0B: Gen2Status.POISON, 0x0C: Gen2Status.BURN, 0x0D: Gen2Status.FREEZE,
+	0x0E: Gen2Status.SLEEP_MASK, 0x0F: Gen2Status.PARALYSIS,
+	ITEM_FULL_RESTORE: Gen2Status.ANY, 0x34: Gen2Status.ANY,
+}
+## `.useVitamin`'s `sub HP_UP`, doubled onto `MON_HP_EXP`: the five stat
+## experience words in the party struct's own order.
+const ITEM_VITAMINS: Dictionary = {
+	0x23: "hp", 0x24: "attack", 0x25: "defense", 0x26: "speed", 0x27: "special",
+}
+## The `ItemUsePtrTable` rows that open on `ld a, [wIsInBattle]` and answer
+## `ItemUseNotTime` outside one. The four X stats are in `UsableItems_PartyMenu`
+## and still never open it: `.useItem_partyMenu` calls `UseItem` first and gets
+## `wActionResultOrTookBattleTurn` back as 2.
+const ITEM_BATTLE_ONLY: Array[int] = [
+	ITEM_MASTER_BALL, ITEM_ULTRA_BALL, ITEM_GREAT_BALL, ITEM_POKE_BALL,
+	ITEM_SAFARI_BALL, 0x15, 0x16, 0x2E, 0x33, 0x37, 0x3A,
+	0x41, 0x42, 0x43, 0x44,
+]
+
+## `ItemUseRepel`, `ItemUseSuperRepel` and `ItemUseMaxRepel`'s own `ld b`.
+const ITEM_REPEL_STEPS: Dictionary = {0x1E: 100, 0x38: 200, 0x39: 250}
+## `.restorePP`'s `add 10` and the `MAX_ETHER` that skips it, with `.useElixir`
+## walking all four slots by decrementing the item twice. The value is whether
+## the whole moveset is restored, which is what [Gen2WorldPartyHost] reads.
+const ITEM_PP_RESTORE: Dictionary = {0x50: false, 0x51: false, 0x52: true, 0x53: true}
+const ITEM_PP_RESTORE_MAX: Array[int] = [0x51, 0x53]
+const ITEM_PP_RESTORE_STEPS: Dictionary = {0x50: 10, 0x52: 10}
 
 ## `ItemUseBall`'s three per-ball numbers: the ceiling Rand1 is rerolled above,
 ## `BallFactor` and `BallFactor2`. SAFARI_BALL takes the fall-through below.
@@ -486,6 +542,13 @@ const POKECENTER_TEXT_AT: Dictionary = {
 const ITEM_USE_TEXT_AT: Dictionary = {
 	"not_time": 0x00, "not_yours": 0x05, "no_effect": 0x0A,
 }
+## `CoinCaseNumCoinsText`, a run of one: `ItemUseCoinCase` is the only reader.
+const COIN_CASE_TEXT_AT: Dictionary = {"coins": 0x00}
+## `PartyMenuMessagePointers`' own five, in the order the table names them.
+## The sixth row points at `PartyMenuItemUseText` again.
+const PARTY_MENU_TEXT_AT: Dictionary = {
+	"normal": 0x00, "item_use": 0x05, "battle": 0x0A, "use_tm": 0x0F, "swap": 0x14,
+}
 const TOSS_TEXT_AT: Dictionary = {
 	"threw_away": 0x00, "ok_to_toss": 0x05, "too_important": 0x0A,
 }
@@ -607,7 +670,7 @@ const SCRIPT_CARRY_BRANCHES: Dictionary = {0x38: true, 0xDA: true, 0x30: false, 
 const SCRIPT_CALLS: Array[String] = [
 	"print_text", "text_script_end", "disable_waiting", "yes_no_choice",
 	"give_item", "is_item_in_bag", "bankswitch", "play_cry", "wait_for_sound",
-	"predef",
+	"predef", "display_pokedex", "give_pokemon",
 ]
 const SCRIPT_SHORT_SIZE: int = 2
 const SCRIPT_LONG_SIZE: int = 3
@@ -757,6 +820,28 @@ const SPRITE_STILL_FIRST_YELLOW: int = 0x47
 const SPRITE_WALKING_TILES: int = 12
 const SPRITE_STILL_TILES: int = 4
 
+## `MonPartySpritePointers`, the table `LoadMonPartySpriteGfx` walks: a CPU
+## address, the tiles to copy, the bank, and the `vSprites` address they land
+## at. An icon owns four tiles at `ICON << 2` and four more `ICONOFFSET` above
+## them, which are its two animation frames.
+const MON_ICON_HEADER_SIZE: int = 6
+const MON_ICON_HEADER_COUNT_RED_BLUE: int = 28
+const MON_ICON_HEADER_COUNT_YELLOW: int = 30
+const MON_ICON_FRAME_TILES: int = 4
+const MON_ICON_FRAME_OFFSET: int = 0x40
+## `vSprites`, which a header's destination is an address inside.
+const MON_ICON_VRAM_AT: int = 0x8000
+## `MonPartyData` holds one `ICON_*` nybble per dex number, the odd number in
+## the high half. Zero is `ICON_MON`, so a cache row is the nybble plus one:
+## [method GameData.mon_menu_icon] reads zero as no icon at all.
+const MON_ICON_NYBBLES: int = 16
+const MON_ICON_VRAM_TILES: int = MON_ICON_FRAME_OFFSET + MON_ICON_NYBBLES * MON_ICON_FRAME_TILES
+## `AnimatePartyMon`'s `.editCoords` pair, which shake a pixel down where every
+## other icon swaps frame, so the two carry the same picture twice.
+const MON_ICON_BALL: int = 0x01
+const MON_ICON_HELIX: int = 0x02
+const MON_ICON_SHAKING: Array[int] = [MON_ICON_BALL, MON_ICON_HELIX]
+
 ## `NUM_TRAINERS`, the trainer classes rather than the individual trainers.
 const TRAINER_CLASS_COUNT: int = 47
 
@@ -800,6 +885,8 @@ const RED_BLUE: Dictionary = {
 	"usable_items_party": 0x13434,
 	"usable_items_close": 0x13459,
 	"item_use_text": 0x0E5C0,
+	"coin_case_text": 0x0E247,
+	"party_menu_text": 0x12E7F,
 	"toss_text": 0x0E755,
 	"tmhm_moves": 0x13773,
 	"mon_palettes": 0x725C8,
@@ -822,6 +909,8 @@ const RED_BLUE: Dictionary = {
 	"yes_no_choice": 0x35EC,
 	"disable_waiting": 0x30B6,
 	"play_cry": 0x13D0,
+	"display_pokedex": 0x0349B,
+	"give_pokemon": 0x03E48,
 	"wait_for_sound": 0x3748,
 	"give_item": 0x3E2E,
 	"is_item_in_bag": 0x3493,
@@ -866,6 +955,8 @@ const RED_BLUE: Dictionary = {
 	"tilesets": 0x0C7BE,
 	"water_tilesets": 0x0E8E0,
 	"overworld_sprites": 0x17B27,
+	"mon_icons": 0x717C0,
+	"mon_icon_species": 0x7190D,
 	"heal_machine_gfx": 0x704B7,
 	"shock_emote_gfx": 0x17CBD,
 	"wild_data": 0x0CEEB,
@@ -906,6 +997,8 @@ const YELLOW: Dictionary = {
 	"usable_items_party": 0x11FDE,
 	"usable_items_close": 0x12003,
 	"item_use_text": 0x0E4FF,
+	"coin_case_text": 0x0E0F4,
+	"party_menu_text": 0x11A38,
 	"toss_text": 0x0E699,
 	"tmhm_moves": 0x1232D,
 	"mon_palettes": 0x72921,
@@ -925,6 +1018,8 @@ const YELLOW: Dictionary = {
 	"yes_no_choice": 0x35EF,
 	"disable_waiting": 0x2FDE,
 	"play_cry": 0x118B,
+	"display_pokedex": 0x0347D,
+	"give_pokemon": 0x03E59,
 	"wait_for_sound": 0x373E,
 	"give_item": 0x3E3F,
 	"is_item_in_bag": 0x3422,
@@ -966,6 +1061,8 @@ const YELLOW: Dictionary = {
 	"tilesets": 0x0C558,
 	"water_tilesets": 0x0E834,
 	"overworld_sprites": 0x142A9,
+	"mon_icons": 0x7184D,
+	"mon_icon_species": 0x719BA,
 	"heal_machine_gfx": 0x7050B,
 	"shock_emote_gfx": 0x411E5,
 	"wild_data": 0x0CB95,
@@ -1226,6 +1323,20 @@ static func sprite_count(id: StringName) -> int:
 static func super_palette_count(id: StringName) -> int:
 	return SUPER_PALETTE_COUNT_YELLOW if id == RomRegistry.YELLOW \
 		else SUPER_PALETTE_COUNT_RED_BLUE
+
+
+## Which of a frame's four tiles its OAM writer reads.
+## `WriteSymmetricMonPartySpriteOAM` reads tiles 0 and 2 and draws each twice,
+## X-flipping the second; the helix has no symmetry and reads all four.
+static func mon_icon_tiles_read(icon: int) -> Array[int]:
+	return [0, 1, 2, 3] if icon == MON_ICON_HELIX else [0, 2]
+
+
+## How many `MonPartySpritePointers` rows `LoadMonPartySpriteGfx` copies.
+## Yellow added Pikachu's own icon and its second frame.
+static func mon_icon_header_count(id: StringName) -> int:
+	return MON_ICON_HEADER_COUNT_YELLOW if id == RomRegistry.YELLOW \
+		else MON_ICON_HEADER_COUNT_RED_BLUE
 
 
 ## `FIRST_STILL_SPRITE`, the picture id from which a sheet is four tiles.

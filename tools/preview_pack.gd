@@ -9,6 +9,8 @@ extends SceneTree
 
 const NEW_BARK_GROUP: int = 24
 const NEW_BARK_MAP: int = 7
+## Generation 1 names a map by one flat id, and Pallet Town is 0.
+const PALLET_TOWN: Vector2i = Vector2i(0, 0)
 
 const BUTTONS: Dictionary = {
 	"u": PokeButton.UP, "d": PokeButton.DOWN,
@@ -34,8 +36,15 @@ const ROUTES: Dictionary = {
 const ITEMS: Dictionary = {
 	1: 1, 4: 12, 5: 30,
 	17: 3, 18: 2, 19: 1, 20: 5, 21: 9, 22: 4,
-	7: 1, 70: 1,
+	0x07: 1, 70: 1,
 	0xBF: 1, 0xF3: 1,
+}
+## The same bag in `item_constants.asm`'s Generation 1 numbering, which shares
+## no number with the run above.
+const GEN1_ITEMS: Dictionary = {
+	0x14: 5, 0x0B: 2, 0x0C: 1, 0x0D: 1, 0x0F: 1,
+	0x10: 1, 0x35: 1, 0x0A: 1, 0x28: 2,
+	0x06: 1, 0x45: 1, 0xC9: 1,
 }
 
 
@@ -45,6 +54,20 @@ const ITEMS: Dictionary = {
 func _process(_delta: float) -> bool:
 	_capture()
 	return true
+
+
+## The bag each generation's own numbering fills, on the map its cartridge opens
+## on: Pallet Town is map 0 where New Bark Town is group 24's seventh.
+func _open_world(data: GameData, female: bool) -> Gen2WorldAPI:
+	var gen1: bool = data.generation == RomRegistry.GEN1
+	var at := PALLET_TOWN if gen1 else Vector2i(NEW_BARK_GROUP, NEW_BARK_MAP)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(
+		data, at.x, at.y, Vector2i.ZERO,
+		Gen2WorldState.new({}, {}, GEN1_ITEMS if gen1 else ITEMS, {})
+	)
+	if female:
+		world.set_player_gender(true)
+	return world
 
 
 func _capture() -> void:
@@ -70,13 +93,7 @@ func _capture() -> void:
 	if args.size() > 3 and not args[3].is_empty():
 		tokens = "%s,%s" % [tokens, args[3]] if not tokens.is_empty() else args[3]
 
-	var world: Gen2WorldAPI = Gen2WorldAPI.open(
-		data, NEW_BARK_GROUP, NEW_BARK_MAP, Vector2i.ZERO,
-		Gen2WorldState.new({}, {}, ITEMS, {})
-	)
-	if args.size() > 4 and args[4] == "female":
-		world.set_player_gender(true)
-
+	var world: Gen2WorldAPI = _open_world(data, args.size() > 4 and args[4] == "female")
 	var host := Gen2StartMenuScreen.new()
 	root.add_child(host)
 	## No slot on disk, so nothing this photographs is written anywhere.
