@@ -14,9 +14,14 @@ here was called that and deserved it. Rewrite from the line that is exactly
 this note and takes its closing marker with it, which is how 0.1.17 published
 an empty body. -->
 
+## Fixed
+
+- Mods installed before 0.1.27 read as not installed and could not be downloaded again, because the download was refused by the copy already on disk. The row now says "Installed, not loaded", offers to replace or remove it, and the update button on the mods page reinstalls every one of them in a single press.
+- A mod built for an older contract now says which build it wants and that downloading it again is the fix, instead of naming both version numbers and leaving it there.
+
 ## Changed
 
-- The mod contract is at version 30, and a host at 30 answers 30 alone. 0.1.26 renamed the classes both generations reach, so a mod built before it names a class this build no longer declares. Installed mods are refused with a message until their author republishes; nothing else about them changed, and a mod moves by renaming what it names.
+- A Generation 1 hit shakes the screen or blinks the picture it landed on, a Pokemon grows out of its ball when it is sent out, and a thrown ball has its throw, its poof and its rocking. The status animations point at the rows the cartridge uses, and the animations that hide, move or squeeze a picture now move it on screen rather than only recording that they did. None of this is reachable from Play yet: Red, Blue and Yellow are still import and inspection only.
 
 ## Which file
 
