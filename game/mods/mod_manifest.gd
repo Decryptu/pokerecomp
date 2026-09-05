@@ -115,10 +115,19 @@ static func from_dictionary(source: Dictionary, folder: String) -> Dictionary:
 static func _check_names(manifest: PokeModManifest, regex: RegEx) -> Dictionary:
 	if regex.search(String(manifest.id)) == null:
 		return _refuse(&"invalid_id", String(manifest.id))
-	if manifest.api_version < MIN_API_VERSION or manifest.api_version > API_VERSION:
+	# Two different fixes, so two different refusals: a mod above this host wants
+	# a newer build of the game, and one below it wants a newer build of itself.
+	if manifest.api_version > API_VERSION:
 		return _refuse(
 			&"unsupported_api_version",
 			"mod declares %d, host provides %d" % [manifest.api_version, API_VERSION]
+		)
+	if manifest.api_version < MIN_API_VERSION:
+		return _refuse(
+			&"mod_is_too_old",
+			"mod declares %d, host answers %d and above" % [
+				manifest.api_version, MIN_API_VERSION
+			]
 		)
 	if not PokeModVersion.valid_version(manifest.version):
 		return _refuse(&"invalid_mod_version", manifest.version)

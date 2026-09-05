@@ -124,9 +124,10 @@ func _summary(row: Dictionary) -> Control:
 	panel.add_child(column)
 
 	var installed: String = String(row["installed_version"])
-	column.add_child(Gen2LauncherUI.stacked(
-		_theme, "Installed", _value(installed if not installed.is_empty() else "Not installed")
-	))
+	if installed.is_empty():
+		# A copy this host refused has no version to name and is still on disk.
+		installed = "installed, not loaded" if bool(row["present"]) else "Not installed"
+	column.add_child(Gen2LauncherUI.stacked(_theme, "Installed", _value(installed)))
 	var listed: String = String(row["listed_version"])
 	if bool(row["listed"]):
 		column.add_child(Gen2LauncherUI.stacked(
@@ -154,7 +155,7 @@ func _summary(row: Dictionary) -> Control:
 		)
 		get_it.pressed.connect(func() -> void: download_requested.emit(_row))
 		actions.add_child(get_it)
-	if bool(row["installed"]):
+	if bool(row["present"]):
 		var remove: Gen2LauncherButton = Gen2LauncherButton.create(
 			_theme,
 			"Delete" if Gen2ModCatalogue.removal_is_permanent(row) else "Remove",
@@ -200,6 +201,8 @@ static func _download_label(row: Dictionary) -> String:
 			return "Download"
 		&"update":
 			return "Update to %s" % row["listed_version"]
+		&"replace":
+			return "Replace"
 	return "Reinstall"
 
 
