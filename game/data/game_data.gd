@@ -97,6 +97,7 @@ var _day_care_text: Dictionary = {}
 var _special_text: Dictionary = {}
 var _special_text_ram: Dictionary = {}
 var _vending: Array = []
+var _prizes: Array = []
 var _battle_object_palettes: Dictionary = {}
 var _indices: Dictionary = {}
 var _world_maps: Array = []
@@ -214,6 +215,7 @@ const MANIFEST_ARRAYS: Dictionary = {
 	"gender_screen_palette": "_gender_screen_palette",
 	"copyright_string": "_copyright_string",
 	"vending": "_vending",
+	"prizes": "_prizes",
 	"copyright_palette": "_copyright_palette",
 	"text_bg_palette": "_text_bg_palette",
 	"odd_eggs": "_odd_eggs",
@@ -1828,6 +1830,12 @@ func special_text(run: String, name: String) -> String:
 ## The WRAM address a `text_ram` in one of those boxes names, by the name
 ## `Gen2Layout`'s own `special_text_ram` gives it, or -1 on a cartridge that
 ## ships no such buffer.
+## `PrizeDifferentMenuPtrs`' three menus, each `{tms, rows}` with a row's item,
+## cost and the level a prize Pokemon arrives at. Empty outside Generation 1.
+func prize_menus() -> Array:
+	return _prizes.duplicate(true)
+
+
 ## `VendingPrices` as `{item, price}`, empty outside Generation 1.
 func vending_rows() -> Array:
 	return _vending.duplicate(true)

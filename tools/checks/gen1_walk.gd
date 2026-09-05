@@ -72,6 +72,29 @@ const VENDING_MACHINES: int = 3
 const VENDING_PRICES: Array = [[0x3C, 200], [0x3D, 300], [0x3E, 350]]
 const VENDING_PURSE: int = 1000
 
+## `GameCornerPrizeRoom_Object`'s three vendors, read from below, and
+## `PrizeDifferentMenuPtrs`' lists as [name, cost, level]. All three cartridges
+## stock a different set of Pokemon and the same three TMs.
+const PRIZE_ROOM: int = 137
+const PRIZE_VENDORS: Array = [Vector2i(2, 3), Vector2i(4, 3), Vector2i(6, 3)]
+const PRIZE_MENUS: Dictionary = {
+	&"red": [
+		[["ABRA", 180, 9], ["CLEFAIRY", 500, 8], ["NIDORINA", 1200, 17]],
+		[["DRATINI", 2800, 18], ["SCYTHER", 5500, 25], ["PORYGON", 9999, 26]],
+		[["TM23", 3300, 0], ["TM15", 5500, 0], ["TM50", 7700, 0]],
+	],
+	&"blue": [
+		[["ABRA", 120, 6], ["CLEFAIRY", 750, 12], ["NIDORINO", 1200, 17]],
+		[["PINSIR", 2500, 20], ["DRATINI", 4600, 24], ["PORYGON", 6500, 18]],
+		[["TM23", 3300, 0], ["TM15", 5500, 0], ["TM50", 7700, 0]],
+	],
+	&"yellow": [
+		[["ABRA", 230, 15], ["VULPIX", 1000, 18], ["WIGGLYTUFF", 2680, 22]],
+		[["SCYTHER", 6500, 30], ["PINSIR", 6500, 30], ["PORYGON", 9999, 26]],
+		[["TM23", 3300, 0], ["TM15", 5500, 0], ["TM50", 7700, 0]],
+	],
+}
+
 var _r: RefCounted = null
 
 
@@ -88,6 +111,7 @@ func _one_game() -> void:
 	_check_the_nurse_heals()
 	_check_the_cable_club()
 	_check_the_vending_machine()
+	_check_the_prize_counter()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -392,3 +416,45 @@ func _check_the_vending_machine() -> void:
 	)
 	world.complete_runtime_request({"ok": true})
 	_r.check(not world.script_busy(), "the machine never closed.")
+
+
+## `PrizeDifferentMenuPtrs`' three lists with `PrizeMonLevelDictionary`'s level
+## on every Pokemon row, and the vendor whose place picks each one.
+func _check_the_prize_counter() -> void:
+	var pinned: Array = PRIZE_MENUS[_r.game_id]
+	var menus: Array = _r.data.prize_menus()
+	if not _r.check(menus.size() == pinned.size(), "%d prize menus." % menus.size()):
+		return
+	for index: int in pinned.size():
+		var menu: Dictionary = menus[index]
+		_r.check(
+			bool(menu["tms"]) == (index == Gen1Layout.PRIZE_TM_MENU),
+			"menu %d is the wrong kind." % index
+		)
+		var rows: Array = menu["rows"]
+		for row: int in (pinned[index] as Array).size():
+			var want: Array = (pinned[index] as Array)[row]
+			var got: Dictionary = rows[row]
+			var name: String = _r.data.item_name(int(got["item"])) if bool(menu["tms"]) \
+				else String(_r.data.species(int(got["item"])).get("name", ""))
+			_r.check(
+				[name, int(got["cost"]), int(got["level"])] == want,
+				"prize %d/%d is %s, pinned %s." % [
+					index, row, [name, int(got["cost"]), int(got["level"])], want,
+				]
+			)
+	for index: int in PRIZE_VENDORS.size():
+		var world: Gen2WorldAPI = _r.open_world(0, PRIZE_ROOM, PRIZE_VENDORS[index])
+		if world == null:
+			return
+		world.player_facing = Gen2WorldSprite.FACING_UP
+		if not _r.check(not world.interact().is_empty(), "vendor %d said nothing." % index):
+			continue
+		var values: Dictionary = world.pending_runtime_request().get("values", {})
+		_r.check(
+			int(values.get("menu", -1)) == index
+				and (values.get("rows", []) as Array).size() == Gen1Layout.PRIZE_ROWS,
+			"vendor %d opened menu %s." % [index, values.get("menu", -1)]
+		)
+		world.complete_runtime_request({"ok": true})
+		_r.check(not world.script_busy(), "vendor %d never closed." % index)

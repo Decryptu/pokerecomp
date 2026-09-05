@@ -377,6 +377,32 @@ const TEXT_SCRIPT_MART: int = 0xFE
 const TEXT_SCRIPT_POKECENTER_NURSE: int = 0xFF
 const TEXT_SCRIPT_CABLE_CLUB: int = 0xF6
 const TEXT_SCRIPT_VENDING_MACHINE: int = 0xF5
+const TEXT_SCRIPT_PRIZE_VENDOR: int = 0xF7
+
+## `IsItemInBag COIN_CASE`, which `CeladonPrizeMenu` opens on.
+const ITEM_COIN_CASE: int = 0x45
+
+## `CeladonPrizeMenu`'s two stub runs, which are not one: the unreferenced
+## `HereYouGoText` between them moves on Yellow.
+const PRIZE_TEXT_AT: Dictionary = {
+	"require_coin_case": 0x00, "exchange": 0x06, "which_prize": 0x0B,
+}
+const PRIZE_TEXT_2_AT: Dictionary = {
+	"so_you_want": 0x00, "need_more_coins": 0x05, "bag_full": 0x0B,
+	"oh_fine_then": 0x11,
+}
+
+## `PrizeDifferentMenuPtrs`: three `(entries, cost)` pairs, each list three long
+## and `@` terminated, a cost being a `bcd2`. `.putMonName`'s own `cp 2` is what
+## makes the third menu TMs and the two in front of it Pokemon.
+const PRIZE_MENUS: int = 3
+const PRIZE_ROWS: int = 3
+const PRIZE_TM_MENU: int = 2
+const PRIZE_COST_SIZE: int = 2
+const PRIZE_POINTER_PAIR: int = 4
+## `PrizeMonLevelDictionary`, the two Pokemon menus' six rows.
+const PRIZE_MON_LEVELS: int = 6
+const PRIZE_MON_LEVEL_SIZE: int = 2
 
 ## `engine/events/vending_machine.asm` from `VendingMachineText1`: the greeting,
 ## the two strings the box draws, `VendingPrices` and the four stubs behind them,
@@ -659,6 +685,10 @@ const RED_BLUE: Dictionary = {
 	"pokecenter_text": 0x0705D,
 	"cable_club_text": 0x072B3,
 	"vending_text": 0x74F99,
+	"prize_text": 0x5277E,
+	"prize_text_2": 0x52960,
+	"prize_menus": 0x52843,
+	"prize_mon_levels": 0x5298A,
 	"font": 0x11A80,
 	"text_box": 0x12288,
 	"battle_font": 0x11EA0,
@@ -721,6 +751,10 @@ const YELLOW: Dictionary = {
 	"pokecenter_text": 0x06ED0,
 	"cable_club_text": 0x07188,
 	"vending_text": 0x747DE,
+	"prize_text": 0x526DF,
+	"prize_text_2": 0x528C0,
+	"prize_menus": 0x527AE,
+	"prize_mon_levels": 0x528EA,
 	"font": 0x10600,
 	"text_box": 0x10E18,
 	"battle_font": 0x10A20,

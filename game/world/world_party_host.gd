@@ -1525,6 +1525,43 @@ static func _apply_party_request(
 	return {"ok": false, "reason": &"unsupported_party_request"}
 
 
+## `GivePokemon`, which the prize counter reaches with `GetPrizeMonLevel`'s
+## level: everything `givepoke` does with no script behind it. Neither the party
+## nor the box having room writes nothing, which is what `.giveMon`'s `ret nc`
+## leaves the coins on.
+static func give_pokemon(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	species: int,
+	level: int,
+	persist: bool = true,
+	random: RandomNumberGenerator = null
+) -> Dictionary:
+	if world == null or save == null or world.data == null:
+		return _failure(&"missing_world", {})
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return _failure(StringName(opened["reason"]), opened.get("details", {}))
+	var candidate: Gen2SaveData = opened["candidate"]
+	var generator: RandomNumberGenerator = random if random != null else RandomNumberGenerator.new()
+	if random == null:
+		generator.randomize()
+	var applied: Dictionary = _apply_pokemon_request(world, candidate, {
+		"kind": &"pokemon_requested",
+		"values": {"pokemon": species, "level": level},
+	}, {}, generator)
+	if not bool(applied.get("ok", false)) or not bool(applied.get("accepted", true)):
+		return _failure(StringName(applied.get("reason", &"storage_full")), applied)
+	var before: Gen2WorldSnapshot = world.snapshot()
+	_register_caught(world, int(applied.get("register_caught", 0)))
+	var committed: Dictionary = Gen2WorldTransaction.commit(
+		world, save, candidate, before, persist
+	)
+	if not bool(committed.get("ok", false)):
+		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	return {"ok": true, "species": species, "level": level}
+
+
 ## `Script_givepoke` and `Script_giveegg`.
 static func _apply_pokemon_request(
 	world: Gen2WorldAPI,

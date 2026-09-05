@@ -7386,6 +7386,7 @@ const SERVICE_HOST_REQUESTS: Array[StringName] = [
 	&"mart_requested", &"phone_call_requested", &"special_phone_call_requested",
 	&"town_map_requested", &"apricorn_selection_requested", &"pc_requested",
 	&"mom_bank_dial_requested", &"elevator_requested", &"vending_requested",
+	&"prize_requested",
 ]
 
 

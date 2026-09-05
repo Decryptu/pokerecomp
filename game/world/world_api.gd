@@ -3708,7 +3708,7 @@ func _gen1_interact() -> Array:
 	if text_id <= 0:
 		text_id = _gen1_text_id_at(object_facing_cell(), &"objects")
 	var row: Dictionary = current_map.text_at(text_id)
-	_gen1_steps = _gen1_facility_steps(row)
+	_gen1_steps = _gen1_facility_steps(row, text_id)
 	if _gen1_steps.is_empty():
 		var text: String = Gen2TextStream.fill_names(String(row.get("text", "")), {
 			"player": _player_name if not _player_name.is_empty() \
@@ -3723,7 +3723,7 @@ func _gen1_interact() -> Array:
 
 ## `DisplayTextID`'s own dispatch, which reads the first byte of the text a
 ## pointer stands at: a `TX_SCRIPT_*` id runs a routine and prints nothing.
-func _gen1_facility_steps(row: Dictionary) -> Array:
+func _gen1_facility_steps(row: Dictionary, text_id: int = 0) -> Array:
 	match int(row.get("command", 0)):
 		Gen1Layout.TEXT_SCRIPT_MART:
 			return _gen1_mart_steps(row)
@@ -3733,7 +3733,39 @@ func _gen1_facility_steps(row: Dictionary) -> Array:
 			return _gen1_cable_club_steps()
 		Gen1Layout.TEXT_SCRIPT_VENDING_MACHINE:
 			return _gen1_vending_steps()
+		Gen1Layout.TEXT_SCRIPT_PRIZE_VENDOR:
+			return _gen1_prize_steps(text_id)
 	return []
+
+
+## `GetPrizeMenuId` subtracts `TEXT_GAMECORNERPRIZEROOM_PRIZE_VENDOR_1` from the
+## id that opened it, so a vendor's list is their place among the map's own
+## prize rows.
+func _gen1_prize_steps(text_id: int) -> Array:
+	var menus: Array = data.prize_menus() if data != null else []
+	var first: int = _gen1_first_prize_text()
+	var menu: int = text_id - first
+	if first <= 0 or menu < 0 or menu >= menus.size():
+		return []
+	var chosen: Dictionary = menus[menu]
+	return [{"type": &"request", "values": {
+		"kind": &"prize_requested",
+		"values": {
+			"menu": menu,
+			"tms": bool(chosen.get("tms", false)),
+			"rows": (chosen.get("rows", []) as Array).duplicate(true),
+		},
+	}}]
+
+
+func _gen1_first_prize_text() -> int:
+	if current_map == null:
+		return 0
+	for index: int in current_map.texts.size():
+		if int((current_map.texts[index] as Dictionary).get("command", 0)) \
+			== Gen1Layout.TEXT_SCRIPT_PRIZE_VENDOR:
+			return index + 1
+	return 0
 
 
 ## `VendingMachineMenu`, whose list is `VendingPrices` rather than a shelf and

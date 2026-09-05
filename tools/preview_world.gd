@@ -30,6 +30,7 @@ const KIND_HELP: Dictionary = {
 	&"sign": "none: DisplayTextID's box, read by facing up from where the player stands",
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
 	&"vending": "presses, rows down: VendingMachineMenu, read by facing up from the cell below one. 0 the list, 1 the box the chosen row lands in",
+	&"prizes": "presses, rows down: CeladonPrizeMenu, read the same way. 0 the list, 1 SoYouWantPrizeText's YES/NO, 2 the box YES lands in",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"level_evolution": "frames: EvolveAfterBattle's screen that many frames in, each box pressed past as it lands",
 	&"egg_hatch": "frames, slot: OverworldHatchEgg on that party slot, that many frames in",
@@ -159,6 +160,7 @@ const STAGED_FRAMES: int = 2
 const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"cut": 12, &"waterfall_use": 26, &"sign": BOX_REVEAL_FRAMES,
 	&"nurse": BOX_REVEAL_FRAMES, &"vending": BOX_REVEAL_FRAMES,
+	&"prizes": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
 const BOX_REVEAL_FRAMES: int = 120
@@ -403,6 +405,7 @@ const STAGERS: Dictionary = {
 	&"sign": &"_stage_sign",
 	&"nurse": &"_stage_nurse",
 	&"vending": &"_stage_vending",
+	&"prizes": &"_stage_prizes",
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
@@ -927,11 +930,21 @@ func _stage_nurse() -> void:
 
 ## The machine, faced from the cell below it, with money for any of its rows.
 func _stage_vending() -> void:
+	_stage_counter({"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY}})
+
+
+## The prize counter, with the COIN CASE it opens on and coins for any row.
+func _stage_prizes() -> void:
+	_stage_counter({
+		"items": {Gen1Layout.ITEM_COIN_CASE: 1}, "coins": Gen2WorldInventory.MAX_COINS,
+	})
+
+
+## A counter faced from the cell below it: presses, then rows down first.
+func _stage_counter(purse: Dictionary) -> void:
 	var world: Gen2WorldAPI = _screen.get("_world")
 	if world != null:
-		world.state.apply_changes({}, {}, {
-			"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY},
-		})
+		world.state.apply_changes({}, {}, purse)
 	_screen.press_button(PokeButton.UP)
 	for _frame: int in TEXT_SETTLE_FRAMES:
 		_screen.advance_frame()

@@ -149,6 +149,8 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"pokecenter": ["pokecenter_text", Gen1Layout.POKECENTER_TEXT_AT],
 	"cable_club": ["cable_club_text", Gen1Layout.CABLE_CLUB_TEXT_AT],
 	"vending": ["vending_text", Gen1Layout.VENDING_TEXT_AT],
+	"prizes": ["prize_text", Gen1Layout.PRIZE_TEXT_AT],
+	"prizes_2": ["prize_text_2", Gen1Layout.PRIZE_TEXT_2_AT],
 }
 
 
@@ -697,6 +699,7 @@ func import_rom(
 		"mart_text": _import_mart_text(rom, layout),
 		"special_text": _import_facility_text(rom, layout),
 		"vending": _import_vending(rom, layout, items),
+		"prizes": _import_prizes(rom, layout),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -923,6 +926,45 @@ func _vending_names_agree(drawn: PackedStringArray, rows: Array, items: Array) -
 	return true
 
 
+## `PrizeDifferentMenuPtrs` and the two lists behind each of its three rows.
+## The Pokemon menus hold internal indexes and are converted here, the TM menu's
+## being item numbers already; a prize Pokemon's level is
+## `PrizeMonLevelDictionary`'s, keyed by dex number.
+func _import_prizes(rom: RomFile, layout: Dictionary) -> Array:
+	var table: int = int(layout.get("prize_menus", 0))
+	@warning_ignore("integer_division")
+	var bank: int = table / RomFile.BANK_SIZE
+	var levels: Dictionary = {}
+	var at: int = int(layout.get("prize_mon_levels", 0))
+	for row: int in Gen1Layout.PRIZE_MON_LEVELS:
+		var entry: int = at + row * Gen1Layout.PRIZE_MON_LEVEL_SIZE
+		levels[Gen1Layout.dex_of_index(rom, layout, rom.u8(entry))] = rom.u8(entry + 1)
+	var out: Array = []
+	for menu: int in Gen1Layout.PRIZE_MENUS:
+		var pair: int = table + menu * Gen1Layout.PRIZE_POINTER_PAIR
+		var tms: bool = menu == Gen1Layout.PRIZE_TM_MENU
+		var entries: int = Gen1Layout.banked(bank, rom.u16le(pair))
+		var costs: int = Gen1Layout.banked(bank, rom.u16le(pair + 2))
+		## Both lists end in the `@` the source writes, which is what says the
+		## pointer pair was read at the right stride.
+		if rom.u8(entries + Gen1Layout.PRIZE_ROWS) != Gen1Text.TERMINATOR \
+			or rom.u8(costs + Gen1Layout.PRIZE_ROWS * Gen1Layout.PRIZE_COST_SIZE) \
+				!= Gen1Text.TERMINATOR:
+			return []
+		var rows: Array = []
+		for row: int in Gen1Layout.PRIZE_ROWS:
+			var value: int = rom.u8(entries + row)
+			var number: int = value if tms else Gen1Layout.dex_of_index(rom, layout, value)
+			rows.append({
+				"item": number,
+				"cost": _bcd3(rom, costs + row * Gen1Layout.PRIZE_COST_SIZE,
+					Gen1Layout.PRIZE_COST_SIZE),
+				"level": int(levels.get(number, 0)) if not tms else 0,
+			})
+		out.append({"tms": tms, "rows": rows})
+	return out
+
+
 ## The other two runs, in [method GameData.special_text]'s run/slot shape.
 func _import_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
@@ -1011,9 +1053,9 @@ static func _item_price(rom: RomFile, layout: Dictionary, item: int) -> int:
 
 
 ## `bcd3`, which is how both a price and a trainer's reward money are stored.
-static func _bcd3(rom: RomFile, at: int) -> int:
+static func _bcd3(rom: RomFile, at: int, size: int = Gen1Layout.ITEM_PRICE_SIZE) -> int:
 	var out: int = 0
-	for byte: int in Gen1Layout.ITEM_PRICE_SIZE:
+	for byte: int in size:
 		var packed: int = rom.u8(at + byte)
 		out = out * 100 + (packed >> 4) * 10 + (packed & 0x0F)
 	return out
