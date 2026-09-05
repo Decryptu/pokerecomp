@@ -2,7 +2,7 @@ class_name PokeAppVersion
 extends RefCounted
 
 ## Host application version. Keep this numeric value aligned with export metadata.
-const VERSION: String = "0.1.27"
+const VERSION: String = "0.1.28"
 const CHANNEL: String = "alpha"
 
 ## Where the project lives, stated once: the release check derives its pages
