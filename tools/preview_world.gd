@@ -455,7 +455,9 @@ func _process(_delta: float) -> bool:
 		_choose_view()
 	if _frames == 2:
 		_stage_kind()
-		if not _bare and _kind not in SELF_DRIVEN_KINDS:
+		## `bare` takes the readout off and nothing else: skipping these caught
+		## a staged box on the frame it opened, which is an empty box.
+		if _kind not in SELF_DRIVEN_KINDS:
 			for _frame: int in int(STAGED_FRAMES_BY_KIND.get(_kind, STAGED_FRAMES)):
 				_screen.advance_frame()
 	if _frames < 18:

@@ -375,6 +375,18 @@ const TEXT_SCRIPT_IDS: Dictionary = {
 }
 const TEXT_SCRIPT_MART: int = 0xFE
 const TEXT_SCRIPT_POKECENTER_NURSE: int = 0xFF
+const TEXT_SCRIPT_CABLE_CLUB: int = 0xF6
+
+## `CableClubNPC`'s stubs by the delta from the first. Only the three a port
+## with no cable reaches are named; the rest want a link partner.
+const CABLE_CLUB_TEXT_AT: Dictionary = {
+	"area_reserved": 0x00, "welcome": 0x05, "making_preparations": 0x1F,
+}
+
+## `ld c, 60 / call DelayFrames` before the preparations line, and
+## `wLinkTimeoutCounter`, one frame a pass of `.establishConnectionLoop`.
+const CABLE_CLUB_PREPARING_FRAMES: int = 60
+const CABLE_CLUB_TIMEOUT_FRAMES: int = 90
 
 ## `script_mart` writes its inventory into the text pointer itself: the $FE,
 ## a count, that many item ids, and a $FF nothing reads. `LoadItemList` copies
@@ -629,6 +641,7 @@ const RED_BLUE: Dictionary = {
 	"mart_greeting": 0x02A55,
 	"mart_text": 0x06E0C,
 	"pokecenter_text": 0x0705D,
+	"cable_club_text": 0x072B3,
 	"font": 0x11A80,
 	"text_box": 0x12288,
 	"battle_font": 0x11EA0,
@@ -689,6 +702,7 @@ const YELLOW: Dictionary = {
 	"mart_greeting": 0x02938,
 	"mart_text": 0x06B91,
 	"pokecenter_text": 0x06ED0,
+	"cable_club_text": 0x07188,
 	"font": 0x10600,
 	"text_box": 0x10E18,
 	"battle_font": 0x10A20,

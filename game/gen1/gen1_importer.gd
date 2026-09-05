@@ -147,6 +147,7 @@ const BATTLE_TILE_SHEETS: Dictionary = {
 ## under `mart_text` instead, because the shop screen already reads that.
 const FACILITY_TEXT_RUNS: Dictionary = {
 	"pokecenter": ["pokecenter_text", Gen1Layout.POKECENTER_TEXT_AT],
+	"cable_club": ["cable_club_text", Gen1Layout.CABLE_CLUB_TEXT_AT],
 }
 
 
