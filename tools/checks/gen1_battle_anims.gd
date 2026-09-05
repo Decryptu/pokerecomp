@@ -54,10 +54,29 @@ const IMPLEMENTED_EFFECTS: Dictionary = {&"red": 36, &"blue": 36, &"yellow": 36}
 ## transform read wrong moves the sprites. Yellow is one animation short and the
 ## same sprites, `ZigZagScreenAnim` being `SE_WAVY_SCREEN` alone.
 const EXPECTED_TOTALS: Dictionary = {
-	&"red": [24828, 141410],
-	&"blue": [24828, 141410],
-	&"yellow": [24316, 141410],
+	&"red": [24908, 141730],
+	&"blue": [24908, 141730],
+	&"yellow": [24396, 141730],
 }
+
+## `AnimationTypePointerTable`'s six routines, as the frames each spends: the
+## two `PredefShakeScreen*` amplitudes, `AnimationShakeScreenHorizontallySlow`'s
+## two counts and `AnimationBlinkMon`'s six cycles, each plus the frame the
+## player ends on.
+const APPLYING_FRAMES: Dictionary = {1: 49, 2: 73, 3: 49, 4: 61, 5: 19, 6: 25}
+
+## `SHAKE_ANIM`, and what `DoBallShakeSpecialEffects` adds per extra shake: its
+## own `ld c, 40` and the four subentries behind it, four frames each.
+const BALL_SHAKE_INDEX: int = Gen1Layout.ANIM_ID_SHAKE - 1
+const BALL_SHAKE_STEP: int = 56
+
+## `AnimateSendingOutMon` over the player's box: the ball tile at (4,11), then
+## `DownscaledMonTiles_3x3`'s own first row at (3,9), and the whole picture.
+const SEND_OUT_BALL_AT: Vector2i = Vector2i(4, 11)
+const SEND_OUT_BALL_TILE: int = 0x4D
+const SEND_OUT_SMALL_AT: Vector2i = Vector2i(3, 9)
+const SEND_OUT_SMALL_ROW: Array[int] = [0x31, 0x46, 0x5B]
+const SEND_OUT_WHOLE_AT: Vector2i = Vector2i(1, 5)
 
 
 func run(r: RefCounted) -> void:
@@ -74,7 +93,90 @@ func _one_game() -> void:
 	_verify_tables(anims)
 	_verify_pound(anims)
 	_verify_transforms(anims)
+	_verify_applying(anims)
+	_verify_ball_shake(anims)
+	_verify_send_out()
 	_play_every_animation(anims)
+
+
+## `PlayApplyingAttackAnimation`, which is a routine rather than a row: each of
+## `wAnimationType`'s six answers run to its end, and zero answering none.
+func _verify_applying(anims: Gen2BattleAnimData) -> void:
+	for animation_type: int in APPLYING_FRAMES:
+		var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1_applying(
+			anims, animation_type
+		)
+		if not _r.check(player != null, "%s: animation type %d would not start." % [
+			_r.game_id, animation_type,
+		]):
+			continue
+		var spent: int = 0
+		while not player.finished() and spent < MAX_FRAMES:
+			player.advance_frame()
+			spent += 1
+		_r.check(
+			spent == int(APPLYING_FRAMES[animation_type]),
+			"%s: animation type %d ran for %d frames, expected %d." % [
+				_r.game_id, animation_type, spent, int(APPLYING_FRAMES[animation_type]),
+			]
+		)
+	_r.check(
+		Gen2BattleAnimPlayer.create_gen1_applying(anims, 0) == null,
+		"%s: animation type 0 built a player." % _r.game_id
+	)
+
+
+## `wNumShakes`: the last frame block rewinds four subentries while shakes are
+## left, so a ball that rocks three times is two more shakes long than one.
+func _verify_ball_shake(anims: Gen2BattleAnimData) -> void:
+	var lengths: Array[int] = []
+	for shakes: int in [1, 3]:
+		var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
+			anims, BALL_SHAKE_INDEX, false, shakes
+		)
+		var spent: int = 0
+		while player != null and not player.finished() and spent < MAX_FRAMES:
+			player.advance_frame()
+			spent += 1
+		lengths.append(spent)
+	_r.check(
+		lengths.size() == 2 and lengths[1] - lengths[0] == BALL_SHAKE_STEP * 2,
+		"%s: three shakes ran %s, expected %d frames more than one." % [
+			_r.game_id, lengths, BALL_SHAKE_STEP * 2,
+		]
+	)
+
+
+## `AnimateSendingOutMon` writes the tilemap rather than running a script.
+func _verify_send_out() -> void:
+	var map: PackedByteArray = Gen2BattleScreenMap.seeded(RomRegistry.GEN1)
+	map.fill(Gen2BattleScreenMap.BLANK_TILE)
+	Gen2BattleScreenMap.send_out_step(map, true, RomRegistry.GEN1, 0)
+	_r.check(
+		_cell(map, SEND_OUT_BALL_AT) == SEND_OUT_BALL_TILE,
+		"%s: the ball tile is $%02X, expected $%02X." % [
+			_r.game_id, _cell(map, SEND_OUT_BALL_AT), SEND_OUT_BALL_TILE,
+		]
+	)
+	Gen2BattleScreenMap.send_out_step(map, true, RomRegistry.GEN1, 3)
+	var row: Array[int] = []
+	for column: int in SEND_OUT_SMALL_ROW.size():
+		row.append(_cell(map, SEND_OUT_SMALL_AT + Vector2i(column, 0)))
+	_r.check(
+		row == SEND_OUT_SMALL_ROW,
+		"%s: the 3x3 block's top row is %s, expected %s." % [
+			_r.game_id, row, SEND_OUT_SMALL_ROW,
+		]
+	)
+	Gen2BattleScreenMap.send_out_step(map, true, RomRegistry.GEN1, 7)
+	_r.check(
+		_cell(map, SEND_OUT_WHOLE_AT) == Gen2BattleScreenMap.PLAYER_BASE_TILE,
+		"%s: the whole picture does not land on the player's own box." % _r.game_id
+	)
+
+
+static func _cell(map: PackedByteArray, at: Vector2i) -> int:
+	return int(map[at.y * Gen2BattleScreenMap.COLUMNS + at.x])
 
 
 func _verify_tables(anims: Gen2BattleAnimData) -> void:

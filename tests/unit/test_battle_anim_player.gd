@@ -453,6 +453,57 @@ func test_a_generation_1_frame_block_is_shown_for_its_own_delay() -> void:
 	)
 
 
+## `AnimationTypePointerTable`: what each of the six routines moves and how far
+## it opens. Only the vertical one is on `rWY`, and a type of zero has no row.
+func test_the_applying_attack_animation_moves_by_its_type() -> void:
+	var data: Gen2BattleAnimData = _gen1_data(0)
+	var vertical: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1_applying(data, 1)
+	vertical.advance_frame()
+	assert_eq(
+		[vertical.background().scy, vertical.background().scx], [(-8) & 0xFF, 0]
+	)
+	var light: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1_applying(data, 5)
+	light.advance_frame()
+	assert_eq(light.background().scx, (-2) & 0xFF, "the light shake is `ld b, 2`")
+	var slow: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1_applying(data, 6)
+	slow.advance_frame()
+	assert_eq(slow.background().scx, (-1) & 0xFF, "the slow shake opens a pixel out")
+	assert_null(Gen2BattleAnimPlayer.create_gen1_applying(data, 0))
+	assert_null(Gen2BattleAnimPlayer.create_gen1_applying(_data(RET), 4))
+
+
+## `.MutateWX` xors the running offset with the count, so the first pass opens on
+## the offset and every later one opens on zero and closes on the count.
+func test_the_screen_shake_offsets_follow_the_xor() -> void:
+	var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1_applying(
+		_gen1_data(0), 2
+	)
+	var offsets: Array[int] = []
+	for _frame: int in 18:
+		player.advance_frame()
+		offsets.append(player.background().scx)
+	assert_eq(
+		[offsets[0], offsets[5], offsets[9], offsets[14]],
+		[(-8) & 0xFF, 0, 0, (-7) & 0xFF]
+	)
+
+
+## `AnimationBlinkEnemyMon` is `AnimationBlinkMon` through `CallWithTurnFlipped`,
+## so the picture that goes is the one belonging to whoever is not acting.
+func test_the_blink_after_anim_takes_the_other_sides_picture() -> void:
+	var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1_applying(
+		_gen1_data(0), 4
+	)
+	player.advance_frame()
+	assert_eq(
+		[
+			bool(player.background().battler_visible[true]),
+			bool(player.background().battler_visible[false]),
+		],
+		[true, false]
+	)
+
+
 ## An animation the cache does not carry answers null on either engine.
 func test_a_generation_1_animation_outside_the_table_answers_null() -> void:
 	assert_null(Gen2BattleAnimPlayer.create_gen1(_gen1_data(0), 1))

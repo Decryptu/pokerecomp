@@ -4,8 +4,7 @@ extends RefCounted
 ## The video state a battle animation's background effects write, and the
 ## primitives they write it with (engine/battle_anims/bg_effects.asm). A bg effect
 ## does not draw: it edits the scanline tables, the screen scroll, the DMG palette
-## bytes and the tilemap the battler's picture sits in. All four are held here, so
-## an effect stays arithmetic the way a motion callback does.
+## bytes and the tilemap the picture sits in, all four held here.
 
 const SCREEN_WIDTH: int = 20
 const SCREEN_HEIGHT: int = 18
@@ -74,11 +73,9 @@ var r_bgp: int = PALETTE_IDENTITY
 var r_obp0: int = PALETTE_IDENTITY
 
 ## Which permutation of its own four colours each palette is drawn with, as the
-## DMG palette byte `CopyPals` was handed.
-##
-## `CopyPals` always reads the pristine `wBGPals2`/`wOBPals2`, never the live
-## copy, so a remap is never compounded and the byte is the whole state. A
-## renderer applies it to whatever colours the battle actually loaded.
+## DMG palette byte `CopyPals` was handed. `CopyPals` always reads the pristine
+## `wBGPals2`/`wOBPals2`, so a remap is never compounded and the byte is the
+## whole state.
 var bg_palette_maps: PackedByteArray = PackedByteArray()
 var ob_palette_maps: PackedByteArray = PackedByteArray()
 
@@ -97,12 +94,11 @@ var bg_map_third: int = 0
 var surf_wave: PackedByteArray = PackedByteArray()
 
 ## What the tilemap effects did to each battler's picture, keyed by `player_side`.
-## `BattleBGEffect_HideMon`, `..._RemoveMon` and `..._RunPicResizeScript` all say
-## it by editing `wTilemap`, and a renderer with no background plane cannot read a
-## shrink or a removal back out of a grid of tile ids. `visible` is whether a
-## picture is on the square at all, `shift` how far `RemoveMon` has pushed it off
-## in pixels, and `scale` the side of the square the resize script last placed
-## over the side of the whole picture.
+## `BattleBGEffect_HideMon`, `..._RemoveMon` and `..._RunPicResizeScript` say it
+## by editing `wTilemap`, which a renderer with no background plane cannot read a
+## shrink or a removal back out of. `visible` is whether a picture is on the
+## square, `shift` how far it has been pushed off in pixels, and `scale` the side
+## of the square last placed over the side of the whole picture.
 var battler_visible: Dictionary = {true: true, false: true}
 var battler_shift: Dictionary = {true: Vector2.ZERO, false: Vector2.ZERO}
 var battler_scale: Dictionary = {true: 1.0, false: 1.0}
@@ -124,10 +120,9 @@ const PLAYER_WINDOW_TOP: int = 0x2D
 ## Tackle, Withdraw, Dig, Psychic, DoubleTeam, AcidArmor, Wobble, Flail,
 ## WaveDeformMon, BounceDown and Vibrate all move a battler by writing scroll
 ## values into it. The mean of the window on the axis `hLCDCPointer` names, less
-## the whole-screen scroll `raster_scx`/`raster_scy` already carry. A scroll of n
-## draws n pixels further left or up, so the offset is its negation, and a row
-## pushed off with `$90` is not part of the mean. WaveDeformMon and Psychic
-## stretch rather than move, where the mean is a summary rather than an answer.
+## the whole-screen scroll `raster_scx`/`raster_scy` already carry, negated
+## because a scroll of n draws n pixels further left or up; a row pushed off with
+## `$90` is not in the mean. WaveDeformMon and Psychic stretch rather than move.
 func battler_window_offset(player_side: bool) -> Vector2:
 	if lcdc_pointer != LCDC_SCX and lcdc_pointer != LCDC_SCY:
 		return Vector2.ZERO

@@ -544,3 +544,36 @@ func test_the_two_generations_draw_one_circle() -> void:
 	seen.sort()
 	spin.sort()
 	assert_eq(seen, spin)
+
+
+## `AnimateSendingOutMon`: the ball tile, the two subsamplings and the whole
+## picture, each block two rows up and a column left of the last.
+func test_a_generation_1_send_out_grows_the_picture_onto_its_box() -> void:
+	var map: PackedByteArray = Gen2BattleScreenMap.seeded(RomRegistry.GEN1)
+	map.fill(Gen2BattleScreenMap.BLANK_TILE)
+	var cell := func(at: Vector2i) -> int:
+		return int(map[at.y * Gen2BattleScreenMap.COLUMNS + at.x])
+
+	Gen2BattleScreenMap.send_out_step(map, true, RomRegistry.GEN1, 0, 2)
+	assert_eq(
+		cell.call(Vector2i(4, 11)), Gen2BattleScreenMap.SEND_OUT_BALL_TILE + 2,
+		"`ld a, [wIsInBattle]` is still in `a` when `add b` runs"
+	)
+
+	Gen2BattleScreenMap.send_out_step(map, true, RomRegistry.GEN1, 5)
+	var base: int = Gen2BattleScreenMap.PLAYER_BASE_TILE
+	assert_eq(
+		[cell.call(Vector2i(2, 7)), cell.call(Vector2i(3, 7)), cell.call(Vector2i(2, 8))],
+		[base, base + 7, base + 1],
+		"`DownscaledMonTiles_5x5` picks rows and columns 0, 1, 3, 5 and 6"
+	)
+
+	Gen2BattleScreenMap.send_out_step(map, false, RomRegistry.GEN1, 3)
+	assert_eq(
+		cell.call(Vector2i(14, 4)), Gen2BattleScreenMap.ENEMY_BASE_TILE,
+		"the enemy's blocks count from its own box at (12, 0)"
+	)
+
+	Gen2BattleScreenMap.send_out_step(map, true, RomRegistry.GEN1, 7)
+	assert_eq(cell.call(Vector2i(1, 5)), base)
+	assert_eq(cell.call(Vector2i(7, 11)), base + 6 * 7 + 6)

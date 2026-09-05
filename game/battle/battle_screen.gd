@@ -201,12 +201,9 @@ var _renderer_ready: bool = false:
 var _battle: Gen2Battle = null
 var _pending: Array = []
 var _rng := RandomNumberGenerator.new()
-## Whether something else owns the funnel every button arrives through. Set while
-## this screen is an overlay inside the overworld, so a press is recorded once, by
-## the world, and a replayed log reaches the fight: see
-## [method Gen2WorldScreen.press_button] and `tools/replay_world.gd`.
-## Whether the screen that opened this one owns its input and its frames. See
-## [method set_driven].
+## Whether the screen that opened this one owns its input and its frames, so a
+## press is recorded once and a replayed log reaches the fight. See
+## [method set_driven] and `tools/replay_world.gd`.
 var _driven: bool = false
 var _save_slot: int = -1
 var _save_written: bool = false
@@ -551,11 +548,9 @@ func _process(delta: float) -> void:
 	if _box != null:
 		_box.accelerated = PokeButton.text_accelerating()
 	## A screen someone else spends frames for must not also spend them off real
-	## time. The world drives a battle from its own pump
-	## ([method advance_hardware_frame]), so with this clock running as well every
-	## bar drained, every animation ran and the box's own arrow blinked at twice
-	## the source's rate. Same rule, and the same caller, as
-	## [member Gen2TextBox.driven].
+	## time: the world drives a battle from [method advance_hardware_frame], and
+	## with this clock running too every bar, animation and blinking arrow ran at
+	## twice the source's rate. Same rule as [member Gen2TextBox.driven].
 	if _driven:
 		return
 	## The yes/no box appears when the question above it has finished printing,
@@ -563,12 +558,10 @@ func _process(delta: float) -> void:
 	if _switch_stage != &"":
 		_advance_party_icons(delta)
 		_refresh_menu_layer()
-	## The box is on the same hardware clock as everything else the screen draws,
-	## and it keeps counting while nothing else does: a text prints, scrolls and
-	## blinks its arrow whether or not a bar or an animation is running.
-	## [method frames_running] deliberately does not answer for it, since a box
-	## waiting at a page is waiting on a press and a caller draining frames on
-	## that answer would never stop.
+	## The box keeps counting hardware frames while nothing else does, printing,
+	## scrolling and blinking whether or not a bar or an animation is running.
+	## [method frames_running] deliberately does not answer for it: a box waiting
+	## at a page waits on a press, and a caller draining frames would never stop.
 	var running: bool = frames_running()
 	if not running and (_box == null or not _box.visible):
 		_frame_clock.reset()
@@ -613,11 +606,9 @@ func advance_frame() -> bool:
 
 ## What the source does when the frames a command spends run out: it runs on to
 ## the next command. Nothing in `DoMove`'s loop reads a button between an
-## animation, `AnimateHPBar` and `MonFaintedAnimation` and whatever follows them,
-## so the pump continues here rather than standing still until a press.
-##
-## The waits that are real are all a box, and [method _continue_after_messages]
-## owns that test: a message on screen is left alone, and so is a bar holding one.
+## animation, `AnimateHPBar` and `MonFaintedAnimation` and what follows them. The
+## waits that are real are all a box, and [method _continue_after_messages] owns
+## that test: a message on screen is left alone, and so is a bar holding one.
 func _resume_after_frames(was_running: bool) -> void:
 	if not was_running or frames_running():
 		return
@@ -886,22 +877,16 @@ func set_rules(battle_rules: Gen2Rules) -> void:
 
 
 ## Seeds everything this screen decides for itself: the enemy's move choice, its
-## item and switch decisions, and the capture rolls.
-##
-## A battle inside a walk is drawn from the world's own generator, so the seed is
-## part of the run's own chain and a replay reproduces the fight without recording
-## anything about it. A battle with no world seeds itself randomly, which is what
-## a development one should do.
+## item and switch decisions, and the capture rolls. A battle inside a walk is
+## drawn from the world's own generator, so a replay reproduces the fight without
+## recording anything about it; one with no world seeds itself randomly.
 func set_random_seed(value: int) -> void:
 	_rng.seed = value
 
 
-## Hands the input funnel and the frame pump to whoever opened this screen.
-##
-## The world does both while a battle is an overlay on it. One funnel is what
-## makes a recorded log complete, and two would record every press twice or none;
-## one pump is what makes a replay land on the same frame, and two spend every
-## frame twice.
+## Hands the input funnel and the frame pump to whoever opened this screen, which
+## the world does while a battle is an overlay on it. Two funnels record every
+## press twice or none, and two pumps spend every frame twice.
 func set_driven(driven: bool) -> void:
 	_driven = driven
 
@@ -1332,10 +1317,8 @@ func set_hp(enemy: int, enemy_max: int, player: int, player_max: int) -> void:
 
 ## Begins a bar animation from [param from_hp] to the HP now committed for
 ## [param side], which is what an event meaning damage or healing does after it
-## has written the new value.
-##
-## A maximum that moved under the bar is not the same bar draining: a Pokemon
-## coming out gets its bar drawn at once, the way `LoadHPBar` puts one up.
+## has written the new value. A maximum that moved under the bar is not the same
+## bar draining: a Pokemon coming out has it drawn at once, as `LoadHPBar` does.
 func _start_bar(side: int, from_hp: int, from_max: int) -> void:
 	var to_hp: int = _enemy_hp if side == Gen2Battle.ENEMY else _player_hp
 	var max_hp: int = _enemy_max_hp if side == Gen2Battle.ENEMY else _player_max_hp
@@ -1848,6 +1831,10 @@ const ANIM_RESTORE_HUD: StringName = &"restore_hud"
 const ANIM_WAIT_SFX: StringName = &"wait_sfx"
 const ANIM_HIT_SOUND: StringName = &"hit_sound"
 const ANIM_APPEAR_USER: StringName = &"appear_user"
+## `PlayApplyingAttackAnimation` and `AnimateSendingOutMon`, Generation 1's two
+## routines with no row behind them.
+const ANIM_APPLYING: StringName = &"applying"
+const ANIM_SEND_OUT: StringName = &"send_out"
 ## `PlaySFX` on its own, which only the entrance uses: an animation's own sounds
 ## come out of its script.
 const ANIM_SFX: StringName = &"sfx"
@@ -1869,11 +1856,8 @@ var _minimize_pic: Dictionary = {Gen2Battle.PLAYER: false, Gen2Battle.ENEMY: fal
 ## `BattleAnimCmd_Minimize` writes `vTiles0`, which is off screen, and
 ## `..._UpdateActorPic` copies it onto the square 48 frames later. The dot is
 ## already on by then, `BattleCommand_StatUp` having set the byte two commands
-## before the animation, so this only keeps the two halves of the source's own
-## pair together. `BattleAnim_Transform` is the other user of the pair and no
-## list here reaches it: `BattleCommand_Transform` calls `LoadMoveAnim` inline
-## rather than through an `anim` command, and this port's Transform prints
-## without an animation.
+## before, so this only keeps the source's own pair together.
+## `BattleAnim_Transform` is the pair's other user and no list here reaches it.
 var _staged_minimize_pic: bool = false
 
 ## `wFXAnimID` is a word: an id past this is not a move and skips the whole
@@ -2018,20 +2002,29 @@ func _begin_animation(event: Dictionary) -> void:
 		if after != 0:
 			_step(ANIM_WAIT_SFX, {})
 			_step(ANIM_HIT_SOUND, {})
-			_step(ANIM_SCRIPT, {
-				"index": after + Gen2BattleAnimPlayer.BATTLE_AFTERANIMS,
-			})
+			if gen1:
+				_step(ANIM_APPLYING, {"type": _gen1_animation_type(index, after)})
+			else:
+				_step(ANIM_SCRIPT, {
+					"index": after + Gen2BattleAnimPlayer.BATTLE_AFTERANIMS,
+				})
 	else:
 		_step(ANIM_WAIT_SFX, {})
 		_step(ANIM_HIT_SOUND, {})
-		_step(ANIM_SCRIPT, {"index": index})
+		if gen1 and index == Gen2Battle.ANIM_SEND_OUT_MON:
+			_gen1_send_out_steps(bool(event.get("enemy_turn", false)))
+		elif gen1 and index == ANIM_THROW_POKE_BALL:
+			_gen1_toss_ball_steps(event)
+		else:
+			_step(ANIM_SCRIPT, {"index": index})
 
 	# `hBGMapMode = 1`, three delays and `WaitSFX`.
 	_step(ANIM_DELAY, {"frames": 3})
 	_step(ANIM_WAIT_SFX, {})
-	# A send-out draws the picture itself and the ball animation only shows it
-	# arriving, so a cache with no animation layer still owes the square one.
-	if bool(event.get("restore_user_pic", false)) or (not is_move and _anim_row(index) < 0):
+	# A send-out draws the picture itself, so a cache with no animation layer at
+	# all still owes the square one.
+	if bool(event.get("restore_user_pic", false)) \
+			or (index == Gen2Battle.ANIM_SEND_OUT_MON and _anim_data == null):
 		_step(ANIM_APPEAR_USER, {})
 	_run_next_anim_step()
 
@@ -2120,8 +2113,20 @@ func _run_next_anim_step() -> void:
 			ANIM_HIT_SOUND:
 				_play_hit_sound()
 			ANIM_SCRIPT:
-				if _start_script(int(step["index"])):
+				if _start_script(
+					int(step["index"]),
+					bool(step.get("enemy_turn", _anim_event.get("enemy_turn", false))),
+					int(step.get("shakes", 0))
+				):
 					return
+			ANIM_APPLYING:
+				if _start_applying(int(step["type"])):
+					return
+			ANIM_SEND_OUT:
+				_send_out_step(int(step["size"]))
+				_anim_delay = int(step["frames"])
+				_push_view()
+				return
 			ANIM_APPEAR_USER:
 				# `AppearUserLowerSub`, which Fly and Dig reach after the
 				# animation: `LowerSubNoAnim` writes the user's own picture and
@@ -2137,23 +2142,45 @@ func _run_next_anim_step() -> void:
 	_push_view()
 
 
-## `AttackAnimationPointers`' rows for the ids the engine names past a move
-## number. Generation 1 numbers those differently from Crystal, and both of the
-## status pairs are picked by which side the animation is playing on.
+## `AttackAnimationPointers` rows for the ids `PlayOpponentBattleAnim` names past
+## a move number, as [code][on the player, on the enemy][/code]: that event's
+## `enemy_turn` is inverted, so the index is the side it is drawn on.
+## `FreezeBurnParalyzeEffect` plays `ENEMY_HUD_SHAKE_ANIM` on `.burn1`, `.freeze1`
+## and `paralyze1` and nothing on the three the opponent's attack reaches, and
+## `PoisonEffect`'s side-effect branch answers `SHAKE_SCREEN_ANIM` there. A
+## confusion is the move's own animation, so `ANIM_CONFUSED` has no row.
 const GEN1_ANIM_IDS: Dictionary = {
-	Gen2BattleAnimPlayer.ANIM_CONFUSED: [190, 191],
-	Gen2BattleAnimPlayer.ANIM_BRN: [186, 186],
-	Gen2BattleAnimPlayer.ANIM_PSN: [186, 186],
-	Gen2BattleAnimPlayer.ANIM_PAR: [184, 184],
+	Gen2BattleAnimPlayer.ANIM_BRN: [0, Gen1Layout.ANIM_ID_ENEMY_HUD_SHAKE],
+	Gen2BattleAnimPlayer.ANIM_FRZ: [0, Gen1Layout.ANIM_ID_ENEMY_HUD_SHAKE],
+	Gen2BattleAnimPlayer.ANIM_PAR: [0, Gen1Layout.ANIM_ID_ENEMY_HUD_SHAKE],
+	Gen2BattleAnimPlayer.ANIM_PSN: [
+		Gen1Layout.ANIM_ID_SHAKE_SCREEN, Gen1Layout.ANIM_ID_ENEMY_HUD_SHAKE,
+	],
+}
+
+## `wAnimationType`, which `GetPlayerAnimationType`, `GetEnemyAnimationType` and
+## `PlayBattleAnimation2` pick where Crystal picks `wBattleAfterAnim`. The damage
+## rows split on `ld a, [wPlayerMoveEffect] / and a`.
+const GEN1_APPLYING_TYPES: Dictionary = {
+	Gen2BattleAnimPlayer.AFTER_ANIM_ENEMY_DAMAGE: [4, 5],
+	Gen2BattleAnimPlayer.AFTER_ANIM_PLAYER_DAMAGE: [1, 2],
+	Gen2BattleAnimPlayer.AFTER_ANIM_ENEMY_STAT_DOWN: [6, 6],
+	Gen2BattleAnimPlayer.AFTER_ANIM_WOBBLE: [3, 3],
+}
+
+## `TossBallAnimation`'s throw, by `wCurItem`; anything else is `ULTRATOSS_ANIM`.
+const GEN1_TOSS_ANIMS: Dictionary = {
+	Gen1Layout.ITEM_POKE_BALL: Gen1Layout.ANIM_ID_TOSS,
+	Gen1Layout.ITEM_GREAT_BALL: Gen1Layout.ANIM_ID_GREATTOSS,
 }
 
 
 ## `wAnimationID` less one, which is what `AttackAnimationPointers` is indexed
 ## by. Crystal's own table is indexed by the id itself, so this is the identity
 ## there. -1 is an id this cartridge has no row for: `ANIM_SEND_OUT_MON`, the
-## thrown ball and the four after-anims are all their own routines in Generation
-## 1 rather than entries in the table, and `ANIM_FRZ` has no animation at all.
-func _anim_row(index: int) -> int:
+## thrown ball and the four after-anims are each their own routine in Generation
+## 1 rather than an entry in the table.
+func _anim_row(index: int, enemy_turn: bool) -> int:
 	if _anim_data == null:
 		return -1
 	if not _anim_data.gen1():
@@ -2163,7 +2190,78 @@ func _anim_row(index: int) -> int:
 	var pair: Variant = GEN1_ANIM_IDS.get(index, null)
 	if not pair is Array:
 		return -1
-	return int((pair as Array)[1 if bool(_anim_event.get("enemy_turn", false)) else 0]) - 1
+	return int((pair as Array)[1 if enemy_turn else 0]) - 1
+
+
+## `wAnimationType`: which of `AnimationTypePointerTable`'s six routines the move
+## ends with, or zero for none.
+func _gen1_animation_type(index: int, after: int) -> int:
+	var pair: Variant = GEN1_APPLYING_TYPES.get(after, null)
+	if not pair is Array:
+		return 0
+	var effect: int = int(_data.move(index).get("effect", 0)) if _data != null else 0
+	return int((pair as Array)[1 if effect != 0 else 0])
+
+
+## `SendOutMon`'s `POOF_ANIM` and `AnimateSendingOutMon`, which is the whole of
+## `ANIM_SEND_OUT_MON` here. `EnemySendOut` has no poof in front of it.
+func _gen1_send_out_steps(enemy_turn: bool) -> void:
+	if not enemy_turn:
+		# `ld a, $1 / ldh [hWhoseTurn]` ahead of the poof, either side.
+		_step(ANIM_SCRIPT, {"index": Gen1Layout.ANIM_ID_POOF, "enemy_turn": true})
+	for tiles: int in Gen2BattleScreenMap.SEND_OUT_SIZES:
+		_step(ANIM_SEND_OUT, {
+			"size": tiles,
+			"frames": int(Gen2BattleScreenMap.SEND_OUT_FRAMES[tiles]),
+		})
+
+
+## `TossBallAnimation`: the throw the ball chooses and then `.PokeBallAnimations`
+## for as many entries as `wPokeBallAnimData`'s high nybble names, four on a
+## capture, two on a ball that never opens and six on a break-out; a trainer
+## battle takes `.BlockBall`.
+func _gen1_toss_ball_steps(event: Dictionary) -> void:
+	var wobbles: Array = event.get("wobbles", [])
+	var caught: bool = wobbles.back() == Gen2BattleAnimScript.WOBBLE_CAUGHT \
+		if not wobbles.is_empty() else false
+	var shakes: int = maxi(wobbles.size() - 1, 0)
+	if not _is_wild_battle():
+		_step(ANIM_SCRIPT, {"index": Gen1Layout.ANIM_ID_TOSS})
+		_step(ANIM_SCRIPT, {"index": Gen1Layout.ANIM_ID_BLOCKBALL})
+		return
+	_step(ANIM_SCRIPT, {"index": int(
+		GEN1_TOSS_ANIMS.get(int(event.get("cur_item", 0)), Gen1Layout.ANIM_ID_ULTRATOSS)
+	)})
+	_step(ANIM_SCRIPT, {"index": Gen1Layout.ANIM_ID_POOF})
+	if not caught and shakes <= 0:
+		return
+	_step(ANIM_SCRIPT, {"index": Gen1Layout.ANIM_ID_HIDEPIC})
+	_step(ANIM_SCRIPT, {
+		"index": Gen1Layout.ANIM_ID_SHAKE, "shakes": maxi(shakes, 1),
+	})
+	if caught:
+		return
+	_step(ANIM_SCRIPT, {"index": Gen1Layout.ANIM_ID_POOF})
+	_step(ANIM_SCRIPT, {"index": Gen1Layout.ANIM_ID_SHOWPIC})
+
+
+## One step of `AnimateSendingOutMon`, which writes the tilemap rather than
+## running a script. Each block is bottom-centred on the picture's own box, so
+## the size is also the scale the square reports.
+func _send_out_step(tiles: int) -> void:
+	var player_side: bool = not bool(_anim_event.get("enemy_turn", false))
+	var side: int = Gen2Battle.PLAYER if player_side else Gen2Battle.ENEMY
+	var square: int = Gen2BattleScreenMap.player_box_side(_generation()) \
+		if player_side else Gen2BattleScreenMap.ENEMY_SIDE
+	Gen2BattleScreenMap.send_out_step(
+		_bg_map, player_side, _generation(), tiles,
+		1 if _is_wild_battle() else 2
+	)
+	_battler_visible[side] = tiles > 0
+	_battler_scale[side] = float(maxi(tiles, 1)) / float(square)
+	_battler_shift[side] = Vector2(
+		Gen2BattleScreenMap.SEND_OUT_AT[tiles] as Vector2i
+	) * PokeTiles.TILE_WIDTH
 
 
 ## `RunBattleAnimScript`, which is `ClearBattleAnims` and then a frame loop. The
@@ -2171,20 +2269,33 @@ func _anim_row(index: int) -> int:
 ## and comes back out at the end. A cache carrying no animation layer answers
 ## with no player, and the step is skipped rather than the whole framing: the
 ## delays and the hud belong to the screen, not to the data.
-func _start_script(index: int) -> bool:
-	var row: int = _anim_row(index)
+func _start_script(index: int, enemy_turn: bool, shakes: int = 0) -> bool:
+	var row: int = _anim_row(index, enemy_turn)
 	if _anim_data == null or row < 0:
 		return false
 	var wobbles: Array[int] = []
 	wobbles.assign(_anim_event.get("wobbles", []))
-	_anim = Gen2BattleAnimPlayer.create_gen1(
-		_anim_data, row, bool(_anim_event.get("enemy_turn", false))
-	) if _anim_data.gen1() else Gen2BattleAnimPlayer.create(
-		_anim_data, row, bool(_anim_event.get("enemy_turn", false)),
-		int(_anim_event.get("param", 0)), wobbles
+	return _begin_anim_player(
+		Gen2BattleAnimPlayer.create_gen1(_anim_data, row, enemy_turn, shakes) \
+			if _anim_data.gen1() else Gen2BattleAnimPlayer.create(
+				_anim_data, row, enemy_turn,
+				int(_anim_event.get("param", 0)), wobbles
+			)
 	)
-	if _anim == null:
+
+
+func _start_applying(animation_type: int) -> bool:
+	return _begin_anim_player(Gen2BattleAnimPlayer.create_gen1_applying(
+		_anim_data, animation_type, bool(_anim_event.get("enemy_turn", false))
+	))
+
+
+func _begin_anim_player(player: Gen2BattleAnimPlayer) -> bool:
+	if player == null:
 		return false
+	_anim = player
+	# `wCurItem`, which colours a thrown ball and flashes a Master or Ultra one.
+	_anim.cur_item = int(_anim_event.get("cur_item", 0))
 	_anim.background().set_bg_map(_bg_map)
 	_after_anim_frame()
 	return true
@@ -2590,11 +2701,9 @@ func battle_snapshot() -> Dictionary:
 
 ## The plain reading a registered battle-information provider annotates from:
 ## both sides' live stat stages, the weather and what is left of it, who is
-## standing, what is on screen, whether this opponent had been seen in this save,
-## and each move's exact effectiveness against the defender. That effectiveness is
-## [method GameData.type_effectiveness] over [method Gen2BattleMon.types] carrying
-## Foresight's identified state, so a provider never copies the type chart and
-## never rebuilds state from the event stream.
+## standing, what is on screen, whether this opponent had been seen, and each
+## move's effectiveness as [method GameData.type_effectiveness] over
+## [method Gen2BattleMon.types], which carries Foresight's identified state.
 func info_snapshot() -> Dictionary:
 	var player: Gen2BattleMon = _battle.mon(Gen2Battle.PLAYER) if _battle != null else null
 	var enemy: Gen2BattleMon = _battle.mon(Gen2Battle.ENEMY) if _battle != null else null
@@ -2663,11 +2772,9 @@ func _list_state_changed() -> void:
 
 
 ## Rebuilds the layer the frame a modal takes the interface or gives it back.
-##
 ## Every state [method _annotations_visible] reads writes through a setter that
 ## reaches here, so ownership is answered where it changes rather than at each
-## caller that opens a subflow: a modal built next year hides the annotations by
-## being made of the same flags, and nothing has to remember to refresh.
+## caller that opens a subflow.
 func _gate_annotations() -> void:
 	if _annotation_layer == null:
 		return
@@ -2861,9 +2968,8 @@ func use_selected_pack_item() -> Dictionary:
 ## `UseBallInTrainerBattle`, which is where `PokeBallEffect` jumps before it says
 ## anything at all: no ITEM USED line, the throw animation on
 ## `BattleAnim_ThrowPokeBall`'s own NO_ITEM branch, two boxes, and then
-## `UseDisposableItem` spends the ball anyway. The turn goes with it, because
-## `wItemEffectSucceeded` and `wBattlePlayerAction` are one byte and
-## `_DoItemEffect` set it to BATTLEPLAYERACTION_USEITEM on the way in.
+## `UseDisposableItem` spends the ball anyway. The turn goes with it:
+## `wItemEffectSucceeded` and `wBattlePlayerAction` are one byte.
 func _block_ball_in_trainer_battle(ball: int) -> Dictionary:
 	_capture_messages.clear()
 	_capture_messages.append(BALL_BLOCKED_TEXT)
@@ -2871,6 +2977,7 @@ func _block_ball_in_trainer_battle(ball: int) -> Dictionary:
 	_begin_animation({
 		"param": ANIM_PARAM_NO_ITEM,
 		"index": ANIM_THROW_POKE_BALL,
+		"cur_item": ball,
 		"enemy_turn": false,
 	})
 	item_used.emit(ball, -1)
@@ -3125,11 +3232,9 @@ func complete_capture(result: Dictionary) -> Dictionary:
 ## `PokeBallEffect`'s own `PlayBattleAnim` on `ANIM_THROW_POKE_BALL`: the throw,
 ## the poof, the opponent going in, the wobbles and the click or the break free,
 ## one script rather than five. The catch is already resolved when this runs, the
-## way the source resolves it in front of the animation and hands the drawing
-## `wThrownBallWobbleCount` rather than a roll, so the queue is
+## way the source resolves it in front of the animation, so the queue is
 ## `GetPokeBallWobble`'s answers in order. The opponent leaving and coming back
-## are `BATTLE_BG_EFFECT_RETURN_MON` and `..._ENTER_MON` inside the script, which
-## is why nothing here touches the picture.
+## are `BATTLE_BG_EFFECT_RETURN_MON` and `..._ENTER_MON` inside the script.
 func _begin_capture_animation(ball: int, wobbles: int, caught: bool) -> void:
 	if ball <= 0:
 		return
@@ -3145,6 +3250,8 @@ func _begin_capture_animation(ball: int, wobbles: int, caught: bool) -> void:
 		## which is what the `cp POKE_BALL + 1` in front of it decides.
 		"param": mini(ball, Gen2WorldPartyHost.ITEM_POKE_BALL),
 		"index": ANIM_THROW_POKE_BALL,
+		## `GetBallAnimPal` colours the ball off the real number, not the clamp.
+		"cur_item": ball,
 		## `xor a / ldh [hBattleTurn]`: the throw is the player's, so the
 		## script's `BG_EFFECT_TARGET` is the opponent.
 		"enemy_turn": false,
@@ -3371,11 +3478,9 @@ func _close_capture_nickname() -> void:
 
 
 ## `PokeBallEffect` gives no experience of its own: this is what a registered
-## policy adds, and with none registered it answers false and the capture flow
-## above is the one the cartridge has.
-##
-## The catching tutorial and a Bug Contest catch are excluded: neither is an
-## ordinary capture, and the contest's is a score rather than a Pokemon kept.
+## policy adds, and with none registered the capture flow is the cartridge's. The
+## catching tutorial and a Bug Contest catch are excluded, the contest's being a
+## score rather than a Pokemon kept.
 func _spend_capture_experience() -> bool:
 	if _capture_experience_spent or _battle == null or _world_battle_tutorial \
 		or bool(_capture_result.get("contest", false)) \
@@ -3582,11 +3687,8 @@ func _next_healthy(side: int) -> int:
 
 
 ## Opens LearnMove's full-slot branch, or keeps it open. Answered through
-## [method _handle_button], the same way capture ball selection is.
-##
-## Only the player side is ever queued
-## ([method Gen2Battle._offer_moves_learned_at]), so there is one stage rather
-## than one per side.
+## [method _handle_button], as capture ball selection is. Only the player side is
+## ever queued ([method Gen2Battle._offer_moves_learned_at]), so one stage does.
 func _open_move_learn() -> bool:
 	if _battle == null:
 		return false
@@ -3927,12 +4029,10 @@ func _finish_battle() -> void:
 		_finish_world_battle()
 
 
-## The fought party over the live save, with nothing written to disk.
-##
-## A ball is thrown mid-battle and the catch is its own transaction, which
-## builds its candidate from the live save; without this the party that reaches
-## the candidate is the pre-battle one, so the HP and PP spent weakening the
-## wild are given back the moment it is caught.
+## The fought party over the live save, with nothing written to disk. A catch is
+## its own transaction and builds its candidate from the live save; without this
+## the candidate carries the pre-battle party, so the HP and PP spent weakening
+## the wild are given back the moment it is caught.
 func sync_live_party() -> bool:
 	if _source_save == null or _battle == null or _data == null:
 		return false
@@ -4193,12 +4293,9 @@ func _answer_baton_pass() -> bool:
 
 
 ## `BattleMenu`: what the player is asked once the turn before it has finished
-## being shown. `EmptyBattleTextbox` first, so the menu opens over a clear box
-## rather than over the last line of the turn.
-##
-## `CheckPlayerHasUsableMoves` runs inside `MoveSelectionScreen` rather than
-## here, so a Pokemon with nothing left still opens the menu and Struggle is
-## chosen when FIGHT is.
+## being shown, `EmptyBattleTextbox` first so it opens over a clear box.
+## `CheckPlayerHasUsableMoves` runs inside `MoveSelectionScreen` rather than here,
+## so a Pokemon with nothing left still opens the menu and Struggle is chosen.
 func _open_battle_menu() -> void:
 	if _battle == null or _battle.is_over() or not _pending.is_empty():
 		return
@@ -5122,12 +5219,9 @@ func _show_layer_image(layer: TextureRect, image: Image, at: Vector2i) -> void:
 
 
 ## `HandlePlayerMonFaint` and `HandleEnemyMonFaint`'s replacement tail put on
-## screen, and whether any of it had something to do.
-##
-## The three steps are the source's own order: `AskUseNextPokemon`'s wild
-## question, `ForcePlayerMonChoice`'s list, and then the trainer's own entrance,
-## which [method Gen2Battle.replace_fallen] picks and which SHIFT turns into
-## another offer.
+## screen, and whether any of it had something to do. The three steps are the
+## source's order: `AskUseNextPokemon`'s wild question, `ForcePlayerMonChoice`'s
+## list, and the trainer's entrance, which SHIFT turns into another offer.
 func _replace_the_fallen() -> bool:
 	if _battle == null:
 		return false
@@ -5214,10 +5308,8 @@ func _show_next_event() -> void:
 			return
 		## `AnimateHPBar` and `MonFaintedAnimation` both block: the source does
 		## not reach the next command until the bar has emptied and the picture
-		## has sunk. Without this stop, a hit with no line of its own popped the
-		## faint in the same pass and the picture left the field while its own bar
-		## was still draining. [method _resume_after_frames] brings the queue back
-		## when the frames are spent.
+		## has sunk. Without this a hit with no line of its own popped the faint
+		## while its own bar was still draining.
 		if not _bars.is_empty() or fainting():
 			return
 	## The queue ran dry with nothing to print. `DoTurn` does not read a button
@@ -5333,12 +5425,10 @@ func _apply_event_state(event: Dictionary) -> void:
 			_refresh_exp_bar()
 		Gen2Battle.GREW_LEVEL:
 			# The level number in the panel belongs to whoever is on screen, so
-			# it only moves when the index that grew is the one currently
-			# active: a benched participant can level up too, and this screen
-			# has no bench to show it on. The bar itself is not recomputed here:
-			# `.LoopLevels` is inside `AnimateExpBar`, so from the award until
-			# the walk ends the animation owns the bar and [method advance_bars]
-			# commits the real count when it arrives.
+			# it only moves when the index that grew is the active one: a
+			# benched participant levels up with no bench to show it on. The bar
+			# is not recomputed here either, `.LoopLevels` being inside
+			# `AnimateExpBar`, so the animation owns it until the walk ends.
 			if int(event["index"]) == _battle.party(Gen2Battle.PLAYER).active:
 				_player_level = int(event["new_level"])
 				_push_view()
@@ -5832,14 +5922,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		accept_event()
 
 
-## Whether the battle itself is idle enough to pass an event on.
-##
-## The modal input states are the ones that mean something by themselves: the
-## forget-move prompt, a switch's yes/no or list, and ball selection. A draining
-## bar, the opening slide and a move animation are deliberately not on that list.
-## None of them reads input, and a camera that stops answering every time a bar
-## drains is not a camera; the presses they do swallow are swallowed in
-## [method _handle_button], which runs first and never reaches here.
+## Whether the battle itself is idle enough to pass an event on. The modal input
+## states are the ones that mean something by themselves: the forget-move prompt,
+## a switch's yes/no or list, and ball selection. A draining bar, the opening
+## slide and a move animation read no input and are deliberately not on that list;
+## what they do swallow is swallowed in [method _handle_button], which runs first.
 func _renderer_input_free() -> bool:
 	return is_ready() and _forget_stage == &"" and _switch_stage == &"" \
 		and _menu_stage == &"" and not _capture_selecting and not _pack_selecting \
@@ -6082,14 +6169,11 @@ func select_view(id: StringName) -> Dictionary:
 	return result
 
 
-## Says what a view switch did, unless a menu is holding the interface.
-##
-## The acknowledgement is battle text, and the menu layer above it covers the
-## box's right-hand half rather than the whole panel, so a line printed under an
-## open menu leaks its first glyphs out beside the list. The cartridge's own
-## transition cover already says the switch happened; the words are development
-## chrome and are worth less than the menu underneath them staying intact. Said
-## through the same log the refusals use, so nothing is silently dropped.
+## Says what a view switch did, unless a menu is holding the interface: the menu
+## layer covers the box's right-hand half rather than the whole panel, so a line
+## printed under an open list leaks its first glyphs out beside it, and the
+## transition cover already says the switch happened. Said through the same log
+## the refusals use, so nothing is silently dropped.
 func _report_view(message: String) -> void:
 	if _menu_owns_interface():
 		print_verbose(message)
@@ -6191,11 +6275,9 @@ func _push_view() -> void:
 		"raster_scx": _raster_offsets(),
 		"raster_scy": _raster_rows(),
 		## `CopyBackpic` puts the player's back pic on the tilemap before
-		## `InitBattleDisplay` ever reaches the slide, so it is there through it
-		## and comes in with the middle band. Its top three tile rows fall in the
-		## band the enemy scrolls, which is what the eighteen sprites here are
-		## for; `PlaceGraphic` afterwards is what settles the two pixels between
-		## them.
+		## `InitBattleDisplay` reaches the slide, so it comes in with the middle
+		## band. Its top three tile rows fall in the band the enemy scrolls,
+		## which is what the eighteen sprites here are for.
 		"intro_sprites": _intro.sprites() if _intro != null else [],
 		## `GetSGBLayout SCGB_BATTLE_GRAYSCALE` is called where the battle is
 		## entered and `SCGB_BATTLE_COLORS` only after `BattleIntroSlidingPics`,
@@ -6228,6 +6310,8 @@ func _push_view() -> void:
 		"bg_vbank1": _bg_vbank1,
 		"bg_palette_maps": _background_maps(&"bg"),
 		"ob_palette_maps": _background_maps(&"ob"),
+		## `rOBP0`, which only `DoBallTossSpecialEffects` moves off `wAnimPalette`.
+		"anim_obp0": _anim.background().obp0 if _anim != null else Gen1Layout.ANIM_OBP0,
 		"anim_sprites": _anim.sprites() if _anim != null else _kept_sprites,
 		"anim_tiles": _anim.tiles() if _anim != null else _kept_tiles,
 		## Whether both panels are on the map, which is the summary of the two
@@ -6250,11 +6334,9 @@ func _push_view() -> void:
 
 
 ## What is standing on one side's square, whether it is on it, how far it is from
-## resting there and how big it is drawn; `docs/MODS.md` documents the block.
-## Every other battler field says it in the terms the hardware draws it in, so a
-## renderer with no background plane would have to rebuild host state to read a
-## faint, a recall or a deformation. These four are read out of the state the
-## screen already runs rather than simulated again.
+## resting there and how big it is drawn; `docs/MODS.md` documents the block. A
+## renderer with no background plane would otherwise have to rebuild host state to
+## read a faint, a recall or a deformation.
 func battler_side(side: int) -> Dictionary:
 	var player_side: bool = side == Gen2Battle.PLAYER
 	var backpic: String = _player_backpic if player_side else ""
@@ -6323,12 +6405,10 @@ func _raster_rows() -> PackedInt32Array:
 	return _anim_raster(Gen2BattleAnimBackground.LCDC_SCY)
 
 
-## One axis of the animation's scroll, per scanline.
-##
-## The whole-screen `hSCX`/`hSCY` is the base, and the scanline table replaces it
-## on every line while `hLCDCPointer` names that axis' register. A table pointed
-## at `rBGP` reaches nothing here: `UpdatePals` never touches that register on the
-## Color hardware, which is the branch this project builds.
+## One axis of the animation's scroll, per scanline. The whole-screen
+## `hSCX`/`hSCY` is the base and the scanline table replaces it on every line
+## while `hLCDCPointer` names that axis' register. A table pointed at `rBGP`
+## reaches nothing here: `UpdatePals` never touches it on the Color hardware.
 func _anim_raster(register: int) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	if _anim == null:
