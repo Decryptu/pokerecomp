@@ -1,14 +1,12 @@
 class_name Gen2WorldPack
 extends RefCounted
 
-## Scene-free grouping of owned items into the cartridge's four pack pockets.
-## [Gen2WorldState] stores items as a flat item-to-quantity map and this is
-## presentation only. Classification uses the item type byte GameData imports under
-## the confusingly-named `pocket` field, which is what decides a real item's
-## pocket. The save remains flat, so one item cannot be split into two 99-count
-## stacks like the source's packed pocket arrays can. Pockets registered on
-## [Gen2ModHost] follow the four source ones, and the item submenu below is
-## `engine/items/pack.asm`'s own header selection.
+## Scene-free grouping of owned items into the cartridge's four pack pockets,
+## and the one answer to whether the bag can take another. [Gen2WorldState]
+## stores items flat, so one item cannot be split into two 99-count stacks the
+## way the source's packed pocket arrays can. Classification is the item type
+## byte GameData imports under the confusingly-named `pocket` field; a pocket
+## registered on [Gen2ModHost] follows the four source ones.
 
 const TYPE_ITEM: int = 1
 const TYPE_KEY_ITEM: int = 2
@@ -43,11 +41,9 @@ const SOURCE_POCKET_NAMES: Dictionary = {
 	TYPE_TM_HM: "TM POCKET",
 }
 
-## `ITEMATTR_PERMISSIONS` bits and the field-menu nibble `CheckItemMenu` returns,
-## named here in this file's own terms but valued from the import layer, so the
-## numbers stay defined once. A set permission bit is what the item *cannot* do,
-## which is why the source's own branch labels around
-## `.ItemBallsKey_LoadSubmenu` read backwards.
+## `ITEMATTR_PERMISSIONS` bits and the field-menu nibble `CheckItemMenu` returns.
+## A set permission bit is what the item *cannot* do, which is why the source's
+## own branch labels around `.ItemBallsKey_LoadSubmenu` read backwards.
 const CANT_SELECT: int = Gen2Layout.ITEM_ATTRIBUTE_CANT_SELECT
 const CANT_TOSS: int = Gen2Layout.ITEM_ATTRIBUTE_CANT_TOSS
 const ITEMMENU_NOUSE: int = Gen2Layout.ITEMMENU_NOUSE
@@ -153,10 +149,7 @@ static func source_pocket_name(data: GameData, item: int) -> String:
 ## The five rows `ScrollingMenu_UpdateDisplay` writes, out of one pocket's own
 ## items and the CANCEL row after them. The TM/HM pocket is
 ## `TMHM_DisplayPocketItems`, which prints the TM number and the move it teaches
-## rather than the item's name. Here rather than in the screen that scrolls them,
-## because the pack listing is drawn on more than one screen and only one of them
-## owns a cursor. [param cancel] is the row that closes the pack: a screen that
-## cannot be closed asks for the listing without it.
+## rather than the item's name. [param cancel] is the row that closes the pack.
 static func list_rows(
 	data: GameData, pocket_type: int, items: Array, scroll: int = 0,
 	cancel: bool = true
@@ -461,10 +454,8 @@ static func pocket_capacity(pocket_type: int) -> int:
 
 
 ## Mirrors ReceiveItem's all-or-nothing result for the flat save model. Existing
-## stacks may grow up to MAX_ITEM_STACK; a new item also consumes one pocket
-## entry. TM/HM and unclassified fixture rows have no count limit here because
-## the source routes TMs through their separate numbered table and mods may add
-## their own pocket types.
+## stacks may grow up to MAX_ITEM_STACK; a new item also takes one pocket entry.
+## A Generation 2 TM/HM row and a mod's own pocket have no entry limit here.
 static func receive_check(
 	data: GameData, owned: Dictionary, item: int, quantity: int
 ) -> Dictionary:
@@ -476,16 +467,24 @@ static func receive_check(
 	if current + quantity > MAX_ITEM_STACK:
 		return {"ok": false, "reason": &"item_stack_full", "available": MAX_ITEM_STACK - current}
 	var pocket: int = pocket_for(data, item)
-	var capacity: int = pocket_capacity(pocket)
-	if current == 0 and capacity > 0:
-		var entries: int = 0
-		for raw_item: Variant in owned:
-			if int(owned[raw_item]) <= 0 or pocket_for(data, int(raw_item)) != pocket:
-				continue
-			entries += 1
-		if entries >= capacity:
-			return {"ok": false, "reason": &"pocket_full", "pocket": pocket}
+	var capacity: int = pocket_capacity(pocket) if data.generation != RomRegistry.GEN1 \
+		else Gen1Layout.BAG_ITEM_CAPACITY
+	if current == 0 and capacity > 0 and _pocket_entries(data, owned, pocket) >= capacity:
+		return {"ok": false, "reason": &"pocket_full", "pocket": pocket}
 	return {"ok": true, "quantity": current + quantity}
+
+
+## How many slots [param pocket] stands in; Generation 1's whole bag is one.
+static func _pocket_entries(data: GameData, owned: Dictionary, pocket: int) -> int:
+	var gen1: bool = data.generation == RomRegistry.GEN1
+	var entries: int = 0
+	for raw_item: Variant in owned:
+		if int(owned[raw_item]) <= 0:
+			continue
+		if not gen1 and pocket_for(data, int(raw_item)) != pocket:
+			continue
+		entries += 1
+	return entries
 
 
 ## `GiveTakePartyMonItem`'s own wording (`data/text/common_2.asm`), shared by the

@@ -3710,8 +3710,7 @@ func gen1_last_map() -> int:
 
 
 ## `IsSpriteOrSignInFrontOfPlayer`: a sign on the faced cell answers first and
-## returns, and only then is a sprite looked for. A Generation 1 script is
-## machine code this port does not run, so a box is the whole of an interaction.
+## returns, and only then is a sprite looked for.
 func _gen1_interact() -> Array:
 	if current_map == null:
 		return []
@@ -3749,14 +3748,19 @@ func _gen1_script_steps(row: Dictionary) -> Array:
 	if not nodes is Array or (nodes as Array).is_empty():
 		return []
 	var steps: Array = []
-	return steps if _gen1_resolve_script(nodes as Array, steps) else []
+	return steps if _gen1_resolve_script(nodes as Array, steps, {
+		"bag": state.items() if state != null else {}, "named": "",
+	}) else []
 
 
-func _gen1_resolve_script(nodes: Array, steps: Array) -> bool:
+## [param run] is the bag the row is walked against, carrying what its own gifts
+## have already put in it, and the name `CopyToStringBuffer` last wrote.
+func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
+	var bag: Dictionary = run["bag"]
 	for node: Dictionary in nodes:
 		match String(node.get("op", "")):
 			"text":
-				steps.append(_gen1_script_box(node))
+				steps.append(_gen1_script_box(node, String(run["named"])))
 			"flag":
 				steps.append({
 					"type": &"flag",
@@ -3764,27 +3768,72 @@ func _gen1_resolve_script(nodes: Array, steps: Array) -> bool:
 					"set": bool(node["set"]),
 				})
 			"branch":
-				var side: String = "then" if event_flag_active(int(node["flag"])) else "else"
-				if not _gen1_resolve_script(node[side] as Array, steps):
+				if not _gen1_resolve_side(
+					node, event_flag_active(int(node["flag"])), steps, run
+				):
 					return false
+			"has_item":
+				if not _gen1_resolve_side(
+					node, int(bag.get(int(node["item"]), 0)) > 0, steps, run
+				):
+					return false
+			"give_item":
+				if not _gen1_resolve_gift(node, steps, run):
+					return false
+			"take_item":
+				_gen1_take_item(int(node["item"]), steps, bag)
 			"choice":
-				return _gen1_script_choice(node, steps)
+				return _gen1_script_choice(node, steps, run)
 			_:
 				return false
 	return true
 
 
+func _gen1_resolve_side(
+	node: Dictionary, taken: bool, steps: Array, run: Dictionary
+) -> bool:
+	return _gen1_resolve_script(node["then" if taken else "else"] as Array, steps, run)
+
+
+## `AddItemToInventory` and its carry; only a gift that landed is named.
+func _gen1_resolve_gift(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var item: int = int(node["item"])
+	var bag: Dictionary = run["bag"]
+	var room: Dictionary = Gen2WorldPack.receive_check(
+		data, bag, item, int(node["count"])
+	)
+	var taken: bool = bool(room.get("ok", false))
+	if taken:
+		bag[item] = int(room["quantity"])
+		run["named"] = data.item_name(item) if data != null else ""
+		steps.append({"type": &"items", "items": {item: int(room["quantity"])}})
+	if not node.has("ok"):
+		return true
+	return _gen1_resolve_script(node["ok" if taken else "full"] as Array, steps, run)
+
+
+func _gen1_take_item(item: int, steps: Array, bag: Dictionary) -> void:
+	var left: int = int(bag.get(item, 0)) - 1
+	if left < 0:
+		return
+	if left == 0:
+		bag.erase(item)
+	else:
+		bag[item] = left
+	steps.append({"type": &"items", "items": {item: left}})
+
+
 ## `YesNoChoice` stands behind the box that asked, so the question is the last
 ## box printed.
-func _gen1_script_choice(node: Dictionary, steps: Array) -> bool:
+func _gen1_script_choice(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	if steps.is_empty() \
 		or StringName((steps[-1] as Dictionary).get("type", &"")) != &"text":
 		return false
 	var question: Dictionary = steps.pop_back()
 	var yes: Array = []
 	var no: Array = []
-	if not _gen1_resolve_script(node["yes"] as Array, yes) \
-		or not _gen1_resolve_script(node["no"] as Array, no):
+	if not _gen1_resolve_script(node["yes"] as Array, yes, _gen1_run_copy(run)) \
+		or not _gen1_resolve_script(node["no"] as Array, no, _gen1_run_copy(run)):
 		return false
 	steps.append({
 		"type": &"choice", "text": String(question["text"]), "yes": yes, "no": no,
@@ -3792,10 +3841,17 @@ func _gen1_script_choice(node: Dictionary, steps: Array) -> bool:
 	return true
 
 
-func _gen1_script_box(node: Dictionary) -> Dictionary:
-	var step: Dictionary = {
-		"type": &"text", "text": _gen1_filled_text(String(node.get("text", ""))),
-	}
+func _gen1_run_copy(run: Dictionary) -> Dictionary:
+	return {"bag": (run["bag"] as Dictionary).duplicate(), "named": run["named"]}
+
+
+func _gen1_script_box(node: Dictionary, named: String) -> Dictionary:
+	var text: String = _gen1_filled_text(String(node.get("text", "")))
+	if not named.is_empty():
+		text = Gen2TextStream.fill_all_markers(
+			text, Gen2TextStream.RAM_MARKER, named
+		)
+	var step: Dictionary = {"type": &"text", "text": text}
 	if not bool(node.get("press", true)):
 		step["press"] = false
 	return step
@@ -4202,13 +4258,11 @@ func _gen1_step(type: StringName) -> Dictionary:
 	return step if StringName(step.get("type", &"")) == type else {}
 
 
-## The result the head step is waiting on, empty once the list is spent. An
-## event flag a row writes takes no turn of its own and is spent on the way past.
+## The result the head step is waiting on, empty once the list is spent. What a
+## row writes takes no turn of its own and is spent on the way past.
 func _gen1_result() -> Array:
-	while not _gen1_steps.is_empty() \
-		and StringName((_gen1_steps[0] as Dictionary)["type"]) == &"flag":
-		var written: Dictionary = _gen1_steps.pop_front()
-		state.set_event_flag(int(written["flag"]), bool(written["set"]))
+	while not _gen1_steps.is_empty() and _gen1_written(_gen1_steps[0]):
+		_gen1_steps.pop_front()
 	if _gen1_steps.is_empty():
 		return []
 	var step: Dictionary = _gen1_steps[0]
@@ -4237,6 +4291,17 @@ func _gen1_result() -> Array:
 			"prompt": bool(step.get("press", true)),
 		},
 	}]
+
+
+func _gen1_written(step: Dictionary) -> bool:
+	match StringName(step["type"]):
+		&"flag":
+			state.set_event_flag(int(step["flag"]), bool(step["set"]))
+			return true
+		&"items":
+			state.apply_changes({}, {}, {"items": step["items"]})
+			return true
+	return false
 
 
 ## Spends the head step and answers with whatever the next one waits on.

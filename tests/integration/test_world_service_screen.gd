@@ -576,7 +576,7 @@ func test_mart_overlay_purchases_the_selected_quantity() -> void:
 	assert_true(host.handle_button(PokeButton.LEFT))
 	assert_eq(host._mart_quantity, 1)
 	assert_true(host.handle_button(PokeButton.DOWN))
-	assert_eq(host._mart_quantity, Gen2WorldMartHost.MAX_ITEM_STACK)
+	assert_eq(host._mart_quantity, Gen2WorldPack.MAX_ITEM_STACK)
 	assert_true(host.handle_button(PokeButton.UP))
 	assert_eq(host._mart_quantity, 1)
 	assert_true(host.handle_button(PokeButton.UP))

@@ -170,6 +170,24 @@ func test_receive_check_enforces_stack_and_pocket_capacity() -> void:
 	assert_eq(pocket_full["reason"], &"pocket_full")
 
 
+## Generation 1 has one bag of BAG_ITEM_CAPACITY slots and no item type byte, so
+## every item counts against the same capacity rather than falling through it.
+func test_receive_check_counts_a_generation_1_bag_as_one_pocket() -> void:
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	data.generation = RomRegistry.GEN1
+	var owned: Dictionary = {}
+	for item: int in range(2, Gen1Layout.BAG_ITEM_CAPACITY + 2):
+		owned[item] = 1
+	var full: Dictionary = Gen2WorldPack.receive_check(data, owned, ITEM_POTION, 1)
+	assert_false(full["ok"])
+	assert_eq(full["reason"], &"pocket_full")
+	owned.erase(2)
+	assert_true(bool(Gen2WorldPack.receive_check(data, owned, ITEM_POTION, 1)["ok"]))
+	assert_true(bool(Gen2WorldPack.receive_check(
+		data, {ITEM_POTION: 1}, ITEM_POTION, 1
+	)["ok"]), "a stack already held takes no new slot")
+
+
 ## engine/items/pack.asm's .ItemBallsKey_LoadSubmenu picks between six headers on
 ## two inverted permission bits and the field-menu nibble. POTION is CANT_SELECT
 ## with a usable field menu, so it reaches MenuHeader_UsableItem.

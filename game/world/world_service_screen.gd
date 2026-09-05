@@ -822,10 +822,12 @@ func _buy_prize(row: Dictionary) -> String:
 		return _prize_text("need_more_coins", GEN1_PRIZE_RUN_2)
 	var number: int = int(row.get("item", 0))
 	if _prize_tms:
-		var owned: int = _world.state.item_quantity(number)
-		if owned + 1 > Gen2WorldMartHost.MAX_ITEM_STACK:
+		var room: Dictionary = Gen2WorldPack.receive_check(
+			_data, _world.state.items(), number, 1
+		)
+		if not bool(room.get("ok", false)):
 			return _prize_text("bag_full", GEN1_PRIZE_RUN_2)
-		_world.state.apply_changes({}, {}, {"items": {number: owned + 1}})
+		_world.state.apply_changes({}, {}, {"items": {number: int(room["quantity"])}})
 	elif not bool(Gen2WorldPartyHost.give_pokemon(
 		_world, _save, number, int(row.get("level", 1)), _persist
 	).get("ok", false)):
@@ -1120,7 +1122,7 @@ func _move_mart_cursor(delta: int) -> void:
 ## against `wItemQuantity`, which `StandardMartAskPurchaseQuantity` sets to the
 ## whole stack rather than to what the money or the pack allows.
 func _press_mart_quantity(button: int) -> void:
-	var maximum: int = Gen2WorldMartHost.MAX_ITEM_STACK
+	var maximum: int = Gen2WorldPack.MAX_ITEM_STACK
 	match button:
 		PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT:
 			_mart_quantity = Gen2WorldQuantityPrompt.stepped(
@@ -1175,7 +1177,7 @@ func _buy_mart_selection() -> void:
 		var reason: StringName = StringName(purchase.get("reason", &""))
 		var slot: String = {
 			&"insufficient_money": "no_money", &"item_stack_full": "pack_full",
-			&"bargain_item_sold_out": "sold_out",
+			&"pocket_full": "pack_full", &"bargain_item_sold_out": "sold_out",
 		}.get(reason, "")
 		if slot.is_empty():
 			_status = "Purchase failed: %s" % String(reason)
@@ -1929,12 +1931,11 @@ func _confirm_pc_item() -> void:
 		_:
 			applied = Gen2WorldPC.toss(_world, _save, item, _pc_quantity, _persist)
 	if not bool(applied.get("ok", false)):
-		## `.PackFull` and `.NoRoomInPC` are the two the source has a box for;
-		## everything else is a refusal it never reaches.
+		## `.PackFull` and `.NoRoomInPC` are the two the source has a box for.
 		var reason: StringName = StringName(applied.get("reason", &""))
 		_status = {
 			&"pc_full": "no_room_deposit", &"pack_full": "no_room_withdraw",
-			&"item_stack_full": "no_room_withdraw",
+			&"item_stack_full": "no_room_withdraw", &"pocket_full": "no_room_withdraw",
 		}.get(reason, "")
 		_status = _data.pokecenter_pc_text(_status) if not _status.is_empty() \
 			else "Refused: %s" % String(reason)
