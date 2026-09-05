@@ -519,10 +519,15 @@ func _build_world() -> void:
 			_data, map_group, map_number, start_cell, saveless_state, save_rules
 		)
 	else:
+		## Both by the running cartridge's own numbering: Crystal's Old Rod and
+		## Poke Ball are a Dire Hit and a Town Map on Generation 1.
+		var generation: int = _data.generation
 		var development_state := Gen2WorldState.new(
 			{}, {}, {
-				Gen2WorldInventory.ITEM_OLD_ROD: 1,
-				Gen2WorldPartyHost.ITEM_POKE_BALL: 1,
+				Gen2WorldInventory.item_for_rod(
+					Gen2WorldEncounter.METHOD_OLD_ROD, generation
+				): 1,
+				Gen2WorldPartyHost.capture_ball_items(generation)[0]: 1,
 			}
 		)
 		## `InitDecorations` runs at new game, so a world the screen builds
@@ -3724,6 +3729,21 @@ func preview_pack_use() -> void:
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
 		return
 	_start_menu_host.handle_button(PokeButton.A)
+
+
+## Public screenshot driver for the bag itself, which no map cell opens: the
+## rows are granted on an injected save so nothing persists, and the caller names
+## them because the two generations share no item number.
+func preview_pack(rows: Dictionary) -> void:
+	if _world == null or _data == null or _start_menu_host != null:
+		return
+	_injected_save = _embedded_party_save()
+	_world.state.apply_changes({}, {}, {"items": rows})
+	_open_start_menu()
+	if _start_menu_host == null:
+		return
+	if _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
+		_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot driver for a field evolution, which is the pack's USE on a

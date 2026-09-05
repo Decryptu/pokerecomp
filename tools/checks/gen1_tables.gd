@@ -59,6 +59,29 @@ const PINNED_EFFECTS: Dictionary = {
 	92: [33, 0], 101: [87, 0], 149: [88, 1],
 }
 
+## What `StartMenu_Item`'s three tables come to over the whole 250-row table:
+## `KeyItemFlags`' own 31 rows with the five HMs behind `IsItemHM`, the Bicycle
+## and `UsableItems_CloseMenu` quitting the menu, and `UsableItems_PartyMenu`
+## with all 55 machines opening the party list. Identical on all three.
+const KEY_ITEM_COUNT: int = 36
+const FIELD_MENU_CENSUS: Dictionary = {
+	Gen2Layout.ITEMMENU_CLOSE: 7,
+	Gen2Layout.ITEMMENU_PARTY: 91,
+	Gen2Layout.ITEMMENU_CURRENT: 152,
+}
+## One row of each shape: the item, its field menu and whether `IsKeyItem` says
+## yes. The Town Map and the Poke Ball are both `call UseItem` rows, one of them
+## a key item and one not.
+const PINNED_ITEM_ATTRIBUTES: Dictionary = {
+	0x04: [Gen2Layout.ITEMMENU_CURRENT, false],
+	0x05: [Gen2Layout.ITEMMENU_CURRENT, true],
+	0x06: [Gen2Layout.ITEMMENU_CLOSE, true],
+	0x14: [Gen2Layout.ITEMMENU_PARTY, false],
+	0x4E: [Gen2Layout.ITEMMENU_CLOSE, true],
+	0xC4: [Gen2Layout.ITEMMENU_PARTY, true],
+	0xC9: [Gen2Layout.ITEMMENU_PARTY, false],
+}
+
 ## `TechnicalMachines`: TM01 through TM05, then the five HMs.
 const PINNED_TMS: Array[int] = [5, 13, 14, 18, 25]
 const PINNED_HMS: Array[int] = [15, 19, 57, 70, 148]
@@ -274,7 +297,36 @@ func _items() -> void:
 	_r.check(int(data.item(ITEM_TABLE_COUNT)["price"]) == 2000, "TM50 is not 2000")
 	_r.check(String(data.item(Gen1Layout.ITEM_COUNT + 1)["name"]).is_empty(),
 		"$54 has a name")
+	_item_attributes(data)
 	_r.note("%d named items in a table of %d" % [ITEM_COUNT, ITEM_TABLE_COUNT])
+
+
+## The three tables `StartMenu_Item` reads a row's own behaviour out of, swept
+## over the whole table: one bag pocket, nothing registered on SELECT, and a
+## field menu that is one of the three the ladder can answer.
+func _item_attributes(data: GameData) -> void:
+	var keys: int = 0
+	var census: Dictionary = {}
+	for number: int in range(1, ITEM_TABLE_COUNT + 1):
+		var item: Dictionary = data.item(number)
+		var menu: int = int(item["field_menu"])
+		census[menu] = int(census.get(menu, 0)) + 1
+		if not Gen2WorldPack.can_toss(data, number):
+			keys += 1
+		_r.check(int(item["pocket"]) == Gen1Layout.BAG_POCKET,
+			"item %d is in pocket %d" % [number, item["pocket"]])
+		_r.check(not Gen2WorldPack.can_select(data, number),
+			"item %d can be registered" % number)
+	_r.check(keys == KEY_ITEM_COUNT, "%d key items, expected %d" % [keys, KEY_ITEM_COUNT])
+	_r.check(census == FIELD_MENU_CENSUS, "field menus read %s" % str(census))
+	for number: int in PINNED_ITEM_ATTRIBUTES:
+		var pinned: Array = PINNED_ITEM_ATTRIBUTES[number]
+		_r.check(int(data.item(number)["field_menu"]) == int(pinned[0]),
+			"item %d has field menu %d" % [number, data.item(number)["field_menu"]])
+		_r.check(Gen2WorldPack.can_toss(data, number) != bool(pinned[1]),
+			"item %d is tossable %s" % [number, not bool(pinned[1])])
+	_r.check(Gen2WorldPack.pocket_order(data).size() == 1,
+		"the Generation 1 bag cycles through %d pockets" % Gen2WorldPack.pocket_order(data).size())
 
 
 func _tmhm() -> void:
@@ -294,6 +346,22 @@ func _tmhm() -> void:
 	_r.check(moves.slice(Gen1Layout.TM_COUNT) == PINNED_HMS, "the HMs read %s" % str(
 		moves.slice(Gen1Layout.TM_COUNT)
 	))
+	## `GetMachineName` counts the HMs above the TMs and the item run puts them
+	## below, so every machine must reach its own row through the seam and
+	## nothing else may reach one at all.
+	var reached: Dictionary = {}
+	for number: int in range(1, ITEM_TABLE_COUNT + 1):
+		var row: int = Gen2WorldTMHM.number_for_item(_r.data, number)
+		var machine: bool = number >= Gen1Layout.HM_FIRST_ITEM
+		_r.check(machine == (row > 0), "item %d answers machine row %d" % [number, row])
+		if row > 0:
+			_r.check(not reached.has(row), "two items answer machine row %d" % row)
+			reached[row] = true
+	_r.check(reached.size() == TMHM_COUNT,
+		"%d of %d machines are reached" % [reached.size(), TMHM_COUNT])
+	_r.check(Gen2WorldTMHM.is_hm(Gen1Layout.HM_FIRST_ITEM, RomRegistry.GEN1)
+		and not Gen2WorldTMHM.is_hm(Gen1Layout.TM_FIRST_ITEM, RomRegistry.GEN1),
+		"the HM run does not end at TM01")
 
 
 func _trainers() -> void:

@@ -25,23 +25,36 @@ const TMHM_FLAG_BYTES: int = Gen2Layout.TMHM_BYTES
 
 
 ## AskTeachTMHM's first test, `cp TM01` before anything else: an item below TM01
-## is not a TM or HM and the prompt never appears.
-static func is_tm_hm(item: int) -> bool:
+## is not a TM or HM and the prompt never appears. Generation 1 numbers the two
+## runs the other way up, five HMs at $C4 with the fifty TMs above them, so the
+## comparison is its own.
+static func is_tm_hm(item: int, generation: int = RomRegistry.GEN2) -> bool:
+	if generation == RomRegistry.GEN1:
+		return Gen1Layout.machine_number(item) > 0
 	return item >= ITEM_TM01 and item <= ITEM_BYTE_MAX
 
 
 ## IsHM, which TeachTMHM asks before ConsumeTM: an HM is never used up.
-static func is_hm(item: int) -> bool:
+static func is_hm(item: int, generation: int = RomRegistry.GEN2) -> bool:
+	if generation == RomRegistry.GEN1:
+		return Gen1Layout.is_hm_item(item)
 	return item >= ITEM_HM01 and item <= ITEM_BYTE_MAX
+
+
+## GetTMHMNumber: the one-based `TMHMMoves` row [param item] names, or 0. The one
+## place either generation's numbering is turned into a row.
+static func number_for_item(data: GameData, item: int) -> int:
+	if data == null:
+		return 0
+	if data.generation == RomRegistry.GEN1:
+		return Gen1Layout.machine_number(item)
+	return Gen2Layout.tmhm_number_for_item(item, data.tmhm_moves().size())
 
 
 ## GetTMHMItemMove: the move [param item] teaches, or 0 when it is not a TM/HM
 ## this cartridge carries.
 static func move_for_item(data: GameData, item: int) -> int:
-	if data == null or not is_tm_hm(item):
-		return 0
-	var number: int = Gen2Layout.tmhm_number_for_item(item, data.tmhm_moves().size())
-	return data.tmhm_move(number)
+	return data.tmhm_move(number_for_item(data, item)) if data != null else 0
 
 
 ## CanLearnTMHMMove: the species' own flag bit for the TM/HM that teaches
@@ -87,13 +100,14 @@ static func teach_prompt(data: GameData, item: int) -> Dictionary:
 	if move <= 0:
 		return {"ok": false, "reason": &"not_a_tm_hm", "item": item}
 	var move_name: String = String(data.move(move).get("name", "MOVE"))
-	var booted: String = "Booted up an HM." if is_hm(item) else "Booted up a TM."
+	var hm: bool = is_hm(item, data.generation)
+	var booted: String = "Booted up an HM." if hm else "Booted up a TM."
 	return {
 		"ok": true,
 		"item": item,
 		"move": move,
 		"move_name": move_name,
-		"hm": is_hm(item),
+		"hm": hm,
 		"text": "%s It contained %s. Teach %s to a #MON?" % [booted, move_name, move_name],
 	}
 

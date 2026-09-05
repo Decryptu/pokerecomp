@@ -308,6 +308,7 @@ const ITEM_ATTRIBUTE_POCKET: int = 5
 const ITEM_ATTRIBUTE_HELP: int = 6
 ## The item attribute table calls this field a pocket, but its value is the
 ## cartridge's item type: ITEM=1, KEY_ITEM=2, BALL=3, TM_HM=4.
+const ITEM_POCKET_ITEM: int = 1
 const ITEM_POCKET_BALL: int = 3
 const ITEMMENU_NOUSE: int = 0
 const ITEMMENU_CURRENT: int = 4

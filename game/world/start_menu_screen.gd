@@ -141,6 +141,19 @@ const TEXT_TOSS_ASK: String = "toss_ask"
 const TEXT_TOSS_ASK_QUANTITY: String = "toss_ask_quantity"
 const TEXT_TOSS_THREW: String = "toss_threw"
 
+## `TossItem_`'s refusal. Generation 2 never reaches it: TOSS is not in its
+## submenu for an item `_CheckTossableItem` refuses.
+const TEXT_TOO_IMPORTANT: String = "too_important"
+## The same four boxes on Generation 1, which keeps them in
+## `engine/items/item_effects.asm` rather than in a pack of its own.
+## `AskQuantityThrowAwayText` has no counterpart: the dial opens over no question.
+const GEN1_PACK_TEXTS: Dictionary = {
+	TEXT_OAK: ["item_use", "not_time"],
+	TEXT_TOSS_ASK_QUANTITY: ["toss", "ok_to_toss"],
+	TEXT_TOSS_THREW: ["toss", "threw_away"],
+	TEXT_TOO_IMPORTANT: ["toss", "too_important"],
+}
+
 ## What each reads on a cache imported before the texts were, which is the only
 ## way any of these is ever seen. Verbatim from data/text/common_2.asm.
 const TEXT_FALLBACKS: Dictionary = {
@@ -165,6 +178,10 @@ const YES_NO_SPAN: Vector2i = Vector2i(5, 4)
 ## `TossItem_MenuHeader`: `menu_coords 15, 9, SCREEN_WIDTH - 1, TEXTBOX_Y - 1`.
 const TOSS_QUANTITY_AT: Vector2i = Vector2i(15, 9)
 const TOSS_QUANTITY_TO: Vector2i = Vector2i(19, 11)
+## `USE_TOSS_MENU_TEMPLATE` (`data/text_boxes.asm`), Generation 1's whole item
+## submenu, with `wTopMenuItemX` on column 14 and its two rows one apart.
+const GEN1_ITEM_MENU_AT: Vector2i = Vector2i(13, 10)
+const GEN1_ITEM_MENU_TO: Vector2i = Vector2i(19, 14)
 ## `STATICMENU_CURSOR | STATICMENU_NO_TOP_SPACING`, which every one of them sets.
 const SUBMENU_FLAGS: int = (
 	Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
@@ -198,6 +215,10 @@ var _pack_cursors: Array[int] = [0, 0, 0, 0]
 ## or -1 for `SwitchItemsInBag`' own zero.
 var _pack_switch: int = -1
 var _pack_page: Gen2PackPage = null
+## Generation 1's pack is the shop's own `DisplayListMenuID` box and the
+## overworld's `MenuTextbox` over the map.
+var _mart_page: Gen2MartPage = null
+var _service_page: Gen2WorldServicePage = null
 var _pack_result_ok: bool = false
 ## `PrintText` waits per page, so a result longer than the box's two rows is
 ## pressed through rather than cut off at the frame.
@@ -399,6 +420,10 @@ func _select_pack_item(item: int) -> bool:
 				continue
 			_pack_pocket_index = pocket_index
 			_pack_cursor = index
+			## `wListScrollOffset`: a row past the window draws no cursor.
+			_pack_scroll[pocket_index] = clampi(
+				index - (_pack_cursor_rows() - 1), 0, index
+			)
 			_render_pack()
 			return true
 	return false
@@ -957,6 +982,21 @@ func _open_pack_mode(reset: bool = true) -> void:
 	_render_pack()
 
 
+## `DisplayListMenuID`'s one list rather than `engine/items/pack.asm`'s pockets.
+func _gen1_pack() -> bool:
+	return _data != null and _data.generation == RomRegistry.GEN1
+
+
+## `wMaxMenuItem` against `ScrollingMenu_InitFlags`' own row count.
+func _pack_cursor_rows() -> int:
+	return Gen2MartPage.GEN1_CURSOR_ROWS if _gen1_pack() else Gen2PackPage.LIST_HEIGHT
+
+
+## `PrintListMenuEntries` prints four names against a `wMaxMenuItem` of 2.
+func _pack_drawn_rows() -> int:
+	return Gen2MartPage.GEN1_LIST_HEIGHT if _gen1_pack() else Gen2PackPage.LIST_HEIGHT
+
+
 func _current_pocket() -> Dictionary:
 	if _pack_pockets.is_empty():
 		return {}
@@ -971,7 +1011,8 @@ func _current_pocket_items() -> Array:
 ## `w*PocketCursor` and `w*PocketScrollPosition` on the way out and loads them
 ## again on the way in, so a pocket is where the player left it.
 func _cycle_pocket(delta: int) -> void:
-	if _pack_pockets.is_empty():
+	## Generation 1's list menu watches left and right and answers neither.
+	if _pack_pockets.is_empty() or _gen1_pack():
 		return
 	## `.switching_item` answers left and right with a plain carry, so the pocket
 	## cannot be changed while a row is held.
@@ -992,13 +1033,17 @@ func _cycle_pocket(delta: int) -> void:
 ## past the last item, which is what makes the walk wrap over `size + 1`.
 func _move_pack_cursor(delta: int) -> void:
 	var rows: int = _current_pocket_items().size() + 1
-	_pack_cursor = wrapi(_pack_cursor + signi(delta), 0, rows)
+	var height: int = _pack_cursor_rows()
+	var next: int = _pack_cursor + signi(delta)
+	## `DisplayListMenuID` sets `wMenuWatchMovingOutOfBounds`, so a move past
+	## either end scrolls `wListScrollOffset` and leaves the cursor where it was.
+	_pack_cursor = clampi(next, 0, rows - 1) if _gen1_pack() else wrapi(next, 0, rows)
 	_pack_scroll[_pack_pocket_index] = clampi(
 		clampi(
 			_pack_scroll[_pack_pocket_index],
-			_pack_cursor - (Gen2PackPage.LIST_HEIGHT - 1), _pack_cursor
+			_pack_cursor - (height - 1), _pack_cursor
 		),
-		0, maxi(rows - Gen2PackPage.LIST_HEIGHT, 0)
+		0, maxi(rows - height, 0)
 	)
 	_render_pack()
 
@@ -1019,6 +1064,8 @@ func _pack_rows() -> Array:
 		int(_current_pocket().get("pocket", 0)),
 		_current_pocket_items(),
 		_pack_scroll[_pack_pocket_index],
+		true,
+		_pack_drawn_rows(),
 	)
 
 
@@ -1026,6 +1073,8 @@ func _pack_rows() -> Array:
 ## own description, and the TM/HM pocket the move's; a cursor on CANCEL leaves
 ## the box empty, which is what `TMHM_CheckHoveringOverCancel` does.
 func _pack_image() -> Image:
+	if _gen1_pack():
+		return _gen1_pack_image()
 	if _pack_page == null:
 		_pack_page = Gen2PackPage.from_data(_data)
 	if _pack_page == null:
@@ -1033,6 +1082,37 @@ func _pack_image() -> Image:
 	return _pack_page.image(
 		_data, _pack_map(_pack_description()), _pack_pocket_index, _player_is_female()
 	)
+
+
+## `StartMenu_Item` never leaves the map: the framed list, the box a chosen row
+## opens, `DisplayChooseQuantityMenu`'s dial and whatever `PrintText` last wrote
+## all stand over it. [param quantity] is the dial's number, or -1 for no dial.
+func _gen1_pack_image(actions: Array = [], quantity: int = -1) -> Image:
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
+	if _mart_page == null:
+		_mart_page = Gen2MartPage.from_data(_data)
+	if _service_page == null or _mart_page == null:
+		return null
+	var scroll: int = _pack_scroll[_pack_pocket_index]
+	var image: Image = _mart_page.render_gen1_pack({
+		"rows": _pack_rows(),
+		"cursor": _pack_cursor - scroll,
+		"held": _pack_switch - scroll if _pack_switch >= 0 else -1,
+		"quantity": quantity,
+	})
+	if image == null:
+		return null
+	var over: Image = _service_page.render(
+		"", "", actions, _item_cursor, box_text(),
+		Gen2MenuBox.from_coords(
+			GEN1_ITEM_MENU_AT.x, GEN1_ITEM_MENU_AT.y,
+			GEN1_ITEM_MENU_TO.x, GEN1_ITEM_MENU_TO.y, SUBMENU_FLAGS
+		)
+	)
+	if over != null:
+		image.blend_rect(over, Rect2i(Vector2i.ZERO, over.get_size()), Vector2i.ZERO)
+	return image
 
 
 ## The pocket listing's own tilemap with [param text] in its description box,
@@ -1049,6 +1129,21 @@ func _pack_map(text: String) -> PackedInt32Array:
 ## The pack's screen with one of its `MENU_BACKUP_TILES` boxes over it.
 ## [param draw_page] writes tiles into the map the pack just built, so the box wears
 ## the attrmap `_CGB_PackPals` left rather than being a layer of its own.
+## `TossItem_`'s `hlcoord 14, 7`, the box `_YesNoBox` opens on Generation 2.
+func _blend_gen1_yes_no(image: Image, cursor_index: int) -> void:
+	if _service_page == null:
+		return
+	var box: Image = _service_page.render(
+		"", "", YES_NO_OPTIONS, cursor_index, "",
+		Gen2MenuBox.from_coords(
+			YES_NO_AT.x, YES_NO_AT.y,
+			YES_NO_AT.x + YES_NO_SPAN.x, YES_NO_AT.y + YES_NO_SPAN.y, SUBMENU_FLAGS
+		)
+	)
+	if box != null:
+		image.blend_rect(box, Rect2i(Vector2i.ZERO, box.get_size()), Vector2i.ZERO)
+
+
 func _pack_overlay(text: String, draw_page: Callable) -> Image:
 	if _pack_page == null:
 		_pack_page = Gen2PackPage.from_data(_data)
@@ -1063,6 +1158,11 @@ func _pack_overlay(text: String, draw_page: Callable) -> Image:
 ## `YesNoBox` over one of the pack's printed questions, which is what every one
 ## of its confirmations is.
 func _pack_yes_no(text: String, cursor_index: int) -> Image:
+	if _gen1_pack():
+		var image: Image = _gen1_pack_image()
+		if image != null:
+			_blend_gen1_yes_no(image, cursor_index)
+		return image
 	return _pack_overlay(_last_page(text), func(map: PackedInt32Array) -> void:
 		_pack_page.draw_menu(
 			map,
@@ -1109,6 +1209,10 @@ func _pack_result_text() -> String:
 
 
 func _pack_description() -> String:
+	## Generation 1 prints under no list: `DisplayListMenuID` has no description
+	## box and `HandleItemListSwapping` marks its held row with `\u25b7` alone.
+	if _gen1_pack():
+		return ""
 	## `.select` prints `AskItemMoveText` over the description and nothing
 	## reprints one until the item is placed.
 	if _pack_switch >= 0:
@@ -1135,6 +1239,13 @@ func _selected_item() -> Dictionary:
 func _open_item_mode() -> void:
 	var item: Dictionary = _selected_item()
 	if item.is_empty():
+		return
+	## `StartMenu_Item`'s `cp BICYCLE / jp z, .useOrTossItem`: the one row that
+	## opens no submenu, because getting on and off is the only thing it does.
+	if _gen1_pack() and int(item.get("item", 0)) == Gen1Layout.ITEM_BICYCLE:
+		_teaching = false
+		_giving = false
+		_confirm_use()
 		return
 	_mode = Mode.PACK_ITEM
 	## Both are answers the party list ahead is still waiting to give. Leaving
@@ -1332,6 +1443,9 @@ func _confirm_use() -> void:
 	if item.is_empty():
 		return
 	var number: int = int(item.get("item", 0))
+	if _gen1_pack():
+		_confirm_gen1_use(number)
+		return
 	## The TM/HM pocket never reaches `UseItem`'s jumptable: engine/items/pack.asm
 	## gives it its own USE, which runs AskTeachTMHM first.
 	if Gen2WorldPack.pocket_for(_data, number) == Gen2WorldPack.TYPE_TM_HM:
@@ -1363,6 +1477,16 @@ func _confirm_use() -> void:
 			_use_field_item(number)
 		_:
 			_show_pack_result(_pack_text(TEXT_OAK), false)
+
+
+## `UseItem`'s jumptable on Generation 1. Neither `DisplayPartyMenu` nor the
+## `ItemUse*` routine behind it is built, so `.Party` and `.Current` answer
+## `ItemUseNotTime` the way a `.Field` row with no effect does.
+func _confirm_gen1_use(item: int) -> void:
+	if Gen2WorldPack.field_use_kind(_data, item) == Gen2WorldPack.ITEMMENU_CLOSE:
+		_use_field_item(item)
+		return
+	_show_pack_result(_pack_text(TEXT_OAK), false)
 
 
 ## `.Field`: `DoItemEffect` and then `wItemEffectSucceeded`. The effects that run
@@ -1403,7 +1527,7 @@ func _resolve_field_item(item: int) -> Dictionary:
 				_world.inventory.change_item_quantity(item, -1)
 			request["warp"] = escaped
 		Gen2WorldPack.FIELD_EFFECT_ROD:
-			var rod: StringName = Gen2WorldInventory.rod_for_item(item)
+			var rod: StringName = Gen2WorldInventory.rod_for_item(item, _data.generation)
 			if not bool(_world.fishing_check(rod).get("ok", false)):
 				return {"ok": false}
 			request["rod"] = rod
@@ -1869,8 +1993,17 @@ func _open_toss_quantity() -> void:
 	var item: Dictionary = _selected_item()
 	if item.is_empty():
 		return
+	var number: int = int(item.get("item", 0))
+	## `USE_TOSS_MENU_TEMPLATE` is one box for every item, so `TossItem_` refuses
+	## a key item and an HM after the row is chosen and past `.skipAskingQuantity`.
+	if not Gen2WorldPack.can_toss(_data, number):
+		_show_pack_result(_pack_text(TEXT_TOO_IMPORTANT), false)
+		return
 	_mode = Mode.PACK_TOSS_QUANTITY
-	_toss_prompt = Gen2WorldQuantityPrompt.open(int(item.get("quantity", 1)))
+	_toss_prompt = Gen2WorldQuantityPrompt.open(
+		int(item.get("quantity", 1)),
+		_data.generation if _data != null else RomRegistry.GEN2
+	)
 	_render_toss_quantity()
 
 
@@ -1995,6 +2128,10 @@ func _coins() -> int:
 ## own line breaks are kept: these boxes are the hardware's now, and a break is
 ## where the cartridge ended the row.
 func _pack_text(key: String) -> String:
+	if _gen1_pack():
+		var run: Array = GEN1_PACK_TEXTS.get(key, [])
+		return "" if run.is_empty() \
+			else _data.special_text(String(run[0]), String(run[1]))
 	var text: String = _data.menu_text(key) if _data != null else ""
 	if text.is_empty():
 		text = String(TEXT_FALLBACKS.get(key, ""))
@@ -2306,10 +2443,13 @@ func box_text() -> String:
 		Mode.PACK_STOP_LEARNING:
 			return Gen2MoveForget.stop_text(_forget_move_name)
 		Mode.PACK_TOSS_CONFIRM:
+			## `IsItOKToTossItemText` names the item and no count, where
+			## `AskQuantityThrowAwayText` prints both.
 			return _fill_item_text(
 				_pack_text(TEXT_TOSS_ASK_QUANTITY),
 				String(_selected_item().get("name", "")),
-				_toss_prompt.value if _toss_prompt != null else 1
+				-1 if _gen1_pack() \
+					else (_toss_prompt.value if _toss_prompt != null else 1)
 			)
 		Mode.PACK_GIVE_SWAP:
 			return _swap_question
@@ -2358,7 +2498,8 @@ func _hardware_image() -> Image:
 		Mode.PACK_FORGET, Mode.PACK_PP_MOVE:
 			return _move_list_image()
 		Mode.PACK_RESULT:
-			return _pack_overlay(box_text(), Callable())
+			return _gen1_pack_image() if _gen1_pack() \
+				else _pack_overlay(box_text(), Callable())
 		Mode.PACK_TARGET:
 			return _target_image()
 		Mode.FIELD_MOVES:
@@ -2384,12 +2525,16 @@ func _item_menu_image() -> Image:
 	var labels: Array = []
 	for entry: Dictionary in _item_actions:
 		labels.append(String(entry.get("label", "")))
+	if _gen1_pack():
+		return _gen1_pack_image(labels)
 	return _pack_overlay(box_text(), func(map: PackedInt32Array) -> void:
 		_pack_page.draw_menu(map, _item_menu_box(labels.size()), labels, _item_cursor)
 	)
 
 
 func _toss_quantity_image() -> Image:
+	if _gen1_pack():
+		return _gen1_pack_image([], _toss_prompt.value if _toss_prompt != null else 1)
 	return _pack_overlay(box_text(), func(map: PackedInt32Array) -> void:
 		_pack_page.draw_quantity(
 			map,

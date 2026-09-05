@@ -299,6 +299,17 @@ const ITEM_GREAT_BALL: int = 0x03
 const ITEM_POKE_BALL: int = 0x04
 const ITEM_SAFARI_BALL: int = 0x08
 
+## The other `ItemUsePtrTable` rows the pack reaches, by `item_constants.asm`'s
+## own numbering, which is not Crystal's anywhere.
+const ITEM_BICYCLE: int = 0x06
+const ITEM_ESCAPE_ROPE: int = 0x1D
+## `IsItemInBag COIN_CASE`, which `CeladonPrizeMenu` opens on.
+const ITEM_COIN_CASE: int = 0x45
+const ITEM_ITEMFINDER: int = 0x47
+const ITEM_OLD_ROD: int = 0x4C
+const ITEM_GOOD_ROD: int = 0x4D
+const ITEM_SUPER_ROD: int = 0x4E
+
 ## `ItemUseBall`'s three per-ball numbers: the ceiling Rand1 is rerolled above,
 ## `BallFactor` and `BallFactor2`. SAFARI_BALL takes the fall-through below.
 const BALL_ROLL: Dictionary = {
@@ -392,8 +403,6 @@ const TEXT_SCRIPT_CABLE_CLUB: int = 0xF6
 const TEXT_SCRIPT_VENDING_MACHINE: int = 0xF5
 const TEXT_SCRIPT_PRIZE_VENDOR: int = 0xF7
 
-## `IsItemInBag COIN_CASE`, which `CeladonPrizeMenu` opens on.
-const ITEM_COIN_CASE: int = 0x45
 
 ## `CeladonPrizeMenu`'s two stub runs, which are not one: the unreferenced
 ## `HereYouGoText` between them moves on Yellow.
@@ -470,6 +479,15 @@ const MART_TEXT_AT: Dictionary = {
 const POKECENTER_TEXT_AT: Dictionary = {
 	"welcome": 0x00, "shall_we_heal": 0x05, "need_your_pokemon": 0x0B,
 	"fighting_fit": 0x10, "farewell": 0x15,
+}
+
+## `engine/items/item_effects.asm`'s two runs the pack prints from: the three
+## refusals `ItemUseFailed` reaches and `TossItem_`'s own three.
+const ITEM_USE_TEXT_AT: Dictionary = {
+	"not_time": 0x00, "not_yours": 0x05, "no_effect": 0x0A,
+}
+const TOSS_TEXT_AT: Dictionary = {
+	"threw_away": 0x00, "ok_to_toss": 0x05, "too_important": 0x0A,
 }
 
 ## `MapHeaderPointers` is flat: one `dw` a map id, with `MapHeaderBanks` beside
@@ -603,6 +621,19 @@ const SCRIPT_OPERAND_HL: int = 6
 const EVENT_FLAG_BYTES: int = 320
 ## `BAG_ITEM_CAPACITY`: one list of slots, not four pockets.
 const BAG_ITEM_CAPACITY: int = 20
+## The one type byte every Generation 1 item wears, so the shared pack draws the
+## bag as the single `DisplayListMenuID` list `engine/menus/start_sub_menus.asm`
+## opens.
+const BAG_POCKET: int = Gen2Layout.ITEM_POCKET_ITEM
+
+## `KeyItemFlags` (`data/items/key_items.asm`): `dbit` writes item `n + 1` into
+## bit `n % 8` of byte `n / 8`, `(NUM_ITEMS + 7) / 8` bytes in all.
+const KEY_ITEM_FLAG_BYTES: int = 11
+## `UsableItems_PartyMenu` and `UsableItems_CloseMenu`, each a run of item
+## numbers ending in `-1`. The guard is the whole item table: a longer run means
+## the offset is wrong.
+const USABLE_ITEMS_END: int = 0xFF
+const USABLE_ITEMS_MAX: int = ITEM_COUNT
 ## `MAX_WARP_EVENTS`, `MAX_BG_EVENTS` and `MAX_OBJECT_EVENTS`.
 const MAX_WARP_EVENTS: int = 32
 const MAX_SIGN_EVENTS: int = 16
@@ -765,6 +796,11 @@ const RED_BLUE: Dictionary = {
 	"item_names": 0x0472B,
 	"item_prices": 0x04608,
 	"tm_prices": 0x7BFA7,
+	"key_item_flags": 0x0E799,
+	"usable_items_party": 0x13434,
+	"usable_items_close": 0x13459,
+	"item_use_text": 0x0E5C0,
+	"toss_text": 0x0E755,
 	"tmhm_moves": 0x13773,
 	"mon_palettes": 0x725C8,
 	"super_palettes": 0x72660,
@@ -866,6 +902,11 @@ const YELLOW: Dictionary = {
 	"item_names": 0x045B7,
 	"item_prices": 0x04494,
 	"tm_prices": 0xF65F5,
+	"key_item_flags": 0x0E6DD,
+	"usable_items_party": 0x11FDE,
+	"usable_items_close": 0x12003,
+	"item_use_text": 0x0E4FF,
+	"toss_text": 0x0E699,
 	"tmhm_moves": 0x1232D,
 	"mon_palettes": 0x72921,
 	"super_palettes": 0x729B9,
@@ -1033,6 +1074,23 @@ static func facility_text_offset(
 	if at <= 0 or not slots.has(name):
 		return -1
 	return at + int(slots[name])
+
+
+## `IsItemHM`, and the TM run that follows the five HMs in the item numbering.
+static func is_hm_item(item: int) -> bool:
+	return item >= HM_FIRST_ITEM and item < TM_FIRST_ITEM
+
+
+static func is_tm_item(item: int) -> bool:
+	return item >= TM_FIRST_ITEM and item < TM_FIRST_ITEM + TM_COUNT
+
+
+## `TechnicalMachines`' own one-based row for [param item], or 0. The item
+## numbering puts the HMs under the TMs and the table has them the other way up.
+static func machine_number(item: int) -> int:
+	if is_tm_item(item):
+		return item - TM_FIRST_ITEM + 1
+	return TM_COUNT + item - HM_FIRST_ITEM + 1 if is_hm_item(item) else 0
 
 
 static func item_price_offset(layout: Dictionary, item: int) -> int:

@@ -213,3 +213,22 @@ func test_teach_prompt_names_the_move_and_distinguishes_a_tm_from_an_hm() -> voi
 	var ordinary: Dictionary = Gen2WorldTMHM.teach_prompt(data, 0x12)
 	assert_false(ordinary["ok"])
 	assert_eq(StringName(ordinary["reason"]), &"not_a_tm_hm")
+
+
+## `GetMachineName` and `GetMachinePrice` put HM01 at $C4 and TM01 at $C9 with no
+## dummy rows between them, and `TechnicalMachines` still lists the fifty TMs
+## first, so an item's own row is the inverse of Crystal's arrangement.
+func test_generation_1_numbers_the_two_runs_the_other_way_up() -> void:
+	var data: GameData = _data()
+	data.generation = RomRegistry.GEN1
+	for pair: Array in [[0xC4, 51], [0xC8, 55], [0xC9, 1], [0xFA, 50]]:
+		assert_eq(
+			Gen2WorldTMHM.number_for_item(data, int(pair[0])), int(pair[1]),
+			"item $%02x" % int(pair[0])
+		)
+	assert_eq(Gen2WorldTMHM.number_for_item(data, 0xC3), 0)
+	assert_eq(Gen2WorldTMHM.number_for_item(data, 0xFB), 0)
+	assert_true(Gen2WorldTMHM.is_hm(0xC8, RomRegistry.GEN1))
+	assert_false(Gen2WorldTMHM.is_hm(0xC9, RomRegistry.GEN1))
+	assert_true(Gen2WorldTMHM.is_tm_hm(0xFA, RomRegistry.GEN1))
+	assert_false(Gen2WorldTMHM.is_tm_hm(0xC3, RomRegistry.GEN1))

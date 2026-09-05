@@ -114,9 +114,21 @@ const GEN1_LIST_HEIGHT: int = 4
 const GEN1_CURSOR_ROWS: int = 3
 ## A name runs to the box's own border: the price sits a row below it.
 const GEN1_NAME_CELLS: int = GEN1_LIST_AT.x + GEN1_LIST_SIZE.x - 1 - GEN1_NAME_AT.x
+## `PrintListMenuEntries`' other two writes: a count one row below its own name
+## and eight columns right, and the `▼` in the box's bottom-right corner.
+const GEN1_COUNT_COLUMN: int = GEN1_NAME_AT.x + 8
+const GEN1_COUNT_DIGITS: int = 2
+const GEN1_DOWN_ARROW_AT: Vector2i = Vector2i(18, 11)
+## `HandleItemListSwapping`'s own marker, written over the cursor column of the
+## row SELECT is holding.
+const GEN1_HELD_CODE: int = 0xEC
 ## `DisplayChooseQuantityMenu`'s priced branch: `hlcoord 7, 9` with `lb b, 1,
-## c, 11`, the same box Generation 2 draws six rows lower.
+## c, 11`, the same box Generation 2 draws six rows lower. Its unpriced branch is
+## the same row at `hlcoord 15, 9` with `c, 3`, which is what a TOSS asks in.
 const GEN1_QUANTITY_AT: Vector2i = Vector2i(7, 9)
+const GEN1_COUNT_ONLY_AT: Vector2i = Vector2i(15, 9)
+const GEN1_COUNT_ONLY_SIZE: Vector2i = Vector2i(5, 3)
+const GEN1_COUNT_ONLY_TEXT_AT: Vector2i = Vector2i(16, 10)
 
 var font: Gen2Font = null
 ## Which text-box border the player chose, for the three boxes this draws.
@@ -304,6 +316,8 @@ func _blit_gen1_money(image: Image, money: int) -> void:
 	_blit_panel(image, indices, MONEY_SIZE, MONEY_AT)
 
 
+## `wPrintItemPrices` is the one place the two callers of
+## `PrintListMenuEntries` differ, so a row carries a `price` or a `quantity`.
 func _blit_gen1_list(image: Image, state: Dictionary) -> void:
 	var indices: PackedByteArray = _panel(GEN1_LIST_SIZE)
 	var width: int = GEN1_LIST_SIZE.x * TILE
@@ -316,17 +330,68 @@ func _blit_gen1_list(image: Image, state: Dictionary) -> void:
 			_text(indices, width, CANCEL, at)
 			continue
 		_text(indices, width, String(row.get("name", "")), at, GEN1_NAME_CELLS)
-		_text(
-			indices, width, money_string(int(row.get("price", 0))),
-			Vector2i(GEN1_PRICE_COLUMN - GEN1_LIST_AT.x, at.y + 1)
-		)
+		if row.has("price"):
+			_text(
+				indices, width, money_string(int(row["price"])),
+				Vector2i(GEN1_PRICE_COLUMN - GEN1_LIST_AT.x, at.y + 1)
+			)
+		elif row.has("quantity") and bool(row.get("show_quantity", true)):
+			_text(
+				indices, width, "×%s" % String.num_int64(
+					maxi(int(row["quantity"]), 0)
+				).lpad(GEN1_COUNT_DIGITS),
+				Vector2i(GEN1_COUNT_COLUMN - GEN1_LIST_AT.x, at.y + 1)
+			)
+	var cursor_column: int = GEN1_CURSOR_COLUMN - GEN1_LIST_AT.x
+	var first_row: int = GEN1_NAME_AT.y - GEN1_LIST_AT.y
+	var held: int = int(state.get("held", -1))
+	if held >= 0 and held < mini(rows.size(), GEN1_LIST_HEIGHT):
+		_code(indices, width, GEN1_HELD_CODE, Vector2i(
+			cursor_column, first_row + held * ROW_STEP
+		))
 	var cursor: int = int(state.get("cursor", -1))
 	if cursor >= 0 and cursor < mini(rows.size(), GEN1_CURSOR_ROWS):
 		_code(indices, width, CURSOR_CODE, Vector2i(
-			GEN1_CURSOR_COLUMN - GEN1_LIST_AT.x,
-			GEN1_NAME_AT.y - GEN1_LIST_AT.y + cursor * ROW_STEP
+			cursor_column, first_row + cursor * ROW_STEP
 		))
+	## `.printCancelMenuItem` is a `jp PlaceString`: a pass that reached the
+	## terminator returns without writing the arrow.
+	if rows.size() >= GEN1_LIST_HEIGHT \
+		and not bool((rows[GEN1_LIST_HEIGHT - 1] as Dictionary).get("cancel", false)):
+		_code(indices, width, DOWN_ARROW_CODE, GEN1_DOWN_ARROW_AT - GEN1_LIST_AT)
 	_blit_panel(image, indices, GEN1_LIST_SIZE, GEN1_LIST_AT)
+
+
+## `StartMenu_Item`'s screen: the same `DisplayListMenuID` box the shop opens,
+## with counts where the shop prints prices and no money box over it.
+func render_gen1_pack(state: Dictionary) -> Image:
+	if font == null:
+		return null
+	var image := Image.create_empty(
+		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	if bool(state.get("listing", true)):
+		_blit_gen1_list(image, state)
+	if int(state.get("quantity", -1)) >= 0:
+		_blit_gen1_count(image, int(state["quantity"]))
+	return image
+
+
+## `DisplayChooseQuantityMenu`'s unpriced branch, `InitialQuantityText`'s own
+## `×01` in a box five cells wide.
+func _blit_gen1_count(image: Image, quantity: int) -> void:
+	var indices: PackedByteArray = _panel(GEN1_COUNT_ONLY_SIZE)
+	var width: int = GEN1_COUNT_ONLY_SIZE.x * TILE
+	font.draw_box(
+		frame_style, indices, width, 0, 0,
+		GEN1_COUNT_ONLY_SIZE.x, GEN1_COUNT_ONLY_SIZE.y
+	)
+	_text(
+		indices, width,
+		"×%s" % String.num_int64(maxi(quantity, 0)).lpad(GEN1_COUNT_DIGITS, "0"),
+		GEN1_COUNT_ONLY_TEXT_AT - GEN1_COUNT_ONLY_AT
+	)
+	_blit_panel(image, indices, GEN1_COUNT_ONLY_SIZE, GEN1_COUNT_ONLY_AT)
 
 
 ## `VendingMachineMenu`'s box: `TextBoxBorder hlcoord 0, 3` at eight by twelve,

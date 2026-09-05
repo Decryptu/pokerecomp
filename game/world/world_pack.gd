@@ -78,6 +78,10 @@ const SUBMENU_USE_QUIT: Array[StringName] = [ACTION_USE, ACTION_QUIT]
 const SUBMENU_TMHM_USE_GIVE_QUIT: Array[StringName] = [
 	ACTION_USE, ACTION_GIVE, ACTION_QUIT,
 ]
+## `USE_TOSS_MENU_TEMPLATE`, the whole of Generation 1's item submenu: nothing
+## there is held, registered or given away, and `TossItem_` refuses a key item
+## once the row is chosen rather than by leaving TOSS off the box.
+const SUBMENU_USE_TOSS: Array[StringName] = [ACTION_USE, ACTION_TOSS]
 
 const ACTION_LABELS: Dictionary = {
 	ACTION_USE: "USE",
@@ -96,7 +100,7 @@ static func build(data: GameData, state: Gen2WorldState) -> Array:
 	if data == null or state == null:
 		return pockets
 	var owned: Dictionary = state.items()
-	for pocket_type: int in pocket_order():
+	for pocket_type: int in pocket_order(data):
 		var pocket_items: Array = []
 		## The order the map holds, which is the order the items were received:
 		## a cartridge pocket is a packed array `ReceiveItem` appends to, and
@@ -126,9 +130,12 @@ static func build(data: GameData, state: Gen2WorldState) -> Array:
 
 ## The source pocket cycle followed by whatever a mod registered, so a mod pocket
 ## is reached by continuing right past TMs/HMs rather than displacing a
-## cartridge one.
-static func pocket_order() -> Array[int]:
+## cartridge one. Generation 1's bag is one `DisplayListMenuID` list with no
+## pockets at all, so it cycles through nothing.
+static func pocket_order(data: GameData = null) -> Array[int]:
 	var order: Array[int] = POCKET_ORDER.duplicate()
+	if data != null and data.generation == RomRegistry.GEN1:
+		order = [TYPE_ITEM] as Array[int]
 	for entry: Dictionary in Gen2ModHost.instance().menu_entries(Gen2ModHost.MENU_PACK_POCKET):
 		var pocket: int = int(entry.get("pocket", 0))
 		if pocket > 0 and not order.has(pocket):
@@ -152,17 +159,19 @@ static func source_pocket_name(data: GameData, item: int) -> String:
 ## rather than the item's name. [param cancel] is the row that closes the pack.
 static func list_rows(
 	data: GameData, pocket_type: int, items: Array, scroll: int = 0,
-	cancel: bool = true
+	cancel: bool = true, height: int = Gen2PackPage.LIST_HEIGHT
 ) -> Array:
 	var tmhm: bool = pocket_type == TYPE_TM_HM
+	var generation: int = data.generation if data != null else RomRegistry.GEN2
 	var out: Array = []
-	for offset: int in Gen2PackPage.LIST_HEIGHT:
+	for offset: int in height:
 		var index: int = scroll + offset
 		if index > items.size():
 			break
 		if index == items.size():
 			if cancel:
-				out.append({"kind": Gen2PackPage.ROW_CANCEL})
+				## `cancel` is the terminator both pages read.
+				out.append({"kind": Gen2PackPage.ROW_CANCEL, "cancel": true})
 			break
 		var entry: Dictionary = items[index]
 		var item: int = int(entry.get("item", 0))
@@ -175,10 +184,8 @@ static func list_rows(
 			"show_quantity": can_toss(data, item),
 		}
 		if tmhm:
-			var number: int = Gen2Layout.tmhm_number_for_item(
-				item, data.tmhm_moves().size() if data != null else 0
-			)
-			var hm: bool = Gen2WorldTMHM.is_hm(item)
+			var number: int = Gen2WorldTMHM.number_for_item(data, item)
+			var hm: bool = Gen2WorldTMHM.is_hm(item, generation)
 			row["kind"] = Gen2PackPage.ROW_TM
 			row["hm"] = hm
 			row["number"] = number - Gen2Layout.TMHM_TM_COUNT if hm else number
@@ -194,7 +201,7 @@ static func list_rows(
 static func row_description(data: GameData, item: int) -> String:
 	if data == null or item <= 0:
 		return ""
-	if Gen2WorldTMHM.is_tm_hm(item):
+	if Gen2WorldTMHM.is_tm_hm(item, data.generation):
 		return String(data.move(Gen2WorldTMHM.move_for_item(data, item)).get("description", ""))
 	return String(data.item(item).get("description", ""))
 
@@ -288,6 +295,8 @@ static func item_submenu(data: GameData, item: int) -> Array:
 	var definition: Dictionary = data.item(item)
 	if definition.is_empty():
 		return []
+	if data.generation == RomRegistry.GEN1:
+		return _submenu_entries(SUBMENU_USE_TOSS)
 	var tossable: bool = can_toss(data, item)
 	var selectable: bool = can_select(data, item)
 	# CheckItemMenu tests the nibble against zero, not against ITEMMENU_CURRENT,
@@ -303,6 +312,10 @@ static func item_submenu(data: GameData, item: int) -> Array:
 		actions = SUBMENU_USE_GIVE_TOSS_QUIT if can_use else SUBMENU_GIVE_TOSS_QUIT
 	else:
 		actions = SUBMENU_USE_GIVE_TOSS_SELECT_QUIT if can_use else SUBMENU_GIVE_TOSS_SELECT_QUIT
+	return _submenu_entries(actions)
+
+
+static func _submenu_entries(actions: Array[StringName]) -> Array:
 	var entries: Array = []
 	for action: StringName in actions:
 		entries.append({"action": action, "label": String(ACTION_LABELS.get(action, ""))})
@@ -336,6 +349,10 @@ static func can_select(data: GameData, item: int) -> bool:
 ## item pocket and then whatever `CheckTossableItem` refuses, which is the same
 ## pair of tests that decides GIVE is in the submenu at all.
 static func can_hold(data: GameData, item: int) -> bool:
+	## Generation 1 has no held items: `GiveTakePartyMonItem` and the byte it
+	## would write both arrive with Generation 2.
+	if data == null or data.generation == RomRegistry.GEN1:
+		return false
 	if not can_toss(data, item):
 		return false
 	return pocket_for(data, item) != TYPE_KEY_ITEM
@@ -397,6 +414,17 @@ const FIELD_EFFECTS: Dictionary = {
 	ITEM_SACRED_ASH: FIELD_EFFECT_SACRED_ASH,
 	ITEM_SQUIRTBOTTLE: FIELD_EFFECT_SQUIRTBOTTLE,
 }
+## `StartMenu_Item`'s `.useItem_closeMenu` rows in Generation 1's numbering: the
+## Bicycle and `UsableItems_CloseMenu`. The Poke Flute is the one of those with
+## no effect built here, so it lands on `ItemUseNotTime` like any other.
+const GEN1_FIELD_EFFECTS: Dictionary = {
+	Gen1Layout.ITEM_BICYCLE: FIELD_EFFECT_BICYCLE,
+	Gen1Layout.ITEM_ESCAPE_ROPE: FIELD_EFFECT_ESCAPE_ROPE,
+	Gen1Layout.ITEM_ITEMFINDER: FIELD_EFFECT_ITEMFINDER,
+	Gen1Layout.ITEM_OLD_ROD: FIELD_EFFECT_ROD,
+	Gen1Layout.ITEM_GOOD_ROD: FIELD_EFFECT_ROD,
+	Gen1Layout.ITEM_SUPER_ROD: FIELD_EFFECT_ROD,
+}
 
 
 ## The bag rows `BattlePack` can offer, in the pack's own pocket order: every
@@ -421,6 +449,8 @@ static func battle_items(data: GameData, state: Gen2WorldState) -> Array[int]:
 static func field_effect(data: GameData, item: int) -> StringName:
 	if field_use_kind(data, item) != ITEMMENU_CLOSE:
 		return FIELD_EFFECT_NONE
+	if data.generation == RomRegistry.GEN1:
+		return GEN1_FIELD_EFFECTS.get(item, FIELD_EFFECT_NONE)
 	return FIELD_EFFECTS.get(item, FIELD_EFFECT_NONE)
 
 

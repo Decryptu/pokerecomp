@@ -399,3 +399,25 @@ func test_a_registered_entry_can_be_absent_rather_than_refused() -> void:
 	assert_false(_kinds(Gen2WorldStartMenu.build(0, false, false)).has(&"pc"))
 	assert_true(_kinds(Gen2WorldStartMenu.build(1, false, false)).has(&"pc"))
 	Gen2ModHost.reset()
+
+
+## `DrawStartMenu`'s own list: no Pokegear, no contest, POKéMON drawn whatever
+## `wPartyCount` says, and only `EVENT_GOT_POKEDEX` gating anything.
+func test_the_generation_1_list_is_draw_start_menus_own() -> void:
+	var menu: Gen2WorldStartMenu = Gen2WorldStartMenu.build(
+		0, false, true, 0, "", false, false, RomRegistry.GEN1
+	)
+	assert_eq(_kinds(menu), [
+		Gen2WorldStartMenu.ITEM_POKEMON, Gen2WorldStartMenu.ITEM_PACK,
+		Gen2WorldStartMenu.ITEM_PLAYER, Gen2WorldStartMenu.ITEM_SAVE,
+		Gen2WorldStartMenu.ITEM_OPTION, Gen2WorldStartMenu.ITEM_EXIT,
+		Gen2WorldStartMenu.ITEM_LAUNCHER,
+	])
+	var with_dex: Gen2WorldStartMenu = Gen2WorldStartMenu.build(
+		0, true, false, 0, "", false, false, RomRegistry.GEN1
+	)
+	assert_eq(_kinds(with_dex)[0], Gen2WorldStartMenu.ITEM_POKEDEX)
+	## The labels are the literal characters `db "POKéDEX@"` holds, not the `#`
+	## and `<POKE>` markers Generation 2's charmap draws them with.
+	assert_eq(String((with_dex.items()[0] as Dictionary)["label"]), "POKéDEX")
+	assert_eq(String((with_dex.items()[2] as Dictionary)["label"]), "ITEM")

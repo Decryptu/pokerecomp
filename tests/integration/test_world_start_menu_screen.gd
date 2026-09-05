@@ -2305,3 +2305,150 @@ func _pocket_items(host: Gen2StartMenuScreen) -> Array:
 	for row: Dictionary in host.call("_current_pocket_items"):
 		out.append(int(row.get("item", 0)))
 	return out
+
+
+## Generation 1's own bag: `pokered`'s item numbers for the Bicycle and the Old
+## Rod, and the two `special_text` runs `TossItem_` and `ItemUseFailed` print
+## from, whose `text_ram` slot the item name fills.
+const GEN1_BICYCLE: int = Gen1Layout.ITEM_BICYCLE
+const GEN1_OLD_ROD: int = Gen1Layout.ITEM_OLD_ROD
+const GEN1_POTION: int = 0x14
+const GEN1_TOSS_TEXT: Dictionary = {
+	"threw_away": "Threw away\n<RAM_D036>.",
+	"ok_to_toss": "Is it OK to toss\n<RAM_CF4B>?",
+	"too_important": "That's too impor-\ntant to toss!",
+}
+const GEN1_ITEM_USE_TEXT: Dictionary = {
+	"not_time": "OAK: <PLAYER>!\nThis isn't the\ntime to use that!",
+}
+
+
+## The fixture's items in Generation 1 shape: one bag pocket, nothing
+## registerable, `KeyItemFlags` on the Bicycle and the Old Rod, and
+## `UsableItems_CloseMenu` on the rod.
+func _open_gen1_world() -> void:
+	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
+	for raw: Dictionary in items:
+		var number: int = int(raw.get("number", 0))
+		raw["pocket"] = Gen1Layout.BAG_POCKET
+		raw["permissions"] = Gen2WorldPack.CANT_SELECT
+		raw["field_menu"] = Gen2WorldPack.ITEMMENU_CURRENT
+		match number:
+			GEN1_POTION:
+				raw["name"] = "POTION"
+				raw["field_menu"] = Gen2WorldPack.ITEMMENU_PARTY
+			GEN1_BICYCLE:
+				raw["name"] = "BICYCLE"
+				raw["permissions"] = Gen2WorldPack.CANT_SELECT | Gen2WorldPack.CANT_TOSS
+				raw["field_menu"] = Gen2WorldPack.ITEMMENU_CLOSE
+			GEN1_OLD_ROD:
+				raw["name"] = "OLD ROD"
+				raw["permissions"] = Gen2WorldPack.CANT_SELECT | Gen2WorldPack.CANT_TOSS
+				raw["field_menu"] = Gen2WorldPack.ITEMMENU_CLOSE
+	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
+	var manifest: Dictionary = RomCache.read_manifest(Fixture.directory())
+	manifest["special_text"] = {
+		"toss": GEN1_TOSS_TEXT, "item_use": GEN1_ITEM_USE_TEXT,
+	}
+	RomCache.write_json(RomCache.manifest_path(Fixture.directory()), manifest)
+	_data = GameData.open_directory(Fixture.directory())
+	_data.generation = RomRegistry.GEN1
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {"items": {
+		GEN1_BICYCLE: 1, GEN1_POTION: 3, GEN1_OLD_ROD: 1,
+	}})
+
+
+func _gen1_pack() -> Gen2StartMenuScreen:
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_PACK)
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	return host
+
+
+## `StartMenu_Item` opens one list, and `USE_TOSS_MENU_TEMPLATE` is the only
+## submenu behind a row of it.
+func test_a_generation_1_bag_lists_one_pocket_and_offers_use_and_toss() -> void:
+	await _open_gen1_world()
+	var host: Gen2StartMenuScreen = await _gen1_pack()
+	assert_eq((host.get("_pack_pockets") as Array).size(), 1)
+	var rows: Array = host.call("_current_pocket_items")
+	assert_eq(rows.size(), 4)
+	host.handle_button(PokeButton.A)
+	var actions: Array = []
+	for entry: Dictionary in host.get("_item_actions"):
+		actions.append(StringName(entry.get("action", &"")))
+	assert_eq(actions, [Gen2WorldPack.ACTION_USE, Gen2WorldPack.ACTION_TOSS])
+	## Left and right cycle nothing: `DisplayListMenuID` watches both and answers
+	## neither.
+	host.handle_button(PokeButton.B)
+	host.handle_button(PokeButton.RIGHT)
+	assert_eq(int(host.get("_pack_pocket_index")), 0)
+
+
+## `TossItem_` refuses a key item and an HM once the row is chosen, because the
+## submenu box is the same one for every item.
+func test_a_generation_1_key_item_is_refused_at_the_toss() -> void:
+	await _open_gen1_world()
+	var host: Gen2StartMenuScreen = await _gen1_pack()
+	assert_true(bool(host.call("_select_pack_item", GEN1_OLD_ROD)))
+	_choose_action(host, Gen2WorldPack.ACTION_TOSS)
+	await get_tree().process_frame
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
+	assert_eq(
+		String(host.get("_pack_result")), String(GEN1_TOSS_TEXT["too_important"])
+	)
+	assert_eq(_world_screen._world.state.item_quantity(GEN1_OLD_ROD), 1)
+
+
+## `cp BICYCLE / jp z, .useOrTossItem`: the one row that opens no submenu, so a
+## single A is its whole USE.
+func test_the_generation_1_bicycle_opens_no_submenu() -> void:
+	await _open_gen1_world()
+	var host: Gen2StartMenuScreen = await _gen1_pack()
+	assert_true(bool(host.call("_select_pack_item", GEN1_BICYCLE)))
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	assert_ne(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_ITEM)
+
+
+## `.useItem_partyMenu` opens `DisplayPartyMenu`, which this port has no
+## Generation 1 screen for, so a USE that would reach it says `ItemUseNotTime`
+## rather than opening Generation 2's party list over a Generation 1 map.
+func test_a_generation_1_use_that_reaches_no_effect_says_oaks_line() -> void:
+	await _open_gen1_world()
+	var host: Gen2StartMenuScreen = await _gen1_pack()
+	assert_true(bool(host.call("_select_pack_item", GEN1_POTION)))
+	_choose_action(host, Gen2WorldPack.ACTION_USE)
+	await get_tree().process_frame
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
+	assert_eq(
+		String(host.get("_pack_result")), String(GEN1_ITEM_USE_TEXT["not_time"])
+	)
+
+
+## `DisplayChooseQuantityMenu` opens over no question, `IsItOKToTossItemText`
+## names the item and no count, and `ThrewAwayItemText` follows the removal.
+func test_a_generation_1_toss_asks_no_quantity_question_and_removes_the_row() -> void:
+	await _open_gen1_world()
+	var host: Gen2StartMenuScreen = await _gen1_pack()
+	assert_true(bool(host.call("_select_pack_item", GEN1_POTION)))
+	_choose_action(host, Gen2WorldPack.ACTION_TOSS)
+	await get_tree().process_frame
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TOSS_QUANTITY)
+	assert_eq(host.box_text(), "", "the dial opens over no words at all")
+	## `.waitForKeyPressLoop` reads UP, DOWN, A and B, so left does not page.
+	host.handle_button(PokeButton.LEFT)
+	host.handle_button(PokeButton.UP)
+	assert_eq(int(host.get("_toss_prompt").value), 2)
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TOSS_CONFIRM)
+	assert_eq(host.box_text(), "Is it OK to toss\nPOTION?")
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	assert_eq(String(host.get("_pack_result")), "Threw away\nPOTION.")
+	assert_eq(_world_screen._world.state.item_quantity(GEN1_POTION), 1)
