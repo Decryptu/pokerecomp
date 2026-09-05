@@ -72,8 +72,10 @@ static func complete_runtime_request(
 		return {"ok": true, "handled": true, "results": world.complete_runtime_request(result)}
 	## None of the three reads cartridge data: the landmark, the dial's amount and
 	## whether `TryQuickSave` wrote are the whole answer.
+	## The vending machine joins them: the request carries `VendingPrices` itself.
 	if kind in [
 		&"town_map_requested", &"mom_bank_dial_requested", &"quick_save_requested",
+		&"vending_requested",
 	]:
 		return {
 			"ok": true,

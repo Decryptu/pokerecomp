@@ -156,6 +156,38 @@ static func purchase(
 	}
 
 
+## `VendingMachineMenu`'s purchase: `HasEnoughMoney` refuses first, then
+## `GiveItem`, at the machine's price rather than `ItemPrices`'. The refusal
+## reasons are the shop's, so a caller can pick its box off them.
+static func vend(
+	world: Gen2WorldAPI, save: Gen2SaveData, row: Dictionary, persist: bool = true
+) -> Dictionary:
+	if world == null or world.data == null or world.state == null:
+		return _failure(&"missing_world", {})
+	var item: int = int(row.get("item", 0))
+	var price: int = int(row.get("price", 0))
+	var balance: int = world.state.money(MONEY_ACCOUNT)
+	if price > balance:
+		return _failure(&"insufficient_money", {"item": item, "price": price})
+	var owned: int = world.state.item_quantity(item)
+	if owned + 1 > MAX_ITEM_STACK:
+		return _failure(&"item_stack_full", {"item": item, "owned": owned})
+	var before: Gen2WorldSnapshot = world.snapshot()
+	var applied: Dictionary = world.state.apply_changes({}, {}, {
+		"items": {item: owned + 1},
+		"money": {MONEY_ACCOUNT: balance - price},
+	})
+	if not bool(applied.get("ok", false)):
+		return _failure(&"purchase_state_failed", applied)
+	var committed: Dictionary = Gen2WorldTransaction.run(world, save, before, persist)
+	if not bool(committed.get("ok", false)):
+		return committed
+	return {
+		"ok": true, "item": item, "price": price, "balance": balance - price,
+		"name": world.data.item_name(item),
+	}
+
+
 static func _purchase_refusal(
 	world: Gen2WorldAPI, mart: Dictionary, item: int, quantity: int
 ) -> Dictionary:

@@ -329,6 +329,48 @@ func _blit_gen1_list(image: Image, state: Dictionary) -> void:
 	_blit_panel(image, indices, GEN1_LIST_SIZE, GEN1_LIST_AT)
 
 
+## `VendingMachineMenu`'s box: `TextBoxBorder hlcoord 0, 3` at eight by twelve,
+## `DrinkText` on the menu's rows and `DrinkPriceText` on the rows between them,
+## placed rather than right aligned, which is what fits a price in a box six
+## columns narrower than the shop's. Beside it is `BuyMenu`'s own `MONEY_BOX`.
+const GEN1_VENDING_AT: Vector2i = Vector2i(0, 3)
+const GEN1_VENDING_SIZE: Vector2i = Vector2i(14, 10)
+const GEN1_VENDING_NAME_AT: Vector2i = Vector2i(2, 5)
+const GEN1_VENDING_PRICE_AT: Vector2i = Vector2i(9, 6)
+const GEN1_VENDING_CURSOR_COLUMN: int = 1
+
+
+func render_gen1_vending(state: Dictionary) -> Image:
+	if font == null:
+		return null
+	var image := Image.create_empty(
+		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	_blit_gen1_money(image, int(state.get("money", 0)))
+	var indices: PackedByteArray = _panel(GEN1_VENDING_SIZE)
+	var width: int = GEN1_VENDING_SIZE.x * TILE
+	font.draw_box(
+		frame_style, indices, width, 0, 0, GEN1_VENDING_SIZE.x, GEN1_VENDING_SIZE.y
+	)
+	var rows: Array = state.get("rows", [])
+	var name_at: Vector2i = GEN1_VENDING_NAME_AT - GEN1_VENDING_AT
+	var price_at: Vector2i = GEN1_VENDING_PRICE_AT - GEN1_VENDING_AT
+	for index: int in rows.size():
+		var row: Dictionary = rows[index]
+		var step := Vector2i(0, index * ROW_STEP)
+		_text(indices, width, String(row.get("name", "")), name_at + step)
+		_text(indices, width, "¥%d" % int(row.get("price", 0)), price_at + step)
+	_text(indices, width, CANCEL, name_at + Vector2i(0, rows.size() * ROW_STEP))
+	var cursor: int = int(state.get("cursor", -1))
+	if cursor >= 0 and cursor <= rows.size():
+		_code(indices, width, CURSOR_CODE, Vector2i(
+			GEN1_VENDING_CURSOR_COLUMN - GEN1_VENDING_AT.x,
+			name_at.y + cursor * ROW_STEP
+		))
+	_blit_panel(image, indices, GEN1_VENDING_SIZE, GEN1_VENDING_AT)
+	return image
+
+
 static func _panel(size: Vector2i) -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(size.x * TILE * size.y * TILE)

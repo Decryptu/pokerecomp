@@ -96,6 +96,7 @@ var _move_deleter_text: Dictionary = {}
 var _day_care_text: Dictionary = {}
 var _special_text: Dictionary = {}
 var _special_text_ram: Dictionary = {}
+var _vending: Array = []
 var _battle_object_palettes: Dictionary = {}
 var _indices: Dictionary = {}
 var _world_maps: Array = []
@@ -212,6 +213,7 @@ const MANIFEST_ARRAYS: Dictionary = {
 	"pc_palette": "_pc_palette",
 	"gender_screen_palette": "_gender_screen_palette",
 	"copyright_string": "_copyright_string",
+	"vending": "_vending",
 	"copyright_palette": "_copyright_palette",
 	"text_bg_palette": "_text_bg_palette",
 	"odd_eggs": "_odd_eggs",
@@ -1826,6 +1828,11 @@ func special_text(run: String, name: String) -> String:
 ## The WRAM address a `text_ram` in one of those boxes names, by the name
 ## `Gen2Layout`'s own `special_text_ram` gives it, or -1 on a cartridge that
 ## ships no such buffer.
+## `VendingPrices` as `{item, price}`, empty outside Generation 1.
+func vending_rows() -> Array:
+	return _vending.duplicate(true)
+
+
 func special_text_ram(name: String) -> int:
 	return int(_special_text_ram.get(name, -1))
 

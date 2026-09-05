@@ -148,6 +148,7 @@ const BATTLE_TILE_SHEETS: Dictionary = {
 const FACILITY_TEXT_RUNS: Dictionary = {
 	"pokecenter": ["pokecenter_text", Gen1Layout.POKECENTER_TEXT_AT],
 	"cable_club": ["cable_club_text", Gen1Layout.CABLE_CLUB_TEXT_AT],
+	"vending": ["vending_text", Gen1Layout.VENDING_TEXT_AT],
 }
 
 
@@ -695,6 +696,7 @@ func import_rom(
 		"bar_palettes": _import_bar_palettes(rom, layout),
 		"mart_text": _import_mart_text(rom, layout),
 		"special_text": _import_facility_text(rom, layout),
+		"vending": _import_vending(rom, layout, items),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -889,6 +891,36 @@ func _import_mart_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 			layout, "mart_text", Gen1Layout.MART_TEXT_AT, name
 		))
 	return out
+
+
+## `VendingPrices`' three rows, checked against the hand-written `DrinkText`
+## beside them: a moved offset sells something the cartridge never stocked.
+func _import_vending(rom: RomFile, layout: Dictionary, items: Array) -> Array:
+	var head: int = int(layout.get("vending_text", 0))
+	## One `PlaceString` with `<NEXT>` between its rows, which [method
+	## Gen1Text.decode] keeps as the token rather than as a break.
+	var drawn: PackedStringArray = Gen1Text.decode(
+		rom.bytes(), head + Gen1Layout.VENDING_DRINKS_AT, Gen1Layout.VENDING_DRINKS_LENGTH
+	).split(Gen1Text.CONTROL_CHARACTERS[Gen1Text.NEXT_LINE])
+	var out: Array = []
+	for row: int in Gen1Layout.VENDING_ROWS:
+		var at: int = head + Gen1Layout.VENDING_PRICES_AT + row * Gen1Layout.VENDING_ROW_SIZE
+		out.append({"item": rom.u8(at), "price": _bcd3(rom, at + 1)})
+	return out if _vending_names_agree(drawn, out, items) else []
+
+
+## `DrinkText` is written by hand rather than read off `ItemNames`, so an offset
+## that has moved shows up as a machine selling something else.
+func _vending_names_agree(drawn: PackedStringArray, rows: Array, items: Array) -> bool:
+	if drawn.size() != Gen1Layout.VENDING_ROWS + 1 \
+		or drawn[Gen1Layout.VENDING_ROWS] != Gen1Layout.VENDING_CANCEL:
+		return false
+	for row: int in Gen1Layout.VENDING_ROWS:
+		var number: int = int((rows[row] as Dictionary)["item"])
+		if number < 1 or number > items.size() \
+			or drawn[row] != String((items[number - 1] as Dictionary).get("name", "")):
+			return false
+	return true
 
 
 ## The other two runs, in [method GameData.special_text]'s run/slot shape.

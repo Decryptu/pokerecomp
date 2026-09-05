@@ -64,6 +64,14 @@ const NURSE_PARTY: int = 4
 const CABLE_CLUB_COUNTER := Vector2i(11, 3)
 const CABLE_CLUB_ROWS: int = 12
 
+## `CeladonMartRoof_Object`'s three `bg_event` machines, read from below.
+const CELADON_MART_ROOF: int = 126
+const VENDING_MACHINE := Vector2i(10, 2)
+const VENDING_MACHINES: int = 3
+## `VendingPrices`: FRESH_WATER, SODA_POP and LEMONADE at 200, 300 and 350.
+const VENDING_PRICES: Array = [[0x3C, 200], [0x3D, 300], [0x3E, 350]]
+const VENDING_PURSE: int = 1000
+
 var _r: RefCounted = null
 
 
@@ -79,6 +87,7 @@ func _one_game() -> void:
 	_check_text_boxes()
 	_check_the_nurse_heals()
 	_check_the_cable_club()
+	_check_the_vending_machine()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -328,3 +337,58 @@ func _walk_the_receptionist(dex: bool, frames: int, said: String) -> void:
 
 func _event_text(results: Array) -> String:
 	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+
+
+## `VendingMachineMenu`'s three `VendingPrices` rows and the purchase
+## `HasEnoughMoney` gates. The box drawn is the screen's.
+func _check_the_vending_machine() -> void:
+	var machines: int = 0
+	for map: Gen2WorldMap in _r.data.world_maps():
+		for row: Dictionary in map.texts:
+			machines += 1 if int(row["command"]) \
+				== Gen1Layout.TEXT_SCRIPT_VENDING_MACHINE else 0
+	_r.check(machines == VENDING_MACHINES, "%d machines stand on the map." % machines)
+	var rows: Array = _r.data.vending_rows()
+	for index: int in VENDING_PRICES.size():
+		var pinned: Array = VENDING_PRICES[index]
+		var row: Dictionary = rows[index] if index < rows.size() else {}
+		_r.check(
+			int(row.get("item", 0)) == int(pinned[0])
+				and int(row.get("price", 0)) == int(pinned[1]),
+			"machine row %d is %s." % [index, row]
+		)
+	var world: Gen2WorldAPI = _r.open_world(0, CELADON_MART_ROOF, VENDING_MACHINE)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	if not _r.check(not world.interact().is_empty(), "the machine offered nothing."):
+		return
+	var request: Dictionary = world.pending_runtime_request()
+	_r.check(
+		StringName(request.get("kind", &"")) == &"vending_requested"
+			and (request.get("values", {}).get("rows", []) as Array).size() == rows.size(),
+		"the machine asked for %s." % [request.get("kind", &"nothing")]
+	)
+	world.state.apply_changes({}, {}, {
+		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_PURSE},
+	})
+	var drink: Dictionary = rows[0]
+	var bought: Dictionary = Gen2WorldMartHost.vend(world, null, drink, false)
+	_r.check(bool(bought.get("ok", false)), "the first drink refused: %s." % [bought])
+	_r.check(
+		world.state.item_quantity(int(drink["item"])) == 1
+			and world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
+				== VENDING_PURSE - int(drink["price"]),
+		"the drink cost %d." % [VENDING_PURSE - world.state.money(
+			Gen2WorldMartHost.MONEY_ACCOUNT
+		)]
+	)
+	## `HasEnoughMoney` refuses before `GiveItem` does.
+	world.state.apply_changes({}, {}, {"money": {Gen2WorldMartHost.MONEY_ACCOUNT: 0}})
+	_r.check(
+		StringName(Gen2WorldMartHost.vend(world, null, drink, false).get("reason", &""))
+			== &"insufficient_money",
+		"an empty purse bought a drink."
+	)
+	world.complete_runtime_request({"ok": true})
+	_r.check(not world.script_busy(), "the machine never closed.")

@@ -3731,7 +3731,20 @@ func _gen1_facility_steps(row: Dictionary) -> Array:
 			return _gen1_nurse_steps()
 		Gen1Layout.TEXT_SCRIPT_CABLE_CLUB:
 			return _gen1_cable_club_steps()
+		Gen1Layout.TEXT_SCRIPT_VENDING_MACHINE:
+			return _gen1_vending_steps()
 	return []
+
+
+## `VendingMachineMenu`, whose list is `VendingPrices` rather than a shelf and
+## whose greeting is the box the menu stands over.
+func _gen1_vending_steps() -> Array:
+	var rows: Array = data.vending_rows() if data != null else []
+	if rows.is_empty():
+		return []
+	return [{"type": &"request", "values": {
+		"kind": &"vending_requested", "values": {"rows": rows},
+	}}]
 
 
 ## `CableClubNPC`. Without the Pokedex it is the welcome, sixty frames and

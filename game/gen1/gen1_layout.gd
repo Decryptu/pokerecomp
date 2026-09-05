@@ -376,6 +376,22 @@ const TEXT_SCRIPT_IDS: Dictionary = {
 const TEXT_SCRIPT_MART: int = 0xFE
 const TEXT_SCRIPT_POKECENTER_NURSE: int = 0xFF
 const TEXT_SCRIPT_CABLE_CLUB: int = 0xF6
+const TEXT_SCRIPT_VENDING_MACHINE: int = 0xF5
+
+## `engine/events/vending_machine.asm` from `VendingMachineText1`: the greeting,
+## the two strings the box draws, `VendingPrices` and the four stubs behind them,
+## at the same deltas on all three cartridges.
+const VENDING_TEXT_AT: Dictionary = {
+	"greeting": 0x00, "no_money": 0x3A, "here_you_go": 0x3F,
+	"bag_full": 0x44, "not_thirsty": 0x49,
+}
+const VENDING_DRINKS_AT: int = 0x05
+const VENDING_DRINKS_LENGTH: int = 0x25
+const VENDING_CANCEL: String = "CANCEL"
+const VENDING_PRICES_AT: int = 0x67
+const VENDING_ROWS: int = 3
+## `vend_item`: one item byte and a `bcd3` price.
+const VENDING_ROW_SIZE: int = 4
 
 ## `CableClubNPC`'s stubs by the delta from the first. Only the three a port
 ## with no cable reaches are named; the rest want a link partner.
@@ -642,6 +658,7 @@ const RED_BLUE: Dictionary = {
 	"mart_text": 0x06E0C,
 	"pokecenter_text": 0x0705D,
 	"cable_club_text": 0x072B3,
+	"vending_text": 0x74F99,
 	"font": 0x11A80,
 	"text_box": 0x12288,
 	"battle_font": 0x11EA0,
@@ -703,6 +720,7 @@ const YELLOW: Dictionary = {
 	"mart_text": 0x06B91,
 	"pokecenter_text": 0x06ED0,
 	"cable_club_text": 0x07188,
+	"vending_text": 0x747DE,
 	"font": 0x10600,
 	"text_box": 0x10E18,
 	"battle_font": 0x10A20,
@@ -734,10 +752,21 @@ const YELLOW: Dictionary = {
 }
 
 
+## Bank $1D holds the 668 symbols that move between Red and Blue: everything in
+## it sits one byte later on Blue.
+const BLUE_ONLY: Dictionary = {
+	"vending_text": 0x74F9A,
+}
+
+static var _blue: Dictionary = RED_BLUE.merged(BLUE_ONLY, true)
+
+
 static func for_id(id: StringName) -> Dictionary:
 	match id:
-		RomRegistry.RED, RomRegistry.BLUE:
+		RomRegistry.RED:
 			return RED_BLUE
+		RomRegistry.BLUE:
+			return _blue
 		RomRegistry.YELLOW:
 			return YELLOW
 	return {}
