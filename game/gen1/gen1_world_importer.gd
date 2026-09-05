@@ -819,15 +819,16 @@ const SCRIPT_BUDGET: int = 512
 const SCRIPT_DEPTH: int = 8
 const SCRIPT_END: int = -2
 const SCRIPT_UNREAD: int = -1
-## What a `jr z` is testing: an event flag by index, or the YES/NO answer.
+## What a branch is testing: an event flag by index, or one of these.
 const SCRIPT_TESTS_CHOICE: int = -1
 const SCRIPT_TESTS_NOTHING: int = -2
+const SCRIPT_TESTS_CARRY: int = -3
+const SCRIPT_TESTS_ITEM: int = -4
 
 
 ## One `text_asm` row's machine code, as the boxes it prints and the branches
 ## choosing between them. Only the routines the layout names are read, and a
-## path reaching anything else is dropped whole rather than kept as a prefix
-## that stops mid-interaction.
+## path reaching anything else is dropped whole rather than kept as a prefix.
 static func decode_script(
 	rom: RomFile, layout: Dictionary, bank: int, at: int
 ) -> Array:
@@ -850,7 +851,7 @@ static func _walk_script(
 	while budget[0] > 0:
 		budget[0] -= 1
 		var op: int = (ctx["rom"] as RomFile).u8(Gen1Layout.banked(int(ctx["bank"]), pc))
-		if Gen1Layout.SCRIPT_BRANCHES.has(op):
+		if Gen1Layout.SCRIPT_BRANCHES.has(op) or Gen1Layout.SCRIPT_CARRY_BRANCHES.has(op):
 			return _script_branch(ctx, op, pc, state, depth, out)
 		var next: int = _script_step(ctx, pc, state, out)
 		if next == SCRIPT_END:
@@ -880,6 +881,14 @@ static func _script_step(
 		Gen1Layout.SCRIPT_LD_HL:
 			state["hl"] = rom.u16le(at + 1)
 			return pc + Gen1Layout.SCRIPT_LONG_SIZE
+		Gen1Layout.SCRIPT_LD_BC:
+			## `lb bc, ITEM, COUNT`: the high byte is what `GiveItem` reads as b.
+			state["b"] = rom.u8(at + 2)
+			state["c"] = rom.u8(at + 1)
+			return pc + Gen1Layout.SCRIPT_LONG_SIZE
+		Gen1Layout.SCRIPT_LD_B:
+			state["b"] = rom.u8(at + 1)
+			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 		Gen1Layout.SCRIPT_LD_A:
 			state["a"] = rom.u8(at + 1)
 			state.erase("source")
@@ -891,6 +900,10 @@ static func _script_step(
 		Gen1Layout.SCRIPT_LD_MEM_A:
 			return pc + Gen1Layout.SCRIPT_LONG_SIZE \
 				if _script_stored(ctx, rom.u16le(at + 1), state) else SCRIPT_UNREAD
+		Gen1Layout.SCRIPT_LDH_MEM_A:
+			return pc + Gen1Layout.SCRIPT_SHORT_SIZE if _script_stored(
+				ctx, Gen1Layout.SCRIPT_HRAM_BASE + rom.u8(at + 1), state
+			) else SCRIPT_UNREAD
 		Gen1Layout.SCRIPT_AND_A:
 			state["tests"] = _script_tests(ctx, state, -1)
 			return pc + 1
@@ -913,12 +926,17 @@ static func _script_hop(operand: int) -> int:
 	return operand - 0x100 if operand > 0x7F else operand
 
 
-## The one memory write read here: `DisableWaitingAfterTextDisplay` by hand.
+## `DisableWaitingAfterTextDisplay` by hand, and `RemoveItemByID`'s own item.
 static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> bool:
-	if address != int((ctx["layout"] as Dictionary)["do_not_wait"]) \
-		or int(state.get("a", 0)) != 1:
+	var layout: Dictionary = ctx["layout"]
+	if address == int(layout["do_not_wait"]):
+		if int(state.get("a", 0)) != 1:
+			return false
+		state["no_press"] = true
+		return true
+	if address != int(layout["item_to_remove"]) or int(state.get("a", 0)) < 1:
 		return false
-	state["no_press"] = true
+	state["remove"] = int(state["a"])
 	return true
 
 
@@ -974,24 +992,72 @@ static func _script_call(
 	## A routine returns with flags of its own, so a `jr z` behind a call is
 	## reading them rather than whatever set them before it.
 	state.erase("tests")
-	if target == int(layout["print_text"]):
-		var box: Dictionary = _script_box(ctx, int(state.get("hl", 0)))
-		if box.is_empty():
-			return SCRIPT_UNREAD
-		out.append(box)
-		return next
-	if target == int(layout["text_script_end"]):
-		return SCRIPT_END
-	if target == int(layout["disable_waiting"]):
-		state["no_press"] = true
-		return next
-	if target == int(layout["yes_no_choice"]):
-		state["source"] = int(layout["current_menu_item"])
-		state.erase("a")
-		return next
-	if target == int(layout["play_cry"]) or target == int(layout["wait_for_sound"]):
-		return next
+	match _script_routine(layout, target):
+		"print_text":
+			var box: Dictionary = _script_box(ctx, int(state.get("hl", 0)))
+			if box.is_empty():
+				return SCRIPT_UNREAD
+			out.append(box)
+			return next
+		"text_script_end":
+			return SCRIPT_END
+		"disable_waiting":
+			state["no_press"] = true
+			return next
+		"yes_no_choice":
+			state["source"] = int(layout["current_menu_item"])
+			state.erase("a")
+			return next
+		"give_item":
+			return _script_gift(state, out, next)
+		"is_item_in_bag":
+			return _script_asked(state, next)
+		"bankswitch":
+			return _script_far(layout, state, out, next)
+		"play_cry", "wait_for_sound":
+			return next
 	return SCRIPT_UNREAD
+
+
+static func _script_routine(layout: Dictionary, target: int) -> String:
+	for name: String in Gen1Layout.SCRIPT_CALLS:
+		if int(layout.get(name, -1)) == target:
+			return name
+	return ""
+
+
+## `GiveItem` reads the item in b and the count in c, answers in carry, drops bc.
+static func _script_gift(state: Dictionary, out: Array, next: int) -> int:
+	if not state.has("b") or not state.has("c") or int(state["c"]) < 1:
+		return SCRIPT_UNREAD
+	out.append({"op": "give_item", "item": int(state["b"]), "count": int(state["c"])})
+	state.erase("b")
+	state.erase("c")
+	state["tests"] = SCRIPT_TESTS_CARRY
+	return next
+
+
+## `IsItemInBag` reads b and sets zero when the bag does not hold it.
+static func _script_asked(state: Dictionary, next: int) -> int:
+	if not state.has("b"):
+		return SCRIPT_UNREAD
+	state["asked"] = int(state["b"])
+	state.erase("b")
+	state["tests"] = SCRIPT_TESTS_ITEM
+	return next
+
+
+## `farcall` is `ld b, BANK`, `ld hl, target`, `call Bankswitch`.
+static func _script_far(
+	layout: Dictionary, state: Dictionary, out: Array, next: int
+) -> int:
+	if int(state.get("b", -1)) != int(layout["remove_item_bank"]) \
+		or int(state.get("hl", -1)) != int(layout["remove_item"]) \
+		or int(state.get("remove", 0)) < 1:
+		return SCRIPT_UNREAD
+	out.append({"op": "take_item", "item": int(state["remove"])})
+	state.erase("remove")
+	return next
 
 
 ## One `PrintText` box, empty when the pointer does not decode to a string.
@@ -1011,7 +1077,8 @@ static func _script_branch(
 	ctx: Dictionary, op: int, pc: int, state: Dictionary, depth: int, out: Array
 ) -> Variant:
 	var tests: int = int(state.get("tests", SCRIPT_TESTS_NOTHING))
-	if tests == SCRIPT_TESTS_NOTHING:
+	var carry: bool = Gen1Layout.SCRIPT_CARRY_BRANCHES.has(op)
+	if tests == SCRIPT_TESTS_NOTHING or carry != (tests == SCRIPT_TESTS_CARRY):
 		return null
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), pc)
@@ -1022,22 +1089,46 @@ static func _script_branch(
 		_walk_script(ctx, jumped, state.duplicate(), depth + 1),
 		_walk_script(ctx, pc + size, state.duplicate(), depth + 1),
 	]
-	if not bool(Gen1Layout.SCRIPT_BRANCHES[op]):
+	var table: Dictionary = Gen1Layout.SCRIPT_CARRY_BRANCHES if carry \
+		else Gen1Layout.SCRIPT_BRANCHES
+	if not bool(table[op]):
 		branches.reverse()
 	if branches[0] == null and branches[1] == null:
 		return null
-	out.append(_script_node(tests, branches))
+	var node: Variant = _script_node(tests, branches, state, out)
+	if node == null:
+		return null
+	out.append(node)
 	return out
 
 
 ## `wCurrentMenuItem` is 0 for YES, so the branch taken when it is not zero is
-## NO. An event flag reads the other way about: the taken side is the set one.
-static func _script_node(tests: int, branches: Array) -> Dictionary:
+## NO. Every other test reads the other way about: the taken side is the set
+## one, a set carry or an item the bag holds.
+static func _script_node(
+	tests: int, branches: Array, state: Dictionary, out: Array
+) -> Variant:
 	var taken: Array = branches[0] if branches[0] != null else [{"op": "unknown"}]
 	var fell: Array = branches[1] if branches[1] != null else [{"op": "unknown"}]
-	if tests == SCRIPT_TESTS_CHOICE:
-		return {"op": "choice", "no": taken, "yes": fell}
+	match tests:
+		SCRIPT_TESTS_CHOICE:
+			return {"op": "choice", "no": taken, "yes": fell}
+		SCRIPT_TESTS_CARRY:
+			return _script_receipt(out, taken, fell)
+		SCRIPT_TESTS_ITEM:
+			return {"op": "has_item", "item": int(state["asked"]),
+				"then": taken, "else": fell}
 	return {"op": "branch", "flag": tests, "then": taken, "else": fell}
+
+
+## The carry belongs to the gift in front of it, so both sides fold onto it.
+static func _script_receipt(out: Array, taken: Array, fell: Array) -> Variant:
+	if out.is_empty() or String((out[-1] as Dictionary)["op"]) != "give_item":
+		return null
+	var gift: Dictionary = out.pop_back()
+	gift["ok"] = taken
+	gift["full"] = fell
+	return gift
 
 
 ## One `trainer` row. `TrainerFlagAction` counts the bit off the address two

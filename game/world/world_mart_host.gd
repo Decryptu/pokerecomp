@@ -6,7 +6,6 @@ extends RefCounted
 ## writeback for one purchase off `BuyMenu` or one sale off `SellMenu`.
 
 const MONEY_ACCOUNT: int = 0
-const MAX_ITEM_STACK: int = 99
 
 const MARTTYPE_STANDARD: int = 0
 const MARTTYPE_BITTER: int = 1
@@ -16,12 +15,10 @@ const MARTTYPE_ROOFTOP: int = 4
 
 
 ## Resolves the source pokemart dialog before the UI is opened. Standard,
-## bitter and pharmacy shops use the indexed pointer; bargain and rooftop
-## shops use their imported priced records.
-##
-## [param inline_items] stands in for the indexed record when the inventory
-## travels with the request: a catalog site's shelf, and every Generation 1
-## counter, whose list `script_mart` writes into the text pointer.
+## bitter and pharmacy shops use the indexed pointer; bargain and rooftop shops
+## their imported priced records. [param inline_items] stands in for the indexed
+## record when the inventory travels with the request, which every Generation 1
+## counter does: `script_mart` writes its list into the text pointer.
 static func resolve_mart(
 	data: GameData, dialog_id: int, mart_id: int, rooftop_after_hall: bool = false,
 	world_state: Gen2WorldState = null, inline_items: Array = []
@@ -157,8 +154,7 @@ static func purchase(
 
 
 ## `VendingMachineMenu`'s purchase: `HasEnoughMoney` refuses first, then
-## `GiveItem`, at the machine's price rather than `ItemPrices`'. The refusal
-## reasons are the shop's, so a caller can pick its box off them.
+## `GiveItem`, at the machine's price rather than `ItemPrices`'.
 static func vend(
 	world: Gen2WorldAPI, save: Gen2SaveData, row: Dictionary, persist: bool = true
 ) -> Dictionary:
@@ -170,11 +166,14 @@ static func vend(
 	if price > balance:
 		return _failure(&"insufficient_money", {"item": item, "price": price})
 	var owned: int = world.state.item_quantity(item)
-	if owned + 1 > MAX_ITEM_STACK:
-		return _failure(&"item_stack_full", {"item": item, "owned": owned})
+	var room: Dictionary = Gen2WorldPack.receive_check(
+		world.data, world.state.items(), item, 1
+	)
+	if not bool(room.get("ok", false)):
+		return _failure(StringName(room["reason"]), {"item": item, "owned": owned})
 	var before: Gen2WorldSnapshot = world.snapshot()
 	var applied: Dictionary = world.state.apply_changes({}, {}, {
-		"items": {item: owned + 1},
+		"items": {item: int(room["quantity"])},
 		"money": {MONEY_ACCOUNT: balance - price},
 	})
 	if not bool(applied.get("ok", false)):
@@ -212,7 +211,6 @@ static func _purchase_refusal(
 	var price: int = int(selected.get("price", 0))
 	var total: int = price * quantity
 	var owned: int = world.state.item_quantity(item)
-	var next_quantity: int = owned + quantity
 	## `BuyMenuLoop` runs `CompareMoney` before `ReceiveItem`: price refuses first.
 	var balance: int = world.state.money(MONEY_ACCOUNT)
 	if total < 0 or total > balance:
@@ -220,11 +218,16 @@ static func _purchase_refusal(
 			"item": item, "price": price, "quantity": quantity,
 			"total": total, "balance": balance,
 		})
-	if next_quantity > MAX_ITEM_STACK:
-		return _failure(&"item_stack_full", {
+	## `.insufficient_bag_space`: `ReceiveItem` refuses a full pocket too.
+	var room: Dictionary = Gen2WorldPack.receive_check(
+		world.data, world.state.items(), item, quantity
+	)
+	if not bool(room.get("ok", false)):
+		return _failure(StringName(room["reason"]), {
 			"item": item, "quantity": quantity, "owned": owned,
-			"maximum": MAX_ITEM_STACK,
+			"maximum": Gen2WorldPack.MAX_ITEM_STACK,
 		})
+	var next_quantity: int = int(room["quantity"])
 	return {
 		"ok": true,
 		"is_bargain": is_bargain,

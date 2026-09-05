@@ -130,9 +130,12 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 91, "text": 126, "branch": 71, "choice": 6, "flag": 5, "unknown": 46},
-	&"blue": {"rows": 91, "text": 126, "branch": 71, "choice": 6, "flag": 5, "unknown": 46},
-	&"yellow": {"rows": 74, "text": 101, "branch": 63, "choice": 5, "flag": 1, "unknown": 44},
+	&"red": {"rows": 94, "text": 195, "branch": 74, "choice": 7, "flag": 22,
+		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 39},
+	&"blue": {"rows": 94, "text": 195, "branch": 74, "choice": 7, "flag": 22,
+		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 39},
+	&"yellow": {"rows": 77, "text": 157, "branch": 66, "choice": 6, "flag": 14,
+		"give_item": 17, "has_item": 7, "take_item": 3, "unknown": 40},
 }
 
 ## The pin on which way a `wCurrentMenuItem` branch reads.
@@ -317,7 +320,7 @@ func _texts() -> void:
 ## every box has to draw, and the ghost girl has to keep both her answers.
 func _scripts(font: Gen2Font) -> void:
 	var census: Dictionary = {"rows": 0, "text": 0, "branch": 0, "choice": 0,
-		"flag": 0, "unknown": 0}
+		"flag": 0, "give_item": 0, "has_item": 0, "take_item": 0, "unknown": 0}
 	var wrong: Array[String] = []
 	for map: Gen2WorldMap in _maps.values():
 		for row: Dictionary in map.texts:
@@ -345,7 +348,10 @@ func _walk_script(
 			var flag: int = int(node["flag"])
 			if (flag < 0 or flag >= Gen1Layout.EVENT_FLAG_BYTES * 8) and wrong.size() < 4:
 				wrong.append("map %d names flag %d" % [number, flag])
-		for side: String in ["then", "else", "yes", "no"]:
+		if op == "give_item" or op == "has_item" or op == "take_item":
+			_r.check(not _r.data.item_name(int(node["item"])).is_empty(),
+				"map %d names item %d, which has no name." % [number, int(node["item"])])
+		for side: String in ["then", "else", "yes", "no", "ok", "full"]:
 			if node.has(side):
 				_walk_script(font, node[side] as Array, census, wrong, number)
 

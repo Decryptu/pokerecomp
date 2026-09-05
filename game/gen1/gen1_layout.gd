@@ -558,18 +558,27 @@ const TRAINER_RANGE_SHIFT: int = 4
 ## ends the path [method Gen1WorldImporter.decode_script] is walking.
 const TEXT_ASM: int = 0x08
 const SCRIPT_LD_HL: int = 0x21
+const SCRIPT_LD_BC: int = 0x01
+const SCRIPT_LD_B: int = 0x06
 const SCRIPT_LD_A: int = 0x3E
 const SCRIPT_LD_A_MEM: int = 0xFA
 const SCRIPT_LD_MEM_A: int = 0xEA
+const SCRIPT_LDH_MEM_A: int = 0xE0
 const SCRIPT_AND_A: int = 0xA7
 const SCRIPT_PREFIX: int = 0xCB
 const SCRIPT_JR: int = 0x18
 const SCRIPT_JP: int = 0xC3
 const SCRIPT_RET: int = 0xC9
 const SCRIPT_CALL: int = 0xCD
+const SCRIPT_HRAM_BASE: int = 0xFF00
 ## Each key is a conditional `jr` or `jp`, the value whether it is taken when
-## the tested bit was set.
+## the tested bit was set; the carry rows read the flag a routine answers in.
 const SCRIPT_BRANCHES: Dictionary = {0x20: true, 0xC2: true, 0x28: false, 0xCA: false}
+const SCRIPT_CARRY_BRANCHES: Dictionary = {0x38: true, 0xDA: true, 0x30: false, 0xD2: false}
+const SCRIPT_CALLS: Array[String] = [
+	"print_text", "text_script_end", "disable_waiting", "yes_no_choice",
+	"give_item", "is_item_in_bag", "bankswitch", "play_cry", "wait_for_sound",
+]
 const SCRIPT_SHORT_SIZE: int = 2
 const SCRIPT_LONG_SIZE: int = 3
 ## The `CB` prefix's three rows, the low three bits naming the operand.
@@ -580,6 +589,8 @@ const SCRIPT_OPERAND_A: int = 7
 const SCRIPT_OPERAND_HL: int = 6
 ## `flag_array NUM_EVENTS`: 2,560 events on all three cartridges.
 const EVENT_FLAG_BYTES: int = 320
+## `BAG_ITEM_CAPACITY`: one list of slots, not four pockets.
+const BAG_ITEM_CAPACITY: int = 20
 ## `MAX_WARP_EVENTS`, `MAX_BG_EVENTS` and `MAX_OBJECT_EVENTS`.
 const MAX_WARP_EVENTS: int = 32
 const MAX_SIGN_EVENTS: int = 16
@@ -764,8 +775,14 @@ const RED_BLUE: Dictionary = {
 	"disable_waiting": 0x30B6,
 	"play_cry": 0x13D0,
 	"wait_for_sound": 0x3748,
+	"give_item": 0x3E2E,
+	"is_item_in_bag": 0x3493,
+	"bankswitch": 0x35D6,
+	"remove_item": 0x7F37,
+	"remove_item_bank": 0x05,
 	"do_not_wait": 0xCC3C,
 	"current_menu_item": 0xCC26,
+	"item_to_remove": 0xFFDB,
 	## `DisplayPokemartDialogue`'s own greeting and the head of the two facility
 	## text runs [constant MART_TEXT_AT] and its neighbour walk. Every offset
 	## here is `pokered.sym`'s, which builds both dumps.
@@ -846,8 +863,14 @@ const YELLOW: Dictionary = {
 	"disable_waiting": 0x2FDE,
 	"play_cry": 0x118B,
 	"wait_for_sound": 0x373E,
+	"give_item": 0x3E3F,
+	"is_item_in_bag": 0x3422,
+	"bankswitch": 0x3E84,
+	"remove_item": 0x7DBB,
+	"remove_item_bank": 0x05,
 	"do_not_wait": 0xCC3C,
 	"current_menu_item": 0xCC26,
+	"item_to_remove": 0xFFDB,
 	"mart_greeting": 0x02938,
 	"mart_text": 0x06B91,
 	"pokecenter_text": 0x06ED0,

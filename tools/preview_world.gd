@@ -28,6 +28,7 @@ const KIND_HELP: Dictionary = {
 	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
 	&"sign": "none: DisplayTextID's box, read by facing up from where the player stands",
+	&"gift": "presses: a `GiveItem` row, faced up from the cell after the @. 0 is the offer's first page, 4 the receipt box a bag with room earns",
 	&"trainer": "presses, frames: TalkToTrainer on the map's first trainer, faced from the cell below. 0 the before-battle box, 1 the fight the press behind it opens; a second number stops that many frames into the transition instead",
 	&"sight": "frames, 0: CheckFightingMapTrainers on the map's first trainer who sees, walked into from the far end of its own line. 40 stands in the shock bubble, 120 in the walk-up, 400 in the before-battle box",
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
@@ -161,6 +162,7 @@ const STAGED_FRAMES: int = 2
 ## `sign` spends the whole reveal: no press finishes a page early.
 const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"cut": 12, &"waterfall_use": 26, &"sign": BOX_REVEAL_FRAMES,
+	&"gift": BOX_REVEAL_FRAMES,
 	&"nurse": BOX_REVEAL_FRAMES, &"vending": BOX_REVEAL_FRAMES,
 	&"prizes": BOX_REVEAL_FRAMES,
 }
@@ -405,6 +407,7 @@ const STAGERS: Dictionary = {
 	&"mod_page": &"_stage_mod_page",
 	&"pokepic": &"_stage_pokepic",
 	&"sign": &"_stage_sign",
+	&"gift": &"_stage_gift",
 	&"trainer": &"_stage_trainer",
 	&"sight": &"_stage_sight",
 	&"nurse": &"_stage_nurse",
@@ -958,6 +961,14 @@ func _stage_sight() -> void:
 func _stage_sign() -> void:
 	_screen.press_button(PokeButton.UP)
 	_screen.interact()
+
+
+func _stage_gift() -> void:
+	_stage_sign()
+	for _press: int in maxi(_cell.x, 0):
+		for _frame: int in BOX_REVEAL_FRAMES:
+			_screen.advance_frame()
+		_screen.press_button(PokeButton.A)
 
 
 ## The nurse, reached over her counter from the cell below it, which is the

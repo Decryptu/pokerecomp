@@ -16,6 +16,12 @@ const LAYOUT: Dictionary = {
 	"current_menu_item": 0xCC26,
 	"event_flags": 0xD747,
 	"talk_to_trainer": 0x0160,
+	"give_item": 0x0170,
+	"is_item_in_bag": 0x0180,
+	"bankswitch": 0x0190,
+	"remove_item": 0x7F37,
+	"remove_item_bank": 0x05,
+	"item_to_remove": 0xFFDB,
 }
 const AT: int = 0x1000
 const HELLO: int = 0x1800
@@ -195,3 +201,85 @@ func test_a_row_that_never_ends_answers_nothing() -> void:
 
 func test_a_box_that_does_not_decode_answers_nothing() -> void:
 	assert_eq(_decode(_print(HELLO) + _call(int(LAYOUT["text_script_end"]))), [])
+
+
+## `lb bc, ITEM, COUNT` then `call GiveItem`, with `jr nc` onto the refusal.
+func _give(item: int, count: int) -> Array:
+	return [Gen1Layout.SCRIPT_LD_BC, count, item] + _call(int(LAYOUT["give_item"]))
+
+
+func test_a_gift_folds_both_sides_of_its_carry_onto_one_node() -> void:
+	## `jr nc` hops over the receipt onto the refusal, so the taken side is the
+	## bag that had no room and the one laid out first is the gift that landed.
+	var received: Array = _print(HELLO) + _call(int(LAYOUT["text_script_end"]))
+	var script: Array = _decode(
+		_give(0xF1, 1) + [0x30, received.size()] + received
+			+ _print(BYE) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	)
+	assert_eq(script, [{
+		"op": "give_item", "item": 0xF1, "count": 1,
+		"ok": [{"op": "text", "text": "HI"}],
+		"full": [{"op": "text", "text": "BYE"}],
+	}])
+
+
+func test_a_gift_with_no_item_loaded_answers_nothing() -> void:
+	assert_eq(_decode(
+		_call(int(LAYOUT["give_item"])) + _call(int(LAYOUT["text_script_end"]))
+	), [])
+
+
+func test_a_carry_branch_behind_a_flag_test_answers_nothing() -> void:
+	# `jr nc` reads the flag a routine returned in, which `bit b, a` never wrote.
+	var clear: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	assert_eq(_decode(
+		_check_event(37) + [0x30, clear.size()] + clear
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	), [])
+
+
+func test_a_zero_branch_behind_a_gift_answers_nothing() -> void:
+	var full: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	assert_eq(_decode(
+		_give(0xF1, 1) + [0x20, full.size()] + full
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	), [])
+
+
+## `ld b, ITEM` then `call IsItemInBag`, which sets zero when the bag has none.
+func test_an_item_test_keeps_the_item_and_both_sides() -> void:
+	var missing: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	var script: Array = _decode(
+		[Gen1Layout.SCRIPT_LD_B, 0x45] + _call(int(LAYOUT["is_item_in_bag"]))
+			+ [0x20, missing.size()] + missing
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	)
+	assert_eq(script, [{
+		"op": "has_item", "item": 0x45,
+		"then": [{"op": "text", "text": "HI"}],
+		"else": [{"op": "text", "text": "BYE"}],
+	}])
+
+
+## `ldh [hItemToRemoveID], a` then `farcall RemoveItemByID`.
+func test_a_far_call_to_remove_an_item_becomes_its_own_node() -> void:
+	var script: Array = _decode(
+		[Gen1Layout.SCRIPT_LD_A, 0x40, Gen1Layout.SCRIPT_LDH_MEM_A, 0xDB,
+			Gen1Layout.SCRIPT_LD_B, 0x05]
+			+ _load_hl(0x7F37) + _call(int(LAYOUT["bankswitch"]))
+			+ _call(int(LAYOUT["text_script_end"]))
+	)
+	assert_eq(script, [{"op": "take_item", "item": 0x40}])
+
+
+func test_a_far_call_to_anything_else_answers_nothing() -> void:
+	assert_eq(_decode(
+		[Gen1Layout.SCRIPT_LD_A, 0x40, Gen1Layout.SCRIPT_LDH_MEM_A, 0xDB,
+			Gen1Layout.SCRIPT_LD_B, 0x05]
+			+ _load_hl(0x4000) + _call(int(LAYOUT["bankswitch"]))
+			+ _call(int(LAYOUT["text_script_end"]))
+	), [])

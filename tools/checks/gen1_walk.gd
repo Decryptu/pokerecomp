@@ -98,8 +98,8 @@ const PRIZE_MENUS: Dictionary = {
 ## Three `text_asm` rows driven on the world, since a decoded script is only
 ## worth the box it puts up. `BikeShopYoungsterText` turns on EVENT_GOT_BICYCLE,
 ## `LavenderTownLittleGirlText` asks and branches on the answer, and
-## `CeladonGameCornerText5` is half machine code: while EVENT_GOT_10_COINS is
-## clear it gives coins instead of speaking, and says nothing here.
+## `GameCornerFishingGuruText` reaches `Has9990Coins` only with the COIN CASE in
+## the bag, so the row speaks without one and says nothing at all with it.
 const BIKE_SHOP: int = 66
 const BIKE_YOUNGSTER := Vector2i(1, 4)
 const BIKE_FLAG: int = 192
@@ -111,6 +111,19 @@ const GAME_CORNER: int = 135
 const GAME_CORNER_GAMBLER := Vector2i(5, 12)
 const GAME_CORNER_FLAG: int = 442
 const GAME_CORNER_BOX: String = "Wins seem to come"
+const GAME_CORNER_ASKED: String = "Kid, do you want"
+const COIN_CASE: int = 0x45
+
+## Celadon City's TM41, whose receipt box names the item out of the buffer
+## `CopyToStringBuffer` fills only when the bag took it.
+const CELADON_CITY: int = 6
+const TM41_CELL := Vector2i(22, 17)
+const TM41_ITEM: int = 241
+const TM41_NAME: String = "TM41"
+const TM41_FLAG: int = 384
+const GIFT_OPENING: String = "Hello, there!"
+const GIFT_KNOWN: String = "TM41 teaches"
+const GIFT_REFUSED: String = "Oh, your pack is"
 
 ## Yellow's `CeruleanBadgeHouse` melanie, the corpus's one box that owes no
 ## press: `DisableWaitingAfterTextDisplay` runs before her last `PrintText`.
@@ -133,6 +146,7 @@ func _one_game() -> void:
 	_check_last_map_round_trip()
 	_check_text_boxes()
 	_check_scripted_npcs()
+	_check_a_gift()
 	_check_the_nurse_heals()
 	_check_the_cable_club()
 	_check_the_vending_machine()
@@ -350,7 +364,12 @@ func _check_scripted_npcs() -> void:
 		)
 		_r.check(read.begins_with(BIKE_BOXES[1 if set_flag else 0]),
 			"the bike shop said %s with the bicycle flag %s." % [read, set_flag])
-	var silent: String = _scripted_box(GAME_CORNER, GAME_CORNER_GAMBLER, 0)
+	var asked: String = _scripted_box(GAME_CORNER, GAME_CORNER_GAMBLER, 0)
+	_r.check(asked.begins_with(GAME_CORNER_ASKED),
+		"the guru said %s with no COIN CASE." % [asked])
+	var silent: String = _scripted_box(
+		GAME_CORNER, GAME_CORNER_GAMBLER, 0, {COIN_CASE: 1}
+	)
 	_r.check(silent.is_empty(), "the half-read row said %s." % [silent])
 	var spoken: String = _scripted_box(
 		GAME_CORNER, GAME_CORNER_GAMBLER, GAME_CORNER_FLAG
@@ -361,14 +380,59 @@ func _check_scripted_npcs() -> void:
 		_check_a_box_owing_no_press()
 
 
+## `GiveItem` both ways: the bag takes the gift, or it stands in every slot.
+func _check_a_gift() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, CELADON_CITY, TM41_CELL)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var said: Array[String] = _spoken(world)
+	_r.check(said.size() == 2 and said[0].begins_with(GIFT_OPENING)
+		and said[1].contains(TM41_NAME), "the gift said %s." % [said])
+	_r.check(world.state.item_quantity(TM41_ITEM) == 1,
+		"the bag holds %d TM41." % world.state.item_quantity(TM41_ITEM))
+	_r.check(world.event_flag_active(TM41_FLAG), "the gift left its flag clear.")
+	var again: Array[String] = _spoken(world)
+	_r.check(again.size() == 1 and again[0].begins_with(GIFT_KNOWN),
+		"talked to again he said %s." % [again])
+	_check_a_gift_refused()
+
+
+func _check_a_gift_refused() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, CELADON_CITY, TM41_CELL)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var stock: Dictionary = {}
+	for slot: int in Gen1Layout.BAG_ITEM_CAPACITY:
+		stock[slot + 1] = 1
+	world.state.apply_changes({}, {}, {"items": stock})
+	var said: Array[String] = _spoken(world)
+	_r.check(said.size() == 2 and said[1].begins_with(GIFT_REFUSED),
+		"a full bag said %s." % [said])
+	_r.check(world.state.item_quantity(TM41_ITEM) == 0, "a full bag took the gift.")
+	_r.check(not world.event_flag_active(TM41_FLAG), "a refused gift set its flag.")
+
+
+func _spoken(world: Gen2WorldAPI) -> Array[String]:
+	var said: Array[String] = []
+	var results: Array = world.interact()
+	while not results.is_empty() and said.size() < Gen1Layout.MAX_OBJECT_EVENTS:
+		said.append(_event_text(results))
+		results = world.run_event_queue(true)
+	return said
+
+
 ## The string one interaction opens with, or "" when it opened no box at all.
 ## [param flag] is an event flag to set first, or 0 for none.
-func _scripted_box(map: int, cell: Vector2i, flag: int) -> String:
+func _scripted_box(map: int, cell: Vector2i, flag: int, owned: Dictionary = {}) -> String:
 	var world: Gen2WorldAPI = _r.open_world(0, map, cell)
 	if world == null:
 		return ""
 	if flag > 0:
 		world.set_event_flag(flag)
+	if not owned.is_empty():
+		world.state.apply_changes({}, {}, {"items": owned})
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	return _box_text(world)
 
