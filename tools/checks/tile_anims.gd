@@ -7,7 +7,7 @@ var _r: RefCounted = null
 ## from the addresses `Gen2Layout`'s `world_animation_functions` names. What a
 ## reading of them costs is which command ticks `wTileAnimationTimer`:
 ## `StandingTileFrame8` and `StandingTileFrame` do, and so does
-## `ScrollTileRightLeft`, which is the **only** tick the cave, dark cave and ice
+## `ScrollTileRightLeft`, which is the one tick the cave, dark cave and ice
 ## path lists have. A timer that never moves leaves those three maps with a still
 ## water palette and a tile scrolling one way for ever.
 

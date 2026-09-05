@@ -128,6 +128,23 @@ const MART_ITEMS: Dictionary = {&"red": 97, &"blue": 97, &"yellow": 98}
 ## `_MtMoonPokecenterClipboardText`, the corpus's one empty box.
 const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
+## The `text_asm` rows read as a script, and the nodes under them.
+const SCRIPT_CENSUS: Dictionary = {
+	&"red": {"rows": 91, "text": 126, "branch": 71, "choice": 6, "flag": 5, "unknown": 46},
+	&"blue": {"rows": 91, "text": 126, "branch": 71, "choice": 6, "flag": 5, "unknown": 46},
+	&"yellow": {"rows": 74, "text": 101, "branch": 63, "choice": 5, "flag": 1, "unknown": 44},
+}
+
+## The pin on which way a `wCurrentMenuItem` branch reads.
+const LAVENDER_TOWN: int = 4
+const GHOST_GIRL_TEXT: int = 1
+const GHOST_GIRL_BOXES: Array[String] = [
+	"Do you believe in\nGHOSTs?",
+	"Really? So there\nare believers...",
+	"Hahaha, I guess\nnot." + Gen2TextStream.PAGE_BREAK + "That white hand\non your shoulder,"
+		+ Gen2TextStream.SCROLL_BREAK + "it's not real.",
+]
+
 ## `NUM_SPRITES` and `FIRST_STILL_SPRITE`, with `SpriteSheetPointerTable`'s
 ## first row: `RedSprite`, $C0 bytes in bank $05.
 const SPRITE_COUNTS: Dictionary = {&"red": 72, &"blue": 72, &"yellow": 82}
@@ -291,7 +308,65 @@ func _texts() -> void:
 	_r.check(empty == int(EMPTY_TEXTS[_r.game_id]),
 		"%d texts decoded to nothing, pinned %d." % [empty, int(EMPTY_TEXTS[_r.game_id])])
 	_r.note("gen1 texts %s" % [census])
+	_scripts(font)
 	_marts()
+
+
+## Every `text_asm` row the importer read as a script. What is pinned is not the
+## count alone but the shape: a branch's flag has to be one `wEventFlags` holds,
+## every box has to draw, and the ghost girl has to keep both her answers.
+func _scripts(font: Gen2Font) -> void:
+	var census: Dictionary = {"rows": 0, "text": 0, "branch": 0, "choice": 0,
+		"flag": 0, "unknown": 0}
+	var wrong: Array[String] = []
+	for map: Gen2WorldMap in _maps.values():
+		for row: Dictionary in map.texts:
+			var script: Array = row.get("script", [])
+			if script.is_empty():
+				continue
+			census["rows"] = int(census["rows"]) + 1
+			_walk_script(font, script, census, wrong, map.number)
+	_r.check(wrong.is_empty(), "script nodes are wrong: %s." % [wrong])
+	_r.check(census == SCRIPT_CENSUS[_r.game_id], "the row scripts read %s." % [census])
+	_r.note("gen1 scripts %s" % [census])
+	_ghost_girl()
+
+
+func _walk_script(
+	font: Gen2Font, nodes: Array, census: Dictionary, wrong: Array[String], number: int
+) -> void:
+	for node: Dictionary in nodes:
+		var op: String = String(node["op"])
+		census[op] = int(census.get(op, 0)) + 1
+		if op == "text" and not _drawn(font, String(node["text"]).replace("\n", "")) \
+			and wrong.size() < 4:
+			wrong.append("map %d draws a blank tile" % number)
+		if op == "flag" or op == "branch":
+			var flag: int = int(node["flag"])
+			if (flag < 0 or flag >= Gen1Layout.EVENT_FLAG_BYTES * 8) and wrong.size() < 4:
+				wrong.append("map %d names flag %d" % [number, flag])
+		for side: String in ["then", "else", "yes", "no"]:
+			if node.has(side):
+				_walk_script(font, node[side] as Array, census, wrong, number)
+
+
+## `LavenderTownLittleGirlText`: the question, then `wCurrentMenuItem` zero for
+## YES. Its `ld hl` between `and a` and the `jr nz` is why a branch is decoded
+## off the flags rather than off the instruction in front of it.
+func _ghost_girl() -> void:
+	var map: Gen2WorldMap = _maps.get(LAVENDER_TOWN)
+	if not _r.check(map != null, "Lavender Town is missing."):
+		return
+	var script: Array = map.text_at(GHOST_GIRL_TEXT).get("script", [])
+	if not _r.check(script.size() == 2, "the ghost girl has %d nodes." % script.size()):
+		return
+	var choice: Dictionary = script[1]
+	var read: Array[String] = [
+		String((script[0] as Dictionary).get("text", "")),
+		String(((choice.get("yes", []) as Array)[0] as Dictionary).get("text", "")),
+		String(((choice.get("no", []) as Array)[0] as Dictionary).get("text", "")),
+	]
+	_r.check(read == GHOST_GIRL_BOXES, "the ghost girl says %s." % [read])
 
 
 ## Every `script_mart` row's inline inventory: `LoadItemList` reads the count out

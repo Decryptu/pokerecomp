@@ -786,6 +786,10 @@ static func _read_text(
 	if header >= 0:
 		row["trainer"] = _read_trainer_header(rom, layout, bank, header)
 		return row
+	if int(row["command"]) == Gen1Layout.TEXT_ASM:
+		var script: Array = decode_script(rom, layout, bank, at + 1)
+		if not script.is_empty():
+			row["script"] = script
 	row["text"] = String(decoded["text"])
 	row["prompt"] = bool(decoded.get("prompt", false))
 	return row
@@ -795,18 +799,245 @@ static func _read_text(
 ## [param target], or -1 for any other machine code. `TalkToTrainer` is 322 of
 ## the corpus's 626 such rows; a map sharing one landing `jr`s onto it.
 static func _asm_operand(rom: RomFile, bank: int, at: int, target: int) -> int:
-	if rom.u8(at) != Gen1Layout.TRAINER_TEXT_ASM \
-		or rom.u8(at + 1) != Gen1Layout.TRAINER_TEXT_LD_HL:
+	if rom.u8(at) != Gen1Layout.TEXT_ASM \
+		or rom.u8(at + 1) != Gen1Layout.SCRIPT_LD_HL:
 		return -1
 	var landing: int = at + 4
-	if rom.u8(landing) == Gen1Layout.TRAINER_TEXT_JR:
+	if rom.u8(landing) == Gen1Layout.SCRIPT_JR:
 		## `jr` counts from the byte after its own operand.
 		var hop: int = rom.u8(landing + 1)
 		landing += 2 + (hop - 0x100 if hop > 0x7F else hop)
-	if rom.u8(landing) != Gen1Layout.TRAINER_TEXT_CALL \
+	if rom.u8(landing) != Gen1Layout.SCRIPT_CALL \
 		or rom.u16le(landing + 1) != target:
 		return -1
 	return Gen1Layout.banked(bank, rom.u16le(at + 2))
+
+
+## What one walk may read, how deep its branches may nest, and the two answers
+## [method _script_step] gives that are not an address.
+const SCRIPT_BUDGET: int = 512
+const SCRIPT_DEPTH: int = 8
+const SCRIPT_END: int = -2
+const SCRIPT_UNREAD: int = -1
+## What a `jr z` is testing: an event flag by index, or the YES/NO answer.
+const SCRIPT_TESTS_CHOICE: int = -1
+const SCRIPT_TESTS_NOTHING: int = -2
+
+
+## One `text_asm` row's machine code, as the boxes it prints and the branches
+## choosing between them. Only the routines the layout names are read, and a
+## path reaching anything else is dropped whole rather than kept as a prefix
+## that stops mid-interaction.
+static func decode_script(
+	rom: RomFile, layout: Dictionary, bank: int, at: int
+) -> Array:
+	var walked: Variant = _walk_script(
+		{"rom": rom, "layout": layout, "bank": bank, "budget": [SCRIPT_BUDGET]},
+		at, {}, 0
+	)
+	return walked as Array if walked is Array else []
+
+
+## One straight run and the branch that ends it, or null for a path that does
+## not reach `TextScriptEnd`.
+static func _walk_script(
+	ctx: Dictionary, pc: int, state: Dictionary, depth: int
+) -> Variant:
+	if depth > SCRIPT_DEPTH:
+		return null
+	var out: Array = []
+	var budget: Array = ctx["budget"]
+	while budget[0] > 0:
+		budget[0] -= 1
+		var op: int = (ctx["rom"] as RomFile).u8(Gen1Layout.banked(int(ctx["bank"]), pc))
+		if Gen1Layout.SCRIPT_BRANCHES.has(op):
+			return _script_branch(ctx, op, pc, state, depth, out)
+		var next: int = _script_step(ctx, pc, state, out)
+		if next == SCRIPT_END:
+			return _script_ended(state, out)
+		if next == SCRIPT_UNREAD:
+			return null
+		pc = next
+	return null
+
+
+## `AfterDisplayingTextID` reads `wDoNotWaitForButtonPress...` once the row is
+## done, so the flag belongs to the last box and not to each.
+static func _script_ended(state: Dictionary, out: Array) -> Array:
+	if bool(state.get("no_press", false)) and not out.is_empty() \
+		and String((out[-1] as Dictionary)["op"]) == "text":
+		(out[-1] as Dictionary)["press"] = false
+	return out
+
+
+## One instruction: the next address, [constant SCRIPT_END] or SCRIPT_UNREAD.
+static func _script_step(
+	ctx: Dictionary, pc: int, state: Dictionary, out: Array
+) -> int:
+	var rom: RomFile = ctx["rom"]
+	var at: int = Gen1Layout.banked(int(ctx["bank"]), pc)
+	match rom.u8(at):
+		Gen1Layout.SCRIPT_LD_HL:
+			state["hl"] = rom.u16le(at + 1)
+			return pc + Gen1Layout.SCRIPT_LONG_SIZE
+		Gen1Layout.SCRIPT_LD_A:
+			state["a"] = rom.u8(at + 1)
+			state.erase("source")
+			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
+		Gen1Layout.SCRIPT_LD_A_MEM:
+			state["source"] = rom.u16le(at + 1)
+			state.erase("a")
+			return pc + Gen1Layout.SCRIPT_LONG_SIZE
+		Gen1Layout.SCRIPT_LD_MEM_A:
+			return pc + Gen1Layout.SCRIPT_LONG_SIZE \
+				if _script_stored(ctx, rom.u16le(at + 1), state) else SCRIPT_UNREAD
+		Gen1Layout.SCRIPT_AND_A:
+			state["tests"] = _script_tests(ctx, state, -1)
+			return pc + 1
+		Gen1Layout.SCRIPT_PREFIX:
+			return _script_prefix(ctx, pc, state, out)
+		Gen1Layout.SCRIPT_JR:
+			return pc + Gen1Layout.SCRIPT_SHORT_SIZE + _script_hop(rom.u8(at + 1))
+		Gen1Layout.SCRIPT_JP:
+			return SCRIPT_END if rom.u16le(at + 1) == int(
+				(ctx["layout"] as Dictionary)["text_script_end"]
+			) else SCRIPT_UNREAD
+		Gen1Layout.SCRIPT_RET:
+			return SCRIPT_END
+		Gen1Layout.SCRIPT_CALL:
+			return _script_call(ctx, pc, rom.u16le(at + 1), state, out)
+	return SCRIPT_UNREAD
+
+
+static func _script_hop(operand: int) -> int:
+	return operand - 0x100 if operand > 0x7F else operand
+
+
+## The one memory write read here: `DisableWaitingAfterTextDisplay` by hand.
+static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> bool:
+	if address != int((ctx["layout"] as Dictionary)["do_not_wait"]) \
+		or int(state.get("a", 0)) != 1:
+		return false
+	state["no_press"] = true
+	return true
+
+
+## What the flags hold. [param bit] is -1 for `and a`, which only asks whether
+## the whole byte is zero and so names no flag.
+static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> int:
+	var layout: Dictionary = ctx["layout"]
+	var source: int = int(state.get("source", -1))
+	if source == int(layout["current_menu_item"]):
+		return SCRIPT_TESTS_CHOICE
+	var flag: int = _script_flag(ctx, source, bit)
+	return flag if bit >= 0 and flag >= 0 else SCRIPT_TESTS_NOTHING
+
+
+## An address in `wEventFlags` and a bit as one flag index, the way
+## [method _read_trainer_header] counts one.
+static func _script_flag(ctx: Dictionary, address: int, bit: int) -> int:
+	var base: int = int((ctx["layout"] as Dictionary)["event_flags"])
+	if address < base or address >= base + Gen1Layout.EVENT_FLAG_BYTES:
+		return -1
+	return (address - base) * 8 + bit
+
+
+## `bit b, a` names the flag a branch tests; `set`/`res b, [hl]` writes one.
+static func _script_prefix(
+	ctx: Dictionary, pc: int, state: Dictionary, out: Array
+) -> int:
+	var code: int = (ctx["rom"] as RomFile).u8(
+		Gen1Layout.banked(int(ctx["bank"]), pc) + 1
+	)
+	var bit: int = (code >> 3) & 7
+	var operand: int = code & 7
+	if operand == Gen1Layout.SCRIPT_OPERAND_A \
+		and code >= Gen1Layout.SCRIPT_BIT_BASE and code < Gen1Layout.SCRIPT_RES_BASE:
+		state["tests"] = _script_tests(ctx, state, bit)
+		return pc + Gen1Layout.SCRIPT_SHORT_SIZE
+	if operand != Gen1Layout.SCRIPT_OPERAND_HL or code < Gen1Layout.SCRIPT_RES_BASE:
+		return SCRIPT_UNREAD
+	var flag: int = _script_flag(ctx, int(state.get("hl", -1)), bit)
+	if flag < 0:
+		return SCRIPT_UNREAD
+	out.append({"op": "flag", "flag": flag, "set": code >= Gen1Layout.SCRIPT_SET_BASE})
+	return pc + Gen1Layout.SCRIPT_SHORT_SIZE
+
+
+## The routines a row may call. No audio driver here, so a cry and the wait
+## behind it spend nothing and the walk carries on past them.
+static func _script_call(
+	ctx: Dictionary, pc: int, target: int, state: Dictionary, out: Array
+) -> int:
+	var layout: Dictionary = ctx["layout"]
+	var next: int = pc + Gen1Layout.SCRIPT_LONG_SIZE
+	## A routine returns with flags of its own, so a `jr z` behind a call is
+	## reading them rather than whatever set them before it.
+	state.erase("tests")
+	if target == int(layout["print_text"]):
+		var box: Dictionary = _script_box(ctx, int(state.get("hl", 0)))
+		if box.is_empty():
+			return SCRIPT_UNREAD
+		out.append(box)
+		return next
+	if target == int(layout["text_script_end"]):
+		return SCRIPT_END
+	if target == int(layout["disable_waiting"]):
+		state["no_press"] = true
+		return next
+	if target == int(layout["yes_no_choice"]):
+		state["source"] = int(layout["current_menu_item"])
+		state.erase("a")
+		return next
+	if target == int(layout["play_cry"]) or target == int(layout["wait_for_sound"]):
+		return next
+	return SCRIPT_UNREAD
+
+
+## One `PrintText` box, empty when the pointer does not decode to a string.
+static func _script_box(ctx: Dictionary, pointer: int) -> Dictionary:
+	var decoded: Dictionary = Gen1Text.decode_stream(
+		ctx["rom"], Gen1Layout.banked(int(ctx["bank"]), pointer)
+	)
+	if not bool(decoded.get("ok", false)) or String(decoded["text"]).is_empty():
+		return {}
+	return {"op": "text", "text": String(decoded["text"])}
+
+
+## A conditional, walked both ways. A side reaching machine code this decoder
+## does not read becomes an `unknown` node, so an interaction taking that side
+## says nothing at all, as an undecoded row does.
+static func _script_branch(
+	ctx: Dictionary, op: int, pc: int, state: Dictionary, depth: int, out: Array
+) -> Variant:
+	var tests: int = int(state.get("tests", SCRIPT_TESTS_NOTHING))
+	if tests == SCRIPT_TESTS_NOTHING:
+		return null
+	var rom: RomFile = ctx["rom"]
+	var at: int = Gen1Layout.banked(int(ctx["bank"]), pc)
+	var short: bool = op < Gen1Layout.SCRIPT_JP
+	var size: int = Gen1Layout.SCRIPT_SHORT_SIZE if short else Gen1Layout.SCRIPT_LONG_SIZE
+	var jumped: int = pc + size + _script_hop(rom.u8(at + 1)) if short else rom.u16le(at + 1)
+	var branches: Array = [
+		_walk_script(ctx, jumped, state.duplicate(), depth + 1),
+		_walk_script(ctx, pc + size, state.duplicate(), depth + 1),
+	]
+	if not bool(Gen1Layout.SCRIPT_BRANCHES[op]):
+		branches.reverse()
+	if branches[0] == null and branches[1] == null:
+		return null
+	out.append(_script_node(tests, branches))
+	return out
+
+
+## `wCurrentMenuItem` is 0 for YES, so the branch taken when it is not zero is
+## NO. An event flag reads the other way about: the taken side is the set one.
+static func _script_node(tests: int, branches: Array) -> Dictionary:
+	var taken: Array = branches[0] if branches[0] != null else [{"op": "unknown"}]
+	var fell: Array = branches[1] if branches[1] != null else [{"op": "unknown"}]
+	if tests == SCRIPT_TESTS_CHOICE:
+		return {"op": "choice", "no": taken, "yes": fell}
+	return {"op": "branch", "flag": tests, "then": taken, "else": fell}
 
 
 ## One `trainer` row. `TrainerFlagAction` counts the bit off the address two

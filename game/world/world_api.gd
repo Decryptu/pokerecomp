@@ -3724,15 +3724,81 @@ func _gen1_interact() -> Array:
 	if _gen1_steps.is_empty():
 		_gen1_steps = _gen1_facility_steps(row, text_id)
 	if _gen1_steps.is_empty():
-		var text: String = Gen2TextStream.fill_names(String(row.get("text", "")), {
-			"player": _player_name if not _player_name.is_empty() \
-				else Gen2WorldScriptRunner.UNNAMED,
-			"rival": gen1_rival_name,
-		})
+		_gen1_steps = _gen1_script_steps(row)
+	if _gen1_steps.is_empty():
+		var text: String = _gen1_filled_text(String(row.get("text", "")))
 		if text.is_empty():
 			return []
 		_gen1_steps = [{"type": &"text", "text": text}]
 	return _gen1_result()
+
+
+func _gen1_filled_text(text: String) -> String:
+	return Gen2TextStream.fill_names(text, {
+		"player": _player_name if not _player_name.is_empty() \
+			else Gen2WorldScriptRunner.UNNAMED,
+		"rival": gen1_rival_name,
+	})
+
+
+## The boxes a `text_asm` row prints, with its branches resolved against the
+## save. A taken side the importer did not read answers nothing at all, the way
+## an undecoded row does.
+func _gen1_script_steps(row: Dictionary) -> Array:
+	var nodes: Variant = row.get("script", [])
+	if not nodes is Array or (nodes as Array).is_empty():
+		return []
+	var steps: Array = []
+	return steps if _gen1_resolve_script(nodes as Array, steps) else []
+
+
+func _gen1_resolve_script(nodes: Array, steps: Array) -> bool:
+	for node: Dictionary in nodes:
+		match String(node.get("op", "")):
+			"text":
+				steps.append(_gen1_script_box(node))
+			"flag":
+				steps.append({
+					"type": &"flag",
+					"flag": int(node["flag"]),
+					"set": bool(node["set"]),
+				})
+			"branch":
+				var side: String = "then" if event_flag_active(int(node["flag"])) else "else"
+				if not _gen1_resolve_script(node[side] as Array, steps):
+					return false
+			"choice":
+				return _gen1_script_choice(node, steps)
+			_:
+				return false
+	return true
+
+
+## `YesNoChoice` stands behind the box that asked, so the question is the last
+## box printed.
+func _gen1_script_choice(node: Dictionary, steps: Array) -> bool:
+	if steps.is_empty() \
+		or StringName((steps[-1] as Dictionary).get("type", &"")) != &"text":
+		return false
+	var question: Dictionary = steps.pop_back()
+	var yes: Array = []
+	var no: Array = []
+	if not _gen1_resolve_script(node["yes"] as Array, yes) \
+		or not _gen1_resolve_script(node["no"] as Array, no):
+		return false
+	steps.append({
+		"type": &"choice", "text": String(question["text"]), "yes": yes, "no": no,
+	})
+	return true
+
+
+func _gen1_script_box(node: Dictionary) -> Dictionary:
+	var step: Dictionary = {
+		"type": &"text", "text": _gen1_filled_text(String(node.get("text", ""))),
+	}
+	if not bool(node.get("press", true)):
+		step["press"] = false
+	return step
 
 
 ## `DisplayTextID`'s own dispatch, which reads the first byte of the text a
@@ -4136,8 +4202,13 @@ func _gen1_step(type: StringName) -> Dictionary:
 	return step if StringName(step.get("type", &"")) == type else {}
 
 
-## The result the head step is waiting on, empty once the list is spent.
+## The result the head step is waiting on, empty once the list is spent. An
+## event flag a row writes takes no turn of its own and is spent on the way past.
 func _gen1_result() -> Array:
+	while not _gen1_steps.is_empty() \
+		and StringName((_gen1_steps[0] as Dictionary)["type"]) == &"flag":
+		var written: Dictionary = _gen1_steps.pop_front()
+		state.set_event_flag(int(written["flag"]), bool(written["set"]))
 	if _gen1_steps.is_empty():
 		return []
 	var step: Dictionary = _gen1_steps[0]
@@ -4156,11 +4227,15 @@ func _gen1_result() -> Array:
 			"event": (step["values"] as Dictionary).duplicate(true),
 			"events": (step.get("events", []) as Array).duplicate(true),
 		}]
-	## `AfterDisplayingTextID` ends every box on `WaitForTextScrollButtonPress`,
-	## whatever the string's last byte said.
+	## `AfterDisplayingTextID` ends every box on `WaitForTextScrollButtonPress`
+	## unless the row set `wDoNotWaitForButtonPress...` before its last one.
 	return [{
 		"ok": true, "status": &"waiting",
-		"event": {"type": &"text", "text": String(step["text"]), "prompt": true},
+		"event": {
+			"type": &"text",
+			"text": String(step["text"]),
+			"prompt": bool(step.get("press", true)),
+		},
 	}]
 
 
@@ -4250,6 +4325,11 @@ func pending_script_input() -> Dictionary:
 			"choices": Gen2WorldMenu.YES_NO_KEYS.duplicate(),
 			"text": String(step.get("text", "")),
 		}
+	## A box owing no press is spent by [method Gen2WorldScreen.advance_frame]
+	## rather than by one, and this is what it reads to find it.
+	var box: Dictionary = _gen1_step(&"text")
+	if not box.is_empty():
+		return {"type": &"text", "text": String(box["text"])}
 	return _active_script.pending_input() if _active_script != null else {}
 
 

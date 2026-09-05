@@ -5,7 +5,7 @@ extends RefCounted
 ## (engine/battle_anims/bg_effects.asm): the screen shakes, the scanline
 ## deformations, the palette fades and the tilemap edits. Five run at once.
 ##
-## **An effect id is profile-local and is never normalised.** pokegold ships no
+## An effect id is profile-local and is never normalised: pokegold ships no
 ## `BATTLE_BG_EFFECT_BODY_SLAM`, so every id from $25 on names a different effect
 ## in the two games; both jumptables are kept whole and dispatch is by name. The
 ## Color branch is taken wherever the source asks `hCGB`, as everywhere else here.
