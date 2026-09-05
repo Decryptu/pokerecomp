@@ -161,7 +161,9 @@ static func text(result: Dictionary) -> String:
 			detail = PokeModManifest.FILENAME
 		&"unsupported_api_version":
 			# The detail already names both versions.
-			return "That mod was built for a different host: %s." % detail
+			return "That mod needs a newer build of the game: %s." % detail
+		&"mod_is_too_old":
+			return "That mod was built for an older build: %s. Download it again." % detail
 		&"unsupported_index_schema":
 			return "That index uses format %s; this build reads %d." % [
 				detail, PokeModIndex.SCHEMA_VERSION,

@@ -18,10 +18,13 @@ const SOURCE_FILE_LABEL: String = "Installed from a file"
 ## anything in it, in the order the player added them, then the file group.
 ##
 ## [param sources] is [method PokeModIndex.followed]'s rows, [param listings] is
-## feed to that feed's entries, and [param manifests] is
-## [method Gen2ModHost.manifests]. A group is
+## feed to that feed's entries, [param manifests] is
+## [method Gen2ModHost.manifests] and [param present] is
+## [method Gen2ModHost.present_ids]. A group is
 ## `{feed, label, rows}`; see [method _row] for a row.
-static func groups(manifests: Array, sources: Array, listings: Dictionary) -> Array:
+static func groups(
+	manifests: Array, sources: Array, listings: Dictionary, present: Dictionary = {}
+) -> Array:
 	var installed: Dictionary = {}
 	for manifest: PokeModManifest in manifests:
 		installed[manifest.id] = manifest
@@ -39,14 +42,22 @@ static func groups(manifests: Array, sources: Array, listings: Dictionary) -> Ar
 			if String(id).is_empty() or claimed.has(id):
 				continue
 			claimed[id] = true
-			rows.append(_row(id, entry as Dictionary, installed.get(id, null), feed, label))
+			rows.append(_row(
+				id, entry as Dictionary, installed.get(id, null), feed, label,
+				present.has(id)
+			))
 		if not rows.is_empty():
 			out.append({"feed": feed, "label": label, "rows": _sorted(rows)})
 
 	var loose: Array = []
 	for id: StringName in installed:
 		if not claimed.has(id):
-			loose.append(_row(id, {}, installed[id], SOURCE_FILE, SOURCE_FILE_LABEL))
+			loose.append(_row(id, {}, installed[id], SOURCE_FILE, SOURCE_FILE_LABEL, true))
+	# A copy no source lists whose manifest was refused: it has no manifest to
+	# read a name or a version off, and it is still a directory to remove.
+	for id: StringName in present:
+		if not claimed.has(id) and not installed.has(id):
+			loose.append(_row(id, {}, null, SOURCE_FILE, SOURCE_FILE_LABEL, true))
 	if not loose.is_empty():
 		out.append({"feed": SOURCE_FILE, "label": SOURCE_FILE_LABEL, "rows": _sorted(loose)})
 	return out
@@ -58,8 +69,11 @@ static func groups(manifests: Array, sources: Array, listings: Dictionary) -> Ar
 ##
 ## `version` is what the row shows: the installed version when there is one,
 ## because that is the copy the player has, and the listed version otherwise.
+## [param present] is whether the mods root holds a directory for it, which is
+## true without a manifest whenever this host refused the one that is there.
 static func _row(
-	id: StringName, entry: Dictionary, manifest: PokeModManifest, feed: String, label: String
+	id: StringName, entry: Dictionary, manifest: PokeModManifest, feed: String,
+	label: String, present: bool
 ) -> Dictionary:
 	var listed_version: String = String(entry.get("version", ""))
 	var installed_version: String = manifest.version if manifest != null else ""
@@ -81,6 +95,7 @@ static func _row(
 		"feed": feed,
 		"source_label": label,
 		"installed": manifest != null,
+		"present": present or manifest != null,
 		"listed": not entry.is_empty(),
 		"enabled": manifest != null and Gen2ModState.is_enabled(id),
 		"update": PokeModIndex.update_state(listed_version, installed_version),
@@ -91,9 +106,15 @@ static func _row(
 ## What the row's own action does, which is the one place the Cydia rule lives:
 ## a listed mod is downloaded, updated or reinstalled, and an installed one is
 ## removed. Removing a listed mod leaves it listed.
+##
+## `replace` is a copy on disk this host would not load, which is what a
+## contract bump leaves behind: the installer refuses a plain download over it,
+## so the press has to say it is replacing what is there.
 static func action_for(row: Dictionary) -> StringName:
-	if not bool(row.get("installed", false)):
+	if not bool(row.get("present", row.get("installed", false))):
 		return &"download"
+	if not bool(row.get("installed", false)):
+		return &"replace"
 	if StringName(row.get("update", PokeModIndex.UNKNOWN)) == PokeModIndex.UPDATE_AVAILABLE:
 		return &"update"
 	return &"remove"

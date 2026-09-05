@@ -300,7 +300,7 @@ func test_mod_update_controls_stay_icon_sized_for_mobile() -> void:
 	assert_eq(check.text, "", "the page-wide check does not widen the mobile header")
 	assert_eq(check.get("_glyph"), &"refresh_all")
 	var actions: Array[Control] = page._action_buttons({
-		"name": "Example", "installed": true,
+		"name": "Example", "installed": true, "present": true, "listed": true,
 		"update": PokeModIndex.UPDATE_AVAILABLE,
 	})
 	var update: Gen2LauncherButton = actions[0] as Gen2LauncherButton
@@ -963,6 +963,8 @@ func test_a_mod_row_fits_a_phone_rather_than_running_off_its_card() -> void:
 		"name": "Listed mod",
 		"version": "1.0.0",
 		"installed": false,
+		"present": false,
+		"listed": true,
 		"enabled": false,
 		"update": PokeModIndex.UNKNOWN,
 	}) as Gen2LauncherCard

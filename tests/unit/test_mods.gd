@@ -113,14 +113,14 @@ func test_a_manifest_built_for_another_host_is_refused() -> void:
 	_write_manifest(source)
 	assert_eq(PokeModManifest.read(_directory)["reason"], &"unsupported_api_version")
 
-	## An OLDER contract still runs: every bump so far has only added to it, and
-	## refusing one would break every mod already installed.
+	## Below the oldest contract this host answers is a different refusal, since
+	## it is the mod that wants updating rather than the game.
 	source["api_version"] = PokeModManifest.MIN_API_VERSION
 	_write_manifest(source)
 	assert_true(bool(PokeModManifest.read(_directory).get("ok", false)))
 	source["api_version"] = PokeModManifest.MIN_API_VERSION - 1
 	_write_manifest(source)
-	assert_eq(PokeModManifest.read(_directory)["reason"], &"unsupported_api_version")
+	assert_eq(PokeModManifest.read(_directory)["reason"], &"mod_is_too_old")
 
 
 func test_manifest_versions_and_dependency_ranges_are_validated_before_code_runs() -> void:
@@ -1529,6 +1529,54 @@ func test_a_mod_belongs_to_the_source_that_lists_it_and_otherwise_to_the_file_it
 	assert_eq(String(loose["id"]), "handmade")
 	assert_eq(Gen2ModCatalogue.action_for(loose), &"remove")
 	assert_true(Gen2ModCatalogue.removal_is_permanent(loose), "a file is the only copy")
+
+
+## The trap a contract bump leaves behind. A copy whose `mod.json` this host
+## refuses is on disk and not in [method Gen2ModHost.manifests], so a row read
+## off the manifests alone says "Not installed", offers only the download, and
+## that download is refused because the directory is there.
+func test_a_copy_the_host_refused_is_still_a_copy_the_player_can_act_on() -> void:
+	var stale: String = "%s/stale" % ROOT
+	_write_dependency_mod(stale, "stale", "1.0.0")
+	_write("%s/mod.json" % stale, JSON.stringify({
+		"id": "stale", "name": "Stale", "version": "1.0.0",
+		"api_version": PokeModManifest.MIN_API_VERSION - 1, "entry": "mod.gd",
+	}))
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.discover(ROOT)
+	assert_eq(host.manifests().size(), 0, "the manifest is refused")
+	assert_true(host.failures().any(func(failure: Dictionary) -> bool:
+		return StringName(failure.get("reason", &"")) == &"mod_is_too_old"
+	), "and refused for the contract it declares")
+	assert_true(host.present_ids().has(&"stale"), "the copy is still on disk")
+
+	var sources: Array = [{"feed": "https://a.example/index.json", "label": "A"}]
+	var groups: Array = Gen2ModCatalogue.groups(
+		host.manifests(), sources,
+		{"https://a.example/index.json": [{
+			"id": &"stale", "name": "Stale", "version": "2.0.0",
+			"download": "https://a.example/stale.zip",
+		}]},
+		host.present_ids()
+	)
+	var row: Dictionary = (groups[0]["rows"] as Array)[0]
+	assert_false(bool(row["installed"]), "no manifest reached the host")
+	assert_true(bool(row["present"]), "a copy is in the mods root")
+	assert_eq(
+		Gen2ModCatalogue.action_for(row), &"replace",
+		"the download replaces the copy rather than being refused by it"
+	)
+	assert_eq(
+		Gen2ModInstaller.install_bytes(
+			PackedByteArray(), bool(row["present"]), StringName(row["id"]), ROOT
+		).get("reason", &""),
+		&"not_a_zip",
+		"the installer got as far as reading the archive rather than refusing the folder"
+	)
+	assert_true(
+		Gen2ModInstaller.uninstall(&"stale", ROOT).get("removed", false),
+		"and the row can be removed instead"
+	)
 
 
 func test_two_sources_listing_one_mod_leave_it_under_the_first() -> void:

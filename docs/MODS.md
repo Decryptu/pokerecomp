@@ -99,7 +99,8 @@ loader and no mod.
 What each `api_version` added. Declare the oldest one that carries every seam the
 mod reaches, and a host refuses a number above its own. Every version up to 29
 only added, so an older number still ran. Version 30 renamed classes, and a host
-carrying it answers 30 alone.
+carrying it answers 30 alone: a copy already installed below that is listed as
+installed but not loaded, and its own page offers to replace or remove it.
 
 | Version | Added |
 |---|---|

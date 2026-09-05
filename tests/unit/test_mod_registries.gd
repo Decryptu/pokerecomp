@@ -467,6 +467,7 @@ func test_every_refusal_reason_the_mod_layer_produces_has_player_wording() -> vo
 	# neither used to show as a raw StringName through whichever screen met it.
 	for reason: StringName in [
 		&"not_a_zip", &"unsafe_archive_entry", &"unsupported_api_version",
+		&"mod_is_too_old",
 		&"unsupported_index_schema", &"already_installed", &"duplicate_renderer",
 		&"duplicate_content", &"reserved_effect_command", &"missing_entry_script",
 		&"duplicate_party_menu_entry", &"party_menu_entry_missing_callable",

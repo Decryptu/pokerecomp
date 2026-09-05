@@ -4,11 +4,9 @@ extends VBoxContainer
 ## The mod manager: a list grouped by where each mod came from, a page per mod,
 ## and a page for the sources the player follows. The model is a package
 ## manager's, so removing a mod a source lists uninstalls it and leaves it listed
-## while removing one that came from a file deletes the only copy there was;
-## [Gen2ModCatalogue] decides both. The list carries only what a list is for, with
-## settings and history on the mod's own page. A change is applied where it is
-## made: the host is reset and every entry script runs again, because nothing here
-## can withdraw one registration on its own.
+## while removing one from a file deletes the only copy; [Gen2ModCatalogue]
+## decides both. A change is applied where it is made: the host is reset and every
+## entry script runs again, nothing here withdrawing one registration on its own.
 
 ## Asks the launcher for its file picker: the page owns no OS dialog.
 signal install_requested
@@ -158,10 +156,9 @@ func refresh() -> void:
 ## Whether the page may reach the network without a player having asked it to.
 ## [method HTTPRequest.request] refuses, loudly, from a node that is not in the
 ## tree, and [method create] builds the whole page before the launcher adds it.
-## The rest is [method Gen2GameRuntime.is_player_launch]: a check, a test tier, a
-## screenshot driver or a replay has nobody to show a listing to and its user:// is
-## usually empty, so every page it builds would fetch the feed and then an icon
-## per row. What a player pressed is not gated here and works in any run.
+## The rest is [method Gen2GameRuntime.is_player_launch]: a check, a test tier or
+## a replay has nobody to show a listing to, so every page it builds would fetch
+## the feed and an icon per row. What a player pressed is not gated here.
 func _may_fetch_unprompted() -> bool:
 	return is_inside_tree() and Gen2GameRuntime.is_player_launch()
 
@@ -192,7 +189,7 @@ func _relist() -> void:
 	Gen2LauncherUI.clear(_list)
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	var groups: Array = Gen2ModCatalogue.groups(
-		host.manifests(), PokeModIndex.followed(), _listings
+		host.manifests(), PokeModIndex.followed(), _listings, host.present_ids()
 	)
 	var failures: Array = host.failures()
 	_note.text = "Loaded from %s" % Gen2ModHost.ROOT
@@ -298,28 +295,26 @@ static func _clipped(label: Label) -> Label:
 
 
 ## What a row can do: download a mod that is not installed, update one a source
-## offers a newer version of, and remove one that is installed. Download and
-## update are the same press, since a source hands over an archive and the
-## installer replaces whatever was there.
+## offers a newer version of, replace a copy this host would not load, and remove
+## whatever is on disk. Download, update and replace are the same press, since a
+## source hands over an archive and the installer replaces what was there.
+##
+## The remove button follows `present` rather than `installed`, or a copy whose
+## manifest was refused has no button that does anything: the download over it is
+## refused by the directory and there is nothing else to press.
 func _action_buttons(row: Dictionary) -> Array[Control]:
 	var out: Array[Control] = []
-	match Gen2ModCatalogue.action_for(row):
-		&"download":
-			var get_it: Gen2LauncherButton = Gen2LauncherButton.icon_only(
-				_theme, &"download", Gen2LauncherButton.Variant.PRIMARY, 40.0
-			)
-			get_it.tooltip_text = "Download %s" % row["name"]
-			get_it.pressed.connect(func() -> void: download(row))
-			out.append(get_it)
-			return out
-		&"update":
-			var update: Gen2LauncherButton = Gen2LauncherButton.icon_only(
-				_theme, &"download", Gen2LauncherButton.Variant.PRIMARY, 40.0
-			)
-			update.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			update.tooltip_text = "Download and install the available update for %s" % row["name"]
-			update.pressed.connect(func() -> void: download(row))
-			out.append(update)
+	var action: StringName = Gen2ModCatalogue.action_for(row)
+	if action != &"remove" and bool(row["listed"]):
+		var get_it: Gen2LauncherButton = Gen2LauncherButton.icon_only(
+			_theme, &"download", Gen2LauncherButton.Variant.PRIMARY, 40.0
+		)
+		get_it.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		get_it.tooltip_text = ACTION_TOOLTIPS[action] % row["name"]
+		get_it.pressed.connect(func() -> void: download(row))
+		out.append(get_it)
+	if not bool(row["present"]):
+		return out
 	var remove: Gen2LauncherButton = Gen2LauncherButton.icon_only(
 		_theme, &"trash", Gen2LauncherButton.Variant.DANGER, 40.0
 	)
@@ -327,6 +322,13 @@ func _action_buttons(row: Dictionary) -> Array[Control]:
 	remove.pressed.connect(func() -> void: remove_mod(row))
 	out.append(remove)
 	return out
+
+
+const ACTION_TOOLTIPS: Dictionary = {
+	&"download": "Download %s",
+	&"update": "Download and install the available update for %s",
+	&"replace": "Replace the copy of %s this version cannot load",
+}
 
 
 ## The line under a name: the version in hand, and what a source is offering
@@ -337,7 +339,11 @@ static func _version_line(row: Dictionary) -> String:
 	if not version.is_empty():
 		line += "  %s" % version
 	if not bool(row["installed"]):
-		return "%s  Not installed" % line
+		# A copy on disk the host refused is not the same as nothing installed,
+		# and the refusal card below the list says which one it was.
+		return "%s  %s" % [
+			line, "Installed, not loaded" if bool(row["present"]) else "Not installed"
+		]
 	match StringName(row["update"]):
 		PokeModIndex.UPDATE_AVAILABLE:
 			return "%s  %s available" % [line, row["listed_version"]]
@@ -364,8 +370,9 @@ func _refusal(failure: Dictionary) -> Control:
 ## The row for one id as the catalogue sees it now, or an empty dictionary for a
 ## mod that has since been removed and is listed nowhere.
 func _row_for(id: StringName) -> Dictionary:
+	var host: Gen2ModHost = Gen2ModHost.instance()
 	for group: Dictionary in Gen2ModCatalogue.groups(
-		Gen2ModHost.instance().manifests(), PokeModIndex.followed(), _listings
+		host.manifests(), PokeModIndex.followed(), _listings, host.present_ids()
 	):
 		for row: Dictionary in group["rows"] as Array:
 			if StringName(row["id"]) == id:
@@ -477,13 +484,20 @@ func available_update_count() -> int:
 	return update_rows().size()
 
 
+## What the update button offers: a newer version, and a copy this host would
+## not load that a source can hand over again, which is the one press out of a
+## contract bump.
+const UPDATE_ACTIONS: Array[StringName] = [&"update", &"replace"]
+
+
 func update_rows() -> Array:
 	var out: Array = []
+	var host: Gen2ModHost = Gen2ModHost.instance()
 	for group: Dictionary in Gen2ModCatalogue.groups(
-		Gen2ModHost.instance().manifests(), PokeModIndex.followed(), _listings
+		host.manifests(), PokeModIndex.followed(), _listings, host.present_ids()
 	):
 		for row: Dictionary in group["rows"] as Array:
-			if Gen2ModCatalogue.action_for(row) == &"update":
+			if UPDATE_ACTIONS.has(Gen2ModCatalogue.action_for(row)) and bool(row["listed"]):
 				out.append(row)
 	return out
 
@@ -635,7 +649,7 @@ func _settled(finished: Callable, ok: bool) -> void:
 ## turns out to be another mod is exactly what this refuses.
 func install_entry_bytes(row: Dictionary, body: PackedByteArray) -> Dictionary:
 	var installed: Dictionary = Gen2ModInstaller.install_bytes(
-		body, bool(row.get("installed", false)), StringName(row["id"])
+		body, bool(row.get("present", row.get("installed", false))), StringName(row["id"])
 	)
 	if not bool(installed.get("ok", false)):
 		_status("%s was not installed: %s" % [

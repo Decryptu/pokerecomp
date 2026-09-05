@@ -66,10 +66,8 @@ const RENDERER_WORLD_CONTEXT_METHOD: String = "set_world_context"
 ## Optional, world renderers only. Offered every input event the world screen did
 ## not use, so a renderer can own camera pitch or first person; answering true
 ## consumes the event. The screen decides first, so a renderer can never take a
-## movement or interaction key: it reads world state and must not write it.
-## Implement this rather than [method Node._input] or
-## [method Node._unhandled_input], which are offered events before the screen
-## decides and so race the gameplay keys instead of taking what is left.
+## movement or interaction key. Implement this rather than [method Node._input]
+## or [method Node._unhandled_input], which race the gameplay keys instead.
 const RENDERER_INPUT_METHOD: String = "handle_world_input"
 ## Optional, battle renderers only. The same seam on the battle side: every event
 ## [Gen2BattleScreen] did not claim, so a renderer composing its own shot can let
@@ -82,11 +80,9 @@ const RENDERER_INPUT_METHOD: String = "handle_world_input"
 const RENDERER_BATTLE_INPUT_METHOD: String = "handle_battle_input"
 ## Optional, both renderer kinds. How opaque the screen draws the field of its own
 ## text box while this renderer is on the native layer, from 0 to 1. The frame's
-## lines and the glyphs are ink and stay opaque, so nothing becomes harder to
-## read. Only honoured for a renderer that answered
+## lines and the glyphs stay opaque. Only honoured for a renderer that answered
 ## [constant RENDERER_SURFACE_METHOD] false: one drawing in hardware pixels paints
-## the background the box sits on, and a hole in the box would show the window
-## behind the screen rather than the map.
+## the background the box sits on, so a hole would show the window behind it.
 const RENDERER_INTERFACE_OPACITY_METHOD: String = "interface_opacity"
 ## Optional, both renderer kinds. Called with the rectangle the screen's text box
 ## covers, in hardware pixels, whenever it changes, and with an empty rectangle
@@ -95,12 +91,10 @@ const RENDERER_INTERFACE_OPACITY_METHOD: String = "interface_opacity"
 const RENDERER_TEXT_BOX_METHOD: String = "set_text_box_rect"
 ## Optional, both renderer kinds. Called when a screen laid out in 160x144 takes
 ## the picture over the view, and again when it gives it back. A renderer drawing
-## in hardware pixels needs nothing, the screen painting its own letterbox inside
-## the hardware viewport; a native-layer renderer is deliberately not covered,
-## since the mask would crop a view that already filled the surface. This is how
-## such a renderer closes its own surround, and `DoBattleTransition` is the case it
-## exists for: twenty by eighteen cells cannot be widened, so the wedge closing
-## over a filled window is a shape only that view can draw.
+## in hardware pixels needs nothing; a native-layer one is deliberately not
+## covered, the mask cropping a view that already filled the surface, so this is
+## how it closes its own surround. `DoBattleTransition` is the case it exists
+## for: the wedge closing over a filled window is a shape only that view draws.
 const RENDERER_INTERFACE_MASK_METHOD: String = "set_interface_masked"
 ## Optional, both renderer kinds, and only meaningful on the native layer. Called
 ## beside [constant RENDERER_RESIZE_METHOD] with the cartridge's own 160x144
@@ -207,6 +201,8 @@ static var _instance: Gen2ModHost = null
 static var _mounted_packs: Dictionary = {}
 
 var _manifests: Dictionary = {}
+## Every mod directory [method discover] saw, refused manifests included.
+var _present: Dictionary = {}
 ## Mod id to version for every entry script that ran. See [method loaded_mods].
 var _loaded: Dictionary = {}
 ## Mod id to the entry object `register` was called on, held so it survives the
@@ -359,9 +355,8 @@ func create_world_renderer() -> Node:
 ## because an actor is a pose and not a view: it must be a [RefCounted], never a
 ## [Node], and must answer [constant Gen2WorldActors.ACTOR_METHODS], a
 ## registration missing one being refused here where the mod's name is in hand.
-## Two more are OPTIONAL and offered only to an actor that defines them, so every
-## actor already written keeps working. What an actor draws is presentation and
-## takes part in nothing else; see `docs/MODS.md` for the entry shape.
+## Two more are OPTIONAL and offered only to an actor that defines them. See
+## `docs/MODS.md` for the entry shape.
 func register_world_actor(id: StringName, actor: Object) -> Dictionary:
 	return _register_provider(
 		_world_actors, Gen2WorldActors.ACTOR_METHODS, id, actor, "actor"
@@ -419,11 +414,9 @@ func requeue_hidden_items(cells: Array[Vector2i]) -> void:
 ## Asks the world screen to hand [param item] over, [param quantity] of it,
 ## through `verbosegiveitem`'s own transaction: the bag write, the fanfare, the
 ## received line, the pocket line and the pack-full branch. A REQUEST and never
-## the act, for the reason [method request_hidden_item] is one, and answering
-## nothing for the same reason. Queued the same way, so one made inside a battle
-## or a warp is spent on the first world frame nothing else owns. An item number
-## the cartridge does not know is refused when the queue is spent, not here.
-## Unlike a hidden item there is no cell, no event flag and no map.
+## the act, for the reason [method request_hidden_item] is one, and queued the
+## same way. An item number the cartridge does not know is refused when the queue
+## is spent, not here. Unlike a hidden item there is no cell, flag or map.
 func request_item_gift(item: int, quantity: int = 1) -> void:
 	if item <= 0 or quantity <= 0:
 		return
@@ -447,12 +440,10 @@ func requeue_item_gifts(gifts: Array[Dictionary]) -> void:
 
 ## One line's worth of the cartridge's own font, printed in the battle's own box
 ## with its own pacing and its own press, after the line being shown when the
-## request was made. Queued and spent in request order, the way the other two ask
-## methods are. Unlike those it is DROPPED where no battle is showing messages
-## rather than held: a line about a moment that has passed is worse than no line.
-## Refused rather than clipped when it does not fit one line of
-## [constant Gen2TextBox.STANDARD_COLUMNS], with the refusal reaching
-## [method failures] under [param id].
+## request was made. Queued and spent in request order like the other two ask
+## methods, but DROPPED where no battle is showing messages rather than held: a
+## line about a moment that has passed is worse than no line. Refused rather than
+## clipped past [constant Gen2TextBox.STANDARD_COLUMNS], into [method failures].
 func request_battle_message(id: StringName, text: String) -> Dictionary:
 	var line: String = text.strip_edges()
 	if String(id).is_empty():
@@ -497,12 +488,10 @@ const MAX_NOTICES: int = 8
 
 ## Asks the world screen to raise a banner over the map: an icon, a title, a line
 ## and a sound. A REQUEST and never the act, the way [method request_hidden_item]
-## is. Drawn as `PlaceMapNameSign` draws the landmark banner, the only thing the
-## cartridge ever puts over a live map, and held rather than dropped while
-## something else owns the world, with [constant Gen2WorldAPI.MAP_NAME_SIGN_PASSES]
-## between two. `title` and `line` are REFUSED rather than clipped, `icon` is the
-## vocabulary an actor's `sprites()` shares, and `sound` is a
-## [constant NOTICE_SOUNDS] name.
+## is. Drawn as `PlaceMapNameSign` draws the landmark banner, and held rather than
+## dropped while something else owns the world, with
+## [constant Gen2WorldAPI.MAP_NAME_SIGN_PASSES] between two. `title` and `line`
+## are REFUSED rather than clipped, `icon` is an actor's `sprites()` vocabulary.
 func request_notice(id: StringName, notice: Dictionary) -> Dictionary:
 	if String(id).is_empty():
 		return {"ok": false, "reason": &"invalid_provider"}
@@ -759,11 +748,9 @@ func repel_renewal_item(bag: Dictionary) -> int:
 ## Registers a SHINY ROLLS provider under [param id]: how many DV words the host
 ## draws for one wild before it settles, which is the later games' charm. The host
 ## keeps the first [method Gen2Stats.is_shiny] accepts and otherwise the last, and
-## clamps to [constant MAX_SHINY_ROLLS]; 0 and 1 both mean the cartridge's own
-## single roll. [code]context[/code] carries the encounter but not the bag, since
-## [method inventory] is live and this would be one snapshot per wild. Two
-## providers COMPOSE ADDITIVELY rather than by registration order: refusing the
-## second would make two charms an install error over a number with an obvious join.
+## clamps to [constant MAX_SHINY_ROLLS]; 0 and 1 both mean one roll.
+## [code]context[/code] carries the encounter but not the bag, [method inventory]
+## being live. Two providers COMPOSE ADDITIVELY rather than by load order.
 func register_shiny_rolls(id: StringName, provider: Object) -> Dictionary:
 	return _register_provider(_shiny_rolls, SHINY_ROLLS_METHODS, id, provider)
 
@@ -909,10 +896,8 @@ func battle_info_ids() -> Array:
 ## Every provider's placements for [param snapshot], validated and with
 ## overlapping ownership refused rather than resolved by load order: a cell a
 ## later provider claims after an earlier one is dropped and reported, so which
-## mod loaded first cannot decide what a player sees. A placement the grid refuses
-## is reported by name too. This runs once a frame over a pure function, so each
-## distinct refusal is recorded once: repeating it sixty times a second would bury
-## every other failure the launcher lists.
+## mod loaded first cannot decide what a player sees. This runs once a frame, so
+## each distinct refusal is recorded once rather than sixty times a second.
 func battle_info_placements(snapshot: Dictionary) -> Array:
 	var out: Array = []
 	var claimed: Dictionary = {}
@@ -1178,10 +1163,8 @@ func party_member_entries(slot: int, in_battle: bool = false) -> Array:
 ## [param entry] carries a `build(page)` Callable taking
 ## [method Gen2MonStatsScreen.snapshot] and answering placements on the screen's
 ## own tile grid, `{"text", "at"}` for a string and `{"divider"}` for a vertical
-## rule. The host writes them with the screen's own font, so a page needs no
-## renderer, node or picture. The ceiling is
-## [constant Gen2StatsScreenPage.MAX_PAGES], past which the indicators reach the
-## front pic.
+## rule, written with the screen's own font. The ceiling is
+## [constant Gen2StatsScreenPage.MAX_PAGES], past which they reach the front pic.
 func register_stats_page(id: StringName, entry: Dictionary) -> Dictionary:
 	if String(id).is_empty():
 		return {"ok": false, "reason": &"invalid_stats_page"}
@@ -1281,11 +1264,10 @@ func menu_entries(menu: StringName) -> Array:
 
 ## The start-menu entries [code]context[/code] leaves visible, in registration order.
 ##
-## An entry that registered no `visible` predicate is always listed, which is
-## every entry written before this existed. One that did is asked with a copy of
-## the context, so deciding whether to appear cannot change the menu being built;
-## answering false leaves the row ABSENT rather than present and refused, which
-## is what the cartridge's own gated rows do. The host applies its own gate after
+## An entry that registered no `visible` predicate is always listed. One that did
+## is asked with a copy of the context, so deciding whether to appear cannot
+## change the menu being built; answering false leaves the row ABSENT rather than
+## refused, as the cartridge's own gated rows are. The host's own gate runs after
 ## the predicate, so a mod cannot show a row the game would refuse.
 func start_menu_entries(context: Dictionary) -> Array:
 	var out: Array = []
@@ -1340,9 +1322,8 @@ func mart_entries(mart: Dictionary) -> Array:
 ## needs a `key`, a `label` and a non-empty `values` array; `labels` names each
 ## rung and defaults to the values themselves, and `default` is the rung used
 ## until the player picks. A toggle is a two-rung ladder and
-## [constant OPTION_NUMBER] takes a range instead. A mod describes a setting rather
-## than drawing one, so the start menu's MODS entry and the launcher's mods page
-## cannot disagree.
+## [constant OPTION_NUMBER] takes a range. A mod describes a setting rather than
+## drawing one, so the MODS entry and the launcher's page cannot disagree.
 func register_option(id: StringName, spec: Dictionary) -> Dictionary:
 	var key: StringName = StringName(spec.get("key", &""))
 	if String(id).is_empty() or String(key).is_empty():
@@ -2103,6 +2084,7 @@ static func _renderer_takes_input(renderer: Node, method: String, event: InputEv
 func discover(root: String = ROOT) -> Array:
 	_manifests = {}
 	_failures = []
+	_present = {}
 	_battle_info_reported = {}
 	var directory: DirAccess = DirAccess.open(root)
 	if directory == null:
@@ -2111,6 +2093,7 @@ func discover(root: String = ROOT) -> Array:
 	var name: String = directory.get_next()
 	while name != "":
 		if directory.current_is_dir() and not name.begins_with("."):
+			_present[StringName(name)] = true
 			var result: Dictionary = PokeModManifest.read("%s/%s" % [root, name])
 			if bool(result.get("ok", false)):
 				var manifest: PokeModManifest = result["manifest"]
@@ -2132,6 +2115,14 @@ func discover(root: String = ROOT) -> Array:
 ## discover would drop the load failures recorded after it.
 func manifests() -> Array:
 	return _manifests.values()
+
+
+## Every directory the last [method discover] walked, which is the question
+## [method Gen2ModInstaller.install_zip] asks before it refuses one as already
+## installed. A copy whose manifest was refused is in here and not in
+## [method manifests], and the launcher has to be able to replace or remove it.
+func present_ids() -> Dictionary:
+	return _present.duplicate()
 
 
 func failures() -> Array:
@@ -2193,10 +2184,9 @@ const SAVE_LIFECYCLE_METHODS: Array[String] = [
 ## rather than an installation. [param manifest] is the object `register()` was
 ## handed and it is the capability: the host keeps it beside the provider, so a
 ## callback reaches [method read_save_data] for its OWN namespace and no other
-## mod's. [param provider] answers [constant SAVE_LIFECYCLE_METHODS]. Ordering is
-## in `docs/MODS.md`; what matters here is that the host drops every lifecycle
-## mod's overlay contributions before a `save_activated` runs, so two slots cannot
-## leak patches into one another.
+## mod's. [param provider] answers [constant SAVE_LIFECYCLE_METHODS]. The host
+## drops every lifecycle mod's overlay contributions before a `save_activated`
+## runs, so two slots cannot leak patches into one another; see `docs/MODS.md`.
 func register_save_lifecycle(manifest: PokeModManifest, provider: Object) -> Dictionary:
 	if not _owns_manifest(manifest):
 		return {"ok": false, "reason": &"unknown_mod_save_owner"}
@@ -2242,10 +2232,9 @@ func created_save(save: Gen2SaveData) -> void:
 ## The save about to be played, or null for a DEVELOPMENT run: one started without
 ## a selected slot, which has no namespace to read and must not be handed an
 ## invented save to write into. Every lifecycle mod's overlay contributions are
-## dropped first, in one pass, so the callbacks that follow all start from the
-## cartridge whatever order they run in. The save's own mod settings are bound
-## before any callback, so a provider reads the values this run was played with;
-## a slot written before that snapshot existed adopts the installation once, here.
+## dropped first, so the callbacks that follow all start from the cartridge. The
+## save's own mod settings are bound before any callback; a slot written before
+## that snapshot existed adopts the installation once, here.
 func activate_save(save: Gen2SaveData) -> void:
 	_clear_save_overlays()
 	if save == null:
