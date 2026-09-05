@@ -104,6 +104,13 @@ const IDLE_PASSES_WRAP: int = 256
 ## four cells into the ten by nine `wXCoord`/`wYCoord` name. Inclusive.
 const OBJECT_SCREEN_MIN: Vector2i = Vector2i(-4, -4)
 const OBJECT_SCREEN_MAX: Vector2i = Vector2i(5, 4)
+## A facing as the step it walks, which is also the axis its sight line runs on.
+const SIGHT_STEPS: Dictionary = {
+	Gen2WorldSprite.FACING_DOWN: Vector2i.DOWN,
+	Gen2WorldSprite.FACING_UP: Vector2i.UP,
+	Gen2WorldSprite.FACING_LEFT: Vector2i.LEFT,
+	Gen2WorldSprite.FACING_RIGHT: Vector2i.RIGHT,
+}
 
 ## Crystal background event types from script_constants.asm. READ and the four
 ## facing variants point directly at a script. IFSET and IFNOTSET point at a
@@ -4069,6 +4076,8 @@ func dispatch_script_events(cell: Vector2i = player_cell) -> Array:
 ## cartridge's trainer scan order. A trainer sees only along its facing axis,
 ## and a nonzero event flag prevents the encounter from being queued.
 func dispatch_sight_events() -> Array:
+	if _gen1:
+		return _gen1_sight()
 	if _active_script != null or not _script_queue.is_empty():
 		return run_event_queue(false)
 	var request: Dictionary = _find_sight_request()
@@ -4076,6 +4085,32 @@ func dispatch_sight_events() -> Array:
 		return []
 	_enqueue_script(request)
 	return run_event_queue(false)
+
+
+## `CheckFightingMapTrainers`: the shock bubble and `TrainerWalkUpToPlayer` in
+## front of `DisplayEnemyTrainerTextAndStartBattle`, which is `TalkToTrainer`
+## with BIT_SEEN_BY_TRAINER already set and so opens on the before-battle line.
+func _gen1_sight() -> Array:
+	if _gen1_holding():
+		return []
+	var request: Dictionary = _find_sight_request()
+	if request.is_empty():
+		return []
+	var event: Dictionary = request["event"]
+	var steps: Array = _gen1_trainer_steps(
+		current_map.text_at(int(event.get("text", 0))), event
+	)
+	if steps.is_empty():
+		return []
+	_gen1_steps = [{"type": &"request", "values": {
+		"kind": &"trainer_approach_requested",
+		"values": {
+			"object_index": int(request["object_index"]),
+			"direction": request["direction"],
+			"distance": int(request["distance"]),
+		},
+	}}] + steps
+	return _gen1_result()
 
 
 func script_input_waiting() -> bool:
@@ -6110,7 +6145,7 @@ func _decide_object_movement(object: Gen2WorldObject, random: RandomNumberGenera
 	# refused step still turns the object.
 	object.apply_direction(direction)
 	var destination: Vector2i = object.cell + direction
-	if not object.can_leave_to(destination) \
+	if not _object_may_leave(object, destination, direction) \
 		or not _object_stays_on_screen(destination) \
 		or not can_object_walk_to(destination, object, direction):
 		# _RandomWalkContinue's .new_duration branch: a blocked object keeps its
@@ -6147,6 +6182,23 @@ func _decide_object_spin(object: Gen2WorldObject, random: RandomNumberGenerator)
 func _rolled_idle_passes(random: RandomNumberGenerator, mask: int) -> int:
 	var rolled: int = random.randi() & mask
 	return rolled if rolled > 0 else IDLE_PASSES_WRAP
+
+
+## The movement radius in Generation 2, and in Generation 1 the displacement
+## counters of [constant Gen1Layout.OBJECT_WALK_ORIGIN], which the distance the
+## object has come carries: each accepted step moves both alike.
+func _object_may_leave(
+	object: Gen2WorldObject, destination: Vector2i, direction: Vector2i
+) -> bool:
+	if not _gen1:
+		return object.can_leave_to(destination)
+	var walked: Vector2i = object.cell - object.initial_cell \
+		+ Vector2i(Gen1Layout.OBJECT_WALK_ORIGIN, Gen1Layout.OBJECT_WALK_ORIGIN)
+	if direction.y < 0:
+		return walked.y > 0
+	if walked.y + direction.y < Gen1Layout.OBJECT_WALK_FLOOR:
+		return false
+	return direction.x >= 0 or walked.x > 0
 
 
 ## `IsObjectMovingOffEdgeOfScreen`, the refusal beside the movement radius in
@@ -7948,7 +8000,7 @@ func _find_sight_request() -> Dictionary:
 	for object: Gen2WorldObject in objects:
 		if not object.active \
 			or object.object_type != Gen2WorldObject.OBJECTTYPE_TRAINER \
-			or object.sight_range <= 0 or object.event_script <= 0:
+			or object.sight_range <= 0 or (object.event_script <= 0 and not _gen1):
 			continue
 		if object.event_flag_active(state) or object.trainer_flag_active(state):
 			continue
@@ -7981,21 +8033,12 @@ func _find_sight_request() -> Dictionary:
 
 
 func _sight_distance(object: Gen2WorldObject) -> Dictionary:
+	var step: Vector2i = SIGHT_STEPS.get(object.facing, Vector2i.ZERO)
 	var delta: Vector2i = player_cell - object.cell
-	var direction: Vector2i = Vector2i.ZERO
-	match object.facing:
-		Gen2WorldSprite.FACING_DOWN:
-			if delta.x == 0 and delta.y > 0:
-				direction = Vector2i.DOWN
-		Gen2WorldSprite.FACING_UP:
-			if delta.x == 0 and delta.y < 0:
-				direction = Vector2i.UP
-		Gen2WorldSprite.FACING_LEFT:
-			if delta.y == 0 and delta.x < 0:
-				direction = Vector2i.LEFT
-		Gen2WorldSprite.FACING_RIGHT:
-			if delta.y == 0 and delta.x > 0:
-				direction = Vector2i.RIGHT
-	if direction == Vector2i.ZERO:
+	if step == Vector2i.ZERO \
+		or (delta.x != 0 and step.x == 0) or (delta.y != 0 and step.y == 0):
 		return {}
-	return {"distance": absi(delta.x) + absi(delta.y), "direction": direction}
+	var reach: int = delta.x * step.x + delta.y * step.y
+	if reach <= 0:
+		return {}
+	return {"distance": absi(reach), "direction": step}

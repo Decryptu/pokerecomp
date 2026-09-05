@@ -495,3 +495,21 @@ func test_the_dungeon_list_is_the_one_the_transition_reads() -> void:
 	for map_id: int in [0x00, 0x3A, 0x3E, 0x5E, 0x77, 0x53, 0x9F, 0xA5, 0xC2,
 		0xC5, 0xE9]:
 		assert_false(Gen1Layout.is_dungeon_map(map_id), "map $%02X is not" % map_id)
+
+
+## `object_event`'s two bytes: STAY plus a direction stands fixed, STAY plus
+## anything else turns at random, and WALK picks the axis it wanders on.
+func test_the_two_movement_bytes_decode_to_one_template() -> void:
+	assert_eq(Gen1Layout.object_movement(0xFF, 0xD0), Gen2WorldObject.MOVEMENT_FIXED_DOWN)
+	assert_eq(Gen1Layout.object_movement(0xFF, 0xD1), Gen2WorldObject.MOVEMENT_FIXED_UP)
+	assert_eq(Gen1Layout.object_movement(0xFF, 0xD2), Gen2WorldObject.MOVEMENT_FIXED_LEFT)
+	assert_eq(Gen1Layout.object_movement(0xFF, 0xD3), Gen2WorldObject.MOVEMENT_FIXED_RIGHT)
+	assert_eq(Gen1Layout.object_movement(0xFF, 0x10), Gen2WorldObject.MOVEMENT_STRENGTH_BOULDER)
+	## ANY_DIR and NONE, the two a standing sprite spins on.
+	assert_eq(Gen1Layout.object_movement(0xFF, 0x00), Gen2WorldObject.MOVEMENT_SPINRANDOM_SLOW)
+	assert_eq(Gen1Layout.object_movement(0xFF, 0xFF), Gen2WorldObject.MOVEMENT_SPINRANDOM_SLOW)
+	assert_eq(Gen1Layout.object_movement(0xFE, 0x00), Gen2WorldObject.MOVEMENT_WANDER)
+	assert_eq(Gen1Layout.object_movement(0xFE, 0x01), Gen2WorldObject.MOVEMENT_WALK_UP_DOWN)
+	assert_eq(Gen1Layout.object_movement(0xFE, 0x02), Gen2WorldObject.MOVEMENT_WALK_LEFT_RIGHT)
+	## A fixed direction only stands a sprite still while byte 1 says STAY.
+	assert_eq(Gen1Layout.object_movement(0xFE, 0xD0), Gen2WorldObject.MOVEMENT_WANDER)

@@ -124,36 +124,60 @@ static func read_world(
 	}
 
 
-## `PokeCenterFlashingMonitorAndHealBall` and `PokeCenterOAMData` behind it, the
-## one effect Generation 1 draws over the map. Both are checked against the bytes
-## the pinned sources build, so a moved offset is refused rather than decoded.
+## `PokeCenterFlashingMonitorAndHealBall` with `PokeCenterOAMData` behind it, and
+## `ShockEmote`: the two sheets Generation 1 draws over the map.
 static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var at: int = int(layout.get("heal_machine_gfx", -1))
-	var bytes: int = Gen1Layout.HEAL_MACHINE_TILES * PokeTiles.TILE_BYTES
-	var oam: int = Gen1Layout.HEAL_MACHINE_OAM.size() * Gen1Layout.HEAL_MACHINE_OAM_SIZE
-	if at < 0 or not rom.in_bounds(at, bytes + oam):
-		return _error("The heal machine graphics are outside the cartridge.")
-	if rom.slice(at, bytes) != PackedByteArray(Gen1Layout.HEAL_MACHINE_BYTES):
-		return _error("The heal machine sheet is not the monitor and its ball.")
+	var machine: Dictionary = _read_pinned_sheet(
+		rom, int(layout.get("heal_machine_gfx", -1)),
+		Gen1Layout.HEAL_MACHINE_BYTES, Gen1Layout.HEAL_MACHINE_VTILE, "heal_machine"
+	)
+	if not bool(machine.get("ok", false)):
+		return machine
+	var oam: Dictionary = _check_heal_machine_oam(
+		rom, int(layout["heal_machine_gfx"]) + Gen1Layout.HEAL_MACHINE_BYTES.size()
+	)
+	if not bool(oam.get("ok", false)):
+		return oam
+	var shock: Dictionary = _read_pinned_sheet(
+		rom, int(layout.get("shock_emote_gfx", -1)),
+		Gen1Layout.SHOCK_EMOTE_BYTES, Gen1Layout.SHOCK_EMOTE_VTILE, "shock"
+	)
+	if not bool(shock.get("ok", false)):
+		return shock
+	return {"ok": true, "effects": [machine["effect"], shock["effect"]]}
+
+
+## One sheet, refused rather than decoded once the pinned bytes have moved.
+static func _read_pinned_sheet(
+	rom: RomFile, at: int, pinned: Array[int], vtile: int, name: String
+) -> Dictionary:
+	if at < 0 or not rom.in_bounds(at, pinned.size()) \
+		or rom.slice(at, pinned.size()) != PackedByteArray(pinned):
+		return _error("The %s sheet is not at $%X." % [name, at])
+	@warning_ignore("integer_division")
+	var tiles: int = pinned.size() / PokeTiles.TILE_BYTES
+	var pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(
+		rom.slice(at, pinned.size()), 0, tiles
+	)
+	if pixels.size() != tiles * PokeTiles.TILE_PIXELS:
+		return _error("The %s sheet did not decode." % name)
+	return {"ok": true, "effect": {
+		"name": name, "tiles": tiles, "vtile": vtile, "bytes": Array(pixels),
+	}}
+
+
+static func _check_heal_machine_oam(rom: RomFile, at: int) -> Dictionary:
 	for row: int in Gen1Layout.HEAL_MACHINE_OAM.size():
-		var entry: int = at + bytes + row * Gen1Layout.HEAL_MACHINE_OAM_SIZE
+		var entry: int = at + row * Gen1Layout.HEAL_MACHINE_OAM_SIZE
 		var pinned: Array = Gen1Layout.HEAL_MACHINE_OAM[row]
+		if not rom.in_bounds(entry, Gen1Layout.HEAL_MACHINE_OAM_SIZE):
+			return _error("Heal machine OAM row %d is outside the cartridge." % row)
 		## The attribute byte carries a Game Boy Color palette on Yellow and not
 		## on Red or Blue, so only the flip is compared.
 		var flipped: bool = (rom.u8(entry + 3) & Gen1Layout.HEAL_MACHINE_OAM_XFLIP) != 0
 		if [rom.u8(entry), rom.u8(entry + 1), rom.u8(entry + 2), flipped] != pinned:
 			return _error("Heal machine OAM row %d is not %s." % [row, pinned])
-	var pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(
-		rom.slice(at, bytes), 0, Gen1Layout.HEAL_MACHINE_TILES
-	)
-	if pixels.size() != Gen1Layout.HEAL_MACHINE_TILES * PokeTiles.TILE_PIXELS:
-		return _error("The heal machine graphics did not decode.")
-	return {"ok": true, "effects": [{
-		"name": "heal_machine",
-		"tiles": Gen1Layout.HEAL_MACHINE_TILES,
-		"vtile": Gen1Layout.HEAL_MACHINE_VTILE,
-		"bytes": Array(pixels),
-	}]}
+	return {"ok": true}
 
 
 static func _error(message: String) -> Dictionary:
@@ -688,8 +712,7 @@ static func _read_objects(
 			"sprite": rom.u8(at),
 			"y": rom.u8(at + 1) - Gen1Layout.OBJECT_COORD_BIAS,
 			"x": rom.u8(at + 2) - Gen1Layout.OBJECT_COORD_BIAS,
-			"movement": rom.u8(at + 3),
-			"range": rom.u8(at + 4),
+			"movement": Gen1Layout.object_movement(rom.u8(at + 3), rom.u8(at + 4)),
 			"text": text & Gen1Layout.OBJECT_TEXT_MASK,
 		}
 		at += Gen1Layout.OBJECT_EVENT_SIZE
@@ -721,13 +744,15 @@ static func _carry_trainer_headers(objects: Array, texts: Array) -> void:
 		var header: Variant = (texts[id - 1] as Dictionary).get("trainer", {})
 		if not header is Dictionary or (header as Dictionary).is_empty():
 			continue
-		## `EndTrainerBattle` hides only below `OPP_ID_OFFSET`, by that bit.
-		if not object.has("trainer_class"):
-			object["event_flag"] = int((header as Dictionary)["event_flag"])
-			continue
+		var flag: int = int((header as Dictionary)["event_flag"])
 		object["object_type"] = Gen2WorldObject.OBJECTTYPE_TRAINER
 		object["sight_range"] = int((header as Dictionary)["sight_range"])
-		object["trainer"] = {"event_flag": int((header as Dictionary)["event_flag"])}
+		## `EndTrainerBattle` hides only below `OPP_ID_OFFSET`, by that bit, and
+		## `CheckForEngagingTrainers` walks both kinds of row alike.
+		if object.has("trainer_class"):
+			object["trainer"] = {"event_flag": flag}
+		else:
+			object["event_flag"] = flag
 
 
 ## `<Map>_TextPointers`, which `DisplayTextID` indexes with a text id. A row is

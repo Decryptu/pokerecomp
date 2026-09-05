@@ -23,6 +23,13 @@ const HEADER_CENSUS: Dictionary = {
 ## `view_range << 4` is a pixel distance, so the stored range is a nibble.
 const MAX_SIGHT_RANGE: int = 5
 
+## Sight lines walked, cells engaging their own trainer, and cells behind one.
+const SIGHT_CENSUS: Dictionary = {
+	&"red": {"lines": 295, "cells": 880, "behind": 0},
+	&"blue": {"lines": 295, "cells": 880, "behind": 0},
+	&"yellow": {"lines": 291, "cells": 868, "behind": 0},
+}
+
 ## `BattleTransitions`' four trainer rows and the frames each runs to black in.
 const TRAINER_TRANSITIONS: Dictionary = {
 	Gen2BattleTransition.GEN1_TRAINER_BIT: 163,
@@ -66,8 +73,74 @@ func _one_game() -> void:
 	_the_party_table()
 	_the_headers()
 	_every_trainer_is_talked_to()
+	_every_trainer_sees()
 	_a_trainer_is_beaten()
 	_the_trainer_transitions()
+
+
+## `CheckFightingMapTrainers` walked from every cell of every trainer's own
+## line: inside the range the shock bubble and the walk-up open, and one cell
+## past it or one cell behind, nothing does. `CheckPlayerIsInFrontOfSprite`
+## exempts the Power Plant, but every fake item there carries `view_range` 0,
+## which `CheckSpriteCanSeePlayer` refuses at any distance, so `behind` is 0.
+func _every_trainer_sees() -> void:
+	var census: Dictionary = {"lines": 0, "cells": 0, "behind": 0}
+	for map: Gen2WorldMap in _r.data.world_maps():
+		var rows: Array = map.events["objects"]
+		var world: Gen2WorldAPI = null
+		for index: int in rows.size():
+			if int((rows[index] as Dictionary).get("sight_range", 0)) < 1:
+				continue
+			if world == null:
+				world = _r.open_world(0, map.number, Vector2i.ZERO)
+			if world == null:
+				return
+			_one_sight_line(world, map, index, census)
+	_r.check(census == SIGHT_CENSUS[_r.game_id], "the sight census reads %s." % str(census))
+	_r.note("gen1 trainers %d sight lines over %d cells" % [
+		int(census["lines"]), int(census["cells"]),
+	])
+
+
+func _one_sight_line(
+	world: Gen2WorldAPI, map: Gen2WorldMap, index: int, census: Dictionary
+) -> void:
+	var object: Gen2WorldObject = world.objects[index]
+	var step: Vector2i = Gen2WorldAPI.SIGHT_STEPS[object.facing]
+	var where: String = "map %d object %d" % [map.number, index]
+	census["lines"] += 1
+	for distance: int in range(1, object.sight_range + 1):
+		var engaged: int = _engaged_at(world, object.cell + step * distance)
+		if not _r.check(engaged >= 0 and engaged <= index,
+			"%s saw nobody %d cells ahead." % [where, distance]):
+			continue
+		if engaged < index:
+			continue
+		census["cells"] += 1
+		var path: Array = world.trainer_approach_plan(index, step, distance).get("path", [])
+		_r.check(path.size() == distance - 1 and (path.is_empty() or path[0] == step),
+			"%s walked %s to reach the player %d cells away." % [where, str(path), distance])
+	_r.check(_engaged_at(world, object.cell + step * (object.sight_range + 1)) != index,
+		"%s saw past its own range of %d." % [where, object.sight_range])
+	if _engaged_at(world, object.cell - step) == index:
+		census["behind"] += 1
+
+
+## `dispatch_sight_events` from one cell, answering which object engaged and
+## spending `TalkToTrainer` behind it so the next cell starts on an idle world.
+func _engaged_at(world: Gen2WorldAPI, cell: Vector2i) -> int:
+	world.player_cell = cell
+	var opened: Array = world.dispatch_sight_events()
+	if opened.is_empty():
+		return -1
+	var request: Dictionary = (opened[0].get("event", {}) as Dictionary).get("request", {})
+	world.complete_runtime_request({"ok": true})
+	world.run_event_queue(true)
+	world.complete_runtime_request({})
+	_r.check(not world.script_busy(), "a sighting at %s held the world." % cell)
+	_r.check(StringName(request.get("kind", &"")) == &"trainer_approach_requested",
+		"a sighting at %s opened %s." % [cell, request.get("kind", &"nothing")])
+	return int((request.get("values", {}) as Dictionary).get("object_index", -1))
 
 
 ## A party is never empty, never over six, and every member is a real species.
@@ -113,6 +186,14 @@ func _the_headers() -> void:
 			var header: Dictionary = _header_for(map, object)
 			if header.is_empty():
 				continue
+			## `CheckForEngagingTrainers` walks one list, so both kinds carry the
+			## type and the range; only the flag's place tells them apart.
+			_r.check(int(object.get("object_type", 0)) == Gen2WorldObject.OBJECTTYPE_TRAINER
+				and int(object.get("sight_range", -1)) == int(header["sight_range"]),
+				"map %d's header row is object type %d seeing %d." % [
+					map.number, int(object.get("object_type", 0)),
+					int(object.get("sight_range", -1)),
+				])
 			if object.has("trainer_class"):
 				census["trainers"] += 1
 				_one_trainer_object(map, object)
@@ -150,8 +231,6 @@ func _one_trainer_object(map: Gen2WorldMap, object: Dictionary) -> void:
 			map.number, _r.data.trainer_name(trainer_class), number,
 			_r.data.trainer_party_count(trainer_class),
 		])
-	_r.check(int(object.get("object_type", 0)) == Gen2WorldObject.OBJECTTYPE_TRAINER,
-		"map %d's trainer is object type %d." % [map.number, int(object.get("object_type", 0))])
 
 
 func _header_for(map: Gen2WorldMap, object: Dictionary) -> Dictionary:

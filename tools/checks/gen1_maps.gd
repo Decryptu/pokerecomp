@@ -55,6 +55,21 @@ const OVERWORLD_PASSABLE: Array[int] = [
 	0x31, 0x33, 0x39, 0x3C, 0x3E, 0x52, 0x54, 0x58, 0x5B,
 ]
 
+## Every template `object_event`'s two movement bytes decode to, and how many.
+const MOVEMENTS: Array[int] = [
+	Gen2WorldObject.MOVEMENT_WANDER, Gen2WorldObject.MOVEMENT_WALK_UP_DOWN,
+	Gen2WorldObject.MOVEMENT_WALK_LEFT_RIGHT,
+	Gen2WorldObject.MOVEMENT_SPINRANDOM_SLOW,
+	Gen2WorldObject.MOVEMENT_STRENGTH_BOULDER, Gen2WorldObject.MOVEMENT_FIXED_DOWN,
+	Gen2WorldObject.MOVEMENT_FIXED_UP, Gen2WorldObject.MOVEMENT_FIXED_LEFT,
+	Gen2WorldObject.MOVEMENT_FIXED_RIGHT,
+]
+const MOVEMENT_CENSUS: Dictionary = {
+	&"red": [20, 29, 50, 256, 21, 234, 79, 114, 121],
+	&"blue": [20, 29, 50, 256, 21, 234, 79, 114, 121],
+	&"yellow": [19, 28, 49, 260, 21, 252, 85, 114, 121],
+}
+
 ## The Power Plant's Voltorbs, Electrodes and Zapdos: an object with the TRAINER
 ## bit and a byte below `OPP_ID_OFFSET`, which is the only shape a wild one
 ## takes: six Voltorbs, two Electrodes and Zapdos, as the dex numbers the cache
@@ -122,6 +137,7 @@ const PLAYER_SPRITE_YELLOW: Array = [0x4571, 0x05]
 
 var _r: RefCounted = null
 var _maps: Dictionary = {}
+var _movements: Array[int] = []
 
 
 func run(r: RefCounted) -> void:
@@ -137,7 +153,11 @@ func _one_game() -> void:
 	_tilesets()
 	_pallet_town()
 	_geometry()
+	_movements = []
+	_movements.resize(MOVEMENTS.size())
 	_events()
+	_r.check(_movements == MOVEMENT_CENSUS[_r.game_id],
+		"the movement census reads %s." % str(_movements))
 	_texts()
 	_wild_objects()
 	_palettes()
@@ -401,6 +421,10 @@ func _object(map: Gen2WorldMap, object: Dictionary, object_count: int) -> void:
 	if object.has("item"):
 		_r.check(_is_item(int(object["item"])),
 			"map %d has an item ball holding item %d." % [map.number, int(object["item"])])
+	var movement: int = int(object["movement"])
+	var slot: int = MOVEMENTS.find(movement)
+	if _r.check(slot >= 0, "map %d has an object on movement %d." % [map.number, movement]):
+		_movements[slot] += 1
 
 
 ## An item id an item ball can hold: a named item, or one of the machines above
