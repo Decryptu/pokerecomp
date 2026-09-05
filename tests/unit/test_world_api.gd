@@ -9828,6 +9828,7 @@ func _write_gen1_cache() -> void:
 			"map_number": Gen1Layout.WARP_TO_LAST_MAP,
 		}]),
 		_gen1_map(2, 3, 2, 2, GEN1_FOREST_CELLS, []),
+		_gen1_wander_map(),
 	])
 	var pixels := PackedByteArray()
 	pixels.resize(96 * PokeTiles.TILE_PIXELS)
@@ -9855,6 +9856,20 @@ func _gen1_map(
 		"connection_flags": 0, "connections": [],
 		"events": {"warps": warps, "coord_events": [], "bg_events": [], "objects": []},
 	}
+
+
+## Map 3: a clear four by twelve floor with one object walking its own column,
+## which is room for the eight cells `CanWalkOntoTile` lets it climb.
+func _gen1_wander_map() -> Dictionary:
+	var cells: Array[int] = []
+	for _cell: int in 4 * 12:
+		cells.append(GEN1_FLOOR)
+	var map: Dictionary = _gen1_map(3, Gen1Layout.TILESET_OVERWORLD, 2, 6, cells, [])
+	(map["events"] as Dictionary)["objects"] = [{
+		"sprite": 1, "x": 1, "y": 9, "text": 1,
+		"movement": Gen2WorldObject.MOVEMENT_WALK_UP_DOWN,
+	}]
+	return map
 
 
 func _gen1_world(number: int, start: Vector2i) -> Gen2WorldAPI:
@@ -9920,4 +9935,24 @@ func test_gen1_tile_pair_collision_blocks_a_step_between_two_passable_tiles() ->
 	world = _gen1_world(2, Vector2i(2, 1))
 	assert_false(world.move(Vector2i.LEFT), "the pair let the player back")
 	assert_true(world.move(Vector2i.UP))
+	RomCache.clear(_gen1_directory())
+
+
+## `CanWalkOntoTile`'s displacement counters: a Generation 1 wanderer climbs at
+## most the eight cells its counter starts on, and the source's own commented
+## bug stops it coming back down once it has climbed five.
+func test_gen1_wanderer_climbs_eight_cells_and_never_comes_back_down() -> void:
+	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(2, 9))
+	var walker: Gen2WorldObject = world.objects[0]
+	var random := RandomNumberGenerator.new()
+	random.seed = 20260905
+	var highest: int = walker.cell.y
+	for _tick: int in 400:
+		world.player_cell = Vector2i(2, walker.cell.y)
+		world.advance_objects(random)
+		highest = mini(highest, walker.cell.y)
+		if highest <= walker.initial_cell.y - 5:
+			assert_true(walker.cell.y <= walker.initial_cell.y - 5, "it walked back down")
+	assert_eq(highest, walker.initial_cell.y - 8, "it stopped short of its counter")
+	assert_eq(walker.cell.y, walker.initial_cell.y - 8, "it left the top of its band")
 	RomCache.clear(_gen1_directory())

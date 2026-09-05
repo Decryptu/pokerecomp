@@ -340,13 +340,26 @@ const FRAME_VERTICAL_ROW: int = 0b00101000
 ## `PokeCenterFlashingMonitorAndHealBall`: the monitor and one ball.
 ## `AnimateHealingMachine` copies three tiles where the sheet is two, so the
 ## third is `PokeCenterOAMData` read as pixels at $7e, which nothing draws.
-const HEAL_MACHINE_TILES: int = 2
 const HEAL_MACHINE_VTILE: int = 0x7C
 const HEAL_MACHINE_BYTES: Array[int] = [
 	0x00, 0x00, 0x00, 0x00, 0x7E, 0x00, 0x7E, 0x00,
 	0x7E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C, 0x12, 0x1E,
 	0x21, 0x3F, 0x33, 0x2D, 0x1E, 0x12, 0x0C, 0x0C,
+]
+
+## `ShockEmote`, at the $F8 `EmotionBubblesOAMBlock` names. It is the one
+## `EmotionBubbles` row with a caller: `CheckFightingMapTrainers`.
+const SHOCK_EMOTE_VTILE: int = 0xF8
+const SHOCK_EMOTE_BYTES: Array[int] = [
+	0x1F, 0x00, 0x3F, 0x1F, 0x7F, 0x20, 0xFF, 0x41,
+	0xFF, 0x41, 0xFF, 0x41, 0xFF, 0x41, 0xFF, 0x41,
+	0xF8, 0x00, 0xFC, 0xF8, 0xFE, 0x04, 0xFF, 0x82,
+	0xFF, 0x82, 0xFF, 0x82, 0xFF, 0x82, 0xFF, 0x82,
+	0xFF, 0x40, 0xFF, 0x41, 0xFF, 0x41, 0x7F, 0x20,
+	0x3F, 0x1F, 0x1F, 0x00, 0x01, 0x00, 0x01, 0x00,
+	0xFF, 0x02, 0xFF, 0x82, 0xFF, 0x82, 0xFE, 0x04,
+	0xFC, 0xF8, 0xF8, 0xC0, 0xC0, 0x80, 0x80, 0x00,
 ]
 
 ## `PokeCenterOAMData`'s seven rows as the cartridge stores them: y, x, tile and
@@ -506,6 +519,28 @@ const OBJECT_ITEM_FLAG: int = 0x80
 const OBJECT_TEXT_MASK: int = 0x3F
 const OBJECT_TRAINER_BYTES: int = 2
 const OBJECT_ITEM_BYTES: int = 1
+## `object_event`'s two movement bytes as one shared template. Byte 1 is WALK or
+## STAY; byte 2 is a fixed direction, the axis a random walk keeps to, or
+## `BOULDER_MOVEMENT_BYTE_2`. A STAY sprite still turns, because `TryWalking`
+## writes the facing before `CanWalkOntoTile` refuses its step.
+const OBJECT_MOVEMENT_STAY: int = 0xFF
+const OBJECT_STANDING_MOVEMENTS: Dictionary = {
+	0x10: Gen2WorldObject.MOVEMENT_STRENGTH_BOULDER,
+	0xD0: Gen2WorldObject.MOVEMENT_FIXED_DOWN,
+	0xD1: Gen2WorldObject.MOVEMENT_FIXED_UP,
+	0xD2: Gen2WorldObject.MOVEMENT_FIXED_LEFT,
+	0xD3: Gen2WorldObject.MOVEMENT_FIXED_RIGHT,
+}
+const OBJECT_WALKING_MOVEMENTS: Dictionary = {
+	0x01: Gen2WorldObject.MOVEMENT_WALK_UP_DOWN,
+	0x02: Gen2WorldObject.MOVEMENT_WALK_LEFT_RIGHT,
+}
+## `CanWalkOntoTile`'s two displacement counters, $8 apiece at map load and the
+## whole of a wanderer's band. Down and right are never refused, up stops at 0,
+## and the vertical test also stands in front of a sideways step, so an object
+## that walked five cells up can only keep going up.
+const OBJECT_WALK_ORIGIN: int = 8
+const OBJECT_WALK_FLOOR: int = 5
 ## `InitBattleEnemyParameters`' `cp OPP_ID_OFFSET`: the extra byte is this plus
 ## a trainer class, or below it a species, and the next its number or level.
 const OPPONENT_ID_OFFSET: int = 200
@@ -728,6 +763,7 @@ const RED_BLUE: Dictionary = {
 	"water_tilesets": 0x0E8E0,
 	"overworld_sprites": 0x17B27,
 	"heal_machine_gfx": 0x704B7,
+	"shock_emote_gfx": 0x17CBD,
 	"wild_data": 0x0CEEB,
 	"wild_chances": 0x13918,
 	"good_rod": 0x0E27F,
@@ -800,6 +836,7 @@ const YELLOW: Dictionary = {
 	"water_tilesets": 0x0E834,
 	"overworld_sprites": 0x142A9,
 	"heal_machine_gfx": 0x7050B,
+	"shock_emote_gfx": 0x411E5,
 	"wild_data": 0x0CB95,
 	"wild_chances": 0x138E2,
 	"good_rod": 0x0E12C,
@@ -1082,6 +1119,15 @@ static func tileset_offset(layout: Dictionary, number: int) -> int:
 
 static func map_song_offset(layout: Dictionary, map_id: int) -> int:
 	return int(layout["map_songs"]) + map_id * MAP_SONG_SIZE
+
+
+## An unlisted byte 2 leaves the direction to `Random`, standing or walking.
+static func object_movement(byte_1: int, byte_2: int) -> int:
+	if byte_1 == OBJECT_MOVEMENT_STAY:
+		return OBJECT_STANDING_MOVEMENTS.get(
+			byte_2, Gen2WorldObject.MOVEMENT_SPINRANDOM_SLOW
+		)
+	return OBJECT_WALKING_MOVEMENTS.get(byte_2, Gen2WorldObject.MOVEMENT_WANDER)
 
 
 ## Whether the Super Rod is read as Yellow's flat slot table.

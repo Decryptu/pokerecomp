@@ -31,9 +31,9 @@ const HEAL_MACHINE_COLORS: Array[int] = [0x7FFF, 0x2A7F, 0x04FF, 0x0000]
 var _first: Dictionary = {}
 
 
-## The one sheet Generation 1 draws over the map. It wears `rOBP1` rather than a
-## palette of its own, and its monitor is three rows of $7E where Crystal's is two.
-const GEN1_EXPECTED: Array = [["heal_machine", 2, 0x7C]]
+## The two sheets Generation 1 draws over the map. The machine wears `rOBP1`
+## rather than a palette of its own, and its monitor is three rows of $7E.
+const GEN1_EXPECTED: Array = [["heal_machine", 2, 0x7C], ["shock", 4, 0xF8]]
 
 ## `PokeCenterOAMData` read back to the pixel each object reaches the screen at:
 ## the monitor, then six balls in two mirrored columns five rows apart.

@@ -155,12 +155,12 @@ static func _events_from_cache(value: Variant) -> Dictionary:
 		"bg_events": _event_rows(
 			event_values.get("bg_events", []), ["x", "y", "type", "script", "text"]
 		),
-		# The last seven are Generation 1's, whose events carry a text id where
+		# The last six are Generation 1's, whose events carry a text id where
 		# Generation 2's carry a script pointer.
 		"objects": _event_rows(event_values.get("objects", []), [
 			"sprite", "x", "y", "movement", "x_radius", "y_radius", "hour_1", "hour_2",
 			"palette", "object_type", "sight_range", "script", "event_flag",
-			"range", "text", "trainer_class", "trainer_number", "species", "level", "item",
+			"text", "trainer_class", "trainer_number", "species", "level", "item",
 		]),
 	}
 

@@ -29,6 +29,7 @@ const KIND_HELP: Dictionary = {
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
 	&"sign": "none: DisplayTextID's box, read by facing up from where the player stands",
 	&"trainer": "presses, frames: TalkToTrainer on the map's first trainer, faced from the cell below. 0 the before-battle box, 1 the fight the press behind it opens; a second number stops that many frames into the transition instead",
+	&"sight": "frames, 0: CheckFightingMapTrainers on the map's first trainer who sees, walked into from the far end of its own line. 40 stands in the shock bubble, 120 in the walk-up, 400 in the before-battle box",
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
 	&"vending": "presses, rows down: VendingMachineMenu, read by facing up from the cell below one. 0 the list, 1 the box the chosen row lands in",
 	&"prizes": "presses, rows down: CeladonPrizeMenu, read the same way. 0 the list, 1 SoYouWantPrizeText's YES/NO, 2 the box YES lands in",
@@ -287,7 +288,7 @@ func _build_live(data: GameData, group: int, number: int, cell: Vector2i) -> voi
 		&"battle_transition", &"level_evolution", &"egg_hatch", &"name_rater",
 		&"move_deleter", &"move_tutor", &"day_care", &"unown_puzzle", &"slot_machine",
 		&"card_flip", &"tile_anim", &"ice_slide", &"whiteout", &"gift_nickname",
-		&"magnet_train",
+		&"magnet_train", &"sight",
 	]:
 		_screen.start_cell = cell
 	## Pinned so two captures of the same map are the same picture: the seed the
@@ -359,7 +360,7 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
 	&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
 	&"catch_nickname", &"catch_dex", &"mom_bank", &"bills_pc", &"players_pc",
-	&"pokemon_center_pc", &"start_menu", &"mod_notice", &"mod_page",
+	&"pokemon_center_pc", &"start_menu", &"mod_notice", &"mod_page", &"sight",
 	&"reset_question", &"launcher_question",
 ]
 
@@ -405,6 +406,7 @@ const STAGERS: Dictionary = {
 	&"pokepic": &"_stage_pokepic",
 	&"sign": &"_stage_sign",
 	&"trainer": &"_stage_trainer",
+	&"sight": &"_stage_sight",
 	&"nurse": &"_stage_nurse",
 	&"vending": &"_stage_vending",
 	&"prizes": &"_stage_prizes",
@@ -934,6 +936,22 @@ func _stage_trainer() -> void:
 		_screen.advance_frame()
 	if _cell.y <= 0:
 		_screen.settle_battle_transition()
+
+
+## `CheckFightingMapTrainers`, walked into from the far end of the line.
+func _stage_sight() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if world == null:
+		return
+	for object: Gen2WorldObject in world.objects:
+		if object.sight_range < 1:
+			continue
+		var step: Vector2i = Gen2WorldAPI.SIGHT_STEPS[object.facing]
+		world.player_cell = object.cell + step * (object.sight_range + 1)
+		world.player_facing = object.facing ^ 1
+		_screen.press_button(ICE_SLIDE_BUTTONS[object.facing ^ 1])
+		break
+	_screen.advance_frames(maxi(_cell.x, 0))
 
 
 ## `DisplayTextID`'s box, read by facing the cell above the `x y` argument.
