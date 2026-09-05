@@ -278,6 +278,24 @@ const ANIM_OBP1: int = 0x6C
 ## three-bit Game Boy Color palette.
 const ANIM_OAM_OBP1: int = 0x10
 
+## `constants/move_constants.asm`: moves do double duty as animation ids, and
+## these are the rows past `NUM_ATTACKS` that no move number names.
+const ANIM_ID_SHOWPIC: int = 0xA6
+const ANIM_ID_ENEMY_HUD_SHAKE: int = 0xA9
+const ANIM_ID_TOSS: int = 0xC1
+const ANIM_ID_SHAKE: int = 0xC2
+const ANIM_ID_POOF: int = 0xC3
+const ANIM_ID_BLOCKBALL: int = 0xC4
+const ANIM_ID_GREATTOSS: int = 0xC5
+const ANIM_ID_ULTRATOSS: int = 0xC6
+const ANIM_ID_SHAKE_SCREEN: int = 0xC7
+const ANIM_ID_HIDEPIC: int = 0xC8
+
+## The three ball items `TossBallAnimation` picks a throw off.
+const ITEM_ULTRA_BALL: int = 0x02
+const ITEM_GREAT_BALL: int = 0x03
+const ITEM_POKE_BALL: int = 0x04
+
 ## What pins the two sheets: the edge under both panels is two solid rows in
 ## the middle of six blank ones, and the empty bar is a rule top and bottom.
 const HUD_BOTTOM_CODE: int = 0x76

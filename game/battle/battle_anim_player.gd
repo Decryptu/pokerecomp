@@ -3,10 +3,9 @@ extends RefCounted
 
 ## One battle animation playing: `RunBattleAnimScript`'s frame loop
 ## (engine/battle_anims/anim_commands.asm). [Gen2BattleAnimScript] is the
-## interpreter and [Gen2BattleAnimObject] is one object; this runs the script
-## until it yields, steps every live object and collects what they would put in
-## `wShadowOAM`. [method unimplemented] reports what an animation asked for and
-## did not get.
+## interpreter and [Gen2BattleAnimObject] one object; this runs the script until
+## it yields, steps every live object and collects `wShadowOAM`.
+## [method unimplemented] reports what an animation asked for and did not get.
 
 ## `NUM_BATTLE_ANIM_STRUCTS`: an eleventh object is simply not spawned.
 const MAX_OBJECTS: int = 10
@@ -117,6 +116,10 @@ var _gen1_write: int = 0
 var _gen1_block: int = 0
 var _gen1_steps: Array = []
 var _gen1_wait: int = 0
+## A routine rather than a row: the step list is the whole animation.
+var _gen1_steps_only: bool = false
+## `wNumShakes`, which `DoBallShakeSpecialEffects` counts off.
+var _gen1_shakes: int = 0
 
 ## `wCurItem`, read by `GetBallAnimPal` to colour a thrown ball. Nothing else
 ## asks, and a non-ball falls out of `BallColors` on its own terminator.
@@ -164,26 +167,48 @@ static func create(
 ## of frame blocks drawn straight into `wShadowOAM`. There is no `param` and no
 ## wobble list, and a row's sound byte is dropped for want of an audio driver.
 static func create_gen1(
-	anim_data: Gen2BattleAnimData, index: int, on_enemy_turn: bool = false
+	anim_data: Gen2BattleAnimData, index: int, on_enemy_turn: bool = false,
+	shakes: int = 0
 ) -> Gen2BattleAnimPlayer:
 	if anim_data == null or not anim_data.gen1():
 		return null
 	var address: int = anim_data.pointer(Gen2BattleAnimData.GEN1_REGION, index)
 	if address < 0:
 		return null
+	var player: Gen2BattleAnimPlayer = _seeded_gen1(anim_data, index, on_enemy_turn)
+	player._gen1_at = address
+	player._gen1_shakes = shakes
+	return player
 
+
+## `PlayApplyingAttackAnimation`: the shake or blink a move ends with, out of
+## `AnimationTypePointerTable`. Null for a `wAnimationType` of zero.
+static func create_gen1_applying(
+	anim_data: Gen2BattleAnimData, animation_type: int, on_enemy_turn: bool = false
+) -> Gen2BattleAnimPlayer:
+	if anim_data == null or not anim_data.gen1():
+		return null
+	var player: Gen2BattleAnimPlayer = _seeded_gen1(anim_data, 0, on_enemy_turn)
+	player._gen1_steps_only = true
+	player._gen1_steps = player._gen1_applying_steps(animation_type)
+	return null if player._gen1_steps.is_empty() else player
+
+
+static func _seeded_gen1(
+	anim_data: Gen2BattleAnimData, index: int, on_enemy_turn: bool
+) -> Gen2BattleAnimPlayer:
 	var player := Gen2BattleAnimPlayer.new()
 	player._data = anim_data
 	player._anim_index = index
 	player._enemy_turn = on_enemy_turn
 	player._gen1 = true
-	player._gen1_at = address
 	player._objects.resize(MAX_OBJECTS)
 	player._tile_dict.resize(TILE_DICT_ENTRIES)
 	player._bg_effects.resize(MAX_BG_EFFECTS)
 	for slot: int in MAX_BG_EFFECTS:
 		player._bg_effects[slot] = Gen2BattleAnimBgEffect.new()
 	player._background = Gen2BattleAnimBackground.new()
+	player._background.obp0 = Gen1Layout.ANIM_OBP0
 	return player
 
 
@@ -259,13 +284,11 @@ func sprites() -> Array:
 
 
 ## What each tile of the animation window currently holds, indexed from
-## [constant Gen2BattleAnimObject.BASE_TILE]. An OAM tile id below that base is
-## not an animation tile at all.
-##
-## Two shapes: [code]{ gfx, tile }[/code] is a tile of an imported sheet, and
-## [code]{ battler_tile }[/code] a tile of `vTiles2`, which is where the battle's
-## own two pictures live, in the numbering [Gen2BattleScreenMap] uses. Only
-## `anim_battlergfx_1row` and `..._2row` produce the second.
+## [constant Gen2BattleAnimObject.BASE_TILE]; an OAM tile id below that base is
+## not an animation tile. [code]{ gfx, tile }[/code] is a tile of an imported
+## sheet and [code]{ battler_tile }[/code] one of `vTiles2`, in the numbering
+## [Gen2BattleScreenMap] uses; only `anim_battlergfx_1row` and `..._2row` make
+## the second.
 func tiles() -> Array:
 	return _tiles
 
@@ -299,9 +322,8 @@ func unimplemented() -> Dictionary:
 
 ## One hardware frame of `.playframe`, in its order: the script, the bg effects,
 ## every object, the scanline table and the palettes. `.playframe` skips its own
-## `BattleAnimDelayFrame` while Rollout's bg effect is live, because that effect
-## waits a frame itself, but both paths spend exactly one frame, so a player
-## stepped once per frame has nothing for the check to decide.
+## `BattleAnimDelayFrame` while Rollout's bg effect is live, that effect waiting
+## a frame itself; both paths spend one frame, so nothing here decides.
 func advance_frame() -> bool:
 	if finished():
 		_finish()
@@ -408,10 +430,9 @@ func _load_graphics(operands: Array) -> void:
 
 ## `BattleAnimCmd_BattlerGFX_1Row` and `..._2Row`: one or two rows of each
 ## battler's picture copied into the top of the animation window, so an effect can
-## lift a battler's feet or head off the tilemap and move them as objects.
-## The dict entries are crosswise with what is copied, `PLAYERHEAD` holding the
+## lift a battler's feet or head off the tilemap and move them as objects. The
+## dict entries are crosswise with what is copied, `PLAYERHEAD` holding the
 ## enemy's rows, and the object rows are crossed the same way, so the two cancel.
-## Both crossings are the cartridge's and neither is tidied.
 func _load_battler_graphics(rows: int) -> void:
 	var slot: int = _free_tile_dict_slot()
 	if slot < 0 or slot + 1 >= TILE_DICT_ENTRIES:
@@ -520,9 +541,8 @@ func _execute_bg_effects() -> void:
 ## `BattleAnim_UpdateOAM_All`: every live object stepped and drawn in slot order,
 ## stopping at the first whose sprites would not fit. The slot's index byte is
 ## tested once, at the top of the loop, so an object whose own callback calls
-## `DeinitBattleAnimation` is still drawn once more where it stands. Measured on a
-## cartridge: TACKLE's `anim_incobj 1` frees the target's two rows on the frame it
-## runs and OAM still holds their fourteen sprites.
+## `DeinitBattleAnimation` is still drawn once more. Measured on a cartridge:
+## TACKLE's `anim_incobj 1` frees two rows and OAM still holds their sprites.
 func _update_oam() -> void:
 	_sprites = []
 	for object: Gen2BattleAnimObject in _objects:
@@ -588,6 +608,8 @@ func _gen1_frame() -> bool:
 func _gen1_step() -> void:
 	if not _gen1_steps.is_empty():
 		_gen1_effect_step()
+	elif _gen1_steps_only:
+		_gen1_done = true
 	elif _gen1_mode >= 0 or _gen1_row < _gen1_rows.size():
 		_gen1_subanim_step()
 	else:
@@ -744,6 +766,10 @@ func _gen1_apply(key: StringName, value: Variant) -> void:
 		&"bgp":
 			_background.bgp = int(value)
 			_background.request_pals()
+		&"obp0":
+			_background.obp0 = int(value) & 0xFF
+		&"rewind":
+			_gen1_row = maxi(_gen1_row - int(value), 0)
 		&"scx":
 			_background.scx = int(value) & 0xFF
 		&"scy":
@@ -754,10 +780,16 @@ func _gen1_apply(key: StringName, value: Variant) -> void:
 			_gen1_copy_sprites(int(value))
 		&"visible":
 			var side: Array = value
-			_background.report_battler(_gen1_side(bool(side[0])), bool(side[1]))
+			_gen1_draw_battler(_gen1_side(bool(side[0])), bool(side[1]))
 		&"shift":
 			var moved: Array = value
-			_background.battler_shift[_gen1_side(bool(moved[0]))] = moved[1] as Vector2
+			_gen1_move_battler(_gen1_side(bool(moved[0])), moved[1] as Vector2)
+		&"squish":
+			var squeezed: Array = value
+			Gen2BattleScreenMap.squish_step(
+				_background.bg_map, _gen1_side(bool(squeezed[0])),
+				RomRegistry.GEN1, bool(squeezed[1])
+			)
 		&"scale":
 			var sized: Array = value
 			_background.battler_scale[_gen1_side(bool(sized[0]))] = float(sized[1])
@@ -779,6 +811,44 @@ func _gen1_apply(key: StringName, value: Variant) -> void:
 
 func _gen1_side(flipped: bool) -> bool:
 	return _enemy_turn if flipped else not _enemy_turn
+
+
+## `AnimationHideMonPic` and `AnimationShowMonPic`, which are `ClearScreenArea`
+## and `CopyPicTiles` over the box the picture was last drawn in. The report
+## beside it is what a renderer with no background plane reads.
+func _gen1_draw_battler(player_side: bool, visible: bool) -> void:
+	_gen1_clear_battler(player_side)
+	_background.report_battler(player_side, visible)
+	if visible:
+		Gen2BattleScreenMap.stamp(
+			_background.bg_map, player_side, RomRegistry.GEN1,
+			_gen1_shift_tiles(player_side)
+		)
+
+
+func _gen1_move_battler(player_side: bool, shift: Vector2) -> void:
+	var visible: bool = bool(_background.battler_visible[player_side])
+	_gen1_clear_battler(player_side)
+	_background.battler_shift[player_side] = shift
+	if visible:
+		Gen2BattleScreenMap.stamp(
+			_background.bg_map, player_side, RomRegistry.GEN1,
+			_gen1_shift_tiles(player_side)
+		)
+
+
+func _gen1_clear_battler(player_side: bool) -> void:
+	if bool(_background.battler_visible[player_side]):
+		Gen2BattleScreenMap.clear_battler(
+			_background.bg_map, player_side, RomRegistry.GEN1,
+			_gen1_shift_tiles(player_side)
+		)
+
+
+func _gen1_shift_tiles(player_side: bool) -> Vector2i:
+	return Vector2i(
+		(_background.battler_shift[player_side] as Vector2) / float(GEN1_TILE)
+	)
 
 
 func _gen1_command(name: StringName) -> void:
@@ -818,9 +888,10 @@ const GEN1_EFFECT_BGP: Dictionary = {
 
 ## The routines that walk a picture off its square, as
 ## [code][steps, pixels, frames, horizontal, hide][/code]. A horizontal slide
-## goes towards the edge the picture stands against.
+## goes towards the edge the picture stands against; `_AnimationSlideMonUp`
+## scrolls its box upwards, which is the one negative row.
 const GEN1_EFFECT_SLIDES: Dictionary = {
-	0xF7: [7, 8, 2, false, false],  # SE_SLIDE_MON_UP
+	0xF7: [7, -8, 2, false, false],  # SE_SLIDE_MON_UP
 	GEN1_SE_SLIDE_MON_DOWN: [7, 8, 3, false, true],
 	0xF4: [8, 8, 3, true, true],    # SE_SLIDE_MON_OFF
 	0xE5: [4, 8, 4, true, false],   # SE_SLIDE_MON_HALF_OFF
@@ -846,9 +917,9 @@ const GEN1_SE_WAVY_SCREEN: int = 0xD8
 
 ## What one step of an effect may write. `frames` is every step's own duration.
 const GEN1_EFFECT_KEYS: Array[StringName] = [
-	&"tileset", &"bgp", &"scx", &"scy", &"visible", &"shift", &"scale",
-	&"substitute", &"minimize", &"wavy", &"rows", &"sprites", &"copy_sprites",
-	&"end_subanim",
+	&"tileset", &"bgp", &"obp0", &"scx", &"scy", &"visible", &"shift", &"squish",
+	&"scale", &"substitute", &"minimize", &"wavy", &"rows", &"sprites",
+	&"copy_sprites", &"end_subanim", &"rewind",
 ]
 
 ## `%00011011`, `AnimationFlashScreen`'s inverted palette, and the white it
@@ -864,13 +935,30 @@ const GEN1_FLASH_LONG_PALETTES: Array[int] = [
 ]
 const GEN1_FLASH_LONG_FRAMES: Array[int] = [2, 1, 1]
 
-## `PredefShakeScreenHorizontally` with `b = 8`: the window out by the count for
-## five frames and back for four, the count dropping. `rWX` right is scroll left.
+## `PredefShakeScreenHorizontally` with `b = 8`; `rWX` right is scroll left.
+## `.MutateWX` xors the running offset with the count, so only the first pass
+## opens on the offset and every later one opens on zero.
 const GEN1_SHAKE_AMPLITUDE: int = 8
 const GEN1_SHAKE_OUT_FRAMES: int = 5
 const GEN1_SHAKE_BACK_FRAMES: int = 4
+const GEN1_SHAKE_VERTICAL_FRAMES: int = 3
 const GEN1_SHAKE_ONE_OUT: int = 4
 const GEN1_SHAKE_ONE_BACK: int = 3
+
+## `AnimationTypePointerTable` by `wAnimationType`, as [code][amplitude,
+## vertical][/code]: rows 1 to 3 are the enemy's turn and 4 to 6 the player's.
+const GEN1_APPLYING_SHAKE: Dictionary = {1: [8, true], 2: [8, false], 5: [2, false]}
+## `lb bc, 6, 2` and `lb bc, 3, 2`, the two non-damaging rows.
+const GEN1_APPLYING_SLOW: Dictionary = {3: 6, 6: 3}
+const GEN1_APPLYING_BLINK: int = 4
+const GEN1_SLOW_SHAKE_FRAMES: int = 2
+const GEN1_SLOW_SHAKE_PASSES: int = 2
+
+## `DoBallTossSpecialEffects`' `xor %00111100` on `rOBP0`, and
+## `DoBallShakeSpecialEffects`' four subentries and `ld c, 40`.
+const GEN1_BALL_FLASH: int = 0x3C
+const GEN1_BALL_SHAKE_ENTRIES: int = 4
+const GEN1_BALL_SHAKE_WAIT: int = 40
 
 ## `AnimationBlinkMon`: six times off and on, five frames each.
 const GEN1_BLINK_CYCLES: int = 6
@@ -1030,7 +1118,7 @@ func _gen1_effect_steps(id: int) -> Array:
 		GEN1_SE_FLASH_SCREEN_LONG:
 			return _gen1_flash_long_steps()
 		GEN1_SE_SHAKE_SCREEN:
-			return _gen1_shake_screen_steps()
+			return _gen1_predef_shake_steps(GEN1_SHAKE_AMPLITUDE)
 		GEN1_SE_DELAY_ANIMATION_10:
 			return [{&"frames": GEN1_DELAY_FRAMES}]
 		GEN1_SE_WAVY_SCREEN:
@@ -1112,12 +1200,52 @@ func _gen1_flash_long_steps() -> Array:
 	return out
 
 
-func _gen1_shake_screen_steps() -> Array:
+func _gen1_predef_shake_steps(amplitude: int, vertical: bool = false) -> Array:
+	var key: StringName = &"scy" if vertical else &"scx"
+	var halves: Array = [GEN1_SHAKE_VERTICAL_FRAMES, GEN1_SHAKE_VERTICAL_FRAMES] \
+		if vertical else [GEN1_SHAKE_OUT_FRAMES, GEN1_SHAKE_BACK_FRAMES]
 	var out: Array = []
-	for amplitude: int in range(GEN1_SHAKE_AMPLITUDE, 0, -1):
-		out.append({&"frames": GEN1_SHAKE_OUT_FRAMES, &"scx": -amplitude})
-		out.append({&"frames": GEN1_SHAKE_BACK_FRAMES, &"scx": 0})
+	var value: int = 0
+	for count: int in range(amplitude, 0, -1):
+		for half: int in 2:
+			value ^= count
+			out.append({&"frames": halves[half], key: -value})
+		value = count - 1
+	out.append({key: 0})
 	return out
+
+
+func _gen1_applying_steps(animation_type: int) -> Array:
+	if GEN1_APPLYING_SHAKE.has(animation_type):
+		var row: Array = GEN1_APPLYING_SHAKE[animation_type]
+		return _gen1_predef_shake_steps(int(row[0]), bool(row[1]))
+	if GEN1_APPLYING_SLOW.has(animation_type):
+		return _gen1_slow_shake_steps(int(GEN1_APPLYING_SLOW[animation_type]))
+	if animation_type == GEN1_APPLYING_BLINK:
+		return _gen1_blink_steps(true)
+	return []
+
+
+## `AnimationShakeScreenHorizontallySlow`, whose two `pop bc` put the count back
+## for the return leg: the window out a pixel at a time and back.
+func _gen1_slow_shake_steps(width: int) -> Array:
+	var out: Array = []
+	for _pass: int in GEN1_SLOW_SHAKE_PASSES:
+		for step: int in width * 2:
+			var offset: int = step + 1 if step < width else width * 2 - step - 1
+			out.append({&"frames": GEN1_SLOW_SHAKE_FRAMES, &"scx": -offset})
+	return out
+
+
+## `DoBallShakeSpecialEffects`: two-thirds of a second at the top of a shake,
+## and the last block rewinding four subentries while shakes are left.
+func _gen1_ball_shake_steps(counter: int) -> Array:
+	if counter == GEN1_BALL_SHAKE_ENTRIES:
+		return [{&"frames": GEN1_BALL_SHAKE_WAIT}]
+	if counter > 1:
+		return []
+	_gen1_shakes -= 1
+	return [] if _gen1_shakes <= 0 else [{&"rewind": GEN1_BALL_SHAKE_ENTRIES}]
 
 
 func _gen1_blink_steps(flipped: bool) -> Array:
@@ -1146,6 +1274,7 @@ func _gen1_squish_steps(flipped: bool) -> Array:
 	for index: int in passes:
 		out.append({
 			&"frames": GEN1_SQUISH_FRAMES,
+			&"squish": [flipped, index % 2 == 1],
 			&"scale": [flipped, float(passes - index - 1) / float(passes)],
 		})
 	out.append({&"visible": [flipped, false], &"scale": [flipped, 1.0]})
@@ -1329,7 +1458,8 @@ func _gen1_hud_shake_steps() -> Array:
 
 ## `DoSpecialEffectByAnimationId`, after every frame block of the twenty-five
 ## `AnimationIdSpecialEffects` names. [param counter] is `wSubAnimCounter`, which
-## opens at the row count. The trade and ball rows wait for a caller.
+## opens at the row count. The three trade rows wait for a caller; `POOF_ANIM`'s
+## row is a sound and Generation 1 has no audio driver here.
 func _gen1_block_effect_steps(counter: int) -> Array:
 	var id: int = _anim_index + 1
 	if GEN1_BLOCK_FLASH.has(id):
@@ -1351,6 +1481,13 @@ func _gen1_block_effect_steps(counter: int) -> Array:
 			return _gen1_flash_when(counter % GEN1_FLASH_EVERY_FOUR == 0)
 		GEN1_ROCK_SLIDE:
 			return _gen1_rock_slide_steps(counter)
+		Gen1Layout.ANIM_ID_TOSS, Gen1Layout.ANIM_ID_GREATTOSS, \
+		Gen1Layout.ANIM_ID_ULTRATOSS:
+			if cur_item > Gen1Layout.ITEM_ULTRA_BALL:
+				return []
+			return [{&"obp0": _background.obp0 ^ GEN1_BALL_FLASH}]
+		Gen1Layout.ANIM_ID_SHAKE:
+			return _gen1_ball_shake_steps(counter)
 	return []
 
 

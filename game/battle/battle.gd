@@ -1433,8 +1433,10 @@ func entrance_events(side: int, ball: bool = true) -> Array:
 	if ball:
 		out.append(_send_out_animation(enemy_turn, SEND_OUT_ANIM_NORMAL))
 	# `BattleCheckPlayerShininess`/`BattleCheckEnemyShininess`, which read the
-	# live DVs: a Transform has already copied the target's over them.
-	if Gen2Stats.is_shiny(entering.dvs):
+	# live DVs: a Transform has already copied the target's over them. Neither
+	# routine exists on a Generation 1 cartridge, which has no shininess.
+	if data != null and data.generation != RomRegistry.GEN1 \
+			and Gen2Stats.is_shiny(entering.dvs):
 		out.append(_send_out_animation(enemy_turn, SEND_OUT_ANIM_SHINY))
 	# `CheckFaintedFrzSlp`: no cry from a fainted, frozen or sleeping Pokemon.
 	# Crystal's alone: pokegold's `SendOutPlayerMon` and

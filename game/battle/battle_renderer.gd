@@ -917,7 +917,8 @@ static func pic_tile(pixels: PackedByteArray, side: int, index: int) -> PackedBy
 ## reads the two between and takes the square's own.
 func _gen1_object_palette(attributes: int) -> PackedColorArray:
 	var dmg: int = Gen1Layout.ANIM_OBP1 \
-		if (attributes & Gen1Layout.ANIM_OAM_OBP1) != 0 else Gen1Layout.ANIM_OBP0
+		if (attributes & Gen1Layout.ANIM_OAM_OBP1) != 0 \
+		else int(_view.get("anim_obp0", Gen1Layout.ANIM_OBP0))
 	return _remap(gen1_screen_palette(GEN1_PAL_PLAYER_MON), dmg)
 
 
