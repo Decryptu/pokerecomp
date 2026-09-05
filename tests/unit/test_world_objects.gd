@@ -30,6 +30,38 @@ func test_ff_event_flag_is_the_source_always_visible_sentinel() -> void:
 	assert_true(object.visible_with_state(6, Gen2WorldPalette.TIME_MORNING, state))
 
 
+## `IsObjectHidden`: the toggleable flag starts at the row's own ON or OFF, so
+## the save holds the indices moved away from it rather than the live array.
+func test_a_toggleable_object_starts_where_its_row_stands() -> void:
+	var visible: Gen2WorldObject = Gen2WorldObject.from_event(0, {
+		"toggle_index": 3, "toggle_on": true,
+	})
+	var hidden: Gen2WorldObject = Gen2WorldObject.from_event(1, {
+		"toggle_index": 4, "toggle_on": false,
+	})
+	var state := Gen2WorldState.new()
+	assert_false(visible.masked_hidden(state))
+	assert_true(hidden.masked_hidden(state))
+
+	state.set_object_toggled(3, true)
+	state.set_object_toggled(4, true)
+	assert_true(visible.masked_hidden(state))
+	assert_false(hidden.masked_hidden(state))
+
+
+## An object outside `ToggleableObjectStates` reads its event flag and nothing
+## else, which is every Generation 2 object.
+func test_an_object_with_no_toggle_row_is_masked_by_its_event_flag_alone() -> void:
+	var object: Gen2WorldObject = Gen2WorldObject.from_event(0, {"event_flag": 7})
+	var state := Gen2WorldState.new()
+	assert_eq(object.toggle_index, -1)
+	assert_false(object.masked_hidden(state))
+	state.set_object_toggled(0, true)
+	assert_false(object.masked_hidden(state))
+	state.set_event_flag(7)
+	assert_true(object.masked_hidden(state))
+
+
 func test_hour_ranges_include_endpoints_and_wrap_midnight() -> void:
 	var object: Gen2WorldObject = _object()
 	assert_true(object.visible_at(6, Gen2WorldPalette.TIME_MORNING))

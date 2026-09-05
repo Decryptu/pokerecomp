@@ -227,14 +227,36 @@ func _write_scroll_script() -> void:
 
 ## Frames until the box is neither revealing a page nor scrolling into one, so
 ## the press that follows is the one the cartridge charges rather than the one
-## that skips a reveal.
+## that skips a reveal. The box is driven by hand here, so the screen is spent
+## one frame past the settling one: that is the pass `MapTextbox` returns on.
 func _settle_text_box(screen: Gen2WorldScreen) -> void:
 	for _frame: int in 240:
-		if not screen._text_box.is_revealing() and not screen._text_box.is_scrolling():
-			return
+		var settled: bool = not screen._text_box.is_revealing() \
+			and not screen._text_box.is_scrolling()
 		screen.advance_frame()
+		if settled:
+			return
 		screen._text_box.advance_frame()
 		screen._text_box.advance_scroll_frames(1.0)
+
+
+## `MapTextbox` prints its string a letter at a time and returns behind the last
+## one, so the command after a `writetext` is not reached while the page is still
+## revealing. Before this the script ran on the frame the box opened, which put a
+## box owing no press on screen for one frame and no letters in it.
+func test_a_writetext_holds_the_script_while_its_page_is_still_printing() -> void:
+	_write_scroll_script()
+	_world_screen = await _open_world()
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(SCRIPT_CELL)
+	)
+	assert_true(_world_screen._text_box.is_revealing())
+	assert_eq(
+		StringName(_world_screen._world.pending_script_input().get("type", &"")), &"text",
+		"the writetext is still running",
+	)
+	_settle_text_box(_world_screen)
+	assert_false(_world_screen._text_box.is_revealing())
 
 
 ## `_ContText` waits for a press and scrolls; the `<DONE>` behind it owes none,

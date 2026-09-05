@@ -85,6 +85,10 @@ var object_type: int = 0
 var sight_range: int = 0
 var event_script: int = 0
 var event_flag: int = 0
+## This object's `ToggleableObjectStates` row: the global index `HideObject`
+## takes and the ON or OFF it starts at. -1 for an object outside the table.
+var toggle_index: int = -1
+var toggle_on: bool = true
 ## Whether [member event_flag] was set when the table was built.
 ## `ReadObjectEvents` reads it at map load, so only `appear` and `disappear`,
 ## which edit the live struct too, move anything mid-map.
@@ -153,6 +157,8 @@ static func from_event(
 	out.sight_range = int(value.get("sight_range", 0))
 	out.event_script = int(value.get("script", 0))
 	out.event_flag = int(value.get("event_flag", 0))
+	out.toggle_index = int(value.get("toggle_index", -1))
+	out.toggle_on = bool(value.get("toggle_on", true))
 	var trainer: Variant = value.get("trainer", {})
 	if trainer is Dictionary:
 		out.trainer_data = (trainer as Dictionary).duplicate(true)
@@ -328,6 +334,21 @@ func visible_with_state(hour: int, time_of_day: int, state: Gen2WorldState) -> b
 
 func event_flag_active(state: Gen2WorldState) -> bool:
 	return event_flag > 0 and state != null and state.is_event_flag_active(event_flag)
+
+
+## `IsObjectHidden`, which reads `wToggleableObjectFlags` rather than an event
+## flag: the row's own ON or OFF is where the bit starts, and the save carries
+## only the indices a `ShowObject` or a `HideObject` has moved since.
+func toggle_hidden(state: Gen2WorldState) -> bool:
+	if toggle_index < 0 or state == null:
+		return false
+	return toggle_on == state.is_object_toggled(toggle_index)
+
+
+## `LoadObjectMasks`' whole answer: `CheckObjectFlag` on Generation 2 and
+## `IsObjectHidden` on Generation 1, and an object carries only its own.
+func masked_hidden(state: Gen2WorldState) -> bool:
+	return event_flag_active(state) or toggle_hidden(state)
 
 
 func trainer_flag_active(state: Gen2WorldState) -> bool:

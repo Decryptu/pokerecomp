@@ -186,23 +186,23 @@ func _the_headers() -> void:
 			var header: Dictionary = _header_for(map, object)
 			if header.is_empty():
 				continue
-			## `CheckForEngagingTrainers` walks one list, so both kinds carry the
-			## type and the range; only the flag's place tells them apart.
+			## Both kinds carry the type, the range and the header's own flag.
 			_r.check(int(object.get("object_type", 0)) == Gen2WorldObject.OBJECTTYPE_TRAINER
-				and int(object.get("sight_range", -1)) == int(header["sight_range"]),
-				"map %d's header row is object type %d seeing %d." % [
+				and int(object.get("sight_range", -1)) == int(header["sight_range"])
+				and int((object.get("trainer", {}) as Dictionary).get("event_flag", 0))
+					== int(header["event_flag"]),
+				"map %d's header row is object type %d seeing %d on flag %d." % [
 					map.number, int(object.get("object_type", 0)),
 					int(object.get("sight_range", -1)),
+					int((object.get("trainer", {}) as Dictionary).get("event_flag", 0)),
 				])
 			if object.has("trainer_class"):
 				census["trainers"] += 1
 				_one_trainer_object(map, object)
 			else:
 				census["wilds"] += 1
-				_r.check(int(object.get("event_flag", 0)) == int(header["event_flag"]),
-					"map %d's standing wild wears flag %d." % [
-						map.number, int(object.get("event_flag", 0)),
-					])
+				_r.check(int(object.get("toggle_index", -1)) >= 0,
+					"map %d's standing wild is outside ToggleableObjectStates." % map.number)
 	_r.check(census == HEADER_CENSUS[_r.game_id],
 		"the header census reads %s." % str(census))
 	_r.note("gen1 trainers %d headers on %d text_asm rows" % [

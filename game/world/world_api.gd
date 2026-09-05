@@ -3661,6 +3661,7 @@ var _gen1_last_map: int = -1
 ## boxes are imported under.
 const GEN1_POKECENTER_RUN: String = "pokecenter"
 const GEN1_CABLE_CLUB_RUN: String = "cable_club"
+const GEN1_PICK_UP_RUN: String = "pick_up_item"
 ## `EndTrainerBattle`'s `cp LOST_BATTLE`, which a catch also passes.
 const GEN1_TRAINER_BEATEN: Array[StringName] = [
 	Gen2WorldBattleAdapter.OUTCOME_WON, Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
@@ -3723,7 +3724,7 @@ func _gen1_interact() -> Array:
 	if _gen1_steps.is_empty():
 		_gen1_steps = _gen1_facility_steps(row, text_id)
 	if _gen1_steps.is_empty():
-		_gen1_steps = _gen1_script_steps(row)
+		_gen1_steps = _gen1_script_steps(row, event)
 	if _gen1_steps.is_empty():
 		var text: String = _gen1_filled_text(String(row.get("text", "")))
 		if text.is_empty():
@@ -3743,13 +3744,13 @@ func _gen1_filled_text(text: String) -> String:
 ## The boxes a `text_asm` row prints, with its branches resolved against the
 ## save. A taken side the importer did not read answers nothing at all, the way
 ## an undecoded row does.
-func _gen1_script_steps(row: Dictionary) -> Array:
+func _gen1_script_steps(row: Dictionary, event: Dictionary = {}) -> Array:
 	var nodes: Variant = row.get("script", [])
 	if not nodes is Array or (nodes as Array).is_empty():
 		return []
 	var steps: Array = []
 	return steps if _gen1_resolve_script(nodes as Array, steps, {
-		"bag": state.items() if state != null else {}, "named": "",
+		"bag": state.items() if state != null else {}, "named": "", "object": event,
 	}) else []
 
 
@@ -3782,6 +3783,15 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 					return false
 			"take_item":
 				_gen1_take_item(int(node["item"]), steps, bag)
+			"toggle_object":
+				steps.append({
+					"type": &"toggle",
+					"index": int(node["index"]),
+					"hidden": bool(node["hidden"]),
+				})
+			"pick_up_item":
+				if not _gen1_pick_up_item(steps, run):
+					return false
 			"choice":
 				return _gen1_script_choice(node, steps, run)
 			_:
@@ -3810,6 +3820,33 @@ func _gen1_resolve_gift(node: Dictionary, steps: Array, run: Dictionary) -> bool
 	if not node.has("ok"):
 		return true
 	return _gen1_resolve_script(node["ok" if taken else "full"] as Array, steps, run)
+
+
+## `PickUpItem`: the object's own item, `HideObject` on it, and the receipt
+## behind `wDoNotWaitForButtonPress`. Its own `ret z` says nothing at all for an
+## item object outside `ToggleableObjectStates`.
+func _gen1_pick_up_item(steps: Array, run: Dictionary) -> bool:
+	var object: Dictionary = run.get("object", {})
+	var item: int = int(object.get("item", 0))
+	var toggle: int = int(object.get("toggle_index", -1))
+	if item < 1 or toggle < 0:
+		return false
+	var bag: Dictionary = run["bag"]
+	var room: Dictionary = Gen2WorldPack.receive_check(data, bag, item, 1)
+	if not bool(room.get("ok", false)):
+		steps.append(_gen1_facility_box(GEN1_PICK_UP_RUN, "no_room"))
+		return true
+	bag[item] = int(room["quantity"])
+	steps.append({"type": &"items", "items": {item: int(room["quantity"])}})
+	steps.append({"type": &"toggle", "index": toggle, "hidden": true})
+	var box: Dictionary = _gen1_facility_box(GEN1_PICK_UP_RUN, "found")
+	box["text"] = Gen2TextStream.fill_all_markers(
+		_gen1_filled_text(String(box["text"])), Gen2TextStream.RAM_MARKER,
+		data.item_name(item) if data != null else ""
+	)
+	box["press"] = false
+	steps.append(box)
+	return true
 
 
 func _gen1_take_item(item: int, steps: Array, bag: Dictionary) -> void:
@@ -3842,7 +3879,11 @@ func _gen1_script_choice(node: Dictionary, steps: Array, run: Dictionary) -> boo
 
 
 func _gen1_run_copy(run: Dictionary) -> Dictionary:
-	return {"bag": (run["bag"] as Dictionary).duplicate(), "named": run["named"]}
+	return {
+		"bag": (run["bag"] as Dictionary).duplicate(),
+		"named": run["named"],
+		"object": run.get("object", {}),
+	}
 
 
 func _gen1_script_box(node: Dictionary, named: String) -> Dictionary:
@@ -4048,6 +4089,7 @@ func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
 			},
 			"trainer_flag": flag,
 			"object_index": int(event.get("object_index", -1)),
+			"standing_wild": not event.has("trainer_class"),
 		},
 	]
 
@@ -4301,6 +4343,9 @@ func _gen1_written(step: Dictionary) -> bool:
 		&"items":
 			state.apply_changes({}, {}, {"items": step["items"]})
 			return true
+		&"toggle":
+			gen1_toggle_object(int(step["index"]), bool(step["hidden"]))
+			return true
 	return false
 
 
@@ -4324,7 +4369,24 @@ func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 	if StringName(result.get("outcome", &"")) not in GEN1_TRAINER_BEATEN:
 		return
 	state.set_event_flag(flag)
+	if bool(step.get("standing_wild", false)):
+		gen1_toggle_object(_gen1_toggle_index(int(step.get("object_index", -1))), true)
 	load_object_masks()
+
+
+## `ShowObject` and `HideObject`: one `wToggleableObjectFlags` bit by global
+## index, and `UpdateSprites` behind it.
+func gen1_toggle_object(index: int, hidden: bool) -> void:
+	if index < 0 or state == null or data == null:
+		return
+	state.set_object_toggled(index, hidden == data.gen1_toggle_on(index))
+	load_object_masks()
+
+
+func _gen1_toggle_index(object_index: int) -> int:
+	if object_index < 0 or object_index >= objects.size():
+		return -1
+	return (objects[object_index] as Gen2WorldObject).toggle_index
 
 
 ## Whether the script holding the world is one that stops the map around it.
@@ -4450,7 +4512,7 @@ func dispatch_map_entry() -> Array:
 func load_object_masks() -> void:
 	_object_masks_pending = false
 	for object: Gen2WorldObject in objects:
-		object.flag_hidden = object.event_flag_active(state)
+		object.flag_hidden = object.masked_hidden(state)
 	## `LoadObjectMasks` writes one mask byte an object out of `GetObjectTimeMask`
 	## and `CheckObjectFlag` together, which is what this already is.
 	set_object_time(object_hour, object_time_of_day)
@@ -8086,7 +8148,7 @@ func connected_map_objects() -> Array:
 			var object: Gen2WorldObject = _object_from_event(index, rows[index])
 			if object.sprite == null:
 				continue
-			object.flag_hidden = object.event_flag_active(state)
+			object.flag_hidden = object.masked_hidden(state)
 			object.active = object.visible_at(object_hour, object_time_of_day) \
 				and not object.flag_hidden
 			if not object.active:
@@ -8121,7 +8183,7 @@ func _load_objects(carry_presentation: bool = false) -> void:
 			object.carry_presentation_from(previous[index] as Gen2WorldObject)
 			object.flag_hidden = (previous[index] as Gen2WorldObject).flag_hidden
 		else:
-			object.flag_hidden = object.event_flag_active(state)
+			object.flag_hidden = object.masked_hidden(state)
 		objects.append(object)
 	set_object_time(object_hour, object_time_of_day)
 
