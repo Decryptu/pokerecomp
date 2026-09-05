@@ -177,7 +177,7 @@ func _the_headers() -> void:
 	var census: Dictionary = {"text_asm": 0, "headers": 0, "trainers": 0, "wilds": 0}
 	for map: Gen2WorldMap in _r.data.world_maps():
 		for row: Dictionary in map.texts:
-			if int(row.get("command", 0)) == Gen1Layout.TRAINER_TEXT_ASM:
+			if int(row.get("command", 0)) == Gen1Layout.TEXT_ASM:
 				census["text_asm"] += 1
 			if row.has("trainer"):
 				census["headers"] += 1

@@ -554,11 +554,32 @@ const TRAINER_HEADER_AT: Dictionary = {
 }
 const TRAINER_HEADER_END: int = 0xFF
 const TRAINER_RANGE_SHIFT: int = 4
-## `text_asm`, `ld hl, nn`, then either `call TalkToTrainer` or a `jr` onto one.
-const TRAINER_TEXT_ASM: int = 0x08
-const TRAINER_TEXT_LD_HL: int = 0x21
-const TRAINER_TEXT_CALL: int = 0xCD
-const TRAINER_TEXT_JR: int = 0x18
+## `TX_ASM`, and the opcodes a row behind it is read with. Any opcode not here
+## ends the path [method Gen1WorldImporter.decode_script] is walking.
+const TEXT_ASM: int = 0x08
+const SCRIPT_LD_HL: int = 0x21
+const SCRIPT_LD_A: int = 0x3E
+const SCRIPT_LD_A_MEM: int = 0xFA
+const SCRIPT_LD_MEM_A: int = 0xEA
+const SCRIPT_AND_A: int = 0xA7
+const SCRIPT_PREFIX: int = 0xCB
+const SCRIPT_JR: int = 0x18
+const SCRIPT_JP: int = 0xC3
+const SCRIPT_RET: int = 0xC9
+const SCRIPT_CALL: int = 0xCD
+## Each key is a conditional `jr` or `jp`, the value whether it is taken when
+## the tested bit was set.
+const SCRIPT_BRANCHES: Dictionary = {0x20: true, 0xC2: true, 0x28: false, 0xCA: false}
+const SCRIPT_SHORT_SIZE: int = 2
+const SCRIPT_LONG_SIZE: int = 3
+## The `CB` prefix's three rows, the low three bits naming the operand.
+const SCRIPT_BIT_BASE: int = 0x40
+const SCRIPT_RES_BASE: int = 0x80
+const SCRIPT_SET_BASE: int = 0xC0
+const SCRIPT_OPERAND_A: int = 7
+const SCRIPT_OPERAND_HL: int = 6
+## `flag_array NUM_EVENTS`: 2,560 events on all three cartridges.
+const EVENT_FLAG_BYTES: int = 320
 ## `MAX_WARP_EVENTS`, `MAX_BG_EVENTS` and `MAX_OBJECT_EVENTS`.
 const MAX_WARP_EVENTS: int = 32
 const MAX_SIGN_EVENTS: int = 16
@@ -737,6 +758,14 @@ const RED_BLUE: Dictionary = {
 	"talk_to_trainer": 0x31CC,
 	"print_text": 0x3C49,
 	"event_flags": 0xD747,
+	## The rest of what `decode_script` reads; a row calling anything else is not.
+	"text_script_end": 0x24D7,
+	"yes_no_choice": 0x35EC,
+	"disable_waiting": 0x30B6,
+	"play_cry": 0x13D0,
+	"wait_for_sound": 0x3748,
+	"do_not_wait": 0xCC3C,
+	"current_menu_item": 0xCC26,
 	## `DisplayPokemartDialogue`'s own greeting and the head of the two facility
 	## text runs [constant MART_TEXT_AT] and its neighbour walk. Every offset
 	## here is `pokered.sym`'s, which builds both dumps.
@@ -812,6 +841,13 @@ const YELLOW: Dictionary = {
 	"talk_to_trainer": 0x3168,
 	"print_text": 0x3C36,
 	"event_flags": 0xD746,
+	"text_script_end": 0x23D2,
+	"yes_no_choice": 0x35EF,
+	"disable_waiting": 0x2FDE,
+	"play_cry": 0x118B,
+	"wait_for_sound": 0x373E,
+	"do_not_wait": 0xCC3C,
+	"current_menu_item": 0xCC26,
 	"mart_greeting": 0x02938,
 	"mart_text": 0x06B91,
 	"pokecenter_text": 0x06ED0,

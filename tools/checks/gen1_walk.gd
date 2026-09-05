@@ -95,6 +95,30 @@ const PRIZE_MENUS: Dictionary = {
 	],
 }
 
+## Three `text_asm` rows driven on the world, since a decoded script is only
+## worth the box it puts up. `BikeShopYoungsterText` turns on EVENT_GOT_BICYCLE,
+## `LavenderTownLittleGirlText` asks and branches on the answer, and
+## `CeladonGameCornerText5` is half machine code: while EVENT_GOT_10_COINS is
+## clear it gives coins instead of speaking, and says nothing here.
+const BIKE_SHOP: int = 66
+const BIKE_YOUNGSTER := Vector2i(1, 4)
+const BIKE_FLAG: int = 192
+const BIKE_BOXES: Array[String] = ["These BIKEs are", "Wow. Your BIKE is"]
+const LAVENDER_TOWN: int = 4
+const GHOST_GIRL := Vector2i(15, 10)
+const GHOST_ANSWERS: Array[String] = ["Really? So there", "Hahaha, I guess"]
+const GAME_CORNER: int = 135
+const GAME_CORNER_GAMBLER := Vector2i(5, 12)
+const GAME_CORNER_FLAG: int = 442
+const GAME_CORNER_BOX: String = "Wins seem to come"
+
+## Yellow's `CeruleanBadgeHouse` melanie, the corpus's one box that owes no
+## press: `DisableWaitingAfterTextDisplay` runs before her last `PrintText`.
+const MELANIE_MAP: int = 63
+const MELANIE_CELL := Vector2i(3, 2)
+const MELANIE_FLAG: int = 168
+const MELANIE_BOX: String = "Is BULBASAUR"
+
 var _r: RefCounted = null
 
 
@@ -108,6 +132,7 @@ func _one_game() -> void:
 	_check_ledges()
 	_check_last_map_round_trip()
 	_check_text_boxes()
+	_check_scripted_npcs()
 	_check_the_nurse_heals()
 	_check_the_cable_club()
 	_check_the_vending_machine()
@@ -315,6 +340,71 @@ func _box_text(world: Gen2WorldAPI) -> String:
 	if results.is_empty():
 		return ""
 	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+
+
+## A decoded `text_asm` row driven on the world, both ways about its own flag.
+func _check_scripted_npcs() -> void:
+	for set_flag: bool in [false, true]:
+		var read: String = _scripted_box(
+			BIKE_SHOP, BIKE_YOUNGSTER, BIKE_FLAG if set_flag else 0
+		)
+		_r.check(read.begins_with(BIKE_BOXES[1 if set_flag else 0]),
+			"the bike shop said %s with the bicycle flag %s." % [read, set_flag])
+	var silent: String = _scripted_box(GAME_CORNER, GAME_CORNER_GAMBLER, 0)
+	_r.check(silent.is_empty(), "the half-read row said %s." % [silent])
+	var spoken: String = _scripted_box(
+		GAME_CORNER, GAME_CORNER_GAMBLER, GAME_CORNER_FLAG
+	)
+	_r.check(spoken.begins_with(GAME_CORNER_BOX), "its other side said %s." % [spoken])
+	_check_the_ghost_girl()
+	if _r.game_id == RomRegistry.YELLOW:
+		_check_a_box_owing_no_press()
+
+
+## The string one interaction opens with, or "" when it opened no box at all.
+## [param flag] is an event flag to set first, or 0 for none.
+func _scripted_box(map: int, cell: Vector2i, flag: int) -> String:
+	var world: Gen2WorldAPI = _r.open_world(0, map, cell)
+	if world == null:
+		return ""
+	if flag > 0:
+		world.set_event_flag(flag)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	return _box_text(world)
+
+
+## `YesNoChoice` answered both ways, which is the routing rather than the
+## strings `tools/checks/gen1_maps.gd` already pins.
+func _check_the_ghost_girl() -> void:
+	for answer: int in [0, 1]:
+		var world: Gen2WorldAPI = _r.open_world(0, LAVENDER_TOWN, GHOST_GIRL)
+		if world == null:
+			return
+		world.player_facing = Gen2WorldSprite.FACING_UP
+		world.interact()
+		var asked: Dictionary = world.pending_script_input()
+		if not _r.check(StringName(asked.get("type", &"")) == &"choice",
+			"the ghost girl asked %s." % [asked]):
+			return
+		var said: String = _event_text(world.choose_script_input(answer))
+		_r.check(said.begins_with(GHOST_ANSWERS[answer]),
+			"answering %d said %s." % [answer, said])
+
+
+## `wDoNotWaitForButtonPressAfterDisplayingText`, which is one box in the corpus.
+func _check_a_box_owing_no_press() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, MELANIE_MAP, MELANIE_CELL)
+	if world == null:
+		return
+	world.set_event_flag(MELANIE_FLAG)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var results: Array = world.interact()
+	if not _r.check(not results.is_empty(), "Melanie said nothing."):
+		return
+	var event: Dictionary = results[0].get("event", {})
+	_r.check(String(event.get("text", "")).begins_with(MELANIE_BOX),
+		"Melanie said %s." % [event.get("text", "")])
+	_r.check(not bool(event.get("prompt", true)), "her box still owes a press.")
 
 
 ## `CableClubNPC` from both sides of `EVENT_GOT_POKEDEX`, each with its own
