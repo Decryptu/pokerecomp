@@ -130,12 +130,27 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 94, "text": 195, "branch": 74, "choice": 7, "flag": 22,
-		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 39},
-	&"blue": {"rows": 94, "text": 195, "branch": 74, "choice": 7, "flag": 22,
-		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 39},
-	&"yellow": {"rows": 77, "text": 157, "branch": 66, "choice": 6, "flag": 14,
-		"give_item": 17, "has_item": 7, "take_item": 3, "unknown": 40},
+	&"red": {"rows": 198, "text": 199, "branch": 74, "choice": 7, "flag": 25,
+		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 36,
+		"pick_up_item": 104, "toggle_object": 4},
+	&"blue": {"rows": 198, "text": 199, "branch": 74, "choice": 7, "flag": 25,
+		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 36,
+		"pick_up_item": 104, "toggle_object": 4},
+	&"yellow": {"rows": 185, "text": 158, "branch": 66, "choice": 6, "flag": 15,
+		"give_item": 17, "has_item": 7, "take_item": 3, "unknown": 39,
+		"pick_up_item": 108, "toggle_object": 1},
+}
+## Three `predef HideObject` rows reach no node: `MtMoonB2F`'s two fossils and
+## `PokemonTower7F`'s Mr. Fuji each write `wCurMapScript` behind it, which is a
+## map script index and means nothing without an interpreter, and
+## `CeladonMansionRoofHouse`'s Eevee is a `GivePokemon`.
+
+## `ToggleableObjectStates` as the corpus carries it: the objects a row lands on
+## and how many start ON. Three rows name an object their map has not got.
+const TOGGLE_CENSUS: Dictionary = {
+	&"red": {"objects": 226, "on": 194},
+	&"blue": {"objects": 226, "on": 194},
+	&"yellow": {"objects": 233, "on": 195},
 }
 
 ## The pin on which way a `wCurrentMenuItem` branch reads.
@@ -179,6 +194,7 @@ func _one_game() -> void:
 	_r.check(_movements == MOVEMENT_CENSUS[_r.game_id],
 		"the movement census reads %s." % str(_movements))
 	_texts()
+	_toggleables()
 	_wild_objects()
 	_palettes()
 	_sprites()
@@ -625,6 +641,49 @@ func _sprites() -> void:
 			var picture: int = int(object["sprite"])
 			_r.check(picture >= 1 and picture <= wanted,
 				"map %d has an object drawn with picture id %d." % [map.number, picture])
+
+
+## Every object `ShowObject` and `HideObject` can name: one object a global
+## index, and a row under every item and every standing wild.
+func _toggleables() -> void:
+	var indexes: Dictionary = {}
+	var on: int = 0
+	var missing: Array[String] = []
+	var unreachable: Array[String] = []
+	for map: Gen2WorldMap in _maps.values():
+		for object: Dictionary in map.events["objects"] as Array:
+			## `BluesHouse`'s two ITEM rows carry item 0 and a script of their
+			## own; every other item object is picked up by `PickUpItemText`.
+			if int(object.get("item", 0)) > 0 and unreachable.size() < 4 and not _has_op(
+				map.text_at(int(object.get("text", 0))).get("script", []), "pick_up_item"
+			):
+				unreachable.append("map %d item %d" % [map.number, int(object["item"])])
+			if not object.has("toggle_index"):
+				## `PickUpItem` and `EndTrainerBattle` both read
+				## `wToggleableObjectList` with no answer for a miss.
+				if (object.has("item") or object.has("species")) and missing.size() < 4:
+					missing.append("map %d object %d" % [map.number, int(object.get("text", 0))])
+				continue
+			var index: int = int(object["toggle_index"])
+			_r.check(not indexes.has(index), "toggleable index %d is on two objects." % index)
+			indexes[index] = true
+			on += 1 if bool(object.get("toggle_on", true)) else 0
+	_r.check(missing.is_empty(), "no toggleable row reaches %s." % ", ".join(missing))
+	_r.check(unreachable.is_empty(),
+		"no PickUpItem reaches the item on %s." % ", ".join(unreachable))
+	var census: Dictionary = {"objects": indexes.size(), "on": on}
+	_r.check(census == TOGGLE_CENSUS[_r.game_id],
+		"the toggleable objects read %s." % [census])
+	_r.note("gen1 toggleables %s" % [census])
+
+
+static func _has_op(nodes: Variant, op: String) -> bool:
+	if not nodes is Array:
+		return false
+	for node: Dictionary in nodes as Array:
+		if String(node["op"]) == op:
+			return true
+	return false
 
 
 func _wild_objects() -> void:

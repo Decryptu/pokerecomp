@@ -161,6 +161,7 @@ static func _events_from_cache(value: Variant) -> Dictionary:
 			"sprite", "x", "y", "movement", "x_radius", "y_radius", "hour_1", "hour_2",
 			"palette", "object_type", "sight_range", "script", "event_flag",
 			"text", "trainer_class", "trainer_number", "species", "level", "item",
+			"toggle_index",
 		]),
 	}
 

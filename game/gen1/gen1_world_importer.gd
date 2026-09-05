@@ -517,6 +517,7 @@ static func _read_map(
 
 	var texts: Array = _read_texts(rom, layout, bank, rom.u16le(header + 5), events)
 	_carry_trainer_headers(events["objects"], texts)
+	_carry_toggleable_objects(rom, layout, events["objects"], map_id)
 
 	return {
 		"ok": true,
@@ -744,15 +745,45 @@ static func _carry_trainer_headers(objects: Array, texts: Array) -> void:
 		var header: Variant = (texts[id - 1] as Dictionary).get("trainer", {})
 		if not header is Dictionary or (header as Dictionary).is_empty():
 			continue
-		var flag: int = int((header as Dictionary)["event_flag"])
 		object["object_type"] = Gen2WorldObject.OBJECTTYPE_TRAINER
 		object["sight_range"] = int((header as Dictionary)["sight_range"])
-		## `EndTrainerBattle` hides only below `OPP_ID_OFFSET`, by that bit, and
-		## `CheckForEngagingTrainers` walks both kinds of row alike.
-		if object.has("trainer_class"):
-			object["trainer"] = {"event_flag": flag}
-		else:
-			object["event_flag"] = flag
+		## `CheckForEngagingTrainers` walks a trainer and a standing wild alike,
+		## and so does `TrainerFlagAction`; only `EndTrainerBattle`'s
+		## `predef HideObject` tells the two apart.
+		object["trainer"] = {"event_flag": int((header as Dictionary)["event_flag"])}
+
+
+## `wToggleableObjectList`: the map's own run of `ToggleableObjectStates`. Three
+## rows of the corpus name an object their map does not have.
+static func read_toggleable_rows(rom: RomFile, layout: Dictionary, map_id: int) -> Array:
+	var table: int = int(layout["toggleable_states"])
+	var at: int = Gen1Layout.banked(RomFile.bank_of(table), rom.u16le(
+		int(layout["toggleable_pointers"]) + map_id * Gen1Layout.POINTER_SIZE
+	))
+	@warning_ignore("integer_division")
+	var first: int = (at - table) / Gen1Layout.TOGGLE_STATE_SIZE
+	var out: Array = []
+	while rom.in_bounds(at, Gen1Layout.TOGGLE_STATE_SIZE) and rom.u8(at) == map_id:
+		out.append({
+			"object": rom.u8(at + 1),
+			"index": first + out.size(),
+			"on": rom.u8(at + 2) == Gen1Layout.TOGGLE_ON,
+		})
+		at += Gen1Layout.TOGGLE_STATE_SIZE
+	return out
+
+
+## Each row carried onto its object, so a mask read reaches it without the table.
+static func _carry_toggleable_objects(
+	rom: RomFile, layout: Dictionary, objects: Array, map_id: int
+) -> void:
+	for row: Dictionary in read_toggleable_rows(rom, layout, map_id):
+		var slot: int = int(row["object"]) - 1
+		if slot < 0 or slot >= objects.size():
+			continue
+		var object: Dictionary = objects[slot]
+		object["toggle_index"] = int(row["index"])
+		object["toggle_on"] = bool(row["on"])
 
 
 ## `<Map>_TextPointers`, which `DisplayTextID` indexes with a text id. A row is
@@ -934,6 +965,11 @@ static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> 
 			return false
 		state["no_press"] = true
 		return true
+	if address == int(layout["toggleable_index"]):
+		if not state.has("a"):
+			return false
+		state["toggle"] = int(state["a"])
+		return true
 	if address != int(layout["item_to_remove"]) or int(state.get("a", 0)) < 1:
 		return false
 	state["remove"] = int(state["a"])
@@ -1014,6 +1050,8 @@ static func _script_call(
 			return _script_asked(state, next)
 		"bankswitch":
 			return _script_far(layout, state, out, next)
+		"predef":
+			return _script_predef(ctx, state, out, next)
 		"play_cry", "wait_for_sound":
 			return next
 	return SCRIPT_UNREAD
@@ -1057,6 +1095,31 @@ static func _script_far(
 		return SCRIPT_UNREAD
 	out.append({"op": "take_item", "item": int(state["remove"])})
 	state.erase("remove")
+	return next
+
+
+## `predef` is `ld a, id` and `call Predef`; `PredefPointers` is the bank and
+## address that id names. `ShowObject2` shares `ShowObject`'s address, so
+## resolving the address rather than the id reads both.
+static func _script_predef(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int
+) -> int:
+	var layout: Dictionary = ctx["layout"]
+	var id: int = int(state.get("a", -1))
+	if id < 0:
+		return SCRIPT_UNREAD
+	var rom: RomFile = ctx["rom"]
+	var row: int = int(layout["predef_pointers"]) + id * Gen1Layout.PREDEF_SIZE
+	var target: int = Gen1Layout.banked(rom.u8(row), rom.u16le(row + 1))
+	if target == int(layout["pick_up_item"]):
+		out.append({"op": "pick_up_item"})
+		return next
+	var hidden: bool = target == int(layout["hide_object"])
+	if not state.has("toggle") \
+		or (not hidden and target != int(layout["show_object"])):
+		return SCRIPT_UNREAD
+	out.append({"op": "toggle_object", "index": int(state["toggle"]), "hidden": hidden})
+	state.erase("toggle")
 	return next
 
 

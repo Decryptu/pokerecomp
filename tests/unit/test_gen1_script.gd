@@ -22,7 +22,15 @@ const LAYOUT: Dictionary = {
 	"remove_item": 0x7F37,
 	"remove_item_bank": 0x05,
 	"item_to_remove": 0xFFDB,
+	"toggleable_index": 0xCC4D,
+	"predef": 0x01A0,
+	"predef_pointers": 0x0300,
+	"hide_object": 0x0210,
+	"show_object": 0x0220,
+	"pick_up_item": 0x0230,
 }
+## `PredefPointers`' rows, by the id `predef` leaves in a.
+const PREDEFS: Dictionary = {1: 0x0210, 2: 0x0220, 3: 0x0230}
 const AT: int = 0x1000
 const HELLO: int = 0x1800
 const BYE: int = 0x1810
@@ -41,6 +49,10 @@ func _rom(program: Array, strings: Dictionary = {}) -> RomFile:
 		for offset: int in text.size():
 			data[int(address) + 1 + offset] = text[offset]
 		data[int(address) + 1 + text.size()] = Gen2TextStream.CHAR_DONE
+	for id: int in PREDEFS:
+		var row: int = int(LAYOUT["predef_pointers"]) + id * Gen1Layout.PREDEF_SIZE
+		data[row + 1] = int(PREDEFS[id]) & 0xFF
+		data[row + 2] = int(PREDEFS[id]) >> 8
 	return RomFile.from_bytes(data)
 
 
@@ -283,3 +295,41 @@ func test_a_far_call_to_anything_else_answers_nothing() -> void:
 			+ _load_hl(0x4000) + _call(int(LAYOUT["bankswitch"]))
 			+ _call(int(LAYOUT["text_script_end"]))
 	), [])
+
+
+## `ld a, id` and `call Predef`, the whole of the macro.
+func _predef(id: int) -> Array:
+	return [Gen1Layout.SCRIPT_LD_A, id] + _call(int(LAYOUT["predef"]))
+
+
+## `ld a, TOGGLE_X` and `ld [wToggleableObjectIndex], a` in front of one.
+func _toggle(index: int, id: int) -> Array:
+	return [Gen1Layout.SCRIPT_LD_A, index, Gen1Layout.SCRIPT_LD_MEM_A,
+		int(LAYOUT["toggleable_index"]) & 0xFF,
+		int(LAYOUT["toggleable_index"]) >> 8] + _predef(id)
+
+
+func test_a_predef_hiding_an_object_keeps_its_global_index() -> void:
+	assert_eq(_decode(_toggle(7, 1) + _call(int(LAYOUT["text_script_end"]))),
+		[{"op": "toggle_object", "index": 7, "hidden": true}])
+
+
+func test_a_predef_showing_an_object_reads_the_other_way() -> void:
+	assert_eq(_decode(_toggle(7, 2) + _call(int(LAYOUT["text_script_end"]))),
+		[{"op": "toggle_object", "index": 7, "hidden": false}])
+
+
+## `wToggleableObjectIndex` is what the routine reads, so a row that wrote no
+## index is one this decoder cannot say which object goes off the map.
+func test_a_predef_with_no_index_written_answers_nothing() -> void:
+	assert_eq(_decode(_predef(1) + _call(int(LAYOUT["text_script_end"]))), [])
+
+
+## `PickUpItemText` whole: the object's own item is the world's to supply.
+func test_the_pick_up_predef_becomes_its_own_node() -> void:
+	assert_eq(_decode(_predef(3) + _call(int(LAYOUT["text_script_end"]))),
+		[{"op": "pick_up_item"}])
+
+
+func test_any_other_predef_answers_nothing() -> void:
+	assert_eq(_decode(_predef(0) + _call(int(LAYOUT["text_script_end"]))), [])

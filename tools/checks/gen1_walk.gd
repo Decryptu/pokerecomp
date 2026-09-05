@@ -125,6 +125,27 @@ const GIFT_OPENING: String = "Hello, there!"
 const GIFT_KNOWN: String = "TM41 teaches"
 const GIFT_REFUSED: String = "Oh, your pack is"
 
+## Route 4's TM04: an ITEM object on `PickUpItemText` with a toggle row of its own.
+const ROUTE_4: int = 15
+const GROUND_ITEM_CELL := Vector2i(57, 3)
+const GROUND_ITEM_OBJECT: int = 2
+const GROUND_ITEM: int = 0xCC
+const GROUND_ITEM_NAME: String = "TM04"
+const GROUND_ITEM_FOUND: String = "found"
+const GROUND_ITEM_REFUSED: String = "No more room for"
+
+## `TOGGLE_PALLET_TOWN_OAK`, row 0 and one of the 32 that start OFF.
+const PALLET_OAK_CELL := Vector2i(10, 4)
+const PALLET_OAK_OBJECT: int = 0
+
+## `Museum1FScientist2Text`, whose gift ends in `predef HideObject` over the OLD
+## AMBER ball beside it. Yellow reaches that text through a `farcall` instead.
+const MUSEUM_1F: int = 52
+const MUSEUM_SCIENTIST_CELL := Vector2i(15, 2)
+const MUSEUM_AMBER_OBJECT: int = 4
+const OLD_AMBER: int = 0x1F
+const MUSEUM_GIFT_BOX: String = "Take this to a\nPOKéMON LAB"
+
 ## Yellow's `CeruleanBadgeHouse` melanie, the corpus's one box that owes no
 ## press: `DisableWaitingAfterTextDisplay` runs before her last `PrintText`.
 const MELANIE_MAP: int = 63
@@ -147,6 +168,10 @@ func _one_game() -> void:
 	_check_text_boxes()
 	_check_scripted_npcs()
 	_check_a_gift()
+	_check_an_item_is_picked_up()
+	_check_an_object_starts_hidden()
+	if _r.game_id != RomRegistry.YELLOW:
+		_check_a_script_hides_an_object()
 	_check_the_nurse_heals()
 	_check_the_cable_club()
 	_check_the_vending_machine()
@@ -412,6 +437,75 @@ func _check_a_gift_refused() -> void:
 		"a full bag said %s." % [said])
 	_r.check(world.state.item_quantity(TM41_ITEM) == 0, "a full bag took the gift.")
 	_r.check(not world.event_flag_active(TM41_FLAG), "a refused gift set its flag.")
+
+
+## `PickUpItem` both ways: the bag takes the item and `HideObject` takes the ball
+## off the map, or the bag is full and both stay where they were.
+func _check_an_item_is_picked_up() -> void:
+	var world: Gen2WorldAPI = _facing_up(ROUTE_4, GROUND_ITEM_CELL + Vector2i.DOWN)
+	if world == null:
+		return
+	var opened: Array = world.interact()
+	var event: Dictionary = opened[0].get("event", {}) if not opened.is_empty() else {}
+	_r.check(String(event.get("text", "")).contains(GROUND_ITEM_NAME)
+		and String(event.get("text", "")).contains(GROUND_ITEM_FOUND)
+		and not bool(event.get("prompt", true)),
+		"the ground item said %s." % [event])
+	world.run_event_queue(true)
+	_r.check(world.state.item_quantity(GROUND_ITEM) == 1,
+		"the bag holds %d of the ground item." % world.state.item_quantity(GROUND_ITEM))
+	_r.check(not _object_active(world, GROUND_ITEM_OBJECT), "the picked ball is still drawn.")
+	_r.check(world.interact().is_empty(), "the picked ball still answers.")
+
+	world = _facing_up(ROUTE_4, GROUND_ITEM_CELL + Vector2i.DOWN)
+	if world == null:
+		return
+	var stock: Dictionary = {}
+	for slot: int in Gen1Layout.BAG_ITEM_CAPACITY:
+		stock[slot + 1] = 1
+	world.state.apply_changes({}, {}, {"items": stock})
+	_r.check(_box_text(world).begins_with(GROUND_ITEM_REFUSED),
+		"a full bag met the ground item with %s." % _box_text(world))
+	_r.check(world.state.item_quantity(GROUND_ITEM) == 0, "a full bag took the ground item.")
+	_r.check(_object_active(world, GROUND_ITEM_OBJECT), "a refused ball left the map.")
+
+
+## `InitializeToggleableObjectsFlags` writes the OFF rows on a new game, so Oak
+## is in Pallet Town's objects and not on its map until a `ShowObject` runs.
+func _check_an_object_starts_hidden() -> void:
+	var world: Gen2WorldAPI = _facing_up(PALLET_TOWN, PALLET_OAK_CELL + Vector2i.DOWN)
+	if world == null:
+		return
+	var oak: Gen2WorldObject = world.objects[PALLET_OAK_OBJECT]
+	_r.check(oak.toggle_index == 0 and not oak.toggle_on,
+		"Pallet Town's Oak carries toggle %d, on %s." % [oak.toggle_index, oak.toggle_on])
+	_r.check(not oak.active, "Oak is on the map already.")
+	world.gen1_toggle_object(oak.toggle_index, false)
+	_r.check(_object_active(world, PALLET_OAK_OBJECT), "ShowObject left Oak off the map.")
+
+
+## A decoded `predef HideObject`: the OLD AMBER lands and its ball leaves the map.
+func _check_a_script_hides_an_object() -> void:
+	var world: Gen2WorldAPI = _facing_up(MUSEUM_1F, MUSEUM_SCIENTIST_CELL + Vector2i.DOWN)
+	if world == null:
+		return
+	_r.check(_object_active(world, MUSEUM_AMBER_OBJECT), "the OLD AMBER was never drawn.")
+	var said: Array[String] = _spoken(world)
+	_r.check(said.size() == 2 and said[0].contains(MUSEUM_GIFT_BOX),
+		"the museum scientist said %s." % [said])
+	_r.check(world.state.item_quantity(OLD_AMBER) == 1, "the OLD AMBER never landed.")
+	_r.check(not _object_active(world, MUSEUM_AMBER_OBJECT), "the OLD AMBER is still drawn.")
+
+
+func _facing_up(map: int, cell: Vector2i) -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, map, cell)
+	if world != null:
+		world.player_facing = Gen2WorldSprite.FACING_UP
+	return world
+
+
+func _object_active(world: Gen2WorldAPI, index: int) -> bool:
+	return (world.objects[index] as Gen2WorldObject).active
 
 
 func _spoken(world: Gen2WorldAPI) -> Array[String]:

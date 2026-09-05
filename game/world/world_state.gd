@@ -298,6 +298,11 @@ var _picked_fruit_trees: Dictionary = {}
 ## `wTradeFlags`, one bit per `NPC_TRADE_*` index. `TradeFlagAction` is an NPC
 ## trade's whole once-only gate: no map script guards one.
 var _npc_trades: Dictionary = {}
+## `wToggleableObjectFlags`, Generation 1's own. The array is initialised from
+## `ToggleableObjectStates` rather than to zero, so what is kept here is the set
+## of global indices a `ShowObject` or a `HideObject` has since moved away from
+## that row: a state that has run neither is the cartridge's own new game.
+var _toggled_objects: Dictionary = {}
 ## `wRegisteredItem`. `wWhichRegisteredItem`'s pocket and slot number have no
 ## counterpart in the flat item model: `CheckRegisteredItem` uses them to find
 ## the entry again in its packed pocket array and clears both when the item is
@@ -520,6 +525,7 @@ func to_dict() -> Dictionary:
 		"maptile_decorations": _maptile_decorations.duplicate(),
 		"kurt_apricorn_quantity": _kurt_apricorn_quantity,
 		"picked_fruit_trees": _picked_fruit_trees.duplicate(),
+		"toggled_objects": _toggled_objects.duplicate(),
 		"npc_trades": _npc_trades.duplicate(),
 		"registered_item": _registered_item,
 		"day_care_man": _day_care_man,
@@ -570,6 +576,7 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	)
 	_seed_counts(restored._pc_items, _map(source, "pc_items"), 1, -1, Gen2WorldPack.MAX_PC_ITEMS)
 	_seed_flags(restored._picked_fruit_trees, _map(source, "picked_fruit_trees"), 1)
+	_seed_flags(restored._toggled_objects, _map(source, "toggled_objects"), 0)
 	_seed_flags(restored._npc_trades, _map(source, "npc_trades"), 0)
 	restored._swarm_maps[SWARM_YANMA] = _vector_from_value(
 		source.get("yanma_swarm_map", [-1, -1])
@@ -724,6 +731,7 @@ func restore_from_dict(raw: Variant) -> void:
 	_maptile_decorations = restored._maptile_decorations.duplicate()
 	_kurt_apricorn_quantity = restored._kurt_apricorn_quantity
 	_picked_fruit_trees = restored._picked_fruit_trees.duplicate()
+	_toggled_objects = restored._toggled_objects.duplicate()
 	_npc_trades = restored._npc_trades.duplicate()
 	_registered_item = restored._registered_item
 	_day_care_man = restored._day_care_man
@@ -1667,6 +1675,21 @@ func set_kurt_apricorn_quantity(quantity: int) -> void:
 	if next_quantity == _kurt_apricorn_quantity:
 		return
 	_kurt_apricorn_quantity = next_quantity
+	changed.emit()
+
+
+## Whether that object stands the other way round from its own table row.
+func is_object_toggled(index: int) -> bool:
+	return index >= 0 and bool(_toggled_objects.get(index, false))
+
+
+func set_object_toggled(index: int, toggled: bool) -> void:
+	if index < 0 or is_object_toggled(index) == toggled:
+		return
+	if toggled:
+		_toggled_objects[index] = true
+	else:
+		_toggled_objects.erase(index)
 	changed.emit()
 
 

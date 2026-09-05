@@ -126,6 +126,8 @@ var _world_marts: Dictionary = {}
 ## Built on first ask and kept, since the walk behind it is the whole script
 ## corpus. See [method catalog].
 var _catalog: Gen2WorldCatalog = null
+## See [method gen1_toggle_on]. Empty outside Generation 1 and until first read.
+var _gen1_toggle_on: Dictionary = {}
 var _world_phone: Dictionary = {}
 var _world_fruit_trees: Array = []
 var _world_spawns: Dictionary = {}
@@ -315,6 +317,19 @@ func world_map(group: int, number: int) -> Gen2WorldMap:
 
 func world_maps() -> Array:
 	return _maps().duplicate()
+
+
+## `ToggleableObjectStates`' ON column by global index, derived once from the
+## objects carrying one. The three rows reaching no object read as ON, which is
+## what a flag nothing draws from is worth.
+func gen1_toggle_on(index: int) -> bool:
+	if _gen1_toggle_on.is_empty():
+		for map: Gen2WorldMap in _maps():
+			for object: Dictionary in map.events.get("objects", []) as Array:
+				if object.has("toggle_index"):
+					_gen1_toggle_on[int(object["toggle_index"])] = \
+						bool(object.get("toggle_on", true))
+	return bool(_gen1_toggle_on.get(index, true))
 
 
 ## Every imported script's `bank:address` key, sorted, for a caller that has to

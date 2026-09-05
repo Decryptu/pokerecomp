@@ -519,6 +519,17 @@ const OBJECT_ITEM_FLAG: int = 0x80
 const OBJECT_TEXT_MASK: int = 0x3F
 const OBJECT_TRAINER_BYTES: int = 2
 const OBJECT_ITEM_BYTES: int = 1
+## `ToggleableObjectStates`: a map id, the object's 1-based id, and ON or OFF.
+## `MarkTownVisitedAndLoadToggleableObjects` reaches a map's run through
+## `ToggleableObjectMapPointers` and ends it on the first row naming another
+## map; a row's distance from the table is the index `HideObject` is given.
+const TOGGLE_STATE_SIZE: int = 3
+const TOGGLE_ON: int = 0x15
+## `add_predef`'s `dba`, indexed by the id the `predef` macro leaves in a.
+const PREDEF_SIZE: int = 3
+## `PickUpItemText`'s two boxes, a `text_far` stub and a `sound_get_item_1` apart.
+const PICK_UP_TEXT_AT: Dictionary = {"found": 0x00, "no_room": 0x06}
+
 ## `object_event`'s two movement bytes as one shared template. Byte 1 is WALK or
 ## STAY; byte 2 is a fixed direction, the axis a random walk keeps to, or
 ## `BOULDER_MOVEMENT_BYTE_2`. A STAY sprite still turns, because `TryWalking`
@@ -578,6 +589,7 @@ const SCRIPT_CARRY_BRANCHES: Dictionary = {0x38: true, 0xDA: true, 0x30: false, 
 const SCRIPT_CALLS: Array[String] = [
 	"print_text", "text_script_end", "disable_waiting", "yes_no_choice",
 	"give_item", "is_item_in_bag", "bankswitch", "play_cry", "wait_for_sound",
+	"predef",
 ]
 const SCRIPT_SHORT_SIZE: int = 2
 const SCRIPT_LONG_SIZE: int = 3
@@ -783,6 +795,16 @@ const RED_BLUE: Dictionary = {
 	"do_not_wait": 0xCC3C,
 	"current_menu_item": 0xCC26,
 	"item_to_remove": 0xFFDB,
+	"toggleable_index": 0xCC4D,
+	## `Predef` and the table it indexes, with the three rows read through it.
+	"predef": 0x3E6D,
+	"predef_pointers": 0x4FE79,
+	"hide_object": 0x0F1D7,
+	"show_object": 0x0F1C8,
+	"pick_up_item": 0x04DE1,
+	"found_item_text": 0x04E26,
+	"toggleable_pointers": 0x0C8F5,
+	"toggleable_states": 0x0CAEA,
 	## `DisplayPokemartDialogue`'s own greeting and the head of the two facility
 	## text runs [constant MART_TEXT_AT] and its neighbour walk. Every offset
 	## here is `pokered.sym`'s, which builds both dumps.
@@ -871,6 +893,15 @@ const YELLOW: Dictionary = {
 	"do_not_wait": 0xCC3C,
 	"current_menu_item": 0xCC26,
 	"item_to_remove": 0xFFDB,
+	"toggleable_index": 0xCC4D,
+	"predef": 0x3EB4,
+	"predef_pointers": 0xF681D,
+	"hide_object": 0x0F053,
+	"show_object": 0x0F044,
+	"pick_up_item": 0x04D55,
+	"found_item_text": 0x04D9A,
+	"toggleable_pointers": 0x0C69B,
+	"toggleable_states": 0x0C892,
 	"mart_greeting": 0x02938,
 	"mart_text": 0x06B91,
 	"pokecenter_text": 0x06ED0,

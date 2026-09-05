@@ -8,6 +8,20 @@ extends GutTest
 const FLYPOINT_VERMILION: int = 58
 
 
+## `wToggleableObjectFlags` is saved as the indices moved away from their own
+## `ToggleableObjectStates` row, so a state that has moved none writes nothing.
+func test_toggled_objects_round_trip_and_clear() -> void:
+	var state := Gen2WorldState.new()
+	assert_false(state.is_object_toggled(11))
+	state.set_object_toggled(11, true)
+	state.set_object_toggled(12, true)
+	state.set_object_toggled(12, false)
+	var restored := Gen2WorldState.from_dict(state.to_dict())
+	assert_true(restored.is_object_toggled(11))
+	assert_false(restored.is_object_toggled(12))
+	assert_false(restored.is_object_toggled(-1))
+
+
 func test_world_state_round_trips_persistent_overworld_fields() -> void:
 	var state := Gen2WorldState.new(
 		{7: true}, {"1:2": 4}, {3: 8}, {0: 120}, 17, {9: true},

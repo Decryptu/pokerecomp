@@ -5675,18 +5675,18 @@ func _advance_script_input() -> void:
 	_refresh_labels()
 
 
-## `Script_writetext` is `MapTextbox` and returns as soon as the string is placed,
-## so a text ending in `<DONE>` owes no press of its own and the script runs on the
-## moment its last page is up. The box reaches that page three ways: shown whole,
-## turned to by the press that clears a `<PARA>`, or scrolled into by `_ContText`,
-## and only the first two are a press. The scroll ends on a frame instead, which
-## is why [method advance_frame] asks this as well.
+## `Script_writetext` is `MapTextbox`, which prints its string a letter at a time
+## and returns behind the last one, so a text ending in `<DONE>` owes no press and
+## the script runs on the frame its last page finishes printing. The box reaches
+## that page three ways: printed where it stands, turned to by the press that
+## clears a `<PARA>`, or scrolled into by `_ContText`. Only the middle one is a
+## press, which is why [method advance_frame] asks this as well.
 func _continue_if_text_settled() -> bool:
 	if _text_box == null or not _text_box.visible or _world == null:
 		return false
 	if _text_awaits_press or not _oak_pc_pages.is_empty():
 		return false
-	if _text_box.is_scrolling() or _text_box.has_pages_left():
+	if _text_box.is_revealing() or _text_box.has_pages_left():
 		return false
 	if StringName(_world.pending_script_input().get("type", &"")) != &"text":
 		return false

@@ -27,7 +27,7 @@ const KIND_HELP: Dictionary = {
 	&"mart": "cell in front of the counter: BuyMenu",
 	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
-	&"sign": "none: DisplayTextID's box, read by facing up from where the player stands",
+	&"sign": "frames: DisplayTextID's box, read by facing up from where the player stands. 0 spends the whole reveal, which is past a box owing no press",
 	&"gift": "presses: a `GiveItem` row, faced up from the cell after the @. 0 is the offer's first page, 4 the receipt box a bag with room earns",
 	&"trainer": "presses, frames: TalkToTrainer on the map's first trainer, faced from the cell below. 0 the before-battle box, 1 the fight the press behind it opens; a second number stops that many frames into the transition instead",
 	&"sight": "frames, 0: CheckFightingMapTrainers on the map's first trainer who sees, walked into from the far end of its own line. 40 stands in the shock bubble, 120 in the walk-up, 400 in the before-battle box",
@@ -470,7 +470,7 @@ func _process(_delta: float) -> bool:
 		## `bare` takes the readout off and nothing else: skipping these caught
 		## a staged box on the frame it opened, which is an empty box.
 		if _kind not in SELF_DRIVEN_KINDS:
-			for _frame: int in int(STAGED_FRAMES_BY_KIND.get(_kind, STAGED_FRAMES)):
+			for _frame: int in _staged_frames():
 				_screen.advance_frame()
 	if _frames < 18:
 		return false
@@ -955,6 +955,13 @@ func _stage_sight() -> void:
 		_screen.press_button(ICE_SLIDE_BUTTONS[object.facing ^ 1])
 		break
 	_screen.advance_frames(maxi(_cell.x, 0))
+
+
+## The whole reveal, or the `x` argument: a box owing no press closes behind it.
+func _staged_frames() -> int:
+	if _kind == &"sign" and _cell.x > 0:
+		return _cell.x
+	return int(STAGED_FRAMES_BY_KIND.get(_kind, STAGED_FRAMES))
 
 
 ## `DisplayTextID`'s box, read by facing the cell above the `x y` argument.

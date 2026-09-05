@@ -508,10 +508,10 @@ func test_production_world_entry_and_facing_object_story_persist_separate_flags(
 	_world_screen._world.player_cell = Vector2i(4, 3)
 	_world_screen._world.player_facing = Gen2WorldSprite.FACING_RIGHT
 	assert_true(_world_screen.interact())
-	## The `waitbutton` behind the `writetext`, which is what a text ending in
-	## `<DONE>` leaves the script holding on.
+	## `MapTextbox` returns behind the last letter it prints, so the `writetext`
+	## is still running while the page reveals.
 	assert_eq(
-		StringName(_world_screen._world.pending_script_input().get("type", &"")), &"button"
+		StringName(_world_screen._world.pending_script_input().get("type", &"")), &"text"
 	)
 	assert_false(_world_screen._world.event_flag_active(STORY_EVENT_FLAG))
 	assert_false(_world_screen._world.state.hall_of_fame())
@@ -519,8 +519,12 @@ func test_production_world_entry_and_facing_object_story_persist_separate_flags(
 	## The box reveals at the OPTION menu's TEXT SPEED, and a press cannot shorten
 	## it: `PrintLetterDelay` is all a button reaches while a text is running, and
 	## the most it does there is one letter a frame. So the page is spent in
-	## frames and then one press acknowledges it.
+	## frames, which is where the `waitbutton` behind the `writetext` is reached,
+	## and then one press acknowledges it.
 	_world_screen.advance_frames(_world_screen._text_box.frames_left())
+	assert_eq(
+		StringName(_world_screen._world.pending_script_input().get("type", &"")), &"button"
+	)
 	_world_screen._advance_script_input()
 	assert_true(_world_screen._world.event_flag_active(STORY_EVENT_FLAG))
 	assert_true(_world_screen._world.state.hall_of_fame())

@@ -155,6 +155,7 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"vending": ["vending_text", Gen1Layout.VENDING_TEXT_AT],
 	"prizes": ["prize_text", Gen1Layout.PRIZE_TEXT_AT],
 	"prizes_2": ["prize_text_2", Gen1Layout.PRIZE_TEXT_2_AT],
+	"pick_up_item": ["found_item_text", Gen1Layout.PICK_UP_TEXT_AT],
 }
 
 
