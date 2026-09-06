@@ -43,9 +43,15 @@ const LAYOUT: Dictionary = {
 	"money_hram": 0xFF9F,
 	"player_money": 0xD347,
 	"sub_bcd": 0x0250,
+	"has_enough_coins": 0x0260,
+	"player_coins": 0xD5A4,
+	"add_bcd": 0x0270,
+	"coin_box": 0x0280,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
-const PREDEFS: Dictionary = {1: 0x0210, 2: 0x0220, 3: 0x0230, 4: 0x0240, 5: 0x0250}
+const PREDEFS: Dictionary = {
+	1: 0x0210, 2: 0x0220, 3: 0x0230, 4: 0x0240, 5: 0x0250, 6: 0x0270,
+}
 const AT: int = 0x1000
 const HELLO: int = 0x1800
 const BYE: int = 0x1810
@@ -556,6 +562,78 @@ func test_the_subtraction_predef_becomes_the_price_it_takes() -> void:
 	assert_eq(
 		_decode(_spend([0x00, 0x05, 0x00]) + _call(int(LAYOUT["text_script_end"]))),
 		[{"op": "spend_money", "amount": 500}]
+	)
+
+
+## `ldh [hCoins + n], a`, which is `hMoney`'s last two bytes.
+func _coins(count: Array) -> Array:
+	var out: Array = []
+	var at: int = int(LAYOUT["money_hram"]) + Gen1Layout.COIN_BUFFER_AT
+	for index: int in count.size():
+		out += [Gen1Layout.SCRIPT_LD_A, int(count[index]),
+			Gen1Layout.SCRIPT_LDH_MEM_A, (at + index) & 0xFF]
+	return out
+
+
+## The two flags `HasEnoughCoins` leaves: carry when the player is short, which
+## `jr nc` at $30 reads, and zero when the counts are equal, which `jr z` at $28
+## reads. `GameCornerGentlemanText` is the one row of the corpus that takes the
+## second, so both readings are built here.
+func test_a_coin_test_reads_either_flag() -> void:
+	for row: Array in [[0x30, "at_least"], [0x28, "exactly"]]:
+		var refused: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+		var script: Array = _decode(
+			_coins([0x99, 0x90]) + _call(int(LAYOUT["has_enough_coins"]))
+				+ [int(row[0]), refused.size()] + refused
+				+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+			_boxes()
+		)
+		assert_eq(script, [{
+			"op": "has_coins", "coins": 9990, "test": String(row[1]),
+			"then": [{"op": "text", "text": "HI"}],
+			"else": [{"op": "text", "text": "BYE"}],
+		}])
+
+
+func test_a_coin_test_with_one_byte_written_answers_nothing() -> void:
+	assert_eq(_decode(
+		_coins([0x99]) + _call(int(LAYOUT["has_enough_coins"]))
+			+ _call(int(LAYOUT["text_script_end"]))
+	), [])
+
+
+## `AddBCDPredef` with `wPlayerCoins + 1` in de and two in c. The Day-Care sums
+## its own price with the same predef over another buffer, which reads as
+## nothing rather than as coins.
+func _add_coins(count: Array, at: int) -> Array:
+	var coins: int = int(LAYOUT["money_hram"]) + Gen1Layout.COIN_BUFFER_AT
+	return _coins(count) + _load_hl(coins + Gen1Layout.COIN_BYTES - 1) \
+		+ [Gen1Layout.SCRIPT_LD_DE, at & 0xFF, at >> 8,
+			Gen1Layout.SCRIPT_LD_C, Gen1Layout.COIN_BYTES] \
+		+ _predef(6)
+
+
+func test_the_addition_predef_becomes_the_coins_it_gives() -> void:
+	var at: int = int(LAYOUT["player_coins"]) + Gen1Layout.COIN_BYTES - 1
+	assert_eq(
+		_decode(_add_coins([0x00, 0x50], at) + _call(int(LAYOUT["text_script_end"]))),
+		[{"op": "add_coins", "amount": 50}]
+	)
+
+
+func test_an_addition_onto_another_buffer_answers_nothing() -> void:
+	assert_eq(_decode(
+		_add_coins([0x00, 0x50], int(LAYOUT["player_money"]))
+			+ _call(int(LAYOUT["text_script_end"]))
+	), [])
+
+
+## `GameCornerDrawCoinBox`, which the layout names by its full ROM offset
+## because the same address in another bank is another routine.
+func test_the_coin_box_call_becomes_its_own_node() -> void:
+	assert_eq(
+		_decode(_call(int(LAYOUT["coin_box"])) + _call(int(LAYOUT["text_script_end"]))),
+		[{"op": "coin_box"}]
 	)
 
 

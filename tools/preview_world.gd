@@ -36,6 +36,7 @@ const KIND_HELP: Dictionary = {
 	&"prizes": "presses, rows down: CeladonPrizeMenu, read the same way. 0 the list, 1 SoYouWantPrizeText's YES/NO, 2 the box YES lands in",
 	&"trade": "presses: DoInGameTradeDialogue, faced up from the cell below the trader. 0 the offer and its YES/NO, 1 the party list YES opens",
 	&"deal": "presses: the MAGIKARP salesman, faced right from the cell beside him with the money box DisplayTextBoxID drew over the map",
+	&"coins": "presses: GameCornerClerk1Text, faced up from the cell below her with GameCornerDrawCoinBox's own box over the map. 0 the offer and its YES/NO, 1 the box YES lands in",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"level_evolution": "frames: EvolveAfterBattle's screen that many frames in, each box pressed past as it lands",
 	&"egg_hatch": "frames, slot: OverworldHatchEgg on that party slot, that many frames in",
@@ -191,6 +192,7 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"gift": BOX_REVEAL_FRAMES,
 	&"nurse": BOX_REVEAL_FRAMES, &"vending": BOX_REVEAL_FRAMES,
 	&"prizes": BOX_REVEAL_FRAMES, &"trade": BOX_REVEAL_FRAMES,
+	&"coins": BOX_REVEAL_FRAMES, &"deal": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
 const BOX_REVEAL_FRAMES: int = 120
@@ -448,6 +450,7 @@ const STAGERS: Dictionary = {
 	&"prizes": &"_stage_prizes",
 	&"trade": &"_stage_trade",
 	&"deal": &"_stage_deal",
+	&"coins": &"_stage_coins",
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
@@ -1068,6 +1071,13 @@ func _stage_deal() -> void:
 	_stage_counter(
 		{"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY}}, PokeButton.RIGHT
 	)
+
+
+func _stage_coins() -> void:
+	_stage_counter({
+		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY},
+		"items": {Gen1Layout.ITEM_COIN_CASE: 1},
+	})
 
 
 ## A counter faced the way [param facing] says: presses, then rows down first.

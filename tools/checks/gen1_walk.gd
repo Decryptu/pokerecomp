@@ -109,7 +109,7 @@ const PRIZE_MENUS: Dictionary = {
 ## worth the box it puts up. `BikeShopYoungsterText` turns on EVENT_GOT_BICYCLE,
 ## `LavenderTownLittleGirlText` asks and branches on the answer, and
 ## `GameCornerFishingGuruText` reaches `Has9990Coins` only with the COIN CASE in
-## the bag, so the row speaks without one and says nothing at all with it.
+## the bag, so its own flag decides which of two boxes it opens.
 const BIKE_SHOP: int = 66
 const BIKE_YOUNGSTER := Vector2i(1, 4)
 const BIKE_FLAG: int = 192
@@ -118,11 +118,26 @@ const LAVENDER_TOWN: int = 4
 const GHOST_GIRL := Vector2i(15, 10)
 const GHOST_ANSWERS: Array[String] = ["Really? So there", "Hahaha, I guess"]
 const GAME_CORNER: int = 135
-const GAME_CORNER_GAMBLER := Vector2i(5, 12)
+const GAME_CORNER_GURU := Vector2i(5, 12)
 const GAME_CORNER_FLAG: int = 442
 const GAME_CORNER_BOX: String = "Wins seem to come"
 const GAME_CORNER_ASKED: String = "Kid, do you want"
-const COIN_CASE: int = 0x45
+
+const GAME_CORNER_CLERK := Vector2i(5, 7)
+const COIN_CASE_CEILING: int = 9990
+const COIN_PRICE: int = 1000
+const COINS_BOUGHT: int = 50
+const CLERK_SOLD: String = "Thanks! Here are"
+const CLERK_NO_CASE: String = "You don't have a"
+const CLERK_CASE_FULL: String = "Oops! Your COIN"
+const CLERK_SHORT: String = "You can't afford"
+
+## `GameCornerGentlemanText`, whose `jr z` refuses exactly 9990 and pays more.
+const GAME_CORNER_GENTLEMAN := Vector2i(17, 14)
+const GENTLEMAN_FLAG: int = 443
+const COINS_GIVEN: int = 20
+const GENTLEMAN_PAID: String = "20 coins!"
+const GENTLEMAN_REFUSED: String = "You've got your"
 
 ## Celadon City's TM41, whose receipt box names the item out of the buffer
 ## `CopyToStringBuffer` fills only when the bag took it.
@@ -219,6 +234,7 @@ func _one_game() -> void:
 	_check_the_prize_counter()
 	_check_a_trade()
 	_check_the_magikarp_salesman()
+	_check_the_coin_clerks()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -432,15 +448,11 @@ func _check_scripted_npcs() -> void:
 		)
 		_r.check(read.begins_with(BIKE_BOXES[1 if set_flag else 0]),
 			"the bike shop said %s with the bicycle flag %s." % [read, set_flag])
-	var asked: String = _scripted_box(GAME_CORNER, GAME_CORNER_GAMBLER, 0)
+	var asked: String = _scripted_box(GAME_CORNER, GAME_CORNER_GURU, 0)
 	_r.check(asked.begins_with(GAME_CORNER_ASKED),
 		"the guru said %s with no COIN CASE." % [asked])
-	var silent: String = _scripted_box(
-		GAME_CORNER, GAME_CORNER_GAMBLER, 0, {COIN_CASE: 1}
-	)
-	_r.check(silent.is_empty(), "the half-read row said %s." % [silent])
 	var spoken: String = _scripted_box(
-		GAME_CORNER, GAME_CORNER_GAMBLER, GAME_CORNER_FLAG
+		GAME_CORNER, GAME_CORNER_GURU, GAME_CORNER_FLAG
 	)
 	_r.check(spoken.begins_with(GAME_CORNER_BOX), "its other side said %s." % [spoken])
 	_check_the_ghost_girl()
@@ -829,6 +841,88 @@ func _magikarp_offer(purse: int) -> Gen2WorldAPI:
 		not String(world.pending_script_input().get("text", "")).is_empty(),
 		"the deal asked nothing: %s." % [results]
 	) else null
+
+
+func _check_the_coin_clerks() -> void:
+	var world: Gen2WorldAPI = _clerk_world(COIN_PRICE, 0, 1)
+	if world == null:
+		return
+	var window: Dictionary = _first_event(world.interact(), &"money_window_opened")
+	_r.check(
+		StringName(window.get("kind", &"")) == &"game_corner"
+			and int(window.get("money", -1)) == COIN_PRICE
+			and int(window.get("coins", -1)) == 0,
+		"the clerk drew %s over the map." % [window]
+	)
+	if not _r.check(world.script_input_waiting(), "the clerk asked nothing."):
+		return
+	var said: String = _event_text(world.choose_script_input(0))
+	_r.check(said.begins_with(CLERK_SOLD), "she answered YES with %s." % [said])
+	_r.check(
+		world.state.coins() == COINS_BOUGHT
+			and world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == 0,
+		"%d coins cost %d." % [world.state.coins(), COIN_PRICE - world.state.money(
+			Gen2WorldMartHost.MONEY_ACCOUNT
+		)]
+	)
+	for row: Array in [
+		[COIN_PRICE - 1, 0, 1, CLERK_SHORT], [COIN_PRICE, COIN_CASE_CEILING, 1,
+		CLERK_CASE_FULL], [COIN_PRICE, 0, 0, CLERK_NO_CASE],
+	]:
+		_check_a_refused_clerk(int(row[0]), int(row[1]), int(row[2]), String(row[3]))
+	_check_the_gentleman()
+	_r.note("gen1 walk the coin clerk: %d coins for %d, and three refusals" % [
+		COINS_BOUGHT, COIN_PRICE,
+	])
+
+
+func _check_a_refused_clerk(money: int, coins: int, cases: int, wanted: String) -> void:
+	var world: Gen2WorldAPI = _clerk_world(money, coins, cases)
+	if world == null:
+		return
+	world.interact()
+	if not _r.check(world.script_input_waiting(), "the clerk asked nothing."):
+		return
+	var said: String = _event_text(world.choose_script_input(0))
+	_r.check(said.begins_with(wanted), "with %d, %d coins and %d cases she said %s." % [
+		money, coins, cases, said,
+	])
+	_r.check(world.state.coins() == coins, "a refusal left %d coins." % world.state.coins())
+
+
+func _clerk_world(money: int, coins: int, cases: int) -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, GAME_CORNER, GAME_CORNER_CLERK)
+	if world == null:
+		return null
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	world.state.apply_changes({}, {}, {
+		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: money},
+		"coins": coins,
+		"items": {Gen1Layout.ITEM_COIN_CASE: cases},
+	})
+	return world
+
+
+func _check_the_gentleman() -> void:
+	for coins: int in [COIN_CASE_CEILING, COIN_CASE_CEILING + 1]:
+		var world: Gen2WorldAPI = _r.open_world(0, GAME_CORNER, GAME_CORNER_GENTLEMAN)
+		if world == null:
+			return
+		world.player_facing = Gen2WorldSprite.FACING_UP
+		world.state.apply_changes({}, {}, {"coins": coins, "items": {Gen1Layout.ITEM_COIN_CASE: 1}})
+		var said: Array[String] = _spoken(world)
+		var refused: bool = coins == COIN_CASE_CEILING
+		_r.check(
+			said.size() == 2 and (said[1].begins_with(GENTLEMAN_REFUSED) if refused
+				else said[1].ends_with(GENTLEMAN_PAID)),
+			"with %d coins the gentleman said %s." % [coins, said]
+		)
+		_r.check(
+			world.state.coins() == (coins if refused else mini(
+				coins + COINS_GIVEN, Gen1Layout.COIN_CEILING
+			)) and world.event_flag_active(GENTLEMAN_FLAG) != refused,
+			"with %d coins he left %d." % [coins, world.state.coins()]
+		)
 
 
 func _first_event(results: Array, type: StringName) -> Dictionary:

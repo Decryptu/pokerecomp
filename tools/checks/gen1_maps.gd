@@ -130,27 +130,30 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 235, "text": 252, "branch": 95, "choice": 11, "flag": 37,
-		"give_item": 24, "has_item": 9, "take_item": 3, "unknown": 43,
+	&"red": {"rows": 236, "text": 264, "branch": 95, "choice": 12, "flag": 40,
+		"give_item": 24, "has_item": 10, "take_item": 3, "unknown": 40,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
-		"trade": 9, "has_money": 1, "spend_money": 1, "money_box": 2},
-	&"blue": {"rows": 235, "text": 252, "branch": 95, "choice": 11, "flag": 37,
-		"give_item": 24, "has_item": 9, "take_item": 3, "unknown": 43,
+		"trade": 9, "has_money": 2, "spend_money": 2, "money_box": 2,
+		"has_coins": 4, "add_coins": 4, "coin_box": 2},
+	&"blue": {"rows": 236, "text": 264, "branch": 95, "choice": 12, "flag": 40,
+		"give_item": 24, "has_item": 10, "take_item": 3, "unknown": 40,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
-		"trade": 9, "has_money": 1, "spend_money": 1, "money_box": 2},
-	&"yellow": {"rows": 279, "text": 294, "branch": 97, "choice": 12, "flag": 32,
-		"give_item": 24, "has_item": 9, "take_item": 3, "unknown": 47,
+		"trade": 9, "has_money": 2, "spend_money": 2, "money_box": 2,
+		"has_coins": 4, "add_coins": 4, "coin_box": 2},
+	&"yellow": {"rows": 280, "text": 306, "branch": 97, "choice": 13, "flag": 35,
+		"give_item": 24, "has_item": 10, "take_item": 3, "unknown": 44,
 		"pick_up_item": 108, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
-		"trade": 7, "has_money": 1, "spend_money": 1, "money_box": 2},
+		"trade": 7, "has_money": 2, "spend_money": 2, "money_box": 2,
+		"has_coins": 4, "add_coins": 4, "coin_box": 2},
 }
 ## The eighth `call DisplayPokedex` in the source is `SilphCo11FPorygonText`,
-## which no map text row names and which the disassembly marks unreferenced. The
+## which no map text row names and the disassembly marks unreferenced. The
 ## `trade` rows are the eight `predef DoInGameTradeDialogue` sites plus
 ## `CinnabarLabTradeRoom`'s second, whose `jr` shares the first one's tail;
-## Yellow ships neither trade house. The money rows are the Magikarp salesman's
-## alone: Museum 1F and the Safari Zone gate spend theirs behind
+## Yellow ships neither trade house. The coin rows are the Game Corner's four
+## clerks. Museum 1F and the Safari Zone gate spend their money behind
 ## `StartSimulatingJoypadStates`, which walks the player and which this port
-## has no counterpart for, so those paths stay unread.
+## has no counterpart for, so those two paths stay unread.
 
 ## `ToggleableObjectStates` as the corpus carries it: the objects a row lands on
 ## and how many start ON. Three rows name an object their map has not got.
