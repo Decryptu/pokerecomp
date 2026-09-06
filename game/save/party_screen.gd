@@ -164,7 +164,6 @@ var _menu_page: Gen2MenuPage = null
 ## A refusal standing in the menu's own bottom box, which the next A or B
 ## clears. See [constant MESSAGE_NOT_ENOUGH_HP].
 var _message: String = ""
-## Whether this is being read rather than driven. See [method set_read_only].
 var _read_only: bool = false
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## `OpenPartyStats`' own screen, standing over the whole party menu while it is

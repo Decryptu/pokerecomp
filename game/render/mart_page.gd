@@ -213,6 +213,10 @@ static func balance_window(
 			page._text(indices, width, "COIN", BALANCES_COIN_LABEL_AT)
 			page._text(indices, width, coin_string(coins), BALANCES_COIN_AT)
 		_:
+			## `DisplayMoneyBox` writes MONEY into the box's own top border,
+			## where `PlaceMoneyTopRight` draws the balance alone.
+			if data.generation == RomRegistry.GEN1:
+				page._text(indices, width, GEN1_MONEY_LABEL, GEN1_MONEY_LABEL_AT)
 			page._text(indices, width, money_string(money), MONEY_TEXT_AT)
 	var image: Image = Gen2PicImage.from_indices(
 		indices, width, Gen2Screen.HEIGHT,

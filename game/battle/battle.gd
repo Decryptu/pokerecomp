@@ -2739,7 +2739,6 @@ static func _is_item(action: Dictionary) -> bool:
 	return StringName(action.get("type", ACTION_MOVE)) == ACTION_ITEM
 
 
-## The event a run attempt produces, carrying whatever branch answered it.
 func _run_event(type: StringName, attempt: Dictionary) -> Dictionary:
 	var out: Dictionary = attempt.duplicate(true)
 	out.erase("outcome")

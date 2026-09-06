@@ -233,7 +233,6 @@ var _bars: Dictionary = {}
 ## `MonFaintedAnimation`s still running, oldest first. A double faint runs two,
 ## one after the other, the way the source's two calls do.
 var _faints: Array[Dictionary] = []
-## The running [Gen2ExpBarAnimation], or null when the exp bar is not filling.
 var _exp_bar: Gen2ExpBarAnimation = null
 ## The running [Gen2BattleIntro], or null once the pics have slid into place.
 var _intro: Gen2BattleIntro = null:

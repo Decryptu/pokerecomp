@@ -104,7 +104,6 @@ var _submenu_cursor: int = 0
 var _asking_delete: bool = false
 var _yes_no_cursor: int = 0
 
-## The screen this is drawn in, and the 160x144 layer inside it.
 var _screen: Gen2Screen = null
 var _field: Control = null
 var _background: TextureRect = null

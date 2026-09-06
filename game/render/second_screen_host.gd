@@ -51,7 +51,6 @@ var _view: Gen2SecondScreen = null
 var _plugin: Object = null
 var _window: Window = null
 var _since_present: float = 0.0
-## Frames a still page is still owed. See [constant PANEL_SETTLE_FRAMES].
 var _settle: int = PANEL_SETTLE_FRAMES
 
 

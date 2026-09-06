@@ -695,6 +695,7 @@ const TRAINER_RANGE_SHIFT: int = 4
 ## ends the path [method Gen1WorldImporter.decode_script] is walking.
 const TEXT_ASM: int = 0x08
 const SCRIPT_LD_HL: int = 0x21
+const SCRIPT_LD_DE: int = 0x11
 const SCRIPT_LD_BC: int = 0x01
 const SCRIPT_LD_B: int = 0x06
 const SCRIPT_LD_A: int = 0x3E
@@ -731,7 +732,7 @@ const SCRIPT_CALLS: Array[String] = [
 	"print_text", "text_script_end", "disable_waiting", "yes_no_choice",
 	"give_item", "is_item_in_bag", "bankswitch", "play_cry", "wait_for_sound",
 	"predef", "display_pokedex", "give_pokemon", "wait_for_button",
-	"auto_textbox_on", "auto_textbox_off",
+	"auto_textbox_on", "auto_textbox_off", "has_enough_money", "display_text_box",
 ]
 ## The routines that spend nothing here: no audio driver, a press already ends
 ## every box, and `wAutoTextBoxDrawingControl` has no counterpart.
@@ -740,8 +741,16 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	"auto_textbox_on", "auto_textbox_off",
 ]
 const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
+## The two packed-decimal buffers a price is written into, most significant
+## byte first. `wPriceTemp` stands at `wWhichTrade`'s own address.
+const SCRIPT_BCD_BUFFERS: Array[String] = ["money_hram", "which_trade"]
+const MONEY_BYTES: int = 3
+const MONEY_BOX_ID: int = 0x13
 const SCRIPT_SHORT_SIZE: int = 2
 const SCRIPT_LONG_SIZE: int = 3
+## Every conditional `jr` is below this and every conditional `jp` above it, so
+## `jp nz` at $C2 is three bytes where [constant SCRIPT_JP] would call it two.
+const SCRIPT_HOP_LIMIT: int = 0x40
 ## The `CB` prefix's three rows, the low three bits naming the operand.
 const SCRIPT_BIT_BASE: int = 0x40
 const SCRIPT_RES_BASE: int = 0x80
@@ -992,6 +1001,14 @@ const RED_BLUE: Dictionary = {
 	"give_item": 0x3E2E,
 	"is_item_in_bag": 0x3493,
 	"bankswitch": 0x35D6,
+	## `HasEnoughMoney` against `hMoney`, `SubBCDPredef` off `wPlayerMoney` and
+	## the `MONEY_BOX` `DisplayTextBoxID` draws.
+	"has_enough_money": 0x35A6,
+	"display_text_box": 0x30E8,
+	"text_box_id": 0xD125,
+	"money_hram": 0xFF9F,
+	"player_money": 0xD347,
+	"sub_bcd": 0x0F836,
 	"remove_item": 0x7F37,
 	"remove_item_bank": 0x05,
 	"do_not_wait": 0xCC3C,
@@ -1116,6 +1133,12 @@ const YELLOW: Dictionary = {
 	"give_item": 0x3E3F,
 	"is_item_in_bag": 0x3422,
 	"bankswitch": 0x3E84,
+	"has_enough_money": 0x35C3,
+	"display_text_box": 0x3010,
+	"text_box_id": 0xD124,
+	"money_hram": 0xFF9F,
+	"player_money": 0xD346,
+	"sub_bcd": 0x0F6BC,
 	"remove_item": 0x7DBB,
 	"remove_item_bank": 0x05,
 	"do_not_wait": 0xCC3C,

@@ -97,7 +97,6 @@ var _message: String = ""
 ## `wDexArrowCursorBlinkCounter`, and the leftover of a hardware frame this
 ## screen has not counted yet.
 var _blink: int = 0
-## Whether this is being read rather than driven. See [method set_read_only].
 var _read_only: bool = false
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 

@@ -54,7 +54,6 @@ const EXP_BAR_FIRST_PARTIAL: int = 0x55
 ## the stats screen eight, and this one is `DrawEnemyHUDBorder`'s ball.
 const CAUGHT_BALL: int = 0x5D
 
-## The level symbol, printed before a number.
 const LEVEL: int = 0x6E
 
 ## The enemy's HUD hangs from a side on its left; the player's from one on its

@@ -21,7 +21,7 @@ const MAX_COMMENT_BLOCK: int = 8
 ## shared battle, world, palette, text, save and renderer code: 150 the battle
 ## animation engine, 140 the transition and the split effects, 85 the party
 ## menu, 40 the bag in a battle, 18 the trades. Fourteen sweeps paid nothing.
-const MAX_COMMENT_LINES: int = 40025
+const MAX_COMMENT_LINES: int = 40024
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than

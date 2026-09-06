@@ -86,7 +86,6 @@ static func lookup(sha1: String) -> Dictionary:
 	return BY_SHA1.get(sha1.to_lower(), {})
 
 
-## The registry row for a game id, or an empty Dictionary if the id is not ours.
 static func row_for(id: StringName) -> Dictionary:
 	for sha1: String in BY_SHA1:
 		if BY_SHA1[sha1]["id"] == id:
@@ -128,7 +127,6 @@ static func ids_of_generation(generation: int) -> Array[StringName]:
 	return out
 
 
-## The dump size a given cartridge must have, or 0 for an id we do not know.
 static func size_for(id: StringName) -> int:
 	return int(SIZES.get(generation_for(id), 0))
 

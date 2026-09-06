@@ -575,7 +575,6 @@ static func glow_palette(
 	return out
 
 
-## Which method's eligible list [param cell] is in, empty when neither.
 func _eligible_method(cell: Vector2i) -> StringName:
 	var eligible: Dictionary = _context.get("eligible", {})
 	for method: Variant in eligible:

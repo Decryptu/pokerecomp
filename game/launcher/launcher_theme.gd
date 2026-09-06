@@ -51,7 +51,6 @@ var backdrop_bottom: Color
 ## laid on the page. It is the opposite of the page, so a control is legible
 ## without an outline and a filled one says so from across the room.
 var surface: Color
-## What is written or drawn on [member surface].
 var on_surface: Color
 ## A content card: the same side of the page as the backdrop, because the text
 ## inside one is page text.

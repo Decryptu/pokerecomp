@@ -124,7 +124,6 @@ static func knob_values() -> Array[int]:
 	return values
 
 
-## The frequency the dial shows for a stored knob value.
 static func frequency_for(knob: int) -> float:
 	return (knob + 2) / 4.0
 
@@ -141,7 +140,6 @@ static func raw_channel(channel: int, crystal: bool = true) -> int:
 	return -1 if channel == BUENAS_PASSWORD else channel - 1
 
 
-## A Crystal landmark index on the active profile.
 static func profile_landmark(landmark: int, crystal: bool = true) -> int:
 	if crystal or landmark < LANDMARK_BATTLE_TOWER:
 		return landmark

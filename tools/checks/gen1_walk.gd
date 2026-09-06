@@ -64,6 +64,16 @@ const NURSE_PARTY: int = 4
 const CABLE_CLUB_COUNTER := Vector2i(11, 3)
 const CABLE_CLUB_ROWS: int = 12
 
+## `MtMoonPokecenter_Object`'s fourth object, the one row of the corpus that
+## spends money: `HasEnoughMoney`, `GivePokemon` and `SubBCDPredef` behind it,
+## with MONEY_BOX standing over the map for the question.
+const MT_MOON_POKECENTER: int = 0x44
+const MAGIKARP_SELLER := Vector2i(10, 6)
+const MAGIKARP_PRICE: int = 500
+const MAGIKARP_DEX: int = 129
+const MAGIKARP_LEVEL: int = 5
+const MAGIKARP_PURSE: int = 600
+
 ## `CeladonMartRoof_Object`'s three `bg_event` machines, read from below.
 const CELADON_MART_ROOF: int = 126
 const VENDING_MACHINE := Vector2i(10, 2)
@@ -208,6 +218,7 @@ func _one_game() -> void:
 	_check_the_vending_machine()
 	_check_the_prize_counter()
 	_check_a_trade()
+	_check_the_magikarp_salesman()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -757,6 +768,75 @@ func _check_the_vending_machine() -> void:
 	)
 	world.complete_runtime_request({"ok": true})
 	_r.check(not world.script_busy(), "the machine never closed.")
+
+
+## The salesman with the money and without it, and the refusal a bought
+## MAGIKARP leaves behind.
+func _check_the_magikarp_salesman() -> void:
+	var world: Gen2WorldAPI = _magikarp_offer(MAGIKARP_PRICE - 1)
+	if world == null:
+		return
+	var refused: Array = world.choose_script_input(0)
+	_r.check(
+		_runtime_request(refused).is_empty()
+			and world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == MAGIKARP_PRICE - 1,
+		"a short purse bought a MAGIKARP: %s." % [refused]
+	)
+	world = _magikarp_offer(MAGIKARP_PURSE)
+	if world == null:
+		return
+	var offer: String = String(world.pending_script_input().get("text", ""))
+	var request: Dictionary = _runtime_request(world.choose_script_input(0))
+	var values: Dictionary = request.get("values", {})
+	_r.check(
+		StringName(request.get("kind", &"")) == &"pokemon_requested"
+			and int(values.get("pokemon", 0)) == MAGIKARP_DEX
+			and int(values.get("level", 0)) == MAGIKARP_LEVEL,
+		"the salesman raised %s." % [request]
+	)
+	world.complete_runtime_request({"ok": true, "accepted": true})
+	_r.check(
+		world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == MAGIKARP_PURSE - MAGIKARP_PRICE,
+		"the MAGIKARP cost %d." % [
+			MAGIKARP_PURSE - world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
+		]
+	)
+	var again: String = _event_text(world.interact())
+	_r.check(not again.is_empty() and again != offer,
+		"a bought MAGIKARP was offered again: %s." % [again])
+	_r.note("gen1 walk the MAGIKARP salesman with %d and with %d" % [
+		MAGIKARP_PURSE, MAGIKARP_PRICE - 1,
+	])
+
+
+## The row up to its YES/NO, which the offer itself is the question of, with
+## the balance window checked on the way.
+func _magikarp_offer(purse: int) -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(
+		0, MT_MOON_POKECENTER, MAGIKARP_SELLER + Vector2i.LEFT
+	)
+	if world == null:
+		return null
+	world.player_facing = Gen2WorldSprite.FACING_RIGHT
+	world.state.apply_changes({}, {}, {
+		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: purse},
+	})
+	var results: Array = world.interact()
+	var window: Dictionary = _first_event(results, &"money_window_opened")
+	_r.check(int(window.get("money", -1)) == purse,
+		"the deal drew %s over the map." % [window])
+	return world if _r.check(
+		not String(world.pending_script_input().get("text", "")).is_empty(),
+		"the deal asked nothing: %s." % [results]
+	) else null
+
+
+func _first_event(results: Array, type: StringName) -> Dictionary:
+	for row: Dictionary in results:
+		for event: Dictionary in row.get("events", []) as Array:
+			if StringName(event.get("type", &"")) == type:
+				return event
+	return {}
 
 
 ## `PrizeDifferentMenuPtrs`' three lists with `PrizeMonLevelDictionary`'s level

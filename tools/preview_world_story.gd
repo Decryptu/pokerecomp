@@ -5902,7 +5902,6 @@ func _saffron_vermilion_walk(
 	return {"ok": true}
 
 
-## The Pokemon Fan Club, where the doll is.
 func _fan_club_doll(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -9203,7 +9202,6 @@ func _walk_connection_resolving(
 	return {"ok": false, "reason": "connection walk did not settle", "encounters": runs}
 
 
-## The _walk_to_story_cell() counterpart of _walk_connection_resolving().
 func _walk_cell_resolving(
 	world: Gen2WorldAPI,
 	target: Vector2i,

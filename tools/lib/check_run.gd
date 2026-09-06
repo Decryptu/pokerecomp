@@ -97,7 +97,6 @@ func region(world: Gen2WorldAPI, from: Vector2i) -> Dictionary:
 	return seen
 
 
-## Gives [param world] the party every field-move check assumes.
 func field_move_party(world: Gen2WorldAPI) -> void:
 	world.set_party_summary(
 		FIELD_MOVE_PARTY_SIZE, false, [1] as Array[int],

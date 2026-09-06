@@ -279,7 +279,6 @@ var _text_awaits_press: bool = true
 ## first when it does not.
 var _field_move_text_waits: bool = true
 var _field_move_text_frames: int = 0
-## How many presses [method preview_text_scroll] will spend looking for one.
 const PREVIEW_TEXT_PRESSES: int = 8
 ## `ProfOaksPCBoot`'s three texts, one page at a time, and the sfx `Rate` leaves
 ## for it to play once the last of them is up.
@@ -7409,7 +7408,6 @@ const REQUEST_OPENERS: Dictionary = {
 	&"contest_mon_requested": [&"_open_contest_nickname", &"prompt", {}],
 }
 
-## Requests the service host draws, all on one screen.
 const SERVICE_HOST_REQUESTS: Array[StringName] = [
 	&"mart_requested", &"phone_call_requested", &"special_phone_call_requested",
 	&"town_map_requested", &"apricorn_selection_requested", &"pc_requested",

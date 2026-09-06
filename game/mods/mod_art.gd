@@ -114,7 +114,6 @@ static func cache_icon(url: String, bytes: PackedByteArray, directory: String = 
 	return true
 
 
-## The cached icon for [param url], or null when it was never fetched.
 static func cached_icon(url: String, directory: String = CACHE_DIRECTORY) -> Texture2D:
 	return icon_texture(cache_path(url, directory))
 

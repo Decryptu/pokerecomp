@@ -118,7 +118,6 @@ func _process(delta: float) -> void:
 	advance_frames(_frame_clock.tick(delta))
 
 
-## [method Gen2ClockSetScreen.advance_frames] over this screen's own state.
 func advance_frames(count: int) -> void:
 	for _frame: int in count:
 		if _text_box != null:

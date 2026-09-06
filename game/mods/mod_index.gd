@@ -45,7 +45,6 @@ const UP_TO_DATE: StringName = &"up_to_date"
 const INSTALLED_IS_NEWER: StringName = &"installed_is_newer"
 ## Either side is missing a version or carries one nothing can order.
 const UNKNOWN: StringName = &"unknown"
-## Not installed at all, so there is nothing to compare.
 const NOT_INSTALLED: StringName = &"not_installed"
 
 

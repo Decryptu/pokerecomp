@@ -1384,7 +1384,6 @@ func _load_dex_orders(path: String) -> void:
 		_dex_orders[key] = order
 
 
-## The moves a Pokémon of this species is created knowing at [param level].
 func moves_at_level(number: int, level: int) -> Array:
 	var known: Array = starting_moves(number)
 	Gen2Learnset.fill_moves(learnset(number), known, level)

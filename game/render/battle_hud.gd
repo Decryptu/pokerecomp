@@ -31,7 +31,6 @@ const PLAYER_HP: Vector2i = Vector2i(11, 10)
 const PLAYER_EXP: Vector2i = Vector2i(10, 11)
 const PLAYER_EDGE: Vector2i = Vector2i(18, 10)
 
-## How many tiles of edge run along the bottom of a panel.
 const EDGE_TILES: int = 8
 
 ## Both HP numbers are printed three columns wide, right-aligned, with a slash
