@@ -3665,6 +3665,9 @@ const GEN1_PICK_UP_RUN: String = "pick_up_item"
 ## `InGameTradeTextPointers`' fifteen and the two boxes the swap prints, which
 ## both generations' trades read under one run name.
 const GEN1_TRADE_RUN: String = "npc_trade"
+## `CardKeySuccessText` and `CardKeyFailText`, the two `TextPredefs` rows
+## `PrintCardKeyText` prints.
+const GEN1_CARD_KEY_RUN: String = "card_key"
 ## `TextScript_PokemonCenterPC`, `TextScript_ItemStoragePC` and
 ## `TextScript_BillsPC`, each a machine, the run its own boxes were imported
 ## under and the boot line it opens with. `BIT_USING_GENERIC_PC` is clear on all
@@ -3715,6 +3718,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"name_item": &"_gen1_node_name_item",
 	"map_text": &"_gen1_node_map_text",
 	"facility": &"_gen1_node_facility",
+	"replace_block": &"_gen1_node_replace_block",
 }
 
 
@@ -3754,16 +3758,18 @@ func gen1_last_map() -> int:
 
 ## `CheckForHiddenEventOrBookshelfOrCardKeyDoor` runs on the A press ahead of
 ## everything, and finding a row spends it even when the routine prints nothing.
-## The card key door is not among them: no Silph Co. floor draws one until its
-## own map callback puts the block there.
+## A card key door is the one thing it finds that does not: `PrintBookshelfText`'s
+## `.noMatch` leaves `hItemAlreadyFound` at $ff, so the door's box opens and the
+## sign and sprite check still runs behind it.
 func _gen1_interact() -> Array:
 	if current_map == null:
 		return []
 	var hidden: Variant = _gen1_hidden_nodes()
-	if hidden == null:
-		return _gen1_sign_or_sprite()
-	_gen1_steps = _gen1_script_steps({"script": hidden})
-	return _gen1_result()
+	if hidden != null:
+		_gen1_steps = _gen1_script_steps({"script": hidden})
+		return _gen1_result()
+	_gen1_steps = _gen1_card_key_steps() + _gen1_sign_or_sprite()
+	return _gen1_result() if not _gen1_steps.is_empty() else []
 
 
 ## `CheckForHiddenEvent`, then `PrintBookshelfText`, or null when neither found
@@ -3796,17 +3802,55 @@ func _gen1_sign_or_sprite() -> Array:
 		event = _gen1_event_at(object_facing_cell(), &"objects")
 	var text_id: int = int(event.get("text", 0))
 	var row: Dictionary = current_map.text_at(text_id)
-	_gen1_steps = _gen1_trainer_steps(row, event)
-	if _gen1_steps.is_empty():
-		_gen1_steps = _gen1_facility_steps(row, text_id)
-	if _gen1_steps.is_empty():
-		_gen1_steps = _gen1_script_steps(row, event)
-	if _gen1_steps.is_empty():
-		var text: String = gen1_filled_text(String(row.get("text", "")))
-		if text.is_empty():
-			return []
-		_gen1_steps = [{"type": &"text", "text": text}]
-	return _gen1_result()
+	var steps: Array = _gen1_trainer_steps(row, event)
+	if steps.is_empty():
+		steps = _gen1_facility_steps(row, text_id)
+	if steps.is_empty():
+		steps = _gen1_script_steps(row, event)
+	if not steps.is_empty():
+		return steps
+	var text: String = gen1_filled_text(String(row.get("text", "")))
+	return [] if text.is_empty() else [{"type": &"text", "text": text}]
+
+
+## `PrintCardKeyText`: the CARD KEY opens the door in front of the player and
+## the world remembers where it stood; without the key there is only a refusal.
+func _gen1_card_key_steps() -> Array:
+	var door: Dictionary = _gen1_card_key_door()
+	if door.is_empty():
+		return []
+	if state == null or int((state.items() as Dictionary).get(
+		Gen1Layout.ITEM_CARD_KEY, 0
+	)) < 1:
+		return [_gen1_card_key_box("card_key_fail")]
+	door["type"] = &"block"
+	door["card_key"] = true
+	return [_gen1_card_key_box("card_key_success"), door]
+
+
+func _gen1_card_key_box(name: String) -> Dictionary:
+	return {
+		"type": &"text",
+		"text": data.special_text(GEN1_CARD_KEY_RUN, name) if data != null else "",
+	}
+
+
+## `GetTileAndCoordsInFrontOfPlayer` against the door tiles, and the block
+## coordinates `srl d` and `srl e` leave.
+func _gen1_card_key_door() -> Dictionary:
+	if (current_map.events["card_key"] as Array).is_empty():
+		return {}
+	var top_floor: bool = current_map.number == Gen1Layout.SILPH_CO_TOP_FLOOR
+	var cell: Vector2i = facing_cell()
+	var tile: int = _gen1_tile_drawn_at(cell)
+	if not Gen1Layout.CARD_KEY_DOOR_TILES.has(tile) \
+		and not (top_floor and tile == Gen1Layout.CARD_KEY_TOP_FLOOR_TILE):
+		return {}
+	return {
+		"x": cell.x >> 1, "y": cell.y >> 1,
+		"block": Gen1Layout.CARD_KEY_TOP_FLOOR_BLOCK if top_floor \
+			else Gen1Layout.CARD_KEY_OPEN_BLOCK,
+	}
 
 
 ## The print-time names still standing in an imported Generation 1 box, which
@@ -3827,11 +3871,16 @@ func _gen1_script_steps(row: Dictionary, event: Dictionary = {}) -> Array:
 	if not nodes is Array or (nodes as Array).is_empty():
 		return []
 	var steps: Array = []
-	return steps if _gen1_resolve_script(nodes as Array, steps, {
+	return steps if _gen1_resolve_script(nodes as Array, steps, _gen1_run(event)) else []
+
+
+## The bag, purse and object a row is walked against.
+func _gen1_run(event: Dictionary) -> Dictionary:
+	return {
 		"bag": state.items() if state != null else {}, "named": "", "object": event,
 		"money": state.money(Gen2WorldMartHost.MONEY_ACCOUNT) if state != null else 0,
 		"coins": state.coins() if state != null else 0,
-	}) else []
+	}
 
 
 ## [param run] is the bag the row is walked against, carrying what its own gifts
@@ -3862,6 +3911,14 @@ func _gen1_node_flag(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
 		"flag": int(node["flag"]),
 		"set": bool(node["set"]),
 		"engine": bool(node.get("engine", false)),
+	})
+	return true
+
+
+func _gen1_node_replace_block(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"block", "x": int(node["x"]), "y": int(node["y"]),
+		"block": int(node["block"]),
 	})
 	return true
 
@@ -4752,6 +4809,17 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 		&"npc_trade":
 			state.apply_changes({}, {}, {"npc_trades": {int(step["trade_id"]): true}})
 			return true
+		&"block":
+			## `PrintCardKeyText` writes `wCardKeyDoorY` and its neighbour behind
+			## the box, so the floor's own callback can flag the door next load.
+			if bool(step.get("card_key", false)) and state != null:
+				state.set_card_key_door(Vector2i(int(step["x"]), int(step["y"])))
+			var changed: Dictionary = change_block(
+				int(step["x"]), int(step["y"]), int(step["block"])
+			)
+			if bool(changed.get("ok", false)):
+				events.append(changed)
+			return true
 	return false
 
 
@@ -5513,6 +5581,9 @@ func _object_event_flags() -> Array[int]:
 func _queue_map_callbacks(callback_type: int) -> void:
 	if current_map == null:
 		return
+	if _gen1:
+		_run_gen1_map_callback()
+		return
 	var bank: int = int(current_map.scripts.get("bank", 0))
 	for callback: Dictionary in current_map.scripts.get("callbacks", []):
 		if callback_type >= 0 and int(callback.get("type", -1)) != callback_type:
@@ -5525,6 +5596,38 @@ func _queue_map_callbacks(callback_type: int) -> void:
 			"bank": bank,
 			"script": int(callback.get("script", 0)),
 		})
+
+
+## The body behind a map's `wCurrentMapScriptFlags` bit. Running it again writes
+## the same blocks, so the second call a map entry makes says nothing new.
+func _run_gen1_map_callback() -> void:
+	var callbacks: Array = current_map.scripts.get("callbacks", [])
+	if callbacks.is_empty():
+		return
+	_unlock_gen1_card_key_door()
+	var steps: Array = []
+	if not _gen1_resolve_script(callbacks[0]["nodes"] as Array, steps, _gen1_run({})):
+		return
+	var events: Array = []
+	while not steps.is_empty() and _gen1_written(steps[0], events):
+		steps.pop_front()
+
+
+## `<Map>_SetCardKeyDoorYScript` and `<Map>_UnlockedDoorEventScript`, which run
+## in front of the blocks: the door `PrintCardKeyText` last opened becomes that
+## door's own flag, and the coordinates are cleared on the floor that owns them.
+func _unlock_gen1_card_key_door() -> void:
+	if state == null:
+		return
+	var opened: Vector2i = state.card_key_door()
+	if opened == Gen2WorldState.NO_CARD_KEY_DOOR:
+		return
+	for door: Dictionary in current_map.events["card_key"] as Array:
+		if Vector2i(int(door["x"]), int(door["y"])) != opened:
+			continue
+		state.set_event_flag(int(door["flag"]))
+		state.set_card_key_door(Gen2WorldState.NO_CARD_KEY_DOOR)
+		return
 
 
 func _queue_map_scene() -> void:

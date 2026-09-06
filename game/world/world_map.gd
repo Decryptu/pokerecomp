@@ -165,6 +165,10 @@ static func _events_from_cache(value: Variant) -> Dictionary:
 		]),
 		# `CheckForHiddenEvent`'s own rows, Generation 1's alone.
 		"hidden_events": _event_rows(event_values.get("hidden_events", []), ["x", "y"]),
+		# One row per Silph Co. card key door, Generation 1's alone.
+		"card_key": _event_rows(
+			event_values.get("card_key", []), ["x", "y", "block", "flag"]
+		),
 	}
 
 

@@ -306,6 +306,12 @@ var _npc_trades: Dictionary = {}
 ## of global indices a `ShowObject` or a `HideObject` has since moved away from
 ## that row: a state that has run neither is the cartridge's own new game.
 var _toggled_objects: Dictionary = {}
+## `wCardKeyDoorY` and its neighbour: the block `PrintCardKeyText` last opened a
+## Silph Co. door at. The floor's own callback turns it into that door's flag on
+## the next load and clears it, so opening a second door on one visit loses the
+## first. Both bytes open at zero, so block (0, 0) is "no door".
+const NO_CARD_KEY_DOOR: Vector2i = Vector2i.ZERO
+var _card_key_door: Vector2i = NO_CARD_KEY_DOOR
 ## `wRegisteredItem`. `wWhichRegisteredItem`'s pocket and slot number have no
 ## counterpart in the flat item model: `CheckRegisteredItem` uses them to find
 ## the entry again in its packed pocket array and clears both when the item is
@@ -529,6 +535,7 @@ func to_dict() -> Dictionary:
 		"kurt_apricorn_quantity": _kurt_apricorn_quantity,
 		"picked_fruit_trees": _picked_fruit_trees.duplicate(),
 		"toggled_objects": _toggled_objects.duplicate(),
+		"card_key_door": [_card_key_door.x, _card_key_door.y],
 		"npc_trades": _npc_trades.duplicate(),
 		"registered_item": _registered_item,
 		"day_care_man": _day_care_man,
@@ -580,6 +587,9 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	_seed_counts(restored._pc_items, _map(source, "pc_items"), 1, -1, Gen2WorldPack.MAX_PC_ITEMS)
 	_seed_flags(restored._picked_fruit_trees, _map(source, "picked_fruit_trees"), 1)
 	_seed_flags(restored._toggled_objects, _map(source, "toggled_objects"), 0)
+	restored._card_key_door = _vector_from_value(
+		source.get("card_key_door", [NO_CARD_KEY_DOOR.x, NO_CARD_KEY_DOOR.y])
+	)
 	_seed_flags(restored._npc_trades, _map(source, "npc_trades"), 0)
 	restored._swarm_maps[SWARM_YANMA] = _vector_from_value(
 		source.get("yanma_swarm_map", [-1, -1])
@@ -735,6 +745,7 @@ func restore_from_dict(raw: Variant) -> void:
 	_kurt_apricorn_quantity = restored._kurt_apricorn_quantity
 	_picked_fruit_trees = restored._picked_fruit_trees.duplicate()
 	_toggled_objects = restored._toggled_objects.duplicate()
+	_card_key_door = restored._card_key_door
 	_npc_trades = restored._npc_trades.duplicate()
 	_registered_item = restored._registered_item
 	_day_care_man = restored._day_care_man
@@ -1678,6 +1689,17 @@ func set_kurt_apricorn_quantity(quantity: int) -> void:
 	if next_quantity == _kurt_apricorn_quantity:
 		return
 	_kurt_apricorn_quantity = next_quantity
+	changed.emit()
+
+
+func card_key_door() -> Vector2i:
+	return _card_key_door
+
+
+func set_card_key_door(cell: Vector2i) -> void:
+	if _card_key_door == cell:
+		return
+	_card_key_door = cell
 	changed.emit()
 
 

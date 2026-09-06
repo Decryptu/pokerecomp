@@ -13,6 +13,15 @@ const LIST_END: int = Gen1Layout.TILESET_LIST_END
 ## and `_GivePokemon`'s.
 const GIFT_OPS: Array[String] = ["give_item", "give_pokemon"]
 
+## The gate's own two prefixed opcodes, and how many `push hl` it may hold a
+## copy of `hl` through.
+const MAP_LOAD_PREFIXES: Array[int] = [
+	Gen1Layout.SCRIPT_BIT_BASE, Gen1Layout.SCRIPT_RES_BASE,
+]
+const MAP_LOAD_HELD_LIMIT: int = 4
+## `ld hl, .GateCoordinates` and the two card key calls behind it.
+const CARD_KEY_PROLOGUE_SIZE: int = 3 * Gen1Layout.SCRIPT_LONG_SIZE
+
 
 static func verify_layout(rom: RomFile) -> Dictionary:
 	var result: Dictionary = read_world(rom, Gen1Layout.for_id(rom.id))
@@ -118,11 +127,14 @@ static func read_world(
 		return overlap
 
 	var maps: Array = []
+	var card_key_floors: PackedByteArray = _read_list(
+		rom, int(layout["silph_map_list"]), Gen1Layout.SILPH_MAP_LIST_MAX
+	)
 	var map_count: int = Gen1Layout.map_count(rom.id)
 	for map_id: int in map_count:
 		if not Gen1Layout.is_real_map(map_id):
 			continue
-		var map: Dictionary = _read_map(rom, layout, tilesets, map_id)
+		var map: Dictionary = _read_map(rom, layout, tilesets, map_id, card_key_floors)
 		if not bool(map.get("ok", false)):
 			return map
 		map.erase("ok")
@@ -619,7 +631,8 @@ static func _bit_count(value: int) -> int:
 
 ## One map header, the blocks it draws and the object block behind it.
 static func _read_map(
-	rom: RomFile, layout: Dictionary, tilesets: Array, map_id: int
+	rom: RomFile, layout: Dictionary, tilesets: Array, map_id: int,
+	card_key_floors: PackedByteArray
 ) -> Dictionary:
 	var bank: int = Gen1Layout.map_bank(rom, layout, map_id)
 	var header: int = Gen1Layout.map_header_offset(rom, layout, map_id)
@@ -670,6 +683,9 @@ static func _read_map(
 	var texts: Array = _read_texts(rom, layout, bank, rom.u16le(header + 5), events)
 	_carry_trainer_headers(events["objects"], texts)
 	_carry_toggleable_objects(rom, layout, events["objects"], map_id)
+	var callback: Dictionary = _read_map_callback(
+		rom, layout, bank, rom.u16le(header + 7), card_key_floors.has(map_id)
+	)
 
 	return {
 		"ok": true,
@@ -690,7 +706,7 @@ static func _read_map(
 			"bank": bank,
 			"address": rom.u16le(header + 7),
 			"scenes": [],
-			"callbacks": [],
+			"callbacks": [] if callback.is_empty() else [callback],
 		},
 		"texts": texts,
 		"events": {
@@ -703,8 +719,130 @@ static func _read_map(
 			"hidden_events": _read_hidden_events(
 				rom, layout, map_id, bank, rom.u16le(header + 7)
 			),
+			"card_key": _card_key_doors(callback),
 		},
 	}
+
+
+## `RunMapScript` runs the whole of a map's script every frame, so the work a map
+## does once is the body behind a `wCurrentMapScriptFlags` bit. That body is
+## decoded the way a `text_asm` row is; the per-frame state machine
+## `CallFunctionInTable` dispatches is not read at all.
+static func _read_map_callback(
+	rom: RomFile, layout: Dictionary, bank: int, script: int, card_key: bool
+) -> Dictionary:
+	var body: int = _map_load_gate(rom, layout, bank, script)
+	if body < 0:
+		return {}
+	var coordinates: Array = _card_key_coordinates(rom, bank, body) if card_key else []
+	if not coordinates.is_empty():
+		body += CARD_KEY_PROLOGUE_SIZE
+	return {"nodes": decode_script(rom, layout, bank, body), "coordinates": coordinates}
+
+
+## The gate is the entry script's own opening or that of the routine its first
+## `call` names, where `AgathaShowOrHideExitBlock` keeps it.
+static func _map_load_gate(rom: RomFile, layout: Dictionary, bank: int, at: int) -> int:
+	var body: int = _map_load_body(rom, layout, bank, at)
+	if body >= 0:
+		return body
+	var entry: int = Gen1Layout.banked(bank, at)
+	if not rom.in_bounds(entry, Gen1Layout.SCRIPT_LONG_SIZE) \
+		or rom.u8(entry) != Gen1Layout.SCRIPT_CALL:
+		return -1
+	return _map_load_body(rom, layout, bank, rom.u16le(entry + 1))
+
+
+## `ld hl, wCurrentMapScriptFlags`, `bit`, `res` and the branch under them. -1
+## when the map opens on anything else.
+static func _map_load_body(rom: RomFile, layout: Dictionary, bank: int, at: int) -> int:
+	var pc: int = at
+	var opening: int = Gen1Layout.banked(bank, pc)
+	if not rom.in_bounds(opening, Gen1Layout.SCRIPT_LONG_SIZE) \
+		or rom.u8(opening) != Gen1Layout.SCRIPT_LD_HL \
+		or rom.u16le(opening + 1) != int(layout["map_script_flags"]):
+		return -1
+	pc += Gen1Layout.SCRIPT_LONG_SIZE
+	for base: int in MAP_LOAD_PREFIXES:
+		if not _map_load_prefixed(rom, bank, pc, base):
+			return -1
+		pc += Gen1Layout.SCRIPT_SHORT_SIZE
+	for held: int in MAP_LOAD_HELD_LIMIT:
+		if not Gen1Layout.SCRIPT_STACK_HL.has(rom.u8(Gen1Layout.banked(bank, pc))):
+			break
+		pc += 1
+	var branch: int = rom.u8(Gen1Layout.banked(bank, pc))
+	if not Gen1Layout.MAP_LOAD_GATE_BRANCHES.has(branch):
+		return -1
+	return _map_load_branch(rom, bank, pc, Gen1Layout.MAP_LOAD_GATE_BRANCHES[branch])
+
+
+static func _map_load_prefixed(rom: RomFile, bank: int, pc: int, base: int) -> bool:
+	var at: int = Gen1Layout.banked(bank, pc)
+	if not rom.in_bounds(at, Gen1Layout.SCRIPT_SHORT_SIZE) \
+		or rom.u8(at) != Gen1Layout.SCRIPT_PREFIX:
+		return false
+	var code: int = rom.u8(at + 1)
+	return code >= base and code < base + Gen1Layout.SCRIPT_PREFIX_BLOCK \
+		and (code & 7) == Gen1Layout.SCRIPT_OPERAND_HL
+
+
+static func _map_load_branch(rom: RomFile, bank: int, pc: int, row: Dictionary) -> int:
+	var size: int = int(row["size"])
+	if not bool(row["target"]):
+		return pc + size
+	var operand: int = Gen1Layout.banked(bank, pc) + 1
+	if size == Gen1Layout.SCRIPT_LONG_SIZE:
+		return rom.u16le(operand)
+	return pc + size + _script_hop(rom.u8(operand))
+
+
+## `SilphCo2F_SetCardKeyDoorYScript` walks the floor's own gate coordinates for
+## the door `PrintCardKeyText` last opened and `<Map>_UnlockedDoorEventScript`
+## turns that index into the door's own flag. Both loop over a table, which this
+## decoder does not, so the pair is read by hand and what the callback is walked
+## for is the blocks behind them.
+static func _card_key_coordinates(rom: RomFile, bank: int, at: int) -> Array:
+	var opening: int = Gen1Layout.banked(bank, at)
+	if not rom.in_bounds(opening, CARD_KEY_PROLOGUE_SIZE) \
+		or rom.u8(opening) != Gen1Layout.SCRIPT_LD_HL:
+		return []
+	for call_index: int in 2:
+		var call_at: int = opening + Gen1Layout.SCRIPT_LONG_SIZE * (call_index + 1)
+		if rom.u8(call_at) != Gen1Layout.SCRIPT_CALL:
+			return []
+	var list: int = Gen1Layout.banked(bank, rom.u16le(opening + 1))
+	var out: Array = []
+	while rom.in_bounds(list, Gen1Layout.MAP_COORD_SIZE) \
+		and rom.u8(list) != Gen1Layout.MAP_COORD_END:
+		out.append({"x": rom.u8(list + 1), "y": rom.u8(list)})
+		list += Gen1Layout.MAP_COORD_SIZE
+	return out
+
+
+## One card key door per gate coordinate: the block the callback puts back while
+## the door's own flag is clear, in the order
+## `<Map>_UnlockedDoorEventScript` numbers them.
+static func _card_key_doors(callback: Dictionary) -> Array:
+	if callback.is_empty() or (callback["coordinates"] as Array).is_empty():
+		return []
+	var doors: Array = []
+	_card_key_walk(callback["nodes"], doors)
+	return doors if doors.size() == (callback["coordinates"] as Array).size() else []
+
+
+static func _card_key_walk(nodes: Array, doors: Array) -> void:
+	for node: Dictionary in nodes:
+		if String(node["op"]) != "branch":
+			continue
+		for blocked: Dictionary in node["else"] as Array:
+			if String(blocked["op"]) != "replace_block":
+				continue
+			doors.append({
+				"x": int(blocked["x"]), "y": int(blocked["y"]),
+				"block": int(blocked["block"]), "flag": int(node["flag"]),
+			})
+		_card_key_walk(node["else"] as Array, doors)
 
 
 ## The tile every walk cell's passability is decided by; Generation 2's grid
@@ -1102,8 +1240,8 @@ static func _hidden_item_nodes(
 	if index < 0:
 		return []
 	var flag: int = Gen1Layout.engine_flag_base("obtained_hidden_items") + index
-	var found: String = _predef_text(rom, layout, bank, "found_hidden_item")
-	var full: String = _predef_text(rom, layout, bank, "hidden_item_bag_full")
+	var found: String = predef_text(rom, layout, bank, "found_hidden_item")
+	var full: String = predef_text(rom, layout, bank, "hidden_item_bag_full")
 	if found.is_empty() or full.is_empty():
 		return []
 	return [{"op": "branch", "flag": flag, "engine": true, "then": [], "else": [
@@ -1126,8 +1264,8 @@ static func _hidden_coin_nodes(
 	if index < 0:
 		return []
 	var flag: int = Gen1Layout.engine_flag_base("obtained_hidden_coins") + index
-	var found: String = _predef_text(rom, layout, bank, "found_hidden_coins")
-	var dropped: String = _predef_text(rom, layout, bank, "dropped_hidden_coins")
+	var found: String = predef_text(rom, layout, bank, "found_hidden_coins")
+	var dropped: String = predef_text(rom, layout, bank, "dropped_hidden_coins")
 	if found.is_empty() or dropped.is_empty():
 		return []
 	return [{"op": "has_item", "item": Gen1Layout.ITEM_COIN_CASE, "else": [], "then": [
@@ -1228,7 +1366,7 @@ static func _predef_pointer(rom: RomFile, layout: Dictionary, id: int) -> int:
 
 
 ## The string one [constant Gen1Layout.TEXT_PREDEFS] row prints.
-static func _predef_text(
+static func predef_text(
 	rom: RomFile, layout: Dictionary, bank: int, name: String
 ) -> String:
 	var decoded: Dictionary = Gen1Text.decode_stream(rom, Gen1Layout.banked(
@@ -1275,6 +1413,20 @@ const SCRIPT_TESTS_DEX: int = -8
 ## which is how a bookshelf tells a sculpture apart.
 const SCRIPT_TESTS_TILESET: int = -9
 const SCRIPT_TESTS_TILE: int = -10
+## What `push af` saves and `pop af` puts back, which is how
+## `CheckEventAfterBranchReuseA` still reads the event byte a block write
+## clobbered.
+const SCRIPT_AF_KEYS: Array[String] = [
+	"a", "source", "rotated", "tests", "tests_in_carry", "tests_engine",
+	"tests_and_a",
+]
+## The four stores a row is read for that are `a` under another name: the box
+## `DisplayTextBoxID` will draw, the row `DisplayTextID` will print, the object
+## a predef will toggle and the block `ReplaceTileBlock` will write.
+const SCRIPT_STORED_REGISTERS: Dictionary = {
+	"text_box_id": "text_box", "text_id_hram": "map_text",
+	"toggleable_index": "toggle", "new_tile_block": "new_block",
+}
 
 
 ## One `text_asm` row's machine code, as the boxes it prints and the branches
@@ -1413,6 +1565,11 @@ static func _script_flow(
 			return SCRIPT_END
 		Gen1Layout.SCRIPT_CALL:
 			return _script_call(ctx, pc, rom.u16le(at + 1), state, out, depth)
+		Gen1Layout.SCRIPT_PUSH_AF:
+			state["af"] = _script_pushed_af(state)
+			return pc + 1
+		Gen1Layout.SCRIPT_POP_AF:
+			return SCRIPT_UNREAD if not state.has("af") else _script_popped_af(state, pc)
 	if Gen1Layout.SCRIPT_CONDITIONAL_CALLS.has(rom.u8(at)):
 		return _script_call_if(ctx, pc, rom.u16le(at + 1), state)
 	return SCRIPT_UNREAD
@@ -1427,6 +1584,24 @@ static func _script_call_if(
 		return SCRIPT_UNREAD
 	_script_untested(state)
 	return pc + Gen1Layout.SCRIPT_LONG_SIZE
+
+
+static func _script_pushed_af(state: Dictionary) -> Dictionary:
+	var saved: Dictionary = {}
+	for key: String in SCRIPT_AF_KEYS:
+		if state.has(key):
+			saved[key] = state[key]
+	return saved
+
+
+static func _script_popped_af(state: Dictionary, pc: int) -> int:
+	var saved: Dictionary = state["af"]
+	for key: String in SCRIPT_AF_KEYS:
+		state.erase(key)
+		if saved.has(key):
+			state[key] = saved[key]
+	state.erase("af")
+	return pc + 1
 
 
 ## What a branch is reading, and whether it is reading it out of carry.
@@ -1524,15 +1699,12 @@ static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> 
 			return false
 		state["no_press"] = true
 		return true
-	if address == int(layout["text_box_id"]):
+	for name: String in SCRIPT_STORED_REGISTERS:
+		if address != int(layout[name]):
+			continue
 		if not state.has("a"):
 			return false
-		state["text_box"] = int(state["a"])
-		return true
-	if address == int(layout["text_id_hram"]):
-		if not state.has("a"):
-			return false
-		state["map_text"] = int(state["a"])
+		state[String(SCRIPT_STORED_REGISTERS[name])] = int(state["a"])
 		return true
 	## `Mansion1Script_Switches` blanks the held buttons and `OpenPokemonCenterPC`
 	## turns the automatic box off; this port reads nothing out of either.
@@ -1540,11 +1712,6 @@ static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> 
 		or address == int(layout["auto_text_box_control"]):
 		return true
 	if _script_bcd_stored(ctx, address, state):
-		return true
-	if address == int(layout["toggleable_index"]):
-		if not state.has("a"):
-			return false
-		state["toggle"] = int(state["a"])
 		return true
 	if address != int(layout["item_to_remove"]) or int(state.get("a", 0)) < 1:
 		return false
@@ -1931,12 +2098,27 @@ static func _script_predef(
 		out.append({"op": "trade", "trade_id": int(state["trade"])})
 		state.erase("trade")
 		return next
+	if target == int(layout["replace_tile_block"]):
+		return _script_replace_block(state, out, next)
 	var hidden: bool = target == int(layout["hide_object"])
 	if not state.has("toggle") \
 		or (not hidden and target != int(layout["show_object"])):
 		return SCRIPT_UNREAD
 	out.append({"op": "toggle_object", "index": int(state["toggle"]), "hidden": hidden})
 	state.erase("toggle")
+	return next
+
+
+## `ReplaceTileBlock`, which is how a map draws a door, a gate or an exit its
+## own block data has none of.
+static func _script_replace_block(state: Dictionary, out: Array, next: int) -> int:
+	if not state.has("new_block") or not state.has("b") or not state.has("c"):
+		return SCRIPT_UNREAD
+	out.append({
+		"op": "replace_block", "block": int(state["new_block"]),
+		"y": int(state["b"]), "x": int(state["c"]),
+	})
+	state.erase("new_block")
 	return next
 
 

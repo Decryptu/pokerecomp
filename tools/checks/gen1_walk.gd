@@ -17,6 +17,16 @@ const WARP_CENSUS: Dictionary = {
 ## `SilphCoElevator_Object`'s two warps name UNUSED_MAP_ED, which has no header;
 ## its own script rewrites the destination before either is taken.
 const SILPH_CO_ELEVATOR: int = 236
+## Silph Co. 2F's two card key doors, the block that locks one and the one
+## `PrintCardKeyText` opens it with, and the cell below the first.
+const SILPH_CO_2F: int = 207
+const SILPH_DOOR := Vector2i(2, 2)
+const SILPH_SECOND_DOOR := Vector2i(2, 5)
+const SILPH_DOOR_APPROACH := Vector2i(4, 5)
+const SILPH_LOCKED_BLOCK: int = 0x54
+const SILPH_OPEN_BLOCK: int = 0x0E
+const CARD_KEY_REFUSED: String = "Darn! It needs a"
+const CARD_KEY_OPENED: String = "Bingo!"
 
 ## The warps no facing can fire, as map id and warp index. Every one is a cell
 ## the player arrives on rather than steps onto: three are pret's own
@@ -272,6 +282,7 @@ func _one_game() -> void:
 	_check_a_gym_statue()
 	_check_a_bench_guy()
 	_check_a_bookshelf()
+	_check_a_card_key_door()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -467,6 +478,65 @@ func _check_text_boxes() -> void:
 	mart.player_facing = Gen2WorldSprite.FACING_LEFT
 	_r.check(mart.object_facing_cell() == MART_CLERK,
 		"the mart counter reaches %s." % [mart.object_facing_cell()])
+
+
+## `PrintCardKeyText` on Silph Co. 2F, whose door tile is on the map only
+## because the floor's own callback put the locked block back.
+func _check_a_card_key_door() -> void:
+	var refused: Gen2WorldAPI = _silph_door()
+	if refused == null:
+		return
+	_r.check(refused.block_at(SILPH_DOOR.x, SILPH_DOOR.y) == SILPH_LOCKED_BLOCK,
+		"Silph Co. 2F draws block $%02X on a locked door." % refused.block_at(
+			SILPH_DOOR.x, SILPH_DOOR.y
+		))
+	var darn: String = _box_text(refused)
+	_r.check(darn.begins_with(CARD_KEY_REFUSED), "a door with no CARD KEY said %s." % [darn])
+	_r.check(refused.block_at(SILPH_DOOR.x, SILPH_DOOR.y) == SILPH_LOCKED_BLOCK,
+		"a refused door opened anyway.")
+
+	var world: Gen2WorldAPI = _silph_door()
+	if world == null:
+		return
+	world.state.apply_changes({}, {}, {"items": {Gen1Layout.ITEM_CARD_KEY: 1}})
+	var opened: String = _box_text(world)
+	_r.check(opened.begins_with(CARD_KEY_OPENED), "the CARD KEY said %s." % [opened])
+	world.run_event_queue(true)
+	_r.check(world.block_at(SILPH_DOOR.x, SILPH_DOOR.y) == SILPH_OPEN_BLOCK,
+		"the opened door draws block $%02X." % world.block_at(SILPH_DOOR.x, SILPH_DOOR.y))
+	_r.check(world.state.card_key_door() == SILPH_DOOR,
+		"the door opened at %s was remembered as %s." % [
+			SILPH_DOOR, world.state.card_key_door(),
+		])
+
+	## The floor loaded again: the coordinates become the door's flag and the
+	## callback leaves that one alone.
+	var again: Gen2WorldAPI = _r.open_world(
+		0, SILPH_CO_2F, SILPH_DOOR_APPROACH, world.state
+	)
+	if again == null:
+		return
+	again.dispatch_map_entry()
+	_r.check(again.state.card_key_door() == Gen2WorldState.NO_CARD_KEY_DOOR,
+		"the reloaded floor kept %s." % [again.state.card_key_door()])
+	_r.check(again.block_at(SILPH_DOOR.x, SILPH_DOOR.y) == SILPH_OPEN_BLOCK,
+		"the reloaded floor blocked the opened door with $%02X." % again.block_at(
+			SILPH_DOOR.x, SILPH_DOOR.y
+		))
+	_r.check(again.block_at(SILPH_SECOND_DOOR.x, SILPH_SECOND_DOOR.y) == SILPH_LOCKED_BLOCK,
+		"the floor's other door stands at $%02X." % again.block_at(
+			SILPH_SECOND_DOOR.x, SILPH_SECOND_DOOR.y
+		))
+
+
+## Silph Co. 2F opened and entered, standing under its first door facing it.
+func _silph_door() -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, SILPH_CO_2F, SILPH_DOOR_APPROACH)
+	if world == null:
+		return null
+	world.dispatch_map_entry()
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	return world
 
 
 ## The string one interaction puts in a box, or "" when it opened none.

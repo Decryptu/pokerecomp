@@ -184,6 +184,14 @@ const HIDDEN_CENSUS: Dictionary = {
 ## statues read `wXCoord` for which of their two boxes they answer with.
 const BOOKSHELF_COUNTS: Dictionary = {&"red": 15, &"blue": 15, &"yellow": 15}
 const CARD_KEY_FLOORS: int = 10
+## `gated` is every map whose script opens on `wCurrentMapScriptFlags` and
+## `read` the ones whose body decodes whole; `blocks` counts the
+## `ReplaceTileBlock` writes on every branch of those bodies.
+const CALLBACK_CENSUS: Dictionary = {
+	&"red": {"gated": 36, "read": 21, "blocks": 79, "doors": 20, "floors": 10},
+	&"blue": {"gated": 36, "read": 21, "blocks": 79, "doors": 20, "floors": 10},
+	&"yellow": {"gated": 34, "read": 20, "blocks": 78, "doors": 20, "floors": 10},
+}
 
 ## The pin on which way a `wCurrentMenuItem` branch reads.
 const LAVENDER_TOWN: int = 4
@@ -226,6 +234,7 @@ func _one_game() -> void:
 	_r.check(_movements == MOVEMENT_CENSUS[_r.game_id],
 		"the movement census reads %s." % str(_movements))
 	_texts()
+	_map_callbacks()
 	_hidden_events()
 	_toggleables()
 	_wild_objects()
@@ -383,6 +392,64 @@ func _scripts(font: Gen2Font) -> void:
 	_r.check(census == SCRIPT_CENSUS[_r.game_id], "the row scripts read %s." % [census])
 	_r.note("gen1 scripts %s" % [census])
 	_ghost_girl()
+
+
+func _map_callbacks() -> void:
+	var census: Dictionary = {
+		"gated": 0, "read": 0, "blocks": 0, "doors": 0, "floors": 0,
+	}
+	var wrong: Array[String] = []
+	for map: Gen2WorldMap in _maps.values():
+		var doors: Array = map.events["card_key"] as Array
+		census["floors"] += 1 if not doors.is_empty() else 0
+		census["doors"] += doors.size()
+		var callbacks: Array = map.scripts["callbacks"] as Array
+		if callbacks.is_empty():
+			continue
+		var nodes: Array = callbacks[0]["nodes"] as Array
+		census["gated"] += 1
+		census["read"] += 1 if not nodes.is_empty() else 0
+		census["blocks"] += _blocks_written(nodes)
+		_check_doors(map, callbacks[0], doors, wrong)
+	_r.check(wrong.is_empty(), "card key doors are wrong: %s." % [wrong])
+	_r.check(census == CALLBACK_CENSUS[_r.game_id],
+		"the map callbacks read %s." % [census])
+	_r.note("gen1 map callbacks %s" % [census])
+
+
+func _blocks_written(nodes: Array) -> int:
+	var written: int = 0
+	for node: Dictionary in nodes:
+		written += 1 if String(node["op"]) == "replace_block" else 0
+		for side: String in ["then", "else"]:
+			if node.has(side):
+				written += _blocks_written(node[side] as Array)
+	return written
+
+
+## A floor's doors stand on its own `.GateCoordinates`, each under a flag of its
+## own.
+func _check_doors(
+	map: Gen2WorldMap, callback: Dictionary, doors: Array, wrong: Array[String]
+) -> void:
+	var coordinates: Array = callback["coordinates"] as Array
+	if coordinates.is_empty():
+		return
+	var flags: Dictionary = {}
+	for index: int in doors.size():
+		var door: Dictionary = doors[index]
+		var gate: Dictionary = coordinates[index]
+		if (int(door["x"]) != int(gate["x"]) or int(door["y"]) != int(gate["y"])) \
+			and wrong.size() < 4:
+			wrong.append("map %d door %d stands on %d,%d, not %d,%d" % [
+				map.number, index, int(door["x"]), int(door["y"]),
+				int(gate["x"]), int(gate["y"]),
+			])
+		flags[int(door["flag"])] = true
+	if flags.size() != doors.size() and wrong.size() < 4:
+		wrong.append("map %d has %d doors under %d flags" % [
+			map.number, doors.size(), flags.size(),
+		])
 
 
 func _walk_script(

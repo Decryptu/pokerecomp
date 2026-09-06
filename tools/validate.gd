@@ -73,7 +73,9 @@ func _initialize() -> void:
 			printerr("FAIL %s: the topic script did not load." % name)
 			failed.append(name)
 			continue
+		run.watch()
 		topic.call(&"run", run)
+		run.unwatch()
 		if run.failures.is_empty():
 			print("PASS %s" % name)
 			continue
