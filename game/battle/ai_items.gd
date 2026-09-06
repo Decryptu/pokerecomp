@@ -5,9 +5,9 @@ extends RefCounted
 ## `AI_TryItem` and the `EnemyUsed*` routines in `engine/battle/ai/items.asm`. A
 ## class carries at most two item numbers (`TRNATTR_ITEM1` and `_ITEM2`, already
 ## in the cache as [method GameData.trainer_attributes]) and its
-## `TRNATTR_AI_ITEM_SWITCH` word decides how freely they are spent. Only the enemy
-## has any of this: the player's pack has no X items and no in-battle healing
-## beyond what [Gen2HeldItem] does on its own.
+## `TRNATTR_AI_ITEM_SWITCH` word decides how freely they are spent. What the
+## player's own pack does with the same items is
+## [method Gen2Battle.use_bag_item]; nothing here is reached from it.
 
 ## The thirteen items the AI knows, at their cartridge numbers.
 const FULL_RESTORE: int = 0x0E

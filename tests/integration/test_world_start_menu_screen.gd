@@ -2451,7 +2451,7 @@ func test_a_generation_1_use_opens_the_party_list_and_heals_the_row_chosen() -> 
 
 
 ## `UseItem_`'s jumptable answers `.Oak` for every row with no effect out of a
-## battle, which is `ItemUseNotTime`'s own box.
+## battle, which is `ItemUseNotTime`'s own box, with `wPlayerName` in it.
 func test_a_generation_1_use_that_reaches_no_effect_says_oaks_line() -> void:
 	await _open_gen1_world()
 	var host: Gen2StartMenuScreen = await _gen1_pack()
@@ -2460,7 +2460,10 @@ func test_a_generation_1_use_that_reaches_no_effect_says_oaks_line() -> void:
 	await get_tree().process_frame
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
 	assert_eq(
-		String(host.get("_pack_result")), String(GEN1_ITEM_USE_TEXT["not_time"])
+		String(host.get("_pack_result")),
+		String(GEN1_ITEM_USE_TEXT["not_time"]).replace(
+			Gen2WorldPC.PLAYER_MARKER, (host.get("_pack_save") as Gen2SaveData).player_name
+		)
 	)
 
 

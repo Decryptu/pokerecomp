@@ -130,24 +130,21 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 204, "text": 206, "branch": 74, "choice": 7, "flag": 25,
-		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 34,
-		"pick_up_item": 104, "toggle_object": 5, "pokedex": 7, "give_pokemon": 1},
-	&"blue": {"rows": 204, "text": 206, "branch": 74, "choice": 7, "flag": 25,
-		"give_item": 22, "has_item": 7, "take_item": 3, "unknown": 34,
-		"pick_up_item": 104, "toggle_object": 5, "pokedex": 7, "give_pokemon": 1},
-	&"yellow": {"rows": 191, "text": 165, "branch": 66, "choice": 6, "flag": 15,
-		"give_item": 17, "has_item": 7, "take_item": 3, "unknown": 37,
-		"pick_up_item": 108, "toggle_object": 2, "pokedex": 7, "give_pokemon": 1},
+	&"red": {"rows": 211, "text": 224, "branch": 78, "choice": 10, "flag": 33,
+		"give_item": 22, "has_item": 9, "take_item": 3, "unknown": 32,
+		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 3},
+	&"blue": {"rows": 211, "text": 224, "branch": 78, "choice": 10, "flag": 33,
+		"give_item": 22, "has_item": 9, "take_item": 3, "unknown": 32,
+		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 3},
+	&"yellow": {"rows": 197, "text": 179, "branch": 70, "choice": 8, "flag": 23,
+		"give_item": 17, "has_item": 9, "take_item": 3, "unknown": 35,
+		"pick_up_item": 108, "toggle_object": 9, "pokedex": 9, "give_pokemon": 3},
 }
-## Three `predef HideObject` rows reach no node: `MtMoonB2F`'s two fossils and
-## `PokemonTower7F`'s Mr. Fuji each write `wCurMapScript` behind it, which is a
-## map script index and means nothing without an interpreter. The eighth
-## `call DisplayPokedex` in the source is `SilphCo11FPorygonText`, which no map
-## text row names and which the disassembly marks unreferenced. The other four
-## `call GivePokemon` rows are reached past machine code this decoder does not
-## read: the Fighting Dojo's two through `CheckEitherEventSet`, the Magikarp
-## salesman's through `HasEnoughMoney` and the Lapras through `wStatusFlags4`.
+## The eighth `call DisplayPokedex` in the source is `SilphCo11FPorygonText`,
+## which no map text row names and which the disassembly marks unreferenced. Two
+## `call GivePokemon` rows are still reached past machine code this decoder does
+## not read: the Magikarp salesman's through `HasEnoughMoney` and the Lapras
+## through `wStatusFlags4`.
 
 ## `ToggleableObjectStates` as the corpus carries it: the objects a row lands on
 ## and how many start ON. Three rows name an object their map has not got.

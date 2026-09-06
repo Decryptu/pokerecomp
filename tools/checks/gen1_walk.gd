@@ -154,6 +154,18 @@ const EEVEE_BALL_OBJECT: int = 1
 const EEVEE_DEX: int = 133
 const EEVEE_LEVEL: int = 25
 
+## `FightingDojoHitmonleePokeBallText`, whose `CheckEitherEventSet` reads both
+## gift flags out of one `wEventFlags` byte: `DisplayPokedex` and the YES/NO
+## behind it are only reached while neither is set. Identical on all three
+## cartridges, objects and event indices alike.
+const FIGHTING_DOJO: int = 0xB1
+const HITMONLEE_BALL_CELL := Vector2i(4, 1)
+const HITMONLEE_BALL_OBJECT: int = 5
+const HITMONLEE_DEX: int = 106
+const HITMONLEE_LEVEL: int = 30
+const GOT_HITMONCHAN_FLAG: int = 855
+const DOJO_GREEDY_BOX: String = "better not get"
+
 ## Yellow's `CeruleanBadgeHouse` melanie, the corpus's one box that owes no
 ## press: `DisableWaitingAfterTextDisplay` runs before her last `PrintText`.
 const MELANIE_MAP: int = 63
@@ -181,6 +193,7 @@ func _one_game() -> void:
 	if _r.game_id != RomRegistry.YELLOW:
 		_check_a_script_hides_an_object()
 	_check_a_script_gives_a_pokemon()
+	_check_either_event_set()
 	_check_the_nurse_heals()
 	_check_the_cable_club()
 	_check_the_vending_machine()
@@ -529,6 +542,33 @@ func _check_a_script_gives_a_pokemon() -> void:
 				"" if accepted else "still ", "" if accepted else "not ",
 			]
 		)
+
+
+## `CheckEitherEventSet`'s two flags, one `wEventFlags` byte and one mask: the
+## ball opens its Pokedex page and its question while neither is set, and the
+## greedy line once the other ball has been taken.
+func _check_either_event_set() -> void:
+	var world: Gen2WorldAPI = _facing_up(
+		FIGHTING_DOJO, HITMONLEE_BALL_CELL + Vector2i.DOWN
+	)
+	if world == null:
+		return
+	var results: Array = world.interact()
+	var request: Dictionary = _runtime_request(results)
+	_r.check(
+		StringName(request.get("kind", &"")) == &"pokedex_entry_requested"
+		and int((request.get("values", {}) as Dictionary).get("species", 0)) == HITMONLEE_DEX,
+		"the HITMONLEE ball raised %s." % [request]
+	)
+	world = _facing_up(FIGHTING_DOJO, HITMONLEE_BALL_CELL + Vector2i.DOWN)
+	if world == null:
+		return
+	world.state.set_event_flag(GOT_HITMONCHAN_FLAG, true)
+	_r.check(
+		"\n".join(_spoken(world)).to_lower().contains(DOJO_GREEDY_BOX),
+		"the taken ball said %s." % [_spoken(world)]
+	)
+	_r.note("gen1 walk the FIGHTING DOJO ball reads both gift flags at once")
 
 
 ## The request the first waiting result of [param results] carries, or empty.

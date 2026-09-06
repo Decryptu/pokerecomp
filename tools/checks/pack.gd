@@ -65,6 +65,10 @@ const NO_DEPOSIT_ROWS: Array[int] = [1, 2, 3]
 const TM_HM_PARTY_ROWS: int = 57
 const GEN1_TM_HM_PARTY_ROWS: int = Gen1Layout.TM_COUNT + Gen1Layout.HM_COUNT
 
+## How many rows carry a battle nibble at all, which is what `BattlePack` offers
+## on Generation 2 and what `UseItem` answers for on Generation 1.
+const BATTLE_ITEM_ROWS: Dictionary = {RomRegistry.GEN2: 57, RomRegistry.GEN1: 34}
+
 ## What fits between the text box's own borders: `Textbox`'s interior is 18
 ## columns and `PrintItemDescription` is handed the cell one in from the left.
 const DESCRIPTION_COLUMNS: int = 18
@@ -83,12 +87,14 @@ func run(r: RefCounted) -> void:
 		_verify_deposit_rule(game_id, data)
 		_verify_key_item_effects(game_id, data)
 		_verify_party_item_effects(game_id, data, TM_HM_PARTY_ROWS)
+		_verify_battle_item_effects(game_id, data)
 		_verify_screen(game_id, data)
 		_verify_descriptions(game_id, data)
 	## `UseItem`'s jumptable is the same three answers on Generation 1, and the
 	## pack that reads it is this one, so its `.Party` rows are swept here too.
 	_r.each_game_of(RomRegistry.GEN1, func() -> void:
 		_verify_party_item_effects(_r.game_id, _r.data, GEN1_TM_HM_PARTY_ROWS)
+		_verify_battle_item_effects(_r.game_id, _r.data)
 	)
 
 
@@ -288,6 +294,52 @@ func _verify_party_item_effects(
 	print("%s: %d party-menu item effects, %d TM/HM rows beside them." % [
 		game_id, covered, machines,
 	])
+
+
+## `UseItem` inside a battle over every row of a real cache: the battle nibble
+## each carries against the branch [method Gen2Battle.use_bag_item] picks for it.
+## An offered row with no branch is the bug worth catching, the way MYSTERYBERRY
+## was in the field.
+func _verify_battle_item_effects(game_id: StringName, data: GameData) -> void:
+	var unhandled: Array[String] = []
+	var offered: int = 0
+	for number: int in range(1, ITEM_ROWS + 1):
+		var definition: Dictionary = data.item(number)
+		if definition.is_empty() \
+			or int(definition.get("battle_menu", 0)) == Gen2WorldPack.ITEMMENU_NOUSE:
+			continue
+		offered += 1
+		if not _battle_effect_branch(number, definition, data):
+			unhandled.append("$%02X (%s)" % [number, data.item_name(number)])
+	_r.check(
+		unhandled.is_empty(),
+		"%s: %d of %d battle items reach no effect branch: %s" % [
+			game_id, unhandled.size(), offered, ", ".join(unhandled.slice(0, 6)),
+		]
+	)
+	var expected: int = int(BATTLE_ITEM_ROWS[data.generation])
+	_r.check(
+		offered == expected,
+		"%s: %d rows carry a battle nibble, expected %d" % [game_id, offered, expected]
+	)
+	print("%s: %d battle-menu item effects." % [game_id, offered])
+
+
+## The branches [method Gen2Battle.use_bag_item] picks between, off the same
+## tables it reads, so a table that loses a row takes this check red with it.
+func _battle_effect_branch(item: int, definition: Dictionary, data: GameData) -> bool:
+	if Gen2WorldPartyHost.is_ball(data, item):
+		return true
+	var roles: Dictionary = Gen2WorldPartyHost.item_effects(data)
+	if item == int(roles["poke_doll"]) or item == int(roles["poke_flute"]):
+		return true
+	if item == int(roles["confusion_cure"]):
+		return true
+	for key: String in ["x_stat", "x_substatus", "pp_restore", "revive"]:
+		if (roles[key] as Dictionary).has(item):
+			return true
+	return int(definition.get("heal_amount", 0)) > 0 \
+		or int(definition.get("status_mask", 0)) != 0
 
 
 ## The branches `_apply_item_effect` picks between, read off the host's own

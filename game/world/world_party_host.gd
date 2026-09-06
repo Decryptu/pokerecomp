@@ -40,6 +40,8 @@ const ITEM_POTION: int = 0x12
 const ITEM_REVIVE: int = 0x27
 const ITEM_MAX_REVIVE: int = 0x28
 const ITEM_REVIVAL_HERB: int = 0x7C
+## `PokeDollEffect`, the one battle row that is neither a heal nor a stage.
+const ITEM_POKE_DOLL: int = 0x25
 const ITEM_REPEL: int = 0x14
 const ITEM_SUPER_REPEL: int = 0x2A
 const ITEM_MAX_REPEL: int = 0x2B
@@ -134,6 +136,8 @@ const PP_RESTORE_ITEMS: Dictionary = {
 }
 const PP_RESTORE_MAX_ITEMS: Array[int] = [ITEM_MAX_ETHER, ITEM_MAX_ELIXER]
 
+## `BitterBerryEffect`, the one battle row whose whole effect is a substatus.
+const ITEM_BITTER_BERRY: int = 0x53
 const ITEM_BERRY: int = 0xAD
 const ITEM_BERRY_JUICE: int = 0x8B
 const SHUCKLE: int = 0xD5
@@ -189,14 +193,7 @@ const CAPTURE_BALLS: Array[int] = [
 	ITEM_FRIEND_BALL, ITEM_MOON_BALL, ITEM_LOVE_BALL,
 ]
 
-## `ItemUsePtrTable`'s own rows, whose numbering is not Crystal's: POKE_BALL is
-## 4 there and 5 here, and SAFARI_BALL is reachable where Crystal's number for it
-## collides with MOON_STONE.
-const GEN1_CAPTURE_BALLS: Array[int] = [
-	Gen1Layout.ITEM_POKE_BALL, Gen1Layout.ITEM_GREAT_BALL,
-	Gen1Layout.ITEM_ULTRA_BALL, Gen1Layout.ITEM_MASTER_BALL,
-	Gen1Layout.ITEM_SAFARI_BALL,
-]
+const GEN1_CAPTURE_BALLS: Array[int] = Gen1Layout.BALL_ITEMS
 
 ## `HeavyBallMultiplier.WeightsTable`: the high byte of the converted weight the
 ## row applies below, and what it adds to the catch rate there. The `.lightmon`
@@ -241,6 +238,16 @@ const WOBBLE_PROBABILITIES: Array = [
 static func capture_ball_items(generation: int = RomRegistry.GEN2) -> Array[int]:
 	return GEN1_CAPTURE_BALLS.duplicate() if generation == RomRegistry.GEN1 \
 		else CAPTURE_BALLS.duplicate()
+
+
+## Whether a pack row is thrown rather than used: `ItemAttributes`' BALL type,
+## or `ItemUsePtrTable`'s five rows on a bag with no type byte to read.
+static func is_ball(data: GameData, item: int) -> bool:
+	if data == null:
+		return false
+	if _generation(data) == RomRegistry.GEN1:
+		return item in GEN1_CAPTURE_BALLS
+	return Gen2WorldPack.pocket_for(data, item) == Gen2WorldPack.TYPE_BALL
 
 
 ## Returns owned supported balls without making the battle scene aware of world
@@ -1936,6 +1943,13 @@ const ITEM_EFFECT_TABLES: Dictionary = {
 		"rare_candy": ITEM_RARE_CANDY,
 		"pp_up": ITEM_PP_UP,
 		"sacred_ash": Gen2WorldPack.ITEM_SACRED_ASH,
+		"ball": CAPTURE_BALLS,
+		"x_stat": Gen2AIItems.X_STATS,
+		"x_substatus": Gen2AIItems.X_SUBSTATUSES,
+		"poke_doll": ITEM_POKE_DOLL,
+		## Crystal has no flute row a battle reaches; 0 is the empty bag slot.
+		"poke_flute": 0,
+		"confusion_cure": ITEM_BITTER_BERRY,
 	},
 	RomRegistry.GEN1: {
 		"repel": Gen1Layout.ITEM_REPEL_STEPS,
@@ -1949,6 +1963,14 @@ const ITEM_EFFECT_TABLES: Dictionary = {
 		## `SacredAshEffect` is Crystal's; nothing in Generation 1 revives a
 		## party, and item 0 is the empty bag slot.
 		"sacred_ash": 0,
+		"ball": GEN1_CAPTURE_BALLS,
+		"x_stat": Gen1Layout.ITEM_X_STATS,
+		"x_substatus": Gen1Layout.ITEM_X_SUBSTATUSES,
+		"poke_doll": Gen1Layout.ITEM_POKE_DOLL,
+		"poke_flute": Gen1Layout.ITEM_POKE_FLUTE,
+		## Nothing in Generation 1 cures confusion: `.cureStatusAilment` reads
+		## the status byte, and confusion is not in it.
+		"confusion_cure": 0,
 	},
 }
 

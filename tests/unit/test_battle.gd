@@ -3055,6 +3055,31 @@ func test_an_x_item_raises_the_stage_once_and_then_has_no_effect() -> void:
 	)
 
 
+## `BitterBerryEffect` reads `wPlayerSubStatus3`, so the row the party list chose
+## is not the one unconfused: whoever is out is, and nothing else in the bag
+## touches confusion at all.
+func test_a_bitter_berry_unconfuses_whoever_is_out() -> void:
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([
+			_mon(Fixture.PIKACHU, 20, [Fixture.TACKLE]),
+			_mon(Fixture.GEODUDE, 20, [Fixture.TACKLE]),
+		]),
+		Gen2Party.of(_mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])),
+		_rng
+	)
+	assert_eq(
+		StringName(battle.use_bag_item(Fixture.BITTER_BERRY, 0)["reason"]),
+		&"item_has_no_effect", "nothing is confused yet"
+	)
+	var out: Gen2BattleMon = battle.mon(Gen2Battle.PLAYER)
+	out.substatus |= Gen2Substatus.CONFUSED
+	out.confusion_turns = 3
+	assert_true(bool(battle.use_bag_item(Fixture.BITTER_BERRY, 1).get("ok", false)))
+	assert_false(Gen2Substatus.has(out.substatus, Gen2Substatus.CONFUSED))
+	assert_eq(out.confusion_turns, 0)
+
+
 ## `PokeDollEffect`: a wild battle ends as a DRAW the moment it is used, and a
 ## trainer battle leaves `wItemEffectSucceeded` clear.
 func test_a_poke_doll_ends_a_wild_battle_and_does_nothing_to_a_trainer() -> void:

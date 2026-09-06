@@ -328,6 +328,8 @@ const ETHER: int = 0x3F
 const ELIXER: int = 0x41
 const POKE_BALL: int = 0x05
 const BATTLE_ITEMS: Dictionary = {
+	## Held below too: `BitterBerryEffect` is the only row that is both.
+	BITTER_BERRY: {"battle_menu": 5, "pocket": 1},
 	POTION: {
 		"name": "POTION", "battle_menu": 5, "pocket": 1, "heal_amount": 20,
 		"description": "Restores HP by 20.",

@@ -3769,9 +3769,7 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 					"set": bool(node["set"]),
 				})
 			"branch":
-				if not _gen1_resolve_side(
-					node, event_flag_active(int(node["flag"])), steps, run
-				):
+				if not _gen1_resolve_side(node, _gen1_branch_set(node), steps, run):
 					return false
 			"has_item":
 				if not _gen1_resolve_side(
@@ -3807,6 +3805,17 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 			_:
 				return false
 	return true
+
+
+## `CheckEvent`'s one flag, or `CheckEitherEventSet`'s mask over the flags of
+## one `wEventFlags` byte, which is set when any of them is.
+func _gen1_branch_set(node: Dictionary) -> bool:
+	if event_flag_active(int(node["flag"])):
+		return true
+	for flag: int in node.get("either", []):
+		if event_flag_active(flag):
+			return true
+	return false
 
 
 func _gen1_resolve_side(

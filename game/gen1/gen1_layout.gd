@@ -295,12 +295,16 @@ const ANIM_ID_SHAKE_SCREEN: int = 0xC7
 const ANIM_ID_HIDEPIC: int = 0xC8
 
 ## `ItemUsePtrTable`'s five `ItemUseBall` rows, which `TossBallAnimation` also
-## picks a throw off.
+## picks a throw off; [constant BALL_ITEMS] gathers them in ball pocket order.
 const ITEM_MASTER_BALL: int = 0x01
 const ITEM_ULTRA_BALL: int = 0x02
 const ITEM_GREAT_BALL: int = 0x03
 const ITEM_POKE_BALL: int = 0x04
 const ITEM_SAFARI_BALL: int = 0x08
+const BALL_ITEMS: Array[int] = [
+	ITEM_POKE_BALL, ITEM_GREAT_BALL, ITEM_ULTRA_BALL, ITEM_MASTER_BALL,
+	ITEM_SAFARI_BALL,
+]
 
 ## The other `ItemUsePtrTable` rows the pack reaches, by `item_constants.asm`'s
 ## own numbering, which is not Crystal's anywhere.
@@ -321,6 +325,20 @@ const ITEM_PP_UP: int = 0x4F
 const ITEM_OLD_ROD: int = 0x4C
 const ITEM_GOOD_ROD: int = 0x4D
 const ITEM_SUPER_ROD: int = 0x4E
+const ITEM_POKE_DOLL: int = 0x33
+const ITEM_POKE_FLUTE: int = 0x49
+
+## `ItemUseXStat`'s `sub X_ATTACK - ATTACK_UP1_EFFECT`, in the move effects' own
+## stat order, with `SPECIAL_STAGE_TWIN` carrying X SPECIAL's other half, and
+## then the three that `set` a bit of `wPlayerBattleStatus2` instead.
+const ITEM_X_STATS: Dictionary = {
+	0x41: "attack", 0x42: "defense", 0x43: "speed", 0x44: "sp_attack",
+}
+const ITEM_X_SUBSTATUSES: Dictionary = {
+	0x2E: Gen2Substatus.X_ACCURACY,
+	0x37: Gen2Substatus.MIST,
+	0x3A: Gen2Substatus.FOCUS_ENERGY,
+}
 
 ## `ItemUseEvoStone`'s five rows of `ItemUsePtrTable`. Crystal numbers its own
 ## six differently, and [method Gen2Evolution.stone_items] is the one seam that
@@ -383,6 +401,21 @@ const BALL_STATUS_ADD: Array[int] = [5, 10]
 ## `.setAnimData`'s ladder over Z: under ten the ball misses, and each threshold
 ## passed is one more rock.
 const BALL_SHAKE_THRESHOLDS: Array[int] = [10, 30, 70]
+
+
+## `ItemUsePtrTable`'s own answer inside a battle, as the nibble [Gen2WorldPack]
+## branches on: `ItemUseMedicine` and `ItemUsePPRestore` open the party list, the
+## balls, X items, Poke Doll and Poke Flute are spent on whoever is out, and
+## every other row jumps to `ItemUseNotTime` there.
+static func item_battle_menu(item: int) -> int:
+	if item in BALL_ITEMS or ITEM_X_STATS.has(item) or ITEM_X_SUBSTATUSES.has(item) \
+		or item == ITEM_POKE_DOLL or item == ITEM_POKE_FLUTE:
+		return Gen2Layout.ITEMMENU_CLOSE
+	if ITEM_HEAL_AMOUNTS.has(item) or ITEM_STATUS_MASKS.has(item) \
+		or ITEM_PP_RESTORE.has(item) or item == ITEM_REVIVE or item == ITEM_MAX_REVIVE:
+		return Gen2Layout.ITEMMENU_PARTY
+	return Gen2Layout.ITEMMENU_NOUSE
+
 
 ## What pins the two sheets: the edge under both panels is two solid rows in
 ## the middle of six blank ones, and the empty bar is a rule top and bottom.
@@ -657,12 +690,21 @@ const SCRIPT_LD_A_MEM: int = 0xFA
 const SCRIPT_LD_MEM_A: int = 0xEA
 const SCRIPT_LDH_MEM_A: int = 0xE0
 const SCRIPT_AND_A: int = 0xA7
+const SCRIPT_AND_N: int = 0xE6
+const SCRIPT_LD_C: int = 0x0E
+const SCRIPT_LD_B_A: int = 0x47
 const SCRIPT_PREFIX: int = 0xCB
 const SCRIPT_JR: int = 0x18
 const SCRIPT_JP: int = 0xC3
 const SCRIPT_RET: int = 0xC9
 const SCRIPT_CALL: int = 0xCD
 const SCRIPT_HRAM_BASE: int = 0xFF00
+## `wGameProgressFlags`' own run of `w<Map>CurScript` bytes, 122 on all three
+## cartridges. A store there or to `wCurMapScript` names a map script index, and
+## this port has no interpreter to hand one to.
+const MAP_SCRIPT_BYTES: int = 0x7A
+## How deep a `call` to a routine the layout does not name may nest.
+const SCRIPT_CALL_DEPTH: int = 2
 ## Each key is a conditional `jr` or `jp`, the value whether it is taken when
 ## the tested bit was set; the carry rows read the flag a routine answers in.
 const SCRIPT_BRANCHES: Dictionary = {0x20: true, 0xC2: true, 0x28: false, 0xCA: false}
@@ -921,6 +963,9 @@ const RED_BLUE: Dictionary = {
 	"current_menu_item": 0xCC26,
 	"item_to_remove": 0xFFDB,
 	"toggleable_index": 0xCC4D,
+	"cur_party_species": 0xCF91,
+	"cur_map_script": 0xDA39,
+	"map_scripts": 0xD5F0,
 	## `Predef` and the table it indexes, with the three rows read through it.
 	"predef": 0x3E6D,
 	"predef_pointers": 0x4FE79,
@@ -1030,6 +1075,9 @@ const YELLOW: Dictionary = {
 	"current_menu_item": 0xCC26,
 	"item_to_remove": 0xFFDB,
 	"toggleable_index": 0xCC4D,
+	"cur_party_species": 0xCF90,
+	"cur_map_script": 0xDA38,
+	"map_scripts": 0xD5EF,
 	"predef": 0x3EB4,
 	"predef_pointers": 0xF681D,
 	"hide_object": 0x0F053,
