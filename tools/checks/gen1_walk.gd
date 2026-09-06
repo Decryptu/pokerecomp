@@ -207,6 +207,27 @@ const TRADE_ROW: int = 0
 const TRADE_WRONG_SPECIES: int = 25
 const TRADE_PARTY_SLOT: int = 2
 
+## `RedsHouse2F`'s SNES and Viridian City's own hidden POTION.
+const REDS_HOUSE_2F: int = 0x26
+const SNES_CELL := Vector2i(3, 5)
+const VIRIDIAN_CITY: int = 0x01
+const HIDDEN_POTION_CELL := Vector2i(14, 4)
+const HIDDEN_POTION: int = 0x14
+
+## `MapBadgeFlags`' Pewter row and its two statues, with the two names
+## `PewterGym_Script.LoadNames` hands `LoadGymLeaderAndCityName`.
+const PEWTER_GYM: int = 0x36
+const PEWTER_STATUE_CELL := Vector2i(3, 10)
+const PEWTER_STATUE_BOX: String = "PEWTER CITY\n#MON GYM"
+
+## `BenchGuyTextPointers`' first row, which answers a player facing left.
+const BENCH_GUY_CELL := Vector2i(0, 4)
+
+## `_RedBedroomSNESText`, which opens on a `<PLAYER>` no walk here has named,
+## and the box `BookshelfTileIDs` gives every mart shelf.
+const SNES_BOX: String = "%s is\nplaying the SNES!"
+const MART_SHELF_BOX: String = "Wow! Tons of\nPOKéMON stuff!"
+
 var _r: RefCounted = null
 
 
@@ -235,6 +256,11 @@ func _one_game() -> void:
 	_check_a_trade()
 	_check_the_magikarp_salesman()
 	_check_the_coin_clerks()
+	_check_a_hidden_object()
+	_check_a_hidden_item()
+	_check_a_gym_statue()
+	_check_a_bench_guy()
+	_check_a_bookshelf()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -1090,3 +1116,126 @@ func _trade_filled(text: String) -> String:
 			String(_r.data.species(int(row[1])).get("name", ""))
 		)
 	return Gen2TextStream.fill_names(out, {"player": Gen2WorldScriptRunner.UNNAMED})
+
+
+## The argument column a hidden event hands its routine is not a facing:
+## `PrintRedSNESText` answers from either side of its own cell.
+func _check_a_hidden_object() -> void:
+	for step: Vector2i in [Vector2i.UP, Vector2i.LEFT]:
+		var world: Gen2WorldAPI = _r.open_world(0, REDS_HOUSE_2F, SNES_CELL - step)
+		if world == null:
+			return
+		world.player_facing = _facing_for(step)
+		var box: String = _box_text(world)
+		_r.check(box.begins_with(SNES_BOX % Gen2WorldScriptRunner.UNNAMED),
+			"the SNES said %s facing %s." % [box, step])
+
+
+## `HiddenItems`: the receipt names the item `GetItemName` fetched before the
+## bag was asked, and the second visit says nothing at all.
+func _check_a_hidden_item() -> void:
+	var world: Gen2WorldAPI = _facing_up(VIRIDIAN_CITY, HIDDEN_POTION_CELL + Vector2i.DOWN)
+	if world == null:
+		return
+	var said: Array[String] = _spoken(world)
+	_r.check(said.size() == 1 and String(said[0]) == _hidden_item_box(),
+		"the hidden POTION said %s." % [said])
+	_r.check(int(world.state.items().get(HIDDEN_POTION, 0)) == 1,
+		"the bag holds %d POTION." % int(world.state.items().get(HIDDEN_POTION, 0)))
+	_r.check(world.interact().is_empty(), "the taken POTION answered twice.")
+
+
+## `GymStatues` reads `wBeatGymFlags`, and Pewter's bit is BOULDERBADGE.
+func _check_a_gym_statue() -> void:
+	var boxes: Array[String] = []
+	for badge: bool in [false, true]:
+		var world: Gen2WorldAPI = _facing_up(
+			PEWTER_GYM, PEWTER_STATUE_CELL + Vector2i.DOWN
+		)
+		if world == null:
+			return
+		if badge:
+			world.state.set_engine_flag(Gen2WorldState.BADGE_ENGINE_FLAGS[
+				Gen2WorldState.KANTO_BADGE_FIRST
+			], true)
+		boxes.append(_box_text(world))
+	_r.check(boxes[0].begins_with(_statue_box()) and boxes[0] != boxes[1],
+		"the gym statues read %s." % [boxes])
+	## Facing up is the whole of the gate: the cell beside it answers nothing.
+	var beside: Gen2WorldAPI = _r.open_world(
+		0, PEWTER_GYM, PEWTER_STATUE_CELL + Vector2i.LEFT
+	)
+	if beside != null:
+		beside.player_facing = Gen2WorldSprite.FACING_RIGHT
+		_r.check(beside.interact().is_empty(), "the statue answered from the side.")
+
+
+## `PrintBenchGuyText` compares the row's own facing; the source's missing
+## `inc hl` walks off the table from any other side.
+func _check_a_bench_guy() -> void:
+	var world: Gen2WorldAPI = _r.open_world(
+		0, VIRIDIAN_POKECENTER, BENCH_GUY_CELL + Vector2i.RIGHT
+	)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_LEFT
+	_r.check(not _box_text(world).is_empty(), "the bench guy said nothing.")
+	var above: Gen2WorldAPI = _facing_up(
+		VIRIDIAN_POKECENTER, BENCH_GUY_CELL + Vector2i.DOWN
+	)
+	if above != null:
+		_r.check(above.interact().is_empty(), "the bench guy answered from below.")
+
+
+## `PrintBookshelfText` runs once no hidden event has, facing up alone.
+func _check_a_bookshelf() -> void:
+	var shelf: Vector2i = _bookshelf_cell(VIRIDIAN_MART)
+	if not _r.check(shelf.x >= 0, "no mart bookshelf tile is on the map."):
+		return
+	var world: Gen2WorldAPI = _facing_up(VIRIDIAN_MART, shelf + Vector2i.DOWN)
+	if world == null:
+		return
+	var box: String = _box_text(world)
+	_r.check(box == MART_SHELF_BOX, "the mart shelf said %s." % [box])
+	var beside: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_MART, shelf + Vector2i.LEFT)
+	if beside != null:
+		beside.player_facing = Gen2WorldSprite.FACING_RIGHT
+		_r.check(beside.interact().is_empty(), "the shelf answered from the side.")
+
+
+## The first cell of [param map] drawing a tile `BookshelfTileIDs` names.
+func _bookshelf_cell(map: int) -> Vector2i:
+	return _tile_cell(map, (_r.data.world_tileset(
+		_r.data.world_map(0, map).tileset
+	).bookshelves as Dictionary).keys())
+
+
+func _tile_cell(map: int, tiles: Array) -> Vector2i:
+	var world: Gen2WorldAPI = _r.open_world(0, map, Vector2i.ZERO)
+	if world == null:
+		return Vector2i(-1, -1)
+	var record: Gen2WorldMap = world.current_map
+	for y: int in record.collision_height - 1:
+		for x: int in record.collision_width:
+			if tiles.has(world.collision_code_at(Vector2i(x, y))):
+				return Vector2i(x, y)
+	return Vector2i(-1, -1)
+
+
+## `_GymStatueText1`'s two `text_ram` markers filled from the map script.
+func _statue_box() -> String:
+	return PEWTER_STATUE_BOX.replace("#MON", Gen1Text.character(0x54) + "MON")
+
+
+func _facing_for(step: Vector2i) -> int:
+	if step == Vector2i.UP:
+		return Gen2WorldSprite.FACING_UP
+	return Gen2WorldSprite.FACING_LEFT if step == Vector2i.LEFT \
+		else Gen2WorldSprite.FACING_DOWN
+
+
+## `_FoundHiddenItemText` with `GetItemName`'s own answer in its RAM marker.
+func _hidden_item_box() -> String:
+	return "%s found\n%s!" % [
+		Gen2WorldScriptRunner.UNNAMED, _r.data.item_name(HIDDEN_POTION),
+	]

@@ -26,6 +26,9 @@ var animation_pointer: int = 0
 var palette_map_pointer: int = 0
 var palette_map: PackedByteArray = PackedByteArray()
 var animation_commands: Array = []
+## `BookshelfTileIDs`' rows for this tileset, the bookshelf tile against the box
+## `PrintBookshelfText` answers with. Generation 1's alone.
+var bookshelves: Dictionary = {}
 
 
 static func from_cache(value: Dictionary) -> Gen2WorldTileset:
@@ -44,6 +47,17 @@ static func from_cache(value: Dictionary) -> Gen2WorldTileset:
 	out.palette_map_pointer = int(value.get("palette_map_pointer", 0))
 	out.palette_map = RomCache.packed_bytes(value.get("palette_map", []))
 	out.animation_commands = value.get("animation_commands", []) if value.get("animation_commands", []) is Array else []
+	out.bookshelves = _bookshelves_from_cache(value.get("bookshelves", {}))
+	return out
+
+
+## JSON writes every key as a string, and a bookshelf is looked up by tile.
+static func _bookshelves_from_cache(value: Variant) -> Dictionary:
+	if not value is Dictionary:
+		return {}
+	var out: Dictionary = {}
+	for tile: Variant in value as Dictionary:
+		out[int(tile)] = (value as Dictionary)[tile]
 	return out
 
 

@@ -96,10 +96,25 @@ func test_text_far_runs_the_target_as_a_text_of_its_own() -> void:
 			return PackedByteArray([0x00, 0x80, 0x57])
 		return PackedByteArray()
 	var decoded: Dictionary = Gen2TextStream.decode(
-		PackedByteArray([0x16, 0x21, 0x43, 0x21]), 0, {"far": far}
+		PackedByteArray([0x16, 0x21, 0x43, 0x21, 0x50]), 0, {"far": far}
 	)
 	assert_true(decoded["ok"])
 	assert_eq(decoded["text"], "A")
+
+
+## `TextCommand_FAR` calls the far text and returns behind its own operands, so
+## whatever follows it is read too. 39 Generation 1 texts carry a second
+## `text_far` behind the first.
+func test_a_command_behind_text_far_is_read_as_well() -> void:
+	var far: Callable = func(bank: int, address: int) -> PackedByteArray:
+		return PackedByteArray([0x00, 0x80 + address, 0x57]) if bank == 1 \
+			else PackedByteArray()
+	var decoded: Dictionary = Gen2TextStream.decode(
+		PackedByteArray([0x16, 0x00, 0x00, 0x01, 0x16, 0x01, 0x00, 0x01, 0x50]),
+		0, {"far": far}
+	)
+	assert_true(decoded["ok"])
+	assert_eq(decoded["text"], "AB")
 
 
 func test_para_and_cont_are_different_breaks() -> void:
@@ -159,7 +174,7 @@ func test_the_two_scrolls_that_wait_for_nothing_are_their_own_break() -> void:
 func test_generation_1_reads_its_own_command_set() -> void:
 	var far: PackedByteArray = PackedByteArray([0x00, 0x82, 0x57])
 	var decoded: Dictionary = Gen2TextStream.decode(
-		PackedByteArray([0x00, 0x80, 0x50, 0x14, 0x15, 0x16, 0x17, 0x00, 0x40, 0x03]),
+		PackedByteArray([0x00, 0x80, 0x50, 0x14, 0x15, 0x16, 0x17, 0x00, 0x40, 0x03, 0x50]),
 		0,
 		{
 			"generation": RomRegistry.GEN1,

@@ -47,6 +47,17 @@ const LAYOUT: Dictionary = {
 	"player_coins": 0xD5A4,
 	"add_bcd": 0x0270,
 	"coin_box": 0x0280,
+	"print_predef_text": 0x0290,
+	"display_text_id": 0x02A0,
+	"count_set_bits": 0x02B0,
+	"text_predefs": 0x0400,
+	"text_id_hram": 0xFF8C,
+	"joy_held": 0xFFB4,
+	"auto_text_box_control": 0xCF0C,
+	"facing_direction": 0xC109,
+	"num_set_bits": 0xD11E,
+	"cur_map_tileset": 0xD367,
+	"tile_map": 0xC3A0,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
 const PREDEFS: Dictionary = {

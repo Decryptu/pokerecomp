@@ -552,9 +552,25 @@ static func _read_tileset(
 		"counter_tiles": Array(rom.slice(table + 7, Gen1Layout.TILESET_COUNTER_TILES)),
 		"grass_tile": rom.u8(table + 10),
 		"animation": rom.u8(table + 11),
+		"bookshelves": _read_bookshelves(rom, layout, number),
 		"water": water.has(number),
 		"pixels": _tileset_strip(rom, bank, graphics_address),
 	}
+
+
+## `BookshelfTileIDs`: the tile a tileset draws a bookshelf with and the box
+## `PrintBookshelfText` answers with, read in that routine's own bank.
+static func _read_bookshelves(rom: RomFile, layout: Dictionary, number: int) -> Dictionary:
+	var at: int = int(layout["bookshelf_tiles"])
+	var bank: int = RomFile.bank_of(at)
+	var out: Dictionary = {}
+	while rom.u8(at) != Gen1Layout.HIDDEN_EVENT_END:
+		if rom.u8(at) == number:
+			var nodes: Array = _predef_nodes(rom, layout, bank, rom.u8(at + 2))
+			if not nodes.is_empty():
+				out[rom.u8(at + 1)] = nodes
+		at += Gen1Layout.BOOKSHELF_ROW_SIZE
+	return out
 
 
 ## The other end of the pinned block counts: the assembler lays each tileset's
@@ -684,6 +700,9 @@ static func _read_map(
 			"coord_events": [],
 			"bg_events": events["bg_events"],
 			"objects": events["objects"],
+			"hidden_events": _read_hidden_events(
+				rom, layout, map_id, bank, rom.u16le(header + 7)
+			),
 		},
 	}
 
@@ -953,13 +972,269 @@ static func _read_text(
 	if header >= 0:
 		row["trainer"] = _read_trainer_header(rom, layout, bank, header)
 		return row
-	if int(row["command"]) == Gen1Layout.TEXT_ASM:
-		var script: Array = decode_script(rom, layout, bank, at + 1)
-		if not script.is_empty():
-			row["script"] = script
 	row["text"] = String(decoded["text"])
 	row["prompt"] = bool(decoded.get("prompt", false))
+	var code: int = _text_code_at(decoded)
+	if code < 0:
+		return row
+	var script: Array = decode_script(rom, layout, bank, code)
+	if script.is_empty():
+		return row
+	if not String(row["text"]).is_empty():
+		script.push_front({"op": "text", "text": String(row["text"])})
+	row["script"] = script
 	return row
+
+
+## Where a text's own machine code begins, or -1. `text_asm` is the one command
+## the stream stops on rather than reads past.
+static func _text_code_at(decoded: Dictionary) -> int:
+	return int(decoded.get("bytes", -1)) if bool(decoded.get("stop", false)) else -1
+
+
+## `CheckForHiddenEvent`: the rows the A button walks before it looks for a sign
+## or a sprite.
+static func _read_hidden_events(
+	rom: RomFile, layout: Dictionary, map_id: int, script_bank: int, script: int
+) -> Array:
+	var table: int = int(layout["hidden_event_maps"])
+	var pointers: int = int(layout["hidden_event_pointers"])
+	var stride: int = 1 if pointers > 0 else Gen1Layout.HIDDEN_EVENT_MAP_SIZE
+	var index: int = 0
+	while rom.u8(table + index * stride) != Gen1Layout.HIDDEN_EVENT_END:
+		if rom.u8(table + index * stride) == map_id:
+			return _read_hidden_rows(rom, layout, RomFile.bank_of(table), rom.u16le(
+				pointers + index * 2 if pointers > 0 else table + index * stride + 1
+			), map_id, _gym_names(rom, layout, script_bank, script))
+		index += 1
+	return []
+
+
+static func _read_hidden_rows(
+	rom: RomFile, layout: Dictionary, bank: int, pointer: int, map_id: int, names: Array
+) -> Array:
+	var at: int = Gen1Layout.banked(bank, pointer)
+	var out: Array = []
+	while rom.u8(at) != Gen1Layout.HIDDEN_EVENT_END:
+		out.append(_read_hidden_row(rom, layout, at, map_id, names))
+		at += Gen1Layout.HIDDEN_EVENT_SIZE
+	return out
+
+
+## The gym's own city and leader names, which its map script hands
+## `LoadGymLeaderAndCityName` and `_GymStatueText1` reads back out of RAM. Red
+## and Blue tail-call it and Yellow calls and returns.
+static func _gym_names(rom: RomFile, layout: Dictionary, bank: int, script: int) -> Array:
+	var at: int = Gen1Layout.banked(bank, script)
+	for step: int in Gen1Layout.GYM_NAME_SEARCH:
+		if rom.u8(at + step) != Gen1Layout.SCRIPT_LD_HL \
+			or rom.u8(at + step + 3) != Gen1Layout.SCRIPT_LD_DE \
+			or rom.u16le(at + step + 7) != int(layout["load_gym_names"]) \
+			or rom.u8(at + step + 6) not in Gen1Layout.GYM_NAME_TAILS:
+			continue
+		return [
+			Gen1Text.decode(rom.bytes(), Gen1Layout.banked(bank, rom.u16le(at + step + 1)),
+				Gen1Layout.GYM_CITY_LENGTH),
+			Gen1Text.decode(rom.bytes(), Gen1Layout.banked(bank, rom.u16le(at + step + 4)),
+				Gen1Layout.GYM_LEADER_LENGTH),
+		]
+	return []
+
+
+## One `hidden_event`: the faced cell, then the routine behind it. Four walk a
+## table of their own; the rest are machine code, read with the argument in `a`.
+static func _read_hidden_row(
+	rom: RomFile, layout: Dictionary, at: int, map_id: int, names: Array
+) -> Dictionary:
+	var row: Dictionary = {"y": rom.u8(at), "x": rom.u8(at + 1)}
+	var argument: int = rom.u8(at + 2)
+	var bank: int = rom.u8(at + 3)
+	var address: int = rom.u16le(at + 4)
+	var named: String = Gen1Layout.hidden_routine(layout, Gen1Layout.banked(bank, address))
+	var script: Array = decode_script(
+		rom, layout, bank, address, {"hidden_argument": argument}
+	) if named.is_empty() else _hidden_table_nodes(
+		rom, layout, named, bank, map_id, argument, row, names
+	)
+	if not script.is_empty():
+		row["script"] = script
+	return row
+
+
+static func _hidden_table_nodes(
+	rom: RomFile, layout: Dictionary, named: String, bank: int, map_id: int,
+	argument: int, row: Dictionary, names: Array
+) -> Array:
+	match named:
+		"hidden_items":
+			return _hidden_item_nodes(rom, layout, bank, map_id, argument, row)
+		"hidden_coins":
+			return _hidden_coin_nodes(rom, layout, bank, map_id, argument, row)
+		"bench_guy_text":
+			return _bench_guy_nodes(rom, layout, bank, map_id)
+		"gym_statues":
+			return _gym_statue_nodes(rom, layout, bank, map_id, names)
+	return []
+
+
+## `FindHiddenItemOrCoinsIndex`: a row's place in the list is its own flag bit.
+static func _hidden_coord_index(
+	rom: RomFile, at: int, map_id: int, row: Dictionary
+) -> int:
+	var index: int = 0
+	while rom.u8(at) != Gen1Layout.HIDDEN_EVENT_END:
+		if rom.u8(at) == map_id and rom.u8(at + 1) == int(row["y"]) \
+			and rom.u8(at + 2) == int(row["x"]):
+			return index
+		at += Gen1Layout.HIDDEN_COORD_SIZE
+		index += 1
+	return -1
+
+
+## `HiddenItems`: the argument is the item, and `GetItemName` runs in front of
+## the box, so the receipt reads even when the bag turns the item away.
+static func _hidden_item_nodes(
+	rom: RomFile, layout: Dictionary, bank: int, map_id: int, item: int, row: Dictionary
+) -> Array:
+	var index: int = _hidden_coord_index(
+		rom, int(layout["hidden_item_coords"]), map_id, row
+	)
+	if index < 0:
+		return []
+	var flag: int = Gen1Layout.engine_flag_base("obtained_hidden_items") + index
+	var found: String = _predef_text(rom, layout, bank, "found_hidden_item")
+	var full: String = _predef_text(rom, layout, bank, "hidden_item_bag_full")
+	if found.is_empty() or full.is_empty():
+		return []
+	return [{"op": "branch", "flag": flag, "engine": true, "then": [], "else": [
+		{"op": "name_item", "item": item},
+		{"op": "text", "text": found, "press": false},
+		{"op": "give_item", "item": item, "count": 1,
+			"ok": [{"op": "flag", "flag": flag, "set": true, "engine": true}],
+			"full": [{"op": "text", "text": full}]},
+	]}]
+
+
+## `HiddenCoins`: no coin case answers nothing, and the box behind the sum is
+## `AddBCD`'s ceiling being reached rather than the sum overflowing.
+static func _hidden_coin_nodes(
+	rom: RomFile, layout: Dictionary, bank: int, map_id: int, argument: int, row: Dictionary
+) -> Array:
+	var index: int = _hidden_coord_index(
+		rom, int(layout["hidden_coin_coords"]), map_id, row
+	)
+	if index < 0:
+		return []
+	var flag: int = Gen1Layout.engine_flag_base("obtained_hidden_coins") + index
+	var found: String = _predef_text(rom, layout, bank, "found_hidden_coins")
+	var dropped: String = _predef_text(rom, layout, bank, "dropped_hidden_coins")
+	if found.is_empty() or dropped.is_empty():
+		return []
+	return [{"op": "has_item", "item": Gen1Layout.ITEM_COIN_CASE, "else": [], "then": [
+		{"op": "branch", "flag": flag, "engine": true, "then": [], "else": [
+			{"op": "add_coins", "amount": Gen1Layout.hidden_coin_amount(argument)},
+			{"op": "flag", "flag": flag, "set": true, "engine": true},
+			{"op": "has_coins", "coins": Gen1Layout.HIDDEN_COIN_CEILING,
+				"test": "exactly",
+				"then": [{"op": "text", "text": dropped}],
+				"else": [{"op": "text", "text": found}]},
+		]},
+	]}]
+
+
+## `BenchGuyTextPointers`: the map, the side he is spoken to from and his own
+## `tx_pre` id. Any other side walks the source's own misaligned loop, which
+## reads past the table and says nothing here.
+static func _bench_guy_nodes(
+	rom: RomFile, layout: Dictionary, bank: int, map_id: int
+) -> Array:
+	var at: int = int(layout["bench_guy_texts"])
+	while rom.u8(at) != Gen1Layout.HIDDEN_EVENT_END:
+		if rom.u8(at) != map_id:
+			at += Gen1Layout.BENCH_GUY_ROW_SIZE
+			continue
+		return _facing_nodes(
+			rom.u8(at + 1), _predef_nodes(rom, layout, bank, rom.u8(at + 2))
+		)
+	return []
+
+
+## `GymStatues`: `MapBadgeFlags` names one badge per gym, and its second box is
+## the one a player wearing it reads.
+static func _gym_statue_nodes(
+	rom: RomFile, layout: Dictionary, bank: int, map_id: int, names: Array
+) -> Array:
+	var at: int = int(layout["map_badge_flags"])
+	while rom.u8(at) != Gen1Layout.HIDDEN_EVENT_END:
+		if rom.u8(at) != map_id:
+			at += Gen1Layout.BADGE_ROW_SIZE
+			continue
+		var badge: int = _bit_index(rom.u8(at + 1))
+		if badge < 0:
+			return []
+		var badge_text: int = Gen1Layout.text_predef(rom.id, "gym_statue_badge")
+		var plain_text: int = Gen1Layout.text_predef(rom.id, "gym_statue")
+		return _facing_nodes(Gen1Layout.FACING_UP, [{"op": "badge", "badge": badge,
+			"then": _named_nodes(_predef_nodes(rom, layout, bank, badge_text), names),
+			"else": _named_nodes(_predef_nodes(rom, layout, bank, plain_text), names)}])
+	return []
+
+
+static func _bit_index(mask: int) -> int:
+	for bit: int in 8:
+		if mask == 1 << bit:
+			return bit
+	return -1
+
+
+## `text_ram`'s markers filled in the order the boxes read them, which is the
+## city and then the leader.
+static func _named_nodes(nodes: Array, names: Array) -> Array:
+	for node: Dictionary in nodes:
+		if String(node["op"]) != "text":
+			continue
+		for name: String in names:
+			node["text"] = Gen2TextStream.fill_marker(
+				String(node["text"]), Gen2TextStream.RAM_MARKER, name
+			)
+	return nodes
+
+
+## A routine's own `cp SPRITE_FACING_*` and the `ret nz` behind it.
+static func _facing_nodes(facing: int, nodes: Array) -> Array:
+	return [] if nodes.is_empty() \
+		else [{"op": "facing", "facing": facing, "then": nodes, "else": []}]
+
+
+## One `TextPredefs` row as the nodes it prints, read in [param bank].
+static func _predef_nodes(
+	rom: RomFile, layout: Dictionary, bank: int, id: int
+) -> Array:
+	if id < 1 or id > Gen1Layout.text_predef_count(rom.id):
+		return []
+	var ctx: Dictionary = {
+		"rom": rom, "layout": layout, "bank": bank,
+		"budget": [SCRIPT_BUDGET], "calls": [0],
+	}
+	var out: Array = []
+	return out if _script_text_row(ctx, _predef_pointer(rom, layout, id), {}, out, 0) \
+		else []
+
+
+static func _predef_pointer(rom: RomFile, layout: Dictionary, id: int) -> int:
+	return rom.u16le(
+		int(layout["text_predefs"]) + (id - 1) * Gen1Layout.TEXT_PREDEF_SIZE
+	)
+
+
+## The string one [constant Gen1Layout.TEXT_PREDEFS] row prints.
+static func _predef_text(
+	rom: RomFile, layout: Dictionary, bank: int, name: String
+) -> String:
+	var decoded: Dictionary = Gen1Text.decode_stream(rom, Gen1Layout.banked(
+		bank, _predef_pointer(rom, layout, Gen1Layout.text_predef(rom.id, name))
+	))
+	return String(decoded["text"]) if bool(decoded.get("ok", false)) else ""
 
 
 ## Where a `text_asm` row's `ld hl` points when the code behind it calls
@@ -993,20 +1268,29 @@ const SCRIPT_TESTS_CARRY: int = -3
 const SCRIPT_TESTS_ITEM: int = -4
 const SCRIPT_TESTS_MONEY: int = -5
 const SCRIPT_TESTS_COINS: int = -6
+## `cp` against the faced direction and the species count the dex holds.
+const SCRIPT_TESTS_FACING: int = -7
+const SCRIPT_TESTS_DEX: int = -8
+## `cp` against the map's tileset and against one `lda_coord` screen position,
+## which is how a bookshelf tells a sculpture apart.
+const SCRIPT_TESTS_TILESET: int = -9
+const SCRIPT_TESTS_TILE: int = -10
 
 
 ## One `text_asm` row's machine code, as the boxes it prints and the branches
 ## choosing between them. Only the routines the layout names are read, and a
 ## path reaching anything else is dropped whole rather than kept as a prefix.
+## [param known] is what the caller knows already: the argument byte
+## `wHiddenEventFunctionArgument` hands a hidden event's own routine.
 static func decode_script(
-	rom: RomFile, layout: Dictionary, bank: int, at: int
+	rom: RomFile, layout: Dictionary, bank: int, at: int, known: Dictionary = {}
 ) -> Array:
 	var walked: Variant = _walk_script(
 		{
 			"rom": rom, "layout": layout, "bank": bank,
 			"budget": [SCRIPT_BUDGET], "calls": [0],
 		},
-		at, {}, 0
+		at, known.duplicate(), 0
 	)
 	return walked as Array if walked is Array else []
 
@@ -1025,6 +1309,8 @@ static func _walk_script(
 		var op: int = (ctx["rom"] as RomFile).u8(Gen1Layout.banked(int(ctx["bank"]), pc))
 		if Gen1Layout.SCRIPT_BRANCHES.has(op) or Gen1Layout.SCRIPT_CARRY_BRANCHES.has(op):
 			return _script_branch(ctx, op, pc, state, depth, out)
+		if Gen1Layout.SCRIPT_RET_BRANCHES.has(op):
+			return _script_ret_branch(ctx, op, pc, state, depth, out)
 		var next: int = _script_step(ctx, pc, state, out, depth)
 		if next == SCRIPT_END:
 			return _script_ended(state, out)
@@ -1111,6 +1397,8 @@ static func _script_flow(
 			return _script_rotated(ctx, pc, state, int(state.get("rotated", 0)))
 		Gen1Layout.SCRIPT_ADD_A:
 			return _script_rotated(ctx, pc, state, Gen1Layout.SCRIPT_HIGH_BIT)
+		Gen1Layout.SCRIPT_CP_N:
+			return _script_compared(ctx, pc, state, rom.u8(at + 1))
 		Gen1Layout.SCRIPT_AND_N:
 			## `CheckEitherEventSet`, whose two flags share a byte and a mask.
 			_script_tested(state, _script_mask(ctx, state, rom.u8(at + 1)))
@@ -1184,9 +1472,12 @@ static func _script_loaded(ctx: Dictionary, address: int, state: Dictionary) -> 
 	_script_wrote_a(state)
 	state.erase("a")
 	state["source"] = address
-	if address == int((ctx["layout"] as Dictionary)["cur_party_species"]) \
-		and state.has("species_index"):
+	var layout: Dictionary = ctx["layout"]
+	if address == int(layout["cur_party_species"]) and state.has("species_index"):
 		state["a"] = int(state["species_index"])
+	## `wHiddenEventFunctionArgument` is `wWhichTrade`'s own byte.
+	if address == int(layout["which_trade"]) and state.has("hidden_argument"):
+		state["a"] = int(state["hidden_argument"])
 
 
 ## `jp` reaching `TextScriptEnd`, a routine the layout names, or an address in
@@ -1237,6 +1528,16 @@ static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> 
 		if not state.has("a"):
 			return false
 		state["text_box"] = int(state["a"])
+		return true
+	if address == int(layout["text_id_hram"]):
+		if not state.has("a"):
+			return false
+		state["map_text"] = int(state["a"])
+		return true
+	## `Mansion1Script_Switches` blanks the held buttons and `OpenPokemonCenterPC`
+	## turns the automatic box off; this port reads nothing out of either.
+	if address == int(layout["joy_held"]) \
+		or address == int(layout["auto_text_box_control"]):
 		return true
 	if _script_bcd_stored(ctx, address, state):
 		return true
@@ -1290,9 +1591,13 @@ static func _script_flag(ctx: Dictionary, address: int, bit: int) -> int:
 ## outside `wEventFlags` a row reads.
 static func _script_engine_flag(ctx: Dictionary, address: int, bit: int) -> int:
 	var layout: Dictionary = ctx["layout"]
-	for index: int in Gen1Layout.ENGINE_FLAG_BYTES.size():
-		if address == int(layout.get(Gen1Layout.ENGINE_FLAG_BYTES[index], -1)):
-			return Gen1Layout.ENGINE_FLAG_FIRST + index * Gen1Layout.ENGINE_FLAG_BITS + bit
+	for run: String in Gen1Layout.ENGINE_FLAG_BYTES:
+		var base: int = int(layout.get(run, -1))
+		var width: int = int(Gen1Layout.ENGINE_FLAG_BYTES[run])
+		if address < base or address >= base + width:
+			continue
+		return Gen1Layout.engine_flag_base(run) \
+			+ (address - base) * Gen1Layout.ENGINE_FLAG_BITS + bit
 	return -1
 
 
@@ -1372,6 +1677,10 @@ static func _script_call(
 			return _script_coins_asked(state, next)
 		"display_text_box":
 			return _script_money_box(state, out, next)
+		"print_predef_text":
+			return _script_predef_text(ctx, state, out, next, depth)
+		"display_text_id":
+			return _script_map_text(state, out, next)
 	if _script_banked_routine(layout, int(ctx["bank"]), target) == "coin_box":
 		out.append({"op": "coin_box"})
 		return next
@@ -1680,6 +1989,107 @@ static func _script_branch(
 	return out
 
 
+## A conditional `ret`, which a wrong facing is refused with: the side that
+## returns prints nothing and the other carries on behind it.
+static func _script_ret_branch(
+	ctx: Dictionary, op: int, pc: int, state: Dictionary, depth: int, out: Array
+) -> Variant:
+	var tests: Variant = state.get("tests", SCRIPT_TESTS_NOTHING)
+	if not _script_reads_flag(state, tests, false):
+		return null
+	var walked: Variant = _walk_script(ctx, pc + 1, state.duplicate(), depth + 1)
+	if walked == null:
+		return null
+	var branches: Array = [[], walked]
+	if not bool(Gen1Layout.SCRIPT_RET_BRANCHES[op]):
+		branches.reverse()
+	var node: Variant = _script_node(tests, branches, state, out, false)
+	if node == null:
+		return null
+	out.append(node)
+	return out
+
+
+## `cp n` against the faced direction, the species count `CountSetBits` left,
+## the map's tileset or one screen position; anything else ends the path.
+static func _script_compared(
+	ctx: Dictionary, pc: int, state: Dictionary, value: int
+) -> int:
+	var layout: Dictionary = ctx["layout"]
+	var source: int = int(state.get("source", -1))
+	var next: int = pc + Gen1Layout.SCRIPT_SHORT_SIZE
+	if source == int(layout["facing_direction"]):
+		state["facing"] = value
+		_script_tested(state, SCRIPT_TESTS_FACING)
+		return next
+	if source == int(layout["cur_map_tileset"]):
+		state["tileset"] = value
+		_script_tested(state, SCRIPT_TESTS_TILESET)
+		return next
+	var screen: int = source - int(layout["tile_map"])
+	if screen >= 0 and screen < Gen1Layout.SCREEN_WIDTH_TILES * Gen1Layout.SCREEN_HEIGHT_TILES:
+		state["screen"] = screen
+		state["tile"] = value
+		_script_tested(state, SCRIPT_TESTS_TILE)
+		return next
+	if source != int(layout["num_set_bits"]):
+		return SCRIPT_UNREAD
+	state["dex_count"] = value
+	_script_tested(state, SCRIPT_TESTS_DEX, true)
+	return next
+
+
+## `PrintPredefTextID`: `TextPredefs` counts from 1 and a row is read in the
+## bank the routine that named it runs in.
+static func _script_predef_text(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int, depth: int
+) -> int:
+	var rom: RomFile = ctx["rom"]
+	var id: int = int(state.get("a", 0))
+	if id < 1 or id > Gen1Layout.text_predef_count(rom.id):
+		return SCRIPT_UNREAD
+	var pointer: int = rom.u16le(
+		int((ctx["layout"] as Dictionary)["text_predefs"])
+		+ (id - 1) * Gen1Layout.TEXT_PREDEF_SIZE
+	)
+	state.erase("a")
+	return next if _script_text_row(ctx, pointer, state, out, depth) else SCRIPT_UNREAD
+
+
+## One text pointer in the walk's own bank: the box it prints, the facility it
+## opens instead, and the machine code a `text_asm` behind it runs.
+static func _script_text_row(
+	ctx: Dictionary, pointer: int, state: Dictionary, out: Array, depth: int
+) -> bool:
+	var rom: RomFile = ctx["rom"]
+	var at: int = Gen1Layout.banked(int(ctx["bank"]), pointer)
+	var decoded: Dictionary = Gen1Text.decode_stream(rom, at)
+	if not bool(decoded.get("ok", false)):
+		if String(decoded.get("reason", "")) != "text_script":
+			return false
+		out.append({"op": "facility", "command": int(decoded["command"])})
+		return true
+	if not String(decoded["text"]).is_empty():
+		out.append({"op": "text", "text": String(decoded["text"])})
+	var code: int = _text_code_at(decoded)
+	if code < 0:
+		return true
+	var walked: Variant = _walk_script(ctx, code, state, depth + 1)
+	if not walked is Array:
+		return false
+	out.append_array(walked as Array)
+	return true
+
+
+## `ldh [hTextID], a` and `jp DisplayTextID`: one of the map's own text rows.
+static func _script_map_text(state: Dictionary, out: Array, next: int) -> int:
+	if not state.has("map_text"):
+		return SCRIPT_UNREAD
+	out.append({"op": "map_text", "text": int(state["map_text"])})
+	state.erase("map_text")
+	return next
+
+
 ## Whether the flag this branch reads is the one the test left: a flag index is in Z alone.
 static func _script_reads_flag(state: Dictionary, tests: Variant, carry: bool) -> bool:
 	if tests is Array:
@@ -1721,6 +2131,20 @@ static func _script_node(
 			return {"op": "has_coins", "coins": int(state["coins"]),
 				"test": "at_least" if carry else "exactly",
 				"then": fell, "else": taken}
+		SCRIPT_TESTS_FACING:
+			## `cp` raises Z on a match, so a `ret nz` leaves the right side.
+			return {"op": "facing", "facing": int(state["facing"]),
+				"then": fell, "else": taken}
+		SCRIPT_TESTS_DEX:
+			## Carry is set below the count, so the taken side owns fewer.
+			return {"op": "dex_count", "count": int(state["dex_count"]),
+				"then": fell, "else": taken}
+		SCRIPT_TESTS_TILESET:
+			return {"op": "tileset", "tileset": int(state["tileset"]),
+				"then": fell, "else": taken}
+		SCRIPT_TESTS_TILE:
+			return {"op": "screen_tile", "screen": int(state["screen"]),
+				"tile": int(state["tile"]), "then": fell, "else": taken}
 	var branch: Dictionary = {
 		"op": "branch", "flag": int(tests), "then": taken, "else": fell,
 	}
