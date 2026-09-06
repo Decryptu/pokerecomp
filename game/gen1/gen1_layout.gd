@@ -316,6 +316,7 @@ const ITEM_ESCAPE_ROPE: int = 0x1D
 ## `IsItemInBag COIN_CASE`, which `CeladonPrizeMenu` opens on.
 const ITEM_COIN_CASE: int = 0x45
 const ITEM_COIN: int = 0x3B
+const ITEM_CARD_KEY: int = 0x30
 const ITEM_ITEMFINDER: int = 0x47
 const ITEM_TOWN_MAP: int = 0x05
 const ITEM_POKEDEX: int = 0x09
@@ -790,6 +791,23 @@ const SCRIPT_HRAM_BASE: int = 0xFF00
 const MAP_SCRIPT_BYTES: int = 0x7A
 ## How deep a `call` to a routine the layout does not name may nest.
 const SCRIPT_CALL_DEPTH: int = 2
+const SCRIPT_PUSH_AF: int = 0xF5
+const SCRIPT_POP_AF: int = 0xF1
+const SCRIPT_STACK_HL: Array[int] = [0xE5, 0xE1]
+## The opcode following a map-load gate, `size` its own length and `target`
+## whether the body is where it branches rather than the byte after it.
+const MAP_LOAD_GATE_BRANCHES: Dictionary = {
+	0xC8: {"size": 1, "target": false},
+	0x28: {"size": 2, "target": false},
+	0x20: {"size": 2, "target": true},
+	0xCA: {"size": 3, "target": false},
+	0xC2: {"size": 3, "target": true},
+	0xCC: {"size": 3, "target": false},
+	0xC4: {"size": 3, "target": true},
+}
+## A `dbmapcoord` list: `db y, x` rows under a terminator.
+const MAP_COORD_END: int = 0xFF
+const MAP_COORD_SIZE: int = 2
 ## Each key is a conditional `jr` or `jp`, the value whether it is taken when
 ## the tested bit was set; the carry rows read the flag a routine answers in.
 const SCRIPT_BRANCHES: Dictionary = {0x20: true, 0xC2: true, 0x28: false, 0xCA: false}
@@ -821,15 +839,27 @@ const TEXT_PREDEF_COUNT: int = 66
 const TEXT_PREDEF_COUNT_YELLOW: int = 68
 const TEXT_PREDEF_SIZE: int = 2
 const TEXT_PREDEFS: Dictionary = {
+	"card_key_success": 0x01, "card_key_fail": 0x02,
 	"gym_statue": 0x0C, "gym_statue_badge": 0x0D, "found_hidden_item": 0x24,
 	"hidden_item_bag_full": 0x25, "found_hidden_coins": 0x2B,
 	"dropped_hidden_coins": 0x2C,
 }
 const TEXT_PREDEFS_YELLOW: Dictionary = {
+	"card_key_success": 0x01, "card_key_fail": 0x02,
 	"gym_statue": 0x0E, "gym_statue_badge": 0x0F, "found_hidden_item": 0x26,
 	"hidden_item_bag_full": 0x27, "found_hidden_coins": 0x2D,
 	"dropped_hidden_coins": 0x2E,
 }
+## `PrintCardKeyText`: a Silph Co. door draws either of two tiles, the top
+## floor's own a third, and the block that opens one is $0E under it and $03
+## there. SILPH_CO_11F is the one floor the routine names by number.
+const CARD_KEY_DOOR_TILES: Array[int] = [0x18, 0x24]
+const CARD_KEY_TOP_FLOOR_TILE: int = 0x5E
+const CARD_KEY_OPEN_BLOCK: int = 0x0E
+const CARD_KEY_TOP_FLOOR_BLOCK: int = 0x03
+const SILPH_CO_TOP_FLOOR: int = 0xEB
+## `SilphCoMapList`, ten floors under a terminator.
+const SILPH_MAP_LIST_MAX: int = 16
 ## The two packed-decimal buffers a price is written into, most significant
 ## byte first. `wPriceTemp` stands at `wWhichTrade`'s own address.
 const SCRIPT_BCD_BUFFERS: Array[String] = ["money_hram", "which_trade"]
@@ -849,6 +879,7 @@ const SCRIPT_HOP_LIMIT: int = 0x40
 const SCRIPT_BIT_BASE: int = 0x40
 const SCRIPT_RES_BASE: int = 0x80
 const SCRIPT_SET_BASE: int = 0xC0
+const SCRIPT_PREFIX_BLOCK: int = 0x40
 const SCRIPT_OPERAND_A: int = 7
 const SCRIPT_OPERAND_HL: int = 6
 ## `flag_array NUM_EVENTS`: 2,560 events on all three cartridges.
@@ -1175,6 +1206,13 @@ const RED_BLUE: Dictionary = {
 	"cur_party_species": 0xCF91,
 	"cur_map_script": 0xDA39,
 	"map_scripts": 0xD5F0,
+	## `ReplaceTileBlock` writes `wNewTileBlockID` at the block `bc` names, and
+	## `SilphCoMapList` is the ten floors `PrintCardKeyText` answers on.
+	"map_script_flags": 0xD126,
+	"new_tile_block": 0xD09F,
+	"replace_tile_block": 0x0EE9E,
+	"card_key_door": 0xD73F,
+	"silph_map_list": 0x526E3,
 	## `DoInGameTradeDialogue`, the trade table it indexes with `wWhichTrade`,
 	## `InGameTradeTextPointers` and the pair of boxes the swap itself prints.
 	"in_game_trade": 0x71AD9,
@@ -1349,6 +1387,11 @@ const YELLOW: Dictionary = {
 	"cur_party_species": 0xCF90,
 	"cur_map_script": 0xDA38,
 	"map_scripts": 0xD5EF,
+	"map_script_flags": 0xD125,
+	"new_tile_block": 0xD09E,
+	"replace_tile_block": 0x0ED1B,
+	"card_key_door": 0xD73E,
+	"silph_map_list": 0x52645,
 	"in_game_trade": 0x71B86,
 	"which_trade": 0xCD3D,
 	"trade_mons": 0x71C1D,

@@ -18,6 +18,25 @@ const FIELD_MOVE_PARTY_SIZE: int = 1
 
 var failures: PackedStringArray = []
 
+## Godot ends the function a runtime error happened in and returns to its
+## caller, so a topic that throws goes on to print its own verdict:
+## `gen1_maps` said PASS for every run in which its hidden event census had not
+## run at all. `OS.add_logger` is the only thing in the engine that sees one.
+class RuntimeErrors extends Logger:
+	var seen: PackedStringArray = []
+
+	func _log_error(
+		function: String, file: String, line: int, code: String,
+		rationale: String, _editor_notify: bool, _error_type: int,
+		_backtraces: Array[ScriptBacktrace]
+	) -> void:
+		seen.append("%s:%d in %s(): %s" % [
+			file, line, function, code if rationale.is_empty() else rationale,
+		])
+
+
+var _errors: RuntimeErrors = RuntimeErrors.new()
+
 ## Set per game by [method each_game] so a topic can read them without threading
 ## them through every helper.
 var game_id: StringName = &""
@@ -35,6 +54,17 @@ func check(condition: bool, message: String) -> bool:
 
 func fail(message: String) -> void:
 	check(false, message)
+
+
+func watch() -> void:
+	OS.add_logger(_errors)
+
+
+## Stops, and answers for every error raised while it was watching.
+func unwatch() -> void:
+	OS.remove_logger(_errors)
+	for error: String in _errors.seen:
+		fail("a runtime error stopped a check: %s" % error)
 
 
 ## A census or landmark line. Kept apart from [method fail] so a topic reads the

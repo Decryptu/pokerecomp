@@ -37,6 +37,7 @@ const KIND_HELP: Dictionary = {
 	&"trade": "presses: DoInGameTradeDialogue, faced up from the cell below the trader. 0 the offer and its YES/NO, 1 the party list YES opens",
 	&"deal": "presses: the MAGIKARP salesman, faced right from the cell beside him with the money box DisplayTextBoxID drew over the map",
 	&"coins": "presses: GameCornerClerk1Text, faced up from the cell below her with GameCornerDrawCoinBox's own box over the map. 0 the offer and its YES/NO, 1 the box YES lands in",
+	&"card_key_door": "presses: PrintCardKeyText on a Silph Co. door, faced up from the cell below it with the CARD KEY owned. 0 CardKeySuccessText's first page, 1 its second, 2 the door those two presses opened",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"level_evolution": "frames: EvolveAfterBattle's screen that many frames in, each box pressed past as it lands",
 	&"egg_hatch": "frames, slot: OverworldHatchEgg on that party slot, that many frames in",
@@ -189,6 +190,7 @@ const STAGED_FRAMES: int = 2
 const BATTLE_MENU_WAIT: int = 6
 const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"cut": 12, &"waterfall_use": 26, &"sign": BOX_REVEAL_FRAMES,
+	&"card_key_door": BOX_REVEAL_FRAMES,
 	&"gift": BOX_REVEAL_FRAMES,
 	&"nurse": BOX_REVEAL_FRAMES, &"vending": BOX_REVEAL_FRAMES,
 	&"prizes": BOX_REVEAL_FRAMES, &"trade": BOX_REVEAL_FRAMES,
@@ -451,6 +453,7 @@ const STAGERS: Dictionary = {
 	&"trade": &"_stage_trade",
 	&"deal": &"_stage_deal",
 	&"coins": &"_stage_coins",
+	&"card_key_door": &"_stage_card_key_door",
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
@@ -1078,6 +1081,15 @@ func _stage_coins() -> void:
 		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY},
 		"items": {Gen1Layout.ITEM_COIN_CASE: 1},
 	})
+
+
+## `PrintCardKeyText` reads the CARD KEY out of the bag rather than through a
+## pack USE, so the door is a box faced from the cell below it.
+func _stage_card_key_door() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if world != null:
+		world.state.apply_changes({}, {}, {"items": {Gen1Layout.ITEM_CARD_KEY: 1}})
+	_stage_gift()
 
 
 ## A counter faced the way [param facing] says: presses, then rows down first.

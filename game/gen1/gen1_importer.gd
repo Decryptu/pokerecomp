@@ -181,6 +181,7 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"change_box": ["change_box_text", Gen1Layout.CHANGE_BOX_TEXT_AT],
 	"choose_box": ["choose_box_text", Gen1Layout.CHOOSE_BOX_TEXT_AT],
 }
+const CARD_KEY_TEXT_NAMES: Array[String] = ["card_key_success", "card_key_fail"]
 
 
 static func verify_layout(rom: RomFile) -> Dictionary:
@@ -1070,6 +1071,17 @@ func _import_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 			)
 		out[run] = boxes
 	out["npc_trade"] = _import_trade_text(rom, layout)
+	out["card_key"] = _import_card_key_text(rom, layout)
+	return out
+
+
+## `PrintCardKeyText`'s two boxes. `PrintPredefTextID` reads a row in the bank of
+## the routine that named it, and `SilphCoMapList` stands in that bank.
+func _import_card_key_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var bank: int = RomFile.bank_of(int(layout["silph_map_list"]))
+	var out: Dictionary = {}
+	for name: String in CARD_KEY_TEXT_NAMES:
+		out[name] = Gen1WorldImporter.predef_text(rom, layout, bank, name)
 	return out
 
 

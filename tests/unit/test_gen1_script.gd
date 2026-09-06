@@ -26,6 +26,9 @@ const LAYOUT: Dictionary = {
 	"cur_party_species": 0xCF91,
 	"cur_map_script": 0xDA39,
 	"map_scripts": 0xD5F0,
+	"map_script_flags": 0xD126,
+	"new_tile_block": 0xD09F,
+	"replace_tile_block": 0x02C0,
 	"predef": 0x01A0,
 	"predef_pointers": 0x0300,
 	"hide_object": 0x0210,
@@ -62,6 +65,7 @@ const LAYOUT: Dictionary = {
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
 const PREDEFS: Dictionary = {
 	1: 0x0210, 2: 0x0220, 3: 0x0230, 4: 0x0240, 5: 0x0250, 6: 0x0270,
+	7: 0x02C0,
 }
 const AT: int = 0x1000
 const HELLO: int = 0x1800
@@ -421,6 +425,60 @@ func test_a_predef_showing_an_object_reads_the_other_way() -> void:
 ## index is one this decoder cannot say which object goes off the map.
 func test_a_predef_with_no_index_written_answers_nothing() -> void:
 	assert_eq(_decode(_predef(1) + _call(int(LAYOUT["text_script_end"]))), [])
+
+
+## `ld a, block`, `ld [wNewTileBlockID], a` and `lb bc, y, x` in front of a
+## `predef ReplaceTileBlock`, which is a map's own load callback whole.
+func _replace_block(block: int, y: int, x: int) -> Array:
+	return [
+		Gen1Layout.SCRIPT_LD_A, block, Gen1Layout.SCRIPT_LD_MEM_A,
+		int(LAYOUT["new_tile_block"]) & 0xFF, int(LAYOUT["new_tile_block"]) >> 8,
+		Gen1Layout.SCRIPT_LD_BC, x, y,
+	] + _predef(7)
+
+
+func test_a_replace_tile_block_predef_becomes_a_block_node() -> void:
+	assert_eq(_decode(_replace_block(0x54, 2, 3) + [Gen1Layout.SCRIPT_RET]),
+		[{"op": "replace_block", "block": 0x54, "y": 2, "x": 3}])
+
+
+## `wNewTileBlockID` is the whole of what the routine writes, so a callback that
+## named no block says nothing rather than writing whatever stood in `a`.
+func test_a_block_predef_with_no_block_written_answers_nothing() -> void:
+	assert_eq(_decode(
+		[Gen1Layout.SCRIPT_LD_BC, 3, 2] + _predef(7) + [Gen1Layout.SCRIPT_RET]
+	), [])
+
+
+## `CheckEventAfterBranchReuseA` reads the event byte the block write left in
+## `a`, which only the `push af` and `pop af` around the write keep.
+func test_push_and_pop_af_carry_the_event_byte_across_a_block_write() -> void:
+	var locked: Array = [Gen1Layout.SCRIPT_PUSH_AF] \
+		+ _replace_block(0x54, 2, 2) + [Gen1Layout.SCRIPT_POP_AF]
+	var script: Array = _decode(
+		_check_event(0) + [0x20, locked.size()] + locked
+			+ [
+				Gen1Layout.SCRIPT_PREFIX,
+				Gen1Layout.SCRIPT_BIT_BASE + 8 + Gen1Layout.SCRIPT_OPERAND_A,
+				0xC0,
+			] + _replace_block(0x54, 5, 2) + [Gen1Layout.SCRIPT_RET]
+	)
+	assert_eq(script, [{
+		"op": "branch", "flag": 0,
+		"then": [{
+			"op": "branch", "flag": 1,
+			"then": [],
+			"else": [{"op": "replace_block", "block": 0x54, "y": 5, "x": 2}],
+		}],
+		"else": [
+			{"op": "replace_block", "block": 0x54, "y": 2, "x": 2},
+			{
+				"op": "branch", "flag": 1,
+				"then": [],
+				"else": [{"op": "replace_block", "block": 0x54, "y": 5, "x": 2}],
+			},
+		],
+	}])
 
 
 ## `PickUpItemText` whole: the object's own item is the world's to supply.
