@@ -336,8 +336,9 @@ func _blit_gen1_money(image: Image, money: int) -> void:
 	_blit_panel(image, indices, MONEY_SIZE, MONEY_AT)
 
 
-## `wPrintItemPrices` is the one place the two callers of
-## `PrintListMenuEntries` differ, so a row carries a `price` or a `quantity`.
+## `wPrintItemPrices` is where the two priced callers of `PrintListMenuEntries`
+## differ, so a row carries a `price` or a `quantity`; `PCPOKEMONLISTMENU`
+## prints `PrintLevel` in the quantity's own cells.
 func _blit_gen1_list(image: Image, state: Dictionary) -> void:
 	var indices: PackedByteArray = _panel(GEN1_LIST_SIZE)
 	var width: int = GEN1_LIST_SIZE.x * TILE
@@ -360,6 +361,11 @@ func _blit_gen1_list(image: Image, state: Dictionary) -> void:
 				indices, width, "×%s" % String.num_int64(
 					maxi(int(row["quantity"]), 0)
 				).lpad(GEN1_COUNT_DIGITS),
+				Vector2i(GEN1_COUNT_COLUMN - GEN1_LIST_AT.x, at.y + 1)
+			)
+		elif row.has("level"):
+			_level(
+				indices, width, int(row["level"]),
 				Vector2i(GEN1_COUNT_COLUMN - GEN1_LIST_AT.x, at.y + 1)
 			)
 	var cursor_column: int = GEN1_CURSOR_COLUMN - GEN1_LIST_AT.x
@@ -513,6 +519,19 @@ func _blit_gen1_coins(image: Image, coins: int) -> void:
 		GEN1_COIN_AT - MONEY_AT
 	)
 	_blit_panel(image, indices, MONEY_SIZE, MONEY_AT)
+
+
+## `PrintLevel`'s `<LV>` and the number beside it, three digits writing over
+## the glyph. The tile is `font_battle_extra`'s, which `BillsPC_` loads first.
+func _level(indices: PackedByteArray, width: int, level: int, at: Vector2i) -> void:
+	var column: int = at.x
+	if Gen2Font.level_glyph_shown(level):
+		font.draw_code(
+			Gen2Text.LEVEL_CODE, indices, width, at.x * TILE, at.y * TILE,
+			Gen2Text.FONT_BATTLE_EXTRA
+		)
+		column += 1
+	_text(indices, width, String.num_int64(maxi(level, 0)), Vector2i(column, at.y))
 
 
 static func _panel(size: Vector2i) -> PackedByteArray:

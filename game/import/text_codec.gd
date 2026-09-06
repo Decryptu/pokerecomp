@@ -29,8 +29,10 @@ const BATTLE_EXTRA_LAST_CODE: int = 0x78
 ## What that run says. The rest is the HP bar's fill levels and the HUD borders,
 ## graphics rather than characters, so a code in the run and not here has none:
 ## falling back would decode $75 as an ellipsis when the tile is part of a bar.
+## `PrintLevel`'s own byte, the same code in both generations.
+const LEVEL_CODE: int = 0x6E
 const BATTLE_EXTRA_CHARACTERS: Dictionary = {
-	0x6E: "<LV>",
+	LEVEL_CODE: "<LV>",
 	0x70: "<DO>",
 	0x71: "◀",
 	0x72: "『",

@@ -178,11 +178,16 @@ const EGG_MESSAGES: Array[String] = [
 var font: Gen2Font = null
 var tiles: Gen2BattleTiles = null
 var hud: Gen2BattleHud = null
+## Whether this is `StatusScreen`'s two pages rather than `StatsScreenMain`'s
+## three, which is a different tile page and a different layout.
+var gen1: bool = false
 
 
 static func from_data(data: GameData) -> Gen2StatsScreenPage:
 	var glyphs: Gen2Font = Gen2Font.from_data(data)
-	var page_tiles: Gen2BattleTiles = Gen2BattleTiles.stats_page(data)
+	var one: bool = data != null and data.generation == RomRegistry.GEN1
+	var page_tiles: Gen2BattleTiles = Gen2BattleTiles.gen1_stats_page(data) if one \
+		else Gen2BattleTiles.stats_page(data)
 	var panels: Gen2BattleHud = Gen2BattleHud.from_data(data)
 	if glyphs == null or page_tiles == null or panels == null:
 		return null
@@ -190,12 +195,19 @@ static func from_data(data: GameData) -> Gen2StatsScreenPage:
 	out.font = glyphs
 	out.tiles = page_tiles
 	out.hud = panels
+	out.gen1 = one
 	return out
 
 
 ## Where the screen puts the front pic, in pixels, and how wide the cell is.
 static func pic_position() -> Vector2i:
 	return PIC_AT * TILE
+
+
+## The same corner for the page that is open: `LoadFlippedFrontSpriteByMonIndex`
+## draws Generation 1's a column right of Crystal's.
+func pic_at() -> Vector2i:
+	return (GEN1_PIC_AT if gen1 else PIC_AT) * TILE
 
 
 static func pic_size() -> int:
@@ -245,6 +257,28 @@ static func pic_image(
 	return Gen2PicImage.x_flipped(art) if pic_mirrored(
 		int(snapshot.get("species", 0)), bool(snapshot.get("egg", false))
 	) else art
+
+
+## `StatsScreenInit`'s whole screen: the page with its front pic composed on
+## top, which has a palette of its own and so is blended rather than written
+## into the page's own index buffer. Null when [param page] has nothing to draw.
+static func compose(
+	page: Gen2StatsScreenPage, data: GameData, stats: Gen2MonStatsScreen
+) -> Image:
+	if page == null or stats == null:
+		return null
+	var snapshot: Dictionary = stats.snapshot()
+	var image: Image = page.render(snapshot, data)
+	if image == null or int(snapshot.get("species", 0)) <= 0:
+		return image
+	var art: Image = pic_image(data, snapshot, stats)
+	if art == null:
+		return image
+	image.blit_rect(
+		art, Rect2i(Vector2i.ZERO, art.get_size()),
+		page.pic_at() + pic_origin(art.get_size(), snapshot)
+	)
+	return image
 
 
 ## Where that picture sits: the animation fills the cell, so only a still one is
@@ -318,6 +352,9 @@ func draw(page: Dictionary) -> PackedByteArray:
 	indices.resize(COLUMNS * TILE * ROWS * TILE)
 	if font == null:
 		return indices
+	if gen1:
+		_draw_gen1(page, indices)
+		return indices
 	if bool(page.get("egg", false)):
 		_draw_egg(page, indices)
 		return indices
@@ -373,6 +410,8 @@ static func attributes(count: int = NUM_PAGES) -> PackedInt32Array:
 func render(page: Dictionary, data: GameData) -> Image:
 	var indices: PackedByteArray = draw(page)
 	var width: int = COLUMNS * TILE
+	if gen1:
+		return _render_gen1(page, indices, data)
 	if data == null:
 		return Gen2PicImage.from_indices(
 			indices, width, ROWS * TILE,
@@ -695,3 +734,242 @@ func _text(into: PackedByteArray, width: int, text: String, at: Vector2i) -> voi
 
 func _code(into: PackedByteArray, width: int, code: int, at: Vector2i) -> void:
 	font.draw_code(code, into, width, at.x * TILE, at.y * TILE, FONT)
+
+
+## `StatusScreen` and `StatusScreen2` (`engine/pokemon/status_screen.asm`): two
+## pages, one press each, on a screen never cleared between them. The picture
+## and the first rule survive the turn; the second page clears the block under
+## the name and covers the lower half.
+const GEN1_PAGES: int = 2
+const GEN1_PIC_AT: Vector2i = Vector2i(1, 0)
+## `DrawLineBox hlcoord 19, 1 / lb bc, 6, 10` and `hlcoord 19, 9 / lb bc, 8, 6`
+## as a corner, the rows down and the cells back.
+const GEN1_NAME_RULE: Array = [Vector2i(19, 1), 6, 10]
+const GEN1_OT_RULE: Array = [Vector2i(19, 9), 8, 6]
+## `ld de, -6 / add hl, de`, six cells left of where the first rule ended.
+const GEN1_NUMERO_AT: Vector2i = Vector2i(1, 7)
+const GEN1_NAME_AT: Vector2i = Vector2i(9, 1)
+const GEN1_LEVEL_AT: Vector2i = Vector2i(14, 2)
+const GEN1_HP_BAR_AT: Vector2i = Vector2i(11, 3)
+const GEN1_HP_NUMBERS_AT: Vector2i = Vector2i(12, 4)
+const GEN1_STATUS_LABEL_AT: Vector2i = Vector2i(9, 6)
+const GEN1_STATUS_AT: Vector2i = Vector2i(16, 6)
+const GEN1_DEX_NUMBER_AT: Vector2i = Vector2i(3, 7)
+const GEN1_LABELS_AT: Vector2i = Vector2i(10, 9)
+const GEN1_TYPES_AT: Vector2i = Vector2i(11, 10)
+const GEN1_ID_AT: Vector2i = Vector2i(12, 14)
+const GEN1_OT_AT: Vector2i = Vector2i(12, 16)
+const GEN1_ID_DIGITS: int = 5
+## `PrintStatsBox`' `STATUS_SCREEN_STATS_BOX` branch: `hlcoord 0, 8 / ld b, 8 /
+## ld c, 8`, each number one row down and five columns right of its name.
+const GEN1_STATS_BOX_AT: Vector2i = Vector2i(0, 8)
+const GEN1_STATS_BOX_SIZE: Vector2i = Vector2i(10, 10)
+const GEN1_STATS_NAMES_AT: Vector2i = Vector2i(1, 9)
+const GEN1_STATS_NUMBERS_AT: Vector2i = Vector2i(6, 10)
+## `.StatsText` and its four `wLoadedMon*` words, Special being the one stat
+## this generation has.
+const GEN1_STAT_NAMES: Array[String] = ["ATTACK", "DEFENSE", "SPEED", "SPECIAL"]
+const GEN1_STAT_KEYS: Array[String] = ["attack", "defense", "speed", "sp_attack"]
+## `TypesIDNoOTText`'s four rows, `<NEXT>` dropping two rows apiece.
+const GEN1_TYPE1_LABEL: String = "TYPE1/"
+const GEN1_TYPE2_LABEL: String = "TYPE2/"
+const GEN1_OT_LABEL: String = "OT/"
+const GEN1_STATUS_LABEL: String = "STATUS/"
+const GEN1_OK_STRING: String = "OK"
+## `StatusScreen2`'s own clear, divider and move box.
+const GEN1_CLEAR_AT: Vector2i = Vector2i(9, 2)
+const GEN1_CLEAR_SIZE: Vector2i = Vector2i(10, 5)
+const GEN1_DIVIDER_AT: Vector2i = Vector2i(19, 3)
+const GEN1_MOVE_BOX_AT: Vector2i = Vector2i(0, 8)
+const GEN1_MOVE_BOX_SIZE: Vector2i = Vector2i(20, 10)
+const GEN1_MOVES_AT: Vector2i = Vector2i(2, 9)
+const GEN1_PP_LABEL_AT: Vector2i = Vector2i(11, 10)
+const GEN1_PP_AT: Vector2i = Vector2i(14, 10)
+const GEN1_PP_DASH: String = "--"
+const GEN1_EXP_LABELS_AT: Vector2i = Vector2i(9, 3)
+const GEN1_EXP_LABELS: Array[String] = ["EXP POINTS", "LEVEL UP"]
+const GEN1_EXP_AT: Vector2i = Vector2i(12, 4)
+const GEN1_EXP_TO_NEXT_AT: Vector2i = Vector2i(7, 6)
+const GEN1_TO_AT: Vector2i = Vector2i(14, 6)
+const GEN1_NEXT_LEVEL_AT: Vector2i = Vector2i(16, 6)
+const GEN1_EXP_DIGITS: int = 7
+## `<NEXT>`'s own two rows, which every list on this screen steps by.
+const GEN1_ROW_STEP: int = 2
+
+
+## What survives the turn: the picture, the first rule and the dex number. The
+## name does not, `StatusScreen_ClearName` replacing the nickname with
+## `GetMonName`'s species name.
+func _draw_gen1(page: Dictionary, into: PackedByteArray) -> void:
+	var width: int = COLUMNS * TILE
+	var moves: bool = int(page.get("page", PINK_PAGE)) > PINK_PAGE
+	_gen1_rule(into, width, GEN1_NAME_RULE)
+	_tile(into, width, Gen2BattleTiles.GEN1_NUMERO, GEN1_NUMERO_AT)
+	_text(into, width, ".", GEN1_NUMERO_AT + Vector2i(1, 0))
+	## PRINTNUM_LEADINGZEROES, so a two-digit dex number keeps its column.
+	_text(
+		into, width, "%0*d" % [DEX_DIGITS, int(page.get("dex_number", 0))],
+		GEN1_DEX_NUMBER_AT
+	)
+	_text(into, width, String(
+		page.get("species_name", "") if moves else page.get("nickname", "")
+	), GEN1_NAME_AT)
+	if moves:
+		_draw_gen1_moves(page, into)
+		return
+	_draw_gen1_stats(page, into)
+
+
+## `StatusScreen`'s own half, down to `PrintStatsBox`.
+func _draw_gen1_stats(page: Dictionary, into: PackedByteArray) -> void:
+	var width: int = COLUMNS * TILE
+	_gen1_rule(into, width, GEN1_OT_RULE)
+	draw_level(into, width, GEN1_LEVEL_AT, int(page.get("level", 0)))
+	var hp: int = int(page.get("hp", 0))
+	var max_hp: int = int(page.get("max_hp", 0))
+	hud.draw_bar_frame(into, width, GEN1_HP_BAR_AT, tiles.hp_bar_end)
+	hud.draw_hp_bar(into, width, GEN1_HP_BAR_AT, hp, max_hp)
+	_text(
+		into, width, "%s/%s" % [str(hp).lpad(HP_DIGITS), str(max_hp).lpad(HP_DIGITS)],
+		GEN1_HP_NUMBERS_AT
+	)
+	_text(into, width, GEN1_STATUS_LABEL, GEN1_STATUS_LABEL_AT)
+	var status: String = _status_string(page)
+	_text(
+		into, width, GEN1_OK_STRING if status == OK_STRING else status, GEN1_STATUS_AT
+	)
+	var types: Array = page.get("types", [])
+	_text(into, width, GEN1_TYPE1_LABEL, GEN1_LABELS_AT)
+	_text(into, width, String(types[0]) if not types.is_empty() else "", GEN1_TYPES_AT)
+	## `EraseType2Text` blanks the second label outright when both types match.
+	if types.size() > 1:
+		_text(into, width, GEN1_TYPE2_LABEL, GEN1_LABELS_AT + Vector2i(0, GEN1_ROW_STEP))
+		_text(
+			into, width, String(types[1]), GEN1_TYPES_AT + Vector2i(0, GEN1_ROW_STEP)
+		)
+	var id_label: Vector2i = GEN1_LABELS_AT + Vector2i(0, GEN1_ROW_STEP * 2)
+	_tile(into, width, Gen2BattleTiles.GEN1_ID, id_label)
+	_tile(into, width, Gen2BattleTiles.GEN1_NUMERO, id_label + Vector2i(1, 0))
+	_text(into, width, "/", id_label + Vector2i(2, 0))
+	_text(into, width, GEN1_OT_LABEL, GEN1_LABELS_AT + Vector2i(0, GEN1_ROW_STEP * 3))
+	_text(
+		into, width, "%0*d" % [GEN1_ID_DIGITS, int(page.get("ot_id", 0))], GEN1_ID_AT
+	)
+	_text(into, width, String(page.get("ot_name", "")), GEN1_OT_AT)
+	font.draw_box(
+		0, into, width, GEN1_STATS_BOX_AT.x * TILE, GEN1_STATS_BOX_AT.y * TILE,
+		GEN1_STATS_BOX_SIZE.x, GEN1_STATS_BOX_SIZE.y
+	)
+	var stats: Dictionary = page.get("stats", {})
+	for index: int in GEN1_STAT_NAMES.size():
+		var step := Vector2i(0, index * GEN1_ROW_STEP)
+		_text(into, width, GEN1_STAT_NAMES[index], GEN1_STATS_NAMES_AT + step)
+		_text(
+			into, width,
+			str(int(stats.get(GEN1_STAT_KEYS[index], 0))).lpad(STAT_DIGITS),
+			GEN1_STATS_NUMBERS_AT + step
+		)
+
+
+## `StatusScreen2`: the moves and PP, and the experience block.
+func _draw_gen1_moves(page: Dictionary, into: PackedByteArray) -> void:
+	var width: int = COLUMNS * TILE
+	_tile(into, width, Gen2BattleTiles.GEN1_LINE_VERTICAL, GEN1_DIVIDER_AT)
+	for index: int in GEN1_EXP_LABELS.size():
+		_text(
+			into, width, GEN1_EXP_LABELS[index],
+			GEN1_EXP_LABELS_AT + Vector2i(0, index * GEN1_ROW_STEP)
+		)
+	_text(into, width, str(int(page.get("exp", 0))).lpad(GEN1_EXP_DIGITS), GEN1_EXP_AT)
+	_text(
+		into, width, str(int(page.get("exp_to_next", 0))).lpad(GEN1_EXP_DIGITS),
+		GEN1_EXP_TO_NEXT_AT
+	)
+	_tile(into, width, Gen2BattleTiles.GEN1_TO, GEN1_TO_AT)
+	draw_level(into, width, GEN1_NEXT_LEVEL_AT, int(page.get("next_level", 0)))
+	font.draw_box(
+		0, into, width, GEN1_MOVE_BOX_AT.x * TILE, GEN1_MOVE_BOX_AT.y * TILE,
+		GEN1_MOVE_BOX_SIZE.x, GEN1_MOVE_BOX_SIZE.y
+	)
+	var moves: Array = page.get("moves", [])
+	for slot: int in MAX_MOVES:
+		var step := Vector2i(0, slot * GEN1_ROW_STEP)
+		if slot >= moves.size():
+			## `StatusScreen_PrintPP`'s second run fills the rest with dashes.
+			_text(into, width, GEN1_PP_DASH, GEN1_PP_LABEL_AT + step)
+			continue
+		var move: Dictionary = moves[slot]
+		_text(into, width, String(move.get("name", "")), GEN1_MOVES_AT + step)
+		for column: int in 2:
+			_tile(
+				into, width, Gen1Layout.STATS_P_CODE,
+				GEN1_PP_LABEL_AT + step + Vector2i(column, 0)
+			)
+		_text(into, width, "%s/%s" % [
+			str(int(move.get("pp", 0))).lpad(PP_DIGITS),
+			str(int(move.get("max_pp", 0))).lpad(PP_DIGITS),
+		], GEN1_PP_AT + step)
+
+
+## `DrawLineBox`: `│` down, the `┘` that closes it, `─` back, a half arrow.
+func _gen1_rule(into: PackedByteArray, width: int, rule: Array) -> void:
+	var at: Vector2i = rule[0]
+	var rows: int = int(rule[1])
+	var columns: int = int(rule[2])
+	for row: int in rows:
+		_tile(into, width, Gen2BattleTiles.GEN1_LINE_VERTICAL, at + Vector2i(0, row))
+	var corner: Vector2i = at + Vector2i(0, rows)
+	_tile(into, width, Gen2BattleTiles.GEN1_LINE_CORNER, corner)
+	for column: int in columns:
+		_tile(
+			into, width, Gen2BattleTiles.GEN1_LINE_HORIZONTAL,
+			corner - Vector2i(column + 1, 0)
+		)
+	_tile(
+		into, width, Gen2BattleTiles.GEN1_LINE_ARROW, corner - Vector2i(columns + 1, 0)
+	)
+
+
+func _tile(into: PackedByteArray, width: int, tile: int, at: Vector2i) -> void:
+	tiles.draw(tile, into, width, at.x * TILE, at.y * TILE)
+
+
+## The page in two colours, with the HP bar blended in `GetHealthBarColor`'s
+## answer the way the party menu blends its six.
+func _render_gen1(page: Dictionary, indices: PackedByteArray, data: GameData) -> Image:
+	var width: int = COLUMNS * TILE
+	var height: int = ROWS * TILE
+	var mono: PackedColorArray = PokePalette.pic_palette(
+		PackedColorArray([Color.WHITE, Color.BLACK])
+	)
+	var pixels: PackedInt32Array = Gen2PicImage.canvas_from_indices(
+		indices, width, height, mono
+	)
+	if data != null and int(page.get("page", PINK_PAGE)) == PINK_PAGE:
+		_blend_gen1_bar(pixels, page, data)
+	return Gen2PicImage.canvas_image(pixels, width, height)
+
+
+func _blend_gen1_bar(
+	pixels: PackedInt32Array, page: Dictionary, data: GameData
+) -> void:
+	var width: int = COLUMNS * TILE
+	var buffer := PackedByteArray()
+	buffer.resize(width * TILE)
+	var hp: int = int(page.get("hp", 0))
+	var max_hp: int = int(page.get("max_hp", 0))
+	hud.draw_hp_bar(buffer, width, Vector2i(GEN1_HP_BAR_AT.x, 0), hp, max_hp)
+	var lit: int = Gen2BattleHud.bar_pixels(
+		hp, max_hp, Gen2BattleHud.HP_BAR_TILES * TILE
+	)
+	var table: PackedInt32Array = Gen2PicImage.lookup(
+		data.bar_palette(GameData.hp_bar_palette_name(lit)), true
+	)
+	var left: int = (GEN1_HP_BAR_AT.x + 2) * TILE
+	for y: int in TILE:
+		var from: int = y * width
+		var to: int = (GEN1_HP_BAR_AT.y * TILE + y) * width
+		for x: int in range(left, left + Gen2BattleHud.HP_BAR_TILES * TILE):
+			var value: int = buffer[from + x]
+			if value != 0:
+				pixels[to + x] = table[value]

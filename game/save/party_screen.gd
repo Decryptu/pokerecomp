@@ -449,14 +449,14 @@ func _confirm_submenu(entry: Dictionary) -> void:
 				"kind": &"field_move",
 				"move": move,
 				"slot": _member_cursor,
-				"name": _display_name(_save.party[_member_cursor]),
+				"name": Gen2SaveMon.display_name(_save.party[_member_cursor], _data),
 			})
 		&"mon_item":
 			action_chosen.emit({
 				"kind": &"mon_item",
 				"option": StringName(entry.get("option", &"")),
 				"slot": _member_cursor,
-				"name": _display_name(_save.party[_member_cursor]),
+				"name": Gen2SaveMon.display_name(_save.party[_member_cursor], _data),
 			})
 		&"mon_mail":
 			## `.done` answers 3, which `.choosemenu` takes back to the list.
@@ -467,7 +467,7 @@ func _confirm_submenu(entry: Dictionary) -> void:
 				"kind": &"mon_mail",
 				"option": StringName(entry.get("option", &"")),
 				"slot": _member_cursor,
-				"name": _display_name(_save.party[_member_cursor]),
+				"name": Gen2SaveMon.display_name(_save.party[_member_cursor], _data),
 			})
 		&"mod_party_action":
 			## The handler is the mod's, and the slot is the only thing it is
@@ -478,7 +478,7 @@ func _confirm_submenu(entry: Dictionary) -> void:
 				"kind": &"mod_party_action",
 				"mod": StringName(entry.get("mod", &"")),
 				"slot": _member_cursor,
-				"name": _display_name(_save.party[_member_cursor]),
+				"name": Gen2SaveMon.display_name(_save.party[_member_cursor], _data),
 			})
 		&"option":
 			_confirm_option(StringName(entry.get("option", &"")))
@@ -618,8 +618,8 @@ func _choose_heal_target() -> void:
 		"move": _heal_move,
 		"slot": _heal_user,
 		"target_slot": _member_cursor,
-		"name": _display_name(_save.party[_heal_user]),
-		"target_name": _display_name(target),
+		"name": Gen2SaveMon.display_name(_save.party[_heal_user], _data),
+		"target_name": Gen2SaveMon.display_name(target, _data),
 	}
 	_heal_user = -1
 	_heal_move = 0
@@ -834,7 +834,7 @@ func _rows() -> Array:
 			"index": index,
 			"species": mon.species,
 			"item": mon.item,
-			"name": _display_name(mon),
+			"name": Gen2SaveMon.display_name(mon, _data),
 			"level": mon.level,
 			"hp": mon.hp,
 			"max_hp": 0 if mon.is_egg else _max_hp(mon),
@@ -915,10 +915,7 @@ func _render_stats() -> void:
 		_stats_page = Gen2StatsScreenPage.from_data(_data)
 	if _stats_page == null:
 		return
-	var snapshot: Dictionary = _stats.snapshot()
-	var image: Image = _stats_page.render(snapshot, _data)
-	_blend_stats_pic(image, snapshot)
-	Gen2PicImage.show(_view, image)
+	Gen2PicImage.show(_view, Gen2StatsScreenPage.compose(_stats_page, _data, _stats))
 
 
 ## `MoveScreenLoop`'s own screen, which steps its one mon icon per frame the way
@@ -929,20 +926,6 @@ func _render_moves() -> void:
 	if _moves_page == null:
 		return
 	Gen2PicImage.show(_view, _moves_page.render(_moves.snapshot(), _data))
-
-
-## `PrepMonFrontpic`'s own seven-tile cell on `hlcoord 0, 0`, which mirrors the
-## picture and bottom-aligns a smaller one against the far column.
-func _blend_stats_pic(image: Image, snapshot: Dictionary) -> void:
-	var species: int = int(snapshot.get("species", 0))
-	if species <= 0:
-		return
-	var art: Image = Gen2StatsScreenPage.pic_image(_data, snapshot, _stats)
-	if art == null:
-		return
-	image.blit_rect(art, Rect2i(Vector2i.ZERO, art.get_size()), Vector2i(
-		Gen2StatsScreenPage.pic_position()
-	) + Gen2StatsScreenPage.pic_origin(art.get_size(), snapshot))
 
 
 ## `.GetTopCoord` for the mon's own submenu, and the fixed box whichever of
@@ -1130,7 +1113,7 @@ func _member_card(index: int) -> Control:
 	var summary: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_XS)
 	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_child(summary)
-	summary.add_child(Gen2LauncherUI.title(_palette, _display_name(mon)))
+	summary.add_child(Gen2LauncherUI.title(_palette, Gen2SaveMon.display_name(mon, _data)))
 	## Level and HP wrap onto their own line on a narrow page rather than
 	## widening the card past the window.
 	var facts: HFlowContainer = Gen2LauncherUI.actions(Gen2LauncherUI.GAP_MD)
@@ -1148,7 +1131,7 @@ func _member_snapshot(index: int, mon: Gen2SaveMon) -> Dictionary:
 	return {
 		"empty": false,
 		"index": index,
-		"name": _display_name(mon),
+		"name": Gen2SaveMon.display_name(mon, _data),
 		"species": mon.species,
 		"level": mon.level,
 		"hp": mon.hp,
@@ -1160,10 +1143,6 @@ func _member_snapshot(index: int, mon: Gen2SaveMon) -> Dictionary:
 func _max_hp(mon: Gen2SaveMon) -> int:
 	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(_data, mon)
 	return battle_mon.max_hp() if battle_mon != null else 0
-
-
-func _display_name(mon: Gen2SaveMon) -> String:
-	return mon.nickname if not mon.nickname.is_empty() else _species_name(mon.species)
 
 
 func _species_name(species: int) -> String:

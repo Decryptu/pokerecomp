@@ -9,13 +9,32 @@ const MESSAGE_BOX := Rect2i(0, 12, 20, 6)
 
 var font: Gen2Font = null
 var menu: Gen2MenuPage = null
+## `PokeballTileGraphics`' first tile, which `BillsPCMenu` copies to `$78` and
+## `DisplayChangeBoxMenu` puts beside a box that is not empty. Null on a cache
+## with no such sheet, which is every Generation 2 one.
+var ball: Image = null
 
 
 static func from_data(data: GameData) -> Gen2WorldServicePage:
 	var out := Gen2WorldServicePage.new()
 	out.font = Gen2Font.from_data(data)
 	out.menu = Gen2MenuPage.from_data(data)
+	out.ball = _ball_tile(data)
 	return out if out.font != null and out.menu != null else null
+
+
+static func _ball_tile(data: GameData) -> Image:
+	var sheet: Dictionary = data.tile_sheet("battle_balls")
+	var indices: PackedByteArray = data.tile_indices("battle_balls")
+	if sheet.is_empty() or indices.is_empty():
+		return null
+	var strip: Image = Gen2PicImage.from_indices(
+		indices, int(sheet.get("width", 0)), PokeTiles.TILE_HEIGHT,
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	)
+	return null if strip == null else strip.get_region(
+		Rect2i(0, 0, PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT)
+	)
 
 
 ## `MenuTextbox` over the map: every box here carries `MENU_BACKUP_TILES`, so the
@@ -24,16 +43,17 @@ static func from_data(data: GameData) -> Gen2WorldServicePage:
 ## [param note] is the box beside the list, `{rect, lines}` with each line
 ## `{text, at}` from its own corner. [param message_box] is
 ## [constant MESSAGE_BOX] everywhere but `_ChangeBox`'s `hlcoord 0, 14`.
+## [param marks] is a screen cell per pokeball tile drawn over the menu.
 func render(title: String, prompt: String, rows: Array, cursor: int,
 		message: String = "", box: Gen2MenuBox = null,
-		note: Dictionary = {}, message_box: Rect2i = MESSAGE_BOX) -> Image:
+		note: Dictionary = {}, message_box: Rect2i = MESSAGE_BOX,
+		marks: Array = []) -> Image:
 	var image := Image.create_empty(
 		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 	)
-	if not rows.is_empty() and box != null:
-		_blit(image, menu.render(box, rows, cursor), box.border_position())
-	if not note.is_empty():
-		_draw_note(image, note)
+	var over: bool = box != null and box.over_textbox
+	if not over:
+		_draw_menu(image, rows, cursor, box, marks)
 	var words: String = message if not message.is_empty() else prompt
 	if words.is_empty():
 		words = title
@@ -54,8 +74,23 @@ func render(title: String, prompt: String, rows: Array, cursor: int,
 		image.blit_rect(
 			part, Rect2i(Vector2i.ZERO, part.get_size()), message_box.position * TILE
 		)
+	## Behind the speech box on the cartridge is above it here: `BillsPCMenu`
+	## draws `WhatText` and then puts its BOX No. panel over the box's own right
+	## half, and no other note here touches one.
+	if over:
+		_draw_menu(image, rows, cursor, box, marks)
+	if not note.is_empty():
+		_draw_note(image, note)
 	return image
 
+
+func _draw_menu(
+	image: Image, rows: Array, cursor: int, box: Gen2MenuBox, marks: Array
+) -> void:
+	if not rows.is_empty() and box != null:
+		_blit(image, menu.render(box, rows, cursor), box.border_position())
+	for at: Vector2i in marks:
+		_blit(image, ball, at)
 
 
 func _draw_note(image: Image, note: Dictionary) -> void:
@@ -75,6 +110,7 @@ func _draw_note(image: Image, note: Dictionary) -> void:
 		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 	image.blit_rect(part, Rect2i(Vector2i.ZERO, part.get_size()), rect.position * TILE)
+
 
 func _blit(into: Image, part: Image, at: Vector2i) -> void:
 	if part != null:

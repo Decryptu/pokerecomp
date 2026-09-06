@@ -24,6 +24,7 @@ enum MODE {
 	PC_MAILBOX, PC_MAIL_SUBMENU, PC_MAIL_CONFIRM,
 	PC_OAK_ASK,
 	PC_SAVE,
+	PC_MON_LIST, PC_MON_ACTION, PC_ASK, PC_ITEM_QUANTITY,
 	ELEVATOR,
 	VENDING, PRIZE,
 }
@@ -128,7 +129,7 @@ var _persist: bool = false
 ## The save sequence while one is up, and what to do once it has finished.
 var _save_prompt: Gen2SavePrompt = null
 var _save_after: StringName = &""
-var _save_clock := Gen2WorldAnimation.FrameClock.new()
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 var _request: Dictionary = {}
 var _resolved: Dictionary = {}
 var _mode: int = -1
@@ -226,7 +227,7 @@ const PC_ROW_MODES: Array = [
 	MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST, MODE.PC_BOX_SUBMENU,
 	MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE,
 	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK,
-	MODE.PC_SAVE,
+	MODE.PC_SAVE, MODE.PC_MON_ACTION, MODE.PC_ASK,
 ]
 ## The `db rows` byte of every scrolling menu here, which is how much of its list
 ## a window shows. `wMenuScrollPosition` is one value, the way it is one address
@@ -243,7 +244,7 @@ const SCROLLING_ROWS: Dictionary = {
 const NO_WRAP_MODES: Array = [
 	MODE.PC_BOXES, MODE.PC_BOX_LIST, MODE.PC_BOX_SUBMENU, MODE.PC_ITEM_LIST,
 	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK,
-	MODE.PC_DECO_SIDE,
+	MODE.PC_DECO_SIDE, MODE.PC_MON_LIST,
 ]
 var _pc_scroll: int = 0
 ## `wCurBox`, which CHANGE BOX writes and both lists read. The save's, so the box
@@ -257,6 +258,25 @@ var _bills_pc_cursor: int = 0
 ## Whether the menu on screen is the host's own question rather than a script's.
 ## See [method open_prompt].
 var _host_prompt: bool = false
+
+## Whether a Generation 1 machine is open, and `BIT_USING_GENERIC_PC`: whether
+## `ActivatePC`'s top menu stands behind it.
+var _gen1_pc: bool = false
+var _gen1_generic: bool = false
+## `wParentMenuItem`: the BILL'S PC row whose list is open, the list, and
+## `wPartyAndBillsPCSavedMenuItem`.
+var _gen1_bills_row: int = -1
+var _gen1_mon_entries: Array = []
+var _gen1_mon_cursor: int = 0
+## Which `YesNoChoice` is up, and `DisplayChooseQuantityMenu`'s dial with it.
+var _gen1_ask: StringName = &""
+var _gen1_ask_over: int = -1
+## `wParentMenuItem` for the item PC, which reopens on the row it was left on.
+var _gen1_items_cursor: int = 0
+var _gen1_quantity: Gen2WorldQuantityPrompt = null
+## `StatsScreenInit` from `.viewStats`, the page BILL'S PC opens over the map.
+var _stats: Gen2MonStatsScreen = null
+var _stats_page: Gen2StatsScreenPage = null
 
 ## The screen every layer here is drawn in: the one the opener handed over, so
 ## the menu box stands on the map's own 160x144 rather than beside it.
@@ -416,41 +436,40 @@ func _open_pokegear(
 
 
 ## Parent screens route buttons here so the service overlay owns input while open.
+## The modes that read the joypad themselves and own every button while open.
+const MODE_PRESS_HANDLERS: Dictionary = {
+	MODE.APRICORN: &"_press_apricorns",
+	MODE.ELEVATOR: &"_press_elevator",
+	MODE.VENDING: &"_press_vending",
+	MODE.PRIZE: &"_press_prize",
+	MODE.MART: &"_press_mart",
+	MODE.MOM_BANK: &"_press_mom_bank",
+	MODE.PC_ITEM_QUANTITY: &"_press_gen1_quantity",
+}
+
+## The overlays that own all 160x144, in the order a press is offered them.
+const OVERLAY_MEMBERS: Array[StringName] = [
+	&"_naming", &"_hof", &"_boxes", &"_mail_reader", &"_mail_party",
+]
+
+
 func handle_button(button: int) -> bool:
 	if not is_active():
 		return false
-	if _mode == MODE.APRICORN:
-		_press_apricorns(button)
-		return true
-	if _mode == MODE.ELEVATOR:
-		_press_elevator(button)
-		return true
-	if _mode == MODE.VENDING:
-		_press_vending(button)
-		return true
-	if _mode == MODE.PRIZE:
-		_press_prize(button)
-		return true
-	if _mode == MODE.MART:
-		_press_mart(button)
-		return true
-	if _mode == MODE.MOM_BANK:
-		_press_mom_bank(button)
+	if MODE_PRESS_HANDLERS.has(_mode):
+		call(MODE_PRESS_HANDLERS[_mode], button)
 		return true
 	if _mode == MODE.CARD and _pokegear != null:
 		return _pokegear.handle_button(button)
-	## The box screen owns all 160x144 while BILL'S PC is open, the way the
-	## region map does, so the buttons are its own.
-	if _naming != null:
-		return _naming.handle_button(button)
-	if _hof != null:
-		return _hof.handle_button(button)
-	if _boxes != null:
-		return _boxes.handle_button(button)
-	if _mail_reader != null:
-		return _mail_reader.handle_button(button)
-	if _mail_party != null:
-		return _mail_party.handle_button(button)
+	if _stats != null:
+		_stats.handle_button(button)
+		if _stats != null:
+			_render_stats()
+		return true
+	for member: StringName in OVERLAY_MEMBERS:
+		var overlay: Object = get(member)
+		if overlay != null:
+			return bool(overlay.call(&"handle_button", button))
 	if PokeButton.is_direction(button):
 		_move_direction(PokeButton.vector(button))
 		return true
@@ -470,8 +489,10 @@ func handle_button(button: int) -> bool:
 ## `SwitchItemsInBag` over `wPCItems`. A deposit is `DepositSellPack`, whose
 ## joypad handler has no SELECT in it.
 func _press_pc_item_select() -> bool:
-	if _mode != MODE.PC_ITEM_LIST \
-		or _pc_action == Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM:
+	if _mode != MODE.PC_ITEM_LIST:
+		return false
+	## `DepositSellPack` has no SELECT; every `ITEMLISTMENU` has one.
+	if not _gen1_pc and _pc_action == Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM:
 		return false
 	_apply_pc_switch_press()
 	return true
@@ -485,7 +506,7 @@ func _apply_pc_switch_press() -> void:
 	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pc_switch, _cursor)
 	var next_order: Array = answer["order"]
 	if next_order != order and _world != null:
-		Gen2WorldBagHost.reorder(_world, _save, next_order, true)
+		Gen2WorldBagHost.reorder(_world, _save, next_order, not _pc_list_is_bag())
 		_refresh_pc_entries()
 		## `PC_PlaySwapItemsSound`, which is the pack's own pair of effects.
 		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
@@ -1603,11 +1624,17 @@ func _finish_mom_bank(amount: int) -> void:
 ## for sixteen frames in every thirty-two: only a crossing of that is redrawn.
 func _process(delta: float) -> void:
 	if _save_prompt != null:
-		for _frame: int in _save_clock.tick(delta):
+		for _frame: int in _frame_clock.tick(delta):
 			_save_prompt.frame()
 			_advance_save_prompt()
 			if _save_prompt == null:
 				return
+		return
+	if _stats != null:
+		## `StatsScreen_WaitAnim`, the picture's own loop while the page is up.
+		for _pic_frame: int in _frame_clock.tick(delta):
+			_stats.advance_animation()
+		_render_stats()
 		return
 	if _mode != MODE.MOM_BANK or _mom_dial == null:
 		return
@@ -1700,6 +1727,12 @@ func open_pc_machine(
 	if _world == null or _data == null:
 		_show_error("The PC has no world or cartridge cache.")
 		return false
+	if String(mode).begins_with("gen1_"):
+		## They refuse nothing, and each zeroes `wParentMenuItem` on the way in.
+		_gen1_items_cursor = 0
+		_bills_pc_cursor = 0
+		_open_gen1_pc(mode)
+		return true
 	## `PC_CheckPartyForPokemon`, which answers with its own sound and shuts down
 	## again. `_PlayersHousePC` never asks it: the bedroom's PC is items and mail.
 	if mode != &"players_house" and not Gen2WorldPC.can_open(_save):
@@ -1725,6 +1758,9 @@ func _leave_bills_pc() -> void:
 ## asked for the bedroom's. `PC_CheckPartyForPokemon` is the one refusal either
 ## has before it opens.
 func _open_pc(mode: StringName) -> void:
+	if _gen1_pc or String(mode).begins_with("gen1_"):
+		_open_gen1_pc(mode)
+		return
 	_pc_house = mode == &"players_house"
 	if not _pc_house and not Gen2WorldPC.can_open(_save):
 		_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
@@ -1788,15 +1824,24 @@ func _open_pc_item_list(action: int) -> void:
 	_render_rows()
 
 
+## The list a chosen row reads: the bag for a deposit and the PC otherwise.
+func _pc_list_is_bag() -> bool:
+	return _pc_action == (Gen2WorldPC.GEN1_PLAYERS_PC_DEPOSIT if _gen1_pc \
+		else Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM)
+
+
 func _refresh_pc_entries() -> void:
-	_pc_entries = Gen2WorldPC.bag_entries(_data, _world.state) \
-		if _pc_action == Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM \
+	_pc_entries = Gen2WorldPC.bag_entries(_data, _world.state) if _pc_list_is_bag() \
 		else Gen2WorldPC.pc_entries(_data, _world.state)
-	_cursor = mini(_cursor, maxi(0, _pc_entries.size() - 1))
+	## `.printCancelMenuItem` is a row of Generation 1's list and not Crystal's.
+	_cursor = mini(_cursor, maxi(0, _pc_entries.size() - (0 if _gen1_pc else 1)))
 	_refresh_pc_counts()
 
 
 func _refresh_pc_counts() -> void:
+	if _gen1_pc:
+		## `PlayerPCMenu` prints its question and no count.
+		return
 	_status = "PC %d/%d stacks" % [
 		_world.state.pc_items().size(), Gen2WorldPack.MAX_PC_ITEMS,
 	]
@@ -1806,6 +1851,8 @@ func _confirm_pc_row() -> void:
 	if _cursor < 0 or _cursor >= _pc_rows.size():
 		return
 	var handlers: Dictionary = {
+		MODE.PC_MON_ACTION: _confirm_gen1_mon_action,
+		MODE.PC_ASK: _confirm_gen1_ask,
 		MODE.PC_BOX_LIST: _confirm_box_list_row,
 		MODE.PC_BOX_SUBMENU: _confirm_box_submenu,
 		MODE.PC_BOXES: _confirm_bills_pc_row,
@@ -1818,6 +1865,14 @@ func _confirm_pc_row() -> void:
 		MODE.PC_OAK_ASK: _confirm_oak_ask,
 		MODE.PC: _confirm_pc_menu_row,
 	}
+	if _gen1_pc:
+		handlers.merge({
+			MODE.PC_OAK_ASK: _confirm_gen1_oak,
+			MODE.PC: _confirm_gen1_top_row,
+			MODE.PC_ITEMS: _confirm_gen1_items_row,
+			MODE.PC_BOXES: _confirm_gen1_bills_row,
+			MODE.PC_BOX_LIST: _confirm_gen1_box_row,
+		}, true)
 	var handler: Callable = handlers.get(_mode, _confirm_player_pc_row)
 	handler.call(int(_pc_rows[_cursor].get("row", -1)))
 
@@ -2103,7 +2158,7 @@ func _open_save_prompt(kind: Gen2SavePrompt.Kind, after: StringName) -> void:
 	_save_prompt = Gen2SavePrompt.open(
 		kind, _save.player_name if _save != null else "", _write_service_save
 	)
-	_save_clock.reset()
+	_frame_clock.reset()
 	set_process(true)
 	_render_save_prompt()
 
@@ -2187,11 +2242,30 @@ func _advance_save_prompt() -> void:
 ## A run of the PC's own boxes, acknowledged one at a time.
 func _open_pc_text(pages: Array, after: StringName, label: String) -> void:
 	_mode = MODE.PC_TEXT
-	_pc_pages = pages.duplicate()
+	_pc_pages = _paged(pages)
 	_pc_after = after
 	_cursor = 0
 	_pc_label = label
 	_show_pc_page()
+
+
+## `PrintText` holds a `<PARA>` and a `<CONT>` for their own press, so a box
+## carrying either is that many pages here.
+func _paged(pages: Array) -> Array:
+	var box: Rect2i = Gen2WorldServicePage.MESSAGE_BOX
+	@warning_ignore("integer_division")
+	var rows: int = (box.size.y - 2) / 2
+	var out: Array = []
+	for page: Variant in pages:
+		var text: String = String(page)
+		if text.is_empty():
+			out.append(text)
+			continue
+		for lines: PackedStringArray in Gen2TextLayout.lay_out(
+			text, box.size.x - 2, rows
+		):
+			out.append("\n".join(lines))
+	return out
 
 
 func _show_pc_page() -> void:
@@ -2212,19 +2286,513 @@ func _advance_pc_text() -> void:
 		## `ProfOaksPCBoot` waits *behind* its sound, not in front of it.
 		sfx_requested.emit(_pc_sfx, false)
 	_pc_sfx = -1
-	if _pc_after == &"close":
-		_finish_runtime({"ok": true, "script_value": 0})
-		return
-	if _pc_after == &"decoration":
-		_open_decorations()
-		return
-	if _pc_after == &"bills_pc":
-		_open_bills_pc_menu()
-		return
-	if _pc_after == &"oak_closed":
-		_open_oak_closed()
+	if PC_TEXT_LANDINGS.has(_pc_after):
+		call(PC_TEXT_LANDINGS[_pc_after])
 		return
 	_open_pc(&"pokemon_center")
+
+
+## Where a run of boxes lands. Anything unnamed goes back to the top menu.
+const PC_TEXT_LANDINGS: Dictionary = {
+	&"close": &"_leave_gen1_machine",
+	&"decoration": &"_open_decorations",
+	&"bills_pc": &"_open_bills_pc_menu",
+	&"oak_closed": &"_open_oak_closed",
+	&"gen1_items": &"_open_gen1_items",
+	&"gen1_bills": &"_open_gen1_bills",
+	&"gen1_item_list": &"_reopen_gen1_item_list",
+	&"gen1_mon_list": &"_reopen_gen1_mon_list",
+	&"gen1_oak_ask": &"_open_gen1_oak_ask",
+	&"gen1_oak_closed": &"_close_gen1_oak",
+	&"gen1_league": &"_open_gen1_league",
+	&"gen1_top": &"_open_gen1_top",
+}
+
+
+## `ActivatePC`, `PlayerPC` and `BillsPC_` over the map. The first can open the
+## other two, which is `BIT_USING_GENERIC_PC`.
+func _open_gen1_pc(mode: StringName) -> void:
+	_gen1_pc = true
+	## `ReloadMainMenu` returns every row of the top menu to it.
+	_gen1_generic = mode != &"gen1_players_pc" and mode != &"gen1_bills_pc"
+	match mode:
+		&"gen1_players_pc":
+			_open_gen1_items()
+		&"gen1_bills_pc":
+			_open_gen1_bills()
+		_:
+			_open_gen1_top()
+
+
+## `DisplayPCMainMenu`, whose box is as tall as the rows it offers.
+func _open_gen1_top() -> void:
+	_mode = MODE.PC
+	_cursor = 0
+	_pc_rows = Gen2WorldPC.gen1_top_menu(
+		_world.state, _save.player_name if _save != null else ""
+	)
+	_gen1_quiet()
+	_render_rows()
+
+
+func _confirm_gen1_top_row(row: int) -> void:
+	match row:
+		Gen2WorldPC.GEN1_PC_BILLS:
+			var met: bool = _world.state.is_event_flag_active(Gen1Layout.EVENT_MET_BILL)
+			_open_gen1_box_text(
+				"pc", "accessed_bills" if met else "accessed_someones", &"gen1_bills"
+			)
+		Gen2WorldPC.GEN1_PC_PLAYERS:
+			_open_gen1_box_text("pc", "accessed_mine", &"gen1_items")
+		Gen2WorldPC.GEN1_PC_OAKS:
+			_open_gen1_box_text("oaks_pc", "accessed", &"gen1_oak_ask")
+		Gen2WorldPC.GEN1_PC_LEAGUE:
+			_open_gen1_box_text("hof_pc", "accessed", &"gen1_league")
+		_:
+			_leave_gen1_machine()
+
+
+## `LogOff`, and `ExitPlayerPC` and `ExitBillsPC` with no top menu behind them.
+func _leave_gen1_machine() -> void:
+	_finish_runtime({"ok": true, "script_value": 0})
+
+
+func _cancel_gen1_machine() -> void:
+	if _gen1_generic:
+		_open_gen1_top()
+		return
+	_leave_gen1_machine()
+
+
+## `PlayerPCMenu`, which opens on `wParentMenuItem` and leaves on LOG OFF or B.
+func _open_gen1_items() -> void:
+	_mode = MODE.PC_ITEMS
+	_cursor = _gen1_items_cursor
+	_pc_action = -1
+	_pc_switch = -1
+	_pc_rows = Gen2WorldPC.gen1_players_pc_menu()
+	_gen1_quiet()
+	_summary = _gen1_box("players_pc", "what_do_you_want")
+	_render_rows()
+
+
+## The question each of `PlayerPC`'s three rows prints, and its empty line.
+const GEN1_ITEM_ACTIONS: Dictionary = {
+	Gen2WorldPC.GEN1_PLAYERS_PC_WITHDRAW: ["what_to_withdraw", "nothing_stored"],
+	Gen2WorldPC.GEN1_PLAYERS_PC_DEPOSIT: ["what_to_deposit", "nothing_to_deposit"],
+	Gen2WorldPC.GEN1_PLAYERS_PC_TOSS: ["what_to_toss", "nothing_stored"],
+}
+
+
+func _confirm_gen1_items_row(row: int) -> void:
+	_gen1_items_cursor = _cursor
+	if not GEN1_ITEM_ACTIONS.has(row):
+		_cancel_gen1_machine()
+		return
+	_pc_action = row
+	_pc_switch = -1
+	_cursor = 0
+	_pc_scroll = 0
+	_pc_quantity = 1
+	_refresh_pc_entries()
+	var names: Array = GEN1_ITEM_ACTIONS[row]
+	if _pc_entries.is_empty():
+		_open_gen1_box_text("players_pc", String(names[1]), &"gen1_items")
+		return
+	_mode = MODE.PC_ITEM_LIST
+	_gen1_quiet()
+	_summary = _gen1_box("players_pc", String(names[0]))
+	_render_rows()
+
+
+## `jp .loop`, back onto the list a transaction's box was printed over.
+func _reopen_gen1_item_list() -> void:
+	_confirm_gen1_items_row(_pc_action)
+
+
+## `IsKeyItem_`, an HM included: a stack asks how many and a toss refuses one.
+func _confirm_gen1_item() -> void:
+	if _cursor >= _pc_entries.size():
+		_open_gen1_items()
+		return
+	_pc_quantity = 1
+	var item: int = int((_pc_entries[_cursor] as Dictionary).get("item", 0))
+	if not Gen2WorldPack.can_toss(_data, item):
+		if _pc_action == Gen2WorldPC.GEN1_PLAYERS_PC_TOSS:
+			_open_gen1_box_text("toss", "too_important", &"gen1_item_list")
+			return
+		_apply_gen1_item()
+		return
+	_gen1_quantity = Gen2WorldQuantityPrompt.open(
+		int((_pc_entries[_cursor] as Dictionary).get("quantity", 1)), RomRegistry.GEN1
+	)
+	_mode = MODE.PC_ITEM_QUANTITY
+	_summary = _gen1_box("players_pc", String(GEN1_QUANTITY_BOXES[_pc_action]))
+	_render_rows()
+
+
+## The three boxes printed in front of `DisplayChooseQuantityMenu`.
+const GEN1_QUANTITY_BOXES: Dictionary = {
+	Gen2WorldPC.GEN1_PLAYERS_PC_WITHDRAW: "withdraw_how_many",
+	Gen2WorldPC.GEN1_PLAYERS_PC_DEPOSIT: "deposit_how_many",
+	Gen2WorldPC.GEN1_PLAYERS_PC_TOSS: "toss_how_many",
+}
+
+
+func _press_gen1_quantity(button: int) -> void:
+	if _gen1_quantity == null:
+		return
+	match _gen1_quantity.press(button):
+		Gen2WorldQuantityPrompt.CONFIRMED:
+			_pc_quantity = _gen1_quantity.value
+			if _pc_action == Gen2WorldPC.GEN1_PLAYERS_PC_TOSS:
+				## `TossItem_` asks `IsItOKToTossItemText` over the list first.
+				_open_gen1_ask(&"toss", Gen2TextStream.fill_marker(
+					_gen1_box("toss", "ok_to_toss"), Gen2TextStream.RAM_MARKER,
+					String(_pc_entries[_cursor].get("name", ""))
+				))
+				return
+			_apply_gen1_item()
+		Gen2WorldQuantityPrompt.CANCELLED:
+			_reopen_gen1_item_list()
+		_:
+			_render_rows()
+
+
+## The three transactions and the box each answers with.
+func _apply_gen1_item() -> void:
+	var item: int = int((_pc_entries[_cursor] as Dictionary).get("item", 0))
+	var applied: Dictionary = _gen1_item_transaction(item)
+	if not bool(applied.get("ok", false)):
+		_open_gen1_box_text(
+			"players_pc", GEN1_ITEM_REFUSALS.get(_pc_action, "no_room_to_store"),
+			&"gen1_item_list"
+		)
+		return
+	_refresh_pc_entries()
+	if _pc_action == Gen2WorldPC.GEN1_PLAYERS_PC_TOSS:
+		_open_gen1_text(
+			[_filled(_data.special_text("toss", "threw_away"), applied)], &"gen1_item_list"
+		)
+		return
+	_open_gen1_text([_filled(_gen1_box(
+		"players_pc",
+		"withdrew_item" if _pc_action == Gen2WorldPC.GEN1_PLAYERS_PC_WITHDRAW
+		else "item_was_stored"
+	), applied)], &"gen1_item_list")
+
+
+## `CantCarryMoreText` and `NoRoomToStoreText`, `AddItemToInventory`'s two.
+const GEN1_ITEM_REFUSALS: Dictionary = {
+	Gen2WorldPC.GEN1_PLAYERS_PC_WITHDRAW: "cant_carry_more",
+	Gen2WorldPC.GEN1_PLAYERS_PC_DEPOSIT: "no_room_to_store",
+	Gen2WorldPC.GEN1_PLAYERS_PC_TOSS: "no_room_to_store",
+}
+
+
+func _gen1_item_transaction(item: int) -> Dictionary:
+	match _pc_action:
+		Gen2WorldPC.GEN1_PLAYERS_PC_WITHDRAW:
+			return Gen2WorldPC.withdraw(_world, _save, item, _pc_quantity, _persist)
+		Gen2WorldPC.GEN1_PLAYERS_PC_DEPOSIT:
+			return Gen2WorldPC.deposit(_world, _save, item, _pc_quantity, _persist)
+	return Gen2WorldPC.toss(_world, _save, item, _pc_quantity, _persist)
+
+
+## `BillsPCMenu`, with `BoxNoPCText`'s own panel under it.
+func _open_gen1_bills() -> void:
+	_mode = MODE.PC_BOXES
+	_cursor = _bills_pc_cursor
+	_pc_rows = Gen2WorldPC.gen1_bills_pc_menu()
+	_gen1_quiet()
+	_summary = _gen1_box("bills_pc", "what")
+	_render_rows()
+
+
+func _confirm_gen1_bills_row(row: int) -> void:
+	_bills_pc_cursor = _cursor
+	if row == Gen2WorldPC.GEN1_BILLS_PC_SEE_YA:
+		_cancel_gen1_machine()
+		return
+	if row == Gen2WorldPC.GEN1_BILLS_PC_CHANGE_BOX:
+		_open_gen1_ask(&"change_box", _gen1_box("change_box", "warning"))
+		return
+	var refusal: StringName = Gen2WorldPC.gen1_bills_pc_refusal(_save, row, _box_index)
+	if refusal != &"":
+		_open_gen1_box_text("bills_pc", String(refusal), &"gen1_bills")
+		return
+	_open_gen1_mon_list(row)
+
+
+## `DisplayMonListMenu` over `wPartyCount` for a deposit and `wBoxCount` for
+## the other two: a name and `PrintLevel` beside it.
+func _open_gen1_mon_list(row: int) -> void:
+	_gen1_bills_row = row
+	_mode = MODE.PC_MON_LIST
+	_cursor = 0
+	_pc_scroll = 0
+	_refresh_gen1_mon_entries()
+	_gen1_mon_box()
+	_render_rows()
+
+
+func _refresh_gen1_mon_entries() -> void:
+	_gen1_mon_entries = []
+	if _gen1_bills_row == Gen2WorldPC.GEN1_BILLS_PC_DEPOSIT:
+		for slot: int in (_save.party.size() if _save != null else 0):
+			_gen1_mon_entries.append({"slot": slot, "mon": _save.party[slot]})
+	else:
+		_gen1_mon_entries = Gen2WorldPC.gen1_box_entries(_save, _box_index)
+	_cursor = mini(_cursor, _gen1_mon_entries.size())
+
+
+func _reopen_gen1_mon_list() -> void:
+	_mode = MODE.PC_MON_LIST
+	_refresh_gen1_mon_entries()
+	_gen1_mon_box()
+	_render_rows()
+
+
+## `PrintListMenuEntries` clears only `hlcoord 5, 3`: `WhatText` stays.
+func _gen1_mon_box() -> void:
+	_gen1_quiet()
+	_summary = _gen1_box("bills_pc", "what")
+
+
+func _confirm_gen1_mon_row() -> void:
+	if _cursor >= _gen1_mon_entries.size():
+		_open_gen1_bills()
+		return
+	if _gen1_bills_row == Gen2WorldPC.GEN1_BILLS_PC_RELEASE:
+		_open_gen1_ask(
+			&"release", _gen1_filled_mon("bills_pc_2", "once_released", 1)
+		)
+		return
+	_mode = MODE.PC_MON_ACTION
+	_pc_rows = [
+		{"row": Gen2WorldPC.GEN1_MON_ACTION_MOVE, "name": "DEPOSIT" \
+			if _gen1_bills_row == Gen2WorldPC.GEN1_BILLS_PC_DEPOSIT else "WITHDRAW"},
+		{"row": Gen2WorldPC.GEN1_MON_ACTION_STATS, "name": "STATS"},
+		{"row": Gen2WorldPC.GEN1_MON_ACTION_CANCEL, "name": "CANCEL"},
+	]
+	_gen1_mon_cursor = _cursor
+	_cursor = 0
+	_gen1_mon_box()
+	_render_rows()
+
+
+func _confirm_gen1_mon_action(row: int) -> void:
+	match row:
+		Gen2WorldPC.GEN1_MON_ACTION_MOVE:
+			_apply_gen1_mon_move()
+		Gen2WorldPC.GEN1_MON_ACTION_STATS:
+			_open_gen1_mon_stats()
+		_:
+			_reopen_gen1_mon_list()
+
+
+## `MoveMon` and `RemovePokemon`, which is [Gen2SaveStorage]'s own move.
+func _apply_gen1_mon_move() -> void:
+	var entry: Dictionary = _gen1_mon_entries[_gen1_mon_cursor]
+	var mon: Gen2SaveMon = entry["mon"]
+	var deposit: bool = _gen1_bills_row == Gen2WorldPC.GEN1_BILLS_PC_DEPOSIT
+	var applied: Dictionary = Gen2SaveStorage.deposit_party_to_box(
+		_save, _data, int(entry["slot"]), _box_index, -1, _persist
+	) if deposit else Gen2SaveStorage.withdraw_box_to_party(
+		_save, _data, _box_index, int(entry["slot"]), _persist
+	)
+	if not bool(applied.get("ok", false)):
+		_open_gen1_box_text(
+			"bills_pc", "box_full" if deposit else "cant_take_mon", &"gen1_bills"
+		)
+		return
+	_cursor = _gen1_mon_cursor
+	cry_requested.emit(mon.species if mon != null else 0)
+	_open_gen1_text([_gen1_mon_text(
+		"bills_pc", "mon_was_stored" if deposit else "mon_is_taken_out", mon
+	)], &"gen1_mon_list")
+
+
+## `.viewStats`' two `StatusScreen` predefs, the party list's own pages.
+func _open_gen1_mon_stats() -> void:
+	var mons: Array = []
+	for entry: Dictionary in _gen1_mon_entries:
+		mons.append(entry["mon"])
+	if _data == null or mons.is_empty():
+		return
+	_stats = Gen2MonStatsScreen.create(_data, mons, _gen1_mon_cursor)
+	_stats.closed.connect(_close_gen1_mon_stats)
+	_stats.cry_requested.connect(cry_requested.emit)
+	_stats.announce()
+	_frame_clock.reset()
+	set_process(true)
+	_render_stats()
+
+
+## `wPartyAndBillsPCSavedMenuItem`: back to the submenu on the row it left.
+func _close_gen1_mon_stats() -> void:
+	_gen1_mon_cursor = _stats.cursor() if _stats != null else _gen1_mon_cursor
+	_stats = null
+	set_process(false)
+	_cursor = 0
+	_mode = MODE.PC_MON_ACTION
+	_render_rows()
+
+
+## `StatsScreenInit`'s screen, composed the way the party menu composes it.
+func _render_stats() -> void:
+	if _stats_page == null:
+		_stats_page = Gen2StatsScreenPage.from_data(_data)
+	if _stats_page == null or _stats == null:
+		return
+	var image: Image = Gen2StatsScreenPage.compose(_stats_page, _data, _stats)
+	if image != null:
+		Gen2PicImage.show(_service_view, image)
+		_service_drawn = true
+		_apply_layer_visibility()
+
+
+## What YES and NO do, by the routine that asked. B is NO's own answer.
+const GEN1_ASK_YES: Dictionary = {
+	&"change_box": &"_open_gen1_box_list",
+	&"release": &"_apply_gen1_release",
+	&"toss": &"_apply_gen1_item",
+}
+const GEN1_ASK_NO: Dictionary = {
+	&"change_box": &"_open_gen1_bills",
+	&"release": &"_reopen_gen1_mon_list",
+	&"toss": &"_reopen_gen1_item_list",
+}
+
+
+## `BillsPCRelease`'s `YesNoChoice`, `ChangeBox`'s and `TossItem_`'s.
+func _open_gen1_ask(kind: StringName, question: String) -> void:
+	_gen1_ask = kind
+	_gen1_ask_over = _mode
+	_mode = MODE.PC_ASK
+	_cursor = 0
+	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
+	_gen1_quiet()
+	_summary = question
+	_render_rows()
+
+
+func _confirm_gen1_ask(row: int) -> void:
+	var landings: Dictionary = GEN1_ASK_YES if row == 0 else GEN1_ASK_NO
+	call(landings.get(_gen1_ask, &"_open_gen1_bills"))
+
+
+func _refuse_gen1_ask() -> void:
+	_confirm_gen1_ask(1)
+
+
+func _apply_gen1_release() -> void:
+	var entry: Dictionary = {}
+	if _cursor < _gen1_mon_entries.size():
+		entry = _gen1_mon_entries[_cursor]
+	var mon: Gen2SaveMon = entry.get("mon", null) as Gen2SaveMon
+	var applied: Dictionary = Gen2SaveStorage.release_box_slot(
+		_save, _data, _box_index, int(entry.get("slot", -1)), _persist
+	)
+	if not bool(applied.get("ok", false)):
+		_open_gen1_box_text("bills_pc", "no_mon", &"gen1_bills")
+		return
+	cry_requested.emit(mon.species if mon != null else 0)
+	_open_gen1_text(
+		[_gen1_mon_text("bills_pc_2", "mon_was_released", mon)], &"gen1_mon_list"
+	)
+
+
+## `DisplayChangeBoxMenu`: twelve names one row apart, a pokeball beside each
+## box that holds something, and `BoxNoText`'s panel.
+func _open_gen1_box_list() -> void:
+	_mode = MODE.PC_BOX_LIST
+	_pc_rows = Gen2WorldPC.gen1_box_menu(_save)
+	_cursor = _box_index
+	_pc_scroll = 0
+	_gen1_quiet()
+	_summary = _gen1_box("choose_box", "choose")
+	_render_rows()
+
+
+## `ChangeBox` writes `wCurrentBoxNum` and saves the game behind it.
+func _confirm_gen1_box_row(row: int) -> void:
+	_box_index = clampi(row, 0, Gen1Layout.BOX_COUNT - 1)
+	if _save != null:
+		_save.current_box = _box_index
+	_open_gen1_bills()
+
+
+## `OpenOaksPC`: the greeting, the question, and `ClosedOaksPCText` either way.
+func _open_gen1_oak_ask() -> void:
+	_mode = MODE.PC_OAK_ASK
+	_cursor = 0
+	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
+	_gen1_quiet()
+	_summary = _gen1_box("oaks_pc", "get_rated")
+	_render_rows()
+
+
+func _confirm_gen1_oak(row: int) -> void:
+	if row != 0:
+		_close_gen1_oak()
+		return
+	## `DisplayDexRating`: `DexCompletionText` and the row the count lands on.
+	var rated: Dictionary = Gen2ProfOaksPC.rate(_data, _world.state)
+	_open_gen1_text(rated.get("pages", []) as Array, &"gen1_oak_closed")
+
+
+func _close_gen1_oak() -> void:
+	_open_gen1_box_text("oaks_pc", "closed", &"gen1_top")
+
+
+## `PKMNLeaguePC`; the save model keeps its teams as records, so an empty
+## list is the row answering with nothing.
+func _open_gen1_league() -> void:
+	_open_hall_of_fame(0)
+
+
+func _gen1_box(run: String, slot: String) -> String:
+	return _world.gen1_filled_text(_data.special_text(run, slot)) if _data != null else ""
+
+
+## A nickname in every `text_ram` slot, and `MonWasStoredText`'s box number.
+func _gen1_mon_text(run: String, slot: String, mon: Gen2SaveMon) -> String:
+	var text: String = _gen1_filled_mon(run, slot, 2 if slot == "mon_is_taken_out" \
+		or slot == "mon_was_released" else 1, mon)
+	if slot != "mon_was_stored":
+		return text
+	return Gen2TextStream.fill_marker(
+		text, Gen2TextStream.RAM_MARKER, String.num_int64(_box_index + 1)
+	)
+
+
+func _gen1_filled_mon(
+	run: String, slot: String, slots: int, mon: Gen2SaveMon = null
+) -> String:
+	var chosen: Gen2SaveMon = mon
+	if chosen == null and _cursor < _gen1_mon_entries.size():
+		chosen = (_gen1_mon_entries[_cursor] as Dictionary).get("mon", null) as Gen2SaveMon
+	var nickname: String = Gen2SaveMon.display_name(chosen, _data)
+	var text: String = _gen1_box(run, slot)
+	for _slot: int in slots:
+		text = Gen2TextStream.fill_marker(text, Gen2TextStream.RAM_MARKER, nickname)
+	return text
+
+
+## The lines a menu with no box of its own has to clear before it draws.
+func _gen1_quiet() -> void:
+	_title = ""
+	_summary = ""
+	_status = ""
+
+
+func _open_gen1_box_text(run: String, slot: String, after: StringName) -> void:
+	_open_gen1_text([_gen1_box(run, slot)], after)
+
+
+func _open_gen1_text(pages: Array, after: StringName) -> void:
+	_open_pc_text(pages, after, "")
 
 
 ## `_BillsPC`, the top menu the two lists and the box picker sit behind.
@@ -2853,9 +3421,9 @@ func _move_cursor(delta: int) -> void:
 	if rows > 0:
 		_pc_scroll = clampi(_pc_scroll, _cursor - rows + 1, _cursor)
 		_pc_scroll = clampi(_pc_scroll, 0, maxi(0, count - rows))
-	if _mode == MODE.PC_BOX_LIST:
+	if _mode == MODE.PC_BOX_LIST and not _gen1_pc:
 		## `BillsPC_PrintBoxCountAndCapacity` runs per row rather than per
-		## choice.
+		## choice, where `DisplayChangeBoxMenu` counts every box once up front.
 		_refresh_box_counts()
 	_render_rows()
 
@@ -2869,6 +3437,13 @@ func _scrolling_rows() -> int:
 		if _menu == null or _menu.rows >= _menu.options.size():
 			return 0
 		return _menu.rows
+	if _gen1_pc:
+		if _mode == MODE.PC_ITEM_LIST or _mode == MODE.PC_MON_LIST:
+			## `ld b, 4` names against `wMaxMenuItem` 2: the fourth is a look ahead.
+			return Gen2MartPage.GEN1_CURSOR_ROWS
+		## `DisplayChangeBoxMenu` draws all twelve names and scrolls none.
+		if _mode == MODE.PC_BOX_LIST:
+			return 0
 	return int(SCROLLING_ROWS.get(_mode, 0))
 
 
@@ -2881,7 +3456,7 @@ func _move_direction(direction: Vector2i) -> void:
 			_cursor = _menu.selected_index()
 			_render_rows()
 		return
-	if _mode == MODE.PC_ITEM_LIST and direction.x != 0:
+	if _mode == MODE.PC_ITEM_LIST and direction.x != 0 and not _gen1_pc:
 		_change_pc_quantity(direction.x)
 		return
 	if direction.x != 0:
@@ -2891,12 +3466,14 @@ func _move_direction(direction: Vector2i) -> void:
 
 
 func _confirm() -> void:
-	if _mode in [
-		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST,
-		MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_BOX_SUBMENU,
-		MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK,
-	]:
+	if _mode == MODE.PC_SAVE:
+		_press_save_prompt(true)
+		return
+	if PC_ROW_MODES.has(_mode):
 		_confirm_pc_row()
+		return
+	if _mode == MODE.PC_MON_LIST:
+		_confirm_gen1_mon_row()
 		return
 	if _mode == MODE.PC_ITEM_LIST:
 		## `.moving_stuff_around` reads A before anything else, so the A that
@@ -2904,10 +3481,10 @@ func _confirm() -> void:
 		if _pc_switch >= 0:
 			_apply_pc_switch_press()
 			return
+		if _gen1_pc:
+			_confirm_gen1_item()
+			return
 		_confirm_pc_item()
-		return
-	if _mode == MODE.PC_SAVE:
-		_press_save_prompt(true)
 		return
 	if _mode == MODE.PC_TEXT:
 		_advance_pc_text()
@@ -2940,13 +3517,32 @@ const CANCEL_HANDLERS: Dictionary = {
 	MODE.PC_DECO_SIDE: &"_cancel_deco_side",
 	MODE.PC_SAVE: &"_refuse_save_prompt",
 	MODE.PC_TEXT: &"_advance_pc_text",
+	MODE.PC_MON_LIST: &"_open_gen1_bills",
+	MODE.PC_MON_ACTION: &"_reopen_gen1_mon_list",
+	MODE.PC_ITEM_QUANTITY: &"_reopen_gen1_item_list",
+	MODE.PC_ASK: &"_refuse_gen1_ask",
 	MODE.MENU: &"_finish_input_cancelled",
 	MODE.PHONE: &"_cancel_phone",
 	MODE.TOWN_MAP: &"_cancel_town_map",
 }
 
 
+## Generation 1's own B: a machine opened from the top menu steps back to it
+## and one opened from a text script leaves.
+const GEN1_CANCEL_HANDLERS: Dictionary = {
+	MODE.PC: &"_leave_gen1_machine",
+	MODE.PC_ITEMS: &"_cancel_gen1_machine",
+	MODE.PC_BOXES: &"_cancel_gen1_machine",
+	MODE.PC_ITEM_LIST: &"_open_gen1_items",
+	MODE.PC_BOX_LIST: &"_open_gen1_bills",
+	MODE.PC_OAK_ASK: &"_close_gen1_oak",
+}
+
+
 func _cancel() -> void:
+	if _gen1_pc and GEN1_CANCEL_HANDLERS.has(_mode):
+		call(GEN1_CANCEL_HANDLERS[_mode])
+		return
 	if CANCEL_HANDLERS.has(_mode):
 		call(CANCEL_HANDLERS[_mode])
 
@@ -3028,6 +3624,8 @@ func _finish(results: Array) -> void:
 		results.append_array(_extra_results)
 		_extra_results = []
 	_mode = -1
+	_gen1_pc = false
+	_gen1_quantity = null
 	_close_mart()
 	completed.emit(results)
 
@@ -3035,6 +3633,9 @@ func _finish(results: Array) -> void:
 ## The rows this mode is offering, which is all [method _render_service_page]
 ## needs: there is no second list to keep in step with it any more.
 func _render_rows(override: Array = []) -> void:
+	if _gen1_pc and GEN1_LIST_MODES.has(_gen1_list_mode()):
+		_render_gen1_list()
+		return
 	if _is_single_row() and override.is_empty():
 		## One value at a time, the way the dial and the room menu each show it.
 		override = [_choices[clampi(_cursor, 0, _choices.size() - 1)]] if not _choices.is_empty() \
@@ -3055,6 +3656,71 @@ func _render_rows(override: Array = []) -> void:
 		_render_service_page(values.slice(_pc_scroll, _pc_scroll + rows), _cursor - _pc_scroll)
 		return
 	_render_service_page(values)
+
+
+## The modes drawn as `DisplayListMenuID`'s `LIST_MENU_BOX` over the map, with
+## the last box printed under it and the quantity dial over it.
+const GEN1_LIST_MODES: Array = [
+	MODE.PC_ITEM_LIST, MODE.PC_MON_LIST, MODE.PC_ITEM_QUANTITY,
+]
+
+
+## The list a `YesNoChoice` is standing over, or the open mode when none is.
+func _gen1_list_mode() -> int:
+	return _gen1_ask_over if _mode == MODE.PC_ASK else _mode
+
+
+func _render_gen1_list() -> void:
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
+	if _mart_page == null:
+		_mart_page = Gen2MartPage.from_data(_data)
+	if _service_page == null or _mart_page == null or _service_view == null:
+		return
+	var asking: bool = _mode == MODE.PC_ASK
+	if not asking:
+		var rows: int = Gen2MartPage.GEN1_CURSOR_ROWS
+		_pc_scroll = clampi(_pc_scroll, _cursor - rows + 1, _cursor)
+		_pc_scroll = clampi(_pc_scroll, 0, maxi(0, _option_count() - rows))
+	var image: Image = _mart_page.render_gen1_pack({
+		"rows": _gen1_list_rows(),
+		"cursor": -1 if asking else _cursor - _pc_scroll,
+		"quantity": _gen1_quantity.value \
+			if _mode == MODE.PC_ITEM_QUANTITY and _gen1_quantity != null else -1,
+	})
+	var over: Image = _service_page.render(
+		"", "", _pc_rows if asking else [], _cursor, _summary,
+		_service_box() if asking else null
+	)
+	if image != null and over != null:
+		image.blend_rect(over, Rect2i(Vector2i.ZERO, over.get_size()), Vector2i.ZERO)
+	if image != null:
+		Gen2PicImage.show(_service_view, image)
+	_service_drawn = image != null
+	_apply_layer_visibility()
+
+
+## `PrintListMenuEntries`' four names, with a count or `PrintLevel` under each.
+func _gen1_list_rows() -> Array:
+	if _gen1_list_mode() != MODE.PC_MON_LIST:
+		return Gen2WorldPack.list_rows(
+			_data, Gen1Layout.BAG_POCKET, _pc_entries, _pc_scroll, true,
+			Gen2MartPage.GEN1_LIST_HEIGHT
+		)
+	var out: Array = []
+	for offset: int in Gen2MartPage.GEN1_LIST_HEIGHT:
+		var index: int = _pc_scroll + offset
+		if index > _gen1_mon_entries.size():
+			break
+		if index == _gen1_mon_entries.size():
+			out.append({"cancel": true})
+			break
+		var mon: Gen2SaveMon = (_gen1_mon_entries[index] as Dictionary)["mon"]
+		out.append({
+			"name": Gen2SaveMon.display_name(mon, _data),
+			"level": mon.level if mon != null else 0,
+		})
+	return out
 
 
 ## `PhoneCall`'s ringing box and `PC_DisplayText`'s plain `MenuTextbox` print
@@ -3089,7 +3755,7 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		else _dial_image() if _is_dial() else _service_page.render(
 		"" if quiet else _title, "" if quiet else _summary, labels,
 		_cursor if cursor < 0 else cursor, "" if quiet else _status,
-		_service_box(), _service_note(), _message_box()
+		_service_box(), _service_note(), _message_box(), _gen1_box_marks()
 	)
 	if image != null:
 		Gen2PicImage.show(_service_view, image)
@@ -3106,6 +3772,8 @@ func _message_box() -> Rect2i:
 
 ## `Elevator_GetCurrentFloorText`'s `hlcoord 0, 0 / ld b, 4 / ld c, 8`.
 func _service_note() -> Dictionary:
+	if _gen1_pc and (_mode == MODE.PC_BOXES or _mode == MODE.PC_BOX_LIST):
+		return _gen1_box_note()
 	if _mode == MODE.PC_BOX_LIST:
 		return _box_count_note()
 	if _mode != MODE.ELEVATOR:
@@ -3121,6 +3789,30 @@ func _service_note() -> Dictionary:
 			"at": Vector2i(4, 4),
 		},
 	]}
+
+
+## `BoxNoPCText`'s panel: `hlcoord 9, 14` under BILL'S PC's menu and
+## `hlcoord 0, 0` beside the box picker, each `lb bc, 2, 9` with the label two
+## rows in and the number eight columns past it.
+func _gen1_box_note() -> Dictionary:
+	var at: Vector2i = Vector2i(0, 0) if _mode == MODE.PC_BOX_LIST else Vector2i(9, 14)
+	return {"rect": Rect2i(at, Vector2i(11, 4)), "lines": [
+		{"text": "BOX No.", "at": Vector2i(1, 2)},
+		{"text": String.num_int64(_box_index + 1), "at": Vector2i(9, 2)},
+	]}
+
+
+## `DisplayChangeBoxMenu`'s pokeball, on every box that holds something.
+func _gen1_box_marks() -> Array:
+	if _mode != MODE.PC_BOX_LIST or not _gen1_pc:
+		return []
+	var out: Array = []
+	for index: int in _pc_rows.size():
+		if bool((_pc_rows[index] as Dictionary).get("occupied", false)):
+			out.append(Vector2i(
+				GEN1_BOX_LIST_BALL_COLUMN, GEN1_BOX_LIST_BOX.position.y + 1 + index
+			))
+	return out
 
 
 ## `BillsPC_PrintBoxCountAndCapacity`'s `hlcoord 11, 7 / lb bc, 5, 7`.
@@ -3173,63 +3865,140 @@ func _dial_image() -> Image:
 
 ## The `menu_coords` box this mode's own list sits in. `null` draws no box,
 ## which is what MODE.MENU falls back to before a menu is loaded.
+## `TextBoxBorder hlcoord 0, 0` with each menu's own height, as the corners
+## `menu_coords` would name: every one of them places its strings at (2,2) with
+## the cursor on column 1. The top menu's height is the rows it offers.
+const GEN1_PC_BOXES: Dictionary = {
+	MODE.PC_ITEMS: Rect2i(0, 0, 15, 9),
+	MODE.PC_BOXES: Rect2i(0, 0, 13, 11),
+	## `DisplayDepositWithdrawMenu`'s `hlcoord 9, 10 / lb bc, 6, 9`.
+	MODE.PC_MON_ACTION: Rect2i(9, 10, 19, 17),
+}
+const GEN1_PC_TOP_BOTTOM: Dictionary = {3: 7, 4: 9, 5: 11}
+## `DisplayChangeBoxMenu`'s `hlcoord 11, 0 / lb bc, 12, 7`, whose names are one
+## row apart: `BIT_DOUBLE_SPACED_MENU` names the bit that is set for a
+## single-row step, and `HandleMenuInput` steps two rows when it is clear.
+const GEN1_BOX_LIST_BOX := Rect2i(11, 0, 19, 13)
+const GEN1_BOX_LIST_BALL_COLUMN: int = 18
+
+
+func _gen1_pc_box() -> Gen2MenuBox:
+	if _mode == MODE.PC_BOX_LIST:
+		var list: Gen2MenuBox = Gen2MenuBox.from_coords(
+			GEN1_BOX_LIST_BOX.position.x, GEN1_BOX_LIST_BOX.position.y,
+			GEN1_BOX_LIST_BOX.end.x, GEN1_BOX_LIST_BOX.end.y,
+			Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
+		)
+		list.row_step = 1
+		return list
+	var corners: Rect2i = GEN1_PC_BOXES.get(_mode, Rect2i(
+		0, 0, 15, int(GEN1_PC_TOP_BOTTOM.get(_pc_rows.size(), 9))
+	))
+	var menu_box: Gen2MenuBox = Gen2MenuBox.from_coords(
+		corners.position.x, corners.position.y, corners.end.x, corners.end.y,
+		Gen2MenuBox.STATICMENU_CURSOR
+	)
+	## `DisplayDepositWithdrawMenu` is drawn after `WhatText`, over the speech
+	## box's own right half.
+	menu_box.over_textbox = _mode == MODE.PC_MON_ACTION
+	return menu_box
+
+
+## The box each mode's menu is drawn in, by the method that answers for it.
+## Every one of them is a `menu_coords` and nothing else, which is why they are
+## a table rather than forty arms.
+const SERVICE_BOXES: Dictionary = {
+	MODE.MENU: &"_scripted_menu_box",
+	MODE.PC: &"_pc_top_box",
+	MODE.PC_ITEMS: &"_pc_top_box",
+	MODE.PC_BOXES: &"_pc_top_box",
+	MODE.PC_DECO: &"_deco_category_box",
+	MODE.PC_DECO_LIST: &"_deco_list_box",
+	MODE.PC_DECO_SIDE: &"_deco_side_box",
+	MODE.ELEVATOR: &"_elevator_box",
+	MODE.PC_MAILBOX: &"_mailbox_box",
+	MODE.PC_MAIL_SUBMENU: &"_mail_submenu_box",
+	MODE.PC_MAIL_CONFIRM: &"_yes_no_box",
+	MODE.PC_OAK_ASK: &"_yes_no_box",
+	MODE.PC_ASK: &"_yes_no_box",
+	MODE.PC_SAVE: &"_save_prompt_box",
+	MODE.PC_BOX_LIST: &"_pc_box_list_box",
+	MODE.PC_BOX_SUBMENU: &"_box_submenu_box",
+	MODE.PC_ITEM_LIST: &"_pc_item_list_box",
+	MODE.APRICORN: &"_apricorn_box",
+}
+## The Generation 1 machines' own menus, which are `TextBoxBorder`s at
+## coordinates of their own rather than any of the above.
+const GEN1_PC_BOX_MODES: Array = [
+	MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_MON_ACTION, MODE.PC_BOX_LIST,
+]
+
+
 func _service_box() -> Gen2MenuBox:
-	match _mode:
-		MODE.MENU:
-			if _menu == null or _menu.kind == &"spinner":
-				return null
-			var menu_box: Gen2MenuBox = _menu.box()
-			menu_box.scroll = _pc_scroll
-			return menu_box
-		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES:
-			return _pc_top_box()
-		MODE.PC_DECO_LIST:
-			return _deco_list_box()
-		MODE.ELEVATOR:
-			## `Elevator_MenuHeader`'s `menu_coords 12, 1, 18, 9`, whose fourth
-			## floor only fits without the top row of spacing.
-			var elevator_box: Gen2MenuBox = Gen2MenuBox.from_coords(
-				12, 1, 18, 9,
-				Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
-			)
-			elevator_box.scrolling_arrows = true
-			elevator_box.scroll = _elevator_scroll
-			return elevator_box
-		MODE.PC_MAILBOX:
-			## `.TopMenuHeader`'s `menu_coords 8, 1, SCREEN_WIDTH - 2, 10`.
-			return _scrolling_box(Gen2MenuBox.from_coords(
-				8, 1, 18, 10,
-				Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
-			))
-		MODE.PC_MAIL_SUBMENU:
-			## `.SubMenuHeader`'s `menu_coords 0, 0, 13, 9`.
-			return Gen2MenuBox.from_coords(0, 0, 13, 9, Gen2MenuBox.STATICMENU_CURSOR)
-		MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK:
-			## `YesNoBox`, which `.PutInPack` and `ProfOaksPC` open over theirs.
-			return Gen2MenuBox.yes_no()
-		MODE.PC_SAVE:
-			## The same `YesNoBox`, and nothing at all on the timed steps: they
-			## are a box with no question on it.
-			return Gen2MenuBox.yes_no() if _pc_rows.size() == 2 else null
-		MODE.PC_DECO:
-			return _deco_category_box()
-		MODE.PC_DECO_SIDE:
-			return _deco_side_box()
-		MODE.PC_BOX_LIST:
-			return _pc_box_list_box()
-		MODE.PC_BOX_SUBMENU:
-			## `.MenuHeader`'s `menu_coords 11, 4, SCREEN_WIDTH - 1, 13`, raised
-			## two rows: the change-box screen it is drawn over on the cartridge
-			## has its own words at rows 14 to 17, and this panel's box is at 11,
-			## which the source's corner would put QUIT behind.
-			return Gen2MenuBox.from_coords(11, 2, 19, 11, Gen2MenuBox.STATICMENU_CURSOR)
-		MODE.PC_ITEM_LIST:
-			return _pc_item_list_box()
-		MODE.APRICORN:
-			return _apricorn_quantity_box() if _apricorns != null \
-				and _apricorns.phase == Gen2WorldApricorn.SELECT_QUANTITY \
-				else _apricorn_select_box()
-	return null
+	if _gen1_pc and GEN1_PC_BOX_MODES.has(_mode):
+		return _gen1_pc_box()
+	if not SERVICE_BOXES.has(_mode):
+		return null
+	return call(SERVICE_BOXES[_mode]) as Gen2MenuBox
+
+
+func _scripted_menu_box() -> Gen2MenuBox:
+	if _menu == null or _menu.kind == &"spinner":
+		return null
+	var menu_box: Gen2MenuBox = _menu.box()
+	menu_box.scroll = _pc_scroll
+	return menu_box
+
+
+## `Elevator_MenuHeader`'s `menu_coords 12, 1, 18, 9`, whose fourth floor only
+## fits without the top row of spacing.
+func _elevator_box() -> Gen2MenuBox:
+	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
+		12, 1, 18, 9,
+		Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
+	)
+	box.scrolling_arrows = true
+	box.scroll = _elevator_scroll
+	return box
+
+
+## `.TopMenuHeader`'s `menu_coords 8, 1, SCREEN_WIDTH - 2, 10`.
+func _mailbox_box() -> Gen2MenuBox:
+	return _scrolling_box(Gen2MenuBox.from_coords(
+		8, 1, 18, 10,
+		Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
+	))
+
+
+## `.SubMenuHeader`'s `menu_coords 0, 0, 13, 9`.
+func _mail_submenu_box() -> Gen2MenuBox:
+	return Gen2MenuBox.from_coords(0, 0, 13, 9, Gen2MenuBox.STATICMENU_CURSOR)
+
+
+## `YesNoBox`, which `.PutInPack`, `ProfOaksPC` and both of Generation 1's
+## questions open over their own.
+func _yes_no_box() -> Gen2MenuBox:
+	return Gen2MenuBox.yes_no()
+
+
+## The same `YesNoBox`, and nothing at all on the timed steps: they are a box
+## with no question on it.
+func _save_prompt_box() -> Gen2MenuBox:
+	return Gen2MenuBox.yes_no() if _pc_rows.size() == 2 else null
+
+
+## `.MenuHeader`'s `menu_coords 11, 4, SCREEN_WIDTH - 1, 13`, raised two rows:
+## the change-box screen it is drawn over on the cartridge has its own words at
+## rows 14 to 17, and this panel's box is at 11, which the source's corner would
+## put QUIT behind.
+func _box_submenu_box() -> Gen2MenuBox:
+	return Gen2MenuBox.from_coords(11, 2, 19, 11, Gen2MenuBox.STATICMENU_CURSOR)
+
+
+func _apricorn_box() -> Gen2MenuBox:
+	return _apricorn_quantity_box() if _apricorns != null \
+		and _apricorns.phase == Gen2WorldApricorn.SELECT_QUANTITY \
+		else _apricorn_select_box()
 
 
 ## `PokemonCenterPC.TopMenu` and `PlayersPCMenuData` share this `menu_coords`.
@@ -3307,15 +4076,13 @@ func _apricorn_quantity_box() -> Gen2MenuBox:
 func _option_count() -> int:
 	if _mode == MODE.MENU:
 		return _menu.options.size() if _menu != null else _choices.size()
-	if _mode in [
-		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST,
-		MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_BOX_SUBMENU,
-		MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_SAVE,
-		MODE.PC_OAK_ASK,
-	]:
+	if PC_ROW_MODES.has(_mode):
 		return _pc_rows.size()
+	if _mode == MODE.PC_MON_LIST:
+		## `.printCancelMenuItem`, the row every `DisplayListMenuID` ends on.
+		return _gen1_mon_entries.size() + 1
 	if _mode == MODE.PC_ITEM_LIST:
-		return maxi(1, _pc_entries.size())
+		return _pc_entries.size() + 1 if _gen1_pc else maxi(1, _pc_entries.size())
 	return 1
 
 

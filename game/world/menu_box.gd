@@ -48,6 +48,10 @@ var scroll: int = 0
 ## The frame a caller drew before the menu, `ScrollingMenu` drawing none. Empty
 ## is every other menu, whose frame is its own corners.
 var frame: Rect2i = Rect2i()
+## Whether the routine drew this box after its own `PrintText`, so it stands
+## over the speech box rather than under it. `DisplayDepositWithdrawMenu` is the
+## one that overlaps; every other menu here clears the bottom six rows.
+var over_textbox: bool = false
 ## `BattleTowerRoomMenu_UpdatePickLevelMenu`, the one menu in the game that
 ## shows a single row between two arrows instead of a list under a cursor. Both
 ## are the `▼` of `String_119d07`, placed at `hlcoord 13, 8` and `hlcoord 13,

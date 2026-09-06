@@ -415,3 +415,128 @@ static func _commit(
 	var out: Dictionary = answer.duplicate()
 	out["ok"] = true
 	return out
+
+
+## `PCMainMenu`'s rows, in the order `DisplayPCMainMenu` prints them.
+const GEN1_PC_BILLS: int = 0
+const GEN1_PC_PLAYERS: int = 1
+const GEN1_PC_OAKS: int = 2
+const GEN1_PC_LEAGUE: int = 3
+const GEN1_PC_LOG_OFF: int = 4
+## `PlayersPCMenuEntries` and `BillsPCMenuText`, inline the way
+## [constant BILLS_PC_ROWS] is.
+const GEN1_PLAYERS_PC_WITHDRAW: int = 0
+const GEN1_PLAYERS_PC_DEPOSIT: int = 1
+const GEN1_PLAYERS_PC_TOSS: int = 2
+const GEN1_PLAYERS_PC_ROWS: Array[String] = [
+	"WITHDRAW ITEM", "DEPOSIT ITEM", "TOSS ITEM", "LOG OFF",
+]
+const GEN1_BILLS_PC_WITHDRAW: int = 0
+const GEN1_BILLS_PC_DEPOSIT: int = 1
+const GEN1_BILLS_PC_RELEASE: int = 2
+const GEN1_BILLS_PC_CHANGE_BOX: int = 3
+const GEN1_BILLS_PC_SEE_YA: int = 4
+const GEN1_BILLS_PC_ROWS: Array[String] = [
+	"WITHDRAW <PKMN>", "DEPOSIT <PKMN>", "RELEASE <PKMN>", "CHANGE BOX", "SEE YA!",
+]
+## `DisplayDepositWithdrawMenu`'s three, its first row named by the parent.
+const GEN1_MON_ACTION_MOVE: int = 0
+const GEN1_MON_ACTION_STATS: int = 1
+const GEN1_MON_ACTION_CANCEL: int = 2
+## `BoxNames`, five cells either way: "BOX 9" has a space and "BOX10" not.
+const GEN1_BOX_LABEL: String = "BOX%s"
+const GEN1_BOX_DIGITS: int = 2
+
+
+## `DisplayPCMainMenu`'s list, `wNumHoFTeams` being the induction flag here
+## the way [method top_menu_list] reads it.
+static func gen1_top_menu(state: Gen2WorldState, player_name: String) -> Array:
+	var pokedex: bool = state != null \
+		and state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX)
+	var league: bool = state != null and state.hall_of_fame()
+	var rows: Array[int] = [GEN1_PC_BILLS, GEN1_PC_PLAYERS]
+	if pokedex:
+		rows.append(GEN1_PC_OAKS)
+		if league:
+			rows.append(GEN1_PC_LEAGUE)
+	rows.append(GEN1_PC_LOG_OFF)
+	var met_bill: bool = state != null \
+		and state.is_event_flag_active(Gen1Layout.EVENT_MET_BILL)
+	var named: String = player_name if not player_name.is_empty() else "PLAYER"
+	var labels: Dictionary = {
+		GEN1_PC_BILLS: "BILL's PC" if met_bill else "SOMEONE's PC",
+		GEN1_PC_PLAYERS: "%s's PC" % named,
+		GEN1_PC_OAKS: "PROF.OAK's PC",
+		GEN1_PC_LEAGUE: "<PKMN>LEAGUE",
+		GEN1_PC_LOG_OFF: "LOG OFF",
+	}
+	var out: Array = []
+	for row: int in rows:
+		out.append({"row": row, "name": String(labels[row])})
+	return out
+
+
+static func gen1_players_pc_menu() -> Array:
+	return _gen1_rows(GEN1_PLAYERS_PC_ROWS)
+
+
+static func gen1_bills_pc_menu() -> Array:
+	return _gen1_rows(GEN1_BILLS_PC_ROWS)
+
+
+## `DisplayChangeBoxMenu`'s twelve, each carrying what
+## `GetMonCountsForAllBoxes` found in it.
+static func gen1_box_menu(save: Gen2SaveData) -> Array:
+	var out: Array = []
+	for box: int in Gen1Layout.BOX_COUNT:
+		out.append({
+			"row": box,
+			"name": GEN1_BOX_LABEL % String.num_int64(box + 1).lpad(GEN1_BOX_DIGITS),
+			"occupied": gen1_box_count(save, box) > 0,
+		})
+	return out
+
+
+static func _gen1_rows(names: Array[String]) -> Array:
+	var out: Array = []
+	for row: int in names.size():
+		out.append({"row": row, "name": names[row]})
+	return out
+
+
+## One box's members: `wBoxCount` counts a packed run, which the occupied
+## slots read in order are.
+static func gen1_box_entries(save: Gen2SaveData, box: int) -> Array:
+	var out: Array = []
+	if save == null or box < 0 or box >= save.boxes.size():
+		return out
+	var record: Gen2SaveBox = save.boxes[box]
+	if record == null:
+		return out
+	for slot: int in record.slots.size():
+		var mon: Gen2SaveMon = record.slots[slot]
+		if mon != null:
+			out.append({"slot": slot, "mon": mon})
+	return out
+
+
+static func gen1_box_count(save: Gen2SaveData, box: int) -> int:
+	return gen1_box_entries(save, box).size()
+
+
+## The three routines' own refusals, in the order each asks them.
+static func gen1_bills_pc_refusal(save: Gen2SaveData, row: int, box: int) -> StringName:
+	var party: int = save.party.size() if save != null else 0
+	var stored: int = gen1_box_count(save, box)
+	match row:
+		GEN1_BILLS_PC_DEPOSIT:
+			if party <= 1:
+				return &"cant_deposit_last"
+			return &"box_full" if stored >= Gen1Layout.BOX_CAPACITY else &""
+		GEN1_BILLS_PC_WITHDRAW:
+			if stored == 0:
+				return &"no_mon"
+			return &"cant_take_mon" if party >= Gen2SaveData.MAX_PARTY else &""
+		GEN1_BILLS_PC_RELEASE:
+			return &"no_mon" if stored == 0 else &""
+	return &""

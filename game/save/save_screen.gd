@@ -645,7 +645,7 @@ func _add_party_summary(body: VBoxContainer, save: Gen2SaveData) -> void:
 		var mon: Gen2SaveMon = save.party[index]
 		var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(_data, mon)
 		column.add_child(Gen2LauncherUI.body(
-			_palette, "%d. %s" % [index + 1, _display_name(mon)]
+			_palette, "%d. %s" % [index + 1, Gen2SaveMon.display_name(mon, _data)]
 		))
 		column.add_child(Gen2LauncherUI.muted(_palette, "Lv.%d   HP %d/%d   %s" % [
 			mon.level, mon.hp, battle_mon.max_hp(), _status_name(mon.status)
@@ -892,18 +892,6 @@ func _slot_state_color(row: Dictionary) -> Color:
 	if not row["valid"] or bool(row.get("run_over", false)):
 		return _palette.error
 	return _palette.success
-
-
-func _display_name(mon: Gen2SaveMon) -> String:
-	if mon.nickname.is_empty():
-		return _species_name(mon.species)
-	return mon.nickname
-
-
-func _species_name(species: int) -> String:
-	if _data == null:
-		return "UNKNOWN"
-	return String(_data.species(species).get("name", "UNKNOWN"))
 
 
 func _status_name(status: int) -> String:

@@ -192,6 +192,9 @@ static func move_power(number: int, power: int) -> int:
 ## $62 as 2bpp, `BattleHudTiles1` at $6d and `BattleHudTiles2` with
 ## `BattleHudTiles3` contiguous behind it at $73, both doubled from 1bpp.
 const BATTLE_FONT_TILES: int = 30
+## `PTile`, the bold P `StatusScreen2` copies to $72 for "PP".
+const STATS_P_TILES: int = 1
+const STATS_P_CODE: int = 0x72
 const BATTLE_FONT_FIRST_CODE: int = 0x62
 const BATTLE_HUD_1_TILES: int = 3
 const BATTLE_HUD_1_FIRST_CODE: int = 0x6D
@@ -492,6 +495,9 @@ const TEXT_SCRIPT_POKECENTER_NURSE: int = 0xFF
 const TEXT_SCRIPT_CABLE_CLUB: int = 0xF6
 const TEXT_SCRIPT_VENDING_MACHINE: int = 0xF5
 const TEXT_SCRIPT_PRIZE_VENDOR: int = 0xF7
+const TEXT_SCRIPT_POKECENTER_PC: int = 0xF9
+const TEXT_SCRIPT_PLAYERS_PC: int = 0xFC
+const TEXT_SCRIPT_BILLS_PC: int = 0xFD
 
 
 ## `CeladonPrizeMenu`'s two stub runs, which are not one: the unreferenced
@@ -586,6 +592,65 @@ const PARTY_MENU_TEXT_AT: Dictionary = {
 const TOSS_TEXT_AT: Dictionary = {
 	"threw_away": 0x00, "ok_to_toss": 0x05, "too_important": 0x0A,
 }
+
+## `engine/menus/pc.asm`'s four, which `ActivatePC` prints around the machine's
+## own top menu.
+const PC_TEXT_AT: Dictionary = {
+	"turned_on": 0x00, "accessed_bills": 0x05, "accessed_someones": 0x0A,
+	"accessed_mine": 0x0F,
+}
+
+## `engine/menus/players_pc.asm`'s fourteen in file order: `PlayerPC` reached
+## from a text script has no generic PC in front of it, so it prints its own
+## boot line.
+const PLAYERS_PC_TEXT_AT: Dictionary = {
+	"turned_on": 0x00, "what_do_you_want": 0x05, "what_to_deposit": 0x0A,
+	"deposit_how_many": 0x0F, "item_was_stored": 0x14, "nothing_to_deposit": 0x19,
+	"no_room_to_store": 0x1E, "what_to_withdraw": 0x23, "withdraw_how_many": 0x28,
+	"withdrew_item": 0x2D, "nothing_stored": 0x32, "cant_carry_more": 0x37,
+	"what_to_toss": 0x3C, "toss_how_many": 0x41,
+}
+
+## `engine/pokemon/bills_pc.asm`'s stubs, in two runs: Yellow puts an extra one
+## between `CantTakeMonText` and `ReleaseWhichMonText`.
+const BILLS_PC_TEXT_AT: Dictionary = {
+	"switch_on": 0x00, "what": 0x05, "mon_was_stored": 0x0F,
+	"cant_deposit_last": 0x14, "box_full": 0x19, "mon_is_taken_out": 0x1E,
+	"no_mon": 0x23, "cant_take_mon": 0x28,
+}
+const BILLS_PC_RELEASE_TEXT_AT: Dictionary = {
+	"once_released": 0x00, "mon_was_released": 0x05,
+}
+
+## `engine/menus/oaks_pc.asm`'s three, the second spending a `text_waitbutton`.
+const OAKS_PC_TEXT_AT: Dictionary = {
+	"get_rated": 0x00, "closed": 0x05, "accessed": 0x0B,
+}
+## `engine/menus/league_pc.asm`'s one.
+const HOF_PC_TEXT_AT: Dictionary = {"accessed": 0x00}
+
+## `ChangeBox`'s two, pinned apart because Yellow's own boxes move the second.
+const CHANGE_BOX_TEXT_AT: Dictionary = {"warning": 0x00}
+const CHOOSE_BOX_TEXT_AT: Dictionary = {"choose": 0x00}
+
+## `DexRatingsTable`: `dbw threshold, text`, the walk stopping at the first row
+## the owned count is under, with `DexCompletionText`'s stub right behind it.
+const DEX_RATING_ROWS: int = 16
+const DEX_RATING_ROW_SIZE: int = 3
+const DEX_RATING_STEP: int = 10
+
+## `PokeballTileGraphics`' four; only the ball itself is drawn here.
+const BALL_TILES: int = 4
+const DEX_COMPLETION_TEXT_AT: int = -TEXT_FAR_STUB_BYTES
+
+## `NUM_BOXES` and `MONS_PER_BOX`, which `BOX_NUM_MASK` bounds `wCurrentBoxNum`
+## to.
+const BOX_COUNT: int = 12
+const BOX_CAPACITY: int = 20
+
+## `EVENT_MET_BILL`, which puts BILL's PC on the machine's top menu where
+## SOMEONE's PC otherwise stands. Counted off `constants/event_constants.asm`.
+const EVENT_MET_BILL: int = 1360
 
 ## `MapHeaderPointers` is flat: one `dw` a map id, with `MapHeaderBanks` beside
 ## it. `SwitchToMapRomBank` selects that bank once, which is what puts a map's
@@ -1135,6 +1200,15 @@ const RED_BLUE: Dictionary = {
 	"pokecenter_text": 0x0705D,
 	"cable_club_text": 0x072B3,
 	"vending_text": 0x74F99,
+	"pc_text": 0x17F23,
+	"players_pc_text": 0x07B22,
+	"bills_pc_text": 0x217E9,
+	"bills_pc_release_text": 0x2181B,
+	"oaks_pc_text": 0x1E93B,
+	"hof_pc_text": 0x76683,
+	"change_box_text": 0x73909,
+	"choose_box_text": 0x739D4,
+	"dex_ratings": 0x441D1,
 	"prize_text": 0x5277E,
 	"prize_text_2": 0x52960,
 	"prize_menus": 0x52843,
@@ -1155,6 +1229,8 @@ const RED_BLUE: Dictionary = {
 	"mon_icons": 0x717C0,
 	"mon_icon_species": 0x7190D,
 	"heal_machine_gfx": 0x704B7,
+	"ball_tiles": 0x3A97E,
+	"stats_p": 0x12ADC,
 	"shock_emote_gfx": 0x17CBD,
 	"wild_data": 0x0CEEB,
 	"wild_chances": 0x13918,
@@ -1292,6 +1368,15 @@ const YELLOW: Dictionary = {
 	"pokecenter_text": 0x06ED0,
 	"cable_club_text": 0x07188,
 	"vending_text": 0x747DE,
+	"pc_text": 0x17DA7,
+	"players_pc_text": 0x079C9,
+	"bills_pc_text": 0x21826,
+	"bills_pc_release_text": 0x2185D,
+	"oaks_pc_text": 0x1E2D4,
+	"hof_pc_text": 0x75F02,
+	"change_box_text": 0x73C52,
+	"choose_box_text": 0x73D10,
+	"dex_ratings": 0x441D1,
 	"prize_text": 0x526DF,
 	"prize_text_2": 0x528C0,
 	"prize_menus": 0x527AE,
@@ -1313,6 +1398,8 @@ const YELLOW: Dictionary = {
 	"mon_icons": 0x7184D,
 	"mon_icon_species": 0x719BA,
 	"heal_machine_gfx": 0x7050B,
+	"ball_tiles": 0x3AA28,
+	"stats_p": 0x11682,
 	"shock_emote_gfx": 0x411E5,
 	"wild_data": 0x0CB95,
 	"wild_chances": 0x138E2,
@@ -1364,6 +1451,7 @@ const BLUE_ONLY: Dictionary = {
 	"hidden_coins": 0x7679A,
 	"hidden_item_coords": 0x766B9,
 	"hidden_coin_coords": 0x76823,
+	"hof_pc_text": 0x76684,
 }
 
 static var _blue: Dictionary = RED_BLUE.merged(BLUE_ONLY, true)
