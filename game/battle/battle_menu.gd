@@ -31,6 +31,9 @@ const MAIN_FLAGS: int = Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_D
 ## `.Text`, in its own order. `<PKMN>` is charmap's $4a, one byte the printer
 ## expands to those four letters, so the four tiles are what is written here.
 const MAIN_OPTIONS: Array[String] = ["FIGHT", "PKMN", "PACK", "RUN"]
+## `BattleMenuText`, the same box in the same order: the bag is spelled ITEM and
+## `<PK><MN>` is two narrow tiles where Crystal's one byte spells four letters.
+const GEN1_MAIN_OPTIONS: Array[String] = ["FIGHT", "<PKMN>", "ITEM", "RUN"]
 
 ## `MoveSelectionScreen`'s own `Textbox` rather than a menu header:
 ## `hlcoord 4, 17 - NUM_MOVES - 1` with `b, 4` and `c, 14`, its list placed from
@@ -99,13 +102,22 @@ static func main_box(contest: bool = false) -> Gen2MenuBox:
 	return box
 
 
-static func main_options(contest: bool = false) -> Array[String]:
-	return CONTEST_OPTIONS.duplicate() if contest else MAIN_OPTIONS.duplicate()
+static func main_options(
+	contest: bool = false, generation: int = RomRegistry.GEN2
+) -> Array[String]:
+	if contest:
+		return CONTEST_OPTIONS.duplicate()
+	return GEN1_MAIN_OPTIONS.duplicate() if generation == RomRegistry.GEN1 \
+		else MAIN_OPTIONS.duplicate()
 
 
-static func move_box() -> Gen2MenuBox:
+## `MoveSelectionMenu`, whose `.regularmenu` box is `hlcoord 4, 12` fourteen
+## wide and so is Crystal's. [param relearn] is `wMoveMenuType` 2, the one
+## `ItemUsePPRestore` opens six rows higher with no PP beside the names.
+static func move_box(relearn: bool = false) -> Gen2MenuBox:
 	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
-		MOVE_LEFT, MOVE_TOP, MOVE_RIGHT, MOVE_BOTTOM, MOVE_FLAGS
+		MOVE_LEFT, MOVE_TOP - (RELEARN_RISE if relearn else 0),
+		MOVE_RIGHT, MOVE_BOTTOM - (RELEARN_RISE if relearn else 0), MOVE_FLAGS
 	)
 	box.row_step = 1
 	return box
@@ -146,6 +158,9 @@ const LIST_RIGHT: int = 19
 const LIST_BOTTOM: int = 11
 const LIST_ROWS: int = 4
 const LIST_FLAGS: int = FORGET_FLAGS
+## How far `.relearnmenu` sits above `.regularmenu`: `hlcoord 4, 7` against
+## `hlcoord 4, 12`.
+const RELEARN_RISE: int = 5
 ## How many columns a row has, from [method Gen2MenuBox.text_start] to the frame
 ## on the right.
 const LIST_TEXT_WIDTH: int = LIST_RIGHT - LIST_LEFT - 2
@@ -170,9 +185,11 @@ static func list_box(scroll: int = 0, more: bool = false) -> Gen2MenuBox:
 
 ## `wMenuScrollPosition` after a cursor move: the window travels the least that
 ## keeps the cursor inside it, which is what `ScrollingMenu`'s own clamp does.
-static func list_scrolled(scroll: int, cursor: int, count: int) -> int:
-	var last: int = maxi(count - LIST_ROWS, 0)
-	return clampi(clampi(scroll, cursor - LIST_ROWS + 1, cursor), 0, last)
+static func list_scrolled(
+	scroll: int, cursor: int, count: int, rows: int = LIST_ROWS
+) -> int:
+	var last: int = maxi(count - rows, 0)
+	return clampi(clampi(scroll, cursor - rows + 1, cursor), 0, last)
 
 
 ## `_2DMenuInterpretJoypad` over the main menu's own two-by-two: a press that

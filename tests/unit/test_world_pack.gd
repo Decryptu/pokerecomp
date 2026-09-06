@@ -504,6 +504,28 @@ func test_a_generation_1_field_effect_reads_its_own_item_numbers() -> void:
 	)
 
 
+## `BattlePack` filters on the battle nibble, where `DisplayPlayerBag` hands
+## `wNumBagItems` over whole and lets `ItemUseNotTime` refuse a row.
+func test_a_generation_1_battle_list_keeps_the_rows_the_bag_would_refuse() -> void:
+	var owned: Dictionary = {ITEM_POTION: 1, ITEM_UNCLASSIFIED: 1}
+	var state := Gen2WorldState.new({}, {}, owned)
+	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
+	for raw: Dictionary in items:
+		match int(raw.get("number", 0)):
+			ITEM_POTION:
+				raw["battle_menu"] = Gen2WorldPack.ITEMMENU_PARTY
+			ITEM_UNCLASSIFIED:
+				raw["pocket"] = Gen2WorldPack.TYPE_ITEM
+	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	assert_eq(Gen2WorldPack.battle_items(data, state), [ITEM_POTION] as Array[int])
+	data.generation = RomRegistry.GEN1
+	assert_eq(
+		Gen2WorldPack.battle_items(data, state),
+		[ITEM_POTION, ITEM_UNCLASSIFIED] as Array[int]
+	)
+
+
 ## `PrintListMenuEntries` prints four names and `IsKeyItem` decides which of them
 ## carry a count, where `ScrollingMenu_UpdateDisplay` writes five and asks
 ## `_CheckTossableItem` for the same thing.

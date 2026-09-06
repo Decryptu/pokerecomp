@@ -15,7 +15,7 @@ extends SceneTree
 const KIND_HELP: Dictionary = {
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
 	&"battle_transition": "frames, index: DoBattleTransition over the map. 1 is the trainer branch; a Generation 1 cartridge reads BattleTransitions' own index, 0 the double circle, 2 the circle, 4 the horizontal stripes, 6 the vertical",
-	&"battle": "frames: the wild fight preview_battle_request starts, settled past its transition",
+	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it",
 	&"battle_caught": "frames: the same fight against a species the dex already holds",
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in",
 	&"catch_dex": "none: NewPokedexEntry's page, over the fight the catch that opened it is still in",
@@ -182,6 +182,8 @@ const TEXT_SETTLE_FRAMES: int = 20
 ## climb runs four passes a cell, so 26 lands a few cells up.
 const STAGED_FRAMES: int = 2
 ## `sign` spends the whole reveal: no press finishes a page early.
+## How many boxes a battle menu is waited for behind.
+const BATTLE_MENU_WAIT: int = 6
 const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"cut": 12, &"waterfall_use": 26, &"sign": BOX_REVEAL_FRAMES,
 	&"gift": BOX_REVEAL_FRAMES,
@@ -543,6 +545,24 @@ func _stage_battle() -> void:
 	for _press: int in (3 if caught else 0):
 		_screen.press_button(PokeButton.A)
 		_screen.advance_frames(frames)
+	if _cell.y == 1:
+		_open_battle_bag(frames)
+
+
+## `BattleMenu`'s ITEM row. The appearance line and the send-out in front of it
+## each owe a press, so A is spent until there is a cursor, and only then is it
+## moved one row down and used.
+func _open_battle_bag(frames: int) -> void:
+	var host: Gen2BattleScreen = _screen.get("_battle_host")
+	for _press: int in BATTLE_MENU_WAIT:
+		if host == null or StringName(host.get("_menu_stage")) == &"main":
+			break
+		_screen.press_button(PokeButton.A)
+		_screen.advance_frames(frames)
+	_screen.press_button(PokeButton.DOWN)
+	_screen.advance_frame()
+	_screen.press_button(PokeButton.A)
+	_screen.advance_frames(frames)
 
 
 ## `CatchTutorial`, played by `DudeAutoInputs` rather than by anybody. The first

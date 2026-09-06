@@ -1355,6 +1355,17 @@ func test_generation_one_offers_the_cartridges_own_ball_numbers() -> void:
 	)
 
 
+## The pack asks the same question in a battle, where a ball is thrown and every
+## other row is used: `ItemAttributes`' type byte, or `ItemUsePtrTable`'s rows on
+## a bag whose every entry carries the item type.
+func test_which_pack_rows_are_thrown_reads_the_generation() -> void:
+	assert_true(Gen2WorldPartyHost.is_ball(_data, 0x05), "POKE_BALL is a Crystal ball")
+	assert_false(Gen2WorldPartyHost.is_ball(_data, 0x08), "and 8 is a MOON STONE row")
+	_data.generation = RomRegistry.GEN1
+	assert_true(Gen2WorldPartyHost.is_ball(_data, 0x08), "8 is the SAFARI BALL there")
+	assert_false(Gen2WorldPartyHost.is_ball(_data, 0x05), "and 5 is the TOWN MAP")
+
+
 ## `ItemUseBall` has one bag rather than four pockets, so nothing an item row
 ## says about a pocket may refuse a Generation 1 throw. The seam is what
 ## `ItemUsePtrTable` says instead, and the cache carries no pocket at all.

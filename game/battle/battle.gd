@@ -404,35 +404,11 @@ const ACTION_SWITCH: StringName = &"switch"
 ## `BattleMenu_Run` runs at menu time, so running is settled before the turn: a
 ## success ends the battle before either side moves and a refusal spends none.
 const ACTION_RUN: StringName = &"run"
-## `AI_TryItem`'s action. It costs the turn and lands before the player's move
-## whatever the speeds say, `AI_SwitchOrTryItem` setting `wEnemyGoesFirst`. Only
-## the enemy uses one; the player's pack is the overworld's.
+## `AI_TryItem`'s action, and `BATTLEPLAYERACTION_USEITEM` on the player's side.
+## The enemy's costs the turn and lands before the player's move whatever the
+## speeds say, `AI_SwitchOrTryItem` setting `wEnemyGoesFirst`; the player's is
+## banked once [method use_bag_item] has already applied the effect.
 const ACTION_ITEM: StringName = &"item"
-
-## The half of `ItemEffects` the cache does not carry: the two revives, the four
-## PP restorers and the doll. Everything else comes off the item's own
-## `status_mask` and `heal_amount`.
-const ITEM_POKE_DOLL: int = 0x25
-const ITEM_REVIVE: int = 0x27
-const ITEM_MAX_REVIVE: int = 0x28
-const ITEM_ETHER: int = 0x3F
-const ITEM_MAX_ETHER: int = 0x40
-const ITEM_ELIXER: int = 0x41
-const ITEM_MAX_ELIXER: int = 0x15
-const ITEM_MYSTERYBERRY: int = 0x96
-const REVIVE_ITEMS: Array[int] = [ITEM_REVIVE, ITEM_MAX_REVIVE]
-const PP_ITEMS: Array[int] = [
-	ITEM_ETHER, ITEM_MAX_ETHER, ITEM_ELIXER, ITEM_MAX_ELIXER, ITEM_MYSTERYBERRY,
-]
-## The three of them that fill one slot, which is what `.loop` asks about; the
-## two Elixers fill every slot and ask nothing.
-const SLOT_PP_ITEMS: Array[int] = [ITEM_ETHER, ITEM_MAX_ETHER, ITEM_MYSTERYBERRY]
-## `RestorePPEffect`'s own amounts: the Max pair fill the slot, and the other
-## three add five (`MYSTERYBERRY` and `ETHER` share it).
-const PP_ITEM_AMOUNTS: Dictionary = {
-	ITEM_ETHER: 10, ITEM_ELIXER: 10, ITEM_MYSTERYBERRY: 5,
-	ITEM_MAX_ETHER: 0, ITEM_MAX_ELIXER: 0,
-}
 
 ## `HandleBerserkGene`'s `BattleCommand_AttackUp2`, and the count it never
 ## writes: a zero byte decremented once is 255 more turns after this one.
@@ -2482,14 +2458,21 @@ func use_bag_item(item: int, target_index: int = -1, move_slot: int = -1) -> Dic
 	var definition: Dictionary = data.item(item)
 	if definition.is_empty():
 		return _item_failure(&"unknown_item")
-	if item == ITEM_POKE_DOLL:
-		## `PokeDollEffect`: `wForcedSwitch` and a DRAW, which is
-		## [method force_out] with nobody blown out by a move.
+	## `ItemUseNotTime`, which only a Generation 1 list ever reaches.
+	if int(definition.get("battle_menu", 0)) == Gen2Layout.ITEMMENU_NOUSE:
+		return _item_failure(&"item_not_usable_here")
+	var roles: Dictionary = Gen2WorldPartyHost.item_effects(data)
+	if item == int(roles["poke_doll"]):
+		## `PokeDollEffect` and `ItemUsePokeDoll` alike: `wForcedSwitch` and a
+		## DRAW, which is [method force_out] with nobody blown out by a move.
 		if is_trainer_battle:
 			return _item_failure(&"item_has_no_effect")
 		force_out(PLAYER)
 		return {"ok": true, "kind": &"fled", "item": item}
-	if Gen2AIItems.X_STATS.has(item) or Gen2AIItems.X_SUBSTATUSES.has(item):
+	if item == int(roles["poke_flute"]):
+		return _play_poke_flute(item)
+	if (roles["x_stat"] as Dictionary).has(item) \
+		or (roles["x_substatus"] as Dictionary).has(item):
 		var applied: Dictionary = _apply_active_item(mon(PLAYER), item)
 		if not bool(applied.get("ok", false)):
 			return _item_failure(StringName(applied.get("reason", &"item_has_no_effect")))
@@ -2512,19 +2495,42 @@ func use_bag_item(item: int, target_index: int = -1, move_slot: int = -1) -> Dic
 	}
 
 
+## `ItemUsePokeFlute`'s in-battle branch: everything asleep on the field and in
+## both parties wakes, `WakeUpEntireParty` reaching the enemy's party only in a
+## trainer battle. The turn is spent either way and the key item is not.
+func _play_poke_flute(item: int) -> Dictionary:
+	var woken: int = 0
+	for side: int in [PLAYER, ENEMY]:
+		if side == ENEMY and not is_trainer_battle:
+			woken += _wake_up(mon(ENEMY))
+			continue
+		for index: int in party(side).size():
+			woken += _wake_up(party(side).at(index))
+	return {"ok": true, "kind": &"poke_flute", "item": item, "woken": woken, "spent": false}
+
+
+func _wake_up(sleeper: Gen2BattleMon) -> int:
+	if sleeper == null or not Gen2Status.is_asleep(sleeper.status):
+		return 0
+	sleeper.status &= ~Gen2Status.SLEEP_MASK
+	return 1
+
+
 ## `XItemEffect`, `GuardSpecEffect` and `DireHitEffect`, on whoever is out rather
 ## than a party member, each refusing a capped stage or a set flag with
 ## `WontHaveAnyEffect_NotUsedMessage`.
 func _apply_active_item(user: Gen2BattleMon, item: int) -> Dictionary:
 	if user == null or user.is_fainted():
 		return {"ok": false, "reason": &"item_has_no_effect"}
-	if Gen2AIItems.X_SUBSTATUSES.has(item):
-		var flag: int = int(Gen2AIItems.X_SUBSTATUSES[item])
+	var roles: Dictionary = Gen2WorldPartyHost.item_effects(data)
+	var substatuses: Dictionary = roles["x_substatus"]
+	if substatuses.has(item):
+		var flag: int = int(substatuses[item])
 		if Gen2Substatus.has(user.substatus, flag):
 			return {"ok": false, "reason": &"item_has_no_effect"}
 		user.substatus |= flag
 		return {"ok": true, "substatus": flag}
-	var stat: String = String(Gen2AIItems.X_STATS[item])
+	var stat: String = String((roles["x_stat"] as Dictionary)[item])
 	if user.stage(stat) >= Gen2Stats.MAX_STAGE:
 		return {"ok": false, "reason": &"item_has_no_effect"}
 	user.change_stage(stat, 1)
@@ -2540,15 +2546,19 @@ func _apply_party_item(
 	target: Gen2BattleMon, item: int, definition: Dictionary,
 	move_slot: int, active: bool
 ) -> Dictionary:
-	if item in REVIVE_ITEMS:
+	var roles: Dictionary = Gen2WorldPartyHost.item_effects(data)
+	var revives: Dictionary = roles["revive"]
+	if revives.has(item):
 		if not target.is_fainted():
 			return {"ok": false, "reason": &"item_has_no_effect"}
-		target.hp = target.max_hp() if item == ITEM_MAX_REVIVE else maxi(target.max_hp() / 2, 1)
+		target.hp = maxi(target.max_hp() / 2, 1) if bool(revives[item]) else target.max_hp()
 		_faint_charged.erase(target.get_instance_id())
 		return {"ok": true, "revived": true, "healed": target.hp}
+	if item == int(roles["confusion_cure"]):
+		return _cure_confusion()
 	if target.is_fainted():
 		return {"ok": false, "reason": &"item_has_no_effect"}
-	if item in PP_ITEMS:
+	if (roles["pp_restore"] as Dictionary).has(item):
 		return _restore_pp(target, item, move_slot)
 	var healed: int = 0
 	var heal_amount: int = int(definition.get("heal_amount", 0))
@@ -2577,12 +2587,33 @@ func _apply_party_item(
 	}
 
 
+## `BitterBerryEffect` reads `wPlayerSubStatus3` rather than the row
+## `UseItem_SelectMon` chose, so whoever is out is unconfused whichever member
+## the list picked.
+func _cure_confusion() -> Dictionary:
+	var user: Gen2BattleMon = mon(PLAYER)
+	if user == null or not Gen2Substatus.has(user.substatus, Gen2Substatus.CONFUSED):
+		return {"ok": false, "reason": &"item_has_no_effect"}
+	user.substatus &= ~Gen2Substatus.CONFUSED
+	user.confusion_turns = 0
+	return {"ok": true, "unconfused": true}
+
+
+## Whether a PP item asks which slot to fill: the two Elixers fill every slot and
+## ask nothing. [method Gen2WorldPartyHost.item_effects] is what tells the two
+## cartridges' item numbers apart, here and in every branch around it.
+static func asks_for_move_slot(item_data: GameData, item: int) -> bool:
+	var rows: Dictionary = Gen2WorldPartyHost.item_effects(item_data)["pp_restore"]
+	return rows.has(item) and not bool(rows[item])
+
+
 ## `RestorePPEffect`: the Elixers fill every slot and the Ethers one, which is
 ## the slot `.loop` asks for. Nothing is spent on a moveset already full.
 func _restore_pp(target: Gen2BattleMon, item: int, move_slot: int) -> Dictionary:
-	var amount: int = PP_ITEM_AMOUNTS.get(item, 0)
+	var roles: Dictionary = Gen2WorldPartyHost.item_effects(data)
+	var amount: int = int((roles["pp_steps"] as Dictionary).get(item, 0))
 	var slots: Array[int] = []
-	if item in [ITEM_ELIXER, ITEM_MAX_ELIXER]:
+	if bool((roles["pp_restore"] as Dictionary)[item]):
 		for slot: int in target.moves.size():
 			slots.append(slot)
 	elif move_slot >= 0 and move_slot < target.moves.size():

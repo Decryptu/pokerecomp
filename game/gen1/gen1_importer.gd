@@ -1093,6 +1093,7 @@ func _import_items(rom: RomFile, layout: Dictionary) -> Array:
 			"pocket": Gen1Layout.BAG_POCKET,
 			"permissions": _item_permissions(rom, layout, item),
 			"field_menu": _item_field_menu(item, party_use, close_use),
+			"battle_menu": Gen1Layout.item_battle_menu(item),
 		}
 		## `ItemUseMedicine` branches on the item number rather than reading a
 		## table, so the two amounts are `Gen1Layout`'s and land the same way.

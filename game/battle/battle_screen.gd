@@ -502,6 +502,8 @@ var _box: Gen2TextBox = null
 ## `PlaceYesNoBox`'s frame over the field, or the whole party page in place of
 ## it, which is what `SetUpBattlePartyMenu` clearing the screen amounts to.
 var _menu_page: Gen2MenuPage = null
+## `DisplayListMenuID`'s box, which the shop and the START menu bag open too.
+var _mart_page: Gen2MartPage = null
 var _party_page: Gen2PartyMenuPage = null
 var _menu_layer: TextureRect = null
 ## What the layer currently holds, so a per-frame refresh redraws nothing.
@@ -2964,7 +2966,7 @@ func use_selected_pack_item() -> Dictionary:
 	if not _pack_selecting or _battle == null:
 		return {"ok": false, "reason": &"pack_not_open"}
 	var item: int = selected_pack_item()
-	if _data != null and int(_data.item(item).get("pocket", 0)) == Gen2WorldPack.TYPE_BALL:
+	if Gen2WorldPartyHost.is_ball(_data, item):
 		_pack_selecting = false
 		if not _is_wild_battle():
 			return _block_ball_in_trainer_battle(item)
@@ -3052,10 +3054,12 @@ func _use_pack_item(item: int, target: int, move_slot: int = -1) -> Dictionary:
 	if not bool(used.get("ok", false)):
 		## `.Field`'s battle twin: every refused effect is one line and the pack
 		## again, so nothing is spent and the turn is still the player's.
-		show_message("It won't have any effect.")
+		show_message(_item_refusal_text(StringName(used.get("reason", &""))))
 		_pack_selecting = true
 		return used
-	item_used.emit(item, target)
+	## `UseDisposableItem`, which the Poke Flute alone is never handed to.
+	if bool(used.get("spent", true)):
+		item_used.emit(item, target)
 	show_message(_item_used_text(item))
 	if _battle.is_over():
 		## `PokeDollEffect`'s `wForcedSwitch`: the battle is already over, so no
@@ -3369,6 +3373,23 @@ func _item_name(item: int) -> String:
 		return "BALL"
 	var item_name: String = _data.item_name(item)
 	return item_name if not item_name.is_empty() else "BALL %d" % item
+
+
+## `ItemUseNoEffectText`, and `ItemUseNotTimeText` for a row `ItemUsePtrTable`
+## refuses inside a battle, which only a Generation 1 list ever offers.
+func _item_refusal_text(reason: StringName) -> String:
+	if reason != &"item_not_usable_here":
+		return _gen1_item_text("no_effect", "It won't have any effect.")
+	return _gen1_item_text(
+		"not_time", "OAK: <PLAYER>!\nThis isn't the\ntime to use that!"
+	).replace(Gen2WorldPC.PLAYER_MARKER, _player_label())
+
+
+func _gen1_item_text(key: String, fallback: String) -> String:
+	if _data == null or _generation() != RomRegistry.GEN1:
+		return fallback
+	var text: String = _data.special_text("item_use_text", key)
+	return fallback if text.is_empty() else text
 
 
 ## `ItemUsedText`, the one line `PokeBallEffect` and every other battle item
@@ -4762,7 +4783,7 @@ func _commit_switch(index: int) -> void:
 		&"item":
 			## `StatusHealer_Jumptable`'s way back: the pack is where a used item
 			## leaves the player, and where a cancelled one does too.
-			if _pack_item in Gen2Battle.SLOT_PP_ITEMS:
+			if Gen2Battle.asks_for_move_slot(_data, _pack_item):
 				_open_pack_move(_pack_item, index)
 				return
 			_use_pack_item(_pack_item, index)
@@ -5051,7 +5072,7 @@ func _draw_battle_menu() -> void:
 	_show_layer_image(
 		_battle_menu_layer,
 		_menu_page.render(
-			box, Gen2BattleMenu.main_options(contest), _menu_position - 1,
+			box, Gen2BattleMenu.main_options(contest, _generation()), _menu_position - 1,
 			"", 0, extras
 		),
 		box.border_position() * Gen2Font.TILE
@@ -5076,14 +5097,22 @@ func _draw_move_menu() -> void:
 
 ## One of the lists standing in front of the fight, windowed onto
 ## [constant Gen2BattleMenu.LIST_ROWS] rows with the cursor kept inside it.
-func _draw_list_menu(key: StringName, labels: Array, cursor: int) -> void:
+func _draw_list_menu(key: StringName, rows: Array, cursor: int) -> void:
 	_menu_layer.visible = false
-	if _menu_page == null or labels.is_empty():
+	if _menu_page == null or rows.is_empty():
 		return
+	var gen1: bool = _generation() == RomRegistry.GEN1
+	var window: int = Gen2MartPage.GEN1_CURSOR_ROWS if gen1 else Gen2BattleMenu.LIST_ROWS
 	var scroll: int = Gen2BattleMenu.list_scrolled(
-		int(_list_scroll.get(key, 0)), cursor, labels.size()
+		int(_list_scroll.get(key, 0)), cursor, rows.size(), window
 	)
 	_list_scroll[key] = scroll
+	if gen1:
+		_draw_gen1_list_menu(rows, scroll, cursor)
+		return
+	var labels: Array = []
+	for row: Dictionary in rows:
+		labels.append(_list_row(String(row.get("name", "")), String(row.get("tail", ""))))
 	var box: Gen2MenuBox = Gen2BattleMenu.list_box(
 		scroll, labels.size() > Gen2BattleMenu.LIST_ROWS
 	)
@@ -5098,6 +5127,20 @@ func _draw_list_menu(key: StringName, labels: Array, cursor: int) -> void:
 	)
 
 
+## `DisplayListMenuID`'s `LIST_MENU_BOX`, the box the shop and the START menu bag
+## already draw: four names two rows apart over the fight, with `wMaxMenuItem`'s
+## own three cursor rows inside them.
+func _draw_gen1_list_menu(rows: Array, scroll: int, cursor: int) -> void:
+	if _mart_page == null:
+		_mart_page = Gen2MartPage.from_data(_data)
+	if _mart_page == null:
+		return
+	_show_layer_image(_battle_menu_layer, _mart_page.render_gen1_pack({
+		"rows": rows.slice(scroll, scroll + Gen2MartPage.GEN1_LIST_HEIGHT),
+		"cursor": cursor - scroll,
+	}), Vector2i.ZERO)
+
+
 ## A row with [param tail] against the box's right-hand edge, which is where the
 ## pack writes a count and the move list a PP pair.
 static func _list_row(text: String, tail: String) -> String:
@@ -5107,21 +5150,23 @@ static func _list_row(text: String, tail: String) -> String:
 
 ## `Pack`'s own rows for the items a battle can use, with what is left of each.
 func _draw_pack_menu() -> void:
-	var labels: Array = []
+	var rows: Array = []
 	for item: int in _pack_rows:
-		labels.append(
-			_list_row(_item_name(item), "×%d" % int(_pack_quantities.get(item, 1)))
-		)
-	_draw_list_menu(&"pack", labels, _pack_index)
+		rows.append(_count_row(_item_name(item), int(_pack_quantities.get(item, 1))))
+	_draw_list_menu(&"pack", rows, _pack_index)
 
 
 ## The BALL pocket of the same list: what choosing a ball in the pack opens, and
 ## the whole of what a fight with no bag behind it is handed.
 func _draw_capture_menu() -> void:
-	var labels: Array = []
+	var rows: Array = []
 	for ball: int in _capture_balls:
-		labels.append(_list_row(_item_name(ball), "×%d" % _capture_quantity(ball)))
-	_draw_list_menu(&"capture", labels, _capture_ball_index)
+		rows.append(_count_row(_item_name(ball), _capture_quantity(ball)))
+	_draw_list_menu(&"capture", rows, _capture_ball_index)
+
+
+static func _count_row(item_name: String, quantity: int) -> Dictionary:
+	return {"name": item_name, "tail": "×%d" % quantity, "quantity": quantity}
 
 
 ## `ItemSubmenu`'s USE/QUIT box, which stands over the list the row was chosen
@@ -5153,14 +5198,30 @@ func _draw_pack_move_menu() -> void:
 	if mon == null or _data == null:
 		_menu_layer.visible = false
 		return
-	var labels: Array = []
+	## `.relearnmenu` prints the names alone, where `BattleMenu_Pack`'s own list
+	## carries the PP pair.
+	var gen1: bool = _generation() == RomRegistry.GEN1
+	var names: Array = []
 	for raw_slot: int in _pack_move_slots:
 		var record: Dictionary = _data.move(int(mon.moves[raw_slot]))
-		labels.append(_list_row(
+		names.append(String(record.get("name", "")) if gen1 else _list_row(
 			String(record.get("name", "")),
 			"%2d/%2d" % [mon.pp_left(raw_slot), int(record.get("pp", 0))]
 		))
-	_draw_list_menu(&"pack_move", labels, _pack_move_index)
+	if not gen1:
+		_draw_list_menu(
+			&"pack_move",
+			names.map(func(text: String) -> Dictionary: return {"name": text, "tail": ""}),
+			_pack_move_index
+		)
+		return
+	_menu_layer.visible = false
+	var box: Gen2MenuBox = Gen2BattleMenu.move_box(true)
+	_show_layer_image(
+		_battle_menu_layer,
+		_menu_page.render(box, names, _pack_move_index),
+		box.border_position() * Gen2Font.TILE
+	)
 
 
 ## `ForgetMove`'s own frame over the field, or the `YesNoBox` of the two

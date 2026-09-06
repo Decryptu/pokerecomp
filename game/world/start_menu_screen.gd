@@ -2174,14 +2174,19 @@ func _coins() -> int:
 ## own line breaks are kept: these boxes are the hardware's now, and a break is
 ## where the cartridge ended the row.
 func _pack_text(key: String) -> String:
+	var text: String = ""
 	if _gen1_pack():
 		var run: Array = GEN1_PACK_TEXTS.get(key, [])
-		return "" if run.is_empty() \
-			else _data.special_text(String(run[0]), String(run[1]))
-	var text: String = _data.menu_text(key) if _data != null else ""
-	if text.is_empty():
-		text = String(TEXT_FALLBACKS.get(key, ""))
-	return text
+		if not run.is_empty():
+			text = _data.special_text(String(run[0]), String(run[1]))
+	else:
+		text = _data.menu_text(key) if _data != null else ""
+		if text.is_empty():
+			text = String(TEXT_FALLBACKS.get(key, ""))
+	return text.replace(
+		Gen2WorldPC.PLAYER_MARKER,
+		_pack_save.player_name if _pack_save != null else ""
+	)
 
 
 ## `Pack_GetItemName` fills wStringBuffer2 and the dial owns wItemQuantityChange,

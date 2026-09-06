@@ -23,6 +23,9 @@ const LAYOUT: Dictionary = {
 	"remove_item_bank": 0x05,
 	"item_to_remove": 0xFFDB,
 	"toggleable_index": 0xCC4D,
+	"cur_party_species": 0xCF91,
+	"cur_map_script": 0xDA39,
+	"map_scripts": 0xD5F0,
 	"predef": 0x01A0,
 	"predef_pointers": 0x0300,
 	"hide_object": 0x0210,
@@ -133,6 +136,55 @@ func test_an_event_branch_keeps_the_flag_and_both_sides() -> void:
 		"then": [{"op": "text", "text": "HI"}],
 		"else": [{"op": "text", "text": "BYE"}],
 	}])
+
+
+## `CheckEitherEventSet`: one `ld a, [wEventFlags + n]` and an `and` whose mask
+## names both flags, so the byte answers for the pair at once.
+func test_either_of_two_flags_in_one_byte_is_one_branch() -> void:
+	var address: int = int(LAYOUT["event_flags"]) + 4
+	var clear: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	var script: Array = _decode(
+		[Gen1Layout.SCRIPT_LD_A_MEM, address & 0xFF, address >> 8,
+			Gen1Layout.SCRIPT_AND_N, 0b01000010]
+			+ [0x20, clear.size()] + clear
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	)
+	assert_eq(script, [{
+		"op": "branch", "flag": 33, "either": [38],
+		"then": [{"op": "text", "text": "HI"}],
+		"else": [{"op": "text", "text": "BYE"}],
+	}])
+
+
+## A `call` to a routine the layout does not name is the map's own:
+## `MtMoonB2FReceivedFossilText` is an `ld hl` and a tail `jp PrintText`.
+func test_a_call_to_the_maps_own_routine_is_walked_and_returned_from() -> void:
+	var routine: int = AT + 0x40
+	var program: Array = _call(routine) + _print(BYE) \
+		+ _call(int(LAYOUT["text_script_end"]))
+	while program.size() < 0x40:
+		program.append(0)
+	program.append_array(
+		_load_hl(HELLO) + [Gen1Layout.SCRIPT_JP,
+			LAYOUT["print_text"] & 0xFF, int(LAYOUT["print_text"]) >> 8]
+	)
+	assert_eq(_decode(program, _boxes()), [
+		{"op": "text", "text": "HI"}, {"op": "text", "text": "BYE"},
+	])
+
+
+## The map script index a row leaves behind it. Nothing here interprets one, so
+## the write is walked past rather than ending the path.
+func test_a_map_script_write_is_walked_past() -> void:
+	var index: int = int(LAYOUT["map_scripts"]) + 0x17
+	var script: Array = _decode(
+		[Gen1Layout.SCRIPT_LD_A, 3, Gen1Layout.SCRIPT_LD_MEM_A,
+			index & 0xFF, index >> 8]
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	)
+	assert_eq(script, [{"op": "text", "text": "HI"}])
 
 
 func test_a_branch_side_this_decoder_cannot_read_is_marked_rather_than_dropped() -> void:

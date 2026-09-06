@@ -66,6 +66,7 @@ func _one_game() -> void:
 	_the_trap_counter_distribution()
 	_conversion_copies_the_target()
 	_teleport_ends_the_battle()
+	_the_bag_in_a_fight()
 
 
 ## `AddPartyMon`'s four base moves and `WriteMonMoves` over them, for every
@@ -333,3 +334,98 @@ func _teleport_ends_the_battle() -> void:
 		for event: Dictionary in events:
 			failed = failed or StringName(event.get("type", &"")) == Gen2Battle.MOVE_FAILED
 		_r.check(failed, "move %d said nothing against a trainer" % move)
+
+
+## `UseItem` from `DisplayPlayerBag`'s own list, at the cartridge's item numbers:
+## a heal, a status cure, a revive, the two kinds of X item, the doll, the flute,
+## and a row `ItemUsePtrTable` refuses inside a battle.
+const BAG_POTION: int = 0x14
+const BAG_ANTIDOTE: int = 0x0B
+const BAG_REVIVE: int = 0x35
+const BAG_X_ATTACK: int = 0x41
+const BAG_X_SPECIAL: int = 0x44
+const BAG_DIRE_HIT: int = 0x3A
+const BAG_POKE_DOLL: int = 0x33
+const BAG_POKE_FLUTE: int = 0x49
+const BAG_TOWN_MAP: int = 0x05
+
+
+func _the_bag_in_a_fight() -> void:
+	var battle: Gen2Battle = _bag_battle()
+	var member: Gen2BattleMon = battle.party(Gen2Battle.PLAYER).at(1)
+	member.hp = 1
+	member.status = Gen2Status.POISON
+	_bag_check(battle.use_bag_item(BAG_POTION, 1), "POTION")
+	_r.check(member.hp == 21, "a POTION left %d HP, not 21" % member.hp)
+	_bag_check(battle.use_bag_item(BAG_ANTIDOTE, 1), "ANTIDOTE")
+	_r.check(member.status == Gen2Status.NONE, "an ANTIDOTE left status %d" % member.status)
+	member.hp = 0
+	_bag_check(battle.use_bag_item(BAG_REVIVE, 1), "REVIVE")
+	_r.check(member.hp > 0, "a REVIVE left the member fainted")
+
+	var out: Gen2BattleMon = battle.mon(Gen2Battle.PLAYER)
+	_bag_check(battle.use_bag_item(BAG_X_ATTACK), "X ATTACK")
+	_r.check(out.stage("attack") == 1, "X ATTACK left attack at %d" % out.stage("attack"))
+	## One stage byte for the one Special stat, which is what the twin carries.
+	_bag_check(battle.use_bag_item(BAG_X_SPECIAL), "X SPECIAL")
+	_r.check(
+		out.stage("sp_attack") == 1 and out.stage("sp_defense") == 1,
+		"X SPECIAL left %d and %d" % [out.stage("sp_attack"), out.stage("sp_defense")]
+	)
+	_bag_check(battle.use_bag_item(BAG_DIRE_HIT), "DIRE HIT")
+	_r.check(
+		Gen2Substatus.has(out.substatus, Gen2Substatus.FOCUS_ENERGY),
+		"DIRE HIT set no focus energy"
+	)
+	_r.check(
+		StringName(battle.use_bag_item(BAG_TOWN_MAP).get("reason", &"")) \
+			== &"item_not_usable_here",
+		"a TOWN MAP is not refused with ItemUseNotTime"
+	)
+
+	out.status = Gen2Status.SLEEP_MASK
+	battle.party(Gen2Battle.PLAYER).at(1).status = Gen2Status.SLEEP_MASK
+	var flute: Dictionary = battle.use_bag_item(BAG_POKE_FLUTE)
+	_bag_check(flute, "POKE FLUTE")
+	_r.check(int(flute.get("woken", 0)) == 2, "the flute woke %d" % int(flute.get("woken", 0)))
+	_r.check(not bool(flute.get("spent", true)), "the flute was spent")
+
+	_r.check(
+		StringName(_bag_battle(true).use_bag_item(BAG_POKE_DOLL).get("reason", &"")) \
+			== &"item_has_no_effect",
+		"a POKE DOLL is not refused in a trainer battle"
+	)
+	var wild: Gen2Battle = _bag_battle()
+	_bag_check(wild.use_bag_item(BAG_POKE_DOLL), "POKE DOLL")
+	_r.check(wild.is_over(), "a POKE DOLL did not end the wild battle")
+	_r.note("gen1 battle bag: 9 rows used, refused or spent as the table says")
+
+
+func _bag_check(result: Dictionary, name: String) -> void:
+	_r.check(bool(result.get("ok", false)), "%s was refused: %s" % [
+		name, String(result.get("reason", &""))
+	])
+
+
+## Two party members so a benched row can be healed, revived and woken.
+func _bag_battle(trainer: bool = false) -> Gen2Battle:
+	var generator := RandomNumberGenerator.new()
+	generator.seed = SWEEP_SEED
+	return Gen2Battle.create_parties(
+		_r.data,
+		Gen2Party.create([
+			Gen2BattleMon.create(
+				_r.data, SWEEP_PLAYER, SWEEP_LEVEL,
+				_r.data.moves_at_level(SWEEP_PLAYER, SWEEP_LEVEL)
+			),
+			Gen2BattleMon.create(
+				_r.data, SWEEP_ENEMY, SWEEP_LEVEL,
+				_r.data.moves_at_level(SWEEP_ENEMY, SWEEP_LEVEL)
+			),
+		]),
+		Gen2Party.of(Gen2BattleMon.create(
+			_r.data, SWEEP_ENEMY, SWEEP_LEVEL,
+			_r.data.moves_at_level(SWEEP_ENEMY, SWEEP_LEVEL)
+		)),
+		generator, trainer
+	)
