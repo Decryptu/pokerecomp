@@ -4292,8 +4292,7 @@ func _show_world_battle_terminal_text() -> bool:
 	if address <= 0:
 		return false
 	var bank: int = int(pointer.get("bank", 0))
-	var raw: PackedByteArray = _data.world_text(bank, address)
-	var decoded: Dictionary = Gen2WorldScript.decode_text(raw)
+	var decoded: Dictionary = _data.world_text_string(bank, address)
 	if not bool(decoded.get("ok", false)):
 		_emit_world_battle_failure(&"missing_battle_result_text", {
 			"bank": bank, "address": address, "text_kind": key,

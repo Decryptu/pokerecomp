@@ -7256,8 +7256,8 @@ func _stage_choice(command: Dictionary, choices: Array) -> Dictionary:
 
 
 func _show_text(bank: int, address: int, finish_after: bool) -> Dictionary:
-	var raw: PackedByteArray = data.world_text(bank, address) if data != null else PackedByteArray()
-	var decoded: Dictionary = _decode_text_with_buffers(raw)
+	var decoded: Dictionary = data.world_text_string(bank, address, text_context()) \
+		if data != null else Gen2TextStream.decode(PackedByteArray())
 	if not bool(decoded.get("ok", false)):
 		return {
 			"ok": false,
@@ -7296,10 +7296,6 @@ func _set_text_buffer(
 
 ## The runner's own print-time context: the buffers `getstring` and
 ## `verbosegiveitem` fill, and the two names a map text can name.
-func _decode_text_with_buffers(raw: PackedByteArray) -> Dictionary:
-	return Gen2TextStream.decode(raw, 0, text_context())
-
-
 ## What `CheckDict` and `TX_STRINGBUFFER` read when this runner prints.
 func text_context() -> Dictionary:
 	var context: Dictionary = {

@@ -35,9 +35,8 @@ const TX_END: int = 0x50
 ## it and no Gold or Silver text does, their `CheckDict` having no entry for it.
 const CHAR_PLAY_G: int = 0x14
 
-## What an unfilled slot in a decoded text opens with. A caller that knows the
-## value puts it in through [method fill_marker]; one that does not can at least
-## see that something belongs there.
+## What an unfilled slot in a decoded text opens with, for a caller that fills
+## it later through [method fill_marker] or [method fill_context].
 const RAM_MARKER: String = "<RAM_"
 const NUMBER_MARKER: String = "<NUM_"
 
@@ -354,6 +353,49 @@ static func fill_all_markers(text: String, prefix: String, value: String) -> Str
 			break
 		out = filled
 	return out
+
+
+## [param text] with the print-time codes filled from [param context], for a
+## string [method decode] did not build: a mod's box, naming people as `<PLAYER>`.
+static func fill_context(text: String, context: Dictionary) -> String:
+	var out: String = text
+	for key: String in NAMES.values():
+		if context.has(key):
+			out = fill_all_markers(out, "<%s" % key.to_upper(), String(context[key]))
+	for marker: String in [RAM_MARKER, NUMBER_MARKER, "<BUFFER_"]:
+		out = _fill_addressed(out, marker, context)
+	return out
+
+
+static func _fill_addressed(text: String, prefix: String, context: Dictionary) -> String:
+	var out: String = text
+	var from: int = 0
+	while true:
+		var at: int = out.find(prefix, from)
+		if at < 0:
+			return out
+		var end: int = out.find(">", at)
+		if end < 0:
+			return out
+		var raw: String = out.substr(at + prefix.length(), end - at - prefix.length())
+		var value: String = _addressed_string(prefix, context, raw)
+		if value.is_empty():
+			from = end + 1
+			continue
+		out = out.substr(0, at) + value + out.substr(end + 1)
+		from = at + value.length()
+	return out
+
+
+static func _addressed_string(prefix: String, context: Dictionary, raw: String) -> String:
+	if prefix == "<BUFFER_":
+		var buffers: Variant = context.get("buffers", {})
+		return String((buffers as Dictionary).get(raw.to_int(), "")) \
+			if buffers is Dictionary else ""
+	var store: Variant = context.get("ram" if prefix == RAM_MARKER else "decimals", {})
+	var address: int = raw.hex_to_int()
+	return String((store as Dictionary).get(address, "")) \
+		if store is Dictionary and (store as Dictionary).has(address) else ""
 
 
 static func _ram_string(context: Dictionary, address: int) -> String:

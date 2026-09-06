@@ -90,6 +90,9 @@ func _write_cache() -> void:
 			"back": {"width": 56, "height": 56, "cell": 56, "columns": 1, "decoded": 1},
 		},
 		"tiles": {},
+		"mart_text": {"greeting": "WELCOME! HOW MAY I <RAM_D086>?"},
+		"special_text": {"elevator": {"which_floor": "WHICH FLOOR?"}},
+		"menu_text": {"descriptions": {"pokedex": "A DEX."}},
 		"complete": true,
 	})
 
@@ -188,6 +191,45 @@ func test_two_mods_claiming_one_number_is_refused_rather_than_decided_by_load_or
 	assert_true(bool(host.register_content(
 		Gen2ContentOverlay.KIND_MOVE, MOD, NEW_MOVE, {"name": "AGAIN"}
 	).get("ok", false)))
+
+
+## The wording seam, reached the way a mod reaches it and read the way a screen
+## reads it. Every named box is one `run`/`name` pair, whichever store holds it.
+func test_a_rewritten_box_reads_back_wherever_the_cartridge_kept_it() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_true(host.patch_text(MOD, &"mart", "greeting", "BIENVENUE !")["ok"])
+	assert_true(host.patch_text(MOD, &"elevator", "which_floor", "QUEL ETAGE ?")["ok"])
+	assert_true(host.patch_text(MOD, &"menu_description", "pokedex", "UN DEX.")["ok"])
+	var data: GameData = _data()
+	assert_eq(data.mart_text("greeting"), "BIENVENUE !")
+	assert_eq(data.special_text("elevator", "which_floor"), "QUEL ETAGE ?")
+	assert_eq(data.menu_description(&"pokedex"), "UN DEX.")
+	## The name the cartridge kept is still what the run lists, so a mod that
+	## rewrote one box has not hidden the others.
+	assert_eq(data.text_names(&"mart"), ["greeting"] as Array[String])
+	assert_true(data.text_runs().has(&"elevator"))
+
+
+## A box nothing claimed is the cartridge's own, and a run this cartridge does
+## not ship answers empty rather than refusing the mod that named it.
+func test_an_unclaimed_box_and_an_absent_run_are_left_alone() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_true(host.patch_text(MOD, &"magikarp", "record", "UN RECORD.")["ok"])
+	var data: GameData = _data()
+	assert_eq(data.mart_text("greeting"), "WELCOME! HOW MAY I <RAM_D086>?")
+	assert_eq(data.special_text("magikarp", "record"), "")
+
+
+func test_two_mods_rewriting_one_box_is_refused_and_an_empty_one_never_lands() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_true(host.patch_text(MOD, &"mart", "greeting", "BIENVENUE !")["ok"])
+	var second: Dictionary = host.patch_text(&"othermod", &"mart", "greeting", "HALLO!")
+	assert_eq(second["reason"], &"duplicate_text")
+	assert_string_contains(PokeModRefusal.text(second), "mart greeting")
+	assert_eq(host.patch_text(MOD, &"mart", "", "X")["reason"], &"invalid_text_key")
+	assert_eq(host.patch_text(MOD, &"mart", "cancel", "")["reason"], &"empty_text")
+	## The first mod's wording survives both refusals.
+	assert_eq(_data().mart_text("greeting"), "BIENVENUE !")
 
 
 func test_a_cache_with_no_mods_reads_exactly_what_the_cartridge_held() -> void:

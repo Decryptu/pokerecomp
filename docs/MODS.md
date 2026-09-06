@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 31 | `patch_text()` and `patch_world_text()`, and `GameData.text()` with the run listings beside it |
 | 30 | The classes both generations reach take the `Poke` prefix: `PokeTiles`, `PokePalette`, `PokeRaster`, `PokeApu`, `PokeAudioRender`, `PokeGameTime`, `PokeModManifest`, `PokeModVersion` and the input and launcher classes beside them. `RomLayout` becomes `Gen2Layout`, beside the new `Gen1Layout`. Nothing else changed, so a mod moves by renaming what it names |
 
 ## Installing
@@ -398,6 +399,35 @@ Name only what changes. A contest row's `percent` is both the choice weight and
 part of the judging. A rod entry's `threshold` is the bite. A roaming mon's
 `map_group`/`map_number` are where it is now, written by the roamer's own
 movement, so a patch naming `species` and `level` leaves them alone.
+
+## Rewriting what a box says
+
+`patch_text()` replaces one of the cartridge's own boxes. A box is named by a run and a name, the pair `GameData.text()` reads it under, and every screen reads through that one call, so nothing downstream knows a mod is there.
+
+```gdscript
+host.patch_text(manifest.id, &"mart", "greeting", "BIENVENUE ! QUE PUIS-JE POUR VOUS ?")
+```
+
+A map dialogue has a pointer rather than a name, so it is patched by bank and address:
+
+```gdscript
+host.patch_world_text(manifest.id, 102, 0x51D1, "<PLAYER> ! TU ES REVENU !")
+```
+
+`tools/checks/text.gd` lists every run and name on every cartridge and pins the totals: 166 named boxes over 15 runs on Gold and Silver, 198 over 19 on Crystal, beside 3004 and 3946 map dialogues. The runs are `bank_of_mom`, `battle_tower`, `buena_prize`, `day_care`, `elevator`, `intro`, `link`, `lucky_number`, `magikarp`, `mart`, `menu`, `menu_description`, `move_deleter`, `mystery_gift`, `name_rater`, `npc_trade`, `npc_trade_newbie`, `photo_studio`, `poke_seer` and `trade`; four of them are Crystal's alone. `GameData.text_runs()`, `text_names()` and `world_text_names()` answer the same lists at run time.
+
+A replacement keeps the markers the cartridge's own line carries, so a line naming something still says where the name goes:
+
+| Marker | Filled with |
+|---|---|
+| `<RAM_D086>` | What a `text_ram` at that address reads, a nickname or an item name |
+| `<NUM_D086>` | What a `text_decimal` at that address prints |
+| `<BUFFER_0>` | A string buffer `getstring` or `verbosegiveitem` filled |
+| `<PLAYER>`, `<RIVAL>`, `<MOM>`, `<RED>`, `<GREEN>`, `<ENEMY>`, `<TARGET>`, `<USER>` | The names `CheckDict` prints |
+
+A marker nothing has a value for is left standing rather than blanked, which is what the cartridge's own text does.
+
+A box this cartridge does not ship is not filled in: a mod rewriting a Crystal-only box installs on Gold and says nothing there, the way a patched content row does. Two mods rewriting one box is refused and names both, and a replacement that says nothing is refused rather than blanking a box.
 
 ## The gameplay catalog
 
