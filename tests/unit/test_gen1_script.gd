@@ -31,13 +31,21 @@ const LAYOUT: Dictionary = {
 	"hide_object": 0x0210,
 	"show_object": 0x0220,
 	"pick_up_item": 0x0230,
+	"in_game_trade": 0x0240,
+	"which_trade": 0xCD3D,
+	"status_flags_4": 0xD72E,
+	"wait_for_button": 0x01B0,
+	"auto_textbox_on": 0x01C0,
+	"auto_textbox_off": 0x01D0,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
-const PREDEFS: Dictionary = {1: 0x0210, 2: 0x0220, 3: 0x0230}
+const PREDEFS: Dictionary = {1: 0x0210, 2: 0x0220, 3: 0x0230, 4: 0x0240}
 const AT: int = 0x1000
 const HELLO: int = 0x1800
 const BYE: int = 0x1810
 const UNREAD_CALL: int = 0x0200
+## `call z, nn`, one of [constant Gen1Layout.SCRIPT_CONDITIONAL_CALLS]' four.
+const CALL_Z: int = 0xCC
 
 
 func _rom(program: Array, strings: Dictionary = {}) -> RomFile:
@@ -385,3 +393,91 @@ func test_the_pick_up_predef_becomes_its_own_node() -> void:
 
 func test_any_other_predef_answers_nothing() -> void:
 	assert_eq(_decode(_predef(0) + _call(int(LAYOUT["text_script_end"]))), [])
+
+
+## `ld a, TRADE_FOR_x`, `ld [wWhichTrade], a` and `predef DoInGameTradeDialogue`.
+func _trade(row: int) -> Array:
+	return [Gen1Layout.SCRIPT_LD_A, row, Gen1Layout.SCRIPT_LD_MEM_A,
+		int(LAYOUT["which_trade"]) & 0xFF,
+		int(LAYOUT["which_trade"]) >> 8] + _predef(4)
+
+
+func test_a_trade_predef_keeps_the_row_it_was_handed() -> void:
+	assert_eq(_decode(_trade(6) + _call(int(LAYOUT["text_script_end"]))),
+		[{"op": "trade", "trade_id": 6}])
+
+
+func test_a_trade_predef_with_no_row_written_answers_nothing() -> void:
+	assert_eq(_decode(_predef(4) + _call(int(LAYOUT["text_script_end"]))), [])
+
+
+## `Route11Gate2FYoungsterText` opens `xor a ; TRADE_FOR_TERRY`.
+func test_xor_a_writes_the_row_a_load_of_zero_would() -> void:
+	assert_eq(_decode(
+		[Gen1Layout.SCRIPT_XOR_A, Gen1Layout.SCRIPT_LD_MEM_A,
+			int(LAYOUT["which_trade"]) & 0xFF, int(LAYOUT["which_trade"]) >> 8]
+			+ _predef(4) + _call(int(LAYOUT["text_script_end"]))
+	), [{"op": "trade", "trade_id": 0}])
+
+
+## `CheckEvent flag, 1`: one `rrca` per bit up to the one asked about, which a
+## `jr c` behind it reads out of carry rather than out of Z.
+func _check_event_carry(flag: int) -> Array:
+	@warning_ignore("integer_division")
+	var byte: int = int(LAYOUT["event_flags"]) + flag / 8
+	var out: Array = [Gen1Layout.SCRIPT_LD_A_MEM, byte & 0xFF, byte >> 8]
+	for _rotation: int in (flag % 8) + 1:
+		out.append(Gen1Layout.SCRIPT_RRCA)
+	return out
+
+
+func test_a_rotated_event_check_reads_the_flag_out_of_carry() -> void:
+	## `jr c` hops over what runs when the flag is clear, the way `jr nz` does.
+	var clear: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	var script: Array = _decode(
+		_check_event_carry(11) + [0x38, clear.size()] + clear
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	)
+	assert_eq(script, [{"op": "branch", "flag": 11,
+		"then": [{"op": "text", "text": "HI"}],
+		"else": [{"op": "text", "text": "BYE"}]}])
+
+
+## Nothing but the rotation raised carry, so a `jr nz` behind the run is reading
+## a Z the rotation did not write.
+func test_a_zero_branch_behind_a_rotation_answers_nothing() -> void:
+	var clear: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	assert_eq(_decode(
+		_check_event_carry(3) + [0x20, clear.size()] + clear
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])), _boxes()
+	), [])
+
+
+## `ld hl, wStatusFlags4` and `set BIT_GOT_LAPRAS, [hl]`, the one saved byte
+## outside `wEventFlags` a row writes.
+func test_an_engine_flag_is_written_as_its_own_kind() -> void:
+	assert_eq(_decode(
+		_load_hl(int(LAYOUT["status_flags_4"]))
+			+ [Gen1Layout.SCRIPT_PREFIX, Gen1Layout.SCRIPT_SET_BASE + 0x06]
+			+ _call(int(LAYOUT["text_script_end"]))
+	), [{"op": "flag", "flag": Gen1Layout.ENGINE_FLAG_FIRST, "set": true,
+		"engine": true}])
+
+
+## `call z, WaitForTextScrollButtonPress`: the routine spends nothing here, so
+## both sides of it print the same boxes.
+func test_a_conditional_call_to_a_silent_routine_is_walked_past() -> void:
+	assert_eq(_decode(
+		[CALL_Z, int(LAYOUT["wait_for_button"]) & 0xFF,
+			int(LAYOUT["wait_for_button"]) >> 8]
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])), _boxes()
+	), [{"op": "text", "text": "HI"}])
+
+
+func test_a_conditional_call_to_anything_else_answers_nothing() -> void:
+	assert_eq(_decode(
+		[CALL_Z, int(LAYOUT["print_text"]) & 0xFF,
+			int(LAYOUT["print_text"]) >> 8]
+			+ _call(int(LAYOUT["text_script_end"]))
+	), [])

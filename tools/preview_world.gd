@@ -34,6 +34,7 @@ const KIND_HELP: Dictionary = {
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
 	&"vending": "presses, rows down: VendingMachineMenu, read by facing up from the cell below one. 0 the list, 1 the box the chosen row lands in",
 	&"prizes": "presses, rows down: CeladonPrizeMenu, read the same way. 0 the list, 1 SoYouWantPrizeText's YES/NO, 2 the box YES lands in",
+	&"trade": "presses: DoInGameTradeDialogue, faced up from the cell below the trader. 0 the offer and its YES/NO, 1 the party list YES opens",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"level_evolution": "frames: EvolveAfterBattle's screen that many frames in, each box pressed past as it lands",
 	&"egg_hatch": "frames, slot: OverworldHatchEgg on that party slot, that many frames in",
@@ -188,7 +189,7 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"cut": 12, &"waterfall_use": 26, &"sign": BOX_REVEAL_FRAMES,
 	&"gift": BOX_REVEAL_FRAMES,
 	&"nurse": BOX_REVEAL_FRAMES, &"vending": BOX_REVEAL_FRAMES,
-	&"prizes": BOX_REVEAL_FRAMES,
+	&"prizes": BOX_REVEAL_FRAMES, &"trade": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
 const BOX_REVEAL_FRAMES: int = 120
@@ -350,15 +351,22 @@ func _stage_battle_tower_party() -> void:
 
 ## A party with something to heal: `HealParty` is a save transaction.
 func _stage_hurt_party() -> void:
-	var save: Gen2SaveData = _screen.active_save()
-	if save == null:
-		save = Gen2SaveStore.create_development_save(_screen._data, 0)
-		_screen.set_save(save)
+	var save: Gen2SaveData = _stage_party()
 	if save == null:
 		return
 	for mon: Gen2SaveMon in save.party:
 		mon.hp = 1
 	_screen._refresh_party_summary()
+
+
+## The save a list or a heal needs, made if the screen has none.
+func _stage_party() -> Gen2SaveData:
+	var save: Gen2SaveData = _screen.active_save()
+	if save != null:
+		return save
+	save = Gen2SaveStore.create_development_save(_screen._data, 0)
+	_screen.set_save(save)
+	return save
 
 
 func _settle_mon_special(host_property: String) -> void:
@@ -437,6 +445,7 @@ const STAGERS: Dictionary = {
 	&"nurse": &"_stage_nurse",
 	&"vending": &"_stage_vending",
 	&"prizes": &"_stage_prizes",
+	&"trade": &"_stage_trade",
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
@@ -1045,6 +1054,12 @@ func _stage_prizes() -> void:
 	_stage_counter({
 		"items": {Gen1Layout.ITEM_COIN_CASE: 1}, "coins": Gen2WorldInventory.MAX_COINS,
 	})
+
+
+## The trader, faced the way a counter is, with a party for the list `YES` opens.
+func _stage_trade() -> void:
+	_stage_party()
+	_stage_counter({})
 
 
 ## A counter faced from the cell below it: presses, then rows down first.

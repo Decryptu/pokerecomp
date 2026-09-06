@@ -1707,7 +1707,10 @@ static func _apply_trade_request(
 		return {"ok": false, "reason": &"could_not_create_trade_pokemon"}
 	received.nickname = String(trade.get("nickname", ""))
 	received.original_trainer = String(trade.get("ot_name", ""))
-	received.ot_id = int(trade.get("ot_id", 0))
+	## `InGameTrade_PrepareTradeData`'s `call Random`: Generation 1 keeps no OT
+	## id on a trade row and rolls one, which the row's -1 asks for.
+	var ot_id: int = int(trade.get("ot_id", 0))
+	received.ot_id = random.randi_range(0, 0xFFFF) if ot_id < 0 else ot_id
 	## `SetGiftPartyMonCaughtData` with `b` from the dialog set: `rrc b` puts bit
 	## 0 in CAUGHT_GENDER_MASK, so only a GIRL trader is recorded as female.
 	set_caught_data(

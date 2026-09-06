@@ -36,6 +36,7 @@ static func import_to_cache(
 		RomCache.world_palettes_path(directory): result["palettes"],
 		RomCache.overworld_sprites_path(directory): sprites,
 		RomCache.world_encounters_path(directory): result["encounters"],
+		RomCache.world_trades_path(directory): result["trades"],
 	}
 	for path: String in sections:
 		if not RomCache.write_json(path, sections[path]):
@@ -141,7 +142,35 @@ static func read_world(
 		"effects": effects["effects"],
 		"icons": icons["icons"],
 		"icon_species": icons["icon_species"],
+		"trades": read_trades(rom, layout),
 	}
+
+
+## `TradeMons` in the shared `world_trade` shape. A row stores no DVs and no OT
+## id: `AddPartyMon` and `InGameTrade_PrepareTradeData` roll them, which -1 asks
+## for, and the trainer name is the one string every row shares.
+static func read_trades(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout["trade_mons"])
+	var out: Array = []
+	for index: int in Gen1Layout.TRADE_COUNT:
+		var row: int = at + index * Gen1Layout.TRADE_RECORD_SIZE
+		out.append({
+			"trade_id": index,
+			"dialog": rom.u8(row + 2),
+			"requested_species": Gen1Layout.dex_of_index(rom, layout, rom.u8(row)),
+			"offered_species": Gen1Layout.dex_of_index(rom, layout, rom.u8(row + 1)),
+			"nickname": Gen1Text.decode(
+				rom.bytes(), row + 3, Gen1Layout.TRADE_NAME_LENGTH
+			),
+			"dvs": -1,
+			"item": 0,
+			"ot_id": -1,
+			"ot_name": Gen1Text.decode(
+				rom.bytes(), int(layout["trade_ot_name"]), Gen1Layout.TRADE_NAME_LENGTH
+			),
+			"gender": Gen2Layout.TRADE_GENDER_EITHER,
+		})
+	return out
 
 
 ## `LoadMonPartySpriteGfx` over `MonPartySpritePointers`: every row copied into
@@ -1013,6 +1042,7 @@ static func _script_ended(state: Dictionary, out: Array) -> Array:
 
 
 ## One instruction: the next address, [constant SCRIPT_END] or SCRIPT_UNREAD.
+## The register writes are here and [method _script_flow] has the rest.
 static func _script_step(
 	ctx: Dictionary, pc: int, state: Dictionary, out: Array
 ) -> int:
@@ -1041,7 +1071,25 @@ static func _script_step(
 		Gen1Layout.SCRIPT_LD_A:
 			state["a"] = rom.u8(at + 1)
 			state.erase("source")
+			state.erase("rotated")
 			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
+		Gen1Layout.SCRIPT_XOR_A:
+			## Zero and a Z the `ld a, 0` above does not raise, so whatever a
+			## branch behind it was reading is gone.
+			state["a"] = 0
+			state.erase("source")
+			state.erase("rotated")
+			state.erase("tests")
+			return pc + 1
+	return _script_flow(ctx, pc, at, state, out)
+
+
+## What reads memory, tests it or leaves the instruction after this one.
+static func _script_flow(
+	ctx: Dictionary, pc: int, at: int, state: Dictionary, out: Array
+) -> int:
+	var rom: RomFile = ctx["rom"]
+	match rom.u8(at):
 		Gen1Layout.SCRIPT_LD_A_MEM:
 			_script_loaded(ctx, rom.u16le(at + 1), state)
 			return pc + Gen1Layout.SCRIPT_LONG_SIZE
@@ -1053,11 +1101,15 @@ static func _script_step(
 				ctx, Gen1Layout.SCRIPT_HRAM_BASE + rom.u8(at + 1), state
 			) else SCRIPT_UNREAD
 		Gen1Layout.SCRIPT_AND_A:
-			state["tests"] = _script_tests(ctx, state, -1)
+			_script_test_bit(ctx, state, -1)
 			return pc + 1
+		Gen1Layout.SCRIPT_RRCA:
+			return _script_rotated(ctx, pc, state, int(state.get("rotated", 0)))
+		Gen1Layout.SCRIPT_ADD_A:
+			return _script_rotated(ctx, pc, state, Gen1Layout.SCRIPT_HIGH_BIT)
 		Gen1Layout.SCRIPT_AND_N:
 			## `CheckEitherEventSet`, whose two flags share a byte and a mask.
-			state["tests"] = _script_mask(ctx, state, rom.u8(at + 1))
+			_script_tested(state, _script_mask(ctx, state, rom.u8(at + 1)))
 			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 		Gen1Layout.SCRIPT_PREFIX:
 			return _script_prefix(ctx, pc, state, out)
@@ -1069,7 +1121,44 @@ static func _script_step(
 			return SCRIPT_END
 		Gen1Layout.SCRIPT_CALL:
 			return _script_call(ctx, pc, rom.u16le(at + 1), state, out)
+	if Gen1Layout.SCRIPT_CONDITIONAL_CALLS.has(rom.u8(at)):
+		return _script_call_if(ctx, pc, rom.u16le(at + 1), state)
 	return SCRIPT_UNREAD
+
+
+## A conditional `call`, which only a routine spending nothing here may be: both
+## sides of `call z, WaitForTextScrollButtonPress` print the same boxes.
+static func _script_call_if(
+	ctx: Dictionary, pc: int, target: int, state: Dictionary
+) -> int:
+	if not _script_routine(ctx["layout"], target) in Gen1Layout.SCRIPT_SILENT_CALLS:
+		return SCRIPT_UNREAD
+	_script_untested(state)
+	return pc + Gen1Layout.SCRIPT_LONG_SIZE
+
+
+## What a branch is reading, and whether it is reading it out of carry.
+static func _script_untested(state: Dictionary) -> void:
+	for key: String in ["tests", "tests_in_carry", "tests_engine"]:
+		state.erase(key)
+
+
+static func _script_tested(
+	state: Dictionary, value: Variant, in_carry: bool = false, engine: bool = false
+) -> void:
+	state["tests"] = value
+	state["tests_in_carry"] = in_carry
+	state["tests_engine"] = engine
+
+
+## One rotation of `CheckEvent flag, 1`'s run, or `add a` standing for all eight
+## of them: the bit that has just landed in carry is the flag being asked about.
+static func _script_rotated(
+	ctx: Dictionary, pc: int, state: Dictionary, rotated: int
+) -> int:
+	state["rotated"] = rotated + 1
+	_script_test_bit(ctx, state, rotated, true)
+	return pc + 1
 
 
 static func _script_hop(operand: int) -> int:
@@ -1081,6 +1170,7 @@ static func _script_hop(operand: int) -> int:
 static func _script_loaded(ctx: Dictionary, address: int, state: Dictionary) -> void:
 	state["source"] = address
 	state.erase("a")
+	state.erase("rotated")
 	if address == int((ctx["layout"] as Dictionary)["cur_party_species"]) \
 		and state.has("species_index"):
 		state["a"] = int(state["species_index"])
@@ -1130,6 +1220,11 @@ static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> 
 			return false
 		state["no_press"] = true
 		return true
+	if address == int(layout["which_trade"]):
+		if not state.has("a"):
+			return false
+		state["trade"] = int(state["a"])
+		return true
 	if address == int(layout["toggleable_index"]):
 		if not state.has("a"):
 			return false
@@ -1141,15 +1236,30 @@ static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> 
 	return true
 
 
-## What the flags hold. [param bit] is -1 for `and a`, which only asks whether
-## the whole byte is zero and so names no flag.
-static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> int:
+## What the flags hold, as the index and whether it is one of Generation 1's own
+## engine flags rather than a `wEventFlags` bit. [param bit] is -1 for `and a`,
+## which only asks whether the whole byte is zero and so names no flag.
+static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> Array:
 	var layout: Dictionary = ctx["layout"]
 	var source: int = int(state.get("source", -1))
 	if source == int(layout["current_menu_item"]):
-		return SCRIPT_TESTS_CHOICE
-	var flag: int = _script_flag(ctx, source, bit)
-	return flag if bit >= 0 and flag >= 0 else SCRIPT_TESTS_NOTHING
+		return [SCRIPT_TESTS_CHOICE, false]
+	if bit >= 0:
+		var flag: int = _script_flag(ctx, source, bit)
+		if flag >= 0:
+			return [flag, false]
+		var engine: int = _script_engine_flag(ctx, source, bit)
+		if engine >= 0:
+			return [engine, true]
+	return [SCRIPT_TESTS_NOTHING, false]
+
+
+## Reads what a test is asking about into [param state].
+static func _script_test_bit(
+	ctx: Dictionary, state: Dictionary, bit: int, in_carry: bool = false
+) -> void:
+	var tested: Array = _script_tests(ctx, state, bit)
+	_script_tested(state, tested[0], in_carry, bool(tested[1]))
 
 
 ## An address in `wEventFlags` and a bit as one flag index, the way
@@ -1159,6 +1269,16 @@ static func _script_flag(ctx: Dictionary, address: int, bit: int) -> int:
 	if address < base or address >= base + Gen1Layout.EVENT_FLAG_BYTES:
 		return -1
 	return (address - base) * 8 + bit
+
+
+## The same for one of [constant Gen1Layout.ENGINE_FLAG_BYTES], the saved bytes
+## outside `wEventFlags` a row reads.
+static func _script_engine_flag(ctx: Dictionary, address: int, bit: int) -> int:
+	var layout: Dictionary = ctx["layout"]
+	for index: int in Gen1Layout.ENGINE_FLAG_BYTES.size():
+		if address == int(layout.get(Gen1Layout.ENGINE_FLAG_BYTES[index], -1)):
+			return Gen1Layout.ENGINE_FLAG_FIRST + index * Gen1Layout.ENGINE_FLAG_BITS + bit
+	return -1
 
 
 ## `bit b, a` names the flag a branch tests; `set`/`res b, [hl]` writes one.
@@ -1172,14 +1292,21 @@ static func _script_prefix(
 	var operand: int = code & 7
 	if operand == Gen1Layout.SCRIPT_OPERAND_A \
 		and code >= Gen1Layout.SCRIPT_BIT_BASE and code < Gen1Layout.SCRIPT_RES_BASE:
-		state["tests"] = _script_tests(ctx, state, bit)
+		_script_test_bit(ctx, state, bit)
 		return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 	if operand != Gen1Layout.SCRIPT_OPERAND_HL or code < Gen1Layout.SCRIPT_RES_BASE:
 		return SCRIPT_UNREAD
-	var flag: int = _script_flag(ctx, int(state.get("hl", -1)), bit)
-	if flag < 0:
+	var written: int = _script_flag(ctx, int(state.get("hl", -1)), bit)
+	var engine: int = _script_engine_flag(ctx, int(state.get("hl", -1)), bit)
+	if written < 0 and engine < 0:
 		return SCRIPT_UNREAD
-	out.append({"op": "flag", "flag": flag, "set": code >= Gen1Layout.SCRIPT_SET_BASE})
+	var node: Dictionary = {
+		"op": "flag", "flag": written if written >= 0 else engine,
+		"set": code >= Gen1Layout.SCRIPT_SET_BASE,
+	}
+	if written < 0:
+		node["engine"] = true
+	out.append(node)
 	return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 
 
@@ -1192,8 +1319,11 @@ static func _script_call(
 	var next: int = pc + Gen1Layout.SCRIPT_LONG_SIZE
 	## A routine returns with flags of its own, so a `jr z` behind a call is
 	## reading them rather than whatever set them before it.
-	state.erase("tests")
-	match _script_routine(layout, target):
+	_script_untested(state)
+	var routine: String = _script_routine(layout, target)
+	if routine in Gen1Layout.SCRIPT_SILENT_CALLS:
+		return next
+	match routine:
 		"print_text":
 			var box: Dictionary = _script_box(ctx, int(state.get("hl", 0)))
 			if box.is_empty():
@@ -1221,8 +1351,6 @@ static func _script_call(
 			return _script_pokedex(ctx, state, out, next)
 		"give_pokemon":
 			return _script_gift_pokemon(ctx, state, out, next)
-		"play_cry", "wait_for_sound":
-			return next
 	return _script_local_call(ctx, target, state, out, next)
 
 
@@ -1293,7 +1421,7 @@ static func _script_gift_pokemon(
 	out.append({"op": "give_pokemon", "species": dex, "level": int(state["c"])})
 	state.erase("b")
 	state.erase("c")
-	state["tests"] = SCRIPT_TESTS_CARRY
+	_script_tested(state, SCRIPT_TESTS_CARRY)
 	return next
 
 
@@ -1304,7 +1432,7 @@ static func _script_gift(state: Dictionary, out: Array, next: int) -> int:
 	out.append({"op": "give_item", "item": int(state["b"]), "count": int(state["c"])})
 	state.erase("b")
 	state.erase("c")
-	state["tests"] = SCRIPT_TESTS_CARRY
+	_script_tested(state, SCRIPT_TESTS_CARRY)
 	return next
 
 
@@ -1314,7 +1442,7 @@ static func _script_asked(state: Dictionary, next: int) -> int:
 		return SCRIPT_UNREAD
 	state["asked"] = int(state["b"])
 	state.erase("b")
-	state["tests"] = SCRIPT_TESTS_ITEM
+	_script_tested(state, SCRIPT_TESTS_ITEM)
 	return next
 
 
@@ -1347,6 +1475,12 @@ static func _script_predef(
 	if target == int(layout["pick_up_item"]):
 		out.append({"op": "pick_up_item"})
 		return next
+	if target == int(layout["in_game_trade"]):
+		if not state.has("trade"):
+			return SCRIPT_UNREAD
+		out.append({"op": "trade", "trade_id": int(state["trade"])})
+		state.erase("trade")
+		return next
 	var hidden: bool = target == int(layout["hide_object"])
 	if not state.has("toggle") \
 		or (not hidden and target != int(layout["show_object"])):
@@ -1377,7 +1511,9 @@ static func _script_branch(
 	if tests is Array:
 		if carry:
 			return null
-	elif int(tests) == SCRIPT_TESTS_NOTHING or carry != (int(tests) == SCRIPT_TESTS_CARRY):
+	elif int(tests) == SCRIPT_TESTS_NOTHING or carry != (
+		int(tests) == SCRIPT_TESTS_CARRY or bool(state.get("tests_in_carry", false))
+	):
 		return null
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), pc)
@@ -1420,7 +1556,12 @@ static func _script_node(
 		SCRIPT_TESTS_ITEM:
 			return {"op": "has_item", "item": int(state["asked"]),
 				"then": taken, "else": fell}
-	return {"op": "branch", "flag": int(tests), "then": taken, "else": fell}
+	var branch: Dictionary = {
+		"op": "branch", "flag": int(tests), "then": taken, "else": fell,
+	}
+	if bool(state.get("tests_engine", false)):
+		branch["engine"] = true
+	return branch
 
 
 ## The carry belongs to the gift in front of it, so both sides fold onto it.

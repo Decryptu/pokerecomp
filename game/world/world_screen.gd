@@ -8061,7 +8061,7 @@ func _open_party_selection(request: Dictionary = {}) -> bool:
 	host.set_screen(_screen)
 	add_child(host)
 	host.open_selection(
-		Gen2PartyScreen.PROMPT_CHOOSE,
+		Gen2PartyScreen.prompt_text(_data, &"normal", Gen2PartyScreen.PROMPT_CHOOSE),
 		Gen2PartyScreen.ACTION_GIVE_MON \
 			if StringName((request.get("values", {}) as Dictionary).get(
 				"routine", &""

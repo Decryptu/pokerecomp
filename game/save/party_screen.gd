@@ -816,8 +816,11 @@ func _moves_page_advance() -> void:
 ## `WritePartyMenuTilemap`'s rows, in [Gen2BattleSwitchMenu]'s own shape plus the
 ## `egg` [Gen2PartyMenuPage] needs, which a battle party never carries.
 ## `PartyMenuQualityPointers`' `.Gender`, both `SelectTradeOrDayCareMon` callers.
+## Generation 1 has no gender byte and `PartyMenuInit` no quality column, so
+## `InGameTrade_DoTrade`'s own list still draws the bar every other menu draws.
 func _gender_column() -> bool:
-	return _selecting and _select_action == ACTION_GIVE_MON
+	return _selecting and _select_action == ACTION_GIVE_MON \
+		and _data != null and _data.generation != RomRegistry.GEN1
 
 
 func _rows() -> Array:

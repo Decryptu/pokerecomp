@@ -82,6 +82,7 @@ uncharacterised bank layout could produce corrupt assets. The three Generation 1
 cartridges import their species, move, type, item and trainer tables, every map
 and tileset, and every map text, and a wild fight, a trainer battle and a
 standing wild Pokemon on one of their maps are all fought on the battle screen.
+An NPC's in-game trade is offered, refused and taken.
 The START menu is the cartridge's own list and opens its one-pocket bag; the
 launcher seats one and does not offer Play until its map scripts are
 interpreted.

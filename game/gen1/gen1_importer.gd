@@ -475,6 +475,7 @@ static func _verify_battle_anims(rom: RomFile, layout: Dictionary) -> Dictionary
 static func _verify_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var runs: Dictionary = {"mart": ["mart_text", Gen1Layout.MART_TEXT_AT]}
 	runs.merge(FACILITY_TEXT_RUNS)
+	runs["npc_trade"] = ["npc_trade_cable_text", Gen1Layout.NPC_TRADE_TEXT_AT]
 	for run: String in runs:
 		var key: String = String((runs[run] as Array)[0])
 		var slots: Dictionary = (runs[run] as Array)[1]
@@ -1026,7 +1027,7 @@ func _import_prizes(rom: RomFile, layout: Dictionary) -> Array:
 	return out
 
 
-## The other two runs, in [method GameData.special_text]'s run/slot shape.
+## Every run but the shop's, in [method GameData.special_text]'s run/slot shape.
 func _import_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	for run: String in FACILITY_TEXT_RUNS:
@@ -1038,6 +1039,28 @@ func _import_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 				rom, Gen1Layout.facility_text_offset(layout, key, slots, name)
 			)
 		out[run] = boxes
+	out["npc_trade"] = _import_trade_text(rom, layout)
+	return out
+
+
+## `InGameTradeTextPointers`' three tables of five and the two boxes the swap
+## prints, in the one run both generations' trades are read from.
+func _import_trade_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for name: String in Gen1Layout.NPC_TRADE_TEXT_AT:
+		out[name] = facility_text(rom, Gen1Layout.facility_text_offset(
+			layout, "npc_trade_cable_text", Gen1Layout.NPC_TRADE_TEXT_AT, name
+		))
+	var table: int = int(layout["trade_text_pointers"])
+	var bank: int = RomFile.bank_of(table)
+	for slot: int in Gen2Layout.TRADE_TEXT_ORDER.size():
+		@warning_ignore("integer_division")
+		var set_row: int = table + (slot / Gen2Layout.TRADE_TEXTS_PER_SET) * Gen1Layout.POINTER_SIZE
+		var texts: int = Gen1Layout.banked(bank, rom.u16le(set_row))
+		out[Gen2Layout.TRADE_TEXT_ORDER[slot]] = facility_text(rom, Gen1Layout.banked(
+			bank,
+			rom.u16le(texts + (slot % Gen2Layout.TRADE_TEXTS_PER_SET) * Gen1Layout.POINTER_SIZE)
+		))
 	return out
 
 

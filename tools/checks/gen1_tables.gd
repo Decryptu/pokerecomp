@@ -104,6 +104,28 @@ const MULTIPLIERS: Array[int] = [0, 5, 20]
 
 const MAX_LEVEL: int = 100
 
+## `TradeMons` whole, as dex numbers: the give and get species, the
+## `TRADE_DIALOGSET_*` and the nickname of every `npctrade` row, unused rows
+## included. Transcribed from `data/events/trades.asm`.
+const TRADES: Dictionary = {
+	&"red": [
+		[33, 30, 0, "TERRY"], [63, 122, 0, "MARCEL"], [12, 15, 2, "CHIKUCHIKU"],
+		[77, 86, 0, "SAILOR"], [21, 83, 2, "DUX"], [80, 108, 0, "MARC"],
+		[61, 124, 1, "LOLA"], [26, 101, 1, "DORIS"], [48, 114, 2, "CRINKLES"],
+		[32, 29, 2, "SPOT"],
+	],
+	&"yellow": [
+		[108, 51, 0, "GURIO"], [35, 122, 0, "MILES"], [12, 15, 2, "STINGER"],
+		[115, 89, 0, "STICKY"], [151, 151, 2, "BART"], [114, 47, 0, "SPIKE"],
+		[18, 18, 1, "MARTY"], [55, 112, 1, "BUFFY"], [58, 87, 2, "CEZANNE"],
+		[104, 67, 2, "RICKY"],
+	],
+}
+## `InGameTrade_TrainerString`, the one OT name every row shares, and the two
+## values `DoInGameTradeDialogue` rolls rather than storing.
+const TRADE_OT_NAME: String = "TRAINER"
+const TRADE_ROLLED: int = -1
+
 var _r: RefCounted = null
 
 
@@ -120,6 +142,7 @@ func _one_game() -> void:
 	_items()
 	_tmhm()
 	_trainers()
+	_trades()
 
 
 func _species() -> void:
@@ -430,3 +453,28 @@ static func _is_real_type(type: int) -> bool:
 	if type > TYPE_DRAGON:
 		return false
 	return type < TYPE_UNUSED_FIRST or type > TYPE_UNUSED_LAST
+
+
+## `TradeMons` and the `special_text` run behind `InGameTradeTextPointers`: ten
+## rows on all three cartridges, three dialog sets of five boxes each, and the
+## two boxes `InGameTrade_DoTrade` prints around the swap.
+func _trades() -> void:
+	var wanted: Array = TRADES[&"yellow" if _r.game_id == RomRegistry.YELLOW else &"red"]
+	var read: Array = []
+	for index: int in _r.data.world_trade_count():
+		var row: Dictionary = _r.data.world_trade(index)
+		read.append([
+			int(row["requested_species"]), int(row["offered_species"]),
+			int(row["dialog"]), String(row["nickname"]),
+		])
+		_r.check(
+			String(row["ot_name"]) == TRADE_OT_NAME
+			and int(row["dvs"]) == TRADE_ROLLED and int(row["ot_id"]) == TRADE_ROLLED,
+			"trade %d carries %s." % [index, row]
+		)
+	_r.check(read == wanted, "the trade table reads %s." % [read])
+	for name: String in Gen2Layout.TRADE_TEXT_ORDER + Gen1Layout.NPC_TRADE_TEXT_AT.keys():
+		_r.check(
+			not _r.data.special_text("npc_trade", name).is_empty(),
+			"the trade run has no %s box." % name
+		)
