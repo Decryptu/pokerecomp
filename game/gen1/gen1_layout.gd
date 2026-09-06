@@ -312,6 +312,7 @@ const ITEM_BICYCLE: int = 0x06
 const ITEM_ESCAPE_ROPE: int = 0x1D
 ## `IsItemInBag COIN_CASE`, which `CeladonPrizeMenu` opens on.
 const ITEM_COIN_CASE: int = 0x45
+const ITEM_COIN: int = 0x3B
 const ITEM_ITEMFINDER: int = 0x47
 const ITEM_TOWN_MAP: int = 0x05
 const ITEM_POKEDEX: int = 0x09
@@ -733,7 +734,7 @@ const SCRIPT_CALLS: Array[String] = [
 	"give_item", "is_item_in_bag", "bankswitch", "play_cry", "wait_for_sound",
 	"predef", "display_pokedex", "give_pokemon", "wait_for_button",
 	"auto_textbox_on", "auto_textbox_off", "has_enough_money", "display_text_box",
-	"has_enough_coins",
+	"has_enough_coins", "print_predef_text", "display_text_id", "count_set_bits",
 ]
 ## Routines named by a full ROM offset, the same address in another bank being another routine.
 const SCRIPT_BANKED_CALLS: Array[String] = ["coin_box"]
@@ -741,9 +742,29 @@ const SCRIPT_BANKED_CALLS: Array[String] = ["coin_box"]
 ## every box, and `wAutoTextBoxDrawingControl` has no counterpart.
 const SCRIPT_SILENT_CALLS: Array[String] = [
 	"play_cry", "wait_for_sound", "wait_for_button",
-	"auto_textbox_on", "auto_textbox_off",
+	"auto_textbox_on", "auto_textbox_off", "count_set_bits",
 ]
 const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
+## `cp n` and the two conditional `ret`s behind it, whose value is the side
+## taken when the comparison did not match.
+const SCRIPT_CP_N: int = 0xFE
+const SCRIPT_RET_BRANCHES: Dictionary = {0xC0: true, 0xC8: false}
+## `PrintPredefTextID`'s operand counts from 1. Yellow puts the Fan Club's two
+## pictures at $0C and $0D, so every row past the fossils sits two higher there
+## and an id read as Red's decodes, in the wrong bank, to something.
+const TEXT_PREDEF_COUNT: int = 66
+const TEXT_PREDEF_COUNT_YELLOW: int = 68
+const TEXT_PREDEF_SIZE: int = 2
+const TEXT_PREDEFS: Dictionary = {
+	"gym_statue": 0x0C, "gym_statue_badge": 0x0D, "found_hidden_item": 0x24,
+	"hidden_item_bag_full": 0x25, "found_hidden_coins": 0x2B,
+	"dropped_hidden_coins": 0x2C,
+}
+const TEXT_PREDEFS_YELLOW: Dictionary = {
+	"gym_statue": 0x0E, "gym_statue_badge": 0x0F, "found_hidden_item": 0x26,
+	"hidden_item_bag_full": 0x27, "found_hidden_coins": 0x2D,
+	"dropped_hidden_coins": 0x2E,
+}
 ## The two packed-decimal buffers a price is written into, most significant
 ## byte first. `wPriceTemp` stands at `wWhichTrade`'s own address.
 const SCRIPT_BCD_BUFFERS: Array[String] = ["money_hram", "which_trade"]
@@ -767,9 +788,14 @@ const SCRIPT_OPERAND_A: int = 7
 const SCRIPT_OPERAND_HL: int = 6
 ## `flag_array NUM_EVENTS`: 2,560 events on all three cartridges.
 const EVENT_FLAG_BYTES: int = 320
-## Generation 1's own saved flag bytes, which Crystal's engine flag table names
-## none of, so the run sits above every Crystal index and one store holds both.
-const ENGINE_FLAG_BYTES: Array[String] = ["status_flags_4"]
+## Generation 1's own saved flag runs, which Crystal's engine flag table names
+## none of, so they sit above every Crystal index. The value is the run's width
+## in bytes and the order is what fixes where each one starts.
+const ENGINE_FLAG_BYTES: Dictionary = {
+	"status_flags_4": 1,
+	"obtained_hidden_items": HIDDEN_ITEM_FLAG_BYTES,
+	"obtained_hidden_coins": HIDDEN_COIN_FLAG_BYTES,
+}
 const ENGINE_FLAG_FIRST: int = 256
 const ENGINE_FLAG_BITS: int = 8
 ## `BAG_ITEM_CAPACITY`: one list of slots, not four pockets.
@@ -791,6 +817,60 @@ const USABLE_ITEMS_MAX: int = ITEM_COUNT
 const MAX_WARP_EVENTS: int = 32
 const MAX_SIGN_EVENTS: int = 16
 const MAX_OBJECT_EVENTS: int = 16
+
+## `hidden_event`: y, x, the routine's own argument, then its bank and address.
+## Red and Blue keep the map ids and the pointers in two tables; Yellow writes
+## the pointer beside each id. Most rows carry a `SPRITE_FACING_*` argument that
+## nothing reads: a facing that matters is tested by the routine itself.
+const HIDDEN_EVENT_SIZE: int = 6
+const HIDDEN_EVENT_MAP_SIZE: int = 3
+const HIDDEN_EVENT_END: int = 0xFF
+## `HiddenItemCoords` and `HiddenCoinCoords`: map id, y, x, indexed by position.
+const HIDDEN_COORD_SIZE: int = 3
+## `flag_array MAX_HIDDEN_ITEMS` and `MAX_HIDDEN_COINS`, in bytes.
+const HIDDEN_ITEM_FLAG_BYTES: int = 14
+const HIDDEN_COIN_FLAG_BYTES: int = 2
+## `AddBCD`'s own ceiling, which a coin case holding 9999 already stands at.
+const HIDDEN_COIN_CEILING: int = 9999
+## `HiddenCoins` writes a packed-decimal sum by hand off `argument - COIN`, and
+## its own `.bcd40` is unreachable: a 40-coin row pays 20.
+const HIDDEN_COIN_AMOUNTS: Dictionary = {10: 10, 20: 20, 40: 20}
+const HIDDEN_COIN_DEFAULT: int = 100
+## The hidden event routines that index a table of their own, read by hand.
+const HIDDEN_TABLE_ROUTINES: Array[String] = [
+	"hidden_items", "hidden_coins", "bench_guy_text", "gym_statues",
+]
+## `bookshelf_tile` is a tileset, a tile and a `tx_pre` id; `MapBadgeFlags` a
+## map and its `wBeatGymFlags` mask; `BenchGuyTextPointers` a map, a facing and
+## a `tx_pre` id.
+const BOOKSHELF_ROW_SIZE: int = 3
+const BADGE_ROW_SIZE: int = 2
+## `GYM_CITY_LENGTH` and `NAME_LENGTH`, the two runs a gym's own map script
+## hands `LoadGymLeaderAndCityName` and `_GymStatueText1` reads back out of RAM.
+## The `ld hl`, `ld de` and `jp` are one shape the head of that script reaches.
+const GYM_CITY_LENGTH: int = 17
+const GYM_LEADER_LENGTH: int = 11
+const GYM_NAME_SEARCH: int = 64
+const GYM_NAME_TAILS: Array[int] = [SCRIPT_JP, SCRIPT_CALL]
+const BENCH_GUY_ROW_SIZE: int = 3
+
+## `wTileMap` is the 20x18 screen and `lda_coord 8, 9` the tile the player
+## stands on: a walk cell's bottom left one, the cell being two tiles each way.
+const SCREEN_WIDTH_TILES: int = 20
+const SCREEN_HEIGHT_TILES: int = 18
+const SCREEN_PLAYER_COLUMN: int = 8
+const SCREEN_PLAYER_ROW: int = 9
+
+## `SPRITE_FACING_*`, which `CheckIfCoordsInFrontOfPlayerMatch` steps by.
+const FACING_DOWN: int = 0x00
+const FACING_UP: int = 0x04
+const FACING_LEFT: int = 0x08
+const FACING_RIGHT: int = 0x0C
+const FACING_STEPS: Dictionary = {
+	FACING_DOWN: Vector2i(0, 1), FACING_UP: Vector2i(0, -1),
+	FACING_LEFT: Vector2i(-1, 0), FACING_RIGHT: Vector2i(1, 0),
+}
+
 ## `warp_event`'s indoor exit: `wLastMap`, the outdoor map the player came from.
 const WARP_TO_LAST_MAP: int = 0xFF
 ## `ExtraWarpCheck`'s four named maps, which take the warp-carpet test their own
@@ -1089,6 +1169,35 @@ const RED_BLUE: Dictionary = {
 	"special_effects": 0x790DA,
 	"anim_tilesets": 0x781F2,
 	"falling_deltas": 0x79D0D,
+	## `CheckForHiddenEventOrBookshelfOrCardKeyDoor`: the hidden events per map,
+	## the two coordinate lists, the bookshelf tiles and `TextPredefs`.
+	"hidden_event_maps": 0x46A40,
+	"hidden_event_pointers": 0x46A96,
+	"hidden_item_coords": 0x766B8,
+	"hidden_coin_coords": 0x76822,
+	"bookshelf_tiles": 0x0FB8B,
+	"text_predefs": 0x03F22,
+	"map_badge_flags": 0x62442,
+	"bench_guy_texts": 0x6247E,
+	## The four table routines, by full ROM offset the way
+	## [constant SCRIPT_BANKED_CALLS] names one.
+	"hidden_items": 0x76688,
+	"hidden_coins": 0x76799,
+	"bench_guy_text": 0x6245D,
+	"gym_statues": 0x62419,
+	"print_predef_text": 0x3EF5,
+	"display_text_id": 0x2920,
+	"count_set_bits": 0x2B7F,
+	"load_gym_names": 0x317F,
+	"text_id_hram": 0xFF8C,
+	"facing_direction": 0xC109,
+	"joy_held": 0xFFB4,
+	"auto_text_box_control": 0xCF0C,
+	"tile_map": 0xC3A0,
+	"cur_map_tileset": 0xD367,
+	"num_set_bits": 0xD11E,
+	"obtained_hidden_items": 0xD6F0,
+	"obtained_hidden_coins": 0xD6FE,
 	## `_IsTilePassable` and the lists it walks share a bank, and the pointer in
 	## a tileset row names no bank of its own. Red and Blue keep both in home.
 	"tileset_collision_bank": 0x00,
@@ -1217,6 +1326,32 @@ const YELLOW: Dictionary = {
 	"special_effects": 0x79145,
 	"anim_tilesets": 0x7822B,
 	"falling_deltas": 0x79E96,
+	## Yellow writes each pointer beside its own map id and keeps no second table.
+	"hidden_event_maps": 0xF268D,
+	"hidden_event_pointers": 0,
+	"hidden_item_coords": 0x75FAA,
+	"hidden_coin_coords": 0x7611E,
+	"bookshelf_tiles": 0x0FA19,
+	"text_predefs": 0x03F67,
+	"map_badge_flags": 0x62611,
+	"bench_guy_texts": 0x6264D,
+	"hidden_items": 0x75F74,
+	"hidden_coins": 0x7608E,
+	"bench_guy_text": 0x6262C,
+	"gym_statues": 0x625E8,
+	"print_predef_text": 0x3F3A,
+	"display_text_id": 0x2817,
+	"count_set_bits": 0x2A81,
+	"load_gym_names": 0x311B,
+	"text_id_hram": 0xFF8C,
+	"facing_direction": 0xC109,
+	"joy_held": 0xFFB4,
+	"auto_text_box_control": 0xCF0C,
+	"tile_map": 0xC3A0,
+	"cur_map_tileset": 0xD366,
+	"num_set_bits": 0xD11D,
+	"obtained_hidden_items": 0xD6EF,
+	"obtained_hidden_coins": 0xD6FD,
 	"tileset_collision_bank": 0x01,
 }
 
@@ -1225,6 +1360,10 @@ const YELLOW: Dictionary = {
 ## it sits one byte later on Blue.
 const BLUE_ONLY: Dictionary = {
 	"vending_text": 0x74F9A,
+	"hidden_items": 0x76689,
+	"hidden_coins": 0x7679A,
+	"hidden_item_coords": 0x766B9,
+	"hidden_coin_coords": 0x76823,
 }
 
 static var _blue: Dictionary = RED_BLUE.merged(BLUE_ONLY, true)
@@ -1424,6 +1563,38 @@ static func map_count(id: StringName) -> int:
 ## `CheckIfInOutsideMap`: which maps write `wLastMap` on the way out of them.
 static func is_outside_tileset(tileset: int) -> bool:
 	return tileset == TILESET_OVERWORLD or tileset == TILESET_PLATEAU
+
+
+## One of [constant TEXT_PREDEFS]' rows in this cartridge's own numbering.
+static func text_predef(id: StringName, name: String) -> int:
+	return int((TEXT_PREDEFS_YELLOW if id == RomRegistry.YELLOW else TEXT_PREDEFS)[name])
+
+
+static func text_predef_count(id: StringName) -> int:
+	return TEXT_PREDEF_COUNT_YELLOW if id == RomRegistry.YELLOW else TEXT_PREDEF_COUNT
+
+
+## What one `HiddenCoins` row pays, off its own argument column.
+static func hidden_coin_amount(argument: int) -> int:
+	return int(HIDDEN_COIN_AMOUNTS.get(argument - ITEM_COIN, HIDDEN_COIN_DEFAULT))
+
+
+## Where one of [constant ENGINE_FLAG_BYTES]' runs starts, or -1.
+static func engine_flag_base(name: String) -> int:
+	var index: int = ENGINE_FLAG_FIRST
+	for run: String in ENGINE_FLAG_BYTES:
+		if run == name:
+			return index
+		index += int(ENGINE_FLAG_BYTES[run]) * ENGINE_FLAG_BITS
+	return -1
+
+
+## Which table routine stands at [param offset], or "" for machine code.
+static func hidden_routine(layout: Dictionary, offset: int) -> String:
+	for name: String in HIDDEN_TABLE_ROUTINES:
+		if int(layout.get(name, -1)) == offset:
+			return name
+	return ""
 
 
 ## `BIT_DUNGEON_BATTLE_TRANSITION`, which picks the stripes over the circles.

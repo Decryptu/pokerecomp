@@ -130,21 +130,21 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 236, "text": 264, "branch": 95, "choice": 12, "flag": 40,
-		"give_item": 24, "has_item": 10, "take_item": 3, "unknown": 40,
+	&"red": {"rows": 250, "text": 289, "branch": 108, "choice": 13, "flag": 41,
+		"give_item": 25, "has_item": 15, "take_item": 3, "unknown": 55,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 9, "has_money": 2, "spend_money": 2, "money_box": 2,
-		"has_coins": 4, "add_coins": 4, "coin_box": 2},
-	&"blue": {"rows": 236, "text": 264, "branch": 95, "choice": 12, "flag": 40,
-		"give_item": 24, "has_item": 10, "take_item": 3, "unknown": 40,
+		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2},
+	&"blue": {"rows": 250, "text": 289, "branch": 108, "choice": 13, "flag": 41,
+		"give_item": 25, "has_item": 15, "take_item": 3, "unknown": 55,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 9, "has_money": 2, "spend_money": 2, "money_box": 2,
-		"has_coins": 4, "add_coins": 4, "coin_box": 2},
-	&"yellow": {"rows": 280, "text": 306, "branch": 97, "choice": 13, "flag": 35,
-		"give_item": 24, "has_item": 10, "take_item": 3, "unknown": 44,
+		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2},
+	&"yellow": {"rows": 296, "text": 327, "branch": 103, "choice": 14, "flag": 35,
+		"give_item": 24, "has_item": 12, "take_item": 3, "unknown": 59,
 		"pick_up_item": 108, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 7, "has_money": 2, "spend_money": 2, "money_box": 2,
-		"has_coins": 4, "add_coins": 4, "coin_box": 2},
+		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 6},
 }
 ## The eighth `call DisplayPokedex` in the source is `SilphCo11FPorygonText`,
 ## which no map text row names and the disassembly marks unreferenced. The
@@ -162,6 +162,28 @@ const TOGGLE_CENSUS: Dictionary = {
 	&"blue": {"objects": 226, "on": 194},
 	&"yellow": {"objects": 233, "on": 195},
 }
+
+## One row of each list stands on UNUSED_MAP_6F, which has no header and so no
+## record: the table holds 217 rows on Red and Blue and 213 on Yellow.
+const HIDDEN_CENSUS: Dictionary = {
+	&"red": {"rows": 216, "silent": 70, "text": 209, "branch": 69, "flag": 65,
+		"facing": 56, "name_item": 53, "give_item": 53, "facility": 21,
+		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
+		"map_text": 5, "choice": 3, "unknown": 2, "dex_count": 1},
+	&"blue": {"rows": 216, "silent": 70, "text": 209, "branch": 69, "flag": 65,
+		"facing": 56, "name_item": 53, "give_item": 53, "facility": 21,
+		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
+		"map_text": 5, "choice": 3, "unknown": 2, "dex_count": 1},
+	&"yellow": {"rows": 212, "silent": 69, "text": 211, "branch": 70, "flag": 66,
+		"facing": 52, "name_item": 54, "give_item": 54, "facility": 17,
+		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
+		"map_text": 5, "choice": 3, "unknown": 2, "dex_count": 1},
+}
+## Of `BookshelfTileIDs`' 17 rows, all but two decode: `TownMapText` ends in
+## `DisplayTownMap`, a screen this port has not imported, and the Indigo Plateau
+## statues read `wXCoord` for which of their two boxes they answer with.
+const BOOKSHELF_COUNTS: Dictionary = {&"red": 15, &"blue": 15, &"yellow": 15}
+const CARD_KEY_FLOORS: int = 10
 
 ## The pin on which way a `wCurrentMenuItem` branch reads.
 const LAVENDER_TOWN: int = 4
@@ -204,6 +226,7 @@ func _one_game() -> void:
 	_r.check(_movements == MOVEMENT_CENSUS[_r.game_id],
 		"the movement census reads %s." % str(_movements))
 	_texts()
+	_hidden_events()
 	_toggleables()
 	_wild_objects()
 	_palettes()
@@ -381,6 +404,55 @@ func _walk_script(
 		for side: String in ["then", "else", "yes", "no", "ok", "full"]:
 			if node.has(side):
 				_walk_script(font, node[side] as Array, census, wrong, number)
+
+
+## Every `hidden_event` row of the corpus, the nodes behind it and the bookshelf
+## tiles the A button falls through to. `silent` counts the rows whose routine is
+## a screen this port has no counterpart for.
+func _hidden_events() -> void:
+	var census: Dictionary = {"rows": 0, "silent": 0}
+	var wrong: Array[String] = []
+	var bookshelves: int = 0
+	var card_keys: int = 0
+	for map: Gen2WorldMap in _maps.values():
+		card_keys += 1 if not (map.events["card_key"] as Array).is_empty() else 0
+		for row: Dictionary in map.events["hidden_events"] as Array:
+			census["rows"] = int(census["rows"]) + 1
+			var script: Array = row.get("script", [])
+			if script.is_empty():
+				census["silent"] = int(census["silent"]) + 1
+				continue
+			_walk_hidden(script, census, wrong, map.number)
+	for number: int in _r.data.world_tileset_count():
+		bookshelves += (_r.data.world_tileset(number).bookshelves as Dictionary).size()
+	_r.check(wrong.is_empty(), "hidden event nodes are wrong: %s." % [wrong])
+	_r.check(census == HIDDEN_CENSUS[_r.game_id], "the hidden events read %s." % [census])
+	_r.check(bookshelves == int(BOOKSHELF_COUNTS[_r.game_id]),
+		"%d bookshelf tiles decoded, pinned %d." % [
+			bookshelves, int(BOOKSHELF_COUNTS[_r.game_id]),
+		])
+	_r.check(card_keys == CARD_KEY_FLOORS,
+		"%d floors carry the card key door, pinned %d." % [card_keys, CARD_KEY_FLOORS])
+	_r.note("gen1 hidden events %s, %d bookshelf tiles" % [census, bookshelves])
+
+
+func _walk_hidden(
+	nodes: Array, census: Dictionary, wrong: Array[String], number: int
+) -> void:
+	for node: Dictionary in nodes:
+		var op: String = String(node["op"])
+		census[op] = int(census.get(op, 0)) + 1
+		if op == "facing" and not Gen1Layout.FACING_STEPS.has(int(node["facing"])) \
+			and wrong.size() < 4:
+			wrong.append("map %d faces %d" % [number, int(node["facing"])])
+		if op == "text" and String(node["text"]).is_empty() and wrong.size() < 4:
+			wrong.append("map %d prints nothing" % number)
+		if (op == "give_item" or op == "has_item" or op == "name_item") \
+			and _r.data.item_name(int(node["item"])).is_empty():
+			wrong.append("map %d names item %d" % [number, int(node["item"])])
+		for side: String in ["then", "else", "yes", "no", "ok", "full"]:
+			if node.has(side):
+				_walk_hidden(node[side] as Array, census, wrong, number)
 
 
 ## `LavenderTownLittleGirlText`: the question, then `wCurrentMenuItem` zero for

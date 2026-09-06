@@ -17,11 +17,11 @@ const MAX_COMMENT_BLOCK: int = 8
 ## it whenever a pass leaves room. It moves up only while a generation the tree
 ## did not carry is being brought in, and then by what that generation's own
 ## files cost: `game/gen1`, `game/rom/rom_import.gd` and `tools/checks/gen1_*`
-## are 1269 lines of the 40025 here, and Generation 1 has added 1068 more to the
+## are 1372 lines of the 40160 here, and Generation 1 has added 1101 more to the
 ## shared battle, world, palette, text, save and renderer code: 150 the battle
-## animation engine, 140 the transition and the split effects, 85 the party
-## menu, 40 the bag in a battle, 18 the trades. Fourteen sweeps paid nothing.
-const MAX_COMMENT_LINES: int = 40024
+## animation engine, 140 the transition, 85 the party menu, 40 the bag in a
+## battle, 33 the hidden objects, 18 the trades. Fourteen sweeps paid nothing.
+const MAX_COMMENT_LINES: int = 40160
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than

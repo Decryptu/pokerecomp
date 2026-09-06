@@ -3698,6 +3698,14 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"pick_up_item": &"_gen1_pick_up_item",
 	"give_pokemon": &"_gen1_resolve_gift_pokemon",
 	"pokedex": &"_gen1_node_pokedex",
+	"facing": &"_gen1_node_facing",
+	"badge": &"_gen1_node_badge",
+	"dex_count": &"_gen1_node_dex_count",
+	"tileset": &"_gen1_node_tileset",
+	"screen_tile": &"_gen1_node_screen_tile",
+	"name_item": &"_gen1_node_name_item",
+	"map_text": &"_gen1_node_map_text",
+	"facility": &"_gen1_node_facility",
 }
 
 
@@ -3735,11 +3743,45 @@ func gen1_last_map() -> int:
 	return _gen1_last_map
 
 
-## `IsSpriteOrSignInFrontOfPlayer`: a sign on the faced cell answers first and
-## returns, and only then is a sprite looked for.
+## `CheckForHiddenEventOrBookshelfOrCardKeyDoor` runs on the A press ahead of
+## everything, and finding a row spends it even when the routine prints nothing.
+## The card key door is not among them: no Silph Co. floor draws one until its
+## own map callback puts the block there.
 func _gen1_interact() -> Array:
 	if current_map == null:
 		return []
+	var hidden: Variant = _gen1_hidden_nodes()
+	if hidden == null:
+		return _gen1_sign_or_sprite()
+	_gen1_steps = _gen1_script_steps({"script": hidden})
+	return _gen1_result()
+
+
+## `CheckForHiddenEvent`, then `PrintBookshelfText`, or null when neither found
+## anything. An empty list is a row that answered and printed nothing.
+func _gen1_hidden_nodes() -> Variant:
+	for row: Dictionary in current_map.events.get("hidden_events", []) as Array:
+		if Vector2i(int(row["x"]), int(row["y"])) == facing_cell():
+			return row.get("script", [])
+	var shelf: Array = _gen1_bookshelf_nodes()
+	if shelf.is_empty():
+		return null
+	return shelf
+
+
+## `PrintBookshelfText` reads `lda_coord 8, 7`, the faced cell's bottom left
+## tile, and answers a player facing up alone.
+func _gen1_bookshelf_nodes() -> Array:
+	if current_tileset == null or player_facing != Gen2WorldSprite.FACING_UP:
+		return []
+	return (current_tileset.bookshelves as Dictionary).get(
+		_gen1_tile_drawn_at(facing_cell()), []
+	) as Array
+
+
+## `IsSpriteOrSignInFrontOfPlayer`: a sign on the faced cell answers first and
+## returns, and only then is a sprite looked for.
+func _gen1_sign_or_sprite() -> Array:
 	var event: Dictionary = _gen1_event_at(facing_cell(), &"bg_events")
 	if event.is_empty():
 		event = _gen1_event_at(object_facing_cell(), &"objects")
@@ -3853,6 +3895,87 @@ func _gen1_node_add_coins(node: Dictionary, steps: Array, run: Dictionary) -> bo
 	)
 	run["coins"] = held
 	steps.append({"type": &"coins", "amount": held})
+	return true
+
+
+## A routine's own `cp SPRITE_FACING_*`: which side of its cell it answers.
+func _gen1_node_facing(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, Gen1Layout.FACING_STEPS.get(int(node["facing"]), Vector2i.ZERO)
+			== facing_direction(),
+		steps, run
+	)
+
+
+## `wBeatGymFlags`, whose eight bits are Kanto's badges in the engine flags'
+## own order.
+func _gen1_node_badge(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var flag: int = Gen2WorldState.BADGE_ENGINE_FLAGS[
+		Gen2WorldState.KANTO_BADGE_FIRST + int(node["badge"])
+	]
+	return _gen1_resolve_side(
+		node, state != null and state.is_engine_flag_active(flag), steps, run
+	)
+
+
+## `CountSetBits` over `wPokedexOwned`, which only Oak's right poster reads.
+func _gen1_node_dex_count(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, state != null and state.caught_count() >= int(node["count"]),
+		steps, run
+	)
+
+
+func _gen1_node_tileset(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, current_map != null and current_map.tileset == int(node["tileset"]),
+		steps, run
+	)
+
+
+## `lda_coord`: one position of the 20x18 screen, which `BookOrSculptureText`
+## reads a row above the shelf's own tile.
+func _gen1_node_screen_tile(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var screen: int = int(node["screen"])
+	@warning_ignore("integer_division")
+	var row: int = screen / Gen1Layout.SCREEN_WIDTH_TILES
+	return _gen1_resolve_side(
+		node,
+		_gen1_screen_tile(screen % Gen1Layout.SCREEN_WIDTH_TILES, row)
+			== int(node["tile"]),
+		steps, run
+	)
+
+
+## `GetItemName` into `wStringBuffer`, which names a hidden item's receipt
+## before the bag has been asked whether it can take one.
+func _gen1_node_name_item(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
+	run["named"] = data.item_name(int(node["item"])) if data != null else ""
+	return true
+
+
+## `jp DisplayTextID`: the map's own row, which the Mansion switches print.
+func _gen1_node_map_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	if current_map == null:
+		return false
+	var row: Dictionary = current_map.text_at(int(node["text"]))
+	var nodes: Variant = row.get("script", [])
+	if nodes is Array and not (nodes as Array).is_empty():
+		return _gen1_resolve_script(nodes as Array, steps, run)
+	var text: String = _gen1_filled_text(String(row.get("text", "")))
+	if text.is_empty():
+		return false
+	steps.append({"type": &"text", "text": text})
+	return true
+
+
+## A `TX_SCRIPT_*` a hidden event reached, which `DisplayTextID` dispatches the
+## same way it does one standing on a sign.
+func _gen1_node_facility(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var facility: Array = _gen1_facility_steps({"command": int(node["command"])})
+	if facility.is_empty():
+		return false
+	steps.append_array(facility)
 	return true
 
 
@@ -6180,6 +6303,31 @@ func _gen1_encounter_tile_at(cell: Vector2i) -> int:
 		posmod(cell.x, Gen2Layout.MAP_BLOCK_CELL_WIDTH),
 		posmod(cell.y, Gen2Layout.MAP_BLOCK_CELL_WIDTH)
 	))
+
+
+## `lda_coord column, row`: the player's own tile stands at (8, 9) and a walk
+## cell is two tiles each way, so a position names a cell and one of its tiles.
+func _gen1_screen_tile(column: int, row: int) -> int:
+	if current_map == null or current_tileset == null:
+		return -1
+	var width: int = Gen1Layout.MAP_BLOCK_CELL_WIDTH
+	var offset := Vector2i(
+		column - Gen1Layout.SCREEN_PLAYER_COLUMN,
+		row - Gen1Layout.SCREEN_PLAYER_ROW + 1
+	)
+	var cell: Vector2i = player_cell + Vector2i(
+		floori(float(offset.x) / float(width)), floori(float(offset.y) / float(width))
+	)
+	var block: int = expanded_block_at(
+		floori(float(cell.x) / float(width)), floori(float(cell.y) / float(width))
+	)
+	var tile: Vector2i = Vector2i(
+		posmod(cell.x, width) * width + posmod(offset.x, width),
+		posmod(cell.y, width) * width + posmod(offset.y, width)
+	)
+	return current_tileset.tile_index(
+		block, tile.y * Gen1Layout.MAP_BLOCK_TILE_WIDTH + tile.x
+	)
 
 
 func _gen1_tile_drawn_at(cell: Vector2i) -> int:

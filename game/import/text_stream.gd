@@ -163,10 +163,17 @@ static func _run(
 			# The effect plays and `WaitSFX` holds the printer; nothing is drawn.
 			continue
 		if command == far_command:
-			return _far_command(data, at, context, depth, out)
+			var far: Dictionary = _far_command(data, at, context, depth, out)
+			if not bool(far.get("ok", false)) or bool(far.get("stop", false)):
+				return far
+			out = String(far["text"])
+			at = int(far["bytes"])
+			prompt = prompt or bool(far.get("prompt", false))
+			continue
 		if command == TX_START_ASM:
-			# `jp hl` into code. Nothing after it can be read as text.
-			return {"ok": true, "text": out, "bytes": at, "prompt": prompt}
+			# `jp hl` into code. Nothing after it can be read as text, and a
+			# `text_far` that reached one leaves nothing to return to either.
+			return {"ok": true, "text": out, "bytes": at, "prompt": prompt, "stop": true}
 		var step: Dictionary = _step_command(data, at, context, command)
 		if step.has("reason"):
 			return _truncated(out, StringName(step["reason"]))
@@ -181,8 +188,11 @@ static func _run(
 	return {"ok": false, "reason": &"missing_text_terminator", "text": out}
 
 
-## `TextCommand_FAR`'s three operands and the text they name, which ends the
-## text the command appears in either way.
+## `TextCommand_FAR`'s three operands and the text they name. The command runs
+## the far text and returns behind its own operands, so what follows one is read
+## too: `<DONE>` and `<PROMPT>` end the far text alone, and only a `text_asm`
+## inside it leaves nothing to come back to. 39 Generation 1 texts carry a
+## second `text_far` behind the first and every TM explanation is one of them.
 static func _far_command(
 	data: PackedByteArray, at: int, context: Dictionary, depth: int, out: String
 ) -> Dictionary:
@@ -197,6 +207,7 @@ static func _far_command(
 	return {
 		"ok": true, "text": text, "bytes": at + 3,
 		"prompt": bool(far.get("prompt", false)),
+		"stop": bool(far.get("stop", false)),
 	}
 
 

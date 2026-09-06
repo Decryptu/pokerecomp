@@ -163,6 +163,8 @@ static func _events_from_cache(value: Variant) -> Dictionary:
 			"text", "trainer_class", "trainer_number", "species", "level", "item",
 			"toggle_index",
 		]),
+		# `CheckForHiddenEvent`'s own rows, Generation 1's alone.
+		"hidden_events": _event_rows(event_values.get("hidden_events", []), ["x", "y"]),
 	}
 
 
