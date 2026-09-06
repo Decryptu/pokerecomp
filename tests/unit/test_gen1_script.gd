@@ -37,9 +37,15 @@ const LAYOUT: Dictionary = {
 	"wait_for_button": 0x01B0,
 	"auto_textbox_on": 0x01C0,
 	"auto_textbox_off": 0x01D0,
+	"has_enough_money": 0x01E0,
+	"display_text_box": 0x01F0,
+	"text_box_id": 0xD125,
+	"money_hram": 0xFF9F,
+	"player_money": 0xD347,
+	"sub_bcd": 0x0250,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
-const PREDEFS: Dictionary = {1: 0x0210, 2: 0x0220, 3: 0x0230, 4: 0x0240}
+const PREDEFS: Dictionary = {1: 0x0210, 2: 0x0220, 3: 0x0230, 4: 0x0240, 5: 0x0250}
 const AT: int = 0x1000
 const HELLO: int = 0x1800
 const BYE: int = 0x1810
@@ -348,11 +354,26 @@ func test_a_far_call_to_remove_an_item_becomes_its_own_node() -> void:
 	assert_eq(script, [{"op": "take_item", "item": 0x40}])
 
 
-func test_a_far_call_to_anything_else_answers_nothing() -> void:
+## `callfar` is the same three the other way about, and the routine it names is
+## walked in the bank `b` carries. Yellow keeps 22 rows behind one.
+func test_a_far_call_to_a_routine_is_walked_and_returned_from() -> void:
+	var routine: int = AT + 0x40
+	var program: Array = _load_hl(routine) + [Gen1Layout.SCRIPT_LD_B, 0]
+	program += _call(int(LAYOUT["bankswitch"])) + _print(BYE) \
+		+ _call(int(LAYOUT["text_script_end"]))
+	while program.size() < 0x40:
+		program.append(0)
+	program.append_array(_print(HELLO) + [Gen1Layout.SCRIPT_RET])
+	assert_eq(_decode(program, _boxes()), [
+		{"op": "text", "text": "HI"}, {"op": "text", "text": "BYE"},
+	])
+
+
+func test_a_far_call_to_machine_code_this_decoder_cannot_read_answers_nothing() -> void:
 	assert_eq(_decode(
 		[Gen1Layout.SCRIPT_LD_A, 0x40, Gen1Layout.SCRIPT_LDH_MEM_A, 0xDB,
 			Gen1Layout.SCRIPT_LD_B, 0x05]
-			+ _load_hl(0x4000) + _call(int(LAYOUT["bankswitch"]))
+			+ _load_hl(UNREAD_CALL) + _call(int(LAYOUT["bankswitch"]))
 			+ _call(int(LAYOUT["text_script_end"]))
 	), [])
 
@@ -481,3 +502,126 @@ func test_a_conditional_call_to_anything_else_answers_nothing() -> void:
 			int(LAYOUT["print_text"]) >> 8]
 			+ _call(int(LAYOUT["text_script_end"]))
 	), [])
+
+
+## `ldh [hMoney + n], a`, most significant byte first.
+func _money(price: Array) -> Array:
+	var out: Array = []
+	for index: int in price.size():
+		out += [Gen1Layout.SCRIPT_LD_A, int(price[index]),
+			Gen1Layout.SCRIPT_LDH_MEM_A, (int(LAYOUT["money_hram"]) + index) & 0xFF]
+	return out
+
+
+## `HasEnoughMoney` sets carry when the player is short, so the `jr nc` behind it
+## hops to the sale and the price is the one the row wrote into `hMoney`.
+func test_a_money_test_keeps_the_price_and_both_sides() -> void:
+	var short: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	var script: Array = _decode(
+		_money([0x00, 0x05, 0x00]) + _call(int(LAYOUT["has_enough_money"]))
+			+ [0x30, short.size()] + short
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	)
+	assert_eq(script, [{
+		"op": "has_money", "price": 500,
+		"then": [{"op": "text", "text": "HI"}],
+		"else": [{"op": "text", "text": "BYE"}],
+	}])
+
+
+func test_a_money_test_with_no_price_written_answers_nothing() -> void:
+	assert_eq(_decode(
+		_money([0x00, 0x05]) + _call(int(LAYOUT["has_enough_money"]))
+			+ _call(int(LAYOUT["text_script_end"]))
+	), [])
+
+
+## `wPriceTemp` stands at `wWhichTrade`'s own address, so the predef behind the
+## three stores is what says a price was meant.
+func _spend(price: Array) -> Array:
+	var at: int = int(LAYOUT["which_trade"])
+	var out: Array = []
+	for index: int in price.size():
+		out += [Gen1Layout.SCRIPT_LD_A, int(price[index]), Gen1Layout.SCRIPT_LD_MEM_A,
+			(at + index) & 0xFF, (at + index) >> 8]
+	var money: int = int(LAYOUT["player_money"]) + Gen1Layout.MONEY_BYTES - 1
+	return out + _load_hl(at + Gen1Layout.MONEY_BYTES - 1) \
+		+ [Gen1Layout.SCRIPT_LD_DE, money & 0xFF, money >> 8,
+			Gen1Layout.SCRIPT_LD_C, Gen1Layout.MONEY_BYTES] \
+		+ _predef(5)
+
+
+func test_the_subtraction_predef_becomes_the_price_it_takes() -> void:
+	assert_eq(
+		_decode(_spend([0x00, 0x05, 0x00]) + _call(int(LAYOUT["text_script_end"]))),
+		[{"op": "spend_money", "amount": 500}]
+	)
+
+
+## `ld a, MONEY_BOX`, `ld [wTextBoxID], a` and `call DisplayTextBoxID`.
+func _text_box(id: int) -> Array:
+	return [Gen1Layout.SCRIPT_LD_A, id, Gen1Layout.SCRIPT_LD_MEM_A,
+		int(LAYOUT["text_box_id"]) & 0xFF, int(LAYOUT["text_box_id"]) >> 8] \
+		+ _call(int(LAYOUT["display_text_box"]))
+
+
+func test_the_money_box_becomes_its_own_node() -> void:
+	assert_eq(
+		_decode(_text_box(Gen1Layout.MONEY_BOX_ID)
+			+ _call(int(LAYOUT["text_script_end"]))),
+		[{"op": "money_box"}]
+	)
+
+
+## Every other id names a menu this port hands nothing to.
+func test_any_other_text_box_answers_nothing() -> void:
+	assert_eq(
+		_decode(_text_box(Gen1Layout.MONEY_BOX_ID + 1)
+			+ _call(int(LAYOUT["text_script_end"]))),
+		[]
+	)
+
+
+## `jp nz` is three bytes where the conditional `jr`s are two. Read as two, its
+## fall-through lands inside its own operand and the row says nothing.
+func test_a_long_conditional_jump_is_three_bytes() -> void:
+	var clear: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	var set_side: Array = _print(HELLO) + _call(int(LAYOUT["text_script_end"]))
+	var head: Array = _check_event(37)
+	var target: int = AT + head.size() + Gen1Layout.SCRIPT_LONG_SIZE + clear.size()
+	assert_eq(_decode(
+		head + [0xC2, target & 0xFF, target >> 8] + clear + set_side, _boxes()
+	), [{
+		"op": "branch", "flag": 37,
+		"then": [{"op": "text", "text": "HI"}],
+		"else": [{"op": "text", "text": "BYE"}],
+	}])
+
+
+## `and a` raises Z only when `a` is zero, so the side a `jp nz` does not take
+## knows the register: the salesman writes `hMoney` out of it.
+func test_the_zero_side_of_and_a_knows_the_register() -> void:
+	var no: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	var yes: Array = [Gen1Layout.SCRIPT_LDH_MEM_A, int(LAYOUT["money_hram"]) & 0xFF,
+		Gen1Layout.SCRIPT_LDH_MEM_A, (int(LAYOUT["money_hram"]) + 2) & 0xFF,
+		Gen1Layout.SCRIPT_LD_A, 0x05,
+		Gen1Layout.SCRIPT_LDH_MEM_A, (int(LAYOUT["money_hram"]) + 1) & 0xFF]
+	yes += _call(int(LAYOUT["has_enough_money"])) + [0x30, no.size()] + no \
+		+ _print(HELLO) + _call(int(LAYOUT["text_script_end"]))
+	var script: Array = _decode(
+		_call(int(LAYOUT["yes_no_choice"]))
+			+ [Gen1Layout.SCRIPT_LD_A_MEM, int(LAYOUT["current_menu_item"]) & 0xFF,
+				int(LAYOUT["current_menu_item"]) >> 8, Gen1Layout.SCRIPT_AND_A]
+			+ [0x20, yes.size()] + yes + no,
+		_boxes()
+	)
+	assert_eq(script, [{
+		"op": "choice",
+		"yes": [{
+			"op": "has_money", "price": 500,
+			"then": [{"op": "text", "text": "HI"}],
+			"else": [{"op": "text", "text": "BYE"}],
+		}],
+		"no": [{"op": "text", "text": "BYE"}],
+	}])

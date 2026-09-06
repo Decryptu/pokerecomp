@@ -19,7 +19,6 @@ const ROOT: String = "user://mods"
 const WORLD_RENDERER_METHODS: Array[String] = [
 	"set_world", "set_time_of_day", "refresh", "refresh_animation",
 ]
-## The methods a battle renderer has to provide.
 const BATTLE_RENDERER_METHODS: Array[String] = [
 	"set_battle_data", "set_view", "refresh",
 ]
@@ -203,7 +202,6 @@ static var _mounted_packs: Dictionary = {}
 var _manifests: Dictionary = {}
 ## Every mod directory [method discover] saw, refused manifests included.
 var _present: Dictionary = {}
-## Mod id to version for every entry script that ran. See [method loaded_mods].
 var _loaded: Dictionary = {}
 ## Mod id to the entry object `register` was called on, held so it survives the
 ## load. See [method load_mod].
@@ -213,7 +211,6 @@ var _entries: Dictionary = {}
 ## nothing: the launcher runs before Play is pressed.
 var _target_game: StringName = &""
 var _options: Dictionary = {}
-## Mod id to its registered actions. See [method register_action].
 var _actions: Dictionary = {}
 var _world_renderers: Dictionary = {}
 ## Mod id to the world actor it registered. Held for as long as the mod is
@@ -963,7 +960,6 @@ func battle_renderer_label(id: StringName) -> String:
 	return _renderer_label(_battle_renderers, id)
 
 
-## The battle half of the same choice. See [method selected_world_renderer].
 func selected_battle_renderer() -> StringName:
 	return _selected_view if _battle_renderers.has(_selected_view) else BUILT_IN_RENDERER
 

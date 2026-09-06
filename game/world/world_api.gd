@@ -3677,6 +3677,25 @@ var gen1_rival_name: String = Gen2WorldScriptRunner.UNNAMED
 ## a frame wait, or a facility request waiting for its host. A plain text is one
 ## box; `DisplayPokemonCenterDialogue_` is five of them around a choice.
 var _gen1_steps: Array = []
+var _gen1_money_window: bool = false
+const GEN1_WAITING_STEPS: Array[StringName] = [&"request", &"choice", &"wait"]
+## What each node [method Gen1WorldImporter.decode_script] wrote becomes. False
+## drops the whole interaction, the way an undecoded row does.
+const GEN1_SCRIPT_NODES: Dictionary = {
+	"text": &"_gen1_node_text",
+	"flag": &"_gen1_node_flag",
+	"branch": &"_gen1_node_branch",
+	"has_item": &"_gen1_node_has_item",
+	"has_money": &"_gen1_node_has_money",
+	"spend_money": &"_gen1_node_spend_money",
+	"money_box": &"_gen1_node_money_box",
+	"give_item": &"_gen1_resolve_gift",
+	"take_item": &"_gen1_take_item",
+	"toggle_object": &"_gen1_node_toggle",
+	"pick_up_item": &"_gen1_pick_up_item",
+	"give_pokemon": &"_gen1_resolve_gift_pokemon",
+	"pokedex": &"_gen1_node_pokedex",
+}
 
 
 ## The raw cartridge permission byte at a walk cell.
@@ -3754,62 +3773,89 @@ func _gen1_script_steps(row: Dictionary, event: Dictionary = {}) -> Array:
 	var steps: Array = []
 	return steps if _gen1_resolve_script(nodes as Array, steps, {
 		"bag": state.items() if state != null else {}, "named": "", "object": event,
+		"money": state.money(Gen2WorldMartHost.MONEY_ACCOUNT) if state != null else 0,
 	}) else []
 
 
 ## [param run] is the bag the row is walked against, carrying what its own gifts
 ## have already put in it, and the name `CopyToStringBuffer` last wrote.
 func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
-	var bag: Dictionary = run["bag"]
 	for node: Dictionary in nodes:
-		match String(node.get("op", "")):
-			"text":
-				steps.append(_gen1_script_box(node, String(run["named"])))
-			"flag":
-				steps.append({
-					"type": &"flag",
-					"flag": int(node["flag"]),
-					"set": bool(node["set"]),
-					"engine": bool(node.get("engine", false)),
-				})
-			"branch":
-				if not _gen1_resolve_side(node, _gen1_branch_set(node), steps, run):
-					return false
-			"has_item":
-				if not _gen1_resolve_side(
-					node, int(bag.get(int(node["item"]), 0)) > 0, steps, run
-				):
-					return false
-			"give_item":
-				if not _gen1_resolve_gift(node, steps, run):
-					return false
-			"take_item":
-				_gen1_take_item(int(node["item"]), steps, bag)
-			"toggle_object":
-				steps.append({
-					"type": &"toggle",
-					"index": int(node["index"]),
-					"hidden": bool(node["hidden"]),
-				})
-			"pick_up_item":
-				if not _gen1_pick_up_item(steps, run):
-					return false
-			"give_pokemon":
-				if not _gen1_resolve_gift_pokemon(node, steps, run):
-					return false
-			"pokedex":
-				## `_DisplayPokedex` opens on one entry and the page the world
-				## already has for `pokedex_entry_requested` is that same one.
-				steps.append({"type": &"request", "values": {
-					"kind": &"pokedex_entry_requested",
-					"values": {"species": int(node["species"])},
-				}})
-			"trade":
-				return _gen1_trade(int(node["trade_id"]), steps)
-			"choice":
-				return _gen1_script_choice(node, steps, run)
-			_:
-				return false
+		var op: String = String(node.get("op", ""))
+		## Each of the two owns every step behind it, so the row ends there.
+		if op == "trade":
+			return _gen1_trade(int(node["trade_id"]), steps)
+		if op == "choice":
+			return _gen1_script_choice(node, steps, run)
+		if not GEN1_SCRIPT_NODES.has(op):
+			return false
+		if not call(GEN1_SCRIPT_NODES[op], node, steps, run):
+			return false
+	return true
+
+
+func _gen1_node_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	steps.append(_gen1_script_box(node, String(run["named"])))
+	return true
+
+
+func _gen1_node_flag(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"flag",
+		"flag": int(node["flag"]),
+		"set": bool(node["set"]),
+		"engine": bool(node.get("engine", false)),
+	})
+	return true
+
+
+func _gen1_node_branch(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(node, _gen1_branch_set(node), steps, run)
+
+
+func _gen1_node_has_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var bag: Dictionary = run["bag"]
+	return _gen1_resolve_side(
+		node, int(bag.get(int(node["item"]), 0)) > 0, steps, run
+	)
+
+
+func _gen1_node_has_money(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, int(run["money"]) >= int(node["price"]), steps, run
+	)
+
+
+## `SubBCD` over `wPlayerMoney`, whose `.fill` writes zeroes across a balance it
+## borrowed past.
+func _gen1_node_spend_money(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var left: int = maxi(int(run["money"]) - int(node["amount"]), 0)
+	run["money"] = left
+	steps.append({"type": &"money", "amount": left})
+	return true
+
+
+func _gen1_node_money_box(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"money_box"})
+	return true
+
+
+func _gen1_node_toggle(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"toggle",
+		"index": int(node["index"]),
+		"hidden": bool(node["hidden"]),
+	})
+	return true
+
+
+## `_DisplayPokedex` opens on one entry and the page the world already has for
+## `pokedex_entry_requested` is that same one.
+func _gen1_node_pokedex(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "values": {
+		"kind": &"pokedex_entry_requested",
+		"values": {"species": int(node["species"])},
+	}})
 	return true
 
 
@@ -3874,7 +3920,7 @@ func _gen1_resolve_gift(node: Dictionary, steps: Array, run: Dictionary) -> bool
 ## `PickUpItem`: the object's own item, `HideObject` on it, and the receipt
 ## behind `wDoNotWaitForButtonPress`. Its own `ret z` says nothing at all for an
 ## item object outside `ToggleableObjectStates`.
-func _gen1_pick_up_item(steps: Array, run: Dictionary) -> bool:
+func _gen1_pick_up_item(_node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var object: Dictionary = run.get("object", {})
 	var item: int = int(object.get("item", 0))
 	var toggle: int = int(object.get("toggle_index", -1))
@@ -3898,15 +3944,18 @@ func _gen1_pick_up_item(steps: Array, run: Dictionary) -> bool:
 	return true
 
 
-func _gen1_take_item(item: int, steps: Array, bag: Dictionary) -> void:
+func _gen1_take_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var bag: Dictionary = run["bag"]
+	var item: int = int(node["item"])
 	var left: int = int(bag.get(item, 0)) - 1
 	if left < 0:
-		return
+		return true
 	if left == 0:
 		bag.erase(item)
 	else:
 		bag[item] = left
 	steps.append({"type": &"items", "items": {item: left}})
+	return true
 
 
 ## `DoInGameTradeDialogue` over the row's own `wWhichTrade`:
@@ -3990,10 +4039,11 @@ func _gen1_trade_text(record: Dictionary, name: String) -> String:
 ## `YesNoChoice` stands behind the box that asked, so the question is the last
 ## box printed.
 func _gen1_script_choice(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	if steps.is_empty() \
-		or StringName((steps[-1] as Dictionary).get("type", &"")) != &"text":
+	var asked: int = _gen1_last_box(steps)
+	if asked < 0:
 		return false
-	var question: Dictionary = steps.pop_back()
+	var question: Dictionary = steps[asked]
+	steps.remove_at(asked)
 	var yes: Array = []
 	var no: Array = []
 	if not _gen1_resolve_script(node["yes"] as Array, yes, _gen1_run_copy(run)) \
@@ -4005,11 +4055,24 @@ func _gen1_script_choice(node: Dictionary, steps: Array, run: Dictionary) -> boo
 	return true
 
 
+## The box a YES/NO opens under, which nothing written between the two takes
+## the place of.
+func _gen1_last_box(steps: Array) -> int:
+	for index: int in range(steps.size() - 1, -1, -1):
+		var type: StringName = StringName((steps[index] as Dictionary)["type"])
+		if type == &"text":
+			return index
+		if GEN1_WAITING_STEPS.has(type):
+			return -1
+	return -1
+
+
 func _gen1_run_copy(run: Dictionary) -> Dictionary:
 	return {
 		"bag": (run["bag"] as Dictionary).duplicate(),
 		"named": run["named"],
 		"object": run.get("object", {}),
+		"money": run.get("money", 0),
 	}
 
 
@@ -4428,42 +4491,74 @@ func _gen1_step(type: StringName) -> Dictionary:
 
 
 ## The result the head step is waiting on, empty once the list is spent. What a
-## row writes takes no turn of its own and is spent on the way past.
+## row writes takes no turn of its own and is spent on the way past, and the
+## balance window one of those draws rides on the result behind it.
 func _gen1_result() -> Array:
-	while not _gen1_steps.is_empty() and _gen1_written(_gen1_steps[0]):
+	var events: Array = []
+	while not _gen1_steps.is_empty() and _gen1_written(_gen1_steps[0], events):
 		_gen1_steps.pop_front()
 	if _gen1_steps.is_empty():
-		return []
-	var step: Dictionary = _gen1_steps[0]
+		_gen1_close_money_window(events)
+		return [] if events.is_empty() \
+			else [{"ok": true, "status": &"done", "events": events}]
+	var result: Dictionary = _gen1_waiting_result(_gen1_steps[0])
+	result["events"] = events + (result.get("events", []) as Array)
+	return [result]
+
+
+## `AfterDisplayingTextID` redraws the map behind the row, which takes a balance
+## window down the way `closetext`'s redraw takes Generation 2's.
+func _gen1_close_money_window(events: Array) -> void:
+	if not _gen1_money_window:
+		return
+	_gen1_money_window = false
+	events.append({"type": &"money_window_closed"})
+
+
+func _gen1_waiting_result(step: Dictionary) -> Dictionary:
 	var type: StringName = StringName(step["type"])
 	if type == &"request":
-		return [{
+		return {
 			"ok": true, "status": &"waiting",
 			"event": {"type": &"runtime_request", "request": step["values"]},
-		}]
+		}
 	if type == &"choice":
-		return [{"ok": true, "status": &"waiting", "event": {"type": &"choice"}}]
+		return {"ok": true, "status": &"waiting", "event": {"type": &"choice"}}
 	## A counted wait and whatever it starts on the frame it opens on.
 	if type == &"wait":
-		return [{
+		return {
 			"ok": true, "status": &"waiting",
 			"event": (step["values"] as Dictionary).duplicate(true),
 			"events": (step.get("events", []) as Array).duplicate(true),
-		}]
+		}
 	## `AfterDisplayingTextID` ends every box on `WaitForTextScrollButtonPress`
 	## unless the row set `wDoNotWaitForButtonPress...` before its last one.
-	return [{
+	return {
 		"ok": true, "status": &"waiting",
 		"event": {
 			"type": &"text",
 			"text": String(step["text"]),
 			"prompt": bool(step.get("press", true)),
 		},
-	}]
+	}
 
 
-func _gen1_written(step: Dictionary) -> bool:
+func _gen1_written(step: Dictionary, events: Array) -> bool:
 	match StringName(step["type"]):
+		&"money":
+			state.apply_changes({}, {}, {
+				"money": {Gen2WorldMartHost.MONEY_ACCOUNT: int(step["amount"])},
+			})
+			return true
+		&"money_box":
+			_gen1_money_window = true
+			events.append({
+				"type": &"money_window_opened",
+				"kind": &"money_top_right",
+				"money": state.money(Gen2WorldMartHost.MONEY_ACCOUNT) if state != null else 0,
+				"coins": state.coins() if state != null else 0,
+			})
+			return true
 		&"flag":
 			if bool(step.get("engine", false)):
 				state.set_engine_flag(int(step["flag"]), bool(step["set"]))
@@ -7399,6 +7494,7 @@ func _apply_map(
 	])
 	_record_escape_points(target_map, from_warp)
 	_gen1_steps = []
+	_gen1_money_window = false
 	## `WarpFound2`'s `CheckIfInOutsideMap`: leaving a town or a route records it,
 	## and that is the map a `LAST_MAP` warp comes back out to.
 	if _gen1 and current_map != null and Gen1Layout.is_outside_tileset(current_map.tileset):

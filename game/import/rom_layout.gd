@@ -3456,7 +3456,6 @@ const CRYSTAL: Dictionary = {
 }
 
 
-## The layout for a game id, or an empty Dictionary if it is not characterised.
 static func for_id(id: StringName) -> Dictionary:
 	match id:
 		RomRegistry.GOLD:

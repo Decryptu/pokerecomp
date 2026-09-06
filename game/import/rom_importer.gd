@@ -4131,7 +4131,6 @@ static func _verify_bar(
 	return {"ok": true, "message": ""}
 
 
-## One tile out of a strip, as its own buffer.
 static func _strip_tile(strip: PackedByteArray, tiles: int, tile: int) -> PackedByteArray:
 	var width: int = tiles * PokeTiles.TILE_WIDTH
 	var out: PackedByteArray = PackedByteArray()
@@ -4589,7 +4588,6 @@ static func verify_trainer_dvs(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"ok": true, "message": ""}
 
 
-## Resolves one entry of the type name pointer table.
 static func type_name(rom: RomFile, layout: Dictionary, type_number: int) -> String:
 	var table: int = Gen2Layout.type_name_pointer_offset(layout, type_number)
 	var address: int = rom.u16le(table)

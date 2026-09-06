@@ -171,7 +171,6 @@ static func slot_of(data: GameData, deco: int) -> StringName:
 	return StringName((pair as Array)[0]) if pair is Array else &""
 
 
-## Whether a row is its category's PUT IT AWAY header rather than a decoration.
 static func is_put_away(data: GameData, deco: int) -> bool:
 	var action: int = int(data.decoration(deco).get("action", ACTION_NOTHING)) \
 		if data != null else ACTION_NOTHING

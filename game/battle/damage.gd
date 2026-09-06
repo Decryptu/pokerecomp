@@ -378,7 +378,6 @@ const HAPPINESS_DENOMINATOR: int = 25
 const HAPPINESS_MAX: int = 255
 
 
-## The [constant MAGNITUDE_POWER] row a rolled byte lands on.
 static func magnitude_row(roll: int) -> Array:
 	for row: Array in MAGNITUDE_POWER:
 		if int(row[0]) >= roll:

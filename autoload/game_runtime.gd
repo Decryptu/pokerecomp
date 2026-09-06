@@ -55,7 +55,6 @@ static func data_or_any() -> GameData:
 	return GameData.open_any()
 
 
-## The selected slot's save, or null when there is no runtime or no slot.
 static func selected_save_or_null() -> Gen2SaveData:
 	var runtime: Gen2GameRuntime = instance()
 	if runtime == null or not runtime.has_selected_save_slot():

@@ -1024,7 +1024,6 @@ func _mart_row_count() -> int:
 	return rows + 1 if rows < Gen2MartPage.LIST_HEIGHT else Gen2MartPage.LIST_HEIGHT
 
 
-## Rows drawn, which is [method _mart_row_count] plus the look-ahead row.
 func _mart_drawn_rows() -> int:
 	if _gen1_mart():
 		return mini(Gen2MartPage.GEN1_LIST_HEIGHT, _mart_list().size() + 1 - _mart_scroll)

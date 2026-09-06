@@ -35,6 +35,7 @@ const KIND_HELP: Dictionary = {
 	&"vending": "presses, rows down: VendingMachineMenu, read by facing up from the cell below one. 0 the list, 1 the box the chosen row lands in",
 	&"prizes": "presses, rows down: CeladonPrizeMenu, read the same way. 0 the list, 1 SoYouWantPrizeText's YES/NO, 2 the box YES lands in",
 	&"trade": "presses: DoInGameTradeDialogue, faced up from the cell below the trader. 0 the offer and its YES/NO, 1 the party list YES opens",
+	&"deal": "presses: the MAGIKARP salesman, faced right from the cell beside him with the money box DisplayTextBoxID drew over the map",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"level_evolution": "frames: EvolveAfterBattle's screen that many frames in, each box pressed past as it lands",
 	&"egg_hatch": "frames, slot: OverworldHatchEgg on that party slot, that many frames in",
@@ -446,6 +447,7 @@ const STAGERS: Dictionary = {
 	&"vending": &"_stage_vending",
 	&"prizes": &"_stage_prizes",
 	&"trade": &"_stage_trade",
+	&"deal": &"_stage_deal",
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
@@ -1062,12 +1064,18 @@ func _stage_trade() -> void:
 	_stage_counter({})
 
 
-## A counter faced from the cell below it: presses, then rows down first.
-func _stage_counter(purse: Dictionary) -> void:
+func _stage_deal() -> void:
+	_stage_counter(
+		{"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY}}, PokeButton.RIGHT
+	)
+
+
+## A counter faced the way [param facing] says: presses, then rows down first.
+func _stage_counter(purse: Dictionary, facing: int = PokeButton.UP) -> void:
 	var world: Gen2WorldAPI = _screen.get("_world")
 	if world != null:
 		world.state.apply_changes({}, {}, purse)
-	_screen.press_button(PokeButton.UP)
+	_screen.press_button(facing)
 	for _frame: int in TEXT_SETTLE_FRAMES:
 		_screen.advance_frame()
 	_screen.interact()

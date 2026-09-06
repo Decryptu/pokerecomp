@@ -991,6 +991,7 @@ const SCRIPT_TESTS_CHOICE: int = -1
 const SCRIPT_TESTS_NOTHING: int = -2
 const SCRIPT_TESTS_CARRY: int = -3
 const SCRIPT_TESTS_ITEM: int = -4
+const SCRIPT_TESTS_MONEY: int = -5
 
 
 ## One `text_asm` row's machine code, as the boxes it prints and the branches
@@ -1023,7 +1024,7 @@ static func _walk_script(
 		var op: int = (ctx["rom"] as RomFile).u8(Gen1Layout.banked(int(ctx["bank"]), pc))
 		if Gen1Layout.SCRIPT_BRANCHES.has(op) or Gen1Layout.SCRIPT_CARRY_BRANCHES.has(op):
 			return _script_branch(ctx, op, pc, state, depth, out)
-		var next: int = _script_step(ctx, pc, state, out)
+		var next: int = _script_step(ctx, pc, state, out, depth)
 		if next == SCRIPT_END:
 			return _script_ended(state, out)
 		if next == SCRIPT_UNREAD:
@@ -1044,13 +1045,16 @@ static func _script_ended(state: Dictionary, out: Array) -> Array:
 ## One instruction: the next address, [constant SCRIPT_END] or SCRIPT_UNREAD.
 ## The register writes are here and [method _script_flow] has the rest.
 static func _script_step(
-	ctx: Dictionary, pc: int, state: Dictionary, out: Array
+	ctx: Dictionary, pc: int, state: Dictionary, out: Array, depth: int
 ) -> int:
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), pc)
 	match rom.u8(at):
 		Gen1Layout.SCRIPT_LD_HL:
 			state["hl"] = rom.u16le(at + 1)
+			return pc + Gen1Layout.SCRIPT_LONG_SIZE
+		Gen1Layout.SCRIPT_LD_DE:
+			state["de"] = rom.u16le(at + 1)
 			return pc + Gen1Layout.SCRIPT_LONG_SIZE
 		Gen1Layout.SCRIPT_LD_BC:
 			## `lb bc, ITEM, COUNT`: the high byte is what `GiveItem` reads as b.
@@ -1069,24 +1073,22 @@ static func _script_step(
 			state["b"] = int(state["a"])
 			return pc + 1
 		Gen1Layout.SCRIPT_LD_A:
+			_script_wrote_a(state)
 			state["a"] = rom.u8(at + 1)
-			state.erase("source")
-			state.erase("rotated")
 			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 		Gen1Layout.SCRIPT_XOR_A:
 			## Zero and a Z the `ld a, 0` above does not raise, so whatever a
 			## branch behind it was reading is gone.
+			_script_wrote_a(state)
 			state["a"] = 0
-			state.erase("source")
-			state.erase("rotated")
 			state.erase("tests")
 			return pc + 1
-	return _script_flow(ctx, pc, at, state, out)
+	return _script_flow(ctx, pc, at, state, out, depth)
 
 
 ## What reads memory, tests it or leaves the instruction after this one.
 static func _script_flow(
-	ctx: Dictionary, pc: int, at: int, state: Dictionary, out: Array
+	ctx: Dictionary, pc: int, at: int, state: Dictionary, out: Array, depth: int
 ) -> int:
 	var rom: RomFile = ctx["rom"]
 	match rom.u8(at):
@@ -1102,6 +1104,7 @@ static func _script_flow(
 			) else SCRIPT_UNREAD
 		Gen1Layout.SCRIPT_AND_A:
 			_script_test_bit(ctx, state, -1)
+			state["tests_and_a"] = true
 			return pc + 1
 		Gen1Layout.SCRIPT_RRCA:
 			return _script_rotated(ctx, pc, state, int(state.get("rotated", 0)))
@@ -1116,11 +1119,11 @@ static func _script_flow(
 		Gen1Layout.SCRIPT_JR:
 			return pc + Gen1Layout.SCRIPT_SHORT_SIZE + _script_hop(rom.u8(at + 1))
 		Gen1Layout.SCRIPT_JP:
-			return _script_jump(ctx, pc, rom.u16le(at + 1), state, out)
+			return _script_jump(ctx, pc, rom.u16le(at + 1), state, out, depth)
 		Gen1Layout.SCRIPT_RET:
 			return SCRIPT_END
 		Gen1Layout.SCRIPT_CALL:
-			return _script_call(ctx, pc, rom.u16le(at + 1), state, out)
+			return _script_call(ctx, pc, rom.u16le(at + 1), state, out, depth)
 	if Gen1Layout.SCRIPT_CONDITIONAL_CALLS.has(rom.u8(at)):
 		return _script_call_if(ctx, pc, rom.u16le(at + 1), state)
 	return SCRIPT_UNREAD
@@ -1139,7 +1142,7 @@ static func _script_call_if(
 
 ## What a branch is reading, and whether it is reading it out of carry.
 static func _script_untested(state: Dictionary) -> void:
-	for key: String in ["tests", "tests_in_carry", "tests_engine"]:
+	for key: String in ["tests", "tests_in_carry", "tests_engine", "tests_and_a"]:
 		state.erase(key)
 
 
@@ -1149,6 +1152,7 @@ static func _script_tested(
 	state["tests"] = value
 	state["tests_in_carry"] = in_carry
 	state["tests_engine"] = engine
+	state.erase("tests_and_a")
 
 
 ## One rotation of `CheckEvent flag, 1`'s run, or `add a` standing for all eight
@@ -1165,12 +1169,20 @@ static func _script_hop(operand: int) -> int:
 	return operand - 0x100 if operand > 0x7F else operand
 
 
+## Anything that writes `a` leaves `CheckEvent`'s rotation and the answer
+## `and a` gave about the register behind it.
+static func _script_wrote_a(state: Dictionary) -> void:
+	state.erase("source")
+	state.erase("rotated")
+	state.erase("tests_and_a")
+
+
 ## `ld a, [nn]`. `ShowPokedexDataInternal` leaves `wPokedexNum` in
 ## `wCurPartySpecies`, which the Fighting Dojo's two gifts read the species from.
 static func _script_loaded(ctx: Dictionary, address: int, state: Dictionary) -> void:
-	state["source"] = address
+	_script_wrote_a(state)
 	state.erase("a")
-	state.erase("rotated")
+	state["source"] = address
 	if address == int((ctx["layout"] as Dictionary)["cur_party_species"]) \
 		and state.has("species_index"):
 		state["a"] = int(state["species_index"])
@@ -1179,14 +1191,14 @@ static func _script_loaded(ctx: Dictionary, address: int, state: Dictionary) -> 
 ## `jp` reaching `TextScriptEnd`, a routine the layout names, or an address in
 ## the same bank. A tail call returns where the row's own `ret` would.
 static func _script_jump(
-	ctx: Dictionary, pc: int, target: int, state: Dictionary, out: Array
+	ctx: Dictionary, pc: int, target: int, state: Dictionary, out: Array, depth: int
 ) -> int:
 	var layout: Dictionary = ctx["layout"]
 	if target == int(layout["text_script_end"]):
 		return SCRIPT_END
 	if _script_routine(layout, target).is_empty():
 		return target
-	return SCRIPT_END if _script_call(ctx, pc, target, state, out) != SCRIPT_UNREAD \
+	return SCRIPT_END if _script_call(ctx, pc, target, state, out, depth) != SCRIPT_UNREAD \
 		else SCRIPT_UNREAD
 
 
@@ -1220,10 +1232,12 @@ static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> 
 			return false
 		state["no_press"] = true
 		return true
-	if address == int(layout["which_trade"]):
+	if address == int(layout["text_box_id"]):
 		if not state.has("a"):
 			return false
-		state["trade"] = int(state["a"])
+		state["text_box"] = int(state["a"])
+		return true
+	if _script_bcd_stored(ctx, address, state):
 		return true
 	if address == int(layout["toggleable_index"]):
 		if not state.has("a"):
@@ -1313,7 +1327,7 @@ static func _script_prefix(
 ## The routines a row may call. No audio driver here, so a cry and the wait
 ## behind it spend nothing and the walk carries on past them.
 static func _script_call(
-	ctx: Dictionary, pc: int, target: int, state: Dictionary, out: Array
+	ctx: Dictionary, pc: int, target: int, state: Dictionary, out: Array, depth: int
 ) -> int:
 	var layout: Dictionary = ctx["layout"]
 	var next: int = pc + Gen1Layout.SCRIPT_LONG_SIZE
@@ -1344,43 +1358,40 @@ static func _script_call(
 		"is_item_in_bag":
 			return _script_asked(state, next)
 		"bankswitch":
-			return _script_far(layout, state, out, next)
+			return _script_far(ctx, state, out, next, depth)
 		"predef":
 			return _script_predef(ctx, state, out, next)
 		"display_pokedex":
 			return _script_pokedex(ctx, state, out, next)
 		"give_pokemon":
 			return _script_gift_pokemon(ctx, state, out, next)
-	return _script_local_call(ctx, target, state, out, next)
+		"has_enough_money":
+			return _script_money_asked(state, next)
+		"display_text_box":
+			return _script_money_box(state, out, next)
+	return _script_routine_call(ctx, int(ctx["bank"]), target, state, out, next, depth)
 
 
-## A `call` to a routine the layout does not name, which is the map's own:
-## walked here and returned from. `MtMoonB2FReceivedFossilText` is an `ld hl` and
-## a tail `jp PrintText`, so a fossil says nothing without this.
-static func _script_local_call(
-	ctx: Dictionary, target: int, state: Dictionary, out: Array, next: int
+## A `call` to a routine the layout does not name, walked in [param bank] and
+## returned from: `MtMoonB2FReceivedFossilText` is an `ld hl` and a tail
+## `jp PrintText`, and Yellow keeps 22 rows behind a `callfar`.
+static func _script_routine_call(
+	ctx: Dictionary, bank: int, target: int, state: Dictionary, out: Array,
+	next: int, depth: int
 ) -> int:
 	var nesting: Array = ctx["calls"]
-	if nesting[0] >= Gen1Layout.SCRIPT_CALL_DEPTH:
+	if nesting[0] >= Gen1Layout.SCRIPT_CALL_DEPTH or bank < 0 or target < 0:
 		return SCRIPT_UNREAD
 	nesting[0] += 1
-	var pc: int = target
-	var budget: Array = ctx["budget"]
-	var answer: int = SCRIPT_UNREAD
-	while budget[0] > 0:
-		budget[0] -= 1
-		var op: int = (ctx["rom"] as RomFile).u8(Gen1Layout.banked(int(ctx["bank"]), pc))
-		## A branch inside one would need a return address per side.
-		if Gen1Layout.SCRIPT_BRANCHES.has(op) or Gen1Layout.SCRIPT_CARRY_BRANCHES.has(op):
-			break
-		pc = _script_step(ctx, pc, state, out)
-		if pc == SCRIPT_UNREAD:
-			break
-		if pc == SCRIPT_END:
-			answer = next
-			break
+	var outer: int = int(ctx["bank"])
+	ctx["bank"] = bank
+	var walked: Variant = _walk_script(ctx, target, state, depth + 1)
+	ctx["bank"] = outer
 	nesting[0] -= 1
-	return answer
+	if not walked is Array:
+		return SCRIPT_UNREAD
+	out.append_array(walked as Array)
+	return next
 
 
 static func _script_routine(layout: Dictionary, target: int) -> String:
@@ -1446,17 +1457,95 @@ static func _script_asked(state: Dictionary, next: int) -> int:
 	return next
 
 
-## `farcall` is `ld b, BANK`, `ld hl, target`, `call Bankswitch`.
+## `farcall` is `ld b, BANK`, `ld hl, target`, `call Bankswitch`, and `callfar`
+## the same two the other way about.
 static func _script_far(
-	layout: Dictionary, state: Dictionary, out: Array, next: int
+	ctx: Dictionary, state: Dictionary, out: Array, next: int, depth: int
 ) -> int:
-	if int(state.get("b", -1)) != int(layout["remove_item_bank"]) \
-		or int(state.get("hl", -1)) != int(layout["remove_item"]) \
-		or int(state.get("remove", 0)) < 1:
+	var layout: Dictionary = ctx["layout"]
+	var bank: int = int(state.get("b", -1))
+	var target: int = int(state.get("hl", -1))
+	if bank != int(layout["remove_item_bank"]) or target != int(layout["remove_item"]):
+		return _script_routine_call(ctx, bank, target, state, out, next, depth)
+	if int(state.get("remove", 0)) < 1:
 		return SCRIPT_UNREAD
 	out.append({"op": "take_item", "item": int(state["remove"])})
 	state.erase("remove")
 	return next
+
+
+## One byte of `hMoney` or `wPriceTemp`, whose first byte is `wWhichTrade`'s
+## own, so a store there is kept as both.
+static func _script_bcd_stored(
+	ctx: Dictionary, address: int, state: Dictionary
+) -> bool:
+	var layout: Dictionary = ctx["layout"]
+	for name: String in Gen1Layout.SCRIPT_BCD_BUFFERS:
+		var base: int = int(layout[name])
+		if address < base or address >= base + Gen1Layout.MONEY_BYTES:
+			continue
+		if not state.has("a"):
+			return false
+		## Duplicated, because a branch's two sides share this state's values.
+		var bytes: Dictionary = (state.get(name, {}) as Dictionary).duplicate()
+		bytes[address - base] = int(state["a"])
+		state[name] = bytes
+		if name == "which_trade" and address == base:
+			state["trade"] = int(state["a"])
+		return true
+	return false
+
+
+## Three packed-decimal bytes as a number, -1 until all three are written.
+static func _script_bcd_value(state: Dictionary, name: String) -> int:
+	var bytes: Dictionary = state.get(name, {})
+	var value: int = 0
+	for index: int in Gen1Layout.MONEY_BYTES:
+		if not bytes.has(index):
+			return -1
+		var byte: int = int(bytes[index])
+		value = value * 100 + (byte >> 4) * 10 + (byte & 0xF)
+	return value
+
+
+## `HasEnoughMoney` compares `hMoney` with the player's own three bytes through
+## `StringCmp`, which sets carry when the player is short.
+static func _script_money_asked(state: Dictionary, next: int) -> int:
+	var price: int = _script_bcd_value(state, Gen1Layout.SCRIPT_BCD_BUFFERS[0])
+	if price < 1:
+		return SCRIPT_UNREAD
+	state["price"] = price
+	_script_tested(state, SCRIPT_TESTS_MONEY, true)
+	return next
+
+
+## `DisplayMoneyBox` draws the balance over the map and returns, and MONEY_BOX
+## is the only `wTextBoxID` a text row writes.
+static func _script_money_box(state: Dictionary, out: Array, next: int) -> int:
+	if int(state.get("text_box", -1)) != Gen1Layout.MONEY_BOX_ID:
+		return SCRIPT_UNREAD
+	out.append({"op": "money_box"})
+	return next
+
+
+## `predef SubBCDPredef` with `wPlayerMoney + 2` in de and three in c.
+static func _script_spend(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int
+) -> int:
+	var layout: Dictionary = ctx["layout"]
+	var last: int = Gen1Layout.MONEY_BYTES - 1
+	if int(state.get("de", -1)) != int(layout["player_money"]) + last \
+		or int(state.get("c", -1)) != Gen1Layout.MONEY_BYTES:
+		return SCRIPT_UNREAD
+	for name: String in Gen1Layout.SCRIPT_BCD_BUFFERS:
+		if int(state.get("hl", -1)) != int(layout[name]) + last:
+			continue
+		var amount: int = _script_bcd_value(state, name)
+		if amount < 1:
+			return SCRIPT_UNREAD
+		out.append({"op": "spend_money", "amount": amount})
+		return next
+	return SCRIPT_UNREAD
 
 
 ## `predef` is `ld a, id` and `call Predef`; `PredefPointers` is the bank and
@@ -1475,6 +1564,8 @@ static func _script_predef(
 	if target == int(layout["pick_up_item"]):
 		out.append({"op": "pick_up_item"})
 		return next
+	if target == int(layout["sub_bcd"]):
+		return _script_spend(ctx, state, out, next)
 	if target == int(layout["in_game_trade"]):
 		if not state.has("trade"):
 			return SCRIPT_UNREAD
@@ -1517,15 +1608,22 @@ static func _script_branch(
 		return null
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), pc)
-	var short: bool = op < Gen1Layout.SCRIPT_JP
+	var short: bool = op < Gen1Layout.SCRIPT_HOP_LIMIT
 	var size: int = Gen1Layout.SCRIPT_SHORT_SIZE if short else Gen1Layout.SCRIPT_LONG_SIZE
 	var jumped: int = pc + size + _script_hop(rom.u8(at + 1)) if short else rom.u16le(at + 1)
-	var branches: Array = [
-		_walk_script(ctx, jumped, state.duplicate(), depth + 1),
-		_walk_script(ctx, pc + size, state.duplicate(), depth + 1),
-	]
 	var table: Dictionary = Gen1Layout.SCRIPT_CARRY_BRANCHES if carry \
 		else Gen1Layout.SCRIPT_BRANCHES
+	var jumped_state: Dictionary = state.duplicate()
+	var fell_state: Dictionary = state.duplicate()
+	if bool(state.get("tests_and_a", false)):
+		## `and a` leaves `a` where it was and raises Z only when it is zero, so
+		## the side a `jp nz` does not take knows the register is zero.
+		var zero: Dictionary = fell_state if bool(table[op]) else jumped_state
+		zero["a"] = 0
+	var branches: Array = [
+		_walk_script(ctx, jumped, jumped_state, depth + 1),
+		_walk_script(ctx, pc + size, fell_state, depth + 1),
+	]
 	if not bool(table[op]):
 		branches.reverse()
 	if branches[0] == null and branches[1] == null:
@@ -1556,6 +1654,11 @@ static func _script_node(
 		SCRIPT_TESTS_ITEM:
 			return {"op": "has_item", "item": int(state["asked"]),
 				"then": taken, "else": fell}
+		SCRIPT_TESTS_MONEY:
+			## Carry is set when the player is short, so the taken side of a
+			## `jr c` is the refusal and the other one is the sale.
+			return {"op": "has_money", "price": int(state["price"]),
+				"then": fell, "else": taken}
 	var branch: Dictionary = {
 		"op": "branch", "flag": int(tests), "then": taken, "else": fell,
 	}

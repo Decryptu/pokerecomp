@@ -19,7 +19,6 @@ var move: Dictionary = {}
 ## The same Array [method Gen2Battle.take_actions] hands its caller back.
 var events: Array = []
 
-## What the damage steps worked out, for the steps after them.
 var damage: int = 0
 var critical: bool = false
 var effectiveness: int = Gen2Layout.MATCHUP_EFFECTIVE

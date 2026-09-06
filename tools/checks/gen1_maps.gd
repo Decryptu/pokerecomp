@@ -130,25 +130,27 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 225, "text": 235, "branch": 84, "choice": 10, "flag": 35,
-		"give_item": 23, "has_item": 9, "take_item": 3, "unknown": 35,
-		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 4,
-		"trade": 9},
-	&"blue": {"rows": 225, "text": 235, "branch": 84, "choice": 10, "flag": 35,
-		"give_item": 23, "has_item": 9, "take_item": 3, "unknown": 35,
-		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 4,
-		"trade": 9},
-	&"yellow": {"rows": 207, "text": 188, "branch": 74, "choice": 8, "flag": 25,
-		"give_item": 18, "has_item": 9, "take_item": 3, "unknown": 36,
-		"pick_up_item": 108, "toggle_object": 9, "pokedex": 9, "give_pokemon": 4,
-		"trade": 7},
+	&"red": {"rows": 235, "text": 252, "branch": 95, "choice": 11, "flag": 37,
+		"give_item": 24, "has_item": 9, "take_item": 3, "unknown": 43,
+		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
+		"trade": 9, "has_money": 1, "spend_money": 1, "money_box": 2},
+	&"blue": {"rows": 235, "text": 252, "branch": 95, "choice": 11, "flag": 37,
+		"give_item": 24, "has_item": 9, "take_item": 3, "unknown": 43,
+		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
+		"trade": 9, "has_money": 1, "spend_money": 1, "money_box": 2},
+	&"yellow": {"rows": 279, "text": 294, "branch": 97, "choice": 12, "flag": 32,
+		"give_item": 24, "has_item": 9, "take_item": 3, "unknown": 47,
+		"pick_up_item": 108, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
+		"trade": 7, "has_money": 1, "spend_money": 1, "money_box": 2},
 }
 ## The eighth `call DisplayPokedex` in the source is `SilphCo11FPorygonText`,
 ## which no map text row names and which the disassembly marks unreferenced. The
 ## `trade` rows are the eight `predef DoInGameTradeDialogue` sites plus
 ## `CinnabarLabTradeRoom`'s second, whose `jr` shares the first one's tail;
-## Yellow ships neither trade house. The last `call GivePokemon` row the decoder
-## does not reach is the Magikarp salesman's, behind `HasEnoughMoney`.
+## Yellow ships neither trade house. The money rows are the Magikarp salesman's
+## alone: Museum 1F and the Safari Zone gate spend theirs behind
+## `StartSimulatingJoypadStates`, which walks the player and which this port
+## has no counterpart for, so those paths stay unread.
 
 ## `ToggleableObjectStates` as the corpus carries it: the objects a row lands on
 ## and how many start ON. Three rows name an object their map has not got.

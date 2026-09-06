@@ -217,7 +217,6 @@ func draw(movie: Gen2IntroMovie) -> Image:
 	return Gen2PicImage.canvas_image(pixels, WIDTH, HEIGHT)
 
 
-## [method Gen2GoldSilverIntroPage.shadow_oam]'s buffer for this movie.
 func shadow_oam(movie: Gen2IntroMovie) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if movie == null:

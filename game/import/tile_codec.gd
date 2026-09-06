@@ -10,7 +10,6 @@ extends RefCounted
 const TILE_WIDTH: int = 8
 const TILE_HEIGHT: int = 8
 const TILE_PIXELS: int = 64
-## Bytes of 2bpp data per tile.
 const TILE_BYTES: int = 16
 ## Bytes of 1bpp data per tile: one row per byte, with no second plane.
 const TILE_1BPP_BYTES: int = 8

@@ -67,7 +67,6 @@ const VECTOR_FIELDS: Array[String] = ["map"]
 var _data: GameData = null
 ## id to row.
 var _rows: Dictionary = {}
-## kind to the ids under it, in decode order.
 var _by_kind: Dictionary = {}
 ## The commands a site's fields also have to reach, keyed by the byte they sit
 ## at: `bank << 24 | address` to `{id, role}`. A starter's species is its ball's
@@ -342,7 +341,6 @@ func badge_for_hm_item(item: int) -> int:
 	return Gen2WorldFieldMove.badge_for_move(move_for_hm_item(item))
 
 
-## The field move [param item] teaches, or 0 for anything that is not a field HM.
 func move_for_hm_item(item: int) -> int:
 	if _data == null or not Gen2WorldTMHM.is_hm(item, _data.generation):
 		return 0

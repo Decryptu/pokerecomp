@@ -199,7 +199,6 @@ const ARROW_LEFT: int = 0x3D
 const ARROW_RIGHT: int = 0x3E
 
 var font: Gen2Font = null
-## The dex sheet and the footprint strip, each as the cache's own index buffer.
 var _sheet: PackedByteArray = PackedByteArray()
 var _footprints: PackedByteArray = PackedByteArray()
 var _unown_font: PackedByteArray = PackedByteArray()

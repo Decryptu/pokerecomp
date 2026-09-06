@@ -47,7 +47,6 @@ var dependencies: Dictionary = {}
 ## when the launcher gains another generation, since a mod naming the three
 ## Generation II cartridges refuses on a fourth without being edited.
 var games: Array[StringName] = []
-## Absolute path of the directory the manifest was read from.
 var directory: String = ""
 
 

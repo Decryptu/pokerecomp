@@ -97,11 +97,9 @@ var _idle: Control = null
 ## built it. Kept so a rebuild is skipped when the answer would be the same node.
 var _page: Node = null
 var _page_kind: StringName = &""
-## The tab row's icons, one [TextureRect] per tab, rebuilt with the tab set.
 var _icons: Array[TextureRect] = []
 ## What [method _gate] answered when the row was last built.
 var _gate_read: String = ""
-## The cartridge's glyphs, for the frame around the tab row.
 var _glyphs: Gen2Font = null
 
 
