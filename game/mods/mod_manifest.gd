@@ -75,7 +75,12 @@ static func from_dictionary(source: Dictionary, folder: String) -> Dictionary:
 	manifest.id = StringName(String(source.get("id", "")))
 	manifest.name = String(source.get("name", String(manifest.id)))
 	manifest.version = String(source.get("version", ""))
-	manifest.api_version = int(source.get("api_version", 0))
+	# A number, never coerced: a manifest naming the field something else read as
+	# 0 and was refused for declaring 0, a number no file held.
+	var raw_api: Variant = source.get("api_version")
+	if not (raw_api is int or raw_api is float):
+		return _refuse(&"missing_api_version", FILENAME)
+	manifest.api_version = int(raw_api)
 	manifest.entry = String(source.get("entry", ""))
 	manifest.pack = String(source.get("pack", ""))
 	manifest.description = String(source.get("description", ""))

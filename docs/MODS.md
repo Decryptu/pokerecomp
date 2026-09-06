@@ -148,11 +148,14 @@ voxel_preview.zip
     mod.gd
 ```
 
-An archive is refused whole if it has no `mod.json`, holds more than one mod
-folder, declares an `api_version` this host does not answer, or names a path that
-would write outside its own folder. Nothing is written until all of that passes,
-so a refusal leaves what is installed untouched. Reimporting a mod that is present
-asks first, and replacing one removes files the new version dropped.
+An archive is refused whole if it has no `mod.json`, holds more than one folder
+with a `mod.json` in it, declares an `api_version` this host does not answer, or
+names a path that would write outside its own folder. A folder holding no
+manifest is not a mod, so it is neither counted nor extracted; the `__MACOSX`
+tree a macOS zip carries is passed over on both counts. Nothing is written until
+all of that passes, so a refusal leaves what is installed untouched. Reimporting
+a mod that is present asks first, and replacing one removes files the new version
+dropped.
 
 An installed mod loads immediately, without a restart. So does a change to the
 list: switching one on or off, deleting one, or choosing a different cartridge
