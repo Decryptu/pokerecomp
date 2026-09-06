@@ -236,7 +236,7 @@ func deposit_selected_party() -> bool:
 		_refresh()
 		return false
 	var mon: Gen2SaveMon = _save.party[_selected_party_index]
-	var mon_name: String = _display_name(mon)
+	var mon_name: String = Gen2SaveMon.display_name(mon, _data)
 	var result: Dictionary = Gen2SaveStorage.deposit_party_to_box(
 		_save, _data, _selected_party_index, _box_index, -1, _persist
 	)
@@ -258,7 +258,7 @@ func withdraw_selected_box() -> bool:
 		return false
 	var box: Gen2SaveBox = _save.boxes[_box_index] if _box_index < _save.boxes.size() else null
 	var mon: Gen2SaveMon = box.slots[_selected_box_slot] as Gen2SaveMon if box != null else null
-	var mon_name: String = _display_name(mon)
+	var mon_name: String = Gen2SaveMon.display_name(mon, _data)
 	var result: Dictionary = Gen2SaveStorage.withdraw_box_to_party(
 		_save, _data, _box_index, _selected_box_slot, _persist
 	)
@@ -278,7 +278,7 @@ func release_selected() -> bool:
 	if _save == null:
 		return false
 	var mon: Gen2SaveMon = _selected_mon()
-	var mon_name: String = _display_name(mon)
+	var mon_name: String = Gen2SaveMon.display_name(mon, _data)
 	var result: Dictionary = Gen2SaveStorage.release_party_member(
 		_save, _data, _selected_party_index, _persist
 	) if _loaded == LOADED_PARTY else Gen2SaveStorage.release_box_slot(
@@ -540,7 +540,8 @@ func rows() -> Array:
 	for entry: Array in _entries():
 		var mon: Gen2SaveMon = entry[1]
 		out.append({
-			"name": _display_name(mon), "index": int(entry[0]), "cancel": false,
+			"name": Gen2SaveMon.display_name(mon, _data),
+			"index": int(entry[0]), "cancel": false,
 		})
 	out.append({"name": Gen2PCBoxPage.CANCEL, "index": -1, "cancel": true})
 	return out
@@ -845,17 +846,9 @@ func _mon_snapshot(box: int, slot: int, mon: Gen2SaveMon) -> Dictionary:
 		return {"empty": true, "box": box, "slot": slot}
 	return {
 		"empty": false, "box": box, "slot": slot,
-		"name": _display_name(mon), "species": mon.species, "level": mon.level,
+		"name": Gen2SaveMon.display_name(mon, _data),
+		"species": mon.species, "level": mon.level,
 	}
-
-
-func _display_name(mon: Gen2SaveMon) -> String:
-	if mon == null:
-		return ""
-	if not mon.nickname.is_empty():
-		return mon.nickname
-	return String(_data.species(mon.species).get("name", "UNKNOWN")) if _data != null \
-		else "UNKNOWN"
 
 
 func _press_up() -> void:

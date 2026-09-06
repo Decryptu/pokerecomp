@@ -214,6 +214,16 @@ const VIRIDIAN_CITY: int = 0x01
 const HIDDEN_POTION_CELL := Vector2i(14, 4)
 const HIDDEN_POTION: int = 0x14
 
+## `OpenPokemonCenterPC` at VIRIDIAN_POKECENTER's own cell and `OpenRedsPC` at
+## the bedroom's: the two hidden events a `TX_SCRIPT_*` PC stands behind, faced
+## from the cell below each.
+const POKECENTER_PC_CELL := Vector2i(13, 3)
+const REDS_PC_CELL := Vector2i(0, 1)
+const PC_MACHINES: Array = [
+	[VIRIDIAN_POKECENTER, POKECENTER_PC_CELL, &"gen1_pokemon_center", "pc"],
+	[REDS_HOUSE_2F, REDS_PC_CELL, &"gen1_players_pc", "players_pc"],
+]
+
 ## `MapBadgeFlags`' Pewter row and its two statues, with the two names
 ## `PewterGym_Script.LoadNames` hands `LoadGymLeaderAndCityName`.
 const PEWTER_GYM: int = 0x36
@@ -257,6 +267,7 @@ func _one_game() -> void:
 	_check_the_magikarp_salesman()
 	_check_the_coin_clerks()
 	_check_a_hidden_object()
+	_check_a_pc_opens()
 	_check_a_hidden_item()
 	_check_a_gym_statue()
 	_check_a_bench_guy()
@@ -1129,6 +1140,49 @@ func _check_a_hidden_object() -> void:
 		var box: String = _box_text(world)
 		_r.check(box.begins_with(SNES_BOX % Gen2WorldScriptRunner.UNNAMED),
 			"the SNES said %s facing %s." % [box, step])
+
+
+## `TextScript_PokemonCenterPC` and `TextScript_ItemStoragePC`: each prints the
+## machine's own boot line and then hands the world a `pc_requested`.
+## `OpenPokemonCenterPC`'s `cp SPRITE_FACING_UP` is what refuses the machine to a
+## player standing beside it.
+func _check_a_pc_opens() -> void:
+	for machine: Array in PC_MACHINES:
+		var world: Gen2WorldAPI = _facing_up(
+			int(machine[0]), Vector2i(machine[1]) + Vector2i.DOWN
+		)
+		if world == null:
+			return
+		var boot: String = world.gen1_filled_text(
+			_r.data.special_text(String(machine[3]), "turned_on")
+		)
+		var said: String = _box_text(world)
+		_r.check(not boot.is_empty() and said.begins_with(boot.split("\n")[0]),
+			"the %s PC opened with %s." % [machine[2], said])
+		world.run_event_queue(true)
+		var request: Dictionary = world.pending_runtime_request()
+		_r.check(
+			StringName(request.get("kind", &"")) == &"pc_requested"
+				and StringName(
+					(request.get("values", {}) as Dictionary).get("mode", &"")
+				) == StringName(machine[2]),
+			"the machine asked for %s." % [request]
+		)
+	_check_the_pc_refuses_a_player_beside_it()
+
+
+func _check_the_pc_refuses_a_player_beside_it() -> void:
+	var world: Gen2WorldAPI = _r.open_world(
+		0, VIRIDIAN_POKECENTER, POKECENTER_PC_CELL + Vector2i.LEFT
+	)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_RIGHT
+	world.interact()
+	_r.check(
+		world.pending_runtime_request().is_empty(),
+		"the Pokemon Center PC opened from beside it."
+	)
 
 
 ## `HiddenItems`: the receipt names the item `GetItemName` fetched before the

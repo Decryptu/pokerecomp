@@ -108,6 +108,17 @@ func cursor() -> int:
 
 ## `StatsScreen_JoypadAction`. Returns whether the button was used.
 func handle_button(button: int) -> bool:
+	## `StatusScreen` and `StatusScreen2` each end in
+	## `WaitForTextScrollButtonPress`, which reads A and B and nothing else: one
+	## press turns to the second page and the next returns.
+	if _gen1():
+		if button != PokeButton.A and button != PokeButton.B:
+			return false
+		if _page == _last_page():
+			closed.emit()
+			return true
+		_turn_page(1)
+		return true
 	## `EggStatsJoypad` masks the joypad down to `PAD_DOWN | PAD_UP | PAD_A |
 	## PAD_B` before it reaches the same action, and answers A with the exit
 	## rather than with a page: an egg has no pages to turn.
@@ -142,16 +153,25 @@ func handle_button(button: int) -> bool:
 ## `.d_right` and `.d_left`: the pages wrap in both directions, and a page change
 ## reloads the lower half without reloading the Pokémon.
 func _turn_page(delta: int) -> void:
-	_page = wrapi(
-		_page - PINK_PAGE + delta, 0, Gen2StatsScreenPage.page_count()
-	) + PINK_PAGE
+	_page = wrapi(_page - PINK_PAGE + delta, 0, _page_count()) + PINK_PAGE
+
+
+func _gen1() -> bool:
+	return _data != null and _data.generation == RomRegistry.GEN1
+
+
+## `StatusScreen` and `StatusScreen2` are the whole of Generation 1's screen,
+## and no mod page is registered against them.
+func _page_count() -> int:
+	return Gen2StatsScreenPage.GEN1_PAGES if _gen1() \
+		else Gen2StatsScreenPage.page_count()
 
 
 ## `.d_right`'s wrap point, which is the blue page until a mod registers one past
 ## it (see [method Gen2ModHost.register_stats_page]). A is the exit on this page
 ## and a page turn everywhere else, so both follow the count rather than BLUE.
 func _last_page() -> int:
-	return PINK_PAGE + Gen2StatsScreenPage.page_count() - 1
+	return PINK_PAGE + _page_count() - 1
 
 
 ## `.d_up` and `.d_down`: neither wraps, and the row the party menu is left on

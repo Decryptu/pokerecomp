@@ -292,6 +292,14 @@ func _types() -> void:
 	_r.check(data.type_count() == TYPE_COUNT, "%d types, expected %d" % [
 		data.type_count(), TYPE_COUNT
 	])
+	## The numbering skips $09 to $13, so a cache holding only the types that
+	## exist cannot be read by position: every real number answers with a name.
+	for type: int in Gen1Layout.TYPE_COUNT:
+		if not _is_real_type(type):
+			continue
+		_r.check(
+			not data.type_name(type).is_empty(), "type $%02X has no name." % type
+		)
 	var matchups: int = 0
 	for attacker: int in Gen1Layout.TYPE_COUNT:
 		for defender: int in Gen1Layout.TYPE_COUNT:

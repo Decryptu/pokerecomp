@@ -2,8 +2,8 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies Bill's PC's own graphics and its screen against freshly imported real
-## caches, over every species rather than a sampled one. Expected values come from
+## Verifies Bill's PC's graphics and its screen against freshly imported real
+## caches over every species, and Generation 1's three machines beside them. Expected values come from
 ## `engine/pokemon/bills_pc.asm`: `BillsPC_InitGFX`'s two runs, `_CGB_BillsPC`'s
 ## palettes, `BillsPC_UpdateSelectionCursor`'s ring and `PCMonInfo`'s left column.
 ## The sweep is over species because that column is the one thing whose width is
@@ -40,6 +40,32 @@ const GOLD_OAM: Array = [
 const OAM_X_BIAS: int = 8
 const OAM_Y_BIAS: int = 16
 
+## Every slot of the runs Generation 1's own machines print from.
+const GEN1_TEXT_RUNS: Dictionary = {
+	"pc": ["turned_on", "accessed_bills", "accessed_someones", "accessed_mine"],
+	"players_pc": [
+		"turned_on", "what_do_you_want", "what_to_deposit", "deposit_how_many",
+		"item_was_stored", "nothing_to_deposit", "no_room_to_store",
+		"what_to_withdraw", "withdraw_how_many", "withdrew_item", "nothing_stored",
+		"cant_carry_more", "what_to_toss", "toss_how_many",
+	],
+	"bills_pc": [
+		"switch_on", "what", "mon_was_stored", "cant_deposit_last", "box_full",
+		"mon_is_taken_out", "no_mon", "cant_take_mon",
+	],
+	"bills_pc_2": ["once_released", "mon_was_released"],
+	"oaks_pc": ["get_rated", "closed", "accessed"],
+	"hof_pc": ["accessed"],
+	"change_box": ["warning"],
+	"choose_box": ["choose"],
+}
+## `DisplayPCMainMenu` before the Pokedex, after it, and once `wNumHoFTeams` is
+## not zero.
+const GEN1_TOP_MENU_ROWS: Array[int] = [3, 4, 5]
+## A box with nothing in it refuses a withdrawal and a release and takes a
+## deposit, the development save's party being six.
+const GEN1_EMPTY_BOX_REFUSALS: Array[StringName] = [&"", &"no_mon", &"no_mon"]
+
 
 func run(r: RefCounted) -> void:
 	_r = r
@@ -51,6 +77,85 @@ func run(r: RefCounted) -> void:
 		_verify_graphics(game_id, data)
 		_verify_cursor(game_id, Gen2PCBoxPage.from_data(data))
 		_verify_info_column(game_id, data)
+	r.each_game_of(RomRegistry.GEN1, _verify_gen1)
+
+
+## Generation 1's three machines: every box `ActivatePC`, `PlayerPC`, `BillsPC_`,
+## `OpenOaksPC` and `ChangeBox` print, `DexRatingsTable` whole, and the menus
+## and refusals the three read.
+func _verify_gen1() -> void:
+	var data: GameData = _r.data
+	for run_name: String in GEN1_TEXT_RUNS:
+		for slot: String in GEN1_TEXT_RUNS[run_name] as Array:
+			_r.check(not data.special_text(run_name, slot).is_empty(),
+				"%s's %s box is empty." % [run_name, slot])
+	_verify_gen1_ratings(data)
+	_verify_gen1_menus(data)
+	_r.check(Gen2StatsScreenPage.from_data(data) != null,
+		"StatusScreen has no tile page.")
+
+
+## `DexRatingsTable`, and `DisplayDexRating`'s `cp b / jr c`: a row answers for
+## the counts under its own threshold, so 9 owned takes the first row and 10
+## takes the second.
+func _verify_gen1_ratings(data: GameData) -> void:
+	var rows: Array = data.oak_ratings()
+	if not _r.check(rows.size() == Gen1Layout.DEX_RATING_ROWS,
+		"%d rating rows." % rows.size()):
+		return
+	for index: int in rows.size():
+		var row: Dictionary = rows[index]
+		_r.check(not String(row.get("text", "")).is_empty(),
+			"rating row %d has no text." % index)
+	for caught: int in [0, 9, 10, 149, 151]:
+		var wanted: int = 0
+		for index: int in rows.size():
+			if caught < int((rows[index] as Dictionary)["threshold"]):
+				wanted = index
+				break
+		_r.check(
+			Gen2ProfOaksPC.rating_for(data, caught) == rows[wanted],
+			"%d owned did not land on row %d." % [caught, wanted]
+		)
+	_r.check(not data.oak_pc_text("counts").is_empty(),
+		"DexCompletionText is empty.")
+
+
+## `DisplayPCMainMenu`'s list, which grows with the Pokedex and again with
+## `wNumHoFTeams`, and `BillsPCDeposit`, `BillsPCWithdraw` and `BillsPCRelease`'s
+## own refusals.
+func _verify_gen1_menus(data: GameData) -> void:
+	var state := Gen2WorldState.new()
+	var rows: Array[int] = []
+	for open_dex: bool in [false, true]:
+		state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, open_dex)
+		rows.append(Gen2WorldPC.gen1_top_menu(state, "RED").size())
+	state.set_hall_of_fame(true)
+	rows.append(Gen2WorldPC.gen1_top_menu(state, "RED").size())
+	_r.check(rows == GEN1_TOP_MENU_ROWS,
+		"the machine's menu reads %s." % [rows])
+	var items: int = Gen2WorldPC.gen1_players_pc_menu().size()
+	var boxes: int = Gen2WorldPC.gen1_bills_pc_menu().size()
+	_r.check(
+		items == Gen2WorldPC.GEN1_PLAYERS_PC_ROWS.size()
+			and boxes == Gen2WorldPC.GEN1_BILLS_PC_ROWS.size(),
+		"the item menu reads %d rows and the box menu %d." % [items, boxes]
+	)
+	_r.check(
+		Gen2WorldPC.gen1_box_menu(null).size() == Gen1Layout.BOX_COUNT,
+		"the box picker is not twelve rows."
+	)
+	var save: Gen2SaveData = Gen2SaveStore.create_development_save(data, 0)
+	if not _r.check(save != null, "no development save."):
+		return
+	var refusals: Array[StringName] = []
+	for row: int in [
+		Gen2WorldPC.GEN1_BILLS_PC_DEPOSIT, Gen2WorldPC.GEN1_BILLS_PC_WITHDRAW,
+		Gen2WorldPC.GEN1_BILLS_PC_RELEASE,
+	]:
+		refusals.append(Gen2WorldPC.gen1_bills_pc_refusal(save, row, 0))
+	_r.check(refusals == GEN1_EMPTY_BOX_REFUSALS,
+		"an empty box refused with %s." % [refusals])
 
 
 ## `BillsPC_InitGFX`'s two sheets and the palette `_CGB_BillsPC` loads over the

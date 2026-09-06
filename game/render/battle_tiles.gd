@@ -82,6 +82,22 @@ const GEN1_FONT_EXTRA_AT: int = 0x60
 const GEN1_BATTLE_FONT_AT: int = 0x62
 const GEN1_HUD_1_AT: int = 0x6D
 const GEN1_HUD_2_AT: int = 0x73
+## Where `StatusScreen` puts them instead, and the cap it closes a bar with:
+## `wHPBarType` 1 is $6d and the party menu's 2 the tile below.
+const GEN1_STATS_HUD_2_AT: int = 0x78
+const GEN1_STATS_HUD_3_AT: int = 0x76
+## `BattleHudTiles3` is three tiles into the run `BattleHudTiles2` opens.
+const GEN1_HUD_3_STRIP_AT: int = 3
+const GEN1_STATS_HP_BAR_END: int = 0x6D
+## `DrawLineBox`'s four tiles.
+const GEN1_LINE_VERTICAL: int = 0x78
+const GEN1_LINE_CORNER: int = 0x77
+const GEN1_LINE_HORIZONTAL: int = 0x76
+const GEN1_LINE_ARROW: int = 0x6F
+## Three battle-extra glyphs the status screen places as bytes.
+const GEN1_ID: int = 0x73
+const GEN1_NUMERO: int = 0x74
+const GEN1_TO: int = 0x70
 
 ## Read through the instance so one panel-drawing routine serves both.
 var hp_label: int = HP_LABEL
@@ -157,6 +173,42 @@ static func _gen1_page(data: GameData) -> Gen2BattleTiles:
 			continue
 		if out._copy(
 			data.tile_indices(String(sheet[0])), int(meta.get("width", 0)), int(sheet[1])
+		):
+			loaded += 1
+	return out if loaded == sheets.size() else null
+
+
+## `StatusScreen`'s own page, which scatters the two HUD sheets a battle copies
+## whole: `BattleHudTiles2` to $78 and `BattleHudTiles3` to $76, leaving $73 to
+## $75 as the battle-extra font's, with `PTile`'s bold P at $72.
+static func gen1_stats_page(data: GameData) -> Gen2BattleTiles:
+	var out := Gen2BattleTiles.new()
+	out._first = GEN1_FIRST_TILE
+	out._last = LAST_TILE
+	out._width = (LAST_TILE - GEN1_FIRST_TILE + 1) * TILE
+	out._tiles.resize(out._width * TILE)
+	out.hp_label = GEN1_HP_LABEL
+	out.hp_label_end = GEN1_HP_LABEL_END
+	out.hp_bar_empty = GEN1_HP_BAR_EMPTY
+	out.hp_bar_full = GEN1_HP_BAR_FULL
+	out.hp_bar_end = GEN1_STATS_HP_BAR_END
+	out.enemy_side = GEN1_ENEMY_SIDE
+	var sheets: Array = [
+		["font_extra", GEN1_FONT_EXTRA_AT, 0, -1],
+		["battle_font", GEN1_BATTLE_FONT_AT, 0, -1],
+		["battle_hud_1", GEN1_HUD_1_AT, 0, -1],
+		["stats_p", Gen1Layout.STATS_P_CODE, 0, 1],
+		["battle_hud_2", GEN1_STATS_HUD_2_AT, 0, 1],
+		["battle_hud_2", GEN1_STATS_HUD_3_AT, GEN1_HUD_3_STRIP_AT, 2],
+	]
+	var loaded: int = 0
+	for sheet: Array in sheets:
+		var meta: Dictionary = data.tile_sheet(String(sheet[0]))
+		if meta.is_empty():
+			continue
+		if out._copy(
+			data.tile_indices(String(sheet[0])), int(meta.get("width", 0)),
+			int(sheet[1]), int(sheet[2]), int(sheet[3])
 		):
 			loaded += 1
 	return out if loaded == sheets.size() else null

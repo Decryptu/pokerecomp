@@ -134,6 +134,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_battle_tiles,
 	_verify_battle_anims,
 	_verify_facility_text,
+	_verify_dex_ratings,
 	_verify_world,
 ]
 
@@ -171,6 +172,14 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"coin_case": ["coin_case_text", Gen1Layout.COIN_CASE_TEXT_AT],
 	"party_menu": ["party_menu_text", Gen1Layout.PARTY_MENU_TEXT_AT],
 	"toss": ["toss_text", Gen1Layout.TOSS_TEXT_AT],
+	"pc": ["pc_text", Gen1Layout.PC_TEXT_AT],
+	"players_pc": ["players_pc_text", Gen1Layout.PLAYERS_PC_TEXT_AT],
+	"bills_pc": ["bills_pc_text", Gen1Layout.BILLS_PC_TEXT_AT],
+	"bills_pc_2": ["bills_pc_release_text", Gen1Layout.BILLS_PC_RELEASE_TEXT_AT],
+	"oaks_pc": ["oaks_pc_text", Gen1Layout.OAKS_PC_TEXT_AT],
+	"hof_pc": ["hof_pc_text", Gen1Layout.HOF_PC_TEXT_AT],
+	"change_box": ["change_box_text", Gen1Layout.CHANGE_BOX_TEXT_AT],
+	"choose_box": ["choose_box_text", Gen1Layout.CHOOSE_BOX_TEXT_AT],
 }
 
 
@@ -488,6 +497,26 @@ static func _verify_facility_text(rom: RomFile, layout: Dictionary) -> Dictionar
 	return _ok()
 
 
+## `DexRatingsTable`'s thresholds run 10 to `NUM_POKEMON + 1` in tens, so a
+## table that has slipped is off on its first row.
+static func _verify_dex_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var table: int = int(layout["dex_ratings"])
+	if facility_text(rom, table + Gen1Layout.DEX_COMPLETION_TEXT_AT).is_empty():
+		return _fail("DexCompletionText does not decode.")
+	for index: int in Gen1Layout.DEX_RATING_ROWS:
+		var row: int = table + index * Gen1Layout.DEX_RATING_ROW_SIZE
+		var wanted: int = Gen1Layout.DEX_RATING_STEP * (index + 1)
+		if index == Gen1Layout.DEX_RATING_ROWS - 1:
+			wanted = Gen1Layout.SPECIES_COUNT + 1
+		if rom.u8(row) != wanted:
+			return _fail("DexRatingsTable row %d reads %d." % [index, rom.u8(row)])
+		if facility_text(
+			rom, Gen1Layout.banked(RomFile.bank_of(table), rom.u16le(row + 1))
+		).is_empty():
+			return _fail("DexRatingsTable row %d has no text." % index)
+	return _ok()
+
+
 static func _verify_world(rom: RomFile, _layout: Dictionary) -> Dictionary:
 	return Gen1WorldImporter.verify_layout(rom)
 
@@ -760,6 +789,7 @@ func import_rom(
 		"bar_palettes": _import_bar_palettes(rom, layout),
 		"mart_text": _import_mart_text(rom, layout),
 		"special_text": _import_facility_text(rom, layout),
+		"oak_ratings": _import_dex_ratings(rom, layout),
 		"vending": _import_vending(rom, layout, items),
 		"prizes": _import_prizes(rom, layout),
 		"complete": true,
@@ -1041,6 +1071,26 @@ func _import_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 		out[run] = boxes
 	out["npc_trade"] = _import_trade_text(rom, layout)
 	return out
+
+
+## `DexRatingsTable` with `DexCompletionText` in front of it, in the section
+## `GameData.oak_ratings` reads. `PlayPokedexRatingSfx` picks its effect off a
+## table of its own rather than off the row, and no Generation 1 audio is
+## imported, so a row carries no `sfx`.
+func _import_dex_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var table: int = int(layout["dex_ratings"])
+	var bank: int = RomFile.bank_of(table)
+	var rows: Array = []
+	for index: int in Gen1Layout.DEX_RATING_ROWS:
+		var row: int = table + index * Gen1Layout.DEX_RATING_ROW_SIZE
+		rows.append({
+			"threshold": rom.u8(row),
+			"text": facility_text(rom, Gen1Layout.banked(bank, rom.u16le(row + 1))),
+		})
+	return {
+		"counts": facility_text(rom, table + Gen1Layout.DEX_COMPLETION_TEXT_AT),
+		"ratings": rows,
+	}
 
 
 ## `InGameTradeTextPointers`' three tables of five and the two boxes the swap
@@ -1352,6 +1402,18 @@ func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"tiles": Gen1Layout.FONT_EXTRA_TILES,
 			"first_code": Gen1Layout.FONT_EXTRA_FIRST_CODE,
 			"bits": 2,
+		},
+		"battle_balls": {
+			"offset": int(layout["ball_tiles"]),
+			"tiles": Gen1Layout.BALL_TILES,
+			"first_code": 0,
+			"bits": 2,
+		},
+		"stats_p": {
+			"offset": int(layout["stats_p"]),
+			"tiles": Gen1Layout.STATS_P_TILES,
+			"first_code": Gen1Layout.STATS_P_CODE,
+			"bits": 1,
 		},
 	}
 	for sheet: String in BATTLE_TILE_SHEETS:

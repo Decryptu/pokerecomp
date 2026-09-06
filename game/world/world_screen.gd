@@ -3836,6 +3836,9 @@ func preview_diploma(printing: bool = false, page: int = 1) -> void:
 ## reaches: every PC on a preview map is a script's, and the machine wants a
 ## party before it opens at all.
 func preview_bills_pc() -> void:
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		_preview_pc(&"gen1_bills_pc")
+		return
 	if _world == null or _data == null or _service_host != null:
 		return
 	var save: Gen2SaveData = _embedded_party_save()
@@ -3863,11 +3866,27 @@ func preview_pokemon_center_pc() -> void:
 	## `_embedded_party_save` builds a development save when nothing is injected,
 	## so the seeded one has to be the save the host is then handed.
 	_injected_save = save
-	_preview_pc(&"pokemon_center")
+	_preview_pc(_pc_preview_mode(&"pokemon_center_pc", &"pokemon_center"))
 
 
 func preview_players_pc() -> void:
-	_preview_pc(&"players_house")
+	_preview_pc(_pc_preview_mode(&"players_pc", &"players_house"))
+
+
+## The same three drivers open Generation 1's own machines, whose cells no
+## preview map carries either: `TextScript_BillsPC`, `TextScript_ItemStoragePC`
+## and `TextScript_PokemonCenterPC`.
+const GEN1_PC_MODES: Dictionary = {
+	&"bills_pc": &"gen1_bills_pc",
+	&"players_pc": &"gen1_players_pc",
+	&"pokemon_center_pc": &"gen1_pokemon_center",
+}
+
+
+func _pc_preview_mode(driver: StringName, gen2: StringName) -> StringName:
+	if _data == null or _data.generation != RomRegistry.GEN1:
+		return gen2
+	return StringName(GEN1_PC_MODES[driver])
 
 
 func preview_mailbox() -> void:
@@ -7846,7 +7865,9 @@ func _prompted_field_move_name(slot: int) -> String:
 	if save == null or slot >= save.party.size():
 		return "#MON"
 	var member: Variant = save.party[slot]
-	return _mon_display_name(member as Gen2SaveMon) if member is Gen2SaveMon else "#MON"
+	if not member is Gen2SaveMon:
+		return "#MON"
+	return Gen2SaveMon.display_name(member as Gen2SaveMon, _data)
 
 
 ## `PlaceString`'s `<PLAYER>`, which is `wPlayerName`. With no save selected it
@@ -8097,7 +8118,7 @@ func _on_party_selection_made(party_index: int) -> void:
 				## `wPartySpecies` holds EGG for an egg slot, which is the byte
 				## `HaircutOrGrooming` compares against.
 				"species": Gen2WorldScriptRunner.SPECIES_EGG if mon.is_egg else mon.species,
-				"nickname": _mon_display_name(mon),
+				"nickname": Gen2SaveMon.display_name(mon, _data),
 				"species_name": String(_data.species(mon.species).get("name", "")),
 				## What the three deferred routines read off the row they were
 				## handed: MON_DVS, MON_OT_ID, the OT name, MON_HAPPINESS and
@@ -8680,7 +8701,7 @@ func _refresh_party_summary() -> void:
 				if move != 0:
 					mon_moves.append(move)
 			moves.append(mon_moves)
-			names.append(_mon_display_name(mon))
+			names.append(Gen2SaveMon.display_name(mon, _data))
 			eggs.append(mon.is_egg)
 			fainted.append(mon.hp <= 0)
 	## The three party facts the Bug Contest's own scripts ask about, which are
@@ -8784,14 +8805,6 @@ func _owned_species(save: Gen2SaveData) -> Array:
 		owned.append(int(key))
 	owned.sort()
 	return owned
-
-
-## GetPartyNickname's answer for one slot, following the party screen's own rule:
-## the stored nickname, or the species name when the save carries none.
-func _mon_display_name(mon: Gen2SaveMon) -> String:
-	if not mon.nickname.is_empty():
-		return mon.nickname
-	return String(_data.species(mon.species).get("name", "")) if _data != null else ""
 
 
 func _refresh_labels() -> void:

@@ -1568,8 +1568,22 @@ func type_count() -> int:
 ## this passes the number to the overlay untouched rather than through
 ## [method _content]'s one-based subtraction.
 func type_name(number: int) -> String:
-	return String(_overlaid(Gen2ContentOverlay.KIND_TYPE, number, _entry(_types, number))
+	return String(_overlaid(Gen2ContentOverlay.KIND_TYPE, number, _type_row(number))
 		.get("name", ""))
+
+
+## The row a type number names. Generation 1's numbering skips $09 to $13 and
+## the cache holds only the types that exist, so a row answers for its own
+## `number` rather than for its place in the array; Crystal's run is dense and
+## takes the first test.
+func _type_row(number: int) -> Dictionary:
+	var row: Dictionary = _entry(_types, number)
+	if int(row.get("number", -1)) == number:
+		return row
+	for candidate: Variant in _types:
+		if int((candidate as Dictionary).get("number", -1)) == number:
+			return candidate
+	return {}
 
 
 ## Which stat pair a type attacks and defends with. The cartridge's answer is

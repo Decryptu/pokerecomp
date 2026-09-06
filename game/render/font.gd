@@ -29,6 +29,11 @@ var _frame_stride: int = Gen2Layout.FRAME_TILES
 var _battle_extra: PackedByteArray = PackedByteArray()
 var _battle_extra_width: int = 0
 var _battle_extra_tiles: int = 0
+## The run `_LoadFontsBattleExtra` replaces, which is where that strip lands
+## rather than where its first tile is: $60 on Crystal and $62 on Generation 1,
+## whose `LoadHpBarAndStatusTilePatterns` copies to `vChars2 tile $62`.
+var _battle_extra_first_code: int = Gen2Layout.BATTLE_FONT_FIRST_CODE
+var _battle_extra_last_code: int = Gen2Text.BATTLE_EXTRA_LAST_CODE
 
 ## `FontExtra`, which `_LoadFontsExtra1` parks under the main font's own $80
 ## floor: the ellipsis, the two quotes, the middle dot and `<COLON>` all draw
@@ -102,6 +107,9 @@ func _take_gen1_frames() -> void:
 	_frame_stride = 0
 	_extra_loaded_first = _extra_first_code
 	_extra_loaded_last = Gen1Layout.FRAME_LAST_CODE
+	_battle_extra_first_code = Gen1Layout.BATTLE_FONT_FIRST_CODE
+	_battle_extra_last_code = Gen1Layout.BATTLE_FONT_FIRST_CODE \
+		+ Gen1Layout.BATTLE_FONT_TILES - 1
 
 
 func is_usable() -> bool:
@@ -131,9 +139,8 @@ func draw_code(
 	font: StringName = Gen2Text.FONT_MAIN
 ) -> void:
 	if font == Gen2Text.FONT_BATTLE_EXTRA \
-		and code >= Gen2Text.BATTLE_EXTRA_FIRST_CODE \
-		and code <= Gen2Text.BATTLE_EXTRA_LAST_CODE:
-		var within: int = code - Gen2Layout.BATTLE_FONT_FIRST_CODE
+		and code >= _battle_extra_first_code and code <= _battle_extra_last_code:
+		var within: int = code - _battle_extra_first_code
 		if within < 0 or within >= _battle_extra_tiles:
 			return
 		blit_slot(_battle_extra, _battle_extra_width, within, into, into_width, at_x, at_y)

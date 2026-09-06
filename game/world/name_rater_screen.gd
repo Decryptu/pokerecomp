@@ -242,7 +242,7 @@ func _on_selected(party_index: int) -> void:
 		return
 	_party_index = party_index
 	var mon: Gen2SaveMon = _save.party[party_index] as Gen2SaveMon
-	_nickname = _display_name(mon)
+	_nickname = Gen2SaveMon.display_name(mon, _data)
 	var ending: StringName = Gen2NameRater.ending_for(mon, _player_name, _player_id)
 	if ending != &"":
 		_end(ending)
@@ -307,14 +307,6 @@ func _end(ending: StringName) -> void:
 		_party_index, _nickname, _filled(String(ending), _nickname)
 	)
 	closed.emit()
-
-
-func _display_name(mon: Gen2SaveMon) -> String:
-	if mon == null:
-		return ""
-	if not mon.nickname.is_empty():
-		return mon.nickname
-	return String(_data.species(mon.species).get("name", ""))
 
 
 func _draw_yes_no() -> void:

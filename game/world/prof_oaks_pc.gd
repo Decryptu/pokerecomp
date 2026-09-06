@@ -49,19 +49,32 @@ static func rate(data: GameData, state: Gen2WorldState) -> Dictionary:
 
 ## `FindOakRating`: the first row whose threshold the caught count does not
 ## exceed. The table's last row is every species, so the walk always lands.
+## Generation 1's `DisplayDexRating` compares the other way, `cp b / jr c`
+## against `jr nc`, so its rows match under the threshold rather than at it.
 static func rating_for(data: GameData, caught: int) -> Dictionary:
+	var under: bool = data != null and data.generation == RomRegistry.GEN1
 	for row: Variant in data.oak_ratings():
-		if caught <= int((row as Dictionary).get("threshold", -1)):
+		var threshold: int = int((row as Dictionary).get("threshold", -1))
+		if caught < threshold if under else caught <= threshold:
 			return row
 	return {}
 
 
 ## `_OakPCText3` with `.UpdateRatingBuffers`' two numbers in the `text_ram` slots
-## it left for them.
+## it left for them. Generation 1's `_DexCompletionText` reads the same two
+## counts with `text_decimal` instead, so its slots are number markers and
+## `PrintNumber` right-aligns them in [constant COUNT_DIGITS] cells where
+## `PRINTNUM_LEFTALIGN` does not.
 static func counts_text(data: GameData, seen: int, caught: int) -> String:
 	var text: String = data.oak_pc_text("counts")
 	for value: int in [seen, caught]:
-		text = Gen2TextStream.fill_marker(
-			text, Gen2TextStream.RAM_MARKER, String.num_int64(value)
-		)
+		var digits: String = String.num_int64(value)
+		var number: int = text.find(Gen2TextStream.NUMBER_MARKER)
+		var ram: int = text.find(Gen2TextStream.RAM_MARKER)
+		if number >= 0 and (ram < 0 or number < ram):
+			text = Gen2TextStream.fill_marker(
+				text, Gen2TextStream.NUMBER_MARKER, digits.lpad(COUNT_DIGITS)
+			)
+			continue
+		text = Gen2TextStream.fill_marker(text, Gen2TextStream.RAM_MARKER, digits)
 	return text

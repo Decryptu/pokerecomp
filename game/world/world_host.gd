@@ -20,6 +20,15 @@ const UNATTENDED_REQUESTS: Array[StringName] = [
 	&"contest_mon_requested", &"dratini_moveset_requested",
 ]
 
+## Which machine a `pc_requested` names. `PokemonCenterPC` and
+## `_PlayersHousePC` are Crystal's two; Generation 1's three are the
+## `TX_SCRIPT_*` ids `ActivatePC`, `PlayerPC` and `BillsPC_` stand behind, which
+## the top menu can reach each other from.
+const PC_MODES: Array[StringName] = [
+	&"pokemon_center", &"players_house",
+	&"gen1_pokemon_center", &"gen1_players_pc", &"gen1_bills_pc",
+]
+
 
 static func complete_runtime_request(
 	world: Gen2WorldAPI,
@@ -279,7 +288,7 @@ static func _resolve_data_request(world: Gen2WorldAPI, request: Dictionary) -> D
 			## the world already holds, so the only thing to resolve is which of
 			## the two the script asked for.
 			var pc_mode: StringName = StringName(values.get("mode", &"pokemon_center"))
-			if pc_mode not in [&"pokemon_center", &"players_house"]:
+			if pc_mode not in PC_MODES:
 				return {"ok": false, "reason": &"unsupported_pc_mode"}
 			return {"ok": true, "data": {"pc": {"mode": pc_mode}}}
 		&"audio_requested":

@@ -3665,6 +3665,15 @@ const GEN1_PICK_UP_RUN: String = "pick_up_item"
 ## `InGameTradeTextPointers`' fifteen and the two boxes the swap prints, which
 ## both generations' trades read under one run name.
 const GEN1_TRADE_RUN: String = "npc_trade"
+## `TextScript_PokemonCenterPC`, `TextScript_ItemStoragePC` and
+## `TextScript_BillsPC`, each a machine, the run its own boxes were imported
+## under and the boot line it opens with. `BIT_USING_GENERIC_PC` is clear on all
+## three, which is what makes every one of them print that line.
+const GEN1_PC_MACHINES: Dictionary = {
+	Gen1Layout.TEXT_SCRIPT_POKECENTER_PC: [&"gen1_pokemon_center", "pc", "turned_on"],
+	Gen1Layout.TEXT_SCRIPT_PLAYERS_PC: [&"gen1_players_pc", "players_pc", "turned_on"],
+	Gen1Layout.TEXT_SCRIPT_BILLS_PC: [&"gen1_bills_pc", "bills_pc", "switch_on"],
+}
 ## `EndTrainerBattle`'s `cp LOST_BATTLE`, which a catch also passes.
 const GEN1_TRAINER_BEATEN: Array[StringName] = [
 	Gen2WorldBattleAdapter.OUTCOME_WON, Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
@@ -3793,14 +3802,16 @@ func _gen1_sign_or_sprite() -> Array:
 	if _gen1_steps.is_empty():
 		_gen1_steps = _gen1_script_steps(row, event)
 	if _gen1_steps.is_empty():
-		var text: String = _gen1_filled_text(String(row.get("text", "")))
+		var text: String = gen1_filled_text(String(row.get("text", "")))
 		if text.is_empty():
 			return []
 		_gen1_steps = [{"type": &"text", "text": text}]
 	return _gen1_result()
 
 
-func _gen1_filled_text(text: String) -> String:
+## The print-time names still standing in an imported Generation 1 box, which
+## is every box the world or a screen hosting one of its facilities prints.
+func gen1_filled_text(text: String) -> String:
 	return Gen2TextStream.fill_names(text, {
 		"player": _player_name if not _player_name.is_empty() \
 			else Gen2WorldScriptRunner.UNNAMED,
@@ -3962,7 +3973,7 @@ func _gen1_node_map_text(node: Dictionary, steps: Array, run: Dictionary) -> boo
 	var nodes: Variant = row.get("script", [])
 	if nodes is Array and not (nodes as Array).is_empty():
 		return _gen1_resolve_script(nodes as Array, steps, run)
-	var text: String = _gen1_filled_text(String(row.get("text", "")))
+	var text: String = gen1_filled_text(String(row.get("text", "")))
 	if text.is_empty():
 		return false
 	steps.append({"type": &"text", "text": text})
@@ -4085,7 +4096,7 @@ func _gen1_pick_up_item(_node: Dictionary, steps: Array, run: Dictionary) -> boo
 	steps.append({"type": &"toggle", "index": toggle, "hidden": true})
 	var box: Dictionary = _gen1_facility_box(GEN1_PICK_UP_RUN, "found")
 	box["text"] = Gen2TextStream.fill_all_markers(
-		_gen1_filled_text(String(box["text"])), Gen2TextStream.RAM_MARKER,
+		String(box["text"]), Gen2TextStream.RAM_MARKER,
 		data.item_name(item) if data != null else ""
 	)
 	box["press"] = false
@@ -4173,7 +4184,7 @@ func _gen1_trade_run_box(record: Dictionary, name: String) -> Dictionary:
 func _gen1_trade_text(record: Dictionary, name: String) -> String:
 	if data == null or name.is_empty():
 		return ""
-	var text: String = _gen1_filled_text(data.special_text(GEN1_TRADE_RUN, name))
+	var text: String = gen1_filled_text(data.special_text(GEN1_TRADE_RUN, name))
 	for row: Array in [
 		[Gen1Layout.TRADE_GIVE_NAME, int(record.get("requested_species", 0))],
 		[Gen1Layout.TRADE_RECEIVE_NAME, int(record.get("offered_species", 0))],
@@ -4227,7 +4238,7 @@ func _gen1_run_copy(run: Dictionary) -> Dictionary:
 
 
 func _gen1_script_box(node: Dictionary, named: String) -> Dictionary:
-	var text: String = _gen1_filled_text(String(node.get("text", "")))
+	var text: String = gen1_filled_text(String(node.get("text", "")))
 	if not named.is_empty():
 		text = Gen2TextStream.fill_all_markers(
 			text, Gen2TextStream.RAM_MARKER, named
@@ -4241,7 +4252,10 @@ func _gen1_script_box(node: Dictionary, named: String) -> Dictionary:
 ## `DisplayTextID`'s own dispatch, which reads the first byte of the text a
 ## pointer stands at: a `TX_SCRIPT_*` id runs a routine and prints nothing.
 func _gen1_facility_steps(row: Dictionary, text_id: int = 0) -> Array:
-	match int(row.get("command", 0)):
+	var command: int = int(row.get("command", 0))
+	if GEN1_PC_MACHINES.has(command):
+		return _gen1_pc_steps(GEN1_PC_MACHINES[command] as Array)
+	match command:
 		Gen1Layout.TEXT_SCRIPT_MART:
 			return _gen1_mart_steps(row)
 		Gen1Layout.TEXT_SCRIPT_POKECENTER_NURSE:
@@ -4253,6 +4267,15 @@ func _gen1_facility_steps(row: Dictionary, text_id: int = 0) -> Array:
 		Gen1Layout.TEXT_SCRIPT_PRIZE_VENDOR:
 			return _gen1_prize_steps(text_id)
 	return []
+
+
+func _gen1_pc_steps(machine: Array) -> Array:
+	return [
+		_gen1_facility_box(String(machine[1]), String(machine[2])),
+		{"type": &"request", "values": {
+			"kind": &"pc_requested", "values": {"mode": StringName(machine[0])},
+		}},
+	]
 
 
 ## `GetPrizeMenuId` subtracts `TEXT_GAMECORNERPRIZEROOM_PRIZE_VENDOR_1` from the
@@ -4397,7 +4420,9 @@ func _gen1_pokecenter_text(name: String) -> String:
 func _gen1_facility_box(run: String, name: String) -> Dictionary:
 	return {
 		"type": &"text",
-		"text": data.special_text(run, name) if data != null else "",
+		"text": gen1_filled_text(
+			data.special_text(run, name)
+		) if data != null else "",
 	}
 
 

@@ -62,9 +62,9 @@ const KIND_HELP: Dictionary = {
 	&"gift_nickname": "presses, species: GiveANickname_YesNo. 1 the question, 2 the WasSentToBillsPCText behind NO; add 1000 for the box branch",
 	&"unown_printer": "slot, page: _UnownPrinter's browser. Slot 26 is the vacant one; page 1 is what A sends to a printer that is not there",
 	&"diploma": "loop, page: _Diploma's page. 1 stands _PrintDiploma's connection error over it; page 2 needs a printer that answered",
-	&"bills_pc": "rows down, A presses: _BillsPC's top menu and the lists behind it",
-	&"players_pc": "rows down, A presses: the bedroom's item PC",
-	&"pokemon_center_pc": "rows down, A presses: the Pokemon Center's machine",
+	&"bills_pc": "rows down, A presses: _BillsPC's top menu and the lists behind it, or BillsPC_ on a Generation 1 cartridge. @d,0 is a second run of rows down, spent before the last press",
+	&"players_pc": "rows down, A presses: the bedroom's item PC, or PlayerPC on a Generation 1 cartridge",
+	&"pokemon_center_pc": "rows down, A presses: the Pokemon Center's machine, or ActivatePC on a Generation 1 cartridge",
 	&"mom_bank": "wallet, balance, both in hundreds: Mom_WithdrawDepositMenuJoypad's dial. Add 1000 for the WITHDRAW header",
 	&"move_tutor": "presses: special MoveTutor. 0 is ChooseMonToLearnTMHM's list, not a box",
 	&"day_care": "presses, routine: 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs",
@@ -1179,13 +1179,22 @@ func _generation() -> int:
 	return data.generation if data != null else RomRegistry.GEN2
 
 
+## `@d,0` is a second run of DOWN presses, spent before the last A: a Generation
+## 1 machine's menus are two deep and one number cannot reach both.
 func _stage_pc() -> void:
 	_screen.call(SCREEN_DRIVER % _kind)
-	for _down: int in maxi(_cell.x, 0):
-		_screen.press_button(PokeButton.DOWN)
-		_screen.advance_frame()
-	for _press: int in maxi(_cell.y, 0):
+	var presses: int = maxi(_cell.y, 0)
+	_press_rows(maxi(_cell.x, 0))
+	for press: int in presses:
+		if press == presses - 1:
+			_press_rows(maxi(_kind_cell.x, 0))
 		_screen.press_button(PokeButton.A)
+		_screen.advance_frame()
+
+
+func _press_rows(rows: int) -> void:
+	for _down: int in rows:
+		_screen.press_button(PokeButton.DOWN)
 		_screen.advance_frame()
 
 

@@ -11,6 +11,8 @@ extends RefCounted
 const MAX_MOVES: int = Gen2BattleMon.MAX_MOVES
 const MAX_EXP: int = Gen2Experience.MAX_EXP
 const STAT_EXP_KEYS: Array = ["hp", "attack", "defense", "speed", "special"]
+## What a member with neither a nickname nor a species row is called.
+const UNNAMED: String = "UNKNOWN"
 
 var species: int = 0
 var item: int = 0
@@ -42,6 +44,17 @@ var is_egg: bool = false
 ## `sPartyMail`'s own entry for this member, or null when the held item is not
 ## mail. Kept on the record rather than on the party slot; see [Gen2SaveMail].
 var mail: Gen2SaveMail = null
+
+
+## `GetNickname`: the species name for a member that was never given one.
+static func display_name(mon: Gen2SaveMon, data: GameData) -> String:
+	if mon == null:
+		return ""
+	if not mon.nickname.is_empty():
+		return mon.nickname
+	if data == null:
+		return UNNAMED
+	return String(data.species(mon.species).get("name", UNNAMED))
 
 
 func to_dict() -> Dictionary:
