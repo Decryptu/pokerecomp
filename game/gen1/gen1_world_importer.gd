@@ -992,6 +992,7 @@ const SCRIPT_TESTS_NOTHING: int = -2
 const SCRIPT_TESTS_CARRY: int = -3
 const SCRIPT_TESTS_ITEM: int = -4
 const SCRIPT_TESTS_MONEY: int = -5
+const SCRIPT_TESTS_COINS: int = -6
 
 
 ## One `text_asm` row's machine code, as the boxes it prints and the branches
@@ -1367,8 +1368,13 @@ static func _script_call(
 			return _script_gift_pokemon(ctx, state, out, next)
 		"has_enough_money":
 			return _script_money_asked(state, next)
+		"has_enough_coins":
+			return _script_coins_asked(state, next)
 		"display_text_box":
 			return _script_money_box(state, out, next)
+	if _script_banked_routine(layout, int(ctx["bank"]), target) == "coin_box":
+		out.append({"op": "coin_box"})
+		return next
 	return _script_routine_call(ctx, int(ctx["bank"]), target, state, out, next, depth)
 
 
@@ -1397,6 +1403,14 @@ static func _script_routine_call(
 static func _script_routine(layout: Dictionary, target: int) -> String:
 	for name: String in Gen1Layout.SCRIPT_CALLS:
 		if int(layout.get(name, -1)) == target:
+			return name
+	return ""
+
+
+static func _script_banked_routine(layout: Dictionary, bank: int, target: int) -> String:
+	var at: int = Gen1Layout.banked(bank, target)
+	for name: String in Gen1Layout.SCRIPT_BANKED_CALLS:
+		if int(layout.get(name, -1)) == at:
 			return name
 	return ""
 
@@ -1496,14 +1510,16 @@ static func _script_bcd_stored(
 	return false
 
 
-## Three packed-decimal bytes as a number, -1 until all three are written.
-static func _script_bcd_value(state: Dictionary, name: String) -> int:
+## A run of packed-decimal bytes as a number, -1 until every one is written.
+static func _script_bcd_value(
+	state: Dictionary, name: String, count: int = Gen1Layout.MONEY_BYTES, first: int = 0
+) -> int:
 	var bytes: Dictionary = state.get(name, {})
 	var value: int = 0
-	for index: int in Gen1Layout.MONEY_BYTES:
-		if not bytes.has(index):
+	for index: int in count:
+		if not bytes.has(first + index):
 			return -1
-		var byte: int = int(bytes[index])
+		var byte: int = int(bytes[first + index])
 		value = value * 100 + (byte >> 4) * 10 + (byte & 0xF)
 	return value
 
@@ -1516,6 +1532,20 @@ static func _script_money_asked(state: Dictionary, next: int) -> int:
 		return SCRIPT_UNREAD
 	state["price"] = price
 	_script_tested(state, SCRIPT_TESTS_MONEY, true)
+	return next
+
+
+## `HasEnoughCoins` is `StringCmp` over `hCoins`: `Has9990Coins` behind a `jr nc` is a full coin
+## case, and `GameCornerGentlemanText`'s `jr z` an exact 9990.
+static func _script_coins_asked(state: Dictionary, next: int) -> int:
+	var coins: int = _script_bcd_value(
+		state, Gen1Layout.SCRIPT_BCD_BUFFERS[0],
+		Gen1Layout.COIN_BYTES, Gen1Layout.COIN_BUFFER_AT
+	)
+	if coins < 1:
+		return SCRIPT_UNREAD
+	state["coins"] = coins
+	_script_tested(state, SCRIPT_TESTS_COINS)
 	return next
 
 
@@ -1548,6 +1578,24 @@ static func _script_spend(
 	return SCRIPT_UNREAD
 
 
+## `predef AddBCDPredef` with `wPlayerCoins + 1` in de and two in c; the Day-Care's own sum is not.
+static func _script_add_coins(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int
+) -> int:
+	var layout: Dictionary = ctx["layout"]
+	if int(state.get("de", -1)) != int(layout["player_coins"]) + Gen1Layout.COIN_BYTES - 1 \
+		or int(state.get("c", -1)) != Gen1Layout.COIN_BYTES:
+		return SCRIPT_UNREAD
+	var amount: int = _script_bcd_value(
+		state, Gen1Layout.SCRIPT_BCD_BUFFERS[0],
+		Gen1Layout.COIN_BYTES, Gen1Layout.COIN_BUFFER_AT
+	)
+	if amount < 1:
+		return SCRIPT_UNREAD
+	out.append({"op": "add_coins", "amount": amount})
+	return next
+
+
 ## `predef` is `ld a, id` and `call Predef`; `PredefPointers` is the bank and
 ## address that id names. `ShowObject2` shares `ShowObject`'s address, so
 ## resolving the address rather than the id reads both.
@@ -1566,6 +1614,8 @@ static func _script_predef(
 		return next
 	if target == int(layout["sub_bcd"]):
 		return _script_spend(ctx, state, out, next)
+	if target == int(layout["add_bcd"]):
+		return _script_add_coins(ctx, state, out, next)
 	if target == int(layout["in_game_trade"]):
 		if not state.has("trade"):
 			return SCRIPT_UNREAD
@@ -1599,12 +1649,7 @@ static func _script_branch(
 ) -> Variant:
 	var tests: Variant = state.get("tests", SCRIPT_TESTS_NOTHING)
 	var carry: bool = Gen1Layout.SCRIPT_CARRY_BRANCHES.has(op)
-	if tests is Array:
-		if carry:
-			return null
-	elif int(tests) == SCRIPT_TESTS_NOTHING or carry != (
-		int(tests) == SCRIPT_TESTS_CARRY or bool(state.get("tests_in_carry", false))
-	):
+	if not _script_reads_flag(state, tests, carry):
 		return null
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), pc)
@@ -1628,18 +1673,31 @@ static func _script_branch(
 		branches.reverse()
 	if branches[0] == null and branches[1] == null:
 		return null
-	var node: Variant = _script_node(tests, branches, state, out)
+	var node: Variant = _script_node(tests, branches, state, out, carry)
 	if node == null:
 		return null
 	out.append(node)
 	return out
 
 
+## Whether the flag this branch reads is the one the test left: a flag index is in Z alone.
+static func _script_reads_flag(state: Dictionary, tests: Variant, carry: bool) -> bool:
+	if tests is Array:
+		return not carry
+	if int(tests) == SCRIPT_TESTS_COINS:
+		return true
+	if int(tests) == SCRIPT_TESTS_NOTHING:
+		return false
+	return carry == (
+		int(tests) == SCRIPT_TESTS_CARRY or bool(state.get("tests_in_carry", false))
+	)
+
+
 ## `wCurrentMenuItem` is 0 for YES, so the branch taken when it is not zero is
 ## NO. Every other test reads the other way about: the taken side is the set
 ## one, a set carry or an item the bag holds.
 static func _script_node(
-	tests: Variant, branches: Array, state: Dictionary, out: Array
+	tests: Variant, branches: Array, state: Dictionary, out: Array, carry: bool
 ) -> Variant:
 	var taken: Array = branches[0] if branches[0] != null else [{"op": "unknown"}]
 	var fell: Array = branches[1] if branches[1] != null else [{"op": "unknown"}]
@@ -1658,6 +1716,10 @@ static func _script_node(
 			## Carry is set when the player is short, so the taken side of a
 			## `jr c` is the refusal and the other one is the sale.
 			return {"op": "has_money", "price": int(state["price"]),
+				"then": fell, "else": taken}
+		SCRIPT_TESTS_COINS:
+			return {"op": "has_coins", "coins": int(state["coins"]),
+				"test": "at_least" if carry else "exactly",
 				"then": fell, "else": taken}
 	var branch: Dictionary = {
 		"op": "branch", "flag": int(tests), "then": taken, "else": fell,

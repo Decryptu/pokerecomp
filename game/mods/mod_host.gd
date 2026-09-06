@@ -420,7 +420,6 @@ func request_item_gift(item: int, quantity: int = 1) -> void:
 	_item_gift_requests.append({"item": item, "quantity": quantity})
 
 
-## Drained by [Gen2WorldScreen], once, on the frame it spends them.
 func take_item_gift_requests() -> Array[Dictionary]:
 	var out: Array[Dictionary] = _item_gift_requests
 	_item_gift_requests = []

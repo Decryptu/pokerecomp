@@ -784,7 +784,6 @@ const TRAINER_CLASS_RED: int = 63
 ## constants/item_constants.asm.
 const ITEM_MACHINE_PART: int = 0x80
 
-## constants/event_flags.asm, same numbers in both pins.
 const EVENT_FAST_SHIP_HAS_ARRIVED: int = 49
 const EVENT_FAST_SHIP_FOUND_GIRL: int = 50
 const EVENT_FAST_SHIP_LAZY_SAILOR: int = 51

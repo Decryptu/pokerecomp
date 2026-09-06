@@ -307,7 +307,6 @@ func _exit_tree() -> void:
 	_mart_view = null
 
 
-## Opens the host for whatever pending input the world currently exposes.
 func open_pending(
 	world: Gen2WorldAPI,
 	data: GameData,

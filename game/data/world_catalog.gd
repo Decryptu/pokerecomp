@@ -65,7 +65,6 @@ const STRING_NAME_FIELDS: Array[String] = ["kind", "role"]
 const VECTOR_FIELDS: Array[String] = ["map"]
 
 var _data: GameData = null
-## id to row.
 var _rows: Dictionary = {}
 var _by_kind: Dictionary = {}
 ## The commands a site's fields also have to reach, keyed by the byte they sit

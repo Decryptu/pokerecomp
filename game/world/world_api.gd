@@ -3687,8 +3687,11 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"branch": &"_gen1_node_branch",
 	"has_item": &"_gen1_node_has_item",
 	"has_money": &"_gen1_node_has_money",
+	"has_coins": &"_gen1_node_has_coins",
 	"spend_money": &"_gen1_node_spend_money",
+	"add_coins": &"_gen1_node_add_coins",
 	"money_box": &"_gen1_node_money_box",
+	"coin_box": &"_gen1_node_coin_box",
 	"give_item": &"_gen1_resolve_gift",
 	"take_item": &"_gen1_take_item",
 	"toggle_object": &"_gen1_node_toggle",
@@ -3774,6 +3777,7 @@ func _gen1_script_steps(row: Dictionary, event: Dictionary = {}) -> Array:
 	return steps if _gen1_resolve_script(nodes as Array, steps, {
 		"bag": state.items() if state != null else {}, "named": "", "object": event,
 		"money": state.money(Gen2WorldMartHost.MONEY_ACCOUNT) if state != null else 0,
+		"coins": state.coins() if state != null else 0,
 	}) else []
 
 
@@ -3826,6 +3830,14 @@ func _gen1_node_has_money(node: Dictionary, steps: Array, run: Dictionary) -> bo
 	)
 
 
+func _gen1_node_has_coins(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var coins: int = int(run["coins"])
+	var wanted: int = int(node["coins"])
+	var holds: bool = coins == wanted if String(node["test"]) == "exactly" \
+		else coins >= wanted
+	return _gen1_resolve_side(node, holds, steps, run)
+
+
 ## `SubBCD` over `wPlayerMoney`, whose `.fill` writes zeroes across a balance it
 ## borrowed past.
 func _gen1_node_spend_money(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -3835,8 +3847,22 @@ func _gen1_node_spend_money(node: Dictionary, steps: Array, run: Dictionary) -> 
 	return true
 
 
+func _gen1_node_add_coins(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var held: int = mini(
+		int(run["coins"]) + int(node["amount"]), Gen1Layout.COIN_CEILING
+	)
+	run["coins"] = held
+	steps.append({"type": &"coins", "amount": held})
+	return true
+
+
 func _gen1_node_money_box(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"money_box"})
+	steps.append({"type": &"money_box", "kind": &"money_top_right"})
+	return true
+
+
+func _gen1_node_coin_box(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"money_box", "kind": &"game_corner"})
 	return true
 
 
@@ -4073,6 +4099,7 @@ func _gen1_run_copy(run: Dictionary) -> Dictionary:
 		"named": run["named"],
 		"object": run.get("object", {}),
 		"money": run.get("money", 0),
+		"coins": run.get("coins", 0),
 	}
 
 
@@ -4550,11 +4577,14 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 				"money": {Gen2WorldMartHost.MONEY_ACCOUNT: int(step["amount"])},
 			})
 			return true
+		&"coins":
+			state.apply_changes({}, {}, {"coins": int(step["amount"])})
+			return true
 		&"money_box":
 			_gen1_money_window = true
 			events.append({
 				"type": &"money_window_opened",
-				"kind": &"money_top_right",
+				"kind": StringName(step.get("kind", &"money_top_right")),
 				"money": state.money(Gen2WorldMartHost.MONEY_ACCOUNT) if state != null else 0,
 				"coins": state.coins() if state != null else 0,
 			})

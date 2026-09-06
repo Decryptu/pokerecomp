@@ -374,7 +374,6 @@ func draw(mail: Gen2SaveMail) -> PackedByteArray:
 	return indices
 
 
-## The tile numbers the last [method draw] loaded, in order.
 func loaded_tiles() -> Array:
 	var out: Array = _vram.keys()
 	out.sort()

@@ -733,7 +733,10 @@ const SCRIPT_CALLS: Array[String] = [
 	"give_item", "is_item_in_bag", "bankswitch", "play_cry", "wait_for_sound",
 	"predef", "display_pokedex", "give_pokemon", "wait_for_button",
 	"auto_textbox_on", "auto_textbox_off", "has_enough_money", "display_text_box",
+	"has_enough_coins",
 ]
+## Routines named by a full ROM offset, the same address in another bank being another routine.
+const SCRIPT_BANKED_CALLS: Array[String] = ["coin_box"]
 ## The routines that spend nothing here: no audio driver, a press already ends
 ## every box, and `wAutoTextBoxDrawingControl` has no counterpart.
 const SCRIPT_SILENT_CALLS: Array[String] = [
@@ -745,6 +748,11 @@ const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
 ## byte first. `wPriceTemp` stands at `wWhichTrade`'s own address.
 const SCRIPT_BCD_BUFFERS: Array[String] = ["money_hram", "which_trade"]
 const MONEY_BYTES: int = 3
+## `hCoins` unions `hMoney`'s last two bytes and `hUnusedCoinsByte` its first, so one buffer
+## holds both, and `AddBCD`'s `.fill` is what ceils a sum that carried out of the two.
+const COIN_BYTES: int = 2
+const COIN_BUFFER_AT: int = 1
+const COIN_CEILING: int = 9999
 const MONEY_BOX_ID: int = 0x13
 const SCRIPT_SHORT_SIZE: int = 2
 const SCRIPT_LONG_SIZE: int = 3
@@ -1009,6 +1017,10 @@ const RED_BLUE: Dictionary = {
 	"money_hram": 0xFF9F,
 	"player_money": 0xD347,
 	"sub_bcd": 0x0F836,
+	"has_enough_coins": 0x35B1,
+	"player_coins": 0xD5A4,
+	"add_bcd": 0x0F81D,
+	"coin_box": 0x48F1E,
 	"remove_item": 0x7F37,
 	"remove_item_bank": 0x05,
 	"do_not_wait": 0xCC3C,
@@ -1139,6 +1151,10 @@ const YELLOW: Dictionary = {
 	"money_hram": 0xFF9F,
 	"player_money": 0xD346,
 	"sub_bcd": 0x0F6BC,
+	"has_enough_coins": 0x35CE,
+	"player_coins": 0xD5A3,
+	"add_bcd": 0x0F6A3,
+	"coin_box": 0x48F42,
 	"remove_item": 0x7DBB,
 	"remove_item_bank": 0x05,
 	"do_not_wait": 0xCC3C,

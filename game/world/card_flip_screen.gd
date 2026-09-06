@@ -144,7 +144,6 @@ func _handle_yes_no_button(button: int) -> void:
 			pass
 
 
-## One pass of the loop and whatever it emitted.
 func _pass() -> void:
 	if not _game.advance() and not _game.waiting_for_sfx():
 		_drain()
@@ -168,7 +167,6 @@ func _drain() -> void:
 				pass
 
 
-## The state the page draws over the table.
 func overlay_state() -> Dictionary:
 	if _game == null:
 		return {}

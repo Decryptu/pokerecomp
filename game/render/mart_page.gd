@@ -37,6 +37,14 @@ const BALANCES_MONEY_AT: Vector2i = Vector2i(12, 1)
 const BALANCES_COIN_LABEL_AT: Vector2i = Vector2i(6, 3)
 const BALANCES_COIN_AT: Vector2i = Vector2i(15, 3)
 
+## `GameCornerDrawCoinBox`: `TextBoxBorder` at `hlcoord 11, 0`, `lb bc, 5, 7`.
+const GAME_CORNER_AT: Vector2i = Vector2i(11, 0)
+const GAME_CORNER_SIZE: Vector2i = Vector2i(9, 7)
+const GAME_CORNER_MONEY_LABEL_AT: Vector2i = Vector2i(12, 2)
+const GAME_CORNER_MONEY_AT: Vector2i = Vector2i(12, 3)
+const GAME_CORNER_COIN_LABEL_AT: Vector2i = Vector2i(12, 4)
+const GAME_CORNER_COIN_AT: Vector2i = Vector2i(15, 5)
+
 ## `Mom_ContinueMenuSetup`'s own box and the three rows it prints in.
 ## `hlcoord 13, 6` plus `wMomBankDigitCursorPosition` is the digit the cursor
 ## blanks, which is the amount's first digit column.
@@ -197,6 +205,9 @@ static func balance_window(
 		&"money_and_coins":
 			at = BALANCES_AT
 			box = BALANCES_SIZE
+		&"game_corner":
+			at = GAME_CORNER_AT
+			box = GAME_CORNER_SIZE
 	var width: int = Gen2Screen.WIDTH
 	var indices := PackedByteArray()
 	indices.resize(width * Gen2Screen.HEIGHT)
@@ -212,6 +223,11 @@ static func balance_window(
 			page._text(indices, width, money_string(money), BALANCES_MONEY_AT)
 			page._text(indices, width, "COIN", BALANCES_COIN_LABEL_AT)
 			page._text(indices, width, coin_string(coins), BALANCES_COIN_AT)
+		&"game_corner":
+			page._text(indices, width, GEN1_MONEY_LABEL, GAME_CORNER_MONEY_LABEL_AT)
+			page._text(indices, width, money_string(money), GAME_CORNER_MONEY_AT)
+			page._text(indices, width, "COIN", GAME_CORNER_COIN_LABEL_AT)
+			page._text(indices, width, coin_string(coins), GAME_CORNER_COIN_AT)
 		_:
 			## `DisplayMoneyBox` writes MONEY into the box's own top border,
 			## where `PlaceMoneyTopRight` draws the balance alone.
