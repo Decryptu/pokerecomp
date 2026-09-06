@@ -4,37 +4,34 @@ extends RefCounted
 ## Installs a mod from a `.zip` into [constant Gen2ModHost.ROOT]. The only way a
 ## mod gets onto disk, whichever way the player found it: a file they picked, one
 ## they dropped on the window, or one downloaded from an index. So a listing buys
-## a mod no trust picking the same file by hand would not. Nothing is written
-## until the archive is opened, its layout resolved and its manifest validated,
-## and a copy that fails part way removes what it wrote.
+## a mod no trust picking the same file by hand would not.
 
-## A single mod's uncompressed size. Well above the voxel example and far below
-## anything that fills a phone, so a hostile or broken archive stops here rather
-## than at the filesystem.
+## A single mod's uncompressed size. Above the voxel example and far below what
+## fills a phone, so a broken archive stops here rather than at the filesystem.
 const MAX_UNCOMPRESSED_BYTES: int = 64 * 1024 * 1024
 ## Refuses an archive that would take longer to unpack than a player will wait.
 const MAX_ENTRIES: int = 2048
-## Local PK magic. An AppleDouble sidecar or a truncated download is not a zip,
-## and saying so beats an opaque failure from the reader.
+## Local PK magic. A sidecar or a truncated download is not a zip, and saying so
+## beats an opaque failure from the reader.
 const ZIP_MAGIC: Array[int] = [0x50, 0x4B]
+## The tree macOS zips beside what was selected. It belongs to no mod.
+const MACOS_SIDECAR: String = "__MACOSX"
 
 
-## Where a staged download is written before it is opened. [ZIPReader] only
-## takes a path, so bytes from the network become a file first.
+## Where a staged download lands: [ZIPReader] takes a path, so bytes from the
+## network become a file first.
 static func staging_path() -> String:
 	return "user://mod_import_staging.zip"
 
 
-## The prefix inside [param paths] that holds the manifest.
+## The prefix inside [param paths] that holds the manifest, as { ok, prefix }.
 ##
-## Returns { ok, prefix } with an empty prefix when the manifest is at the
-## archive root, or the single top-level directory that holds it. Anything else
-## is refused: two mods in one archive have no obvious winner, and an archive
-## with no manifest is not a mod. Pure, so the layout rule is testable without
-## an archive on disk.
+## Empty when the manifest is at the archive root, else the one top-level folder
+## holding one. A folder holding none is not a mod and does not count, which is
+## what macOS zips beside the mod; two that do are refused. Pure, so the rule is
+## testable without an archive.
 static func locate_root(paths: PackedStringArray) -> Dictionary:
-	var top_directories: Array[String] = []
-	var holds_manifest: Dictionary = {}
+	var holds_manifest: Array[String] = []
 	for path: String in paths:
 		if path == PokeModManifest.FILENAME:
 			return {"ok": true, "prefix": ""}
@@ -42,23 +39,46 @@ static func locate_root(paths: PackedStringArray) -> Dictionary:
 		if separator <= 0:
 			continue
 		var top: String = path.substr(0, separator)
-		var rest: String = path.substr(separator + 1)
-		if not top_directories.has(top):
-			top_directories.append(top)
-		if rest == PokeModManifest.FILENAME:
-			holds_manifest[top] = true
-	if top_directories.size() == 1 and holds_manifest.has(top_directories[0]):
-		return {"ok": true, "prefix": top_directories[0]}
-	if top_directories.size() > 1:
-		return {"ok": false, "reason": &"archive_holds_more_than_one_folder"}
-	return {"ok": false, "reason": &"archive_has_no_manifest"}
+		if path.substr(separator + 1) == PokeModManifest.FILENAME \
+			and not holds_manifest.has(top):
+			holds_manifest.append(top)
+	if holds_manifest.size() == 1:
+		return {"ok": true, "prefix": holds_manifest[0]}
+	if holds_manifest.size() > 1:
+		return {
+			"ok": false,
+			"reason": &"archive_holds_more_than_one_folder",
+			"detail": ", ".join(holds_manifest),
+		}
+	return {
+		"ok": false, "reason": &"archive_has_no_manifest", "detail": _manifests_found(paths)
+	}
+
+
+## The JSON filenames where a manifest would be. A foreign mod carries one under
+## its own name, and saying which beats saying only that mod.json is missing.
+static func _manifests_found(paths: PackedStringArray) -> String:
+	var found: Array[String] = []
+	for path: String in paths:
+		var name: String = path.get_file()
+		if name.ends_with(".json") and path.count("/") <= 1 and not found.has(name):
+			found.append(name)
+	found.sort()
+	return ", ".join(found)
+
+
+## True when [param entry] is part of the mod at [param prefix]; anything else is
+## passed over rather than written.
+static func belongs_to_mod(entry: String, prefix: String) -> bool:
+	if entry.begins_with("%s/" % MACOS_SIDECAR):
+		return false
+	return prefix.is_empty() or entry.begins_with("%s/" % prefix)
 
 
 ## True when [param entry] stays inside the mod directory once [param prefix] is
 ## removed. A zip may name any path it likes, including one that climbs out with
-## `..` or starts at the filesystem root, and extracting that would write
-## wherever it pointed. The manifest's own entry check refuses the same shapes;
-## this refuses them one layer earlier, before anything is read.
+## `..` or starts at the filesystem root. The manifest's own entry check refuses
+## the same shapes; this refuses them earlier, before anything is read.
 static func is_safe_entry(entry: String, prefix: String) -> bool:
 	var relative: String = entry
 	if not prefix.is_empty():
@@ -78,9 +98,9 @@ static func is_safe_entry(entry: String, prefix: String) -> bool:
 ## Installs the archive at [param path].
 ##
 ## [param replace] allows an already-installed id to be overwritten, which an
-## update does and a first install does not. [param expect_id] refuses an
-## archive whose manifest names a different mod, so a download resolved from an
-## index cannot quietly deliver something else.
+## update does and a first install does not. [param expect_id] refuses an archive
+## whose manifest names a different mod, so a download resolved from an index
+## cannot quietly deliver something else.
 static func install_zip(
 	path: String,
 	replace: bool = false,
@@ -103,7 +123,10 @@ static func install_zip(
 	var located: Dictionary = locate_root(entries)
 	if not bool(located.get("ok", false)):
 		reader.close()
-		return _refuse(StringName(located.get("reason", &"archive_has_no_manifest")), path)
+		return _refuse(
+			StringName(located.get("reason", &"archive_has_no_manifest")),
+			String(located.get("detail", "")),
+		)
 	var prefix: String = String(located["prefix"])
 
 	var manifest_entry: String = PokeModManifest.FILENAME
@@ -132,25 +155,16 @@ static func install_zip(
 		reader.close()
 		return _refuse(&"already_installed", String(manifest.id))
 
-	var planned: Array[String] = []
-	var total: int = 0
-	for entry: String in entries:
-		if entry.ends_with("/"):
-			continue
-		if not is_safe_entry(entry, prefix):
-			reader.close()
-			return _refuse(&"unsafe_archive_entry", entry)
-		total += reader.read_file(entry).size()
-		if total > MAX_UNCOMPRESSED_BYTES:
-			reader.close()
-			return _refuse(&"archive_too_large", str(total))
-		planned.append(entry)
+	var plan: Dictionary = _plan(reader, entries, prefix)
+	if not bool(plan.get("ok", false)):
+		reader.close()
+		return plan
+	var planned: Array[String] = plan["planned"]
 	if planned.is_empty():
 		reader.close()
 		return _refuse(&"archive_is_empty", path)
 
-	# Only now is anything written. An existing tree is removed first so a
-	# replaced mod cannot keep a file the new version dropped.
+	# Only now is anything written, the old tree first so no dropped file survives.
 	if existed:
 		_remove_tree(destination)
 	var written: Dictionary = _extract(reader, planned, prefix, destination)
@@ -169,9 +183,24 @@ static func install_zip(
 	}
 
 
+## The members to write, as { ok, planned }.
+static func _plan(reader: ZIPReader, entries: PackedStringArray, prefix: String) -> Dictionary:
+	var planned: Array[String] = []
+	var total: int = 0
+	for entry: String in entries:
+		if entry.ends_with("/") or not belongs_to_mod(entry, prefix):
+			continue
+		if not is_safe_entry(entry, prefix):
+			return _refuse(&"unsafe_archive_entry", entry)
+		total += reader.read_file(entry).size()
+		if total > MAX_UNCOMPRESSED_BYTES:
+			return _refuse(&"archive_too_large", str(total))
+		planned.append(entry)
+	return {"ok": true, "planned": planned}
+
+
 ## Installs [param bytes], staging them where [ZIPReader] can open them. The
-## staging file is removed whatever the outcome, so a failed download leaves
-## nothing behind.
+## staging file is removed whatever the outcome, so a failed download leaves none.
 static func install_bytes(
 	bytes: PackedByteArray,
 	replace: bool = false,
@@ -195,9 +224,8 @@ static func uninstall(id: StringName, root: String = Gen2ModHost.ROOT) -> Dictio
 	if String(id).is_empty():
 		return _refuse(&"invalid_id", String(id))
 	var directory: String = "%s/%s" % [root, id]
-	# Drop any off switch and any stored settings with the mod itself, so
-	# reinstalling it later does not find it silently disabled, or configured, by
-	# a decision about a mod that no longer exists.
+	# Drop any off switch and any stored settings with the mod, so reinstalling it
+	# does not find it silently disabled by a decision about a mod that is gone.
 	Gen2ModState.forget(id)
 	PokeModOptions.forget(id)
 	if not DirAccess.dir_exists_absolute(directory):

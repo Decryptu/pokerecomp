@@ -123,6 +123,22 @@ func test_a_manifest_built_for_another_host_is_refused() -> void:
 	assert_eq(PokeModManifest.read(_directory)["reason"], &"mod_is_too_old")
 
 
+## A manifest naming the field something else read as 0 and was then refused for
+## declaring 0, which named a number no file held.
+func test_a_manifest_declaring_no_api_version_is_refused_by_the_missing_field() -> void:
+	var source: Dictionary = _valid_manifest()
+	source.erase("api_version")
+	source["api"] = 2
+	var missing: Dictionary = PokeModManifest.from_dictionary(source, _directory)
+	assert_eq(missing["reason"], &"missing_api_version")
+	assert_string_contains(PokeModRefusal.text(missing), "api_version")
+
+	source["api_version"] = "thirty"
+	assert_eq(
+		PokeModManifest.from_dictionary(source, _directory)["reason"], &"missing_api_version"
+	)
+
+
 func test_manifest_versions_and_dependency_ranges_are_validated_before_code_runs() -> void:
 	var source: Dictionary = _valid_manifest()
 	source["version"] = "one"
@@ -896,12 +912,61 @@ func test_locate_root_refuses_an_archive_without_exactly_one_mod() -> void:
 	)
 	assert_false(two["ok"])
 	assert_eq(two["reason"], &"archive_holds_more_than_one_folder")
+	assert_eq(two["detail"], "a, b")
 
 	var none: Dictionary = Gen2ModInstaller.locate_root(
 		PackedStringArray(["voxel/renderer.gd"])
 	)
 	assert_false(none["ok"])
 	assert_eq(none["reason"], &"archive_has_no_manifest")
+
+
+## A folder holding no manifest is not a mod, so a sidecar tree beside the mod
+## is not a second one and nothing in it is written.
+func test_locate_root_passes_over_a_folder_that_holds_no_manifest() -> void:
+	assert_eq(Gen2ModInstaller.locate_root(PackedStringArray([
+		"voxel/mod.json", "voxel/mod.gd", "__MACOSX/voxel/._mod.json",
+	]))["prefix"], "voxel")
+	assert_false(Gen2ModInstaller.belongs_to_mod("__MACOSX/voxel/._mod.json", "voxel"))
+	assert_false(Gen2ModInstaller.belongs_to_mod("__MACOSX/._mod.json", ""))
+	assert_true(Gen2ModInstaller.belongs_to_mod("voxel/mod.gd", "voxel"))
+	assert_true(Gen2ModInstaller.belongs_to_mod("extra/notes.txt", ""))
+
+
+## A mod built for another project carries its own manifest under its own name.
+## Saying only "no mod.json" sent one author editing files nothing reads.
+func test_an_archive_with_no_manifest_names_what_it_holds_instead() -> void:
+	var foreign: Dictionary = Gen2ModInstaller.locate_root(PackedStringArray([
+		"fr_crystal/manifest.json", "fr_crystal/main.lua", "fr_crystal/.modkit/pack.json",
+	]))
+	assert_eq(foreign["reason"], &"archive_has_no_manifest")
+	assert_eq(foreign["detail"], "manifest.json")
+	assert_string_contains(PokeModRefusal.text(foreign), "manifest.json")
+	assert_string_contains(PokeModRefusal.text(foreign), PokeModManifest.FILENAME)
+
+	var bare: Dictionary = Gen2ModInstaller.locate_root(PackedStringArray(["voxel/mod.gd"]))
+	assert_eq(String(bare["detail"]), "")
+	assert_eq(PokeModRefusal.text(bare), "The archive has no mod.json.")
+
+
+## The whole chain a mod built for another project takes, since the installer
+## carries the layout refusal's own detail rather than the archive path.
+func test_a_mod_built_for_another_project_is_refused_by_what_it_carries() -> void:
+	var archive: String = "%s/foreign.zip" % ROOT
+	DirAccess.make_dir_recursive_absolute(ROOT)
+	_write_zip(archive, {
+		"fr_crystal/manifest.json": JSON.stringify({
+			"id": "fr_crystal", "name": "French", "version": "1.1.0",
+			"api": 2, "entry": "main.lua", "dependencies": [],
+		}),
+		"fr_crystal/main.lua": "return {}",
+	})
+	var refused: Dictionary = Gen2ModInstaller.install_zip(archive, false, &"", ROOT)
+	assert_eq(refused["reason"], &"archive_has_no_manifest")
+	assert_eq(
+		PokeModRefusal.text(refused), "The archive has no mod.json; it holds manifest.json."
+	)
+	assert_false(DirAccess.dir_exists_absolute("%s/fr_crystal" % ROOT))
 
 
 func test_is_safe_entry_refuses_paths_that_leave_the_mod_directory() -> void:
@@ -913,6 +978,21 @@ func test_is_safe_entry_refuses_paths_that_leave_the_mod_directory() -> void:
 	assert_false(Gen2ModInstaller.is_safe_entry("/etc/passwd", ""))
 	assert_false(Gen2ModInstaller.is_safe_entry("user://evil.gd", ""))
 	assert_false(Gen2ModInstaller.is_safe_entry("other/mod.gd", "voxel"))
+
+
+## The sidecar a macOS zip carries is not extracted, so a mod zipped that way
+## installs with its own files and nothing else.
+func test_installing_a_zip_made_on_macos_passes_over_its_sidecar() -> void:
+	var archive: String = "%s/import.zip" % ROOT
+	DirAccess.make_dir_recursive_absolute(ROOT)
+	var entries: Dictionary = _mod_zip_entries("packaged")
+	entries["__MACOSX/packaged/._mod.json"] = "sidecar"
+	_write_zip(archive, entries)
+
+	var result: Dictionary = Gen2ModInstaller.install_zip(archive, false, &"", ROOT)
+	assert_true(result["ok"], JSON.stringify(result))
+	assert_eq(int(result["files"]), 3)
+	assert_false(DirAccess.dir_exists_absolute("%s/packaged/__MACOSX" % ROOT))
 
 
 func test_installing_a_zip_writes_the_mod_and_the_host_then_loads_it() -> void:

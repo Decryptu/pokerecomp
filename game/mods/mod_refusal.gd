@@ -16,7 +16,7 @@ const WORDING: Dictionary = {
 	&"archive_not_found": "%s could not be read.",
 	&"archive_unreadable": "That archive could not be opened.",
 	&"archive_is_empty": "That archive is empty.",
-	&"archive_holds_more_than_one_folder": "The archive must hold a single mod folder.",
+	&"archive_holds_more_than_one_folder": "The archive must hold a single mod folder (%s).",
 	&"archive_too_large": "That archive is too large to be a mod.",
 	&"archive_too_many_entries": "That archive is too large to be a mod.",
 	&"unsafe_archive_entry": "The archive tries to write outside the mod folder (%s).",
@@ -24,6 +24,7 @@ const WORDING: Dictionary = {
 	&"missing_manifest": "The mod has no %s.",
 	&"unreadable_manifest": "The mod's %s could not be read.",
 	&"invalid_manifest": "The mod's %s is not valid JSON.",
+	&"missing_api_version": "The mod's %s names no api_version.",
 	&"invalid_id": "\"%s\" is not a usable mod id.",
 	&"invalid_mod_version": "\"%s\" is not a semantic mod version.",
 	&"invalid_dependencies": "%s's dependencies must be an id-to-range object.",
@@ -155,10 +156,13 @@ static func text(result: Dictionary) -> String:
 		# than the whole path, and a version this build can name itself.
 		&"not_a_zip", &"archive_not_found":
 			detail = detail.get_file()
-		&"archive_has_no_manifest", &"missing_manifest", &"unreadable_manifest", \
-		&"invalid_manifest":
+		&"missing_manifest", &"unreadable_manifest", &"invalid_manifest":
 			# The detail is a path; the filename is what a player recognises.
 			detail = PokeModManifest.FILENAME
+		&"archive_has_no_manifest":
+			if detail.is_empty():
+				return "The archive has no %s." % PokeModManifest.FILENAME
+			return "The archive has no %s; it holds %s." % [PokeModManifest.FILENAME, detail]
 		&"unsupported_api_version":
 			# The detail already names both versions.
 			return "That mod needs a newer build of the game: %s." % detail
