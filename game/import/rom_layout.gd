@@ -346,7 +346,9 @@ const TRADE_TEXTS_GOLD_SILVER: Array[String] = [
 ## The two cells in their own run, because only Crystal ships them.
 const TRADE_NEWBIE_TEXTS: Array[String] = ["complete_4", "after_4"]
 ## The stubs' own order in the file, variant-major where `TradeTexts` is
-## dialog-major, which is the order a run of stubs is read at.
+## dialog-major, which is the order a run of stubs is read at. Generation 1's
+## `TradeTextPointers1` to `...3` are laid out the same way.
+const TRADE_TEXTS_PER_SET: int = 5
 const TRADE_TEXT_ORDER: Array[String] = [
 	"intro_1", "cancel_1", "wrong_1", "complete_1", "after_1",
 	"intro_2", "cancel_2", "wrong_2", "complete_2", "after_2",

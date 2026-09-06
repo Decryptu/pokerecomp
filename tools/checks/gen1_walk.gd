@@ -173,6 +173,15 @@ const MELANIE_CELL := Vector2i(3, 2)
 const MELANIE_FLAG: int = 168
 const MELANIE_BOX: String = "Is BULBASAUR"
 
+## `Route11Gate2FYoungsterText`, whose `wWhichTrade` is row 0 on all three
+## cartridges: `xor a` on Red and Blue and `ld a, TRADE_FOR_GURIO` on Yellow.
+const ROUTE_11_GATE_2F: int = 0x56
+const TRADE_YOUNGSTER := Vector2i(4, 3)
+const TRADE_ROW: int = 0
+## Any species the row does not ask for, which is TRADETEXT_WRONG_MON.
+const TRADE_WRONG_SPECIES: int = 25
+const TRADE_PARTY_SLOT: int = 2
+
 var _r: RefCounted = null
 
 
@@ -198,6 +207,7 @@ func _one_game() -> void:
 	_check_the_cable_club()
 	_check_the_vending_machine()
 	_check_the_prize_counter()
+	_check_a_trade()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -789,3 +799,120 @@ func _check_the_prize_counter() -> void:
 		)
 		world.complete_runtime_request({"ok": true})
 		_r.check(not world.script_busy(), "vendor %d never closed." % index)
+
+
+## `DoInGameTradeDialogue` walked whole: the offer both mon names fill, the
+## refusal, a species the row does not want, the swap and the line the trader has
+## once `wCompletedInGameTradeFlags` holds the bit.
+func _check_a_trade() -> void:
+	var trade: Dictionary = _r.data.world_trade(TRADE_ROW)
+	var wanted: int = int(trade.get("requested_species", 0))
+	var asked: String = _trade_offer()
+	_r.check(
+		asked.contains(String(_r.data.species(wanted).get("name", "")))
+		and asked.contains(String(_r.data.species(
+			int(trade.get("offered_species", 0))
+		).get("name", ""))),
+		"the trader offered %s." % [asked]
+	)
+	for row: Array in [
+		[1, 0, "cancel_", "a refused trade"],
+		[0, 0, "cancel_", "a cancelled list"],
+		[0, TRADE_WRONG_SPECIES, "wrong_", "the wrong species"],
+	]:
+		var said: String = _event_text(_trade_walk(int(row[0]), int(row[1])))
+		_r.check(said == _trade_text(String(row[2])), "%s said %s." % [row[3], said])
+	_walk_the_swap(wanted)
+
+
+## The three boxes behind a list that came back with the row's own species, and
+## the once-only bit the swap sets in front of them.
+func _walk_the_swap(wanted: int) -> void:
+	var world: Gen2WorldAPI = _facing_up(ROUTE_11_GATE_2F, TRADE_YOUNGSTER)
+	if world == null:
+		return
+	world.interact()
+	world.choose_script_input(0)
+	var cable: String = _event_text(world.complete_runtime_request({
+		"ok": true, "party_index": TRADE_PARTY_SLOT, "species": wanted,
+	}))
+	_r.check(
+		world.state.npc_trade_done(TRADE_ROW),
+		"the swap left `wCompletedInGameTradeFlags` clear."
+	)
+	_r.check(
+		cable == _r.data.special_text("npc_trade", "cable"),
+		"the swap opened with %s." % [cable]
+	)
+	var request: Dictionary = _runtime_request(world.run_event_queue(true))
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"trade_requested"
+		and int((request.get("values", {}) as Dictionary).get("party_index", -1))
+			== TRADE_PARTY_SLOT,
+		"the swap raised %s." % [request]
+	):
+		return
+	var receipt: String = _event_text(
+		world.complete_runtime_request({"ok": true, "accepted": true})
+	)
+	_r.check(
+		receipt == _trade_filled(_r.data.special_text("npc_trade", "traded_for")),
+		"the movie was followed by %s." % [receipt]
+	)
+	var thanks: String = _event_text(world.run_event_queue(true))
+	_r.check(thanks == _trade_text("complete_"), "the trader said %s." % [thanks])
+	world.run_event_queue(true)
+	var again: String = _trade_offer(world)
+	_r.check(again == _trade_text("after_"), "a done trade said %s." % [again])
+	_r.note("gen1 walk one in-game trade, both refusals and a wrong species")
+
+
+## The question the youngster opens with, on a world that may already carry the
+## bit.
+func _trade_offer(world: Gen2WorldAPI = null) -> String:
+	var open: Gen2WorldAPI = world if world != null \
+		else _facing_up(ROUTE_11_GATE_2F, TRADE_YOUNGSTER)
+	if open == null:
+		return ""
+	var results: Array = open.interact()
+	var asked: Dictionary = open.pending_script_input()
+	return String(asked["text"]) if asked.has("text") else _event_text(results)
+
+
+## One walk of the row: [param answer] is the YES/NO row and [param species] the
+## member the party list came back with, or 0 for a list that was cancelled.
+func _trade_walk(answer: int, species: int) -> Array:
+	var world: Gen2WorldAPI = _facing_up(ROUTE_11_GATE_2F, TRADE_YOUNGSTER)
+	if world == null:
+		return []
+	world.interact()
+	var results: Array = world.choose_script_input(answer)
+	if answer != 0:
+		return results
+	return world.complete_runtime_request({
+		"ok": true, "party_index": -1 if species < 1 else TRADE_PARTY_SLOT,
+		"species": species,
+	})
+
+
+## One `TradeTextPointers` cell of row 0's own dialog set, with both mon names
+## already in it.
+func _trade_text(prefix: String) -> String:
+	var trade: Dictionary = _r.data.world_trade(TRADE_ROW)
+	return _trade_filled(_r.data.special_text(
+		"npc_trade", "%s%d" % [prefix, int(trade.get("dialog", 0)) + 1]
+	))
+
+
+func _trade_filled(text: String) -> String:
+	var trade: Dictionary = _r.data.world_trade(TRADE_ROW)
+	var out: String = text
+	for row: Array in [
+		[Gen1Layout.TRADE_GIVE_NAME, int(trade.get("requested_species", 0))],
+		[Gen1Layout.TRADE_RECEIVE_NAME, int(trade.get("offered_species", 0))],
+	]:
+		out = Gen2TextStream.fill_all_markers(
+			out, "%s%04X>" % [Gen2TextStream.RAM_MARKER, int(row[0])],
+			String(_r.data.species(int(row[1])).get("name", ""))
+		)
+	return Gen2TextStream.fill_names(out, {"player": Gen2WorldScriptRunner.UNNAMED})

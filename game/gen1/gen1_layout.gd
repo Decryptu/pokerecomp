@@ -644,6 +644,18 @@ const PREDEF_SIZE: int = 3
 ## `PickUpItemText`'s two boxes, a `text_far` stub and a `sound_get_item_1` apart.
 const PICK_UP_TEXT_AT: Dictionary = {"found": 0x00, "no_room": 0x06}
 
+## `TradeMons`: `npctrade`'s give and get species, its `TRADE_DIALOGSET_*` and a
+## nickname. `ConnectCableText` and `TradedForText` sit behind the last of
+## `InGameTradeTextPointers`' three tables.
+const TRADE_COUNT: int = 10
+const TRADE_RECORD_SIZE: int = 14
+const TRADE_NAME_LENGTH: int = 11
+const NPC_TRADE_TEXT_AT: Dictionary = {"cable": 0x00, "traded_for": 0x05}
+## `InGameTrade_GetMonName`'s two buffers, which every box of the run names by
+## address: the species the row asks for and the one it offers.
+const TRADE_GIVE_NAME: int = 0xCD13
+const TRADE_RECEIVE_NAME: int = 0xCD1E
+
 ## `object_event`'s two movement bytes as one shared template. Byte 1 is WALK or
 ## STAY; byte 2 is a fixed direction, the axis a random walk keeps to, or
 ## `BOULDER_MOVEMENT_BYTE_2`. A STAY sprite still turns, because `TryWalking`
@@ -690,6 +702,12 @@ const SCRIPT_LD_A_MEM: int = 0xFA
 const SCRIPT_LD_MEM_A: int = 0xEA
 const SCRIPT_LDH_MEM_A: int = 0xE0
 const SCRIPT_AND_A: int = 0xA7
+const SCRIPT_XOR_A: int = 0xAF
+## `CheckEvent flag, 1`: one `rrca` per bit up to the one asked about, or `add a`
+## alone for bit 7, which leaves the answer in carry rather than in Z.
+const SCRIPT_RRCA: int = 0x0F
+const SCRIPT_ADD_A: int = 0x87
+const SCRIPT_HIGH_BIT: int = 7
 const SCRIPT_AND_N: int = 0xE6
 const SCRIPT_LD_C: int = 0x0E
 const SCRIPT_LD_B_A: int = 0x47
@@ -712,8 +730,16 @@ const SCRIPT_CARRY_BRANCHES: Dictionary = {0x38: true, 0xDA: true, 0x30: false, 
 const SCRIPT_CALLS: Array[String] = [
 	"print_text", "text_script_end", "disable_waiting", "yes_no_choice",
 	"give_item", "is_item_in_bag", "bankswitch", "play_cry", "wait_for_sound",
-	"predef", "display_pokedex", "give_pokemon",
+	"predef", "display_pokedex", "give_pokemon", "wait_for_button",
+	"auto_textbox_on", "auto_textbox_off",
 ]
+## The routines that spend nothing here: no audio driver, a press already ends
+## every box, and `wAutoTextBoxDrawingControl` has no counterpart.
+const SCRIPT_SILENT_CALLS: Array[String] = [
+	"play_cry", "wait_for_sound", "wait_for_button",
+	"auto_textbox_on", "auto_textbox_off",
+]
+const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
 const SCRIPT_SHORT_SIZE: int = 2
 const SCRIPT_LONG_SIZE: int = 3
 ## The `CB` prefix's three rows, the low three bits naming the operand.
@@ -724,6 +750,11 @@ const SCRIPT_OPERAND_A: int = 7
 const SCRIPT_OPERAND_HL: int = 6
 ## `flag_array NUM_EVENTS`: 2,560 events on all three cartridges.
 const EVENT_FLAG_BYTES: int = 320
+## Generation 1's own saved flag bytes, which Crystal's engine flag table names
+## none of, so the run sits above every Crystal index and one store holds both.
+const ENGINE_FLAG_BYTES: Array[String] = ["status_flags_4"]
+const ENGINE_FLAG_FIRST: int = 256
+const ENGINE_FLAG_BITS: int = 8
 ## `BAG_ITEM_CAPACITY`: one list of slots, not four pockets.
 const BAG_ITEM_CAPACITY: int = 20
 ## The one type byte every Generation 1 item wears, so the shared pack draws the
@@ -946,6 +977,7 @@ const RED_BLUE: Dictionary = {
 	"talk_to_trainer": 0x31CC,
 	"print_text": 0x3C49,
 	"event_flags": 0xD747,
+	"status_flags_4": 0xD72E,
 	## The rest of what `decode_script` reads; a row calling anything else is not.
 	"text_script_end": 0x24D7,
 	"yes_no_choice": 0x35EC,
@@ -954,6 +986,9 @@ const RED_BLUE: Dictionary = {
 	"display_pokedex": 0x0349B,
 	"give_pokemon": 0x03E48,
 	"wait_for_sound": 0x3748,
+	"wait_for_button": 0x3865,
+	"auto_textbox_on": 0x3C3C,
+	"auto_textbox_off": 0x3C3F,
 	"give_item": 0x3E2E,
 	"is_item_in_bag": 0x3493,
 	"bankswitch": 0x35D6,
@@ -966,6 +1001,14 @@ const RED_BLUE: Dictionary = {
 	"cur_party_species": 0xCF91,
 	"cur_map_script": 0xDA39,
 	"map_scripts": 0xD5F0,
+	## `DoInGameTradeDialogue`, the trade table it indexes with `wWhichTrade`,
+	## `InGameTradeTextPointers` and the pair of boxes the swap itself prints.
+	"in_game_trade": 0x71AD9,
+	"which_trade": 0xCD3D,
+	"trade_mons": 0x71B7B,
+	"trade_text_pointers": 0x71D64,
+	"trade_ot_name": 0x71D59,
+	"npc_trade_cable_text": 0x71D88,
 	## `Predef` and the table it indexes, with the three rows read through it.
 	"predef": 0x3E6D,
 	"predef_pointers": 0x4FE79,
@@ -1059,6 +1102,7 @@ const YELLOW: Dictionary = {
 	"talk_to_trainer": 0x3168,
 	"print_text": 0x3C36,
 	"event_flags": 0xD746,
+	"status_flags_4": 0xD72D,
 	"text_script_end": 0x23D2,
 	"yes_no_choice": 0x35EF,
 	"disable_waiting": 0x2FDE,
@@ -1066,6 +1110,9 @@ const YELLOW: Dictionary = {
 	"display_pokedex": 0x0347D,
 	"give_pokemon": 0x03E59,
 	"wait_for_sound": 0x373E,
+	"wait_for_button": 0x3852,
+	"auto_textbox_on": 0x3C29,
+	"auto_textbox_off": 0x3C2C,
 	"give_item": 0x3E3F,
 	"is_item_in_bag": 0x3422,
 	"bankswitch": 0x3E84,
@@ -1078,6 +1125,12 @@ const YELLOW: Dictionary = {
 	"cur_party_species": 0xCF90,
 	"cur_map_script": 0xDA38,
 	"map_scripts": 0xD5EF,
+	"in_game_trade": 0x71B86,
+	"which_trade": 0xCD3D,
+	"trade_mons": 0x71C1D,
+	"trade_text_pointers": 0x71E38,
+	"trade_ot_name": 0x71E2D,
+	"npc_trade_cable_text": 0x71E5C,
 	"predef": 0x3EB4,
 	"predef_pointers": 0xF681D,
 	"hide_object": 0x0F053,

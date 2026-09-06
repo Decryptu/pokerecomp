@@ -3662,6 +3662,9 @@ var _gen1_last_map: int = -1
 const GEN1_POKECENTER_RUN: String = "pokecenter"
 const GEN1_CABLE_CLUB_RUN: String = "cable_club"
 const GEN1_PICK_UP_RUN: String = "pick_up_item"
+## `InGameTradeTextPointers`' fifteen and the two boxes the swap prints, which
+## both generations' trades read under one run name.
+const GEN1_TRADE_RUN: String = "npc_trade"
 ## `EndTrainerBattle`'s `cp LOST_BATTLE`, which a catch also passes.
 const GEN1_TRAINER_BEATEN: Array[StringName] = [
 	Gen2WorldBattleAdapter.OUTCOME_WON, Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
@@ -3767,6 +3770,7 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 					"type": &"flag",
 					"flag": int(node["flag"]),
 					"set": bool(node["set"]),
+					"engine": bool(node.get("engine", false)),
 				})
 			"branch":
 				if not _gen1_resolve_side(node, _gen1_branch_set(node), steps, run):
@@ -3800,6 +3804,8 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 					"kind": &"pokedex_entry_requested",
 					"values": {"species": int(node["species"])},
 				}})
+			"trade":
+				return _gen1_trade(int(node["trade_id"]), steps)
 			"choice":
 				return _gen1_script_choice(node, steps, run)
 			_:
@@ -3808,8 +3814,11 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 
 
 ## `CheckEvent`'s one flag, or `CheckEitherEventSet`'s mask over the flags of
-## one `wEventFlags` byte, which is set when any of them is.
+## one `wEventFlags` byte, which is set when any of them is. A row may read one
+## of Generation 1's own saved bytes instead, which the engine flags hold.
 func _gen1_branch_set(node: Dictionary) -> bool:
+	if bool(node.get("engine", false)):
+		return state != null and state.is_engine_flag_active(int(node["flag"]))
 	if event_flag_active(int(node["flag"])):
 		return true
 	for flag: int in node.get("either", []):
@@ -3898,6 +3907,84 @@ func _gen1_take_item(item: int, steps: Array, bag: Dictionary) -> void:
 	else:
 		bag[item] = left
 	steps.append({"type": &"items", "items": {item: left}})
+
+
+## `DoInGameTradeDialogue` over the row's own `wWhichTrade`:
+## `wCompletedInGameTradeFlags` answers TRADETEXT_AFTER_TRADE alone once the swap
+## has happened, and the offer is a `YesNoChoice` under TRADETEXT_WANNA_TRADE.
+func _gen1_trade(trade_id: int, steps: Array) -> bool:
+	var record: Dictionary = Gen2WorldPartyHost.trade_record(data, {"trade_id": trade_id})
+	if record.is_empty():
+		return false
+	if state != null and state.npc_trade_done(trade_id):
+		steps.append(_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_AFTER))
+		return true
+	steps.append({
+		"type": &"choice",
+		"text": _gen1_trade_text(record, Gen2Layout.trade_text_name(
+			false, Gen2WorldScriptRunner.TRADE_DIALOG_INTRO, int(record["dialog"])
+		)),
+		"yes": [{
+			"type": &"request",
+			"values": {"kind": &"party_selection_requested", "values": {
+				"routine": &"npc_trade", "trade": {"trade_id": trade_id},
+			}},
+			"trade": trade_id,
+		}],
+		"no": [_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_CANCEL)],
+	})
+	return true
+
+
+## `InGameTrade_DoTrade` behind `DisplayPartyMenu`: a cancelled list is
+## TRADETEXT_NO_TRADE and a wrong species TRADETEXT_WRONG_MON. The swap sets the
+## flag before `ConnectCableText`, and `TradedForText` follows the movie.
+func _gen1_trade_after_selection(step: Dictionary, result: Dictionary) -> Array:
+	var trade_id: int = int(step["trade"])
+	var record: Dictionary = Gen2WorldPartyHost.trade_record(data, {"trade_id": trade_id})
+	var party_index: int = int(result.get("party_index", -1))
+	if record.is_empty():
+		return []
+	if party_index < 0:
+		return [_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_CANCEL)]
+	if int(result.get("species", 0)) != int(record["requested_species"]):
+		return [_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_WRONG)]
+	return [
+		{"type": &"npc_trade", "trade_id": trade_id},
+		_gen1_trade_run_box(record, "cable"),
+		{"type": &"request", "values": {"kind": &"trade_requested", "values": {
+			"trade_id": trade_id, "party_index": party_index,
+		}}},
+		_gen1_trade_run_box(record, "traded_for"),
+		_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_COMPLETE),
+	]
+
+
+func _gen1_trade_box(record: Dictionary, dialog: int) -> Dictionary:
+	return _gen1_trade_run_box(record, Gen2Layout.trade_text_name(
+		false, dialog, int(record.get("dialog", 0))
+	))
+
+
+func _gen1_trade_run_box(record: Dictionary, name: String) -> Dictionary:
+	return {"type": &"text", "text": _gen1_trade_text(record, name)}
+
+
+## `InGameTrade_GetMonName` twice: the species the row asks for into
+## `wInGameTradeGiveMonName` and the one it offers into its neighbour.
+func _gen1_trade_text(record: Dictionary, name: String) -> String:
+	if data == null or name.is_empty():
+		return ""
+	var text: String = _gen1_filled_text(data.special_text(GEN1_TRADE_RUN, name))
+	for row: Array in [
+		[Gen1Layout.TRADE_GIVE_NAME, int(record.get("requested_species", 0))],
+		[Gen1Layout.TRADE_RECEIVE_NAME, int(record.get("offered_species", 0))],
+	]:
+		text = Gen2TextStream.fill_all_markers(
+			text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, int(row[0])],
+			String(data.species(int(row[1])).get("name", ""))
+		)
+	return text
 
 
 ## `YesNoChoice` stands behind the box that asked, so the question is the last
@@ -4378,13 +4465,19 @@ func _gen1_result() -> Array:
 func _gen1_written(step: Dictionary) -> bool:
 	match StringName(step["type"]):
 		&"flag":
-			state.set_event_flag(int(step["flag"]), bool(step["set"]))
+			if bool(step.get("engine", false)):
+				state.set_engine_flag(int(step["flag"]), bool(step["set"]))
+			else:
+				state.set_event_flag(int(step["flag"]), bool(step["set"]))
 			return true
 		&"items":
 			state.apply_changes({}, {}, {"items": step["items"]})
 			return true
 		&"toggle":
 			gen1_toggle_object(int(step["index"]), bool(step["hidden"]))
+			return true
+		&"npc_trade":
+			state.apply_changes({}, {}, {"npc_trades": {int(step["trade_id"]): true}})
 			return true
 	return false
 
@@ -4396,6 +4489,8 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 	if StringName(step.get("type", &"")) == &"choice":
 		var branch: Array = step.get("yes" if choice == 0 else "no", [])
 		_gen1_steps = branch.duplicate(true) + _gen1_steps
+	elif step.has("trade"):
+		_gen1_steps = _gen1_trade_after_selection(step, result) + _gen1_steps
 	elif step.has("ok"):
 		## `accepted` is the carry `_GivePokemon` answers in.
 		_gen1_steps = (step[
