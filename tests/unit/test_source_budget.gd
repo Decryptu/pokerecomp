@@ -21,7 +21,10 @@ const MAX_COMMENT_BLOCK: int = 8
 ## text, save and renderer code: 150 the battle animation engine, 140 the
 ## transition, 108 the three PCs, 85 the party menu, 42 the status screen, 40
 ## the bag in a battle, 33 the hidden objects. Fifteen sweeps paid nothing.
-const MAX_COMMENT_LINES: int = 40379
+
+## The wording seam is the one subsystem since: `data/text_overlay.gd` and
+## `checks/text.gd` are 17 lines against 5 the accessors they funnelled gave back.
+const MAX_COMMENT_LINES: int = 40391
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than

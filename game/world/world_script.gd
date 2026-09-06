@@ -997,8 +997,8 @@ static func decode_elevator_floors(data: PackedByteArray) -> Dictionary:
 	return {"ok": true, "floors": floors, "bytes": at + 1}
 
 
-## A world text with nothing to substitute into it. Anything carrying a name,
-## a string buffer or a `text_far` goes through [Gen2TextStream] with a
-## context; this is the bare form a tool or a fixture reads.
+## A world text with nothing to substitute into it, which is what a tool or a
+## fixture reads; a box the game shows takes
+## [method GameData.world_text_string].
 static func decode_text(data: PackedByteArray) -> Dictionary:
 	return Gen2TextStream.decode(data)

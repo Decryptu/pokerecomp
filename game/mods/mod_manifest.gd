@@ -12,7 +12,7 @@ const FILENAME: String = "mod.json"
 ## Bumped in the same commit as any seam added to the contract, so a mod has a
 ## number that says the seam is there; `docs/MODS.md` lists each version. An
 ## optional field an older host may drop is deliberately not a bump.
-const API_VERSION: int = 30
+const API_VERSION: int = 31
 ## The oldest contract this host still answers. Version 30 renamed classes, so a
 ## mod below it names one this host no longer declares and cannot parse.
 const MIN_API_VERSION: int = 30

@@ -314,6 +314,7 @@ static func instance() -> Gen2ModHost:
 static func reset() -> void:
 	_instance = null
 	Gen2ContentOverlay.reset()
+	Gen2TextOverlay.reset()
 	Gen2MoveEffect.reset_registry()
 
 
@@ -1746,6 +1747,18 @@ func patch_content(
 	return Gen2ContentOverlay.shared().patch(kind, id, number, fields)
 
 
+## Rewrites one named box, by the pair [method GameData.text] reads it under.
+func patch_text(id: StringName, run: StringName, name: String, text: String) -> Dictionary:
+	return Gen2TextOverlay.shared().patch(run, name, id, text)
+
+
+## Rewrites one map dialogue, whose key is packed here.
+func patch_world_text(id: StringName, bank: int, address: int, text: String) -> Dictionary:
+	return Gen2TextOverlay.shared().patch(
+		Gen2TextOverlay.RUN_WORLD, Gen2TextOverlay.world_name(bank, address), id, text
+	)
+
+
 ## Changes one attacking/defending type pair. A matchup is an exception row,
 ## not separately numbered content, so its collision-free key is packed here
 ## and the caller keeps speaking in type ids.
@@ -1853,6 +1866,10 @@ func validate_placement(data: GameData, patches: Dictionary) -> Dictionary:
 ## a mod changed before the player starts.
 func content_overlay() -> Gen2ContentOverlay:
 	return Gen2ContentOverlay.shared()
+
+
+func text_overlay() -> Gen2TextOverlay:
+	return Gen2TextOverlay.shared()
 
 
 ## Watches one of [constant CHANNELS]. [param handler] is called with each event
@@ -2253,8 +2270,11 @@ func deactivate_save() -> void:
 
 func _clear_save_overlays() -> void:
 	var overlay: Gen2ContentOverlay = Gen2ContentOverlay.shared()
+	var wording: Gen2TextOverlay = Gen2TextOverlay.shared()
 	for entry: Dictionary in _save_providers:
-		overlay.clear_owner((entry["manifest"] as PokeModManifest).id)
+		var id: StringName = (entry["manifest"] as PokeModManifest).id
+		overlay.clear_owner(id)
+		wording.clear_owner(id)
 
 
 func _owns_manifest(manifest: PokeModManifest) -> bool:

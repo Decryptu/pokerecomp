@@ -20,6 +20,9 @@ var generation: int = RomRegistry.GEN2
 ## Mod content, consulted ahead of the cached tables by [method _content]. Null
 ## for a [GameData] built by hand, which is what a fixture does.
 var _overlay: Gen2ContentOverlay = null
+## Mod wording, consulted ahead of the cached boxes by [method text].
+var _text_overlay: Gen2TextOverlay = null
+var _text_stores: Dictionary = {}
 
 var _species: Array = []
 var _moves: Array = []
@@ -162,6 +165,11 @@ static func open_argument(argument: String) -> GameData:
 	return open(StringName(argument))
 
 
+## The runs every cartridge carries; the rest are its own special runs.
+const TEXT_RUNS: Array[StringName] = [
+	&"intro", &"menu", &"mart", &"name_rater", &"move_deleter", &"day_care",
+]
+
 ## Manifest sections copied into a member as they stand, key to member. A section
 ## that is missing or the wrong type leaves the member's own default, which is
 ## what lets a cache written by an older import still open.
@@ -233,6 +241,7 @@ static func open_directory(path: String) -> GameData:
 	var manifest: Dictionary = RomCache.read_manifest(path)
 	var data := GameData.new()
 	data._overlay = Gen2ContentOverlay.shared()
+	data._text_overlay = Gen2TextOverlay.shared()
 	data.directory = path
 	data.id = StringName(manifest.get("game_id", ""))
 	data.sha1 = String(manifest.get("sha1", ""))
@@ -598,6 +607,22 @@ func world_text(bank: int, address: int) -> PackedByteArray:
 	return _payload_bytes(
 		_text().get(Gen2WorldScript.pointer_key(bank, address), []), _blob("text")
 	)
+
+
+## One map dialogue, decoded, with any mod wording folded in. Every runtime
+## reader of a box takes this; the three reading a NAME stay on the bytes.
+func world_text_string(bank: int, address: int, context: Dictionary = {}) -> Dictionary:
+	var decoded: Dictionary = Gen2TextStream.decode(world_text(bank, address), 0, context)
+	if not bool(decoded.get("ok", false)) or _text_overlay == null \
+		or _text_overlay.is_empty():
+		return decoded
+	var name: String = Gen2TextOverlay.world_name(bank, address)
+	var replaced: String = _text_overlay.resolve(
+		Gen2TextOverlay.RUN_WORLD, name, String(decoded.get("text", ""))
+	)
+	if replaced != String(decoded.get("text", "")):
+		decoded["text"] = Gen2TextStream.fill_context(replaced, context)
+	return decoded
 
 
 func world_movement(bank: int, address: int) -> PackedByteArray:
@@ -1525,12 +1550,10 @@ func string_buffer_addresses() -> Array[int]:
 	return _string_buffer_pointers.duplicate()
 
 
-## One of the intro's own texts by its `data/text/common_2.asm` label, in the
-## keys [constant RomImporter.INTRO_TEXT_OPENINGS] names: `oak_1`, `oak_2`,
-## `oak_4` to `oak_7` and `gender`. Empty when this cartridge does not ship it,
-## which for `gender` means Gold or Silver.
+## The intro's texts, named by [constant RomImporter.INTRO_TEXT_OPENINGS]:
+## `oak_1`, `oak_2`, `oak_4` to `oak_7`, and Crystal's own `gender`.
 func intro_text(key: String) -> String:
-	return String(_intro_text.get(key, ""))
+	return text(&"intro", key)
 
 
 func item(number: int) -> Dictionary:
@@ -1808,56 +1831,90 @@ func copyright_palette() -> PackedColorArray:
 	return colors
 
 
-## One of the pack's own boxes or the ones a field item says, by the name
-## `RomImporter.PACK_TEXT_OPENINGS` gives it, still carrying [Gen2TextStream]'s
-## markers. Empty on a cache imported before it, which is the caller's cue to use
-## its own wording.
+## One named box with any mod wording folded in, still carrying
+## [Gen2TextStream]'s markers. A run outside [constant TEXT_RUNS] is a
+## `Gen2Layout.SPECIAL_TEXT_RUNS` one; a box the cartridge lacks reads empty.
+func text(run: StringName, name: String) -> String:
+	var value: Variant = _text_store(run).get(name, "")
+	return _overlaid_text(run, name, String(value) if value is String else "")
+
+
+## Every run a box can be named under, this cartridge's special runs included.
+func text_runs() -> Array[StringName]:
+	var out: Array[StringName] = TEXT_RUNS.duplicate()
+	for run: Variant in _special_text:
+		out.append(StringName(run))
+	out.sort()
+	return out
+
+
+## Every name [param run] carries, sorted. What a mod addresses a box by.
+func text_names(run: StringName) -> Array[String]:
+	var store: Dictionary = _text_store(run)
+	var out: Array[String] = []
+	for name: Variant in store:
+		if store[name] is String:
+			out.append(String(name))
+	out.sort()
+	return out
+
+
+## The same for map dialogue, whose names are pointer keys.
+func world_text_names() -> Array[String]:
+	var out: Array[String] = []
+	for name: Variant in _text():
+		out.append(String(name))
+	out.sort()
+	return out
+
+
+func _text_store(run: StringName) -> Dictionary:
+	if _text_stores.is_empty():
+		_text_stores = {
+			&"intro": _intro_text, &"menu": _menu_text, &"mart": _mart_text,
+			&"name_rater": _name_rater_text, &"move_deleter": _move_deleter_text,
+			&"day_care": _day_care_text,
+		}
+	var store: Variant = _text_stores.get(run, _special_text.get(run, {}))
+	return store as Dictionary if store is Dictionary else {}
+
+
+func _overlaid_text(run: StringName, name: String, base: String) -> String:
+	if _text_overlay == null or _text_overlay.is_empty():
+		return base
+	return _text_overlay.resolve(run, name, base)
+
+
+## The pack's boxes, named by `RomImporter.PACK_TEXT_OPENINGS`.
 func menu_text(key: String) -> String:
-	return String(_menu_text.get(key, ""))
+	return text(&"menu", key)
 
 
-## One of `engine/items/mart.asm`'s own boxes, by the name
-## `Gen2Layout.MART_TEXT_AT` gives its stub, still carrying [Gen2TextStream]'s
-## markers for the quantity, the item name and the price. Empty on a cache
-## imported before them.
+## `engine/items/mart.asm`'s boxes, named by `Gen2Layout.MART_TEXT_AT`.
 func mart_text(name: String) -> String:
-	return String(_mart_text.get(name, ""))
+	return text(&"mart", name)
 
 
-## One of `engine/events/name_rater.asm`'s own boxes, by the name
-## `Gen2Layout.NAME_RATER_TEXT_ORDER` gives its stub, still carrying
-## [Gen2TextStream]'s marker for the nickname. Empty on a cache imported before
-## them.
+## `engine/events/name_rater.asm`'s, named by `Gen2Layout.NAME_RATER_TEXT_ORDER`.
 func name_rater_text(name: String) -> String:
-	return String(_name_rater_text.get(name, ""))
+	return text(&"name_rater", name)
 
 
-## One of `engine/events/move_deleter.asm`'s own boxes, by the name
-## `Gen2Layout.MOVE_DELETER_TEXT_ORDER` gives its stub, still carrying
-## [Gen2TextStream]'s marker for the move name. Empty on a cache imported before
-## them.
+## `engine/events/move_deleter.asm`'s, by `Gen2Layout.MOVE_DELETER_TEXT_ORDER`.
 func move_deleter_text(name: String) -> String:
-	return String(_move_deleter_text.get(name, ""))
+	return text(&"move_deleter", name)
 
 
-## One of the Day-Care's own boxes, by the name `Gen2Layout.DAY_CARE_TEXT_RUNS`
-## gives its stub, still carrying [Gen2TextStream]'s markers for the nickname
-## and money it prints. Empty on a cache imported before them.
+## The Day-Care's boxes, named by `Gen2Layout.DAY_CARE_TEXT_RUNS`.
 func day_care_text(name: String) -> String:
-	return String(_day_care_text.get(name, ""))
+	return text(&"day_care", name)
 
 
-## One box of one `Gen2Layout.SPECIAL_TEXT_RUNS` run, still carrying
-## [Gen2TextStream]'s markers. Empty for a run this cartridge does not ship,
-## which is what a Gold or Silver reader of the three Crystal-only runs gets.
+## One box of one `Gen2Layout.SPECIAL_TEXT_RUNS` run.
 func special_text(run: String, name: String) -> String:
-	var boxes: Variant = _special_text.get(run, {})
-	return String((boxes as Dictionary).get(name, "")) if boxes is Dictionary else ""
+	return text(StringName(run), name)
 
 
-## The WRAM address a `text_ram` in one of those boxes names, by the name
-## `Gen2Layout`'s own `special_text_ram` gives it, or -1 on a cartridge that
-## ships no such buffer.
 ## `PrizeDifferentMenuPtrs`' three menus, each `{tms, rows}` with a row's item,
 ## cost and the level a prize Pokemon arrives at. Empty outside Generation 1.
 func prize_menus() -> Array:
@@ -1869,6 +1926,9 @@ func vending_rows() -> Array:
 	return _vending.duplicate(true)
 
 
+## The WRAM address a `text_ram` in one of those boxes names, by the name
+## `Gen2Layout`'s own `special_text_ram` gives it, or -1 on a cartridge that
+## ships no such buffer.
 func special_text_ram(name: String) -> int:
 	return int(_special_text_ram.get(name, -1))
 
@@ -1885,9 +1945,9 @@ func has_special_text(run: String) -> bool:
 ## imported before the run was.
 func menu_description(kind: StringName) -> String:
 	var descriptions: Variant = _menu_text.get("descriptions", {})
-	if not descriptions is Dictionary:
-		return ""
-	return String((descriptions as Dictionary).get(String(kind), ""))
+	var base: String = String((descriptions as Dictionary).get(String(kind), "")) \
+		if descriptions is Dictionary else ""
+	return _overlaid_text(&"menu_description", String(kind), base)
 
 
 ## One of the splash's object palettes: `object` is
@@ -3353,6 +3413,10 @@ func overlaid_check(check_id: int, base: Dictionary) -> Dictionary:
 ## Whether any mod content reaches this cache at all, which is the one check a
 ## hot path pays before asking the overlay anything. Not the SHARED overlay: a
 ## tool or a test may hand this cache one of its own.
+func set_text_overlay(overlay: Gen2TextOverlay) -> void:
+	_text_overlay = overlay
+
+
 func has_content_overlay() -> bool:
 	return _overlay != null and not _overlay.is_empty()
 
