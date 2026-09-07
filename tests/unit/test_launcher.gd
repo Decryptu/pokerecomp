@@ -93,6 +93,28 @@ func test_launcher_lists_every_supported_game() -> void:
 		assert_false(row["selected"])
 
 
+## The shelf opens on the cartridge last launched rather than on the first bay,
+## and an id the registry no longer lists opens it where it always did.
+func test_the_shelf_opens_on_the_cartridge_last_played() -> void:
+	Gen2OptionsStore.use_test_path()
+	for played: StringName in [RomRegistry.YELLOW, RomRegistry.SILVER]:
+		var options: Gen2Options = Gen2OptionsStore.current()
+		options.last_played = played
+		assert_true(Gen2OptionsStore.save(options))
+		await _open_launcher()
+		assert_eq(_launcher.launcher_snapshot()["shelf"], String(played))
+		_launcher.free()
+		_launcher = null
+		await get_tree().process_frame
+
+	var forgotten: Gen2Options = Gen2OptionsStore.current()
+	forgotten.last_played = &"a_cartridge_that_left"
+	assert_true(Gen2OptionsStore.save(forgotten))
+	await _open_launcher()
+	assert_eq(_launcher.launcher_snapshot()["shelf"], String(RomRegistry.ORDER[0]))
+	DirAccess.remove_absolute(Gen2OptionsStore.path())
+
+
 func test_launcher_opens_on_the_shelf_and_moves_between_its_pages() -> void:
 	await _open_launcher()
 	assert_eq(_launcher.launcher_snapshot()["page"], "shelf")

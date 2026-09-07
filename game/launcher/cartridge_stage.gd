@@ -57,11 +57,17 @@ var _scroll: float = 0.0:
 		_place_all()
 
 
-static func create(palette: Gen2LauncherTheme, order: Array[StringName]) -> Gen2CartridgeStage:
+## [param opening] is where the row starts, an id it does not hold being the
+## first. It opens there rather than sliding: a step is the player's own.
+static func create(
+	palette: Gen2LauncherTheme, order: Array[StringName], opening: StringName = &""
+) -> Gen2CartridgeStage:
 	var stage := Gen2CartridgeStage.new()
 	stage._theme = palette
 	stage._order = order
 	stage._build()
+	stage.selected = maxi(order.find(opening), 0)
+	stage._scroll = float(stage.selected)
 	return stage
 
 
@@ -174,9 +180,8 @@ func _step_by(event: InputEvent) -> bool:
 	return false
 
 
-## The row is dragged rather than paged: a press takes hold of it, the pointer
-## carries it, and letting go settles on whatever is nearest. Touch arrives here
-## too, since the engine emulates a mouse from it.
+## The row is dragged rather than paged: a press takes hold of it and letting go
+## settles on the nearest. Touch arrives here, the engine emulating a mouse.
 func _on_click(click: InputEventMouseButton) -> void:
 	match click.button_index:
 		MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_LEFT:
@@ -216,8 +221,7 @@ func _on_click(click: InputEventMouseButton) -> void:
 	_settle()
 
 
-## Lights whichever card the pointer is over, and names it in the tooltip. The
-## cards take no pointer events of their own, so this is where hover lives.
+## The cards take no pointer events of their own, so hover lives here.
 func _hover(index: int) -> void:
 	for at: int in _cartridges.size():
 		_cartridges[at].set_hovered(at == index)
@@ -231,9 +235,8 @@ func _on_drag(motion: InputEventMouseMotion) -> void:
 	_scroll = _grab_scroll - (motion.position.x - _grab_x) / stride
 
 
-## Settles a dragged row on the nearest cartridge and makes that the selection.
-## The whole ring is shifted back into range at the same time, so a row dragged
-## round and round does not walk [member _scroll] away from its slot numbers.
+## The nearest cartridge, and the whole ring shifted back into range with it, so
+## a row dragged round and round does not walk [member _scroll] off its slots.
 func _settle() -> void:
 	var ring: int = _cartridges.size()
 	var nearest: float = roundf(_scroll)
