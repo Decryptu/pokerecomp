@@ -76,6 +76,16 @@ const TOWN_MAP_POSTER_TILE: int = 0x3D
 ## `text_promptbutton` behind the string, which is the page break the stream
 ## keeps rather than a second box.
 const TOWN_MAP_POSTER_BOX: String = "A TOWN MAP." + Gen2TextStream.PAGE_BREAK
+## `Route22GateScriptCoords`' first cell, the `w<Map>CurScript` byte the gate
+## dispatches on, and the two states `Route22GateGuardText` leaves behind it.
+const ROUTE_22_GATE: int = 193
+const ROUTE_22_GATE_CELL := Vector2i(4, 2)
+const ROUTE_22_GATE_BYTE: int = 0x1E
+const ROUTE_22_GATE_MOVING: int = 1
+const ROUTE_22_GATE_NOOP: int = 2
+const ROUTE_22_GATE_PASS: String = "Oh! That is the"
+const ROUTE_22_GATE_REFUSED: String = "Only truly skilled"
+
 ## A party that knows FLY, and `FlyWarpDataPtr.ViridianCity`'s own tile.
 const FLY_SPECIES: Array[int] = [16]
 const FLY_MOVES: Array = [[Gen2WorldFieldMove.MOVE_FLY, 0, 0, 0]]
@@ -378,6 +388,7 @@ func _one_game() -> void:
 	_check_the_poke_flute()
 	_check_a_cut_tree()
 	_check_rock_tunnel_is_dark()
+	_check_a_map_script_runs()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -1919,6 +1930,36 @@ func _check_the_cycling_road() -> void:
 		"the gate left the ride %s forced." % ["still" if world.always_on_bike() else "no longer"]
 	)
 	_r.note("gen1 bike forced on Route 16 at %s" % ROUTE_16_GATE_DOOR)
+
+
+## `RunMapScript` driven on the world: Route 22 Gate's own state machine opens
+## on `ArePlayerCoordsInArray`, the guard's row branches on BOULDERBADGE, and
+## the index it leaves behind is what the next step dispatches on.
+func _check_a_map_script_runs() -> void:
+	for badge: bool in [true, false]:
+		var world: Gen2WorldAPI = _r.open_world(0, ROUTE_22_GATE, ROUTE_22_GATE_CELL)
+		if world == null:
+			return
+		if badge:
+			world.state.set_engine_flag(
+				Gen2WorldState.gen1_badge_flag(Gen1Layout.BOULDERBADGE), true
+			)
+		var spoken: String = _event_text(world.dispatch_sight_events())
+		var wanted: String = ROUTE_22_GATE_PASS if badge else ROUTE_22_GATE_REFUSED
+		if not _r.check(spoken.begins_with(wanted),
+			"the gate guard said %s with the badge %s." % [spoken, badge]):
+			continue
+		world.run_event_queue(true)
+		_r.check(
+			world.state.gen1_map_script(ROUTE_22_GATE_BYTE)
+				== (ROUTE_22_GATE_NOOP if badge else ROUTE_22_GATE_MOVING),
+			"the guard left the gate on state %d with the badge %s." % [
+				world.state.gen1_map_script(ROUTE_22_GATE_BYTE), badge,
+			]
+		)
+		_r.check(world.dispatch_sight_events().is_empty(),
+			"the gate spoke twice with the badge %s." % badge)
+	_r.note("gen1 walk ROUTE_22_GATE both ways past its guard")
 
 
 ## `ItemUsePokeFlute` outside a battle: the cell beside Route 12's Snorlax sets

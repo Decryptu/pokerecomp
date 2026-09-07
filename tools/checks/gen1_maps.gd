@@ -130,24 +130,27 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 261, "text": 328, "branch": 118, "choice": 20, "flag": 46,
+	&"red": {"rows": 263, "text": 334, "branch": 119, "choice": 21, "flag": 46,
 		"give_item": 28, "has_item": 15, "take_item": 3, "unknown": 59,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 9, "has_money": 3, "spend_money": 3, "money_box": 4,
 		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2,
-		"player_coord": 4, "walk": 2, "replace_block": 1, "day_care": 1},
-	&"blue": {"rows": 261, "text": 328, "branch": 118, "choice": 20, "flag": 46,
+		"player_coord": 4, "walk": 3, "replace_block": 1, "day_care": 1,
+		"set_map_script": 9, "player_in_array": 1},
+	&"blue": {"rows": 263, "text": 334, "branch": 119, "choice": 21, "flag": 46,
 		"give_item": 28, "has_item": 15, "take_item": 3, "unknown": 59,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 9, "has_money": 3, "spend_money": 3, "money_box": 4,
 		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2,
-		"player_coord": 4, "walk": 2, "replace_block": 1, "day_care": 1},
-	&"yellow": {"rows": 307, "text": 366, "branch": 113, "choice": 21, "flag": 40,
-		"give_item": 27, "has_item": 12, "take_item": 3, "unknown": 63,
+		"player_coord": 4, "walk": 3, "replace_block": 1, "day_care": 1,
+		"set_map_script": 9, "player_in_array": 1},
+	&"yellow": {"rows": 309, "text": 373, "branch": 114, "choice": 22, "flag": 40,
+		"give_item": 27, "has_item": 12, "take_item": 3, "unknown": 62,
 		"pick_up_item": 108, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 7, "has_money": 3, "spend_money": 3, "money_box": 4,
 		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 6,
-		"player_coord": 4, "walk": 2, "replace_block": 1, "day_care": 1},
+		"player_coord": 4, "walk": 3, "replace_block": 1, "day_care": 1,
+		"set_map_script": 10, "player_in_array": 1},
 }
 ## `BIT_GOT_OLD_ROD` and its two neighbours share `wStatusFlags1` with
 ## `BIT_STRENGTH_ACTIVE`, so reading that byte is what hands the three rods over.
@@ -195,6 +198,14 @@ const CALLBACK_CENSUS: Dictionary = {
 	&"red": {"gated": 36, "read": 21, "blocks": 79, "doors": 20, "floors": 10},
 	&"blue": {"gated": 36, "read": 21, "blocks": 79, "doors": 20, "floors": 10},
 	&"yellow": {"gated": 34, "read": 20, "blocks": 78, "doors": 20, "floors": 10},
+}
+
+## The maps with a state machine, the states reachable from index 0 and from
+## every `set_map_script` already read, and the bodies the walker gets whole.
+const STATE_CENSUS: Dictionary = {
+	&"red": {"tables": 92, "states": 56, "read": 5, "ops": 33},
+	&"blue": {"tables": 92, "states": 56, "read": 5, "ops": 33},
+	&"yellow": {"tables": 90, "states": 51, "read": 3, "ops": 16},
 }
 
 ## The pin on which way a `wCurrentMenuItem` branch reads.
@@ -280,6 +291,7 @@ func _one_game() -> void:
 		"the movement census reads %s." % str(_movements))
 	_texts()
 	_map_callbacks()
+	_map_states()
 	_hidden_events()
 	_dungeon_warps()
 	_bike()
@@ -537,6 +549,49 @@ func _map_callbacks() -> void:
 	_r.check(census == CALLBACK_CENSUS[_r.game_id],
 		"the map callbacks read %s." % [census])
 	_r.note("gen1 map callbacks %s" % [census])
+
+
+## `RunMapScript`'s own half, swept over the corpus.
+func _map_states() -> void:
+	var census: Dictionary = {"tables": 0, "states": 0, "read": 0, "ops": 0}
+	for map: Gen2WorldMap in _maps.values():
+		var entry: Array = map.scripts["entry"] as Array
+		var dispatch: Dictionary = _dispatch_node(entry)
+		var states: Array = map.scripts["states"] as Array
+		if dispatch.is_empty():
+			_r.check(states.is_empty(),
+				"map %d holds states with no dispatch." % map.number)
+			continue
+		census["tables"] += 1
+		census["states"] += states.size()
+		for row: Dictionary in states:
+			var nodes: Array = row["nodes"] as Array
+			census["read"] += 1 if not nodes.is_empty() else 0
+			census["ops"] += _node_count(nodes)
+	_r.check(census == STATE_CENSUS[_r.game_id], "the map states read %s." % [census])
+	_r.note("gen1 map states %s" % [census])
+
+
+func _dispatch_node(nodes: Array) -> Dictionary:
+	for node: Dictionary in nodes:
+		if String(node["op"]) == "map_script_table":
+			return node
+		for key: String in node:
+			if not node[key] is Array or key == "either":
+				continue
+			var found: Dictionary = _dispatch_node(node[key] as Array)
+			if not found.is_empty():
+				return found
+	return {}
+
+
+func _node_count(nodes: Array) -> int:
+	var total: int = nodes.size()
+	for node: Dictionary in nodes:
+		for key: String in node:
+			if node[key] is Array and key != "either":
+				total += _node_count(node[key] as Array)
+	return total
 
 
 func _blocks_written(nodes: Array) -> int:
@@ -929,6 +984,21 @@ func _sprites() -> void:
 				"map %d has an object drawn with picture id %d." % [map.number, picture])
 
 
+## `res BIT_ALWAYS_ON_BIKE, [hl]` in a map's per-frame script, which reads
+## through the shared engine flag `BIKEFLAGS_ALWAYS_ON_BIKE_F` holds.
+func _clears_forced_ride(nodes: Array) -> bool:
+	for node: Dictionary in nodes:
+		if String(node["op"]) == "flag" and bool(node.get("engine", false)) \
+			and not bool(node["set"]) \
+			and int(node["flag"]) == Gen2WorldState.ENGINE_ALWAYS_ON_BIKE:
+			return true
+		for key: String in node:
+			if node[key] is Array and key != "either" \
+				and _clears_forced_ride(node[key] as Array):
+				return true
+	return false
+
+
 ## `IsBikeRidingAllowed`'s two answers, `ForcedBikeOrSurfMaps`' eight cells and
 ## the two gate scripts that clear a forced ride, over the whole corpus.
 func _bike() -> void:
@@ -937,7 +1007,7 @@ func _bike() -> void:
 		"BikeRidingTilesets reads %s." % str(tilesets))
 	var allowed: int = 0
 	for map: Gen2WorldMap in _maps.values():
-		var gate: bool = bool(map.scripts.get("clears_always_on_bike", false))
+		var gate: bool = _clears_forced_ride(map.scripts["entry"] as Array)
 		_r.check(gate == BIKE_GATE_MAPS.has(map.number),
 			"map %d answers %s to clearing a forced ride." % [map.number, gate])
 		if BIKE_RIDING_TILESETS.has(map.tileset) \

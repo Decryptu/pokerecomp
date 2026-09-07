@@ -9895,7 +9895,10 @@ func _gen1_gate_map() -> Dictionary:
 		"x": 1, "y": 3, "destination": 0, "map_group": 0,
 		"map_number": Gen1Layout.WARP_TO_LAST_MAP,
 	}])
-	map["scripts"] = {"clears_always_on_bike": true}
+	map["scripts"] = {"entry": [
+		{"op": "flag", "flag": Gen2WorldState.ENGINE_ALWAYS_ON_BIKE,
+			"set": false, "engine": true},
+	]}
 	return map
 
 

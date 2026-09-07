@@ -1013,14 +1013,21 @@ const SCRIPT_RET: int = 0xC9
 const SCRIPT_CALL: int = 0xCD
 const SCRIPT_HRAM_BASE: int = 0xFF00
 ## `wGameProgressFlags`' own run of `w<Map>CurScript` bytes, 122 on all three
-## cartridges. A store there or to `wCurMapScript` names a map script index, and
-## this port has no interpreter to hand one to.
+## cartridges. A store there names the map script index `CallFunctionInTable`
+## dispatches on; `wCurMapScript` is the mirror `ExecuteCurMapScriptInTable`
+## keeps and nothing here reads.
 const MAP_SCRIPT_BYTES: int = 0x7A
+const MAP_SCRIPT_STATES: int = 32
+## What a `<Map>_ScriptPointers` word has to be to be a pointer at all.
+const SCRIPT_LOWEST: int = 0x0100
+const SCRIPT_CEILING: int = 0x8000
 ## How deep a `call` to a routine the layout does not name may nest.
 const SCRIPT_CALL_DEPTH: int = 2
 const SCRIPT_PUSH_AF: int = 0xF5
 const SCRIPT_POP_AF: int = 0xF1
-const SCRIPT_STACK_HL: Array[int] = [0xE5, 0xE1]
+const SCRIPT_PUSH_HL: int = 0xE5
+const SCRIPT_POP_HL: int = 0xE1
+const SCRIPT_STACK_HL: Array[int] = [SCRIPT_PUSH_HL, SCRIPT_POP_HL]
 ## The opcode following a map-load gate, `size` its own length and `target`
 ## whether the body is where it branches rather than the byte after it.
 const MAP_LOAD_GATE_BRANCHES: Dictionary = {
@@ -1046,6 +1053,9 @@ const SCRIPT_CALLS: Array[String] = [
 	"auto_textbox_on", "auto_textbox_off", "has_enough_money", "display_text_box",
 	"has_enough_coins", "print_predef_text", "display_text_id", "count_set_bits",
 	"start_simulating_joypad", "update_sprites", "play_sound", "play_sound_wait",
+	"call_function_in_table", "execute_map_script", "load_gym_names",
+	"delay_frames", "delay_3", "play_default_music", "check_map_trainers",
+	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle",
 ]
 ## Routines named by a full ROM offset, the same address in another bank being another routine.
 const SCRIPT_BANKED_CALLS: Array[String] = ["coin_box"]
@@ -1054,13 +1064,35 @@ const SCRIPT_BANKED_CALLS: Array[String] = ["coin_box"]
 const SCRIPT_SILENT_CALLS: Array[String] = [
 	"play_cry", "wait_for_sound", "wait_for_button",
 	"auto_textbox_on", "auto_textbox_off", "count_set_bits", "update_sprites",
-	"play_sound", "play_sound_wait",
+	"play_sound", "play_sound_wait", "load_gym_names",
+	## A wait is frames of nothing and the map music is nobody's here. The three
+	## trainer rows every fighting map's own table opens with are the sight walk
+	## `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
+	"delay_frames", "delay_3", "play_default_music", "check_map_trainers",
+	"start_trainer_battle", "end_trainer_battle",
 ]
 const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
+## The two of them the zero flag answers, `true` calling on a clear one.
+const SCRIPT_ZERO_CALLS: Dictionary = {0xC4: true, 0xCC: false}
+## `wSpriteStateData1`: sixteen slots of sixteen bytes, the player's own first
+## and a map's objects behind it in their table order, facing at offset nine.
+const SPRITE_SLOT_SIZE: int = 0x10
+const SPRITE_FACING_AT: int = 9
+const SPRITE_SLOTS: int = 16
+
+## The stores a row is walked past: nothing here reads any of them.
+const SCRIPT_SILENT_STORES: Array[String] = [
+	"joy_held", "auto_text_box_control", "joy_ignore", "update_sprites_enabled",
+	## A forced walk writes the pad bit over the player's own facing byte, and
+	## the `walk` node behind it carries the direction anyway.
+	"facing_direction",
+]
 ## `cp n` and the two conditional `ret`s behind it, whose value is the side
 ## taken when the comparison did not match.
 const SCRIPT_CP_N: int = 0xFE
 const SCRIPT_RET_BRANCHES: Dictionary = {0xC0: true, 0xC8: false}
+## The same two on carry, which `ret nc` behind `ArePlayerCoordsInArray` is.
+const SCRIPT_RET_CARRY_BRANCHES: Dictionary = {0xD8: true, 0xD0: false}
 ## `PrintPredefTextID`'s operand counts from 1. Yellow puts the Fan Club's two
 ## pictures at $0C and $0D, so every row past the fossils sits two higher there
 ## and an id read as Red's decodes, in the wrong bank, to something.
@@ -1454,6 +1486,21 @@ const RED_BLUE: Dictionary = {
 	"cur_party_species": 0xCF91,
 	"cur_map_script": 0xDA39,
 	"map_scripts": 0xD5F0,
+	## The per-frame half's own dispatch: `hl` is the table for one and `de` is
+	## for the other, which takes the trainer header in `hl` instead.
+	"call_function_in_table": 0x3D97,
+	"execute_map_script": 0x3160,
+	"delay_frames": 0x3739,
+	"delay_3": 0x3DD7,
+	"play_default_music": 0x2307,
+	"check_map_trainers": 0x3219,
+	"player_coords_in_array": 0x34BF,
+	"start_trainer_battle": 0x324C,
+	"end_trainer_battle": 0x3275,
+	"joy_ignore": 0xCD6B,
+	"update_sprites_enabled": 0xCFCB,
+	"obtained_badges": 0xD356,
+	"sprite_state_data": 0xC100,
 	## `ReplaceTileBlock` writes `wNewTileBlockID` at the block `bc` names, and
 	## `SilphCoMapList` is the ten floors `PrintCardKeyText` answers on.
 	"map_script_flags": 0xD126,
@@ -1694,6 +1741,19 @@ const YELLOW: Dictionary = {
 	"cur_party_species": 0xCF90,
 	"cur_map_script": 0xDA38,
 	"map_scripts": 0xD5EF,
+	"call_function_in_table": 0x3D93,
+	"execute_map_script": 0x30FC,
+	"delay_frames": 0x372F,
+	"delay_3": 0x3DDB,
+	"play_default_music": 0x216B,
+	"check_map_trainers": 0x31B5,
+	"player_coords_in_array": 0x34BC,
+	"start_trainer_battle": 0x31E8,
+	"end_trainer_battle": 0x3211,
+	"joy_ignore": 0xCD6B,
+	"update_sprites_enabled": 0xCFCA,
+	"obtained_badges": 0xD355,
+	"sprite_state_data": 0xC100,
 	"map_script_flags": 0xD125,
 	"new_tile_block": 0xD09E,
 	"replace_tile_block": 0x0ED1B,
@@ -2078,6 +2138,30 @@ static func text_predef_count(id: StringName) -> int:
 ## What one `HiddenCoins` row pays, off its own argument column.
 static func hidden_coin_amount(argument: int) -> int:
 	return int(HIDDEN_COIN_AMOUNTS.get(argument - ITEM_COIN, HIDDEN_COIN_DEFAULT))
+
+
+## The two bytes a script reads that the shared engine flags already hold:
+## `wObtainedBadges`, whose eight bits are Kanto's badges, and
+## `BIT_ALWAYS_ON_BIKE`, which is the state `BIKEFLAGS_ALWAYS_ON_BIKE_F` holds.
+## -1 for any other byte or bit.
+static func script_flag_alias(layout: Dictionary, address: int, bit: int) -> int:
+	if address == int(layout.get("obtained_badges", -1)):
+		return Gen2WorldState.gen1_badge_flag(bit)
+	if address != int(layout.get("status_flags_6", -1)) or bit != ALWAYS_ON_BIKE_BIT:
+		return -1
+	return Gen2WorldState.ENGINE_ALWAYS_ON_BIKE
+
+
+## Which map object's facing byte [param address] is, or -1. Slot 0 is the
+## player's, which is walked past instead.
+static func sprite_facing_slot(layout: Dictionary, address: int) -> int:
+	var base: int = int(layout["sprite_state_data"])
+	var offset: int = address - base
+	if offset < SPRITE_SLOT_SIZE or offset >= SPRITE_SLOTS * SPRITE_SLOT_SIZE \
+		or offset % SPRITE_SLOT_SIZE != SPRITE_FACING_AT:
+		return -1
+	@warning_ignore("integer_division")
+	return offset / SPRITE_SLOT_SIZE - 1
 
 
 ## Where one of [constant ENGINE_FLAG_BYTES]' runs starts, or -1.
