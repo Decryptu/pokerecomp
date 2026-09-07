@@ -371,6 +371,7 @@ const FIELD_EFFECT_SACRED_ASH: StringName = &"sacred_ash"
 const FIELD_EFFECT_CARD_KEY: StringName = &"card_key"
 const FIELD_EFFECT_BASEMENT_KEY: StringName = &"basement_key"
 const FIELD_EFFECT_SQUIRTBOTTLE: StringName = &"squirtbottle"
+const FIELD_EFFECT_POKE_FLUTE: StringName = &"poke_flute"
 const ITEM_BICYCLE: int = 0x07
 const ITEM_ESCAPE_ROPE: int = 0x13
 ## `CoinCaseEffect` is the one key item on `.Current` rather than `.Field`: it
@@ -415,12 +416,12 @@ const FIELD_EFFECTS: Dictionary = {
 	ITEM_SQUIRTBOTTLE: FIELD_EFFECT_SQUIRTBOTTLE,
 }
 ## `StartMenu_Item`'s `.useItem_closeMenu` rows in Generation 1's numbering: the
-## Bicycle and `UsableItems_CloseMenu`. The Poke Flute is the one of those with
-## no effect built here, so it lands on `ItemUseNotTime` like any other.
+## Bicycle and `UsableItems_CloseMenu`.
 const GEN1_FIELD_EFFECTS: Dictionary = {
 	Gen1Layout.ITEM_BICYCLE: FIELD_EFFECT_BICYCLE,
 	Gen1Layout.ITEM_ESCAPE_ROPE: FIELD_EFFECT_ESCAPE_ROPE,
 	Gen1Layout.ITEM_ITEMFINDER: FIELD_EFFECT_ITEMFINDER,
+	Gen1Layout.ITEM_POKE_FLUTE: FIELD_EFFECT_POKE_FLUTE,
 	Gen1Layout.ITEM_OLD_ROD: FIELD_EFFECT_ROD,
 	Gen1Layout.ITEM_GOOD_ROD: FIELD_EFFECT_ROD,
 	Gen1Layout.ITEM_SUPER_ROD: FIELD_EFFECT_ROD,

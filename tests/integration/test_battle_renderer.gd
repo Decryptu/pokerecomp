@@ -251,7 +251,7 @@ func test_a_capture_publishes_and_a_mod_line_lands_behind_it() -> void:
 	## `Text_GotchaMonWasCaught` is the whole of what a caught throw says: the
 	## rocking is the animation, and nothing is published before the line.
 	assert_eq(_caught.size(), 0, "published before the line that says why")
-	_battle_screen._show_next_capture_message()
+	_battle_screen._show_next_box()
 	assert_string_contains(String(_battle_screen.battle_snapshot()["message"]), "Gotcha!")
 	assert_eq(_caught.size(), 1)
 	assert_eq(int(_caught[0]["species"]), 16)

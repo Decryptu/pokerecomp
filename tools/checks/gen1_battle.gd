@@ -389,6 +389,7 @@ func _the_bag_in_a_fight() -> void:
 	_bag_check(flute, "POKE FLUTE")
 	_r.check(int(flute.get("woken", 0)) == 2, "the flute woke %d" % int(flute.get("woken", 0)))
 	_r.check(not bool(flute.get("spent", true)), "the flute was spent")
+	_the_wild_sleeps_alone()
 
 	_r.check(
 		StringName(_bag_battle(true).use_bag_item(BAG_POKE_DOLL).get("reason", &"")) \
@@ -398,7 +399,23 @@ func _the_bag_in_a_fight() -> void:
 	var wild: Gen2Battle = _bag_battle()
 	_bag_check(wild.use_bag_item(BAG_POKE_DOLL), "POKE DOLL")
 	_r.check(wild.is_over(), "a POKE DOLL did not end the wild battle")
-	_r.note("gen1 battle bag: 9 rows used, refused or spent as the table says")
+	_r.note("gen1 battle bag: 10 rows used, refused or spent as the table says")
+
+
+## `wWereAnyMonsAsleep` against a wild that is the only sleeper, which is what
+## [method Gen1Layout.flute_counts_wild] parts.
+func _the_wild_sleeps_alone() -> void:
+	var battle: Gen2Battle = _bag_battle()
+	battle.mon(Gen2Battle.ENEMY).status = Gen2Status.SLEEP_MASK
+	var flute: Dictionary = battle.use_bag_item(BAG_POKE_FLUTE)
+	_bag_check(flute, "POKE FLUTE")
+	var counted: int = 1 if _r.game_id == RomRegistry.YELLOW else 0
+	_r.check(int(flute.get("woken", 0)) == counted,
+		"a sleeping wild counted %d, wanted %d" % [int(flute.get("woken", 0)), counted])
+	_r.check(
+		not Gen2Status.is_asleep(battle.mon(Gen2Battle.ENEMY).status),
+		"the flute left the wild asleep"
+	)
 
 
 func _bag_check(result: Dictionary, name: String) -> void:

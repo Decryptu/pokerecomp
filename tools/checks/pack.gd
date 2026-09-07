@@ -26,6 +26,17 @@ const CLOSE_ITEMS: Dictionary = {
 	0x9C: "SACRED ASH",
 	0xAF: "SQUIRTBOTTLE",
 }
+## `UsableItems_CloseMenu`'s six rows with the Bicycle, which `.choseItem` sends
+## straight to `.useOrTossItem` with no USE/TOSS box of its own.
+const GEN1_CLOSE_ITEMS: Dictionary = {
+	0x06: "BICYCLE",
+	0x1D: "ESCAPE ROPE",
+	0x47: "ITEMFINDER",
+	0x49: "POKé FLUTE",
+	0x4C: "OLD ROD",
+	0x4D: "GOOD ROD",
+	0x4E: "SUPER ROD",
+}
 
 ## The three maps and cells `card_key.asm`, `basement_key.asm` and
 ## `squirtbottle.asm` name, with the cell the player stands on to face each.
@@ -55,8 +66,7 @@ const REGISTERABLE_KEY_ITEMS: Dictionary = {
 	0x3D: "SUPER ROD",
 }
 
-## `ItemAttributes` is 256 rows on both pins, the last of which is the terminator
-## the item list never reaches.
+## `ItemAttributes` is 256 rows on both pins, the last being the terminator.
 const ITEM_ROWS: int = 255
 const NO_DEPOSIT_ROWS: Array[int] = [1, 2, 3]
 ## The TM and HM rows, whose ITEMMENU_PARTY nibble is `TeachTMHM` rather than an
@@ -83,7 +93,10 @@ func run(r: RefCounted) -> void:
 			continue
 		_verify_registerable(game_id, data)
 		_verify_submenus(game_id, data)
-		_verify_field_effects(game_id, data)
+		_verify_field_effects(
+			game_id, data, CLOSE_ITEMS, Gen2WorldPack.FIELD_EFFECTS
+		)
+		_verify_current_rows(game_id, data)
 		_verify_deposit_rule(game_id, data)
 		_verify_key_item_effects(game_id, data)
 		_verify_party_item_effects(game_id, data, TM_HM_PARTY_ROWS)
@@ -93,6 +106,9 @@ func run(r: RefCounted) -> void:
 	## `UseItem`'s jumptable is the same three answers on Generation 1, and the
 	## pack that reads it is this one, so its `.Party` rows are swept here too.
 	_r.each_game_of(RomRegistry.GEN1, func() -> void:
+		_verify_field_effects(
+			_r.game_id, _r.data, GEN1_CLOSE_ITEMS, Gen2WorldPack.GEN1_FIELD_EFFECTS
+		)
 		_verify_party_item_effects(_r.game_id, _r.data, GEN1_TM_HM_PARTY_ROWS)
 		_verify_battle_item_effects(_r.game_id, _r.data)
 	)
@@ -169,9 +185,11 @@ func _verify_submenus(game_id: StringName, data: GameData) -> void:
 
 ## `UseItem`'s jumptable over the real nibbles. Every ITEMMENU_CLOSE row has to
 ## have a `.Field` effect and nothing else may claim one: a row named by
-## FIELD_EFFECTS that the cartridge puts on `.Current` or `.Party` is dead, and
+## [param effects] that the cartridge puts on `.Current` or `.Party` is dead, and
 ## a CLOSE row with no entry falls through to `.Oak` in silence.
-func _verify_field_effects(game_id: StringName, data: GameData) -> void:
+func _verify_field_effects(
+	game_id: StringName, data: GameData, pinned: Dictionary, effects: Dictionary
+) -> void:
 	var close_rows: Dictionary = {}
 	for number: int in range(1, ITEM_ROWS + 1):
 		if data.item(number).is_empty():
@@ -179,23 +197,22 @@ func _verify_field_effects(game_id: StringName, data: GameData) -> void:
 		if Gen2WorldPack.field_use_kind(data, number) == Gen2WorldPack.ITEMMENU_CLOSE:
 			close_rows[number] = true
 		_r.check(
-			not Gen2WorldPack.FIELD_EFFECTS.has(number)
-				or close_rows.has(number),
+			not effects.has(number) or close_rows.has(number),
 			"%s: $%02X (%s) has a field effect but is not ITEMMENU_CLOSE." % [
 				game_id, number, data.item_name(number),
 			]
 		)
-	for number: int in CLOSE_ITEMS:
+	for number: int in pinned:
 		_r.check(
 			close_rows.has(number),
 			"%s: $%02X (%s) is not ITEMMENU_CLOSE on this cache." % [
-				game_id, number, String(CLOSE_ITEMS[number]),
+				game_id, number, String(pinned[number]),
 			]
 		)
 	_r.check(
-		close_rows.size() == CLOSE_ITEMS.size(),
+		close_rows.size() == pinned.size(),
 		"%s: %d rows are ITEMMENU_CLOSE, not the pinned %d." % [
-			game_id, close_rows.size(), CLOSE_ITEMS.size(),
+			game_id, close_rows.size(), pinned.size(),
 		]
 	)
 	for number: int in close_rows:
@@ -205,6 +222,14 @@ func _verify_field_effects(game_id: StringName, data: GameData) -> void:
 				game_id, number, data.item_name(number),
 			]
 		)
+
+
+## The whole of Crystal's `.Current` past the three repels: the Coin Case, the
+## two trophy boxes, and the Blue Card, which is Crystal's alone because Buena
+## is. A row here the cache does not make CURRENT is one the pack answers with
+## `.Oak`. Generation 1's `.Current` rows share no number and are swept in
+## [Gen2StartMenuScreen] instead.
+func _verify_current_rows(game_id: StringName, data: GameData) -> void:
 	_r.check(
 		Gen2WorldPack.field_effect(data, Gen2WorldPack.ITEM_COIN_CASE)
 			== Gen2WorldPack.FIELD_EFFECT_NONE
@@ -212,10 +237,6 @@ func _verify_field_effects(game_id: StringName, data: GameData) -> void:
 				== Gen2WorldPack.ITEMMENU_CURRENT,
 		"%s: the COIN CASE is not ITEMMENU_CURRENT." % game_id
 	)
-	## The whole of `.Current` past the three repels: the Coin Case above, the
-	## two trophy boxes, and the Blue Card, which is Crystal's alone because
-	## Buena is. A row here that the cache does not make CURRENT is a row the
-	## pack would answer with `.Oak`.
 	var current_rows: Array[int] = [Gen2WorldPack.ITEM_COIN_CASE]
 	current_rows.append_array(Gen2WorldPack.TROPHY_BOXES.keys())
 	if Gen2WorldState.is_crystal_profile(data):

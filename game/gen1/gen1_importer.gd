@@ -138,7 +138,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_battle_anims,
 	_verify_facility_text,
 	_verify_dex_ratings,
-	_verify_bike_data,
+	_verify_overworld_coords,
 	_verify_world,
 ]
 
@@ -174,6 +174,7 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"pick_up_item": ["found_item_text", Gen1Layout.PICK_UP_TEXT_AT],
 	"item_use": ["item_use_text", Gen1Layout.ITEM_USE_TEXT_AT],
 	"bicycle": ["bicycle_text", Gen1Layout.BICYCLE_TEXT_AT],
+	"poke_flute": ["poke_flute_text", Gen1Layout.POKE_FLUTE_TEXT_AT],
 	"start_menu": ["start_menu_text", Gen1Layout.START_MENU_TEXT_AT],
 	"coin_case": ["coin_case_text", Gen1Layout.COIN_CASE_TEXT_AT],
 	"party_menu": ["party_menu_text", Gen1Layout.PARTY_MENU_TEXT_AT],
@@ -507,9 +508,10 @@ static func _verify_facility_text(rom: RomFile, layout: Dictionary) -> Dictionar
 	return _ok()
 
 
-## `BikeRidingTilesets`' five rows and `ForcedBikeOrSurfMaps`' eight, each
-## naming something the rest of the cache holds.
-static func _verify_bike_data(rom: RomFile, layout: Dictionary) -> Dictionary:
+## The tables an overworld routine walks against the player's cell, each naming
+## something the rest of the cache holds: `BikeRidingTilesets`' five rows,
+## `ForcedBikeOrSurfMaps`' eight and the two Snorlax flute lists.
+static func _verify_overworld_coords(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var tilesets: Array = _byte_list(rom, int(layout["bike_riding_tilesets"]))
 	if tilesets.size() != Gen1Layout.BIKE_RIDING_TILESET_COUNT:
 		return _fail("BikeRidingTilesets holds %d rows." % tilesets.size())
@@ -522,6 +524,11 @@ static func _verify_bike_data(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for row: Dictionary in forced:
 		if not Gen1Layout.is_real_map(int(row["map"])):
 			return _fail("ForcedBikeOrSurfMaps names map %d." % int(row["map"]))
+	var flutes: Array = _snorlax_flute(rom, layout)
+	for index: int in Gen1Layout.SNORLAX_FLUTES.size():
+		var cells: Array = (flutes[index] as Dictionary)["cells"]
+		if cells.size() != int(Gen1Layout.SNORLAX_FLUTES[index]["count"]):
+			return _fail("Snorlax flute list %d holds %d cells." % [index, cells.size()])
 	return _ok()
 
 
@@ -1123,7 +1130,26 @@ func _import_special_warps(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"rest_houses": _byte_list(rom, int(layout["rest_houses"])),
 		"bike_riding_tilesets": _byte_list(rom, int(layout["bike_riding_tilesets"])),
 		"forced_bike_surf": _forced_bike_surf(rom, layout),
+		"snorlax_flute": _snorlax_flute(rom, layout),
 	}
+
+
+## `Route12SnorlaxFluteCoords` and `Route16SnorlaxFluteCoords`, adjacent the way
+## the two dungeon warp tables are, as `dbmapcoord`'s own `db y, x` pairs.
+static func _snorlax_flute(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout["snorlax_flute_coords"])
+	var out: Array = []
+	for flute: Dictionary in Gen1Layout.SNORLAX_FLUTES:
+		var cells: Array = []
+		while rom.u8(at) != Gen1Layout.TILESET_LIST_END:
+			cells.append({"y": rom.u8(at), "x": rom.u8(at + 1)})
+			at += Gen1Layout.SNORLAX_FLUTE_ROW_SIZE
+		at += 1
+		out.append({
+			"map": int(flute["map"]), "cells": cells,
+			"fight": int(flute["fight"]), "beat": int(flute["beat"]),
+		})
+	return out
 
 
 ## `ForcedBikeOrSurfMaps`, whose `db map, y, x` rows `CheckForceBikeOrSurf` walks

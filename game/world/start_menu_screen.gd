@@ -1591,6 +1591,8 @@ func _resolve_field_item(item: int) -> Dictionary:
 			request["rod"] = rod
 		Gen2WorldPack.FIELD_EFFECT_ITEMFINDER:
 			request["found"] = _world.hidden_item_nearby()
+		Gen2WorldPack.FIELD_EFFECT_POKE_FLUTE:
+			request.merge(_world.poke_flute_request(), true)
 		Gen2WorldPack.FIELD_EFFECT_CARD_KEY:
 			var slot: Dictionary = _world.card_key_request()
 			if not bool(slot.get("ok", false)):

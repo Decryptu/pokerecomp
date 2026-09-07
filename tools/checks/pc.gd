@@ -129,11 +129,19 @@ func _verify_gen1_menus(data: GameData) -> void:
 	var rows: Array[int] = []
 	for open_dex: bool in [false, true]:
 		state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, open_dex)
-		rows.append(Gen2WorldPC.gen1_top_menu(state, "RED").size())
+		rows.append(Gen2WorldPC.gen1_top_menu(data, state, "RED").size())
 	state.set_hall_of_fame(true)
-	rows.append(Gen2WorldPC.gen1_top_menu(state, "RED").size())
+	rows.append(Gen2WorldPC.gen1_top_menu(data, state, "RED").size())
 	_r.check(rows == GEN1_TOP_MENU_ROWS,
 		"the machine's menu reads %s." % [rows])
+	## `EVENT_MET_BILL` is counted off the cartridge's own event list.
+	for met: bool in [false, true]:
+		state.set_event_flag(Gen1Layout.met_bill_event(data.id), met)
+		var top: String = String(
+			(Gen2WorldPC.gen1_top_menu(data, state, "RED")[0] as Dictionary)["name"]
+		)
+		_r.check(top.begins_with("BILL" if met else "SOMEONE"),
+			"the machine's first row reads %s with EVENT_MET_BILL %s." % [top, met])
 	var items: int = Gen2WorldPC.gen1_players_pc_menu().size()
 	var boxes: int = Gen2WorldPC.gen1_bills_pc_menu().size()
 	_r.check(

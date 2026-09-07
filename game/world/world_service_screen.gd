@@ -2329,7 +2329,7 @@ func _open_gen1_top() -> void:
 	_mode = MODE.PC
 	_cursor = 0
 	_pc_rows = Gen2WorldPC.gen1_top_menu(
-		_world.state, _save.player_name if _save != null else ""
+		_data, _world.state, _save.player_name if _save != null else ""
 	)
 	_gen1_quiet()
 	_render_rows()
@@ -2338,7 +2338,9 @@ func _open_gen1_top() -> void:
 func _confirm_gen1_top_row(row: int) -> void:
 	match row:
 		Gen2WorldPC.GEN1_PC_BILLS:
-			var met: bool = _world.state.is_event_flag_active(Gen1Layout.EVENT_MET_BILL)
+			var met: bool = _world.state.is_event_flag_active(
+				Gen1Layout.met_bill_event(_data.id)
+			)
 			_open_gen1_box_text(
 				"pc", "accessed_bills" if met else "accessed_someones", &"gen1_bills"
 			)

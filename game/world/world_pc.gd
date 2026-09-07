@@ -450,7 +450,9 @@ const GEN1_BOX_DIGITS: int = 2
 
 ## `DisplayPCMainMenu`'s list, `wNumHoFTeams` being the induction flag here
 ## the way [method top_menu_list] reads it.
-static func gen1_top_menu(state: Gen2WorldState, player_name: String) -> Array:
+static func gen1_top_menu(
+	data: GameData, state: Gen2WorldState, player_name: String
+) -> Array:
 	var pokedex: bool = state != null \
 		and state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX)
 	var league: bool = state != null and state.hall_of_fame()
@@ -460,8 +462,8 @@ static func gen1_top_menu(state: Gen2WorldState, player_name: String) -> Array:
 		if league:
 			rows.append(GEN1_PC_LEAGUE)
 	rows.append(GEN1_PC_LOG_OFF)
-	var met_bill: bool = state != null \
-		and state.is_event_flag_active(Gen1Layout.EVENT_MET_BILL)
+	var met_bill: bool = state != null and data != null \
+		and state.is_event_flag_active(Gen1Layout.met_bill_event(data.id))
 	var named: String = player_name if not player_name.is_empty() else "PLAYER"
 	var labels: Dictionary = {
 		GEN1_PC_BILLS: "BILL's PC" if met_bill else "SOMEONE's PC",

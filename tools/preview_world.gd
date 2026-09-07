@@ -15,7 +15,7 @@ extends SceneTree
 const KIND_HELP: Dictionary = {
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
 	&"battle_transition": "frames, index: DoBattleTransition over the map. 1 is the trainer branch; a Generation 1 cartridge reads BattleTransitions' own index, 0 the double circle, 2 the circle, 4 the horizontal stripes, 6 the vertical",
-	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it",
+	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it and 2 plays the POKé FLUTE from it",
 	&"battle_caught": "frames: the same fight against a species the dex already holds",
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in",
 	&"catch_dex": "none: NewPokedexEntry's page, over the fight the catch that opened it is still in",
@@ -55,6 +55,7 @@ const KIND_HELP: Dictionary = {
 	&"warp": "warp tile: MapSetupScript_Door at its whitest, the frame the new map loads on",
 	&"dungeon_fall": "0 or 1: the step north onto a Generation 1 dungeon hole. 0 is LeaveMapAnim at its whitest, 1 the map DungeonWarpData lands on",
 	&"cycling_road": "none: the walk east into Route 16's gate and back out onto ForcedBikeOrSurfMaps' own cell, with the Bicycle refused behind it (`red 0 27 ... cycling_road@16,10`)",
+	&"poke_flute": "none: ItemUsePokeFlute over the map, on a cell Route12SnorlaxFluteCoords names (`red 0 23 ... poke_flute@11,62`)",
 	&"script_fade": "special, frames: one of the five fade specials over the map",
 	&"door": "door mat: .CheckWarp's carpet, standing on an interior door's mat",
 	&"ice_slide": "direction, frames: DoPlayerMovement.CheckForced's run. Direction is down, up, left, right",
@@ -147,6 +148,7 @@ const GEN1_FIELD_ITEMS: Dictionary = {
 	&"field_item": Gen1Layout.ITEM_ITEMFINDER,
 	&"bike": Gen1Layout.ITEM_BICYCLE,
 	&"coin_case": Gen1Layout.ITEM_COIN_CASE,
+	&"poke_flute": Gen1Layout.ITEM_POKE_FLUTE,
 }
 
 ## One row of each shape the bag draws, by generation: a stack that shows its
@@ -201,6 +203,7 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"prizes": BOX_REVEAL_FRAMES, &"trade": BOX_REVEAL_FRAMES,
 	&"coins": BOX_REVEAL_FRAMES, &"deal": BOX_REVEAL_FRAMES,
 	&"ticket": BOX_REVEAL_FRAMES, &"day_care": BOX_REVEAL_FRAMES,
+	&"poke_flute": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
 const BOX_REVEAL_FRAMES: int = 120
@@ -488,7 +491,7 @@ func _stage_kind() -> void:
 	if STAGERS.has(_kind):
 		call(STAGERS[_kind])
 		return
-	if FIELD_ITEMS.has(_kind):
+	if FIELD_ITEMS.has(_kind) or GEN1_FIELD_ITEMS.has(_kind):
 		if _kind in FACE_UP_FIRST:
 			_screen.move_up()
 		_screen.preview_field_item(int(_field_item_number()))
@@ -568,20 +571,26 @@ func _stage_battle() -> void:
 	var caught: bool = _kind == &"battle_caught"
 	if caught:
 		_screen.world().state.set_species_caught(PREVIEW_BATTLE_SPECIES)
+	var flute: bool = _cell.y >= 2 and _generation() == RomRegistry.GEN1
+	if flute:
+		_screen.world().state.apply_changes(
+			{}, {}, {"items": {Gen1Layout.ITEM_POKE_FLUTE: 1}}
+		)
 	_screen.preview_battle_request()
 	_screen.settle_battle_transition()
 	_screen.advance_frames(frames)
 	for _press: int in (3 if caught else 0):
 		_screen.press_button(PokeButton.A)
 		_screen.advance_frames(frames)
-	if _cell.y == 1:
-		_open_battle_bag(frames)
+	if _cell.y >= 1:
+		_open_battle_bag(frames, flute)
 
 
 ## `BattleMenu`'s ITEM row. The appearance line and the send-out in front of it
 ## each owe a press, so A is spent until there is a cursor, and only then is it
-## moved one row down and used.
-func _open_battle_bag(frames: int) -> void:
+## moved one row down and used. [param flute] walks the list to the Poke Flute,
+## granted before the fight so the row is there to reach, and uses it.
+func _open_battle_bag(frames: int, flute: bool) -> void:
 	var host: Gen2BattleScreen = _screen.get("_battle_host")
 	for _press: int in BATTLE_MENU_WAIT:
 		if host == null or StringName(host.get("_menu_stage")) == &"main":
@@ -592,6 +601,15 @@ func _open_battle_bag(frames: int) -> void:
 	_screen.advance_frame()
 	_screen.press_button(PokeButton.A)
 	_screen.advance_frames(frames)
+	if not flute or host == null:
+		return
+	var rows: Array[int] = host.battle_pack_items()
+	for _down: int in maxi(rows.find(Gen1Layout.ITEM_POKE_FLUTE), 0):
+		_screen.press_button(PokeButton.DOWN)
+		_screen.advance_frame()
+	for _press: int in 2:  # The row, and then USE out of the box behind it.
+		_screen.press_button(PokeButton.A)
+		_screen.advance_frames(frames)
 
 
 ## `CatchTutorial`, played by `DudeAutoInputs` rather than by anybody. The first
@@ -1302,7 +1320,7 @@ func _stage_pack() -> void:
 ## no row for it at all.
 func _field_item_number() -> int:
 	if _generation() != RomRegistry.GEN1:
-		return int(FIELD_ITEMS[_kind])
+		return int(FIELD_ITEMS.get(_kind, 0))
 	return int(GEN1_FIELD_ITEMS.get(_kind, 0))
 
 

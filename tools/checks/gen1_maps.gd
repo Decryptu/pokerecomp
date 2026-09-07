@@ -228,6 +228,13 @@ const BIKE_ALLOWED_MAPS: int = 63
 ## `res BIT_ALWAYS_ON_BIKE, [hl]`.
 const BIKE_GATE_MAPS: Array[int] = [186, 190]
 
+## `Route12SnorlaxFluteCoords` and `Route16SnorlaxFluteCoords`: the four cells
+## around Route 12's Snorlax and the two either side of Route 16's.
+const SNORLAX_FLUTE_CELLS: Dictionary = {
+	23: [[10, 61], [9, 62], [11, 62], [10, 63]],
+	27: [[25, 10], [27, 10]],
+}
+
 ## Every `IsPlayerOnDungeonWarp` caller of the corpus, source map to its holes:
 ## the `dbmapcoord`, the map it drops onto and the `DungeonWarpData` tile it
 ## lands on. Victory Road 3F's first row is the boulder switch, which
@@ -273,6 +280,7 @@ func _one_game() -> void:
 	_hidden_events()
 	_dungeon_warps()
 	_bike()
+	_snorlax_flute()
 	_toggleables()
 	_wild_objects()
 	_palettes()
@@ -948,6 +956,21 @@ func _forced_ride_cells(map: Gen2WorldMap) -> void:
 				hits.append([x, y])
 	_r.check(hits == FORCED_RIDES.get(map.number, []),
 		"map %d forces a ride on %s." % [map.number, str(hits)])
+
+
+## Every cell `ItemUsePokeFlute` answers a Snorlax on, over the whole corpus.
+func _snorlax_flute() -> void:
+	var found: int = 0
+	for map: Gen2WorldMap in _maps.values():
+		var hits: Array = []
+		for y: int in map.collision_height:
+			for x: int in map.collision_width:
+				if not _r.data.gen1_snorlax_flute(map.number, Vector2i(x, y)).is_empty():
+					hits.append([x, y])
+		found += hits.size()
+		_r.check(hits == SNORLAX_FLUTE_CELLS.get(map.number, []),
+			"map %d wakes a Snorlax on %s." % [map.number, str(hits)])
+	_r.note("gen1 poke flute answers on %d cells" % found)
 
 
 ## Every object `ShowObject` and `HideObject` can name: one object a global

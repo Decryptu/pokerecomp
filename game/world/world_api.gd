@@ -8627,6 +8627,21 @@ func _gen1_check_escape() -> StringName:
 	return &""
 
 
+## `ItemUsePokeFlute`'s overworld half, which refuses nothing: only the box
+## changes. The flag a standing Snorlax sets is read by that map's own per-frame
+## script alone, so the walk-up line lands and the fight behind it does not.
+func poke_flute_request() -> Dictionary:
+	var request: Dictionary = {"ok": true, "woke": false}
+	if current_map == null:
+		return request
+	var flute: Dictionary = data.gen1_snorlax_flute(current_map.number, player_cell)
+	if flute.is_empty() or state.is_event_flag_active(int(flute["beat"])):
+		return request
+	state.set_event_flag(int(flute["fight"]), true)
+	request["woke"] = true
+	return request
+
+
 ## `EscapeRopeFunction`, which is `EscapeRopeOrDig` with the other type byte: the
 ## same `.CheckCanDig` and the same `.DoDig`, without a move to know. The type
 ## only picks which text the queued script says and whether `.FailDig` says
