@@ -15,6 +15,8 @@ const PAGE_1: int = Gen2TrainerCardPage.PAGE_1
 const PAGE_2: int = Gen2TrainerCardPage.PAGE_2
 const PAGE_3: int = Gen2TrainerCardPage.PAGE_3
 const PAGES: int = 3
+## `StartMenu_TrainerInfo`, which is one page and no badge pages behind it.
+const GEN1_PAGE: int = Gen2TrainerCardPage.GEN1_PAGE
 
 ## `NUM_JOHTO_BADGES`, which is also the number of Kanto badges and the length of
 ## `TrainerCard_JohtoBadgesOAM`, the one template both badge pages read.
@@ -56,6 +58,17 @@ static func page(
 	}
 
 
+## `DrawTrainerInfo`'s three lines and `DrawBadges`' eight bits.
+## `wObtainedBadges` is the Kanto half of the shared badge order, which is what
+## page 3 already reads.
+static func gen1_page(save: Gen2SaveData, world: Gen2WorldAPI) -> Dictionary:
+	var out: Dictionary = page(save, world, PAGE_3)
+	if out.is_empty():
+		return out
+	out["page"] = GEN1_PAGE
+	return out
+
+
 ## Which of the eight badges a badge page draws, in source badge order.
 ## `TrainerCard_Page2_3_OAMUpdate` walks one bit per badge and skips the clear
 ## ones, so this is that bit array rather than a count.
@@ -80,6 +93,11 @@ static func badges(state: Gen2WorldState, page_number: int, crystal: bool) -> Ar
 ## page 3 is unreachable on the cartridge and is unreachable here.
 static func next_page(page_number: int, button: int) -> Dictionary:
 	match page_number:
+		GEN1_PAGE:
+			## `WaitForTextScrollButtonPress`, which is the whole of the
+			## Generation 1 card's input: A or B and back to the start menu.
+			if button == PokeButton.A:
+				return {"exit": true}
 		PAGE_1:
 			if button == PokeButton.RIGHT or button == PokeButton.A:
 				return {"page": PAGE_2}

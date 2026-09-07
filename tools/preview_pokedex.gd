@@ -3,16 +3,23 @@ extends SceneTree
 ## Captures the Pokedex against a real imported cache.
 ##   Godot --headless --path . -s res://tools/preview_pokedex.gd -- \
 ##       crystal /tmp/dex.png [list|entry|option|search|results|unown] [presses]
+## A Generation 1 cartridge answers `list`, `side` and `entry` and none of the
+## other four: `ShowPokedexMenu` has no mode, search or Unown screen.
 ## The world behind it is a new game with every species seen and every second one
 ## caught, which puts a full listing, both row states and a real entry on screen at
 ## once. `f<n>` in [presses] spends n hardware frames, which catches the arrow blink.
 
 const NEW_BARK_GROUP: int = 24
 const NEW_BARK_MAP: int = 7
-## How far down the dex the preview's save has been filled.
+## PALLET_TOWN, which a Generation 1 map id names on its own.
+const PALLET_TOWN: int = 0
+## How far down the dex the preview's save has been filled, per generation.
 const SEEN: int = 251
+const GEN1_SEEN: int = 151
 ## The one species left out of it, so the listing has an unseen row to draw.
+## Generation 1 lists by dex number, so the hole has to be past the first page.
 const UNSEEN: int = 1
+const GEN1_UNSEEN: int = 4
 
 const BUTTONS: Dictionary = {
 	"u": PokeButton.UP, "d": PokeButton.DOWN,
@@ -37,6 +44,15 @@ const ROUTES: Dictionary = {
 	"unown": "sel,d,d,d,a",
 }
 
+## `HandlePokedexSideMenu` and `ShowPokedexDataInternal`, the two screens behind
+## Generation 1's listing.
+const GEN1_ROUTES: Dictionary = {
+	"list": "",
+	"unseen": "d,d,d",
+	"side": "a",
+	"entry": "a,a",
+}
+
 
 func _initialize() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
@@ -56,13 +72,16 @@ func _initialize() -> void:
 		quit(1)
 		return
 
+	var gen1: bool = data.generation == RomRegistry.GEN1
 	var screen: String = args[2] if args.size() > 2 else "list"
-	var tokens: String = String(ROUTES.get(screen, ""))
+	var routes: Dictionary = GEN1_ROUTES if gen1 else ROUTES
+	var tokens: String = String(routes.get(screen, ""))
 	if args.size() > 3:
 		tokens = "%s,%s" % [tokens, args[3]] if not tokens.is_empty() else args[3]
 
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(
-		data, NEW_BARK_GROUP, NEW_BARK_MAP, Vector2i.ZERO, _state()
+		data, 0 if gen1 else NEW_BARK_GROUP, PALLET_TOWN if gen1 else NEW_BARK_MAP,
+		Vector2i.ZERO, _state(gen1)
 	)
 	var host := Gen2PokedexScreen.new()
 	root.add_child(host)
@@ -98,10 +117,12 @@ func _initialize() -> void:
 ## OPTION screen offers its fourth row.
 ## [constant UNSEEN] is left out so one row is the not-seen one, which is the
 ## only row that draws `LoadQuestionMarkPic`'s picture.
-static func _state() -> Gen2WorldState:
+static func _state(gen1: bool = false) -> Gen2WorldState:
 	var state := Gen2WorldState.new({}, {}, {}, {})
-	for species: int in range(1, SEEN + 1):
-		if species == UNSEEN:
+	var last: int = GEN1_SEEN if gen1 else SEEN
+	var hole: int = GEN1_UNSEEN if gen1 else UNSEEN
+	for species: int in range(1, last + 1):
+		if species == hole:
 			continue
 		state.set_species_seen(species)
 		if species % 2 == 0:

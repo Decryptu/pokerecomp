@@ -4490,6 +4490,40 @@ class PreviewRepel extends RefCounted:
 ## Public screenshot driver for `_Option`, which is what the start menu's own
 ## OPTION row opens. One call, since the picture wanted is the settings screen
 ## and not the row that reaches it.
+## Public screenshot driver for `StartMenu_Pokedex`, whose row no map cell
+## reaches. A second call presses A on whatever the dex has up, which is how the
+## Generation 1 side menu and its entry page are reached.
+func preview_pokedex() -> void:
+	if _world == null or _data == null:
+		return
+	if _pokedex_host != null:
+		_pokedex_host.handle_button(PokeButton.A)
+		return
+	if _start_menu_host == null:
+		_injected_save = _embedded_party_save()
+		_open_start_menu()
+	if _start_menu_host == null:
+		return
+	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_POKEDEX):
+		return
+	_start_menu_host.handle_button(PokeButton.A)
+
+
+## Public screenshot driver for `StartMenu_TrainerInfo`, whose row no map cell
+## reaches.
+func preview_trainer_card() -> void:
+	if _world == null or _data == null or _trainer_card_host != null:
+		return
+	if _start_menu_host == null:
+		_injected_save = _embedded_party_save()
+		_open_start_menu()
+	if _start_menu_host == null:
+		return
+	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PLAYER):
+		return
+	_start_menu_host.handle_button(PokeButton.A)
+
+
 func preview_options() -> void:
 	if _world == null or _data == null:
 		return

@@ -18,6 +18,12 @@ func after_each() -> void:
 	RomCache.clear(Fixture.directory())
 
 
+## The Generation 1 cache is built once and kept: it is 151 species of JSON and
+## no test writes to it.
+func after_all() -> void:
+	RomCache.clear(Fixture.gen1_directory())
+
+
 func _state(seen: Array, caught: Array = []) -> Gen2WorldState:
 	var seen_map: Dictionary = {}
 	for species: int in seen:
@@ -740,3 +746,263 @@ func test_a_picture_fills_its_whole_box() -> void:
 		padded.get_pixel(side - 1, side - 1), Color.RED,
 		"a narrow pic is one column in and sits on the box's floor",
 	)
+
+
+## engine/menus/pokedex.asm: one listing over the dex numbers themselves, a side
+## menu of four rows, and a data page with two description pages behind it.
+
+var _gen1_data: GameData = null
+
+
+func _gen1() -> GameData:
+	if _gen1_data == null:
+		_gen1_data = Fixture.build_gen1()
+	return _gen1_data
+
+
+func _gen1_dex(seen: Array, caught: Array = []) -> Gen2Pokedex:
+	return Gen2Pokedex.open_gen1(_gen1(), _state(seen, caught))
+
+
+func _gen1_page() -> Gen2PokedexPage:
+	var page: Gen2PokedexPage = Gen2PokedexPage.from_data(_gen1())
+	assert_not_null(page, "the fixture carries LoadPokedexTilePatterns' sheets")
+	assert_true(page.ready())
+	return page
+
+
+## `.maxSeenPokemonLoop` walks the seen bits backwards, so `wDexMaxSeenMon` is
+## the highest number seen rather than a count of them.
+func test_the_gen1_listing_runs_to_the_highest_number_seen() -> void:
+	assert_eq(_gen1_dex([4, 40, 12]).listing_end, 40)
+	assert_eq(_gen1_dex([]).listing_end, 0)
+
+
+## `.printPokemonLoop` prints seven rows from the scroll offset whether or not
+## each has been seen, and `.dashedLine` stands in for a name that has not.
+func test_a_gen1_row_is_drawn_seen_or_not_and_carries_a_ball_once_caught() -> void:
+	var rows: Array = _gen1_dex([1, 2, 9], [2]).gen1_rows()
+	assert_eq(rows.size(), Gen2Pokedex.GEN1_LISTING_HEIGHT)
+	assert_eq(int(rows[0]["number"]), 1)
+	assert_eq(String(rows[0]["name"]), Fixture.species_name(1))
+	assert_false(bool(rows[0]["caught"]))
+	assert_true(bool(rows[1]["caught"]), "002 has been caught")
+	assert_eq(
+		String(rows[2]["name"]), Gen2Pokedex.GEN1_NOT_SEEN_NAME,
+		"003 has not been seen"
+	)
+
+
+## A listing shorter than a page draws only what it holds, which is `ld d, a`
+## behind `cp 7`, and `wMaxMenuItem` is one under it.
+func test_a_short_gen1_listing_draws_and_walks_only_its_own_rows() -> void:
+	var dex: Gen2Pokedex = _gen1_dex([3])
+	assert_eq(dex.gen1_rows().size(), 3)
+	assert_eq(dex.gen1_max_cursor(), 2)
+	for _step: int in 4:
+		dex.gen1_move_listing(PokeButton.DOWN)
+	assert_eq(dex.cursor, 2)
+	assert_eq(dex.scroll, 0, "nothing to scroll to")
+
+
+## `HandleMenuInput` moves the cursor inside the page and reports only the press
+## that ran off its end, which is where `.upPressed` and `.checkIfDownPressed`
+## scroll by one.
+func test_the_gen1_cursor_fills_the_page_before_the_listing_scrolls() -> void:
+	var dex: Gen2Pokedex = _gen1_dex([20])
+	for _step: int in Gen2Pokedex.GEN1_LISTING_HEIGHT - 1:
+		assert_true(dex.gen1_move_listing(PokeButton.DOWN))
+	assert_eq(dex.cursor, 6)
+	assert_eq(dex.scroll, 0)
+	assert_true(dex.gen1_move_listing(PokeButton.DOWN))
+	assert_eq(dex.cursor, 6)
+	assert_eq(dex.scroll, 1)
+	## The last row of the listing is `wDexMaxSeenMon`, so the scroll stops seven
+	## short of it.
+	for _step: int in 40:
+		dex.gen1_move_listing(PokeButton.DOWN)
+	assert_eq(dex.scroll, 20 - Gen2Pokedex.GEN1_LISTING_HEIGHT)
+	assert_eq(dex.selected_species(), 20)
+	for _step: int in 40:
+		dex.gen1_move_listing(PokeButton.UP)
+	assert_eq(dex.cursor, 0)
+	assert_eq(dex.scroll, 0)
+
+
+## `.checkIfRightPressed` adds seven and steps back to `wDexMaxSeenMon - 7` when
+## that runs past the end; `.checkIfLeftPressed` subtracts seven and lands on
+## zero on the borrow, with no length test of its own.
+func test_a_gen1_page_moves_seven_rows_and_clamps_to_either_end() -> void:
+	var dex: Gen2Pokedex = _gen1_dex([20])
+	assert_true(dex.gen1_move_listing(PokeButton.RIGHT))
+	assert_eq(dex.scroll, 7)
+	assert_true(dex.gen1_move_listing(PokeButton.RIGHT))
+	assert_eq(dex.scroll, 13, "20 - 7")
+	assert_false(dex.gen1_move_listing(PokeButton.RIGHT))
+	assert_true(dex.gen1_move_listing(PokeButton.LEFT))
+	assert_eq(dex.scroll, 6)
+	assert_true(dex.gen1_move_listing(PokeButton.LEFT))
+	assert_eq(dex.scroll, 0)
+	assert_false(dex.gen1_move_listing(PokeButton.LEFT))
+	assert_false(
+		_gen1_dex([5]).gen1_move_listing(PokeButton.RIGHT),
+		"a listing shorter than a page cannot page"
+	)
+
+
+## `HandlePokedexListMenu` draws the number one row above the name, the ball
+## between them, and `PlaceMenuCursor`'s own double-spaced arrow at column 0.
+func test_the_gen1_listing_stacks_its_number_over_its_name() -> void:
+	var dex: Gen2Pokedex = _gen1_dex([1, 2, 9], [2])
+	var map: PackedInt32Array = _gen1_page().gen1_list_map(
+		dex.gen1_rows(), dex.seen_count(), dex.caught_count(), 1
+	)
+	var top: int = Gen2PokedexPage.GEN1_LIST_TOP
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_LIST_NUMBER_X, top - 1),
+		Gen1Text.encode("0")[0], "001's leading zero"
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_LIST_NAME_X, top), Gen1Text.encode("M")[0]
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_LIST_BALL_X, top + Gen2PokedexPage.GEN1_ROW_STEP),
+		Gen2PokedexPage.GEN1_CAUGHT_BALL, "002 has been caught"
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_LIST_CURSOR_X, top + Gen2PokedexPage.GEN1_ROW_STEP),
+		Gen2PokedexPage.GEN1_CURSOR
+	)
+
+
+## `PlaceUnfilledArrowMenuCursor` opens `HandlePokedexSideMenu`, so the listing's
+## own arrow is hollow for as long as that menu is up.
+func test_the_gen1_side_menu_hollows_the_listing_arrow() -> void:
+	var dex: Gen2Pokedex = _gen1_dex([9])
+	var map: PackedInt32Array = _gen1_page().gen1_list_map(
+		dex.gen1_rows(), dex.seen_count(), dex.caught_count(), 0,
+		Gen2Pokedex.GEN1_SIDE_CRY
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_LIST_CURSOR_X, Gen2PokedexPage.GEN1_LIST_TOP),
+		Gen2PokedexPage.GEN1_UNFILLED_CURSOR
+	)
+	assert_eq(
+		_cell(
+			map, Gen2PokedexPage.GEN1_SIDE_CURSOR_X,
+			Gen2PokedexPage.GEN1_SIDE_MENU_AT.y + Gen2PokedexPage.GEN1_ROW_STEP
+		),
+		Gen2PokedexPage.GEN1_CURSOR
+	)
+
+
+## `ShowPokedexDataInternal` prints the height as feet and inches over
+## `HeightWeightText`'s own `?`s and the weight as five digits with `.next`'s
+## shuffle behind them, and the caught check gates both.
+func test_the_gen1_data_page_prints_its_two_measurements() -> void:
+	var page: Gen2PokedexPage = _gen1_page()
+	var entry: Dictionary = _gen1().dex_entry(4)
+	var map: PackedInt32Array = page.gen1_entry_map(
+		4, Fixture.species_name(4), entry, true, Gen2Pokedex.PAGE_1, true
+	)
+	var row: int = Gen2PokedexPage.GEN1_ENTRY_HEIGHT_AT.y
+	## The fixture's height is 104, which is 1'04".
+	assert_eq(_cell(map, Gen2PokedexPage.GEN1_FEET_AT + 1, row), Gen1Text.encode("1")[0])
+	assert_eq(_cell(map, Gen2PokedexPage.GEN1_FEET_AT + 2, row), Gen2PokedexPage.GEN1_FEET_MARK)
+	assert_eq(_cell(map, Gen2PokedexPage.GEN1_INCHES_AT, row), Gen1Text.encode("0")[0])
+	assert_eq(_cell(map, Gen2PokedexPage.GEN1_INCHES_AT + 1, row), Gen1Text.encode("4")[0])
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_INCHES_AT + 2, row),
+		Gen2PokedexPage.GEN1_INCHES_MARK
+	)
+	## 40 tenths of a pound, which reads "   4.0".
+	var weight_row: int = Gen2PokedexPage.GEN1_ENTRY_WEIGHT_AT.y
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_WEIGHT_POINT_AT - 1, weight_row),
+		Gen1Text.encode("4")[0]
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_WEIGHT_POINT_AT, weight_row),
+		Gen2PokedexPage.GEN1_DOT
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_WEIGHT_POINT_AT + 1, weight_row),
+		Gen1Text.encode("0")[0]
+	)
+
+
+## A weight under one pound has `.next` write the zero the printed field left
+## blank, which is what makes a stored 5 read "   0.5".
+func test_a_gen1_weight_under_a_pound_gets_its_own_leading_zero() -> void:
+	var map: PackedInt32Array = _gen1_page().gen1_entry_map(
+		1, "X", {"category": "CAT", "height": 100, "weight": 5, "pages": ["a"]},
+		true, Gen2Pokedex.PAGE_1, false
+	)
+	var row: int = Gen2PokedexPage.GEN1_ENTRY_WEIGHT_AT.y
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_WEIGHT_POINT_AT - 1, row),
+		Gen1Text.encode("0")[0]
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_WEIGHT_POINT_AT + 1, row),
+		Gen1Text.encode("5")[0]
+	)
+
+
+## `jp z, .waitForButtonPress` skips the height, the weight and the description
+## for a species that has been seen and not owned, so the template's own `?`s
+## stay on screen.
+func test_an_uncaught_gen1_entry_keeps_the_template_and_prints_no_description() -> void:
+	var page: Gen2PokedexPage = _gen1_page()
+	var map: PackedInt32Array = page.gen1_entry_map(
+		4, Fixture.species_name(4), _gen1().dex_entry(4), false, Gen2Pokedex.PAGE_1, false
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_FEET_AT + 1, Gen2PokedexPage.GEN1_ENTRY_HEIGHT_AT.y),
+		Gen1Text.encode("?")[0]
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_ENTRY_TEXT_AT.x, Gen2PokedexPage.GEN1_ENTRY_TEXT_AT.y),
+		Gen2PokedexPage.GEN1_SPACE
+	)
+	## The category and the number are printed in front of that check.
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_ENTRY_CATEGORY_AT.x, Gen2PokedexPage.GEN1_ENTRY_CATEGORY_AT.y),
+		Gen1Text.encode("C")[0]
+	)
+	assert_eq(
+		_cell(map, Gen2PokedexPage.GEN1_ENTRY_NUMBER_AT.x, Gen2PokedexPage.GEN1_ENTRY_NUMBER_AT.y),
+		Gen2PokedexPage.GEN1_NUMERO
+	)
+
+
+## `PageChar` shows its `▼` and waits, so the marker is on the first page and not
+## on the second.
+func test_only_the_first_gen1_description_page_carries_its_arrow() -> void:
+	var page: Gen2PokedexPage = _gen1_page()
+	var entry: Dictionary = _gen1().dex_entry(4)
+	var first: PackedInt32Array = page.gen1_entry_map(
+		4, "X", entry, true, Gen2Pokedex.PAGE_1, true
+	)
+	var second: PackedInt32Array = page.gen1_entry_map(
+		4, "X", entry, true, Gen2Pokedex.PAGE_2, false
+	)
+	var at: Vector2i = Gen2PokedexPage.GEN1_ENTRY_ARROW_AT
+	assert_eq(_cell(first, at.x, at.y), Gen2PokedexPage.GEN1_DOWN_ARROW)
+	assert_eq(_cell(second, at.x, at.y), Gen2PokedexPage.GEN1_SPACE)
+	assert_eq(
+		_cell(second, Gen2PokedexPage.GEN1_ENTRY_TEXT_AT.x, Gen2PokedexPage.GEN1_ENTRY_TEXT_AT.y),
+		Gen1Text.encode("p")[0], "the second page's own first letter"
+	)
+
+
+## `LoadUncompressedSpriteData` centres a pic narrower than the block where
+## `PadFrontpic` lays one blank column in front of it.
+func test_generation_one_centres_a_narrow_picture_in_its_box() -> void:
+	var side: int = Gen2PokedexPage.PIC_COLUMNS * Gen2PokedexPage.TILE
+	var art: Image = Image.create_empty(40, 40, false, Image.FORMAT_RGBA8)
+	art.fill(Color.BLUE)
+	var padded: Image = Gen2PokedexPage.pad_pic(art, Color.RED, RomRegistry.GEN1)
+	assert_eq(padded.get_pixel(0, side - 1), Color.RED, "one blank column each side")
+	assert_eq(padded.get_pixel(Gen2PokedexPage.TILE, side - 1), Color.BLUE)
+	assert_eq(padded.get_pixel(side - 1, side - 1), Color.RED)

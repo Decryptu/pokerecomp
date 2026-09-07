@@ -138,6 +138,9 @@ const CORNER_AT: Vector2i = Vector2i(18, 1)
 var font: Gen2Font = null
 var crystal: bool = true
 var female: bool = false
+## `StartMenu_TrainerInfo`'s card, which shares nothing with Crystal's three
+## pages but this class's tile window and its own compose.
+var gen1: bool = false
 ## The cartridge's VRAM window, as one indices strip per tile number.
 var _tiles: Dictionary = {}
 
@@ -154,7 +157,11 @@ static func from_data(
 	out.font = glyphs
 	out.crystal = is_crystal
 	out.female = is_female
-	out._load_vram(data, is_female)
+	out.gen1 = data.generation == RomRegistry.GEN1
+	if out.gen1:
+		out._load_gen1_vram(data)
+	else:
+		out._load_vram(data, is_female)
 	return out
 
 
@@ -180,12 +187,17 @@ func load_page_tiles(data: GameData, page: int) -> void:
 	_load_sheet(data, sheet, STATUS_FIRST_TILE, STATUS_TILES)
 
 
-func _load_sheet(data: GameData, name: String, first_tile: int, count: int) -> void:
+## [param from] takes a run out of the middle of a sheet, which only the
+## Generation 1 card's two scattered copies need.
+func _load_sheet(
+	data: GameData, name: String, first_tile: int, count: int, from: int = 0
+) -> void:
 	var indices: PackedByteArray = data.tile_indices(name)
 	if indices.is_empty():
 		return
 	var width: int = indices.size() / TILE
-	for tile: int in count:
+	for offset: int in count:
+		var tile: int = from + offset
 		if (tile + 1) * TILE > width:
 			break
 		var cell := PackedByteArray()
@@ -193,12 +205,14 @@ func _load_sheet(data: GameData, name: String, first_tile: int, count: int) -> v
 		for y: int in TILE:
 			for x: int in TILE:
 				cell[y * TILE + x] = indices[y * width + tile * TILE + x]
-		_tiles[first_tile + tile] = cell
+		_tiles[first_tile + offset] = cell
 
 
 ## The whole 160x144 page as palette indices. [param page] is a `TRAINERCARD*`
 ## page number and [param page] one row of [method Gen2TrainerCard.page].
 func draw(page: Dictionary) -> PackedByteArray:
+	if gen1:
+		return _draw_gen1(page)
 	var map: PackedInt32Array = _blank_map()
 	_draw_border(map, Vector2i.ZERO, TOP_BORDER_ROWS)
 	_draw_border(map, BOTTOM_BORDER_AT, BOTTOM_BORDER_ROWS)
@@ -409,3 +423,258 @@ func _blit(
 	for y: int in TILE:
 		for x: int in TILE:
 			indices[(at.y + y) * width + at.x + x] = cell[y * TILE + x]
+
+
+## `StartMenu_TrainerInfo`'s card (engine/menus/start_sub_menus.asm): one page,
+## `DrawTrainerInfo`'s two boxes and three lines with `DrawBadges`' eight cells.
+
+const GEN1_PAGE: int = 3
+
+## `DisplayPicCenteredOrUpperRight`'s corner and the 7x7 `CopyUncompressedPicToHL`
+## writes from it. Two columns run off the right onto the next row, which is the
+## spill `TrainerInfo_DrawVerticalLine` blanks.
+const GEN1_PIC_AT := Vector2i(15, 1)
+const GEN1_PIC_TILES: int = 7
+## `ld hl, vChars2 tile $07 / ld de, vChars2 tile $00 / ld bc, $1c tiles`: the
+## picture walks one column forward in VRAM, so a tile number draws its neighbour.
+const GEN1_PIC_SHIFT: int = 0x07
+const GEN1_PIC_SHIFTED: int = 0x1C
+const GEN1_SPILL_AT := Vector2i(0, 2)
+const GEN1_SPILL_COLUMNS: int = 2
+const GEN1_SPILL_ROWS: int = 8
+
+## `TrainerInfo_DrawTextBox`'s eight tiles and its two boxes, six rows inside.
+const GEN1_BOX_TOP_LEFT: int = 0x79
+const GEN1_BOX_TOP: int = 0x7A
+const GEN1_BOX_TOP_RIGHT: int = 0x7B
+const GEN1_BOX_LEFT: int = 0x7C
+const GEN1_BOX_RIGHT: int = 0x78
+const GEN1_BOX_BOTTOM_LEFT: int = 0x7D
+const GEN1_BOX_BOTTOM: int = 0x77
+const GEN1_BOX_BOTTOM_RIGHT: int = 0x7E
+const GEN1_BOX_ROWS: int = 6
+const GEN1_TOP_BOX_AT := Vector2i(0, 0)
+const GEN1_TOP_BOX_WIDTH: int = 18
+const GEN1_BOTTOM_BOX_AT := Vector2i(1, 10)
+const GEN1_BOTTOM_BOX_WIDTH: int = 16
+## The two columns beside the lower box, filled with the card's own background.
+const GEN1_SIDE_COLUMNS: Array[int] = [0, COLUMNS - 1]
+const GEN1_SIDE_AT: int = 10
+const GEN1_SIDE_ROWS: int = 8
+
+## `TrainerInfo_NameMoneyTimeText`, whose `next` drops two rows.
+const GEN1_LABELS: Array[String] = ["NAME/", "MONEY/", "TIME/"]
+const GEN1_LABELS_AT := Vector2i(2, 2)
+const GEN1_ROW_STEP: int = 2
+const GEN1_NAME_AT := Vector2i(7, 2)
+const GEN1_MONEY_AT := Vector2i(8, 4)
+const GEN1_TIME_AT := Vector2i(9, 6)
+## `TrainerInfo_BadgesText`'s `db $76,"BADGES",$76`.
+const GEN1_BADGES_LABEL: String = "BADGES"
+const GEN1_BADGES_LABEL_AT := Vector2i(6, 9)
+
+## `DrawBadges`' two `hlcoord`s and four cells each, four columns apart: a number
+## tile, two name tiles beside it and a 2x2 face under those.
+const GEN1_BADGE_ROWS: Array[Vector2i] = [Vector2i(2, 11), Vector2i(2, 14)]
+const GEN1_BADGES_PER_ROW: int = 4
+const GEN1_BADGE_STRIDE: int = 4
+## `.FaceBadgeTiles`, and the `add 4` that swaps a leader's face for the badge.
+const GEN1_FACE_TILES: Array[int] = [
+	0x20, 0x28, 0x30, 0x38, 0x40, 0x48, 0x50, 0x58,
+]
+
+## `BlkPacket_TrainerCard`'s ten blocks as (x1, y1, x2, y2, palette), verbatim.
+## Every other cell takes palette 0. Three of them are the Rainbow badge and
+## none of the three is on it: the cell is (15,12) to (16,13) and the packet
+## colours (16,11), (14,13) and (16,13) instead, which is the cartridge's.
+const GEN1_ATTRIBUTE_BLOCKS: Array[Array] = [
+	[3, 12, 4, 13, 0], [7, 12, 8, 13, 1], [11, 12, 12, 13, 3],
+	[16, 11, 17, 12, 2], [14, 13, 15, 14, 1], [16, 13, 17, 14, 3],
+	[3, 15, 4, 16, 2], [7, 15, 8, 16, 3], [11, 15, 12, 16, 2],
+	[15, 15, 16, 16, 1],
+]
+## `PalPacket_TrainerCard`'s own `SuperPalettes` rows, in packet order.
+const GEN1_PALETTES: Array[int] = [
+	Gen1Layout.PAL_MEWMON, Gen1Layout.PAL_BADGE,
+	Gen1Layout.PAL_REDMON, Gen1Layout.PAL_YELLOWMON,
+]
+
+
+## `DrawTrainerInfo` in write order: the picture, the spill blanked over it, both
+## boxes, the labels, then `DrawBadges`.
+func _draw_gen1(page: Dictionary) -> PackedByteArray:
+	return _compose(gen1_map(page))
+
+
+## The card as tile numbers, which is what a sweep reads: the pixels behind them
+## are the four sheets' own.
+func gen1_map(page: Dictionary) -> PackedInt32Array:
+	var map: PackedInt32Array = _blank_map()
+	for row: int in GEN1_PIC_TILES:
+		for column: int in GEN1_PIC_TILES:
+			_put_wrapped(
+				map, GEN1_PIC_AT.y * COLUMNS + GEN1_PIC_AT.x + column * 1 + row * COLUMNS,
+				column * GEN1_PIC_TILES + row
+			)
+	for column: int in GEN1_SPILL_COLUMNS:
+		for row: int in GEN1_SPILL_ROWS:
+			_put(map, GEN1_SPILL_AT + Vector2i(column, row), BLANK_TILE)
+	_gen1_box(map, GEN1_TOP_BOX_AT, GEN1_TOP_BOX_WIDTH)
+	_gen1_box(map, GEN1_BOTTOM_BOX_AT, GEN1_BOTTOM_BOX_WIDTH)
+	for column: int in GEN1_SIDE_COLUMNS:
+		for row: int in GEN1_SIDE_ROWS:
+			_put(map, Vector2i(column, GEN1_SIDE_AT + row), Gen1Layout.TRAINER_CARD_FILL_CODE)
+	_put(map, GEN1_BADGES_LABEL_AT, Gen1Layout.TRAINER_CARD_CIRCLE_CODE)
+	_gen1_text(map, GEN1_BADGES_LABEL, GEN1_BADGES_LABEL_AT + Vector2i(1, 0))
+	_put(
+		map, GEN1_BADGES_LABEL_AT + Vector2i(GEN1_BADGES_LABEL.length() + 1, 0),
+		Gen1Layout.TRAINER_CARD_CIRCLE_CODE
+	)
+	for index: int in GEN1_LABELS.size():
+		_gen1_text(
+			map, GEN1_LABELS[index], GEN1_LABELS_AT + Vector2i(0, index * GEN1_ROW_STEP)
+		)
+	_gen1_text(map, String(page.get("player_name", "")), GEN1_NAME_AT)
+	## `PrintBCDNumber` with LEFT_ALIGN and the money sign, so the `¥` sits
+	## against the first digit and nothing is padded.
+	_gen1_text(map, Gen2MartPage.money_string(int(page.get("money", 0)), true), GEN1_MONEY_AT)
+	_gen1_time(map, page)
+	_draw_gen1_badges(map, page.get("badges", []) as Array)
+	return map
+
+
+## `PrintNumber` with LEFT_ALIGN, the colon the card copies in, then the minutes.
+func _gen1_time(map: PackedInt32Array, page: Dictionary) -> void:
+	var hours: String = String(page.get("hours", "")).strip_edges()
+	_gen1_text(map, hours, GEN1_TIME_AT)
+	var at: Vector2i = GEN1_TIME_AT + Vector2i(hours.length(), 0)
+	_put(map, at, Gen1Layout.TRAINER_CARD_COLON_CODE)
+	_gen1_text(map, String(page.get("minutes", "")), at + Vector2i(1, 0))
+
+
+## `DrawBadges`: both counters step whether or not their tile is drawn, and an
+## owned badge shows the badge rather than the leader's face and no name.
+func _draw_gen1_badges(map: PackedInt32Array, badges: Array) -> void:
+	var number: int = Gen1Layout.BADGE_NUMBER_CODE
+	var name_tile: int = Gen1Layout.TRAINER_CARD_NAME_CODE
+	for row: int in GEN1_BADGE_ROWS.size():
+		for column: int in GEN1_BADGES_PER_ROW:
+			var index: int = row * GEN1_BADGES_PER_ROW + column
+			var at: Vector2i = GEN1_BADGE_ROWS[row] \
+				+ Vector2i(column * GEN1_BADGE_STRIDE, 0)
+			_put(map, at, number)
+			number += 1
+			var owned: bool = index < badges.size() and bool(badges[index])
+			if not owned:
+				_put(map, at + Vector2i(1, 0), name_tile)
+				_put(map, at + Vector2i(2, 0), name_tile + 1)
+			name_tile += 2
+			var face: int = GEN1_FACE_TILES[index] \
+				+ (Gen1Layout.BADGE_FACE_BADGE_AT if owned else 0)
+			for cell: int in 4:
+				@warning_ignore("integer_division")
+				_put(map, at + Vector2i(1 + cell % 2, 1 + cell / 2), face + cell)
+
+
+## `TrainerInfo_DrawTextBox`, whose width is the inside.
+func _gen1_box(map: PackedInt32Array, at: Vector2i, width: int) -> void:
+	_gen1_edge(map, at, width, GEN1_BOX_TOP_LEFT, GEN1_BOX_TOP, GEN1_BOX_TOP_RIGHT)
+	for row: int in GEN1_BOX_ROWS:
+		_put(map, Vector2i(at.x, at.y + 1 + row), GEN1_BOX_LEFT)
+		_put(map, Vector2i(at.x + width + 1, at.y + 1 + row), GEN1_BOX_RIGHT)
+	_gen1_edge(
+		map, Vector2i(at.x, at.y + GEN1_BOX_ROWS + 1), width,
+		GEN1_BOX_BOTTOM_LEFT, GEN1_BOX_BOTTOM, GEN1_BOX_BOTTOM_RIGHT
+	)
+
+
+func _gen1_edge(
+	map: PackedInt32Array, at: Vector2i, width: int, left: int, middle: int, right: int
+) -> void:
+	_put(map, at, left)
+	for column: int in width:
+		_put(map, at + Vector2i(1 + column, 0), middle)
+	_put(map, at + Vector2i(width + 1, 0), right)
+
+
+## `_CGB_TrainerCard`'s counterpart: `BlkPacket_TrainerCard`'s ten blocks over
+## palette 0.
+func gen1_attributes() -> PackedInt32Array:
+	var map := PackedInt32Array()
+	map.resize(COLUMNS * ROWS)
+	for block: Array in GEN1_ATTRIBUTE_BLOCKS:
+		for y: int in range(int(block[1]), int(block[3]) + 1):
+			for x: int in range(int(block[0]), int(block[2]) + 1):
+				if x < COLUMNS and y < ROWS:
+					map[y * COLUMNS + x] = int(block[4])
+	return map
+
+
+## `hlcoord 15, 1`'s own write, which runs past the right edge onto the next row.
+func _put_wrapped(map: PackedInt32Array, cell: int, tile: int) -> void:
+	if cell < 0 or cell >= map.size():
+		return
+	map[cell] = tile
+
+
+func _gen1_text(map: PackedInt32Array, text: String, at: Vector2i) -> void:
+	var codes: PackedByteArray = Gen1Text.encode(text)
+	for index: int in codes.size():
+		_put(map, at + Vector2i(index, 0), codes[index])
+
+
+## The card's own VRAM, in copy order: the picture at $00, the leaders' faces over
+## its tail, the erased names, the box pieces, and the two tiles it drops into the
+## font's window.
+func _load_gen1_vram(data: GameData) -> void:
+	_load_gen1_pic(data)
+	_load_sheet(data, "badge_faces", Gen1Layout.BADGE_FACE_CODE, Gen1Layout.BADGE_FACE_TILES)
+	_load_sheet(
+		data, "trainer_card_names", Gen1Layout.TRAINER_CARD_NAME_CODE,
+		Gen1Layout.TRAINER_CARD_NAME_TILES
+	)
+	_load_sheet(
+		data, "trainer_card_box", Gen1Layout.TRAINER_CARD_BOX_CODE,
+		Gen1Layout.TRAINER_CARD_BOX_TILES - 1
+	)
+	_load_sheet(
+		data, "badge_numbers", Gen1Layout.BADGE_NUMBER_CODE, Gen1Layout.BADGE_NUMBER_TILES
+	)
+	_load_sheet(
+		data, "font_extra", Gen1Layout.TRAINER_CARD_COLON_CODE, 1,
+		Gen1Layout.TRAINER_CARD_COLON_TILE
+	)
+	_load_sheet(
+		data, "trainer_card_box", Gen1Layout.TRAINER_CARD_FILL_CODE, 1,
+		Gen1Layout.TRAINER_CARD_BOX_TILES - 1
+	)
+
+
+## `RedPicFront` cut into the 7x7 block column by column, then walked forward by
+## [constant GEN1_PIC_SHIFT].
+func _load_gen1_pic(data: GameData) -> void:
+	var record: Dictionary = data.player_frontpic()
+	if record.is_empty():
+		return
+	var cell: Dictionary = Gen2PicImage.atlas_cell(
+		data.atlas_indices("player_front"), data.atlas("player_front"), record
+	)
+	if cell.is_empty():
+		return
+	var indices: PackedByteArray = cell["indices"]
+	var width: int = int(cell["width"])
+	var tiles: Array = []
+	for column: int in GEN1_PIC_TILES:
+		for row: int in GEN1_PIC_TILES:
+			var block := PackedByteArray()
+			block.resize(TILE * TILE)
+			for y: int in TILE:
+				for x: int in TILE:
+					block[y * TILE + x] = indices[
+						(row * TILE + y) * width + column * TILE + x
+					]
+			tiles.append(block)
+	for tile: int in tiles.size():
+		var from: int = tile + GEN1_PIC_SHIFT if tile < GEN1_PIC_SHIFTED else tile
+		if from < tiles.size():
+			_tiles[tile] = tiles[from]

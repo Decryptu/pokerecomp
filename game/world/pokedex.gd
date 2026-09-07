@@ -464,7 +464,8 @@ func step_entry(button: int) -> bool:
 ## The name, the category and the number are printed whether or not the species
 ## has been caught; the caught check sits after them and gates the measurements
 ## and the description. A zero height or weight is left blank rather than printed
-## as a zero, which is `.skip_height` and `.skip_weight`.
+## as a zero, which is `.skip_height` and `.skip_weight`. Generation 1 has
+## neither guard and prints both whatever they hold.
 func entry() -> Dictionary:
 	var species: int = selected_species()
 	var dex: Dictionary = _data.dex_entry(species) if _data != null else {}
@@ -478,8 +479,8 @@ func entry() -> Dictionary:
 		"number": "%03d" % species,
 		"category": String(dex.get("category", "")),
 		"caught": caught,
-		"height": height_text(height) if caught and height != 0 else "",
-		"weight": weight_text(weight) if caught and weight != 0 else "",
+		"height": height_text(height) if caught and (gen1 or height != 0) else "",
+		"weight": weight_text(weight) if caught and (gen1 or weight != 0) else "",
 		"page": page,
 		"text": pages[page] if caught and page < pages.size() else "",
 	}
@@ -684,3 +685,139 @@ func _species_name(species: int) -> String:
 	if _data == null:
 		return ""
 	return String(_data.species(species).get("name", ""))
+
+
+## `ShowPokedexMenu` (engine/menus/pokedex.asm) lists the dex numbers themselves
+## rather than an order table, so a species and its position are one value.
+## `wDexMaxSeenMon` is [member listing_end], the last row Generation 2 keeps
+## there too.
+
+## `ld d, 7`, the rows `.printPokemonLoop` draws, and the `ld a, 6` behind them.
+const GEN1_LISTING_HEIGHT: int = 7
+## `.dashedLine`, drawn in place of the name of a species not yet seen.
+const GEN1_NOT_SEEN_NAME: String = "----------"
+## `PokedexMenuItemsText`, and the `b` each row leaves `HandlePokedexSideMenu`
+## with: DATA and AREA redraw the listing, QUIT closes the dex, and CRY stays.
+const GEN1_SIDE_ROWS: Array[String] = ["DATA", "CRY", "AREA", "QUIT"]
+const GEN1_SIDE_DATA: int = 0
+const GEN1_SIDE_CRY: int = 1
+const GEN1_SIDE_AREA: int = 2
+const GEN1_SIDE_QUIT: int = 3
+
+## Set by [method open_gen1]. Every listing rule below this line is that
+## generation's own, and no Generation 2 screen reads it.
+var gen1: bool = false
+
+
+## `ShowPokedexMenu`'s own open: the scroll and the cursor start at zero and the
+## listing runs to the highest dex number seen.
+static func open_gen1(data: GameData, state: Gen2WorldState) -> Gen2Pokedex:
+	var dex := Gen2Pokedex.new()
+	dex._data = data
+	dex._state = state
+	dex.gen1 = true
+	dex.listing_height = GEN1_LISTING_HEIGHT
+	dex._order = PackedInt32Array()
+	dex._order.resize(Gen1Layout.SPECIES_COUNT)
+	for index: int in Gen1Layout.SPECIES_COUNT:
+		dex._order[index] = index + 1
+	dex.find_gen1_max_seen()
+	return dex
+
+
+## `.maxSeenPokemonLoop`, `wPokedexSeen` walked backwards for the highest bit
+## set. Nothing seen answers zero, where the source runs off the front of the
+## field; the dex is behind `EVENT_GOT_POKEDEX` and never opens empty.
+func find_gen1_max_seen() -> void:
+	listing_end = 0
+	for number: int in range(_order.size(), 0, -1):
+		if _has_seen(number):
+			listing_end = number
+			break
+
+
+## `wMaxMenuItem`: six, or one under the listing when it is shorter than a page.
+func gen1_max_cursor() -> int:
+	return mini(GEN1_LISTING_HEIGHT, listing_end) - 1
+
+
+## `.printPokemonLoop`'s rows: seven, or the whole listing when it is shorter.
+func gen1_rows() -> Array:
+	var out: Array = []
+	for index: int in mini(GEN1_LISTING_HEIGHT, listing_end):
+		var number: int = scroll + index + 1
+		var seen: bool = _has_seen(number)
+		out.append({
+			"number": number,
+			"name": _species_name(number) if seen else GEN1_NOT_SEEN_NAME,
+			"seen": seen,
+			"caught": _has_caught(number),
+			"selected": index == cursor,
+		})
+	return out
+
+
+## `HandleMenuInput` inside `HandlePokedexListMenu`: the shared menu moves the
+## cursor inside the page and reports only the presses that ran off its ends, and
+## the listing scrolls on those. Answers whether anything moved.
+func gen1_move_listing(button: int) -> bool:
+	match button:
+		PokeButton.UP:
+			return _gen1_up()
+		PokeButton.DOWN:
+			return _gen1_down()
+		PokeButton.LEFT:
+			return _gen1_page_up()
+		PokeButton.RIGHT:
+			return _gen1_page_down()
+	return false
+
+
+func _gen1_up() -> bool:
+	if cursor > 0:
+		cursor -= 1
+		return true
+	if scroll == 0:
+		return false
+	scroll -= 1
+	return true
+
+
+## `.checkIfDownPressed`, whose scroll stops at `wDexMaxSeenMon - 7`.
+func _gen1_down() -> bool:
+	if cursor < gen1_max_cursor():
+		cursor += 1
+		return true
+	if listing_end < GEN1_LISTING_HEIGHT or scroll >= listing_end - GEN1_LISTING_HEIGHT:
+		return false
+	scroll += 1
+	return true
+
+
+## `.checkIfLeftPressed`: seven rows up, the borrow landing it on zero. It has no
+## length test, so a listing shorter than a page pages too.
+func _gen1_page_up() -> bool:
+	if scroll == 0:
+		return false
+	scroll = maxi(scroll - GEN1_LISTING_HEIGHT, 0)
+	return true
+
+
+## `.checkIfRightPressed`: seven rows down, clamped to `wDexMaxSeenMon - 6` less
+## one, which is the same landing the down press stops at.
+func _gen1_page_down() -> bool:
+	if listing_end < GEN1_LISTING_HEIGHT:
+		return false
+	var last: int = listing_end - GEN1_LISTING_HEIGHT
+	var next: int = mini(scroll + GEN1_LISTING_HEIGHT, last)
+	if next == scroll:
+		return false
+	scroll = next
+	return true
+
+
+## `ShowPokedexData`, which is entered with a dex number in `wPokedexNum` and no
+## listing behind it: the cursor is put on that number outright.
+func gen1_show(number: int) -> void:
+	scroll = maxi(number - 1, 0)
+	cursor = 0

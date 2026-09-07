@@ -103,6 +103,13 @@ const PAL_GRAYMON: int = 0x19
 ## `PalPacket_PartyMenu`'s first row, which `BlkPacket_PartyMenu` gives the two
 ## columns the party menu's icons stand in and nothing else.
 const PAL_MEWMON: int = 0x10
+## `PalPacket_Pokedex`, which is what `BlkPacket_Pokedex` gives every cell of the
+## dex outside the picture box.
+const PAL_BROWNMON: int = 0x15
+## `PalPacket_TrainerCard`'s four, in its own order.
+const PAL_REDMON: int = 0x12
+const PAL_YELLOWMON: int = 0x18
+const PAL_BADGE: int = 0x22
 const PAL_CAVE: int = 0x23
 ## The three rows `GetHealthBarColor` picks between, under the names
 ## [method GameData.bar_palette] takes them by. Generation 1 has no exp bar.
@@ -643,6 +650,37 @@ const DEX_RATING_STEP: int = 10
 ## `PokeballTileGraphics`' four; only the ball itself is drawn here.
 const BALL_TILES: int = 4
 const DEX_COMPLETION_TEXT_AT: int = -TEXT_FAR_STUB_BYTES
+
+## `LoadPokedexTilePatterns`: `PokedexTileGraphics` at `vChars2 tile $60`, over
+## the text box sheet, with `PokeballTileGraphics`' first tile at $72 behind it.
+const POKEDEX_TILES: int = 18
+const POKEDEX_FIRST_CODE: int = 0x60
+const POKEDEX_BALL_CODE: int = 0x72
+
+## `DrawTrainerInfo`'s own four sheets and where each lands. `BlankLeaderNames`
+## runs straight on into `CircleTile`, which is why its `$17` is one longer than
+## the file: `$76` is the circle "●BADGES●" is written with, and the sixteen
+## under it are the leader names the international ROMs erased.
+const TRAINER_CARD_BOX_TILES: int = 9
+const TRAINER_CARD_BOX_CODE: int = 0x77
+## The ninth tile, which goes to `vChars1 tile $57` rather than beside the
+## other eight, and is the card's background.
+const TRAINER_CARD_FILL_CODE: int = 0xD7
+const TRAINER_CARD_NAME_TILES: int = 23
+const TRAINER_CARD_NAME_CODE: int = 0x60
+const TRAINER_CARD_CIRCLE_CODE: int = 0x76
+const BADGE_NUMBER_TILES: int = 8
+const BADGE_NUMBER_CODE: int = 0xD8
+## `GymLeaderFaceAndBadgeTileGraphics`: eight tiles a leader, the face first and
+## its badge four on (`DrawBadges`' own `add 4`).
+const BADGE_FACE_TILES: int = 64
+const BADGE_FACE_CODE: int = 0x20
+const BADGE_FACE_STRIDE: int = 8
+const BADGE_FACE_BADGE_AT: int = 4
+## `TextBoxGraphics` tile 13, which the card copies on its own to `vChars1 tile
+## $56` for the play timer's colon.
+const TRAINER_CARD_COLON_TILE: int = 13
+const TRAINER_CARD_COLON_CODE: int = 0xD6
 
 ## `NUM_BOXES` and `MONS_PER_BOX`, which `BOX_NUM_MASK` bounds `wCurrentBoxNum`
 ## to.
@@ -1258,11 +1296,17 @@ const RED_BLUE: Dictionary = {
 	"prize_mon_levels": 0x5298A,
 	"font": 0x11A80,
 	"text_box": 0x12288,
+	"pokedex_tiles": 0x12488,
 	"battle_font": 0x11EA0,
 	"battle_hud_1": 0x12080,
 	"battle_hud_2": 0x12098,
 	"pic_player_back": 0x33E0A,
 	"pic_old_man_back": 0x33E9A,
+	"pic_player_front": 0x12EDE,
+	"trainer_card_box": 0x2FB98,
+	"trainer_card_names": 0x2FC28,
+	"badge_numbers": 0x2FD98,
+	"badge_faces": 0x0EA9E,
 	"map_headers": 0x001AE,
 	"map_header_banks": 0x0C23D,
 	"map_songs": 0x0C04D,
@@ -1440,12 +1484,18 @@ const YELLOW: Dictionary = {
 	"prize_mon_levels": 0x528EA,
 	"font": 0x10600,
 	"text_box": 0x10E18,
+	"pokedex_tiles": 0x11018,
 	"battle_font": 0x10A20,
 	"battle_hud_1": 0x10C00,
 	"battle_hud_2": 0x10C18,
 	## Yellow moved both back pics out of "Pics 4" and into their own bank.
 	"pic_player_back": 0xF43B1,
 	"pic_old_man_back": 0xF4441,
+	"pic_player_front": 0x11A97,
+	"trainer_card_box": 0xF5C24,
+	"trainer_card_names": 0xF5CB4,
+	"badge_numbers": 0xF5E24,
+	"badge_faces": 0x0E91B,
 	"map_headers": 0xFC1F2,
 	"map_header_banks": 0xFC3E4,
 	"map_songs": 0xFC000,

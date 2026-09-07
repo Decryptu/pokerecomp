@@ -71,8 +71,13 @@ func open(data: GameData, world: Gen2WorldAPI, save: Gen2SaveData) -> bool:
 	if _page_renderer == null or not _page_renderer.ready():
 		return false
 	if is_inside_tree() and _background != null:
-		_show_page(Gen2TrainerCard.PAGE_1)
+		_show_page(_first_page())
 	return true
+
+
+## `StartMenu_TrainerInfo` has one page and no jumptable behind it.
+func _first_page() -> int:
+	return Gen2TrainerCard.GEN1_PAGE if _page_renderer.gen1 else Gen2TrainerCard.PAGE_1
 
 
 func _ready() -> void:
@@ -80,7 +85,7 @@ func _ready() -> void:
 	size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_build()
 	if _page_renderer != null:
-		_show_page(Gen2TrainerCard.PAGE_1)
+		_show_page(_first_page())
 
 
 func current_page() -> int:
@@ -103,6 +108,9 @@ func handle_button(button: int) -> bool:
 ## One hardware frame: the badges turn every eight and the colon flips every
 ## thirty-two, both off the counter the source reads rather than off a timer.
 func advance_frame() -> void:
+	## Nothing on `DrawTrainerInfo`'s card moves: its badges are background tiles.
+	if _page_renderer != null and _page_renderer.gen1:
+		return
 	_frames += 1
 	if _frames % BADGE_FRAMES == 0 and _page != Gen2TrainerCard.PAGE_1:
 		_refresh_badges()
@@ -127,7 +135,8 @@ func _build() -> void:
 func _show_page(page: int) -> void:
 	_page = page
 	_frames = 0
-	_page_renderer.load_page_tiles(_data, page)
+	if not _page_renderer.gen1:
+		_page_renderer.load_page_tiles(_data, page)
 	_refresh_page()
 	_refresh_badges()
 
@@ -136,11 +145,15 @@ func _refresh_page() -> void:
 	if _background == null or _page_renderer == null:
 		return
 	var separator: bool = int(_frames / SEPARATOR_FRAMES) % 2 == 0
-	var page: Dictionary = Gen2TrainerCard.page(_save, _world, _page, separator)
+	var page: Dictionary = Gen2TrainerCard.gen1_page(_save, _world) \
+		if _page_renderer.gen1 \
+		else Gen2TrainerCard.page(_save, _world, _page, separator)
 	var indices: PackedByteArray = _page_renderer.draw(page)
-	Gen2PicImage.show(_background,
-		_image_from(indices, _page_renderer.attributes())
-	)
+	Gen2PicImage.show(_background, _image_from(
+		indices,
+		_page_renderer.gen1_attributes() if _page_renderer.gen1
+			else _page_renderer.attributes()
+	))
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 
 
@@ -149,8 +162,13 @@ func _refresh_page() -> void:
 ## is eight palettes at once.
 func _image_from(indices: PackedByteArray, attributes: PackedInt32Array) -> Image:
 	var palettes: Array = []
-	for slot: int in Gen2Layout.CARD_PALETTE_CLASSES.size():
-		palettes.append(_data.card_palette(slot))
+	if _page_renderer.gen1:
+		## `PalPacket_TrainerCard`'s four rows, where Crystal builds eight.
+		for row: int in Gen2TrainerCardPage.GEN1_PALETTES:
+			palettes.append(_data.world_palette(row))
+	else:
+		for slot: int in Gen2Layout.CARD_PALETTE_CLASSES.size():
+			palettes.append(_data.card_palette(slot))
 	return Gen2PicImage.from_attributes(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, attributes,
 		Gen2TrainerCardPage.COLUMNS, palettes
@@ -164,7 +182,9 @@ func _refresh_badges() -> void:
 	for node: Node in _badges:
 		Gen2Screen.drop(node)
 	_badges = []
-	if _page == Gen2TrainerCard.PAGE_1 or _data == null:
+	if _page != Gen2TrainerCard.PAGE_2 and _page != Gen2TrainerCard.PAGE_3:
+		return
+	if _data == null:
 		return
 	var set_badges: Array = Gen2TrainerCard.badges(
 		_world.state if _world != null else null,

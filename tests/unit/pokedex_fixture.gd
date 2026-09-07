@@ -131,3 +131,82 @@ static func _tiles(path: String) -> Dictionary:
 			"bits": 1,
 		}
 	return sheets
+
+
+const GEN1_GAME_ID: StringName = &"pokedexfixturegen1"
+## `PAL_BROWNMON`'s own four colours (data/sgb/sgb_palettes.asm), so a page test
+## reads what `PalPacket_Pokedex` actually draws through.
+const GEN1_BROWNMON: Array = [0x7FBF, 0x3E9C, 0x25D5, 0x0843]
+
+
+static func gen1_directory() -> String:
+	return RomCache.directory_for(GEN1_GAME_ID, SHA1)
+
+
+## The same cache shaped the way `Gen1Importer` writes one: 151 species, no order
+## tables, and the four sheets `LoadPokedexTilePatterns` assembles its page from.
+static func build_gen1() -> GameData:
+	var path: String = gen1_directory()
+	RomCache.clear(path)
+	RomCache.prepare(path)
+	RomCache.write_json(RomCache.species_path(path), _gen1_species())
+	var palettes: Array = []
+	for index: int in Gen1Layout.PAL_BROWNMON + 1:
+		palettes.append(GEN1_BROWNMON)
+	RomCache.write_json(RomCache.world_palettes_path(path), palettes)
+	RomCache.write_json(RomCache.manifest_path(path), {
+		"format_version": RomCache.FORMAT_VERSION,
+		"game_id": String(GEN1_GAME_ID),
+		"sha1": SHA1,
+		"complete": true,
+		"generation": RomRegistry.GEN1,
+		"tiles": _gen1_tiles(path),
+	})
+	return GameData.open_directory(path)
+
+
+## Heights are feet and inches packed the way the importer packs them and weights
+## are tenths of a pound, so a formatting test reads a real measurement.
+static func _gen1_species() -> Array:
+	var out: Array = []
+	for number: int in range(1, Gen1Layout.SPECIES_COUNT + 1):
+		out.append({
+			"number": number,
+			"name": species_name(number),
+			"types": types_for(number),
+			"dex": {
+				"category": "CAT%03d" % number,
+				"height": 100 + number,
+				"weight": number * 10,
+				"pages": ["page one %d" % number, "page two %d." % number],
+			},
+		})
+	return out
+
+
+static func _gen1_tiles(path: String) -> Dictionary:
+	var sheets: Dictionary = {}
+	for entry: Array in [
+		["font", Gen1Layout.FONT_TILES, 3, Gen1Layout.FONT_FIRST_CODE],
+		["font_extra", Gen1Layout.FONT_EXTRA_TILES, 1, Gen1Layout.FONT_EXTRA_FIRST_CODE],
+		[
+			"battle_font", Gen1Layout.BATTLE_FONT_TILES, 2,
+			Gen1Layout.BATTLE_FONT_FIRST_CODE,
+		],
+		["battle_balls", Gen1Layout.BALL_TILES, 1, 0],
+		["pokedex_tiles", Gen1Layout.POKEDEX_TILES, 2, Gen1Layout.POKEDEX_FIRST_CODE],
+	]:
+		var name: String = String(entry[0])
+		var count: int = int(entry[1])
+		var indices := PackedByteArray()
+		indices.resize(count * PokeTiles.TILE_PIXELS)
+		indices.fill(int(entry[2]))
+		RomCache.write_indices(RomCache.tile_path(path, name), indices)
+		sheets[name] = {
+			"width": count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
+			"tiles": count,
+			"first_code": int(entry[3]),
+			"bits": 1,
+		}
+	return sheets

@@ -615,17 +615,17 @@ static func read_dex_entry(rom: RomFile, layout: Dictionary, index: int) -> Dict
 	var feet: int = rom.u8(after)
 	var inches: int = rom.u8(after + 1)
 	var weight: int = rom.u16le(after + 2)
-	var text: String = ""
+	var pages := PackedStringArray()
 	if rom.u8(after + 4) == Gen1Layout.DEX_TEXT_FAR:
 		var target: int = RomFile.linear(rom.u8(after + 7), rom.u16le(after + 5))
-		text = Gen1Text.decode_dex_text(data, target, MAX_DEX_TEXT)
+		pages = Gen1Text.decode_dex_pages(data, target, MAX_DEX_TEXT)
 	return {
 		"category": category,
 		# Feet and inches as one decimal number, the way Generation 2 stores the
 		# same measurement: 204 is 2'04".
 		"height": feet * 100 + inches,
 		"weight": weight,
-		"text": text,
+		"pages": pages,
 	}
 
 
@@ -892,7 +892,7 @@ func _import_species(rom: RomFile, layout: Dictionary, on_progress: Callable) ->
 				"category": entry["category"],
 				"height": entry["height"],
 				"weight": entry["weight"],
-				"pages": [entry["text"]],
+				"pages": Array(entry["pages"] as PackedStringArray),
 			},
 			"palette": _import_palette(rom, layout, dex),
 		})
@@ -1377,14 +1377,22 @@ func _import_pics(
 			player_back, slot
 		)
 
+	## `RedPicFront`, which `DrawTrainerInfo` and Oak's speech draw and which no
+	## `BaseStats` row names, so it is imported beside the back pics rather than
+	## with the species.
+	var player_front: Dictionary = PokeTiles.new_atlas(Gen1Layout.FRONTPIC_MAX_TILES, 1)
+	_decode_pic(codec, rom, int(layout["pic_player_front"]), player_front, 0)
+
 	# A wrong offset decodes nothing, so an atlas short of a cell is a bad pin.
 	var wanted: Dictionary = {
 		"front": Gen1Layout.SPECIES_COUNT, "back": Gen1Layout.SPECIES_COUNT,
 		"trainers": Gen1Layout.TRAINER_CLASS_COUNT,
 		"player_back": Gen1Layout.PLAYER_BACKPICS.size(),
+		"player_front": 1,
 	}
 	var atlases: Dictionary = {
-		"front": front, "back": back, "trainers": trainers, "player_back": player_back,
+		"front": front, "back": back, "trainers": trainers,
+		"player_back": player_back, "player_front": player_front,
 	}
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
@@ -1419,6 +1427,36 @@ func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"offset": int(layout["ball_tiles"]),
 			"tiles": Gen1Layout.BALL_TILES,
 			"first_code": 0,
+			"bits": 2,
+		},
+		"pokedex_tiles": {
+			"offset": int(layout["pokedex_tiles"]),
+			"tiles": Gen1Layout.POKEDEX_TILES,
+			"first_code": Gen1Layout.POKEDEX_FIRST_CODE,
+			"bits": 2,
+		},
+		"trainer_card_box": {
+			"offset": int(layout["trainer_card_box"]),
+			"tiles": Gen1Layout.TRAINER_CARD_BOX_TILES,
+			"first_code": Gen1Layout.TRAINER_CARD_BOX_CODE,
+			"bits": 2,
+		},
+		"trainer_card_names": {
+			"offset": int(layout["trainer_card_names"]),
+			"tiles": Gen1Layout.TRAINER_CARD_NAME_TILES,
+			"first_code": Gen1Layout.TRAINER_CARD_NAME_CODE,
+			"bits": 2,
+		},
+		"badge_numbers": {
+			"offset": int(layout["badge_numbers"]),
+			"tiles": Gen1Layout.BADGE_NUMBER_TILES,
+			"first_code": Gen1Layout.BADGE_NUMBER_CODE,
+			"bits": 2,
+		},
+		"badge_faces": {
+			"offset": int(layout["badge_faces"]),
+			"tiles": Gen1Layout.BADGE_FACE_TILES,
+			"first_code": Gen1Layout.BADGE_FACE_CODE,
 			"bits": 2,
 		},
 		"stats_p": {
