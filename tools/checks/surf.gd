@@ -46,8 +46,24 @@ const SWIM_OBJECT_CENSUS: int = 1
 const LAPRAS_STEP_FRAME_BUDGET: int = 16384
 
 
+## `ItemUseSurfboard` and `IsSurfingAllowed` over the whole Generation 1 corpus:
+## the cells `IsNextTileShoreOrWater` accepts from land and the maps they sit on,
+## then the two refusals and one get-on and get-off.
+const GEN1_CENSUS: Dictionary = {
+	&"red": [1701, 46], &"blue": [1701, 46], &"yellow": [1692, 46],
+}
+## Route 16, whose gate forces the bike, and the cell inside it that does; and
+## Pallet Town's own shore, which is the first water a Generation 1 walk meets.
+const GEN1_CYCLING_MAP: int = 0x1B
+const GEN1_CYCLING_CELL := Vector2i(16, 10)
+const GEN1_SHORE_MAP: int = 0x00
+const GEN1_SHORE_CELL := Vector2i(6, 13)
+const GEN1_WATER_CELL := Vector2i(6, 14)
+
+
 func run(r: RefCounted) -> void:
 	_r = r
+	_r.each_game_of(RomRegistry.GEN1, _gen1_checks)
 	for game_id: StringName in _r.GAME_IDS:
 		var data: GameData = GameData.open(game_id)
 		if data == null:
@@ -339,3 +355,89 @@ func _verify_swimming_objects(game_id: StringName, data: GameData, crystal: bool
 	print("%s: one swimming object, and it crosses all %d water cells its radius allows." % [
 		game_id, expected.size(),
 	])
+
+
+func _gen1_checks() -> void:
+	_gen1_census()
+	_gen1_pallet_town()
+	_gen1_cycling_road()
+
+
+func _gen1_census() -> void:
+	var cells: int = 0
+	var maps: int = 0
+	for map: Gen2WorldMap in _r.data.world_maps():
+		var tileset: Gen2WorldTileset = _r.data.world_tileset(map.tileset)
+		if tileset == null or not tileset.water:
+			continue
+		var found: bool = false
+		for y: int in map.collision_height:
+			for x: int in map.collision_width:
+				if not tileset.tile_passable(map.collision_at(x, y)):
+					continue
+				for step: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+					var at: Vector2i = Vector2i(x, y) + step
+					if at.x < 0 or at.y < 0 or at.x >= map.collision_width \
+						or at.y >= map.collision_height:
+						continue
+					if Gen1Layout.is_shore_or_water(
+						map.tileset, tileset.water, map.collision_at(at.x, at.y)
+					):
+						cells += 1
+						found = true
+						break
+		maps += 1 if found else 0
+	var counts: Array = [cells, maps]
+	_r.note("%d cells offer a surf, across %d maps." % counts)
+	_r.check(counts == GEN1_CENSUS.get(_r.game_id, []),
+		"the Generation 1 surf census is %s, not the pinned %s." % [
+			counts, GEN1_CENSUS.get(_r.game_id, []),
+		])
+
+
+## The badge first, then the water, then `.stopSurfing` back onto the shore the
+## player left. Both halves step one cell in the direction faced.
+func _gen1_pallet_town() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, GEN1_SHORE_MAP, GEN1_SHORE_CELL)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	_r.field_move_party(world)
+	_r.check(
+		StringName(world.surf_request().get("reason", &"")) == &"badge_required",
+		"surfing was allowed with no SOULBADGE."
+	)
+	world.state.set_engine_flag(Gen2WorldState.gen1_badge_flag(Gen1Layout.SOULBADGE), true)
+	var on: Dictionary = world.surf_request()
+	if not _r.check(bool(on.get("ok", false)), "surfing was refused at the shore."):
+		return
+	world.complete_surf()
+	_r.check(
+		world.movement_mode == Gen2WorldAPI.MOVEMENT_SURF and world.player_cell == GEN1_WATER_CELL,
+		"getting on left the player %s in %s." % [world.player_cell, world.movement_mode]
+	)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var off: Dictionary = world.surf_request()
+	if not _r.check(bool(off.get("ok", false)), "getting off was refused facing the shore."):
+		return
+	world.complete_surf()
+	_r.check(
+		world.movement_mode == Gen2WorldAPI.MOVEMENT_WALK and world.player_cell == GEN1_SHORE_CELL,
+		"getting off left the player %s in %s." % [world.player_cell, world.movement_mode]
+	)
+
+
+## `.forcedToRideBike`, which is the whole of what a Generation 1 walk can reach
+## of `IsSurfingAllowed`: Seafoam Islands B4F's own branch needs two boulder
+## events only that map's per-frame script writes.
+func _gen1_cycling_road() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, GEN1_CYCLING_MAP, GEN1_CYCLING_CELL)
+	if world == null:
+		return
+	_r.field_move_party(world)
+	world.state.set_engine_flag(Gen2WorldState.gen1_badge_flag(Gen1Layout.SOULBADGE), true)
+	world.state.set_engine_flag(Gen2WorldState.always_on_bike_flag(_r.data), true)
+	_r.check(
+		StringName(world.surf_request().get("reason", &"")) == &"cycling_is_fun",
+		"surfing on Cycling Road was not refused."
+	)

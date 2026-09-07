@@ -455,6 +455,7 @@ static func open_snapshot(
 	out.last_spawn_map = world_snapshot.last_spawn_map
 	out._gen1_last_map = world_snapshot.gen1_last_map
 	out._gen1_last_blackout_map = world_snapshot.gen1_last_blackout_map
+	out.gen1_map_pal_offset = world_snapshot.gen1_map_pal_offset
 	out.dig_warp = world_snapshot.dig_warp.duplicate()
 	out.backup_warp = world_snapshot.backup_warp.duplicate()
 	## `.SpawnAfterE4` and `.AfterRed`, which stand between `ClockContinue` and
@@ -1366,6 +1367,8 @@ func cut_request() -> Dictionary:
 		return _cut_failure(&"missing_map")
 	if not _pending_cut.is_empty():
 		return _cut_failure(&"cut_in_progress")
+	if _gen1:
+		return _gen1_cut_request()
 	## TryCutOW asks CheckPartyMove before the badge; the submenu path cannot
 	## reach here without the move at all.
 	if field_move_source(Gen2WorldFieldMove.MOVE_CUT).is_empty():
@@ -1409,7 +1412,11 @@ func complete_cut() -> Dictionary:
 	var request: Dictionary = _pending_cut
 	_pending_cut = {}
 	var block_cell: Vector2i = request["block_cell"]
-	var changed: Dictionary = change_block(block_cell.x, block_cell.y, int(request["block"]))
+	var block: int = int(request["block"])
+	## `ReplaceTreeTileBlock` returns on `$ff` without writing, so a Generation 1
+	## block outside `CutTreeBlockSwaps` cuts nothing and still says it did.
+	var changed: Dictionary = change_block(block_cell.x, block_cell.y, block) if block >= 0 \
+		else {"ok": true}
 	if not bool(changed.get("ok", false)):
 		return changed
 	return {
@@ -1421,6 +1428,37 @@ func complete_cut() -> Dictionary:
 		"block": int(request["block"]),
 		"animation": int(request["animation"]),
 	}
+
+
+## `.cut`, the CASCADEBADGE and `UsedCut` behind it. `UsedCut` reads the faced
+## tile against its own tileset rather than a permission, and
+## `ReplaceTreeTileBlock` swaps the block that tile sits in.
+func _gen1_cut_request() -> Dictionary:
+	if not _gen1_has_badge(Gen2WorldFieldMove.MOVE_CUT):
+		return _cut_failure(&"badge_required")
+	var target: Vector2i = facing_cell()
+	var tile: int = Gen1Layout.cut_tile(current_map.tileset, _gen1_tile_drawn_at(target))
+	if tile < 0:
+		return _cut_failure(&"nothing_to_cut")
+	var block_cell: Vector2i = _script_block_cell(target)
+	_pending_cut = {
+		"ok": true,
+		"kind": &"cut_requested",
+		"move": Gen2WorldFieldMove.MOVE_CUT,
+		"cell": target,
+		"block_cell": block_cell,
+		"block": Gen1Layout.cut_block_swap(block_at(block_cell.x, block_cell.y)),
+		"animation": Gen2WorldFieldMove.ANIMATION_GRASS \
+			if tile == Gen1Layout.CUT_GRASS_TILE else Gen2WorldFieldMove.ANIMATION_TREE,
+	}
+	return _pending_cut.duplicate(true)
+
+
+func _gen1_has_badge(field_move: int) -> bool:
+	var bit: int = int(Gen1Layout.FIELD_MOVE_BADGES.get(field_move, -1))
+	return bit < 0 or (state != null and state.is_engine_flag_active(
+		Gen2WorldState.gen1_badge_flag(bit)
+	))
 
 
 static func _cut_failure(reason: StringName) -> Dictionary:
@@ -1436,6 +1474,8 @@ func surf_request(species: int = 0) -> Dictionary:
 		return _surf_failure(&"missing_map")
 	if not _pending_surf.is_empty():
 		return _surf_failure(&"surf_in_progress")
+	if _gen1:
+		return _gen1_surf_request(species)
 	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
 	if not state.is_engine_flag_active(
 		Gen2WorldState.badge_flag(Gen2WorldFieldMove.BADGE_FOG, crystal)
@@ -1485,7 +1525,7 @@ func complete_surf() -> Dictionary:
 		return _surf_failure(&"no_pending_surf")
 	var request: Dictionary = _pending_surf
 	_pending_surf = {}
-	movement_mode = MOVEMENT_SURF
+	movement_mode = StringName(request.get("movement", MOVEMENT_SURF))
 	player_sprite_number = int(request["sprite"])
 	player_cell = request["cell"]
 	_apply_map_music()
@@ -1497,6 +1537,69 @@ func complete_surf() -> Dictionary:
 		"cell": player_cell,
 		"sprite": player_sprite_number,
 	}
+
+
+## `.surf`: the SOULBADGE, `IsSurfingAllowed`, then `ItemUseSurfboard`, which is
+## one routine for getting on and off.
+func _gen1_surf_request(species: int) -> Dictionary:
+	if not _gen1_has_badge(Gen2WorldFieldMove.MOVE_SURF):
+		return _surf_failure(&"badge_required")
+	var refused: StringName = _gen1_surfing_allowed()
+	if refused != &"":
+		return _surf_failure(refused)
+	var target: Vector2i = facing_cell()
+	if movement_mode == MOVEMENT_SURF:
+		return _gen1_surf_off_request(target)
+	if collision_permission_at(target) != Gen2WorldCollision.WATER_TILE \
+		or _gen1_water_pair_blocked(target):
+		return _surf_failure(&"cannot_surf")
+	return _stage_gen1_surf(target, MOVEMENT_SURF, species)
+
+
+## `IsSurfingAllowed`: the forced ride first, then Seafoam Islands B4F's one cell
+## once both boulders are down the hole.
+func _gen1_surfing_allowed() -> StringName:
+	if always_on_bike():
+		return &"cycling_is_fun"
+	if current_map.number != Gen1Layout.SEAFOAM_ISLANDS_B4F \
+		or player_cell != Gen1Layout.SEAFOAM_B4F_STAIRS:
+		return &""
+	for event: int in Gen1Layout.SEAFOAM_BOULDER_EVENTS:
+		if state == null or not state.is_event_flag_active(event):
+			return &""
+	return &"current_too_fast"
+
+
+## `.tryToStopSurfing`: a sprite within the ordinary talking range, the water
+## tile pairs, then the tileset's own passable list.
+func _gen1_surf_off_request(target: Vector2i) -> Dictionary:
+	if object_at(target) != null or _gen1_water_pair_blocked(target) \
+		or not current_tileset.tile_passable(_gen1_tile_drawn_at(target)):
+		return _surf_failure(&"no_place_to_get_off")
+	return _stage_gen1_surf(target, MOVEMENT_WALK, 0)
+
+
+## `TilePairCollisionsWater`, which both halves of `ItemUseSurfboard` read.
+func _gen1_water_pair_blocked(target: Vector2i) -> bool:
+	return Gen2WorldCollision.gen1_pair_blocked(
+		current_map.tileset, _gen1_tile_drawn_at(player_cell),
+		_gen1_tile_drawn_at(target), true
+	)
+
+
+## `.makePlayerMoveForward` is a simulated press, so both halves end one cell on.
+func _stage_gen1_surf(target: Vector2i, mode: StringName, species: int) -> Dictionary:
+	_pending_surf = {
+		"ok": true,
+		"kind": &"surf_requested",
+		"move": Gen2WorldFieldMove.MOVE_SURF,
+		"cell": target,
+		"direction": _direction_for_facing(player_facing),
+		"movement": mode,
+		"sprite": Gen2WorldFieldMove.surf_sprite(species, true) if mode == MOVEMENT_SURF \
+			else _walking_sprite(),
+	}
+	return _pending_surf.duplicate(true)
 
 
 static func _surf_failure(reason: StringName) -> Dictionary:
@@ -1677,6 +1780,18 @@ func flash_request() -> Dictionary:
 		return _flash_failure(&"flash_in_progress")
 	if field_move_source(Gen2WorldFieldMove.MOVE_FLASH).is_empty():
 		return _flash_failure(&"move_not_known")
+	## `.flash` is the BOULDERBADGE and `wMapPalOffset = 0`: no map test and no
+	## flag, so the line lands wherever it is used.
+	if _gen1:
+		if not _gen1_has_badge(Gen2WorldFieldMove.MOVE_FLASH):
+			return _flash_failure(&"badge_required")
+		_pending_flash = {
+			"ok": true,
+			"kind": &"flash_requested",
+			"move": Gen2WorldFieldMove.MOVE_FLASH,
+			"wall_event": -1,
+		}
+		return _pending_flash.duplicate(true)
 	## The badge is checked before the map, so a player without it is told about
 	## the badge even standing in the dark.
 	if not state.is_engine_flag_active(Gen2WorldState.badge_flag(
@@ -1711,6 +1826,10 @@ func complete_flash() -> Dictionary:
 		return _flash_failure(&"no_pending_flash")
 	var wall_event: int = int(_pending_flash.get("wall_event", -1))
 	_pending_flash = {}
+	if _gen1:
+		gen1_map_pal_offset = 0
+		return {"ok": true, "kind": &"flash_used", "time_of_day": map_time_of_day(),
+			"wall_event": -1}
 	state.set_used_flash(true)
 	if wall_event >= 0:
 		state.set_event_flag(wall_event, true)
@@ -2020,9 +2139,11 @@ func strength_request(species: int = 0) -> Dictionary:
 		return _strength_failure(&"missing_map")
 	if not _pending_strength.is_empty():
 		return _strength_failure(&"strength_in_progress")
-	if not state.is_engine_flag_active(Gen2WorldState.badge_flag(
-		Gen2WorldFieldMove.BADGE_PLAIN, Gen2WorldState.is_crystal_profile(data)
-	)):
+	## `.strength` tests the RAINBOWBADGE and `PrintStrengthText` checks nothing.
+	if not (_gen1_has_badge(Gen2WorldFieldMove.MOVE_STRENGTH) if _gen1
+		else state.is_engine_flag_active(Gen2WorldState.badge_flag(
+			Gen2WorldFieldMove.BADGE_PLAIN, Gen2WorldState.is_crystal_profile(data)
+		))):
 		return _strength_failure(&"badge_required")
 	_pending_strength = {
 		"ok": true,
@@ -2045,9 +2166,7 @@ func complete_strength() -> Dictionary:
 		return _strength_failure(&"no_pending_strength")
 	var request: Dictionary = _pending_strength
 	_pending_strength = {}
-	state.set_engine_flag(
-		Gen2WorldState.strength_active_flag(Gen2WorldState.is_crystal_profile(data)), true
-	)
+	state.set_engine_flag(_strength_flag(), true)
 	return {
 		"ok": true,
 		"kind": &"strength_applied",
@@ -2058,9 +2177,15 @@ func complete_strength() -> Dictionary:
 
 ## BIKEFLAGS_STRENGTH_ACTIVE_F, the one condition CheckStrengthBoulder reads.
 func strength_active() -> bool:
-	return state.is_engine_flag_active(
-		Gen2WorldState.strength_active_flag(Gen2WorldState.is_crystal_profile(data))
-	)
+	return state.is_engine_flag_active(_strength_flag())
+
+
+## Where that bit lives. Generation 1 has no `ResetBikeFlags`, so its own
+## outlives every map change.
+func _strength_flag() -> int:
+	if _gen1:
+		return Gen1Layout.status_flag_1(Gen1Layout.STRENGTH_ACTIVE_BIT)
+	return Gen2WorldState.strength_active_flag(Gen2WorldState.is_crystal_profile(data))
 
 
 static func _strength_failure(reason: StringName) -> Dictionary:
@@ -2964,6 +3089,8 @@ func _fishing_context(rod: StringName) -> Dictionary:
 	var target: Vector2i = facing_cell()
 	if collision_permission_at(target) != Gen2WorldCollision.WATER_TILE:
 		return {"ok": false, "reason": &"not_facing_water"}
+	if _gen1:
+		return _gen1_fishing_context(rod, target)
 	var fish_group: int = current_map.fish_group
 	var selected_group: int = _fishing_group_for_state(fish_group)
 	var record: Dictionary = data.world_fishing_group(selected_group)
@@ -2973,6 +3100,26 @@ func _fishing_context(rod: StringName) -> Dictionary:
 		"ok": true,
 		"fish_group": fish_group,
 		"selected_fish_group": selected_group,
+		"record": record,
+		"facing_cell": target,
+	}
+
+
+## `FishingInit` reads the faced tile and the player's state and no more: only
+## the Super Rod looks at the map. A cast on a map `SuperRodData` does not name
+## is `wRodResponse` 2, the empty slot list below rather than a refusal.
+func _gen1_fishing_context(rod: StringName, target: Vector2i) -> Dictionary:
+	var group: int = data.world_fishing_map(current_map.number) \
+		if rod == Gen2WorldEncounter.METHOD_SUPER_ROD else 0
+	var record: Dictionary = data.world_fishing_group(group) if group > 0 else {}
+	if rod != Gen2WorldEncounter.METHOD_SUPER_ROD:
+		record = {"slots": Gen1Layout.rod_slots(rod)}
+	elif record.is_empty():
+		record = {"slots": []}
+	return {
+		"ok": true,
+		"fish_group": group,
+		"selected_fish_group": group,
 		"record": record,
 		"facing_cell": target,
 	}
@@ -3669,6 +3816,12 @@ var _gen1_last_map: int = -1
 ## on its own `FlyWarpDataPtr` tile. A zeroed byte is PALLET_TOWN, which is what
 ## a game that has healed nowhere lands on.
 var _gen1_last_blackout_map: int = Gen1Layout.PALLET_TOWN
+## `wMapPalOffset`, the whole of Generation 1's darkness. `LoadGBPal` shifts
+## every palette the screen draws with by it.
+var gen1_map_pal_offset: int = 0
+## `wMiscFlags`' `BIT_TRIED_PUSH_BOULDER`, which is not saved data and so rides
+## no snapshot: a cartridge reload arms the next push the same way.
+var _gen1_boulder_tried: bool = false
 ## The [method GameData.special_text] run `DisplayPokemonCenterDialogue_`'s own
 ## boxes are imported under.
 const GEN1_POKECENTER_RUN: String = "pokecenter"
@@ -3774,6 +3927,16 @@ func gen1_last_map() -> int:
 
 func gen1_last_blackout_map() -> int:
 	return _gen1_last_blackout_map
+
+
+## `CheckWarpsNoCollision`'s only two writes of it: the warp into ROCK_TUNNEL_1F
+## darkens the screen and `.goBackOutside` clears it, so B1F stays dark between
+## them. Every escape clears it through [method _gen1_leave_map_on_foot].
+func _gen1_apply_map_pal_offset(target_map: Gen2WorldMap) -> void:
+	if target_map.number == Gen1Layout.ROCK_TUNNEL_1F:
+		gen1_map_pal_offset = Gen1Layout.MAP_PAL_OFFSET_DARK
+	elif Gen1Layout.is_outside_tileset(target_map.tileset):
+		gen1_map_pal_offset = 0
 
 
 ## `CheckForHiddenEventOrBookshelfOrCardKeyDoor` runs on the A press ahead of
@@ -3998,9 +4161,7 @@ func _gen1_node_facing(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 ## `wBeatGymFlags`, whose eight bits are Kanto's badges in the engine flags'
 ## own order.
 func _gen1_node_badge(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var flag: int = Gen2WorldState.BADGE_ENGINE_FLAGS[
-		Gen2WorldState.KANTO_BADGE_FIRST + int(node["badge"])
-	]
+	var flag: int = Gen2WorldState.gen1_badge_flag(int(node["badge"]))
 	return _gen1_resolve_side(
 		node, state != null and state.is_engine_flag_active(flag), steps, run
 	)
@@ -7657,6 +7818,9 @@ func _refused_move(direction: Vector2i, reason: StringName) -> Dictionary:
 ## that commits a step or a turn passes through here; nothing else does.
 func _do_step(direction: Vector2i) -> void:
 	_player_turning_direction = 0x80 | TURNING_DIRECTION_ORDER.find(direction)
+	## `TryPushingBoulder` runs every overworld pass and resets its own flag
+	## whenever nothing pushable is in front, so a step or a turn disarms it.
+	_gen1_boulder_tried = false
 
 
 ## `.StandInPlace` and `._WalkInPlace`, which differ only in the movement byte
@@ -7774,14 +7938,27 @@ func _forced_step(direction: Vector2i, destination: Vector2i) -> Dictionary:
 func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary:
 	if not strength_active():
 		return {}
-	if not _step_permission_allows(destination, direction):
+	## `TryPushingBoulder` opens on `IsSpriteInFrontOfPlayer` with no permission
+	## test, so a boulder on a wall tile is pushed where `.CheckLandPerms` refuses.
+	if not _gen1 and not _step_permission_allows(destination, direction):
 		return {}
 	var boulder: Gen2WorldObject = object_at(destination)
 	if boulder == null or not boulder.is_strength_boulder() or boulder.is_stepping():
+		_gen1_boulder_tried = false
 		return {}
 	if Gen2WorldCollision.is_pit_tile(gen2_code_at(boulder.cell)):
 		return {}
 	var landing: Vector2i = boulder.cell + direction
+	if _gen1:
+		## The bit is set on the way past and read on the next pass, so the first
+		## bump into a boulder only arms the push.
+		if not _gen1_boulder_tried:
+			_gen1_boulder_tried = true
+			return {}
+		if _gen1_boulder_blocked(boulder, landing):
+			_gen1_boulder_tried = false
+			return {}
+		return _commit_boulder_push(boulder, landing, direction)
 	# CanObjectMoveInDirection with the boulder's own flags: WONT_DELETE,
 	# FIXED_FACING, SLIDING and MOVE_ANYWHERE, palette bit STRENGTH_BOULDER and
 	# no NOCLIP or SWIMMING. That leaves the destination's land permission, both
@@ -7789,6 +7966,27 @@ func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary
 	# the player's own. can_object_walk_to() is those four tests.
 	if not can_object_walk_to(landing, boulder, direction):
 		return {}
+	return _commit_boulder_push(boulder, landing, direction)
+
+
+## `CheckForCollisionWhenPushingBoulder`: the tile two ahead must be passable,
+## must not pair with the one stood on, must not be the stairs and must be empty.
+func _gen1_boulder_blocked(boulder: Gen2WorldObject, landing: Vector2i) -> bool:
+	if collision_permission_at(landing) != Gen2WorldCollision.LAND_TILE:
+		return true
+	if Gen2WorldCollision.gen1_pair_blocked(
+		current_map.tileset, _gen1_tile_drawn_at(player_cell),
+		_gen1_tile_drawn_at(boulder.cell), false
+	):
+		return true
+	if _gen1_tile_drawn_at(landing) == Gen1Layout.BOULDER_STAIRS_TILE:
+		return true
+	return object_at(landing) != null
+
+
+func _commit_boulder_push(
+	boulder: Gen2WorldObject, landing: Vector2i, direction: Vector2i
+) -> Dictionary:
 	boulder.cell = landing
 	# The stone queue is asked here, on the call that commits the cell, for the
 	# same reason the push itself is resolved here: the source waits for the
@@ -8022,6 +8220,8 @@ func _apply_map(
 	## and that is the map a `LAST_MAP` warp comes back out to.
 	if _gen1 and current_map != null and Gen1Layout.is_outside_tileset(current_map.tileset):
 		_gen1_last_map = current_map.number
+	if _gen1:
+		_gen1_apply_map_pal_offset(target_map)
 	## `RefreshPlayerSprite` clears `wPlayerTurningDirection`, and every warp and
 	## connection reaches it, so a slide never survives a map change.
 	_stand_in_place()
@@ -8266,9 +8466,7 @@ func gen1_visited_towns() -> PackedInt32Array:
 ## `.fly`: the THUNDERBADGE, then `CheckIfInOutsideMap` rather than a map
 ## environment, and `wFlyLocationsList` in place of the visited flypoints.
 func _gen1_fly_request() -> Dictionary:
-	if not state.is_engine_flag_active(Gen2WorldState.BADGE_ENGINE_FLAGS[
-		Gen2WorldState.KANTO_BADGE_FIRST + Gen1Layout.THUNDERBADGE
-	]):
+	if not _gen1_has_badge(Gen2WorldFieldMove.MOVE_FLY):
 		return _fly_failure(&"badge_required")
 	if not Gen1Layout.is_outside_tileset(current_map.tileset):
 		return _fly_failure(&"indoors")
@@ -8578,6 +8776,7 @@ func _gen1_leave_map_on_foot() -> void:
 		return
 	movement_mode = MOVEMENT_WALK
 	player_sprite_number = _walking_sprite()
+	gen1_map_pal_offset = 0
 	state.set_engine_flag(Gen2WorldState.always_on_bike_flag(data), false)
 
 

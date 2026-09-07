@@ -54,9 +54,42 @@ const FIELD_MOVE_TEXT_RUNS_ON: Array[int] = [
 	Gen2WorldFieldMove.MOVE_STRENGTH, Gen2WorldFieldMove.MOVE_FLASH,
 	Gen2WorldFieldMove.MOVE_TELEPORT,
 ]
-## `.TeleportScript`'s `pause 60`, two frames a unit, where the other two
-## escapes spend a `waitbutton`.
+## `_UsedStrengthText` ends `text_end` and `_WarpToLastPokemonCenterText` `done`;
+## `_FlashLightsAreaText` ends `prompt`, so Generation 1's Flash waits.
+const GEN1_FIELD_MOVE_TEXT_RUNS_ON: Array[int] = [
+	Gen2WorldFieldMove.MOVE_STRENGTH, Gen2WorldFieldMove.MOVE_TELEPORT,
+]
+## `.TeleportScript`'s `pause 60`, two frames a unit, where the other two escapes
+## spend a `waitbutton`. `.canTeleport`'s `ld c, 60` is hardware frames.
 const TELEPORT_PAUSE_FRAMES: int = 120
+const GEN1_TELEPORT_PAUSE_FRAMES: int = 60
+## `ItemUseEscapeRope`'s `ld c, 30`, which is the whole of what it shows.
+const GEN1_ESCAPE_ROPE_FRAMES: int = 30
+
+## What each Generation 1 field move writes, as its `special_text` run and name.
+## Fly and Dig write nothing: `.fly` opens the region map and
+## `ItemUseEscapeRope` prints only when a rope was the item.
+const GEN1_FIELD_MOVE_TEXTS: Dictionary = {
+	Gen2WorldFieldMove.MOVE_CUT: ["cut", "used_cut"],
+	Gen2WorldFieldMove.MOVE_SURF: ["surf", "got_on"],
+	Gen2WorldFieldMove.MOVE_STRENGTH: ["strength", "used_strength"],
+	Gen2WorldFieldMove.MOVE_FLASH: ["field_move", "flash_lights_area"],
+	Gen2WorldFieldMove.MOVE_TELEPORT: ["field_move", "warp_to_last_center"],
+}
+## Every refusal the six share, by the reason the world answers with. A reason
+## with no row falls to `ItemUseNotTime`, which is what `UseItem` refuses in.
+const GEN1_FIELD_MOVE_REFUSALS: Dictionary = {
+	&"badge_required": ["field_move", "new_badge_required"],
+	&"nothing_to_cut": ["cut", "nothing_to_cut"],
+	&"cannot_surf": ["item_use", "no_surfing"],
+	&"no_place_to_get_off": ["surf", "no_place_to_get_off"],
+	&"cycling_is_fun": ["strength", "cycling_is_fun"],
+	&"current_too_fast": ["strength", "current_too_fast"],
+	&"indoors": ["field_move", "cannot_fly_here"],
+	&"not_outdoors": ["field_move", "cannot_teleport_now"],
+	&"not_enough_health": ["field_move", "not_healthy_enough"],
+}
+const GEN1_FIELD_MOVE_REFUSAL_DEFAULT: Array = ["item_use", "not_time"]
 ## constants/sfx_constants.asm's SFX_SANDSTORM, which is what ShakeHeadbuttTree
 ## plays (engine/events/field_moves.asm). SFX_HEADBUTT is a battle-move effect
 ## and is referenced by nothing in either pin's overworld code.
@@ -3567,29 +3600,38 @@ func preview_script_event() -> void:
 	_refresh_labels()
 
 
+## The same pair for any row of the submenu, badge and acknowledge included.
+func preview_field_move_row(move: int) -> void:
+	_preview_field_move(move)
+
+
+func preview_field_move_row_use(move: int) -> void:
+	_preview_field_move_use(move)
+
+
 ## Public screenshot driver for the party submenu's field-move entry. Grants the
 ## move's badge and teaches it to the first party member, then injects that save
 ## so persistence stays off, the way preview_party_transaction() does.
 func preview_field_move() -> void:
-	_preview_field_move(Gen2WorldFieldMove.MOVE_CUT, Gen2WorldFieldMove.BADGE_HIVE)
+	_preview_field_move(Gen2WorldFieldMove.MOVE_CUT)
 
 
 ## The rest of that sequence, one step per call: the first chooses the submenu's
 ## field-move entry and shows its message, the second acknowledges it and
 ## commits.
 func preview_field_move_use() -> void:
-	_preview_field_move_use(Gen2WorldFieldMove.MOVE_CUT, Gen2WorldFieldMove.BADGE_HIVE)
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_CUT)
 
 
 ## The same pair for Surf, which needs the scene opened beside water.
 func preview_surf() -> void:
 	_face_surfable_water()
-	_preview_field_move(Gen2WorldFieldMove.MOVE_SURF, Gen2WorldFieldMove.BADGE_FOG)
+	_preview_field_move(Gen2WorldFieldMove.MOVE_SURF)
 
 
 func preview_surf_use() -> void:
 	_face_surfable_water()
-	_preview_field_move_use(Gen2WorldFieldMove.MOVE_SURF, Gen2WorldFieldMove.BADGE_FOG)
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_SURF)
 
 
 ## `.TrySurf` reads the faced tile, so facing anywhere else photographs a refusal.
@@ -3615,38 +3657,34 @@ func _face_surfable_water() -> void:
 ## And for Whirlpool, facing a COLL_WHIRLPOOL cell: Dragon's Den B1F, Route 41 and
 ## Route 27 are the only maps that carry one.
 func preview_whirlpool() -> void:
-	_preview_field_move(Gen2WorldFieldMove.MOVE_WHIRLPOOL, Gen2WorldFieldMove.BADGE_GLACIER)
+	_preview_field_move(Gen2WorldFieldMove.MOVE_WHIRLPOOL)
 
 
 func preview_whirlpool_use() -> void:
-	_preview_field_move_use(
-		Gen2WorldFieldMove.MOVE_WHIRLPOOL, Gen2WorldFieldMove.BADGE_GLACIER
-	)
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_WHIRLPOOL)
 
 
 ## And for Strength, which needs nothing in front of the player: .TryStrength
 ## checks the badge and stops. To watch a boulder move, press a direction into one
 ## after the second call; Cianwood Gym (22/5) and Ice Path B1F carry them.
 func preview_strength() -> void:
-	_preview_field_move(Gen2WorldFieldMove.MOVE_STRENGTH, Gen2WorldFieldMove.BADGE_PLAIN)
+	_preview_field_move(Gen2WorldFieldMove.MOVE_STRENGTH)
 
 
 func preview_strength_use() -> void:
-	_preview_field_move_use(
-		Gen2WorldFieldMove.MOVE_STRENGTH, Gen2WorldFieldMove.BADGE_PLAIN
-	)
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_STRENGTH)
 
 
 ## And for Waterfall, in the water at a fall's foot; the facing is the driver's,
 ## below. The climb is paced, so the frames after the second call are the climb.
 func preview_waterfall() -> void:
 	_stage_waterfall_world()
-	_preview_field_move(Gen2WorldFieldMove.MOVE_WATERFALL, Gen2WorldFieldMove.BADGE_RISING)
+	_preview_field_move(Gen2WorldFieldMove.MOVE_WATERFALL)
 
 
 func preview_waterfall_use() -> void:
 	_stage_waterfall_world()
-	_preview_field_move_use(Gen2WorldFieldMove.MOVE_WATERFALL, Gen2WorldFieldMove.BADGE_RISING)
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_WATERFALL)
 
 
 ## The world a climber is in: `CheckMapCanWaterfall` passes only FACE_UP, and a
@@ -3662,23 +3700,36 @@ func _stage_waterfall_world() -> void:
 ## And for Flash, which checks no tile and is what makes a dark cave
 ## photographable at all.
 func preview_flash() -> void:
-	_preview_field_move(Gen2WorldFieldMove.MOVE_FLASH, Gen2WorldFieldMove.BADGE_ZEPHYR)
+	_preview_field_move(Gen2WorldFieldMove.MOVE_FLASH)
 
 
 func preview_flash_use() -> void:
-	_preview_field_move_use(Gen2WorldFieldMove.MOVE_FLASH, Gen2WorldFieldMove.BADGE_ZEPHYR)
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_FLASH)
 
 
-func _preview_field_move_use(move: int, badge: int) -> void:
+## Which badge flag that move is behind, which is the move's own `CheckBadge`
+## argument rather than a second table: `wObtainedBadges` orders Kanto's eight
+## differently and no caller should have to know that.
+func _field_move_badge_flag(move: int) -> int:
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		return Gen2WorldState.gen1_badge_flag(
+			int(Gen1Layout.FIELD_MOVE_BADGES.get(move, Gen1Layout.BOULDERBADGE))
+		)
+	return Gen2WorldState.badge_flag(
+		Gen2WorldFieldMove.badge_for_move(move), Gen2WorldState.is_crystal_profile(_data)
+	)
+
+
+func _preview_field_move_use(move: int) -> void:
 	if _field_move_text:
 		_acknowledge_field_move_text()
 		return
-	_preview_field_move(move, badge)
+	_preview_field_move(move)
 	if _party_host != null:
 		_party_host.handle_button(PokeButton.A)
 
 
-func _preview_field_move(move: int, badge: int) -> void:
+func _preview_field_move(move: int) -> void:
 	if _world == null or _data == null:
 		return
 	var save: Gen2SaveData = _embedded_party_save()
@@ -3694,9 +3745,7 @@ func _preview_field_move(move: int, badge: int) -> void:
 	## the next catch, purchase or party change reported nothing but failure.
 	teacher.pp[0] = int(_data.move(move).get("pp", 0))
 	_injected_save = save
-	_world.state.set_engine_flag(Gen2WorldState.badge_flag(
-		badge, Gen2WorldState.is_crystal_profile(_data)
-	))
+	_world.state.set_engine_flag(_field_move_badge_flag(move))
 	_open_embedded_party()
 	if _party_host == null:
 		return
@@ -5033,6 +5082,10 @@ func _handle_fishing_result(result: Dictionary) -> void:
 	match StringName(result.get("kind", &"")):
 		&"fishing_no_bite":
 			_script_prompt = "Nothing was hooked. F: cast again"
+		## `FishingAnim`'s `NothingHereText`, which only a map with no
+		## `SuperRodData` row reaches.
+		&"fishing_no_fish":
+			_script_prompt = "No fish here. F: cast again"
 		&"fishing_bite":
 			_script_prompt = "A bite! Press A to reel in"
 		&"battle_requested":
@@ -6510,8 +6563,13 @@ func _on_field_item_used(request: Dictionary) -> void:
 		Gen2WorldPack.FIELD_EFFECT_BICYCLE:
 			_on_bike_used(request)
 		## Printed on the map being left; the acknowledge takes the warp.
+		## `ItemUseEscapeRope` prints nothing, so Generation 1 spends its own
+		## thirty frames and warps with the box never opening.
 		Gen2WorldPack.FIELD_EFFECT_ESCAPE_ROPE:
-			_show_field_move_text(_field_item_text("escape_rope", "Used an\nESCAPE ROPE."))
+			if _data != null and _data.generation == RomRegistry.GEN1:
+				_show_field_move_text("", false, false, GEN1_ESCAPE_ROPE_FRAMES)
+			else:
+				_show_field_move_text(_field_item_text("escape_rope", "Used an\nESCAPE ROPE."))
 		Gen2WorldPack.FIELD_EFFECT_ROD:
 			var rods: Array[StringName] = _world.available_fishing_rods()
 			select_fishing_rod(rods.find(StringName(request.get("rod", &""))))
@@ -6718,7 +6776,7 @@ func _run_party_action(action: Dictionary) -> void:
 ## follows it. Every line is [constant Gen2WorldFieldMove.USED_TEXTS]' own. Fly
 ## is the one row with no line: its script writes nothing before the region map.
 func _field_move_rows(slot: int, user: String) -> Dictionary:
-	var says: Callable = Gen2WorldFieldMove.used_text.bind(user)
+	var says: Callable = _used_field_move_text.bind(user)
 	return {
 		Gen2WorldFieldMove.MOVE_CUT: [
 			_world.cut_request, _cut_refusal,
@@ -6784,26 +6842,70 @@ func _run_field_move(action: Dictionary) -> void:
 		return
 	var row: Array = rows[move]
 	var answer: Dictionary = (row[0] as Callable).call()
+	var gen1: bool = _data != null and _data.generation == RomRegistry.GEN1
 	if not bool(answer.get("ok", false)):
-		_show_field_move_text(
-			(row[1] as Callable).call(StringName(answer.get("reason", &"")))
-		)
+		var reason: StringName = StringName(answer.get("reason", &""))
+		_show_field_move_text(_gen1_refusal_text(reason, user) if gen1
+			else (row[1] as Callable).call(reason))
 		return
-	if not String(row[2]).is_empty():
-		var runs_on: bool = FIELD_MOVE_TEXT_RUNS_ON.has(move)
-		_show_field_move_text(
-			row[2], not runs_on, not runs_on,
-			TELEPORT_PAUSE_FRAMES if move == Gen2WorldFieldMove.MOVE_TELEPORT else 0
-		)
+	var line: String = _gen1_used_line(move, user, answer) if gen1 else String(row[2])
+	if not line.is_empty():
+		var runs_on: bool = (GEN1_FIELD_MOVE_TEXT_RUNS_ON if gen1
+			else FIELD_MOVE_TEXT_RUNS_ON).has(move)
+		var pause: int = 0
+		if move == Gen2WorldFieldMove.MOVE_TELEPORT:
+			pause = GEN1_TELEPORT_PAUSE_FRAMES if gen1 else TELEPORT_PAUSE_FRAMES
+		_show_field_move_text(line, not runs_on, not runs_on, pause)
+	elif gen1 and move == Gen2WorldFieldMove.MOVE_SURF:
+		## `.stopSurfing` steps out of the water on the same frame, so the commit
+		## is owed with no box in front of it.
+		_show_field_move_text("", false, false, 0)
 	var after: Callable = row[3]
 	if after.is_valid():
 		after.call(answer)
 
 
-## `Script_UsedStrength` past its first box: `cry 0` on `wStrengthSpecies`.
+## `Script_UsedStrength` past its first box: `cry 0` on `wStrengthSpecies`, which
+## `UsedStrengthText`'s own `text_asm` plays in the same place.
 func _after_strength(_answer: Dictionary, slot: int, user: String) -> void:
 	_play_species_cry(_party_species(slot))
-	_player_event_texts.append(Gen2WorldFieldMove.move_boulders_text(user))
+	_player_event_texts.append(
+		_gen1_field_move_text(["strength", "can_move_boulders"], user)
+		if _data != null and _data.generation == RomRegistry.GEN1
+		else Gen2WorldFieldMove.move_boulders_text(user)
+	)
+
+
+func _used_field_move_text(move: int, user: String) -> String:
+	if _data == null or _data.generation != RomRegistry.GEN1:
+		return Gen2WorldFieldMove.used_text(move, user)
+	return _gen1_field_move_text(GEN1_FIELD_MOVE_TEXTS.get(move, []), user)
+
+
+## Surf is the one move whose line depends on the answer: `.stopSurfing` prints
+## nothing where getting on prints its own box.
+func _gen1_used_line(move: int, user: String, answer: Dictionary) -> String:
+	if move == Gen2WorldFieldMove.MOVE_SURF \
+		and StringName(answer.get("movement", &"")) != Gen2WorldAPI.MOVEMENT_SURF:
+		return ""
+	return _used_field_move_text(move, user)
+
+
+func _gen1_refusal_text(reason: StringName, user: String) -> String:
+	return _gen1_field_move_text(
+		GEN1_FIELD_MOVE_REFUSALS.get(reason, GEN1_FIELD_MOVE_REFUSAL_DEFAULT), user
+	)
+
+
+## One `special_text` row with its markers filled: `<PLAYER>` as every other box
+## takes it, and `wNameBuffer` the name `.choseOutOfBattleMove` put there.
+func _gen1_field_move_text(run: Array, user: String) -> String:
+	if _data == null or run.size() < 2:
+		return ""
+	var text: String = _data.special_text(String(run[0]), String(run[1]))
+	if _world != null:
+		text = _world.gen1_filled_text(text)
+	return Gen2TextStream.fill_all_markers(text, Gen2TextStream.RAM_MARKER, user)
 
 
 func _after_sweet_scent(answer: Dictionary) -> void:
@@ -7013,7 +7115,11 @@ func _run_heal_transfer(action: Dictionary) -> void:
 		int(action.get("target_slot", -1)), _injected_save == null
 	)
 	if not bool(result.get("ok", false)):
-		_show_field_move_text("It won't have any effect.")
+		_show_field_move_text(
+			_gen1_refusal_text(StringName(result.get("reason", &"")), "")
+			if _data != null and _data.generation == RomRegistry.GEN1
+			else "It won't have any effect."
+		)
 		return
 	## `PARTYMENUTEXT_HEAL_HP`, behind `ItemActionText`'s own `JoyWaitAorB`,
 	## which waits without an arrow the way `ProfOaksPCBoot`'s pages do.
@@ -7032,7 +7138,10 @@ func _show_field_move_text(
 	_field_move_text = true
 	_field_move_text_waits = waits
 	_field_move_text_frames = frames
-	if _text_box != null and _text_box.font != null:
+	if _text_box != null and text.is_empty():
+		## A move that owes a commit and writes nothing still runs through here.
+		_text_box.visible = false
+	elif _text_box != null and _text_box.font != null:
 		_apply_text_box_options()
 		_text_box.show_text(text, blink_cursor)
 		_text_box.visible = true

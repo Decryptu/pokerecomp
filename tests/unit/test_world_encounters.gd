@@ -590,3 +590,62 @@ func test_the_contest_timer_counts_the_minutes_down_across_midnight() -> void:
 		started, {"day": 1, "hour": 0, "minute": 15}
 	), 0)
 	assert_eq(Gen2WorldBugContest.minutes_remaining({}, started), 0)
+
+
+## `ItemUseOldRod` never rolls at all: `lb bc, 5, MAGIKARP` and a set bite.
+func test_the_generation_1_old_rod_always_bites() -> void:
+	var random := RandomNumberGenerator.new()
+	random.seed = 3
+	for _cast: int in 20:
+		var result: Dictionary = Gen2WorldEncounter.resolve_gen1_fishing(
+			{"slots": [{"level": 5, "species": 129}]},
+			Gen2WorldEncounter.METHOD_OLD_ROD, random
+		)
+		assert_eq(result["pokemon"], 129)
+		assert_eq(result["level"], 5)
+		assert_eq(result["values"]["battle_type"], Gen2Battle.BATTLETYPE_FISH)
+
+
+## `.RandomLoop`: an odd byte answers nothing, an even one whose two bits land
+## inside the list picks that slot, and anything else re-rolls the whole byte.
+func test_the_generation_1_good_rod_reads_bit_0_then_bits_1_and_2() -> void:
+	var record: Dictionary = {
+		"slots": [{"level": 10, "species": 118}, {"level": 10, "species": 60}],
+	}
+	var bites: int = 0
+	var random := RandomNumberGenerator.new()
+	random.seed = 5
+	for _cast: int in 3000:
+		if not Gen2WorldEncounter.resolve_gen1_fishing(
+			record, Gen2WorldEncounter.METHOD_GOOD_ROD, random
+		).is_empty():
+			bites += 1
+	assert_almost_eq(float(bites) / 3000.0, 1.0 / 3.0, 0.05)
+
+
+## `ReadSuperRodData`'s `ld e, $2`: a map `SuperRodData` does not name.
+func test_the_generation_1_super_rod_answers_nothing_off_the_table() -> void:
+	assert_true(Gen2WorldEncounter.resolve_gen1_fishing(
+		{"slots": []}, Gen2WorldEncounter.METHOD_SUPER_ROD, RandomNumberGenerator.new()
+	).is_empty())
+
+
+## Yellow's `GenerateRandomFishingEncounter` walks four thresholds with one roll
+## and the caller's own `and $1` decides the bite, so a forced cast lands on the
+## slot the roll names rather than re-rolling.
+func test_yellows_super_rod_picks_by_threshold() -> void:
+	var record: Dictionary = {"slots": [
+		{"level": 10, "species": 120, "threshold": 0x65},
+		{"level": 10, "species": 72, "threshold": 0xB1},
+		{"level": 5, "species": 120, "threshold": 0xE4},
+		{"level": 20, "species": 72, "threshold": 0xFF},
+	]}
+	var picked: Dictionary = {}
+	var random := RandomNumberGenerator.new()
+	random.seed = 9
+	for _cast: int in 400:
+		var result: Dictionary = Gen2WorldEncounter.resolve_gen1_fishing(
+			record, Gen2WorldEncounter.METHOD_SUPER_ROD, random, true
+		)
+		picked[int(result["slot"])] = true
+	assert_eq(picked.keys().size(), 4)

@@ -42,8 +42,19 @@ const EXPECTED_CENSUS: Dictionary = {
 }
 
 
+## `BOULDER_MOVEMENT_BYTE_2` over the whole Generation 1 corpus, and Victory
+## Road 1F's own first boulder as the acceptance case: `maps/VictoryRoad1F.asm`
+## stands it at (5, 15) and its switch is the cell the route needs it on.
+const GEN1_CENSUS: Dictionary = {
+	&"red": [21, 8], &"blue": [21, 8], &"yellow": [21, 8],
+}
+const GEN1_PUSH_MAP: int = 0x6C
+const GEN1_PUSH_CELL := Vector2i(5, 15)
+
+
 func run(r: RefCounted) -> void:
 	_r = r
+	_r.each_game_of(RomRegistry.GEN1, _gen1_checks)
 	for game_id: StringName in _r.GAME_IDS:
 		var data: GameData = GameData.open(game_id)
 		if data == null:
@@ -203,3 +214,53 @@ func _gym_world(data: GameData, crystal: bool, active: bool) -> Gen2WorldAPI:
 	if world != null:
 		world.player_facing = Gen2WorldSprite.FACING_UP
 	return world
+
+
+
+func _gen1_checks() -> void:
+	var boulders: int = 0
+	var maps: Dictionary = {}
+	for map: Gen2WorldMap in _r.data.world_maps():
+		for row: Dictionary in map.events.get("objects", []):
+			if int(row.get("movement", 0)) != Gen2WorldObject.MOVEMENT_STRENGTH_BOULDER:
+				continue
+			boulders += 1
+			maps[map.number] = true
+	var counts: Array = [boulders, maps.size()]
+	_r.note("%d boulders across %d maps." % counts)
+	_r.check(counts == GEN1_CENSUS.get(_r.game_id, []),
+		"the Generation 1 boulder census is %s, not the pinned %s." % [
+			counts, GEN1_CENSUS.get(_r.game_id, []),
+		])
+	_gen1_push()
+
+
+## `PrintStrengthText` refuses only the badge, and `TryPushingBoulder` arms on the
+## first bump and moves on the second.
+func _gen1_push() -> void:
+	var world: Gen2WorldAPI = _r.open_world(
+		0, GEN1_PUSH_MAP, GEN1_PUSH_CELL + Vector2i.DOWN
+	)
+	if world == null:
+		return
+	_r.field_move_party(world)
+	_r.check(
+		StringName(world.strength_request().get("reason", &"")) == &"badge_required",
+		"Strength was allowed with no RAINBOWBADGE."
+	)
+	world.state.set_engine_flag(Gen2WorldState.gen1_badge_flag(Gen1Layout.RAINBOWBADGE), true)
+	if not _r.check(bool(world.strength_request().get("ok", false)), "Strength was refused."):
+		return
+	world.complete_strength()
+	_r.check(world.strength_active(), "the Strength flag did not go on.")
+	var boulder: Gen2WorldObject = world.object_at(GEN1_PUSH_CELL)
+	if not _r.check(boulder != null, "no boulder stands at %s." % GEN1_PUSH_CELL):
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	world.move_result(Vector2i.UP)
+	_r.check(boulder.cell == GEN1_PUSH_CELL, "the first bump moved the boulder.")
+	world.move_result(Vector2i.UP)
+	_r.check(
+		boulder.cell == GEN1_PUSH_CELL + Vector2i.UP,
+		"the second bump left the boulder at %s." % boulder.cell
+	)

@@ -175,6 +175,8 @@ static func resolve_fishing(
 ) -> Dictionary:
 	if record.is_empty() or rod not in [METHOD_OLD_ROD, METHOD_GOOD_ROD, METHOD_SUPER_ROD]:
 		return {}
+	if record.has("slots"):
+		return resolve_gen1_fishing(record, rod, random, force_encounter)
 	var generator := random if random != null else RandomNumberGenerator.new()
 	if random == null:
 		generator.randomize()
@@ -454,6 +456,93 @@ static func _blocked_by_repel(level: int, options: Dictionary) -> bool:
 	var steps: int = int(options.get("repel_steps", 0))
 	var lead_level: int = int(options.get("lead_level", -1))
 	return steps > 0 and lead_level > 0 and level < lead_level
+
+
+## `ItemUseOldRod`, `ItemUseGoodRod` and `ItemUseSuperRod`, which share only
+## `RodResponse`. The Old Rod never rolls and always bites; the other two spend a
+## `Random` on it and, on Red and Blue, re-roll the slot until it is in the list.
+## An empty answer is `wRodResponse` 0; a record with no slots is response 2.
+static func resolve_gen1_fishing(
+	record: Dictionary,
+	rod: StringName,
+	random: RandomNumberGenerator = null,
+	force_encounter: bool = false,
+) -> Dictionary:
+	var slots: Array = record.get("slots", [])
+	if slots.is_empty():
+		return {}
+	var generator := random if random != null else RandomNumberGenerator.new()
+	if random == null:
+		generator.randomize()
+	var rolls: Array[int] = []
+	var picked: int = 0
+	if rod != Gen2WorldEncounter.METHOD_OLD_ROD:
+		var flat: bool = (slots[0] as Dictionary).has("threshold")
+		picked = _gen1_rod_slot(slots, generator, rolls, flat, force_encounter)
+		if picked < 0:
+			return {}
+	var slot: Dictionary = slots[picked]
+	var species: int = int(slot.get("species", 0))
+	var level: int = int(slot.get("level", 0))
+	if species < 1 or level < 1:
+		return {}
+	return {
+		"kind": &"wild_encounter_requested",
+		"method": rod,
+		"source": SOURCE_FISHING,
+		"slot": picked,
+		"pokemon": species,
+		"level": level,
+		"rate": 0,
+		"encounter_roll": -1,
+		"slot_roll": rolls[0] if not rolls.is_empty() else -1,
+		"rolls": rolls,
+		"time_group": 0,
+		"forced": force_encounter,
+		"values": {
+			"kind": &"wild", "pokemon": species, "level": level,
+			"battle_type": Gen2Battle.BATTLETYPE_FISH,
+		},
+	}
+
+
+## Which slot bites, or -1. [param flat] is Yellow's Super Rod, whose
+## `GenerateRandomFishingEncounter` walks four thresholds with one roll and whose
+## bite is the caller's own `Random / and $1`.
+static func _gen1_rod_slot(
+	slots: Array, generator: RandomNumberGenerator, rolls: Array[int],
+	flat: bool, force_encounter: bool
+) -> int:
+	if flat:
+		var roll: int = generator.randi_range(0, 255)
+		rolls.append(roll)
+		var index: int = slots.size() - 1
+		for slot: int in slots.size():
+			if roll <= int((slots[slot] as Dictionary).get("threshold", 0xFF)):
+				index = slot
+				break
+		var bite: int = generator.randi_range(0, 255)
+		rolls.append(bite)
+		return index if force_encounter or bite % 2 == 1 else -1
+	## `.RandomLoop`: `srl a` drops bit 0 into carry and a set carry answers
+	## nothing. The two bits left name the slot, and a value at or above the list
+	## re-rolls the whole byte.
+	for _attempt: int in GEN1_ROD_ROLL_LIMIT:
+		var roll: int = generator.randi_range(0, 255)
+		rolls.append(roll)
+		if roll % 2 == 1:
+			if not force_encounter:
+				return -1
+			continue
+		var index: int = (roll >> 1) & 0x03
+		if index < slots.size():
+			return index
+	return -1
+
+
+## `.RandomLoop` has no bound of its own; this is the port's, and a run reaching
+## it answers no nibble rather than spinning.
+const GEN1_ROD_ROLL_LIMIT: int = 64
 
 
 static func _rod_index(rod: StringName) -> int:

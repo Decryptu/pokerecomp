@@ -139,6 +139,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_facility_text,
 	_verify_dex_ratings,
 	_verify_overworld_coords,
+	_verify_field_moves,
 	_verify_world,
 ]
 
@@ -176,6 +177,10 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"bicycle": ["bicycle_text", Gen1Layout.BICYCLE_TEXT_AT],
 	"poke_flute": ["poke_flute_text", Gen1Layout.POKE_FLUTE_TEXT_AT],
 	"start_menu": ["start_menu_text", Gen1Layout.START_MENU_TEXT_AT],
+	"field_move": ["field_move_text", Gen1Layout.FIELD_MOVE_TEXT_AT],
+	"strength": ["strength_text", Gen1Layout.STRENGTH_TEXT_AT],
+	"cut": ["cut_text", Gen1Layout.CUT_TEXT_AT],
+	"surf": ["surf_text", Gen1Layout.SURF_TEXT_AT],
 	"coin_case": ["coin_case_text", Gen1Layout.COIN_CASE_TEXT_AT],
 	"party_menu": ["party_menu_text", Gen1Layout.PARTY_MENU_TEXT_AT],
 	"toss": ["toss_text", Gen1Layout.TOSS_TEXT_AT],
@@ -374,10 +379,18 @@ static func _verify_wild_constants(rom: RomFile, layout: Dictionary) -> Dictiona
 	at = int(layout["good_rod"])
 	for slot: int in Gen1Layout.GOOD_ROD_SLOTS.size():
 		var row: Array = Gen1Layout.GOOD_ROD_SLOTS[slot]
-		if rom.u8(at + slot * 2) != int(row[0]) or rom.u8(at + slot * 2 + 1) != int(row[1]):
+		if rom.u8(at + slot * 2) != int(row[0]) or rom.u8(at + slot * 2 + 1) != int(row[1]) \
+			or Gen1Layout.dex_of_index(rom, layout, int(row[1])) != int(row[2]):
 			return _fail("GoodRodMons row %d reads level %d, index %d." % [
 				slot, rom.u8(at + slot * 2), rom.u8(at + slot * 2 + 1),
 			])
+	var old_rod: int = int(layout["old_rod"])
+	if rom.u8(old_rod) != Gen1Layout.OPCODE_LD_BC \
+		or rom.u8(old_rod + 2) != int(Gen1Layout.OLD_ROD_SLOT[0]) \
+		or Gen1Layout.dex_of_index(
+			rom, layout, rom.u8(old_rod + 1)
+		) != int(Gen1Layout.OLD_ROD_SLOT[1]):
+		return _fail("ItemUseOldRod does not name a level 5 MAGIKARP.")
 	return _ok()
 
 
@@ -549,6 +562,30 @@ static func _verify_dex_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 			rom, Gen1Layout.banked(RomFile.bank_of(table), rom.u16le(row + 1))
 		).is_empty():
 			return _fail("DexRatingsTable row %d has no text." % index)
+	return _ok()
+
+
+## `CutTreeBlockSwaps` and `DisplayPCMainMenu`'s own `CheckEvent`: two tables the
+## rest of the field moves are read through, each pinned against the dump so a
+## number here can never be the only thing that says what the cartridge does.
+static func _verify_field_moves(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout["cut_tree_blocks"])
+	for block: int in Gen1Layout.CUT_BLOCK_SWAPS:
+		if rom.u8(at) != block or rom.u8(at + 1) != int(Gen1Layout.CUT_BLOCK_SWAPS[block]):
+			return _fail("CutTreeBlockSwaps row $%02X reads $%02X, $%02X." % [
+				block, rom.u8(at), rom.u8(at + 1),
+			])
+		at += Gen1Layout.CUT_BLOCK_SWAP_SIZE
+	if rom.u8(at) != Gen1Layout.CUT_BLOCK_SWAP_END:
+		return _fail("CutTreeBlockSwaps runs past its %d rows." % Gen1Layout.CUT_BLOCK_SWAPS.size())
+	var event: int = int(layout["pc_met_bill"])
+	if rom.u8(event) != Gen1Layout.OPCODE_LD_A_FAR \
+		or rom.u8(event + 3) != Gen1Layout.OPCODE_CB_PREFIX:
+		return _fail("DisplayPCMainMenu does not read an event flag at $%05X." % event)
+	var index: int = (rom.u16le(event + 1) - int(layout["event_flags"])) * 8 \
+		+ (rom.u8(event + 4) - Gen1Layout.OPCODE_BIT_A) / 8
+	if index != Gen1Layout.MET_BILL_EVENT:
+		return _fail("DisplayPCMainMenu reads event %d, not EVENT_MET_BILL." % index)
 	return _ok()
 
 

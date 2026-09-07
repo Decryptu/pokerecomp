@@ -353,6 +353,7 @@ func _tile_palettes_for(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Array:
 		_fade_order,
 		_fade_white_fill,
 		_world.gen1_last_map(),
+		_world.gen1_map_pal_offset,
 	)
 	if _transition_order == Gen2BattleTransition.IDENTITY:
 		return rows
@@ -970,7 +971,9 @@ func _sprite_palette(palette: int) -> PackedColorArray:
 func _overworld_sprite_colors(palette: int) -> PackedColorArray:
 	if _world.data.generation != RomRegistry.GEN1:
 		return _world.data.overworld_sprite_palette(palette, _time_of_day)
-	return Gen2WorldPalette.gen1_object_colors(_gen1_map_colors())
+	return Gen2WorldPalette.gen1_object_colors(
+		_gen1_map_colors(), _world.gen1_map_pal_offset
+	)
 
 
 func _gen1_map_colors() -> PackedColorArray:

@@ -68,7 +68,11 @@ func begin(
 		return _failure(&"fishing_in_progress")
 	if not is_rod(rod):
 		return _failure(&"invalid_rod")
-	if fish_group <= 0 or selected_fish_group <= 0 or record.is_empty():
+	## Generation 1's record carries its own slots, because only the Super Rod
+	## reads the map and a map with no group is still cast at: `wRodResponse` 2
+	## is a box rather than a refusal.
+	if record.is_empty() or (not record.has("slots")
+		and (fish_group <= 0 or selected_fish_group <= 0)):
 		return _failure(&"no_fishing_group")
 
 	_context = {
@@ -84,6 +88,8 @@ func begin(
 	_pending_encounter = Gen2WorldEncounter.resolve_fishing(
 		record, rod, time_of_day, time_groups, random, force_encounter
 	)
+	_context["no_fish"] = (record.get("slots", []) as Array).is_empty() \
+		if record.has("slots") else false
 	_state = STATE_CASTING
 	return {
 		"ok": true,
@@ -108,7 +114,10 @@ func advance() -> Dictionary:
 			var no_bite := _result_context()
 			_reset()
 			no_bite["ok"] = true
-			no_bite["kind"] = &"fishing_no_bite"
+			## `FishingAnim`'s three answers: `wRodResponse` 2 is the map having
+			## no fishing group and 0 is a cast that caught nothing.
+			no_bite["kind"] = &"fishing_no_fish" if bool(no_bite.get("no_fish", false)) \
+				else &"fishing_no_bite"
 			no_bite["state"] = STATE_IDLE
 			return no_bite
 		_state = STATE_BITE

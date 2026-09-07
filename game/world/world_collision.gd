@@ -546,12 +546,14 @@ const GEN1_DUNGEON_TILESETS: Array[int] = [3, 7, 10, 12, 13, 15, 17, 18, 19, 20,
 
 
 ## `CheckTilePassable`, with `IsNextTileShoreOrWater`'s own test in front of it,
-## as the permission a Generation 2 collision code would have answered. Tile $14
-## is water only on a `WaterTilesets` row: elsewhere it is Red's own doormat.
+## as the permission a Generation 2 collision code would have answered. A tile
+## that keeps `CollisionCheckOnWater` surfing is water and the passable list
+## answers the rest, which is why $14 is Red's own doormat off a water tileset
+## and why the Vermilion dock's own $32 is a landing rather than more sea.
 static func gen1_permission(tileset: Gen2WorldTileset, tile: int) -> int:
 	if tileset == null or tile < 0:
 		return WALL_TILE
-	if tileset.water and tile == Gen1Layout.WATER_TILE:
+	if Gen1Layout.is_shore_or_water(tileset.number, tileset.water, tile):
 		return WATER_TILE
 	return LAND_TILE if tileset.tile_passable(tile) else WALL_TILE
 

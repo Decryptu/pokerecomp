@@ -63,9 +63,9 @@ const GEN1_CENSUS: Dictionary = {
 ## how many of them read the water table, the maps holding one, and the left
 ## shores among them.
 const GEN1_CELL_CENSUS: Dictionary = {
-	&"red": [17875, 3624, 57, 34],
-	&"blue": [17875, 3624, 57, 34],
-	&"yellow": [19317, 5172, 57, 38],
+	&"red": [17909, 3624, 57, 34],
+	&"blue": [17909, 3624, 57, 34],
+	&"yellow": [19355, 5172, 57, 38],
 }
 
 ## Viridian Forest's FOREST tileset is the one indoor map that does not roll off
@@ -123,6 +123,7 @@ func _verify_gen1_tables() -> void:
 	_gen1_route_1()
 	_gen1_sea_routes()
 	_gen1_super_rod()
+	_gen1_rod_casts()
 	_gen1_cells()
 	_gen1_rolls()
 	_r.note("gen1 encounters %s" % census)
@@ -318,6 +319,86 @@ func _gen1_super_rod() -> void:
 				slot.has("threshold") == (_r.game_id == RomRegistry.YELLOW),
 				"map %d's rod slot carries the wrong pick." % map.number
 			)
+
+
+## `ItemUseOldRod`, `ItemUseGoodRod` and `ItemUseSuperRod` rolled over Pallet
+## Town's own shore. The Old Rod never misses, the other two miss about half the
+## time, and a map `SuperRodData` does not name answers `wRodResponse` 2, which
+## is a cast with no slots to pick from.
+const GEN1_ROD_CASTS: int = 4000
+const GEN1_ROD_SEED: int = 11
+const GEN1_ROD_TOLERANCE: float = 0.03
+## Pallet Town's own shore, and Route 16's, which `SuperRodData` names no group
+## for on any of the three.
+const GEN1_ROD_CAST_CELL := Vector2i(6, 13)
+const GEN1_NO_FISH_MAP: int = 0x1B
+const GEN1_NO_FISH_CELL := Vector2i(14, 15)
+
+
+func _gen1_rod_casts() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, GEN1_ROD_MAP, GEN1_ROD_CAST_CELL)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	for rod: StringName in Gen2WorldFishing.rods():
+		world.inventory.set_item_quantity(
+			Gen2WorldInventory.item_for_rod(rod, RomRegistry.GEN1), 1
+		)
+	var random := RandomNumberGenerator.new()
+	random.seed = GEN1_ROD_SEED
+	for rod: StringName in Gen2WorldFishing.rods():
+		var bites: int = 0
+		var species: Dictionary = {}
+		for _cast: int in GEN1_ROD_CASTS:
+			var started: Dictionary = world.fishing_request(rod, random)
+			if not _r.check(bool(started.get("ok", false)), "%s was refused." % rod):
+				return
+			var result: Dictionary = world.advance_fishing()
+			if StringName(result.get("kind", &"")) == &"fishing_bite":
+				bites += 1
+				species[int((result["encounter"] as Dictionary)["pokemon"])] = true
+			world.cancel_fishing()
+		var share: float = float(bites) / float(GEN1_ROD_CASTS)
+		var wanted: float = _gen1_bite_share(rod)
+		_r.check(absf(share - wanted) < GEN1_ROD_TOLERANCE,
+			"%s bit on %.3f of its casts, not %.2f." % [rod, share, wanted])
+		_r.note("%s: %.3f bites over %s" % [rod, share, species.keys()])
+	_gen1_no_fish(world)
+
+
+## `.RandomLoop` bites on an even roll whose two bits land inside the list and
+## re-rolls the whole byte otherwise, so a group of n slots bites n / (n + 4) of
+## the time. The Old Rod never rolls and Yellow's Super Rod spends `and $1`.
+func _gen1_bite_share(rod: StringName) -> float:
+	if rod == Gen2WorldEncounter.METHOD_OLD_ROD:
+		return 1.0
+	if rod == Gen2WorldEncounter.METHOD_SUPER_ROD:
+		if _r.game_id == RomRegistry.YELLOW:
+			return 0.5
+		var group: int = _r.data.world_fishing_map(GEN1_ROD_MAP)
+		var slots: int = (_r.data.world_fishing_group(group).get("slots", []) as Array).size()
+		return float(slots) / float(slots + Gen1Layout.SUPER_ROD_MAX_SLOTS)
+	var rows: int = Gen1Layout.GOOD_ROD_SLOTS.size()
+	return float(rows) / float(rows + Gen1Layout.SUPER_ROD_MAX_SLOTS)
+
+
+## `ReadSuperRodData`'s own `ld e, $2`: the cast happens and answers nothing.
+func _gen1_no_fish(world: Gen2WorldAPI) -> void:
+	var elsewhere: Gen2WorldAPI = _r.open_world(
+		0, GEN1_NO_FISH_MAP, GEN1_NO_FISH_CELL, world.state
+	)
+	if elsewhere == null:
+		return
+	elsewhere.inventory = world.inventory
+	elsewhere.player_facing = Gen2WorldSprite.FACING_DOWN
+	var started: Dictionary = elsewhere.fishing_request(Gen2WorldEncounter.METHOD_SUPER_ROD)
+	if not _r.check(bool(started.get("ok", false)),
+		"the Super Rod was refused where no group is named."):
+		return
+	_r.check(
+		StringName(elsewhere.advance_fishing().get("kind", &"")) == &"fishing_no_fish",
+		"a map with no fishing group did not answer NothingHereText."
+	)
 
 
 static func _gen1_rows(slots: Array) -> Array:

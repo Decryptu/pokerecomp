@@ -44,6 +44,18 @@ const UNSTANDABLE_WARPS: Array = [
 	[161, 5], [161, 6], [162, 0], [162, 1], [245, 2], [245, 3],
 ]
 
+## Viridian City's own cut tree, the first the corpus holds, and the block it
+## sits in. Route 10's northern tunnel mouth, Rock Tunnel 1F's stairs down and
+## the mouth it comes back out of.
+const CUT_TREE_CELL := Vector2i(8, 22)
+const CUT_TREE_BLOCK := Vector2i(4, 11)
+const ROUTE_10: int = 21
+const ROCK_TUNNEL_MOUTH := Vector2i(8, 17)
+const ROCK_TUNNEL_B1F: int = 232
+const ROCK_TUNNEL_STAIRS := Vector2i(37, 3)
+const ROCK_TUNNEL_B1F_STAIRS := Vector2i(33, 25)
+const ROCK_TUNNEL_EXIT := Vector2i(15, 3)
+
 ## Pallet Town's front door and the mat behind it: the round trip a `LAST_MAP`
 ## warp is, out through `RedsHouse1F_Object`'s first warp and back.
 const PALLET_TOWN: int = 0
@@ -364,6 +376,8 @@ func _one_game() -> void:
 	_check_an_escape_rope()
 	_check_the_bicycle()
 	_check_the_poke_flute()
+	_check_a_cut_tree()
+	_check_rock_tunnel_is_dark()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -1676,9 +1690,9 @@ func _check_a_gym_statue() -> void:
 		if world == null:
 			return
 		if badge:
-			world.state.set_engine_flag(Gen2WorldState.BADGE_ENGINE_FLAGS[
-				Gen2WorldState.KANTO_BADGE_FIRST
-			], true)
+			world.state.set_engine_flag(
+				Gen2WorldState.gen1_badge_flag(Gen1Layout.BOULDERBADGE), true
+			)
 		boxes.append(_box_text(world))
 	_r.check(boxes[0].begins_with(_statue_box()) and boxes[0] != boxes[1],
 		"the gym statues read %s." % [boxes])
@@ -1755,9 +1769,7 @@ func _check_flying() -> void:
 		StringName(world.fly_request().get("reason", &"")) == &"badge_required",
 		"flying was allowed with no THUNDERBADGE."
 	)
-	world.state.set_engine_flag(Gen2WorldState.BADGE_ENGINE_FLAGS[
-		Gen2WorldState.KANTO_BADGE_FIRST + Gen1Layout.THUNDERBADGE
-	], true)
+	world.state.set_engine_flag(Gen2WorldState.gen1_badge_flag(Gen1Layout.THUNDERBADGE), true)
 	var request: Dictionary = world.fly_request()
 	if not _r.check(bool(request.get("ok", false)), "flying was refused outdoors."):
 		return
@@ -1776,9 +1788,7 @@ func _check_flying() -> void:
 	if indoors == null:
 		return
 	indoors.set_party_summary(1, false, FLY_SPECIES, FLY_MOVES)
-	indoors.state.set_engine_flag(Gen2WorldState.BADGE_ENGINE_FLAGS[
-		Gen2WorldState.KANTO_BADGE_FIRST + Gen1Layout.THUNDERBADGE
-	], true)
+	indoors.state.set_engine_flag(Gen2WorldState.gen1_badge_flag(Gen1Layout.THUNDERBADGE), true)
 	_r.check(
 		StringName(indoors.fly_request().get("reason", &"")) == &"indoors",
 		"flying was allowed out of a house."
@@ -2048,3 +2058,84 @@ func _hidden_item_box() -> String:
 	return "%s found\n%s!" % [
 		Gen2WorldScriptRunner.UNNAMED, _r.data.item_name(HIDDEN_POTION),
 	]
+
+
+## `UsedCut` and `ReplaceTreeTileBlock` on the corpus's own first cut tree:
+## Viridian City's, which hides the path west out of the school's row.
+func _check_a_cut_tree() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_CITY, CUT_TREE_CELL + Vector2i.DOWN)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	_r.field_move_party(world)
+	_r.check(
+		StringName(world.cut_request().get("reason", &"")) == &"badge_required",
+		"Cut was allowed with no CASCADEBADGE."
+	)
+	world.state.set_engine_flag(
+		Gen2WorldState.gen1_badge_flag(Gen1Layout.CASCADEBADGE), true
+	)
+	var before: int = world.block_at(CUT_TREE_BLOCK.x, CUT_TREE_BLOCK.y)
+	if not _r.check(bool(world.cut_request().get("ok", false)), "Cut was refused at the tree."):
+		return
+	world.complete_cut()
+	var after: int = world.block_at(CUT_TREE_BLOCK.x, CUT_TREE_BLOCK.y)
+	_r.check(
+		after == Gen1Layout.cut_block_swap(before) and after != before,
+		"cutting turned block $%02X into $%02X." % [before, after]
+	)
+	world.player_cell = CUT_TREE_CELL + Vector2i.DOWN * 2
+	_r.check(
+		StringName(world.cut_request().get("reason", &"")) == &"nothing_to_cut",
+		"Cut was offered with nothing in front."
+	)
+
+
+## `wMapPalOffset`: the warp into ROCK_TUNNEL_1F darkens both floors, `.flash`
+## clears it, and the way back out to Route 10 clears it again.
+func _check_rock_tunnel_is_dark() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, ROUTE_10, ROCK_TUNNEL_MOUTH)
+	if world == null:
+		return
+	_r.field_move_party(world)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	if not _r.check(bool(world.try_warp().get("ok", false)), "the tunnel mouth refused."):
+		return
+	_r.check(
+		world.map_id() == Vector2i(0, Gen1Layout.ROCK_TUNNEL_1F)
+			and world.gen1_map_pal_offset == Gen1Layout.MAP_PAL_OFFSET_DARK,
+		"the tunnel is %s at offset %d." % [world.map_id(), world.gen1_map_pal_offset]
+	)
+	world.player_cell = ROCK_TUNNEL_STAIRS
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	if not _r.check(bool(world.try_warp().get("ok", false)), "the stairs down refused."):
+		return
+	_r.check(
+		world.map_id() == Vector2i(0, ROCK_TUNNEL_B1F)
+			and world.gen1_map_pal_offset == Gen1Layout.MAP_PAL_OFFSET_DARK,
+		"B1F is %s at offset %d." % [world.map_id(), world.gen1_map_pal_offset]
+	)
+	_r.check(
+		StringName(world.flash_request().get("reason", &"")) == &"badge_required",
+		"Flash was allowed with no BOULDERBADGE."
+	)
+	world.state.set_engine_flag(
+		Gen2WorldState.gen1_badge_flag(Gen1Layout.BOULDERBADGE), true
+	)
+	if not _r.check(bool(world.flash_request().get("ok", false)), "Flash was refused."):
+		return
+	world.complete_flash()
+	_r.check(world.gen1_map_pal_offset == 0, "Flash left the floor dark.")
+	world.player_cell = ROCK_TUNNEL_B1F_STAIRS
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	world.try_warp()
+	world.player_cell = ROCK_TUNNEL_EXIT
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	if not _r.check(bool(world.try_warp().get("ok", false)), "the way out refused."):
+		return
+	_r.check(
+		world.map_id() == Vector2i(0, ROUTE_10) and world.gen1_map_pal_offset == 0,
+		"leaving Rock Tunnel landed on %s at offset %d." % [
+			world.map_id(), world.gen1_map_pal_offset,
+		]
+	)
