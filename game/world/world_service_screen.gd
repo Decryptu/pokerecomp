@@ -2339,7 +2339,7 @@ func _confirm_gen1_top_row(row: int) -> void:
 	match row:
 		Gen2WorldPC.GEN1_PC_BILLS:
 			var met: bool = _world.state.is_event_flag_active(
-				Gen1Layout.met_bill_event(_data.id)
+				Gen1Layout.MET_BILL_EVENT
 			)
 			_open_gen1_box_text(
 				"pc", "accessed_bills" if met else "accessed_someones", &"gen1_bills"

@@ -130,25 +130,28 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 254, "text": 309, "branch": 111, "choice": 17, "flag": 43,
-		"give_item": 25, "has_item": 15, "take_item": 3, "unknown": 55,
+	&"red": {"rows": 261, "text": 328, "branch": 118, "choice": 20, "flag": 46,
+		"give_item": 28, "has_item": 15, "take_item": 3, "unknown": 59,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 9, "has_money": 3, "spend_money": 3, "money_box": 4,
 		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2,
 		"player_coord": 4, "walk": 2, "replace_block": 1, "day_care": 1},
-	&"blue": {"rows": 254, "text": 309, "branch": 111, "choice": 17, "flag": 43,
-		"give_item": 25, "has_item": 15, "take_item": 3, "unknown": 55,
+	&"blue": {"rows": 261, "text": 328, "branch": 118, "choice": 20, "flag": 46,
+		"give_item": 28, "has_item": 15, "take_item": 3, "unknown": 59,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 9, "has_money": 3, "spend_money": 3, "money_box": 4,
 		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2,
 		"player_coord": 4, "walk": 2, "replace_block": 1, "day_care": 1},
-	&"yellow": {"rows": 300, "text": 347, "branch": 106, "choice": 18, "flag": 37,
-		"give_item": 24, "has_item": 12, "take_item": 3, "unknown": 59,
+	&"yellow": {"rows": 307, "text": 366, "branch": 113, "choice": 21, "flag": 40,
+		"give_item": 27, "has_item": 12, "take_item": 3, "unknown": 63,
 		"pick_up_item": 108, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 7, "has_money": 3, "spend_money": 3, "money_box": 4,
 		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 6,
 		"player_coord": 4, "walk": 2, "replace_block": 1, "day_care": 1},
 }
+## `BIT_GOT_OLD_ROD` and its two neighbours share `wStatusFlags1` with
+## `BIT_STRENGTH_ACTIVE`, so reading that byte is what hands the three rods over.
+
 ## The eighth `call DisplayPokedex` in the source is `SilphCo11FPorygonText`,
 ## which no map text row names and the disassembly marks unreferenced. The
 ## `trade` rows are the eight `predef DoInGameTradeDialogue` sites plus

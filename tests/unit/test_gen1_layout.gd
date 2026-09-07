@@ -360,13 +360,28 @@ func test_every_palette_row_is_inside_the_table() -> void:
 
 
 ## `GBPalNormal` writes %11010000, so an object's three drawn indices take
-## shades 0, 1 and 3 and never the palette's third colour.
+## shades 0, 1 and 3 and never the palette's third colour. That byte is
+## `FadePal4`'s own rOBP0, which is why the fade table answers for it.
 func test_the_object_register_skips_the_third_colour() -> void:
-	assert_eq(Gen1Layout.OBJECT_SHADES, [0, 0, 1, 3] as Array[int])
+	var colors := PackedColorArray([Color.RED, Color.GREEN, Color.BLUE, Color.BLACK])
+	assert_eq(Gen1Layout.gb_palette(0, Gen1Layout.FADE_PAL_OBJECT), 0xD0)
+	assert_eq(
+		Gen2WorldPalette.gen1_object_colors(colors),
+		PackedColorArray([Color.RED, Color.RED, Color.GREEN, Color.BLACK])
+	)
+
+
+## `LoadGBPal` subtracts `wMapPalOffset` from `FadePal4` in bytes, so Rock
+## Tunnel's own 6 reads `FadePal2`: rBGP $FE and rOBP0 $FE, which leaves one
+## drawn shade above black.
+func test_rock_tunnel_reads_two_rows_back() -> void:
+	var dark: int = Gen1Layout.MAP_PAL_OFFSET_DARK
+	assert_eq(Gen1Layout.gb_palette(dark, Gen1Layout.FADE_PAL_BACKGROUND), 0xFE)
+	assert_eq(Gen1Layout.gb_palette(dark, Gen1Layout.FADE_PAL_OBJECT), 0xFE)
 	var colors := PackedColorArray([Color.RED, Color.GREEN, Color.BLUE, Color.BLACK])
 	assert_eq(
-		PokePalette.through_shades(colors, Gen1Layout.OBJECT_SHADES),
-		PackedColorArray([Color.RED, Color.RED, Color.GREEN, Color.BLACK])
+		Gen2WorldPalette.gen1_object_colors(colors, dark),
+		PackedColorArray([Color.BLUE, Color.BLACK, Color.BLACK, Color.BLACK])
 	)
 
 
@@ -513,3 +528,66 @@ func test_the_two_movement_bytes_decode_to_one_template() -> void:
 	assert_eq(Gen1Layout.object_movement(0xFE, 0x02), Gen2WorldObject.MOVEMENT_WALK_LEFT_RIGHT)
 	## A fixed direction only stands a sprite still while byte 1 says STAY.
 	assert_eq(Gen1Layout.object_movement(0xFE, 0xD0), Gen2WorldObject.MOVEMENT_WANDER)
+
+
+## `UsedCut`: the OVERWORLD tileset takes a tree or grass, GYM its own one tile,
+## and every other tileset answers nothing whatever is in front.
+func test_only_two_tilesets_can_be_cut() -> void:
+	assert_eq(
+		Gen1Layout.cut_tile(Gen1Layout.TILESET_OVERWORLD, Gen1Layout.CUT_TREE_TILE),
+		Gen1Layout.CUT_TREE_TILE
+	)
+	assert_eq(
+		Gen1Layout.cut_tile(Gen1Layout.TILESET_OVERWORLD, Gen1Layout.CUT_GRASS_TILE),
+		Gen1Layout.CUT_GRASS_TILE
+	)
+	assert_eq(Gen1Layout.cut_tile(Gen1Layout.TILESET_GYM, Gen1Layout.CUT_TREE_TILE), -1)
+	assert_eq(
+		Gen1Layout.cut_tile(Gen1Layout.TILESET_GYM, Gen1Layout.CUT_GYM_TREE_TILE),
+		Gen1Layout.CUT_GYM_TREE_TILE
+	)
+	assert_eq(Gen1Layout.cut_tile(Gen1Layout.TILESET_CAVERN, Gen1Layout.CUT_TREE_TILE), -1)
+	assert_eq(Gen1Layout.cut_block_swap(0x32), 0x6D)
+	assert_eq(Gen1Layout.cut_block_swap(0xFF), -1)
+
+
+## `IsNextTileShoreOrWater`: a tileset off `WaterTilesets` answers nothing, and
+## the Vermilion dock's own $32 is a landing rather than more sea.
+func test_the_shore_tiles_are_water_off_the_dock() -> void:
+	for tile: int in [Gen1Layout.WATER_TILE, 0x32, 0x48]:
+		assert_true(Gen1Layout.is_shore_or_water(Gen1Layout.TILESET_OVERWORLD, true, tile))
+		assert_false(Gen1Layout.is_shore_or_water(Gen1Layout.TILESET_OVERWORLD, false, tile))
+	assert_true(
+		Gen1Layout.is_shore_or_water(Gen1Layout.TILESET_SHIP_PORT, true, Gen1Layout.WATER_TILE)
+	)
+	for tile: int in Gen1Layout.SHORE_TILES:
+		assert_false(Gen1Layout.is_shore_or_water(Gen1Layout.TILESET_SHIP_PORT, true, tile))
+
+
+## `.outOfBattleMovePointers`' own badge tests, and the three rows with none.
+func test_the_field_move_badges_are_the_jump_tables_own() -> void:
+	assert_eq(
+		int(Gen1Layout.FIELD_MOVE_BADGES[Gen2WorldFieldMove.MOVE_CUT]),
+		Gen1Layout.CASCADEBADGE
+	)
+	assert_eq(
+		int(Gen1Layout.FIELD_MOVE_BADGES[Gen2WorldFieldMove.MOVE_FLASH]),
+		Gen1Layout.BOULDERBADGE
+	)
+	for move: int in [
+		Gen2WorldFieldMove.MOVE_DIG, Gen2WorldFieldMove.MOVE_TELEPORT,
+		Gen2WorldFieldMove.MOVE_SOFTBOILED,
+	]:
+		assert_false(Gen1Layout.FIELD_MOVE_BADGES.has(move))
+
+
+## `ItemUseOldRod`'s one pair and `GoodRodMons`' two, as dex numbers.
+func test_the_two_map_free_rods_carry_their_own_slots() -> void:
+	var old_rod: Array = Gen1Layout.rod_slots(Gen2WorldEncounter.METHOD_OLD_ROD)
+	assert_eq(old_rod.size(), 1)
+	assert_eq(int((old_rod[0] as Dictionary)["species"]), 129)
+	assert_eq(int((old_rod[0] as Dictionary)["level"]), 5)
+	var good_rod: Array = Gen1Layout.rod_slots(Gen2WorldEncounter.METHOD_GOOD_ROD)
+	assert_eq(good_rod.size(), 2)
+	for slot: Dictionary in good_rod:
+		assert_eq(int(slot["level"]), 10)

@@ -49,6 +49,7 @@ var dig_warp: Dictionary = {}
 ## Escape Rope, Dig and Teleport land beside. PALLET_TOWN is the zeroed byte's.
 var gen1_last_map: int = -1
 var gen1_last_blackout_map: int = Gen1Layout.PALLET_TOWN
+var gen1_map_pal_offset: int = 0
 ## `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`, which
 ## `SavePlayerData` copies into `sCurMapData` alongside the dig warp: where the
 ## stairs out of a Pokemon Center's second floor lead and whose landmark that
@@ -83,6 +84,7 @@ static func from_world(world: Gen2WorldAPI) -> Gen2WorldSnapshot:
 	out.last_spawn_map = world.last_spawn_map
 	out.gen1_last_map = world.gen1_last_map()
 	out.gen1_last_blackout_map = world.gen1_last_blackout_map()
+	out.gen1_map_pal_offset = world.gen1_map_pal_offset
 	out.dig_warp = world.dig_warp.duplicate()
 	out.backup_warp = world.backup_warp.duplicate()
 	out.spawn_after_champion = world.spawn_after_champion
@@ -106,6 +108,7 @@ func to_dict() -> Dictionary:
 		"last_spawn_map": [last_spawn_map.x, last_spawn_map.y],
 		"gen1_last_map": gen1_last_map,
 		"gen1_last_blackout_map": gen1_last_blackout_map,
+		"gen1_map_pal_offset": gen1_map_pal_offset,
 		"dig_warp": dig_warp.duplicate(),
 		"backup_warp": backup_warp.duplicate(),
 		"spawn_after_champion": spawn_after_champion,
@@ -145,6 +148,7 @@ static func from_dict(raw: Variant) -> Gen2WorldSnapshot:
 	out.gen1_last_blackout_map = int(source.get(
 		"gen1_last_blackout_map", Gen1Layout.PALLET_TOWN
 	))
+	out.gen1_map_pal_offset = maxi(0, int(source.get("gen1_map_pal_offset", 0)))
 	out.dig_warp = _warp_from_value(source.get("dig_warp", {}))
 	out.backup_warp = _warp_from_value(source.get("backup_warp", {}))
 	out.spawn_after_champion = clampi(

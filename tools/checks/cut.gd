@@ -36,8 +36,18 @@ const EXPECTED_CENSUS: Dictionary = {
 }
 
 
+## `UsedCut` and `CutTreeBlockSwaps` over the whole Generation 1 corpus: how many
+## cells the two tilesets accept, how many of those sit in a block the swap list
+## names, and the maps each is on. A cell whose block is not in the list is the
+## cartridge's own `ret z`: the box is printed and the tree stays.
+const GEN1_CENSUS: Dictionary = {
+	&"red": [1527, 1527, 30], &"blue": [1527, 1527, 30], &"yellow": [1527, 1527, 30],
+}
+
+
 func run(r: RefCounted) -> void:
 	_r = r
+	_r.each_game_of(RomRegistry.GEN1, _gen1_census)
 	for game_id: StringName in _r.GAME_IDS:
 		var data: GameData = GameData.open(game_id)
 		if data == null:
@@ -217,3 +227,26 @@ func _verify_ilex_forest(game_id: StringName, data: GameData, crystal: bool) -> 
 		StringName(wrong_world.cut_request().get("reason", &"")) == &"badge_required",
 		"%s: Ilex Forest accepted the other profile's Hive Badge flag." % game_id
 	)
+
+
+func _gen1_census() -> void:
+	var cells: int = 0
+	var resolved: int = 0
+	var maps: int = 0
+	for map: Gen2WorldMap in _r.data.world_maps():
+		var found: bool = false
+		for y: int in map.collision_height:
+			for x: int in map.collision_width:
+				if Gen1Layout.cut_tile(map.tileset, map.collision_at(x, y)) < 0:
+					continue
+				cells += 1
+				found = true
+				if Gen1Layout.cut_block_swap(map.block_at(x >> 1, y >> 1)) >= 0:
+					resolved += 1
+		maps += 1 if found else 0
+	var counts: Array = [cells, resolved, maps]
+	_r.note("%d cuttable cells, %d in a swapped block, across %d maps." % counts)
+	_r.check(counts == GEN1_CENSUS.get(_r.game_id, []),
+		"the Generation 1 census is %s, not the pinned %s." % [
+			counts, GEN1_CENSUS.get(_r.game_id, []),
+		])

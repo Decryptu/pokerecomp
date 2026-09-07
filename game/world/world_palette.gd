@@ -143,6 +143,14 @@ const BATTLE_TOWER_FADE_STEP_FRAMES: int = 7
 
 ## One step of a palette fade: `CopyPals`' rule, which every `DmgToCgb*Pals`
 ## caller shares. The identity order answers the palette it was handed.
+## Which rBGP a Generation 1 map draws through: `LoadGBPal`'s own row while
+## nothing is fading, and the fade's row while one is, because the two write the
+## same register and the fade's landing restores the map's.
+static func gen1_fade_order(fade_order: int, map_pal_offset: int) -> int:
+	return Gen1Layout.gb_palette(map_pal_offset, Gen1Layout.FADE_PAL_BACKGROUND) \
+		if fade_order == FADE_IDENTITY else fade_order
+
+
 static func fade_palette(palette: PackedColorArray, order: int) -> PackedColorArray:
 	if order == FADE_IDENTITY or palette.size() < 4:
 		return palette
@@ -195,8 +203,11 @@ static func gen1_tile_palettes(
 	tileset: Gen2WorldTileset,
 	last_map: int = -1,
 	fade_order: int = FADE_IDENTITY,
+	map_pal_offset: int = 0,
 ) -> Array:
-	var colors: PackedColorArray = fade_palette(gen1_map_colors(data, map, last_map), fade_order)
+	var colors: PackedColorArray = fade_palette(
+		gen1_map_colors(data, map, last_map), gen1_fade_order(fade_order, map_pal_offset)
+	)
 	var out: Array = []
 	out.resize(tileset.tile_count)
 	out.fill(colors)
@@ -214,9 +225,15 @@ static func gen1_map_colors(
 
 ## The same four through `GBPalNormal`'s `rOBP0`, which is what every object on
 ## a Generation 1 map is drawn with. Colour 0 is the object's transparent index,
-## so a sprite never shows the map's own background colour.
-static func gen1_object_colors(colors: PackedColorArray) -> PackedColorArray:
-	return PokePalette.through_shades(colors, Gen1Layout.OBJECT_SHADES)
+## so a sprite never shows the map's own background colour. `LoadGBPal` writes
+## that register out of `FadePal4 - wMapPalOffset`, so an object in Rock Tunnel
+## darkens with the map behind it.
+static func gen1_object_colors(
+	colors: PackedColorArray, map_pal_offset: int = 0
+) -> PackedColorArray:
+	return fade_palette(colors, Gen1Layout.gb_palette(
+		map_pal_offset, Gen1Layout.FADE_PAL_OBJECT
+	))
 
 
 ## `FillWhiteBGColor`, which only the fade out of the map runs: every background
@@ -248,9 +265,12 @@ static func tile_palettes(
 	fade_order: int = FADE_IDENTITY,
 	white_fill: bool = false,
 	last_map: int = -1,
+	map_pal_offset: int = 0,
 ) -> Array:
 	if data.generation == RomRegistry.GEN1:
-		return gen1_tile_palettes(data, map, tileset, last_map, fade_order)
+		return gen1_tile_palettes(
+			data, map, tileset, last_map, fade_order, map_pal_offset
+		)
 	## `LoadMapPals` asks `LoadSpecialMapPalette` first, and its carry skips the
 	## environment and time-of-day pair entirely.
 	var special: Array = data.special_map_palettes(map.tileset, map.environment)

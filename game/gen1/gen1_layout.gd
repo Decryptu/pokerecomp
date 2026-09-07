@@ -117,10 +117,6 @@ const HP_BAR_PALETTES: Dictionary = {
 	"hp_green": 0x1F, "hp_yellow": 0x20, "hp_red": 0x21,
 }
 
-## `GBPalNormal`'s `rOBP0`, %11010000: an object's colours 1, 2 and 3 take
-## shades 0, 1 and 3, so a sprite never shows the palette's third colour.
-const OBJECT_SHADES: Array[int] = [0, 0, 1, 3]
-
 ## Evolutions by method until a zero byte, then (level, move) pairs until
 ## another; `EVOLVE_ITEM` is the only four-byte row.
 const EVOLVE_LEVEL: int = 1
@@ -599,6 +595,7 @@ const DAY_CARE_TEXT_AT: Dictionary = {
 ## refusals `ItemUseFailed` reaches and `TossItem_`'s own three.
 const ITEM_USE_TEXT_AT: Dictionary = {
 	"not_time": 0x00, "not_yours": 0x05, "no_effect": 0x0A, "no_cycling": 0x19,
+	"no_surfing": 0x1E,
 }
 ## `GotOnBicycleText` and `GotOffBicycleText`, pinned away from the run above
 ## because Yellow's `DontHavePokemonText` sits between them and it.
@@ -611,6 +608,21 @@ const POKE_FLUTE_TEXT_AT: Dictionary = {
 ## rather than through `ItemUseFailed`. `CannotUseItemsHereText` above it is the
 ## Colosseum's and no screen here reaches it.
 const START_MENU_TEXT_AT: Dictionary = {"cannot_get_off": 0x00}
+## `start_sub_menus.asm`'s own six in file order, and `field_move_messages.asm`'s
+## four. Yellow keeps each run whole and moves the second away from the first.
+const FIELD_MOVE_TEXT_AT: Dictionary = {
+	"flash_lights_area": 0x00, "warp_to_last_center": 0x23,
+	"cannot_teleport_now": 0x42, "cannot_fly_here": 0x5E,
+	"not_healthy_enough": 0x72, "new_badge_required": 0x87,
+}
+const STRENGTH_TEXT_AT: Dictionary = {
+	"used_strength": 0x00, "can_move_boulders": 0x15,
+	"current_too_fast": 0x2D, "cycling_is_fun": 0x4C,
+}
+## `UsedCut`'s two, and `ItemUseSurfboard`'s two.
+const CUT_TEXT_AT: Dictionary = {"nothing_to_cut": 0x00, "used_cut": 0x1D}
+const SURF_TEXT_AT: Dictionary = {"got_on": 0x00, "no_place_to_get_off": 0x11}
+
 ## `CoinCaseNumCoinsText`, a run of one: `ItemUseCoinCase` is the only reader.
 const COIN_CASE_TEXT_AT: Dictionary = {"coins": 0x00}
 ## `PartyMenuMessagePointers`' own five, in the order the table names them.
@@ -765,6 +777,62 @@ const SNORLAX_FLUTES: Array[Dictionary] = [
 	{"map": ROUTE_16, "fight": 1224, "beat": 1225, "count": 2},
 ]
 
+## `.outOfBattleMovePointers`' own `bit` on `wObtainedBadges`. Dig, Teleport and
+## Softboiled test none.
+const BOULDERBADGE: int = 0
+const CASCADEBADGE: int = 1
+const RAINBOWBADGE: int = 3
+const SOULBADGE: int = 4
+const FIELD_MOVE_BADGES: Dictionary = {
+	Gen2WorldFieldMove.MOVE_CUT: CASCADEBADGE,
+	Gen2WorldFieldMove.MOVE_FLY: THUNDERBADGE,
+	Gen2WorldFieldMove.MOVE_SURF: SOULBADGE,
+	Gen2WorldFieldMove.MOVE_STRENGTH: RAINBOWBADGE,
+	Gen2WorldFieldMove.MOVE_FLASH: BOULDERBADGE,
+}
+
+const TILESET_GYM: int = 7
+const CUT_TREE_TILE: int = 0x3D
+const CUT_GRASS_TILE: int = 0x52
+const CUT_GYM_TREE_TILE: int = 0x50
+## `CutTreeBlockSwaps`, byte identical in all three: the block holding the tree
+## and the one that replaces it. `ReplaceTreeTileBlock` walks the whole list
+## whatever the tileset, so a gym's own row sits beside the overworld's.
+const CUT_BLOCK_SWAPS: Dictionary = {
+	0x32: 0x6D, 0x33: 0x6C, 0x34: 0x6F, 0x35: 0x4C, 0x60: 0x6E,
+	0x0B: 0x0A, 0x3C: 0x35, 0x3F: 0x35, 0x3D: 0x36,
+}
+const CUT_BLOCK_SWAP_SIZE: int = 2
+const CUT_BLOCK_SWAP_END: int = 0xFF
+
+## `IsNextTileShoreOrWater`'s two shore tiles, which its `cp SHIP_PORT` skips on
+## the Vermilion dock alone.
+const SHORE_TILES: Array[int] = [0x48, 0x32]
+
+## `IsSurfingAllowed`'s Seafoam branch, which nothing reaches yet: only that
+## map's own per-frame script sets either boulder event.
+const SEAFOAM_B4F_STAIRS := Vector2i(7, 11)
+const SEAFOAM_BOULDER_EVENTS: Array[int] = [2512, 2513]
+
+## `CheckForCollisionWhenPushingBoulder`'s `cp $15`, which refuses a push whether
+## or not the tileset calls that tile passable.
+const BOULDER_STAIRS_TILE: int = 0x15
+
+## `wMapPalOffset`, which `LoadGBPal` subtracts from `FadePal4` in bytes before
+## writing rBGP, rOBP0 and rOBP1. Only the warp into ROCK_TUNNEL_1F writes it, so
+## that floor and B1F are the whole of Generation 1's darkness.
+const ROCK_TUNNEL_1F: int = 0x52
+const MAP_PAL_OFFSET_DARK: int = 6
+## `FadePal1` to `FadePal8` as the byte run `LoadGBPal` indexes: rBGP, rOBP0 and
+## rOBP1 a row, `dc`-packed.
+const FADE_PALS: Array[int] = [
+	0xFF, 0xFF, 0xFF, 0xFE, 0xFE, 0xF8, 0xF9, 0xE4, 0xE4, 0xE4, 0xD0, 0xE0,
+	0xE4, 0xD0, 0xE0, 0x90, 0x80, 0x90, 0x40, 0x40, 0x40, 0x00, 0x00, 0x00,
+]
+const FADE_PAL_BASE: int = 9
+const FADE_PAL_BACKGROUND: int = 0
+const FADE_PAL_OBJECT: int = 1
+
 ## `NOT_VISITED`, which `BuildFlyLocationsList` writes for a town the player has
 ## not been to, and `.townMapFlyLoop`'s own `ld c, 15` between two draws.
 const TOWN_MAP_NOT_VISITED: int = 0xFE
@@ -801,11 +869,13 @@ const BOX_COUNT: int = 12
 const BOX_CAPACITY: int = 20
 
 ## `EVENT_MET_BILL`, which puts BILL's PC on the machine's top menu where
-## SOMEONE's PC otherwise stands. Yellow's unused `EVENT_54F` sits below it in
-## `constants/event_constants.asm` and pushes it one higher.
-const MET_BILL_EVENTS: Dictionary = {
-	RomRegistry.RED: 1360, RomRegistry.BLUE: 1360, RomRegistry.YELLOW: 1361,
-}
+## SOMEONE's PC otherwise stands. Yellow's unused `EVENT_54F` sits below it and
+## its `const_next $550 - 1` re-anchors the run, so all three number it alike;
+## `pc_met_bill` pins `DisplayPCMainMenu`'s own read of it.
+const MET_BILL_EVENT: int = 1360
+const OPCODE_LD_A_FAR: int = 0xFA
+const OPCODE_CB_PREFIX: int = 0xCB
+const OPCODE_BIT_A: int = 0x47
 
 ## `MapHeaderPointers` is flat: one `dw` a map id, with `MapHeaderBanks` beside
 ## it. `SwitchToMapRomBank` selects that bank once, which is what puts a map's
@@ -1051,7 +1121,14 @@ const ENGINE_FLAG_BYTES: Dictionary = {
 	"obtained_hidden_items": HIDDEN_ITEM_FLAG_BYTES,
 	"obtained_hidden_coins": HIDDEN_COIN_FLAG_BYTES,
 	"town_visited": TOWN_VISITED_FLAG_BYTES,
+	## Appended, because a run's base is its position here and a saved index
+	## may not move.
+	"status_flags_1": 1,
 }
+## `PrintStrengthText` sets bit 0 and `IsSurfingAllowed` bit 1. Generation 1 has
+## no `ResetBikeFlags`, so bit 0 outlives the map it was set on.
+const STRENGTH_ACTIVE_BIT: int = 0
+const SURF_ALLOWED_BIT: int = 1
 const ENGINE_FLAG_FIRST: int = 256
 const ENGINE_FLAG_BITS: int = 8
 ## `flag_array NUM_CITY_MAPS`, rounded up to the two bytes the array occupies.
@@ -1214,9 +1291,12 @@ const WILD_POINTERS_END: int = 0xFFFF
 const WILD_CHANCE_SIZE: int = 2
 const WILD_SLOT_CHANCES: Array[int] = [50, 101, 140, 165, 190, 215, 228, 241, 252, 255]
 
-## `GoodRodMons`. The Old Rod has no table: `ItemUseOldRod` carries its one pair
-## as `lb bc, 5, MAGIKARP`, and neither rod reads the map.
-const GOOD_ROD_SLOTS: Array = [[10, 0x9D], [10, 0x47]]
+## `GoodRodMons`: level, the cartridge's internal index and the dex number the
+## cache speaks. Neither this rod nor the Old Rod reads the map at all.
+const GOOD_ROD_SLOTS: Array = [[10, 0x9D, 118], [10, 0x47, 60]]
+## `old_rod` pins `lb bc, 5, MAGIKARP`, which rgbds writes as one `ld bc`.
+const OLD_ROD_SLOT: Array = [5, 129]
+const OPCODE_LD_BC: int = 0x01
 
 ## `SuperRodData`, a map id and a pointer to `count` (level, species) rows that
 ## `ReadSuperRodData` picks between by rejecting a two-bit roll. Yellow's
@@ -1338,6 +1418,7 @@ const RED_BLUE: Dictionary = {
 	"print_text": 0x3C49,
 	"event_flags": 0xD747,
 	"status_flags_4": 0xD72E,
+	"status_flags_1": 0xD728,
 	## The rest of what `decode_script` reads; a row calling anything else is not.
 	"text_script_end": 0x24D7,
 	"yes_no_choice": 0x35EC,
@@ -1457,6 +1538,12 @@ const RED_BLUE: Dictionary = {
 	"poke_flute_text": 0x0E20B,
 	"bicycle_text": 0x0E5F2,
 	"start_menu_text": 0x1342F,
+	"field_move_text": 0xA40A9,
+	"strength_text": 0xA403C,
+	"cut_text": 0xA82F8,
+	"surf_text": 0xA685E,
+	"cut_tree_blocks": 0x0F100,
+	"pc_met_bill": 0x17EEC,
 	"battle_font": 0x11EA0,
 	"battle_hud_1": 0x12080,
 	"battle_hud_2": 0x12098,
@@ -1482,6 +1569,7 @@ const RED_BLUE: Dictionary = {
 	"wild_data": 0x0CEEB,
 	"wild_chances": 0x13918,
 	"good_rod": 0x0E27F,
+	"old_rod": 0x0E252,
 	"super_rod": 0x0E919,
 	## `data/battle_anims`, every one of them in bank $1E and reached from
 	## `AttackAnimationPointers`.
@@ -1573,6 +1661,7 @@ const YELLOW: Dictionary = {
 	"print_text": 0x3C36,
 	"event_flags": 0xD746,
 	"status_flags_4": 0xD72D,
+	"status_flags_1": 0xD727,
 	"text_script_end": 0x23D2,
 	"yes_no_choice": 0x35EF,
 	"disable_waiting": 0x2FDE,
@@ -1672,6 +1761,12 @@ const YELLOW: Dictionary = {
 	"poke_flute_text": 0x0E0BA,
 	"bicycle_text": 0x0E536,
 	"start_menu_text": 0x11FD9,
+	"field_move_text": 0xB40A7,
+	"strength_text": 0xB417E,
+	"cut_text": 0xB7166,
+	"surf_text": 0xB6B0E,
+	"cut_tree_blocks": 0x0EF80,
+	"pc_met_bill": 0x17D70,
 	"battle_font": 0x10A20,
 	"battle_hud_1": 0x10C00,
 	"battle_hud_2": 0x10C18,
@@ -1698,6 +1793,7 @@ const YELLOW: Dictionary = {
 	"wild_data": 0x0CB95,
 	"wild_chances": 0x138E2,
 	"good_rod": 0x0E12C,
+	"old_rod": 0x0E0FF,
 	## Yellow's is a flat slot table rather than an index into groups.
 	"super_rod": 0xF5EDA,
 	"attack_anims": 0x7A22A,
@@ -1959,10 +2055,6 @@ static func map_count(id: StringName) -> int:
 	return MAP_COUNT_YELLOW if id == RomRegistry.YELLOW else MAP_COUNT_RED_BLUE
 
 
-static func met_bill_event(id: StringName) -> int:
-	return int(MET_BILL_EVENTS.get(id, MET_BILL_EVENTS[RomRegistry.RED]))
-
-
 ## `.inBattle`'s `wWereAnyMonsAsleep`: Yellow's `ld c, a` counts the wild's own
 ## sleep, where Red and Blue clear it and print `PlayedFluteNoEffectText` anyway.
 static func flute_counts_wild(id: StringName) -> bool:
@@ -2112,6 +2204,56 @@ static func object_movement(byte_1: int, byte_2: int) -> int:
 			byte_2, Gen2WorldObject.MOVEMENT_SPINRANDOM_SLOW
 		)
 	return OBJECT_WALKING_MOVEMENTS.get(byte_2, Gen2WorldObject.MOVEMENT_WANDER)
+
+
+## `UsedCut`'s gate, as the tile it writes to `wCutTile` or -1: OVERWORLD takes a
+## cut tree or grass, GYM one tile of its own, every other tileset nothing.
+static func cut_tile(tileset: int, tile: int) -> int:
+	if tileset == TILESET_GYM:
+		return tile if tile == CUT_GYM_TREE_TILE else -1
+	if tileset != TILESET_OVERWORLD:
+		return -1
+	return tile if tile == CUT_TREE_TILE or tile == CUT_GRASS_TILE else -1
+
+
+## `ReplaceTreeTileBlock`'s walk, or -1 for a block the list does not name.
+static func cut_block_swap(block: int) -> int:
+	return int(CUT_BLOCK_SWAPS.get(block, -1))
+
+
+## `IsNextTileShoreOrWater`: a tileset off `WaterTilesets` answers no whatever is
+## in front, and the dock's own $32 is a landing rather than more sea.
+static func is_shore_or_water(tileset: int, water: bool, tile: int) -> bool:
+	if not water:
+		return false
+	if tile == WATER_TILE:
+		return true
+	return tileset != TILESET_SHIP_PORT and SHORE_TILES.has(tile)
+
+
+## Where `wStatusFlags1`'s two bits sit in the shared engine flag space.
+static func status_flag_1(bit: int) -> int:
+	return engine_flag_base("status_flags_1") + bit
+
+
+## `LoadGBPal`, whose `sub b` counts bytes back from `FadePal4`. An offset past
+## either end of the run answers the identity rather than reading nothing.
+static func gb_palette(offset: int, register: int) -> int:
+	var at: int = FADE_PAL_BASE - offset + register
+	if at < 0 or at >= FADE_PALS.size():
+		return FADE_PALS[FADE_PAL_BASE]
+	return FADE_PALS[at]
+
+
+## `ItemUseOldRod`'s one pair and `GoodRodMons`' two, as the `{level, species}`
+## slots the shared fishing resolution takes.
+static func rod_slots(rod: StringName) -> Array:
+	if rod == Gen2WorldEncounter.METHOD_OLD_ROD:
+		return [{"level": int(OLD_ROD_SLOT[0]), "species": int(OLD_ROD_SLOT[1])}]
+	var out: Array = []
+	for row: Array in GOOD_ROD_SLOTS:
+		out.append({"level": int(row[0]), "species": int(row[2])})
+	return out
 
 
 ## Whether the Super Rod is read as Yellow's flat slot table.

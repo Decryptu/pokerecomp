@@ -16,12 +16,12 @@ const MAX_COMMENT_BLOCK: int = 8
 ## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
 ## it whenever a pass leaves room. It moves up only while a generation the tree
 ## did not carry is being brought in, and then by what that generation's own
-## files cost: `game/gen1` and its neighbours are 1535 lines of it, and
-## Generation 1 has added 1981 more to the shared code: 152 the region map, 150
-## the battle animation engine, 140 the transition, 130 the Pokedex, 108 the
-## three PCs, 97 the bicycle, 95 the trainer card, 85 the party menu, 85 the
-## dungeon warps, 66 the Day-Care, 42 the status screen, 37 the Poke Flute.
-const MAX_COMMENT_LINES: int = 41186
+## files cost: `game/gen1` and its neighbours are 1568 lines of it, and
+## Generation 1 has added 2112 more to the shared code: 152 the region map, 150
+## the battle animation engine, 140 the transition, 131 the field moves, 130 the
+## Pokedex, 108 the three PCs, 97 the bicycle, 95 the trainer card, 85 the party
+## menu, 85 the dungeon warps, 66 the Day-Care, 42 the status screen.
+const MAX_COMMENT_LINES: int = 41350
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than

@@ -136,7 +136,7 @@ func _verify_gen1_menus(data: GameData) -> void:
 		"the machine's menu reads %s." % [rows])
 	## `EVENT_MET_BILL` is counted off the cartridge's own event list.
 	for met: bool in [false, true]:
-		state.set_event_flag(Gen1Layout.met_bill_event(data.id), met)
+		state.set_event_flag(Gen1Layout.MET_BILL_EVENT, met)
 		var top: String = String(
 			(Gen2WorldPC.gen1_top_menu(data, state, "RED")[0] as Dictionary)["name"]
 		)

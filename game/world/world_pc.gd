@@ -463,7 +463,7 @@ static func gen1_top_menu(
 			rows.append(GEN1_PC_LEAGUE)
 	rows.append(GEN1_PC_LOG_OFF)
 	var met_bill: bool = state != null and data != null \
-		and state.is_event_flag_active(Gen1Layout.met_bill_event(data.id))
+		and state.is_event_flag_active(Gen1Layout.MET_BILL_EVENT)
 	var named: String = player_name if not player_name.is_empty() else "PLAYER"
 	var labels: Dictionary = {
 		GEN1_PC_BILLS: "BILL's PC" if met_bill else "SOMEONE's PC",

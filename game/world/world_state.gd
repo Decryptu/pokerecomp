@@ -954,6 +954,12 @@ func bargain_merchant_closed(crystal: bool = true) -> bool:
 ## indexed in source badge order: 0 is ZEPHYRBADGE and 15 EARTHBADGE. Out of
 ## range answers -1, which is_engine_flag_active() reads as inactive. This is
 ## what a CheckBadge caller uses, so no caller indexes the two arrays itself.
+## The Generation 1 badge [param bit] of `wObtainedBadges` as one of the sixteen
+## rows above, which is the one place Kanto's eight are indexed from.
+static func gen1_badge_flag(bit: int) -> int:
+	return badge_flag(KANTO_BADGE_FIRST + bit)
+
+
 static func badge_flag(badge: int, crystal: bool = true) -> int:
 	var flags: Array[int] = BADGE_ENGINE_FLAGS if crystal else BADGE_ENGINE_FLAGS_GOLD_SILVER
 	return flags[badge] if badge >= 0 and badge < flags.size() else -1
