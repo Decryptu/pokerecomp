@@ -115,9 +115,9 @@ const PALETTE_CENSUS: Dictionary = {
 ## byte that opens it. Yellow's six bare `text_end`s are Jessie and James, whose
 ## two ids share one on three maps.
 const TEXT_CENSUS: Dictionary = {
-	&"red": {0x08: 626, 0x17: 461, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
-	&"blue": {0x08: 626, 0x17: 461, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
-	&"yellow": {0x08: 675, 0x17: 434, 0x50: 6, 0xF5: 3, 0xF6: 12, 0xF7: 3,
+	&"red": {0x08: 626, 0x17: 478, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
+	&"blue": {0x08: 626, 0x17: 478, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
+	&"yellow": {0x08: 676, 0x17: 450, 0x50: 6, 0xF5: 3, 0xF6: 12, 0xF7: 3,
 		0xFE: 14, 0xFF: 12},
 }
 
@@ -130,27 +130,27 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 263, "text": 334, "branch": 119, "choice": 21, "flag": 46,
-		"give_item": 28, "has_item": 15, "take_item": 3, "unknown": 59,
+	&"red": {"rows": 264, "text": 350, "branch": 122, "choice": 21, "flag": 53,
+		"give_item": 31, "has_item": 15, "take_item": 3, "unknown": 53,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 9, "has_money": 3, "spend_money": 3, "money_box": 4,
 		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2,
-		"player_coord": 4, "walk": 3, "replace_block": 1, "day_care": 1,
-		"set_map_script": 9, "player_in_array": 1},
-	&"blue": {"rows": 263, "text": 334, "branch": 119, "choice": 21, "flag": 46,
-		"give_item": 28, "has_item": 15, "take_item": 3, "unknown": 59,
+		"player_coord": 4, "walk": 7, "replace_block": 1, "day_care": 1,
+		"guard_drink": 4, "set_map_script": 13, "player_in_array": 1},
+	&"blue": {"rows": 264, "text": 350, "branch": 122, "choice": 21, "flag": 53,
+		"give_item": 31, "has_item": 15, "take_item": 3, "unknown": 53,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 9, "has_money": 3, "spend_money": 3, "money_box": 4,
 		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2,
-		"player_coord": 4, "walk": 3, "replace_block": 1, "day_care": 1,
-		"set_map_script": 9, "player_in_array": 1},
-	&"yellow": {"rows": 309, "text": 373, "branch": 114, "choice": 22, "flag": 40,
-		"give_item": 27, "has_item": 12, "take_item": 3, "unknown": 62,
+		"player_coord": 4, "walk": 7, "replace_block": 1, "day_care": 1,
+		"guard_drink": 4, "set_map_script": 13, "player_in_array": 1},
+	&"yellow": {"rows": 313, "text": 396, "branch": 122, "choice": 23, "flag": 51,
+		"give_item": 30, "has_item": 12, "take_item": 3, "unknown": 61,
 		"pick_up_item": 108, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
 		"trade": 7, "has_money": 3, "spend_money": 3, "money_box": 4,
 		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 6,
-		"player_coord": 4, "walk": 3, "replace_block": 1, "day_care": 1,
-		"set_map_script": 10, "player_in_array": 1},
+		"player_coord": 4, "walk": 7, "replace_block": 1, "day_care": 1,
+		"guard_drink": 4, "set_map_script": 14, "player_in_array": 1},
 }
 ## `BIT_GOT_OLD_ROD` and its two neighbours share `wStatusFlags1` with
 ## `BIT_STRENGTH_ACTIVE`, so reading that byte is what hands the three rods over.
@@ -195,17 +195,37 @@ const CARD_KEY_FLOORS: int = 10
 ## `read` the ones whose body decodes whole; `blocks` counts the
 ## `ReplaceTileBlock` writes on every branch of those bodies.
 const CALLBACK_CENSUS: Dictionary = {
-	&"red": {"gated": 36, "read": 21, "blocks": 79, "doors": 20, "floors": 10},
-	&"blue": {"gated": 36, "read": 21, "blocks": 79, "doors": 20, "floors": 10},
-	&"yellow": {"gated": 34, "read": 20, "blocks": 78, "doors": 20, "floors": 10},
+	&"red": {"gated": 36, "read": 23, "blocks": 83, "doors": 20, "floors": 10},
+	&"blue": {"gated": 36, "read": 23, "blocks": 83, "doors": 20, "floors": 10},
+	&"yellow": {"gated": 34, "read": 21, "blocks": 80, "doors": 20, "floors": 10},
 }
 
 ## The maps with a state machine, the states reachable from index 0 and from
 ## every `set_map_script` already read, and the bodies the walker gets whole.
 const STATE_CENSUS: Dictionary = {
-	&"red": {"tables": 92, "states": 78, "read": 26, "ops": 105},
-	&"blue": {"tables": 92, "states": 78, "read": 26, "ops": 105},
-	&"yellow": {"tables": 90, "states": 70, "read": 22, "ops": 100},
+	&"red": {"tables": 92, "states": 118, "read": 65,
+		"branch": 35, "flag": 23, "unknown": 21, "map_text": 39,
+		"set_map_script": 66, "player_in_array": 26, "player_facing": 18,
+		"movement_running": 19, "walk": 16, "coord_index": 12, "object_facing": 8,
+		"object_move": 8, "object_stay": 6, "toggle_object": 8, "player_coord": 7,
+		"save_coord_index": 8, "saved_coord_index": 2, "battle_outcome": 5,
+		"guard_drink": 4, "wild_battle": 3, "arrow_movement": 3, "has_item": 3,
+		"facing": 2},
+	&"blue": {"tables": 92, "states": 118, "read": 65,
+		"branch": 35, "flag": 23, "unknown": 21, "map_text": 39,
+		"set_map_script": 66, "player_in_array": 26, "player_facing": 18,
+		"movement_running": 19, "walk": 16, "coord_index": 12, "object_facing": 8,
+		"object_move": 8, "object_stay": 6, "toggle_object": 8, "player_coord": 7,
+		"save_coord_index": 8, "saved_coord_index": 2, "battle_outcome": 5,
+		"guard_drink": 4, "wild_battle": 3, "arrow_movement": 3, "has_item": 3,
+		"facing": 2},
+	&"yellow": {"tables": 90, "states": 104, "read": 55,
+		"branch": 28, "flag": 26, "unknown": 22, "map_text": 34,
+		"set_map_script": 55, "player_in_array": 25, "player_facing": 16,
+		"movement_running": 16, "walk": 15, "coord_index": 12, "object_facing": 7,
+		"object_move": 5, "object_stay": 4, "toggle_object": 6, "player_coord": 6,
+		"save_coord_index": 5, "saved_coord_index": 1, "battle_outcome": 5,
+		"guard_drink": 4, "wild_battle": 3, "arrow_movement": 3, "has_item": 3},
 }
 
 ## The pin on which way a `wCurrentMenuItem` branch reads.
@@ -267,6 +287,7 @@ const ESCAPE_ROPE_TILESETS: Array[int] = [3, 15, 17, 22, 16]
 const REST_HOUSES: Array[int] = [223, 224, 225]
 
 var _r: RefCounted = null
+var _font: Gen2Font = null
 var _maps: Dictionary = {}
 var _movements: Array[int] = []
 
@@ -482,6 +503,7 @@ func _pallet_town() -> void:
 ## code from the wrong generation's codec is a hole rather than a wrong letter.
 func _texts() -> void:
 	var font: Gen2Font = Gen2Font.from_data(_r.data)
+	_font = font
 	if not _r.check(font != null, "the cache has no font."):
 		return
 	var census: Dictionary = {}
@@ -553,7 +575,8 @@ func _map_callbacks() -> void:
 
 ## `RunMapScript`'s own half, swept over the corpus.
 func _map_states() -> void:
-	var census: Dictionary = {"tables": 0, "states": 0, "read": 0, "ops": 0}
+	var census: Dictionary = {"tables": 0, "states": 0, "read": 0}
+	var wrong: Array[String] = []
 	for map: Gen2WorldMap in _maps.values():
 		var entry: Array = map.scripts["entry"] as Array
 		var dispatch: Dictionary = _dispatch_node(entry)
@@ -567,7 +590,8 @@ func _map_states() -> void:
 		for row: Dictionary in states:
 			var nodes: Array = row["nodes"] as Array
 			census["read"] += 1 if not nodes.is_empty() else 0
-			census["ops"] += _node_count(nodes)
+			_walk_script(_font, nodes, census, wrong, map.number)
+	_r.check(wrong.is_empty(), "state nodes are wrong: %s." % [wrong])
 	_r.check(census == STATE_CENSUS[_r.game_id], "the map states read %s." % [census])
 	_r.note("gen1 map states %s" % [census])
 

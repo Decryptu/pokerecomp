@@ -736,6 +736,12 @@ static func _read_map(
 		states = _read_map_states(
 			rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts
 		)
+	var hidden: Array = _read_hidden_events(
+		rom, layout, map_id, bank, rom.u16le(header + MAP_SCRIPT_AT)
+	)
+	for nodes: Array in [callback.get("nodes", []) as Array] \
+		+ hidden.map(func(row: Dictionary) -> Array: return row.get("script", []) as Array):
+		_bind_map_script_byte(nodes, int(states["byte"]))
 
 	return {
 		"ok": true,
@@ -768,9 +774,7 @@ static func _read_map(
 			"coord_events": [],
 			"bg_events": events["bg_events"],
 			"objects": events["objects"],
-			"hidden_events": _read_hidden_events(
-				rom, layout, map_id, bank, rom.u16le(header + MAP_SCRIPT_AT)
-			),
+			"hidden_events": hidden,
 			"card_key": _card_key_doors(callback),
 			"dungeon_holes": _read_dungeon_holes(
 				rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), script_end
@@ -813,11 +817,13 @@ static func _read_map_states(
 	var entry: Array = decode_script(rom, layout, bank, script)
 	var dispatch: Dictionary = _map_script_dispatch(entry)
 	if dispatch.is_empty():
-		return {"entry": entry, "states": []}
+		return {"entry": entry, "states": [], "byte": MAP_SCRIPT_MIRROR}
 	var byte: int = int(dispatch["byte"])
 	var bodies: Array = _map_script_bodies(rom, layout, bank, int(dispatch["table"]))
+	_bind_map_script_byte(entry, byte)
 	var pending: Array[int] = _map_script_successors(entry, byte)
 	for row: Dictionary in texts:
+		_bind_map_script_byte(row.get("script", []) as Array, byte)
 		pending.append_array(_map_script_successors(row.get("script", []) as Array, byte))
 	pending.append(0)
 	var reached: Dictionary = {}
@@ -827,12 +833,13 @@ static func _read_map_states(
 			continue
 		reached[index] = true
 		if bodies[index] != null:
+			_bind_map_script_byte(bodies[index] as Array, byte)
 			pending.append_array(_map_script_successors(bodies[index] as Array, byte))
 	var rows: Array = []
 	for index: int in bodies.size():
 		if reached.has(index) and bodies[index] != null:
 			rows.append({"id": index, "nodes": bodies[index]})
-	return {"entry": entry, "states": rows}
+	return {"entry": entry, "states": rows, "byte": byte}
 
 
 ## Every body of one `<Map>_ScriptPointers` table, read while the word addresses
@@ -1631,6 +1638,8 @@ static func _asm_operand(rom: RomFile, bank: int, at: int, target: int) -> int:
 
 ## What one walk may read, how deep its branches may nest, and the two answers
 ## [method _script_step] gives that are not an address.
+## A `set_map_script` through `wCurMapScript`, whose byte the dispatch names.
+const MAP_SCRIPT_MIRROR: int = -1
 const SCRIPT_BUDGET: int = 512
 const SCRIPT_DEPTH: int = 8
 const SCRIPT_END: int = -2
@@ -1656,6 +1665,14 @@ const SCRIPT_TESTS_COORD_ARRAY: int = -12
 ## `wStatusFlags5`'s own two bits, and `wCoordIndex`, the row that list matched.
 const SCRIPT_TESTS_MOVEMENT: int = -13
 const SCRIPT_TESTS_COORD_INDEX: int = -14
+## `RemoveGuardDrink` answers zero in `hItemToRemoveID` for an empty bag.
+const SCRIPT_TESTS_GUARD_DRINK: int = -15
+## `DecodeArrowMovementRLE` leaves $FF when the player stands on no arrow tile.
+const SCRIPT_TESTS_ARROW: int = -16
+## `wIsInBattle` and `wBattleResult`, read by a post-battle state alone.
+const SCRIPT_TESTS_BATTLE: int = -17
+## `wSavedCoordIndex`, read back by a state after the one that matched.
+const SCRIPT_TESTS_SAVED_INDEX: int = -18
 ## What `push af` saves and `pop af` puts back, which is how
 ## `CheckEventAfterBranchReuseA` still reads the event byte a block write
 ## clobbered.
@@ -1749,19 +1766,24 @@ static func _script_step(
 			return pc + Gen1Layout.SCRIPT_LONG_SIZE
 		Gen1Layout.SCRIPT_LD_BC:
 			## `lb bc, ITEM, COUNT`: the high byte is what `GiveItem` reads as b.
-			state["b"] = rom.u8(at + 2)
-			state["c"] = rom.u8(at + 1)
+			_script_loaded_register(state, "b", rom.u8(at + 2))
+			_script_loaded_register(state, "c", rom.u8(at + 1))
 			return pc + Gen1Layout.SCRIPT_LONG_SIZE
 		Gen1Layout.SCRIPT_LD_B:
-			state["b"] = rom.u8(at + 1)
+			_script_loaded_register(state, "b", rom.u8(at + 1))
 			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 		Gen1Layout.SCRIPT_LD_C:
-			state["c"] = rom.u8(at + 1)
+			_script_loaded_register(state, "c", rom.u8(at + 1))
 			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 		Gen1Layout.SCRIPT_LD_B_A, Gen1Layout.SCRIPT_LD_C_A:
-			if not state.has("a"):
+			var register: String = "b" \
+				if rom.u8(at) == Gen1Layout.SCRIPT_LD_B_A else "c"
+			return pc + 1 if _script_moved_a(state, register) else SCRIPT_UNREAD
+		Gen1Layout.SCRIPT_LD_A_B:
+			if not state.has("b"):
 				return SCRIPT_UNREAD
-			state["b" if rom.u8(at) == Gen1Layout.SCRIPT_LD_B_A else "c"] = int(state["a"])
+			_script_wrote_a(state)
+			state["a"] = int(state["b"])
 			return pc + 1
 		Gen1Layout.SCRIPT_LD_A:
 			_script_wrote_a(state)
@@ -1809,6 +1831,10 @@ static func _script_flow(
 			return _script_stored_hli(ctx, pc, state, out)
 		Gen1Layout.SCRIPT_AND_A:
 			_script_test_bit(ctx, state, -1)
+			if Gen1Layout.script_zero_source(
+				ctx["layout"], int(state.get("source", -1))
+			):
+				state["known_zero"] = true
 			state["tests_and_a"] = true
 			return pc + 1
 		Gen1Layout.SCRIPT_RRCA:
@@ -1820,6 +1846,7 @@ static func _script_flow(
 		Gen1Layout.SCRIPT_AND_N:
 			## `CheckEitherEventSet`, whose two flags share a byte and a mask.
 			_script_tested(state, _script_mask(ctx, state, rom.u8(at + 1)))
+			state["mask"] = rom.u8(at + 1)
 			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 		Gen1Layout.SCRIPT_PREFIX:
 			return _script_prefix(ctx, pc, state, out)
@@ -1898,7 +1925,8 @@ static func _script_popped_af(state: Dictionary, pc: int) -> int:
 ## What a branch is reading, and whether it is reading it out of carry.
 static func _script_untested(state: Dictionary) -> void:
 	for key: String in [
-		"tests", "tests_in_carry", "tests_engine", "tests_and_a", "known_zero",
+		"tests", "tests_in_carry", "tests_engine", "tests_and_a", "tests_all",
+		"known_zero",
 	]:
 		state.erase(key)
 
@@ -1910,6 +1938,7 @@ static func _script_tested(
 	state["tests_in_carry"] = in_carry
 	state["tests_engine"] = engine
 	state.erase("tests_and_a")
+	state.erase("tests_all")
 	state.erase("known_zero")
 
 
@@ -1929,6 +1958,25 @@ static func _script_hop(operand: int) -> int:
 
 ## Anything that writes `a` leaves `CheckEvent`'s rotation and the answer
 ## `and a` gave about the register behind it.
+static func _script_loaded_register(state: Dictionary, register: String, value: int) -> void:
+	state[register] = value
+	state.erase(register + "_source")
+
+
+## `ld b, a` and `ld c, a`: a register handed a value the walk does not know
+## carries where it was read from, which is what says `DecodeArrowMovementRLE`'s
+## b and c are the player's own coordinates.
+static func _script_moved_a(state: Dictionary, register: String) -> bool:
+	if state.has("a"):
+		_script_loaded_register(state, register, int(state["a"]))
+		return true
+	if not state.has("source"):
+		return false
+	state.erase(register)
+	state[register + "_source"] = int(state["source"])
+	return true
+
+
 static func _script_wrote_a(state: Dictionary) -> void:
 	state.erase("source")
 	state.erase("rotated")
@@ -1987,7 +2035,7 @@ static func _script_stored(
 ) -> bool:
 	var layout: Dictionary = ctx["layout"]
 	if address == int(layout["cur_map_script"]):
-		return true
+		return _script_map_script_mirror(state, out)
 	var byte: int = _map_script_byte(layout, address)
 	if byte >= 0:
 		if not state.has("a"):
@@ -2013,6 +2061,13 @@ static func _script_stored(
 	for silent: String in Gen1Layout.SCRIPT_SILENT_STORES:
 		if address == int(layout.get(silent, -1)):
 			return true
+	return _script_stored_more(ctx, layout, address, state, out)
+
+
+## The rest of [method _script_stored]: what a store moves or fights with.
+static func _script_stored_more(
+	ctx: Dictionary, layout: Dictionary, address: int, state: Dictionary, out: Array
+) -> bool:
 	if address == int(layout.get("player_moving_direction", -1)):
 		return _script_player_facing(state, out)
 	var slot: int = Gen1Layout.sprite_facing_slot(layout, address)
@@ -2021,6 +2076,12 @@ static func _script_stored(
 			return false
 		out.append({"op": "object_facing", "object": slot, "facing": int(state["a"])})
 		return true
+	if _script_saved_index(layout, address, state, out):
+		return true
+	if address == int(layout["cur_opponent"]):
+		return _script_opponent(ctx, state)
+	if address == int(layout["cur_enemy_level"]):
+		return _script_wild_battle(state, out)
 	if _script_joypad_stored(layout, address, state):
 		return true
 	if _script_bcd_stored(ctx, address, state):
@@ -2028,6 +2089,45 @@ static func _script_stored(
 	if address != int(layout["item_to_remove"]) or int(state.get("a", 0)) < 1:
 		return false
 	state["remove"] = int(state["a"])
+	return true
+
+
+## `wSavedCoordIndex` and the `hSavedCoordIndex` sharing `hItemToRemoveID`'s
+## byte: only the index is ever written out of `wCoordIndex`, and -1 is it.
+static func _script_saved_index(
+	layout: Dictionary, address: int, state: Dictionary, out: Array
+) -> bool:
+	var index: bool = int(state.get("source", -1)) == int(layout["which_trade"])
+	if address != int(layout["saved_coord_index"]) \
+		and not (index and address == int(layout["item_to_remove"])):
+		return false
+	if not index and not state.has("a"):
+		return false
+	out.append({"op": "save_coord_index", "value": -1 if index else int(state["a"])})
+	return true
+
+
+## `wCurOpponent` and `wCurEnemyLevel`, which `OverworldLoop` fights once the
+## script returns. The register holds an internal index and the cache speaks dex
+## numbers; at or above `OPP_ID_OFFSET` it is a trainer, which has no level.
+static func _script_opponent(ctx: Dictionary, state: Dictionary) -> bool:
+	var index: int = int(state.get("a", -1))
+	if index < 1 or index >= Gen1Layout.OPPONENT_ID_OFFSET:
+		return false
+	var dex: int = Gen1Layout.dex_of_index(ctx["rom"], ctx["layout"], index)
+	if dex < 1:
+		return false
+	state["opponent"] = dex
+	return true
+
+
+static func _script_wild_battle(state: Dictionary, out: Array) -> bool:
+	if not state.has("opponent") or int(state.get("a", 0)) < 1:
+		return false
+	out.append({
+		"op": "wild_battle", "species": int(state["opponent"]), "level": int(state["a"]),
+	})
+	state.erase("opponent")
 	return true
 
 
@@ -2091,6 +2191,12 @@ static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> Array
 	if not movement.is_empty():
 		state["movement_who"] = movement
 		return [SCRIPT_TESTS_MOVEMENT, false]
+	if source == int(layout["item_to_remove"]) and state.has("drinks"):
+		return [SCRIPT_TESTS_GUARD_DRINK, false]
+	## `and a ; cp SPRITE_FACING_DOWN`, which the source spells as a comment.
+	if source == int(layout["facing_direction"]) and bit < 0:
+		state["facing"] = 0
+		return [SCRIPT_TESTS_FACING, false]
 	if bit >= 0:
 		var flag: int = _script_flag(ctx, source, bit)
 		if flag >= 0:
@@ -2135,7 +2241,7 @@ static func _script_engine_flag(ctx: Dictionary, address: int, bit: int) -> int:
 	return -1
 
 
-## `bit b, a` names the flag a branch tests; `set`/`res b, [hl]` writes one.
+## `bit b, a` and `bit b, [hl]` name the flag a branch tests, `set`/`res` writes one.
 static func _script_prefix(
 	ctx: Dictionary, pc: int, state: Dictionary, out: Array
 ) -> int:
@@ -2159,7 +2265,12 @@ static func _script_prefix(
 			state["known_zero"] = true
 		return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 	if code < Gen1Layout.SCRIPT_RES_BASE:
-		return SCRIPT_UNREAD
+		## `CheckEventHL` names its flag in `hl` where `CheckEvent` loads it.
+		state["source"] = int(state.get("hl", -1))
+		_script_test_bit(ctx, state, bit)
+		return pc + Gen1Layout.SCRIPT_SHORT_SIZE
+	if Gen1Layout.script_silent_flag(ctx["layout"], int(state.get("hl", -1)), bit):
+		return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 	var written: int = _script_flag(ctx, int(state.get("hl", -1)), bit)
 	var engine: int = _script_engine_flag(ctx, int(state.get("hl", -1)), bit)
 	if written < 0 and engine < 0:
@@ -2260,6 +2371,8 @@ static func _script_sprite_called(
 			return _script_object_move(ctx, state, out, next)
 		"decode_rle":
 			return _script_decode_rle(ctx, state, next)
+		"decode_arrow_movement":
+			return _script_arrow_movement(ctx, state, next)
 	var bank: int = int(ctx["bank"])
 	if _script_banked_routine(ctx["layout"], bank, target) == "coin_box":
 		out.append({"op": "coin_box"})
@@ -2328,25 +2441,70 @@ static func _script_decode_rle(ctx: Dictionary, state: Dictionary, next: int) ->
 	if int(state.get("hl", -1)) != int(layout.get("simulated_joypad_end", -1)) \
 		or address < 0 or address >= Gen1Layout.SCRIPT_WRAM_BASE:
 		return SCRIPT_UNREAD
+	var buffer: Variant = _script_rle_list(ctx, address)
+	if not buffer is Array:
+		return SCRIPT_UNREAD
+	state["walk_buffer"] = buffer
+	_script_wrote_a(state)
+	state["a"] = (buffer as Array).size() + 1
+	return next
+
+
+## One `<value> <repetitions>` list under a $FF as the pads it fills, or null.
+static func _script_rle_list(ctx: Dictionary, address: int) -> Variant:
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), address)
 	var buffer: Array = []
 	while rom.in_bounds(at, Gen1Layout.RLE_PAIR_SIZE) \
 		and buffer.size() <= Gen1Layout.SIMULATED_JOYPAD_MAX:
-		var pad: int = rom.u8(at)
-		if pad == Gen1Layout.RLE_END:
-			state["walk_buffer"] = buffer
-			_script_wrote_a(state)
-			state["a"] = buffer.size() + 1
-			return next
+		if rom.u8(at) == Gen1Layout.RLE_END:
+			return buffer
 		for _repeat: int in rom.u8(at + 1):
-			buffer.append(pad)
+			buffer.append(rom.u8(at))
 		at += Gen1Layout.RLE_PAIR_SIZE
-	return SCRIPT_UNREAD
+	return null
+
+
+## `DecodeArrowMovementRLE`: the `map_coord_movement` row the player stands on
+## fills the joypad buffer from its own list, and `a` is $FF when none does.
+static func _script_arrow_movement(ctx: Dictionary, state: Dictionary, next: int) -> int:
+	var rom: RomFile = ctx["rom"]
+	var layout: Dictionary = ctx["layout"]
+	if int(state.get("b_source", -1)) != int(layout[Gen1Layout.SCRIPT_COORD_SOURCES[0]]) \
+		or int(state.get("c_source", -1)) != int(layout[Gen1Layout.SCRIPT_COORD_SOURCES[1]]):
+		return SCRIPT_UNREAD
+	var table: int = int(state.get("hl", -1))
+	var cells: Array = []
+	while table >= 0 and cells.size() < Gen1Layout.ARROW_TILE_MAX:
+		var at: int = Gen1Layout.banked(
+			int(ctx["bank"]), table + cells.size() * Gen1Layout.ARROW_ROW_SIZE
+		)
+		if rom.u8(at) == Gen1Layout.MAP_COORD_END:
+			break
+		var list: Variant = _script_rle_list(
+			ctx, rom.u16le(at + Gen1Layout.MAP_COORD_SIZE)
+		)
+		if not list is Array:
+			return SCRIPT_UNREAD
+		var moves: Array = _script_walk_moves(
+			{"walk_buffer": list, "walk_steps": (list as Array).size()}
+		)
+		if moves.is_empty():
+			return SCRIPT_UNREAD
+		cells.append({"y": rom.u8(at), "x": rom.u8(at + 1), "moves": moves})
+	if cells.is_empty():
+		return SCRIPT_UNREAD
+	state["arrows"] = cells
+	_script_wrote_a(state)
+	state.erase("a")
+	return next
 
 
 ## `StartSimulatingJoypadStates`, whose buffer is one walking step per entry.
 static func _script_walk(state: Dictionary, out: Array, next: int) -> int:
+	## The `arrow_movement` node behind it carries every row's legs already.
+	if state.has("arrows"):
+		return next
 	var moves: Array = _script_walk_moves(state)
 	if moves.is_empty():
 		return SCRIPT_UNREAD
@@ -2406,6 +2564,31 @@ static func _script_map_script_table(
 		return SCRIPT_UNREAD
 	out.append({"op": "map_script_table", "table": table, "byte": byte})
 	return SCRIPT_END
+
+
+## `<Map>_Script` copies `wCurMapScript` into the map's own byte on the next
+## frame, and Viridian Gym and the two Rocket Hideout floors write nothing else.
+## The dispatch names that byte, so [method _bind_map_script_byte] fills it in.
+static func _script_map_script_mirror(state: Dictionary, out: Array) -> bool:
+	if not state.has("a"):
+		return false
+	var value: int = int(state["a"])
+	if not out.is_empty():
+		var last: Dictionary = out[-1]
+		if String(last["op"]) == "set_map_script" and int(last["value"]) == value:
+			return true
+	out.append({"op": "set_map_script", "byte": MAP_SCRIPT_MIRROR, "value": value})
+	return true
+
+
+## Every unbound mirror store in [param nodes], as the map's own byte.
+static func _bind_map_script_byte(nodes: Array, byte: int) -> void:
+	for node: Dictionary in nodes:
+		if String(node["op"]) == "set_map_script" and int(node["byte"]) == MAP_SCRIPT_MIRROR:
+			node["byte"] = byte
+		for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+			if node.has(key):
+				_bind_map_script_byte(node[key] as Array, byte)
 
 
 static func _map_script_byte(layout: Dictionary, address: int) -> int:
@@ -2523,6 +2706,10 @@ static func _script_far(
 		and RomFile.linear(bank, target) == int(layout.get("display_town_map", -1)):
 		out.append({"op": "town_map"})
 		return next
+	if bank >= 0 and target >= 0 \
+		and RomFile.linear(bank, target) == int(layout.get("remove_guard_drink", -1)):
+		state["drinks"] = _script_guard_drinks(ctx, bank, target)
+		return next
 	if bank != int(layout["remove_item_bank"]) or target != int(layout["remove_item"]):
 		return _script_routine_call(ctx, bank, target, state, out, next, depth)
 	if int(state.get("remove", 0)) < 1:
@@ -2530,6 +2717,20 @@ static func _script_far(
 	out.append({"op": "take_item", "item": int(state["remove"])})
 	state.erase("remove")
 	return next
+
+
+## `GuardDrinksList`, off `RemoveGuardDrink`'s own opening `ld hl`. The routine
+## spends the first row the bag holds, so the list and its test are one node.
+static func _script_guard_drinks(ctx: Dictionary, bank: int, target: int) -> Array:
+	var rom: RomFile = ctx["rom"]
+	var list: int = rom.u16le(Gen1Layout.banked(bank, target) + 1)
+	var out: Array = []
+	while out.size() < Gen1Layout.GUARD_DRINK_MAX:
+		var item: int = rom.u8(Gen1Layout.banked(bank, list + out.size()))
+		if item < 1:
+			break
+		out.append(item)
+	return out
 
 
 ## One byte of `hMoney` or `wPriceTemp`, whose first byte is `wWhichTrade`'s
@@ -2811,6 +3012,22 @@ static func _script_compared(
 	var layout: Dictionary = ctx["layout"]
 	var source: int = int(state.get("source", -1))
 	var next: int = pc + Gen1Layout.SCRIPT_SHORT_SIZE
+	## `CheckBothEventsSet` is `and mask` with `cp mask` behind it: every flag.
+	if state.get("tests") is Array and value == int(state.get("mask", -1)):
+		state["tests_all"] = true
+		return next
+	if source in [int(layout["saved_coord_index"]), int(layout["item_to_remove"])]:
+		state["coord_index"] = value
+		_script_tested(state, SCRIPT_TESTS_SAVED_INDEX)
+		return next
+	var outcome: String = Gen1Layout.script_battle_outcome(layout, source, value)
+	if not outcome.is_empty():
+		state["outcome"] = outcome
+		_script_tested(state, SCRIPT_TESTS_BATTLE)
+		return next
+	if state.has("arrows") and value == Gen1Layout.MAP_COORD_END:
+		_script_tested(state, SCRIPT_TESTS_ARROW)
+		return next
 	## `cp $0` where every other row spends `and a`, YES being 0 either way.
 	if source == int(layout["current_menu_item"]) and value == 0:
 		_script_test_bit(ctx, state, -1)
@@ -2838,7 +3055,7 @@ static func _script_compared(
 		return next
 	if source == int(layout["which_trade"]) and state.has("coord_array"):
 		state["coord_index"] = value
-		_script_tested(state, SCRIPT_TESTS_COORD_INDEX, true)
+		_script_tested(state, SCRIPT_TESTS_COORD_INDEX)
 		return next
 	if source != int(layout["num_set_bits"]):
 		return SCRIPT_UNREAD
@@ -2908,7 +3125,10 @@ static func _script_map_text(state: Dictionary, out: Array, next: int) -> int:
 static func _script_reads_flag(state: Dictionary, tests: Variant, carry: bool) -> bool:
 	if tests is Array:
 		return not carry
-	if int(tests) == SCRIPT_TESTS_COINS:
+	## `cp` answers in both flags, so a row against a number may read either.
+	if int(tests) in [
+		SCRIPT_TESTS_COINS, SCRIPT_TESTS_COORD_INDEX, SCRIPT_TESTS_SAVED_INDEX,
+	]:
 		return true
 	if int(tests) == SCRIPT_TESTS_NOTHING:
 		return false
@@ -2926,8 +3146,11 @@ static func _script_node(
 	var taken: Array = branches[0] if branches[0] != null else [{"op": "unknown"}]
 	var fell: Array = branches[1] if branches[1] != null else [{"op": "unknown"}]
 	if tests is Array:
+		var rest: Array = (tests as Array).slice(1)
+		var all: bool = bool(state.get("tests_all", false))
 		return {"op": "branch", "flag": int((tests as Array)[0]),
-			"either": (tests as Array).slice(1), "then": taken, "else": fell}
+			"all" if all else "either": rest,
+			"then": fell if all else taken, "else": taken if all else fell}
 	match int(tests):
 		SCRIPT_TESTS_CHOICE:
 			return {"op": "choice", "no": taken, "yes": fell}
@@ -2945,8 +3168,16 @@ static func _script_node(
 			return {"op": "has_coins", "coins": int(state["coins"]),
 				"test": "at_least" if carry else "exactly",
 				"then": fell, "else": taken}
+	return _script_node_compared(tests, taken, fell, state, carry)
+
+
+## The rest of [method _script_node]'s own rows. A `cp` raises Z on the match,
+## so a match is the side the branch did not take.
+static func _script_node_compared(
+	tests: Variant, taken: Array, fell: Array, state: Dictionary, carry: bool
+) -> Variant:
+	match int(tests):
 		SCRIPT_TESTS_FACING:
-			## `cp` raises Z on a match, so a `ret nz` leaves the right side.
 			return {"op": "facing", "facing": int(state["facing"]),
 				"then": fell, "else": taken}
 		SCRIPT_TESTS_DEX:
@@ -2968,11 +3199,26 @@ static func _script_node(
 		SCRIPT_TESTS_MOVEMENT:
 			return {"op": "movement_running", "who": String(state["movement_who"]),
 				"then": taken, "else": fell}
-		SCRIPT_TESTS_COORD_INDEX:
-			## Carry is set below the row number, so the taken side is the
-			## earlier row of the list the player was found on.
-			return {"op": "coord_index", "below": int(state["coord_index"]),
+		SCRIPT_TESTS_SAVED_INDEX:
+			return {"op": "saved_coord_index", "index": int(state["coord_index"]),
+				"test": "below" if carry else "exactly",
+				"then": taken if carry else fell, "else": fell if carry else taken}
+		SCRIPT_TESTS_BATTLE:
+			## `cp` raises Z on the match, so the outcome is the other side.
+			return {"op": "battle_outcome", "outcome": String(state["outcome"]),
+				"then": fell, "else": taken}
+		SCRIPT_TESTS_ARROW:
+			## `cp $ff` raises Z on no match, so the spin is the other side.
+			return {"op": "arrow_movement", "cells": state["arrows"],
 				"then": taken, "else": fell}
+		SCRIPT_TESTS_GUARD_DRINK:
+			return {"op": "guard_drink", "items": state["drinks"],
+				"then": taken, "else": fell}
+		SCRIPT_TESTS_COORD_INDEX:
+			## A `jr c` takes an earlier row of the list and a `jr z` that row.
+			return {"op": "coord_index", "index": int(state["coord_index"]),
+				"test": "below" if carry else "exactly",
+				"then": taken if carry else fell, "else": fell if carry else taken}
 	var branch: Dictionary = {
 		"op": "branch", "flag": int(tests), "then": taken, "else": fell,
 	}

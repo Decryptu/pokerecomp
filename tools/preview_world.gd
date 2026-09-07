@@ -1125,6 +1125,11 @@ func _stage_map_script() -> void:
 			break
 		_screen.press_button(PokeButton.UP)
 		_screen.advance_frame()
+	## An arrow tile spins the player nine cells, and the picture is the landing.
+	for _frame: int in MAP_SCRIPT_STEP_FRAMES:
+		if world == null or not world.gen1_player_movement_running():
+			break
+		_screen.advance_frame()
 	_screen.advance_frames(maxi(_cell.x, 0))
 
 
