@@ -51,6 +51,27 @@ static func number_for_item(data: GameData, item: int) -> int:
 	return Gen2Layout.tmhm_number_for_item(item, data.tmhm_moves().size())
 
 
+## GetNumberedTMHM, the inverse of [method number_for_item].
+static func item_for_number(data: GameData, number: int) -> int:
+	if data == null or number < 1:
+		return 0
+	if data.generation == RomRegistry.GEN1:
+		return Gen1Layout.machine_item(number)
+	return Gen2Layout.item_for_tmhm_number(number, data.tmhm_moves().size())
+
+
+## KnowsHMMove, whose `HMMoveArray` is the HM machines' own moves. The
+## Generation 1 Day-Care is its only caller.
+static func knows_hm_move(data: GameData, moves: Array) -> bool:
+	if data == null:
+		return false
+	for slot: Variant in moves:
+		var number: int = data.tmhm_number_for_move(int(slot))
+		if number > 0 and is_hm(item_for_number(data, number), data.generation):
+			return true
+	return false
+
+
 ## GetTMHMItemMove: the move [param item] teaches, or 0 when it is not a TM/HM
 ## this cartridge carries.
 static func move_for_item(data: GameData, item: int) -> int:
