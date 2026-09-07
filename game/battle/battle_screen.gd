@@ -361,7 +361,7 @@ var _capture_selecting: bool = false:
 		_capture_selecting = value
 		_list_state_changed()
 var _capture_waiting: bool = false
-var _capture_messages: Array[String] = []
+var _box_queue: Array[String] = []
 ## The [constant Gen2Battle.CAUGHT] event built by [method complete_capture] and
 ## published on the box that prints its Gotcha line, so a subscriber has moved
 ## before the nickname prompt opens.
@@ -1878,6 +1878,10 @@ const ANIM_THROW_POKE_BALL: int = 0x100
 const NEW_DEX_DATA_TEXT: String = "%s's data\nwas newly added to\nthe #DEX."
 const BALL_BLOCKED_TEXT: String = "The trainer\nblocked the BALL!"
 const BALL_DONT_BE_A_THIEF_TEXT: String = "Don't be a thief!"
+## What a cache imported before `poke_flute_text` was carries instead.
+const FLUTE_NO_EFFECT_TEXT: String = "Played the #\nFLUTE."
+const FLUTE_HAD_EFFECT_TEXT: String = "<PLAYER> played the\n# FLUTE."
+const FLUTE_WOKE_UP_TEXT: String = "All sleeping\n#MON woke up."
 const BALL_BOX_FULL_TEXT: String = "The #MON BOX\nis full. That\ncan't be used now."
 ## `_BoxFullCannotThrowBallText`, `BoxFullCannotThrowBall`'s own words.
 const GEN1_BALL_BOX_FULL_TEXT: String = "The #MON BOX\nis full! Can't%suse that item!"
@@ -2988,9 +2992,9 @@ func use_selected_pack_item() -> Dictionary:
 ## `UseDisposableItem` spends the ball anyway. The turn goes with it:
 ## `wItemEffectSucceeded` and `wBattlePlayerAction` are one byte.
 func _block_ball_in_trainer_battle(ball: int) -> Dictionary:
-	_capture_messages.clear()
-	_capture_messages.append(BALL_BLOCKED_TEXT)
-	_capture_messages.append(BALL_DONT_BE_A_THIEF_TEXT)
+	_box_queue.clear()
+	_box_queue.append(BALL_BLOCKED_TEXT)
+	_box_queue.append(BALL_DONT_BE_A_THIEF_TEXT)
 	_begin_animation({
 		"param": ANIM_PARAM_NO_ITEM,
 		"index": ANIM_THROW_POKE_BALL,
@@ -3059,7 +3063,10 @@ func _use_pack_item(item: int, target: int, move_slot: int = -1) -> Dictionary:
 	## `UseDisposableItem`, which the Poke Flute alone is never handed to.
 	if bool(used.get("spent", true)):
 		item_used.emit(item, target)
-	show_message(_item_used_text(item))
+	if StringName(used.get("kind", &"")) == &"poke_flute":
+		_show_flute_boxes(int(used.get("woken", 0)) > 0)
+	else:
+		show_message(_item_used_text(item))
 	if _battle.is_over():
 		## `PokeDollEffect`'s `wForcedSwitch`: the battle is already over, so no
 		## turn is taken and the terminal text is what follows this line.
@@ -3153,7 +3160,7 @@ func _capture_guard() -> Dictionary:
 	if not _capture_refusal.is_empty():
 		show_message(_capture_refusal)
 		return _capture_failure(&"capture_refused_by_rules")
-	if _capture_waiting or not _capture_messages.is_empty() \
+	if _capture_waiting or not _box_queue.is_empty() \
 		or not _capture_result.is_empty():
 		return _capture_failure(&"capture_input_busy")
 	if not _pending.is_empty():
@@ -3198,7 +3205,7 @@ func complete_capture(result: Dictionary) -> Dictionary:
 	if not _capture_waiting:
 		return _capture_failure(&"capture_result_not_pending")
 	_capture_waiting = false
-	_capture_messages.clear()
+	_box_queue.clear()
 	_capture_result = result.duplicate(true)
 	_capture_terminal = false
 	if not bool(result.get("ok", false)):
@@ -3232,7 +3239,7 @@ func complete_capture(result: Dictionary) -> Dictionary:
 	var wobbles: int = clampi(int(result.get("wobbles", 0)), 0, 3)
 	var caught: bool = bool(result.get("caught", false))
 	if caught:
-		_capture_messages.append(
+		_box_queue.append(
 			(GEN1_CAUGHT_TEXT if _generation() == RomRegistry.GEN1 else CAUGHT_TEXT)
 			% _name_of(_enemy)
 		)
@@ -3242,11 +3249,11 @@ func complete_capture(result: Dictionary) -> Dictionary:
 		## instead, which comes with the switch question rather than here.
 		if bool(result.get("contest", false)) \
 			and not bool(result.get("replace_offer", false)):
-			_capture_messages.append("Caught %s!" % _name_of(_enemy))
+			_box_queue.append("Caught %s!" % _name_of(_enemy))
 		_capture_terminal = true
 		_capture_caught_event = _caught_event(result)
 	else:
-		_capture_messages.append(
+		_box_queue.append(
 			GEN1_BREAK_FREE_TEXT[wobbles] if _generation() == RomRegistry.GEN1
 			else BREAK_FREE_TEXT[wobbles]
 		)
@@ -3303,16 +3310,16 @@ func _show_capture_selection() -> void:
 	_reopen_menu_layer()
 
 
-func _show_next_capture_message() -> void:
-	if _capture_messages.is_empty():
+func _show_next_box() -> void:
+	if _box_queue.is_empty():
 		return
-	show_message(_capture_messages.pop_front())
+	show_message(_box_queue.pop_front())
 	## `Text_GotchaMonWasCaught` is always the last line of a caught throw, so
 	## the queue running dry on a terminal capture is that box. Published here
 	## rather than in [method complete_capture] because a subscriber asking for a
 	## line of its own owes the same ordering every event gets: after the line
 	## being shown when it asked.
-	if _capture_terminal and _capture_messages.is_empty() \
+	if _capture_terminal and _box_queue.is_empty() \
 		and not _capture_caught_event.is_empty():
 		var event: Dictionary = _capture_caught_event
 		_capture_caught_event = {}
@@ -3384,17 +3391,31 @@ func _item_refusal_text(reason: StringName) -> String:
 	).replace(Gen2WorldPC.PLAYER_MARKER, _player_label())
 
 
-func _gen1_item_text(key: String, fallback: String) -> String:
+func _gen1_item_text(key: String, fallback: String, run: String = "item_use") -> String:
 	if _data == null or _generation() != RomRegistry.GEN1:
 		return fallback
-	var text: String = _data.special_text("item_use_text", key)
+	var text: String = _data.special_text(run, key)
 	return fallback if text.is_empty() else text
 
 
-## `ItemUsedText`, the one line `PokeBallEffect` and every other battle item
-## print before their effect runs. A ball says it too: the throw, the rocking and
-## the click are the animation behind this line, and the next thing said is
-## already the outcome.
+## `ItemUsePokeFlute` reaches neither `PrintItemUseTextAndRemoveItem` nor
+## `UseDisposableItem`, so its own boxes are all a battle says.
+## `Music_PokeFluteInBattle` sits between the two and waits on a channel no
+## driver here fills.
+func _show_flute_boxes(woke: bool) -> void:
+	_box_queue.clear()
+	if not woke:
+		show_message(_gen1_item_text("no_effect", FLUTE_NO_EFFECT_TEXT, "poke_flute"))
+		return
+	show_message(_gen1_item_text(
+		"had_effect", FLUTE_HAD_EFFECT_TEXT, "poke_flute"
+	).replace(Gen2WorldPC.PLAYER_MARKER, _player_label()))
+	_box_queue.append(_gen1_item_text("woke_up", FLUTE_WOKE_UP_TEXT, "poke_flute"))
+
+
+## `ItemUseText00`, the line `PrintItemUseTextAndRemoveItem` prints in front of
+## an effect. A ball says it too: the throw, the rocking and the click are the
+## animation behind it, and the next thing said is already the outcome.
 func _item_used_text(item: int) -> String:
 	if _generation() == RomRegistry.GEN1:
 		## `_ItemUseText001` and `_ItemUseText002` with the name between them:
@@ -3560,7 +3581,7 @@ func _clear_capture_action() -> void:
 	_capture_spent_turn = {}
 	_capture_selecting = false
 	_capture_waiting = false
-	_capture_messages.clear()
+	_box_queue.clear()
 	_capture_caught_event = {}
 	_capture_terminal = false
 	_contest_already_caught_said = false
@@ -3918,8 +3939,8 @@ func _continue_after_messages() -> void:
 		return
 	if _a_list_owns_the_joypad():
 		return
-	if not _capture_messages.is_empty():
-		_show_next_capture_message()
+	if not _box_queue.is_empty():
+		_show_next_box()
 		return
 	## `PokeBallEffect`'s own `call ClearSprites`, which is the first thing after
 	## `Text_GotchaMonWasCaught` has been pressed past: the ball `anim_keepsprites`

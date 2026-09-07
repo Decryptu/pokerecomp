@@ -6535,6 +6535,13 @@ func _on_field_item_used(request: Dictionary) -> void:
 			_show_field_move_text(
 				_field_item_text("sacred_ash", "#MON were all\nhealed!")
 			)
+		## `PlayedFluteHadEffectText`'s own `text_asm` plays SFX_POKEFLUTE and
+		## waits it out; nothing else follows either box in the overworld.
+		Gen2WorldPack.FIELD_EFFECT_POKE_FLUTE:
+			_show_field_move_text(_field_item_text(
+				"flute_woke" if bool(request.get("woke", false)) else "flute_no_effect",
+				"Played the #\nFLUTE."
+			))
 		## `farsjump CardKeySlotScript` and `farsjump BasementDoorScript`, each
 		## `QueueScript`d by its own routine, so both run as any map script does.
 		Gen2WorldPack.FIELD_EFFECT_CARD_KEY, Gen2WorldPack.FIELD_EFFECT_BASEMENT_KEY:
@@ -6583,6 +6590,8 @@ func _on_bike_used(request: Dictionary) -> void:
 const GEN1_FIELD_ITEM_TEXTS: Dictionary = {
 	"got_on_bike": ["bicycle", "got_on"],
 	"got_off_bike": ["bicycle", "got_off"],
+	"flute_woke": ["poke_flute", "had_effect"],
+	"flute_no_effect": ["poke_flute", "no_effect"],
 }
 
 

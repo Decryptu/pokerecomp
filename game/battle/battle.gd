@@ -2497,15 +2497,19 @@ func use_bag_item(item: int, target_index: int = -1, move_slot: int = -1) -> Dic
 
 ## `ItemUsePokeFlute`'s in-battle branch: everything asleep on the field and in
 ## both parties wakes, `WakeUpEntireParty` reaching the enemy's party only in a
-## trainer battle. The turn is spent either way and the key item is not.
+## trainer battle. `woken` is `wWereAnyMonsAsleep`, which picks the box behind
+## it. The turn is spent either way and the key item is not.
 func _play_poke_flute(item: int) -> Dictionary:
 	var woken: int = 0
-	for side: int in [PLAYER, ENEMY]:
-		if side == ENEMY and not is_trainer_battle:
-			woken += _wake_up(mon(ENEMY))
-			continue
-		for index: int in party(side).size():
-			woken += _wake_up(party(side).at(index))
+	for index: int in party(PLAYER).size():
+		woken += _wake_up(party(PLAYER).at(index))
+	if is_trainer_battle:
+		for index: int in party(ENEMY).size():
+			woken += _wake_up(party(ENEMY).at(index))
+	else:
+		var wild: int = _wake_up(mon(ENEMY))
+		if Gen1Layout.flute_counts_wild(data.id):
+			woken += wild
 	return {"ok": true, "kind": &"poke_flute", "item": item, "woken": woken, "spent": false}
 
 

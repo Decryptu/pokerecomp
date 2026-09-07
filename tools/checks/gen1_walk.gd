@@ -315,6 +315,12 @@ const PALLET_FLY_CELL := Vector2i(5, 6)
 ## `AGATHAS_ROOM`, the one map `ItemUseEscapeRope` refuses by name.
 const AGATHAS_ROOM_CELL := Vector2i(4, 11)
 
+## `Route12SnorlaxFluteCoords`' last row, one space east of the Snorlax.
+const ROUTE_12: int = 0x17
+const SNORLAX_CELL := Vector2i(11, 62)
+const SNORLAX_FIGHT_FLAG: int = 1166
+const SNORLAX_BEAT_FLAG: int = 1167
+
 var _r: RefCounted = null
 
 
@@ -357,6 +363,7 @@ func _one_game() -> void:
 	_check_a_dungeon_fall()
 	_check_an_escape_rope()
 	_check_the_bicycle()
+	_check_the_poke_flute()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -1902,6 +1909,35 @@ func _check_the_cycling_road() -> void:
 		"the gate left the ride %s forced." % ["still" if world.always_on_bike() else "no longer"]
 	)
 	_r.note("gen1 bike forced on Route 16 at %s" % ROUTE_16_GATE_DOOR)
+
+
+## `ItemUsePokeFlute` outside a battle: the cell beside Route 12's Snorlax sets
+## the fight event, a cell away does not, and neither does that cell once the
+## beat event stands.
+func _check_the_poke_flute() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, ROUTE_12, SNORLAX_CELL)
+	if world == null:
+		return
+	var flute: Dictionary = world.poke_flute_request()
+	_r.check(
+		bool(flute.get("ok", false)) and bool(flute.get("woke", false))
+			and world.event_flag_active(SNORLAX_FIGHT_FLAG),
+		"the flute beside the Snorlax answered %s." % [flute]
+	)
+	world.player_cell = SNORLAX_CELL + Vector2i.LEFT
+	world.state.set_event_flag(SNORLAX_FIGHT_FLAG, false)
+	_r.check(
+		not bool(world.poke_flute_request().get("woke", false))
+			and not world.event_flag_active(SNORLAX_FIGHT_FLAG),
+		"the flute woke a Snorlax a cell away."
+	)
+	world.player_cell = SNORLAX_CELL
+	world.state.set_event_flag(SNORLAX_BEAT_FLAG, true)
+	_r.check(
+		not bool(world.poke_flute_request().get("woke", false)),
+		"the flute woke a Snorlax that had already been beaten."
+	)
+	_r.note("gen1 poke flute set flag %d beside the Snorlax" % SNORLAX_FIGHT_FLAG)
 
 
 ## `ItemUseEscapeRope`: refused outdoors and in Agatha's room, taken in a cave,

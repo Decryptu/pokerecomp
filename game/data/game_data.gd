@@ -2618,6 +2618,20 @@ func gen1_forces_ride(map: int, cell: Vector2i) -> bool:
 	return false
 
 
+## The Snorlax whose flute cells hold [param cell] on [param map], as the
+## `SetEvent` and `CheckEvent` pair `ItemUsePokeFlute` reads there.
+func gen1_snorlax_flute(map: int, cell: Vector2i) -> Dictionary:
+	for row: Variant in _special_warps.get("snorlax_flute", []) as Array:
+		var flute: Dictionary = row
+		if int(flute.get("map", -1)) != map:
+			continue
+		for entry: Variant in flute.get("cells", []) as Array:
+			var coords: Dictionary = entry
+			if int(coords.get("x", -1)) == cell.x and int(coords.get("y", -1)) == cell.y:
+				return {"fight": int(flute["fight"]), "beat": int(flute["beat"])}
+	return {}
+
+
 ## One of the `db` lists ending in `-1` that `_import_special_warps` reads:
 ## `EscapeRopeTilesets`, `SafariZoneRestHouses` or `BikeRidingTilesets`.
 func gen1_special_warp_list(name: String) -> PackedInt32Array:

@@ -603,6 +603,10 @@ const ITEM_USE_TEXT_AT: Dictionary = {
 ## `GotOnBicycleText` and `GotOffBicycleText`, pinned away from the run above
 ## because Yellow's `DontHavePokemonText` sits between them and it.
 const BICYCLE_TEXT_AT: Dictionary = {"got_on": 0x00, "got_off": 0x0A}
+## `ItemUsePokeFlute`'s own three, in file order.
+const POKE_FLUTE_TEXT_AT: Dictionary = {
+	"no_effect": 0x00, "woke_up": 0x05, "had_effect": 0x0A,
+}
 ## `CannotGetOffHereText`, which `.useOrTossItem` prints in front of `UseItem`
 ## rather than through `ItemUseFailed`. `CannotUseItemsHereText` above it is the
 ## Colosseum's and no screen here reaches it.
@@ -749,6 +753,18 @@ const SEAFOAM_ISLANDS_B4F: int = 0xA2
 ## Gate 1F's and Route 18 Gate 1F's per-frame scripts open with.
 const ALWAYS_ON_BIKE_BIT: int = 5
 
+## `ItemUsePokeFlute`'s two maps and the events each branch reads, in the order
+## their coordinate tables sit in. Both cartridges number the four alike;
+## Yellow's third branch is Pikachu at PEWTER_POKECENTER, which nothing follows
+## the player here.
+const ROUTE_12: int = 0x17
+const ROUTE_16: int = 0x1B
+const SNORLAX_FLUTE_ROW_SIZE: int = 2
+const SNORLAX_FLUTES: Array[Dictionary] = [
+	{"map": ROUTE_12, "fight": 1166, "beat": 1167, "count": 4},
+	{"map": ROUTE_16, "fight": 1224, "beat": 1225, "count": 2},
+]
+
 ## `NOT_VISITED`, which `BuildFlyLocationsList` writes for a town the player has
 ## not been to, and `.townMapFlyLoop`'s own `ld c, 15` between two draws.
 const TOWN_MAP_NOT_VISITED: int = 0xFE
@@ -785,8 +801,11 @@ const BOX_COUNT: int = 12
 const BOX_CAPACITY: int = 20
 
 ## `EVENT_MET_BILL`, which puts BILL's PC on the machine's top menu where
-## SOMEONE's PC otherwise stands. Counted off `constants/event_constants.asm`.
-const EVENT_MET_BILL: int = 1360
+## SOMEONE's PC otherwise stands. Yellow's unused `EVENT_54F` sits below it in
+## `constants/event_constants.asm` and pushes it one higher.
+const MET_BILL_EVENTS: Dictionary = {
+	RomRegistry.RED: 1360, RomRegistry.BLUE: 1360, RomRegistry.YELLOW: 1361,
+}
 
 ## `MapHeaderPointers` is flat: one `dw` a map id, with `MapHeaderBanks` beside
 ## it. `SwitchToMapRomBank` selects that bank once, which is what puts a map's
@@ -1432,6 +1451,10 @@ const RED_BLUE: Dictionary = {
 	"bike_riding_tilesets": 0x009E2,
 	"forced_bike_surf": 0x0C3E6,
 	"status_flags_6": 0xD732,
+	## `Route12SnorlaxFluteCoords` with `Route16SnorlaxFluteCoords` behind it,
+	## and the three boxes `ItemUsePokeFlute` prints from behind both.
+	"snorlax_flute_coords": 0x0E1FD,
+	"poke_flute_text": 0x0E20B,
 	"bicycle_text": 0x0E5F2,
 	"start_menu_text": 0x1342F,
 	"battle_font": 0x11EA0,
@@ -1645,6 +1668,8 @@ const YELLOW: Dictionary = {
 	"bike_riding_tilesets": 0x00822,
 	"forced_bike_surf": 0x0C12F,
 	"status_flags_6": 0xD731,
+	"snorlax_flute_coords": 0x0E0AC,
+	"poke_flute_text": 0x0E0BA,
 	"bicycle_text": 0x0E536,
 	"start_menu_text": 0x11FD9,
 	"battle_font": 0x10A20,
@@ -1932,6 +1957,16 @@ static func pic_bank(layout: Dictionary, index: int) -> int:
 ## behind Agatha's room.
 static func map_count(id: StringName) -> int:
 	return MAP_COUNT_YELLOW if id == RomRegistry.YELLOW else MAP_COUNT_RED_BLUE
+
+
+static func met_bill_event(id: StringName) -> int:
+	return int(MET_BILL_EVENTS.get(id, MET_BILL_EVENTS[RomRegistry.RED]))
+
+
+## `.inBattle`'s `wWereAnyMonsAsleep`: Yellow's `ld c, a` counts the wild's own
+## sleep, where Red and Blue clear it and print `PlayedFluteNoEffectText` anyway.
+static func flute_counts_wild(id: StringName) -> bool:
+	return id == RomRegistry.YELLOW
 
 
 ## `CheckIfInOutsideMap`: which maps write `wLastMap` on the way out of them.
