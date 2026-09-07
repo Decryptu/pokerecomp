@@ -70,6 +70,7 @@ var _text_bg_palette: Array = []
 var _presents_palettes: Dictionary = {}
 var _title: Dictionary = {}
 var _town_map: Dictionary = {}
+var _special_warps: Dictionary = {}
 var _oak_ratings: Dictionary = {}
 var _pokecenter_pc: Dictionary = {}
 var _decorations: Dictionary = {}
@@ -188,6 +189,7 @@ const MANIFEST_DICTIONARIES: Dictionary = {
 	"presents_palettes": "_presents_palettes",
 	"title": "_title",
 	"town_map": "_town_map",
+	"special_warps": "_special_warps",
 	"oak_ratings": "_oak_ratings",
 	"pokecenter_pc": "_pokecenter_pc",
 	"decorations": "_decorations",
@@ -2591,6 +2593,25 @@ func gen1_fly_warp(map: int) -> Dictionary:
 				"y": int((row as Dictionary).get("y", 0)),
 			}
 	return {}
+
+
+## `.dungeonWarpListLoop`: the `DungeonWarpData` tile hole [param warp] falling
+## onto [param map] lands on. Empty for a pair the list does not hold, which is
+## Victory Road 3F's switch alone and which the source walks off the end for.
+func gen1_dungeon_warp(map: int, warp: int) -> Dictionary:
+	for row: Variant in _special_warps.get("dungeon_warps", []) as Array:
+		var entry: Dictionary = row
+		if int(entry.get("map", -1)) == map and int(entry.get("warp", -1)) == warp:
+			return {"x": int(entry.get("x", 0)), "y": int(entry.get("y", 0))}
+	return {}
+
+
+## `EscapeRopeTilesets` or `SafariZoneRestHouses`, each a `db` list to a `-1`.
+func gen1_special_warp_list(name: String) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for value: Variant in _special_warps.get(name, []) as Array:
+		out.append(int(value))
+	return out
 
 
 func landmark_count() -> int:

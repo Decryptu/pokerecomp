@@ -41,6 +41,9 @@ const SPRITE_PLAYER: int = 0x01
 const SPRITE_PLAYER_BIKE: int = 0x02
 const SPRITE_SURFING_PIKACHU: int = 0x34
 const SPRITE_SURF: int = 0x53
+## `SPRITE_SEEL`, which `LoadSurfingPlayerSpriteGraphics` draws the surfing
+## player with on all three Generation 1 cartridges.
+const SPRITE_SEEL: int = 0x3C
 const SPRITE_KRIS: int = 0x60
 const SPRITE_KRIS_BIKE: int = 0x61
 const SPRITE_POKEMON: int = 0x80

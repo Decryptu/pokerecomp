@@ -53,6 +53,7 @@ const KIND_HELP: Dictionary = {
 	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
 	&"pet_actor_arc": "cell: the same actor mid-ledge, at the top of the arc its span names",
 	&"warp": "warp tile: MapSetupScript_Door at its whitest, the frame the new map loads on",
+	&"dungeon_fall": "0 or 1: the step north onto a Generation 1 dungeon hole. 0 is LeaveMapAnim at its whitest, 1 the map DungeonWarpData lands on",
 	&"script_fade": "special, frames: one of the five fade specials over the map",
 	&"door": "door mat: .CheckWarp's carpet, standing on an interior door's mat",
 	&"ice_slide": "direction, frames: DoPlayerMovement.CheckForced's run. Direction is down, up, left, right",
@@ -441,6 +442,7 @@ const STAGERS: Dictionary = {
 	&"mart_sell": &"_stage_mart",
 	&"elevator": &"_stage_elevator",
 	&"warp": &"_stage_warp",
+	&"dungeon_fall": &"_stage_dungeon_fall",
 	&"door": &"_stage_door",
 	&"ledge": &"_stage_ledge",
 	&"ice_slide": &"_stage_ice_slide",
@@ -884,6 +886,25 @@ func _stage_warp() -> void:
 		if StringName(fade.get("stage", &"")) == &"out" \
 			and int(fade.get("step", 0)) == Gen2WorldPalette.FADE_OUT_ORDERS.size() - 1:
 			break
+
+
+## `HandleFlyWarpOrDungeonWarp`: the step north onto a hole and the fade behind
+## it, whose last order is the frame the destination loads on. A first number of
+## 1 spends the fade in too (`red 0 192 ... dungeon_fall@17,7 1 0`).
+func _stage_dungeon_fall() -> void:
+	for _frame: int in WARP_FRAME_CAP:
+		_screen.move_up()
+		_screen.advance_frame()
+		var fade: Dictionary = _screen.map_fade()
+		if StringName(fade.get("stage", &"")) == &"out" \
+			and int(fade.get("step", 0)) == Gen2WorldPalette.FADE_OUT_ORDERS.size() - 1:
+			break
+	if _cell.x <= 0:
+		return
+	for _frame: int in WARP_FRAME_CAP:
+		if _screen.map_fade().is_empty():
+			break
+		_screen.advance_frame()
 
 
 ## `CheckDirectionalWarp`'s carpet: the step onto an interior door's mat lands and

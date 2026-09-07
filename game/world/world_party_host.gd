@@ -1215,7 +1215,7 @@ static func whiteout(
 	var before_money: int = world.state.money(0)
 	world.state.apply_changes({}, {}, {"money": {0: before_money >> 1}})
 	var spawn: int = world.whiteout_spawn()
-	var warped: Dictionary = world.warp_to_spawn(spawn)
+	var warped: Dictionary = world.warp_to_escape_point(spawn)
 	if not bool(warped.get("ok", false)):
 		return _failure(StringName(warped.get("reason", &"missing_spawn")), warped)
 	if persist and save != null:

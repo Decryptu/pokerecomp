@@ -453,6 +453,8 @@ static func open_snapshot(
 	out.random_seed = world_snapshot.random_seed
 	out.frame_number = world_snapshot.frame_number
 	out.last_spawn_map = world_snapshot.last_spawn_map
+	out._gen1_last_map = world_snapshot.gen1_last_map
+	out._gen1_last_blackout_map = world_snapshot.gen1_last_blackout_map
 	out.dig_warp = world_snapshot.dig_warp.duplicate()
 	out.backup_warp = world_snapshot.backup_warp.duplicate()
 	## `.SpawnAfterE4` and `.AfterRed`, which stand between `ClockContinue` and
@@ -1465,7 +1467,7 @@ func surf_request(species: int = 0) -> Dictionary:
 		"move": Gen2WorldFieldMove.MOVE_SURF,
 		"cell": target,
 		"direction": direction,
-		"sprite": Gen2WorldFieldMove.surf_sprite(species),
+		"sprite": Gen2WorldFieldMove.surf_sprite(species, _gen1),
 	}
 	return _pending_surf.duplicate(true)
 
@@ -3662,6 +3664,11 @@ var _gen1: bool = false
 ## `wLastMap`, the outdoor map a [constant Gen1Layout.WARP_TO_LAST_MAP] warp
 ## comes back out to. Generation 2 has no such warp and never writes it.
 var _gen1_last_map: int = -1
+## `wLastBlackoutMap`, which `SetLastBlackoutMap` copies `wLastMap` into at the
+## Pokemon Center's YES. A blackout, an Escape Rope, Dig and Teleport all land
+## on its own `FlyWarpDataPtr` tile. A zeroed byte is PALLET_TOWN, which is what
+## a game that has healed nowhere lands on.
+var _gen1_last_blackout_map: int = Gen1Layout.PALLET_TOWN
 ## The [method GameData.special_text] run `DisplayPokemonCenterDialogue_`'s own
 ## boxes are imported under.
 const GEN1_POKECENTER_RUN: String = "pokecenter"
@@ -3763,6 +3770,10 @@ func collision_code_at(cell: Vector2i) -> int:
 ## `SetPal_Overworld` names no branch of its own. -1 until a warp writes it.
 func gen1_last_map() -> int:
 	return _gen1_last_map
+
+
+func gen1_last_blackout_map() -> int:
+	return _gen1_last_blackout_map
 
 
 ## `CheckForHiddenEventOrBookshelfOrCardKeyDoor` runs on the A press ahead of
@@ -4565,6 +4576,7 @@ func _gen1_nurse_steps() -> Array:
 			"type": &"choice",
 			"text": _gen1_pokecenter_text("shall_we_heal"),
 			"yes": [
+				{"type": &"blackout_map"},
 				_gen1_pokecenter_box("need_your_pokemon"),
 				{"type": &"request", "values": {
 					"kind": &"party_heal_requested", "values": {},
@@ -4881,6 +4893,16 @@ func _gen1_result() -> Array:
 	return [result]
 
 
+## `SetLastBlackoutMap`, whose whole body is the rest-house list: healing in one
+## of the Safari Zone's three leaves the map a blackout lands on where it was.
+## -1 is no outdoor map walked out of rather than a map id, and records nothing.
+func _gen1_record_blackout_map() -> void:
+	if current_map == null or data == null or _gen1_last_map < 0 \
+		or data.gen1_special_warp_list("rest_houses").has(current_map.number):
+		return
+	_gen1_last_blackout_map = _gen1_last_map
+
+
 ## `AfterDisplayingTextID` redraws the map behind the row, which takes a balance
 ## window down the way `closetext`'s redraw takes Generation 2's.
 func _gen1_close_money_window(events: Array) -> void:
@@ -4948,6 +4970,9 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 			return true
 		&"toggle":
 			gen1_toggle_object(int(step["index"]), bool(step["hidden"]))
+			return true
+		&"blackout_map":
+			_gen1_record_blackout_map()
 			return true
 		&"walk":
 			events.append_array(_gen1_walk_player(
@@ -7922,7 +7947,7 @@ func _apply_map_setup_player_state() -> void:
 
 func _map_setup_sprite(mode: StringName) -> int:
 	if mode == MOVEMENT_SURF:
-		return Gen2WorldSprite.SPRITE_SURF
+		return Gen2WorldFieldMove.surf_sprite(0, _gen1)
 	if mode == MOVEMENT_BIKE:
 		return Gen2WorldSprite.player_bike_sprite(_player_female)
 	return _walking_sprite()
@@ -8227,7 +8252,7 @@ func _gen1_fly_request() -> Dictionary:
 
 ## `.usedFlyWarp`: the destination's own `FlyWarpDataPtr` record, which is a tile
 ## on a map the overworld tileset always draws.
-func gen1_fly_to(map: int) -> Dictionary:
+func gen1_fly_to(map: int, entry: int = MAP_ENTRY_FLY) -> Dictionary:
 	var landing: Dictionary = data.gen1_fly_warp(map) if data != null else {}
 	var target_map: Gen2WorldMap = data.world_map(0, map) if not landing.is_empty() else null
 	var target_tileset: Gen2WorldTileset = data.world_tileset(target_map.tileset) \
@@ -8237,12 +8262,66 @@ func gen1_fly_to(map: int) -> Dictionary:
 	var from_map: Vector2i = map_id()
 	_apply_map(
 		target_map, target_tileset,
-		Vector2i(int(landing["x"]), int(landing["y"])), false, 0, MAP_ENTRY_FLY
+		Vector2i(int(landing["x"]), int(landing["y"])), false, 0, entry
 	)
 	return {
 		"ok": true, "kind": &"fly_warp", "from_map": from_map,
 		"to_map": map_id(), "to_cell": player_cell,
 	}
+
+
+## `IsPlayerOnDungeonWarp`: the hole [param cell] stands on, with the
+## `DungeonWarpData` tile it falls to. `.dungeonWarpListLoop` looks the pair up
+## by the map the floor's script wrote and the hole's one-based index; the pair
+## it does not hold is Victory Road 3F's switch, whose bits that floor clears.
+func gen1_dungeon_hole_at(cell: Vector2i) -> Dictionary:
+	if not _gen1 or current_map == null or data == null:
+		return {}
+	var rows: Array = current_map.events.get("dungeon_holes", [])
+	for index: int in rows.size():
+		var hole: Dictionary = rows[index]
+		if int(hole["x"]) != cell.x or int(hole["y"]) != cell.y:
+			continue
+		var landing: Dictionary = data.gen1_dungeon_warp(
+			int(hole["destination"]), index + 1
+		)
+		if landing.is_empty():
+			return {}
+		return {
+			"map": int(hole["destination"]), "warp": index + 1,
+			"x": int(landing["x"]), "y": int(landing["y"]),
+		}
+	return {}
+
+
+## `HandleFlyWarpOrDungeonWarp` behind the fall: the landing is
+## `DungeonWarpData`'s own record rather than a warp event on either map.
+func gen1_dungeon_fall() -> Dictionary:
+	var hole: Dictionary = gen1_dungeon_hole_at(player_cell)
+	if hole.is_empty():
+		return {}
+	var target_map: Gen2WorldMap = data.world_map(0, int(hole["map"]))
+	var target_tileset: Gen2WorldTileset = data.world_tileset(target_map.tileset) \
+		if target_map != null else null
+	if target_map == null or target_tileset == null:
+		return {"ok": false, "kind": &"dungeon_warp", "reason": &"missing_map"}
+	var from_map: Vector2i = map_id()
+	_apply_map(
+		target_map, target_tileset, Vector2i(int(hole["x"]), int(hole["y"])),
+		false, 0, MAP_ENTRY_FALL
+	)
+	return {
+		"ok": true, "kind": &"dungeon_warp", "from_map": from_map,
+		"warp": int(hole["warp"]), "to_map": map_id(), "to_cell": player_cell,
+	}
+
+
+## `PlayMapChangeSound`'s own test: `lda_coord 8, 8`, a row above every other
+## read, against the OVERWORLD door tile, whatever tileset the map wears.
+func gen1_entered_a_door() -> bool:
+	return _gen1 and _gen1_screen_tile(
+		Gen1Layout.SCREEN_PLAYER_COLUMN, Gen1Layout.SCREEN_PLAYER_ROW - 1
+	) == Gen1Layout.OVERWORLD_DOOR_TILE
 
 
 func fly_request() -> Dictionary:
@@ -8324,6 +8403,14 @@ func teleport_request() -> Dictionary:
 		return _teleport_failure(&"missing_map")
 	if party_slot_with_move(Gen2WorldFieldMove.MOVE_TELEPORT) < 0:
 		return _teleport_failure(&"move_not_known")
+	## `.teleport` asks `CheckIfInOutsideMap` and nothing else, so the map being
+	## a spawn point is Generation 2's question alone.
+	if _gen1:
+		if not Gen1Layout.is_outside_tileset(current_map.tileset):
+			return _teleport_failure(&"not_outdoors")
+		return _stage_escape(
+			&"teleport_requested", Gen2WorldFieldMove.MOVE_TELEPORT, -1
+		)
 	if not _is_outdoor(current_map.environment):
 		return _teleport_failure(&"not_outdoors")
 	var spawn: int = spawn_index_of(last_spawn_map)
@@ -8344,7 +8431,7 @@ func dig_request() -> Dictionary:
 		return _dig_failure(&"missing_map")
 	if party_slot_with_move(Gen2WorldFieldMove.MOVE_DIG) < 0:
 		return _dig_failure(&"move_not_known")
-	var checked: StringName = _check_can_dig()
+	var checked: StringName = _gen1_check_escape() if _gen1 else _check_can_dig()
 	if checked != &"":
 		return _dig_failure(checked)
 	return _stage_escape(&"dig_requested", Gen2WorldFieldMove.MOVE_DIG, -1)
@@ -8415,6 +8502,28 @@ static func _bike_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"bike_failed", "reason": reason}
 
 
+## Where a blackout, an Escape Rope, Dig and Teleport all put the player down.
+## Generation 2 reads a spawn point; `LoadSpecialWarpData`'s `.usedEscapeWarp`
+## hands `.usedFlyWarp` `wLastBlackoutMap` instead. `Script_AbortBugContest` has
+## no Generation 1 counterpart, so the tail behind the warp is Generation 2's.
+func warp_to_escape_point(spawn: int, entry: int = MAP_ENTRY_WARP) -> Dictionary:
+	if not _gen1:
+		return warp_to_spawn(spawn, entry)
+	return gen1_fly_to(_gen1_last_blackout_map, entry)
+
+
+## `ItemUseEscapeRope`: no map environment is read at all. Agatha's room is
+## refused by name and `EscapeRopeTilesets` is the rest. `DigFunction` is the
+## same routine under the other type byte and asks exactly this.
+func _gen1_check_escape() -> StringName:
+	if current_map.number == Gen1Layout.AGATHAS_ROOM \
+		or not data.gen1_special_warp_list(
+			"escape_rope_tilesets"
+		).has(current_map.tileset):
+		return &"not_in_a_cave"
+	return &""
+
+
 ## `EscapeRopeFunction`, which is `EscapeRopeOrDig` with the other type byte: the
 ## same `.CheckCanDig` and the same `.DoDig`, without a move to know. The type
 ## only picks which text the queued script says and whether `.FailDig` says
@@ -8422,7 +8531,7 @@ static func _bike_failure(reason: StringName) -> Dictionary:
 func escape_rope_request() -> Dictionary:
 	if current_map == null:
 		return _escape_rope_failure(&"missing_map")
-	var checked: StringName = _check_can_dig()
+	var checked: StringName = _gen1_check_escape() if _gen1 else _check_can_dig()
 	if checked != &"":
 		return _escape_rope_failure(checked)
 	## `.escaperope`'s `farcall SpecialKabutoChamber`, which runs while the
@@ -8457,8 +8566,8 @@ func complete_escape() -> Dictionary:
 	var spawn: int = int(staged["spawn"])
 	## Dig and an Escape Rope both `newloadmap MAPSETUP_DOOR`, which
 	## [method warp_to_dig_point] carries; `.TeleportScript` names its own.
-	var warped: Dictionary = warp_to_spawn(spawn, MAP_ENTRY_TELEPORT) if spawn >= 0 \
-		else warp_to_dig_point()
+	var warped: Dictionary = warp_to_escape_point(spawn, MAP_ENTRY_TELEPORT) \
+		if spawn >= 0 or _gen1 else warp_to_dig_point()
 	if not bool(warped.get("ok", false)):
 		return {
 			"ok": false, "kind": &"escape_failed",

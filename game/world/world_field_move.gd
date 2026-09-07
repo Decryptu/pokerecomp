@@ -211,7 +211,11 @@ static func is_hm_field_move(move: int) -> bool:
 ## GetSurfType through ChrisStateSprites. The source keeps the Pikachu variant
 ## as its own wPlayerState value and only the sprite differs, so the two lookups
 ## collapse into the one number a renderer needs.
-static func surf_sprite(species: int) -> int:
+## `LoadSurfingPlayerSpriteGraphics` is `SeelSprite` on all three Generation 1
+## cartridges, Yellow's included, and there is no variant of it.
+static func surf_sprite(species: int, gen1: bool = false) -> int:
+	if gen1:
+		return Gen2WorldSprite.SPRITE_SEEL
 	return Gen2WorldSprite.SPRITE_SURFING_PIKACHU if species == SPECIES_PIKACHU \
 		else Gen2WorldSprite.SPRITE_SURF
 
