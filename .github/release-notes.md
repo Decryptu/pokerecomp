@@ -14,14 +14,24 @@ here was called that and deserved it. Rewrite from the line that is exactly
 this note and takes its closing marker with it, which is how 0.1.17 published
 an empty body. -->
 
-## Fixed
+## Added
 
-- Mods installed before 0.1.27 read as not installed and could not be downloaded again, because the download was refused by the copy already on disk. The row now says "Installed, not loaded", offers to replace or remove it, and the update button on the mods page reinstalls every one of them in a single press.
-- A mod built for an older contract now says which build it wants and that downloading it again is the fix, instead of naming both version numbers and leaving it there.
+- The launcher opens on the cartridge you last played. Anyone whose game is Crystal was turning the carousel four steps at every launch. A shelf that has never been played from still opens on Red.
+- A mod can rewrite what a text box says. Every named box reads through one seam now, which is what a translation needs: the menus, the marts, the name rater, the move deleter, the Day-Care, the intro and the special scripts. Issue #575 asked for a French Crystal and had nothing to aim at.
 
 ## Changed
 
-- A Generation 1 hit shakes the screen or blinks the picture it landed on, a Pokemon grows out of its ball when it is sent out, and a thrown ball has its throw, its poof and its rocking. The status animations point at the rows the cartridge uses, and the animations that hide, move or squeeze a picture now move it on screen rather than only recording that they did. None of this is reachable from Play yet: Red, Blue and Yellow are still import and inspection only.
+- Generation 1's overworld is walked, fought and talked to. A map opens and a step meets a wild Pokemon. A sign or an NPC opens a box, a trainer sees you across a room and walks up, and the fight behind it runs to a faint with its own wipe, animations and ball throws.
+- Every counter on Red, Blue and Yellow is open: the mart, the Pokemon Center nurse, the cable club receptionist, the vending machines, the Game Corner prize counter with its four coin clerks, the Day-Care, and all three PCs.
+- The START menu, the bag, the party list, the Pokedex, the trainer card and the region map each draw in Generation 1's own layout.
+- Field moves run. Cut, Surf, Strength, Fly, Dig, Teleport and Softboiled, the three fishing rods, the bicycle down Cycling Road, the Poke Flute in front of a Snorlax, and Flash lighting Rock Tunnel.
+- Hidden objects, in-game trades, gifts, items on the ground, Silph Co.'s card key doors, the dungeon holes and the Escape Rope all answer.
+- A Generation 1 map runs its own per-frame script, so a state machine walks an NPC across a room or the player up a corridor and holds its line until that walk has been drawn.
+- None of this is reachable from Play. Red, Blue and Yellow are still import and inspection only.
+
+## Fixed
+
+- A mod archive refused for its contract now names the manifest it found. One built by another project's generator carries `manifest.json` with an `api` field, and this installer reported "no mod.json" over a file it had already read, then refused the mod for declaring the 0 it had defaulted to.
 
 ## Which file
 
