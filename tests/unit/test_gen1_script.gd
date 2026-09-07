@@ -61,6 +61,14 @@ const LAYOUT: Dictionary = {
 	"num_set_bits": 0xD11E,
 	"cur_map_tileset": 0xD367,
 	"tile_map": 0xC3A0,
+	"player_y": 0xD361,
+	"player_x": 0xD362,
+	"update_sprites": 0x02D0,
+	"play_sound": 0x02E0,
+	"play_sound_wait": 0x02F0,
+	"start_simulating_joypad": 0x0320,
+	"simulated_joypad_index": 0xCD38,
+	"simulated_joypad_end": 0xCCD3,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
 const PREDEFS: Dictionary = {

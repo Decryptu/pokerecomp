@@ -779,6 +779,9 @@ const SCRIPT_HIGH_BIT: int = 7
 const SCRIPT_AND_N: int = 0xE6
 const SCRIPT_LD_C: int = 0x0E
 const SCRIPT_LD_B_A: int = 0x47
+const SCRIPT_COORD_SOURCES: Array[String] = ["player_y", "player_x"]
+## `PAD_DOWN` down to `PAD_RIGHT`, bits 7 to 4, as `Gen2WorldAPI`'s directions.
+const PAD_DIRECTIONS: Dictionary = {0x80: 0, 0x40: 1, 0x20: 2, 0x10: 3}
 const SCRIPT_PREFIX: int = 0xCB
 const SCRIPT_JR: int = 0x18
 const SCRIPT_JP: int = 0xC3
@@ -818,6 +821,7 @@ const SCRIPT_CALLS: Array[String] = [
 	"predef", "display_pokedex", "give_pokemon", "wait_for_button",
 	"auto_textbox_on", "auto_textbox_off", "has_enough_money", "display_text_box",
 	"has_enough_coins", "print_predef_text", "display_text_id", "count_set_bits",
+	"start_simulating_joypad", "update_sprites", "play_sound", "play_sound_wait",
 ]
 ## Routines named by a full ROM offset, the same address in another bank being another routine.
 const SCRIPT_BANKED_CALLS: Array[String] = ["coin_box"]
@@ -825,7 +829,8 @@ const SCRIPT_BANKED_CALLS: Array[String] = ["coin_box"]
 ## every box, and `wAutoTextBoxDrawingControl` has no counterpart.
 const SCRIPT_SILENT_CALLS: Array[String] = [
 	"play_cry", "wait_for_sound", "wait_for_button",
-	"auto_textbox_on", "auto_textbox_off", "count_set_bits",
+	"auto_textbox_on", "auto_textbox_off", "count_set_bits", "update_sprites",
+	"play_sound", "play_sound_wait",
 ]
 const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
 ## `cp n` and the two conditional `ret`s behind it, whose value is the side
@@ -1310,6 +1315,15 @@ const RED_BLUE: Dictionary = {
 	"tile_map": 0xC3A0,
 	"cur_map_tileset": 0xD367,
 	"num_set_bits": 0xD11E,
+	"player_y": 0xD361,
+	"player_x": 0xD362,
+	## `StartSimulatingJoypadStates` and its buffer: one entry per walking step.
+	"update_sprites": 0x2429,
+	"play_sound": 0x23B1,
+	"play_sound_wait": 0x3740,
+	"start_simulating_joypad": 0x3486,
+	"simulated_joypad_index": 0xCD38,
+	"simulated_joypad_end": 0xCCD3,
 	"obtained_hidden_items": 0xD6F0,
 	"obtained_hidden_coins": 0xD6FE,
 	## `_IsTilePassable` and the lists it walks share a bank, and the pointer in
@@ -1480,6 +1494,14 @@ const YELLOW: Dictionary = {
 	"tile_map": 0xC3A0,
 	"cur_map_tileset": 0xD366,
 	"num_set_bits": 0xD11D,
+	"player_y": 0xD360,
+	"player_x": 0xD361,
+	"update_sprites": 0x231C,
+	"play_sound": 0x2238,
+	"play_sound_wait": 0x3736,
+	"start_simulating_joypad": 0x3415,
+	"simulated_joypad_index": 0xCD38,
+	"simulated_joypad_end": 0xCCD3,
 	"obtained_hidden_items": 0xD6EF,
 	"obtained_hidden_coins": 0xD6FD,
 	"tileset_collision_bank": 0x01,

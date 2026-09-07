@@ -3065,7 +3065,8 @@ func _party_holds_cleanse_tag() -> bool:
 func interact() -> bool:
 	if _world == null or _overlay_open() \
 		or _field_move_text or not _oak_pc_pages.is_empty() \
-		or _world.phone_ring_active() or _world.fishing_busy():
+		or _world.phone_ring_active() or _world.fishing_busy() \
+		or _world.scripted_movement_in_progress():
 		return false
 	var results: Array = _world.interact()
 	if results.is_empty():
