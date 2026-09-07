@@ -36,6 +36,7 @@ const KIND_HELP: Dictionary = {
 	&"prizes": "presses, rows down: CeladonPrizeMenu, read the same way. 0 the list, 1 SoYouWantPrizeText's YES/NO, 2 the box YES lands in",
 	&"trade": "presses: DoInGameTradeDialogue, faced up from the cell below the trader. 0 the offer and its YES/NO, 1 the party list YES opens",
 	&"deal": "presses: the MAGIKARP salesman, faced right from the cell beside him with the money box DisplayTextBoxID drew over the map",
+	&"ticket": "presses: Museum 1F's scientist, faced right from 11,4 with the fare exactly. 0 the offer, `2 1` the walk StartSimulatingJoypadStates makes of a refusal",
 	&"coins": "presses: GameCornerClerk1Text, faced up from the cell below her with GameCornerDrawCoinBox's own box over the map. 0 the offer and its YES/NO, 1 the box YES lands in",
 	&"card_key_door": "presses: PrintCardKeyText on a Silph Co. door, faced up from the cell below it with the CARD KEY owned. 0 CardKeySuccessText's first page, 1 its second, 2 the door those two presses opened",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
@@ -195,6 +196,7 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"nurse": BOX_REVEAL_FRAMES, &"vending": BOX_REVEAL_FRAMES,
 	&"prizes": BOX_REVEAL_FRAMES, &"trade": BOX_REVEAL_FRAMES,
 	&"coins": BOX_REVEAL_FRAMES, &"deal": BOX_REVEAL_FRAMES,
+	&"ticket": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
 const BOX_REVEAL_FRAMES: int = 120
@@ -452,6 +454,7 @@ const STAGERS: Dictionary = {
 	&"prizes": &"_stage_prizes",
 	&"trade": &"_stage_trade",
 	&"deal": &"_stage_deal",
+	&"ticket": &"_stage_ticket",
 	&"coins": &"_stage_coins",
 	&"card_key_door": &"_stage_card_key_door",
 	&"unown_printer": &"_stage_unown_printer",
@@ -1076,6 +1079,10 @@ func _stage_deal() -> void:
 	)
 
 
+func _stage_ticket() -> void:
+	_stage_counter({"money": {Gen2WorldMartHost.MONEY_ACCOUNT: MUSEUM_FARE}}, PokeButton.RIGHT)
+
+
 func _stage_coins() -> void:
 	_stage_counter({
 		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY},
@@ -1111,6 +1118,7 @@ func _stage_counter(purse: Dictionary, facing: int = PokeButton.UP) -> void:
 
 ## Enough for every row of `VendingPrices` and not enough to widen the money box.
 const VENDING_MONEY: int = 1000
+const MUSEUM_FARE: int = 50
 
 
 ## `_UnownPrinter`'s browser: the first number is the slot, where 26 is the vacant

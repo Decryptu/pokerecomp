@@ -74,15 +74,28 @@ const NURSE_PARTY: int = 4
 const CABLE_CLUB_COUNTER := Vector2i(11, 3)
 const CABLE_CLUB_ROWS: int = 12
 
-## `MtMoonPokecenter_Object`'s fourth object, the one row of the corpus that
-## spends money: `HasEnoughMoney`, `GivePokemon` and `SubBCDPredef` behind it,
-## with MONEY_BOX standing over the map for the question.
+## `MtMoonPokecenter_Object`'s fourth object: `HasEnoughMoney`, `GivePokemon`
+## and `SubBCDPredef` behind it, with MONEY_BOX standing over the map for the
+## question. Museum 1F's scientist is the corpus's other spender.
 const MT_MOON_POKECENTER: int = 0x44
 const MAGIKARP_SELLER := Vector2i(10, 6)
 const MAGIKARP_PRICE: int = 500
 const MAGIKARP_DEX: int = 129
 const MAGIKARP_LEVEL: int = 5
 const MAGIKARP_PURSE: int = 600
+
+## `Museum1F_Object`'s first object, at 12,4: the cell the player stands on
+## picks his line, and a refusal walks them one cell down.
+const MUSEUM_COUNTER := Vector2i(11, 4)
+const MUSEUM_TICKET: int = 50
+const MUSEUM_TICKET_FLAG: int = 104
+const MUSEUM_OFFER: String = "It's ¥50 for a"
+const MUSEUM_REFUSED: String = "Come again!"
+const MUSEUM_BOUGHT: String = "Right, ¥50!"
+const MUSEUM_BEHIND_COUNTER := Vector2i(13, 4)
+const MUSEUM_BACK_WAY: String = "You can't sneak"
+const MUSEUM_BELOW_COUNTER := Vector2i(12, 5)
+const MUSEUM_OTHER_SIDE: String = "Please go to the"
 
 ## `CeladonMartRoof_Object`'s three `bg_event` machines, read from below.
 const CELADON_MART_ROOF: int = 126
@@ -275,6 +288,7 @@ func _one_game() -> void:
 	_check_the_prize_counter()
 	_check_a_trade()
 	_check_the_magikarp_salesman()
+	_check_the_museum_ticket()
 	_check_the_coin_clerks()
 	_check_a_hidden_object()
 	_check_a_pc_opens()
@@ -926,6 +940,75 @@ func _check_the_magikarp_salesman() -> void:
 	_r.note("gen1 walk the MAGIKARP salesman with %d and with %d" % [
 		MAGIKARP_PURSE, MAGIKARP_PRICE - 1,
 	])
+
+
+## `Museum1FScientist1Text`, the corpus's one `StartSimulatingJoypadStates`: a
+## refusal is proved by the player standing a cell lower, mid-step.
+func _check_the_museum_ticket() -> void:
+	var world: Gen2WorldAPI = _museum_offer()
+	if world == null:
+		return
+	var refused: Array = world.choose_script_input(1)
+	_r.check(_event_text(refused).begins_with(MUSEUM_REFUSED),
+		"the refusal said %s." % [_event_text(refused)])
+	var walked: Array = world.run_event_queue(true)
+	_r.check(
+		world.player_cell == MUSEUM_COUNTER + Vector2i.DOWN
+			and world.scripted_movement_in_progress(),
+		"the refusal left the player at %s." % [world.player_cell]
+	)
+	_r.check(world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == MUSEUM_TICKET,
+		"a refused ticket cost %s." % [walked])
+	world = _museum_offer()
+	if world == null:
+		return
+	_r.check(_event_text(world.choose_script_input(0)).begins_with(MUSEUM_BOUGHT),
+		"the ticket was not sold.")
+	world.run_event_queue(true)
+	_r.check(
+		world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == 0
+			and world.state.is_event_flag_active(MUSEUM_TICKET_FLAG)
+			and world.player_cell == MUSEUM_COUNTER,
+		"the sale left %d and flag %s." % [
+			world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
+			world.state.is_event_flag_active(MUSEUM_TICKET_FLAG),
+		]
+	)
+	_check_the_museum_counter()
+	_r.note("gen1 walk the MUSEUM ticket bought and refused")
+
+
+func _check_the_museum_counter() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, MUSEUM_1F, MUSEUM_BEHIND_COUNTER)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_LEFT
+	world.interact()
+	var back: String = String(world.pending_script_input().get("text", ""))
+	_r.check(back.begins_with(MUSEUM_BACK_WAY), "the back way said %s." % [back])
+	world = _r.open_world(0, MUSEUM_1F, MUSEUM_BELOW_COUNTER)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var side: String = _box_text(world)
+	_r.check(side.begins_with(MUSEUM_OTHER_SIDE), "the near side said %s." % [side])
+
+
+func _museum_offer() -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, MUSEUM_1F, MUSEUM_COUNTER)
+	if world == null:
+		return null
+	world.player_facing = Gen2WorldSprite.FACING_RIGHT
+	world.state.apply_changes({}, {}, {
+		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: MUSEUM_TICKET},
+	})
+	var window: Dictionary = _first_event(world.interact(), &"money_window_opened")
+	_r.check(int(window.get("money", -1)) == MUSEUM_TICKET,
+		"the ticket drew %s over the map." % [window])
+	return world if _r.check(
+		String(world.pending_script_input().get("text", "")).begins_with(MUSEUM_OFFER),
+		"the ticket asked %s." % [world.pending_script_input()]
+	) else null
 
 
 ## The row up to its YES/NO, which the offer itself is the question of, with

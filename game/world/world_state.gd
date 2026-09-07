@@ -652,7 +652,6 @@ static func _map(source: Dictionary, key: String) -> Dictionary:
 	return value if value is Dictionary else {}
 
 
-## The same for a list.
 static func _list(source: Dictionary, key: String) -> Array:
 	var value: Variant = source.get(key, [])
 	return value if value is Array else []

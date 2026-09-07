@@ -1413,6 +1413,7 @@ const SCRIPT_TESTS_DEX: int = -8
 ## which is how a bookshelf tells a sculpture apart.
 const SCRIPT_TESTS_TILESET: int = -9
 const SCRIPT_TESTS_TILE: int = -10
+const SCRIPT_TESTS_COORD: int = -11
 ## What `push af` saves and `pop af` puts back, which is how
 ## `CheckEventAfterBranchReuseA` still reads the event byte a block write
 ## clobbered.
@@ -1711,11 +1712,27 @@ static func _script_stored(ctx: Dictionary, address: int, state: Dictionary) -> 
 	if address == int(layout["joy_held"]) \
 		or address == int(layout["auto_text_box_control"]):
 		return true
+	if _script_joypad_stored(layout, address, state):
+		return true
 	if _script_bcd_stored(ctx, address, state):
 		return true
 	if address != int(layout["item_to_remove"]) or int(state.get("a", 0)) < 1:
 		return false
 	state["remove"] = int(state["a"])
+	return true
+
+
+static func _script_joypad_stored(
+	layout: Dictionary, address: int, state: Dictionary
+) -> bool:
+	if not state.has("a"):
+		return false
+	if address == int(layout["simulated_joypad_index"]):
+		state["walk_steps"] = int(state["a"])
+		return true
+	if address != int(layout["simulated_joypad_end"]):
+		return false
+	state["walk_pad"] = int(state["a"])
 	return true
 
 
@@ -1848,10 +1865,27 @@ static func _script_call(
 			return _script_predef_text(ctx, state, out, next, depth)
 		"display_text_id":
 			return _script_map_text(state, out, next)
+		"start_simulating_joypad":
+			return _script_walk(state, out, next)
 	if _script_banked_routine(layout, int(ctx["bank"]), target) == "coin_box":
 		out.append({"op": "coin_box"})
 		return next
 	return _script_routine_call(ctx, int(ctx["bank"]), target, state, out, next, depth)
+
+
+## `StartSimulatingJoypadStates`, whose buffer is one walking step per entry.
+static func _script_walk(state: Dictionary, out: Array, next: int) -> int:
+	var pad: int = int(state.get("walk_pad", 0))
+	if not Gen1Layout.PAD_DIRECTIONS.has(pad) or int(state.get("walk_steps", 0)) < 1:
+		return SCRIPT_UNREAD
+	out.append({
+		"op": "walk",
+		"direction": int(Gen1Layout.PAD_DIRECTIONS[pad]),
+		"steps": int(state["walk_steps"]),
+	})
+	state.erase("walk_pad")
+	state.erase("walk_steps")
+	return next
 
 
 ## A `call` to a routine the layout does not name, walked in [param bank] and
@@ -2193,13 +2227,18 @@ static func _script_ret_branch(
 
 
 ## `cp n` against the faced direction, the species count `CountSetBits` left,
-## the map's tileset or one screen position; anything else ends the path.
+## the map's tileset, one screen position or where the player stands; anything
+## else ends the path.
 static func _script_compared(
 	ctx: Dictionary, pc: int, state: Dictionary, value: int
 ) -> int:
 	var layout: Dictionary = ctx["layout"]
 	var source: int = int(state.get("source", -1))
 	var next: int = pc + Gen1Layout.SCRIPT_SHORT_SIZE
+	## `cp $0` where every other row spends `and a`, YES being 0 either way.
+	if source == int(layout["current_menu_item"]) and value == 0:
+		_script_test_bit(ctx, state, -1)
+		return next
 	if source == int(layout["facing_direction"]):
 		state["facing"] = value
 		_script_tested(state, SCRIPT_TESTS_FACING)
@@ -2213,6 +2252,13 @@ static func _script_compared(
 		state["screen"] = screen
 		state["tile"] = value
 		_script_tested(state, SCRIPT_TESTS_TILE)
+		return next
+	for axis: int in Gen1Layout.SCRIPT_COORD_SOURCES.size():
+		if source != int(layout[Gen1Layout.SCRIPT_COORD_SOURCES[axis]]):
+			continue
+		state["axis"] = axis
+		state["coord"] = value
+		_script_tested(state, SCRIPT_TESTS_COORD)
 		return next
 	if source != int(layout["num_set_bits"]):
 		return SCRIPT_UNREAD
@@ -2327,6 +2373,9 @@ static func _script_node(
 		SCRIPT_TESTS_TILE:
 			return {"op": "screen_tile", "screen": int(state["screen"]),
 				"tile": int(state["tile"]), "then": fell, "else": taken}
+		SCRIPT_TESTS_COORD:
+			return {"op": "player_coord", "axis": int(state["axis"]),
+				"value": int(state["coord"]), "then": fell, "else": taken}
 	var branch: Dictionary = {
 		"op": "branch", "flag": int(tests), "then": taken, "else": fell,
 	}

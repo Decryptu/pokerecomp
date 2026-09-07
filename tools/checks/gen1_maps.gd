@@ -130,30 +130,32 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 250, "text": 289, "branch": 108, "choice": 13, "flag": 41,
+	&"red": {"rows": 253, "text": 309, "branch": 111, "choice": 17, "flag": 43,
 		"give_item": 25, "has_item": 15, "take_item": 3, "unknown": 55,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
-		"trade": 9, "has_money": 2, "spend_money": 2, "money_box": 2,
-		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2},
-	&"blue": {"rows": 250, "text": 289, "branch": 108, "choice": 13, "flag": 41,
+		"trade": 9, "has_money": 3, "spend_money": 3, "money_box": 4,
+		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2,
+		"player_coord": 4, "walk": 2, "replace_block": 1},
+	&"blue": {"rows": 253, "text": 309, "branch": 111, "choice": 17, "flag": 43,
 		"give_item": 25, "has_item": 15, "take_item": 3, "unknown": 55,
 		"pick_up_item": 104, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
-		"trade": 9, "has_money": 2, "spend_money": 2, "money_box": 2,
-		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2},
-	&"yellow": {"rows": 296, "text": 327, "branch": 103, "choice": 14, "flag": 35,
+		"trade": 9, "has_money": 3, "spend_money": 3, "money_box": 4,
+		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 2,
+		"player_coord": 4, "walk": 2, "replace_block": 1},
+	&"yellow": {"rows": 299, "text": 347, "branch": 106, "choice": 18, "flag": 37,
 		"give_item": 24, "has_item": 12, "take_item": 3, "unknown": 59,
 		"pick_up_item": 108, "toggle_object": 12, "pokedex": 9, "give_pokemon": 5,
-		"trade": 7, "has_money": 2, "spend_money": 2, "money_box": 2,
-		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 6},
+		"trade": 7, "has_money": 3, "spend_money": 3, "money_box": 4,
+		"has_coins": 4, "add_coins": 4, "coin_box": 2, "facing": 13, "dex_count": 6,
+		"player_coord": 4, "walk": 2, "replace_block": 1},
 }
 ## The eighth `call DisplayPokedex` in the source is `SilphCo11FPorygonText`,
 ## which no map text row names and the disassembly marks unreferenced. The
 ## `trade` rows are the eight `predef DoInGameTradeDialogue` sites plus
 ## `CinnabarLabTradeRoom`'s second, whose `jr` shares the first one's tail;
 ## Yellow ships neither trade house. The coin rows are the Game Corner's four
-## clerks. Museum 1F and the Safari Zone gate spend their money behind
-## `StartSimulatingJoypadStates`, which walks the player and which this port
-## has no counterpart for, so those two paths stay unread.
+## clerks. The Safari Zone gate takes its 500 from a row only that map's own
+## per-frame script names, so no event reaches it and it is not imported.
 
 ## `ToggleableObjectStates` as the corpus carries it: the objects a row lands on
 ## and how many start ON. Three rows name an object their map has not got.

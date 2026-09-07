@@ -3719,6 +3719,8 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"map_text": &"_gen1_node_map_text",
 	"facility": &"_gen1_node_facility",
 	"replace_block": &"_gen1_node_replace_block",
+	"player_coord": &"_gen1_node_player_coord",
+	"walk": &"_gen1_node_walk",
 }
 
 
@@ -4013,6 +4015,19 @@ func _gen1_node_screen_tile(node: Dictionary, steps: Array, run: Dictionary) -> 
 			== int(node["tile"]),
 		steps, run
 	)
+
+
+func _gen1_node_player_coord(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var axis: int = int(node["axis"])
+	var standing: int = player_cell.y if axis == 0 else player_cell.x
+	return _gen1_resolve_side(node, standing == int(node["value"]), steps, run)
+
+
+func _gen1_node_walk(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"walk", "direction": int(node["direction"]), "steps": int(node["steps"]),
+	})
+	return true
 
 
 ## `GetItemName` into `wStringBuffer`, which names a hidden item's receipt
@@ -4806,6 +4821,11 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 		&"toggle":
 			gen1_toggle_object(int(step["index"]), bool(step["hidden"]))
 			return true
+		&"walk":
+			events.append_array(_gen1_walk_player(
+				_movement_direction(int(step["direction"])), int(step["steps"])
+			))
+			return true
 		&"npc_trade":
 			state.apply_changes({}, {}, {"npc_trades": {int(step["trade_id"]): true}})
 			return true
@@ -4857,6 +4877,23 @@ func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 
 ## `ShowObject` and `HideObject`: one `wToggleableObjectFlags` bit by global
 ## index, and `UpdateSprites` behind it.
+## `CollisionCheckOnLand` skips every test while `wSimulatedJoypadStatesIndex`
+## stands, so only the map bounds refuse. The row ends before the walk is drawn.
+func _gen1_walk_player(direction: Vector2i, steps: int) -> Array:
+	var generated: Array = []
+	for _step: int in steps:
+		var destination: Vector2i = player_cell + direction
+		if not _cell_in_bounds(destination):
+			_queue_player_step(Vector2i.ZERO, 0, false, direction, STEP_KIND_WALK)
+			generated.append({
+				"type": &"movement_blocked", "player": true, "cell": destination,
+			})
+			break
+		player_cell = destination
+		_queue_player_step(direction, STEP_PASSES_WALK, false, direction, STEP_KIND_WALK)
+	return generated
+
+
 func gen1_toggle_object(index: int, hidden: bool) -> void:
 	if index < 0 or state == null or data == null:
 		return
