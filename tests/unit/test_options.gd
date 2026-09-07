@@ -213,6 +213,7 @@ func test_saving_then_loading_keeps_both_blocks() -> void:
 	options.music_volume = 2
 	options.video_mode = &"fullscreen"
 	options.max_fps = 120
+	options.last_played = RomRegistry.YELLOW
 	assert_true(Gen2OptionsStore.save(options))
 
 	Gen2OptionsStore.use_test_path()
@@ -222,6 +223,7 @@ func test_saving_then_loading_keeps_both_blocks() -> void:
 	assert_eq(loaded.music_volume, 2)
 	assert_eq(loaded.video_mode, &"fullscreen")
 	assert_eq(loaded.max_fps, 120)
+	assert_eq(loaded.last_played, RomRegistry.YELLOW)
 
 
 func test_a_missing_file_loads_defaults() -> void:

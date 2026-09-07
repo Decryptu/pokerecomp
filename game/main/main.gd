@@ -77,7 +77,9 @@ func _build() -> void:
 	_title_backdrop = Gen2LauncherTitleBackdrop.new()
 	add_child(_title_backdrop)
 
-	_shelf = Gen2ShelfPage.create(_palette, _shell.compact)
+	_shelf = Gen2ShelfPage.create(
+		_palette, _shell.compact, Gen2OptionsStore.current().last_played
+	)
 	_shelf.insert_requested.connect(_open_import_dialog)
 	_shelf.play_requested.connect(_launch_game)
 	_shelf.manage_requested.connect(_open_manage_sheet)
@@ -552,6 +554,7 @@ func launcher_snapshot() -> Dictionary:
 		"importing": _importing,
 		"page": String(_shell.current_page()) if _shell != null else "",
 		"theme": String(_palette.mode),
+		"shelf": String(_shelf.selected_id()) if _shelf != null else "",
 		"games": games,
 	}
 
@@ -686,6 +689,7 @@ func _launch_game(game_id: StringName) -> void:
 		)
 		return
 	_selected_game_id = game_id
+	_remember_last_played(game_id)
 	# The launch says itself with the transition; a toast announcing it would be
 	# a second, slower answer to the same press.
 	_shelf.set_busy(true)
@@ -694,6 +698,16 @@ func _launch_game(game_id: StringName) -> void:
 		await seated.play_start()
 	await _shell.flash()
 	get_tree().change_scene_to_file.call_deferred("res://game/save/save_screen.tscn")
+
+
+## Written where a launch is settled rather than where one is asked for: a bay
+## with no world has been turned away above, and an import is not a game played.
+func _remember_last_played(game_id: StringName) -> void:
+	var options: Gen2Options = Gen2OptionsStore.current()
+	if options.last_played == game_id:
+		return
+	options.last_played = game_id
+	Gen2OptionsStore.save(options)
 
 
 ## A cartridge this build cannot read was imported once; an empty bay was not.
