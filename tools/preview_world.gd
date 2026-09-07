@@ -54,6 +54,7 @@ const KIND_HELP: Dictionary = {
 	&"pet_actor_arc": "cell: the same actor mid-ledge, at the top of the arc its span names",
 	&"warp": "warp tile: MapSetupScript_Door at its whitest, the frame the new map loads on",
 	&"dungeon_fall": "0 or 1: the step north onto a Generation 1 dungeon hole. 0 is LeaveMapAnim at its whitest, 1 the map DungeonWarpData lands on",
+	&"cycling_road": "none: the walk east into Route 16's gate and back out onto ForcedBikeOrSurfMaps' own cell, with the Bicycle refused behind it (`red 0 27 ... cycling_road@16,10`)",
 	&"script_fade": "special, frames: one of the five fade specials over the map",
 	&"door": "door mat: .CheckWarp's carpet, standing on an interior door's mat",
 	&"ice_slide": "direction, frames: DoPlayerMovement.CheckForced's run. Direction is down, up, left, right",
@@ -443,6 +444,7 @@ const STAGERS: Dictionary = {
 	&"elevator": &"_stage_elevator",
 	&"warp": &"_stage_warp",
 	&"dungeon_fall": &"_stage_dungeon_fall",
+	&"cycling_road": &"_stage_cycling_road",
 	&"door": &"_stage_door",
 	&"ledge": &"_stage_ledge",
 	&"ice_slide": &"_stage_ice_slide",
@@ -904,6 +906,30 @@ func _stage_dungeon_fall() -> void:
 	for _frame: int in WARP_FRAME_CAP:
 		if _screen.map_fade().is_empty():
 			break
+		_screen.advance_frame()
+
+
+## `CheckForceBikeOrSurf`: the gate's own door lands back on a cell of
+## `ForcedBikeOrSurfMaps`, so the walk out mounts the bike and every Bicycle
+## after it is refused by `.useOrTossItem`.
+func _stage_cycling_road() -> void:
+	_walk_a_warp(_screen.move_right)
+	_walk_a_warp(_screen.move_left)
+	_screen.preview_field_item(Gen1Layout.ITEM_BICYCLE)
+
+
+## Steps [param towards] until the map has changed, then spends the fade behind
+## it: a press landing inside one is eaten and the next walk goes nowhere.
+func _walk_a_warp(towards: Callable) -> void:
+	var from: Variant = _screen.world_snapshot().get("map")
+	for _frame: int in WARP_FRAME_CAP:
+		towards.call()
+		_screen.advance_frame()
+		if _screen.world_snapshot().get("map") != from:
+			break
+	for _frame: int in WARP_FRAME_CAP:
+		if _screen.map_fade().is_empty():
+			return
 		_screen.advance_frame()
 
 

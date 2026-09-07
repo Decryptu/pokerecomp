@@ -527,7 +527,40 @@ static func _read_sprites(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"type": Gen2WorldSprite.TYPE_STILL if still else Gen2WorldSprite.TYPE_WALKING,
 			"palette": 0,
 		})
+	var bike: Dictionary = _read_bike_sprite(rom, sprites)
+	if not bool(bike["ok"]):
+		return bike
+	sprites.append(bike["sprite"])
+	graphics[int((bike["sprite"] as Dictionary)["number"])] = bike["pixels"]
 	return {"ok": true, "sprites": sprites, "graphics": graphics}
+
+
+## `RedBikeSprite`, which the table names no row for. See [constant
+## Gen1Layout.SPRITE_BIKE_BYTES] for where it stands and why it is derived.
+static func _read_bike_sprite(rom: RomFile, sprites: Array) -> Dictionary:
+	var player: Dictionary = sprites[Gen2WorldSprite.SPRITE_PLAYER - 1]
+	var address: int = int(player["address"]) - Gen1Layout.SPRITE_BIKE_BYTES
+	if address < RomFile.BANK_SIZE:
+		return _error("RedBikeSprite would start at $%04X." % address)
+	var tiles: int = Gen1Layout.SPRITE_WALKING_TILES * 2
+	var raw: PackedByteArray = rom.slice(
+		RomFile.linear(int(player["bank"]), address), Gen1Layout.SPRITE_BIKE_BYTES
+	)
+	if raw.size() != Gen1Layout.SPRITE_BIKE_BYTES:
+		return _error("RedBikeSprite's graphics are truncated.")
+	return {
+		"ok": true,
+		"pixels": PokeTiles.decode_2bpp_strip(raw, 0, tiles),
+		"sprite": {
+			"number": Gen1Layout.bike_sprite(rom.id),
+			"address": address,
+			"bank": int(player["bank"]),
+			"bytes": Gen1Layout.SPRITE_BIKE_BYTES,
+			"tiles": tiles,
+			"type": Gen2WorldSprite.TYPE_WALKING,
+			"palette": 0,
+		},
+	}
 
 
 ## One row of `Tilesets`, its blockset, its graphics and the list of tiles
@@ -717,6 +750,9 @@ static func _read_map(
 			"address": rom.u16le(header + MAP_SCRIPT_AT),
 			"scenes": [],
 			"callbacks": [] if callback.is_empty() else [callback],
+			"clears_always_on_bike": _clears_always_on_bike(
+				rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT)
+			),
 		},
 		"texts": texts,
 		"events": {
@@ -759,6 +795,24 @@ static func _script_ends(rom: RomFile, layout: Dictionary, map_count: int) -> Di
 			out[int((rows[index] as Array)[1])] = 2 * RomFile.BANK_SIZE \
 				if index + 1 == rows.size() else int((rows[index + 1] as Array)[0])
 	return out
+
+
+## Route 16 Gate 1F's and Route 18 Gate 1F's per-frame scripts open with
+## `ld hl, wStatusFlags6` / `res BIT_ALWAYS_ON_BIKE, [hl]` in front of their own
+## jump table, so a forced ride ends on the frame the gate is entered. Nothing
+## interprets that half of a map script here, so the five bytes are matched.
+static func _clears_always_on_bike(
+	rom: RomFile, layout: Dictionary, bank: int, script: int
+) -> bool:
+	var at: int = Gen1Layout.banked(bank, script)
+	if rom.u8(at) != Gen1Layout.SCRIPT_LD_HL \
+		or rom.u16le(at + 1) != int(layout["status_flags_6"]) \
+		or rom.u8(at + Gen1Layout.SCRIPT_LONG_SIZE) != Gen1Layout.SCRIPT_PREFIX:
+		return false
+	var code: int = rom.u8(at + Gen1Layout.SCRIPT_LONG_SIZE + 1)
+	return code >= Gen1Layout.SCRIPT_RES_BASE and code < Gen1Layout.SCRIPT_SET_BASE \
+		and (code & 7) == Gen1Layout.SCRIPT_OPERAND_HL \
+		and ((code >> 3) & 7) == Gen1Layout.ALWAYS_ON_BIKE_BIT
 
 
 ## `IsPlayerOnDungeonWarp` and the copy Pokemon Mansion 3F keeps of it both open

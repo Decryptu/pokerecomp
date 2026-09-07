@@ -9849,10 +9849,7 @@ func _write_gen1_cache() -> void:
 	RomCache.write_json(RomCache.world_maps_path(directory), [
 		_gen1_map(0, Gen1Layout.TILESET_OVERWORLD, 2, 3, GEN1_TOWN_CELLS,
 			[{"x": 1, "y": 1, "destination": 0, "map_group": 0, "map_number": 1}]),
-		_gen1_map(1, 1, 2, 2, GEN1_HOUSE_CELLS, [{
-			"x": 1, "y": 3, "destination": 0, "map_group": 0,
-			"map_number": Gen1Layout.WARP_TO_LAST_MAP,
-		}]),
+		_gen1_gate_map(),
 		_gen1_map(2, 3, 2, 2, GEN1_FOREST_CELLS, []),
 		_gen1_wander_map(),
 	])
@@ -9866,6 +9863,13 @@ func _write_gen1_cache() -> void:
 		"generation": RomRegistry.GEN1,
 		"sha1": "fedcba9876543210",
 		"complete": true,
+		## `BikeRidingTilesets` and `ForcedBikeOrSurfMaps`: the town and the
+		## forest are rideable, the house is not, and the town's own warp cell is
+		## the one `CheckForceBikeOrSurf` mounts on.
+		"special_warps": {
+			"bike_riding_tilesets": [Gen1Layout.TILESET_OVERWORLD, 3],
+			"forced_bike_surf": [{"map": 0, "y": 1, "x": 1}],
+		},
 	})
 
 
@@ -9882,6 +9886,17 @@ func _gen1_map(
 		"connection_flags": 0, "connections": [],
 		"events": {"warps": warps, "coord_events": [], "bg_events": [], "objects": []},
 	}
+
+
+## Map 1: the house behind the town's door, standing in for Route 16 Gate 1F as
+## the one map whose script opens by clearing `BIT_ALWAYS_ON_BIKE`.
+func _gen1_gate_map() -> Dictionary:
+	var map: Dictionary = _gen1_map(1, 1, 2, 2, GEN1_HOUSE_CELLS, [{
+		"x": 1, "y": 3, "destination": 0, "map_group": 0,
+		"map_number": Gen1Layout.WARP_TO_LAST_MAP,
+	}])
+	map["scripts"] = {"clears_always_on_bike": true}
+	return map
 
 
 ## Map 3: a clear four by twelve floor with one object walking its own column,
@@ -9903,6 +9918,81 @@ func _gen1_world(number: int, start: Vector2i) -> Gen2WorldAPI:
 	return Gen2WorldAPI.open(
 		GameData.open_directory(_gen1_directory()), 0, number, start, Gen2WorldState.new()
 	)
+
+
+## `IsBikeRidingAllowed` reads the map's tileset and nothing about the cell the
+## player stands on, and `LoadPlayerSpriteGraphics`' `.ridingBike` puts the bike
+## away on a map it refuses.
+func test_gen1_the_bike_reads_the_tileset_the_map_wears() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 2))
+	var mounted: Dictionary = world.bike_request()
+	assert_true(bool(mounted.get("ok", false)), "the town is rideable")
+	assert_eq(world.movement_mode, Gen2WorldAPI.MOVEMENT_BIKE)
+	assert_eq(world.player_sprite_number, Gen1Layout.bike_sprite(&"red"))
+	assert_eq(StringName(mounted["kind"]), &"bike_on")
+
+	world.player_cell = Vector2i(1, 1)
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	assert_true(bool(world.try_warp().get("ok", false)), "the door opened")
+	assert_eq(world.map_id(), Vector2i(0, 1))
+	assert_eq(world.movement_mode, Gen2WorldAPI.MOVEMENT_WALK, "the house is not rideable")
+	assert_eq(
+		StringName(world.bike_request().get("reason", &"")), &"no_cycling_here",
+		"`NoCyclingAllowedHere` rather than `.Oak`"
+	)
+	RomCache.clear(_gen1_directory())
+
+
+## `CheckForceBikeOrSurf` on the cell the gate's door lands on, and the gate
+## script's own `res BIT_ALWAYS_ON_BIKE` on the way back in. `HandleNewMap` has
+## no counterpart here, so nothing else clears the flag between the two.
+func test_gen1_a_forced_ride_outlives_the_map_and_only_the_gate_ends_it() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 1))
+	var flag: int = Gen2WorldState.always_on_bike_flag(world.data)
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	assert_true(bool(world.try_warp().get("ok", false)), "the door opened")
+	assert_false(world.always_on_bike(), "the gate is not a forced cell")
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	assert_true(bool(world.try_warp().get("ok", false)), "the mat led back outside")
+	assert_eq(world.player_cell, Vector2i(1, 1))
+	assert_true(world.always_on_bike(), "`ForcedBikeOrSurfMaps` names that cell")
+	assert_eq(world.movement_mode, Gen2WorldAPI.MOVEMENT_BIKE)
+	assert_eq(world.player_sprite_number, Gen1Layout.bike_sprite(&"red"))
+
+	var refused: Dictionary = world.bike_request()
+	assert_false(bool(refused.get("ok", false)))
+	assert_eq(StringName(refused["reason"]), &"cannot_get_off")
+	assert_eq(world.movement_mode, Gen2WorldAPI.MOVEMENT_BIKE, "still riding")
+
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	assert_true(bool(world.try_warp().get("ok", false)), "the door opened again")
+	assert_false(world.state.is_engine_flag_active(flag), "the gate script cleared it")
+	assert_eq(world.movement_mode, Gen2WorldAPI.MOVEMENT_WALK)
+	RomCache.clear(_gen1_directory())
+
+
+## `CheckWarpsCollision`: a step blocked while standing on a warp still takes it
+## when `ExtraWarpCheck` passes, which is what leaves a map through a warp at its
+## own edge. Crystal has no such path.
+func test_gen1_a_blocked_step_on_a_warp_takes_it() -> void:
+	var world: Gen2WorldAPI = _gen1_world(1, Vector2i(1, 3))
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	assert_true(world.blocked_step_warps(), "the mat sits on the map's own edge")
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	assert_false(world.blocked_step_warps(), "`ExtraWarpCheck` fails facing the room")
+	world.player_cell = Vector2i(1, 2)
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	assert_false(world.blocked_step_warps(), "no warp on that cell")
+	RomCache.clear(_gen1_directory())
+
+	## The town's own door tile, which `IsPlayerStandingOnDoorTileOrWarpTile`
+	## takes on a landed step and `ExtraWarpCheck` refuses facing the wall above.
+	var town: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 1))
+	town.player_facing = Gen2WorldSprite.FACING_UP
+	assert_true(town.warp_pending(), "a door tile needs no ExtraWarpCheck")
+	assert_false(town.blocked_step_warps(), "the collision path asks that check alone")
+	RomCache.clear(_gen1_directory())
+	assert_false(_world(Vector2i(8, 6)).blocked_step_warps(), "Generation 2 never does")
 
 
 ## `CheckTilePassable` walks the tileset's own list, so a tile that is not on it

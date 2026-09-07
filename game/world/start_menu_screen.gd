@@ -148,8 +148,20 @@ const TEXT_TOO_IMPORTANT: String = "too_important"
 ## `engine/items/item_effects.asm` rather than in a pack of its own.
 ## `AskQuantityThrowAwayText` has no counterpart: the dial opens over no question.
 const TEXT_COIN_CASE: String = "coin_case"
+## The Bicycle's two Generation 1 refusals: `.useOrTossItem` prints
+## `CannotGetOffHereText` in front of `UseItem`, and `NoCyclingAllowedHere`
+## reaches `ItemUseFailed` with a line of its own where every other way an
+## effect fails says `.Oak`.
+const TEXT_CANNOT_GET_OFF: String = "cannot_get_off"
+const TEXT_NO_CYCLING: String = "no_cycling"
+const GEN1_BIKE_REFUSALS: Dictionary = {
+	&"cannot_get_off": TEXT_CANNOT_GET_OFF,
+	&"no_cycling_here": TEXT_NO_CYCLING,
+}
 const GEN1_PACK_TEXTS: Dictionary = {
 	TEXT_OAK: ["item_use", "not_time"],
+	TEXT_CANNOT_GET_OFF: ["start_menu", "cannot_get_off"],
+	TEXT_NO_CYCLING: ["item_use", "no_cycling"],
 	TEXT_COIN_CASE: ["coin_case", "coins"],
 	TEXT_TOSS_ASK_QUANTITY: ["toss", "ok_to_toss"],
 	TEXT_TOSS_THREW: ["toss", "threw_away"],
@@ -1542,7 +1554,9 @@ func _use_field_item(item: int) -> void:
 	if not bool(request.get("ok", false)):
 		## `.Field` says `.Oak` and `UseRegisteredItem`'s `.Overworld`
 		## `CantUseItem`, which is the one thing the two jumptables disagree on.
-		_show_pack_result(_use_refusal(&"item_effect_failed", item), false)
+		_show_pack_result(_use_refusal(
+			StringName(request.get("reason", &"item_effect_failed")), item
+		), false)
 		return
 	## `.CheckIfRegistered`: the Bicycle's two scripts each have a silent copy.
 	request["registered"] = _using_registered
@@ -1559,7 +1573,7 @@ func _resolve_field_item(item: int) -> Dictionary:
 		Gen2WorldPack.FIELD_EFFECT_BICYCLE:
 			var ridden: Dictionary = _world.bike_request()
 			if not bool(ridden.get("ok", false)):
-				return {"ok": false}
+				return {"ok": false, "reason": ridden.get("reason", &"")}
 			request["bike"] = ridden
 		Gen2WorldPack.FIELD_EFFECT_ESCAPE_ROPE:
 			var escaped: Dictionary = _world.escape_rope_request()
@@ -1991,6 +2005,8 @@ func _use_summary(item: Dictionary, result: Dictionary) -> String:
 func _use_refusal(reason: StringName, item: int) -> String:
 	if _using_registered:
 		return Gen2WorldPack.cant_use_text()
+	if _gen1_pack() and GEN1_BIKE_REFUSALS.has(reason):
+		return _pack_text(String(GEN1_BIKE_REFUSALS[reason]))
 	## `.Field` reads one byte and says `.Oak` for every way an effect can fail,
 	## so a CLOSE item is answered before the reasons `.Party`'s own effects give.
 	if Gen2WorldPack.field_use_kind(_data, item) == Gen2WorldPack.ITEMMENU_CLOSE:

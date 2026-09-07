@@ -598,8 +598,15 @@ const DAY_CARE_TEXT_AT: Dictionary = {
 ## `engine/items/item_effects.asm`'s two runs the pack prints from: the three
 ## refusals `ItemUseFailed` reaches and `TossItem_`'s own three.
 const ITEM_USE_TEXT_AT: Dictionary = {
-	"not_time": 0x00, "not_yours": 0x05, "no_effect": 0x0A,
+	"not_time": 0x00, "not_yours": 0x05, "no_effect": 0x0A, "no_cycling": 0x19,
 }
+## `GotOnBicycleText` and `GotOffBicycleText`, pinned away from the run above
+## because Yellow's `DontHavePokemonText` sits between them and it.
+const BICYCLE_TEXT_AT: Dictionary = {"got_on": 0x00, "got_off": 0x0A}
+## `CannotGetOffHereText`, which `.useOrTossItem` prints in front of `UseItem`
+## rather than through `ItemUseFailed`. `CannotUseItemsHereText` above it is the
+## Colosseum's and no screen here reaches it.
+const START_MENU_TEXT_AT: Dictionary = {"cannot_get_off": 0x00}
 ## `CoinCaseNumCoinsText`, a run of one: `ItemUseCoinCase` is the only reader.
 const COIN_CASE_TEXT_AT: Dictionary = {"coins": 0x00}
 ## `PartyMenuMessagePointers`' own five, in the order the table names them.
@@ -724,6 +731,23 @@ const PALLET_TOWN: int = 0x00
 ## `PlayMapChangeSound`'s `cp $0b`, the OVERWORLD door tile it parts
 ## SFX_GO_INSIDE from SFX_GO_OUTSIDE by on every map.
 const OVERWORLD_DOOR_TILE: int = 0x0B
+
+## `IsBikeRidingAllowed`'s two maps by name, in front of `BikeRidingTilesets`.
+const ROUTE_23: int = 0x22
+const INDIGO_PLATEAU: int = 0x09
+const BIKE_ALLOWED_MAPS: Array[int] = [ROUTE_23, INDIGO_PLATEAU]
+## `BikeRidingTilesets`: OVERWORLD, FOREST, UNDERGROUND, SHIP_PORT and CAVERN.
+const BIKE_RIDING_TILESET_COUNT: int = 5
+## `ForcedBikeOrSurfMaps`, whose `force_bike_surf` macro writes `db map, y, x`
+## for arguments given as map, x, y. Route 16's and Route 18's four rows force
+## the bike; Seafoam Islands B3F's and B4F's force surfing instead.
+const FORCED_BIKE_SURF_ROW_SIZE: int = 3
+const FORCED_BIKE_SURF_ROWS: int = 8
+const SEAFOAM_ISLANDS_B3F: int = 0xA1
+const SEAFOAM_ISLANDS_B4F: int = 0xA2
+## `res BIT_ALWAYS_ON_BIKE, [hl]`: bit 5 of `wStatusFlags6`, which only Route 16
+## Gate 1F's and Route 18 Gate 1F's per-frame scripts open with.
+const ALWAYS_ON_BIKE_BIT: int = 5
 
 ## `NOT_VISITED`, which `BuildFlyLocationsList` writes for a town the player has
 ## not been to, and `.townMapFlyLoop`'s own `ld c, 15` between two draws.
@@ -1205,6 +1229,10 @@ const SPRITE_STILL_FIRST_RED_BLUE: int = 0x3D
 const SPRITE_STILL_FIRST_YELLOW: int = 0x47
 const SPRITE_WALKING_TILES: int = 12
 const SPRITE_STILL_TILES: int = 4
+## `RedBikeSprite`, which `LoadBikePlayerSpriteGraphics` loads by address and no
+## row names: the walking strip `INCBIN`'d in front of SPRITE_RED's, so its
+## address is that row's less both halves.
+const SPRITE_BIKE_BYTES: int = SPRITE_WALKING_TILES * 2 * PokeTiles.TILE_BYTES
 
 ## `MonPartySpritePointers`, the table `LoadMonPartySpriteGfx` walks: a CPU
 ## address, the tiles to copy, the bank, and the `vSprites` address they land
@@ -1399,6 +1427,13 @@ const RED_BLUE: Dictionary = {
 	"rest_houses": 0x07092,
 	"which_dungeon_warp": 0xD71E,
 	"dungeon_warp_destination": 0xD71D,
+	## `IsBikeRidingAllowed`'s tileset list, `CheckForceBikeOrSurf`'s coordinate
+	## list and the byte the gate scripts clear a forced ride in.
+	"bike_riding_tilesets": 0x009E2,
+	"forced_bike_surf": 0x0C3E6,
+	"status_flags_6": 0xD732,
+	"bicycle_text": 0x0E5F2,
+	"start_menu_text": 0x1342F,
 	"battle_font": 0x11EA0,
 	"battle_hud_1": 0x12080,
 	"battle_hud_2": 0x12098,
@@ -1607,6 +1642,11 @@ const YELLOW: Dictionary = {
 	"rest_houses": 0x06F0A,
 	"which_dungeon_warp": 0xD71D,
 	"dungeon_warp_destination": 0xD71C,
+	"bike_riding_tilesets": 0x00822,
+	"forced_bike_surf": 0x0C12F,
+	"status_flags_6": 0xD731,
+	"bicycle_text": 0x0E536,
+	"start_menu_text": 0x11FD9,
 	"battle_font": 0x10A20,
 	"battle_hud_1": 0x10C00,
 	"battle_hud_2": 0x10C18,
@@ -1992,6 +2032,11 @@ static func first_still_sprite(id: StringName) -> int:
 
 static func sprite_offset(layout: Dictionary, number: int) -> int:
 	return int(layout["overworld_sprites"]) + (number - 1) * SPRITE_RECORD_SIZE
+
+
+## The picture id [constant SPRITE_BIKE_BYTES]' strip is cached under.
+static func bike_sprite(id: StringName) -> int:
+	return sprite_count(id) + 1
 
 
 ## Blocks per tileset, in `Tilesets` order.

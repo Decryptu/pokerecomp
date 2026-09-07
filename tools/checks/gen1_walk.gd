@@ -9,9 +9,9 @@ extends RefCounted
 
 ## `data/maps/objects`' own totals, and the `LAST_MAP` warps inside them.
 const WARP_CENSUS: Dictionary = {
-	&"red": {"warps": 813, "last_map": 251, "driven": 554, "hops": 758},
-	&"blue": {"warps": 813, "last_map": 251, "driven": 554, "hops": 758},
-	&"yellow": {"warps": 817, "last_map": 253, "driven": 556, "hops": 756},
+	&"red": {"warps": 813, "last_map": 251, "driven": 554, "hops": 758, "edge": 394},
+	&"blue": {"warps": 813, "last_map": 251, "driven": 554, "hops": 758, "edge": 394},
+	&"yellow": {"warps": 817, "last_map": 253, "driven": 556, "hops": 756, "edge": 397},
 }
 
 ## `SilphCoElevator_Object`'s two warps name UNUSED_MAP_ED, which has no header;
@@ -161,6 +161,10 @@ const PRIZE_MENUS: Dictionary = {
 ## `LavenderTownLittleGirlText` asks and branches on the answer, and
 ## `GameCornerFishingGuruText` reaches `Has9990Coins` only with the COIN CASE in
 ## the bag, so its own flag decides which of two boxes it opens.
+## Route 16 and the cell its gate's south door lands on, which
+## `ForcedBikeOrSurfMaps`' first row names.
+const ROUTE_16: int = 27
+const ROUTE_16_GATE_DOOR := Vector2i(17, 10)
 const BIKE_SHOP: int = 66
 const BIKE_YOUNGSTER := Vector2i(1, 4)
 const BIKE_FLAG: int = 192
@@ -352,6 +356,7 @@ func _one_game() -> void:
 	_check_flying()
 	_check_a_dungeon_fall()
 	_check_an_escape_rope()
+	_check_the_bicycle()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -407,6 +412,7 @@ func _check_warps() -> void:
 	var warps: int = 0
 	var last_map: int = 0
 	var driven: int = 0
+	var edge: int = 0
 	var arrival_only: Array = []
 	var unstandable: Array = []
 	for map: Gen2WorldMap in _r.data.world_maps():
@@ -425,6 +431,17 @@ func _check_warps() -> void:
 			if facing < 0:
 				arrival_only.append([map.number, index])
 				continue
+			## `ExtraWarpCheck`'s own warps: neither a door nor a warp tile, so
+			## `CheckWarpsNoCollision` asks the map edge or the carpet in front
+			## and `CheckWarpsCollision` takes them on a step that never lands.
+			if not Gen2WorldCollision.gen1_is_warp_tile(
+				map.tileset, map.collision_at(cell.x, cell.y)
+			) and not Gen2WorldCollision.gen1_is_door_tile(
+				map.tileset, map.collision_at(cell.x, cell.y)
+			):
+				edge += 1
+				_r.check(world.blocked_step_warps(),
+					"map %d warp %d takes no blocked step." % [map.number, index])
 			## A `LAST_MAP` warp names no map of its own until one is walked out
 			## of, which [method _check_last_map_round_trip] is; the lift's two
 			## name a map with no header at all.
@@ -449,7 +466,11 @@ func _check_warps() -> void:
 		"%d warps taken, wanted %d" % [driven, pinned["driven"]])
 	_r.check(arrival_only == ARRIVAL_ONLY, "warps firing from no facing: %s" % [arrival_only])
 	_r.check(unstandable == UNSTANDABLE_WARPS, "warps on an impassable tile: %s" % [unstandable])
-	_r.note("%d warps, %d back to LAST_MAP, %d taken" % [warps, last_map, driven])
+	_r.check(edge == int(pinned["edge"]),
+		"%d warps need ExtraWarpCheck, wanted %d" % [edge, pinned["edge"]])
+	_r.note("%d warps, %d back to LAST_MAP, %d taken, %d off ExtraWarpCheck" % [
+		warps, last_map, driven, edge,
+	])
 
 
 ## The first facing `CheckWarpsNoCollision` would warp from, or -1.
@@ -1800,6 +1821,87 @@ func _check_a_dungeon_fall() -> void:
 			and road.player_cell == VICTORY_ROAD_LANDING,
 		"Victory Road's hole landed on %s at %s." % [road.map_id(), road.player_cell]
 	)
+
+
+## `ItemUseBicycle` and `CheckForceBikeOrSurf` walked together: mounted in Pallet
+## Town, refused in Red's house, put away by walking into it, forced by the gate
+## door onto Route 16 and refused there, and let go by the gate's own script.
+func _check_the_bicycle() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, PALLET_TOWN, PALLET_DOOR)
+	if world == null:
+		return
+	var bike: int = Gen1Layout.bike_sprite(_r.game_id)
+	var got_on: Dictionary = world.bike_request()
+	if not _r.check(
+		bool(got_on.get("ok", false)) and world.movement_mode == Gen2WorldAPI.MOVEMENT_BIKE
+			and world.player_sprite_number == bike,
+		"the bike left the player %s on sprite %d." % [
+			world.movement_mode, world.player_sprite_number,
+		]
+	):
+		return
+	world.gen1_fly_to(VIRIDIAN_CITY)
+	_r.check(
+		world.movement_mode == Gen2WorldAPI.MOVEMENT_WALK
+			and world.player_sprite_number == Gen2WorldSprite.SPRITE_PLAYER,
+		"flying left the player %s on sprite %d." % [
+			world.movement_mode, world.player_sprite_number,
+		]
+	)
+	var indoors: Gen2WorldAPI = _r.open_world(0, PALLET_TOWN, PALLET_DOOR)
+	if indoors == null:
+		return
+	indoors.bike_request()
+	indoors.player_facing = Gen2WorldSprite.FACING_UP
+	indoors.try_warp()
+	_r.check(
+		indoors.map_id() == Vector2i(0, REDS_HOUSE_1F)
+			and indoors.movement_mode == Gen2WorldAPI.MOVEMENT_WALK,
+		"riding into Red's house left the player %s." % indoors.movement_mode
+	)
+	_r.check(
+		StringName(indoors.bike_request().get("reason", &"")) == &"no_cycling_here",
+		"the bike was ridden indoors."
+	)
+	_check_the_cycling_road()
+
+
+## The gate's south door lands on `ForcedBikeOrSurfMaps`' own cell, and the
+## Bicycle is refused for as long as `BIT_ALWAYS_ON_BIKE` stands.
+func _check_the_cycling_road() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, ROUTE_16, ROUTE_16_GATE_DOOR)
+	if world == null:
+		return
+	world.player_facing = _firing_facing(world, ROUTE_16_GATE_DOOR)
+	if not _r.check(bool(world.try_warp().get("ok", false)),
+		"Route 16's gate door refused the warp."):
+		return
+	_r.check(world.movement_mode == Gen2WorldAPI.MOVEMENT_WALK,
+		"the gate left the player %s." % world.movement_mode)
+	var inside: Vector2i = world.player_cell
+	world.player_facing = _firing_facing(world, inside)
+	if not _r.check(bool(world.try_warp().get("ok", false)),
+		"the gate refused the way back onto Route 16."):
+		return
+	_r.check(
+		world.player_cell == ROUTE_16_GATE_DOOR and world.always_on_bike()
+			and world.movement_mode == Gen2WorldAPI.MOVEMENT_BIKE,
+		"leaving the gate left the player %s at %s." % [
+			world.movement_mode, world.player_cell,
+		]
+	)
+	_r.check(
+		StringName(world.bike_request().get("reason", &"")) == &"cannot_get_off",
+		"the Bicycle was put away on Cycling Road."
+	)
+	world.player_facing = _firing_facing(world, ROUTE_16_GATE_DOOR)
+	world.try_warp()
+	_r.check(
+		not world.always_on_bike()
+			and world.movement_mode == Gen2WorldAPI.MOVEMENT_WALK,
+		"the gate left the ride %s forced." % ["still" if world.always_on_bike() else "no longer"]
+	)
+	_r.note("gen1 bike forced on Route 16 at %s" % ROUTE_16_GATE_DOOR)
 
 
 ## `ItemUseEscapeRope`: refused outdoors and in Agatha's room, taken in a cave,

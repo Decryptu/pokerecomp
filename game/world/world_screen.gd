@@ -1686,6 +1686,10 @@ func move_player(direction: Vector2i) -> bool:
 			if _renderer != null:
 				_renderer.refresh()
 			_refresh_labels()
+		elif _world.blocked_step_warps():
+			_zero_map_name_sign_timer()
+			_start_map_fade()
+			return true
 		else:
 			_play_bump_sfx(movement)
 		return false
@@ -4940,8 +4944,13 @@ func preview_field_item(item: int = Gen2WorldPack.ITEM_ITEMFINDER) -> void:
 	if not bool(_start_menu_host.call("_select_pack_item", item)):
 		return
 	# The row's submenu, and then its first action, which for a key item is USE.
+	# `.choseItem`'s `cp BICYCLE / jp z, .useOrTossItem` opens no submenu, so
+	# that one row is used by the first press and the host is gone behind it.
+	var submenu: bool = _data.generation != RomRegistry.GEN1 \
+		or item != Gen1Layout.ITEM_BICYCLE
 	_start_menu_host.handle_button(PokeButton.A)
-	_start_menu_host.handle_button(PokeButton.A)
+	if submenu and _start_menu_host != null:
+		_start_menu_host.handle_button(PokeButton.A)
 	if _text_box != null:
 		# The box reveals a tile at a time off wall-clock delta, and a capture
 		# owning its own frames spends none on that.
@@ -6569,11 +6578,28 @@ func _on_bike_used(request: Dictionary) -> void:
 		_renderer.refresh()
 
 
+## The [method GameData.special_text] runs Generation 1 keeps the same lines in.
+## A key with no row is a Generation 2 effect no Generation 1 item reaches.
+const GEN1_FIELD_ITEM_TEXTS: Dictionary = {
+	"got_on_bike": ["bicycle", "got_on"],
+	"got_off_bike": ["bicycle", "got_off"],
+}
+
+
+func _field_item_line(key: String) -> String:
+	if _data == null:
+		return ""
+	if _data.generation != RomRegistry.GEN1:
+		return _data.menu_text(key)
+	var run: Array = GEN1_FIELD_ITEM_TEXTS.get(key, [])
+	return "" if run.is_empty() else _data.special_text(String(run[0]), String(run[1]))
+
+
 ## One of `data/text/common_2.asm`'s field-item lines, with `<PLAYER>` filled
 ## from the world the way every other text's marker is. [param fallback] is what
 ## a cache imported before these texts were carries instead.
 func _field_item_text(key: String, fallback: String) -> String:
-	var text: String = _data.menu_text(key) if _data != null else ""
+	var text: String = _field_item_line(key)
 	if text.is_empty():
 		return fallback
 	return text.replace(

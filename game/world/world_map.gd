@@ -99,6 +99,9 @@ static func _scripts_from_cache(value: Variant) -> Dictionary:
 		"address": int(script_values.get("address", 0)),
 		"scenes": _script_pointer_rows(script_values.get("scenes", [])),
 		"callbacks": _script_pointer_rows(script_values.get("callbacks", [])),
+		# Whether the per-frame half opens by clearing `BIT_ALWAYS_ON_BIKE`,
+		# which only the two cycling road gates do. Generation 1's alone.
+		"clears_always_on_bike": bool(script_values.get("clears_always_on_bike", false)),
 	}
 
 
