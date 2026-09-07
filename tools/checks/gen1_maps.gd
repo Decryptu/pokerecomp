@@ -115,9 +115,9 @@ const PALETTE_CENSUS: Dictionary = {
 ## byte that opens it. Yellow's six bare `text_end`s are Jessie and James, whose
 ## two ids share one on three maps.
 const TEXT_CENSUS: Dictionary = {
-	&"red": {0x08: 626, 0x17: 456, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
-	&"blue": {0x08: 626, 0x17: 456, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
-	&"yellow": {0x08: 675, 0x17: 429, 0x50: 6, 0xF5: 3, 0xF6: 12, 0xF7: 3,
+	&"red": {0x08: 626, 0x17: 461, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
+	&"blue": {0x08: 626, 0x17: 461, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
+	&"yellow": {0x08: 675, 0x17: 434, 0x50: 6, 0xF5: 3, 0xF6: 12, 0xF7: 3,
 		0xFE: 14, 0xFF: 12},
 }
 
@@ -174,18 +174,18 @@ const TOGGLE_CENSUS: Dictionary = {
 ## One row of each list stands on UNUSED_MAP_6F, which has no header and so no
 ## record: the table holds 217 rows on Red and Blue and 213 on Yellow.
 const HIDDEN_CENSUS: Dictionary = {
-	&"red": {"rows": 216, "silent": 70, "text": 209, "branch": 69, "flag": 65,
+	&"red": {"rows": 216, "silent": 70, "text": 210, "branch": 69, "flag": 66,
 		"facing": 56, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
-		"map_text": 5, "choice": 3, "unknown": 2, "dex_count": 1},
-	&"blue": {"rows": 216, "silent": 70, "text": 209, "branch": 69, "flag": 65,
+		"map_text": 5, "choice": 3, "unknown": 1, "dex_count": 1},
+	&"blue": {"rows": 216, "silent": 70, "text": 210, "branch": 69, "flag": 66,
 		"facing": 56, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
-		"map_text": 5, "choice": 3, "unknown": 2, "dex_count": 1},
-	&"yellow": {"rows": 212, "silent": 69, "text": 211, "branch": 70, "flag": 66,
+		"map_text": 5, "choice": 3, "unknown": 1, "dex_count": 1},
+	&"yellow": {"rows": 212, "silent": 69, "text": 212, "branch": 70, "flag": 67,
 		"facing": 52, "name_item": 54, "give_item": 54, "facility": 17,
 		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
-		"map_text": 5, "choice": 3, "unknown": 2, "dex_count": 1},
+		"map_text": 5, "choice": 3, "unknown": 1, "dex_count": 1},
 }
 ## Of `BookshelfTileIDs`' 17 rows, all but one decode: the Indigo Plateau
 ## statues read `wXCoord` for which of their two boxes they answer with.
@@ -203,9 +203,9 @@ const CALLBACK_CENSUS: Dictionary = {
 ## The maps with a state machine, the states reachable from index 0 and from
 ## every `set_map_script` already read, and the bodies the walker gets whole.
 const STATE_CENSUS: Dictionary = {
-	&"red": {"tables": 92, "states": 56, "read": 5, "ops": 33},
-	&"blue": {"tables": 92, "states": 56, "read": 5, "ops": 33},
-	&"yellow": {"tables": 90, "states": 51, "read": 3, "ops": 16},
+	&"red": {"tables": 92, "states": 78, "read": 26, "ops": 105},
+	&"blue": {"tables": 92, "states": 78, "read": 26, "ops": 105},
+	&"yellow": {"tables": 90, "states": 70, "read": 22, "ops": 100},
 }
 
 ## The pin on which way a `wCurrentMenuItem` branch reads.
@@ -576,8 +576,8 @@ func _dispatch_node(nodes: Array) -> Dictionary:
 	for node: Dictionary in nodes:
 		if String(node["op"]) == "map_script_table":
 			return node
-		for key: String in node:
-			if not node[key] is Array or key == "either":
+		for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+			if not node.has(key):
 				continue
 			var found: Dictionary = _dispatch_node(node[key] as Array)
 			if not found.is_empty():
@@ -588,8 +588,8 @@ func _dispatch_node(nodes: Array) -> Dictionary:
 func _node_count(nodes: Array) -> int:
 	var total: int = nodes.size()
 	for node: Dictionary in nodes:
-		for key: String in node:
-			if node[key] is Array and key != "either":
+		for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+			if node.has(key):
 				total += _node_count(node[key] as Array)
 	return total
 
@@ -645,7 +645,7 @@ func _walk_script(
 		if op == "give_item" or op == "has_item" or op == "take_item":
 			_r.check(not _r.data.item_name(int(node["item"])).is_empty(),
 				"map %d names item %d, which has no name." % [number, int(node["item"])])
-		for side: String in ["then", "else", "yes", "no", "ok", "full"]:
+		for side: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
 			if node.has(side):
 				_walk_script(font, node[side] as Array, census, wrong, number)
 
@@ -694,7 +694,7 @@ func _walk_hidden(
 		if (op == "give_item" or op == "has_item" or op == "name_item") \
 			and _r.data.item_name(int(node["item"])).is_empty():
 			wrong.append("map %d names item %d" % [number, int(node["item"])])
-		for side: String in ["then", "else", "yes", "no", "ok", "full"]:
+		for side: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
 			if node.has(side):
 				_walk_hidden(node[side] as Array, census, wrong, number)
 
@@ -992,9 +992,8 @@ func _clears_forced_ride(nodes: Array) -> bool:
 			and not bool(node["set"]) \
 			and int(node["flag"]) == Gen2WorldState.ENGINE_ALWAYS_ON_BIKE:
 			return true
-		for key: String in node:
-			if node[key] is Array and key != "either" \
-				and _clears_forced_ride(node[key] as Array):
+		for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+			if node.has(key) and _clears_forced_ride(node[key] as Array):
 				return true
 	return false
 

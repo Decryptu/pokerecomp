@@ -86,6 +86,35 @@ const ROUTE_22_GATE_NOOP: int = 2
 const ROUTE_22_GATE_PASS: String = "Oh! That is the"
 const ROUTE_22_GATE_REFUSED: String = "Only truly skilled"
 
+## Frames enough for the longest walk either check drives, so a trail that never
+## drains ends the loop rather than hanging the suite.
+const SCRIPTED_WALK_PASSES: int = 256
+
+## `MtMoonB2FMoveSuperNerdScript`: the state it stands at, the nerd's own object
+## index, and the cell each coordinate list walks him to. He starts at (12, 8),
+## and `MtMoon3FSuperNerdMoveRightMovementData` falls through into the row below
+## it, so the dome side is two steps and the helix side one.
+const MT_MOON_B2F: int = 61
+const MT_MOON_B2F_BYTE: int = 0x17
+const MT_MOON_B2F_MOVE_NERD: int = 4
+const MT_MOON_B2F_NERD: int = 0
+## Yellow puts a Pikachu branch on the cell in front of each fossil, so the walk
+## stands on the corner both cartridges share.
+const MT_MOON_B2F_WALKS: Array = [
+	[Vector2i(11, 6), Vector2i(13, 7)], [Vector2i(14, 6), Vector2i(12, 7)],
+]
+const MT_MOON_B2F_NERD_BOX: String = "All right. Then\nthis is mine!"
+
+## `HallOfFameDefaultScript` walks the player five cells up out of the room's
+## own first warp, and `HallOfFameOakCongratulationsScript` behind it turns Oak
+## to face them. Champion's Room's third warp is the way in.
+const CHAMPIONS_ROOM: int = 120
+const CHAMPIONS_ROOM_STAIRS := Vector2i(3, 0)
+const HALL_OF_FAME_LANDING := Vector2i(4, 7)
+const HALL_OF_FAME_WALKED := Vector2i(4, 2)
+const HALL_OF_FAME_OAK: int = 0
+const HALL_OF_FAME_BOX: String = "OAK: Er-hem!"
+
 ## A party that knows FLY, and `FlyWarpDataPtr.ViridianCity`'s own tile.
 const FLY_SPECIES: Array[int] = [16]
 const FLY_MOVES: Array = [[Gen2WorldFieldMove.MOVE_FLY, 0, 0, 0]]
@@ -389,6 +418,8 @@ func _one_game() -> void:
 	_check_a_cut_tree()
 	_check_rock_tunnel_is_dark()
 	_check_a_map_script_runs()
+	_check_a_scripted_npc_walk()
+	_check_a_scripted_player_walk()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -487,9 +518,12 @@ func _check_warps() -> void:
 				continue
 			driven += 1
 			var destination: Dictionary = taken["destination"]
+			## The landing rather than where the player stands: the destination
+			## map's own script runs behind `EnterMap` and may walk them off it.
 			_r.check(
-				world.player_cell == Vector2i(int(destination["x"]), int(destination["y"])),
-				"map %d warp %d landed on %s" % [map.number, index, world.player_cell]
+				Vector2i(taken["to_cell"])
+					== Vector2i(int(destination["x"]), int(destination["y"])),
+				"map %d warp %d landed on %s" % [map.number, index, taken["to_cell"]]
 			)
 	_r.check(warps == int(pinned["warps"]), "%d warps, wanted %d" % [warps, pinned["warps"]])
 	_r.check(last_map == int(pinned["last_map"]),
@@ -1960,6 +1994,65 @@ func _check_a_map_script_runs() -> void:
 		_r.check(world.dispatch_sight_events().is_empty(),
 			"the gate spoke twice with the badge %s." % badge)
 	_r.note("gen1 walk ROUTE_22_GATE both ways past its guard")
+
+
+## `MoveSprite` driven on the world: Mt. Moon B2F's super nerd walks to whichever
+## fossil is left, and the state behind him holds its line until that walk has
+## been drawn.
+func _check_a_scripted_npc_walk() -> void:
+	for row: Array in MT_MOON_B2F_WALKS:
+		var world: Gen2WorldAPI = _r.open_world(0, MT_MOON_B2F, row[0])
+		if world == null:
+			return
+		world.state.set_gen1_map_script(MT_MOON_B2F_BYTE, MT_MOON_B2F_MOVE_NERD)
+		_r.check(world.dispatch_sight_events().is_empty(),
+			"the nerd said something on the frame he was sent walking.")
+		var nerd: Gen2WorldObject = world.objects[MT_MOON_B2F_NERD]
+		_r.check(nerd.cell == row[1],
+			"the nerd walked to %s from %s, not %s." % [nerd.cell, row[0], row[1]])
+		_r.check(world.gen1_object_movement_running(),
+			"the nerd's walk was over before a frame had drawn it.")
+		_r.check(world.dispatch_sight_events().is_empty(),
+			"the nerd spoke while his own walk was still being drawn.")
+		var passes: int = 0
+		while world.gen1_object_movement_running() and passes < SCRIPTED_WALK_PASSES:
+			world.advance_scripted_steps_pass()
+			passes += 1
+		_r.check(_event_text(world.dispatch_sight_events()) == MT_MOON_B2F_NERD_BOX,
+			"the nerd said nothing once his walk had been drawn.")
+	_r.note("gen1 walk MT_MOON_B2F both ways past its super nerd")
+
+
+## `HallOfFameDefaultScript`: the warp in walks the player five cells up on the
+## frame the map loads, and the state behind it turns Oak to face them.
+func _check_a_scripted_player_walk() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, CHAMPIONS_ROOM, CHAMPIONS_ROOM_STAIRS)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var taken: Dictionary = world.try_warp()
+	if not _r.check(bool(taken.get("ok", false)), "the Hall of Fame door was refused."):
+		return
+	_r.check(Vector2i(taken["to_cell"]) == HALL_OF_FAME_LANDING,
+		"the door landed on %s." % [taken["to_cell"]])
+	_r.check(world.player_cell == HALL_OF_FAME_WALKED,
+		"the room walked the player to %s, not %s." % [
+			world.player_cell, HALL_OF_FAME_WALKED,
+		])
+	_r.check(world.dispatch_sight_events().is_empty(),
+		"Oak spoke while the player was still walking in.")
+	var passes: int = 0
+	while world.gen1_player_movement_running() and passes < SCRIPTED_WALK_PASSES:
+		world.advance_player_step_pass()
+		passes += 1
+	_r.check(_event_text(world.dispatch_sight_events()).begins_with(HALL_OF_FAME_BOX),
+		"Oak said nothing once the walk in had been drawn.")
+	var oak: Gen2WorldObject = world.objects[HALL_OF_FAME_OAK]
+	_r.check(oak.facing == Gen2WorldSprite.FACING_LEFT,
+		"Oak faced %d rather than the player." % oak.facing)
+	_r.check(world.player_facing == Gen2WorldSprite.FACING_RIGHT,
+		"the player faced %d rather than Oak." % world.player_facing)
+	_r.note("gen1 walk HALL_OF_FAME five cells in and Oak turning to meet it")
 
 
 ## `ItemUsePokeFlute` outside a battle: the cell beside Route 12's Snorlax sets

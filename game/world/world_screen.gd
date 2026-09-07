@@ -329,6 +329,9 @@ var _start_menu_cursor: int = 0
 ## Pokegear reached by a script or by the debug key still returns to the world.
 var _reopen_start_menu: bool = false
 var _trainer_approach: Dictionary = {}
+## Whether a scripted walk was still being drawn last frame, which is the edge
+## [method _run_settled_gen1_map_script] runs the map's own script on.
+var _gen1_movement_drawn: bool = false
 var _active_battle_save: Gen2SaveData = null
 ## `wBattleScriptFlags` bit 7, which `Script_loadtrainer` sets and
 ## `Script_reloadmapafterbattle` reads: a trainer fight is the branch
@@ -1093,6 +1096,7 @@ func _advance_waits(map_pass: bool) -> void:
 		var wait_results: Array = _world.advance_script_wait_frame()
 		if not wait_results.is_empty():
 			_show_script_results(wait_results)
+	_run_settled_gen1_map_script()
 	_advance_sound_schedule()
 	## `_ContText`'s scroll ends on a frame rather than on a press, and the page
 	## it lands on may be the text's last, which is where the script runs on.
@@ -1106,6 +1110,24 @@ func _advance_waits(map_pass: bool) -> void:
 			_show_script_results(ring_results)
 		_refresh_labels()
 	_advance_audio_wait()
+
+
+## `RunMapScript` runs on every frame `JoypadOverworld` reads, so a state that
+## opens `ret nz` on a walk still being drawn gets its turn the frame the walk
+## ends. An ordinary step reaches the map script through
+## [method _after_map_settled]; a scripted walk has no step behind it, so this
+## is the frame it lands on.
+func _run_settled_gen1_map_script() -> void:
+	if _world == null or not _world.is_gen1():
+		return
+	var running: bool = _world.scripted_movement_in_progress()
+	var settled: bool = _gen1_movement_drawn and not running
+	_gen1_movement_drawn = running
+	if not settled or _world.script_busy() or not _map_fade.is_empty():
+		return
+	var results: Array = _world.dispatch_sight_events()
+	if not results.is_empty():
+		_show_script_results(results)
 
 
 ## The one wait whose condition is the audio device's rather than a counter's,

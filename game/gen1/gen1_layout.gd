@@ -952,6 +952,7 @@ const TRADE_RECEIVE_NAME: int = 0xCD1E
 ## `BOULDER_MOVEMENT_BYTE_2`. A STAY sprite still turns, because `TryWalking`
 ## writes the facing before `CanWalkOntoTile` refuses its step.
 const OBJECT_MOVEMENT_STAY: int = 0xFF
+const OBJECT_MOVEMENT_NONE: int = 0xFF
 const OBJECT_STANDING_MOVEMENTS: Dictionary = {
 	0x10: Gen2WorldObject.MOVEMENT_STRENGTH_BOULDER,
 	0xD0: Gen2WorldObject.MOVEMENT_FIXED_DOWN,
@@ -1003,9 +1004,31 @@ const SCRIPT_HIGH_BIT: int = 7
 const SCRIPT_AND_N: int = 0xE6
 const SCRIPT_LD_C: int = 0x0E
 const SCRIPT_LD_B_A: int = 0x47
+const SCRIPT_LD_C_A: int = 0x4F
+const SCRIPT_LDH_A_MEM: int = 0xF0
+const SCRIPT_DEC_A: int = 0x3D
+const SCRIPT_INC_A: int = 0x3C
+## `ld [hli], a`, which is how `AgathaScriptWalkIntoRoom` writes its six steps.
+const SCRIPT_LD_HLI_A: int = 0x22
 const SCRIPT_COORD_SOURCES: Array[String] = ["player_y", "player_x"]
 ## `PAD_DOWN` down to `PAD_RIGHT`, bits 7 to 4, as `Gen2WorldAPI`'s directions.
 const PAD_DIRECTIONS: Dictionary = {0x80: 0, 0x40: 1, 0x20: 2, 0x10: 3}
+## `wSimulatedJoypadStatesEnd`'s buffer, one walking step an entry. The longest
+## the corpus writes is `WalkToLance_RLEList`'s 37.
+const SIMULATED_JOYPAD_MAX: int = 48
+## `DecodeRLEList`'s pairs of a byte and a repeat count, under a $FF.
+const RLE_PAIR_SIZE: int = 2
+const RLE_END: int = 0xFF
+## `NPC_MOVEMENT_DOWN` to `..._RIGHT`, $00 to $C0: the top two bits are already
+## the order [constant PAD_DIRECTIONS] counts in, and a low bit set is
+## `NPC_CHANGE_FACING`, whose facing is whatever `c` last held.
+const NPC_MOVEMENT_SHIFT: int = 6
+const NPC_MOVEMENT_LOW_BITS: int = 0x3F
+const NPC_MOVEMENT_END: int = 0xFF
+const NPC_MOVEMENT_MAX: int = 32
+## Below `wSpriteStateData1`: an address at or above it is WRAM, so a `de`
+## naming one is `FindPathToPlayer`'s answer rather than a list in the bank.
+const SCRIPT_WRAM_BASE: int = 0xC000
 const SCRIPT_PREFIX: int = 0xCB
 const SCRIPT_JR: int = 0x18
 const SCRIPT_JP: int = 0xC3
@@ -1042,6 +1065,9 @@ const MAP_LOAD_GATE_BRANCHES: Dictionary = {
 ## A `dbmapcoord` list: `db y, x` rows under a terminator.
 const MAP_COORD_END: int = 0xFF
 const MAP_COORD_SIZE: int = 2
+## The keys a decoded node keeps its branches under, and the only arrays a
+## walker may recurse into: `either`, `cells` and `moves` are values.
+const SCRIPT_BRANCH_KEYS: Array[String] = ["then", "else", "yes", "no", "ok", "full"]
 ## Each key is a conditional `jr` or `jp`, the value whether it is taken when
 ## the tested bit was set; the carry rows read the flag a routine answers in.
 const SCRIPT_BRANCHES: Dictionary = {0x20: true, 0xC2: true, 0x28: false, 0xCA: false}
@@ -1056,15 +1082,28 @@ const SCRIPT_CALLS: Array[String] = [
 	"call_function_in_table", "execute_map_script", "load_gym_names",
 	"delay_frames", "delay_3", "play_default_music", "check_map_trainers",
 	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle",
+	"play_music", "stop_all_music",
+	"set_sprite_facing", "set_sprite_facing_delay", "sprite_stay", "move_sprite",
+	"decode_rle",
 ]
 ## Routines named by a full ROM offset, the same address in another bank being another routine.
-const SCRIPT_BANKED_CALLS: Array[String] = ["coin_box"]
+const SCRIPT_BANKED_CALLS: Array[String] = [
+	"coin_box", "music_rival_start", "music_rival_tempo",
+	"music_rival_start_tempo", "music_cities1_tempo",
+]
+## The four of those a `farcall` spends nothing on: no audio driver here.
+const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
+	"music_rival_start", "music_rival_tempo", "music_rival_start_tempo",
+	"music_cities1_tempo",
+]
 ## The routines that spend nothing here: no audio driver, a press already ends
 ## every box, and `wAutoTextBoxDrawingControl` has no counterpart.
 const SCRIPT_SILENT_CALLS: Array[String] = [
 	"play_cry", "wait_for_sound", "wait_for_button",
 	"auto_textbox_on", "auto_textbox_off", "count_set_bits", "update_sprites",
 	"play_sound", "play_sound_wait", "load_gym_names",
+	## Red and Blue spell `StopAllMusic` as `PlaySound`; only Yellow has a routine.
+	"play_music", "stop_all_music",
 	## A wait is frames of nothing and the map music is nobody's here. The three
 	## trainer rows every fighting map's own table opens with are the sight walk
 	## `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
@@ -1086,6 +1125,8 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	## A forced walk writes the pad bit over the player's own facing byte, and
 	## the `walk` node behind it carries the direction anyway.
 	"facing_direction",
+	## `hJoyPressed` beside `hJoyHeld`, and the sound id no driver here reads.
+	"joy_pressed", "new_sound_id",
 ]
 ## `cp n` and the two conditional `ret`s behind it, whose value is the side
 ## taken when the comparison did not match.
@@ -1229,6 +1270,14 @@ const SCREEN_HEIGHT_TILES: int = 18
 const SCREEN_PLAYER_COLUMN: int = 8
 const SCREEN_PLAYER_ROW: int = 9
 
+## `wStatusFlags5`'s two scripted-movement bits: one stands while the walk a
+## `MoveSprite` started is drawn, the other while the player spends
+## `wSimulatedJoypadStatesIndex`, which a body may read instead.
+const SCRIPTED_NPC_MOVEMENT_BIT: int = 0
+const SCRIPTED_MOVEMENT_STATE_BIT: int = 7
+const MOVEMENT_TEST_OBJECT: String = "object"
+const MOVEMENT_TEST_PLAYER: String = "player"
+
 ## `SPRITE_FACING_*`, which `CheckIfCoordsInFrontOfPlayerMatch` steps by.
 const FACING_DOWN: int = 0x00
 const FACING_UP: int = 0x04
@@ -1238,6 +1287,12 @@ const FACING_STEPS: Dictionary = {
 	FACING_DOWN: Vector2i(0, 1), FACING_UP: Vector2i(0, -1),
 	FACING_LEFT: Vector2i(-1, 0), FACING_RIGHT: Vector2i(1, 0),
 }
+## `PLAYER_DIR_*` as `UpdatePlayerSprite` reads them, one `bit` per row in this
+## order, so a byte with two set takes the first and zero reaches `.notMoving`,
+## which leaves the facing byte alone.
+const PLAYER_DIR_FACINGS: Array = [
+	[0x04, FACING_DOWN], [0x08, FACING_UP], [0x02, FACING_LEFT], [0x01, FACING_RIGHT],
+]
 
 ## `warp_event`'s indoor exit: `wLastMap`, the outdoor map the player came from.
 const WARP_TO_LAST_MAP: int = 0xFF
@@ -1663,6 +1718,23 @@ const RED_BLUE: Dictionary = {
 	"start_simulating_joypad": 0x3486,
 	"simulated_joypad_index": 0xCD38,
 	"simulated_joypad_end": 0xCCD3,
+	## `hSpriteFacingDirection`, above `hSpriteIndex` at `hTextID`'s own byte.
+	"sprite_facing_hram": 0xFF8D,
+	"joy_pressed": 0xFFB3,
+	"new_sound_id": 0xC0EE,
+	"status_flags_5": 0xD730,
+	"player_moving_direction": 0xD528,
+	"play_music": 0x23A1,
+	## `Music_RivalAlternateStart` and the three beside it, in bank $02.
+	"music_rival_start": 0x9B47,
+	"music_rival_tempo": 0x9B65,
+	"music_rival_start_tempo": 0x9B75,
+	"music_cities1_tempo": 0x9B81,
+	"set_sprite_facing": 0x34AE,
+	"set_sprite_facing_delay": 0x34A6,
+	"sprite_stay": 0x3541,
+	"move_sprite": 0x363A,
+	"decode_rle": 0x350C,
 	"obtained_hidden_items": 0xD6F0,
 	"obtained_hidden_coins": 0xD6FE,
 	## `_IsTilePassable` and the lists it walks share a bank, and the pointer in
@@ -1895,6 +1967,22 @@ const YELLOW: Dictionary = {
 	"start_simulating_joypad": 0x3415,
 	"simulated_joypad_index": 0xCD38,
 	"simulated_joypad_end": 0xCCD3,
+	"sprite_facing_hram": 0xFF8D,
+	"joy_pressed": 0xFFB3,
+	"new_sound_id": 0xC0EE,
+	"status_flags_5": 0xD72F,
+	"player_moving_direction": 0xD527,
+	"play_music": 0x2211,
+	"stop_all_music": 0x2233,
+	"music_rival_start": 0x99BD,
+	"music_rival_tempo": 0x99DB,
+	"music_rival_start_tempo": 0x99E7,
+	"music_cities1_tempo": 0x99F4,
+	"set_sprite_facing": 0x3490,
+	"set_sprite_facing_delay": 0x3488,
+	"sprite_stay": 0x353E,
+	"move_sprite": 0x363D,
+	"decode_rle": 0x3509,
 	"obtained_hidden_items": 0xD6EF,
 	"obtained_hidden_coins": 0xD6FD,
 	"tileset_collision_bank": 0x01,
@@ -2150,6 +2238,26 @@ static func script_flag_alias(layout: Dictionary, address: int, bit: int) -> int
 	if address != int(layout.get("status_flags_6", -1)) or bit != ALWAYS_ON_BIKE_BIT:
 		return -1
 	return Gen2WorldState.ENGINE_ALWAYS_ON_BIKE
+
+
+## Whether a test is asking about a walk still being drawn, and whose: a
+## `jr nz` behind any of the three is the side that is still waiting.
+static func script_movement_test(layout: Dictionary, address: int, bit: int) -> String:
+	if address == int(layout["simulated_joypad_index"]) and bit < 0:
+		return MOVEMENT_TEST_PLAYER
+	if address != int(layout.get("status_flags_5", -1)):
+		return ""
+	if bit == SCRIPTED_NPC_MOVEMENT_BIT:
+		return MOVEMENT_TEST_OBJECT
+	return MOVEMENT_TEST_PLAYER if bit == SCRIPTED_MOVEMENT_STATE_BIT else ""
+
+
+## `wPlayerMovingDirection` as the facing it draws, or -1 for zero.
+static func player_dir_facing(direction: int) -> int:
+	for row: Array in PLAYER_DIR_FACINGS:
+		if direction & int(row[0]) != 0:
+			return int(row[1])
+	return -1
 
 
 ## Which map object's facing byte [param address] is, or -1. Slot 0 is the

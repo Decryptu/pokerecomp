@@ -3891,6 +3891,11 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"set_map_script": &"_gen1_node_set_map_script",
 	"player_in_array": &"_gen1_node_player_in_array",
 	"object_facing": &"_gen1_node_object_facing",
+	"object_move": &"_gen1_node_object_move",
+	"object_stay": &"_gen1_node_object_stay",
+	"movement_running": &"_gen1_node_movement_running",
+	"coord_index": &"_gen1_node_coord_index",
+	"player_facing": &"_gen1_node_player_facing",
 	"map_script_table": &"_gen1_node_map_script_table",
 }
 
@@ -4212,8 +4217,13 @@ func _gen1_node_player_in_array(
 	node: Dictionary, steps: Array, run: Dictionary
 ) -> bool:
 	var standing: bool = false
-	for cell: Dictionary in node["cells"] as Array:
+	var cells: Array = node["cells"]
+	for index: int in cells.size():
+		var cell: Dictionary = cells[index]
 		if player_cell == Vector2i(int(cell["x"]), int(cell["y"])):
+			## `CheckCoords` counts the row up before it compares, so the index
+			## a body reads back starts at one.
+			run["coord_index"] = index + 1
 			standing = true
 			break
 	return _gen1_resolve_side(node, standing, steps, run)
@@ -4255,8 +4265,46 @@ func _gen1_node_map_script_table(
 
 
 func _gen1_node_walk(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"walk", "moves": (node["moves"] as Array).duplicate(true)})
+	return true
+
+
+## `MoveSprite` returns as soon as it has copied the list, so its steps are
+## drawn behind the script rather than in front of it.
+func _gen1_node_object_move(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
 	steps.append({
-		"type": &"walk", "direction": int(node["direction"]), "steps": int(node["steps"]),
+		"type": &"object_move", "index": int(node["object"]),
+		"moves": (node["moves"] as Array).duplicate(),
+	})
+	return true
+
+
+func _gen1_node_object_stay(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"object_stay", "index": int(node["object"])})
+	return true
+
+
+## The bits a state reads to hold still while the walk before it is drawn.
+func _gen1_node_movement_running(
+	node: Dictionary, steps: Array, run: Dictionary
+) -> bool:
+	var running: bool = gen1_object_movement_running() \
+		if String(node["who"]) == Gen1Layout.MOVEMENT_TEST_OBJECT \
+		else gen1_player_movement_running()
+	return _gen1_resolve_side(node, running, steps, run)
+
+
+## `wCoordIndex`, the row `ArePlayerCoordsInArray` matched on, counted from 1.
+func _gen1_node_coord_index(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, int(run.get("coord_index", 0)) < int(node["below"]), steps, run
+	)
+
+
+func _gen1_node_player_facing(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"player_facing",
+		"facing": facing_for_direction(Gen1Layout.FACING_STEPS[int(node["facing"])]),
 	})
 	return true
 
@@ -5208,16 +5256,31 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 		&"map_script":
 			state.set_gen1_map_script(int(step["byte"]), int(step["value"]))
 			return true
+		&"npc_trade":
+			state.apply_changes({}, {}, {"npc_trades": {int(step["trade_id"]): true}})
+			return true
+	return _gen1_drawn(step, events)
+
+
+## The rest of [method _gen1_written]: what a row moves or redraws.
+func _gen1_drawn(step: Dictionary, events: Array) -> bool:
+	match StringName(step["type"]):
 		&"object_facing":
 			_turn_gen1_object(int(step["index"]), int(step["facing"]), events)
 			return true
 		&"walk":
-			events.append_array(_gen1_walk_player(
-				_movement_direction(int(step["direction"])), int(step["steps"])
+			events.append_array(_gen1_walk_player(step["moves"] as Array))
+			return true
+		&"object_move":
+			events.append_array(_gen1_walk_object(
+				int(step["index"]), step["moves"] as Array
 			))
 			return true
-		&"npc_trade":
-			state.apply_changes({}, {}, {"npc_trades": {int(step["trade_id"]): true}})
+		&"object_stay":
+			_gen1_stand_object(int(step["index"]))
+			return true
+		&"player_facing":
+			player_facing = int(step["facing"])
 			return true
 		&"block":
 			## `PrintCardKeyText` writes `wCardKeyDoorY` and its neighbour behind
@@ -5279,25 +5342,73 @@ func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 	load_object_masks()
 
 
-## `ShowObject` and `HideObject`: one `wToggleableObjectFlags` bit by global
-## index, and `UpdateSprites` behind it.
 ## `CollisionCheckOnLand` skips every test while `wSimulatedJoypadStatesIndex`
 ## stands, so only the map bounds refuse. The row ends before the walk is drawn.
-func _gen1_walk_player(direction: Vector2i, steps: int) -> Array:
+func _gen1_walk_player(moves: Array) -> Array:
 	var generated: Array = []
-	for _step: int in steps:
-		var destination: Vector2i = player_cell + direction
-		if not _cell_in_bounds(destination):
-			_queue_player_step(Vector2i.ZERO, 0, false, direction, STEP_KIND_WALK)
-			generated.append({
-				"type": &"movement_blocked", "player": true, "cell": destination,
-			})
-			break
-		player_cell = destination
-		_queue_player_step(direction, STEP_PASSES_WALK, false, direction, STEP_KIND_WALK)
+	for leg: Dictionary in moves:
+		var direction: Vector2i = _movement_direction(int(leg["direction"]))
+		for _step: int in int(leg["steps"]):
+			var destination: Vector2i = player_cell + direction
+			if not _cell_in_bounds(destination):
+				_queue_player_step(Vector2i.ZERO, 0, false, direction, STEP_KIND_WALK)
+				generated.append({
+					"type": &"movement_blocked", "player": true, "cell": destination,
+				})
+				return generated
+			player_cell = destination
+			_queue_player_step(
+				direction, STEP_PASSES_WALK, false, direction, STEP_KIND_WALK
+			)
 	return generated
 
 
+## `MoveSprite`, whose whole list is queued here and drawn a step at a time by
+## [method advance_scripted_steps_pass]. `CanWalkOntoTile` allows a scripted step
+## outright, so only the map bounds refuse one, and `.reachedEnd` puts STAY back
+## over the movement byte the map gave the object.
+func _gen1_walk_object(index: int, moves: Array) -> Array:
+	var generated: Array = []
+	if current_map == null or index < 0 or index >= objects.size():
+		return generated
+	var object: Gen2WorldObject = objects[index]
+	_gen1_stand_object(index)
+	var facing: int = object.facing
+	for row: int in moves:
+		var direction: Vector2i = _movement_direction(row)
+		facing = facing_for_direction(direction)
+		var destination: Vector2i = object.cell + direction
+		if not _cell_in_bounds(destination):
+			## `NormalStep` writes the facing before `GetNextTile` refuses, so a
+			## step off the map turns the object where it stands.
+			object.queue_step(Vector2i.ZERO, 0, false, direction)
+			generated.append({
+				"type": &"movement_blocked", "object_index": index, "cell": destination,
+			})
+			continue
+		var vacated: Vector2i = object.cell
+		object.cell = destination
+		object.queue_step(direction, STEP_PASSES_WALK, false, direction, STEP_KIND_WALK)
+		_advance_followers(index, vacated)
+	var key: String = _object_key(current_map.group, current_map.number, index)
+	_object_position_overrides[key] = object.cell
+	_object_facing_overrides[key] = facing
+	return generated
+
+
+## `SetSpriteMovementBytesToFF`: STAY over movement byte 1 and NONE over byte 2,
+## which is the template a script stops a wanderer with. The write is WRAM the
+## next map load fills from `wMapSpriteData`, so nothing is recorded for it.
+func _gen1_stand_object(index: int) -> void:
+	if index < 0 or index >= objects.size():
+		return
+	(objects[index] as Gen2WorldObject).movement = Gen1Layout.object_movement(
+		Gen1Layout.OBJECT_MOVEMENT_STAY, Gen1Layout.OBJECT_MOVEMENT_NONE
+	)
+
+
+## `ShowObject` and `HideObject`: one `wToggleableObjectFlags` bit by global
+## index, and `UpdateSprites` behind it.
 func gen1_toggle_object(index: int, hidden: bool) -> void:
 	if index < 0 or state == null or data == null:
 		return
@@ -7064,17 +7175,17 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	# `wPrevWarp` is the warp walked through, which is what a Dig or an Escape
 	# Rope comes back out of. `WarpToNewMapScript`, the pitfall and the magnet
 	# train name DOOR, FALL and TRAIN, which are one setup-script body.
-	_apply_map(
-		target_map, target_tileset, _warp_landing_cell(target_map, target_warp, cell),
-		false, warp_index_at(cell), MAP_ENTRY_DOOR
-	)
+	var landing: Vector2i = _warp_landing_cell(target_map, target_warp, cell)
+	_apply_map(target_map, target_tileset, landing, false, warp_index_at(cell), MAP_ENTRY_DOOR)
 	return {
 		"ok": true,
 		"kind": &"warp",
 		"from_map": from_map,
 		"from_cell": from_cell,
 		"to_map": map_id(),
-		"to_cell": player_cell,
+		## Where the warp put the player, which the map's own entry script may
+		## already have walked away from: `HallOfFameDefaultScript` walks five.
+		"to_cell": landing,
 		"source": source_warp,
 		"destination": target_warp,
 	}
@@ -7564,8 +7675,24 @@ func script_wait_remaining() -> int:
 ## wStateFlags' SCRIPTED_MOVEMENT_STATE_F: one flag for all of them, cleared by
 ## whichever stream reaches its own `step_end`.
 func scripted_movement_in_progress() -> bool:
-	if _player_scripted_steps and player_step_in_progress():
-		return true
+	return gen1_player_movement_running() or gen1_object_movement_running()
+
+
+## Whether this world is a Generation 1 one, which is what says the map has a
+## per-frame script of its own to run.
+func is_gen1() -> bool:
+	return _gen1
+
+
+## `wSimulatedJoypadStatesIndex`, and BIT_SCRIPTED_MOVEMENT_STATE beside it: the
+## player is still spending the buttons a `walk` queued.
+func gen1_player_movement_running() -> bool:
+	return _player_scripted_steps and player_step_in_progress()
+
+
+## BIT_SCRIPTED_NPC_MOVEMENT, which `MoveSprite` sets and the last step of the
+## list clears.
+func gen1_object_movement_running() -> bool:
 	for object: Gen2WorldObject in objects:
 		if object.scripted_steps and not object.deleted:
 			return true

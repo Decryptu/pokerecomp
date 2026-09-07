@@ -84,6 +84,17 @@ const LAYOUT: Dictionary = {
 	"obtained_badges": 0xD356,
 	"sprite_state_data": 0xC100,
 	"status_flags_6": 0xD732,
+	"status_flags_5": 0xD730,
+	"sprite_facing_hram": 0xFF8D,
+	"player_moving_direction": 0xD528,
+	"joy_pressed": 0xFFB3,
+	"new_sound_id": 0xC0EE,
+	"set_sprite_facing": 0x03D0,
+	"set_sprite_facing_delay": 0x03E0,
+	"sprite_stay": 0x03F0,
+	"move_sprite": 0x0410,
+	"decode_rle": 0x0420,
+	"play_music": 0x0430,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
 const PREDEFS: Dictionary = {
@@ -94,6 +105,8 @@ const AT: int = 0x1000
 const HELLO: int = 0x1800
 const BYE: int = 0x1810
 const UNREAD_CALL: int = 0x0200
+## Where a `MoveSprite` list and a `DecodeRLEList` one are laid down.
+const MOVEMENT_LIST: int = 0x1900
 ## `call z, nn`, one of [constant Gen1Layout.SCRIPT_CONDITIONAL_CALLS]' four.
 const CALL_Z: int = 0xCC
 ## A `<Map>_ScriptPointers` table, the `w<Map>CurScript` byte it dispatches on
@@ -106,6 +119,7 @@ const COORDS: int = 0x1930
 ## `ret nc`, which a coordinate list is refused with, and `call nz`, which a map
 ## load gate calls its own body through.
 const RET_NC: int = 0xD0
+const RET_NZ: int = 0xC0
 const CALL_NZ: int = 0xC4
 
 
@@ -147,8 +161,10 @@ func _print(address: int) -> Array:
 	return _load_hl(address) + _call(int(LAYOUT["print_text"]))
 
 
-func _decode(program: Array, strings: Dictionary = {}) -> Array:
-	return Gen1WorldImporter.decode_script(_rom(program, strings), LAYOUT, 0, AT)
+func _decode(
+	program: Array, strings: Dictionary = {}, raw: Dictionary = {}
+) -> Array:
+	return Gen1WorldImporter.decode_script(_rom(program, strings, raw), LAYOUT, 0, AT)
 
 
 func _load_a(address: int) -> Array:
@@ -157,6 +173,13 @@ func _load_a(address: int) -> Array:
 
 func _store_a(address: int) -> Array:
 	return [Gen1Layout.SCRIPT_LD_MEM_A, address & 0xFF, address >> 8]
+
+
+## `ld a, n` / `ldh [n], a`, which is how a row names a sprite and its facing.
+func _store_hram(address: int, value: int) -> Array:
+	return [
+		Gen1Layout.SCRIPT_LD_A, value, Gen1Layout.SCRIPT_LDH_MEM_A, address & 0xFF,
+	]
 
 
 ## `ld hl, <table>` / `ld a, [w<Map>CurScript]` / `jp CallFunctionInTable`.
@@ -229,6 +252,87 @@ func test_a_store_to_a_sprite_facing_byte_turns_that_object() -> void:
 	assert_eq(script, [
 		{"op": "object_facing", "object": 1, "facing": Gen1Layout.FACING_LEFT},
 	])
+
+
+## `hSpriteIndex` shares `hTextID`'s byte, so the routine behind the store is
+## what says an object was meant rather than a text row.
+func test_the_facing_routine_turns_the_sprite_its_hram_byte_names() -> void:
+	var script: Array = _decode(
+		_store_hram(int(LAYOUT["text_id_hram"]), 2)
+			+ _store_hram(int(LAYOUT["sprite_facing_hram"]), Gen1Layout.FACING_LEFT)
+			+ [Gen1Layout.SCRIPT_CALL, 0xE0, 0x03, Gen1Layout.SCRIPT_RET]
+	)
+	assert_eq(script, [
+		{"op": "object_facing", "object": 1, "facing": Gen1Layout.FACING_LEFT},
+	])
+
+
+func test_a_sprite_walk_carries_its_own_movement_list() -> void:
+	var script: Array = _decode(
+		_store_hram(int(LAYOUT["text_id_hram"]), 3)
+			+ [Gen1Layout.SCRIPT_LD_DE, MOVEMENT_LIST & 0xFF, MOVEMENT_LIST >> 8]
+			+ [Gen1Layout.SCRIPT_CALL, 0x10, 0x04, Gen1Layout.SCRIPT_RET],
+		{}, {
+			MOVEMENT_LIST: 0xC0, MOVEMENT_LIST + 1: 0x40,
+			MOVEMENT_LIST + 2: Gen1Layout.NPC_MOVEMENT_END,
+		}
+	)
+	assert_eq(script, [{"op": "object_move", "object": 2, "moves": [3, 1]}])
+
+
+## `FindPathToPlayer` writes its answer into WRAM, which no list in the bank
+## stands at, so Oak's own walk says nothing here.
+func test_a_sprite_walk_out_of_wram_answers_nothing() -> void:
+	assert_eq(_decode(
+		_store_hram(int(LAYOUT["text_id_hram"]), 3)
+			+ [Gen1Layout.SCRIPT_LD_DE, 0x97, 0xCC]
+			+ [Gen1Layout.SCRIPT_CALL, 0x10, 0x04, Gen1Layout.SCRIPT_RET]
+	), [])
+
+
+## `DecodeRLEList` unrolls its pairs into the buffer, and `GetSimulatedInput`
+## spends them back to front.
+func test_a_decoded_walk_spends_its_buffer_back_to_front() -> void:
+	var script: Array = _decode(
+		_load_hl(int(LAYOUT["simulated_joypad_end"]))
+			+ [Gen1Layout.SCRIPT_LD_DE, MOVEMENT_LIST & 0xFF, MOVEMENT_LIST >> 8]
+			+ [Gen1Layout.SCRIPT_CALL, 0x20, 0x04, Gen1Layout.SCRIPT_DEC_A]
+			+ _store_a(int(LAYOUT["simulated_joypad_index"]))
+			+ [Gen1Layout.SCRIPT_CALL, 0x20, 0x03, Gen1Layout.SCRIPT_RET],
+		{}, {
+			MOVEMENT_LIST: 0x20, MOVEMENT_LIST + 1: 1, MOVEMENT_LIST + 2: 0x40,
+			MOVEMENT_LIST + 3: 2, MOVEMENT_LIST + 4: Gen1Layout.RLE_END,
+		}
+	)
+	assert_eq(script, [{"op": "walk", "moves": [
+		{"direction": 1, "steps": 2}, {"direction": 2, "steps": 1},
+	]}])
+
+
+## A row spending more entries than it wrote reads whatever the buffer held, so
+## the walk is refused rather than invented.
+func test_a_walk_longer_than_its_buffer_answers_nothing() -> void:
+	assert_eq(_decode(
+		[Gen1Layout.SCRIPT_LD_A, 0x40] + _store_a(int(LAYOUT["simulated_joypad_end"]))
+			+ [Gen1Layout.SCRIPT_LD_A, 3]
+			+ _store_a(int(LAYOUT["simulated_joypad_index"]))
+			+ [Gen1Layout.SCRIPT_CALL, 0x20, 0x03, Gen1Layout.SCRIPT_RET]
+	), [])
+
+
+## `bit BIT_SCRIPTED_NPC_MOVEMENT, a` / `ret nz`, which is how a state holds
+## still while the walk the state before it started is drawn.
+func test_a_scripted_movement_bit_becomes_a_movement_branch() -> void:
+	var script: Array = _decode(
+		_load_a(int(LAYOUT["status_flags_5"]))
+			+ [Gen1Layout.SCRIPT_PREFIX, Gen1Layout.SCRIPT_BIT_BASE | 0x07]
+			+ [RET_NZ] + _print(HELLO) + [Gen1Layout.SCRIPT_RET],
+		{HELLO: "HI"}
+	)
+	assert_eq(script, [{
+		"op": "movement_running", "who": Gen1Layout.MOVEMENT_TEST_OBJECT,
+		"then": [], "else": [{"op": "text", "text": "HI"}],
+	}], "the box opens on the side that is no longer walking")
 
 
 func test_a_row_that_prints_one_box_decodes_to_it() -> void:
