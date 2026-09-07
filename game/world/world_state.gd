@@ -306,6 +306,10 @@ var _npc_trades: Dictionary = {}
 ## of global indices a `ShowObject` or a `HideObject` has since moved away from
 ## that row: a state that has run neither is the cartridge's own new game.
 var _toggled_objects: Dictionary = {}
+## `wGameProgressFlags`' own `w<Map>CurScript` bytes, by their offset in that
+## run: which state of its own machine a map's per-frame script stands on. Zero
+## is the cartridge's own new game, so only a byte a script has moved is kept.
+var _gen1_map_scripts: Dictionary = {}
 ## `wCardKeyDoorY` and its neighbour: the block `PrintCardKeyText` last opened a
 ## Silph Co. door at. The floor's own callback turns it into that door's flag on
 ## the next load and clears it, so opening a second door on one visit loses the
@@ -535,6 +539,7 @@ func to_dict() -> Dictionary:
 		"kurt_apricorn_quantity": _kurt_apricorn_quantity,
 		"picked_fruit_trees": _picked_fruit_trees.duplicate(),
 		"toggled_objects": _toggled_objects.duplicate(),
+		"gen1_map_scripts": _gen1_map_scripts.duplicate(),
 		"card_key_door": [_card_key_door.x, _card_key_door.y],
 		"npc_trades": _npc_trades.duplicate(),
 		"registered_item": _registered_item,
@@ -587,6 +592,7 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	_seed_counts(restored._pc_items, _map(source, "pc_items"), 1, -1, Gen2WorldPack.MAX_PC_ITEMS)
 	_seed_flags(restored._picked_fruit_trees, _map(source, "picked_fruit_trees"), 1)
 	_seed_flags(restored._toggled_objects, _map(source, "toggled_objects"), 0)
+	_seed_counts(restored._gen1_map_scripts, _map(source, "gen1_map_scripts"), 0)
 	restored._card_key_door = _vector_from_value(
 		source.get("card_key_door", [NO_CARD_KEY_DOOR.x, NO_CARD_KEY_DOOR.y])
 	)
@@ -744,6 +750,7 @@ func restore_from_dict(raw: Variant) -> void:
 	_kurt_apricorn_quantity = restored._kurt_apricorn_quantity
 	_picked_fruit_trees = restored._picked_fruit_trees.duplicate()
 	_toggled_objects = restored._toggled_objects.duplicate()
+	_gen1_map_scripts = restored._gen1_map_scripts.duplicate()
 	_card_key_door = restored._card_key_door
 	_npc_trades = restored._npc_trades.duplicate()
 	_registered_item = restored._registered_item
@@ -1720,6 +1727,20 @@ func set_object_toggled(index: int, toggled: bool) -> void:
 		_toggled_objects[index] = true
 	else:
 		_toggled_objects.erase(index)
+	changed.emit()
+
+
+func gen1_map_script(byte: int) -> int:
+	return int(_gen1_map_scripts.get(byte, 0))
+
+
+func set_gen1_map_script(byte: int, value: int) -> void:
+	if byte < 0 or gen1_map_script(byte) == value:
+		return
+	if value > 0:
+		_gen1_map_scripts[byte] = value
+	else:
+		_gen1_map_scripts.erase(byte)
 	changed.emit()
 
 

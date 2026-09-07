@@ -30,6 +30,7 @@ const KIND_HELP: Dictionary = {
 	&"sign": "frames: DisplayTextID's box, read by facing up from where the player stands. 0 spends the whole reveal, which is past a box owing no press",
 	&"gift": "presses: a `GiveItem` row, faced up from the cell after the @. 0 is the offer's first page, 4 the receipt box a bag with room earns",
 	&"trainer": "presses, frames: TalkToTrainer on the map's first trainer, faced from the cell below. 0 the before-battle box, 1 the fight the press behind it opens; a second number stops that many frames into the transition instead",
+	&"map_script": "frames, 0: RunMapScript's own state, stepped into by walking up out of the cell after the @. Route 22 Gate's guard is `-- red 0 193 <out.png> live map_script@4,3 300 0`",
 	&"sight": "frames, 0: CheckFightingMapTrainers on the map's first trainer who sees, walked into from the far end of its own line. 40 stands in the shock bubble, 120 in the walk-up, 400 in the before-battle box",
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
 	&"vending": "presses, rows down: VendingMachineMenu, read by facing up from the cell below one. 0 the list, 1 the box the chosen row lands in",
@@ -100,6 +101,8 @@ const BADGE_NAMES: Array[String] = [
 ]
 
 ## `.forced_dpad`'s own order, which the first number indexes.
+## Frames of UP held, which is one step and the landing behind it.
+const MAP_SCRIPT_STEP_FRAMES: int = 24
 const ICE_SLIDE_BUTTONS: Array[int] = [
 	PokeButton.DOWN, PokeButton.UP, PokeButton.LEFT, PokeButton.RIGHT,
 ]
@@ -411,7 +414,7 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
 	&"catch_nickname", &"catch_dex", &"mom_bank", &"bills_pc", &"players_pc",
 	&"pokemon_center_pc", &"start_menu", &"pokedex", &"trainer_card",
-	&"mod_notice", &"mod_page", &"sight",
+	&"mod_notice", &"mod_page", &"sight", &"map_script",
 	&"reset_question", &"launcher_question",
 ]
 
@@ -463,6 +466,7 @@ const STAGERS: Dictionary = {
 	&"gift": &"_stage_gift",
 	&"trainer": &"_stage_trainer",
 	&"sight": &"_stage_sight",
+	&"map_script": &"_stage_map_script",
 	&"nurse": &"_stage_nurse",
 	&"vending": &"_stage_vending",
 	&"prizes": &"_stage_prizes",
@@ -1110,6 +1114,19 @@ func _stage_trainer() -> void:
 		_screen.advance_frame()
 	if _cell.y <= 0:
 		_screen.settle_battle_transition()
+
+
+## `RunMapScript`, which runs on the step that lands: the cell after the @ is
+## the one below the trigger, walked up out of.
+func _stage_map_script() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	for _press: int in MAP_SCRIPT_STEP_FRAMES:
+		if world != null and world.script_input_waiting():
+			break
+		_screen.press_button(PokeButton.UP)
+		_screen.advance_frame()
+	_screen.advance_frames(maxi(_cell.x, 0))
+
 
 
 ## `CheckFightingMapTrainers`, walked into from the far end of the line.

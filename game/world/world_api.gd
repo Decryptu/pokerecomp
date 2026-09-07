@@ -3888,6 +3888,10 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"walk": &"_gen1_node_walk",
 	"day_care": &"_gen1_node_day_care",
 	"town_map": &"_gen1_node_town_map",
+	"set_map_script": &"_gen1_node_set_map_script",
+	"player_in_array": &"_gen1_node_player_in_array",
+	"object_facing": &"_gen1_node_object_facing",
+	"map_script_table": &"_gen1_node_map_script_table",
 }
 
 
@@ -4200,6 +4204,54 @@ func _gen1_node_player_coord(node: Dictionary, steps: Array, run: Dictionary) ->
 	var axis: int = int(node["axis"])
 	var standing: int = player_cell.y if axis == 0 else player_cell.x
 	return _gen1_resolve_side(node, standing == int(node["value"]), steps, run)
+
+
+## `ArePlayerCoordsInArray`, whose carry is the player standing on one row of
+## the `db y, x` list the caller named.
+func _gen1_node_player_in_array(
+	node: Dictionary, steps: Array, run: Dictionary
+) -> bool:
+	var standing: bool = false
+	for cell: Dictionary in node["cells"] as Array:
+		if player_cell == Vector2i(int(cell["x"]), int(cell["y"])):
+			standing = true
+			break
+	return _gen1_resolve_side(node, standing, steps, run)
+
+
+## One object's own byte of `wSpriteStateData1`, which a script writes by hand
+## to turn an NPC where `applymovement` would turn one on Generation 2.
+func _gen1_node_object_facing(
+	node: Dictionary, steps: Array, _run: Dictionary
+) -> bool:
+	steps.append({
+		"type": &"object_facing", "index": int(node["object"]),
+		"facing": facing_for_direction(Gen1Layout.FACING_STEPS[int(node["facing"])]),
+	})
+	return true
+
+
+## The store `CallFunctionInTable` dispatches on next frame.
+func _gen1_node_set_map_script(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"map_script", "byte": int(node["byte"]), "value": int(node["value"]),
+	})
+	return true
+
+
+## `CallFunctionInTable` itself: the body the map's own byte selects, resolved
+## where the entry script reaches the dispatch. An index the importer read no
+## body for runs nothing, the way an undecoded row says nothing.
+func _gen1_node_map_script_table(
+	node: Dictionary, steps: Array, run: Dictionary
+) -> bool:
+	if state == null or current_map == null:
+		return false
+	var index: int = state.gen1_map_script(int(node["byte"]))
+	for row: Dictionary in current_map.scripts.get("states", []) as Array:
+		if int(row.get("id", -1)) == index:
+			return _gen1_resolve_script(row.get("nodes", []) as Array, steps, run)
+	return true
 
 
 func _gen1_node_walk(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
@@ -4995,6 +5047,9 @@ func dispatch_sight_events() -> Array:
 func _gen1_sight() -> Array:
 	if _gen1_holding():
 		return []
+	var running: Array = _gen1_map_script()
+	if not running.is_empty():
+		return running
 	var request: Dictionary = _find_sight_request()
 	if request.is_empty():
 		return []
@@ -5012,6 +5067,21 @@ func _gen1_sight() -> Array:
 			"distance": int(request["distance"]),
 		},
 	}}] + steps
+	return _gen1_result()
+
+
+## `RunMapScript`, which `JoypadOverworld` runs every frame: what stands in
+## front of `CallFunctionInTable` and then the state the map's byte selects.
+func _gen1_map_script() -> Array:
+	if current_map == null or state == null:
+		return []
+	var entry: Array = current_map.scripts.get("entry", [])
+	if entry.is_empty():
+		return []
+	var steps: Array = []
+	if not _gen1_resolve_script(entry, steps, _gen1_run({})) or steps.is_empty():
+		return []
+	_gen1_steps = steps
 	return _gen1_result()
 
 
@@ -5135,6 +5205,12 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 		&"blackout_map":
 			_gen1_record_blackout_map()
 			return true
+		&"map_script":
+			state.set_gen1_map_script(int(step["byte"]), int(step["value"]))
+			return true
+		&"object_facing":
+			_turn_gen1_object(int(step["index"]), int(step["facing"]), events)
+			return true
 		&"walk":
 			events.append_array(_gen1_walk_player(
 				_movement_direction(int(step["direction"])), int(step["steps"])
@@ -5155,6 +5231,18 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 				events.append(changed)
 			return true
 	return false
+
+
+## The override the next object load reads, and the object standing now.
+func _turn_gen1_object(index: int, facing: int, events: Array) -> void:
+	if current_map == null or index < 0 or index >= objects.size():
+		return
+	_apply_object_override(&"object_facing", {
+		"map_group": current_map.group, "map_number": current_map.number,
+		"object_index": index, "facing": facing,
+	})
+	(objects[index] as Gen2WorldObject).facing = facing
+	events.append({"type": &"object_turned", "object_index": index, "facing": facing})
 
 
 ## Spends the head step and answers with whatever the next one waits on.
@@ -5936,6 +6024,10 @@ func _queue_map_callbacks(callback_type: int) -> void:
 		return
 	if _gen1:
 		_run_gen1_map_callback()
+		## `RunMapScript` runs on the first frame behind `EnterMap`, so what the
+		## map's own script writes is standing before the player may move. What
+		## it would show waits for the step dispatch, which resolves it again.
+		_spend_gen1_nodes(current_map.scripts.get("entry", []) as Array)
 		return
 	var bank: int = int(current_map.scripts.get("bank", 0))
 	for callback: Dictionary in current_map.scripts.get("callbacks", []):
@@ -5958,8 +6050,14 @@ func _run_gen1_map_callback() -> void:
 	if callbacks.is_empty():
 		return
 	_unlock_gen1_card_key_door()
+	_spend_gen1_nodes(callbacks[0]["nodes"] as Array)
+
+
+## Spends every step of [param nodes] that takes no turn of its own, stopping
+## at the first that would show something.
+func _spend_gen1_nodes(nodes: Array) -> void:
 	var steps: Array = []
-	if not _gen1_resolve_script(callbacks[0]["nodes"] as Array, steps, _gen1_run({})):
+	if nodes.is_empty() or not _gen1_resolve_script(nodes, steps, _gen1_run({})):
 		return
 	var events: Array = []
 	while not steps.is_empty() and _gen1_written(steps[0], events):
@@ -8747,13 +8845,10 @@ func always_on_bike() -> bool:
 ## `CheckForceBikeOrSurf`, which `EnterMap` runs behind the map load. A cell of
 ## `ForcedBikeOrSurfMaps` mounts the bike and sets `BIT_ALWAYS_ON_BIKE`, except
 ## on the two Seafoam Islands floors, which force surfing and set nothing; the
-## flag already standing returns before the walk. The two gate scripts open by
-## clearing it, which is the only way a forced ride ends.
+## flag already standing returns before the walk. The two gates' own per-frame
+## scripts clear it, which is the only way a forced ride ends.
 func _gen1_check_force_bike_or_surf() -> void:
 	if not _gen1 or current_map == null or state == null:
-		return
-	if current_map.scripts.get("clears_always_on_bike", false):
-		state.set_engine_flag(Gen2WorldState.always_on_bike_flag(data), false)
 		return
 	if always_on_bike() or not data.gen1_forces_ride(current_map.number, player_cell):
 		return

@@ -69,6 +69,21 @@ const LAYOUT: Dictionary = {
 	"start_simulating_joypad": 0x0320,
 	"simulated_joypad_index": 0xCD38,
 	"simulated_joypad_end": 0xCCD3,
+	"call_function_in_table": 0x0330,
+	"execute_map_script": 0x0340,
+	"player_coords_in_array": 0x0350,
+	"delay_3": 0x0360,
+	"delay_frames": 0x0370,
+	"play_default_music": 0x0380,
+	"check_map_trainers": 0x0390,
+	"start_trainer_battle": 0x03A0,
+	"end_trainer_battle": 0x03B0,
+	"load_gym_names": 0x03C0,
+	"joy_ignore": 0xCD6B,
+	"update_sprites_enabled": 0xCFCB,
+	"obtained_badges": 0xD356,
+	"sprite_state_data": 0xC100,
+	"status_flags_6": 0xD732,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
 const PREDEFS: Dictionary = {
@@ -81,13 +96,26 @@ const BYE: int = 0x1810
 const UNREAD_CALL: int = 0x0200
 ## `call z, nn`, one of [constant Gen1Layout.SCRIPT_CONDITIONAL_CALLS]' four.
 const CALL_Z: int = 0xCC
+## A `<Map>_ScriptPointers` table, the `w<Map>CurScript` byte it dispatches on
+## and one state body behind it.
+const TABLE: int = 0x1900
+const STATE: int = 0x1910
+const MAP_SCRIPT_BYTE: int = 4
+## `PewterCityPlayerLeavingEastCoords`' shape: `db y, x` rows under a $FF.
+const COORDS: int = 0x1930
+## `ret nc`, which a coordinate list is refused with, and `call nz`, which a map
+## load gate calls its own body through.
+const RET_NC: int = 0xD0
+const CALL_NZ: int = 0xC4
 
 
-func _rom(program: Array, strings: Dictionary = {}) -> RomFile:
+func _rom(program: Array, strings: Dictionary = {}, raw: Dictionary = {}) -> RomFile:
 	var data: PackedByteArray = PackedByteArray()
 	data.resize(RomFile.BANK_SIZE)
 	for offset: int in program.size():
 		data[AT + offset] = int(program[offset])
+	for address: int in raw:
+		data[address] = int(raw[address])
 	for address: int in strings:
 		## `TX_START`, the literal, and `<DONE>`: what a `text_far` target holds.
 		var text: PackedByteArray = Gen1Text.encode(String(strings[address]))
@@ -121,6 +149,86 @@ func _print(address: int) -> Array:
 
 func _decode(program: Array, strings: Dictionary = {}) -> Array:
 	return Gen1WorldImporter.decode_script(_rom(program, strings), LAYOUT, 0, AT)
+
+
+func _load_a(address: int) -> Array:
+	return [Gen1Layout.SCRIPT_LD_A_MEM, address & 0xFF, address >> 8]
+
+
+func _store_a(address: int) -> Array:
+	return [Gen1Layout.SCRIPT_LD_MEM_A, address & 0xFF, address >> 8]
+
+
+## `ld hl, <table>` / `ld a, [w<Map>CurScript]` / `jp CallFunctionInTable`.
+func _dispatch() -> Array:
+	return _load_hl(TABLE) \
+		+ _load_a(int(LAYOUT["map_scripts"]) + MAP_SCRIPT_BYTE) \
+		+ [Gen1Layout.SCRIPT_JP, LAYOUT["call_function_in_table"] & 0xFF,
+			int(LAYOUT["call_function_in_table"]) >> 8]
+
+
+func test_the_dispatch_names_the_table_and_the_byte_it_reads() -> void:
+	assert_eq(_decode(_dispatch()), [
+		{"op": "map_script_table", "table": TABLE, "byte": MAP_SCRIPT_BYTE},
+	])
+
+
+func test_a_store_to_a_map_script_byte_names_the_state_it_leaves() -> void:
+	var script: Array = _decode(
+		[Gen1Layout.SCRIPT_LD_A, 3] + _store_a(int(LAYOUT["map_scripts"]) + MAP_SCRIPT_BYTE)
+			+ [Gen1Layout.SCRIPT_RET]
+	)
+	assert_eq(script, [{"op": "set_map_script", "byte": MAP_SCRIPT_BYTE, "value": 3}])
+
+
+func test_a_map_script_store_the_walk_cannot_value_answers_nothing() -> void:
+	assert_eq(
+		_decode(_store_a(int(LAYOUT["map_scripts"])) + [Gen1Layout.SCRIPT_RET]), []
+	)
+
+
+## `wCurrentMapScriptFlags` is clear on every frame but the map's own load, so
+## the gate in front of a per-frame script tests false and the body it would
+## have called is not read at all.
+func test_the_map_load_gate_is_walked_past() -> void:
+	var gate: Array = _load_hl(int(LAYOUT["map_script_flags"])) \
+		+ [Gen1Layout.SCRIPT_PREFIX, Gen1Layout.SCRIPT_BIT_BASE + Gen1Layout.SCRIPT_OPERAND_HL,
+			Gen1Layout.SCRIPT_PREFIX,
+			Gen1Layout.SCRIPT_RES_BASE + Gen1Layout.SCRIPT_OPERAND_HL,
+			CALL_NZ, UNREAD_CALL & 0xFF, UNREAD_CALL >> 8]
+	var script: Array = _decode(
+		gate + _print(HELLO) + _call(int(LAYOUT["text_script_end"])), _boxes()
+	)
+	assert_eq(script, [{"op": "text", "text": "HI"}])
+
+
+func test_a_coordinate_list_becomes_the_cells_it_holds() -> void:
+	var program: Array = _load_hl(COORDS) + _call(int(LAYOUT["player_coords_in_array"])) \
+		+ [RET_NC] + _print(HELLO) + _call(int(LAYOUT["text_script_end"]))
+	var script: Array = Gen1WorldImporter.decode_script(
+		_rom(program, _boxes(), {
+			COORDS: 7, COORDS + 1: 9, COORDS + 2: 8, COORDS + 3: 10,
+			COORDS + 4: Gen1Layout.MAP_COORD_END,
+		}),
+		LAYOUT, 0, AT
+	)
+	assert_eq(script, [{
+		"op": "player_in_array",
+		"cells": [{"y": 7, "x": 9}, {"y": 8, "x": 10}],
+		"then": [{"op": "text", "text": "HI"}], "else": [],
+	}])
+
+
+func test_a_store_to_a_sprite_facing_byte_turns_that_object() -> void:
+	var facing_byte: int = int(LAYOUT["sprite_state_data"]) \
+		+ 2 * Gen1Layout.SPRITE_SLOT_SIZE + Gen1Layout.SPRITE_FACING_AT
+	var script: Array = _decode(
+		[Gen1Layout.SCRIPT_LD_A, Gen1Layout.FACING_LEFT] + _store_a(facing_byte)
+			+ [Gen1Layout.SCRIPT_RET]
+	)
+	assert_eq(script, [
+		{"op": "object_facing", "object": 1, "facing": Gen1Layout.FACING_LEFT},
+	])
 
 
 func test_a_row_that_prints_one_box_decodes_to_it() -> void:
@@ -215,19 +323,6 @@ func test_a_call_to_the_maps_own_routine_is_walked_and_returned_from() -> void:
 	assert_eq(_decode(program, _boxes()), [
 		{"op": "text", "text": "HI"}, {"op": "text", "text": "BYE"},
 	])
-
-
-## The map script index a row leaves behind it. Nothing here interprets one, so
-## the write is walked past rather than ending the path.
-func test_a_map_script_write_is_walked_past() -> void:
-	var index: int = int(LAYOUT["map_scripts"]) + 0x17
-	var script: Array = _decode(
-		[Gen1Layout.SCRIPT_LD_A, 3, Gen1Layout.SCRIPT_LD_MEM_A,
-			index & 0xFF, index >> 8]
-			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
-		_boxes()
-	)
-	assert_eq(script, [{"op": "text", "text": "HI"}])
 
 
 func test_a_branch_side_this_decoder_cannot_read_is_marked_rather_than_dropped() -> void:
