@@ -78,6 +78,29 @@ const TOWN_MAP_POSTER_TILE: int = 0x3D
 const TOWN_MAP_POSTER_BOX: String = "A TOWN MAP." + Gen2TextStream.PAGE_BREAK
 ## `Route22GateScriptCoords`' first cell, the `w<Map>CurScript` byte the gate
 ## dispatches on, and the two states `Route22GateGuardText` leaves behind it.
+## `Route5Gate.PlayerInCoordsArray`'s first cell and BIT_GAVE_SAFFRON_GUARDS_DRINK.
+const ROUTE_5_GATE: int = 70
+const ROUTE_5_GATE_CELL := Vector2i(3, 3)
+const SAFFRON_GUARD_THIRSTY: String = "I'm on guard duty."
+const SAFFRON_GUARD_PAID: String = "Whoa, boy!"
+const SAFFRON_DRINK_BIT: int = 6
+const ITEM_FRESH_WATER: int = 0x3C
+const ITEM_LEMONADE: int = 0x3E
+
+## `ViridianGymArrowTilePlayerMovement`'s first row, its nine steps up, and a
+## cell the table names no row for.
+const VIRIDIAN_GYM: int = 45
+const VIRIDIAN_GYM_ARROW := Vector2i(19, 11)
+const VIRIDIAN_GYM_SPUN := Vector2i(19, 2)
+const VIRIDIAN_GYM_STILL := Vector2i(19, 10)
+
+## `Route12DefaultScript`'s fight and `Route12SnorlaxPostBattleScript`'s box.
+const ROUTE_12_BYTE: int = 0x34
+const ROUTE_12_POST_BATTLE: int = 3
+const SNORLAX_SPECIES: int = 143
+const SNORLAX_LEVEL: int = 30
+const SNORLAX_CALMED: String = "SNORLAX calmed"
+
 const ROUTE_22_GATE: int = 193
 const ROUTE_22_GATE_CELL := Vector2i(4, 2)
 const ROUTE_22_GATE_BYTE: int = 0x1E
@@ -420,6 +443,9 @@ func _one_game() -> void:
 	_check_a_map_script_runs()
 	_check_a_scripted_npc_walk()
 	_check_a_scripted_player_walk()
+	_check_the_saffron_guard()
+	_check_an_arrow_tile()
+	_check_a_scripted_wild_battle()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -2053,6 +2079,102 @@ func _check_a_scripted_player_walk() -> void:
 	_r.check(world.player_facing == Gen2WorldSprite.FACING_RIGHT,
 		"the player faced %d rather than Oak." % world.player_facing)
 	_r.note("gen1 walk HALL_OF_FAME five cells in and Oak turning to meet it")
+
+
+## `RemoveGuardDrink` driven on the world: the guard is thirsty with an empty
+## bag and takes the first drink of `GuardDrinksList` the bag holds.
+func _check_the_saffron_guard() -> void:
+	for drink: int in [0, ITEM_LEMONADE, ITEM_FRESH_WATER]:
+		var world: Gen2WorldAPI = _r.open_world(0, ROUTE_5_GATE, ROUTE_5_GATE_CELL)
+		if world == null:
+			return
+		if drink > 0:
+			world.state.apply_changes({}, {}, {"items": {drink: 1}})
+		var spoken: String = _event_text(world.dispatch_sight_events())
+		var wanted: String = SAFFRON_GUARD_PAID if drink > 0 else SAFFRON_GUARD_THIRSTY
+		if not _r.check(spoken.begins_with(wanted),
+			"the Saffron guard said %s for drink %d." % [spoken, drink]):
+			continue
+		world.run_event_queue(true)
+		_r.check(world.state.item_quantity(drink) == 0 if drink > 0 else true,
+			"the guard left %d of item %d in the bag." % [
+				world.state.item_quantity(drink), drink,
+			])
+		_r.check(
+			world.state.is_engine_flag_active(_saffron_drink_flag()) == (drink > 0),
+			"the drink flag stood %s for drink %d." % [
+				world.state.is_engine_flag_active(_saffron_drink_flag()), drink,
+			]
+		)
+	_r.note("gen1 walk the SAFFRON guard thirsty and paid")
+
+
+## `DecodeArrowMovementRLE`: Viridian Gym's first `map_coord_movement` row spins
+## the player along its list and a cell with no row of its own spins nobody.
+func _check_an_arrow_tile() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_GYM, VIRIDIAN_GYM_ARROW)
+	if world == null:
+		return
+	world.dispatch_sight_events()
+	var passes: int = 0
+	while world.gen1_player_movement_running() and passes < SCRIPTED_WALK_PASSES:
+		world.advance_player_step_pass()
+		passes += 1
+	_r.check(world.player_cell == VIRIDIAN_GYM_SPUN,
+		"the arrow tile spun the player to %s, not %s." % [
+			world.player_cell, VIRIDIAN_GYM_SPUN,
+		])
+	var still: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_GYM, VIRIDIAN_GYM_STILL)
+	if still == null:
+		return
+	still.dispatch_sight_events()
+	_r.check(not still.gen1_player_movement_running(),
+		"a cell with no arrow row spun the player anyway.")
+	_r.note("gen1 walk VIRIDIAN_GYM's arrow tile %s to %s" % [
+		VIRIDIAN_GYM_ARROW, VIRIDIAN_GYM_SPUN,
+	])
+
+
+## Route 12's woken Snorlax, fought off the map script and read back by the
+## state behind it.
+func _check_a_scripted_wild_battle() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, ROUTE_12, SNORLAX_CELL)
+	if world == null:
+		return
+	world.set_event_flag(SNORLAX_FIGHT_FLAG)
+	if not _r.check(not world.dispatch_sight_events().is_empty(),
+		"the woken Snorlax asked for nothing."):
+		return
+	var passes: int = 0
+	while world.pending_runtime_request().is_empty() and passes < SCRIPTED_WALK_PASSES:
+		world.run_event_queue(true)
+		passes += 1
+	var request: Dictionary = world.pending_runtime_request()
+	var values: Dictionary = request.get("values", {}) as Dictionary
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"battle_requested"
+			and int(values.get("pokemon", 0)) == SNORLAX_SPECIES
+			and int(values.get("level", 0)) == SNORLAX_LEVEL,
+		"the Snorlax battle asked for %s." % [request]
+	):
+		return
+	world.complete_runtime_request({
+		"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_WON,
+	})
+	_r.check(world.state.gen1_map_script(ROUTE_12_BYTE) == ROUTE_12_POST_BATTLE,
+		"the fight left Route 12 on state %d." % world.state.gen1_map_script(ROUTE_12_BYTE))
+	_r.check(_event_text(world.dispatch_sight_events()).begins_with(SNORLAX_CALMED),
+		"the beaten Snorlax said nothing.")
+	while world.script_busy() and passes < SCRIPTED_WALK_PASSES:
+		world.run_event_queue(true)
+		passes += 1
+	_r.check(world.event_flag_active(SNORLAX_BEAT_FLAG),
+		"the beaten Snorlax left its own flag clear.")
+	_r.note("gen1 walk ROUTE_12's Snorlax fought at level %d" % SNORLAX_LEVEL)
+
+
+func _saffron_drink_flag() -> int:
+	return Gen1Layout.engine_flag_base("status_flags_1") + SAFFRON_DRINK_BIT
 
 
 ## `ItemUsePokeFlute` outside a battle: the cell beside Route 12's Snorlax sets

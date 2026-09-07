@@ -1005,6 +1005,13 @@ const SCRIPT_AND_N: int = 0xE6
 const SCRIPT_LD_C: int = 0x0E
 const SCRIPT_LD_B_A: int = 0x47
 const SCRIPT_LD_C_A: int = 0x4F
+## `ld a, b`, which carries a facing chosen either side of a branch past it.
+const SCRIPT_LD_A_B: int = 0x78
+## `GuardDrinksList`, three drinks under a zero.
+const GUARD_DRINK_MAX: int = 8
+## `map_coord_movement`: `db y, x` and a pointer, under a $FF.
+const ARROW_ROW_SIZE: int = 4
+const ARROW_TILE_MAX: int = 64
 const SCRIPT_LDH_A_MEM: int = 0xF0
 const SCRIPT_DEC_A: int = 0x3D
 const SCRIPT_INC_A: int = 0x3C
@@ -1084,8 +1091,31 @@ const SCRIPT_CALLS: Array[String] = [
 	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle",
 	"play_music", "stop_all_music",
 	"set_sprite_facing", "set_sprite_facing_delay", "sprite_stay", "move_sprite",
-	"decode_rle",
+	"decode_rle", "decode_arrow_movement",
 ]
+## The flag bits a `set` or `res` spends nothing on: BIT_SPINNING is an
+## animation this port does not draw, `wStatusFlags5`'s two are the queued
+## walk's own state, and BIT_FORCED_WARP is `OverworldLoop`'s alone.
+const SPINNING_BIT: int = 7
+const FORCED_WARP_BIT: int = 2
+const SCRIPT_SILENT_FLAGS: Dictionary = {
+	"movement_flags": 1 << SPINNING_BIT,
+	"status_flags_5": (1 << SCRIPTED_NPC_MOVEMENT_BIT) | (1 << SCRIPTED_MOVEMENT_STATE_BIT),
+	"status_flags_7": 1 << FORCED_WARP_BIT,
+}
+## The bytes an `and a` reads a known zero out of: the sight walk owns a trainer
+## engagement here, and Cinnabar Gym's six quiz gates say nothing yet.
+const SCRIPT_ZERO_SOURCES: Array[String] = [
+	"trainer_header_flag_bit", "opponent_after_wrong_answer",
+]
+## `wIsInBattle` is LOST_BATTLE when the player lost and `wBattleResult` 2 when
+## the wild was caught or ran, which is all a post-battle state asks.
+const BATTLE_OUTCOME_LOST: String = "lost"
+const BATTLE_OUTCOME_ESCAPED: String = "escaped"
+const BATTLE_OUTCOME_SOURCES: Dictionary = {
+	"is_in_battle": [0xFF, BATTLE_OUTCOME_LOST],
+	"battle_result": [2, BATTLE_OUTCOME_ESCAPED],
+}
 ## Routines named by a full ROM offset, the same address in another bank being another routine.
 const SCRIPT_BANKED_CALLS: Array[String] = [
 	"coin_box", "music_rival_start", "music_rival_tempo",
@@ -1621,6 +1651,22 @@ const RED_BLUE: Dictionary = {
 	"town_visited": 0xD70B,
 	"display_town_map": 0x70E3E,
 	"town_map_text": 0x0FC12,
+	## `RemoveGuardDrink`, whose own `ld hl` names `GuardDrinksList`.
+	"remove_guard_drink": 0x5A59F,
+	## `DecodeArrowMovementRLE` and the byte `BIT_SPINNING` sits in.
+	"decode_arrow_movement": 0x3442,
+	"movement_flags": 0xD736,
+	"status_flags_7": 0xD733,
+	## The two bytes a state body reads that nothing here writes.
+	"trainer_header_flag_bit": 0xCC55,
+	"opponent_after_wrong_answer": 0xDA38,
+	## The pair `OverworldLoop` starts a scripted wild battle off.
+	"cur_opponent": 0xD059,
+	"cur_enemy_level": 0xD127,
+	"is_in_battle": 0xD057,
+	"battle_result": 0xCF0B,
+	## `wSavedCoordIndex`, whose HRAM twin is `item_to_remove`'s own byte.
+	"saved_coord_index": 0xCF0D,
 	"fly_warps": 0x06448,
 	## `LoadSpecialWarpData` and `ItemUseEscapeRope`: the dungeon warp tables, the
 	## tilesets a rope may be pulled on and the rest houses that record no map.
@@ -1880,6 +1926,17 @@ const YELLOW: Dictionary = {
 	"town_visited": 0xD70A,
 	"display_town_map": 0x70EB4,
 	"town_map_text": 0x0FAA0,
+	"remove_guard_drink": 0x5A53A,
+	"decode_arrow_movement": 0x33D1,
+	"movement_flags": 0xD735,
+	"status_flags_7": 0xD732,
+	"trainer_header_flag_bit": 0xCC55,
+	"opponent_after_wrong_answer": 0xDA37,
+	"cur_opponent": 0xD058,
+	"cur_enemy_level": 0xD126,
+	"is_in_battle": 0xD056,
+	"battle_result": 0xCF0B,
+	"saved_coord_index": 0xCF0D,
 	"fly_warps": 0x061BC,
 	"dungeon_warps": 0x06133,
 	"escape_rope_tilesets": 0x0DE28,
@@ -2242,6 +2299,28 @@ static func script_flag_alias(layout: Dictionary, address: int, bit: int) -> int
 
 ## Whether a test is asking about a walk still being drawn, and whose: a
 ## `jr nz` behind any of the three is the side that is still waiting.
+static func script_battle_outcome(layout: Dictionary, address: int, value: int) -> String:
+	for name: String in BATTLE_OUTCOME_SOURCES:
+		var row: Array = BATTLE_OUTCOME_SOURCES[name]
+		if address == int(layout.get(name, -1)) and value == int(row[0]):
+			return String(row[1])
+	return ""
+
+
+static func script_zero_source(layout: Dictionary, address: int) -> bool:
+	for name: String in SCRIPT_ZERO_SOURCES:
+		if address == int(layout.get(name, -1)):
+			return true
+	return false
+
+
+static func script_silent_flag(layout: Dictionary, address: int, bit: int) -> bool:
+	for name: String in SCRIPT_SILENT_FLAGS:
+		if address == int(layout.get(name, -1)):
+			return (int(SCRIPT_SILENT_FLAGS[name]) & (1 << bit)) != 0
+	return false
+
+
 static func script_movement_test(layout: Dictionary, address: int, bit: int) -> String:
 	if address == int(layout["simulated_joypad_index"]) and bit < 0:
 		return MOVEMENT_TEST_PLAYER

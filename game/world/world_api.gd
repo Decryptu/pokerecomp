@@ -3847,6 +3847,19 @@ const GEN1_TRAINER_BEATEN: Array[StringName] = [
 	Gen2WorldBattleAdapter.OUTCOME_WON, Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
 ]
 
+## The outcomes `wIsInBattle` and `wBattleResult` name, one run of results each.
+const GEN1_BATTLE_OUTCOMES: Dictionary = {
+	Gen1Layout.BATTLE_OUTCOME_LOST: [Gen2WorldBattleAdapter.OUTCOME_LOST],
+	Gen1Layout.BATTLE_OUTCOME_ESCAPED: [
+		Gen2WorldBattleAdapter.OUTCOME_CAUGHT, Gen2WorldBattleAdapter.OUTCOME_RAN,
+	],
+}
+
+## What the last battle a script asked for answered.
+var _gen1_battle_outcome: StringName = &""
+## `wSavedCoordIndex`, the row a state matched and the state behind it reads.
+var _gen1_saved_coord_index: int = 0
+
 ## `wRivalName`, which no Generation 1 save model holds yet.
 var gen1_rival_name: String = Gen2WorldScriptRunner.UNNAMED
 ## What `DisplayTextID` is holding `HandleMap` with, in order, since there is no
@@ -3895,6 +3908,12 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"object_stay": &"_gen1_node_object_stay",
 	"movement_running": &"_gen1_node_movement_running",
 	"coord_index": &"_gen1_node_coord_index",
+	"guard_drink": &"_gen1_node_guard_drink",
+	"arrow_movement": &"_gen1_node_arrow_movement",
+	"wild_battle": &"_gen1_node_wild_battle",
+	"battle_outcome": &"_gen1_node_battle_outcome",
+	"save_coord_index": &"_gen1_node_save_coord_index",
+	"saved_coord_index": &"_gen1_node_saved_coord_index",
 	"player_facing": &"_gen1_node_player_facing",
 	"map_script_table": &"_gen1_node_map_script_table",
 }
@@ -4241,11 +4260,13 @@ func _gen1_node_object_facing(
 	return true
 
 
-## The store `CallFunctionInTable` dispatches on next frame.
+## The store `CallFunctionInTable` dispatches on next frame; a map with no
+## dispatch has no byte for `wCurMapScript` to be copied into.
 func _gen1_node_set_map_script(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({
-		"type": &"map_script", "byte": int(node["byte"]), "value": int(node["value"]),
-	})
+	var byte: int = int(node["byte"])
+	if byte < 0:
+		return true
+	steps.append({"type": &"map_script", "byte": byte, "value": int(node["value"])})
 	return true
 
 
@@ -4262,6 +4283,36 @@ func _gen1_node_map_script_table(
 		if int(row.get("id", -1)) == index:
 			return _gen1_resolve_script(row.get("nodes", []) as Array, steps, run)
 	return true
+
+
+## The two Snorlax and the Pokemon Tower's Marowak, fought once a state returns.
+## `wIsInBattle` and `wBattleResult`, read by a post-battle state.
+func _gen1_node_battle_outcome(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var wanted: Array = GEN1_BATTLE_OUTCOMES.get(String(node["outcome"]), [])
+	return _gen1_resolve_side(node, wanted.has(_gen1_battle_outcome), steps, run)
+
+
+func _gen1_node_wild_battle(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "values": {
+		"kind": &"battle_requested",
+		"values": {
+			"kind": &"wild",
+			"pokemon": int(node["species"]),
+			"level": int(node["level"]),
+		},
+	}})
+	return true
+
+
+## `DecodeArrowMovementRLE`: the arrow tile the player stands on queues its own
+## legs, and a cell with no row of its own leaves the map's trainers alone.
+func _gen1_node_arrow_movement(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	for cell: Dictionary in node["cells"] as Array:
+		if player_cell != Vector2i(int(cell["x"]), int(cell["y"])):
+			continue
+		steps.append({"type": &"walk", "moves": (cell["moves"] as Array).duplicate(true)})
+		return _gen1_resolve_side(node, true, steps, run)
+	return _gen1_resolve_side(node, false, steps, run)
 
 
 func _gen1_node_walk(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
@@ -4297,8 +4348,31 @@ func _gen1_node_movement_running(
 ## `wCoordIndex`, the row `ArePlayerCoordsInArray` matched on, counted from 1.
 func _gen1_node_coord_index(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	return _gen1_resolve_side(
-		node, int(run.get("coord_index", 0)) < int(node["below"]), steps, run
+		node, _gen1_index_matches(node, int(run.get("coord_index", 0))), steps, run
 	)
+
+
+## `wSavedCoordIndex`, which outlives the state that wrote it.
+func _gen1_node_saved_coord_index(
+	node: Dictionary, steps: Array, run: Dictionary
+) -> bool:
+	return _gen1_resolve_side(
+		node, _gen1_index_matches(node, _gen1_saved_coord_index), steps, run
+	)
+
+
+func _gen1_index_matches(node: Dictionary, index: int) -> bool:
+	var value: int = int(node["index"])
+	return index < value if String(node["test"]) == "below" else index == value
+
+
+## The store, whose -1 is `wCoordIndex` itself rather than a constant.
+func _gen1_node_save_coord_index(
+	node: Dictionary, _steps: Array, run: Dictionary
+) -> bool:
+	var value: int = int(node["value"])
+	_gen1_saved_coord_index = int(run.get("coord_index", 0)) if value < 0 else value
+	return true
 
 
 func _gen1_node_player_facing(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
@@ -4382,10 +4456,17 @@ func _gen1_node_pokedex(node: Dictionary, steps: Array, _run: Dictionary) -> boo
 ## `CheckEvent`'s one flag, or `CheckEitherEventSet`'s mask over the flags of
 ## one `wEventFlags` byte, which is set when any of them is. A row may read one
 ## of Generation 1's own saved bytes instead, which the engine flags hold.
+## One flag, or the run a mask named: `either` is `CheckEitherEventSet`'s own
+## any and `all` is `CheckBothEventsSet`'s every.
 func _gen1_branch_set(node: Dictionary) -> bool:
 	if bool(node.get("engine", false)):
 		return state != null and state.is_engine_flag_active(int(node["flag"]))
-	if event_flag_active(int(node["flag"])):
+	var first: bool = event_flag_active(int(node["flag"]))
+	if node.has("all"):
+		for flag: int in node["all"] as Array:
+			first = first and event_flag_active(flag)
+		return first
+	if first:
 		return true
 	for flag: int in node.get("either", []):
 		if event_flag_active(flag):
@@ -4462,6 +4543,18 @@ func _gen1_pick_up_item(_node: Dictionary, steps: Array, run: Dictionary) -> boo
 	box["press"] = false
 	steps.append(box)
 	return true
+
+
+## `RemoveGuardDrink`: the first row of `GuardDrinksList` the bag holds is spent
+## and named in `hItemToRemoveID`. The Saffron gate guards are its only callers.
+func _gen1_node_guard_drink(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var bag: Dictionary = run["bag"]
+	for item: int in node["items"] as Array:
+		if int(bag.get(item, 0)) < 1:
+			continue
+		_gen1_take_item({"item": item}, steps, run)
+		return _gen1_resolve_side(node, true, steps, run)
+	return _gen1_resolve_side(node, false, steps, run)
 
 
 func _gen1_take_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -5331,6 +5424,8 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 ## `EndTrainerBattle` flags a beaten opponent, and its `cp OPP_ID_OFFSET` skips
 ## `HideObject` for a trainer, so only a standing wild goes off the map.
 func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
+	if result.has("outcome"):
+		_gen1_battle_outcome = StringName(result["outcome"])
 	var flag: int = int(step.get("trainer_flag", -1))
 	if flag < 0 or state == null:
 		return
