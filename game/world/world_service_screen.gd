@@ -3317,6 +3317,21 @@ func _close_card() -> void:
 	_pokegear = null
 
 
+## `ItemUseTownMap`, the poster read out of the bag: the same screen with no
+## runtime request behind it, so closing it answers nothing and the host reopens
+## whatever it came from.
+func open_town_map(world: Gen2WorldAPI, data: GameData, save: Gen2SaveData) -> bool:
+	_world = world
+	_data = data
+	_save = save
+	_persist = false
+	if _world == null or _data == null:
+		_show_error("The region map has no world or cartridge cache.")
+		return false
+	_open_town_map(false)
+	return _town_map != null
+
+
 ## `_FlyMap` opened as an overlay of its own: the region map with the flypoint
 ## cursor, and nothing of the Pokegear around it.
 ##
@@ -3342,6 +3357,13 @@ func open_fly_map(
 	_town_map.set_screen(_service_hardware)
 	add_child(_town_map)
 	_town_map.closed.connect(_on_town_map_closed)
+	if _data.generation == RomRegistry.GEN1:
+		var towns := PackedInt32Array()
+		for town: Variant in request.get("towns", []):
+			towns.append(int(town))
+		if not _town_map.open_gen1_fly(_data, _world.landmark_backup(), towns):
+			_on_town_map_closed()
+		return true
 	var visited: Array[int] = []
 	for index: Variant in request.get("visited", []):
 		visited.append(int(index))
@@ -3373,7 +3395,9 @@ func _open_town_map(from_request: bool) -> void:
 	# The Pokegear's own MAP card when the Pokegear opened it, `_TownMap`'s
 	# corner box when `OverworldTownMap` did.
 	var owned: Array = Gen2PokegearScreen.owned_card_ids(_world.state)
-	var screen: StringName = Gen2TownMap.SCREEN_TOWN_MAP if from_request \
+	# Generation 1 has no Pokegear, so `_TownMap`'s own screen is every caller's.
+	var screen: StringName = Gen2TownMap.SCREEN_TOWN_MAP \
+		if from_request or _data.generation == RomRegistry.GEN1 \
 		else Gen2TownMap.SCREEN_POKEGEAR_CARD
 	var opened: bool = _town_map.open(
 		_data,

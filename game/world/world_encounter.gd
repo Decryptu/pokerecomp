@@ -283,6 +283,23 @@ static func nests(
 	return out
 
 
+## `FindWildLocationsOfMon` with `ZeroOutDuplicatesInList` behind it: the maps
+## whose grass or water table holds the species, in `WildDataPointers`' own
+## order and once each. The duplicate pass writes a zero, which is PALLET_TOWN's
+## id, so `DisplayWildLocations` refuses that map its icon.
+static func gen1_nests(data: GameData, species: int) -> Array:
+	var out: Array = []
+	if data == null or species < 1:
+		return out
+	for map: int in Gen1Layout.map_count(data.id):
+		for method: StringName in [METHOD_GRASS, &"water"]:
+			if out.has(map):
+				continue
+			if _holds_species(data.world_encounter(method, 0, map), species):
+				out.append(map)
+	return out
+
+
 ## `.SearchMapForMon` over every slot the record carries: `NUM_GRASSMON * 3`
 ## walks the three times of day as one run, and water's own three follow.
 static func _holds_species(row: Dictionary, species: int) -> bool:

@@ -52,13 +52,11 @@ const MAX_MONEY: int = 9900
 ## `ChiefPic:` falls through to `ScientistPic`, so rows 27 and 28 are one picture.
 const SHARED_PIC_ROWS: Array[int] = [27, 28]
 
-## SHA-1 of each tile strip. All three cartridges hold the one font and the one
-## text box; re-earn these against `gfx/font/font.png` and `font_extra.png`.
 ## SHA-1 of each tile strip. All three cartridges hold the same five; re-earn
 ## these against `gfx/font/font.png`, `font_extra.png`, `font_battle_extra.png`,
-## `gfx/battle/battle_hud_*.png`, `gfx/pokedex/pokedex.png` and the trainer
-## card's own three. `BlankLeaderNames` runs on into `CircleTile`, so its digest
-## is over both files.
+## `gfx/battle/battle_hud_*.png`, `gfx/pokedex/pokedex.png`, `gfx/town_map`'s
+## own four and the trainer card's three. `BlankLeaderNames` runs on into
+## `CircleTile`, so its digest is over both files.
 const SHEET_DIGESTS: Dictionary = {
 	"font": "8146fe98bbbd27f9d67509e3da62044b44785a3a",
 	"font_extra": "ca0735bbbf8d2ce178a3f06a8d95ac6395dc8f7e",
@@ -69,6 +67,10 @@ const SHEET_DIGESTS: Dictionary = {
 	"trainer_card_box": "4cbd04d3a6bc75710d26612068ed8ed71b1262b8",
 	"trainer_card_names": "b308184b958a914e70f6f034a28a13fe06b43b24",
 	"badge_numbers": "b2a864c62c1d5c5e50e372fa83b704178e41fcf0",
+	"world_map": "0777b341fe67d856c28a89bd2a64a0ef2cd1e001",
+	"town_map_cursor": "9ac3640b61003d3d45528ec1c599f9f885685261",
+	"town_map_nest": "c3b5073e7202abe208484e48ca065b2c3f393e49",
+	"town_map_arrow": "baf477ca6150473ffce09097a62a86f6b6cbdaf7",
 }
 ## `gfx/trainer_card/badges.2bpp` is the one card sheet the two pins disagree
 ## on: Yellow redrew Brock's and Misty's faces and left both their badges and

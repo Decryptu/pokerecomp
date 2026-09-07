@@ -89,6 +89,9 @@ const MAX_ANIM_ROWS: int = 64
 
 ## A runaway guard for the terminated name tables, longer than any entry.
 const MAX_NAME_LENGTH: int = 20
+## `data/maps/names.asm`: the longest is `SEAFOAM ISLANDS`, and a run past this
+## means the entry table's own pointer is wrong.
+const MAX_LANDMARK_LENGTH: int = 24
 ## `PokedexEntry` descriptions run to two pages of three lines.
 const MAX_DEX_TEXT: int = 256
 ## An `EvosMoves` record cannot outrun this; the longest learnset is well under.
@@ -797,6 +800,7 @@ func import_rom(
 		"oak_ratings": _import_dex_ratings(rom, layout),
 		"vending": _import_vending(rom, layout, items),
 		"prizes": _import_prizes(rom, layout),
+		"town_map": _import_town_map(rom, layout),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -937,6 +941,90 @@ static func _import_bar_palettes(rom: RomFile, layout: Dictionary) -> Dictionary
 		for slot: int in Gen1Layout.SUPER_PALETTE_COLORS:
 			colors.append(rom.u16le(at + slot * PokePalette.COLOR_BYTES))
 		out[name] = colors
+	return out
+
+
+## `_TownMap`'s whole screen: `CompressedMap`'s runs, `PalPacket_TownMap`'s own
+## four colours, `TownMapOrder` and one landmark a map id, so the cursor walk and
+## every icon read the same table [Gen2TownMapPage] draws Crystal's regions from.
+static func _import_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var palette: int = Gen1Layout.super_palette_offset(layout, Gen1Layout.PAL_TOWNMAP)
+	var colors: Array = []
+	for slot: int in Gen1Layout.SUPER_PALETTE_COLORS:
+		colors.append(rom.u16le(palette + slot * PokePalette.COLOR_BYTES))
+	var order: Array = []
+	for row: int in Gen1Layout.TOWN_MAP_ORDER_COUNT:
+		order.append(rom.u8(int(layout["town_map_order"]) + row))
+	return {
+		"kanto": _town_map_cells(rom, int(layout["town_map_rle"])),
+		"palettes": colors,
+		"order": order,
+		"landmarks": _town_map_landmarks(rom, layout),
+		"fly_warps": _town_map_fly_warps(rom, layout),
+	}
+
+
+## `FlyWarpDataPtr` with the record behind each row, which `.usedFlyWarp` copies
+## the last four bytes of onto the player: the tile, then the two sub-block bits
+## the tile's own low bits already say.
+static func _town_map_fly_warps(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout["fly_warps"])
+	var bank: int = RomFile.bank_of(at)
+	var out: Array = []
+	for row: int in Gen1Layout.FLY_WARP_COUNT:
+		var record: int = RomFile.linear(
+			bank, rom.u16le(at + row * Gen1Layout.FLY_WARP_ROW_SIZE + 2)
+		) + Gen1Layout.FLY_WARP_RECORD_AT
+		out.append({
+			"map": rom.u8(at + row * Gen1Layout.FLY_WARP_ROW_SIZE),
+			"y": rom.u8(record),
+			"x": rom.u8(record + 1),
+		})
+	return out
+
+
+## `.nextTile`: each byte is a tile nybble over [constant
+## Gen1Layout.WORLD_MAP_FIRST_CODE] and a count, and a zero byte ends the screen.
+static func _town_map_cells(rom: RomFile, at: int) -> Array:
+	var out: Array = []
+	while rom.u8(at) != 0 and out.size() < Gen1Layout.WORLD_MAP_CELLS:
+		var byte: int = rom.u8(at)
+		for _run: int in byte & 0x0F:
+			out.append(Gen1Layout.WORLD_MAP_FIRST_CODE + ((byte >> 4) & 0x0F))
+		at += 1
+	return out
+
+
+## `LoadTownMapEntry` for every map id, flattened: the icon centre in screen
+## pixels and the name `PlaceString` copies out of the row's own pointer.
+static func _town_map_landmarks(rom: RomFile, layout: Dictionary) -> Array:
+	var external: int = int(layout["external_map_entries"])
+	var internal: int = int(layout["internal_map_entries"])
+	var out: Array = []
+	for map: int in Gen1Layout.map_count(rom.id):
+		var row: int = external + map * Gen1Layout.EXTERNAL_MAP_ENTRY_SIZE
+		if map >= Gen1Layout.FIRST_INDOOR_MAP:
+			row = internal
+			while rom.u8(row) <= map:
+				row += Gen1Layout.INTERNAL_MAP_ENTRY_SIZE
+			row += 1
+		var packed: int = rom.u8(row)
+		var name: String = Gen1Text.decode(
+			rom.bytes(),
+			RomFile.linear(RomFile.bank_of(external), rom.u16le(row + 1)),
+			MAX_LANDMARK_LENGTH
+		)
+		var codes: Array = []
+		for code: int in Gen1Text.encode(name):
+			codes.append(code)
+		out.append({
+			"x": (packed & 0x0F) * PokeTiles.TILE_WIDTH
+				+ Gen1Layout.TOWN_MAP_ICON_CENTRE.x,
+			"y": (packed >> 4) * PokeTiles.TILE_HEIGHT
+				+ Gen1Layout.TOWN_MAP_ICON_CENTRE.y,
+			"packed": packed,
+			"codes": codes,
+		})
 	return out
 
 
@@ -1473,6 +1561,30 @@ func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"tiles": Gen1Layout.BADGE_FACE_TILES,
 			"first_code": Gen1Layout.BADGE_FACE_CODE,
 			"bits": 2,
+		},
+		"world_map": {
+			"offset": int(layout["world_map_tiles"]),
+			"tiles": Gen1Layout.WORLD_MAP_TILES,
+			"first_code": Gen1Layout.WORLD_MAP_FIRST_CODE,
+			"bits": 2,
+		},
+		"town_map_cursor": {
+			"offset": int(layout["town_map_cursor"]),
+			"tiles": Gen1Layout.TOWN_MAP_CURSOR_TILES,
+			"first_code": 0,
+			"bits": 1,
+		},
+		"town_map_nest": {
+			"offset": int(layout["town_map_nest"]),
+			"tiles": Gen1Layout.TOWN_MAP_NEST_TILES,
+			"first_code": 0,
+			"bits": 1,
+		},
+		"town_map_arrow": {
+			"offset": int(layout["town_map_arrow"]),
+			"tiles": Gen1Layout.TOWN_MAP_ARROW_TILES,
+			"first_code": Gen1Text.ARROW_UP,
+			"bits": 1,
 		},
 		"stats_p": {
 			"offset": int(layout["stats_p"]),

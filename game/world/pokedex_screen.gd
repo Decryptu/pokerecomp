@@ -310,19 +310,10 @@ func _open_area() -> void:
 	if _area != null:
 		return
 	var species: int = _dex.selected_species()
-	var roaming: Array = _world.state.roaming_mons()
-	var nests: Array = []
-	for region: int in Gen2TownMap.REGION_NAMES.size():
-		nests.append(Gen2WorldEncounter.nests(
-			_data, species, Gen2TownMap.region_name(region), roaming
-		))
 	var host := Gen2TownMapScreen.new()
 	host.z_index = 10
 	add_child(host)
-	if not host.open_dex_area(
-		_data, species, nests, _world.landmark_backup(), _world.state.hall_of_fame(),
-		_world.player_female(), _world.map_time_of_day()
-	):
+	if not _open_area_screen(host, species):
 		Gen2Screen.drop(host)
 		return
 	host.closed.connect(_on_area_closed)
@@ -330,10 +321,35 @@ func _open_area() -> void:
 	_mode = Mode.AREA
 
 
+## `predef LoadTownMap_Nest` on a Generation 1 cartridge, whose nests are one
+## list of map ids and whose header is the species itself.
+func _open_area_screen(host: Gen2TownMapScreen, species: int) -> bool:
+	if _gen1:
+		return host.open_gen1_dex_area(
+			_data, species, Gen2WorldEncounter.gen1_nests(_data, species),
+			_world.landmark_backup()
+		)
+	var roaming: Array = _world.state.roaming_mons()
+	var nests: Array = []
+	for region: int in Gen2TownMap.REGION_NAMES.size():
+		nests.append(Gen2WorldEncounter.nests(
+			_data, species, Gen2TownMap.region_name(region), roaming
+		))
+	return host.open_dex_area(
+		_data, species, nests, _world.landmark_backup(), _world.state.hall_of_fame(),
+		_world.player_female(), _world.map_time_of_day()
+	)
+
+
 func _on_area_closed() -> void:
 	if _area != null:
 		Gen2Screen.drop(_area)
 		_area = null
+	if _gen1:
+		## `.choseArea` leaves `b = 0`, which is `.exitSideMenu`'s own way back
+		## to the listing rather than to the entry page.
+		_open_list_mode()
+		return
 	## `.Area` redisplays the entry it left, cursor and page included.
 	_mode = Mode.ENTRY
 	_refresh()
@@ -436,9 +452,7 @@ func _handle_gen1_side(button: int) -> bool:
 
 
 ## What each row leaves `b` as: DATA and AREA answer 0 and redraw the listing,
-## QUIT answers 1 and closes the dex, and CRY stays in the menu. AREA is
-## `predef LoadTownMap_Nest`, whose nest table nothing imports, so it draws
-## nothing and lands on the listing its own `b = 0` goes to.
+## QUIT answers 1 and closes the dex, and CRY stays in the menu.
 func _gen1_side_action() -> void:
 	match _side_cursor:
 		Gen2Pokedex.GEN1_SIDE_DATA:
@@ -447,7 +461,7 @@ func _gen1_side_action() -> void:
 		Gen2Pokedex.GEN1_SIDE_CRY:
 			cry_requested.emit(_dex.selected_species())
 		Gen2Pokedex.GEN1_SIDE_AREA:
-			_open_list_mode()
+			_open_area()
 		Gen2Pokedex.GEN1_SIDE_QUIT:
 			closed.emit()
 
@@ -676,6 +690,10 @@ func render() -> Image:
 		return Image.create_empty(
 			Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 		)
+	## `LoadTownMap` clears the screen and draws the region map over it, so the
+	## AREA row is the whole picture rather than a layer on the listing.
+	if _mode == Mode.AREA and _area != null:
+		return _area.render()
 	if _gen1:
 		return _render_gen1()
 	## `Pokedex_BlinkArrowCursor`'s own off phase, and the same answer on every

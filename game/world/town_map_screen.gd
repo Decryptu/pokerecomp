@@ -51,6 +51,13 @@ const NEST_ORIGIN: int = 4
 const NEST_BLINK_FRAMES: int = 0x10
 ## `.String_SNest`, printed straight after `GetPokemonName`'s answer.
 const NEST_HEADER_SUFFIX: String = "'S NEST"
+## `MonsNestText`, whose `'s` is the one tile the Generation 1 charmap gives it.
+const GEN1_NEST_HEADER_SUFFIX: String = "'s NEST"
+## `TownMapCursor` and `MonNestIcon`, both at `vSprites tile $04`, and
+## `SPRITE_BIRD`, which `LoadTownMap_Fly` copies over the same four tiles.
+const GEN1_CURSOR_SHEET: String = "town_map_cursor"
+const GEN1_NEST_SHEET: String = "town_map_nest"
+const GEN1_BIRD_SPRITE: int = 0x09
 
 ## What the shadow OAM currently holds, which is a state rather than a redraw:
 ## the blink only writes it every sixteenth frame, so releasing SELECT leaves the
@@ -84,6 +91,13 @@ var _nests: Array = []
 var _oam: StringName = OAM_NESTS
 var _select_held: bool = false
 var _nest_icons: Array[TextureRect] = []
+var _gen1: bool = false
+## `DisplayWildLocations`' answer, which Generation 1 holds as one list of map
+## ids rather than a landmark list per region.
+var _gen1_nests: Array = []
+## Which frame the fly map's last press landed on, so its `ld c, 15` between the
+## blank and the two arrows is spent rather than assumed.
+var _gen1_pressed_at: int = -1
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 
@@ -119,12 +133,15 @@ func open(
 		# with an empty rectangle over its own menu.
 		visible = false
 		return false
-	_map = Gen2TownMap.create(
-		landmark, Gen2WorldState.is_crystal_profile(_data), hall_of_fame, screen
-	)
+	_gen1 = _data.generation == RomRegistry.GEN1
+	_map = Gen2TownMap.create_gen1(landmark, _data.town_map_order(), screen) if _gen1 \
+		else Gen2TownMap.create(
+			landmark, Gen2WorldState.is_crystal_profile(_data), hall_of_fame, screen
+		)
 	if screen != Gen2TownMap.SCREEN_DEX_AREA:
 		_species = 0
 		_nests = []
+		_gen1_nests = []
 		for icon: TextureRect in _nest_icons:
 			icon.visible = false
 	_cards = cards.duplicate()
@@ -136,6 +153,32 @@ func open(
 	_select_held = false
 	_open = true
 	visible = true
+	if is_inside_tree() and _background != null:
+		_refresh()
+	return true
+
+
+## `LoadTownMap_Nest`. [param nests] is `DisplayWildLocations`' own list of map
+## ids, already deduplicated, and [param at_map] is `wCurMap`, where the player
+## icon stands beside them.
+func open_gen1_dex_area(
+	data: GameData, species: int, nests: Array, at_map: int
+) -> bool:
+	_species = species
+	_gen1_nests = nests.duplicate()
+	_nests = []
+	return open(data, at_map, false, Gen2TownMap.SCREEN_DEX_AREA)
+
+
+## `LoadTownMap_Fly` over `BuildFlyLocationsList`. [param towns] is one entry a
+## town: its map id, or `NOT_VISITED`. The answer is taken with
+## [method chosen_spawn], which is the map id `.pressedA` writes to
+## `wDestinationMap` and -1 for the B press that writes none.
+func open_gen1_fly(data: GameData, at_map: int, towns: PackedInt32Array) -> bool:
+	_chosen_spawn = -1
+	if not open(data, at_map, false, Gen2TownMap.SCREEN_FLY):
+		return false
+	_map = Gen2TownMap.fly_gen1(at_map, towns)
 	if is_inside_tree() and _background != null:
 		_refresh()
 	return true
@@ -204,7 +247,7 @@ func map() -> Gen2TownMap:
 func cursor_landmark() -> int:
 	if _map == null:
 		return 0
-	if _map.screen != Gen2TownMap.SCREEN_FLY:
+	if _gen1 or _map.screen != Gen2TownMap.SCREEN_FLY:
 		return _map.cursor
 	var row: Dictionary = _data.flypoint(_map.cursor) if _data != null else {}
 	return int(row.get("landmark", 0))
@@ -223,16 +266,19 @@ func handle_button(button: int) -> bool:
 	if not _open or _map == null:
 		return false
 	if button == PokeButton.A and _map.screen == Gen2TownMap.SCREEN_FLY:
-		# `.pressedA` reads the flypoint's own spawn out of `Flypoints + 1`.
+		# `.pressedA` reads the flypoint's own spawn out of `Flypoints + 1`,
+		# where Generation 1 writes the map id the list itself holds.
 		var row: Dictionary = _data.flypoint(_map.cursor) if _data != null else {}
-		_chosen_spawn = int(row.get("spawn", -1)) if not row.is_empty() else -1
+		_chosen_spawn = _map.cursor if _gen1 \
+			else (int(row.get("spawn", -1)) if not row.is_empty() else -1)
 		close()
 		return true
 	if button == PokeButton.B \
 		or (button == PokeButton.A and _map.screen == Gen2TownMap.SCREEN_DEX_AREA):
 		close()
 		return true
-	if button == PokeButton.SELECT and _map.screen == Gen2TownMap.SCREEN_DEX_AREA:
+	if button == PokeButton.SELECT and not _gen1 \
+		and _map.screen == Gen2TownMap.SCREEN_DEX_AREA:
 		_select_held = true
 		_apply_select()
 		return true
@@ -240,6 +286,7 @@ func handle_button(button: int) -> bool:
 		# `.left` and `.right` write the new region's icons at once rather than
 		# waiting for the blink.
 		_oam = OAM_NESTS
+		_gen1_pressed_at = _frames
 		_refresh()
 	return true
 
@@ -268,11 +315,36 @@ func close() -> void:
 ## icon it draws instead is `GetPlayerIcon`'s standing frame, not a walk.
 func advance_frame() -> void:
 	_frames += 1
+	if _gen1:
+		_advance_gen1()
+		return
 	if _map != null and _map.screen == Gen2TownMap.SCREEN_DEX_AREA:
 		_advance_dex_area()
 		return
 	if _frames % WALK_FRAME_LENGTH == 0:
 		_refresh_player_icon()
+
+
+## `TownMapSpriteBlinkingAnimation`, which the map's own input loop and
+## `WaitForTextScrollButtonPress` both run: 25 frames shown and 25 hidden. The
+## fly map's loop calls neither, and the player icon is above the range the
+## routine hides either way.
+func _advance_gen1() -> void:
+	if _map == null:
+		return
+	if _map.screen == Gen2TownMap.SCREEN_FLY:
+		if _map.arrow_hidden >= 0 \
+			and _frames - _gen1_pressed_at >= Gen1Layout.TOWN_MAP_FLY_DELAY:
+			_map.arrow_hidden = -1
+			_refresh()
+		return
+	var blinked: StringName = OAM_CLEARED \
+		if _frames % (Gen1Layout.TOWN_MAP_BLINK_FRAMES * 2) \
+			>= Gen1Layout.TOWN_MAP_BLINK_FRAMES else OAM_NESTS
+	if blinked == _oam:
+		return
+	_oam = blinked
+	_refresh_objects()
 
 
 func _advance_dex_area() -> void:
@@ -297,6 +369,14 @@ func _apply_select() -> void:
 func render() -> Image:
 	var out: Image = _background_image()
 	if _map == null:
+		return out
+	if _gen1:
+		for object: Array in _gen1_objects():
+			out.blend_rect(
+				object[0] as Image,
+				Rect2i(Vector2i.ZERO, (object[0] as Image).get_size()),
+				object[1] as Vector2i
+			)
 		return out
 	if _map.screen == Gen2TownMap.SCREEN_DEX_AREA:
 		return _render_dex_area(out)
@@ -350,6 +430,10 @@ func shadow_oam() -> StringName:
 
 ## The landmarks the region on screen holds the species at, which is the list
 ## `.GetAndPlaceNest` last loaded.
+func nest_count() -> int:
+	return _gen1_drawn_nests().size() if _gen1 else current_nests().size()
+
+
 func current_nests() -> Array:
 	if _map == null or _map.region() >= _nests.size():
 		return []
@@ -396,7 +480,7 @@ func _refresh() -> void:
 		Gen2PicImage.show(_background, _background_image())
 		_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_refresh_arrow()
-	if _map != null and _map.screen == Gen2TownMap.SCREEN_DEX_AREA:
+	if _map != null and (_gen1 or _map.screen == Gen2TownMap.SCREEN_DEX_AREA):
 		_refresh_objects()
 		return
 	_refresh_player_icon()
@@ -405,8 +489,48 @@ func _refresh() -> void:
 
 ## The dex area's shadow OAM, which holds one of three things whole rather than
 ## a per-object position.
+## Every object the Generation 1 screen has up this frame, in shadow-OAM order
+## so the player's icon draws over what blinks under it: the nest set or the
+## cursor first, then the bird, then the player, who no blink ever hides.
+func _gen1_objects() -> Array:
+	var out: Array = []
+	if _map.screen == Gen2TownMap.SCREEN_DEX_AREA and _oam != OAM_CLEARED:
+		var nest: Image = _gen1_nest_image()
+		for nested: int in _gen1_drawn_nests():
+			out.append([nest, _gen1_nest_position(nested)])
+	elif _map.screen == Gen2TownMap.SCREEN_FLY:
+		out.append([_gen1_bird_image(), _icon_position(_map.cursor)])
+	elif _oam != OAM_CLEARED:
+		out.append([_cursor_image(), _icon_position(_map.cursor)])
+	out.append([_player_image(), _icon_position(_map.player_landmark)])
+	return out
+
+
+## `.loop`'s own two refusals, and what `.exitLoop`'s `ld a, l / and a` counts:
+## a zero, which is both a duplicate the list cleared and PALLET_TOWN's own id,
+## and Cerulean Cave, named by the coordinates its entry carries.
+func _gen1_drawn_nests() -> Array:
+	var out: Array = []
+	for nested: int in _gen1_nests:
+		var entry: Dictionary = _data.landmark(nested)
+		if nested == 0 or entry.is_empty() \
+			or int(entry.get("packed", -1)) == Gen1Layout.TOWN_MAP_SKIP_COORDS:
+			continue
+		out.append(nested)
+	return out
+
+
+func _gen1_nest_position(at_map: int) -> Vector2i:
+	var entry: Dictionary = _data.landmark(at_map)
+	return Vector2i(int(entry.get("x", 0)), int(entry.get("y", 0))) \
+		- Gen1Layout.TOWN_MAP_NEST_ORIGIN
+
+
 func _refresh_objects() -> void:
 	if _cursor_icon == null or _player_icon == null:
+		return
+	if _gen1:
+		_refresh_gen1_objects()
 		return
 	_cursor_icon.visible = false
 	_player_icon.visible = _oam == OAM_PLAYER and _map != null \
@@ -426,6 +550,26 @@ func _refresh_objects() -> void:
 			continue
 		node.position = Vector2(_nest_position(landmark))
 		Gen2PicImage.show(node, icon)
+
+
+## [method _gen1_objects] over the nodes this screen keeps, the last of which is
+## always the player.
+func _refresh_gen1_objects() -> void:
+	var objects: Array = _gen1_objects()
+	var player: Array = objects.pop_back()
+	_player_icon.visible = true
+	_player_icon.position = Vector2(player[1] as Vector2i)
+	Gen2PicImage.show(_player_icon, player[0] as Image)
+	_cursor_icon.visible = false
+	while _nest_icons.size() < objects.size():
+		_nest_icons.append(_sprite())
+	for index: int in _nest_icons.size():
+		var node: TextureRect = _nest_icons[index]
+		node.visible = index < objects.size()
+		if not node.visible:
+			continue
+		node.position = Vector2((objects[index] as Array)[1] as Vector2i)
+		Gen2PicImage.show(node, (objects[index] as Array)[0] as Image)
 
 
 ## Up only on the Pokegear's own card: `OverworldTownMap`, the fly map and the
@@ -450,9 +594,20 @@ func _background_image() -> Image:
 	if _page == null or _map == null or _data == null:
 		return Image.create(Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8)
 	var codes: PackedByteArray = _header_codes()
+	var region: PackedByteArray = _data.town_map_region(
+		Gen2TownMap.region_name(_map.region())
+	)
+	if _gen1:
+		return _page.image(_data, _page.gen1_tilemap(
+			region, codes, _map.screen, {
+				"row_cleared": _map.row_cleared,
+				"arrow_hidden": _map.arrow_hidden,
+				"area_unknown": _map.screen == Gen2TownMap.SCREEN_DEX_AREA \
+					and _gen1_drawn_nests().is_empty(),
+			}
+		), false, _map.screen)
 	return _page.image(_data, _page.tilemap(
-		_data.town_map_region(Gen2TownMap.region_name(_map.region())),
-		codes, _map.screen, _cards
+		region, codes, _map.screen, _cards
 	), _female, _map.screen)
 
 
@@ -462,6 +617,10 @@ func _header_codes() -> PackedByteArray:
 	if _map.screen != Gen2TownMap.SCREEN_DEX_AREA:
 		return _data.landmark(cursor_landmark()).get("codes", PackedByteArray())
 	var species_name: String = String(_data.species(_species).get("name", ""))
+	if _gen1:
+		var gen1: PackedByteArray = Gen1Text.encode(species_name)
+		gen1.append_array(Gen1Text.encode(GEN1_NEST_HEADER_SUFFIX))
+		return gen1
 	var out: PackedByteArray = Gen2Text.encode(species_name)
 	out.append_array(Gen2Text.encode(NEST_HEADER_SUFFIX))
 	return out
@@ -477,7 +636,21 @@ func _refresh_cursor() -> void:
 
 
 func _cursor_image() -> Image:
+	if _gen1:
+		return _icon_from(GEN1_CURSOR_SHEET, 0)
 	return _icon_from("pokegear_sprites", CURSOR_TILE)
+
+
+## `MonNestIcon`, one 1bpp tile `FarCopyDataDouble` doubles into the same four
+## the cursor was copied over.
+func _gen1_nest_image() -> Image:
+	return _tile_image(GEN1_NEST_SHEET, NEST_TILE)
+
+
+## `SPRITE_BIRD`, whose first four tiles `LoadTownMap_Fly` copies to the cursor's
+## own `vSprites tile $04` and draws with the same OAM writer.
+func _gen1_bird_image() -> Image:
+	return _overworld_icon(GEN1_BIRD_SPRITE)
 
 
 ## One 16x16 object out of a tile strip, as the four tiles from [param first].
@@ -517,10 +690,12 @@ func _refresh_player_icon() -> void:
 
 
 func _player_image() -> Image:
-	var blank := Image.create(ICON_SIZE, ICON_SIZE, false, Image.FORMAT_RGBA8)
-	blank.fill(Color(0, 0, 0, 0))
 	if _data == null:
-		return blank
+		return _blank_icon()
+	if _gen1:
+		# `DrawPlayerOrBirdSprite` writes the four tiles once, so no icon on any
+		# of the three Generation 1 screens walks.
+		return _overworld_icon(Gen2WorldSprite.player_normal_sprite(false))
 	@warning_ignore("integer_division")
 	var step: int = (_frames / WALK_FRAME_LENGTH) % WALK_FRAMES.size()
 	if _map != null and _map.screen == Gen2TownMap.SCREEN_DEX_AREA:
@@ -529,16 +704,24 @@ func _player_image() -> Image:
 		step = 0
 	if _map != null and _map.player_landmark == Gen2WorldRadio.fast_ship_landmark(_map.crystal):
 		return _fast_ship_image(step)
-	var number: int = Gen2WorldSprite.player_normal_sprite(_female)
+	return _overworld_icon(
+		Gen2WorldSprite.player_normal_sprite(_female), WALK_FRAMES[step]
+	)
+
+
+func _blank_icon() -> Image:
+	var blank := Image.create(ICON_SIZE, ICON_SIZE, false, Image.FORMAT_RGBA8)
+	blank.fill(Color(0, 0, 0, 0))
+	return blank
+
+
+func _overworld_icon(number: int, frame: int = 0) -> Image:
 	var sprite: Gen2WorldSprite = _data.overworld_sprite(number)
 	if sprite == null:
-		return blank
+		return _blank_icon()
 	return Gen2WorldSprite.image_for(
-		sprite,
-		_data.overworld_sprite_indices(number),
-		_player_palette(),
-		Gen2WorldSprite.FACING_DOWN,
-		WALK_FRAMES[step],
+		sprite, _data.overworld_sprite_indices(number), _player_palette(),
+		Gen2WorldSprite.FACING_DOWN, frame,
 	)
 
 
@@ -554,7 +737,11 @@ func _fast_ship_image(step: int) -> Image:
 ## `PokedexNestIconGFX`, drawn with the same object palette every other icon on
 ## these screens takes.
 func _nest_image() -> Image:
-	var tiles: PackedByteArray = _data.tile_indices("dex_nest_icon") if _data != null \
+	return _tile_image("dex_nest_icon", NEST_TILE)
+
+
+func _tile_image(sheet: String, tile: int) -> Image:
+	var tiles: PackedByteArray = _data.tile_indices(sheet) if _data != null \
 		else PackedByteArray()
 	var palette: PackedColorArray = _object_palette()
 	var out: PackedInt32Array = Gen2PicImage.canvas(NEST_ICON_SIZE, NEST_ICON_SIZE)
@@ -563,7 +750,7 @@ func _nest_image() -> Image:
 	@warning_ignore("integer_division")
 	Gen2PicImage.blit_tile(
 		out, NEST_ICON_SIZE, NEST_ICON_SIZE, tiles,
-		tiles.size() / PokeTiles.TILE_PIXELS, NEST_TILE, 0, 0,
+		tiles.size() / PokeTiles.TILE_PIXELS, tile, 0, 0,
 		Gen2PicImage.lookup(palette), false, false, 0
 	)
 	return Gen2PicImage.canvas_image(out, NEST_ICON_SIZE, NEST_ICON_SIZE)
@@ -580,6 +767,12 @@ func _nest_position(landmark: int) -> Vector2i:
 func _object_palette(slot: int = OBJECT_PALETTE) -> PackedColorArray:
 	if _data == null:
 		return PackedColorArray()
+	if _gen1:
+		# `GBPalNormal`'s `rOBP0` over the one row `PalPacket_TownMap` names, so
+		# an icon wears the map's own colours and colour 0 is transparent.
+		return Gen2WorldPalette.gen1_object_colors(
+			_data.world_palette(Gen1Layout.PAL_TOWNMAP)
+		)
 	return _data.overworld_sprite_palette(slot, _time_of_day)
 
 

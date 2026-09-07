@@ -54,6 +54,27 @@ const CARD_TEXTS: Dictionary = {
 const SHADOW_OAM_SPRITES: int = 40
 
 
+## `LoadTownMapEntry` end to end: the external table's own first row, the first
+## indoor map, the last one Silph Co.'s group covers, and Cerulean Cave, whose
+## packed pair `DisplayWildLocations` refuses a nest icon by.
+const GEN1_PALLET_TOWN: int = 0
+const GEN1_LANDMARK_PINS: Array[Array] = [
+	[0x00, "PALLET TOWN", 0xB2], [0x25, "PALLET TOWN", 0xB2],
+	[0xEB, "SILPH CO.", 0x5A], [0xE4, "CERULEAN CAVE", 0x19],
+]
+## The places `TownMapOrder`'s 47 rows stand on: MT_MOON_1F and ROUTE_4 share
+## Mt. Moon's own entry, which is why the walk shows one fewer.
+const GEN1_ORDER_PLACES: int = 47
+## `FindWildLocationsOfMon` on the two ends: PIKACHU stands in the Viridian
+## Forest and the Power Plant, and in no wild table at all on Yellow, which hands
+## one over instead; MEW is nowhere on any of the three.
+const GEN1_NEST_PINS: Dictionary = {
+	&"red": [[25, 2], [151, 0]],
+	&"blue": [[25, 2], [151, 0]],
+	&"yellow": [[25, 0], [151, 0]],
+}
+
+
 func run(r: RefCounted) -> void:
 	_r = r
 	for game_id: StringName in _r.GAME_IDS:
@@ -70,6 +91,207 @@ func run(r: RefCounted) -> void:
 		_verify_nests(game_id, _data, crystal)
 		_verify_flypoints(game_id, _data)
 		_verify_cards(game_id, _data)
+	_r.each_game_of(RomRegistry.GEN1, _one_gen1_game)
+
+
+## `LoadTownMap` and the three screens over it, on Red, Blue and Yellow. What
+## only a real cache can say is that `CompressedMap`'s runs fill the screen out
+## of the sixteen tiles it has, that `LoadTownMapEntry` resolves every map id
+## either table names, and that `FindWildLocationsOfMon` finds the species the
+## cartridge's own wild tables hold.
+func _one_gen1_game() -> void:
+	_gen1_region()
+	_gen1_landmarks()
+	_gen1_cursor_walk()
+	_gen1_fly_walk()
+	_gen1_nests()
+	_gen1_screens()
+
+
+func _gen1_region() -> void:
+	var cells: PackedByteArray = _r.data.town_map_region(
+		Gen2TownMap.region_name(Gen2TownMap.REGION_KANTO)
+	)
+	if not _r.check(
+		cells.size() == Gen1Layout.WORLD_MAP_CELLS,
+		"the region map decoded to %d cells." % cells.size()
+	):
+		return
+	var outside: int = 0
+	for cell: int in cells:
+		if cell < Gen1Layout.WORLD_MAP_FIRST_CODE 			or cell >= Gen1Layout.WORLD_MAP_FIRST_CODE + Gen1Layout.WORLD_MAP_TILES:
+			outside += 1
+	_r.check(outside == 0, "%d cells name a tile the sheet has not." % outside)
+	_r.check(
+		_r.data.town_map_palette(0).size() == PokePalette.COLORS_PER_PIC,
+		"PAL_TOWNMAP decoded to %d colours." % _r.data.town_map_palette(0).size()
+	)
+
+
+## Every map id `LoadTownMapEntry` answers for, and the four rows pinned by hand:
+## the external table's first, the internal walk's own first row above
+## `FIRST_INDOOR_MAP`, the deepest indoor map, and Cerulean Cave, whose packed
+## coordinates are what `DisplayWildLocations` refuses an icon by.
+func _gen1_landmarks() -> void:
+	var count: int = Gen1Layout.map_count(_r.data.id)
+	_r.check(
+		_r.data.landmark_count() == count,
+		"%d landmark rows for %d maps." % [_r.data.landmark_count(), count]
+	)
+	var offscreen: int = 0
+	var unnamed: int = 0
+	for map: int in count:
+		var entry: Dictionary = _r.data.landmark(map)
+		if _r.data.landmark_name(map).is_empty():
+			unnamed += 1
+		var at := Vector2i(int(entry.get("x", -1)), int(entry.get("y", -1)))
+		if at.x < 0 or at.y < 0 or at.x >= Gen2Screen.WIDTH or at.y >= Gen2Screen.HEIGHT:
+			offscreen += 1
+	_r.check(unnamed == 0, "%d map ids resolved to no name." % unnamed)
+	_r.check(offscreen == 0, "%d landmark points fall off the screen." % offscreen)
+	for pin: Array in GEN1_LANDMARK_PINS:
+		var entry: Dictionary = _r.data.landmark(int(pin[0]))
+		var name: String = _r.data.landmark_name(int(pin[0]))
+		_r.check(
+			name == String(pin[1]) and int(entry.get("packed", -1)) == int(pin[2]),
+			"map %d is %s at $%02x." % [int(pin[0]), name, int(entry.get("packed", -1))]
+		)
+
+
+## `.pressedUp` and `.pressedDown` over `TownMapOrder`: 47 presses come back to
+## the row the walk started on, and every row names a map the cache has.
+func _gen1_cursor_walk() -> void:
+	var order: PackedInt32Array = _r.data.town_map_order()
+	if not _r.check(
+		order.size() == Gen1Layout.TOWN_MAP_ORDER_COUNT,
+		"TownMapOrder decoded to %d rows." % order.size()
+	):
+		return
+	var missing: int = 0
+	for map: int in order:
+		if _r.data.world_map(0, map) == null:
+			missing += 1
+	_r.check(missing == 0, "%d order rows name a map the cache has not." % missing)
+	var walk: Gen2TownMap = Gen2TownMap.create_gen1(GEN1_PALLET_TOWN, order)
+	_r.check(
+		walk.cursor == GEN1_PALLET_TOWN and not walk.row_cleared,
+		"the map opened on %d rather than wCurMap." % walk.cursor
+	)
+	var seen: Dictionary = {}
+	for _press: int in order.size():
+		walk.press(PokeButton.UP)
+		seen[walk.cursor] = true
+	_r.check(
+		walk.row_index == 0 and walk.cursor == order[0],
+		"%d presses ended on row %d." % [order.size(), walk.row_index]
+	)
+	_r.check(
+		seen.size() == GEN1_ORDER_PLACES,
+		"the walk showed %d places of %d." % [seen.size(), GEN1_ORDER_PLACES]
+	)
+	walk.press(PokeButton.DOWN)
+	_r.check(
+		walk.row_index == order.size() - 1,
+		"one DOWN press from the first row landed on %d." % walk.row_index
+	)
+
+
+## `BuildFlyLocationsList` and the walk over it: with Pallet Town alone visited
+## every press stays there, and with all eleven the walk is a ring.
+func _gen1_fly_walk() -> void:
+	var lone := PackedInt32Array()
+	var every := PackedInt32Array()
+	for town: int in Gen1Layout.NUM_CITY_MAPS:
+		lone.append(town if town == 0 else Gen1Layout.TOWN_MAP_NOT_VISITED)
+		every.append(town)
+	var alone: Gen2TownMap = Gen2TownMap.fly_gen1(GEN1_PALLET_TOWN, lone)
+	alone.press(PokeButton.UP)
+	_r.check(alone.cursor == 0, "an unvisited walk reached map %d." % alone.cursor)
+	alone.press(PokeButton.DOWN)
+	_r.check(alone.cursor == 0, "an unvisited walk fell to map %d." % alone.cursor)
+	var full: Gen2TownMap = Gen2TownMap.fly_gen1(GEN1_PALLET_TOWN, every)
+	var seen: Dictionary = {}
+	for _press: int in Gen1Layout.NUM_CITY_MAPS:
+		full.press(PokeButton.UP)
+		seen[full.cursor] = true
+	_r.check(
+		seen.size() == Gen1Layout.NUM_CITY_MAPS and full.cursor == 0,
+		"the fly walk showed %d towns and ended on %d." % [seen.size(), full.cursor]
+	)
+	var landings: int = 0
+	for map: int in Gen1Layout.map_count(_r.data.id):
+		var landing: Dictionary = _r.data.gen1_fly_warp(map)
+		if landing.is_empty():
+			continue
+		landings += 1
+		var record: Gen2WorldMap = _r.data.world_map(0, map)
+		_r.check(
+			record != null and int(landing["x"]) < record.collision_width
+				and int(landing["y"]) < record.collision_height,
+			"map %d lands a flight at %s." % [map, landing]
+		)
+	_r.check(
+		landings == Gen1Layout.FLY_WARP_COUNT,
+		"FlyWarpDataPtr decoded to %d rows." % landings
+	)
+
+
+## `FindWildLocationsOfMon` over all 151 species: every map it names holds the
+## species in its own grass or water table, and no map is named twice.
+func _gen1_nests() -> void:
+	var wrong: int = 0
+	var total: int = 0
+	for species: int in range(1, Gen1Layout.SPECIES_COUNT + 1):
+		var nests: Array = Gen2WorldEncounter.gen1_nests(_r.data, species)
+		total += nests.size()
+		var seen: Dictionary = {}
+		for map: int in nests:
+			if seen.has(map) or not _gen1_map_holds(map, species):
+				wrong += 1
+			seen[map] = true
+	_r.check(wrong == 0, "%d nests name a map with no such wild slot." % wrong)
+	_r.note("gen1 nests %s: %d over 151 species" % [_r.game_id, total])
+	for pin: Array in GEN1_NEST_PINS[_r.game_id] as Array:
+		var found: int = Gen2WorldEncounter.gen1_nests(_r.data, int(pin[0])).size()
+		_r.check(found == int(pin[1]), "species %d has %d nests." % [int(pin[0]), found])
+
+
+func _gen1_map_holds(map: int, species: int) -> bool:
+	for method: StringName in [Gen2WorldEncounter.METHOD_GRASS, &"water"]:
+		for slot: Variant in _r.data.world_encounter(method, 0, map).get("slots", []) as Array:
+			if slot is Dictionary and int((slot as Dictionary).get("species", 0)) == species:
+				return true
+	return false
+
+
+## The three screens drawn: `DisplayTownMap` on the map the player stands on,
+## `LoadTownMap_Nest` for a species with no wild table, which is the AREA UNKNOWN
+## box, and `LoadTownMap_Fly`. The blink is what the cursor answers to.
+func _gen1_screens() -> void:
+	var host := Gen2TownMapScreen.new()
+	if not _r.check(host.open(_r.data, GEN1_PALLET_TOWN), "the map would not open."):
+		host.free()
+		return
+	var shown: int = host.render().get_used_rect().size.y
+	for _frame: int in Gen1Layout.TOWN_MAP_BLINK_FRAMES:
+		host.advance_frame()
+	_r.check(
+		host.shadow_oam() == Gen2TownMapScreen.OAM_CLEARED,
+		"the cursor was still up after %d frames." % Gen1Layout.TOWN_MAP_BLINK_FRAMES
+	)
+	_r.check(shown > 0, "the map drew an empty screen.")
+	_r.check(
+		host.open_gen1_dex_area(_r.data, Gen1Layout.SPECIES_COUNT, [], GEN1_PALLET_TOWN)
+			and host.nest_count() == 0,
+		"MEW's AREA screen drew a nest."
+	)
+	var towns := PackedInt32Array()
+	for town: int in Gen1Layout.NUM_CITY_MAPS:
+		towns.append(town)
+	_r.check(host.open_gen1_fly(_r.data, GEN1_PALLET_TOWN, towns), "the fly map would not open.")
+	host.handle_button(PokeButton.A)
+	_r.check(host.chosen_spawn() == 0, "A on the fly map chose %d." % host.chosen_spawn())
+	host.free()
 
 
 ## `Flypoints` and `SpawnPoints` against the cache they were imported beside: every

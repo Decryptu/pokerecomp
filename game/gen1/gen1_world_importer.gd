@@ -1994,6 +1994,10 @@ static func _script_far(
 	var layout: Dictionary = ctx["layout"]
 	var bank: int = int(state.get("b", -1))
 	var target: int = int(state.get("hl", -1))
+	if bank >= 0 and target >= 0 \
+		and RomFile.linear(bank, target) == int(layout.get("display_town_map", -1)):
+		out.append({"op": "town_map"})
+		return next
 	if bank != int(layout["remove_item_bank"]) or target != int(layout["remove_item"]):
 		return _script_routine_call(ctx, bank, target, state, out, next, depth)
 	if int(state.get("remove", 0)) < 1:
@@ -2306,6 +2310,12 @@ static func _script_text_row(
 		out.append({"op": "text", "text": String(decoded["text"])})
 	var code: int = _text_code_at(decoded)
 	if code < 0:
+		return true
+	## The third row the world owns whole. `TownMapText`'s own code clears
+	## `BIT_NO_TEXT_DELAY` and pushes a return address behind `CloseTextDisplay`,
+	## and none of that is the screen it opens.
+	if at == int((ctx["layout"] as Dictionary).get("town_map_text", -1)):
+		out.append({"op": "town_map"})
 		return true
 	var walked: Variant = _walk_script(ctx, code, state, depth + 1)
 	if not walked is Array:

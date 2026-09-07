@@ -4,8 +4,9 @@ extends SceneTree
 ##   Godot --headless --path . -s res://tools/preview_town_map.gd -- \
 ##       crystal /tmp/map.png [landmark] [card|clock|phone|radio|area:<species>|fly[:all]] [presses]
 ## [landmark] is `TownMap_GetCurrentLandmark`'s answer, which picks the region and
-## where the player icon stands. `hof` widens the Kanto window, `sel`/`rel` press and
-## release the dex area's held SELECT, and `f<n>` spends n frames for the nest blink.
+## where the player icon stands, and a map id on a Generation 1 cache. `hof` widens
+## the Kanto window, `sel`/`rel` press and release the dex area's held SELECT, and
+## `f<n>` spends n frames for the nest blink.
 
 ## Where a card preview's world stands, which is what its clock, dial and contact
 ## list are read from.
@@ -71,8 +72,14 @@ func _initialize() -> void:
 	if species > 0:
 		print("Wrote %s: %s'S NEST, region %s, %d nests, player at landmark %d %s" % [
 			args[1], data.species(species).get("name", "?"), region,
-			host.current_nests().size(), landmark,
+			host.nest_count(), landmark,
 			data.landmark_name(landmark).replace(" ", "_"),
+		])
+	elif data.generation == RomRegistry.GEN1:
+		print("Wrote %s: map %d, cursor %d %s, row %d of %d" % [
+			args[1], landmark, host.cursor_landmark(),
+			host.cursor_name().replace(" ", "_"),
+			host.map().row_index, host.map().rows.size(),
 		])
 	else:
 		print("Wrote %s: landmark %d, region %s, cursor %d %s, window %d..%d" % [
@@ -115,6 +122,8 @@ func _open(
 	host: Gen2TownMapScreen, data: GameData, species: int, landmark: int,
 	hall_of_fame: bool, mode: String
 ) -> bool:
+	if data.generation == RomRegistry.GEN1:
+		return _open_gen1(host, data, species, landmark, mode)
 	if mode.begins_with("fly"):
 		var visited: Array[int] = []
 		if mode == "fly:all":
@@ -140,6 +149,27 @@ func _open(
 		Gen2TownMap.SCREEN_POKEGEAR_CARD if mode == "card" else Gen2TownMap.SCREEN_TOWN_MAP,
 		[&"map", &"phone", &"radio"] as Array,
 	)
+
+
+## Generation 1's three screens, where the landmark argument is a map id.
+## `fly` visits Pallet Town alone, so the walk shows every other town skipped;
+## `fly:all` visits them all.
+func _open_gen1(
+	host: Gen2TownMapScreen, data: GameData, species: int, landmark: int, mode: String
+) -> bool:
+	if mode.begins_with("fly"):
+		var towns := PackedInt32Array()
+		for town: int in Gen1Layout.NUM_CITY_MAPS:
+			towns.append(
+				town if town == 0 or mode == "fly:all"
+				else Gen1Layout.TOWN_MAP_NOT_VISITED
+			)
+		return host.open_gen1_fly(data, landmark, towns)
+	if species > 0:
+		return host.open_gen1_dex_area(
+			data, species, Gen2WorldEncounter.gen1_nests(data, species), landmark
+		)
+	return host.open(data, landmark)
 
 
 ## The Pokegear's other three cards, driven the way the service host drives them:

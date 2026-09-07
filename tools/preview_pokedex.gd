@@ -51,6 +51,8 @@ const GEN1_ROUTES: Dictionary = {
 	"unseen": "d,d,d",
 	"side": "a",
 	"entry": "a,a",
+	# `.choseArea`, which is the side menu's third row.
+	"area": "a,d,d,a",
 }
 
 

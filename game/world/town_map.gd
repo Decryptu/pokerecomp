@@ -46,6 +46,19 @@ var hall_of_fame: bool = false
 var visited_flypoints: Array[int] = []
 var _first: int = JOHTO_LANDMARK
 var _last: int = JOHTO_LANDMARK
+## Generation 1 walks tables rather than a landmark window: `TownMapOrder` on
+## the map itself and `wFlyLocationsList` on the fly map, whose unvisited towns
+## stand at [constant Gen1Layout.TOWN_MAP_NOT_VISITED].
+var gen1: bool = false
+var rows: PackedInt32Array = PackedInt32Array()
+## `wWhichTownMapLocation`, which `.enterLoop` leaves at zero while the cursor
+## stands on `wCurMap`, so the first UP press walks to the second row.
+var row_index: int = 0
+## Whether `.townMapLoop`'s own `ClearScreenArea` has run, which the screen each
+## of the three opened on skipped.
+var row_cleared: bool = false
+## Which of the two fly arrows the last press blanked, and -1 before any.
+var arrow_hidden: int = -1
 
 
 ## `FlyMap`, opened on the region the player is in with the cursor on its default
@@ -71,6 +84,31 @@ static func fly(
 		out._first = 0
 		out._last = Gen2Layout.KANTO_FLYPOINT - 1
 		out.cursor = 0
+	return out
+
+
+## `DisplayTownMap`. [param map] is `wCurMap`, which `.enterLoop` draws the
+## cursor on before the loop proper, and [param order] is `TownMapOrder`.
+static func create_gen1(
+	map: int, order: PackedInt32Array, on_screen: StringName = SCREEN_TOWN_MAP
+) -> Gen2TownMap:
+	var out := Gen2TownMap.new()
+	out.gen1 = true
+	out.crystal = false
+	out.screen = on_screen
+	out.rows = order
+	out.player_landmark = map
+	out.cursor = map
+	return out
+
+
+## `LoadTownMap_Fly` over `BuildFlyLocationsList`'s answer: one entry a town, the
+## map id where it was visited and `NOT_VISITED` where it was not. The list opens
+## on its first row whether or not that town was visited, which is the source's
+## own `ld hl, wFlyLocationsList`.
+static func fly_gen1(map: int, towns: PackedInt32Array) -> Gen2TownMap:
+	var out: Gen2TownMap = create_gen1(map, towns, SCREEN_FLY)
+	out.cursor = towns[0] if towns.size() > 0 else map
 	return out
 
 
@@ -115,6 +153,8 @@ func _shift(landmark: int) -> int:
 ## `_TownMap` picks by number alone, so the Fast Ship shows Kanto there;
 ## `InitPokegearTilemap.Map` tests it first and shows Johto.
 func region() -> int:
+	if gen1:
+		return REGION_KANTO
 	if screen == SCREEN_DEX_AREA:
 		return cursor
 	# `.NoKanto` is what puts a player standing in Kanto on Johto's map.
@@ -133,6 +173,8 @@ static func region_name(region_id: int) -> String:
 
 ## `.CheckPlayerLocation`: whether the dex area draws the player icon at all.
 func player_in_region() -> bool:
+	if gen1:
+		return true
 	var player: int = REGION_KANTO if Gen2WorldRadio.is_kanto_landmark(
 		player_landmark, crystal
 	) else REGION_JOHTO
@@ -152,6 +194,8 @@ func last_landmark() -> int:
 ## `.right` Kanto, the second only past the Hall of Fame, and each returns
 ## without redrawing when that region is already up.
 func press(button: int) -> bool:
+	if gen1:
+		return _press_gen1(button)
 	if screen == SCREEN_DEX_AREA:
 		match button:
 			PokeButton.LEFT:
@@ -175,6 +219,32 @@ func press(button: int) -> bool:
 			_skip_unvisited(-1)
 			return true
 	return false
+
+
+## `.pressedUp` and `.pressedDown` on both Generation 1 screens. The map's own
+## walk wraps through `TownMapOrder`; the fly map's skips an unvisited town and
+## wraps down through them too, where `.wrapToStartOfList` does not.
+func _press_gen1(button: int) -> bool:
+	var step: int = 1 if button == PokeButton.UP else -1
+	if button != PokeButton.UP and button != PokeButton.DOWN:
+		return false
+	row_cleared = true
+	arrow_hidden = 0 if step > 0 else 1
+	if rows.is_empty():
+		return true
+	row_index = wrapi(row_index + step, 0, rows.size())
+	if screen == SCREEN_FLY:
+		_skip_unvisited_gen1(step)
+	cursor = rows[row_index]
+	return true
+
+
+## `cp NOT_VISITED / jr z`, which walks on in the direction the press went.
+## `.wrapToStartOfList` skips the test, so an unvisited first town is landed on;
+## the first town is always visited, so nothing here has to guard against it.
+func _skip_unvisited_gen1(step: int) -> void:
+	while rows[row_index] == Gen1Layout.TOWN_MAP_NOT_VISITED and row_index > 0:
+		row_index = wrapi(row_index + step, 0, rows.size())
 
 
 ## `.ScrollNext` and `.ScrollPrev`'s loop, wrapping the way one press does. The

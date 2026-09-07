@@ -146,6 +146,26 @@ const NAME_BREAK_CODES: Array[int] = [0x1F, 0x25]
 ## `PAL_TOWNMAP_CITY`, the one slot `FemalePokegearPals` changes.
 const CITY_PALETTE: int = 3
 
+## Generation 1 draws one screen out of `CompressedMap` and prints over it.
+## `DisplayTownMap` puts the cursor's name at (1,0), and `.townMapLoop` clears
+## the row first where the screen it opened on did not.
+const GEN1_NAME_AT: Vector2i = Vector2i(1, 0)
+## `LoadTownMap_Fly`: `ToText` in the corner, fifteen cells cleared for the name
+## at (3,0), and the two arrows the loop rewrites after its own `DelayFrames`.
+const GEN1_FLY_TO: String = "To"
+const GEN1_FLY_NAME_AT: Vector2i = Vector2i(3, 0)
+const GEN1_FLY_CLEAR_COLUMNS: int = 15
+const GEN1_FLY_ARROWS: Array[Vector2i] = [Vector2i(18, 0), Vector2i(19, 0)]
+const GEN1_FLY_ARROW_CODES: Array[int] = [Gen1Text.ARROW_UP, Gen1Text.ARROW_DOWN]
+## `DisplayWildLocations`' own box when nothing matched, which is the whole of
+## what the AREA row shows for a species with no wild table.
+const GEN1_UNKNOWN_BOX_AT: Vector2i = Vector2i(1, 7)
+const GEN1_UNKNOWN_BOX_SIZE: Vector2i = Vector2i(17, 4)
+const GEN1_UNKNOWN_AT: Vector2i = Vector2i(2, 9)
+const GEN1_UNKNOWN_TEXT: String = " AREA UNKNOWN"
+## `WaitForTextScrollButtonPress`' own arrow, which the nest screen waits under.
+const GEN1_NEST_ARROW_AT: Vector2i = Vector2i(18, 16)
+
 var font: Gen2Font = null
 ## Which text-box border the player chose, for the box a card draws under itself.
 ## The region map screens have no box and never read it.
@@ -156,6 +176,7 @@ var _cards: Dictionary = {}
 ## `FlyMapLabelBorderGFX`, which the fly map loads over the first six Pokegear
 ## tiles, so it is a second window rather than more of the first.
 var _fly_tiles: Dictionary = {}
+var _gen1: bool = false
 
 
 ## [param data] supplies the glyphs and both graphics sheets; a cache without
@@ -167,6 +188,9 @@ static func from_data(data: GameData) -> Gen2TownMapPage:
 	var out := Gen2TownMapPage.new()
 	out.font = glyphs
 	out.frame_style = Gen2OptionsStore.current().textbox_frame
+	out._gen1 = data.generation == RomRegistry.GEN1
+	if out._gen1:
+		return out._load_gen1(data)
 	out._load_sheet(
 		data, "town_map", TOWN_MAP_FIRST_TILE, Gen2Layout.TOWN_MAP_TILES, out._tiles
 	)
@@ -184,8 +208,27 @@ static func from_data(data: GameData) -> Gen2TownMapPage:
 	return out
 
 
+## `LoadTownMap` copies `WorldMapTileGraphics` over the text box sheet at $60
+## and the fly map puts `TownMapUpArrow` over the cursor tile the font draws at
+## `▲`, so the second is a window over the first rather than beside it.
+func _load_gen1(data: GameData) -> Gen2TownMapPage:
+	_load_sheet(
+		data, "world_map", Gen1Layout.WORLD_MAP_FIRST_CODE,
+		Gen1Layout.WORLD_MAP_TILES, _tiles
+	)
+	_load_sheet(
+		data, "town_map_arrow", Gen1Text.ARROW_UP,
+		Gen1Layout.TOWN_MAP_ARROW_TILES, _fly_tiles
+	)
+	return self
+
+
 func ready() -> bool:
-	return font != null and _tiles.size() >= Gen2Layout.TOWN_MAP_TILES + Gen2Layout.POKEGEAR_TILES
+	if font == null:
+		return false
+	if _gen1:
+		return _tiles.size() >= Gen1Layout.WORLD_MAP_TILES
+	return _tiles.size() >= Gen2Layout.TOWN_MAP_TILES + Gen2Layout.POKEGEAR_TILES
 
 
 ## [param window] is which VRAM window the strip lands in: the shared one, or the
@@ -239,6 +282,53 @@ func tilemap(
 			_draw_town_map_frame(map)
 			_draw_name(map, name_codes)
 	return map
+
+
+## `DisplayTownMap`, `LoadTownMap_Nest` and `LoadTownMap_Fly` over the one screen
+## `LoadTownMap` draws. [param options] is what each loop blanked before it
+## printed: `row_cleared` is `.townMapLoop`'s own `ClearScreenArea`, which the
+## screen it opened on never ran, `arrow_hidden` the arrow the last press left
+## blank for fifteen frames, and `area_unknown` the box a species with no wild
+## table gets instead of icons.
+func gen1_tilemap(
+	region: PackedByteArray,
+	name_codes: PackedByteArray,
+	screen: StringName = Gen2TownMap.SCREEN_TOWN_MAP,
+	options: Dictionary = {},
+) -> PackedInt32Array:
+	var map := PackedInt32Array()
+	map.resize(COLUMNS * ROWS)
+	map.fill(BLANK_TILE)
+	for cell: int in mini(region.size(), map.size()):
+		map[cell] = region[cell]
+	if screen == Gen2TownMap.SCREEN_FLY:
+		_draw_gen1_fly(map, name_codes, int(options.get("arrow_hidden", -1)))
+		return map
+	if bool(options.get("row_cleared", false)):
+		for column: int in COLUMNS:
+			_put(map, Vector2i(column, 0), BLANK_TILE)
+	_draw_codes(map, GEN1_NAME_AT, name_codes)
+	if screen != Gen2TownMap.SCREEN_DEX_AREA:
+		return map
+	_put(map, GEN1_NEST_ARROW_AT, Gen1Text.ARROW_DOWN)
+	if bool(options.get("area_unknown", false)):
+		_draw_box(map, GEN1_UNKNOWN_BOX_AT, GEN1_UNKNOWN_BOX_SIZE)
+		_draw_string(map, GEN1_UNKNOWN_AT, GEN1_UNKNOWN_TEXT)
+	return map
+
+
+func _draw_gen1_fly(
+	map: PackedInt32Array, name_codes: PackedByteArray, hidden: int
+) -> void:
+	_draw_string(map, Vector2i.ZERO, GEN1_FLY_TO)
+	for column: int in GEN1_FLY_CLEAR_COLUMNS:
+		_put(map, GEN1_FLY_NAME_AT + Vector2i(column, 0), BLANK_TILE)
+	_draw_codes(map, GEN1_FLY_NAME_AT, name_codes)
+	for index: int in GEN1_FLY_ARROWS.size():
+		_put(
+			map, GEN1_FLY_ARROWS[index],
+			BLANK_TILE if index == hidden else GEN1_FLY_ARROW_CODES[index]
+		)
 
 
 func cards_ready() -> bool:
@@ -394,8 +484,12 @@ func _draw_box(map: PackedInt32Array, at: Vector2i, size: Vector2i) -> void:
 
 
 func _draw_string(map: PackedInt32Array, at: Vector2i, text: String) -> void:
+	_draw_codes(map, at, font.encode(text))
+
+
+func _draw_codes(map: PackedInt32Array, at: Vector2i, codes: PackedByteArray) -> void:
 	var cell: Vector2i = at
-	for code: int in Gen2Text.encode(text):
+	for code: int in codes:
 		_put(map, cell, code)
 		cell.x += 1
 
@@ -421,10 +515,7 @@ func _draw_fly_bubble(map: PackedInt32Array, name_codes: PackedByteArray) -> voi
 	for corner: Array in FLY_BUBBLE_CORNERS:
 		_put(map, corner[0] as Vector2i, int(corner[1]))
 	_draw_string(map, FLY_BUBBLE_WHERE_AT, FLY_BUBBLE_WHERE)
-	var at: Vector2i = FLY_BUBBLE_NAME_AT
-	for code: int in name_codes:
-		_put(map, at, code)
-		at.x += 1
+	_draw_codes(map, FLY_BUBBLE_NAME_AT, name_codes)
 	_put(map, FLY_BUBBLE_ARROW_AT, FLY_BUBBLE_ARROW_TILE)
 
 
@@ -441,10 +532,7 @@ func _draw_nest_header(map: PackedInt32Array, header_codes: PackedByteArray) -> 
 	for column: int in COLUMNS:
 		_put(map, Vector2i(column, 0), BLANK_TILE)
 	_draw_bar(map, NEST_BAR_ROW)
-	var at: Vector2i = NEST_HEADER_AT
-	for code: int in header_codes:
-		_put(map, at, code)
-		at.x += 1
+	_draw_codes(map, NEST_HEADER_AT, header_codes)
 
 
 ## `Pokegear_FinishTilemap`, which runs after the name is placed and so blanks

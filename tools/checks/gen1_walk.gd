@@ -57,6 +57,18 @@ const PALLET_HOUSE_SIGN := Vector2i(3, 6)
 const PALLET_GIRL := Vector2i(3, 9)
 const PALLET_GIRL_TEXT: String = "I'm raising\nPOKéMON too!"
 
+## Blue's house and the poster on its wall, which is the one bookshelf row that
+## opens a screen. `_TownMapText` is what its own box says.
+const BLUES_HOUSE: int = 39
+const TOWN_MAP_POSTER_TILE: int = 0x3D
+## `text_promptbutton` behind the string, which is the page break the stream
+## keeps rather than a second box.
+const TOWN_MAP_POSTER_BOX: String = "A TOWN MAP." + Gen2TextStream.PAGE_BREAK
+## A party that knows FLY, and `FlyWarpDataPtr.ViridianCity`'s own tile.
+const FLY_SPECIES: Array[int] = [16]
+const FLY_MOVES: Array = [[Gen2WorldFieldMove.MOVE_FLY, 0, 0, 0]]
+const VIRIDIAN_FLY_CELL := Vector2i(23, 26)
+
 ## `ViridianMart_Object`'s clerk, who stands at 0,5 behind the counter at 1,5.
 ## `.extendRangeOverCounter` is what lets the player at 2,5 reach them.
 const VIRIDIAN_MART: int = 42
@@ -314,6 +326,8 @@ func _one_game() -> void:
 	_check_a_bookshelf()
 	_check_a_card_key_door()
 	_check_the_day_care()
+	_check_the_town_map_poster()
+	_check_flying()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -1656,6 +1670,67 @@ func _check_a_bookshelf() -> void:
 	if beside != null:
 		beside.player_facing = Gen2WorldSprite.FACING_RIGHT
 		_r.check(beside.interact().is_empty(), "the shelf answered from the side.")
+
+
+## `bookshelf_tile HOUSE, $3D, TownMapText`: the poster in Blue's house, whose
+## box is followed by the region map rather than by another line.
+func _check_the_town_map_poster() -> void:
+	var shelf: Vector2i = _tile_cell(BLUES_HOUSE, [TOWN_MAP_POSTER_TILE])
+	if not _r.check(shelf.x >= 0, "no town map poster tile is in Blue's house."):
+		return
+	var world: Gen2WorldAPI = _facing_up(BLUES_HOUSE, shelf + Vector2i.DOWN)
+	if world == null:
+		return
+	var box: String = _box_text(world)
+	if not _r.check(box == TOWN_MAP_POSTER_BOX, "the poster said %s." % [box]):
+		return
+	world.run_event_queue(true)
+	var request: Dictionary = world.pending_runtime_request()
+	_r.check(
+		StringName(request.get("kind", &"")) == &"town_map_requested",
+		"the poster asked for %s." % [request.get("kind", &"nothing")]
+	)
+
+
+## `.fly`: the THUNDERBADGE, `CheckIfInOutsideMap`, and `.usedFlyWarp` landing
+## the player on the destination's own `FlyWarpDataPtr` tile.
+func _check_flying() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, PALLET_TOWN, PALLET_DOOR)
+	if world == null:
+		return
+	world.set_party_summary(1, false, FLY_SPECIES, FLY_MOVES)
+	_r.check(
+		StringName(world.fly_request().get("reason", &"")) == &"badge_required",
+		"flying was allowed with no THUNDERBADGE."
+	)
+	world.state.set_engine_flag(Gen2WorldState.BADGE_ENGINE_FLAGS[
+		Gen2WorldState.KANTO_BADGE_FIRST + Gen1Layout.THUNDERBADGE
+	], true)
+	var request: Dictionary = world.fly_request()
+	if not _r.check(bool(request.get("ok", false)), "flying was refused outdoors."):
+		return
+	var towns: Array = request.get("towns", [])
+	_r.check(
+		towns.size() == Gen1Layout.NUM_CITY_MAPS and int(towns[0]) == PALLET_TOWN
+			and int(towns[1]) == Gen1Layout.TOWN_MAP_NOT_VISITED,
+		"the fly list read %s." % [towns]
+	)
+	var landed: Dictionary = world.gen1_fly_to(VIRIDIAN_CITY)
+	_r.check(
+		bool(landed.get("ok", false)) and world.player_cell == VIRIDIAN_FLY_CELL,
+		"flying to Viridian landed on %s." % [world.player_cell]
+	)
+	var indoors: Gen2WorldAPI = _r.open_world(0, REDS_HOUSE_1F, REDS_HOUSE_MAT)
+	if indoors == null:
+		return
+	indoors.set_party_summary(1, false, FLY_SPECIES, FLY_MOVES)
+	indoors.state.set_engine_flag(Gen2WorldState.BADGE_ENGINE_FLAGS[
+		Gen2WorldState.KANTO_BADGE_FIRST + Gen1Layout.THUNDERBADGE
+	], true)
+	_r.check(
+		StringName(indoors.fly_request().get("reason", &"")) == &"indoors",
+		"flying was allowed out of a house."
+	)
 
 
 ## The first cell of [param map] drawing a tile `BookshelfTileIDs` names.

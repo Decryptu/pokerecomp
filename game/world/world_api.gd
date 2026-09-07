@@ -488,6 +488,7 @@ func _init(
 	inventory = Gen2WorldInventory.new(data, state)
 	state.ensure_roaming_mons(data.world_roaming_mons())
 	current_map = map
+	_gen1_mark_town_visited()
 	_map_placements = {}
 	_connected_objects = []
 	block_revision += 1
@@ -519,6 +520,10 @@ func landmark() -> int:
 ## on every visit. `SetCaughtData` tests POKECENTER_2F by name rather than the
 ## landmark, and the two agree everywhere a caught mon can be made.
 func landmark_backup() -> int:
+	## `LoadTownMapEntry` takes `wCurMap` itself, so a Generation 1 map is its own
+	## landmark and the four routines below need no backup to reach one.
+	if data != null and data.generation == RomRegistry.GEN1:
+		return current_map.number if current_map != null else 0
 	var here: int = landmark()
 	if here != Gen2WorldRadio.LANDMARK_SPECIAL or backup_warp.is_empty() or data == null:
 		return here
@@ -3722,6 +3727,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"player_coord": &"_gen1_node_player_coord",
 	"walk": &"_gen1_node_walk",
 	"day_care": &"_gen1_node_day_care",
+	"town_map": &"_gen1_node_town_map",
 }
 
 
@@ -4028,6 +4034,15 @@ func _gen1_node_walk(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
 	steps.append({
 		"type": &"walk", "direction": int(node["direction"]), "steps": int(node["steps"]),
 	})
+	return true
+
+
+## `farcall DisplayTownMap`, which the bookshelf poster and the TOWN MAP item
+## both reach. The screen is the whole of the step: it takes B and leaves.
+func _gen1_node_town_map(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "values": {
+		"kind": &"town_map_requested", "values": {"landmark": landmark_backup()},
+	}})
 	return true
 
 
@@ -7996,6 +8011,7 @@ func _apply_map(
 	state.clear_flash_if_outdoors(target_map.environment)
 	_command_queue_slots = _empty_command_queue_slots()
 	current_map = target_map
+	_gen1_mark_town_visited()
 	_map_placements = {}
 	_connected_objects = []
 	block_revision += 1
@@ -8168,11 +8184,74 @@ func warp_to_spawn(index: int, entry: int = MAP_ENTRY_WARP) -> Dictionary:
 ## `FlyFunction`'s `.TryFly`: the badge and the map, which is everything it can
 ## refuse on before the region map is drawn. The choice itself belongs to
 ## whoever draws that map; [method warp_to_spawn] is what answers it.
+## `MarkTownVisitedAndLoadToggleableObjects`' own first half: any map under
+## `FIRST_ROUTE_MAP` marks its bit, which is the list the fly map walks.
+func _gen1_mark_town_visited() -> void:
+	if not _gen1 or state == null or current_map == null \
+		or current_map.number >= Gen1Layout.FIRST_ROUTE_MAP:
+		return
+	state.set_engine_flag(
+		Gen1Layout.engine_flag_base("town_visited") + current_map.number, true
+	)
+
+
+## `BuildFlyLocationsList`: one entry a town, its own map id where the bit is set
+## and `NOT_VISITED` where it is not.
+func gen1_visited_towns() -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var base: int = Gen1Layout.engine_flag_base("town_visited")
+	for town: int in Gen1Layout.NUM_CITY_MAPS:
+		out.append(
+			town if state != null and state.is_engine_flag_active(base + town)
+			else Gen1Layout.TOWN_MAP_NOT_VISITED
+		)
+	return out
+
+
+## `.fly`: the THUNDERBADGE, then `CheckIfInOutsideMap` rather than a map
+## environment, and `wFlyLocationsList` in place of the visited flypoints.
+func _gen1_fly_request() -> Dictionary:
+	if not state.is_engine_flag_active(Gen2WorldState.BADGE_ENGINE_FLAGS[
+		Gen2WorldState.KANTO_BADGE_FIRST + Gen1Layout.THUNDERBADGE
+	]):
+		return _fly_failure(&"badge_required")
+	if not Gen1Layout.is_outside_tileset(current_map.tileset):
+		return _fly_failure(&"indoors")
+	return {
+		"ok": true,
+		"kind": &"fly_requested",
+		"move": Gen2WorldFieldMove.MOVE_FLY,
+		"towns": gen1_visited_towns(),
+	}
+
+
+## `.usedFlyWarp`: the destination's own `FlyWarpDataPtr` record, which is a tile
+## on a map the overworld tileset always draws.
+func gen1_fly_to(map: int) -> Dictionary:
+	var landing: Dictionary = data.gen1_fly_warp(map) if data != null else {}
+	var target_map: Gen2WorldMap = data.world_map(0, map) if not landing.is_empty() else null
+	var target_tileset: Gen2WorldTileset = data.world_tileset(target_map.tileset) \
+		if target_map != null else null
+	if target_map == null or target_tileset == null:
+		return {"ok": false, "kind": &"fly_warp", "reason": &"missing_map"}
+	var from_map: Vector2i = map_id()
+	_apply_map(
+		target_map, target_tileset,
+		Vector2i(int(landing["x"]), int(landing["y"])), false, 0, MAP_ENTRY_FLY
+	)
+	return {
+		"ok": true, "kind": &"fly_warp", "from_map": from_map,
+		"to_map": map_id(), "to_cell": player_cell,
+	}
+
+
 func fly_request() -> Dictionary:
 	if current_map == null:
 		return _fly_failure(&"missing_map")
 	if field_move_source(Gen2WorldFieldMove.MOVE_FLY).is_empty():
 		return _fly_failure(&"move_not_known")
+	if _gen1:
+		return _gen1_fly_request()
 	if not state.is_engine_flag_active(Gen2WorldState.badge_flag(
 		Gen2WorldFieldMove.BADGE_STORM, Gen2WorldState.is_crystal_profile(data)
 	)):

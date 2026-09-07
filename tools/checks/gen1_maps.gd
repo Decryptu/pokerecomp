@@ -181,10 +181,9 @@ const HIDDEN_CENSUS: Dictionary = {
 		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
 		"map_text": 5, "choice": 3, "unknown": 2, "dex_count": 1},
 }
-## Of `BookshelfTileIDs`' 17 rows, all but two decode: `TownMapText` ends in
-## `DisplayTownMap`, a screen this port has not imported, and the Indigo Plateau
+## Of `BookshelfTileIDs`' 17 rows, all but one decode: the Indigo Plateau
 ## statues read `wXCoord` for which of their two boxes they answer with.
-const BOOKSHELF_COUNTS: Dictionary = {&"red": 15, &"blue": 15, &"yellow": 15}
+const BOOKSHELF_COUNTS: Dictionary = {&"red": 16, &"blue": 16, &"yellow": 16}
 const CARD_KEY_FLOORS: int = 10
 ## `gated` is every map whose script opens on `wCurrentMapScriptFlags` and
 ## `read` the ones whose body decodes whole; `blocks` counts the

@@ -667,6 +667,57 @@ const POKEDEX_TILES: int = 18
 const POKEDEX_FIRST_CODE: int = 0x60
 const POKEDEX_BALL_CODE: int = 0x72
 
+## `LoadTownMap`: `WorldMapTileGraphics` at `vChars2 tile $60` over the text box
+## sheet, and `CompressedMap`'s runs, each byte a tile nybble from that base and
+## a count, filling the whole screen.
+const WORLD_MAP_TILES: int = 16
+const WORLD_MAP_FIRST_CODE: int = 0x60
+const WORLD_MAP_CELLS: int = 360
+## `TownMapCursor`, `MonNestIcon`, `TownMapUpArrow` and the `BirdSprite` frames
+## `LoadTownMap_Fly` copies over the cursor, all at `vSprites tile $04`.
+const TOWN_MAP_CURSOR_TILES: int = 4
+const TOWN_MAP_NEST_TILES: int = 1
+const TOWN_MAP_ARROW_TILES: int = 1
+const TOWN_MAP_BIRD_TILES: int = 12
+## `PalPacket_TownMap` under a `BlkPacket_WholeScreen`, so one row colours every
+## cell of the screen.
+const PAL_TOWNMAP: int = 0x0C
+## `TownMapOrder`, the ids `DisplayTownMap`'s own cursor walks.
+const TOWN_MAP_ORDER_COUNT: int = 47
+## `LoadTownMapEntry`: a map under this indexes `ExternalMapEntries` by itself,
+## and one above it takes the first `InternalMapEntries` row whose group byte is
+## greater. Both rows pack y in the high nybble and x in the low one.
+const EXTERNAL_MAP_ENTRY_SIZE: int = 3
+const INTERNAL_MAP_ENTRY_SIZE: int = 4
+## `MarkTownVisitedAndLoadToggleableObjects` sets a bit for any map under this,
+## and `BuildFlyLocationsList` walks the [constant NUM_CITY_MAPS] under that.
+const FIRST_ROUTE_MAP: int = 0x0C
+## `TownMapCoordsToOAMCoords` gives (x * 8 + 24, y * 8 + 24) and
+## `WriteTownMapSpriteOAM` takes 4 off x and, the borrow out of x costing one of
+## the two, 3 off y. Stored is the 16x16 icon's own centre.
+const TOWN_MAP_ICON_CENTRE: Vector2i = Vector2i(20, 13)
+## `.nestloop` writes that pair with no adjustment, so its 8x8 icon hangs a
+## pixel below the centre the borrow gave the bigger one.
+const TOWN_MAP_NEST_ORIGIN: Vector2i = Vector2i(4, 5)
+## `DisplayWildLocations`' `cp $19`: the packed coordinates Cerulean Cave's own
+## entry carries, and the one place a nest icon is never drawn.
+const TOWN_MAP_SKIP_COORDS: int = 0x19
+## `TownMapSpriteBlinkingAnimation` counts to 25 and hides every object but the
+## player's, then to 50 and shows them again.
+const TOWN_MAP_BLINK_FRAMES: int = 25
+## `FlyWarpDataPtr`: thirteen `db map, 0 / dw` rows, each pointing at a
+## `fly_warp` whose third and fourth bytes are the tile the player lands on.
+const FLY_WARP_COUNT: int = 13
+const FLY_WARP_ROW_SIZE: int = 4
+const FLY_WARP_RECORD_AT: int = 2
+## `wBeatGymFlags`' own bit for the badge `.fly` asks for.
+const THUNDERBADGE: int = 2
+
+## `NOT_VISITED`, which `BuildFlyLocationsList` writes for a town the player has
+## not been to, and `.townMapFlyLoop`'s own `ld c, 15` between two draws.
+const TOWN_MAP_NOT_VISITED: int = 0xFE
+const TOWN_MAP_FLY_DELAY: int = 15
+
 ## `DrawTrainerInfo`'s own four sheets and where each lands. `BlankLeaderNames`
 ## runs straight on into `CircleTile`, which is why its `$17` is one longer than
 ## the file: `$76` is the circle "●BADGES●" is written with, and the sixteen
@@ -944,9 +995,13 @@ const ENGINE_FLAG_BYTES: Dictionary = {
 	"status_flags_4": 1,
 	"obtained_hidden_items": HIDDEN_ITEM_FLAG_BYTES,
 	"obtained_hidden_coins": HIDDEN_COIN_FLAG_BYTES,
+	"town_visited": TOWN_VISITED_FLAG_BYTES,
 }
 const ENGINE_FLAG_FIRST: int = 256
 const ENGINE_FLAG_BITS: int = 8
+## `flag_array NUM_CITY_MAPS`, rounded up to the two bytes the array occupies.
+const TOWN_VISITED_FLAG_BYTES: int = 2
+
 ## `BAG_ITEM_CAPACITY`: one list of slots, not four pockets.
 const BAG_ITEM_CAPACITY: int = 20
 ## The one type byte every Generation 1 item wears, so the shared pack draws the
@@ -1310,6 +1365,21 @@ const RED_BLUE: Dictionary = {
 	"font": 0x11A80,
 	"text_box": 0x12288,
 	"pokedex_tiles": 0x12488,
+	## The region map's own sheet, its run-length screen, the three object tiles
+	## and the twelve `BirdSprite` frames the fly map draws instead of a cursor.
+	"world_map_tiles": 0x125A8,
+	"town_map_rle": 0x71100,
+	"town_map_order": 0x70F11,
+	"town_map_cursor": 0x70F40,
+	"town_map_nest": 0x716BE,
+	"town_map_arrow": 0x71093,
+	"town_map_bird": 0x14D80,
+	"external_map_entries": 0x71313,
+	"internal_map_entries": 0x71382,
+	"town_visited": 0xD70B,
+	"display_town_map": 0x70E3E,
+	"town_map_text": 0x0FC12,
+	"fly_warps": 0x06448,
 	"battle_font": 0x11EA0,
 	"battle_hud_1": 0x12080,
 	"battle_hud_2": 0x12098,
@@ -1500,6 +1570,19 @@ const YELLOW: Dictionary = {
 	"font": 0x10600,
 	"text_box": 0x10E18,
 	"pokedex_tiles": 0x11018,
+	"world_map_tiles": 0x11138,
+	"town_map_rle": 0x7118A,
+	"town_map_order": 0x70F95,
+	"town_map_cursor": 0x70FC4,
+	"town_map_nest": 0x7174B,
+	"town_map_arrow": 0x7111E,
+	"town_map_bird": 0x15171,
+	"external_map_entries": 0x7139C,
+	"internal_map_entries": 0x7140B,
+	"town_visited": 0xD70A,
+	"display_town_map": 0x70EB4,
+	"town_map_text": 0x0FAA0,
+	"fly_warps": 0x061BC,
 	"battle_font": 0x10A20,
 	"battle_hud_1": 0x10C00,
 	"battle_hud_2": 0x10C18,
