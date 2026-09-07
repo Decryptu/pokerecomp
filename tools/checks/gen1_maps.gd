@@ -211,6 +211,23 @@ const SPRITE_STILL_FIRST: Dictionary = {&"red": 0x3D, &"blue": 0x3D, &"yellow": 
 const PLAYER_SPRITE: Array = [0x4180, 0x05]
 const PLAYER_SPRITE_YELLOW: Array = [0x4571, 0x05]
 
+## Every `IsPlayerOnDungeonWarp` caller of the corpus, source map to its holes:
+## the `dbmapcoord`, the map it drops onto and the `DungeonWarpData` tile it
+## lands on. Victory Road 3F's first row is the boulder switch, which
+## `DungeonWarpList` names no pair for.
+const DUNGEON_HOLES: Dictionary = {
+	192: [[6, 17, 159, 7, 18], [6, 24, 159, 7, 23]],
+	159: [[6, 18, 160, 7, 19], [6, 23, 160, 7, 22]],
+	160: [[6, 19, 161, 7, 18], [6, 22, 161, 7, 19]],
+	161: [[16, 3, 162, 14, 4], [16, 6, 162, 14, 5]],
+	198: [[5, 3, 194, -1, -1], [15, 23, 194, 16, 22]],
+	215: [[14, 16, 165, 14, 16], [14, 17, 165, 14, 16], [14, 19, 214, 14, 18]],
+}
+## `EscapeRopeTilesets` and `SafariZoneRestHouses`, the two lists the rope and
+## `SetLastBlackoutMap` walk.
+const ESCAPE_ROPE_TILESETS: Array[int] = [3, 15, 17, 22, 16]
+const REST_HOUSES: Array[int] = [223, 224, 225]
+
 var _r: RefCounted = null
 var _maps: Dictionary = {}
 var _movements: Array[int] = []
@@ -237,6 +254,7 @@ func _one_game() -> void:
 	_texts()
 	_map_callbacks()
 	_hidden_events()
+	_dungeon_warps()
 	_toggleables()
 	_wild_objects()
 	_palettes()
@@ -267,6 +285,80 @@ func _counts() -> void:
 			census[key], key, int(pinned[key]),
 		])
 	_r.note("gen1 maps %s" % census)
+
+
+## `IsPlayerOnDungeonWarp` over the whole corpus: the six maps that call it and
+## nothing else, each hole answering with the tile `.matchedDungeonWarpID` copies.
+func _dungeon_warps() -> void:
+	_r.check(
+		Array(_r.data.gen1_special_warp_list("escape_rope_tilesets")) == ESCAPE_ROPE_TILESETS,
+		"EscapeRopeTilesets reads %s." % str(_r.data.gen1_special_warp_list("escape_rope_tilesets"))
+	)
+	_r.check(
+		Array(_r.data.gen1_special_warp_list("rest_houses")) == REST_HOUSES,
+		"SafariZoneRestHouses reads %s." % str(_r.data.gen1_special_warp_list("rest_houses"))
+	)
+	var holes: int = 0
+	for map: Gen2WorldMap in _maps.values():
+		var rows: Array = map.events.get("dungeon_holes", [])
+		if not _r.check(
+			rows.is_empty() != DUNGEON_HOLES.has(map.number),
+			"map %d decoded %d dungeon holes." % [map.number, rows.size()]
+		) or rows.is_empty():
+			continue
+		_dungeon_holes_of(map, rows)
+		holes += rows.size()
+	_r.note("gen1 dungeon holes %d over %d maps" % [holes, DUNGEON_HOLES.size()])
+
+
+func _dungeon_holes_of(map: Gen2WorldMap, rows: Array) -> void:
+	var pinned: Array = DUNGEON_HOLES[map.number]
+	if not _r.check(rows.size() == pinned.size(), "map %d holds %d holes, pinned %d." % [
+		map.number, rows.size(), pinned.size(),
+	]):
+		return
+	for index: int in rows.size():
+		var hole: Dictionary = rows[index]
+		var want: Array = pinned[index]
+		var landing: Dictionary = _r.data.gen1_dungeon_warp(
+			int(hole["destination"]), index + 1
+		)
+		_r.check(
+			[int(hole["y"]), int(hole["x"]), int(hole["destination"])] == want.slice(0, 3),
+			"map %d hole %d reads (%d, %d) to map %d." % [
+				map.number, index + 1, int(hole["y"]), int(hole["x"]),
+				int(hole["destination"]),
+			]
+		)
+		var got: Array = [-1, -1] if landing.is_empty() \
+			else [int(landing["y"]), int(landing["x"])]
+		_r.check(got == want.slice(3), "map %d hole %d lands at %s, pinned %s." % [
+			map.number, index + 1, str(got), str(want.slice(3)),
+		])
+		if landing.is_empty():
+			continue
+		_r.check(
+			_dungeon_landing_stands(int(hole["destination"]), landing),
+			"map %d hole %d lands off map %d." % [
+				map.number, index + 1, int(hole["destination"]),
+			]
+		)
+
+
+## Nothing checks the landing cell, so a tile the destination cannot stand on
+## would strand the player. The four Seafoam falls land on `CheckForceBikeOrSurf`'s water.
+func _dungeon_landing_stands(number: int, landing: Dictionary) -> bool:
+	var map: Gen2WorldMap = _maps.get(number, null)
+	if map == null:
+		return false
+	var cell := Vector2i(int(landing["x"]), int(landing["y"]))
+	if cell.x < 0 or cell.y < 0 \
+		or cell.x >= map.collision_width or cell.y >= map.collision_height:
+		return false
+	var tile: int = map.collision_at(cell.x, cell.y)
+	var tileset: Gen2WorldTileset = _r.data.world_tileset(map.tileset)
+	return tileset != null \
+		and (tileset.tile_passable(tile) or tile == Gen1Layout.WATER_TILE)
 
 
 func _tilesets() -> void:

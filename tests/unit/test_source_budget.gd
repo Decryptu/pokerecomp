@@ -17,11 +17,11 @@ const MAX_COMMENT_BLOCK: int = 8
 ## it whenever a pass leaves room. It moves up only while a generation the tree
 ## did not carry is being brought in, and then by what that generation's own
 ## files cost: `game/gen1` and its neighbours are 1535 lines of it, and
-## Generation 1 has added 1762 more to the shared code: 152 the region map, 150
-## the battle animation engine, 140 the transition, 130 the Pokedex, 108 the
-## three PCs, 95 the trainer card, 85 the party menu, 66 the Day-Care, 42 the
-## status screen, 40 the bag in a battle, 29 the map callbacks and the walk.
-const MAX_COMMENT_LINES: int = 40967
+## Generation 1 has added 1847 more to the shared code: 85 the dungeon warps,
+## 152 the region map, 150 the battle animation engine, 140 the transition, 130
+## the Pokedex, 108 the three PCs, 95 the trainer card, 85 the party menu, 66
+## the Day-Care, 42 the status screen and 40 the bag in a battle.
+const MAX_COMMENT_LINES: int = 41052
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than

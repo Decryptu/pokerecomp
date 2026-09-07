@@ -289,6 +289,28 @@ const BENCH_GUY_CELL := Vector2i(0, 4)
 const SNES_BOX: String = "%s is\nplaying the SNES!"
 const MART_SHELF_BOX: String = "Wow! Tons of\nPOKéMON stuff!"
 
+## `Seafoam1HolesCoords`' first hole and the tile below it, with Victory Road
+## 3F's list, whose first row is the switch and carries no pair of its own.
+const SEAFOAM_1F: int = 192
+const SEAFOAM_B1F: int = 159
+const SEAFOAM_HOLE := Vector2i(17, 6)
+const SEAFOAM_LANDING := Vector2i(18, 7)
+## Seafoam B2F's first hole and the water on B3F it drops into.
+const SEAFOAM_B2F: int = 160
+const SEAFOAM_B3F: int = 161
+const SEAFOAM_B2F_HOLE := Vector2i(19, 6)
+const SEAFOAM_B3F_LANDING := Vector2i(18, 7)
+const VICTORY_ROAD_3F: int = 198
+const VICTORY_ROAD_2F: int = 194
+const VICTORY_ROAD_SWITCH := Vector2i(3, 5)
+const VICTORY_ROAD_HOLE := Vector2i(23, 15)
+const VICTORY_ROAD_LANDING := Vector2i(22, 16)
+
+## `FlyWarpDataPtr.PalletTown`, which a zeroed `wLastBlackoutMap` names.
+const PALLET_FLY_CELL := Vector2i(5, 6)
+## `AGATHAS_ROOM`, the one map `ItemUseEscapeRope` refuses by name.
+const AGATHAS_ROOM_CELL := Vector2i(4, 11)
+
 var _r: RefCounted = null
 
 
@@ -328,6 +350,8 @@ func _one_game() -> void:
 	_check_the_day_care()
 	_check_the_town_map_poster()
 	_check_flying()
+	_check_a_dungeon_fall()
+	_check_an_escape_rope()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -1731,6 +1755,123 @@ func _check_flying() -> void:
 		StringName(indoors.fly_request().get("reason", &"")) == &"indoors",
 		"flying was allowed out of a house."
 	)
+
+
+## `IsPlayerOnDungeonWarp` and `HandleFlyWarpOrDungeonWarp` behind it. Victory
+## Road 3F's switch shares the list and is no hole at all.
+func _check_a_dungeon_fall() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, SEAFOAM_1F, SEAFOAM_HOLE)
+	if world == null:
+		return
+	if not _r.check(
+		not world.gen1_dungeon_hole_at(SEAFOAM_HOLE).is_empty(),
+		"Seafoam Islands 1F's first hole is no dungeon warp."
+	):
+		return
+	var fell: Dictionary = world.gen1_dungeon_fall()
+	_r.check(
+		bool(fell.get("ok", false)) and world.map_id() == Vector2i(0, SEAFOAM_B1F)
+			and world.player_cell == SEAFOAM_LANDING,
+		"the fall landed on %s at %s." % [world.map_id(), world.player_cell]
+	)
+	var deeper: Gen2WorldAPI = _r.open_world(0, SEAFOAM_B2F, SEAFOAM_B2F_HOLE)
+	if deeper != null:
+		deeper.gen1_dungeon_fall()
+		_r.check(
+			deeper.map_id() == Vector2i(0, SEAFOAM_B3F)
+				and deeper.player_cell == SEAFOAM_B3F_LANDING
+				and deeper.movement_mode == Gen2WorldAPI.MOVEMENT_SURF
+				and deeper.player_sprite_number == Gen2WorldSprite.SPRITE_SEEL,
+			"the fall into B3F's water left the player %s on sprite %d." % [
+				deeper.movement_mode, deeper.player_sprite_number,
+			]
+		)
+	var road: Gen2WorldAPI = _r.open_world(0, VICTORY_ROAD_3F, VICTORY_ROAD_SWITCH)
+	if road == null:
+		return
+	_r.check(
+		road.gen1_dungeon_hole_at(VICTORY_ROAD_SWITCH).is_empty(),
+		"Victory Road 3F's boulder switch fell through the floor."
+	)
+	road.player_cell = VICTORY_ROAD_HOLE
+	var dropped: Dictionary = road.gen1_dungeon_fall()
+	_r.check(
+		bool(dropped.get("ok", false)) and road.map_id() == Vector2i(0, VICTORY_ROAD_2F)
+			and road.player_cell == VICTORY_ROAD_LANDING,
+		"Victory Road's hole landed on %s at %s." % [road.map_id(), road.player_cell]
+	)
+
+
+## `ItemUseEscapeRope`: refused outdoors and in Agatha's room, taken in a cave,
+## landing on `wLastBlackoutMap`'s own `FlyWarpDataPtr` tile.
+func _check_an_escape_rope() -> void:
+	var outdoors: Gen2WorldAPI = _r.open_world(0, PALLET_TOWN, PALLET_DOOR)
+	if outdoors == null:
+		return
+	_r.check(
+		StringName(outdoors.escape_rope_request().get("reason", &"")) == &"not_in_a_cave",
+		"an Escape Rope was pulled in Pallet Town."
+	)
+	var agatha: Gen2WorldAPI = _r.open_world(
+		0, Gen1Layout.AGATHAS_ROOM, AGATHAS_ROOM_CELL
+	)
+	if agatha != null:
+		_r.check(
+			StringName(agatha.escape_rope_request().get("reason", &"")) == &"not_in_a_cave",
+			"an Escape Rope was pulled in Agatha's room."
+		)
+	var world: Gen2WorldAPI = _r.open_world(0, SEAFOAM_1F, SEAFOAM_HOLE + Vector2i.UP)
+	if world == null:
+		return
+	if not _r.check(
+		bool(world.escape_rope_request().get("ok", false)),
+		"an Escape Rope was refused in the Seafoam Islands."
+	):
+		return
+	var escaped: Dictionary = world.complete_escape()
+	_r.check(
+		bool(escaped.get("ok", false)) and world.map_id() == Vector2i(0, PALLET_TOWN)
+			and world.player_cell == PALLET_FLY_CELL,
+		"the rope landed on %s at %s." % [world.map_id(), world.player_cell]
+	)
+	_check_the_blackout_map_moves()
+
+
+## `SetLastBlackoutMap` reads `wLastMap`, so walking in is what moves it.
+func _check_the_blackout_map_moves() -> void:
+	var city: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_CITY, Vector2i.ZERO)
+	if city == null:
+		return
+	var door: Vector2i = _warp_cell_to(city, VIRIDIAN_POKECENTER)
+	if not _r.check(door.x >= 0, "Viridian City has no Pokemon Center door."):
+		return
+	city.player_cell = door
+	city.player_facing = Gen2WorldSprite.FACING_UP
+	if not _r.check(
+		bool(city.try_warp().get("ok", false)),
+		"the Pokemon Center door did not open."
+	):
+		return
+	city.player_cell = NURSE_COUNTER
+	city.player_facing = Gen2WorldSprite.FACING_UP
+	city.set_party_summary(NURSE_PARTY, false)
+	city.interact()
+	city.run_event_queue(true)
+	city.choose_script_input(0)
+	city.run_event_queue(true)
+	_r.check(
+		city.gen1_last_blackout_map() == VIRIDIAN_CITY,
+		"healing left the blackout map at %d." % city.gen1_last_blackout_map()
+	)
+	_r.note("gen1 blackout map %d" % city.gen1_last_blackout_map())
+
+
+## The cell of [param world]'s own warp onto [param map], or (-1, -1).
+func _warp_cell_to(world: Gen2WorldAPI, map: int) -> Vector2i:
+	for warp: Dictionary in world.current_map.events.get("warps", []) as Array:
+		if int(warp.get("map_number", -1)) == map:
+			return Vector2i(int(warp["x"]), int(warp["y"]))
+	return Vector2i(-1, -1)
 
 
 ## The first cell of [param map] drawing a tile `BookshelfTileIDs` names.

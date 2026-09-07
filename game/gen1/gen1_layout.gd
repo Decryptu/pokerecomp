@@ -713,6 +713,18 @@ const FLY_WARP_RECORD_AT: int = 2
 ## `wBeatGymFlags`' own bit for the badge `.fly` asks for.
 const THUNDERBADGE: int = 2
 
+## `LoadSpecialWarpData`'s other pair. A `DungeonWarpList` row is a destination
+## map and a hole index; `DungeonWarpData`'s row at the same place is a `fly_warp`.
+const DUNGEON_WARP_ROW_SIZE: int = 2
+const DUNGEON_WARP_DATA_SIZE: int = 6
+## `ItemUseEscapeRope`'s one refusal by map, in front of `EscapeRopeTilesets`.
+const AGATHAS_ROOM: int = 0xF7
+## PALLET_TOWN, which is map 0 and so what a zeroed `wLastBlackoutMap` names.
+const PALLET_TOWN: int = 0x00
+## `PlayMapChangeSound`'s `cp $0b`, the OVERWORLD door tile it parts
+## SFX_GO_INSIDE from SFX_GO_OUTSIDE by on every map.
+const OVERWORLD_DOOR_TILE: int = 0x0B
+
 ## `NOT_VISITED`, which `BuildFlyLocationsList` writes for a town the player has
 ## not been to, and `.townMapFlyLoop`'s own `ld c, 15` between two draws.
 const TOWN_MAP_NOT_VISITED: int = 0xFE
@@ -1380,6 +1392,13 @@ const RED_BLUE: Dictionary = {
 	"display_town_map": 0x70E3E,
 	"town_map_text": 0x0FC12,
 	"fly_warps": 0x06448,
+	## `LoadSpecialWarpData` and `ItemUseEscapeRope`: the dungeon warp tables, the
+	## tilesets a rope may be pulled on and the rest houses that record no map.
+	"dungeon_warps": 0x063BF,
+	"escape_rope_tilesets": 0x0DFFD,
+	"rest_houses": 0x07092,
+	"which_dungeon_warp": 0xD71E,
+	"dungeon_warp_destination": 0xD71D,
 	"battle_font": 0x11EA0,
 	"battle_hud_1": 0x12080,
 	"battle_hud_2": 0x12098,
@@ -1583,6 +1602,11 @@ const YELLOW: Dictionary = {
 	"display_town_map": 0x70EB4,
 	"town_map_text": 0x0FAA0,
 	"fly_warps": 0x061BC,
+	"dungeon_warps": 0x06133,
+	"escape_rope_tilesets": 0x0DE28,
+	"rest_houses": 0x06F0A,
+	"which_dungeon_warp": 0xD71D,
+	"dungeon_warp_destination": 0xD71C,
 	"battle_font": 0x10A20,
 	"battle_hud_1": 0x10C00,
 	"battle_hud_2": 0x10C18,

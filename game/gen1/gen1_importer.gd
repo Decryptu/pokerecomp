@@ -801,6 +801,7 @@ func import_rom(
 		"vending": _import_vending(rom, layout, items),
 		"prizes": _import_prizes(rom, layout),
 		"town_map": _import_town_map(rom, layout),
+		"special_warps": _import_special_warps(rom, layout),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -1078,6 +1079,36 @@ func _import_mart_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 		out[name] = facility_text(rom, Gen1Layout.facility_text_offset(
 			layout, "mart_text", Gen1Layout.MART_TEXT_AT, name
 		))
+	return out
+
+
+## `LoadSpecialWarpData`'s dungeon warp pair flattened onto one row each, with
+## the two lists `ItemUseEscapeRope` and `SetLastBlackoutMap` walk beside them.
+func _import_special_warps(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout["dungeon_warps"])
+	var rows: Array = []
+	while rom.u8(at) != Gen1Layout.TILESET_LIST_END:
+		rows.append({"map": rom.u8(at), "warp": rom.u8(at + 1)})
+		at += Gen1Layout.DUNGEON_WARP_ROW_SIZE
+	at += 1
+	for index: int in rows.size():
+		var record: int = at + index * Gen1Layout.DUNGEON_WARP_DATA_SIZE \
+			+ Gen1Layout.FLY_WARP_RECORD_AT
+		(rows[index] as Dictionary)["y"] = rom.u8(record)
+		(rows[index] as Dictionary)["x"] = rom.u8(record + 1)
+	return {
+		"dungeon_warps": rows,
+		"escape_rope_tilesets": _byte_list(rom, int(layout["escape_rope_tilesets"])),
+		"rest_houses": _byte_list(rom, int(layout["rest_houses"])),
+	}
+
+
+## A `db`-per-row table ended by the `-1` every one of Generation 1's carries.
+func _byte_list(rom: RomFile, at: int) -> Array:
+	var out: Array = []
+	while rom.u8(at) != Gen1Layout.TILESET_LIST_END:
+		out.append(rom.u8(at))
+		at += 1
 	return out
 
 

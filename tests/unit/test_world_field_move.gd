@@ -1846,6 +1846,10 @@ func test_a_snapshot_carries_both_escape_points_and_a_reopened_world_keeps_them(
 	world.try_warp()
 	var snapshot: Gen2WorldSnapshot = Gen2WorldSnapshot.from_world(world)
 	snapshot.last_spawn_map = Vector2i(1, ESCAPE_TOWN)
+	# `wLastMap` and `wLastBlackoutMap` ride beside them, saved player data
+	# Generation 1 alone writes.
+	snapshot.gen1_last_map = ESCAPE_TOWN
+	snapshot.gen1_last_blackout_map = ESCAPE_TOWN
 
 	var reopened: Gen2WorldAPI = Gen2WorldAPI.open_snapshot(
 		GameData.open_directory(_directory),
@@ -1853,14 +1857,20 @@ func test_a_snapshot_carries_both_escape_points_and_a_reopened_world_keeps_them(
 	)
 	assert_eq(reopened.dig_warp, {"warp": 1, "map_group": 1, "map_number": ESCAPE_TOWN})
 	assert_eq(reopened.last_spawn_map, Vector2i(1, ESCAPE_TOWN))
-	# A snapshot written before either existed reads as a game that has entered
-	# neither, which is what their defaults say.
+	assert_eq(reopened.gen1_last_map(), ESCAPE_TOWN)
+	assert_eq(reopened.gen1_last_blackout_map(), ESCAPE_TOWN)
+	# A snapshot written before any of them existed reads as a game that has
+	# entered none, which is what their defaults say.
 	var old: Dictionary = snapshot.to_dict()
 	old.erase("dig_warp")
 	old.erase("last_spawn_map")
+	old.erase("gen1_last_map")
+	old.erase("gen1_last_blackout_map")
 	var older: Gen2WorldSnapshot = Gen2WorldSnapshot.from_dict(old)
 	assert_true(older.dig_warp.is_empty())
 	assert_eq(older.last_spawn_map, Vector2i(-1, -1))
+	assert_eq(older.gen1_last_map, -1)
+	assert_eq(older.gen1_last_blackout_map, Gen1Layout.PALLET_TOWN)
 
 
 ## `SweetScentEncounter`: a wild where one could have been stepped into.

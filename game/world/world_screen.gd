@@ -122,6 +122,8 @@ var _pending_step_events: Dictionary = {}
 ## empty on every other frame. The map swaps between the two stages, which is
 ## where the setup script's own list sits.
 var _map_fade: Dictionary = {}
+## Whether the fade in flight is a Generation 1 dungeon fall rather than a warp.
+var _pending_dungeon_fall: bool = false
 ## The fade one of the five fade specials is inside, `{ orders, white_fill,
 ## step_frames, step, frames }`, and the row it left behind once it is done. A
 ## `FadeOutToWhite` holds the screen white until its own `FadeInFromWhite` runs,
@@ -1776,6 +1778,13 @@ func _complete_player_step(movement: Dictionary) -> bool:
 		_zero_map_name_sign_timer()
 		_start_map_fade()
 		return true
+	## `RunMapScript` sets the dungeon warp bit and `OverworldLoop` reads it
+	## behind `CheckWarpsNoCollision`, so a cell that is both takes the warp.
+	if not _world.gen1_dungeon_hole_at(_world.player_cell).is_empty():
+		_zero_map_name_sign_timer()
+		_pending_dungeon_fall = true
+		_start_map_fade()
+		return true
 	return _after_map_settled()
 
 
@@ -2894,13 +2903,20 @@ func script_fade() -> Dictionary:
 ## `MapSetupScript_Door`'s `FadeOutToWhite` is the first thing the setup script
 ## spends: four palette orders, two frames each, before anything is loaded.
 func _start_map_fade() -> void:
-	_play_sfx(_warp_sfx())
+	var sfx: int = _warp_sfx()
+	if sfx >= 0:
+		_play_sfx(sfx)
 	_map_fade = {"stage": &"out", "step": 0, "frames": Gen2WorldPalette.FADE_STEP_FRAMES}
 	_apply_map_fade_step()
 
 
-## `GetWarpSFX`, off `wPlayerTileCollision`.
+## `GetWarpSFX`, off `wPlayerTileCollision`. Generation 1 has no such table:
+## `PlayMapChangeSound` reads one tile and the fall's own anim plays nothing.
 func _warp_sfx() -> int:
+	if _pending_dungeon_fall:
+		return -1
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		return SFX_ENTER_DOOR if _world.gen1_entered_a_door() else SFX_EXIT_BUILDING
 	match _world.collision_code_at(_world.player_cell):
 		COLL_DOOR:
 			return SFX_ENTER_DOOR
@@ -3017,7 +3033,10 @@ func _clear_script_fade() -> void:
 ## screen at its whitest, and `FadeToMapMusic` is the eight-step fade the new
 ## map's track arrives behind rather than a restart.
 func _swap_warped_map() -> void:
-	var transition: Dictionary = _world.try_warp()
+	var falling: bool = _pending_dungeon_fall
+	_pending_dungeon_fall = false
+	var transition: Dictionary = _world.gen1_dungeon_fall() if falling \
+		else _world.try_warp()
 	if not bool(transition.get("ok", false)):
 		return
 	_clear_script_fade()

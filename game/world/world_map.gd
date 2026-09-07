@@ -169,6 +169,10 @@ static func _events_from_cache(value: Variant) -> Dictionary:
 		"card_key": _event_rows(
 			event_values.get("card_key", []), ["x", "y", "block", "flag"]
 		),
+		# `IsPlayerOnDungeonWarp`'s own coordinate list, Generation 1's alone.
+		"dungeon_holes": _event_rows(
+			event_values.get("dungeon_holes", []), ["x", "y", "destination"]
+		),
 	}
 
 

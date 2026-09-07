@@ -21,6 +21,13 @@ const MAP_LOAD_PREFIXES: Array[int] = [
 const MAP_LOAD_HELD_LIMIT: int = 4
 ## `ld hl, .GateCoordinates` and the two card key calls behind it.
 const CARD_KEY_PROLOGUE_SIZE: int = 3 * Gen1Layout.SCRIPT_LONG_SIZE
+## Where a map header keeps its script pointer.
+const MAP_SCRIPT_AT: int = 7
+## `jr nz, .fellDownHoleTo1F` hops the one `ld a, n` behind it, and how far past
+## the call the pick may sit.
+const DUNGEON_PICK_BRANCH: int = 0x20
+const DUNGEON_PICK_HOP: int = 2
+const DUNGEON_PICK_WINDOW: int = 32
 
 
 static func verify_layout(rom: RomFile) -> Dictionary:
@@ -131,10 +138,13 @@ static func read_world(
 		rom, int(layout["silph_map_list"]), Gen1Layout.SILPH_MAP_LIST_MAX
 	)
 	var map_count: int = Gen1Layout.map_count(rom.id)
+	var script_ends: Dictionary = _script_ends(rom, layout, map_count)
 	for map_id: int in map_count:
 		if not Gen1Layout.is_real_map(map_id):
 			continue
-		var map: Dictionary = _read_map(rom, layout, tilesets, map_id, card_key_floors)
+		var map: Dictionary = _read_map(
+			rom, layout, tilesets, map_id, card_key_floors, int(script_ends[map_id])
+		)
 		if not bool(map.get("ok", false)):
 			return map
 		map.erase("ok")
@@ -632,7 +642,7 @@ static func _bit_count(value: int) -> int:
 ## One map header, the blocks it draws and the object block behind it.
 static func _read_map(
 	rom: RomFile, layout: Dictionary, tilesets: Array, map_id: int,
-	card_key_floors: PackedByteArray
+	card_key_floors: PackedByteArray, script_end: int
 ) -> Dictionary:
 	var bank: int = Gen1Layout.map_bank(rom, layout, map_id)
 	var header: int = Gen1Layout.map_header_offset(rom, layout, map_id)
@@ -684,7 +694,7 @@ static func _read_map(
 	_carry_trainer_headers(events["objects"], texts)
 	_carry_toggleable_objects(rom, layout, events["objects"], map_id)
 	var callback: Dictionary = _read_map_callback(
-		rom, layout, bank, rom.u16le(header + 7), card_key_floors.has(map_id)
+		rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), card_key_floors.has(map_id)
 	)
 
 	return {
@@ -704,7 +714,7 @@ static func _read_map(
 		"connections": connections,
 		"scripts": {
 			"bank": bank,
-			"address": rom.u16le(header + 7),
+			"address": rom.u16le(header + MAP_SCRIPT_AT),
 			"scenes": [],
 			"callbacks": [] if callback.is_empty() else [callback],
 		},
@@ -717,11 +727,110 @@ static func _read_map(
 			"bg_events": events["bg_events"],
 			"objects": events["objects"],
 			"hidden_events": _read_hidden_events(
-				rom, layout, map_id, bank, rom.u16le(header + 7)
+				rom, layout, map_id, bank, rom.u16le(header + MAP_SCRIPT_AT)
 			),
 			"card_key": _card_key_doors(callback),
+			"dungeon_holes": _read_dungeon_holes(
+				rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), script_end
+			),
 		},
 	}
+
+
+## Where each map's script stops: the next script start in the same bank, or the
+## bank's end. A map's own tables sit behind its script in the file they share.
+static func _script_ends(rom: RomFile, layout: Dictionary, map_count: int) -> Dictionary:
+	var banks: Dictionary = {}
+	for map_id: int in map_count:
+		if not Gen1Layout.is_real_map(map_id):
+			continue
+		var bank: int = Gen1Layout.map_bank(rom, layout, map_id)
+		var rows: Array = banks.get(bank, [])
+		rows.append([
+			rom.u16le(Gen1Layout.map_header_offset(rom, layout, map_id) + MAP_SCRIPT_AT),
+			map_id,
+		])
+		banks[bank] = rows
+	var out: Dictionary = {}
+	for bank: int in banks:
+		var rows: Array = banks[bank]
+		rows.sort()
+		for index: int in rows.size():
+			out[int((rows[index] as Array)[1])] = 2 * RomFile.BANK_SIZE \
+				if index + 1 == rows.size() else int((rows[index + 1] as Array)[0])
+	return out
+
+
+## `IsPlayerOnDungeonWarp` and the copy Pokemon Mansion 3F keeps of it both open
+## `xor a` / `ld [wWhichDungeonWarp], a`, which is what the `ld hl, <coords>` and
+## the call behind it are found by. The per-frame half of a map script has no
+## interpreter here, so the block is read out of the script's own bytes.
+static func _read_dungeon_holes(
+	rom: RomFile, layout: Dictionary, bank: int, script: int, script_end: int
+) -> Array:
+	for pc: int in range(script, script_end - 2 * Gen1Layout.SCRIPT_LONG_SIZE):
+		var at: int = Gen1Layout.banked(bank, pc)
+		if rom.u8(at) != Gen1Layout.SCRIPT_LD_HL \
+			or rom.u8(at + Gen1Layout.SCRIPT_LONG_SIZE) not in [
+				Gen1Layout.SCRIPT_JP, Gen1Layout.SCRIPT_CALL,
+			]:
+			continue
+		var routine: int = Gen1Layout.banked(
+			bank, rom.u16le(at + Gen1Layout.SCRIPT_LONG_SIZE + 1)
+		)
+		if rom.u8(routine) != Gen1Layout.SCRIPT_XOR_A \
+			or rom.u8(routine + 1) != Gen1Layout.SCRIPT_LD_MEM_A \
+			or rom.u16le(routine + 2) != int(layout["which_dungeon_warp"]):
+			continue
+		return _dungeon_holes(
+			rom, layout, bank, rom.u16le(at + 1), pc, pc + 2 * Gen1Layout.SCRIPT_LONG_SIZE
+		)
+	return []
+
+
+## The `dbmapcoord` list itself, each row carrying the map its own index falls to.
+static func _dungeon_holes(
+	rom: RomFile, layout: Dictionary, bank: int, coords: int, block: int, behind: int
+) -> Array:
+	var maps: Dictionary = _dungeon_destinations(rom, layout, bank, block, behind)
+	var out: Array = []
+	var at: int = Gen1Layout.banked(bank, coords)
+	while rom.u8(at) != Gen1Layout.MAP_COORD_END:
+		var index: int = out.size() + 1
+		out.append({
+			"y": rom.u8(at),
+			"x": rom.u8(at + 1),
+			"destination": int(maps.get(index, maps.get(0, -1))),
+		})
+		at += Gen1Layout.MAP_COORD_SIZE
+	return out
+
+
+## Which map each hole index falls to. Five maps write one in front of the block,
+## which is key 0; Pokemon Mansion 3F picks by index behind the call, which is
+## `.fellDownHoleTo1F`'s `cp n` / `ld a, m1` / `jr nz, +2` / `ld a, m2`.
+static func _dungeon_destinations(
+	rom: RomFile, layout: Dictionary, bank: int, block: int, behind: int
+) -> Dictionary:
+	var store: int = int(layout["dungeon_warp_destination"])
+	var ahead: int = Gen1Layout.banked(bank, block) - Gen1Layout.SCRIPT_LONG_SIZE \
+		- Gen1Layout.SCRIPT_SHORT_SIZE
+	if rom.u8(ahead) == Gen1Layout.SCRIPT_LD_A \
+		and rom.u8(ahead + 2) == Gen1Layout.SCRIPT_LD_MEM_A \
+		and rom.u16le(ahead + 3) == store:
+		return {0: rom.u8(ahead + 1)}
+	for pc: int in range(behind, behind + DUNGEON_PICK_WINDOW):
+		var at: int = Gen1Layout.banked(bank, pc)
+		if rom.u8(at) != Gen1Layout.SCRIPT_CP_N \
+			or rom.u8(at + 2) != Gen1Layout.SCRIPT_LD_A \
+			or rom.u8(at + 4) != DUNGEON_PICK_BRANCH \
+			or rom.u8(at + 5) != DUNGEON_PICK_HOP \
+			or rom.u8(at + 6) != Gen1Layout.SCRIPT_LD_A \
+			or rom.u8(at + 8) != Gen1Layout.SCRIPT_LD_MEM_A \
+			or rom.u16le(at + 9) != store:
+			continue
+		return {0: rom.u8(at + 3), rom.u8(at + 1): rom.u8(at + 7)}
+	return {}
 
 
 ## `RunMapScript` runs the whole of a map's script every frame, so the work a map
