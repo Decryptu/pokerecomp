@@ -1508,13 +1508,16 @@ func _confirm_gen1_use(item: int) -> void:
 
 
 ## The `.Current` rows that are neither `UnusableItem` nor battle-only.
-## `ItemUsePokedex` is a predef the world owns, `ItemUseCoinCase` prints over
-## the pack, and `ItemUseOaksParcel` is the one refusal with a text of its own.
+## `ItemUsePokedex` and `ItemUseTownMap` are screens the world owns,
+## `ItemUseCoinCase` prints over the pack, and `ItemUseOaksParcel` is the one
+## refusal with a text of its own.
 ## The rest land on `ItemUseNotTime`, the box `.Oak` prints.
 func _confirm_gen1_current(item: int) -> void:
 	match item:
 		Gen1Layout.ITEM_POKEDEX:
 			action_chosen.emit(Gen2WorldStartMenu.ITEM_POKEDEX, &"")
+		Gen1Layout.ITEM_TOWN_MAP:
+			action_chosen.emit(Gen2WorldStartMenu.ITEM_TOWN_MAP, &"")
 		Gen1Layout.ITEM_COIN_CASE:
 			_show_pack_result(_coin_case_text(), true)
 		Gen1Layout.ITEM_OAKS_PARCEL:

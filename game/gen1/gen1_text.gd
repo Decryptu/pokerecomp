@@ -85,6 +85,11 @@ const FONT_EXTRA_CHARACTERS: Dictionary = {
 
 const ELLIPSIS_CODE: int = 0x75
 
+## `charmap "▲", $ed`. `LoadTownMap_Fly` copies `TownMapUpArrow` over the tile
+## the menu cursor is drawn from, so one code is both while that screen is up.
+const ARROW_UP: int = 0xED
+const ARROW_DOWN: int = 0xEE
+
 ## `PlacePKMN`'s text is `db "<PK><MN>@"`: two narrow tiles, never six letters.
 const WORD_TILES: Dictionary = {
 	"<PKMN>": [0xE1, 0xE2],

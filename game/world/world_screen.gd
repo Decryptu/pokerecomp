@@ -6240,6 +6240,7 @@ func _on_start_menu_action(kind: StringName, id: StringName = &"") -> void:
 	_reopen_start_menu = kind in [
 		Gen2WorldStartMenu.ITEM_POKEMON, Gen2WorldStartMenu.ITEM_POKEGEAR,
 		Gen2WorldStartMenu.ITEM_PLAYER, Gen2WorldStartMenu.ITEM_POKEDEX,
+		Gen2WorldStartMenu.ITEM_TOWN_MAP,
 		Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
 		Gen2ModHost.START_ACTION_OPEN_MOD_PAGE,
 	]
@@ -6256,6 +6257,8 @@ func _on_start_menu_action(kind: StringName, id: StringName = &"") -> void:
 			_open_trainer_card()
 		Gen2WorldStartMenu.ITEM_POKEDEX:
 			_open_pokedex()
+		Gen2WorldStartMenu.ITEM_TOWN_MAP:
+			_open_town_map_overlay()
 		Gen2WorldStartMenu.ITEM_QUIT:
 			## `StartMenu_Quit`'s `FarQueueScript
 			## BugCatchingContestReturnToGateScript` and the 4 it returns, which
@@ -7231,34 +7234,64 @@ func _open_service_overlay(kind: StringName) -> void:
 	_refresh_labels()
 
 
-## `_FlyMap` as its own overlay, and the warp its answer asks for. A cancel
-## leaves the player where they were, which is what `.illegal` does with the
-## `-1` a B press writes.
-func _open_fly_map(request: Dictionary) -> void:
-	if _service_host != null or _world == null or _data == null:
-		return
-	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+## `ItemUseTownMap`: the same overlay the poster opens, with nothing behind it
+## to answer. `.ItemMenuLoop` returns to the bag; the menu the row was chosen
+## from is what reopens here, the way the bag's own POKéDEX row does.
+func _open_town_map_overlay() -> void:
+	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
-		_script_prompt = "Region map scene unavailable"
-		_refresh_labels()
 		return
-	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	host.z_index = 20
-	host.set_screen(_screen)
-	add_child(host)
-	var save: Gen2SaveData = _injected_save if _injected_save != null \
-		else _selected_runtime_save()
-	if not host.open_fly_map(_world, _data, save, request):
+	if not host.open_town_map(_world, _data, _overlay_save()):
 		Gen2Screen.drop(host)
 		_script_prompt = "Region map unavailable"
 		_refresh_labels()
 		return
+	_adopt_service_overlay(host, "Town map open")
+
+
+## `_FlyMap` as its own overlay, and the warp its answer asks for. A cancel
+## leaves the player where they were, which is what `.illegal` does with the
+## `-1` a B press writes.
+func _open_fly_map(request: Dictionary) -> void:
+	var host: Gen2WorldServiceScreen = _service_overlay()
+	if host == null:
+		return
+	if not host.open_fly_map(_world, _data, _overlay_save(), request):
+		Gen2Screen.drop(host)
+		_script_prompt = "Region map unavailable"
+		_refresh_labels()
+		return
+	_adopt_service_overlay(host, "Fly: choose a town")
+
+
+## The service host the two region-map overlays are drawn in, added and sized but
+## not yet opened. Null when one is already up or the scene will not load.
+func _service_overlay() -> Gen2WorldServiceScreen:
+	if _service_host != null or _world == null or _data == null:
+		return null
+	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	if host == null:
+		_script_prompt = "Region map scene unavailable"
+		_refresh_labels()
+		return null
+	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host.z_index = 20
+	host.set_screen(_screen)
+	add_child(host)
+	return host
+
+
+func _overlay_save() -> Gen2SaveData:
+	return _injected_save if _injected_save != null else _selected_runtime_save()
+
+
+func _adopt_service_overlay(host: Gen2WorldServiceScreen, prompt: String) -> void:
 	host.save_action = persist_world_snapshot
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
 	_service_host = host
-	_script_prompt = "Fly: choose a town"
+	_script_prompt = prompt
 	_refresh_labels()
 
 
@@ -7342,8 +7375,11 @@ func _advance_fly() -> void:
 		return
 	var spawn: int = int(_pending_fly["spawn"])
 	## `newloadmap MAPSETUP_FLY`, whose setup script opens on `JumpRoamMons`: a
-	## flight scatters the beasts rather than stepping them.
-	var warped: Dictionary = _world.warp_to_spawn(spawn, Gen2WorldAPI.MAP_ENTRY_FLY)
+	## flight scatters the beasts rather than stepping them. Generation 1's own
+	## answer is the destination map, which `.usedFlyWarp` lands on directly.
+	var warped: Dictionary = _world.gen1_fly_to(spawn) \
+		if _data != null and _data.generation == RomRegistry.GEN1 \
+		else _world.warp_to_spawn(spawn, Gen2WorldAPI.MAP_ENTRY_FLY)
 	if not bool(warped.get("ok", false)):
 		_finish_fly()
 		return

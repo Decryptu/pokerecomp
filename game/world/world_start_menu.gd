@@ -19,6 +19,9 @@ const ENGINE_POKEGEAR: int = 4
 const ENGINE_POKEDEX: int = 11
 
 const ITEM_POKEDEX: StringName = &"pokedex"
+## `ItemUseTownMap`, which is a bag row rather than a start menu one: Generation
+## 1 has no Pokegear, so the poster in the pack is the only way to the map.
+const ITEM_TOWN_MAP: StringName = &"town_map"
 const ITEM_POKEMON: StringName = &"pokemon"
 const ITEM_PACK: StringName = &"pack"
 const ITEM_POKEGEAR: StringName = &"pokegear"

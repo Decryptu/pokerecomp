@@ -2565,6 +2565,34 @@ func town_map_palette(slot: int, female: bool = false) -> PackedColorArray:
 	return colors
 
 
+## `TownMapOrder`, the map ids `DisplayTownMap`'s cursor walks. Empty on a
+## Generation 2 cache, whose cursor walks a landmark window instead.
+func town_map_order() -> PackedInt32Array:
+	var stored: Variant = _town_map.get("order", [])
+	var out := PackedInt32Array()
+	if not stored is Array:
+		return out
+	for entry: Variant in stored as Array:
+		out.append(int(entry))
+	return out
+
+
+## `FlyWarpDataPtr`'s row for [param map]: `{ x, y }`, the tile `.usedFlyWarp`
+## puts the player on. Empty for a map no row names, which is what
+## `.flyWarpDataPtrLoop` never returning from means for a bad destination.
+func gen1_fly_warp(map: int) -> Dictionary:
+	var stored: Variant = _town_map.get("fly_warps", [])
+	if not stored is Array:
+		return {}
+	for row: Variant in stored as Array:
+		if row is Dictionary and int((row as Dictionary).get("map", -1)) == map:
+			return {
+				"x": int((row as Dictionary).get("x", 0)),
+				"y": int((row as Dictionary).get("y", 0)),
+			}
+	return {}
+
+
 func landmark_count() -> int:
 	var stored: Variant = _town_map.get("landmarks", [])
 	return (stored as Array).size() if stored is Array else 0
@@ -2580,7 +2608,12 @@ func landmark(index: int) -> Dictionary:
 	var codes := PackedByteArray()
 	for code: Variant in row.get("codes", []) as Array:
 		codes.append(int(code))
-	return {"x": int(row.get("x", 0)), "y": int(row.get("y", 0)), "codes": codes}
+	return {
+		"x": int(row.get("x", 0)), "y": int(row.get("y", 0)), "codes": codes,
+		## `LoadTownMapEntry`'s own packed pair, which only Generation 1 stores
+		## and only `DisplayWildLocations`' Cerulean Cave test reads.
+		"packed": int(row.get("packed", -1)),
+	}
 
 
 ## A landmark's name as text. `<BSP>` reads as the space it is everywhere but the
@@ -2591,7 +2624,8 @@ func landmark_name(index: int) -> String:
 		return ""
 	var out: String = ""
 	for code: int in entry.get("codes", PackedByteArray()) as PackedByteArray:
-		out += Gen2Text.character(code)
+		out += Gen1Text.character(code) if generation == RomRegistry.GEN1 \
+			else Gen2Text.character(code)
 	return out
 
 

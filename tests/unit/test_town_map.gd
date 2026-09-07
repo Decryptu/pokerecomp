@@ -1,8 +1,14 @@
 extends GutTest
 
-## `_TownMap`'s region choice and cursor walk, which is all of the region map
-## that is not pixels. The page and the imported art are covered by
+## `_TownMap`'s region choice and cursor walk, and `DisplayTownMap`'s own walk
+## over `TownMapOrder` beside it, which is all of the region map that is not
+## pixels. The page and the imported art are covered by
 ## `tools/preview_town_map.gd` against a real cache.
+
+## `TownMapOrder`'s own head: PALLET_TOWN, ROUTE_1, VIRIDIAN_CITY, ROUTE_2.
+const GEN1_ORDER: Array[int] = [0, 12, 1, 13]
+## OAKS_LAB, which is an indoor map standing on Pallet Town's own point.
+const GEN1_OAKS_LAB: int = 40
 
 
 func test_johto_window_is_the_whole_region_and_the_cursor_wraps() -> void:
@@ -162,3 +168,52 @@ func test_a_fly_map_with_nothing_visited_holds_its_default() -> void:
 	for press: int in [PokeButton.UP, PokeButton.DOWN, PokeButton.UP]:
 		map.press(press)
 		assert_eq(map.cursor, 0)
+
+
+func test_the_generation_1_map_opens_on_wcurmap_with_the_order_still_at_zero() -> void:
+	## `.enterLoop` draws the cursor on `wCurMap` while `wWhichTownMapLocation`
+	## is zero, so the first UP press walks to the order's second row.
+	var map := Gen2TownMap.create_gen1(GEN1_OAKS_LAB, PackedInt32Array(GEN1_ORDER))
+	assert_eq(map.region(), Gen2TownMap.REGION_KANTO)
+	assert_eq(map.cursor, GEN1_OAKS_LAB)
+	assert_eq(map.player_landmark, GEN1_OAKS_LAB)
+	assert_false(map.row_cleared)
+
+	map.press(PokeButton.UP)
+	assert_eq(map.cursor, GEN1_ORDER[1])
+	assert_true(map.row_cleared)
+	assert_eq(map.arrow_hidden, 0)
+
+
+func test_the_generation_1_cursor_wraps_both_ways_round_the_order() -> void:
+	var map := Gen2TownMap.create_gen1(0, PackedInt32Array(GEN1_ORDER))
+	map.press(PokeButton.DOWN)
+	assert_eq(map.cursor, GEN1_ORDER[GEN1_ORDER.size() - 1])
+	assert_eq(map.arrow_hidden, 1)
+	map.press(PokeButton.UP)
+	assert_eq(map.cursor, GEN1_ORDER[0])
+	## Neither LEFT nor A moves it: `.inputLoop` watches four buttons and the
+	## d-pad's other axis is not among them.
+	assert_false(map.press(PokeButton.LEFT))
+	assert_eq(map.cursor, GEN1_ORDER[0])
+
+
+func test_the_generation_1_fly_walk_skips_a_town_that_was_not_visited() -> void:
+	## `BuildFlyLocationsList` with Pallet, Pewter and Cerulean visited.
+	var towns := PackedInt32Array([
+		0, Gen1Layout.TOWN_MAP_NOT_VISITED, 2, 3,
+		Gen1Layout.TOWN_MAP_NOT_VISITED, Gen1Layout.TOWN_MAP_NOT_VISITED,
+	])
+	var map := Gen2TownMap.fly_gen1(0, towns)
+	assert_eq(map.cursor, 0)
+	map.press(PokeButton.UP)
+	assert_eq(map.cursor, 2)
+	map.press(PokeButton.UP)
+	assert_eq(map.cursor, 3)
+	## `.wrapToStartOfList` skips the unvisited test, and the first town is the
+	## one the source leaves reachable regardless.
+	map.press(PokeButton.UP)
+	assert_eq(map.cursor, 0)
+	## `.pressedDown` keeps skipping through the wrap, where UP does not.
+	map.press(PokeButton.DOWN)
+	assert_eq(map.cursor, 3)
