@@ -44,6 +44,8 @@ const KIND_HELP: Dictionary = {
 	&"egg_hatch": "frames, slot: OverworldHatchEgg on that party slot, that many frames in",
 	&"whiteout": "presses, frames: Script_Whiteout. 0 the faint line, 1 the first page of _WhitedOutText, 3 the map woken on; a second number stops that many frames into .PlayPoisonSFX instead",
 	&"elevator": "DOWN presses: the floor list bg_event 3's elevator opens, read from the cell below the panel",
+	&"trainer_card": "badges, 0: StartMenu_TrainerInfo's card, with that many of wObtainedBadges' eight set",
+	&"pokedex": "rows down, presses: StartMenu_Pokedex's own listing, then A on the row it left the cursor on",
 	&"start_menu": "rows down, contest: SetUpMenuItems' list. A second number of 1 runs the Bug Catching Contest and 2 has something caught",
 	&"pack": "presses, rows down: the bag opened off the start menu, seeded with one row of each shape. The rows are walked after the first press, so 0 4 scrolls the list, 1 0 is USE/TOSS, 2 1 the TOSS dial and 4 1 the box it ends in",
 	&"mailbox": "rows down, A presses: the bedroom PC's MAILBOX",
@@ -401,7 +403,8 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
 	&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
 	&"catch_nickname", &"catch_dex", &"mom_bank", &"bills_pc", &"players_pc",
-	&"pokemon_center_pc", &"start_menu", &"mod_notice", &"mod_page", &"sight",
+	&"pokemon_center_pc", &"start_menu", &"pokedex", &"trainer_card",
+	&"mod_notice", &"mod_page", &"sight",
 	&"reset_question", &"launcher_question",
 ]
 
@@ -460,6 +463,8 @@ const STAGERS: Dictionary = {
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
+	&"pokedex": &"_stage_pokedex",
+	&"trainer_card": &"_stage_trainer_card",
 	&"pack": &"_stage_pack",
 	&"bills_pc": &"_stage_pc",
 	&"players_pc": &"_stage_pc",
@@ -1140,6 +1145,30 @@ func _stage_diploma() -> void:
 ## number is how many rows down to walk before the picture, and a second number of 1
 ## or more runs the Bug Catching Contest, which is the list `SetUpMenuItems` drops
 ## PACK from and puts QUIT in SAVE's slot.
+## `StartMenu_Pokedex`. The first number walks the listing down and the second
+## spends A presses on it, so `1 2` is the second row's entry page.
+func _stage_pokedex() -> void:
+	_screen.get("_world").state.set_engine_flag(
+		Gen2WorldStartMenu.ENGINE_POKEDEX, true
+	)
+	_screen.preview_pokedex()
+	for _down: int in maxi(_cell.x, 0):
+		_screen.press_button(PokeButton.DOWN)
+	for _press: int in maxi(_cell.y, 0):
+		_screen.preview_pokedex()
+
+
+## `StartMenu_TrainerInfo`. The first number is how many badges to set, since a
+## development save has none and the card's lower half is what they fill.
+func _stage_trainer_card() -> void:
+	var state: Gen2WorldState = _screen.get("_world").state
+	for badge: int in maxi(_cell.x, 0):
+		state.set_engine_flag(Gen2WorldState.BADGE_ENGINE_FLAGS[
+			Gen2WorldState.KANTO_BADGE_FIRST + badge
+		], true)
+	_screen.preview_trainer_card()
+
+
 func _stage_start_menu() -> void:
 	if _cell.y >= 1:
 		var contest_world: Gen2WorldAPI = _screen.get("_world")

@@ -199,6 +199,10 @@ const ARROW_LEFT: int = 0x3D
 const ARROW_RIGHT: int = 0x3E
 
 var font: Gen2Font = null
+## `LoadPokedexTilePatterns`' own page, on a Generation 1 cache alone. Every
+## layout below that reads it is that generation's; a Crystal cache leaves it
+## null and takes none of them.
+var gen1_tiles: Gen2BattleTiles = null
 var _sheet: PackedByteArray = PackedByteArray()
 var _footprints: PackedByteArray = PackedByteArray()
 var _unown_font: PackedByteArray = PackedByteArray()
@@ -223,6 +227,13 @@ static func from_data(data: GameData) -> Gen2PokedexPage:
 		return null
 	var out := Gen2PokedexPage.new()
 	out.font = glyphs
+	if data.generation == RomRegistry.GEN1:
+		out.gen1_tiles = Gen2BattleTiles.gen1_pokedex_page(data)
+		## `BlkPacket_Pokedex` gives every cell outside the picture box palette
+		## 0, which `PalPacket_Pokedex` fills with PAL_BROWNMON; the box itself
+		## is the species' own and is blitted over this.
+		out._palette = data.world_palette(Gen1Layout.PAL_BROWNMON)
+		return out
 	out._sheet = data.tile_indices("pokedex")
 	out._footprints = data.tile_indices("footprints")
 	out._unown_font = data.tile_indices("unown_font")
@@ -235,6 +246,8 @@ static func from_data(data: GameData) -> Gen2PokedexPage:
 
 
 func ready() -> bool:
+	if gen1_tiles != null:
+		return font != null and _palette.size() == PokePalette.COLORS_PER_PIC
 	return font != null and not _sheet.is_empty() and not _footprints.is_empty() \
 		and not _objects.is_empty() and not _question_mark.is_empty() \
 		and _object_palette.size() == PokePalette.COLORS_PER_PIC \
@@ -583,18 +596,24 @@ func image(map: PackedInt32Array, pic: Image = null, pic_at: Vector2i = Vector2i
 
 
 ## `PadFrontpic`, which is what makes every species fill the same seven by seven
-## box: one blank column on the left, the picture sitting on the box's floor, and
-## the rest filled with colour 0. A 5x5 species is padded to 7x7 before the copy,
-## so the box is never the screen's own background showing through.
-static func pad_pic(pic: Image, background: Color) -> Image:
+## box: the picture sitting on the box's floor and the rest filled with colour 0.
+## A 5x5 species is padded to 7x7 before the copy, so the box is never the
+## screen's own background showing through. Generation 1's own
+## `LoadUncompressedSpriteData` centres a narrow pic where `PadFrontpic` lays one
+## blank column in front of it, which is [method Gen2PicImage.frontpic_origin]'s
+## own split.
+static func pad_pic(
+	pic: Image, background: Color, generation: int = RomRegistry.GEN2
+) -> Image:
 	var side: int = PIC_COLUMNS * TILE
 	var out: Image = Image.create_empty(side, side, false, Image.FORMAT_RGBA8)
 	out.fill(background)
 	if pic == null:
 		return out
-	out.blit_rect(pic, Rect2i(Vector2i.ZERO, pic.get_size()), Vector2i(
-		0 if pic.get_width() >= side else TILE, side - pic.get_height()
-	))
+	out.blit_rect(
+		pic, Rect2i(Vector2i.ZERO, pic.get_size()),
+		Gen2PicImage.frontpic_origin(pic.get_size(), false, generation)
+	)
 	return out
 
 
@@ -911,6 +930,16 @@ func _window_number(map: PackedInt32Array, x: int, y: int, value: int) -> void:
 func _blit_tile(
 	into: PackedByteArray, into_width: int, tile: int, at_x: int, at_y: int
 ) -> void:
+	# Generation 1 loads no font of its own here, so nothing on its two screens
+	# is inverted: $60 to $7F is `LoadPokedexTilePatterns`' page and the rest the
+	# ordinary font.
+	if gen1_tiles != null:
+		if tile >= Gen1Layout.POKEDEX_FIRST_CODE \
+			and tile <= Gen2BattleTiles.GEN1_POKEDEX_LAST_TILE:
+			gen1_tiles.draw(tile, into, into_width, at_x, at_y)
+			return
+		font.draw_code(tile, into, into_width, at_x, at_y)
+		return
 	# `Pokedex_LoadUnownFont` lands on top of the sheet, so this run is the
 	# alphabet on the Unown screen and the sheet's own tiles everywhere else.
 	if _unown_letters and tile >= UNOWN_FIRST_CHAR \
@@ -974,3 +1003,228 @@ func _invert(into: PackedByteArray, into_width: int, at_x: int, at_y: int) -> vo
 				continue
 			var at: int = row * into_width + column
 			into[at] = 0 if into[at] == 3 else 3
+
+
+## `ShowPokedexMenu`'s two screens (engine/menus/pokedex.asm) are plain tile
+## grids: no window layer, no objects, and the cursor is a `▶` in the map.
+
+## `.doPokemonListMenu`'s `wTopMenuItemY` and `PlaceMenuCursor`'s double-spaced
+## step. `.printPokemonLoop`'s `ld de, -SCREEN_WIDTH` is what puts the number a
+## row above the name.
+const GEN1_LIST_TOP: int = 3
+const GEN1_ROW_STEP: int = 2
+const GEN1_LIST_CURSOR_X: int = 0
+const GEN1_LIST_NUMBER_X: int = 1
+const GEN1_LIST_BALL_X: int = 3
+const GEN1_LIST_NAME_X: int = 4
+const GEN1_LIST_DIGITS: int = 3
+
+## `HandlePokedexListMenu`'s furniture: the column, the rule and the labels.
+const GEN1_RULE_AT := Vector2i(15, 8)
+const GEN1_RULE_WIDTH: int = 5
+const GEN1_LINE_X: int = 14
+const GEN1_CONTENTS_AT := Vector2i(1, 1)
+const GEN1_SEEN_AT := Vector2i(16, 2)
+const GEN1_OWN_AT := Vector2i(16, 5)
+const GEN1_COUNT_DIGITS: int = 3
+const GEN1_SIDE_MENU_AT := Vector2i(16, 10)
+const GEN1_SIDE_CURSOR_X: int = 15
+
+## `DrawPokedexVerticalLine`, run twice nine rows at a time, the second starting
+## on the first's last row.
+const GEN1_LINE: int = 0x71
+const GEN1_LINE_ALT: int = 0x70
+const GEN1_LINE_HEIGHT: int = 9
+## `.writeTile`'s pokeball, beside every species owned.
+const GEN1_CAUGHT_BALL: int = 0x72
+
+## `ShowPokedexDataInternal`'s border and the divider under the picture.
+const GEN1_ENTRY_TOP_LEFT: int = 0x63
+const GEN1_ENTRY_TOP: int = 0x64
+const GEN1_ENTRY_TOP_RIGHT: int = 0x65
+const GEN1_ENTRY_LEFT: int = 0x66
+const GEN1_ENTRY_RIGHT: int = 0x67
+const GEN1_ENTRY_BOTTOM_LEFT: int = 0x6C
+const GEN1_ENTRY_BOTTOM: int = 0x6F
+const GEN1_ENTRY_BOTTOM_RIGHT: int = 0x6E
+const GEN1_ENTRY_ROWS: int = 16
+## `PokedexDataDividerLine`, verbatim.
+const GEN1_DIVIDER: Array[int] = [
+	0x68, 0x69, 0x6B, 0x69, 0x6B, 0x69, 0x6B, 0x69, 0x6B, 0x6B,
+	0x6B, 0x6B, 0x69, 0x6B, 0x69, 0x6B, 0x69, 0x6B, 0x69, 0x6A,
+]
+const GEN1_DIVIDER_ROW: int = 9
+
+## The entry's own coordinates, each an `hlcoord` of its own.
+const GEN1_ENTRY_PIC_AT := Vector2i(1, 1)
+const GEN1_ENTRY_NAME_AT := Vector2i(9, 2)
+const GEN1_ENTRY_CATEGORY_AT := Vector2i(9, 4)
+const GEN1_ENTRY_HEIGHT_AT := Vector2i(9, 6)
+const GEN1_ENTRY_WEIGHT_AT := Vector2i(9, 8)
+const GEN1_ENTRY_NUMBER_AT := Vector2i(2, 8)
+const GEN1_ENTRY_TEXT_AT := Vector2i(1, 11)
+const GEN1_ENTRY_ARROW_AT := Vector2i(18, 16)
+const GEN1_ENTRY_LINES: int = 3
+## `HeightWeightText`'s two rows, whose `?`s the numbers are printed over.
+const GEN1_HEIGHT_TEXT: String = "HT  ?"
+const GEN1_WEIGHT_TEXT: String = "WT   ???lb"
+const GEN1_FEET_AT: int = 12
+const GEN1_INCHES_AT: int = 15
+const GEN1_WEIGHT_NUMBER_AT: int = 11
+const GEN1_WEIGHT_DIGITS: int = 5
+## Where `.next`'s own shuffle puts the point, and the digit it steps forward.
+const GEN1_WEIGHT_POINT_AT: int = 15
+const GEN1_WEIGHT_TENTH: int = 10
+
+## `'′'` and `'″'` are the dex sheet's first two tiles, not font characters.
+const GEN1_FEET_MARK: int = 0x60
+const GEN1_INCHES_MARK: int = 0x61
+const GEN1_NUMERO: int = 0x74
+const GEN1_DOT: int = 0xF2
+const GEN1_SPACE: int = 0x7F
+const GEN1_CURSOR: int = 0xED
+const GEN1_UNFILLED_CURSOR: int = 0xEC
+const GEN1_DOWN_ARROW: int = 0xEE
+
+
+## `ShowPokedexMenu`'s listing. [param side_cursor] is -1 while the side menu is
+## closed, and the listing's arrow is hollow while it is not, which is
+## `PlaceUnfilledArrowMenuCursor`.
+func gen1_list_map(
+	rows: Array, seen: int, caught: int, cursor: int, side_cursor: int = -1
+) -> PackedInt32Array:
+	var map: PackedInt32Array = gen1_blank_map()
+	_put(map, GEN1_LINE_X, 0, GEN1_LINE)
+	for run: int in 2:
+		for row: int in GEN1_LINE_HEIGHT:
+			_put(
+				map, GEN1_LINE_X, 1 + run * (GEN1_LINE_HEIGHT - 1) + row,
+				GEN1_LINE_ALT if row % 2 == 1 else GEN1_LINE
+			)
+	_fill(map, GEN1_RULE_AT.x, GEN1_RULE_AT.y, GEN1_RULE_WIDTH, Gen2BattleTiles.GEN1_RULE)
+	_gen1_text(map, GEN1_CONTENTS_AT.x, GEN1_CONTENTS_AT.y, "CONTENTS")
+	_gen1_text(map, GEN1_SEEN_AT.x, GEN1_SEEN_AT.y, "SEEN")
+	_gen1_number(map, GEN1_SEEN_AT.x, GEN1_SEEN_AT.y + 1, seen, GEN1_COUNT_DIGITS)
+	_gen1_text(map, GEN1_OWN_AT.x, GEN1_OWN_AT.y, "OWN")
+	_gen1_number(map, GEN1_OWN_AT.x, GEN1_OWN_AT.y + 1, caught, GEN1_COUNT_DIGITS)
+	for index: int in Gen2Pokedex.GEN1_SIDE_ROWS.size():
+		_gen1_text(
+			map, GEN1_SIDE_MENU_AT.x, GEN1_SIDE_MENU_AT.y + index * GEN1_ROW_STEP,
+			Gen2Pokedex.GEN1_SIDE_ROWS[index]
+		)
+	for index: int in rows.size():
+		_gen1_list_row(map, index, rows[index] as Dictionary)
+	if cursor >= 0:
+		_put(
+			map, GEN1_LIST_CURSOR_X, GEN1_LIST_TOP + cursor * GEN1_ROW_STEP,
+			GEN1_UNFILLED_CURSOR if side_cursor >= 0 else GEN1_CURSOR
+		)
+	if side_cursor >= 0:
+		_put(
+			map, GEN1_SIDE_CURSOR_X,
+			GEN1_SIDE_MENU_AT.y + side_cursor * GEN1_ROW_STEP, GEN1_CURSOR
+		)
+	return map
+
+
+func _gen1_list_row(map: PackedInt32Array, index: int, row: Dictionary) -> void:
+	var y: int = GEN1_LIST_TOP + index * GEN1_ROW_STEP
+	_gen1_text(
+		map, GEN1_LIST_NUMBER_X, y - 1,
+		"%0*d" % [GEN1_LIST_DIGITS, int(row.get("number", 0))]
+	)
+	if bool(row.get("caught", false)):
+		_put(map, GEN1_LIST_BALL_X, y, GEN1_CAUGHT_BALL)
+	_gen1_text(map, GEN1_LIST_NAME_X, y, String(row.get("name", "")))
+
+
+## `ShowPokedexDataInternal`. [param entry] is [method GameData.dex_entry]'s own
+## record and [param arrow] `PageChar`'s `▼`, which the first page waits under.
+func gen1_entry_map(
+	number: int, name: String, entry: Dictionary, caught: bool, page: int,
+	arrow: bool
+) -> PackedInt32Array:
+	var map: PackedInt32Array = gen1_blank_map()
+	_fill(map, 0, 0, COLUMNS, GEN1_ENTRY_TOP)
+	_fill(map, 0, ROWS - 1, COLUMNS, GEN1_ENTRY_BOTTOM)
+	_column(map, 0, 1, GEN1_ENTRY_ROWS, GEN1_ENTRY_LEFT)
+	_column(map, COLUMNS - 1, 1, GEN1_ENTRY_ROWS, GEN1_ENTRY_RIGHT)
+	_put(map, 0, 0, GEN1_ENTRY_TOP_LEFT)
+	_put(map, COLUMNS - 1, 0, GEN1_ENTRY_TOP_RIGHT)
+	_put(map, 0, ROWS - 1, GEN1_ENTRY_BOTTOM_LEFT)
+	_put(map, COLUMNS - 1, ROWS - 1, GEN1_ENTRY_BOTTOM_RIGHT)
+	_tiles(map, 0, GEN1_DIVIDER_ROW, GEN1_DIVIDER)
+	_gen1_text(map, GEN1_ENTRY_HEIGHT_AT.x, GEN1_ENTRY_HEIGHT_AT.y, GEN1_HEIGHT_TEXT)
+	_put(map, GEN1_FEET_AT + 2, GEN1_ENTRY_HEIGHT_AT.y, GEN1_FEET_MARK)
+	_gen1_text(map, GEN1_INCHES_AT, GEN1_ENTRY_HEIGHT_AT.y, "??")
+	_put(map, GEN1_INCHES_AT + 2, GEN1_ENTRY_HEIGHT_AT.y, GEN1_INCHES_MARK)
+	_gen1_text(map, GEN1_ENTRY_WEIGHT_AT.x, GEN1_ENTRY_WEIGHT_AT.y, GEN1_WEIGHT_TEXT)
+	_gen1_text(map, GEN1_ENTRY_NAME_AT.x, GEN1_ENTRY_NAME_AT.y, name)
+	_gen1_text(
+		map, GEN1_ENTRY_CATEGORY_AT.x, GEN1_ENTRY_CATEGORY_AT.y,
+		String(entry.get("category", ""))
+	)
+	_put(map, GEN1_ENTRY_NUMBER_AT.x, GEN1_ENTRY_NUMBER_AT.y, GEN1_NUMERO)
+	_put(map, GEN1_ENTRY_NUMBER_AT.x + 1, GEN1_ENTRY_NUMBER_AT.y, GEN1_DOT)
+	_gen1_text(
+		map, GEN1_ENTRY_NUMBER_AT.x + 2, GEN1_ENTRY_NUMBER_AT.y,
+		"%0*d" % [GEN1_LIST_DIGITS, number]
+	)
+	if not caught:
+		return map
+	_gen1_measurements(map, int(entry.get("height", 0)), int(entry.get("weight", 0)))
+	var pages: Array = entry.get("pages", []) as Array
+	_gen1_paragraph(map, String(pages[page]) if page < pages.size() else "")
+	if arrow:
+		_put(map, GEN1_ENTRY_ARROW_AT.x, GEN1_ENTRY_ARROW_AT.y, GEN1_DOWN_ARROW)
+	return map
+
+
+## The two lines the caught check gates: feet and inches over the template's
+## `?`s, then five digits and `.next`'s own shuffle, which steps the last digit
+## one cell on and writes the point behind it.
+func _gen1_measurements(map: PackedInt32Array, height: int, weight: int) -> void:
+	var y: int = GEN1_ENTRY_HEIGHT_AT.y
+	@warning_ignore("integer_division")
+	_gen1_number(map, GEN1_FEET_AT, y, height / 100, 2)
+	_put(map, GEN1_FEET_AT + 2, y, GEN1_FEET_MARK)
+	_gen1_text(map, GEN1_INCHES_AT, y, "%02d" % (height % 100))
+	_put(map, GEN1_INCHES_AT + 2, y, GEN1_INCHES_MARK)
+	var row: int = GEN1_ENTRY_WEIGHT_AT.y
+	_gen1_number(map, GEN1_WEIGHT_NUMBER_AT, row, weight, GEN1_WEIGHT_DIGITS)
+	if weight < GEN1_WEIGHT_TENTH:
+		_gen1_text(map, GEN1_WEIGHT_POINT_AT - 1, row, "0")
+	_put(map, GEN1_WEIGHT_POINT_AT + 1, row, map[row * COLUMNS + GEN1_WEIGHT_POINT_AT])
+	_put(map, GEN1_WEIGHT_POINT_AT, row, GEN1_DOT)
+
+
+## `TextCommandProcessor` from `bccoord 1, 11`, `<NEXT>` dropping two rows.
+func _gen1_paragraph(map: PackedInt32Array, text: String) -> void:
+	var lines: PackedStringArray = text.split("\n")
+	for index: int in mini(lines.size(), GEN1_ENTRY_LINES):
+		_gen1_text(
+			map, GEN1_ENTRY_TEXT_AT.x,
+			GEN1_ENTRY_TEXT_AT.y + index * GEN1_ROW_STEP, lines[index]
+		)
+
+
+## `ClearScreen`, which fills the map with spaces rather than a background tile.
+func gen1_blank_map() -> PackedInt32Array:
+	var map := PackedInt32Array()
+	map.resize(COLUMNS * ROWS)
+	map.fill(GEN1_SPACE)
+	return map
+
+
+## `PlaceString` through the other generation's codec.
+func _gen1_text(map: PackedInt32Array, x: int, y: int, text: String) -> void:
+	var codes: PackedByteArray = Gen1Text.encode(text)
+	for index: int in codes.size():
+		_put(map, x + index, y, codes[index])
+
+
+## `PrintNumber` with no leading-zero flag.
+func _gen1_number(
+	map: PackedInt32Array, x: int, y: int, value: int, digits: int
+) -> void:
+	_gen1_text(map, x, y, Gen2Pokedex.print_num(value, digits, digits))

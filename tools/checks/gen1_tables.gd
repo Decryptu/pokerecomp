@@ -18,6 +18,8 @@ const TRAINER_COUNT: int = 47
 const MATCHUP_COUNT: int = 82
 const TMHM_COUNT: int = 55
 const EVOLUTION_COUNT: int = 72
+## `page` in every `PokedexEntry` description, which `PageChar` waits on.
+const DEX_PAGES: int = 2
 ## `data/pokemon/evos_moves.asm`: Yellow gave Pikachu and its line more to learn.
 const LEARNSET_MOVES: Dictionary = {&"red": 728, &"blue": 728, &"yellow": 755}
 
@@ -207,9 +209,12 @@ func _dex_entry(name: String, dex: Dictionary) -> void:
 	_r.check(not String(dex["category"]).is_empty(), "%s has no Pokedex category" % name)
 	_r.check(int(dex["height"]) > 0, "%s has no height" % name)
 	_r.check(int(dex["weight"]) > 0, "%s has no weight" % name)
+	## `page` parts every description in two, which is what
+	## `ShowPokedexDataInternal` waits between.
 	var pages: Array = dex["pages"]
-	_r.check(pages.size() == 1 and not String(pages[0]).is_empty(),
-		"%s has no Pokedex description" % name)
+	_r.check(pages.size() == DEX_PAGES, "%s has %d description pages" % [name, pages.size()])
+	for page: Variant in pages:
+		_r.check(not String(page).is_empty(), "%s has an empty description page" % name)
 	# `text_far` is the only way out of an entry, so an undecoded byte left in
 	# the text is a pointer that landed somewhere it should not have.
 	_r.check(not String(pages[0]).contains("<"), "%s's description holds a raw byte" % name)

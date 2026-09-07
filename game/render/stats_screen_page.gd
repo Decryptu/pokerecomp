@@ -276,19 +276,23 @@ static func compose(
 		return image
 	image.blit_rect(
 		art, Rect2i(Vector2i.ZERO, art.get_size()),
-		page.pic_at() + pic_origin(art.get_size(), snapshot)
+		page.pic_at() + pic_origin(
+			art.get_size(), snapshot, data.generation if data != null else RomRegistry.GEN2
+		)
 	)
 	return image
 
 
 ## Where that picture sits: the animation fills the cell, so only a still one is
 ## padded.
-static func pic_origin(size: Vector2i, snapshot: Dictionary) -> Vector2i:
+static func pic_origin(
+	size: Vector2i, snapshot: Dictionary, generation: int = RomRegistry.GEN2
+) -> Vector2i:
 	if size.x >= pic_size():
 		return Vector2i.ZERO
 	return Gen2PicImage.frontpic_origin(size, pic_mirrored(
 		int(snapshot.get("species", 0)), bool(snapshot.get("egg", false))
-	))
+	), generation)
 
 
 static func pic_palette(data: GameData, snapshot: Dictionary) -> PackedColorArray:

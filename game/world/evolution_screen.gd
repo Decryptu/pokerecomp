@@ -426,7 +426,9 @@ func _draw_species(species: int) -> void:
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
 	_pic.position = Vector2(
-		PIC_AT * TILE + Gen2PicImage.frontpic_origin(image.get_size(), true)
+		PIC_AT * TILE + Gen2PicImage.frontpic_origin(
+			image.get_size(), true, _data.generation
+		)
 	)
 
 

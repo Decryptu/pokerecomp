@@ -159,24 +159,37 @@ static func terminated_end(data: PackedByteArray, offset: int, max_length: int) 
 	return end + 1
 
 
-## A Pokedex description: ends on `<DEXEND>` rather than a terminator, and its
-## `<LINE>` and `<PAGE>` breaks become newlines.
-static func decode_dex_text(data: PackedByteArray, offset: int, max_length: int) -> String:
+## A Pokedex description as the pages it prints. `PageChar` clears the box and
+## starts again at its own corner, so `<PAGE>` parts one page from the next where
+## `<LINE>` and `<NEXT>` only drop a row. `PlaceDexEnd` writes a full stop before
+## it returns, which is why no description carries its own.
+static func decode_dex_pages(
+	data: PackedByteArray, offset: int, max_length: int
+) -> PackedStringArray:
+	var pages := PackedStringArray()
 	var out: String = ""
 	for i: int in max_length:
 		var at: int = offset + i
 		if at < 0 or at >= data.size():
 			break
 		var byte: int = data[at]
-		if byte == DEX_END or byte == TERMINATOR:
+		if byte == DEX_END:
+			out += "."
+			break
+		if byte == TERMINATOR:
 			break
 		if byte == TEXT_START:
 			continue
-		if byte == LINE or byte == NEXT_LINE or byte == PAGE:
+		if byte == PAGE:
+			pages.append(out)
+			out = ""
+			continue
+		if byte == LINE or byte == NEXT_LINE:
 			out += "\n"
 			continue
 		out += character(byte)
-	return out
+	pages.append(out)
+	return pages
 
 
 ## A string to the codes that draw it, one tile each: [method decode]'s inverse

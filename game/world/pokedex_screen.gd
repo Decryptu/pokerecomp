@@ -26,7 +26,7 @@ signal cry_requested(species: int)
 ## the way [signal cry_requested] is.
 signal sfx_requested(index: int)
 
-enum Mode { LIST, ENTRY, OPTION, SEARCH, SEARCH_RESULTS, AREA, UNOWN }
+enum Mode { LIST, ENTRY, OPTION, SEARCH, SEARCH_RESULTS, AREA, UNOWN, SIDE }
 
 ## The dex is drawn in hardware pixels and the start menu it opens over is
 ## ordinary UI at window resolution, so it carries a [Gen2Screen] of its own the
@@ -62,6 +62,11 @@ var _dex: Gen2Pokedex = null
 var _world: Gen2WorldAPI = null
 var _data: GameData = null
 var _mode: Mode = Mode.LIST
+## `ShowPokedexMenu` is a listing, a side menu and an entry page and none of the
+## other five states, so every branch below reads this rather than the cache.
+var _gen1: bool = false
+## `HandlePokedexSideMenu`'s `wCurrentMenuItem`, or -1 while that menu is closed.
+var _side_cursor: int = -1
 ## The OPTION screen's own cursor (`wDexArrowCursorPosIndex`), which opens on
 ## the row matching the current mode.
 var _option_cursor: int = 0
@@ -109,12 +114,16 @@ func open(data: GameData, world: Gen2WorldAPI, start_entry: int = 0) -> bool:
 	_world = world
 	if _data == null or _world == null or _world.state == null:
 		return false
-	if _data.dex_order_new().is_empty() or _data.dex_order_alpha().is_empty():
+	## Generation 1 lists the dex numbers themselves, so it needs neither order
+	## table; everything else on this screen is behind [member _gen1].
+	_gen1 = _data.generation == RomRegistry.GEN1
+	if not _gen1 \
+		and (_data.dex_order_new().is_empty() or _data.dex_order_alpha().is_empty()):
 		return false
 	_page = Gen2PokedexPage.from_data(_data)
 	if _page == null or not _page.ready():
 		return false
-	_dex = Gen2Pokedex.open(
+	_dex = Gen2Pokedex.open_gen1(_data, _world.state) if _gen1 else Gen2Pokedex.open(
 		_data, _world.state, _world.state.last_dex_mode(), start_entry
 	)
 	if is_inside_tree() and _background != null:
@@ -128,6 +137,10 @@ func open(data: GameData, world: Gen2WorldAPI, start_entry: int = 0) -> bool:
 func open_entry(data: GameData, world: Gen2WorldAPI, species: int) -> bool:
 	if not open(data, world, species):
 		return false
+	## `ShowPokedexData` is handed a dex number and no listing, so the cursor is
+	## put on it rather than sought through an order table.
+	if _gen1 and _dex != null:
+		_dex.gen1_show(species)
 	if _dex == null or _dex.selected_species() != species:
 		return false
 	_entry_only = true
@@ -172,7 +185,9 @@ func handle_button(button: int) -> bool:
 		return _area.handle_button(button)
 	match _mode:
 		Mode.LIST:
-			return _handle_list(button)
+			return _handle_gen1_list(button) if _gen1 else _handle_list(button)
+		Mode.SIDE:
+			return _handle_gen1_side(button)
 		Mode.ENTRY:
 			return _handle_entry(button)
 		Mode.OPTION:
@@ -222,6 +237,8 @@ func _handle_list(button: int) -> bool:
 ## so A always turns the page rather than moving a cursor along a row whose
 ## other three entries would refuse.
 func _handle_entry(button: int) -> bool:
+	if _gen1:
+		return _handle_gen1_entry(button)
 	if _entry_only:
 		return _handle_new_entry(button)
 	match button:
@@ -379,8 +396,131 @@ func _exit() -> void:
 func _open_list_mode() -> void:
 	_message = ""
 	_mode = Mode.LIST
+	_side_cursor = -1
 	_dex.listing_height = Gen2Pokedex.LISTING_HEIGHT
 	_refresh()
+
+
+## `HandlePokedexListMenu`: B leaves, A opens the side menu, the rest walks.
+func _handle_gen1_list(button: int) -> bool:
+	match button:
+		PokeButton.B:
+			closed.emit()
+			return true
+		PokeButton.A:
+			## `HandlePokedexSideMenu` opens whatever the row is and answers
+			## `b = 2` at once for a species not yet seen, which is back here.
+			if _dex.can_open_entry():
+				_open_gen1_side()
+			return true
+	if _dex.gen1_move_listing(button):
+		_refresh()
+	return PokeButton.is_direction(button)
+
+
+## `HandlePokedexSideMenu`'s own four rows, whose watched keys are A and B.
+func _handle_gen1_side(button: int) -> bool:
+	match button:
+		PokeButton.B:
+			_open_list_mode()
+			return true
+		PokeButton.A:
+			_gen1_side_action()
+			return true
+		PokeButton.UP, PokeButton.DOWN:
+			var next: int = _side_cursor + (1 if button == PokeButton.DOWN else -1)
+			_side_cursor = clampi(next, 0, Gen2Pokedex.GEN1_SIDE_ROWS.size() - 1)
+			_refresh()
+			return true
+	return false
+
+
+## What each row leaves `b` as: DATA and AREA answer 0 and redraw the listing,
+## QUIT answers 1 and closes the dex, and CRY stays in the menu. AREA is
+## `predef LoadTownMap_Nest`, whose nest table nothing imports, so it draws
+## nothing and lands on the listing its own `b = 0` goes to.
+func _gen1_side_action() -> void:
+	match _side_cursor:
+		Gen2Pokedex.GEN1_SIDE_DATA:
+			_dex.open_entry()
+			_open_entry_mode(Mode.LIST)
+		Gen2Pokedex.GEN1_SIDE_CRY:
+			cry_requested.emit(_dex.selected_species())
+		Gen2Pokedex.GEN1_SIDE_AREA:
+			_open_list_mode()
+		Gen2Pokedex.GEN1_SIDE_QUIT:
+			closed.emit()
+
+
+func _open_gen1_side() -> void:
+	_message = ""
+	_mode = Mode.SIDE
+	_side_cursor = 0
+	_refresh()
+
+
+## `ShowPokedexDataInternal` waits on A or B twice: `PageChar`'s
+## `ManualTextScroll` between the description pages and `.waitForButtonPress`
+## behind the second. A species not owned prints no description and waits once.
+func _handle_gen1_entry(button: int) -> bool:
+	if button != PokeButton.A and button != PokeButton.B:
+		return false
+	if _gen1_entry_pages() > 1 and _dex.page == Gen2Pokedex.PAGE_1:
+		_dex.toggle_page()
+		_refresh()
+		return true
+	if _entry_only:
+		closed.emit()
+		return true
+	## `.choseData`'s `b = 0` lands on `.setUpGraphics`, which redraws the
+	## listing and re-enters it with the cursor where the side menu left it.
+	_open_list_mode()
+	return true
+
+
+## How many description pages this entry prints, none of them unless owned.
+func _gen1_entry_pages() -> int:
+	var entry: Dictionary = _dex.entry()
+	if not bool(entry.get("caught", false)):
+		return 0
+	return (_data.dex_entry(_dex.selected_species()).get(
+		"pages", PackedStringArray()
+	) as PackedStringArray).size()
+
+
+## `ShowPokedexMenu`'s listing and `ShowPokedexDataInternal`'s page.
+func _render_gen1() -> Image:
+	if _mode != Mode.ENTRY:
+		return _page.image(_page.gen1_list_map(
+			_dex.gen1_rows(), _dex.seen_count(), _dex.caught_count(),
+			_listing_cursor(), _side_cursor
+		))
+	var species: int = _dex.selected_species()
+	var entry: Dictionary = _dex.entry()
+	var page: int = int(entry["page"])
+	return _page.image(_page.gen1_entry_map(
+		species, String(entry["name"]), _data.dex_entry(species),
+		bool(entry["caught"]), page,
+		_gen1_entry_pages() > 1 and page == Gen2Pokedex.PAGE_1
+	), _gen1_entry_pic(species), Gen2PokedexPage.GEN1_ENTRY_PIC_AT)
+
+
+## `LoadFlippedFrontSpriteByMonIndex`: the front pic mirrored, centred in
+## `LoadUncompressedSpriteData`'s 7x7 block, and drawn through the species' own
+## palette, which is `BlkPacket_Pokedex`'s one block.
+func _gen1_entry_pic(species: int) -> Image:
+	var pic: Dictionary = _data.species_pic(species)
+	var palette: PackedColorArray = _data.palette(species)
+	if pic.is_empty() or palette.size() < PokePalette.COLORS_PER_PIC:
+		return null
+	var art: Image = Gen2PicImage.from_atlas(
+		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic, palette
+	)
+	if art == null:
+		return null
+	return Gen2PokedexPage.pad_pic(
+		Gen2PicImage.x_flipped(art), palette[0], RomRegistry.GEN1
+	)
 
 
 func _open_entry_mode(from: Mode = Mode.LIST) -> void:
@@ -536,6 +676,8 @@ func render() -> Image:
 		return Image.create_empty(
 			Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 		)
+	if _gen1:
+		return _render_gen1()
 	## `Pokedex_BlinkArrowCursor`'s own off phase, and the same answer on every
 	## frame for a screen that is being read rather than walked.
 	var cursor: int = -1 if _read_only or _blink >= CURSOR_BLINK_FRAMES else 0
@@ -707,6 +849,9 @@ func advance_frame() -> void:
 			_finish_search()
 		elif _slowpoke_frame() != frame:
 			_refresh()
+		return
+	## `PlaceMenuCursor` writes its `▶` into the map, so nothing there blinks.
+	if _gen1:
 		return
 	_blink = (_blink + 1) % (CURSOR_BLINK_FRAMES * 2)
 	if _blink == 0 or _blink == CURSOR_BLINK_FRAMES:

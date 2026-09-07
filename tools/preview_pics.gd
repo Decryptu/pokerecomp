@@ -9,9 +9,12 @@ extends SceneTree
 
 const ATLASES: PackedStringArray = [
 	"front", "back", "unown_front", "unown_back", "trainers", "player_back",
+	"player_front",
 ]
 const SHEETS: PackedStringArray = [
 	"font", "font_extra", "frames", "battle_font", "enemy_hud", "player_hud", "exp_bar",
+	"pokedex_tiles", "trainer_card_box", "trainer_card_names", "badge_numbers",
+	"badge_faces",
 ]
 
 ## Tiles per row when a strip is folded for viewing.

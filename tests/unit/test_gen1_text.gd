@@ -11,6 +11,13 @@ func _bytes(values: Array) -> PackedByteArray:
 	return out
 
 
+func _strings(values: Array) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	for value: String in values:
+		out.append(value)
+	return out
+
+
 func test_the_letter_runs_decode() -> void:
 	# "RHYDON", the cartridge's own first species name.
 	var data: PackedByteArray = _bytes([0x91, 0x87, 0x98, 0x83, 0x8E, 0x8D, 0x50])
@@ -64,7 +71,16 @@ func test_a_dex_description_ends_on_dexend_and_breaks_on_its_line_codes() -> voi
 	var data: PackedByteArray = _bytes([
 		0x00, 0x80, 0x81, 0x4F, 0x82, 0x83, Gen1Text.DEX_END, 0x84,
 	])
-	assert_eq(Gen1Text.decode_dex_text(data, 0, 32), "AB\nCD")
+	# `PlaceDexEnd` writes the full stop the description itself does not carry.
+	assert_eq(Gen1Text.decode_dex_pages(data, 0, 32), _strings(["AB\nCD."]))
+
+
+func test_a_dex_description_parts_its_two_pages_on_page() -> void:
+	# TX_START, "AB", <PAGE>, "CD", <DEXEND>.
+	var data: PackedByteArray = _bytes([
+		0x00, 0x80, 0x81, Gen1Text.PAGE, 0x82, 0x83, Gen1Text.DEX_END,
+	])
+	assert_eq(Gen1Text.decode_dex_pages(data, 0, 32), _strings(["AB", "CD."]))
 
 
 func test_decoding_stops_at_the_end_of_the_buffer() -> void:

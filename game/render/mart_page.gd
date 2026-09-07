@@ -180,9 +180,11 @@ func render(state: Dictionary) -> Image:
 
 
 ## `PRINTNUM_MONEY`'s own shape: `¥` against the number, the pair right aligned
-## in seven cells. `PrintBCDNumber` lays the prices down the same way.
-static func money_string(amount: int) -> String:
-	return ("¥%d" % maxi(amount, 0)).lpad(MONEY_CELLS)
+## in seven cells. `PrintBCDNumber` lays the prices down the same way, and its
+## own LEFT_ALIGN flag is [param left_align], which drops the padding.
+static func money_string(amount: int, left_align: bool = false) -> String:
+	var text: String = "¥%d" % maxi(amount, 0)
+	return text if left_align else text.lpad(MONEY_CELLS)
 
 
 ## One of the three balance windows as an image and the tile it stands at:

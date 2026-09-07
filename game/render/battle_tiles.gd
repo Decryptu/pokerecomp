@@ -98,6 +98,10 @@ const GEN1_LINE_ARROW: int = 0x6F
 const GEN1_ID: int = 0x73
 const GEN1_NUMERO: int = 0x74
 const GEN1_TO: int = 0x70
+## `'─'`, the listing's own SEEN/OWN divider, and the last tile the Pokedex page
+## carries.
+const GEN1_RULE: int = 0x7A
+const GEN1_POKEDEX_LAST_TILE: int = 0x7F
 
 ## Read through the instance so one panel-drawing routine serves both.
 var hp_label: int = HP_LABEL
@@ -204,6 +208,34 @@ static func gen1_stats_page(data: GameData) -> Gen2BattleTiles:
 	var loaded: int = 0
 	for sheet: Array in sheets:
 		var meta: Dictionary = data.tile_sheet(String(sheet[0]))
+		if meta.is_empty():
+			continue
+		if out._copy(
+			data.tile_indices(String(sheet[0])), int(meta.get("width", 0)),
+			int(sheet[1]), int(sheet[2]), int(sheet[3])
+		):
+			loaded += 1
+	return out if loaded == sheets.size() else null
+
+
+## `LoadPokedexTilePatterns`'s page: `LoadHpBarAndStatusTilePatterns` first, then
+## `PokedexTileGraphics` over its front and `PokeballTileGraphics`' first tile at
+## $72. It runs to $7F rather than the battle's $78 because the listing's own
+## divider is `'─'`, which the two sheets happen to draw identically.
+static func gen1_pokedex_page(data: GameData) -> Gen2BattleTiles:
+	var out := Gen2BattleTiles.new()
+	out._first = GEN1_FIRST_TILE
+	out._last = GEN1_POKEDEX_LAST_TILE
+	out._width = (GEN1_POKEDEX_LAST_TILE - GEN1_FIRST_TILE + 1) * TILE
+	out._tiles.resize(out._width * TILE)
+	var sheets: Array = [
+		["battle_font", GEN1_BATTLE_FONT_AT, 0, -1],
+		["pokedex_tiles", Gen1Layout.POKEDEX_FIRST_CODE, 0, -1],
+		["battle_balls", Gen1Layout.POKEDEX_BALL_CODE, 0, 1],
+	]
+	var loaded: int = 0
+	for sheet: Array in sheets:
+		var meta: Dictionary = data.tile_sheet(String(sheet[0])) if data != null else {}
 		if meta.is_empty():
 			continue
 		if out._copy(

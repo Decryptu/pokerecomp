@@ -287,14 +287,18 @@ static func frontpic_pad_rows(height: int) -> int:
 
 ## Where the seven-tile cell leaves a front pic, in pixels: bottom-aligned, one
 ## blank column in, and on the other side of the cell when the picture is
-## mirrored. [param size] is the pic's own pixel size.
-static func frontpic_origin(size: Vector2i, mirrored: bool = false) -> Vector2i:
+## mirrored. [param size] is the pic's own pixel size, and [param generation]
+## picks between `PadFrontpic`'s blank column and `LoadUncompressedSpriteData`'s
+## centring, which is the same split [method frontpic_pad_columns] makes.
+static func frontpic_origin(
+	size: Vector2i, mirrored: bool = false, generation: int = RomRegistry.GEN2
+) -> Vector2i:
 	@warning_ignore("integer_division")
 	var columns: int = size.x / PokeTiles.TILE_WIDTH
 	@warning_ignore("integer_division")
 	var rows: int = size.y / PokeTiles.TILE_WIDTH
 	return Vector2i(
-		frontpic_pad_columns(columns, mirrored), frontpic_pad_rows(rows)
+		frontpic_pad_columns(columns, mirrored, generation), frontpic_pad_rows(rows)
 	) * PokeTiles.TILE_WIDTH
 
 

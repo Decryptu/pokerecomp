@@ -2898,6 +2898,14 @@ func player_backpic(kind: String) -> Dictionary:
 	return {"atlas": "player_back", "slot": slot, "width": cell, "height": cell}
 
 
+## `RedPicFront`, the one picture Generation 1 keeps outside both pic tables.
+func player_frontpic() -> Dictionary:
+	var cell: int = int(atlas("player_front").get("cell", 0))
+	if cell <= 0:
+		return {}
+	return {"atlas": "player_front", "slot": 0, "width": cell, "height": cell}
+
+
 func trainer_pic(number: int) -> Dictionary:
 	var entry: Dictionary = trainer(number)
 	if entry.is_empty():
