@@ -1110,6 +1110,11 @@ static func _read_text(
 	if header >= 0:
 		row["trainer"] = _read_trainer_header(rom, layout, bank, header)
 		return row
+	## The corpus's other row the world owns whole: a party list and `MoveMon`
+	## both ways are no more readable here than `TalkToTrainer` is.
+	if at == int(layout["day_care_script"]):
+		row["script"] = [{"op": "day_care"}]
+		return row
 	row["text"] = String(decoded["text"])
 	row["prompt"] = bool(decoded.get("prompt", false))
 	var code: int = _text_code_at(decoded)

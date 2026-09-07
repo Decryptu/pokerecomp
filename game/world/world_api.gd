@@ -3721,6 +3721,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"replace_block": &"_gen1_node_replace_block",
 	"player_coord": &"_gen1_node_player_coord",
 	"walk": &"_gen1_node_walk",
+	"day_care": &"_gen1_node_day_care",
 }
 
 
@@ -4188,6 +4189,118 @@ func _gen1_take_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 		bag[item] = left
 	steps.append({"type": &"items", "items": {item: left}})
 	return true
+
+
+## `DaycareGentlemanText`, which owns the whole row: the offer and a party list
+## on one side of `wDayCareInUse`, the growth and the price on the other.
+func _gen1_node_day_care(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	if data == null or state == null:
+		return false
+	if not state.day_care_has_mon(Gen2WorldDayCare.SLOT_MAN):
+		steps.append(_gen1_day_care_offer())
+		return true
+	return _gen1_day_care_visit(steps)
+
+
+## `.IntroText` under a `YesNoChoice`, with `wPartyCount` tested before the list.
+func _gen1_day_care_offer() -> Dictionary:
+	var taken: Array = [_gen1_day_care_box("only_one_mon")]
+	if int(_party_summary.get("count", 0)) > 1:
+		taken = [
+			_gen1_day_care_box("which_mon"),
+			{
+				"type": &"request",
+				"values": {"kind": &"party_selection_requested", "values": {
+					"routine": &"day_care",
+				}},
+				"day_care": &"deposit",
+			},
+		]
+	return {
+		"type": &"choice",
+		"text": String(_gen1_day_care_box("intro")["text"]),
+		"yes": taken,
+		"no": [_gen1_day_care_box("come_again")],
+	}
+
+
+## `DisplayPartyMenu`'s carry is CANCEL, and `callfar KnowsHMMove` is the whole
+## of what is asked about the row it came back with.
+func _gen1_day_care_after_selection(result: Dictionary) -> Array:
+	var party_index: int = int(result.get("party_index", -1))
+	if party_index < 0:
+		return [_gen1_day_care_box("all_right_then")]
+	if Gen2WorldTMHM.knows_hm_move(data, _gen1_party_moves(party_index)):
+		return [_gen1_day_care_box("knows_hm_move")]
+	return [
+		_gen1_day_care_box("will_look_after", String(result.get("nickname", ""))),
+		_gen1_day_care_request(&"deposit", party_index),
+		_gen1_day_care_box("come_see_me"),
+	]
+
+
+## `.daycareInUse`: the level the slot reached and the price behind it.
+func _gen1_day_care_visit(steps: Array) -> bool:
+	var visit: Dictionary = Gen2WorldDayCare.gen1_visit(state, data)
+	if visit.is_empty():
+		return false
+	var nickname: String = String(visit["nickname"])
+	var growth: int = int(visit["growth"])
+	steps.append(_gen1_day_care_box(
+		"has_grown" if growth > 0 else "needs_more_time", nickname, "%3d" % growth
+	))
+	if int(_party_summary.get("count", 0)) >= Gen2SaveData.MAX_PARTY:
+		steps.append(_gen1_day_care_box("no_room"))
+		return true
+	var price: int = int(visit["price"])
+	steps.append({"type": &"money_box", "kind": &"money_top_right"})
+	steps.append({
+		"type": &"choice",
+		"text": String(_gen1_day_care_box("owe_money", "", str(price))["text"]),
+		"yes": _gen1_day_care_payment(price, nickname),
+		"no": [_gen1_day_care_box("all_right_then")],
+	})
+	return true
+
+
+## `.enoughMoney` pays before it draws the box again, so the receipt stands over
+## the new balance.
+func _gen1_day_care_payment(price: int, nickname: String) -> Array:
+	var purse: int = state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
+	if purse < price:
+		return [_gen1_day_care_box("not_enough_money")]
+	return [
+		{"type": &"money", "amount": purse - price},
+		{"type": &"money_box", "kind": &"money_top_right"},
+		_gen1_day_care_box("heres_your_mon"),
+		_gen1_day_care_request(&"withdraw", -1),
+		_gen1_day_care_box("got_mon_back", nickname),
+	]
+
+
+func _gen1_day_care_request(action: StringName, party_index: int) -> Dictionary:
+	return {"type": &"request", "values": {
+		"kind": &"day_care_mon_requested",
+		"values": {"action": action, "party_index": party_index},
+	}}
+
+
+## One stub with its `text_ram` and its `text_decimal` or `text_bcd` filled,
+## [param number] already spelled the way that command prints it.
+func _gen1_day_care_box(name: String, ram: String = "", number: String = "") -> Dictionary:
+	var text: String = gen1_filled_text(data.day_care_text(name))
+	if not ram.is_empty():
+		text = Gen2TextStream.fill_all_markers(text, Gen2TextStream.RAM_MARKER, ram)
+	if not number.is_empty():
+		text = Gen2TextStream.fill_all_markers(
+			text, Gen2TextStream.NUMBER_MARKER, number
+		)
+	return {"type": &"text", "text": text}
+
+
+func _gen1_party_moves(party_index: int) -> Array:
+	var moves: Array = _party_summary.get("moves", [])
+	return moves[party_index] as Array if party_index < moves.size() else []
 
 
 ## `DoInGameTradeDialogue` over the row's own `wWhichTrade`:
@@ -4852,6 +4965,8 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		_gen1_steps = branch.duplicate(true) + _gen1_steps
 	elif step.has("trade"):
 		_gen1_steps = _gen1_trade_after_selection(step, result) + _gen1_steps
+	elif step.has("day_care"):
+		_gen1_steps = _gen1_day_care_after_selection(result) + _gen1_steps
 	elif step.has("ok"):
 		## `accepted` is the carry `_GivePokemon` answers in.
 		_gen1_steps = (step[

@@ -8,16 +8,16 @@ extends RefCounted
 ## if the subsystem had run.
 
 ## The requests the host settles out of the save alone: `special HealParty`,
-## `giveegg`, `GiveDratini` and a `givepoke` that names an OT each run to
-## completion inside the command that asked, so a screen completes one where it
-## is staged rather than waiting for a press. `pokemon_requested` is here for
-## those and no further: `GivePoke`'s `.wildmon` branch reaches
-## `GiveANickname_YesNo`, so a screen that can draw one intercepts it in front of
-## this list and a driver that cannot settles it with the species name, which is
-## what NO answers.
+## `giveegg`, `GiveDratini`, a `givepoke` that names an OT and
+## `DaycareGentlemanText`'s two `MoveMon` calls each run to completion inside the
+## command that asked. `pokemon_requested` is here for those and no further:
+## `GivePoke`'s `.wildmon` branch reaches `GiveANickname_YesNo`, so a screen that
+## can draw one intercepts it in front of this list and a driver that cannot
+## settles it with the species name, which is what NO answers.
 const UNATTENDED_REQUESTS: Array[StringName] = [
 	&"party_heal_requested", &"pokemon_requested", &"trade_requested",
 	&"contest_mon_requested", &"dratini_moveset_requested",
+	&"day_care_mon_requested",
 ]
 
 ## Which machine a `pc_requested` names. `PokemonCenterPC` and
@@ -54,6 +54,8 @@ static func complete_runtime_request(
 		)
 	if kind == &"party_heal_requested":
 		return Gen2WorldPartyHost.heal_party(world, save, persist)
+	if kind == &"day_care_mon_requested":
+		return Gen2WorldPartyHost.day_care_mon(world, save, request, persist)
 	if kind == &"apricorn_selection_requested":
 		return Gen2WorldApricornHost.complete_runtime_request(world, result, save, persist)
 	if kind == &"rival_name_requested":

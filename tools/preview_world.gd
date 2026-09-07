@@ -71,7 +71,7 @@ const KIND_HELP: Dictionary = {
 	&"pokemon_center_pc": "rows down, A presses: the Pokemon Center's machine, or ActivatePC on a Generation 1 cartridge",
 	&"mom_bank": "wallet, balance, both in hundreds: Mom_WithdrawDepositMenuJoypad's dial. Add 1000 for the WITHDRAW header",
 	&"move_tutor": "presses: special MoveTutor. 0 is ChooseMonToLearnTMHM's list, not a box",
-	&"day_care": "presses, routine: 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs",
+	&"day_care": "presses, routine: 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs. On a Generation 1 cartridge, DaycareGentlemanText faced left from 3,3 on DAYCARE, the second number being wDayCareInUse",
 	&"slot_machine": "frames, bet: special SlotMachine. Bet is 1 to 3, plus 4 for the lucky machine",
 	&"card_flip": "frames, coins in hundreds: special CardFlip",
 	&"unown_puzzle": "frames, picture: special UnownPuzzle. 0 Kabuto, 1 Omanyte, 2 Aerodactyl, 3 Ho-Oh, 4 to 7 solved",
@@ -198,7 +198,7 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"nurse": BOX_REVEAL_FRAMES, &"vending": BOX_REVEAL_FRAMES,
 	&"prizes": BOX_REVEAL_FRAMES, &"trade": BOX_REVEAL_FRAMES,
 	&"coins": BOX_REVEAL_FRAMES, &"deal": BOX_REVEAL_FRAMES,
-	&"ticket": BOX_REVEAL_FRAMES,
+	&"ticket": BOX_REVEAL_FRAMES, &"day_care": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
 const BOX_REVEAL_FRAMES: int = 120
@@ -741,6 +741,9 @@ func _stage_card_flip() -> void:
 ## presses into the routine to photograph and the second is which routine: 0 the man,
 ## 1 the lady, 2 the man outside, 3 and 4 the two signs.
 func _stage_day_care() -> void:
+	if _screen._data != null and _screen._data.generation == RomRegistry.GEN1:
+		_stage_gen1_day_care()
+		return
 	_screen.preview_day_care(DAY_CARE_ROLES[clampi(
 		_cell.y, 0, DAY_CARE_ROLES.size() - 1
 	)])
@@ -1105,7 +1108,7 @@ func _stage_card_key_door() -> void:
 
 
 ## A counter faced the way [param facing] says: presses, then rows down first.
-func _stage_counter(purse: Dictionary, facing: int = PokeButton.UP) -> void:
+func _stage_counter(purse: Dictionary, facing: int = PokeButton.UP, rows: int = -1) -> void:
 	var world: Gen2WorldAPI = _screen.get("_world")
 	if world != null:
 		world.state.apply_changes({}, {}, purse)
@@ -1113,13 +1116,46 @@ func _stage_counter(purse: Dictionary, facing: int = PokeButton.UP) -> void:
 	for _frame: int in TEXT_SETTLE_FRAMES:
 		_screen.advance_frame()
 	_screen.interact()
-	for _step: int in maxi(_cell.y, 0):
+	for _step: int in maxi(_cell.y if rows < 0 else rows, 0):
 		_screen.press_button(PokeButton.DOWN)
 	for _press: int in maxi(_cell.x, 0):
 		for _frame: int in BOX_REVEAL_FRAMES:
 			_screen.advance_frame()
 		_screen.press_button(PokeButton.A)
 
+
+## `DaycareGentlemanText`, whose second number is `wDayCareInUse`: a seeded slot
+## is what puts the growth, the price and MONEY_BOX on the screen.
+func _stage_gen1_day_care() -> void:
+	_stage_party()
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if world != null and _cell.y >= 1:
+		world.state.set_day_care_mon(Gen2WorldDayCare.SLOT_MAN, _day_care_slot())
+		world.state.set_day_care_has_mon(Gen2WorldDayCare.SLOT_MAN, true)
+	_stage_counter(
+		{"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY}},
+		PokeButton.LEFT, 0
+	)
+	for _frame: int in _staged_frames():
+		_screen.advance_frame()
+
+
+## The development party's own lead, three levels on from where it went in.
+func _day_care_slot() -> Gen2SaveMon:
+	var mon: Gen2SaveMon = Gen2SaveMon.new()
+	mon.species = DAY_CARE_SPECIES
+	mon.level = DAY_CARE_LEVEL
+	mon.nickname = ""
+	mon.exp = Gen2Experience.total_exp_at(
+		int(_screen._data.species(DAY_CARE_SPECIES).get("growth_rate", 0)),
+		DAY_CARE_LEVEL + DAY_CARE_GROWTH
+	)
+	return mon
+
+
+const DAY_CARE_SPECIES: int = 1
+const DAY_CARE_LEVEL: int = 5
+const DAY_CARE_GROWTH: int = 3
 
 ## Enough for every row of `VendingPrices` and not enough to widen the money box.
 const VENDING_MONEY: int = 1000

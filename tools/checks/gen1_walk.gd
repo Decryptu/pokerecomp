@@ -74,6 +74,22 @@ const NURSE_PARTY: int = 4
 const CABLE_CLUB_COUNTER := Vector2i(11, 3)
 const CABLE_CLUB_ROWS: int = 12
 
+## `Daycare_Object`'s one object, faced from the cell beside him, and the party
+## the row's `wPartyCount` tests are answered with.
+const DAYCARE: int = 0x48
+const DAYCARE_GENTLEMAN := Vector2i(3, 3)
+const DAYCARE_PARTY: int = 2
+## `SPECIES_PIDGEY` and its own level 5, which the deposited slot is built from,
+## and CUT, the HM move `KnowsHMMove` refuses a member for.
+const DAYCARE_SPECIES: int = 16
+const DAYCARE_LEVEL: int = 5
+const DAYCARE_NICKNAME: String = "BIRD"
+const MOVE_CUT: int = 15
+## `wDayCarePerLevelCost` is $0100 and the loop runs `levels + 1` times.
+const DAYCARE_GROWN_LEVEL: int = 8
+const DAYCARE_PRICE: int = 400
+const DAY_CARE_STEPS: int = 6
+
 ## `MtMoonPokecenter_Object`'s fourth object: `HasEnoughMoney`, `GivePokemon`
 ## and `SubBCDPredef` behind it, with MONEY_BOX standing over the map for the
 ## question. Museum 1F's scientist is the corpus's other spender.
@@ -297,6 +313,7 @@ func _one_game() -> void:
 	_check_a_bench_guy()
 	_check_a_bookshelf()
 	_check_a_card_key_door()
+	_check_the_day_care()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -1280,6 +1297,237 @@ func _trade_filled(text: String) -> String:
 			String(_r.data.species(int(row[1])).get("name", ""))
 		)
 	return Gen2TextStream.fill_names(out, {"player": Gen2WorldScriptRunner.UNNAMED})
+
+
+## `DaycareGentlemanText` walked both ways: the offer, the party list and
+## `MoveMon PARTY_TO_DAYCARE`, then the growth, `HasEnoughMoney` and the way
+## back out. `IncrementDayCareMonExp` is what makes the second half possible.
+func _check_the_day_care() -> void:
+	_check_the_day_care_refuses()
+	var world: Gen2WorldAPI = _day_care_world(0)
+	if world == null:
+		return
+	var save: Gen2SaveData = Gen2SaveStore.create_development_save(_r.data, 0)
+	if not _r.check(save != null, "no development save."):
+		return
+	world.set_party_summary(save.party.size(), false, [] as Array[int], _party_moves(save))
+	world.interact()
+	_r.check(
+		_event_text(world.choose_script_input(0)) == _day_care_text("which_mon"),
+		"the gentleman asked for no member."
+	)
+	world.run_event_queue(true)
+	var deposited: String = Gen2SaveMon.display_name(save.party[0], _r.data)
+	_r.check(
+		_event_text(world.complete_runtime_request({
+			"ok": true, "party_index": 0, "nickname": deposited,
+		})) == _day_care_text("will_look_after", deposited),
+		"the gentleman took it without saying so."
+	)
+	world.run_event_queue(true)
+	_r.check(
+		_event_text(_day_care_move(world, save)) == _day_care_text("come_see_me"),
+		"the deposit ended on nothing."
+	)
+	_r.check(
+		world.state.day_care_has_mon(Gen2WorldDayCare.SLOT_MAN)
+			and save.party.size() == DAYCARE_PARTY - 1,
+		"the deposit left %d in the party." % save.party.size()
+	)
+	_check_the_day_care_counts_steps(world)
+	_check_the_day_care_hands_it_back(save)
+	_check_the_day_care_holds_on()
+	_r.note("gen1 walk the DAYCARE: a deposit, three refusals and a %d withdrawal"
+		% DAYCARE_PRICE)
+
+
+## The two boxes that end the visit where it stands: a full party never reaches
+## the price at all, and a slot that has not grown says so before the question.
+func _check_the_day_care_holds_on() -> void:
+	for row: Array in [
+		[Gen2SaveData.MAX_PARTY, DAYCARE_GROWN_LEVEL, "no_room"],
+		[DAYCARE_PARTY, DAYCARE_LEVEL, "needs_more_time"],
+	]:
+		var world: Gen2WorldAPI = _day_care_world(DAYCARE_PRICE)
+		if world == null:
+			return
+		var mon: Gen2SaveMon = _grown_slot()
+		mon.exp = Gen2Experience.total_exp_at(
+			int(_r.data.species(DAYCARE_SPECIES).get("growth_rate", 0)), int(row[1])
+		)
+		world.state.set_day_care_mon(Gen2WorldDayCare.SLOT_MAN, mon)
+		world.state.set_day_care_has_mon(Gen2WorldDayCare.SLOT_MAN, true)
+		world.set_party_summary(int(row[0]), false)
+		var opened: String = _event_text(world.interact())
+		if String(row[2]) == "needs_more_time":
+			_r.check(
+				opened == _day_care_text("needs_more_time", DAYCARE_NICKNAME, "%3d" % 0),
+				"an ungrown slot said %s." % opened
+			)
+			continue
+		var said: String = _event_text(world.run_event_queue(true))
+		_r.check(said == _day_care_text("no_room"), "a full party said %s." % said)
+
+
+## The three refusals in the routine's own order: one member, a member that
+## knows an HM, and a list that came back empty.
+func _check_the_day_care_refuses() -> void:
+	for row: Array in [
+		[1, [], "only_one_mon"], [DAYCARE_PARTY, [MOVE_CUT], "knows_hm_move"],
+		[DAYCARE_PARTY, [], "all_right_then"],
+	]:
+		var world: Gen2WorldAPI = _day_care_world(0)
+		if world == null:
+			return
+		world.set_party_summary(
+			int(row[0]), false, [] as Array[int], [row[1], row[1]]
+		)
+		world.interact()
+		var said: String = _event_text(world.choose_script_input(0))
+		if int(row[0]) > 1:
+			world.run_event_queue(true)
+			said = _event_text(world.complete_runtime_request({
+				"ok": true, "party_index": -1 if String(row[2]) == "all_right_then" else 0,
+			}))
+		_r.check(said == _day_care_text(String(row[2])),
+			"the %s refusal said %s." % [String(row[2]), said])
+	var refused: Gen2WorldAPI = _day_care_world(0)
+	if refused != null:
+		refused.set_party_summary(DAYCARE_PARTY, false)
+		refused.interact()
+		_r.check(
+			_event_text(refused.choose_script_input(1)) == _day_care_text("come_again"),
+			"a refused offer said something else."
+		)
+
+
+## `IncrementDayCareMonExp` runs off `CountStep`'s own counter here, so what
+## proves it is the owed steps turning into experience.
+func _check_the_day_care_counts_steps(world: Gen2WorldAPI) -> void:
+	var before: int = world.state.day_care_mon(Gen2WorldDayCare.SLOT_MAN).exp
+	for _step: int in DAY_CARE_STEPS:
+		world.state.count_step()
+	for _step: int in world.state.take_pending_day_care_steps():
+		Gen2WorldDayCare.gen1_step(world.state)
+	_r.check(
+		world.state.day_care_mon(Gen2WorldDayCare.SLOT_MAN).exp == before + DAY_CARE_STEPS,
+		"%d steps bought no experience." % DAY_CARE_STEPS
+	)
+
+
+## `.daycareInUse` with a slot that has grown: the box says how many levels, the
+## price is a hundred a level plus a hundred, and a short purse is refused.
+func _check_the_day_care_hands_it_back(save: Gen2SaveData) -> void:
+	var grown: Gen2SaveMon = _grown_slot()
+	for purse: int in [DAYCARE_PRICE - 1, DAYCARE_PRICE]:
+		var world: Gen2WorldAPI = _day_care_world(purse)
+		if world == null:
+			return
+		world.state.set_day_care_mon(Gen2WorldDayCare.SLOT_MAN, grown)
+		world.state.set_day_care_has_mon(Gen2WorldDayCare.SLOT_MAN, true)
+		world.set_party_summary(save.party.size(), false)
+		_r.check(
+			_event_text(world.interact()) == _day_care_text(
+				"has_grown", DAYCARE_NICKNAME,
+				"%3d" % (DAYCARE_GROWN_LEVEL - DAYCARE_LEVEL)
+			),
+			"the gentleman did not say how much it had grown."
+		)
+		var asked: Dictionary = world.pending_script_input() 			if not world.run_event_queue(true).is_empty() else {}
+		if not _r.check(
+			String(asked.get("text", "")) == _day_care_text(
+				"owe_money", "", str(DAYCARE_PRICE)
+			),
+			"the price was asked as %s." % [asked.get("text", "")]
+		):
+			return
+		_day_care_payment(world, save, purse, grown)
+
+
+func _day_care_payment(
+	world: Gen2WorldAPI, save: Gen2SaveData, purse: int, grown: Gen2SaveMon
+) -> void:
+	var said: String = _event_text(world.choose_script_input(0))
+	if purse < DAYCARE_PRICE:
+		_r.check(said == _day_care_text("not_enough_money"),
+			"a short purse was answered with %s." % said)
+		return
+	_r.check(said == _day_care_text("heres_your_mon"), "the receipt said %s." % said)
+	var taken: Gen2SaveData = Gen2SaveData.from_dict(save.to_dict())
+	world.run_event_queue(true)
+	var handed: String = _event_text(_day_care_move(world, taken))
+	_r.check(
+		not world.state.day_care_has_mon(Gen2WorldDayCare.SLOT_MAN)
+			and taken.party.size() == save.party.size() + 1
+			and (taken.party[-1] as Gen2SaveMon).level == DAYCARE_GROWN_LEVEL,
+		"the slot came back as %d members." % taken.party.size()
+	)
+	_r.check(
+		world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == purse - DAYCARE_PRICE,
+		"the purse stands at %d." % world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
+	)
+	_r.check(
+		handed == _day_care_text("got_mon_back", Gen2SaveMon.display_name(grown, _r.data)),
+		"the hand-over said %s." % handed
+	)
+
+
+## The `day_care_mon_requested` the row raises, settled the way the world screen
+## settles it: the party is the save's and the slot is the world's.
+func _day_care_move(world: Gen2WorldAPI, save: Gen2SaveData) -> Array:
+	var request: Dictionary = world.pending_runtime_request()
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"day_care_mon_requested",
+		"the row raised %s." % [request.get("kind", &"nothing")]
+	):
+		return []
+	var moved: Dictionary = Gen2WorldPartyHost.day_care_mon(world, save, request, false)
+	_r.check(bool(moved.get("ok", false)), "the move failed: %s." % [moved])
+	return moved.get("results", []) as Array
+
+
+func _day_care_world(purse: int) -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, DAYCARE, DAYCARE_GENTLEMAN)
+	if world == null:
+		return null
+	world.player_facing = Gen2WorldSprite.FACING_LEFT
+	world.state.apply_changes({}, {}, {
+		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: purse},
+	})
+	return world
+
+
+## The slot as it stands after enough experience for three levels.
+func _grown_slot() -> Gen2SaveMon:
+	var mon: Gen2SaveMon = Gen2SaveMon.new()
+	mon.species = DAYCARE_SPECIES
+	mon.level = DAYCARE_LEVEL
+	mon.nickname = DAYCARE_NICKNAME
+	mon.moves = [MOVE_CUT, 0, 0, 0]
+	mon.pp = [1, 0, 0, 0]
+	mon.exp = Gen2Experience.total_exp_at(
+		int(_r.data.species(DAYCARE_SPECIES).get("growth_rate", 0)), DAYCARE_GROWN_LEVEL
+	)
+	return mon
+
+
+func _party_moves(save: Gen2SaveData) -> Array:
+	var out: Array = []
+	for mon: Gen2SaveMon in save.party:
+		out.append(mon.moves.duplicate())
+	return out
+
+
+func _day_care_text(name: String, ram: String = "", number: String = "") -> String:
+	var text: String = Gen2TextStream.fill_names(
+		_r.data.day_care_text(name),
+		{"player": Gen2WorldScriptRunner.UNNAMED}
+	)
+	if not ram.is_empty():
+		text = Gen2TextStream.fill_all_markers(text, Gen2TextStream.RAM_MARKER, ram)
+	if not number.is_empty():
+		text = Gen2TextStream.fill_all_markers(text, Gen2TextStream.NUMBER_MARKER, number)
+	return text
 
 
 ## The argument column a hidden event hands its routine is not a facing:

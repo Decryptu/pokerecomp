@@ -466,14 +466,12 @@ static func deposit(
 	return true
 
 
-## `RetrieveBreedmon`. The level comes from the experience, `HealPartyMon` fills
-## HP, status and PP, and `FillMoves` teaches whatever the levels between the two
-## carry.
-##
-## The last write is `CalcExpAtLevel`, which puts the experience *back* to the
-## bottom of the level it just reached: that is
-## `docs/bugs_and_glitches.md`'s "Pokemon deposited in the Day-Care might lose
-## experience", and it is reproduced rather than corrected.
+## `RetrieveBreedmon`, and `MoveMon DAYCARE_TO_PARTY` with `.enoughMoney` behind
+## it on Generation 1. The level comes from the experience and HP is filled from
+## the new maximum on both; only Crystal's clears the status byte, refills every
+## PP and writes the experience *back* to the bottom of the level just reached,
+## which is `docs/bugs_and_glitches.md`'s "Pokemon deposited in the Day-Care
+## might lose experience" and is reproduced rather than corrected.
 static func retrieve(
 	state: Gen2WorldState, save: Gen2SaveData, data: GameData, slot: int
 ) -> Dictionary:
@@ -484,19 +482,14 @@ static func retrieve(
 		return {}
 	var previous_level: int = mon.level
 	mon.level = clampi(grown_level(data, mon), previous_level, MAX_LEVEL)
-	Gen2Learnset.fill_moves(
-		data.learnset(mon.species), mon.moves, mon.level, previous_level
-	)
-	var growth_rate: int = int(data.species(mon.species).get("growth_rate", 0))
-	mon.exp = Gen2Experience.total_exp_at(growth_rate, mon.level)
-	mon.status = Gen2Status.NONE
+	if data.generation == RomRegistry.GEN1:
+		gen1_fill_moves(data, mon, previous_level)
+	else:
+		_retrieve_gen2_rows(data, mon, previous_level)
 	mon.hp = Gen2Stats.calculate(
 		int((data.species(mon.species).get("stats", {}) as Dictionary).get("hp", 0)),
 		Gen2Stats.hp_dv(mon.dvs), int(mon.stat_exp.get("hp", 0)), mon.level, true
 	)
-	for index: int in Gen2SaveMon.MAX_MOVES:
-		var move: int = int(mon.moves[index])
-		mon.pp[index] = int(data.move(move).get("pp", 0)) if move > 0 else 0
 	save.party.append(mon)
 	state.set_day_care_mon(slot, null)
 	state.set_day_care_has_mon(slot, false)
@@ -506,6 +499,72 @@ static func retrieve(
 		"level": mon.level,
 		"previous_level": previous_level,
 	}
+
+
+static func _retrieve_gen2_rows(data: GameData, mon: Gen2SaveMon, previous_level: int) -> void:
+	Gen2Learnset.fill_moves(
+		data.learnset(mon.species), mon.moves, mon.level, previous_level
+	)
+	mon.exp = Gen2Experience.total_exp_at(
+		int(data.species(mon.species).get("growth_rate", 0)), mon.level
+	)
+	mon.status = Gen2Status.NONE
+	for index: int in Gen2SaveMon.MAX_MOVES:
+		var move: int = int(mon.moves[index])
+		mon.pp[index] = int(data.move(move).get("pp", 0)) if move > 0 else 0
+
+
+## `IncrementDayCareMonExp`, in front of `ApplyOutOfBattlePoisonDamage`'s own
+## gate: a point for the one slot, with no level test, so MAX_LEVEL keeps counting.
+static func gen1_step(state: Gen2WorldState) -> void:
+	var mon: Gen2SaveMon = state.day_care_mon(SLOT_MAN) if state != null else null
+	if mon == null or not state.day_care_has_mon(SLOT_MAN):
+		return
+	mon.exp = _day_care_exp_after(mon.exp)
+	state.set_day_care_mon(SLOT_MAN, mon)
+
+
+## `.daycareInUse`'s head, and the one write a visit makes whatever the player
+## answers: a slot past MAX_LEVEL has its experience put back down to
+## `CalcExperience MAX_LEVEL`, which `.leaveMonInDayCare` does not undo.
+static func gen1_visit(state: Gen2WorldState, data: GameData) -> Dictionary:
+	var mon: Gen2SaveMon = state.day_care_mon(SLOT_MAN) if state != null else null
+	if mon == null or data == null:
+		return {}
+	var rate: int = int(data.species(mon.species).get("growth_rate", 0))
+	var level: int = clampi(Gen2Experience.level_for_exp(rate, mon.exp), 1, MAX_LEVEL)
+	if level == MAX_LEVEL:
+		mon.exp = Gen2Experience.total_exp_at(rate, MAX_LEVEL)
+		state.set_day_care_mon(SLOT_MAN, mon)
+	var growth: int = maxi(0, level - mon.level)
+	return {
+		"level": level,
+		"growth": growth,
+		"price": price_to_retrieve(growth),
+		"species": mon.species,
+		"nickname": Gen2SaveMon.display_name(mon, data),
+	}
+
+
+## `WriteMonMoves` under `wLearningMovesFromDayCare`: only the levels above
+## [param above] are offered, and the shift runs a second time over the PP, so a
+## displaced slot keeps its own count.
+static func gen1_fill_moves(data: GameData, mon: Gen2SaveMon, above: int) -> void:
+	for entry: Dictionary in data.learnset(mon.species):
+		var at: int = int(entry["level"])
+		if at > mon.level:
+			break
+		var move: int = int(entry["move"])
+		if at <= above or mon.moves.has(move):
+			continue
+		var slot: int = mon.moves.find(0)
+		if slot < 0:
+			for index: int in Gen2SaveMon.MAX_MOVES - 1:
+				mon.moves[index] = mon.moves[index + 1]
+				mon.pp[index] = mon.pp[index + 1]
+			slot = Gen2SaveMon.MAX_MOVES - 1
+		mon.moves[slot] = move
+		mon.pp[slot] = int(data.move(move).get("pp", 0))
 
 
 ## `DayCare_GiveEgg`. The egg the pair built when the counter started is the one

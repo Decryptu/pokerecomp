@@ -585,6 +585,16 @@ const POKECENTER_TEXT_AT: Dictionary = {
 	"fighting_fit": 0x10, "farewell": 0x15,
 }
 
+## `DaycareGentlemanText`'s fifteen stubs, at the same deltas on all three.
+## `all_right_then` has no `text_end`, so `come_again` prints as part of it.
+const DAY_CARE_TEXT_AT: Dictionary = {
+	"intro": 0x00, "which_mon": 0x05, "will_look_after": 0x0A,
+	"come_see_me": 0x0F, "has_grown": 0x14, "owe_money": 0x19,
+	"got_mon_back": 0x1E, "needs_more_time": 0x23, "all_right_then": 0x28,
+	"come_again": 0x2C, "no_room": 0x31, "only_one_mon": 0x36,
+	"knows_hm_move": 0x3B, "heres_your_mon": 0x40, "not_enough_money": 0x45,
+}
+
 ## `engine/items/item_effects.asm`'s two runs the pack prints from: the three
 ## refusals `ItemUseFailed` reaches and `TossItem_`'s own three.
 const ITEM_USE_TEXT_AT: Dictionary = {
@@ -1256,6 +1266,9 @@ const RED_BLUE: Dictionary = {
 	"replace_tile_block": 0x0EE9E,
 	"card_key_door": 0xD73F,
 	"silph_map_list": 0x526E3,
+	## `DaycareGentlemanText` and the head of its own stub run.
+	"day_care_script": 0x56254,
+	"day_care_text": 0x5640F,
 	## `DoInGameTradeDialogue`, the trade table it indexes with `wWhichTrade`,
 	## `InGameTradeTextPointers` and the pair of boxes the swap itself prints.
 	"in_game_trade": 0x71AD9,
@@ -1450,6 +1463,8 @@ const YELLOW: Dictionary = {
 	"replace_tile_block": 0x0ED1B,
 	"card_key_door": 0xD73E,
 	"silph_map_list": 0x52645,
+	"day_care_script": 0x56244,
+	"day_care_text": 0x56441,
 	"in_game_trade": 0x71B86,
 	"which_trade": 0xCD3D,
 	"trade_mons": 0x71C1D,
@@ -1670,6 +1685,15 @@ static func machine_number(item: int) -> int:
 	if is_tm_item(item):
 		return item - TM_FIRST_ITEM + 1
 	return TM_COUNT + item - HM_FIRST_ITEM + 1 if is_hm_item(item) else 0
+
+
+## The inverse: the item a one-based `TechnicalMachines` row is carried by.
+static func machine_item(number: int) -> int:
+	if number >= 1 and number <= TM_COUNT:
+		return TM_FIRST_ITEM + number - 1
+	if number > TM_COUNT and number <= TM_COUNT + HM_COUNT:
+		return HM_FIRST_ITEM + number - TM_COUNT - 1
+	return 0
 
 
 static func item_price_offset(layout: Dictionary, item: int) -> int:

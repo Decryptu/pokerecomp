@@ -483,7 +483,10 @@ static func _verify_battle_anims(rom: RomFile, layout: Dictionary) -> Dictionary
 ## Each run is one contiguous block of `text_far` stubs, so a base offset that
 ## has slipped shows up as a slot that does not decode at all.
 static func _verify_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var runs: Dictionary = {"mart": ["mart_text", Gen1Layout.MART_TEXT_AT]}
+	var runs: Dictionary = {
+		"mart": ["mart_text", Gen1Layout.MART_TEXT_AT],
+		"day_care": ["day_care_text", Gen1Layout.DAY_CARE_TEXT_AT],
+	}
 	runs.merge(FACILITY_TEXT_RUNS)
 	runs["npc_trade"] = ["npc_trade_cable_text", Gen1Layout.NPC_TRADE_TEXT_AT]
 	for run: String in runs:
@@ -789,6 +792,7 @@ func import_rom(
 		"tiles": tiles,
 		"bar_palettes": _import_bar_palettes(rom, layout),
 		"mart_text": _import_mart_text(rom, layout),
+		"day_care_text": _import_day_care_text(rom, layout),
 		"special_text": _import_facility_text(rom, layout),
 		"oak_ratings": _import_dex_ratings(rom, layout),
 		"vending": _import_vending(rom, layout, items),
@@ -1055,6 +1059,17 @@ func _import_prizes(rom: RomFile, layout: Dictionary) -> Array:
 				"level": int(levels.get(number, 0)) if not tms else 0,
 			})
 		out.append({"tms": tms, "rows": rows})
+	return out
+
+
+## `DaycareGentlemanText`'s fifteen, in the section both generations' Day-Care
+## boxes are read from.
+func _import_day_care_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for name: String in Gen1Layout.DAY_CARE_TEXT_AT:
+		out[name] = facility_text(rom, Gen1Layout.facility_text_offset(
+			layout, "day_care_text", Gen1Layout.DAY_CARE_TEXT_AT, name
+		))
 	return out
 
 

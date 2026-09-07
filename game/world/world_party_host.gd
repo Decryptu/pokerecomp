@@ -559,6 +559,66 @@ static func heal_party_rows(data: GameData, save: Gen2SaveData) -> int:
 	return healed
 
 
+## `MoveMon` both ways for the Generation 1 Day-Care, whose slot is world state
+## and whose party is the save: one transaction, for the reason a trade is.
+static func day_care_mon(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	request: Dictionary,
+	persist: bool = true,
+) -> Dictionary:
+	if world == null or save == null or world.data == null or world.state == null:
+		return _failure(&"missing_save", request)
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return _failure(StringName(opened["reason"]), opened.get("details", {}))
+	var candidate: Gen2SaveData = opened["candidate"]
+	## After the snapshot, so a refused write rolls the slot back with the party.
+	var before: Gen2WorldSnapshot = world.snapshot()
+	var values: Dictionary = request.get("values", {})
+	var moved: Dictionary = _move_day_care_mon(world, candidate, values)
+	if not bool(moved.get("ok", false)):
+		Gen2WorldTransaction.restore(world, before)
+		return _failure(StringName(moved.get("reason", &"day_care_move_failed")), request)
+	var resumed: Array = world.complete_runtime_request({"ok": true})
+	if resumed.is_empty() or not bool(resumed[0].get("ok", false)):
+		return _failure(&"runtime_request_failed", {
+			"request": request, "results": resumed,
+		})
+	var committed: Dictionary = Gen2WorldTransaction.commit(
+		world, save, candidate, before, persist
+	)
+	if not bool(committed.get("ok", false)):
+		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	return {
+		"ok": true,
+		"handled": true,
+		"request": request,
+		"transaction": moved,
+		"results": resumed,
+	}
+
+
+static func _move_day_care_mon(
+	world: Gen2WorldAPI, candidate: Gen2SaveData, values: Dictionary
+) -> Dictionary:
+	if StringName(values.get("action", &"")) == &"deposit":
+		var party_index: int = int(values.get("party_index", -1))
+		if not Gen2WorldDayCare.deposit(
+			world.state, candidate, Gen2WorldDayCare.SLOT_MAN, party_index
+		):
+			return {"ok": false, "reason": &"day_care_deposit_refused"}
+		return {"ok": true, "kind": &"deposit", "party_index": party_index}
+	var taken: Dictionary = Gen2WorldDayCare.retrieve(
+		world.state, candidate, world.data, Gen2WorldDayCare.SLOT_MAN
+	)
+	if taken.is_empty():
+		return {"ok": false, "reason": &"day_care_slot_empty"}
+	taken["ok"] = true
+	taken["kind"] = &"withdraw"
+	return taken
+
+
 ## `Softboiled_MilkDrinkFunction`: a fifth of the user's own maximum health moved
 ## from the user to another party member, as one candidate transaction. Both halves
 ## are the *user's* fifth, `GetOneFifthMaxHP` being called twice with

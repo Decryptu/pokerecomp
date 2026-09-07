@@ -17,6 +17,7 @@ const MAROWAK: int = Fixture.MAROWAK
 const HOOTHOOT: int = Fixture.HOOTHOOT
 const BULBASAUR: int = Fixture.BULBASAUR
 const IVYSAUR: int = 2
+const GEODUDE: int = Fixture.GEODUDE
 const DITTO: int = Fixture.DITTO
 
 ## Two DV words giving opposite genders at GENDER_F50, whose Defense DVs and
@@ -223,6 +224,88 @@ func test_a_retrieved_member_comes_back_at_the_level_its_experience_bought() -> 
 	assert_eq(back.exp, Gen2Experience.total_exp_at(growth_rate, 14))
 	assert_eq(back.status, Gen2Status.NONE)
 	assert_gt(back.hp, 0)
+
+
+## `IncrementDayCareMonExp` has no level test in front of it, which is the whole
+## of what parts it from `DayCareStep`.
+func test_a_generation_one_slot_gains_experience_at_the_level_cap() -> void:
+	var state: Gen2WorldState = _state()
+	var mon: Gen2SaveMon = _mon(CUBONE)
+	mon.level = Gen2WorldDayCare.MAX_LEVEL
+	state.set_day_care_mon(Gen2WorldDayCare.SLOT_MAN, mon)
+	state.set_day_care_has_mon(Gen2WorldDayCare.SLOT_MAN, true)
+	var before: int = state.day_care_mon(Gen2WorldDayCare.SLOT_MAN).exp
+	Gen2WorldDayCare.gen1_step(state)
+	assert_eq(state.day_care_mon(Gen2WorldDayCare.SLOT_MAN).exp, before + 1)
+
+
+func test_an_empty_generation_one_slot_counts_nothing() -> void:
+	var state: Gen2WorldState = _state()
+	Gen2WorldDayCare.gen1_step(state)
+	assert_null(state.day_care_mon(Gen2WorldDayCare.SLOT_MAN))
+
+
+## `.daycareInUse` reads the level off the experience and prices the difference.
+func test_a_generation_one_visit_reads_the_growth_and_the_price() -> void:
+	var state: Gen2WorldState = _state()
+	var mon: Gen2SaveMon = _mon(CUBONE)
+	mon.exp = Gen2Experience.total_exp_at(
+		int(_data.species(CUBONE).get("growth_rate", 0)), 13
+	)
+	state.set_day_care_mon(Gen2WorldDayCare.SLOT_MAN, mon)
+	state.set_day_care_has_mon(Gen2WorldDayCare.SLOT_MAN, true)
+	var visit: Dictionary = Gen2WorldDayCare.gen1_visit(state, _data)
+	assert_eq(int(visit["level"]), 13)
+	assert_eq(int(visit["growth"]), 3)
+	assert_eq(int(visit["price"]), 400)
+
+
+## The clamp is not undone by `.leaveMonInDayCare`, so it survives a visit that
+## bought nothing.
+func test_a_generation_one_visit_clamps_experience_past_the_level_cap() -> void:
+	var state: Gen2WorldState = _state()
+	var mon: Gen2SaveMon = _mon(CUBONE)
+	mon.exp = Gen2Experience.MAX_EXP
+	state.set_day_care_mon(Gen2WorldDayCare.SLOT_MAN, mon)
+	state.set_day_care_has_mon(Gen2WorldDayCare.SLOT_MAN, true)
+	assert_eq(
+		int(Gen2WorldDayCare.gen1_visit(state, _data)["level"]),
+		Gen2WorldDayCare.MAX_LEVEL
+	)
+	assert_eq(
+		state.day_care_mon(Gen2WorldDayCare.SLOT_MAN).exp,
+		Gen2Experience.total_exp_at(
+			int(_data.species(CUBONE).get("growth_rate", 0)),
+			Gen2WorldDayCare.MAX_LEVEL
+		)
+	)
+
+
+## `WriteMonMoves_ShiftMoveData` runs a second time over the PP, so the slot a
+## move is shifted into carries that move's own count and the survivors keep
+## whatever they had left.
+func test_generation_one_learning_shifts_the_pp_with_the_moves() -> void:
+	var mon: Gen2SaveMon = _mon(GEODUDE)
+	var learned: Array = _data.learnset(GEODUDE)
+	var taught: int = int((learned[-1] as Dictionary)["move"])
+	var level: int = int((learned[-1] as Dictionary)["level"])
+	mon.moves = [1, 2, 3, 4]
+	mon.pp = [5, 6, 7, 8]
+	mon.level = level
+	Gen2WorldDayCare.gen1_fill_moves(_data, mon, level - 1)
+	assert_eq(mon.moves, [2, 3, 4, taught])
+	assert_eq(int(mon.pp[0]), 6)
+	assert_eq(int(mon.pp[3]), int(_data.move(taught).get("pp", 0)))
+
+
+## Only the levels above the one the slot went in at are offered.
+func test_generation_one_learning_skips_the_levels_below_the_deposit() -> void:
+	var mon: Gen2SaveMon = _mon(GEODUDE)
+	mon.moves = [0, 0, 0, 0]
+	mon.pp = [0, 0, 0, 0]
+	mon.level = Gen2WorldDayCare.MAX_LEVEL
+	Gen2WorldDayCare.gen1_fill_moves(_data, mon, Gen2WorldDayCare.MAX_LEVEL)
+	assert_eq(mon.moves, [0, 0, 0, 0])
 
 
 func test_a_full_party_cannot_take_a_member_back() -> void:

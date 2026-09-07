@@ -2058,6 +2058,15 @@ func _spend_day_care_steps() -> void:
 	var owed: int = _world.state.take_pending_day_care_steps()
 	if owed <= 0 or _hatch_host != null:
 		return
+	## `IncrementDayCareMonExp` stands in front of `ApplyOutOfBattlePoisonDamage`'s
+	## own gate and behind its `wPartyCount` test, so an empty party counts nothing.
+	if _data.generation == RomRegistry.GEN1:
+		var save: Gen2SaveData = active_save()
+		if save == null or save.party.is_empty():
+			return
+		for _pass: int in owed:
+			Gen2WorldDayCare.gen1_step(_world.state)
+		return
 	for _pass: int in owed:
 		Gen2WorldDayCare.step(_world.state, _data, _breed_random)
 
