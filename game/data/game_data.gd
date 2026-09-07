@@ -2606,7 +2606,20 @@ func gen1_dungeon_warp(map: int, warp: int) -> Dictionary:
 	return {}
 
 
-## `EscapeRopeTilesets` or `SafariZoneRestHouses`, each a `db` list to a `-1`.
+## Whether `ForcedBikeOrSurfMaps` holds [param map] at [param cell], which is
+## everything `CheckForceBikeOrSurf` asks of the table: which of the two rides
+## it forces is the map id's own answer.
+func gen1_forces_ride(map: int, cell: Vector2i) -> bool:
+	for row: Variant in _special_warps.get("forced_bike_surf", []) as Array:
+		var entry: Dictionary = row
+		if int(entry.get("map", -1)) == map and int(entry.get("x", -1)) == cell.x \
+			and int(entry.get("y", -1)) == cell.y:
+			return true
+	return false
+
+
+## One of the `db` lists ending in `-1` that `_import_special_warps` reads:
+## `EscapeRopeTilesets`, `SafariZoneRestHouses` or `BikeRidingTilesets`.
 func gen1_special_warp_list(name: String) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	for value: Variant in _special_warps.get(name, []) as Array:

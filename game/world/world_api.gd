@@ -6558,6 +6558,16 @@ func warp_pending(cell: Vector2i = player_cell) -> bool:
 		and not Gen2WorldCollision.is_directional_warp(code)
 
 
+## `CheckWarpsCollision`, which `CollisionCheckOnLand`'s own carry reaches: a
+## step blocked while standing on a warp still takes it when `ExtraWarpCheck`
+## passes, and that check alone, where a landed step takes a door tile as well.
+## Generation 1's alone, and the only way out of a map whose exit is a warp at
+## its own edge.
+func blocked_step_warps() -> bool:
+	return _gen1 and current_map != null and not warp_at(player_cell).is_empty() \
+		and _gen1_extra_warp_check(player_cell)
+
+
 ## `DoPlayerMovement.CheckWarp`: the player is standing on the warp carpet that
 ## names [param direction], is already facing that way, and the cell carries a
 ## warp. The press takes the warp instead of bumping, which is why an interior
@@ -6682,16 +6692,24 @@ func _warp_tile_allows(cell: Vector2i) -> bool:
 	if not _gen1:
 		return Gen2WorldCollision.is_warp_tile(standing)
 	var tileset: int = current_map.tileset
+	## `IsPlayerStandingOnDoorTileOrWarpTile`, which `CheckWarpsNoCollision` takes
+	## before `ExtraWarpCheck` is asked at all.
 	if Gen2WorldCollision.gen1_is_warp_tile(tileset, standing) \
 		or Gen2WorldCollision.gen1_is_door_tile(tileset, standing):
 		return true
+	return _gen1_extra_warp_check(cell)
+
+
+## `ExtraWarpCheck`: `IsWarpTileInFrontOfPlayer` on the maps and tilesets it
+## names and `IsPlayerFacingEdgeOfMap` on the rest, which compares the player's
+## own coordinate against the map where the carpet test reads the drawn tile and
+## so sees the border.
+func _gen1_extra_warp_check(cell: Vector2i) -> bool:
 	var direction: Vector2i = _direction_for_facing(player_facing)
 	var ahead: Vector2i = cell + direction
 	if current_map.number == Gen1Layout.MAP_SS_ANNE_BOW:
 		return _gen1_tile_drawn_at(ahead) == Gen1Layout.SS_ANNE_BOW_WARP_TILE
-	## `IsPlayerFacingEdgeOfMap` compares the player's own coordinate against the
-	## map, where the carpet test reads the drawn tile and so sees the border.
-	if not Gen1Layout.warp_wants_carpet(current_map.number, tileset):
+	if not Gen1Layout.warp_wants_carpet(current_map.number, current_map.tileset):
 		return collision_code_at(ahead) < 0
 	return Gen2WorldCollision.gen1_is_warp_carpet(direction, _gen1_tile_drawn_at(ahead))
 
@@ -7949,7 +7967,7 @@ func _map_setup_sprite(mode: StringName) -> int:
 	if mode == MOVEMENT_SURF:
 		return Gen2WorldFieldMove.surf_sprite(0, _gen1)
 	if mode == MOVEMENT_BIKE:
-		return Gen2WorldSprite.player_bike_sprite(_player_female)
+		return _bike_sprite()
 	return _walking_sprite()
 
 
@@ -7962,8 +7980,10 @@ const BIKE_DISMOUNT_ENVIRONMENTS: Array[int] = [
 
 ## `CheckUpdatePlayerSprite`'s three branches in its own order: `.CheckForcedBiking`,
 ## then `.CheckSurfing`, then `.ResetSurfingOrBikingState`.
+## Generation 1's is `LoadPlayerSpriteGraphics`, whose `.ridingBike` asks
+## `IsBikeRidingAllowed` and whose nothing forces a ride.
 func _setup_movement_mode(cell: Vector2i) -> StringName:
-	if state != null and state.is_engine_flag_active(
+	if not _gen1 and state != null and state.is_engine_flag_active(
 		Gen2WorldState.always_on_bike_flag(data)
 	):
 		return MOVEMENT_BIKE
@@ -7972,9 +7992,14 @@ func _setup_movement_mode(cell: Vector2i) -> StringName:
 	if movement_mode == MOVEMENT_SURF:
 		return MOVEMENT_WALK
 	if movement_mode == MOVEMENT_BIKE and current_map != null \
-		and BIKE_DISMOUNT_ENVIRONMENTS.has(current_map.environment):
+		and not _map_setup_keeps_bike():
 		return MOVEMENT_WALK
 	return movement_mode
+
+
+func _map_setup_keeps_bike() -> bool:
+	return _can_ride_bike_here() if _gen1 \
+		else not BIKE_DISMOUNT_ENVIRONMENTS.has(current_map.environment)
 
 
 func _apply_map(
@@ -8032,7 +8057,11 @@ func _apply_map(
 	# HandleNewMap's own resets: ResetBikeFlags drops a used Strength with the
 	# map, ResetFlashIfOutOfCave puts the light out on a route or a town, and
 	# HandleContinueMap behind it runs ClearCmdQueue over every written queue.
-	state.reset_bike_flags(Gen2WorldState.is_crystal_profile(data))
+	# Generation 1 has no such reset: `BIT_ALWAYS_ON_BIKE` outlives a map change
+	# and only the two gate scripts clear it, which is what carries a forced ride
+	# from Route 16 all the way to Route 18.
+	if not _gen1:
+		state.reset_bike_flags(Gen2WorldState.is_crystal_profile(data))
 	state.clear_flash_if_outdoors(target_map.environment)
 	_command_queue_slots = _empty_command_queue_slots()
 	current_map = target_map
@@ -8051,6 +8080,7 @@ func _apply_map(
 	):
 		player_facing = Gen2WorldSprite.FACING_DOWN
 	_apply_map_setup_player_state()
+	_gen1_check_force_bike_or_surf()
 	_clear_player_step()
 	# _load_objects() rebuilds every record, so in-flight object steps end with
 	# the objects that owned them.
@@ -8253,6 +8283,7 @@ func _gen1_fly_request() -> Dictionary:
 ## `.usedFlyWarp`: the destination's own `FlyWarpDataPtr` record, which is a tile
 ## on a map the overworld tileset always draws.
 func gen1_fly_to(map: int, entry: int = MAP_ENTRY_FLY) -> Dictionary:
+	_gen1_leave_map_on_foot()
 	var landing: Dictionary = data.gen1_fly_warp(map) if data != null else {}
 	var target_map: Gen2WorldMap = data.world_map(0, map) if not landing.is_empty() else null
 	var target_tileset: Gen2WorldTileset = data.world_tileset(target_map.tileset) \
@@ -8300,6 +8331,7 @@ func gen1_dungeon_fall() -> Dictionary:
 	var hole: Dictionary = gen1_dungeon_hole_at(player_cell)
 	if hole.is_empty():
 		return {}
+	_gen1_leave_map_on_foot()
 	var target_map: Gen2WorldMap = data.world_map(0, int(hole["map"]))
 	var target_tileset: Gen2WorldTileset = data.world_tileset(target_map.tileset) \
 		if target_map != null else null
@@ -8457,21 +8489,45 @@ func _step_frames_for_movement() -> int:
 func bike_request() -> Dictionary:
 	if current_map == null:
 		return _bike_failure(&"missing_map")
+	if _gen1:
+		return _gen1_bike_request()
 	if not _can_ride_bike_here():
 		return _bike_failure(&"cannot_use_bike")
 	if movement_mode == MOVEMENT_WALK:
-		movement_mode = MOVEMENT_BIKE
-		player_sprite_number = Gen2WorldSprite.player_bike_sprite(_player_female)
-		_apply_map_music()
-		return {
-			"ok": true, "kind": &"bike_on",
-			"music": state.map_music(),
-			"sprite": player_sprite_number,
-		}
+		return _mount_bike()
 	if movement_mode != MOVEMENT_BIKE:
 		return _bike_failure(&"cannot_use_bike")
 	if always_on_bike():
 		return {"ok": true, "kind": &"bike_cant_get_off", "sprite": player_sprite_number}
+	return _dismount_bike()
+
+
+## `ItemUseBicycle`, with `.useOrTossItem`'s own refusal in front of it: the item
+## menu tests `BIT_ALWAYS_ON_BIKE` before `UseItem` runs, so the Bicycle is
+## refused on Cycling Road whether or not the player is riding. Getting off asks
+## nothing about the map, and only getting on reaches `IsBikeRidingAllowed`.
+func _gen1_bike_request() -> Dictionary:
+	if always_on_bike():
+		return _bike_failure(&"cannot_get_off")
+	if movement_mode == MOVEMENT_SURF:
+		return _bike_failure(&"cannot_use_bike")
+	if movement_mode == MOVEMENT_BIKE:
+		return _dismount_bike()
+	return _mount_bike() if _can_ride_bike_here() else _bike_failure(&"no_cycling_here")
+
+
+func _mount_bike() -> Dictionary:
+	movement_mode = MOVEMENT_BIKE
+	player_sprite_number = _bike_sprite()
+	_apply_map_music()
+	return {
+		"ok": true, "kind": &"bike_on",
+		"music": state.map_music(),
+		"sprite": player_sprite_number,
+	}
+
+
+func _dismount_bike() -> Dictionary:
 	movement_mode = MOVEMENT_WALK
 	player_sprite_number = _walking_sprite()
 	_apply_map_music()
@@ -8483,15 +8539,62 @@ func bike_request() -> Dictionary:
 
 
 ## `BIKEFLAGS_ALWAYS_ON_BIKE_F`: Route 16 and Route 17 set it, and it refuses
-## both getting off and surfing.
+## both getting off and surfing. Generation 1's `BIT_ALWAYS_ON_BIKE` is the same
+## bit of state under `CheckForceBikeOrSurf` instead.
 func always_on_bike() -> bool:
 	return state != null \
 		and state.is_engine_flag_active(Gen2WorldState.always_on_bike_flag(data))
 
 
+## `CheckForceBikeOrSurf`, which `EnterMap` runs behind the map load. A cell of
+## `ForcedBikeOrSurfMaps` mounts the bike and sets `BIT_ALWAYS_ON_BIKE`, except
+## on the two Seafoam Islands floors, which force surfing and set nothing; the
+## flag already standing returns before the walk. The two gate scripts open by
+## clearing it, which is the only way a forced ride ends.
+func _gen1_check_force_bike_or_surf() -> void:
+	if not _gen1 or current_map == null or state == null:
+		return
+	if current_map.scripts.get("clears_always_on_bike", false):
+		state.set_engine_flag(Gen2WorldState.always_on_bike_flag(data), false)
+		return
+	if always_on_bike() or not data.gen1_forces_ride(current_map.number, player_cell):
+		return
+	if current_map.number in [
+		Gen1Layout.SEAFOAM_ISLANDS_B3F, Gen1Layout.SEAFOAM_ISLANDS_B4F,
+	]:
+		movement_mode = MOVEMENT_SURF
+		player_sprite_number = Gen2WorldFieldMove.surf_sprite(0, true)
+		return
+	state.set_engine_flag(Gen2WorldState.always_on_bike_flag(data), true)
+	movement_mode = MOVEMENT_BIKE
+	player_sprite_number = _bike_sprite()
+
+
+## `HandleFlyWarpOrDungeonWarp`'s own two writes, which a fly, an Escape Rope,
+## Dig, Teleport, a blackout and a dungeon hole all pay: `wWalkBikeSurfState`
+## back to walking and `BIT_ALWAYS_ON_BIKE` clear.
+func _gen1_leave_map_on_foot() -> void:
+	if not _gen1:
+		return
+	movement_mode = MOVEMENT_WALK
+	player_sprite_number = _walking_sprite()
+	state.set_engine_flag(Gen2WorldState.always_on_bike_flag(data), false)
+
+
+## `LoadBikePlayerSpriteGraphics`' own sheet. Generation 1's is `RedBikeSprite`,
+## which the picture table names no row for; see [method Gen1Layout.bike_sprite].
+func _bike_sprite() -> int:
+	return Gen1Layout.bike_sprite(data.id) if _gen1 \
+		else Gen2WorldSprite.player_bike_sprite(_player_female)
+
+
 ## `.CheckEnvironment`: outdoors, a cave or a gate, and standing on a tile whose
 ## permission's low nibble is `FLOOR_TILE`. Water and every wall code fail it.
+## `IsBikeRidingAllowed` asks neither: two map ids, then the map's tileset.
 func _can_ride_bike_here() -> bool:
+	if _gen1:
+		return Gen1Layout.BIKE_ALLOWED_MAPS.has(current_map.number) \
+			or data.gen1_special_warp_list("bike_riding_tilesets").has(current_map.tileset)
 	if not _is_outdoor(current_map.environment) \
 		and current_map.environment not in [ENVIRONMENT_CAVE, ENVIRONMENT_GATE]:
 		return false

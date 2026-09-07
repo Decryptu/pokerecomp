@@ -138,6 +138,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_battle_anims,
 	_verify_facility_text,
 	_verify_dex_ratings,
+	_verify_bike_data,
 	_verify_world,
 ]
 
@@ -172,6 +173,8 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"prizes_2": ["prize_text_2", Gen1Layout.PRIZE_TEXT_2_AT],
 	"pick_up_item": ["found_item_text", Gen1Layout.PICK_UP_TEXT_AT],
 	"item_use": ["item_use_text", Gen1Layout.ITEM_USE_TEXT_AT],
+	"bicycle": ["bicycle_text", Gen1Layout.BICYCLE_TEXT_AT],
+	"start_menu": ["start_menu_text", Gen1Layout.START_MENU_TEXT_AT],
 	"coin_case": ["coin_case_text", Gen1Layout.COIN_CASE_TEXT_AT],
 	"party_menu": ["party_menu_text", Gen1Layout.PARTY_MENU_TEXT_AT],
 	"toss": ["toss_text", Gen1Layout.TOSS_TEXT_AT],
@@ -501,6 +504,24 @@ static func _verify_facility_text(rom: RomFile, layout: Dictionary) -> Dictionar
 				return _fail("%s's %s box does not decode at $%05X." % [run, name, at])
 	if facility_text(rom, int(layout["mart_greeting"])).is_empty():
 		return _fail("PokemartGreetingText does not decode.")
+	return _ok()
+
+
+## `BikeRidingTilesets`' five rows and `ForcedBikeOrSurfMaps`' eight, each
+## naming something the rest of the cache holds.
+static func _verify_bike_data(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var tilesets: Array = _byte_list(rom, int(layout["bike_riding_tilesets"]))
+	if tilesets.size() != Gen1Layout.BIKE_RIDING_TILESET_COUNT:
+		return _fail("BikeRidingTilesets holds %d rows." % tilesets.size())
+	for number: int in tilesets:
+		if number >= Gen1Layout.tileset_count(rom.id):
+			return _fail("BikeRidingTilesets names tileset %d." % number)
+	var forced: Array = _forced_bike_surf(rom, layout)
+	if forced.size() != Gen1Layout.FORCED_BIKE_SURF_ROWS:
+		return _fail("ForcedBikeOrSurfMaps holds %d rows." % forced.size())
+	for row: Dictionary in forced:
+		if not Gen1Layout.is_real_map(int(row["map"])):
+			return _fail("ForcedBikeOrSurfMaps names map %d." % int(row["map"]))
 	return _ok()
 
 
@@ -1100,11 +1121,24 @@ func _import_special_warps(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"dungeon_warps": rows,
 		"escape_rope_tilesets": _byte_list(rom, int(layout["escape_rope_tilesets"])),
 		"rest_houses": _byte_list(rom, int(layout["rest_houses"])),
+		"bike_riding_tilesets": _byte_list(rom, int(layout["bike_riding_tilesets"])),
+		"forced_bike_surf": _forced_bike_surf(rom, layout),
 	}
 
 
+## `ForcedBikeOrSurfMaps`, whose `db map, y, x` rows `CheckForceBikeOrSurf` walks
+## against the cell the player entered the map on.
+static func _forced_bike_surf(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout["forced_bike_surf"])
+	var out: Array = []
+	while rom.u8(at) != Gen1Layout.TILESET_LIST_END:
+		out.append({"map": rom.u8(at), "y": rom.u8(at + 1), "x": rom.u8(at + 2)})
+		at += Gen1Layout.FORCED_BIKE_SURF_ROW_SIZE
+	return out
+
+
 ## A `db`-per-row table ended by the `-1` every one of Generation 1's carries.
-func _byte_list(rom: RomFile, at: int) -> Array:
+static func _byte_list(rom: RomFile, at: int) -> Array:
 	var out: Array = []
 	while rom.u8(at) != Gen1Layout.TILESET_LIST_END:
 		out.append(rom.u8(at))

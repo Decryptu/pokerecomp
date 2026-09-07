@@ -210,6 +210,23 @@ const SPRITE_COUNTS: Dictionary = {&"red": 72, &"blue": 72, &"yellow": 82}
 const SPRITE_STILL_FIRST: Dictionary = {&"red": 0x3D, &"blue": 0x3D, &"yellow": 0x47}
 const PLAYER_SPRITE: Array = [0x4180, 0x05]
 const PLAYER_SPRITE_YELLOW: Array = [0x4571, 0x05]
+## `RedBikeSprite`, which no row of that table names: the walking strip
+## `INCBIN`'d in front of `RedSprite`'s, cached one picture id past the last.
+const BIKE_SPRITE_BYTES: int = 0x180
+
+## `BikeRidingTilesets` and `ForcedBikeOrSurfMaps` as map to its cells. Route
+## 16's and Route 18's four force the bike, Seafoam Islands B3F's and B4F's
+## force surfing, and `IsBikeRidingAllowed` answers yes on 63 real maps of every
+## cartridge, counted from pret's own `data/maps/headers`.
+const BIKE_RIDING_TILESETS: Array[int] = [0, 3, 11, 14, 17]
+const FORCED_RIDES: Dictionary = {
+	27: [[17, 10], [17, 11]], 29: [[33, 8], [33, 9]],
+	161: [[18, 7], [19, 7]], 162: [[4, 14], [5, 14]],
+}
+const BIKE_ALLOWED_MAPS: int = 63
+## Route 16 Gate 1F and Route 18 Gate 1F, the only two scripts opening on
+## `res BIT_ALWAYS_ON_BIKE, [hl]`.
+const BIKE_GATE_MAPS: Array[int] = [186, 190]
 
 ## Every `IsPlayerOnDungeonWarp` caller of the corpus, source map to its holes:
 ## the `dbmapcoord`, the map it drops onto and the `DungeonWarpData` tile it
@@ -255,6 +272,7 @@ func _one_game() -> void:
 	_map_callbacks()
 	_hidden_events()
 	_dungeon_warps()
+	_bike()
 	_toggleables()
 	_wild_objects()
 	_palettes()
@@ -848,9 +866,9 @@ static func _packed(color: Color) -> int:
 func _sprites() -> void:
 	var wanted: int = int(SPRITE_COUNTS[_r.game_id])
 	var still_first: int = int(SPRITE_STILL_FIRST[_r.game_id])
-	if not _r.check(_r.data.overworld_sprite_count() == wanted,
+	if not _r.check(_r.data.overworld_sprite_count() == wanted + 1,
 		"the cache holds %d overworld sprites, wanted %d." % [
-			_r.data.overworld_sprite_count(), wanted,
+			_r.data.overworld_sprite_count(), wanted + 1,
 		]):
 		return
 	var player: Array = PLAYER_SPRITE_YELLOW if _r.game_id == RomRegistry.YELLOW \
@@ -858,6 +876,20 @@ func _sprites() -> void:
 	var red: Gen2WorldSprite = _r.data.overworld_sprite(1)
 	_r.check(red.address == int(player[0]) and red.bank == int(player[1]),
 		"RedSprite reads $%02X:$%04X." % [red.bank, red.address])
+	var bike: Gen2WorldSprite = _r.data.overworld_sprite(
+		Gen1Layout.bike_sprite(_r.game_id)
+	)
+	_r.check(bike != null and bike.bank == red.bank \
+		and bike.address == red.address - BIKE_SPRITE_BYTES \
+		and bike.tiles == Gen1Layout.SPRITE_WALKING_TILES * 2 and bike.is_walking(),
+		"RedBikeSprite reads $%02X:$%04X over %d tiles." % [
+			bike.bank, bike.address, bike.tiles,
+		])
+	_r.check(
+		_r.data.overworld_sprite_indices(Gen1Layout.bike_sprite(_r.game_id)).size()
+			== Gen1Layout.SPRITE_WALKING_TILES * 2 * PokeTiles.TILE_PIXELS,
+		"RedBikeSprite's strip is the wrong size."
+	)
 
 	var census: Dictionary = {"walking": 0, "still": 0}
 	for number: int in range(1, wanted + 1):
@@ -884,6 +916,38 @@ func _sprites() -> void:
 			var picture: int = int(object["sprite"])
 			_r.check(picture >= 1 and picture <= wanted,
 				"map %d has an object drawn with picture id %d." % [map.number, picture])
+
+
+## `IsBikeRidingAllowed`'s two answers, `ForcedBikeOrSurfMaps`' eight cells and
+## the two gate scripts that clear a forced ride, over the whole corpus.
+func _bike() -> void:
+	var tilesets: Array = Array(_r.data.gen1_special_warp_list("bike_riding_tilesets"))
+	_r.check(tilesets == BIKE_RIDING_TILESETS,
+		"BikeRidingTilesets reads %s." % str(tilesets))
+	var allowed: int = 0
+	for map: Gen2WorldMap in _maps.values():
+		var gate: bool = bool(map.scripts.get("clears_always_on_bike", false))
+		_r.check(gate == BIKE_GATE_MAPS.has(map.number),
+			"map %d answers %s to clearing a forced ride." % [map.number, gate])
+		if BIKE_RIDING_TILESETS.has(map.tileset) \
+			or Gen1Layout.BIKE_ALLOWED_MAPS.has(map.number):
+			allowed += 1
+		_forced_ride_cells(map)
+	_r.check(allowed == BIKE_ALLOWED_MAPS,
+		"the bike is allowed on %d maps." % allowed)
+	_r.note("gen1 bike allowed on %d maps, forced on %d cells" % [
+		allowed, FORCED_RIDES.size() * 2,
+	])
+
+
+func _forced_ride_cells(map: Gen2WorldMap) -> void:
+	var hits: Array = []
+	for y: int in map.collision_height:
+		for x: int in map.collision_width:
+			if _r.data.gen1_forces_ride(map.number, Vector2i(x, y)):
+				hits.append([x, y])
+	_r.check(hits == FORCED_RIDES.get(map.number, []),
+		"map %d forces a ride on %s." % [map.number, str(hits)])
 
 
 ## Every object `ShowObject` and `HideObject` can name: one object a global
