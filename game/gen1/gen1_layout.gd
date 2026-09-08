@@ -604,6 +604,46 @@ const BICYCLE_TEXT_AT: Dictionary = {"got_on": 0x00, "got_off": 0x0A}
 const POKE_FLUTE_TEXT_AT: Dictionary = {
 	"no_effect": 0x00, "woke_up": 0x05, "had_effect": 0x0A,
 }
+const SAFARI_BATTLE_TEXT_AT: Dictionary = {"eating": 0x00, "angry": 0x05}
+const SAFARI_TEXT_AT: Dictionary = {"times_up": 0x00, "game_over": 0x05}
+const SAFARI_ITEM_TEXT_AT: Dictionary = {"bait": 0x00, "rock": 0x05}
+const SAFARI_LOW_COST_TEXT_AT: Dictionary = {"low_cost_1": 0x00, "low_cost_2": 0x05}
+const SAFARI_NAG_TEXT_AT: Dictionary = {"one_ball": 0x00}
+
+## `InitBattleVariables`' two comparisons and `PrintSafariZoneSteps`' own pair,
+## which reaches the rest houses a fight is never the game's on.
+const SAFARI_FIRST_MAP: int = 0xD9
+const SAFARI_BATTLE_END_MAP: int = 0xDD
+const SAFARI_WINDOW_END_MAP: int = 0xE2
+const SAFARI_ZONE_GATE_MAP: int = 0x9C
+const SAFARI_GAME_OVER_WARP: int = 3
+const SAFARI_SCRIPT_LEAVING: int = 5
+## Ahead of `const_next $550 - 1`, so all three cartridges number them alike.
+const SAFARI_GAME_OVER_EVENT: int = 590
+const IN_SAFARI_ZONE_EVENT: int = 591
+## `.success`: 30 balls and 502 steps for ¥500.
+const SAFARI_BALLS: int = 30
+const SAFARI_STEPS: int = 502
+## SAFARI_BALL, and the two badge numbers the bait and the rock overload.
+const SAFARI_BALL_ITEM: int = 0x08
+const SAFARI_BAIT_ITEM: int = 0x15
+const SAFARI_ROCK_ITEM: int = 0x16
+## `BaitRockCommon`'s `.randomLoop`, which grows a factor by 1 to 5.
+const SAFARI_FACTOR_MASK: int = 7
+const SAFARI_FACTOR_LIMIT: int = 5
+const SAFARI_MENU_COLUMN: int = 12
+
+## Yellow's admission for a purse that cannot pay: `ld a, 23` writes $17, which
+## `DivideBCD` reads as seventeen, and `.load_balls` stops the quotient at 29.
+const SAFARI_LOW_COST_DIVISOR: int = 17
+const SAFARI_LOW_COST_DIGITS: int = 100
+const SAFARI_LOW_COST_MAX_BALLS: int = 29
+## An empty purse's visits are counted in `wSafariSteps`' high byte and paid on
+## the fourth; `Pointers_f2100` has five rows for four counts.
+const SAFARI_NAG_LINES: int = 5
+const SAFARI_NAG_GIFT_VISIT: int = 3
+const SAFARI_NAG_BALLS: int = 1
+
 ## `CannotGetOffHereText`, which `.useOrTossItem` prints in front of `UseItem`
 ## rather than through `ItemUseFailed`. `CannotUseItemsHereText` above it is the
 ## Colosseum's and no screen here reaches it.
@@ -1246,6 +1286,7 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"pewter_guys", "convert_npc_directions", "heal_party", "save_game_data",
 	"get_item_quantity", "flag_action", "route23_copy_badge_text", "oaks_aide",
 	"starter_dex", "display_dex_rating",
+	"safari_low_cost", "safari_nag",
 ]
 ## The four of those a `farcall` spends nothing on: no node carries a sound.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
@@ -1325,7 +1366,7 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	"npc_movement_bank", "list_scroll_offset", "dungeon_warp_destination",
 	"which_dungeon_warp", "sprite_screen_y", "sprite_screen_x",
 	"letter_printing_delay", "player_movement_byte_1", "override_joypad_mask",
-	"num_safari_balls", "gym_leader_no", "mon_data_location", "joy_released",
+	"gym_leader_no", "mon_data_location", "joy_released",
 	"trainer_header_flag_bit",
 	## The menu registers, which the `menu` node behind them carries instead.
 	"current_menu_item", "max_menu_item", "top_menu_item_y", "top_menu_item_x",
@@ -2044,6 +2085,14 @@ const RED_BLUE: Dictionary = {
 	"player_movement_byte_1": 0xC206,
 	"override_joypad_mask": 0xCD3B,
 	"num_safari_balls": 0xDA47,
+	"safari_game_over": 0xDA46,
+	"safari_steps": 0xD70D,
+	"safari_battle_text": 0x042A7,
+	"safari_game_over_text": 0x1EA0D,
+	"safari_item_text": 0x0DFA5,
+	"safari_steps_labels": 0x0C579,
+	"safari_battle_menu_text": 0x07468,
+	"safari_out_of_balls_text": 0x89639,
 	"rle_pallet_player": 0x1A4E9,
 	"flag_action": 0x0F666,
 	"route23_copy_badge_text": 0x5125D,
@@ -2434,6 +2483,19 @@ const YELLOW: Dictionary = {
 	"player_movement_byte_1": 0xC206,
 	"override_joypad_mask": 0xCD3B,
 	"num_safari_balls": 0xDA46,
+	"safari_game_over": 0xDA45,
+	"safari_steps": 0xD70C,
+	"safari_battle_text": 0x04141,
+	"safari_game_over_text": 0x1E3A5,
+	"safari_item_text": 0x0DDC5,
+	"safari_steps_labels": 0x0C2C4,
+	"safari_battle_menu_text": 0x0733D,
+	"safari_out_of_balls_text": 0x9F511,
+	"safari_low_cost": 0xF2077,
+	"safari_nag": 0xF20CE,
+	"safari_low_cost_text": 0xF20C4,
+	"safari_nag_text": 0xF20F6,
+	"safari_nag_lines": 0xF2100,
 	"rle_pallet_player": 0x1A5FB,
 	"flag_action": 0x0F4EC,
 	"route23_copy_badge_text": 0x51216,
@@ -2812,6 +2874,14 @@ static func hidden_routine(layout: Dictionary, offset: int) -> String:
 		if int(layout.get(name, -1)) == offset:
 			return name
 	return ""
+
+
+static func is_safari_battle_map(map_id: int) -> bool:
+	return map_id >= SAFARI_FIRST_MAP and map_id < SAFARI_BATTLE_END_MAP
+
+
+static func is_safari_map(map_id: int) -> bool:
+	return map_id >= SAFARI_FIRST_MAP and map_id < SAFARI_WINDOW_END_MAP
 
 
 ## `BIT_DUNGEON_BATTLE_TRANSITION`, which picks the stripes over the circles.

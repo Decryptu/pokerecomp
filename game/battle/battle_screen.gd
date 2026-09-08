@@ -371,6 +371,7 @@ var _capture_terminal: bool = false
 ## comes once, before the switch question, and the question is asked again on
 ## every pump until it is answered.
 var _contest_already_caught_said: bool = false
+var _safari_pending: bool = false
 ## Whether this capture's experience award has already run. See
 ## [method _spend_capture_experience].
 var _capture_experience_spent: bool = false
@@ -1222,6 +1223,10 @@ func _begin_world_battle(prepared: Dictionary, save: Gen2SaveData) -> void:
 	_enemy_trainer_index = int(prepared.get("trainer_index", 0))
 	_battle = prepared["battle"]
 	_battle.time_of_day = _time_of_day
+	if _battle.battle_type == Gen2Battle.BATTLETYPE_SAFARI:
+		_battle.safari_catch_rate = int(_data.species(
+			(prepared["enemy_party"] as Gen2Party).active_mon().species
+		).get("catch_rate", 0))
 	## `GetWorldMapLocation`, the same reading [method _play_battle_music] uses:
 	## `LevelUpHappinessMod` compares it against the winner's caught location.
 	_battle.landmark = _world_context.landmark if _world_context != null \
@@ -3120,6 +3125,10 @@ func capture_thrower() -> Gen2BattleMon:
 	return _battle.player if _is_wild_battle() and _battle != null else null
 
 
+func capture_safari_catch_rate() -> int:
+	return _battle.safari_catch_rate if _is_safari_battle() else -1
+
+
 ## `wBattleType`, which `PokeBallEffect` reads once the catch has landed: a
 ## BATTLETYPE_CELEBI catch is the one that raises BATTLERESULT_CAUGHT_CELEBI.
 func capture_battle_type() -> int:
@@ -3188,6 +3197,7 @@ func _throw_ball(ball: int, origin: StringName = &"capture") -> Dictionary:
 		return _capture_failure(&"capture_selection_not_active")
 	_capture_origin = origin
 	_capture_waiting = true
+	_safari_pending = _is_safari_battle()
 	_capture_spent_turn = Gen2Battle.use_item(ball)
 	show_message(_item_used_text(ball))
 	capture_requested.emit(ball)
@@ -3439,6 +3449,22 @@ func _is_wild_battle() -> bool:
 ## contest's own and the ball a Park Ball.
 func _is_bug_contest_battle() -> bool:
 	return _battle != null and _battle.battle_type == Gen2Battle.BATTLETYPE_CONTEST
+
+
+## `wBattleType` being BATTLE_TYPE_SAFARI, which offers no move and no bag row.
+func _is_safari_battle() -> bool:
+	return _battle != null and _battle.battle_type == Gen2Battle.BATTLETYPE_SAFARI
+
+
+const SAFARI_BATTLE_RUN: String = "safari_battle"
+const SAFARI_ITEM_RUN: String = "safari_item"
+const SAFARI_LABEL_RUN: String = "safari_labels"
+
+
+func _safari_base_catch_rate() -> int:
+	if _data == null or _battle == null:
+		return 0
+	return int(_data.species(_battle.mon(Gen2Battle.ENEMY).species).get("catch_rate", 0))
 
 
 ## The screen the fight draws on, for an overlay the world opens over it.
@@ -3972,6 +3998,8 @@ func _continue_after_messages() -> void:
 		return
 	if _replace_the_fallen():
 		return
+	if _resolve_safari_turn():
+		return
 	if _battle != null and _battle.is_over():
 		_finish_battle()
 		return
@@ -4425,6 +4453,61 @@ func _answer_menu(button: int) -> void:
 			_open_move_menu()
 
 
+func _safari_menu_options() -> Array[String]:
+	if _data == null:
+		return []
+	return Gen2BattleMenu.safari_options(
+		_data.special_text(SAFARI_LABEL_RUN, "menu_top"),
+		_data.special_text(SAFARI_LABEL_RUN, "menu_bottom")
+	)
+
+
+## `.handleMenuSelection` and `PartyMenuOrRockOrRun`, in the box's reading order.
+func _choose_safari_menu() -> void:
+	_close_battle_menu()
+	match _menu_position:
+		Gen2BattleMenu.FIGHT:
+			if bool(begin_capture().get("ok", false)):
+				throw_capture_ball()
+		Gen2BattleMenu.PKMN:
+			_throw_bait_or_rock(true)
+		Gen2BattleMenu.PACK:
+			_throw_bait_or_rock(false)
+		Gen2BattleMenu.RUN:
+			run_from_battle()
+
+
+func _throw_bait_or_rock(bait: bool) -> void:
+	if _battle == null or _battle.is_over():
+		return
+	_battle.throw_bait_or_rock(bait, Callable(_rng, "randi_range").bind(0, 0xFF))
+	show_message(_gen1_item_text(
+		"bait" if bait else "rock", "", SAFARI_ITEM_RUN
+	))
+	_safari_pending = true
+
+
+## `.displaySafariZoneBattleMenu`'s tail, run after each of the four actions:
+## the last ball ends the fight and the roll behind the box may end it too.
+func _resolve_safari_turn() -> bool:
+	if not _safari_pending:
+		return false
+	_safari_pending = false
+	if _battle == null or _battle.is_over():
+		return false
+	if _capture_quantity(Gen1Layout.SAFARI_BALL_ITEM) <= 0:
+		show_message(_gen1_item_text("out_of_balls", "", SAFARI_LABEL_RUN))
+		_battle.force_out(Gen2Battle.ENEMY)
+		return true
+	var box: String = _battle.safari_battle_text(_safari_base_catch_rate())
+	if _battle.safari_enemy_runs(Callable(_rng, "randi_range").bind(0, 0xFF)):
+		_battle.force_out(Gen2Battle.ENEMY)
+	if box.is_empty():
+		return false
+	show_message(_gen1_item_text(box, "", SAFARI_BATTLE_RUN))
+	return true
+
+
 ## `BattleMenu.loop`: the cursor moves, A picks, and B is disabled by the
 ## header's own STATICMENU_DISABLE_B.
 func _answer_battle_menu(button: int) -> void:
@@ -4440,6 +4523,9 @@ func _answer_battle_menu(button: int) -> void:
 
 
 func _choose_battle_menu() -> void:
+	if _is_safari_battle():
+		_choose_safari_menu()
+		return
 	match _menu_position:
 		Gen2BattleMenu.FIGHT:
 			_open_move_menu()
@@ -5083,8 +5169,16 @@ func _draw_battle_menu() -> void:
 	if _menu_page == null:
 		return
 	var contest: bool = _is_bug_contest_battle()
-	var box: Gen2MenuBox = Gen2BattleMenu.main_box(contest)
+	var safari: bool = _is_safari_battle()
+	var box: Gen2MenuBox = Gen2BattleMenu.safari_box() if safari \
+		else Gen2BattleMenu.main_box(contest)
 	var extras: Array = []
+	if safari:
+		## `.safariLeftColumn`'s `PrintNumber`, beside the row rather than in it.
+		extras.append({
+			"text": "%2d" % _capture_quantity(Gen1Layout.SAFARI_BALL_ITEM),
+			"at": Gen2BattleMenu.SAFARI_BALLS_AT,
+		})
 	if contest:
 		## `.PrintParkBallsRemaining`, which prints the count beside the row
 		## rather than inside it.
@@ -5095,8 +5189,9 @@ func _draw_battle_menu() -> void:
 	_show_layer_image(
 		_battle_menu_layer,
 		_menu_page.render(
-			box, Gen2BattleMenu.main_options(contest, _generation()), _menu_position - 1,
-			"", 0, extras
+			box, _safari_menu_options() if safari \
+				else Gen2BattleMenu.main_options(contest, _generation()),
+			_menu_position - 1, "", 0, extras
 		),
 		box.border_position() * Gen2Font.TILE
 	)

@@ -765,6 +765,24 @@ func _confirm_list() -> void:
 ## `StartMenu_PrintBugContestStatus`' three values: `wContestMon` and its level,
 ## and `wParkBallsRemaining`. An unset `wContestMon` is the empty name the page
 ## prints `.NoneString` for.
+## `PrintSafariZoneSteps`, which prints nothing outside the Zone's own map run.
+func _safari_status() -> Dictionary:
+	if _world == null or _world.data == null or _world.current_map == null:
+		return {}
+	if not Gen1Layout.is_safari_map(_world.current_map.number) \
+		or _world.data.generation != RomRegistry.GEN1:
+		return {}
+	return {
+		"steps": _world.state.safari_steps(),
+		"balls": _world.state.safari_balls(),
+		"steps_label": _world.data.special_text(SAFARI_LABEL_RUN, "steps"),
+		"balls_label": _world.data.special_text(SAFARI_LABEL_RUN, "balls"),
+	}
+
+
+const SAFARI_LABEL_RUN: String = "safari_labels"
+
+
 func _contest_status() -> Dictionary:
 	if _world == null:
 		return {}
@@ -2484,7 +2502,7 @@ func _list_image() -> Image:
 	return _page.render_list(
 		labels.slice(_list_scroll, _list_scroll + shown),
 		_menu.cursor - _list_scroll, description, contest, null,
-		_contest_status() if contest else {}
+		_contest_status() if contest else {}, _safari_status()
 	)
 
 

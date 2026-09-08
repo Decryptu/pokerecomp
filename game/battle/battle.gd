@@ -435,8 +435,13 @@ const BATTLETYPE_TREE: int = 8
 const BATTLETYPE_TRAP: int = 9
 const BATTLETYPE_CELEBI: int = 11
 const BATTLETYPE_SUICUNE: int = 12
+## Generation 1's `BATTLE_TYPE_SAFARI`, whose own byte is 2 and which Crystal
+## has no row for at all.
+const BATTLETYPE_SAFARI: int = 13
 ## The two lists it reads them against, in source order.
-const ALWAYS_ESCAPES: Array[int] = [BATTLETYPE_DEBUG, BATTLETYPE_CONTEST]
+const ALWAYS_ESCAPES: Array[int] = [
+	BATTLETYPE_DEBUG, BATTLETYPE_CONTEST, BATTLETYPE_SAFARI,
+]
 const NEVER_ESCAPES: Array[int] = [
 	BATTLETYPE_TRAP, BATTLETYPE_CELEBI, BATTLETYPE_FORCESHINY, BATTLETYPE_SUICUNE,
 ]
@@ -481,6 +486,11 @@ var player_id: int = -1
 
 ## `wBattleType`, set by `loadvar VAR_BATTLETYPE` before `startbattle`.
 var battle_type: int = BATTLETYPE_NORMAL
+
+## `wSafariBaitFactor`, `wSafariEscapeFactor` and `wEnemyMonActualCatchRate`.
+var safari_bait_factor: int = 0
+var safari_escape_factor: int = 0
+var safari_catch_rate: int = 0
 
 ## Earned player badges as source-order bits. Zero is the battle-safe default
 ## for wild fixtures and development matchups without a world save.
@@ -1001,6 +1011,56 @@ func run_odds(runner_speed: int = -1) -> Dictionary:
 		"outcome": &"roll", "odds": odds, "attempts": attempts,
 		"range": FLEE_ODDS_RANGE,
 	}
+
+
+## `ItemUseBait` and `ItemUseRock`: the other side's factor is zeroed and the
+## chosen one grows by `.randomLoop`'s own 1 to 5.
+func throw_bait_or_rock(bait: bool, rolls: Callable) -> void:
+	if bait:
+		safari_catch_rate >>= 1
+		safari_escape_factor = 0
+	else:
+		safari_catch_rate = mini(safari_catch_rate * 2, 0xFF)
+		safari_bait_factor = 0
+	var grown: int = int(rolls.call()) & Gen1Layout.SAFARI_FACTOR_MASK
+	while grown >= Gen1Layout.SAFARI_FACTOR_LIMIT:
+		grown = int(rolls.call()) & Gen1Layout.SAFARI_FACTOR_MASK
+	grown += 1
+	if bait:
+		safari_bait_factor = mini(safari_bait_factor + grown, 0xFF)
+	else:
+		safari_escape_factor = mini(safari_escape_factor + grown, 0xFF)
+
+
+## `PrintSafariZoneBattleText`: the bait counter first, then the escape one,
+## whose last turn puts `wMonHCatchRate` back.
+func safari_battle_text(base_catch_rate: int) -> String:
+	if safari_bait_factor > 0:
+		safari_bait_factor -= 1
+		return SAFARI_EATING_TEXT
+	if safari_escape_factor <= 0:
+		return ""
+	safari_escape_factor -= 1
+	if safari_escape_factor == 0:
+		safari_catch_rate = base_catch_rate
+	return SAFARI_ANGRY_TEXT
+
+
+## `.notOutOfSafariBalls`' roll: twice the low byte of the enemy's Speed,
+## quartered eating and doubled angry, a carry out of it taking the enemy away.
+func safari_enemy_runs(rolls: Callable) -> bool:
+	var doubled: int = (mon(ENEMY).stat("speed") & 0xFF) * 2
+	if doubled > 0xFF:
+		return true
+	if safari_bait_factor != 0:
+		doubled >>= 2
+	if safari_escape_factor != 0:
+		doubled = mini(doubled * 2, 0xFF)
+	return int(rolls.call()) < doubled
+
+
+const SAFARI_EATING_TEXT: String = "eating"
+const SAFARI_ANGRY_TEXT: String = "angry"
 
 
 ## The held effect of whatever [param battler] is carrying, or zero. The item's

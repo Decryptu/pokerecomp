@@ -91,6 +91,31 @@ const CONTEST_SPACING: int = 12
 const CONTEST_OPTIONS: Array[String] = ["FIGHT", "PKMN", "PARKBALL×", "RUN"]
 const CONTEST_BALLS_AT := Vector2i(13, 16)
 
+## `text_box_text SAFARI_BATTLE_MENU_TEMPLATE, 0, 12, 19, 17, ..., 2, 14`, with
+## `.safariLeftColumn`'s own count beside the first row.
+const SAFARI_LEFT: int = 0
+const SAFARI_BALLS_AT := Vector2i(7, 14)
+
+
+static func safari_box() -> Gen2MenuBox:
+	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
+		SAFARI_LEFT, MAIN_TOP, MAIN_RIGHT, MAIN_BOTTOM, MAIN_FLAGS
+	)
+	box.columns = MAIN_COLUMNS
+	box.column_spacing = Gen1Layout.SAFARI_MENU_COLUMN
+	return box
+
+
+## `SafariZoneBattleMenuText`'s two rows split at the second word's own column.
+static func safari_options(top: String, bottom: String) -> Array[String]:
+	var out: Array[String] = []
+	for row: String in [top, bottom]:
+		for column: int in MAIN_COLUMNS:
+			out.append(row.substr(
+				column * Gen1Layout.SAFARI_MENU_COLUMN, Gen1Layout.SAFARI_MENU_COLUMN
+			).rstrip(" "))
+	return out
+
 
 static func main_box(contest: bool = false) -> Gen2MenuBox:
 	var box: Gen2MenuBox = Gen2MenuBox.from_coords(

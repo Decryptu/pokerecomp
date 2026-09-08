@@ -17,6 +17,7 @@ const KIND_HELP: Dictionary = {
 	&"battle_transition": "frames, index: DoBattleTransition over the map. 1 is the trainer branch; a Generation 1 cartridge reads BattleTransitions' own index, 0 the double circle, 2 the circle, 4 the horizontal stripes, 6 the vertical",
 	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it and 2 plays the POKé FLUTE from it",
 	&"battle_caught": "frames: the same fight against a species the dex already holds",
+	&"safari": "frames, 0: the Safari game's own battle menu over a Safari Zone map. 1 draws PrintSafariZoneSteps' window on the START menu instead",
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in",
 	&"catch_dex": "none: NewPokedexEntry's page, over the fight the catch that opened it is still in",
 	&"cut": "cell: OWCutAnimation's two halves and the jump shadow",
@@ -410,6 +411,7 @@ func _settle_mon_special(host_property: String) -> void:
 const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine", &"fly",
 	&"battle", &"battle_caught", &"battle_transition", &"level_evolution",
+	&"safari",
 	&"egg_hatch",
 	&"catch_tutorial",
 	&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
@@ -428,6 +430,7 @@ const STAGERS: Dictionary = {
 	&"unown_wall": &"_stage_unown_wall",
 	&"battle": &"_stage_battle",
 	&"battle_caught": &"_stage_battle",
+	&"safari": &"_stage_safari",
 	&"catch_tutorial": &"_stage_catch_tutorial",
 	&"battle_transition": &"_stage_battle_transition",
 	&"script_fade": &"_stage_script_fade",
@@ -595,6 +598,27 @@ func _stage_battle() -> void:
 		_screen.advance_frames(frames)
 	if _cell.y >= 1:
 		_open_battle_bag(frames, flute)
+
+
+## The Safari game with the fee already paid: its battle menu, or the window
+## `PrintSafariZoneSteps` draws beside the START menu's list.
+func _stage_safari() -> void:
+	var world: Gen2WorldAPI = _screen.world()
+	world.state.set_event_flag(Gen1Layout.IN_SAFARI_ZONE_EVENT, true)
+	world.state.set_safari_balls(Gen1Layout.SAFARI_BALLS)
+	world.state.set_safari_steps(Gen1Layout.SAFARI_STEPS)
+	if _cell.y >= 1:
+		_screen.preview_start_menu()
+		return
+	_screen.preview_battle_request()
+	_screen.settle_battle_transition()
+	_screen.advance_frames(maxi(_cell.x, STAGED_FRAMES))
+	var host: Gen2BattleScreen = _screen.get("_battle_host")
+	for _press: int in BATTLE_MENU_WAIT:
+		if host == null or StringName(host.get("_menu_stage")) == &"main":
+			break
+		_screen.press_button(PokeButton.A)
+		_screen.advance_frames(maxi(_cell.x, STAGED_FRAMES))
 
 
 ## `BattleMenu`'s ITEM row. The appearance line and the send-out in front of it

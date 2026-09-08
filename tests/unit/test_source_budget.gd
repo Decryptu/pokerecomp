@@ -17,11 +17,11 @@ const MAX_COMMENT_BLOCK: int = 8
 ## it whenever a pass leaves room. It moves up only while a generation the tree
 ## did not carry is being brought in, and then by what that generation's own
 ## files cost: `game/gen1`, its neighbours, the 157 of the sound driver and the
-## 23 of its check are 1847 lines of it, and Generation 1 has added 2403 more to
+## 23 of its check are 1847 lines of it, and Generation 1 has added 2493 more to
 ## the shared code, the largest of them 152 the region map, 150 the battle
 ## animation engine, 140 the transition, 131 the field moves, 130 the Pokedex,
-## 108 the three PCs, 103 a map script's movement, 52 the menus a row draws.
-const MAX_COMMENT_LINES: int = 41922
+## 108 the three PCs, 90 the Safari Zone, 52 the menus a row draws.
+const MAX_COMMENT_LINES: int = 42012
 
 ## What no comment block ever ends on. A pass that meets the ceiling above trims
 ## the second line of a two-line block and leaves the first mid-sentence, which
