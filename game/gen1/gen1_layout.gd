@@ -3071,6 +3071,19 @@ static func rod_slots(rod: StringName) -> Array:
 
 
 ## Whether the Super Rod is read as Yellow's flat slot table.
+## `wRivalStarter` and `wPlayerStarter` hold one of these and nothing else, so
+## `Route22GetRivalTrainerNoByStarterScript`'s unterminated table walk stops.
+const SCRIPT_STARTERS: Dictionary = {
+	RomRegistry.RED: {"rival": [0xB0, 0xB1, 0x99], "player": [0xB0, 0xB1, 0x99]},
+	RomRegistry.BLUE: {"rival": [0xB0, 0xB1, 0x99], "player": [0xB0, 0xB1, 0x99]},
+	RomRegistry.YELLOW: {"rival": [1, 2, 3], "player": [0x54]},
+}
+
+
+static func script_starters(id: StringName, who: String) -> Array:
+	return (SCRIPT_STARTERS.get(id, {}) as Dictionary).get(who, [])
+
+
 static func flat_super_rod(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
 

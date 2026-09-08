@@ -132,7 +132,10 @@ const RET_NZ: int = 0xC0
 const CALL_NZ: int = 0xC4
 
 
-func _rom(program: Array, strings: Dictionary = {}, raw: Dictionary = {}) -> RomFile:
+func _rom(
+	program: Array, strings: Dictionary = {}, raw: Dictionary = {},
+	game_id: StringName = &""
+) -> RomFile:
 	var data: PackedByteArray = PackedByteArray()
 	data.resize(RomFile.BANK_SIZE)
 	for offset: int in program.size():
@@ -150,7 +153,7 @@ func _rom(program: Array, strings: Dictionary = {}, raw: Dictionary = {}) -> Rom
 		var row: int = int(LAYOUT["predef_pointers"]) + id * Gen1Layout.PREDEF_SIZE
 		data[row + 1] = int(PREDEFS[id]) & 0xFF
 		data[row + 2] = int(PREDEFS[id]) >> 8
-	return RomFile.from_bytes(data)
+	return RomFile.from_bytes(data, game_id)
 
 
 func _boxes(text: String = "HI", second: String = "BYE") -> Dictionary:
@@ -171,9 +174,12 @@ func _print(address: int) -> Array:
 
 
 func _decode(
-	program: Array, strings: Dictionary = {}, raw: Dictionary = {}
+	program: Array, strings: Dictionary = {}, raw: Dictionary = {},
+	game_id: StringName = &""
 ) -> Array:
-	return Gen1WorldImporter.decode_script(_rom(program, strings, raw), LAYOUT, 0, AT)
+	return Gen1WorldImporter.decode_script(
+		_rom(program, strings, raw, game_id), LAYOUT, 0, AT
+	)
 
 
 func _load_a(address: int) -> Array:
@@ -1061,6 +1067,44 @@ func test_the_rivals_starter_picks_the_party() -> void:
 	assert_eq(script, [{"op": "starter", "who": "rival", "value": 0xB1,
 		"then": [{"op": "trainer_battle", "class": 0x2A, "number": 7}],
 		"else": [{"op": "trainer_battle", "class": 0x2A, "number": 9}]}])
+
+
+## `Route11Gate2FLeftBinocularsText` hands a facing its own `jp nz` has already
+## refused to `GateUpstairsScript_PrintIfFacingUp`, which tests the same byte
+## again: the second match is unreachable rather than unread.
+func test_a_facing_the_walk_excluded_cannot_match_again() -> void:
+	var script: Array = _decode(
+		_load_a(int(LAYOUT["facing_direction"]))
+			+ [Gen1Layout.SCRIPT_CP_N, Gen1Layout.FACING_UP, 0x20, 0x07]
+			+ _print(HELLO) + [Gen1Layout.SCRIPT_RET]
+			+ _load_a(int(LAYOUT["facing_direction"]))
+			+ [Gen1Layout.SCRIPT_CP_N, Gen1Layout.FACING_UP, 0x28, 0x01]
+			+ [Gen1Layout.SCRIPT_RET] + _print(BYE) + [Gen1Layout.SCRIPT_RET],
+		_boxes()
+	)
+	assert_eq(script, [{"op": "facing", "facing": Gen1Layout.FACING_UP,
+		"then": [{"op": "text", "text": "HI"}], "else": []}])
+
+
+## `Route22GetRivalTrainerNoByStarterScript` walks a three-row table its `cp b`
+## loop has no terminator for, so the third starter is the one the set has left
+## rather than a test with the bytes behind the table under it.
+func test_the_last_starter_of_the_set_is_not_a_test() -> void:
+	var script: Array = _decode(
+		_load_a(int(LAYOUT["rival_starter"]))
+			+ [Gen1Layout.SCRIPT_CP_N, 0xB0, 0x28, 0x09]
+			+ [Gen1Layout.SCRIPT_CP_N, 0xB1, 0x28, 0x0C]
+			+ [Gen1Layout.SCRIPT_CP_N, 0x99, 0x28, 0x0F] + [0xFF]
+			+ _print(HELLO) + [Gen1Layout.SCRIPT_RET]
+			+ _print(BYE) + [Gen1Layout.SCRIPT_RET]
+			+ _print(HELLO) + [Gen1Layout.SCRIPT_RET],
+		_boxes(), {}, RomRegistry.RED
+	)
+	assert_eq(script, [{"op": "starter", "who": "rival", "value": 0xB0,
+		"then": [{"op": "text", "text": "HI"}],
+		"else": [{"op": "starter", "who": "rival", "value": 0xB1,
+			"then": [{"op": "text", "text": "BYE"}],
+			"else": [{"op": "text", "text": "HI"}]}]}])
 
 
 func _raw_at(address: int, bytes: Array) -> Dictionary:
