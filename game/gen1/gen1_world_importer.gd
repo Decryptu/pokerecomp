@@ -747,6 +747,7 @@ static func _read_map(
 		"number": map_id,
 		"tileset": tileset_number,
 		"music": rom.u8(Gen1Layout.map_song_offset(layout, map_id)),
+		"music_bank": rom.u8(Gen1Layout.map_song_offset(layout, map_id) + 1),
 		"border_block": events["border_block"],
 		"width_blocks": width,
 		"height_blocks": height,

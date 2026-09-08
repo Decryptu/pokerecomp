@@ -318,10 +318,7 @@ func _play_music(music: int, restart: bool) -> void:
 ## The two blobs `Gen2SoundEngine` reads outside a record: `WaveSamples` and the
 ## drumkits, which every request here shares.
 func _audio_assets() -> Dictionary:
-	return {
-		"wave_samples": _data.world_audio_asset(&"wave_samples"),
-		"drumkits": _data.world_audio_asset(&"drumkits"),
-	}
+	return _data.audio_assets()
 
 
 ## `ClearTilemap` leaves the blank tile everywhere, which through this palette

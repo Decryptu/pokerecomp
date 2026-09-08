@@ -128,10 +128,7 @@ func _hold_music() -> void:
 ## The two blobs [Gen2SoundEngine] reads outside a record, the same pair the
 ## opening's own screen passes.
 func _audio_assets() -> Dictionary:
-	return {
-		"wave_samples": _data.world_audio_asset(&"wave_samples"),
-		"drumkits": _data.world_audio_asset(&"drumkits"),
-	}
+	return _data.audio_assets()
 
 
 ## Removes only the title lettering from the launcher copy. The real title page

@@ -8629,10 +8629,7 @@ func _skip_audio_request(reason: StringName) -> Array:
 
 
 func _audio_assets() -> Dictionary:
-	return {
-		"wave_samples": _data.world_audio_asset(&"wave_samples") if _data != null else {},
-		"drumkits": _data.world_audio_asset(&"drumkits") if _data != null else {},
-	}
+	return {} if _data == null else _data.audio_assets()
 
 
 ## `FadeToMapMusic`, which is what a map entered through a warp arrives behind:
@@ -8644,8 +8641,7 @@ func _fade_to_map_music() -> void:
 		or _world.current_map == null:
 		return
 	_audio_player.fade_to(
-		_data.world_audio(&"music", _world.state.map_music()),
-		WARP_MUSIC_FADE_FRAMES, _audio_assets(),
+		_world.map_music_record(), WARP_MUSIC_FADE_FRAMES, _audio_assets(),
 	)
 
 
@@ -8668,8 +8664,7 @@ func _play_music_track(index: int) -> void:
 func _play_current_map_music() -> void:
 	if _audio_player == null or _data == null or _world == null or _world.current_map == null:
 		return
-	var track: int = _world.state.map_music()
-	var record: Dictionary = _data.world_audio(&"music", track)
+	var record: Dictionary = _world.map_music_record()
 	if record.is_empty():
 		return
 	_audio_player.play_record(record, &"map_music", _audio_assets())

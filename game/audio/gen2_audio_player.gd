@@ -56,6 +56,11 @@ var _playback: AudioStreamGeneratorPlayback = null
 ## [method timeline_updates].
 var _timeline_updates: int = 0
 var _engine: Gen2SoundEngine = null
+## The Generation 1 driver, which shares the APU: a cache written by either
+## generation reaches the same four hardware channels through its own engine, and
+## the record the caller hands over is what says which.
+var _gen1: Gen1SoundEngine = null
+var _generation: int = RomRegistry.GEN2
 var _apu: PokeApu = null
 var _music_key: String = ""
 ## What a SOUND change restarts.
@@ -92,6 +97,7 @@ func _init() -> void:
 	_apu = PokeApu.new()
 	_engine = Gen2SoundEngine.new(_apu)
 	_engine.init_sound()
+	_gen1 = Gen1SoundEngine.new(_apu)
 	_buffer.resize(PokeApu.SAMPLES_PER_FRAME)
 
 
@@ -141,6 +147,8 @@ func _apply_settings() -> void:
 		_engine.music_gain = music
 	if not is_equal_approx(sfx, _engine.sfx_gain):
 		_engine.sfx_gain = sfx
+	_gen1.music_gain = music
+	_gen1.sfx_gain = sfx
 
 
 ## Plays one imported audio record. Music continues when the source asks for the
@@ -156,6 +164,8 @@ func play_record(
 		return {"ok": true, "played": fade_out(int(record.get("fade_time", 0)))}
 	if record.is_empty():
 		return {"ok": false, "played": false, "reason": &"audio_data_unavailable"}
+	if int(assets.get("generation", RomRegistry.GEN2)) == RomRegistry.GEN1:
+		return _play_gen1_record(record, request_kind, assets, restart)
 	_engine.set_assets(assets)
 	_engine.stereo = stereo
 
@@ -216,6 +226,77 @@ func play_record(
 	}
 
 
+## `PlaySound` for a Generation 1 cache: the id is all an effect needs, since it
+## plays out of whichever copy of the driver the game is on, and a piece of music
+## names the bank `PlayMusic` switches to first.
+func _play_gen1_record(
+	record: Dictionary, request_kind: StringName, assets: Dictionary, restart: bool
+) -> Dictionary:
+	_generation = RomRegistry.GEN1
+	_gen1.set_assets(assets)
+	_gen1.yellow = bool(assets.get("yellow", _gen1.yellow))
+	var id: int = int(record.get("sound_id", -1))
+	var bank: int = int(record.get("bank", -1))
+	if id <= 0:
+		return {"ok": false, "played": false, "reason": &"audio_record_unplayable"}
+	if _is_music(request_kind):
+		return _play_gen1_music(record, bank, id, assets, restart)
+	if request_kind in [&"cry", &"cries", &"mon_cry"]:
+		_gen1.frequency_modifier = int(record.get("cry_pitch", 0)) & 0xFF
+		_gen1.tempo_modifier = int(record.get("cry_length", 0x80)) & 0xFF
+	_start_stream()
+	_gen1.play_sound(id)
+	return _gen1_result(request_kind, bank, id)
+
+
+func _play_gen1_music(
+	record: Dictionary, bank: int, id: int, assets: Dictionary, restart: bool
+) -> Dictionary:
+	if id == Gen1SoundEngine.SFX_STOP_ALL_MUSIC:
+		_gen1.play_sound(id)
+		_forget_music()
+		return {"ok": true, "played": true, "stopped": true}
+	var key: String = "%d:%d" % [bank, id]
+	if not restart and key == _music_key:
+		return {"ok": true, "played": false, "continued": true}
+	_start_stream()
+	if not _gen1.play_music(bank, id):
+		return {"ok": false, "played": false, "reason": &"audio_record_unplayable"}
+	_music_key = key
+	_music_record = record
+	_music_assets = assets
+	return _gen1_result(&"music", bank, id)
+
+
+func _gen1_result(request_kind: StringName, bank: int, id: int) -> Dictionary:
+	return {
+		"ok": true,
+		"played": true,
+		"ready": true,
+		"request_kind": request_kind,
+		"index": id,
+		"bank": bank,
+		"address": Gen1SoundEngine.HEADER_TABLE_ADDRESS
+			+ id * Gen1SoundEngine.HEADER_ENTRY_SIZE,
+	}
+
+
+## One LCD frame of whichever driver is live. Generation 1's VBlank runs
+## `FadeOutAudio` in front of `Audio<N>_UpdateMusic`, and that is where the fade
+## and the full-volume write on every other frame come from.
+func _advance_driver() -> void:
+	if _generation == RomRegistry.GEN1:
+		_gen1.fade_out_audio()
+		_gen1.update_music()
+		return
+	_engine.update_sound()
+
+
+func _any_channel_active() -> bool:
+	return _gen1.any_channel_active() if _generation == RomRegistry.GEN1 \
+		else _engine.any_channel_active()
+
+
 func _forget_music() -> void:
 	_music_key = ""
 	_music_record = {}
@@ -237,6 +318,8 @@ func stop_effects() -> void:
 ## `FadeMusic`: a frame count per volume step. Zero stops at once, which is what
 ## the source's own zero-length fades do.
 func fade_out(frames: int = 0) -> bool:
+	if _generation == RomRegistry.GEN1:
+		return _fade_out_gen1(frames)
 	if frames <= 0:
 		if not _engine.any_channel_active():
 			return false
@@ -248,6 +331,21 @@ func fade_out(frames: int = 0) -> bool:
 	return true
 
 
+## `PlaySound`'s `.fadeOut` with nothing queued behind it, which is what
+## `wAudioFadeOutControl` of $ff spells: the volume walks down and the music
+## stops. A zero count is `StopAllMusic`.
+func _fade_out_gen1(frames: int) -> bool:
+	if not _gen1.any_channel_active():
+		return false
+	if frames <= 0:
+		_gen1.play_sound(Gen1SoundEngine.SFX_STOP_ALL_MUSIC)
+		_forget_music()
+		return true
+	_gen1.start_fade(frames, Gen1SoundEngine.SFX_STOP_ALL_MUSIC, _gen1.audio_rom_bank)
+	_forget_music()
+	return true
+
+
 ## `FadeToMapMusic`: the same `wMusicFade`, with `wMusicFadeID` behind it, so the
 ## new track starts when the fade reaches zero rather than over the old one.
 ## Answers false when there is nothing playing to fade, which is the source's own
@@ -255,6 +353,8 @@ func fade_out(frames: int = 0) -> bool:
 func fade_to(record: Dictionary, frames: int, assets: Dictionary = {}) -> bool:
 	if record.is_empty():
 		return false
+	if int(assets.get("generation", RomRegistry.GEN2)) == RomRegistry.GEN1:
+		return _fade_to_gen1(record, frames, assets)
 	_engine.set_assets(assets)
 	_engine.stereo = stereo
 	var key: String = "%d:%d" % [int(record.get("bank", -1)), int(record.get("address", -1))]
@@ -270,8 +370,29 @@ func fade_to(record: Dictionary, frames: int, assets: Dictionary = {}) -> bool:
 	return true
 
 
+## `PlaySound`'s `.fadeOut` with the new piece queued in `wAudioFadeOutControl`,
+## which is how every map change hands one track to the next.
+func _fade_to_gen1(record: Dictionary, frames: int, assets: Dictionary) -> bool:
+	_gen1.set_assets(assets)
+	_generation = RomRegistry.GEN1
+	var bank: int = int(record.get("bank", -1))
+	var id: int = int(record.get("sound_id", -1))
+	var key: String = "%d:%d" % [bank, id]
+	if key == _music_key or id <= 0:
+		return false
+	if not _gen1.any_channel_active():
+		return bool(play_record(record, &"map_music", assets).get("played", false))
+	_start_stream()
+	_gen1.start_fade(frames, id, bank)
+	_music_key = key
+	_music_record = record
+	_music_assets = assets
+	return true
+
+
 func stop_all() -> void:
 	_engine.init_sound()
+	_gen1.play_sound(Gen1SoundEngine.SFX_STOP_ALL_MUSIC)
 	_forget_music()
 	if _player != null:
 		_player.stop()
@@ -283,6 +404,12 @@ func stop_all() -> void:
 ## otherwise; `StopDangerSound` and `CleanUpBattleRAM` zero the byte whole,
 ## which is what clearing it here does, timer and all.
 func set_low_health_alarm(on: bool) -> void:
+	if _generation == RomRegistry.GEN1:
+		## `Music_DoLowHealthAlarm` clears the byte through $ff rather than zero,
+		## so the silencing tone is written on the frame it is switched off.
+		_gen1.low_health_alarm = Gen1SoundEngine.BIT_LOW_HEALTH_ALARM if on \
+			else Gen1SoundEngine.DISABLE_LOW_HEALTH_ALARM
+		return
 	if on:
 		_engine.low_health_alarm |= 1 << Gen2SoundEngine.DANGER_ON_BIT
 		return
@@ -290,6 +417,8 @@ func set_low_health_alarm(on: bool) -> void:
 
 
 func low_health_alarm() -> bool:
+	if _generation == RomRegistry.GEN1:
+		return (_gen1.low_health_alarm & Gen1SoundEngine.BIT_LOW_HEALTH_ALARM) != 0
 	return (_engine.low_health_alarm & (1 << Gen2SoundEngine.DANGER_ON_BIT)) != 0
 
 
@@ -297,12 +426,13 @@ func low_health_alarm() -> bool:
 ## for as long as its screen is up checks each frame. Separate from
 ## [method audio_status] because that builds a dictionary.
 func music_playing() -> bool:
-	return _engine.music_channels_active()
+	return _gen1.music_channels_active() if _generation == RomRegistry.GEN1 \
+		else _engine.music_channels_active()
 
 
 ## `_CheckSFX`, which is what `waitsfx` and the battle screen wait on.
 func effect_playing() -> bool:
-	return _engine.sfx_active()
+	return _gen1.sfx_active() if _generation == RomRegistry.GEN1 else _engine.sfx_active()
 
 
 ## How many driver frames this player has actually rendered. The engine only
@@ -319,12 +449,15 @@ func timeline_updates() -> int:
 func audio_status() -> Dictionary:
 	var active: Array[int] = []
 	for index: int in Gen2SoundEngine.NUM_CHANNELS:
-		if _engine.channels[index].channel_on:
+		var on: bool = _gen1.channel_sound_id(index) != 0 \
+			if _generation == RomRegistry.GEN1 else _engine.channels[index].channel_on
+		if on:
 			active.append(index + 1)
 	return {
 		"active_channels": active,
-		"sfx_active": _engine.sfx_active(),
-		"music_active": _engine.music_channels_active(),
+		"sfx_active": effect_playing(),
+		"music_active": music_playing(),
+		"generation": _generation,
 		"volume": _engine.volume,
 		"music_gain": _engine.music_gain,
 		"sfx_gain": _engine.sfx_gain,
@@ -397,7 +530,7 @@ func _service_timeline(delta: float = 0.0) -> void:
 		# over live music, which is what a host that stopped its stream and then
 		# asked for the same piece again used to leave behind. The output
 		# follows the driver rather than the other way round.
-		if not _engine.any_channel_active():
+		if not _any_channel_active():
 			_starved_seconds = 0.0
 			return
 		_start_stream()
@@ -424,7 +557,7 @@ func _service_timeline(delta: float = 0.0) -> void:
 	var pushed: int = 0
 	while available >= PokeApu.SAMPLES_PER_FRAME and _capacity - available < target:
 		_timeline_updates += 1
-		_engine.update_sound()
+		_advance_driver()
 		_apu.render_frame(_buffer)
 		_playback.push_buffer(_buffer)
 		available = _playback.get_frames_available()
@@ -439,7 +572,7 @@ func _service_timeline(delta: float = 0.0) -> void:
 ## what the queue does is the only honest evidence: a live one consumes 59.7
 ## driver frames a second whatever the host's frame rate.
 func _watch_for_a_dead_output(delta: float, pushed: int) -> void:
-	if pushed > 0 or not _engine.any_channel_active():
+	if pushed > 0 or not _any_channel_active():
 		_starved_seconds = 0.0
 		return
 	_starved_seconds += delta

@@ -16,12 +16,12 @@ const MAX_COMMENT_BLOCK: int = 8
 ## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
 ## it whenever a pass leaves room. It moves up only while a generation the tree
 ## did not carry is being brought in, and then by what that generation's own
-## files cost: `game/gen1` and its neighbours are 1667 lines of it, and
-## Generation 1 has added 2260 more to the shared code, the largest of them 152
-## the region map, 150 the battle animation engine, 140 the transition, 131 the
-## field moves, 130 the Pokedex, 108 the three PCs, 103 the movement a map
-## script runs, 97 the bicycle, 95 the trainer card, 74 those scripts.
-const MAX_COMMENT_LINES: int = 41596
+## files cost: `game/gen1`, its neighbours, the 157 of the sound driver and the
+## 23 of its check are 1847 lines of it, and Generation 1 has added 2351 more to
+## the shared code, the largest of them 152 the region map, 150 the battle
+## animation engine, 140 the transition, 131 the field moves, 130 the Pokedex,
+## 108 the three PCs, 103 the movement a map script runs, 97 the bicycle.
+const MAX_COMMENT_LINES: int = 41867
 
 ## What no comment block ever ends on. A pass that meets the ceiling above trims
 ## the second line of a two-line block and leaves the first mid-sentence, which

@@ -866,6 +866,18 @@ func import_rom(
 		result["message"] = "Could not write the battle animations."
 		return result
 	await _breathe(yield_ms)
+	var audio: Dictionary = read_audio(rom, layout)
+	if not bool(audio["ok"]):
+		result["message"] = String(audio["message"])
+		return result
+	if not RomCache.write_section(
+		RomCache.world_audio_path(directory),
+		RomCache.blob_path(RomCache.world_audio_path(directory)),
+		audio["data"]
+	):
+		result["message"] = "Could not write the audio banks."
+		return result
+	await _breathe(yield_ms)
 
 	var sections: Dictionary = {
 		RomCache.species_path(directory): species,
@@ -899,6 +911,9 @@ func import_rom(
 		"overworld_sprite_count": int(world["sprites"]),
 		"encounter_count": int(world["encounters"]),
 		"battle_anim_count": int(anims["anims"]),
+		"audio_bank_count": (audio["data"]["audio_banks"] as Array).size(),
+		"audio_record_count": (audio["data"]["music"] as Array).size()
+			+ (audio["data"]["sfx"] as Array).size(),
 		"atlases": pics,
 		"tiles": tiles,
 		"bar_palettes": _import_bar_palettes(rom, layout),
@@ -2095,3 +2110,136 @@ func _bank_u16(bank: PackedByteArray, address: int) -> int:
 
 static func _in_bank(address: int) -> bool:
 	return address >= BANK_BASE and address < BANK_BASE + RomFile.BANK_SIZE
+
+
+## `SFX_Headers_1` to `_3`, and `_4` on Yellow, with the whole bank behind each:
+## one copy of the sound driver, its effects, its wave instruments and its music.
+## An id above the bank's own `MAX_SFX_ID` is a piece of music and everything at
+## or below it an effect, which is the only division `PlaySound` makes.
+static func read_audio(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var banks: Array = []
+	var music: Array = []
+	var sfx: Array = []
+	var counts: Array[int] = Gen1Layout.audio_record_counts(rom.id)
+	for index: int in Gen1Layout.audio_bank_count(rom.id):
+		var bank: int = Gen1Layout.AUDIO_BANK_ROM[index]
+		var walk: Dictionary = _walk_audio_headers(rom, bank, index)
+		if not bool(walk["ok"]):
+			return walk
+		var rows: Array = walk["rows"]
+		if rows.size() != counts[index]:
+			return _fail("Audio bank %d holds %d records, expected %d." % [
+				bank, rows.size(), counts[index],
+			])
+		banks.append(_audio_bank_row(rom, index, bank, rows.size()))
+		for row: Dictionary in rows:
+			var into: Array = music if int(row["index"]) > Gen1Layout.AUDIO_MAX_SFX_ID[index] \
+				else sfx
+			into.append(row)
+	var cries: Dictionary = _read_cry_headers(rom)
+	if not bool(cries["ok"]):
+		return cries
+	return {
+		"ok": true,
+		"data": {
+			"generation": RomRegistry.GEN1,
+			"audio_banks": banks,
+			"music": music,
+			"sfx": sfx,
+			"cries": cries["rows"],
+			"mon_cries": _read_mon_cries(rom, layout),
+		},
+	}
+
+
+static func _audio_bank_row(rom: RomFile, index: int, bank: int, records: int) -> Dictionary:
+	var start: int = bank * RomFile.BANK_SIZE
+	return {
+		"index": index,
+		"bank": bank,
+		"address": Gen1Layout.AUDIO_HEADER_TABLE,
+		"data_address": Gen1Layout.AUDIO_HEADER_TABLE,
+		"offset": start,
+		"wave_pointers": Gen1Layout.audio_wave_pointers(rom.id, index),
+		"max_sfx_id": Gen1Layout.AUDIO_MAX_SFX_ID[index],
+		"record_count": records,
+		"bytes": Array(rom.slice(start, RomFile.BANK_SIZE)),
+		"byte_count": RomFile.BANK_SIZE,
+	}
+
+
+## The table walks itself: id 0 is `db $ff, $ff, $ff` padding, every entry names
+## its own channel count, and the table ends exactly where the lowest channel
+## pointer in it begins. Nothing in the cartridge records its length.
+static func _walk_audio_headers(rom: RomFile, bank: int, index: int) -> Dictionary:
+	var start: int = bank * RomFile.BANK_SIZE
+	if not rom.in_bounds(start, RomFile.BANK_SIZE):
+		return _fail("Audio bank %d is outside the cartridge." % bank)
+	var rows: Array = []
+	var lowest: int = BANK_BASE + RomFile.BANK_SIZE
+	var id: int = 1
+	while Gen1Layout.AUDIO_HEADER_TABLE + id * Gen1Layout.AUDIO_HEADER_ENTRY_SIZE < lowest:
+		var entry: int = start + id * Gen1Layout.AUDIO_HEADER_ENTRY_SIZE
+		var count: int = ((rom.u8(entry) >> 6) & 0x03) + 1
+		var channels: Array = []
+		for slot: int in count:
+			var at: int = entry + slot * Gen1Layout.AUDIO_HEADER_ENTRY_SIZE
+			var address: int = rom.u16le(at + 1)
+			if not _in_bank(address):
+				return _fail("Audio bank %d id %d points outside the bank." % [bank, id])
+			lowest = mini(lowest, address)
+			channels.append({"channel": rom.u8(at) & 0x0F, "address": address})
+		rows.append({
+			"index": id,
+			"bank": bank,
+			"audio_bank": index,
+			"address": Gen1Layout.AUDIO_HEADER_TABLE + id * Gen1Layout.AUDIO_HEADER_ENTRY_SIZE,
+			"offset": entry,
+			"channels": channels,
+			"data_address": Gen1Layout.AUDIO_HEADER_TABLE,
+			"byte_count": RomFile.BANK_SIZE,
+		})
+		id += count
+	var end: int = Gen1Layout.AUDIO_HEADER_TABLE + id * Gen1Layout.AUDIO_HEADER_ENTRY_SIZE
+	if end != lowest:
+		return _fail("Audio bank %d table ends at $%04X, its data at $%04X." % [
+			bank, end, lowest,
+		])
+	return {"ok": true, "rows": rows}
+
+
+## The thirty-eight cries, which every copy of the driver numbers the same way.
+## A cry names no bank of its own: `PlayCry` runs on whichever one the game is
+## already on, which is why the same cry sounds different in a battle.
+static func _read_cry_headers(rom: RomFile) -> Dictionary:
+	var rows: Array = []
+	for index: int in Gen1Layout.AUDIO_CRY_COUNT:
+		var id: int = Gen1Layout.AUDIO_CRY_FIRST_ID + index * 3
+		var entry: int = Gen1Layout.AUDIO_BANK_ROM[0] * RomFile.BANK_SIZE \
+			+ id * Gen1Layout.AUDIO_HEADER_ENTRY_SIZE
+		if (((rom.u8(entry) >> 6) & 0x03) + 1) != 3:
+			return _fail("Cry %d is not three channels long." % index)
+		rows.append({
+			"index": index,
+			"sound_id": id,
+			"bank": -1,
+			"address": Gen1Layout.AUDIO_HEADER_TABLE + id * Gen1Layout.AUDIO_HEADER_ENTRY_SIZE,
+			"data_address": Gen1Layout.AUDIO_HEADER_TABLE,
+			"byte_count": RomFile.BANK_SIZE,
+		})
+	return {"ok": true, "rows": rows}
+
+
+## `CryData`, read into dex order: the table is indexed by the internal slot, and
+## its three bytes are the cry, `wFrequencyModifier` and `wTempoModifier`.
+static func _read_mon_cries(rom: RomFile, layout: Dictionary) -> Array:
+	var slots: PackedInt32Array = Gen1Layout.index_of_dex(rom, layout)
+	var rows: Array = []
+	for dex: int in range(1, Gen1Layout.SPECIES_COUNT + 1):
+		var at: int = Gen1Layout.cry_offset(layout, slots[dex])
+		rows.append({
+			"index": rom.u8(at),
+			"pitch": rom.u8(at + 1),
+			"length": rom.u8(at + 2),
+		})
+	return rows
