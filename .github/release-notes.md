@@ -16,22 +16,29 @@ an empty body. -->
 
 ## Added
 
-- The launcher opens on the cartridge you last played. Anyone whose game is Crystal was turning the carousel four steps at every launch. A shelf that has never been played from still opens on Red.
-- A mod can rewrite what a text box says. Every named box reads through one seam now, which is what a translation needs: the menus, the marts, the name rater, the move deleter, the Day-Care, the intro and the special scripts. Issue #575 asked for a French Crystal and had nothing to aim at.
+- Red, Blue and Yellow play their own music, sound effects and cries. `audio/engine_1.asm` is a second driver beside Crystal's, and a map plays its piece out of whichever ROM bank the cartridge names for it. All 151 cries are in.
+- A Generation 1 new game runs from Oak's speech to the bedroom. Six intro palettes, the pic that walks across the window, both keyboards for your name and your rival's, and the save that puts you in Red's house at (3, 6) with 3000 in the wallet and a POTION in the PC.
+- The Safari Zone runs whole. The gate takes the fee, hands over 30 balls, counts your 500 steps and ends the game with the PA wherever you are standing. Bait and the rock move the catch rate and the flee roll, and Yellow's discount for a thin wallet works.
+- Celadon Mart's, Silph Co.'s and Rocket Hideout's elevators ride and shake, and the door you walked in through goes back where it belongs when you leave.
+- The NAME RATER renames a Pokemon, on his own ten-letter keyboard with the party icon drawn over it.
+- The Poke Flute plays inside a battle. It stays quiet while the low health alarm owns the channels it would take.
 
 ## Changed
 
-- Generation 1's overworld is walked, fought and talked to. A map opens and a step meets a wild Pokemon. A sign or an NPC opens a box, a trainer sees you across a room and walks up, and the fight behind it runs to a faint with its own wipe, animations and ball throws.
-- Every counter on Red, Blue and Yellow is open: the mart, the Pokemon Center nurse, the cable club receptionist, the vending machines, the Game Corner prize counter with its four coin clerks, the Day-Care, and all three PCs.
-- The START menu, the bag, the party list, the Pokedex, the trainer card and the region map each draw in Generation 1's own layout.
-- Field moves run. Cut, Surf, Strength, Fly, Dig, Teleport and Softboiled, the three fishing rods, the bicycle down Cycling Road, the Poke Flute in front of a Snorlax, and Flash lighting Rock Tunnel.
-- Hidden objects, in-game trades, gifts, items on the ground, Silph Co.'s card key doors, the dungeon holes and the Escape Rope all answer.
-- A Generation 1 map runs its own per-frame script, so a state machine walks an NPC across a room or the player up a corridor and holds its line until that walk has been drawn.
-- None of this is reachable from Play. Red, Blue and Yellow are still import and inspection only.
+- Generation 1 map scripts run their own bodies. 186 state bodies over 98 tables decode on Red and Blue, 127 of them whole, against 118 and 65 last release.
+- The menus a text row draws for itself are open. Among them the Cinnabar lab handing back what your fossil revives into, the Cerulean badge house's list, Oak's aides, the Pokedex rating and the healing machine sounding once per ball.
+- Every `text_asm` row on Red and Blue decodes now, 317 of them, and none is left with an arm the walker could not read.
+- Blue's layout is built from Red's and the bytes it shifts, so a correction to one reaches the other.
+- Red, Blue and Yellow are still import and inspection only. Play turns them away.
+- The cache format is 126. Import your Generation 1 cartridge again: a cache written before this one carries no audio and no map music bank.
 
 ## Fixed
 
-- A mod archive refused for its contract now names the manifest it found. One built by another project's generator carries `manifest.json` with an `api` field, and this installer reported "no mod.json" over a file it had already read, then refused the mod for declaring the 0 it had defaulted to.
+- Every scripted warp landed on the row in front of the one it named. `wDestinationWarpID` counts from zero.
+- Importing Yellow raised an error partway and left one map's state machine half built.
+- Six of the Safari gate's text rows were never read, because the table they sat in could only grow once.
+- Route 11 Gate 2F's aide said nothing at all.
+- Generation 1's Pokemon Center nurse never recorded the town to wake up in, two stores having matched the same byte.
 
 ## Which file
 
