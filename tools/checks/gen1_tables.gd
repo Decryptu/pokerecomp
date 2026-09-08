@@ -450,8 +450,12 @@ func _items() -> void:
 		"$C9 is not TM01")
 	_r.check(int(data.item(Gen1Layout.TM_FIRST_ITEM)["price"]) == 3000, "TM01 is not 3000")
 	_r.check(int(data.item(ITEM_TABLE_COUNT)["price"]) == 2000, "TM50 is not 2000")
-	_r.check(String(data.item(Gen1Layout.ITEM_COUNT + 1)["name"]).is_empty(),
-		"$54 has a name")
+	_r.check(String(data.item(Gen1Layout.ITEM_COUNT + 1)["name"]) == "B2F",
+		"$54 is not B2F")
+	_r.check(String(data.item(Gen1Layout.ITEM_NAME_COUNT)["name"]) == "B4F",
+		"$61 is not B4F")
+	_r.check(String(data.item(Gen1Layout.ITEM_NAME_COUNT + 1)["name"]).is_empty(),
+		"$62 has a name")
 	_item_attributes(data)
 	_r.note("%d named items in a table of %d" % [ITEM_COUNT, ITEM_TABLE_COUNT])
 

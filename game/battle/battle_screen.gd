@@ -3395,8 +3395,7 @@ func _gen1_item_text(key: String, fallback: String, run: String = "item_use") ->
 
 ## `ItemUsePokeFlute` reaches neither `PrintItemUseTextAndRemoveItem` nor
 ## `UseDisposableItem`, so its own boxes are all a battle says.
-## `Music_PokeFluteInBattle` sits between the two and waits on a channel no
-## driver here fills.
+## `Music_PokeFluteInBattle` sits between the two, behind `wLowHealthAlarm`.
 func _show_flute_boxes(woke: bool) -> void:
 	_box_queue.clear()
 	if not woke:
@@ -3405,7 +3404,17 @@ func _show_flute_boxes(woke: bool) -> void:
 	show_message(_gen1_item_text(
 		"had_effect", FLUTE_HAD_EFFECT_TEXT, "poke_flute"
 	).replace(Gen2WorldPC.PLAYER_MARKER, _player_label()))
+	_play_poke_flute()
 	_box_queue.append(_gen1_item_text("woke_up", FLUTE_WOKE_UP_TEXT, "poke_flute"))
+
+
+func _play_poke_flute() -> void:
+	if _audio_player == null or _data == null or _audio_player.low_health_alarm():
+		return
+	var record: Dictionary = _data.gen1_poke_flute()
+	if record.is_empty():
+		return
+	_audio_player.play_record(record, &"poke_flute", _audio_assets())
 
 
 ## `ItemUseText00`, the line `PrintItemUseTextAndRemoveItem` prints in front of

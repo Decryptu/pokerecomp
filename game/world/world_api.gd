@@ -3912,6 +3912,9 @@ var _gen1_last_sprite_index: int = -1
 var _gen1_text_table: int = -1
 var _gen1_movement_script: Dictionary = {}
 var _gen1_scratch: Dictionary = {}
+## `wWarpedFromWhichWarp` and the one `wWarpEntries` row an elevator rewrites.
+var _gen1_warped_from: Dictionary = {}
+var _gen1_warp_entry: Dictionary = {}
 
 ## `wRivalName`, which no Generation 1 save model holds yet.
 var gen1_rival_name: String = Gen2WorldScriptRunner.UNNAMED
@@ -3954,6 +3957,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"walk": &"_gen1_node_walk",
 	"day_care": &"_gen1_node_day_care",
 	"town_map": &"_gen1_node_town_map",
+	"elevator": &"_gen1_node_elevator",
 	"set_map_script": &"_gen1_node_set_map_script",
 	"player_in_array": &"_gen1_node_player_in_array",
 	"object_facing": &"_gen1_node_object_facing",
@@ -4494,6 +4498,44 @@ func _gen1_node_player_facing(node: Dictionary, steps: Array, _run: Dictionary) 
 func _gen1_node_town_map(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
 	steps.append({"type": &"request", "values": {
 		"kind": &"town_map_requested", "values": {"landmark": landmark_backup()},
+	}})
+	return true
+
+
+## `<Map>ElevatorStoreWarpEntriesScript`, run by the map an `elevator` row is on.
+func _gen1_seed_warp_entry(target_map: Gen2WorldMap) -> void:
+	_gen1_warp_entry = _gen1_warped_from.duplicate() \
+		if _gen1_map_elevator(target_map) else {}
+
+
+static func _gen1_map_elevator(target_map: Gen2WorldMap) -> bool:
+	for row: Dictionary in target_map.texts:
+		for node: Dictionary in (row.get("script", []) as Array):
+			if String(node.get("op", "")) == "elevator":
+				return true
+	return false
+
+
+func _gen1_warp_entry_over(cell: Vector2i, source_warp: Dictionary) -> Dictionary:
+	if not _gen1 or _gen1_warp_entry.is_empty() or warp_index_at(cell) != 1:
+		return source_warp
+	var written: Dictionary = source_warp.duplicate(true)
+	written["destination"] = int(_gen1_warp_entry["warp"])
+	written["map_group"] = 0
+	written["map_number"] = int(_gen1_warp_entry["map"])
+	return written
+
+
+## `DisplayElevatorFloorMenu`, whose `WhichFloorText` ends on `text_end`.
+func _gen1_node_elevator(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var floors: Array = node.get("floors", [])
+	if floors.is_empty():
+		return false
+	steps.append({"type": &"request", "elevator": true, "values": {
+		"kind": &"elevator_requested",
+		"values": {
+			"generation": RomRegistry.GEN1, "floors": floors.duplicate(true),
+		},
 	}})
 	return true
 
@@ -5334,8 +5376,8 @@ func _gen1_nurse_steps() -> Array:
 
 
 ## `farcall AnimateHealingMachine`, the step behind `predef HealParty`, which the
-## dialogue waits out before its last two lines. No Generation 1 audio driver, so
-## the sound each ball is placed with plays nothing.
+## dialogue waits out before its last two lines. The sound each ball is placed
+## with is a script sound, and no step in this list carries one.
 func _gen1_heal_machine_step() -> Dictionary:
 	var balls: int = int(_party_summary.get("count", 0))
 	var frames: int = balls * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES \
@@ -5989,6 +6031,8 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		_gen1_steps = _gen1_trade_after_selection(step, result) + _gen1_steps
 	elif step.has("day_care"):
 		_gen1_steps = _gen1_day_care_after_selection(result) + _gen1_steps
+	elif step.has("elevator"):
+		_gen1_ride_elevator(result)
 	elif step.has("ok"):
 		## `accepted` is the carry `_GivePokemon` answers in.
 		_gen1_steps = (step[
@@ -5996,6 +6040,19 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		] as Array).duplicate(true) + _gen1_steps
 	_gen1_battle_won(step, result)
 	return _gen1_result()
+
+
+func _gen1_ride_elevator(result: Dictionary) -> void:
+	var floor_row: Variant = result.get("floor", null)
+	if not floor_row is Dictionary:
+		return
+	_gen1_warp_entry = {
+		"warp": int((floor_row as Dictionary)["warp"]),
+		"map": int((floor_row as Dictionary)["map"]),
+	}
+	_gen1_steps.push_front(_gen1_wait_step(
+		&"gen1_elevator_shake", Gen1Layout.ELEVATOR_SHAKE_FRAMES, {"shake": true}
+	))
 
 
 ## `EndTrainerBattle` flags a beaten opponent, and its `cp OPP_ID_OFFSET` skips
@@ -7765,6 +7822,7 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	## (10,8) is one, and the walk to the beasts crosses it.
 	if not _warp_tile_allows(cell):
 		return {}
+	source_warp = _gen1_warp_entry_over(cell, source_warp)
 	var target_group: int = int(source_warp.get("map_group", -1))
 	var target_number: int = int(source_warp.get("map_number", -1))
 	## `.goBackOutside`: a Generation 1 indoor warp names `LAST_MAP` rather than a
@@ -7848,6 +7906,7 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	# Rope comes back out of. `WarpToNewMapScript`, the pitfall and the magnet
 	# train name DOOR, FALL and TRAIN, which are one setup-script body.
 	var landing: Vector2i = _warp_landing_cell(target_map, target_warp, cell)
+	_gen1_warped_from = {"warp": maxi(warp_index_at(cell) - 1, 0), "map": from_map.y}
 	_apply_map(target_map, target_tileset, landing, false, warp_index_at(cell), MAP_ENTRY_DOOR)
 	return {
 		"ok": true,
@@ -9124,6 +9183,7 @@ func _apply_map(
 		_gen1_volatile.clear()
 		_gen1_text_table = -1
 		_gen1_last_boulder = -1
+		_gen1_seed_warp_entry(target_map)
 	## `RefreshPlayerSprite` clears `wPlayerTurningDirection`, and every warp and
 	## connection reaches it, so a slide never survives a map change.
 	_stand_in_place()

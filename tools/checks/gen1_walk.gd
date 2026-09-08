@@ -28,6 +28,15 @@ const SILPH_OPEN_BLOCK: int = 0x0E
 const CARD_KEY_REFUSED: String = "Darn! It needs a"
 const CARD_KEY_OPENED: String = "Bingo!"
 
+const CELADON_MART_1F: int = 122
+const CELADON_MART_ELEVATOR: int = 127
+const ELEVATOR_DOOR_CELL := Vector2i(1, 1)
+const ELEVATOR_DOOR_WARP: int = 5
+const ELEVATOR_EXIT_CELL := Vector2i(1, 3)
+const ELEVATOR_SIGN_CELL := Vector2i(3, 1)
+const ELEVATOR_FLOOR_COUNT: int = 5
+const ELEVATOR_CHOSEN_ROW: int = 2
+
 ## The warps no facing can fire, as map id and warp index. Every one is a cell
 ## the player arrives on rather than steps onto: three are pret's own
 ## `; inaccessible`, four are the upper half of a two-cell gate doorway on
@@ -431,6 +440,7 @@ func _one_game() -> void:
 	_check_a_bench_guy()
 	_check_a_bookshelf()
 	_check_a_card_key_door()
+	_check_an_elevator()
 	_check_the_day_care()
 	_check_the_town_map_poster()
 	_check_flying()
@@ -1077,6 +1087,73 @@ func _check_the_vending_machine() -> void:
 	)
 	world.complete_runtime_request({"ok": true})
 	_r.check(not world.script_busy(), "the machine never closed.")
+
+
+func _check_an_elevator() -> void:
+	var arrived: Gen2WorldAPI = _ride_into_the_elevator()
+	if arrived == null:
+		return
+	_r.check(_elevator_exit(arrived) == [CELADON_MART_1F, ELEVATOR_DOOR_WARP],
+		"an unused car opened onto %s." % [_elevator_exit(arrived)])
+
+	var world: Gen2WorldAPI = _ride_into_the_elevator()
+	if world == null:
+		return
+	world.player_cell = ELEVATOR_SIGN_CELL
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	if not _r.check(not world.interact().is_empty(), "the car offered nothing."):
+		return
+	var request: Dictionary = world.pending_runtime_request()
+	var floors: Array = request.get("values", {}).get("floors", [])
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"elevator_requested"
+			and floors.size() == ELEVATOR_FLOOR_COUNT,
+		"the car asked for %s." % [request.get("kind", &"nothing")]
+	):
+		return
+	world.complete_runtime_request({"ok": true})
+	_r.check(_elevator_exit(world) == [CELADON_MART_1F, ELEVATOR_DOOR_WARP],
+		"a cancelled ride opened onto %s." % [_elevator_exit(world)])
+
+	world = _ride_into_the_elevator()
+	if world == null:
+		return
+	world.player_cell = ELEVATOR_SIGN_CELL
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	world.interact()
+	var chosen: Dictionary = (world.pending_runtime_request()["values"]
+		as Dictionary)["floors"][ELEVATOR_CHOSEN_ROW]
+	world.complete_runtime_request({"ok": true, "floor": chosen})
+	_r.check(_elevator_exit(world) == [int(chosen["map"]), int(chosen["warp"])],
+		"the ride opened onto %s, wanting %s." % [
+			_elevator_exit(world), [int(chosen["map"]), int(chosen["warp"])],
+		])
+
+
+func _elevator_exit(world: Gen2WorldAPI) -> Array:
+	world.player_cell = ELEVATOR_EXIT_CELL
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	var taken: Dictionary = world.try_warp()
+	if not bool(taken.get("ok", false)):
+		return [taken.get("reason", &"refused")]
+	var landed: Dictionary = taken["destination"]
+	return [world.current_map.number, world.warp_index_at(
+		Vector2i(int(landed["x"]), int(landed["y"]))
+	) - 1]
+
+
+func _ride_into_the_elevator() -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, CELADON_MART_1F, ELEVATOR_DOOR_CELL)
+	if world == null:
+		return null
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var taken: Dictionary = world.try_warp()
+	if not _r.check(
+		bool(taken.get("ok", false)) and world.current_map.number == CELADON_MART_ELEVATOR,
+		"the lift door refused: %s." % [taken.get("reason", &"refused")]
+	):
+		return null
+	return world
 
 
 ## The salesman with the money and without it, and the refusal a bought

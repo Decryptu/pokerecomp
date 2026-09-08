@@ -7626,6 +7626,7 @@ const EVENT_HANDLERS: Dictionary = {
 const PRESENTATION_HANDLERS: Dictionary = {
 	&"prof_oaks_pc_boot": &"_event_prof_oaks_pc",
 	&"heal_machine_anim": &"_start_heal_machine_sounds",
+	&"gen1_elevator_shake": &"_start_gen1_elevator_shake",
 	&"palette_fade": &"_start_script_fade",
 }
 
@@ -8834,6 +8835,13 @@ func _play_encounter_sounds() -> void:
 			record, &"stereo_sfx", _audio_assets(), false,
 			Gen2BattleAnimScript.sound_panning(int(operands[0]), true)
 		)
+
+
+func _start_gen1_elevator_shake(_event: Dictionary) -> void:
+	if _effects != null:
+		_effects.start_gen1_elevator_shake()
+	if _renderer != null:
+		_renderer.refresh()
 
 
 func _start_heal_machine_sounds(event: Dictionary) -> void:

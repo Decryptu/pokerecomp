@@ -165,7 +165,7 @@ static func create(
 
 ## `PlayAnimation`: `battle_anim` rows, each a special effect or a subanimation
 ## of frame blocks drawn straight into `wShadowOAM`. There is no `param` and no
-## wobble list, and a row's sound byte is dropped for want of an audio driver.
+## wobble list, and a row's sound byte is not a step this player holds.
 static func create_gen1(
 	anim_data: Gen2BattleAnimData, index: int, on_enemy_turn: bool = false,
 	shakes: int = 0
@@ -1458,8 +1458,8 @@ func _gen1_hud_shake_steps() -> Array:
 
 ## `DoSpecialEffectByAnimationId`, after every frame block of the twenty-five
 ## `AnimationIdSpecialEffects` names. [param counter] is `wSubAnimCounter`, which
-## opens at the row count. The three trade rows wait for a caller; `POOF_ANIM`'s
-## row is a sound and Generation 1 has no audio driver here.
+## opens at the row count. The three trade rows wait for a caller, and
+## `POOF_ANIM`'s row is a sound, which is not a step this player holds.
 func _gen1_block_effect_steps(counter: int) -> Array:
 	var id: int = _anim_index + 1
 	if GEN1_BLOCK_FLASH.has(id):
