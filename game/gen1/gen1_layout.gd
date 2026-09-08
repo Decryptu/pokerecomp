@@ -2876,3 +2876,159 @@ static func cell_tile_index(cell_x: int, cell_y: int) -> int:
 ## in rather than its bottom left, which is why a left shore rolls on grass.
 static func cell_encounter_tile_index(cell_x: int, cell_y: int) -> int:
 	return cell_tile_index(cell_x, cell_y) + 1
+
+
+## The four copies of the sound driver, as the ROM banks they and their data live
+## in. Yellow alone has a fourth; the other three are the same banks on all three
+## cartridges, and so is every sound id.
+const AUDIO_BANK_ROM: Array[int] = [0x02, 0x08, 0x1F, 0x20]
+const AUDIO_BANK_COUNT_RED_BLUE: int = 3
+const AUDIO_BANK_COUNT_YELLOW: int = 4
+## `MAX_SFX_ID_1` to `_4`: an id above its bank's own is a piece of music, which
+## is what makes `PlaySound` clear the four music channels first.
+const AUDIO_MAX_SFX_ID: Array[int] = [185, 233, 194, 152]
+## `Audio<N>_WavePointers`. Red and Blue keep one per bank at the same address;
+## Yellow keeps a single table and every copy of the driver reads it.
+const AUDIO_WAVE_POINTERS_RED_BLUE: int = 0x4361
+const AUDIO_WAVE_POINTERS_YELLOW: int = 0x5A16
+## Where a bank's header table starts, and how many ids the corpus walk finds in
+## each: an entry names its own channel count, so the walk steps by it and stops
+## where the first channel pointer begins.
+const AUDIO_HEADER_TABLE: int = 0x4000
+const AUDIO_HEADER_ENTRY_SIZE: int = 3
+const AUDIO_RECORD_COUNT_RED_BLUE: Array[int] = [115, 126, 121]
+const AUDIO_RECORD_COUNT_YELLOW: Array[int] = [115, 126, 121, 74]
+## `CryData`'s first column counts cries rather than sound ids: the id is
+## `CRY_SFX_START` plus three times the index, every cry header being three
+## channels long.
+const AUDIO_CRY_COUNT: int = 38
+const AUDIO_CRY_FIRST_ID: int = 20
+
+## `Audio1_HWChannelEnableMasks`, which Yellow alone reads through
+## `Audio1_ApplyMonoStereo`: the mono row, then the three earphone rows the SOUND
+## option picks between. `wOptions & SOUND_MASK` shifted right once is the offset.
+const YELLOW_ENABLE_MASKS: Array[int] = [
+	0x11, 0x22, 0x44, 0x88, 0x11, 0x22, 0x44, 0x88,
+	0x01, 0x20, 0x44, 0x88, 0x11, 0x22, 0x44, 0x88,
+	0x01, 0x20, 0x04, 0x80, 0x01, 0x20, 0x04, 0x80,
+	0x01, 0x02, 0x40, 0x80, 0x01, 0x02, 0x40, 0x80,
+]
+const YELLOW_SOUND_OPTION_MASK: int = 0x30
+
+## The effects a Generation 1 path names directly. `Music_PokeFluteInBattle`
+## starts the first and overwrites its three channel pointers at once.
+const SFX_CAUGHT_MON: int = 154
+const SFX_GO_INSIDE: int = 173
+const SFX_GO_OUTSIDE: int = 181
+
+## The one seam every Crystal-numbered effect request reaches: a role spelled as
+## Crystal's own number, answered with the Generation 1 sound id that plays it.
+## An unlisted number belongs to a screen no Generation 1 cartridge opens.
+const SFX_ROLES: Dictionary = {
+	0x01: 134, ## SFX_ITEM, which is SFX_Get_Item1_1
+	0x02: 154, ## SFX_CAUGHT_MON, the battle bank's own
+	0x08: 144, ## SFX_READ_TEXT_2 is SFX_PRESS_AB
+	0x0B: 151, ## SFX_POISON is SFX_POISONED
+	0x0D: 153, ## SFX_BOOT_PC is SFX_TURN_ON_PC
+	0x0E: 154, ## SFX_SHUT_DOWN_PC is SFX_TURN_OFF_PC
+	0x0F: 155, ## SFX_CHOOSE_PC_OPTION is SFX_ENTER_PC
+	0x13: 173, ## SFX_WARP_TO is SFX_GO_INSIDE
+	0x15: 144, ## SFX_CHANGE_DEX_MODE is SFX_PRESS_AB
+	0x16: 162, ## SFX_JUMP_OVER_LEDGE is SFX_LEDGE
+	0x18: 164, ## SFX_FLY
+	0x19: 165, ## SFX_WRONG is SFX_DENIED
+	0x1F: 173, ## SFX_ENTER_DOOR is SFX_GO_INSIDE
+	0x20: 157, ## SFX_SWITCH_POKEMON is SFX_SWITCH
+	0x22: 178, ## SFX_TRANSACTION is SFX_PURCHASE
+	0x23: 181, ## SFX_EXIT_BUILDING is SFX_GO_OUTSIDE
+	0x24: 180, ## SFX_BUMP is SFX_COLLISION
+	0x25: 182, ## SFX_SAVE
+	0x28: 145, ## SFX_THROW_BALL is SFX_BALL_TOSS
+	0x29: 147, ## SFX_BALL_POOF
+	0x2E: 165, ## the move tutor's own SFX_WRONG
+	0x5E: 233, ## SFX_SHINE is SFX_TRAINER_APPEARED
+	0x62: 157, ## SFX_SWITCH_POCKETS is SFX_SWITCH
+	0x8C: 140, ## SFX_EXP_BAR is SFX_TINK
+	0xA4: 137, ## SFX_EVOLVED is SFX_GET_ITEM_2
+	0xAB: 167, ## SFX_NOT_VERY_EFFECTIVE
+	0xAC: 166, ## SFX_DAMAGE
+	0xAD: 176, ## SFX_SUPER_EFFECTIVE
+	0xB6: 140, ## SFX_HIT_END_OF_EXP_BAR is SFX_TINK
+}
+
+## The other half of the seam: a Crystal track number answered with the bank and
+## id that play the piece here. `MapSongBanks` carries both bytes itself, so only
+## the pieces a screen names by constant are listed.
+const MUSIC_ROLES: Dictionary = {
+	0x01: [0x1F, 195], ## MUSIC_TITLE is Music_TitleScreen
+	0x06: [0x08, 234], ## MUSIC_KANTO_GYM_LEADER_BATTLE
+	0x07: [0x08, 237], ## MUSIC_KANTO_TRAINER_BATTLE
+	0x08: [0x08, 240], ## MUSIC_KANTO_WILD_BATTLE
+	0x0D: [0x02, 232], ## MUSIC_HEAL is Music_PkmnHealed
+	0x12: [0x1F, 217], ## MUSIC_GAME_CORNER
+	0x13: [0x1F, 210], ## MUSIC_BICYCLE is Music_BikeRiding
+	0x14: [0x1F, 202], ## MUSIC_HALL_OF_FAME
+	0x21: [0x1F, 214], ## MUSIC_SURF is Music_Surfing
+	0x24: [0x1F, 199], ## MUSIC_CREDITS
+	0x29: [0x08, 240], ## MUSIC_JOHTO_WILD_BATTLE
+	0x2A: [0x08, 237], ## MUSIC_JOHTO_TRAINER_BATTLE
+	0x2B: [0x1F, 205], ## MUSIC_ROUTE_30 is Music_OaksLab, the speech's own piece
+	0x2E: [0x08, 234], ## MUSIC_JOHTO_GYM_LEADER_BATTLE
+	0x2F: [0x08, 243], ## MUSIC_CHAMPION_BATTLE is Music_FinalBattle
+	0x30: [0x08, 237], ## MUSIC_RIVAL_BATTLE
+	0x31: [0x08, 237], ## MUSIC_ROCKET_BATTLE
+	0x4A: [0x08, 240], ## MUSIC_JOHTO_WILD_BATTLE_NIGHT
+}
+
+## `PlayBattleMusic`'s own choice, as the bank and id each branch reaches. Lance
+## takes the gym leader piece and the rival's third battle the champion's.
+const BATTLE_MUSIC_GYM_LEADER: Array[int] = [0x08, 234]
+const BATTLE_MUSIC_TRAINER: Array[int] = [0x08, 237]
+const BATTLE_MUSIC_WILD: Array[int] = [0x08, 240]
+const BATTLE_MUSIC_FINAL: Array[int] = [0x08, 243]
+## `OPP_ID_OFFSET`, and the two opponents `PlayBattleMusic` names.
+const OPP_ID_OFFSET: int = 200
+const OPP_RIVAL3: int = 200 + 0x43
+const OPP_LANCE: int = 200 + 0x2E
+
+
+## How many copies of the driver a cartridge ships.
+static func audio_bank_count(id: StringName) -> int:
+	return AUDIO_BANK_COUNT_YELLOW if id == RomRegistry.YELLOW \
+		else AUDIO_BANK_COUNT_RED_BLUE
+
+
+static func audio_record_counts(id: StringName) -> Array[int]:
+	return AUDIO_RECORD_COUNT_YELLOW if id == RomRegistry.YELLOW \
+		else AUDIO_RECORD_COUNT_RED_BLUE
+
+
+## Where the copy of the driver in [param index] reads its wave instruments.
+## Yellow's later copies read the first one's table, which is a bank away.
+static func audio_wave_pointers(id: StringName, index: int) -> int:
+	if id != RomRegistry.YELLOW:
+		return AUDIO_WAVE_POINTERS_RED_BLUE
+	return AUDIO_WAVE_POINTERS_YELLOW if index == 0 else 0
+
+
+## The sound id a Crystal-numbered effect plays here, or -1 for a role no
+## Generation 1 cartridge has.
+static func sfx_role(crystal_number: int) -> int:
+	return int(SFX_ROLES.get(crystal_number, -1))
+
+
+## The bank and id a Crystal-numbered track plays here, or an empty array.
+static func music_role(crystal_track: int) -> Array:
+	return MUSIC_ROLES.get(crystal_track, [])
+
+
+## `PlayBattleMusic`: the gym leader flag first, then a wild battle, then the two
+## opponents that take a piece of their own.
+static func battle_music(gym_leader: bool, opponent: int) -> Array[int]:
+	if gym_leader or opponent == OPP_LANCE:
+		return BATTLE_MUSIC_GYM_LEADER
+	if opponent < OPP_ID_OFFSET:
+		return BATTLE_MUSIC_WILD
+	if opponent == OPP_RIVAL3:
+		return BATTLE_MUSIC_FINAL
+	return BATTLE_MUSIC_TRAINER

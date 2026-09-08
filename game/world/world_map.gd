@@ -14,6 +14,9 @@ var tileset: int = 0
 var environment: int = 0
 var location: int = 0
 var music: int = 0
+## `MapSongBanks`' second byte, which is Generation 1's only: the copy of the
+## sound driver the piece lives in. Zero on a Generation 2 map.
+var music_bank: int = 0
 var phone_flag: int = 0
 var palette: int = 0
 var fish_group: int = 0
@@ -50,6 +53,7 @@ static func from_cache(value: Dictionary) -> Gen2WorldMap:
 	out.environment = int(value.get("environment", 0))
 	out.location = int(value.get("location", 0))
 	out.music = int(value.get("music", 0))
+	out.music_bank = int(value.get("music_bank", 0))
 	out.phone_flag = int(value.get("phone_flag", 0))
 	out.palette = int(value.get("palette", 0))
 	out.fish_group = int(value.get("fish_group", 0))

@@ -604,7 +604,33 @@ func map_music_track() -> int:
 	## branch is unreferenced.
 	if movement_mode == MOVEMENT_BIKE:
 		return Gen2WorldFieldMove.MUSIC_BICYCLE
+	if data != null and data.generation == RomRegistry.GEN1:
+		return 0 if current_map == null else current_map.music
 	return _map_header_music()
+
+
+## `MapSongBanks`' second byte, which `PlayDefaultMusicCommon` puts into
+## `wAudioROMBank` before the id. Riding and surfing take their own piece out of
+## the third copy of the driver rather than the map's.
+func map_music_bank() -> int:
+	if data == null or data.generation != RomRegistry.GEN1:
+		return 0
+	if movement_mode == MOVEMENT_SURF or movement_mode == MOVEMENT_BIKE:
+		var role: Array = Gen1Layout.music_role(map_music_track())
+		return int(role[0]) if not role.is_empty() else 0
+	return 0 if current_map == null else current_map.music_bank
+
+
+## The record the map's own music resolves to, which is the one place a
+## Generation 1 track carries its bank across.
+func map_music_record() -> Dictionary:
+	if data == null:
+		return {}
+	if data.generation != RomRegistry.GEN1:
+		return data.world_audio(&"music", map_music_track())
+	if movement_mode == MOVEMENT_SURF or movement_mode == MOVEMENT_BIKE:
+		return data.world_audio(&"music", map_music_track())
+	return data.gen1_sound(map_music_bank(), map_music_track())
 
 
 func _is_national_park_gate() -> bool:

@@ -19,6 +19,8 @@ static func render(
 ) -> Dictionary:
 	if record.is_empty():
 		return {"ok": false, "reason": &"audio_data_unavailable"}
+	if int(assets.get("generation", RomRegistry.GEN2)) == RomRegistry.GEN1:
+		return render_gen1(record, assets, frames, trace)
 	var apu := PokeApu.new()
 	var engine := Gen2SoundEngine.new(apu)
 	engine.stereo = stereo
@@ -45,6 +47,47 @@ static func render(
 	for frame: int in maxi(frames, 1):
 		apu.trace_frame = frame
 		engine.update_sound()
+		var block: PackedInt32Array = apu.render_frame_pcm()
+		for index: int in block.size():
+			pcm[cursor + index] = block[index]
+		cursor += block.size()
+	return {
+		"ok": true,
+		"pcm": pcm,
+		"trace": "\n".join(apu.trace_lines) + "\n" if trace else "",
+		"frames": maxi(frames, 1),
+	}
+
+
+## The same render for a Generation 1 record. `PlaySound $ff` runs first so both
+## sides of a parity diff start from the same registers and the same channel
+## block, and the trace is the engine bank's writes alone: `FadeOutAudio` is
+## VBlank's, one bank away, and belongs to the live path rather than to this one.
+static func render_gen1(
+	record: Dictionary, assets: Dictionary, frames: int, trace: bool = false
+) -> Dictionary:
+	var apu := PokeApu.new()
+	var engine := Gen1SoundEngine.new(apu)
+	engine.yellow = bool(assets.get("yellow", false))
+	engine.set_assets(assets)
+	var bank: int = int(record.get("bank", -1))
+	var id: int = int(record.get("sound_id", -1))
+	if bank <= 0:
+		bank = Gen1Layout.AUDIO_BANK_ROM[0]
+	if not engine.bank_is_registered(bank) or id <= 0:
+		return {"ok": false, "reason": &"audio_record_unplayable"}
+	engine.audio_rom_bank = bank
+	engine.play_sound(Gen1SoundEngine.SFX_STOP_ALL_MUSIC)
+	engine.frequency_modifier = int(record.get("cry_pitch", 0)) & 0xFF
+	engine.tempo_modifier = int(record.get("cry_length", 0x80)) & 0xFF
+	apu.tracing = trace
+	engine.play_sound(id)
+	var pcm := PackedInt32Array()
+	pcm.resize(maxi(frames, 1) * PokeApu.SAMPLES_PER_FRAME * 2)
+	var cursor: int = 0
+	for frame: int in maxi(frames, 1):
+		apu.trace_frame = frame
+		engine.update_music()
 		var block: PackedInt32Array = apu.render_frame_pcm()
 		for index: int in block.size():
 			pcm[cursor + index] = block[index]

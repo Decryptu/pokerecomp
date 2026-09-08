@@ -2510,12 +2510,7 @@ func _play_hit_sound() -> void:
 
 
 func _audio_assets() -> Dictionary:
-	if _data == null:
-		return {}
-	return {
-		"wave_samples": _data.world_audio_asset(&"wave_samples"),
-		"drumkits": _data.world_audio_asset(&"drumkits"),
-	}
+	return {} if _data == null else _data.audio_assets()
 
 
 ## The two pictures put back where a battle draws them, which every send-out and

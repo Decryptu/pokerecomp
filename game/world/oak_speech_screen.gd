@@ -730,7 +730,4 @@ func _play_intro_cry() -> void:
 
 
 func _audio_assets() -> Dictionary:
-	return {
-		"wave_samples": _data.world_audio_asset(&"wave_samples"),
-		"drumkits": _data.world_audio_asset(&"drumkits"),
-	}
+	return _data.audio_assets()

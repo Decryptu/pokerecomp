@@ -527,8 +527,84 @@ func world_phone_script(kind: StringName) -> Dictionary:
 	return _coerce_service_dictionary(metadata.get(key, {}))
 
 
+## One audio record by the number the caller spells it with. A Generation 2 cache
+## is indexed directly; a Generation 1 cache takes the same number as a role and
+## answers with the sound id that plays it, which is the one seam every
+## Crystal-numbered request in the tree passes through.
 func world_audio(kind: StringName, index: int) -> Dictionary:
+	if generation == RomRegistry.GEN1:
+		return _gen1_role(kind, index)
 	return _service_row(_audio().get(String(kind), []), index, _blob("audio"))
+
+
+func _gen1_role(kind: StringName, index: int) -> Dictionary:
+	if kind == &"music":
+		## Crystal's MUSIC_NONE is `_InitSound`, which is `PlaySound $ff` here.
+		if index == 0:
+			return {"index": 0, "bank": -1, "sound_id": Gen1SoundEngine.SFX_STOP_ALL_MUSIC}
+		var role: Array = Gen1Layout.music_role(index)
+		return {} if role.is_empty() else gen1_sound(int(role[0]), int(role[1]))
+	var sound_id: int = Gen1Layout.sfx_role(index)
+	return {} if sound_id < 0 else gen1_sound(-1, sound_id)
+
+
+## One Generation 1 sound, named the way `PlaySound` names it. A bank below zero
+## is `wAudioROMBank`: an effect plays out of whichever copy of the driver the
+## game is already on, which is why the same request sounds different in battle.
+func gen1_sound(bank: int, sound_id: int) -> Dictionary:
+	if sound_id <= 0:
+		return {}
+	var row: Dictionary = _gen1_audio_row(bank, sound_id)
+	if row.is_empty():
+		return {}
+	row["sound_id"] = sound_id
+	row["bank"] = bank
+	return row
+
+
+## Every Generation 1 record of one kind, in the order the header tables walk:
+## what a corpus sweep and the parity harness both iterate.
+func gen1_audio_rows(kind: StringName) -> Array:
+	var rows: Variant = _audio().get(String(kind), [])
+	if not rows is Array:
+		return []
+	var out: Array = []
+	for value: Variant in rows as Array:
+		if value is Dictionary:
+			out.append((value as Dictionary).duplicate(true))
+	return out
+
+
+func _gen1_audio_row(bank: int, sound_id: int) -> Dictionary:
+	for kind: String in ["music", "sfx"]:
+		var rows: Variant = _audio().get(kind, [])
+		if not rows is Array:
+			continue
+		for value: Variant in rows as Array:
+			if not value is Dictionary \
+				or int((value as Dictionary).get("index", -1)) != sound_id:
+				continue
+			if bank >= 0 and int((value as Dictionary).get("bank", -1)) != bank:
+				continue
+			return (value as Dictionary).duplicate(true)
+	return {}
+
+
+## The audio banks a Generation 1 driver reads, or the wave samples and drum kits
+## a Generation 2 one does. Every host that plays a record hands these across.
+func audio_assets() -> Dictionary:
+	if generation == RomRegistry.GEN1:
+		return {
+			"generation": RomRegistry.GEN1,
+			"yellow": id == RomRegistry.YELLOW,
+			"audio_banks": _coerce_service_value(
+				_audio().get("audio_banks", []), _blob("audio")
+			),
+		}
+	return {
+		"wave_samples": world_audio_asset(&"wave_samples"),
+		"drumkits": world_audio_asset(&"drumkits"),
+	}
 
 
 func world_audio_pointer(kind: StringName, bank: int, address: int) -> Dictionary:
@@ -565,7 +641,11 @@ func species_cry(number: int) -> Dictionary:
 	var row: Dictionary = mon_cry(number)
 	if row.is_empty():
 		return {}
-	var record: Dictionary = world_audio(&"cries", int(row["index"]))
+	## `GetCryData`: the cry column counts cries, and the id is `CRY_SFX_START`
+	## plus three times it because every cry header is three channels long.
+	var record: Dictionary = gen1_sound(
+		-1, Gen1Layout.AUDIO_CRY_FIRST_ID + int(row["index"]) * 3
+	) if generation == RomRegistry.GEN1 else world_audio(&"cries", int(row["index"]))
 	if record.is_empty():
 		return {}
 	record["cry_pitch"] = int(row["pitch"])
