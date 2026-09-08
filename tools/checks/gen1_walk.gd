@@ -249,6 +249,31 @@ const PRIZE_MENUS: Dictionary = {
 const ROUTE_16: int = 27
 const ROUTE_16_GATE_DOOR := Vector2i(17, 10)
 const BIKE_SHOP: int = 66
+const CELADON_LITTLE_GIRL := Vector2i(5, 5)
+const DRINK_ROWS: Array[String] = ["FRESH WATER", "LEMONADE"]
+const DRINK_QUESTION: String = "Give her which"
+const DRINK_THIRSTY: String = "I'm thirsty!"
+const TM_ICE_BEAM: int = 0xD5
+const TM13_FLAG: int = 396
+const MENU_ARM_BOXES: int = 6
+const BIKE_CLERK := Vector2i(6, 2)
+const BIKE_MENU_ROWS: Array[String] = ["BICYCLE", "CANCEL"]
+const BIKE_PRICE: String = "¥1000000"
+const CINNABAR_LAB_FOSSIL_ROOM: int = 170
+const FOSSIL_SCIENTIST := Vector2i(5, 2)
+const DOME_FOSSIL: int = 0x29
+const FOSSIL_ROWS: Array[String] = ["DOME FOSSIL", "OLD AMBER"]
+const FOSSIL_GIVEN_FLAG: int = 736
+const FOSSIL_REVIVING_FLAG: int = 737
+const KABUTO_INDEX: int = 0x5A
+const KABUTO_DEX: int = 140
+const BADGE_HOUSE: int = 230
+const BADGE_MAN := Vector2i(5, 3)
+const BADGE_COUNT: int = 8
+const BADGE_FIRST: String = "BOULDERBADGE"
+const BADGE_FAREWELL: String = "Come visit me any"
+const BIKE_TOO_DEAR: String = "Sorry!"
+const BIKE_COME_AGAIN: String = "Come back again"
 const BIKE_YOUNGSTER := Vector2i(1, 4)
 const BIKE_FLAG: int = 192
 const BIKE_BOXES: Array[String] = ["These BIKEs are", "Wow. Your BIKE is"]
@@ -441,6 +466,9 @@ func _one_game() -> void:
 	_check_a_bookshelf()
 	_check_a_card_key_door()
 	_check_an_elevator()
+	_check_a_script_menu()
+	_check_the_fossil_lab()
+	_check_the_badge_house()
 	_check_the_day_care()
 	_check_the_town_map_poster()
 	_check_flying()
@@ -489,7 +517,8 @@ func _check_the_nurse_heals() -> void:
 		"the nurse asked for %s." % [request.get("kind", &"nothing")]
 	):
 		return
-	world.complete_runtime_request({"ok": true})
+	var healed: Array = world.complete_runtime_request({"ok": true})
+	var machine: Dictionary = _first_event(healed, &"presentation_special_applied")
 	var wait: Dictionary = world.pending_script_wait()
 	var frames: int = NURSE_PARTY * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES \
 		+ Gen2WorldEffects.HEAL_MACHINE_FLASHES \
@@ -500,6 +529,22 @@ func _check_the_nurse_heals() -> void:
 		"the heal machine waited on %s." % [wait]
 	)
 	_r.check(world.party_holder() == &"heal_machine", "the machine held no party.")
+	## `.partyLoop`'s `ld c, 30` per ball, and `MUSIC_PKMN_HEALED` behind them.
+	var sounds: Array = machine.get("sounds", [])
+	var wanted: Array = [[0, Gen1SoundEngine.SFX_STOP_ALL_MUSIC]]
+	for ball: int in NURSE_PARTY:
+		wanted.append([
+			ball * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES,
+			Gen1Layout.SFX_HEALING_MACHINE,
+		])
+	wanted.append([
+		NURSE_PARTY * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES,
+		Gen1Layout.MUSIC_PKMN_HEALED,
+	])
+	var played: Array = []
+	for row: Dictionary in sounds:
+		played.append([int(row["frame"]), int(row["index"])])
+	_r.check(played == wanted, "the machine sounded %s." % [played])
 	var spent: int = 0
 	while not world.pending_script_wait().is_empty() and spent <= frames:
 		world.advance_script_wait_frame()
@@ -1087,6 +1132,166 @@ func _check_the_vending_machine() -> void:
 	)
 	world.complete_runtime_request({"ok": true})
 	_r.check(not world.script_busy(), "the machine never closed.")
+
+
+## `CeladonMartRoofScript_GiveDrinkToGirl` lists `wFilteredBagItems`, so two of
+## the three drinks offer two rows; `BikeShopClerkText` lists two fixed strings.
+func _check_a_script_menu() -> void:
+	var world: Gen2WorldAPI = _facing_up(CELADON_MART_ROOF, CELADON_LITTLE_GIRL + Vector2i.DOWN)
+	if world == null:
+		return
+	world.state.apply_changes({}, {}, {"items": {
+		Gen1Layout.ITEM_FRESH_WATER: 1, Gen1Layout.ITEM_LEMONADE: 1,
+	}})
+	world.interact()
+	var request: Dictionary = _runtime_request(world.choose_script_input(0))
+	var values: Dictionary = request.get("values", {})
+	var rows: Array = values.get("rows", [])
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"gen1_menu_requested"
+			and _menu_names(rows) == DRINK_ROWS
+			and String(values.get("text", "")).begins_with(DRINK_QUESTION),
+		"the girl asked %s." % [request]
+	):
+		return
+	world.complete_runtime_request({"ok": true, "row": 0})
+	_press_past_boxes(world)
+	_r.check(
+		int(world.state.items().get(Gen1Layout.ITEM_FRESH_WATER, 0)) == 0
+			and int(world.state.items().get(TM_ICE_BEAM, 0)) == 1
+			and world.state.is_event_flag_active(TM13_FLAG),
+		"the FRESH WATER left %s." % [world.state.items()]
+	)
+	_check_an_empty_drink_bag()
+	_check_the_bike_shop_menu()
+
+
+func _check_an_empty_drink_bag() -> void:
+	var world: Gen2WorldAPI = _facing_up(CELADON_MART_ROOF, CELADON_LITTLE_GIRL + Vector2i.DOWN)
+	if world == null:
+		return
+	var said: Array = world.interact()
+	_r.check(
+		_runtime_request(said).is_empty()
+			and _event_text(said).begins_with(DRINK_THIRSTY),
+		"an empty bag was offered %s." % [said]
+	)
+
+
+## `BikeShopMenuText`, its price, and `BikeShopCantAffordText` behind row 0.
+func _check_the_bike_shop_menu() -> void:
+	var world: Gen2WorldAPI = _facing_up(BIKE_SHOP, BIKE_CLERK + Vector2i.DOWN)
+	if world == null:
+		return
+	world.interact()
+	var request: Dictionary = _runtime_request(world.run_event_queue(true))
+	var values: Dictionary = request.get("values", {})
+	var labels: Array = values.get("labels", [])
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"gen1_menu_requested"
+			and _menu_names(values.get("rows", [])) == BIKE_MENU_ROWS
+			and labels.size() == 1
+			and String(((labels[0] as Dictionary)["rows"] as Array)[0]) == BIKE_PRICE,
+		"the clerk offered %s." % [request]
+	):
+		return
+	var bought: Array = world.complete_runtime_request({"ok": true, "row": 0})
+	_r.check(_event_text(bought).begins_with(BIKE_TOO_DEAR),
+		"row 0 said %s." % [_event_text(bought)])
+	world = _facing_up(BIKE_SHOP, BIKE_CLERK + Vector2i.DOWN)
+	if world == null:
+		return
+	world.interact()
+	world.run_event_queue(true)
+	var left: Array = world.complete_runtime_request({"ok": true, "row": -1})
+	_r.check(_event_text(left).begins_with(BIKE_COME_AGAIN),
+		"the B press said %s." % [_event_text(left)])
+	_r.note("gen1 walk the drink menu, the empty bag and the BIKE SHOP's own two rows")
+
+
+func _press_past_boxes(world: Gen2WorldAPI) -> void:
+	for _press: int in MENU_ARM_BOXES:
+		var input: Dictionary = world.pending_script_input()
+		if input.is_empty() and world.pending_runtime_request().is_empty():
+			return
+		world.choose_script_input(0 if StringName(input.get("type", &"")) == &"choice" else -1)
+
+
+## `GiveFossilToCinnabarLab`: the bag's fossils are the rows, the one chosen is
+## spent, and `wFossilMon` is what the next visit hands back.
+func _check_the_fossil_lab() -> void:
+	var world: Gen2WorldAPI = _facing_up(
+		CINNABAR_LAB_FOSSIL_ROOM, FOSSIL_SCIENTIST + Vector2i.DOWN
+	)
+	if world == null:
+		return
+	world.state.apply_changes({}, {}, {"items": {DOME_FOSSIL: 1, OLD_AMBER: 1}})
+	## The box is drawn over `.Text`, so the menu opens on the row's own press.
+	var request: Dictionary = _runtime_request(world.interact())
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"gen1_menu_requested"
+			and _menu_names(request.get("values", {}).get("rows", [])) == FOSSIL_ROWS,
+		"the lab offered %s." % [request]
+	):
+		return
+	world.complete_runtime_request({"ok": true, "row": 0})
+	_press_past_boxes(world)
+	_r.check(
+		int(world.state.items().get(DOME_FOSSIL, 0)) == 0
+			and world.state.is_event_flag_active(FOSSIL_GIVEN_FLAG)
+			and int(world.gen1_fossil.get("mon", 0)) == KABUTO_INDEX,
+		"the DOME FOSSIL left %s and %s." % [world.state.items(), world.gen1_fossil]
+	)
+	_check_the_revived_fossil(world)
+
+
+func _check_the_revived_fossil(world: Gen2WorldAPI) -> void:
+	world.state.set_event_flag(FOSSIL_REVIVING_FLAG, false)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	world.interact()
+	var request: Dictionary = _runtime_request(world.run_event_queue(true))
+	_r.check(
+		StringName(request.get("kind", &"")) == &"pokemon_requested"
+			and int(request.get("values", {}).get("pokemon", 0)) == KABUTO_DEX,
+		"the revived fossil was %s." % [request]
+	)
+	_r.note("gen1 walk the fossil lab: two fossils listed, one taken, KABUTO back")
+
+
+## `CeruleanBadgeHouseMiddleAgedManText`: eight badges, and B the way out.
+func _check_the_badge_house() -> void:
+	var world: Gen2WorldAPI = _facing_up(BADGE_HOUSE, BADGE_MAN + Vector2i.DOWN)
+	if world == null:
+		return
+	world.interact()
+	world.run_event_queue(true)
+	var request: Dictionary = _runtime_request(world.run_event_queue(true))
+	var rows: Array = request.get("values", {}).get("rows", [])
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"gen1_list_menu_requested"
+			and rows.size() == BADGE_COUNT
+			and String((rows[0] as Dictionary)["name"]) == BADGE_FIRST,
+		"the badge man offered %s." % [request]
+	):
+		return
+	var said: Array = world.complete_runtime_request({"ok": true, "row": 0})
+	if not _r.check(not _event_text(said).is_empty(),
+		"the first badge said nothing: %s." % [said]):
+		return
+	var again: Dictionary = _runtime_request(world.run_event_queue(true))
+	_r.check(StringName(again.get("kind", &"")) == &"gen1_list_menu_requested",
+		"the list did not reopen: %s." % [again])
+	var left: Array = world.complete_runtime_request({"ok": true, "row": -1})
+	_r.check(_event_text(left).begins_with(BADGE_FAREWELL),
+		"the B press said %s." % [_event_text(left)])
+	_r.note("gen1 walk the badge house: %d badges, one read, the list reopened" % BADGE_COUNT)
+
+
+func _menu_names(rows: Array) -> Array[String]:
+	var out: Array[String] = []
+	for row: Dictionary in rows:
+		out.append(String(row.get("text", "")))
+	return out
 
 
 func _check_an_elevator() -> void:

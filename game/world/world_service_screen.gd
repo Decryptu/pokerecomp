@@ -26,7 +26,7 @@ enum MODE {
 	PC_SAVE,
 	PC_MON_LIST, PC_MON_ACTION, PC_ASK, PC_ITEM_QUANTITY,
 	ELEVATOR,
-	VENDING, PRIZE,
+	VENDING, PRIZE, SCRIPT_MENU, SCRIPT_LIST,
 }
 
 ## `ElevatorFloorNames`, in `FLOOR_*` order (constants/script_constants.asm).
@@ -363,6 +363,12 @@ func open_pending(
 	if StringName(request.get("kind", &"")) == &"prize_requested":
 		_open_prizes(request.get("values", {}))
 		return true
+	if StringName(request.get("kind", &"")) == &"gen1_menu_requested":
+		_open_script_menu(request.get("values", {}))
+		return true
+	if StringName(request.get("kind", &"")) == &"gen1_list_menu_requested":
+		_open_script_list(request.get("values", {}))
+		return true
 	var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(_world, request)
 	if not bool(resolved.get("ok", false)):
 		_show_error("Service unavailable: %s" % String(resolved.get("reason", "unknown")))
@@ -446,6 +452,8 @@ const MODE_PRESS_HANDLERS: Dictionary = {
 	MODE.MART: &"_press_mart",
 	MODE.MOM_BANK: &"_press_mom_bank",
 	MODE.PC_ITEM_QUANTITY: &"_press_gen1_quantity",
+	MODE.SCRIPT_MENU: &"_press_script_menu",
+	MODE.SCRIPT_LIST: &"_press_script_list",
 }
 
 ## The overlays that own all 160x144, in the order a press is offered them.
@@ -825,6 +833,107 @@ func _vending_named_rows() -> Array:
 			"price": int(row.get("price", 0)),
 		})
 	return out
+
+
+## The menu a Generation 1 script draws for itself. `HandleMenuInput` watches A
+## and B alone, and the row chosen is the whole answer.
+var _script_menu: Dictionary = {}
+
+
+func _open_script_menu(values: Dictionary) -> void:
+	_mode = MODE.SCRIPT_MENU
+	_script_menu = values.duplicate(true)
+	_cursor = 0
+	_set_overlay_open(true)
+	_open_map_overlay_view()
+	_render_script_menu()
+
+
+func _press_script_menu(button: int) -> void:
+	var rows: Array = _script_menu.get("rows", [])
+	if button == PokeButton.UP or button == PokeButton.DOWN:
+		_cursor = clampi(
+			_cursor + (-1 if button == PokeButton.UP else 1), 0, maxi(rows.size() - 1, 0)
+		)
+		_render_script_menu()
+		return
+	if button == PokeButton.B:
+		_finish_runtime({"ok": true, "row": -1})
+		return
+	if button == PokeButton.A:
+		_finish_runtime({"ok": true, "row": _cursor})
+
+
+func _render_script_menu() -> void:
+	if _mart_view == null or _data == null:
+		return
+	if _mart_page == null:
+		_mart_page = Gen2MartPage.from_data(_data)
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
+	if _mart_page == null or _service_page == null:
+		return
+	var page: Dictionary = _script_menu.duplicate(true)
+	page["cursor"] = _cursor
+	var image: Image = _service_page.render(
+		"", "", [], -1, String(_script_menu.get("text", ""))
+	)
+	var overlay: Image = _mart_page.render_gen1_script_menu(page)
+	if image != null and overlay != null:
+		image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
+	Gen2PicImage.show(_mart_view, image)
+
+
+var _script_list: Array = []
+var _script_list_scroll: int = 0
+
+
+func _open_script_list(values: Dictionary) -> void:
+	_mode = MODE.SCRIPT_LIST
+	_script_list = (values.get("rows", []) as Array).duplicate(true)
+	_script_list_scroll = 0
+	_cursor = 0
+	_set_overlay_open(true)
+	_open_map_overlay_view()
+	_render_script_list()
+
+
+func _press_script_list(button: int) -> void:
+	if button == PokeButton.B or (button == PokeButton.A and _cursor >= _script_list.size()):
+		_finish_runtime({"ok": true, "row": -1})
+		return
+	if button == PokeButton.A:
+		_finish_runtime({"ok": true, "row": _cursor})
+		return
+	if button == PokeButton.UP:
+		_cursor = maxi(0, _cursor - 1)
+	elif button == PokeButton.DOWN:
+		_cursor = mini(_script_list.size(), _cursor + 1)
+	else:
+		return
+	_script_list_scroll = clampi(
+		_script_list_scroll, maxi(0, _cursor - Gen2MartPage.GEN1_CURSOR_ROWS + 1), _cursor
+	)
+	_render_script_list()
+
+
+func _render_script_list() -> void:
+	if _mart_view == null or _data == null:
+		return
+	if _mart_page == null:
+		_mart_page = Gen2MartPage.from_data(_data)
+	if _mart_page == null:
+		return
+	var rows: Array = []
+	for offset: int in Gen2MartPage.GEN1_LIST_HEIGHT:
+		var index: int = _script_list_scroll + offset
+		if index > _script_list.size():
+			break
+		rows.append({"cancel": true} if index == _script_list.size() \
+			else {"name": String((_script_list[index] as Dictionary).get("name", ""))})
+	Gen2PicImage.show(_mart_view, _mart_page.render_gen1_pack({
+		"rows": rows, "cursor": _cursor - _script_list_scroll,
+	}))
 
 
 const GEN1_PRIZE_RUN: String = "prizes"

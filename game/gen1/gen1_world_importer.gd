@@ -1728,6 +1728,10 @@ const SCRIPT_TESTS_RANDOM: int = -25
 const SCRIPT_TESTS_RANDOM_BIT: int = -26
 const SCRIPT_TESTS_TALKING: int = -27
 const SCRIPT_TESTS_SCRATCH: int = -28
+const SCRIPT_TESTS_FILTERED: int = -29
+const SCRIPT_TESTS_MENU_CANCEL: int = -30
+const SCRIPT_TESTS_MENU_ROW: int = -31
+const SCRIPT_TESTS_MENU_ITEM: int = -32
 const SCRIPT_AIDE: int = -3
 ## What `push af` saves and `pop af` puts back, which is how
 ## `CheckEventAfterBranchReuseA` still reads the event byte a block write
@@ -1749,15 +1753,14 @@ const SCRIPT_STORED_REGISTERS: Dictionary = {
 ## choosing between them; a path reaching anything unread is dropped whole.
 ## [param known] is the argument byte a hidden event's own routine is handed.
 static func decode_script(
-	rom: RomFile, layout: Dictionary, bank: int, at: int, known: Dictionary = {}
+	rom: RomFile, layout: Dictionary, bank: int, at: int, known: Dictionary = {},
+	refused: Array = []
 ) -> Array:
-	var walked: Variant = _walk_script(
-		{
-			"rom": rom, "layout": layout, "bank": bank,
-			"budget": [SCRIPT_BUDGET], "calls": [0],
-		},
-		at, known.duplicate(), 0
-	)
+	var ctx: Dictionary = {
+		"rom": rom, "layout": layout, "bank": bank,
+		"budget": [SCRIPT_BUDGET], "calls": [0], "refused": refused,
+	}
+	var walked: Variant = _walk_script(ctx, at, known.duplicate(), 0)
 	return walked as Array if walked is Array else []
 
 
@@ -1875,13 +1878,21 @@ static func _script_step(
 			## `dec a` is what takes `DecodeRLEList`'s own sentinel back off its
 			## count, and `inc a` how a row spells PLAYER_DIR_RIGHT over `xor a`.
 			if not state.has("a"):
-				return SCRIPT_UNREAD
+				if int(state.get("source", -1)) \
+					!= int((ctx["layout"] as Dictionary).get("filtered_bag_count", -1)):
+					return SCRIPT_UNREAD
+				state.erase("source")
+				return pc + 1
 			var step: int = 1 if rom.u8(at) == Gen1Layout.SCRIPT_INC_A else -1
 			var symbolic: String = String(state.get("a_symbolic", ""))
 			_script_wrote_a(state)
 			state["a"] = int(state["a"]) + step
 			if not symbolic.is_empty():
 				state["a_symbolic"] = symbolic
+			else:
+				## `OaksAideScript`'s own `dec a ; jr nz` is the whole of this Z.
+				_script_untested(state)
+				state["known_zero"] = int(state["a"]) == 0
 			return pc + 1
 	return _script_step_more(ctx, pc, at, state, out, depth)
 
@@ -1918,6 +1929,8 @@ static func _script_step_more(
 			return next
 		Gen1Layout.SCRIPT_ADD_N:
 			return _script_added(ctx, pc, at, state)
+		Gen1Layout.SCRIPT_LD_D:
+			return _script_filtered_index(ctx, pc, at, state)
 		Gen1Layout.SCRIPT_CP_B:
 			return _script_compared_b(ctx, pc, state)
 	return _script_step_registers(ctx, pc, at, state, out, depth)
@@ -1974,6 +1987,11 @@ static func _script_step_registers(
 			_script_untested(state)
 			state["known_zero"] = int(state["b"]) == 0
 			return pc + 1
+		Gen1Layout.SCRIPT_DEC_L, Gen1Layout.SCRIPT_LD_B_L:
+			if not bool(state.get("menu_rows", false)):
+				return SCRIPT_UNREAD
+			state.erase("b")
+			return pc + 1
 	return _script_flow(ctx, pc, at, state, out, depth)
 
 
@@ -1988,9 +2006,12 @@ static func _script_read_table(ctx: Dictionary, pc: int, state: Dictionary) -> i
 
 
 static func _script_moved_half(pc: int, op: int, state: Dictionary) -> int:
+	var to_hl: bool = op in [Gen1Layout.SCRIPT_LD_H_D, Gen1Layout.SCRIPT_LD_L_E]
+	## `ld h, d` with `ld l, e` is a copy: the unwritten half is not read.
+	if to_hl and not state.has("hl"):
+		state["hl"] = 0
 	if not state.has("de") or not state.has("hl"):
 		return SCRIPT_UNREAD
-	var to_hl: bool = op in [Gen1Layout.SCRIPT_LD_H_D, Gen1Layout.SCRIPT_LD_L_E]
 	var high: bool = op in [Gen1Layout.SCRIPT_LD_H_D, Gen1Layout.SCRIPT_LD_D_H]
 	var source: int = int(state["de"]) if to_hl else int(state["hl"])
 	var target: String = "hl" if to_hl else "de"
@@ -2012,6 +2033,23 @@ static func _script_added(ctx: Dictionary, pc: int, at: int, state: Dictionary) 
 	_script_wrote_a(state)
 	state["a"] = int(state["a"]) + value
 	return pc + Gen1Layout.SCRIPT_SHORT_SIZE
+
+
+static func _script_filtered_index(
+	ctx: Dictionary, pc: int, at: int, state: Dictionary
+) -> int:
+	var rom: RomFile = ctx["rom"]
+	var layout: Dictionary = ctx["layout"]
+	if int(state.get("hl", -1)) != int(layout.get("filtered_bag_items", -1)) \
+		or int(state.get("source", -1)) != int(layout["current_menu_item"]):
+		return SCRIPT_UNREAD
+	for offset: int in Gen1Layout.SCRIPT_FILTERED_INDEX.size():
+		if rom.u8(at + offset) != int(Gen1Layout.SCRIPT_FILTERED_INDEX[offset]):
+			return SCRIPT_UNREAD
+	_script_wrote_a(state)
+	state.erase("a")
+	state["source"] = Gen1Layout.SCRIPT_MENU_ITEM_SOURCE
+	return pc + Gen1Layout.SCRIPT_FILTERED_INDEX.size()
 
 
 static func _script_compared_b(ctx: Dictionary, pc: int, state: Dictionary) -> int:
@@ -2336,6 +2374,9 @@ static func _script_stored(
 	for silent: String in Gen1Layout.SCRIPT_SILENT_STORES:
 		if address == int(layout.get(silent, -1)):
 			return true
+	for word: String in Gen1Layout.SCRIPT_SILENT_WORDS:
+		if address - int(layout.get(word, -3)) in [0, 1]:
+			return true
 	return _script_stored_more(ctx, layout, address, state, out)
 
 
@@ -2424,6 +2465,23 @@ static func _script_stored_named_more(
 				state["named_index"] = a
 			else:
 				state["named_source"] = int(state.get("source", -1))
+		"fossil_item", "fossil_mon":
+			return _script_fossil_stored(name, state, out, known, a)
+	return STORE_OK
+
+
+## `.fossilSelected`: the item is the menu's row and the mon the species it revives.
+static func _script_fossil_stored(
+	name: String, state: Dictionary, out: Array, known: bool, a: int
+) -> int:
+	var node: Dictionary = {"op": "set_fossil", "which": name.trim_prefix("fossil_")}
+	if known:
+		node["value"] = a
+	elif int(state.get("source", -1)) == Gen1Layout.SCRIPT_MENU_ITEM_SOURCE:
+		node["from"] = "menu"
+	else:
+		return STORE_REFUSED
+	out.append(node)
 	return STORE_OK
 
 
@@ -2473,6 +2531,7 @@ const STORE_NAMES: Array[String] = [
 	"warp_destination_map", "destination_warp_id", "cur_map_text_ptr",
 	"player_y", "player_x", "sprite_map_y", "sprite_map_x", "rival_starter",
 	"player_starter", "cur_party_species", "num_set_bits", "oaks_aide_reward",
+	"fossil_item", "fossil_mon",
 ]
 
 
@@ -2580,6 +2639,14 @@ static func _script_stored_more(
 	if _script_joypad_stored(layout, address, state, out):
 		return true
 	if _script_bcd_stored(ctx, address, state):
+		return true
+	var source: int = int(state.get("source", -2))
+	var marked: int = Gen1Layout.SCRIPT_MENU_ITEM_SOURCE \
+		if source == Gen1Layout.SCRIPT_MENU_ITEM_SOURCE \
+		else (Gen1Layout.SCRIPT_FOSSIL_ITEM_SOURCE \
+			if source == int(layout.get("fossil_item", -1)) else 0)
+	if address == int(layout["item_to_remove"]) and marked != 0:
+		state["remove"] = marked
 		return true
 	if address != int(layout["item_to_remove"]) or int(state.get("a", 0)) < 1:
 		return false
@@ -2698,6 +2765,12 @@ static func _script_stored_hli(
 static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> Array:
 	var layout: Dictionary = ctx["layout"]
 	var source: int = int(state.get("source", -1))
+	if bool(state.get("menu_open", false)):
+		var menu: Array = _script_menu_tests(layout, state, source, bit)
+		if not menu.is_empty():
+			return menu
+	if source == int(layout.get("filtered_bag_count", -1)):
+		return [SCRIPT_TESTS_FILTERED, false]
 	if source == int(layout["current_menu_item"]):
 		return [SCRIPT_TESTS_CHOICE, false]
 	var movement: String = Gen1Layout.script_movement_test(layout, source, bit)
@@ -2725,6 +2798,17 @@ static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> Array
 		if engine >= 0:
 			return [engine, true]
 	return [SCRIPT_TESTS_NOTHING, false]
+
+
+static func _script_menu_tests(
+	layout: Dictionary, state: Dictionary, source: int, bit: int
+) -> Array:
+	if bit == Gen1Layout.SCRIPT_PAD_B_BIT and not state.has("source"):
+		return [SCRIPT_TESTS_MENU_CANCEL, false]
+	if source == int(layout["current_menu_item"]):
+		state["menu_row"] = 0
+		return [SCRIPT_TESTS_MENU_ROW, false]
+	return []
 
 
 static func _script_tests_byte(layout: Dictionary, source: int, state: Dictionary) -> Array:
@@ -2984,6 +3068,9 @@ static func _script_call(
 	var routine: String = _script_routine(layout, target)
 	if routine in Gen1Layout.SCRIPT_SILENT_CALLS:
 		return next
+	var shaped: int = _script_shaped_routine(ctx, target, state, out)
+	if shaped != SCRIPT_NOT_SHAPED:
+		return next if shaped == SCRIPT_SHAPE_READ else SCRIPT_UNREAD
 	match routine:
 		"print_text":
 			var box: Dictionary = _script_box(ctx, int(state.get("hl", 0)))
@@ -2997,6 +3084,8 @@ static func _script_call(
 			state["no_press"] = true
 			return next
 		"yes_no_choice":
+			## The YES/NO writes `wCurrentMenuItem` over a menu's own row.
+			state.erase("menu_open")
 			state["source"] = int(layout["current_menu_item"])
 			state.erase("a")
 			return next
@@ -3044,6 +3133,18 @@ static func _script_called(
 				return SCRIPT_UNREAD
 			state["item_list"] = int(state["hl"])
 			return next
+		"add_n_times":
+			state.erase("hl")
+			state["menu_rows"] = true
+			return next
+		"text_box_border":
+			return _script_menu_box(ctx, state, next)
+		"place_string":
+			return _script_menu_string(ctx, state, next)
+		"handle_menu_input":
+			return _script_menu(state, out, next)
+		"display_list_menu":
+			return _script_list_menu(ctx, state, out, next, depth)
 	return _script_called_more(ctx, routine, target, state, out, next, depth)
 
 
@@ -3070,9 +3171,22 @@ static func _script_called_more(
 		"get_mon_name":
 			return _script_name_species(ctx, state, out, next)
 		"get_item_name":
-			if not state.has("named_index"):
+			var layout: Dictionary = ctx["layout"]
+			var named: Dictionary = {"op": "name_item", "buffer": int(layout.get("name_buffer", -1))}
+			if state.has("named_index"):
+				named["item"] = int(state["named_index"])
+			elif int(state.get("named_source", -1)) == int(layout.get("fossil_item", -1)):
+				named["from"] = "fossil_item"
+			else:
 				return SCRIPT_UNREAD
-			out.append({"op": "name_item", "item": int(state["named_index"])})
+			out.append(named)
+			state["de"] = int(layout.get("name_buffer", -1))
+			return next
+		"copy_to_string_buffer":
+			## `wNameBuffer` into `wStringBuffer`: one box names two things.
+			out.append({"op": "copy_name",
+				"from": int((ctx["layout"] as Dictionary).get("name_buffer", -1)),
+				"to": int((ctx["layout"] as Dictionary).get("string_buffer", -1))})
 			return next
 		"add_party_mon":
 			return _script_party_mon(ctx, state, out, next)
@@ -3089,9 +3203,11 @@ static func _script_name_species(
 			return SCRIPT_UNREAD
 		out.append({"op": "name_species", "species": dex})
 		return next
-	if int(state.get("named_source", -1)) == int(layout.get("player_starter", -1)):
-		out.append({"op": "name_species", "from": "player_starter"})
-		return next
+	for source: String in ["player_starter", "fossil_mon"]:
+		if int(state.get("named_source", -1)) == int(layout.get(source, -1)):
+			out.append({"op": "name_species", "from": source,
+				"buffer": int(layout.get("name_buffer", -1))})
+			return next
 	return SCRIPT_UNREAD
 
 
@@ -3574,9 +3690,18 @@ static func _script_pokedex(
 static func _script_gift_pokemon(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int
 ) -> int:
-	if not state.has("b") or not state.has("c") or int(state["c"]) < 1:
+	var layout: Dictionary = ctx["layout"]
+	if not state.has("c") or int(state["c"]) < 1:
 		return SCRIPT_UNREAD
-	var dex: int = Gen1Layout.dex_of_index(ctx["rom"], ctx["layout"], int(state["b"]))
+	if int(state.get("b_source", -1)) == int(layout.get("fossil_mon", -1)):
+		out.append({"op": "give_pokemon", "from": "fossil_mon", "level": int(state["c"])})
+		state.erase("b_source")
+		state.erase("c")
+		_script_tested(state, SCRIPT_TESTS_CARRY)
+		return next
+	if not state.has("b"):
+		return SCRIPT_UNREAD
+	var dex: int = Gen1Layout.dex_of_index(ctx["rom"], layout, int(state["b"]))
 	if dex < 1:
 		return SCRIPT_UNREAD
 	out.append({"op": "give_pokemon", "species": dex, "level": int(state["c"])})
@@ -3625,7 +3750,9 @@ static func _script_far(
 		return next
 	if bank != int(layout["remove_item_bank"]) or target != int(layout["remove_item"]):
 		return _script_routine_call(ctx, bank, target, state, out, next, depth)
-	if int(state.get("remove", 0)) < 1:
+	if int(state.get("remove", 0)) < 1 and int(state.get("remove", 0)) not in [
+		Gen1Layout.SCRIPT_MENU_ITEM_SOURCE, Gen1Layout.SCRIPT_FOSSIL_ITEM_SOURCE,
+	]:
 		return SCRIPT_UNREAD
 	out.append({"op": "take_item", "item": int(state["remove"])})
 	state.erase("remove")
@@ -3839,6 +3966,8 @@ static func _script_predef_named(
 			if not state.has("species_index"):
 				return STORE_REFUSED
 			out.append({"op": "pokedex", "species": int(state["species_index"])})
+		"display_dex_rating":
+			out.append({"op": "dex_rating"})
 		"oaks_aide":
 			return STORE_BRANCHED
 		_:
@@ -3908,6 +4037,195 @@ static func _script_elevator(
 		})
 	out.append({"op": "elevator", "floors": floors})
 	state.erase("item_list")
+	return next
+
+
+const SCRIPT_NOT_SHAPED: int = 0
+const SCRIPT_SHAPE_READ: int = 1
+const SCRIPT_SHAPE_REFUSED: int = 2
+
+
+## Three loops a walk cannot step through, each read by the bytes it opens with
+## rather than by an address: `<Map>Script_Get*InBag` filters a `db` run through
+## `GetQuantityOfItemInBag`, `Print*InBag` draws what is left, and
+## `OaksLabScript_RemoveParcel` spends one bag row.
+static func _script_shaped_routine(
+	ctx: Dictionary, target: int, state: Dictionary, out: Array
+) -> int:
+	var layout: Dictionary = ctx["layout"]
+	var rom: RomFile = ctx["rom"]
+	var at: int = Gen1Layout.banked(int(ctx["bank"]), target)
+	if rom.u8(at) != Gen1Layout.SCRIPT_LD_HL and rom.u8(at) != Gen1Layout.SCRIPT_XOR_A:
+		return SCRIPT_NOT_SHAPED
+	var items: int = int(layout.get("filtered_bag_items", -1))
+	if rom.u8(at) == Gen1Layout.SCRIPT_LD_HL and rom.u16le(at + 1) == items:
+		return _script_filter_printed(ctx, at, state)
+	if rom.u8(at) == Gen1Layout.SCRIPT_LD_HL and rom.u16le(at + 1) == int(layout.get("bag_items", -1)):
+		return _script_bag_scan(ctx, at, out)
+	if rom.u8(at) != Gen1Layout.SCRIPT_XOR_A \
+		or rom.u8(at + 1) != Gen1Layout.SCRIPT_LD_MEM_A \
+		or rom.u16le(at + 2) != int(layout.get("filtered_bag_count", -1)) \
+		or rom.u8(at + 4) != Gen1Layout.SCRIPT_LD_DE or rom.u16le(at + 5) != items \
+		or rom.u8(at + 7) != Gen1Layout.SCRIPT_LD_HL:
+		return SCRIPT_NOT_SHAPED
+	var list: int = Gen1Layout.banked(int(ctx["bank"]), rom.u16le(at + 8))
+	var rows: Array = []
+	while rows.size() < Gen1Layout.FILTERED_BAG_MAX and rom.u8(list + rows.size()) > 0:
+		rows.append(rom.u8(list + rows.size()))
+	if rows.is_empty():
+		return SCRIPT_SHAPE_REFUSED
+	state["filtered"] = rows
+	return SCRIPT_SHAPE_READ
+
+
+static func _script_bag_scan(ctx: Dictionary, at: int, out: Array) -> int:
+	var rom: RomFile = ctx["rom"]
+	var layout: Dictionary = ctx["layout"]
+	var item: int = -1
+	var taken: bool = false
+	for offset: int in Gen1Layout.BAG_SCAN_SIZE:
+		var op: int = rom.u8(at + offset)
+		if item < 1 and op == Gen1Layout.SCRIPT_CP_N \
+			and rom.u8(at + offset + 1) != Gen1Layout.MAP_COORD_END:
+			item = rom.u8(at + offset + 1)
+		taken = taken or (op == Gen1Layout.SCRIPT_JP \
+			and rom.u16le(at + offset + 1) == int(layout.get("remove_item_from_inventory", -1)))
+	if item < 1 or not taken:
+		return SCRIPT_SHAPE_REFUSED
+	out.append({"op": "take_item", "item": item})
+	return SCRIPT_SHAPE_READ
+
+
+static func _script_filter_printed(ctx: Dictionary, at: int, state: Dictionary) -> int:
+	if not state.has("filtered"):
+		return SCRIPT_NOT_SHAPED
+	var rom: RomFile = ctx["rom"]
+	var layout: Dictionary = ctx["layout"]
+	for offset: int in range(Gen1Layout.SCRIPT_LONG_SIZE, Gen1Layout.FILTER_PRINT_SCAN):
+		if rom.u8(at + offset) != Gen1Layout.SCRIPT_LD_HL:
+			continue
+		var cell: int = _script_screen_cell(layout, rom.u16le(at + offset + 1))
+		if cell < 0:
+			continue
+		state["filtered_at"] = {
+			"y": cell / Gen1Layout.SCREEN_WIDTH_TILES,
+			"x": cell % Gen1Layout.SCREEN_WIDTH_TILES,
+		}
+		return SCRIPT_SHAPE_READ
+	return SCRIPT_SHAPE_REFUSED
+
+
+## `CeruleanBadgeHouseMiddleAgedManText`, the one `SPECIALLISTMENU` outside an
+## elevator: badges, a text table the row indexes, and a `jr .loop` onto the
+## list, which is one node because a walk cannot return to itself.
+static func _script_list_menu(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int, depth: int
+) -> int:
+	if not state.has("item_list"):
+		return SCRIPT_UNREAD
+	var rom: RomFile = ctx["rom"]
+	var bank: int = int(ctx["bank"])
+	var at: int = Gen1Layout.banked(bank, next)
+	if rom.u8(at) != Gen1Layout.SCRIPT_JR_CARRY \
+		or rom.u8(at + 2) != Gen1Layout.SCRIPT_LD_HL \
+		or rom.u8(at + 5) != Gen1Layout.SCRIPT_LD_A_MEM \
+		or rom.u8(at + 8) != Gen1Layout.SCRIPT_SUB_N:
+		return SCRIPT_UNREAD
+	var texts: int = rom.u16le(at + 3)
+	var base: int = rom.u8(at + 9)
+	var list: int = Gen1Layout.banked(bank, int(state["item_list"]))
+	var count: int = rom.u8(list)
+	if count < 1 or count > Gen1Layout.LIST_MENU_MAX:
+		return SCRIPT_UNREAD
+	var rows: Array = []
+	for index: int in count:
+		var item: int = rom.u8(list + 1 + index)
+		var pointer: int = rom.u16le(
+			Gen1Layout.banked(bank, texts + (item - base) * Gen1Layout.POINTER_SIZE)
+		)
+		var box: Dictionary = _script_box(ctx, pointer)
+		if item < base or box.is_empty():
+			return SCRIPT_UNREAD
+		rows.append({"item": item, "text": String(box["text"])})
+	var done: Variant = _walk_script(
+		ctx, next + Gen1Layout.SCRIPT_SHORT_SIZE + _script_hop(rom.u8(at + 1)),
+		state.duplicate(), depth + 1
+	)
+	if not done is Array:
+		return SCRIPT_UNREAD
+	out.append({"op": "list_menu", "rows": rows, "done": done})
+	state.erase("item_list")
+	return SCRIPT_END
+
+
+## `TextBoxBorder`: `hl` is the corner, `b` and `c` the interior; a box sized off
+## the filtered count has no readable `b` and counts two rows an entry.
+static func _script_menu_box(ctx: Dictionary, state: Dictionary, next: int) -> int:
+	var layout: Dictionary = ctx["layout"]
+	var corner: int = _script_screen_cell(layout, int(state.get("hl", -1)))
+	if corner < 0 or not state.has("c"):
+		return SCRIPT_UNREAD
+	state["menu_box"] = {
+		"y": corner / Gen1Layout.SCREEN_WIDTH_TILES,
+		"x": corner % Gen1Layout.SCREEN_WIDTH_TILES,
+		"width": int(state["c"]),
+		"height": int(state["b"]) if state.has("b") \
+			else Gen1Layout.SCRIPT_MENU_SIZED_BY_COUNT,
+	}
+	state["menu_strings"] = []
+	state["menu_labels"] = []
+	state.erase("menu_rows")
+	return next
+
+
+static func _script_screen_cell(layout: Dictionary, address: int) -> int:
+	var cell: int = address - int(layout.get("tile_map", -1))
+	var cells: int = Gen1Layout.SCREEN_WIDTH_TILES * Gen1Layout.SCREEN_HEIGHT_TILES
+	return cell if address >= 0 and cell >= 0 and cell < cells else -1
+
+
+static func _script_menu_string(ctx: Dictionary, state: Dictionary, next: int) -> int:
+	if not state.has("menu_box") or not state.has("de"):
+		return SCRIPT_UNREAD
+	var layout: Dictionary = ctx["layout"]
+	var cell: int = _script_screen_cell(layout, int(state.get("hl", -1)))
+	if cell < 0:
+		return SCRIPT_UNREAD
+	var rom: RomFile = ctx["rom"]
+	var at: int = Gen1Layout.banked(int(ctx["bank"]), int(state["de"]))
+	var text: String = Gen1Text.decode(
+		rom.slice(at, Gen1Layout.MENU_STRING_MAX), 0, Gen1Layout.MENU_STRING_MAX
+	)
+	var rows: PackedStringArray = text.split(Gen1Layout.MENU_ROW_BREAK)
+	var placed: Dictionary = {
+		"y": cell / Gen1Layout.SCREEN_WIDTH_TILES,
+		"x": cell % Gen1Layout.SCREEN_WIDTH_TILES,
+		"rows": rows,
+	}
+	var key: String = "menu_strings" if rows.size() > 1 else "menu_labels"
+	(state[key] as Array).append(placed)
+	return next
+
+
+## `HandleMenuInput`, which owns every step behind it as a `YesNoChoice` does.
+static func _script_menu(state: Dictionary, out: Array, next: int) -> int:
+	if not state.has("menu_box"):
+		return SCRIPT_UNREAD
+	var node: Dictionary = {"op": "menu", "box": state["menu_box"]}
+	var strings: Array = state.get("menu_strings", [])
+	if state.has("filtered"):
+		node["filter"] = (state["filtered"] as Array).duplicate()
+		node["entries_at"] = state.get("filtered_at", {})
+	elif not strings.is_empty():
+		node["entries_at"] = {"y": int(strings[0]["y"]), "x": int(strings[0]["x"])}
+		node["entries"] = (strings[0] as Dictionary)["rows"]
+	else:
+		return SCRIPT_UNREAD
+	node["labels"] = state.get("menu_labels", [])
+	out.append(node)
+	state["menu_open"] = true
+	for key: String in ["menu_box", "menu_strings", "menu_labels", "a", "source"]:
+		state.erase(key)
 	return next
 
 
@@ -4066,6 +4384,14 @@ static func _script_compared(
 	if state.has("arrows") and value == Gen1Layout.MAP_COORD_END:
 		_script_tested(state, SCRIPT_TESTS_ARROW)
 		return next
+	if source == Gen1Layout.SCRIPT_MENU_ITEM_SOURCE:
+		state["menu_item"] = value
+		_script_tested(state, SCRIPT_TESTS_MENU_ITEM)
+		return next
+	if source == int(layout["current_menu_item"]) and bool(state.get("menu_open", false)):
+		state["menu_row"] = value
+		_script_tested(state, SCRIPT_TESTS_MENU_ROW)
+		return next
 	## `cp $0` where every other row spends `and a`, YES being 0 either way.
 	if source == int(layout["current_menu_item"]) and value == 0:
 		_script_test_bit(ctx, state, -1)
@@ -4092,7 +4418,7 @@ static func _script_compared_more(
 		state["tileset"] = value
 		_script_tested(state, SCRIPT_TESTS_TILESET)
 		return next
-	var screen: int = source - int(layout["tile_map"])
+	var screen: int = source - int(layout.get("tile_map", -1))
 	if screen >= 0 and screen < Gen1Layout.SCREEN_WIDTH_TILES * Gen1Layout.SCREEN_HEIGHT_TILES:
 		state["screen"] = screen
 		state["tile"] = value
@@ -4336,6 +4662,17 @@ static func _script_node_state(
 		SCRIPT_TESTS_SCRATCH:
 			return {"op": "scratch_test", "address": int(state["scratch_test"][0]),
 				"value": int(state["scratch_test"][1]), "then": fell, "else": taken}
+		SCRIPT_TESTS_FILTERED:
+			return {"op": "filtered_bag", "items": state.get("filtered", []),
+				"then": taken, "else": fell}
+		SCRIPT_TESTS_MENU_CANCEL:
+			return {"op": "menu_cancel", "then": taken, "else": fell}
+		SCRIPT_TESTS_MENU_ROW:
+			return {"op": "menu_row", "row": int(state["menu_row"]),
+				"then": fell, "else": taken}
+		SCRIPT_TESTS_MENU_ITEM:
+			return {"op": "menu_item", "item": int(state["menu_item"]),
+				"then": fell, "else": taken}
 	var branch: Dictionary = {
 		"op": "branch", "flag": int(tests), "then": taken, "else": fell,
 	}
