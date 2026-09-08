@@ -1314,6 +1314,15 @@ func world_tileset_indices(number: int) -> PackedByteArray:
 
 ## One species by Pokédex number, or an empty Dictionary if there is no such
 ## number. Out of range is a question, not a crash: a mod may well ask.
+## A Generation 1 internal index as the dex number the cache speaks, off the
+## `index` each species row keeps; 0 for a slot no species stands in.
+func gen1_dex_of_index(index: int) -> int:
+	for number: int in range(1, species_count() + 1):
+		if int(species(number).get("index", -1)) == index:
+			return number
+	return 0
+
+
 func species(number: int) -> Dictionary:
 	return _content(Gen2ContentOverlay.KIND_SPECIES, _species, number)
 

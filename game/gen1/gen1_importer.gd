@@ -192,6 +192,7 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"hof_pc": ["hof_pc_text", Gen1Layout.HOF_PC_TEXT_AT],
 	"change_box": ["change_box_text", Gen1Layout.CHANGE_BOX_TEXT_AT],
 	"choose_box": ["choose_box_text", Gen1Layout.CHOOSE_BOX_TEXT_AT],
+	"oaks_aide": ["oaks_aide_text", Gen1Layout.OAKS_AIDE_TEXT_AT],
 }
 const CARD_KEY_TEXT_NAMES: Array[String] = ["card_key_success", "card_key_fail"]
 

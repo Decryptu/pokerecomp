@@ -10,10 +10,9 @@ extends RefCounted
 ## [RomRegistry] does). A table is still a claim about a specific dump, so an
 ## uncharacterised ROM is refused rather than guessed at.
 
-## `NUM_POKEMON` and `NUM_POKEMON_INDEXES`: 151 dex entries over 190 cartridge
-## slots, most of the difference being MISSINGNO. `MonsterNames`,
-## `PokedexEntryPointers`, `EvosMovesPointerTable` and `CryData` are indexed by
-## the slot; `BaseStats` and `MonsterPalettes` by dex number.
+## 151 dex entries over 190 cartridge slots. `MonsterNames`, `PokedexEntryPointers`,
+## `EvosMovesPointerTable` and `CryData` are indexed by the slot; `BaseStats` and
+## `MonsterPalettes` by dex number.
 const SPECIES_COUNT: int = 151
 const INDEX_COUNT: int = 190
 const NAME_LENGTH: int = 10
@@ -141,11 +140,9 @@ const PIC_INDEX_MEW: int = 0x15
 const PIC_INDEX_FOSSIL_KABUTOPS: int = 0xB6
 const PIC_BANK_FOSSIL_KABUTOPS: int = 0x0B
 
-## `FontGraphics` and `TextBoxGraphics`, which `LoadFontTilePatterns` and
-## `LoadTextBoxTilePatterns` copy to `vFont` and `vChars2 tile $60`. Both are
-## indexed by character code: a byte is already the tile that draws it. The text
-## box's six border tiles at $79 are inside the second, where Generation 2 keeps
-## a table of eight frames of its own.
+## `FontGraphics` and `TextBoxGraphics`, copied to `vFont` and `vChars2 tile $60`
+## and indexed by character code. The box's six border tiles at $79 are inside
+## the second.
 const FONT_TILES: int = 128
 const FONT_FIRST_CODE: int = 0x80
 const FONT_EXTRA_TILES: int = 32
@@ -204,10 +201,8 @@ const BATTLE_HUD_1_FIRST_CODE: int = 0x6D
 const BATTLE_HUD_2_TILES: int = 6
 const BATTLE_HUD_2_FIRST_CODE: int = 0x73
 
-## The battle animation layer, all of it in bank $1E: `AttackAnimationPointers`,
-## `SubanimationPointers`, `FrameBlockPointers` and `FrameBlockBaseCoords` with
-## their data interleaved between them, so the cache holds one region and every
-## table resolves inside it.
+## The battle animation layer, all of it in bank $1E with its data interleaved,
+## so the cache holds one region.
 const ANIM_COUNT_RED_BLUE: int = 203
 ## Yellow drops `ZigZagScreenAnim`, the one entry past `NUM_ATTACK_ANIMS`.
 const ANIM_COUNT_YELLOW: int = 202
@@ -257,12 +252,9 @@ const ANIM_FLIP_Y: int = 136
 const ANIM_FLIP_X: int = 168
 const ANIM_HFLIP_DROP: int = 40
 
-## `FallingObjects_DeltaXs` is nine bytes and `FallingObjects_UpdateMovementByte`
-## only wraps a movement byte that reaches nine, so the two objects
-## `FallingObjects_InitialMovementData` starts at nine walk off the end and read
-## the routine's own machine code as their drift. The byte is masked to seven
-## bits, so 128 is as far as one can reach; the two dumps disagree past the ninth
-## and both are cached.
+## `FallingObjects_DeltaXs` is nine bytes and two objects start at nine, so they
+## read the routine's own machine code as their drift, masked to seven bits; the
+## two dumps disagree past the ninth and both are cached.
 const FALLING_DELTA_BYTES: int = 128
 const FALLING_DELTA_TABLE: int = 9
 
@@ -353,10 +345,8 @@ const ITEM_X_SUBSTATUSES: Dictionary = {
 ## tells the two apart.
 const STONE_ITEMS: Array[int] = [ITEM_MOON_STONE, 0x20, 0x21, 0x22, 0x2F]
 
-## `.addHealAmount`'s ladder, with `.setCurrentHPToMaxHp`'s own `cp HYPER_POTION`
-## in front of it: FULL_RESTORE and MAX_POTION are set to the maximum whatever
-## the byte said, which is what a heal past [constant Gen2Stats.MAX_STAT_VALUE]
-## means to [method Gen2WorldPartyHost.use_item].
+## `.addHealAmount`'s ladder; FULL_RESTORE and MAX_POTION heal past
+## [constant Gen2Stats.MAX_STAT_VALUE], which is the maximum to the party host.
 const ITEM_HEAL_AMOUNTS: Dictionary = {
 	ITEM_FULL_RESTORE: 999, 0x11: 999, 0x12: 200, 0x13: 50, 0x14: 20,
 	0x3C: 50, 0x3D: 60, 0x3E: 80,
@@ -373,10 +363,8 @@ const ITEM_STATUS_MASKS: Dictionary = {
 const ITEM_VITAMINS: Dictionary = {
 	0x23: "hp", 0x24: "attack", 0x25: "defense", 0x26: "speed", 0x27: "special",
 }
-## The `ItemUsePtrTable` rows that open on `ld a, [wIsInBattle]` and answer
-## `ItemUseNotTime` outside one. The four X stats are in `UsableItems_PartyMenu`
-## and still never open it: `.useItem_partyMenu` calls `UseItem` first and gets
-## `wActionResultOrTookBattleTurn` back as 2.
+## The `ItemUsePtrTable` rows that answer `ItemUseNotTime` outside a battle; the
+## four X stats are in `UsableItems_PartyMenu` and still never open it.
 const ITEM_BATTLE_ONLY: Array[int] = [
 	ITEM_MASTER_BALL, ITEM_ULTRA_BALL, ITEM_GREAT_BALL, ITEM_POKE_BALL,
 	ITEM_SAFARI_BALL, 0x15, 0x16, 0x2E, 0x33, 0x37, 0x3A,
@@ -560,9 +548,7 @@ const MART_ITEMS_AT: int = 2
 const MART_MAX_ITEMS: int = 14
 
 ## A `text_far` stub is `TX_FAR`, a two-byte address, a bank byte and a
-## `text_end`; a `text_pause` in front of one adds a byte, which is what makes
-## the second run below irregular. Each run is contiguous with the same deltas on
-## all three cartridges, so one pinned address apiece is enough.
+## `text_end`; a `text_pause` in front of one adds a byte.
 const TEXT_FAR_STUB_BYTES: int = 5
 
 ## `engine/events/pokemart.asm`'s eleven stubs in file order, under the slot
@@ -765,10 +751,8 @@ const SEAFOAM_ISLANDS_B4F: int = 0xA2
 ## Gate 1F's and Route 18 Gate 1F's per-frame scripts open with.
 const ALWAYS_ON_BIKE_BIT: int = 5
 
-## `ItemUsePokeFlute`'s two maps and the events each branch reads, in the order
-## their coordinate tables sit in. Both cartridges number the four alike;
-## Yellow's third branch is Pikachu at PEWTER_POKECENTER, which nothing follows
-## the player here.
+## `ItemUsePokeFlute`'s two maps and the events each branch reads. Yellow's third
+## branch is Pikachu at PEWTER_POKECENTER, who does not follow the player here.
 const ROUTE_12: int = 0x17
 const ROUTE_16: int = 0x1B
 const SNORLAX_FLUTE_ROW_SIZE: int = 2
@@ -924,10 +908,8 @@ const OBJECT_ITEM_FLAG: int = 0x80
 const OBJECT_TEXT_MASK: int = 0x3F
 const OBJECT_TRAINER_BYTES: int = 2
 const OBJECT_ITEM_BYTES: int = 1
-## `ToggleableObjectStates`: a map id, the object's 1-based id, and ON or OFF.
-## `MarkTownVisitedAndLoadToggleableObjects` reaches a map's run through
-## `ToggleableObjectMapPointers` and ends it on the first row naming another
-## map; a row's distance from the table is the index `HideObject` is given.
+## `ToggleableObjectStates`: a map id, the object's 1-based id, and ON or OFF;
+## a row's distance from the table is the index `HideObject` is given.
 const TOGGLE_STATE_SIZE: int = 3
 const TOGGLE_ON: int = 0x15
 ## `add_predef`'s `dba`, indexed by the id the `predef` macro leaves in a.
@@ -964,10 +946,9 @@ const OBJECT_WALKING_MOVEMENTS: Dictionary = {
 	0x01: Gen2WorldObject.MOVEMENT_WALK_UP_DOWN,
 	0x02: Gen2WorldObject.MOVEMENT_WALK_LEFT_RIGHT,
 }
-## `CanWalkOntoTile`'s two displacement counters, $8 apiece at map load and the
-## whole of a wanderer's band. Down and right are never refused, up stops at 0,
-## and the vertical test also stands in front of a sideways step, so an object
-## that walked five cells up can only keep going up.
+## `CanWalkOntoTile`'s two displacement counters, $8 apiece at map load: down
+## and right are never refused, up stops at 0, and the vertical test also stands
+## in front of a sideways step.
 const OBJECT_WALK_ORIGIN: int = 8
 const OBJECT_WALK_FLOOR: int = 5
 ## `InitBattleEnemyParameters`' `cp OPP_ID_OFFSET`: the extra byte is this plus
@@ -1017,6 +998,28 @@ const SCRIPT_DEC_A: int = 0x3D
 const SCRIPT_INC_A: int = 0x3C
 ## `ld [hli], a`, which is how `AgathaScriptWalkIntoRoom` writes its six steps.
 const SCRIPT_LD_HLI_A: int = 0x22
+const SCRIPT_LD_A_HLI: int = 0x2A
+const SCRIPT_INC_HL: int = 0x23
+const SCRIPT_INC_DE: int = 0x13
+const SCRIPT_DEC_B: int = 0x05
+const SCRIPT_CP_B: int = 0xB8
+const SCRIPT_LD_A_HL: int = 0x7E
+const SCRIPT_ADD_N: int = 0xC6
+const SCRIPT_LD_H_D: int = 0x62
+const SCRIPT_LD_L_E: int = 0x6B
+const SCRIPT_LD_D_H: int = 0x54
+const SCRIPT_LD_E_L: int = 0x5D
+const SCRIPT_AND_B: int = 0xA0
+const SCRIPT_OR_N: int = 0xF6
+const SCRIPT_ITEM_QUANTITY_SOURCE: int = -100
+const SCRIPT_SYMBOLIC_COORD_INDEX: String = "coord_index"
+const SCRIPT_LD_HL_A: int = 0x77
+const SCRIPT_LD_HL_N: int = 0x36
+const SCRIPT_LD_A_C: int = 0x79
+const SCRIPT_LD_A_L: int = 0x7D
+const SCRIPT_LD_A_H: int = 0x7C
+const SCRIPT_DEC_HL: int = 0x35
+const SCRIPT_SWAP_A: int = 0x37
 const SCRIPT_COORD_SOURCES: Array[String] = ["player_y", "player_x"]
 ## `PAD_DOWN` down to `PAD_RIGHT`, bits 7 to 4, as `Gen2WorldAPI`'s directions.
 const PAD_DIRECTIONS: Dictionary = {0x80: 0, 0x40: 1, 0x20: 2, 0x10: 3}
@@ -1043,9 +1046,7 @@ const SCRIPT_RET: int = 0xC9
 const SCRIPT_CALL: int = 0xCD
 const SCRIPT_HRAM_BASE: int = 0xFF00
 ## `wGameProgressFlags`' own run of `w<Map>CurScript` bytes, 122 on all three
-## cartridges. A store there names the map script index `CallFunctionInTable`
-## dispatches on; `wCurMapScript` is the mirror `ExecuteCurMapScriptInTable`
-## keeps and nothing here reads.
+## cartridges, which `CallFunctionInTable` dispatches on.
 const MAP_SCRIPT_BYTES: int = 0x7A
 const MAP_SCRIPT_STATES: int = 32
 ## What a `<Map>_ScriptPointers` word has to be to be a pointer at all.
@@ -1092,26 +1093,74 @@ const SCRIPT_CALLS: Array[String] = [
 	"play_music", "stop_all_music",
 	"set_sprite_facing", "set_sprite_facing_delay", "sprite_stay", "move_sprite",
 	"decode_rle", "decode_arrow_movement",
+	"serial_connect", "fill_memory", "save_end_battle_text", "engage_map_trainer",
+	"check_boulder_coords", "sprite_pointer_1", "sprite_pointer_2",
+	"add_party_mon", "get_item_name", "get_mon_name", "get_sprite_position_2",
+	"save_screen_1", "load_screen_1", "save_screen_2", "reload_map_data", "copy_data",
+	"init_battle_enemy", "set_sprite_position", "get_sprite_position",
+	"fade_out_white", "fade_in_white", "fade_out_black", "fade_in_black", "init",
 ]
 ## The flag bits a `set` or `res` spends nothing on: BIT_SPINNING is an
 ## animation this port does not draw, `wStatusFlags5`'s two are the queued
 ## walk's own state, and BIT_FORCED_WARP is `OverworldLoop`'s alone.
 const SPINNING_BIT: int = 7
 const FORCED_WARP_BIT: int = 2
+## BIT_NO_MAP_MUSIC waits on an audio driver and `wPikachuMapScriptFlags` on
+## the follower nothing here draws.
+const NO_MAP_MUSIC_BIT: int = 1
+const NO_TEXT_DELAY_BIT: int = 6
+const SCRIPT_SCRATCH_BYTES: Array[String] = ["which_trade", "rival_starter_ball"]
+const SCRIPT_FLAG_ACTION_SOURCE: int = -101
+const FLAG_ACTION_RESET: int = 0
+const FLAG_ACTION_SET: int = 1
+const FLAG_ACTION_TEST: int = 2
+const SCRIPT_FIRST_BOX_ROWS: Array[String] = ["jigglypuff_text"]
+const OAKS_AIDE_TEXT_AT: Dictionary = {
+	"hi": 0x00, "uh_oh": 0x05, "come_back": 0x0A, "here_you_go": 0x0F,
+	"got_item": 0x14, "no_room": 0x1A,
+}
+const OAKS_AIDE_GOT_ITEM: int = 1
 const SCRIPT_SILENT_FLAGS: Dictionary = {
 	"movement_flags": 1 << SPINNING_BIT,
-	"status_flags_5": (1 << SCRIPTED_NPC_MOVEMENT_BIT) | (1 << SCRIPTED_MOVEMENT_STATE_BIT),
-	"status_flags_7": 1 << FORCED_WARP_BIT,
+	"status_flags_5": (1 << SCRIPTED_NPC_MOVEMENT_BIT) | (1 << SCRIPTED_MOVEMENT_STATE_BIT)
+		| (1 << NO_TEXT_DELAY_BIT),
+	"status_flags_7": (1 << FORCED_WARP_BIT) | (1 << NO_MAP_MUSIC_BIT),
+	"status_flags_3": (1 << WARP_FROM_SCRIPT_BIT) | (1 << ON_DUNGEON_WARP_BIT)
+		| (1 << TALKED_TO_TRAINER_BIT) | (1 << PRINT_END_BATTLE_TEXT_BIT),
+	"status_flags_6": 1 << DUNGEON_WARP_BIT,
+	"pikachu_map_script_flags": 0xFF,
 }
+const DUNGEON_WARP_BIT: int = 4
+const WARP_FROM_SCRIPT_BIT: int = 3
+const ON_DUNGEON_WARP_BIT: int = 4
+const NO_NPC_FACE_PLAYER_BIT: int = 5
+const TALKED_TO_TRAINER_BIT: int = 6
+const PRINT_END_BATTLE_TEXT_BIT: int = 7
+const PUSHED_BOULDER_BIT: int = 7
+## Bits clear whenever a state body runs: the fall and the sight walk happen outside it.
+const SCRIPT_ZERO_BITS: Dictionary = {
+	"status_flags_3": (1 << ON_DUNGEON_WARP_BIT) | (1 << TALKED_TO_TRAINER_BIT),
+	"pikachu_spawn_state_flags": 1 << PIKACHU_SPAWN_STARTER_BIT,
+}
+const PIKACHU_SPAWN_STARTER_BIT: int = 7
+const PIKACHU_MAP_SCRIPT_ACTIVE_BIT: int = 7
+## Bits that live for one map, held by name until the next map load.
+const SCRIPT_VOLATILE_BITS: Dictionary = {
+	"misc_flags": {PUSHED_BOULDER_BIT: "pushed_boulder"},
+	"status_flags_3": {NO_NPC_FACE_PLAYER_BIT: "no_npc_face_player"},
+	"pikachu_map_script_flags": {PIKACHU_MAP_SCRIPT_ACTIVE_BIT: "pikachu_script_active"},
+}
+const SCRIPT_TEMP_BYTES: Array[String] = ["object_to_hide", "object_to_show"]
 ## The bytes an `and a` reads a known zero out of: the sight walk owns a trainer
 ## engagement here, and Cinnabar Gym's six quiz gates say nothing yet.
 const SCRIPT_ZERO_SOURCES: Array[String] = [
-	"trainer_header_flag_bit", "opponent_after_wrong_answer",
+	"trainer_header_flag_bit", "opponent_after_wrong_answer", "which_dungeon_warp",
 ]
 ## `wIsInBattle` is LOST_BATTLE when the player lost and `wBattleResult` 2 when
 ## the wild was caught or ran, which is all a post-battle state asks.
 const BATTLE_OUTCOME_LOST: String = "lost"
 const BATTLE_OUTCOME_ESCAPED: String = "escaped"
+const BATTLE_OUTCOME_WON: String = "won"
 const BATTLE_OUTCOME_SOURCES: Dictionary = {
 	"is_in_battle": [0xFF, BATTLE_OUTCOME_LOST],
 	"battle_result": [2, BATTLE_OUTCOME_ESCAPED],
@@ -1120,11 +1169,17 @@ const BATTLE_OUTCOME_SOURCES: Dictionary = {
 const SCRIPT_BANKED_CALLS: Array[String] = [
 	"coin_box", "music_rival_start", "music_rival_tempo",
 	"music_rival_start_tempo", "music_cities1_tempo",
+	"emotion_bubble", "find_path_to_player", "calc_player_relative",
+	"hall_of_fame_pc", "is_player_on_dungeon_warp", "load_spinner_arrow_tiles",
+	"pewter_guys", "convert_npc_directions", "heal_party", "save_game_data",
+	"get_item_quantity", "flag_action", "route23_copy_badge_text", "oaks_aide",
+	"starter_dex",
 ]
 ## The four of those a `farcall` spends nothing on: no audio driver here.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
 	"music_rival_start", "music_rival_tempo", "music_rival_start_tempo",
 	"music_cities1_tempo",
+	"load_spinner_arrow_tiles", "convert_npc_directions", "pewter_guys",
 ]
 ## The routines that spend nothing here: no audio driver, a press already ends
 ## every box, and `wAutoTextBoxDrawingControl` has no counterpart.
@@ -1139,10 +1194,48 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	## `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
 	"delay_frames", "delay_3", "play_default_music", "check_map_trainers",
 	"start_trainer_battle", "end_trainer_battle",
+	"serial_connect", "fade_out_white", "fade_in_white", "fade_out_black",
+	"fade_in_black", "get_sprite_position", "init_battle_enemy",
+	"get_sprite_position_2", "save_screen_1", "load_screen_1", "save_screen_2",
+	"reload_map_data", "copy_data",
 ]
 const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
 ## The two of them the zero flag answers, `true` calling on a clear one.
 const SCRIPT_ZERO_CALLS: Dictionary = {0xC4: true, 0xCC: false}
+const SCRIPT_CARRY_CALLS: Array[int] = [0xD4, 0xDC]
+const SCRIPT_CALLS_ON_SET: Array[int] = [0xC4, 0xDC]
+const SPRITE_PIXEL_FIELDS: Array[int] = [1, 4, 6]
+const SPRITE_MAP_Y_AT: int = 4
+const SPRITE_MAP_X_AT: int = 5
+const SPRITE_MAP_OFFSET: int = 4
+const ROUTE23_SCAN: int = 0x30
+const ROUTE23_OPCODE_SIZES: Dictionary = {
+	0x21: 3, 0xFA: 3, 0x47: 1, 0x1E: 2, 0x0E: 2, 0x2A: 1, 0xFE: 2, 0xC8: 1, 0x1C: 1,
+	0x0D: 1, 0xB8: 1, 0x20: 2, 0xD0: 1, 0x7B: 1, 0xE0: 2, 0x79: 1, 0xEA: 3, 0x06: 2,
+	0x3E: 2, 0xCD: 3,
+}
+const EMOTE_FRAMES: int = 60
+const RIVAL_CLASSES: Array[int] = [0x19, 0x2A, 0x2B]
+const BADGE_COUNT: int = 8
+const MOVE_DOWN: int = 0
+const MOVE_UP: int = 1
+const MOVE_LEFT: int = 2
+const MOVE_RIGHT: int = 3
+const MOVEMENT_SCRIPT_PALLET: int = 1
+const MOVEMENT_SCRIPT_MUSEUM: int = 2
+const MOVEMENT_SCRIPT_GYM: int = 3
+const PALLET_PATH_LEFT_COLUMN: int = 0x0A
+const PEWTER_CITY: int = 0x02
+## Which map each table's two RLE lists stand on.
+const MOVEMENT_SCRIPT_LISTS: Dictionary = {
+	PALLET_TOWN: {MOVEMENT_SCRIPT_PALLET: ["rle_pallet_player", "rle_pallet_object"]},
+	PEWTER_CITY: {
+		MOVEMENT_SCRIPT_MUSEUM: ["rle_museum_player", "rle_museum_object"],
+		MOVEMENT_SCRIPT_GYM: ["rle_gym_player", "rle_gym_object"],
+	},
+}
+const NPC_CHANGE_FACING: int = 0xE0
+const BADGE_NAME_MAX: int = 13
 ## `wSpriteStateData1`: sixteen slots of sixteen bytes, the player's own first
 ## and a map's objects behind it in their table order, facing at offset nine.
 const SPRITE_SLOT_SIZE: int = 0x10
@@ -1157,6 +1250,11 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	"facing_direction",
 	## `hJoyPressed` beside `hJoyHeld`, and the sound id no driver here reads.
 	"joy_pressed", "new_sound_id",
+	"npc_movement_bank", "list_scroll_offset", "dungeon_warp_destination",
+	"which_dungeon_warp", "sprite_screen_y", "sprite_screen_x",
+	"letter_printing_delay", "player_movement_byte_1", "override_joypad_mask",
+	"num_safari_balls", "gym_leader_no", "mon_data_location", "joy_released",
+	"trainer_header_flag_bit",
 ]
 ## `cp n` and the two conditional `ret`s behind it, whose value is the side
 ## taken when the comparison did not match.
@@ -1227,6 +1325,8 @@ const ENGINE_FLAG_BYTES: Dictionary = {
 	## Appended, because a run's base is its position here and a saved index
 	## may not move.
 	"status_flags_1": 1,
+	"elite_4_flags": 1,
+	"beat_gym_flags": 1,
 }
 ## `PrintStrengthText` sets bit 0 and `IsSurfingAllowed` bit 1. Generation 1 has
 ## no `ResetBikeFlags`, so bit 0 outlives the map it was set on.
@@ -1259,8 +1359,7 @@ const MAX_OBJECT_EVENTS: int = 16
 
 ## `hidden_event`: y, x, the routine's own argument, then its bank and address.
 ## Red and Blue keep the map ids and the pointers in two tables; Yellow writes
-## the pointer beside each id. Most rows carry a `SPRITE_FACING_*` argument that
-## nothing reads: a facing that matters is tested by the routine itself.
+## the pointer beside each id.
 const HIDDEN_EVENT_SIZE: int = 6
 const HIDDEN_EVENT_MAP_SIZE: int = 3
 const HIDDEN_EVENT_END: int = 0xFF
@@ -1366,10 +1465,8 @@ const TILESET_NO_TILE: int = 0xFF
 const TILESET_TILE_COUNT: int = 96
 const TILESET_BLOCK_TILES: int = MAP_BLOCK_TILE_WIDTH * MAP_BLOCK_TILE_WIDTH
 
-## Blocks per tileset, in table order. Nothing in the cartridge records it:
-## `<Tileset>_Block` is an INCBIN whose length only the assembler knew. Read off
-## the pinned checkouts' `.bst` files, and bracketed at import by the blocks the
-## maps use and by where the next tileset's graphics start.
+## Blocks per tileset, read off the pinned checkouts' `.bst` files: nothing in
+## the cartridge records an INCBIN's length.
 const TILESET_BLOCKS_RED_BLUE: Array[int] = [
 	128, 19, 37, 128, 19, 116, 37, 116, 35, 128, 128, 17,
 	128, 62, 23, 110, 58, 128, 79, 72, 58, 36, 128, 73,
@@ -1415,10 +1512,8 @@ const GOOD_ROD_SLOTS: Array = [[10, 0x9D, 118], [10, 0x47, 60]]
 const OLD_ROD_SLOT: Array = [5, 129]
 const OPCODE_LD_BC: int = 0x01
 
-## `SuperRodData`, a map id and a pointer to `count` (level, species) rows that
-## `ReadSuperRodData` picks between by rejecting a two-bit roll. Yellow's
-## `SuperRodFishingSlots` is one row a map, four (species, level) pairs picked by
-## a byte threshold. Both end on $FF where a map id would be.
+## `SuperRodData`: a map id and `count` (level, species) rows. Yellow's is one
+## row a map, four (species, level) pairs picked by a byte threshold.
 const SUPER_ROD_ROW_SIZE: int = 3
 const SUPER_ROD_ROW_SIZE_YELLOW: int = 9
 const SUPER_ROD_SLOTS_YELLOW: int = 4
@@ -1434,10 +1529,8 @@ const ROD_LIST_END: int = 0xFF
 const MAP_BLOCK_TILE_WIDTH: int = 4
 const MAP_BLOCK_CELL_WIDTH: int = 2
 
-## `SpriteSheetPointerTable`: a CPU address, the bytes of one half and the bank,
-## with a picture id one past the row. `LoadMapSpriteTilePatterns` reads a row
-## below `FIRST_STILL_SPRITE` twice, the second time $C0 further on, which is the
-## `$80` the walking rows of `SpriteFacingAndAnimationTable` add.
+## `SpriteSheetPointerTable`: a CPU address, the bytes of one half and the bank.
+## A row below `FIRST_STILL_SPRITE` is read twice, the second time $C0 further on.
 const SPRITE_RECORD_SIZE: int = 4
 const SPRITE_COUNT_RED_BLUE: int = 72
 const SPRITE_COUNT_YELLOW: int = 82
@@ -1450,10 +1543,9 @@ const SPRITE_STILL_TILES: int = 4
 ## address is that row's less both halves.
 const SPRITE_BIKE_BYTES: int = SPRITE_WALKING_TILES * 2 * PokeTiles.TILE_BYTES
 
-## `MonPartySpritePointers`, the table `LoadMonPartySpriteGfx` walks: a CPU
-## address, the tiles to copy, the bank, and the `vSprites` address they land
-## at. An icon owns four tiles at `ICON << 2` and four more `ICONOFFSET` above
-## them, which are its two animation frames.
+## `MonPartySpritePointers`: a CPU address, the tiles to copy, the bank and the
+## `vSprites` address. An icon's two frames are four tiles at `ICON << 2` and
+## four more `ICONOFFSET` above them.
 const MON_ICON_HEADER_SIZE: int = 6
 const MON_ICON_HEADER_COUNT_RED_BLUE: int = 28
 const MON_ICON_HEADER_COUNT_YELLOW: int = 30
@@ -1769,6 +1861,96 @@ const RED_BLUE: Dictionary = {
 	"joy_pressed": 0xFFB3,
 	"new_sound_id": 0xC0EE,
 	"status_flags_5": 0xD730,
+	"last_map": 0xD365,
+	"last_blackout_map": 0xD719,
+	"serial_connect": 0x22FA,
+	"check_boulder_coords": 0x34E4,
+	"get_item_quantity": 0x0F8A5,
+	"sprite_pointer_1": 0x34FC,
+	"sprite_pointer_2": 0x3500,
+	"fill_memory": 0x36E0,
+	"misc_flags": 0xCD60,
+	"status_flags_3": 0xD72D,
+	"elite_4_flags": 0xD734,
+	"walk_bike_surf_state": 0xD700,
+	"warp_destination_map": 0xFF8B,
+	"destination_warp_id": 0xD42F,
+	"emotion_bubble_sprite": 0xCD4F,
+	"which_emotion_bubble": 0xCD50,
+	"emotion_bubble": 0x17C47,
+	"find_path_to_player": 0x0F8BA,
+	"calc_player_relative": 0x0F929,
+	"npc_relative_perspective": 0xFF9B,
+	"npc_sprite_offset": 0xFF95,
+	"npc_movement_directions": 0xCC97,
+	"npc_movement_table": 0xCC57,
+	"npc_movement_function": 0xCF10,
+	"npc_movement_bank": 0xCC58,
+	"sprite_index_wram": 0xCF13,
+	"trainer_no": 0xD05D,
+	"save_end_battle_text": 0x3354,
+	"engage_map_trainer": 0x336A,
+	"init_battle_enemy": 0x32D7,
+	"battle_type": 0xD05A,
+	"list_scroll_offset": 0xCC36,
+	"sprite_screen_y": 0xFFEB,
+	"sprite_screen_x": 0xFFEC,
+	"sprite_map_y": 0xFFED,
+	"sprite_map_x": 0xFFEE,
+	"set_sprite_position": 0x32F9,
+	"get_sprite_position": 0x32EF,
+	"cur_map_text_ptr": 0xD36C,
+	"hall_of_fame_pc": 0x7405C,
+	"is_player_on_dungeon_warp": 0x46981,
+	"load_spinner_arrow_tiles": 0x44FD7,
+	"pewter_guys": 0x37CA1,
+	"convert_npc_directions": 0x0F9A0,
+	"heal_party": 0x0F6A5,
+	"save_game_data": 0x73848,
+	"rival_starter": 0xD715,
+	"player_starter": 0xD717,
+	"object_to_hide": 0xD079,
+	"object_to_show": 0xD07A,
+	"route23_default_script": 0x51219,
+	"route23_badge_texts": 0x51276,
+	"fade_out_white": 0x20D8,
+	"fade_in_white": 0x20F6,
+	"fade_out_black": 0x20EF,
+	"fade_in_black": 0x20D1,
+	"init": 0x1F54,
+	"letter_printing_delay": 0xD358,
+	"player_movement_byte_1": 0xC206,
+	"override_joypad_mask": 0xCD3B,
+	"num_safari_balls": 0xDA47,
+	"rle_pallet_player": 0x1A4E9,
+	"flag_action": 0x0F666,
+	"route23_copy_badge_text": 0x5125D,
+	"add_party_mon": 0x3927,
+	"mon_data_location": 0xCC49,
+	"beat_gym_flags": 0xD72A,
+	"gym_leader_no": 0xD05C,
+	"random_add": 0xFFD3,
+	"oaks_aide_reward": 0xFFDC,
+	"get_item_name": 0x2FCF,
+	"get_mon_name": 0x2F9E,
+	"get_sprite_position_2": 0x32F4,
+	"save_screen_1": 0x3719,
+	"load_screen_1": 0x3725,
+	"save_screen_2": 0x36F4,
+	"reload_map_data": 0x3071,
+	"copy_data": 0x00B5,
+	"oaks_aide": 0x59035,
+	"oaks_aide_text": 0x59091,
+	"starter_dex": 0x5C0DC,
+	"joy_released": 0xFFB2,
+	"rival_starter_ball": 0xCD3E,
+	"jigglypuff_text": 0x5C59B,
+	"channel_sound_ids": 0xC026,
+	"rle_pallet_object": 0x1A4DC,
+	"rle_museum_player": 0x1A559,
+	"rle_museum_object": 0x1A562,
+	"rle_gym_player": 0x1A5CD,
+	"rle_gym_object": 0x1A5DA,
 	"player_moving_direction": 0xD528,
 	"play_music": 0x23A1,
 	## `Music_RivalAlternateStart` and the three beside it, in bank $02.
@@ -2028,6 +2210,98 @@ const YELLOW: Dictionary = {
 	"joy_pressed": 0xFFB3,
 	"new_sound_id": 0xC0EE,
 	"status_flags_5": 0xD72F,
+	"last_map": 0xD364,
+	"last_blackout_map": 0xD718,
+	"serial_connect": 0x2156,
+	"check_boulder_coords": 0x34E1,
+	"get_item_quantity": 0x0F735,
+	"sprite_pointer_1": 0x34F9,
+	"sprite_pointer_2": 0x34FD,
+	"fill_memory": 0x166E,
+	"misc_flags": 0xCD60,
+	"status_flags_3": 0xD72C,
+	"elite_4_flags": 0xD733,
+	"walk_bike_surf_state": 0xD6FF,
+	"warp_destination_map": 0xFF8B,
+	"destination_warp_id": 0xD42E,
+	"emotion_bubble_sprite": 0xCD4F,
+	"which_emotion_bubble": 0xCD50,
+	"emotion_bubble": 0x4116F,
+	"find_path_to_player": 0x0F74A,
+	"calc_player_relative": 0x0F7B9,
+	"npc_relative_perspective": 0xFF9B,
+	"npc_sprite_offset": 0xFF95,
+	"npc_movement_directions": 0xCC97,
+	"npc_movement_table": 0xCC57,
+	"npc_movement_function": 0xCF10,
+	"npc_movement_bank": 0xCC58,
+	"sprite_index_wram": 0xCF13,
+	"trainer_no": 0xD05C,
+	"save_end_battle_text": 0x32F0,
+	"engage_map_trainer": 0x3306,
+	"init_battle_enemy": 0x3273,
+	"battle_type": 0xD059,
+	"list_scroll_offset": 0xCC36,
+	"sprite_screen_y": 0xFFEB,
+	"sprite_screen_x": 0xFFEC,
+	"sprite_map_y": 0xFFED,
+	"sprite_map_x": 0xFFEE,
+	"set_sprite_position": 0x3295,
+	"get_sprite_position": 0x328B,
+	"cur_map_text_ptr": 0xD36B,
+	"hall_of_fame_pc": 0xF0F26,
+	"is_player_on_dungeon_warp": 0x46BF3,
+	"load_spinner_arrow_tiles": 0x45077,
+	"pewter_guys": 0x1A6E5,
+	"convert_npc_directions": 0x0F830,
+	"heal_party": 0x0F52B,
+	"save_game_data": 0x73B91,
+	"rival_starter": 0xD714,
+	"player_starter": 0xD716,
+	"object_to_hide": 0xD078,
+	"object_to_show": 0xD079,
+	"route23_default_script": 0x511D2,
+	"route23_badge_texts": 0x5122F,
+	"fade_out_white": 0x1E96,
+	"fade_in_white": 0x1EBD,
+	"fade_out_black": 0x1EB6,
+	"fade_in_black": 0x1E8F,
+	"init": 0x1D10,
+	"letter_printing_delay": 0xD357,
+	"player_movement_byte_1": 0xC206,
+	"override_joypad_mask": 0xCD3B,
+	"num_safari_balls": 0xDA46,
+	"rle_pallet_player": 0x1A5FB,
+	"flag_action": 0x0F4EC,
+	"route23_copy_badge_text": 0x51216,
+	"add_party_mon": 0x391C,
+	"mon_data_location": 0xCC49,
+	"beat_gym_flags": 0xD729,
+	"gym_leader_no": 0xD05B,
+	"random_add": 0xFFD3,
+	"oaks_aide_reward": 0xFFDC,
+	"get_item_name": 0x2EC4,
+	"get_mon_name": 0x2E93,
+	"get_sprite_position_2": 0x3290,
+	"save_screen_1": 0x370F,
+	"load_screen_1": 0x371B,
+	"save_screen_2": 0x36EC,
+	"reload_map_data": 0x2F66,
+	"copy_data": 0x00B1,
+	"oaks_aide": 0x58ECC,
+	"oaks_aide_text": 0x58F28,
+	"starter_dex": 0x5C0D4,
+	"joy_released": 0xFFB2,
+	"rival_starter_ball": 0xCD3E,
+	"jigglypuff_text": 0x5C498,
+	"channel_sound_ids": 0xC026,
+	"rle_pallet_object": 0x1A5EE,
+	"rle_museum_player": 0x1A661,
+	"rle_museum_object": 0x1A66A,
+	"rle_gym_player": 0x1A6CB,
+	"rle_gym_object": 0x1A6D8,
+	"pikachu_map_script_flags": 0xD492,
+	"pikachu_spawn_state_flags": 0xD471,
 	"player_moving_direction": 0xD527,
 	"play_music": 0x2211,
 	"stop_all_music": 0x2233,
@@ -2286,9 +2560,7 @@ static func hidden_coin_amount(argument: int) -> int:
 
 
 ## The two bytes a script reads that the shared engine flags already hold:
-## `wObtainedBadges`, whose eight bits are Kanto's badges, and
-## `BIT_ALWAYS_ON_BIKE`, which is the state `BIKEFLAGS_ALWAYS_ON_BIKE_F` holds.
-## -1 for any other byte or bit.
+## `wObtainedBadges` and `BIT_ALWAYS_ON_BIKE`. -1 for any other byte or bit.
 static func script_flag_alias(layout: Dictionary, address: int, bit: int) -> int:
 	if address == int(layout.get("obtained_badges", -1)):
 		return Gen2WorldState.gen1_badge_flag(bit)
