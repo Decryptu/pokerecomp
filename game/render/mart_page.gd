@@ -464,6 +464,44 @@ func render_gen1_vending(state: Dictionary) -> Image:
 	return image
 
 
+## The box a script draws for itself: `TextBoxBorder` at the row's own
+## `hlcoord`, `PlaceString` two rows apart, and the cursor at `wTopMenuItemY`.
+func render_gen1_script_menu(state: Dictionary) -> Image:
+	if font == null:
+		return null
+	var image := Image.create_empty(
+		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	var box: Dictionary = state.get("box", {})
+	var rows: Array = state.get("rows", [])
+	var at := Vector2i(int(box.get("x", 0)), int(box.get("y", 0)))
+	var height: int = int(box.get("height", -1))
+	if height < 0:
+		height = rows.size() * Gen1Layout.SCRIPT_MENU_ROWS_PER_ENTRY
+	var size := Vector2i(int(box.get("width", 0)) + 2, height + 2)
+	var indices: PackedByteArray = _panel(size)
+	var width: int = size.x * TILE
+	font.draw_box(frame_style, indices, width, 0, 0, size.x, size.y)
+	var entries: Vector2i = Vector2i(
+		int((state.get("entries_at", {}) as Dictionary).get("x", at.x + 2)),
+		int((state.get("entries_at", {}) as Dictionary).get("y", at.y + 2))
+	) - at
+	for index: int in rows.size():
+		_text(indices, width, String((rows[index] as Dictionary).get("text", "")),
+			entries + Vector2i(0, index * ROW_STEP))
+	for label: Dictionary in state.get("labels", []) as Array:
+		var placed := Vector2i(int(label.get("x", 0)), int(label.get("y", 0))) - at
+		for line: int in (label.get("rows", []) as Array).size():
+			_text(indices, width, String((label["rows"] as Array)[line]),
+				placed + Vector2i(0, line * ROW_STEP))
+	var cursor: int = int(state.get("cursor", -1))
+	if cursor >= 0 and cursor < rows.size():
+		_code(indices, width, CURSOR_CODE,
+			Vector2i(entries.x - 1, entries.y + cursor * ROW_STEP))
+	_blit_panel(image, indices, size, at)
+	return image
+
+
 ## `CeladonPrizeMenu`'s box: `TextBoxBorder hlcoord 0, 2` at eight by sixteen,
 ## with `PrintPrizePrice`'s COIN panel where the shop puts its money. A cost is
 ## `PrintBCDNumber`'s two bytes with leading zeroes, so always four digits.

@@ -29,6 +29,7 @@ const KIND_HELP: Dictionary = {
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
 	&"sign": "frames: DisplayTextID's box, read by facing up from where the player stands. 0 spends the whole reveal, which is past a box owing no press",
 	&"gift": "presses: a `GiveItem` row, faced up from the cell after the @. 0 is the offer's first page, 4 the receipt box a bag with room earns",
+	&"script_menu": "presses, rows: the box a Generation 1 script draws for itself, faced up from the cell after the @. The bag holds all three drinks, so Celadon Mart Roof's little girl is `-- red 0 126 <out.png> live script_menu@5,6 2 0`",
 	&"trainer": "presses, frames: TalkToTrainer on the map's first trainer, faced from the cell below. 0 the before-battle box, 1 the fight the press behind it opens; a second number stops that many frames into the transition instead",
 	&"map_script": "frames, 0: RunMapScript's own state, stepped into by walking up out of the cell after the @. Route 22 Gate's guard is `-- red 0 193 <out.png> live map_script@4,3 300 0`",
 	&"sight": "frames, 0: CheckFightingMapTrainers on the map's first trainer who sees, walked into from the far end of its own line. 40 stands in the shock bubble, 120 in the walk-up, 400 in the before-battle box",
@@ -465,6 +466,7 @@ const STAGERS: Dictionary = {
 	&"pokepic": &"_stage_pokepic",
 	&"sign": &"_stage_sign",
 	&"gift": &"_stage_gift",
+	&"script_menu": &"_stage_script_menu",
 	&"trainer": &"_stage_trainer",
 	&"sight": &"_stage_sight",
 	&"map_script": &"_stage_map_script",
@@ -1162,6 +1164,18 @@ func _staged_frames() -> int:
 func _stage_sign() -> void:
 	_screen.press_button(PokeButton.UP)
 	_screen.interact()
+
+
+const SCRIPT_MENU_DOME_FOSSIL: int = 0x29
+const SCRIPT_MENU_HELIX_FOSSIL: int = 0x2A
+
+## The box a row drew itself, filled by the drinks and fossils in the bag.
+func _stage_script_menu() -> void:
+	_stage_counter({"items": {
+		Gen1Layout.ITEM_FRESH_WATER: 1, Gen1Layout.ITEM_SODA_POP: 1,
+		Gen1Layout.ITEM_LEMONADE: 1, SCRIPT_MENU_DOME_FOSSIL: 1,
+		SCRIPT_MENU_HELIX_FOSSIL: 1,
+	}})
 
 
 func _stage_gift() -> void:

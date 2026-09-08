@@ -7697,7 +7697,7 @@ const SERVICE_HOST_REQUESTS: Array[StringName] = [
 	&"mart_requested", &"phone_call_requested", &"special_phone_call_requested",
 	&"town_map_requested", &"apricorn_selection_requested", &"pc_requested",
 	&"mom_bank_dial_requested", &"elevator_requested", &"vending_requested",
-	&"prize_requested",
+	&"prize_requested", &"gen1_menu_requested", &"gen1_list_menu_requested",
 ]
 
 
@@ -8881,11 +8881,22 @@ func _advance_sound_schedule() -> void:
 			break
 		_sound_schedule.pop_front()
 		var index: int = int(due.get("index", 0))
-		if StringName(due.get("kind", &"sound")) == &"music":
+		if bool(due.get("gen1", false)):
+			_play_gen1_sound(index)
+		elif StringName(due.get("kind", &"sound")) == &"music":
 			_play_music(index)
 		else:
 			_play_sfx(index, bool(due.get("wait", false)))
 	_sound_schedule_frame += 1
+
+
+## A schedule entry naming the sound id `PlaySound` takes, not a Crystal role.
+func _play_gen1_sound(sound_id: int) -> void:
+	if _audio_player == null or _data == null:
+		return
+	var record: Dictionary = _data.gen1_sound(-1, sound_id)
+	if not record.is_empty():
+		_audio_player.play_record(record, &"sound", _audio_assets())
 
 
 func _play_music(index: int) -> void:

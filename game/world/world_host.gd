@@ -83,10 +83,11 @@ static func complete_runtime_request(
 		return {"ok": true, "handled": true, "results": world.complete_runtime_request(result)}
 	## None of the three reads cartridge data: the landmark, the dial's amount and
 	## whether `TryQuickSave` wrote are the whole answer.
-	## The two Generation 1 counters join them: each request carries its own list.
+	## The three Generation 1 boxes join them: each carries its own list.
 	if kind in [
 		&"town_map_requested", &"mom_bank_dial_requested", &"quick_save_requested",
-		&"vending_requested", &"prize_requested",
+		&"vending_requested", &"prize_requested", &"gen1_menu_requested",
+		&"gen1_list_menu_requested",
 	]:
 		return {
 			"ok": true,

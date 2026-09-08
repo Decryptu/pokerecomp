@@ -314,6 +314,9 @@ const ITEM_ESCAPE_ROPE: int = 0x1D
 ## `IsItemInBag COIN_CASE`, which `CeladonPrizeMenu` opens on.
 const ITEM_COIN_CASE: int = 0x45
 const ITEM_COIN: int = 0x3B
+const ITEM_FRESH_WATER: int = 0x3C
+const ITEM_SODA_POP: int = 0x3D
+const ITEM_LEMONADE: int = 0x3E
 const ITEM_CARD_KEY: int = 0x30
 const ITEM_ITEMFINDER: int = 0x47
 const ITEM_TOWN_MAP: int = 0x05
@@ -1119,7 +1122,9 @@ const MAP_COORD_END: int = 0xFF
 const MAP_COORD_SIZE: int = 2
 ## The keys a decoded node keeps its branches under, and the only arrays a
 ## walker may recurse into: `either`, `cells` and `moves` are values.
-const SCRIPT_BRANCH_KEYS: Array[String] = ["then", "else", "yes", "no", "ok", "full"]
+const SCRIPT_BRANCH_KEYS: Array[String] = [
+	"then", "else", "yes", "no", "ok", "full", "done",
+]
 ## Each key is a conditional `jr` or `jp`, the value whether it is taken when
 ## the tested bit was set; the carry rows read the flag a routine answers in.
 const SCRIPT_BRANCHES: Dictionary = {0x20: true, 0xC2: true, 0x28: false, 0xCA: false}
@@ -1132,6 +1137,8 @@ const SCRIPT_CALLS: Array[String] = [
 	"has_enough_coins", "print_predef_text", "display_text_id", "count_set_bits",
 	"start_simulating_joypad", "update_sprites", "play_sound", "play_sound_wait",
 	"call_function_in_table", "execute_map_script", "load_gym_names",
+	"text_box_border", "place_string", "handle_menu_input", "add_n_times",
+	"remove_item_from_inventory", "display_list_menu", "copy_to_string_buffer",
 	"delay_frames", "delay_3", "play_default_music", "check_map_trainers",
 	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle",
 	"play_music", "stop_all_music",
@@ -1155,6 +1162,27 @@ const NO_MAP_MUSIC_BIT: int = 1
 const NO_TEXT_DELAY_BIT: int = 6
 const SCRIPT_SCRATCH_BYTES: Array[String] = ["which_trade", "rival_starter_ball"]
 const SCRIPT_FLAG_ACTION_SOURCE: int = -101
+## The row a hand-drawn menu's cursor stands on, read as an item id.
+const SCRIPT_MENU_ITEM_SOURCE: int = -102
+## `wFossilItem`, read back into `hItemToRemoveID` on the way past the box.
+const SCRIPT_FOSSIL_ITEM_SOURCE: int = -103
+const SCRIPT_PAD_B_BIT: int = 1
+## `AddNTimes` over `hl = 3`, `bc = 2` and `dec l`; the Bike Shop's `ld b, 4` agrees.
+const SCRIPT_MENU_ROWS_PER_ENTRY: int = 2
+const SCRIPT_MENU_SIZED_BY_COUNT: int = -1
+## `ld d, 0`, `ld e, a`, `add hl, de`, `ld a, [hl]` behind `ld hl, wFilteredBagItems`.
+const SCRIPT_FILTERED_INDEX: Array[int] = [0x16, 0x00, 0x5F, 0x19, 0x7E]
+const SCRIPT_DEC_L: int = 0x2D
+const SCRIPT_LD_B_L: int = 0x45
+const SCRIPT_LD_D: int = 0x16
+const SCRIPT_JR_CARRY: int = 0x38
+const SCRIPT_SUB_N: int = 0xD6
+const LIST_MENU_MAX: int = 16
+const FILTERED_BAG_MAX: int = 4
+const MENU_STRING_MAX: int = 24
+const FILTER_PRINT_SCAN: int = 32
+const BAG_SCAN_SIZE: int = 40
+const MENU_ROW_BREAK: String = "<NEXT>"
 const FLAG_ACTION_RESET: int = 0
 const FLAG_ACTION_SET: int = 1
 const FLAG_ACTION_TEST: int = 2
@@ -1217,7 +1245,7 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"hall_of_fame_pc", "is_player_on_dungeon_warp", "load_spinner_arrow_tiles",
 	"pewter_guys", "convert_npc_directions", "heal_party", "save_game_data",
 	"get_item_quantity", "flag_action", "route23_copy_badge_text", "oaks_aide",
-	"starter_dex",
+	"starter_dex", "display_dex_rating",
 ]
 ## The four of those a `farcall` spends nothing on: no node carries a sound.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
@@ -1299,7 +1327,14 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	"letter_printing_delay", "player_movement_byte_1", "override_joypad_mask",
 	"num_safari_balls", "gym_leader_no", "mon_data_location", "joy_released",
 	"trainer_header_flag_bit",
+	## The menu registers, which the `menu` node behind them carries instead.
+	"current_menu_item", "max_menu_item", "top_menu_item_y", "top_menu_item_x",
+	"menu_watched_keys",
+	"last_menu_item", "menu_item_to_swap", "print_item_prices", "list_menu_id",
+	"filtered_bag_count", "opponent_after_wrong_answer",
 ]
+## The same over two bytes; `LoadItemList` already left the list itself.
+const SCRIPT_SILENT_WORDS: Array[String] = ["list_pointer"]
 ## `cp n` and the two conditional `ret`s behind it, whose value is the side
 ## taken when the comparison did not match.
 const SCRIPT_CP_N: int = 0xFE
@@ -1702,6 +1737,34 @@ const RED_BLUE: Dictionary = {
 	"remove_item_bank": 0x05,
 	"do_not_wait": 0xCC3C,
 	"current_menu_item": 0xCC26,
+	## The menu a script draws itself, over `GetQuantityOfItemInBag`'s own list.
+	"text_box_border": 0x1922,
+	"place_string": 0x1955,
+	"handle_menu_input": 0x3ABE,
+	"add_n_times": 0x3A87,
+	"filtered_bag_items": 0xCC5B,
+	"filtered_bag_count": 0xCD37,
+	"name_buffer": 0xCD6D,
+	"string_buffer": 0xCF4B,
+	"copy_to_string_buffer": 0x3826,
+	"display_dex_rating": 0x44169,
+	## `wFossilItem` and `wFossilMon`, written one visit and read the next.
+	"fossil_item": 0xD70F,
+	"fossil_mon": 0xD710,
+	"max_menu_item": 0xCC28,
+	"top_menu_item_y": 0xCC24,
+	"top_menu_item_x": 0xCC25,
+	"menu_watched_keys": 0xCC29,
+	"last_menu_item": 0xCC2A,
+	"menu_item_to_swap": 0xCC35,
+	"display_list_menu": 0x2BE6,
+	"list_menu_id": 0xCF94,
+	"list_pointer": 0xCF8B,
+	"item_list": 0xCF7B,
+	"print_item_prices": 0xCF93,
+	"cur_item": 0xCF91,
+	"bag_items": 0xD31E,
+	"remove_item_from_inventory": 0x2BBB,
 	"item_to_remove": 0xFFDB,
 	"toggleable_index": 0xCC4D,
 	"cur_party_species": 0xCF91,
@@ -2095,6 +2158,32 @@ const YELLOW: Dictionary = {
 	"remove_item_bank": 0x05,
 	"do_not_wait": 0xCC3C,
 	"current_menu_item": 0xCC26,
+	"text_box_border": 0x16F0,
+	"place_string": 0x1723,
+	"handle_menu_input": 0x3AAB,
+	"add_n_times": 0x3A74,
+	"filtered_bag_items": 0xCC5B,
+	"filtered_bag_count": 0xCD37,
+	"name_buffer": 0xCD6D,
+	"string_buffer": 0xCF4A,
+	"copy_to_string_buffer": 0x3813,
+	"display_dex_rating": 0x44169,
+	"fossil_item": 0xD70E,
+	"fossil_mon": 0xD70F,
+	"max_menu_item": 0xCC28,
+	"top_menu_item_y": 0xCC24,
+	"top_menu_item_x": 0xCC25,
+	"menu_watched_keys": 0xCC29,
+	"last_menu_item": 0xCC2A,
+	"menu_item_to_swap": 0xCC35,
+	"display_list_menu": 0x2AE0,
+	"list_menu_id": 0xCF93,
+	"list_pointer": 0xCF8A,
+	"item_list": 0xCF7A,
+	"print_item_prices": 0xCF92,
+	"cur_item": 0xCF90,
+	"bag_items": 0xD31D,
+	"remove_item_from_inventory": 0x2ABD,
 	"item_to_remove": 0xFFDB,
 	"toggleable_index": 0xCC4D,
 	"cur_party_species": 0xCF90,
@@ -2942,6 +3031,9 @@ const YELLOW_SOUND_OPTION_MASK: int = 0x30
 ## starts the first and overwrites its three channel pointers at once.
 const SFX_CAUGHT_MON: int = 154
 const SFX_GO_INSIDE: int = 173
+## `AnimateHealingMachine`'s own two, one per ball and one behind the flashes.
+const SFX_HEALING_MACHINE: int = 158
+const MUSIC_PKMN_HEALED: int = 232
 const SFX_GO_OUTSIDE: int = 181
 
 ## The one seam every Crystal-numbered effect request reaches: a role spelled as

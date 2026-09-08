@@ -457,6 +457,7 @@ static func open_snapshot(
 	out._gen1_last_blackout_map = world_snapshot.gen1_last_blackout_map
 	out.gen1_map_pal_offset = world_snapshot.gen1_map_pal_offset
 	out.gen1_rival_name = world_snapshot.gen1_rival_name
+	out.gen1_fossil = world_snapshot.gen1_fossil.duplicate()
 	out.dig_warp = world_snapshot.dig_warp.duplicate()
 	out.backup_warp = world_snapshot.backup_warp.duplicate()
 	## `.SpawnAfterE4` and `.AfterRed`, which stand between `ClockContinue` and
@@ -3912,6 +3913,9 @@ var _gen1_last_sprite_index: int = -1
 var _gen1_text_table: int = -1
 var _gen1_movement_script: Dictionary = {}
 var _gen1_scratch: Dictionary = {}
+## `wFossilItem` and `wFossilMon`, saved player data: the lab keeps both from
+## the visit that takes the fossil to the one that hands the Pokemon over.
+var gen1_fossil: Dictionary = {}
 ## `wWarpedFromWhichWarp` and the one `wWarpEntries` row an elevator rewrites.
 var _gen1_warped_from: Dictionary = {}
 var _gen1_warp_entry: Dictionary = {}
@@ -4007,6 +4011,14 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"random_bit": &"_gen1_node_random_bit",
 	"talking_to": &"_gen1_node_talking_to",
 	"oaks_aide": &"_gen1_node_oaks_aide",
+	"filtered_bag": &"_gen1_node_filtered_bag",
+	"menu_cancel": &"_gen1_node_menu_cancel",
+	"menu_row": &"_gen1_node_menu_row",
+	"menu_item": &"_gen1_node_menu_item",
+	"dex_rating": &"_gen1_node_dex_rating",
+	"set_fossil": &"_gen1_node_set_fossil",
+	"copy_name": &"_gen1_node_copy_name",
+	"list_menu": &"_gen1_node_list_menu",
 }
 
 
@@ -4198,13 +4210,16 @@ func _gen1_run(event: Dictionary) -> Dictionary:
 ## [param run] is the bag the row is walked against, carrying what its own gifts
 ## have already put in it, and the name `CopyToStringBuffer` last wrote.
 func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
-	for node: Dictionary in nodes:
+	for index: int in nodes.size():
+		var node: Dictionary = nodes[index]
 		var op: String = String(node.get("op", ""))
-		## Each of the two owns every step behind it, so the row ends there.
+		## Each of the three owns every step behind it, so the row ends there.
 		if op == "trade":
 			return _gen1_trade(int(node["trade_id"]), steps)
 		if op == "choice":
 			return _gen1_script_choice(node, steps, run)
+		if op == "menu":
+			return _gen1_script_menu(node, nodes.slice(index + 1), steps, run)
 		if not GEN1_SCRIPT_NODES.has(op):
 			return false
 		if not call(GEN1_SCRIPT_NODES[op], node, steps, run):
@@ -4213,7 +4228,7 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 
 
 func _gen1_node_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	steps.append(_gen1_script_box(node, String(run["named"])))
+	steps.append(_gen1_script_box(node, String(run["named"]), run.get("buffers", {})))
 	return true
 
 
@@ -4543,8 +4558,19 @@ func _gen1_node_elevator(node: Dictionary, steps: Array, _run: Dictionary) -> bo
 ## `GetItemName` into `wStringBuffer`, which names a hidden item's receipt
 ## before the bag has been asked whether it can take one.
 func _gen1_node_name_item(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
-	run["named"] = data.item_name(int(node["item"])) if data != null else ""
+	var item: int = _gen1_fossil_byte(run, "item") \
+		if String(node.get("from", "")) == "fossil_item" \
+		else _gen1_item_of(int(node["item"]), run)
+	_gen1_named(node, run, data.item_name(item) if data != null else "")
 	return true
+
+
+func _gen1_item_of(item: int, run: Dictionary) -> int:
+	if item == Gen1Layout.SCRIPT_FOSSIL_ITEM_SOURCE:
+		return _gen1_fossil_byte(run, "item")
+	if item != Gen1Layout.SCRIPT_MENU_ITEM_SOURCE:
+		return item
+	return int((run.get("menu", {}) as Dictionary).get("item", -1))
 
 
 func _gen1_node_set_last_map(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
@@ -4573,9 +4599,52 @@ func _gen1_node_name_species(node: Dictionary, _steps: Array, run: Dictionary) -
 	var species: int = int(node.get("species", 0))
 	if String(node.get("from", "")) == "player_starter" and state != null and data != null:
 		species = data.gen1_dex_of_index(state.gen1_starter("player"))
-	run["named"] = String(data.species(species).get("name", "")) \
-		if data != null and species > 0 else ""
+	elif String(node.get("from", "")) == "fossil_mon":
+		species = _gen1_fossil_species(run)
+	_gen1_named(node, run, String(data.species(species).get("name", "")) \
+		if data != null and species > 0 else "")
 	return true
+
+
+## Both name routines answer in `wNameBuffer`, and `CopyToStringBuffer` moves the
+## first out. A node naming its buffer fills that marker alone.
+func _gen1_named(node: Dictionary, run: Dictionary, name: String) -> void:
+	run["named"] = name
+	if not node.has("buffer"):
+		return
+	var buffers: Dictionary = run.get("buffers", {})
+	buffers[int(node["buffer"])] = name
+	run["buffers"] = buffers
+
+
+func _gen1_node_copy_name(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
+	var buffers: Dictionary = run.get("buffers", {})
+	buffers[int(node["to"])] = String(buffers.get(int(node["from"]), ""))
+	run["buffers"] = buffers
+	return true
+
+
+func _gen1_node_set_fossil(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var which: String = String(node["which"])
+	var value: int = _gen1_item_of(
+		Gen1Layout.SCRIPT_MENU_ITEM_SOURCE if node.has("from") else int(node["value"]), run
+	)
+	## Read again inside the same row, so the walk carries them like the bag.
+	var fossil: Dictionary = run.get("fossil", {})
+	fossil[which] = value
+	run["fossil"] = fossil
+	steps.append({"type": &"fossil", "which": which, "value": value})
+	return true
+
+
+func _gen1_fossil_byte(run: Dictionary, which: String) -> int:
+	var walked: Dictionary = run.get("fossil", {})
+	return int(walked[which]) if walked.has(which) else int(gen1_fossil.get(which, 0))
+
+
+func _gen1_fossil_species(run: Dictionary) -> int:
+	var stored: int = _gen1_fossil_byte(run, "mon")
+	return data.gen1_dex_of_index(stored) if data != null and stored > 0 else 0
 
 
 func _gen1_node_name_badge(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
@@ -4917,9 +4986,13 @@ func _gen1_resolve_side(
 ## the screen holding the save knows which, so both sides are resolved here and
 ## the request carries them until it comes back.
 func _gen1_resolve_gift_pokemon(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var species: int = _gen1_fossil_species(run) \
+		if String(node.get("from", "")) == "fossil_mon" else int(node["species"])
+	if species < 1:
+		return false
 	var step: Dictionary = {"type": &"request", "values": {
 		"kind": &"pokemon_requested",
-		"values": {"pokemon": int(node["species"]), "level": int(node["level"])},
+		"values": {"pokemon": species, "level": int(node["level"])},
 	}}
 	if node.has("ok"):
 		var taken: Array = []
@@ -4991,7 +5064,7 @@ func _gen1_node_guard_drink(node: Dictionary, steps: Array, run: Dictionary) -> 
 
 func _gen1_take_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var bag: Dictionary = run["bag"]
-	var item: int = int(node["item"])
+	var item: int = _gen1_item_of(int(node["item"]), run)
 	var left: int = int(bag.get(item, 0)) - 1
 	if left < 0:
 		return true
@@ -5212,6 +5285,120 @@ func _gen1_script_choice(node: Dictionary, steps: Array, run: Dictionary) -> boo
 	return true
 
 
+## `HandleMenuInput` over a box a script drew itself: the node owns the tail,
+## walked once per row and once for the B press.
+func _gen1_script_menu(
+	node: Dictionary, tail: Array, steps: Array, run: Dictionary
+) -> bool:
+	var rows: Array = _gen1_menu_rows(node, run)
+	if rows.is_empty():
+		return false
+	var answers: Array = []
+	for index: int in rows.size():
+		var row: Dictionary = rows[index]
+		if not _gen1_menu_walk(tail, answers, run, {
+			"row": index, "item": int(row.get("item", -1)),
+		}):
+			return false
+	if not _gen1_menu_walk(tail, answers, run, {"row": -1, "item": -1, "cancelled": true}):
+		return false
+	## The question stays up under the menu, so its box owes no press.
+	var asked: int = _gen1_last_box(steps)
+	var text: String = String((steps[asked] as Dictionary)["text"]) if asked >= 0 else ""
+	if asked >= 0:
+		steps.remove_at(asked)
+	steps.append({
+		"type": &"request", "menu": true, "answers": answers,
+		"values": {"kind": &"gen1_menu_requested", "values": {
+			"box": node["box"], "entries_at": node.get("entries_at", {}),
+			"labels": node.get("labels", []), "rows": rows, "text": text,
+		}},
+	})
+	return true
+
+
+func _gen1_menu_walk(
+	tail: Array, answers: Array, run: Dictionary, menu: Dictionary
+) -> bool:
+	var arm: Array = []
+	var copy: Dictionary = _gen1_run_copy(run)
+	copy["menu"] = menu
+	if not _gen1_resolve_script(tail, arm, copy):
+		return false
+	answers.append(arm)
+	return true
+
+
+func _gen1_menu_rows(node: Dictionary, run: Dictionary) -> Array:
+	var rows: Array = []
+	if not node.has("filter"):
+		for text: String in node.get("entries", []) as Array:
+			rows.append({"text": text})
+		return rows
+	var bag: Dictionary = run["bag"]
+	for value: Variant in node["filter"] as Array:
+		var item: int = int(value)
+		if int(bag.get(item, 0)) > 0:
+			rows.append({"item": item, "text": data.item_name(item) if data != null else ""})
+	return rows
+
+
+func _gen1_node_filtered_bag(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, not _gen1_menu_rows({"filter": node.get("items", [])}, run).is_empty(),
+		steps, run
+	)
+
+
+## `DisplayListMenuID` over `SPECIALLISTMENU`, reopened behind every line it
+## prints: the loop is the node and the `jr c` B answers the way out.
+func _gen1_node_list_menu(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var done: Array = []
+	if not _gen1_resolve_script(node["done"] as Array, done, _gen1_run_copy(run)):
+		return false
+	var rows: Array = []
+	for row: Dictionary in node["rows"] as Array:
+		rows.append({
+			"item": int(row["item"]),
+			"name": data.item_name(int(row["item"])) if data != null else "",
+			"text": gen1_filled_text(String(row["text"])),
+		})
+	steps.append({
+		"type": &"request", "list_menu": true, "rows": rows, "done": done,
+		"values": {"kind": &"gen1_list_menu_requested", "values": {"rows": rows}},
+	})
+	return true
+
+
+func _gen1_node_menu_cancel(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, bool((run.get("menu", {}) as Dictionary).get("cancelled", false)), steps, run
+	)
+
+
+func _gen1_node_menu_row(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, int((run.get("menu", {}) as Dictionary).get("row", -1)) == int(node["row"]),
+		steps, run
+	)
+
+
+func _gen1_node_menu_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, int((run.get("menu", {}) as Dictionary).get("item", -1)) == int(node["item"]),
+		steps, run
+	)
+
+
+func _gen1_node_dex_rating(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var rated: Dictionary = Gen2ProfOaksPC.rate(data, state)
+	if rated.is_empty():
+		return false
+	for page: String in rated["pages"] as Array:
+		steps.append({"type": &"text", "text": gen1_filled_text(page)})
+	return true
+
+
 ## The box a YES/NO opens under, which nothing written between the two takes
 ## the place of.
 func _gen1_last_box(steps: Array) -> int:
@@ -5228,14 +5415,24 @@ func _gen1_run_copy(run: Dictionary) -> Dictionary:
 	return {
 		"bag": (run["bag"] as Dictionary).duplicate(),
 		"named": run["named"],
+		"buffers": (run.get("buffers", {}) as Dictionary).duplicate(),
 		"object": run.get("object", {}),
 		"money": run.get("money", 0),
 		"coins": run.get("coins", 0),
+		"menu": run.get("menu", {}),
+		"fossil": (run.get("fossil", {}) as Dictionary).duplicate(),
 	}
 
 
-func _gen1_script_box(node: Dictionary, named: String) -> Dictionary:
+func _gen1_script_box(
+	node: Dictionary, named: String, buffers: Dictionary = {}
+) -> Dictionary:
 	var text: String = gen1_filled_text(String(node.get("text", "")))
+	for address: Variant in buffers:
+		text = Gen2TextStream.fill_all_markers(
+			text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, int(address)],
+			String(buffers[address])
+		)
 	if not named.is_empty():
 		text = Gen2TextStream.fill_all_markers(
 			text, Gen2TextStream.RAM_MARKER, named
@@ -5376,15 +5573,26 @@ func _gen1_nurse_steps() -> Array:
 
 
 ## `farcall AnimateHealingMachine`, the step behind `predef HealParty`, which the
-## dialogue waits out before its last two lines. The sound each ball is placed
-## with is a script sound, and no step in this list carries one.
+## dialogue waits out before its last two lines. `.partyLoop` sounds one ball
+## every `ld c, 30`, and the flashes open on `MUSIC_PKMN_HEALED`.
 func _gen1_heal_machine_step() -> Dictionary:
 	var balls: int = int(_party_summary.get("count", 0))
-	var frames: int = balls * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES \
-		+ Gen2WorldEffects.HEAL_MACHINE_FLASHES \
+	var flashes_at: int = balls * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES
+	var frames: int = flashes_at + Gen2WorldEffects.HEAL_MACHINE_FLASHES \
 		* Gen2WorldEffects.HEAL_MACHINE_FLASH_INTERVAL
+	var sounds: Array = [{
+		"frame": 0, "gen1": true, "index": Gen1SoundEngine.SFX_STOP_ALL_MUSIC,
+	}]
+	for ball: int in balls:
+		sounds.append({
+			"frame": ball * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES,
+			"gen1": true, "index": Gen1Layout.SFX_HEALING_MACHINE,
+		})
+	sounds.append({
+		"frame": flashes_at, "gen1": true, "index": Gen1Layout.MUSIC_PKMN_HEALED,
+	})
 	return _gen1_wait_step(&"heal_machine_anim", frames, {
-		"machine_type": 0, "balls": balls, "sounds": [],
+		"machine_type": 0, "balls": balls, "sounds": sounds,
 	})
 
 
@@ -5773,11 +5981,19 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 		&"items":
 			state.apply_changes({}, {}, {"items": step["items"]})
 			return true
+		&"fossil":
+			gen1_fossil[String(step["which"])] = int(step["value"])
+			return true
 		&"toggle":
 			gen1_toggle_object(int(step["index"]), bool(step["hidden"]))
 			return true
+		## `SetLastBlackoutMap` names the map a script wrote; the nurse's own
+		## step carries none and takes `wLastMap` instead.
 		&"blackout_map":
-			_gen1_record_blackout_map()
+			if step.has("map"):
+				_gen1_last_blackout_map = int(step["map"])
+			else:
+				_gen1_record_blackout_map()
 			return true
 		&"map_script":
 			state.set_gen1_map_script(int(step["byte"]), int(step["value"]))
@@ -5785,12 +6001,15 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 		&"last_map":
 			_gen1_last_map = int(step["map"])
 			return true
-		&"blackout_map":
-			_gen1_last_blackout_map = int(step["map"])
-			return true
 		&"starter":
 			state.set_gen1_starter(String(step["who"]), int(step["value"]))
 			return true
+	return _gen1_kept(step, events)
+
+
+## The rest of [method _gen1_written]: what a row leaves behind it.
+func _gen1_kept(step: Dictionary, events: Array) -> bool:
+	match StringName(step["type"]):
 		&"scratch":
 			_gen1_scratch[int(step["address"])] = int(step["value"])
 			return true
@@ -6033,6 +6252,19 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		_gen1_steps = _gen1_day_care_after_selection(result) + _gen1_steps
 	elif step.has("elevator"):
 		_gen1_ride_elevator(result)
+	elif step.has("list_menu"):
+		var listed: Array = step["rows"]
+		var chosen: int = int(result.get("row", -1))
+		_gen1_steps = ([
+			{"type": &"text", "text": String((listed[chosen] as Dictionary)["text"])}, step,
+		] if chosen >= 0 and chosen < listed.size() \
+			else (step["done"] as Array).duplicate(true)) + _gen1_steps
+	elif step.has("answers"):
+		var answers: Array = step["answers"]
+		var row: int = int(result.get("row", -1))
+		if row < 0 or row >= answers.size() - 1:
+			row = answers.size() - 1
+		_gen1_steps = (answers[row] as Array).duplicate(true) + _gen1_steps
 	elif step.has("ok"):
 		## `accepted` is the carry `_GivePokemon` answers in.
 		_gen1_steps = (step[
