@@ -67,6 +67,7 @@ func _one_game() -> void:
 	_conversion_copies_the_target()
 	_teleport_ends_the_battle()
 	_the_bag_in_a_fight()
+	_a_safari_battle()
 
 
 ## `AddPartyMon`'s four base moves and `WriteMonMoves` over them, for every
@@ -446,3 +447,89 @@ func _bag_battle(trainer: bool = false) -> Gen2Battle:
 		)),
 		generator, trainer
 	)
+
+
+## `BaitRockCommon`'s `.randomLoop`: a factor grows by 1 to 5, in even shares.
+const SAFARI_ROLLS: int = 4000
+const SAFARI_FACTOR_SHARE: float = 0.2
+const SAFARI_TOLERANCE: float = 0.03
+## `.compareWithRandomValue`: a low Speed byte at or above 128 carries out of the
+## doubling and takes the enemy away with no roll.
+const SAFARI_SLOW_SPEED: int = 20
+const SAFARI_FAST_SPEED: int = 200
+
+
+## A Safari battle's whole turn: `ItemUseBait` halves the catch rate where
+## `ItemUseRock` doubles it, `PrintSafariZoneBattleText` counts the factor the
+## last action raised, and `.notOutOfSafariBalls` may roll the enemy away.
+func _a_safari_battle() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [], SWEEP_SEED)
+	if not _r.check(battle != null, "no battle could be built for the Safari game"):
+		return
+	var rate: int = int(_r.data.species(SWEEP_ENEMY).get("catch_rate", 0))
+	battle.battle_type = Gen2Battle.BATTLETYPE_SAFARI
+	battle.safari_catch_rate = rate
+	var rolls: Callable = Callable(battle.rng, "randi_range").bind(0, 0xFF)
+	battle.throw_bait_or_rock(true, rolls)
+	@warning_ignore("integer_division")
+	var halved: int = rate / 2
+	_r.check(battle.safari_catch_rate == halved and battle.safari_escape_factor == 0,
+		"bait left the catch rate at %d, wanted %d." % [battle.safari_catch_rate, halved])
+	battle.throw_bait_or_rock(false, rolls)
+	_r.check(battle.safari_catch_rate == mini(halved * 2, 0xFF)
+		and battle.safari_bait_factor == 0,
+		"a rock left the catch rate at %d." % battle.safari_catch_rate)
+
+	## `.no_bait` reads the escape counter only once the bait one is spent.
+	battle.safari_bait_factor = 1
+	battle.safari_escape_factor = 1
+	_r.check(battle.safari_battle_text(rate) == Gen2Battle.SAFARI_EATING_TEXT
+		and battle.safari_bait_factor == 0, "the bait counter said the wrong box.")
+	_r.check(battle.safari_battle_text(rate) == Gen2Battle.SAFARI_ANGRY_TEXT
+		and battle.safari_catch_rate == rate,
+		"the escape counter left the catch rate at %d." % battle.safari_catch_rate)
+	_r.check(battle.safari_battle_text(rate).is_empty(),
+		"a spent pair of counters still said something.")
+	_safari_factor_distribution()
+	_safari_run_roll()
+	_r.note("gen1 battle the Safari game's bait, rock and %d run rolls" % SAFARI_ROLLS)
+
+
+func _safari_factor_distribution() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [], SWEEP_SEED)
+	if battle == null:
+		return
+	var rolls: Callable = Callable(battle.rng, "randi_range").bind(0, 0xFF)
+	var counts: Array[int] = [0, 0, 0, 0, 0]
+	for _roll: int in SAFARI_ROLLS:
+		battle.safari_bait_factor = 0
+		battle.throw_bait_or_rock(true, rolls)
+		var grown: int = battle.safari_bait_factor
+		if not _r.check(grown >= 1 and grown <= Gen1Layout.SAFARI_FACTOR_LIMIT,
+			"a bait raised the factor by %d." % grown):
+			return
+		counts[grown - 1] += 1
+	for grown: int in counts.size():
+		var share: float = float(counts[grown]) / SAFARI_ROLLS
+		_r.check(absf(share - SAFARI_FACTOR_SHARE) <= SAFARI_TOLERANCE,
+			"a factor of %d came up %.3f of the time." % [grown + 1, share])
+
+
+func _safari_run_roll() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [], SWEEP_SEED)
+	if battle == null:
+		return
+	var enemy: Gen2BattleMon = battle.mon(Gen2Battle.ENEMY)
+	var rolls: Callable = Callable(battle.rng, "randi_range").bind(0, 0xFF)
+	enemy.stats["speed"] = SAFARI_FAST_SPEED
+	_r.check(battle.safari_enemy_runs(rolls), "a fast wild stayed with no roll.")
+	enemy.stats["speed"] = SAFARI_SLOW_SPEED
+	var ran: Array[int] = [0, 0, 0]
+	for index: int in ran.size():
+		battle.safari_bait_factor = 1 if index == 1 else 0
+		battle.safari_escape_factor = 1 if index == 2 else 0
+		for _roll: int in SAFARI_ROLLS:
+			if battle.safari_enemy_runs(rolls):
+				ran[index] += 1
+	_r.check(ran[1] < ran[0] and ran[0] < ran[2],
+		"the run rolls came out %s eating, plain and angry." % [ran])

@@ -94,6 +94,8 @@ const MAX_NAME_LENGTH: int = 20
 const MAX_LANDMARK_LENGTH: int = 24
 ## `PokedexEntry` descriptions run to two pages of three lines.
 const MAX_DEX_TEXT: int = 256
+const SAFARI_LABEL_MAX: int = 16
+const SAFARI_MENU_MAX: int = 40
 ## An `EvosMoves` record cannot outrun this; the longest learnset is well under.
 const MAX_EVOS_MOVES: int = 128
 
@@ -180,6 +182,9 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"item_use": ["item_use_text", Gen1Layout.ITEM_USE_TEXT_AT],
 	"bicycle": ["bicycle_text", Gen1Layout.BICYCLE_TEXT_AT],
 	"poke_flute": ["poke_flute_text", Gen1Layout.POKE_FLUTE_TEXT_AT],
+	"safari_battle": ["safari_battle_text", Gen1Layout.SAFARI_BATTLE_TEXT_AT],
+	"safari": ["safari_game_over_text", Gen1Layout.SAFARI_TEXT_AT],
+	"safari_item": ["safari_item_text", Gen1Layout.SAFARI_ITEM_TEXT_AT],
 	"start_menu": ["start_menu_text", Gen1Layout.START_MENU_TEXT_AT],
 	"field_move": ["field_move_text", Gen1Layout.FIELD_MOVE_TEXT_AT],
 	"strength": ["strength_text", Gen1Layout.STRENGTH_TEXT_AT],
@@ -1428,6 +1433,53 @@ func _import_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 		out[run] = boxes
 	out["npc_trade"] = _import_trade_text(rom, layout)
 	out["card_key"] = _import_card_key_text(rom, layout)
+	out["safari_labels"] = _import_safari_labels(rom, layout)
+	return out
+
+
+## `PrintSafariZoneSteps`' two labels and `SafariZoneBattleMenuText`'s two rows,
+## which are `db` strings rather than `text_far` rows.
+func _import_safari_labels(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var labels: int = int(layout["safari_steps_labels"])
+	var menu: String = Gen1Text.decode(
+		rom.bytes(), int(layout["safari_battle_menu_text"]), SAFARI_MENU_MAX
+	)
+	var lines: PackedStringArray = menu.split(
+		String(Gen1Text.CONTROL_CHARACTERS[Gen1Text.NEXT_LINE])
+	)
+	var steps: String = Gen1Text.decode(rom.bytes(), labels, SAFARI_LABEL_MAX)
+	var out: Dictionary = {
+		"steps": steps,
+		"balls": Gen1Text.decode(
+			rom.bytes(), labels + steps.length() + 1, SAFARI_LABEL_MAX
+		),
+		"menu_top": lines[0] if lines.size() > 0 else "",
+		"menu_bottom": lines[1] if lines.size() > 1 else "",
+		## `.outOfSafariBallsText` is local, so its far text is what is pinned.
+		"out_of_balls": facility_text(rom, int(layout["safari_out_of_balls_text"])),
+	}
+	out.merge(_import_safari_admission_text(rom, layout))
+	return out
+
+
+func _import_safari_admission_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var lines: int = int(layout.get("safari_nag_lines", 0))
+	if lines <= 0:
+		return {}
+	var out: Dictionary = {}
+	for slots: Array in [
+		[Gen1Layout.SAFARI_LOW_COST_TEXT_AT, "safari_low_cost_text"],
+		[Gen1Layout.SAFARI_NAG_TEXT_AT, "safari_nag_text"],
+	]:
+		for name: String in (slots[0] as Dictionary):
+			out[name] = facility_text(rom, Gen1Layout.facility_text_offset(
+				layout, String(slots[1]), slots[0] as Dictionary, name
+			))
+	var bank: int = RomFile.bank_of(lines)
+	for index: int in Gen1Layout.SAFARI_NAG_LINES:
+		out["nag_%d" % index] = facility_text(rom, Gen1Layout.banked(
+			bank, rom.u16le(lines + index * Gen1Layout.POINTER_SIZE)
+		))
 	return out
 
 

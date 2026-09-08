@@ -1282,7 +1282,8 @@ static func capture_wild(
 	caught_location: int = 0,
 	persist: bool = true,
 	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL,
-	thrower: Gen2BattleMon = null
+	thrower: Gen2BattleMon = null,
+	safari_catch_rate: int = -1
 ) -> Dictionary:
 	if world == null or save == null or world.data == null or wild == null:
 		return _failure(&"missing_capture_context", {})
@@ -1303,14 +1304,15 @@ static func capture_wild(
 	## landmark is not the map the player stands on, and every caller that has
 	## none passes 0 and takes the map's.
 	var catch_landmark: int = caught_location if caught_location > 0 else world.landmark_backup()
-	var refused: Dictionary = _capture_refusal(world, save, ball, catch_landmark)
+	var safari: bool = battle_type == Gen2Battle.BATTLETYPE_SAFARI
+	var refused: Dictionary = _capture_refusal(world, save, ball, catch_landmark, safari)
 	if not refused.is_empty():
 		return refused
 	var generator: RandomNumberGenerator = random if random != null else RandomNumberGenerator.new()
 	if random == null:
 		generator.randomize()
 	var outcome: Dictionary = _capture_outcome(
-		world.data, wild, ball, generator, battle_type, thrower
+		world.data, wild, ball, generator, battle_type, thrower, safari_catch_rate
 	)
 	var candidate: Gen2SaveData = opened["candidate"]
 	var stored: Dictionary = _store_capture(
@@ -1328,10 +1330,17 @@ static func capture_wild(
 		_register_unown(world, _unown_form(
 			wild.species, wild.persistent_dvs(), destination
 		))
-	var next_quantity: int = world.state.item_quantity(ball) - 1
-	var item_result: Dictionary = world.state.apply_changes({}, {}, {"items": {ball: next_quantity}})
-	if not bool(item_result.get("ok", false)):
-		return _failure(&"ball_state_failed", item_result)
+	## `.safariZone`'s `dec [hl]`: the bag has no row for a Safari Ball.
+	var next_quantity: int = world.state.safari_balls() - 1 if safari \
+		else world.state.item_quantity(ball) - 1
+	if safari:
+		world.state.set_safari_balls(next_quantity)
+	else:
+		var item_result: Dictionary = world.state.apply_changes(
+			{}, {}, {"items": {ball: next_quantity}}
+		)
+		if not bool(item_result.get("ok", false)):
+			return _failure(&"ball_state_failed", item_result)
 	var committed: Dictionary = Gen2WorldTransaction.commit(
 		world, save, candidate, before, persist
 	)
@@ -1362,7 +1371,8 @@ static func capture_wild(
 
 
 static func _capture_refusal(
-	world: Gen2WorldAPI, save: Gen2SaveData, ball: int, catch_landmark: int
+	world: Gen2WorldAPI, save: Gen2SaveData, ball: int, catch_landmark: int,
+	safari: bool = false
 ) -> Dictionary:
 	## `Ball_BoxIsFullMessage`, which stands in front of everything else the
 	## effect does: no line is said about the ball and the ball is not spent.
@@ -1381,7 +1391,10 @@ static func _capture_refusal(
 		return _failure(&"item_is_not_a_ball", {"ball": ball})
 	if ball not in capture_ball_items(generation):
 		return _failure(&"unsupported_ball_effect", {"ball": ball})
-	if world.state == null or world.state.item_quantity(ball) <= 0:
+	var owned: int = 0 if world.state == null else (
+		world.state.safari_balls() if safari else world.state.item_quantity(ball)
+	)
+	if owned <= 0:
 		return _failure(&"insufficient_ball_quantity", {"ball": ball})
 	## The Nuzlocke's first rule, at the one place a ball is ever thrown: only
 	## the encounter that claimed this area may be thrown at, and
@@ -2410,12 +2423,13 @@ static func _capture_outcome(
 	ball: int,
 	random: RandomNumberGenerator,
 	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL,
-	thrower: Gen2BattleMon = null
+	thrower: Gen2BattleMon = null,
+	safari_catch_rate: int = -1
 ) -> Dictionary:
 	if ball == ITEM_MASTER_BALL or battle_type == Gen2Battle.BATTLETYPE_TUTORIAL:
 		return {"caught": true, "catch_rate": 255, "wobbles": 3}
 	if _generation(data) == RomRegistry.GEN1:
-		return _gen1_capture_outcome(data, wild, ball, random)
+		return _gen1_capture_outcome(data, wild, ball, random, safari_catch_rate)
 	var max_hp: int = maxi(wild.max_hp(), 1)
 	var final_rate: int = final_catch_rate(data, ball, {
 		"base_rate": clampi(int(data.species(wild.species).get("catch_rate", 0)), 1, 255),
@@ -2443,11 +2457,13 @@ static func _capture_outcome(
 ## Tower ghost on the screen. The Safari Zone's branch spends `wNumSafariBalls`
 ## rather than the bag and changes nothing else.
 static func _gen1_capture_outcome(
-	data: GameData, wild: Gen2BattleMon, ball: int, random: RandomNumberGenerator
+	data: GameData, wild: Gen2BattleMon, ball: int, random: RandomNumberGenerator,
+	catch_rate: int = -1
 ) -> Dictionary:
 	var max_hp: int = maxi(wild.max_hp(), 1)
 	return gen1_ball_outcome(ball, {
-		"catch_rate": int(data.species(wild.species).get("catch_rate", 0)),
+		"catch_rate": catch_rate if catch_rate >= 0 \
+			else int(data.species(wild.species).get("catch_rate", 0)),
 		"max_hp": max_hp,
 		"current_hp": clampi(wild.hp, 0, max_hp),
 		"status": wild.status,

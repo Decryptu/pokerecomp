@@ -34,6 +34,17 @@ const CONTEST_LEVEL_AT: Vector2i = Vector2i(1, 3)
 const CONTEST_LEVEL_NUMBER_AT: Vector2i = Vector2i(7, 3)
 const CONTEST_BALLS_AT: Vector2i = Vector2i(1, 5)
 const CONTEST_BALLS_NUMBER_AT: Vector2i = Vector2i(8, 5)
+
+## `PrintSafariZoneSteps`' `TextBoxBorder` at `hlcoord 0, 0` with `b, 3` `c, 7`.
+const SAFARI_BOX_SIZE: Vector2i = Vector2i(9, 5)
+const SAFARI_STEPS_AT: Vector2i = Vector2i(1, 1)
+const SAFARI_STEPS_LABEL_AT: Vector2i = Vector2i(4, 1)
+const SAFARI_BALLS_AT: Vector2i = Vector2i(1, 3)
+const SAFARI_BALLS_BLANK_AT: Vector2i = Vector2i(5, 3)
+const SAFARI_BALLS_NUMBER_AT: Vector2i = Vector2i(6, 3)
+const SAFARI_STEPS_DIGITS: int = 3
+const SAFARI_BALLS_DIGITS: int = 2
+const SAFARI_BALLS_TENS: int = 10
 ## `.MenuData`'s own flags.
 const LIST_FLAGS: int = (
 	Gen2MenuBox.STATICMENU_CURSOR
@@ -160,7 +171,7 @@ static func list_box(count: int, contest: bool = false) -> Gen2MenuBox:
 ## names rather than the eight-character words the source list holds.
 func render_list(
 	labels: Array, cursor: int, description: String = "", contest: bool = false,
-	frame: Gen2MenuBox = null, status: Dictionary = {}
+	frame: Gen2MenuBox = null, status: Dictionary = {}, safari: Dictionary = {}
 ) -> Image:
 	if menu == null or font == null:
 		return null
@@ -173,6 +184,9 @@ func render_list(
 		## the flag alone decides. Drawn before the list, because the list's box
 		## sits two rows into it.
 		_blit(image, _render_contest_status(status), Vector2i.ZERO)
+	if not safari.is_empty():
+		## `RedisplayStartMenu` draws it behind `DrawStartMenu`, left of the list.
+		_blit(image, _render_safari_steps(safari), Vector2i.ZERO)
 	_blit(image, menu.render(box, labels, cursor), box.border_position())
 	if not description.is_empty():
 		_blit(image, _render_account(description), ACCOUNT_AT)
@@ -300,6 +314,36 @@ func _render_contest_status(status: Dictionary) -> Image:
 		)
 	return Gen2PicImage.from_indices(
 		indices, width, CONTEST_BOX_SIZE.y * TILE, _palette()
+	)
+
+
+## [param status] carries `steps`, `balls`, `steps_label` and `balls_label`.
+func _render_safari_steps(status: Dictionary) -> Image:
+	var width: int = SAFARI_BOX_SIZE.x * TILE
+	var indices := PackedByteArray()
+	indices.resize(width * SAFARI_BOX_SIZE.y * TILE)
+	font.draw_box(
+		frame_style, indices, width, 0, 0, SAFARI_BOX_SIZE.x, SAFARI_BOX_SIZE.y
+	)
+	var balls: int = maxi(int(status.get("balls", 0)), 0)
+	for entry: Array in [
+		["%*d" % [SAFARI_STEPS_DIGITS, maxi(int(status.get("steps", 0)), 0)], SAFARI_STEPS_AT],
+		[String(status.get("steps_label", "")), SAFARI_STEPS_LABEL_AT],
+		[String(status.get("balls_label", "")), SAFARI_BALLS_AT],
+	]:
+		var at: Vector2i = entry[1]
+		font.draw_text(String(entry[0]), indices, width, at.x * TILE, at.y * TILE)
+	if balls < SAFARI_BALLS_TENS:
+		font.draw_text(
+			" ", indices, width,
+			SAFARI_BALLS_BLANK_AT.x * TILE, SAFARI_BALLS_BLANK_AT.y * TILE
+		)
+	font.draw_text(
+		"%*d" % [SAFARI_BALLS_DIGITS, balls], indices, width,
+		SAFARI_BALLS_NUMBER_AT.x * TILE, SAFARI_BALLS_NUMBER_AT.y * TILE
+	)
+	return Gen2PicImage.from_indices(
+		indices, width, SAFARI_BOX_SIZE.y * TILE, _palette()
 	)
 
 

@@ -1826,6 +1826,11 @@ func _complete_player_step(movement: Dictionary) -> bool:
 	_spend_step_happiness()
 	_spend_egg_steps()
 	_spend_day_care_steps()
+	## In front of `CheckWarpsNoCollision`, so the step the timer runs out on ends
+	## the game rather than taking its warp.
+	if _world.gen1_count_safari_step():
+		_zero_map_name_sign_timer()
+		return _after_map_settled()
 	var kind: StringName = StringName(movement.get("kind", &""))
 	if kind == &"edge_warp" or (kind in [
 		&"move", &"ledge_hop", &"water_move", &"exit_water", &"forced_move",
@@ -5301,10 +5306,22 @@ func _play_battle_music(request: Dictionary) -> void:
 	_audio_player.play_record(record, &"map_music", _audio_assets())
 
 
+## `InitBattleVariables` reads `wCurMap` alone, so every wild fight on the Safari
+## Zone's own four maps is the game's however it was started.
+func _is_a_safari_fight(values: Dictionary) -> bool:
+	if _world == null or _world.current_map == null or _data == null:
+		return false
+	return _data.generation == RomRegistry.GEN1 \
+		and StringName(values.get("kind", &"")) == &"wild" \
+		and Gen1Layout.is_safari_battle_map(_world.current_map.number)
+
+
 func _open_battle_host(request: Dictionary) -> void:
 	if _battle_host != null or _data == null:
 		return
 	var values: Dictionary = request.get("values", {})
+	if _is_a_safari_fight(values):
+		values["battle_type"] = Gen2Battle.BATTLETYPE_SAFARI
 	var tutorial: bool = bool(values.get("tutorial", false))
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	_active_battle_save = save
@@ -5366,6 +5383,11 @@ func _open_battle_host(request: Dictionary) -> void:
 			host.set_capture_balls(
 				[Gen2WorldPartyHost.ITEM_PARK_BALL],
 				{Gen2WorldPartyHost.ITEM_PARK_BALL: _world.state.park_balls()}
+			)
+		elif int(values.get("battle_type", 0)) == Gen2Battle.BATTLETYPE_SAFARI:
+			host.set_capture_balls(
+				[Gen1Layout.SAFARI_BALL_ITEM],
+				{Gen1Layout.SAFARI_BALL_ITEM: _world.state.safari_balls()}
 			)
 		else:
 			host.set_capture_balls(
@@ -5456,7 +5478,8 @@ func _on_capture_requested(ball: int) -> void:
 		if _world.bug_contest_active()
 		else Gen2WorldPartyHost.capture_wild(
 			_world, save, target, ball, _encounter_random, 0, _active_battle_persist,
-			_battle_host.capture_battle_type(), _battle_host.capture_thrower()
+			_battle_host.capture_battle_type(), _battle_host.capture_thrower(),
+			_battle_host.capture_safari_catch_rate()
 		)
 	)
 	_battle_host.complete_capture(result)

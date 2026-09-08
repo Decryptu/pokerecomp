@@ -313,6 +313,10 @@ var _gen1_map_scripts: Dictionary = {}
 ## `wPlayerStarter` and `wRivalStarter`, the cartridge's own bytes: a species
 ## index on Red and Blue, and Yellow's RIVAL_STARTER_* for the rival.
 var _gen1_starters: Dictionary = {}
+## `wNumSafariBalls` and `wSafariSteps`, both saved player data: the gate writes
+## 30 and 502, a step spends one and `SafariZoneGameOver` clears the balls.
+var _safari_balls: int = 0
+var _safari_steps: int = 0
 ## `wCardKeyDoorY` and its neighbour: the block `PrintCardKeyText` last opened a
 ## Silph Co. door at. The floor's own callback turns it into that door's flag on
 ## the next load and clears it, so opening a second door on one visit loses the
@@ -544,6 +548,8 @@ func to_dict() -> Dictionary:
 		"toggled_objects": _toggled_objects.duplicate(),
 		"gen1_map_scripts": _gen1_map_scripts.duplicate(),
 		"gen1_starters": _gen1_starters.duplicate(),
+		"safari_balls": _safari_balls,
+		"safari_steps": _safari_steps,
 		"card_key_door": [_card_key_door.x, _card_key_door.y],
 		"npc_trades": _npc_trades.duplicate(),
 		"registered_item": _registered_item,
@@ -601,6 +607,8 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 		var starter: int = int((source.get("gen1_starters", {}) as Dictionary).get(who, 0))
 		if starter > 0:
 			restored._gen1_starters[who] = starter
+	restored._safari_balls = maxi(int(source.get("safari_balls", 0)), 0)
+	restored._safari_steps = maxi(int(source.get("safari_steps", 0)), 0)
 	restored._card_key_door = _vector_from_value(
 		source.get("card_key_door", [NO_CARD_KEY_DOOR.x, NO_CARD_KEY_DOOR.y])
 	)
@@ -759,6 +767,8 @@ func restore_from_dict(raw: Variant) -> void:
 	_picked_fruit_trees = restored._picked_fruit_trees.duplicate()
 	_toggled_objects = restored._toggled_objects.duplicate()
 	_gen1_map_scripts = restored._gen1_map_scripts.duplicate()
+	_safari_balls = restored._safari_balls
+	_safari_steps = restored._safari_steps
 	_gen1_starters = restored._gen1_starters.duplicate()
 	_card_key_door = restored._card_key_door
 	_npc_trades = restored._npc_trades.duplicate()
@@ -1741,6 +1751,30 @@ func set_object_toggled(index: int, toggled: bool) -> void:
 
 func gen1_map_script(byte: int) -> int:
 	return int(_gen1_map_scripts.get(byte, 0))
+
+
+func safari_balls() -> int:
+	return _safari_balls
+
+
+func safari_steps() -> int:
+	return _safari_steps
+
+
+func set_safari_balls(count: int) -> void:
+	var kept: int = maxi(count, 0)
+	if kept == _safari_balls:
+		return
+	_safari_balls = kept
+	changed.emit()
+
+
+func set_safari_steps(steps: int) -> void:
+	var kept: int = maxi(steps, 0)
+	if kept == _safari_steps:
+		return
+	_safari_steps = kept
+	changed.emit()
 
 
 const GEN1_STARTER_ROLES: Array[String] = ["player", "rival"]

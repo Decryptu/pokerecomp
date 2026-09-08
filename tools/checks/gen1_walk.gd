@@ -492,6 +492,7 @@ func _one_game() -> void:
 	_check_the_tower_warp()
 	_check_the_silph_rival()
 	_check_a_seafoam_boulder_hole()
+	_check_the_safari_zone()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -2953,3 +2954,148 @@ func _check_a_seafoam_boulder_hole() -> void:
 
 func _first_text(results: Array) -> String:
 	return _event_text(results) if not results.is_empty() else ""
+
+
+const SAFARI_GATE: int = 0x9C
+const SAFARI_GATE_WORKER_CELLS: Array[Vector2i] = [Vector2i(3, 2), Vector2i(4, 2)]
+const SAFARI_CENTER: int = 0xDC
+const SAFARI_CENTER_CELL := Vector2i(15, 25)
+const SAFARI_ADMISSION: int = 500
+## `SafariZoneGate_ScriptPointers` by name, which is what the walk drives.
+const SAFARI_SCRIPT_JOIN: int = 2
+const SAFARI_SCRIPT_MOVING_UP: int = 3
+const SAFARI_SCRIPT_MOVING_DOWN: int = 4
+const SAFARI_TIMES_UP: String = "PA: Ding-dong!"
+
+
+## `SafariZoneGateWouldYouLikeToJoinScript` and `SafariZoneCheckSteps` behind it:
+## the fee buys 30 balls and 502 steps, and running out warps back to the gate.
+func _check_the_safari_zone() -> void:
+	var world: Gen2WorldAPI = _safari_offer(SAFARI_ADMISSION)
+	if world == null:
+		return
+	_safari_answer(world, 0)
+	_r.check(
+		world.state.safari_balls() == Gen1Layout.SAFARI_BALLS
+			and world.state.safari_steps() == Gen1Layout.SAFARI_STEPS,
+		"the fee bought %d balls and %d steps." % [
+			world.state.safari_balls(), world.state.safari_steps(),
+		]
+	)
+	_r.check(world.gen1_safari_active(), "the fee left EVENT_IN_SAFARI_ZONE clear.")
+	_r.check(
+		world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == 0,
+		"the fee left %d." % world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
+	)
+	_check_the_safari_game_ends(world.state)
+	_check_the_safari_zone_refuses()
+	_r.note("gen1 walk paid the SAFARI ZONE's %d and walked its %d steps out" % [
+		SAFARI_ADMISSION, Gen1Layout.SAFARI_STEPS,
+	])
+
+
+func _check_the_safari_game_ends(state: Gen2WorldState) -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, SAFARI_CENTER, SAFARI_CENTER_CELL, state)
+	if world == null:
+		return
+	var spent: int = 0
+	while world.gen1_count_safari_step() == false and spent <= Gen1Layout.SAFARI_STEPS:
+		spent += 1
+	_r.check(spent == Gen1Layout.SAFARI_STEPS,
+		"the timer ran out after %d steps." % spent)
+	var said: Array[String] = _safari_spoken(world, world.dispatch_sight_events())
+	_r.check(said.size() == 2 and said[0].begins_with(SAFARI_TIMES_UP),
+		"the game over said %s." % [said])
+	_r.check(world.map_id() == Vector2i(0, SAFARI_GATE),
+		"the game over landed on %s." % [world.map_id()])
+	_r.check(
+		world.state.gen1_map_script(world.gen1_safari_gate_byte())
+			== Gen1Layout.SAFARI_SCRIPT_LEAVING,
+		"the gate stands on state %d." % world.state.gen1_map_script(
+			world.gen1_safari_gate_byte()
+		)
+	)
+	## `SafariZoneGateLeavingSafariScript` runs on the frame the gate is entered
+	## and consumes the event the warp set, which is what says the game ended.
+	_r.check(not world.gen1_safari_active(),
+		"the gate left EVENT_IN_SAFARI_ZONE standing.")
+	var haul: Array[String] = _safari_spoken(world, world.dispatch_sight_events())
+	_r.check(haul.size() == 1 and not haul[0].is_empty(),
+		"the gate said %s on the way out." % [haul])
+	_r.check(world.state.safari_balls() == 0,
+		"the gate left %d balls." % world.state.safari_balls())
+
+
+## Red and Blue walk a short purse back down; Yellow's own two routines hand out
+## a reduced admission instead, and nothing at all until the fourth empty visit.
+func _check_the_safari_zone_refuses() -> void:
+	var world: Gen2WorldAPI = _safari_offer(SAFARI_ADMISSION - 1)
+	if world == null:
+		return
+	_safari_answer(world, 0)
+	if _r.game_id != RomRegistry.YELLOW:
+		_r.check(world.state.safari_balls() == 0
+			and world.state.gen1_map_script(world.gen1_safari_gate_byte())
+				== SAFARI_SCRIPT_MOVING_DOWN,
+			"a short purse bought %d balls." % world.state.safari_balls())
+		return
+	@warning_ignore("integer_division")
+	var discounted: int = mini(
+		(SAFARI_ADMISSION - 1) / Gen1Layout.SAFARI_LOW_COST_DIVISOR
+			% Gen1Layout.SAFARI_LOW_COST_DIGITS + 1,
+		Gen1Layout.SAFARI_LOW_COST_MAX_BALLS
+	)
+	_r.check(world.state.safari_balls() == discounted
+		and world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == 0,
+		"¥%d bought %d balls, wanted %d." % [
+			SAFARI_ADMISSION - 1, world.state.safari_balls(), discounted,
+		])
+	_check_the_safari_zone_nags()
+
+
+func _check_the_safari_zone_nags() -> void:
+	var state := Gen2WorldState.new()
+	for visit: int in Gen1Layout.SAFARI_NAG_GIFT_VISIT + 1:
+		var world: Gen2WorldAPI = _safari_offer(0, state)
+		if world == null:
+			return
+		_safari_answer(world, 0)
+		var owed: int = Gen1Layout.SAFARI_NAG_BALLS \
+			if visit == Gen1Layout.SAFARI_NAG_GIFT_VISIT else 0
+		_r.check(state.safari_balls() == owed,
+			"visit %d of an empty purse bought %d balls." % [visit, state.safari_balls()])
+
+
+func _safari_spoken(world: Gen2WorldAPI, results: Array) -> Array[String]:
+	var said: Array[String] = []
+	while not results.is_empty() and said.size() < Gen1Layout.MAX_OBJECT_EVENTS:
+		var text: String = _event_text(results)
+		if not text.is_empty():
+			said.append(text)
+		results = world.run_event_queue(true)
+	return said
+
+
+func _safari_answer(world: Gen2WorldAPI, choice: int) -> void:
+	var results: Array = world.choose_script_input(choice)
+	var guard: int = 0
+	while not results.is_empty() and guard < Gen1Layout.MAX_OBJECT_EVENTS:
+		results = world.run_event_queue(true)
+		guard += 1
+
+
+func _safari_offer(purse: int, state: Gen2WorldState = null) -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(
+		0, SAFARI_GATE, SAFARI_GATE_WORKER_CELLS[0], state
+	)
+	if world == null:
+		return null
+	world.state.apply_changes({}, {}, {
+		"money": {Gen2WorldMartHost.MONEY_ACCOUNT: purse},
+	})
+	world.state.set_gen1_map_script(world.gen1_safari_gate_byte(), SAFARI_SCRIPT_JOIN)
+	world.dispatch_sight_events()
+	return world if _r.check(
+		not String(world.pending_script_input().get("text", "")).is_empty(),
+		"the SAFARI ZONE gate offered nothing on a %d purse." % purse
+	) else null

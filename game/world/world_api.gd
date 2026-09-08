@@ -3881,6 +3881,8 @@ const GEN1_TRADE_RUN: String = "npc_trade"
 ## `CardKeySuccessText` and `CardKeyFailText`, the two `TextPredefs` rows
 ## `PrintCardKeyText` prints.
 const GEN1_CARD_KEY_RUN: String = "card_key"
+const GEN1_SAFARI_RUN: String = "safari"
+const GEN1_SAFARI_LABEL_RUN: String = "safari_labels"
 ## `TextScript_PokemonCenterPC`, `TextScript_ItemStoragePC` and
 ## `TextScript_BillsPC`, each a machine, the run its own boxes were imported
 ## under and the boot line it opens with. `BIT_USING_GENERIC_PC` is clear on all
@@ -3907,6 +3909,10 @@ const GEN1_BATTLE_OUTCOMES: Dictionary = {
 var _gen1_battle_outcome: StringName = &""
 ## `wSavedCoordIndex`, the row a state matched and the state behind it reads.
 var _gen1_saved_coord_index: int = 0
+## `wSafariZoneGameOver`: scratch, the way the cartridge's own byte is.
+var _gen1_safari_game_over: bool = false
+var _gen1_safari_admitted: Dictionary = {}
+var _gen1_entry_steps: Array = []
 var _gen1_volatile: Dictionary = {}
 var _gen1_last_boulder: int = -1
 var _gen1_last_sprite_index: int = -1
@@ -3978,6 +3984,9 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"player_facing": &"_gen1_node_player_facing",
 	"map_script_table": &"_gen1_node_map_script_table",
 	"set_last_map": &"_gen1_node_set_last_map",
+	"safari_balls": &"_gen1_node_safari_balls",
+	"safari_admission": &"_gen1_node_safari_admission",
+	"safari_steps": &"_gen1_node_safari_steps",
 	"set_blackout_map": &"_gen1_node_set_blackout_map",
 	"set_player_coord": &"_gen1_node_set_player_coord",
 	"set_starter": &"_gen1_node_set_starter",
@@ -4385,7 +4394,9 @@ func _gen1_node_set_map_script(node: Dictionary, steps: Array, _run: Dictionary)
 	var byte: int = int(node["byte"])
 	if byte < 0:
 		return true
-	steps.append({"type": &"map_script", "byte": byte, "value": int(node["value"])})
+	## `wNextSafariZoneGateScript`: the state the walk before it is to land on.
+	var value: int = _gen1_saved_coord_index if node.has("from") else int(node["value"])
+	steps.append({"type": &"map_script", "byte": byte, "value": value})
 	return true
 
 
@@ -4571,6 +4582,62 @@ func _gen1_item_of(item: int, run: Dictionary) -> int:
 	if item != Gen1Layout.SCRIPT_MENU_ITEM_SOURCE:
 		return item
 	return int((run.get("menu", {}) as Dictionary).get("item", -1))
+
+
+func _gen1_node_safari_balls(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"safari_balls", "count": int(node.get(
+		"count", _gen1_safari_admitted.get("balls", 0)
+	))})
+	return true
+
+
+func _gen1_node_safari_steps(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"safari_steps", "steps": int(node["steps"])})
+	return true
+
+
+## Yellow's two admission routines for a purse that cannot pay ¥500, both of
+## which answer carry when nothing was won, which is the branch's `else`.
+func _gen1_node_safari_admission(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	_gen1_safari_admitted = {}
+	if String(node["kind"]) == "low_cost":
+		_gen1_safari_low_cost(steps, run)
+	else:
+		_gen1_safari_nag(steps)
+	return _gen1_resolve_side(node, not _gen1_safari_admitted.is_empty(), steps, run)
+
+
+func _gen1_safari_low_cost(steps: Array, run: Dictionary) -> void:
+	## `DivideBCDPredef3` divides the balance by the byte `ld a, 23` wrote, which
+	## packed decimal reads as seventeen; `SafariZoneEntranceConvertBCDtoNumber`
+	## then takes the quotient's last byte, so only its last two digits count.
+	@warning_ignore("integer_division")
+	var quotient: int = int(run["money"]) / Gen1Layout.SAFARI_LOW_COST_DIVISOR
+	var balls: int = quotient % Gen1Layout.SAFARI_LOW_COST_DIGITS + 1
+	## `FillMemory` empties the purse before either line is printed.
+	run["money"] = 0
+	steps.append({"type": &"money", "amount": 0})
+	steps.append(_gen1_safari_box("low_cost_1"))
+	steps.append({"type": &"money_box", "kind": &"money_top_right"})
+	steps.append(_gen1_safari_box("low_cost_2"))
+	_gen1_safari_admitted = {
+		"balls": mini(balls, Gen1Layout.SAFARI_LOW_COST_MAX_BALLS),
+		"steps": Gen1Layout.SAFARI_STEPS,
+	}
+
+
+func _gen1_safari_nag(steps: Array) -> void:
+	var visit: int = state.safari_steps() >> 8
+	steps.append(_gen1_safari_box("nag_%d" % mini(
+		visit, Gen1Layout.SAFARI_NAG_LINES - 1
+	)))
+	state.set_safari_steps(state.safari_steps() + (1 << 8))
+	if visit != Gen1Layout.SAFARI_NAG_GIFT_VISIT:
+		return
+	steps.append(_gen1_safari_box("one_ball"))
+	_gen1_safari_admitted = {
+		"balls": Gen1Layout.SAFARI_NAG_BALLS, "steps": Gen1Layout.SAFARI_STEPS,
+	}
 
 
 func _gen1_node_set_last_map(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
@@ -5829,6 +5896,9 @@ func _gen1_sight() -> Array:
 	if _gen1_holding():
 		return []
 	advance_gen1_movement_script()
+	var ended: Array = _gen1_safari_check()
+	if not ended.is_empty():
+		return ended
 	var running: Array = _gen1_map_script()
 	if not running.is_empty():
 		return running
@@ -5852,11 +5922,96 @@ func _gen1_sight() -> Array:
 	return _gen1_result()
 
 
+## `CheckEvent EVENT_IN_SAFARI_ZONE`, which gates the counter and the window.
+func gen1_safari_active() -> bool:
+	return _gen1 and state != null \
+		and state.is_event_flag_active(Gen1Layout.IN_SAFARI_ZONE_EVENT)
+
+
+## `SafariZoneCheckSteps`, in front of `CheckWarpsNoCollision`. The counter is
+## read before it is decremented, so a zero ends the game on that step.
+func gen1_count_safari_step() -> bool:
+	if not gen1_safari_active():
+		return false
+	if state.safari_steps() <= 0:
+		_gen1_safari_game_over = true
+		return true
+	state.set_safari_steps(state.safari_steps() - 1)
+	return false
+
+
+## `SafariZoneGameOver`, reached from `SafariZoneCheck`'s ball count as well as
+## from the step counter: the box, the warp to the gate and the state it leaves.
+func _gen1_safari_check() -> Array:
+	if not gen1_safari_active():
+		_gen1_safari_game_over = false
+		return []
+	if not _gen1_safari_game_over and state.safari_balls() > 0:
+		return []
+	_gen1_safari_game_over = false
+	var steps: Array = []
+	## `SafariGameOverText`'s first line is the timer rather than the bag.
+	if state.safari_balls() > 0:
+		steps.append(_gen1_safari_box("times_up"))
+	steps.append(_gen1_safari_box("game_over"))
+	steps.append({
+		"type": &"flag", "flag": Gen1Layout.SAFARI_GAME_OVER_EVENT, "set": true,
+	})
+	var byte: int = gen1_safari_gate_byte()
+	if byte >= 0:
+		steps.append({
+			"type": &"map_script", "byte": byte,
+			"value": Gen1Layout.SAFARI_SCRIPT_LEAVING,
+		})
+	steps.append({
+		"type": &"warp_to", "map": Gen1Layout.SAFARI_ZONE_GATE_MAP,
+		"warp": Gen1Layout.SAFARI_GAME_OVER_WARP,
+	})
+	_gen1_steps = steps
+	return _gen1_result()
+
+
+func _gen1_leave_safari_zone() -> void:
+	if not gen1_safari_active():
+		return
+	state.set_event_flag(Gen1Layout.IN_SAFARI_ZONE_EVENT, false)
+	state.set_safari_balls(0)
+	var byte: int = gen1_safari_gate_byte()
+	if byte >= 0:
+		state.set_gen1_map_script(byte, 0)
+
+
+func _gen1_safari_box(name: String) -> Dictionary:
+	if data == null:
+		return {"type": &"text", "text": ""}
+	var text: String = data.special_text(GEN1_SAFARI_RUN, name)
+	if text.is_empty():
+		text = data.special_text(GEN1_SAFARI_LABEL_RUN, name)
+	return {"type": &"text", "text": gen1_filled_text(text)}
+
+
+## `wSafariZoneGateCurScript`'s offset, read off the gate's own dispatch: it is
+## the one map whose state a routine outside that map writes.
+func gen1_safari_gate_byte() -> int:
+	var gate: Gen2WorldMap = data.world_map(0, Gen1Layout.SAFARI_ZONE_GATE_MAP) \
+		if data != null else null
+	if gate == null:
+		return -1
+	for node: Dictionary in (gate.scripts.get("entry", []) as Array):
+		if String(node.get("op", "")) == "map_script_table":
+			return int(node["byte"])
+	return -1
+
+
 ## `RunMapScript`, which `JoypadOverworld` runs every frame: what stands in
 ## front of `CallFunctionInTable` and then the state the map's byte selects.
 func _gen1_map_script() -> Array:
 	if current_map == null or state == null:
 		return []
+	if not _gen1_entry_steps.is_empty():
+		_gen1_steps = _gen1_entry_steps
+		_gen1_entry_steps = []
+		return _gen1_result()
 	var entry: Array = current_map.scripts.get("entry", [])
 	if entry.is_empty():
 		return []
@@ -6001,6 +6156,12 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 		&"last_map":
 			_gen1_last_map = int(step["map"])
 			return true
+		&"safari_balls":
+			state.set_safari_balls(int(step["count"]))
+			return true
+		&"safari_steps":
+			state.set_safari_steps(int(step["steps"]))
+			return true
 		&"starter":
 			state.set_gen1_starter(String(step["who"]), int(step["value"]))
 			return true
@@ -6129,10 +6290,12 @@ func _gen1_warp_to(map_number: int, warp: int) -> Dictionary:
 	var target_map: Gen2WorldMap = data.world_map(0, map_number) if data != null else null
 	if target_map == null:
 		return {}
+	## `LoadDestinationWarpPosition` reaches the row with `add a / add a`, so
+	## `wDestinationWarpID` counts from zero as a `warp_event`'s `\4 - 1` does.
 	var warps: Array = target_map.events.get("warps", [])
-	if warp < 1 or warp > warps.size():
+	if warp < 0 or warp >= warps.size():
 		return {}
-	var row: Dictionary = warps[warp - 1]
+	var row: Dictionary = warps[warp]
 	var from_map: Vector2i = map_id()
 	## The state's own steps behind the warp still stand.
 	var rest: Array = _gen1_steps
@@ -7096,10 +7259,13 @@ func _queue_map_callbacks(callback_type: int) -> void:
 		return
 	if _gen1:
 		_run_gen1_map_callback()
-		## `RunMapScript` runs on the first frame behind `EnterMap`, so what the
-		## map's own script writes is standing before the player may move. What
-		## it would show waits for the step dispatch, which resolves it again.
-		_spend_gen1_nodes(current_map.scripts.get("entry", []) as Array)
+		## `RunMapScript` runs once on the first frame behind `EnterMap`, so what
+		## it writes stands before the player may move and what it shows waits for
+		## the step dispatch. The rest of that one run is kept rather than resolved
+		## again: `CheckAndResetEvent` answers differently the second time.
+		_gen1_entry_steps = _spend_gen1_nodes(
+			current_map.scripts.get("entry", []) as Array
+		)
 		return
 	var bank: int = int(current_map.scripts.get("bank", 0))
 	for callback: Dictionary in current_map.scripts.get("callbacks", []):
@@ -7127,13 +7293,14 @@ func _run_gen1_map_callback() -> void:
 
 ## Spends every step of [param nodes] that takes no turn of its own, stopping
 ## at the first that would show something.
-func _spend_gen1_nodes(nodes: Array) -> void:
+func _spend_gen1_nodes(nodes: Array) -> Array:
 	var steps: Array = []
 	if nodes.is_empty() or not _gen1_resolve_script(nodes, steps, _gen1_run({})):
-		return
+		return []
 	var events: Array = []
 	while not steps.is_empty() and _gen1_written(steps[0], events):
 		steps.pop_front()
+	return steps
 
 
 ## `<Map>_SetCardKeyDoorYScript` and `<Map>_UnlockedDoorEventScript`, which run
@@ -9405,6 +9572,7 @@ func _apply_map(
 	])
 	_record_escape_points(target_map, from_warp)
 	_gen1_steps = []
+	_gen1_entry_steps = []
 	_gen1_money_window = false
 	## `WarpFound2`'s `CheckIfInOutsideMap`: leaving a town or a route records it,
 	## and that is the map a `LAST_MAP` warp comes back out to.
@@ -10047,6 +10215,7 @@ func escape_rope_request() -> Dictionary:
 	var wall_event: int = unown_wall_event(EVENT_WALL_OPENED_IN_KABUTO_CHAMBER)
 	if wall_event >= 0:
 		state.set_event_flag(wall_event, true)
+	_gen1_leave_safari_zone()
 	var staged: Dictionary = _stage_escape(&"escape_rope_requested", 0, -1)
 	staged["wall_event"] = wall_event
 	_pending_escape["wall_event"] = wall_event

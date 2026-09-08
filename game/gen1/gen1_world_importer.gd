@@ -730,7 +730,9 @@ static func _read_map(
 	var states: Dictionary = _read_map_states(
 		rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts
 	)
-	if _extend_texts(rom, layout, bank, rom.u16le(header + 5), texts, events, callback, states):
+	## A row the table grew by may reach one higher still, which is how the
+	## Safari Zone gate's own six are read rather than its first four.
+	while _extend_texts(rom, layout, bank, rom.u16le(header + 5), texts, events, callback, states):
 		states = _read_map_states(
 			rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts
 		)
@@ -1732,6 +1734,8 @@ const SCRIPT_TESTS_FILTERED: int = -29
 const SCRIPT_TESTS_MENU_CANCEL: int = -30
 const SCRIPT_TESTS_MENU_ROW: int = -31
 const SCRIPT_TESTS_MENU_ITEM: int = -32
+const SCRIPT_TESTS_SAFARI_ADMISSION: int = -33
+const SCRIPT_TESTS_ANY_MONEY: int = -34
 const SCRIPT_AIDE: int = -3
 ## What `push af` saves and `pop af` puts back, which is how
 ## `CheckEventAfterBranchReuseA` still reads the event byte a block write
@@ -1921,7 +1925,9 @@ static func _script_step_more(
 			state[pair] = int(state[pair]) + 1
 			return pc + 1
 		Gen1Layout.SCRIPT_LD_A_HLI:
-			return _script_read_table(ctx, pc, state)
+			var folded: int = _script_money_fold(ctx, pc, state)
+			return folded if folded != SCRIPT_NOT_FOLDED \
+				else _script_read_table(ctx, pc, state)
 		Gen1Layout.SCRIPT_LD_A_HL:
 			var next: int = _script_read_table(ctx, pc, state)
 			if next != SCRIPT_UNREAD:
@@ -1993,6 +1999,26 @@ static func _script_step_registers(
 			state.erase("b")
 			return pc + 1
 	return _script_flow(ctx, pc, at, state, out, depth)
+
+
+## `ld a, [hli] / or [hl] / inc hl / or [hl]` over `wPlayerMoney`: Z is raised
+## only by three zero bytes, so the `jr nz` behind it is a balance of one or more.
+const SCRIPT_NOT_FOLDED: int = -3
+const SCRIPT_MONEY_FOLD: Array[int] = [0xB6, Gen1Layout.SCRIPT_INC_HL, 0xB6]
+static func _script_money_fold(ctx: Dictionary, pc: int, state: Dictionary) -> int:
+	var layout: Dictionary = ctx["layout"]
+	if int(state.get("hl", -1)) != int(layout.get("player_money", -2)):
+		return SCRIPT_NOT_FOLDED
+	var rom: RomFile = ctx["rom"]
+	for step: int in SCRIPT_MONEY_FOLD.size():
+		if rom.u8(Gen1Layout.banked(int(ctx["bank"]), pc + 1 + step)) \
+			!= SCRIPT_MONEY_FOLD[step]:
+			return SCRIPT_NOT_FOLDED
+	_script_wrote_a(state)
+	state.erase("a")
+	state.erase("hl")
+	_script_tested(state, SCRIPT_TESTS_ANY_MONEY)
+	return pc + 1 + SCRIPT_MONEY_FOLD.size()
 
 
 static func _script_read_table(ctx: Dictionary, pc: int, state: Dictionary) -> int:
@@ -2340,8 +2366,12 @@ static func _script_stored(
 		return _script_map_script_mirror(state, out)
 	var byte: int = _map_script_byte(layout, address)
 	if byte >= 0:
+		## `wNextSafariZoneGateScript` is a union over `wSavedCoordIndex`.
 		if not state.has("a"):
-			return false
+			if int(state.get("source", -1)) != int(layout.get("saved_coord_index", -1)):
+				return false
+			out.append({"op": "set_map_script", "byte": byte, "from": "saved_coord_index"})
+			return true
 		out.append({"op": "set_map_script", "byte": byte, "value": int(state["a"])})
 		return true
 	if address == int(layout["do_not_wait"]):
@@ -2365,19 +2395,57 @@ static func _script_stored(
 			return false
 		state[String(SCRIPT_STORED_REGISTERS[name])] = int(state["a"])
 		return true
-	## The held buttons, the automatic box, `wJoyIgnore` and a redraw gate:
-	## nothing here reads any of the four.
 	if address == int(layout["facing_direction"]) and state.has("a") \
 		and Gen1Layout.FACING_STEPS.has(int(state["a"])):
 		out.append({"op": "player_facing", "facing": int(state["a"])})
 		return true
+	var safari: int = _script_stored_safari(layout, address, state, out)
+	if safari != STORE_NOT_NAMED:
+		return safari == STORE_OK
+	if _script_stored_silently(layout, address):
+		return true
+	return _script_stored_more(ctx, layout, address, state, out)
+
+
+## The held buttons, the automatic box, `wJoyIgnore`, a redraw gate and the list
+## `LoadItemList` already left behind: nothing here reads any of them.
+static func _script_stored_silently(layout: Dictionary, address: int) -> bool:
 	for silent: String in Gen1Layout.SCRIPT_SILENT_STORES:
 		if address == int(layout.get(silent, -1)):
 			return true
 	for word: String in Gen1Layout.SCRIPT_SILENT_WORDS:
 		if address - int(layout.get(word, -3)) in [0, 1]:
 			return true
-	return _script_stored_more(ctx, layout, address, state, out)
+	return false
+
+
+## `.success` writes 30 balls and 502 steps; the gate's `xor a` is the way out.
+static func _script_stored_safari(
+	layout: Dictionary, address: int, state: Dictionary, out: Array
+) -> int:
+	var steps: int = int(layout.get("safari_steps", -1))
+	var admitted: bool = state.has("safari_admission") and not state.has("a")
+	if address == int(layout.get("num_safari_balls", -1)):
+		if admitted:
+			out.append({"op": "safari_balls", "from": String(state["safari_admission"])})
+			return STORE_OK
+		if not state.has("a"):
+			return STORE_REFUSED
+		out.append({"op": "safari_balls", "count": int(state["a"])})
+		return STORE_OK
+	if address == steps:
+		if not state.has("a"):
+			return STORE_REFUSED
+		state["safari_steps_high"] = int(state["a"])
+		return STORE_OK
+	if address != steps + 1:
+		return STORE_NOT_NAMED
+	if not state.has("a") or not state.has("safari_steps_high"):
+		return STORE_REFUSED
+	out.append({"op": "safari_steps",
+		"steps": (int(state["safari_steps_high"]) << 8) | int(state["a"])})
+	state.erase("safari_steps_high")
+	return STORE_OK
 
 
 static func _script_stored_flag_byte(
@@ -3341,7 +3409,10 @@ static func _script_sprite_called(
 		"decode_arrow_movement":
 			return _script_arrow_movement(ctx, state, next)
 	var bank: int = int(ctx["bank"])
-	match _script_banked_routine(ctx["layout"], bank, target):
+	var banked: String = _script_banked_routine(ctx["layout"], bank, target)
+	if banked in ["safari_low_cost", "safari_nag"]:
+		return _script_safari_admission(state, banked, next)
+	match banked:
 		"coin_box":
 			out.append({"op": "coin_box"})
 			return next
@@ -3808,6 +3879,17 @@ static func _script_bcd_value(
 		var byte: int = int(bytes[first + index])
 		value = value * 100 + (byte >> 4) * 10 + (byte & 0xF)
 	return value
+
+
+## Yellow's two admission routines, each printing its lines, deciding a ball
+## count and answering carry when it hands nothing over.
+static func _script_safari_admission(state: Dictionary, routine: String, next: int) -> int:
+	## Both return `ld hl, 502` with the count in `a`, so only the count is here.
+	state.erase("a")
+	state["hl"] = Gen1Layout.SAFARI_STEPS
+	state["safari_admission"] = routine.trim_prefix("safari_")
+	_script_tested(state, SCRIPT_TESTS_SAFARI_ADMISSION, true)
+	return next
 
 
 ## `HasEnoughMoney` compares `hMoney` with the player's own three bytes through
@@ -4576,6 +4658,13 @@ static func _script_node(
 			return {"op": "has_coins", "coins": int(state["coins"]),
 				"test": "at_least" if carry else "exactly",
 				"then": fell, "else": taken}
+		SCRIPT_TESTS_SAFARI_ADMISSION:
+			## Carry is the refusal, so the `jr c` takes the walk back down.
+			return {"op": "safari_admission", "kind": String(state["safari_admission"]),
+				"then": fell, "else": taken}
+		SCRIPT_TESTS_ANY_MONEY:
+			## Z is an empty purse, so the `jr nz` takes the side with money in it.
+			return {"op": "has_money", "price": 1, "then": taken, "else": fell}
 	return _script_node_compared(tests, taken, fell, state, carry)
 
 
