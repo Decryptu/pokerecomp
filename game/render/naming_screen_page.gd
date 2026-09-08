@@ -1,14 +1,11 @@
 class_name Gen2NamingScreenPage
 extends RefCounted
 
-## `engine/menus/naming_screen.asm`'s screen on the hardware tile grid. The naming
-## screen is a tilemap screen rather than a text one, the way the trainer card is,
-## so the page keeps the cartridge's own VRAM window: $60 the border, $eb and $f2
-## the two entry markers, and the font from $80 up. The layout is the same shape
-## on both keyboards and differs only in where the two `ClearBox` calls land and
-## how many rows are printed. `_ComposeMailMessage.InitCharset` is the third
-## layout: the same tiles and cursor over a wider keyboard, a two-line entry and
-## an icon instead of a prompt. Node-free.
+## `engine/menus/naming_screen.asm`'s screen on the hardware tile grid, which is
+## a tilemap screen rather than a text one: $60 the border, $eb and $f2 the two
+## entry markers, and the font from $80 up. The two keyboards differ only in
+## where the `ClearBox` calls land; `_ComposeMailMessage.InitCharset` is a third
+## layout, a wider keyboard with a two-line entry and an icon for the prompt.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
@@ -60,9 +57,8 @@ const CELL: int = 2
 ## `.OAMData_TextEntryCursor`'s four sprites and `.OAMData_TextEntryCursorBig`'s
 ## ten. `dbsprite` is `db (y_tile * 8) + y_px, (x_tile * 8) + x_px`
 ## (`macros/gfx.asm`), so the four sit at pixel (-1,-1), (0,-1), (-1,0) and
-## (0,0), each 8x8 and each drawing only its own top row and left column: a 9x9
-## outline hugging one letter tile, not a 2x2 block of them. The big one runs x
-## 0..32 in eights over the same two rows, so it is 40x9 and its left edge
+## (0,0), each drawing only its top row and left column: a 9x9 outline hugging
+## one letter tile. The big one is 40x9 over the same two rows and its left edge
 ## carries no -1. The z of each entry is its flip pair: bit 0 x, bit 1 y.
 const CURSOR_SPRITES: Array[Vector3i] = [
 	Vector3i(-1, -1, 0), Vector3i(0, -1, 1),
@@ -83,6 +79,12 @@ const MAIL_BORDER_ROWS: int = 6
 const CLEARED_MAIL: Array = [[1, 1, 4, 18]]
 
 const GEN1_PROMPT_AT: Vector2i = Vector2i(0, 1)
+## `PrintNamingText`'s NAME_MON header, whose `の` is a blank tile in English.
+const GEN1_MON_NAME_AT: Vector2i = Vector2i(4, 1)
+const GEN1_MON_LABEL_AT: Vector2i = Vector2i(1, 3)
+const GEN1_MON_LABEL: String = "NICKNAME?"
+## `WriteMonPartySpriteOAM`'s 2x2 at OAM ($10, $10).
+const GEN1_MON_ICON_AT: Vector2i = Vector2i(1, 0)
 const GEN1_ENTRY_AT: Vector2i = Vector2i(10, 2)
 const GEN1_UNDERSCORE_AT: Vector2i = Vector2i(10, 3)
 const GEN1_BORDER_AT: Vector2i = Vector2i(0, 4)
@@ -105,6 +107,7 @@ var _tiles: Dictionary = {}
 var _cursor_tiles: Dictionary = {}
 ## `_ComposeMailMessage.MailIcon`, drawn only by the mail screen.
 var _icon_tiles: Dictionary = {}
+var gen1_icon: int = 0
 
 
 static func from_data(data: GameData) -> Gen2NamingScreenPage:
@@ -154,7 +157,7 @@ func draw(
 	icon: PackedByteArray = PackedByteArray(), gender: int = 0
 ) -> PackedByteArray:
 	if _gen1:
-		return _draw_gen1(screen, prompt)
+		return _draw_gen1(screen, prompt, icon)
 	var map: PackedInt32Array = PackedInt32Array()
 	map.resize(COLUMNS * ROWS)
 	map.fill(BORDER_TILE)
@@ -181,11 +184,17 @@ func draw(
 	return indices
 
 
-func _draw_gen1(screen: Gen2NamingScreen, prompt: String) -> PackedByteArray:
+func _draw_gen1(
+	screen: Gen2NamingScreen, prompt: String, icon: PackedByteArray = PackedByteArray()
+) -> PackedByteArray:
 	var map: PackedInt32Array = PackedInt32Array()
 	map.resize(COLUMNS * ROWS)
 	map.fill(BLANK_TILE)
-	_string(map, prompt, GEN1_PROMPT_AT, 1)
+	if screen.is_gen1_mon:
+		_string(map, prompt, GEN1_MON_NAME_AT, 1)
+		_string(map, GEN1_MON_LABEL, GEN1_MON_LABEL_AT, 1)
+	else:
+		_string(map, prompt, GEN1_PROMPT_AT, 1)
 	for index: int in screen.length:
 		_put(map, GEN1_ENTRY_AT + Vector2i(index, 0), screen.buffer[index])
 	for index: int in screen.max_length:
@@ -214,7 +223,36 @@ func _draw_gen1(screen: Gen2NamingScreen, prompt: String) -> PackedByteArray:
 			0, indices, COLUMNS * TILE, GEN1_BORDER_AT.x * TILE,
 			GEN1_BORDER_AT.y * TILE, GEN1_BORDER_SIZE.x, GEN1_BORDER_SIZE.y
 		)
+	if screen.is_gen1_mon:
+		_gen1_mon_icon(indices, icon)
 	return indices
+
+
+## `farcall WriteMonPartySpriteOAMBySpecies`, at the first animation frame.
+func _gen1_mon_icon(indices: PackedByteArray, icon: PackedByteArray) -> void:
+	for quadrant: int in MAIL_ICON_TILES:
+		var read: Array = Gen1Layout.mon_icon_quadrant(gen1_icon, quadrant)
+		var cell: PackedByteArray = _sheet_cell(icon, int(read[0]))
+		if cell.is_empty():
+			return
+		_blit(
+			indices, {0: cell}, 0, GEN1_MON_ICON_AT, bool(read[1]), false, true,
+			Vector2i((quadrant & 1) * TILE, (quadrant >> 1) * TILE)
+		)
+
+
+## One tile of a side-by-side strip, the shape `Gen2PicImage.blit_tile` reads.
+func _sheet_cell(strip: PackedByteArray, tile: int) -> PackedByteArray:
+	@warning_ignore("integer_division")
+	var width: int = strip.size() / TILE
+	if width <= 0 or (tile + 1) * TILE > width:
+		return PackedByteArray()
+	var cell := PackedByteArray()
+	cell.resize(TILE * TILE)
+	for y: int in TILE:
+		for x: int in TILE:
+			cell[y * TILE + x] = strip[y * width + tile * TILE + x]
+	return cell
 
 
 func _gen1_cursor(screen: Gen2NamingScreen) -> Vector2i:
@@ -246,13 +284,8 @@ func _mail_icon(indices: PackedByteArray) -> void:
 func _prompt_icon(indices: PackedByteArray, icon: PackedByteArray) -> void:
 	if icon.size() < MAIL_ICON_TILES * TILE * TILE:
 		return
-	var width: int = icon.size() / TILE
 	for quadrant: int in MAIL_ICON_TILES:
-		var cell := PackedByteArray()
-		cell.resize(TILE * TILE)
-		for y: int in TILE:
-			for x: int in TILE:
-				cell[y * TILE + x] = icon[y * width + quadrant * TILE + x]
+		var cell: PackedByteArray = _sheet_cell(icon, quadrant)
 		_blit(
 			indices, {0: cell}, 0, Vector2i.ZERO, false, false, true,
 			PROMPT_ICON_AT + Vector2i((quadrant & 1) * TILE, (quadrant >> 1) * TILE)

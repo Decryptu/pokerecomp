@@ -2,12 +2,9 @@ class_name Gen2NicknamePromptScreen
 extends Control
 
 ## `GiveANickname_YesNo`, `InitNickname` and the `WasSentToBillsPCText` behind
-## them, for a Pokemon that was received rather than hatched: `GivePoke`'s
-## `.wildmon` branch and every `givepoke` that names no OT. Text only, because the
-## routine draws nothing else: it stands over whatever screen the caller left up.
-## [Gen2EggHatchScreen] keeps its own copy of the same pair rather than opening
-## this one, since its question is `_BreedAskNicknameText` and its box stands over
-## its own animation backdrop.
+## them, for a Pokemon received rather than hatched. Text only, because the
+## routine draws nothing else. [Gen2EggHatchScreen] keeps its own copy: its
+## question is `_BreedAskNicknameText` over its own animation backdrop.
 
 ## The nickname the player settled on, emitted once, before [signal closed].
 signal named(nickname: String)

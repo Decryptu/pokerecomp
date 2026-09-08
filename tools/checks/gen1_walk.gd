@@ -171,6 +171,15 @@ const CABLE_CLUB_ROWS: int = 12
 
 ## `Daycare_Object`'s one object, faced from the cell beside him, and the party
 ## the row's `wPartyCount` tests are answered with.
+## `NAME_RATERS_HOUSE` and its one object, at `object_event 5, 3` facing LEFT.
+const NAME_RATER_MAP: int = 0xE5
+const NAME_RATER_CELL := Vector2i(6, 3)
+const NAME_RATER_TEXT: int = 1
+const NAME_RATER_TRAINER: String = "RED"
+const NAME_RATER_ID: int = 22222
+const NAME_RATER_NICKNAME: String = "BOLT"
+const NAME_RATER_SPECIES_NAME: String = "SPARKY"
+
 const DAYCARE: int = 0x48
 const DAYCARE_GENTLEMAN := Vector2i(3, 3)
 const DAYCARE_PARTY: int = 2
@@ -470,6 +479,7 @@ func _one_game() -> void:
 	_check_the_fossil_lab()
 	_check_the_badge_house()
 	_check_the_day_care()
+	_check_the_name_rater()
 	_check_the_town_map_poster()
 	_check_flying()
 	_check_a_dungeon_fall()
@@ -1744,6 +1754,151 @@ func _trade_filled(text: String) -> String:
 ## `DaycareGentlemanText` walked both ways: the offer, the party list and
 ## `MoveMon PARTY_TO_DAYCARE`, then the growth, `HasEnoughMoney` and the way
 ## back out. `IncrementDayCareMonExp` is what makes the second half possible.
+## `NameRatersHouseNameRaterText` end to end, and the OT test both ways.
+func _check_the_name_rater() -> void:
+	var boxes: Dictionary = _name_rater_boxes()
+	if boxes.is_empty():
+		return
+	_check_the_name_rater_refuses(boxes)
+	var world: Gen2WorldAPI = _name_rater_world()
+	if world == null:
+		return
+	world.interact()
+	_r.check(
+		_name_rater_asked(world) == _name_rater_text(boxes, "hello"),
+		"the rater opened on something else."
+	)
+	_r.check(
+		_event_text(world.choose_script_input(0)) == _name_rater_text(boxes, "which"),
+		"YES asked for no member."
+	)
+	world.run_event_queue(true)
+	_r.check(
+		StringName(world.pending_runtime_request().get("kind", &""))
+			== &"party_selection_requested",
+		"the question opened no party list."
+	)
+	world.complete_runtime_request(_name_rater_row(true))
+	_r.check(
+		_name_rater_asked(world)
+			== _name_rater_text(boxes, "decent", NAME_RATER_SPECIES_NAME),
+		"a member of the player's own was not offered a rename."
+	)
+	_r.check(
+		_event_text(world.choose_script_input(0)) == _name_rater_text(boxes, "what"),
+		"YES did not ask for a name."
+	)
+	world.run_event_queue(true)
+	_r.check(
+		StringName(world.pending_runtime_request().get("kind", &""))
+			== &"gen1_nickname_requested",
+		"the question opened no keyboard."
+	)
+	_r.check(
+		_event_text(world.complete_runtime_request({
+			"ok": true, "name": NAME_RATER_NICKNAME,
+		})) == _name_rater_text(boxes, "renamed", NAME_RATER_NICKNAME),
+		"the entry was not read back."
+	)
+	_r.note("gen1 walk the NAME RATER: a rename, a traded member and three refusals")
+
+
+func _check_the_name_rater_refuses(boxes: Dictionary) -> void:
+	var come_again: String = _name_rater_text(boxes, "come_again")
+	var world: Gen2WorldAPI = _name_rater_world()
+	if world == null:
+		return
+	world.interact()
+	_r.check(
+		_event_text(world.choose_script_input(1)) == come_again,
+		"NO said something else."
+	)
+	for row: Dictionary in [{"ok": true, "party_index": -1}, _name_rater_row(false)]:
+		var refused: Gen2WorldAPI = _name_rater_world()
+		if refused == null:
+			return
+		refused.interact()
+		refused.choose_script_input(0)
+		refused.run_event_queue(true)
+		var said: String = _event_text(refused.complete_runtime_request(row))
+		var wanted: String = come_again if int(row.get("party_index", -1)) < 0 \
+			else _name_rater_text(boxes, "impeccable", NAME_RATER_SPECIES_NAME)
+		_r.check(said == wanted, "the list was answered with %s." % said)
+	var blank: Gen2WorldAPI = _name_rater_world()
+	if blank == null:
+		return
+	blank.interact()
+	blank.choose_script_input(0)
+	blank.run_event_queue(true)
+	blank.complete_runtime_request(_name_rater_row(true))
+	blank.choose_script_input(0)
+	blank.run_event_queue(true)
+	_r.check(
+		_event_text(blank.complete_runtime_request({"ok": true, "name": ""})) == come_again,
+		"an empty entry was not refused."
+	)
+
+
+func _name_rater_row(mine: bool) -> Dictionary:
+	return {
+		"ok": true, "party_index": 0, "nickname": NAME_RATER_SPECIES_NAME,
+		"ot_id": NAME_RATER_ID if mine else NAME_RATER_ID + 1,
+		"original_trainer": NAME_RATER_TRAINER,
+	}
+
+
+## What the box over a YES/NO says: the pending input's text, not the step's.
+func _name_rater_asked(world: Gen2WorldAPI) -> String:
+	return String(world.pending_script_input().get("text", ""))
+
+
+func _name_rater_world() -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, NAME_RATER_MAP, NAME_RATER_CELL)
+	if world == null:
+		return null
+	world.player_facing = Gen2WorldSprite.FACING_LEFT
+	world.set_player_name(NAME_RATER_TRAINER)
+	world.set_player_id(NAME_RATER_ID)
+	return world
+
+
+## The row's own boxes, by where each stands in the tree: the shape is pinned too.
+func _name_rater_boxes() -> Dictionary:
+	var map: Gen2WorldMap = _r.data.world_map(0, NAME_RATER_MAP)
+	var nodes: Variant = map.text_at(NAME_RATER_TEXT).get("script", []) if map != null else []
+	if not nodes is Array or (nodes as Array).is_empty():
+		_r.fail("the NAME RATER's row decoded to nothing.")
+		return {}
+	var rows: Array = nodes as Array
+	var offer: Dictionary = rows[-1]
+	var listed: Dictionary = (offer.get("yes", []) as Array)[-1]
+	var ot: Dictionary = (listed.get("else", []) as Array)[-1]
+	var nicer: Dictionary = (ot.get("else", []) as Array)[-1]
+	var keyboard: Dictionary = (nicer.get("yes", []) as Array)[-1]
+	return {
+		"hello": (rows[0] as Dictionary).get("text", ""),
+		"come_again": ((offer.get("no", []) as Array)[0] as Dictionary).get("text", ""),
+		"which": ((offer.get("yes", []) as Array)[0] as Dictionary).get("text", ""),
+		"impeccable": ((ot.get("then", []) as Array)[0] as Dictionary).get("text", ""),
+		"decent": ((ot.get("else", []) as Array)[0] as Dictionary).get("text", ""),
+		"what": ((nicer.get("yes", []) as Array)[0] as Dictionary).get("text", ""),
+		"renamed": ((keyboard.get("else", []) as Array)[0] as Dictionary).get("text", ""),
+	}
+
+
+func _name_rater_text(boxes: Dictionary, name: String, ram: String = "") -> String:
+	var text: String = Gen2TextStream.fill_names(
+		String(boxes.get(name, "")), {"player": NAME_RATER_TRAINER}
+	)
+	var layout: Dictionary = Gen1Layout.for_id(_r.game_id)
+	for buffer: String in ["name_buffer", "entry_buffer"]:
+		var marker: String = "%s%04X>" % [
+			Gen2TextStream.RAM_MARKER, int(layout[buffer])
+		]
+		text = Gen2TextStream.fill_all_markers(text, marker, ram)
+	return text
+
+
 func _check_the_day_care() -> void:
 	_check_the_day_care_refuses()
 	var world: Gen2WorldAPI = _day_care_world(0)

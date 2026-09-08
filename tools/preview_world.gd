@@ -69,7 +69,7 @@ const KIND_HELP: Dictionary = {
 	&"yes_no": "script, presses: Script_yesorno's box over the map's script",
 	&"npc_trade": "cell below the trader: NPCTrade's own TRADE_DIALOG_INTRO with the YesNoBox over it",
 	&"battle_tower": "A presses, DOWN presses: BattleTower1FReceptionistScript, talked to from the cell below her",
-	&"name_rater": "presses: special NameRater. 0 is the introduction, 2 the last page with YES/NO, 4 the party list",
+	&"name_rater": "presses: special NameRater. 0 is the introduction, 2 the last page with YES/NO, 4 the party list. On a Generation 1 cartridge, NameRatersHouseNameRaterText faced left from 6,3 on NAME_RATERS_HOUSE (`red 0 229 ... name_rater@6,3`)",
 	&"move_deleter": "presses: special MoveDeletion, the same three stages",
 	&"gift_nickname": "presses, species: GiveANickname_YesNo. 1 the question, 2 the WasSentToBillsPCText behind NO; add 1000 for the box branch",
 	&"unown_printer": "slot, page: _UnownPrinter's browser. Slot 26 is the vacant one; page 1 is what A sends to a printer that is not there",
@@ -211,6 +211,7 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"elevator": BOX_REVEAL_FRAMES,
 	&"coins": BOX_REVEAL_FRAMES, &"deal": BOX_REVEAL_FRAMES,
 	&"ticket": BOX_REVEAL_FRAMES, &"day_care": BOX_REVEAL_FRAMES,
+	&"name_rater": BOX_REVEAL_FRAMES,
 	&"poke_flute": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
@@ -818,6 +819,10 @@ func _stage_day_care() -> void:
 ## Presses are spent only once the box owes no frames, since nothing shortens a
 ## printing text.
 func _stage_party_routine() -> void:
+	if _kind == &"name_rater" and _screen._data != null \
+		and _screen._data.generation == RomRegistry.GEN1:
+		_stage_gen1_name_rater()
+		return
 	_screen.call(SCREEN_DRIVER % _kind)
 	var host_property: String = "_%s_host" % _kind
 	_settle_mon_special(host_property)
@@ -1283,6 +1288,17 @@ func _stage_counter(purse: Dictionary, facing: int = PokeButton.UP, rows: int = 
 		for _frame: int in BOX_REVEAL_FRAMES:
 			_screen.advance_frame()
 		_screen.press_button(PokeButton.A)
+
+
+## `NameRatersHouseNameRaterText`, faced left from the cell beside him.
+func _stage_gen1_name_rater() -> void:
+	var save: Gen2SaveData = _stage_party()
+	## A development party carries no OT, which every real gift stamps.
+	if save != null and not save.party.is_empty():
+		var mon: Gen2SaveMon = save.party[0] as Gen2SaveMon
+		mon.original_trainer = save.player_name
+		mon.ot_id = save.player_id
+	_stage_counter({}, PokeButton.LEFT, 0)
 
 
 ## `DaycareGentlemanText`, whose second number is `wDayCareInUse`: a seeded slot
