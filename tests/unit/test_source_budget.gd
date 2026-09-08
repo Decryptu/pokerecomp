@@ -21,7 +21,16 @@ const MAX_COMMENT_BLOCK: int = 8
 ## the region map, 150 the battle animation engine, 140 the transition, 131 the
 ## field moves, 130 the Pokedex, 108 the three PCs, 103 the movement a map
 ## script runs, 97 the bicycle, 95 the trainer card, 74 those scripts.
-const MAX_COMMENT_LINES: int = 41597
+const MAX_COMMENT_LINES: int = 41596
+
+## What no comment block ever ends on. A pass that meets the ceiling above trims
+## the second line of a two-line block and leaves the first mid-sentence, which
+## is worse than no comment at all: three of those shipped in one commit.
+const DANGLING_WORDS: Array[String] = [
+	"so", "and", "the", "which", "that", "of", "to", "with", "for", "but", "since",
+	"where", "when", "while", "than", "from", "into", "onto", "because", "their",
+	"its", "this", "these", "those",
+]
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than
@@ -59,6 +68,25 @@ func test_no_comment_block_is_longer_than_the_ceiling() -> void:
 				over.append("%s:%d is %d lines" % [path, line_number - run, run])
 			run = 0
 	_report("comment blocks over %d lines" % MAX_COMMENT_BLOCK, over)
+
+
+func test_no_comment_block_stops_mid_sentence() -> void:
+	var over: Array[String] = []
+	for path: String in _scripts():
+		var lines: PackedStringArray = _lines(path)
+		for index: int in lines.size():
+			var line: String = lines[index].strip_edges()
+			if not line.begins_with("#"):
+				continue
+			if index + 1 < lines.size() and lines[index + 1].strip_edges().begins_with("#"):
+				continue
+			var body: String = line.lstrip("#").strip_edges()
+			var words: PackedStringArray = body.split(" ", false)
+			if words.is_empty():
+				continue
+			if body.ends_with(",") or DANGLING_WORDS.has(words[words.size() - 1].to_lower()):
+				over.append("%s:%d ends on \"%s\"" % [path, index + 1, body])
+	_report("comment blocks that stop mid-sentence", over)
 
 
 func test_the_comment_total_is_under_the_recorded_ceiling() -> void:

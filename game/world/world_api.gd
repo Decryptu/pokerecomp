@@ -4503,7 +4503,7 @@ func _gen1_node_set_starter(node: Dictionary, steps: Array, _run: Dictionary) ->
 
 func _gen1_node_name_species(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
 	var species: int = int(node.get("species", 0))
-	if String(node.get("from", "")) == "player" + "_starter" and state != null and data != null:
+	if String(node.get("from", "")) == "player_starter" and state != null and data != null:
 		species = data.gen1_dex_of_index(state.gen1_starter("player"))
 	run["named"] = String(data.species(species).get("name", "")) \
 		if data != null and species > 0 else ""
@@ -4648,7 +4648,7 @@ func _gen1_node_object_path(node: Dictionary, steps: Array, _run: Dictionary) ->
 
 func _gen1_node_trainer_battle(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
 	var number: int = int(node.get("number", 1))
-	if String(node.get("number_from", "")) == "rival" + "_starter" and state != null:
+	if String(node.get("number_from", "")) == "rival_starter" and state != null:
 		number += state.gen1_starter("rival")
 	steps.append(_gen1_trainer_request(int(node["class"]), number, node.get("end_texts", {}), -1))
 	return true

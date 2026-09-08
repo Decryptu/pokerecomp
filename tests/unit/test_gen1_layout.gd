@@ -31,18 +31,19 @@ func test_a_gen2_game_has_none() -> void:
 	assert_true(Gen1Layout.for_id(&"emerald").is_empty())
 
 
-func test_red_and_blue_share_every_table_but_bank_1d() -> void:
+func test_red_and_blue_share_every_table_but_the_shifted_ones() -> void:
 	# The two are one source built twice, so every table sits at the same offset
-	# in both. Bank $1D is the exception: its 668 symbols are the map scripts,
-	# and everything in it is one byte later on Blue.
+	# in both unless `BLUE_SHIFT` names it. A shift for a key Red does not carry
+	# reads as a missing offset and hands Blue a table at zero.
 	var red: Dictionary = Gen1Layout.for_id(RomRegistry.RED)
 	var blue: Dictionary = Gen1Layout.for_id(RomRegistry.BLUE)
 	assert_eq(red.size(), blue.size())
+	for key: String in Gen1Layout.BLUE_SHIFT:
+		assert_true(red.has(key), "%s is shifted but Red has no offset for it" % key)
+		assert_between(int(Gen1Layout.BLUE_SHIFT[key]), 1, 4, "%s shift" % key)
 	for key: String in red:
-		if Gen1Layout.BLUE_ONLY.has(key):
-			assert_eq(int(blue[key]), int(red[key]) + 1, "%s moved by more than a byte" % key)
-			continue
-		assert_eq(blue[key], red[key], key)
+		var shift: int = int(Gen1Layout.BLUE_SHIFT.get(key, 0))
+		assert_eq(int(blue[key]), int(red[key]) + shift, key)
 
 
 func test_every_layout_is_complete_and_inside_the_cartridge() -> void:

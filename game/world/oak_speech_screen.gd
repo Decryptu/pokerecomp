@@ -214,7 +214,7 @@ func advance() -> void:
 		_naming_role = role
 		_open_name_menu()
 		return
-	# `RotateThreePalettesRight` then `ClearTilemap` after the beats that load a
+	# `RotateThreePalettesRight` then `ClearTilemap`, after a beat that loads a new picture.
 	if bool(_beats[_index].get("clears_after", false)):
 		_push_fade_out()
 		_queue(_enter_next_beat)
@@ -679,8 +679,7 @@ func _place_player_sprite() -> void:
 	)
 	if sprite == null:
 		return
-	# The routine names PAL_OW_RED and PAL_OW_BLUE where `InitPlayerObject` names
-	# PAL_NPC_RED and PAL_NPC_BLUE; both pairs index the same two rows, since the
+	# PAL_OW_RED and PAL_NPC_RED index one row: the palette lookup takes the low three bits.
 	var colors: PackedColorArray = _text_palette if _gen1 \
 		else _data.overworld_sprite_palette(
 			Gen2WorldSprite.player_palette(female), Gen2WorldPalette.TIME_DAY

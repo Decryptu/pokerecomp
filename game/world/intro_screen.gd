@@ -198,7 +198,7 @@ func _on_splash_finished() -> void:
 	_start_profile_setup()
 
 
-## `PlayerProfileSetup`. On Gold and Silver it has no gender screen to reach, so
+## `PlayerProfileSetup`. Only Crystal reaches a gender screen; the rest keep GENDER_MALE.
 func _start_profile_setup() -> void:
 	if _data != null and _data.generation == RomRegistry.GEN1:
 		_start_speech()

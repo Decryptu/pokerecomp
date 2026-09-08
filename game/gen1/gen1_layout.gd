@@ -2371,21 +2371,28 @@ const YELLOW: Dictionary = {
 }
 
 
-## Bank $1D holds the 668 symbols that move between Red and Blue: everything in
-## it sits one byte later on Blue. `DefaultNamesRival` moves for a reason of its
-## own: the player table in front of it spells BLUE, GARY and JOHN where Red
-## spells RED, ASH and JACK, which is two bytes more.
-const BLUE_ONLY: Dictionary = {
-	"default_names_rival": 0x06AC0,
-	"vending_text": 0x74F9A,
-	"hidden_items": 0x76689,
-	"hidden_coins": 0x7679A,
-	"hidden_item_coords": 0x766B9,
-	"hidden_coin_coords": 0x76823,
-	"hof_pc_text": 0x76684,
+## What Blue moves, and by how many bytes. Bank $1D holds the 668 symbols that
+## shift: everything in it sits one byte later. `DefaultNamesRival` moves two,
+## because the player table in front of it spells BLUE, GARY and JOHN where Red
+## spells RED, ASH and JACK.
+const BLUE_SHIFT: Dictionary = {
+	"default_names_rival": 2,
+	"vending_text": 1,
+	"hidden_items": 1,
+	"hidden_coins": 1,
+	"hidden_item_coords": 1,
+	"hidden_coin_coords": 1,
+	"hof_pc_text": 1,
 }
 
-static var _blue: Dictionary = RED_BLUE.merged(BLUE_ONLY, true)
+static var _blue: Dictionary = _shifted_for_blue()
+
+
+static func _shifted_for_blue() -> Dictionary:
+	var layout: Dictionary = RED_BLUE.duplicate()
+	for key: String in BLUE_SHIFT:
+		layout[key] = int(RED_BLUE[key]) + int(BLUE_SHIFT[key])
+	return layout
 
 
 static func for_id(id: StringName) -> Dictionary:
