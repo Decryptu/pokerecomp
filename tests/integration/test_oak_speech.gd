@@ -110,9 +110,10 @@ func test_a_blank_entry_becomes_the_gendered_default() -> void:
 	assert_eq(Gen2OakSpeech.resolve_name("ASH", Gen2SaveData.GENDER_MALE), "ASH")
 
 
-func test_the_player_marker_is_replaced_by_the_name() -> void:
-	assert_eq(Gen2OakSpeech.with_player_name("<PLAYER>, hello", "ASH"), "ASH, hello")
-	assert_eq(Gen2OakSpeech.with_player_name("no marker", "ASH"), "no marker")
+func test_the_name_markers_are_replaced_by_the_names() -> void:
+	assert_eq(Gen2OakSpeech.with_names("<PLAYER>, hello", "ASH", ""), "ASH, hello")
+	assert_eq(Gen2OakSpeech.with_names("<RIVAL>!", "ASH", "GARY"), "GARY!")
+	assert_eq(Gen2OakSpeech.with_names("no marker", "ASH", ""), "no marker")
 
 
 func test_each_profile_uses_its_own_source_name_table() -> void:

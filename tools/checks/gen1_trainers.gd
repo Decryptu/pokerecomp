@@ -15,9 +15,9 @@ const CLASS_COUNT: int = 47
 ## `text_asm` rows, the ones reaching `TalkToTrainer`, and the objects naming
 ## one: a trainer class above `OPP_ID_OFFSET`, or a standing wild below it.
 const HEADER_CENSUS: Dictionary = {
-	&"red": {"text_asm": 626, "headers": 322, "trainers": 310, "wilds": 12},
-	&"blue": {"text_asm": 626, "headers": 322, "trainers": 310, "wilds": 12},
-	&"yellow": {"text_asm": 676, "headers": 317, "trainers": 305, "wilds": 12},
+	&"red": {"text_asm": 637, "headers": 322, "trainers": 310, "wilds": 12},
+	&"blue": {"text_asm": 637, "headers": 322, "trainers": 310, "wilds": 12},
+	&"yellow": {"text_asm": 686, "headers": 317, "trainers": 305, "wilds": 12},
 }
 
 ## `view_range << 4` is a pixel distance, so the stored range is a nibble.

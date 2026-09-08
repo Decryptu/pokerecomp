@@ -25,21 +25,21 @@ const DIGESTS: Dictionary = {
 		"back": "a8976278a8c8294f285a25a993a44f2f6012b127",
 		"trainers": "1bdca25cb1bf6de93811f597481f0bda00079cf6",
 		"player_back": "6c2830e479cf877b20bd10f6c94324bb5c3e425d",
-		"player_front": "80b4ea682aa90ca902af3310d93ec9f125d03704",
+		"player_front": "f559e48b2eb05e86dd59f5c6887979027411a446",
 	},
 	&"blue": {
 		"front": "672ba02e2d98a787fb619e11e77fba45a379a47b",
 		"back": "a8976278a8c8294f285a25a993a44f2f6012b127",
 		"trainers": "1bdca25cb1bf6de93811f597481f0bda00079cf6",
 		"player_back": "6c2830e479cf877b20bd10f6c94324bb5c3e425d",
-		"player_front": "80b4ea682aa90ca902af3310d93ec9f125d03704",
+		"player_front": "f559e48b2eb05e86dd59f5c6887979027411a446",
 	},
 	&"yellow": {
 		"front": "d6e50eed9888dbe7787b1a1952403eab5bd133b6",
 		"back": "a8976278a8c8294f285a25a993a44f2f6012b127",
 		"trainers": "6b0fe80efffb9a8223a9646b1df42cfa592fd0f4",
 		"player_back": "6c2830e479cf877b20bd10f6c94324bb5c3e425d",
-		"player_front": "ec4681e52cb329f5c0466ca02ac05ba3c38a6e3d",
+		"player_front": "070dcf72706fc8ab991158a8bd32beae0c7a0d36",
 	},
 }
 
@@ -106,7 +106,7 @@ func _one_game() -> void:
 	_atlas("back", SPECIES_COUNT, BACK_SIDE)
 	_atlas("trainers", TRAINER_COUNT, TRAINER_SIDE)
 	_atlas("player_back", Gen1Layout.PLAYER_BACKPICS.size(), BACK_SIDE)
-	_atlas("player_front", 1, TRAINER_SIDE)
+	_atlas("player_front", PLAYER_FRONTPICS, TRAINER_SIDE)
 	_species_pics()
 	_trainer_pics()
 	_player_pics()
@@ -195,6 +195,13 @@ func _player_pics() -> void:
 			_lit_columns(front),
 		]
 	)
+	var shrunk: Array[PackedByteArray] = [front.get("indices", PackedByteArray())]
+	for slot: int in Gen2OakSpeech.GEN1_SHRINK_SLOTS:
+		var cell: Dictionary = _cell("player_front", slot)
+		_r.check(_ink(cell), "ShrinkPic%d is blank." % slot)
+		shrunk.append(cell.get("indices", PackedByteArray()))
+	_r.check(shrunk[0] != shrunk[1] and shrunk[1] != shrunk[2],
+		"the shrink pics repeat the picture in front of them.")
 
 
 ## The import's own font check seen from the cache side, and addressed the way
@@ -349,6 +356,7 @@ func _digests() -> void:
 ## picture one column forward in VRAM and the card's own boxes then cover the
 ## outer column and the bottom row, so only these four are ever on screen.
 const GEN1_CARD_PIC_COLUMNS: Array[int] = [1, 2, 3, 4]
+const PLAYER_FRONTPICS: int = 3
 
 ## `DrawTrainerInfo`'s own cells, as (x, y) and the tile each has to hold: the
 ## two boxes' corners, the `●BADGES●` circles and the badge numbers.

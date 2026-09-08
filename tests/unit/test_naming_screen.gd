@@ -12,6 +12,10 @@ extends GutTest
 const TABLE_ROWS: Array[int] = [5, 6, 5, 6]
 const SPACE: int = 0x7F
 const NAME_ROWS: int = 5
+## Generation 1's own generated alphabet, on the letter runs `Gen1Text` decodes
+## as "A" and "a" so a stored name reads back as text.
+const GEN1_UPPER_A: int = 0x80
+const GEN1_LOWER_A: int = 0xA0
 const BOX_ROWS: int = 6
 
 var _directory: String = ""
@@ -430,3 +434,117 @@ func test_a_stored_mail_entry_keeps_its_break_and_terminates_the_rest() -> void:
 	assert_eq(stored[0], Gen2Layout.MAIL_INPUT_UPPER_A)
 	assert_eq(stored[1], Gen2NamingScreen.TERMINATOR)
 	assert_eq(int(stored[Gen2SaveMail.LINE_LENGTH]), Gen2SaveMail.LINE_BREAK)
+
+
+# --- Generation 1's own keyboard ----------------------------------------------
+
+## The alphabets are generated the way the Generation 2 tables above are: five
+## rows of nine printed one column apart, `<ED>` in the last letter cell, and a
+## label row that no cursor column reaches.
+func _gen1_cache() -> String:
+	var directory: String = RomCache.directory_for(&"testgen1name", "0123456789abcdef")
+	RomCache.clear(directory)
+	RomCache.prepare(directory)
+	var tables: Array = []
+	for table: int in 2:
+		var first: int = GEN1_UPPER_A if table == Gen1Layout.ALPHABET_UPPER else GEN1_LOWER_A
+		var rows: Array = []
+		for row: int in Gen1Layout.ALPHABET_ROWS:
+			var codes: Array[int] = []
+			for column: int in Gen1Layout.ALPHABET_COLUMNS:
+				codes.append(first + row * Gen1Layout.ALPHABET_COLUMNS + column)
+			rows.append(codes)
+		(rows[Gen1Layout.ALPHABET_ROWS - 1] as Array)[Gen1Layout.ALPHABET_COLUMNS - 1] = \
+			Gen1Layout.CHAR_ED
+		rows.append([GEN1_UPPER_A])
+		tables.append(rows)
+	RomCache.write_json(RomCache.name_input_chars_path(directory), tables)
+	RomCache.write_json(RomCache.manifest_path(directory), {
+		"format_version": RomCache.FORMAT_VERSION, "complete": true,
+		"game_id": "testgen1name", "generation": RomRegistry.GEN1,
+	})
+	return directory
+
+
+func _gen1() -> Gen2NamingScreen:
+	return Gen2NamingScreen.for_gen1_player(GameData.open_directory(_gen1_cache()))
+
+
+func _gen1_letter(upper: bool, row: int, column: int) -> int:
+	var first: int = GEN1_UPPER_A if upper else GEN1_LOWER_A
+	return first + row * Gen1Layout.ALPHABET_COLUMNS + column
+
+
+## `PrintAlphabet` prints nine cells a row with no blank between them, so the
+## cursor's own column is the cell rather than every second byte.
+func test_a_generation_one_cursor_reads_every_cell_of_its_row() -> void:
+	var screen: Gen2NamingScreen = _gen1()
+	assert_eq(screen.last_character(), _gen1_letter(true, 0, 0))
+	screen.column = 3
+	screen.row = 2
+	assert_eq(screen.last_character(), _gen1_letter(true, 2, 3))
+	screen.press_select()
+	assert_eq(screen.last_character(), _gen1_letter(false, 2, 3))
+
+
+## `.pressedA`'s two comparisons: `<ED>` at the end of the last letter row ends
+## the screen, and the case-switch row is the whole of the row below it.
+func test_the_generation_one_commands_are_a_letter_cell_and_a_row() -> void:
+	var screen: Gen2NamingScreen = _gen1()
+	assert_eq(screen.cursor_command(), Gen2NamingScreen.COMMAND_NONE)
+	screen.row = Gen2NamingScreen.GEN1_END_ROW
+	screen.column = Gen2NamingScreen.GEN1_LAST_COLUMN
+	assert_eq(screen.cursor_command(), Gen2NamingScreen.COMMAND_END)
+	assert_eq(screen.press_a(), Gen2NamingScreen.RESULT_END)
+	screen.row = Gen2NamingScreen.GEN1_COMMAND_ROW
+	screen.column = 0
+	assert_eq(screen.press_a(), Gen2NamingScreen.RESULT_CASE)
+	assert_false(screen.upper_case)
+
+
+## `.pressedUp` and `.pressedDown` force `wTopMenuItemX` back to its own column
+## whenever they land on the case switch or wrap off it, and keep it otherwise.
+func test_the_generation_one_case_row_takes_the_cursor_home() -> void:
+	var screen: Gen2NamingScreen = _gen1()
+	screen.row = Gen2NamingScreen.GEN1_END_ROW
+	screen.column = 5
+	screen.move(Vector2i.DOWN)
+	assert_eq(screen.row, Gen2NamingScreen.GEN1_COMMAND_ROW)
+	assert_eq(screen.column, 0, "the case switch has one column")
+	screen.move(Vector2i.RIGHT)
+	assert_eq(screen.column, 0, "left and right return on the case row")
+	screen.move(Vector2i.UP)
+	assert_eq(screen.row, Gen2NamingScreen.GEN1_END_ROW)
+	screen.move(Vector2i.UP)
+	assert_eq(screen.row, Gen2NamingScreen.GEN1_END_ROW - 1)
+
+
+## `PrintNicknameAndUnderscores`' own tail: the row that fills the last slot
+## forces the cursor onto `<ED>`, and `.checkNameLength` refuses anything after.
+func test_a_full_generation_one_name_puts_the_cursor_on_end() -> void:
+	var screen: Gen2NamingScreen = _gen1()
+	for _press: int in Gen2NamingScreen.GEN1_MAX_LENGTH:
+		screen.row = 0
+		screen.column = 0
+		assert_eq(screen.press_a(), Gen2NamingScreen.RESULT_LETTER)
+	assert_eq(screen.length, Gen2NamingScreen.GEN1_MAX_LENGTH)
+	assert_eq(screen.row, Gen2NamingScreen.GEN1_END_ROW)
+	assert_eq(screen.column, Gen2NamingScreen.GEN1_LAST_COLUMN)
+	assert_eq(screen.press_a(), Gen2NamingScreen.RESULT_END)
+
+
+## Generation 1's buffer is the string itself: `ld a, '@'` seeds it and
+## `.pressedB` writes the terminator back over the letter it took.
+func test_a_generation_one_entry_is_the_string_and_its_terminator() -> void:
+	var screen: Gen2NamingScreen = _gen1()
+	assert_eq(screen.buffer[0], Gen2NamingScreen.TERMINATOR)
+	screen.column = 1
+	screen.row = 0
+	screen.press_a()
+	assert_eq(screen.buffer[0], _gen1_letter(true, 0, 1))
+	assert_eq(screen.buffer[1], Gen2NamingScreen.TERMINATOR)
+	assert_eq(screen.stored_codes().size(), 1)
+	screen.press_b()
+	assert_eq(screen.length, 0)
+	assert_eq(screen.buffer[0], Gen2NamingScreen.TERMINATOR)
+	assert_eq(screen.stored_name(), "")

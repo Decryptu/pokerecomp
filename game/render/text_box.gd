@@ -212,7 +212,7 @@ func set_blink_cursor(blink: bool) -> void:
 ## finished, and a press cannot shorten it.
 func frames_left() -> int:
 	if _scroll_page >= 0:
-		var steps: int = SCROLL_STEPS - _scroll_rows
+		var steps: int = SCROLL_STEPS - _scroll_rows + 1
 		return int(ceil(float(steps) * float(SCROLL_STEP_FRAMES) - _scroll_elapsed))
 	var rate: float = maxf(reveal_speed, ACCELERATED_SPEED) if accelerated else reveal_speed
 	if rate <= 0.0 or _shown >= float(_tiles_on_page):
@@ -274,7 +274,6 @@ func advance() -> bool:
 	_page += 1
 	if _page >= _pages.size():
 		_pages = []
-		_lines = []
 		_tiles_on_page = 0
 		finished.emit()
 		return false
@@ -375,7 +374,6 @@ func _end_scroll() -> void:
 	_page = next_page
 	if _page >= _pages.size():
 		_pages = []
-		_lines = []
 		_tiles_on_page = 0
 		finished.emit()
 		return

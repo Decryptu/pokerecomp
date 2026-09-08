@@ -140,8 +140,8 @@ func _show_sub_screen(node: Control) -> void:
 
 ## The launcher's staged slot, for the scene entered through a scene change.
 func _take_pending() -> void:
-	_data = GameRuntime.selected_data()
-	var pending: Dictionary = GameRuntime.take_pending_new_game()
+	_data = Gen2GameRuntime.instance().selected_data()
+	var pending: Dictionary = Gen2GameRuntime.instance().take_pending_new_game()
 	_slot = int(pending["slot"])
 	_label = String(pending["label"])
 	_challenge = StringName(pending.get("challenge", Gen2Rules.CHALLENGE_VANILLA))
@@ -198,9 +198,11 @@ func _on_splash_finished() -> void:
 	_start_profile_setup()
 
 
-## `PlayerProfileSetup`. On Gold and Silver it has no gender screen to reach, so
-## the run starts on Oak's speech and the save keeps GENDER_MALE.
+## `PlayerProfileSetup`. Only Crystal reaches a gender screen; the rest keep GENDER_MALE.
 func _start_profile_setup() -> void:
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		_start_speech()
+		return
 	_gender_screen = Gen2GenderScreen.new()
 	if not _gender_screen.open(_data):
 		_gender_screen.free()
@@ -288,6 +290,7 @@ func _on_speech_finished(player_name: String) -> void:
 	created.gender = _gender
 	created.label = _label
 	if created.world != null:
+		created.world.gen1_rival_name = _speech.rival_name() if _speech != null else ""
 		created.world.world_day = int(_clock["day"])
 		created.world.world_hour = int(_clock["hour"])
 		created.world.world_minute = int(_clock["minute"])
@@ -296,12 +299,12 @@ func _on_speech_finished(player_name: String) -> void:
 		created.world.world_clock_stamp = Gen2WorldClock.host_seconds()
 	## Before the write: a mod holding a run snapshots what built it into the
 	## save's own namespace, and that has to be in the bytes on disk.
-	GameRuntime.announce_new_save(created, _challenge)
+	Gen2GameRuntime.instance().announce_new_save(created, _challenge)
 	var result: Dictionary = Gen2SaveStore.save(created, _data)
 	if not bool(result["ok"]):
 		_fail(String(result["message"]))
 		return
-	GameRuntime.select_save_slot(_data.id, _slot)
+	Gen2GameRuntime.instance().select_save_slot(_data.id, _slot)
 	finished.emit(created)
 	if _standalone:
 		get_tree().change_scene_to_file.call_deferred(WORLD_SCENE)

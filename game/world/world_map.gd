@@ -35,6 +35,11 @@ var events: Dictionary = {}
 ## `<Map>_TextPointers` decoded, one row a text id from 1 up. Generation 1 only:
 ## a Generation 2 map's text is inside the script its event names.
 var texts: Array = []
+## A Generation 1 map's other `<Map>_TextPointers` table, by address, which its
+## own entry script swaps in behind an event: Viridian Mart's and Oak's Lab's.
+var alternate_texts: Dictionary = {}
+## `RunNPCMovementScript`'s two RLE lists per table this map runs, by table.
+var movement_scripts: Dictionary = {}
 
 
 static func from_cache(value: Dictionary) -> Gen2WorldMap:
@@ -66,6 +71,10 @@ static func from_cache(value: Dictionary) -> Gen2WorldMap:
 	out.scripts = _scripts_from_cache(value.get("scripts", {}))
 	out.events = _events_from_cache(value.get("events", {}))
 	out.texts = _text_rows(value.get("texts", []))
+	for table: Variant in (value.get("alternate_texts", {}) as Dictionary):
+		out.alternate_texts[int(table)] = _text_rows(value["alternate_texts"][table])
+	for table: Variant in (value.get("movement_scripts", {}) as Dictionary):
+		out.movement_scripts[int(table)] = value["movement_scripts"][table]
 	return out
 
 

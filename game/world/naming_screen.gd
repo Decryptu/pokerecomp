@@ -68,9 +68,15 @@ const MAIL_LAST_COLUMN: int = MAIL_COLUMNS - 1
 ## screens: mail's own table repeats $00, $30 and $60 the same way.
 const COMMAND_GROUP: int = 3
 
+const GEN1_MAX_LENGTH: int = 7
+const GEN1_LAST_COLUMN: int = Gen1Layout.ALPHABET_COLUMNS - 1
+const GEN1_COMMAND_ROW: int = Gen1Layout.ALPHABET_ROWS
+const GEN1_END_ROW: int = Gen1Layout.ALPHABET_ROWS - 1
+
 ## `NamingScreen_IsTargetBox`: a box keyboard is six rows and a name keyboard
 ## five, so the command row is row 5 or row 4.
 var is_box: bool = false
+var is_gen1: bool = false
 ## `_ComposeMailMessage` rather than `NamingScreen`: a six-row, ten-column
 ## keyboard of its own, a two-line entry with a fixed break in the middle, and
 ## no prompt. Everything else on the screen is the same walk.
@@ -119,6 +125,18 @@ static func for_mail(data: GameData) -> Gen2NamingScreen:
 	return screen
 
 
+static func for_gen1_player(data: GameData) -> Gen2NamingScreen:
+	var screen := Gen2NamingScreen.new()
+	screen.is_gen1 = true
+	screen.max_length = GEN1_MAX_LENGTH
+	if data != null:
+		for table: int in [Gen1Layout.ALPHABET_UPPER, Gen1Layout.ALPHABET_LOWER]:
+			screen._tables.append(data.name_input_chars(table))
+	screen.init_name_entry()
+	screen.init_cursor()
+	return screen
+
+
 static func _build(data: GameData, box: bool, limit: int) -> Gen2NamingScreen:
 	var screen := Gen2NamingScreen.new()
 	screen.is_box = box
@@ -143,6 +161,10 @@ func init_cursor() -> void:
 func init_name_entry() -> void:
 	buffer = []
 	buffer.resize(max_length + 1)
+	if is_gen1:
+		buffer.fill(TERMINATOR)
+		length = 0
+		return
 	buffer.fill(MIDDLELINE)
 	buffer[0] = UNDERLINE
 	buffer[max_length] = TERMINATOR
@@ -156,6 +178,8 @@ func init_name_entry() -> void:
 ## `NamingScreen_ApplyTextInputMode`'s table selection: the case picks the pair
 ## and NamingScreen_IsTargetBox picks which of the pair.
 func keyboard() -> int:
+	if is_gen1:
+		return Gen1Layout.ALPHABET_UPPER if upper_case else Gen1Layout.ALPHABET_LOWER
 	if is_mail:
 		return Keyboard.MAIL_UPPER if upper_case else Keyboard.MAIL_LOWER
 	var table: int = Keyboard.NAME_UPPER if upper_case else Keyboard.NAME_LOWER
@@ -171,6 +195,8 @@ func rows() -> Array:
 
 ## `ld b, $5` / `ld b, $6`: the number of rows the live keyboard has.
 func row_count() -> int:
+	if is_gen1:
+		return GEN1_COMMAND_ROW + 1
 	return 6 if is_box or is_mail else 5
 
 
@@ -181,6 +207,10 @@ func command_row() -> int:
 ## `NamingScreen_GetCursorPosition`. Off the command row every column is a
 ## letter; on it the column decides which of the three commands.
 func cursor_command() -> int:
+	if is_gen1:
+		if row == GEN1_END_ROW and column == GEN1_LAST_COLUMN:
+			return COMMAND_END
+		return COMMAND_CASE if row == GEN1_COMMAND_ROW else COMMAND_NONE
 	if row != command_row():
 		return COMMAND_NONE
 	if column < COMMAND_GROUP:
@@ -198,12 +228,14 @@ func last_character() -> int:
 	if row < 0 or row >= table.size():
 		return 0
 	var codes: Array = table[row]
-	var at: int = column * COLUMN_STRIDE
+	var at: int = column if is_gen1 else column * COLUMN_STRIDE
 	return int(codes[at]) if at >= 0 and at < codes.size() else 0
 
 
 ## The rightmost column of the live keyboard, which is what both wraps run to.
 func last_column() -> int:
+	if is_gen1:
+		return GEN1_LAST_COLUMN
 	return MAIL_LAST_COLUMN if is_mail else LAST_COLUMN
 
 
@@ -211,6 +243,9 @@ func last_column() -> int:
 ## row steps between the three commands rather than between columns, and both
 ## axes wrap.
 func move(direction: Vector2i) -> void:
+	if is_gen1:
+		_gen1_move(direction)
+		return
 	if direction.y < 0:
 		_up()
 	elif direction.y > 0:
@@ -235,6 +270,8 @@ func press_a() -> StringName:
 			return RESULT_END
 	if length >= max_length:
 		return RESULT_FULL
+	if is_gen1:
+		return _gen1_press_a()
 	if _add_character(last_character()):
 		# TryAddCharacter's carry falls straight into `.start`, so filling the
 		# last slot puts the cursor on END rather than leaving it on a letter.
@@ -243,9 +280,26 @@ func press_a() -> StringName:
 	return RESULT_LETTER
 
 
+func _gen1_press_a() -> StringName:
+	var code: int = last_character()
+	if code <= 0:
+		return RESULT_FULL
+	buffer[length] = code
+	length += 1
+	buffer[length] = TERMINATOR
+	if length >= max_length:
+		row = GEN1_END_ROW
+		column = GEN1_LAST_COLUMN
+	return RESULT_LETTER
+
+
 ## `.b`, which is `NamingScreen_DeleteCharacter`.
 func press_b() -> void:
 	if length <= 0:
+		return
+	if is_gen1:
+		length -= 1
+		buffer[length] = TERMINATOR
 		return
 	length -= 1
 	buffer[length] = UNDERLINE
@@ -268,8 +322,11 @@ func _step_over_line_break(forwards: bool) -> void:
 
 
 ## `.start`: the cursor jumps to END, which is the last column of the command
-## row.
 func press_start() -> void:
+	if is_gen1:
+		row = GEN1_END_ROW
+		column = GEN1_LAST_COLUMN
+		return
 	column = last_column()
 	row = command_row()
 
@@ -298,7 +355,7 @@ func stored_codes() -> PackedByteArray:
 	var out := PackedByteArray()
 	for index: int in max_length:
 		var code: int = buffer[index]
-		if code == MIDDLELINE or code == UNDERLINE:
+		if code == MIDDLELINE or code == UNDERLINE or (is_gen1 and code == TERMINATOR):
 			break
 		out.append(code)
 	return out
@@ -308,6 +365,8 @@ func stored_codes() -> PackedByteArray:
 ## project's own decoded forms; see [Gen2Text].
 func stored_name() -> String:
 	var codes: PackedByteArray = stored_codes()
+	if is_gen1:
+		return Gen1Text.decode(codes, 0, codes.size())
 	return Gen2Text.decode(codes, 0, codes.size())
 
 
@@ -323,6 +382,25 @@ func _add_character(code: int) -> bool:
 		return true
 	buffer[length] = UNDERLINE
 	return false
+
+
+func _gen1_move(direction: Vector2i) -> void:
+	if direction.y == 0:
+		if row == GEN1_COMMAND_ROW:
+			return
+		if direction.x > 0:
+			column = 0 if column >= GEN1_LAST_COLUMN else column + 1
+		elif direction.x < 0:
+			column = GEN1_LAST_COLUMN if column <= 0 else column - 1
+		return
+	var next: int = row + (1 if direction.y > 0 else -1)
+	if next > GEN1_COMMAND_ROW:
+		next = 0
+	elif next < 0:
+		next = GEN1_COMMAND_ROW
+	if next == GEN1_COMMAND_ROW or (direction.y > 0 and next == 0):
+		column = 0
+	row = next
 
 
 func _right() -> void:

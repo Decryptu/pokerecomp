@@ -69,6 +69,8 @@ var palette: PackedColorArray = PackedColorArray():
 ## player and the rival; only the line over it differs, so it is the caller's.
 const PROMPT_PLAYER: String = "YOUR NAME?"
 const PROMPT_RIVAL: String = "RIVAL'S NAME?"
+const GEN1_PROMPT_PLAYER: String = "YOUR NAME?"
+const GEN1_PROMPT_RIVAL: String = "RIVAL's NAME?"
 
 
 func open(data: GameData, prompt: String, kind: StringName = KIND_PLAYER) -> bool:
@@ -85,6 +87,8 @@ func open(data: GameData, prompt: String, kind: StringName = KIND_PLAYER) -> boo
 
 
 static func _model(data: GameData, kind: StringName) -> Gen2NamingScreen:
+	if data != null and data.generation == RomRegistry.GEN1:
+		return Gen2NamingScreen.for_gen1_player(data)
 	if kind == KIND_MON:
 		return Gen2NamingScreen.for_mon(data)
 	if kind == KIND_BOX:
@@ -145,6 +149,9 @@ func handle_button(button: int) -> bool:
 			_screen.press_b()
 		PokeButton.START:
 			_screen.press_start()
+			if _screen.is_gen1:
+				closed.emit(_screen.stored_name())
+				return true
 		PokeButton.SELECT:
 			_screen.press_select()
 		_:

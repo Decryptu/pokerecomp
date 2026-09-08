@@ -191,6 +191,18 @@ func test_new_game_starts_empty_until_the_elm_lab_handoff() -> void:
 	assert_true(validation["ok"], validation["message"])
 
 
+## `PrepareForSpecialWarp` copies `NewGameWarp` onto the player, so a
+## Generation 1 cache that carries no such row has no world to open and the run
+## has to say so rather than land in the Generation 2 bedroom.
+func test_a_generation_one_new_game_needs_its_own_warp_row() -> void:
+	var directory: String = RomCache.directory_for(&"savetestgen1", "0123456789abcdef")
+	var gen1: GameData = Fixture.build(directory, "red", RomRegistry.GEN1)
+	assert_eq(gen1.gen1_new_game_warp(), {})
+	assert_null(Gen2WorldSpawn.new_game_snapshot(gen1))
+	assert_null(Gen2SaveStore.create_new_game(gen1, 1, "RED").world)
+	RomCache.clear(directory)
+
+
 ## wPlayerID is rolled once when the game starts. The generator is injectable
 ## so a run that has to reproduce itself can pin it; GetTreeScore reads the
 ## result, so an unpinned one would move every headbutt tier.

@@ -100,6 +100,10 @@ const LAYOUT: Dictionary = {
 	"move_sprite": 0x0410,
 	"decode_rle": 0x0420,
 	"play_music": 0x0430,
+	"last_map": 0xD365,
+	"check_boulder_coords": 0x0440,
+	"trainer_no": 0xD05D,
+	"rival_starter": 0xD715,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
 const PREDEFS: Dictionary = {
@@ -712,7 +716,7 @@ func _trade(row: int) -> Array:
 
 func test_a_trade_predef_keeps_the_row_it_was_handed() -> void:
 	assert_eq(_decode(_trade(6) + _call(int(LAYOUT["text_script_end"]))),
-		[{"op": "trade", "trade_id": 6}])
+		[{"op": "scratch", "address": 0xCD3D, "value": 6}, {"op": "trade", "trade_id": 6}])
 
 
 func test_a_trade_predef_with_no_row_written_answers_nothing() -> void:
@@ -725,7 +729,7 @@ func test_xor_a_writes_the_row_a_load_of_zero_would() -> void:
 		[Gen1Layout.SCRIPT_XOR_A, Gen1Layout.SCRIPT_LD_MEM_A,
 			int(LAYOUT["which_trade"]) & 0xFF, int(LAYOUT["which_trade"]) >> 8]
 			+ _predef(4) + _call(int(LAYOUT["text_script_end"]))
-	), [{"op": "trade", "trade_id": 0}])
+	), [{"op": "scratch", "address": 0xCD3D, "value": 0}, {"op": "trade", "trade_id": 0}])
 
 
 ## `CheckEvent flag, 1`: one `rrca` per bit up to the one asked about, which a
@@ -842,7 +846,7 @@ func _spend(price: Array) -> Array:
 func test_the_subtraction_predef_becomes_the_price_it_takes() -> void:
 	assert_eq(
 		_decode(_spend([0x00, 0x05, 0x00]) + _call(int(LAYOUT["text_script_end"]))),
-		[{"op": "spend_money", "amount": 500}]
+		[{"op": "scratch", "address": 0xCD3D, "value": 0}, {"op": "spend_money", "amount": 500}]
 	)
 
 
@@ -984,3 +988,83 @@ func test_the_zero_side_of_and_a_knows_the_register() -> void:
 		}],
 		"no": [{"op": "text", "text": "BYE"}],
 	}])
+
+
+## A conditional `call` to a routine that prints is a branch: the side that
+## calls prints the routine's box and then its own, the other only its own.
+func test_a_conditional_call_is_a_branch() -> void:
+	var routine: int = 0x1400
+	var script: Array = _decode(
+		_load_a(int(LAYOUT["event_flags"])) + [Gen1Layout.SCRIPT_PREFIX, 0x5F]
+			+ [0xC4, routine & 0xFF, routine >> 8] + _print(HELLO) + [Gen1Layout.SCRIPT_RET],
+		_boxes(), _raw_at(routine, _print(BYE) + [Gen1Layout.SCRIPT_RET])
+	)
+	assert_eq(script, [{"op": "branch", "flag": 3,
+		"then": [{"op": "text", "text": "BYE"}, {"op": "text", "text": "HI"}],
+		"else": [{"op": "text", "text": "HI"}]}])
+
+
+## The Elite Four rooms end their buffer with `ld [hl], a`.
+func test_a_store_through_hl_ends_the_joypad_buffer() -> void:
+	var script: Array = _decode(
+		_load_hl(int(LAYOUT["simulated_joypad_end"])) + [Gen1Layout.SCRIPT_LD_A, 0x40]
+			+ [Gen1Layout.SCRIPT_LD_HLI_A, Gen1Layout.SCRIPT_LD_HL_A, Gen1Layout.SCRIPT_LD_A, 2]
+			+ _store_a(int(LAYOUT["simulated_joypad_index"]))
+			+ _call(int(LAYOUT["start_simulating_joypad"])) + [Gen1Layout.SCRIPT_RET]
+	)
+	assert_eq(script, [{"op": "walk", "moves": [{"direction": 1, "steps": 2}]}])
+
+
+## `ld a, [hli]` over a table in the bank, `cp $ff` folding on the byte read
+## and the loop behind it unrolling: Silph Co.'s rockets leaving.
+func test_a_table_loop_unrolls_on_the_bytes_read() -> void:
+	var table: int = 0x1900
+	var script: Array = _decode(
+		_load_hl(table) + [Gen1Layout.SCRIPT_LD_A_HLI, Gen1Layout.SCRIPT_CP_N, 0xFF, 0x28, 0x0C]
+			+ [Gen1Layout.SCRIPT_PUSH_HL] + _store_a(int(LAYOUT["toggleable_index"]))
+			+ [Gen1Layout.SCRIPT_LD_A, 1] + _call(int(LAYOUT["predef"]))
+			+ [Gen1Layout.SCRIPT_POP_HL, Gen1Layout.SCRIPT_JR, 0xEF, Gen1Layout.SCRIPT_RET],
+		{}, {table: 5, table + 1: 9, table + 2: 0xFF}
+	)
+	assert_eq(script, [
+		{"op": "toggle_object", "index": 5, "hidden": true},
+		{"op": "toggle_object", "index": 9, "hidden": true},
+	])
+
+
+func test_a_last_map_store_is_a_node() -> void:
+	assert_eq(_decode(
+		[Gen1Layout.SCRIPT_LD_A, 7] + _store_a(int(LAYOUT["last_map"])) + [Gen1Layout.SCRIPT_RET]
+	), [{"op": "set_last_map", "map": 7}])
+
+
+## `CheckBoulderCoords` answers in carry, so `jr nc` is the side off the list.
+func test_a_boulder_check_branches_in_carry() -> void:
+	var cells: int = 0x1900
+	var script: Array = _decode(
+		_load_hl(cells) + _call(int(LAYOUT["check_boulder_coords"])) + [0x30, 0x06]
+			+ _print(HELLO) + [Gen1Layout.SCRIPT_RET],
+		_boxes(), {cells: 4, cells + 1: 6, cells + 2: Gen1Layout.MAP_COORD_END}
+	)
+	assert_eq(script, [{"op": "boulder_on", "cells": [{"y": 4, "x": 6}],
+		"then": [{"op": "text", "text": "HI"}], "else": []}])
+
+
+## `wCurOpponent` above OPP_ID_OFFSET, then `wRivalStarter` picking `wTrainerNo`.
+func test_the_rivals_starter_picks_the_party() -> void:
+	var script: Array = _decode(
+		[Gen1Layout.SCRIPT_LD_A, 0xF2] + _store_a(int(LAYOUT["cur_opponent"]))
+			+ _load_a(int(LAYOUT["rival_starter"])) + [Gen1Layout.SCRIPT_CP_N, 0xB1, 0x20, 0x04]
+			+ [Gen1Layout.SCRIPT_LD_A, 7, Gen1Layout.SCRIPT_JR, 0x02, Gen1Layout.SCRIPT_LD_A, 9]
+			+ _store_a(int(LAYOUT["trainer_no"])) + [Gen1Layout.SCRIPT_RET]
+	)
+	assert_eq(script, [{"op": "starter", "who": "rival", "value": 0xB1,
+		"then": [{"op": "trainer_battle", "class": 0x2A, "number": 7}],
+		"else": [{"op": "trainer_battle", "class": 0x2A, "number": 9}]}])
+
+
+func _raw_at(address: int, bytes: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for index: int in bytes.size():
+		out[address + index] = int(bytes[index])
+	return out

@@ -446,6 +446,14 @@ func _one_game() -> void:
 	_check_the_saffron_guard()
 	_check_an_arrow_tile()
 	_check_a_scripted_wild_battle()
+	if _r.game_id != RomRegistry.YELLOW:
+		_check_the_opening_walk()
+	_check_the_route_23_guards()
+	_check_the_cycling_road_gate_walk()
+	_check_the_viridian_gym_door()
+	_check_the_tower_warp()
+	_check_the_silph_rival()
+	_check_a_seafoam_boulder_hole()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -2395,3 +2403,271 @@ func _check_rock_tunnel_is_dark() -> void:
 			world.map_id(), world.gen1_map_pal_offset,
 		]
 	)
+
+
+## The opening, from `wYCoord == 1` to Oak's Lab's speech state. Yellow opens
+## on Pikachu's own battle instead.
+const OAKS_LAB: int = 40
+const PALLET_TOWN_BYTE: int = 1
+const OAKS_LAB_BYTE: int = 0
+const PALLET_NORTH_EXIT := Vector2i(10, 1)
+const PALLET_OAK: int = 0
+const OAKS_LAB_SPEECH: int = 5
+const OAK_APPEARED_FLAG: int = 39
+const FOLLOWED_OAK_FLAG: int = 0
+const OPENING_PASSES: int = 1200
+const OAK_HEY_WAIT: String = "OAK: Hey! Wait!"
+const OAK_UNSAFE: String = "OAK: It's unsafe!"
+
+
+func _check_the_opening_walk() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, PALLET_TOWN, PALLET_NORTH_EXIT)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var spoken: Array[String] = []
+	var passes: int = 0
+	while passes < OPENING_PASSES:
+		spoken.append_array(_spoken_this_pass(world))
+		_drive_one_pass(world)
+		passes += 1
+		if world.map_id() == Vector2i(0, OAKS_LAB) \
+			and world.state.gen1_map_script(OAKS_LAB_BYTE) >= OAKS_LAB_SPEECH:
+			break
+	var lines: String = "\n".join(spoken)
+	_r.check(lines.contains(OAK_HEY_WAIT), "Oak never called out: %s" % lines.left(200))
+	_r.check(lines.contains(OAK_UNSAFE), "Oak never said it was unsafe: %s" % lines.left(200))
+	_r.check(world.event_flag_active(OAK_APPEARED_FLAG), "EVENT_OAK_APPEARED_IN_PALLET is clear.")
+	_r.check(world.map_id() == Vector2i(0, OAKS_LAB),
+		"after %d passes the player stands on %s." % [passes, world.map_id()])
+	_r.check(world.event_flag_active(FOLLOWED_OAK_FLAG), "EVENT_FOLLOWED_OAK_INTO_LAB is clear.")
+	_r.check(not world.gen1_movement_script_running(), "the movement script never ended.")
+	_r.check(world.state.gen1_map_script(OAKS_LAB_BYTE) >= OAKS_LAB_SPEECH,
+		"Oak's Lab stands on state %d after %d passes." % [
+			world.state.gen1_map_script(OAKS_LAB_BYTE), passes,
+		])
+	_r.note("gen1 walk PALLET_TOWN into OAKS_LAB in %d passes" % passes)
+
+
+## One overworld pass with nobody at the buttons.
+func _drive_one_pass(world: Gen2WorldAPI) -> void:
+	var guard: int = 0
+	while world.script_busy() and world.pending_runtime_request().is_empty() \
+		and world.pending_script_wait().is_empty() and guard < 50:
+		world.run_event_queue(true)
+		guard += 1
+	world.advance_script_wait_frame()
+	world.advance_player_step_pass()
+	world.advance_scripted_steps_pass()
+	if not world.player_step_in_progress() and world.warp_pending():
+		world.try_warp()
+
+
+func _spoken_this_pass(world: Gen2WorldAPI) -> Array[String]:
+	var out: Array[String] = []
+	for result: Dictionary in world.dispatch_sight_events():
+		var event: Dictionary = result.get("event", {})
+		if StringName(event.get("type", &"")) == &"text":
+			out.append(String(event["text"]))
+	return out
+
+
+const ROUTE_23: int = 34
+const ROUTE_23_BYTE: int = 0x77
+const ROUTE_23_TOP_GUARD := Vector2i(8, 35)
+const ROUTE_23_PAST_TOP := Vector2i(14, 35)
+const ROUTE_23_BOTTOM_GUARD := Vector2i(8, 136)
+const PASSED_CASCADE_CHECK: int = 1328
+const PASSED_EARTH_CHECK: int = 1334
+
+
+func _check_the_route_23_guards() -> void:
+	var rows: Array = [
+		[ROUTE_23_TOP_GUARD, PASSED_EARTH_CHECK], [ROUTE_23_BOTTOM_GUARD, PASSED_CASCADE_CHECK],
+	]
+	for row: Array in rows:
+		for passed: bool in [false, true]:
+			var world: Gen2WorldAPI = _r.open_world(0, ROUTE_23, row[0])
+			if world == null:
+				return
+			if passed:
+				world.set_event_flag(int(row[1]))
+			var said: String = _first_text(world.dispatch_sight_events())
+			_r.check(said.is_empty() == passed,
+				"the guard at %s said %s with the check passed %s." % [row[0], said, passed])
+	var past: Gen2WorldAPI = _r.open_world(0, ROUTE_23, ROUTE_23_PAST_TOP)
+	if past == null:
+		return
+	_r.check(_first_text(past.dispatch_sight_events()).is_empty(),
+		"the top guard spoke to a player already past him.")
+	_r.note("gen1 walk ROUTE_23's guards both ways about their badge checks")
+
+
+const ROUTE_16_GATE_1F: int = 186
+const ROUTE_16_GATE_BYTE: int = 0x70
+const ROUTE_16_GATE_MOVING_UP: int = 1
+const ROUTE_16_GATE_STOP := Vector2i(4, 9)
+const BICYCLE_ITEM: int = 0x06
+
+
+func _check_the_cycling_road_gate_walk() -> void:
+	for owned: bool in [false, true]:
+		var world: Gen2WorldAPI = _r.open_world(0, ROUTE_16_GATE_1F, ROUTE_16_GATE_STOP)
+		if world == null:
+			return
+		if owned:
+			world.state.apply_changes({}, {}, {"items": {BICYCLE_ITEM: 1}})
+		var said: String = _first_text(world.dispatch_sight_events())
+		_r.check(said.is_empty() == owned,
+			"the gate guard said %s with the Bicycle owned %s." % [said, owned])
+		if owned:
+			continue
+		world.run_event_queue(true)
+		_r.check(world.state.gen1_map_script(ROUTE_16_GATE_BYTE) == ROUTE_16_GATE_MOVING_UP,
+			"the gate left its byte on %d." % world.state.gen1_map_script(ROUTE_16_GATE_BYTE))
+		var passes: int = 0
+		while world.gen1_player_movement_running() and passes < SCRIPTED_WALK_PASSES:
+			world.advance_player_step_pass()
+			passes += 1
+		_r.check(world.player_cell == ROUTE_16_GATE_STOP + Vector2i.UP * 2,
+			"the guard walked the player to %s." % [world.player_cell])
+	_r.note("gen1 walk ROUTE_16_GATE_1F's guard with and without the Bicycle")
+
+
+const VIRIDIAN_CITY_BYTE: int = 4
+const VIRIDIAN_GYM_DOOR := Vector2i(32, 8)
+const VIRIDIAN_GYM_OPEN_FLAG: int = 40
+const VIRIDIAN_MOVING_DOWN: Dictionary = {&"red": 3, &"blue": 3, &"yellow": 6}
+const EARTHBADGE_BIT: int = 7
+
+
+func _check_the_viridian_gym_door() -> void:
+	for earned: bool in [false, true]:
+		var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_CITY, VIRIDIAN_GYM_DOOR)
+		if world == null:
+			return
+		if earned:
+			for bit: int in EARTHBADGE_BIT:
+				world.state.set_engine_flag(Gen2WorldState.gen1_badge_flag(bit), true)
+		var said: String = _first_text(world.dispatch_sight_events())
+		_r.check(said.is_empty() == earned,
+			"the gym door said %s with seven badges %s." % [said, earned])
+		world.run_event_queue(true)
+		_r.check(world.event_flag_active(VIRIDIAN_GYM_OPEN_FLAG) == earned,
+			"EVENT_VIRIDIAN_GYM_OPEN reads %s with seven badges %s." % [
+				world.event_flag_active(VIRIDIAN_GYM_OPEN_FLAG), earned,
+			])
+		if not earned:
+			_r.check(
+				world.state.gen1_map_script(VIRIDIAN_CITY_BYTE)
+					== int(VIRIDIAN_MOVING_DOWN[_r.game_id]),
+				"the door left Viridian City on state %d." % [
+					world.state.gen1_map_script(VIRIDIAN_CITY_BYTE),
+				])
+	_r.note("gen1 walk VIRIDIAN_CITY's gym door with and without seven badges")
+
+
+const POKEMON_TOWER_7F: int = 148
+const TOWER_7F_BYTE: int = 0x40
+const TOWER_7F_WARP_STATE: Dictionary = {&"red": 4, &"blue": 4, &"yellow": 11}
+const TOWER_7F_FUJI := Vector2i(10, 3)
+const TOWER_7F_FUJI_OBJECT: int = 3
+const MR_FUJIS_HOUSE: int = 149
+
+
+func _check_the_tower_warp() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, POKEMON_TOWER_7F, TOWER_7F_FUJI + Vector2i.DOWN)
+	if world == null:
+		return
+	world.state.set_gen1_map_script(TOWER_7F_BYTE, int(TOWER_7F_WARP_STATE[_r.game_id]))
+	world.dispatch_sight_events()
+	world.run_event_queue(true)
+	_r.check(world.map_id() == Vector2i(0, MR_FUJIS_HOUSE),
+		"the tower's warp landed on %s." % [world.map_id()])
+	_r.check(world.gen1_last_map() == LAVENDER_TOWN,
+		"the warp left wLastMap at %d." % world.gen1_last_map())
+	_r.check(world.state.gen1_map_script(TOWER_7F_BYTE) == 0,
+		"the tower stayed on state %d." % world.state.gen1_map_script(TOWER_7F_BYTE))
+	_r.check(world.player_facing == Gen2WorldSprite.FACING_UP,
+		"the player faced %d in Mr. Fuji's house." % world.player_facing)
+	_r.note("gen1 walk POKEMON_TOWER_7F warped to MR_FUJIS_HOUSE")
+
+
+const SILPH_CO_7F: int = 212
+const SILPH_CO_7F_BYTE: int = 0x58
+const SILPH_RIVAL_START: int = 3
+const SILPH_RIVAL_AFTER: int = 4
+const SILPH_RIVAL_CELL := Vector2i(3, 3)
+const SILPH_RIVAL_CLASS: int = 0x2A
+const BEAT_SILPH_RIVAL_FLAG: int = 1856
+## STARTER2 on Red and Blue, RIVAL_STARTER_FLAREON on Yellow: party 7 and `starter + 4`.
+const SILPH_RIVAL_STARTER: Dictionary = {&"red": 0xB1, &"blue": 0xB1, &"yellow": 2}
+const SILPH_RIVAL_PARTY: Dictionary = {&"red": 7, &"blue": 7, &"yellow": 6}
+
+
+func _check_the_silph_rival() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, SILPH_CO_7F, SILPH_RIVAL_CELL)
+	if world == null:
+		return
+	world.state.set_gen1_starter("rival", int(SILPH_RIVAL_STARTER[_r.game_id]))
+	world.state.set_gen1_map_script(SILPH_CO_7F_BYTE, SILPH_RIVAL_START)
+	world.dispatch_sight_events()
+	var passes: int = 0
+	while world.pending_runtime_request().is_empty() and passes < SCRIPTED_WALK_PASSES:
+		world.run_event_queue(true)
+		passes += 1
+	var request: Dictionary = world.pending_runtime_request()
+	var values: Dictionary = request.get("values", {}) as Dictionary
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"battle_requested"
+			and int(values.get("trainer_class", 0)) == SILPH_RIVAL_CLASS
+			and int(values.get("trainer_id", -1)) == int(SILPH_RIVAL_PARTY[_r.game_id]) - 1,
+		"the Silph rival asked for %s." % [request]
+	):
+		return
+	world.complete_runtime_request({
+		"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_WON,
+	})
+	_r.check(world.state.gen1_map_script(SILPH_CO_7F_BYTE) == SILPH_RIVAL_AFTER,
+		"the fight left Silph Co. 7F on state %d." % world.state.gen1_map_script(SILPH_CO_7F_BYTE))
+	world.dispatch_sight_events()
+	passes = 0
+	while world.script_busy() and passes < SCRIPTED_WALK_PASSES:
+		world.run_event_queue(true)
+		passes += 1
+	_r.check(world.event_flag_active(BEAT_SILPH_RIVAL_FLAG),
+		"the beaten rival left EVENT_BEAT_SILPH_CO_RIVAL clear.")
+	_r.note("gen1 walk SILPH_CO_7F's rival fought as party %d" % int(SILPH_RIVAL_PARTY[_r.game_id]))
+
+
+const SEAFOAM_B1F_HOLE := Vector2i(18, 6)
+const SEAFOAM_B1F_BOULDER: int = 0
+const SEAFOAM2_BOULDER1_FLAG: int = 2496
+
+
+func _check_a_seafoam_boulder_hole() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, SEAFOAM_B1F, SEAFOAM_B1F_HOLE + Vector2i.LEFT * 2)
+	if world == null:
+		return
+	var boulder: Gen2WorldObject = world.objects[SEAFOAM_B1F_BOULDER]
+	world.gen1_toggle_object(boulder.toggle_index, false)
+	world.state.set_engine_flag(
+		Gen1Layout.engine_flag_base("status_flags_1") + Gen1Layout.STRENGTH_ACTIVE_BIT, true
+	)
+	world.player_facing = Gen2WorldSprite.FACING_RIGHT
+	world.player_input_move(Vector2i.RIGHT)
+	world.player_input_move(Vector2i.RIGHT)
+	if not _r.check(boulder.cell == SEAFOAM_B1F_HOLE,
+		"the boulder stood on %s rather than the hole." % [boulder.cell]):
+		return
+	world.dispatch_sight_events()
+	world.run_event_queue(true)
+	_r.check(world.event_flag_active(SEAFOAM2_BOULDER1_FLAG),
+		"the boulder on the hole left EVENT_SEAFOAM2_BOULDER1_DOWN_HOLE clear.")
+	_r.check(boulder.deleted or not _object_active(world, SEAFOAM_B1F_BOULDER),
+		"the fallen boulder is still on B1F.")
+	_r.note("gen1 walk SEAFOAM_ISLANDS_B1F's first boulder down its hole")
+
+
+func _first_text(results: Array) -> String:
+	return _event_text(results) if not results.is_empty() else ""

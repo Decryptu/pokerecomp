@@ -6,33 +6,36 @@ extends RefCounted
 
 ## What a beat shows above its text.
 enum Pic {
-	## `Intro_PrepTrainerPic` with wTrainerClass POKEMON_PROF.
 	OAK,
 	## `PrepMonFrontpic`, zeroed DVs, on [method intro_species].
 	MON,
-	## `DrawIntroPlayerPic`: CAL in Gold and Silver, ChrisPic or KrisPic here.
 	PLAYER,
+	RIVAL,
 }
 
 ## How a beat's picture arrives, between `GetSGBLayout` and the `PrintText`.
 enum Enter {
 	## The beat keeps the picture the one before it drew.
 	NONE,
-	## `Intro_RotatePalettesLeftFrontpic`, the trainer pics' six-step fade.
 	FRONTPIC,
 	## `Intro_WipeInFrontpic`, which the species beat uses instead.
 	WIPE,
+	MOVE_LEFT,
+	FADE_IN_WHITE,
 }
+
+const NAME_NONE: String = ""
+const NAME_PLAYER: String = "player"
+const NAME_RIVAL: String = "rival"
 
 ## `constants/trainer_constants.asm`. Gold and Silver ship no ChrisPic, so CAL.
 const POKEMON_PROF: int = 0x0A
 const CAL: int = 0x0C
+const GEN1_PROF_OAK: int = 0x1A
+const GEN1_RIVAL1: int = 0x19
 ## `OakSpeech` is `ld a, MARILL` in pokegold and `ld a, WOOPER` in pokecrystal.
 const MARILL: int = 183
 const WOOPER: int = 194
-
-## Where `NamePlayer` sits; only its NEW NAME row reaches `NamingScreen`.
-const NAME_AFTER: String = "oak_6"
 
 ## `constants/music_constants.asm`: MUSIC_ROUTE_30.
 const MUSIC_ROUTE_30: int = 0x2B
@@ -47,6 +50,10 @@ const SHRINK_CLEAR_AT: Vector2i = Vector2i(6, 5)
 ## `Intro_PlacePlayerSprite`'s four `dbsprite` are one 16x16 icon at y `9 * 8 +
 ## 4`, x `9 * 8`; hardware OAM counts from (-8, -16).
 const SHRINK_SPRITE_AT: Vector2i = Vector2i(64, 60)
+
+const GEN1_SHRINK_WAITS: Array[int] = [4, 4, 20, 50]
+const GEN1_SHRINK_FADE_FRAMES: int = 10
+const GEN1_SHRINK_SLOTS: Array[int] = [1, 2]
 
 ## `home/string.asm`'s InitName substitutes these for a blank entry.
 const DEFAULT_MALE: String = "CHRIS"
@@ -99,6 +106,25 @@ static func trainer_cell(data: GameData, trainer_class: int) -> Dictionary:
 	)
 
 
+const GEN2_ORDER: Array = [
+	[Pic.OAK, "oak_1", Enter.FRONTPIC, true, NAME_NONE],
+	[Pic.MON, "oak_2", Enter.WIPE, false, NAME_NONE],
+	[Pic.MON, "oak_4", Enter.NONE, true, NAME_NONE],
+	[Pic.OAK, "oak_5", Enter.FRONTPIC, true, NAME_NONE],
+	[Pic.PLAYER, "oak_6", Enter.FRONTPIC, false, NAME_PLAYER],
+	[Pic.PLAYER, "oak_7", Enter.NONE, false, NAME_NONE],
+]
+
+const GEN1_ORDER: Array = [
+	[Pic.OAK, "oak_speech_1", Enter.FRONTPIC, true, NAME_NONE],
+	[Pic.MON, "oak_speech_2", Enter.MOVE_LEFT, true, NAME_NONE],
+	[Pic.PLAYER, "introduce_player", Enter.MOVE_LEFT, false, NAME_PLAYER],
+	[Pic.PLAYER, "your_name_is", Enter.NONE, true, NAME_NONE],
+	[Pic.RIVAL, "introduce_rival", Enter.FRONTPIC, false, NAME_RIVAL],
+	[Pic.RIVAL, "his_name_is", Enter.NONE, true, NAME_NONE],
+	[Pic.PLAYER, "oak_speech_3", Enter.FADE_IN_WHITE, false, NAME_NONE],
+]
+
 ## Source order, each `{ pic, text, key, enter, clears_after }`. `_OakText2` and
 ## `_OakText4` are two `PrintText` calls over one pic and so two beats, while
 ## `_OakText3` is a bare promptbutton and is none. `clears_after` is the
@@ -106,14 +132,7 @@ static func trainer_cell(data: GameData, trainer_class: int) -> Dictionary:
 static func beats(data: GameData) -> Array:
 	if data == null:
 		return []
-	var order: Array = [
-		[Pic.OAK, "oak_1", Enter.FRONTPIC, true],
-		[Pic.MON, "oak_2", Enter.WIPE, false],
-		[Pic.MON, "oak_4", Enter.NONE, true],
-		[Pic.OAK, "oak_5", Enter.FRONTPIC, true],
-		[Pic.PLAYER, "oak_6", Enter.FRONTPIC, false],
-		[Pic.PLAYER, "oak_7", Enter.NONE, false],
-	]
+	var order: Array = GEN1_ORDER if is_gen1(data) else GEN2_ORDER
 	var out: Array = []
 	for row: Array in order:
 		var key: String = String(row[1])
@@ -126,8 +145,13 @@ static func beats(data: GameData) -> Array:
 			"key": key,
 			"enter": int(row[2]),
 			"clears_after": bool(row[3]),
+			"name": String(row[4]),
 		})
 	return out
+
+
+static func is_gen1(data: GameData) -> bool:
+	return data != null and data.generation == RomRegistry.GEN1
 
 
 ## `InitName`, which makes the naming screen's END reachable with nothing typed.
@@ -137,11 +161,21 @@ static func resolve_name(entered: String, gender: int) -> String:
 	return DEFAULT_FEMALE if gender == Gen2SaveData.GENDER_FEMALE else DEFAULT_MALE
 
 
-## `_OakText7` opens on `<PLAYER>`, which the codec leaves as a marker.
-static func with_player_name(text: String, player_name: String) -> String:
-	return text.replace("<PLAYER>", player_name)
+static func with_names(text: String, player_name: String, rival_name: String) -> String:
+	return Gen2TextStream.fill_names(text, {"player": player_name, "rival": rival_name})
 
 
-## Which species `OakSpeech` puts on the two middle beats.
 static func intro_species(data: GameData) -> int:
+	if is_gen1(data):
+		return Gen1Layout.INTRO_SPECIES_YELLOW if data.id == RomRegistry.YELLOW \
+			else Gen1Layout.INTRO_SPECIES_KANTO
 	return WOOPER if Gen2WorldState.is_crystal_profile(data) else MARILL
+
+
+## Which cry the species beat plays. `OakSpeechText2`'s own
+## `sound_cry_nidorina` does not match the picture beside it, which is the
+## source's own recorded bug and is kept.
+static func intro_cry(data: GameData) -> int:
+	if is_gen1(data) and data.id != RomRegistry.YELLOW:
+		return Gen1Layout.INTRO_CRY_KANTO
+	return intro_species(data)

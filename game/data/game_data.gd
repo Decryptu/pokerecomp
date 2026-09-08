@@ -71,6 +71,7 @@ var _presents_palettes: Dictionary = {}
 var _title: Dictionary = {}
 var _town_map: Dictionary = {}
 var _special_warps: Dictionary = {}
+var _intro_names: Dictionary = {}
 var _oak_ratings: Dictionary = {}
 var _pokecenter_pc: Dictionary = {}
 var _decorations: Dictionary = {}
@@ -190,6 +191,7 @@ const MANIFEST_DICTIONARIES: Dictionary = {
 	"title": "_title",
 	"town_map": "_town_map",
 	"special_warps": "_special_warps",
+	"intro_names": "_intro_names",
 	"oak_ratings": "_oak_ratings",
 	"pokecenter_pc": "_pokecenter_pc",
 	"decorations": "_decorations",
@@ -1314,6 +1316,15 @@ func world_tileset_indices(number: int) -> PackedByteArray:
 
 ## One species by Pokédex number, or an empty Dictionary if there is no such
 ## number. Out of range is a question, not a crash: a mod may well ask.
+## A Generation 1 internal index as the dex number the cache speaks, off the
+## `index` each species row keeps; 0 for a slot no species stands in.
+func gen1_dex_of_index(index: int) -> int:
+	for number: int in range(1, species_count() + 1):
+		if int(species(number).get("index", -1)) == index:
+			return number
+	return 0
+
+
 func species(number: int) -> Dictionary:
 	return _content(Gen2ContentOverlay.KIND_SPECIES, _species, number)
 
@@ -2632,6 +2643,24 @@ func gen1_snorlax_flute(map: int, cell: Vector2i) -> Dictionary:
 	return {}
 
 
+func gen1_new_game_warp() -> Dictionary:
+	var stored: Variant = _special_warps.get("new_game_warp", {})
+	if not stored is Dictionary or (stored as Dictionary).is_empty():
+		return {}
+	var row: Dictionary = stored
+	return {
+		"map": int(row["map"]), "x": int(row["x"]), "y": int(row["y"]),
+		"tileset": int(row["tileset"]),
+	}
+
+
+func gen1_default_names(rival: bool) -> Array[String]:
+	var out: Array[String] = []
+	for value: Variant in _intro_names.get("rival" if rival else "player", []) as Array:
+		out.append(String(value))
+	return out
+
+
 ## One of the `db` lists ending in `-1` that `_import_special_warps` reads:
 ## `EscapeRopeTilesets`, `SafariZoneRestHouses` or `BikeRidingTilesets`.
 func gen1_special_warp_list(name: String) -> PackedInt32Array:
@@ -2980,12 +3009,11 @@ func player_backpic(kind: String) -> Dictionary:
 	return {"atlas": "player_back", "slot": slot, "width": cell, "height": cell}
 
 
-## `RedPicFront`, the one picture Generation 1 keeps outside both pic tables.
-func player_frontpic() -> Dictionary:
+func player_frontpic(slot: int = 0) -> Dictionary:
 	var cell: int = int(atlas("player_front").get("cell", 0))
-	if cell <= 0:
+	if cell <= 0 or slot < 0 or slot >= int(atlas("player_front").get("decoded", 0)):
 		return {}
-	return {"atlas": "player_front", "slot": 0, "width": cell, "height": cell}
+	return {"atlas": "player_front", "slot": slot, "width": cell, "height": cell}
 
 
 func trainer_pic(number: int) -> Dictionary:

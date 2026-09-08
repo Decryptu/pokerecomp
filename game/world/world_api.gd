@@ -456,6 +456,7 @@ static func open_snapshot(
 	out._gen1_last_map = world_snapshot.gen1_last_map
 	out._gen1_last_blackout_map = world_snapshot.gen1_last_blackout_map
 	out.gen1_map_pal_offset = world_snapshot.gen1_map_pal_offset
+	out.gen1_rival_name = world_snapshot.gen1_rival_name
 	out.dig_warp = world_snapshot.dig_warp.duplicate()
 	out.backup_warp = world_snapshot.backup_warp.duplicate()
 	## `.SpawnAfterE4` and `.AfterRed`, which stand between `ClockContinue` and
@@ -1049,6 +1050,7 @@ func _face_player_toward(direction: Vector2i) -> void:
 
 ## The player's half of [method Gen2WorldObject._start_next_queued_step].
 func _start_next_player_step() -> void:
+	_gen1_warp_under_a_queued_walk()
 	while not _player_queued_steps.is_empty():
 		var next: Dictionary = _player_queued_steps.pop_front()
 		_face_player_toward(next.get("facing", Vector2i.ZERO))
@@ -1061,6 +1063,25 @@ func _start_next_player_step() -> void:
 	_player_scripted_steps = false
 	_player_step_kind = &""
 	_run_player_step_tail()
+
+
+## `CheckWarpsNoCollision` runs on every landed step, simulated or not, and
+## `wSimulatedJoypadStatesIndex` outlives the map load.
+func _gen1_warp_under_a_queued_walk() -> void:
+	if not _gen1 or _player_queued_steps.is_empty():
+		return
+	var rest: Array = _player_queued_steps.duplicate()
+	var ahead := Vector2i.ZERO
+	for entry: Dictionary in rest:
+		ahead += entry["direction"] as Vector2i
+	var landed: Vector2i = player_cell - ahead
+	if warp_at(landed).is_empty() or not _warp_tile_allows(landed):
+		return
+	if not bool(try_warp(landed).get("ok", false)):
+		return
+	_player_queued_steps = rest
+	_player_scripted_steps = true
+	player_cell += ahead
 
 
 func _run_player_step_tail() -> void:
@@ -3859,6 +3880,12 @@ const GEN1_BATTLE_OUTCOMES: Dictionary = {
 var _gen1_battle_outcome: StringName = &""
 ## `wSavedCoordIndex`, the row a state matched and the state behind it reads.
 var _gen1_saved_coord_index: int = 0
+var _gen1_volatile: Dictionary = {}
+var _gen1_last_boulder: int = -1
+var _gen1_last_sprite_index: int = -1
+var _gen1_text_table: int = -1
+var _gen1_movement_script: Dictionary = {}
+var _gen1_scratch: Dictionary = {}
 
 ## `wRivalName`, which no Generation 1 save model holds yet.
 var gen1_rival_name: String = Gen2WorldScriptRunner.UNNAMED
@@ -3916,6 +3943,40 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"saved_coord_index": &"_gen1_node_saved_coord_index",
 	"player_facing": &"_gen1_node_player_facing",
 	"map_script_table": &"_gen1_node_map_script_table",
+	"set_last_map": &"_gen1_node_set_last_map",
+	"set_blackout_map": &"_gen1_node_set_blackout_map",
+	"set_player_coord": &"_gen1_node_set_player_coord",
+	"set_starter": &"_gen1_node_set_starter",
+	"starter": &"_gen1_node_starter",
+	"riding": &"_gen1_node_riding",
+	"movement_script_running": &"_gen1_node_movement_script_running",
+	"npc_movement_script": &"_gen1_node_npc_movement_script",
+	"volatile": &"_gen1_node_volatile",
+	"volatile_test": &"_gen1_node_volatile_test",
+	"boulder_on": &"_gen1_node_boulder_on",
+	"coord_lookup": &"_gen1_node_coord_lookup",
+	"emote": &"_gen1_node_emote",
+	"object_path": &"_gen1_node_object_path",
+	"trainer_battle": &"_gen1_node_trainer_battle",
+	"trainer_battle_object": &"_gen1_node_trainer_battle_object",
+	"warp_to": &"_gen1_node_warp_to",
+	"text_table": &"_gen1_node_text_table",
+	"object_position": &"_gen1_node_object_position",
+	"heal_party": &"_gen1_node_heal_party",
+	"hall_of_fame": &"_gen1_node_hall_of_fame",
+	"save_game": &"_gen1_node_save_game",
+	"reset_game": &"_gen1_node_reset_game",
+	"flag_range": &"_gen1_node_flag_range",
+	"badge_guards": &"_gen1_node_badge_guards",
+	"badges_byte": &"_gen1_node_badges_byte",
+	"name_species": &"_gen1_node_name_species",
+	"name_badge": &"_gen1_node_name_badge",
+	"scratch": &"_gen1_node_scratch",
+	"scratch_test": &"_gen1_node_scratch_test",
+	"random": &"_gen1_node_random",
+	"random_bit": &"_gen1_node_random_bit",
+	"talking_to": &"_gen1_node_talking_to",
+	"oaks_aide": &"_gen1_node_oaks_aide",
 }
 
 
@@ -4011,8 +4072,9 @@ func _gen1_sign_or_sprite() -> Array:
 	var event: Dictionary = _gen1_event_at(facing_cell(), &"bg_events")
 	if event.is_empty():
 		event = _gen1_event_at(object_facing_cell(), &"objects")
+		_gen1_last_sprite_index = int(event.get("object_index", -1))
 	var text_id: int = int(event.get("text", 0))
-	var row: Dictionary = current_map.text_at(text_id)
+	var row: Dictionary = gen1_text_at(text_id)
 	var steps: Array = _gen1_trainer_steps(row, event)
 	if steps.is_empty():
 		steps = _gen1_facility_steps(row, text_id)
@@ -4062,6 +4124,15 @@ func _gen1_card_key_door() -> Dictionary:
 		"block": Gen1Layout.CARD_KEY_TOP_FLOOR_BLOCK if top_floor \
 			else Gen1Layout.CARD_KEY_OPEN_BLOCK,
 	}
+
+
+func gen1_text_at(text_id: int) -> Dictionary:
+	if current_map == null:
+		return {}
+	if _gen1_text_table >= 0 and current_map.alternate_texts.has(_gen1_text_table):
+		var rows: Array = current_map.alternate_texts[_gen1_text_table]
+		return rows[text_id - 1] if text_id >= 1 and text_id <= rows.size() else {}
+	return current_map.text_at(text_id)
 
 
 ## The print-time names still standing in an imported Generation 1 box, which
@@ -4227,7 +4298,10 @@ func _gen1_node_screen_tile(node: Dictionary, steps: Array, run: Dictionary) -> 
 func _gen1_node_player_coord(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var axis: int = int(node["axis"])
 	var standing: int = player_cell.y if axis == 0 else player_cell.x
-	return _gen1_resolve_side(node, standing == int(node["value"]), steps, run)
+	var value: int = int(node["value"])
+	var holds: bool = standing < value if String(node.get("test", "exactly")) == "below" \
+		else standing == value
+	return _gen1_resolve_side(node, holds, steps, run)
 
 
 ## `ArePlayerCoordsInArray`, whose carry is the player standing on one row of
@@ -4315,8 +4389,14 @@ func _gen1_node_arrow_movement(node: Dictionary, steps: Array, run: Dictionary) 
 	return _gen1_resolve_side(node, false, steps, run)
 
 
-func _gen1_node_walk(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"walk", "moves": (node["moves"] as Array).duplicate(true)})
+func _gen1_node_walk(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var moves: Array = (node["moves"] as Array).duplicate(true)
+	if node.has("steps_offset"):
+		var count: int = int(run.get("coord_index", 0)) + int(node["steps_offset"])
+		if count < 1:
+			return true
+		(moves[0] as Dictionary)["steps"] = count
+	steps.append({"type": &"walk", "moves": moves})
 	return true
 
 
@@ -4399,11 +4479,295 @@ func _gen1_node_name_item(node: Dictionary, _steps: Array, run: Dictionary) -> b
 	return true
 
 
+func _gen1_node_set_last_map(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"last_map", "map": int(node["map"])})
+	return true
+
+
+func _gen1_node_set_blackout_map(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"blackout_map", "map": int(node["map"])})
+	return true
+
+
+func _gen1_node_set_player_coord(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"player_coord", "axis": int(node["axis"]), "value": int(node["value"])})
+	return true
+
+
+func _gen1_node_set_starter(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var value: int = int(_gen1_scratch.get(int(node["scratch"]), 0)) if node.has("scratch") \
+		else int(node["value"])
+	steps.append({"type": &"starter", "who": String(node["who"]), "value": value})
+	return true
+
+
+func _gen1_node_name_species(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
+	var species: int = int(node.get("species", 0))
+	if String(node.get("from", "")) == "player_starter" and state != null and data != null:
+		species = data.gen1_dex_of_index(state.gen1_starter("player"))
+	run["named"] = String(data.species(species).get("name", "")) \
+		if data != null and species > 0 else ""
+	return true
+
+
+func _gen1_node_name_badge(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
+	run["named"] = String(node["name"])
+	return true
+
+
+func _gen1_node_scratch(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"scratch", "address": int(node["address"]), "value": int(node["value"])})
+	return true
+
+
+func _gen1_node_scratch_test(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, int(_gen1_scratch.get(int(node["address"]), 0)) == int(node["value"]), steps, run
+	)
+
+
+func _gen1_node_random(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var roll: int = script_random.randi_range(0, 255) if script_random != null else 0
+	return _gen1_resolve_side(node, roll < int(node["below"]), steps, run)
+
+
+func _gen1_node_random_bit(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var roll: int = script_random.randi_range(0, 255) if script_random != null else 0
+	return _gen1_resolve_side(node, roll & (1 << int(node["bit"])) != 0, steps, run)
+
+
+func _gen1_node_talking_to(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(node, _gen1_last_sprite_index == int(node["object"]), steps, run)
+
+
+func _gen1_node_oaks_aide(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var other: Array = [_gen1_aide_box("come_back")]
+	if not _gen1_resolve_script(node["other"] as Array, other, _gen1_run_copy(run)):
+		return false
+	var yes: Array = []
+	if state != null and state.caught_count() >= int(node["requirement"]):
+		var got: Array = [_gen1_aide_box("got_item")]
+		var full: Array = [_gen1_aide_box("no_room")]
+		if not _gen1_resolve_script(node["got"] as Array, got, _gen1_run_copy(run)) \
+			or not _gen1_resolve_script(node["other"] as Array, full, _gen1_run_copy(run)):
+			return false
+		yes.append(_gen1_aide_box("here_you_go"))
+		if not _gen1_resolve_gift(
+			{"op": "give_item", "item": int(node["item"]), "count": 1, "ok": got, "full": full},
+			yes, _gen1_run_copy(run)
+		):
+			return false
+	else:
+		yes.append(_gen1_aide_box("uh_oh"))
+		if not _gen1_resolve_script(node["other"] as Array, yes, _gen1_run_copy(run)):
+			return false
+	steps.append({
+		"type": &"choice", "text": String(_gen1_aide_box("hi")["text"]), "yes": yes, "no": other,
+	})
+	return true
+
+
+func _gen1_aide_box(name: String) -> Dictionary:
+	return {"type": &"text", "text": gen1_filled_text(
+		data.special_text(GEN1_OAKS_AIDE_RUN, name) if data != null else ""
+	)}
+
+
+const GEN1_OAKS_AIDE_RUN: StringName = &"oaks_aide"
+
+
+func _gen1_node_starter(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var held: int = state.gen1_starter(String(node["who"])) if state != null else 0
+	return _gen1_resolve_side(node, held == int(node["value"]), steps, run)
+
+
+func _gen1_node_riding(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(node, movement_mode != MOVEMENT_WALK, steps, run)
+
+
+func _gen1_node_movement_script_running(
+	node: Dictionary, steps: Array, run: Dictionary
+) -> bool:
+	return _gen1_resolve_side(node, not _gen1_movement_script.is_empty(), steps, run)
+
+
+func _gen1_node_npc_movement_script(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"npc_movement_script", "table": int(node["table"]),
+		"object": int(node["object"]),
+	})
+	return true
+
+
+func _gen1_node_volatile(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"volatile", "name": String(node["name"]), "set": bool(node["set"])})
+	return true
+
+
+func _gen1_node_volatile_test(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(
+		node, bool(_gen1_volatile.get(String(node["name"]), false)), steps, run
+	)
+
+
+func _gen1_node_boulder_on(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var standing: bool = false
+	if _gen1_last_boulder >= 0 and _gen1_last_boulder < objects.size():
+		var cell: Vector2i = (objects[_gen1_last_boulder] as Gen2WorldObject).cell
+		standing = _gen1_cell_index(node["cells"] as Array, cell, run)
+	return _gen1_resolve_side(node, standing, steps, run)
+
+
+func _gen1_node_coord_lookup(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
+	_gen1_cell_index(node["cells"] as Array, player_cell, run)
+	return true
+
+
+func _gen1_cell_index(cells: Array, cell: Vector2i, run: Dictionary) -> bool:
+	for index: int in cells.size():
+		var row: Dictionary = cells[index]
+		if cell == Vector2i(int(row["x"]), int(row["y"])):
+			run["coord_index"] = index + 1
+			return true
+	return false
+
+
+func _gen1_node_emote(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"emote", "object": int(node["object"]), "kind": int(node["kind"])})
+	steps.append(_gen1_wait_step(&"emote", Gen1Layout.EMOTE_FRAMES))
+	return true
+
+
+func _gen1_node_object_path(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"object_path", "index": int(node["object"]), "target": int(node["target"]),
+		"perspective": int(node["perspective"]), "y_adjust": int(node["y_adjust"]),
+	})
+	return true
+
+
+func _gen1_node_trainer_battle(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var number: int = int(node.get("number", 1))
+	if String(node.get("number_from", "")) == "rival_starter" and state != null:
+		number += state.gen1_starter("rival")
+	steps.append(_gen1_trainer_request(int(node["class"]), number, node.get("end_texts", {}), -1))
+	return true
+
+
+func _gen1_node_trainer_battle_object(
+	node: Dictionary, steps: Array, _run: Dictionary
+) -> bool:
+	var index: int = _gen1_last_sprite_index
+	if index < 0 or index >= objects.size():
+		return false
+	var trainer: Dictionary = (objects[index] as Gen2WorldObject).trainer_data
+	if trainer.is_empty():
+		return false
+	steps.append(_gen1_trainer_request(
+		int(trainer.get("trainer_class", 0)), int(trainer.get("trainer_number", 1)),
+		node.get("end_texts", {}), index
+	))
+	return true
+
+
+func _gen1_trainer_request(
+	trainer_class: int, number: int, end_texts: Dictionary, object_index: int
+) -> Dictionary:
+	var speaker: String = gen1_rival_name if trainer_class in Gen1Layout.RIVAL_CLASSES \
+		else (data.trainer_name(trainer_class) if data != null else "")
+	var won: Dictionary = {"text": "%s: %s" % [speaker, String(end_texts.get("won", ""))]}
+	var lost: Dictionary = {"text": "%s: %s" % [speaker, String(end_texts.get("lost", ""))]}
+	return {
+		"type": &"request",
+		"values": {"kind": &"battle_requested", "values": {
+			"kind": &"trainer", "trainer_group": trainer_class, "trainer_class": trainer_class,
+			"trainer_id": maxi(number - 1, 0), "object_index": object_index,
+			"win_text": won, "loss_text": lost,
+		}},
+		"object_index": object_index,
+	}
+
+
+func _gen1_node_warp_to(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"warp_to", "map": int(node["map"]), "warp": int(node["warp"])})
+	return true
+
+
+func _gen1_node_text_table(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"text_table", "table": int(node["table"])})
+	return true
+
+
+func _gen1_node_object_position(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"object_position", "index": int(node["object"]),
+		"axis": String(node["axis"]), "value": int(node["value"]),
+	})
+	return true
+
+
+func _gen1_node_heal_party(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "values": {
+		"kind": &"party_heal_requested", "values": {},
+	}})
+	return true
+
+
+func _gen1_node_hall_of_fame(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "values": {
+		"kind": &"hall_of_fame_requested", "values": {},
+	}})
+	return true
+
+
+func _gen1_node_save_game(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "values": {
+		"kind": &"quick_save_requested", "values": {},
+	}})
+	return true
+
+
+func _gen1_node_reset_game(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "values": {
+		"kind": &"soft_reset_requested", "values": {},
+	}})
+	return true
+
+
+func _gen1_node_flag_range(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var first: int = int(node["first"])
+	for offset: int in int(node["count"]):
+		steps.append({"type": &"flag", "flag": first + offset, "set": bool(node["set"])})
+	return true
+
+
+## The top row is skipped past Victory Road; the badge name fills `wNameBuffer`.
+func _gen1_node_badge_guards(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	for row: Dictionary in node["rows"] as Array:
+		if player_cell.y != int(row["y"]):
+			continue
+		if player_cell.y == int(node["past_y"]) and player_cell.x >= int(node["past_x"]):
+			return true
+		if event_flag_active(int(row["flag"])):
+			return true
+		run["named"] = String(row["badge"])
+		return _gen1_node_map_text({"text": int(row["text"])}, steps, run)
+	return true
+
+
+func _gen1_node_badges_byte(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var byte: int = 0
+	for bit: int in Gen1Layout.BADGE_COUNT:
+		if state != null and state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(bit)):
+			byte |= 1 << bit
+	return _gen1_resolve_side(node, byte == int(node["value"]), steps, run)
+
+
 ## `jp DisplayTextID`: the map's own row, which the Mansion switches print.
 func _gen1_node_map_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	if current_map == null:
 		return false
-	var row: Dictionary = current_map.text_at(int(node["text"]))
+	var row: Dictionary = gen1_text_at(int(node["text"]))
 	var nodes: Variant = row.get("script", [])
 	if nodes is Array and not (nodes as Array).is_empty():
 		return _gen1_resolve_script(nodes as Array, steps, run)
@@ -5188,6 +5552,7 @@ func dispatch_sight_events() -> Array:
 func _gen1_sight() -> Array:
 	if _gen1_holding():
 		return []
+	advance_gen1_movement_script()
 	var running: Array = _gen1_map_script()
 	if not running.is_empty():
 		return running
@@ -5349,6 +5714,27 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 		&"map_script":
 			state.set_gen1_map_script(int(step["byte"]), int(step["value"]))
 			return true
+		&"last_map":
+			_gen1_last_map = int(step["map"])
+			return true
+		&"blackout_map":
+			_gen1_last_blackout_map = int(step["map"])
+			return true
+		&"starter":
+			state.set_gen1_starter(String(step["who"]), int(step["value"]))
+			return true
+		&"scratch":
+			_gen1_scratch[int(step["address"])] = int(step["value"])
+			return true
+		&"volatile":
+			_gen1_volatile[String(step["name"])] = bool(step["set"])
+			return true
+		&"text_table":
+			_gen1_text_table = int(step["table"])
+			return true
+		&"npc_movement_script":
+			_gen1_start_movement_script(int(step["table"]), int(step["object"]))
+			return true
 		&"npc_trade":
 			state.apply_changes({}, {}, {"npc_trades": {int(step["trade_id"]): true}})
 			return true
@@ -5359,17 +5745,41 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 func _gen1_drawn(step: Dictionary, events: Array) -> bool:
 	match StringName(step["type"]):
 		&"object_facing":
+			_gen1_last_sprite_index = int(step["index"])
 			_turn_gen1_object(int(step["index"]), int(step["facing"]), events)
+			return true
+		&"player_coord":
+			if int(step["axis"]) == 0:
+				player_cell.y = int(step["value"])
+			else:
+				player_cell.x = int(step["value"])
+			return true
+		&"emote":
+			_gen1_show_emote(int(step["object"]), int(step["kind"]))
+			return true
+		&"object_path":
+			_gen1_last_sprite_index = int(step["index"])
+			events.append_array(_gen1_walk_object(
+				int(step["index"]), _gen1_path_to_player(step)
+			))
+			return true
+		&"warp_to":
+			events.append(_gen1_warp_to(int(step["map"]), int(step["warp"])))
+			return true
+		&"object_position":
+			_gen1_place_object(int(step["index"]), String(step["axis"]), int(step["value"]))
 			return true
 		&"walk":
 			events.append_array(_gen1_walk_player(step["moves"] as Array))
 			return true
 		&"object_move":
+			_gen1_last_sprite_index = int(step["index"])
 			events.append_array(_gen1_walk_object(
 				int(step["index"]), step["moves"] as Array
 			))
 			return true
 		&"object_stay":
+			_gen1_last_sprite_index = int(step["index"])
 			_gen1_stand_object(int(step["index"]))
 			return true
 		&"player_facing":
@@ -5387,6 +5797,147 @@ func _gen1_drawn(step: Dictionary, events: Array) -> bool:
 				events.append(changed)
 			return true
 	return false
+
+
+func _gen1_show_emote(index: int, kind: int) -> void:
+	if index < 0:
+		set_player_emote(kind, true, Gen1Layout.EMOTE_FRAMES)
+	elif index < objects.size():
+		(objects[index] as Gen2WorldObject).set_emote(kind, true, Gen1Layout.EMOTE_FRAMES)
+
+
+## `FindPathToPlayer`: greater axis first, `hNPCPlayerYDistance` moved by the caller.
+func _gen1_path_to_player(step: Dictionary) -> Array:
+	var target: int = int(step["target"])
+	if target < 0 or target >= objects.size():
+		return []
+	var from: Vector2i = (objects[target] as Gen2WorldObject).cell
+	## BIT_PLAYER_LOWER_Y is set when the object is north of the player, and
+	## the perspective byte complements both bits before the path is read.
+	var lower_y: bool = from.y < player_cell.y
+	var lower_x: bool = from.x < player_cell.x
+	if int(step["perspective"]) != 0:
+		lower_y = not lower_y
+		lower_x = not lower_x
+	var dy: int = absi(player_cell.y - from.y) + int(step["y_adjust"])
+	var dx: int = absi(player_cell.x - from.x)
+	var moves: Array = []
+	var walked_y: int = 0
+	var walked_x: int = 0
+	while moves.size() < Gen1Layout.NPC_MOVEMENT_MAX:
+		var left_y: int = absi(dy - walked_y)
+		var left_x: int = absi(dx - walked_x)
+		if left_y == 0 and left_x == 0:
+			break
+		if left_x > left_y:
+			moves.append(Gen1Layout.MOVE_LEFT if lower_x else Gen1Layout.MOVE_RIGHT)
+			walked_x += 1
+		else:
+			moves.append(Gen1Layout.MOVE_UP if lower_y else Gen1Layout.MOVE_DOWN)
+			walked_y += 1
+	return moves
+
+
+func _gen1_warp_to(map_number: int, warp: int) -> Dictionary:
+	var target_map: Gen2WorldMap = data.world_map(0, map_number) if data != null else null
+	if target_map == null:
+		return {}
+	var warps: Array = target_map.events.get("warps", [])
+	if warp < 1 or warp > warps.size():
+		return {}
+	var row: Dictionary = warps[warp - 1]
+	var from_map: Vector2i = map_id()
+	## The state's own steps behind the warp still stand.
+	var rest: Array = _gen1_steps
+	_apply_map(
+		target_map, data.world_tileset(target_map.tileset),
+		Vector2i(int(row["x"]), int(row["y"])), true, 0, MAP_ENTRY_DOOR
+	)
+	_gen1_steps = rest
+	return {"type": &"warp", "from_map": from_map, "to_map": map_id(), "to_cell": player_cell}
+
+
+func _gen1_place_object(index: int, axis: String, value: int) -> void:
+	if index < 0 or index >= objects.size():
+		return
+	var object: Gen2WorldObject = objects[index]
+	if axis == "y":
+		object.cell.y = value
+	else:
+		object.cell.x = value
+	_remember_object_position(object)
+
+
+func _gen1_start_movement_script(table: int, object: int) -> void:
+	_gen1_movement_script = {"table": table, "object": object, "function": 0, "steps": 0}
+
+
+func gen1_movement_script_running() -> bool:
+	return not _gen1_movement_script.is_empty()
+
+
+func advance_gen1_movement_script() -> Array:
+	if _gen1_movement_script.is_empty() or current_map == null:
+		return []
+	var events: Array = []
+	var table: int = int(_gen1_movement_script["table"])
+	var function: int = int(_gen1_movement_script["function"])
+	if table == Gen1Layout.MOVEMENT_SCRIPT_PALLET:
+		_gen1_pallet_movement(function, events)
+	else:
+		_gen1_pewter_movement(table, function, events)
+	return events
+
+
+func _gen1_movement_lists(table: int) -> Dictionary:
+	return current_map.movement_scripts.get(table, {}) if current_map != null else {}
+
+
+func _gen1_pallet_movement(function: int, events: Array) -> void:
+	var object: int = int(_gen1_movement_script["object"])
+	match function:
+		0:
+			var steps: int = player_cell.x - Gen1Layout.PALLET_PATH_LEFT_COLUMN
+			_gen1_movement_script["steps"] = steps
+			if steps == 0:
+				_gen1_movement_script["function"] = 3
+				return
+			var moves: Array = []
+			moves.resize(steps)
+			moves.fill(Gen1Layout.MOVE_LEFT)
+			events.append_array(_gen1_walk_object(object, moves))
+			_gen1_movement_script["function"] = 1
+		1:
+			if gen1_object_movement_running():
+				return
+			events.append_array(_gen1_walk_player([
+				{"direction": Gen1Layout.MOVE_LEFT, "steps": int(_gen1_movement_script["steps"])},
+			]))
+			_gen1_movement_script["function"] = 2
+		2, 3:
+			if function == 2 and gen1_player_movement_running():
+				return
+			var lists: Dictionary = _gen1_movement_lists(Gen1Layout.MOVEMENT_SCRIPT_PALLET)
+			events.append_array(_gen1_walk_player(lists.get("player", [])))
+			events.append_array(_gen1_walk_object(object, lists.get("object", [])))
+			_gen1_movement_script["function"] = 4
+		4:
+			if gen1_player_movement_running():
+				return
+			gen1_toggle_object(_gen1_toggle_index(object), true)
+			_gen1_movement_script = {}
+
+
+func _gen1_pewter_movement(table: int, function: int, events: Array) -> void:
+	if function == 0:
+		var lists: Dictionary = _gen1_movement_lists(table)
+		events.append_array(_gen1_walk_player(lists.get("player", [])))
+		events.append_array(_gen1_walk_object(
+			int(_gen1_movement_script["object"]), lists.get("object", [])
+		))
+		_gen1_movement_script["function"] = 1
+	elif not gen1_player_movement_running():
+		_gen1_movement_script = {}
 
 
 ## The override the next object load reads, and the object standing now.
@@ -8317,6 +8868,8 @@ func _commit_boulder_push(
 	# OBJECT_DIRECTION write and the sprite keeps facing down while it slides.
 	boulder.start_step(direction, STEP_PASSES_BOULDER_PUSH)
 	_remember_object_position(boulder)
+	_gen1_last_boulder = boulder.index
+	_gen1_volatile["pushed_boulder"] = true
 	var pushed: Dictionary = {
 		"index": boulder.index,
 		"from_cell": landing - direction,
@@ -8542,6 +9095,9 @@ func _apply_map(
 		_gen1_last_map = current_map.number
 	if _gen1:
 		_gen1_apply_map_pal_offset(target_map)
+		_gen1_volatile.clear()
+		_gen1_text_table = -1
+		_gen1_last_boulder = -1
 	## `RefreshPlayerSprite` clears `wPlayerTurningDirection`, and every warp and
 	## connection reaches it, so a slide never survives a map change.
 	_stand_in_place()
