@@ -245,6 +245,9 @@ func _play_gen1_record(
 		_gen1.frequency_modifier = int(record.get("cry_pitch", 0)) & 0xFF
 		_gen1.tempo_modifier = int(record.get("cry_length", 0x80)) & 0xFF
 	_start_stream()
+	if request_kind == &"poke_flute":
+		_gen1.play_poke_flute_in_battle(record.get("channels", []))
+		return _gen1_result(request_kind, bank, id)
 	_gen1.play_sound(id)
 	return _gen1_result(request_kind, bank, id)
 

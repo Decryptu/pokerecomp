@@ -161,6 +161,7 @@ var _mart_over_map: bool = false
 ## and the row `.FindCurrentFloor` matched, plus this screen's own scroll.
 var _elevator: Dictionary = {}
 var _elevator_scroll: int = 0
+var _elevator_gen1: bool = false
 var _apricorns: Gen2WorldApricorn = null
 var _mom_dial: Gen2WorldMoneyDial = null
 ## The same counted blink [Gen2TextBox]'s arrow is, since it is the same
@@ -576,6 +577,14 @@ func open_quick_save(
 func _open_elevator(elevator: Dictionary) -> void:
 	_mode = MODE.ELEVATOR
 	_elevator = elevator.duplicate(true)
+	_elevator_gen1 = int(_elevator.get("generation", 0)) == RomRegistry.GEN1
+	if _elevator_gen1:
+		_cursor = 0
+		_elevator_scroll = 0
+		_set_overlay_open(true)
+		_open_map_overlay_view()
+		_render_elevator()
+		return
 	if int(_elevator.get("current", -1)) < 0:
 		## `.FindCurrentFloor`'s `jr c, .quit` is in front of
 		## `Elevator_AskWhichFloor`; `completed` is connected after this returns.
@@ -609,6 +618,9 @@ static func _floor_name(index: int) -> String:
 
 
 func _render_elevator() -> void:
+	if _elevator_gen1:
+		_render_gen1_elevator()
+		return
 	var rows: Array = []
 	var floors: Array = _elevator_floors()
 	for row: int in ELEVATOR_ROWS:
@@ -619,7 +631,65 @@ func _render_elevator() -> void:
 	_render_service_page(rows, _cursor - _elevator_scroll)
 
 
+func _gen1_elevator_rows() -> Array:
+	var floors: Array = _elevator_floors()
+	var out: Array = []
+	for offset: int in Gen2MartPage.GEN1_LIST_HEIGHT:
+		var index: int = _elevator_scroll + offset
+		if index > floors.size():
+			break
+		if index == floors.size():
+			out.append({"cancel": true})
+			break
+		out.append({"name": _data.item_name(int((floors[index] as Dictionary)["floor"]))})
+	return out
+
+
+func _render_gen1_elevator() -> void:
+	if _mart_view == null or _data == null:
+		return
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
+	if _mart_page == null:
+		_mart_page = Gen2MartPage.from_data(_data)
+	if _service_page == null or _mart_page == null:
+		return
+	var image: Image = _mart_page.render_gen1_pack({
+		"rows": _gen1_elevator_rows(), "cursor": _cursor - _elevator_scroll,
+	})
+	var over: Image = _service_page.render("", "", [], -1, _elevator_prompt())
+	if image != null and over != null:
+		image.blend_rect(over, Rect2i(Vector2i.ZERO, over.get_size()), Vector2i.ZERO)
+	Gen2PicImage.show(_mart_view, image)
+
+
+func _press_gen1_elevator(button: int) -> void:
+	var floors: Array = _elevator_floors()
+	if button == PokeButton.B:
+		_finish_runtime({"ok": true})
+		return
+	if button == PokeButton.A:
+		if _cursor >= floors.size():
+			_finish_runtime({"ok": true})
+			return
+		_finish_runtime({"ok": true, "floor": (floors[_cursor] as Dictionary).duplicate()})
+		return
+	if button == PokeButton.UP:
+		_cursor = maxi(0, _cursor - 1)
+	elif button == PokeButton.DOWN:
+		_cursor = mini(floors.size(), _cursor + 1)
+	else:
+		return
+	_elevator_scroll = clampi(
+		_elevator_scroll, maxi(0, _cursor - Gen2MartPage.GEN1_CURSOR_ROWS + 1), _cursor
+	)
+	_render_elevator()
+
+
 func _press_elevator(button: int) -> void:
+	if _elevator_gen1:
+		_press_gen1_elevator(button)
+		return
 	var floors: Array = _elevator_floors()
 	if button == PokeButton.B:
 		## `.cancel`'s `scf`, which `Script_elevator`'s `ret c` leaves as FALSE.

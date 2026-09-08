@@ -130,8 +130,9 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 312, "text": 540, "branch": 155, "choice": 33, "flag": 206,
-		"give_item": 38, "has_item": 18, "take_item": 3, "unknown": 13, "pokedex": 13,
+	&"red": {"rows": 314, "text": 540, "branch": 155, "choice": 33, "flag": 206,
+		"give_item": 38, "has_item": 18, "take_item": 3, "unknown": 12,
+		"pokedex": 13, "elevator": 3,
 		"give_pokemon": 32, "saved_coord_index": 1, "badges_byte": 1, "walk": 17,
 		"player_facing": 8, "set_map_script": 106, "npc_movement_script": 2,
 		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 13,
@@ -142,8 +143,9 @@ const SCRIPT_CENSUS: Dictionary = {
 		"spend_money": 3, "guard_drink": 4, "day_care": 1, "random_bit": 2,
 		"volatile": 1, "coin_box": 2, "has_coins": 4, "add_coins": 4,
 		"replace_block": 1, "starter": 2, "trainer_battle": 3},
-	&"blue": {"rows": 312, "text": 540, "branch": 155, "choice": 33, "flag": 206,
-		"give_item": 38, "has_item": 18, "take_item": 3, "unknown": 13, "pokedex": 13,
+	&"blue": {"rows": 314, "text": 540, "branch": 155, "choice": 33, "flag": 206,
+		"give_item": 38, "has_item": 18, "take_item": 3, "unknown": 12,
+		"pokedex": 13, "elevator": 3,
 		"give_pokemon": 32, "saved_coord_index": 1, "badges_byte": 1, "walk": 17,
 		"player_facing": 8, "set_map_script": 106, "npc_movement_script": 2,
 		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 13,
@@ -154,8 +156,9 @@ const SCRIPT_CENSUS: Dictionary = {
 		"spend_money": 3, "guard_drink": 4, "day_care": 1, "random_bit": 2,
 		"volatile": 1, "coin_box": 2, "has_coins": 4, "add_coins": 4,
 		"replace_block": 1, "starter": 2, "trainer_battle": 3},
-	&"yellow": {"rows": 365, "text": 523, "branch": 151, "choice": 27, "flag": 180,
-		"give_item": 37, "has_item": 15, "take_item": 3, "unknown": 25, "pokedex": 10,
+	&"yellow": {"rows": 367, "text": 523, "branch": 151, "choice": 27, "flag": 180,
+		"give_item": 37, "has_item": 15, "take_item": 3, "unknown": 24,
+		"pokedex": 10, "elevator": 3,
 		"give_pokemon": 7, "saved_coord_index": 1, "badges_byte": 1, "walk": 16,
 		"set_map_script": 66, "npc_movement_script": 2, "toggle_object": 22,
 		"trainer_battle_object": 15, "random": 5, "facing": 13, "player_in_array": 1,
@@ -166,16 +169,13 @@ const SCRIPT_CENSUS: Dictionary = {
 		"day_care": 1, "random_bit": 2, "volatile": 1, "coin_box": 2, "has_coins": 4,
 		"add_coins": 4, "replace_block": 1, "trainer_battle": 1, "talking_to": 2},
 }
-## `BIT_GOT_OLD_ROD` and its two neighbours share `wStatusFlags1` with
-## `BIT_STRENGTH_ACTIVE`, so reading that byte is what hands the three rods over.
+## `SilphCo11FPorygonText` is a `call DisplayPokedex` the disassembly marks
+## unreferenced. The `trade` rows are the eight `predef DoInGameTradeDialogue`
+## sites plus `CinnabarLabTradeRoom`'s second, whose `jr` shares the first's
+## tail; Yellow ships neither trade house.
 
-## The eighth `call DisplayPokedex` in the source is `SilphCo11FPorygonText`,
-## which no map text row names and the disassembly marks unreferenced. The
-## `trade` rows are the eight `predef DoInGameTradeDialogue` sites plus
-## `CinnabarLabTradeRoom`'s second, whose `jr` shares the first one's tail;
-## Yellow ships neither trade house. The coin rows are the Game Corner's four
-## clerks. The Safari Zone gate takes its 500 from a row only that map's own
-## per-frame script names, so no event reaches it and it is not imported.
+const ELEVATOR_MAPS: Array[int] = [127, 203, 236]
+const ELEVATOR_FLOORS: int = 19
 
 ## `ToggleableObjectStates` as the corpus carries it: the objects a row lands on
 ## and how many start ON. Three rows name an object their map has not got.
@@ -345,6 +345,7 @@ func _one_game() -> void:
 	_map_callbacks()
 	_map_states()
 	_hidden_events()
+	_elevators()
 	_dungeon_warps()
 	_bike()
 	_snorlax_flute()
@@ -708,6 +709,50 @@ func _walk_script(
 ## Every `hidden_event` row of the corpus, the nodes behind it and the bookshelf
 ## tiles the A button falls through to. `silent` counts the rows whose routine is
 ## a screen this port has no counterpart for.
+func _elevators() -> void:
+	var floors: int = 0
+	var maps: Array[int] = []
+	var wrong: Array[String] = []
+	for map: Gen2WorldMap in _maps.values():
+		for row: Dictionary in map.texts:
+			for node: Dictionary in _elevator_nodes(row.get("script", []) as Array):
+				maps.append(map.number)
+				floors += _elevator_rows(map.number, node["floors"] as Array, wrong)
+	maps.sort()
+	_r.check(wrong.is_empty(), "elevator floors are wrong: %s." % [wrong])
+	_r.check(maps == ELEVATOR_MAPS, "the elevator maps read %s." % [maps])
+	_r.check(floors == ELEVATOR_FLOORS,
+		"the elevators offer %d floors, pinned %d." % [floors, ELEVATOR_FLOORS])
+	_r.note("gen1 elevators %d over %d maps" % [floors, maps.size()])
+
+
+func _elevator_nodes(nodes: Array) -> Array:
+	var out: Array = []
+	for node: Dictionary in nodes:
+		if String(node.get("op", "")) == "elevator":
+			out.append(node)
+		for side: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+			if node.has(side):
+				out.append_array(_elevator_nodes(node[side] as Array))
+	return out
+
+
+func _elevator_rows(number: int, rows: Array, wrong: Array[String]) -> int:
+	for row: Dictionary in rows:
+		if wrong.size() >= 4:
+			break
+		var landing: Gen2WorldMap = _maps.get(int(row["map"]), null)
+		if _r.data.item_name(int(row["floor"])).is_empty():
+			wrong.append("map %d names floor %d" % [number, int(row["floor"])])
+		elif landing == null:
+			wrong.append("map %d rides to map %d" % [number, int(row["map"])])
+		elif int(row["warp"]) >= (landing.events["warps"] as Array).size():
+			wrong.append("map %d rides to warp %d of map %d" % [
+				number, int(row["warp"]), int(row["map"]),
+			])
+	return rows.size()
+
+
 func _hidden_events() -> void:
 	var census: Dictionary = {"rows": 0, "silent": 0}
 	var wrong: Array[String] = []

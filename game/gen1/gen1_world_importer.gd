@@ -2971,7 +2971,7 @@ static func _script_special_body(ctx: Dictionary, pc: int) -> Variant:
 	return [{"op": "badge_guards", "rows": rows, "past_y": compares[0], "past_x": compares[1]}]
 
 
-## The routines a row may call. No audio driver here, so a cry and the wait
+## The routines a row may call. No node carries a sound, so a cry and the wait
 ## behind it spend nothing and the walk carries on past them.
 static func _script_call(
 	ctx: Dictionary, pc: int, target: int, state: Dictionary, out: Array, depth: int
@@ -3039,6 +3039,11 @@ static func _script_called(
 			return _script_map_script_table(ctx, state, out, int(state.get("hl", -1)))
 		"execute_map_script":
 			return _script_map_script_table(ctx, state, out, int(state.get("de", -1)))
+		"load_item_list":
+			if not state.has("hl"):
+				return SCRIPT_UNREAD
+			state["item_list"] = int(state["hl"])
+			return next
 	return _script_called_more(ctx, routine, target, state, out, next, depth)
 
 
@@ -3778,6 +3783,8 @@ static func _script_predef(
 		return next
 	if target == int(layout["replace_tile_block"]):
 		return _script_replace_block(state, out, next)
+	if target == int(layout.get("elevator_floor_menu", -1)):
+		return _script_elevator(ctx, state, out, next)
 	var named: int = _script_predef_named(layout, target, state, out)
 	if named == STORE_BRANCHED:
 		return SCRIPT_AIDE
@@ -3874,6 +3881,34 @@ static func _script_predef_name(layout: Dictionary, target: int) -> String:
 		if int(layout.get(name, -1)) == target:
 			return name
 	return ""
+
+
+## `DisplayElevatorFloorMenu`, reached with `LoadItemList`'s floor names behind
+## it and `hl` on `.UpdateWarp`'s own warp table, whose bytes are already the
+## 0-based index `warp_event`'s `\4 - 1` stores.
+static func _script_elevator(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int
+) -> int:
+	if not state.has("item_list") or not state.has("hl"):
+		return SCRIPT_UNREAD
+	var rom: RomFile = ctx["rom"]
+	var bank: int = int(ctx["bank"])
+	var list: int = Gen1Layout.banked(bank, int(state["item_list"]))
+	var count: int = rom.u8(list)
+	if count <= 0 or count > Gen1Layout.ELEVATOR_MAX_FLOORS \
+		or rom.u8(list + 1 + count) != Gen1Layout.ELEVATOR_FLOOR_END:
+		return SCRIPT_UNREAD
+	var maps: int = Gen1Layout.banked(bank, int(state["hl"]))
+	var floors: Array = []
+	for index: int in count:
+		floors.append({
+			"floor": rom.u8(list + 1 + index),
+			"warp": rom.u8(maps + index * Gen1Layout.ELEVATOR_WARP_SIZE),
+			"map": rom.u8(maps + index * Gen1Layout.ELEVATOR_WARP_SIZE + 1),
+		})
+	out.append({"op": "elevator", "floors": floors})
+	state.erase("item_list")
+	return next
 
 
 ## `ReplaceTileBlock`, which is how a map draws a door, a gate or an exit its

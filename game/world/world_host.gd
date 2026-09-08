@@ -320,6 +320,13 @@ static func _resolve_mart(world: Gen2WorldAPI, values: Dictionary) -> Dictionary
 
 
 static func _resolve_elevator(world: Gen2WorldAPI, values: Dictionary) -> Dictionary:
+	if int(values.get("generation", 0)) == RomRegistry.GEN1:
+		var carried: Array = values.get("floors", [])
+		if carried.is_empty():
+			return {"ok": false, "reason": &"elevator_data_unavailable"}
+		return {"ok": true, "data": {"elevator": {
+			"floors": carried, "current": -1, "generation": RomRegistry.GEN1,
+		}}}
 	var floors: Dictionary = Gen2WorldScript.decode_elevator_floors(
 		world.data.world_script_at(
 			int(values.get("bank", 0)), int(values.get("address", 0))

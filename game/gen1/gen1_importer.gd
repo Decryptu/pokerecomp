@@ -4,8 +4,7 @@ extends RefCounted
 ## Decodes a verified Generation 1 cartridge into the cache under `user://`, the
 ## counterpart of [RomImporter]. The cache format is shared: a section this
 ## generation has no table for goes unwritten and [GameData] keeps its default.
-## The species, move, type, item and trainer layer is here; the world is not,
-## which is why [RomRegistry] marks these cartridges unplayable.
+## Tables, pictures and audio here; [Gen1WorldImporter] decodes the maps.
 
 ## What the tables are known to say, independently of the cartridge, from pret's
 ## own data files. A wrong offset reads plausible garbage rather than failing, so
@@ -15,6 +14,7 @@ const LAST_SPECIES_NAME: String = "MEW"
 const FIRST_MOVE_NAME: String = "POUND"
 const LAST_MOVE_NAME: String = "STRUGGLE"
 const FIRST_ITEM_NAME: String = "MASTER BALL"
+const LAST_FLOOR_NAME: String = "B4F"
 const FIRST_TYPE_NAME: String = "NORMAL"
 const LAST_TYPE_NAME: String = "DRAGON"
 const FIRST_TRAINER_NAME: String = "YOUNGSTER"
@@ -172,6 +172,7 @@ const BATTLE_TILE_SHEETS: Dictionary = {
 const FACILITY_TEXT_RUNS: Dictionary = {
 	"pokecenter": ["pokecenter_text", Gen1Layout.POKECENTER_TEXT_AT],
 	"cable_club": ["cable_club_text", Gen1Layout.CABLE_CLUB_TEXT_AT],
+	"elevator": ["elevator_text", Gen1Layout.ELEVATOR_TEXT_AT],
 	"vending": ["vending_text", Gen1Layout.VENDING_TEXT_AT],
 	"prizes": ["prize_text", Gen1Layout.PRIZE_TEXT_AT],
 	"prizes_2": ["prize_text_2", Gen1Layout.PRIZE_TEXT_2_AT],
@@ -320,9 +321,10 @@ static func _verify_type_effects(rom: RomFile, layout: Dictionary) -> Dictionary
 
 static func _verify_item_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var names: PackedStringArray = Gen1Text.decode_sequence(
-		rom.bytes(), int(layout["item_names"]), Gen1Layout.ITEM_COUNT, MAX_NAME_LENGTH
+		rom.bytes(), int(layout["item_names"]), Gen1Layout.ITEM_NAME_COUNT, MAX_NAME_LENGTH
 	)
-	if names.size() != Gen1Layout.ITEM_COUNT or names[0] != FIRST_ITEM_NAME:
+	if names.size() != Gen1Layout.ITEM_NAME_COUNT or names[0] != FIRST_ITEM_NAME \
+		or names[-1] != LAST_FLOOR_NAME:
 		return _fail("Item names open on '%s'." % (names[0] if not names.is_empty() else ""))
 	return _ok()
 
@@ -1514,7 +1516,7 @@ func _import_matchups(rom: RomFile, layout: Dictionary) -> Array:
 ## here rather than stored as it lies.
 func _import_items(rom: RomFile, layout: Dictionary) -> Array:
 	var names: PackedStringArray = Gen1Text.decode_sequence(
-		rom.bytes(), int(layout["item_names"]), Gen1Layout.ITEM_COUNT, MAX_NAME_LENGTH
+		rom.bytes(), int(layout["item_names"]), Gen1Layout.ITEM_NAME_COUNT, MAX_NAME_LENGTH
 	)
 	var party_use: Dictionary = read_usable_items(rom, layout, "usable_items_party")
 	var close_use: Dictionary = read_usable_items(rom, layout, "usable_items_close")
@@ -1587,7 +1589,7 @@ static func read_usable_items(rom: RomFile, layout: Dictionary, key: String) -> 
 
 
 static func _item_name(names: PackedStringArray, item: int) -> String:
-	if item <= Gen1Layout.ITEM_COUNT:
+	if item <= Gen1Layout.ITEM_NAME_COUNT:
 		return names[item - 1]
 	if item < Gen1Layout.TM_FIRST_ITEM:
 		return "HM%02d" % (item - Gen1Layout.HM_FIRST_ITEM + 1) \
@@ -2148,6 +2150,10 @@ static func read_audio(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"sfx": sfx,
 			"cries": cries["rows"],
 			"mon_cries": _read_mon_cries(rom, layout),
+			"poke_flute": [
+				int(layout["poke_flute_ch5"]), int(layout["poke_flute_ch6"]),
+				int(layout["poke_flute_ch7"]),
+			],
 		},
 	}
 

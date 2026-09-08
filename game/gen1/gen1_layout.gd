@@ -68,6 +68,9 @@ const TYPE_EFFECT_NEUTRAL: int = 10
 ## `NUM_ITEMS`, and the three packed-decimal bytes of `bcd3`.
 const ITEM_COUNT: int = 83
 const ITEM_PRICE_SIZE: int = 3
+## `NUM_FLOORS`: a floor is an item id above the named run with its own name.
+const FLOOR_COUNT: int = 14
+const ITEM_NAME_COUNT: int = ITEM_COUNT + FLOOR_COUNT
 
 ## `NUM_TMS` and `NUM_HMS`: `TechnicalMachines` is one move number per row and
 ## the HMs follow the TMs. As items they sit above the named ones, `HM01` at $C4.
@@ -550,6 +553,14 @@ const MART_MAX_ITEMS: int = 14
 ## A `text_far` stub is `TX_FAR`, a two-byte address, a bank byte and a
 ## `text_end`; a `text_pause` in front of one adds a byte.
 const TEXT_FAR_STUB_BYTES: int = 5
+
+const ELEVATOR_TEXT_AT: Dictionary = {"which_floor": 0x00}
+const ELEVATOR_FLOOR_END: int = 0xFF
+const ELEVATOR_WARP_SIZE: int = 2
+const ELEVATOR_MAX_FLOORS: int = 16
+const ELEVATOR_SHAKE_PASSES: int = 100
+const ELEVATOR_SHAKE_STEP: int = 2
+const ELEVATOR_SHAKE_FRAMES: int = ELEVATOR_SHAKE_PASSES * ELEVATOR_SHAKE_STEP
 
 ## `engine/events/pokemart.asm`'s eleven stubs in file order, under the slot
 ## names [Gen2WorldServiceScreen] gives a shop's boxes. The greeting is not among
@@ -1116,7 +1127,7 @@ const SCRIPT_CARRY_BRANCHES: Dictionary = {0x38: true, 0xDA: true, 0x30: false, 
 const SCRIPT_CALLS: Array[String] = [
 	"print_text", "text_script_end", "disable_waiting", "yes_no_choice",
 	"give_item", "is_item_in_bag", "bankswitch", "play_cry", "wait_for_sound",
-	"predef", "display_pokedex", "give_pokemon", "wait_for_button",
+	"predef", "display_pokedex", "give_pokemon", "wait_for_button", "load_item_list",
 	"auto_textbox_on", "auto_textbox_off", "has_enough_money", "display_text_box",
 	"has_enough_coins", "print_predef_text", "display_text_id", "count_set_bits",
 	"start_simulating_joypad", "update_sprites", "play_sound", "play_sound_wait",
@@ -1138,8 +1149,8 @@ const SCRIPT_CALLS: Array[String] = [
 ## walk's own state, and BIT_FORCED_WARP is `OverworldLoop`'s alone.
 const SPINNING_BIT: int = 7
 const FORCED_WARP_BIT: int = 2
-## BIT_NO_MAP_MUSIC waits on an audio driver and `wPikachuMapScriptFlags` on
-## the follower nothing here draws.
+## BIT_NO_MAP_MUSIC is a script's hold on the map's music, which no node here
+## carries, and `wPikachuMapScriptFlags` the follower nothing here draws.
 const NO_MAP_MUSIC_BIT: int = 1
 const NO_TEXT_DELAY_BIT: int = 6
 const SCRIPT_SCRATCH_BYTES: Array[String] = ["which_trade", "rival_starter_ball"]
@@ -1208,14 +1219,14 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"get_item_quantity", "flag_action", "route23_copy_badge_text", "oaks_aide",
 	"starter_dex",
 ]
-## The four of those a `farcall` spends nothing on: no audio driver here.
+## The four of those a `farcall` spends nothing on: no node carries a sound.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
 	"music_rival_start", "music_rival_tempo", "music_rival_start_tempo",
 	"music_cities1_tempo",
 	"load_spinner_arrow_tiles", "convert_npc_directions", "pewter_guys",
 ]
-## The routines that spend nothing here: no audio driver, a press already ends
-## every box, and `wAutoTextBoxDrawingControl` has no counterpart.
+## The routines that spend nothing here: no node carries a sound, a press
+## already ends every box, and `wAutoTextBoxDrawingControl` has no counterpart.
 const SCRIPT_SILENT_CALLS: Array[String] = [
 	"play_cry", "wait_for_sound", "wait_for_button",
 	"auto_textbox_on", "auto_textbox_off", "count_set_bits", "update_sprites",
@@ -1281,7 +1292,7 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	## A forced walk writes the pad bit over the player's own facing byte, and
 	## the `walk` node behind it carries the direction anyway.
 	"facing_direction",
-	## `hJoyPressed` beside `hJoyHeld`, and the sound id no driver here reads.
+	## `hJoyPressed` beside `hJoyHeld`, and the sound id no node here carries.
 	"joy_pressed", "new_sound_id",
 	"npc_movement_bank", "list_scroll_offset", "dungeon_warp_destination",
 	"which_dungeon_warp", "sprite_screen_y", "sprite_screen_x",
@@ -1732,6 +1743,11 @@ const RED_BLUE: Dictionary = {
 	## `Predef` and the table it indexes, with the three rows read through it.
 	"predef": 0x3E6D,
 	"predef_pointers": 0x4FE79,
+	"load_item_list": 0x02A5A,
+	"elevator_floor_menu": 0x1C9C6,
+	"poke_flute_ch5": 0x6322,
+	"poke_flute_ch6": 0x6325,
+	"poke_flute_ch7": 0x449B,
 	"hide_object": 0x0F1D7,
 	"show_object": 0x0F1C8,
 	"pick_up_item": 0x04DE1,
@@ -1742,6 +1758,7 @@ const RED_BLUE: Dictionary = {
 	## text runs [constant MART_TEXT_AT] and its neighbour walk. Every offset
 	## here is `pokered.sym`'s, which builds both dumps.
 	"mart_greeting": 0x02A55,
+	"elevator_text": 0x89DAD,
 	"mart_text": 0x06E0C,
 	"pokecenter_text": 0x0705D,
 	"cable_club_text": 0x072B3,
@@ -2111,6 +2128,11 @@ const YELLOW: Dictionary = {
 	"npc_trade_cable_text": 0x71E5C,
 	"predef": 0x3EB4,
 	"predef_pointers": 0xF681D,
+	"load_item_list": 0x0293D,
+	"elevator_floor_menu": 0x1C264,
+	"poke_flute_ch5": 0x59EB,
+	"poke_flute_ch6": 0x59EE,
+	"poke_flute_ch7": 0x444B,
 	"hide_object": 0x0F053,
 	"show_object": 0x0F044,
 	"pick_up_item": 0x04D55,
@@ -2118,6 +2140,7 @@ const YELLOW: Dictionary = {
 	"toggleable_pointers": 0x0C69B,
 	"toggleable_states": 0x0C892,
 	"mart_greeting": 0x02938,
+	"elevator_text": 0xA0100,
 	"mart_text": 0x06B91,
 	"pokecenter_text": 0x06ED0,
 	"cable_club_text": 0x07188,

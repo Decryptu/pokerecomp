@@ -562,6 +562,17 @@ func gen1_sound(bank: int, sound_id: int) -> Dictionary:
 	return row
 
 
+func gen1_poke_flute() -> Dictionary:
+	var channels: Variant = _audio().get("poke_flute", [])
+	if not channels is Array or (channels as Array).size() < 3:
+		return {}
+	var record: Dictionary = gen1_sound(-1, Gen1Layout.SFX_CAUGHT_MON)
+	if record.is_empty():
+		return {}
+	record["channels"] = (channels as Array).duplicate()
+	return record
+
+
 ## Every Generation 1 record of one kind, in the order the header tables walk:
 ## what a corpus sweep and the parity harness both iterate.
 func gen1_audio_rows(kind: StringName) -> Array:

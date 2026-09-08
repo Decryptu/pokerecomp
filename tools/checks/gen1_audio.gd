@@ -26,7 +26,26 @@ func run(r: RefCounted) -> void:
 		_verify_every_map_track()
 		_verify_every_cry()
 		_verify_the_role_tables()
+		_verify_the_poke_flute()
 	)
+
+
+func _verify_the_poke_flute() -> void:
+	var record: Dictionary = _r.data.gen1_poke_flute()
+	if not _r.check(not record.is_empty(), "no PokeFlute record."):
+		return
+	_engine.audio_rom_bank = Gen1Layout.AUDIO_BANK_ROM[POKE_FLUTE_BANK]
+	_engine.play_sound(Gen1SoundEngine.SFX_STOP_ALL_MUSIC)
+	_engine.apu.trace_lines = PackedStringArray()
+	_engine.play_poke_flute_in_battle(record["channels"])
+	if not _r.check(_engine.any_channel_active(), "the flute started no channel."):
+		return
+	for _frame: int in FRAMES:
+		_engine.update_music()
+	_r.check(not _engine.apu.trace_lines.is_empty(), "the flute wrote no register.")
+
+
+const POKE_FLUTE_BANK: int = 1
 
 
 ## `SFX_Headers_1` to `_3`, and `_4` on Yellow: the cache carries a whole ROM

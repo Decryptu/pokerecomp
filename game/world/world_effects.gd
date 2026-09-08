@@ -12,6 +12,7 @@ extends RefCounted
 var _frame: int = 0
 var _duration: int = 0
 var _amplitude: int = 0
+var _shake_step: int = 1
 var _kind: StringName = &"none"
 var _source: Dictionary = {}
 var _sprites: Array = []
@@ -188,9 +189,20 @@ func start_screen_shake(packed_value: int, kind: StringName = &"screen_shake", s
 	var value: int = clampi(packed_value, 0, 0xFF)
 	_duration = value & 0x3F
 	_amplitude = 1 << ((value >> 6) & 0x03) if _duration > 0 else 0
+	_shake_step = 1
 	_frame = 0
 	_kind = kind if _duration > 0 else &"none"
 	_source = source.duplicate(true)
+	return snapshot()
+
+
+func start_gen1_elevator_shake() -> Dictionary:
+	_duration = Gen1Layout.ELEVATOR_SHAKE_FRAMES
+	_amplitude = 1
+	_shake_step = Gen1Layout.ELEVATOR_SHAKE_STEP
+	_frame = 0
+	_kind = &"gen1_elevator_shake"
+	_source = {}
 	return snapshot()
 
 
@@ -413,7 +425,8 @@ func offset() -> Vector2:
 	var remaining: int = _duration - 1 - _frame
 	if remaining <= 0:
 		return Vector2.ZERO
-	return Vector2(0.0, float(_amplitude if remaining % 2 == 0 else -_amplitude))
+	var pass_index: int = remaining / _shake_step
+	return Vector2(0.0, float(_amplitude if pass_index % 2 == 0 else -_amplitude))
 
 
 ## What a renderer draws this frame: one record per live sprite, each carrying
