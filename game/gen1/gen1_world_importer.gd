@@ -1762,12 +1762,11 @@ const SCRIPT_STORED_REGISTERS: Dictionary = {
 ## choosing between them; a path reaching anything unread is dropped whole.
 ## [param known] is the argument byte a hidden event's own routine is handed.
 static func decode_script(
-	rom: RomFile, layout: Dictionary, bank: int, at: int, known: Dictionary = {},
-	refused: Array = []
+	rom: RomFile, layout: Dictionary, bank: int, at: int, known: Dictionary = {}
 ) -> Array:
 	var ctx: Dictionary = {
 		"rom": rom, "layout": layout, "bank": bank,
-		"budget": [SCRIPT_BUDGET], "calls": [0], "refused": refused,
+		"budget": [SCRIPT_BUDGET], "calls": [0],
 	}
 	var walked: Variant = _walk_script(ctx, at, known.duplicate(), 0)
 	return walked as Array if walked is Array else []
@@ -1779,7 +1778,6 @@ static func _walk_script(
 	ctx: Dictionary, pc: int, state: Dictionary, depth: int
 ) -> Variant:
 	if depth > SCRIPT_DEPTH:
-		_script_refused(ctx, pc, "depth")
 		return null
 	## A `jp nc, CheckFightingMapTrainers` lands here rather than on a call, and
 	## a `<Map>_ScriptPointers` row may stand at a routine outright, so a routine
@@ -1809,18 +1807,63 @@ static func _walk_script(
 		if next == SCRIPT_END:
 			return _script_ended(state, out)
 		if next == SCRIPT_UNREAD:
-			_script_refused(ctx, pc, "op")
 			return null
 		if next == SCRIPT_AIDE:
 			return _script_aide_branch(ctx, pc + Gen1Layout.SCRIPT_LONG_SIZE, state, depth, out)
 		pc = next
-	_script_refused(ctx, pc, "budget")
 	return null
 
 
-static func _script_refused(ctx: Dictionary, pc: int, why: String) -> void:
-	if ctx.has("refused"):
-		(ctx["refused"] as Array).append({"bank": int(ctx["bank"]), "pc": pc, "why": why})
+const SCRIPT_TEST_DOMAINS: Dictionary = {
+	SCRIPT_TESTS_FACING: "facing", SCRIPT_TESTS_STARTER: "starter",
+}
+
+
+static func _script_domain(ctx: Dictionary, state: Dictionary, tests: int) -> Array:
+	if tests == SCRIPT_TESTS_FACING:
+		return Gen1Layout.FACING_STEPS.keys()
+	return Gen1Layout.script_starters(
+		(ctx["rom"] as RomFile).id, String(state.get("starter_who", ""))
+	)
+
+
+static func _script_domain_settled(
+	ctx: Dictionary, state: Dictionary, tests: Variant
+) -> Variant:
+	if not (tests is int) or not SCRIPT_TEST_DOMAINS.has(int(tests)):
+		return null
+	var key: int = int(tests)
+	var domain: Array = _script_domain(ctx, state, key)
+	var value: int = int(state[SCRIPT_TEST_DOMAINS[key]])
+	if domain.is_empty():
+		return null
+	var known: Dictionary = state.get("domains", {})
+	var fixed: Dictionary = known.get("fixed", {})
+	if fixed.has(key):
+		return int(fixed[key]) == value
+	var seen: Array = (known.get("excluded", {}) as Dictionary).get(key, [])
+	if seen.has(value) or not domain.has(value):
+		return false
+	for other: int in domain:
+		if other != value and not seen.has(other):
+			return null
+	return true
+
+
+static func _script_domain_learn(
+	state: Dictionary, tests: Variant, miss: Dictionary, match_side: Dictionary
+) -> void:
+	if not (tests is int) or not SCRIPT_TEST_DOMAINS.has(int(tests)):
+		return
+	var key: int = int(tests)
+	var value: int = int(state[SCRIPT_TEST_DOMAINS[key]])
+	var known: Dictionary = state.get("domains", {})
+	var excluded: Dictionary = (known.get("excluded", {}) as Dictionary).duplicate()
+	excluded[key] = (excluded.get(key, []) as Array) + [value]
+	miss["domains"] = {"fixed": known.get("fixed", {}), "excluded": excluded}
+	var fixed: Dictionary = (known.get("fixed", {}) as Dictionary).duplicate()
+	fixed[key] = value
+	match_side["domains"] = {"fixed": fixed, "excluded": known.get("excluded", {})}
 
 
 ## `AfterDisplayingTextID` reads `wDoNotWaitForButtonPress...` once the row is
@@ -3036,7 +3079,6 @@ static func _script_call_branch(
 	var tests: Variant = state.get("tests", SCRIPT_TESTS_NOTHING)
 	var carry: bool = Gen1Layout.SCRIPT_CARRY_CALLS.has(op)
 	if not _script_reads_flag(state, tests, carry):
-		_script_refused(ctx, pc, "call_branch")
 		return null
 	var called: Variant = _script_call_walked_on(ctx, pc, target, state.duplicate(), depth + 1, [])
 	var passed: Variant = _walk_script(ctx, next, state.duplicate(), depth + 1)
@@ -3056,7 +3098,6 @@ static func _script_call_walked_on(
 ) -> Variant:
 	var called: int = _script_call(ctx, pc, target, state, out, depth)
 	if called == SCRIPT_UNREAD:
-		_script_refused(ctx, pc, "call")
 		return null
 	if called == SCRIPT_END:
 		return _script_ended(state, out)
@@ -4355,8 +4396,7 @@ static func _script_box(ctx: Dictionary, pointer: int) -> Dictionary:
 
 
 ## A conditional, walked both ways. A side reaching machine code this decoder
-## does not read becomes an `unknown` node, so an interaction taking that side
-## says nothing at all, as an undecoded row does.
+## does not read becomes an `unknown` node the runtime can do nothing with.
 static func _script_branch(
 	ctx: Dictionary, op: int, pc: int, state: Dictionary, depth: int, out: Array
 ) -> Variant:
@@ -4364,8 +4404,11 @@ static func _script_branch(
 	var carry: bool = Gen1Layout.SCRIPT_CARRY_BRANCHES.has(op)
 	if state.has("known_zero") and not carry:
 		return _script_known_branch(ctx, op, pc, state, depth, out)
+	var settled: Variant = null if carry else _script_domain_settled(ctx, state, tests)
+	if settled != null:
+		state["known_zero"] = bool(settled)
+		return _script_known_branch(ctx, op, pc, state, depth, out)
 	if not _script_reads_flag(state, tests, carry):
-		_script_refused(ctx, pc, "branch")
 		return null
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), pc)
@@ -4381,6 +4424,9 @@ static func _script_branch(
 		## the side a `jp nz` does not take knows the register is zero.
 		var zero: Dictionary = fell_state if bool(table[op]) else jumped_state
 		zero["a"] = 0
+	if not carry:
+		_script_domain_learn(state, tests, jumped_state if bool(table[op]) else fell_state,
+			fell_state if bool(table[op]) else jumped_state)
 	var branches: Array = [
 		_walk_script(ctx, jumped, jumped_state, depth + 1),
 		_walk_script(ctx, pc + size, fell_state, depth + 1),
@@ -4391,7 +4437,6 @@ static func _script_branch(
 		return null
 	var node: Variant = _script_node(tests, branches, state, out, carry)
 	if node == null:
-		_script_refused(ctx, pc, "node")
 		return null
 	out.append(node)
 	return out
@@ -4418,8 +4463,7 @@ static func _script_known_branch(
 	return out
 
 
-## A conditional `ret`, which a wrong facing is refused with: the side that
-## returns prints nothing and the other carries on behind it.
+## A conditional `ret`: the side that returns prints nothing.
 static func _script_ret_branch(
 	ctx: Dictionary, op: int, pc: int, state: Dictionary, depth: int, out: Array
 ) -> Variant:
@@ -4433,7 +4477,6 @@ static func _script_ret_branch(
 		state.erase("known_zero")
 		return _script_walked_on(ctx, pc + 1, state, depth, out)
 	if not _script_reads_flag(state, tests, carry):
-		_script_refused(ctx, pc, "ret_branch")
 		return null
 	var walked: Variant = _walk_script(ctx, pc + 1, state.duplicate(), depth + 1)
 	if walked == null:

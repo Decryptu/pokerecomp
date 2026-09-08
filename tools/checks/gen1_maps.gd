@@ -131,10 +131,10 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
 	&"red": {"rows": 317, "text": 596, "branch": 158, "choice": 39, "flag": 243,
-		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 1, "pokedex": 13,
+		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 0, "pokedex": 13,
 		"give_pokemon": 33, "saved_coord_index": 1, "badges_byte": 1, "walk": 20,
 		"player_facing": 10, "set_map_script": 113, "npc_movement_script": 2,
-		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 13,
+		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 12,
 		"player_in_array": 1, "pick_up_item": 105, "scratch": 28, "name_badge": 7,
 		"heal_party": 2, "object_facing": 9, "talking_to": 32, "set_starter": 9,
 		"name_species": 13, "dex_rating": 2, "dex_count": 2, "map_text": 24, "trade": 9,
@@ -146,10 +146,10 @@ const SCRIPT_CENSUS: Dictionary = {
 		"save_coord_index": 2, "copy_name": 4, "set_fossil": 6, "list_menu": 1,
 		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1},
 	&"blue": {"rows": 317, "text": 596, "branch": 158, "choice": 39, "flag": 243,
-		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 1, "pokedex": 13,
+		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 0, "pokedex": 13,
 		"give_pokemon": 33, "saved_coord_index": 1, "badges_byte": 1, "walk": 20,
 		"player_facing": 10, "set_map_script": 113, "npc_movement_script": 2,
-		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 13,
+		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 12,
 		"player_in_array": 1, "pick_up_item": 105, "scratch": 28, "name_badge": 7,
 		"heal_party": 2, "object_facing": 9, "talking_to": 32, "set_starter": 9,
 		"name_species": 13, "dex_rating": 2, "dex_count": 2, "map_text": 24, "trade": 9,
@@ -161,10 +161,10 @@ const SCRIPT_CENSUS: Dictionary = {
 		"save_coord_index": 2, "copy_name": 4, "set_fossil": 6, "list_menu": 1,
 		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1},
 	&"yellow": {"rows": 370, "text": 583, "branch": 154, "choice": 34, "flag": 221,
-		"give_item": 41, "has_item": 15, "take_item": 9, "unknown": 12, "pokedex": 10,
+		"give_item": 41, "has_item": 15, "take_item": 9, "unknown": 11, "pokedex": 10,
 		"give_pokemon": 8, "saved_coord_index": 1, "badges_byte": 1, "walk": 23,
 		"set_map_script": 75, "npc_movement_script": 2, "toggle_object": 22,
-		"trainer_battle_object": 15, "random": 5, "facing": 13, "player_in_array": 1,
+		"trainer_battle_object": 15, "random": 5, "facing": 12, "player_in_array": 1,
 		"name_species": 6, "pick_up_item": 109, "scratch": 20, "name_badge": 7,
 		"player_facing": 15, "heal_party": 2, "emote": 7, "dex_rating": 2, "dex_count": 6,
 		"map_text": 24, "trade": 7, "name_item": 7, "oaks_aide": 3, "player_coord": 4,
@@ -230,9 +230,9 @@ const STATE_CENSUS: Dictionary = {
 		"object_path": 1, "movement_running": 50, "npc_movement_script": 1,
 		"movement_script_running": 2, "badges_byte": 1, "walk": 32, "wild_battle": 4,
 		"player_in_array": 30, "riding": 4, "object_move": 51, "object_position": 6,
-		"coord_index": 17, "starter": 28, "trainer_battle": 29, "battle_outcome": 28,
+		"coord_index": 17, "starter": 16, "trainer_battle": 21, "battle_outcome": 28,
 		"object_stay": 9, "facing": 3, "has_item": 4, "emote": 2, "saved_coord_index": 16,
-		"unknown": 6, "badge_guards": 1, "give_item": 9, "arrow_movement": 3,
+		"unknown": 2, "badge_guards": 1, "give_item": 9, "arrow_movement": 3,
 		"guard_drink": 4, "boulder_on": 3, "hall_of_fame": 1, "set_blackout_map": 1,
 		"save_game": 1, "reset_game": 1, "heal_party": 1, "warp_to": 1, "set_last_map": 1,
 		"safari_balls": 1, "volatile": 1, "volatile_test": 1, "coord_lookup": 3,
@@ -243,9 +243,9 @@ const STATE_CENSUS: Dictionary = {
 		"object_path": 1, "movement_running": 50, "npc_movement_script": 1,
 		"movement_script_running": 2, "badges_byte": 1, "walk": 32, "wild_battle": 4,
 		"player_in_array": 30, "riding": 4, "object_move": 51, "object_position": 6,
-		"coord_index": 17, "starter": 28, "trainer_battle": 29, "battle_outcome": 28,
+		"coord_index": 17, "starter": 16, "trainer_battle": 21, "battle_outcome": 28,
 		"object_stay": 9, "facing": 3, "has_item": 4, "emote": 2, "saved_coord_index": 16,
-		"unknown": 6, "badge_guards": 1, "give_item": 9, "arrow_movement": 3,
+		"unknown": 2, "badge_guards": 1, "give_item": 9, "arrow_movement": 3,
 		"guard_drink": 4, "boulder_on": 3, "hall_of_fame": 1, "set_blackout_map": 1,
 		"save_game": 1, "reset_game": 1, "heal_party": 1, "warp_to": 1, "set_last_map": 1,
 		"safari_balls": 1, "volatile": 1, "volatile_test": 1, "coord_lookup": 3,
@@ -714,9 +714,6 @@ func _walk_script(
 				_walk_script(font, node[side] as Array, census, wrong, number)
 
 
-## Every `hidden_event` row of the corpus, the nodes behind it and the bookshelf
-## tiles the A button falls through to. `silent` counts the rows whose routine is
-## a screen this port has no counterpart for.
 func _elevators() -> void:
 	var floors: int = 0
 	var maps: Array[int] = []
@@ -761,6 +758,9 @@ func _elevator_rows(number: int, rows: Array, wrong: Array[String]) -> int:
 	return rows.size()
 
 
+## Every `hidden_event` row of the corpus, the nodes behind it and the bookshelf
+## tiles the A button falls through to. `silent` counts the rows whose routine is
+## a screen this port has no counterpart for.
 func _hidden_events() -> void:
 	var census: Dictionary = {"rows": 0, "silent": 0}
 	var wrong: Array[String] = []
