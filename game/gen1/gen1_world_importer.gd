@@ -2364,7 +2364,7 @@ const STORE_OK: int = 1
 const STORE_REFUSED: int = 0
 const STORE_NOT_NAMED: int = -1
 static func _script_stored_named(
-	ctx: Dictionary, layout: Dictionary, address: int, state: Dictionary, out: Array
+	_ctx: Dictionary, layout: Dictionary, address: int, state: Dictionary, out: Array
 ) -> int:
 	var a: int = int(state.get("a", -1))
 	var known: bool = state.has("a")

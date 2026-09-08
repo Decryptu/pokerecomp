@@ -16,6 +16,7 @@ signal finished(player_name: String)
 const PIC_AT: Vector2i = Vector2i(6, 4)
 const PIC_TILES: int = 7
 const TILE: int = Gen2Font.TILE
+const GEN1_NAME_BOX_FRAMES: int = 10
 
 ## Where the screen is standing, which is the routine it is inside.
 enum Phase {
@@ -34,6 +35,9 @@ var _beats: Array = []
 var _index: int = 0
 var _gender: int = Gen2SaveData.GENDER_MALE
 var _player_name: String = ""
+var _rival_name: String = ""
+var _naming_role: String = Gen2OakSpeech.NAME_NONE
+var _gen1: bool = false
 var _phase: int = Phase.ANIMATING
 
 var _background: Gen2Screen.Field = null
@@ -68,11 +72,14 @@ var _after: Callable = Callable()
 func open(data: GameData, gender: int) -> bool:
 	_data = data
 	_gender = gender
+	_gen1 = Gen2OakSpeech.is_gen1(data)
 	_beats = Gen2OakSpeech.beats(data)
 	_index = 0
 	if _beats.is_empty():
 		return false
-	_text_palette = data.text_bg_palette()
+	## `OakSpeech` runs no `RunPaletteCommand` at all, so a Generation 1 speech
+	## is drawn in the four shades the hardware shows with no packet sent.
+	_text_palette = PokePalette.monochrome() if _gen1 else data.text_bg_palette()
 	if _text_palette.size() != 4:
 		_text_palette = PokePalette.pic_palette(
 			PackedColorArray([Color.WHITE, Color.BLACK])
@@ -125,8 +132,10 @@ func advance_frames(count: int) -> void:
 		if _phase != Phase.ANIMATING:
 			# The cry sits inside `OakText2`'s own `text_asm`, so it fires when
 			# the words have finished appearing rather than when A is pressed.
+			# Every frame asked for is spent: returning here left a caller that
+			# had asked for a whole printing text with one frame of it.
 			_play_cry_if_due()
-			return
+			continue
 		_presentation.advance_frame()
 		_apply_frame()
 		# `DelayFrames` returns on its last VBlank; no frame goes at a boundary.
@@ -171,6 +180,10 @@ func player_name() -> String:
 	return _player_name
 
 
+func rival_name() -> String:
+	return _rival_name
+
+
 ## A advances, the way every `PrintText` in the routine waits for one. A button
 ## pressed inside a `DelayFrames` run is swallowed, which is what the hardware
 ## does with a joypad nobody is reading.
@@ -196,22 +209,34 @@ func advance() -> void:
 	# the end, so the beat only moves on once the box has nothing left.
 	if _text_box != null and _text_box.advance():
 		return
-	if String(_beats[_index].get("key", "")) == Gen2OakSpeech.NAME_AFTER:
+	var role: String = String(_beats[_index].get("name", Gen2OakSpeech.NAME_NONE))
+	if role != Gen2OakSpeech.NAME_NONE:
+		_naming_role = role
 		_open_name_menu()
 		return
 	# `RotateThreePalettesRight` then `ClearTilemap` after the beats that load a
-	# new picture; the beats that keep the one before them run straight on.
 	if bool(_beats[_index].get("clears_after", false)):
-		_presentation.push_rotate_three_right()
+		_push_fade_out()
 		_queue(_enter_next_beat)
 		return
 	_enter_next_beat()
+
+
+func _push_fade_out() -> void:
+	if _gen1:
+		_presentation.push_gen1_fade_out_white()
+		return
+	_presentation.push_rotate_three_right()
 
 
 ## The whole opening of `OakSpeech`: out to black, the music, back in, and out
 ## to white before the first picture is loaded.
 func _begin() -> void:
 	_presentation.clear()
+	if _gen1:
+		_start_audio()
+		_show_beat()
+		return
 	_presentation.push_rotate_four_left()
 	_queue(_after_first_fade)
 
@@ -278,28 +303,40 @@ func _enter_next_beat() -> void:
 ## (6,4) and `_OakText7`'s box is still drawn, because nothing between the two
 ## routines clears either.
 func _begin_shrink() -> void:
-	_fade_music()
 	_play_shrink_sfx()
-	var waits: Array[int] = Gen2OakSpeech.SHRINK_WAITS
-	_presentation.push_delay(waits[0])
+	if not _gen1:
+		_fade_music()
+	_presentation.push_delay(_shrink_waits()[0])
 	_queue(_shrink_to_first)
+
+
+func _shrink_waits() -> Array[int]:
+	return Gen2OakSpeech.GEN1_SHRINK_WAITS if _gen1 else Gen2OakSpeech.SHRINK_WAITS
 
 
 func _shrink_to_first() -> void:
 	_show_shrink_pic(0)
-	_presentation.push_delay(Gen2OakSpeech.SHRINK_WAITS[1])
+	_presentation.push_delay(_shrink_waits()[1])
 	_queue(_shrink_to_second)
 
 
 func _shrink_to_second() -> void:
 	_show_shrink_pic(1)
-	_presentation.push_delay(Gen2OakSpeech.SHRINK_WAITS[2])
+	if _gen1:
+		_fade_music()
+	_presentation.push_delay(_shrink_waits()[2])
 	_queue(_shrink_clear)
 
 
 func _shrink_clear() -> void:
 	_pic.texture = null
 	_pic_cell = {}
+	if _gen1:
+		_place_player_sprite()
+		_presentation.push_delay(_shrink_waits()[3])
+		_presentation.push_gen1_fade_out_white()
+		_queue(_shrink_done)
+		return
 	_presentation.push_delay(Gen2OakSpeech.SHRINK_WAITS[3])
 	_queue(_shrink_place_sprite)
 
@@ -334,6 +371,10 @@ func _show_beat() -> void:
 			_presentation.push_rotate_left_frontpic()
 		Gen2OakSpeech.Enter.WIPE:
 			_presentation.push_wipe_in_frontpic()
+		Gen2OakSpeech.Enter.MOVE_LEFT:
+			_presentation.push_gen1_move_pic_left()
+		Gen2OakSpeech.Enter.FADE_IN_WHITE:
+			_presentation.push_gen1_fade_in_white()
 	if _presentation.finished():
 		_print_text()
 		return
@@ -347,8 +388,8 @@ func _print_text() -> void:
 	if _text_box == null or _index >= _beats.size():
 		return
 	_text_box.visible = true
-	_text_box.show_text(Gen2OakSpeech.with_player_name(
-		String(_beats[_index]["text"]), _player_name
+	_text_box.show_text(Gen2OakSpeech.with_names(
+		String(_beats[_index]["text"]), _player_name, _rival_name
 	))
 	_phase = Phase.TEXT
 	_apply_frame()
@@ -360,29 +401,38 @@ func _print_text() -> void:
 func _play_cry_if_due() -> void:
 	if _cry_played or _index >= _beats.size() or _text_box == null:
 		return
-	if String(_beats[_index].get("key", "")) != "oak_2" or _text_box.is_revealing():
+	if String(_beats[_index].get("key", "")) != _cry_beat_key() or _text_box.is_revealing():
 		return
 	_cry_played = true
 	_play_intro_cry()
 
 
+func _cry_beat_key() -> String:
+	return "oak_speech_2" if _gen1 else "oak_2"
+
+
 ## `NamePlayer`: the pic slides to the right, then the preset menu opens over
 ## where it was.
 func _open_name_menu() -> void:
-	_presentation.push_move_player_pic(true)
+	if _gen1:
+		_presentation.push_gen1_slide_pic(true)
+	else:
+		_presentation.push_move_player_pic(true)
 	_queue(_show_name_choices)
 
 
 func _show_name_choices() -> void:
 	_name_menu = Gen2PlayerNameMenuScreen.new()
-	if not _name_menu.open(_data, _gender):
+	if not _name_menu.open(_data, _gender, _naming_role == Gen2OakSpeech.NAME_RIVAL):
 		_name_menu.free()
 		_name_menu = null
 		_open_naming()
 		return
 	_name_menu.closed.connect(_on_name_choice)
 	add_child(_name_menu)
-	if _text_box != null:
+	# `DisplayIntroNameTextBox` draws over the top eleven rows alone, so the box
+	# the introduction printed is still standing under it.
+	if _text_box != null and not _gen1:
 		_text_box.visible = false
 	_phase = Phase.NAME_MENU
 
@@ -393,46 +443,86 @@ func _on_name_choice(chosen: String) -> void:
 	if chosen == "":
 		_open_naming()
 		return
-	_player_name = chosen
+	_store_name(chosen)
 	if _text_box != null:
 		_text_box.visible = true
 	# `StorePlayerName`, `ApplyMonOrTrainerPals`, then the pic walks back.
-	_presentation.push_move_player_pic(false)
+	if _gen1:
+		_presentation.push_delay(GEN1_NAME_BOX_FRAMES + Gen2IntroPresentation.DELAY_3_FRAMES)
+		_presentation.push_gen1_slide_pic(false)
+	else:
+		_presentation.push_move_player_pic(false)
 	_queue(_enter_next_beat)
 
 
 func _open_naming() -> void:
 	_naming = Gen2NamingScreenScreen.new()
-	if not _naming.open(_data, Gen2NamingScreenScreen.PROMPT_PLAYER):
+	if not _naming.open(_data, _naming_prompt()):
 		_naming.free()
 		_naming = null
 		_enter_next_beat()
 		return
 	## `.Player`'s `GetPlayerIcon`, which is the sprite the gender screen picked.
-	_naming.set_sprite_icon(
-		_data, Gen2WorldSprite.player_normal_sprite(_gender == Gen2SaveData.GENDER_FEMALE)
-	)
+	## `PrintNamingText` draws no icon at all outside NAME_MON_SCREEN.
+	if not _gen1:
+		_naming.set_sprite_icon(
+			_data, Gen2WorldSprite.player_normal_sprite(_gender == Gen2SaveData.GENDER_FEMALE)
+		)
 	_naming.closed.connect(_on_named)
 	add_child(_naming)
 	_hide_speech(true)
 	_phase = Phase.NAMING
 
 
+func _naming_prompt() -> String:
+	if _naming_role != Gen2OakSpeech.NAME_RIVAL:
+		return Gen2NamingScreenScreen.GEN1_PROMPT_PLAYER if _gen1 \
+			else Gen2NamingScreenScreen.PROMPT_PLAYER
+	return Gen2NamingScreenScreen.GEN1_PROMPT_RIVAL if _gen1 \
+		else Gen2NamingScreenScreen.PROMPT_RIVAL
+
+
 ## `.NewName`'s tail: out to white, the screen cleared, the player pic drawn
 ## again at (6,4), `WaitBGMap`'s four frames, and back in from white.
+## `ChoosePlayerName`'s own `cp '@'` sends an empty entry straight back to the
+## keyboard rather than filling in a default.
 func _on_named(entered: String) -> void:
-	_player_name = Gen2OakSpeech.resolve_name(entered, _gender)
+	if _gen1:
+		Gen2Screen.drop(_naming)
+		_naming = null
+		if entered.strip_edges() == "":
+			_open_naming()
+			return
+		_store_name(entered)
+		_presentation.push(
+			Gen2IntroPresentation.KEEP, Gen2IntroPresentation.PIC_LEFT_COLUMN,
+			Gen2IntroPresentation.DELAY_3_FRAMES
+		)
+		_queue(_after_naming_fade)
+		return
+	_store_name(Gen2OakSpeech.resolve_name(entered, _gender))
 	_presentation.push_rotate_three_right()
 	_queue(_after_naming_fade)
 
 
+func _store_name(chosen: String) -> void:
+	if _naming_role == Gen2OakSpeech.NAME_RIVAL:
+		_rival_name = chosen
+		return
+	_player_name = chosen
+
+
 func _after_naming_fade() -> void:
-	Gen2Screen.drop(_naming)
-	_naming = null
+	if _naming != null:
+		Gen2Screen.drop(_naming)
+		_naming = null
 	_hide_speech(false)
 	if _text_box != null:
 		_text_box.visible = false
-	_show_pic(Gen2OakSpeech.Pic.PLAYER)
+	_show_pic(int(_beats[_index]["pic"]) if _gen1 else Gen2OakSpeech.Pic.PLAYER)
+	if _gen1:
+		_resume_after_name()
+		return
 	_presentation.push_delay(Gen2IntroPresentation.WAIT_BG_MAP_FRAMES)
 	_presentation.push_rotate_three_left()
 	_queue(_resume_after_name)
@@ -464,18 +554,22 @@ func _show_pic(kind: int) -> void:
 	if _data == null:
 		return
 	var cell: Dictionary = {}
-	var palette: PackedColorArray = PackedColorArray()
+	var palette: PackedColorArray = _text_palette if _gen1 else PackedColorArray()
 	var mirrored: bool = false
 	match kind:
 		Gen2OakSpeech.Pic.OAK:
-			palette = _data.trainer_palette(Gen2OakSpeech.POKEMON_PROF)
-			cell = Gen2OakSpeech.trainer_cell(_data, Gen2OakSpeech.POKEMON_PROF)
+			if not _gen1:
+				palette = _data.trainer_palette(Gen2OakSpeech.POKEMON_PROF)
+			cell = Gen2OakSpeech.trainer_cell(_data, _oak_class())
+		Gen2OakSpeech.Pic.RIVAL:
+			cell = Gen2OakSpeech.trainer_cell(_data, Gen2OakSpeech.GEN1_RIVAL1)
 		Gen2OakSpeech.Pic.MON:
 			# `PrepMonFrontpic` sets wBoxAlignment before `PlaceGraphic`, and
 			# `Intro_PrepTrainerPic` does not, so only this beat is mirrored.
 			mirrored = true
 			var species: int = Gen2OakSpeech.intro_species(_data)
-			palette = _data.palette(species)
+			if not _gen1:
+				palette = _data.palette(species)
 			cell = _species_cell(species)
 			if not cell.is_empty():
 				cell["indices"] = Gen2PicImage.x_flipped_indices(
@@ -483,13 +577,18 @@ func _show_pic(kind: int) -> void:
 				)
 		Gen2OakSpeech.Pic.PLAYER:
 			var female: bool = _gender == Gen2SaveData.GENDER_FEMALE
-			palette = Gen2OakSpeech.player_palette(_data, female)
-			cell = Gen2OakSpeech.player_cell(_data, female)
+			if _gen1:
+				cell = _player_front_cell(0)
+			else:
+				palette = Gen2OakSpeech.player_palette(_data, female)
+				cell = Gen2OakSpeech.player_cell(_data, female)
 	if cell.is_empty():
 		return
 	_pic_cell = cell
 	_pic_palette = palette
-	_pic_pad_columns = Gen2PicImage.frontpic_pad_columns(int(cell["width"]) / TILE, mirrored)
+	_pic_pad_columns = Gen2PicImage.frontpic_pad_columns(
+		int(cell["width"]) / TILE, mirrored, _data.generation
+	)
 	_pic.size = Vector2(float(cell["width"]), float(cell["height"]))
 	_pic.position = Vector2(
 		float((PIC_AT.x + _pic_pad_columns) * TILE),
@@ -508,6 +607,19 @@ func _redraw_pic(colors: PackedColorArray) -> void:
 	))
 
 
+func _oak_class() -> int:
+	return Gen2OakSpeech.GEN1_PROF_OAK if _gen1 else Gen2OakSpeech.POKEMON_PROF
+
+
+func _player_front_cell(slot: int) -> Dictionary:
+	var pic: Dictionary = _data.player_frontpic(slot)
+	if pic.is_empty():
+		return {}
+	return Gen2PicImage.atlas_cell(
+		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic
+	)
+
+
 func _species_cell(species: int) -> Dictionary:
 	var pic: Dictionary = _data.species_pic(species)
 	if pic.is_empty():
@@ -522,8 +634,8 @@ func _start_audio() -> void:
 		return
 	_audio_started = true
 	_audio.play_record(
-		_data.world_audio(&"music", Gen2OakSpeech.MUSIC_ROUTE_30), &"music",
-		_audio_assets()
+		_data.world_audio(&"music", Gen1Layout.MUSIC_ROUTES2 if _gen1 \
+			else Gen2OakSpeech.MUSIC_ROUTE_30), &"music", _audio_assets()
 	)
 
 
@@ -532,6 +644,16 @@ func _start_audio() -> void:
 ## and re-places the graphic without touching the palettes.
 func _show_shrink_pic(which: int) -> void:
 	if _pic == null or _data == null:
+		return
+	if _gen1:
+		var cell: Dictionary = _player_front_cell(Gen2OakSpeech.GEN1_SHRINK_SLOTS[which])
+		if cell.is_empty():
+			return
+		_pic_cell = cell
+		_pic_pad_columns = 0
+		_pic.size = Vector2(float(cell["width"]), float(cell["height"]))
+		_pic.position = Vector2(PIC_AT * TILE)
+		_redraw_pic(Gen2IntroPresentation.apply_bgp(_pic_palette, _presentation.bgp()))
 		return
 	var pic_name: String = Gen2Layout.SHRINK_PIC_NAMES[which]
 	var indices: PackedByteArray = _data.tile_indices(pic_name)
@@ -559,10 +681,10 @@ func _place_player_sprite() -> void:
 		return
 	# The routine names PAL_OW_RED and PAL_OW_BLUE where `InitPlayerObject` names
 	# PAL_NPC_RED and PAL_NPC_BLUE; both pairs index the same two rows, since the
-	# lookup takes the low three bits.
-	var colors: PackedColorArray = _data.overworld_sprite_palette(
-		Gen2WorldSprite.player_palette(female), Gen2WorldPalette.TIME_DAY
-	)
+	var colors: PackedColorArray = _text_palette if _gen1 \
+		else _data.overworld_sprite_palette(
+			Gen2WorldSprite.player_palette(female), Gen2WorldPalette.TIME_DAY
+		)
 	if _sprite == null:
 		_sprite = TextureRect.new()
 		_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -587,14 +709,16 @@ func _redraw_sprite(colors: PackedColorArray) -> void:
 
 func _fade_music() -> void:
 	if _audio != null:
-		_audio.fade_out(Gen2OakSpeech.SHRINK_FADE_FRAMES)
+		_audio.fade_out(Gen2OakSpeech.GEN1_SHRINK_FADE_FRAMES if _gen1 \
+			else Gen2OakSpeech.SHRINK_FADE_FRAMES)
 
 
 func _play_shrink_sfx() -> void:
 	if _audio == null or _data == null:
 		return
 	_audio.play_record(
-		_data.world_audio(&"sfx", Gen2OakSpeech.SHRINK_SFX), &"sfx", _audio_assets()
+		_data.world_audio(&"sfx", Gen1Layout.SFX_SHRINK if _gen1 \
+			else Gen2OakSpeech.SHRINK_SFX), &"sfx", _audio_assets()
 	)
 
 
@@ -602,7 +726,7 @@ func _play_intro_cry() -> void:
 	if _audio == null or _data == null:
 		return
 	_audio.play_record(
-		_data.species_cry(Gen2OakSpeech.intro_species(_data)), &"cry", _audio_assets()
+		_data.species_cry(Gen2OakSpeech.intro_cry(_data)), &"cry", _audio_assets()
 	)
 
 

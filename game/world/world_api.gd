@@ -456,6 +456,7 @@ static func open_snapshot(
 	out._gen1_last_map = world_snapshot.gen1_last_map
 	out._gen1_last_blackout_map = world_snapshot.gen1_last_blackout_map
 	out.gen1_map_pal_offset = world_snapshot.gen1_map_pal_offset
+	out.gen1_rival_name = world_snapshot.gen1_rival_name
 	out.dig_warp = world_snapshot.dig_warp.duplicate()
 	out.backup_warp = world_snapshot.backup_warp.duplicate()
 	## `.SpawnAfterE4` and `.AfterRed`, which stand between `ClockContinue` and

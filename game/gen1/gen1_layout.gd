@@ -660,6 +660,39 @@ const HOF_PC_TEXT_AT: Dictionary = {"accessed": 0x00}
 const CHANGE_BOX_TEXT_AT: Dictionary = {"warning": 0x00}
 const CHOOSE_BOX_TEXT_AT: Dictionary = {"choose": 0x00}
 
+const INTRO_TEXT_AT: Dictionary = {
+	"oak_speech_1": 0x00, "oak_speech_2": 0x05, "introduce_player": 0x0F,
+	"introduce_rival": 0x14, "oak_speech_3": 0x19,
+}
+const INTRO_NAME_TEXT_AT: Dictionary = {"your_name_is": 0x00, "his_name_is": 0x48}
+
+## `special_warp_spec REDS_HOUSE_2F, 3, 6, REDS_HOUSE_2`: a map byte, a
+## `fly_warp` and the destination's tileset. `fly_warp` writes `db y, x` for
+## arguments given as x then y, so the cell `LoadSpecialWarpData` copies onto
+## `wYCoord` is (6, 3) read the other way round.
+const NEW_GAME_WARP_RECORD_AT: int = 1
+const NEW_GAME_WARP_TILESET_AT: int = 7
+
+const INTRO_NAME_ROWS: int = 4
+const INTRO_NAME_MAX: int = 16
+
+## `LowerCaseAlphabet` with `UpperCaseAlphabet` behind it: five rows of nine and
+## the case-switch label. `<ED>` is the last cell of the last row, and its tile
+## is `ED_Tile` rather than the font's own $F0.
+const ALPHABET_ROWS: int = 5
+const ALPHABET_COLUMNS: int = 9
+const ALPHABET_LABEL_LENGTH: int = 11
+const ALPHABET_STRIDE: int = ALPHABET_ROWS * ALPHABET_COLUMNS + ALPHABET_LABEL_LENGTH
+const ALPHABET_UPPER: int = 0
+const ALPHABET_LOWER: int = 1
+const CHAR_ED: int = 0xF0
+
+const MUSIC_ROUTES2: int = 239
+const SFX_SHRINK: int = 156
+const INTRO_SPECIES_KANTO: int = 33
+const INTRO_CRY_KANTO: int = 30
+const INTRO_SPECIES_YELLOW: int = 25
+
 ## `DexRatingsTable`: `dbw threshold, text`, the walk stopping at the first row
 ## the owned count is under, with `DexCompletionText`'s stub right behind it.
 const DEX_RATING_ROWS: int = 16
@@ -1760,6 +1793,13 @@ const RED_BLUE: Dictionary = {
 	## `wSavedCoordIndex`, whose HRAM twin is `item_to_remove`'s own byte.
 	"saved_coord_index": 0xCF0D,
 	"fly_warps": 0x06448,
+	"new_game_warp": 0x06420,
+	"intro_text": 0x06253,
+	"intro_name_text": 0x0699F,
+	"default_names_player": 0x06AA8,
+	"default_names_rival": 0x06ABE,
+	"intro_alphabet": 0x0679E,
+	"intro_ed_tile": 0x06767,
 	## `LoadSpecialWarpData` and `ItemUseEscapeRope`: the dungeon warp tables, the
 	## tilesets a rope may be pulled on and the rest houses that record no map.
 	"dungeon_warps": 0x063BF,
@@ -1790,6 +1830,8 @@ const RED_BLUE: Dictionary = {
 	"pic_player_back": 0x33E0A,
 	"pic_old_man_back": 0x33E9A,
 	"pic_player_front": 0x12EDE,
+	"pic_shrink_1": 0x12FE8,
+	"pic_shrink_2": 0x13042,
 	"trainer_card_box": 0x2FB98,
 	"trainer_card_names": 0x2FC28,
 	"badge_numbers": 0x2FD98,
@@ -2120,6 +2162,13 @@ const YELLOW: Dictionary = {
 	"battle_result": 0xCF0B,
 	"saved_coord_index": 0xCF0D,
 	"fly_warps": 0x061BC,
+	"new_game_warp": 0x06194,
+	"intro_text": 0x05FB9,
+	"intro_name_text": 0x0671D,
+	"default_names_player": 0x06827,
+	"default_names_rival": 0x06840,
+	"intro_alphabet": 0x0651C,
+	"intro_ed_tile": 0x064E5,
 	"dungeon_warps": 0x06133,
 	"escape_rope_tilesets": 0x0DE28,
 	"rest_houses": 0x06F0A,
@@ -2145,6 +2194,8 @@ const YELLOW: Dictionary = {
 	"pic_player_back": 0xF43B1,
 	"pic_old_man_back": 0xF4441,
 	"pic_player_front": 0x11A97,
+	"pic_shrink_1": 0x11B96,
+	"pic_shrink_2": 0x11BF0,
 	"trainer_card_box": 0xF5C24,
 	"trainer_card_names": 0xF5CB4,
 	"badge_numbers": 0xF5E24,
@@ -2321,8 +2372,11 @@ const YELLOW: Dictionary = {
 
 
 ## Bank $1D holds the 668 symbols that move between Red and Blue: everything in
-## it sits one byte later on Blue.
+## it sits one byte later on Blue. `DefaultNamesRival` moves for a reason of its
+## own: the player table in front of it spells BLUE, GARY and JOHN where Red
+## spells RED, ASH and JACK, which is two bytes more.
 const BLUE_ONLY: Dictionary = {
+	"default_names_rival": 0x06AC0,
 	"vending_text": 0x74F9A,
 	"hidden_items": 0x76689,
 	"hidden_coins": 0x7679A,

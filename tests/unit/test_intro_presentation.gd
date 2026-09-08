@@ -1,7 +1,9 @@
 extends GutTest
 
 ## `home/fade.asm` and `engine/menus/intro_menu.asm`'s frame counts and palette
-## bytes, which are the whole of the intro's timing.
+## bytes, which are the whole of the intro's timing, with
+## `engine/movie/oak_speech/oak_speech.asm`'s own runs and beat order beside
+## them.
 
 var _row := PackedColorArray([Color.RED, Color.GREEN, Color.BLUE, Color.WHITE])
 var _motion: Gen2IntroPresentation = null
@@ -161,3 +163,83 @@ func test_remaining_frames_counts_what_the_queue_still_owes() -> void:
 	for _frame: int in 10:
 		_motion.advance_frame()
 	assert_eq(_motion.remaining_frames(), 14)
+
+
+# --- Generation 1's own runs --------------------------------------------------
+
+## `GBFadeOutToWhite`: `FadePal6`, `FadePal7` and `FadePal8`'s rBGP bytes, eight
+## frames each, ending on a screen with every index white.
+func test_the_generation_one_fade_out_is_three_eights_ending_on_white() -> void:
+	_motion.push_gen1_fade_out_white()
+	var trace: Array[int] = _bgp_trace()
+	assert_eq(trace.size(), 24)
+	assert_eq([trace[0], trace[8], trace[16], trace[23]], [0x90, 0x40, 0x00, 0x00])
+
+
+## `GBFadeInFromWhite` reads the same table backwards from `FadePal7`.
+func test_the_generation_one_fade_in_ends_on_the_identity() -> void:
+	_motion.push_gen1_fade_in_white()
+	var trace: Array[int] = _bgp_trace()
+	assert_eq(trace.size(), 24)
+	assert_eq([trace[0], trace[8], trace[16]], [0x40, 0x90, 0xE4])
+
+
+## `MovePicLeft`: rWX 119 for two frames, the second writing the identity
+## palette, then one frame per eight until the subtraction would pass zero.
+func test_the_picture_walks_in_from_fourteen_columns_of_window() -> void:
+	_motion.push_gen1_move_pic_left()
+	var columns: Array[int] = _column_trace()
+	assert_eq(columns.size(), 16)
+	assert_eq(columns[0], Gen2IntroPresentation.PIC_LEFT_COLUMN + 14)
+	assert_eq(columns[1], columns[0], "the second frame writes the palette, not rWX")
+	assert_eq(columns[columns.size() - 1], Gen2IntroPresentation.PIC_LEFT_COLUMN)
+
+	_motion.clear()
+	_motion.push_gen1_move_pic_left()
+	var palettes: Array[int] = _bgp_trace()
+	assert_eq(palettes[1], Gen2IntroPresentation.BGP_NORMAL)
+
+
+## `OakSpeechSlidePicRight` and its left half: six columns, one `Delay3` each,
+## between the picture's own place and where the name box leaves it.
+func test_the_name_box_slide_is_six_columns_of_three_frames() -> void:
+	_motion.push_gen1_slide_pic(true)
+	var columns: Array[int] = _column_trace()
+	assert_eq(columns.size(), 18)
+	assert_eq(columns[0], Gen2IntroPresentation.PIC_LEFT_COLUMN + 1)
+	assert_eq(columns[columns.size() - 1], Gen2IntroPresentation.GEN1_SLIDE_RIGHT_COLUMN)
+
+	_motion.clear()
+	_motion.push_gen1_slide_pic(false)
+	columns = _column_trace()
+	assert_eq(columns.size(), 18)
+	assert_eq(columns[columns.size() - 1], Gen2IntroPresentation.PIC_LEFT_COLUMN)
+
+
+## `OakSpeech`'s own run: two pictures and two naming branches where Generation
+## 2 has one, and the two answers printed over the pictures that asked for them.
+func test_the_generation_one_beats_are_the_source_routines_order() -> void:
+	var keys: Array = []
+	var names: Array = []
+	for row: Array in Gen2OakSpeech.GEN1_ORDER:
+		keys.append(String(row[1]))
+		if String(row[4]) != Gen2OakSpeech.NAME_NONE:
+			names.append(String(row[4]))
+	assert_eq(keys, [
+		"oak_speech_1", "oak_speech_2", "introduce_player", "your_name_is",
+		"introduce_rival", "his_name_is", "oak_speech_3",
+	])
+	assert_eq(names, [Gen2OakSpeech.NAME_PLAYER, Gen2OakSpeech.NAME_RIVAL])
+	assert_eq(int(Gen2OakSpeech.GEN1_ORDER[3][0]), Gen2OakSpeech.Pic.PLAYER)
+	assert_eq(int(Gen2OakSpeech.GEN1_ORDER[5][0]), Gen2OakSpeech.Pic.RIVAL)
+	assert_eq(int(Gen2OakSpeech.GEN1_ORDER[1][2]), Gen2OakSpeech.Enter.MOVE_LEFT)
+	assert_eq(int(Gen2OakSpeech.GEN1_ORDER[6][2]), Gen2OakSpeech.Enter.FADE_IN_WHITE)
+
+
+## `_OakSpeechText3` opens on `<PLAYER>` and `_HisNameIsText` carries `<RIVAL>`,
+## which are the only two print-time names the speech has to fill.
+func test_both_intro_names_are_filled_where_the_codec_left_them() -> void:
+	assert_eq(
+		Gen2OakSpeech.with_names("<PLAYER>! <RIVAL> waits.", "RED", "BLUE"),
+		"RED! BLUE waits."
+	)

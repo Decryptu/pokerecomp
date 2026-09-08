@@ -140,8 +140,11 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_dex_ratings,
 	_verify_overworld_coords,
 	_verify_field_moves,
+	_verify_intro,
 	_verify_world,
 ]
+
+const NEW_NAME: String = "NEW NAME"
 
 ## What `LoadHudAndHpBarAndStatusTilePatterns` copies over the text box's own,
 ## in load order and under the names [Gen2BattleTiles] assembles a page from.
@@ -195,6 +198,18 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"oaks_aide": ["oaks_aide_text", Gen1Layout.OAKS_AIDE_TEXT_AT],
 }
 const CARD_KEY_TEXT_NAMES: Array[String] = ["card_key_success", "card_key_fail"]
+
+const INTRO_TEXT_RUNS: Dictionary = {
+	"intro_text": Gen1Layout.INTRO_TEXT_AT,
+	"intro_name_text": Gen1Layout.INTRO_NAME_TEXT_AT,
+}
+const INTRO_NAME_TABLES: Dictionary = {
+	"player": "default_names_player", "rival": "default_names_rival",
+}
+
+const PLAYER_FRONTPICS: Array[String] = [
+	"pic_player_front", "pic_shrink_1", "pic_shrink_2",
+]
 
 
 static func verify_layout(rom: RomFile) -> Dictionary:
@@ -522,6 +537,31 @@ static func _verify_facility_text(rom: RomFile, layout: Dictionary) -> Dictionar
 	return _ok()
 
 
+static func _verify_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
+	for run: String in INTRO_TEXT_RUNS:
+		var slots: Dictionary = INTRO_TEXT_RUNS[run]
+		for name: String in slots:
+			if facility_text(
+				rom, Gen1Layout.facility_text_offset(layout, run, slots, name)
+			).is_empty():
+				return _fail("the intro's %s box does not decode." % name)
+	for role: String in INTRO_NAME_TABLES:
+		var key: String = INTRO_NAME_TABLES[role]
+		if Gen1Text.decode(rom.bytes(), int(layout[key]), NEW_NAME.length()) != NEW_NAME:
+			return _fail("%s does not open on NEW NAME." % key)
+	for table: int in [0, Gen1Layout.ALPHABET_STRIDE]:
+		var end: int = int(layout["intro_alphabet"]) + table \
+			+ Gen1Layout.ALPHABET_ROWS * Gen1Layout.ALPHABET_COLUMNS - 1
+		if rom.u8(end) != Gen1Layout.CHAR_ED:
+			return _fail("the alphabet at +$%02X does not end on <ED>." % table)
+	var warp: int = int(layout["new_game_warp"])
+	if not Gen1Layout.is_real_map(rom.u8(warp)) \
+		or rom.u8(warp + Gen1Layout.NEW_GAME_WARP_TILESET_AT) \
+			>= Gen1Layout.tileset_count(rom.id):
+		return _fail("NewGameWarp names map %d." % rom.u8(warp))
+	return _ok()
+
+
 ## The tables an overworld routine walks against the player's cell, each naming
 ## something the rest of the cache holds: `BikeRidingTilesets`' five rows,
 ## `ForcedBikeOrSurfMaps`' eight and the two Snorlax flute lists.
@@ -835,6 +875,8 @@ func import_rom(
 		RomCache.items_path(directory): items,
 		RomCache.tmhm_moves_path(directory): tmhm_moves,
 		RomCache.trainers_path(directory): trainers,
+		RomCache.intro_text_path(directory): _import_intro_text(rom, layout),
+		RomCache.name_input_chars_path(directory): _import_alphabets(rom, layout),
 	}
 	for path: String in sections:
 		if not RomCache.write_json(path, sections[path]):
@@ -868,6 +910,7 @@ func import_rom(
 		"prizes": _import_prizes(rom, layout),
 		"town_map": _import_town_map(rom, layout),
 		"special_warps": _import_special_warps(rom, layout),
+		"intro_names": _import_intro_names(rom, layout),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -1162,8 +1205,17 @@ func _import_special_warps(rom: RomFile, layout: Dictionary) -> Dictionary:
 			+ Gen1Layout.FLY_WARP_RECORD_AT
 		(rows[index] as Dictionary)["y"] = rom.u8(record)
 		(rows[index] as Dictionary)["x"] = rom.u8(record + 1)
+	var new_game: int = int(layout["new_game_warp"])
+	var home: int = new_game + Gen1Layout.NEW_GAME_WARP_RECORD_AT \
+		+ Gen1Layout.FLY_WARP_RECORD_AT
 	return {
 		"dungeon_warps": rows,
+		"new_game_warp": {
+			"map": rom.u8(new_game),
+			"y": rom.u8(home),
+			"x": rom.u8(home + 1),
+			"tileset": rom.u8(new_game + Gen1Layout.NEW_GAME_WARP_TILESET_AT),
+		},
 		"escape_rope_tilesets": _byte_list(rom, int(layout["escape_rope_tilesets"])),
 		"rest_houses": _byte_list(rom, int(layout["rest_houses"])),
 		"bike_riding_tilesets": _byte_list(rom, int(layout["bike_riding_tilesets"])),
@@ -1287,6 +1339,61 @@ func _import_day_care_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 		out[name] = facility_text(rom, Gen1Layout.facility_text_offset(
 			layout, "day_care_text", Gen1Layout.DAY_CARE_TEXT_AT, name
 		))
+	return out
+
+
+func _import_intro_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for run: String in INTRO_TEXT_RUNS:
+		var slots: Dictionary = INTRO_TEXT_RUNS[run]
+		for name: String in slots:
+			out[name] = facility_text(
+				rom, Gen1Layout.facility_text_offset(layout, run, slots, name)
+			)
+	return out
+
+
+func _import_intro_names(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for role: String in INTRO_NAME_TABLES:
+		var at: int = int(layout[INTRO_NAME_TABLES[role]])
+		var rows: Array = []
+		for _row: int in Gen1Layout.INTRO_NAME_ROWS:
+			var name: String = ""
+			while rom.u8(at) != Gen1Text.NEXT_LINE and rom.u8(at) != Gen1Text.TERMINATOR \
+				and name.length() < Gen1Layout.INTRO_NAME_MAX:
+				name += Gen1Text.character(rom.u8(at))
+				at += 1
+			rows.append(name)
+			at += 1
+		out[role] = rows
+	return out
+
+
+func _import_alphabets(rom: RomFile, layout: Dictionary) -> Array:
+	var out: Array = []
+	for table: int in [Gen1Layout.ALPHABET_UPPER, Gen1Layout.ALPHABET_LOWER]:
+		var at: int = int(layout["intro_alphabet"])
+		if table == Gen1Layout.ALPHABET_UPPER:
+			at += Gen1Layout.ALPHABET_STRIDE
+		var rows: Array = []
+		for row: int in Gen1Layout.ALPHABET_ROWS:
+			var codes: Array[int] = []
+			for column: int in Gen1Layout.ALPHABET_COLUMNS:
+				codes.append(rom.u8(at + row * Gen1Layout.ALPHABET_COLUMNS + column))
+			rows.append(codes)
+		rows.append(_label_codes(rom, at + Gen1Layout.ALPHABET_ROWS * Gen1Layout.ALPHABET_COLUMNS))
+		out.append(rows)
+	return out
+
+
+static func _label_codes(rom: RomFile, at: int) -> Array[int]:
+	var out: Array[int] = []
+	for index: int in Gen1Layout.ALPHABET_LABEL_LENGTH:
+		var code: int = rom.u8(at + index)
+		if code == Gen1Text.TERMINATOR:
+			break
+		out.append(code)
 	return out
 
 
@@ -1609,18 +1716,18 @@ func _import_pics(
 			player_back, slot
 		)
 
-	## `RedPicFront`, which `DrawTrainerInfo` and Oak's speech draw and which no
-	## `BaseStats` row names, so it is imported beside the back pics rather than
-	## with the species.
-	var player_front: Dictionary = PokeTiles.new_atlas(Gen1Layout.FRONTPIC_MAX_TILES, 1)
-	_decode_pic(codec, rom, int(layout["pic_player_front"]), player_front, 0)
+	var player_front: Dictionary = PokeTiles.new_atlas(
+		Gen1Layout.FRONTPIC_MAX_TILES, PLAYER_FRONTPICS.size()
+	)
+	for slot: int in PLAYER_FRONTPICS.size():
+		_decode_pic(codec, rom, int(layout[PLAYER_FRONTPICS[slot]]), player_front, slot)
 
 	# A wrong offset decodes nothing, so an atlas short of a cell is a bad pin.
 	var wanted: Dictionary = {
 		"front": Gen1Layout.SPECIES_COUNT, "back": Gen1Layout.SPECIES_COUNT,
 		"trainers": Gen1Layout.TRAINER_CLASS_COUNT,
 		"player_back": Gen1Layout.PLAYER_BACKPICS.size(),
-		"player_front": 1,
+		"player_front": PLAYER_FRONTPICS.size(),
 	}
 	var atlases: Dictionary = {
 		"front": front, "back": back, "trainers": trainers,
@@ -1719,6 +1826,12 @@ func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"offset": int(layout["stats_p"]),
 			"tiles": Gen1Layout.STATS_P_TILES,
 			"first_code": Gen1Layout.STATS_P_CODE,
+			"bits": 1,
+		},
+		"intro_ed": {
+			"offset": int(layout["intro_ed_tile"]),
+			"tiles": 1,
+			"first_code": Gen1Layout.CHAR_ED,
 			"bits": 1,
 		},
 	}

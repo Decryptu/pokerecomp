@@ -1,14 +1,13 @@
 class_name Gen2WorldSpawn
 extends RefCounted
 
-## Canonical new-game spawn values from Pokémon Crystal's SPAWN_HOME record.
-## These are map coordinates, not a guessed development-screen position.
 
 const NEW_BARK_GROUP: int = 24
 const PLAYERS_HOUSE_2F: int = 7
 const HOME_CELL: Vector2i = Vector2i(3, 3)
 const HOME_FACING: int = Gen2WorldSprite.FACING_DOWN
 const START_MONEY: int = 3000
+const GEN1_POTION: int = 0x14
 ## InitDecorations (engine/overworld/decorations.asm): DECO_FEATHERY_BED and
 ## DECO_TOWN_MAP. The other two maptile slots remain zero.
 const INITIAL_MAPTILE_DECORATIONS: Dictionary = {&"bed": 0x02, &"poster": 0x10}
@@ -18,9 +17,32 @@ const INITIAL_MAPTILE_DECORATIONS: Dictionary = {&"bed": 0x02, &"poster": 0x10}
 const INITIAL_DECORATION_FLAGS: Array[int] = [676, 687]
 
 
+static func gen1_new_game_snapshot(data: GameData) -> Gen2WorldSnapshot:
+	var warp: Dictionary = data.gen1_new_game_warp()
+	if warp.is_empty():
+		return null
+	var map: Gen2WorldMap = data.world_map(0, int(warp["map"]))
+	var cell := Vector2i(int(warp["x"]), int(warp["y"]))
+	if map == null or data.world_tileset(map.tileset) == null \
+		or cell.x < 0 or cell.y < 0 \
+		or cell.x >= map.collision_width or cell.y >= map.collision_height:
+		return null
+	var snapshot := Gen2WorldSnapshot.new()
+	snapshot.map_id = Vector2i(0, int(warp["map"]))
+	snapshot.player_cell = cell
+	snapshot.player_facing = HOME_FACING
+	snapshot.movement_mode = Gen2WorldAPI.MOVEMENT_WALK
+	snapshot.gen1_last_map = Gen1Layout.PALLET_TOWN
+	snapshot.world_state = Gen2WorldState.new({}, {}, {}, {0: START_MONEY})
+	snapshot.world_state.apply_changes({}, {}, {"pc_items": {GEN1_POTION: 1}})
+	return snapshot
+
+
 static func new_game_snapshot(data: GameData) -> Gen2WorldSnapshot:
 	if data == null:
 		return null
+	if data.generation == RomRegistry.GEN1:
+		return gen1_new_game_snapshot(data)
 	var map: Gen2WorldMap = data.world_map(NEW_BARK_GROUP, PLAYERS_HOUSE_2F)
 	if map == null or data.world_tileset(map.tileset) == null:
 		return null

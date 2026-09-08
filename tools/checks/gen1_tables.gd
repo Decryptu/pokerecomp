@@ -37,6 +37,35 @@ const PINNED_SPECIES: Dictionary = {
 	151: ["MEW", 100, 100, 100, 100, 100, 0x18, 0x18, 45, 64],
 }
 
+const INTRO_BEAT_KEYS: Array = [
+	"oak_speech_1", "oak_speech_2", "introduce_player", "your_name_is",
+	"introduce_rival", "his_name_is", "oak_speech_3",
+]
+const OAK_SPEECH_1_OPENS: String = "Hello there!"
+const INTRO_MARKERS: Array = [
+	["oak_speech_3", "<PLAYER>"], ["your_name_is", "<PLAYER>"],
+	["his_name_is", "<RIVAL>"],
+]
+
+const INTRO_NAMES: Dictionary = {
+	&"red": {
+		"player": ["NEW NAME", "RED", "ASH", "JACK"],
+		"rival": ["NEW NAME", "BLUE", "GARY", "JOHN"],
+	},
+	&"blue": {
+		"player": ["NEW NAME", "BLUE", "GARY", "JOHN"],
+		"rival": ["NEW NAME", "RED", "ASH", "JACK"],
+	},
+	&"yellow": {
+		"player": ["NEW NAME", "YELLOW", "ASH", "JACK"],
+		"rival": ["NEW NAME", "BLUE", "GARY", "JOHN"],
+	},
+}
+const INTRO_SPECIES: Dictionary = {
+	&"red": [33, 30], &"blue": [33, 30], &"yellow": [25, 25],
+}
+const NEW_GAME_WARP: Dictionary = {"map": 38, "x": 3, "y": 6, "tileset": 4}
+
 ## `data/moves/moves.asm`, first and last: effect, power, type, accuracy, pp.
 const PINNED_MOVES: Dictionary = {
 	1: ["POUND", 0, 40, 0x00, 255, 35],
@@ -145,6 +174,85 @@ func _one_game() -> void:
 	_tmhm()
 	_trainers()
 	_trades()
+	_intro()
+
+
+func _intro() -> void:
+	var data: GameData = _r.data
+	var beats: Array = Gen2OakSpeech.beats(data)
+	var keys: Array = []
+	for beat: Dictionary in beats:
+		keys.append(String(beat["key"]))
+		_r.check(not String(beat["text"]).is_empty(), "%s is empty." % beat["key"])
+	_r.check(keys == INTRO_BEAT_KEYS, "the intro beats read %s." % [keys])
+	_r.check(data.intro_text("oak_speech_1").begins_with(OAK_SPEECH_1_OPENS),
+		"OakSpeechText1 opens %s." % data.intro_text("oak_speech_1").left(20))
+	for pair: Array in INTRO_MARKERS:
+		_r.check(data.intro_text(String(pair[0])).contains(String(pair[1])),
+			"%s carries no %s." % pair)
+
+	var names: Dictionary = INTRO_NAMES[_r.game_id]
+	for role: String in names:
+		_r.check(data.gen1_default_names(role == "rival") == names[role],
+			"the %s names read %s." % [role, data.gen1_default_names(role == "rival")])
+	_intro_keyboards()
+	_r.check(data.player_frontpic(Gen2OakSpeech.GEN1_SHRINK_SLOTS[1]).size() > 0
+		and data.tile_indices("intro_ed").size() == PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT,
+		"the shrink pics or the ED tile are missing.")
+	_r.check(Gen2OakSpeech.intro_species(data) == int(INTRO_SPECIES[_r.game_id][0])
+		and Gen2OakSpeech.intro_cry(data) == int(INTRO_SPECIES[_r.game_id][1]),
+		"the speech draws %d and cries %d." % [
+			Gen2OakSpeech.intro_species(data), Gen2OakSpeech.intro_cry(data)
+		])
+	_new_game_warp()
+
+
+func _intro_keyboards() -> void:
+	var model: Gen2NamingScreen = Gen2NamingScreen.for_gen1_player(_r.data)
+	var rows: Array = model.rows()
+	_r.check(rows.size() == Gen1Layout.ALPHABET_ROWS + 1,
+		"the upper keyboard holds %d rows." % rows.size())
+	for row: int in Gen1Layout.ALPHABET_ROWS:
+		_r.check((rows[row] as Array).size() == Gen1Layout.ALPHABET_COLUMNS,
+			"keyboard row %d holds %d cells." % [row, (rows[row] as Array).size()])
+	model.row = Gen2NamingScreen.GEN1_END_ROW
+	model.column = Gen2NamingScreen.GEN1_LAST_COLUMN
+	_r.check(model.last_character() == Gen1Layout.CHAR_ED
+		and model.cursor_command() == Gen2NamingScreen.COMMAND_END,
+		"the last letter cell is not <ED>.")
+	model.upper_case = false
+	_r.check(model.rows()[0] != rows[0], "both keyboards hold the same letters.")
+	_r.check(model.max_length == Gen2NamingScreen.GEN1_MAX_LENGTH,
+		"a name may be %d characters." % model.max_length)
+
+
+func _new_game_warp() -> void:
+	var warp: Dictionary = _r.data.gen1_new_game_warp()
+	_r.check(warp == NEW_GAME_WARP, "NewGameWarp reads %s." % [warp])
+	var snapshot: Gen2WorldSnapshot = Gen2WorldSpawn.new_game_snapshot(_r.data)
+	if not _r.check(snapshot != null, "the new game builds no world."):
+		return
+	_r.check(
+		snapshot.map_id == Vector2i(0, int(NEW_GAME_WARP["map"]))
+		and snapshot.player_cell == Vector2i(
+			int(NEW_GAME_WARP["x"]), int(NEW_GAME_WARP["y"])
+		)
+		and snapshot.world_state.money(0) == Gen2WorldSpawn.START_MONEY
+		and snapshot.world_state.pc_items() == {Gen2WorldSpawn.GEN1_POTION: 1}
+		and snapshot.world_state.items().is_empty(),
+		"the new game opens at %s %s with %s." % [
+			snapshot.map_id, snapshot.player_cell, snapshot.world_state.pc_items()
+		]
+	)
+	var map: Gen2WorldMap = _r.data.world_map(snapshot.map_id.x, snapshot.map_id.y)
+	var tileset: Gen2WorldTileset = _r.data.world_tileset(map.tileset)
+	_r.check(tileset.tile_passable(int(map.collision[
+		snapshot.player_cell.y * map.collision_width + snapshot.player_cell.x
+	])), "the new game's own cell cannot be stood on.")
+	_r.note("the intro reads %d boxes and opens on map %d at %s" % [
+		Gen1Layout.INTRO_TEXT_AT.size() + Gen1Layout.INTRO_NAME_TEXT_AT.size(),
+		snapshot.map_id.y, snapshot.player_cell,
+	])
 
 
 func _species() -> void:

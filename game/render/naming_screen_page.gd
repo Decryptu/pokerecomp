@@ -82,9 +82,24 @@ const CLEARED_BOX: Array = [[1, 1, 4, 18], [1, 6, 9, 18], [1, 16, 1, 18]]
 const MAIL_BORDER_ROWS: int = 6
 const CLEARED_MAIL: Array = [[1, 1, 4, 18]]
 
+const GEN1_PROMPT_AT: Vector2i = Vector2i(0, 1)
+const GEN1_ENTRY_AT: Vector2i = Vector2i(10, 2)
+const GEN1_UNDERSCORE_AT: Vector2i = Vector2i(10, 3)
+const GEN1_BORDER_AT: Vector2i = Vector2i(0, 4)
+const GEN1_BORDER_SIZE: Vector2i = Vector2i(20, 11)
+const GEN1_KEYBOARD_AT: Vector2i = Vector2i(2, 5)
+const GEN1_LABEL_AT: Vector2i = Vector2i(2, 15)
+const GEN1_CURSOR_COLUMN: int = 1
+const GEN1_ROW_STEP: int = 2
+const GEN1_UNDERSCORE_TILE: int = 0x76
+const GEN1_RAISED_UNDERSCORE_TILE: int = 0x77
+const GEN1_HP_BAR_FIRST_CODE: int = Gen1Layout.BATTLE_FONT_FIRST_CODE
+const GEN1_CURSOR_CODE: int = 0xED
+
 const BLANK_TILE: int = -1
 
 var font: Gen2Font = null
+var _gen1: bool = false
 
 var _tiles: Dictionary = {}
 var _cursor_tiles: Dictionary = {}
@@ -98,6 +113,14 @@ static func from_data(data: GameData) -> Gen2NamingScreenPage:
 		return null
 	var out := Gen2NamingScreenPage.new()
 	out.font = glyphs
+	out._gen1 = data.generation == RomRegistry.GEN1
+	if out._gen1:
+		out._load_sheet(
+			data, "battle_font", out._tiles, GEN1_HP_BAR_FIRST_CODE,
+			Gen1Layout.BATTLE_FONT_TILES
+		)
+		out._load_sheet(data, "intro_ed", out._tiles, Gen1Layout.CHAR_ED, 1)
+		return out
 	out._load_sheet(data, "naming_border", out._tiles, BORDER_TILE, Gen2Layout.NAMING_BORDER_TILES)
 	out._load_sheet(
 		data, "naming_middle_line", out._tiles, MIDDLE_LINE_TILE, Gen2Layout.NAMING_MARKER_TILES
@@ -116,7 +139,12 @@ static func from_data(data: GameData) -> Gen2NamingScreenPage:
 ## The mail icon is not in this list: it is one sprite over the compose screen
 ## and no keyboard needs it, so a cache without it draws every screen here.
 func ready() -> bool:
-	return font != null and _tiles.size() == 3 and _cursor_tiles.size() == 2
+	if font == null:
+		return false
+	if _gen1:
+		return _tiles.has(GEN1_UNDERSCORE_TILE) and _tiles.has(GEN1_RAISED_UNDERSCORE_TILE) \
+			and _tiles.has(Gen1Layout.CHAR_ED)
+	return _tiles.size() == 3 and _cursor_tiles.size() == 2
 
 
 ## The whole 160x144 page as palette indices, for [param screen] as it stands
@@ -125,6 +153,8 @@ func draw(
 	screen: Gen2NamingScreen, prompt: String,
 	icon: PackedByteArray = PackedByteArray(), gender: int = 0
 ) -> PackedByteArray:
+	if _gen1:
+		return _draw_gen1(screen, prompt)
 	var map: PackedInt32Array = PackedInt32Array()
 	map.resize(COLUMNS * ROWS)
 	map.fill(BORDER_TILE)
@@ -149,6 +179,49 @@ func draw(
 		_prompt_icon(indices, icon)
 	_cursor(indices, screen)
 	return indices
+
+
+func _draw_gen1(screen: Gen2NamingScreen, prompt: String) -> PackedByteArray:
+	var map: PackedInt32Array = PackedInt32Array()
+	map.resize(COLUMNS * ROWS)
+	map.fill(BLANK_TILE)
+	_string(map, prompt, GEN1_PROMPT_AT, 1)
+	for index: int in screen.length:
+		_put(map, GEN1_ENTRY_AT + Vector2i(index, 0), screen.buffer[index])
+	for index: int in screen.max_length:
+		_put(map, GEN1_UNDERSCORE_AT + Vector2i(index, 0), GEN1_UNDERSCORE_TILE)
+	_put(
+		map,
+		GEN1_UNDERSCORE_AT + Vector2i(mini(screen.length, screen.max_length - 1), 0),
+		GEN1_RAISED_UNDERSCORE_TILE
+	)
+	var rows: Array = screen.rows()
+	for row: int in rows.size():
+		var codes: Array = rows[row]
+		var letters: bool = row < Gen1Layout.ALPHABET_ROWS
+		var at := Vector2i(
+			GEN1_KEYBOARD_AT.x, GEN1_KEYBOARD_AT.y + row * GEN1_ROW_STEP
+		) if letters else GEN1_LABEL_AT
+		for column: int in codes.size():
+			_put(map, Vector2i(
+				at.x + column * (CELL if letters else 1), at.y
+			), int(codes[column]))
+	_put(map, _gen1_cursor(screen), GEN1_CURSOR_CODE)
+
+	var indices: PackedByteArray = _compose(map)
+	if font != null:
+		font.draw_box(
+			0, indices, COLUMNS * TILE, GEN1_BORDER_AT.x * TILE,
+			GEN1_BORDER_AT.y * TILE, GEN1_BORDER_SIZE.x, GEN1_BORDER_SIZE.y
+		)
+	return indices
+
+
+func _gen1_cursor(screen: Gen2NamingScreen) -> Vector2i:
+	var column: int = GEN1_CURSOR_COLUMN
+	if screen.row < Gen1Layout.ALPHABET_ROWS:
+		column += screen.column * CELL
+	return Vector2i(column, GEN1_KEYBOARD_AT.y + screen.row * GEN1_ROW_STEP)
 
 
 func _cleared(screen: Gen2NamingScreen) -> Array:
@@ -285,12 +358,15 @@ func _clear(map: PackedInt32Array, x: int, y: int, rows: int, columns: int) -> v
 
 ## A prompt is one `PlaceString` per row, and `.Pokemon`'s two are `hlcoord 5, 2`
 ## and `hlcoord 5, 4`: the rows the screen prints on are two apart.
-func _string(map: PackedInt32Array, text: String, at: Vector2i) -> void:
+func _string(
+	map: PackedInt32Array, text: String, at: Vector2i, line_step: int = 2
+) -> void:
 	var lines: PackedStringArray = text.split("\n")
 	for line: int in lines.size():
-		var codes: PackedByteArray = Gen2Text.encode(lines[line])
+		var codes: PackedByteArray = Gen1Text.encode(lines[line]) if _gen1 \
+			else Gen2Text.encode(lines[line])
 		for index: int in codes.size():
-			_put(map, at + Vector2i(index, line * 2), codes[index])
+			_put(map, at + Vector2i(index, line * line_step), codes[index])
 
 
 func _put(map: PackedInt32Array, at: Vector2i, tile: int) -> void:

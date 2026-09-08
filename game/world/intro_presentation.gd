@@ -48,6 +48,13 @@ const MOVE_STEP_FRAMES: int = WAIT_BG_MAP_FRAMES + 1
 const PIC_LEFT_COLUMN: int = 6
 const PIC_RIGHT_COLUMN: int = 13
 
+const GEN1_FADE_STEP_FRAMES: int = 8
+const GEN1_FADE_ROW_BYTES: int = 3
+const GEN1_MOVE_LEFT_COLUMNS: int = 14
+const GEN1_SLIDE_STEPS: int = 6
+const GEN1_SLIDE_RIGHT_COLUMN: int = PIC_LEFT_COLUMN + GEN1_SLIDE_STEPS
+const DELAY_3_FRAMES: int = 3
+
 ## Each entry is [bgp, column, frames]; [constant KEEP] leaves that value alone.
 var _steps: Array[Array] = []
 var _step: int = 0
@@ -112,6 +119,35 @@ func push_move_player_pic(right: bool) -> void:
 	var step: int = 1 if right else -1
 	for index: int in MOVE_STEPS:
 		push(KEEP, from + index * step, MOVE_STEP_FRAMES)
+
+
+func push_gen1_fade_out_white() -> void:
+	_push_gen1_fade([5, 6, 7])
+
+
+func push_gen1_fade_in_white() -> void:
+	_push_gen1_fade([6, 5, 4])
+
+
+func push_gen1_move_pic_left() -> void:
+	push(KEEP, PIC_LEFT_COLUMN + GEN1_MOVE_LEFT_COLUMNS, 1)
+	push(BGP_NORMAL, PIC_LEFT_COLUMN + GEN1_MOVE_LEFT_COLUMNS, 1)
+	for step: int in GEN1_MOVE_LEFT_COLUMNS:
+		push(KEEP, PIC_LEFT_COLUMN + GEN1_MOVE_LEFT_COLUMNS - 1 - step, 1)
+
+
+func push_gen1_slide_pic(right: bool) -> void:
+	var from: int = PIC_LEFT_COLUMN if right else GEN1_SLIDE_RIGHT_COLUMN
+	var step: int = 1 if right else -1
+	for index: int in GEN1_SLIDE_STEPS:
+		push(KEEP, from + step * (index + 1), DELAY_3_FRAMES)
+
+
+func _push_gen1_fade(rows: Array[int]) -> void:
+	for row: int in rows:
+		push(
+			Gen1Layout.FADE_PALS[row * GEN1_FADE_ROW_BYTES], KEEP, GEN1_FADE_STEP_FRAMES
+		)
 
 
 ## Applies the queued step's own palette byte and pic column without spending a

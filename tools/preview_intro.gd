@@ -2,10 +2,6 @@ extends SceneTree
 
 ## Captures the new-game opening screens against a real cache.
 ##   Godot --path . -s res://tools/preview_intro.gd -- <game> <out.png> [what] [steps] [WxH]
-## `what` is `copyright`, `presents`, `title`, `gender`, `clock`, `speech` or
-## `shrink`; `steps` is how many source frames to run first, several separated by
-## commas writing one file each. `WxH` photographs the opening in a real window
-## through [Gen2Screen] instead, which is the only way to see SCREEN FILL.
 
 ## Captured at hardware resolution, so a frame here compares to an emulator
 ## frame pixel for pixel rather than by eye.
@@ -19,6 +15,10 @@ const PRESENTS_FIRST_FRAME: int = Gen2BootCinema.COPYRIGHT_PRELUDE_FRAMES \
 ## Enough frames for the copyright, the GameFreak logo and both intro movies,
 ## which `title` spends before it is on the screen it was asked for.
 const TITLE_GUARD: int = 20000
+const NAME_MENU_GUARD: int = 200
+const NEW_GAME_GUARD: int = 400
+const PRESET_ROW: int = 1
+const SAVE_ROOT: String = "user://preview_intro_slots"
 
 var _output_path: String = ""
 var _what: String = "gender"
@@ -37,7 +37,8 @@ func _initialize() -> void:
 	if args.size() < 2:
 		push_error(
 			"Usage: preview_intro.gd -- <game> <out.png> "
-			+ "[copyright|presents|title|gender|clock|speech|shrink] [step] [WxH]"
+			+ "[copyright|presents|title|gender|clock|speech|name_menu|naming|shrink]"
+			+ " [step] [WxH]"
 		)
 		quit(1)
 		return
@@ -80,6 +81,9 @@ func _initialize() -> void:
 	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP \
 		if _window == WINDOW_SIZE else Window.CONTENT_SCALE_ASPECT_IGNORE
 	root.set_content_scale_size(_window)
+	if _what == "new_game":
+		_run_new_game(data)
+		return
 	_screen = _build(data)
 	if _screen == null:
 		quit(1)
@@ -175,6 +179,16 @@ func _drive(step: Vector2i) -> void:
 			speech.advance_frames(1)
 			_frames_run += 1
 		return
+	if _what in ["name_menu", "naming", "shrink"]:
+		_press_until(speech, speech.choosing_name if _what != "shrink" \
+			else func() -> bool: return speech.beat_index() >= speech.beat_count())
+		if _what == "naming":
+			speech.handle_button(PokeButton.A)
+			_settle_frames(speech)
+		for _press: int in step.x:
+			speech.handle_button(PokeButton.DOWN)
+		speech.advance_frames(step.y)
+		return
 	while _presses_run < step.x:
 		_settle_frames(speech)
 		speech.handle_button(PokeButton.A)
@@ -184,6 +198,16 @@ func _drive(step: Vector2i) -> void:
 	# run of frames rather than compounding.
 	speech.advance_frames(maxi(step.y - _frames_run, 0))
 	_frames_run = maxi(step.y, _frames_run)
+
+
+func _press_until(speech: Gen2OakSpeechScreen, reached: Callable) -> void:
+	for _press: int in NAME_MENU_GUARD:
+		if bool(reached.call()):
+			return
+		_settle_frames(speech)
+		if bool(reached.call()):
+			return
+		speech.handle_button(PokeButton.A)
 
 
 ## Spends whatever `DelayFrames` run or printing text a screen is standing in.
@@ -198,6 +222,8 @@ func _settle_frames(screen: Node) -> void:
 ## One capture per step, each after a fresh pair of rendered frames so the
 ## textures written this step have reached the window.
 func _process(_delta: float) -> bool:
+	if _screen == null:
+		return false
 	_elapsed += 1
 	# Frames are spent by `steps`, not by the clock, so a given frame of a fade
 	# comes out the same on every run. It has to be turned off from inside the
@@ -230,6 +256,57 @@ func _process(_delta: float) -> bool:
 	_at += 1
 	_elapsed = FRAMES_BEFORE_CAPTURE - 1
 	return false
+
+
+func _run_new_game(data: GameData) -> void:
+	Gen2SaveStore.use_root(SAVE_ROOT)
+	var intro := Gen2IntroScreen.new()
+	intro.finished.connect(_on_new_game_written.bind(data))
+	intro.failed.connect(func(message: String) -> void:
+		push_error("The new game did not finish: %s" % message)
+		quit(1)
+	)
+	intro.begin(data, 0, "", false)
+	root.add_child(intro)
+	current_scene = intro
+	await process_frame
+	for _press: int in NEW_GAME_GUARD:
+		if _at > 0:
+			return
+		_settle_frames(intro)
+		var screen: Control = intro.current()
+		if screen != null and bool(screen.call(&"choosing_name")):
+			for _row: int in PRESET_ROW:
+				intro.handle_button(PokeButton.DOWN)
+		intro.handle_button(PokeButton.A)
+	push_error("The opening did not reach its save in %d presses." % NEW_GAME_GUARD)
+	quit(1)
+
+
+func _on_new_game_written(save: Gen2SaveData, data: GameData) -> void:
+	_at = 1
+	var world: Gen2WorldSnapshot = save.world
+	var warp: Dictionary = data.gen1_new_game_warp()
+	var wanted: Dictionary = {
+		"map": [world.map_id, Vector2i(0, int(warp["map"]))],
+		"cell": [world.player_cell, Vector2i(int(warp["x"]), int(warp["y"]))],
+		"money": [world.world_state.money(0), Gen2WorldSpawn.START_MONEY],
+		"pc_items": [world.world_state.pc_items(), {Gen2WorldSpawn.GEN1_POTION: 1}],
+		"bag": [world.world_state.items(), {}],
+		"party": [save.party.size(), 0],
+		"player": [save.player_name, data.gen1_default_names(false)[PRESET_ROW]],
+		"rival": [world.gen1_rival_name, data.gen1_default_names(true)[PRESET_ROW]],
+	}
+	var failures: int = 0
+	for field: String in wanted:
+		var pair: Array = wanted[field]
+		var ok: bool = pair[0] == pair[1]
+		failures += 0 if ok else 1
+		print("%-9s %-8s %s" % [field, "ok" if ok else "WRONG", pair[0]])
+	var written: Dictionary = Gen2SaveStore.load_result(save.game_id, save.rom_sha1, 0, data)
+	print("reopened  %s" % ("ok" if bool(written["ok"]) else String(written["message"])))
+	Gen2SaveStore.use_root("")
+	quit(1 if failures > 0 or not bool(written["ok"]) else 0)
 
 
 func _find_cache(game: StringName) -> String:

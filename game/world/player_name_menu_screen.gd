@@ -10,10 +10,15 @@ const FLAGS: int = (
 	| Gen2MenuBox.STATICMENU_DISABLE_B
 )
 
+const TITLE_INDENT: int = 2
+const GEN1_TITLE_INDENT: int = 3
+const TITLE: String = "NAME"
+
 var _menu: Gen2WorldMenu = null
 var _page: Gen2MenuPage = null
 var _options: Array[String] = []
 var _background: TextureRect = null
+var _gen1: bool = false
 
 ## The four colours [Gen2NamingScreenScreen] is drawn through, on the same terms.
 var palette: PackedColorArray = PackedColorArray():
@@ -23,14 +28,18 @@ var palette: PackedColorArray = PackedColorArray():
 
 
 
-func open(data: GameData, gender: int) -> bool:
-	_options = Gen2PlayerNameChoices.options(data, gender)
+func open(data: GameData, gender: int, rival: bool = false) -> bool:
+	_options = Gen2PlayerNameChoices.options(data, gender, rival)
 	_page = Gen2MenuPage.from_data(data)
-	if _page == null or _options.size() != 5:
+	_gen1 = data != null and data.generation == RomRegistry.GEN1
+	if _page == null or _options.is_empty():
 		return false
 	_menu = Gen2WorldMenu.from_input({
 		"options": _options,
-		"header": {"kind": &"vertical", "data_flags": FLAGS, "default": 1},
+		"header": {
+			"kind": &"vertical", "data_flags": FLAGS,
+			"default": 0 if _gen1 else 1,
+		},
 	})
 	if is_inside_tree():
 		_refresh()
@@ -76,7 +85,10 @@ func _refresh() -> void:
 	var indices := PackedByteArray()
 	indices.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
 	var box := Gen2MenuBox.from_coords(0, 0, 10, Gen2TextBox.STANDARD_TOP - 1, FLAGS)
-	_page.draw(box, _options, _menu.selected_index(), indices, Gen2Screen.WIDTH, "NAME", 2)
+	_page.draw(
+		box, _options, _menu.selected_index(), indices, Gen2Screen.WIDTH,
+		TITLE, GEN1_TITLE_INDENT if _gen1 else TITLE_INDENT
+	)
 	# Index 0 stays transparent: `MENU_BACKUP_TILES` draws this over the left of
 	# a screen the player pic is still standing on the right of.
 	Gen2PicImage.show(_background, Gen2PicImage.from_indices(
