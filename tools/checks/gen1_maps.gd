@@ -130,8 +130,8 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 317, "text": 588, "branch": 158, "choice": 38, "flag": 243,
-		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 2, "pokedex": 13,
+	&"red": {"rows": 317, "text": 596, "branch": 158, "choice": 39, "flag": 243,
+		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 1, "pokedex": 13,
 		"give_pokemon": 33, "saved_coord_index": 1, "badges_byte": 1, "walk": 20,
 		"player_facing": 10, "set_map_script": 113, "npc_movement_script": 2,
 		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 13,
@@ -143,9 +143,10 @@ const SCRIPT_CENSUS: Dictionary = {
 		"day_care": 1, "random_bit": 2, "volatile": 1, "filtered_bag": 2, "menu_item": 4,
 		"elevator": 3, "coin_box": 2, "has_coins": 4, "add_coins": 4, "replace_block": 1,
 		"starter": 2, "trainer_battle": 3, "safari_balls": 1, "safari_steps": 1,
-		"save_coord_index": 2, "copy_name": 4, "set_fossil": 6, "list_menu": 1},
-	&"blue": {"rows": 317, "text": 588, "branch": 158, "choice": 38, "flag": 243,
-		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 2, "pokedex": 13,
+		"save_coord_index": 2, "copy_name": 4, "set_fossil": 6, "list_menu": 1,
+		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1},
+	&"blue": {"rows": 317, "text": 596, "branch": 158, "choice": 39, "flag": 243,
+		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 1, "pokedex": 13,
 		"give_pokemon": 33, "saved_coord_index": 1, "badges_byte": 1, "walk": 20,
 		"player_facing": 10, "set_map_script": 113, "npc_movement_script": 2,
 		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 13,
@@ -157,9 +158,10 @@ const SCRIPT_CENSUS: Dictionary = {
 		"day_care": 1, "random_bit": 2, "volatile": 1, "filtered_bag": 2, "menu_item": 4,
 		"elevator": 3, "coin_box": 2, "has_coins": 4, "add_coins": 4, "replace_block": 1,
 		"starter": 2, "trainer_battle": 3, "safari_balls": 1, "safari_steps": 1,
-		"save_coord_index": 2, "copy_name": 4, "set_fossil": 6, "list_menu": 1},
-	&"yellow": {"rows": 370, "text": 570, "branch": 154, "choice": 32, "flag": 221,
-		"give_item": 41, "has_item": 15, "take_item": 9, "unknown": 16, "pokedex": 10,
+		"save_coord_index": 2, "copy_name": 4, "set_fossil": 6, "list_menu": 1,
+		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1},
+	&"yellow": {"rows": 370, "text": 583, "branch": 154, "choice": 34, "flag": 221,
+		"give_item": 41, "has_item": 15, "take_item": 9, "unknown": 12, "pokedex": 10,
 		"give_pokemon": 8, "saved_coord_index": 1, "badges_byte": 1, "walk": 23,
 		"set_map_script": 75, "npc_movement_script": 2, "toggle_object": 22,
 		"trainer_battle_object": 15, "random": 5, "facing": 13, "player_in_array": 1,
@@ -171,7 +173,8 @@ const SCRIPT_CENSUS: Dictionary = {
 		"filtered_bag": 2, "menu_item": 4, "elevator": 3, "coin_box": 2, "has_coins": 4,
 		"add_coins": 4, "replace_block": 1, "trainer_battle": 1, "safari_balls": 3,
 		"safari_steps": 3, "safari_admission": 2, "save_coord_index": 2, "talking_to": 2,
-		"copy_name": 4, "set_fossil": 6, "list_menu": 1},
+		"copy_name": 4, "set_fossil": 6, "list_menu": 1,
+		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1},
 }
 ## `SilphCo11FPorygonText` is a `call DisplayPokedex` the disassembly marks
 ## unreferenced. The `trade` rows are the eight `predef DoInGameTradeDialogue`

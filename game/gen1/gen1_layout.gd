@@ -1187,6 +1187,8 @@ const SCRIPT_CALLS: Array[String] = [
 	"serial_connect", "fill_memory", "save_end_battle_text", "engage_map_trainer",
 	"check_boulder_coords", "sprite_pointer_1", "sprite_pointer_2",
 	"add_party_mon", "get_item_name", "get_mon_name", "get_sprite_position_2",
+	"display_party_menu", "get_party_mon_name",
+	"gb_pal_white_out_delay", "restore_screen_tiles", "load_gb_pal",
 	"save_screen_1", "load_screen_1", "save_screen_2", "reload_map_data", "copy_data",
 	"init_battle_enemy", "set_sprite_position", "get_sprite_position",
 	"fade_out_white", "fade_in_white", "fade_out_black", "fade_in_black", "init",
@@ -1286,7 +1288,7 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"pewter_guys", "convert_npc_directions", "heal_party", "save_game_data",
 	"get_item_quantity", "flag_action", "route23_copy_badge_text", "oaks_aide",
 	"starter_dex", "display_dex_rating",
-	"safari_low_cost", "safari_nag",
+	"safari_low_cost", "safari_nag", "name_rater_check_ot", "name_rater_screen",
 ]
 ## The four of those a `farcall` spends nothing on: no node carries a sound.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
@@ -1309,6 +1311,7 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	"start_trainer_battle", "end_trainer_battle",
 	"serial_connect", "fade_out_white", "fade_in_white", "fade_out_black",
 	"fade_in_black", "get_sprite_position", "init_battle_enemy",
+	"gb_pal_white_out_delay", "restore_screen_tiles", "load_gb_pal",
 	"get_sprite_position_2", "save_screen_1", "load_screen_1", "save_screen_2",
 	"reload_map_data", "copy_data",
 ]
@@ -1367,7 +1370,7 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	"which_dungeon_warp", "sprite_screen_y", "sprite_screen_x",
 	"letter_printing_delay", "player_movement_byte_1", "override_joypad_mask",
 	"gym_leader_no", "mon_data_location", "joy_released",
-	"trainer_header_flag_bit",
+	"trainer_header_flag_bit", "party_menu_type",
 	## The menu registers, which the `menu` node behind them carries instead.
 	"current_menu_item", "max_menu_item", "top_menu_item_y", "top_menu_item_x",
 	"menu_watched_keys",
@@ -1787,6 +1790,16 @@ const RED_BLUE: Dictionary = {
 	"filtered_bag_count": 0xCD37,
 	"name_buffer": 0xCD6D,
 	"string_buffer": 0xCF4B,
+	## `NameRatersHouseNameRaterText`'s four routines, `wBuffer` and `wNameBuffer`.
+	"display_party_menu": 0x13FC,
+	"get_party_mon_name": 0x15B4,
+	"gb_pal_white_out_delay": 0x3DD4,
+	"restore_screen_tiles": 0x3DBE,
+	"load_gb_pal": 0x20BA,
+	"name_rater_check_ot": 0x1DA20,
+	"name_rater_screen": 0x655C,
+	"party_menu_type": 0xD07D,
+	"entry_buffer": 0xCEE9,
 	"copy_to_string_buffer": 0x3826,
 	"display_dex_rating": 0x44169,
 	## `wFossilItem` and `wFossilMon`, written one visit and read the next.
@@ -2215,6 +2228,15 @@ const YELLOW: Dictionary = {
 	"filtered_bag_count": 0xCD37,
 	"name_buffer": 0xCD6D,
 	"string_buffer": 0xCF4A,
+	"display_party_menu": 0x11C8,
+	"get_party_mon_name": 0x1394,
+	"gb_pal_white_out_delay": 0x3DD8,
+	"restore_screen_tiles": 0x3DC2,
+	"load_gb_pal": 0x1E6F,
+	"name_rater_check_ot": 0x1D328,
+	"name_rater_screen": 0x62CD,
+	"party_menu_type": 0xD07C,
+	"entry_buffer": 0xCEE9,
 	"copy_to_string_buffer": 0x3813,
 	"display_dex_rating": 0x44169,
 	"fossil_item": 0xD70E,
@@ -2928,6 +2950,12 @@ static func super_palette_count(id: StringName) -> int:
 ## X-flipping the second; the helix has no symmetry and reads all four.
 static func mon_icon_tiles_read(icon: int) -> Array[int]:
 	return [0, 1, 2, 3] if icon == MON_ICON_HELIX else [0, 2]
+
+
+## Which tile of a frame one quadrant of the 2x2 draws, and whether X-flipped.
+static func mon_icon_quadrant(icon: int, quadrant: int) -> Array:
+	return [quadrant, false] if icon == MON_ICON_HELIX \
+		else [quadrant & 2, quadrant % 2 == 1]
 
 
 ## How many `MonPartySpritePointers` rows `LoadMonPartySpriteGfx` copies.

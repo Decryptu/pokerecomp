@@ -25,7 +25,14 @@ const ENDING_SAME_NAME: StringName = &"same_name"
 static func is_your_ot(mon: Gen2SaveMon, player_name: String, player_id: int) -> bool:
 	if mon == null:
 		return false
-	return mon.original_trainer == player_name and mon.ot_id == player_id
+	return matches_ot(mon.original_trainer, mon.ot_id, player_name, player_id)
+
+
+## The same on the two halves alone: `NameRatersHouseCheckMonOTScript`.
+static func matches_ot(
+	trainer: String, ot_id: int, player_name: String, player_id: int
+) -> bool:
+	return trainer == player_name and ot_id == player_id
 
 
 ## `IsNewNameEmpty`: an entry of nothing but spaces, or one that begins with the

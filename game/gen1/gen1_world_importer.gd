@@ -936,7 +936,9 @@ static func _map_script_dispatch(nodes: Array) -> Dictionary:
 static func _map_script_successors(nodes: Array, byte: int) -> Array[int]:
 	var out: Array[int] = []
 	for node: Dictionary in nodes:
-		if String(node["op"]) == "set_map_script" and int(node["byte"]) == byte:
+		## `wNextSafariZoneGateScript` stores a byte read back, not a constant.
+		if String(node["op"]) == "set_map_script" and int(node["byte"]) == byte \
+			and node.has("value"):
 			out.append(int(node["value"]))
 		for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
 			if node.has(key):
@@ -1736,6 +1738,9 @@ const SCRIPT_TESTS_MENU_ROW: int = -31
 const SCRIPT_TESTS_MENU_ITEM: int = -32
 const SCRIPT_TESTS_SAFARI_ADMISSION: int = -33
 const SCRIPT_TESTS_ANY_MONEY: int = -34
+const SCRIPT_TESTS_PARTY_MENU: int = -35
+const SCRIPT_TESTS_MON_OT: int = -36
+const SCRIPT_TESTS_NAME_ENTRY: int = -37
 const SCRIPT_AIDE: int = -3
 ## What `push af` saves and `pop af` puts back, which is how
 ## `CheckEventAfterBranchReuseA` still reads the event byte a block write
@@ -3169,6 +3174,13 @@ static func _script_call(
 			return _script_pokedex(ctx, state, out, next)
 		"give_pokemon":
 			return _script_gift_pokemon(ctx, state, out, next)
+		"display_party_menu":
+			_script_tested(state, SCRIPT_TESTS_PARTY_MENU, true)
+			return next
+		"get_party_mon_name":
+			out.append({"op": "name_party_mon",
+				"buffer": int((ctx["layout"] as Dictionary).get("name_buffer", -1))})
+			return next
 	return _script_called(ctx, routine, target, state, out, next, depth)
 
 
@@ -3684,11 +3696,19 @@ static func _script_routine_call(
 	ctx: Dictionary, bank: int, target: int, state: Dictionary, out: Array,
 	next: int, depth: int
 ) -> int:
-	if _script_banked_routine(ctx["layout"], bank, target) \
-		in Gen1Layout.SCRIPT_SILENT_BANKED_CALLS:
+	var banked: String = _script_banked_routine(ctx["layout"], bank, target)
+	if banked in Gen1Layout.SCRIPT_SILENT_BANKED_CALLS:
 		return next
-	if _script_banked_routine(ctx["layout"], bank, target) == "route23_copy_badge_text":
-		return _script_name_badge(ctx, state, out, next)
+	match banked:
+		"route23_copy_badge_text":
+			return _script_name_badge(ctx, state, out, next)
+		"name_rater_check_ot":
+			_script_tested(state, SCRIPT_TESTS_MON_OT, true)
+			return next
+		"name_rater_screen":
+			state["entry_buffer"] = int((ctx["layout"] as Dictionary).get("entry_buffer", -1))
+			_script_tested(state, SCRIPT_TESTS_NAME_ENTRY, true)
+			return next
 	var named: int = _script_predef_named(
 		ctx["layout"], Gen1Layout.banked(bank, target), state, out
 	)
@@ -4751,6 +4771,13 @@ static func _script_node_state(
 		SCRIPT_TESTS_SCRATCH:
 			return {"op": "scratch_test", "address": int(state["scratch_test"][0]),
 				"value": int(state["scratch_test"][1]), "then": fell, "else": taken}
+	return _script_node_menu(tests, taken, fell, state)
+
+
+static func _script_node_menu(
+	tests: Variant, taken: Array, fell: Array, state: Dictionary
+) -> Variant:
+	match int(tests):
 		SCRIPT_TESTS_FILTERED:
 			return {"op": "filtered_bag", "items": state.get("filtered", []),
 				"then": taken, "else": fell}
@@ -4762,6 +4789,14 @@ static func _script_node_state(
 		SCRIPT_TESTS_MENU_ITEM:
 			return {"op": "menu_item", "item": int(state["menu_item"]),
 				"then": fell, "else": taken}
+		## Carry is CANCEL on all three: B, a foreign OT, an empty entry.
+		SCRIPT_TESTS_PARTY_MENU:
+			return {"op": "party_menu", "then": taken, "else": fell}
+		SCRIPT_TESTS_MON_OT:
+			return {"op": "mon_ot", "then": taken, "else": fell}
+		SCRIPT_TESTS_NAME_ENTRY:
+			return {"op": "name_mon", "buffer": int(state.get("entry_buffer", -1)),
+				"then": taken, "else": fell}
 	var branch: Dictionary = {
 		"op": "branch", "flag": int(tests), "then": taken, "else": fell,
 	}

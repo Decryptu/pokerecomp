@@ -2,11 +2,8 @@ class_name Gen2NamingScreenScreen
 extends Control
 
 ## The naming screen (`engine/menus/naming_screen.asm`), embedded the way the
-## trainer card and the Hall of Fame are.
-##
-## [Gen2NamingScreen] owns the walk and [Gen2NamingScreenPage] the tiles; this
-## is the node between them. Input is the eight hardware buttons and nothing
-## else, so a test presses a button rather than a key.
+## trainer card is. [Gen2NamingScreen] owns the walk and [Gen2NamingScreenPage]
+## the tiles; input is the eight hardware buttons and nothing else.
 
 ## Carries the stored entry. `NamingScreen_StoreEntry` runs on END and on
 ## nothing else, so a caller that never sees this signal has no name to take.
@@ -88,7 +85,8 @@ func open(data: GameData, prompt: String, kind: StringName = KIND_PLAYER) -> boo
 
 static func _model(data: GameData, kind: StringName) -> Gen2NamingScreen:
 	if data != null and data.generation == RomRegistry.GEN1:
-		return Gen2NamingScreen.for_gen1_player(data)
+		return Gen2NamingScreen.for_gen1_mon(data) if kind == KIND_MON \
+			else Gen2NamingScreen.for_gen1_player(data)
 	if kind == KIND_MON:
 		return Gen2NamingScreen.for_mon(data)
 	if kind == KIND_BOX:
@@ -125,6 +123,8 @@ func set_icon(strip: PackedByteArray, gender: int = 0) -> void:
 func set_species_icon(data: GameData, species: int, gender: int = 0) -> void:
 	if data == null:
 		return
+	if _page != null:
+		_page.gen1_icon = data.mon_menu_icon(species) - 1
 	set_icon(data.species_icon_indices(species), gender)
 
 

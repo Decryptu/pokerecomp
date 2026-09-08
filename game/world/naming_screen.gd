@@ -2,11 +2,9 @@ class_name Gen2NamingScreen
 extends RefCounted
 
 ## `engine/menus/naming_screen.asm`'s model: which keyboard is live, where the
-## cursor is, what a press does to the name being typed and what comes out at the
-## end. Scene-free, so the whole walk can be tested without drawing it. The name is
-## kept as the cartridge keeps it, a fixed buffer of raw codes seeded with
-## NAMINGSCREEN_UNDERLINE and NAMINGSCREEN_MIDDLELINE rather than a String,
-## because every routine here reads and writes those two markers.
+## cursor is and what a press does to the name being typed. Scene-free. The name
+## is a fixed buffer of raw codes seeded with NAMINGSCREEN_UNDERLINE and
+## NAMINGSCREEN_MIDDLELINE, which every routine here reads and writes.
 
 ## The six keyboards in block order, which is the order they are imported in:
 ## `data/text/name_input_chars.asm`'s four and `mail_input_chars.asm`'s two.
@@ -68,7 +66,9 @@ const MAIL_LAST_COLUMN: int = MAIL_COLUMNS - 1
 ## screens: mail's own table repeats $00, $30 and $60 the same way.
 const COMMAND_GROUP: int = 3
 
+## `PrintNicknameAndUnderscores`: NAME_LENGTH - 1, or PLAYER_NAME_LENGTH - 1.
 const GEN1_MAX_LENGTH: int = 7
+const GEN1_MON_MAX_LENGTH: int = 10
 const GEN1_LAST_COLUMN: int = Gen1Layout.ALPHABET_COLUMNS - 1
 const GEN1_COMMAND_ROW: int = Gen1Layout.ALPHABET_ROWS
 const GEN1_END_ROW: int = Gen1Layout.ALPHABET_ROWS - 1
@@ -77,6 +77,8 @@ const GEN1_END_ROW: int = Gen1Layout.ALPHABET_ROWS - 1
 ## five, so the command row is row 5 or row 4.
 var is_box: bool = false
 var is_gen1: bool = false
+## `wNamingScreenType` NAME_MON_SCREEN: the same keyboard, its own header.
+var is_gen1_mon: bool = false
 ## `_ComposeMailMessage` rather than `NamingScreen`: a six-row, ten-column
 ## keyboard of its own, a two-line entry with a fixed break in the middle, and
 ## no prompt. Everything else on the screen is the same walk.
@@ -126,9 +128,18 @@ static func for_mail(data: GameData) -> Gen2NamingScreen:
 
 
 static func for_gen1_player(data: GameData) -> Gen2NamingScreen:
+	return _build_gen1(data, false)
+
+
+static func for_gen1_mon(data: GameData) -> Gen2NamingScreen:
+	return _build_gen1(data, true)
+
+
+static func _build_gen1(data: GameData, mon: bool) -> Gen2NamingScreen:
 	var screen := Gen2NamingScreen.new()
 	screen.is_gen1 = true
-	screen.max_length = GEN1_MAX_LENGTH
+	screen.is_gen1_mon = mon
+	screen.max_length = GEN1_MON_MAX_LENGTH if mon else GEN1_MAX_LENGTH
 	if data != null:
 		for table: int in [Gen1Layout.ALPHABET_UPPER, Gen1Layout.ALPHABET_LOWER]:
 			screen._tables.append(data.name_input_chars(table))
@@ -337,8 +348,6 @@ func press_select() -> void:
 	upper_case = not upper_case
 
 
-## `NamingScreen_StoreEntry`: every marker still in the buffer becomes a
-## terminator, so the name is what was typed and nothing behind it.
 ## `NamingScreen_StoreEntry` whole: the buffer at its own length with every
 ## marker turned into a terminator and everything else left where it is. Mail
 ## needs the whole buffer rather than the run in front of the first marker,

@@ -246,6 +246,8 @@ var _nickname_preview: bool = false
 ## `special NameRater`'s screen and the save whose party row it may rename.
 var _name_rater_host: Gen2NameRaterScreen = null
 var _rival_name_host: Gen2NamingScreenScreen = null
+var _gen1_nickname_host: Gen2NamingScreenScreen = null
+var _gen1_nickname: Dictionary = {}
 var _name_rater_save: Gen2SaveData = null
 ## `special MoveDeletion`'s screen. It needs no save of its own beside it: the
 ## moves and their PP belong to the save it was handed and it writes them itself.
@@ -1313,6 +1315,7 @@ const FULLSCREEN_HOSTS: Array[StringName] = [
 	&"_nickname_host",
 	&"_name_rater_host",
 	&"_rival_name_host",
+	&"_gen1_nickname_host",
 	&"_move_deleter_host",
 	&"_move_tutor_host",
 	&"_day_care_host",
@@ -1439,6 +1442,7 @@ const OVERLAY_HOSTS: Array[StringName] = [
 	&"_nickname_host",
 	&"_name_rater_host",
 	&"_rival_name_host",
+	&"_gen1_nickname_host",
 	&"_move_tutor_host",
 	&"_move_deleter_host",
 	&"_day_care_host",
@@ -7711,6 +7715,7 @@ const REQUEST_OPENERS: Dictionary = {
 	],
 	## A cache with no keyboards answers blank, which `InitName` reads as SILVER.
 	&"rival_name_requested": [&"_open_rival_name", &"values", {"ok": true}],
+	&"gen1_nickname_requested": [&"_open_gen1_nickname", &"continue", {}],
 	&"magnet_train_requested": [&"_open_magnet_train", &"values", {"ok": true}],
 	&"pokemon_requested": [&"_open_gift_nickname", &"prompt", {}],
 	&"contest_mon_requested": [&"_open_contest_nickname", &"prompt", {}],
@@ -7970,6 +7975,53 @@ func _on_rival_named(entered: String) -> void:
 	if _world != null:
 		_show_script_results(
 			_world.complete_runtime_request({"ok": true, "name": entered})
+		)
+	_refresh_labels()
+
+
+## `DisplayNameRaterScreen`: NAME_MON_SCREEN, whose entry is copied into
+## `wPartyMonNicks`; an empty one is the carry the caller reads.
+func _open_gen1_nickname(request: Dictionary) -> bool:
+	if _gen1_nickname_host != null or _world == null or _data == null:
+		return false
+	var index: int = int((request.get("values", {}) as Dictionary).get("party_index", -1))
+	var save: Gen2SaveData = _embedded_party_save()
+	if save == null or index < 0 or index >= save.party.size():
+		return false
+	var mon: Gen2SaveMon = save.party[index] as Gen2SaveMon
+	var host := Gen2NamingScreenScreen.new()
+	if mon == null or not host.open(
+		_data, String(_data.species(mon.species).get("name", "")),
+		Gen2NamingScreenScreen.KIND_MON
+	):
+		return false
+	host.set_species_icon(_data, mon.species)
+	host.closed.connect(_on_gen1_nickname_entered)
+	host.z_index = 30
+	_gen1_nickname = {"save": save, "party_index": index}
+	_gen1_nickname_host = host
+	_screen.display(host)
+	_script_prompt = "Nickname"
+	_refresh_labels()
+	return true
+
+
+func _on_gen1_nickname_entered(entered: String) -> void:
+	var host: Gen2NamingScreenScreen = _gen1_nickname_host
+	_gen1_nickname_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	var save: Gen2SaveData = _gen1_nickname.get("save", null) as Gen2SaveData
+	var index: int = int(_gen1_nickname.get("party_index", -1))
+	_gen1_nickname = {}
+	var nickname: String = entered.strip_edges()
+	if not nickname.is_empty() and save != null:
+		Gen2WorldPartyHost.rename_party_mon(save, index, nickname)
+	if _renderer != null:
+		_renderer.refresh()
+	if _world != null:
+		_show_script_results(
+			_world.complete_runtime_request({"ok": true, "name": nickname})
 		)
 	_refresh_labels()
 

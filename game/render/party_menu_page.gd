@@ -4,11 +4,9 @@ extends RefCounted
 ## The party menu as the hardware draws it: `WritePartyMenuTilemap`'s
 ## `PARTYMENUACTION_SWITCH` quality set plus `PlacePartyMenuText`.
 ## `SetUpBattlePartyMenu` clears the battle off the screen, so the page is the
-## whole 160x144 rather than a box over the field, and each quality steps two rows
-## per member because `PartyMenu2DMenuData`'s cursor offset is `dn 2, 0`.
-## [Gen2BattleSwitchMenu] owns the rows and the cursor. The one thing this owns is
-## `InitPartyMenuGFX`'s icons, whose sprite anim structs are per-frame state. A row
-## carrying `egg` is `PartyMenuCheckEgg`'s and only the overworld menu shows one.
+## whole 160x144, and each quality steps two rows per member because
+## `PartyMenu2DMenuData`'s cursor offset is `dn 2, 0`. [Gen2BattleSwitchMenu]
+## owns the rows; this owns `InitPartyMenuGFX`'s icons and their frame state.
 
 const TILE: int = Gen2Font.TILE
 
@@ -315,7 +313,7 @@ func reset(rows: Array) -> void:
 			"mail": Gen2HeldItem.is_mail(int(member.get("item", 0))),
 			"speed": speed,
 			"shakes": gen1 and Gen1Layout.MON_ICON_SHAKING.has(icon - 1),
-			"symmetric": gen1 and icon - 1 != Gen1Layout.MON_ICON_HELIX,
+			"icon": icon - 1,
 			"frame": -1 if not gen1 else 0,
 			"duration": 0,
 			"var1": 0,
@@ -387,11 +385,9 @@ func _blend_icons(pixels: PackedInt32Array, count: int) -> void:
 			var tile: int = first + quadrant
 			var flip: bool = false
 			if gen1:
-				## `WriteSymmetricMonPartySpriteOAM` writes each row's one tile
-				## twice, the second time X-flipped; the helix's own writer walks
-				## all four in raster order.
-				flip = bool(icon["symmetric"]) and quadrant % 2 == 1
-				tile = first + (quadrant & 2) if bool(icon["symmetric"]) else tile
+				var read: Array = Gen1Layout.mon_icon_quadrant(int(icon["icon"]), quadrant)
+				tile = first + int(read[0])
+				flip = bool(read[1])
 			elif quadrant == ICON_ITEM_QUADRANT and bool(icon["item"]) and not held.is_empty():
 				source = held
 				tile = ICON_MAIL_TILE if bool(icon["mail"]) else ICON_ITEM_TILE
@@ -481,11 +477,8 @@ func _draw_member(
 
 
 ## The fill of one bar, blended over the page in its own colour: the hardware
-## gives every tile its own palette, and one index buffer carries one.
-##
-## A bar is one tile row of the screen, so it is drawn into a strip that tall:
-## six party rows used to cost six 160x144 buffers and six whole images a frame
-## for six 48x8 rectangles.
+## gives every tile its own palette, and one index buffer carries one. A bar is
+## one tile row of the screen, so it is drawn into a strip that tall.
 func _blend_bar(pixels: PackedInt32Array, index: int, row: Dictionary) -> void:
 	var width: int = Gen2Screen.WIDTH
 	if bool(row.get("egg", false)):

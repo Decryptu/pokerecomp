@@ -4027,6 +4027,10 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"dex_rating": &"_gen1_node_dex_rating",
 	"set_fossil": &"_gen1_node_set_fossil",
 	"copy_name": &"_gen1_node_copy_name",
+	"party_menu": &"_gen1_node_party_menu",
+	"name_mon": &"_gen1_node_name_mon",
+	"name_party_mon": &"_gen1_node_name_party_mon",
+	"mon_ot": &"_gen1_node_mon_ot",
 	"list_menu": &"_gen1_node_list_menu",
 }
 
@@ -4682,6 +4686,52 @@ func _gen1_named(node: Dictionary, run: Dictionary, name: String) -> void:
 	var buffers: Dictionary = run.get("buffers", {})
 	buffers[int(node["buffer"])] = name
 	run["buffers"] = buffers
+
+
+## `DisplayPartyMenu` and `DisplayNameRaterScreen`: what either answers decides
+## the boxes behind it, so both sides ride the request unresolved.
+func _gen1_node_party_menu(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_stage_later(node, steps, run, {
+		"kind": &"party_selection_requested", "values": {"routine": &"name_rater"},
+	}, &"party_index")
+
+
+func _gen1_node_name_mon(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var chosen: Dictionary = run.get("party", {})
+	if chosen.is_empty():
+		return false
+	return _gen1_stage_later(node, steps, run, {
+		"kind": &"gen1_nickname_requested", "values": {
+			"party_index": int(chosen.get("index", -1)),
+			"buffer": int(node.get("buffer", -1)),
+		},
+	}, &"name")
+
+
+func _gen1_stage_later(
+	node: Dictionary, steps: Array, run: Dictionary, values: Dictionary, answer: StringName
+) -> bool:
+	steps.append({
+		"type": &"request", "values": values, "answer": answer,
+		"later": {"then": node["then"], "else": node["else"]},
+		"run": _gen1_run_copy(run),
+	})
+	return true
+
+
+## `GetPartyMonName2` into `wNameBuffer`: the nickname the list came back with.
+func _gen1_node_name_party_mon(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
+	_gen1_named(node, run, String((run.get("party", {}) as Dictionary).get("nickname", "")))
+	return true
+
+
+## `NameRatersHouseCheckMonOTScript`: carry when either half of the OT differs.
+func _gen1_node_mon_ot(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var chosen: Dictionary = run.get("party", {})
+	return _gen1_resolve_side(node, not Gen2NameRater.matches_ot(
+		String(chosen.get("original_trainer", "")), int(chosen.get("ot_id", -1)),
+		_player_name, _player_id
+	), steps, run)
 
 
 func _gen1_node_copy_name(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
@@ -5488,6 +5538,7 @@ func _gen1_run_copy(run: Dictionary) -> Dictionary:
 		"coins": run.get("coins", 0),
 		"menu": run.get("menu", {}),
 		"fossil": (run.get("fossil", {}) as Dictionary).duplicate(),
+		"party": (run.get("party", {}) as Dictionary).duplicate(),
 	}
 
 
@@ -6428,6 +6479,8 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		if row < 0 or row >= answers.size() - 1:
 			row = answers.size() - 1
 		_gen1_steps = (answers[row] as Array).duplicate(true) + _gen1_steps
+	elif step.has("later"):
+		_gen1_steps = _gen1_resolve_later(step, result) + _gen1_steps
 	elif step.has("ok"):
 		## `accepted` is the carry `_GivePokemon` answers in.
 		_gen1_steps = (step[
@@ -6435,6 +6488,31 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		] as Array).duplicate(true) + _gen1_steps
 	_gen1_battle_won(step, result)
 	return _gen1_result()
+
+
+## The side a staged request came back on, with its answer on the run.
+func _gen1_resolve_later(step: Dictionary, result: Dictionary) -> Array:
+	var run: Dictionary = (step.get("run", {}) as Dictionary).duplicate(true)
+	var cancelled: bool = true
+	if StringName(step.get("answer", &"")) == &"party_index":
+		cancelled = int(result.get("party_index", -1)) < 0
+		if not cancelled:
+			run["party"] = {
+				"index": int(result["party_index"]),
+				"nickname": String(result.get("nickname", "")),
+				"ot_id": int(result.get("ot_id", -1)),
+				"original_trainer": String(result.get("original_trainer", "")),
+			}
+	else:
+		var entered: String = String(result.get("name", ""))
+		cancelled = entered.is_empty()
+		if not cancelled:
+			var buffers: Dictionary = run.get("buffers", {})
+			buffers[int((step["values"]["values"] as Dictionary)["buffer"])] = entered
+			run["buffers"] = buffers
+	var steps: Array = []
+	var nodes: Array = (step["later"] as Dictionary)["then" if cancelled else "else"]
+	return steps if _gen1_resolve_script(nodes, steps, run) else []
 
 
 func _gen1_ride_elevator(result: Dictionary) -> void:
