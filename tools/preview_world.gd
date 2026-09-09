@@ -13,6 +13,7 @@ extends SceneTree
 ## twice when its name ends in `_use`, or one of [constant FIELD_ITEMS]' names,
 ## which is the pack's USE on that item.
 const KIND_HELP: Dictionary = {
+	&"gym_gates": "gate mask: Cinnabar Gym after its map-entry redraw (`red 0 166 ... gym_gates@17,6 0 0`)",
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
 	&"battle_transition": "frames, index: DoBattleTransition over the map. 1 is the trainer branch; a Generation 1 cartridge reads BattleTransitions' own index, 0 the double circle, 2 the circle, 4 the horizontal stripes, 6 the vertical",
 	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it and 2 plays the POKé FLUTE from it",
@@ -428,6 +429,7 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 ## does not name is a field item, one of the screen's own `preview_*` drivers, or
 ## an overworld effect sprite, in that order.
 const STAGERS: Dictionary = {
+	&"gym_gates": &"_stage_gym_gates",
 	&"unown_wall": &"_stage_unown_wall",
 	&"battle": &"_stage_battle",
 	&"battle_caught": &"_stage_battle",
@@ -566,8 +568,14 @@ func _process(_delta: float) -> bool:
 	return true
 
 
-## The chamber's own `bg_event ..., BGEVENT_UP`: face the wall from the cell below it
-## and read it, which is the only way in.
+func _stage_gym_gates() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	for bit: int in 7:
+		world.state.set_event_flag(0x2A8 + bit, (_cell.x & (1 << bit)) != 0)
+	world.dispatch_callbacks()
+	_screen._renderer.refresh()
+
+
 func _stage_unown_wall() -> void:
 	_screen.move_up()
 	_screen.interact()

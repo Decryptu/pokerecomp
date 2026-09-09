@@ -10075,3 +10075,31 @@ func test_gen1_wanderer_climbs_eight_cells_and_never_comes_back_down() -> void:
 	assert_eq(highest, walker.initial_cell.y - 8, "it stopped short of its counter")
 	assert_eq(walker.cell.y, walker.initial_cell.y - 8, "it left the top of its band")
 	RomCache.clear(_gen1_directory())
+
+
+func test_gen1_script_branches_read_pending_flags_and_scratch_in_each_choice() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 2))
+	var source: int = 0xCC55
+	var chosen: Array = [
+		{"op": "scratch", "address": source, "value": 5},
+		{"op": "flag", "flag": 680, "index_source": source, "index_offset": 254, "set": true},
+		{"op": "branch", "flag": 683, "then": [{"op": "text", "text": "OPEN"}], "else": []},
+		{"op": "flag_test", "snapshot": 0, "flag": 683},
+		{"op": "flag_range", "first": 683, "count": 1, "set": false},
+		{"op": "branch", "snapshot": 0, "then": [{"op": "text", "text": "WAS OPEN"}], "else": []},
+		{"op": "branch", "flag": 683, "then": [], "else": [{"op": "text", "text": "CLOSED"}]},
+	]
+	var steps: Array = world._gen1_script_steps({"script": [
+		{"op": "text", "text": "QUESTION"},
+		{"op": "choice", "yes": chosen, "no": [
+			{"op": "branch", "flag": 683, "then": [], "else": [{"op": "text", "text": "NO"}]},
+		]},
+	]})
+	assert_false(steps.is_empty())
+	if not steps.is_empty():
+		assert_eq((steps[0]["yes"] as Array).filter(func(row: Dictionary) -> bool:
+			return row["type"] == &"text").map(func(row: Dictionary) -> String:
+			return row["text"]), ["OPEN", "WAS OPEN", "CLOSED"])
+		assert_eq(steps[0]["no"], [{"type": &"text", "text": "NO"}])
+	assert_false(world.state.is_event_flag_active(683), "planning a choice writes no save flags")
+	RomCache.clear(_gen1_directory())

@@ -6,8 +6,7 @@ extends RefCounted
 ## reports through [method check] and prints its own census lines with
 ## [method note]; the runner owns the exit code.
 
-## The Generation 2 cartridges, which is what a topic naming these means: every
-## topic here but `gen1_tables` is about that generation's tables and maps.
+## The cartridges used by topics that call `each_game`.
 static var GAME_IDS: Array[StringName] = RomRegistry.ids_of_generation(RomRegistry.GEN2)
 
 ## The party [code]CheckPartyMove[/code] gates every field move against. These

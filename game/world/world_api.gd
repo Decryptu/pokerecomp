@@ -3941,6 +3941,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"text": &"_gen1_node_text",
 	"flag": &"_gen1_node_flag",
 	"branch": &"_gen1_node_branch",
+	"flag_test": &"_gen1_node_flag_test",
 	"has_item": &"_gen1_node_has_item",
 	"has_money": &"_gen1_node_has_money",
 	"has_coins": &"_gen1_node_has_coins",
@@ -4217,6 +4218,7 @@ func _gen1_run(event: Dictionary) -> Dictionary:
 		"bag": state.items() if state != null else {}, "named": "", "object": event,
 		"money": state.money(Gen2WorldMartHost.MONEY_ACCOUNT) if state != null else 0,
 		"coins": state.coins() if state != null else 0,
+		"flags": {}, "engine_flags": {}, "flag_tests": {}, "scratch": _gen1_scratch.duplicate(),
 	}
 
 
@@ -4245,10 +4247,20 @@ func _gen1_node_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	return true
 
 
-func _gen1_node_flag(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+func _gen1_node_flag_index(node: Dictionary, run: Dictionary) -> int:
+	var index: int = int(node["flag"])
+	if node.has("index_source"):
+		index += (int((run["scratch"] as Dictionary).get(int(node["index_source"]), 0))
+			+ int(node.get("index_offset", 0))) & 0xFF
+	return index
+
+
+func _gen1_node_flag(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var shadow: Dictionary = run["engine_flags" if bool(node.get("engine", false)) else "flags"]
+	shadow[_gen1_node_flag_index(node, run)] = bool(node["set"])
 	steps.append({
 		"type": &"flag",
-		"flag": int(node["flag"]),
+		"flag": _gen1_node_flag_index(node, run),
 		"set": bool(node["set"]),
 		"engine": bool(node.get("engine", false)),
 	})
@@ -4264,7 +4276,7 @@ func _gen1_node_replace_block(node: Dictionary, steps: Array, _run: Dictionary) 
 
 
 func _gen1_node_branch(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(node, _gen1_branch_set(node), steps, run)
+	return _gen1_resolve_side(node, _gen1_branch_set(node, run), steps, run)
 
 
 func _gen1_node_has_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -4769,14 +4781,15 @@ func _gen1_node_name_badge(node: Dictionary, _steps: Array, run: Dictionary) -> 
 	return true
 
 
-func _gen1_node_scratch(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+func _gen1_node_scratch(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	(run["scratch"] as Dictionary)[int(node["address"])] = int(node["value"])
 	steps.append({"type": &"scratch", "address": int(node["address"]), "value": int(node["value"])})
 	return true
 
 
 func _gen1_node_scratch_test(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	return _gen1_resolve_side(
-		node, int(_gen1_scratch.get(int(node["address"]), 0)) == int(node["value"]), steps, run
+		node, int((run["scratch"] as Dictionary).get(int(node["address"]), 0)) == int(node["value"]), steps, run
 	)
 
 
@@ -4914,8 +4927,15 @@ func _gen1_node_trainer_battle_object(
 	var index: int = _gen1_last_sprite_index
 	if index < 0 or index >= objects.size():
 		return false
-	var trainer: Dictionary = (objects[index] as Gen2WorldObject).trainer_data
-	if trainer.is_empty():
+	var rows: Array = current_map.events.get("objects", [])
+	if index >= rows.size():
+		return false
+	var trainer: Dictionary = rows[index]
+	if trainer.has("species"):
+		steps.append({"type": &"request", "values": {"kind": &"battle_requested",
+			"values": _gen1_battle_values({}, trainer)}})
+		return true
+	if not trainer.has("trainer_class"):
 		return false
 	steps.append(_gen1_trainer_request(
 		int(trainer.get("trainer_class", 0)), int(trainer.get("trainer_number", 1)),
@@ -4988,10 +5008,10 @@ func _gen1_node_reset_game(_node: Dictionary, steps: Array, _run: Dictionary) ->
 	return true
 
 
-func _gen1_node_flag_range(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+func _gen1_node_flag_range(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var first: int = int(node["first"])
 	for offset: int in int(node["count"]):
-		steps.append({"type": &"flag", "flag": first + offset, "set": bool(node["set"])})
+		_gen1_node_flag({"flag": first + offset, "set": bool(node["set"])}, steps, run)
 	return true
 
 
@@ -5071,23 +5091,32 @@ func _gen1_node_pokedex(node: Dictionary, steps: Array, _run: Dictionary) -> boo
 	return true
 
 
-## `CheckEvent`'s one flag, or `CheckEitherEventSet`'s mask over the flags of
-## one `wEventFlags` byte, which is set when any of them is. A row may read one
-## of Generation 1's own saved bytes instead, which the engine flags hold.
-## One flag, or the run a mask named: `either` is `CheckEitherEventSet`'s own
-## any and `all` is `CheckBothEventsSet`'s every.
-func _gen1_branch_set(node: Dictionary) -> bool:
+func _gen1_run_flag(flag: int, run: Dictionary) -> bool:
+	return bool((run["flags"] as Dictionary).get(flag, event_flag_active(flag)))
+
+
+func _gen1_node_flag_test(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
+	var condition: Dictionary = node.duplicate()
+	condition.erase("snapshot")
+	run["flag_tests"][int(node["snapshot"])] = _gen1_branch_set(condition, run)
+	return true
+
+
+func _gen1_branch_set(node: Dictionary, run: Dictionary) -> bool:
+	if node.has("snapshot"):
+		return bool(run["flag_tests"][int(node["snapshot"])])
 	if bool(node.get("engine", false)):
-		return state != null and state.is_engine_flag_active(int(node["flag"]))
-	var first: bool = event_flag_active(int(node["flag"]))
+		return bool((run["engine_flags"] as Dictionary).get(int(node["flag"]),
+			state != null and state.is_engine_flag_active(int(node["flag"]))))
+	var first: bool = _gen1_run_flag(_gen1_node_flag_index(node, run), run)
 	if node.has("all"):
 		for flag: int in node["all"] as Array:
-			first = first and event_flag_active(flag)
+			first = first and _gen1_run_flag(flag, run)
 		return first
 	if first:
 		return true
 	for flag: int in node.get("either", []):
-		if event_flag_active(flag):
+		if _gen1_run_flag(flag, run):
 			return true
 	return false
 
@@ -5529,17 +5558,7 @@ func _gen1_last_box(steps: Array) -> int:
 
 
 func _gen1_run_copy(run: Dictionary) -> Dictionary:
-	return {
-		"bag": (run["bag"] as Dictionary).duplicate(),
-		"named": run["named"],
-		"buffers": (run.get("buffers", {}) as Dictionary).duplicate(),
-		"object": run.get("object", {}),
-		"money": run.get("money", 0),
-		"coins": run.get("coins", 0),
-		"menu": run.get("menu", {}),
-		"fossil": (run.get("fossil", {}) as Dictionary).duplicate(),
-		"party": (run.get("party", {}) as Dictionary).duplicate(),
-	}
+	return run.duplicate(true)
 
 
 func _gen1_script_box(
@@ -5766,6 +5785,7 @@ func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
 		return []
 	var header: Dictionary = raw as Dictionary
 	var flag: int = int(header["event_flag"])
+	_gen1_scratch[int(Gen1Layout.for_id(data.id)["trainer_header_flag_bit"])] = flag % 8
 	if event_flag_active(flag):
 		return [{"type": &"text", "text": String(header["after"])}]
 	return [

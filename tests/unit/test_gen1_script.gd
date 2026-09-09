@@ -104,11 +104,15 @@ const LAYOUT: Dictionary = {
 	"check_boulder_coords": 0x0440,
 	"trainer_no": 0xD05D,
 	"rival_starter": 0xD715,
+	"sprite_pointer_1": 0x0450,
+	"warp_destination_map": 0xFF8B,
+	"trainer_header_flag_bit": 0xCC55,
+	"flag_action": 0x0460,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
 const PREDEFS: Dictionary = {
 	1: 0x0210, 2: 0x0220, 3: 0x0230, 4: 0x0240, 5: 0x0250, 6: 0x0270,
-	7: 0x02C0,
+	7: 0x02C0, 8: 0x0460,
 }
 const AT: int = 0x1000
 const HELLO: int = 0x1800
@@ -1112,3 +1116,44 @@ func _raw_at(address: int, bytes: Array) -> Dictionary:
 	for index: int in bytes.size():
 		out[address + index] = int(bytes[index])
 	return out
+
+
+func test_nested_sprite_pointer_saves_restore_each_position() -> void:
+	var program: Array = _load_hl(0xC225) + [0xE5, 0x3E, 2, 0xE0, 0x8C,
+		0x3E, 4, 0xE0, 0x8B] + _call(0x0450) + [0xE5, 0x36, 0x4C,
+		0x23, 0x23, 0x36, 0, 0xE1, 0x24, 0x36, 8, 0x23, 0x36, 9,
+		0xE1, 0x36, 10, 0xC9]
+	assert_eq(_decode(program), [
+		{"op": "object_position", "object": 1, "axis": "y", "value": 4},
+		{"op": "object_position", "object": 1, "axis": "x", "value": 5},
+		{"op": "object_position", "object": 1, "axis": "x", "value": 6},
+	])
+
+
+func test_indexed_flag_action_keeps_the_byte_offset_and_both_arms() -> void:
+	var program: Array = _load_a(0xCC55) + [0xD6, 2, 0x4F, 0x06, 2] \
+		+ _load_hl(0xD747) + [0x3E, 8] + _call(0x01A0) \
+		+ [0x79, 0xA7, 0xC0] + _print(HELLO) + [0xC9]
+	assert_eq(_decode(program, _boxes()), [
+		{"op": "branch", "flag": 0, "index_source": 0xCC55, "index_offset": 254,
+			"then": [], "else": [{"op": "text", "text": "HI"}]},
+	])
+
+
+func test_indexed_flag_action_sets_and_resets_a_runtime_bit() -> void:
+	for action: int in [0, 1]:
+		var program: Array = _load_a(0xCC55) + [0xD6, 2, 0x4F, 0x06, action] \
+			+ _load_hl(0xD748) + [0x3E, 8] + _call(0x01A0) + [0xC9]
+		assert_eq(_decode(program), [{"op": "flag", "flag": 8,
+			"set": action == 1, "index_source": 0xCC55, "index_offset": 254}])
+
+
+func test_flag_reset_preserves_the_preceding_bit_test() -> void:
+	var program: Array = _load_hl(0xD747) + [0xCB, 0x46, 0xCB, 0x86, 0xC0] \
+		+ _print(HELLO) + [0xC9]
+	assert_eq(_decode(program, _boxes()), [
+		{"op": "flag_test", "snapshot": 0, "flag": 0, "engine": false},
+		{"op": "flag", "flag": 0, "set": false},
+		{"op": "branch", "snapshot": 0, "then": [],
+			"else": [{"op": "text", "text": "HI"}]},
+	])
