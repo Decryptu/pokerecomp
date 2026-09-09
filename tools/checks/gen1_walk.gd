@@ -447,6 +447,7 @@ func run(r: RefCounted) -> void:
 
 
 func _one_game() -> void:
+	_check_cinnabar_gates()
 	_check_warps()
 	_check_ledges()
 	_check_last_map_round_trip()
@@ -3254,3 +3255,62 @@ func _safari_offer(purse: int, state: Gen2WorldState = null) -> Gen2WorldAPI:
 		not String(world.pending_script_input().get("text", "")).is_empty(),
 		"the SAFARI ZONE gate offered nothing on a %d purse." % purse
 	) else null
+
+
+const CINNABAR_GYM: int = 166
+const CINNABAR_GATES: Array[Vector2i] = [
+	Vector2i(9, 3), Vector2i(6, 3), Vector2i(6, 6),
+	Vector2i(3, 8), Vector2i(2, 6), Vector2i(2, 3),
+]
+
+
+func _check_cinnabar_gates() -> void:
+	for trainer: int in range(1, 8):
+		for won: bool in [false, true]:
+			_check_cinnabar_trainer(trainer, won)
+	_r.note("gen1 Cinnabar: seven trainers, both battle outcomes, six gates and re-entry")
+
+
+func _check_cinnabar_trainer(trainer: int, won: bool) -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, CINNABAR_GYM, Vector2i(17, 3))
+	if world == null:
+		return
+	world.dispatch_map_entry()
+	var object: Dictionary = (world.current_map.events["objects"] as Array)[trainer]
+	world.player_cell = Vector2i(int(object["x"]), int(object["y"]) + 1)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	if _r.game_id == RomRegistry.YELLOW and trainer > 1:
+		_r.check(not _event_text(world.interact()).is_empty(), "the quiz requirement has no text")
+		world.run_event_queue(true)
+		_r.check(world.pending_runtime_request().is_empty(), "a trainer skipped Yellow's quiz gate")
+		world._gen1_volatile["gym_quiz_answered"] = true
+	world.interact()
+	for _pass: int in 12:
+		if not world.pending_runtime_request().is_empty():
+			break
+		world.run_event_queue(true)
+	if not _r.check(StringName(world.pending_runtime_request().get("kind", &"")) \
+		== &"battle_requested", "Cinnabar trainer %d never requested a battle" % trainer):
+		return
+	world.complete_runtime_request({"ok": true, "outcome": &"won" if won else &"lost"})
+	for _pass: int in 12:
+		world.run_event_queue(true)
+		world.dispatch_sight_events()
+	_r.check(world.event_flag_active(665 + trainer) == won, "the trainer's beaten flag is wrong")
+	_r.check(world.event_flag_active(679 + trainer) == won, "the trainer's gate flag is wrong")
+	_check_cinnabar_blocks(world, trainer, won)
+	var returned: Gen2WorldAPI = _r.open_world(0, CINNABAR_GYM, Vector2i(17, 3), world.state)
+	if returned != null:
+		returned.dispatch_map_entry()
+		_check_cinnabar_blocks(returned, trainer, won)
+
+
+func _check_cinnabar_blocks(world: Gen2WorldAPI, trainer: int, won: bool) -> void:
+	for gate: int in CINNABAR_GATES.size():
+		var cell: Vector2i = CINNABAR_GATES[gate]
+		var expected: int = 0x5F if gate == 3 else 0x54
+		if won and gate == trainer - 2:
+			expected = 0x0E
+		_r.check(world.block_at(cell.x, cell.y) == expected,
+			"trainer %d won=%s gate %d is %02x, expected %02x" % [
+				trainer, won, gate + 1, world.block_at(cell.x, cell.y), expected])

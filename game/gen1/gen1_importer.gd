@@ -144,6 +144,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_field_moves,
 	_verify_intro,
 	_verify_world,
+	_verify_gym_gates,
 ]
 
 const NEW_NAME: String = "NEW NAME"
@@ -634,6 +635,23 @@ static func _verify_field_moves(rom: RomFile, layout: Dictionary) -> Dictionary:
 		+ (rom.u8(event + 4) - Gen1Layout.OPCODE_BIT_A) / 8
 	if index != Gen1Layout.MET_BILL_EVENT:
 		return _fail("DisplayPCMainMenu reads event %d, not EVENT_MET_BILL." % index)
+	return _ok()
+
+
+static func _verify_gym_gates(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var routine: int = int(layout["update_gym_gates"])
+	var body: int = Gen1Layout.banked(rom.u8(routine + 1), rom.u16le(routine + 3))
+	var table: int = int(layout["gym_gate_coords"])
+	if rom.u8(routine) != 0x06 or rom.u8(routine + 2) != 0x21 \
+		or rom.u8(body) != 0x3E or rom.u8(body + 1) != 6 \
+		or rom.u8(body + 12) != 0x21 \
+		or Gen1Layout.banked(7, rom.u16le(body + 13)) != table:
+		return _fail("UpdateCinnabarGymGateTileBlocks does not address its six gate rows.")
+	for gate: int in 6:
+		var at: int = table + gate * 4
+		if rom.u8(at) >= 10 or rom.u8(at + 1) >= 9 \
+			or rom.u8(at + 2) not in [0x54, 0x5F] or rom.u8(at + 3) != 0:
+			return _fail("CinnabarGymGateCoords contains an invalid gate.")
 	return _ok()
 
 

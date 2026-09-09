@@ -1086,6 +1086,11 @@ const SCRIPT_INC_A: int = 0x3C
 ## `ld [hli], a`, which is how `AgathaScriptWalkIntoRoom` writes its six steps.
 const SCRIPT_LD_HLI_A: int = 0x22
 const SCRIPT_LD_A_HLI: int = 0x2A
+const SCRIPT_LD_E: int = 0x1E
+const SCRIPT_ADD_HL_DE: int = 0x19
+const SCRIPT_LD_H_HL: int = 0x66
+const SCRIPT_LD_L_A: int = 0x6F
+const SCRIPT_INC_H: int = 0x24
 const SCRIPT_INC_HL: int = 0x23
 const SCRIPT_INC_DE: int = 0x13
 const SCRIPT_DEC_B: int = 0x05
@@ -1183,7 +1188,7 @@ const SCRIPT_CALLS: Array[String] = [
 	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle",
 	"play_music", "stop_all_music",
 	"set_sprite_facing", "set_sprite_facing_delay", "sprite_stay", "move_sprite",
-	"decode_rle", "decode_arrow_movement",
+	"decode_rle", "decode_arrow_movement", "update_gym_gates",
 	"serial_connect", "fill_memory", "save_end_battle_text", "engage_map_trainer",
 	"check_boulder_coords", "sprite_pointer_1", "sprite_pointer_2",
 	"add_party_mon", "get_item_name", "get_mon_name", "get_sprite_position_2",
@@ -1202,7 +1207,9 @@ const FORCED_WARP_BIT: int = 2
 ## carries, and `wPikachuMapScriptFlags` the follower nothing here draws.
 const NO_MAP_MUSIC_BIT: int = 1
 const NO_TEXT_DELAY_BIT: int = 6
-const SCRIPT_SCRATCH_BYTES: Array[String] = ["which_trade", "rival_starter_ball"]
+const SCRIPT_SCRATCH_BYTES: Array[String] = [
+	"which_trade", "rival_starter_ball", "trainer_header_flag_bit",
+]
 const SCRIPT_FLAG_ACTION_SOURCE: int = -101
 ## The row a hand-drawn menu's cursor stands on, read as an item id.
 const SCRIPT_MENU_ITEM_SOURCE: int = -102
@@ -1261,12 +1268,12 @@ const PIKACHU_MAP_SCRIPT_ACTIVE_BIT: int = 7
 ## Bits that live for one map, held by name until the next map load.
 const SCRIPT_VOLATILE_BITS: Dictionary = {
 	"misc_flags": {PUSHED_BOULDER_BIT: "pushed_boulder"},
+	"gym_quiz_flags": {7: "gym_quiz_answered"},
 	"status_flags_3": {NO_NPC_FACE_PLAYER_BIT: "no_npc_face_player"},
 	"pikachu_map_script_flags": {PIKACHU_MAP_SCRIPT_ACTIVE_BIT: "pikachu_script_active"},
 }
 const SCRIPT_TEMP_BYTES: Array[String] = ["object_to_hide", "object_to_show"]
-## The bytes an `and a` reads a known zero out of: the sight walk owns a trainer
-## engagement here, and Cinnabar Gym's six quiz gates say nothing yet.
+## The sight walk owns engagement; dungeon warps are dispatched separately.
 const SCRIPT_ZERO_SOURCES: Array[String] = [
 	"trainer_header_flag_bit", "opponent_after_wrong_answer", "which_dungeon_warp",
 ]
@@ -2042,6 +2049,8 @@ const RED_BLUE: Dictionary = {
 	"serial_connect": 0x22FA,
 	"check_boulder_coords": 0x34E4,
 	"get_item_quantity": 0x0F8A5,
+	"update_gym_gates": 0x3EAD,
+	"gym_gate_coords": 0x1EB48,
 	"sprite_pointer_1": 0x34FC,
 	"sprite_pointer_2": 0x3500,
 	"fill_memory": 0x36E0,
@@ -2449,6 +2458,9 @@ const YELLOW: Dictionary = {
 	"serial_connect": 0x2156,
 	"check_boulder_coords": 0x34E1,
 	"get_item_quantity": 0x0F735,
+	"update_gym_gates": 0x3EF0,
+	"gym_gate_coords": 0x1E503,
+	"gym_quiz_flags": 0xD474,
 	"sprite_pointer_1": 0x34F9,
 	"sprite_pointer_2": 0x34FD,
 	"fill_memory": 0x166E,
