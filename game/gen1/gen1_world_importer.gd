@@ -1580,13 +1580,20 @@ static func _hidden_coin_nodes(
 	if index < 0:
 		return []
 	var flag: int = Gen1Layout.engine_flag_base("obtained_hidden_coins") + index
-	var found: String = predef_text(rom, layout, bank, "found_hidden_coins")
-	var dropped: String = predef_text(rom, layout, bank, "dropped_hidden_coins")
+	var amount: int = Gen1Layout.hidden_coin_amount(argument)
+	## Both boxes print `hCoins`, which holds the amount just added.
+	var coins: int = int(layout["money_hram"]) + Gen1Layout.COIN_BUFFER_AT
+	var found: String = _number_filled(
+		predef_text(rom, layout, bank, "found_hidden_coins"), coins, amount
+	)
+	var dropped: String = _number_filled(
+		predef_text(rom, layout, bank, "dropped_hidden_coins"), coins, amount
+	)
 	if found.is_empty() or dropped.is_empty():
 		return []
 	return [{"op": "has_item", "item": Gen1Layout.ITEM_COIN_CASE, "else": [], "then": [
 		{"op": "branch", "flag": flag, "engine": true, "then": [], "else": [
-			{"op": "add_coins", "amount": Gen1Layout.hidden_coin_amount(argument)},
+			{"op": "add_coins", "amount": amount},
 			{"op": "flag", "flag": flag, "set": true, "engine": true},
 			{"op": "has_coins", "coins": Gen1Layout.HIDDEN_COIN_CEILING,
 				"test": "exactly",
@@ -1918,9 +1925,24 @@ static func _script_ended(state: Dictionary, out: Array) -> Variant:
 	return out
 
 
-static func _script_printed(state: Dictionary, out: Array, box: Dictionary) -> void:
+## A `text_bcd` over a buffer the walk wrote every byte of prints that number,
+## which is how Yellow's Safari gate says ¥500 where Red's text spells it.
+static func _script_printed(ctx: Dictionary, state: Dictionary, out: Array, box: Dictionary) -> void:
+	var layout: Dictionary = ctx["layout"]
+	for name: String in Gen1Layout.SCRIPT_BCD_BUFFERS:
+		var value: int = _script_bcd_value(state, name)
+		if value >= 0:
+			box["text"] = _number_filled(String(box["text"]), int(layout[name]), value)
 	out.append(box)
 	state["last_box"] = box
+
+
+## `PrintBCDNumber` with LEADING_ZEROES | LEFT_ALIGN, which every map text's
+## `text_bcd` passes: the digits alone.
+static func _number_filled(text: String, address: int, value: int) -> String:
+	return Gen2TextStream.fill_all_markers(
+		text, "%s%04X>" % [Gen2TextStream.NUMBER_MARKER, address], str(value)
+	)
 
 
 ## One instruction: the next address, [constant SCRIPT_END] or SCRIPT_UNREAD.
@@ -5308,7 +5330,7 @@ static func _script_text_row(
 		out.append({"op": "facility", "command": int(decoded["command"])})
 		return true
 	if not String(decoded["text"]).is_empty():
-		_script_printed(state, out, {"op": "text", "text": String(decoded["text"])})
+		_script_printed(ctx, state, out, {"op": "text", "text": String(decoded["text"])})
 	var code: int = _text_code_at(decoded)
 	if code < 0:
 		return true

@@ -778,17 +778,22 @@ func _check_a_card_key_door() -> void:
 		"the door opened at %s was remembered as %s." % [
 			SILPH_DOOR, world.state.card_key_door(),
 		])
+	## `set BIT_CUR_MAP_LOADED_1`: the next frame's callback turns the
+	## coordinates into the door's flag before the player takes a step.
+	world.dispatch_sight_events()
+	var flag: int = int((world.current_map.events["card_key"] as Array)[0]["flag"])
+	_r.check(world.state.card_key_door() == Gen2WorldState.NO_CARD_KEY_DOOR
+		and world.event_flag_active(flag),
+		"the frame after the box kept %s and flag %d %s." % [
+			world.state.card_key_door(), flag, world.event_flag_active(flag)])
 
-	## The floor loaded again: the coordinates become the door's flag and the
-	## callback leaves that one alone.
+	## The floor loaded again: the callback leaves the flagged door alone.
 	var again: Gen2WorldAPI = _r.open_world(
 		0, SILPH_CO_2F, SILPH_DOOR_APPROACH, world.state
 	)
 	if again == null:
 		return
 	again.dispatch_map_entry()
-	_r.check(again.state.card_key_door() == Gen2WorldState.NO_CARD_KEY_DOOR,
-		"the reloaded floor kept %s." % [again.state.card_key_door()])
 	_r.check(again.block_at(SILPH_DOOR.x, SILPH_DOOR.y) == SILPH_OPEN_BLOCK,
 		"the reloaded floor blocked the opened door with $%02X." % again.block_at(
 			SILPH_DOOR.x, SILPH_DOOR.y

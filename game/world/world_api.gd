@@ -4103,7 +4103,10 @@ func _gen1_card_key_steps() -> Array:
 		return [_gen1_card_key_box("card_key_fail")]
 	door["type"] = &"block"
 	door["card_key"] = true
-	return [_gen1_card_key_box("card_key_success"), door]
+	## `set BIT_CUR_MAP_LOADED_1` behind the block: the floor's callback flags
+	## the door on the next frame, so leaving and returning keeps it open.
+	return [_gen1_card_key_box("card_key_success"), door,
+		{"type": &"map_load", "bit": Gen1Layout.MAP_LOADED_1_BIT}]
 
 
 func _gen1_card_key_box(name: String) -> Dictionary:
@@ -7583,7 +7586,6 @@ func _queue_map_callbacks(callback_type: int) -> void:
 	if current_map == null:
 		return
 	if _gen1:
-		_unlock_gen1_card_key_door()
 		## `RunMapScript`'s first frame behind `EnterMap`: its writes stand before a
 		## step, its boxes wait for one, and `CheckAndResetEvent` answers only once.
 		_gen1_entry_steps = _spend_gen1_nodes(_gen1_map_script_nodes(Gen1Layout.MAP_LOAD_BOTH))
@@ -7604,6 +7606,8 @@ func _queue_map_callbacks(callback_type: int) -> void:
 
 ## The map's script with [param mask] standing in `wCurrentMapScriptFlags`.
 func _gen1_map_script_nodes(mask: int) -> Array:
+	if mask & (1 << Gen1Layout.MAP_LOADED_1_BIT):
+		_unlock_gen1_card_key_door()
 	for callback: Dictionary in current_map.scripts.get("callbacks", []) as Array:
 		if int(callback.get("mask", 0)) == mask:
 			return callback["nodes"] as Array
@@ -7627,8 +7631,8 @@ func _spend_gen1_nodes(nodes: Array) -> Array:
 
 
 ## `<Map>_SetCardKeyDoorYScript` and `<Map>_UnlockedDoorEventScript`, which run
-## in front of the blocks: the door `PrintCardKeyText` last opened becomes that
-## door's own flag, and the coordinates are cleared on the floor that owns them.
+## in front of the blocks on every BIT_CUR_MAP_LOADED_1 pass: the door
+## `PrintCardKeyText` last opened becomes that door's own flag.
 func _unlock_gen1_card_key_door() -> void:
 	if state == null:
 		return

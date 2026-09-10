@@ -715,6 +715,9 @@ func _walk_script(
 		if op == "text" and not _drawn(font, String(node["text"]).replace("\n", "")) \
 			and wrong.size() < 4:
 			wrong.append("map %d draws a blank tile" % number)
+		if op == "text" and String(node["text"]).contains(Gen2TextStream.NUMBER_MARKER) \
+			and wrong.size() < 4:
+			wrong.append("map %d prints a number nothing wrote" % number)
 		if node.has("flag") and op in ["flag", "branch", "flag_test"]:
 			var flag: int = int(node["flag"])
 			if (flag < 0 or flag >= Gen1Layout.EVENT_FLAG_BYTES * 8) and wrong.size() < 4:
@@ -803,6 +806,22 @@ func _hidden_events() -> void:
 	_r.note("gen1 hidden events %s, %d bookshelf tiles" % [census, bookshelves])
 
 
+## Every box under [param rows]' scripts, branches included.
+func _script_texts(rows: Array) -> Array[String]:
+	var out: Array[String] = []
+	var pending: Array = []
+	for row: Dictionary in rows:
+		pending.append(row.get("script", []))
+	while not pending.is_empty():
+		for node: Dictionary in pending.pop_back() as Array:
+			if String(node["op"]) == "text":
+				out.append(String(node["text"]))
+			for side: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+				if node.has(side):
+					pending.append(node[side])
+	return out
+
+
 func _walk_hidden(
 	nodes: Array, census: Dictionary, wrong: Array[String], number: int
 ) -> void:
@@ -814,6 +833,9 @@ func _walk_hidden(
 			wrong.append("map %d faces %d" % [number, int(node["facing"])])
 		if op == "text" and String(node["text"]).is_empty() and wrong.size() < 4:
 			wrong.append("map %d prints nothing" % number)
+		if op == "text" and String(node["text"]).contains(Gen2TextStream.NUMBER_MARKER) \
+			and wrong.size() < 4:
+			wrong.append("map %d prints a number nothing wrote" % number)
 		if (op == "give_item" or op == "has_item" or op == "name_item") \
 			and _r.data.item_name(int(node["item"])).is_empty():
 			wrong.append("map %d names item %d" % [number, int(node["item"])])
@@ -1232,6 +1254,7 @@ const SAFARI_TEXTS: int = 6
 const SAFARI_BATTLE_MAPS: int = 4
 const SAFARI_WINDOW_MAPS: int = 9
 const SAFARI_STEPS_LABEL: String = "/500"
+const SAFARI_FEE_LINE: String = "That'll be ¥500"
 const SAFARI_MENU_TOP: String = "BALL×"
 
 
@@ -1243,6 +1266,10 @@ func _safari() -> void:
 		"the gate reads %d states." % (gate.scripts["states"] as Array).size())
 	_r.check(gate.texts.size() == SAFARI_TEXTS,
 		"the gate reads %d text rows." % gate.texts.size())
+	## Yellow's `text_bcd wPriceTemp` where Red spells the fee out.
+	_r.check(_script_texts(gate.texts).any(
+		func(text: String) -> bool: return text.contains(SAFARI_FEE_LINE)),
+		"no gate text says %s." % [SAFARI_FEE_LINE])
 	var battle_maps: int = 0
 	var window_maps: int = 0
 	for number: int in _maps:

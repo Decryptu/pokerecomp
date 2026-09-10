@@ -2,11 +2,9 @@ class_name Gen2Accuracy
 extends RefCounted
 
 ## Whether a move connects.
-##
 ## Accuracy is a byte out of 255, not a percentage: "100%" stores 255 and "90%"
 ## stores 229. Kept as the byte, because the roll is against it and a stored 255
 ## is a special case that never misses.
-##
 ## Accuracy and evasion use their own multiplier table, a different shape from
 ## the other stats', so -1 accuracy and -1 Attack are different fractions.
 
@@ -23,10 +21,8 @@ const STAGE_MULTIPLIERS: Array = [
 
 
 ## The chance a move connects, out of 255.
-##
 ## Evasion reads the same table from the other end rather than a second table:
 ## +2 evasion is the multiplier accuracy uses at -2.
-##
 ## [param foresight] drops both sides' stages, not only evasion, and only when
 ## the evasion stage is at least the accuracy stage, so it cannot undo an
 ## accuracy the attacker raised.
@@ -58,7 +54,6 @@ static func apply_stage(value: int, stage: int) -> int:
 
 
 ## Rolls a hit against a chance out of 255.
-##
 ## A chance of exactly 255 connects without rolling. Rolling would miss one time
 ## in 256, and Crystal goes out of its way not to. [param generation] is
 ## `MoveHitTest`, which does not: pret's own comment there says even the highest

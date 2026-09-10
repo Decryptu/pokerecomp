@@ -4,7 +4,6 @@ extends RefCounted
 ## The battle animation command interpreter (engine/battle_anims/anim_commands.asm).
 ## Nothing here draws, plays a sound or touches a palette: the commands are
 ## reported and whoever is drawing decides what they look like.
-##
 ## Anything below [constant FIRST_COMMAND] is a delay rather than a command, so
 ## `anim_wait N` is exactly N frames. The control flow is the cartridge's single
 ## `wBattleAnimParent` word and single `wBattleAnimLoops` byte, so a call inside a
@@ -116,7 +115,6 @@ const WOBBLE_CAUGHT: int = 1
 const WOBBLE_ESCAPED: int = 2
 
 ## How many commands one frame may run before the script is abandoned.
-##
 ## The cartridge has no such limit: `.RunScript` loops until a delay byte or a
 ## top-level `anim_ret`, and a script that does neither hangs the hardware. This
 ## is ours, so a malformed cached region or a mod's own script costs a refused
@@ -151,7 +149,6 @@ var _failed: bool = false
 
 ## An interpreter positioned at [param start_address] inside [param region], which
 ## starts at [param base_address].
-##
 ## [param param] is `wBattleAnimParam`, which the caller sets before playing;
 ## `wBattleAnimVar` starts at zero because `ClearBattleAnims` clears it.
 static func create(
@@ -173,7 +170,6 @@ static func create(
 ## [code]{ ok, name, byte, operands, size, target }[/code]; `target` is the
 ## start_address a branch would take, or -1. A delay byte answers [constant WAIT] with
 ## its own value as its single operand.
-##
 ## Shared with [Gen2BattleAnimImporter], which walks every body with it, so the
 ## vocabulary is stated once.
 static func decode_command(
@@ -250,7 +246,6 @@ func variable() -> int:
 
 ## One hardware frame of `RunBattleAnimCommand`, as an Array of the commands it
 ## ran, each [code]{ name, byte, operands }[/code].
-##
 ## Empty while a delay is counting down, which is most frames, and empty once
 ## the script has stopped. A frame that runs commands ends either on the delay
 ## byte that set the next pause or on the `anim_ret` that ended the script, and
