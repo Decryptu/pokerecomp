@@ -495,6 +495,7 @@ func _one_game() -> void:
 	_check_the_saffron_guard()
 	_check_an_arrow_tile()
 	_check_a_scripted_wild_battle()
+	_check_the_catch_training()
 	if _r.game_id != RomRegistry.YELLOW:
 		_check_the_opening_walk()
 	_check_the_route_23_guards()
@@ -2706,6 +2707,46 @@ func _check_a_scripted_wild_battle() -> void:
 	_r.check(world.event_flag_active(SNORLAX_BEAT_FLAG),
 		"the beaten Snorlax left its own flag clear.")
 	_r.note("gen1 walk ROUTE_12's Snorlax fought at level %d" % SNORLAX_LEVEL)
+
+
+## `ViridianCityOldManStartCatchTrainingScript`'s `wBattleType` as the Dude's
+## tutorial, and `wCurOpponent` read behind the whole state: Yellow's initial
+## training sets EVENT_INITIAL_CATCH_TRAINING after the store and breaks out on it.
+const VIRIDIAN_BYTE: int = 4
+## Each row: the state to start on, the one it moves to, and whether the ball lands.
+const CATCH_TRAINING_STATES: Dictionary = {
+	&"red": [[1, 2, true]], &"blue": [[1, 2, true]], &"yellow": [[3, 4, true], [7, 8, false]],
+}
+
+
+func _check_the_catch_training() -> void:
+	for row: Array in CATCH_TRAINING_STATES[_r.game_id] as Array:
+		var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_CITY, Vector2i(23, 10))
+		if world == null:
+			return
+		world.state.set_gen1_map_script(VIRIDIAN_BYTE, int(row[0]))
+		var results: Array = world.dispatch_sight_events()
+		var request: Dictionary = world.pending_runtime_request()
+		var values: Dictionary = request.get("values", {}) as Dictionary
+		if not _r.check(
+			StringName(request.get("kind", &"")) == &"battle_requested"
+				and bool(values.get("tutorial", false))
+				and int(values.get("battle_type", -1)) == Gen2Battle.BATTLETYPE_TUTORIAL
+				and int(values.get("gen1_battle_type", -1)) == Gen1Layout.BATTLE_TYPE_OLD_MAN,
+			"state %d asked for %s / %s." % [row[0], request, results]
+		):
+			return
+		_r.check(world.state.gen1_map_script(VIRIDIAN_BYTE) == int(row[1]),
+			"the state behind the old man's battle is %d." % world.state.gen1_map_script(VIRIDIAN_BYTE))
+		_r.check(world.gen1_tutorial_ball_lands() == bool(row[2]),
+			"the old man's ball from state %d %s." % [
+				row[0], "landed" if world.gen1_tutorial_ball_lands() else "broke out"])
+		world.complete_runtime_request({
+			"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
+		})
+		_r.check(world.pending_runtime_request().is_empty(), "the training left a request standing.")
+	_r.note("gen1 walk VIRIDIAN_CITY's catch training from %d states" % (
+		CATCH_TRAINING_STATES[_r.game_id] as Array).size())
 
 
 func _saffron_drink_flag() -> int:

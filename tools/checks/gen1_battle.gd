@@ -68,6 +68,7 @@ func _one_game() -> void:
 	_teleport_ends_the_battle()
 	_the_bag_in_a_fight()
 	_a_safari_battle()
+	_the_tutor_throws()
 
 
 ## `AddPartyMon`'s four base moves and `WriteMonMoves` over them, for every
@@ -533,3 +534,103 @@ func _safari_run_roll() -> void:
 				ran[index] += 1
 	_r.check(ran[1] < ran[0] and ran[0] < ran[2],
 		"the run rolls came out %s eating, plain and angry." % [ran])
+
+
+## The tutor on the real overlay, frame by frame, from the map script that
+## starts him: Viridian City's catch training, Yellow's initial one that
+## `ItemUseBall` refuses, and Prof. Oak's PIKACHU with no party at all. A row is
+## the state to start on, the one left behind, the wild, and whether the ball lands.
+const TUTOR_ROWS: Dictionary = {
+	&"red": [[1, 2, 13, true]], &"blue": [[1, 2, 13, true]],
+	&"yellow": [[3, 4, 19, true], [7, 8, 19, false]],
+}
+const TUTOR_GUARD_FRAMES: int = 6000
+const VIRIDIAN_CITY: int = 1
+const VIRIDIAN_BYTE: int = 4
+const PALLET_TOWN: int = 0
+const TUTOR_CELL := Vector2i(23, 10)
+const PIKACHU_DEX: int = 25
+## `_ItemUseText001`, `text_low`, `_ItemUseText002`; `_ItemUseBallText05`'s
+## `line` and `cont`; and `_ItemUseBallText04`.
+const TUTOR_USED: String = "%s used\nPOKé BALL!"
+const TUTOR_CAUGHT: String = "All right!\n%s was" + Gen2TextStream.SCROLL_BREAK + "caught!"
+const TUTOR_BROKE_FREE: String = "Shoot! It was so\nclose too!"
+
+
+func _the_tutor_throws() -> void:
+	for row: Array in TUTOR_ROWS[_r.game_id] as Array:
+		var screen: Gen2WorldScreen = _open_screen(VIRIDIAN_CITY, TUTOR_CELL, true)
+		var world: Gen2WorldAPI = screen.world()
+		var party_before: int = screen.active_save().party.size()
+		var balls_before: int = world.state.item_quantity(Gen1Layout.ITEM_POKE_BALL)
+		world.state.set_gen1_map_script(VIRIDIAN_BYTE, int(row[0]))
+		screen._show_script_results(world.dispatch_sight_events())
+		var training: Dictionary = _drive_tutor(screen)
+		var name: String = String(_r.data.species(int(row[2])).get("name", ""))
+		_r.check(training["frames"] < TUTOR_GUARD_FRAMES, "the old man's battle never ended: %s" % [training])
+		_r.check((training["messages"] as Array).has(TUTOR_USED % "OLD MAN"), "the old man threw nothing: %s" % [training])
+		var landed: String = TUTOR_CAUGHT % name if bool(row[3]) else TUTOR_BROKE_FREE
+		_r.check((training["messages"] as Array).has(landed), "the old man's %s ball said %s" % [name, training])
+		_r.check(world.state.gen1_map_script(VIRIDIAN_BYTE) == int(row[1]),
+			"the training left Viridian City on state %d." % world.state.gen1_map_script(VIRIDIAN_BYTE))
+		_r.check(screen.active_save().party.size() == party_before
+			and world.state.item_quantity(Gen1Layout.ITEM_POKE_BALL) == balls_before,
+			"the old man's catch was kept.")
+		_r.note("gen1 tutor: the old man's %s in %d frames, %s" % [
+			name, training["frames"], "caught" if bool(row[3]) else "broke free"])
+		_close_screen(screen)
+	if not Gen1Layout.TUTOR_WILDS[_r.game_id].has(Gen1Layout.BATTLE_TYPE_PIKACHU):
+		return
+	var lab: Gen2WorldScreen = _open_screen(PALLET_TOWN, TUTOR_CELL, false)
+	lab.preview_catch_tutorial(true)
+	var oak: Dictionary = _drive_tutor(lab)
+	var pikachu: String = String(_r.data.species(PIKACHU_DEX).get("name", ""))
+	_r.check(oak["frames"] < TUTOR_GUARD_FRAMES, "Prof. Oak's battle never ended: %s" % [oak])
+	_r.check((oak["messages"] as Array).has(TUTOR_USED % "PROF.OAK")
+		and (oak["messages"] as Array).has(TUTOR_CAUGHT % pikachu), "Prof. Oak's throw said %s" % [oak])
+	_r.check(lab.active_save().party.is_empty(), "Prof. Oak's PIKACHU joined the party.")
+	_r.note("gen1 tutor: Prof. Oak's %s in %d frames" % [pikachu, oak["frames"]])
+	_close_screen(lab)
+
+
+func _open_screen(map: int, cell: Vector2i, party: bool) -> Gen2WorldScreen:
+	var screen: Gen2WorldScreen = (load("res://game/world/world_screen.tscn") as PackedScene).instantiate()
+	screen.map_group = 0
+	screen.map_number = map
+	screen.start_cell = cell
+	screen.encounter_seed = 1
+	screen.set_data(_r.data)
+	var save: Gen2SaveData = Gen2SaveStore.create_development_save(_r.data, 0)
+	if not party:
+		save.party = []
+	screen.set_save(save)
+	(Engine.get_main_loop() as SceneTree).root.add_child(screen)
+	screen.set_process(false)
+	return screen
+
+
+func _close_screen(screen: Gen2WorldScreen) -> void:
+	(Engine.get_main_loop() as SceneTree).root.remove_child(screen)
+	screen.free()
+
+
+func _drive_tutor(screen: Gen2WorldScreen) -> Dictionary:
+	var messages: Array[String] = []
+	var frames: int = 0
+	var host: Gen2BattleScreen = null
+	while frames < TUTOR_GUARD_FRAMES:
+		frames += 1
+		screen.advance_frame()
+		var current: Gen2BattleScreen = screen.get("_battle_host")
+		if host == null:
+			host = current
+			continue
+		if current == null:
+			break
+		var snapshot: Dictionary = host.battle_snapshot()
+		var line: String = String(snapshot.get("message", ""))
+		if messages.is_empty() or messages.back() != line:
+			messages.append(line)
+		if bool(snapshot.get("awaits_press", false)):
+			screen.press_button(PokeButton.A)
+	return {"frames": frames, "messages": messages}

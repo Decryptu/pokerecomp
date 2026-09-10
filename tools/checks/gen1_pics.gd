@@ -18,7 +18,7 @@ const TRAINER_SIDE: int = 7
 
 ## SHA-1 of each atlas's own index buffer. Red and Blue share every picture,
 ## and Yellow redrew all 151 front pics, six trainer ones (Brock, Misty, Erika
-## and the rival's three) and `RedPicFront`, but no back pic at all.
+## and the rival's three) and `RedPicFront`, and added `ProfOakPicBack` alone.
 const DIGESTS: Dictionary = {
 	&"red": {
 		"front": "672ba02e2d98a787fb619e11e77fba45a379a47b",
@@ -38,7 +38,7 @@ const DIGESTS: Dictionary = {
 		"front": "d6e50eed9888dbe7787b1a1952403eab5bd133b6",
 		"back": "a8976278a8c8294f285a25a993a44f2f6012b127",
 		"trainers": "6b0fe80efffb9a8223a9646b1df42cfa592fd0f4",
-		"player_back": "6c2830e479cf877b20bd10f6c94324bb5c3e425d",
+		"player_back": "161795669025786e3c4d004a400325e05b53d57b",
 		"player_front": "070dcf72706fc8ab991158a8bd32beae0c7a0d36",
 	},
 }
@@ -106,7 +106,7 @@ func _one_game() -> void:
 	_atlas("front", SPECIES_COUNT, FRONT_SIDES[FRONT_SIDES.size() - 1])
 	_atlas("back", SPECIES_COUNT, BACK_SIDE)
 	_atlas("trainers", TRAINER_COUNT, TRAINER_SIDE)
-	_atlas("player_back", Gen1Layout.PLAYER_BACKPICS.size(), BACK_SIDE)
+	_atlas("player_back", _backpics().size(), BACK_SIDE)
 	_atlas("player_front", PLAYER_FRONTPICS, TRAINER_SIDE)
 	_species_pics()
 	_trainer_pics()
@@ -181,13 +181,23 @@ func _trainer_pics() -> void:
 	)
 
 
+func _backpics() -> Array[String]:
+	return Gen1Layout.player_backpics(Gen1Layout.for_id(_r.game_id))
+
+
 func _player_pics() -> void:
+	var backpics: Array[String] = _backpics()
+	_r.check(
+		backpics.size() == (3 if _r.game_id == RomRegistry.YELLOW else 2),
+		"the cartridge draws %d back pics." % backpics.size()
+	)
 	var drawn: Array[PackedByteArray] = []
-	for slot: int in Gen1Layout.PLAYER_BACKPICS.size():
+	for slot: int in backpics.size():
 		var cell: Dictionary = _cell("player_back", slot)
-		_r.check(_ink(cell), "the %s back pic is blank." % Gen1Layout.PLAYER_BACKPICS[slot])
-		drawn.append(cell.get("indices", PackedByteArray()))
-	_r.check(drawn[0] != drawn[1], "the player and the old man share a back pic.")
+		_r.check(_ink(cell), "the %s back pic is blank." % backpics[slot])
+		var indices: PackedByteArray = cell.get("indices", PackedByteArray())
+		_r.check(not drawn.has(indices), "the %s back pic repeats another." % backpics[slot])
+		drawn.append(indices)
 	var front: Dictionary = _cell("player_front", 0)
 	_r.check(_ink(front), "RedPicFront is blank.")
 	_r.check(
@@ -245,7 +255,7 @@ func _battle_page() -> void:
 		_r.check(drawn != blank, "battle tile $%02X is blank." % tile)
 
 	var cropped: Array[int] = []
-	for slot: int in SPECIES_COUNT + Gen1Layout.PLAYER_BACKPICS.size():
+	for slot: int in SPECIES_COUNT + _backpics().size():
 		var name: String = "back" if slot < SPECIES_COUNT else "player_back"
 		if _draws_outside_crop(name, slot if slot < SPECIES_COUNT else slot - SPECIES_COUNT):
 			cropped.append(slot + 1)

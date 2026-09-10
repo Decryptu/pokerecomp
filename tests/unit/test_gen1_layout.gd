@@ -592,3 +592,36 @@ func test_the_two_map_free_rods_carry_their_own_slots() -> void:
 	assert_eq(good_rod.size(), 2)
 	for slot: Dictionary in good_rod:
 		assert_eq(int(slot["level"]), 10)
+
+
+## `wBattleType` read across: the two tutors are Crystal's tutorial with the
+## raw byte kept, the Safari is its own, and a value no script writes adds nothing.
+func test_a_battle_type_byte_reads_across_onto_crystals() -> void:
+	var old_man: Dictionary = Gen1Layout.battle_type_values(Gen1Layout.BATTLE_TYPE_OLD_MAN)
+	assert_eq(int(old_man["battle_type"]), Gen2Battle.BATTLETYPE_TUTORIAL)
+	assert_true(bool(old_man["tutorial"]))
+	assert_eq(int(old_man["gen1_battle_type"]), Gen1Layout.BATTLE_TYPE_OLD_MAN)
+	var pikachu: Dictionary = Gen1Layout.battle_type_values(Gen1Layout.BATTLE_TYPE_PIKACHU)
+	assert_eq(int(pikachu["battle_type"]), Gen2Battle.BATTLETYPE_TUTORIAL)
+	assert_eq(
+		int(Gen1Layout.battle_type_values(Gen1Layout.BATTLE_TYPE_SAFARI)["battle_type"]),
+		Gen2Battle.BATTLETYPE_SAFARI
+	)
+	assert_false(Gen1Layout.battle_type_values(Gen1Layout.BATTLE_TYPE_SAFARI).has("tutorial"))
+	assert_true(Gen1Layout.battle_type_values(0).is_empty())
+
+
+## `.oldManBattle`: only Yellow's old man can miss, and only under its event.
+func test_the_tutors_ball_lands_unless_yellows_initial_training_stands() -> void:
+	var set_flag: Callable = func(_flag: int) -> bool: return true
+	var clear_flag: Callable = func(_flag: int) -> bool: return false
+	assert_true(Gen1Layout.tutorial_ball_lands(RomRegistry.RED, Gen1Layout.BATTLE_TYPE_OLD_MAN, set_flag))
+	assert_true(Gen1Layout.tutorial_ball_lands(RomRegistry.YELLOW, Gen1Layout.BATTLE_TYPE_PIKACHU, set_flag))
+	assert_true(Gen1Layout.tutorial_ball_lands(RomRegistry.YELLOW, Gen1Layout.BATTLE_TYPE_OLD_MAN, clear_flag))
+	assert_false(Gen1Layout.tutorial_ball_lands(RomRegistry.YELLOW, Gen1Layout.BATTLE_TYPE_OLD_MAN, set_flag))
+
+
+## Red and Blue draw the player and the old man; Yellow adds Prof. Oak.
+func test_yellow_alone_carries_prof_oaks_back_pic() -> void:
+	assert_eq(Gen1Layout.player_backpics(Gen1Layout.RED_BLUE), ["player", "old_man"])
+	assert_eq(Gen1Layout.player_backpics(Gen1Layout.YELLOW), ["player", "old_man", "prof_oak"])

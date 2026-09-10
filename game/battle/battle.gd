@@ -3,7 +3,6 @@ extends RefCounted
 
 ## A battle: two parties, a turn at a time. Scene-free with randomness injected,
 ## so a whole battle can be fought in a test with no display.
-##
 ## A turn answers with events carrying their own numbers, never a string:
 ## sentences, animation and draining bars are the screen's job. A side is a party
 ## and a wild encounter a party of one. A turn ending with somebody down says so
@@ -751,7 +750,6 @@ static func use_item(item: int) -> Dictionary:
 ## `InitEnemyTrainer`: the class's own `TRNATTR_ITEM1` and `TRNATTR_ITEM2` into
 ## the two working slots, and then `IsGymLeader`'s own party walk. `NO_ITEM` is
 ## zero and is not carried.
-##
 ## [param rewarded] is false for the two opponents `ReadTrainerParty` returns in
 ## front of, the Battle Tower's and a link partner's: neither reaches
 ## `ComputeTrainerReward`, and neither win branch pays money either.
@@ -1513,12 +1511,10 @@ static func double_reward(amount: int) -> int:
 
 
 ## `BattleWon.give_money`, the whole of what a beaten trainer pays.
-##
 ## [param reward] is [member battle_reward], a quarter of the prize: the Amulet
 ## Coin doubles that quarter, four quarters are handed out one at a time, and
 ## the two `.DoubleReward` calls at `.done` put the total back for the line that
 ## announces it. [param mom_flags] is `wMomSavingMoney`.
-##
 ## Returns the two credits, the figure the line prints and which line it is.
 static func prize_money_split(
 	reward: int, amulet: bool, mom_flags: int, moms_money: int, max_money: int
@@ -1565,7 +1561,6 @@ func _send_out_animation(enemy_turn: bool, param: int) -> Dictionary:
 
 ## `SendOutMonText`, which picks one of four lines off how much of the opponent
 ## is left. Only the player is ever announced this way; the enemy has one line.
-##
 ## The arithmetic is the source's own: the remaining HP times 25 over the top
 ## quarter of the maximum, both read as the cartridge reads them, so the answer
 ## is a percentage that has been through an eight-bit divisor. A maximum below
@@ -2972,7 +2967,6 @@ func _act(side: int, slot: int, move_number: int, events: Array) -> void:
 
 ## The command interpreter: `DoMove`'s own read cycle over the list an effect
 ## byte picks, with `SkipToBattleCommand` and `endloop`'s rewind to `critical`.
-##
 ## `ResetTurn`, used by Metronome, Mirror Move and Sleep Talk: the called move
 ## replaces the working one and starts its list from the beginning, without the
 ## once-per-action status gate. A fresh [Gen2Turn] is that clean move-struct copy,
@@ -3035,7 +3029,6 @@ func run_move_effect(turn: Gen2Turn, depth: int = 0) -> void:
 ## calls, `RegionCheck` and `IsGymLeader`. Kept here rather than on the screen
 ## because every input is battle state: `wBattleType`, `wOtherTrainerClass`,
 ## `wOtherTrainerID`, `wTimeOfDay` and the map's landmark.
-##
 ## `MUSIC_SUICUNE_BATTLE` exists on Crystal alone; the two `BATTLETYPE_` rows in
 ## front of the trainer check are the only place either game reaches it, and
 ## Gold and Silver never write those types.
@@ -3112,7 +3105,6 @@ const LANDMARK_VICTORY_ROAD: int = 0x58
 ## does everything below `KANTO_LANDMARK`, and so does Victory Road and every
 ## landmark above it, because `cp LANDMARK_VICTORY_ROAD / jr c, .kanto` only
 ## takes the Kanto branch below that row.
-##
 ## The `LANDMARK_SPECIAL` backup lookup in front of it is
 ## [method Gen2WorldAPI.landmark_backup], which every caller of this resolves
 ## the landmark through.
@@ -3125,7 +3117,6 @@ static func region_is_kanto(landmark_id: int, crystal: bool = true) -> bool:
 
 
 ## `PlayBattleMusic`'s answer: the track a battle opens on.
-##
 ## [param landmark_id] is `GetWorldMapLocation`'s, [param trainer_class] and
 ## [param trainer_id] are `wOtherTrainerClass` and `wOtherTrainerID` (class 0
 ## being a wild fight), and [param day_period] is `wTimeOfDay`.

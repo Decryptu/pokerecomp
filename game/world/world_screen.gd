@@ -4863,8 +4863,20 @@ func preview_meet_visible_encounter(cell: Vector2i) -> bool:
 ## development Master Ball, starts an imported wild encounter, and leaves the
 ## production battle overlay on its throw message.
 ## `CatchTutorial`: the Dude's own fight, which answers itself. `Route29Tutorial1`
-## loads the same `loadwildmon RATTATA, 5` in front of it.
-func preview_catch_tutorial() -> void:
+## loads the same `loadwildmon RATTATA, 5` in front of it. A Generation 1 cache
+## throws the old man's, or Prof. Oak's for [param pikachu].
+func preview_catch_tutorial(pikachu: bool = false) -> void:
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		var raw: int = Gen1Layout.BATTLE_TYPE_PIKACHU if pikachu else Gen1Layout.BATTLE_TYPE_OLD_MAN
+		var wilds: Dictionary = Gen1Layout.TUTOR_WILDS.get(_data.id, {})
+		if not wilds.has(raw):
+			return
+		var values: Dictionary = {
+			"kind": &"wild", "pokemon": int(wilds[raw]), "level": Gen1Layout.TUTOR_WILD_LEVEL,
+		}
+		values.merge(Gen1Layout.battle_type_values(raw))
+		_start_battle_request({"kind": &"battle_requested", "values": values})
+		return
 	_start_battle_request({
 		"kind": &"catch_tutorial_requested",
 		"values": {

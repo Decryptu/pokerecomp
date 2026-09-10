@@ -1796,14 +1796,10 @@ func _import_pics(
 			trainers, trainer_class - 1
 		)
 
-	var player_back: Dictionary = PokeTiles.new_atlas(
-		Gen1Layout.BACKPIC_TILES, Gen1Layout.PLAYER_BACKPICS.size()
-	)
-	for slot: int in Gen1Layout.PLAYER_BACKPICS.size():
-		_decode_pic(
-			codec, rom, int(layout["pic_%s_back" % Gen1Layout.PLAYER_BACKPICS[slot]]),
-			player_back, slot
-		)
+	var backpics: Array[String] = Gen1Layout.player_backpics(layout)
+	var player_back: Dictionary = PokeTiles.new_atlas(Gen1Layout.BACKPIC_TILES, backpics.size())
+	for slot: int in backpics.size():
+		_decode_pic(codec, rom, int(layout["pic_%s_back" % backpics[slot]]), player_back, slot)
 
 	var player_front: Dictionary = PokeTiles.new_atlas(
 		Gen1Layout.FRONTPIC_MAX_TILES, PLAYER_FRONTPICS.size()
@@ -1815,7 +1811,7 @@ func _import_pics(
 	var wanted: Dictionary = {
 		"front": Gen1Layout.SPECIES_COUNT, "back": Gen1Layout.SPECIES_COUNT,
 		"trainers": Gen1Layout.TRAINER_CLASS_COUNT,
-		"player_back": Gen1Layout.PLAYER_BACKPICS.size(),
+		"player_back": backpics.size(),
 		"player_front": PLAYER_FRONTPICS.size(),
 	}
 	var atlases: Dictionary = {

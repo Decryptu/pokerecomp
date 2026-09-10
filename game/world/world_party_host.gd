@@ -1289,12 +1289,13 @@ static func capture_wild(
 		return _failure(&"missing_capture_context", {})
 	## The Dude's throw: `.catch_without_fail` in front of every multiplier, and
 	## `.return_from_capture`'s `cp BATTLETYPE_TUTORIAL / ret z` behind the line.
-	## The ball is his and nothing is kept, so no transaction opens.
+	## The ball is his and nothing is kept, so no transaction opens. Generation
+	## 1's `.oldManBattle` ends the battle even on the throw Yellow refuses.
 	if battle_type == Gen2Battle.BATTLETYPE_TUTORIAL:
 		return {
-			"ok": true, "caught": true, "ball": ball, "wobbles": 3,
+			"ok": true, "caught": world.gen1_tutorial_ball_lands(), "ball": ball, "wobbles": 3,
 			"catch_rate": 255, "species": wild.species,
-			"tutorial": true, "persistent": false,
+			"tutorial": true, "persistent": false, "ends_battle": true,
 		}
 	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
 	if not bool(opened.get("ok", false)):

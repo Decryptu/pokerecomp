@@ -8639,6 +8639,9 @@ func _request_party_host(world: Gen2WorldAPI, _request: Dictionary, state: Dicti
 ## answers the request itself instead of opening a battle screen, so it credits
 ## the same accounts that screen would have.
 func _request_battle(world: Gen2WorldAPI, request: Dictionary, state: Dictionary) -> Array:
+	## A Generation 1 tutor rides a `battle_requested` the map script wrote.
+	if bool((request.get("values", {}) as Dictionary).get("tutorial", false)):
+		return _request_catch_tutorial(world, request, state)
 	var data: GameData = state["data"]
 	var save: Gen2SaveData = state["save"]
 	var player_party: Gen2Party = (
@@ -9302,7 +9305,10 @@ const GEN1_MT_MOON_NERD_CELL := Vector2i(13, 8)
 const GEN1_MT_MOON_BELOW_DOME := Vector2i(12, 7)
 const GEN1_MT_MOON_B2F_EXIT_LADDER := Vector2i(5, 7)
 const GEN1_MT_MOON_B1F_EXIT := Vector2i(27, 3)
-const GEN1_EVENT_GOT_DOME_FOSSIL: int = 0x570 + 14
+## Yellow's Mt. Moon run puts it right behind the 1F trainers.
+const GEN1_EVENT_GOT_DOME_FOSSIL: Dictionary = {
+	&"red": 0x570 + 14, &"blue": 0x570 + 14, &"yellow": 0x570 + 8,
+}
 const GEN1_ROUTE_24: int = 35
 const GEN1_ROUTE_25: int = 36
 const GEN1_BILLS_HOUSE: int = 88
@@ -9311,6 +9317,7 @@ const GEN1_CERULEAN_BRIDGE_FOOT := Vector2i(20, 6)
 const GEN1_CERULEAN_GYM_DOOR := Vector2i(30, 19)
 const GEN1_BELOW_BILL_POKEMON := Vector2i(6, 6)
 const GEN1_BILLS_PC_CELL := Vector2i(1, 5)
+const GEN1_BELOW_DAMIAN := Vector2i(6, 6)
 const GEN1_BELOW_BILL := Vector2i(4, 5)
 const GEN1_MISTY := Vector2i(4, 2)
 const GEN1_EVENT_BEAT_CERULEAN_RIVAL: int = 152
@@ -9360,7 +9367,11 @@ const GEN1_PALLET_NORTH_PATH: Dictionary = {
 }
 const GEN1_PALLET_LAB_DOOR := Vector2i(12, 11)
 const GEN1_LAB_DOOR := Vector2i(4, 11)
-const GEN1_LAB_BELOW_CHARMANDER := Vector2i(6, 4)
+## The cell under the ball the walk takes and the dex number it gives: Yellow's
+## one EEVEE ball sends the rival for it and walks the player to Oak's PIKACHU.
+const GEN1_LAB_STARTER_BALLS: Dictionary = {
+	&"red": [Vector2i(6, 4), 4], &"blue": [Vector2i(6, 4), 4], &"yellow": [Vector2i(7, 4), 25],
+}
 const GEN1_LAB_BELOW_OAK := Vector2i(5, 3)
 const GEN1_VIRIDIAN_MART_DOOR := Vector2i(29, 19)
 const GEN1_MART_DOOR := Vector2i(3, 7)
@@ -9375,7 +9386,6 @@ const GEN1_EVENT_OAK_GOT_PARCEL: int = 56
 const GEN1_EVENT_GOT_OAKS_PARCEL: int = 57
 const GEN1_EVENT_GOT_TM34: int = 118
 const GEN1_EVENT_BEAT_BROCK: int = 119
-const GEN1_CHARMANDER_DEX: int = 4
 const GEN1_OAKS_PARCEL: int = 0x46
 const GEN1_TM34: int = 0xEA
 const GEN1_BIT_BOULDERBADGE: int = 0
@@ -9689,17 +9699,18 @@ func _gen1_lab_leg(
 	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
 	path: Array
 ) -> Dictionary:
+	var ball: Array = GEN1_LAB_STARTER_BALLS[data.id]
 	var starter: Dictionary = _gen1_talk(
-		world, GEN1_LAB_BELOW_CHARMANDER, Gen2WorldSprite.FACING_UP, save, random, data
+		world, ball[0], Gen2WorldSprite.FACING_UP, save, random, data
 	)
-	var stepped: Dictionary = _gen1_step(path, "oaks_lab_charmander", world, starter, {
+	var stepped: Dictionary = _gen1_step(path, "oaks_lab_starter", world, starter, {
 		"party": _party_species(save)})
 	if not bool(stepped["ok"]):
 		return stepped
-	stepped = _gen1_flag_leg(path, "oaks_lab_charmander", world, GEN1_EVENT_GOT_STARTER, "EVENT_GOT_STARTER")
+	stepped = _gen1_flag_leg(path, "oaks_lab_starter", world, GEN1_EVENT_GOT_STARTER, "EVENT_GOT_STARTER")
 	if not bool(stepped["ok"]):
 		return stepped
-	if save.party.is_empty() or int(save.party[0].species) != GEN1_CHARMANDER_DEX:
+	if save.party.is_empty() or int(save.party[0].species) != int(ball[1]):
 		return {"ok": false, "path": path, "reason": "the ball gave %s" % [_party_species(save)]}
 	var leaving: Dictionary = _gen1_warp_walk(world, GEN1_LAB_DOOR, save, random, data)
 	stepped = _gen1_step(path, "oaks_lab_rival_fight", world, leaving, {"party": _party_species(save)})
@@ -9901,7 +9912,9 @@ func _gen1_mt_moon_leg(
 		"items": _named_items(data, world.state.items())})
 	if not bool(stepped["ok"]):
 		return stepped
-	stepped = _gen1_flag_leg(path, "mt_moon_dome_fossil", world, GEN1_EVENT_GOT_DOME_FOSSIL, "EVENT_GOT_DOME_FOSSIL")
+	stepped = _gen1_flag_leg(
+		path, "mt_moon_dome_fossil", world, GEN1_EVENT_GOT_DOME_FOSSIL[data.id], "EVENT_GOT_DOME_FOSSIL"
+	)
 	if not bool(stepped["ok"]):
 		return stepped
 	return _gen1_warp_legs(path, world, save, random, data, [
@@ -9928,6 +9941,21 @@ func _gen1_bills_house_leg(
 ) -> Dictionary:
 	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
 		["north", GEN1_ROUTE_24, "cerulean_to_route_24"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	## Yellow's PIKACHU learns no HM01; Damian's CHARMANDER cuts the gym's tree.
+	if data.id == RomRegistry.YELLOW:
+		var damian: Dictionary = _gen1_talk(
+			world, GEN1_BELOW_DAMIAN, Gen2WorldSprite.FACING_UP, save, random, data
+		)
+		stepped = _gen1_step(path, "route_24_damian", world, damian, {"party": _party_species(save)})
+		if not bool(stepped["ok"]):
+			return stepped
+		if _party_species(save).size() != 2:
+			return {"ok": false, "path": path, "reason": "route_24_damian: Damian left the party %s" % [
+				_party_species(save)]}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
 		["east", GEN1_ROUTE_25, "route_24_to_route_25"],
 		[GEN1_BILLS_HOUSE, "route_25_to_bills_house"],
 	])

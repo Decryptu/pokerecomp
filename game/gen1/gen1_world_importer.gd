@@ -4849,7 +4849,8 @@ static func _script_bag_scan(ctx: Dictionary, at: int, out: Array) -> int:
 		if item < 1 and op == Gen1Layout.SCRIPT_CP_N \
 			and rom.u8(at + offset + 1) != Gen1Layout.MAP_COORD_END:
 			item = rom.u8(at + offset + 1)
-		taken = taken or (op == Gen1Layout.SCRIPT_JP \
+		## Yellow spells the tail `call` and `ret` where Red and Blue `jp`.
+		taken = taken or (op in [Gen1Layout.SCRIPT_JP, Gen1Layout.SCRIPT_CALL] \
 			and rom.u16le(at + offset + 1) == int(layout.get("remove_item_from_inventory", -1)))
 	if item < 1 or not taken:
 		return SCRIPT_SHAPE_REFUSED
