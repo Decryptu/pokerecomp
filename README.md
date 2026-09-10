@@ -386,7 +386,7 @@ The rest are previews and dumps, each driving a real screen or table:
 ```bash
 # the full walked route: Johto, the Hall of Fame, every Kanto gym, and Red
 godot --headless --path . -s res://tools/preview_world_story.gd -- crystal 24 7 2 2 1 none home story
-# Red, Blue or Yellow from the bedroom to Lt. Surge
+# Red, Blue or Yellow from the bedroom to Erika
 godot --headless --path . -s res://tools/preview_world_story.gd -- red 0 38 3 6 1 none home story
 ```
 

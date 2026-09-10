@@ -9359,6 +9359,40 @@ const GEN1_EVENT_GOT_TM24: int = 358
 const GEN1_EVENT_BEAT_LT_SURGE: int = 359
 const GEN1_EVENT_2ND_LOCK_OPENED: int = 352
 const GEN1_BIT_THUNDERBADGE: int = 2
+const GEN1_ROUTE_9: int = 20
+const GEN1_ROUTE_10: int = 21
+const GEN1_ROCK_TUNNEL_1F: int = 82
+const GEN1_ROCK_TUNNEL_B1F: int = 232
+const GEN1_LAVENDER_TOWN: int = 4
+const GEN1_ROUTE_8: int = 19
+const GEN1_ROUTE_7: int = 18
+const GEN1_UNDERGROUND_PATH_ROUTE_8: int = 80
+const GEN1_UNDERGROUND_PATH_ROUTE_7: int = 77
+const GEN1_UNDERGROUND_PATH_WEST_EAST: int = 121
+const GEN1_CELADON_CITY: int = 6
+const GEN1_CELADON_GYM: int = 134
+## The tree behind Route 9's west edge, and the one `CeladonGym`'s corridor ends on.
+const GEN1_ROUTE_9_TREE_APPROACH := Vector2i(4, 8)
+## `ReplaceTreeTileBlock` edits the tilemap alone, so the gym's tree stands
+## again on the way out and is cut from inside the fence.
+const GEN1_VERMILION_TREE_INSIDE := Vector2i(15, 19)
+const GEN1_CELADON_GYM_TREE_APPROACH := Vector2i(5, 8)
+## The tree at (35, 32), which seals the gym's own corner of Celadon City.
+const GEN1_CELADON_TREE_APPROACH := Vector2i(35, 31)
+## Rock Tunnel's four ladders in walking order, each a floor and its cell, and
+## the south exit: `TilePairCollisionsLand`'s CAVERN rows are what make the
+## floors a maze rather than open rock.
+const GEN1_ROCK_TUNNEL_LADDERS: Array = [
+	[GEN1_ROCK_TUNNEL_B1F, Vector2i(37, 3)], [GEN1_ROCK_TUNNEL_1F, Vector2i(27, 3)],
+	[GEN1_ROCK_TUNNEL_B1F, Vector2i(17, 11)], [GEN1_ROCK_TUNNEL_1F, Vector2i(3, 3)],
+]
+const GEN1_ROCK_TUNNEL_SOUTH_EXIT := Vector2i(15, 33)
+const GEN1_ROUTE_8_UNDERGROUND := Vector2i(13, 3)
+const GEN1_CELADON_GYM_DOOR := Vector2i(12, 27)
+const GEN1_ERIKA := Vector2i(4, 3)
+const GEN1_EVENT_GOT_TM21: int = 424
+const GEN1_EVENT_BEAT_ERIKA: int = 425
+const GEN1_BIT_RAINBOWBADGE: int = 3
 const GEN1_BEDROOM_STAIRS := Vector2i(7, 1)
 const GEN1_HOUSE_DOOR := Vector2i(2, 7)
 ## `PalletTownDefaultScript` stops the player at `wYCoord == 1`, and Yellow's at 0.
@@ -9438,7 +9472,7 @@ func _gen1_story_path(data: GameData) -> Dictionary:
 		_gen1_pokedex_leg, _gen1_viridian_forest_leg, _gen1_pewter_gym_leg,
 		_gen1_mt_moon_leg, _gen1_cerulean_rival_leg, _gen1_bills_house_leg,
 		_gen1_cerulean_gym_leg, _gen1_cerulean_thief_leg, _gen1_ss_anne_leg,
-		_gen1_vermilion_gym_leg,
+		_gen1_vermilion_gym_leg, _gen1_rock_tunnel_leg, _gen1_celadon_gym_leg,
 	]
 	for leg: Callable in legs:
 		var walked: Dictionary = leg.call(world, save, random, data, path)
@@ -10097,16 +10131,9 @@ func _gen1_vermilion_gym_leg(
 		"moves": _party_moves(save)})
 	if not bool(stepped["ok"]):
 		return stepped
-	var walked: Dictionary = _gen1_walk(world, GEN1_VERMILION_TREE_APPROACH, save, random, data)
-	if bool(walked.get("ok", false)):
-		world.player_facing = Gen2WorldSprite.FACING_RIGHT
-		var request: Dictionary = world.cut_request()
-		if not bool(request.get("ok", false)):
-			walked = {"ok": false, "reason": "cut refused: %s" % request.get("reason", "")}
-		else:
-			var applied: Dictionary = world.complete_cut()
-			walked = {"ok": bool(applied.get("ok", false)), "reason": applied.get("reason", "")}
-	stepped = _gen1_step(path, "vermilion_cut_tree", world, walked)
+	stepped = _gen1_step(path, "vermilion_cut_tree", world, _gen1_cut(
+		world, GEN1_VERMILION_TREE_APPROACH, Gen2WorldSprite.FACING_RIGHT, save, random, data
+	))
 	if not bool(stepped["ok"]):
 		return stepped
 	stepped = _gen1_warp_legs(path, world, save, random, data, [
@@ -10151,3 +10178,108 @@ func _gen1_vermilion_gym_leg(
 	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_THUNDERBADGE)):
 		return {"ok": false, "path": path, "reason": "vermilion_gym_lt_surge: THUNDERBADGE is clear"}
 	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_VERMILION_CITY, "vermilion_gym_exit"]])
+
+
+## `UsedCut` on the tree in front of [param cell], faced [param facing].
+func _gen1_cut(
+	world: Gen2WorldAPI, cell: Vector2i, facing: int, save: Gen2SaveData,
+	random: RandomNumberGenerator, data: GameData
+) -> Dictionary:
+	var walked: Dictionary = _gen1_walk(world, cell, save, random, data)
+	if not bool(walked.get("ok", false)):
+		return walked
+	world.player_facing = facing
+	var request: Dictionary = world.cut_request()
+	if not bool(request.get("ok", false)):
+		return {"ok": false, "reason": "cut refused: %s" % request.get("reason", ""), "runs": walked["runs"]}
+	var applied: Dictionary = world.complete_cut()
+	return {"ok": bool(applied.get("ok", false)), "reason": applied.get("reason", ""), "runs": walked["runs"]}
+
+
+## Vermilion back up the Underground Path, Route 9 behind its tree, Rock
+## Tunnel's two ladders and out to Lavender Town.
+func _gen1_rock_tunnel_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_step(path, "vermilion_cut_tree_again", world, _gen1_cut(
+		world, GEN1_VERMILION_TREE_INSIDE, Gen2WorldSprite.FACING_UP, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		["north", GEN1_ROUTE_6, "vermilion_to_route_6"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_6, "route_6_to_underground"],
+		[GEN1_UNDERGROUND_PATH_NORTH_SOUTH, "underground_south_entrance"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_5, "underground_north_exit"],
+		[GEN1_ROUTE_5, "underground_to_route_5"],
+		["north", GEN1_CERULEAN_CITY, "route_5_to_cerulean"],
+		["east", GEN1_ROUTE_9, "cerulean_to_route_9"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "route_9_cut_tree", world, _gen1_cut(
+		world, GEN1_ROUTE_9_TREE_APPROACH, Gen2WorldSprite.FACING_RIGHT, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	var legs: Array = [
+		["east", GEN1_ROUTE_10, "route_9_to_route_10"],
+		[GEN1_ROCK_TUNNEL_1F, "route_10_to_rock_tunnel"],
+	]
+	for ladder: int in GEN1_ROCK_TUNNEL_LADDERS.size():
+		var row: Array = GEN1_ROCK_TUNNEL_LADDERS[ladder]
+		legs.append([int(row[0]), "rock_tunnel_ladder_%d" % (ladder + 1), row[1]])
+	legs.append_array([
+		[GEN1_ROUTE_10, "rock_tunnel_to_route_10", GEN1_ROCK_TUNNEL_SOUTH_EXIT],
+		["south", GEN1_LAVENDER_TOWN, "route_10_to_lavender"],
+	])
+	return _gen1_warp_legs(path, world, save, random, data, legs)
+
+
+## Route 8's Underground Path to Celadon City, the gym's own tree and Erika.
+func _gen1_celadon_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		["west", GEN1_ROUTE_8, "lavender_to_route_8"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_8, "route_8_to_underground", GEN1_ROUTE_8_UNDERGROUND],
+		[GEN1_UNDERGROUND_PATH_WEST_EAST, "underground_east_entrance"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_7, "underground_west_exit"],
+		[GEN1_ROUTE_7, "underground_to_route_7"],
+		["west", GEN1_CELADON_CITY, "route_7_to_celadon"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "celadon_cut_tree", world, _gen1_cut(
+		world, GEN1_CELADON_TREE_APPROACH, Gen2WorldSprite.FACING_DOWN, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_CELADON_GYM, "celadon_gym_entry", GEN1_CELADON_GYM_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "celadon_gym_cut_tree", world, _gen1_cut(
+		world, GEN1_CELADON_GYM_TREE_APPROACH, Gen2WorldSprite.FACING_UP, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	var erika: Dictionary = _gen1_talk_to(world, GEN1_ERIKA, save, random, data)
+	stepped = _gen1_step(path, "celadon_gym_erika", world, erika, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_ERIKA, "EVENT_BEAT_ERIKA"], [GEN1_EVENT_GOT_TM21, "EVENT_GOT_TM21"],
+	]:
+		stepped = _gen1_flag_leg(path, "celadon_gym_erika", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_RAINBOWBADGE)):
+		return {"ok": false, "path": path, "reason": "celadon_gym_erika: RAINBOWBADGE is clear"}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_CELADON_CITY, "celadon_gym_exit"]])
