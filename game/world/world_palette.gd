@@ -156,7 +156,8 @@ static func fade_palette(palette: PackedColorArray, order: int) -> PackedColorAr
 	var out := PackedColorArray()
 	out.resize(palette.size())
 	for index: int in palette.size():
-		out[index] = palette[(order >> (2 * mini(index, 3))) & 3] if index < 4 			else palette[index]
+		out[index] = palette[(order >> (2 * mini(index, 3))) & 3] if index < 4 \
+			else palette[index]
 	return out
 
 

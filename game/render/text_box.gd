@@ -185,7 +185,10 @@ func place_at_bottom() -> void:
 ## ending in `done`, which is why `SendOutMonText` runs on, and a caller that
 ## waits with `JoyWaitAorB`, which is every page of `ProfOaksPCBoot`.
 func show_text(text: String, blink_cursor: bool = true) -> void:
-	_pages = Gen2TextLayout.lay_out_pages(text, text_columns(), text_rows())
+	_pages = Gen2TextLayout.lay_out_pages(
+		text, text_columns(), text_rows(),
+		font.font_generation() if font != null else RomRegistry.GEN2
+	)
 	_blink_cursor = blink_cursor
 	_page = 0
 	_scroll_page = -1

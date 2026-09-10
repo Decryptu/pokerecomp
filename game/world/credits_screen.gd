@@ -2,17 +2,18 @@ class_name Gen2CreditsScreen
 extends Control
 
 ## The credits, embedded in the overworld the way the Hall of Fame is.
-## [Gen2Credits] owns `Credits`' whole loop and [Gen2CreditsPage] draws it; this
-## spends the frames and reads the two buttons `.execution_loop` reads. Both are
-## held states rather than presses, so the host says when each is let go: A only
-## leaves once the script has run out, and B burns a tick of the current wait per
-## frame and only on a replay. The two `PlayMusic` calls are the overworld's.
+## [Gen2Credits] owns `Credits`' whole loop, [Gen1Credits] Generation 1's, and
+## [Gen2CreditsPage] draws either; this spends the frames and reads the two
+## buttons `.execution_loop` reads, both held states, so the host says when each
+## is let go. The `PlayMusic` calls are the overworld's.
 
 signal closed()
 signal music_requested(music: int)
 ## `.end`'s `wMusicFade`, which fades whatever is playing into MUSIC_POST_CREDITS
 ## over its own frame count.
 signal music_fade_requested(music: int, frames: int)
+
+var music_outlasts: bool = false
 
 var _data: GameData = null
 var _credits: Gen2Credits = null
@@ -30,12 +31,15 @@ var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 func set_context(data: GameData, skippable: bool = false) -> bool:
 	_data = data
 	_page = Gen2CreditsPage.from_data(data)
-	_credits = Gen2Credits.create(data, skippable)
+	_credits = Gen1Credits.create_gen1(data) \
+		if data != null and data.generation == RomRegistry.GEN1 \
+		else Gen2Credits.create(data, skippable)
 	if _page == null or not _page.ready() or _credits == null:
 		_page = null
 		_credits = null
 		visible = false
 		return false
+	music_outlasts = _credits.music_outlasts()
 	return true
 
 

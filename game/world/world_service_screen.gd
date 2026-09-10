@@ -3280,13 +3280,13 @@ func _on_boxes_cry(species: int) -> void:
 ## `Gen2BoxScreen.closed` carries the result its own host would have resumed a
 ## script with; nothing is waiting here, because the PC's request is still open.
 ## `_HallOfFamePC.MasterLoop`: one stored team at a time, newest first, until
-## `LoadHOFTeam` runs out of records or B leaves. The panels are the induction's
-## own, which is why this opens the same screen the sequence does.
+## `LoadHOFTeam` runs out of records or B leaves; `PKMNLeaguePC` walks them
+## oldest first. The panels are the induction's own.
 func _open_hall_of_fame(index: int) -> void:
 	var records: Array = _save.hall_of_fame if _save != null else []
 	var pages: Array = Gen2HallOfFame.record_pages(
-		_data, records[index]
-	) if index >= 0 and index < records.size() else []
+		_data, Gen2HallOfFame.record_at(_data, records, index)
+	)
 	if pages.is_empty():
 		## `.absent` and `.invalid` both answer carry, which `.MasterLoop` takes
 		## straight back to the machine's own menu.

@@ -1,12 +1,10 @@
 class_name Gen2HallOfFamePage
 extends RefCounted
 
-## One Hall of Fame induction panel, on the tile grid the hardware uses.
-## Positions are `engine/events/halloffame.asm`'s own: `DisplayHOFMon`'s two text
-## boxes, its frontpic at (6,5) and every field row, plus
-## `HOF_AnimatePlayerPic`'s name box. `LoadFontsBattleExtra` runs first, so the
-## panel prints with the battle-extra strip over $60 to $78. Node-free: the pic
-## has its own palette and is composed over the page by the screen.
+## One Hall of Fame induction panel, on the tile grid the hardware uses, at
+## `engine/events/halloffame.asm`'s own positions. `LoadFontsBattleExtra` runs
+## first, so Crystal's panel prints with the battle-extra strip over $60 to $78.
+## Node-free: the pic is composed over the page by the screen.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
@@ -93,6 +91,37 @@ const SAVING_AT: Vector2i = Vector2i(1, 14)
 var frame_style: int = 0
 
 var font: Gen2Font = null
+## `AnimateHallOfFame`'s own layout, drawn through the main font.
+var gen1: bool = false
+
+const GEN1_INFO_BOX: Rect2i = Rect2i(0, 2, 12, 11)
+const GEN1_NICKNAME_AT: Vector2i = Vector2i(1, 4)
+const GEN1_LABELS_AT: Vector2i = Vector2i(2, 6)
+const GEN1_LABELS: Array[String] = ["LEVEL/", "TYPE1/", "TYPE2/"]
+const GEN1_ROW_STEP: int = 2
+## `PrintLevelCommon` with LEFT_ALIGN and the `c` `PlaceString` left: digits
+## alone.
+const GEN1_LEVEL_AT: Vector2i = Vector2i(8, 7)
+const GEN1_TYPES_AT: Vector2i = Vector2i(3, 9)
+const GEN1_FAMED_BOX: Rect2i = Rect2i(2, 13, 16, 5)
+const GEN1_FAMED_AT: Vector2i = Vector2i(4, 15)
+const GEN1_FAMED_TEXT: String = "HALL OF FAME"
+## `LeaguePCShowMon`'s box, with `wHoFTeamNo` in three cells.
+const GEN1_TEAM_BOX: Rect2i = Rect2i(0, 13, 20, 4)
+const GEN1_TEAM_AT: Vector2i = Vector2i(1, 15)
+const GEN1_TEAM_TEXT: String = "HALL OF FAME No"
+const GEN1_TEAM_NUMBER_AT: Vector2i = Vector2i(16, 15)
+const GEN1_TEAM_DIGITS: int = 3
+const GEN1_STATS_BOX: Rect2i = Rect2i(0, 4, 12, 8)
+const GEN1_NAME_BOX: Rect2i = Rect2i(5, 0, 11, 4)
+const GEN1_NAME_AT: Vector2i = Vector2i(7, 2)
+const GEN1_PLAY_TIME_AT: Vector2i = Vector2i(1, 6)
+## `lb bc, 1, 3`, the `ld [hl], $6d` behind it and two minute digits.
+const GEN1_HOURS_AT: Vector2i = Vector2i(5, 7)
+const GEN1_HOUR_DIGITS: int = 3
+const GEN1_MONEY_LABEL: String = "MONEY"
+const GEN1_MONEY_LABEL_AT: Vector2i = Vector2i(1, 9)
+const GEN1_MONEY_AT: Vector2i = Vector2i(4, 10)
 
 
 static func from_data(data: GameData) -> Gen2HallOfFamePage:
@@ -102,6 +131,7 @@ static func from_data(data: GameData) -> Gen2HallOfFamePage:
 	var out := Gen2HallOfFamePage.new()
 	out.font = glyphs
 	out.frame_style = Gen2OptionsStore.current().textbox_frame
+	out.gen1 = Gen2HallOfFame.is_gen1(data)
 	return out
 
 
@@ -113,7 +143,9 @@ func draw(page: Dictionary) -> PackedByteArray:
 	if font == null:
 		return indices
 	var kind: StringName = StringName(page.get("kind", &""))
-	if kind == Gen2HallOfFame.PAGE_SAVING:
+	if gen1:
+		_draw_gen1(page, indices)
+	elif kind == Gen2HallOfFame.PAGE_SAVING:
 		_draw_saving(page, indices)
 	elif kind == Gen2HallOfFame.PAGE_PLAYER:
 		_draw_player(page, indices)
@@ -131,9 +163,84 @@ static func pic_size() -> int:
 	return PIC_TILES * TILE
 
 
-## Where the screen puts the player's own front pic, in pixels.
+## Where the screen puts the player's own front pic, in pixels; Generation 1
+## draws every pic there.
 static func player_pic_position() -> Vector2i:
 	return PLAYER_PIC_AT * TILE
+
+
+func pic_at() -> Vector2i:
+	return player_pic_position() if gen1 else pic_position()
+
+
+## `HoFShowMonOrPlayer` clears the screen for the slide.
+func _draw_gen1(page: Dictionary, indices: PackedByteArray) -> void:
+	if bool(page.get("slide", false)):
+		return
+	var kind: StringName = StringName(page.get("kind", &""))
+	if kind == Gen2HallOfFame.PAGE_MON:
+		_draw_gen1_mon(page, indices)
+	elif kind == Gen2HallOfFame.PAGE_PLAYER:
+		_draw_gen1_player(page, indices)
+
+
+func _draw_gen1_mon(page: Dictionary, indices: PackedByteArray) -> void:
+	var width: int = COLUMNS * TILE
+	_gen1_box(indices, width, GEN1_INFO_BOX)
+	_gen1_text(indices, width, String(page.get("nickname", "")), GEN1_NICKNAME_AT)
+	var types: Array = page.get("types", [])
+	## `EraseType2Text` blanks the second label outright when both types match.
+	for index: int in mini(GEN1_LABELS.size(), types.size() + 1):
+		_gen1_text(
+			indices, width, GEN1_LABELS[index], GEN1_LABELS_AT + Vector2i(0, index * GEN1_ROW_STEP)
+		)
+	_gen1_text(indices, width, str(int(page.get("level", 0))), GEN1_LEVEL_AT)
+	for index: int in types.size():
+		_gen1_text(
+			indices, width, String(types[index]), GEN1_TYPES_AT + Vector2i(0, index * GEN1_ROW_STEP)
+		)
+	if page.has("team_number"):
+		_gen1_box(indices, width, GEN1_TEAM_BOX)
+		_gen1_text(indices, width, GEN1_TEAM_TEXT, GEN1_TEAM_AT)
+		_gen1_text(
+			indices, width, "%*d" % [GEN1_TEAM_DIGITS, int(page["team_number"])],
+			GEN1_TEAM_NUMBER_AT
+		)
+	elif bool(page.get("famed", false)):
+		_gen1_box(indices, width, GEN1_FAMED_BOX)
+		_gen1_text(indices, width, GEN1_FAMED_TEXT, GEN1_FAMED_AT)
+
+
+func _draw_gen1_player(page: Dictionary, indices: PackedByteArray) -> void:
+	var width: int = COLUMNS * TILE
+	_gen1_box(indices, width, GEN1_STATS_BOX)
+	_gen1_box(indices, width, GEN1_NAME_BOX)
+	_gen1_text(indices, width, String(page.get("player_name", "")), GEN1_NAME_AT)
+	_gen1_text(indices, width, PLAY_TIME_TEXT, GEN1_PLAY_TIME_AT)
+	_gen1_text(indices, width, "%*d" % [GEN1_HOUR_DIGITS, int(page.get("hours", 0))], GEN1_HOURS_AT)
+	var colon_at: Vector2i = GEN1_HOURS_AT + Vector2i(GEN1_HOUR_DIGITS, 0)
+	font.draw_code(CODE_COLON, indices, width, colon_at.x * TILE, colon_at.y * TILE)
+	_gen1_text(indices, width, String(page.get("minutes", "")), colon_at + Vector2i(1, 0))
+	_gen1_text(indices, width, GEN1_MONEY_LABEL, GEN1_MONEY_LABEL_AT)
+	_gen1_text(indices, width, Gen2MartPage.money_string(int(page.get("money", 0))), GEN1_MONEY_AT)
+	if not page.has("lines"):
+		return
+	_gen1_box(indices, width, MON_BOTTOM_BOX)
+	var lines: Array = page.get("lines", [])
+	for index: int in lines.size():
+		_gen1_text(
+			indices, width, String(lines[index]), TEXT_AT + Vector2i(0, index * TEXT_LINE_SPACING)
+		)
+
+
+func _gen1_box(indices: PackedByteArray, width: int, box: Rect2i) -> void:
+	font.draw_box(
+		0, indices, width, box.position.x * TILE, box.position.y * TILE, box.size.x, box.size.y
+	)
+
+
+func _gen1_text(indices: PackedByteArray, width: int, text: String, at: Vector2i) -> void:
+	font.draw_text(text, indices, width, at.x * TILE, at.y * TILE)
 
 
 func _draw_mon(page: Dictionary, indices: PackedByteArray) -> void:

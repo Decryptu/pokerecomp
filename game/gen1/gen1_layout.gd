@@ -709,6 +709,7 @@ const OAKS_PC_TEXT_AT: Dictionary = {
 }
 ## `engine/menus/league_pc.asm`'s one.
 const HOF_PC_TEXT_AT: Dictionary = {"accessed": 0x00}
+const HOF_DEX_TEXT_AT: Dictionary = {"seen_owned": 0x00, "rating": TEXT_FAR_STUB_BYTES}
 
 ## `ChangeBox`'s two, pinned apart because Yellow's own boxes move the second.
 const CHANGE_BOX_TEXT_AT: Dictionary = {"warning": 0x00}
@@ -756,6 +757,26 @@ const DEX_RATING_STEP: int = 10
 ## `PokeballTileGraphics`' four; only the ball itself is drawn here.
 const BALL_TILES: int = 4
 const DEX_COMPLETION_TEXT_AT: int = -TEXT_FAR_STUB_BYTES
+
+## `CreditsOrder`'s six commands; anything below is a `CreditsTextPointers`
+## index, of which there are `NUM_CRED_STRINGS`.
+const CREDITS_TEXT_FADE_MON: int = 0xFF
+const CREDITS_TEXT_MON: int = 0xFE
+const CREDITS_TEXT_FADE: int = 0xFD
+const CREDITS_TEXT: int = 0xFC
+const CREDITS_COPYRIGHT: int = 0xFB
+const CREDITS_THE_END: int = 0xFA
+const CREDITS_STRINGS_RED_BLUE: int = 64
+const CREDITS_STRINGS_YELLOW: int = 86
+const CREDITS_STRING_MAX: int = 32
+const CREDITS_CENTRE_COLUMN: int = 9
+## `TheEndGfx` and `LoadCopyrightTiles`' run both land at `vChars2 tile $60`;
+## Yellow's run reaches `NineTile`, which its `CopyrightTextString` uses.
+const CREDITS_THE_END_TILES: int = 10
+const CREDITS_TILES_FIRST_CODE: int = 0x60
+const COPYRIGHT_TILES_RED_BLUE: int = 28
+const COPYRIGHT_TILES_YELLOW: int = 30
+const COPYRIGHT_ROWS: int = 3
 
 ## `LoadPokedexTilePatterns`: `PokedexTileGraphics` at `vChars2 tile $60`, over
 ## the text box sheet, with `PokeballTileGraphics`' first tile at $72 behind it.
@@ -1973,6 +1994,14 @@ const RED_BLUE: Dictionary = {
 	"bills_pc_release_text": 0x2181B,
 	"oaks_pc_text": 0x1E93B,
 	"hof_pc_text": 0x76683,
+	## `DexSeenOwnedText`, then the credits' four tables and the copyright run.
+	"hof_dex_text": 0x703FA,
+	"credits_mons": 0x74131,
+	"credits_order": 0x74243,
+	"credits_text_pointers": 0x742C3,
+	"credits_the_end": 0x7473E,
+	"copyright_tiles": 0x120C8,
+	"copyright_text": 0x04556,
 	"change_box_text": 0x73909,
 	"choose_box_text": 0x739D4,
 	"dex_ratings": 0x441D1,
@@ -2424,6 +2453,13 @@ const YELLOW: Dictionary = {
 	"bills_pc_release_text": 0x2185D,
 	"oaks_pc_text": 0x1E2D4,
 	"hof_pc_text": 0x75F02,
+	"hof_dex_text": 0x70452,
+	"credits_mons": 0xF1028,
+	"credits_order": 0xF1171,
+	"credits_text_pointers": 0xF11E3,
+	"credits_the_end": 0xF181B,
+	"copyright_tiles": 0x10C48,
+	"copyright_text": 0x04355,
 	"change_box_text": 0x73C52,
 	"choose_box_text": 0x73D10,
 	"dex_ratings": 0x441D1,
@@ -2721,6 +2757,7 @@ const BLUE_SHIFT: Dictionary = {
 	"hidden_item_coords": 1,
 	"hidden_coin_coords": 1,
 	"hof_pc_text": 1,
+	"credits_the_end": 1,
 }
 
 static var _blue: Dictionary = _shifted_for_blue()
@@ -2937,6 +2974,14 @@ static func map_count(id: StringName) -> int:
 ## sleep, where Red and Blue clear it and print `PlayedFluteNoEffectText` anyway.
 static func flute_counts_wild(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
+
+
+static func credits_string_count(id: StringName) -> int:
+	return CREDITS_STRINGS_YELLOW if id == RomRegistry.YELLOW else CREDITS_STRINGS_RED_BLUE
+
+
+static func copyright_tiles(id: StringName) -> int:
+	return COPYRIGHT_TILES_YELLOW if id == RomRegistry.YELLOW else COPYRIGHT_TILES_RED_BLUE
 
 
 static func player_backpics(layout: Dictionary) -> Array[String]:

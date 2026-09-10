@@ -143,8 +143,32 @@ static func gen1_directory() -> String:
 	return RomCache.directory_for(GEN1_GAME_ID, SHA1)
 
 
+## `CreditsOrder` as a fixture: one string and a mon, one string faded, the
+## same string with a mon, the copyright with a mon, and The End.
+const GEN1_CREDITS: Dictionary = {
+	"script": [0, 0xFF, 1, 0xFD, 1, 0xFE, 0xFB, 0xFF, 0xFA],
+	"strings": [[0x92, 0x93, 0x80, 0x85, 0x85], [0x8D, 0x80, 0x8C, 0x84]],
+	"columns": [7, 7],
+	"mons": [1, 2, 3],
+	"copyright_rows": [[0x60, 0x61], [0x62], [0x63]],
+}
+const GEN1_DEX_RATINGS: Dictionary = {
+	"counts": "POKéDEX comp-\nletion is:\n<NUM_CC5B> POKéMON seen\n<NUM_CC5C> POKéMON owned",
+	"ratings": [{
+		"threshold": 10,
+		"text": "You still have\nlots to do." + Gen2TextStream.SCROLL_BREAK
+			+ "Look for POKéMON\nin grassy areas!",
+	}],
+}
+const GEN1_HALL_OF_FAME_TEXT: Dictionary = {
+	"seen_owned": "POKéDEX   Seen:<NUM_CC5B>\n         Owned:<NUM_CC5C>",
+	"rating": "POKéDEX Rating<COLON>",
+}
+
+
 ## The same cache shaped the way `Gen1Importer` writes one: 151 species, no order
-## tables, and the four sheets `LoadPokedexTilePatterns` assembles its page from.
+## tables, the four sheets `LoadPokedexTilePatterns` assembles its page from, and
+## what the Hall of Fame and the credits read.
 static func build_gen1() -> GameData:
 	var path: String = gen1_directory()
 	RomCache.clear(path)
@@ -161,6 +185,9 @@ static func build_gen1() -> GameData:
 		"complete": true,
 		"generation": RomRegistry.GEN1,
 		"tiles": _gen1_tiles(path),
+		"credits": GEN1_CREDITS,
+		"oak_ratings": GEN1_DEX_RATINGS,
+		"special_text": {"hall_of_fame": GEN1_HALL_OF_FAME_TEXT},
 	})
 	return GameData.open_directory(path)
 
@@ -195,6 +222,11 @@ static func _gen1_tiles(path: String) -> Dictionary:
 		],
 		["battle_balls", Gen1Layout.BALL_TILES, 1, 0],
 		["pokedex_tiles", Gen1Layout.POKEDEX_TILES, 2, Gen1Layout.POKEDEX_FIRST_CODE],
+		["copyright", 4, 2, Gen1Layout.CREDITS_TILES_FIRST_CODE],
+		[
+			"credits_the_end", Gen1Layout.CREDITS_THE_END_TILES, 3,
+			Gen1Layout.CREDITS_TILES_FIRST_CODE,
+		],
 	]:
 		var name: String = String(entry[0])
 		var count: int = int(entry[1])

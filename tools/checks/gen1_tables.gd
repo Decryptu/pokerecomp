@@ -68,6 +68,14 @@ const INTRO_SPECIES: Dictionary = {
 	&"red": [33, 30], &"blue": [33, 30], &"yellow": [25, 25],
 }
 const NEW_GAME_WARP: Dictionary = {"map": 38, "x": 3, "y": 6, "tileset": 4}
+## `_DexSeenOwnedText` with 12 and 3 in its slots, `_DexRatingText` whose
+## `<COLON>` is one tile, and `AnimateHallOfFame`'s six pages per member.
+const HOF_SEEN_OWNED: String = "POKéDEX   Seen: 12\n         Owned:  3"
+const HOF_RATING: String = "POKéDEX Rating<COLON>"
+const HOF_RATING_TILES: int = 15
+const HOF_PAGES_PER_MON: int = 6
+const HOF_FADE_PAGES: int = 3
+const HOF_TEAM_CAPACITY: int = 50
 
 ## `data/moves/moves.asm`, first and last: effect, power, type, accuracy, pp.
 const PINNED_MOVES: Dictionary = {
@@ -178,6 +186,7 @@ func _one_game() -> void:
 	_trainers()
 	_trades()
 	_intro()
+	_hall_of_fame()
 
 
 func _intro() -> void:
@@ -208,6 +217,37 @@ func _intro() -> void:
 			Gen2OakSpeech.intro_species(data), Gen2OakSpeech.intro_cry(data)
 		])
 	_new_game_warp()
+
+
+## `HoFDisplayPlayerStats`' two stubs and the pages over the development save.
+func _hall_of_fame() -> void:
+	var data: GameData = _r.data
+	var seen_owned: String = Gen2ProfOaksPC.fill_counts(
+		data.special_text("hall_of_fame", "seen_owned"), 12, 3
+	)
+	_r.check(seen_owned == HOF_SEEN_OWNED, "DexSeenOwnedText fills to %s." % [seen_owned])
+	var rating: String = data.special_text("hall_of_fame", "rating")
+	_r.check(rating == HOF_RATING and Gen1Text.encode(rating).size() == HOF_RATING_TILES,
+		"DexRatingText reads %s in %d tiles." % [rating, Gen1Text.encode(rating).size()])
+	var save: Gen2SaveData = Gen2SaveStore.create_development_save(data, 0)
+	var pages: Array = Gen2HallOfFame.pages(data, save, null)
+	var mons: int = 0
+	var text_pages: int = 0
+	for page: Dictionary in pages:
+		if bool(page.get("slide", false)) and StringName(page["kind"]) == Gen2HallOfFame.PAGE_MON:
+			mons += 1
+		if page.has("lines") and not page.has("bgp"):
+			text_pages += 1
+	_r.check(mons == save.party.size(), "%d of %d party members slide in." % [mons, save.party.size()])
+	_r.check(
+		pages.size() == 1 + mons * HOF_PAGES_PER_MON + 1 + text_pages + HOF_FADE_PAGES,
+		"the induction is %d pages for %d members and %d boxes." % [pages.size(), mons, text_pages]
+	)
+	_r.check(bool(pages[0].get("music", false))
+		and bool(pages[pages.size() - HOF_FADE_PAGES].get("fade_music", false)),
+		"the music starts on the first page and fades with the last panel.")
+	_r.check(Gen2HallOfFame.max_records(data) == HOF_TEAM_CAPACITY,
+		"sHallOfFame keeps %d teams." % Gen2HallOfFame.max_records(data))
 
 
 func _intro_keyboards() -> void:

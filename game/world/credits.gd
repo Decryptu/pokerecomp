@@ -1,14 +1,12 @@
 class_name Gen2Credits
 extends RefCounted
 
-## The credits (`engine/movie/credits.asm`), as the frame-driven state machine
-## they are. `Credits_Jumptable` runs one entry per frame and loops back after
-## thirteen, so a `CREDITS_WAIT` tick is thirteen frames and not one. The rest of
-## the cycle is what moves: the banner's frame, the two border bands walking
-## sideways two pixels, and the three `Credits_Next` entries `UpdateBGMap` spends
-## copying the tilemap a third at a time. That copy is why this owns two maps: a
-## batch ending on `CREDITS_WAIT2` or `CREDITS_END` is written and never shown,
-## which is why The End stays on screen. Nothing here draws.
+## The credits (`engine/movie/credits.asm`) as the state machine they are.
+## `Credits_Jumptable` runs one entry per frame and loops after thirteen, so a
+## `CREDITS_WAIT` tick is thirteen frames; the cycle moves the banner, walks the
+## border bands two pixels and spends three entries copying the tilemap a third
+## at a time. That copy is why this owns two maps: a batch ending on
+## `CREDITS_WAIT2` or `CREDITS_END` is written and never shown. Nothing here draws.
 
 ## `MUSIC_CREDITS` and the `MUSIC_POST_CREDITS` `.end` fades into, both the same
 ## number on all three cartridges.
@@ -204,6 +202,11 @@ func skippable() -> bool:
 	return _skippable
 
 
+## `.end` fades the music into MUSIC_POST_CREDITS before the screen closes.
+func music_outlasts() -> bool:
+	return false
+
+
 func frame_state() -> Dictionary:
 	return {
 		"map": bg_map(),
@@ -216,11 +219,8 @@ func frame_state() -> Dictionary:
 
 
 ## One frame of `.execution_loop`: the B skip, the jumptable entry, then the
-## VBlank behind `DelayFrame`.
-##
-## [param held] is `hJoypadDown`, since both of the loop's buttons are held
-## states rather than presses. Returns the events the frame asked for, which is
-## the two `PlayMusic` calls and nothing else.
+## VBlank behind `DelayFrame`. [param held] is `hJoypadDown`. Returns the two
+## `PlayMusic` events and nothing else.
 func advance_frame(held: Array = []) -> Array:
 	var events: Array = []
 	if PokeButton.B in held:

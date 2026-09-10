@@ -94,6 +94,7 @@ const ARROW_DOWN: int = 0xEE
 const WORD_TILES: Dictionary = {
 	"<PKMN>": [0xE1, 0xE2],
 }
+static var _words: Dictionary = {}
 
 ## The longest sequence one tile stands for: a ligature is two characters.
 ## [constant WORD_TILES]' spelling is longer and is matched ahead of this run.
@@ -204,12 +205,13 @@ static func encode(text: String) -> PackedByteArray:
 	var codes: Dictionary = _encodings()
 	var out: PackedByteArray = PackedByteArray()
 	var at: int = 0
+	var words: Dictionary = _word_tiles()
 	while at < text.length():
 		var taken: int = 0
-		for spelling: String in WORD_TILES:
+		for spelling: String in words:
 			if text.substr(at, spelling.length()) != spelling:
 				continue
-			for code: int in WORD_TILES[spelling] as Array:
+			for code: int in words[spelling] as Array:
 				out.append(code)
 			taken = spelling.length()
 			break
@@ -259,6 +261,20 @@ static func _characters() -> Dictionary:
 	return _table
 
 
+## [constant WORD_TILES] and the $60 run's bracketed names, so a decoded
+## `<COLON>` writes its tile back.
+static func _word_tiles() -> Dictionary:
+	if not _words.is_empty():
+		return _words
+	var words: Dictionary = WORD_TILES.duplicate()
+	for byte: int in FONT_EXTRA_CHARACTERS:
+		var extra: String = FONT_EXTRA_CHARACTERS[byte]
+		if extra.begins_with("<") and not words.has(extra):
+			words[extra] = [byte]
+	_words = words
+	return _words
+
+
 ## Built once. Where two codes draw the same character the first wins, which is
 ## why $F2's decimal point does not displace $E8's.
 static func _encodings() -> Dictionary:
@@ -272,7 +288,7 @@ static func _encodings() -> Dictionary:
 		if not codes.has(glyph):
 			codes[glyph] = byte
 	# The $60 run is below FIRST_PRINTABLE and still drawn. A bracketed name in it
-	# stays decode-only, being wider than one window of the loop above.
+	# is wider than one window of the loop above and goes through _word_tiles.
 	for byte: int in FONT_EXTRA_CHARACTERS:
 		var extra: String = FONT_EXTRA_CHARACTERS[byte]
 		if extra.length() <= MAX_LIGATURE and not codes.has(extra):

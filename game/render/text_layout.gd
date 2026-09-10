@@ -18,7 +18,9 @@ const TEXTBOX_ROWS: int = 2
 ##
 ## Explicit newlines are kept: a caller that has already decided where a line
 ## ends is obeyed, and only the runs between them are wrapped.
-static func wrap_lines(text: String, columns: int) -> PackedStringArray:
+static func wrap_lines(
+	text: String, columns: int, generation: int = RomRegistry.GEN2
+) -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
 	if columns <= 0:
 		return out
@@ -27,7 +29,7 @@ static func wrap_lines(text: String, columns: int) -> PackedStringArray:
 		var line: String = ""
 		for word: String in _spaced_words(paragraph):
 			var candidate: String = line + word
-			if Gen2Text.encoded_length(candidate) <= columns:
+			if _tiles(candidate, generation) <= columns:
 				line = candidate
 				continue
 
@@ -35,15 +37,15 @@ static func wrap_lines(text: String, columns: int) -> PackedStringArray:
 				out.append(line)
 				line = ""
 				word = word.lstrip(" ")
-				if Gen2Text.encoded_length(word) <= columns:
+				if _tiles(word, generation) <= columns:
 					line = word
 					continue
 
 			# A word too long for a line of its own is cut rather than allowed to
 			# run off the edge. Nothing in these games is that long, but a mod's
 			# text is not the cartridge's.
-			while Gen2Text.encoded_length(word) > columns:
-				var head: String = _take(word, columns)
+			while _tiles(word, generation) > columns:
+				var head: String = _take(word, columns, generation)
 				out.append(head)
 				word = word.substr(head.length())
 			line = word
@@ -70,9 +72,11 @@ static func _spaced_words(paragraph: String) -> PackedStringArray:
 
 
 ## [method lay_out_pages] with each page's lines alone.
-static func lay_out(text: String, columns: int, rows: int) -> Array:
+static func lay_out(
+	text: String, columns: int, rows: int, generation: int = RomRegistry.GEN2
+) -> Array:
 	var out: Array = []
-	for page: Dictionary in lay_out_pages(text, columns, rows):
+	for page: Dictionary in lay_out_pages(text, columns, rows, generation):
 		out.append(page["lines"])
 	return out
 
@@ -85,7 +89,9 @@ static func lay_out(text: String, columns: int, rows: int) -> Array:
 ## page is `start`. `carried` is how many of the page's first lines the scroll
 ## moved up rather than printed, since `TextScroll` copies tiles and a carried
 ## line is already on screen.
-static func lay_out_pages(text: String, columns: int, rows: int) -> Array:
+static func lay_out_pages(
+	text: String, columns: int, rows: int, generation: int = RomRegistry.GEN2
+) -> Array:
 	var out: Array = []
 	if rows <= 0 or columns <= 0:
 		return out
@@ -102,7 +108,7 @@ static func lay_out_pages(text: String, columns: int, rows: int) -> Array:
 			if candidate >= 0 and (stop < 0 or candidate < stop):
 				stop = candidate
 		var segment: String = text.substr(at, -1) if stop < 0 else text.substr(at, stop - at)
-		for line: String in wrap_lines(segment, columns):
+		for line: String in wrap_lines(segment, columns, generation):
 			page.append(line)
 			if page.size() == rows:
 				out.append({"lines": page, "enter": enter, "carried": carried})
@@ -142,10 +148,18 @@ static func standing_page(
 
 
 ## The longest prefix of [param word] that fits in [param columns] tiles.
-static func _take(word: String, columns: int) -> String:
+static func _take(word: String, columns: int, generation: int) -> String:
 	var length: int = 0
 	while length < word.length():
-		if Gen2Text.encoded_length(word.substr(0, length + 1)) > columns:
+		if _tiles(word.substr(0, length + 1), generation) > columns:
 			break
 		length += 1
 	return word.substr(0, maxi(length, 1))
+
+
+## A `<COLON>` is one tile to Generation 1's codec and seven unknowns to
+## Crystal's.
+static func _tiles(text: String, generation: int) -> int:
+	if generation == RomRegistry.GEN1:
+		return Gen1Text.encoded_length(text)
+	return Gen2Text.encoded_length(text)
