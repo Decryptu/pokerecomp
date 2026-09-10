@@ -334,6 +334,7 @@ var _trainer_approach: Dictionary = {}
 ## Whether a scripted walk was still being drawn last frame, which is the edge
 ## [method _run_settled_gen1_map_script] runs the map's own script on.
 var _gen1_movement_drawn: bool = false
+var _gen1_steps_remaining: int = 0
 var _active_battle_save: Gen2SaveData = null
 ## `wBattleScriptFlags` bit 7, which `Script_loadtrainer` sets and
 ## `Script_reloadmapafterbattle` reads: a trainer fight is the branch
@@ -1115,14 +1116,18 @@ func _advance_waits(map_pass: bool) -> void:
 
 
 ## `RunMapScript` runs on every frame `JoypadOverworld` reads: a state opening
-## `ret nz` on a walk gets its turn the frame the walk ends, and a
-## `wCurrentMapScriptFlags` bit a row set back is read the frame its box closes.
+## `ret nz` on a walk gets its turn the frame the walk ends, one counting
+## `wNPCNumScriptedSteps` the frame a step is read, and a map-load bit a row
+## set back the frame its box closes.
 func _run_settled_gen1_map_script() -> void:
 	if _world == null or not _world.is_gen1():
 		return
 	var running: bool = _world.scripted_movement_in_progress()
-	var settled: bool = (_gen1_movement_drawn and not running) or _world.gen1_map_load_pending()
+	var remaining: int = _world.gen1_object_steps_remaining() + _world.gen1_player_steps_remaining()
+	var settled: bool = (_gen1_movement_drawn and not running) or _world.gen1_map_load_pending() \
+		or (running and remaining != _gen1_steps_remaining)
 	_gen1_movement_drawn = running
+	_gen1_steps_remaining = remaining
 	if not settled or _world.script_busy() or not _map_fade.is_empty():
 		return
 	var results: Array = _world.dispatch_sight_events()

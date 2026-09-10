@@ -17,7 +17,7 @@ const CLASS_COUNT: int = 47
 const HEADER_CENSUS: Dictionary = {
 	&"red": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12},
 	&"blue": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12},
-	&"yellow": {"text_asm": 687, "headers": 317, "trainers": 305, "wilds": 12},
+	&"yellow": {"text_asm": 691, "headers": 317, "trainers": 305, "wilds": 12},
 }
 
 ## `view_range << 4` is a pixel distance, so the stored range is a nibble.

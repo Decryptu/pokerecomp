@@ -126,14 +126,9 @@ const BGEVENT_IFNOTSET: int = 6
 const BGEVENT_ITEM: int = 7
 const BGEVENT_COPY: int = 8
 
-## `HandleMap` spends `NextOverworldFrame` in the middle of every pass and
-## `MaxOverworldDelay` is 2 (engine/overworld/events.asm), so the whole
-## overworld runs one pass per two hardware frames: every map object's step,
-## every landmark sign countdown and every joypad read is a pass's, never a
-## screen frame's. Measured on a real cartridge with
-## Measured on a real cartridge: an ordinary walk step is eight
-## passes of two pixels and sixteen frames. Every `PASSES` count below is in
-## that unit, and [Gen2WorldScreen] is what spends the two frames.
+## `HandleMap` spends `NextOverworldFrame` every pass and `MaxOverworldDelay`
+## is 2, so the overworld runs one pass per two hardware frames: a walk step is
+## eight passes of two pixels. Every `PASSES` count below is in that unit.
 const FRAMES_PER_OVERWORLD_PASS: int = 2
 
 ## How far into the pass above the drawn frame stands: 0.0 on the pass, 0.5 on
@@ -685,14 +680,9 @@ func radio_station() -> Dictionary:
 	return Gen2WorldRadio.station_for(state.radio_knob(), radio_context())
 
 
-## Moves the dial and loads whatever station answers, which is
-## UpdateRadioStation plus the LoadStation_ call it jumps to and
-## StartRadioStation's music commit.
-##
-## A station's own music id is neither ENTER_MAP_MUSIC nor RESTART_MAP_MUSIC, so
-## ExitPokegearRadio_HandleMusic takes neither branch when the Pokegear closes
-## and the tuned track stays in `wMapMusic`. That is the whole mechanism behind
-## the Poke Flute channel waking Snorlax.
+## `UpdateRadioStation` and `StartRadioStation`'s music commit. A station's
+## music id is neither ENTER_MAP_MUSIC nor RESTART_MAP_MUSIC, so the tuned
+## track stays in `wMapMusic` when the Pokegear closes: the flute wakes Snorlax.
 func tune_radio(knob: int) -> Dictionary:
 	state.set_radio_knob(knob)
 	var tuned: Dictionary = radio_station()
@@ -1181,14 +1171,9 @@ func set_movement_mode(mode: StringName) -> Dictionary:
 	return {"ok": true, "mode": movement_mode}
 
 
-## Sets the read-only party mirror a queued script's VAR_PARTYCOUNT read, its
-## CheckPokerus special and its checkpoke consult. `has_pokerus` is the source's
-## own low-nibble check across the party, computed by the caller because this
-## class does not read [Gen2SaveMon] fields. [param moves] mirrors the move slots
-## for `CheckPartyMove` and [param names] the display names for
-## `GetPartyNickname`. [param eggs] marks the slots `CheckPartyMove` skips, since
-## an egg carries the moves it will hatch with. [param extra] carries the few party
-## facts that are not per-slot. Only an absent summary fails a script-visible read.
+## The read-only party mirror a script's VAR_PARTYCOUNT, CheckPokerus,
+## `CheckPartyMove` and `GetPartyNickname` read; [param eggs] marks the slots
+## `CheckPartyMove` skips. Only an absent summary fails a script-visible read.
 func set_party_summary(
 	count: int, has_pokerus: bool, species: Array[int] = [] as Array[int],
 	moves: Array = [], names: Array = [], eggs: Array = [], extra: Dictionary = {},
@@ -1210,13 +1195,8 @@ func set_party_summary(
 	return {"ok": true}
 
 
-## CheckPartyMove: the first party slot whose own move list carries [param move_id],
-## or -1 when none does. Eggs are skipped, empty and terminator slots end the walk,
-## and the answer is the slot index the source leaves in `wCurPartyMon`. Every
-## field move is gated on this: the party submenu reaches `CutFunction` and friends
-## only for a mon that knows the move, and the overworld prompts each call
-## `CheckPartyMove` themselves, so there is no path in either game that uses a
-## field move the party does not know.
+## `CheckPartyMove`: the first slot whose moves carry [param move_id], or -1.
+## Eggs are skipped; every field move is gated on this.
 func party_slot_with_move(move_id: int) -> int:
 	var moves: Array = _party_summary.get("moves", [])
 	var eggs: Array = _party_summary.get("eggs", [])
@@ -1757,14 +1737,9 @@ func pending_waterfall() -> Dictionary:
 	return _pending_waterfall.duplicate(true)
 
 
-## Script_UsedWaterfall's loop: `applymovement PLAYER, .WaterfallStep` is one
-## `turn_waterfall UP`, repeated by `.CheckContinueWaterfall` while the cell the
-## player now stands on answers CheckWaterfallTile, so the climb ends on the first
-## cell that is not a waterfall. Each step is an applymovement: no collision, no
-## repel step, no encounter. Paced like a scripted stream, the cell committing at
-## once and the column drawn a cell at a time, so a renderer can carry the player
-## up the fall's face. [method _finish_waterfall_climb] is what the run drains
-## into, and the answer reports the mode it will leave.
+## `Script_UsedWaterfall`: one `turn_waterfall UP` per cell while the cell
+## answers CheckWaterfallTile. Each step is an applymovement, so no collision,
+## repel step or encounter; [method _finish_waterfall_climb] drains the run.
 func complete_waterfall() -> Dictionary:
 	if _pending_waterfall.is_empty():
 		return _waterfall_failure(&"no_pending_waterfall")
@@ -3305,14 +3280,10 @@ func trainer_approach_plan(
 	}
 
 
-## Applies one step from an already validated approach plan and starts that
-## object's presentation offset for the pacing caller to consume; the object's cell
-## is already the destination when this returns. Only the map bounds refuse: the
-## approach is `applymovementlasttalked wMovementBuffer` and its steps reach
-## NormalStep, which never calls CanObjectMoveInDirection, which is what walks
-## Cerulean Gym's swimmers over their own pool. STEP_PASSES_WALK, not the slow row:
-## TrainerWalkToPlayer passes 1 in d and `.GetPathToPlayer` hands it to
-## ComputePathToWalkToPlayer, whose `ld b, a` selects `.MovementData`'s `step` row.
+## One step of a validated approach plan. Only the map bounds refuse: the
+## approach is `applymovementlasttalked` and NormalStep never calls
+## CanObjectMoveInDirection, which walks Cerulean Gym's swimmers over their
+## pool. STEP_PASSES_WALK: `TrainerWalkToPlayer` passes 1 in d, the `step` row.
 func advance_trainer_approach_step(object_index: int, direction: Vector2i) -> Dictionary:
 	if current_map == null or object_index < 0 or object_index >= objects.size():
 		return {"ok": false, "reason": &"invalid_trainer_object"}
@@ -3401,14 +3372,9 @@ func visible_objects() -> Array:
 	return out
 
 
-## Every object that is really there, whether or not this build can draw it.
-##
-## `ReadObjectEvents` builds `wMapObjects` from the map's own event data and
-## `LoadSpriteGFX` fills VRAM afterwards, so on the cartridge an object exists
-## before, and independently of, its graphics. Collision, interaction, sight and
-## NPC movement all walk the object table and none of them asks what loaded.
-## Keeping the two apart here is what stops a missing sprite from quietly
-## deleting an object out of the world as well as off the screen.
+## Every object that is really there, drawn or not: `ReadObjectEvents` builds
+## `wMapObjects` before `LoadSpriteGFX` fills VRAM, and collision, interaction,
+## sight and NPC movement walk the table without asking what loaded.
 func active_objects() -> Array:
 	var out: Array = []
 	for object: Gen2WorldObject in objects:
@@ -3978,6 +3944,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"set_blackout_map": &"_gen1_node_set_blackout_map",
 	"set_player_coord": &"_gen1_node_set_player_coord",
 	"set_starter": &"_gen1_node_set_starter",
+	"set_riding": &"_gen1_node_set_riding",
 	"starter": &"_gen1_node_starter",
 	"riding": &"_gen1_node_riding",
 	"movement_script_running": &"_gen1_node_movement_script_running",
@@ -4487,9 +4454,20 @@ func _gen1_node_walk(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 func _gen1_node_object_move(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	steps.append({
 		"type": &"object_move", "index": _gen1_object_index(node, run),
-		"moves": (node["moves"] as Array).duplicate(),
+		"moves": _gen1_filled_moves(node["fill"], run) if node.has("fill") \
+			else (node["moves"] as Array).duplicate(),
 	})
 	return true
+
+
+## `FillMemory` over `wNPCMovementDirections2`: one direction, `c` times.
+func _gen1_filled_moves(fill: Dictionary, run: Dictionary) -> Array:
+	var count: int = _gen1_scratch_read(run, int(fill["from"]), int(fill["offset"])) \
+		if fill.has("from") else int(fill["count"])
+	var moves: Array = []
+	moves.resize(mini(count, Gen1Layout.NPC_MOVEMENT_MAX))
+	moves.fill(int(fill["direction"]))
+	return moves
 
 
 func _gen1_node_object_stay(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -4501,6 +4479,11 @@ func _gen1_node_object_stay(node: Dictionary, steps: Array, run: Dictionary) -> 
 func _gen1_node_movement_running(
 	node: Dictionary, steps: Array, run: Dictionary
 ) -> bool:
+	if node.has("remaining"):
+		var remaining: int = gen1_object_steps_remaining() \
+			if String(node["who"]) == Gen1Layout.MOVEMENT_TEST_OBJECT \
+			else gen1_player_steps_remaining()
+		return _gen1_resolve_side(node, remaining == int(node["remaining"]), steps, run)
 	var running: bool = gen1_object_movement_running() \
 		if String(node["who"]) == Gen1Layout.MOVEMENT_TEST_OBJECT \
 		else gen1_player_movement_running()
@@ -4681,8 +4664,8 @@ func _gen1_node_set_player_coord(node: Dictionary, steps: Array, _run: Dictionar
 	return true
 
 
-func _gen1_node_set_starter(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var value: int = int(_gen1_scratch.get(int(node["scratch"]), 0)) if node.has("scratch") \
+func _gen1_node_set_starter(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var value: int = _gen1_scratch_read(run, int(node["scratch"]), 0) if node.has("scratch") \
 		else int(node["value"])
 	steps.append({"type": &"starter", "who": String(node["who"]), "value": value})
 	return true
@@ -4694,6 +4677,8 @@ func _gen1_node_name_species(node: Dictionary, _steps: Array, run: Dictionary) -
 		species = data.gen1_dex_of_index(state.gen1_starter("player"))
 	elif String(node.get("from", "")) == "fossil_mon":
 		species = _gen1_fossil_species(run)
+	elif node.has("scratch") and data != null:
+		species = data.gen1_dex_of_index(_gen1_scratch_read(run, int(node["scratch"]), 0))
 	_gen1_named(node, run, String(data.species(species).get("name", "")) \
 		if data != null and species > 0 else "")
 	return true
@@ -4870,6 +4855,18 @@ func _gen1_node_starter(node: Dictionary, steps: Array, run: Dictionary) -> bool
 
 func _gen1_node_riding(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	return _gen1_resolve_side(node, movement_mode != MOVEMENT_WALK, steps, run)
+
+
+## `wWalkBikeSurfState`'s three values, in `LoadPlayerSpriteGraphics`' order.
+const GEN1_RIDING_MODES: Array[StringName] = [MOVEMENT_WALK, MOVEMENT_BIKE, MOVEMENT_SURF]
+
+
+func _gen1_node_set_riding(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var mode: int = int(node["mode"])
+	if mode < 0 or mode >= GEN1_RIDING_MODES.size():
+		return false
+	steps.append({"type": &"riding", "mode": GEN1_RIDING_MODES[mode]})
+	return true
 
 
 func _gen1_node_movement_script_running(
@@ -5200,6 +5197,9 @@ func _gen1_branch_set(node: Dictionary, run: Dictionary) -> bool:
 		return bool((run["engine_flags"] as Dictionary).get(int(node["flag"]),
 			state != null and state.is_engine_flag_active(int(node["flag"]))))
 	var first: bool = _gen1_run_flag(_gen1_node_flag_index(node, run), run)
+	for flag: int in node.get("clear", []):
+		if _gen1_run_flag(flag, run):
+			return false
 	if node.has("all"):
 		for flag: int in node["all"] as Array:
 			first = first and _gen1_run_flag(flag, run)
@@ -6425,6 +6425,9 @@ func _gen1_drawn(step: Dictionary, events: Array) -> bool:
 		&"player_facing":
 			player_facing = int(step["facing"])
 			return true
+		&"riding":
+			set_movement_mode(StringName(step["mode"]))
+			return true
 		&"block":
 			## `PrintCardKeyText` writes `wCardKeyDoorY` and its neighbour behind
 			## the box, so the floor's own callback can flag the door next load.
@@ -6736,7 +6739,8 @@ func _gen1_walk_object(index: int, moves: Array) -> Array:
 			continue
 		var vacated: Vector2i = object.cell
 		object.cell = destination
-		object.queue_step(direction, STEP_PASSES_WALK, false, direction, STEP_KIND_WALK)
+		var passes: int = STEP_PASSES_FAST if row >= Gen1Layout.NPC_RUN_FIRST else STEP_PASSES_WALK
+		object.queue_step(direction, passes, false, direction, STEP_KIND_WALK)
 		_advance_followers(index, vacated)
 	var key: String = _object_key(current_map.group, current_map.number, index)
 	_object_position_overrides[key] = object.cell
@@ -9040,6 +9044,20 @@ func is_gen1() -> bool:
 ## player is still spending the buttons a `walk` queued.
 func gen1_player_movement_running() -> bool:
 	return _player_scripted_steps and player_step_in_progress()
+
+
+## `wSimulatedJoypadStatesIndex`: the forced steps not yet spent.
+func gen1_player_steps_remaining() -> int:
+	if not gen1_player_movement_running():
+		return 0
+	return _player_queued_steps.size() + 1
+
+
+func gen1_object_steps_remaining() -> int:
+	for object: Gen2WorldObject in objects:
+		if object.scripted_steps and not object.deleted:
+			return object.queued_steps.size() + 1
+	return 0
 
 
 ## BIT_SCRIPTED_NPC_MOVEMENT, which `MoveSprite` sets and the last step of the
