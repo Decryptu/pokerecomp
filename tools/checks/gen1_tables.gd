@@ -16,6 +16,9 @@ const ITEM_TABLE_COUNT: int = 250
 const TYPE_COUNT: int = 16
 const TRAINER_COUNT: int = 47
 const MATCHUP_COUNT: int = 82
+const LEARNABLE_PAIRS: Dictionary = {&"red": 3037, &"blue": 3037, &"yellow": 3043}
+const CHARMANDER_DEX: int = 4
+const CUT_MOVE: int = 15
 const TMHM_COUNT: int = 55
 const EVOLUTION_COUNT: int = 72
 ## `page` in every `PokedexEntry` description, which `PageChar` waits on.
@@ -521,6 +524,17 @@ func _tmhm() -> void:
 	_r.check(Gen2WorldTMHM.is_hm(Gen1Layout.HM_FIRST_ITEM, RomRegistry.GEN1)
 		and not Gen2WorldTMHM.is_hm(Gen1Layout.TM_FIRST_ITEM, RomRegistry.GEN1),
 		"the HM run does not end at TM01")
+	## `CanLearnTMHMMove` over `BaseStats`' seven flag bytes, every species and
+	## every machine; Yellow retuned six rows and MEW's padding byte is $FF.
+	var pairs: int = 0
+	for species: int in range(1, _r.data.species_count() + 1):
+		for number: int in range(1, TMHM_COUNT + 1):
+			if Gen2WorldTMHM.can_learn(_r.data, species, _r.data.tmhm_move(number)):
+				pairs += 1
+	_r.check(pairs == int(LEARNABLE_PAIRS[_r.game_id]),
+		"%d species/machine pairs are learnable" % pairs)
+	_r.check(Gen2WorldTMHM.can_learn(_r.data, CHARMANDER_DEX, CUT_MOVE),
+		"CHARMANDER cannot learn CUT")
 
 
 func _trainers() -> void:

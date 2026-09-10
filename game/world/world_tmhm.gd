@@ -19,10 +19,6 @@ const ITEM_HM01: int = Gen2Layout.ITEM_HM01
 ## without this every mod item read as a TM, and as an HM.
 const ITEM_BYTE_MAX: int = Gen2Layout.ITEM_BYTE_MAX
 
-## Eight bytes of learnable flags on each species, one bit per TMNUM, indexed by
-## the entry's own zero-based place in TMHMMoves.
-const TMHM_FLAG_BYTES: int = Gen2Layout.TMHM_BYTES
-
 
 ## AskTeachTMHM's first test, `cp TM01` before anything else: an item below TM01
 ## is not a TM or HM and the prompt never appears. Generation 1 numbers the two
@@ -87,12 +83,14 @@ static func can_learn(data: GameData, species: int, move: int) -> bool:
 	var number: int = data.tmhm_number_for_move(move)
 	if number < 1:
 		return false
+	## `BaseStats` keeps seven bytes for Generation 1's 55 machines and eight for
+	## Crystal's 57, so the run's own length is the bound.
 	var flags: Array = data.species(species).get("tmhm", [])
-	if flags.size() < TMHM_FLAG_BYTES:
+	var index: int = number - 1
+	if (index >> 3) >= flags.size():
 		return false
 	# SmallFarFlagAction with d = 0: byte index >> 3, then bit index & 7 counted
 	# from the *low* bit, since it shifts 1 left that many times.
-	var index: int = number - 1
 	var byte: int = int(flags[index >> 3])
 	return (byte & (1 << (index & 7))) != 0
 

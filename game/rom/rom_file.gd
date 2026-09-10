@@ -84,6 +84,14 @@ func u8(offset: int) -> int:
 	return _bytes[offset] if in_bounds(offset) else 0
 
 
+func s8(offset: int) -> int:
+	return signed_byte(u8(offset))
+
+
+static func signed_byte(value: int) -> int:
+	return value - 0x100 if (value & 0x80) != 0 else value
+
+
 func u16le(offset: int) -> int:
 	if not in_bounds(offset, 2):
 		return 0

@@ -1158,16 +1158,12 @@ static func _read_connections(
 			"map_pointer": rom.u16le(at + 4),
 			"length": rom.u8(at + 6),
 			"target_width_blocks": rom.u8(at + 7),
-			"y_offset": _signed_byte(rom.u8(at + 8)),
-			"x_offset": _signed_byte(rom.u8(at + 9)),
+			"y_offset": rom.s8(at + 8),
+			"x_offset": rom.s8(at + 9),
 			"window_pointer": rom.u16le(at + 10),
 		})
 		at += Gen2Layout.MAP_CONNECTION_RECORD_SIZE
 	return out
-
-
-static func _signed_byte(value: int) -> int:
-	return value - 0x100 if (value & 0x80) != 0 else value
 
 
 static func _read_events(

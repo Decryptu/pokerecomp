@@ -191,7 +191,14 @@ static func earnings(battle: Gen2Battle, state: Gen2WorldState, won: bool) -> Di
 		return result
 	var wallet: int = 0
 	var to_mom: int = 0
-	if battle.battle_reward > 0:
+	## Generation 1 has no `.CheckMomSavings`: `wAmountMoneyWon` is the whole
+	## prize and `AddBCDPredef` pays it into `wPlayerMoney` as it stands.
+	if battle.battle_reward > 0 and battle.data != null \
+		and battle.data.generation == RomRegistry.GEN1:
+		wallet = battle.battle_reward
+		result["prize_shown"] = wallet
+		result["prize_line"] = Gen2Battle.PRIZE_KEPT_IT_ALL
+	elif battle.battle_reward > 0:
 		var split: Dictionary = Gen2Battle.prize_money_split(
 			battle.battle_reward,
 			battle.amulet_coin,

@@ -1710,10 +1710,12 @@ func _import_trainers(rom: RomFile, layout: Dictionary) -> Array:
 		out.append({
 			"number": trainer_class,
 			"name": names[trainer_class - 1],
-			# `ReadTrainerParty.LastLoop` adds it once a level, which is what
-			# `Gen2Battle._compute_trainer_reward` multiplies.
+			# `GetTrainerInformation` copies two of `bcd3`'s three bytes into
+			# `wTrainerBaseMoney`, so `pic_money 1500` pays 15 a level.
 			"attributes": {
-				"base_reward": _bcd3(rom, row + Gen1Layout.POINTER_SIZE),
+				"base_reward": _bcd3(
+					rom, row + Gen1Layout.POINTER_SIZE, Gen1Layout.POINTER_SIZE
+				),
 			},
 			"trainers": parties[trainer_class - 1],
 		})

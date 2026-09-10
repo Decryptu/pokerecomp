@@ -154,7 +154,6 @@ const VIRIDIAN_FLY_CELL := Vector2i(23, 26)
 
 ## `ViridianMart_Object`'s clerk, who stands at 0,5 behind the counter at 1,5.
 ## `.extendRangeOverCounter` is what lets the player at 2,5 reach them.
-const VIRIDIAN_MART: int = 42
 const MART_COUNTER := Vector2i(2, 5)
 const MART_CLERK := Vector2i(0, 5)
 
@@ -508,6 +507,14 @@ func _one_game() -> void:
 	_check_the_silph_rival()
 	_check_a_seafoam_boulder_hole()
 	_check_the_safari_zone()
+	_check_a_connection_lands_aligned()
+	_check_the_parcel_clerk()
+	if _r.game_id != RomRegistry.YELLOW:
+		_check_a_gift_lands_in_the_party()
+	_check_the_map_script_names_the_nerd()
+	_check_the_captains_back()
+	_check_the_ship_leaves()
+	_check_the_gate_pushes_back()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -2989,6 +2996,7 @@ const CHARMANDER_INDEX: int = 0xB0
 const SQUIRTLE_INDEX: int = 0xB1
 const CHARMANDER_DEX: int = 4
 const OAKS_PARCEL: int = 0x46
+const OAK_ASKED_TO_CHOOSE_FLAG: int = 33
 const GOT_STARTER_FLAG: int = 34
 const BATTLED_RIVAL_FLAG: int = 35
 const GOT_POKEDEX_FLAG: int = 37
@@ -3732,3 +3740,187 @@ func _check_cinnabar_blocks(world: Gen2WorldAPI, trainer: int, won: bool) -> voi
 		_r.check(world.block_at(cell.x, cell.y) == expected,
 			"trainer %d won=%s gate %d is %02x, expected %02x" % [
 				trainer, won, gate + 1, world.block_at(cell.x, cell.y), expected])
+
+
+## `.checkNorthMap` adds `wNorthConnectedMapXAlignment` to `wXCoord`.
+const ROUTE_1: int = 12
+const ROUTE_1_ROAD_TOP := Vector2i(11, 0)
+const VIRIDIAN_ROAD_BOTTOM := Vector2i(21, 35)
+const VIRIDIAN_CITY_ID: int = 1
+
+
+func _check_a_connection_lands_aligned() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, ROUTE_1, ROUTE_1_ROAD_TOP)
+	if world == null:
+		return
+	var crossed: Dictionary = world.move_result(Vector2i.UP)
+	_r.check(bool(crossed.get("ok", false)) and world.map_id() == Vector2i(0, VIRIDIAN_CITY_ID)
+		and world.player_cell == VIRIDIAN_ROAD_BOTTOM,
+		"Route 1's road crossed onto %s at %s." % [world.map_id(), world.player_cell])
+	var back: Dictionary = world.move_result(Vector2i.DOWN)
+	_r.check(bool(back.get("ok", false)) and world.player_cell == ROUTE_1_ROAD_TOP,
+		"Viridian's road crossed back onto %s at %s." % [world.map_id(), world.player_cell])
+	_r.note("gen1 walk ROUTE_1 onto VIRIDIAN_CITY ten cells over and back")
+
+
+## `ViridianMartDefaultScript`'s two clerk rows sit past the three the objects name.
+const VIRIDIAN_MART: int = 42
+const VIRIDIAN_MART_MAT := Vector2i(3, 7)
+const VIRIDIAN_MART_WALKED := Vector2i(2, 5)
+const OAKS_PARCEL_ITEM: int = 0x46
+const GOT_OAKS_PARCEL_FLAG: int = 57
+const PARCEL_CLERK_GREETS: String = "Hey! You came from"
+
+
+func _check_the_parcel_clerk() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_MART, VIRIDIAN_MART_MAT)
+	if world == null:
+		return
+	var spoken: Array[String] = []
+	for _pass: int in LAB_PASSES:
+		spoken.append_array(_lab_answers(world, world.dispatch_sight_events()))
+		world.advance_player_step_pass()
+		if world.event_flag_active(GOT_OAKS_PARCEL_FLAG):
+			break
+	_r.check("\n".join(spoken).begins_with(PARCEL_CLERK_GREETS),
+		"the clerk opened with %s." % ["\n".join(spoken).left(60)])
+	_r.check(world.player_cell == VIRIDIAN_MART_WALKED,
+		"the clerk's walk left the player on %s." % [world.player_cell])
+	_r.check(world.state.item_quantity(OAKS_PARCEL_ITEM) == 1
+		and world.event_flag_active(GOT_OAKS_PARCEL_FLAG),
+		"the clerk handed over %d parcels." % world.state.item_quantity(OAKS_PARCEL_ITEM))
+	_r.note("gen1 walk VIRIDIAN_MART's clerk walked the player in and handed the parcel over")
+
+
+## `GivePokemon`'s carry through [Gen2WorldPartyHost], which the screen uses.
+func _check_a_gift_lands_in_the_party() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, OAKS_LAB, LAB_BELOW_CHARMANDER)
+	if world == null:
+		return
+	world.state.set_gen1_map_script(OAKS_LAB_BYTE, LAB_DONT_GO_AWAY)
+	world.state.set_event_flag(OAK_ASKED_TO_CHOOSE_FLAG)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var save: Gen2SaveData = Gen2SaveStore.create_new_game(_r.data, 0, "RED")
+	world.interact()
+	var hosted: Dictionary = {}
+	for _turn: int in LAB_PASSES:
+		var request: Dictionary = world.pending_runtime_request()
+		var input: Dictionary = world.pending_script_input()
+		if StringName(request.get("kind", &"")) == &"pokemon_requested":
+			hosted = Gen2WorldPartyHost.complete_runtime_request(world, {"ok": true}, save, false)
+			break
+		if not request.is_empty():
+			world.complete_runtime_request({"ok": true})
+		elif not input.is_empty():
+			world.choose_script_input(0 if StringName(input.get("type", &"")) == &"choice" else -1)
+		else:
+			break
+	_r.check(bool(hosted.get("ok", false)), "the host refused the ball: %s" % [hosted])
+	_r.check(save.party.size() == 1 and int(save.party[0].species) == CHARMANDER_DEX,
+		"the ball left the party as %s." % [save.party.map(func(mon: Gen2SaveMon) -> int: return mon.species)])
+	_r.note("gen1 walk OAKS_LAB's ball put CHARMANDER in the party through the host")
+
+
+## `hTextID` and `hSpriteIndex` are one byte, so the map script's own row fights.
+const MT_MOON_NERD_CELL := Vector2i(13, 8)
+const SUPER_NERD_CLASS: int = 8
+
+
+func _check_the_map_script_names_the_nerd() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, MT_MOON_B2F, MT_MOON_NERD_CELL)
+	if world == null:
+		return
+	var results: Array = world.dispatch_sight_events()
+	var request: Dictionary = {}
+	for _turn: int in LAB_PASSES:
+		request = world.pending_runtime_request()
+		if not request.is_empty() or results.is_empty():
+			break
+		results = world.run_event_queue(true)
+	var values: Dictionary = request.get("values", {})
+	_r.check(int(values.get("trainer_class", 0)) == SUPER_NERD_CLASS,
+		"the fossil floor's script fought %s." % [request])
+	_r.note("gen1 walk MT_MOON_B2F's script fights the super nerd, not the last trainer met")
+
+
+## `SSAnneCaptainsRoomRubCaptainsBackText` carries its own `text_asm`.
+const SS_ANNE_CAPTAINS_ROOM: int = 101
+const BELOW_CAPTAIN := Vector2i(4, 3)
+const RUBBED_CAPTAINS_BACK_FLAG: int = 1505
+const GOT_HM01_FLAG: int = 1504
+const HM01_ITEM: int = 0xC4
+
+
+func _check_the_captains_back() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, SS_ANNE_CAPTAINS_ROOM, BELOW_CAPTAIN)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	_lab_answers(world, world.interact())
+	_r.check(world.event_flag_active(RUBBED_CAPTAINS_BACK_FLAG),
+		"EVENT_RUBBED_CAPTAINS_BACK is clear after the rub.")
+	_r.check(world.event_flag_active(GOT_HM01_FLAG) and world.state.item_quantity(HM01_ITEM) == 1,
+		"the captain handed over %d HM01." % world.state.item_quantity(HM01_ITEM))
+	_r.note("gen1 walk SS_ANNE_CAPTAINS_ROOM's rub sets its own flag and pays HM01")
+
+
+## `VermilionDock_Script` reads `wDestinationWarpID`: off the ship with HM01 it
+## runs `VermilionDockSSAnneLeavesScript`, and Vermilion walks the player on.
+const SS_ANNE_1F: int = 95
+const SS_ANNE_GANGWAY := Vector2i(26, 0)
+const VERMILION_DOCK: int = 94
+const DOCK_GANGWAY := Vector2i(14, 2)
+const SS_ANNE_LEFT_FLAG: int = 1506
+const VERMILION_PAST_SAILOR := Vector2i(18, 29)
+const SHIP_LEAVES_PASSES: int = 1400
+
+
+func _check_the_ship_leaves() -> void:
+	var snapshot := Gen2WorldSnapshot.new()
+	snapshot.map_id = Vector2i(0, SS_ANNE_1F)
+	snapshot.player_cell = SS_ANNE_GANGWAY
+	snapshot.player_facing = Gen2WorldSprite.FACING_UP
+	snapshot.gen1_last_map = VERMILION_CITY
+	snapshot.world_state = Gen2WorldState.new()
+	snapshot.world_state.set_event_flag(GOT_HM01_FLAG)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open_snapshot(_r.data, snapshot)
+	if not _r.check(world != null and bool(world.try_warp().get("ok", false)),
+		"the gangway did not lead to the dock."):
+		return
+	for _pass: int in SHIP_LEAVES_PASSES:
+		world.dispatch_sight_events()
+		_drive_one_pass(world)
+		if not world.scripted_movement_in_progress() and world.map_id() == Vector2i(0, VERMILION_CITY) \
+			and world.player_cell == VERMILION_PAST_SAILOR:
+			break
+	_r.check(world.event_flag_active(SS_ANNE_LEFT_FLAG), "EVENT_SS_ANNE_LEFT is clear.")
+	_r.check(world.map_id() == Vector2i(0, VERMILION_CITY) and world.player_cell == VERMILION_PAST_SAILOR,
+		"the ship left the player on %s at %s." % [world.map_id(), world.player_cell])
+	var dock: Gen2WorldAPI = _r.open_world(0, VERMILION_DOCK, DOCK_GANGWAY, world.state)
+	if dock == null:
+		return
+	_r.check(not dock.warp_at(DOCK_GANGWAY).is_empty(),
+		"the gangway is gone from a dock loaded fresh.")
+	_r.note("gen1 walk the S.S. ANNE left, and the dock walked the player out past the sailor")
+
+
+## `Route8GateMovePlayerRightScript` fills the joypad buffer by hand.
+const ROUTE_8_GATE: int = 79
+const ROUTE_8_GATE_CELL := Vector2i(2, 3)
+
+
+func _check_the_gate_pushes_back() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, ROUTE_8_GATE, ROUTE_8_GATE_CELL)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_LEFT
+	_lab_answers(world, world.dispatch_sight_events())
+	_r.check(world.gen1_player_movement_running() or world.player_cell == ROUTE_8_GATE_CELL + Vector2i.RIGHT,
+		"the guard left the player standing on %s." % [world.player_cell])
+	for _pass: int in LAB_PASSES:
+		_drive_one_pass(world)
+		if not world.scripted_movement_in_progress():
+			break
+	_r.check(world.player_cell == ROUTE_8_GATE_CELL + Vector2i.RIGHT,
+		"the push left the player on %s." % [world.player_cell])
+	_r.note("gen1 walk ROUTE_8_GATE's guard pushed the player a cell right")

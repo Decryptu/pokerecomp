@@ -723,7 +723,7 @@ func _cosine(angle: int, amplitude: int) -> int:
 ## A sprite offset is a byte the cartridge adds; a renderer drawing at a signed
 ## pixel needs the same byte read as a two's complement offset.
 static func _signed(value: int) -> int:
-	return value - 0x100 if value >= 0x80 else value
+	return RomFile.signed_byte(value)
 
 
 ## The source's DOWN, UP, LEFT, RIGHT order, which is what `.dust_coords` is

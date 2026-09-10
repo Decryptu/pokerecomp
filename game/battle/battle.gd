@@ -768,10 +768,9 @@ func init_enemy_trainer(trainer_class: int, rewarded: bool = true) -> void:
 	_gain_gym_battle_happiness(trainer_class)
 
 
-## `wAmountMoneyWon`, the three packed-decimal bytes
-## `ReadTrainerParty.LastLoop` adds `wTrainerBaseMoney` into once a level, where
-## `ComputeTrainerReward`'s `Multiply` is read two binary ones wide.
-const GEN1_REWARD_CEILING: int = 999999
+## `ReadTrainerParty.LastLoop` adds `wTrainerBaseMoney` into `wAmountMoneyWon`
+## once a level with `AddBCD` two bytes wide, whose `.fill` stops at 9999.
+const GEN1_REWARD_CEILING: int = 9999
 
 
 ## `ComputeTrainerReward`, which `ReadTrainerParty` runs once the whole party is
