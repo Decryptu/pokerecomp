@@ -16,29 +16,41 @@ an empty body. -->
 
 ## Added
 
-- Red, Blue and Yellow play their own music, sound effects and cries. `audio/engine_1.asm` is a second driver beside Crystal's, and a map plays its piece out of whichever ROM bank the cartridge names for it. All 151 cries are in.
-- A Generation 1 new game runs from Oak's speech to the bedroom. Six intro palettes, the pic that walks across the window, both keyboards for your name and your rival's, and the save that puts you in Red's house at (3, 6) with 3000 in the wallet and a POTION in the PC.
-- The Safari Zone runs whole. The gate takes the fee, hands over 30 balls, counts your 500 steps and ends the game with the PA wherever you are standing. Bait and the rock move the catch rate and the flee roll, and Yellow's discount for a thin wallet works.
-- Celadon Mart's, Silph Co.'s and Rocket Hideout's elevators ride and shake, and the door you walked in through goes back where it belongs when you leave.
-- The NAME RATER renames a Pokemon, on his own ten-letter keyboard with the party icon drawn over it.
-- The Poke Flute plays inside a battle. It stays quiet while the low health alarm owns the channels it would take.
+- Red, Blue and Yellow are playable. The shelf offers Play on all three, and a game runs from the bedroom to the Hall of Fame: 360 steps and eight badges on Red and Blue, 361 on Yellow, through Brock, Mt. Moon, the Nugget Bridge, Bill, the S.S. Anne, the trash cans, Rock Tunnel, the Rocket Hideout, Pokemon Tower, the SNORLAX, the Safari Zone, Silph Co., Cinnabar, Viridian's gym, Victory Road, the Elite Four and the Champion.
+- Oak's Lab runs whole, from the speech to the rival leaving with the Pokedex: the starter pick, the fight, the parcel and the hand-over. Yellow's lab hands over the Pikachu.
+- The old man's catch tutorial on Red and Blue, and Prof. Oak's Pikachu battle on Yellow, with the cartridge's own ball, back pic and cursor timings.
+- Generation 1's own Hall of Fame: the white frames, each member sliding in with its cry, the player's stats and the dex rating, then the credits with their bands, each `CreditsMons` silhouette crossing at 8 px a frame and THE END. 5254 frames on Red and Blue, 5248 on Yellow. `sHallOfFame` keeps 50 teams and the League PC walks them oldest first.
+- Vermilion Gym's fifteen trash cans and the door they open, Cinnabar Gym's six quiz machines and the trainer a wrong answer walks up, the Champion's Room's eleven states, Pokemon Tower 7F's rocket walking off, and Pewter City's museum and gym guides.
+- Every map-script body but the two link maps decodes on all three cartridges: Red and Blue read 183 state bodies of 373, Yellow 223 of 408, against 186 of 206 last release.
+- The S.S. Anne leaves the dock, with its 1144 frames and the gangway taken off. The game designer's completed-dex diploma prints.
+- The Hall of Fame music starts on the page that asks for it and fades on the page that ends it, on both generations.
 
 ## Changed
 
-- Generation 1 map scripts run their own bodies. 186 state bodies over 98 tables decode on Red and Blue, 127 of them whole, against 118 and 65 last release.
-- The menus a text row draws for itself are open. Among them the Cinnabar lab handing back what your fossil revives into, the Cerulean badge house's list, Oak's aides, the Pokedex rating and the healing machine sounding once per ball.
-- Every `text_asm` row on Red and Blue decodes now, 317 of them, and none is left with an arm the walker could not read.
-- Blue's layout is built from Red's and the bytes it shifts, so a correction to one reaches the other.
-- Red, Blue and Yellow are still import and inspection only. Play turns them away.
-- The cache format is 126. Import your Generation 1 cartridge again: a cache written before this one carries no audio and no map music bank.
+- The cache format is 133. Import your Generation 1 cartridge again.
+- Blue's `TheEndGfx` sits one byte on from Red's, and `Gen1Layout` pins the credits tables for all three.
+- A Generation 1 map's load-time work is its entry script walked under each `wCurrentMapScriptFlags` bit, and `EndTrainerBattle` puts the map's script back on row 2 the way the cartridge does.
+- Cinnabar Gym's gate flags were compared against emulator block-write traces, all 128 masks per cartridge, and every trainer after wins, losses and re-entry.
 
 ## Fixed
 
-- Every scripted warp landed on the row in front of the one it named. `wDestinationWarpID` counts from zero.
-- Importing Yellow raised an error partway and left one map's state machine half built.
-- Six of the Safari gate's text rows were never read, because the table they sat in could only grow once.
-- Route 11 Gate 2F's aide said nothing at all.
-- Generation 1's Pokemon Center nurse never recorded the town to wake up in, two stores having matched the same byte.
+- Every Generation 1 map connection landed at the source x, so Route 1 came out ten cells into Viridian's fenced corner.
+- No TM or HM could be taught on Generation 1.
+- A trainer paid a hundred times the prize, with Crystal's quarter split on top.
+- Every Elite Four room's end-battle state printed its after-battle line for ever.
+- Silph Co. 3F's card key door shut again on the way back from 11F, and the Mansion's four switches opened nothing.
+- The tower's MAROWAK stood again after every won fight, and the Safari gate asked "Leaving early?" for ever.
+- Lance's trigger asked for a wild Pokemon of species 0. The LIFT KEY never appeared and EVENT_BEAT_LANCE was never set, because three trainer texts are machine code.
+- Yellow's Safari gate printed `<NUM_CD3D>` where Red spells ¥500, and `HiddenCoins`' two boxes printed `<NUM_FFA0>` on all three cartridges.
+- Pewter City's two guides and Bill were placed four cells off.
+- A Safari or tutorial battle sent the lead out and drew a player HUD.
+- Lt. Surge's receipt did not name TM24 and the Silph rival did not name the player.
+- The Viridian Mart clerk's two parcel rows were empty, and Mt. Moon's super nerd fought the last rocket met.
+- A Generation 1 induction drew Crystal's panels and then stopped on "The credits are not in this cache".
+- `_DexRatingText` wrapped and could not print, from a `<COLON>` encoded as seven unknowns.
+- The story walk stopped on every ledge hop. All three Johto profiles walk to Red again.
+- `GameData.palette` raised on a species record without a palette.
+- README lines still said Play was refused on Generation 1.
 
 ## Which file
 
