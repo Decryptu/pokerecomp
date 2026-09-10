@@ -9499,6 +9499,28 @@ const GEN1_EVENT_BEAT_POKEMON_TOWER_RIVAL: int = 239
 const GEN1_EVENT_BEAT_GHOST_MAROWAK: int = 271
 const GEN1_EVENT_GOT_POKE_FLUTE: int = 296
 const GEN1_EVENT_RESCUED_MR_FUJI: int = 1231
+const GEN1_ROUTE_12: int = 23
+const GEN1_ROUTE_13: int = 24
+const GEN1_ROUTE_14: int = 25
+const GEN1_ROUTE_15: int = 26
+const GEN1_FUCHSIA_CITY: int = 7
+const GEN1_FUCHSIA_GYM: int = 157
+const GEN1_ROUTE_12_GATE_1F: int = 87
+## Route 13's rows 4 and 6 end at Bird Keepers; row 8 goes through.
+const GEN1_ROUTE_13_WEST_EDGE := Vector2i(0, 8)
+const GEN1_ROUTE_15_GATE_1F: int = 184
+const GEN1_ROUTE_12_GATE_DOOR := Vector2i(10, 15)
+const GEN1_ROUTE_12_GATE_SOUTH := Vector2i(4, 7)
+const GEN1_ROUTE_15_GATE_DOOR := Vector2i(14, 8)
+const GEN1_ROUTE_15_GATE_WEST := Vector2i(0, 4)
+const GEN1_ABOVE_SNORLAX := Vector2i(10, 61)
+const GEN1_FUCHSIA_GYM_DOOR := Vector2i(5, 27)
+const GEN1_KOGA := Vector2i(4, 10)
+const GEN1_EVENT_FIGHT_ROUTE12_SNORLAX: int = 1166
+const GEN1_EVENT_BEAT_ROUTE12_SNORLAX: int = 1167
+const GEN1_EVENT_GOT_TM06: int = 600
+const GEN1_EVENT_BEAT_KOGA: int = 601
+const GEN1_BIT_SOULBADGE: int = 4
 const GEN1_BEDROOM_STAIRS := Vector2i(7, 1)
 const GEN1_HOUSE_DOOR := Vector2i(2, 7)
 ## `PalletTownDefaultScript` stops the player at `wYCoord == 1`, and Yellow's at 0.
@@ -9579,7 +9601,7 @@ func _gen1_story_path(data: GameData) -> Dictionary:
 		_gen1_mt_moon_leg, _gen1_cerulean_rival_leg, _gen1_bills_house_leg,
 		_gen1_cerulean_gym_leg, _gen1_cerulean_thief_leg, _gen1_ss_anne_leg,
 		_gen1_vermilion_gym_leg, _gen1_rock_tunnel_leg, _gen1_celadon_gym_leg,
-		_gen1_rocket_hideout_leg, _gen1_pokemon_tower_leg,
+		_gen1_rocket_hideout_leg, _gen1_pokemon_tower_leg, _gen1_fuchsia_gym_leg,
 	]
 	for leg: Callable in legs:
 		var walked: Dictionary = leg.call(world, save, random, data, path)
@@ -9893,11 +9915,18 @@ func _gen1_parcel_leg(
 	])
 
 
+## A row is [direction, map, step], with the edge cell to cross at fourth.
 func _gen1_crossings(
 	path: Array, world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator,
 	data: GameData, legs: Array
 ) -> Dictionary:
 	for leg: Array in legs:
+		if leg.size() > 3:
+			var stepped_to: Dictionary = _gen1_step(
+				path, "%s_edge" % leg[2], world, _gen1_walk(world, leg[3], save, random, data)
+			)
+			if not bool(stepped_to["ok"]):
+				return stepped_to
 		var crossed: Dictionary = _gen1_cross(world, String(leg[0]), int(leg[1]), save, random, data)
 		var stepped: Dictionary = _gen1_step(path, String(leg[2]), world, crossed)
 		if not bool(stepped["ok"]):
@@ -10585,3 +10614,57 @@ func _gen1_pokemon_tower_leg(
 		return {"ok": false, "path": path, "reason": "mr_fujis_house_flute: the bag holds %s" % [
 			_named_items(data, world.state.items())]}
 	return {"ok": true}
+
+
+func _gen1_fuchsia_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_LAVENDER_TOWN, "mr_fujis_house_exit"],
+		["south", GEN1_ROUTE_12, "lavender_to_route_12"],
+		[GEN1_ROUTE_12_GATE_1F, "route_12_gate", GEN1_ROUTE_12_GATE_DOOR],
+		[GEN1_ROUTE_12, "route_12_gate_south", GEN1_ROUTE_12_GATE_SOUTH],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var beside: Dictionary = _gen1_walk(world, GEN1_ABOVE_SNORLAX, save, random, data)
+	if bool(beside.get("ok", false)):
+		var flute: Dictionary = world.poke_flute_request()
+		if not bool(flute.get("woke", false)):
+			beside = {"ok": false, "reason": "the flute woke nothing: %s" % [flute], "runs": beside["runs"]}
+		else:
+			beside = _gen1_settle(world, save, random, data, world.dispatch_sight_events())
+	stepped = _gen1_step(path, "route_12_snorlax", world, beside, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "route_12_snorlax", world, GEN1_EVENT_BEAT_ROUTE12_SNORLAX, "EVENT_BEAT_ROUTE12_SNORLAX")
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		["south", GEN1_ROUTE_13, "route_12_to_route_13"],
+		["west", GEN1_ROUTE_14, "route_13_to_route_14", GEN1_ROUTE_13_WEST_EDGE],
+		["west", GEN1_ROUTE_15, "route_14_to_route_15"],
+		[GEN1_ROUTE_15_GATE_1F, "route_15_gate", GEN1_ROUTE_15_GATE_DOOR],
+		[GEN1_ROUTE_15, "route_15_gate_west", GEN1_ROUTE_15_GATE_WEST],
+		["west", GEN1_FUCHSIA_CITY, "route_15_to_fuchsia"],
+		[GEN1_FUCHSIA_GYM, "fuchsia_gym_entry", GEN1_FUCHSIA_GYM_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var koga: Dictionary = _gen1_talk_to(world, GEN1_KOGA, save, random, data)
+	stepped = _gen1_step(path, "fuchsia_gym_koga", world, koga, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_KOGA, "EVENT_BEAT_KOGA"], [GEN1_EVENT_GOT_TM06, "EVENT_GOT_TM06"],
+	]:
+		stepped = _gen1_flag_leg(path, "fuchsia_gym_koga", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_SOULBADGE)):
+		return {"ok": false, "path": path, "reason": "fuchsia_gym_koga: SOULBADGE is clear"}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_FUCHSIA_CITY, "fuchsia_gym_exit"]])
