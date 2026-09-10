@@ -4,7 +4,6 @@ extends RefCounted
 ## Whether a trainer pulls its Pokemon out, and which one it sends instead:
 ## `CheckAbleToSwitch` and its five party scans in `engine/battle/ai/switch.asm`,
 ## plus the three frequency gates in `items.asm`.
-##
 ## The cartridge works in six-bit masks and reuses one variable as both a score
 ## and a party index; here the masks are arrays of indices and the two uses are
 ## separate return values. Nothing changes: every scan keeps party order, and
@@ -51,7 +50,6 @@ const THREAT_LOW: int = 5
 
 
 ## Whether this trainer switches, and to which party index.
-##
 ## Answers [code]{"switch": bool, "index": int}[/code]. [param flags] is the
 ## class's own [constant Gen2Layout.ATTR_AI_ITEM_SWITCH] word; a class with none
 ## of the three switch bits never switches, which is `AI_SwitchOrTryItem`'s own
@@ -75,7 +73,6 @@ static func decide(battle: Gen2Battle, flags: int, rng: RandomNumberGenerator) -
 
 ## `FindMonInOTPartyToSwitchIntoBattle`: who the AI would rather have in, with no
 ## opinion about whether it should switch at all.
-##
 ## [method decide] is the ordinary route and answers both questions at once.
 ## Baton Pass is the one caller that has already settled the first, so it needs
 ## the pick on its own. Nobody standing answers -1; a shortlist that resists
@@ -171,7 +168,6 @@ static func _counter_choice(battle: Gen2Battle, immune: Array) -> Dictionary:
 
 ## `CheckPlayerMoveTypeMatchups`: how well the Pokémon that is out is doing,
 ## starting at [constant BASE_SCORE]. Higher is better for staying in.
-##
 ## The first half reads what the player has actually thrown so far, falling back
 ## to the player's own types when it has thrown nothing. The second half reads
 ## what the enemy's own moves would do back.
@@ -296,7 +292,6 @@ static func _alive_enough_to_switch(battle: Gen2Battle) -> bool:
 
 
 ## `FindEnemyMonsWithAtLeastQuarterMaxHP`, narrowing whoever was passed in.
-##
 ## The name is the only quarter in it. `AICheckEnemyQuarterHP` doubles the HP
 ## word twice with `sla c / rl b`; this routine writes `srl c / rl b`, so the low
 ## byte is halved twice while the high byte is doubled twice and picks up the two
@@ -313,7 +308,6 @@ static func _at_least_quarter_hp(battle: Gen2Battle, candidates: Array) -> Array
 
 
 ## The `srl c / rl b` pair run twice over the HP word, as a number.
-##
 ## For a maximum HP under 256 the whole thing comes to "current HP is not a
 ## multiple of four": the high byte ends up holding the two bits the low byte
 ## dropped, so anything but a multiple of four lands over 255 and clears any
@@ -364,7 +358,6 @@ static func _resisting(battle: Gen2Battle, candidates: Array) -> Array:
 
 ## `FindEnemyMonsWithASuperEffectiveMove`, with `FindAliveEnemyMons` folded in
 ## the way `FindAliveEnemyMonsWithASuperEffectiveMove` folds it.
-##
 ## Answers [code]{"index": int, "quality": int}[/code]: quality 2 for the first
 ## candidate holding a move that is super effective against whoever the player
 ## has out, 1 for the first that at least has a neutral one, and 0 for nobody.

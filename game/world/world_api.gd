@@ -3837,6 +3837,8 @@ const GEN1_BATTLE_OUTCOMES: Dictionary = {
 	Gen1Layout.BATTLE_OUTCOME_ESCAPED: [
 		Gen2WorldBattleAdapter.OUTCOME_CAUGHT, Gen2WorldBattleAdapter.OUTCOME_RAN,
 	],
+	## `wBattleResult` at zero, which the tower's MAROWAK reads with `and a`.
+	Gen1Layout.BATTLE_OUTCOME_WON: [Gen2WorldBattleAdapter.OUTCOME_WON],
 }
 
 ## What the last battle a script asked for answered.
@@ -5903,9 +5905,12 @@ func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
 	var flag: int = int(header["event_flag"])
 	_gen1_scratch[int(Gen1Layout.for_id(data.id)["trainer_header_flag_bit"])] = flag % 8
 	if event_flag_active(flag):
-		return [{"type": &"text", "text": String(header["after"])}]
+		if header.has("after_script"):
+			var steps: Array = []
+			return steps if _gen1_resolve_script(header["after_script"], steps, _gen1_run(event)) else []
+		return [{"type": &"text", "text": gen1_filled_text(String(header["after"]))}]
 	return [
-		{"type": &"text", "text": String(header["before"])},
+		{"type": &"text", "text": gen1_filled_text(String(header["before"]))},
 		{
 			"type": &"request",
 			"values": {
@@ -5915,6 +5920,7 @@ func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
 			"trainer_flag": flag,
 			"object_index": int(event.get("object_index", -1)),
 			"standing_wild": not event.has("trainer_class"),
+			"end_script": header.get("end_script", []),
 		},
 	]
 
@@ -6759,6 +6765,14 @@ func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 	if bool(step.get("standing_wild", false)):
 		gen1_toggle_object(_gen1_toggle_index(int(step.get("object_index", -1))), true)
 	load_object_masks()
+	## `TextCommand_ASM` behind the end-battle line the fight printed.
+	var ending: Array = []
+	for node: Dictionary in step.get("end_script", []) as Array:
+		if String(node.get("op", "")) != "text":
+			ending.append(node)
+	var steps: Array = []
+	if not ending.is_empty() and _gen1_resolve_script(ending, steps, _gen1_run({})):
+		_gen1_steps = steps + _gen1_steps
 
 
 ## `CollisionCheckOnLand` skips every test while `wSimulatedJoypadStatesIndex`
@@ -6766,7 +6780,7 @@ func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 func _gen1_walk_player(moves: Array) -> Array:
 	var generated: Array = []
 	for leg: Dictionary in moves:
-		var direction: Vector2i = _movement_direction(int(leg["direction"]))
+		var direction: Vector2i = movement_direction(int(leg["direction"]))
 		for _step: int in int(leg["steps"]):
 			var destination: Vector2i = player_cell + direction
 			if not _cell_in_bounds(destination):
@@ -6794,7 +6808,7 @@ func _gen1_walk_object(index: int, moves: Array) -> Array:
 	_gen1_stand_object(index)
 	var facing: int = object.facing
 	for row: int in moves:
-		var direction: Vector2i = _movement_direction(row)
+		var direction: Vector2i = movement_direction(row)
 		facing = facing_for_direction(direction)
 		var destination: Vector2i = object.cell + direction
 		if not _cell_in_bounds(destination):
@@ -8018,12 +8032,12 @@ func _apply_object_movement(event: Dictionary) -> Array:
 		if kind in SCRIPTED_TURN_KINDS:
 			## Queued rather than applied, so a turn behind a walk turns where
 			## the walk ends. `queue_step` drains an entry of no frames itself.
-			var turn: Vector2i = _movement_direction(int(command.get("direction", 0)))
+			var turn: Vector2i = movement_direction(int(command.get("direction", 0)))
 			object.queue_step(Vector2i.ZERO, 0, false, turn)
 			final_facing = facing_for_direction(turn)
 			continue
 		if SCRIPTED_STEP_PASSES.has(kind):
-			var direction: Vector2i = _movement_direction(int(command.get("direction", 0)))
+			var direction: Vector2i = movement_direction(int(command.get("direction", 0)))
 			var jumping: bool = kind in JUMP_STEP_KINDS
 			var cells: int = 2 if jumping else 1
 			var destination: Vector2i = object.cell + direction * cells
@@ -8152,11 +8166,11 @@ func _apply_player_movement(event: Dictionary) -> Array:
 			## the walk ends rather than on the frame the stream was applied.
 			_queue_player_step(
 				Vector2i.ZERO, 0, false,
-				_movement_direction(int(command.get("direction", 0))), kind,
+				movement_direction(int(command.get("direction", 0))), kind,
 			)
 			continue
 		if SCRIPTED_STEP_PASSES.has(kind):
-			var direction: Vector2i = _movement_direction(int(command.get("direction", 0)))
+			var direction: Vector2i = movement_direction(int(command.get("direction", 0)))
 			var jumping: bool = kind in JUMP_STEP_KINDS
 			var cells: int = 2 if jumping else 1
 			var destination: Vector2i = player_cell + direction * cells
@@ -8205,7 +8219,7 @@ func _apply_player_movement(event: Dictionary) -> Array:
 	return generated
 
 
-func _movement_direction(direction: int) -> Vector2i:
+func movement_direction(direction: int) -> Vector2i:
 	match direction & 3:
 		0:
 			return Vector2i.DOWN

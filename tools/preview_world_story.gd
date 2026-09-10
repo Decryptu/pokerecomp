@@ -28,7 +28,11 @@ const REQUEST_HANDLERS: Dictionary = {
 	&"audio_requested": &"_request_audio",
 	&"magnet_train_requested": &"_request_magnet_train",
 	&"pokedex_entry_requested": &"_request_audio",
+	&"elevator_requested": &"_request_elevator",
 }
+
+## The map number the next `DisplayElevatorFloorMenu` is answered with; -1 is B.
+var _gen1_elevator_floor: int = -1
 
 ## SPECIALCALL_ASSISTANT (constants/phone_constants.asm), armed by beating
 ## Falkner and answered by ElmPhoneCallerScript's .assistant branch.
@@ -8787,6 +8791,17 @@ func _request_apricorns(world: Gen2WorldAPI, _request: Dictionary, state: Dictio
 	return given.get("results", [])
 
 
+func _request_elevator(world: Gen2WorldAPI, request: Dictionary, state: Dictionary) -> Array:
+	var floors: Array = (request.get("values", {}) as Dictionary).get("floors", [])
+	for row: Dictionary in floors:
+		if int(row.get("map", -1)) == _gen1_elevator_floor:
+			_gen1_elevator_floor = -1
+			return world.complete_runtime_request({"ok": true, "floor": row})
+	if _gen1_elevator_floor >= 0:
+		return _request_failed(state, "the car lists no floor on map %d" % _gen1_elevator_floor, {"floors": floors})
+	return world.complete_runtime_request({"ok": true})
+
+
 ## `DisplayPokedex` behind a Generation 1 ball is a page with nothing to answer,
 ## the way `waitsfx` is.
 func _request_audio(world: Gen2WorldAPI, _request: Dictionary, _state: Dictionary) -> Array:
@@ -9006,7 +9021,9 @@ func _walk_to_story_cell(
 		}
 	var steps: Array[Vector2i] = plan["steps"]
 	var events: Array = []
+	var arrows: Dictionary = _gen1_arrow_landings(world)
 	for direction: Vector2i in steps:
+		var expected: Vector2i = arrows.get(world.player_cell + direction, world.player_cell + direction)
 		var moved: Dictionary = world.move_result(direction)
 		if not bool(moved.get("ok", false)):
 			return {
@@ -9016,7 +9033,8 @@ func _walk_to_story_cell(
 				],
 			}
 		events = _dispatch_after_step(world)
-		if not events.is_empty():
+		## A spin tile has already moved the player off the plan.
+		if not events.is_empty() or world.player_cell != expected:
 			break
 	return {"ok": true, "steps": steps.size(), "events": events}
 
@@ -9025,6 +9043,7 @@ func _plan_walk(world: Gen2WorldAPI, target: Vector2i, water_only: bool = false)
 	var frontier: Array[Vector2i] = [world.player_cell]
 	var previous: Dictionary = {world.player_cell: {"cell": Vector2i(-1, -1), "direction": Vector2i.ZERO}}
 	var directions: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+	var arrows: Dictionary = _gen1_arrow_landings(world)
 	var found: bool = false
 	while not frontier.is_empty():
 		var cell: Vector2i = frontier.pop_front()
@@ -9035,6 +9054,8 @@ func _plan_walk(world: Gen2WorldAPI, target: Vector2i, water_only: bool = false)
 			var next: Vector2i = _reachable_step(
 				world, cell, direction, target, water_only and cell + direction != target
 			)
+			## A spin tile is one edge to wherever its ride stops.
+			next = arrows.get(next, next)
 			if next.x < 0 or previous.has(next):
 				continue
 			previous[next] = {"cell": cell, "direction": direction}
@@ -9046,6 +9067,34 @@ func _plan_walk(world: Gen2WorldAPI, target: Vector2i, water_only: bool = false)
 		steps.push_front(link["direction"])
 		cursor = link["cell"]
 	return {"found": found, "steps": steps, "previous": previous}
+
+
+## Each spin tile and the cell `DecodeArrowMovementRLE`'s whole ride stops on.
+func _gen1_arrow_landings(world: Gen2WorldAPI) -> Dictionary:
+	var out: Dictionary = {}
+	if world == null or not world.is_gen1() or world.current_map == null:
+		return out
+	var pending: Array = [world.current_map.scripts.get("states", [])]
+	while not pending.is_empty():
+		var nodes: Variant = pending.pop_back()
+		if not nodes is Array:
+			continue
+		for node: Variant in nodes as Array:
+			if not node is Dictionary:
+				continue
+			if node.has("nodes"):
+				pending.append(node["nodes"])
+			for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+				if node.has(key):
+					pending.append(node[key])
+			if String(node.get("op", "")) != "arrow_movement":
+				continue
+			for cell: Dictionary in node["cells"] as Array:
+				var landing := Vector2i(int(cell["x"]), int(cell["y"]))
+				for leg: Dictionary in cell["moves"] as Array:
+					landing += world.movement_direction(int(leg["direction"])) * int(leg["steps"])
+				out[Vector2i(int(cell["x"]), int(cell["y"]))] = landing
+	return out
 
 
 ## What a failed walk hit, when what it hit was somebody standing there.
@@ -9379,6 +9428,7 @@ const GEN1_VERMILION_TREE_INSIDE := Vector2i(15, 19)
 const GEN1_CELADON_GYM_TREE_APPROACH := Vector2i(5, 8)
 ## The tree at (35, 32), which seals the gym's own corner of Celadon City.
 const GEN1_CELADON_TREE_APPROACH := Vector2i(35, 31)
+const GEN1_CELADON_TREE_INSIDE := Vector2i(35, 33)
 ## Rock Tunnel's four ladders in walking order, each a floor and its cell, and
 ## the south exit: `TilePairCollisionsLand`'s CAVERN rows are what make the
 ## floors a maze rather than open rock.
@@ -9393,6 +9443,62 @@ const GEN1_ERIKA := Vector2i(4, 3)
 const GEN1_EVENT_GOT_TM21: int = 424
 const GEN1_EVENT_BEAT_ERIKA: int = 425
 const GEN1_BIT_RAINBOWBADGE: int = 3
+const GEN1_GAME_CORNER: int = 135
+const GEN1_ROCKET_HIDEOUT_B1F: int = 199
+const GEN1_ROCKET_HIDEOUT_B2F: int = 200
+const GEN1_ROCKET_HIDEOUT_B3F: int = 201
+const GEN1_ROCKET_HIDEOUT_B4F: int = 202
+const GEN1_ROCKET_HIDEOUT_ELEVATOR: int = 203
+const GEN1_GAME_CORNER_DOOR := Vector2i(28, 19)
+## The poster's guard, and the stairs `GameCornerPosterText` writes in.
+const GEN1_GAME_CORNER_ROCKET := Vector2i(9, 5)
+const GEN1_GAME_CORNER_STAIRS := Vector2i(17, 4)
+const GEN1_HIDEOUT_B1F_STAIRS := Vector2i(23, 2)
+const GEN1_HIDEOUT_B2F_STAIRS := Vector2i(21, 8)
+const GEN1_HIDEOUT_B3F_STAIRS := Vector2i(19, 18)
+const GEN1_HIDEOUT_B4F_STAIRS := Vector2i(19, 10)
+const GEN1_HIDEOUT_B3F_UP := Vector2i(25, 6)
+const GEN1_HIDEOUT_B2F_ELEVATOR := Vector2i(24, 19)
+## `RocketHideoutB4FRocket3` drops the LIFT KEY's ball beside him.
+const GEN1_HIDEOUT_ROCKET_3 := Vector2i(11, 2)
+const GEN1_BELOW_LIFT_KEY := Vector2i(10, 3)
+const GEN1_HIDEOUT_CAR_PANEL := Vector2i(1, 2)
+const GEN1_HIDEOUT_CAR_DOOR := Vector2i(2, 1)
+## The two Rockets `RocketHideoutB4F`'s load callback opens the door on.
+const GEN1_HIDEOUT_DOOR_ROCKETS: Array = [Vector2i(23, 12), Vector2i(26, 12)]
+const GEN1_HIDEOUT_GIOVANNI := Vector2i(25, 3)
+const GEN1_BELOW_SILPH_SCOPE := Vector2i(25, 3)
+const GEN1_LIFT_KEY: int = 0x4A
+const GEN1_SILPH_SCOPE: int = 0x48
+const GEN1_EVENT_FOUND_ROCKET_HIDEOUT: int = 441
+const GEN1_EVENT_ROCKET_DROPPED_LIFT_KEY: int = 1702
+const GEN1_EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI: int = 1703
+const GEN1_POKEMON_TOWER_1F: int = 142
+const GEN1_POKEMON_TOWER_2F: int = 143
+const GEN1_POKEMON_TOWER_3F: int = 144
+const GEN1_POKEMON_TOWER_4F: int = 145
+const GEN1_POKEMON_TOWER_5F: int = 146
+const GEN1_POKEMON_TOWER_6F: int = 147
+const GEN1_POKEMON_TOWER_7F: int = 148
+const GEN1_MR_FUJIS_HOUSE: int = 149
+const GEN1_HIDEOUT_B4F_ELEVATOR := Vector2i(24, 15)
+const GEN1_HIDEOUT_B1F_ELEVATOR_STAIRS := Vector2i(21, 2)
+## `RocketHideoutB1FDoorCallbackScript` shuts the car's pocket on this Rocket.
+const GEN1_HIDEOUT_B1F_DOOR_ROCKET := Vector2i(28, 18)
+const GEN1_LAVENDER_TOWER_DOOR := Vector2i(14, 5)
+## The tower's stairs alternate sides; 6F's RARE CANDY ball plugs the one-cell
+## gap on the way to the 7F stairs, and the ghost MAROWAK stands on (10, 16).
+const GEN1_TOWER_EAST_STAIRS := Vector2i(18, 9)
+const GEN1_TOWER_WEST_STAIRS := Vector2i(3, 9)
+const GEN1_ABOVE_RARE_CANDY := Vector2i(6, 7)
+const GEN1_TOWER_7F_STAIRS := Vector2i(9, 16)
+const GEN1_MR_FUJI := Vector2i(10, 3)
+const GEN1_BELOW_MR_FUJI_HOME := Vector2i(3, 2)
+const GEN1_POKE_FLUTE: int = 0x49
+const GEN1_EVENT_BEAT_POKEMON_TOWER_RIVAL: int = 239
+const GEN1_EVENT_BEAT_GHOST_MAROWAK: int = 271
+const GEN1_EVENT_GOT_POKE_FLUTE: int = 296
+const GEN1_EVENT_RESCUED_MR_FUJI: int = 1231
 const GEN1_BEDROOM_STAIRS := Vector2i(7, 1)
 const GEN1_HOUSE_DOOR := Vector2i(2, 7)
 ## `PalletTownDefaultScript` stops the player at `wYCoord == 1`, and Yellow's at 0.
@@ -9473,6 +9579,7 @@ func _gen1_story_path(data: GameData) -> Dictionary:
 		_gen1_mt_moon_leg, _gen1_cerulean_rival_leg, _gen1_bills_house_leg,
 		_gen1_cerulean_gym_leg, _gen1_cerulean_thief_leg, _gen1_ss_anne_leg,
 		_gen1_vermilion_gym_leg, _gen1_rock_tunnel_leg, _gen1_celadon_gym_leg,
+		_gen1_rocket_hideout_leg, _gen1_pokemon_tower_leg,
 	]
 	for leg: Callable in legs:
 		var walked: Dictionary = leg.call(world, save, random, data, path)
@@ -10283,3 +10390,198 @@ func _gen1_celadon_gym_leg(
 	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_RAINBOWBADGE)):
 		return {"ok": false, "path": path, "reason": "celadon_gym_erika: RAINBOWBADGE is clear"}
 	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_CELADON_CITY, "celadon_gym_exit"]])
+
+
+## The Game Corner's poster and the hideout's four floors down to the LIFT KEY.
+func _gen1_rocket_hideout_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_step(path, "celadon_cut_tree_again", world, _gen1_cut(
+		world, GEN1_CELADON_TREE_INSIDE, Gen2WorldSprite.FACING_UP, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_GAME_CORNER, "game_corner_entry", GEN1_GAME_CORNER_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var guard: Dictionary = _gen1_talk_to(world, GEN1_GAME_CORNER_ROCKET, save, random, data)
+	stepped = _gen1_step(path, "game_corner_rocket", world, guard, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	var poster: Dictionary = _gen1_talk(
+		world, GEN1_GAME_CORNER_ROCKET, Gen2WorldSprite.FACING_UP, save, random, data
+	)
+	stepped = _gen1_step(path, "game_corner_poster", world, poster)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(
+		path, "game_corner_poster", world, GEN1_EVENT_FOUND_ROCKET_HIDEOUT, "EVENT_FOUND_ROCKET_HIDEOUT"
+	)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_B1F, "game_corner_stairs", GEN1_GAME_CORNER_STAIRS],
+		[GEN1_ROCKET_HIDEOUT_B2F, "hideout_b1f_to_b2f", GEN1_HIDEOUT_B1F_STAIRS],
+		[GEN1_ROCKET_HIDEOUT_B3F, "hideout_b2f_to_b3f", GEN1_HIDEOUT_B2F_STAIRS],
+		[GEN1_ROCKET_HIDEOUT_B4F, "hideout_b3f_to_b4f", GEN1_HIDEOUT_B3F_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var rocket: Dictionary = _gen1_talk_to(world, GEN1_HIDEOUT_ROCKET_3, save, random, data)
+	stepped = _gen1_step(path, "hideout_b4f_rocket_3", world, rocket, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(
+		path, "hideout_b4f_rocket_3", world, GEN1_EVENT_ROCKET_DROPPED_LIFT_KEY, "EVENT_ROCKET_DROPPED_LIFT_KEY"
+	)
+	if not bool(stepped["ok"]):
+		return stepped
+	var key: Dictionary = _gen1_talk(world, GEN1_BELOW_LIFT_KEY, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "hideout_lift_key", world, key, {"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_LIFT_KEY, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "hideout_lift_key: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	return _gen1_giovanni_leg(world, save, random, data, path)
+
+
+## The car up to Giovanni and the SILPH SCOPE he leaves behind.
+func _gen1_giovanni_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_B3F, "hideout_b4f_to_b3f", GEN1_HIDEOUT_B4F_STAIRS],
+		[GEN1_ROCKET_HIDEOUT_B2F, "hideout_b3f_to_b2f", GEN1_HIDEOUT_B3F_UP],
+		[GEN1_ROCKET_HIDEOUT_ELEVATOR, "hideout_b2f_elevator", GEN1_HIDEOUT_B2F_ELEVATOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	_gen1_elevator_floor = GEN1_ROCKET_HIDEOUT_B4F
+	var panel: Dictionary = _gen1_talk(world, GEN1_HIDEOUT_CAR_PANEL, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "hideout_elevator_panel", world, panel)
+	if not bool(stepped["ok"]):
+		return stepped
+	if _gen1_elevator_floor >= 0:
+		return {"ok": false, "path": path, "reason": "hideout_elevator_panel: the car offered no floor"}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_B4F, "hideout_elevator_to_b4f", GEN1_HIDEOUT_CAR_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	for rocket_cell: Vector2i in GEN1_HIDEOUT_DOOR_ROCKETS:
+		var fought: Dictionary = _gen1_talk_to(world, rocket_cell, save, random, data)
+		stepped = _gen1_step(path, "hideout_door_rocket_%d" % rocket_cell.x, world, fought, {
+			"party": _party_species(save)})
+		if not bool(stepped["ok"]):
+			return stepped
+	var giovanni: Dictionary = _gen1_talk_to(world, GEN1_HIDEOUT_GIOVANNI, save, random, data)
+	stepped = _gen1_step(path, "hideout_giovanni", world, giovanni, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(
+		path, "hideout_giovanni", world, GEN1_EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI,
+		"EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI"
+	)
+	if not bool(stepped["ok"]):
+		return stepped
+	var scope: Dictionary = _gen1_talk(
+		world, GEN1_BELOW_SILPH_SCOPE, Gen2WorldSprite.FACING_UP, save, random, data
+	)
+	stepped = _gen1_step(path, "hideout_silph_scope", world, scope, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_SILPH_SCOPE, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "hideout_silph_scope: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	return {"ok": true}
+
+
+## The car back up, the tower floor by floor, and Mr. Fuji's POKé FLUTE.
+func _gen1_pokemon_tower_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_ELEVATOR, "hideout_b4f_elevator", GEN1_HIDEOUT_B4F_ELEVATOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	_gen1_elevator_floor = GEN1_ROCKET_HIDEOUT_B1F
+	var panel: Dictionary = _gen1_talk(world, GEN1_HIDEOUT_CAR_PANEL, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "hideout_elevator_panel_up", world, panel)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_B1F, "hideout_elevator_to_b1f", GEN1_HIDEOUT_CAR_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var door_rocket: Dictionary = _gen1_talk_to(world, GEN1_HIDEOUT_B1F_DOOR_ROCKET, save, random, data)
+	stepped = _gen1_step(path, "hideout_b1f_door_rocket", world, door_rocket, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_GAME_CORNER, "hideout_b1f_to_game_corner", GEN1_HIDEOUT_B1F_ELEVATOR_STAIRS],
+		[GEN1_CELADON_CITY, "game_corner_exit"],
+		["east", GEN1_ROUTE_7, "celadon_to_route_7"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_7, "route_7_to_underground"],
+		[GEN1_UNDERGROUND_PATH_WEST_EAST, "underground_west_entrance"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_8, "underground_east_exit"],
+		[GEN1_ROUTE_8, "underground_to_route_8"],
+		["east", GEN1_LAVENDER_TOWN, "route_8_to_lavender"],
+		[GEN1_POKEMON_TOWER_1F, "lavender_to_tower", GEN1_LAVENDER_TOWER_DOOR],
+		[GEN1_POKEMON_TOWER_2F, "tower_1f_to_2f", GEN1_TOWER_EAST_STAIRS],
+		[GEN1_POKEMON_TOWER_3F, "tower_2f_to_3f", GEN1_TOWER_WEST_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(
+		path, "tower_2f_to_3f", world, GEN1_EVENT_BEAT_POKEMON_TOWER_RIVAL, "EVENT_BEAT_POKEMON_TOWER_RIVAL"
+	)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_POKEMON_TOWER_4F, "tower_3f_to_4f", GEN1_TOWER_EAST_STAIRS],
+		[GEN1_POKEMON_TOWER_5F, "tower_4f_to_5f", GEN1_TOWER_WEST_STAIRS],
+		[GEN1_POKEMON_TOWER_6F, "tower_5f_to_6f", GEN1_TOWER_EAST_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var candy: Dictionary = _gen1_talk(world, GEN1_ABOVE_RARE_CANDY, Gen2WorldSprite.FACING_DOWN, save, random, data)
+	stepped = _gen1_step(path, "tower_6f_rare_candy", world, candy, {"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_POKEMON_TOWER_7F, "tower_6f_marowak_to_7f", GEN1_TOWER_7F_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "tower_6f_marowak_to_7f", world, GEN1_EVENT_BEAT_GHOST_MAROWAK, "EVENT_BEAT_GHOST_MAROWAK")
+	if not bool(stepped["ok"]):
+		return stepped
+	var fuji: Dictionary = _gen1_talk_to(world, GEN1_MR_FUJI, save, random, data)
+	stepped = _gen1_step(path, "tower_7f_mr_fuji", world, fuji, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	if world.map_id() != Vector2i(0, GEN1_MR_FUJIS_HOUSE):
+		return {"ok": false, "path": path, "reason": "tower_7f_mr_fuji: Fuji left the player on %s" % [_map_value(world)]}
+	var flute: Dictionary = _gen1_talk(world, GEN1_BELOW_MR_FUJI_HOME, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "mr_fujis_house_flute", world, flute, {"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_RESCUED_MR_FUJI, "EVENT_RESCUED_MR_FUJI"], [GEN1_EVENT_GOT_POKE_FLUTE, "EVENT_GOT_POKE_FLUTE"],
+	]:
+		stepped = _gen1_flag_leg(path, "mr_fujis_house_flute", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if int(world.state.items().get(GEN1_POKE_FLUTE, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "mr_fujis_house_flute: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	return {"ok": true}

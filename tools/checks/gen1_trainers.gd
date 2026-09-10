@@ -15,9 +15,16 @@ const CLASS_COUNT: int = 47
 ## `text_asm` rows, the ones reaching `TalkToTrainer`, and the objects naming
 ## one: a trainer class above `OPP_ID_OFFSET`, or a standing wild below it.
 const HEADER_CENSUS: Dictionary = {
-	&"red": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12},
-	&"blue": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12},
-	&"yellow": {"text_asm": 691, "headers": 317, "trainers": 305, "wilds": 12},
+	&"red": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12, "coded": 3},
+	&"blue": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12, "coded": 3},
+	&"yellow": {"text_asm": 691, "headers": 317, "trainers": 305, "wilds": 12, "coded": 3},
+}
+## The header texts whose machine code does more than print, by map and the
+## flag each sets; Yellow moved the LIFT KEY's `ShowObject` to the end text.
+const CODED_HEADER_FLAGS: Dictionary = {
+	&"red": {"113:after": 2302, "199:end": 1653, "202:after": 1702},
+	&"blue": {"113:after": 2302, "199:end": 1653, "202:after": 1702},
+	&"yellow": {"113:after": 2302, "199:end": 1653, "202:end": 1702},
 }
 
 ## `view_range << 4` is a pixel distance, so the stored range is a nibble.
@@ -175,7 +182,8 @@ func _the_party_table() -> void:
 ## Every header the corpus carries, and the object each belongs to: three texts,
 ## a range inside its nibble, a flag above zero, and a party that is stored.
 func _the_headers() -> void:
-	var census: Dictionary = {"text_asm": 0, "headers": 0, "trainers": 0, "wilds": 0}
+	var census: Dictionary = {"text_asm": 0, "headers": 0, "trainers": 0, "wilds": 0, "coded": 0}
+	var coded: Dictionary = {}
 	for map: Gen2WorldMap in _r.data.world_maps():
 		for row: Dictionary in map.texts:
 			if int(row.get("command", 0)) == Gen1Layout.TEXT_ASM:
@@ -183,6 +191,12 @@ func _the_headers() -> void:
 			if row.has("trainer"):
 				census["headers"] += 1
 				_one_header(map, row["trainer"])
+				for name: String in ["before", "after", "end"]:
+					var flag: int = _first_flag((row["trainer"] as Dictionary).get("%s_script" % name, []))
+					if flag < 0:
+						continue
+					census["coded"] += 1
+					coded["%d:%s" % [map.number, name]] = flag
 		for object: Dictionary in map.events["objects"] as Array:
 			var header: Dictionary = _header_for(map, object)
 			if header.is_empty():
@@ -206,9 +220,17 @@ func _the_headers() -> void:
 					"map %d's standing wild is outside ToggleableObjectStates." % map.number)
 	_r.check(census == HEADER_CENSUS[_r.game_id],
 		"the header census reads %s." % str(census))
+	_r.check(coded == CODED_HEADER_FLAGS[_r.game_id], "the coded header texts set %s." % [coded])
 	_r.note("gen1 trainers %d headers on %d text_asm rows" % [
 		int(census["headers"]), int(census["text_asm"]),
 	])
+
+
+func _first_flag(script: Array) -> int:
+	for node: Dictionary in script:
+		if String(node.get("op", "")) == "flag":
+			return int(node["flag"])
+	return -1
 
 
 func _one_header(map: Gen2WorldMap, header: Dictionary) -> void:
@@ -275,7 +297,7 @@ func _talk_to(
 	var where: String = "map %d text %d" % [map.number, int(object.get("text", 0))]
 	if not _r.check(not opened.is_empty(), "%s said nothing." % where):
 		return false
-	if not _r.check(_event_text(opened) == String(header["before"]),
+	if not _r.check(_event_text(opened) == world.gen1_filled_text(String(header["before"])),
 		"%s opened with %s." % [where, _event_text(opened)]):
 		return false
 	var request: Dictionary = _request_after(world)
@@ -290,8 +312,10 @@ func _talk_to(
 	if not object.has("trainer_class"):
 		return _r.check(_face(world, object).is_empty(), "%s is still on the map." % where)
 	var again: Array = _face(world, object)
-	var answered: bool = _r.check(_event_text(again) == String(header["after"]),
-		"%s finished with %s." % [where, _event_text(again)])
+	var answered: bool = _r.check(
+		_event_text(again) == world.gen1_filled_text(String(header["after"])),
+		"%s finished with %s." % [where, _event_text(again)]
+	)
 	world.run_event_queue(true)
 	return answered
 

@@ -495,6 +495,7 @@ func _one_game() -> void:
 	_check_the_saffron_guard()
 	_check_an_arrow_tile()
 	_check_a_scripted_wild_battle()
+	_check_the_ghost_marowak()
 	_check_the_catch_training()
 	if _r.game_id != RomRegistry.YELLOW:
 		_check_the_opening_walk()
@@ -2707,6 +2708,44 @@ func _check_a_scripted_wild_battle() -> void:
 	_r.check(world.event_flag_active(SNORLAX_BEAT_FLAG),
 		"the beaten Snorlax left its own flag clear.")
 	_r.note("gen1 walk ROUTE_12's Snorlax fought at level %d" % SNORLAX_LEVEL)
+
+
+## `PokemonTower6FMarowakBattleScript` reads `wBattleResult` with `and a`: only
+## a won fight sets EVENT_BEAT_GHOST_MAROWAK and prints the departure.
+const POKEMON_TOWER_6F: int = 147
+const POKEMON_TOWER_6F_BYTE: int = 63
+const MAROWAK_CELL := Vector2i(10, 16)
+const MAROWAK_SPECIES: int = 105
+const MAROWAK_LEVEL: int = 30
+const MAROWAK_BEAT_FLAG: int = 271
+const MAROWAK_DEPARTED: String = "The GHOST was"
+
+
+func _check_the_ghost_marowak() -> void:
+	for outcome: StringName in [Gen2WorldBattleAdapter.OUTCOME_RAN, Gen2WorldBattleAdapter.OUTCOME_WON]:
+		var world: Gen2WorldAPI = _r.open_world(0, POKEMON_TOWER_6F, MAROWAK_CELL + Vector2i.RIGHT)
+		if world == null:
+			return
+		world.player_cell = MAROWAK_CELL
+		var opened: Array = world.dispatch_sight_events()
+		var passes: int = 0
+		while world.pending_runtime_request().is_empty() and passes < SCRIPTED_WALK_PASSES:
+			world.run_event_queue(true)
+			passes += 1
+		var values: Dictionary = world.pending_runtime_request().get("values", {}) as Dictionary
+		if not _r.check(
+			int(values.get("pokemon", 0)) == MAROWAK_SPECIES and int(values.get("level", 0)) == MAROWAK_LEVEL,
+			"the ghost asked for %s / %s." % [world.pending_runtime_request(), opened]
+		):
+			return
+		world.complete_runtime_request({"ok": true, "outcome": outcome})
+		var after: Array = world.dispatch_sight_events()
+		var won: bool = outcome == Gen2WorldBattleAdapter.OUTCOME_WON
+		_r.check(world.event_flag_active(MAROWAK_BEAT_FLAG) == won,
+			"a fight %s left EVENT_BEAT_GHOST_MAROWAK %s." % [outcome, world.event_flag_active(MAROWAK_BEAT_FLAG)])
+		_r.check((not after.is_empty() and _event_text(after).begins_with(MAROWAK_DEPARTED)) == won,
+			"a fight %s was answered with %s." % [outcome, after])
+	_r.note("gen1 walk POKEMON_TOWER_6F's MAROWAK fought at level %d" % MAROWAK_LEVEL)
 
 
 ## `ViridianCityOldManStartCatchTrainingScript`'s `wBattleType` as the Dude's

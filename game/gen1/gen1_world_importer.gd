@@ -5581,15 +5581,25 @@ static func _read_trainer_header(
 			+ rom.u8(at + int(offsets["flag_bit"])),
 		"sight_range": rom.u8(at + int(offsets["range"])) >> Gen1Layout.TRAINER_RANGE_SHIFT,
 	}
+	## The LIFT KEY's `ShowObject` is machine code in a header text, Red's
+	## after-battle one and Yellow's end-battle one.
 	for name: String in ["before", "after", "end"]:
-		out[name] = _read_trainer_text(
-			rom, layout, bank, rom.u16le(at + int(offsets[name]))
-		)
+		var pointer: int = rom.u16le(at + int(offsets[name]))
+		out[name] = _read_trainer_text(rom, layout, bank, pointer)
+		var decoded: Dictionary = Gen1Text.decode_stream(rom, Gen1Layout.banked(bank, pointer))
+		var code: int = _text_code_at(decoded)
+		if code < 0:
+			continue
+		var script: Array = decode_script(rom, layout, bank, code)
+		if script.is_empty():
+			continue
+		## Lance's `SetEvent EVENT_BEAT_LANCE` stands behind the streamed line.
+		if not String(decoded.get("text", "")).is_empty():
+			script.push_front({"op": "text", "text": String(decoded["text"])})
+		out["%s_script" % name] = script
 	return out
 
 
-## One of a header's three texts. `RocketHideoutB4FRocket3AfterBattleText` is
-## the corpus's one that is machine code, and says its `PrintText` operand.
 static func _read_trainer_text(
 	rom: RomFile, layout: Dictionary, bank: int, pointer: int
 ) -> String:

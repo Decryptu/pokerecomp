@@ -33,7 +33,6 @@ const FIELD_COLOR := Color(0.0, 0.0, 0.0, 1.0)
 ## What the panel shows with no world on it, drawn in the launcher's own
 ## language rather than the cartridge's: an empty cartridge silhouette, the
 ## project's name and a line saying nothing is running.
-##
 ## The launcher measures in points, so the design is written in these units and
 ## drawn at whatever whole multiple of them the panel is; a launcher unit is
 ## about a point at [constant IDLE_UNITS] on a handheld's lower display.
@@ -129,7 +128,6 @@ func set_world(data: GameData, world: Gen2WorldAPI, save: Gen2SaveData) -> void:
 
 ## Re-reads the world: which tabs are open, and whether the page on screen is
 ## still the one the cursor names.
-##
 ## Called every hardware frame and does nothing on almost all of them: the gates
 ## are three numbers and the row's one live picture is the party's lead, so the
 ## whole question is a short string. Rebuilding the START menu here instead would
@@ -168,7 +166,6 @@ func _gate() -> String:
 
 ## Which tab a tap at [param at] landed on, counting from zero, or -1 for a tap
 ## that missed the row.
-##
 ## Static and pure, so where a touch lands is asserted without a display: the row
 ## is the only part of this screen that takes one.
 static func tab_index_at(at: Vector2, canvas: Vector2i, count: int) -> int:
@@ -197,7 +194,6 @@ static func tab_cell(index: int, canvas: Vector2i, count: int) -> Rect2i:
 
 ## The tab the tap at [param at] landed on, in canvas pixels, or the empty name
 ## for a tap that missed the row.
-##
 ## Public because a host on a real panel converts its own touch to these pixels
 ## and a test drives it without one.
 func tab_at(at: Vector2) -> StringName:
@@ -208,7 +204,6 @@ func tab_at(at: Vector2) -> StringName:
 
 
 ## A touch on the tab row, in canvas pixels. Answers whether it opened a page.
-##
 ## The only input this screen accepts, and the reason it stays read only: there
 ## is no path from here into a page.
 func touch(at: Vector2) -> bool:
@@ -439,7 +434,6 @@ func _cell(index: int) -> Rect2:
 
 ## The row as the cartridge would have drawn it: the player's own text-box frame
 ## around white paper, with the open tab underlined in the frame's ink.
-##
 ## Redrawn when the tab set or the chosen tab changes, not per frame. Nothing
 ## here is invented: the six frame tiles are `LoadFrame`'s own, chosen by the
 ## same FRAME option the boxes on the top screen wear.
@@ -468,7 +462,6 @@ func _redraw_strip() -> void:
 
 
 ## The six frame tiles around the row.
-##
 ## Placed by hand rather than through [method Gen2Font.draw_box], because that
 ## one takes whole tiles in both directions and this row is a whole number of
 ## tiles in neither: the border tiles are laid at the four edges and the runs
