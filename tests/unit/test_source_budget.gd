@@ -21,7 +21,7 @@ const MAX_COMMENT_BLOCK: int = 8
 ## the shared code, the largest of them 152 the region map, 150 the battle
 ## animation engine, 140 the transition, 131 the field moves, 130 the Pokedex,
 ## 108 the three PCs, 90 the Safari Zone, 52 the menus a row draws.
-const MAX_COMMENT_LINES: int = 41950
+const MAX_COMMENT_LINES: int = 41947
 
 ## What no comment block ever ends on. A pass that meets the ceiling above trims
 ## the second line of a two-line block and leaves the first mid-sentence, which

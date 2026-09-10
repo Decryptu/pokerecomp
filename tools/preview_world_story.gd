@@ -9521,6 +9521,35 @@ const GEN1_EVENT_BEAT_ROUTE12_SNORLAX: int = 1167
 const GEN1_EVENT_GOT_TM06: int = 600
 const GEN1_EVENT_BEAT_KOGA: int = 601
 const GEN1_BIT_SOULBADGE: int = 4
+const GEN1_SAFARI_ZONE_GATE: int = 156
+const GEN1_SAFARI_ZONE_NORTH: int = 218
+const GEN1_SAFARI_ZONE_WEST: int = 219
+const GEN1_SAFARI_ZONE_CENTER: int = 220
+const GEN1_SAFARI_ZONE_SECRET_HOUSE: int = 222
+const GEN1_WARDENS_HOUSE: int = 155
+const GEN1_SAFARI_GATE_DOOR := Vector2i(18, 3)
+const GEN1_SAFARI_GATE_OFFER := Vector2i(3, 2)
+## The centre's tree lines leave the entrance the east door alone.
+const GEN1_SAFARI_ZONE_EAST: int = 217
+const GEN1_SAFARI_CENTER_EAST := Vector2i(29, 10)
+const GEN1_SAFARI_EAST_NORTH := Vector2i(0, 4)
+const GEN1_SAFARI_NORTH_WEST := Vector2i(2, 35)
+const GEN1_SAFARI_WEST_NORTH := Vector2i(20, 0)
+const GEN1_SAFARI_NORTH_EAST := Vector2i(39, 30)
+const GEN1_SAFARI_EAST_CENTER := Vector2i(0, 22)
+const GEN1_SAFARI_SECRET_HOUSE_DOOR := Vector2i(3, 3)
+const GEN1_BELOW_FISHING_GURU := Vector2i(3, 4)
+const GEN1_BELOW_GOLD_TEETH := Vector2i(19, 8)
+const GEN1_SAFARI_CENTER_GATE := Vector2i(14, 25)
+const GEN1_SAFARI_GATE_SOUTH := Vector2i(3, 5)
+const GEN1_WARDENS_HOUSE_DOOR := Vector2i(27, 27)
+const GEN1_WARDEN := Vector2i(2, 3)
+const GEN1_HM03: int = 0xC6
+const GEN1_HM04: int = 0xC7
+const GEN1_GOLD_TEETH: int = 0x40
+const GEN1_EVENT_GOT_HM03: int = 2176
+const GEN1_EVENT_GOT_HM04: int = 568
+const GEN1_EVENT_GAVE_GOLD_TEETH: int = 569
 const GEN1_BEDROOM_STAIRS := Vector2i(7, 1)
 const GEN1_HOUSE_DOOR := Vector2i(2, 7)
 ## `PalletTownDefaultScript` stops the player at `wYCoord == 1`, and Yellow's at 0.
@@ -9602,6 +9631,7 @@ func _gen1_story_path(data: GameData) -> Dictionary:
 		_gen1_cerulean_gym_leg, _gen1_cerulean_thief_leg, _gen1_ss_anne_leg,
 		_gen1_vermilion_gym_leg, _gen1_rock_tunnel_leg, _gen1_celadon_gym_leg,
 		_gen1_rocket_hideout_leg, _gen1_pokemon_tower_leg, _gen1_fuchsia_gym_leg,
+		_gen1_safari_zone_leg,
 	]
 	for leg: Callable in legs:
 		var walked: Dictionary = leg.call(world, save, random, data, path)
@@ -10668,3 +10698,77 @@ func _gen1_fuchsia_gym_leg(
 	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_SOULBADGE)):
 		return {"ok": false, "path": path, "reason": "fuchsia_gym_koga: SOULBADGE is clear"}
 	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_FUCHSIA_CITY, "fuchsia_gym_exit"]])
+
+
+func _gen1_safari_zone_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SAFARI_ZONE_GATE, "safari_gate_entry", GEN1_SAFARI_GATE_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var offer: Dictionary = _gen1_walk(world, GEN1_SAFARI_GATE_OFFER, save, random, data)
+	stepped = _gen1_step(path, "safari_gate_fee", world, offer, {
+		"balls": world.state.safari_balls(), "steps": world.state.safari_steps()})
+	if not bool(stepped["ok"]):
+		return stepped
+	## `SafariZoneEntranceAutoWalk` has already walked the player into the centre.
+	if not world.gen1_safari_active() or world.map_id() != Vector2i(0, GEN1_SAFARI_ZONE_CENTER):
+		return {"ok": false, "path": path, "reason": "safari_gate_fee: the fee left the player on %s" % [
+			_map_value(world)]}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SAFARI_ZONE_EAST, "safari_center_to_east", GEN1_SAFARI_CENTER_EAST],
+		[GEN1_SAFARI_ZONE_NORTH, "safari_east_to_north", GEN1_SAFARI_EAST_NORTH],
+		[GEN1_SAFARI_ZONE_WEST, "safari_north_to_west", GEN1_SAFARI_NORTH_WEST],
+		[GEN1_SAFARI_ZONE_SECRET_HOUSE, "safari_secret_house", GEN1_SAFARI_SECRET_HOUSE_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var guru: Dictionary = _gen1_talk(world, GEN1_BELOW_FISHING_GURU, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "safari_secret_house_hm03", world, guru, {
+		"items": _named_items(data, world.state.items()), "steps": world.state.safari_steps()})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "safari_secret_house_hm03", world, GEN1_EVENT_GOT_HM03, "EVENT_GOT_HM03")
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SAFARI_ZONE_WEST, "safari_secret_house_exit"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var teeth: Dictionary = _gen1_talk(world, GEN1_BELOW_GOLD_TEETH, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "safari_gold_teeth", world, teeth, {
+		"items": _named_items(data, world.state.items()), "steps": world.state.safari_steps()})
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_GOLD_TEETH, 0)) != 1 or int(world.state.items().get(GEN1_HM03, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "safari_gold_teeth: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SAFARI_ZONE_NORTH, "safari_west_to_north", GEN1_SAFARI_WEST_NORTH],
+		[GEN1_SAFARI_ZONE_EAST, "safari_north_to_east", GEN1_SAFARI_NORTH_EAST],
+		[GEN1_SAFARI_ZONE_CENTER, "safari_east_to_center", GEN1_SAFARI_EAST_CENTER],
+		[GEN1_SAFARI_ZONE_GATE, "safari_center_to_gate", GEN1_SAFARI_CENTER_GATE],
+		[GEN1_FUCHSIA_CITY, "safari_gate_exit", GEN1_SAFARI_GATE_SOUTH],
+		[GEN1_WARDENS_HOUSE, "wardens_house_entry", GEN1_WARDENS_HOUSE_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var warden: Dictionary = _gen1_talk_to(world, GEN1_WARDEN, save, random, data)
+	stepped = _gen1_step(path, "wardens_house_hm04", world, warden, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_GAVE_GOLD_TEETH, "EVENT_GAVE_GOLD_TEETH"], [GEN1_EVENT_GOT_HM04, "EVENT_GOT_HM04"],
+	]:
+		stepped = _gen1_flag_leg(path, "wardens_house_hm04", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if int(world.state.items().get(GEN1_HM04, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "wardens_house_hm04: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_FUCHSIA_CITY, "wardens_house_exit"]])

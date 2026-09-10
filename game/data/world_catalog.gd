@@ -6,7 +6,6 @@ extends RefCounted
 ## trades, prizes, ground items, badges and shops. The host owns the decoding and
 ## the mod owns the placement, so a randomizer needs no private copy of cartridge
 ## semantics. A patch changes a FIELD of a row and never the script behind it.
-##
 ## Nothing is imported for this: every row is derived from the cache and written
 ## beside it as a sidecar, so an absent or stale one is rebuilt rather than bumped.
 
@@ -131,7 +130,6 @@ static func build_reporting(
 ## The scan's result, for the sidecar. Ids are dictionary keys, so they go out
 ## as decimal strings and come back as ints; every one is well under the 2^53
 ## a JSON number carries exactly.
-##
 ## The lazy answers ([member _item_sources], [member _field_hms]) are not here:
 ## both are derived from these rows in a millisecond and would only be a second
 ## copy to keep in step.
@@ -187,7 +185,6 @@ static func from_dict(data: GameData, source: Variant) -> Gen2WorldCatalog:
 ## and a `kind` comes back as floats and a String. A reader compares these with
 ## `==` against typed literals, so the shapes have to be restored rather than
 ## coerced at every site.
-##
 ## Whole floats become ints: every number a row carries is an id, a bank, an
 ## address, an item, a quantity or a price, and none of them is fractional. The
 ## two String fields that are StringNames name themselves.
@@ -278,7 +275,6 @@ func size() -> int:
 ## The site a command at [param bank]:[param address] belongs to but is not
 ## itself, as `{id, role}`, or empty. `role` is `picture` for a starter's
 ## `pokepic` and `price` for a prize's `checkcoins` or `takecoins`.
-##
 ## This is what makes a patched field effective at the whole TRANSACTION rather
 ## than at one command of it: the ball that shows a Bellsprout hands over a
 ## Bellsprout, and a prize the mod priced at 500 is refused at 499 coins and
@@ -806,7 +802,6 @@ func _store(row: Dictionary) -> void:
 ## it checked and the items it asked for. The decoded graph fact a placement
 ## needs, and no more than a fact: it does not say the site is unreachable
 ## without them, only that the cartridge looked.
-##
 ## Read in source order up to the site rather than over the whole script, since a
 ## `checkevent` after a `givepoke` guards something else.
 func _requirements(commands: Array, at: int, crystal: bool) -> Array:

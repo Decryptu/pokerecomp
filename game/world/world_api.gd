@@ -4388,12 +4388,12 @@ func _gen1_node_object_facing(
 
 ## The store `CallFunctionInTable` dispatches on next frame; a map with no
 ## dispatch has no byte for `wCurMapScript` to be copied into.
-func _gen1_node_set_map_script(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+func _gen1_node_set_map_script(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var byte: int = int(node["byte"])
 	if byte < 0:
 		return true
 	## `wNextSafariZoneGateScript`: the state the walk before it is to land on.
-	var value: int = _gen1_saved_coord_index if node.has("from") else int(node["value"])
+	var value: int = _gen1_run_saved_index(run) if node.has("from") else int(node["value"])
 	steps.append({"type": &"map_script", "byte": byte, "value": value})
 	return true
 
@@ -4524,7 +4524,7 @@ func _gen1_node_saved_coord_index(
 	node: Dictionary, steps: Array, run: Dictionary
 ) -> bool:
 	return _gen1_resolve_side(
-		node, _gen1_index_matches(node, _gen1_saved_coord_index), steps, run
+		node, _gen1_index_matches(node, _gen1_run_saved_index(run)), steps, run
 	)
 
 
@@ -4533,13 +4533,20 @@ func _gen1_index_matches(node: Dictionary, index: int) -> bool:
 	return index < value if String(node["test"]) == "below" else index == value
 
 
-## The store, whose -1 is `wCoordIndex` itself rather than a constant.
+## The store, whose -1 is `wCoordIndex` itself. The run keeps the copy the rest
+## of the row reads and the world takes it when spent: both sides of the gate's
+## "Leaving early?" resolve before the answer, and NO's 5 had overwritten YES's 0.
 func _gen1_node_save_coord_index(
-	node: Dictionary, _steps: Array, run: Dictionary
+	node: Dictionary, steps: Array, run: Dictionary
 ) -> bool:
 	var value: int = int(node["value"])
-	_gen1_saved_coord_index = int(run.get("coord_index", 0)) if value < 0 else value
+	run["saved_coord_index"] = int(run.get("coord_index", 0)) if value < 0 else value
+	steps.append({"type": &"saved_coord_index", "value": int(run["saved_coord_index"])})
 	return true
+
+
+func _gen1_run_saved_index(run: Dictionary) -> int:
+	return int(run.get("saved_coord_index", _gen1_saved_coord_index))
 
 
 func _gen1_node_player_facing(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
@@ -6412,6 +6419,9 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 			return true
 		&"map_script":
 			state.set_gen1_map_script(int(step["byte"]), int(step["value"]))
+			return true
+		&"saved_coord_index":
+			_gen1_saved_coord_index = int(step["value"])
 			return true
 		&"last_map":
 			_gen1_last_map = int(step["map"])

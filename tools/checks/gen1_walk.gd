@@ -3556,6 +3556,7 @@ func _check_the_safari_zone() -> void:
 		"the fee left %d." % world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
 	)
 	_check_the_safari_game_ends(world.state)
+	_check_leaving_early()
 	_check_the_safari_zone_refuses()
 	_r.note("gen1 walk paid the SAFARI ZONE's %d and walked its %d steps out" % [
 		SAFARI_ADMISSION, Gen1Layout.SAFARI_STEPS,
@@ -3592,6 +3593,44 @@ func _check_the_safari_game_ends(state: Gen2WorldState) -> void:
 		"the gate said %s on the way out." % [haul])
 	_r.check(world.state.safari_balls() == 0,
 		"the gate left %d balls." % world.state.safari_balls())
+
+
+## `SafariZoneGateSafariZoneWorker1LeavingEarlyText`'s YES: the walk down, both
+## events cleared, and `wNextSafariZoneGateScript`'s 0 rather than NO's 5.
+const SAFARI_GATE_TOP := Vector2i(3, 0)
+const SAFARI_SCRIPT_LEAVE_EARLY_LANDING := Vector2i(3, 3)
+
+
+func _check_leaving_early() -> void:
+	var state := Gen2WorldState.new()
+	state.set_event_flag(Gen1Layout.IN_SAFARI_ZONE_EVENT, true)
+	state.set_safari_balls(Gen1Layout.SAFARI_BALLS)
+	state.set_safari_steps(Gen1Layout.SAFARI_STEPS)
+	var world: Gen2WorldAPI = _r.open_world(0, SAFARI_GATE, SAFARI_GATE_TOP, state)
+	if world == null:
+		return
+	world.state.set_gen1_map_script(world.gen1_safari_gate_byte(), SAFARI_SCRIPT_MOVING_UP)
+	## `SafariZoneGatePlayerMovingUpScript` hands the question to the next frame.
+	world.dispatch_sight_events()
+	world.dispatch_sight_events()
+	if not _r.check(
+		StringName(world.pending_script_input().get("type", &"")) == &"choice",
+		"the gate asked %s of a player leaving early." % [world.pending_script_input()]
+	):
+		return
+	_safari_answer(world, 0)
+	var passes: int = 0
+	while (world.gen1_player_movement_running() or world.player_step_in_progress()) 		and passes < SCRIPTED_WALK_PASSES:
+		world.advance_player_step_pass()
+		world.dispatch_sight_events()
+		passes += 1
+	world.dispatch_sight_events()
+	_r.check(world.player_cell == SAFARI_SCRIPT_LEAVE_EARLY_LANDING
+		and world.state.gen1_map_script(world.gen1_safari_gate_byte()) == 0,
+		"leaving early left the player on %s at state %d." % [
+			world.player_cell, world.state.gen1_map_script(world.gen1_safari_gate_byte())])
+	_r.check(not world.gen1_safari_active() and not world.event_flag_active(Gen1Layout.SAFARI_GAME_OVER_EVENT),
+		"leaving early left the game's events standing.")
 
 
 ## Red and Blue walk a short purse back down; Yellow's own two routines hand out
