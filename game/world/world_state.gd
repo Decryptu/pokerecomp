@@ -323,6 +323,8 @@ var _safari_steps: int = 0
 ## first. Both bytes open at zero, so block (0, 0) is "no door".
 const NO_CARD_KEY_DOOR: Vector2i = Vector2i.ZERO
 var _card_key_door: Vector2i = NO_CARD_KEY_DOOR
+## Bytes a Generation 1 script writes by name; zero is cleared WRAM and is not kept.
+var _gen1_bytes: Dictionary = {}
 ## `wRegisteredItem`. `wWhichRegisteredItem`'s pocket and slot number have no
 ## counterpart in the flat item model: `CheckRegisteredItem` uses them to find
 ## the entry again in its packed pocket array and clears both when the item is
@@ -551,6 +553,7 @@ func to_dict() -> Dictionary:
 		"safari_balls": _safari_balls,
 		"safari_steps": _safari_steps,
 		"card_key_door": [_card_key_door.x, _card_key_door.y],
+		"gen1_bytes": _gen1_bytes.duplicate(),
 		"npc_trades": _npc_trades.duplicate(),
 		"registered_item": _registered_item,
 		"day_care_man": _day_care_man,
@@ -612,6 +615,9 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	restored._card_key_door = _vector_from_value(
 		source.get("card_key_door", [NO_CARD_KEY_DOOR.x, NO_CARD_KEY_DOOR.y])
 	)
+	var bytes: Dictionary = _map(source, "gen1_bytes")
+	for name: String in bytes:
+		restored.set_gen1_byte(name, int(bytes[name]))
 	_seed_flags(restored._npc_trades, _map(source, "npc_trades"), 0)
 	restored._swarm_maps[SWARM_YANMA] = _vector_from_value(
 		source.get("yanma_swarm_map", [-1, -1])
@@ -771,6 +777,7 @@ func restore_from_dict(raw: Variant) -> void:
 	_safari_steps = restored._safari_steps
 	_gen1_starters = restored._gen1_starters.duplicate()
 	_card_key_door = restored._card_key_door
+	_gen1_bytes = restored._gen1_bytes.duplicate()
 	_npc_trades = restored._npc_trades.duplicate()
 	_registered_item = restored._registered_item
 	_day_care_man = restored._day_care_man
@@ -1725,6 +1732,21 @@ func set_kurt_apricorn_quantity(quantity: int) -> void:
 
 func card_key_door() -> Vector2i:
 	return _card_key_door
+
+
+func gen1_byte(name: String) -> int:
+	return int(_gen1_bytes.get(name, 0))
+
+
+func set_gen1_byte(name: String, value: int) -> void:
+	var next_value: int = clampi(value, 0, 0xFF)
+	if gen1_byte(name) == next_value:
+		return
+	if next_value == 0:
+		_gen1_bytes.erase(name)
+	else:
+		_gen1_bytes[name] = next_value
+	changed.emit()
 
 
 func set_card_key_door(cell: Vector2i) -> void:

@@ -58,6 +58,9 @@ const LAYOUT: Dictionary = {
 	"print_predef_text": 0x0290,
 	"display_text_id": 0x02A0,
 	"count_set_bits": 0x02B0,
+	"random": 0x02C8,
+	"random_sub": 0xFFD4,
+	"first_lock_trash_can": 0xD743,
 	"text_predefs": 0x0400,
 	"text_id_hram": 0xFF8C,
 	"joy_held": 0xFFB4,
@@ -233,15 +236,69 @@ func test_a_map_script_store_the_walk_cannot_value_answers_nothing() -> void:
 ## the gate in front of a per-frame script tests false and the body it would
 ## have called is not read at all.
 func test_the_map_load_gate_is_walked_past() -> void:
-	var gate: Array = _load_hl(int(LAYOUT["map_script_flags"])) \
-		+ [Gen1Layout.SCRIPT_PREFIX, Gen1Layout.SCRIPT_BIT_BASE + Gen1Layout.SCRIPT_OPERAND_HL,
-			Gen1Layout.SCRIPT_PREFIX,
-			Gen1Layout.SCRIPT_RES_BASE + Gen1Layout.SCRIPT_OPERAND_HL,
-			CALL_NZ, UNREAD_CALL & 0xFF, UNREAD_CALL >> 8]
 	var script: Array = _decode(
-		gate + _print(HELLO) + _call(int(LAYOUT["text_script_end"])), _boxes()
+		_map_load_gate(UNREAD_CALL) + _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
 	)
 	assert_eq(script, [{"op": "text", "text": "HI"}])
+
+
+## The same gate on `EnterMap`'s frame, with the bit known set.
+func test_the_map_load_gate_is_taken_with_its_bit_set() -> void:
+	var body: int = 0x1400
+	var program: Array = _map_load_gate(body) + _print(HELLO) \
+		+ _call(int(LAYOUT["text_script_end"]))
+	var raw: Dictionary = {}
+	var routine: Array = _print(BYE) + [Gen1Layout.SCRIPT_RET]
+	for offset: int in routine.size():
+		raw[body + offset] = routine[offset]
+	var script: Array = Gen1WorldImporter.decode_script(
+		_rom(program, _boxes(), raw), LAYOUT, 0, AT, {}, 1 << Gen1Layout.MAP_LOADED_1_BIT
+	)
+	assert_eq(script, [{"op": "text", "text": "BYE"}, {"op": "text", "text": "HI"}])
+	assert_eq(Gen1WorldImporter.decode_script(
+		_rom(program, _boxes(), raw), LAYOUT, 0, AT, {}, 1 << Gen1Layout.MAP_LOADED_2_BIT
+	), [{"op": "text", "text": "HI"}])
+
+
+## A script setting the bit back is asking for that body on the next frame.
+func test_setting_a_map_load_bit_is_kept() -> void:
+	var script: Array = _decode(
+		_load_hl(int(LAYOUT["map_script_flags"]))
+			+ [Gen1Layout.SCRIPT_PREFIX, Gen1Layout.SCRIPT_SET_BASE
+				+ 8 * Gen1Layout.MAP_LOADED_2_BIT + Gen1Layout.SCRIPT_OPERAND_HL,
+			Gen1Layout.SCRIPT_RET]
+	)
+	assert_eq(script, [{"op": "map_load_bit", "bit": Gen1Layout.MAP_LOADED_2_BIT}])
+
+
+## `.setFirstLockTrashCanIndex`: `call Random`, `ldh a, [hRandomSub]`, `and $e`
+## and the store, which the world rolls itself.
+func test_a_byte_stored_from_random_is_a_masked_roll() -> void:
+	var script: Array = _decode(
+		_call(int(LAYOUT["random"]))
+			+ [Gen1Layout.SCRIPT_LDH_A_MEM, int(LAYOUT["random_sub"]) & 0xFF,
+				Gen1Layout.SCRIPT_AND_N, 0x0E,
+				Gen1Layout.SCRIPT_PREFIX, Gen1Layout.SCRIPT_SRL_A]
+			+ _store_a(int(LAYOUT["first_lock_trash_can"])) + [Gen1Layout.SCRIPT_RET]
+	)
+	assert_eq(script, [{
+		"op": "store_byte", "name": "first_lock_trash_can", "random": true, "mask": 0x0E, "shift": 1,
+	}])
+	assert_eq(_decode(
+		[Gen1Layout.SCRIPT_LD_A, 0x0C, Gen1Layout.SCRIPT_AND_N, 0x0A]
+			+ _store_a(int(LAYOUT["first_lock_trash_can"])) + [Gen1Layout.SCRIPT_RET]
+	), [{"op": "store_byte", "name": "first_lock_trash_can", "value": 0x08}])
+
+
+## `ld hl, wCurrentMapScriptFlags`, `bit 5, [hl]`, `res 5, [hl]`, `call nz, body`.
+func _map_load_gate(body: int) -> Array:
+	return _load_hl(int(LAYOUT["map_script_flags"])) \
+		+ [Gen1Layout.SCRIPT_PREFIX, Gen1Layout.SCRIPT_BIT_BASE
+			+ 8 * Gen1Layout.MAP_LOADED_1_BIT + Gen1Layout.SCRIPT_OPERAND_HL,
+			Gen1Layout.SCRIPT_PREFIX, Gen1Layout.SCRIPT_RES_BASE
+			+ 8 * Gen1Layout.MAP_LOADED_1_BIT + Gen1Layout.SCRIPT_OPERAND_HL,
+			CALL_NZ, body & 0xFF, body >> 8]
 
 
 func test_a_coordinate_list_becomes_the_cells_it_holds() -> void:

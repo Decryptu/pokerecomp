@@ -15,9 +15,9 @@ const CLASS_COUNT: int = 47
 ## `text_asm` rows, the ones reaching `TalkToTrainer`, and the objects naming
 ## one: a trainer class above `OPP_ID_OFFSET`, or a standing wild below it.
 const HEADER_CENSUS: Dictionary = {
-	&"red": {"text_asm": 637, "headers": 322, "trainers": 310, "wilds": 12},
-	&"blue": {"text_asm": 637, "headers": 322, "trainers": 310, "wilds": 12},
-	&"yellow": {"text_asm": 686, "headers": 317, "trainers": 305, "wilds": 12},
+	&"red": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12},
+	&"blue": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12},
+	&"yellow": {"text_asm": 687, "headers": 317, "trainers": 305, "wilds": 12},
 }
 
 ## `view_range << 4` is a pixel distance, so the stored range is a nibble.
@@ -128,10 +128,11 @@ func _one_sight_line(
 
 ## `dispatch_sight_events` from one cell, answering which object engaged and
 ## spending `TalkToTrainer` behind it so the next cell starts on an idle world.
+## The map's own script runs first and may redraw a gate behind the last fight.
 func _engaged_at(world: Gen2WorldAPI, cell: Vector2i) -> int:
 	world.player_cell = cell
 	var opened: Array = world.dispatch_sight_events()
-	if opened.is_empty():
+	if opened.is_empty() or not world.script_busy():
 		return -1
 	var request: Dictionary = (opened[0].get("event", {}) as Dictionary).get("request", {})
 	world.complete_runtime_request({"ok": true})

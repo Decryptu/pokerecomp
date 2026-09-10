@@ -115,9 +115,9 @@ const PALETTE_CENSUS: Dictionary = {
 ## byte that opens it. Yellow's six bare `text_end`s are Jessie and James, whose
 ## two ids share one on three maps.
 const TEXT_CENSUS: Dictionary = {
-	&"red": {0x08: 637, 0x17: 517, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
-	&"blue": {0x08: 637, 0x17: 517, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
-	&"yellow": {0x08: 686, 0x17: 493, 0x50: 6, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14,
+	&"red": {0x08: 638, 0x17: 521, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
+	&"blue": {0x08: 638, 0x17: 521, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
+	&"yellow": {0x08: 687, 0x17: 495, 0x50: 6, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14,
 		0xFF: 12},
 }
 
@@ -130,14 +130,14 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 317, "text": 596, "branch": 158, "choice": 39, "flag": 243,
+	&"red": {"rows": 318, "text": 597, "branch": 158, "choice": 39, "flag": 243,
 		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 0, "pokedex": 13,
 		"give_pokemon": 33, "saved_coord_index": 1, "badges_byte": 1, "walk": 20,
 		"player_facing": 10, "set_map_script": 113, "npc_movement_script": 2,
 		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 12,
-		"player_in_array": 1, "pick_up_item": 105, "scratch": 35, "name_badge": 7,
+		"player_in_array": 1, "pick_up_item": 105, "scratch": 37, "name_badge": 7,
 		"heal_party": 2, "object_facing": 9, "talking_to": 32, "set_starter": 9,
-		"name_species": 13, "dex_rating": 2, "dex_count": 2, "map_text": 24, "trade": 9,
+		"name_species": 14, "dex_rating": 2, "dex_count": 2, "map_text": 24, "trade": 9,
 		"name_item": 7, "oaks_aide": 3, "player_coord": 4, "money_box": 6, "has_money": 4,
 		"spend_money": 4, "menu": 3, "menu_cancel": 3, "menu_row": 1, "guard_drink": 4,
 		"day_care": 1, "random_bit": 2, "volatile": 1, "filtered_bag": 2, "menu_item": 4,
@@ -145,15 +145,15 @@ const SCRIPT_CENSUS: Dictionary = {
 		"starter": 2, "trainer_battle": 3, "safari_balls": 1, "safari_steps": 1,
 		"save_coord_index": 2, "copy_name": 4, "set_fossil": 6, "list_menu": 1,
 		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1,
-		"flag_test": 3},
-	&"blue": {"rows": 317, "text": 596, "branch": 158, "choice": 39, "flag": 243,
+		"flag_test": 3, "map_load_bit": 2},
+	&"blue": {"rows": 318, "text": 597, "branch": 158, "choice": 39, "flag": 243,
 		"give_item": 42, "has_item": 18, "take_item": 11, "unknown": 0, "pokedex": 13,
 		"give_pokemon": 33, "saved_coord_index": 1, "badges_byte": 1, "walk": 20,
 		"player_facing": 10, "set_map_script": 113, "npc_movement_script": 2,
 		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 12,
-		"player_in_array": 1, "pick_up_item": 105, "scratch": 35, "name_badge": 7,
+		"player_in_array": 1, "pick_up_item": 105, "scratch": 37, "name_badge": 7,
 		"heal_party": 2, "object_facing": 9, "talking_to": 32, "set_starter": 9,
-		"name_species": 13, "dex_rating": 2, "dex_count": 2, "map_text": 24, "trade": 9,
+		"name_species": 14, "dex_rating": 2, "dex_count": 2, "map_text": 24, "trade": 9,
 		"name_item": 7, "oaks_aide": 3, "player_coord": 4, "money_box": 6, "has_money": 4,
 		"spend_money": 4, "menu": 3, "menu_cancel": 3, "menu_row": 1, "guard_drink": 4,
 		"day_care": 1, "random_bit": 2, "volatile": 1, "filtered_bag": 2, "menu_item": 4,
@@ -161,13 +161,13 @@ const SCRIPT_CENSUS: Dictionary = {
 		"starter": 2, "trainer_battle": 3, "safari_balls": 1, "safari_steps": 1,
 		"save_coord_index": 2, "copy_name": 4, "set_fossil": 6, "list_menu": 1,
 		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1,
-		"flag_test": 3},
-	&"yellow": {"rows": 370, "text": 601, "branch": 160, "choice": 34, "flag": 221,
+		"flag_test": 3, "map_load_bit": 2},
+	&"yellow": {"rows": 371, "text": 602, "branch": 160, "choice": 34, "flag": 221,
 		"give_item": 41, "has_item": 15, "take_item": 9, "unknown": 5, "pokedex": 10,
 		"give_pokemon": 8, "saved_coord_index": 1, "badges_byte": 1, "walk": 23,
 		"set_map_script": 99, "npc_movement_script": 2, "toggle_object": 22,
 		"trainer_battle_object": 27, "random": 5, "facing": 12, "player_in_array": 1,
-		"name_species": 6, "pick_up_item": 109, "scratch": 27, "name_badge": 7,
+		"name_species": 7, "pick_up_item": 109, "scratch": 29, "name_badge": 7,
 		"player_facing": 15, "heal_party": 2, "emote": 7, "dex_rating": 2, "dex_count": 6,
 		"map_text": 24, "trade": 7, "name_item": 7, "oaks_aide": 3, "player_coord": 4,
 		"money_box": 6, "has_money": 5, "spend_money": 4, "menu": 3, "menu_cancel": 3,
@@ -177,7 +177,7 @@ const SCRIPT_CENSUS: Dictionary = {
 		"safari_steps": 3, "safari_admission": 2, "save_coord_index": 2, "talking_to": 14,
 		"copy_name": 4, "set_fossil": 6, "list_menu": 1,
 		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1,
-		"flag_test": 6, "volatile_test": 6},
+		"flag_test": 6, "volatile_test": 6, "map_load_bit": 2},
 }
 ## `SilphCo11FPorygonText` is a `call DisplayPokedex` the disassembly marks
 ## unreferenced. The `trade` rows are the eight `predef DoInGameTradeDialogue`
@@ -198,76 +198,75 @@ const TOGGLE_CENSUS: Dictionary = {
 ## One row of each list stands on UNUSED_MAP_6F, which has no header and so no
 ## record: the table holds 217 rows on Red and Blue and 213 on Yellow.
 const HIDDEN_CENSUS: Dictionary = {
-	&"red": {"rows": 216, "silent": 70, "text": 210, "branch": 69, "flag": 66,
-		"facing": 56, "name_item": 53, "give_item": 53, "facility": 21,
+	&"red": {"rows": 216, "silent": 49, "text": 234, "branch": 111, "flag": 72,
+		"facing": 62, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
-		"map_text": 5, "choice": 3, "unknown": 1, "dex_count": 1},
-	&"blue": {"rows": 216, "silent": 70, "text": 210, "branch": 69, "flag": 66,
-		"facing": 56, "name_item": 53, "give_item": 53, "facility": 21,
+		"map_text": 5, "choice": 9, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72},
+	&"blue": {"rows": 216, "silent": 49, "text": 234, "branch": 111, "flag": 72,
+		"facing": 62, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
-		"map_text": 5, "choice": 3, "unknown": 1, "dex_count": 1},
-	&"yellow": {"rows": 212, "silent": 69, "text": 212, "branch": 70, "flag": 67,
-		"facing": 52, "name_item": 54, "give_item": 54, "facility": 17,
+		"map_text": 5, "choice": 9, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72},
+	&"yellow": {"rows": 212, "silent": 48, "text": 236, "branch": 112, "flag": 73,
+		"facing": 58, "name_item": 54, "give_item": 54, "facility": 17,
 		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
-		"map_text": 5, "choice": 3, "unknown": 1, "dex_count": 1},
+		"map_text": 5, "choice": 9, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "volatile": 12, "map_load_bit": 6, "replace_block": 72},
 }
 ## Of `BookshelfTileIDs`' 17 rows, all but one decode: the Indigo Plateau
 ## statues read `wXCoord` for which of their two boxes they answer with.
 const BOOKSHELF_COUNTS: Dictionary = {&"red": 16, &"blue": 16, &"yellow": 16}
 const CARD_KEY_FLOORS: int = 10
-## `gated` is every map whose script opens on `wCurrentMapScriptFlags` and
-## `read` the ones whose body decodes whole; `blocks` counts the
-## `ReplaceTileBlock` writes on every branch of those bodies.
+## `gated` is every map `wCurrentMapScriptFlags` changes the script of, `walks`
+## its load-time walks, and `blocks` the writes on the walk `EnterMap` runs.
 const CALLBACK_CENSUS: Dictionary = {
-	&"red": {"gated": 36, "read": 26, "blocks": 99, "doors": 20, "floors": 10},
-	&"blue": {"gated": 36, "read": 26, "blocks": 99, "doors": 20, "floors": 10},
-	&"yellow": {"gated": 34, "read": 24, "blocks": 96, "doors": 20, "floors": 10},
+	&"red": {"gated": 30, "walks": 63, "blocks": 107, "doors": 20, "floors": 10},
+	&"blue": {"gated": 30, "walks": 63, "blocks": 107, "doors": 20, "floors": 10},
+	&"yellow": {"gated": 29, "walks": 61, "blocks": 104, "doors": 20, "floors": 10},
 }
 
 ## The maps with a state machine, the states reachable from index 0 and from
 ## every `set_map_script` already read, and the bodies the walker gets whole.
 const STATE_CENSUS: Dictionary = {
-	&"red": {"tables": 98, "states": 203, "read": 144, "branch": 65, "player_coord": 33,
-		"player_facing": 40, "flag": 254, "set_map_script": 227, "save_coord_index": 9,
-		"map_text": 109, "toggle_object": 134, "object_facing": 48, "set_player_coord": 1,
-		"object_path": 1, "movement_running": 50, "npc_movement_script": 1,
-		"movement_script_running": 2, "badges_byte": 1, "walk": 32, "wild_battle": 4,
-		"player_in_array": 30, "riding": 4, "object_move": 52, "object_position": 8,
-		"coord_index": 17, "starter": 16, "trainer_battle": 21, "battle_outcome": 28,
-		"object_stay": 9, "facing": 3, "has_item": 4, "emote": 2, "saved_coord_index": 16,
+	&"red": {"tables": 98, "states": 362, "read": 173, "branch": 67, "player_coord": 35,
+		"player_facing": 43, "flag": 255, "set_map_script": 266, "save_coord_index": 9,
+		"map_text": 123, "toggle_object": 141, "object_facing": 54, "set_player_coord": 1,
+		"object_path": 1, "movement_running": 60, "npc_movement_script": 1,
+		"movement_script_running": 4, "badges_byte": 1, "walk": 37, "wild_battle": 4,
+		"player_in_array": 31, "riding": 4, "object_move": 58, "object_position": 12,
+		"coord_index": 18, "starter": 18, "trainer_battle": 24, "battle_outcome": 34,
+		"object_stay": 11, "facing": 3, "has_item": 4, "emote": 2, "saved_coord_index": 16,
 		"badge_guards": 1, "give_item": 9, "arrow_movement": 3,
 		"guard_drink": 4, "boulder_on": 3, "hall_of_fame": 1, "set_blackout_map": 1,
 		"save_game": 1, "reset_game": 1, "heal_party": 1, "warp_to": 1, "set_last_map": 1,
 		"safari_balls": 1, "volatile": 1, "volatile_test": 1, "coord_lookup": 3,
 		"trainer_battle_object": 1,
-		"flag_test": 15, "replace_block": 24},
-	&"blue": {"tables": 98, "states": 203, "read": 144, "branch": 65, "player_coord": 33,
-		"player_facing": 40, "flag": 254, "set_map_script": 227, "save_coord_index": 9,
-		"map_text": 109, "toggle_object": 134, "object_facing": 48, "set_player_coord": 1,
-		"object_path": 1, "movement_running": 50, "npc_movement_script": 1,
-		"movement_script_running": 2, "badges_byte": 1, "walk": 32, "wild_battle": 4,
-		"player_in_array": 30, "riding": 4, "object_move": 52, "object_position": 8,
-		"coord_index": 17, "starter": 16, "trainer_battle": 21, "battle_outcome": 28,
-		"object_stay": 9, "facing": 3, "has_item": 4, "emote": 2, "saved_coord_index": 16,
+		"flag_test": 15, "replace_block": 24, "map_load_bit": 10, "scratch": 9, "scratch_test": 2, "object_coord_move": 1},
+	&"blue": {"tables": 98, "states": 362, "read": 173, "branch": 67, "player_coord": 35,
+		"player_facing": 43, "flag": 255, "set_map_script": 266, "save_coord_index": 9,
+		"map_text": 123, "toggle_object": 141, "object_facing": 54, "set_player_coord": 1,
+		"object_path": 1, "movement_running": 60, "npc_movement_script": 1,
+		"movement_script_running": 4, "badges_byte": 1, "walk": 37, "wild_battle": 4,
+		"player_in_array": 31, "riding": 4, "object_move": 58, "object_position": 12,
+		"coord_index": 18, "starter": 18, "trainer_battle": 24, "battle_outcome": 34,
+		"object_stay": 11, "facing": 3, "has_item": 4, "emote": 2, "saved_coord_index": 16,
 		"badge_guards": 1, "give_item": 9, "arrow_movement": 3,
 		"guard_drink": 4, "boulder_on": 3, "hall_of_fame": 1, "set_blackout_map": 1,
 		"save_game": 1, "reset_game": 1, "heal_party": 1, "warp_to": 1, "set_last_map": 1,
 		"safari_balls": 1, "volatile": 1, "volatile_test": 1, "coord_lookup": 3,
 		"trainer_battle_object": 1,
-		"flag_test": 15, "replace_block": 24},
-	&"yellow": {"tables": 98, "states": 207, "read": 152, "branch": 84, "player_coord": 46,
-		"flag": 280, "player_facing": 39, "set_map_script": 240, "save_coord_index": 11,
-		"map_text": 125, "object_position": 6, "toggle_object": 153, "object_facing": 50,
-		"set_player_coord": 1, "object_path": 1, "movement_running": 50, "wild_battle": 6,
-		"npc_movement_script": 1, "movement_script_running": 2, "badges_byte": 2, "walk": 35,
-		"object_move": 53, "player_in_array": 33, "riding": 4, "coord_index": 17,
-		"trainer_battle": 7, "battle_outcome": 28, "object_stay": 10, "facing": 4,
+		"flag_test": 15, "replace_block": 24, "map_load_bit": 10, "scratch": 9, "scratch_test": 2, "object_coord_move": 1},
+	&"yellow": {"tables": 98, "states": 361, "read": 177, "branch": 88, "player_coord": 52,
+		"flag": 282, "player_facing": 44, "set_map_script": 271, "save_coord_index": 11,
+		"map_text": 138, "object_position": 6, "toggle_object": 157, "object_facing": 55,
+		"set_player_coord": 1, "object_path": 1, "movement_running": 58, "wild_battle": 6,
+		"npc_movement_script": 1, "movement_script_running": 2, "badges_byte": 3, "walk": 41,
+		"object_move": 57, "player_in_array": 34, "riding": 4, "coord_index": 18,
+		"trainer_battle": 8, "battle_outcome": 33, "object_stay": 12, "facing": 4,
 		"has_item": 4, "emote": 2, "saved_coord_index": 18, "starter": 1, "set_starter": 1,
 		"badge_guards": 1, "give_item": 9, "arrow_movement": 3, "guard_drink": 4,
-		"unknown": 1, "volatile_test": 2, "volatile": 5, "boulder_on": 3, "hall_of_fame": 1,
+		"unknown": 1, "volatile_test": 3, "volatile": 7, "boulder_on": 3, "hall_of_fame": 1,
 		"set_blackout_map": 1, "save_game": 1, "reset_game": 1, "heal_party": 1, "warp_to": 1,
 		"set_last_map": 1, "safari_balls": 1, "coord_lookup": 3, "trainer_battle_object": 2,
-		"flag_test": 18, "replace_block": 36, "scratch_test": 1},
+		"flag_test": 18, "replace_block": 36, "scratch_test": 3, "map_load_bit": 10, "scratch": 8, "random": 1},
 }
 
 ## The pin on which way a `wCurrentMenuItem` branch reads.
@@ -597,21 +596,24 @@ func _scripts(font: Gen2Font) -> void:
 
 func _map_callbacks() -> void:
 	var census: Dictionary = {
-		"gated": 0, "read": 0, "blocks": 0, "doors": 0, "floors": 0,
+		"gated": 0, "walks": 0, "blocks": 0, "doors": 0, "floors": 0,
 	}
 	var wrong: Array[String] = []
 	for map: Gen2WorldMap in _maps.values():
 		var doors: Array = map.events["card_key"] as Array
 		census["floors"] += 1 if not doors.is_empty() else 0
 		census["doors"] += doors.size()
+		_check_doors(map, doors, wrong)
 		var callbacks: Array = map.scripts["callbacks"] as Array
 		if callbacks.is_empty():
 			continue
-		var nodes: Array = callbacks[0]["nodes"] as Array
 		census["gated"] += 1
-		census["read"] += 1 if not nodes.is_empty() else 0
-		census["blocks"] += _blocks_written(nodes)
-		_check_doors(map, callbacks[0], doors, wrong)
+		census["walks"] += callbacks.size()
+		for callback: Dictionary in callbacks:
+			_r.check(not (callback["nodes"] as Array).is_empty(),
+				"map %d keeps an empty walk for mask %d." % [map.number, int(callback["mask"])])
+			if int(callback["mask"]) == Gen1Layout.MAP_LOAD_BOTH:
+				census["blocks"] += _blocks_written(callback["nodes"] as Array)
 	_r.check(wrong.is_empty(), "card key doors are wrong: %s." % [wrong])
 	_r.check(census == CALLBACK_CENSUS[_r.game_id],
 		"the map callbacks read %s." % [census])
@@ -673,29 +675,32 @@ func _blocks_written(nodes: Array) -> int:
 	return written
 
 
-## A floor's doors stand on its own `.GateCoordinates`, each under a flag of its
-## own.
-func _check_doors(
-	map: Gen2WorldMap, callback: Dictionary, doors: Array, wrong: Array[String]
-) -> void:
-	var coordinates: Array = callback["coordinates"] as Array
-	if coordinates.is_empty():
-		return
+## A floor's doors each stand under their own flag, on a cell the load walk locks.
+func _check_doors(map: Gen2WorldMap, doors: Array, wrong: Array[String]) -> void:
 	var flags: Dictionary = {}
-	for index: int in doors.size():
-		var door: Dictionary = doors[index]
-		var gate: Dictionary = coordinates[index]
-		if (int(door["x"]) != int(gate["x"]) or int(door["y"]) != int(gate["y"])) \
-			and wrong.size() < 4:
-			wrong.append("map %d door %d stands on %d,%d, not %d,%d" % [
-				map.number, index, int(door["x"]), int(door["y"]),
-				int(gate["x"]), int(gate["y"]),
-			])
+	var locked: Dictionary = {}
+	for callback: Dictionary in map.scripts["callbacks"] as Array:
+		if int(callback["mask"]) == Gen1Layout.MAP_LOAD_BOTH:
+			_locked_cells(callback["nodes"] as Array, locked)
+	for door: Dictionary in doors:
 		flags[int(door["flag"])] = true
+		if not locked.has(Vector2i(int(door["x"]), int(door["y"]))) and wrong.size() < 4:
+			wrong.append("map %d's door at %d,%d is never locked by its load walk" % [
+				map.number, int(door["x"]), int(door["y"]),
+			])
 	if flags.size() != doors.size() and wrong.size() < 4:
 		wrong.append("map %d has %d doors under %d flags" % [
 			map.number, doors.size(), flags.size(),
 		])
+
+
+func _locked_cells(nodes: Array, locked: Dictionary) -> void:
+	for node: Dictionary in nodes:
+		if String(node["op"]) == "replace_block":
+			locked[Vector2i(int(node["x"]), int(node["y"]))] = true
+		for side: String in ["then", "else"]:
+			if node.has(side):
+				_locked_cells(node[side] as Array, locked)
 
 
 func _walk_script(
