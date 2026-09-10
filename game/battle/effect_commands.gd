@@ -829,7 +829,6 @@ static func _rage_damage(turn: Gen2Turn) -> void:
 ## takes, and the line that says so. It stands behind `checkfaint`, which ends
 ## the move when the target has fallen, so a Rage that faints does not build; a
 ## substitute is not a gate, the doll spending the hit still counting.
-##
 ## `inc a / ret z` is the saturation: 255 increments to 0 and is not stored.
 static func _build_opponent_rage(turn: Gen2Turn) -> void:
 	if turn.missed:
@@ -855,7 +854,6 @@ static func _check_future_sight(turn: Gen2Turn) -> void:
 
 ## Stores damage after DamageCalc and before DamageVariation, exactly where the
 ## source copies `wCurDamage` into the side's delayed word, and ends the move.
-##
 ## `.failed` is a count still running: the move announces and then fails, which is
 ## what a second Future Sight does.
 static func _future_sight(turn: Gen2Turn) -> void:
@@ -957,7 +955,6 @@ static func _stab(turn: Gen2Turn) -> void:
 
 
 ## `BattleCommand_DamageVariation`: the 85% to 100% spread, last.
-##
 ## Nothing below two is touched and, because the routine returns before
 ## `BattleRandom`, nothing below two draws either, so a move that worked out to
 ## nothing moves no generator.
@@ -1049,7 +1046,6 @@ static func _present(turn: Gen2Turn) -> void:
 
 ## `BattleCommand_FuryCutter`: the damage doubled once per consecutive hit,
 ## capped at five turns' worth, and the count reset by a miss.
-##
 ## Sits between `stab` and `damagevariation`, so the doubling lands on the
 ## matched-up damage and the spread is taken from the doubled figure.
 static func _fury_cutter(turn: Gen2Turn) -> void:
@@ -1152,7 +1148,6 @@ static func _tri_status_chance(turn: Gen2Turn) -> void:
 
 
 ## `BattleCommand_Defrost`: Flame Wheel and Sacred Fire thaw whoever used them.
-##
 ## The user, not the target, which is what tells this apart from the `Defrost`
 ## subroutine [method _defrost] is. It clears the freeze bit rather than the
 ## whole status byte, which comes to the same thing while a freeze is the only
@@ -1903,7 +1898,6 @@ static func _effect_chance(turn: Gen2Turn) -> void:
 ## Puts a status on the defender, or fails. One at a time: a Pokémon already
 ## carrying something is refused, as is one whose type makes it immune, and only
 ## sleep is rolled for a length.
-##
 ## The four `*Target` commands share their order: existing status, weather, type,
 ## and only then `wEffectFailed`. Last is not cosmetic, the first step being the
 ## one that does something besides refuse: a burn whose roll failed still reaches
@@ -2228,7 +2222,6 @@ static func _check_charge(turn: Gen2Turn) -> void:
 ## `BattleCommand_Charge`: the charging turn. It locks the user in, says its own
 ## line and ends the move; Skull Bash carries on at [constant END_TURN], which is
 ## where its Defense raise sits.
-##
 ## A user that is asleep gets `PrintButItFailed` instead, which is Sleep Talk
 ## reaching a two-turn move: the source spends `movedelay` and `raisesub` before
 ## the line.
@@ -3045,7 +3038,6 @@ static func _destiny_bond(turn: Gen2Turn) -> void:
 ## `BattleCommand_ForceSwitch`: Whirlwind and Roar, with two endings. Against a
 ## trainer the target's side switches to a random standing member; against a wild
 ## the battle *ends* in either direction, `SetBattleDraw` making both a draw.
-##
 ## The source's `.trainer` and `.vs_trainer` are one routine here, every
 ## difference between them being which side is read: the user's level against the
 ## target's, the user having moved second, and a random member of that party.
@@ -3226,7 +3218,6 @@ static func _foresight(turn: Gen2Turn) -> void:
 ## `BattleCommand_LockOn`: Lock On and Mind Reader, one command. The flag goes on
 ## the target, and [method _check_hit] spends it on the next hit check made
 ## against that Pokémon, whoever makes it.
-##
 ## The one refusal is a target behind a doll, and it prints
 ## `PrintDidntAffect` rather than "But it failed!".
 static func _lock_on(turn: Gen2Turn) -> void:
@@ -3321,7 +3312,6 @@ static func _thief(turn: Gen2Turn) -> void:
 
 ## `BattleCommand_Pursuit`: twice the finished figure against a side that is
 ## leaving, saturating at a word rather than wrapping.
-##
 ## The doubling is all this command is. What makes Pursuit hit the Pokémon on its
 ## way out is `PursuitSwitch`, which runs the whole move in front of the switch;
 ## see [method Gen2Battle.take_actions].
@@ -3336,7 +3326,6 @@ static func _pursuit(turn: Gen2Turn) -> void:
 ## stats. `damagecalc` never sees `damagestats`, so no item, screen, stage or
 ## truncation touches either figure, and there is no `stab`, so the modifier
 ## stays `EFFECTIVE` and no effectiveness is announced.
-##
 ## A member with no health or any status takes `.beatup_fail`, which skips
 ## forward to `buildopponentrage`: the hit is not spent and the loop carries on.
 static func _beat_up(turn: Gen2Turn) -> void:
@@ -3400,7 +3389,6 @@ static func _base_stat(turn: Gen2Turn, species: int, key: String) -> int:
 
 ## `BattleCommand_CheckSafeguard`: the target's own Safeguard refusing a status
 ## move outright, with `SafeguardProtectText` and the move ended.
-##
 ## `wAttackMissed` is set before the text, so everything behind this in the list
 ## is skipped and the move counts as a miss for whatever reads that back.
 static func _check_safeguard(turn: Gen2Turn) -> void:
@@ -3420,7 +3408,6 @@ static func _safeguard_refuses(turn: Gen2Turn, side: int) -> bool:
 
 ## `BattleCommand_Heal`: Recover, Softboiled and Milk Drink take back half the
 ## maximum; Rest takes back all of it and pays for that with two turns asleep.
-##
 ## The full-HP refusal is checked before anything else, so Rest at full health
 ## fails and stays awake even when there is a status sitting on it that sleeping
 ## would have cleared. Rest writes `REST_SLEEP_TURNS + 1` over the whole status
@@ -3449,7 +3436,6 @@ static func _heal(turn: Gen2Turn) -> void:
 
 
 ## `BattleCommand_TimeBasedHealContinue`: Morning Sun, Synthesis and Moonlight.
-##
 ## Half the maximum by default. One step down the table outside the move's own
 ## time of day, which is the cartridge's real rule: matching the clock buys
 ## nothing, missing it costs. Then one step up in sun, or one step down in any
@@ -3496,7 +3482,6 @@ static func _heal_fraction(max_hp: int, index: int) -> int:
 
 ## Thunder's accuracy for this turn: `50 percent + 1` (128) in sun, and
 ## `100 percent` (255) in rain.
-##
 ## Written on the turn rather than on the move, because the cartridge writes it
 ## into `wPlayerMoveStruct`, a per-turn copy, while [member Gen2Turn.move] is the
 ## cached row every future Thunder would read.
@@ -3518,7 +3503,6 @@ static func _skip_sun_charge(turn: Gen2Turn) -> void:
 
 ## `PlayFXAnimID`. Nothing is drawn here: the animation is written down as an
 ## event at its own place in the turn and the screen is what spends frames on it.
-##
 ## [param on_opponent] is `PlayOpponentBattleAnim`'s pair of
 ## `BattleCommand_SwitchTurn` calls: the same event with `hBattleTurn` inverted
 ## for the length of the animation, so it plays on the target rather than on
@@ -3551,7 +3535,6 @@ static func _play_opponent_battle_anim(turn: Gen2Turn, index: int) -> void:
 
 ## `BattleCommand_MoveAnimNoSub`: the damage flash aimed at whoever was hit, the
 ## animation param cleared or alternated, and then the move's own animation.
-##
 ## A miss falls to `BattleCommand_MoveDelay` and plays nothing. That branch is
 ## structural here rather than reached: [method _check_hit] ends the move, so no
 ## list gets this far after one.
@@ -3580,7 +3563,6 @@ static func _move_anim(turn: Gen2Turn) -> void:
 
 ## `BattleCommand_LowerSub`: the user's doll dropped out of the way of whatever
 ## is about to be drawn, as the SUBSTITUTE animation's own `.dropsub` branch.
-##
 ## Nothing is dropped for a user with no doll up, and nothing is dropped on the
 ## turn a two-turn move is charging either: `CheckUserIsCharging` is what
 ## [method _do_turn] reads as [member Gen2Turn.locked] or
@@ -3646,7 +3628,6 @@ static func _stat_change_anim(turn: Gen2Turn, after_anim: int) -> void:
 
 
 ## Which of the five status commands carries an `AnimateCurrentMove` of its own.
-##
 ## `BattleCommand_SleepTarget`, `..._Poison` and `..._Paralyze` are the status
 ## moves' own commands and do; `..._PoisonTarget`, `..._ParalyzeTarget`,
 ## `..._BurnTarget` and `..._FreezeTarget` are the secondary-effect commands and
@@ -3664,7 +3645,6 @@ static func _status_move_animates(turn: Gen2Turn, flag: int) -> bool:
 
 
 ## Which status animation `PlayOpponentBattleAnim` plays on the target, or -1.
-##
 ## The four secondary-effect commands each play one and the primary status moves'
 ## commands play none, each ending at `AnimateCurrentMove`; Toxic reaches
 ## `.apply_poison` too, so [method _toxic_target] plays none either. The exact
@@ -3700,7 +3680,6 @@ static func _animate_current_move(turn: Gen2Turn) -> void:
 
 ## `BattleCommand_HeldFlinch`: a King's Rock on the attacker makes an ordinary
 ## attack flinch, out of the item's own parameter.
-##
 ## The `wAttackMissed` guard is structural here, since [method _check_hit] ends
 ## the move on a miss and [method _check_faint] ends it on a KO, so this step is
 ## only ever reached by a hit that left the target standing. The Substitute check
@@ -3859,7 +3838,6 @@ static func _stat_message(turn: Gen2Turn) -> void:
 ## only place [code]data/moves/effects.asm[/code] follows a message step with
 ## [code]statdownfailtext[/code]; an on-hit drop blocked by Mist fails silently,
 ## like any on-hit drop that misses its roll.
-##
 ## Mist gets its own line, because
 ## [code]BattleCommand_StatDownFailText[/code] prints
 ## [code]ProtectedByMistText[/code] here rather than "won't go any lower".

@@ -28,7 +28,18 @@ const REQUEST_HANDLERS: Dictionary = {
 	&"audio_requested": &"_request_audio",
 	&"magnet_train_requested": &"_request_magnet_train",
 	&"pokedex_entry_requested": &"_request_audio",
+	&"elevator_requested": &"_request_elevator",
+	&"vending_requested": &"_request_vending",
+	&"hall_of_fame_requested": &"_request_hall_of_fame",
+	&"quick_save_requested": &"_request_acknowledged",
+	&"soft_reset_requested": &"_request_soft_reset",
 }
+
+## The drink the next `VendingMachineMenu` buys, as an item number; 0 is B.
+var _gen1_drink: int = 0
+
+## The map number the next `DisplayElevatorFloorMenu` is answered with; -1 is B.
+var _gen1_elevator_floor: int = -1
 
 ## SPECIALCALL_ASSISTANT (constants/phone_constants.asm), armed by beating
 ## Falkner and answered by ElmPhoneCallerScript's .assistant branch.
@@ -8520,6 +8531,7 @@ func _drain_story(
 		"hall_of_fame": _hall_of_fame_events(results),
 		"credits": _credits_events(results),
 		"texts": _gen1_texts(results),
+		"soft_reset": false,
 		"reason": "",
 		"details": "",
 	}
@@ -8546,6 +8558,7 @@ func _drain_story(
 		"credits": state["credits"],
 		"approaches": state["approaches"],
 		"texts": state["texts"],
+		"soft_reset": state["soft_reset"],
 		"terminal": String(state["reason"]).is_empty() \
 			and not world.script_input_waiting() and world.pending_runtime_request().is_empty(),
 		"reason": state["reason"],
@@ -8597,6 +8610,25 @@ func _runtime_request(world: Gen2WorldAPI, state: Dictionary) -> Array:
 	return (Callable(self, String(REQUEST_HANDLERS[kind]))).call(world, request, state)
 
 
+## `HallOfFamePC` on Generation 1 is a request rather than Crystal's event, so
+## the induction is counted where the event is and the script carries on.
+func _request_hall_of_fame(world: Gen2WorldAPI, _request: Dictionary, state: Dictionary) -> Array:
+	state["hall_of_fame"] = int(state["hall_of_fame"]) + 1
+	return world.complete_runtime_request({"ok": true})
+
+
+## `SaveGameData`: nothing this walk keeps, and the script goes on.
+func _request_acknowledged(world: Gen2WorldAPI, _request: Dictionary, _state: Dictionary) -> Array:
+	return world.complete_runtime_request({"ok": true, "script_value": 1})
+
+
+## `jp Init` behind the Hall of Fame's save: the console restarts, so the drain
+## is over and the settle behind it does not wait for a map script that never runs.
+func _request_soft_reset(world: Gen2WorldAPI, _request: Dictionary, state: Dictionary) -> Array:
+	state["soft_reset"] = true
+	return world.complete_runtime_request({"ok": true})
+
+
 func _request_rival_name(world: Gen2WorldAPI, _request: Dictionary, state: Dictionary) -> Array:
 	var named: Dictionary = Gen2WorldHost.complete_runtime_request(
 		world, {"ok": true, "name": "SILVER"}, state["save"], false, state["random"]
@@ -8639,6 +8671,9 @@ func _request_party_host(world: Gen2WorldAPI, _request: Dictionary, state: Dicti
 ## answers the request itself instead of opening a battle screen, so it credits
 ## the same accounts that screen would have.
 func _request_battle(world: Gen2WorldAPI, request: Dictionary, state: Dictionary) -> Array:
+	## A Generation 1 tutor rides a `battle_requested` the map script wrote.
+	if bool((request.get("values", {}) as Dictionary).get("tutorial", false)):
+		return _request_catch_tutorial(world, request, state)
 	var data: GameData = state["data"]
 	var save: Gen2SaveData = state["save"]
 	var player_party: Gen2Party = (
@@ -8784,6 +8819,29 @@ func _request_apricorns(world: Gen2WorldAPI, _request: Dictionary, state: Dictio
 	return given.get("results", [])
 
 
+func _request_elevator(world: Gen2WorldAPI, request: Dictionary, state: Dictionary) -> Array:
+	var floors: Array = (request.get("values", {}) as Dictionary).get("floors", [])
+	for row: Dictionary in floors:
+		if int(row.get("map", -1)) == _gen1_elevator_floor:
+			_gen1_elevator_floor = -1
+			return world.complete_runtime_request({"ok": true, "floor": row})
+	if _gen1_elevator_floor >= 0:
+		return _request_failed(state, "the car lists no floor on map %d" % _gen1_elevator_floor, {"floors": floors})
+	return world.complete_runtime_request({"ok": true})
+
+
+func _request_vending(world: Gen2WorldAPI, request: Dictionary, state: Dictionary) -> Array:
+	for row: Dictionary in (request.get("values", {}) as Dictionary).get("rows", []):
+		if int(row.get("item", 0)) != _gen1_drink:
+			continue
+		_gen1_drink = 0
+		var bought: Dictionary = Gen2WorldMartHost.vend(world, state["save"], row, false)
+		if not bool(bought.get("ok", false)):
+			return _request_failed(state, "the machine refused: %s" % bought.get("reason", ""), bought)
+		break
+	return world.complete_runtime_request({"ok": true})
+
+
 ## `DisplayPokedex` behind a Generation 1 ball is a page with nothing to answer,
 ## the way `waitsfx` is.
 func _request_audio(world: Gen2WorldAPI, _request: Dictionary, _state: Dictionary) -> Array:
@@ -8800,6 +8858,8 @@ func _absorb_results(world: Gen2WorldAPI, results: Array, state: Dictionary) -> 
 	state["credits"] += _credits_events(results)
 	state["waits"] += 1
 	_record_failure(results, state)
+	if bool(state["soft_reset"]):
+		return true
 	if world.script_input_waiting() or not world.pending_runtime_request().is_empty():
 		return false
 	for result: Dictionary in results:
@@ -8917,7 +8977,8 @@ func _reachable_step(
 	# cell it was asked to reach, which is what makes Ecruteak Gym's thirty
 	# holes a maze instead of open floor. A warp_event on ordinary floor is
 	# inert, as CheckWarpCollision has it, so it is not a wall.
-	if direct != warp_target and world.warp_pending(direct):
+	if direct != warp_target and (world.warp_pending(direct) \
+		or not world.gen1_dungeon_hole_at(direct).is_empty()):
 		return Vector2i(-1, -1)
 	# A whirlpool traps rather than moves: .CheckTile answers
 	# PLAYERMOVEMENT_FORCE_TURN for the cell the player stands on, so a plan that
@@ -8981,7 +9042,7 @@ func _named_items(data: GameData, items: Dictionary) -> Dictionary:
 ## landfall names one land cell and the step onto it is .ExitWater.
 func _walk_to_story_cell(
 	world: Gen2WorldAPI, target: Vector2i, water_only: bool = false,
-	dispatch_target_events: bool = true
+	dispatch_target_events: bool = true, avoid: Dictionary = {}
 ) -> Dictionary:
 	if world == null or world.current_map == null:
 		return {"ok": false, "reason": "missing world"}
@@ -8990,7 +9051,7 @@ func _walk_to_story_cell(
 			"ok": true,
 			"events": _dispatch_after_step(world, target) if dispatch_target_events else [],
 		}
-	var plan: Dictionary = _plan_walk(world, target, water_only)
+	var plan: Dictionary = _plan_walk(world, target, water_only, avoid)
 	if not bool(plan["found"]):
 		return {
 			"ok": false,
@@ -9003,7 +9064,9 @@ func _walk_to_story_cell(
 		}
 	var steps: Array[Vector2i] = plan["steps"]
 	var events: Array = []
+	var arrows: Dictionary = _gen1_arrow_landings(world)
 	for direction: Vector2i in steps:
+		var expected: Vector2i = arrows.get(world.player_cell + direction, world.player_cell + direction)
 		var moved: Dictionary = world.move_result(direction)
 		if not bool(moved.get("ok", false)):
 			return {
@@ -9013,15 +9076,19 @@ func _walk_to_story_cell(
 				],
 			}
 		events = _dispatch_after_step(world)
-		if not events.is_empty():
+		## A spin tile has already moved the player off the plan.
+		if not events.is_empty() or world.player_cell != expected:
 			break
 	return {"ok": true, "steps": steps.size(), "events": events}
 
 
-func _plan_walk(world: Gen2WorldAPI, target: Vector2i, water_only: bool = false) -> Dictionary:
+func _plan_walk(
+	world: Gen2WorldAPI, target: Vector2i, water_only: bool = false, avoid: Dictionary = {}
+) -> Dictionary:
 	var frontier: Array[Vector2i] = [world.player_cell]
 	var previous: Dictionary = {world.player_cell: {"cell": Vector2i(-1, -1), "direction": Vector2i.ZERO}}
 	var directions: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+	var arrows: Dictionary = _gen1_arrow_landings(world)
 	var found: bool = false
 	while not frontier.is_empty():
 		var cell: Vector2i = frontier.pop_front()
@@ -9032,7 +9099,9 @@ func _plan_walk(world: Gen2WorldAPI, target: Vector2i, water_only: bool = false)
 			var next: Vector2i = _reachable_step(
 				world, cell, direction, target, water_only and cell + direction != target
 			)
-			if next.x < 0 or previous.has(next):
+			## A spin tile is one edge to wherever its ride stops.
+			next = arrows.get(next, next)
+			if next.x < 0 or previous.has(next) or (next != target and avoid.has(next)):
 				continue
 			previous[next] = {"cell": cell, "direction": direction}
 			frontier.append(next)
@@ -9043,6 +9112,34 @@ func _plan_walk(world: Gen2WorldAPI, target: Vector2i, water_only: bool = false)
 		steps.push_front(link["direction"])
 		cursor = link["cell"]
 	return {"found": found, "steps": steps, "previous": previous}
+
+
+## Each spin tile and the cell `DecodeArrowMovementRLE`'s whole ride stops on.
+func _gen1_arrow_landings(world: Gen2WorldAPI) -> Dictionary:
+	var out: Dictionary = {}
+	if world == null or not world.is_gen1() or world.current_map == null:
+		return out
+	var pending: Array = [world.current_map.scripts.get("states", [])]
+	while not pending.is_empty():
+		var nodes: Variant = pending.pop_back()
+		if not nodes is Array:
+			continue
+		for node: Variant in nodes as Array:
+			if not node is Dictionary:
+				continue
+			if node.has("nodes"):
+				pending.append(node["nodes"])
+			for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+				if node.has(key):
+					pending.append(node[key])
+			if String(node.get("op", "")) != "arrow_movement":
+				continue
+			for cell: Dictionary in node["cells"] as Array:
+				var landing := Vector2i(int(cell["x"]), int(cell["y"]))
+				for leg: Dictionary in cell["moves"] as Array:
+					landing += world.movement_direction(int(leg["direction"])) * int(leg["steps"])
+				out[Vector2i(int(cell["x"]), int(cell["y"]))] = landing
+	return out
 
 
 ## What a failed walk hit, when what it hit was somebody standing there.
@@ -9302,7 +9399,10 @@ const GEN1_MT_MOON_NERD_CELL := Vector2i(13, 8)
 const GEN1_MT_MOON_BELOW_DOME := Vector2i(12, 7)
 const GEN1_MT_MOON_B2F_EXIT_LADDER := Vector2i(5, 7)
 const GEN1_MT_MOON_B1F_EXIT := Vector2i(27, 3)
-const GEN1_EVENT_GOT_DOME_FOSSIL: int = 0x570 + 14
+## Yellow's Mt. Moon run puts it right behind the 1F trainers.
+const GEN1_EVENT_GOT_DOME_FOSSIL: Dictionary = {
+	&"red": 0x570 + 14, &"blue": 0x570 + 14, &"yellow": 0x570 + 8,
+}
 const GEN1_ROUTE_24: int = 35
 const GEN1_ROUTE_25: int = 36
 const GEN1_BILLS_HOUSE: int = 88
@@ -9311,6 +9411,7 @@ const GEN1_CERULEAN_BRIDGE_FOOT := Vector2i(20, 6)
 const GEN1_CERULEAN_GYM_DOOR := Vector2i(30, 19)
 const GEN1_BELOW_BILL_POKEMON := Vector2i(6, 6)
 const GEN1_BILLS_PC_CELL := Vector2i(1, 5)
+const GEN1_BELOW_DAMIAN := Vector2i(6, 6)
 const GEN1_BELOW_BILL := Vector2i(4, 5)
 const GEN1_MISTY := Vector2i(4, 2)
 const GEN1_EVENT_BEAT_CERULEAN_RIVAL: int = 152
@@ -9352,6 +9453,368 @@ const GEN1_EVENT_GOT_TM24: int = 358
 const GEN1_EVENT_BEAT_LT_SURGE: int = 359
 const GEN1_EVENT_2ND_LOCK_OPENED: int = 352
 const GEN1_BIT_THUNDERBADGE: int = 2
+const GEN1_ROUTE_9: int = 20
+const GEN1_ROUTE_10: int = 21
+const GEN1_ROCK_TUNNEL_1F: int = 82
+const GEN1_ROCK_TUNNEL_B1F: int = 232
+const GEN1_LAVENDER_TOWN: int = 4
+const GEN1_ROUTE_8: int = 19
+const GEN1_ROUTE_7: int = 18
+const GEN1_UNDERGROUND_PATH_ROUTE_8: int = 80
+const GEN1_UNDERGROUND_PATH_ROUTE_7: int = 77
+const GEN1_UNDERGROUND_PATH_WEST_EAST: int = 121
+const GEN1_CELADON_CITY: int = 6
+const GEN1_CELADON_GYM: int = 134
+## The tree behind Route 9's west edge, and the one `CeladonGym`'s corridor ends on.
+const GEN1_ROUTE_9_TREE_APPROACH := Vector2i(4, 8)
+## `ReplaceTreeTileBlock` edits the tilemap alone, so the gym's tree stands
+## again on the way out and is cut from inside the fence.
+const GEN1_VERMILION_TREE_INSIDE := Vector2i(15, 19)
+const GEN1_CELADON_GYM_TREE_APPROACH := Vector2i(5, 8)
+## The tree at (35, 32), which seals the gym's own corner of Celadon City.
+const GEN1_CELADON_TREE_APPROACH := Vector2i(35, 31)
+const GEN1_CELADON_TREE_INSIDE := Vector2i(35, 33)
+## Rock Tunnel's four ladders in walking order, each a floor and its cell, and
+## the south exit: `TilePairCollisionsLand`'s CAVERN rows are what make the
+## floors a maze rather than open rock.
+const GEN1_ROCK_TUNNEL_LADDERS: Array = [
+	[GEN1_ROCK_TUNNEL_B1F, Vector2i(37, 3)], [GEN1_ROCK_TUNNEL_1F, Vector2i(27, 3)],
+	[GEN1_ROCK_TUNNEL_B1F, Vector2i(17, 11)], [GEN1_ROCK_TUNNEL_1F, Vector2i(3, 3)],
+]
+const GEN1_ROCK_TUNNEL_SOUTH_EXIT := Vector2i(15, 33)
+const GEN1_ROUTE_8_UNDERGROUND := Vector2i(13, 3)
+const GEN1_CELADON_GYM_DOOR := Vector2i(12, 27)
+const GEN1_ERIKA := Vector2i(4, 3)
+const GEN1_EVENT_GOT_TM21: int = 424
+const GEN1_EVENT_BEAT_ERIKA: int = 425
+const GEN1_BIT_RAINBOWBADGE: int = 3
+const GEN1_GAME_CORNER: int = 135
+const GEN1_ROCKET_HIDEOUT_B1F: int = 199
+const GEN1_ROCKET_HIDEOUT_B2F: int = 200
+const GEN1_ROCKET_HIDEOUT_B3F: int = 201
+const GEN1_ROCKET_HIDEOUT_B4F: int = 202
+const GEN1_ROCKET_HIDEOUT_ELEVATOR: int = 203
+const GEN1_GAME_CORNER_DOOR := Vector2i(28, 19)
+## The poster's guard, and the stairs `GameCornerPosterText` writes in.
+const GEN1_GAME_CORNER_ROCKET := Vector2i(9, 5)
+const GEN1_GAME_CORNER_STAIRS := Vector2i(17, 4)
+const GEN1_HIDEOUT_B1F_STAIRS := Vector2i(23, 2)
+const GEN1_HIDEOUT_B2F_STAIRS := Vector2i(21, 8)
+const GEN1_HIDEOUT_B3F_STAIRS := Vector2i(19, 18)
+const GEN1_HIDEOUT_B4F_STAIRS := Vector2i(19, 10)
+const GEN1_HIDEOUT_B3F_UP := Vector2i(25, 6)
+const GEN1_HIDEOUT_B2F_ELEVATOR := Vector2i(24, 19)
+## `RocketHideoutB4FRocket3` drops the LIFT KEY's ball beside him.
+const GEN1_HIDEOUT_ROCKET_3 := Vector2i(11, 2)
+const GEN1_BELOW_LIFT_KEY := Vector2i(10, 3)
+const GEN1_HIDEOUT_CAR_PANEL := Vector2i(1, 2)
+const GEN1_HIDEOUT_CAR_DOOR := Vector2i(2, 1)
+## The two Rockets `RocketHideoutB4F`'s load callback opens the door on.
+const GEN1_HIDEOUT_DOOR_ROCKETS: Array = [Vector2i(23, 12), Vector2i(26, 12)]
+const GEN1_HIDEOUT_GIOVANNI := Vector2i(25, 3)
+const GEN1_BELOW_SILPH_SCOPE := Vector2i(25, 3)
+const GEN1_LIFT_KEY: int = 0x4A
+const GEN1_SILPH_SCOPE: int = 0x48
+const GEN1_EVENT_FOUND_ROCKET_HIDEOUT: int = 441
+const GEN1_EVENT_ROCKET_DROPPED_LIFT_KEY: int = 1702
+const GEN1_EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI: int = 1703
+const GEN1_POKEMON_TOWER_1F: int = 142
+const GEN1_POKEMON_TOWER_2F: int = 143
+const GEN1_POKEMON_TOWER_3F: int = 144
+const GEN1_POKEMON_TOWER_4F: int = 145
+const GEN1_POKEMON_TOWER_5F: int = 146
+const GEN1_POKEMON_TOWER_6F: int = 147
+const GEN1_POKEMON_TOWER_7F: int = 148
+const GEN1_MR_FUJIS_HOUSE: int = 149
+const GEN1_HIDEOUT_B4F_ELEVATOR := Vector2i(24, 15)
+const GEN1_HIDEOUT_B1F_ELEVATOR_STAIRS := Vector2i(21, 2)
+## `RocketHideoutB1FDoorCallbackScript` shuts the car's pocket on this Rocket.
+const GEN1_HIDEOUT_B1F_DOOR_ROCKET := Vector2i(28, 18)
+const GEN1_LAVENDER_TOWER_DOOR := Vector2i(14, 5)
+## The tower's stairs alternate sides; 6F's RARE CANDY ball plugs the one-cell
+## gap on the way to the 7F stairs, and the ghost MAROWAK stands on (10, 16).
+const GEN1_TOWER_EAST_STAIRS := Vector2i(18, 9)
+const GEN1_TOWER_WEST_STAIRS := Vector2i(3, 9)
+const GEN1_ABOVE_RARE_CANDY := Vector2i(6, 7)
+const GEN1_TOWER_7F_STAIRS := Vector2i(9, 16)
+const GEN1_MR_FUJI := Vector2i(10, 3)
+const GEN1_BELOW_MR_FUJI_HOME := Vector2i(3, 2)
+const GEN1_POKE_FLUTE: int = 0x49
+const GEN1_EVENT_BEAT_POKEMON_TOWER_RIVAL: int = 239
+const GEN1_EVENT_BEAT_GHOST_MAROWAK: int = 271
+const GEN1_EVENT_GOT_POKE_FLUTE: int = 296
+const GEN1_EVENT_RESCUED_MR_FUJI: int = 1231
+const GEN1_ROUTE_12: int = 23
+const GEN1_ROUTE_13: int = 24
+const GEN1_ROUTE_14: int = 25
+const GEN1_ROUTE_15: int = 26
+const GEN1_FUCHSIA_CITY: int = 7
+const GEN1_FUCHSIA_GYM: int = 157
+const GEN1_ROUTE_12_GATE_1F: int = 87
+## Route 13's rows 4 and 6 end at Bird Keepers; row 8 goes through.
+const GEN1_ROUTE_13_WEST_EDGE := Vector2i(0, 8)
+const GEN1_ROUTE_15_GATE_1F: int = 184
+const GEN1_ROUTE_12_GATE_DOOR := Vector2i(10, 15)
+const GEN1_ROUTE_12_GATE_SOUTH := Vector2i(4, 7)
+const GEN1_ROUTE_15_GATE_DOOR := Vector2i(14, 8)
+const GEN1_ROUTE_15_GATE_WEST := Vector2i(0, 4)
+const GEN1_ROUTE_15_WEST_DOOR := Vector2i(7, 8)
+const GEN1_ROUTE_15_GATE_EAST_EXIT := Vector2i(7, 4)
+const GEN1_ROUTE_14_EAST_EDGE := Vector2i(19, 8)
+const GEN1_ROUTE_12_GATE_SOUTH_DOOR := Vector2i(10, 21)
+const GEN1_ROUTE_12_GATE_NORTH := Vector2i(4, 0)
+const GEN1_ABOVE_SNORLAX := Vector2i(10, 61)
+const GEN1_FUCHSIA_GYM_DOOR := Vector2i(5, 27)
+const GEN1_KOGA := Vector2i(4, 10)
+const GEN1_EVENT_FIGHT_ROUTE12_SNORLAX: int = 1166
+const GEN1_EVENT_BEAT_ROUTE12_SNORLAX: int = 1167
+const GEN1_EVENT_GOT_TM06: int = 600
+const GEN1_EVENT_BEAT_KOGA: int = 601
+const GEN1_BIT_SOULBADGE: int = 4
+const GEN1_SAFARI_ZONE_GATE: int = 156
+const GEN1_SAFARI_ZONE_NORTH: int = 218
+const GEN1_SAFARI_ZONE_WEST: int = 219
+const GEN1_SAFARI_ZONE_CENTER: int = 220
+const GEN1_SAFARI_ZONE_SECRET_HOUSE: int = 222
+const GEN1_WARDENS_HOUSE: int = 155
+const GEN1_SAFARI_GATE_DOOR := Vector2i(18, 3)
+const GEN1_SAFARI_GATE_OFFER := Vector2i(3, 2)
+## The centre's tree lines leave the entrance the east door alone.
+const GEN1_SAFARI_ZONE_EAST: int = 217
+const GEN1_SAFARI_CENTER_EAST := Vector2i(29, 10)
+const GEN1_SAFARI_EAST_NORTH := Vector2i(0, 4)
+const GEN1_SAFARI_NORTH_WEST := Vector2i(2, 35)
+const GEN1_SAFARI_WEST_NORTH := Vector2i(20, 0)
+const GEN1_SAFARI_NORTH_EAST := Vector2i(39, 30)
+const GEN1_SAFARI_EAST_CENTER := Vector2i(0, 22)
+const GEN1_SAFARI_SECRET_HOUSE_DOOR := Vector2i(3, 3)
+const GEN1_BELOW_FISHING_GURU := Vector2i(3, 4)
+const GEN1_BELOW_GOLD_TEETH := Vector2i(19, 8)
+const GEN1_SAFARI_CENTER_GATE := Vector2i(14, 25)
+const GEN1_SAFARI_GATE_SOUTH := Vector2i(3, 5)
+const GEN1_WARDENS_HOUSE_DOOR := Vector2i(27, 27)
+const GEN1_WARDEN := Vector2i(2, 3)
+const GEN1_HM03: int = 0xC6
+const GEN1_HM04: int = 0xC7
+const GEN1_GOLD_TEETH: int = 0x40
+const GEN1_EVENT_GOT_HM03: int = 2176
+const GEN1_EVENT_GOT_HM04: int = 568
+const GEN1_EVENT_GAVE_GOLD_TEETH: int = 569
+const GEN1_CELADON_MART_1F: int = 122
+const GEN1_CELADON_MART_ROOF: int = 126
+const GEN1_CELADON_MART_ELEVATOR: int = 127
+const GEN1_CELADON_MART_5F: int = 136
+const GEN1_ROUTE_7_GATE: int = 76
+const GEN1_SAFFRON_CITY: int = 10
+const GEN1_SAFFRON_GYM: int = 178
+const GEN1_SILPH_CO_1F: int = 181
+const GEN1_SILPH_CO_2F: int = 207
+const GEN1_SILPH_CO_3F: int = 208
+const GEN1_SILPH_CO_4F: int = 209
+const GEN1_SILPH_CO_5F: int = 210
+const GEN1_SILPH_CO_7F: int = 212
+const GEN1_SILPH_CO_9F: int = 233
+const GEN1_SILPH_CO_11F: int = 235
+const GEN1_CELADON_MART_DOOR := Vector2i(8, 13)
+const GEN1_MART_ELEVATOR_DOOR := Vector2i(1, 1)
+const GEN1_MART_CAR_PANEL := Vector2i(3, 1)
+const GEN1_MART_CAR_DOOR := Vector2i(1, 3)
+const GEN1_MART_5F_ROOF_STAIRS := Vector2i(12, 1)
+const GEN1_BELOW_VENDING_MACHINE := Vector2i(10, 2)
+const GEN1_MART_ROOF_STAIRS := Vector2i(15, 2)
+const GEN1_MART_1F_DOOR := Vector2i(2, 7)
+const GEN1_ROUTE_7_GATE_WEST := Vector2i(11, 10)
+const GEN1_ROUTE_7_GATE_EAST := Vector2i(5, 3)
+const GEN1_SILPH_CO_DOOR := Vector2i(18, 21)
+## Silph Co.'s stairs alternate between the two top-row cells floor by floor.
+const GEN1_SILPH_STAIRS_RIGHT := Vector2i(26, 0)
+const GEN1_SILPH_STAIRS_LEFT := Vector2i(24, 0)
+## 5F's CARD KEY lies on the bottom row a Rocket seals from the corridor, so the
+## teleporter beside him is ridden to 9F and back to land past him.
+const GEN1_SILPH_5F_PAD_TO_9F := Vector2i(9, 15)
+const GEN1_SILPH_9F_PAD := Vector2i(17, 15)
+const GEN1_BESIDE_CARD_KEY := Vector2i(20, 16)
+const GEN1_SILPH_5F_PAD_TO_3F := Vector2i(11, 5)
+const GEN1_SILPH_3F_DOOR_SIDE := Vector2i(18, 8)
+const GEN1_SILPH_3F_PAD_TO_7F := Vector2i(11, 11)
+const GEN1_SILPH_LAPRAS_WORKER := Vector2i(1, 5)
+const GEN1_DEX_LAPRAS: int = 131
+const GEN1_SILPH_7F_PAD_TO_11F := Vector2i(5, 7)
+const GEN1_SILPH_11F_DOOR_SIDE := Vector2i(6, 14)
+const GEN1_SILPH_GIOVANNI := Vector2i(6, 9)
+const GEN1_SILPH_PRESIDENT := Vector2i(7, 5)
+## 11F's car stands behind walls the pad's side never reaches, so the pads are
+## ridden back to 3F and its car taken.
+const GEN1_SILPH_11F_PAD_TO_7F := Vector2i(3, 2)
+const GEN1_SILPH_7F_PAD_TO_3F := Vector2i(5, 3)
+const GEN1_SILPH_3F_ELEVATOR := Vector2i(20, 0)
+const GEN1_SILPH_CAR_PANEL := Vector2i(3, 1)
+const GEN1_SILPH_CAR_DOOR := Vector2i(1, 3)
+const GEN1_SILPH_CO_ELEVATOR: int = 236
+const GEN1_SAFFRON_GYM_DOOR := Vector2i(34, 3)
+## The pads from the gym's door to Sabrina's room, in riding order.
+const GEN1_SAFFRON_GYM_PADS: Array = [
+	Vector2i(11, 15), Vector2i(15, 15), Vector2i(15, 5), Vector2i(1, 5),
+]
+## And from her room back to the door.
+const GEN1_SAFFRON_GYM_PADS_OUT: Array = [
+	Vector2i(11, 11), Vector2i(5, 5), Vector2i(5, 11), Vector2i(5, 15), Vector2i(19, 17),
+]
+const GEN1_SABRINA := Vector2i(9, 8)
+const GEN1_FRESH_WATER: int = 0x3C
+const GEN1_CARD_KEY: int = 0x30
+const GEN1_MASTER_BALL: int = 0x01
+const GEN1_EVENT_BEAT_SILPH_CO_RIVAL: int = 1856
+const GEN1_EVENT_GOT_MASTER_BALL: int = 1933
+const GEN1_EVENT_BEAT_SILPH_CO_GIOVANNI: int = 1935
+const GEN1_EVENT_GOT_TM46: int = 864
+const GEN1_EVENT_BEAT_SABRINA: int = 865
+const GEN1_BIT_MARSHBADGE: int = 5
+const GEN1_ROUTE_8_GATE: int = 79
+const GEN1_ROUTE_8_GATE_WEST := Vector2i(1, 10)
+const GEN1_ROUTE_8_GATE_EAST := Vector2i(5, 3)
+const GEN1_ROUTE_19: int = 30
+const GEN1_ROUTE_20: int = 31
+const GEN1_CINNABAR_ISLAND: int = 8
+const GEN1_SEAFOAM_ISLANDS_1F: int = 192
+const GEN1_SEAFOAM_ISLANDS_B1F: int = 159
+const GEN1_SEAFOAM_ISLANDS_B2F: int = 160
+const GEN1_SEAFOAM_ISLANDS_B3F: int = 161
+## Yellow's Route 19 keeps a beach house and two more rows of sand.
+const GEN1_ROUTE_19_SHORE: Dictionary = {
+	&"red": Vector2i(8, 9), &"blue": Vector2i(8, 9), &"yellow": Vector2i(8, 11),
+}
+## A rock column at x = 62 parts Route 20's two seas below the islands' north
+## field, so the sea from Fuchsia lands there and reaches the west door alone;
+## the east door's own beach opens on the sea to Cinnabar.
+const GEN1_ROUTE_20_NORTH_FIELD := Vector2i(61, 3)
+const GEN1_ROUTE_20_SEAFOAM_WEST := Vector2i(48, 5)
+const GEN1_SEAFOAM_1F_WEST_LADDER := Vector2i(7, 5)
+const GEN1_SEAFOAM_B1F_WEST_LADDER := Vector2i(13, 7)
+const GEN1_SEAFOAM_B2F_WEST_LADDER := Vector2i(5, 13)
+## `TilePairCollisionsWater`'s CAVERN row keeps $05 banks off the pool, so the
+## way across B3F is the one $15 bank on each side.
+const GEN1_SEAFOAM_B3F_WEST_BANK := Vector2i(15, 7)
+const GEN1_SEAFOAM_B3F_SHORE := Vector2i(23, 9)
+const GEN1_SEAFOAM_B2F_EAST_LADDER := Vector2i(25, 14)
+const GEN1_SEAFOAM_B1F_EAST_LADDER := Vector2i(25, 11)
+const GEN1_SEAFOAM_1F_EAST_LADDER := Vector2i(23, 15)
+const GEN1_SEAFOAM_1F_EAST_DOOR := Vector2i(26, 17)
+const GEN1_ROUTE_20_EAST_BEACH := Vector2i(58, 11)
+const GEN1_POKEMON_MANSION_1F: int = 165
+const GEN1_POKEMON_MANSION_2F: int = 214
+const GEN1_POKEMON_MANSION_3F: int = 215
+const GEN1_POKEMON_MANSION_B1F: int = 216
+const GEN1_CINNABAR_SHORE := Vector2i(19, 13)
+const GEN1_MANSION_DOOR := Vector2i(6, 3)
+const GEN1_MANSION_1F_STAIRS := Vector2i(5, 10)
+const GEN1_MANSION_2F_STAIRS := Vector2i(6, 1)
+## Each statue's own cell is one up from where it is pressed.
+const GEN1_MANSION_3F_SWITCH := Vector2i(10, 6)
+const GEN1_MANSION_3F_HOLE := Vector2i(16, 14)
+const GEN1_MANSION_1F_B1F_STAIRS := Vector2i(21, 23)
+const GEN1_MANSION_B1F_SOUTH_SWITCH := Vector2i(18, 26)
+const GEN1_MANSION_B1F_NORTH_SWITCH := Vector2i(20, 4)
+const GEN1_MANSION_SECRET_KEY := Vector2i(5, 13)
+const GEN1_MANSION_B1F_STAIRS := Vector2i(23, 22)
+const GEN1_MANSION_EAST_DOOR := Vector2i(26, 27)
+const GEN1_SECRET_KEY: int = 0x2B
+const GEN1_EVENT_MANSION_SWITCH_ON: int = 632
+const GEN1_NUGGET: int = 0x31
+const GEN1_CINNABAR_GYM: int = 166
+const GEN1_CINNABAR_GYM_DOOR := Vector2i(18, 3)
+## Each machine's cell below it and `hGymGateAnswer`, the `wCurrentMenuItem` it
+## wants: 0 is YES.
+const GEN1_CINNABAR_QUIZ: Array = [
+	[Vector2i(15, 8), 0], [Vector2i(10, 2), 1], [Vector2i(9, 8), 1],
+	[Vector2i(9, 14), 1], [Vector2i(1, 14), 0], [Vector2i(1, 8), 1],
+]
+const GEN1_EVENT_CINNABAR_GYM_GATE0_UNLOCKED: int = 680
+const GEN1_BLAINE := Vector2i(3, 3)
+const GEN1_EVENT_BEAT_BLAINE: int = 665
+const GEN1_EVENT_GOT_TM38: int = 664
+const GEN1_BIT_VOLCANOBADGE: int = 6
+const GEN1_ROUTE_21: int = 32
+const GEN1_VIRIDIAN_GYM: int = 45
+const GEN1_CINNABAR_WEST_SHORE := Vector2i(4, 4)
+const GEN1_PALLET_SHORE := Vector2i(8, 15)
+const GEN1_TM11: int = 0xD3
+const GEN1_VIRIDIAN_GYM_DOOR := Vector2i(32, 7)
+const GEN1_VIRIDIAN_GIOVANNI := Vector2i(2, 1)
+const GEN1_EVENT_BEAT_VIRIDIAN_GYM_GIOVANNI: int = 81
+const GEN1_EVENT_GOT_TM27: int = 80
+const GEN1_BIT_EARTHBADGE: int = 7
+const GEN1_ROUTE_22: int = 33
+const GEN1_ROUTE_23: int = 34
+const GEN1_ROUTE_22_GATE: int = 193
+const GEN1_VICTORY_ROAD_1F: int = 108
+const GEN1_VICTORY_ROAD_2F: int = 194
+const GEN1_VICTORY_ROAD_3F: int = 198
+const GEN1_ROUTE_22_GATE_DOOR := Vector2i(8, 5)
+const GEN1_ROUTE_22_GATE_NORTH := Vector2i(4, 0)
+const GEN1_ROUTE_23_SOUTH_BANK := Vector2i(11, 104)
+const GEN1_ROUTE_23_NORTH_BANK := Vector2i(8, 71)
+const GEN1_ROUTE_23_VICTORY_ROAD_DOOR := Vector2i(4, 31)
+## 1F's boulder to its switch at (17, 13): down to the entrance row, along it,
+## up column 9 from the door cell (whose edge is never faced), along row 14, up
+## column 16, right and down. Each row is a step name, the cell pushed from, the
+## way and how many times.
+const GEN1_VICTORY_ROAD_1F_PUSHES: Array = [
+	["victory_road_1f_push_down", Vector2i(5, 14), Vector2i.DOWN, 1],
+	["victory_road_1f_push_right", Vector2i(4, 16), Vector2i.RIGHT, 4],
+	["victory_road_1f_push_up", Vector2i(9, 17), Vector2i.UP, 2],
+	["victory_road_1f_push_along", Vector2i(8, 14), Vector2i.RIGHT, 7],
+	["victory_road_1f_push_up_again", Vector2i(16, 15), Vector2i.UP, 2],
+	["victory_road_1f_push_right_again", Vector2i(15, 12), Vector2i.RIGHT, 1],
+	["victory_road_1f_push_onto_switch", Vector2i(17, 11), Vector2i.DOWN, 1],
+]
+const GEN1_EVENT_VICTORY_ROAD_1_BOULDER_ON_SWITCH: int = 2327
+const GEN1_VICTORY_ROAD_1F_LADDER := Vector2i(1, 1)
+## 2F's first switch at (1, 16), which opens the way east: the boulder at (4, 14)
+## left, down column 3 and left along the bottom row.
+const GEN1_VICTORY_ROAD_2F_PUSHES: Array = [
+	["victory_road_2f_push_left", Vector2i(5, 14), Vector2i.LEFT, 1],
+	["victory_road_2f_push_down", Vector2i(3, 13), Vector2i.DOWN, 2],
+	["victory_road_2f_push_onto_switch", Vector2i(4, 16), Vector2i.LEFT, 2],
+]
+const GEN1_EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1: int = 1336
+const GEN1_EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2: int = 1343
+## 3F's boulder into its hole, which `VictoryRoad3FDefaultScript` answers by
+## showing 2F's own on (23, 16), and the player after it: that one goes left
+## along the bottom row to the second switch at (9, 16), which opens the way to
+## the east ladder's own $05 floor.
+const GEN1_VICTORY_ROAD_2F_LADDER := Vector2i(23, 7)
+## The boulder standing in the wall's one gap at (13, 12), pushed out of it and
+## once more off the cell below.
+const GEN1_VICTORY_ROAD_3F_GAP_ABOVE := Vector2i(13, 11)
+const GEN1_VICTORY_ROAD_3F_HOLE_SIDE := Vector2i(21, 15)
+const GEN1_VICTORY_ROAD_3F_HOLE := Vector2i(23, 15)
+const GEN1_VICTORY_ROAD_2F_FALLEN_BOULDER_SIDE := Vector2i(24, 16)
+const GEN1_VICTORY_ROAD_2F_SECOND_PUSHES: int = 14
+const GEN1_VICTORY_ROAD_2F_EAST_LADDER := Vector2i(25, 14)
+const GEN1_VICTORY_ROAD_3F_LADDER_DOWN := Vector2i(26, 8)
+const GEN1_VICTORY_ROAD_2F_EXIT := Vector2i(29, 8)
+const GEN1_INDIGO_PLATEAU: int = 9
+const GEN1_INDIGO_PLATEAU_LOBBY: int = 174
+const GEN1_INDIGO_PLATEAU_DOOR := Vector2i(9, 5)
+const GEN1_LORELEIS_ROOM: int = 245
+const GEN1_BRUNOS_ROOM: int = 246
+const GEN1_AGATHAS_ROOM: int = 247
+const GEN1_LANCES_ROOM: int = 113
+const GEN1_CHAMPIONS_ROOM: int = 120
+const GEN1_LOBBY_STAIRS := Vector2i(8, 0)
+## Each of the first three rooms is the same: the member at (5, 2), the door on.
+const GEN1_ELITE_MEMBER := Vector2i(5, 2)
+const GEN1_ELITE_NEXT_DOOR := Vector2i(4, 0)
+const GEN1_LANCE := Vector2i(6, 1)
+const GEN1_EVENT_BEAT_LANCE: int = 2302
+const GEN1_LANCES_ROOM_EXIT := Vector2i(5, 0)
+const GEN1_HALL_OF_FAME: int = 118
+const GEN1_ELITE_FOUR: Array = [
+	["lorelei", GEN1_BRUNOS_ROOM, 2273, "EVENT_BEAT_LORELEIS_ROOM_TRAINER_0"],
+	["bruno", GEN1_AGATHAS_ROOM, 2281, "EVENT_BEAT_BRUNOS_ROOM_TRAINER_0"],
+	["agatha", GEN1_LANCES_ROOM, 2289, "EVENT_BEAT_AGATHAS_ROOM_TRAINER_0"],
+]
 const GEN1_BEDROOM_STAIRS := Vector2i(7, 1)
 const GEN1_HOUSE_DOOR := Vector2i(2, 7)
 ## `PalletTownDefaultScript` stops the player at `wYCoord == 1`, and Yellow's at 0.
@@ -9360,7 +9823,11 @@ const GEN1_PALLET_NORTH_PATH: Dictionary = {
 }
 const GEN1_PALLET_LAB_DOOR := Vector2i(12, 11)
 const GEN1_LAB_DOOR := Vector2i(4, 11)
-const GEN1_LAB_BELOW_CHARMANDER := Vector2i(6, 4)
+## The cell under the ball the walk takes and the dex number it gives: Yellow's
+## one EEVEE ball sends the rival for it and walks the player to Oak's PIKACHU.
+const GEN1_LAB_STARTER_BALLS: Dictionary = {
+	&"red": [Vector2i(6, 4), 4], &"blue": [Vector2i(6, 4), 4], &"yellow": [Vector2i(7, 4), 25],
+}
 const GEN1_LAB_BELOW_OAK := Vector2i(5, 3)
 const GEN1_VIRIDIAN_MART_DOOR := Vector2i(29, 19)
 const GEN1_MART_DOOR := Vector2i(3, 7)
@@ -9375,7 +9842,6 @@ const GEN1_EVENT_OAK_GOT_PARCEL: int = 56
 const GEN1_EVENT_GOT_OAKS_PARCEL: int = 57
 const GEN1_EVENT_GOT_TM34: int = 118
 const GEN1_EVENT_BEAT_BROCK: int = 119
-const GEN1_CHARMANDER_DEX: int = 4
 const GEN1_OAKS_PARCEL: int = 0x46
 const GEN1_TM34: int = 0xEA
 const GEN1_BIT_BOULDERBADGE: int = 0
@@ -9428,7 +9894,11 @@ func _gen1_story_path(data: GameData) -> Dictionary:
 		_gen1_pokedex_leg, _gen1_viridian_forest_leg, _gen1_pewter_gym_leg,
 		_gen1_mt_moon_leg, _gen1_cerulean_rival_leg, _gen1_bills_house_leg,
 		_gen1_cerulean_gym_leg, _gen1_cerulean_thief_leg, _gen1_ss_anne_leg,
-		_gen1_vermilion_gym_leg,
+		_gen1_vermilion_gym_leg, _gen1_rock_tunnel_leg, _gen1_celadon_gym_leg,
+		_gen1_rocket_hideout_leg, _gen1_pokemon_tower_leg, _gen1_fuchsia_gym_leg,
+		_gen1_safari_zone_leg, _gen1_saffron_drink_leg, _gen1_silph_co_leg,
+		_gen1_saffron_gym_leg, _gen1_cinnabar_leg, _gen1_mansion_leg, _gen1_cinnabar_gym_leg,
+		_gen1_viridian_gym_leg, _gen1_route_23_leg, _gen1_victory_road_leg, _gen1_elite_four_leg,
 	]
 	for leg: Callable in legs:
 		var walked: Dictionary = leg.call(world, save, random, data, path)
@@ -9449,7 +9919,7 @@ func _gen1_story_path(data: GameData) -> Dictionary:
 ## a warp takes it, as `CheckWarpsNoCollision` does under a scripted walk.
 func _gen1_settle(
 	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
-	results: Array = []
+	results: Array = [], answers: Array[int] = []
 ) -> Dictionary:
 	var statuses: Array = []
 	var battles: Array = []
@@ -9457,7 +9927,8 @@ func _gen1_settle(
 	var warps: int = 0
 	for pass_index: int in GEN1_SETTLE_PASSES:
 		if not results.is_empty():
-			var run: Dictionary = _drain_story(world, results, save, random, data)
+			var run: Dictionary = _drain_story(world, results, save, random, data, false, answers)
+			answers = []
 			texts.append_array(run.get("texts", []))
 			statuses.append_array(run.get("statuses", []))
 			battles.append_array(run.get("battles", []))
@@ -9466,15 +9937,26 @@ func _gen1_settle(
 					"ok": false, "reason": run["reason"], "details": run.get("details", ""),
 					"passes": pass_index, "texts": texts,
 				}
+			## `jp Init`: the console restarts and no map script runs again.
+			if bool(run.get("soft_reset", false)):
+				return {
+					"ok": true, "passes": pass_index + 1, "statuses": statuses,
+					"battles": battles, "texts": texts, "warps": warps, "soft_reset": true,
+				}
 		var stepping: bool = world.player_step_in_progress()
 		## A state that only writes the next one shows nothing on its own pass.
 		var script_state: int = world.gen1_map_script_state()
 		world.advance_script_wait_frame()
 		world.advance_player_step_pass()
 		world.advance_scripted_steps_pass()
-		if stepping and not world.player_step_in_progress() and world.warp_pending():
-			if bool(world.try_warp().get("ok", false)):
-				warps += 1
+		if stepping and not world.player_step_in_progress():
+			if world.warp_pending():
+				if bool(world.try_warp().get("ok", false)):
+					warps += 1
+			## `RunMapScript` sets the dungeon warp bit, read behind `CheckWarpsNoCollision`.
+			elif not world.gen1_dungeon_hole_at(world.player_cell).is_empty():
+				if bool(world.gen1_dungeon_fall().get("ok", false)):
+					warps += 1
 		results = world.dispatch_sight_events()
 		if results.is_empty() and _gen1_settled(world) \
 			and world.gen1_map_script_state() == script_state:
@@ -9517,9 +9999,17 @@ func _gen1_walk(
 ) -> Dictionary:
 	var runs: Array = []
 	var from: Vector2i = world.map_id()
+	## A cell whose script only moved the player off it is planned around next
+	## time, which is how Cinnabar's locked gym door is passed by the row below
+	## it; a scene that fought first, like Mt. Moon's Rockets, is over.
+	var avoid: Dictionary = {}
 	for _attempt: int in WALK_RESOLVE_ATTEMPTS:
-		var walked: Dictionary = _walk_to_story_cell(world, cell)
+		var walked: Dictionary = _walk_to_story_cell(world, cell, _gen1_surfing(world), true, avoid)
+		var interrupted: Vector2i = world.player_cell
 		var settled: Dictionary = _gen1_settle(world, save, random, data, walked.get("events", []))
+		if world.player_cell != interrupted and world.map_id() == from \
+			and settled.get("battles", []).is_empty():
+			avoid[interrupted] = true
 		if not settled.get("texts", []).is_empty() or not settled.get("battles", []).is_empty():
 			runs.append({"cell": _cell_value(world), "texts": settled.get("texts", []),
 				"battles": settled.get("battles", [])})
@@ -9527,8 +10017,10 @@ func _gen1_walk(
 			return {"ok": false, "reason": settled.get("reason", ""), "details": settled.get("details", ""), "runs": runs}
 		if not bool(walked.get("ok", false)):
 			return {"ok": false, "reason": walked.get("reason", ""), "runs": runs}
-		if world.player_cell == cell or world.map_id() != from:
-			return {"ok": true, "runs": runs}
+		## A pad on the same map lands elsewhere on it, as Saffron Gym's do.
+		var warped: bool = world.map_id() != from or int(settled.get("warps", 0)) > 0
+		if world.player_cell == cell or warped:
+			return {"ok": true, "runs": runs, "warped": warped}
 	return {"ok": false, "reason": "walk to %s kept being interrupted" % cell, "runs": runs}
 
 
@@ -9537,10 +10029,19 @@ func _gen1_warp_walk(
 	data: GameData
 ) -> Dictionary:
 	var from: Vector2i = world.map_id()
+	## A pad the player landed on is taken again by stepping off and back on,
+	## which is how Silph Co.'s teleporters are ridden twice.
+	if world.player_cell == cell:
+		for direction: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+			if world.can_walk_to(cell + direction) and not world.warp_pending(cell + direction):
+				var aside: Dictionary = _gen1_walk(world, cell + direction, save, random, data)
+				if not bool(aside.get("ok", false)):
+					return aside
+				break
 	var walked: Dictionary = _gen1_walk(world, cell, save, random, data)
 	if not bool(walked.get("ok", false)):
 		return walked
-	if world.map_id() != from:
+	if bool(walked.get("warped", false)):
 		walked["transition"] = {"ok": true, "from_map": from, "to_map": world.map_id(), "to_cell": world.player_cell}
 		return walked
 	## `CheckWarpsCollision`: a mat the landing did not take is left by pressing
@@ -9565,7 +10066,7 @@ func _gen1_cross(
 ) -> Dictionary:
 	var runs: Array = []
 	for _attempt: int in WALK_RESOLVE_ATTEMPTS:
-		var walked: Dictionary = _walk_to_connection(world, direction, 0, map)
+		var walked: Dictionary = _walk_to_connection(world, direction, 0, map, _gen1_surfing(world))
 		var settled: Dictionary = _gen1_settle(world, save, random, data, walked.get("events", []))
 		if not settled.get("texts", []).is_empty() or not settled.get("battles", []).is_empty():
 			runs.append({"cell": _cell_value(world), "texts": settled.get("texts", []),
@@ -9584,13 +10085,13 @@ func _gen1_cross(
 
 func _gen1_talk(
 	world: Gen2WorldAPI, cell: Vector2i, facing: int, save: Gen2SaveData,
-	random: RandomNumberGenerator, data: GameData
+	random: RandomNumberGenerator, data: GameData, answers: Array[int] = []
 ) -> Dictionary:
 	var walked: Dictionary = _gen1_walk(world, cell, save, random, data)
 	if not bool(walked.get("ok", false)):
 		return walked
 	world.player_facing = facing
-	var settled: Dictionary = _gen1_settle(world, save, random, data, world.interact())
+	var settled: Dictionary = _gen1_settle(world, save, random, data, world.interact(), answers)
 	settled["runs"] = walked["runs"]
 	return settled
 
@@ -9689,17 +10190,18 @@ func _gen1_lab_leg(
 	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
 	path: Array
 ) -> Dictionary:
+	var ball: Array = GEN1_LAB_STARTER_BALLS[data.id]
 	var starter: Dictionary = _gen1_talk(
-		world, GEN1_LAB_BELOW_CHARMANDER, Gen2WorldSprite.FACING_UP, save, random, data
+		world, ball[0], Gen2WorldSprite.FACING_UP, save, random, data
 	)
-	var stepped: Dictionary = _gen1_step(path, "oaks_lab_charmander", world, starter, {
+	var stepped: Dictionary = _gen1_step(path, "oaks_lab_starter", world, starter, {
 		"party": _party_species(save)})
 	if not bool(stepped["ok"]):
 		return stepped
-	stepped = _gen1_flag_leg(path, "oaks_lab_charmander", world, GEN1_EVENT_GOT_STARTER, "EVENT_GOT_STARTER")
+	stepped = _gen1_flag_leg(path, "oaks_lab_starter", world, GEN1_EVENT_GOT_STARTER, "EVENT_GOT_STARTER")
 	if not bool(stepped["ok"]):
 		return stepped
-	if save.party.is_empty() or int(save.party[0].species) != GEN1_CHARMANDER_DEX:
+	if save.party.is_empty() or int(save.party[0].species) != int(ball[1]):
 		return {"ok": false, "path": path, "reason": "the ball gave %s" % [_party_species(save)]}
 	var leaving: Dictionary = _gen1_warp_walk(world, GEN1_LAB_DOOR, save, random, data)
 	stepped = _gen1_step(path, "oaks_lab_rival_fight", world, leaving, {"party": _party_species(save)})
@@ -9741,11 +10243,18 @@ func _gen1_parcel_leg(
 	])
 
 
+## A row is [direction, map, step], with the edge cell to cross at fourth.
 func _gen1_crossings(
 	path: Array, world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator,
 	data: GameData, legs: Array
 ) -> Dictionary:
 	for leg: Array in legs:
+		if leg.size() > 3:
+			var stepped_to: Dictionary = _gen1_step(
+				path, "%s_edge" % leg[2], world, _gen1_walk(world, leg[3], save, random, data)
+			)
+			if not bool(stepped_to["ok"]):
+				return stepped_to
 		var crossed: Dictionary = _gen1_cross(world, String(leg[0]), int(leg[1]), save, random, data)
 		var stepped: Dictionary = _gen1_step(path, String(leg[2]), world, crossed)
 		if not bool(stepped["ok"]):
@@ -9901,7 +10410,9 @@ func _gen1_mt_moon_leg(
 		"items": _named_items(data, world.state.items())})
 	if not bool(stepped["ok"]):
 		return stepped
-	stepped = _gen1_flag_leg(path, "mt_moon_dome_fossil", world, GEN1_EVENT_GOT_DOME_FOSSIL, "EVENT_GOT_DOME_FOSSIL")
+	stepped = _gen1_flag_leg(
+		path, "mt_moon_dome_fossil", world, GEN1_EVENT_GOT_DOME_FOSSIL[data.id], "EVENT_GOT_DOME_FOSSIL"
+	)
 	if not bool(stepped["ok"]):
 		return stepped
 	return _gen1_warp_legs(path, world, save, random, data, [
@@ -9928,6 +10439,21 @@ func _gen1_bills_house_leg(
 ) -> Dictionary:
 	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
 		["north", GEN1_ROUTE_24, "cerulean_to_route_24"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	## Yellow's PIKACHU learns no HM01; Damian's CHARMANDER cuts the gym's tree.
+	if data.id == RomRegistry.YELLOW:
+		var damian: Dictionary = _gen1_talk(
+			world, GEN1_BELOW_DAMIAN, Gen2WorldSprite.FACING_UP, save, random, data
+		)
+		stepped = _gen1_step(path, "route_24_damian", world, damian, {"party": _party_species(save)})
+		if not bool(stepped["ok"]):
+			return stepped
+		if _party_species(save).size() != 2:
+			return {"ok": false, "path": path, "reason": "route_24_damian: Damian left the party %s" % [
+				_party_species(save)]}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
 		["east", GEN1_ROUTE_25, "route_24_to_route_25"],
 		[GEN1_BILLS_HOUSE, "route_25_to_bills_house"],
 	])
@@ -10069,16 +10595,9 @@ func _gen1_vermilion_gym_leg(
 		"moves": _party_moves(save)})
 	if not bool(stepped["ok"]):
 		return stepped
-	var walked: Dictionary = _gen1_walk(world, GEN1_VERMILION_TREE_APPROACH, save, random, data)
-	if bool(walked.get("ok", false)):
-		world.player_facing = Gen2WorldSprite.FACING_RIGHT
-		var request: Dictionary = world.cut_request()
-		if not bool(request.get("ok", false)):
-			walked = {"ok": false, "reason": "cut refused: %s" % request.get("reason", "")}
-		else:
-			var applied: Dictionary = world.complete_cut()
-			walked = {"ok": bool(applied.get("ok", false)), "reason": applied.get("reason", "")}
-	stepped = _gen1_step(path, "vermilion_cut_tree", world, walked)
+	stepped = _gen1_step(path, "vermilion_cut_tree", world, _gen1_cut(
+		world, GEN1_VERMILION_TREE_APPROACH, Gen2WorldSprite.FACING_RIGHT, save, random, data
+	))
 	if not bool(stepped["ok"]):
 		return stepped
 	stepped = _gen1_warp_legs(path, world, save, random, data, [
@@ -10123,3 +10642,1112 @@ func _gen1_vermilion_gym_leg(
 	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_THUNDERBADGE)):
 		return {"ok": false, "path": path, "reason": "vermilion_gym_lt_surge: THUNDERBADGE is clear"}
 	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_VERMILION_CITY, "vermilion_gym_exit"]])
+
+
+## `UsedCut` on the tree in front of [param cell], faced [param facing].
+func _gen1_cut(
+	world: Gen2WorldAPI, cell: Vector2i, facing: int, save: Gen2SaveData,
+	random: RandomNumberGenerator, data: GameData
+) -> Dictionary:
+	var walked: Dictionary = _gen1_walk(world, cell, save, random, data)
+	if not bool(walked.get("ok", false)):
+		return walked
+	world.player_facing = facing
+	var request: Dictionary = world.cut_request()
+	if not bool(request.get("ok", false)):
+		return {"ok": false, "reason": "cut refused: %s" % request.get("reason", ""), "runs": walked["runs"]}
+	var applied: Dictionary = world.complete_cut()
+	return {"ok": bool(applied.get("ok", false)), "reason": applied.get("reason", ""), "runs": walked["runs"]}
+
+
+## A surfing walk keeps to the water until the cell it was asked for, which is
+## where it lands, as `.stopSurfing` has the step onto a passable tile end it.
+func _gen1_surfing(world: Gen2WorldAPI) -> bool:
+	return world.movement_mode == Gen2WorldAPI.MOVEMENT_SURF
+
+
+## `ItemUseSurfboard` from [param cell] facing [param facing]'s water.
+func _gen1_surf(
+	world: Gen2WorldAPI, cell: Vector2i, facing: int, save: Gen2SaveData,
+	random: RandomNumberGenerator, data: GameData
+) -> Dictionary:
+	var walked: Dictionary = _gen1_walk(world, cell, save, random, data)
+	if not bool(walked.get("ok", false)):
+		return walked
+	world.player_facing = facing
+	var request: Dictionary = world.surf_request()
+	if not bool(request.get("ok", false)):
+		return {"ok": false, "reason": "surf refused: %s" % request.get("reason", ""), "runs": walked["runs"]}
+	var applied: Dictionary = world.complete_surf()
+	if not bool(applied.get("ok", false)):
+		return {"ok": false, "reason": "surf failed: %s" % applied.get("reason", ""), "runs": walked["runs"]}
+	var settled: Dictionary = _gen1_settle(world, save, random, data)
+	settled["runs"] = walked["runs"]
+	return settled
+
+
+## Vermilion back up the Underground Path, Route 9 behind its tree, Rock
+## Tunnel's two ladders and out to Lavender Town.
+func _gen1_rock_tunnel_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_step(path, "vermilion_cut_tree_again", world, _gen1_cut(
+		world, GEN1_VERMILION_TREE_INSIDE, Gen2WorldSprite.FACING_UP, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		["north", GEN1_ROUTE_6, "vermilion_to_route_6"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_6, "route_6_to_underground"],
+		[GEN1_UNDERGROUND_PATH_NORTH_SOUTH, "underground_south_entrance"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_5, "underground_north_exit"],
+		[GEN1_ROUTE_5, "underground_to_route_5"],
+		["north", GEN1_CERULEAN_CITY, "route_5_to_cerulean"],
+		["east", GEN1_ROUTE_9, "cerulean_to_route_9"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "route_9_cut_tree", world, _gen1_cut(
+		world, GEN1_ROUTE_9_TREE_APPROACH, Gen2WorldSprite.FACING_RIGHT, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	var legs: Array = [
+		["east", GEN1_ROUTE_10, "route_9_to_route_10"],
+		[GEN1_ROCK_TUNNEL_1F, "route_10_to_rock_tunnel"],
+	]
+	for ladder: int in GEN1_ROCK_TUNNEL_LADDERS.size():
+		var row: Array = GEN1_ROCK_TUNNEL_LADDERS[ladder]
+		legs.append([int(row[0]), "rock_tunnel_ladder_%d" % (ladder + 1), row[1]])
+	legs.append_array([
+		[GEN1_ROUTE_10, "rock_tunnel_to_route_10", GEN1_ROCK_TUNNEL_SOUTH_EXIT],
+		["south", GEN1_LAVENDER_TOWN, "route_10_to_lavender"],
+	])
+	return _gen1_warp_legs(path, world, save, random, data, legs)
+
+
+## Route 8's Underground Path to Celadon City, the gym's own tree and Erika.
+func _gen1_celadon_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		["west", GEN1_ROUTE_8, "lavender_to_route_8"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_8, "route_8_to_underground", GEN1_ROUTE_8_UNDERGROUND],
+		[GEN1_UNDERGROUND_PATH_WEST_EAST, "underground_east_entrance"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_7, "underground_west_exit"],
+		[GEN1_ROUTE_7, "underground_to_route_7"],
+		["west", GEN1_CELADON_CITY, "route_7_to_celadon"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "celadon_cut_tree", world, _gen1_cut(
+		world, GEN1_CELADON_TREE_APPROACH, Gen2WorldSprite.FACING_DOWN, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_CELADON_GYM, "celadon_gym_entry", GEN1_CELADON_GYM_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "celadon_gym_cut_tree", world, _gen1_cut(
+		world, GEN1_CELADON_GYM_TREE_APPROACH, Gen2WorldSprite.FACING_UP, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	var erika: Dictionary = _gen1_talk_to(world, GEN1_ERIKA, save, random, data)
+	stepped = _gen1_step(path, "celadon_gym_erika", world, erika, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_ERIKA, "EVENT_BEAT_ERIKA"], [GEN1_EVENT_GOT_TM21, "EVENT_GOT_TM21"],
+	]:
+		stepped = _gen1_flag_leg(path, "celadon_gym_erika", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_RAINBOWBADGE)):
+		return {"ok": false, "path": path, "reason": "celadon_gym_erika: RAINBOWBADGE is clear"}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_CELADON_CITY, "celadon_gym_exit"]])
+
+
+## The Game Corner's poster and the hideout's four floors down to the LIFT KEY.
+func _gen1_rocket_hideout_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_step(path, "celadon_cut_tree_again", world, _gen1_cut(
+		world, GEN1_CELADON_TREE_INSIDE, Gen2WorldSprite.FACING_UP, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_GAME_CORNER, "game_corner_entry", GEN1_GAME_CORNER_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var guard: Dictionary = _gen1_talk_to(world, GEN1_GAME_CORNER_ROCKET, save, random, data)
+	stepped = _gen1_step(path, "game_corner_rocket", world, guard, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	var poster: Dictionary = _gen1_talk(
+		world, GEN1_GAME_CORNER_ROCKET, Gen2WorldSprite.FACING_UP, save, random, data
+	)
+	stepped = _gen1_step(path, "game_corner_poster", world, poster)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(
+		path, "game_corner_poster", world, GEN1_EVENT_FOUND_ROCKET_HIDEOUT, "EVENT_FOUND_ROCKET_HIDEOUT"
+	)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_B1F, "game_corner_stairs", GEN1_GAME_CORNER_STAIRS],
+		[GEN1_ROCKET_HIDEOUT_B2F, "hideout_b1f_to_b2f", GEN1_HIDEOUT_B1F_STAIRS],
+		[GEN1_ROCKET_HIDEOUT_B3F, "hideout_b2f_to_b3f", GEN1_HIDEOUT_B2F_STAIRS],
+		[GEN1_ROCKET_HIDEOUT_B4F, "hideout_b3f_to_b4f", GEN1_HIDEOUT_B3F_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var rocket: Dictionary = _gen1_talk_to(world, GEN1_HIDEOUT_ROCKET_3, save, random, data)
+	stepped = _gen1_step(path, "hideout_b4f_rocket_3", world, rocket, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(
+		path, "hideout_b4f_rocket_3", world, GEN1_EVENT_ROCKET_DROPPED_LIFT_KEY, "EVENT_ROCKET_DROPPED_LIFT_KEY"
+	)
+	if not bool(stepped["ok"]):
+		return stepped
+	var key: Dictionary = _gen1_talk(world, GEN1_BELOW_LIFT_KEY, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "hideout_lift_key", world, key, {"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_LIFT_KEY, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "hideout_lift_key: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	return _gen1_giovanni_leg(world, save, random, data, path)
+
+
+## The car up to Giovanni and the SILPH SCOPE he leaves behind.
+func _gen1_giovanni_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_B3F, "hideout_b4f_to_b3f", GEN1_HIDEOUT_B4F_STAIRS],
+		[GEN1_ROCKET_HIDEOUT_B2F, "hideout_b3f_to_b2f", GEN1_HIDEOUT_B3F_UP],
+		[GEN1_ROCKET_HIDEOUT_ELEVATOR, "hideout_b2f_elevator", GEN1_HIDEOUT_B2F_ELEVATOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	_gen1_elevator_floor = GEN1_ROCKET_HIDEOUT_B4F
+	var panel: Dictionary = _gen1_talk(world, GEN1_HIDEOUT_CAR_PANEL, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "hideout_elevator_panel", world, panel)
+	if not bool(stepped["ok"]):
+		return stepped
+	if _gen1_elevator_floor >= 0:
+		return {"ok": false, "path": path, "reason": "hideout_elevator_panel: the car offered no floor"}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_B4F, "hideout_elevator_to_b4f", GEN1_HIDEOUT_CAR_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	for rocket_cell: Vector2i in GEN1_HIDEOUT_DOOR_ROCKETS:
+		var fought: Dictionary = _gen1_talk_to(world, rocket_cell, save, random, data)
+		stepped = _gen1_step(path, "hideout_door_rocket_%d" % rocket_cell.x, world, fought, {
+			"party": _party_species(save)})
+		if not bool(stepped["ok"]):
+			return stepped
+	var giovanni: Dictionary = _gen1_talk_to(world, GEN1_HIDEOUT_GIOVANNI, save, random, data)
+	stepped = _gen1_step(path, "hideout_giovanni", world, giovanni, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(
+		path, "hideout_giovanni", world, GEN1_EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI,
+		"EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI"
+	)
+	if not bool(stepped["ok"]):
+		return stepped
+	var scope: Dictionary = _gen1_talk(
+		world, GEN1_BELOW_SILPH_SCOPE, Gen2WorldSprite.FACING_UP, save, random, data
+	)
+	stepped = _gen1_step(path, "hideout_silph_scope", world, scope, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_SILPH_SCOPE, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "hideout_silph_scope: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	return {"ok": true}
+
+
+## The car back up, the tower floor by floor, and Mr. Fuji's POKé FLUTE.
+func _gen1_pokemon_tower_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_ELEVATOR, "hideout_b4f_elevator", GEN1_HIDEOUT_B4F_ELEVATOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	_gen1_elevator_floor = GEN1_ROCKET_HIDEOUT_B1F
+	var panel: Dictionary = _gen1_talk(world, GEN1_HIDEOUT_CAR_PANEL, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "hideout_elevator_panel_up", world, panel)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROCKET_HIDEOUT_B1F, "hideout_elevator_to_b1f", GEN1_HIDEOUT_CAR_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var door_rocket: Dictionary = _gen1_talk_to(world, GEN1_HIDEOUT_B1F_DOOR_ROCKET, save, random, data)
+	stepped = _gen1_step(path, "hideout_b1f_door_rocket", world, door_rocket, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_GAME_CORNER, "hideout_b1f_to_game_corner", GEN1_HIDEOUT_B1F_ELEVATOR_STAIRS],
+		[GEN1_CELADON_CITY, "game_corner_exit"],
+		["east", GEN1_ROUTE_7, "celadon_to_route_7"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_7, "route_7_to_underground"],
+		[GEN1_UNDERGROUND_PATH_WEST_EAST, "underground_west_entrance"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_8, "underground_east_exit"],
+		[GEN1_ROUTE_8, "underground_to_route_8"],
+		["east", GEN1_LAVENDER_TOWN, "route_8_to_lavender"],
+		[GEN1_POKEMON_TOWER_1F, "lavender_to_tower", GEN1_LAVENDER_TOWER_DOOR],
+		[GEN1_POKEMON_TOWER_2F, "tower_1f_to_2f", GEN1_TOWER_EAST_STAIRS],
+		[GEN1_POKEMON_TOWER_3F, "tower_2f_to_3f", GEN1_TOWER_WEST_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(
+		path, "tower_2f_to_3f", world, GEN1_EVENT_BEAT_POKEMON_TOWER_RIVAL, "EVENT_BEAT_POKEMON_TOWER_RIVAL"
+	)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_POKEMON_TOWER_4F, "tower_3f_to_4f", GEN1_TOWER_EAST_STAIRS],
+		[GEN1_POKEMON_TOWER_5F, "tower_4f_to_5f", GEN1_TOWER_WEST_STAIRS],
+		[GEN1_POKEMON_TOWER_6F, "tower_5f_to_6f", GEN1_TOWER_EAST_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var candy: Dictionary = _gen1_talk(world, GEN1_ABOVE_RARE_CANDY, Gen2WorldSprite.FACING_DOWN, save, random, data)
+	stepped = _gen1_step(path, "tower_6f_rare_candy", world, candy, {"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_POKEMON_TOWER_7F, "tower_6f_marowak_to_7f", GEN1_TOWER_7F_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "tower_6f_marowak_to_7f", world, GEN1_EVENT_BEAT_GHOST_MAROWAK, "EVENT_BEAT_GHOST_MAROWAK")
+	if not bool(stepped["ok"]):
+		return stepped
+	var fuji: Dictionary = _gen1_talk_to(world, GEN1_MR_FUJI, save, random, data)
+	stepped = _gen1_step(path, "tower_7f_mr_fuji", world, fuji, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	if world.map_id() != Vector2i(0, GEN1_MR_FUJIS_HOUSE):
+		return {"ok": false, "path": path, "reason": "tower_7f_mr_fuji: Fuji left the player on %s" % [_map_value(world)]}
+	var flute: Dictionary = _gen1_talk(world, GEN1_BELOW_MR_FUJI_HOME, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "mr_fujis_house_flute", world, flute, {"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_RESCUED_MR_FUJI, "EVENT_RESCUED_MR_FUJI"], [GEN1_EVENT_GOT_POKE_FLUTE, "EVENT_GOT_POKE_FLUTE"],
+	]:
+		stepped = _gen1_flag_leg(path, "mr_fujis_house_flute", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if int(world.state.items().get(GEN1_POKE_FLUTE, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "mr_fujis_house_flute: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	return {"ok": true}
+
+
+func _gen1_fuchsia_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_LAVENDER_TOWN, "mr_fujis_house_exit"],
+		["south", GEN1_ROUTE_12, "lavender_to_route_12"],
+		[GEN1_ROUTE_12_GATE_1F, "route_12_gate", GEN1_ROUTE_12_GATE_DOOR],
+		[GEN1_ROUTE_12, "route_12_gate_south", GEN1_ROUTE_12_GATE_SOUTH],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var beside: Dictionary = _gen1_walk(world, GEN1_ABOVE_SNORLAX, save, random, data)
+	if bool(beside.get("ok", false)):
+		var flute: Dictionary = world.poke_flute_request()
+		if not bool(flute.get("woke", false)):
+			beside = {"ok": false, "reason": "the flute woke nothing: %s" % [flute], "runs": beside["runs"]}
+		else:
+			beside = _gen1_settle(world, save, random, data, world.dispatch_sight_events())
+	stepped = _gen1_step(path, "route_12_snorlax", world, beside, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "route_12_snorlax", world, GEN1_EVENT_BEAT_ROUTE12_SNORLAX, "EVENT_BEAT_ROUTE12_SNORLAX")
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		["south", GEN1_ROUTE_13, "route_12_to_route_13"],
+		["west", GEN1_ROUTE_14, "route_13_to_route_14", GEN1_ROUTE_13_WEST_EDGE],
+		["west", GEN1_ROUTE_15, "route_14_to_route_15"],
+		[GEN1_ROUTE_15_GATE_1F, "route_15_gate", GEN1_ROUTE_15_GATE_DOOR],
+		[GEN1_ROUTE_15, "route_15_gate_west", GEN1_ROUTE_15_GATE_WEST],
+		["west", GEN1_FUCHSIA_CITY, "route_15_to_fuchsia"],
+		[GEN1_FUCHSIA_GYM, "fuchsia_gym_entry", GEN1_FUCHSIA_GYM_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var koga: Dictionary = _gen1_talk_to(world, GEN1_KOGA, save, random, data)
+	stepped = _gen1_step(path, "fuchsia_gym_koga", world, koga, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_KOGA, "EVENT_BEAT_KOGA"], [GEN1_EVENT_GOT_TM06, "EVENT_GOT_TM06"],
+	]:
+		stepped = _gen1_flag_leg(path, "fuchsia_gym_koga", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_SOULBADGE)):
+		return {"ok": false, "path": path, "reason": "fuchsia_gym_koga: SOULBADGE is clear"}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_FUCHSIA_CITY, "fuchsia_gym_exit"]])
+
+
+func _gen1_safari_zone_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SAFARI_ZONE_GATE, "safari_gate_entry", GEN1_SAFARI_GATE_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var offer: Dictionary = _gen1_walk(world, GEN1_SAFARI_GATE_OFFER, save, random, data)
+	stepped = _gen1_step(path, "safari_gate_fee", world, offer, {
+		"balls": world.state.safari_balls(), "steps": world.state.safari_steps()})
+	if not bool(stepped["ok"]):
+		return stepped
+	## `SafariZoneEntranceAutoWalk` has already walked the player into the centre.
+	if not world.gen1_safari_active() or world.map_id() != Vector2i(0, GEN1_SAFARI_ZONE_CENTER):
+		return {"ok": false, "path": path, "reason": "safari_gate_fee: the fee left the player on %s" % [
+			_map_value(world)]}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SAFARI_ZONE_EAST, "safari_center_to_east", GEN1_SAFARI_CENTER_EAST],
+		[GEN1_SAFARI_ZONE_NORTH, "safari_east_to_north", GEN1_SAFARI_EAST_NORTH],
+		[GEN1_SAFARI_ZONE_WEST, "safari_north_to_west", GEN1_SAFARI_NORTH_WEST],
+		[GEN1_SAFARI_ZONE_SECRET_HOUSE, "safari_secret_house", GEN1_SAFARI_SECRET_HOUSE_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var guru: Dictionary = _gen1_talk(world, GEN1_BELOW_FISHING_GURU, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "safari_secret_house_hm03", world, guru, {
+		"items": _named_items(data, world.state.items()), "steps": world.state.safari_steps()})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "safari_secret_house_hm03", world, GEN1_EVENT_GOT_HM03, "EVENT_GOT_HM03")
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SAFARI_ZONE_WEST, "safari_secret_house_exit"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var teeth: Dictionary = _gen1_talk(world, GEN1_BELOW_GOLD_TEETH, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "safari_gold_teeth", world, teeth, {
+		"items": _named_items(data, world.state.items()), "steps": world.state.safari_steps()})
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_GOLD_TEETH, 0)) != 1 or int(world.state.items().get(GEN1_HM03, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "safari_gold_teeth: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SAFARI_ZONE_NORTH, "safari_west_to_north", GEN1_SAFARI_WEST_NORTH],
+		[GEN1_SAFARI_ZONE_EAST, "safari_north_to_east", GEN1_SAFARI_NORTH_EAST],
+		[GEN1_SAFARI_ZONE_CENTER, "safari_east_to_center", GEN1_SAFARI_EAST_CENTER],
+		[GEN1_SAFARI_ZONE_GATE, "safari_center_to_gate", GEN1_SAFARI_CENTER_GATE],
+		[GEN1_FUCHSIA_CITY, "safari_gate_exit", GEN1_SAFARI_GATE_SOUTH],
+		[GEN1_WARDENS_HOUSE, "wardens_house_entry", GEN1_WARDENS_HOUSE_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var warden: Dictionary = _gen1_talk_to(world, GEN1_WARDEN, save, random, data)
+	stepped = _gen1_step(path, "wardens_house_hm04", world, warden, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_GAVE_GOLD_TEETH, "EVENT_GAVE_GOLD_TEETH"], [GEN1_EVENT_GOT_HM04, "EVENT_GOT_HM04"],
+	]:
+		stepped = _gen1_flag_leg(path, "wardens_house_hm04", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if int(world.state.items().get(GEN1_HM04, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "wardens_house_hm04: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_FUCHSIA_CITY, "wardens_house_exit"]])
+
+
+## Back to Celadon's roof for a FRESH WATER and through Route 7's gate on it.
+func _gen1_saffron_drink_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		["east", GEN1_ROUTE_15, "fuchsia_to_route_15"],
+		[GEN1_ROUTE_15_GATE_1F, "route_15_gate_back", GEN1_ROUTE_15_WEST_DOOR],
+		[GEN1_ROUTE_15, "route_15_gate_east", GEN1_ROUTE_15_GATE_EAST_EXIT],
+		["east", GEN1_ROUTE_14, "route_15_to_route_14"],
+		["east", GEN1_ROUTE_13, "route_14_to_route_13", GEN1_ROUTE_14_EAST_EDGE],
+		["north", GEN1_ROUTE_12, "route_13_to_route_12"],
+		[GEN1_ROUTE_12_GATE_1F, "route_12_gate_back", GEN1_ROUTE_12_GATE_SOUTH_DOOR],
+		[GEN1_ROUTE_12, "route_12_gate_north", GEN1_ROUTE_12_GATE_NORTH],
+		["north", GEN1_LAVENDER_TOWN, "route_12_to_lavender"],
+		["west", GEN1_ROUTE_8, "lavender_to_route_8_again"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_8, "route_8_to_underground_again", GEN1_ROUTE_8_UNDERGROUND],
+		[GEN1_UNDERGROUND_PATH_WEST_EAST, "underground_east_entrance_again"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_7, "underground_west_exit_again"],
+		[GEN1_ROUTE_7, "underground_to_route_7_again"],
+		["west", GEN1_CELADON_CITY, "route_7_to_celadon_again"],
+		[GEN1_CELADON_MART_1F, "celadon_mart_entry", GEN1_CELADON_MART_DOOR],
+		[GEN1_CELADON_MART_ELEVATOR, "celadon_mart_elevator", GEN1_MART_ELEVATOR_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_ride(path, world, save, random, data, "celadon_mart_to_5f",
+		GEN1_MART_CAR_PANEL, GEN1_MART_CAR_DOOR, GEN1_CELADON_MART_5F)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_CELADON_MART_ROOF, "celadon_mart_roof", GEN1_MART_5F_ROOF_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	_gen1_drink = GEN1_FRESH_WATER
+	var machine: Dictionary = _gen1_talk(
+		world, GEN1_BELOW_VENDING_MACHINE, Gen2WorldSprite.FACING_UP, save, random, data
+	)
+	stepped = _gen1_step(path, "celadon_mart_fresh_water", world, machine, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_FRESH_WATER, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "celadon_mart_fresh_water: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_CELADON_MART_5F, "celadon_mart_roof_down", GEN1_MART_ROOF_STAIRS],
+		[GEN1_CELADON_MART_ELEVATOR, "celadon_mart_elevator_down", GEN1_MART_ELEVATOR_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_ride(path, world, save, random, data, "celadon_mart_to_1f",
+		GEN1_MART_CAR_PANEL, GEN1_MART_CAR_DOOR, GEN1_CELADON_MART_1F)
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_CELADON_CITY, "celadon_mart_exit", GEN1_MART_1F_DOOR],
+		["east", GEN1_ROUTE_7, "celadon_to_route_7_again"],
+		[GEN1_ROUTE_7_GATE, "route_7_gate", GEN1_ROUTE_7_GATE_WEST],
+		[GEN1_ROUTE_7, "route_7_gate_east", GEN1_ROUTE_7_GATE_EAST],
+		["east", GEN1_SAFFRON_CITY, "route_7_to_saffron"],
+	])
+
+
+## The car's panel answered with [param landing], then its door.
+func _gen1_ride(
+	path: Array, world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator,
+	data: GameData, step: String, panel: Vector2i, door: Vector2i, landing: int
+) -> Dictionary:
+	_gen1_elevator_floor = landing
+	var pressed: Dictionary = _gen1_talk(world, panel, Gen2WorldSprite.FACING_UP, save, random, data)
+	var stepped: Dictionary = _gen1_step(path, "%s_panel" % step, world, pressed)
+	if not bool(stepped["ok"]):
+		return stepped
+	if _gen1_elevator_floor >= 0:
+		return {"ok": false, "path": path, "reason": "%s: the car offered no floor on map %d" % [step, landing]}
+	return _gen1_warp_legs(path, world, save, random, data, [[landing, step, door]])
+
+
+## Silph Co.: the stairs to 5F, the CARD KEY past its Rocket, the pads to
+## Giovanni on 11F, the president's MASTER BALL and the car down.
+func _gen1_silph_co_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SILPH_CO_1F, "silph_co_entry", GEN1_SILPH_CO_DOOR],
+		[GEN1_SILPH_CO_2F, "silph_1f_to_2f", GEN1_SILPH_STAIRS_RIGHT],
+		[GEN1_SILPH_CO_3F, "silph_2f_to_3f", GEN1_SILPH_STAIRS_RIGHT],
+		[GEN1_SILPH_CO_4F, "silph_3f_to_4f", GEN1_SILPH_STAIRS_LEFT],
+		[GEN1_SILPH_CO_5F, "silph_4f_to_5f", GEN1_SILPH_STAIRS_RIGHT],
+		[GEN1_SILPH_CO_9F, "silph_5f_pad_to_9f", GEN1_SILPH_5F_PAD_TO_9F],
+		[GEN1_SILPH_CO_5F, "silph_9f_pad_back", GEN1_SILPH_9F_PAD],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var key: Dictionary = _gen1_talk(world, GEN1_BESIDE_CARD_KEY, Gen2WorldSprite.FACING_RIGHT, save, random, data)
+	stepped = _gen1_step(path, "silph_5f_card_key", world, key, {"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_CARD_KEY, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "silph_5f_card_key: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SILPH_CO_9F, "silph_5f_pad_to_9f_again", GEN1_SILPH_5F_PAD_TO_9F],
+		[GEN1_SILPH_CO_5F, "silph_9f_pad_back_again", GEN1_SILPH_9F_PAD],
+		[GEN1_SILPH_CO_3F, "silph_5f_pad_to_3f", GEN1_SILPH_5F_PAD_TO_3F],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_card_key(path, "silph_3f_card_key", world, GEN1_SILPH_3F_DOOR_SIDE,
+		Gen2WorldSprite.FACING_LEFT, save, random, data)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SILPH_CO_7F, "silph_3f_pad_to_7f", GEN1_SILPH_3F_PAD_TO_7F],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	## `SilphCo7FSilphWorkerM1Text`: the LAPRAS that will carry the walk to Cinnabar.
+	var lapras: Dictionary = _gen1_talk_to(world, GEN1_SILPH_LAPRAS_WORKER, save, random, data)
+	_mirror_party(world, save)
+	stepped = _gen1_step(path, "silph_7f_lapras", world, lapras, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	if not _party_species(save).any(func(mon: Dictionary) -> bool: return int(mon["species"]) == GEN1_DEX_LAPRAS):
+		return {"ok": false, "path": path, "reason": "silph_7f_lapras: the party is %s" % [_party_species(save)]}
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SILPH_CO_11F, "silph_7f_pad_to_11f", GEN1_SILPH_7F_PAD_TO_11F],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "silph_7f_pad_to_11f", world, GEN1_EVENT_BEAT_SILPH_CO_RIVAL, "EVENT_BEAT_SILPH_CO_RIVAL")
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_card_key(path, "silph_11f_card_key", world, GEN1_SILPH_11F_DOOR_SIDE,
+		Gen2WorldSprite.FACING_UP, save, random, data)
+	if not bool(stepped["ok"]):
+		return stepped
+	var giovanni: Dictionary = _gen1_talk_to(world, GEN1_SILPH_GIOVANNI, save, random, data)
+	stepped = _gen1_step(path, "silph_11f_giovanni", world, giovanni, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "silph_11f_giovanni", world, GEN1_EVENT_BEAT_SILPH_CO_GIOVANNI, "EVENT_BEAT_SILPH_CO_GIOVANNI")
+	if not bool(stepped["ok"]):
+		return stepped
+	var president: Dictionary = _gen1_talk_to(world, GEN1_SILPH_PRESIDENT, save, random, data)
+	stepped = _gen1_step(path, "silph_11f_master_ball", world, president, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "silph_11f_master_ball", world, GEN1_EVENT_GOT_MASTER_BALL, "EVENT_GOT_MASTER_BALL")
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SILPH_CO_7F, "silph_11f_pad_to_7f", GEN1_SILPH_11F_PAD_TO_7F],
+		[GEN1_SILPH_CO_3F, "silph_7f_pad_to_3f", GEN1_SILPH_7F_PAD_TO_3F],
+		[GEN1_SILPH_CO_ELEVATOR, "silph_3f_elevator", GEN1_SILPH_3F_ELEVATOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_ride(path, world, save, random, data, "silph_car_to_1f",
+		GEN1_SILPH_CAR_PANEL, GEN1_SILPH_CAR_DOOR, GEN1_SILPH_CO_1F)
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_SAFFRON_CITY, "silph_co_exit"]])
+
+
+## `PrintCardKeyText`: the door in front of [param cell] opened with the CARD KEY.
+func _gen1_card_key(
+	path: Array, step: String, world: Gen2WorldAPI, cell: Vector2i, facing: int,
+	save: Gen2SaveData, random: RandomNumberGenerator, data: GameData
+) -> Dictionary:
+	var opened: Dictionary = _gen1_talk(world, cell, facing, save, random, data)
+	var stepped: Dictionary = _gen1_step(path, step, world, opened)
+	if not bool(stepped["ok"]):
+		return stepped
+	var door: Vector2i = world.player_cell + world.facing_direction()
+	if not world.can_walk_to(door):
+		return {"ok": false, "path": path, "reason": "%s: the door at %s stayed shut" % [step, door]}
+	return {"ok": true}
+
+
+## SURF on the LAPRAS, Fuchsia by the gates again, Route 19's sea, Route 20 through
+## the Seafoam Islands (B3F's pool is the way between its halves) and Cinnabar.
+func _gen1_cinnabar_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var taught: Dictionary = _teach_tm_hm(world, save, GEN1_HM03)
+	_mirror_party(world, save)
+	var stepped: Dictionary = _gen1_step(path, "saffron_teach_surf", world, taught, {
+		"moves": _party_moves(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	var legs: Array = []
+	for pad: int in GEN1_SAFFRON_GYM_PADS_OUT.size():
+		legs.append([GEN1_SAFFRON_GYM, "saffron_gym_pad_out_%d" % (pad + 1), GEN1_SAFFRON_GYM_PADS_OUT[pad]])
+	stepped = _gen1_warp_legs(path, world, save, random, data, legs + [
+		[GEN1_SAFFRON_CITY, "saffron_gym_exit"],
+		["east", GEN1_ROUTE_8, "saffron_to_route_8"],
+		[GEN1_ROUTE_8_GATE, "route_8_gate", GEN1_ROUTE_8_GATE_WEST],
+		[GEN1_ROUTE_8, "route_8_gate_east", GEN1_ROUTE_8_GATE_EAST],
+		["east", GEN1_LAVENDER_TOWN, "route_8_to_lavender_again"],
+		["south", GEN1_ROUTE_12, "lavender_to_route_12_again"],
+		[GEN1_ROUTE_12_GATE_1F, "route_12_gate_again", GEN1_ROUTE_12_GATE_DOOR],
+		[GEN1_ROUTE_12, "route_12_gate_south_again", GEN1_ROUTE_12_GATE_SOUTH],
+		["south", GEN1_ROUTE_13, "route_12_to_route_13_again"],
+		["west", GEN1_ROUTE_14, "route_13_to_route_14_again", GEN1_ROUTE_13_WEST_EDGE],
+		["west", GEN1_ROUTE_15, "route_14_to_route_15_again"],
+		[GEN1_ROUTE_15_GATE_1F, "route_15_gate_again", GEN1_ROUTE_15_GATE_DOOR],
+		[GEN1_ROUTE_15, "route_15_gate_west_again", GEN1_ROUTE_15_GATE_WEST],
+		["west", GEN1_FUCHSIA_CITY, "route_15_to_fuchsia_again"],
+		["south", GEN1_ROUTE_19, "fuchsia_to_route_19"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "route_19_surf", world, _gen1_surf(
+		world, GEN1_ROUTE_19_SHORE[data.id], Gen2WorldSprite.FACING_DOWN, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_crossings(path, world, save, random, data, [
+		["west", GEN1_ROUTE_20, "route_19_to_route_20"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "route_20_north_field", world, _gen1_walk(
+		world, GEN1_ROUTE_20_NORTH_FIELD, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SEAFOAM_ISLANDS_1F, "seafoam_west_door", GEN1_ROUTE_20_SEAFOAM_WEST],
+		[GEN1_SEAFOAM_ISLANDS_B1F, "seafoam_1f_to_b1f", GEN1_SEAFOAM_1F_WEST_LADDER],
+		[GEN1_SEAFOAM_ISLANDS_B2F, "seafoam_b1f_to_b2f", GEN1_SEAFOAM_B1F_WEST_LADDER],
+		[GEN1_SEAFOAM_ISLANDS_B3F, "seafoam_b2f_to_b3f", GEN1_SEAFOAM_B2F_WEST_LADDER],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "seafoam_b3f_surf", world, _gen1_surf(
+		world, GEN1_SEAFOAM_B3F_WEST_BANK, Gen2WorldSprite.FACING_DOWN, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "seafoam_b3f_east_bank", world, _gen1_walk(
+		world, GEN1_SEAFOAM_B3F_SHORE, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SEAFOAM_ISLANDS_B2F, "seafoam_b3f_to_b2f", GEN1_SEAFOAM_B2F_EAST_LADDER],
+		[GEN1_SEAFOAM_ISLANDS_B1F, "seafoam_b2f_to_b1f", GEN1_SEAFOAM_B1F_EAST_LADDER],
+		[GEN1_SEAFOAM_ISLANDS_1F, "seafoam_b1f_to_1f", GEN1_SEAFOAM_1F_EAST_LADDER],
+		[GEN1_ROUTE_20, "seafoam_east_door", GEN1_SEAFOAM_1F_EAST_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "route_20_surf_again", world, _gen1_surf(
+		world, GEN1_ROUTE_20_EAST_BEACH, Gen2WorldSprite.FACING_DOWN, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_warp_legs(path, world, save, random, data, [
+		["west", GEN1_CINNABAR_ISLAND, "route_20_to_cinnabar"],
+	])
+
+
+## `Mansion<N>Script_Switches`: the statue in front of [param cell] pressed, and
+## [param on] is where EVENT_MANSION_SWITCH_ON has to stand behind it.
+func _gen1_mansion_switch(
+	path: Array, step: String, world: Gen2WorldAPI, cell: Vector2i, on: bool,
+	save: Gen2SaveData, random: RandomNumberGenerator, data: GameData
+) -> Dictionary:
+	var pressed: Dictionary = _gen1_talk(world, cell, Gen2WorldSprite.FACING_UP, save, random, data)
+	var stepped: Dictionary = _gen1_step(path, step, world, pressed)
+	if not bool(stepped["ok"]):
+		return stepped
+	if world.event_flag_active(GEN1_EVENT_MANSION_SWITCH_ON) != on:
+		return {"ok": false, "path": path, "reason": "%s: the switch stands %s" % [
+			step, "on" if world.event_flag_active(GEN1_EVENT_MANSION_SWITCH_ON) else "off"]}
+	return {"ok": true}
+
+
+## The POKéMON MANSION to the SECRET KEY: 3F's switch and its hole down to 1F's
+## east half, B1F's two statues turned to open the key's room and then the way
+## back to its stairs, and out by the east doors.
+func _gen1_mansion_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_step(path, "cinnabar_shore", world, _gen1_walk(
+		world, GEN1_CINNABAR_SHORE, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_POKEMON_MANSION_1F, "mansion_entry", GEN1_MANSION_DOOR],
+		[GEN1_POKEMON_MANSION_2F, "mansion_1f_to_2f", GEN1_MANSION_1F_STAIRS],
+		[GEN1_POKEMON_MANSION_3F, "mansion_2f_to_3f", GEN1_MANSION_2F_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_mansion_switch(path, "mansion_3f_switch_on", world, GEN1_MANSION_3F_SWITCH, true, save, random, data)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_POKEMON_MANSION_1F, "mansion_3f_hole", GEN1_MANSION_3F_HOLE],
+		[GEN1_POKEMON_MANSION_B1F, "mansion_1f_to_b1f", GEN1_MANSION_1F_B1F_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	for turn: Array in [
+		["mansion_b1f_south_switch_off", GEN1_MANSION_B1F_SOUTH_SWITCH, false],
+		["mansion_b1f_north_switch_on", GEN1_MANSION_B1F_NORTH_SWITCH, true],
+	]:
+		stepped = _gen1_mansion_switch(path, String(turn[0]), world, turn[1], bool(turn[2]), save, random, data)
+		if not bool(stepped["ok"]):
+			return stepped
+	var key: Dictionary = _gen1_talk_to(world, GEN1_MANSION_SECRET_KEY, save, random, data)
+	stepped = _gen1_step(path, "mansion_b1f_secret_key", world, key, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_SECRET_KEY, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "mansion_b1f_secret_key: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	for turn: Array in [
+		["mansion_b1f_north_switch_off", GEN1_MANSION_B1F_NORTH_SWITCH, false],
+		["mansion_b1f_south_switch_on", GEN1_MANSION_B1F_SOUTH_SWITCH, true],
+	]:
+		stepped = _gen1_mansion_switch(path, String(turn[0]), world, turn[1], bool(turn[2]), save, random, data)
+		if not bool(stepped["ok"]):
+			return stepped
+	return _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_POKEMON_MANSION_1F, "mansion_b1f_to_1f", GEN1_MANSION_B1F_STAIRS],
+		[GEN1_CINNABAR_ISLAND, "mansion_exit", GEN1_MANSION_EAST_DOOR],
+	])
+
+
+## Cinnabar's gym: the six quiz machines answered as `CinnabarGymQuiz`'s own
+## nibble has them, each gate opening on the way round to Blaine.
+func _gen1_cinnabar_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	## Twenty items fill a Generation 1 bag, and Blaine's TM38 is the twenty-first.
+	var tossed: Dictionary = Gen2WorldBagHost.toss(world, save, GEN1_NUGGET, 1, false)
+	var stepped: Dictionary = _gen1_step(path, "cinnabar_toss_nugget", world, tossed, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_CINNABAR_GYM, "cinnabar_gym_entry", GEN1_CINNABAR_GYM_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	for machine: int in GEN1_CINNABAR_QUIZ.size():
+		var row: Array = GEN1_CINNABAR_QUIZ[machine]
+		var answer: Array[int] = [int(row[1])]
+		var quiz: Dictionary = _gen1_talk(world, row[0], Gen2WorldSprite.FACING_UP, save, random, data, answer)
+		stepped = _gen1_step(path, "cinnabar_gym_quiz_%d" % (machine + 1), world, quiz, {
+			"party": _party_species(save)})
+		if not bool(stepped["ok"]):
+			return stepped
+		stepped = _gen1_flag_leg(path, "cinnabar_gym_quiz_%d" % (machine + 1), world,
+			GEN1_EVENT_CINNABAR_GYM_GATE0_UNLOCKED + machine + 1, "EVENT_CINNABAR_GYM_GATE%d_UNLOCKED" % (machine + 1))
+		if not bool(stepped["ok"]):
+			return stepped
+	var blaine: Dictionary = _gen1_talk_to(world, GEN1_BLAINE, save, random, data)
+	stepped = _gen1_step(path, "cinnabar_gym_blaine", world, blaine, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_BLAINE, "EVENT_BEAT_BLAINE"], [GEN1_EVENT_GOT_TM38, "EVENT_GOT_TM38"],
+	]:
+		stepped = _gen1_flag_leg(path, "cinnabar_gym_blaine", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_VOLCANOBADGE)):
+		return {"ok": false, "path": path, "reason": "cinnabar_gym_blaine: VOLCANOBADGE is clear"}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_CINNABAR_ISLAND, "cinnabar_gym_exit"]])
+
+
+## Route 21 north to Pallet, Route 1 to Viridian and its gym: Giovanni again,
+## the EARTHBADGE and TM27.
+func _gen1_viridian_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_step(path, "cinnabar_surf_north", world, _gen1_surf(
+		world, GEN1_CINNABAR_WEST_SHORE, Gen2WorldSprite.FACING_LEFT, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_crossings(path, world, save, random, data, [
+		["north", GEN1_ROUTE_21, "cinnabar_to_route_21"],
+		["north", GEN1_PALLET_TOWN, "route_21_to_pallet"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "pallet_shore", world, _gen1_walk(
+		world, GEN1_PALLET_SHORE, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	var tossed: Dictionary = Gen2WorldBagHost.toss(world, save, GEN1_TM11, 1, false)
+	stepped = _gen1_step(path, "pallet_toss_tm11", world, tossed, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		["north", GEN1_ROUTE_1, "pallet_to_route_1_again"],
+		["north", GEN1_VIRIDIAN_CITY, "route_1_to_viridian_again"],
+		[GEN1_VIRIDIAN_GYM, "viridian_gym_entry", GEN1_VIRIDIAN_GYM_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var giovanni: Dictionary = _gen1_talk_to(world, GEN1_VIRIDIAN_GIOVANNI, save, random, data)
+	stepped = _gen1_step(path, "viridian_gym_giovanni", world, giovanni, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_VIRIDIAN_GYM_GIOVANNI, "EVENT_BEAT_VIRIDIAN_GYM_GIOVANNI"],
+		[GEN1_EVENT_GOT_TM27, "EVENT_GOT_TM27"],
+	]:
+		stepped = _gen1_flag_leg(path, "viridian_gym_giovanni", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_EARTHBADGE)):
+		return {"ok": false, "path": path, "reason": "viridian_gym_giovanni: EARTHBADGE is clear"}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_VIRIDIAN_CITY, "viridian_gym_exit"]])
+
+
+## `TryPushingBoulder` [param count] times from [param approach], the player
+## stepping after the boulder between pushes, since `MoveSprite` moves it alone.
+func _gen1_push(
+	path: Array, step: String, world: Gen2WorldAPI, approach: Vector2i, direction: Vector2i,
+	count: int, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData
+) -> Dictionary:
+	var walked: Dictionary = _gen1_walk(world, approach, save, random, data)
+	var stepped: Dictionary = _gen1_step(path, "%s_approach" % step, world, walked)
+	if not bool(stepped["ok"]):
+		return stepped
+	var pushes: Array = []
+	for _push: int in count:
+		_settle_object_steps(world, random)
+		## The first bump only arms `TryPushingBoulder`; the next press pushes.
+		var result: Dictionary = world.move_result(direction)
+		if not result.has("boulder_pushed"):
+			result = world.move_result(direction)
+		if not result.has("boulder_pushed"):
+			return _gen1_step(path, step, world, {"ok": false, "reason": "no boulder moved from %s: %s" % [
+				_cell_value(world), result.get("reason", "the step succeeded")]})
+		var settled: Dictionary = _gen1_settle(world, save, random, data, _dispatch_after_step(world))
+		if not bool(settled.get("ok", false)):
+			return _gen1_step(path, step, world, settled)
+		pushes.append(_cell_value_from_vector((result["boulder_pushed"] as Dictionary)["to_cell"]))
+		_settle_object_steps(world, random)
+		if _push + 1 < count:
+			var followed: Dictionary = _gen1_walk(world, world.player_cell + direction, save, random, data)
+			if not bool(followed.get("ok", false)):
+				return _gen1_step(path, step, world, followed)
+	return _gen1_step(path, step, world, {"ok": true}, {"boulder": pushes})
+
+
+## STRENGTH on the LAPRAS, Route 22, its gate, and Route 23's guards and river
+## to Victory Road's door.
+func _gen1_route_23_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var taught: Dictionary = _teach_tm_hm(world, save, GEN1_HM04)
+	_mirror_party(world, save)
+	var stepped: Dictionary = _gen1_step(path, "viridian_teach_strength", world, taught, {
+		"moves": _party_moves(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		["west", GEN1_ROUTE_22, "viridian_to_route_22"],
+		[GEN1_ROUTE_22_GATE, "route_22_gate", GEN1_ROUTE_22_GATE_DOOR],
+		[GEN1_ROUTE_23, "route_22_gate_north", GEN1_ROUTE_22_GATE_NORTH],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "route_23_surf", world, _gen1_surf(
+		world, GEN1_ROUTE_23_SOUTH_BANK, Gen2WorldSprite.FACING_UP, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_step(path, "route_23_north_bank", world, _gen1_walk(
+		world, GEN1_ROUTE_23_NORTH_BANK, save, random, data
+	))
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_VICTORY_ROAD_1F, "victory_road_entry", GEN1_ROUTE_23_VICTORY_ROAD_DOOR],
+	])
+
+
+## Victory Road's three switches: 1F's boulder to the ladder, 2F's first to the
+## east, 3F's into its hole and down onto 2F's second, then out to the Plateau.
+func _gen1_victory_road_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var strength: Dictionary = world.strength_request()
+	if bool(strength.get("ok", false)):
+		strength = world.complete_strength()
+	var stepped: Dictionary = _gen1_step(path, "victory_road_strength", world, strength)
+	if not bool(stepped["ok"]):
+		return stepped
+	for push: Array in GEN1_VICTORY_ROAD_1F_PUSHES:
+		stepped = _gen1_push(path, String(push[0]), world, push[1], push[2], int(push[3]), save, random, data)
+		if not bool(stepped["ok"]):
+			return stepped
+	stepped = _gen1_flag_leg(path, "victory_road_1f_switch", world,
+		GEN1_EVENT_VICTORY_ROAD_1_BOULDER_ON_SWITCH, "EVENT_VICTORY_ROAD_1_BOULDER_ON_SWITCH")
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_VICTORY_ROAD_2F, "victory_road_1f_to_2f", GEN1_VICTORY_ROAD_1F_LADDER],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	for push: Array in GEN1_VICTORY_ROAD_2F_PUSHES:
+		stepped = _gen1_push(path, String(push[0]), world, push[1], push[2], int(push[3]), save, random, data)
+		if not bool(stepped["ok"]):
+			return stepped
+	stepped = _gen1_flag_leg(path, "victory_road_2f_switch", world,
+		GEN1_EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1, "EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1")
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_VICTORY_ROAD_3F, "victory_road_2f_to_3f", GEN1_VICTORY_ROAD_2F_LADDER],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_push(path, "victory_road_3f_push_gap", world, GEN1_VICTORY_ROAD_3F_GAP_ABOVE,
+		Vector2i.DOWN, 2, save, random, data)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_push(path, "victory_road_3f_push_into_hole", world, GEN1_VICTORY_ROAD_3F_HOLE_SIDE,
+		Vector2i.RIGHT, 1, save, random, data)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_VICTORY_ROAD_2F, "victory_road_3f_hole", GEN1_VICTORY_ROAD_3F_HOLE],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_push(path, "victory_road_2f_push_onto_second_switch", world,
+		GEN1_VICTORY_ROAD_2F_FALLEN_BOULDER_SIDE, Vector2i.LEFT, GEN1_VICTORY_ROAD_2F_SECOND_PUSHES,
+		save, random, data)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "victory_road_2f_second_switch", world,
+		GEN1_EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2, "EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2")
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_VICTORY_ROAD_3F, "victory_road_2f_to_3f_again", GEN1_VICTORY_ROAD_2F_EAST_LADDER],
+		[GEN1_VICTORY_ROAD_2F, "victory_road_3f_to_2f", GEN1_VICTORY_ROAD_3F_LADDER_DOWN],
+		[GEN1_ROUTE_23, "victory_road_exit", GEN1_VICTORY_ROAD_2F_EXIT],
+		["north", GEN1_INDIGO_PLATEAU, "route_23_to_indigo_plateau"],
+		[GEN1_INDIGO_PLATEAU_LOBBY, "indigo_plateau_lobby", GEN1_INDIGO_PLATEAU_DOOR],
+	])
+
+
+## The Elite Four's four rooms, the Champion and the Hall of Fame.
+func _gen1_elite_four_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_LORELEIS_ROOM, "loreleis_room", GEN1_LOBBY_STAIRS],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	for room: Array in GEN1_ELITE_FOUR:
+		var member: Dictionary = _gen1_talk_to(world, GEN1_ELITE_MEMBER, save, random, data)
+		stepped = _gen1_step(path, "%s_fought" % room[0], world, member, {"party": _party_species(save)})
+		if not bool(stepped["ok"]):
+			return stepped
+		stepped = _gen1_flag_leg(path, "%s_fought" % room[0], world, int(room[2]), String(room[3]))
+		if not bool(stepped["ok"]):
+			return stepped
+		stepped = _gen1_warp_legs(path, world, save, random, data, [
+			[int(room[1]), "%s_next_door" % room[0], GEN1_ELITE_NEXT_DOOR],
+		])
+		if not bool(stepped["ok"]):
+			return stepped
+	var lance: Dictionary = _gen1_talk_to(world, GEN1_LANCE, save, random, data)
+	stepped = _gen1_step(path, "lance_fought", world, lance, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "lance_fought", world, GEN1_EVENT_BEAT_LANCE, "EVENT_BEAT_LANCE")
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_CHAMPIONS_ROOM, "champions_room", GEN1_LANCES_ROOM_EXIT, GEN1_HALL_OF_FAME],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	## `ChampionsRoomOakAppearsScript` walks the player into the Hall, whose own
+	## script inducts the party, clears every Plateau event, saves and resets,
+	## all inside the one drain.
+	path.append({
+		"step": "hall_of_fame", "map": _map_value(world), "cell": _cell_value(world),
+		"ok": world.map_id() == Vector2i(0, GEN1_HALL_OF_FAME) and world.state.hall_of_fame(),
+		"hall_of_fame_flag": world.state.hall_of_fame(), "party": _party_species(save),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(path[-1]["ok"]):
+		return {"ok": false, "path": path, "reason": "hall_of_fame: the walk ended on %s with the flag %s" % [
+			_map_value(world), world.state.hall_of_fame()]}
+	return {"ok": true}
+
+
+## The gym's pads to Sabrina, and the MARSHBADGE.
+func _gen1_saffron_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var legs: Array = [[GEN1_SAFFRON_GYM, "saffron_gym_entry", GEN1_SAFFRON_GYM_DOOR]]
+	for pad: int in GEN1_SAFFRON_GYM_PADS.size():
+		legs.append([GEN1_SAFFRON_GYM, "saffron_gym_pad_%d" % (pad + 1), GEN1_SAFFRON_GYM_PADS[pad]])
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, legs)
+	if not bool(stepped["ok"]):
+		return stepped
+	var sabrina: Dictionary = _gen1_talk_to(world, GEN1_SABRINA, save, random, data)
+	stepped = _gen1_step(path, "saffron_gym_sabrina", world, sabrina, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_SABRINA, "EVENT_BEAT_SABRINA"], [GEN1_EVENT_GOT_TM46, "EVENT_GOT_TM46"],
+	]:
+		stepped = _gen1_flag_leg(path, "saffron_gym_sabrina", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_MARSHBADGE)):
+		return {"ok": false, "path": path, "reason": "saffron_gym_sabrina: MARSHBADGE is clear"}
+	return {"ok": true}

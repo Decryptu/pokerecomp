@@ -78,7 +78,6 @@ var subpixel: bool = false:
 var _subpixel_steps: int = 1
 
 ## Whether the buffer outside the 160x144 rectangle is filled by this screen.
-##
 ## On by default, and the reason a screen written without a thought for the
 ## window is still not letterboxed: a screen laid out in 160x144 has nothing of
 ## its own to put in a wider buffer, so the surround is its own field and the
@@ -109,7 +108,6 @@ var surround_color: Color = Color.BLACK:
 			_mask.queue_redraw()
 
 ## Whether anything has said what [member surround_color] is.
-##
 ## "Not told yet" is not "told it is black", and the difference is a whole class
 ## of bug: a screen laid out over another -- a menu box over the map, a question
 ## over a picture -- has no field of its own, and painting the default over the
@@ -204,7 +202,6 @@ func apply_screen_fill() -> void:
 
 
 ## Inside the screen, in hardware pixels: position it in the 160x144 space.
-##
 ## Everything placed this way is interface, and sits above whatever
 ## [method display_content] put there, in the order it was placed.
 func display(node: Node) -> void:
@@ -243,7 +240,6 @@ func view_size() -> Vector2i:
 
 
 ## The cartridge's own 160x144 screen, in the native layer's own pixels.
-##
 ## A view on that layer is handed a rectangle and told nothing else, and every
 ## hardware-pixel number it is given -- the text box's, first -- has to land
 ## somewhere inside it. Framed, that mapping was the layer itself, since the
@@ -350,7 +346,6 @@ func interface_layer() -> Control:
 
 
 ## Where the hardware's own 160x144 sits inside the buffer, in buffer pixels.
-##
 ## What a screen drawing a backdrop has to leave alone: the picture it hands
 ## [method set_backdrop] is the buffer's size, and this is the hole its own
 ## frame is already filling.
@@ -359,10 +354,8 @@ func interface_origin() -> Vector2i:
 
 
 ## The screen [param node] is drawn on, or null outside one.
-##
 ## The walk rather than a stored reference: a screen is added to whichever host
 ## has one and freed by it, and neither end should have to hold the other.
-##
 ## The outermost one, not the nearest, for a node that is somehow inside two.
 static func owner_of(node: Node) -> Gen2Screen:
 	var at: Node = node
@@ -431,7 +424,6 @@ func _on_backdrop_source_gone() -> void:
 ## The 160x144 field a screen stands on when it is a colour rather than a
 ## picture: a [ColorRect] that says what colour it is, so the screen around it
 ## carries the same one out to the window.
-##
 ## [method Gen2PicImage.show] is that seam for a screen drawn as a picture and
 ## this is the other half of it. It reports on every draw rather than on a
 ## setter, so a fade that recolours the field takes the surround with it without
@@ -658,7 +650,6 @@ func _draw_cover() -> void:
 ## the interface is laid out in. Not a filled surface, because the middle is not
 ## always the interface's -- a battle transition is the renderer's own screen and
 ## has to stay visible inside it.
-##
 ## A backdrop the size of the buffer is drawn through the same four bands, so a
 ## screen with real art out there paints it and a screen without paints its own
 ## field colour.

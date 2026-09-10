@@ -5,7 +5,6 @@ extends RefCounted
 ## `wPokedexDataStart`..`wPokedexDataEnd` does: the mode, the species order that
 ## mode built, how far the listing runs, and the cursor and scroll into it. A
 ## screen draws [method rows] and feeds buttons back in.
-##
 ## The orderings come from the cache ([method GameData.dex_order_new] and
 ## [method GameData.dex_order_alpha]); DEXMODE_OLD has no table, `.OldMode`
 ## counting from 1. Seen and caught come from [Gen2WorldState].
@@ -402,7 +401,6 @@ func _move_up_one_page() -> bool:
 
 
 ## `Pokedex_ListingMoveDownOnePage`, which always reports a change.
-##
 ## The source adds two pages to the offset in one byte and treats the carry as
 ## "near the bottom", so an offset that would overflow lands on the last page
 ## exactly as one that runs past `wDexListingEnd` does. The wrap is kept because
@@ -437,7 +435,6 @@ func toggle_page() -> void:
 
 ## `Pokedex_NextOrPreviousDexEntry`: moves until it lands on a seen species, and
 ## puts the cursor and scroll back if it runs out of listing first.
-##
 ## Answers whether it moved. A move re-enters the entry screen at page 1, which
 ## is `Pokedex_ReinitDexEntryScreen`.
 func step_entry(button: int) -> bool:
@@ -460,7 +457,6 @@ func step_entry(button: int) -> bool:
 
 ## The selected species' entry, as `DisplayDexEntry` prints it:
 ## { species, name, number, category, caught, height, weight, page, text }.
-##
 ## The name, the category and the number are printed whether or not the species
 ## has been caught; the caught check sits after them and gates the measurements
 ## and the description. A zero height or weight is left blank rather than printed
@@ -542,7 +538,6 @@ static func mode_rows(with_unown: bool = false) -> Array:
 ## `.ChangeMode`: choosing the mode already in use changes nothing, and choosing
 ## another reorders the listing and puts the cursor back at the top before
 ## seeking `wPrevDexEntry` again.
-##
 ## Answers whether the mode changed, which is what decides whether the screen
 ## shows [constant CHANGING_MODES_TEXT].
 func change_mode(next_mode: int) -> bool:
@@ -587,7 +582,6 @@ func search_type_string(value: int) -> String:
 
 ## `Pokedex_UpdateSearchMonType`, which reads left and right on the two type rows
 ## only and answers whether the value changed.
-##
 ## The two rows wrap differently, and deliberately: the first row runs 1 to
 ## NUM_TYPES and can never be empty, while the second wraps through
 ## [constant SEARCH_TYPE_NONE] as well, which is the only way to search on one

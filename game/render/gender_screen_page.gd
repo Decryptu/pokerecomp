@@ -3,11 +3,9 @@ extends RefCounted
 
 ## `engine/menus/init_gender.asm`'s screen on the hardware tile grid: the
 ## question in the standard text box and the two-option menu over it.
-##
 ## Positions are the source's own. The menu is [Gen2MenuPage]'s, drawn from
 ## `.MenuHeader`'s `menu_coords 6, 4, 12, 9` and its three flags, so nothing
 ## about the box is decided here.
-##
 ## Crystal only, since pokegold ships neither the routine nor its text.
 
 const TILE: int = Gen2Font.TILE
@@ -70,7 +68,6 @@ static func menu_box() -> Gen2MenuBox:
 
 
 ## The whole 160x144 page as palette indices, with the arrow on [param cursor].
-##
 ## `InitGenderScreen` ByteFills the whole tilemap with tile $00, which
 ## `LoadGenderScreenLightBlueTile` has just filled with one colour, so the field
 ## behind the box and the menu is that index rather than a blank.

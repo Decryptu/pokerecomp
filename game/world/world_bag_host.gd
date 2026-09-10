@@ -10,7 +10,6 @@ extends RefCounted
 ## stacks. The commit boundary is [Gen2WorldTransaction].
 
 ## `TossItem` with `wCurItemQuantity`, as one validated transaction.
-##
 ## `TossMenu` is only reachable from a submenu that offered TOSS, so the
 ## permission is already settled by the time the source gets here; it is checked
 ## again because a caller is not always that menu.
@@ -223,7 +222,6 @@ static func register(
 
 ## `SwitchItemsInBag` as a committed transaction: one pocket's rows put in
 ## [param pocket_order], with the rest of the bag left where it sits.
-##
 ## The caller has already run [method Gen2WorldPack.switch_items] to work out the
 ## order; this only writes it. `wPCItems` is the same routine over a different
 ## list, which [param pc] selects.

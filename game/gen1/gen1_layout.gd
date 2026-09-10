@@ -1194,7 +1194,8 @@ const SCRIPT_CALLS: Array[String] = [
 	"delay_frame", "delay_frames", "delay_3", "play_default_music", "check_map_trainers",
 	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle", "force_bike_or_surf",
 	"play_music", "stop_all_music", "random", "set_sprite_position_2", "set_sprite_image",
-	"set_sprite_image_2", "enable_pikachu_drawing", "check_pikachu_following",
+	"set_sprite_image_2", "enable_pikachu_drawing", "disable_pikachu_drawing",
+	"check_pikachu_following",
 	"set_sprite_facing", "set_sprite_facing_delay", "sprite_stay", "move_sprite",
 	"decode_rle", "decode_arrow_movement", "update_gym_gates",
 	"serial_connect", "fill_memory", "save_end_battle_text", "engage_map_trainer",
@@ -1310,6 +1311,33 @@ const BATTLE_OUTCOME_SOURCES: Dictionary = {
 	"is_in_battle": [0xFF, BATTLE_OUTCOME_LOST],
 	"battle_result": [2, BATTLE_OUTCOME_ESCAPED],
 }
+## `wBattleType` read across onto Crystal's numbering. The old man and Yellow's
+## Prof. Oak share `DisplayBattleMenu`'s branch, so both are the Dude's tutorial
+## here; `tutor` names `LoadPlayerBackPic`'s pic and `.oldManName`'s row.
+const BATTLE_TYPE_OLD_MAN: int = 1
+const BATTLE_TYPE_SAFARI: int = 2
+const BATTLE_TYPE_PIKACHU: int = 4
+const BATTLE_TYPES: Dictionary = {
+	BATTLE_TYPE_OLD_MAN: {"battle_type": Gen2Battle.BATTLETYPE_TUTORIAL, "tutor": "old_man"},
+	BATTLE_TYPE_SAFARI: {"battle_type": Gen2Battle.BATTLETYPE_SAFARI},
+	BATTLE_TYPE_PIKACHU: {"battle_type": Gen2Battle.BATTLETYPE_TUTORIAL, "tutor": "prof_oak"},
+}
+const TUTOR_NAMES: Dictionary = {"old_man": "OLD MAN", "prof_oak": "PROF.OAK"}
+## `wCurOpponent` as each tutor's script writes it, by dex number.
+const TUTOR_WILDS: Dictionary = {
+	RomRegistry.RED: {BATTLE_TYPE_OLD_MAN: 13}, RomRegistry.BLUE: {BATTLE_TYPE_OLD_MAN: 13},
+	RomRegistry.YELLOW: {BATTLE_TYPE_OLD_MAN: 19, BATTLE_TYPE_PIKACHU: 25},
+}
+const TUTOR_WILD_LEVEL: int = 5
+## `OldManItemList` is fifty balls where Yellow's `SimulatedInputBattleItemList` is one.
+const TUTOR_BALLS: Dictionary = {RomRegistry.RED: 50, RomRegistry.BLUE: 50, RomRegistry.YELLOW: 1}
+## `DisplayBattleMenu`'s two `DelayFrames` and `DisplayListMenuIDLoop`'s one.
+const TUTOR_FRAMES: Dictionary = {
+	RomRegistry.RED: [80, 50, 80], RomRegistry.BLUE: [80, 50, 80],
+	RomRegistry.YELLOW: [20, 20, 20],
+}
+## Yellow's `ItemUseBall` answers `$63` while EVENT_INITIAL_CATCH_TRAINING stands.
+const INITIAL_CATCH_TRAINING_EVENT: Dictionary = {RomRegistry.YELLOW: 47}
 ## Routines named by a full ROM offset, the same address in another bank being another routine.
 const SCRIPT_BANKED_CALLS: Array[String] = [
 	"coin_box", "music_rival_start", "music_rival_tempo", "schedule_pikachu_spawn",
@@ -1337,7 +1365,7 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	## `SetSpritePosition2` puts back what `GetSpritePosition2` saved on the same
 	## visit, which the map's own table answers here; the image index is drawn.
 	"set_sprite_position_2", "set_sprite_image", "set_sprite_image_2",
-	"enable_pikachu_drawing",
+	"enable_pikachu_drawing", "disable_pikachu_drawing",
 	## Red and Blue spell `StopAllMusic` as `PlaySound`; only Yellow has a routine.
 	"play_music", "stop_all_music",
 	## A wait is frames of nothing and the map music is nobody's here. The three
@@ -1415,6 +1443,8 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	"menu_watched_keys",
 	"last_menu_item", "menu_item_to_swap", "print_item_prices", "list_menu_id",
 	"filtered_bag_count", "walk_bike_surf_state_copy", "pikachu_spawn_state",
+	## `AddPartyMon`'s catch-rate byte, read back by a Time Capsule alone.
+	"party_mon_1_catch_rate",
 ]
 ## The same over two bytes; `LoadItemList` already left the list itself.
 const SCRIPT_SILENT_WORDS: Array[String] = ["list_pointer"]
@@ -1757,9 +1787,8 @@ const TRAINER_PIC_TILES: int = 7
 const FRONTPIC_MAX_TILES: int = 7
 const BACKPIC_TILES: int = 4
 
-## `GetTrainerBackpic`'s counterpart, in the `player_back` atlas's slot order:
-## the player, and the old man who borrows the screen for the catching tutorial.
-const PLAYER_BACKPICS: Array[String] = ["player", "old_man"]
+## `LoadPlayerBackPic`'s three in atlas slot order; Red and Blue have no Prof. Oak.
+const PLAYER_BACKPICS: Array[String] = ["player", "old_man", "prof_oak"]
 
 const RED_BLUE: Dictionary = {
 	"species_names": 0x1C21E,
@@ -2187,6 +2216,7 @@ const RED_BLUE: Dictionary = {
 	"route23_copy_badge_text": 0x5125D,
 	"add_party_mon": 0x3927,
 	"mon_data_location": 0xCC49,
+	"party_mon_1_catch_rate": 0xD172,
 	"beat_gym_flags": 0xD72A,
 	"gym_leader_no": 0xD05C,
 	"random_add": 0xFFD3,
@@ -2460,6 +2490,7 @@ const YELLOW: Dictionary = {
 	## Yellow moved both back pics out of "Pics 4" and into their own bank.
 	"pic_player_back": 0xF43B1,
 	"pic_old_man_back": 0xF4441,
+	"pic_prof_oak_back": 0xF44D2,
 	"pic_player_front": 0x11A97,
 	"pic_shrink_1": 0x11B96,
 	"pic_shrink_2": 0x11BF0,
@@ -2625,6 +2656,7 @@ const YELLOW: Dictionary = {
 	"route23_copy_badge_text": 0x51216,
 	"add_party_mon": 0x391C,
 	"mon_data_location": 0xCC49,
+	"party_mon_1_catch_rate": 0xD171,
 	"beat_gym_flags": 0xD729,
 	"gym_leader_no": 0xD05B,
 	"random_add": 0xFFD3,
@@ -2657,6 +2689,7 @@ const YELLOW: Dictionary = {
 	"pikachu_spawn_state": 0xD430,
 	"schedule_pikachu_spawn": 0xFC4FA,
 	"enable_pikachu_drawing": 0x1525,
+	"disable_pikachu_drawing": 0x152D,
 	"check_pikachu_following": 0x154A,
 	"player_moving_direction": 0xD527,
 	"play_music": 0x2211,
@@ -2904,6 +2937,32 @@ static func map_count(id: StringName) -> int:
 ## sleep, where Red and Blue clear it and print `PlayedFluteNoEffectText` anyway.
 static func flute_counts_wild(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
+
+
+static func player_backpics(layout: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for name: String in PLAYER_BACKPICS:
+		if layout.has("pic_%s_back" % name):
+			out.append(name)
+	return out
+
+
+static func battle_type_values(raw: int) -> Dictionary:
+	var row: Dictionary = BATTLE_TYPES.get(raw, {})
+	if row.is_empty():
+		return {}
+	var out: Dictionary = {"battle_type": int(row["battle_type"]), "gen1_battle_type": raw}
+	if row.has("tutor"):
+		out["tutorial"] = true
+		out["can_lose"] = false
+	return out
+
+
+## `.oldManBattle`'s throw.
+static func tutorial_ball_lands(id: StringName, raw: int, event_active: Callable) -> bool:
+	if raw != BATTLE_TYPE_OLD_MAN or not INITIAL_CATCH_TRAINING_EVENT.has(id):
+		return true
+	return not bool(event_active.call(int(INITIAL_CATCH_TRAINING_EVENT[id])))
 
 
 ## `CheckIfInOutsideMap`: which maps write `wLastMap` on the way out of them.

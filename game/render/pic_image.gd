@@ -5,7 +5,6 @@ extends RefCounted
 ## cartridge stores, two bits per pixel and no colour, so the palette is chosen
 ## here at draw time and a shiny sprite costs one [PackedColorArray] rather than
 ## a second copy of the pixels.
-##
 ## Built as one buffer for [method Image.create_from_data]: per-pixel
 ## [method Image.set_pixel] on a 56x56 sprite is 3136 binding calls for a table
 ## lookup, and a battle can want several sprites a frame. Node-free, so headless.
@@ -68,7 +67,6 @@ static func canvas_from_indices(
 ## tile, so a screen the hardware draws in several palettes is one buffer here
 ## too rather than a layer per colour. [param slots] is [param columns] wide and
 ## row-major, and a slot naming no palette falls back on the first.
-##
 ## `FillBoxCGB` and `ByteFill` over an attrmap `WipeAttrmap` cleared are what
 ## every `_CGB_*` layout writes, so a caller's own `attributes()` is that list of
 ## boxes flattened once.
@@ -167,7 +165,6 @@ static func from_atlas(
 ## The same cell before a palette is chosen: { indices, width, height }, or empty
 ## for a slot the atlas does not hold. Split out so a palette fade over a
 ## frontpic swaps colours rather than cropping the atlas again.
-##
 ## A [param pic] carrying its own [code]indices[/code] is a mod's picture and has
 ## no cell to crop: the atlases hold exactly the cartridge's slots. Answering it
 ## here is what lets every screen draw one without knowing which it has.
@@ -213,7 +210,6 @@ static func atlas_cell(
 ## One packed RGBA8 word per colour index, so a blit is an array copy rather
 ## than a [Color] conversion. Little-endian, which is the order
 ## [method PackedInt32Array.to_byte_array] writes and `FORMAT_RGBA8` reads.
-##
 ## Public because every per-tile blit in the project shares it: a page that
 ## builds a [Color] per pixel pays a binding call and an allocation for a table
 ## lookup, which is what [method blit_tile] exists to stop.
@@ -370,7 +366,6 @@ static func x_flipped_indices(indices: PackedByteArray, width: int) -> PackedByt
 
 
 ## The palette as the eight-bit colours a blit actually writes.
-##
 ## For a caller comparing a rendered pixel against a palette: a 15-bit colour is
 ## kept as a float and read back through an eight-bit image, so the comparison
 ## belongs where the picture is and the conversion has to be the drawing's own.
@@ -389,7 +384,6 @@ static func quantized(
 
 ## A blank canvas [param width] x [param height], one packed RGBA8 word per
 ## pixel. Every word is zero, which is transparent black.
-##
 ## A word rather than four bytes because the inner loop of every page in the
 ## project is one store per pixel either way, and four of them cost four bounds
 ## checks; the conversion to bytes at the end is one memcpy.
@@ -458,7 +452,6 @@ static func blit_tile(
 
 
 ## Puts [param image] on [param target].
-##
 ## The one way a screen in this project hands a redrawn picture to the node that
 ## shows it, so the reuse below happens everywhere rather than at whichever
 ## screen was measured.

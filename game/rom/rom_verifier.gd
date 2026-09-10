@@ -2,7 +2,6 @@ class_name RomVerifier
 extends RefCounted
 
 ## Identifies a user-supplied ROM file by SHA-1 against [RomRegistry].
-##
 ## Pure and node-free so the whole import gate is testable headlessly. Nothing
 ## here reads game content; it only answers "is this a cartridge we know?".
 ## The importer that follows is entitled to assume a verified hash.
@@ -41,7 +40,6 @@ static func sha1_of_file(path: String) -> String:
 
 
 ## Identifies a candidate ROM.
-##
 ## Returns { status, sha1, id, title, revision, message }. Callers should look
 ## at [code]status[/code]; [code]message[/code] is a ready-to-show string.
 static func identify(path: String) -> Dictionary:

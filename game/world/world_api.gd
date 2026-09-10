@@ -2,7 +2,6 @@ class_name Gen2WorldAPI
 extends RefCounted
 
 ## Scene-free runtime access to one imported Generation 2 map.
-##
 ## The API works in walk cells: every cell is a 2x2 group of 8x8 graphics
 ## tiles. It owns player position, camera framing and live object state, while
 ## event flags are supplied through a separate scene-free world state.
@@ -558,7 +557,6 @@ func clear_map_name_sign() -> void:
 
 
 ## `InitMapNameSign`, which every map setup script but the submenu's reaches.
-##
 ## The sign is Crystal's own screen: pokegold ships neither `MapEntryFrameGFX`
 ## nor the routine, so the whole decision is skipped there. `wPrevLandmark` is
 ## written on both branches, which is what makes a walk through a gate silent on
@@ -1138,7 +1136,6 @@ func _clear_player_step() -> void:
 
 
 ## Spends one hardware frame of the player's walk-step offset.
-##
 ## This only shrinks a presentation offset that starts and ends at player_cell;
 ## it never changes player_cell, collision or event results, and a caller that
 ## never starts a step sees no difference.
@@ -3531,7 +3528,6 @@ func tile_index_at(tile_x: int, tile_y: int) -> int:
 
 ## Returns the visible 20x18 graphics-tile page in row-major order. Map padding
 ## is expanded through [method drawn_block_at], just like LoadMetatiles.
-##
 ## This is [method tile_index_at] for 360 tiles, written out rather than called
 ## 360 times: it is on the draw path, and the per-tile call did the same block
 ## division and bounds check for every tile of the same block row.
@@ -3613,7 +3609,6 @@ static func in_hardware_buffer(map: Gen2WorldMap, block_x: int, block_y: int) ->
 ## Every map the connection graph reaches from the current one, keyed
 ## `"group:number"`, each with its origin in the current map's block
 ## coordinates. The current map is not in it: it is the origin.
-##
 ## Built once per map load and kept, since the graph is header data and nothing
 ## a run does moves a map. Ordered nearest first, so a caller that draws them in
 ## order draws the far ones under the near ones.
@@ -3684,7 +3679,6 @@ static func connection_origin_blocks(
 ## The same fold for a map that is not the loaded one, which is what a battle
 ## staged on a map has: [Gen2BattleWorldContext] names the map and hands over no
 ## world, deliberately, so there is no `current_map` to read.
-##
 ## [param block_overrides] is a live `changeblock` table, keyed as
 ## [method _block_key] keys one. A caller with no world has none, and a map with
 ## no world has had no block edited.
@@ -3843,6 +3837,8 @@ const GEN1_BATTLE_OUTCOMES: Dictionary = {
 	Gen1Layout.BATTLE_OUTCOME_ESCAPED: [
 		Gen2WorldBattleAdapter.OUTCOME_CAUGHT, Gen2WorldBattleAdapter.OUTCOME_RAN,
 	],
+	## `wBattleResult` at zero, which the tower's MAROWAK reads with `and a`.
+	Gen1Layout.BATTLE_OUTCOME_WON: [Gen2WorldBattleAdapter.OUTCOME_WON],
 }
 
 ## What the last battle a script asked for answered.
@@ -3991,7 +3987,6 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 
 
 ## The raw cartridge permission byte at a walk cell.
-##
 ## The imported grid already holds the code the tileset gave each cell, so it is
 ## the answer unless a changeblock has replaced the block this cell belongs to.
 ## An overridden block has to be looked up in the tileset instead, because the
@@ -4108,7 +4103,10 @@ func _gen1_card_key_steps() -> Array:
 		return [_gen1_card_key_box("card_key_fail")]
 	door["type"] = &"block"
 	door["card_key"] = true
-	return [_gen1_card_key_box("card_key_success"), door]
+	## `set BIT_CUR_MAP_LOADED_1` behind the block: the floor's callback flags
+	## the door on the next frame, so leaving and returning keeps it open.
+	return [_gen1_card_key_box("card_key_success"), door,
+		{"type": &"map_load", "bit": Gen1Layout.MAP_LOADED_1_BIT}]
 
 
 func _gen1_card_key_box(name: String) -> Dictionary:
@@ -4393,12 +4391,12 @@ func _gen1_node_object_facing(
 
 ## The store `CallFunctionInTable` dispatches on next frame; a map with no
 ## dispatch has no byte for `wCurMapScript` to be copied into.
-func _gen1_node_set_map_script(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+func _gen1_node_set_map_script(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var byte: int = int(node["byte"])
 	if byte < 0:
 		return true
 	## `wNextSafariZoneGateScript`: the state the walk before it is to land on.
-	var value: int = _gen1_saved_coord_index if node.has("from") else int(node["value"])
+	var value: int = _gen1_run_saved_index(run) if node.has("from") else int(node["value"])
 	steps.append({"type": &"map_script", "byte": byte, "value": value})
 	return true
 
@@ -4424,15 +4422,21 @@ func _gen1_node_battle_outcome(node: Dictionary, steps: Array, run: Dictionary) 
 
 
 func _gen1_node_wild_battle(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"request", "values": {
-		"kind": &"battle_requested",
-		"values": {
-			"kind": &"wild",
-			"pokemon": int(node["species"]),
-			"level": int(node["level"]),
-		},
-	}})
+	var values: Dictionary = {
+		"kind": &"wild", "pokemon": int(node["species"]), "level": int(node["level"]),
+	}
+	values.merge(Gen1Layout.battle_type_values(int(node.get("battle_type", 0))))
+	steps.append({"type": &"request", "values": {"kind": &"battle_requested", "values": values}})
 	return true
+
+
+func gen1_tutorial_ball_lands() -> bool:
+	if data == null or state == null:
+		return true
+	var values: Dictionary = pending_runtime_request().get("values", {})
+	return Gen1Layout.tutorial_ball_lands(
+		data.id, int(values.get("gen1_battle_type", 0)), state.is_event_flag_active
+	)
 
 
 ## `DecodeArrowMovementRLE`: the arrow tile the player stands on queues its own
@@ -4523,7 +4527,7 @@ func _gen1_node_saved_coord_index(
 	node: Dictionary, steps: Array, run: Dictionary
 ) -> bool:
 	return _gen1_resolve_side(
-		node, _gen1_index_matches(node, _gen1_saved_coord_index), steps, run
+		node, _gen1_index_matches(node, _gen1_run_saved_index(run)), steps, run
 	)
 
 
@@ -4532,13 +4536,20 @@ func _gen1_index_matches(node: Dictionary, index: int) -> bool:
 	return index < value if String(node["test"]) == "below" else index == value
 
 
-## The store, whose -1 is `wCoordIndex` itself rather than a constant.
+## The store, whose -1 is `wCoordIndex` itself. The run keeps the copy the rest
+## of the row reads and the world takes it when spent: both sides of the gate's
+## "Leaving early?" resolve before the answer, and NO's 5 had overwritten YES's 0.
 func _gen1_node_save_coord_index(
-	node: Dictionary, _steps: Array, run: Dictionary
+	node: Dictionary, steps: Array, run: Dictionary
 ) -> bool:
 	var value: int = int(node["value"])
-	_gen1_saved_coord_index = int(run.get("coord_index", 0)) if value < 0 else value
+	run["saved_coord_index"] = int(run.get("coord_index", 0)) if value < 0 else value
+	steps.append({"type": &"saved_coord_index", "value": int(run["saved_coord_index"])})
 	return true
+
+
+func _gen1_run_saved_index(run: Dictionary) -> int:
+	return int(run.get("saved_coord_index", _gen1_saved_coord_index))
 
 
 func _gen1_node_player_facing(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
@@ -5089,7 +5100,11 @@ func _gen1_node_heal_party(_node: Dictionary, steps: Array, _run: Dictionary) ->
 	return true
 
 
-func _gen1_node_hall_of_fame(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+## `HallOfFamePC` writes the team into `sHallOfFame` and counts it in
+## `wNumHoFTeams` in front of the animation, which is the induction the shelf
+## and the Pokemon Center's machine read as `ENGINE_HALL_OF_FAME`.
+func _gen1_node_hall_of_fame(_node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	_gen1_node_flag({"flag": Gen2WorldState.ENGINE_HALL_OF_FAME, "engine": true, "set": true}, steps, run)
 	steps.append({"type": &"request", "values": {
 		"kind": &"hall_of_fame_requested", "values": {},
 	}})
@@ -5146,21 +5161,23 @@ func _gen1_node_map_text(node: Dictionary, steps: Array, run: Dictionary) -> boo
 	var text_id: int = int(node["text"]) if node.has("text") \
 		else _gen1_scratch_read(run, int(node["from"]), int(node["offset"]))
 	## `hTextID` and `hSpriteIndex` are one HRAM byte, so a row a map script
-	## opens by id leaves that id where `EngageMapTrainer` reads a sprite.
+	## opens by id leaves that id where `EngageMapTrainer` reads a sprite: the
+	## object of that index is the trainer, which is how Lance's room fights him.
 	_gen1_last_sprite_index = text_id - 1
 	var row: Dictionary = gen1_text_at(text_id)
 	## `DisplayTextID` over a trainer's row is `TalkToTrainer` after the fight.
-	var trainer: Array = _gen1_trainer_steps(row, {})
+	var trainer: Array = _gen1_trainer_steps(row, _gen1_object_event(text_id - 1))
 	if not trainer.is_empty():
 		steps.append_array(trainer)
 		return true
 	var nodes: Variant = row.get("script", [])
 	if nodes is Array and not (nodes as Array).is_empty():
 		return _gen1_resolve_script(nodes as Array, steps, run)
-	var text: String = gen1_filled_text(String(row.get("text", "")))
-	if text.is_empty():
+	if String(row.get("text", "")).is_empty():
 		return false
-	steps.append({"type": &"text", "text": text})
+	## `wStringBuffer` outlives the row that filled it: Lt. Surge's receipt is
+	## the `DisplayTextID` after his `GiveItem`.
+	steps.append(_gen1_script_box(row, String(run.get("named", "")), run.get("buffers", {})))
 	return true
 
 
@@ -5903,9 +5920,12 @@ func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
 	var flag: int = int(header["event_flag"])
 	_gen1_scratch[int(Gen1Layout.for_id(data.id)["trainer_header_flag_bit"])] = flag % 8
 	if event_flag_active(flag):
-		return [{"type": &"text", "text": String(header["after"])}]
+		if header.has("after_script"):
+			var steps: Array = []
+			return steps if _gen1_resolve_script(header["after_script"], steps, _gen1_run(event)) else []
+		return [{"type": &"text", "text": gen1_filled_text(String(header["after"]))}]
 	return [
-		{"type": &"text", "text": String(header["before"])},
+		{"type": &"text", "text": gen1_filled_text(String(header["before"]))},
 		{
 			"type": &"request",
 			"values": {
@@ -5915,6 +5935,7 @@ func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
 			"trainer_flag": flag,
 			"object_index": int(event.get("object_index", -1)),
 			"standing_wild": not event.has("trainer_class"),
+			"end_script": header.get("end_script", []),
 		},
 	]
 
@@ -6286,6 +6307,7 @@ func _gen1_step(type: StringName) -> Dictionary:
 ## row writes takes no turn of its own and is spent on the way past, and the
 ## balance window one of those draws rides on the result behind it.
 func _gen1_result() -> Array:
+	_gen1_battle_last()
 	var events: Array = []
 	while not _gen1_steps.is_empty() and _gen1_written(_gen1_steps[0], events):
 		_gen1_steps.pop_front()
@@ -6296,6 +6318,19 @@ func _gen1_result() -> Array:
 	var result: Dictionary = _gen1_waiting_result(_gen1_steps[0])
 	result["events"] = events + (result.get("events", []) as Array)
 	return [result]
+
+
+## `OverworldLoop` reads `wCurOpponent` once the script has returned, so the
+## rest of a row stands in front of its battle: Yellow's initial catch training
+## sets its event behind the store and the throw reads it.
+func _gen1_battle_last() -> void:
+	var battles: Array = []
+	var rest: Array = []
+	for step: Dictionary in _gen1_steps:
+		var request: Dictionary = step.get("values", {}) if step.get("type", &"") == &"request" else {}
+		(battles if StringName(request.get("kind", &"")) == &"battle_requested" else rest).append(step)
+	if not battles.is_empty() and not rest.is_empty():
+		_gen1_steps = rest + battles
 
 
 ## `SetLastBlackoutMap`, whose whole body is the rest-house list: healing in one
@@ -6392,6 +6427,9 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 			return true
 		&"map_script":
 			state.set_gen1_map_script(int(step["byte"]), int(step["value"]))
+			return true
+		&"saved_coord_index":
+			_gen1_saved_coord_index = int(step["value"])
 			return true
 		&"last_map":
 			_gen1_last_map = int(step["map"])
@@ -6745,6 +6783,14 @@ func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 	if bool(step.get("standing_wild", false)):
 		gen1_toggle_object(_gen1_toggle_index(int(step.get("object_index", -1))), true)
 	load_object_masks()
+	## `TextCommand_ASM` behind the end-battle line the fight printed.
+	var ending: Array = []
+	for node: Dictionary in step.get("end_script", []) as Array:
+		if String(node.get("op", "")) != "text":
+			ending.append(node)
+	var steps: Array = []
+	if not ending.is_empty() and _gen1_resolve_script(ending, steps, _gen1_run({})):
+		_gen1_steps = steps + _gen1_steps
 
 
 ## `CollisionCheckOnLand` skips every test while `wSimulatedJoypadStatesIndex`
@@ -6752,7 +6798,7 @@ func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 func _gen1_walk_player(moves: Array) -> Array:
 	var generated: Array = []
 	for leg: Dictionary in moves:
-		var direction: Vector2i = _movement_direction(int(leg["direction"]))
+		var direction: Vector2i = movement_direction(int(leg["direction"]))
 		for _step: int in int(leg["steps"]):
 			var destination: Vector2i = player_cell + direction
 			if not _cell_in_bounds(destination):
@@ -6780,7 +6826,7 @@ func _gen1_walk_object(index: int, moves: Array) -> Array:
 	_gen1_stand_object(index)
 	var facing: int = object.facing
 	for row: int in moves:
-		var direction: Vector2i = _movement_direction(row)
+		var direction: Vector2i = movement_direction(row)
 		facing = facing_for_direction(direction)
 		var destination: Vector2i = object.cell + direction
 		if not _cell_in_bounds(destination):
@@ -6829,7 +6875,6 @@ func _gen1_toggle_index(object_index: int) -> int:
 
 
 ## Whether the script holding the world is one that stops the map around it.
-##
 ## `ScriptEvents` runs inside `HandleMap`, and `HandleMapObjects` runs on the
 ## same iteration, so a script standing in `WaitScript` or `WaitScriptMovement`
 ## leaves every object that is not frozen stepping: `FreezeAllOtherObjects` is
@@ -7211,6 +7256,22 @@ func _clear_active_script() -> void:
 	unfreeze_all_objects()
 
 
+## The object row of [param index] with its live cell, as the events at a cell
+## carry it, or {} past the table.
+func _gen1_object_event(index: int) -> Dictionary:
+	var rows: Array = current_map.events.get("objects", []) if current_map != null else []
+	if index < 0 or index >= rows.size() or index >= objects.size() \
+		or not rows[index] is Dictionary:
+		return {}
+	var object: Gen2WorldObject = objects[index]
+	var event: Dictionary = (rows[index] as Dictionary).duplicate(true)
+	event["x"] = object.cell.x
+	event["y"] = object.cell.y
+	event["kind"] = &"objects"
+	event["object_index"] = index
+	return event
+
+
 func _active_events_at(cell: Vector2i) -> Array:
 	var out: Array = []
 	for event: Dictionary in events_at(cell):
@@ -7235,12 +7296,7 @@ func _active_events_at(cell: Vector2i) -> Array:
 			or object.index < 0 or object.index >= rows.size() \
 			or not rows[object.index] is Dictionary:
 			continue
-		var event: Dictionary = (rows[object.index] as Dictionary).duplicate(true)
-		event["x"] = object.cell.x
-		event["y"] = object.cell.y
-		event["kind"] = &"objects"
-		event["object_index"] = object.index
-		out.append(event)
+		out.append(_gen1_object_event(object.index))
 	return out
 
 
@@ -7546,7 +7602,6 @@ func _queue_map_callbacks(callback_type: int) -> void:
 	if current_map == null:
 		return
 	if _gen1:
-		_unlock_gen1_card_key_door()
 		## `RunMapScript`'s first frame behind `EnterMap`: its writes stand before a
 		## step, its boxes wait for one, and `CheckAndResetEvent` answers only once.
 		_gen1_entry_steps = _spend_gen1_nodes(_gen1_map_script_nodes(Gen1Layout.MAP_LOAD_BOTH))
@@ -7567,14 +7622,26 @@ func _queue_map_callbacks(callback_type: int) -> void:
 
 ## The map's script with [param mask] standing in `wCurrentMapScriptFlags`.
 func _gen1_map_script_nodes(mask: int) -> Array:
+	if mask & (1 << Gen1Layout.MAP_LOADED_1_BIT):
+		_unlock_gen1_card_key_door()
+	var callback: Dictionary = _gen1_map_load_callback(mask)
+	return callback["nodes"] as Array if not callback.is_empty() \
+		else current_map.scripts.get("entry", []) as Array
+
+
+func _gen1_map_load_callback(mask: int) -> Dictionary:
 	for callback: Dictionary in current_map.scripts.get("callbacks", []) as Array:
 		if int(callback.get("mask", 0)) == mask:
-			return callback["nodes"] as Array
-	return current_map.scripts.get("entry", []) as Array
+			return callback
+	return {}
 
 
+## Whether the next pass owes the map a body its own script does not run every
+## frame. `CinnabarIsland_Script` sets BIT_CUR_MAP_LOADED_1 on every frame and
+## nothing on the island reads it, so a bit no callback takes is not pending.
 func gen1_map_load_pending() -> bool:
-	return _gen1_map_load_pending != 0
+	return _gen1_map_load_pending != 0 and current_map != null \
+		and not _gen1_map_load_callback(_gen1_map_load_pending).is_empty()
 
 
 ## Spends every step of [param nodes] that takes no turn of its own, stopping
@@ -7590,8 +7657,8 @@ func _spend_gen1_nodes(nodes: Array) -> Array:
 
 
 ## `<Map>_SetCardKeyDoorYScript` and `<Map>_UnlockedDoorEventScript`, which run
-## in front of the blocks: the door `PrintCardKeyText` last opened becomes that
-## door's own flag, and the coordinates are cleared on the floor that owns them.
+## in front of the blocks on every BIT_CUR_MAP_LOADED_1 pass: the door
+## `PrintCardKeyText` last opened becomes that door's own flag.
 func _unlock_gen1_card_key_door() -> void:
 	if state == null:
 		return
@@ -8005,12 +8072,12 @@ func _apply_object_movement(event: Dictionary) -> Array:
 		if kind in SCRIPTED_TURN_KINDS:
 			## Queued rather than applied, so a turn behind a walk turns where
 			## the walk ends. `queue_step` drains an entry of no frames itself.
-			var turn: Vector2i = _movement_direction(int(command.get("direction", 0)))
+			var turn: Vector2i = movement_direction(int(command.get("direction", 0)))
 			object.queue_step(Vector2i.ZERO, 0, false, turn)
 			final_facing = facing_for_direction(turn)
 			continue
 		if SCRIPTED_STEP_PASSES.has(kind):
-			var direction: Vector2i = _movement_direction(int(command.get("direction", 0)))
+			var direction: Vector2i = movement_direction(int(command.get("direction", 0)))
 			var jumping: bool = kind in JUMP_STEP_KINDS
 			var cells: int = 2 if jumping else 1
 			var destination: Vector2i = object.cell + direction * cells
@@ -8139,11 +8206,11 @@ func _apply_player_movement(event: Dictionary) -> Array:
 			## the walk ends rather than on the frame the stream was applied.
 			_queue_player_step(
 				Vector2i.ZERO, 0, false,
-				_movement_direction(int(command.get("direction", 0))), kind,
+				movement_direction(int(command.get("direction", 0))), kind,
 			)
 			continue
 		if SCRIPTED_STEP_PASSES.has(kind):
-			var direction: Vector2i = _movement_direction(int(command.get("direction", 0)))
+			var direction: Vector2i = movement_direction(int(command.get("direction", 0)))
 			var jumping: bool = kind in JUMP_STEP_KINDS
 			var cells: int = 2 if jumping else 1
 			var destination: Vector2i = player_cell + direction * cells
@@ -8192,7 +8259,7 @@ func _apply_player_movement(event: Dictionary) -> Array:
 	return generated
 
 
-func _movement_direction(direction: int) -> Vector2i:
+func movement_direction(direction: int) -> Vector2i:
 	match direction & 3:
 		0:
 			return Vector2i.DOWN
@@ -8864,7 +8931,6 @@ func _object_landing_cells(
 ## Advances the movement templates whose source behavior is data-driven in this
 ## slice. Scripted movement is executed by the script runner, while followers
 ## advance after each successful player step.
-##
 ## One decision per eligible object per call. A caller wanting the source's
 ## pacing uses advance_object_steps_pass(), which spends the durations.
 func advance_objects(random: RandomNumberGenerator) -> int:
@@ -8956,7 +9022,6 @@ func _object_stays_on_screen(destination: Vector2i) -> bool:
 
 
 ## One hardware frame of the data-driven movement templates.
-##
 ## An object spends a frame of an in-flight step, a frame of its wait, or takes
 ## a decision: STEP_TYPE_CONTINUE_WALK, _SLEEP and _FROM_MOVEMENT. The cell
 ## commits when the step starts, as InitStep does, and the offset trails.
@@ -9058,7 +9123,6 @@ func advance_scripted_steps_pass() -> bool:
 
 ## Spends the frames a script is waiting on and resumes it the frame its wait
 ## ends, returning whatever that produced.
-##
 ## The two waits are `ScriptEvents`'s own: SCRIPT_WAIT_MOVEMENT, which ends when
 ## the stream an `applymovement` started has been drawn, and the counted delay
 ## `pause`, `wait`, `deactivatefacing` and `showemote` spend. A host calls this
@@ -10730,7 +10794,6 @@ func basement_key_request() -> Dictionary:
 ## `wItemEffectSucceeded` is set before the script is queued, and
 ## `.CheckCanUseSquirtbottle` only picks which half of it runs. So the refusal is
 ## the queued script's own `_SquirtbottleNothingText` rather than `.Oak`.
-##
 ## The test is `GetFacingObject` and `cp SPRITEMOVEDATA_SUDOWOODO`, the same
 ## shape rock_smash_request() uses, behind the Route 36 map check.
 func squirtbottle_request() -> Dictionary:

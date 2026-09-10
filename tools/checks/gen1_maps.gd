@@ -115,9 +115,9 @@ const PALETTE_CENSUS: Dictionary = {
 ## byte that opens it. Yellow's six bare `text_end`s are Jessie and James, whose
 ## two ids share one on three maps.
 const TEXT_CENSUS: Dictionary = {
-	&"red": {0x08: 638, 0x17: 528, 0xFF: 12, 0xF6: 12, 0xFE: 14, 0xF5: 3, 0xF7: 3},
-	&"blue": {0x08: 638, 0x17: 528, 0xFF: 12, 0xF6: 12, 0xFE: 14, 0xF5: 3, 0xF7: 3},
-	&"yellow": {0x08: 691, 0x17: 512, 0xFF: 12, 0xF6: 12, 0xFE: 14, 0x50: 6, 0xF5: 3, 0xF7: 3},
+	&"red": {0x08: 642, 0x17: 528, 0xFF: 12, 0xF6: 12, 0xFE: 14, 0xF5: 3, 0xF7: 3},
+	&"blue": {0x08: 642, 0x17: 528, 0xFF: 12, 0xF6: 12, 0xFE: 14, 0xF5: 3, 0xF7: 3},
+	&"yellow": {0x08: 695, 0x17: 512, 0xFF: 12, 0xF6: 12, 0xFE: 14, 0x50: 6, 0xF5: 3, 0xF7: 3},
 }
 
 ## Rows of `script_mart` across the corpus. Yellow's Celadon 5F clerk sells one
@@ -129,54 +129,52 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 318, "text": 609, "branch": 158, "choice": 41, "flag": 246,
-		"give_item": 44, "has_item": 20, "take_item": 11, "unknown": 0, "pokedex": 13,
-		"give_pokemon": 33, "saved_coord_index": 1, "badges_byte": 1, "walk": 20,
-		"player_facing": 11, "set_map_script": 113, "npc_movement_script": 2,
-		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 12,
-		"player_in_array": 1, "flag_test": 3, "pick_up_item": 105, "scratch": 37,
-		"name_badge": 7, "heal_party": 2, "object_facing": 9, "talking_to": 32,
-		"set_starter": 9, "name_species": 14, "dex_rating": 2, "dex_count": 2,
-		"map_text": 24, "trade": 9, "name_item": 7, "oaks_aide": 3, "player_coord": 4,
-		"money_box": 6, "has_money": 4, "spend_money": 4, "menu": 3, "menu_cancel": 3,
-		"menu_row": 1, "guard_drink": 4, "day_care": 1, "random_bit": 2, "volatile": 2,
-		"filtered_bag": 2, "menu_item": 4, "elevator": 3, "coin_box": 2, "has_coins": 4,
-		"add_coins": 4, "replace_block": 1, "starter": 2, "trainer_battle": 3,
-		"safari_balls": 1, "safari_steps": 1, "save_coord_index": 2, "map_load_bit": 2,
-		"copy_name": 4, "set_fossil": 6, "party_menu": 1, "name_party_mon": 1, "mon_ot": 1,
-		"name_mon": 1, "list_menu": 1, "emote": 1, "diploma": 1},
-	&"blue": {"rows": 318, "text": 609, "branch": 158, "choice": 41, "flag": 246,
-		"give_item": 44, "has_item": 20, "take_item": 11, "unknown": 0, "pokedex": 13,
-		"give_pokemon": 33, "saved_coord_index": 1, "badges_byte": 1, "walk": 20,
-		"player_facing": 11, "set_map_script": 113, "npc_movement_script": 2,
-		"toggle_object": 49, "trainer_battle_object": 21, "random": 5, "facing": 12,
-		"player_in_array": 1, "flag_test": 3, "pick_up_item": 105, "scratch": 37,
-		"name_badge": 7, "heal_party": 2, "object_facing": 9, "talking_to": 32,
-		"set_starter": 9, "name_species": 14, "dex_rating": 2, "dex_count": 2,
-		"map_text": 24, "trade": 9, "name_item": 7, "oaks_aide": 3, "player_coord": 4,
-		"money_box": 6, "has_money": 4, "spend_money": 4, "menu": 3, "menu_cancel": 3,
-		"menu_row": 1, "guard_drink": 4, "day_care": 1, "random_bit": 2, "volatile": 2,
-		"filtered_bag": 2, "menu_item": 4, "elevator": 3, "coin_box": 2, "has_coins": 4,
-		"add_coins": 4, "replace_block": 1, "starter": 2, "trainer_battle": 3,
-		"safari_balls": 1, "safari_steps": 1, "save_coord_index": 2, "map_load_bit": 2,
-		"copy_name": 4, "set_fossil": 6, "party_menu": 1, "name_party_mon": 1, "mon_ot": 1,
-		"name_mon": 1, "list_menu": 1, "emote": 1, "diploma": 1},
-	&"yellow": {"rows": 373, "text": 610, "branch": 160, "choice": 34, "flag": 222,
-		"give_item": 41, "has_item": 15, "take_item": 9, "unknown": 4, "pokedex": 10,
-		"give_pokemon": 8, "saved_coord_index": 2, "badges_byte": 1, "walk": 23,
-		"set_map_script": 99, "npc_movement_script": 2, "toggle_object": 22,
+	&"red": {"rows": 322, "text": 621, "branch": 162, "choice": 45, "flag": 254, "give_item": 44,
+		"has_item": 20, "take_item": 11, "unknown": 0, "pokedex": 13, "give_pokemon": 33,
+		"saved_coord_index": 1, "emote": 1, "player_facing": 11, "badges_byte": 1, "walk": 20,
+		"set_map_script": 113, "npc_movement_script": 2, "toggle_object": 49,
+		"trainer_battle_object": 21, "random": 5, "facing": 12, "player_in_array": 1,
+		"flag_test": 7, "pick_up_item": 105, "scratch": 37, "name_badge": 7, "heal_party": 2,
+		"object_facing": 9, "talking_to": 32, "set_starter": 9, "name_species": 14,
+		"dex_rating": 2, "dex_count": 2, "map_text": 24, "trade": 9, "name_item": 7,
+		"oaks_aide": 3, "player_coord": 4, "money_box": 6, "has_money": 4, "spend_money": 4,
+		"menu": 3, "menu_cancel": 3, "menu_row": 1, "guard_drink": 4, "day_care": 1,
+		"random_bit": 2, "volatile": 2, "filtered_bag": 2, "menu_item": 4, "elevator": 3,
+		"diploma": 1, "coin_box": 2, "has_coins": 4, "add_coins": 4, "replace_block": 1,
+		"starter": 2, "trainer_battle": 3, "safari_balls": 1, "safari_steps": 1,
+		"save_coord_index": 2, "map_load_bit": 6, "copy_name": 4, "set_fossil": 6,
+		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1, "list_menu": 1},
+	&"blue": {"rows": 322, "text": 621, "branch": 162, "choice": 45, "flag": 254, "give_item": 44,
+		"has_item": 20, "take_item": 11, "unknown": 0, "pokedex": 13, "give_pokemon": 33,
+		"saved_coord_index": 1, "emote": 1, "player_facing": 11, "badges_byte": 1, "walk": 20,
+		"set_map_script": 113, "npc_movement_script": 2, "toggle_object": 49,
+		"trainer_battle_object": 21, "random": 5, "facing": 12, "player_in_array": 1,
+		"flag_test": 7, "pick_up_item": 105, "scratch": 37, "name_badge": 7, "heal_party": 2,
+		"object_facing": 9, "talking_to": 32, "set_starter": 9, "name_species": 14,
+		"dex_rating": 2, "dex_count": 2, "map_text": 24, "trade": 9, "name_item": 7,
+		"oaks_aide": 3, "player_coord": 4, "money_box": 6, "has_money": 4, "spend_money": 4,
+		"menu": 3, "menu_cancel": 3, "menu_row": 1, "guard_drink": 4, "day_care": 1,
+		"random_bit": 2, "volatile": 2, "filtered_bag": 2, "menu_item": 4, "elevator": 3,
+		"diploma": 1, "coin_box": 2, "has_coins": 4, "add_coins": 4, "replace_block": 1,
+		"starter": 2, "trainer_battle": 3, "safari_balls": 1, "safari_steps": 1,
+		"save_coord_index": 2, "map_load_bit": 6, "copy_name": 4, "set_fossil": 6,
+		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1, "list_menu": 1},
+	&"yellow": {"rows": 378, "text": 625, "branch": 164, "choice": 38, "flag": 232, "give_item": 41,
+		"has_item": 15, "take_item": 10, "unknown": 3, "pokedex": 10, "give_pokemon": 9,
+		"saved_coord_index": 2, "player_facing": 16, "emote": 8, "badges_byte": 1, "walk": 23,
+		"set_map_script": 100, "npc_movement_script": 2, "toggle_object": 22,
 		"trainer_battle_object": 27, "random": 5, "facing": 12, "player_in_array": 1,
-		"name_species": 7, "flag_test": 6, "pick_up_item": 109, "scratch": 29,
-		"name_badge": 7, "player_facing": 16, "heal_party": 2, "emote": 8, "dex_rating": 2,
-		"dex_count": 6, "map_text": 24, "trade": 7, "name_item": 7, "oaks_aide": 3,
-		"player_coord": 4, "money_box": 6, "has_money": 5, "spend_money": 4, "menu": 3,
-		"menu_cancel": 3, "menu_row": 1, "guard_drink": 4, "day_care": 1, "random_bit": 2,
-		"volatile": 2, "filtered_bag": 2, "menu_item": 4, "elevator": 3, "coin_box": 2,
+		"name_species": 8, "flag_test": 10, "pick_up_item": 109, "scratch": 29,
+		"name_badge": 7, "heal_party": 2, "dex_rating": 2, "dex_count": 6, "set_starter": 1,
+		"map_text": 24, "trade": 7, "name_item": 7, "oaks_aide": 3, "player_coord": 4,
+		"money_box": 6, "has_money": 5, "spend_money": 4, "menu": 3, "menu_cancel": 3,
+		"menu_row": 1, "guard_drink": 4, "day_care": 1, "random_bit": 2, "volatile": 2,
+		"filtered_bag": 2, "menu_item": 4, "elevator": 3, "diploma": 1, "coin_box": 2,
 		"has_coins": 4, "add_coins": 4, "replace_block": 1, "trainer_battle": 1,
 		"safari_balls": 3, "safari_steps": 3, "safari_admission": 2, "save_coord_index": 2,
-		"map_load_bit": 2, "talking_to": 14, "volatile_test": 6, "copy_name": 4,
+		"map_load_bit": 6, "talking_to": 14, "volatile_test": 6, "copy_name": 4,
 		"set_fossil": 6, "party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1,
-		"list_menu": 1, "diploma": 1},
+		"list_menu": 1},
 }
 ## `SilphCo11FPorygonText` is a `call DisplayPokedex` the disassembly marks
 ## unreferenced. The `trade` rows are the eight `predef DoInGameTradeDialogue`
@@ -226,7 +224,7 @@ const CALLBACK_CENSUS: Dictionary = {
 ## every `set_map_script` already read, and the bodies the walker gets whole.
 const STATE_CENSUS: Dictionary = {
 	&"red": {"tables": 98, "states": 373, "read": 183, "branch": 71, "player_coord": 53,
-		"player_facing": 58, "flag": 264, "set_map_script": 313, "save_coord_index": 9,
+		"player_facing": 58, "flag": 264, "set_map_script": 318, "save_coord_index": 9,
 		"map_text": 142, "toggle_object": 155, "object_facing": 75, "set_player_coord": 1,
 		"object_path": 2, "movement_running": 70, "npc_movement_script": 1,
 		"movement_script_running": 4, "flag_test": 15, "walk": 47, "badges_byte": 1,
@@ -234,14 +232,14 @@ const STATE_CENSUS: Dictionary = {
 		"riding": 4, "coord_index": 18, "starter": 22, "trainer_battle": 30,
 		"battle_outcome": 34, "object_stay": 12, "facing": 3, "has_item": 4, "emote": 2,
 		"saved_coord_index": 16, "badge_guards": 1, "scratch_test": 4, "set_starter": 3,
-		"name_species": 3, "heal_party": 2, "scratch": 13, "give_item": 9,
-		"arrow_movement": 3, "guard_drink": 4, "boulder_on": 3, "map_load_bit": 10,
-		"hall_of_fame": 1, "set_blackout_map": 1, "save_game": 1, "reset_game": 1,
-		"object_coord_move": 1, "warp_to": 1, "set_last_map": 1, "safari_balls": 1,
-		"set_riding": 1, "replace_block": 24, "volatile": 1, "volatile_test": 1,
-		"coord_lookup": 3, "trainer_battle_object": 1},
+		"name_species": 3, "heal_party": 2, "scratch": 13, "give_item": 9, "arrow_movement": 3,
+		"guard_drink": 4, "boulder_on": 3, "map_load_bit": 10, "hall_of_fame": 1,
+		"set_blackout_map": 1, "save_game": 1, "reset_game": 1, "object_coord_move": 1,
+		"warp_to": 1, "set_last_map": 1, "safari_balls": 1, "set_riding": 1,
+		"replace_block": 24, "volatile": 1, "volatile_test": 1, "coord_lookup": 3,
+		"trainer_battle_object": 1},
 	&"blue": {"tables": 98, "states": 373, "read": 183, "branch": 71, "player_coord": 53,
-		"player_facing": 58, "flag": 264, "set_map_script": 313, "save_coord_index": 9,
+		"player_facing": 58, "flag": 264, "set_map_script": 318, "save_coord_index": 9,
 		"map_text": 142, "toggle_object": 155, "object_facing": 75, "set_player_coord": 1,
 		"object_path": 2, "movement_running": 70, "npc_movement_script": 1,
 		"movement_script_running": 4, "flag_test": 15, "walk": 47, "badges_byte": 1,
@@ -249,27 +247,26 @@ const STATE_CENSUS: Dictionary = {
 		"riding": 4, "coord_index": 18, "starter": 22, "trainer_battle": 30,
 		"battle_outcome": 34, "object_stay": 12, "facing": 3, "has_item": 4, "emote": 2,
 		"saved_coord_index": 16, "badge_guards": 1, "scratch_test": 4, "set_starter": 3,
-		"name_species": 3, "heal_party": 2, "scratch": 13, "give_item": 9,
-		"arrow_movement": 3, "guard_drink": 4, "boulder_on": 3, "map_load_bit": 10,
-		"hall_of_fame": 1, "set_blackout_map": 1, "save_game": 1, "reset_game": 1,
-		"object_coord_move": 1, "warp_to": 1, "set_last_map": 1, "safari_balls": 1,
-		"set_riding": 1, "replace_block": 24, "volatile": 1, "volatile_test": 1,
-		"coord_lookup": 3, "trainer_battle_object": 1},
-	&"yellow": {"tables": 98, "states": 408, "read": 223, "branch": 123, "player_coord": 79,
-		"flag": 301, "player_facing": 63, "set_map_script": 369, "save_coord_index": 15,
-		"map_text": 174, "object_position": 12, "toggle_object": 181, "object_facing": 85,
-		"set_player_coord": 1, "object_path": 2, "movement_running": 81, "wild_battle": 6,
-		"npc_movement_script": 1, "movement_script_running": 4, "flag_test": 20,
-		"walk": 61, "badges_byte": 6, "object_move": 93, "player_in_array": 38,
-		"riding": 4, "coord_index": 18, "trainer_battle": 17, "battle_outcome": 38,
-		"object_stay": 17, "facing": 4, "has_item": 4, "emote": 2, "saved_coord_index": 18,
-		"starter": 1, "set_starter": 4, "badge_guards": 1, "name_species": 1,
-		"heal_party": 3, "give_item": 9, "arrow_movement": 3, "guard_drink": 4,
-		"volatile_test": 3, "volatile": 8, "random": 1, "boulder_on": 3,
-		"map_load_bit": 10, "hall_of_fame": 1, "set_blackout_map": 1, "save_game": 1,
-		"reset_game": 1, "warp_to": 1, "set_last_map": 1, "safari_balls": 1,
-		"set_riding": 1, "scratch_test": 3, "scratch": 8, "replace_block": 36,
-		"coord_lookup": 3, "trainer_battle_object": 2},
+		"name_species": 3, "heal_party": 2, "scratch": 13, "give_item": 9, "arrow_movement": 3,
+		"guard_drink": 4, "boulder_on": 3, "map_load_bit": 10, "hall_of_fame": 1,
+		"set_blackout_map": 1, "save_game": 1, "reset_game": 1, "object_coord_move": 1,
+		"warp_to": 1, "set_last_map": 1, "safari_balls": 1, "set_riding": 1,
+		"replace_block": 24, "volatile": 1, "volatile_test": 1, "coord_lookup": 3,
+		"trainer_battle_object": 1},
+	&"yellow": {"tables": 98, "states": 411, "read": 226, "branch": 123, "player_coord": 86,
+		"flag": 306, "player_facing": 63, "set_map_script": 384, "save_coord_index": 15,
+		"map_text": 181, "object_position": 28, "toggle_object": 195, "object_facing": 94,
+		"set_player_coord": 1, "object_path": 2, "movement_running": 83, "wild_battle": 6,
+		"npc_movement_script": 1, "movement_script_running": 4, "flag_test": 20, "walk": 61,
+		"badges_byte": 6, "object_move": 102, "player_in_array": 38, "riding": 4,
+		"coord_index": 18, "trainer_battle": 17, "battle_outcome": 38, "object_stay": 17,
+		"facing": 4, "has_item": 4, "emote": 2, "saved_coord_index": 18, "starter": 1,
+		"set_starter": 4, "badge_guards": 1, "name_species": 1, "heal_party": 3, "scratch": 16,
+		"give_item": 9, "arrow_movement": 3, "guard_drink": 4, "volatile_test": 3,
+		"volatile": 8, "random": 1, "boulder_on": 3, "map_load_bit": 10, "hall_of_fame": 1,
+		"set_blackout_map": 1, "save_game": 1, "reset_game": 1, "warp_to": 1,
+		"set_last_map": 1, "safari_balls": 1, "set_riding": 1, "scratch_test": 3,
+		"replace_block": 36, "coord_lookup": 3, "trainer_battle_object": 2},
 }
 
 ## The pin on which way a `wCurrentMenuItem` branch reads.
@@ -715,6 +712,9 @@ func _walk_script(
 		if op == "text" and not _drawn(font, String(node["text"]).replace("\n", "")) \
 			and wrong.size() < 4:
 			wrong.append("map %d draws a blank tile" % number)
+		if op == "text" and String(node["text"]).contains(Gen2TextStream.NUMBER_MARKER) \
+			and wrong.size() < 4:
+			wrong.append("map %d prints a number nothing wrote" % number)
 		if node.has("flag") and op in ["flag", "branch", "flag_test"]:
 			var flag: int = int(node["flag"])
 			if (flag < 0 or flag >= Gen1Layout.EVENT_FLAG_BYTES * 8) and wrong.size() < 4:
@@ -803,23 +803,53 @@ func _hidden_events() -> void:
 	_r.note("gen1 hidden events %s, %d bookshelf tiles" % [census, bookshelves])
 
 
+## Every box under [param rows]' scripts, branches included.
+func _script_texts(rows: Array) -> Array[String]:
+	var out: Array[String] = []
+	var pending: Array = []
+	for row: Dictionary in rows:
+		pending.append(row.get("script", []))
+	while not pending.is_empty():
+		for node: Dictionary in pending.pop_back() as Array:
+			if String(node["op"]) == "text":
+				out.append(String(node["text"]))
+			for side: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+				if node.has(side):
+					pending.append(node[side])
+	return out
+
+
 func _walk_hidden(
 	nodes: Array, census: Dictionary, wrong: Array[String], number: int
 ) -> void:
 	for node: Dictionary in nodes:
 		var op: String = String(node["op"])
 		census[op] = int(census.get(op, 0)) + 1
-		if op == "facing" and not Gen1Layout.FACING_STEPS.has(int(node["facing"])) \
-			and wrong.size() < 4:
-			wrong.append("map %d faces %d" % [number, int(node["facing"])])
-		if op == "text" and String(node["text"]).is_empty() and wrong.size() < 4:
-			wrong.append("map %d prints nothing" % number)
-		if (op == "give_item" or op == "has_item" or op == "name_item") \
-			and _r.data.item_name(int(node["item"])).is_empty():
-			wrong.append("map %d names item %d" % [number, int(node["item"])])
+		var fault: String = _hidden_node_fault(node, number)
+		if not fault.is_empty() and wrong.size() < 4:
+			wrong.append("map %d %s" % [number, fault])
 		for side: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
 			if node.has(side):
 				_walk_hidden(node[side] as Array, census, wrong, number)
+
+
+## What is wrong with one hidden event node, or "".
+func _hidden_node_fault(node: Dictionary, number: int) -> String:
+	var op: String = String(node["op"])
+	if op == "facing" and not Gen1Layout.FACING_STEPS.has(int(node["facing"])):
+		return "faces %d" % int(node["facing"])
+	if op == "text" and String(node["text"]).is_empty():
+		return "prints nothing"
+	if op == "text" and String(node["text"]).contains(Gen2TextStream.NUMBER_MARKER):
+		return "prints a number nothing wrote"
+	## The Mansion's switches name rows past every object's, read all the same.
+	if op == "map_text" and node.has("text") \
+		and (_maps[number] as Gen2WorldMap).text_at(int(node["text"])).is_empty():
+		return "opens text %d, which was not read" % int(node["text"])
+	if op in ["give_item", "has_item", "name_item"] \
+		and _r.data.item_name(int(node["item"])).is_empty():
+		return "names item %d" % int(node["item"])
+	return ""
 
 
 ## `LavenderTownLittleGirlText`: the question, then `wCurrentMenuItem` zero for
@@ -1232,6 +1262,7 @@ const SAFARI_TEXTS: int = 6
 const SAFARI_BATTLE_MAPS: int = 4
 const SAFARI_WINDOW_MAPS: int = 9
 const SAFARI_STEPS_LABEL: String = "/500"
+const SAFARI_FEE_LINE: String = "That'll be ¥500"
 const SAFARI_MENU_TOP: String = "BALL×"
 
 
@@ -1243,6 +1274,10 @@ func _safari() -> void:
 		"the gate reads %d states." % (gate.scripts["states"] as Array).size())
 	_r.check(gate.texts.size() == SAFARI_TEXTS,
 		"the gate reads %d text rows." % gate.texts.size())
+	## Yellow's `text_bcd wPriceTemp` where Red spells the fee out.
+	_r.check(_script_texts(gate.texts).any(
+		func(text: String) -> bool: return text.contains(SAFARI_FEE_LINE)),
+		"no gate text says %s." % [SAFARI_FEE_LINE])
 	var battle_maps: int = 0
 	var window_maps: int = 0
 	for number: int in _maps:

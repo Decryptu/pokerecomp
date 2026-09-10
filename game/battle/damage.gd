@@ -123,7 +123,6 @@ static func damage_stats(
 
 ## `BattleCommand_DamageCalc`: Selfdestruct's halved defense, the formula, the
 ## type-boosting item, the critical multiplier, the cap and the minimum.
-##
 ## Its `ret z` on a power of zero is why a status move reaches
 ## [method stab_damage] with no damage rather than the minimum two.
 ## [param level] is -1 for the attacker's own; `BattleCommand_BeatUp` is the one
@@ -171,7 +170,6 @@ static func damage_calc(
 ## over whatever [method damage_calc] left. It runs for a powerless move too, and
 ## has to: `DoPoison` and `DoParalyze` carry `stab` and no `damagecalc`, which is
 ## how Thunder Wave learns it does nothing to a Ground type.
-##
 ## Returns { damage, stab, immune, effectiveness }. [param foresight] is
 ## `SUBSTATUS_IDENTIFIED`, which drops the rows past the chart's `-2` marker.
 static func stab_damage(
@@ -456,7 +454,6 @@ const CONSTANT_DAMAGE_EFFECTS: Array[int] = [
 ## and by `AIDamageCalc`, which routes the same four effects here rather than
 ## through the formula. [param defender] is whoever the hit lands on, which is
 ## the only mon Super Fang reads.
-##
 ## A null [param rng] is a prediction rather than a hit, and answers Psywave with
 ## the top of its range the way [constant MAX_VARIATION] does for the formula.
 static func constant_damage(
@@ -489,7 +486,6 @@ static func psywave_damage(level: int, rng: RandomNumberGenerator) -> int:
 
 ## The split is by type, not by move: below Fire is physical and Fire up
 ## special, which is why Hyper Beam is physical and Bite special.
-##
 ## A type past the cartridge's chart is a mod's own and carries the choice on its
 ## row instead, since there is no number to compare it against. Only such a
 ## number reaches the overlay, so a cartridge battle pays one comparison.
@@ -516,7 +512,6 @@ static func _attack_stat(
 ## The defending stat, doubled by the defender's screen. Metal Powder is not
 ## here: `DittoMetalPowder` runs past `TruncateHL_BC`, which is
 ## [method metal_powder_pair].
-##
 ## `PlayerAttackDamage` doubles before `CheckDamageStatsCritical`, and a critical
 ## reaching `.thickclub`'s no-carry branch reloads the unmodified stat over it,
 ## so a critical that ignores the defender's stages ignores its screen too.

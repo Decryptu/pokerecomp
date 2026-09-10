@@ -2,11 +2,9 @@ class_name Gen2Party
 extends RefCounted
 
 ## The Pokémon one side of a battle has, and which of them is out.
-##
 ## An ordered list and a cursor into it, not a set: the order is what a switch
 ## menu shows and what a replacement is chosen from, and the first entry leads. A
 ## wild battle is a party of one, so it needs no special case.
-##
 ## Fainted Pokémon stay in the list, still counting against the six. A battle is
 ## lost when all of them are down, not when the list runs out.
 
@@ -88,7 +86,6 @@ func first_healthy() -> int:
 
 
 ## Puts [param index] out, and answers whether it went.
-##
 ## The Pokémon leaving keeps its health and PP and loses its stat stages and
 ## everything [Gen2Substatus] holds. A stage is a lens on a stat, and neither it
 ## nor confusion, a charge or a recharge survives the walk back to the ball.

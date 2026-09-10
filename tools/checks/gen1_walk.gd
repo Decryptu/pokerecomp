@@ -495,6 +495,8 @@ func _one_game() -> void:
 	_check_the_saffron_guard()
 	_check_an_arrow_tile()
 	_check_a_scripted_wild_battle()
+	_check_the_ghost_marowak()
+	_check_the_catch_training()
 	if _r.game_id != RomRegistry.YELLOW:
 		_check_the_opening_walk()
 	_check_the_route_23_guards()
@@ -515,6 +517,10 @@ func _one_game() -> void:
 	_check_the_captains_back()
 	_check_the_ship_leaves()
 	_check_the_gate_pushes_back()
+	_check_cinnabar_settles()
+	_check_a_mansion_switch()
+	_check_an_elite_room_settles()
+	_check_lances_trigger()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -776,17 +782,22 @@ func _check_a_card_key_door() -> void:
 		"the door opened at %s was remembered as %s." % [
 			SILPH_DOOR, world.state.card_key_door(),
 		])
+	## `set BIT_CUR_MAP_LOADED_1`: the next frame's callback turns the
+	## coordinates into the door's flag before the player takes a step.
+	world.dispatch_sight_events()
+	var flag: int = int((world.current_map.events["card_key"] as Array)[0]["flag"])
+	_r.check(world.state.card_key_door() == Gen2WorldState.NO_CARD_KEY_DOOR
+		and world.event_flag_active(flag),
+		"the frame after the box kept %s and flag %d %s." % [
+			world.state.card_key_door(), flag, world.event_flag_active(flag)])
 
-	## The floor loaded again: the coordinates become the door's flag and the
-	## callback leaves that one alone.
+	## The floor loaded again: the callback leaves the flagged door alone.
 	var again: Gen2WorldAPI = _r.open_world(
 		0, SILPH_CO_2F, SILPH_DOOR_APPROACH, world.state
 	)
 	if again == null:
 		return
 	again.dispatch_map_entry()
-	_r.check(again.state.card_key_door() == Gen2WorldState.NO_CARD_KEY_DOOR,
-		"the reloaded floor kept %s." % [again.state.card_key_door()])
 	_r.check(again.block_at(SILPH_DOOR.x, SILPH_DOOR.y) == SILPH_OPEN_BLOCK,
 		"the reloaded floor blocked the opened door with $%02X." % again.block_at(
 			SILPH_DOOR.x, SILPH_DOOR.y
@@ -2614,6 +2625,89 @@ func _check_a_scripted_player_walk() -> void:
 	_r.check(world.player_facing == Gen2WorldSprite.FACING_RIGHT,
 		"the player faced %d rather than Oak." % world.player_facing)
 	_r.note("gen1 walk HALL_OF_FAME five cells in and Oak turning to meet it")
+	_check_the_induction(world)
+
+
+## `HallOfFameResetEventsAndSaveScript` behind Oak's box: `HallOfFamePC` is a
+## request the screen answers with the induction, and the flag the shelf reads
+## stands before it; the Plateau's events, the save and `jp Init` follow.
+func _check_the_induction(world: Gen2WorldAPI) -> void:
+	world.state.set_event_flag(BEAT_CHAMPION_RIVAL_FLAG)
+	var request: Dictionary = _pressed_to_request(world)
+	if not _r.check(StringName(request.get("kind", &"")) == &"hall_of_fame_requested",
+		"Oak's box was followed by %s." % [request]):
+		return
+	_r.check(world.state.hall_of_fame(), "ENGINE_HALL_OF_FAME is clear at the induction.")
+	world.complete_runtime_request({"ok": true})
+	var kinds: Array = []
+	for _request: int in 3:
+		var next: Dictionary = _pressed_to_request(world)
+		if next.is_empty():
+			break
+		kinds.append(StringName(next["kind"]))
+		if StringName(next["kind"]) == &"soft_reset_requested":
+			break
+		world.complete_runtime_request({"ok": true, "script_value": 1})
+	_r.check(kinds == [&"quick_save_requested", &"soft_reset_requested"],
+		"the induction was followed by %s." % [kinds])
+	_r.check(not world.event_flag_active(BEAT_CHAMPION_RIVAL_FLAG),
+		"the Plateau's events were not cleared.")
+
+
+## A pressed through every box until a runtime request stands, or {}.
+func _pressed_to_request(world: Gen2WorldAPI) -> Dictionary:
+	for _pass: int in SCRIPTED_WALK_PASSES:
+		if not world.pending_runtime_request().is_empty():
+			return world.pending_runtime_request()
+		if world.pending_script_input().is_empty():
+			world.dispatch_sight_events()
+		else:
+			world.run_event_queue(true)
+	return world.pending_runtime_request()
+
+
+## `LoreleisRoomLoreleiEndBattleScript` calls `EndTrainerBattle`, whose
+## `ResetButtonPressedAndMapScript` zeroes `wCurMapScript`, so the after-battle
+## line prints once and the room settles on its default state.
+func _check_an_elite_room_settles() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, LORELEIS_ROOM, LORELEI_SIDE)
+	if world == null:
+		return
+	world.state.set_event_flag(AUTOWALKED_INTO_LORELEIS_ROOM_FLAG)
+	world.dispatch_map_entry()
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	world.interact()
+	var request: Dictionary = _pressed_to_request(world)
+	if not _r.check(StringName(request.get("kind", &"")) == &"battle_requested",
+		"Lorelei asked for %s." % [request]):
+		return
+	world.complete_runtime_request({"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_WON})
+	var boxes: int = 0
+	for _pass: int in 6:
+		if not world.pending_script_input().is_empty():
+			boxes += 1
+			world.run_event_queue(true)
+		else:
+			world.dispatch_sight_events()
+	_r.check(world.state.gen1_map_script(LORELEIS_ROOM_BYTE) == 0,
+		"the room stayed on state %d." % world.state.gen1_map_script(LORELEIS_ROOM_BYTE))
+	_r.check(boxes == 1, "the after-battle line printed %d times." % boxes)
+	_r.check(world.event_flag_active(BEAT_LORELEI_FLAG), "EVENT_BEAT_LORELEIS_ROOM_TRAINER_0 is clear.")
+	_r.note("gen1 walk LORELEIS_ROOM's end-battle state hands back to the default one")
+
+
+## `DisplayTextID` by id: `hTextID` is `hSpriteIndex`, so the object of that
+## index is the trainer `TalkToTrainer` fights, which is how Lance's own
+## coordinate trigger opens a trainer battle rather than a wild one.
+func _check_lances_trigger() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, LANCES_ROOM, LANCE_TRIGGER)
+	if world == null:
+		return
+	world.dispatch_map_entry()
+	var values: Dictionary = _pressed_to_request(world).get("values", {}) as Dictionary
+	_r.check(StringName(values.get("kind", &"")) == &"trainer"
+		and int(values.get("trainer_class", 0)) == LANCE_CLASS,
+		"Lance's trigger asked for %s." % [values])
 
 
 ## `RemoveGuardDrink` driven on the world: the guard is thirsty with an empty
@@ -2706,6 +2800,84 @@ func _check_a_scripted_wild_battle() -> void:
 	_r.check(world.event_flag_active(SNORLAX_BEAT_FLAG),
 		"the beaten Snorlax left its own flag clear.")
 	_r.note("gen1 walk ROUTE_12's Snorlax fought at level %d" % SNORLAX_LEVEL)
+
+
+## `PokemonTower6FMarowakBattleScript` reads `wBattleResult` with `and a`: only
+## a won fight sets EVENT_BEAT_GHOST_MAROWAK and prints the departure.
+const POKEMON_TOWER_6F: int = 147
+const POKEMON_TOWER_6F_BYTE: int = 63
+const MAROWAK_CELL := Vector2i(10, 16)
+const MAROWAK_SPECIES: int = 105
+const MAROWAK_LEVEL: int = 30
+const MAROWAK_BEAT_FLAG: int = 271
+const MAROWAK_DEPARTED: String = "The GHOST was"
+
+
+func _check_the_ghost_marowak() -> void:
+	for outcome: StringName in [Gen2WorldBattleAdapter.OUTCOME_RAN, Gen2WorldBattleAdapter.OUTCOME_WON]:
+		var world: Gen2WorldAPI = _r.open_world(0, POKEMON_TOWER_6F, MAROWAK_CELL + Vector2i.RIGHT)
+		if world == null:
+			return
+		world.player_cell = MAROWAK_CELL
+		var opened: Array = world.dispatch_sight_events()
+		var passes: int = 0
+		while world.pending_runtime_request().is_empty() and passes < SCRIPTED_WALK_PASSES:
+			world.run_event_queue(true)
+			passes += 1
+		var values: Dictionary = world.pending_runtime_request().get("values", {}) as Dictionary
+		if not _r.check(
+			int(values.get("pokemon", 0)) == MAROWAK_SPECIES and int(values.get("level", 0)) == MAROWAK_LEVEL,
+			"the ghost asked for %s / %s." % [world.pending_runtime_request(), opened]
+		):
+			return
+		world.complete_runtime_request({"ok": true, "outcome": outcome})
+		var after: Array = world.dispatch_sight_events()
+		var won: bool = outcome == Gen2WorldBattleAdapter.OUTCOME_WON
+		_r.check(world.event_flag_active(MAROWAK_BEAT_FLAG) == won,
+			"a fight %s left EVENT_BEAT_GHOST_MAROWAK %s." % [outcome, world.event_flag_active(MAROWAK_BEAT_FLAG)])
+		_r.check((not after.is_empty() and _event_text(after).begins_with(MAROWAK_DEPARTED)) == won,
+			"a fight %s was answered with %s." % [outcome, after])
+	_r.note("gen1 walk POKEMON_TOWER_6F's MAROWAK fought at level %d" % MAROWAK_LEVEL)
+
+
+## `ViridianCityOldManStartCatchTrainingScript`'s `wBattleType` as the Dude's
+## tutorial, and `wCurOpponent` read behind the whole state: Yellow's initial
+## training sets EVENT_INITIAL_CATCH_TRAINING after the store and breaks out on it.
+const VIRIDIAN_BYTE: int = 4
+## Each row: the state to start on, the one it moves to, and whether the ball lands.
+const CATCH_TRAINING_STATES: Dictionary = {
+	&"red": [[1, 2, true]], &"blue": [[1, 2, true]], &"yellow": [[3, 4, true], [7, 8, false]],
+}
+
+
+func _check_the_catch_training() -> void:
+	for row: Array in CATCH_TRAINING_STATES[_r.game_id] as Array:
+		var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_CITY, Vector2i(23, 10))
+		if world == null:
+			return
+		world.state.set_gen1_map_script(VIRIDIAN_BYTE, int(row[0]))
+		var results: Array = world.dispatch_sight_events()
+		var request: Dictionary = world.pending_runtime_request()
+		var values: Dictionary = request.get("values", {}) as Dictionary
+		if not _r.check(
+			StringName(request.get("kind", &"")) == &"battle_requested"
+				and bool(values.get("tutorial", false))
+				and int(values.get("battle_type", -1)) == Gen2Battle.BATTLETYPE_TUTORIAL
+				and int(values.get("gen1_battle_type", -1)) == Gen1Layout.BATTLE_TYPE_OLD_MAN,
+			"state %d asked for %s / %s." % [row[0], request, results]
+		):
+			return
+		_r.check(world.state.gen1_map_script(VIRIDIAN_BYTE) == int(row[1]),
+			"the state behind the old man's battle is %d." % world.state.gen1_map_script(VIRIDIAN_BYTE))
+		_r.check(world.gen1_tutorial_ball_lands() == bool(row[2]),
+			"the old man's ball from state %d %s." % [
+				row[0], "landed" if world.gen1_tutorial_ball_lands() else "broke out"])
+		world.complete_runtime_request({
+			"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
+		})
+		_r.check(world.pending_runtime_request().is_empty(), "the training left a request standing.")
+	_r.note("gen1 walk VIRIDIAN_CITY's catch training from %d states" % (
+		CATCH_TRAINING_STATES[_r.game_id] as Array).size())
 
 
 func _saffron_drink_flag() -> int:
@@ -3253,6 +3425,63 @@ func _check_the_viridian_gym_door() -> void:
 	_r.note("gen1 walk VIRIDIAN_CITY's gym door with and without seven badges")
 
 
+const LORELEIS_ROOM: int = 245
+const LORELEIS_ROOM_BYTE: int = 93
+const LORELEI_SIDE := Vector2i(5, 3)
+const AUTOWALKED_INTO_LORELEIS_ROOM_FLAG: int = 2278
+const BEAT_LORELEI_FLAG: int = 2273
+const LANCES_ROOM: int = 113
+const LANCE_TRIGGER := Vector2i(6, 2)
+const LANCE_CLASS: int = 47
+const CINNABAR_ISLAND: int = 8
+const CINNABAR_SHORE := Vector2i(19, 13)
+const POKEMON_MANSION_3F: int = 215
+const MANSION_3F_SWITCH := Vector2i(10, 6)
+const MANSION_3F_DOOR := Vector2i(15, 10)
+const MANSION_SWITCH_FLAG: int = 632
+const MANSION_SWITCH_ASKS: String = "A secret switch!"
+
+
+## `CinnabarIsland_Script` sets BIT_CUR_MAP_LOADED_1 on every frame and nothing
+## on the island reads it, so a walk there is not forever owed a load pass.
+func _check_cinnabar_settles() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, CINNABAR_ISLAND, CINNABAR_SHORE)
+	if world == null:
+		return
+	world.dispatch_map_entry()
+	for _pass: int in 3:
+		world.dispatch_sight_events()
+	_r.check(not world.gen1_map_load_pending(),
+		"Cinnabar Island still owes a map-load pass after three frames.")
+	_r.check(not world.event_flag_active(MANSION_SWITCH_FLAG),
+		"the island did not clear EVENT_MANSION_SWITCH_ON.")
+
+
+## `Mansion3Script_Switches`: the statue's row sits past every object's, asks,
+## flips EVENT_MANSION_SWITCH_ON and sets the bit that redraws the doors.
+func _check_a_mansion_switch() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, POKEMON_MANSION_3F, MANSION_3F_SWITCH)
+	if world == null:
+		return
+	world.dispatch_map_entry()
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var shut: bool = not world.can_walk_to(MANSION_3F_DOOR)
+	world.interact()
+	var asked: Dictionary = world.pending_script_input()
+	if not _r.check(StringName(asked.get("type", &"")) == &"choice"
+		and String(asked.get("text", "")).begins_with(MANSION_SWITCH_ASKS),
+		"the 3F switch asked %s." % [asked]):
+		return
+	world.choose_script_input(0)
+	world.run_event_queue(true)
+	world.dispatch_sight_events()
+	_r.check(world.event_flag_active(MANSION_SWITCH_FLAG), "the pressed switch left the event clear.")
+	_r.check(shut and world.can_walk_to(MANSION_3F_DOOR),
+		"the door at %s stood %s before and %s after." % [
+			MANSION_3F_DOOR, "shut" if shut else "open", "open" if world.can_walk_to(MANSION_3F_DOOR) else "shut"])
+	_r.note("gen1 walk POKEMON_MANSION_3F's switch opens its door")
+
+
 const POKEMON_TOWER_7F: int = 148
 const TOWER_7F_BYTE: int = 0x40
 const TOWER_7F_WARP_STATE: Dictionary = {&"red": 4, &"blue": 4, &"yellow": 11}
@@ -3476,6 +3705,7 @@ func _check_the_safari_zone() -> void:
 		"the fee left %d." % world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
 	)
 	_check_the_safari_game_ends(world.state)
+	_check_leaving_early()
 	_check_the_safari_zone_refuses()
 	_r.note("gen1 walk paid the SAFARI ZONE's %d and walked its %d steps out" % [
 		SAFARI_ADMISSION, Gen1Layout.SAFARI_STEPS,
@@ -3512,6 +3742,44 @@ func _check_the_safari_game_ends(state: Gen2WorldState) -> void:
 		"the gate said %s on the way out." % [haul])
 	_r.check(world.state.safari_balls() == 0,
 		"the gate left %d balls." % world.state.safari_balls())
+
+
+## `SafariZoneGateSafariZoneWorker1LeavingEarlyText`'s YES: the walk down, both
+## events cleared, and `wNextSafariZoneGateScript`'s 0 rather than NO's 5.
+const SAFARI_GATE_TOP := Vector2i(3, 0)
+const SAFARI_SCRIPT_LEAVE_EARLY_LANDING := Vector2i(3, 3)
+
+
+func _check_leaving_early() -> void:
+	var state := Gen2WorldState.new()
+	state.set_event_flag(Gen1Layout.IN_SAFARI_ZONE_EVENT, true)
+	state.set_safari_balls(Gen1Layout.SAFARI_BALLS)
+	state.set_safari_steps(Gen1Layout.SAFARI_STEPS)
+	var world: Gen2WorldAPI = _r.open_world(0, SAFARI_GATE, SAFARI_GATE_TOP, state)
+	if world == null:
+		return
+	world.state.set_gen1_map_script(world.gen1_safari_gate_byte(), SAFARI_SCRIPT_MOVING_UP)
+	## `SafariZoneGatePlayerMovingUpScript` hands the question to the next frame.
+	world.dispatch_sight_events()
+	world.dispatch_sight_events()
+	if not _r.check(
+		StringName(world.pending_script_input().get("type", &"")) == &"choice",
+		"the gate asked %s of a player leaving early." % [world.pending_script_input()]
+	):
+		return
+	_safari_answer(world, 0)
+	var passes: int = 0
+	while (world.gen1_player_movement_running() or world.player_step_in_progress()) 		and passes < SCRIPTED_WALK_PASSES:
+		world.advance_player_step_pass()
+		world.dispatch_sight_events()
+		passes += 1
+	world.dispatch_sight_events()
+	_r.check(world.player_cell == SAFARI_SCRIPT_LEAVE_EARLY_LANDING
+		and world.state.gen1_map_script(world.gen1_safari_gate_byte()) == 0,
+		"leaving early left the player on %s at state %d." % [
+			world.player_cell, world.state.gen1_map_script(world.gen1_safari_gate_byte())])
+	_r.check(not world.gen1_safari_active() and not world.event_flag_active(Gen1Layout.SAFARI_GAME_OVER_EVENT),
+		"leaving early left the game's events standing.")
 
 
 ## Red and Blue walk a short purse back down; Yellow's own two routines hand out

@@ -49,7 +49,6 @@ const NOT_INSTALLED: StringName = &"not_installed"
 
 
 ## Turns whatever the player pasted into the feed URL to read.
-##
 ## People copy whichever URL they happen to be looking at, so a repository page,
 ## a Pages site, a bare `owner/repo` and the feed file itself all resolve to the
 ## same place. Returns { ok, feed, label } or { ok: false, reason }.
@@ -79,7 +78,6 @@ static func resolve_source(input: String) -> Dictionary:
 
 
 ## Reads a fetched feed into rows the launcher can list.
-##
 ## Returns { ok, name, entries } where each entry has id, name, version,
 ## description, download, games, and the optional icon and thumbnail URLs. An
 ## entry missing an id or a usable download is dropped rather than failing the whole
@@ -207,7 +205,6 @@ static func cached_feed(feed: String, directory: String = CACHE_DIRECTORY) -> Di
 
 
 ## What a fetch of [param feed] amounts to, whether or not it arrived.
-##
 ## A feed that parsed is kept and answered; anything else falls back to the copy
 ## already on disk, so a server that is down costs the freshness of a listing
 ## rather than the listing. `stale` is true for the fallback, with `age` in
@@ -331,7 +328,6 @@ static func _label_for(url: String) -> String:
 
 ## Whether [param feed] is the one this project publishes, which is followed by
 ## every build and cannot be dropped.
-##
 ## Not `is_built_in`: [method Script.is_built_in] takes no arguments and a class
 ## name is a [Script], so that spelling resolves to Godot's and answers false
 ## everywhere without an error.

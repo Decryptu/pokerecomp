@@ -102,7 +102,6 @@ func wait_for_linked_friend(transport: Gen2LinkTransport) -> int:
 ## `Link_CheckCommunicationError`: FALSE is a link that dropped while the two
 ## players were saving, and the peer's own action lands in
 ## `wOtherPlayerLinkMode` for the `readmem` that follows.
-##
 ## A Gen 1 game has no `wPlayerLinkAction` to raise, so what comes back from one
 ## is zero, which is the whole of the "can't link to the past" branch and the
 ## whole of what makes the Time Capsule legal.
@@ -188,7 +187,6 @@ func which_chris(transport: Gen2LinkTransport) -> int:
 ## tests: every species slot first, then mail, then moves. The answer is the
 ## wScriptVar value and the party slot the box names, which is the slot the test
 ## stopped on rather than the first slot of the party.
-##
 ## [param party] is the world's own party mirror: the parallel `species`,
 ## `held_items` and `moves` arrays [method Gen2WorldAPI.set_party_summary]
 ## carries, which is where every other party-reading special gets its answer.
@@ -252,7 +250,6 @@ static func validate_ot_trademon(
 ## `CheckAnyOtherAliveMonsForTrade`. A trade that would leave this side with
 ## nothing that can fight is refused, so the offered slot is skipped here and
 ## the incoming Pokemon is what answers for it.
-##
 ## Carry set is the refusal in the source, so this answers the opposite: TRUE
 ## means the trade may go ahead.
 static func any_other_alive_mons_for_trade(
@@ -271,7 +268,6 @@ static func any_other_alive_mons_for_trade(
 ## takes the last of the five, which `.FindOpponentAndAppendRecord`'s sort has
 ## kept for the least successful one. Both counters stop at
 ## [constant MAX_LINK_RECORD] rather than wrapping.
-##
 ## [param result] is `wins`, `losses` or `draws`, which is `wBattleResult`'s own
 ## WIN/LOSE/DRAW one name further on.
 static func add_battle_to_record(

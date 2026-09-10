@@ -4,7 +4,6 @@ extends RefCounted
 ## `SECTION "SRAM Battle Tower"` and the routines that read it: the challenge's
 ## own state, the seven trainers it has already sampled, and the levels, rules
 ## and rewards `engine/events/battle_tower/` decides from them.
-##
 ## Scene free. The world screen owns the two menus and the battle; this record
 ## owns the SRAM section and every answer `BattleTowerAction`, `LoadOpponentTrainerAndPokemon`
 ## and `_CheckForBattleTowerRules` give from it.
@@ -188,7 +187,6 @@ static func group_level(group: int) -> int:
 
 ## `BattleTower_LevelCheck`, which fails on the first party member above the
 ## chosen group's level. -1 when the party is inside it.
-##
 ## [param party] is the read-only party mirror the script runner carries:
 ## `species`, `levels`, `held_items` and `eggs`, one entry per slot.
 static func level_check(party: Dictionary, group: int) -> int:
@@ -219,7 +217,6 @@ static func ubers_check(party: Dictionary, group: int) -> int:
 
 ## `_CheckForBattleTowerRules`' four checks in its own order, each named by the
 ## box it prints. An empty Array is a party that may enter.
-##
 ## `BattleTower_ExecuteJumptable` runs every check rather than stopping at the
 ## first, so a party can fail more than one and the receptionist says so once
 ## per failure.
@@ -288,7 +285,6 @@ func load_opponent(data: GameData, random: RandomNumberGenerator) -> Dictionary:
 ## The `.resample` loop: `maskbits BATTLETOWER_NUM_UNIQUE_TRAINERS` is seven
 ## bits, so the roll is 0 to 127 and anything past the table is drawn again, as
 ## is any index already in `sBTTrainers`.
-##
 ## Crystal 1.0 masks with `BATTLETOWER_NUM_UNIQUE_MON` instead and can only ever
 ## reach the first 21; the pinned dumps are 1.1, so this is the 1.1 branch.
 func _sample_trainer(random: RandomNumberGenerator) -> int:
@@ -436,7 +432,6 @@ func choose_reward(random: RandomNumberGenerator) -> int:
 ## `BattleTower_GiveReward`: the stored item, or POTION when the pack has no room
 ## for five more of it. [param pack] is the item pocket as
 ## [code]{ item: quantity }[/code].
-##
 ## The source's own shape, which is not "is there room": a pack under `MAX_ITEMS`
 ## always has room for a new row, and a full one only does when it already
 ## carries the reward with fewer than `MAX_ITEM_STACK - 5 + 1` of it.
@@ -452,7 +447,6 @@ func reward_for(pack: Dictionary) -> int:
 ## `BattleTowerAction`'s jumptable, as the value it leaves in `wScriptVar`.
 ## An action that writes nothing there answers -1, which the runner leaves the
 ## variable alone for.
-##
 ## The mobile rows are no-ops with a reason: each writes a byte in SRAM bank 5
 ## that only the mobile adapter's own routines read, and none of them reaches a
 ## script the player can talk to.

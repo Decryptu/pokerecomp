@@ -725,15 +725,18 @@ static func _read_map(
 	var states: Dictionary = _read_map_states(
 		rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts
 	)
+	## A hidden event's row can sit past every object's, as the Mansion's four
+	## switches do, so the hidden rows are read before the table is grown.
+	var hidden: Array = _read_hidden_events(
+		rom, layout, map_id, bank, rom.u16le(header + MAP_SCRIPT_AT)
+	)
+	events["hidden_events"] = hidden
 	## A row the table grew by may reach one higher still, which is how the
 	## Safari Zone gate's own six are read rather than its first four.
 	while _extend_texts(rom, layout, bank, rom.u16le(header + 5), texts, events, states, known):
 		states = _read_map_states(
 			rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts
 		)
-	var hidden: Array = _read_hidden_events(
-		rom, layout, map_id, bank, rom.u16le(header + MAP_SCRIPT_AT)
-	)
 	for row: Dictionary in hidden:
 		_bind_map_script_byte(row.get("script", []) as Array, int(states["byte"]))
 
@@ -1580,13 +1583,20 @@ static func _hidden_coin_nodes(
 	if index < 0:
 		return []
 	var flag: int = Gen1Layout.engine_flag_base("obtained_hidden_coins") + index
-	var found: String = predef_text(rom, layout, bank, "found_hidden_coins")
-	var dropped: String = predef_text(rom, layout, bank, "dropped_hidden_coins")
+	var amount: int = Gen1Layout.hidden_coin_amount(argument)
+	## Both boxes print `hCoins`, which holds the amount just added.
+	var coins: int = int(layout["money_hram"]) + Gen1Layout.COIN_BUFFER_AT
+	var found: String = _number_filled(
+		predef_text(rom, layout, bank, "found_hidden_coins"), coins, amount
+	)
+	var dropped: String = _number_filled(
+		predef_text(rom, layout, bank, "dropped_hidden_coins"), coins, amount
+	)
 	if found.is_empty() or dropped.is_empty():
 		return []
 	return [{"op": "has_item", "item": Gen1Layout.ITEM_COIN_CASE, "else": [], "then": [
 		{"op": "branch", "flag": flag, "engine": true, "then": [], "else": [
-			{"op": "add_coins", "amount": Gen1Layout.hidden_coin_amount(argument)},
+			{"op": "add_coins", "amount": amount},
 			{"op": "flag", "flag": flag, "set": true, "engine": true},
 			{"op": "has_coins", "coins": Gen1Layout.HIDDEN_COIN_CEILING,
 				"test": "exactly",
@@ -1918,9 +1928,24 @@ static func _script_ended(state: Dictionary, out: Array) -> Variant:
 	return out
 
 
-static func _script_printed(state: Dictionary, out: Array, box: Dictionary) -> void:
+## A `text_bcd` over a buffer the walk wrote every byte of prints that number,
+## which is how Yellow's Safari gate says ¥500 where Red's text spells it.
+static func _script_printed(ctx: Dictionary, state: Dictionary, out: Array, box: Dictionary) -> void:
+	var layout: Dictionary = ctx["layout"]
+	for name: String in Gen1Layout.SCRIPT_BCD_BUFFERS:
+		var value: int = _script_bcd_value(state, name)
+		if value >= 0:
+			box["text"] = _number_filled(String(box["text"]), int(layout[name]), value)
 	out.append(box)
 	state["last_box"] = box
+
+
+## `PrintBCDNumber` with LEADING_ZEROES | LEFT_ALIGN, which every map text's
+## `text_bcd` passes: the digits alone.
+static func _number_filled(text: String, address: int, value: int) -> String:
+	return Gen2TextStream.fill_all_markers(
+		text, "%s%04X>" % [Gen2TextStream.NUMBER_MARKER, address], str(value)
+	)
 
 
 ## One instruction: the next address, [constant SCRIPT_END] or SCRIPT_UNREAD.
@@ -3603,6 +3628,16 @@ static func _script_special_body(ctx: Dictionary, pc: int, state: Dictionary = {
 	return [{"op": "badge_guards", "rows": rows, "past_y": compares[0], "past_x": compares[1]}]
 
 
+## `ResetButtonPressedAndMapScript` behind `EndTrainerBattle` zeroes
+## `wCurMapScript`, so an end-battle state that calls it and prints on, as the
+## Elite Four's do, ends on the default state rather than itself.
+static func _script_silent_call(routine: String, state: Dictionary, out: Array, next: int) -> int:
+	if routine == "end_trainer_battle":
+		state["a"] = 0
+		_script_map_script_mirror(state, out)
+	return next
+
+
 ## The routines a row may call. No node carries a sound, so a cry and the wait
 ## behind it spend nothing and the walk carries on past them.
 static func _script_call(
@@ -3615,7 +3650,7 @@ static func _script_call(
 	_script_untested(state)
 	var routine: String = _script_routine(layout, target)
 	if routine in Gen1Layout.SCRIPT_SILENT_CALLS:
-		return next
+		return _script_silent_call(routine, state, out, next)
 	var shaped: int = _script_shaped_routine(ctx, target, state, out)
 	if shaped == SCRIPT_NOT_SHAPED:
 		shaped = _script_card_key_call(ctx, target, state, out)
@@ -4849,7 +4884,8 @@ static func _script_bag_scan(ctx: Dictionary, at: int, out: Array) -> int:
 		if item < 1 and op == Gen1Layout.SCRIPT_CP_N \
 			and rom.u8(at + offset + 1) != Gen1Layout.MAP_COORD_END:
 			item = rom.u8(at + offset + 1)
-		taken = taken or (op == Gen1Layout.SCRIPT_JP \
+		## Yellow spells the tail `call` and `ret` where Red and Blue `jp`.
+		taken = taken or (op in [Gen1Layout.SCRIPT_JP, Gen1Layout.SCRIPT_CALL] \
 			and rom.u16le(at + offset + 1) == int(layout.get("remove_item_from_inventory", -1)))
 	if item < 1 or not taken:
 		return SCRIPT_SHAPE_REFUSED
@@ -5307,7 +5343,7 @@ static func _script_text_row(
 		out.append({"op": "facility", "command": int(decoded["command"])})
 		return true
 	if not String(decoded["text"]).is_empty():
-		_script_printed(state, out, {"op": "text", "text": String(decoded["text"])})
+		_script_printed(ctx, state, out, {"op": "text", "text": String(decoded["text"])})
 	var code: int = _text_code_at(decoded)
 	if code < 0:
 		return true
@@ -5580,15 +5616,25 @@ static func _read_trainer_header(
 			+ rom.u8(at + int(offsets["flag_bit"])),
 		"sight_range": rom.u8(at + int(offsets["range"])) >> Gen1Layout.TRAINER_RANGE_SHIFT,
 	}
+	## The LIFT KEY's `ShowObject` is machine code in a header text, Red's
+	## after-battle one and Yellow's end-battle one.
 	for name: String in ["before", "after", "end"]:
-		out[name] = _read_trainer_text(
-			rom, layout, bank, rom.u16le(at + int(offsets[name]))
-		)
+		var pointer: int = rom.u16le(at + int(offsets[name]))
+		out[name] = _read_trainer_text(rom, layout, bank, pointer)
+		var decoded: Dictionary = Gen1Text.decode_stream(rom, Gen1Layout.banked(bank, pointer))
+		var code: int = _text_code_at(decoded)
+		if code < 0:
+			continue
+		var script: Array = decode_script(rom, layout, bank, code)
+		if script.is_empty():
+			continue
+		## Lance's `SetEvent EVENT_BEAT_LANCE` stands behind the streamed line.
+		if not String(decoded.get("text", "")).is_empty():
+			script.push_front({"op": "text", "text": String(decoded["text"])})
+		out["%s_script" % name] = script
 	return out
 
 
-## One of a header's three texts. `RocketHideoutB4FRocket3AfterBattleText` is
-## the corpus's one that is machine code, and says its `PrintText` operand.
 static func _read_trainer_text(
 	rom: RomFile, layout: Dictionary, bank: int, pointer: int
 ) -> String:

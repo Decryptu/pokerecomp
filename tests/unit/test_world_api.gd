@@ -10103,3 +10103,26 @@ func test_gen1_script_branches_read_pending_flags_and_scratch_in_each_choice() -
 		assert_eq(steps[0]["no"], [{"type": &"text", "text": "NO"}])
 	assert_false(world.state.is_event_flag_active(683), "planning a choice writes no save flags")
 	RomCache.clear(_gen1_directory())
+
+
+## `OverworldLoop` reads `wCurOpponent` after the script has returned, so a
+## flag the row sets behind the store is set before the fight opens, and the
+## `wBattleType` byte rides the request read across onto Crystal's numbering.
+func test_gen1_a_rows_battle_stands_behind_the_rest_of_the_row() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 2))
+	world._gen1_steps = world._gen1_script_steps({"script": [
+		{"op": "wild_battle", "species": 19, "level": 5,
+			"battle_type": Gen1Layout.BATTLE_TYPE_OLD_MAN},
+		{"op": "flag", "flag": 47, "set": true},
+	]})
+	var results: Array = world._gen1_result()
+	assert_true(world.state.is_event_flag_active(47), "the flag behind the store is set first")
+	var request: Dictionary = world.pending_runtime_request()
+	assert_eq(StringName(request.get("kind", &"")), &"battle_requested")
+	var values: Dictionary = request.get("values", {})
+	assert_eq(int(values.get("battle_type", -1)), Gen2Battle.BATTLETYPE_TUTORIAL)
+	assert_true(bool(values.get("tutorial", false)))
+	assert_eq(int(values.get("gen1_battle_type", -1)), Gen1Layout.BATTLE_TYPE_OLD_MAN)
+	assert_true(world.gen1_tutorial_ball_lands())
+	assert_eq(StringName((results[0] as Dictionary).get("status", &"")), &"waiting")
+	RomCache.clear(_gen1_directory())

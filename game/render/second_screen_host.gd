@@ -56,7 +56,6 @@ var _settle: int = PANEL_SETTLE_FRAMES
 
 ## Attaches [param view] to whatever second display this build can reach, or
 ## answers null when there is none.
-##
 ## [param mode] is [member Gen2Options.second_screen]. The view is not built
 ## here: the world owns it, because it mirrors the world, and this only decides
 ## where it is drawn.
@@ -192,7 +191,6 @@ func _attach_window() -> bool:
 
 
 ## The largest hardware-pixel canvas that fills [param panel] at a whole scale.
-##
 ## Whole numbers only, for the reason [Gen2Screen] gives: a hardware pixel drawn
 ## as 6.43 screen pixels crawls. The leftover is a bar the far side fills with
 ## the field colour, and it is never more than one scale factor wide.

@@ -5,7 +5,6 @@ extends RefCounted
 ## never touches scene nodes or engine internals: it is handed this host,
 ## registers what it provides, and is done, reaching only cartridge content
 ## through [GameData] and live world state through [Gen2WorldAPI].
-##
 ## Both renderers are replaceable this way, neither requiring 2D, which is why
 ## the contract is a factory and [method select_view] swaps between them. Mods are
 ## interpreted GDScript, iOS forbidding JIT and runtime native loading.
@@ -26,7 +25,6 @@ const BATTLE_RENDERER_METHODS: Array[String] = [
 ## rectangle at window resolution instead of the 160x144 viewport. A view built
 ## from geometry cannot be drawn into a 160x144 buffer and magnified, so this is
 ## what makes a 3D or HD renderer possible at all.
-##
 ## A renderer that does not define it draws in hardware pixels, which is what the
 ## built-in ones do and what a tile-recolouring mod wants. Shared by both
 ## renderer kinds.
@@ -71,7 +69,6 @@ const RENDERER_INPUT_METHOD: String = "handle_world_input"
 ## Optional, battle renderers only. The same seam on the battle side: every event
 ## [Gen2BattleScreen] did not claim, so a renderer composing its own shot can let
 ## someone steer it. Answering true consumes the event.
-##
 ## A [PokeButton] never arrives here, on either side. The screen routes every one
 ## of them to whatever owns it first, so a text box, the forget-move list and
 ## ball selection all take their press before a renderer could see it, and what
@@ -98,7 +95,6 @@ const RENDERER_INTERFACE_MASK_METHOD: String = "set_interface_masked"
 ## Optional, both renderer kinds, and only meaningful on the native layer. Called
 ## beside [constant RENDERER_RESIZE_METHOD] with the cartridge's own 160x144
 ## screen expressed in that layer's pixels.
-##
 ## Every hardware-pixel number a renderer is handed -- the text box's rectangle,
 ## first -- has to land somewhere inside the surface it draws on. Framed, that
 ## mapping was the surface itself, because it was a whole multiple of 160x144.
@@ -167,7 +163,6 @@ const FIRST_MOD_POCKET: int = 5
 ## steps along, a whole number in a range, and a button that does something the
 ## moment it is pressed. A button stores nothing, because "recentre the camera
 ## now" has no value to keep.
-##
 ## A number is not a ladder with every rung written out: a randomizer's seed has
 ## ten thousand, and four one-digit ladders spend four menu rows on one field.
 const OPTION_LADDER: StringName = &"ladder"
@@ -319,7 +314,6 @@ static func reset() -> void:
 
 
 ## Registers a world renderer under [param id].
-##
 ## [param script] is instantiated per world, so one registration serves a map
 ## change, a snapshot restore and a live switch between renderers.
 func register_world_renderer(
@@ -463,7 +457,6 @@ func request_battle_message(id: StringName, text: String) -> Dictionary:
 
 ## The sounds a notice may ask for, by name, so a mod never names a raw effect
 ## number and never reaches one the host has not chosen to lend.
-##
 ## `SFX_SHINE` ($5E) is deliberately absent: the sparkle means a shiny Pokemon
 ## and nothing else, and a mod firing it for something ordinary teaches a player
 ## to distrust it. `item` is `SFX_ITEM`, the jingle `FindItemInBallScript` plays,
@@ -570,7 +563,6 @@ func set_hidden_items_source(source: Callable) -> void:
 ## The live world's own `{item: quantity}`, the copy a
 ## [method register_repel_renewal] provider is handed, and empty when no world is
 ## open. Read only, and a copy: writing the bag is the host's.
-##
 ## One narrow accessor rather than a handle on [Gen2WorldAPI], because a
 ## non-renderer mod is deliberately given no world at all.
 func inventory() -> Dictionary:
@@ -590,7 +582,6 @@ func set_progress_source(source: Callable) -> void:
 
 ## What the run being played has achieved: badges, the Hall of Fame, the dex
 ## counts, what is kept, money, coins, the play timer. `{}` with no world open.
-##
 ## A copy rather than a handle, and read only: every field is state the host
 ## owns. See [Gen2ModProgress] for the fields and for why an absent one is absent
 ## rather than zero.
@@ -611,7 +602,6 @@ func progress_for(save: Gen2SaveData, data: GameData = null) -> Dictionary:
 
 ## Re-reads the live run and emits [signal progress_changed] where a field moved.
 ## Called by [Gen2WorldScreen] once a world pass.
-##
 ## Nothing is read while nothing is connected: walking the party and every box is
 ## the expensive half of a reading, and a build with no mod watching must not pay
 ## for it.
@@ -1223,7 +1213,6 @@ func page(id: StringName) -> Dictionary:
 
 ## What [param id]'s page lists now, asked fresh: a page is a view of state the
 ## mod holds and is answered when it is drawn rather than when it is registered.
-##
 ## Every row is normalised here, so a screen never sees a shape a mod invented:
 ## a row with no `label` is dropped, `icon` is a Dictionary or absent, and
 ## `locked` is a bool. An answer that is not an Array is no rows at all.
@@ -1259,7 +1248,6 @@ func menu_entries(menu: StringName) -> Array:
 
 
 ## The start-menu entries [code]context[/code] leaves visible, in registration order.
-##
 ## An entry that registered no `visible` predicate is always listed. One that did
 ## is asked with a copy of the context, so deciding whether to appear cannot
 ## change the menu being built; answering false leaves the row ABSENT rather than
@@ -1726,7 +1714,6 @@ static func _option_name(id: StringName, key: StringName) -> String:
 
 
 ## Adds a species, move, item or trainer class the cartridge does not have.
-##
 ## [param number] has to be at or above
 ## [constant Gen2ContentOverlay.FIRST_MOD_NUMBER], and [param row] is a partial
 ## row: whatever it leaves out comes from the kind's defaults. Everything a
@@ -1780,7 +1767,6 @@ func patch_type_matchup(
 ## slots [method GameData.world_encounter] answers with, which is what a
 ## randomizer rewrites. [param method] is one of
 ## [constant Gen2ContentOverlay.ENCOUNTER_METHODS].
-##
 ## `slots` and `rates` are arrays and replace whole. Patching a map this
 ## cartridge does not carry changes nothing, exactly as a species patch does.
 func patch_encounter(
@@ -1874,7 +1860,6 @@ func text_overlay() -> Gen2TextOverlay:
 
 ## Watches one of [constant CHANNELS]. [param handler] is called with each event
 ## dictionary as it reaches the screen showing it.
-##
 ## Reading only. A subscriber is handed a copy of the event after the channel's
 ## optional presentation mutator has run.
 func subscribe(channel: StringName, id: StringName, handler: Callable) -> Dictionary:
@@ -1928,7 +1913,6 @@ func unregister_event_mutator(channel: StringName, id: StringName) -> void:
 
 ## Hands [param event] through the optional presentation rewrite and then to
 ## every watcher. Returns the effective event for the screen to consume.
-##
 ## Static and null-safe on the instance, because this sits on the path every
 ## battle event and every world result takes: a game with no mods must not build
 ## a host, or copy an event, to publish to nobody.
@@ -2230,7 +2214,6 @@ func save_lifecycle_ids() -> Array:
 ## A save that has just been made, before it is written or played. A provider
 ## snapshots whatever its run is built from into its own namespace here; there is
 ## nothing to clear, since the save carries no run yet.
-##
 ## The installation's mod settings are copied onto the save first, so the run
 ## records what it was created with and a later change to the installation cannot
 ## reach back into it. See [method PokeModOptions.bind_run].
@@ -2282,7 +2265,6 @@ func _owns_manifest(manifest: PokeModManifest) -> bool:
 
 
 ## Runs each discovered mod's entry script, which registers what it provides.
-##
 ## A mod that will not load is reported and skipped: one broken mod must not
 ## stop the others, and it must not stop the game starting. A mod the player
 ## switched off is skipped silently and is not a failure, and a mod for another
@@ -2440,7 +2422,6 @@ func loaded_mods() -> Array:
 
 
 ## Mounts a mod's own resource pack, once per run.
-##
 ## `replace_files` is false, so a pack only adds paths and never lands on one the
 ## game ships. The engine has no unmount, which is why a reload remounts nothing
 ## and the set is kept on the host rather than the manifest.

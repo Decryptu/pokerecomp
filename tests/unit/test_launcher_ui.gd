@@ -746,26 +746,25 @@ func test_ejecting_a_cartridge_empties_its_bay() -> void:
 	assert_almost_eq(card.position.y, card.rest_y(), 0.5, "and back where it stood")
 
 
-## A generation with an importer and no world reads its cartridge and cannot
-## start it, so the bar must not offer Play on a seated one.
-func test_a_seated_but_unplayable_cartridge_offers_nothing_to_press() -> void:
+## Every registry cartridge walks to its Hall of Fame, so a seated one of
+## either generation offers Play, and an empty bay still takes a dump.
+func test_a_seated_cartridge_of_either_generation_offers_play() -> void:
 	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
 	add_child_autofree(page)
 	page.size = Vector2(900, 600)
 	await get_tree().process_frame
-	# Unanimated, because the depth a bay reads is only settled once the slide is.
-	page.stage().select(RomRegistry.ORDER.find(RomRegistry.RED), false)
-	await get_tree().process_frame
-
-	page.set_slot_state(RomRegistry.RED, RomCache.STATE_MISSING, "")
-	assert_eq(page.hints()[0]["label"], "Add cartridge", "an empty bay still takes a dump")
-
-	page.set_slot_state(RomRegistry.RED, RomCache.STATE_USABLE, "Ready")
-	var labels: Array = []
-	for entry: Dictionary in page.hints():
-		labels.append(entry["label"])
-	assert_false(labels.has("Play"), "Red cannot be played yet")
-	assert_true(labels.has("Options"), "and its cache is still reachable")
+	for id: StringName in [RomRegistry.RED, RomRegistry.GOLD]:
+		# Unanimated, because the depth a bay reads is only settled once the slide is.
+		page.stage().select(RomRegistry.ORDER.find(id), false)
+		await get_tree().process_frame
+		page.set_slot_state(id, RomCache.STATE_MISSING, "")
+		assert_eq(page.hints()[0]["label"], "Add cartridge", "an empty bay still takes a dump")
+		page.set_slot_state(id, RomCache.STATE_USABLE, "Ready")
+		var labels: Array = []
+		for entry: Dictionary in page.hints():
+			labels.append(entry["label"])
+		assert_true(labels.has("Play"), "%s can be played" % id)
+		assert_true(labels.has("Options"), "and its cache is still reachable")
 
 
 ## A cache an older build wrote is not an empty bay. The player imported this

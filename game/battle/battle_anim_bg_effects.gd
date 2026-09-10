@@ -4,7 +4,6 @@ extends RefCounted
 ## The `BATTLE_BG_EFFECT_*` jumptable and the routines it dispatches
 ## (engine/battle_anims/bg_effects.asm): the screen shakes, the scanline
 ## deformations, the palette fades and the tilemap edits. Five run at once.
-##
 ## An effect id is profile-local and is never normalised: pokegold ships no
 ## `BATTLE_BG_EFFECT_BODY_SLAM`, so every id from $25 on names a different effect
 ## in the two games; both jumptables are kept whole and dispatch is by name. The
@@ -444,7 +443,6 @@ static func _hues(
 
 ## `BGEffect_RapidCyclePals`, the Color branch: one side of the field at a time,
 ## and the enemy's own states are the two above the player's.
-##
 ## Nothing here ends the walk. The list's own `$ff` only stalls it; the effect is
 ## retired by the script's `anim_incbgeffect`, which is what steps it onto the
 ## state that puts the palette back.
@@ -1336,7 +1334,6 @@ static func _shake_amount(
 
 ## `BattleBGEffect_Rollout`: the screen shaken vertically, with the first
 ## animation object moved the opposite way so the ball it draws stays put.
-##
 ## The source waits a frame here rather than at the bottom of `.playframe`;
 ## in a player stepped once per frame that is the same one frame either way.
 static func _rollout(

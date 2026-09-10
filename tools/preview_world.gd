@@ -19,7 +19,7 @@ const KIND_HELP: Dictionary = {
 	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it and 2 plays the POKé FLUTE from it",
 	&"battle_caught": "frames: the same fight against a species the dex already holds",
 	&"safari": "frames, 0: the Safari game's own battle menu over a Safari Zone map. 1 draws PrintSafariZoneSteps' window on the START menu instead",
-	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in",
+	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in. A Generation 1 cartridge throws the old man's ball, or Prof. Oak's with a second number of 1",
 	&"catch_dex": "none: NewPokedexEntry's page, over the fight the catch that opened it is still in",
 	&"cut": "cell: OWCutAnimation's two halves and the jump shadow",
 	&"fly": "none: FlyFromAnim 80 frames in, with HideSprites' empty OAM behind it",
@@ -664,10 +664,19 @@ func _open_battle_bag(frames: int, flute: bool) -> void:
 
 ## `CatchTutorial`, played by `DudeAutoInputs` rather than by anybody. The first
 ## number is how many frames in to photograph: nothing here presses anything.
+## A second number of 1 is Yellow's Prof. Oak.
 func _stage_catch_tutorial() -> void:
-	_screen.preview_catch_tutorial()
+	_screen.preview_catch_tutorial(_cell.y == 1)
 	_screen.settle_battle_transition()
-	_screen.advance_frames(maxi(_cell.x, STAGED_FRAMES))
+	if _generation() != RomRegistry.GEN1:
+		_screen.advance_frames(maxi(_cell.x, STAGED_FRAMES))
+		return
+	## The tutor's boxes wait on the player, so A is pressed wherever one owes it.
+	var host: Gen2BattleScreen = _screen.get("_battle_host")
+	for _frame: int in maxi(_cell.x, STAGED_FRAMES):
+		if host != null and bool(host.battle_snapshot().get("awaits_press", false)):
+			_screen.press_button(PokeButton.A)
+		_screen.advance_frame()
 
 
 ## `DoBattleTransition` over the map it runs on. The first of the two numbers is how

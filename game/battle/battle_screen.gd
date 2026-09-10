@@ -70,7 +70,6 @@ const INFLICTED: Dictionary = {
 ## `BattleCommand_Charge.UsedText` (data/text/common_2.asm), which picks its line
 ## by move number rather than by effect: Fly and Dig share an effect byte and do
 ## not share a sentence.
-##
 ## The source's own `line` is a line break in a fixed-width box rather than part
 ## of the sentence, so these read as one flowing string the way every other
 ## message here does.
@@ -938,16 +937,33 @@ func _tick_auto_input() -> void:
 	if stage != _auto_input_stage:
 		_auto_input_stage = stage
 		_auto_input_polls = 0.0
-		if stage == &"":
+		var streams: Dictionary = _auto_input_streams()
+		if not streams.has(stage):
 			_auto_input = []
 		else:
-			_start_auto_input(DUDE_AUTO_INPUT[stage])
+			_start_auto_input(streams[stage])
 	if _auto_input_index >= _auto_input.size():
 		return
-	_auto_input_polls += float(DUDE_POLLS_PER_FRAME.get(_auto_input_stage, 1.0))
+	_auto_input_polls += 1.0 if _generation() == RomRegistry.GEN1 \
+		else float(DUDE_POLLS_PER_FRAME.get(_auto_input_stage, 1.0))
 	while _auto_input_polls >= 1.0 and _auto_input_index < _auto_input.size():
 		_auto_input_polls -= 1.0
 		_spend_auto_input_poll()
+
+
+## `DudeAutoInputs`, or the cursor `DisplayBattleMenu` and `DisplayListMenuIDLoop`
+## draw themselves: FIGHT, ITEM, the one ball, each held `DelayFrames` long.
+func _auto_input_streams() -> Dictionary:
+	if _generation() != RomRegistry.GEN1:
+		return DUDE_AUTO_INPUT
+	var frames: Array = Gen1Layout.TUTOR_FRAMES.get(_data.id, Gen1Layout.TUTOR_FRAMES[RomRegistry.RED])
+	return {
+		&"menu": [
+			[PokeButton.NONE, int(frames[0]) - 1], [PokeButton.DOWN, int(frames[1]) - 1],
+			[PokeButton.A, 0],
+		],
+		&"pack": [[PokeButton.NONE, int(frames[2]) - 1], [PokeButton.A, 0]],
+	}
 
 
 func _spend_auto_input_poll() -> void:
@@ -1252,10 +1268,15 @@ func _begin_world_battle(prepared: Dictionary, save: Gen2SaveData) -> void:
 
 ## The Dude's bag, not the player's, which is why the world hands none.
 func _set_up_dude_tutorial() -> void:
+	_stop_auto_input()
+	if _generation() == RomRegistry.GEN1:
+		var balls: Dictionary = {_tutor_ball(): int(Gen1Layout.TUTOR_BALLS.get(_data.id, 1))}
+		set_battle_pack([_tutor_ball()], balls)
+		set_capture_balls([_tutor_ball()], balls)
+		return
 	## `.DudeTutorial` forces TEXT_DELAY_MED over the player's own TEXT SPEED.
 	if _box != null:
 		_box.reveal_speed = 1.0 / (Gen2Options.FRAME_SECONDS * Gen2Options.TEXT_DELAY_MED)
-	_stop_auto_input()
 	set_battle_pack(DUDE_PACK, DUDE_PACK_QUANTITIES)
 	set_capture_balls([Gen2WorldPartyHost.ITEM_POKE_BALL], DUDE_PACK_QUANTITIES)
 
@@ -1434,10 +1455,30 @@ func player_backpic_kind() -> String:
 	## `GetTrainerBackPic` has two: the player, and the old man who borrows the
 	## screen for the catching tutorial.
 	if _data != null and _data.generation == RomRegistry.GEN1:
-		return Gen1Layout.PLAYER_BACKPICS[1 if _world_battle_tutorial else 0]
+		return _gen1_tutor().get("tutor", Gen1Layout.PLAYER_BACKPICS[0]) \
+			if _world_battle_tutorial else Gen1Layout.PLAYER_BACKPICS[0]
 	if _world_battle_tutorial:
 		return "dude"
 	return "kris" if player_is_female() else "chris"
+
+
+func _gen1_tutor() -> Dictionary:
+	var values: Variant = _world_battle_request.get("values", _world_battle_request)
+	var raw: int = int((values as Dictionary).get("gen1_battle_type", 0)) \
+		if values is Dictionary else 0
+	return Gen1Layout.BATTLE_TYPES.get(raw, {})
+
+
+## Crystal's POKE_BALL is a TOWN MAP on the other cartridge.
+func _tutor_ball() -> int:
+	return Gen1Layout.ITEM_POKE_BALL if _generation() == RomRegistry.GEN1 \
+		else Gen2WorldPartyHost.ITEM_POKE_BALL
+
+
+func _tutor_name() -> String:
+	if _generation() != RomRegistry.GEN1:
+		return DUDE_NAME
+	return String(Gen1Layout.TUTOR_NAMES.get(String(_gen1_tutor().get("tutor", "")), DUDE_NAME))
 
 
 ## `wPlayerGender`'s `PLAYERGENDER_FEMALE_F`. Gold and Silver have one player
@@ -1527,6 +1568,10 @@ func _build_entrance() -> void:
 		_entrance_stages.append({"apply": ENTRANCE_ENEMY_HUD})
 	# `DoBattle`'s own `ld c, 40`, then `SlideBattlePicOut` and `SendOutMonText`.
 	_entrance_stages.append({"delay": PLAYER_ENTRANCE_FRAMES})
+	## `StartBattle` sends the player out on a normal battle alone; a Safari or
+	## a tutor's fight opens `DisplayBattleMenu` with the back pic still up.
+	if _gen1_special_battle():
+		return
 	_entrance_stages.append({"slide": Gen2Battle.PLAYER})
 	_entrance_stages.append({
 		"message": SEND_OUT_LINES[
@@ -1913,7 +1958,7 @@ const GEN1_BREAK_FREE_TEXT: Array[String] = [
 
 ## `Text_GotchaMonWasCaught` and `_ItemUseBallText05`.
 const CAUGHT_TEXT: String = "Gotcha! %s was caught!"
-const GEN1_CAUGHT_TEXT: String = "All right! %s was\ncaught!"
+const GEN1_CAUGHT_TEXT: String = "All right!\n%s was%scaught!"
 
 ## `SendOutMonText`'s four texts, in [constant Gen2Battle.SEND_OUT_GO]'s order.
 const SEND_OUT_LINES: Array[String] = [
@@ -2057,7 +2102,6 @@ func _begin_animation(event: Dictionary) -> void:
 
 ## The doll the animation would have drawn, written straight into the picture
 ## when the battle-scene option is off and the script never runs.
-##
 ## `BattleCommand_LowerSub` and `..._RaiseSub` both branch to their own `noanim`
 ## routine on `_CheckBattleScene`, and `BattleCommand_Substitute`'s own
 ## `.no_anim` calls `RaiseSubNoAnim`, so the three animation parameters answer
@@ -3243,10 +3287,13 @@ func complete_capture(result: Dictionary) -> Dictionary:
 
 	var wobbles: int = clampi(int(result.get("wobbles", 0)), 0, 3)
 	var caught: bool = bool(result.get("caught", false))
+	## `wCapturedMonSpecies`, which Yellow's initial catch training leaves standing
+	## on a ball that broke out.
+	_capture_terminal = bool(result.get("ends_battle", false))
 	if caught:
 		_box_queue.append(
-			(GEN1_CAUGHT_TEXT if _generation() == RomRegistry.GEN1 else CAUGHT_TEXT)
-			% _name_of(_enemy)
+			GEN1_CAUGHT_TEXT % [_name_of(_enemy), Gen2TextStream.SCROLL_BREAK]
+			if _generation() == RomRegistry.GEN1 else CAUGHT_TEXT % _name_of(_enemy)
 		)
 		## `.catch_bug_contest_mon` runs after `Text_GotchaMonWasCaught`, and
 		## `BugContest_SetCaughtContestMon`'s `.firstcatch` says a second line.
@@ -3432,9 +3479,9 @@ func _play_poke_flute() -> void:
 ## animation behind it, and the next thing said is already the outcome.
 func _item_used_text(item: int) -> String:
 	if _generation() == RomRegistry.GEN1:
-		## `_ItemUseText001` and `_ItemUseText002` with the name between them:
-		## one line, no "the", and an exclamation where Crystal has a stop.
-		return "%s used %s!" % [_player_label(), _item_name(item)]
+		## `_ItemUseText001`, `text_low`, `_ItemUseText002`: no "the", the item on
+		## the bottom row and an exclamation where Crystal has a stop.
+		return "%s used\n%s!" % [_player_label(), _item_name(item)]
 	return "%s used the\n%s." % [_player_label(), _item_name(item)]
 
 
@@ -3443,6 +3490,13 @@ func _is_wild_battle() -> bool:
 		return false
 	var values: Variant = _world_battle_request.get("values", _world_battle_request)
 	return values is Dictionary and StringName((values as Dictionary).get("kind", &"")) == &"wild"
+
+
+## `wBattleType` on a Generation 1 cartridge: every value but zero is a fight
+## the player's own Pokemon never joins.
+func _gen1_special_battle() -> bool:
+	return _generation() == RomRegistry.GEN1 and _battle != null \
+		and _battle.battle_type != Gen2Battle.BATTLETYPE_NORMAL
 
 
 ## `wBattleType` being BATTLETYPE_CONTEST, which is what makes the menu the
@@ -3479,7 +3533,6 @@ func _capture_failure(reason: StringName) -> Dictionary:
 ## `AskGiveNicknameText`, `YesNoBox` and `NamingScreen`, which `PokeBallEffect`
 ## runs for a caught Pokemon whether it went to the party or to the box, and
 ## which `.catch_bug_contest_mon` and `.FinishTutorial` both jump past.
-##
 ## True while the prompt stands, so the pump that called this waits for it.
 func _open_capture_nickname() -> bool:
 	if _capture_nickname_host != null:
@@ -3757,7 +3810,6 @@ func _rules() -> Gen2Rules:
 
 
 ## Tries to run, which is `BattleMenu_Run` and settles before the turn does.
-##
 ## Offered in a trainer battle too, because the cartridge offers it there and
 ## answers with its own refusal rather than greying the entry out.
 func run_from_battle() -> void:
@@ -3770,7 +3822,6 @@ func run_from_battle() -> void:
 
 
 ## Swaps the player's Pokémon for the next one that is standing, as a turn.
-##
 ## The enemy attacks while it happens, because a switch is not free: this is the
 ## whole point of the ordering rule, and it is worth being able to look at.
 func switch_player() -> void:
@@ -4148,7 +4199,8 @@ func _finish_battle() -> void:
 func sync_live_party() -> bool:
 	if _source_save == null or _battle == null or _data == null:
 		return false
-	if _battle.in_battle_tower:
+	## `.FinishTutorial` keeps nothing, and the tutor may stand on a stand-in party.
+	if _battle.in_battle_tower or _world_battle_tutorial:
 		return true
 	var fought: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
 		_data.id, _data.sha1, _source_save.slot, _battle.party(Gen2Battle.PLAYER),
@@ -4593,7 +4645,6 @@ func _take_turn_with_slot(slot: int) -> void:
 
 ## Opens `OfferSwitch`'s yes/no, which only SHIFT ever reaches, and answers
 ## whether there was a question to put up.
-##
 ## Answered before a replacement for the same reason a Baton Pass is: the turn it
 ## stopped has not finished, and nothing behind it can be asked yet.
 func _answer_switch_offer() -> bool:
@@ -4942,7 +4993,7 @@ func _enemy_label() -> String:
 ## sentence.
 func _player_label() -> String:
 	if _world_battle_tutorial:
-		return DUDE_NAME
+		return _tutor_name()
 	if _source_save != null and not _source_save.player_name.is_empty():
 		return _source_save.player_name
 	return Gen2OakSpeech.DEFAULT_MALE
@@ -5044,7 +5095,6 @@ func _draw_menu_layer() -> void:
 ## `DisplayCaughtContestMonStats`: the screen is cleared and the two boxes are
 ## drawn over it, STOCK #MON above THIS #MON, each with a name, a level and a
 ## HEALTH number, with `PlaceYesNoBox`' own box beside the lower one.
-##
 ## One image on the menu layer, the way the party page is: all three boxes go
 ## into the tilemap on the cartridge too, and the text box under them is this
 ## screen's own, which is where `ContestAskSwitchText` is already being said.
@@ -5289,7 +5339,6 @@ static func _count_row(item_name: String, quantity: int) -> Dictionary:
 
 ## `ItemSubmenu`'s USE/QUIT box, which stands over the list the row was chosen
 ## from and is what the second A press answers.
-##
 ## On [member _info_layer] rather than on the menu layer, which is under the
 ## list: `LoadMenuHeader` draws this box into the tilemap after the pack's own,
 ## so it covers the rows it was opened from.
@@ -5469,7 +5518,6 @@ func _replace_the_fallen() -> bool:
 
 
 ## The next event, with whatever it changes applied first.
-##
 ## Every number drawn comes from the event, not the Pokémon: the turn has already
 ## resolved by the time the first event is shown, so reading the Pokémon would
 ## draw the end of the turn during the middle of it.
@@ -6241,7 +6289,7 @@ func _button_pack(button: int) -> bool:
 			## and throws a POKE BALL anyway, so there is no USE submenu.
 			if _world_battle_tutorial:
 				_pack_selecting = false
-				_throw_ball(Gen2WorldPartyHost.ITEM_POKE_BALL, &"pack")
+				_throw_ball(_tutor_ball(), &"pack")
 			else:
 				_open_pack_action(&"pack")
 		PokeButton.B:

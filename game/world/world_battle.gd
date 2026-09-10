@@ -37,7 +37,7 @@ static func prepare(
 	battle_rules: Gen2Rules = null,
 	player_id: int = -1,
 ) -> Dictionary:
-	if data == null or player_party == null:
+	if data == null:
 		return _failure(&"missing_player_party")
 
 	var raw_values: Variant = request.get("values", request)
@@ -45,6 +45,9 @@ static func prepare(
 		return _failure(&"invalid_battle_request")
 	var values: Dictionary = (raw_values as Dictionary).duplicate(true)
 	var kind: StringName = StringName(values.get("kind", &""))
+	player_party = _tutor_stand_in(data, values, player_party)
+	if player_party == null:
+		return _failure(&"missing_player_party")
 	if kind == &"battle_tower":
 		for member: Gen2BattleMon in player_party.mons:
 			member.restore_health()
@@ -116,6 +119,14 @@ static func prepare(
 		"trainer_index": trainer_index,
 		"trainer_battle": battle.is_trainer_battle,
 	}
+
+
+## Yellow's `.checkAnyPartyAlive` skips `AnyPartyAlive` for the Pikachu battle,
+## fought before the player owns a Pokemon; a tutor sends nobody out.
+static func _tutor_stand_in(data: GameData, values: Dictionary, party: Gen2Party) -> Gen2Party:
+	if bool(values.get("tutorial", false)) and (party == null or party.is_wiped()):
+		return fallback_party(data)
+	return party
 
 
 static func _recorded_party(data: GameData, values: Dictionary, tower: bool) -> Gen2Party:

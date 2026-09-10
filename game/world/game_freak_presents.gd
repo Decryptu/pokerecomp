@@ -199,7 +199,6 @@ func word_positions() -> Array[Vector2i]:
 
 ## What the last `PlaySpriteAnimations` pass left in shadow OAM, as
 ## [code]{ kind, at, set, flip_y }[/code] in shadow-OAM coordinates.
-##
 ## The buffer, not the live structs: `GameFreakPresentsInit` spawns one without
 ## writing shadow OAM, and a struct the scene half of a pass spawns is only drawn
 ## by the sprite half, which on Gold and Silver runs first and so does not see it
@@ -211,7 +210,6 @@ func sprites() -> Array[Dictionary]:
 
 ## Which `GameFreakDittoPaletteFade` colour the Ditto is wearing, or -1 before
 ## `GameFreakLogo_Transform` has written one.
-##
 ## Applied in the pass that computes it, like the shadow OAM beside it:
 ## `hCGBPalUpdate` and hDMATransfer are both serviced by the same VBlank, so the
 ## palette and the sprites reach the screen together and neither is delayed here.

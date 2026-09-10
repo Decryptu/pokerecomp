@@ -4,7 +4,6 @@ extends Control
 ## Draws the battle field: two pics, two status panels, two HP bars, the exp bar
 ## and whatever an animation is putting over them. Call [method set_battle_data]
 ## once, then [method set_view] whenever the screen has new display values.
-##
 ## The pics are drawn through `wTilemap` rather than placed at a corner, because
 ## that map is what an animation edits. Panels compose into one screen-sized index
 ## buffer with index 0 transparent. Every background layer is one plane, so the
@@ -436,7 +435,6 @@ static func minimize_pixels(
 ## `GetSubstitutePic`: a blank box with four tiles of [param strip], the monster
 ## overworld sprite, copied into it. The doll wears whichever battler palette its
 ## box sits in, since nothing writes one for it.
-##
 ## Static because it is the whole of the picture and takes no screen: a check
 ## sweeping three caches builds it the same way the renderer does.
 static func substitute_pixels(
@@ -582,7 +580,6 @@ static func _append_animation(
 
 ## A battler pic's own palette, permuted by whatever DMG byte the animation's
 ## last `BattleAnimRequestPals` left on that palette slot.
-##
 ## `CGB_BattleColors` reads `CheckShininess` on both sides, so the shiny palette
 ## is the picture's for the whole fight and not just the gold sweep the entrance
 ## plays over it.
@@ -776,7 +773,6 @@ func _draw_hud_balls() -> void:
 
 ## `wShadowOAM` as the animation left it: up to forty sprites, each eight by
 ## eight, in the order they were written, so a later one draws over an earlier.
-##
 ## Objects are not part of the background plane and take no scroll. Index 0 is
 ## transparent, which is what OAM's own colour 0 is.
 func _draw_sprites() -> void:
@@ -850,7 +846,6 @@ func _blit_sprite(into: Image, sprite: Dictionary, backpic: bool = false) -> voi
 ## The eight pixels by eight of one animation tile, found through the window
 ## [method Gen2BattleAnimPlayer.tiles] describes, counted from
 ## `BATTLEANIM_BASE_TILE`.
-##
 ## A window tile is either an imported sheet's or one of the battle's own two
 ## pictures, which is what `anim_battlergfx_1row` and `..._2row` put there so an
 ## effect can move a battler as objects.

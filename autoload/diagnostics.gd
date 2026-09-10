@@ -3,7 +3,6 @@ extends Node
 
 ## What a player hands over when something goes wrong: this build, this machine,
 ## the settings and mods in force, and the engine's own log of the session.
-##
 ## A sink rather than a set of call sites: [Logger] goes in through
 ## [method OS.add_logger], so every print, warning and runtime error in the game,
 ## a tool or a mod reaches the report without being routed twice. The file at
@@ -62,7 +61,6 @@ static func instance() -> Gen2Diagnostics:
 
 ## Records one line of context. Safe before the autoload exists and in a tool
 ## run, so a caller never guards the call itself.
-##
 ## Goes through `print`, which is what puts it in the engine's log file next to
 ## the errors it explains; the sink below picks it up on the way past.
 static func note(topic: String, message: String) -> void:
@@ -92,7 +90,6 @@ func _ready() -> void:
 ## Printed rather than written, so it is near the top of the engine's own log
 ## file: a crash log is then self-describing whether or not the player ever
 ## reaches the launcher again.
-##
 ## A player's launch only, for the reason [method trace] gives: a check or a
 ## tool is read for the answer it prints, and a header no one asked for is in
 ## the way of it.
@@ -209,7 +206,6 @@ func report() -> String:
 
 ## Writes the report and every kept log file into one `.zip` under
 ## [param folder], and answers the path it wrote.
-##
 ## A zip rather than the log itself because the useful thing is the whole set:
 ## the session that crashed is usually the file *before* the one this launch is
 ## writing. An empty [param folder] takes the platform's downloads directory,
@@ -285,7 +281,6 @@ func log_files(directory: String = DIRECTORY) -> PackedStringArray:
 
 ## Drops log files in [param directory] past the count, the age or the total
 ## size this keeps, whichever bites first, oldest first.
-##
 ## The engine's own rotation counts files at startup and nothing else, so a
 ## single session that logged for a week, or a build that once wrote under
 ## another name, would otherwise sit in the player's data directory for good.
@@ -339,7 +334,6 @@ func record(level: String, message: String) -> void:
 
 
 ## Reads the previous session's marker and raises this one's.
-##
 ## Only a player's own launch writes it. A headless check or a `-s` tool that
 ## the wall-clock cap kills never reaches [method _exit_tree], so letting those
 ## write the marker would report a crash to the player at the next launch, and
@@ -510,7 +504,6 @@ static func _video_adapter() -> String:
 
 ## The sink itself, kept beside the autoload rather than in a file of its own:
 ## it is four lines and it has no other caller.
-##
 ## Nothing here prints. A logger that raised a message of its own would be
 ## handed it straight back.
 class Gen2DiagnosticsSink extends Logger:

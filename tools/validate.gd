@@ -52,15 +52,25 @@ const GROUPS: Dictionary = {
 }
 
 
+var _names: PackedStringArray = []
+
+
 func _initialize() -> void:
 	var topics: PackedStringArray = _available()
-	var names: PackedStringArray = _requested(topics)
-	if names.is_empty():
+	_names = _requested(topics)
+	if _names.is_empty():
 		print("Topics: %s" % ", ".join(topics))
 		print("Groups: %s, all" % ", ".join(PackedStringArray(GROUPS.keys())))
 		quit(2)
-		return
 
+
+## On the first frame rather than in `_initialize`: the root is not inside the
+## tree until the loop starts, so a screen a topic adds there is never ready.
+func _process(_delta: float) -> bool:
+	if _names.is_empty():
+		return true
+	var names: PackedStringArray = _names
+	_names = []
 	var failed: PackedStringArray = []
 	for name: String in names:
 		var run := CheckRun.new()
@@ -87,6 +97,7 @@ func _initialize() -> void:
 	if not failed.is_empty():
 		printerr("FAILED: %s" % ", ".join(failed))
 	quit(1 if not failed.is_empty() else 0)
+	return true
 
 
 ## Every topic on disk, so a new check file needs no registration.

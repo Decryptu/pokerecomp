@@ -2,11 +2,9 @@ class_name Gen2Options
 extends RefCounted
 
 ## Player options, in two independent blocks.
-##
 ## The cartridge block is the real `wOptions` .. `wOptionsEnd` bytes, so the
 ## in-game OPTION menu and this launcher screen can never disagree about what a
 ## setting means. The app block is everything the hardware had no concept of.
-##
 ## `data/default_options.asm` is byte identical between the two pins, so nothing
 ## here is profile split.
 
@@ -167,7 +165,6 @@ func text_reveal_speed() -> float:
 
 
 ## Hardware frames per real second, as a multiple of the cartridge's own rate.
-##
 ## Applied by [Gen2WorldAnimation.FrameClock] and nowhere else, which is what
 ## keeps it off the sound driver: [Gen2AudioPlayer] fills its generator from the
 ## output's own demand, so music, effects and cries run at the cartridge's tempo

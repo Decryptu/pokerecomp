@@ -9,7 +9,6 @@ extends RefCounted
 
 ## The effect bytes with a list of their own, numbered as the cartridge's move
 ## table numbers them.
-##
 ## Recoil is here because Struggle needs it: without it two empty Pokémon never
 ## finish their battle. The rest are the status conditions in their two shapes, a
 ## move whose whole purpose is the status and a move that damages and leaves
@@ -1030,7 +1029,6 @@ const BATON_PASS_SEQUENCE: Array = [
 ]
 
 ## Whirlwind and Roar. `checkhit` is the one thing in front of the command.
-##
 ## The list carries no `failuretext`, so on the cartridge a missed Whirlwind
 ## reaches `forceswitch`, takes `.missed` and says "But it failed!" with no miss
 ## line at all. Here `checkhit` ends the move and announces the miss, which is
@@ -1113,7 +1111,6 @@ const PURSUIT_SEQUENCE: Array = [
 ## Beat Up: one pass of the loop per party member, `endloop` jumping back to
 ## `critical` rather than to the top, so `checkhit` is outside the loop and rolls
 ## once for the whole move.
-##
 ## No `damagestats` and no `stab`: the command loads the formula's two stats
 ## itself, from base stats rather than from either Pokémon's real ones, and
 ## nothing multiplies the result by a matchup. `CheckTurn` leaves `wTypeModifier`
@@ -1198,7 +1195,6 @@ const MEAN_LOOK_SEQUENCE: Array = [
 ## [constant MULTI_HIT] and [constant DOUBLE_HIT]. `startloop` and `endloop`
 ## bracket the hit and `endloop` rewinds to `critical`, so the accuracy roll and
 ## the doll are outside the loop and the damage is worked out again per hit.
-##
 ## The count is rolled by `endloop` on its first pass, which is *behind* the
 ## first hit's own spread: rolling it in front would take the same seed to a
 ## different battle.
@@ -2116,7 +2112,6 @@ static func _table() -> Dictionary:
 
 
 ## The commands a move with this effect byte is made of.
-##
 ## A registered effect wins over the cartridge's, which is what lets a mod
 ## rewrite one as well as add one. [method register_effect] is where that is
 ## refused for the effects the engine relies on reading back off a turn.
@@ -2149,7 +2144,6 @@ const RESERVED_EFFECTS: Array[int] = [
 
 
 ## Registers the command list a move carrying [param effect] runs.
-##
 ## Every step named has to be one the engine knows or one already registered
 ## through [method register_command], so a list that would push an error mid-turn
 ## is refused here, where the mod's id is still in hand.
@@ -2181,7 +2175,6 @@ static func register_effect(id: StringName, effect: int, commands: Array) -> Dic
 
 ## Registers a step a command list may name, run with the [Gen2Turn] the way
 ## every built-in step is.
-##
 ## The engine's own commands are tried first, so a registration cannot shadow
 ## [constant Gen2EffectCommands.APPLY_DAMAGE] and quietly change what every move
 ## in the game does.

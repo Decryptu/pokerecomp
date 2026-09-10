@@ -2,7 +2,6 @@ class_name Gen2WorldScriptRunner
 extends RefCounted
 
 ## Bounded, scene-free execution of the supported overworld script commands.
-##
 ## A runner owns one event invocation. It never opens a ROM and it never
 ## changes the world state until the invocation reaches END or ENDCALLBACK.
 ## Text and explicit warps are returned as structured pauses for the screen or
@@ -2710,7 +2709,6 @@ func _command_checkpokemail(_opcode: int, command: Dictionary, _bank: int) -> Di
 
 
 ## A command whose numbers a mod may have moved, substituted before it runs.
-##
 ## The site is addressed by the byte it sits at, `frame.address + offset`, which
 ## is exactly the id [Gen2WorldCatalog] gave it. Only the OPERANDS change: the
 ## command still runs, its script still sets its own completion flag, prints its
@@ -4121,7 +4119,6 @@ func _var_kenji_break_timer() -> Variant:
 ## store of wScriptVar into the address it answered. Only those rows can be
 ## written: every other entry hands back a copy in wStringBuffer2 or runs a
 ## routine, so a `writevar` naming one writes nothing the script can read back.
-##
 ## Every `writevar` in either game is RadioTower2F's own award of a Blue Card
 ## point, which stopped the script here until this existed.
 func _write_runtime_variable(variable: int) -> Dictionary:
@@ -5864,7 +5861,6 @@ func _battle_tower_party() -> Dictionary:
 ## `_CheckForBattleTowerRules`: every rule is run rather than stopping at the
 ## first failure, so a party can fail more than one and the receptionist says so
 ## once per failure. `BattleTower_PleaseReturnWhenReady` closes the run.
-##
 ## wScriptVar is TRUE when something failed, which is what
 ## `ifnotequal FALSE, Script_WaitButton` refuses the challenge on.
 func _check_battle_tower_rules() -> Dictionary:
@@ -6632,7 +6628,6 @@ func _byte_array(raw: Variant) -> PackedByteArray:
 
 ## `ReadCaughtData` and `SeerAction`, which are one reading of the row and then
 ## the boxes that reading picked.
-##
 ## Nothing here writes anything: every branch is a run of `PrintText`s and the
 ## five buffers they read, so the whole routine is text.
 func _finish_poke_seer(special: int, result: Dictionary) -> Dictionary:
@@ -6822,7 +6817,6 @@ func _stage_item_ball() -> Dictionary:
 ## `FruitTreeScript` (`engine/events/fruit_trees.asm`). Like an item ball it is
 ## a script rather than a host request: `fruittree` is the whole of the object's
 ## own script, and the routine below it is text, a flag and a `giveitem`.
-##
 ## The first pause is `FruitBearingTreeText`; `TryResetFruitTrees` and
 ## `CheckFruitTree` run on its acknowledge, since the source's own `callasm`s sit
 ## behind the `promptbutton`.
@@ -7312,7 +7306,6 @@ func text_context() -> Dictionary:
 
 
 ## The buffers this runner filled, keyed the way `TextCommand_RAM` asks for them.
-##
 ## `getstring` and `verbosegiveitem` fill buffers by `text_buffer` number, but a
 ## `text_ram` names the same storage by its WRAM address, so the item texts read
 ## through StringBufferPointers rather than the number. Addresses come from the
@@ -7435,7 +7428,6 @@ func _engine_flag_active(flag: int) -> bool:
 
 
 ## _GetVarAction's .CountBadges, over staged flags rather than committed ones.
-##
 ## The cartridge has no staging: `setflag` writes wBadges and the `readvar`
 ## after it reads what was just written. Mahogany Gym is where that matters:
 ## PryceScript sets ENGINE_GLACIERBADGE, reads VAR_BADGES and branches on 7 to

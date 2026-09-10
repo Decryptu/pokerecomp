@@ -2,7 +2,6 @@ class_name Gen2WorldScript
 extends RefCounted
 
 ## Shared Generation 2 overworld script command definitions.
-##
 ## The cartridge stores one command byte followed by command-specific operands.
 ## This file describes the byte layout for the commands used by the bounded
 ## overworld runner. Unknown commands remain visible to the caller instead of
@@ -554,7 +553,6 @@ const NON_RETURNING_SOURCE_OPCODES: Array[int] = [
 
 
 ## Whether the command at [param opcode] is followed by another command.
-##
 ## A linear walk over a script stops here, not at [method is_terminal]: a script
 ## that ends in `jumptext` is followed by the text it named, and a `jumpstd`
 ## table by its pointers. Only the live runner, which dispatches one command at
@@ -945,7 +943,6 @@ static func decode_command_queue_entry(data: PackedByteArray) -> Dictionary:
 
 
 ## Decodes a `stonetable`, the only cmdqueue payload either game ships.
-##
 ## Rows are `warp_id, object_id, script` until a $ff warp id, and the ids are
 ## the source's own: the warp is one-based, as `.check_on_warp` counts it, and
 ## the object is an `object_const_def` constant, which starts at 2, so it is two

@@ -265,7 +265,6 @@ static func blank_map() -> PackedInt32Array:
 ## `Pokedex_DrawMainScreenBG`: the left sidebar, the two boxes and the bottom
 ## bar. The listing is not in it; that is the window, and [method window_map]
 ## draws it.
-##
 ## [param seen] and [param caught] are the two counts `CountSetBits` prints.
 func main_background(seen: int, caught: int) -> PackedInt32Array:
 	_unown_letters = false
@@ -317,7 +316,6 @@ func search_results_background(count: int, type_line: String) -> PackedInt32Arra
 
 ## `DrawPokedexListWindow` and `Pokedex_PrintListing`, as the twelve-column
 ## window the main screen and the results screen both put their listing in.
-##
 ## [param rows] is [method Gen2Pokedex.rows]' own shape: `number`, `name`,
 ## `seen` and `caught` per visible entry. [param old_mode] swaps the scroll bar
 ## for the two tiles that replace it and is what prints a dex number above each
@@ -402,7 +400,6 @@ func results_window_map(rows: Array) -> PackedInt32Array:
 
 
 ## `Pokedex_DrawDexEntryScreenBG` and `DisplayDexEntry`, as one grid.
-##
 ## [param entry] is [method GameData.dex_entry]'s own record. A species that has
 ## not been caught keeps the placeholder height and weight the background draws,
 ## which is what the source's early `ret z` leaves on screen.
@@ -529,7 +526,6 @@ func search_map(
 
 
 ## `Pokedex_DrawUnownModeBG` and its own letter walk.
-##
 ## [param forms] is `wUnownDex`, the forms in catching order, and
 ## [constant UNOWN_COORDS] the table it indexes: the letter's cell and the cell
 ## the cursor stands in beside it, which are not always the same column.

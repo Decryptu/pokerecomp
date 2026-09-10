@@ -4863,8 +4863,20 @@ func preview_meet_visible_encounter(cell: Vector2i) -> bool:
 ## development Master Ball, starts an imported wild encounter, and leaves the
 ## production battle overlay on its throw message.
 ## `CatchTutorial`: the Dude's own fight, which answers itself. `Route29Tutorial1`
-## loads the same `loadwildmon RATTATA, 5` in front of it.
-func preview_catch_tutorial() -> void:
+## loads the same `loadwildmon RATTATA, 5` in front of it. A Generation 1 cache
+## throws the old man's, or Prof. Oak's for [param pikachu].
+func preview_catch_tutorial(pikachu: bool = false) -> void:
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		var raw: int = Gen1Layout.BATTLE_TYPE_PIKACHU if pikachu else Gen1Layout.BATTLE_TYPE_OLD_MAN
+		var wilds: Dictionary = Gen1Layout.TUTOR_WILDS.get(_data.id, {})
+		if not wilds.has(raw):
+			return
+		var values: Dictionary = {
+			"kind": &"wild", "pokemon": int(wilds[raw]), "level": Gen1Layout.TUTOR_WILD_LEVEL,
+		}
+		values.merge(Gen1Layout.battle_type_values(raw))
+		_start_battle_request({"kind": &"battle_requested", "values": values})
+		return
 	_start_battle_request({
 		"kind": &"catch_tutorial_requested",
 		"values": {
@@ -6272,6 +6284,9 @@ func _on_credits_closed() -> void:
 		_renderer.refresh()
 	_script_prompt = ""
 	_refresh_labels()
+	if _world != null and StringName(_world.pending_runtime_request().get("kind", &"")) \
+		== &"hall_of_fame_requested":
+		_show_script_results(_world.complete_runtime_request({"ok": true}))
 
 
 ## `.music`, whose `PlayMusic MUSIC_NONE` and `DelayFrame` in front of the real
@@ -7691,6 +7706,8 @@ const REQUEST_HANDLERS: Dictionary = {
 	&"swarm_requested": &"_request_swarm",
 	&"map_radio_requested": &"_request_map_radio",
 	&"audio_requested": &"_request_audio",
+	&"hall_of_fame_requested": &"_request_hall_of_fame",
+	&"soft_reset_requested": &"_request_soft_reset",
 }
 
 ## Runtime requests the screen answers by opening a page: the method that opens
@@ -8057,6 +8074,22 @@ func _request_bug_contest_judging(_request: Dictionary) -> StringName:
 ## `TryQuickSave`, which is `Link_SaveGame`: the overwrite question, the SAVING
 ## box and `SavedTheGame`, on the service screen where BILL'S PC's already are. A
 ## driver with no scene behind it still writes rather than hanging.
+## `HallOfFamePC`, which Generation 1's own room script calls and waits on: the
+## induction and the credits, and the script's save and reset behind them run
+## when the credits close.
+func _request_hall_of_fame(_request: Dictionary) -> StringName:
+	open_hall_of_fame()
+	return &"break"
+
+
+## `jp Init` at the end of `HallOfFameResetEventsAndSaveScript`, a request where
+## Crystal's `special Reset` is an event.
+func _request_soft_reset(_request: Dictionary) -> StringName:
+	persist_world_snapshot()
+	_soft_reset()
+	return &"break"
+
+
 func _request_quick_save(_request: Dictionary) -> StringName:
 	if _service_host == null and _open_quick_save_screen():
 		return &"break"

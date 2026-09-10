@@ -232,7 +232,6 @@ func _handle_list(button: int) -> bool:
 
 ## `Pokedex_UpdateDexEntryScreen`: B returns to the listing, A turns the page,
 ## and up and down step to the neighbouring entry.
-##
 ## The source's four-button row is PAGE, AREA, CRY and PRNT; only PAGE is built,
 ## so A always turns the page rather than moving a cursor along a row whose
 ## other three entries would refuse.
@@ -377,7 +376,6 @@ func _handle_option(button: int) -> bool:
 
 ## `.ChangeMode`, including the message it shows while the order is rebuilt.
 ## Choosing the mode already in use returns to the listing untouched.
-##
 ## UNOWN is not one of them: `.MenuAction_UnownMode` never writes `wCurDexMode`,
 ## it jumps straight to DEXSTATE_UNOWN_MODE, so the listing keeps the mode it
 ## had and the Unown screen answers back to OPTION rather than to the listing.
@@ -640,7 +638,6 @@ func _handle_search_results(button: int) -> bool:
 
 
 ## `Pokedex_InitSearchScreen`, which resets both type rows every time.
-##
 ## Coming back from the results screen resets them too: `.return_to_search_screen`
 ## jumps to DEXSTATE_SEARCH_SCR, and that jumptable entry is this Init rather
 ## than its Update, so the search is not remembered.
@@ -806,7 +803,6 @@ func _selected_pic() -> Image:
 
 
 ## One imported pic, or the question mark when the cache does not hold it.
-##
 ## `_CGB_Pokedex` fills the picture box's attrmap with palette 1, and which
 ## palette that is turns on `wCurPartySpecies`: the two listing screens set it to
 ## `-1` and get `PokedexQuestionMarkPalette`, so every species is drawn in the

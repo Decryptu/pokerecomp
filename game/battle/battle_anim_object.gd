@@ -5,7 +5,6 @@ extends RefCounted
 ## (engine/battle_anims/core.asm, helpers.asm). `anim_obj` names a row of
 ## `BattleAnimObjects`, which supplies the frameset, the motion callback, the
 ## palette and the graphics sheet, and a place to put it.
-##
 ## Every field is a cartridge byte: coordinates wrap at 256, and an object walking
 ## off one side is that wrap rather than a clamp. `frame` starts at -1 because
 ## `GetBattleAnimFrame` increments before it reads.
@@ -108,11 +107,9 @@ func active() -> bool:
 
 
 ## `BattleAnimOAMUpdate`, as the sprites it would write into `wShadowOAM`.
-##
 ## Returns [code]{ deleted, sprites }[/code]. `sprites` is empty for an
 ## `oamwait`, which is a frame the object is simply not drawn on, and for the
 ## `oamdelete` that ends it; `deleted` says which of the two happened.
-##
 ## [param enemy_turn] is `hBattleTurn`, the only thing that decides whether the
 ## coordinates are mirrored onto the other side of the field.
 func oam_update(
@@ -207,7 +204,6 @@ func _attributes(attributes: int, flags: int, object_palette: int) -> int:
 
 ## `GetBattleAnimFrame`. Answers the OAM set to draw, or one of the three
 ## commands, and leaves [member _frame_flags] set for the frame it chose.
-##
 ## While a frame still has duration left it is redrawn without advancing.
 ## `oamend` steps back two and loops, which redraws the last real frame forever;
 ## `oamrestart` goes back to -1 and loops, which starts the frameset again.

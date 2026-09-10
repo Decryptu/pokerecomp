@@ -3,7 +3,6 @@ extends RefCounted
 
 ## What the trainer card prints (`engine/menus/trainer_card.asm`), as pages a
 ## screen can draw.
-##
 ## Everything here comes from the save and the world the card is opened over:
 ## `wPlayerName`, `wPlayerID` and `wMoney` on the top half, `wPokedexCaught`'s
 ## set bits and `wGameTimeHours`/`wGameTimeMinutes` on page 1, and the two badge
@@ -85,7 +84,6 @@ static func badges(state: Gen2WorldState, page_number: int, crystal: bool) -> Ar
 
 ## `TrainerCard_Page1_Joypad`, `..._Page2_Joypad` and `..._Page3_Joypad` as one
 ## table: which page a direction reaches, and whether A leaves.
-##
 ## Page 1 answers right and A with page 2; page 2 answers left with page 1 and A
 ## with the exit; page 3 answers left with page 2 and right with page 1. The two
 ## `.KantoBadgeCheck` branches that would reach page 3 are unreferenced in both

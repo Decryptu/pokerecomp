@@ -254,7 +254,6 @@ func _load_sheet(
 
 ## The whole screen as tile numbers, in the order the source writes them: the
 ## region map over everything, then the screen's own frame, then the name.
-##
 ## [param cards] is `wPokegearFlags`, as the card names `Pokegear_FinishTilemap`
 ## tests; it is read only by the Pokegear card's frame. [param name_codes] is the
 ## landmark's name, or the dex area's whole `<MON>'S NEST` header.
@@ -586,7 +585,6 @@ func attributes(data: GameData, map: PackedInt32Array) -> PackedInt32Array:
 
 ## The whole screen as pixels, each tile coloured through the palette
 ## `TownMapPals` gave it. [param female] is Kris's own city colours.
-##
 ## This cannot go through [method Gen2PicImage.from_indices] whole: the screen is
 ## six palettes at once.
 func image(
