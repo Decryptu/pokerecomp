@@ -15,9 +15,9 @@ const CLASS_COUNT: int = 47
 ## `text_asm` rows, the ones reaching `TalkToTrainer`, and the objects naming
 ## one: a trainer class above `OPP_ID_OFFSET`, or a standing wild below it.
 const HEADER_CENSUS: Dictionary = {
-	&"red": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12, "coded": 3},
-	&"blue": {"text_asm": 638, "headers": 322, "trainers": 310, "wilds": 12, "coded": 3},
-	&"yellow": {"text_asm": 691, "headers": 317, "trainers": 305, "wilds": 12, "coded": 3},
+	&"red": {"text_asm": 642, "headers": 322, "trainers": 310, "wilds": 12, "coded": 3},
+	&"blue": {"text_asm": 642, "headers": 322, "trainers": 310, "wilds": 12, "coded": 3},
+	&"yellow": {"text_asm": 695, "headers": 317, "trainers": 305, "wilds": 12, "coded": 3},
 }
 ## The header texts whose machine code does more than print, by map and the
 ## flag each sets; Yellow moved the LIFT KEY's `ShowObject` to the end text.

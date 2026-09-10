@@ -5,7 +5,6 @@ extends RefCounted
 ## in data/battle_anims the objects it spawns are built from. Each is a pointer
 ## table immediately followed by its data with every pointer bank-local, so each
 ## is cached as a whole region and a cached address resolves by subtraction.
-##
 ## Validation walks what it stores, which is what makes a wrong offset a refused
 ## import rather than a screen full of noise. The object graphics are the
 ## exception: LZ streams reached by far pointer, decoded into tile strips.
@@ -163,7 +162,6 @@ static func read_battle_anims(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## `BattleAnimations` and every body it reaches, as one region.
-##
 ## The walk follows calls and branches the way [Gen2BattleAnimScript] does, so a
 ## body only some other body jumps into is still measured, and refuses anything
 ## that leaves the bank or never reaches a top-level `anim_ret`.
@@ -271,7 +269,6 @@ static func _walk_body(bank_bytes: PackedByteArray, address: int) -> Dictionary:
 
 
 ## `BattleAnimSineWave`, the table `BattleAnim_Sine` reads.
-##
 ## The bytes are the check as well as the content: 64 identical bytes appear
 ## several times in a dump, so the offset is only trustworthy against the values,
 ## and this is the one copy in the animation bank.
@@ -383,7 +380,6 @@ static func _read_framesets(rom: RomFile, table: int) -> Dictionary:
 
 
 ## One `oamframe` stream, to whichever of the three terminators ends it.
-##
 ## An `oamframe` and an `oamwait` are both two bytes, because `.GetPointer`
 ## indexes frames by `frame * 2`. The three terminators are one byte each in the
 ## macros and the byte after them belongs to the next frameset, which the

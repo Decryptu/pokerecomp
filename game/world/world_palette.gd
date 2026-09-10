@@ -36,7 +36,6 @@ const PALETTE_MASK: int = 0x07
 
 
 ## Which of the four palette rows a map draws with right now.
-##
 ## `ReplaceTimeOfDayPals` and `GetTimePalette` together. A
 ## [constant PALETTE_DARK] map is the only one the clock cannot reach: it is
 ## [constant TIME_DARK] until Flash has been used and [constant TIME_NIGHT]
@@ -173,7 +172,6 @@ static func palette_slots(environment: int, time_of_day: int) -> Array:
 
 ## The two colours a map group lends `PAL_BG_ROOF`, or nothing when the map is
 ## not one `_LoadMapPals` reaches the roof branch for.
-##
 ## `cp NITE_F / jr c, .morn_day` is the whole test, so DARKNESS takes the nite
 ## pair as well: the four rows are two, not four.
 static func roof_colors(
@@ -250,7 +248,6 @@ static func _flood_white(resolved: Array) -> void:
 
 
 ## One palette per tile of [param tileset], in tile order.
-##
 ## Every tile of the strip shares eight palette slots, so the eight are resolved
 ## once and the same one is handed to every tile that uses it. This runs again on
 ## every frame an animated tileset changes a tile, and building one palette copy

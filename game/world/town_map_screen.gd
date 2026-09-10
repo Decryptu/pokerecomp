@@ -114,7 +114,6 @@ func _ready() -> void:
 ## region map: `_TownMap`'s own corner box or the Pokegear card's icon row.
 ## [param cards] is the owned `wPokegearFlags` cards, which only the card frame
 ## reads.
-##
 ## Optional the way the other overlays are: a cache with no region map answers
 ## false and the caller keeps its menu open.
 func open(
@@ -207,7 +206,6 @@ func open_dex_area(
 ## visited. [param in_kanto] is which map `FlyMap` opens, which is the region the
 ## player is standing in, and [param visited] which `FLY_*` indexes
 ## `CheckIfVisitedFlypoint` answers for.
-##
 ## The answer is taken with [method chosen_spawn] once this closes: -1 for a
 ## cancel, and the flypoint's own spawn for a choice, which is exactly the byte
 ## `.pressedA` leaves in `e`.
@@ -259,7 +257,6 @@ func cursor_name() -> String:
 
 ## `.loop`'s own joypad read: B leaves and the d-pad walks the window. Every
 ## other button is swallowed, which is what the loop does with them.
-##
 ## The dex area's loop leaves on A as well as B, walks regions rather than
 ## landmarks, and reads SELECT as a held state; see [method release_button].
 func handle_button(button: int) -> bool:
@@ -309,7 +306,6 @@ func close() -> void:
 ## One hardware frame. Only the player icon moves: the cursor's own
 ## `SPRITEANIMSTRUCT_ANIM_SEQ_ID` is overwritten with `SPRITE_ANIM_FUNC_NULL`, so
 ## it holds `.Frameset_StillCursor`'s single entry forever.
-##
 ## The dex area animates nothing. Its own frame is `.BlinkNestIcons`, which
 ## shows the icons for sixteen frames and hides them for sixteen; the player
 ## icon it draws instead is `GetPlayerIcon`'s standing frame, not a walk.

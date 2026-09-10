@@ -725,15 +725,18 @@ static func _read_map(
 	var states: Dictionary = _read_map_states(
 		rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts
 	)
+	## A hidden event's row can sit past every object's, as the Mansion's four
+	## switches do, so the hidden rows are read before the table is grown.
+	var hidden: Array = _read_hidden_events(
+		rom, layout, map_id, bank, rom.u16le(header + MAP_SCRIPT_AT)
+	)
+	events["hidden_events"] = hidden
 	## A row the table grew by may reach one higher still, which is how the
 	## Safari Zone gate's own six are read rather than its first four.
 	while _extend_texts(rom, layout, bank, rom.u16le(header + 5), texts, events, states, known):
 		states = _read_map_states(
 			rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts
 		)
-	var hidden: Array = _read_hidden_events(
-		rom, layout, map_id, bank, rom.u16le(header + MAP_SCRIPT_AT)
-	)
 	for row: Dictionary in hidden:
 		_bind_map_script_byte(row.get("script", []) as Array, int(states["byte"]))
 

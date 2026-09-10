@@ -2,7 +2,6 @@ class_name Gen2BattleAI
 extends RefCounted
 
 ## Scores an enemy trainer's move choice the way the cartridge's own AI does.
-##
 ## Every slot starts at 20, or 80 with no PP. Each bit set in the trainer class's
 ## [constant Gen2Layout.ATTR_AI_MOVE_WEIGHTS] runs one scoring layer over the four
 ## slots, nudging scores up (discourage) or down (encourage); lowest wins, ties
@@ -1259,7 +1258,6 @@ static func _smart_pursuit(scores: Array, slot: int, c: Context) -> void:
 
 
 ## `AI_Smart_Protect`: one ladder of tests, first match winning.
-##
 static func _smart_protect(scores: Array, slot: int, c: Context) -> void:
 	if c.attacker.protect_count != 0:
 		_smart_protect_discourage(scores, slot, c, true)
@@ -1398,7 +1396,6 @@ static func _apply_opportunist(scores: Array, c: Context) -> void:
 ## whichever deals the most, unless it would cost the mon itself
 ## ([constant RECKLESS_EFFECTS]) or does one point of damage that is really a
 ## fixed-damage move ([code]power < 2[/code]).
-##
 ## The estimate is [method _estimate_damage], which is `AIDamageCalc` itself.
 static func _apply_aggressive(scores: Array, c: Context) -> void:
 	var attacker: Gen2BattleMon = c.attacker
@@ -1450,7 +1447,6 @@ static func _estimate_damage(c: Context, move: Dictionary, constant: bool = true
 
 ## [constant Gen2Layout.AI_CAUTIOUS]: discourage [constant RESIDUAL_MOVE_NUMBERS]
 ## once it is no longer the attacker's first turn.
-##
 ## Diverges from a documented source bug (`docs/bugs_and_glitches.md`,
 ## "'Cautious' AI may fail to discourage residual moves") unless
 ## `cautious_ai_abandons_remaining_moves` is on: `ret nc` abandons the remaining

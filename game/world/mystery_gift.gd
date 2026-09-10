@@ -65,7 +65,6 @@ const LOCKED: int = 0xFF
 
 
 ## The section a slot that has never seen a Mystery Gift carries.
-##
 ## `sMysteryGiftData` is two pairs rather than one block, and the pairing is
 ## what `BackupMysteryGift` and `RestoreMysteryGift` copy between: `item` and
 ## `unlocked` are the working bytes the exchange writes, `backup_item` and
@@ -213,7 +212,6 @@ static func copy_decorations_to_pc(
 ## `MysteryGiftGetItem` and `MysteryGiftGetDecoration`, which share
 ## `MysteryGiftFallbackItem`: an index past either table's end is a RED CARPET
 ## as a decoration and a GREAT BALL as an item, the same byte read two ways.
-##
 ## [param table] is the imported `MysteryGiftItems` or `MysteryGiftDecos`.
 static func gift_at(table: Array, index: int) -> int:
 	if index < 0 or index >= table.size():
@@ -349,7 +347,6 @@ static func _add_partner_id(section: Dictionary, id: int) -> void:
 
 ## `.SaveMysteryGiftTrainerName`, which is what the Trainer House reads: the
 ## partner's name and the flag that says somebody has linked.
-##
 ## The party beside them is deliberately empty, because a real cartridge's is:
 ## `StagePartyDataForMysteryGift` sits behind a `vc_patch` and is unreferenced
 ## in the retail build, so `ClearMysteryGiftTrainer` zeroes `wMysteryGiftTrainer`
@@ -369,7 +366,6 @@ static func _item_name(data: GameData, item: int) -> String:
 
 ## `DoMysteryGiftIfDayHasPassed`, which is the only thing that resets the day's
 ## partner list and runs when the menu row is chosen rather than at midnight.
-##
 ## `sMysteryGiftTimer` is `InitOneDayCountdown`'s own two bytes: the days still
 ## to run, and the day the countdown started on. `CheckDayDependentEventHL`
 ## takes the days since that start off the first byte and reports the borrow,

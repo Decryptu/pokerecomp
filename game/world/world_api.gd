@@ -7608,14 +7608,24 @@ func _queue_map_callbacks(callback_type: int) -> void:
 func _gen1_map_script_nodes(mask: int) -> Array:
 	if mask & (1 << Gen1Layout.MAP_LOADED_1_BIT):
 		_unlock_gen1_card_key_door()
+	var callback: Dictionary = _gen1_map_load_callback(mask)
+	return callback["nodes"] as Array if not callback.is_empty() \
+		else current_map.scripts.get("entry", []) as Array
+
+
+func _gen1_map_load_callback(mask: int) -> Dictionary:
 	for callback: Dictionary in current_map.scripts.get("callbacks", []) as Array:
 		if int(callback.get("mask", 0)) == mask:
-			return callback["nodes"] as Array
-	return current_map.scripts.get("entry", []) as Array
+			return callback
+	return {}
 
 
+## Whether the next pass owes the map a body its own script does not run every
+## frame. `CinnabarIsland_Script` sets BIT_CUR_MAP_LOADED_1 on every frame and
+## nothing on the island reads it, so a bit no callback takes is not pending.
 func gen1_map_load_pending() -> bool:
-	return _gen1_map_load_pending != 0
+	return _gen1_map_load_pending != 0 and current_map != null \
+		and not _gen1_map_load_callback(_gen1_map_load_pending).is_empty()
 
 
 ## Spends every step of [param nodes] that takes no turn of its own, stopping

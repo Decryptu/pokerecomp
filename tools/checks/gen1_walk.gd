@@ -517,6 +517,8 @@ func _one_game() -> void:
 	_check_the_captains_back()
 	_check_the_ship_leaves()
 	_check_the_gate_pushes_back()
+	_check_cinnabar_settles()
+	_check_a_mansion_switch()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -3336,6 +3338,55 @@ func _check_the_viridian_gym_door() -> void:
 					world.state.gen1_map_script(VIRIDIAN_CITY_BYTE),
 				])
 	_r.note("gen1 walk VIRIDIAN_CITY's gym door with and without seven badges")
+
+
+const CINNABAR_ISLAND: int = 8
+const CINNABAR_SHORE := Vector2i(19, 13)
+const POKEMON_MANSION_3F: int = 215
+const MANSION_3F_SWITCH := Vector2i(10, 6)
+const MANSION_3F_DOOR := Vector2i(15, 10)
+const MANSION_SWITCH_FLAG: int = 632
+const MANSION_SWITCH_ASKS: String = "A secret switch!"
+
+
+## `CinnabarIsland_Script` sets BIT_CUR_MAP_LOADED_1 on every frame and nothing
+## on the island reads it, so a walk there is not forever owed a load pass.
+func _check_cinnabar_settles() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, CINNABAR_ISLAND, CINNABAR_SHORE)
+	if world == null:
+		return
+	world.dispatch_map_entry()
+	for _pass: int in 3:
+		world.dispatch_sight_events()
+	_r.check(not world.gen1_map_load_pending(),
+		"Cinnabar Island still owes a map-load pass after three frames.")
+	_r.check(not world.event_flag_active(MANSION_SWITCH_FLAG),
+		"the island did not clear EVENT_MANSION_SWITCH_ON.")
+
+
+## `Mansion3Script_Switches`: the statue's row sits past every object's, asks,
+## flips EVENT_MANSION_SWITCH_ON and sets the bit that redraws the doors.
+func _check_a_mansion_switch() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, POKEMON_MANSION_3F, MANSION_3F_SWITCH)
+	if world == null:
+		return
+	world.dispatch_map_entry()
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var shut: bool = not world.can_walk_to(MANSION_3F_DOOR)
+	world.interact()
+	var asked: Dictionary = world.pending_script_input()
+	if not _r.check(StringName(asked.get("type", &"")) == &"choice"
+		and String(asked.get("text", "")).begins_with(MANSION_SWITCH_ASKS),
+		"the 3F switch asked %s." % [asked]):
+		return
+	world.choose_script_input(0)
+	world.run_event_queue(true)
+	world.dispatch_sight_events()
+	_r.check(world.event_flag_active(MANSION_SWITCH_FLAG), "the pressed switch left the event clear.")
+	_r.check(shut and world.can_walk_to(MANSION_3F_DOOR),
+		"the door at %s stood %s before and %s after." % [
+			MANSION_3F_DOOR, "shut" if shut else "open", "open" if world.can_walk_to(MANSION_3F_DOOR) else "shut"])
+	_r.note("gen1 walk POKEMON_MANSION_3F's switch opens its door")
 
 
 const POKEMON_TOWER_7F: int = 148

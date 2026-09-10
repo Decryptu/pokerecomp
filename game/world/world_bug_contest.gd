@@ -4,7 +4,6 @@ extends RefCounted
 ## The Bug Catching Contest: its own encounter roll, its score, and its judging
 ## (`engine/events/bug_contest/`, `engine/overworld/events.asm`'s
 ## `TryWildEncounter_BugContest` and `ChooseWildEncounter_BugContest`).
-##
 ## Scene-free and stateless, like [Gen2WorldTreemon]: the tables are the cache's
 ## (`GameData.bug_contest_mons`, `GameData.bug_contestants`), the live counters
 ## are [Gen2WorldState]'s, and every roll takes the caller's generator so a
@@ -137,7 +136,6 @@ static func _level(row: Dictionary, random: RandomNumberGenerator) -> int:
 ## `ContestScore`: the tally the player's caught Pokemon is judged on. Every
 ## term is the *low* byte of a big-endian word, which is the stat itself for
 ## anything a contest Pokemon can reach, and the whole runs 16 bit with carry.
-##
 ## [param mon] is the caught Pokemon as [Gen2WorldState] keeps it:
 ## `max_hp`, `hp`, `attack`, `defense`, `speed`, `special_attack`,
 ## `special_defense`, `dvs` and `item`.
@@ -174,7 +172,6 @@ static func _dv_score(dvs: int) -> int:
 
 ## `BugContest_JudgeContestants`: the AI contestants are scored first and the
 ## player is inserted last, which is why the player takes a place on a tie.
-##
 ## [param withdrawn] is the set of contestant indices whose event flag is set,
 ## which `SelectRandomBugContestContestants` chose and who therefore do not
 ## compete. Answers `{"placings": [...], "player_place": 0..3}` with the placings
