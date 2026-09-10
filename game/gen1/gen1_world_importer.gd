@@ -2082,8 +2082,8 @@ static func _script_toggle_by_sprite(ctx: Dictionary, pc: int, state: Dictionary
 	for offset: int in TOGGLE_BY_SPRITE.size():
 		if TOGGLE_BY_SPRITE[offset] >= 0 and rom.u8(at + offset) != TOGGLE_BY_SPRITE[offset]:
 			return SCRIPT_UNREAD
-	if rom.u16le(at + 1) != int(layout["sprite_index_wram"]) \
-		or rom.u16le(at + 10) != int(layout["toggleable_index"]):
+	if rom.u16le(at + 1) != int(layout.get("sprite_index_wram", -1)) \
+		or rom.u16le(at + 10) != int(layout.get("toggleable_index", -1)):
 		return SCRIPT_UNREAD
 	state["toggle_from"] = int(layout["sprite_index_wram"])
 	return pc + Gen1Layout.SCRIPT_LONG_SIZE + TOGGLE_BY_SPRITE.size()
@@ -4569,9 +4569,9 @@ static func _script_shaped_routine(
 	var items: int = int(layout.get("filtered_bag_items", -1))
 	if rom.u8(at) == Gen1Layout.SCRIPT_LD_HL and rom.u16le(at + 1) == items:
 		return _script_filter_printed(ctx, at, state)
-	if _script_opens_with(rom, at + Gen1Layout.SCRIPT_LONG_SIZE, [
-		Gen1Layout.SCRIPT_LD_A_MEM, int(layout["sprite_index_wram"]) & 0xFF,
-		int(layout["sprite_index_wram"]) >> 8, Gen1Layout.SCRIPT_DEC_A,
+	var sprite_index: int = int(layout.get("sprite_index_wram", -1))
+	if sprite_index >= 0 and _script_opens_with(rom, at + Gen1Layout.SCRIPT_LONG_SIZE, [
+		Gen1Layout.SCRIPT_LD_A_MEM, sprite_index & 0xFF, sprite_index >> 8, Gen1Layout.SCRIPT_DEC_A,
 		Gen1Layout.SCRIPT_PREFIX, Gen1Layout.SCRIPT_SWAP_A]):
 		return _script_object_coord_move(ctx, rom.u16le(at + 1), out)
 	if rom.u8(at) == Gen1Layout.SCRIPT_LD_HL and rom.u16le(at + 1) == int(layout.get("bag_items", -1)):
@@ -4600,7 +4600,7 @@ static func _script_card_key_call(
 	var layout: Dictionary = ctx["layout"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), target)
 	if rom.u8(at) == Gen1Layout.SCRIPT_PUSH_HL and rom.u8(at + 1) == Gen1Layout.SCRIPT_LD_HL \
-		and rom.u16le(at + 2) == int(layout["card_key_door"]):
+		and rom.u16le(at + 2) == int(layout.get("card_key_door", -1)):
 		if not state.has("hl"):
 			return SCRIPT_SHAPE_REFUSED
 		out.append({"op": "card_key_doors", "cells": _script_cell_list(ctx, int(state["hl"]))})
