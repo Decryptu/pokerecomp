@@ -3618,26 +3618,16 @@ func tile_indices_in_window(origin: Vector2i, size: Vector2i) -> PackedInt32Arra
 	return out
 
 
-## The block a tile is drawn from, which is not always the block that is there.
-##
-## `LoadMetatiles` (`home/map.asm:120`) substitutes `wMapBorderBlock` for any
-## block byte of `$00`, and the padding `ChangeMap` puts around the map is that
-## same border block wherever no connection fills it. Both are graphics only:
-## `GetCoordTileCollision` (`home/map.asm:2065`) reads the raw byte and answers
-## -1 for `$00`, which is why [method block_at] is left alone and the collision
-## path never comes through here.
+## `LoadMetatiles` (`home/map.asm:120`) draws `wMapBorderBlock` for a `$00`
+## block and `ChangeMap`'s padding, graphics only: `GetCoordTileCollision`
+## (`home/map.asm:2065`) reads the raw byte, so [method block_at] is left alone.
 func drawn_block_at(block_x: int, block_y: int) -> int:
 	return drawn_block_for(data, current_map, block_x, block_y, _block_overrides)
 
 
-## [method drawn_block_at] for a view wider than the hardware's own.
-##
-## Inside `wOverworldMapBlocks` this is [method drawn_block_at] byte for byte,
-## so nothing a 20x18 screen can reach changes. Past it the cartridge holds
-## nothing at all, and a view that reaches further would show border block to
-## the horizon; the connection graph places whole neighbouring maps there
-## instead ([method map_placements]), and the border block still fills what no
-## map covers.
+## [method drawn_block_at] for a view wider than the hardware's own: past
+## `wOverworldMapBlocks` the neighbouring maps stand where the cartridge holds
+## nothing ([method map_placements]), and the border block fills the rest.
 func expanded_block_at(block_x: int, block_y: int) -> int:
 	if current_map == null:
 		return 0
@@ -3715,14 +3705,9 @@ static func placements_around(
 	return out
 
 
-## Where [param target] sits, in [param source]'s block coordinates, for a
-## connection running [param connection] out of [param source].
-##
-## The four cases are `_connected_drawn_block_at`'s own arithmetic read the
-## other way round: it takes a padding block to a cell of the target, and this
-## takes the target's own origin to a block of the source. Both come from
-## `FillMapConnections`' pointer sums, and having them in one place is what
-## keeps a strip and the map behind it from disagreeing by a block.
+## Where [param target] sits in [param source]'s block coordinates:
+## `_connected_drawn_block_at`'s arithmetic the other way round, both out of
+## `FillMapConnections`' pointer sums so a strip and its map agree.
 static func connection_origin_blocks(
 	source: Gen2WorldMap, target: Gen2WorldMap, connection: Dictionary
 ) -> Vector2i:
@@ -3913,6 +3898,8 @@ var _gen1_saved_coord_index: int = 0
 var _gen1_safari_game_over: bool = false
 var _gen1_safari_admitted: Dictionary = {}
 var _gen1_entry_steps: Array = []
+## `wCurrentMapScriptFlags` bits a script set back for the next `RunMapScript`.
+var _gen1_map_load_pending: int = 0
 var _gen1_volatile: Dictionary = {}
 var _gen1_last_boulder: int = -1
 var _gen1_last_sprite_index: int = -1
@@ -3996,6 +3983,10 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"movement_script_running": &"_gen1_node_movement_script_running",
 	"npc_movement_script": &"_gen1_node_npc_movement_script",
 	"volatile": &"_gen1_node_volatile",
+	"map_load_bit": &"_gen1_node_map_load_bit",
+	"store_byte": &"_gen1_node_store_byte",
+	"gym_trash": &"_gen1_node_gym_trash",
+	"object_coord_move": &"_gen1_node_object_coord_move",
 	"volatile_test": &"_gen1_node_volatile_test",
 	"boulder_on": &"_gen1_node_boulder_on",
 	"coord_lookup": &"_gen1_node_coord_lookup",
@@ -4218,8 +4209,16 @@ func _gen1_run(event: Dictionary) -> Dictionary:
 		"bag": state.items() if state != null else {}, "named": "", "object": event,
 		"money": state.money(Gen2WorldMartHost.MONEY_ACCOUNT) if state != null else 0,
 		"coins": state.coins() if state != null else 0,
-		"flags": {}, "engine_flags": {}, "flag_tests": {}, "scratch": _gen1_scratch.duplicate(),
+		"flags": {}, "engine_flags": {}, "flag_tests": {}, "scratch": _gen1_run_scratch(),
 	}
+
+
+## `wSpriteIndex` counts objects from one.
+func _gen1_run_scratch() -> Dictionary:
+	var scratch: Dictionary = _gen1_scratch.duplicate()
+	if data != null and _gen1_last_sprite_index >= 0:
+		scratch[int(Gen1Layout.for_id(data.id)["sprite_index_wram"])] = _gen1_last_sprite_index + 1
+	return scratch
 
 
 ## [param run] is the bag the row is walked against, carrying what its own gifts
@@ -4395,10 +4394,10 @@ func _gen1_node_player_in_array(
 ## One object's own byte of `wSpriteStateData1`, which a script writes by hand
 ## to turn an NPC where `applymovement` would turn one on Generation 2.
 func _gen1_node_object_facing(
-	node: Dictionary, steps: Array, _run: Dictionary
+	node: Dictionary, steps: Array, run: Dictionary
 ) -> bool:
 	steps.append({
-		"type": &"object_facing", "index": int(node["object"]),
+		"type": &"object_facing", "index": _gen1_object_index(node, run),
 		"facing": facing_for_direction(Gen1Layout.FACING_STEPS[int(node["facing"])]),
 	})
 	return true
@@ -4424,11 +4423,9 @@ func _gen1_node_map_script_table(
 ) -> bool:
 	if state == null or current_map == null:
 		return false
-	var index: int = state.gen1_map_script(int(node["byte"]))
-	for row: Dictionary in current_map.scripts.get("states", []) as Array:
-		if int(row.get("id", -1)) == index:
-			return _gen1_resolve_script(row.get("nodes", []) as Array, steps, run)
-	return true
+	return _gen1_resolve_script(
+		_gen1_map_state_nodes(state.gen1_map_script(int(node["byte"]))), steps, run
+	)
 
 
 ## The two Snorlax and the Pokemon Tower's Marowak, fought once a state returns.
@@ -4461,6 +4458,19 @@ func _gen1_node_arrow_movement(node: Dictionary, steps: Array, run: Dictionary) 
 	return _gen1_resolve_side(node, false, steps, run)
 
 
+func _gen1_node_object_coord_move(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var object: int = _gen1_object_index(node, run)
+	var rows: Array = node["rows"]
+	for index: int in range(object * Gen1Layout.OBJECT_COORD_ROWS,
+		mini(rows.size(), (object + 1) * Gen1Layout.OBJECT_COORD_ROWS)):
+		var row: Dictionary = rows[index]
+		if player_cell != Vector2i(int(row["x"]), int(row["y"])):
+			continue
+		steps.append({"type": &"object_move", "index": object, "moves": (row["moves"] as Array).duplicate()})
+		return true
+	return true
+
+
 func _gen1_node_walk(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var moves: Array = (node["moves"] as Array).duplicate(true)
 	if node.has("steps_offset"):
@@ -4474,16 +4484,16 @@ func _gen1_node_walk(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 
 ## `MoveSprite` returns as soon as it has copied the list, so its steps are
 ## drawn behind the script rather than in front of it.
-func _gen1_node_object_move(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+func _gen1_node_object_move(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	steps.append({
-		"type": &"object_move", "index": int(node["object"]),
+		"type": &"object_move", "index": _gen1_object_index(node, run),
 		"moves": (node["moves"] as Array).duplicate(),
 	})
 	return true
 
 
-func _gen1_node_object_stay(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"object_stay", "index": int(node["object"])})
+func _gen1_node_object_stay(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	steps.append({"type": &"object_stay", "index": _gen1_object_index(node, run)})
 	return true
 
 
@@ -4782,9 +4792,21 @@ func _gen1_node_name_badge(node: Dictionary, _steps: Array, run: Dictionary) -> 
 
 
 func _gen1_node_scratch(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	(run["scratch"] as Dictionary)[int(node["address"])] = int(node["value"])
-	steps.append({"type": &"scratch", "address": int(node["address"]), "value": int(node["value"])})
+	var value: int = int(node["value"]) if node.has("value") \
+		else _gen1_scratch_read(run, int(node["from"]), int(node["offset"]))
+	(run["scratch"] as Dictionary)[int(node["address"])] = value
+	steps.append({"type": &"scratch", "address": int(node["address"]), "value": value})
 	return true
+
+
+func _gen1_scratch_read(run: Dictionary, address: int, offset: int) -> int:
+	return (int((run["scratch"] as Dictionary).get(address, 0)) + offset) & 0xFF
+
+
+func _gen1_object_index(node: Dictionary, run: Dictionary) -> int:
+	if node.has("object"):
+		return int(node["object"])
+	return _gen1_scratch_read(run, int(node["object_from"]), int(node["object_offset"]))
 
 
 func _gen1_node_scratch_test(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -4794,13 +4816,11 @@ func _gen1_node_scratch_test(node: Dictionary, steps: Array, run: Dictionary) ->
 
 
 func _gen1_node_random(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var roll: int = script_random.randi_range(0, 255) if script_random != null else 0
-	return _gen1_resolve_side(node, roll < int(node["below"]), steps, run)
+	return _gen1_resolve_side(node, _gen1_roll() < int(node["below"]), steps, run)
 
 
 func _gen1_node_random_bit(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var roll: int = script_random.randi_range(0, 255) if script_random != null else 0
-	return _gen1_resolve_side(node, roll & (1 << int(node["bit"])) != 0, steps, run)
+	return _gen1_resolve_side(node, _gen1_roll() & (1 << int(node["bit"])) != 0, steps, run)
 
 
 func _gen1_node_talking_to(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -4866,6 +4886,70 @@ func _gen1_node_npc_movement_script(node: Dictionary, steps: Array, _run: Dictio
 	return true
 
 
+func _gen1_node_store_byte(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var value: int = int(node.get("value", 0))
+	if bool(node.get("random", false)):
+		value = (_gen1_roll() & int(node["mask"])) >> int(node["shift"])
+	steps.append({"type": &"byte", "name": String(node["name"]), "value": value})
+	return true
+
+
+## `GymTrashScript`, whose second lock sets `VermilionGymSetDoorTile`'s bit.
+func _gen1_node_gym_trash(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var can: int = int(node["can"])
+	var side: String = "trash"
+	if state != null and not _gen1_run_flag(Gen1Layout.LOCK_2ND_EVENT, run):
+		if not _gen1_run_flag(Gen1Layout.LOCK_1ST_EVENT, run):
+			if can == state.gen1_byte(GEN1_FIRST_LOCK):
+				_gen1_node_flag({"flag": Gen1Layout.LOCK_1ST_EVENT, "set": true}, steps, run)
+				_gen1_draw_second_can(node, steps)
+				side = "first_lock"
+		elif can in [state.gen1_byte(GEN1_SECOND_LOCK), state.gen1_byte(GEN1_SECOND_LOCK_ALT)]:
+			_gen1_node_flag({"flag": Gen1Layout.LOCK_2ND_EVENT, "set": true}, steps, run)
+			steps.append({"type": &"map_load", "bit": Gen1Layout.MAP_LOADED_2_BIT})
+			side = "second_lock"
+		else:
+			_gen1_node_flag({"flag": Gen1Layout.LOCK_1ST_EVENT, "set": false}, steps, run)
+			steps.append({"type": &"byte", "name": GEN1_FIRST_LOCK,
+				"value": _gen1_roll() & Gen1Layout.TRASH_FIRST_MASK})
+			side = "reset"
+	return _gen1_resolve_script(node[side] as Array, steps, run)
+
+
+## Where `CheckFightingMapTrainers`' two increments leave a map's script.
+const GEN1_END_BATTLE_STATE: int = 2
+const GEN1_FIRST_LOCK: String = "first_lock_trash_can"
+const GEN1_SECOND_LOCK: String = "second_lock_trash_can"
+const GEN1_SECOND_LOCK_ALT: String = "second_lock_trash_can_alt"
+
+
+func _gen1_draw_second_can(node: Dictionary, steps: Array) -> void:
+	var table: Array = node["table"]
+	var row: int = int(node["can"]) * int(node["row_size"])
+	var roll: int = _gen1_roll()
+	var swapped: int = ((roll & 0xF) << 4) | (roll >> 4)
+	if int(node["row_size"]) == Gen1Layout.TRASH_ROW_SIZE:
+		var masked: int = ((int(table[row]) & swapped) - 1) & 0xFF
+		steps.append({"type": &"byte", "name": GEN1_SECOND_LOCK,
+			"value": int(table[row + 1 + masked]) & Gen1Layout.TRASH_CAN_MASK})
+		steps.append({"type": &"byte", "name": GEN1_SECOND_LOCK_ALT, "value": 0})
+		return
+	var pair: int = {2: roll & 1, 3: swapped, 4: roll & 3}.get(int(table[row]), 0)
+	steps.append({"type": &"byte", "name": GEN1_SECOND_LOCK,
+		"value": int(table[row + 1 + 2 * pair])})
+	steps.append({"type": &"byte", "name": GEN1_SECOND_LOCK_ALT,
+		"value": int(table[row + 2 + 2 * pair])})
+
+
+func _gen1_roll() -> int:
+	return script_random.randi_range(0, 255) if script_random != null else 0
+
+
+func _gen1_node_map_load_bit(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"map_load", "bit": int(node["bit"])})
+	return true
+
+
 func _gen1_node_volatile(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
 	steps.append({"type": &"volatile", "name": String(node["name"]), "set": bool(node["set"])})
 	return true
@@ -4905,9 +4989,9 @@ func _gen1_node_emote(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
 	return true
 
 
-func _gen1_node_object_path(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+func _gen1_node_object_path(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	steps.append({
-		"type": &"object_path", "index": int(node["object"]), "target": int(node["target"]),
+		"type": &"object_path", "index": _gen1_object_index(node, run), "target": int(node["target"]),
 		"perspective": int(node["perspective"]), "y_adjust": int(node["y_adjust"]),
 	})
 	return true
@@ -5041,7 +5125,13 @@ func _gen1_node_badges_byte(node: Dictionary, steps: Array, run: Dictionary) -> 
 func _gen1_node_map_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	if current_map == null:
 		return false
-	var row: Dictionary = gen1_text_at(int(node["text"]))
+	var row: Dictionary = gen1_text_at(int(node["text"]) if node.has("text") \
+		else _gen1_scratch_read(run, int(node["from"]), int(node["offset"])))
+	## `DisplayTextID` over a trainer's row is `TalkToTrainer` after the fight.
+	var trainer: Array = _gen1_trainer_steps(row, {})
+	if not trainer.is_empty():
+		steps.append_array(trainer)
+		return true
 	var nodes: Variant = row.get("script", [])
 	if nodes is Array and not (nodes as Array).is_empty():
 		return _gen1_resolve_script(nodes as Array, steps, run)
@@ -5072,10 +5162,11 @@ func _gen1_node_coin_box(_node: Dictionary, steps: Array, _run: Dictionary) -> b
 	return true
 
 
-func _gen1_node_toggle(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+func _gen1_node_toggle(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	steps.append({
 		"type": &"toggle",
-		"index": int(node["index"]),
+		"index": int(node["index"]) if node.has("index") \
+			else _gen1_toggle_index(_gen1_object_index(node, run)),
 		"hidden": bool(node["hidden"]),
 	})
 	return true
@@ -5970,18 +6061,20 @@ func _gen1_sight() -> Array:
 	var ended: Array = _gen1_safari_check()
 	if not ended.is_empty():
 		return ended
+	## A script that only wrote blocks holds nothing, and the trainer check follows.
 	var running: Array = _gen1_map_script()
-	if not running.is_empty():
+	if _gen1_holding():
 		return running
 	var request: Dictionary = _find_sight_request()
 	if request.is_empty():
-		return []
+		return running
 	var event: Dictionary = request["event"]
+	_gen1_last_sprite_index = int(request["object_index"])
 	var steps: Array = _gen1_trainer_steps(
 		current_map.text_at(int(event.get("text", 0))), event
 	)
 	if steps.is_empty():
-		return []
+		return running
 	_gen1_steps = [{"type": &"request", "values": {
 		"kind": &"trainer_approach_requested",
 		"values": {
@@ -5990,7 +6083,15 @@ func _gen1_sight() -> Array:
 			"distance": int(request["distance"]),
 		},
 	}}] + steps
-	return _gen1_result()
+	return _gen1_joined(running, _gen1_result())
+
+
+func _gen1_joined(first: Array, second: Array) -> Array:
+	if first.is_empty() or second.is_empty():
+		return first + second
+	(second[0] as Dictionary)["events"] = (first[0] as Dictionary).get("events", []) \
+		+ (second[0] as Dictionary).get("events", [])
+	return second
 
 
 ## `CheckEvent EVENT_IN_SAFARI_ZONE`, which gates the counter and the window.
@@ -6066,12 +6167,25 @@ func _gen1_safari_box(name: String) -> Dictionary:
 func gen1_safari_gate_byte() -> int:
 	var gate: Gen2WorldMap = data.world_map(0, Gen1Layout.SAFARI_ZONE_GATE_MAP) \
 		if data != null else null
-	if gate == null:
-		return -1
-	for node: Dictionary in (gate.scripts.get("entry", []) as Array):
+	return _gen1_dispatch_byte(gate) if gate != null else -1
+
+
+func _gen1_map_script_byte() -> int:
+	return _gen1_dispatch_byte(current_map) if current_map != null else -1
+
+
+func _gen1_dispatch_byte(map: Gen2WorldMap) -> int:
+	for node: Dictionary in map.scripts.get("entry", []) as Array:
 		if String(node.get("op", "")) == "map_script_table":
 			return int(node["byte"])
 	return -1
+
+
+func _gen1_map_state_nodes(index: int) -> Array:
+	for row: Dictionary in current_map.scripts.get("states", []) as Array:
+		if int(row.get("id", -1)) == index:
+			return row.get("nodes", []) as Array
+	return []
 
 
 ## `RunMapScript`, which `JoypadOverworld` runs every frame: what stands in
@@ -6083,7 +6197,8 @@ func _gen1_map_script() -> Array:
 		_gen1_steps = _gen1_entry_steps
 		_gen1_entry_steps = []
 		return _gen1_result()
-	var entry: Array = current_map.scripts.get("entry", [])
+	var entry: Array = _gen1_map_script_nodes(_gen1_map_load_pending)
+	_gen1_map_load_pending = 0
 	if entry.is_empty():
 		return []
 	var steps: Array = []
@@ -6247,6 +6362,12 @@ func _gen1_kept(step: Dictionary, events: Array) -> bool:
 			return true
 		&"volatile":
 			_gen1_volatile[String(step["name"])] = bool(step["set"])
+			return true
+		&"map_load":
+			_gen1_map_load_pending |= 1 << int(step["bit"])
+			return true
+		&"byte":
+			state.set_gen1_byte(String(step["name"]), int(step["value"]))
 			return true
 		&"text_table":
 			_gen1_text_table = int(step["table"])
@@ -6549,13 +6670,18 @@ func _gen1_ride_elevator(result: Dictionary) -> void:
 
 
 ## `EndTrainerBattle` flags a beaten opponent, and its `cp OPP_ID_OFFSET` skips
-## `HideObject` for a trainer, so only a standing wild goes off the map.
+## `HideObject` for a trainer, so only a standing wild goes off the map. It sets
+## both map-load bits, and `StartTrainerBattle` left the map's script on row 2.
 func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 	if result.has("outcome"):
 		_gen1_battle_outcome = StringName(result["outcome"])
 	var flag: int = int(step.get("trainer_flag", -1))
-	if flag < 0 or state == null:
+	if flag < 0 or state == null or not result.has("outcome"):
 		return
+	_gen1_map_load_pending = Gen1Layout.MAP_LOAD_BOTH
+	var byte: int = _gen1_map_script_byte()
+	if byte >= 0 and not _gen1_map_state_nodes(GEN1_END_BATTLE_STATE).is_empty():
+		state.set_gen1_map_script(byte, GEN1_END_BATTLE_STATE)
 	if StringName(result.get("outcome", &"")) not in GEN1_TRAINER_BEATEN:
 		return
 	state.set_event_flag(flag)
@@ -7356,14 +7482,10 @@ func _queue_map_callbacks(callback_type: int) -> void:
 	if current_map == null:
 		return
 	if _gen1:
-		_run_gen1_map_callback()
-		## `RunMapScript` runs once on the first frame behind `EnterMap`, so what
-		## it writes stands before the player may move and what it shows waits for
-		## the step dispatch. The rest of that one run is kept rather than resolved
-		## again: `CheckAndResetEvent` answers differently the second time.
-		_gen1_entry_steps = _spend_gen1_nodes(
-			current_map.scripts.get("entry", []) as Array
-		)
+		_unlock_gen1_card_key_door()
+		## `RunMapScript`'s first frame behind `EnterMap`: its writes stand before a
+		## step, its boxes wait for one, and `CheckAndResetEvent` answers only once.
+		_gen1_entry_steps = _spend_gen1_nodes(_gen1_map_script_nodes(Gen1Layout.MAP_LOAD_BOTH))
 		return
 	var bank: int = int(current_map.scripts.get("bank", 0))
 	for callback: Dictionary in current_map.scripts.get("callbacks", []):
@@ -7379,14 +7501,16 @@ func _queue_map_callbacks(callback_type: int) -> void:
 		})
 
 
-## The body behind a map's `wCurrentMapScriptFlags` bit. Running it again writes
-## the same blocks, so the second call a map entry makes says nothing new.
-func _run_gen1_map_callback() -> void:
-	var callbacks: Array = current_map.scripts.get("callbacks", [])
-	if callbacks.is_empty():
-		return
-	_unlock_gen1_card_key_door()
-	_spend_gen1_nodes(callbacks[0]["nodes"] as Array)
+## The map's script with [param mask] standing in `wCurrentMapScriptFlags`.
+func _gen1_map_script_nodes(mask: int) -> Array:
+	for callback: Dictionary in current_map.scripts.get("callbacks", []) as Array:
+		if int(callback.get("mask", 0)) == mask:
+			return callback["nodes"] as Array
+	return current_map.scripts.get("entry", []) as Array
+
+
+func gen1_map_load_pending() -> bool:
+	return _gen1_map_load_pending != 0
 
 
 ## Spends every step of [param nodes] that takes no turn of its own, stopping
@@ -9671,6 +9795,7 @@ func _apply_map(
 	_record_escape_points(target_map, from_warp)
 	_gen1_steps = []
 	_gen1_entry_steps = []
+	_gen1_map_load_pending = 0
 	_gen1_money_window = false
 	## `WarpFound2`'s `CheckIfInOutsideMap`: leaving a town or a route records it,
 	## and that is the map a `LAST_MAP` warp comes back out to.

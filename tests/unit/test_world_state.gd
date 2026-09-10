@@ -180,6 +180,20 @@ func test_strength_active_flag_is_profile_split_and_is_not_a_badge() -> void:
 	assert_eq(state.badge_count(false), 0)
 
 
+## `wFirstLockTrashCanIndex` and its two neighbours are saved player data; a
+## byte written back to zero is the cleared WRAM a new game starts on.
+func test_gen1_bytes_ride_the_snapshot_by_name() -> void:
+	var state := Gen2WorldState.new()
+	state.set_gen1_byte("first_lock_trash_can", 12)
+	state.set_gen1_byte("second_lock_trash_can", 0x1FF)
+	var restored: Gen2WorldState = Gen2WorldState.from_dict(state.to_dict())
+	assert_eq(restored.gen1_byte("first_lock_trash_can"), 12)
+	assert_eq(restored.gen1_byte("second_lock_trash_can"), 0xFF)
+	assert_eq(restored.gen1_byte("second_lock_trash_can_alt"), 0)
+	restored.set_gen1_byte("first_lock_trash_can", 0)
+	assert_false(restored.to_dict()["gen1_bytes"].has("first_lock_trash_can"))
+
+
 ## Snapshots and MapSetupScript_ReloadMap do not run a warp's ResetBikeFlags.
 func test_strength_active_flag_survives_round_trip_and_map_reload() -> void:
 	var state := Gen2WorldState.new()

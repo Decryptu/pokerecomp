@@ -471,6 +471,7 @@ func _one_game() -> void:
 	_check_a_hidden_object()
 	_check_a_pc_opens()
 	_check_a_hidden_item()
+	_check_the_trash_cans()
 	_check_a_gym_statue()
 	_check_a_bench_guy()
 	_check_a_bookshelf()
@@ -501,6 +502,9 @@ func _one_game() -> void:
 	_check_the_cycling_road_gate_walk()
 	_check_the_viridian_gym_door()
 	_check_the_tower_warp()
+	if _r.game_id != RomRegistry.YELLOW:
+		_check_the_tower_rocket_leaves()
+	_check_the_champion()
 	_check_the_silph_rival()
 	_check_a_seafoam_boulder_hole()
 	_check_the_safari_zone()
@@ -2198,6 +2202,83 @@ func _check_a_hidden_item() -> void:
 	_r.check(world.interact().is_empty(), "the taken POTION answered twice.")
 
 
+func _check_the_trash_cans() -> void:
+	var city: Gen2WorldAPI = _r.open_world(0, VERMILION_CITY, VERMILION_GYM_DOOR)
+	if city == null:
+		return
+	city.script_random = RandomNumberGenerator.new()
+	city.script_random.seed = TRASH_SEED
+	city.dispatch_map_entry()
+	var first: int = city.state.gen1_byte(Gen2WorldAPI.GEN1_FIRST_LOCK)
+	_r.check(first % 2 == 0 and first < Gen1Layout.TRASH_CANS,
+		"the city rolled can %d for the first lock." % first)
+	var gym: Gen2WorldAPI = _r.open_world(0, VERMILION_GYM, VERMILION_GYM_MAT, city.state)
+	if gym == null:
+		return
+	gym.script_random = city.script_random
+	gym.dispatch_map_entry()
+	_r.check(gym.block_at(VERMILION_GYM_DOOR_BLOCK.x, VERMILION_GYM_DOOR_BLOCK.y)
+		== VERMILION_GYM_DOOR_LOCKED, "the gym's door opened before the locks.")
+	var cans: Dictionary = _trash_cans(gym)
+	if not _r.check(cans.size() == Gen1Layout.TRASH_CANS, "%d cans answer." % cans.size()):
+		return
+	_r.check(_trash_said(gym, cans, (first + 1) % Gen1Layout.TRASH_CANS) == TRASH_NOTHING,
+		"a wrong first can did not say so.")
+	_r.check(_trash_said(gym, cans, first).begins_with(TRASH_FIRST_OPENED),
+		"the first lock did not open.")
+	_r.check(gym.event_flag_active(Gen1Layout.LOCK_1ST_EVENT), "EVENT_1ST_LOCK_OPENED is clear.")
+	var second: int = gym.state.gen1_byte(Gen2WorldAPI.GEN1_SECOND_LOCK)
+	var wrong: int = (second + 1) % Gen1Layout.TRASH_CANS
+	while wrong == gym.state.gen1_byte(Gen2WorldAPI.GEN1_SECOND_LOCK_ALT):
+		wrong = (wrong + 1) % Gen1Layout.TRASH_CANS
+	_r.check(_trash_said(gym, cans, wrong).begins_with(TRASH_RESET), "a wrong second can did not reset.")
+	_r.check(not gym.event_flag_active(Gen1Layout.LOCK_1ST_EVENT), "the reset kept the first lock.")
+	first = gym.state.gen1_byte(Gen2WorldAPI.GEN1_FIRST_LOCK)
+	_r.check(_trash_said(gym, cans, first).begins_with(TRASH_FIRST_OPENED),
+		"the first lock did not open again.")
+	second = gym.state.gen1_byte(Gen2WorldAPI.GEN1_SECOND_LOCK)
+	if not _r.check(cans.has(second), "the second lock is under can %d." % second):
+		return
+	_r.check(_trash_said(gym, cans, second).begins_with(TRASH_DONE), "the second lock did not open.")
+	_r.check(gym.event_flag_active(Gen1Layout.LOCK_2ND_EVENT), "EVENT_2ND_LOCK_OPENED is clear.")
+	_r.check(gym.gen1_map_load_pending(), "the door's own bit was not set back.")
+	gym.dispatch_sight_events()
+	_r.check(gym.block_at(VERMILION_GYM_DOOR_BLOCK.x, VERMILION_GYM_DOOR_BLOCK.y)
+		== VERMILION_GYM_DOOR_OPEN, "the door stayed shut behind the second lock.")
+	_r.check(_trash_said(gym, cans, first) == TRASH_NOTHING, "a can still answers after the door.")
+	_r.note("gen1 trash cans: first %d, second %d, door open" % [first, second])
+
+
+func _trash_cans(gym: Gen2WorldAPI) -> Dictionary:
+	var cans: Dictionary = {}
+	for row: Dictionary in gym.current_map.events["hidden_events"] as Array:
+		for node: Dictionary in row.get("script", []) as Array:
+			if String(node["op"]) == "gym_trash":
+				cans[int(node["can"])] = Vector2i(int(row["x"]), int(row["y"]))
+	return cans
+
+
+func _trash_said(gym: Gen2WorldAPI, cans: Dictionary, can: int) -> String:
+	gym.player_cell = (cans[can] as Vector2i) + Vector2i.DOWN
+	gym.player_facing = Gen2WorldSprite.FACING_UP
+	var said: Array[String] = _spoken(gym)
+	return "\n".join(said)
+
+
+const VERMILION_CITY: int = 5
+const VERMILION_GYM: int = 92
+const VERMILION_GYM_DOOR := Vector2i(12, 20)
+const VERMILION_GYM_MAT := Vector2i(4, 16)
+const VERMILION_GYM_DOOR_BLOCK := Vector2i(2, 2)
+const VERMILION_GYM_DOOR_LOCKED: int = 0x24
+const VERMILION_GYM_DOOR_OPEN: int = 0x05
+const TRASH_SEED: int = 7
+const TRASH_NOTHING: String = "Nope, there's\nonly trash here."
+const TRASH_FIRST_OPENED: String = "Hey! There's a\nswitch under the"
+const TRASH_RESET: String = "Nope! There's\nonly trash here."
+const TRASH_DONE: String = "The 2nd electric\nlock opened!"
+
+
 ## `GymStatues` reads `wBeatGymFlags`, and Pewter's bit is BOULDERBADGE.
 func _check_a_gym_statue() -> void:
 	var boxes: Array[String] = []
@@ -3079,6 +3160,91 @@ func _check_the_silph_rival() -> void:
 	_r.note("gen1 walk SILPH_CO_7F's rival fought as party %d" % int(SILPH_RIVAL_PARTY[_r.game_id]))
 
 
+## `PokemonTower7FEndBattleScript` walks the beaten rocket off along the table
+## row the player stands on, and `PokemonTower7FHideNPCScript` hides it.
+const TOWER_7F_ROCKET: int = 0
+const TOWER_7F_ROCKET_CELL := Vector2i(9, 11)
+const TOWER_7F_BESIDE_ROCKET := Vector2i(10, 11)
+const TOWER_7F_HIDE_STATE: int = 3
+
+
+func _check_the_tower_rocket_leaves() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, POKEMON_TOWER_7F, TOWER_7F_BESIDE_ROCKET)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_LEFT
+	var results: Array = world.interact()
+	var passes: int = 0
+	while world.pending_runtime_request().is_empty() and not results.is_empty() \
+		and passes < SCRIPTED_WALK_PASSES:
+		results = world.run_event_queue(true)
+		passes += 1
+	if not _r.check(StringName(world.pending_runtime_request().get("kind", &"")) == &"battle_requested",
+		"the rocket never asked for a fight."):
+		return
+	world.complete_runtime_request({"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_WON})
+	_r.check(world.state.gen1_map_script(TOWER_7F_BYTE) == Gen2WorldAPI.GEN1_END_BATTLE_STATE,
+		"the fight left the tower on state %d." % world.state.gen1_map_script(TOWER_7F_BYTE))
+	_press_past_boxes(world)
+	world.dispatch_sight_events()
+	_press_past_boxes(world)
+	var rocket: Gen2WorldObject = world.objects[TOWER_7F_ROCKET]
+	_r.check(world.scripted_movement_in_progress() or rocket.cell != TOWER_7F_ROCKET_CELL,
+		"the beaten rocket stood still.")
+	_r.check(world.state.gen1_map_script(TOWER_7F_BYTE) == TOWER_7F_HIDE_STATE,
+		"the tower stands on state %d behind the walk." % world.state.gen1_map_script(TOWER_7F_BYTE))
+	for _pass: int in SCRIPTED_WALK_PASSES:
+		world.advance_scripted_steps_pass()
+		world.dispatch_sight_events()
+		if not rocket.active:
+			break
+	_r.check(not rocket.active, "the rocket never left the map.")
+	_r.check(world.state.gen1_map_script(TOWER_7F_BYTE) == 0,
+		"the tower stayed on state %d." % world.state.gen1_map_script(TOWER_7F_BYTE))
+	_r.note("gen1 walk POKEMON_TOWER_7F's rocket walked off and hid")
+
+
+## `ChampionsRoomPlayerEntersScript`, which Agatha's own end-battle state sets.
+const CHAMPIONS_ROOM_BYTE: int = 92
+const CHAMPIONS_ROOM_ENTRANCE := Vector2i(3, 7)
+const CHAMPIONS_ROOM_WALKED := Vector2i(4, 3)
+const CHAMPIONS_ROOM_PLAYER_ENTERS: int = 1
+const CHAMPION_CLASS: int = 43
+const BEAT_CHAMPION_RIVAL_FLAG: int = 2305
+
+
+func _check_the_champion() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, CHAMPIONS_ROOM, CHAMPIONS_ROOM_ENTRANCE)
+	if world == null:
+		return
+	world.state.set_gen1_starter("rival", int(SILPH_RIVAL_STARTER[_r.game_id]))
+	world.state.set_gen1_map_script(CHAMPIONS_ROOM_BYTE, CHAMPIONS_ROOM_PLAYER_ENTERS)
+	world.dispatch_map_entry()
+	var passes: int = 0
+	while world.pending_runtime_request().is_empty() and passes < SCRIPTED_WALK_PASSES:
+		world.advance_player_step_pass()
+		world.dispatch_sight_events()
+		world.run_event_queue(true)
+		passes += 1
+	_r.check(world.player_cell == CHAMPIONS_ROOM_WALKED,
+		"the player was walked to %s." % [world.player_cell])
+	var request: Dictionary = world.pending_runtime_request()
+	var values: Dictionary = request.get("values", {}) as Dictionary
+	if not _r.check(StringName(request.get("kind", &"")) == &"battle_requested"
+		and int(values.get("trainer_class", 0)) == CHAMPION_CLASS,
+		"the champion asked for %s." % [request]):
+		return
+	world.complete_runtime_request({"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_WON})
+	passes = 0
+	while not world.event_flag_active(BEAT_CHAMPION_RIVAL_FLAG) and passes < SCRIPTED_WALK_PASSES:
+		world.dispatch_sight_events()
+		world.run_event_queue(true)
+		passes += 1
+	_r.check(world.event_flag_active(BEAT_CHAMPION_RIVAL_FLAG),
+		"EVENT_BEAT_CHAMPION_RIVAL is clear after the win.")
+	_r.note("gen1 walk CHAMPIONS_ROOM's rival fought after the entrance walk")
+
+
 const SEAFOAM_B1F_HOLE := Vector2i(18, 6)
 const SEAFOAM_B1F_BOULDER: int = 0
 const SEAFOAM2_BOULDER1_FLAG: int = 2496
@@ -3269,6 +3435,100 @@ func _check_cinnabar_gates() -> void:
 		for won: bool in [false, true]:
 			_check_cinnabar_trainer(trainer, won)
 	_r.note("gen1 Cinnabar: seven trainers, both battle outcomes, six gates and re-entry")
+	_check_the_cinnabar_quiz()
+
+
+func _check_the_cinnabar_quiz() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, CINNABAR_GYM, Vector2i(17, 3))
+	if world == null:
+		return
+	world.dispatch_map_entry()
+	var machines: Array = _quiz_machines(world)
+	if not _r.check(machines.size() == CINNABAR_GATES.size(), "%d quiz machines answer." % machines.size()):
+		return
+	var right: Dictionary = machines[0]
+	_r.check(_quiz_asked(world, right).begins_with(QUIZ_INTRO), "the first quiz opened on the wrong box.")
+	_r.check(_quiz_answered(world, int(right["answer"])).begins_with(QUIZ_RIGHT),
+		"the right answer was not taken.")
+	_r.check(world.event_flag_active(CINNABAR_GATE_FLAG), "the first gate's flag is clear.")
+	_r.check(world.block_at(CINNABAR_GATES[0].x, CINNABAR_GATES[0].y) == CINNABAR_GATE_OPEN,
+		"the first gate did not open on the spot.")
+	var wrong: Dictionary = machines[1]
+	_r.check(_quiz_asked(world, wrong).begins_with(QUIZ_SHORT_INTRO), "the second quiz opened on the wrong box.")
+	_r.check(_quiz_answered(world, 1 - int(wrong["answer"])).begins_with(QUIZ_WRONG),
+		"the wrong answer was not refused.")
+	_r.check(world.block_at(CINNABAR_GATES[1].x, CINNABAR_GATES[1].y) == CINNABAR_GATE_LOCKED,
+		"a wrong answer opened the gate.")
+	var trainer: Gen2WorldObject = world.objects[QUIZ_TRAINER_OBJECT]
+	var stood: Vector2i = trainer.cell
+	world.dispatch_sight_events()
+	_r.check(world.scripted_movement_in_progress() or trainer.cell != stood,
+		"the trainer did not walk up after a wrong answer.")
+	for _pass: int in SCRIPTED_WALK_PASSES:
+		if not world.pending_runtime_request().is_empty():
+			break
+		world.advance_scripted_steps_pass()
+		world.dispatch_sight_events()
+		world.run_event_queue(true)
+	_r.check(StringName(world.pending_runtime_request().get("kind", &"")) == &"battle_requested",
+		"the trainer never asked for a fight after the wrong answer.")
+	_r.note("gen1 Cinnabar quiz: a right answer opens gate 1, a wrong one brings trainer %d" % [
+		QUIZ_TRAINER_OBJECT,
+	])
+
+
+func _quiz_machines(world: Gen2WorldAPI) -> Array:
+	var machines: Array = []
+	for row: Dictionary in world.current_map.events["hidden_events"] as Array:
+		var choice: Dictionary = _first_node(row.get("script", []) as Array, "choice")
+		if choice.is_empty():
+			continue
+		var answer: int = 0 if not _first_node(choice["yes"] as Array, "flag").is_empty() else 1
+		machines.append({"cell": Vector2i(int(row["x"]), int(row["y"])), "answer": answer})
+	return machines
+
+
+func _first_node(nodes: Array, op: String) -> Dictionary:
+	for node: Dictionary in nodes:
+		if String(node["op"]) == op:
+			return node
+		for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+			if node.has(key):
+				var found: Dictionary = _first_node(node[key] as Array, op)
+				if not found.is_empty():
+					return found
+	return {}
+
+
+func _quiz_asked(world: Gen2WorldAPI, machine: Dictionary) -> String:
+	world.player_cell = (machine["cell"] as Vector2i) + Vector2i.DOWN
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var results: Array = world.interact()
+	var said: Array[String] = []
+	while not results.is_empty() and StringName(world.pending_script_input().get("type", &"")) != &"choice" \
+		and said.size() < Gen1Layout.MAX_OBJECT_EVENTS:
+		said.append(_event_text(results))
+		results = world.run_event_queue(true)
+	return "\n".join(said)
+
+
+func _quiz_answered(world: Gen2WorldAPI, choice: int) -> String:
+	var results: Array = world.choose_script_input(choice)
+	var said: Array[String] = []
+	while not results.is_empty() and said.size() < Gen1Layout.MAX_OBJECT_EVENTS:
+		said.append(_event_text(results))
+		results = world.run_event_queue(true)
+	return "\n".join(said)
+
+
+const CINNABAR_GATE_FLAG: int = 681
+const CINNABAR_GATE_OPEN: int = 0x0E
+const CINNABAR_GATE_LOCKED: int = 0x54
+const QUIZ_TRAINER_OBJECT: int = 3
+const QUIZ_INTRO: String = "POKéMON Quiz!"
+const QUIZ_SHORT_INTRO: String = "POKéMON Quiz!"
+const QUIZ_RIGHT: String = "You're absolutely\ncorrect!"
+const QUIZ_WRONG: String = "Sorry! Bad call!"
 
 
 func _check_cinnabar_trainer(trainer: int, won: bool) -> void:

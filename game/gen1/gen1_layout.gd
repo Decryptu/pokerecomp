@@ -1095,6 +1095,7 @@ const SCRIPT_INC_HL: int = 0x23
 const SCRIPT_INC_DE: int = 0x13
 const SCRIPT_DEC_B: int = 0x05
 const SCRIPT_CP_B: int = 0xB8
+const SCRIPT_CP_C: int = 0xB9
 const SCRIPT_LD_A_HL: int = 0x7E
 const SCRIPT_ADD_N: int = 0xC6
 const SCRIPT_LD_H_D: int = 0x62
@@ -1133,6 +1134,7 @@ const NPC_MOVEMENT_MAX: int = 32
 const SCRIPT_WRAM_BASE: int = 0xC000
 const SCRIPT_PREFIX: int = 0xCB
 const SCRIPT_JR: int = 0x18
+const SCRIPT_JR_NZ: int = 0x20
 const SCRIPT_JP: int = 0xC3
 const SCRIPT_RET: int = 0xC9
 const SCRIPT_CALL: int = 0xCD
@@ -1150,18 +1152,20 @@ const SCRIPT_PUSH_AF: int = 0xF5
 const SCRIPT_POP_AF: int = 0xF1
 const SCRIPT_PUSH_HL: int = 0xE5
 const SCRIPT_POP_HL: int = 0xE1
-const SCRIPT_STACK_HL: Array[int] = [SCRIPT_PUSH_HL, SCRIPT_POP_HL]
-## The opcode following a map-load gate, `size` its own length and `target`
-## whether the body is where it branches rather than the byte after it.
-const MAP_LOAD_GATE_BRANCHES: Dictionary = {
-	0xC8: {"size": 1, "target": false},
-	0x28: {"size": 2, "target": false},
-	0x20: {"size": 2, "target": true},
-	0xCA: {"size": 3, "target": false},
-	0xC2: {"size": 3, "target": true},
-	0xCC: {"size": 3, "target": false},
-	0xC4: {"size": 3, "target": true},
-}
+const SCRIPT_PUSH_BC: int = 0xC5
+const SCRIPT_POP_BC: int = 0xC1
+const SCRIPT_ADD_B: int = 0x80
+const SCRIPT_LD_D_A: int = 0x57
+const SCRIPT_LD_E_A: int = 0x5F
+const SCRIPT_ADC_B: int = 0x88
+const SCRIPT_SRL_A: int = 0x3F
+## Bytes a script writes and the world keeps by name, `Random` or not.
+const SCRIPT_STORED_BYTES: Array[String] = ["first_lock_trash_can", "lucky_slot_index"]
+const SCRIPT_RANDOM_SOURCES: Array[String] = ["random_add", "random_sub"]
+## BIT_CUR_MAP_LOADED_1 and BIT_CUR_MAP_LOADED_2, which `EnterMap` sets.
+const MAP_LOADED_1_BIT: int = 5
+const MAP_LOADED_2_BIT: int = 6
+const MAP_LOAD_BOTH: int = (1 << MAP_LOADED_1_BIT) | (1 << MAP_LOADED_2_BIT)
 ## A `dbmapcoord` list: `db y, x` rows under a terminator.
 const MAP_COORD_END: int = 0xFF
 const MAP_COORD_SIZE: int = 2
@@ -1186,7 +1190,7 @@ const SCRIPT_CALLS: Array[String] = [
 	"remove_item_from_inventory", "display_list_menu", "copy_to_string_buffer",
 	"delay_frames", "delay_3", "play_default_music", "check_map_trainers",
 	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle",
-	"play_music", "stop_all_music",
+	"play_music", "stop_all_music", "random", "set_sprite_position_2", "set_sprite_image",
 	"set_sprite_facing", "set_sprite_facing_delay", "sprite_stay", "move_sprite",
 	"decode_rle", "decode_arrow_movement", "update_gym_gates",
 	"serial_connect", "fill_memory", "save_end_battle_text", "engage_map_trainer",
@@ -1208,8 +1212,15 @@ const FORCED_WARP_BIT: int = 2
 const NO_MAP_MUSIC_BIT: int = 1
 const NO_TEXT_DELAY_BIT: int = 6
 const SCRIPT_SCRATCH_BYTES: Array[String] = [
-	"which_trade", "rival_starter_ball", "trainer_header_flag_bit",
+	"which_trade", "rival_starter_ball", "trainer_header_flag_bit", "opponent_after_wrong_answer",
 ]
+## The scratch bytes a walk reads as a run-time value.
+const SCRIPT_RUNTIME_SCRATCH: Array[String] = [
+	"trainer_header_flag_bit", "opponent_after_wrong_answer", "sprite_index_wram",
+]
+## `PokemonTower7FNPCCoordMovementTable`: `map_coord_movement` rows, sixteen
+## bytes a rocket, matched against the player's cell.
+const OBJECT_COORD_ROWS: int = 4
 const SCRIPT_FLAG_ACTION_SOURCE: int = -101
 ## The row a hand-drawn menu's cursor stands on, read as an item id.
 const SCRIPT_MENU_ITEM_SOURCE: int = -102
@@ -1250,7 +1261,14 @@ const SCRIPT_SILENT_FLAGS: Dictionary = {
 		| (1 << TALKED_TO_TRAINER_BIT) | (1 << PRINT_END_BATTLE_TEXT_BIT),
 	"status_flags_6": 1 << DUNGEON_WARP_BIT,
 	"pikachu_map_script_flags": 0xFF,
+	## The champion fight turns battle animations on for itself; the sight walk
+	## owns BIT_SEEN_BY_TRAINER and the renderer BIT_NO_SPRITE_UPDATES.
+	"options": 1 << BATTLE_ANIMATION_BIT,
+	"misc_flags": (1 << SEEN_BY_TRAINER_BIT) | (1 << NO_SPRITE_UPDATES_BIT),
 }
+const BATTLE_ANIMATION_BIT: int = 7
+const SEEN_BY_TRAINER_BIT: int = 0
+const NO_SPRITE_UPDATES_BIT: int = 4
 const DUNGEON_WARP_BIT: int = 4
 const WARP_FROM_SCRIPT_BIT: int = 3
 const ON_DUNGEON_WARP_BIT: int = 4
@@ -1275,7 +1293,7 @@ const SCRIPT_VOLATILE_BITS: Dictionary = {
 const SCRIPT_TEMP_BYTES: Array[String] = ["object_to_hide", "object_to_show"]
 ## The sight walk owns engagement; dungeon warps are dispatched separately.
 const SCRIPT_ZERO_SOURCES: Array[String] = [
-	"trainer_header_flag_bit", "opponent_after_wrong_answer", "which_dungeon_warp",
+	"trainer_header_flag_bit", "which_dungeon_warp",
 ]
 ## `wIsInBattle` is LOST_BATTLE when the player lost and `wBattleResult` 2 when
 ## the wild was caught or ran, which is all a post-battle state asks.
@@ -1309,6 +1327,10 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	"play_cry", "wait_for_sound", "wait_for_button",
 	"auto_textbox_on", "auto_textbox_off", "count_set_bits", "update_sprites",
 	"play_sound", "play_sound_wait", "load_gym_names",
+	"random",
+	## `SetSpritePosition2` puts back what `GetSpritePosition2` saved on the same
+	## visit, which the map's own table answers here; the image index is drawn.
+	"set_sprite_position_2", "set_sprite_image",
 	## Red and Blue spell `StopAllMusic` as `PlaySound`; only Yellow has a routine.
 	"play_music", "stop_all_music",
 	## A wait is frames of nothing and the map music is nobody's here. The three
@@ -1382,7 +1404,7 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	"current_menu_item", "max_menu_item", "top_menu_item_y", "top_menu_item_x",
 	"menu_watched_keys",
 	"last_menu_item", "menu_item_to_swap", "print_item_prices", "list_menu_id",
-	"filtered_bag_count", "opponent_after_wrong_answer",
+	"filtered_bag_count",
 ]
 ## The same over two bytes; `LoadItemList` already left the list itself.
 const SCRIPT_SILENT_WORDS: Array[String] = ["list_pointer"]
@@ -1402,13 +1424,15 @@ const TEXT_PREDEFS: Dictionary = {
 	"card_key_success": 0x01, "card_key_fail": 0x02,
 	"gym_statue": 0x0C, "gym_statue_badge": 0x0D, "found_hidden_item": 0x24,
 	"hidden_item_bag_full": 0x25, "found_hidden_coins": 0x2B,
-	"dropped_hidden_coins": 0x2C,
+	"dropped_hidden_coins": 0x2C, "trash": 0x26, "first_lock": 0x3B, "second_lock": 0x3D,
+	"reset": 0x3E,
 }
 const TEXT_PREDEFS_YELLOW: Dictionary = {
 	"card_key_success": 0x01, "card_key_fail": 0x02,
 	"gym_statue": 0x0E, "gym_statue_badge": 0x0F, "found_hidden_item": 0x26,
 	"hidden_item_bag_full": 0x27, "found_hidden_coins": 0x2D,
-	"dropped_hidden_coins": 0x2E,
+	"dropped_hidden_coins": 0x2E, "trash": 0x28, "first_lock": 0x3D, "second_lock": 0x3F,
+	"reset": 0x40,
 }
 ## `PrintCardKeyText`: a Silph Co. door draws either of two tiles, the top
 ## floor's own a third, and the block that opens one is $0E under it and $03
@@ -1419,7 +1443,6 @@ const CARD_KEY_OPEN_BLOCK: int = 0x0E
 const CARD_KEY_TOP_FLOOR_BLOCK: int = 0x03
 const SILPH_CO_TOP_FLOOR: int = 0xEB
 ## `SilphCoMapList`, ten floors under a terminator.
-const SILPH_MAP_LIST_MAX: int = 16
 ## The two packed-decimal buffers a price is written into, most significant
 ## byte first. `wPriceTemp` stands at `wWhichTrade`'s own address.
 const SCRIPT_BCD_BUFFERS: Array[String] = ["money_hram", "which_trade"]
@@ -1506,8 +1529,21 @@ const HIDDEN_COIN_AMOUNTS: Dictionary = {10: 10, 20: 20, 40: 20}
 const HIDDEN_COIN_DEFAULT: int = 100
 ## The hidden event routines that index a table of their own, read by hand.
 const HIDDEN_TABLE_ROUTINES: Array[String] = [
-	"hidden_items", "hidden_coins", "bench_guy_text", "gym_statues",
+	"hidden_items", "hidden_coins", "bench_guy_text", "gym_statues", "gym_trash",
 ]
+## EVENT_2ND_LOCK_OPENED and EVENT_1ST_LOCK_OPENED. `GymTrashCans` is a mask and
+## four cans a row, Yellow's a count and four pairs, and a draw reads past either.
+const LOCK_2ND_EVENT: int = 352
+const LOCK_1ST_EVENT: int = 353
+const TRASH_CANS: int = 15
+const TRASH_ROW_SIZE: int = 5
+const TRASH_ROW_SIZE_YELLOW: int = 9
+const TRASH_TABLE_TAIL: int = 256
+const TRASH_TABLE_TAIL_YELLOW: int = 512
+const TRASH_FIRST_MASK: int = 0x0E
+const TRASH_CAN_MASK: int = 0x0F
+const TRASH_THREE_THIRD: int = 0xFF / 3
+const TRASH_TEXTS: Array[String] = ["trash", "first_lock", "second_lock", "reset"]
 ## `bookshelf_tile` is a tileset, a tile and a `tx_pre` id; `MapBadgeFlags` a
 ## map and its `wBeatGymFlags` mask; `BenchGuyTextPointers` a map, a facing and
 ## a `tx_pre` id.
@@ -1766,6 +1802,7 @@ const RED_BLUE: Dictionary = {
 	"display_pokedex": 0x0349B,
 	"give_pokemon": 0x03E48,
 	"wait_for_sound": 0x3748,
+	"random": 0x3E5C,
 	"wait_for_button": 0x3865,
 	"auto_textbox_on": 0x3C3C,
 	"auto_textbox_off": 0x3C3F,
@@ -1828,6 +1865,7 @@ const RED_BLUE: Dictionary = {
 	"remove_item_from_inventory": 0x2BBB,
 	"item_to_remove": 0xFFDB,
 	"toggleable_index": 0xCC4D,
+	"toggleable_list": 0xD5CE,
 	"cur_party_species": 0xCF91,
 	"cur_map_script": 0xDA39,
 	"map_scripts": 0xD5F0,
@@ -1849,9 +1887,12 @@ const RED_BLUE: Dictionary = {
 	## `ReplaceTileBlock` writes `wNewTileBlockID` at the block `bc` names, and
 	## `SilphCoMapList` is the ten floors `PrintCardKeyText` answers on.
 	"map_script_flags": 0xD126,
+	"options": 0xD355,
 	"new_tile_block": 0xD09F,
 	"replace_tile_block": 0x0EE9E,
 	"card_key_door": 0xD73F,
+	"unlocked_silph_doors": 0xFFE0,
+	"first_lock_trash_can": 0xD743,
 	"silph_map_list": 0x526E3,
 	## `DaycareGentlemanText` and the head of its own stub run.
 	"day_care_script": 0x56254,
@@ -2019,6 +2060,8 @@ const RED_BLUE: Dictionary = {
 	"hidden_coins": 0x76799,
 	"bench_guy_text": 0x6245D,
 	"gym_statues": 0x62419,
+	"gym_trash": 0x5DDFC,
+	"gym_trash_cans": 0x5DE7D,
 	"print_predef_text": 0x3EF5,
 	"display_text_id": 0x2920,
 	"count_set_bits": 0x2B7F,
@@ -2050,6 +2093,7 @@ const RED_BLUE: Dictionary = {
 	"check_boulder_coords": 0x34E4,
 	"get_item_quantity": 0x0F8A5,
 	"update_gym_gates": 0x3EAD,
+	"update_gym_gates_far": 0x1EB0A,
 	"gym_gate_coords": 0x1EB48,
 	"sprite_pointer_1": 0x34FC,
 	"sprite_pointer_2": 0x3500,
@@ -2083,6 +2127,8 @@ const RED_BLUE: Dictionary = {
 	"sprite_map_y": 0xFFED,
 	"sprite_map_x": 0xFFEE,
 	"set_sprite_position": 0x32F9,
+	"set_sprite_position_2": 0x32FE,
+	"set_sprite_image": 0x34B9,
 	"get_sprite_position": 0x32EF,
 	"cur_map_text_ptr": 0xD36C,
 	"hall_of_fame_pc": 0x7405C,
@@ -2123,6 +2169,8 @@ const RED_BLUE: Dictionary = {
 	"beat_gym_flags": 0xD72A,
 	"gym_leader_no": 0xD05C,
 	"random_add": 0xFFD3,
+	"random_sub": 0xFFD4,
+	"lucky_slot_index": 0xCD05,
 	"oaks_aide_reward": 0xFFDC,
 	"get_item_name": 0x2FCF,
 	"get_mon_name": 0x2F9E,
@@ -2209,6 +2257,7 @@ const YELLOW: Dictionary = {
 	"display_pokedex": 0x0347D,
 	"give_pokemon": 0x03E59,
 	"wait_for_sound": 0x373E,
+	"random": 0x3E6D,
 	"wait_for_button": 0x3852,
 	"auto_textbox_on": 0x3C29,
 	"auto_textbox_off": 0x3C2C,
@@ -2266,6 +2315,7 @@ const YELLOW: Dictionary = {
 	"remove_item_from_inventory": 0x2ABD,
 	"item_to_remove": 0xFFDB,
 	"toggleable_index": 0xCC4D,
+	"toggleable_list": 0xD5CD,
 	"cur_party_species": 0xCF90,
 	"cur_map_script": 0xDA38,
 	"map_scripts": 0xD5EF,
@@ -2283,9 +2333,12 @@ const YELLOW: Dictionary = {
 	"obtained_badges": 0xD355,
 	"sprite_state_data": 0xC100,
 	"map_script_flags": 0xD125,
+	"options": 0xD354,
 	"new_tile_block": 0xD09E,
 	"replace_tile_block": 0x0ED1B,
 	"card_key_door": 0xD73E,
+	"unlocked_silph_doors": 0xFFE0,
+	"first_lock_trash_can": 0xD742,
 	"silph_map_list": 0x52645,
 	"day_care_script": 0x56244,
 	"day_care_text": 0x56441,
@@ -2430,6 +2483,8 @@ const YELLOW: Dictionary = {
 	"hidden_coins": 0x7608E,
 	"bench_guy_text": 0x6262C,
 	"gym_statues": 0x625E8,
+	"gym_trash": 0x5DE60,
+	"gym_trash_cans": 0xF2D31,
 	"print_predef_text": 0x3F3A,
 	"display_text_id": 0x2817,
 	"count_set_bits": 0x2A81,
@@ -2459,6 +2514,7 @@ const YELLOW: Dictionary = {
 	"check_boulder_coords": 0x34E1,
 	"get_item_quantity": 0x0F735,
 	"update_gym_gates": 0x3EF0,
+	"update_gym_gates_far": 0x1E4BF,
 	"gym_gate_coords": 0x1E503,
 	"gym_quiz_flags": 0xD474,
 	"sprite_pointer_1": 0x34F9,
@@ -2493,6 +2549,8 @@ const YELLOW: Dictionary = {
 	"sprite_map_y": 0xFFED,
 	"sprite_map_x": 0xFFEE,
 	"set_sprite_position": 0x3295,
+	"set_sprite_position_2": 0x329A,
+	"set_sprite_image": 0x349B,
 	"get_sprite_position": 0x328B,
 	"cur_map_text_ptr": 0xD36B,
 	"hall_of_fame_pc": 0xF0F26,
@@ -2538,6 +2596,8 @@ const YELLOW: Dictionary = {
 	"beat_gym_flags": 0xD729,
 	"gym_leader_no": 0xD05B,
 	"random_add": 0xFFD3,
+	"random_sub": 0xFFD4,
+	"lucky_slot_index": 0xCD05,
 	"oaks_aide_reward": 0xFFDC,
 	"get_item_name": 0x2EC4,
 	"get_mon_name": 0x2E93,

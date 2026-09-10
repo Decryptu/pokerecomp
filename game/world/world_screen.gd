@@ -1114,16 +1114,14 @@ func _advance_waits(map_pass: bool) -> void:
 	_advance_audio_wait()
 
 
-## `RunMapScript` runs on every frame `JoypadOverworld` reads, so a state that
-## opens `ret nz` on a walk still being drawn gets its turn the frame the walk
-## ends. An ordinary step reaches the map script through
-## [method _after_map_settled]; a scripted walk has no step behind it, so this
-## is the frame it lands on.
+## `RunMapScript` runs on every frame `JoypadOverworld` reads: a state opening
+## `ret nz` on a walk gets its turn the frame the walk ends, and a
+## `wCurrentMapScriptFlags` bit a row set back is read the frame its box closes.
 func _run_settled_gen1_map_script() -> void:
 	if _world == null or not _world.is_gen1():
 		return
 	var running: bool = _world.scripted_movement_in_progress()
-	var settled: bool = _gen1_movement_drawn and not running
+	var settled: bool = (_gen1_movement_drawn and not running) or _world.gen1_map_load_pending()
 	_gen1_movement_drawn = running
 	if not settled or _world.script_busy() or not _map_fade.is_empty():
 		return
