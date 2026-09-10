@@ -111,6 +111,18 @@ const LAYOUT: Dictionary = {
 	"warp_destination_map": 0xFF8B,
 	"trainer_header_flag_bit": 0xCC55,
 	"flag_action": 0x0460,
+	"fill_memory": 0x0470,
+	"set_sprite_position": 0x0480,
+	"get_mon_name": 0x0490,
+	"npc_movement_directions": 0xCC5B,
+	"npc_movement_directions_2": 0xCC97,
+	"saved_npc_movement_index": 0xD157,
+	"sprite_index_wram": 0xCF13,
+	"name_buffer": 0xCD6D,
+	"sprite_map_y": 0xFFED,
+	"sprite_map_x": 0xFFEE,
+	"walk_bike_surf_state": 0xD700,
+	"npc_num_scripted_steps": 0xCF0F,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
 const PREDEFS: Dictionary = {
@@ -502,6 +514,177 @@ func test_a_call_to_the_maps_own_routine_is_walked_and_returned_from() -> void:
 	)
 	assert_eq(_decode(program, _boxes()), [
 		{"op": "text", "text": "HI"}, {"op": "text", "text": "BYE"},
+	])
+
+
+## `OaksLabCalcRivalMovementScript` branches on the player's row and its caller
+## reads what each side left in `b`, so the routine's `ret` lands back in the
+## caller and the rest of the row is walked once per side.
+func test_a_routine_that_branches_walks_the_rest_of_the_row_on_each_side() -> void:
+	var routine: int = AT + 0x40
+	var program: Array = _call(routine) + _print(BYE) \
+		+ _call(int(LAYOUT["text_script_end"]))
+	while program.size() < 0x40:
+		program.append(0)
+	var clear: Array = _print(HELLO)
+	program.append_array(_check_event(37) + [0x20, clear.size()] + clear + [Gen1Layout.SCRIPT_RET])
+	assert_eq(_decode(program, _boxes()), [{
+		"op": "branch", "flag": 37,
+		"then": [{"op": "text", "text": "BYE"}],
+		"else": [{"op": "text", "text": "HI"}, {"op": "text", "text": "BYE"}],
+	}])
+
+
+## `MtMoonB2FReceivedFossilText` prints the row's last box from inside a
+## routine, and the flag `AfterDisplayingTextID` reads still lands on it.
+func test_the_no_press_flag_reaches_a_box_a_routine_printed() -> void:
+	var routine: int = AT + 0x40
+	var program: Array = _call(int(LAYOUT["disable_waiting"])) + _call(routine) \
+		+ _store_hram(int(LAYOUT["text_id_hram"]), 3) \
+		+ _call(int(LAYOUT["text_script_end"]))
+	while program.size() < 0x40:
+		program.append(0)
+	program.append_array(_print(HELLO) + [Gen1Layout.SCRIPT_RET])
+	assert_eq(_decode(program, _boxes()), [{"op": "text", "text": "HI", "press": false}])
+
+
+## `.RivalExitMovement` opens on `NPC_CHANGE_FACING`, and the row writes the
+## side the player stands on over `wNPCMovementDirections` once `MoveSprite`
+## has copied the list.
+func test_a_change_facing_row_is_filled_by_the_store_behind_the_walk() -> void:
+	var script: Array = _decode(
+		_store_hram(int(LAYOUT["text_id_hram"]), 3)
+			+ [Gen1Layout.SCRIPT_LD_DE, MOVEMENT_LIST & 0xFF, MOVEMENT_LIST >> 8]
+			+ [Gen1Layout.SCRIPT_CALL, 0x10, 0x04]
+			+ [Gen1Layout.SCRIPT_LD_A, 0x80] + _store_a(int(LAYOUT["npc_movement_directions"]))
+			+ [Gen1Layout.SCRIPT_RET],
+		{}, {
+			MOVEMENT_LIST: Gen1Layout.NPC_CHANGE_FACING, MOVEMENT_LIST + 1: 0x00,
+			MOVEMENT_LIST + 2: Gen1Layout.NPC_MOVEMENT_END,
+		}
+	)
+	assert_eq(script, [{"op": "object_move", "object": 2, "moves": [2, 0]}])
+
+
+func test_a_change_facing_row_never_written_answers_nothing() -> void:
+	assert_eq(_decode(
+		_store_hram(int(LAYOUT["text_id_hram"]), 3)
+			+ [Gen1Layout.SCRIPT_LD_DE, MOVEMENT_LIST & 0xFF, MOVEMENT_LIST >> 8]
+			+ [Gen1Layout.SCRIPT_CALL, 0x10, 0x04, Gen1Layout.SCRIPT_RET],
+		{}, {
+			MOVEMENT_LIST: Gen1Layout.NPC_CHANGE_FACING, MOVEMENT_LIST + 1: 0x00,
+			MOVEMENT_LIST + 2: Gen1Layout.NPC_MOVEMENT_END,
+		}
+	), [])
+
+
+## `ld b, 0` / `ld c, n` / `ld hl, wNPCMovementDirections2` / `ld a, NPC_MOVEMENT_UP`
+## / `call FillMemory` / `ld [hl], $ff`, then `MoveSprite` over the buffer.
+func _fill_walk(count: Array) -> Array:
+	return [Gen1Layout.SCRIPT_LD_B, 0] + count \
+		+ _load_hl(int(LAYOUT["npc_movement_directions_2"])) \
+		+ [Gen1Layout.SCRIPT_LD_A, 0x40] + _call(int(LAYOUT["fill_memory"])) \
+		+ [Gen1Layout.SCRIPT_LD_HL_N, Gen1Layout.NPC_MOVEMENT_END] \
+		+ _store_hram(int(LAYOUT["text_id_hram"]), 3) \
+		+ [Gen1Layout.SCRIPT_LD_DE, 0x97, 0xCC] + _call(int(LAYOUT["move_sprite"])) \
+		+ [Gen1Layout.SCRIPT_RET]
+
+
+func test_a_walk_filled_a_known_number_of_times_is_that_many_steps() -> void:
+	assert_eq(_decode(_fill_walk([Gen1Layout.SCRIPT_LD_C, 3])), [
+		{"op": "object_move", "object": 2, "moves": [],
+			"fill": {"direction": 1, "count": 3}},
+	])
+
+
+## `wSavedNPCMovementDirections2Index` is what the rival's second walk counts,
+## which only the world knows by then.
+func test_a_walk_filled_from_a_scratch_byte_counts_it_at_run_time() -> void:
+	var saved: int = int(LAYOUT["saved_npc_movement_index"])
+	assert_eq(_decode(_fill_walk(_load_a(saved) + [Gen1Layout.SCRIPT_LD_C_A])), [
+		{"op": "object_move", "object": 2, "moves": [],
+			"fill": {"direction": 1, "from": saved, "offset": 0}},
+	])
+
+
+## `PewterCityYoungsterShowsPlayerGymScript`: `hSpriteMapYCoord` and its
+## neighbour are `SPRITESTATEDATA2`'s map coordinates, the cell and four.
+func test_a_sprite_placed_through_hram_lands_on_the_cell_it_names() -> void:
+	assert_eq(_decode(
+		_store_hram(int(LAYOUT["sprite_map_y"]), 22) + _store_hram(int(LAYOUT["sprite_map_x"]), 16)
+			+ [Gen1Layout.SCRIPT_LD_A, 3] + _store_a(int(LAYOUT["sprite_index_wram"]))
+			+ _call(int(LAYOUT["set_sprite_position"])) + [Gen1Layout.SCRIPT_RET]
+	), [
+		{"op": "object_position", "object": 2, "axis": "y", "value": 18},
+		{"op": "object_position", "object": 2, "axis": "x", "value": 12},
+	])
+
+
+## `SeafoamIslandsB4FObjectMoving2Script`: `cp 1` on the forced-step count is
+## the last step, and `.doneForcedSurfMovement` puts the player back on foot.
+func test_a_compared_step_count_is_a_counted_movement_branch() -> void:
+	var done: Array = [Gen1Layout.SCRIPT_XOR_A] \
+		+ _store_a(int(LAYOUT["walk_bike_surf_state"])) + [Gen1Layout.SCRIPT_RET]
+	assert_eq(_decode(
+		_load_a(int(LAYOUT["simulated_joypad_index"])) + [Gen1Layout.SCRIPT_CP_N, 1]
+			+ [0x28, 1, Gen1Layout.SCRIPT_RET] + done
+	), [{"op": "movement_running", "who": "player", "remaining": 1,
+		"then": [{"op": "set_riding", "mode": 0}], "else": []}])
+
+
+## `OaksLabPlayerWatchRivalExitScript` reads `wNPCNumScriptedSteps` the same way.
+func test_an_objects_step_count_is_counted_over_the_object() -> void:
+	assert_eq(_decode(
+		_load_a(int(LAYOUT["npc_num_scripted_steps"])) + [Gen1Layout.SCRIPT_CP_N, 5]
+			+ [0x20, 5, Gen1Layout.SCRIPT_LD_A, 0] + _store_a(int(LAYOUT["facing_direction"]))
+			+ [Gen1Layout.SCRIPT_RET]
+	), [{"op": "movement_running", "who": "object", "remaining": 5,
+		"then": [{"op": "player_facing", "facing": 0}], "else": []}])
+
+
+## `SilphCo11FScript5`: `CheckEitherEventSet` under `and a`, then `cp 1` over
+## the masked byte, which is the first flag set and the second clear.
+func test_a_value_compared_under_a_flag_mask_names_the_set_and_clear_flags() -> void:
+	var address: int = int(LAYOUT["event_flags"]) + 4
+	var hello: Array = _print(HELLO) + _call(int(LAYOUT["text_script_end"]))
+	var bye: Array = _print(BYE) + _call(int(LAYOUT["text_script_end"]))
+	var script: Array = _decode(
+		_load_a(address) + [Gen1Layout.SCRIPT_AND_N, 0x03, Gen1Layout.SCRIPT_AND_A]
+			+ [0x28, 4 + bye.size() + hello.size(), Gen1Layout.SCRIPT_CP_N, 1, 0x28, bye.size()]
+			+ bye + hello + hello,
+		_boxes()
+	)
+	assert_eq(script, [{
+		"op": "branch", "flag": 32, "either": [33],
+		"then": [{"op": "branch", "flag": 32, "all": [], "clear": [33],
+			"then": [{"op": "text", "text": "HI"}], "else": [{"op": "text", "text": "BYE"}]}],
+		"else": [{"op": "text", "text": "HI"}],
+	}])
+
+
+## `SetSpritePosition1` over nothing the row wrote puts back what
+## `GetSpritePosition1` saved, which nothing here moved.
+func test_a_sprite_position_restored_from_nothing_is_walked_past() -> void:
+	assert_eq(_decode(
+		[Gen1Layout.SCRIPT_LD_A, 2] + _store_a(int(LAYOUT["sprite_index_wram"]))
+			+ _call(int(LAYOUT["set_sprite_position"])) + _print(HELLO)
+			+ _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	), [{"op": "text", "text": "HI"}])
+
+
+## `wRivalStarterTemp` is `wWhichTrade`'s byte; `GetMonName` over it names
+## whatever the world put there.
+func test_a_species_named_out_of_a_scratch_byte_reads_it_at_run_time() -> void:
+	var which: int = int(LAYOUT["which_trade"])
+	assert_eq(_decode(
+		_load_a(which) + _store_a(int(LAYOUT["num_set_bits"]))
+			+ _call(int(LAYOUT["get_mon_name"])) + _print(HELLO)
+			+ _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	), [
+		{"op": "name_species", "scratch": which, "buffer": int(LAYOUT["name_buffer"])},
+		{"op": "text", "text": "HI"},
 	])
 
 

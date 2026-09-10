@@ -1129,6 +1129,9 @@ const NPC_MOVEMENT_SHIFT: int = 6
 const NPC_MOVEMENT_LOW_BITS: int = 0x3F
 const NPC_MOVEMENT_END: int = 0xFF
 const NPC_MOVEMENT_MAX: int = 32
+## Yellow's `Func_5288`: $04 to $07 are the four directions at a doubled step.
+const NPC_RUN_FIRST: int = 0x04
+const NPC_RUN_LAST: int = 0x07
 ## Below `wSpriteStateData1`: an address at or above it is WRAM, so a `de`
 ## naming one is `FindPathToPlayer`'s answer rather than a list in the bank.
 const SCRIPT_WRAM_BASE: int = 0xC000
@@ -1188,9 +1191,10 @@ const SCRIPT_CALLS: Array[String] = [
 	"call_function_in_table", "execute_map_script", "load_gym_names",
 	"text_box_border", "place_string", "handle_menu_input", "add_n_times",
 	"remove_item_from_inventory", "display_list_menu", "copy_to_string_buffer",
-	"delay_frames", "delay_3", "play_default_music", "check_map_trainers",
-	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle",
+	"delay_frame", "delay_frames", "delay_3", "play_default_music", "check_map_trainers",
+	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle", "force_bike_or_surf",
 	"play_music", "stop_all_music", "random", "set_sprite_position_2", "set_sprite_image",
+	"set_sprite_image_2", "enable_pikachu_drawing", "check_pikachu_following",
 	"set_sprite_facing", "set_sprite_facing_delay", "sprite_stay", "move_sprite",
 	"decode_rle", "decode_arrow_movement", "update_gym_gates",
 	"serial_connect", "fill_memory", "save_end_battle_text", "engage_map_trainer",
@@ -1213,10 +1217,12 @@ const NO_MAP_MUSIC_BIT: int = 1
 const NO_TEXT_DELAY_BIT: int = 6
 const SCRIPT_SCRATCH_BYTES: Array[String] = [
 	"which_trade", "rival_starter_ball", "trainer_header_flag_bit", "opponent_after_wrong_answer",
+	"saved_npc_movement_index",
 ]
 ## The scratch bytes a walk reads as a run-time value.
 const SCRIPT_RUNTIME_SCRATCH: Array[String] = [
 	"trainer_header_flag_bit", "opponent_after_wrong_answer", "sprite_index_wram",
+	"saved_npc_movement_index",
 ]
 ## `PokemonTower7FNPCCoordMovementTable`: `map_coord_movement` rows, sixteen
 ## bytes a rocket, matched against the player's cell.
@@ -1306,7 +1312,7 @@ const BATTLE_OUTCOME_SOURCES: Dictionary = {
 }
 ## Routines named by a full ROM offset, the same address in another bank being another routine.
 const SCRIPT_BANKED_CALLS: Array[String] = [
-	"coin_box", "music_rival_start", "music_rival_tempo",
+	"coin_box", "music_rival_start", "music_rival_tempo", "schedule_pikachu_spawn",
 	"music_rival_start_tempo", "music_cities1_tempo",
 	"emotion_bubble", "find_path_to_player", "calc_player_relative",
 	"hall_of_fame_pc", "is_player_on_dungeon_warp", "load_spinner_arrow_tiles",
@@ -1317,7 +1323,7 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 ]
 ## The four of those a `farcall` spends nothing on: no node carries a sound.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
-	"music_rival_start", "music_rival_tempo", "music_rival_start_tempo",
+	"music_rival_start", "music_rival_tempo", "music_rival_start_tempo", "schedule_pikachu_spawn",
 	"music_cities1_tempo",
 	"load_spinner_arrow_tiles", "convert_npc_directions", "pewter_guys",
 ]
@@ -1330,14 +1336,16 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	"random",
 	## `SetSpritePosition2` puts back what `GetSpritePosition2` saved on the same
 	## visit, which the map's own table answers here; the image index is drawn.
-	"set_sprite_position_2", "set_sprite_image",
+	"set_sprite_position_2", "set_sprite_image", "set_sprite_image_2",
+	"enable_pikachu_drawing",
 	## Red and Blue spell `StopAllMusic` as `PlaySound`; only Yellow has a routine.
 	"play_music", "stop_all_music",
 	## A wait is frames of nothing and the map music is nobody's here. The three
 	## trainer rows every fighting map's own table opens with are the sight walk
 	## `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
-	"delay_frames", "delay_3", "play_default_music", "check_map_trainers",
+	"delay_frame", "delay_frames", "delay_3", "play_default_music", "check_map_trainers",
 	"start_trainer_battle", "end_trainer_battle",
+	"force_bike_or_surf",
 	"serial_connect", "fade_out_white", "fade_in_white", "fade_out_black",
 	"fade_in_black", "get_sprite_position", "init_battle_enemy",
 	"gb_pal_white_out_delay", "restore_screen_tiles", "load_gb_pal",
@@ -1404,7 +1412,7 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	"current_menu_item", "max_menu_item", "top_menu_item_y", "top_menu_item_x",
 	"menu_watched_keys",
 	"last_menu_item", "menu_item_to_swap", "print_item_prices", "list_menu_id",
-	"filtered_bag_count",
+	"filtered_bag_count", "walk_bike_surf_state_copy", "pikachu_spawn_state",
 ]
 ## The same over two bytes; `LoadItemList` already left the list itself.
 const SCRIPT_SILENT_WORDS: Array[String] = ["list_pointer"]
@@ -2102,6 +2110,8 @@ const RED_BLUE: Dictionary = {
 	"status_flags_3": 0xD72D,
 	"elite_4_flags": 0xD734,
 	"walk_bike_surf_state": 0xD700,
+	"walk_bike_surf_state_copy": 0xD11A,
+	"force_bike_or_surf": 0x12ED,
 	"warp_destination_map": 0xFF8B,
 	"destination_warp_id": 0xD42F,
 	"emotion_bubble_sprite": 0xCD4F,
@@ -2111,7 +2121,11 @@ const RED_BLUE: Dictionary = {
 	"calc_player_relative": 0x0F929,
 	"npc_relative_perspective": 0xFF9B,
 	"npc_sprite_offset": 0xFF95,
-	"npc_movement_directions": 0xCC97,
+	"npc_movement_directions": 0xCC5B,
+	"npc_movement_directions_2": 0xCC97,
+	"npc_num_scripted_steps": 0xCF0F,
+	"saved_npc_movement_index": 0xD157,
+	"delay_frame": 0x20AF,
 	"npc_movement_table": 0xCC57,
 	"npc_movement_function": 0xCF10,
 	"npc_movement_bank": 0xCC58,
@@ -2524,6 +2538,8 @@ const YELLOW: Dictionary = {
 	"status_flags_3": 0xD72C,
 	"elite_4_flags": 0xD733,
 	"walk_bike_surf_state": 0xD6FF,
+	"walk_bike_surf_state_copy": 0xD119,
+	"force_bike_or_surf": 0x0FD6,
 	"warp_destination_map": 0xFF8B,
 	"destination_warp_id": 0xD42E,
 	"emotion_bubble_sprite": 0xCD4F,
@@ -2533,7 +2549,11 @@ const YELLOW: Dictionary = {
 	"calc_player_relative": 0x0F7B9,
 	"npc_relative_perspective": 0xFF9B,
 	"npc_sprite_offset": 0xFF95,
-	"npc_movement_directions": 0xCC97,
+	"npc_movement_directions": 0xCC5B,
+	"npc_movement_directions_2": 0xCC97,
+	"npc_num_scripted_steps": 0xCF0F,
+	"saved_npc_movement_index": 0xD156,
+	"delay_frame": 0x1E64,
 	"npc_movement_table": 0xCC57,
 	"npc_movement_function": 0xCF10,
 	"npc_movement_bank": 0xCC58,
@@ -2551,6 +2571,7 @@ const YELLOW: Dictionary = {
 	"set_sprite_position": 0x3295,
 	"set_sprite_position_2": 0x329A,
 	"set_sprite_image": 0x349B,
+	"set_sprite_image_2": 0x34A1,
 	"get_sprite_position": 0x328B,
 	"cur_map_text_ptr": 0xD36B,
 	"hall_of_fame_pc": 0xF0F26,
@@ -2621,6 +2642,11 @@ const YELLOW: Dictionary = {
 	"rle_gym_object": 0x1A6D8,
 	"pikachu_map_script_flags": 0xD492,
 	"pikachu_spawn_state_flags": 0xD471,
+	## The follower nothing here draws: its spawn byte and routines.
+	"pikachu_spawn_state": 0xD430,
+	"schedule_pikachu_spawn": 0xFC4FA,
+	"enable_pikachu_drawing": 0x1525,
+	"check_pikachu_following": 0x154A,
 	"player_moving_direction": 0xD527,
 	"play_music": 0x2211,
 	"stop_all_music": 0x2233,

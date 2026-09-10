@@ -34,6 +34,7 @@ const KIND_HELP: Dictionary = {
 	&"script_menu": "presses, rows: the box a Generation 1 script draws for itself, faced up from the cell after the @. The bag holds all three drinks, so Celadon Mart Roof's little girl is `-- red 0 126 <out.png> live script_menu@5,6 2 0`",
 	&"trainer": "presses, frames: TalkToTrainer on the map's first trainer, faced from the cell below. 0 the before-battle box, 1 the fight the press behind it opens; a second number stops that many frames into the transition instead",
 	&"map_script": "frames, 0: RunMapScript's own state, stepped into by walking up out of the cell after the @. Route 22 Gate's guard is `-- red 0 193 <out.png> live map_script@4,3 300 0`",
+	&"lab_rival": "frames, 0: OaksLabRivalStartsExitScript with the rival beside the player at the cell after the @, counted from his first step. `-- red 0 40 <out.png> live lab_rival@5,6 20 0` has the player turned to watch him go",
 	&"sight": "frames, 0: CheckFightingMapTrainers on the map's first trainer who sees, walked into from the far end of its own line. 40 stands in the shock bubble, 120 in the walk-up, 400 in the before-battle box",
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
 	&"vending": "presses, rows down: VendingMachineMenu, read by facing up from the cell below one. 0 the list, 1 the box the chosen row lands in",
@@ -135,6 +136,10 @@ const DAY_CARE_ROLES: Array[StringName] = [
 ]
 
 
+const OAKS_LAB_BYTE: int = 0
+const OAKS_LAB_RIVAL_EXIT: int = 13
+const OAKS_LAB_RIVAL: int = 0
+const BATTLED_RIVAL_FLAG: int = 35
 ## `UpdateJumpPosition`'s highest `.y_offsets` entry, which is where the `ledge`
 ## kind photographs the hop.
 const LEDGE_ARC_TOP: float = 12.0
@@ -476,6 +481,7 @@ const STAGERS: Dictionary = {
 	&"trainer": &"_stage_trainer",
 	&"sight": &"_stage_sight",
 	&"map_script": &"_stage_map_script",
+	&"lab_rival": &"_stage_lab_rival",
 	&"nurse": &"_stage_nurse",
 	&"vending": &"_stage_vending",
 	&"prizes": &"_stage_prizes",
@@ -1172,6 +1178,25 @@ func _stage_map_script() -> void:
 		_screen.advance_frame()
 	_screen.advance_frames(maxi(_cell.x, 0))
 
+
+
+## `OaksLabRivalStartsExitScript`, the rival where `FindPathToPlayer` left him.
+func _stage_lab_rival() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if world == null:
+		return
+	world.state.set_gen1_map_script(OAKS_LAB_BYTE, OAKS_LAB_RIVAL_EXIT)
+	world.state.set_event_flag(BATTLED_RIVAL_FLAG)
+	(world.objects[OAKS_LAB_RIVAL] as Gen2WorldObject).cell = world.player_cell + Vector2i.UP
+	world.dispatch_sight_events()
+	for _frame: int in BOX_REVEAL_FRAMES:
+		_screen.advance_frame()
+	_screen.press_button(PokeButton.A)
+	for _frame: int in MAP_SCRIPT_STEP_FRAMES:
+		if world.scripted_movement_in_progress():
+			break
+		_screen.advance_frame()
+	_screen.advance_frames(maxi(_cell.x, 0))
 
 
 ## `CheckFightingMapTrainers`, walked into from the far end of the line.

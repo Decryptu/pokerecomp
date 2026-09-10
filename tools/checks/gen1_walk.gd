@@ -2967,6 +2967,164 @@ func _check_the_opening_walk() -> void:
 			world.state.gen1_map_script(OAKS_LAB_BYTE), passes,
 		])
 	_r.note("gen1 walk PALLET_TOWN into OAKS_LAB in %d passes" % passes)
+	_check_the_lab_starter(world)
+
+
+## The lab from the speech to the rival leaving with the Pokedex.
+const LAB_RIVAL: int = 0
+const LAB_CHARMANDER_BALL: int = 1
+const LAB_OAK: int = 4
+const LAB_POKEDEXES: Array[int] = [5, 6]
+const LAB_BELOW_CHARMANDER := Vector2i(6, 4)
+const LAB_LEAVING_ROW: int = 6
+const LAB_BELOW_OAK := Vector2i(5, 3)
+const LAB_RIVAL_ARRIVES_STATE: int = 15
+const LAB_RIVAL_BESIDE_OAK := Vector2i(4, 3)
+const LAB_DONT_GO_AWAY: int = 6
+const LAB_NOOP: int = 18
+const LAB_RIVAL_CLASS: int = 25
+## `OaksLabRivalStartBattleScript`: the rival holding SQUIRTLE is party 1.
+const LAB_RIVAL_PARTY: int = 1
+const CHARMANDER_INDEX: int = 0xB0
+const SQUIRTLE_INDEX: int = 0xB1
+const CHARMANDER_DEX: int = 4
+const OAKS_PARCEL: int = 0x46
+const GOT_STARTER_FLAG: int = 34
+const BATTLED_RIVAL_FLAG: int = 35
+const GOT_POKEDEX_FLAG: int = 37
+const OAK_GOT_PARCEL_FLAG: int = 56
+const ROUTE22_RIVAL_WANTS_BATTLE_FLAG: int = 1319
+const LAB_PASSES: int = 600
+const RIVAL_TAKES_THIS_ONE: String = "I'll take"
+const RIVAL_SMELL_YOU_LATER: String = "Smell you later"
+const RIVAL_LEAVE_IT_TO_ME: String = "Leave it"
+
+
+func _check_the_lab_starter(world: Gen2WorldAPI) -> void:
+	var spoken: Array[String] = []
+	_drive_the_lab(world, spoken, LAB_DONT_GO_AWAY)
+	if not _r.check(world.state.gen1_map_script(OAKS_LAB_BYTE) == LAB_DONT_GO_AWAY,
+		"the speech left the lab on state %d." % world.state.gen1_map_script(OAKS_LAB_BYTE)):
+		return
+	world.player_cell = LAB_BELOW_CHARMANDER
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	spoken.append_array(_lab_answers(world, world.interact()))
+	_drive_the_lab(world, spoken, LAB_NOOP - 1)
+	_r.check(world.state.gen1_starter("player") == CHARMANDER_INDEX
+		and world.state.gen1_starter("rival") == SQUIRTLE_INDEX,
+		"the starters read %d and %d." % [
+			world.state.gen1_starter("player"), world.state.gen1_starter("rival")])
+	_r.check(not _object_active(world, LAB_CHARMANDER_BALL), "the CHARMANDER ball is still drawn.")
+	_r.check(world.event_flag_active(GOT_STARTER_FLAG), "EVENT_GOT_STARTER is clear.")
+	_r.check("\n".join(spoken).contains(RIVAL_TAKES_THIS_ONE),
+		"the rival never took his: %s" % ["\n".join(spoken).right(300)])
+	world.player_cell = Vector2i(LAB_BELOW_CHARMANDER.x, LAB_LEAVING_ROW)
+	_lab_facings.clear()
+	_drive_the_lab(world, spoken, LAB_NOOP, LAB_RIVAL_CLASS, LAB_RIVAL_PARTY - 1)
+	_r.check(world.event_flag_active(BATTLED_RIVAL_FLAG), "EVENT_BATTLED_RIVAL_IN_OAKS_LAB is clear.")
+	## `OaksLabPlayerWatchRivalExitScript`: toward the rival at five steps left, down at four.
+	_r.check(_lab_facings.slice(-2) == [Gen2WorldSprite.FACING_LEFT, Gen2WorldSprite.FACING_DOWN],
+		"the player watched the rival leave facing %s." % [_lab_facings])
+	_r.check("\n".join(spoken).contains(RIVAL_SMELL_YOU_LATER),
+		"the rival never left: %s" % ["\n".join(spoken).right(300)])
+	_r.check(not _object_active(world, LAB_RIVAL), "the rival is still drawn after leaving.")
+	_r.check(world.state.gen1_map_script(OAKS_LAB_BYTE) == LAB_NOOP,
+		"the rival's exit left the lab on state %d." % world.state.gen1_map_script(OAKS_LAB_BYTE))
+	_check_the_lab_parcel(world, spoken)
+
+
+## `OaksLabOak1Text` with OAK'S PARCEL in the bag, then states 15 to 17.
+func _check_the_lab_parcel(world: Gen2WorldAPI, spoken: Array[String]) -> void:
+	world.state.apply_changes({}, {}, {"items": {OAKS_PARCEL: 1}})
+	world.player_cell = LAB_BELOW_OAK
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	spoken.append_array(_lab_answers(world, world.interact()))
+	_r.check(int(world.state.items().get(OAKS_PARCEL, 0)) == 0, "OAK'S PARCEL is still in the bag.")
+	_r.check(world.state.gen1_map_script(OAKS_LAB_BYTE) == LAB_RIVAL_ARRIVES_STATE,
+		"the parcel left the lab on state %d." % world.state.gen1_map_script(OAKS_LAB_BYTE))
+	var rival: Gen2WorldObject = world.objects[LAB_RIVAL]
+	var passes: int = 0
+	while world.state.gen1_map_script(OAKS_LAB_BYTE) == LAB_RIVAL_ARRIVES_STATE \
+		and passes < LAB_PASSES:
+		spoken.append_array(_lab_answers(world, world.dispatch_sight_events()))
+		passes += 1
+	_r.check(rival.active and rival.cell == LAB_RIVAL_BESIDE_OAK
+		and world.scripted_movement_in_progress(),
+		"the rival walked to %s, drawn %s, walking %s." % [
+			rival.cell, rival.active, world.scripted_movement_in_progress()])
+	_drive_the_lab(world, spoken, LAB_NOOP)
+	_r.check(world.event_flag_active(OAK_GOT_PARCEL_FLAG), "EVENT_OAK_GOT_PARCEL is clear.")
+	_r.check(world.event_flag_active(GOT_POKEDEX_FLAG), "EVENT_GOT_POKEDEX is clear.")
+	_r.check(world.event_flag_active(ROUTE22_RIVAL_WANTS_BATTLE_FLAG),
+		"EVENT_ROUTE22_RIVAL_WANTS_BATTLE is clear.")
+	for index: int in LAB_POKEDEXES:
+		_r.check(not _object_active(world, index), "Pokedex %d is still on the table." % index)
+	_r.check("\n".join(spoken).contains(RIVAL_LEAVE_IT_TO_ME),
+		"the rival never took the Pokedex: %s" % ["\n".join(spoken).right(300)])
+	_r.check(not rival.active, "the rival is still drawn after leaving with the Pokedex.")
+	_r.check(world.state.gen1_map_script(OAKS_LAB_BYTE) == LAB_NOOP,
+		"the Pokedex left the lab on state %d." % world.state.gen1_map_script(OAKS_LAB_BYTE))
+	_r.note("gen1 walk OAKS_LAB from the speech to the rival leaving with the Pokedex")
+
+
+## Passes with A held until the lab's byte reaches [param until] and every
+## walk has been drawn.
+var _lab_facings: Array[int] = []
+
+
+func _drive_the_lab(
+	world: Gen2WorldAPI, spoken: Array[String], until: int, trainer_class: int = -1,
+	trainer_id: int = -1
+) -> void:
+	var passes: int = 0
+	while passes < LAB_PASSES:
+		if _lab_facings.is_empty() or _lab_facings[-1] != world.player_facing:
+			_lab_facings.append(world.player_facing)
+		spoken.append_array(_lab_answers(world, world.dispatch_sight_events(), trainer_class, trainer_id))
+		spoken.append_array(_lab_answers(world, world.run_event_queue(true), trainer_class, trainer_id))
+		world.advance_script_wait_frame()
+		world.advance_player_step_pass()
+		world.advance_scripted_steps_pass()
+		passes += 1
+		if world.state.gen1_map_script(OAKS_LAB_BYTE) >= until \
+			and not world.scripted_movement_in_progress() and not world.script_busy():
+			return
+
+
+## The boxes in [param results], every request behind them answered.
+func _lab_answers(
+	world: Gen2WorldAPI, results: Array, trainer_class: int = -1, trainer_id: int = -1
+) -> Array[String]:
+	var spoken: Array[String] = []
+	for _turn: int in LAB_PASSES:
+		for row: Dictionary in results:
+			var event: Dictionary = row.get("event", {})
+			if StringName(event.get("type", &"")) == &"text":
+				spoken.append(String(event["text"]))
+		var request: Dictionary = world.pending_runtime_request()
+		var input: Dictionary = world.pending_script_input()
+		if not request.is_empty():
+			results = world.complete_runtime_request(_lab_answer(request, trainer_class, trainer_id))
+		elif not input.is_empty():
+			results = world.choose_script_input(0 if StringName(input.get("type", &"")) == &"choice" else -1)
+		else:
+			return spoken
+	return spoken
+
+
+func _lab_answer(request: Dictionary, trainer_class: int, trainer_id: int) -> Dictionary:
+	var values: Dictionary = request.get("values", {}) as Dictionary
+	match StringName(request.get("kind", &"")):
+		&"battle_requested":
+			_r.check(int(values.get("trainer_class", 0)) == trainer_class
+				and int(values.get("trainer_id", -1)) == trainer_id,
+				"the lab asked for %s." % [request])
+			return {"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_WON}
+		&"pokemon_requested":
+			_r.check(int(values.get("pokemon", 0)) == CHARMANDER_DEX,
+				"the ball gave %s." % [request])
+			return {"ok": true, "accepted": true}
+	return {"ok": true}
 
 
 ## One overworld pass with nobody at the buttons.
