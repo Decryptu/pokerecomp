@@ -102,6 +102,8 @@ const SFX_POISON: int = 0x0B
 ## constants/music_constants.asm, which AnimateHallOfFame plays over the whole
 ## induction.
 const MUSIC_HALL_OF_FAME: int = 20
+## `HoFFadeOutScreenAndMusic`'s `wAudioFadeOutCounterReloadValue`.
+const HALL_OF_FAME_MUSIC_FADE_FRAMES: int = 10
 
 ## `GetWarpSFX`: the door, the warp panel, and everything else, which is a step
 ## out of a building. Read off the tile the step landed on, the way
@@ -777,13 +779,11 @@ func _render_time_of_day() -> int:
 	return _world.map_time_of_day()
 
 
-## SCREEN FILL: the overworld has more to show than the hardware framed, so it
-## fills the window with map where every other screen fills it with its own field.
-## Every menu, box and cursor over it stays inside the 160x144 rectangle
-## [Gen2Screen] centres in the buffer. The setting itself is the screen's and is
-## taken again here rather than trusted from the frame the screen was born on: a
-## tool that stages a framed shot sets the option around building this scene, and
-## either order has to mean the same thing. The zoom is the map's alone.
+## SCREEN FILL: the overworld fills the window with map where every other
+## screen fills it with its own field; every box over it stays inside the
+## 160x144 rectangle [Gen2Screen] centres. The setting is read again here rather
+## than from the frame the screen was born on, since a tool may set it around
+## building this scene. The zoom is the map's alone.
 func _apply_screen_fill() -> void:
 	var options: Gen2Options = Gen2OptionsStore.current()
 	_screen.apply_screen_fill()
@@ -794,13 +794,10 @@ func _apply_screen_fill() -> void:
 
 
 ## A screen that hides the map takes the whole picture with it: it is laid out in
-## 160x144 and has nothing to put in a wider buffer, so the surround becomes that
-## screen's own field. The start menu is not one of these, being a box the map is
-## still visible around, and neither is a map fade. `DoBattleTransition` is: it
-## writes twenty by eighteen cells and nothing wider. The mask is drawn inside the
-## hardware viewport, so raising it would crop a renderer that already filled the
-## whole surface; such a renderer is told instead and closes its own surround,
-## which is the only way a wedge reaches the edge of a filled window.
+## 160x144, so the surround becomes that screen's own field. The start menu is
+## not one, being a box the map stays visible around; `DoBattleTransition` is.
+## The mask is drawn inside the hardware viewport, so a renderer that already
+## filled the whole surface is told instead and closes its own surround.
 func _apply_interface_mask() -> void:
 	var owned: bool = _battle_transition != null or _any_host_open(FULLSCREEN_HOSTS)
 	_screen.interface_masked = _screen.expanded and owned \
@@ -2259,13 +2256,11 @@ func _on_hatch_named(party_index: int, nickname: String) -> void:
 	_script_prompt = "%s hatched" % nickname
 
 
-## `GivePoke`'s own prompt, for the `givepoke` sites that name no OT: thirteen
-## of the fourteen, every starter among them. `GiveANickname_YesNo` stands
-## between `TryAddMonToParty` and the row being named, so the request is left
-## pending while the screen is up and the party host applies it with the answer.
-## False when the routine reaches no prompt and the request may be settled where
-## it was staged: an egg, a gift that names an OT, and the storage that has room
-## for neither, which is `.FailedToGiveMon`.
+## `GivePoke`'s own prompt, for the thirteen `givepoke` sites that name no OT.
+## `GiveANickname_YesNo` stands between `TryAddMonToParty` and the row being
+## named, so the request is left pending while the screen is up. False when the
+## routine reaches no prompt: an egg, a gift that names an OT, and
+## `.FailedToGiveMon`.
 func _open_gift_nickname(request: Dictionary) -> bool:
 	if _nickname_host != null or _world == null or _data == null:
 		return false
@@ -2436,13 +2431,10 @@ func _on_name_rater_closed() -> void:
 	_refresh_labels()
 
 
-## The Day-Care's five specials, hosted exactly as `special NameRater` is. The
-## routine writes the party, the two slots and the money itself, so nothing is
-## staged: the cartridge writes WRAM straight and the save is committed when the
-## player saves. Below, `special UnownPuzzle`, whose `FadeToMenu` and
-## `ExitAllMenus` are what the host's overlay already is; and `_Diploma`'s page,
-## or `_PrintDiploma`'s with the printer's status box over it, where the screen
-## owns both loops and this hands it only what the cache does not carry.
+## The Day-Care's five specials, hosted exactly as `special NameRater` is: the
+## routine writes the party, the two slots and the money itself, as the
+## cartridge writes WRAM straight. Below, `special UnownPuzzle` and `_Diploma`'s
+## page, or `_PrintDiploma`'s with the printer's status box over it.
 func _open_diploma(request: Dictionary) -> bool:
 	if _diploma_host != null or _world == null or _data == null:
 		return false
@@ -3966,19 +3958,16 @@ func preview_bills_pc() -> void:
 	_open_bills_pc()
 
 
-## Public screenshot drivers for the two PCs, whose cells no preview map has:
-## the Pokemon Center's machine and the bedroom's own item PC, which is the one
-## that carries DECORATION.
-## The machine's own list grows with the story, and its last row is postgame:
-## `.ChooseWhichPCListToUse` asks for the Pokedex and then the induction. Neither
-## has happened on a preview save, so this drives `halloffame`'s own two writes
-## first rather than photographing a list that is missing two of its rows.
+## Public screenshot drivers for the two PCs, whose cells no preview map has.
+## The machine's list grows with the story: `.ChooseWhichPCListToUse` asks for
+## the Pokedex and then the induction, so this drives `halloffame`'s own two
+## writes first rather than photographing a list missing two of its rows.
 func preview_pokemon_center_pc() -> void:
 	var save: Gen2SaveData = _embedded_party_save()
 	if _world != null and save != null and save.hall_of_fame.is_empty():
 		_world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
 		_world.state.set_hall_of_fame(true)
-		save.hall_of_fame = Gen2HallOfFame.inducted(save.hall_of_fame, save)
+		save.hall_of_fame = Gen2HallOfFame.inducted(save.hall_of_fame, save, _data)
 	## `_embedded_party_save` builds a development save when nothing is injected,
 	## so the seeded one has to be the save the host is then handed.
 	_injected_save = save
@@ -4102,11 +4091,9 @@ const SLOT_MACHINE_MENU_FRAME_CAP: int = 16
 
 
 ## Public screenshot driver and scene-test entry for `special SlotMachine`,
-## which only the two Game Corners reach and no fixture cell does.
-## [param coins] is the balance the machine opens with, [param lucky] the
-## `wScriptVar` the map's own `setval` leaves, and [param frames] how far into
-## the game to drive: the machine is pressed past its bet menu and then handed
-## A three times, which is how a spin is photographed at all.
+## which no fixture cell reaches. [param coins] is the opening balance,
+## [param lucky] the `wScriptVar` the map's `setval` leaves, and [param frames]
+## how far to drive: past the bet menu, then A three times for a spin.
 func preview_slot_machine(
 	coins: int = 100, lucky: bool = false, bet: int = 1, frames: int = 0
 ) -> void:
@@ -4151,11 +4138,9 @@ const CARD_FLIP_PROMPT_FRAME_CAP: int = 240
 
 
 ## Public screenshot driver and scene-test entry for `special CardFlip`, which
-## only the two Game Corners reach and no fixture cell does.
-## [param coins] is the balance the table opens with and [param frames] how far
-## into the game to drive: every `YesNoBox` is answered YES and every
-## `WaitPressAorB` pressed, so the table deals, toggles and pays without the
-## driver knowing which state it is in.
+## no fixture cell reaches. [param coins] is the opening balance and
+## [param frames] how far to drive: every `YesNoBox` is answered YES and every
+## `WaitPressAorB` pressed.
 func preview_card_flip(coins: int = 100, frames: int = 0) -> void:
 	if _world == null or _data == null or _card_flip_host != null:
 		return
@@ -4410,12 +4395,10 @@ func _first_stone_evolution() -> Dictionary:
 
 
 ## Public screenshot driver and scene-test entry for `EvolveAfterBattle`'s own
-## presentation: it stands the first party member on the first LEVEL evolution
-## the cache holds and opens the screen on it, which is the one path a stone
-## cannot reach, since `.pressed_b` lets B cancel this one and not that one.
-## The party row is left alone. [method _on_evolution_resolved] applies it, the
-## same way the after-battle pass does, so the preview is that pass rather than
-## a picture of it.
+## presentation: the first party member on the first LEVEL evolution the cache
+## holds, the one path a stone cannot reach since `.pressed_b` lets B cancel
+## it. [method _on_evolution_resolved] applies it the way the after-battle pass
+## does.
 func preview_level_evolution() -> void:
 	if _world == null or _data == null:
 		return
@@ -4764,10 +4747,8 @@ func preview_pack_toss() -> void:
 ## Public screenshot driver for ForgetMove. It fills the first party member's
 ## four move slots and grants a TM or HM that member can learn, on an injected
 ## save so nothing persists, then advances one menu step per call: Pack, the
-## TM/HM, USE, YES, the party member, ForgetMove's ask, and the move list.
-## The granted item is whichever TM or HM this species can actually learn, since
-## a development save's first member is whatever the cache holds; a species that
-## can learn none reports that rather than opening a menu it cannot fill.
+## TM/HM, USE, YES, the party member, ForgetMove's ask, and the move list. A
+## species that can learn none reports that rather than opening the menu.
 func preview_move_forget() -> void:
 	if _world == null or _data == null:
 		return
@@ -4859,9 +4840,8 @@ func preview_meet_visible_encounter(cell: Vector2i) -> bool:
 	return true
 
 
-## Public screenshot driver for the real wild capture bridge. It adds one
-## development Master Ball, starts an imported wild encounter, and leaves the
-## production battle overlay on its throw message.
+## Public screenshot driver for the wild capture bridge: one development Master
+## Ball, an imported wild encounter, the battle overlay on its throw message.
 ## `CatchTutorial`: the Dude's own fight, which answers itself. `Route29Tutorial1`
 ## loads the same `loadwildmon RATTATA, 5` in front of it. A Generation 1 cache
 ## throws the old man's, or Prof. Oak's for [param pikachu].
@@ -6087,7 +6067,7 @@ func open_hall_of_fame() -> void:
 	## `AddHallOfFameEntry` runs behind `SaveGameData` and in front of the
 	## animation, so the team is stored whether or not the player watches it;
 	## the snapshot itself is written when the sequence ends.
-	save.hall_of_fame = Gen2HallOfFame.inducted(save.hall_of_fame, save)
+	save.hall_of_fame = Gen2HallOfFame.inducted(save.hall_of_fame, save, _data)
 	## No anchor preset: this is a child of the 160x144 Gen2Screen and sizes
 	## itself in native pixels, the way the story picture does.
 	var host := Gen2HallOfFameScreen.new()
@@ -6095,13 +6075,14 @@ func open_hall_of_fame() -> void:
 	host.closed.connect(_on_hall_of_fame_closed)
 	host.cry_requested.connect(_play_species_cry)
 	host.rating_reached.connect(_on_hall_of_fame_rating)
+	host.music_requested.connect(_play_hall_of_fame_music)
+	host.music_fade_requested.connect(_fade_hall_of_fame_music)
 	_hall_of_fame_host = host
 	_screen.display(host)
 	if _hall_of_fame_host == null:
 		## set_context() with nothing to show closes on _ready(), which runs as
 		## soon as the node enters the tree.
 		return
-	_play_hall_of_fame_music()
 	_script_prompt = "Hall of Fame"
 	_refresh_labels()
 
@@ -6232,14 +6213,22 @@ func _on_hall_of_fame_closed() -> void:
 	var written: Dictionary = persist_world_snapshot()
 	_script_prompt = "Hall of Fame recorded" if bool(written.get("ok", false)) \
 		else "Hall of Fame not saved: %s" % String(written.get("reason", "unknown"))
-	_play_current_map_music()
 	if _renderer != null:
 		_renderer.refresh()
 	_refresh_labels()
 	## `AnimateHallOfFame` is followed by `farcall Credits` with the `wStatusFlags`
 	## byte pushed before the Hall of Fame bit went into it, so this pair is never
 	## skippable however many times it has been seen.
-	open_credits(false)
+	if open_credits(false):
+		return
+	_play_current_map_music()
+	_complete_hall_of_fame_request()
+
+
+func _complete_hall_of_fame_request() -> void:
+	if _world != null and StringName(_world.pending_runtime_request().get("kind", &"")) \
+		== &"hall_of_fame_requested":
+		_show_script_results(_world.complete_runtime_request({"ok": true}))
 
 
 ## `ProfOaksPCRating`'s tail: `PlayMusic MUSIC_NONE` stops the induction music
@@ -6256,15 +6245,15 @@ func _on_hall_of_fame_rating(sfx: int) -> void:
 ## passes the live one, which by Red has the Hall of Fame bit in it, while
 ## `HallOfFame` pushes the byte before setting that bit, so the induction's own
 ## credits cannot be skipped even on a second run.
-func open_credits(skippable: bool = true) -> void:
+func open_credits(skippable: bool = true) -> bool:
 	if _credits_host != null or _world == null or _data == null:
-		return
+		return false
 	var host := Gen2CreditsScreen.new()
 	if not host.set_context(_data, skippable):
 		host.free()
 		_script_prompt = "The credits are not in this cache"
 		_refresh_labels()
-		return
+		return false
 	host.closed.connect(_on_credits_closed)
 	host.music_requested.connect(_play_credits_music)
 	host.music_fade_requested.connect(_fade_credits_music)
@@ -6272,21 +6261,23 @@ func open_credits(skippable: bool = true) -> void:
 	_screen.display(host)
 	_script_prompt = "Credits"
 	_refresh_labels()
+	return true
 
 
+## Generation 1's `Credits` returns with its music still playing.
 func _on_credits_closed() -> void:
 	var host: Gen2CreditsScreen = _credits_host
 	_credits_host = null
+	var music_outlasts: bool = host != null and host.music_outlasts
 	if host != null:
 		Gen2Screen.drop(host)
-	_play_current_map_music()
+	if not music_outlasts:
+		_play_current_map_music()
 	if _renderer != null:
 		_renderer.refresh()
 	_script_prompt = ""
 	_refresh_labels()
-	if _world != null and StringName(_world.pending_runtime_request().get("kind", &"")) \
-		== &"hall_of_fame_requested":
-		_show_script_results(_world.complete_runtime_request({"ok": true}))
+	_complete_hall_of_fame_request()
 
 
 ## `.music`, whose `PlayMusic MUSIC_NONE` and `DelayFrame` in front of the real
@@ -6315,6 +6306,11 @@ func _play_hall_of_fame_music() -> void:
 	if record.is_empty():
 		return
 	_audio_player.play_record(record, &"map_music", _audio_assets())
+
+
+func _fade_hall_of_fame_music() -> void:
+	if _audio_player != null:
+		_audio_player.fade_out(HALL_OF_FAME_MUSIC_FADE_FRAMES)
 
 
 ## Public driver for screenshot tooling and scene tests, mirroring

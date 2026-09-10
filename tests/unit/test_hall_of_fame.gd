@@ -248,3 +248,87 @@ func test_the_dex_row_draws_two_label_tiles_and_leaves_column_six_blank() -> voi
 func _index_at(indices: PackedByteArray, tile: Vector2i) -> int:
 	var at: int = tile.y * TILE * Gen2Screen.WIDTH + tile.x * TILE
 	return indices[at] if at < indices.size() else -1
+
+
+const PokedexFixture := preload("res://tests/unit/pokedex_fixture.gd")
+
+## `AnimateHallOfFame`'s own pages on a Generation 1 cache: `ld c, 100` of
+## white, then per member the slide, the info box with its cry, HallOfFameText's
+## box and `GBFadeOutToWhite`'s three palettes, then the player's slide and the
+## three `HoFPrintTextAndDelay` boxes, a `cont` inside the rating waiting for
+## its press.
+func test_generation_1_pages_follow_animate_hall_of_fame() -> void:
+	var data: GameData = PokedexFixture.build_gen1()
+	var pages: Array = Gen2HallOfFame.pages(data, _save([1, 4]))
+	assert_eq(pages.size(), 1 + 2 * 6 + 1 + 2 + 3 + 3)
+	assert_eq(StringName(pages[0]["kind"]), Gen2HallOfFame.PAGE_BLANK)
+	assert_eq(int(pages[0]["hold"]), Gen2HallOfFame.GEN1_OPEN_FRAMES)
+	assert_true(bool(pages[0]["music"]), "PlayMusic MUSIC_HALL_OF_FAME after the white")
+	assert_true(bool(pages[1]["slide"]))
+	assert_eq(int(pages[1]["hold"]), Gen2HallOfFame.GEN1_SLIDE_FRAMES)
+	assert_false(bool(pages[1]["cry"]), "the slide is silent")
+	assert_eq(int(pages[2]["hold"]), Gen2HallOfFame.GEN1_INFO_FRAMES)
+	assert_true(bool(pages[2].get("cry", true)), "HoFDisplayMonInfo ends on PlayCry")
+	assert_eq(pages[2]["types"], [String(data.type_name(1)), String(data.type_name(2))] \
+		if data.type_name(1) != data.type_name(2) else [String(data.type_name(1))])
+	assert_true(bool(pages[3]["famed"]))
+	assert_eq(int(pages[3]["hold"]), Gen2HallOfFame.GEN1_FAMED_FRAMES)
+	for step: int in 3:
+		assert_eq(int(pages[4 + step]["bgp"]), Gen2HallOfFame.GEN1_FADE_PALETTES[step])
+		assert_eq(int(pages[4 + step]["hold"]), Gen2HallOfFame.GEN1_FADE_STEP_FRAMES)
+	var player: int = 1 + 2 * 6
+	assert_eq(StringName(pages[player]["kind"]), Gen2HallOfFame.PAGE_PLAYER)
+	assert_true(bool(pages[player]["slide"]))
+	assert_eq(pages[player + 1]["lines"], ["POKéDEX   Seen:  0", "         Owned:  0"])
+	assert_eq(int(pages[player + 1]["hold"]), Gen2HallOfFame.GEN1_TEXT_FRAMES)
+	assert_eq(pages[player + 2]["lines"], ["POKéDEX Rating<COLON>"], "one tile, one line")
+	assert_eq(int(pages[player + 3]["hold"]), 0, "cont waits for the press")
+	assert_eq(int(pages[player + 4]["hold"]), 0, "and the carried line's page does too")
+	assert_eq(int(pages[player + 5]["hold"]), Gen2HallOfFame.GEN1_TEXT_FRAMES)
+	assert_true(bool(pages[player + 6]["fade_music"]), "HoFFadeOutScreenAndMusic")
+	RomCache.clear(PokedexFixture.gen1_directory())
+
+
+## `sHallOfFame` keeps fifty teams and `wNumHoFTeams` stops at 255, and
+## `PKMNLeaguePC` walks them oldest first with `wHoFTeamNo` on each panel.
+func test_generation_1_records_keep_fifty_and_walk_oldest_first() -> void:
+	var data: GameData = PokedexFixture.build_gen1()
+	var records: Array = []
+	for _win: int in Gen2HallOfFame.MAX_RECORDS_GEN1 + 1:
+		records = Gen2HallOfFame.inducted(records, _save([1]), data)
+	assert_eq(records.size(), Gen2HallOfFame.MAX_RECORDS_GEN1)
+	assert_eq(Gen2HallOfFame.win_count(records), Gen2HallOfFame.MAX_RECORDS_GEN1 + 1)
+	assert_eq(int(Gen2HallOfFame.record_at(data, records, 0)["win_count"]), 2, "the oldest kept")
+	assert_eq(int(Gen2HallOfFame.record_at(_data, records, 0)["win_count"]), 51, "Crystal's newest")
+	var page: Dictionary = Gen2HallOfFame.record_pages(
+		data, Gen2HallOfFame.record_at(data, records, 0)
+	)[0]
+	assert_eq(int(page["team_number"]), 2)
+	var indices: PackedByteArray = Gen2HallOfFamePage.from_data(data).draw(page)
+	assert_true(_has_ink(indices, Gen2HallOfFamePage.GEN1_TEAM_BOX))
+	assert_true(_has_ink(indices, Gen2HallOfFamePage.GEN1_INFO_BOX))
+	RomCache.clear(PokedexFixture.gen1_directory())
+
+
+## The Generation 1 panels: the slide draws nothing, the info box stands alone
+## until HallOfFameText's box joins it, and the player's panel is its two boxes
+## with `PrintText`'s under them.
+func test_generation_1_panels_draw_their_own_boxes() -> void:
+	var data: GameData = PokedexFixture.build_gen1()
+	var renderer: Gen2HallOfFamePage = Gen2HallOfFamePage.from_data(data)
+	var pages: Array = Gen2HallOfFame.pages(data, _save([1]))
+	assert_eq(renderer.draw(pages[1]).count(0), Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	var info: PackedByteArray = renderer.draw(pages[2])
+	assert_true(_has_ink(info, Gen2HallOfFamePage.GEN1_INFO_BOX))
+	assert_false(_has_ink(info, Gen2HallOfFamePage.GEN1_FAMED_BOX))
+	assert_true(_has_ink(renderer.draw(pages[3]), Gen2HallOfFamePage.GEN1_FAMED_BOX))
+	var player: PackedByteArray = renderer.draw(pages[9])
+	assert_true(_has_ink(player, Gen2HallOfFamePage.GEN1_NAME_BOX))
+	assert_true(_has_ink(player, Gen2HallOfFamePage.GEN1_STATS_BOX))
+	assert_true(_has_ink(player, Gen2HallOfFamePage.MON_BOTTOM_BOX))
+	assert_eq(renderer.pic_at(), Gen2HallOfFamePage.player_pic_position(), "hlcoord 12, 5")
+	## `SET_PAL_POKEMON_WHOLE_SCREEN`, then `FadePal6`: colour 3 falls to the
+	## row's colour 2 on the first step.
+	var colors: PackedColorArray = Gen2HallOfFame.page_palette(data, pages[4])
+	assert_eq(colors[3], data.palette(1)[2])
+	RomCache.clear(PokedexFixture.gen1_directory())

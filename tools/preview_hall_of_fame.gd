@@ -5,7 +5,8 @@ extends SceneTree
 ## real font and the real text-box frame.
 ##   Godot --path . -s res://tools/preview_hall_of_fame.gd -- crystal /tmp/hof.png [page]
 ## A fourth argument of `shiny` makes the lead shiny. [page] is how many times to
-## advance, so 0 is the first party member and the last pages are the player's own.
+## advance, so 0 is the first party member and the last pages are the player's own;
+## `page,frames` also spends that many hardware frames on the page.
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 ## Enough frames for the scene to lay out and the overlay to draw once.
@@ -14,6 +15,7 @@ const SETTLE_FRAMES: int = 18
 var _screen: Gen2WorldScreen = null
 var _output_path: String = ""
 var _advance: int = 0
+var _spend: int = 0
 var _shiny: bool = false
 var _frames: int = 0
 
@@ -28,7 +30,9 @@ func _initialize() -> void:
 	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
-	_advance = int(args[2]) if args.size() > 2 else 0
+	var page: PackedStringArray = (args[2] if args.size() > 2 else "0").split(",")
+	_advance = int(page[0])
+	_spend = int(page[1]) if page.size() > 1 else 0
 	_shiny = args.size() > 3 and args[3] == "shiny"
 
 	var data: GameData = GameData.open(StringName(args[0]))
@@ -71,6 +75,10 @@ func _process(_delta: float) -> bool:
 		for _step: int in _advance:
 			if _screen._hall_of_fame_host != null:
 				_screen._hall_of_fame_host.advance()
+		if _screen._hall_of_fame_host != null:
+			_screen._hall_of_fame_host.advance_hold_frames(_spend)
+			## The frames the capture settles over must not spend the page.
+			_screen._hall_of_fame_host.set_process(false)
 	if _frames < SETTLE_FRAMES:
 		return false
 	var image: Image = PokeToolPath.capture(root)

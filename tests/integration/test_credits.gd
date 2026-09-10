@@ -329,3 +329,109 @@ func test_only_the_border_rows_are_scrolled() -> void:
 		Gen2Credits.create(_gold()).scroll_rows(),
 		[Gen2Credits.BORDER_TOP_ROW, Gen2Credits.BORDER_BOTTOM_ROW_GOLD_SILVER]
 	)
+
+
+const PokedexFixture := preload("res://tests/unit/pokedex_fixture.gd")
+
+
+func _gen1() -> Gen1Credits:
+	return Gen1Credits.create_gen1(PokedexFixture.build_gen1())
+
+
+## `HallOfFamePC`: `ClearScreen` and `ld c, 100` of white, then the two black
+## bands and `PlayMusic MUSIC_CREDITS`, then `ld c, 128` before the first
+## screen.
+func test_generation_1_opens_white_then_raises_the_bands_with_the_music() -> void:
+	var credits: Gen1Credits = _gen1()
+	assert_eq(credits.bgp(), Gen1Credits.BGP_WHITE)
+	assert_eq(_spend(credits, Gen1Credits.OPEN_FRAMES - 1).size(), 0)
+	assert_eq(_cell(credits.bg_map(), 0, 0), Gen2Credits.BLANK_TILE, "no bands yet")
+	var events: Array = credits.advance_frame()
+	assert_eq(events.size(), 1)
+	assert_eq(int(events[0]["music"]), Gen2Credits.MUSIC_CREDITS)
+	var map: PackedInt32Array = credits.bg_map()
+	for row: int in Gen1Credits.BAND_ROWS:
+		assert_eq(_cell(map, 5, row), Gen1Credits.BLACK_TILE)
+		assert_eq(_cell(map, 5, Gen1Credits.BAND_BOTTOM_ROW + row), Gen1Credits.BLACK_TILE)
+	assert_eq(_cell(map, 5, Gen1Credits.MIDDLE_FIRST_ROW), Gen2Credits.BLANK_TILE)
+	assert_eq(credits.bgp(), Gen1Credits.BGP_HIDDEN)
+	assert_eq(credits.position(), 0, "nothing parsed until the lead is spent")
+	_spend(credits, Gen1Credits.LEAD_FRAMES)
+	assert_eq(credits.position(), 2, "the first string and its command")
+	RomCache.clear(PokedexFixture.gen1_directory())
+
+
+## `.fadeInTextAndShowMon`: `FadeInCredits` walks `HoFGBPalettes` five frames a
+## step, the wait follows, and `DisplayCreditsMon` slides the next mon across
+## with everything black, then leaves colour 2 white for the next screen.
+func test_generation_1_fades_waits_and_slides_the_mon() -> void:
+	var credits: Gen1Credits = _gen1()
+	_spend(credits, Gen1Credits.OPEN_FRAMES + Gen1Credits.LEAD_FRAMES)
+	var map: PackedInt32Array = credits.bg_map()
+	assert_eq(_cell(map, 7, Gen2Credits.TEXT_TOP_ROW), 0x92, "STAFF at its own column")
+	for step: int in Gen1Credits.FADE_PALETTES.size():
+		_spend(credits, 1)
+		assert_eq(credits.bgp(), Gen1Credits.FADE_PALETTES[step], "step %d" % step)
+		_spend(credits, Gen1Credits.FADE_STEP_FRAMES - 1)
+	_spend(credits, int(Gen1Credits.WAITS[Gen1Layout.CREDITS_TEXT_FADE_MON]))
+	assert_eq(credits.sliding_mon(), 0, "the copies to VRAM come first")
+	_spend(credits, Gen1Credits.SLIDE_SETUP_FRAMES)
+	assert_eq(credits.sliding_mon(), 1)
+	assert_eq(credits.bgp(), Gen1Credits.BGP_SILHOUETTE)
+	assert_eq(credits.slide_scroll(), 0, "the first scroll frame shows SCX 0")
+	_spend(credits, 1)
+	assert_eq(credits.slide_scroll(), Gen1Credits.SLIDE_STEP)
+	_spend(credits, Gen1Credits.SLIDE_FRAMES - 2)
+	assert_eq(credits.slide_scroll(), (Gen1Credits.SLIDE_FRAMES - 1) * Gen1Credits.SLIDE_STEP)
+	_spend(credits, 1)
+	assert_eq(credits.sliding_mon(), 0)
+	assert_eq(credits.bgp(), Gen1Credits.BGP_HIDDEN)
+	assert_eq(_cell(credits.bg_map(), 7, Gen2Credits.TEXT_TOP_ROW), 0x8D, "NAME is up")
+	RomCache.clear(PokedexFixture.gen1_directory())
+
+
+## `CRED_COPYRIGHT` loads its tiles at $60 and prints the three rows at
+## `hlcoord 2, 7` on the same screen; `CRED_THE_END` clears the middle, swaps
+## the sheet, fades in and returns, which is the credits' end. The script's own
+## delay then holds The End until A or B.
+func test_generation_1_copyright_then_the_end_holds_for_a_press() -> void:
+	var credits: Gen1Credits = _gen1()
+	var frames: int = 0
+	while not credits.finished() and frames < 5000:
+		credits.advance_frame()
+		frames += 1
+		if credits.sheet() == Gen1Credits.SHEET_COPYRIGHT and credits.bgp() == Gen1Credits.BGP_HIDDEN \
+			and credits.sliding_mon() == 0:
+			break
+	assert_eq(_cell(credits.bg_map(), 2, 7), 0x60)
+	assert_eq(_cell(credits.bg_map(), 2, 11), 0x63, "a next drops two rows")
+	while not credits.finished() and frames < 5000:
+		credits.advance_frame()
+		frames += 1
+	assert_true(credits.finished())
+	assert_eq(credits.sheet(), Gen1Credits.SHEET_THE_END)
+	assert_eq(_cell(credits.bg_map(), Gen1Credits.THE_END_AT_GEN1.x, Gen1Credits.THE_END_AT_GEN1.y), 0x60)
+	assert_eq(credits.bgp(), Gen1Credits.FADE_PALETTES[Gen1Credits.FADE_PALETTES.size() - 1])
+	assert_false(credits.may_finish([PokeButton.A]), "the delay reads no joypad")
+	_spend(credits, Gen1Credits.END_HOLD_FRAMES)
+	assert_false(credits.may_finish([]))
+	assert_true(credits.may_finish([PokeButton.A]))
+	assert_true(credits.music_outlasts(), "nothing before jp Init stops it")
+	RomCache.clear(PokedexFixture.gen1_directory())
+
+
+## `ShiftFontColorIndex` zeroes the low plane, so the page's ink is colour 2,
+## the black tile stays colour 3 and the sheet at $60 is drawn as it is.
+func test_generation_1_page_composes_ink_on_colour_two() -> void:
+	var data: GameData = PokedexFixture.build_gen1()
+	var page: Gen2CreditsPage = Gen2CreditsPage.from_data(data)
+	assert_true(page.ready())
+	var credits: Gen1Credits = Gen1Credits.create_gen1(data)
+	_spend(credits, Gen1Credits.OPEN_FRAMES + Gen1Credits.LEAD_FRAMES)
+	var indices: PackedByteArray = page.compose_gen1(credits.bg_map(), Gen1Credits.SHEET_NONE)
+	var width: int = Gen2Screen.WIDTH
+	assert_eq(indices[0], PokeTiles.INK, "the band")
+	assert_eq(indices[Gen2Credits.TEXT_TOP_ROW * Gen2Font.TILE * width + 7 * Gen2Font.TILE], 2, "the font, shifted")
+	var image: Image = page.image(data, credits.frame_state())
+	assert_eq(image.get_size(), Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT))
+	RomCache.clear(PokedexFixture.gen1_directory())

@@ -46,7 +46,8 @@ func _initialize() -> void:
 		return
 
 	var page: Gen2CreditsPage = Gen2CreditsPage.from_data(data)
-	var credits: Gen2Credits = Gen2Credits.create(data, true)
+	var credits: Gen2Credits = Gen1Credits.create_gen1(data) \
+		if data.generation == RomRegistry.GEN1 else Gen2Credits.create(data, true)
 	if page == null or not page.ready() or credits == null:
 		push_error("The %s cache holds no credits." % args[0])
 		quit(1)
@@ -63,11 +64,21 @@ func _initialize() -> void:
 			path = "%s-%d.%s" % [args[1].get_basename(), wanted, args[1].get_extension()]
 		if not _write(page.image(data, credits.frame_state()), path):
 			return
-		print("frame %d, scene %d, block %d, scroll %d, pos %d, timer %d%s" % [
-			wanted, credits.scene(), credits.banner_block(), credits.scroll(),
-			credits.position(), credits.timer(), ", finished" if credits.finished() else "",
-		])
+		print(_describe(credits, wanted))
 	quit(0)
+
+
+func _describe(credits: Gen2Credits, wanted: int) -> String:
+	var finished: String = ", finished" if credits.finished() else ""
+	if credits is Gen1Credits:
+		var gen1: Gen1Credits = credits
+		return "frame %d, pos %d, bgp $%02X, mon %d, scroll %d%s" % [
+			wanted, gen1.position(), gen1.bgp(), gen1.sliding_mon(), gen1.slide_scroll(), finished,
+		]
+	return "frame %d, scene %d, block %d, scroll %d, pos %d, timer %d%s" % [
+		wanted, credits.scene(), credits.banner_block(), credits.scroll(),
+		credits.position(), credits.timer(), finished,
+	]
 
 
 ## The live path: a real world screen at the new game's own spawn, with

@@ -116,6 +116,10 @@ func is_usable() -> bool:
 	return _glyph_width > 0 and _glyphs.size() >= _glyph_width * TILE
 
 
+func font_generation() -> int:
+	return _generation
+
+
 func frame_count() -> int:
 	if _frame_stride <= 0:
 		return 1 if _frame_tiles > 0 else 0

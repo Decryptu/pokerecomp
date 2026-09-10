@@ -183,3 +183,24 @@ func test_the_hall_of_fame_runs_into_unskippable_credits() -> void:
 	await get_tree().process_frame
 	assert_not_null(_host())
 	assert_false(_host().credits().skippable())
+
+
+## A cache with no credits still ends the induction cleanly: nothing opens
+## behind it and the screen is back on the map.
+func test_the_hall_of_fame_ends_on_the_map_when_the_cache_has_no_credits() -> void:
+	var directory: String = Fixture.directory()
+	var manifest: Dictionary = RomCache.read_json(RomCache.manifest_path(directory))
+	manifest.erase("credits")
+	RomCache.write_json(RomCache.manifest_path(directory), manifest)
+	_data = GameData.open_directory(directory)
+	assert_true(_data.credits_script().is_empty())
+	await _open_world()
+	_world_screen.open_hall_of_fame()
+	await get_tree().process_frame
+	while _world_screen._hall_of_fame_host != null:
+		var host: Gen2HallOfFameScreen = _world_screen._hall_of_fame_host
+		if host.handle_button(PokeButton.A):
+			host.advance_hold_frames(Gen2SavePrompt.SAVING_RECORD_FRAMES)
+	await get_tree().process_frame
+	assert_null(_host())
+	assert_eq(_world_screen._script_prompt, "The credits are not in this cache")

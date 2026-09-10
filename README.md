@@ -14,8 +14,8 @@
 </p>
 
 A native [Godot 4](https://godotengine.org) reimplementation of the Game Boy
-Pokémon games. Gold, Silver and Crystal are playable end to end; Red, Blue and
-Yellow are read and cached, and their world is being built. It is written from
+Pokémon games. Gold, Silver, Crystal, Red, Blue and Yellow are playable from the
+bedroom to the Hall of Fame and their own credits. It is written from
 scratch in GDScript, not an emulator, static recompilation or disassembly. A
 user-supplied cartridge dump is SHA-1 verified, decoded once into a cache, then
 released. No game data ships here: bring your own ROM.
@@ -80,12 +80,9 @@ godot --headless --path . -s res://tools/verify_rom.gd
 Matching uses SHA-1, never filenames. Unknown hashes are refused because an
 uncharacterised bank layout could produce corrupt assets. The three Generation 1
 cartridges import their species, move, type, item and trainer tables, every map
-and tileset, and every map text, and a wild fight, a trainer battle and a
-standing wild Pokemon on one of their maps are all fought on the battle screen.
-An NPC's in-game trade is offered, refused and taken.
-The START menu is the cartridge's own list and opens its one-pocket bag; the
-launcher seats one and does not offer Play until its map scripts are
-interpreted.
+and tileset, every map text and script, and `AnimateHallOfFame`'s induction with
+`HallOfFamePC`'s credits behind it; their START menu is the cartridge's own list
+over a one-pocket bag.
 
 | Game | SHA-1 |
 |---|---|
@@ -128,7 +125,7 @@ whatever shape it is, with a way back to the shipped art. It is kept under
 | Font, borders, HUD | 128 glyphs, eight text-box frames, HP/EXP bars and panels |
 | Splash, title, intro | Each cartridge's opening art, tilemaps and palette runs, including Crystal's 35-entry intro section |
 | Region map | Three graphics sheets, both region tilemaps, the per-tile palette map and 96 landmarks |
-| Prof Oak's PC, credits | The 19 `OakRatings` rows and their texts; `CreditsScript`'s whole command stream |
+| Prof Oak's PC, credits | The 19 `OakRatings` rows and their texts; `CreditsScript`'s whole command stream, or Generation 1's `CreditsOrder`, its strings, `CreditsMons` and `TheEndGfx` |
 | Overworld | Maps, tilesets, collisions, events, scripts, movement, palettes, animation and object sprites |
 | Wild encounters | Grass, water and swarm tables, 13 fishing groups, the roaming graph, rates, slots and repel checks |
 | World services | Menus, marts, fruit trees, phone contacts, special calls, bounded scripts and text, music, SFX and cries |
@@ -366,10 +363,10 @@ or a group, or `all`; with no argument it lists them.
 | `terrain` | Ledge hops, side walls, every map's drawn blocks, the story's map ids |
 | `johto` | Radio Tower, the Rising Badge, command queues, item balls, Route 27, the Magnet Train and long scripted scenes |
 | `kanto` | Each city, its gym and the way in, from Vermilion to Mt. Silver |
-| `art` | Both intro movies, the credits, the region map, all 278 battle animations, the map name sign |
+| `art` | Both intro movies, the credits of all six cartridges, the region map, all 278 battle animations, the map name sign |
 | `tables` | TM/HM, naming, world scripts, the opening lane |
 | `trainers` | The Route 30 trainer on each profile |
-| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, the key-item and usable-item tables behind the bag, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, the text box, shop inventory and wild encounter a map reads, every trainer and standing wild an object stands on, and all 202 or 203 battle animations |
+| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, the key-item and usable-item tables behind the bag, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, the text box, shop inventory and wild encounter a map reads, every trainer and standing wild an object stands on, all 202 or 203 battle animations, and the Hall of Fame's own pages |
 
 The rest are previews and dumps, each driving a real screen or table:
 

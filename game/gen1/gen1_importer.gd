@@ -140,6 +140,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_battle_anims,
 	_verify_facility_text,
 	_verify_dex_ratings,
+	_verify_credits,
 	_verify_overworld_coords,
 	_verify_field_moves,
 	_verify_intro,
@@ -200,10 +201,12 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"bills_pc_2": ["bills_pc_release_text", Gen1Layout.BILLS_PC_RELEASE_TEXT_AT],
 	"oaks_pc": ["oaks_pc_text", Gen1Layout.OAKS_PC_TEXT_AT],
 	"hof_pc": ["hof_pc_text", Gen1Layout.HOF_PC_TEXT_AT],
+	"hall_of_fame": ["hof_dex_text", Gen1Layout.HOF_DEX_TEXT_AT],
 	"change_box": ["change_box_text", Gen1Layout.CHANGE_BOX_TEXT_AT],
 	"choose_box": ["choose_box_text", Gen1Layout.CHOOSE_BOX_TEXT_AT],
 	"oaks_aide": ["oaks_aide_text", Gen1Layout.OAKS_AIDE_TEXT_AT],
 }
+const CREDITS_ORDER_MAX: int = 256
 const CARD_KEY_TEXT_NAMES: Array[String] = ["card_key_success", "card_key_fail"]
 
 const INTRO_TEXT_RUNS: Dictionary = {
@@ -614,6 +617,41 @@ static func _verify_dex_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return _ok()
 
 
+## `CreditsOrder` ends on `CRED_THE_END`, names only `NUM_CRED_STRINGS`
+## pointers, and `CreditsMons` holds one species per `_MON` command.
+static func _verify_credits(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var order: PackedByteArray = read_credits_order(rom, layout)
+	if order.is_empty() or order[order.size() - 1] != Gen1Layout.CREDITS_THE_END:
+		return _fail("CreditsOrder does not end on CRED_THE_END.")
+	var count: int = Gen1Layout.credits_string_count(rom.id)
+	var table: int = int(layout["credits_text_pointers"])
+	var bank: int = RomFile.bank_of(table)
+	var first: int = -1
+	for index: int in count:
+		var at: int = Gen1Layout.banked(bank, rom.u16le(table + index * Gen1Layout.POINTER_SIZE))
+		first = at if first < 0 else mini(first, at)
+		if read_credits_string(rom, at).is_empty():
+			return _fail("Credits string %d does not decode." % index)
+	if first != table + count * Gen1Layout.POINTER_SIZE:
+		return _fail("CreditsTextPointers holds %d rows, not %d." % [
+			(first - table) / Gen1Layout.POINTER_SIZE, count
+		])
+	var mons: int = 0
+	for command: int in order:
+		if command < count:
+			continue
+		if command == Gen1Layout.CREDITS_TEXT_MON or command == Gen1Layout.CREDITS_TEXT_FADE_MON:
+			mons += 1
+		elif command < Gen1Layout.CREDITS_THE_END:
+			return _fail("CreditsOrder names string %d of %d." % [command, count])
+	for slot: int in mons:
+		if Gen1Layout.dex_of_index(rom, layout, rom.u8(int(layout["credits_mons"]) + slot)) < 1:
+			return _fail("CreditsMons row %d is no species." % slot)
+	if read_copyright_rows(rom, layout).size() != Gen1Layout.COPYRIGHT_ROWS:
+		return _fail("CopyrightTextString is not three rows.")
+	return _ok()
+
+
 ## `CutTreeBlockSwaps` and `DisplayPCMainMenu`'s own `CheckEvent`: two tables the
 ## rest of the field moves are read through, each pinned against the dump so a
 ## number here can never be the only thing that says what the cartridge does.
@@ -946,6 +984,7 @@ func import_rom(
 		"day_care_text": _import_day_care_text(rom, layout),
 		"special_text": _import_facility_text(rom, layout),
 		"oak_ratings": _import_dex_ratings(rom, layout),
+		"credits": read_credits(rom, layout),
 		"vending": _import_vending(rom, layout, items),
 		"prizes": _import_prizes(rom, layout),
 		"town_map": _import_town_map(rom, layout),
@@ -1531,6 +1570,76 @@ func _import_dex_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 	}
 
 
+## `engine/movie/credits.asm`'s four tables, in the shape `GameData.credits_*`
+## reads.
+static func read_credits(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var order: PackedByteArray = read_credits_order(rom, layout)
+	var table: int = int(layout["credits_text_pointers"])
+	var bank: int = RomFile.bank_of(table)
+	var strings: Array = []
+	var columns: Array = []
+	for index: int in Gen1Layout.credits_string_count(rom.id):
+		var at: int = Gen1Layout.banked(bank, rom.u16le(table + index * Gen1Layout.POINTER_SIZE))
+		strings.append(Array(read_credits_string(rom, at)))
+		## `ld b, -1 / add hl, bc`: the byte counts back from `hlcoord 9, 6`.
+		columns.append(Gen1Layout.CREDITS_CENTRE_COLUMN + (rom.u8(at) - 0x100))
+	var mons: Array = []
+	for command: int in order:
+		if command == Gen1Layout.CREDITS_TEXT_MON or command == Gen1Layout.CREDITS_TEXT_FADE_MON:
+			mons.append(Gen1Layout.dex_of_index(
+				rom, layout, rom.u8(int(layout["credits_mons"]) + mons.size())
+			))
+	return {
+		"script": Array(order),
+		"strings": strings,
+		"columns": columns,
+		"mons": mons,
+		"copyright_rows": read_copyright_rows(rom, layout),
+	}
+
+
+static func read_credits_order(rom: RomFile, layout: Dictionary) -> PackedByteArray:
+	var out := PackedByteArray()
+	var at: int = int(layout["credits_order"])
+	while rom.in_bounds(at, 1) and out.size() < CREDITS_ORDER_MAX:
+		var command: int = rom.u8(at)
+		out.append(command)
+		at += 1
+		if command == Gen1Layout.CREDITS_THE_END:
+			return out
+	return PackedByteArray()
+
+
+## One `db -n, "TEXT@"` row past its offset byte; empty with no terminator.
+static func read_credits_string(rom: RomFile, at: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	for index: int in Gen1Layout.CREDITS_STRING_MAX + 1:
+		var read: int = at + 1 + index
+		if not rom.in_bounds(read, 1):
+			return PackedByteArray()
+		var code: int = rom.u8(read)
+		if code == Gen1Text.TERMINATOR:
+			return out
+		out.append(code)
+	return PackedByteArray()
+
+
+static func read_copyright_rows(rom: RomFile, layout: Dictionary) -> Array:
+	var rows: Array = [[]]
+	var at: int = int(layout["copyright_text"])
+	for index: int in Gen2Layout.COPYRIGHT_STRING_MAX:
+		if not rom.in_bounds(at + index, 1):
+			return []
+		var code: int = rom.u8(at + index)
+		if code == Gen1Text.TERMINATOR:
+			return rows
+		if code == Gen1Text.NEXT_LINE:
+			rows.append([])
+			continue
+		(rows[rows.size() - 1] as Array).append(code)
+	return []
+
+
 ## `InGameTradeTextPointers`' three tables of five and the two boxes the swap
 ## prints, in the one run both generations' trades are read from.
 func _import_trade_text(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -1918,6 +2027,18 @@ func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"tiles": 1,
 			"first_code": Gen1Layout.CHAR_ED,
 			"bits": 1,
+		},
+		"copyright": {
+			"offset": int(layout["copyright_tiles"]),
+			"tiles": Gen1Layout.copyright_tiles(rom.id),
+			"first_code": Gen1Layout.CREDITS_TILES_FIRST_CODE,
+			"bits": 2,
+		},
+		"credits_the_end": {
+			"offset": int(layout["credits_the_end"]),
+			"tiles": Gen1Layout.CREDITS_THE_END_TILES,
+			"first_code": Gen1Layout.CREDITS_TILES_FIRST_CODE,
+			"bits": 2,
 		},
 	}
 	for sheet: String in BATTLE_TILE_SHEETS:

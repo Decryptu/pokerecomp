@@ -98,11 +98,13 @@ func test_the_text_box_sheet_is_characters_as_well_as_a_border() -> void:
 	assert_eq(Gen1Text.encode("\u2026"), _bytes([Gen1Text.ELLIPSIS_CODE]))
 
 
-## A name too long to be one tile stays decode-only, the way `<PLAYER>` does:
-## [method encode] matches two characters at a time.
-func test_an_unused_bold_letter_does_not_encode() -> void:
+## A bracketed name in the $60 run writes its tile back, so `_DexRatingText`'s
+## `<COLON>` prints as one; a control code like `<PLAYER>` stays decode-only.
+func test_a_font_extra_name_encodes_to_its_tile() -> void:
 	assert_eq(Gen1Text.character(0x60), "<BOLD_A>")
-	assert_eq(Gen1Text.encode("<BOLD_A>").size(), 8, "eight characters, not one tile")
+	assert_eq(Gen1Text.encode("<BOLD_A>"), _bytes([0x60]))
+	assert_eq(Gen1Text.encode("Rating<COLON>").size(), 7, "one tile, not seven unknowns")
+	assert_eq(Gen1Text.encode("<PLAYER>").size(), 8, "eight unknowns")
 
 
 ## `PlacePKMN`'s text is `db "<PK><MN>@"`: two narrow tiles, never six letters.

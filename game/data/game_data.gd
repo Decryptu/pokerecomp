@@ -1806,10 +1806,10 @@ func _build_matchups(rows: Array) -> void:
 ## The four colours a species is drawn with, in index order.
 func palette(number: int, shiny: bool = false) -> PackedColorArray:
 	var entry: Dictionary = species(number)
-	if entry.is_empty():
+	var entry_palette: Dictionary = entry.get("palette", {})
+	if entry_palette.is_empty():
 		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
-	var entry_palette: Dictionary = entry["palette"]
 	# Generation 1's `SuperPalettes` row is all four colours and has no shiny
 	# half; Generation 2 stores only the two that sit between white and black.
 	if entry_palette.has("colors"):
@@ -2276,6 +2276,39 @@ func credits_string(index: int) -> PackedByteArray:
 ## string printed from column 2. -1 on a cache without the credits.
 func credits_index(name: String) -> int:
 	return int(_credits.get(name, -1))
+
+
+## Generation 1's own `db -n` column per string; -1 outside the table.
+func credits_string_column(index: int) -> int:
+	var stored: Variant = _credits.get("columns", [])
+	if not stored is Array or index < 0 or index >= (stored as Array).size():
+		return -1
+	return int((stored as Array)[index])
+
+
+## `CreditsMons` by dex number, one per `_MON` command in the order.
+func credits_mons() -> PackedInt32Array:
+	var stored: Variant = _credits.get("mons", [])
+	var out := PackedInt32Array()
+	if stored is Array:
+		for number: Variant in stored as Array:
+			out.append(int(number))
+	return out
+
+
+## `CopyrightTextString`'s rows of `LoadCopyrightTiles` codes.
+func credits_copyright_rows() -> Array:
+	var stored: Variant = _credits.get("copyright_rows", [])
+	var out: Array = []
+	if not stored is Array:
+		return out
+	for row: Variant in stored as Array:
+		var codes := PackedByteArray()
+		if row is Array:
+			for code: Variant in row as Array:
+				codes.append(int(code) & 0xFF)
+		out.append(codes)
+	return out
 
 
 ## Whether this cache carries `CrystalIntro`'s art. False on Gold and Silver,

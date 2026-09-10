@@ -2,12 +2,11 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the credits against freshly imported real caches, for both command
-## profiles. The whole script is run to `CREDITS_END` rather than sampled: every
-## command it carries, every string it names and every scene it selects is exercised
-## once, which is the sweep tests/integration/test_credits.gd's four-string fixture
-## cannot be. Expected values come from pokecrystal and pokegold's
-## engine/movie/credits.asm and the two data files behind it.
+## Verifies the credits against freshly imported real caches, both command
+## profiles and the three Generation 1 cartridges. The whole script is run to its
+## end rather than sampled, which the fixtures of
+## tests/integration/test_credits.gd cannot be. Expected values come from each
+## pinned engine/movie/credits.asm and the data files behind it.
 
 
 ## Long enough for either script, whose own totals are pinned below.
@@ -30,6 +29,16 @@ const SPACE_CODE: int = 0x7F
 const FIRST_LETTER: int = 0x80
 
 
+## Generation 1's `HallOfFamePC` credits: [frames to the return, mons slid].
+## Red's order is 7 `_FADE_MON`, 8 `_MON`, 15 `_FADE` and 5 `_TEXT` behind 228
+## frames of white and lead; Yellow's 11, 5, 12 and 4 with longer waits.
+const EXPECTED_GEN1: Dictionary = {
+	&"red": [5254, 15],
+	&"blue": [5254, 15],
+	&"yellow": [5248, 16],
+}
+
+
 func run(r: RefCounted) -> void:
 	_r = r
 	for game_id: StringName in _r.GAME_IDS:
@@ -40,6 +49,92 @@ func run(r: RefCounted) -> void:
 		_verify_strings(game_id, data)
 		_verify_palettes_and_frames(game_id, data)
 		_run(game_id, data)
+	_r.each_game_of(RomRegistry.GEN1, _run_gen1)
+
+
+## A Generation 1 order frame by frame: every string fits from its own column,
+## every `_MON` finds a species, and The End is up when `Credits` returns.
+func _run_gen1() -> void:
+	var data: GameData = _r.data
+	var game_id: StringName = _r.game_id
+	var page: Gen2CreditsPage = Gen2CreditsPage.from_data(data)
+	if page == null or not page.ready():
+		_r.fail("%s: the cache carries no credits graphics." % game_id)
+		return
+	var credits: Gen1Credits = Gen1Credits.create_gen1(data)
+	if credits == null:
+		_r.fail("%s: the cache carries no credits script." % game_id)
+		return
+	var count: int = Gen1Layout.credits_string_count(game_id)
+	for index: int in count:
+		var column: int = data.credits_string_column(index)
+		var tiles: int = 0
+		for code: int in data.credits_string(index):
+			if code == Gen2Credits.CODE_NEXT_LINE:
+				tiles = 0
+				continue
+			tiles += Gen2Credits.POKE_TEXT.length() if code == Gen2Credits.CODE_POKE else 1
+			_r.check(
+				column >= 0 and column + tiles <= Gen2Credits.COLUMNS,
+				"%s: credits string %d runs off the screen from column %d." % [
+					game_id, index, column,
+				]
+			)
+	_r.check(
+		data.credits_string(count).is_empty(),
+		"%s: the credits table holds more than %d strings." % [game_id, count]
+	)
+	var mons: int = 0
+	var frames: int = 0
+	var last_mon: int = 0
+	while frames < FRAME_CAP and not credits.finished():
+		credits.advance_frame()
+		frames += 1
+		var mon: int = credits.sliding_mon()
+		if mon != last_mon:
+			last_mon = mon
+			if mon > 0:
+				mons += 1
+				_r.check(
+					not data.species_pic(mon).is_empty(),
+					"%s: credits mon %d has no front pic." % [game_id, mon]
+				)
+		if credits.sliding_mon() == 0 and credits.slide_scroll() == 0 \
+			and credits.bgp() == Gen1Credits.BGP_HIDDEN:
+			_verify_gen1_bands(game_id, credits.bg_map())
+	var expected: Array = EXPECTED_GEN1[game_id]
+	_r.check(
+		frames == int(expected[0]),
+		"%s: the credits ran %d frames, not the pinned %d." % [game_id, frames, int(expected[0])]
+	)
+	_r.check(
+		mons == int(expected[1]),
+		"%s: %d mons slid across, not the pinned %d." % [game_id, mons, int(expected[1])]
+	)
+	var the_end: Vector2i = Gen1Credits.THE_END_AT_GEN1
+	_r.check(
+		credits.bg_map()[the_end.y * Gen2Credits.COLUMNS + the_end.x] \
+			== Gen1Layout.CREDITS_TILES_FIRST_CODE
+			and credits.sheet() == Gen1Credits.SHEET_THE_END,
+		"%s: The End is not on screen when Credits returns." % game_id
+	)
+	var image: Image = page.image(data, credits.frame_state())
+	_r.check(
+		image.get_width() == Gen2Screen.WIDTH and image.get_height() == Gen2Screen.HEIGHT,
+		"%s: the credits page did not draw a hardware screen." % game_id
+	)
+
+
+## `FillFourRowsWithBlack`'s two bands, which no string may reach.
+func _verify_gen1_bands(game_id: StringName, map: PackedInt32Array) -> void:
+	for column: int in Gen2Credits.COLUMNS:
+		for row: int in Gen1Credits.BAND_ROWS:
+			_r.check(
+				map[row * Gen2Credits.COLUMNS + column] == Gen1Credits.BLACK_TILE
+					and map[(Gen1Credits.BAND_BOTTOM_ROW + row) * Gen2Credits.COLUMNS + column] \
+						== Gen1Credits.BLACK_TILE,
+				"%s: the credits text reached a black band." % game_id
+			)
 
 
 ## Every string in the table, whose codes have to be ones the screen can draw:

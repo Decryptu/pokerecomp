@@ -64,7 +64,11 @@ static func rating_for(data: GameData, caught: int) -> Dictionary:
 ## `PrintNumber` right-aligns them in [constant COUNT_DIGITS] cells where
 ## `PRINTNUM_LEFTALIGN` does not.
 static func counts_text(data: GameData, seen: int, caught: int) -> String:
-	var text: String = data.oak_pc_text("counts")
+	return fill_counts(data.oak_pc_text("counts"), seen, caught)
+
+
+## The same two numbers into `_DexSeenOwnedText`'s slots as well.
+static func fill_counts(text: String, seen: int, caught: int) -> String:
 	for value: int in [seen, caught]:
 		var digits: String = String.num_int64(value)
 		var number: int = text.find(Gen2TextStream.NUMBER_MARKER)
