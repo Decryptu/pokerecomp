@@ -1,11 +1,10 @@
 extends SceneTree
 
-## Exercises map-entry callbacks and one facing interaction from an imported
-## cartridge cache without opening the ROM at runtime.
+## The story walk, from a new game as far as the route goes:
 ##   Godot --headless --path . -s res://tools/preview_world_story.gd -- \
 ##     crystal 3 19 3 5 1 37,1744 home story
-## The optional seventh argument is a comma-separated event flag list. `home`
-## follows the bedroom stair warp out; `story` drives the Mom and New Bark events.
+## The seventh argument is a comma-separated event flag list; `red 0 38 3 6 1`
+## walks Generation 1.
 
 ## A ring is 30 lead frames plus two 60-frame rings; the budget only has to
 ## outlast that.
@@ -28,6 +27,7 @@ const REQUEST_HANDLERS: Dictionary = {
 	&"apricorn_selection_requested": &"_request_apricorns",
 	&"audio_requested": &"_request_audio",
 	&"magnet_train_requested": &"_request_magnet_train",
+	&"pokedex_entry_requested": &"_request_audio",
 }
 
 ## SPECIALCALL_ASSISTANT (constants/phone_constants.asm), armed by beating
@@ -67,9 +67,6 @@ const APRICORN_WHT: int = 0x61
 ## the Route 44 door and the first staircase (`maps/IcePath1F.asm`). Three of its
 ## four neighbours are wall, so (30,7) facing right is the only approach.
 const HM07_APPROACH: Vector2i = Vector2i(30, 7)
-## How many balls the route buys is its own choice, not the cartridge's. The
-## budget is the source start money plus what the fights on the way pay: the
-## walk credits `.give_money`'s prize the way the battle screen would.
 ## `MartViolet` sells Poké Balls and `MartBlackthorn` does not, so the two catches
 ## before Goldenrod are stocked in Violet and Dratini's far lower catch rate is
 ## answered with the cheapest ball Blackthorn does stock.
@@ -204,12 +201,10 @@ const ICE_PATH_DOORS: Array = [
 ## `SCENE_ROUTE27_FIRST_STEP_INTO_KANTO` coord pair (`maps/Route27.asm`).
 const ROUTE_27_LANDFALL: Vector2i = Vector2i(18, 10)
 
-## Tohjo Falls, west to east (`maps/TohjoFalls.asm`, `maps/Route27.asm`). The
-## two mouths are Route 27 cells; everything between them is inside the cave.
-## The west door lands on (13,15) in an eight-cell pocket whose only water is to
-## the left, so the surf starts on (10,14). The climb's foot is (8,12), directly
-## below the four-cell `COLL_WATERFALL` column at x 8, and the descent's top is
-## (18,5) on the pool, directly above the east column.
+## Tohjo Falls, west to east (`maps/TohjoFalls.asm`, `maps/Route27.asm`): the
+## west door's eight-cell pocket has water only to the left, the climb's foot
+## is under the `COLL_WATERFALL` column at x 8 and the descent's top above the
+## east column.
 const TOHJO_WEST_MOUTH: Vector2i = Vector2i(26, 5)
 const TOHJO_WEST_SHORE: Vector2i = Vector2i(10, 14)
 const TOHJO_CLIMB_FOOT: Vector2i = Vector2i(8, 12)
@@ -229,10 +224,8 @@ const EVENT_BEAT_RIVAL_IN_MT_MOON: int = 793
 ## ENGINE_FLYPOINT_INDIGO_PLATEAU, set by Route23FlypointCallback on map entry.
 const ENGINE_FLYPOINT_INDIGO_PLATEAU: int = 64
 
-## Victory Road's regions, in the order its warp maze joins them
-## (`maps/VictoryRoad.asm`). The internal warps are pairs, so warp 2 at (1,49)
-## arrives on warp 3 at (1,35) and warp 4 at (13,31) on warp 5 at (13,17). The
-## fourth region, behind (0,11) and (0,27), is a dead end and is not walked.
+## Victory Road's regions, in the order its warp pairs join them
+## (`maps/VictoryRoad.asm`); the fourth, behind (0,11) and (0,27), is a dead end.
 ## The cell below `PlateauRivalBattle1`'s coord event, which is stepped onto
 ## from here (`maps/IndigoPlateauPokecenter1F.asm`).
 const PLATEAU_RIVAL_APPROACH: Vector2i = Vector2i(16, 5)
@@ -331,12 +324,9 @@ const SHIP_1F_TO_NE_CABIN: Vector2i = Vector2i(19, 8)
 const SHIP_1F_TO_CAPTAIN_CABIN: Vector2i = Vector2i(3, 13)
 const SHIP_1F_SAILOR_FACE: Vector2i = Vector2i(25, 3)
 
-## B1F's east region is 18 cells: columns 30 and 31 from row 7 down to row 15.
-## The two sailors stand on (30,6) and (31,6) and the coord events below them
-## toggle which one does, so the corridor north is sealed while the map scene is
-## SCENE_FASTSHIPB1F_SAILOR_BLOCKS (`maps/FastShipB1F.asm`). The approach is the
-## cell below the east coord event: stepping onto (31,7) is what runs it, and a
-## resolving walk aimed at (31,7) would re-dispatch it until it ran out.
+## The two sailors on (30,6) and (31,6) seal B1F's east corridor while the scene
+## is SCENE_FASTSHIPB1F_SAILOR_BLOCKS (`maps/FastShipB1F.asm`); stepping onto
+## (31,7) runs the coord event that swaps them.
 const SHIP_B1F_TO_1F_EAST: Vector2i = Vector2i(31, 13)
 const SHIP_B1F_TO_1F_WEST: Vector2i = Vector2i(5, 11)
 const SHIP_B1F_SAILOR_APPROACH: Vector2i = Vector2i(31, 8)
@@ -347,12 +337,9 @@ const SCENE_FASTSHIPB1F_NOOP: int = 1
 const SHIP_NE_CABIN_DOOR: Vector2i = Vector2i(2, 24)
 const SHIP_LAZY_SAILOR_FACE: Vector2i = Vector2i(4, 27)
 
-## The captain's cabin is the third section of
-## `maps/FastShipCabins_SE_SSE_CaptainsCabin.asm`, reached from 1F's west wing.
-## The granddaughter stands on (2,25) with wall on three sides, so she is faced
-## from (1,25). `SSAquaCaptainsCabinWarpsToGrandpasCabinMovement` then carries
-## the player one cell right and six up, through five rows of wall, onto (2,19),
-## which is the grandpa cabin's own door back to 1F's east deck.
+## `maps/FastShipCabins_SE_SSE_CaptainsCabin.asm`: the granddaughter on (2,25)
+## is faced from (1,25), and `..WarpsToGrandpasCabinMovement` carries the player
+## through five rows of wall onto the grandpa cabin's door at (2,19).
 const SHIP_GRANDDAUGHTER_FACE: Vector2i = Vector2i(1, 25)
 const SHIP_GRANDPA_CABIN_DOOR: Vector2i = Vector2i(2, 19)
 
@@ -421,12 +408,8 @@ const EVENT_GOT_LOST_ITEM_FROM_FAN_CLUB: int = 210
 const ITEM_LOST_ITEM: int = 0x82
 const ITEM_PASS: int = 0x86
 
-## Both Magnet Train stations are two regions with no seam: the lobby is rows 10
-## to 17, the platform rows 2 to 8, and row 9 is solid between them. The officer
-## stands inside that solid row on (9,9) and is talked to across it, and his
-## script's `applymovement` is the only thing that ever puts the player on the
-## platform, because a scripted step ignores collision. It ends on the train door
-## and `warpcheck` takes it.
+## Both stations' officers stand in the solid row between lobby and platform,
+## and their `applymovement` is the only way onto the train door.
 const SAFFRON_TRAIN_STATION_DOOR: Vector2i = Vector2i(8, 3)
 const SAFFRON_TRAIN_STATION_EXIT: Vector2i = Vector2i(8, 17)
 const TRAIN_OFFICER_FACE: Vector2i = Vector2i(9, 10)
@@ -601,12 +584,8 @@ const EVENT_BEAT_JANINE: int = 1225
 const FUCHSIA_GYM_TRAINER_FLAGS: Array[int] = [1303, 1306, 1154, 1054]
 const EVENT_GOT_TM06_TOXIC: int = 221
 
-## Fuchsia back to Vermilion, which is four connections and one gate, not the
-## walk back through Lavender and Saffron the route came by: Route 12 connects
-## west onto Route 11 and Route 11 west onto Vermilion City
-## (`data/maps/attributes.asm`), and `maps/Route11.asm` declares no warps at
-## all, so nothing on that pair is gated. `maps/FuchsiaGym.asm` warps 1 and 2
-## both land on Fuchsia's warp 3.
+## Fuchsia back to Vermilion is Route 12 west onto Route 11 and Route 11 west
+## onto Vermilion, four connections and one gate (`data/maps/attributes.asm`).
 const FUCHSIA_GYM_EXIT: Vector2i = Vector2i(4, 17)
 ## `maps/FuchsiaCity.asm` warp 8, the east half of the Route 15 gate pair.
 const FUCHSIA_ROUTE_15_GATE_DOOR: Vector2i = Vector2i(37, 22)
@@ -619,13 +598,8 @@ const KNOB_POKE_FLUTE: int = 78
 const EVENT_FOUGHT_SNORLAX: int = 1872
 const EVENT_VERMILION_CITY_SNORLAX: int = 1904
 
-## Diglett's Cave, the one door into west Kanto (`maps/DiglettsCave.asm`).
-## Three walkable regions, not one tunnel, so it is crossed by warps: the
-## Vermilion entrance sits in a 14-cell room whose only ladder is (5,31); that
-## lands on (17,33) in the 99-cell middle, which reaches the second ladder on
-## (3,3); and that lands on (17,3) in a 15-cell room holding the Route 2 door.
-## Measured against the cache, not read off the warp table, since the table
-## alone does not say which cells share a region.
+## Diglett's Cave (`maps/DiglettsCave.asm`) is three regions joined by its two
+## ladders, (5,31) into the middle and (3,3) into the Route 2 room.
 const DIGLETTS_CAVE_GROUP: int = 3
 const DIGLETTS_CAVE_NUMBER: int = 84
 const DIGLETTS_CAVE_CHAIN: Array[Vector2i] = [
@@ -654,12 +628,8 @@ const EVENT_BEAT_CAMPER_JERRY: int = 1067
 ## `maps/PewterGym.asm` warps 1 and 2, both back onto Pewter's warp 2.
 const PEWTER_GYM_EXIT: Vector2i = Vector2i(4, 13)
 
-## South from Pewter to Cinnabar: Route 2, Viridian City, Route 1, Pallet Town,
-## Route 21 and Cinnabar Island are six plain connections with no gate building
-## and no door on any of them (`data/maps/attributes.asm`, and neither Route 1
-## nor Route 21 declares a warp at all). Coming back onto Route 2 from Pewter
-## lands in its main region, which already holds the Viridian crossing, so the
-## cut tree is not on this half of the walk.
+## Pewter to Cinnabar is six plain connections with no gate on any of them
+## (`data/maps/attributes.asm`).
 const VIRIDIAN_CITY_NUMBER: int = 3
 const PALLET_GROUP: int = 13
 const ROUTE_1_NUMBER: int = 1
@@ -677,13 +647,8 @@ const CINNABAR_ISLAND_NUMBER: int = 8
 const ROUTE_20_NUMBER: int = 6
 const SEAFOAM_GYM_NUMBER: int = 4
 
-## Cinnabar Island is two land regions with no seam between them, so which cell
-## the crossing lands on decides whether Blue is reachable at all. Route 21's
-## south edge is water from x=1 to 14, and Cinnabar's row 0 is water on x=1 to 3
-## and land on x=11 to 18: crossing on the eastern half exits the water into an
-## 89-cell region that reaches neither Blue nor the Pokecenter, so the walk stays
-## on the water down the island's west side and lands on (4,10) instead, in the
-## 51-cell region that holds both.
+## Cinnabar's eastern landing is an 89-cell region that reaches neither Blue
+## nor the Pokecenter, so the walk lands on the west side at (4,10).
 const CINNABAR_LANDING: Vector2i = Vector2i(4, 10)
 ## `maps/CinnabarIsland.asm` object 1 on (9,6), walled on three sides, so (8,6)
 ## facing right is its only approach. `CinnabarIslandBlue` is what clears
@@ -699,12 +664,8 @@ const ENGINE_FLYPOINT_CINNABAR: int = 63
 ## flag is the reason this leg comes before Viridian's.
 const CINNABAR_SURF_APPROACH: Vector2i = Vector2i(4, 10)
 const EVENT_CINNABAR_ROCKS_CLEARED: int = 215
-## Route 20's island cluster, landed on from the east and not the west. The
-## channel on x=26 and 27 that runs up the island's west shore is walled off from
-## the open sea on every side: column 25 is wall from row 2 to 13, row 1 closes it
-## above and row 13's own eleven wall cells close it below. The east shore is
-## open water, so (41,8) is the landfall and (38,7) the `$7b` cave tile that
-## warps into the gym.
+## Route 20's island is landed on from the east: its west channel is walled off
+## from the sea on every side. (38,7) is the `$7b` cave tile into the gym.
 const ROUTE_20_LANDING: Vector2i = Vector2i(41, 8)
 const SEAFOAM_GYM_DOOR: Vector2i = Vector2i(38, 7)
 ## `maps/SeafoamGym.asm`: Blaine on (5,2) inside a 13-cell cave, faced from the
@@ -732,12 +693,8 @@ const BADGE_EARTH: int = 15
 const EVENT_BEAT_BLUE: int = 1228
 const VIRIDIAN_GYM_EXIT: Vector2i = Vector2i(4, 17)
 
-## Mt. Silver. Every step past the gate is a warp or a connection, so the leg
-## needs only the map the walk west crosses onto (`constants/map_constants.asm`,
-## `data/maps/attributes.asm`). The three cave rooms are the one place the
-## profiles renumber, 74 to 76 in Crystal and 66 to 68 in Gold and Silver, which
-## is why `tools/checks/mt_silver.gd` splits them and this Crystal-only walk
-## does not name them at all.
+## The three Mt. Silver cave rooms are 74 to 76 in Crystal and 66 to 68 in Gold
+## and Silver, so this walk names none of them.
 const SILVER_GROUP: int = 19
 const SILVER_CAVE_OUTSIDE_NUMBER: int = 2
 const ROUTE_22_NUMBER: int = 2
@@ -755,13 +712,9 @@ const OAK_FACE: Vector2i = Vector2i(4, 3)
 const EVENT_TALKED_TO_OAK_IN_KANTO: int = 225
 const EVENT_OPENED_MT_SILVER: int = 1871
 
-## The Victory Road Gate is three regions joined by two single cells, and a black
-## belt stands in each (`maps/VictoryRoadGate.asm`). The right belt on (12,5)
-## joins the corridor to the Route 22 arm and is hidden by EVENT_FOUGHT_SNORLAX,
-## which `_wake_snorlax()` already set; the left belt on (7,5) joins it to the
-## Route 28 arm and is hidden by EVENT_OPENED_MT_SILVER. Oak is therefore the
-## gate on Mt. Silver, not a courtesy, and `tools/checks/mt_silver.gd` pins all
-## four flag combinations.
+## `maps/VictoryRoadGate.asm`: the belt on (12,5) is hidden by
+## EVENT_FOUGHT_SNORLAX and the one on (7,5) by EVENT_OPENED_MT_SILVER, so Oak
+## is the gate on Mt. Silver.
 const ROUTE_22_GATE_DOOR: Vector2i = Vector2i(13, 5)
 const GATE_WEST_DOOR: Vector2i = Vector2i(1, 7)
 
@@ -815,13 +768,9 @@ const EVENT_TELEPORT_GUY: int = 1916
 const EVENT_RIVAL_SPROUT_TOWER: int = 1732
 const EVENT_RED_IN_MT_SILVER: int = 1890
 
-## Maps this walk names by id rather than by cell, where the two profiles disagree.
-## A map number counts from its group's first entry, so a map pokegold does not
-## ship shifts every later number in that group: group 3 runs eight lower from
-## `UNION_CAVE_1F` on, because pokecrystal inserts eight Ruins of Alph rooms, and
-## group 11 shifts around `GOLDENROD_POKECENTER_1F` and the absent
-## `GOLDENROD_DEPT_STORE_ROOF`. Only the ids this walk resolves are listed;
-## everything else it reaches is found by the cell it stands on.
+## Maps this walk names by id, where the two profiles disagree: group 3 runs
+## eight lower from `UNION_CAVE_1F` on pokegold and group 11 shifts around
+## `GOLDENROD_POKECENTER_1F`.
 const MAP_IDS: Dictionary = {
 	&"ILEX_FOREST": {&"crystal": Vector2i(3, 52), &"gold": Vector2i(3, 44)},
 	&"MAHOGANY_MART_1F": {&"crystal": Vector2i(3, 48), &"gold": Vector2i(3, 40)},
@@ -882,6 +831,8 @@ func _initialize() -> void:
 
 
 func _home_path(data: GameData) -> Array:
+	if data.generation == RomRegistry.GEN1:
+		return _gen1_home_path(data)
 	var path: Array = []
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 24, 7, Vector2i.ZERO)
 	if world == null:
@@ -917,6 +868,8 @@ func _home_path(data: GameData) -> Array:
 
 
 func _story_path(data: GameData) -> Dictionary:
+	if data.generation == RomRegistry.GEN1:
+		return _gen1_story_path(data)
 	# The walked route is a new game, so it starts on the new game's own world
 	# state rather than a bare one: Gen2WorldSpawn is what the launcher hands the
 	# screen, and its SPAWN_HOME record carries the source start money. Without
@@ -2139,14 +2092,9 @@ func _goldenrod_flower_shop(
 	return {"ok": true}
 
 
-## Goldenrod to the Fog Badge. Two errands gate it: the SquirtBottle, whose shape
-## is the leg's one profile split, and Morty, who is absent until the Burned
-## Tower's beasts are released. Crystal spends the bottle on a round trip, Floria
-## having to be met on Route 36 first and talked to again in the shop before
-## `FlowerShopTeacherScript` reaches its `verbosegiveitem SQUIRTBOTTLE`. Gold and
-## Silver ship no Floria on Route 36 at all and their teacher is
-## `checkflag ENGINE_PLAINBADGE` and nothing else, so the badge the walk already
-## holds is the whole gate and the trip north before the shop buys nothing.
+## Goldenrod to the Fog Badge. Crystal's SquirtBottle needs Floria met on Route
+## 36 before `FlowerShopTeacherScript` gives it; Gold and Silver's teacher is
+## `checkflag ENGINE_PLAINBADGE` and nothing else.
 func _fog_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -2714,13 +2662,8 @@ func _olivine_gym_leg(
 	return {"ok": true}
 
 
-## The Mineral Badge to the Glacier Badge. Mahogany's gym is closed until the
-## Rocket hideout under its souvenir shop is cleared, and the hideout only opens
-## after Lance is met at the Lake of Rage, which is behind the Red Gyarados in the
-## middle of the water. The hideout is three floors of one-way halves rather than
-## one maze: each floor is cut in two and the halves are joined through the other
-## floor, so the route climbs and drops the same ladders several times. Its own
-## doors are the only other links, and each opens on something learned a floor away.
+## The Mineral Badge to the Glacier Badge: the Red Gyarados, Lance at the lake,
+## the hideout's three floors of halves joined through each other, then Pryce.
 func _glacier_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -3286,13 +3229,8 @@ func _mahogany_gym_leg(
 
 
 
-## Mahogany Town west to Goldenrod City and back, clearing the Radio Tower. This
-## leg is what opens Blackthorn Gym: BLACKTHORNCITY_SUPER_NERD1 stands on (18,12),
-## the only cell that reaches the gym door warp at (18,11), and its event flag is
-## set only by `maps/RadioTower5F.asm`'s boss script. Beating Pryce already ran
-## `RadioTowerRocketsScript`, so the takeover is armed before the leg starts. The
-## walk back is six connections west, all crossed eastward earlier in the route,
-## and the two Route 42 lakes are surfed in reverse.
+## The Radio Tower opens Blackthorn Gym: BLACKTHORNCITY_SUPER_NERD1 on (18,12)
+## is hidden only by `maps/RadioTower5F.asm`'s boss script.
 func _radio_tower_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8581,6 +8519,7 @@ func _drain_story(
 		"waits_spent": 0,
 		"hall_of_fame": _hall_of_fame_events(results),
 		"credits": _credits_events(results),
+		"texts": _gen1_texts(results),
 		"reason": "",
 		"details": "",
 	}
@@ -8606,6 +8545,7 @@ func _drain_story(
 		"hall_of_fame": state["hall_of_fame"],
 		"credits": state["credits"],
 		"approaches": state["approaches"],
+		"texts": state["texts"],
 		"terminal": String(state["reason"]).is_empty() \
 			and not world.script_input_waiting() and world.pending_runtime_request().is_empty(),
 		"reason": state["reason"],
@@ -8625,7 +8565,9 @@ func _answer_input(world: Gen2WorldAPI, input_type: StringName, state: Dictionar
 		## A movement or a counted delay. Nothing answers it, so the walk
 		## spends the frames the way the screen does.
 		var standing_in: Dictionary = world.pending_script_wait()
-		var finished: Array = world.finish_script_waits()
+		var finished: Array = world.finish_script_waits(
+			maxi(1024, int(standing_in.get("frames", 0)) + 64)
+		)
 		state["waits_spent"] += 1
 		if world.pending_script_wait().is_empty():
 			return finished
@@ -8842,6 +8784,8 @@ func _request_apricorns(world: Gen2WorldAPI, _request: Dictionary, state: Dictio
 	return given.get("results", [])
 
 
+## `DisplayPokedex` behind a Generation 1 ball is a page with nothing to answer,
+## the way `waitsfx` is.
 func _request_audio(world: Gen2WorldAPI, _request: Dictionary, _state: Dictionary) -> Array:
 	return world.complete_runtime_request({"ok": true})
 
@@ -8851,6 +8795,7 @@ func _absorb_results(world: Gen2WorldAPI, results: Array, state: Dictionary) -> 
 	if results.is_empty():
 		return true
 	state["statuses"].append_array(_statuses(results))
+	state["texts"].append_array(_gen1_texts(results))
 	state["hall_of_fame"] += _hall_of_fame_events(results)
 	state["credits"] += _credits_events(results)
 	state["waits"] += 1
@@ -8972,15 +8917,14 @@ func _reachable_step(
 	# cell it was asked to reach, which is what makes Ecruteak Gym's thirty
 	# holes a maze instead of open floor. A warp_event on ordinary floor is
 	# inert, as CheckWarpCollision has it, so it is not a wall.
-	if direct != warp_target and not world.warp_at(direct).is_empty() \
-		and Gen2WorldCollision.is_warp_tile(world.collision_code_at(direct)):
+	if direct != warp_target and world.warp_pending(direct):
 		return Vector2i(-1, -1)
 	# A whirlpool traps rather than moves: .CheckTile answers
 	# PLAYERMOVEMENT_FORCE_TURN for the cell the player stands on, so a plan that
 	# crosses one never leaves it. Dragon's Den B1F's (10,20) is the first cell on
 	# a walked route where the shortest path runs through one.
 	if direct != warp_target and StringName(Gen2WorldCollision.forced_action(
-		world.collision_code_at(direct)
+		world.gen2_code_at(direct)
 	).get("kind", &"none")) == &"force_turn":
 		return Vector2i(-1, -1)
 	# move_result() calls can_walk_to() with the direction, which reads the
@@ -8988,13 +8932,11 @@ func _reachable_step(
 	# has to be anchored on the frontier cell instead, or the plan crosses walls
 	# the replayed walk then refuses. Route 32's UP_WALL row at y=72 is the
 	# first cell on the walked route where the two disagree.
-	var face: int = Gen2WorldCollision.face_mask_for_direction(step)
-	var walled: bool = face != 0 and (world.tile_permissions_at(cell) & face) != 0
-	if not walled and world.can_walk_to(direct):
+	if not world.step_blocked_from(cell, step) and world.can_walk_to(direct):
 		return direct
 	if world.movement_mode == Gen2WorldAPI.MOVEMENT_SURF:
 		return Vector2i(-1, -1)
-	if not Gen2WorldCollision.allows_hop(world.collision_code_at(cell), step):
+	if not world.allows_hop_at(cell, step):
 		return Vector2i(-1, -1)
 	var landing: Vector2i = cell + step * 2
 	var size: Vector2i = world.map_size_cells()
@@ -9048,6 +8990,35 @@ func _walk_to_story_cell(
 			"ok": true,
 			"events": _dispatch_after_step(world, target) if dispatch_target_events else [],
 		}
+	var plan: Dictionary = _plan_walk(world, target, water_only)
+	if not bool(plan["found"]):
+		return {
+			"ok": false,
+			"reason": "target %s unreachable from %s on %s (collision $%02x, walkable %s)%s" % [
+				target, world.player_cell, _map_value(world),
+				world.collision_code_at(target), world.can_walk_to(target),
+				_objects_in_the_way(world, target, plan["previous"]),
+			],
+			"target": _cell_value_from_vector(target),
+		}
+	var steps: Array[Vector2i] = plan["steps"]
+	var events: Array = []
+	for direction: Vector2i in steps:
+		var moved: Dictionary = world.move_result(direction)
+		if not bool(moved.get("ok", false)):
+			return {
+				"ok": false,
+				"reason": "walk step %s from %s refused: %s" % [
+					direction, _cell_value(world), moved.get("reason", ""),
+				],
+			}
+		events = _dispatch_after_step(world)
+		if not events.is_empty():
+			break
+	return {"ok": true, "steps": steps.size(), "events": events}
+
+
+func _plan_walk(world: Gen2WorldAPI, target: Vector2i, water_only: bool = false) -> Dictionary:
 	var frontier: Array[Vector2i] = [world.player_cell]
 	var previous: Dictionary = {world.player_cell: {"cell": Vector2i(-1, -1), "direction": Vector2i.ZERO}}
 	var directions: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
@@ -9065,36 +9036,13 @@ func _walk_to_story_cell(
 				continue
 			previous[next] = {"cell": cell, "direction": direction}
 			frontier.append(next)
-	if not found:
-		return {
-			"ok": false,
-			"reason": "target %s unreachable from %s on %s (collision $%02x, walkable %s)%s" % [
-				target, world.player_cell, _map_value(world),
-				world.collision_code_at(target), world.can_walk_to(target),
-				_objects_in_the_way(world, target, previous),
-			],
-			"target": _cell_value_from_vector(target),
-		}
 	var steps: Array[Vector2i] = []
 	var cursor: Vector2i = target
-	while cursor != world.player_cell:
+	while found and cursor != world.player_cell:
 		var link: Dictionary = previous[cursor]
 		steps.push_front(link["direction"])
 		cursor = link["cell"]
-	var events: Array = []
-	for direction: Vector2i in steps:
-		var moved: Dictionary = world.move_result(direction)
-		if not bool(moved.get("ok", false)):
-			return {
-				"ok": false,
-				"reason": "walk step %s from %s refused: %s" % [
-					direction, _cell_value(world), moved.get("reason", ""),
-				],
-			}
-		events = _dispatch_after_step(world)
-		if not events.is_empty():
-			break
-	return {"ok": true, "steps": steps.size(), "events": events}
+	return {"found": found, "steps": steps, "previous": previous}
 
 
 ## What a failed walk hit, when what it hit was somebody standing there.
@@ -9327,3 +9275,851 @@ func _presentation_events(results: Array, type: StringName) -> int:
 			if StringName(event.get("type", &"")) == type:
 				count += 1
 	return count
+
+
+## Generation 1's own route. A map id is `constants/map_constants.asm`'s one
+## flat number, so every row is group 0; a cell is the map's own object file's.
+const GEN1_PALLET_TOWN: int = 0
+const GEN1_VIRIDIAN_CITY: int = 1
+const GEN1_PEWTER_CITY: int = 2
+const GEN1_ROUTE_1: int = 12
+const GEN1_ROUTE_2: int = 13
+const GEN1_REDS_HOUSE_1F: int = 37
+const GEN1_OAKS_LAB: int = 40
+const GEN1_VIRIDIAN_MART: int = 42
+const GEN1_VIRIDIAN_FOREST_NORTH_GATE: int = 47
+const GEN1_VIRIDIAN_FOREST_SOUTH_GATE: int = 50
+const GEN1_VIRIDIAN_FOREST: int = 51
+const GEN1_PEWTER_GYM: int = 54
+const GEN1_CERULEAN_CITY: int = 3
+const GEN1_ROUTE_3: int = 14
+const GEN1_ROUTE_4: int = 15
+const GEN1_MT_MOON_1F: int = 59
+const GEN1_MT_MOON_B1F: int = 60
+const GEN1_MT_MOON_B2F: int = 61
+const GEN1_MT_MOON_1F_LADDER := Vector2i(5, 5)
+const GEN1_MT_MOON_NERD_CELL := Vector2i(13, 8)
+const GEN1_MT_MOON_BELOW_DOME := Vector2i(12, 7)
+const GEN1_MT_MOON_B2F_EXIT_LADDER := Vector2i(5, 7)
+const GEN1_MT_MOON_B1F_EXIT := Vector2i(27, 3)
+const GEN1_EVENT_GOT_DOME_FOSSIL: int = 0x570 + 14
+const GEN1_ROUTE_24: int = 35
+const GEN1_ROUTE_25: int = 36
+const GEN1_BILLS_HOUSE: int = 88
+const GEN1_CERULEAN_GYM: int = 65
+const GEN1_CERULEAN_BRIDGE_FOOT := Vector2i(20, 6)
+const GEN1_CERULEAN_GYM_DOOR := Vector2i(30, 19)
+const GEN1_BELOW_BILL_POKEMON := Vector2i(6, 6)
+const GEN1_BILLS_PC_CELL := Vector2i(1, 5)
+const GEN1_BELOW_BILL := Vector2i(4, 5)
+const GEN1_MISTY := Vector2i(4, 2)
+const GEN1_EVENT_BEAT_CERULEAN_RIVAL: int = 152
+const GEN1_EVENT_GOT_TM11: int = 190
+const GEN1_EVENT_BEAT_MISTY: int = 191
+const GEN1_EVENT_MET_BILL: int = 1360
+const GEN1_EVENT_USED_CELL_SEPARATOR_ON_BILL: int = 1371
+const GEN1_EVENT_BILL_SAID_USE_CELL_SEPARATOR: int = 1374
+const GEN1_EVENT_GOT_SS_TICKET: int = 1372
+const GEN1_BIT_CASCADEBADGE: int = 1
+const GEN1_VERMILION_CITY: int = 5
+const GEN1_CERULEAN_TRASHED_HOUSE: int = 62
+const GEN1_TRASHED_HOUSE_DOOR := Vector2i(27, 11)
+const GEN1_TRASHED_HOUSE_BACK_DOOR := Vector2i(3, 0)
+const GEN1_CERULEAN_BELOW_THIEF := Vector2i(30, 9)
+const GEN1_EVENT_BEAT_CERULEAN_ROCKET_THIEF: int = 167
+const GEN1_ROUTE_5: int = 16
+const GEN1_ROUTE_6: int = 17
+const GEN1_UNDERGROUND_PATH_ROUTE_5: int = 71
+const GEN1_UNDERGROUND_PATH_ROUTE_6: int = 74
+const GEN1_UNDERGROUND_PATH_NORTH_SOUTH: int = 119
+const GEN1_VERMILION_DOCK: int = 94
+const GEN1_SS_ANNE_1F: int = 95
+const GEN1_SS_ANNE_2F: int = 96
+const GEN1_SS_ANNE_CAPTAINS_ROOM: int = 101
+const GEN1_VERMILION_TICKET_CHECK := Vector2i(18, 30)
+const GEN1_SS_ANNE_RIVAL_CELL := Vector2i(36, 8)
+const GEN1_CAPTAIN := Vector2i(4, 2)
+const GEN1_EVENT_GOT_HM01: int = 1504
+const GEN1_EVENT_RUBBED_CAPTAINS_BACK: int = 1505
+const GEN1_EVENT_SS_ANNE_LEFT: int = 1506
+const GEN1_VERMILION_GYM: int = 92
+const GEN1_VERMILION_TREE_APPROACH := Vector2i(14, 18)
+const GEN1_VERMILION_GYM_DOOR := Vector2i(12, 19)
+const GEN1_LT_SURGE := Vector2i(5, 1)
+const GEN1_HM01: int = 0xC4
+const GEN1_TM24: int = 0xE0
+const GEN1_EVENT_GOT_TM24: int = 358
+const GEN1_EVENT_BEAT_LT_SURGE: int = 359
+const GEN1_EVENT_2ND_LOCK_OPENED: int = 352
+const GEN1_BIT_THUNDERBADGE: int = 2
+const GEN1_BEDROOM_STAIRS := Vector2i(7, 1)
+const GEN1_HOUSE_DOOR := Vector2i(2, 7)
+## `PalletTownDefaultScript` stops the player at `wYCoord == 1`, and Yellow's at 0.
+const GEN1_PALLET_NORTH_PATH: Dictionary = {
+	&"red": Vector2i(10, 1), &"blue": Vector2i(10, 1), &"yellow": Vector2i(10, 0),
+}
+const GEN1_PALLET_LAB_DOOR := Vector2i(12, 11)
+const GEN1_LAB_DOOR := Vector2i(4, 11)
+const GEN1_LAB_BELOW_CHARMANDER := Vector2i(6, 4)
+const GEN1_LAB_BELOW_OAK := Vector2i(5, 3)
+const GEN1_VIRIDIAN_MART_DOOR := Vector2i(29, 19)
+const GEN1_MART_DOOR := Vector2i(3, 7)
+const GEN1_VIRIDIAN_FOREST_GATE_DOOR := Vector2i(5, 9)
+const GEN1_PEWTER_GYM_DOOR := Vector2i(16, 17)
+const GEN1_GYM_DOOR := Vector2i(4, 13)
+const GEN1_BELOW_BROCK := Vector2i(4, 2)
+const GEN1_EVENT_GOT_STARTER: int = 34
+const GEN1_EVENT_BATTLED_RIVAL_IN_OAKS_LAB: int = 35
+const GEN1_EVENT_GOT_POKEDEX: int = 37
+const GEN1_EVENT_OAK_GOT_PARCEL: int = 56
+const GEN1_EVENT_GOT_OAKS_PARCEL: int = 57
+const GEN1_EVENT_GOT_TM34: int = 118
+const GEN1_EVENT_BEAT_BROCK: int = 119
+const GEN1_CHARMANDER_DEX: int = 4
+const GEN1_OAKS_PARCEL: int = 0x46
+const GEN1_TM34: int = 0xEA
+const GEN1_BIT_BOULDERBADGE: int = 0
+const GEN1_RIVAL_NAMES: Dictionary = {&"red": "BLUE", &"blue": "RED", &"yellow": "BLUE"}
+## The opening's walk from the north path into the lab is about 300 passes.
+const GEN1_SETTLE_PASSES: int = 1200
+
+
+func _gen1_home_path(data: GameData) -> Array:
+	var spawn: Gen2WorldSnapshot = Gen2WorldSpawn.new_game_snapshot(data)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open_snapshot(data, spawn) if spawn != null else null
+	if world == null:
+		return [{"ok": false, "reason": "missing home map"}]
+	var path: Array = []
+	var random := RandomNumberGenerator.new()
+	random.seed = 7
+	for leg: Array in [
+		[GEN1_BEDROOM_STAIRS, "stairs_to_1f"], [GEN1_HOUSE_DOOR, "front_door_to_pallet"],
+	]:
+		var walked: Dictionary = _gen1_warp_walk(world, leg[0], null, random, data)
+		path.append({
+			"step": String(leg[1]), "map": _map_value(world), "cell": _cell_value(world),
+			"transition": _transition_value(walked.get("transition", {})),
+		})
+		if not bool(walked.get("ok", false)):
+			path.append({"ok": false, "reason": walked.get("reason", "")})
+			return path
+	return path
+
+
+func _gen1_story_path(data: GameData) -> Dictionary:
+	var spawn: Gen2WorldSnapshot = Gen2WorldSpawn.new_game_snapshot(data)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open_snapshot(data, spawn) if spawn != null else null
+	if world == null:
+		return {"ok": false, "reason": "missing new-game spawn"}
+	world.gen1_rival_name = String(GEN1_RIVAL_NAMES.get(data.id, "BLUE"))
+	world.set_player_name("RED")
+	var random := RandomNumberGenerator.new()
+	random.seed = 7
+	world.script_random = random
+	var identity_random := RandomNumberGenerator.new()
+	identity_random.seed = 23
+	var save: Gen2SaveData = Gen2SaveStore.create_new_game(data, 0, "RED", -1, identity_random)
+	if save == null:
+		return {"ok": false, "reason": "could not create source-shaped new game"}
+	save.world = world.snapshot()
+	var path: Array = []
+	var legs: Array[Callable] = [
+		_gen1_bedroom_leg, _gen1_oak_leg, _gen1_lab_leg, _gen1_parcel_leg,
+		_gen1_pokedex_leg, _gen1_viridian_forest_leg, _gen1_pewter_gym_leg,
+		_gen1_mt_moon_leg, _gen1_cerulean_rival_leg, _gen1_bills_house_leg,
+		_gen1_cerulean_gym_leg, _gen1_cerulean_thief_leg, _gen1_ss_anne_leg,
+		_gen1_vermilion_gym_leg,
+	]
+	for leg: Callable in legs:
+		var walked: Dictionary = leg.call(world, save, random, data, path)
+		if not bool(walked.get("ok", false)):
+			return walked
+	return {
+		"ok": true,
+		"path": path,
+		"party": _party_species(save),
+		"items": _named_items(data, world.state.items()),
+		"event_flags": world.state.event_flags(),
+		"badge_count": world.state.badge_count(),
+	}
+
+
+## `RunMapScript` runs on every frame `JoypadOverworld` reads, so a leg settles
+## by spending passes until nothing walks, waits or asks; a step that lands on
+## a warp takes it, as `CheckWarpsNoCollision` does under a scripted walk.
+func _gen1_settle(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	results: Array = []
+) -> Dictionary:
+	var statuses: Array = []
+	var battles: Array = []
+	var texts: Array = []
+	var warps: int = 0
+	for pass_index: int in GEN1_SETTLE_PASSES:
+		if not results.is_empty():
+			var run: Dictionary = _drain_story(world, results, save, random, data)
+			texts.append_array(run.get("texts", []))
+			statuses.append_array(run.get("statuses", []))
+			battles.append_array(run.get("battles", []))
+			if not String(run.get("reason", "")).is_empty():
+				return {
+					"ok": false, "reason": run["reason"], "details": run.get("details", ""),
+					"passes": pass_index, "texts": texts,
+				}
+		var stepping: bool = world.player_step_in_progress()
+		## A state that only writes the next one shows nothing on its own pass.
+		var script_state: int = world.gen1_map_script_state()
+		world.advance_script_wait_frame()
+		world.advance_player_step_pass()
+		world.advance_scripted_steps_pass()
+		if stepping and not world.player_step_in_progress() and world.warp_pending():
+			if bool(world.try_warp().get("ok", false)):
+				warps += 1
+		results = world.dispatch_sight_events()
+		if results.is_empty() and _gen1_settled(world) \
+			and world.gen1_map_script_state() == script_state:
+			return {
+				"ok": true, "passes": pass_index + 1, "statuses": statuses,
+				"battles": battles, "texts": texts, "warps": warps,
+			}
+	return {
+		"ok": false, "reason": "never settled on %s at %s" % [_map_value(world), _cell_value(world)],
+		"details": JSON.stringify({
+			"movement": world.scripted_movement_in_progress(),
+			"busy": world.script_busy(),
+			"input": world.pending_script_input(),
+			"request": world.pending_runtime_request(),
+			"map_script": world.gen1_map_script_state(),
+		}),
+		"texts": texts,
+	}
+
+
+func _gen1_settled(world: Gen2WorldAPI) -> bool:
+	return not world.scripted_movement_in_progress() and not world.script_busy() \
+		and not world.gen1_movement_script_running() \
+		and not world.gen1_map_load_pending() and world.pending_runtime_request().is_empty() \
+		and not world.player_step_in_progress() and world.pending_script_wait().is_empty()
+
+
+func _gen1_texts(results: Array) -> Array:
+	var out: Array = []
+	for result: Dictionary in results:
+		var event: Dictionary = result.get("event", {})
+		if StringName(event.get("type", &"")) == &"text":
+			out.append(String(event["text"]))
+	return out
+
+
+func _gen1_walk(
+	world: Gen2WorldAPI, cell: Vector2i, save: Gen2SaveData, random: RandomNumberGenerator,
+	data: GameData
+) -> Dictionary:
+	var runs: Array = []
+	var from: Vector2i = world.map_id()
+	for _attempt: int in WALK_RESOLVE_ATTEMPTS:
+		var walked: Dictionary = _walk_to_story_cell(world, cell)
+		var settled: Dictionary = _gen1_settle(world, save, random, data, walked.get("events", []))
+		if not settled.get("texts", []).is_empty() or not settled.get("battles", []).is_empty():
+			runs.append({"cell": _cell_value(world), "texts": settled.get("texts", []),
+				"battles": settled.get("battles", [])})
+		if not bool(settled.get("ok", false)):
+			return {"ok": false, "reason": settled.get("reason", ""), "details": settled.get("details", ""), "runs": runs}
+		if not bool(walked.get("ok", false)):
+			return {"ok": false, "reason": walked.get("reason", ""), "runs": runs}
+		if world.player_cell == cell or world.map_id() != from:
+			return {"ok": true, "runs": runs}
+	return {"ok": false, "reason": "walk to %s kept being interrupted" % cell, "runs": runs}
+
+
+func _gen1_warp_walk(
+	world: Gen2WorldAPI, cell: Vector2i, save: Gen2SaveData, random: RandomNumberGenerator,
+	data: GameData
+) -> Dictionary:
+	var from: Vector2i = world.map_id()
+	var walked: Dictionary = _gen1_walk(world, cell, save, random, data)
+	if not bool(walked.get("ok", false)):
+		return walked
+	if world.map_id() != from:
+		walked["transition"] = {"ok": true, "from_map": from, "to_map": world.map_id(), "to_cell": world.player_cell}
+		return walked
+	## `CheckWarpsCollision`: a mat the landing did not take is left by pressing
+	## into the edge behind it, which `ExtraWarpCheck` answers off the facing.
+	var transition: Dictionary = {}
+	for direction: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		world.player_facing = world.facing_for_direction(direction)
+		if not world.can_walk_to(cell + direction, direction) and world.blocked_step_warps():
+			transition = world.try_warp()
+			break
+	if not bool(transition.get("ok", false)):
+		return {"ok": false, "reason": "warp at %s did not fire" % cell, "runs": walked["runs"]}
+	var settled: Dictionary = _gen1_settle(world, save, random, data)
+	settled["transition"] = transition
+	settled["runs"] = walked["runs"]
+	return settled
+
+
+func _gen1_cross(
+	world: Gen2WorldAPI, direction: String, map: int, save: Gen2SaveData,
+	random: RandomNumberGenerator, data: GameData
+) -> Dictionary:
+	var runs: Array = []
+	for _attempt: int in WALK_RESOLVE_ATTEMPTS:
+		var walked: Dictionary = _walk_to_connection(world, direction, 0, map)
+		var settled: Dictionary = _gen1_settle(world, save, random, data, walked.get("events", []))
+		if not settled.get("texts", []).is_empty() or not settled.get("battles", []).is_empty():
+			runs.append({"cell": _cell_value(world), "texts": settled.get("texts", []),
+				"battles": settled.get("battles", [])})
+		if not bool(settled.get("ok", false)):
+			return {"ok": false, "reason": settled.get("reason", ""), "details": settled.get("details", ""), "runs": runs}
+		if bool(walked.get("ok", false)):
+			settled = _gen1_settle(world, save, random, data)
+			if not bool(settled.get("ok", false)):
+				return {"ok": false, "reason": settled.get("reason", ""), "details": settled.get("details", ""), "runs": runs}
+			return {"ok": true, "runs": runs, "transition": walked.get("transition", {})}
+		if walked.get("events", []).is_empty():
+			return {"ok": false, "reason": walked.get("reason", ""), "runs": runs}
+	return {"ok": false, "reason": "crossing %s kept being interrupted" % direction, "runs": runs}
+
+
+func _gen1_talk(
+	world: Gen2WorldAPI, cell: Vector2i, facing: int, save: Gen2SaveData,
+	random: RandomNumberGenerator, data: GameData
+) -> Dictionary:
+	var walked: Dictionary = _gen1_walk(world, cell, save, random, data)
+	if not bool(walked.get("ok", false)):
+		return walked
+	world.player_facing = facing
+	var settled: Dictionary = _gen1_settle(world, save, random, data, world.interact())
+	settled["runs"] = walked["runs"]
+	return settled
+
+
+## A trainer who walked up may stand where the walk meant to, so the side is
+## picked again after every interruption.
+func _gen1_talk_to(
+	world: Gen2WorldAPI, target: Vector2i, save: Gen2SaveData, random: RandomNumberGenerator,
+	data: GameData
+) -> Dictionary:
+	var runs: Array = []
+	for _attempt: int in WALK_RESOLVE_ATTEMPTS:
+		var side: Vector2i = Vector2i.ZERO
+		for direction: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+			if world.player_cell == target + direction or bool(_plan_walk(world, target + direction)["found"]):
+				side = direction
+				break
+		if side == Vector2i.ZERO:
+			return {"ok": false, "reason": "no cell beside %s is in reach from %s" % [
+				target, world.player_cell], "runs": runs}
+		var walked: Dictionary = _walk_to_story_cell(world, target + side)
+		var settled: Dictionary = _gen1_settle(world, save, random, data, walked.get("events", []))
+		if not settled.get("texts", []).is_empty() or not settled.get("battles", []).is_empty():
+			runs.append({"cell": _cell_value(world), "texts": settled.get("texts", []),
+				"battles": settled.get("battles", [])})
+		if not bool(settled.get("ok", false)):
+			return {"ok": false, "reason": settled.get("reason", ""), "details": settled.get("details", ""), "runs": runs}
+		if world.player_cell != target + side:
+			continue
+		world.player_facing = world.facing_for_direction(-side)
+		settled = _gen1_settle(world, save, random, data, world.interact())
+		settled["runs"] = runs
+		return settled
+	return {"ok": false, "reason": "the walk to %s kept being interrupted" % target, "runs": runs}
+
+
+func _gen1_step(path: Array, step: String, world: Gen2WorldAPI, result: Dictionary, extras: Dictionary = {}) -> Dictionary:
+	var record: Dictionary = {
+		"step": step, "map": _map_value(world), "cell": _cell_value(world), "ok": bool(result.get("ok", false)),
+		"map_script": world.gen1_map_script_state(),
+	}
+	for key: String in ["runs", "texts", "battles", "passes", "reason", "details"]:
+		if result.has(key):
+			record[key] = result[key]
+	for key: String in extras:
+		record[key] = extras[key]
+	path.append(record)
+	if not bool(result.get("ok", false)):
+		return {"ok": false, "path": path, "reason": "%s: %s" % [step, result.get("reason", "")]}
+	return {"ok": true}
+
+
+func _gen1_flag_leg(path: Array, step: String, world: Gen2WorldAPI, flag: int, name: String) -> Dictionary:
+	if world.event_flag_active(flag):
+		return {"ok": true}
+	return {"ok": false, "path": path, "reason": "%s: %s is clear" % [step, name]}
+
+
+func _gen1_bedroom_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var entered: Dictionary = _gen1_settle(world, save, random, data, world.dispatch_sight_events())
+	var stepped: Dictionary = _gen1_step(path, "reds_house_2f", world, entered)
+	if not bool(stepped["ok"]):
+		return stepped
+	for leg: Array in [
+		[GEN1_BEDROOM_STAIRS, "stairs_to_1f", GEN1_REDS_HOUSE_1F],
+		[GEN1_HOUSE_DOOR, "front_door_to_pallet", GEN1_PALLET_TOWN],
+	]:
+		stepped = _gen1_step(path, String(leg[1]), world, _gen1_warp_walk(world, leg[0], save, random, data))
+		if not bool(stepped["ok"]):
+			return stepped
+		if world.map_id() != Vector2i(0, int(leg[2])):
+			return {"ok": false, "path": path, "reason": "%s landed on %s" % [leg[1], _map_value(world)]}
+	return {"ok": true}
+
+
+func _gen1_oak_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var walked: Dictionary = _gen1_walk(
+		world, GEN1_PALLET_NORTH_PATH[data.id], save, random, data
+	)
+	var stepped: Dictionary = _gen1_step(path, "pallet_north_path_oak", world, walked)
+	if not bool(stepped["ok"]):
+		return stepped
+	if world.map_id() != Vector2i(0, GEN1_OAKS_LAB):
+		return {"ok": false, "path": path, "reason": "Oak left the player on %s at %s" % [
+			_map_value(world), _cell_value(world)]}
+	return {"ok": true}
+
+
+func _gen1_lab_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var starter: Dictionary = _gen1_talk(
+		world, GEN1_LAB_BELOW_CHARMANDER, Gen2WorldSprite.FACING_UP, save, random, data
+	)
+	var stepped: Dictionary = _gen1_step(path, "oaks_lab_charmander", world, starter, {
+		"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "oaks_lab_charmander", world, GEN1_EVENT_GOT_STARTER, "EVENT_GOT_STARTER")
+	if not bool(stepped["ok"]):
+		return stepped
+	if save.party.is_empty() or int(save.party[0].species) != GEN1_CHARMANDER_DEX:
+		return {"ok": false, "path": path, "reason": "the ball gave %s" % [_party_species(save)]}
+	var leaving: Dictionary = _gen1_warp_walk(world, GEN1_LAB_DOOR, save, random, data)
+	stepped = _gen1_step(path, "oaks_lab_rival_fight", world, leaving, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_flag_leg(
+		path, "oaks_lab_rival_fight", world, GEN1_EVENT_BATTLED_RIVAL_IN_OAKS_LAB,
+		"EVENT_BATTLED_RIVAL_IN_OAKS_LAB"
+	)
+
+
+func _gen1_parcel_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_crossings(path, world, save, random, data, [
+		["north", GEN1_ROUTE_1, "pallet_to_route_1"],
+		["north", GEN1_VIRIDIAN_CITY, "route_1_to_viridian"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var mart: Dictionary = _gen1_warp_walk(world, GEN1_VIRIDIAN_MART_DOOR, save, random, data)
+	stepped = _gen1_step(path, "viridian_mart_parcel", world, mart, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "viridian_mart_parcel", world, GEN1_EVENT_GOT_OAKS_PARCEL, "EVENT_GOT_OAKS_PARCEL")
+	if not bool(stepped["ok"]):
+		return stepped
+	if int(world.state.items().get(GEN1_OAKS_PARCEL, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "the clerk left the bag holding %s" % [
+			_named_items(data, world.state.items())]}
+	stepped = _gen1_step(path, "viridian_mart_exit", world, _gen1_warp_walk(world, GEN1_MART_DOOR, save, random, data))
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_crossings(path, world, save, random, data, [
+		["south", GEN1_ROUTE_1, "viridian_to_route_1"],
+		["south", GEN1_PALLET_TOWN, "route_1_to_pallet"],
+	])
+
+
+func _gen1_crossings(
+	path: Array, world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator,
+	data: GameData, legs: Array
+) -> Dictionary:
+	for leg: Array in legs:
+		var crossed: Dictionary = _gen1_cross(world, String(leg[0]), int(leg[1]), save, random, data)
+		var stepped: Dictionary = _gen1_step(path, String(leg[2]), world, crossed)
+		if not bool(stepped["ok"]):
+			return stepped
+		if world.map_id() != Vector2i(0, int(leg[1])):
+			return {"ok": false, "path": path, "reason": "%s landed on %s" % [leg[2], _map_value(world)]}
+	return {"ok": true}
+
+
+func _gen1_pokedex_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var lab: Dictionary = _gen1_warp_walk(world, GEN1_PALLET_LAB_DOOR, save, random, data)
+	var stepped: Dictionary = _gen1_step(path, "oaks_lab_with_parcel", world, lab)
+	if not bool(stepped["ok"]):
+		return stepped
+	var oak: Dictionary = _gen1_talk(world, GEN1_LAB_BELOW_OAK, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "oaks_lab_pokedex", world, oak, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_OAK_GOT_PARCEL, "EVENT_OAK_GOT_PARCEL"], [GEN1_EVENT_GOT_POKEDEX, "EVENT_GOT_POKEDEX"],
+	]:
+		stepped = _gen1_flag_leg(path, "oaks_lab_pokedex", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	stepped = _gen1_step(path, "oaks_lab_exit", world, _gen1_warp_walk(world, GEN1_LAB_DOOR, save, random, data))
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_crossings(path, world, save, random, data, [
+		["north", GEN1_ROUTE_1, "pallet_to_route_1_again"],
+		["north", GEN1_VIRIDIAN_CITY, "route_1_to_viridian_again"],
+		["north", GEN1_ROUTE_2, "viridian_to_route_2"],
+	])
+
+
+func _gen1_viridian_forest_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	return _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_VIRIDIAN_FOREST_SOUTH_GATE, "route_2_to_south_gate"],
+		[GEN1_VIRIDIAN_FOREST, "south_gate_to_forest"],
+		[GEN1_VIRIDIAN_FOREST_NORTH_GATE, "forest_to_north_gate"],
+		[GEN1_ROUTE_2, "north_gate_to_route_2"],
+		["north", GEN1_PEWTER_CITY, "route_2_to_pewter"],
+	])
+
+
+## A row is [map, step], with the warp cell third where the map holds several
+## and the map a script walks on to fourth; a string first names a connection.
+func _gen1_warp_legs(
+	path: Array, world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator,
+	data: GameData, legs: Array
+) -> Dictionary:
+	for leg: Array in legs:
+		if leg[0] is String:
+			var crossed: Dictionary = _gen1_crossings(path, world, save, random, data, [leg])
+			if not bool(crossed["ok"]):
+				return crossed
+			continue
+		var cell: Vector2i = leg[2] if leg.size() > 2 and leg[2].x >= 0 \
+			else _gen1_warp_cell_to(world, int(leg[0]))
+		if cell.x < 0:
+			return {"ok": false, "path": path, "reason": "%s: %s has no standable warp to %d" % [
+				leg[1], _map_value(world), leg[0]]}
+		var stepped: Dictionary = _gen1_step(
+			path, String(leg[1]), world, _gen1_warp_walk(world, cell, save, random, data),
+			{"party": _party_species(save)}
+		)
+		if not bool(stepped["ok"]):
+			return stepped
+		var lands: int = int(leg[3]) if leg.size() > 3 else int(leg[0])
+		if world.map_id() != Vector2i(0, lands):
+			return {"ok": false, "path": path, "reason": "%s landed on %s" % [leg[1], _map_value(world)]}
+	return {"ok": true}
+
+
+## A gate's upper doorway cell is a warp nothing can stand on, and the forest's
+## second north cell is behind its first, so the nearest reachable one wins.
+func _gen1_warp_cell_to(world: Gen2WorldAPI, target: int) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var best_distance: int = 1 << 30
+	for warp: Dictionary in world.current_map.events.get("warps", []):
+		var number: int = int(warp.get("map_number", -1))
+		if number == Gen1Layout.WARP_TO_LAST_MAP:
+			number = world.gen1_last_map()
+		var cell := Vector2i(int(warp["x"]), int(warp["y"]))
+		if number != target:
+			continue
+		var plan: Dictionary = _plan_walk(world, cell)
+		if not bool(plan["found"]) or (plan["steps"] as Array).size() >= best_distance:
+			continue
+		best = cell
+		best_distance = (plan["steps"] as Array).size()
+	return best
+
+
+func _gen1_pewter_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var gym: Dictionary = _gen1_warp_walk(world, GEN1_PEWTER_GYM_DOOR, save, random, data)
+	var stepped: Dictionary = _gen1_step(path, "pewter_gym_entry", world, gym)
+	if not bool(stepped["ok"]):
+		return stepped
+	var brock: Dictionary = _gen1_talk(world, GEN1_BELOW_BROCK, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "pewter_gym_brock", world, brock, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_BROCK, "EVENT_BEAT_BROCK"], [GEN1_EVENT_GOT_TM34, "EVENT_GOT_TM34"],
+	]:
+		stepped = _gen1_flag_leg(path, "pewter_gym_brock", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_BOULDERBADGE)):
+		return {"ok": false, "path": path, "reason": "pewter_gym_brock: BOULDERBADGE is clear"}
+	if int(world.state.items().get(GEN1_TM34, 0)) != 1:
+		return {"ok": false, "path": path, "reason": "pewter_gym_brock: the bag holds %s" % [
+			_named_items(data, world.state.items())]}
+	return _gen1_step(path, "pewter_gym_exit", world, _gen1_warp_walk(world, GEN1_GYM_DOOR, save, random, data))
+
+
+func _gen1_mt_moon_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		["east", GEN1_ROUTE_3, "pewter_to_route_3"],
+		["north", GEN1_ROUTE_4, "route_3_to_route_4"],
+		[GEN1_MT_MOON_1F, "route_4_to_mt_moon"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_MT_MOON_B1F, "mt_moon_1f_to_b1f", GEN1_MT_MOON_1F_LADDER],
+		[GEN1_MT_MOON_B2F, "mt_moon_b1f_to_b2f"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var nerd: Dictionary = _gen1_walk(world, GEN1_MT_MOON_NERD_CELL, save, random, data)
+	stepped = _gen1_step(path, "mt_moon_super_nerd", world, nerd, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	var fossil: Dictionary = _gen1_talk(world, GEN1_MT_MOON_BELOW_DOME, Gen2WorldSprite.FACING_UP, save, random, data)
+	stepped = _gen1_step(path, "mt_moon_dome_fossil", world, fossil, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_flag_leg(path, "mt_moon_dome_fossil", world, GEN1_EVENT_GOT_DOME_FOSSIL, "EVENT_GOT_DOME_FOSSIL")
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_MT_MOON_B1F, "mt_moon_b2f_to_b1f", GEN1_MT_MOON_B2F_EXIT_LADDER],
+		[GEN1_ROUTE_4, "mt_moon_b1f_to_route_4", GEN1_MT_MOON_B1F_EXIT],
+		["east", GEN1_CERULEAN_CITY, "route_4_to_cerulean"],
+	])
+
+
+func _gen1_cerulean_rival_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var rival: Dictionary = _gen1_walk(world, GEN1_CERULEAN_BRIDGE_FOOT, save, random, data)
+	var stepped: Dictionary = _gen1_step(path, "cerulean_rival", world, rival, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_flag_leg(path, "cerulean_rival", world, GEN1_EVENT_BEAT_CERULEAN_RIVAL, "EVENT_BEAT_CERULEAN_RIVAL")
+
+
+func _gen1_bills_house_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		["north", GEN1_ROUTE_24, "cerulean_to_route_24"],
+		["east", GEN1_ROUTE_25, "route_24_to_route_25"],
+		[GEN1_BILLS_HOUSE, "route_25_to_bills_house"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var talks: Array = [
+		[GEN1_BELOW_BILL_POKEMON, "bills_house_pokemon", GEN1_EVENT_BILL_SAID_USE_CELL_SEPARATOR, "EVENT_BILL_SAID_USE_CELL_SEPARATOR"],
+		[GEN1_BILLS_PC_CELL, "bills_house_cell_separator", GEN1_EVENT_USED_CELL_SEPARATOR_ON_BILL, "EVENT_USED_CELL_SEPARATOR_ON_BILL"],
+		[GEN1_BELOW_BILL, "bills_house_ss_ticket", GEN1_EVENT_GOT_SS_TICKET, "EVENT_GOT_SS_TICKET"],
+	]
+	for talk: Array in talks:
+		var spoken: Dictionary = _gen1_talk(world, talk[0], Gen2WorldSprite.FACING_UP, save, random, data)
+		stepped = _gen1_step(path, String(talk[1]), world, spoken, {
+			"items": _named_items(data, world.state.items())})
+		if not bool(stepped["ok"]):
+			return stepped
+		stepped = _gen1_flag_leg(path, String(talk[1]), world, int(talk[2]), String(talk[3]))
+		if not bool(stepped["ok"]):
+			return stepped
+	stepped = _gen1_flag_leg(path, "bills_house_ss_ticket", world, GEN1_EVENT_MET_BILL, "EVENT_MET_BILL")
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_ROUTE_25, "bills_house_exit"],
+		["west", GEN1_ROUTE_24, "route_25_to_route_24"],
+		["south", GEN1_CERULEAN_CITY, "route_24_to_cerulean"],
+	])
+
+
+func _gen1_cerulean_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_CERULEAN_GYM, "cerulean_gym_entry", GEN1_CERULEAN_GYM_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var misty: Dictionary = _gen1_talk_to(world, GEN1_MISTY, save, random, data)
+	stepped = _gen1_step(path, "cerulean_gym_misty", world, misty, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_MISTY, "EVENT_BEAT_MISTY"], [GEN1_EVENT_GOT_TM11, "EVENT_GOT_TM11"],
+	]:
+		stepped = _gen1_flag_leg(path, "cerulean_gym_misty", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_CASCADEBADGE)):
+		return {"ok": false, "path": path, "reason": "cerulean_gym_misty: CASCADEBADGE is clear"}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_CERULEAN_CITY, "cerulean_gym_exit"]])
+
+
+func _gen1_ss_anne_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		["south", GEN1_ROUTE_5, "cerulean_to_route_5"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_5, "route_5_to_underground"],
+		[GEN1_UNDERGROUND_PATH_NORTH_SOUTH, "underground_north_entrance"],
+		[GEN1_UNDERGROUND_PATH_ROUTE_6, "underground_south_exit"],
+		[GEN1_ROUTE_6, "underground_to_route_6"],
+		["south", GEN1_VERMILION_CITY, "route_6_to_vermilion"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var sailor: Dictionary = _gen1_walk(world, GEN1_VERMILION_TICKET_CHECK, save, random, data)
+	stepped = _gen1_step(path, "vermilion_ticket_check", world, sailor)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_VERMILION_DOCK, "vermilion_to_dock"],
+		[GEN1_SS_ANNE_1F, "dock_to_ss_anne"],
+		[GEN1_SS_ANNE_2F, "ss_anne_1f_to_2f"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var rival: Dictionary = _gen1_walk(world, GEN1_SS_ANNE_RIVAL_CELL, save, random, data)
+	stepped = _gen1_step(path, "ss_anne_rival", world, rival, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SS_ANNE_CAPTAINS_ROOM, "ss_anne_captains_room"],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var captain: Dictionary = _gen1_talk_to(world, GEN1_CAPTAIN, save, random, data)
+	stepped = _gen1_step(path, "ss_anne_captain", world, captain, {
+		"items": _named_items(data, world.state.items())})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_RUBBED_CAPTAINS_BACK, "EVENT_RUBBED_CAPTAINS_BACK"], [GEN1_EVENT_GOT_HM01, "EVENT_GOT_HM01"],
+	]:
+		stepped = _gen1_flag_leg(path, "ss_anne_captain", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_SS_ANNE_2F, "captains_room_exit"],
+		[GEN1_SS_ANNE_1F, "ss_anne_2f_to_1f"],
+		[GEN1_VERMILION_DOCK, "ss_anne_leaves", Vector2i(-1, -1), GEN1_VERMILION_CITY],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_flag_leg(path, "ss_anne_leaves", world, GEN1_EVENT_SS_ANNE_LEFT, "EVENT_SS_ANNE_LEFT")
+
+
+func _gen1_cerulean_thief_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_CERULEAN_TRASHED_HOUSE, "cerulean_trashed_house", GEN1_TRASHED_HOUSE_DOOR],
+		[GEN1_CERULEAN_CITY, "cerulean_trashed_house_yard", GEN1_TRASHED_HOUSE_BACK_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var thief: Dictionary = _gen1_walk(world, GEN1_CERULEAN_BELOW_THIEF, save, random, data)
+	stepped = _gen1_step(path, "cerulean_rocket_thief", world, thief, {"party": _party_species(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	return _gen1_flag_leg(
+		path, "cerulean_rocket_thief", world, GEN1_EVENT_BEAT_CERULEAN_ROCKET_THIEF,
+		"EVENT_BEAT_CERULEAN_ROCKET_THIEF"
+	)
+
+
+func _gen1_vermilion_gym_leg(
+	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
+	path: Array
+) -> Dictionary:
+	var taught: Dictionary = _teach_tm_hm(world, save, GEN1_HM01)
+	_mirror_party(world, save)
+	var stepped: Dictionary = _gen1_step(path, "vermilion_teach_cut", world, taught, {
+		"moves": _party_moves(save)})
+	if not bool(stepped["ok"]):
+		return stepped
+	var walked: Dictionary = _gen1_walk(world, GEN1_VERMILION_TREE_APPROACH, save, random, data)
+	if bool(walked.get("ok", false)):
+		world.player_facing = Gen2WorldSprite.FACING_RIGHT
+		var request: Dictionary = world.cut_request()
+		if not bool(request.get("ok", false)):
+			walked = {"ok": false, "reason": "cut refused: %s" % request.get("reason", "")}
+		else:
+			var applied: Dictionary = world.complete_cut()
+			walked = {"ok": bool(applied.get("ok", false)), "reason": applied.get("reason", "")}
+	stepped = _gen1_step(path, "vermilion_cut_tree", world, walked)
+	if not bool(stepped["ok"]):
+		return stepped
+	stepped = _gen1_warp_legs(path, world, save, random, data, [
+		[GEN1_VERMILION_GYM, "vermilion_gym_entry", GEN1_VERMILION_GYM_DOOR],
+	])
+	if not bool(stepped["ok"]):
+		return stepped
+	var cans: Dictionary = {}
+	for row: Dictionary in world.current_map.events["hidden_events"] as Array:
+		for node: Dictionary in row.get("script", []) as Array:
+			if String(node["op"]) == "gym_trash":
+				cans[int(node["can"])] = Vector2i(int(row["x"]), int(row["y"]))
+	for lock: Array in [
+		[Gen2WorldAPI.GEN1_FIRST_LOCK, "vermilion_gym_first_lock"],
+		[Gen2WorldAPI.GEN1_SECOND_LOCK, "vermilion_gym_second_lock"],
+	]:
+		var can: int = world.state.gen1_byte(String(lock[0]))
+		if not cans.has(can):
+			return {"ok": false, "path": path, "reason": "%s: no can %d" % [lock[1], can]}
+		var opened: Dictionary = _gen1_talk(
+			world, (cans[can] as Vector2i) + Vector2i.DOWN, Gen2WorldSprite.FACING_UP, save, random, data
+		)
+		stepped = _gen1_step(path, String(lock[1]), world, opened, {"can": can})
+		if not bool(stepped["ok"]):
+			return stepped
+	stepped = _gen1_flag_leg(path, "vermilion_gym_second_lock", world, GEN1_EVENT_2ND_LOCK_OPENED, "EVENT_2ND_LOCK_OPENED")
+	if not bool(stepped["ok"]):
+		return stepped
+	var surge: Dictionary = _gen1_talk_to(world, GEN1_LT_SURGE, save, random, data)
+	stepped = _gen1_step(path, "vermilion_gym_lt_surge", world, surge, {
+		"party": _party_species(save), "items": _named_items(data, world.state.items()),
+		"badges": world.state.badge_count(),
+	})
+	if not bool(stepped["ok"]):
+		return stepped
+	for flag: Array in [
+		[GEN1_EVENT_BEAT_LT_SURGE, "EVENT_BEAT_LT_SURGE"], [GEN1_EVENT_GOT_TM24, "EVENT_GOT_TM24"],
+	]:
+		stepped = _gen1_flag_leg(path, "vermilion_gym_lt_surge", world, int(flag[0]), String(flag[1]))
+		if not bool(stepped["ok"]):
+			return stepped
+	if not world.state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(GEN1_BIT_THUNDERBADGE)):
+		return {"ok": false, "path": path, "reason": "vermilion_gym_lt_surge: THUNDERBADGE is clear"}
+	return _gen1_warp_legs(path, world, save, random, data, [[GEN1_VERMILION_CITY, "vermilion_gym_exit"]])

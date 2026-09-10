@@ -804,13 +804,9 @@ func map_size_pixels() -> Vector2i:
 	return map_size_cells() * CELL_PIXELS
 
 
-## The 6x5-metatile surrounding-page origin, which follows the player off the
-## edge of the map and changes only on a 2x2-walk-cell block boundary.
-##
-## `GetMapScreenCoords` (`home/map.asm:1065`) stores
-## `floor(wXCoord / 2) - 2`, and likewise for Y, in wOverworldMapAnchor. It
-## clamps nothing. wPlayerMetatileX/Y carry the odd-cell remainder separately;
-## see [method visible_subcell_offset_cells].
+## `GetMapScreenCoords` (`home/map.asm:1065`) stores `floor(wXCoord / 2) - 2`,
+## and likewise for Y, in wOverworldMapAnchor and clamps nothing; the odd-cell
+## remainder is [method visible_subcell_offset_cells].
 func visible_origin_cell() -> Vector2i:
 	if current_map == null:
 		return Vector2i.ZERO
@@ -2809,13 +2805,9 @@ func request_incoming_phone_call(
 	return _start_phone_ring(request)
 
 
-## `MomTriesToBuySomething` whole: the decision, the purchase and the call, in
-## the source's order. [param random_row] is `RandomRange` over `MomItems_1`,
-## passed in the way every other roll here is.
-##
-## Answers `{ ok, bought, reason, results }`. `bought` is false when nothing was
-## due, and the trigger balance the walk climbed to is still stored, because
-## `.AddMoney` writes it before `.less_than` returns.
+## `MomTriesToBuySomething` whole. [param random_row] is `RandomRange` over
+## `MomItems_1`. `bought` is false when nothing was due, and the trigger balance
+## is still stored, because `.AddMoney` writes it before `.less_than` returns.
 func mom_purchase(random_row: int = 0) -> Dictionary:
 	if data == null or state == null:
 		return {"ok": false, "reason": &"mom_data_unavailable", "results": []}
@@ -3177,13 +3169,10 @@ func player_visible() -> bool:
 	return not _player_object.deleted
 
 
-## The grass rustles `NormalStep` spawned this frame, taken once. `ShakeGrass` runs
-## where a step starts, for whichever object is stepping and for the player alike,
-## when the tile that step commits to is grass by `SetTallGrassFlags`' own test.
-## The temporary object it spawns lives one frame less than the step, tracks the
-## object that spawned it and is drawn over that object's own sprite. Returned
-## rather than emitted because nothing in the world reads it: it is presentation,
-## and [Gen2WorldEffects] holds it while it runs. Object index -1 is the player.
+## The grass rustles `NormalStep` spawned this frame, taken once. `ShakeGrass`
+## runs where a step onto grass starts, for any object and the player alike,
+## and its temporary object lives one frame less than the step. Object index
+## -1 is the player; [Gen2WorldEffects] holds them.
 func take_grass_rustles() -> Array:
 	var out: Array = []
 	if _player_step_began:
@@ -3473,7 +3462,7 @@ func warp_index_at(cell: Vector2i) -> int:
 	if current_map == null:
 		return 0
 	var warps: Array = current_map.events.get("warps", [])
-	for index: int in warps.size():
+	for index: int in warps.size() - _gen1_warps_dropped:
 		var event: Dictionary = warps[index]
 		if int(event.get("x", -1)) == cell.x and int(event.get("y", -1)) == cell.y:
 			return index + 1
@@ -3877,6 +3866,10 @@ var _gen1_scratch: Dictionary = {}
 var gen1_fossil: Dictionary = {}
 ## `wWarpedFromWhichWarp` and the one `wWarpEntries` row an elevator rewrites.
 var _gen1_warped_from: Dictionary = {}
+## `wDestinationWarpID` and `wNumberOfWarps` less what a script took off it,
+## both reloaded with the map.
+var _gen1_destination_warp: int = -1
+var _gen1_warps_dropped: int = 0
 var _gen1_warp_entry: Dictionary = {}
 
 ## `wRivalName`, which no Generation 1 save model holds yet.
@@ -3912,6 +3905,9 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"badge": &"_gen1_node_badge",
 	"dex_count": &"_gen1_node_dex_count",
 	"tileset": &"_gen1_node_tileset",
+	"destination_warp": &"_gen1_node_destination_warp",
+	"diploma": &"_gen1_node_diploma",
+	"ss_anne_leaves": &"_gen1_node_ss_anne_leaves",
 	"screen_tile": &"_gen1_node_screen_tile",
 	"name_item": &"_gen1_node_name_item",
 	"map_text": &"_gen1_node_map_text",
@@ -4308,6 +4304,31 @@ func _gen1_node_dex_count(node: Dictionary, steps: Array, run: Dictionary) -> bo
 		node, state != null and state.caught_count() >= int(node["count"]),
 		steps, run
 	)
+
+
+## `DisplayDiploma`, a page of its own behind the game designer's last line.
+func _gen1_node_diploma(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "values": {
+		"kind": &"diploma_requested", "values": {"printing": false},
+	}})
+	return true
+
+
+## `wDestinationWarpID`: the warp the last `LoadDestinationWarpPosition` landed
+## on, counted from zero.
+func _gen1_node_destination_warp(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	return _gen1_resolve_side(node, _gen1_destination_warp == int(node["warp"]), steps, run)
+
+
+## `VermilionDockSSAnneLeavesScript`: `ld c, 120` in front of the horn, then
+## eight columns of sixteen drifts of eight frames, and `dec [wNumberOfWarps]`.
+const SS_ANNE_LEAVES_FRAMES: int = 120 + 8 * 16 * 8
+
+
+func _gen1_node_ss_anne_leaves(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append(_gen1_wait_step(&"ss_anne_leaves", SS_ANNE_LEAVES_FRAMES, {}))
+	steps.append({"type": &"drop_last_warp"})
+	return true
 
 
 func _gen1_node_tileset(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -5122,8 +5143,12 @@ func _gen1_node_badges_byte(node: Dictionary, steps: Array, run: Dictionary) -> 
 func _gen1_node_map_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	if current_map == null:
 		return false
-	var row: Dictionary = gen1_text_at(int(node["text"]) if node.has("text") \
-		else _gen1_scratch_read(run, int(node["from"]), int(node["offset"])))
+	var text_id: int = int(node["text"]) if node.has("text") \
+		else _gen1_scratch_read(run, int(node["from"]), int(node["offset"]))
+	## `hTextID` and `hSpriteIndex` are one HRAM byte, so a row a map script
+	## opens by id leaves that id where `EngageMapTrainer` reads a sprite.
+	_gen1_last_sprite_index = text_id - 1
+	var row: Dictionary = gen1_text_at(text_id)
 	## `DisplayTextID` over a trainer's row is `TalkToTrainer` after the fight.
 	var trainer: Array = _gen1_trainer_steps(row, {})
 	if not trainer.is_empty():
@@ -5943,7 +5968,13 @@ func permission_for_code(code: int, tileset: Gen2WorldTileset = null) -> int:
 
 ## The leave-side test one step owes: `GetMovementPermissions`' face mask in
 ## Generation 2, and `CheckForTilePairCollisions` in Generation 1, which reads
-## the faced tile as well as the one stood on.
+## the faced tile as well as the one stood on. [method step_blocked_from] is
+## the same test anchored on a cell the player is not standing on, which a
+## plan drawn from a frontier asks.
+func step_blocked_from(from: Vector2i, direction: Vector2i) -> bool:
+	return _edge_step_blocked(from, collision_code_at(from + direction), direction)
+
+
 func _edge_step_blocked(from: Vector2i, to_code: int, direction: Vector2i) -> bool:
 	var face: int = Gen2WorldCollision.face_mask_for_direction(direction)
 	if face == 0:
@@ -5979,7 +6010,9 @@ func tile_permissions_at(cell: Vector2i) -> int:
 func warp_at(cell: Vector2i = player_cell) -> Dictionary:
 	if current_map == null:
 		return {}
-	for event: Dictionary in current_map.events.get("warps", []):
+	var warps: Array = current_map.events.get("warps", [])
+	for index: int in warps.size() - _gen1_warps_dropped:
+		var event: Dictionary = warps[index]
 		if int(event.get("x", -1)) == cell.x and int(event.get("y", -1)) == cell.y:
 			return event.duplicate(true)
 	return {}
@@ -6170,14 +6203,32 @@ func gen1_safari_gate_byte() -> int:
 	return _gen1_dispatch_byte(gate) if gate != null else -1
 
 
+## `w<Map>CurScript`'s value for the map stood on, or -1 where the map
+## dispatches on none.
+func gen1_map_script_state() -> int:
+	var byte: int = _gen1_map_script_byte()
+	return state.gen1_map_script(byte) if byte >= 0 and state != null else -1
+
+
 func _gen1_map_script_byte() -> int:
 	return _gen1_dispatch_byte(current_map) if current_map != null else -1
 
 
+## The table sits behind whatever the entry script tests first, which is a
+## branch on Pallet Town, Oak's Lab and Viridian Mart, so every arm is walked.
 func _gen1_dispatch_byte(map: Gen2WorldMap) -> int:
-	for node: Dictionary in map.scripts.get("entry", []) as Array:
+	return _gen1_dispatch_byte_in(map.scripts.get("entry", []) as Array)
+
+
+func _gen1_dispatch_byte_in(nodes: Array) -> int:
+	for node: Dictionary in nodes:
 		if String(node.get("op", "")) == "map_script_table":
 			return int(node["byte"])
+		for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+			if node.has(key):
+				var byte: int = _gen1_dispatch_byte_in(node[key] as Array)
+				if byte >= 0:
+					return byte
 	return -1
 
 
@@ -6327,6 +6378,9 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 			return true
 		&"toggle":
 			gen1_toggle_object(int(step["index"]), bool(step["hidden"]))
+			return true
+		&"drop_last_warp":
+			_gen1_warps_dropped += 1
 			return true
 		## `SetLastBlackoutMap` names the map a script wrote; the nurse's own
 		## step carries none and takes `wLastMap` instead.
@@ -6842,6 +6896,9 @@ func pending_script_input() -> Dictionary:
 	var box: Dictionary = _gen1_step(&"text")
 	if not box.is_empty():
 		return {"type": &"text", "text": String(box["text"])}
+	var wait: Dictionary = _gen1_step(&"wait")
+	if not wait.is_empty():
+		return (wait["values"] as Dictionary).duplicate(true)
 	return _active_script.pending_input() if _active_script != null else {}
 
 
@@ -7086,7 +7143,10 @@ func complete_runtime_request(result: Dictionary) -> Array:
 	## `AfterDisplayingTextID` returns to `HandleMap` with nothing behind it, so
 	## a Generation 1 facility walks its own list instead of resuming a script.
 	if not _gen1_step(&"request").is_empty():
-		return _gen1_advance(-1, result)
+		var spent: Array = _gen1_advance(-1, result)
+		## A list ending on its request still answers the host that the request
+		## was taken, the way a Generation 2 script's own terminal result does.
+		return spent if not spent.is_empty() else [{"ok": true, "status": &"done", "events": []}]
 	if _active_script == null:
 		return []
 	var results: Array = []
@@ -8533,6 +8593,7 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	var landing: Vector2i = _warp_landing_cell(target_map, target_warp, cell)
 	_gen1_warped_from = {"warp": maxi(warp_index_at(cell) - 1, 0), "map": from_map.y}
 	_apply_map(target_map, target_tileset, landing, false, warp_index_at(cell), MAP_ENTRY_DOOR)
+	_gen1_destination_warp = destination_index
 	return {
 		"ok": true,
 		"kind": &"warp",
@@ -9659,11 +9720,15 @@ func _try_ledge_hop(direction: Vector2i) -> Dictionary:
 ## front of the passability check rather than behind it. A ledge tile is never
 ## passable, so the step is refused either way and the hop is the same one.
 func _allows_hop(direction: Vector2i) -> bool:
+	return allows_hop_at(player_cell, direction)
+
+
+func allows_hop_at(cell: Vector2i, direction: Vector2i) -> bool:
 	if not _gen1:
-		return Gen2WorldCollision.allows_hop(collision_code_at(player_cell), direction)
+		return Gen2WorldCollision.allows_hop(collision_code_at(cell), direction)
 	return Gen2WorldCollision.gen1_allows_hop(
-		current_map.tileset, collision_code_at(player_cell),
-		collision_code_at(player_cell + direction), direction
+		current_map.tileset, collision_code_at(cell),
+		collision_code_at(cell + direction), direction
 	)
 
 
@@ -9815,6 +9880,8 @@ func _apply_map(
 	_gen1_entry_steps = []
 	_gen1_map_load_pending = 0
 	_gen1_money_window = false
+	_gen1_destination_warp = -1
+	_gen1_warps_dropped = 0
 	## `WarpFound2`'s `CheckIfInOutsideMap`: leaving a town or a route records it,
 	## and that is the map a `LAST_MAP` warp comes back out to.
 	if _gen1 and current_map != null and Gen1Layout.is_outside_tileset(current_map.tileset):

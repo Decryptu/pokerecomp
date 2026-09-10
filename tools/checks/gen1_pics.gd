@@ -43,11 +43,12 @@ const DIGESTS: Dictionary = {
 	},
 }
 
-## `TrainerPicAndMoneyPointers`' money column, first row, last row and the two
-## the cartridge caps: money received is this times the last enemy's level.
-const PINNED_MONEY: Dictionary = {1: 1500, 26: 9900, 47: 9900}
-const MIN_MONEY: int = 500
-const MAX_MONEY: int = 9900
+## `TrainerPicAndMoneyPointers`' money column as `GetTrainerInformation` keeps
+## it, two of `bcd3`'s three bytes: `pic_money 1500` pays 15 a level of the
+## last enemy. The first row, the last, and the two the cartridge caps.
+const PINNED_MONEY: Dictionary = {1: 15, 26: 99, 47: 99}
+const MIN_MONEY: int = 5
+const MAX_MONEY: int = 99
 
 ## `ChiefPic:` falls through to `ScientistPic`, so rows 27 and 28 are one picture.
 const SHARED_PIC_ROWS: Array[int] = [27, 28]
