@@ -519,6 +519,8 @@ func _one_game() -> void:
 	_check_the_gate_pushes_back()
 	_check_cinnabar_settles()
 	_check_a_mansion_switch()
+	_check_an_elite_room_settles()
+	_check_lances_trigger()
 
 
 ## `DisplayPokemonCenterDialogue_` walked whole. `AnimateHealingMachine` is a
@@ -2623,6 +2625,89 @@ func _check_a_scripted_player_walk() -> void:
 	_r.check(world.player_facing == Gen2WorldSprite.FACING_RIGHT,
 		"the player faced %d rather than Oak." % world.player_facing)
 	_r.note("gen1 walk HALL_OF_FAME five cells in and Oak turning to meet it")
+	_check_the_induction(world)
+
+
+## `HallOfFameResetEventsAndSaveScript` behind Oak's box: `HallOfFamePC` is a
+## request the screen answers with the induction, and the flag the shelf reads
+## stands before it; the Plateau's events, the save and `jp Init` follow.
+func _check_the_induction(world: Gen2WorldAPI) -> void:
+	world.state.set_event_flag(BEAT_CHAMPION_RIVAL_FLAG)
+	var request: Dictionary = _pressed_to_request(world)
+	if not _r.check(StringName(request.get("kind", &"")) == &"hall_of_fame_requested",
+		"Oak's box was followed by %s." % [request]):
+		return
+	_r.check(world.state.hall_of_fame(), "ENGINE_HALL_OF_FAME is clear at the induction.")
+	world.complete_runtime_request({"ok": true})
+	var kinds: Array = []
+	for _request: int in 3:
+		var next: Dictionary = _pressed_to_request(world)
+		if next.is_empty():
+			break
+		kinds.append(StringName(next["kind"]))
+		if StringName(next["kind"]) == &"soft_reset_requested":
+			break
+		world.complete_runtime_request({"ok": true, "script_value": 1})
+	_r.check(kinds == [&"quick_save_requested", &"soft_reset_requested"],
+		"the induction was followed by %s." % [kinds])
+	_r.check(not world.event_flag_active(BEAT_CHAMPION_RIVAL_FLAG),
+		"the Plateau's events were not cleared.")
+
+
+## A pressed through every box until a runtime request stands, or {}.
+func _pressed_to_request(world: Gen2WorldAPI) -> Dictionary:
+	for _pass: int in SCRIPTED_WALK_PASSES:
+		if not world.pending_runtime_request().is_empty():
+			return world.pending_runtime_request()
+		if world.pending_script_input().is_empty():
+			world.dispatch_sight_events()
+		else:
+			world.run_event_queue(true)
+	return world.pending_runtime_request()
+
+
+## `LoreleisRoomLoreleiEndBattleScript` calls `EndTrainerBattle`, whose
+## `ResetButtonPressedAndMapScript` zeroes `wCurMapScript`, so the after-battle
+## line prints once and the room settles on its default state.
+func _check_an_elite_room_settles() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, LORELEIS_ROOM, LORELEI_SIDE)
+	if world == null:
+		return
+	world.state.set_event_flag(AUTOWALKED_INTO_LORELEIS_ROOM_FLAG)
+	world.dispatch_map_entry()
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	world.interact()
+	var request: Dictionary = _pressed_to_request(world)
+	if not _r.check(StringName(request.get("kind", &"")) == &"battle_requested",
+		"Lorelei asked for %s." % [request]):
+		return
+	world.complete_runtime_request({"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_WON})
+	var boxes: int = 0
+	for _pass: int in 6:
+		if not world.pending_script_input().is_empty():
+			boxes += 1
+			world.run_event_queue(true)
+		else:
+			world.dispatch_sight_events()
+	_r.check(world.state.gen1_map_script(LORELEIS_ROOM_BYTE) == 0,
+		"the room stayed on state %d." % world.state.gen1_map_script(LORELEIS_ROOM_BYTE))
+	_r.check(boxes == 1, "the after-battle line printed %d times." % boxes)
+	_r.check(world.event_flag_active(BEAT_LORELEI_FLAG), "EVENT_BEAT_LORELEIS_ROOM_TRAINER_0 is clear.")
+	_r.note("gen1 walk LORELEIS_ROOM's end-battle state hands back to the default one")
+
+
+## `DisplayTextID` by id: `hTextID` is `hSpriteIndex`, so the object of that
+## index is the trainer `TalkToTrainer` fights, which is how Lance's own
+## coordinate trigger opens a trainer battle rather than a wild one.
+func _check_lances_trigger() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, LANCES_ROOM, LANCE_TRIGGER)
+	if world == null:
+		return
+	world.dispatch_map_entry()
+	var values: Dictionary = _pressed_to_request(world).get("values", {}) as Dictionary
+	_r.check(StringName(values.get("kind", &"")) == &"trainer"
+		and int(values.get("trainer_class", 0)) == LANCE_CLASS,
+		"Lance's trigger asked for %s." % [values])
 
 
 ## `RemoveGuardDrink` driven on the world: the guard is thirsty with an empty
@@ -3340,6 +3425,14 @@ func _check_the_viridian_gym_door() -> void:
 	_r.note("gen1 walk VIRIDIAN_CITY's gym door with and without seven badges")
 
 
+const LORELEIS_ROOM: int = 245
+const LORELEIS_ROOM_BYTE: int = 93
+const LORELEI_SIDE := Vector2i(5, 3)
+const AUTOWALKED_INTO_LORELEIS_ROOM_FLAG: int = 2278
+const BEAT_LORELEI_FLAG: int = 2273
+const LANCES_ROOM: int = 113
+const LANCE_TRIGGER := Vector2i(6, 2)
+const LANCE_CLASS: int = 47
 const CINNABAR_ISLAND: int = 8
 const CINNABAR_SHORE := Vector2i(19, 13)
 const POKEMON_MANSION_3F: int = 215

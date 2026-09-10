@@ -224,7 +224,6 @@ func start_headbutt_tree(cell: Vector2i) -> void:
 ## the splitting tree and index 1 the four leaves (`Gen2WorldFieldMove`'s
 ## ANIMATION_TREE and ANIMATION_GRASS), which is the byte
 ## `CheckOverworldTileArrays` returns beside the replacement block.
-##
 ## [param player_cell] is where the player stands, which is what picks the
 ## leaves' own corner of the block.
 func start_cut(
@@ -305,7 +304,6 @@ func start_boulder_dust(object_index: int, cell: Vector2i, direction: Vector2i, 
 ## sprite: its OAM is written at fixed screen pixels while the script waits, and
 ## it wears `gfx/overworld/heal_machine.pal` over `wOBPals2`' PAL_OW_TREE slot
 ## rather than an overworld palette, which is what `palette: -1` says here.
-##
 ## [param balls] is `wPartyCount`; the source returns before writing anything
 ## when it is zero.
 func start_heal_machine(

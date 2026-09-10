@@ -5100,7 +5100,11 @@ func _gen1_node_heal_party(_node: Dictionary, steps: Array, _run: Dictionary) ->
 	return true
 
 
-func _gen1_node_hall_of_fame(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+## `HallOfFamePC` writes the team into `sHallOfFame` and counts it in
+## `wNumHoFTeams` in front of the animation, which is the induction the shelf
+## and the Pokemon Center's machine read as `ENGINE_HALL_OF_FAME`.
+func _gen1_node_hall_of_fame(_node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	_gen1_node_flag({"flag": Gen2WorldState.ENGINE_HALL_OF_FAME, "engine": true, "set": true}, steps, run)
 	steps.append({"type": &"request", "values": {
 		"kind": &"hall_of_fame_requested", "values": {},
 	}})
@@ -5157,11 +5161,12 @@ func _gen1_node_map_text(node: Dictionary, steps: Array, run: Dictionary) -> boo
 	var text_id: int = int(node["text"]) if node.has("text") \
 		else _gen1_scratch_read(run, int(node["from"]), int(node["offset"]))
 	## `hTextID` and `hSpriteIndex` are one HRAM byte, so a row a map script
-	## opens by id leaves that id where `EngageMapTrainer` reads a sprite.
+	## opens by id leaves that id where `EngageMapTrainer` reads a sprite: the
+	## object of that index is the trainer, which is how Lance's room fights him.
 	_gen1_last_sprite_index = text_id - 1
 	var row: Dictionary = gen1_text_at(text_id)
 	## `DisplayTextID` over a trainer's row is `TalkToTrainer` after the fight.
-	var trainer: Array = _gen1_trainer_steps(row, {})
+	var trainer: Array = _gen1_trainer_steps(row, _gen1_object_event(text_id - 1))
 	if not trainer.is_empty():
 		steps.append_array(trainer)
 		return true
@@ -7251,6 +7256,22 @@ func _clear_active_script() -> void:
 	unfreeze_all_objects()
 
 
+## The object row of [param index] with its live cell, as the events at a cell
+## carry it, or {} past the table.
+func _gen1_object_event(index: int) -> Dictionary:
+	var rows: Array = current_map.events.get("objects", []) if current_map != null else []
+	if index < 0 or index >= rows.size() or index >= objects.size() \
+		or not rows[index] is Dictionary:
+		return {}
+	var object: Gen2WorldObject = objects[index]
+	var event: Dictionary = (rows[index] as Dictionary).duplicate(true)
+	event["x"] = object.cell.x
+	event["y"] = object.cell.y
+	event["kind"] = &"objects"
+	event["object_index"] = index
+	return event
+
+
 func _active_events_at(cell: Vector2i) -> Array:
 	var out: Array = []
 	for event: Dictionary in events_at(cell):
@@ -7275,12 +7296,7 @@ func _active_events_at(cell: Vector2i) -> Array:
 			or object.index < 0 or object.index >= rows.size() \
 			or not rows[object.index] is Dictionary:
 			continue
-		var event: Dictionary = (rows[object.index] as Dictionary).duplicate(true)
-		event["x"] = object.cell.x
-		event["y"] = object.cell.y
-		event["kind"] = &"objects"
-		event["object_index"] = object.index
-		out.append(event)
+		out.append(_gen1_object_event(object.index))
 	return out
 
 

@@ -29,7 +29,6 @@ const DEADZONE: float = 0.5
 const ALL_DEVICES: int = -1
 
 ## The pad button Godot's own UI actions are missing.
-##
 ## `ui_accept` ships as Enter, Keypad Enter and Space, and `ui_cancel` as Escape
 ## alone, so on a machine with no keyboard every focus ring in the launcher can
 ## be moved and nothing under it can be chosen. The page pair and the menu key
@@ -200,7 +199,6 @@ static func defaults() -> Dictionary:
 
 
 ## Replaces every `gen2_*` action in the [InputMap] with these bindings.
-##
 ## Rebuilt rather than merged: a rebind that only added would leave the previous
 ## key working, and the player would have two keys where the screen says one.
 static func install(scheme: Dictionary) -> void:
@@ -387,7 +385,6 @@ static func action_badge(
 
 
 ## Reads a scheme back out of the options file.
-##
 ## Clamped rather than refused, the way the rest of [Gen2Options] is: one
 ## unreadable binding should cost that binding, and a button left with none at
 ## all falls back to its default rather than becoming unpressable.

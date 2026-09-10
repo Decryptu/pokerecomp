@@ -2,7 +2,6 @@ class_name Gen2WorldTileset
 extends RefCounted
 
 ## Runtime data for one overworld tileset.
-##
 ## Graphics are kept in the cache as an indexed tile strip and loaded lazily by
 ## GameData. The metatile and collision tables stay here because map expansion
 ## needs them without opening the cartridge.
@@ -90,7 +89,6 @@ func collision_index(block: int, cell_x: int, cell_y: int) -> int:
 
 
 ## Which of the eight background palette slots a tile of the strip draws with.
-##
 ## Palette maps store two assignments per byte, low nibble first, over the whole
 ## 224-tile span. Bit 3 of a nibble is the VRAM bank the cartridge draws that
 ## tile from and is dropped here: the strip is flat, so the tile number already

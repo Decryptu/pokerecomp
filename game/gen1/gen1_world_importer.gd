@@ -3628,6 +3628,16 @@ static func _script_special_body(ctx: Dictionary, pc: int, state: Dictionary = {
 	return [{"op": "badge_guards", "rows": rows, "past_y": compares[0], "past_x": compares[1]}]
 
 
+## `ResetButtonPressedAndMapScript` behind `EndTrainerBattle` zeroes
+## `wCurMapScript`, so an end-battle state that calls it and prints on, as the
+## Elite Four's do, ends on the default state rather than itself.
+static func _script_silent_call(routine: String, state: Dictionary, out: Array, next: int) -> int:
+	if routine == "end_trainer_battle":
+		state["a"] = 0
+		_script_map_script_mirror(state, out)
+	return next
+
+
 ## The routines a row may call. No node carries a sound, so a cry and the wait
 ## behind it spend nothing and the walk carries on past them.
 static func _script_call(
@@ -3640,7 +3650,7 @@ static func _script_call(
 	_script_untested(state)
 	var routine: String = _script_routine(layout, target)
 	if routine in Gen1Layout.SCRIPT_SILENT_CALLS:
-		return next
+		return _script_silent_call(routine, state, out, next)
 	var shaped: int = _script_shaped_routine(ctx, target, state, out)
 	if shaped == SCRIPT_NOT_SHAPED:
 		shaped = _script_card_key_call(ctx, target, state, out)

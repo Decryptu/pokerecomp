@@ -2,7 +2,6 @@ class_name Gen2GameRuntime
 extends Node
 
 ## Runtime selection shared by the launcher and screens opened from it.
-##
 ## Cartridge bytes and decoded data stay owned by their existing layers. The
 ## selected save is the exception: it is mutable, and every screen has to see the
 ## same instance. Re-reading the slot per call handed a battle result, a party
@@ -14,7 +13,6 @@ var selected_game_id: StringName = &""
 var selected_save_slot: int = -1
 
 ## The new game the intro is running for, before it exists on disk.
-##
 ## `NewGame` reaches `InitializeWorld` only after `PlayerProfileSetup` and
 ## `OakSpeech` have both returned, so there is nothing to write until the intro
 ## finishes. The launcher stages the slot and the slot's own label here, the
@@ -99,7 +97,6 @@ var _second_screen_host: Gen2SecondScreenHost = null
 
 
 ## Loads installed mods before any screen exists.
-##
 ## A mod registers what it provides and returns, so this must happen before the
 ## first screen asks the host: a renderer registered after the overworld was
 ## built would not be offered until the next map. It also means a broken mod is

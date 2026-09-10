@@ -27,28 +27,29 @@ const CRYSTAL: StringName = &"crystal"
 
 ## sha1 (lowercase hex) -> { id, title, revision, generation, playable }
 ## `playable` is false while a generation has an importer but no story to walk:
-## the launcher seats such a cartridge and reads it, and offers no Play.
+## the launcher seats such a cartridge and reads it, and offers no Play. Every
+## cartridge here walks from the bedroom to its Hall of Fame.
 const BY_SHA1: Dictionary = {
 	"ea9bcae617fdf159b045185467ae58b2e4a48b9a": {
 		"id": RED,
 		"title": "Red",
 		"revision": "USA/Europe",
 		"generation": GEN1,
-		"playable": false,
+		"playable": true,
 	},
 	"d7037c83e1ae5b39bde3c30787637ba1d4c48ce2": {
 		"id": BLUE,
 		"title": "Blue",
 		"revision": "USA/Europe",
 		"generation": GEN1,
-		"playable": false,
+		"playable": true,
 	},
 	"cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1": {
 		"id": YELLOW,
 		"title": "Yellow",
 		"revision": "USA/Europe",
 		"generation": GEN1,
-		"playable": false,
+		"playable": true,
 	},
 	"d8b8a3600a465308c9953dfa04f0081c05bdcb94": {
 		"id": GOLD,

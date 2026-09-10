@@ -3,7 +3,6 @@ extends RefCounted
 
 ## `ProfOaksPCBoot`, `ProfOaksPCRating` and `Rate` (engine/events/prof_oaks_pc.asm),
 ## as the pages a screen shows and the effect it plays.
-##
 ## Presentation only: the routine counts `wPokedexSeen` and `wPokedexCaught` and
 ## writes nothing back. The pages are the source's own order, and each waits for
 ## A or B, which is why the sound is on the last of them rather than on the whole
@@ -19,7 +18,6 @@ const COUNT_DIGITS: int = 3
 ## The whole boot, as [code]{ seen, caught, sfx, pages }[/code]. Empty for a
 ## cache imported without the rating table, which is the caller's cue to leave
 ## the script's own `end` alone.
-##
 ## `ProfOaksPCBoot` is `_OakPCText2` in front of `Rate`.
 static func boot(data: GameData, state: Gen2WorldState) -> Dictionary:
 	var out: Dictionary = rate(data, state)

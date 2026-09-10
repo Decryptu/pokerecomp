@@ -96,7 +96,6 @@ const CHANNELS: Array[Dictionary] = [
 ## Let's All Sing's, though only `PlayRadioStationPointers` reaches it and a map
 ## radio prints no name. `LoadStation_BuenasPassword` answers with
 ## `NotBuenasPasswordName`, an empty string, until Team Rocket takes the tower.
-##
 ## `.returnafterstation` places this before `PlayRadioShow` runs, so the name is
 ## the station the dial is on and never the Rocket broadcast standing in for it.
 const STATION_NAMES: Dictionary = {
@@ -164,7 +163,6 @@ static func is_kanto_landmark(landmark: int, crystal: bool = true) -> bool:
 
 
 ## The station a knob position answers with, or a no-signal result.
-##
 ## [param context] carries what the source reads off WRAM: `landmark` (already
 ## resolved through GetWorldMapLocation), `crystal`, `expn_card`,
 ## `rocket_signal`, `rockets_in_radio_tower` and `time_of_day`.

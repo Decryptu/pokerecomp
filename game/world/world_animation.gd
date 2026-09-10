@@ -2,7 +2,6 @@ class_name Gen2WorldAnimation
 extends RefCounted
 
 ## Small interpreter for the command tables used by the cartridge overworld.
-##
 ## The original engine writes 2bpp tiles to VRAM. This node-free equivalent
 ## keeps the same command order and timer semantics, but applies those writes to
 ## the indexed tile strip held by GameData.
@@ -22,7 +21,6 @@ const TIMER_TOWER_FRAMES: Array = [0, 1, 2, 3, 4, 3, 2, 1]
 const TIMER_WATER_PALETTE: Array = [0, 1, 2, 1]
 
 ## Real seconds into hardware frames, for every screen that spends them.
-##
 ## One instance per pump, and the whole conversion: the remainder is banked here
 ## so nothing downstream keeps one, the cap is applied here so no screen can
 ## forget it, and [method Gen2Options.speed_scale] is applied here and nowhere else.
@@ -252,7 +250,6 @@ func reload_tileset(world: Gen2WorldAPI, time_of_day: int = Gen2WorldPalette.TIM
 
 ## Runs one hardware frame's command and reports whether the tile strip or a
 ## palette row actually changed.
-##
 ## Most commands are waits and timer bumps that draw nothing new, so the return
 ## value is what a renderer should gate its atlas rebuild on; [method tick] is
 ## the single-command step the sequence is defined in.

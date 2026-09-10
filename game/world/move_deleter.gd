@@ -2,7 +2,6 @@ class_name Gen2MoveDeleter
 extends RefCounted
 
 ## `MoveDeletion` (`engine/events/move_deleter.asm`), the rules half.
-##
 ## Same shape as [Gen2NameRater], one house further on: an introduction and a
 ## `YesNoBox`, the party list `SelectMonFromParty` opens, two endings that need
 ## no move, `ChooseMoveToDelete`'s own list, a second `YesNoBox` and
@@ -21,7 +20,6 @@ const SFX_MOVE_DELETED: int = 0x97
 
 ## Which ending [param mon] reaches once it has been chosen, or `&""` for the
 ## one member the routine carries on with.
-##
 ## `.onlyonemove` reads `wPartyMon1Moves + 1`, which is the *second* slot rather
 ## than a move count, so a member whose second slot is empty is refused whatever
 ## stands behind it.

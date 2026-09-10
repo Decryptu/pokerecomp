@@ -16,7 +16,6 @@ const SOURCE_FILE_LABEL: String = "Installed from a file"
 
 ## The groups to draw, in the order to draw them: each followed source that has
 ## anything in it, in the order the player added them, then the file group.
-##
 ## [param sources] is [method PokeModIndex.followed]'s rows, [param listings] is
 ## feed to that feed's entries, [param manifests] is
 ## [method Gen2ModHost.manifests] and [param present] is
@@ -66,7 +65,6 @@ static func groups(
 ## One row of the list. [param entry] is the source's listing for it, empty for a
 ## mod no source lists; [param manifest] is the installed copy, null for one that
 ## is only listed.
-##
 ## `version` is what the row shows: the installed version when there is one,
 ## because that is the copy the player has, and the listed version otherwise.
 ## [param present] is whether the mods root holds a directory for it, which is
@@ -106,7 +104,6 @@ static func _row(
 ## What the row's own action does, which is the one place the Cydia rule lives:
 ## a listed mod is downloaded, updated or reinstalled, and an installed one is
 ## removed. Removing a listed mod leaves it listed.
-##
 ## `replace` is a copy on disk this host would not load, which is what a
 ## contract bump leaves behind: the installer refuses a plain download over it,
 ## so the press has to say it is replacing what is there.

@@ -3,7 +3,6 @@ extends RefCounted
 
 ## Boundary between an original Generation 2 SRAM image and the project's
 ## party-focused save model.
-##
 ## Only an existing, checksummed cartridge image is written. The canonical save
 ## model does not own map, options, inventory, PC boxes or event flags, so
 ## creating those bytes from scratch would invent game state. Bytes outside the
@@ -216,7 +215,6 @@ static func export_bytes(
 
 
 ## Refuses a save holding content a cartridge byte cannot name.
-##
 ## Every species, item and move on the hardware is one byte, and
 ## [constant Gen2ContentOverlay.FIRST_MOD_NUMBER] sits past that on purpose. So a
 ## mod's own content has no representation here: truncating it would write a

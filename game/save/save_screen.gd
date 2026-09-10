@@ -2,11 +2,9 @@ class_name Gen2SaveScreen
 extends Control
 
 ## Player-facing save selection for one imported cartridge revision.
-##
 ## The screen only coordinates validated save data. Original SRAM bytes enter
 ## through [Gen2SramAdapter], and project slots are written through
 ## [Gen2SaveStore], so no control here needs to know a cartridge offset.
-##
 ## It is the launcher's second screen and shares its frame: same shell, same
 ## soft surfaces, same palette.
 

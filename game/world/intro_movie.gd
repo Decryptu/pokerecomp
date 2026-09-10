@@ -11,7 +11,6 @@ extends RefCounted
 ## Crystal only: `GoldSilverIntro` is a different movie.
 
 ## `wBGPals2` and the `wOBPals2` behind it, which is what the screen shows.
-##
 ## Every scene's `ld bc, 16 palettes` runs off the end of the background
 ## buffer and into the object one, which is where the sprites get their colours:
 ## the Unown's purple, Pichu's yellow and Wooper's blue are all in the second
@@ -630,7 +629,6 @@ func _scene_reset_counter() -> void:
 ## The half of a setup scene every one of them shares: clear the palettes, the
 ## sprites and the tilemap, load this scene's own VRAM and palette run, put the
 ## scroll back at the origin and hand on.
-##
 ## `Intro_ClearBGPals` spends two `DelayFrame`s of its own, which is why a setup
 ## scene is not free.
 func _setup_scene() -> void:
@@ -1194,7 +1192,6 @@ func _run_sprites() -> void:
 
 ## `SpriteAnimFunc_IntroSuicune`: still until `wIntroSceneTimer` is set, then a
 ## jump on a sine of amplitude 32 and the second frameset under it.
-##
 ## The reinit is unconditional in the source and has to stay that way:
 ## `_ReinitSpriteAnimFrame` puts FRAME back to -1 and DURATION to 0 every frame,
 ## so the jump holds `.Frameset_IntroSuicune2`'s first entry for the whole leap

@@ -77,7 +77,6 @@ static func apply_display_density(window: Window, on: bool) -> void:
 
 ## Keeps [param root]'s window drawn in launcher units for as long as [param root]
 ## is in the tree, and puts it back when it leaves.
-##
 ## Every screen written in launcher units needs this and only those do, so it is
 ## a guard a screen attaches rather than something a shell happens to own: the
 ## save editor is drawn in the same units and has no shell, and without the
@@ -201,7 +200,6 @@ static func muted(theme: Gen2LauncherTheme, text: String) -> Label:
 
 
 ## A muted word that does not wrap, for a line of short facts.
-##
 ## [method muted] wraps, and a wrapping label reports almost no minimum width, so
 ## one dropped into a flow row or an expanding box is squeezed to a character a
 ## line. A fact is short enough to keep whole and long enough to be worth the
@@ -242,7 +240,6 @@ static func row(separation: int = GAP_MD) -> HBoxContainer:
 
 
 ## Empties a container that is about to be rebuilt.
-##
 ## Every launcher pane is rebuilt from a button inside it, so the node emitting
 ## `pressed` is one of the children being removed and `free()` there destroys an
 ## object the signal is still walking. Detaching first takes the child out of the

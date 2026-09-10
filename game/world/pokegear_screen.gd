@@ -30,7 +30,6 @@ const CARD_MAP: StringName = &"map"
 ## engine/pokegear/pokegear.asm's card order. Each is behind its own
 ## wPokegearFlags bit, named by the engine flag that carries it, since that is
 ## what the state holds. The clock card needs no flag.
-##
 ## Here rather than in the screen that lists them, because the Pokegear is not
 ## the only thing that has to know which cards a player owns.
 const CARDS: Array[Dictionary] = [
@@ -146,7 +145,6 @@ func _ready() -> void:
 ## names `Pokegear_FinishTilemap` tests, [param text] whichever of the Pokegear's
 ## own texts the card prints: the question it opens with and, on the phone card,
 ## `PokegearAskDeleteText`.
-##
 ## Optional the way the region map is: a cache with no card tilemaps answers
 ## false and the caller keeps its own screen open.
 func open(
