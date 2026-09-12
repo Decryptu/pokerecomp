@@ -16,41 +16,29 @@ an empty body. -->
 
 ## Added
 
-- Red, Blue and Yellow are playable. The shelf offers Play on all three, and a game runs from the bedroom to the Hall of Fame: 360 steps and eight badges on Red and Blue, 361 on Yellow, through Brock, Mt. Moon, the Nugget Bridge, Bill, the S.S. Anne, the trash cans, Rock Tunnel, the Rocket Hideout, Pokemon Tower, the SNORLAX, the Safari Zone, Silph Co., Cinnabar, Viridian's gym, Victory Road, the Elite Four and the Champion.
-- Oak's Lab runs whole, from the speech to the rival leaving with the Pokedex: the starter pick, the fight, the parcel and the hand-over. Yellow's lab hands over the Pikachu.
-- The old man's catch tutorial on Red and Blue, and Prof. Oak's Pikachu battle on Yellow, with the cartridge's own ball, back pic and cursor timings.
-- Generation 1's own Hall of Fame: the white frames, each member sliding in with its cry, the player's stats and the dex rating, then the credits with their bands, each `CreditsMons` silhouette crossing at 8 px a frame and THE END. 5254 frames on Red and Blue, 5248 on Yellow. `sHallOfFame` keeps 50 teams and the League PC walks them oldest first.
-- Vermilion Gym's fifteen trash cans and the door they open, Cinnabar Gym's six quiz machines and the trainer a wrong answer walks up, the Champion's Room's eleven states, Pokemon Tower 7F's rocket walking off, and Pewter City's museum and gym guides.
-- Every map-script body but the two link maps decodes on all three cartridges: Red and Blue read 183 state bodies of 373, Yellow 223 of 408, against 186 of 206 last release.
-- The S.S. Anne leaves the dock, with its 1144 frames and the gangway taken off. The game designer's completed-dex diploma prints.
-- The Hall of Fame music starts on the page that asks for it and fades on the page that ends it, on both generations.
+- Yellow's Pikachu walks behind the player: the follow buffer, the eight movement commands and their hop arcs, the tricks a hop earns, the spawn state every warp and connection leaves, and the happiness and mood bytes. A 2222-frame route from the bedroom over Route 1's ledge matches the cartridge frame for frame.
+- Talking to the follower opens its face box, with `PikachuEmotionTable`'s bubbles, movements and faces timed from the A press. Its scenes run: the Fan Club's Seel, Bill's house, the Pewter center, Mt Moon, Cinnabar Gym, Oak's lab, Viridian City, Pokemon Tower 2F and the Game Corner.
+- Pewter's Jigglypuff sings on all three cartridges, turning every 24 frames until the channels fall silent, and Yellow's follower falls asleep behind it.
+- Happiness moves from all eleven of the cartridge's callers: walking, the PC deposit, items, a Rare Candy, a TM, a poison faint, a trade, the level-up, a faint, the X items and a gym leader's fight.
+- Trainers on Red, Blue and Yellow fight with the cartridge's own head. The move roll is `SelectEnemyMove`'s, the three scoring layers are `AIEnemyTrainerChooseMoves`', and each class's routine spends its item or switches where its move would have been: Brock's Full Heal, Misty's X Defend, Erika's Super Potion, the Jugglers' switches, Agatha's, Lance's Hyper Potion, every one at the odds its `cp` leaves.
+- Gym leaders and the Elite Four carry their signature moves: Brock's Onix knows BIDE, Misty's Starmie BUBBLEBEAM, Lorelei's Lapras BLIZZARD, the champion's Pidgeot SKY ATTACK and its starter the move its species names, and Yellow's own per-trainer rows.
+- The trainer's own withdraw and item lines, `AIBattleWithdrawText` and `AIBattleUseItemText`, with the trainer named.
 
 ## Changed
 
-- The cache format is 133. Import your Generation 1 cartridge again.
-- Blue's `TheEndGfx` sits one byte on from Red's, and `Gen1Layout` pins the credits tables for all three.
-- A Generation 1 map's load-time work is its entry script walked under each `wCurrentMapScriptFlags` bit, and `EndTrainerBattle` puts the map's script back on row 2 the way the cartridge does.
-- Cinnabar Gym's gate flags were compared against emulator block-write traces, all 128 masks per cartridge, and every trainer after wins, losses and re-entry.
+- The cache format is 135. Import your cartridges again.
+- Generation 1 steps take seventeen frames where the cartridge's do, a turn shows one pass, a ledge is found on one pass and hopped on the next, and a warp follows `GBFadeOutToBlack`'s timeline with the screen back at 39 frames indoors and 41 out.
+- Every `EmotionBubbles` row of Red, Blue and Yellow is imported under Generation 2's names.
 
 ## Fixed
 
-- Every Generation 1 map connection landed at the source x, so Route 1 came out ten cells into Viridian's fenced corner.
-- No TM or HM could be taught on Generation 1.
-- A trainer paid a hundred times the prize, with Crystal's quarter split on top.
-- Every Elite Four room's end-battle state printed its after-battle line for ever.
-- Silph Co. 3F's card key door shut again on the way back from 11F, and the Mansion's four switches opened nothing.
-- The tower's MAROWAK stood again after every won fight, and the Safari gate asked "Leaving early?" for ever.
-- Lance's trigger asked for a wild Pokemon of species 0. The LIFT KEY never appeared and EVENT_BEAT_LANCE was never set, because three trainer texts are machine code.
-- Yellow's Safari gate printed `<NUM_CD3D>` where Red spells ¥500, and `HiddenCoins`' two boxes printed `<NUM_FFA0>` on all three cartridges.
-- Pewter City's two guides and Bill were placed four cells off.
-- A Safari or tutorial battle sent the lead out and drew a player HUD.
-- Lt. Surge's receipt did not name TM24 and the Silph rival did not name the player.
-- The Viridian Mart clerk's two parcel rows were empty, and Mt. Moon's super nerd fought the last rocket met.
-- A Generation 1 induction drew Crystal's panels and then stopped on "The credits are not in this cache".
-- `_DexRatingText` wrapped and could not print, from a `<COLON>` encoded as seven unknowns.
-- The story walk stopped on every ledge hop. All three Johto profiles walk to Red again.
-- `GameData.palette` raised on a species record without a palette.
-- README lines still said Play was refused on Generation 1.
+- An opponent's PP was spent on Generation 1, where the cartridge never spends it.
+- Quick Attack went at ordinary speed and Counter did not go last on Generation 1.
+- A gift Pokemon's OT id was not the player's.
+- A held direction walked past Oak on the north path.
+- Event flags 0 to 7 were lost across a map load on Generation 1.
+- The first door out of a house did not open on a new game, `wLastMap` starting empty.
+- Pewter's mart could not be opened by the replay tool on the three Generation 1 caches.
 
 ## Which file
 
