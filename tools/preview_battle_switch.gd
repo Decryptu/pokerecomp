@@ -40,6 +40,10 @@ const BALL_QUANTITIES: Dictionary = {
 ## before the question is asked.
 const TRAINER_CLASS: int = 1
 const PLAYER_SPECIES: Array[int] = [155, 152, 158]
+## A Generation 1 cache's stand-ins: Brock, whose Full Heal `gen1_item`
+## photographs, and three of Kanto's.
+const GEN1_TRAINER_CLASS: int = 34
+const GEN1_PLAYER_SPECIES: Array[int] = [25, 1, 4]
 const PLAYER_LEVEL: int = 30
 ## Four moves on the lead, so `MoveSelectionScreen`'s list is a full one:
 ## TACKLE, GROWL, TAIL_WHIP and BITE (constants/move_constants.asm).
@@ -340,29 +344,42 @@ func _open_world_stage() -> void:
 
 func _open_battle_stage() -> void:
 	var data: GameData = _screen.get("_data")
+	var gen1: bool = data.generation == RomRegistry.GEN1
+	var trainer_class: int = GEN1_TRAINER_CLASS if gen1 else TRAINER_CLASS
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3
 	var members: Array = []
-	for species: int in PLAYER_SPECIES:
+	for species: int in GEN1_PLAYER_SPECIES if gen1 else PLAYER_SPECIES:
 		var lead: Array[int] = INFO_MOVES if _informing() else LEAD_MOVES
 		members.append(Gen2BattleMon.create(
 			data, species, PLAYER_LEVEL,
 			lead.duplicate() if members.is_empty() else [33]
 		))
-	var enemy: Gen2Party = Gen2TrainerParty.build(data, TRAINER_CLASS, 0)
+	var enemy: Gen2Party = Gen2TrainerParty.build(data, trainer_class, 0)
 	if enemy == null or enemy.size() < 2:
-		push_error("Trainer class %d has no bench to switch from" % TRAINER_CLASS)
+		push_error("Trainer class %d has no bench to switch from" % trainer_class)
 		quit(1)
 		return
 
 	## `AskUseNextPokemon` prints in a wild battle and returns at once in a
 	## trainer one, which is the only thing separating the two faint stages.
-	_screen.show_trainer(TRAINER_CLASS, 0, PLAYER_SPECIES[0], PLAYER_LEVEL)
+	_screen.show_trainer(trainer_class, 0, members[0].species, PLAYER_LEVEL)
 	var battle: Gen2Battle = Gen2Battle.create_parties(
 		data, Gen2Party.create(members), enemy, rng, _stage != "use_next"
 	)
 	battle.battle_style_set = false
+	battle.init_enemy_trainer(trainer_class)
 	_screen.set("_battle", battle)
+	if _stage == "gen1_item":
+		## A burned Geodude and the player's Growl, so the second half is the Full Heal.
+		battle.enemy.status = Gen2Status.BURN
+		_screen.set("_pending", battle.take_actions(
+			Gen2Battle.use_move(1), Gen2Battle.use_move(0)
+		))
+		_drain_to_line("FULL HEAL")
+		_screen.finish()
+		_settle_icons()
+		return
 	if _stage in ["use_next", "replace"]:
 		## Through the screen's own quarter, so the HUD in the picture is the HUD
 		## the faint left rather than the one the intro drew, and then the
@@ -517,6 +534,16 @@ func _drain_to_menu() -> void:
 func _drain() -> void:
 	for _press: int in 60:
 		if String(_screen.battle_snapshot()["switch_stage"]) != "":
+			return
+		_settle()
+		_screen.finish()
+		_screen.advance()
+
+
+## Presses through the turn until the box holds [param needle].
+func _drain_to_line(needle: String) -> void:
+	for _press: int in 60:
+		if String(_screen.battle_snapshot()["message"]).contains(needle):
 			return
 		_settle()
 		_screen.finish()

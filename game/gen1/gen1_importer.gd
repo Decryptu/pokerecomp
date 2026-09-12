@@ -131,6 +131,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_dex_entries,
 	_verify_trainer_names,
 	_verify_trainer_parties,
+	_verify_trainer_ai,
 	_verify_palettes,
 	_verify_wild_constants,
 	_verify_pic_pointers,
@@ -185,6 +186,7 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"bicycle": ["bicycle_text", Gen1Layout.BICYCLE_TEXT_AT],
 	"poke_flute": ["poke_flute_text", Gen1Layout.POKE_FLUTE_TEXT_AT],
 	"safari_battle": ["safari_battle_text", Gen1Layout.SAFARI_BATTLE_TEXT_AT],
+	"trainer_ai": ["trainer_ai_text", Gen1Layout.TRAINER_AI_TEXT_AT],
 	"safari": ["safari_game_over_text", Gen1Layout.SAFARI_TEXT_AT],
 	"safari_item": ["safari_item_text", Gen1Layout.SAFARI_ITEM_TEXT_AT],
 	"start_menu": ["start_menu_text", Gen1Layout.START_MENU_TEXT_AT],
@@ -767,6 +769,33 @@ static func _verify_trainer_parties(rom: RomFile, layout: Dictionary) -> Diction
 	return _ok()
 
 
+## Every layer id, routine pointer and special-move row is one the tables name.
+static func _verify_trainer_ai(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var layers: Array = read_move_choices(rom, layout)
+	var ai: Array = read_trainer_ai(rom, layout)
+	for index: int in Gen1Layout.TRAINER_CLASS_COUNT:
+		for layer: int in layers[index] as Array:
+			if layer < 1 or layer > Gen1Layout.TRAINER_AI_LAYER_COUNT:
+				return _fail("Trainer class %d runs AI layer %d." % [index + 1, layer])
+		if String((ai[index] as Dictionary)["routine"]).is_empty():
+			return _fail("Trainer class %d's AI routine is not named." % (index + 1))
+	var parties: Array = _read_trainer_parties(rom, layout)
+	_attach_special_moves(rom, layout, parties)
+	var rows: int = 0
+	for class_parties: Array in parties:
+		for party: Dictionary in class_parties:
+			for row: Dictionary in party.get("special_moves", []) as Array:
+				rows += 1
+				if int(row["slot"]) < 1 or int(row["slot"]) > Gen2Learnset.MOVE_SLOTS \
+					or int(row["member"]) < 1 or int(row["member"]) > Gen2Party.MAX_SIZE:
+					return _fail("A special move row names member %d, slot %d." % [
+						int(row["member"]), int(row["slot"]),
+					])
+	if rows == 0:
+		return _fail("No trainer carries a special move.")
+	return _ok()
+
+
 ## One facility box, already laid out. Empty for a stub that does not decode.
 static func facility_text(rom: RomFile, at: int) -> String:
 	if at < 0:
@@ -1245,6 +1274,8 @@ func _import_moves(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 			"effect": Gen1Layout.move_effect(
 				move, rom.u8(entry + Gen1Layout.MOVE_EFFECT)
 			),
+			# The byte itself too, which `AIMoveChoiceModification*` compare.
+			"gen1_effect": rom.u8(entry + Gen1Layout.MOVE_EFFECT),
 			"power": Gen1Layout.move_power(
 				move, rom.u8(entry + Gen1Layout.MOVE_POWER)
 			),
@@ -1813,10 +1844,14 @@ func _import_trainers(rom: RomFile, layout: Dictionary) -> Array:
 		MAX_NAME_LENGTH,
 	)
 	var parties: Array = _read_trainer_parties(rom, layout)
+	_attach_special_moves(rom, layout, parties)
+	var layers: Array = read_move_choices(rom, layout)
+	var ai: Array = read_trainer_ai(rom, layout)
 	var out: Array = []
 	for trainer_class: int in range(1, Gen1Layout.TRAINER_CLASS_COUNT + 1):
 		var row: int = int(layout["trainer_pics"]) \
 			+ (trainer_class - 1) * Gen1Layout.TRAINER_PIC_SIZE
+		var routine: Dictionary = ai[trainer_class - 1]
 		out.append({
 			"number": trainer_class,
 			"name": names[trainer_class - 1],
@@ -1826,10 +1861,116 @@ func _import_trainers(rom: RomFile, layout: Dictionary) -> Array:
 				"base_reward": _bcd3(
 					rom, row + Gen1Layout.POINTER_SIZE, Gen1Layout.POINTER_SIZE
 				),
+				"ai_layers": layers[trainer_class - 1],
+				"ai_count": int(routine["count"]),
+				"ai_routine": String(routine["routine"]),
 			},
 			"trainers": parties[trainer_class - 1],
 		})
 	return out
+
+
+## `TrainerClassMoveChoiceModifications`, one zero-ended list a class.
+static func read_move_choices(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout["trainer_move_choices"])
+	var out: Array = []
+	for _trainer_class: int in Gen1Layout.TRAINER_CLASS_COUNT:
+		var layers: Array = []
+		while rom.in_bounds(at, 1) and rom.u8(at) != 0:
+			layers.append(rom.u8(at))
+			at += 1
+		at += 1
+		out.append(layers)
+	return out
+
+
+## `TrainerAIPointers`: a use count and the routine's name, empty for a
+## pointer [constant Gen1Layout.TRAINER_AI_ROUTINES] does not carry.
+static func read_trainer_ai(rom: RomFile, layout: Dictionary) -> Array:
+	var table: int = int(layout["trainer_ai_pointers"])
+	var out: Array = []
+	for trainer_class: int in Gen1Layout.TRAINER_CLASS_COUNT:
+		var at: int = table + trainer_class * Gen1Layout.TRAINER_AI_ROW_SIZE
+		out.append({
+			"count": rom.u8(at),
+			"routine": Gen1Layout.trainer_ai_routine(rom.id, rom.u16le(at + 1)),
+		})
+	return out
+
+
+## The moves `ReadTrainer` writes over a filled party, `member` and `slot`
+## counted from one. Red and Blue's rows carry a `lone` gate, `wLoneAttackNo`'s
+## value or 0 for `.AddTeamMove`'s side.
+static func _attach_special_moves(rom: RomFile, layout: Dictionary, parties: Array) -> void:
+	if layout.has("special_trainer_moves"):
+		_attach_yellow_special_moves(rom, layout, parties)
+	else:
+		_attach_red_special_moves(rom, layout, parties)
+	for class_parties: Array in parties:
+		for party: Dictionary in class_parties:
+			party.erase("special")
+
+
+## `.SpecialTrainer`'s tail. `.LoopTrainerData` ends on `.FinishUp`, so a
+## level-shared party takes no row.
+static func _attach_red_special_moves(rom: RomFile, layout: Dictionary, parties: Array) -> void:
+	var lone: Array = []
+	var lone_at: int = int(layout["lone_moves"])
+	for row: int in Gen1Layout.LONE_MOVE_COUNT:
+		lone.append({
+			"member": rom.u8(lone_at + row * Gen1Layout.LONE_MOVE_SIZE) + 1,
+			"slot": Gen1Layout.SPECIAL_MOVE_SLOT,
+			"move": rom.u8(lone_at + row * Gen1Layout.LONE_MOVE_SIZE + 1),
+			"lone": row + 1,
+		})
+	var team: Dictionary = {}
+	var team_at: int = int(layout["team_moves"])
+	while rom.u8(team_at) != Gen1Layout.TEAM_MOVE_END:
+		team[rom.u8(team_at)] = rom.u8(team_at + 1)
+		team_at += Gen1Layout.LONE_MOVE_SIZE
+	for index: int in parties.size():
+		var trainer_class: int = index + 1
+		for party: Dictionary in parties[index] as Array:
+			if not bool(party.get("special", false)):
+				continue
+			var rows: Array = lone.duplicate(true)
+			if team.has(trainer_class):
+				rows.append({
+					"member": Gen1Layout.TEAM_MOVE_MEMBER, "slot": Gen1Layout.SPECIAL_MOVE_SLOT,
+					"move": int(team[trainer_class]), "lone": 0,
+				})
+			elif trainer_class == Gen1Layout.RIVAL3_CLASS:
+				rows.append({
+					"member": Gen1Layout.CHAMPION_BIRD_MEMBER, "slot": Gen1Layout.SPECIAL_MOVE_SLOT,
+					"move": Gen1Layout.CHAMPION_BIRD_MOVE, "lone": 0,
+				})
+				rows.append({
+					"member": Gen1Layout.CHAMPION_STARTER_MEMBER,
+					"slot": Gen1Layout.SPECIAL_MOVE_SLOT,
+					"starter": Gen1Layout.CHAMPION_STARTER_MOVES.duplicate(true), "lone": 0,
+				})
+			party["special_moves"] = rows
+
+
+## `SpecialTrainerMoves`: `db class, id`, `db member, slot, move` rows, a zero.
+static func _attach_yellow_special_moves(rom: RomFile, layout: Dictionary, parties: Array) -> void:
+	var at: int = int(layout["special_trainer_moves"])
+	while rom.in_bounds(at, 1) and rom.u8(at) != Gen1Layout.TEAM_MOVE_END:
+		var trainer_class: int = rom.u8(at)
+		var number: int = rom.u8(at + 1)
+		at += 2
+		var rows: Array = []
+		while rom.in_bounds(at, Gen1Layout.TRAINER_AI_ROW_SIZE) and rom.u8(at) != 0:
+			rows.append({
+				"member": rom.u8(at), "slot": rom.u8(at + 1), "move": rom.u8(at + 2),
+			})
+			at += Gen1Layout.TRAINER_AI_ROW_SIZE
+		at += 1
+		if trainer_class < 1 or trainer_class > parties.size():
+			continue
+		var class_parties: Array = parties[trainer_class - 1]
+		if number >= 1 and number <= class_parties.size():
+			(class_parties[number - 1] as Dictionary)["special_moves"] = rows
 
 
 ## `TrainerDataPointers`: one span a class, each a run of parties. A party opens
@@ -1860,6 +2001,7 @@ static func _read_trainer_class_parties(
 		var level: int = rom.u8(at)
 		at += 1
 		var party: Array = []
+		var special: bool = level == Gen1Layout.TRAINER_PARTY_LEVELS
 		while at < end and rom.u8(at) != 0:
 			var member_level: int = level
 			if level == Gen1Layout.TRAINER_PARTY_LEVELS:
@@ -1873,7 +2015,10 @@ static func _read_trainer_class_parties(
 			})
 			at += 1
 		at += 1
-		out.append({"name": "", "type": Gen2Layout.TRAINER_MON_NORMAL, "party": party})
+		out.append({
+			"name": "", "type": Gen2Layout.TRAINER_MON_NORMAL, "party": party,
+			"special": special,
+		})
 	return out
 
 

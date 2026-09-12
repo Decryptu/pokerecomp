@@ -608,6 +608,8 @@ const POKE_FLUTE_TEXT_AT: Dictionary = {
 	"no_effect": 0x00, "woke_up": 0x05, "had_effect": 0x0A,
 }
 const SAFARI_BATTLE_TEXT_AT: Dictionary = {"eating": 0x00, "angry": 0x05}
+## `AIBattleWithdrawText` and `AIBattleUseItemText`, $C3 apart on every cartridge.
+const TRAINER_AI_TEXT_AT: Dictionary = {"withdraw": 0x00, "use_item": 0xC3}
 const SAFARI_TEXT_AT: Dictionary = {"times_up": 0x00, "game_over": 0x05}
 const SAFARI_ITEM_TEXT_AT: Dictionary = {"bait": 0x00, "rock": 0x05}
 const SAFARI_LOW_COST_TEXT_AT: Dictionary = {"low_cost_1": 0x00, "low_cost_2": 0x05}
@@ -1896,6 +1898,47 @@ const TRAINER_PIC_SIZE: int = 5
 ## front of every species instead of one for the whole team.
 const TRAINER_PARTY_LEVELS: int = 0xFF
 
+## `AIMoveChoiceModificationFunctionPointers` names four layers.
+const TRAINER_AI_LAYER_COUNT: int = 4
+## `TrainerAIPointers`: a use count and a near pointer.
+const TRAINER_AI_ROW_SIZE: int = 3
+## Each cartridge's `TrainerAIPointers` targets by bank-local address; Yellow
+## retuned Koga, Blaine and Sabrina.
+const TRAINER_AI_ROUTINES: Dictionary = {
+	RomRegistry.RED: {
+		0x65E9: "juggler", 0x65EF: "blackbelt", 0x65F5: "giovanni",
+		0x65FB: "cooltrainer_m", 0x6601: "cooltrainer_f", 0x6614: "brock",
+		0x661C: "misty", 0x6622: "lt_surge", 0x6628: "erika", 0x6634: "koga",
+		0x663A: "blaine", 0x6640: "sabrina", 0x664C: "rival2", 0x6658: "rival3",
+		0x6664: "lorelei", 0x6670: "bruno", 0x6676: "agatha", 0x6687: "lance",
+		0x6693: "generic",
+	},
+	RomRegistry.YELLOW: {
+		0x667F: "juggler", 0x6685: "blackbelt", 0x668B: "giovanni",
+		0x6691: "cooltrainer_m", 0x6697: "cooltrainer_f", 0x66AA: "brock",
+		0x66B2: "misty", 0x66B8: "lt_surge", 0x66BE: "erika", 0x66CA: "koga_yellow",
+		0x66D0: "blaine_yellow", 0x66DC: "sabrina_yellow", 0x66E2: "rival2",
+		0x66EE: "rival3", 0x66FA: "lorelei", 0x6706: "bruno", 0x670C: "agatha",
+		0x671D: "lance", 0x6729: "generic",
+	},
+}
+## `LoneMoves`, `TeamMoves` and `.ChampionRival`, Red and Blue's own.
+const LONE_MOVE_COUNT: int = 8
+const LONE_MOVE_SIZE: int = 2
+const TEAM_MOVE_END: int = 0xFF
+## `wEnemyMon1Moves + 2`: every table move lands in the third slot.
+const SPECIAL_MOVE_SLOT: int = 3
+const TEAM_MOVE_MEMBER: int = 5
+const CHAMPION_BIRD_MEMBER: int = 1
+const CHAMPION_STARTER_MEMBER: int = 6
+## `.ChampionRival`'s `cp STARTER3` and `cp STARTER1`, Squirtle's line the rest.
+const CHAMPION_STARTER_MOVES: Array = [
+	{"species": 0x99, "move": 0x48}, {"species": 0xB0, "move": 0x7E},
+	{"species": 0, "move": 0x3B},
+]
+const CHAMPION_BIRD_MOVE: int = 0x8F
+const RIVAL3_CLASS: int = 0x2B
+
 ## Sides in tiles: `_LoadTrainerPic`'s `ld a, $77`, the widest front pic, and
 ## every back pic, which `ScaleSpriteByTwo` doubles before a battle draws it.
 const TRAINER_PIC_TILES: int = 7
@@ -1942,6 +1985,11 @@ const RED_BLUE: Dictionary = {
 	## `TrainerDataPointers` and the `TrainerAI` that bounds the last class.
 	"trainer_parties": 0x39D3B,
 	"trainer_parties_end": 0x3A52E,
+	"trainer_move_choices": 0x3989B,
+	"trainer_ai_pointers": 0x3A55C,
+	"trainer_ai_text": 0x3A781,
+	"lone_moves": 0x39D22,
+	"team_moves": 0x39D32,
 	## What a trainer header is read through, and what one of its texts may be.
 	"talk_to_trainer": 0x31CC,
 	"print_text": 0x3C49,
@@ -2420,6 +2468,10 @@ const YELLOW: Dictionary = {
 	"trainer_pics_bank": 0x13,
 	"trainer_parties": 0x39DD1,
 	"trainer_parties_end": 0x3A5B2,
+	"trainer_move_choices": 0x3981E,
+	"trainer_ai_pointers": 0x3A5F2,
+	"trainer_ai_text": 0x3A817,
+	"special_trainer_moves": 0x39C6B,
 	"talk_to_trainer": 0x3168,
 	"print_text": 0x3C36,
 	"event_flags": 0xD746,
@@ -2902,6 +2954,18 @@ static func for_id(id: StringName) -> Dictionary:
 
 static func is_characterised(id: StringName) -> bool:
 	return not for_id(id).is_empty()
+
+
+static func trainer_ai_routine(id: StringName, address: int) -> String:
+	var routines: Dictionary = TRAINER_AI_ROUTINES.get(
+		RomRegistry.YELLOW if id == RomRegistry.YELLOW else RomRegistry.RED, {}
+	)
+	return String(routines.get(address, ""))
+
+
+## `TrainerAI`'s `.done` guard on a locked opponent, Yellow's alone.
+static func trainer_ai_respects_lock(id: StringName) -> bool:
+	return id == RomRegistry.YELLOW
 
 
 ## A type number the cartridge really uses.

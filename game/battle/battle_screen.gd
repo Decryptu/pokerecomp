@@ -3758,6 +3758,8 @@ func _random_slot(side: int) -> int:
 ## pairing, which is not one of the cartridge's own trainers and so has no AI
 ## flags to read.
 func _enemy_slot() -> int:
+	if _generation() == RomRegistry.GEN1:
+		return Gen1TrainerAI.select_slot(_battle, _rng)
 	if _enemy_trainer_class == 0:
 		return _random_slot(Gen2Battle.ENEMY)
 	var policy: Dictionary = Gen2BattleAI.trainer_policy(
@@ -3792,7 +3794,8 @@ func _party_status_mask(side: int) -> int:
 ## cartridge's trainers, so it has no class flags and never uses an item.
 func _enemy_action() -> Dictionary:
 	var slot: int = _enemy_slot()
-	if _enemy_trainer_class == 0:
+	## `TrainerAI` is asked inside the turn, where `MainInBattleLoop` asks it.
+	if _enemy_trainer_class == 0 or _generation() == RomRegistry.GEN1:
 		return Gen2Battle.use_move(slot)
 	var policy: Dictionary = Gen2BattleAI.trainer_policy(
 		_data, _enemy_trainer_class, _battle.in_battle_tower
@@ -5788,9 +5791,6 @@ const LINES: Dictionary = {
 	Gen2Battle.ATTRACT_INFLICTED: ["%s fell in love!", &"name:target"],
 	Gen2Battle.ENCORE_INFLICTED: ["%s got an encore!", &"name:target"],
 	Gen2Battle.ENCORE_ENDED: ["%s's encore ended!", &"name:side"],
-	# `EnemyUsedOnText`, one line for all thirteen: the trainer's own name is not in
-	# the event, so the class is all this can say.
-	Gen2Battle.TRAINER_USED_ITEM: ["Enemy used %s on %s!", &"item:item", &"name:side"],
 	Gen2Battle.HP_RESTORED: ["%s regained health!", &"name:side"],
 	Gen2Battle.HP_ALREADY_FULL: ["%s's HP is full!", &"name:side"],
 	Gen2Battle.WENT_TO_SLEEP: ["%s went to sleep!", &"name:side"],
@@ -5913,6 +5913,7 @@ const LINE_HANDLERS: Dictionary = {
 	Gen2Battle.STAT_CHANGED: &"_stat_changed_text",
 	Gen2Battle.STAT_CHANGE_FAILED: &"_stat_failed_text",
 	Gen2Battle.WITHDREW: &"_withdrew_text",
+	Gen2Battle.TRAINER_USED_ITEM: &"_trainer_used_item_text",
 	Gen2Battle.SENT_OUT: &"_sent_out_text",
 	Gen2Battle.WEATHER_STARTED: &"_weather_text",
 	Gen2Battle.WEATHER_CONTINUES: &"_weather_text",
@@ -6032,8 +6033,31 @@ func _charging_up_text(event: Dictionary) -> String:
 ## is already the one that came in.
 func _withdrew_text(event: Dictionary) -> String:
 	if int(event.get("side", Gen2Battle.PLAYER)) == Gen2Battle.ENEMY:
+		if _generation() == RomRegistry.GEN1:
+			return _gen1_trainer_ai_text("withdraw", [
+				_enemy_battler_label(), _name_of(int(event["species"])),
+			])
 		return "Enemy withdrew %s!" % _name_of(int(event["species"]))
 	return "%s, come back!" % _name_of(int(event["species"]))
+
+
+## `EnemyUsedOnText`, one line for all thirteen, or `AIBattleUseItemText`.
+func _trainer_used_item_text(event: Dictionary) -> String:
+	var item: String = _data.item_name(int(event["item"]))
+	var battler: String = _battler_name(int(event.get("side", Gen2Battle.ENEMY)))
+	if _generation() == RomRegistry.GEN1:
+		return _gen1_trainer_ai_text("use_item", [
+			_enemy_battler_label(), item, _name_of(int(event["species"])),
+		])
+	return "Enemy used %s on %s!" % [item, battler]
+
+
+## One of `trainer_ai.asm`'s two boxes, its `text_ram` markers filled in order.
+func _gen1_trainer_ai_text(key: String, values: Array) -> String:
+	var text: String = _data.special_text("trainer_ai", key)
+	for value: String in values:
+		text = Gen2TextStream.fill_marker(text, Gen2TextStream.RAM_MARKER, value)
+	return text
 
 
 func _sent_out_text(event: Dictionary) -> String:

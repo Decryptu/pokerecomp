@@ -581,12 +581,13 @@ static func _moves() -> Array:
 	# Name, power, type, accuracy, PP, effect, and the secondary effect's chance
 	# out of 256. Ember and Thunderbolt keep a chance of zero, which is never, so
 	# that the tests written before there were status conditions still see the
-	# plain attacks they were written against.
+	# plain attacks they were written against. An eighth entry is the Generation
+	# 1 effect byte, which its trainer AI reads; a row without one reads as 0.
 	var known: Dictionary = {
 		PAY_DAY: ["PAY DAY", 40, NORMAL, 255, 20, Gen2MoveEffect.PAY_DAY, 0],
 		TRANSFORM: ["TRANSFORM", 0, NORMAL, 255, 10, Gen2MoveEffect.TRANSFORM, 0],
 		TACKLE: ["TACKLE", 35, NORMAL, 255, 35, 0, 0],
-		GROWL: ["GROWL", 0, NORMAL, 255, 40, Gen2MoveEffect.STAT_DOWN_BASE, 0],
+		GROWL: ["GROWL", 0, NORMAL, 255, 40, Gen2MoveEffect.STAT_DOWN_BASE, 0, 0x12],
 		EMBER: ["EMBER", 40, FIRE, 255, 25, Gen2MoveEffect.BURN_HIT, 0],
 		THUNDERBOLT: ["THUNDERBOLT", 95, ELECTRIC, 255, 15, Gen2MoveEffect.PARALYZE_HIT, 0],
 		SLASH: ["SLASH", 70, NORMAL, 255, 20, 0, 0],
@@ -601,9 +602,9 @@ static func _moves() -> Array:
 		BIDE: ["BIDE", 0, NORMAL, 255, 10, Gen2MoveEffect.BIDE, 0],
 		RAGE: ["RAGE", 20, NORMAL, 255, 20, Gen2MoveEffect.RAGE, 0],
 		FUTURE_SIGHT: ["FUTURE SIGHT", 80, PSYCHIC_TYPE, 255, 15, Gen2MoveEffect.FUTURE_SIGHT, 0],
-		THUNDER_WAVE: ["THUNDERWAVE", 0, ELECTRIC, 255, 20, Gen2MoveEffect.PARALYZE, 0],
-		SLEEP_POWDER: ["SLEEP POWDER", 0, GRASS, 255, 15, Gen2MoveEffect.SLEEP, 0],
-		POISON_POWDER: ["POISONPOWDER", 0, POISON, 255, 35, Gen2MoveEffect.POISON, 0],
+		THUNDER_WAVE: ["THUNDERWAVE", 0, ELECTRIC, 255, 20, Gen2MoveEffect.PARALYZE, 0, 0x43],
+		SLEEP_POWDER: ["SLEEP POWDER", 0, GRASS, 255, 15, Gen2MoveEffect.SLEEP, 0, 0x20],
+		POISON_POWDER: ["POISONPOWDER", 0, POISON, 255, 35, Gen2MoveEffect.POISON, 0, 0x42],
 		# A chance of 256 is one the roll cannot fail, which is how a test gets a
 		# burn without a seed. Its opposite is a chance of zero.
 		EMBER_BURNS: ["EMBER", 40, FIRE, 255, 25, Gen2MoveEffect.BURN_HIT, 256],
@@ -621,7 +622,7 @@ static func _moves() -> Array:
 			"BODY SLAM", 85, NORMAL, 255, 15, Gen2MoveEffect.PARALYZE_HIT, 256,
 		],
 		# Attack up by two, on the user, with no roll to miss.
-		SWORDS_DANCE: ["SWORDS DANCE", 0, NORMAL, 255, 30, Gen2MoveEffect.STAT_UP_2_BASE, 0],
+		SWORDS_DANCE: ["SWORDS DANCE", 0, NORMAL, 255, 30, Gen2MoveEffect.STAT_UP_2_BASE, 0, 0x32],
 		# Defense down by two, on the foe, which can still miss.
 		SCREECH: ["SCREECH", 0, NORMAL, 216, 40, Gen2MoveEffect.STAT_DOWN_2_BASE + 1, 0],
 		# Attack up on the user, behind a roll, the way Metal Claw does it.
@@ -643,7 +644,7 @@ static func _moves() -> Array:
 		# Confusion as the whole of the move, the way Supersonic does it.
 		SUPERSONIC: ["SUPERSONIC", 0, NORMAL, 255, 20, Gen2MoveEffect.CONFUSE, 0],
 		HYPER_BEAM: ["HYPER BEAM", 150, NORMAL, 255, 5, Gen2MoveEffect.RECHARGE_HIT, 0],
-		FLY: ["FLY", 70, FLYING, 242, 15, Gen2MoveEffect.FLY_OR_DIG, 0],
+		FLY: ["FLY", 70, FLYING, 242, 15, Gen2MoveEffect.FLY_OR_DIG, 0, 0x2B],
 		DIG: ["DIG", 100, GROUND, 255, 10, Gen2MoveEffect.FLY_OR_DIG, 0],
 		GUST: ["GUST", 40, FLYING, 255, 35, Gen2MoveEffect.GUST, 0],
 		THUNDER: ["THUNDER", 120, ELECTRIC, 178, 10, Gen2MoveEffect.THUNDER, 76],
@@ -673,9 +674,9 @@ static func _moves() -> Array:
 		TWINEEDLE_MOVE: ["TWINEEDLE", 25, POISON, 255, 20, Gen2MoveEffect.TWINEEDLE, 256],
 		DRAIN_MOVE: ["ABSORB", 20, GRASS, 255, 20, Gen2MoveEffect.LEECH_HIT, 0],
 		DREAM_EATER_MOVE: ["DREAM EATER", 100, PSYCHIC_TYPE, 255, 15, Gen2MoveEffect.DREAM_EATER, 0],
-		LEVEL_DAMAGE_MOVE: ["SEISMIC TOSS", 1, NORMAL, 255, 20, Gen2MoveEffect.LEVEL_DAMAGE, 0],
+		LEVEL_DAMAGE_MOVE: ["SEISMIC TOSS", 1, NORMAL, 255, 20, Gen2MoveEffect.LEVEL_DAMAGE, 0, 0x29],
 		STATIC_DAMAGE_MOVE: ["SONICBOOM", 20, NORMAL, 255, 20, Gen2MoveEffect.STATIC_DAMAGE, 0],
-		SUPER_FANG_MOVE: ["SUPER FANG", 1, NORMAL, 255, 10, Gen2MoveEffect.SUPER_FANG, 0],
+		SUPER_FANG_MOVE: ["SUPER FANG", 1, NORMAL, 255, 10, Gen2MoveEffect.SUPER_FANG, 0, 0x28],
 		PSYWAVE_MOVE: ["PSYWAVE", 1, PSYCHIC_TYPE, 255, 15, Gen2MoveEffect.PSYWAVE, 0],
 		OHKO_MOVE: ["GUILLOTINE", 0, NORMAL, 76, 5, Gen2MoveEffect.OHKO, 0],
 		DISABLE_MOVE: ["DISABLE", 0, NORMAL, 140, 20, Gen2MoveEffect.DISABLE, 0],
@@ -808,6 +809,7 @@ static func _moves() -> Array:
 			"accuracy": entry[3],
 			"pp": entry[4],
 			"effect_chance": entry[6],
+			"gen1_effect": int(entry[7]) if entry.size() > 7 else 0,
 		})
 	return out
 
@@ -854,6 +856,19 @@ const FALKNER: int = 1
 const FALKNER_BASE_REWARD: int = 25
 
 
+## Two Generation 1 classes beside it: a gym leader running all three layers
+## with Brock's routine and a five-use count, whose one party carries the three
+## shapes of `special_moves` row, and a juggler with no layer at all.
+const GEN1_LEADER: int = 2
+const GEN1_JUGGLER: int = 3
+const GEN1_LEADER_COUNT: int = 5
+const GEN1_LONE_MOVE: int = BIDE
+const GEN1_TEAM_MOVE: int = SWORDS_DANCE
+const GEN1_STARTER_MOVE: int = EMBER
+const GEN1_OTHER_STARTER_MOVE: int = THUNDERBOLT
+const GEN1_STARTER: int = 0xB0
+
+
 static func _trainers() -> Array:
 	return [{
 		"number": FALKNER,
@@ -864,7 +879,42 @@ static func _trainers() -> Array:
 			"item1": 0, "item2": 0, "base_reward": FALKNER_BASE_REWARD,
 			"ai_move_weights": 0, "ai_item_switch": 0,
 		},
-		"dvs": [],
+	}, {
+		"number": GEN1_LEADER,
+		"name": "LEADER",
+		"palette": [0, 0],
+		"trainers": [{
+			"name": "", "type": Gen2Layout.TRAINER_MON_NORMAL,
+			"party": [
+				{"level": 12, "species": GEODUDE, "item": 0, "moves": []},
+				{"level": 14, "species": CHARMANDER, "item": 0, "moves": []},
+			],
+			"special_moves": [
+				{"member": 2, "slot": 3, "move": GEN1_LONE_MOVE, "lone": 1},
+				{"member": 1, "slot": 3, "move": GEN1_TEAM_MOVE, "lone": 0},
+				{"member": 2, "slot": 4, "lone": 0, "starter": [
+					{"species": GEN1_STARTER, "move": GEN1_STARTER_MOVE},
+					{"species": 0, "move": GEN1_OTHER_STARTER_MOVE},
+				]},
+			],
+		}],
+		"attributes": {
+			"base_reward": 99, "ai_layers": [1, 2, 3], "ai_count": GEN1_LEADER_COUNT,
+			"ai_routine": "brock",
+		},
+	}, {
+		"number": GEN1_JUGGLER,
+		"name": "JUGGLER",
+		"palette": [0, 0],
+		"trainers": [{
+			"name": "", "type": Gen2Layout.TRAINER_MON_NORMAL,
+			"party": [
+				{"level": 20, "species": PIKACHU, "item": 0, "moves": []},
+				{"level": 20, "species": GEODUDE, "item": 0, "moves": []},
+				{"level": 20, "species": CHARMANDER, "item": 0, "moves": []},
+			],
+		}],
+		"attributes": {"base_reward": 35, "ai_layers": [], "ai_count": 3, "ai_routine": "juggler"},
 	}]
 
 

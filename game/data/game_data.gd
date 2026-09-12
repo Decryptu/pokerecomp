@@ -1776,6 +1776,17 @@ func _matchup_row(key: int) -> Dictionary:
 	}
 
 
+## `AIGetTypeEffectiveness`: the first chart row hitting either of
+## [param defending], or -1. The walk returns on the first match, so a dual
+## type answers with whichever of its two the table lists first.
+func first_matchup(attacking: int, defending: Array) -> int:
+	for key: int in _matchups.keys():
+		for kind: int in defending:
+			if key == Gen2ContentOverlay.matchup_number(attacking, kind):
+				return int(_matchups[key])
+	return -1
+
+
 ## How effective [param attacking] is against a defender of one or two types, in
 ## tenths, accumulated the way the cartridge accumulates it: start at ten,
 ## multiply by each matching type in turn, truncate after each.
@@ -3008,6 +3019,8 @@ func trainer_party(number: int, index: int) -> Dictionary:
 		"name": String(entry.get("name", "")),
 		"type": int(entry.get("type", 0)),
 		"party": party,
+		## Generation 1's `ReadTrainer` rows, see [method Gen2TrainerParty.apply_special_moves].
+		"special_moves": (entry.get("special_moves", []) as Array).duplicate(true),
 	}
 
 
@@ -3020,12 +3033,19 @@ func trainer_attributes(number: int) -> Dictionary:
 		return {}
 
 	var attributes: Dictionary = entry.get("attributes", {})
+	var layers: Array = []
+	for layer: Variant in attributes.get("ai_layers", []) as Array:
+		layers.append(int(layer))
 	return {
 		"item1": int(attributes.get("item1", 0)),
 		"item2": int(attributes.get("item2", 0)),
 		"base_reward": int(attributes.get("base_reward", 0)),
 		"ai_move_weights": int(attributes.get("ai_move_weights", 0)),
 		"ai_item_switch": int(attributes.get("ai_item_switch", 0)),
+		## `TrainerClassMoveChoiceModifications` and `TrainerAIPointers`.
+		"ai_layers": layers,
+		"ai_count": int(attributes.get("ai_count", 0)),
+		"ai_routine": String(attributes.get("ai_routine", "")),
 	}
 
 

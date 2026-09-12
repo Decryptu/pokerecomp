@@ -1,13 +1,9 @@
 class_name Gen2EffectCommands
 extends RefCounted
 
-## The steps a move is made of. A move is a short program rather than a switch
-## case: the cartridge keeps a command list per effect and runs it in order. An
-## ordinary attack announces, spends the PP, works out damage, rolls the hit,
-## applies it and checks for a faint, and every other move is that list with steps
-## added, removed or replaced. None of it reaches [Gen2Battle], which only runs a
-## list. The names are the cartridge's, so a sequence reads against
-## `data/moves/effects.asm` line for line.
+## The steps a move is made of: the cartridge keeps a command list per effect
+## and runs it in order, and [Gen2Battle] only runs a list. The names are the
+## cartridge's, so a sequence reads against `data/moves/effects.asm` line for line.
 
 ## Announces the move. First, because a move that fails still says it was used.
 const USED_MOVE_TEXT: StringName = &"usedmovetext"
@@ -130,12 +126,9 @@ const CHECK_IMMUNE: StringName = &"checkimmune"
 ## Rolls whether the move connects, and ends it if it does not.
 const CHECK_HIT: StringName = &"checkhit"
 
-## The effects whose list still has work after a miss, and so are not ended by
-## [constant CHECK_HIT]. `BattleCommand_CheckHit` ends nothing on the cartridge:
-## it writes `wAttackMissed` and the list runs to `failuretext`, which this engine
-## has none of, so the hit check ends the move instead. These three carry a
-## command between the two: Selfdestruct faints its user whether or not it
-## connected, `rolloutpower` breaks the chain, and `furycutter` zeroes its count.
+## The effects whose list still has work after a miss. `BattleCommand_CheckHit`
+## only writes `wAttackMissed` and the list runs on to `failuretext`; the hit
+## check ends the move here instead, and these three carry a command between.
 const CONTINUES_AFTER_MISS: Array[int] = [
 	Gen2MoveEffect.SELFDESTRUCT, Gen2MoveEffect.ROLLOUT, Gen2MoveEffect.FURY_CUTTER,
 ]
@@ -775,6 +768,9 @@ static func _do_turn(turn: Gen2Turn) -> void:
 	# check, so Struggle counts even though it spends nothing.
 	turn.attacker().turns_taken = (turn.attacker().turns_taken + 1) & 0xFF
 
+	# `DecrementPP` has no enemy half in Generation 1.
+	if turn.side == Gen2Battle.ENEMY and turn.battle.is_gen1():
+		return
 	if turn.slot >= 0 and turn.move_number != Gen2Damage.STRUGGLE:
 		turn.attacker().spend_pp(turn.slot)
 
@@ -1002,12 +998,8 @@ static func _hidden_power(turn: Gen2Turn) -> void:
 	_damage_stats(turn)
 
 
-## `BattleCommand_Present`: three power rows and a fourth that heals the target a
-## quarter of its maximum. The matchup and the accuracy roll come first and are
-## asked by the command itself, `present` sitting where `damagecalc` would with no
-## `failuretext` in front of `applydamage`. The heal is the target's: the source
-## switches turn, measures, switches back and calls `RestoreHP`, which reads the
-## side opposite whoever is acting.
+## `BattleCommand_Present`: three power rows and a fourth that heals the target
+## a quarter of its maximum, the matchup and the accuracy roll asked first.
 static func _present(turn: Gen2Turn) -> void:
 	var matchup: Dictionary = Gen2Damage.stab_damage(
 		turn.attacker(), turn.defender(), turn.effective_move(), 0
@@ -1102,12 +1094,9 @@ static func _reset_type_matchup(turn: Gen2Turn) -> void:
 	turn.effectiveness = Gen2Layout.MATCHUP_EFFECTIVE
 
 
-## `BattleCommand_HealBell`: every Pokémon in the user's party loses its status,
-## the one on the field included. The source zeroes all six bytes whether or not a
-## slot holds anything, so a shorter party is the same thing. Its trailing
-## `CalcPlayerStats` has no counterpart, a burn and a paralysis being applied when
-## a stat is read ([method Gen2BattleMon.stat]). Its opening `res
-## SUBSTATUS_NIGHTMARE` is the ringer's own, reached through Sleep Talk.
+## `BattleCommand_HealBell`: every party member loses its status. Its trailing
+## `CalcPlayerStats` has no counterpart, a burn being applied when a stat is
+## read, and its opening `res SUBSTATUS_NIGHTMARE` is reached through Sleep Talk.
 static func _heal_bell(turn: Gen2Turn) -> void:
 	for mon: Gen2BattleMon in turn.battle.party(turn.side).mons:
 		if mon == null:
@@ -1524,14 +1513,10 @@ static func _jump_kick_crash(turn: Gen2Turn) -> void:
 	})
 
 
-## Takes the damage off and reports what was taken.
-## `BattleCommand_ApplyDamage` rolls the defender's Focus Band first, and a band
-## that fires calls `BattleCommand_FalseSwipe`, leaving one hit point; the roll
-## happens whether or not the hit was lethal. The band sits in front of the
-## substitute routing, which is the source's order: `FalseSwipe` clamps against
-## the *real* health, so a band can fire, cut the figure, and have the doll spend
-## the cut figure with "hung on" printed anyway. `.update_damage_taken` then
-## returns early against a doll, which stops Counter answering a hit it took.
+## `BattleCommand_ApplyDamage` rolls the defender's Focus Band first, whether
+## or not the hit was lethal, and in front of the substitute routing: a band can
+## fire, cut the figure, and have the doll spend the cut figure with "hung on"
+## printed anyway. `.update_damage_taken` returns early against a doll.
 static func _apply_damage(turn: Gen2Turn) -> void:
 	if turn.missed or turn.damage <= 0:
 		return
@@ -1589,12 +1574,9 @@ static func _apply_damage(turn: Gen2Turn) -> void:
 		turn.emit(Gen2Battle.ENDURED, {"target": turn.target, "item": defender.item})
 
 
-## `DoSubstituteDamage`: the doll spends the hit and the health is never touched.
-## The damage is a sixteen-bit word against a one-byte counter, so anything from
-## 256 up breaks the doll without arithmetic and the subtraction breaks it on
-## exactly zero as well as on a borrow. `xor a / ld [hl], a` over the effect byte
-## then makes the rest of the list an ordinary attack, five effects exempted, and
-## `ResetDamage` closes both branches.
+## `DoSubstituteDamage`: a sixteen-bit word against a one-byte counter, so 256
+## up breaks the doll outright and the subtraction breaks it on zero too. `xor a`
+## over the effect byte makes the rest of the list an ordinary attack.
 static func _substitute_damage(turn: Gen2Turn) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 	turn.emit(Gen2Battle.SUBSTITUTE_TOOK_DAMAGE, {"target": turn.target})
@@ -1712,13 +1694,9 @@ static func _recoil(turn: Gen2Turn) -> void:
 	})
 
 
-## The defender first, then the attacker, the order they can go down in. A
-## defender that went down ends the move, `BattleCommand_CheckFaint` finishing on
-## `jp EndMoveEffect`, so every secondary status and [constant TRAP_TARGET] behind
-## it is skipped; the attacker going down to recoil ends nothing, the cartridge
-## testing only the opponent's HP. The commands behind it keep their own
-## fainted-target check, since a list with no faint step can still reach one
-## through [constant BEAT_UP].
+## A defender that went down ends the move, `BattleCommand_CheckFaint`
+## finishing on `jp EndMoveEffect`; the attacker going down to recoil ends
+## nothing, the cartridge testing only the opponent's HP.
 static func _check_faint(turn: Gen2Turn) -> void:
 	_destiny_bond_takes_user(turn)
 	for side: int in [turn.target, turn.side]:
@@ -1728,13 +1706,9 @@ static func _check_faint(turn: Gen2Turn) -> void:
 		turn.end()
 
 
-## The Destiny Bond half of `BattleCommand_CheckFaint`, the one reader of the
-## flag, and it reads the *target's*. The health is emptied rather than damaged,
-## the source zeroing both bytes of `wBattleMonHP` by hand, so no held item,
-## Endure or Focus Band stands between the bond and the attacker; sitting in front
-## of the loop below reports the target's faint first, the order the source's two
-## `HandleMonFaint` calls take. A user already down is not exempted, since
-## `recoil` runs in front of `checkfaint` in `RecoilHit`.
+## The Destiny Bond half of `BattleCommand_CheckFaint`, reading the target's
+## flag. The source zeroes `wBattleMonHP` by hand, so no item, Endure or Focus
+## Band stands between the bond and the attacker.
 static func _destiny_bond_takes_user(turn: Gen2Turn) -> void:
 	var target: Gen2BattleMon = turn.battle.mon(turn.target)
 	if not target.is_fainted():
@@ -1895,13 +1869,9 @@ static func _effect_chance(turn: Gen2Turn) -> void:
 		turn.failed_chance = true
 
 
-## Puts a status on the defender, or fails. One at a time: a Pokémon already
-## carrying something is refused, as is one whose type makes it immune, and only
-## sleep is rolled for a length.
-## The four `*Target` commands share their order: existing status, weather, type,
-## and only then `wEffectFailed`. Last is not cosmetic, the first step being the
-## one that does something besides refuse: a burn whose roll failed still reaches
-## `Defrost`.
+## The four `*Target` commands share their order: existing status, weather,
+## type, and only then `wEffectFailed`, so a burn whose roll failed still
+## reaches `Defrost`.
 static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 	if defender.is_fainted():
@@ -1990,13 +1960,9 @@ static func _status_interrupts(turn: Gen2Turn, flag: int) -> void:
 		_cant_move(defender)
 
 
-## Whether the target's type refuses this status, which two of the five ask.
-## Poison asks `CheckIfTargetIsPoisonType`, comparing the target's types against
-## POISON rather than the move's, so a Poison-type is refused whatever poisons it.
-## Burn and freeze ask `CheckMoveTypeMatchesTarget`, comparing the *move's* type,
-## and its `.normal` branch returns non-zero without comparing, so Tri Attack can
-## burn and freeze anything. Sleep and paralysis ask neither, which is why Body
-## Slam paralyses a Ground-type.
+## Poison asks `CheckIfTargetIsPoisonType` against the target's types, burn and
+## freeze `CheckMoveTypeMatchesTarget` against the move's, whose `.normal`
+## branch lets Tri Attack burn anything, and sleep and paralysis ask neither.
 static func _status_type_refuses(turn: Gen2Turn, flag: int) -> bool:
 	var types: Array = turn.defender().types()
 	if flag == Gen2Status.POISON:
@@ -2136,14 +2102,9 @@ static func _drain_target(turn: Gen2Turn) -> void:
 	})
 
 
-## `BattleCommand_ConstantDamage`: the whole hit without the ordinary formula.
-## LEVEL_DAMAGE is the user's level, PSYWAVE a roll of it, SUPER_FANG half the
-## target's HP and STATIC_DAMAGE the power field. None criticals or announces an
-## effectiveness, the number having been multiplied by neither, which is what
-## [constant RESET_TYPE_MATCHUP] behind them says.
-## [constant Gen2MoveEffect.REVERSAL] shares the command and not the shape: it
-## sets a power and runs the formula, its list carrying `stab`, so Flail against a
-## Ghost really is super effective.
+## `BattleCommand_ConstantDamage`: the user's level, a roll of it, half the
+## target's HP or the power field, none of them multiplied or announced.
+## [constant Gen2MoveEffect.REVERSAL] shares the command and runs the formula.
 static func _fixed_damage(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	var defender: Gen2BattleMon = turn.defender()
@@ -2219,12 +2180,8 @@ static func _check_charge(turn: Gen2Turn) -> void:
 	turn.skip_to = CHARGE
 
 
-## `BattleCommand_Charge`: the charging turn. It locks the user in, says its own
-## line and ends the move; Skull Bash carries on at [constant END_TURN], which is
-## where its Defense raise sits.
-## A user that is asleep gets `PrintButItFailed` instead, which is Sleep Talk
-## reaching a two-turn move: the source spends `movedelay` and `raisesub` before
-## the line.
+## `BattleCommand_Charge`: the charging turn, which Skull Bash carries on from
+## at [constant END_TURN]. A sleeping user is Sleep Talk's `PrintButItFailed`.
 static func _charge(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 	if Gen2Status.is_asleep(mon.status):
@@ -2322,13 +2279,9 @@ static func _rollout_check(turn: Gen2Turn) -> void:
 		turn.skip_to = DO_TURN
 
 
-## `BattleCommand_RolloutPower`, both halves of Rollout: the count and the
-## doubling. It runs after `stab` and the hit check and before `damagevariation`,
-## so the doubling lands on the matched-up damage and the spread comes off the
-## doubled figure; a miss ends the chain, and a fifth hit clears the flag while
-## keeping its count. The count is raised before the doubling and one doubling
-## does nothing (`inc [hl]`, then `dec b / jr z`), so the first hit is worth its
-## own power and the fifth sixteen times it. Defense Curl adds one more.
+## `BattleCommand_RolloutPower`, after `stab` and before `damagevariation`. The
+## count is raised before the doubling and one doubling does nothing, so the
+## first hit is worth its own power and the fifth sixteen times it.
 static func _rollout_power(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 	# Sleep Talk can call Rollout while the user remains asleep. The cartridge's
@@ -2451,12 +2404,9 @@ static func _gen1_cure_volatile(battle: Gen2Battle, side: int) -> void:
 	battle.reflect_turns[side] = 0
 
 
-## `TrappingEffect`. The counter goes on the target, where
-## [member Gen2BattleMon.trapped_turns] already lives, and Generation 1 spends it
-## by repeating the move rather than by bleeding: [method Gen2Battle.move_for]
-## forces the move on the user and [method _check_status] holds the target in
-## place. `.MultiturnMoveCheck` jumps past the damage calculation, the accuracy
-## roll and `DecrementPP`, which is the skip here.
+## `TrappingEffect`: Generation 1 spends the counter by repeating the move,
+## [method Gen2Battle.move_for] forcing it on the user and [method _check_status]
+## holding the target. `.MultiturnMoveCheck` skips the calculation and the roll.
 static func _gen1_trap_target(turn: Gen2Turn) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 	if defender.trapping_move != 0:
@@ -2571,12 +2521,9 @@ static func _psych_up(turn: Gen2Turn) -> void:
 	turn.emit(Gen2Battle.STAGES_COPIED)
 
 
-## Locks whichever of the target's slots holds
-## [member Gen2BattleMon.last_counter_move], searched for as the cartridge
-## searches, nothing the attacker did carrying the slot. Fails silently against a
-## target that has not moved, a last move of Struggle, an already disabled target,
-## a move no longer in the list (a mid-battle level up, which the cartridge never
-## has to consider), or a slot out of PP.
+## Locks the slot holding [member Gen2BattleMon.last_counter_move]. Silent
+## against a target that has not moved, Struggle, an already disabled target, a
+## move no longer in the list, or a slot out of PP.
 static func _disable(turn: Gen2Turn) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 	if defender.disabled_slot >= 0:
@@ -2682,13 +2629,9 @@ static func _focus_energy(turn: Gen2Turn) -> void:
 	turn.emit(Gen2Battle.FOCUS_ENERGY_SET)
 
 
-## Binds the target for three to six turns, of which
-## [method Gen2Battle._tick_wrap] spends the first without damage.
-## `BattleCommand_TrapTarget`'s three refusals in its order: a missed move, which
-## is structural here since [method _check_hit] ends the move first, a target
-## already bound, and a target behind a Substitute. All three are silent, the
-## cartridge printing nothing, and the doll check sits in front of `BattleRandom`,
-## so a bind aimed at one draws no roll.
+## `BattleCommand_TrapTarget`'s three silent refusals in order: a miss, a
+## target already bound, and one behind a Substitute, whose check sits in front
+## of `BattleRandom` so it draws no roll.
 static func _trap_target(turn: Gen2Turn) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 	if defender.trapped_turns > 0:
@@ -2872,13 +2815,9 @@ static func _nightmare(turn: Gen2Turn) -> void:
 	turn.emit(Gen2Battle.NIGHTMARE_STARTED, {"target": turn.target})
 
 
-## Two moves sharing a byte, told apart by the *user's* types: a Ghost curses the
-## target for half its own maximum, everybody else trades a stage of Speed for one
-## each of Attack and Defense. Those three are `LowerStat` and
-## `BattleCommand_AttackUp`/`..._DefenseUp` acting on the user's own stages with no
-## Mist, Substitute or `wEffectFailed` check, which is why they are stage moves
-## here rather than [method _stat_change] calls; `ResetMiss` between them stops a
-## Speed that could not fall from swallowing the raises.
+## Told apart by the user's types. The non-Ghost half is `LowerStat` and the two
+## `*Up`s on the user's own stages with no Mist or Substitute check, and
+## `ResetMiss` stops a Speed that could not fall from swallowing the raises.
 static func _curse(turn: Gen2Turn) -> void:
 	var user: Gen2BattleMon = turn.attacker()
 	if user.types().has(Gen2Layout.TYPE_GHOST):
@@ -2965,12 +2904,9 @@ static func _clear_hazards(turn: Gen2Turn) -> void:
 		turn.emit(Gen2Battle.RELEASED_BY, {"target": turn.target})
 
 
-## `ProtectChance`, which Protect, Detect and Endure all are: three gates, then a
-## roll whose odds halve per consecutive use, with the failure already reported
-## when it says no. The two gates in front are easy to get backwards: going second
-## fails outright, which is what makes two Protects a question of speed, and the
-## Substitute refused is the *user's own* (`BATTLE_VARS_SUBSTATUS4`, not `_OPP`),
-## so nothing about the target is asked.
+## `ProtectChance`: three gates, then a roll whose odds halve per consecutive
+## use. Going second fails outright, and the Substitute refused is the user's
+## own (`BATTLE_VARS_SUBSTATUS4`, not `_OPP`).
 static func _protect_chance(turn: Gen2Turn) -> bool:
 	var user: Gen2BattleMon = turn.attacker()
 	if turn.battle.opponent_went_first(turn.side):
@@ -3035,12 +2971,8 @@ static func _destiny_bond(turn: Gen2Turn) -> void:
 	turn.emit(Gen2Battle.DESTINY_BOND_SET)
 
 
-## `BattleCommand_ForceSwitch`: Whirlwind and Roar, with two endings. Against a
-## trainer the target's side switches to a random standing member; against a wild
-## the battle *ends* in either direction, `SetBattleDraw` making both a draw.
-## The source's `.trainer` and `.vs_trainer` are one routine here, every
-## difference between them being which side is read: the user's level against the
-## target's, the user having moved second, and a random member of that party.
+## `BattleCommand_ForceSwitch`: a random standing member against a trainer, a
+## draw against a wild in either direction.
 static func _force_switch(turn: Gen2Turn) -> void:
 	if FORCE_SWITCH_REFUSED_TYPES.has(turn.battle.battle_type) or turn.missed:
 		turn.emit(Gen2Battle.MOVE_FAILED)
@@ -3135,13 +3067,10 @@ static func _force_switch_wild(turn: Gen2Turn) -> void:
 	turn.emit(line, {"target": turn.target})
 
 
-## `BattleCommand_BatonPass`: switch, and hand the arrival everything the position
-## was carrying. The two halves differ in one thing, which is why this is the
-## first effect that cannot be resolved in one go: the enemy's target is picked by
-## the ordinary AI switch and the player's by `ForcePickSwitchMonInBattle`, a menu
-## inside the move that cannot be backed out of, so the turn stops here until
-## [method Gen2Battle.pass_to]. Committing a target before the turn would be
-## wrong: a pass that moves second is picked once the opponent's move has landed.
+## `BattleCommand_BatonPass`. The player's target is `ForcePickSwitchMonInBattle`,
+## a menu inside the move, so the turn stops here until
+## [method Gen2Battle.pass_to]: a pass that moves second is picked once the
+## opponent's move has landed.
 static func _baton_pass(turn: Gen2Turn) -> void:
 	var battle: Gen2Battle = turn.battle
 	var side: int = turn.side
@@ -3166,14 +3095,10 @@ static func _baton_pass(turn: Gen2Turn) -> void:
 	)
 
 
-## `BattleCommand_Teleport`: the user takes itself out of a wild battle, which
-## [method Gen2Battle.force_out] ends as a draw. Four refusals in the source's
-## order: the four scripted `wBattleType` values, Mean Look or Spider Web, a
-## trainer battle, and `BattleCommand_ForceSwitch`'s level comparison. The enemy's
-## half draws that roll and throws it away, `cp b / jr nc, .run_away` falling
-## straight into `.run_away`, so a wild Pokemon always teleports
-## (`docs/bugs_and_glitches.md`). Mirrored rather than fixed, and the roll is still
-## drawn so the generator moves the same way.
+## `BattleCommand_Teleport`: four refusals in order, the scripted `wBattleType`
+## values, Mean Look, a trainer battle, and the level comparison. The enemy's
+## half draws that roll and throws it away (`docs/bugs_and_glitches.md`), so a
+## wild always teleports; the roll is still drawn.
 static func _teleport(turn: Gen2Turn) -> void:
 	if FORCE_SWITCH_REFUSED_TYPES.has(turn.battle.battle_type) \
 		or Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.CANT_RUN) \
@@ -3196,13 +3121,8 @@ static func _teleport(turn: Gen2Turn) -> void:
 	turn.emit(Gen2Battle.FLED_FROM_BATTLE)
 
 
-## `BattleCommand_Foresight`: the flag that drops the target's evasion out of the
-## accuracy sum and opens the two Ghost immunities the matchup table keeps past
-## its `-2` marker. It sits on the target and nothing but a switch clears it. Two
-## refusals: a target that is flying or underground, and one already identified.
-## Only the second is reached through the cartridge's own list, since `checkhit`
-## in front of the command has already turned a hidden target away; the first is
-## kept for a registered list that carries no `checkhit`.
+## `BattleCommand_Foresight`: the flag that drops the target's evasion and
+## opens the two Ghost immunities past the table's `-2` marker.
 static func _foresight(turn: Gen2Turn) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 	if _is_hidden(defender.substatus) \
@@ -3230,12 +3150,9 @@ static func _lock_on(turn: Gen2Turn) -> void:
 	turn.emit(Gen2Battle.TOOK_AIM)
 
 
-## `BattleCommand_Spite`: two to five PP off the slot holding the target's last
-## move, or what it has left. The slot is searched for the way [method _disable]
-## searches, and the guard for a move no longer in the list is this project's:
-## `.loop` there has no bound and would run off the end, reachable only through a
-## mid-battle level up. Four refusals, all `PrintDidntAffect2`: a target that has
-## not moved, a last move of Struggle, an empty slot, and that missing one.
+## `BattleCommand_Spite`: two to five PP off the target's last move. The guard
+## for a move no longer in the list is this project's: `.loop` has no bound and
+## would run off the end after a mid-battle level up.
 static func _spite(turn: Gen2Turn) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 	var last_move: int = defender.last_counter_move
@@ -3265,12 +3182,8 @@ static func _roll_spite_pp(rng: RandomNumberGenerator) -> int:
 const SPITE_MIN_PP: int = 2
 
 
-## `BattleCommand_PainSplit`: both Pokémon end on the floored average of the two
-## totals, neither above its own maximum. The health words are written by hand, so
-## no doll takes it, no Focus Band fires and no Endure clamps it, and both being
-## standing means the average is at least one. Two refusals, both
-## `PrintDidntAffect2`: a miss, already an ended move, and a target behind a
-## doll.
+## `BattleCommand_PainSplit`: the floored average, written by hand, so no doll,
+## Focus Band or Endure sees it. Refused against a target behind a doll.
 static func _pain_split(turn: Gen2Turn) -> void:
 	if _substitute_refuses(turn):
 		turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
@@ -3290,12 +3203,8 @@ static func _pain_split(turn: Gen2Turn) -> void:
 	})
 
 
-## `BattleCommand_Thief`: the target's held item, onto a thief carrying none. The
-## cartridge writes the battle struct and the party struct, being two copies of
-## one Pokémon; [method Gen2Battle.mon] hands back the party member itself, so one
-## write is both. Four silent refusals in the source's order: the thief holds
-## something, the target holds nothing, the item is mail, and the chance came up
-## short, read last because `effectchance` drew its roll earlier.
+## `BattleCommand_Thief`: four silent refusals in order, the chance read last
+## because `effectchance` drew its roll earlier.
 static func _thief(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	var defender: Gen2BattleMon = turn.defender()
@@ -3321,13 +3230,8 @@ static func _pursuit(turn: Gen2Turn) -> void:
 	turn.damage = mini(turn.damage * 2, 0xFFFF)
 
 
-## `BattleCommand_BeatUp`: one pass of the loop, which picks the party member
-## this hit is worked out from and loads the formula's two numbers off its base
-## stats. `damagecalc` never sees `damagestats`, so no item, screen, stage or
-## truncation touches either figure, and there is no `stab`, so the modifier
-## stays `EFFECTIVE` and no effectiveness is announced.
-## A member with no health or any status takes `.beatup_fail`, which skips
-## forward to `buildopponentrage`: the hit is not spent and the loop carries on.
+## `BattleCommand_BeatUp`: one pass, the formula's two numbers off the member's
+## base stats with no item, screen, stage or `stab`.
 static func _beat_up(turn: Gen2Turn) -> void:
 	turn.damage = 0
 	var battle: Gen2Battle = turn.battle
@@ -3406,13 +3310,9 @@ static func _safeguard_refuses(turn: Gen2Turn, side: int) -> bool:
 	return Gen2Screens.has(turn.battle.screens[side], Gen2Screens.SAFEGUARD)
 
 
-## `BattleCommand_Heal`: Recover, Softboiled and Milk Drink take back half the
-## maximum; Rest takes back all of it and pays for that with two turns asleep.
-## The full-HP refusal is checked before anything else, so Rest at full health
-## fails and stays awake even when there is a status sitting on it that sleeping
-## would have cleared. Rest writes `REST_SLEEP_TURNS + 1` over the whole status
-## byte rather than into the sleep bits, which is why it is the one move that
-## cures a burn or a paralysis, and it clears Toxic's ramp with it.
+## `BattleCommand_Heal`. The full-HP refusal comes first, so Rest at full health
+## fails whatever status sits on it; it writes `REST_SLEEP_TURNS + 1` over the
+## whole status byte, which is why it cures a burn or a paralysis.
 static func _heal(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	if attacker.hp >= attacker.max_hp():
@@ -3435,12 +3335,9 @@ static func _heal(turn: Gen2Turn) -> void:
 	})
 
 
-## `BattleCommand_TimeBasedHealContinue`: Morning Sun, Synthesis and Moonlight.
-## Half the maximum by default. One step down the table outside the move's own
-## time of day, which is the cartridge's real rule: matching the clock buys
-## nothing, missing it costs. Then one step up in sun, or one step down in any
-## other weather, so the worst case is an eighth and the best is the whole bar.
-## Link battles skip the time step.
+## `BattleCommand_TimeBasedHealContinue`: half by default, one step down outside
+## the move's own time of day, one up in sun or down in other weather. Link
+## battles skip the time step.
 static func _timed_heal(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	if attacker.hp >= attacker.max_hp():
@@ -3501,12 +3398,8 @@ static func _skip_sun_charge(turn: Gen2Turn) -> void:
 		turn.skip_to = CHARGE
 
 
-## `PlayFXAnimID`. Nothing is drawn here: the animation is written down as an
-## event at its own place in the turn and the screen is what spends frames on it.
-## [param on_opponent] is `PlayOpponentBattleAnim`'s pair of
-## `BattleCommand_SwitchTurn` calls: the same event with `hBattleTurn` inverted
-## for the length of the animation, so it plays on the target rather than on
-## whoever is acting.
+## `PlayFXAnimID`, as an event the screen spends frames on. [param on_opponent]
+## is `PlayOpponentBattleAnim`'s `hBattleTurn` inversion.
 static func _play_fx_anim(
 	turn: Gen2Turn, index: int, after_anim: int, restore_user_pic: bool = false,
 	on_opponent: bool = false

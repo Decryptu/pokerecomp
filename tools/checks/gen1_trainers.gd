@@ -60,6 +60,72 @@ const FIGHT_LEAD_LEVEL: int = 50
 const FIGHT_SEED: int = 20260930
 const FIGHT_TURN_CAP: int = 64
 
+## Classes running each layer, classes past `GenericAI`, and the use counts
+## summed. Yellow drops layer 3 from four classes.
+const AI_CENSUS: Dictionary = {
+	&"red": {"layer1": 45, "layer2": 8, "layer3": 21, "routines": 19, "uses": 116},
+	&"blue": {"layer1": 45, "layer2": 8, "layer3": 21, "routines": 19, "uses": 116},
+	&"yellow": {"layer1": 45, "layer2": 8, "layer3": 17, "routines": 19, "uses": 116},
+}
+## Each routine's action at 1 HP with a status, as the `Random` bytes of 256
+## that reach it: `cp n / ret nc` is n, Agatha's potion 129 - 20, no roll 256.
+const ROUTINE_SHARES: Dictionary = {
+	"generic": {},
+	"juggler": {"switch": 65},
+	"blackbelt": {Gen1TrainerAI.X_ATTACK: 32},
+	"giovanni": {Gen1TrainerAI.GUARD_SPEC: 65},
+	"cooltrainer_m": {Gen1TrainerAI.X_ATTACK: 65},
+	"cooltrainer_f": {Gen1TrainerAI.HYPER_POTION: 256},
+	"brock": {Gen1TrainerAI.FULL_HEAL: 256},
+	"misty": {Gen1TrainerAI.X_DEFEND: 65},
+	"lt_surge": {Gen1TrainerAI.X_SPEED: 65},
+	"erika": {Gen1TrainerAI.SUPER_POTION: 129},
+	"koga": {Gen1TrainerAI.X_ATTACK: 65},
+	"koga_yellow": {Gen1TrainerAI.X_ATTACK: 32},
+	"blaine": {Gen1TrainerAI.SUPER_POTION: 65},
+	"blaine_yellow": {Gen1TrainerAI.SUPER_POTION: 65},
+	"sabrina": {Gen1TrainerAI.HYPER_POTION: 65},
+	"sabrina_yellow": {Gen1TrainerAI.X_DEFEND: 65},
+	"rival2": {Gen1TrainerAI.POTION: 32},
+	"rival3": {Gen1TrainerAI.FULL_RESTORE: 32},
+	"lorelei": {Gen1TrainerAI.SUPER_POTION: 129},
+	"bruno": {Gen1TrainerAI.X_DEFEND: 65},
+	"agatha": {"switch": 20, Gen1TrainerAI.SUPER_POTION: 109},
+	"lance": {Gen1TrainerAI.HYPER_POTION: 129},
+}
+const ROUTINE_SEEDS: int = 512
+const SHARE_TOLERANCE: float = 0.04
+
+## Class, party, member, slot, move and `wLoneAttackNo`: Brock's Onix,
+## Lorelei's fifth and the champion's Pidgeot and Venusaur.
+const BROCK_CLASS: int = 34
+const LORELEI_CLASS: int = 44
+const RIVAL3_CLASS: int = 43
+const BULBASAUR_INDEX: int = 0x99
+const SPECIAL_MOVE_ROWS: Dictionary = {
+	&"red": [
+		[BROCK_CLASS, 0, 2, 3, 0x75, 1], [LORELEI_CLASS, 0, 5, 3, 0x3B, 0],
+		[RIVAL3_CLASS, 0, 1, 3, 0x8F, 0], [RIVAL3_CLASS, 0, 6, 3, 0x48, 0],
+	],
+	&"blue": [
+		[BROCK_CLASS, 0, 2, 3, 0x75, 1], [LORELEI_CLASS, 0, 5, 3, 0x3B, 0],
+		[RIVAL3_CLASS, 0, 1, 3, 0x8F, 0], [RIVAL3_CLASS, 0, 6, 3, 0x48, 0],
+	],
+	&"yellow": [
+		[BROCK_CLASS, 0, 2, 3, 0x14, 0], [BROCK_CLASS, 0, 2, 4, 0x75, 0],
+		[LORELEI_CLASS, 0, 5, 3, 0x3B, 0], [RIVAL3_CLASS, 0, 6, 3, 0x62, 0],
+	],
+}
+## Pewter Gym, Brock's cell, and Onix's third slot: `LoneMoves`' BIDE behind
+## his row's `ld a, $1` on Red and Blue, Yellow's own ungated BIND.
+const PEWTER_GYM: int = 0x36
+const BROCK_APPROACH := Vector2i(4, 2)
+const BROCK_LONE_ATTACK: int = 1
+const BROCK_ONIX_MOVE: Dictionary = {&"red": 0x75, &"blue": 0x75, &"yellow": 0x14}
+
+## Every row, `LoneMoves`' eight on each `$FF` party of Red and Blue.
+const SPECIAL_MOVE_CENSUS: Dictionary = {&"red": 314, &"blue": 314, &"yellow": 102}
+
 ## Where the player stands to talk to an object, and which way that faces.
 const APPROACHES: Array = [
 	[Vector2i.DOWN, Gen2WorldSprite.FACING_UP],
@@ -78,11 +144,137 @@ func run(r: RefCounted) -> void:
 
 func _one_game() -> void:
 	_the_party_table()
+	_the_ai_tables()
+	_the_special_moves()
 	_the_headers()
 	_every_trainer_is_talked_to()
 	_every_trainer_sees()
 	_a_trainer_is_beaten()
+	_the_gym_leader_stamps_the_lone_move()
+	_every_routine_acts()
 	_the_trainer_transitions()
+
+
+func _the_ai_tables() -> void:
+	var census: Dictionary = {"layer1": 0, "layer2": 0, "layer3": 0, "routines": 0, "uses": 0}
+	for trainer_class: int in range(1, CLASS_COUNT + 1):
+		var attributes: Dictionary = _r.data.trainer_attributes(trainer_class)
+		for layer: int in attributes["ai_layers"]:
+			census["layer%d" % layer] = int(census.get("layer%d" % layer, 0)) + 1
+		census["uses"] += int(attributes["ai_count"])
+		var routine: String = String(attributes["ai_routine"])
+		if not _r.check(Gen1TrainerAI.ROUTINES.has(routine),
+			"class %d names AI routine '%s'." % [trainer_class, routine]):
+			continue
+		if routine != "generic":
+			census["routines"] += 1
+	_r.check(census == AI_CENSUS[_r.game_id],
+		"the AI tables read %s, pinned %s." % [str(census), str(AI_CENSUS[_r.game_id])])
+
+
+func _the_special_moves() -> void:
+	var rows: int = 0
+	for trainer_class: int in range(1, CLASS_COUNT + 1):
+		for index: int in _r.data.trainer_party_count(trainer_class):
+			rows += (_r.data.trainer_party(trainer_class, index)["special_moves"] as Array).size()
+	_r.check(rows == int(SPECIAL_MOVE_CENSUS[_r.game_id]),
+		"%d special move rows, pinned %d." % [rows, int(SPECIAL_MOVE_CENSUS[_r.game_id])])
+	for row: Array in SPECIAL_MOVE_ROWS[_r.game_id]:
+		var context: Dictionary = {"lone_attack": int(row[5]), "rival_starter": BULBASAUR_INDEX}
+		var party: Gen2Party = Gen2TrainerParty.build(_r.data, int(row[0]), int(row[1]), null, context)
+		var member: Gen2BattleMon = party.at(int(row[2]) - 1) if party != null else null
+		if not _r.check(member != null, "class %d party %d has no member %d." % [row[0], row[1], row[2]]):
+			continue
+		var slot: int = int(row[3]) - 1
+		var move: int = int(member.moves[slot]) if slot < member.moves.size() else 0
+		_r.check(move == int(row[4]) and member.pp_left(slot) > 0,
+			"class %d member %d slot %d knows move %d with %d PP, wanted %d." % [
+				row[0], row[2], row[3], move, member.pp_left(slot), row[4],
+			])
+		if int(row[5]) == 0:
+			continue
+		var plain: Gen2Party = Gen2TrainerParty.build(_r.data, int(row[0]), int(row[1]))
+		var without: int = int(plain.at(int(row[2]) - 1).moves[slot]) \
+			if slot < plain.at(int(row[2]) - 1).moves.size() else 0
+		_r.check(without != int(row[4]),
+			"class %d member %d knows its lone move with wLoneAttackNo clear." % [row[0], row[2]])
+
+
+## `wGymLeaderNo` is written behind `InitBattleEnemyParameters`, so the request
+## carries it as it stands when the fight opens and `ReadTrainer` reads it.
+func _the_gym_leader_stamps_the_lone_move() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, PEWTER_GYM, BROCK_APPROACH)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	if not _r.check(not world.interact().is_empty(), "Brock said nothing."):
+		return
+	var request: Dictionary = _request_after(world)
+	var values: Dictionary = request.get("values", {})
+	if not _r.check(int(values.get("trainer_group", 0)) == BROCK_CLASS
+		and int(values.get("lone_attack", 0)) == BROCK_LONE_ATTACK,
+		"Brock's row asked for %s." % str(request)):
+		return
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_r.data, request, Gen2WorldBattleAdapter.fallback_party(_r.data)
+	)
+	var onix: Gen2BattleMon = (prepared.get("enemy_party") as Gen2Party).at(1) \
+		if bool(prepared.get("ok", false)) else null
+	var known: Array = onix.moves if onix != null else []
+	_r.check(known.size() > 2 and int(known[2]) == int(BROCK_ONIX_MOVE[_r.game_id]),
+		"Brock's Onix knows %s." % str(known))
+	world.complete_runtime_request({"outcome": Gen2WorldBattleAdapter.OUTCOME_WON})
+
+
+## `TrainerAI` over every class's first party at 1 HP with a burn and a bench,
+## so every gate but the roll passes.
+func _every_routine_acts() -> void:
+	var generator := RandomNumberGenerator.new()
+	var lead: Gen2BattleMon = Gen2BattleMon.create(
+		_r.data, FIGHT_LEAD, FIGHT_LEAD_LEVEL, _r.data.moves_at_level(FIGHT_LEAD, FIGHT_LEAD_LEVEL)
+	)
+	var routines: Dictionary = {}
+	for trainer_class: int in range(1, CLASS_COUNT + 1):
+		var routine: String = String(_r.data.trainer_attributes(trainer_class)["ai_routine"])
+		if routines.has(routine) or _r.data.trainer_party_count(trainer_class) == 0:
+			continue
+		routines[routine] = true
+		var enemy: Gen2Party = Gen2TrainerParty.build(_r.data, trainer_class, 0)
+		if enemy.size() < 2:
+			enemy = Gen2Party.create([enemy.at(0), Gen2BattleMon.create(
+				_r.data, FIGHT_LEAD, FIGHT_LEAD_LEVEL, [1]
+			)])
+		var battle: Gen2Battle = Gen2Battle.create_parties(
+			_r.data, Gen2Party.of(lead), enemy, generator, true, 0
+		)
+		battle.init_enemy_trainer(trainer_class, true)
+		var census: Dictionary = {}
+		for seed_value: int in ROUTINE_SEEDS:
+			generator.seed = seed_value
+			battle.gen1_ai_count = Gen1TrainerAI.COUNT_UNLOADED
+			battle.mon(Gen2Battle.ENEMY).hp = 1
+			battle.mon(Gen2Battle.ENEMY).status = Gen2Status.BURN
+			var action: Dictionary = Gen1TrainerAI.trainer_action(battle, generator)
+			if action.is_empty():
+				continue
+			var kind: Variant = int(action.get("item", 0))
+			if StringName(action["type"]) == Gen2Battle.ACTION_SWITCH:
+				kind = "switch"
+			census[kind] = int(census.get(kind, 0)) + 1
+		var expected: Dictionary = ROUTINE_SHARES[routine]
+		var same_kinds: bool = census.size() == expected.size()
+		for kind: Variant in expected:
+			same_kinds = same_kinds and census.has(kind)
+		if not _r.check(same_kinds,
+			"%s reached %s, expected %s." % [routine, str(census), str(expected.keys())]):
+			continue
+		for kind: Variant in expected:
+			var share: float = float(census[kind]) / float(ROUTINE_SEEDS)
+			_r.check(absf(share - float(expected[kind]) / 256.0) < SHARE_TOLERANCE,
+				"%s reached %s on %.3f of rolls, expected %d of 256." % [
+					routine, str(kind), share, int(expected[kind]),
+				])
+	_r.note("gen1 trainers %d AI routines act at their shares" % routines.size())
 
 
 ## `CheckFightingMapTrainers` walked from every cell of every trainer's own
@@ -390,6 +582,10 @@ func _a_trainer_is_beaten() -> void:
 		turns += 1
 	_r.check(battle.winner() == Gen2Battle.PLAYER,
 		"the trainer fight ended on %s after %d turns." % [battle.winner(), turns])
+	for member: Gen2BattleMon in enemy.mons:
+		for slot: int in member.moves.size():
+			_r.check(member.pp_left(slot) == int(_r.data.move(int(member.moves[slot])).get("pp", 0)),
+				"an opponent's move %d spent PP." % int(member.moves[slot]))
 
 
 ## Each of those rows run to `BlackScreen`.
