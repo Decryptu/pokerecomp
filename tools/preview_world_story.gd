@@ -4368,7 +4368,7 @@ func _ride_waterfall_down(
 	var walked: Dictionary = _walk_cell_resolving(world, top, save, random, data, true)
 	if not bool(walked.get("ok", false)):
 		return walked
-	var stepped: Dictionary = world.move_result(Vector2i.DOWN)
+	var stepped: Dictionary = world.move_action(Vector2i.DOWN)
 	if not bool(stepped.get("ok", false)):
 		return {"ok": false, "reason": "the descent's first step refused"}
 	var steps: int = 1
@@ -4504,7 +4504,7 @@ func _victory_road_leg(
 	)
 	if not bool(approach.get("ok", false)):
 		return _leg_failed(path, "Indigo Plateau approach failed", approach)
-	var stepped: Dictionary = world.move_result(Vector2i.UP)
+	var stepped: Dictionary = world.move_action(Vector2i.UP)
 	var plateau: Dictionary = {"ok": bool(stepped.get("ok", false))}
 	if bool(plateau.get("ok", false)):
 		var fired: Array = _dispatch_after_step(world)
@@ -4638,7 +4638,7 @@ func _lances_room_leg(
 	)
 	if not bool(approach.get("ok", false)):
 		return _leg_failed(path, "the walk to Lance failed", approach)
-	var stepped: Dictionary = world.move_result(Vector2i.UP)
+	var stepped: Dictionary = world.move_action(Vector2i.UP)
 	var champion: Dictionary = {"ok": false, "reason": "the step onto the coord event refused"}
 	if bool(stepped.get("ok", false)):
 		champion = _drain_story(
@@ -4814,7 +4814,7 @@ func _ss_aqua_crossing(
 	)
 	if not bool(approach.get("ok", false)):
 		return _leg_failed(path, "the gangway approach failed", approach)
-	var stepped: Dictionary = world.move_result(Vector2i.DOWN)
+	var stepped: Dictionary = world.move_action(Vector2i.DOWN)
 	var boarded: Dictionary = {"ok": false, "reason": "the step onto the gangway refused"}
 	if bool(stepped.get("ok", false)):
 		# OlivinePortWalkUpToShipScript's yesorno, then OlivinePortAskTicketText's
@@ -4937,7 +4937,7 @@ func _ss_aqua_worried_grandpa(
 	)
 	if not bool(approach.get("ok", false)):
 		return _leg_failed(path, "the walk to the grandpa scene failed", approach)
-	var stepped: Dictionary = world.move_result(Vector2i.DOWN)
+	var stepped: Dictionary = world.move_action(Vector2i.DOWN)
 	var scene: Dictionary = {"ok": false, "reason": "the step onto the grandpa cell refused"}
 	if bool(stepped.get("ok", false)):
 		scene = _drain_story(world, _dispatch_after_step(world), save, random, data, true)
@@ -4999,7 +4999,7 @@ func _ss_aqua_b1f_sailor(
 	)
 	if not bool(approach.get("ok", false)):
 		return _leg_failed(path, "the walk up B1F's east corridor failed", approach)
-	var stepped: Dictionary = world.move_result(Vector2i.UP)
+	var stepped: Dictionary = world.move_action(Vector2i.UP)
 	var blocked: Dictionary = {"ok": false, "reason": "the step onto the coord event refused"}
 	if bool(stepped.get("ok", false)):
 		blocked = _drain_story(world, _dispatch_after_step(world), save, random, data, true)
@@ -7048,7 +7048,7 @@ func _cerulean_machine_part(
 ## Runs the coord event on [param cell], whichever way the walk gets there.
 ## Open work item 15: a resolving walk aimed at a live coord event re-dispatches
 ## its own target and never settles, so the target is [param approach] and the
-## last step is a plain move_result(). But the walk to that approach can cross
+## last step is a plain move_action(). But the walk to that approach can cross
 ## the event's own cell first and resolve it on the way, which is what both of
 ## this leg's coord events do, so a walk that already ran something counts.
 func _coord_event_step(
@@ -7068,7 +7068,7 @@ func _coord_event_step(
 	var direction: Vector2i = cell - world.player_cell
 	if absi(direction.x) + absi(direction.y) != 1:
 		return {"ok": false, "reason": "%s does not neighbour %s" % [approach, cell]}
-	var moved: Dictionary = world.move_result(direction)
+	var moved: Dictionary = world.move_action(direction)
 	if not bool(moved.get("ok", false)):
 		return {"ok": false, "reason": "the step onto %s was refused" % cell}
 	var run: Dictionary = _drain_story(
@@ -7501,7 +7501,7 @@ func _push_boulder_at(
 	var walked: Dictionary = _walk_cell_resolving(world, approach, save, random, data)
 	if not bool(walked.get("ok", false)):
 		return walked
-	var result: Dictionary = world.move_result(direction)
+	var result: Dictionary = world.move_action(direction)
 	if not result.has("boulder_pushed"):
 		return {
 			"ok": false,
@@ -8879,13 +8879,13 @@ func _walk_to_connection(
 		steps.push_front(link["direction"])
 		cursor = link["cell"]
 	for step: Vector2i in steps:
-		var moved: Dictionary = world.move_result(step)
+		var moved: Dictionary = world.move_action(step)
 		if not bool(moved.get("ok", false)):
 			return {"ok": false, "reason": "walk step failed", "step": step}
 		var events: Array = _dispatch_after_step(world)
 		if not events.is_empty():
 			return {"ok": false, "reason": "connection walk hit a scripted event", "events": events}
-	var transition: Dictionary = world.move_result(_connection_direction(direction_name))
+	var transition: Dictionary = world.move_action(_connection_direction(direction_name))
 	return {
 		"ok": bool(transition.get("ok", false)),
 		"steps": steps.size(),
@@ -8923,7 +8923,7 @@ func _reachable_step(
 		world.gen2_code_at(direct)
 	).get("kind", &"none")) == &"force_turn":
 		return Vector2i(-1, -1)
-	# move_result() calls can_walk_to() with the direction, which reads the
+	# move_action() calls can_walk_to() with the direction, which reads the
 	# leave/enter wall mask at the player's own cell; from a BFS frontier that
 	# has to be anchored on the frontier cell instead, or the plan crosses walls
 	# the replayed walk then refuses. Route 32's UP_WALL row at y=72 is the
@@ -9002,7 +9002,7 @@ func _walk_to_story_cell(
 	var events: Array = []
 	for index: int in steps.size():
 		var direction: Vector2i = steps[index]
-		var moved: Dictionary = world.move_result(direction)
+		var moved: Dictionary = world.move_action(direction)
 		if not bool(moved.get("ok", false)):
 			return {
 				"ok": false,
@@ -11490,9 +11490,9 @@ func _gen1_push(
 	for _push: int in count:
 		_settle_object_steps(world, random)
 		## The first bump only arms `TryPushingBoulder`; the next press pushes.
-		var result: Dictionary = world.move_result(direction)
+		var result: Dictionary = world.move_action(direction)
 		if not result.has("boulder_pushed"):
-			result = world.move_result(direction)
+			result = world.move_action(direction)
 		if not result.has("boulder_pushed"):
 			return _gen1_step(path, step, world, {"ok": false, "reason": "no boulder moved from %s: %s" % [
 				_cell_value(world), result.get("reason", "the step succeeded")]})

@@ -6,6 +6,9 @@ const NEW_BARK_GROUP: int = 24
 const PLAYERS_HOUSE_2F: int = 7
 const HOME_CELL: Vector2i = Vector2i(3, 3)
 const HOME_FACING: int = Gen2WorldSprite.FACING_DOWN
+## `StartNewGame`'s `ld a, PLAYER_DIR_UP` behind `OakSpeech` on Yellow, and
+## `RedsHouse2FDefaultScript`'s on Red and Blue: a new game faces the SNES.
+const GEN1_HOME_FACING: int = Gen2WorldSprite.FACING_UP
 const START_MONEY: int = 3000
 const GEN1_POTION: int = 0x14
 ## InitDecorations (engine/overworld/decorations.asm): DECO_FEATHERY_BED and
@@ -30,7 +33,7 @@ static func gen1_new_game_snapshot(data: GameData) -> Gen2WorldSnapshot:
 	var snapshot := Gen2WorldSnapshot.new()
 	snapshot.map_id = Vector2i(0, int(warp["map"]))
 	snapshot.player_cell = cell
-	snapshot.player_facing = HOME_FACING
+	snapshot.player_facing = GEN1_HOME_FACING
 	snapshot.movement_mode = Gen2WorldAPI.MOVEMENT_WALK
 	snapshot.gen1_last_map = Gen1Layout.PALLET_TOWN
 	snapshot.world_state = Gen2WorldState.new({}, {}, {}, {0: START_MONEY})

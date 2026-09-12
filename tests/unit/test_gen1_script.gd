@@ -123,6 +123,12 @@ const LAYOUT: Dictionary = {
 	"sprite_map_x": 0xFFEE,
 	"walk_bike_surf_state": 0xD700,
 	"npc_num_scripted_steps": 0xCF0F,
+	"pikachu_spawn_state_flags": 0xD471,
+	"pikachu_happiness": 0xD46F,
+	"check_pikachu_following": 0x04A0,
+	"disable_pikachu_following": 0x04B0,
+	"apply_pikachu_movement": 0x04C0,
+	"pikachu_spawn_state": 0xD430,
 }
 ## `PredefPointers`' rows, by the id `predef` leaves in a.
 const PREDEFS: Dictionary = {
@@ -1396,4 +1402,56 @@ func test_flag_reset_preserves_the_preceding_bit_test() -> void:
 		{"op": "flag", "flag": 0, "set": false},
 		{"op": "branch", "snapshot": 0, "then": [],
 			"else": [{"op": "text", "text": "HI"}]},
+	])
+
+
+## `bit BIT_PIKACHU_SPAWN_STARTER, a` and `jr z`: the set side is the follower's.
+func test_the_starter_bit_is_a_runtime_test() -> void:
+	var program: Array = _load_a(int(LAYOUT["pikachu_spawn_state_flags"])) \
+		+ [Gen1Layout.SCRIPT_PREFIX, 0x7F, 0x28, 0x07] + _print(HELLO) + [0xC9] \
+		+ _print(BYE) + [0xC9]
+	assert_eq(_decode(program, _boxes()), [{
+		"op": "pikachu_test", "what": "starter",
+		"then": [{"op": "text", "text": "HI"}], "else": [{"op": "text", "text": "BYE"}],
+	}])
+
+
+## `cp 147` under `wPikachuHappiness` and `jr c`: carry is a happiness below it.
+func test_a_happiness_compare_names_its_threshold() -> void:
+	var program: Array = _load_a(int(LAYOUT["pikachu_happiness"])) \
+		+ [Gen1Layout.SCRIPT_CP_N, 147, Gen1Layout.SCRIPT_JR_CARRY, 0x07] \
+		+ _print(HELLO) + [0xC9] + _print(BYE) + [0xC9]
+	assert_eq(_decode(program, _boxes()), [{
+		"op": "pikachu_test", "what": "happiness", "below": 147,
+		"then": [{"op": "text", "text": "BYE"}], "else": [{"op": "text", "text": "HI"}],
+	}])
+
+
+## `CheckPikachuFollowingPlayer` answers Z while the follower walks, so a
+## `jr nz` takes the side without it.
+func test_the_following_check_reads_z_as_following() -> void:
+	var program: Array = _call(int(LAYOUT["check_pikachu_following"])) \
+		+ [Gen1Layout.SCRIPT_JR_NZ, 0x07] + _print(HELLO) + [0xC9] + _print(BYE) + [0xC9]
+	assert_eq(_decode(program, _boxes()), [{
+		"op": "pikachu_test", "what": "following",
+		"then": [{"op": "text", "text": "HI"}], "else": [{"op": "text", "text": "BYE"}],
+	}])
+
+
+func test_the_follower_calls_and_stores_are_steps() -> void:
+	var program: Array = _call(int(LAYOUT["disable_pikachu_following"])) \
+		+ [Gen1Layout.SCRIPT_LD_A, 2] + _store_a(int(LAYOUT["pikachu_spawn_state"])) + [0xC9]
+	assert_eq(_decode(program), [
+		{"op": "pikachu", "what": "following", "value": false},
+		{"op": "pikachu", "what": "spawn_state", "value": 2},
+	])
+
+
+## `ApplyPikachuMovementData` reads `hl` to the `$3f`, a `$80` row taking its
+## byte off the script: `$01` walks one direction for a scripted count.
+func test_movement_data_is_read_to_its_end() -> void:
+	var raw: Dictionary = {0x1900: 0x00, 0x1901: 0x01, 0x1902: 0x27, 0x1903: 0x1D, 0x1904: 0x3F}
+	var program: Array = _load_hl(0x1900) + _call(int(LAYOUT["apply_pikachu_movement"])) + [0xC9]
+	assert_eq(_decode(program, {}, raw), [
+		{"op": "pikachu_movement", "bytes": [0x00, 0x01, 0x27, 0x1D, 0x3F]},
 	])

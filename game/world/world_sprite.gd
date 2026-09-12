@@ -44,6 +44,8 @@ const SPRITE_SURF: int = 0x53
 ## `SPRITE_SEEL`, which `LoadSurfingPlayerSpriteGraphics` draws the surfing
 ## player with on all three Generation 1 cartridges.
 const SPRITE_SEEL: int = 0x3C
+## Yellow's `SPRITE_PIKACHU`, the sheet slot fifteen is drawn from.
+const SPRITE_PIKACHU_FOLLOWER: int = 0x3D
 const SPRITE_KRIS: int = 0x60
 const SPRITE_KRIS_BIKE: int = 0x61
 const SPRITE_POKEMON: int = 0x80

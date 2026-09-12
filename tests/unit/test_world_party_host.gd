@@ -147,6 +147,10 @@ func test_givepoke_appends_a_real_save_mon_and_resumes_the_script() -> void:
 	assert_eq(_save.party[2].species, 25)
 	assert_eq(_save.party[2].level, 5)
 	assert_eq(_save.party[2].item, 0)
+	## `AddPartyMon`'s `.trainerID`: the player's own, which is what Yellow's
+	## `IsThisPartyMonStarterPikachu` reads a gift against.
+	assert_eq(int(_save.party[2].ot_id), int(_save.player_id) & 0xFFFF)
+	assert_eq(_save.party[2].original_trainer, _save.player_name)
 
 
 func test_giveegg_records_an_egg_without_pretending_it_can_battle() -> void:

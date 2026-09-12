@@ -366,7 +366,7 @@ or a group, or `all`; with no argument it lists them.
 | `art` | Both intro movies, the credits of all six cartridges, the region map, all 278 battle animations, the map name sign |
 | `tables` | TM/HM, naming, world scripts, the opening lane |
 | `trainers` | The Route 30 trainer on each profile |
-| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, the key-item and usable-item tables behind the bag, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, the text box, shop inventory and wild encounter a map reads, every trainer and standing wild an object stands on, all 202 or 203 battle animations, and the Hall of Fame's own pages |
+| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, the key-item and usable-item tables behind the bag, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, the text box, shop inventory and wild encounter a map reads, every trainer and standing wild an object stands on, all 202 or 203 battle animations, the Hall of Fame's own pages, and Yellow's follower: its emotion table, its faces, its cries and the spawn every warp leaves it |
 
 The rest are previews and dumps, each driving a real screen or table:
 

@@ -71,6 +71,7 @@ var _presents_palettes: Dictionary = {}
 var _title: Dictionary = {}
 var _town_map: Dictionary = {}
 var _special_warps: Dictionary = {}
+var _pikachu: Dictionary = {}
 var _intro_names: Dictionary = {}
 var _oak_ratings: Dictionary = {}
 var _pokecenter_pc: Dictionary = {}
@@ -191,6 +192,7 @@ const MANIFEST_DICTIONARIES: Dictionary = {
 	"title": "_title",
 	"town_map": "_town_map",
 	"special_warps": "_special_warps",
+	"pikachu": "_pikachu",
 	"intro_names": "_intro_names",
 	"oak_ratings": "_oak_ratings",
 	"pokecenter_pc": "_pokecenter_pc",
@@ -2792,6 +2794,12 @@ func gen1_special_warp_list(name: String) -> PackedInt32Array:
 	for value: Variant in _special_warps.get(name, []) as Array:
 		out.append(int(value))
 	return out
+
+
+## Yellow's `PikachuEmotionTable` with its mood and happiness lookups, empty on
+## the other two.
+func gen1_pikachu() -> Dictionary:
+	return _pikachu
 
 
 func landmark_count() -> int:

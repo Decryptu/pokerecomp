@@ -67,6 +67,7 @@ const KIND_HELP: Dictionary = {
 	&"door": "door mat: .CheckWarp's carpet, standing on an interior door's mat",
 	&"ice_slide": "direction, frames: DoPlayerMovement.CheckForced's run. Direction is down, up, left, right",
 	&"ledge": "start cell: the ledge hop at the top of its arc, walking south until one allows it",
+	&"pikachu": "steps, direction: Yellow's follower behind that many held steps, 0 down, 1 up, 2 left, 3 right, photographed one step's frames after the last lands (`yellow 0 0 <out.png> live pikachu@12,6 3 1`)",
 	&"map_name_sign": "cell: InitMapNameSign's window, raised by walking west onto the neighbouring map",
 	&"yes_no": "script, presses: Script_yesorno's box over the map's script",
 	&"npc_trade": "cell below the trader: NPCTrade's own TRADE_DIALOG_INTRO with the YesNoBox over it",
@@ -416,7 +417,7 @@ func _settle_mon_special(host_property: String) -> void:
 ## The kinds that drove themselves to the frame they want. Every other kind
 ## stages a sprite and then spends the frames it needs.
 const SELF_DRIVEN_KINDS: Array[StringName] = [
-	&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine", &"fly",
+	&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine", &"fly", &"pikachu",
 	&"battle", &"battle_caught", &"battle_transition", &"level_evolution",
 	&"safari",
 	&"egg_hatch",
@@ -470,6 +471,7 @@ const STAGERS: Dictionary = {
 	&"dark_cave": &"_stage_dark_cave",
 	&"door": &"_stage_door",
 	&"ledge": &"_stage_ledge",
+	&"pikachu": &"_stage_pikachu",
 	&"ice_slide": &"_stage_ice_slide",
 	&"map_name_sign": &"_stage_map_name_sign",
 	&"mod_notice": &"_stage_mod_notice",
@@ -1066,6 +1068,23 @@ func _stage_door() -> void:
 ## `StepFunction_PlayerJump` at the top of its arc: the player is walked south until a
 ## cell allows the hop below it, and the picture is the frame `UpdateJumpPosition`
 ## draws highest (`crystal 24 4 ... ledge 5 4`).
+## Yellow's follower: the lead is made the starter, the first number of steps
+## is walked holding the second number's direction, then eight frames a step
+## settle the last one and the follower's own.
+func _stage_pikachu() -> void:
+	_screen.preview_pikachu()
+	var direction: Vector2i = PokeButton.vector(ICE_SLIDE_BUTTONS[posmod(maxi(_cell.y, 0), 4)])
+	var steps: int = maxi(_cell.x, 0)
+	for _frame: int in WARP_FRAME_CAP:
+		if steps > 0 and _screen.move_player(direction):
+			steps -= 1
+		_screen.advance_frame()
+		if steps == 0 and not _screen._world.player_step_in_progress():
+			break
+	for _frame: int in Gen2WorldAPI.passes_in_frames(Gen2WorldAPI.STEP_PASSES_WALK):
+		_screen.advance_frame()
+
+
 func _stage_ledge() -> void:
 	for _frame: int in WARP_FRAME_CAP:
 		_screen.move_down()

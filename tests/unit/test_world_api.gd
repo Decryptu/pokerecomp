@@ -10035,13 +10035,84 @@ func test_gen1_warp_and_the_way_back_through_last_map() -> void:
 	RomCache.clear(_gen1_directory())
 
 
+## `.goBackOutside` lands on the door tile, and `PlayerStepOutFromDoor`'s
+## simulated DOWN walks the player off it on the first pass.
+func test_gen1_a_warp_back_onto_a_door_steps_out_of_it() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 1))
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	assert_true(bool(world.try_warp().get("ok", false)))
+	assert_false(world.gen1_step_out_of_door(), "the house's mat is not a door tile")
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	assert_true(bool(world.try_warp().get("ok", false)))
+	assert_eq(world.player_cell, Vector2i(1, 1))
+	assert_true(world.gen1_step_out_of_door())
+	assert_true(world.gen1_player_movement_running())
+	assert_eq(world.player_cell, Vector2i(1, 2))
+	assert_false(world.gen1_step_out_of_door(), "spent once per warp")
+	RomCache.clear(_gen1_directory())
+
+
+## `.handleDirectionButtonPress`: a press away from `wPlayerLastStopDirection`
+## turns without stepping and shows the old facing for one pass, the next press
+## walks, and only a poll with nothing held arms the turn again.
+func test_gen1_a_direction_change_turns_for_one_pass_before_it_walks() -> void:
+	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(2, 3))
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	var turned: Dictionary = world.player_input_move(Vector2i.UP)
+	assert_eq(StringName(turned["kind"]), &"turn")
+	assert_eq(world.player_cell, Vector2i(2, 3))
+	assert_eq(world.player_facing, Gen2WorldSprite.FACING_UP)
+	assert_eq(world.player_drawn_facing(), Gen2WorldSprite.FACING_DOWN, "the old facing stands")
+	assert_true(world.gen1_turned_this_pass())
+	world.frame_number += Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS
+	assert_eq(world.player_drawn_facing(), Gen2WorldSprite.FACING_UP)
+	var walked: Dictionary = world.player_input_move(Vector2i.UP)
+	assert_eq(StringName(walked["kind"]), &"move", "the held press walks the next poll")
+	assert_eq(world.player_cell, Vector2i(2, 2))
+	while world.player_step_in_progress():
+		world.advance_player_step_pass()
+	assert_eq(StringName(world.player_input_move(Vector2i.LEFT)["kind"]), &"move",
+		"a bump-free walk arms no turn")
+	world.note_standing_still()
+	while world.player_step_in_progress():
+		world.advance_player_step_pass()
+	assert_eq(StringName(world.player_input_move(Vector2i.DOWN)["kind"]), &"turn")
+	RomCache.clear(_gen1_directory())
+
+
+## `AdvancePlayerSprite`'s first pass runs `LoadCurrentMapView` behind
+## `UpdateSprites` and overruns VBlank by a frame as soon as that loop has a
+## slot to run; an empty map keeps sixteen frames a step.
+func test_gen1_a_step_start_runs_a_frame_over_when_an_object_is_on_the_map() -> void:
+	var peopled: Gen2WorldAPI = _gen1_world(3, Vector2i(2, 3))
+	assert_true(bool(peopled.move_result(Vector2i.UP).get("ok", false)))
+	peopled.advance_player_step_pass()
+	assert_eq(peopled.take_pass_overrun_frames(), 1)
+	assert_eq(peopled.take_pass_overrun_frames(), 0, "read once")
+	var empty: Gen2WorldAPI = _gen1_world(2, Vector2i(2, 2))
+	assert_true(bool(empty.move_result(Vector2i.UP).get("ok", false)))
+	empty.advance_player_step_pass()
+	assert_eq(empty.take_pass_overrun_frames(), 0)
+	RomCache.clear(_gen1_directory())
+
+
 ## `HandleLedges` reads the faced tile as well as the one stood on, and the hop
 ## covers two cells as `wSimulatedJoypadStatesIndex`'s 2 does.
+## `HandleLedges` writes its two simulated presses and returns through
+## `.collision`, so the poll that finds the ledge spends nothing but the sound,
+## and the pass after it, reading the simulated DOWN, is the one that hops.
 func test_gen1_ledge_hop_crosses_the_ledge_tile() -> void:
 	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 3))
-	var hop: Dictionary = world.move_result(Vector2i.DOWN)
+	var found: Dictionary = world.move_result(Vector2i.DOWN)
+	assert_false(bool(found.get("ok", true)), "the finding pass moves nothing")
+	assert_true(bool(found.get("ledge", false)), "and plays SFX_LEDGE")
+	assert_false(bool(found.get("bump", true)))
+	assert_eq(world.player_cell, Vector2i(1, 3))
+	assert_eq(StringName(world.forced_movement().get("kind", &"")), &"ledge")
+	var hop: Dictionary = world.advance_forced_movement()
 	assert_eq(StringName(hop.get("kind", &"")), &"ledge_hop")
 	assert_eq(world.player_cell, Vector2i(1, 5))
+	assert_eq(StringName(world.forced_movement().get("kind", &"")), &"none")
 	RomCache.clear(_gen1_directory())
 
 
