@@ -3094,7 +3094,7 @@ static func _script_stored_named_more(
 		"gym_leader_no":
 			## `wLoneAttackNo` is the same byte: a gym leader's fight, which
 			## `InitBattle` tells the follower about and a map load clears.
-			out.append({"op": "volatile", "name": "gym_leader", "set": a != 0})
+			out.append({"op": "volatile", "name": "gym_leader", "set": a != 0, "value": a})
 	return STORE_OK
 
 

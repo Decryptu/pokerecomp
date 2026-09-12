@@ -16,8 +16,10 @@ extends RefCounted
 ##
 ## [param rules] defaults to the installed set, which is the run's; a caller
 ## holding a battle's own passes it rather than installing it.
+## [param context] is `ReadTrainer`'s `lone_attack` and `rival_starter`.
 static func build(
-	data: GameData, trainer_class: int, index: int, rules: Gen2Rules = null
+	data: GameData, trainer_class: int, index: int, rules: Gen2Rules = null,
+	context: Dictionary = {}
 ) -> Gen2Party:
 	if data == null:
 		return null
@@ -41,8 +43,47 @@ static func build(
 		members.append(
 			Gen2BattleMon.create(data, species, level, moves, dvs, trained, int(mon["item"]))
 		)
+	apply_special_moves(data, members, trainer.get("special_moves", []), context)
 
 	return Gen2Party.create(members)
+
+
+## `ReadTrainer`'s tail: each row a move written over one member's slot after
+## `AddPartyMon` filled it, gated on `wLoneAttackNo` or picked by
+## `wRivalStarter`. No PP is written beside it and the enemy's is never spent,
+## so an empty slot takes the move's own.
+static func apply_special_moves(
+	data: GameData, members: Array, rows: Array, context: Dictionary
+) -> void:
+	var lone: int = int(context.get("lone_attack", 0))
+	for row: Dictionary in rows:
+		if row.has("lone") and int(row["lone"]) != lone:
+			continue
+		var member: Gen2BattleMon = members[int(row["member"]) - 1] \
+			if int(row["member"]) <= members.size() else null
+		if member == null:
+			continue
+		var move: int = int(row.get("move", 0))
+		if row.has("starter"):
+			move = _starter_move(row["starter"], int(context.get("rival_starter", 0)))
+		var slot: int = int(row["slot"]) - 1
+		while member.moves.size() <= slot:
+			member.moves.append(0)
+			member.pp.append(0)
+		member.moves[slot] = move
+		if int(member.pp[slot]) == 0:
+			member.pp[slot] = int(data.move(move).get("pp", 0))
+
+
+## `.GiveStarterMove`: species 0 is the line every other value takes.
+static func _starter_move(rows: Array, starter: int) -> int:
+	var fallback: int = 0
+	for row: Dictionary in rows:
+		if int(row["species"]) == starter:
+			return int(row["move"])
+		if int(row["species"]) == 0:
+			fallback = int(row["move"])
+	return fallback
 
 
 ## What one of this trainer's Pokémon knows: its own stored moves if the

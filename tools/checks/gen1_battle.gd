@@ -170,7 +170,12 @@ func _a_wild_fight() -> void:
 
 ## [param moves] empty takes whatever the level gives, which is what a wild
 ## encounter and a party member both carry.
-func _fight(player_level: int, enemy_level: int, moves: Array, seed_value: int) -> Gen2Battle:
+## The Pidgey's own Whirlwind outspeeds a Bulbasaur and ends a wild battle, so
+## a routine drill hands [param enemy_moves] SPLASH.
+func _fight(
+	player_level: int, enemy_level: int, moves: Array, seed_value: int,
+	enemy_moves: Array = []
+) -> Gen2Battle:
 	var generator := RandomNumberGenerator.new()
 	generator.seed = seed_value
 	var player_moves: Array = moves if not moves.is_empty() \
@@ -180,7 +185,8 @@ func _fight(player_level: int, enemy_level: int, moves: Array, seed_value: int) 
 		Gen2BattleMon.create(_r.data, SWEEP_PLAYER, player_level, player_moves),
 		Gen2BattleMon.create(
 			_r.data, SWEEP_ENEMY, enemy_level,
-			_r.data.moves_at_level(SWEEP_ENEMY, enemy_level)
+			enemy_moves if not enemy_moves.is_empty()
+			else _r.data.moves_at_level(SWEEP_ENEMY, enemy_level)
 		),
 		generator
 	)
@@ -201,6 +207,7 @@ const WRAP_MOVE: int = 35
 const CONVERSION_MOVE: int = 160
 const TELEPORT_MOVE: int = 100
 const ROAR_MOVE: int = 46
+const SPLASH_MOVE: int = 150
 ## `TYPE_NORMAL` and `TYPE_FLYING` as `type_constants.asm` numbers them.
 const PIDGEY_TYPES: Array[int] = [0, 2]
 
@@ -217,7 +224,7 @@ const TRAP_TOLERANCE: float = 0.025
 ## screens, and the target's own status byte with them. Crystal's
 ## `EFFECT_RESET_STATS` clears the stages and nothing else.
 func _haze_clears_more_than_stages() -> void:
-	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [HAZE_MOVE], SWEEP_SEED)
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [HAZE_MOVE], SWEEP_SEED, [SPLASH_MOVE])
 	if not _r.check(battle != null, "no battle could be built for HAZE"):
 		return
 	battle.player.change_stage("attack", 2)
@@ -247,7 +254,7 @@ func _haze_clears_more_than_stages() -> void:
 ## the first hit's damage over again. `MoveHitTest.moveMissed` clears the flag,
 ## so the run walks until a Wrap actually binds.
 func _a_trapping_move_holds_its_target() -> void:
-	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [WRAP_MOVE], SWEEP_SEED)
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [WRAP_MOVE], SWEEP_SEED, [SPLASH_MOVE])
 	if not _r.check(battle != null, "no battle could be built for WRAP"):
 		return
 	var bound: int = 0
@@ -306,7 +313,7 @@ func _the_trap_counter_distribution() -> void:
 ## own Conversion samples the user's own moves for one.
 func _conversion_copies_the_target() -> void:
 	var battle: Gen2Battle = _fight(
-		SWEEP_LEVEL, SWEEP_LEVEL, [CONVERSION_MOVE], SWEEP_SEED
+		SWEEP_LEVEL, SWEEP_LEVEL, [CONVERSION_MOVE], SWEEP_SEED, [SPLASH_MOVE]
 	)
 	if not _r.check(battle != null, "no battle could be built for CONVERSION"):
 		return
@@ -322,13 +329,13 @@ func _conversion_copies_the_target() -> void:
 ## all three outright.
 func _teleport_ends_the_battle() -> void:
 	for move: int in [TELEPORT_MOVE, ROAR_MOVE]:
-		var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [move], SWEEP_SEED)
+		var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [move], SWEEP_SEED, [SPLASH_MOVE])
 		if not _r.check(battle != null, "no battle could be built for move %d" % move):
 			return
 		battle.take_turn(0, 0)
 		_r.check(battle.is_over(), "move %d did not end the wild battle" % move)
 
-		var trainer: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [move], SWEEP_SEED)
+		var trainer: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [move], SWEEP_SEED, [SPLASH_MOVE])
 		trainer.is_trainer_battle = true
 		var events: Array = trainer.take_turn(0, 0)
 		_r.check(not trainer.is_over(), "move %d ended a trainer battle" % move)

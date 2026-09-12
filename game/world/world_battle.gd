@@ -74,7 +74,10 @@ static func prepare(
 			trainer_class = int(values.get("trainer_group", 0))
 			trainer_index = int(values.get("trainer_id", 0))
 			enemy_party = Gen2TrainerParty.build(
-				data, trainer_class, trainer_index, battle_rules
+				data, trainer_class, trainer_index, battle_rules, {
+					"lone_attack": int(values.get("lone_attack", 0)),
+					"rival_starter": int(values.get("rival_starter", 0)),
+				}
 			)
 			if enemy_party == null:
 				return _failure(&"invalid_trainer", {

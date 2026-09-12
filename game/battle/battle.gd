@@ -455,6 +455,11 @@ const FLEE_ODDS_RANGE: int = 256
 ## Priority runs 0 to 3 with most moves at 1, so a move can go below the ordinary
 ## as well as above it. Keyed by effect byte, which the cache carries.
 const BASE_PRIORITY: int = 1
+## `MainInBattleLoop`'s two `cp`s in order: QUICK_ATTACK's user moves first,
+## COUNTER's last, and `50 percent + 1` bounds the tie.
+const GEN1_PRIORITY_MOVES: Array = [[0x62, true], [0x44, false]]
+const GEN1_TIE_BOUND: int = 129
+
 const EFFECT_PRIORITIES: Dictionary = {
 	Gen2MoveEffect.PROTECT: 3,
 	Gen2MoveEffect.ENDURE: 3,
@@ -526,6 +531,13 @@ var landmark: int = LANDMARK_NONE
 ## and each removed as it is spent (`xor a; ld [de], a`). Empty for a wild battle
 ## and for a class carrying `NO_ITEM` twice.
 var enemy_items: Array[int] = []
+
+## `wTrainerClass`, zero for a wild.
+var enemy_trainer_class: int = 0
+## `wAICount` and `wAILayer2Encouragement`, the `ExecuteEnemyMove`s since a
+## faint replacement. Generation 1 alone reads either.
+var gen1_ai_count: int = Gen1TrainerAI.COUNT_UNLOADED
+var gen1_enemy_moves: int = 0
 
 ## `wPlayerUsedMoves`, oldest first: all the switch AI has to go on about what it
 ## is facing. `NewBattleMonStatus` clears it on every send-out, so it describes
@@ -758,6 +770,7 @@ static func use_item(item: int) -> Dictionary:
 ## `ComputeTrainerReward`, and neither win branch pays money either.
 func init_enemy_trainer(trainer_class: int, rewarded: bool = true) -> void:
 	enemy_items = []
+	enemy_trainer_class = maxi(trainer_class, 0)
 	if data == null or trainer_class <= 0:
 		return
 	var attributes: Dictionary = data.trainer_attributes(trainer_class)
@@ -789,7 +802,7 @@ func _compute_trainer_reward(base_reward: int) -> void:
 	if last == null:
 		return
 	var product: int = base_reward * last.level
-	if data != null and data.generation == RomRegistry.GEN1:
+	if is_gen1():
 		battle_reward = mini(product, GEN1_REWARD_CEILING)
 		return
 	battle_reward = product & 0xFFFF
@@ -1421,6 +1434,12 @@ func send_out(
 		return events
 	if side == PLAYER:
 		_apply_player_badges()
+	elif is_gen1():
+		# `EnemySendOutFirstMon`'s `wAICount` reset, and `HandleEnemyMonFainted`'s
+		# `wAILayer2Encouragement` one, which an `AISwitchIfEnoughMons` skips.
+		gen1_ai_count = Gen1TrainerAI.COUNT_UNLOADED
+		if not withdrawing:
+			gen1_enemy_moves = 0
 	_clear_trapping()
 	if not preserve_counter_moves:
 		# NewBattleMonStatus/NewEnemyMonStatus clear both counter-move words.
@@ -1697,6 +1716,38 @@ func take_actions(player_action: Dictionary, enemy_action: Dictionary) -> Array:
 	return _run_turn(events)
 
 
+## `TrainerAI` stands in front of `ExecuteEnemyMove` on both orderings, so an
+## item or a switch replaces the move where it would have been, marked
+## `trainer_ai`.
+func _gen1_ai_action(side: int, actions: Dictionary) -> Dictionary:
+	var action: Dictionary = actions[side]
+	if side != ENEMY or not is_gen1() or _is_switch(action) or _is_item(action):
+		return action
+	var chosen: Dictionary = Gen1TrainerAI.trainer_action(self, rng)
+	if chosen.is_empty():
+		return action
+	chosen["trainer_ai"] = true
+	actions[side] = chosen
+	return chosen
+
+
+## `EnemySwitch`: on SHIFT the player is asked whether to change before that
+## Pokémon is out, and the turn stops there. `SwitchEnemyMon` raises
+## `wFirstMonsNotOutYet`, so a Generation 1 class's switch asks nobody.
+func _switch_offered(side: int, action: Dictionary, actions: Dictionary, events: Array) -> bool:
+	_pursuit_before_switch(side, actions, events)
+	if side == ENEMY and not bool(action.get("trainer_ai", false)) and should_offer_switch():
+		_pending_switch_offer = int(action.get("index", -1))
+		events.append({
+			"type": SWITCH_OFFERED, "side": PLAYER,
+			"index": _pending_switch_offer,
+			"species": party(ENEMY).at(_pending_switch_offer).species,
+		})
+		return true
+	events.append_array(send_out(side, int(action.get("index", -1))))
+	return false
+
+
 ## The per-side loop and the end-of-turn tail, from wherever the turn last
 ## stopped. Baton Pass is the one thing that stops it part way: `DoPlayerTurn`
 ## opens a switch menu and waits, so the rest sits in [member _pending_turn].
@@ -1706,34 +1757,23 @@ func _run_turn(events: Array) -> Array:
 
 	while int(_pending_turn["index"]) < acting.size():
 		var side: int = int(acting[int(_pending_turn["index"])])
-		var action: Dictionary = actions[side]
-		var action_event_start: int = events.size()
-		var moving: bool = not (_is_run(action) or _is_switch(action) or _is_item(action))
 		# `HasPlayerFainted`/`HasEnemyFainted` between the halves of the turn,
 		# gating the whole second half rather than its move, which is why it is
-		# asked before the bracket opens. A switching or item-using side is always
-		# [method order]'s first, so this is only ever asked of a move.
-		if moving and (mon(side).is_fainted() or mon(opponent_of(side)).is_fainted()):
+		# asked before the bracket opens.
+		if mon(side).is_fainted() or mon(opponent_of(side)).is_fainted():
 			break
+		var action: Dictionary = _gen1_ai_action(side, actions)
+		var action_event_start: int = events.size()
+		var moving: bool = not (_is_run(action) or _is_switch(action) or _is_item(action))
 		_open_turn_bracket(side, action)
-		if not moving:
+		if not moving and not bool(action.get("trainer_ai", false)):
 			# `.reset_rage` for a switch and `.reset_bide` for an item or a failed
 			# run, both falling into `.locked_in`'s zeroing, and `AI_TryItem` the
 			# same on the enemy's side. -1 is no effect, so both counters go.
 			_reset_action_counters(side, -1)
 		if _is_switch(action):
-			_pursuit_before_switch(side, actions, events)
-			# `EnemySwitch`: on SHIFT the player is told who is coming and asked
-			# whether to change, before that Pokémon is out. The turn stops here.
-			if side == ENEMY and should_offer_switch():
-				_pending_switch_offer = int(action.get("index", -1))
-				events.append({
-					"type": SWITCH_OFFERED, "side": PLAYER,
-					"index": _pending_switch_offer,
-					"species": party(ENEMY).at(_pending_switch_offer).species,
-				})
+			if _switch_offered(side, action, actions, events):
 				return events
-			events.append_array(send_out(side, int(action.get("index", -1))))
 		elif _is_item(action):
 			## `BattleMenu_Pack` spends the player's item before the turn
 			## resolves; only the enemy reaches into its bag inside one.
@@ -1741,6 +1781,8 @@ func _run_turn(events: Array) -> Array:
 				_use_trainer_item(side, int(action.get("item", 0)), events)
 		elif moving and side != _pursuit_spent:
 			var slot: int = effective_slot(side, int(action.get("slot", 0)))
+			if side == ENEMY and is_gen1():
+				gen1_enemy_moves += 1
 			_act(side, slot, move_for(side, slot), events)
 			_report_unannounced_action_faints(events, action_event_start)
 		# The move asked for a Baton Pass target and nothing behind it can happen
@@ -2063,7 +2105,7 @@ func _tick_wrap(events: Array) -> void:
 	## `CheckNumAttacksLeft` at the end of the whole turn is what lets go. So the
 	## turn the counter empties still holds the target, whichever side moves
 	## first on it.
-	if data != null and data.generation == RomRegistry.GEN1:
+	if is_gen1():
 		for side: int in [PLAYER, ENEMY]:
 			if mon(side).trapped_turns <= 0:
 				mon(side).trapping_move = 0
@@ -2493,7 +2535,8 @@ func _use_trainer_item(side: int, item: int, events: Array) -> void:
 		return
 	enemy_items.erase(item)
 	var user: Gen2BattleMon = mon(side)
-	var effect: Dictionary = Gen2AIItems.apply(user, item)
+	var effect: Dictionary = Gen1TrainerAI.apply_item(self, user, item) if is_gen1() \
+		else Gen2AIItems.apply(user, item)
 	events.append({
 		"type": TRAINER_USED_ITEM, "side": side, "item": item,
 		"species": user.species, "effect": effect,
@@ -2585,6 +2628,11 @@ func _wake_up(sleeper: Gen2BattleMon) -> int:
 ## `XItemEffect`, `GuardSpecEffect` and `DireHitEffect`, on whoever is out rather
 ## than a party member, each refusing a capped stage or a set flag with
 ## `WontHaveAnyEffect_NotUsedMessage`.
+## `AIIncreaseStat` reaches the same routine for the enemy.
+func apply_x_item(user: Gen2BattleMon, item: int) -> Dictionary:
+	return _apply_active_item(user, item)
+
+
 func _apply_active_item(user: Gen2BattleMon, item: int) -> Dictionary:
 	if user == null or user.is_fainted():
 		return {"ok": false, "reason": &"item_has_no_effect"}
@@ -2856,11 +2904,15 @@ func move_for(side: int, slot: int) -> int:
 	return int(attacker.moves[chosen_slot]) if attacker.can_use(chosen_slot) else Gen2Damage.STRUGGLE
 
 
+func is_gen1() -> bool:
+	return data != null and data.generation == RomRegistry.GEN1
+
+
 ## `USING_TRAPPING_MOVE` read from the user's side: while the opponent is bound,
 ## Generation 1 repeats the move that bound it and spends no PP on the repeat.
 ## Answers 0 on Generation 2, where a bound target still takes its turn.
 func gen1_trapping_move(side: int) -> int:
-	if data == null or data.generation != RomRegistry.GEN1:
+	if not is_gen1():
 		return 0
 	return mon(1 - side).trapping_move
 
@@ -2882,6 +2934,8 @@ func order(chosen: Dictionary, actions: Dictionary = {}) -> Array:
 		or _is_item(actions.get(ENEMY, {}))
 	if player_switching or enemy_switching:
 		return _sides(player_switching)
+	if is_gen1():
+		return _gen1_order(chosen)
 
 	var player_priority: int = priority_of(data.move(int(chosen[PLAYER])))
 	var enemy_priority: int = priority_of(data.move(int(chosen[ENEMY])))
@@ -2898,6 +2952,22 @@ func order(chosen: Dictionary, actions: Dictionary = {}) -> Array:
 		return _sides(player_speed > enemy_speed)
 
 	return _sides(rng.randi_range(0, 255) < 128)
+
+
+## `MainInBattleLoop` from `.noLinkBattle`: a priority is a move number, both
+## effect bytes being NO_ADDITIONAL_EFFECT, then speed, then one byte.
+func _gen1_order(chosen: Dictionary) -> Array:
+	var player_move: int = int(chosen[PLAYER])
+	var enemy_move: int = int(chosen[ENEMY])
+	for priority: Array in GEN1_PRIORITY_MOVES:
+		var move: int = int(priority[0])
+		if (player_move == move) != (enemy_move == move):
+			return _sides((player_move == move) == bool(priority[1]))
+	var player_speed: int = player.stat("speed")
+	var enemy_speed: int = enemy.stat("speed")
+	if player_speed != enemy_speed:
+		return _sides(player_speed > enemy_speed)
+	return _sides(rng.randi_range(0, 255) < GEN1_TIE_BOUND)
 
 
 ## `DetermineMoveOrder`'s `.equal_priority` block: true for the player first,

@@ -5356,7 +5356,10 @@ func _gen1_node_map_load_bit(node: Dictionary, steps: Array, _run: Dictionary) -
 
 
 func _gen1_node_volatile(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"volatile", "name": String(node["name"]), "set": bool(node["set"])})
+	steps.append({
+		"type": &"volatile", "name": String(node["name"]), "set": bool(node["set"]),
+		"value": int(node.get("value", 1 if bool(node["set"]) else 0)),
+	})
 	return true
 
 
@@ -6701,6 +6704,22 @@ func _gen1_battle_last() -> void:
 		_gen1_steps = rest + battles
 
 
+## `ReadTrainer` reads `wLoneAttackNo` and `wRivalStarter` as they stand when
+## the fight opens: a gym's row writes the byte behind `InitBattleEnemyParameters`.
+func _gen1_stamped_request(request: Dictionary) -> Dictionary:
+	if StringName(request.get("kind", &"")) != &"battle_requested":
+		return request.duplicate(true)
+	var values: Variant = request.get("values", {})
+	if not values is Dictionary or StringName((values as Dictionary).get("kind", &"")) != &"trainer":
+		return request.duplicate(true)
+	var stamped: Dictionary = request.duplicate(true)
+	var stamped_values: Dictionary = stamped["values"]
+	stamped_values["lone_attack"] = int(_gen1_volatile.get("gym_leader", 0))
+	stamped_values["rival_starter"] = state.gen1_starter("rival") if state != null else 0
+	return stamped
+
+
+
 ## `SetLastBlackoutMap`, whose whole body is the rest-house list: healing in one
 ## of the Safari Zone's three leaves the map a blackout lands on where it was.
 func _gen1_record_blackout_map() -> void:
@@ -6724,7 +6743,7 @@ func _gen1_waiting_result(step: Dictionary) -> Dictionary:
 	if type == &"request":
 		return {
 			"ok": true, "status": &"waiting",
-			"event": {"type": &"runtime_request", "request": step["values"]},
+			"event": {"type": &"runtime_request", "request": _gen1_stamped_request(step["values"])},
 		}
 	if type == &"choice":
 		return {"ok": true, "status": &"waiting", "event": {"type": &"choice"}}
@@ -6820,7 +6839,8 @@ func _gen1_kept(step: Dictionary, events: Array) -> bool:
 			_gen1_scratch[int(step["address"])] = int(step["value"])
 			return true
 		&"volatile":
-			_gen1_volatile[String(step["name"])] = bool(step["set"])
+			## The byte itself, `wGymLeaderNo` being `wLoneAttackNo` too.
+			_gen1_volatile[String(step["name"])] = int(step.get("value", 1 if bool(step["set"]) else 0))
 			return true
 		&"map_load":
 			_gen1_map_load_pending |= 1 << int(step["bit"])
@@ -7282,7 +7302,7 @@ func script_stops_the_map() -> bool:
 func pending_runtime_request() -> Dictionary:
 	var step: Dictionary = _gen1_step(&"request")
 	if not step.is_empty():
-		return (step["values"] as Dictionary).duplicate(true)
+		return _gen1_stamped_request(step["values"])
 	return _active_script.pending_runtime_request() if _active_script != null else {}
 
 
