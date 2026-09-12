@@ -4044,6 +4044,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"pikachu_text": &"_gen1_node_pikachu_text",
 	"pikachu_movement": &"_gen1_node_pikachu_movement",
 	"pikachu_talk": &"_gen1_node_pikachu_talk",
+	"jigglypuff": &"_gen1_node_jigglypuff",
 	"oaks_aide": &"_gen1_node_oaks_aide",
 	"filtered_bag": &"_gen1_node_filtered_bag",
 	"menu_cancel": &"_gen1_node_menu_cancel",
@@ -4139,6 +4140,39 @@ func advance_gen1_pikachu_pass(random: RandomNumberGenerator, font_loaded: bool)
 
 func gen1_pikachu_movement_running() -> bool:
 	return pikachu != null and pikachu.movement_running()
+
+
+## `ModifyPikachuHappiness` from wherever a host reaches it: [param slot] is
+## `wWhichPokemon` for the rows that ask about one member, -1 for the two that
+## ask about the party.
+func gen1_pikachu_happiness(kind: int, slot: int = -1) -> void:
+	if pikachu == null:
+		return
+	var starter: Dictionary = _party_summary.get("starter_pikachu", {})
+	pikachu.modify_happiness(kind, slot < 0 or int(starter.get("slot", -1)) == slot)
+
+
+## `ModifyPikachuHappiness`'s battle callers off [member Gen2Battle.party_log]:
+## `.printGrewLevelText`, `UpdateFaintedPlayerMon`'s two rows thirty levels
+## apart, and the four X items.
+func gen1_pikachu_battle_log(party_log: Dictionary) -> void:
+	if pikachu == null:
+		return
+	for index: int in party_log.get("grew", []):
+		gen1_pikachu_happiness(Gen1Pikachu.HAPPY_LEVELUP, index)
+	for faint: Dictionary in party_log.get("faints", []):
+		var careless: bool = int(faint["foe_level"]) - int(faint["level"]) \
+			>= Gen1Pikachu.CARELESS_LEVEL_GAP
+		gen1_pikachu_happiness(Gen1Pikachu.HAPPY_CARELESSTRAINER if careless
+			else Gen1Pikachu.HAPPY_FAINTED, int(faint["index"]))
+	for index: int in party_log.get("x_items", []):
+		gen1_pikachu_happiness(Gen1Pikachu.HAPPY_USEDXITEM, index)
+
+
+## `InitBattle`'s `wLoneAttackNo` test, which is `wGymLeaderNo` under another name.
+func gen1_pikachu_battle_opened(trainer: bool) -> void:
+	if trainer and bool(_gen1_volatile.get("gym_leader", false)):
+		gen1_pikachu_happiness(Gen1Pikachu.HAPPY_GYMLEADER)
 
 
 ## `ApplyOutOfBattlePoisonDamage`'s two Pikachu lines behind a counted step.
@@ -5048,6 +5082,20 @@ func _gen1_node_pikachu_movement(node: Dictionary, steps: Array, _run: Dictionar
 		"type": &"wait", "wait": Gen2WorldScriptRunner.WAIT_MOVEMENT,
 	}})
 	return true
+
+
+## `PewterPokecenterJigglypuffText`'s song, which the host plays and spins
+## `wSprite03` through until the driver's channels fall silent.
+func _gen1_node_jigglypuff(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append(_gen1_wait_step(&"jigglypuff", WAIT_UNTIL_FINISHED,
+		{"object": int(node["object"])}))
+	return true
+
+
+## `wSprite03StateData1ImageIndex` written by hand: the standing frame of the
+## next facing of `.FacingDirections`' ring.
+func gen1_turn_object(index: int, facing: int) -> void:
+	_turn_gen1_object(index, facing, [])
 
 
 func _gen1_node_pikachu_talk(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
@@ -6781,7 +6829,7 @@ func _gen1_kept(step: Dictionary, events: Array) -> bool:
 			state.set_gen1_byte(String(step["name"]), int(step["value"]))
 			return true
 		&"pikachu":
-			_gen1_pikachu_written(String(step["what"]), step["value"], events)
+			_gen1_pikachu_written(String(step["what"]), step["value"])
 			return true
 		&"pikachu_movement":
 			if pikachu != null:
@@ -6861,9 +6909,8 @@ func _gen1_drawn(step: Dictionary, events: Array) -> bool:
 
 
 ## The follower's routines a row calls and an emotion's own commands; Red and
-## Blue have nothing to write. The clip and the portrait are events: the
-## follower does not draw either.
-func _gen1_pikachu_written(what: String, value: Variant, events: Array) -> void:
+## Blue have nothing to write.
+func _gen1_pikachu_written(what: String, value: Variant) -> void:
 	if pikachu == null:
 		return
 	match what:
@@ -10128,7 +10175,16 @@ func allows_hop_at(cell: Vector2i, direction: Vector2i) -> bool:
 ## hop applies. Diagonal, zero and out-of-bounds moves are rejected without
 ## changing the player position.
 func move(direction: Vector2i) -> bool:
-	return bool(move_result(direction).get("ok", false))
+	return bool(move_action(direction).get("ok", false))
+
+
+## One whole action for a caller with no frame pump: a Generation 1 ledge is
+## found on one pass and hopped on the next, and both passes are spent here.
+func move_action(direction: Vector2i) -> Dictionary:
+	var result: Dictionary = move_result(direction)
+	if bool(result.get("ledge", false)) and not bool(result.get("ok", false)):
+		return advance_forced_movement()
+	return result
 
 
 func _clamp_cell(cell: Vector2i) -> Vector2i:

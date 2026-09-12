@@ -326,6 +326,8 @@ const ITEM_FULL_RESTORE: int = 0x10
 const ITEM_REVIVE: int = 0x35
 const ITEM_MAX_REVIVE: int = 0x36
 const ITEM_RARE_CANDY: int = 0x28
+## `ItemUseMedicine`'s `cp CALCIUM + 1`: the last item the follower is glad of.
+const ITEM_CALCIUM: int = 0x27
 const ITEM_OAKS_PARCEL: int = 0x46
 const ITEM_PP_UP: int = 0x4F
 const ITEM_OLD_ROD: int = 0x4C
@@ -1278,7 +1280,15 @@ const MENU_ROW_BREAK: String = "<NEXT>"
 const FLAG_ACTION_RESET: int = 0
 const FLAG_ACTION_SET: int = 1
 const FLAG_ACTION_TEST: int = 2
+## `PewterPokecenterJigglypuffText`, whose song loop is one node behind its
+## box; `wSprite03StateData1` is the singer. Yellow's `jigglypuff_tail` is the
+## code past `PlayDefaultMusic`, in the routine's own bank.
 const SCRIPT_FIRST_BOX_ROWS: Array[String] = ["jigglypuff_text"]
+const JIGGLYPUFF_OBJECT: int = 2
+const JIGGLYPUFF_HUSH_FRAMES: int = 32
+const JIGGLYPUFF_SPIN_FRAMES: int = 24
+const JIGGLYPUFF_AFTER_FRAMES: int = 48
+const MUSIC_JIGGLYPUFF_SONG: Array[int] = [0x1F, 208]
 const OAKS_AIDE_TEXT_AT: Dictionary = {
 	"hi": 0x00, "uh_oh": 0x05, "come_back": 0x0A, "here_you_go": 0x0F,
 	"got_item": 0x14, "no_room": 0x1A,
@@ -1540,7 +1550,7 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	"npc_movement_bank", "list_scroll_offset", "dungeon_warp_destination",
 	"which_dungeon_warp", "sprite_screen_y", "sprite_screen_x",
 	"letter_printing_delay", "player_movement_byte_1", "override_joypad_mask",
-	"gym_leader_no", "mon_data_location", "joy_released",
+	"mon_data_location", "joy_released",
 	"trainer_header_flag_bit", "party_menu_type",
 	## The menu registers, which the `menu` node behind them carries instead.
 	"current_menu_item", "max_menu_item", "top_menu_item_y", "top_menu_item_x",
@@ -2819,6 +2829,7 @@ const YELLOW: Dictionary = {
 	"check_pikachu_status": 0xFCE73,
 	"play_pikachu_sound_clip": 0xF0000,
 	"celadon_granny_thresholds": 0xF1EA2,
+	"jigglypuff_tail": 0x5E06,
 	"apply_pikachu_movement": 0x159B,
 	"try_apply_pikachu_movement": 0xF0A82,
 	## `MtMoonB2FScript_ApplyPikachuMovementData` and `CinnabarGymScript_74fa3`,
@@ -3527,18 +3538,6 @@ const MUSIC_ROLES: Dictionary = {
 	0x4A: [0x08, 240], ## MUSIC_JOHTO_WILD_BATTLE_NIGHT
 }
 
-## `PlayBattleMusic`'s own choice, as the bank and id each branch reaches. Lance
-## takes the gym leader piece and the rival's third battle the champion's.
-const BATTLE_MUSIC_GYM_LEADER: Array[int] = [0x08, 234]
-const BATTLE_MUSIC_TRAINER: Array[int] = [0x08, 237]
-const BATTLE_MUSIC_WILD: Array[int] = [0x08, 240]
-const BATTLE_MUSIC_FINAL: Array[int] = [0x08, 243]
-## `OPP_ID_OFFSET`, and the two opponents `PlayBattleMusic` names.
-const OPP_ID_OFFSET: int = 200
-const OPP_RIVAL3: int = 200 + 0x43
-const OPP_LANCE: int = 200 + 0x2E
-
-
 ## How many copies of the driver a cartridge ships.
 static func audio_bank_count(id: StringName) -> int:
 	return AUDIO_BANK_COUNT_YELLOW if id == RomRegistry.YELLOW \
@@ -3567,15 +3566,3 @@ static func sfx_role(crystal_number: int) -> int:
 ## The bank and id a Crystal-numbered track plays here, or an empty array.
 static func music_role(crystal_track: int) -> Array:
 	return MUSIC_ROLES.get(crystal_track, [])
-
-
-## `PlayBattleMusic`: the gym leader flag first, then a wild battle, then the two
-## opponents that take a piece of their own.
-static func battle_music(gym_leader: bool, opponent: int) -> Array[int]:
-	if gym_leader or opponent == OPP_LANCE:
-		return BATTLE_MUSIC_GYM_LEADER
-	if opponent < OPP_ID_OFFSET:
-		return BATTLE_MUSIC_WILD
-	if opponent == OPP_RIVAL3:
-		return BATTLE_MUSIC_FINAL
-	return BATTLE_MUSIC_TRAINER

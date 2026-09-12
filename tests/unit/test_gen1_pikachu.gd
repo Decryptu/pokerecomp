@@ -70,7 +70,7 @@ func test_a_hop_arcs_with_a_shadow_and_lands() -> void:
 	pikachu.advance_movement_pass(view)
 	var heights: Array[int] = []
 	var shadows: int = 0
-	for _pass: int in 16:
+	for _step: int in 16:
 		pikachu.advance_movement_pass(view)
 		heights.append(pikachu.movement_height())
 		shadows += 1 if pikachu.movement_shadow() else 0
@@ -110,7 +110,8 @@ func test_the_mood_and_happiness_tables_pick_an_emotion() -> void:
 
 
 ## `ModifyPikachuHappiness` reads the row's column off the happiness hundred and
-## moves the mood toward the row's target; the walking row asks the party alone.
+## moves the mood toward the row's target; a slot row asks about the member
+## acted on and the walking row about the party.
 func test_happiness_moves_by_the_table_and_the_mood_follows() -> void:
 	var pikachu := Gen1Pikachu.new()
 	pikachu.set_party(true, false)
@@ -120,6 +121,10 @@ func test_happiness_moves_by_the_table_and_the_mood_follows() -> void:
 	pikachu.modify_happiness(Gen1Pikachu.HAPPY_DEPOSITED)
 	assert_eq(pikachu.happiness, 92)
 	assert_eq(pikachu.mood, 0x62)
-	pikachu.set_party(false, false)
-	pikachu.modify_happiness(Gen1Pikachu.HAPPY_LEVELUP)
+	pikachu.modify_happiness(Gen1Pikachu.HAPPY_LEVELUP, false)
 	assert_eq(pikachu.happiness, 92)
+	pikachu.set_party(false, false)
+	pikachu.modify_happiness(Gen1Pikachu.HAPPY_WALKING)
+	assert_eq(pikachu.happiness, 92)
+	pikachu.modify_happiness(Gen1Pikachu.HAPPY_FAINTED)
+	assert_eq(pikachu.happiness, 91)

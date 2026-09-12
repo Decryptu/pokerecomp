@@ -2788,6 +2788,9 @@ func _apply_gen1_mon_move() -> void:
 		)
 		return
 	_cursor = _gen1_mon_cursor
+	## `.depositedText`'s PIKAHAPPY_DEPOSITED, ahead of the `MoveMon`.
+	if deposit and _world != null:
+		_world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_DEPOSITED, int(entry["slot"]))
 	cry_requested.emit(mon.species if mon != null else 0)
 	_open_gen1_text([_gen1_mon_text(
 		"bills_pc", "mon_was_stored" if deposit else "mon_is_taken_out", mon

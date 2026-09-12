@@ -4274,6 +4274,7 @@ func _finish_world_battle() -> void:
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_LOST:
 		result["recovery"] = _world_battle_recovery.duplicate(true)
 	result["enemy"] = _enemy_battler_record()
+	result["party_log"] = _battle.party_log.duplicate(true)
 	_world_battle_completion_sent = true
 	battle_finished.emit(result)
 

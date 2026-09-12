@@ -67,7 +67,7 @@ const KIND_HELP: Dictionary = {
 	&"door": "door mat: .CheckWarp's carpet, standing on an interior door's mat",
 	&"ice_slide": "direction, frames: DoPlayerMovement.CheckForced's run. Direction is down, up, left, right",
 	&"ledge": "start cell: the ledge hop at the top of its arc, walking south until one allows it",
-	&"pikachu": "steps, direction: Yellow's follower behind that many held steps, 0 down, 1 up, 2 left, 3 right, then the frames the pass leaves it standing; a second run of numbers after @d walks on (`yellow 0 0 <out.png> live pikachu@12,6 3 1`)",
+	&"pikachu": "steps, direction: Yellow's follower behind that many held steps, 0 down, 1 up, 2 left, 3 right, photographed one step's frames after the last lands (`yellow 0 0 <out.png> live pikachu@12,6 3 1`)",
 	&"map_name_sign": "cell: InitMapNameSign's window, raised by walking west onto the neighbouring map",
 	&"yes_no": "script, presses: Script_yesorno's box over the map's script",
 	&"npc_trade": "cell below the trader: NPCTrade's own TRADE_DIALOG_INTRO with the YesNoBox over it",

@@ -73,6 +73,8 @@ const HAPPY_FAINTED: int = 8
 const HAPPY_PSNFNT: int = 9
 const HAPPY_CARELESSTRAINER: int = 10
 const HAPPY_TRADE: int = 11
+## `UpdateFaintedPlayerMon`'s `cp 30` on the enemy's level over the fallen one's.
+const CARELESS_LEVEL_GAP: int = 30
 const HAPPINESS_CHANGES: Array = [
 	[5, 3, 2], [5, 3, 2], [1, 1, 0], [3, 2, 1], [1, 1, 0], [2, 1, 1],
 	[-3, -3, -5], [-1, -1, -1], [-5, -5, -10], [-5, -5, -10], [-10, -10, -20],
@@ -227,13 +229,12 @@ func restore(source: Dictionary) -> void:
 ## `IsSurfingPikachuInParty`, run every pass: both party bits, off the summary
 ## the screen keeps. `CheckPikachuStatusCondition` is the starter's status byte.
 func set_party(
-	starter_alive: bool, surfing: bool, starter_ailing: bool = false,
-	starter_asleep: bool = false
+	alive: bool, surfs: bool, starter_ailing: bool = false, starter_asleep: bool = false
 ) -> void:
 	spawn_flags &= ~(SPAWN_FLAG_STARTER | SPAWN_FLAG_SURFING)
-	if starter_alive:
+	if alive:
 		spawn_flags |= SPAWN_FLAG_STARTER
-	if surfing:
+	if surfs:
 		spawn_flags |= SPAWN_FLAG_SURFING
 	ailing = starter_ailing
 	asleep = starter_asleep
@@ -261,11 +262,17 @@ func surfing() -> bool:
 	return (spawn_flags & SPAWN_FLAG_SURFING) != 0
 
 
-## `ModifyPikachuHappiness`: the row's column is the happiness hundred, the
-## table's own sign test is `cp 100`, and the mood only moves toward the row's
-## value.
+## `ModifyPikachuHappiness`: the gym leader and walking rows ask
+## `IsStarterPikachuAliveInOurParty`, the rest `IsThisPartyMonStarterPikachu` on
+## the slot acted on, fainted or not. The row's column is the happiness hundred,
+## the table's own sign test is `cp 100`, and the mood only moves toward the row's value.
 func modify_happiness(kind: int, starter_in_slot: bool = true) -> void:
-	if not starter_alive() or not starter_in_slot or kind < HAPPY_LEVELUP or kind > HAPPY_TRADE:
+	if kind < HAPPY_LEVELUP or kind > HAPPY_TRADE:
+		return
+	if kind in [HAPPY_GYMLEADER, HAPPY_WALKING]:
+		if not starter_alive():
+			return
+	elif not starter_in_slot:
 		return
 	var column: int = 0 if happiness < 100 else (1 if happiness < 200 else 2)
 	var change: int = int(HAPPINESS_CHANGES[kind - 1][column])

@@ -1860,7 +1860,8 @@ func test_a_snapshot_carries_both_escape_points_and_a_reopened_world_keeps_them(
 	assert_eq(reopened.gen1_last_map(), ESCAPE_TOWN)
 	assert_eq(reopened.gen1_last_blackout_map(), ESCAPE_TOWN)
 	# A snapshot written before any of them existed reads as a game that has
-	# entered none, which is what their defaults say.
+	# entered none, which is what their defaults say: `InitPlayerData2` starts
+	# both Generation 1 bytes on PALLET_TOWN.
 	var old: Dictionary = snapshot.to_dict()
 	old.erase("dig_warp")
 	old.erase("last_spawn_map")
@@ -1869,7 +1870,7 @@ func test_a_snapshot_carries_both_escape_points_and_a_reopened_world_keeps_them(
 	var older: Gen2WorldSnapshot = Gen2WorldSnapshot.from_dict(old)
 	assert_true(older.dig_warp.is_empty())
 	assert_eq(older.last_spawn_map, Vector2i(-1, -1))
-	assert_eq(older.gen1_last_map, -1)
+	assert_eq(older.gen1_last_map, Gen1Layout.PALLET_TOWN)
 	assert_eq(older.gen1_last_blackout_map, Gen1Layout.PALLET_TOWN)
 
 

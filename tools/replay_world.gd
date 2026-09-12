@@ -26,14 +26,16 @@ const DIRECTIONS: Array[int] = [
 const ROUTE_GROUP: int = Gen2WorldSpawn.NEW_BARK_GROUP
 const ROUTE_MAPS: int = 8
 
-## Cherrygrove's mart, which is map 1/8 with the clerk on (1,3) and its two door
-## cells on (2,7) and (3,7) in all three caches, so one errand route sweeps
-## every profile the way the walk routes do.
-const MART_MAP: Vector2i = Vector2i(1, 8)
-const MART_DOOR: Vector2i = Vector2i(3, 7)
-## The counter cell the clerk is talked to across, which is `preview_world_story`'s
-## own MART_CLERK_FACE: `CheckFacingObject` reaches two cells over a `$90`.
-const MART_COUNTER: Vector2i = Vector2i(3, 3)
+## Cherrygrove's mart, map 1/8 with the clerk on (1,3) and its door cells on
+## (2,7) and (3,7) in all three Generation 2 caches; Pewter's on the three
+## Generation 1 ones, map 0/56 with the clerk on (0,5) and the same door. The
+## counter row is where the walk up stops, and the column the counter is faced
+## from: `CheckFacingObject` reaches two cells over a `$90`, Generation 1's
+## `TalkToTrainer` one over its counter tile.
+const MARTS: Dictionary = {
+	RomRegistry.GEN2: {"map": Vector2i(1, 8), "door": Vector2i(3, 7), "counter": Vector2i(3, 3)},
+	RomRegistry.GEN1: {"map": Vector2i(0, 56), "door": Vector2i(3, 7), "counter": Vector2i(2, 5)},
+}
 ## How often the driver presses A inside a battle: the errand's own cadence, which
 ## is slow enough that a box waiting for a press is not pressed twice.
 const BATTLE_PRESS_FRAMES: int = 8
@@ -104,15 +106,17 @@ func _routes_for(data: GameData) -> Array:
 	var battle: Dictionary = _battle_route(data)
 	if not battle.is_empty():
 		out.append(battle)
+	var mart: Dictionary = MARTS[data.generation]
 	out.append_array([
 		{"name": "new_game_spawn", "spawn": true},
 		{
 			"name": "mart_errand",
 			"spawn": true,
 			"errand": true,
-			"group": MART_MAP.x,
-			"number": MART_MAP.y,
-			"cell": MART_DOOR,
+			"group": (mart["map"] as Vector2i).x,
+			"number": (mart["map"] as Vector2i).y,
+			"cell": mart["door"],
+			"mart": mart,
 		},
 	])
 	for number: int in range(1, ROUTE_MAPS + 1):
@@ -181,7 +185,9 @@ func _check_route(data: GameData, route: Dictionary, requested_frames: int) -> i
 	## replaying a precomputed program: how long the walk takes to roll an
 	## encounter is the seed's business, and a fixed program would either press A
 	## at the map or hold a direction inside the move menu.
-	var program: Array = [] if battle else _program(seed_value, frames, errand)
+	var program: Array = [] if battle else _program(
+		seed_value, frames, route.get("mart", {}) if errand else {}
+	)
 
 	var recorded: Dictionary = await _run(data, route, seed_value, frames, program, true, 0.0, battle)
 	if not bool(recorded.get("ok", false)):
@@ -414,9 +420,9 @@ func _drive(screen: Gen2WorldScreen, frames: int) -> int:
 ## The input a run is driven by: a direction held for a while, an occasional A,
 ## and nothing else the cartridge's own controller does not have. Deterministic
 ## in the route's seed, so the generated program is itself reproducible.
-func _program(seed_value: int, frames: int, errand: bool = false) -> Array:
-	if errand:
-		return _errand_program(frames)
+func _program(seed_value: int, frames: int, mart: Dictionary = {}) -> Array:
+	if not mart.is_empty():
+		return _errand_program(frames, mart)
 	var random := RandomNumberGenerator.new()
 	random.seed = seed_value
 	var log_lines: Array = []
@@ -441,28 +447,28 @@ func _walk_frames() -> int:
 	return Gen2WorldAPI.passes_in_frames(Gen2WorldAPI.STEP_PASSES_WALK)
 
 
-## The scripted errand: walk the door column up to the counter, turn into the
-## clerk, and then press A on a cadence for the rest of the run. That one button
-## carries the whole leg, because every step of it answers a press: the clerk's
-## `pokemart` dialog, the mart overlay's own A, and the boxes on either side. Held
-## rather than counted out step by step: `move_player` refuses while a step is in
-## flight, so a direction held to the counter arrives on the cell whatever the walk
-## rate is.
-func _errand_program(frames: int) -> Array:
+## The scripted errand: walk the door column up to the counter row, hold LEFT
+## long enough to turn into the clerk and step to the counter column, and then
+## press A on a cadence for the rest of the run. That one button carries the
+## whole leg, because every step of it answers a press: the clerk's `pokemart`
+## dialog, the mart overlay's own A, and the boxes on either side. Held rather
+## than counted out step by step: `move_player` refuses while a step is in
+## flight, so a direction held to the counter arrives whatever the walk rate is.
+func _errand_program(frames: int, mart: Dictionary) -> Array:
 	var log_lines: Array = []
-	var walk: int = mini(frames, (MART_DOOR.y - MART_COUNTER.y) * _walk_frames())
+	var door: Vector2i = mart["door"]
+	var counter: Vector2i = mart["counter"]
+	var walk: int = mini(frames, (door.y - counter.y) * _walk_frames())
 	for frame: int in range(1, walk + 1):
 		log_lines.append({"frame": frame, "kind": "hold", "button": PokeButton.UP})
 	## Clear of the walk rather than up against it: `move_player` refuses a press
 	## while the last step is still in flight, and a turn that is refused leaves
 	## the player facing the wall behind the counter instead of the clerk.
-	if walk + _walk_frames() * 3 <= frames:
-		log_lines.append({
-			"frame": walk + _walk_frames() * 3,
-			"kind": "press",
-			"button": PokeButton.LEFT,
-		})
-	var frame: int = walk + _walk_frames() * 5
+	var sideways: int = (door.x - counter.x + 1) * _walk_frames()
+	for frame: int in range(walk + _walk_frames() * 3, walk + _walk_frames() * 3 + sideways):
+		if frame <= frames:
+			log_lines.append({"frame": frame, "kind": "hold", "button": PokeButton.LEFT})
+	var frame: int = walk + _walk_frames() * 5 + sideways
 	while frame <= frames:
 		log_lines.append({"frame": frame, "kind": "press", "button": PokeButton.A})
 		frame += 8

@@ -185,6 +185,7 @@ func _one_game() -> void:
 	_tmhm()
 	_trainers()
 	_trades()
+	_pikachu()
 	_intro()
 	_hall_of_fame()
 
@@ -657,3 +658,89 @@ func _trades() -> void:
 			not _r.data.special_text("npc_trade", name).is_empty(),
 			"the trade run has no %s box." % name
 		)
+
+
+## `PikachuEmotionTable`, the mood and happiness lookups behind
+## `GetPikaPicAnimationScriptIndex`, `PikaPicAnimPointers` and every table it
+## reaches, and `PikachuCriesPointerTable`: Yellow's alone, and every index one
+## row names has to land inside the table it names.
+## `data/pikachu/pikachu_emotions.asm`'s commands: 31 `pikaemotion_pcm`, six of
+## them the `$ff` that plays nothing and is dropped.
+const PIKACHU_EMOTION_COUNTS: Dictionary = {
+	"emote": 13, "pcm": 25, "movement": 6, "pikapic": 32, "subcmd": 14, "delay": 0,
+	"turn_away": 1, "text": 0,
+}
+const PIKACHU_CRY_BYTES: int = 180954
+const PIKAPIC_FRAMESET_ROWS: int = 153
+
+
+func _pikachu() -> void:
+	var record: Dictionary = _r.data.gen1_pikachu()
+	if _r.game_id != RomRegistry.YELLOW:
+		_r.check(record.is_empty(), "%s carries a follower record." % _r.game_id)
+		return
+	var emotions: Array = record.get("emotions", [])
+	var counts: Dictionary = {}
+	for emotion: Array in emotions:
+		for row: Dictionary in emotion:
+			counts[row["cmd"]] = int(counts.get(row["cmd"], 0)) + 1
+			if String(row["cmd"]) == "pikapic":
+				_r.check(int(row["value"]) < Gen1Layout.PIKAPIC_SCRIPTS,
+					"an emotion names pikapic %d." % int(row["value"]))
+			if String(row["cmd"]) == "pcm":
+				_r.check(int(row["value"]) < Gen1Layout.PIKACHU_CRIES,
+					"an emotion names cry %d." % int(row["value"]))
+	_r.check(emotions.size() == Gen1Layout.PIKACHU_EMOTIONS,
+		"the emotion table holds %d rows." % emotions.size())
+	for name: String in PIKACHU_EMOTION_COUNTS:
+		_r.check(int(counts.get(name, 0)) == int(PIKACHU_EMOTION_COUNTS[name]),
+			"the emotions run %d %s commands." % [int(counts.get(name, 0)), name])
+	_r.check(record["moods"].size() == 5 and record["happiness"].size() == 7,
+		"the mood and happiness lookups read %s rows." % [
+			[record["moods"].size(), record["happiness"].size()]])
+	var cries: Array = record.get("cries", [])
+	var total: int = 0
+	for length: int in cries:
+		total += length
+	_r.check(cries.size() == Gen1Layout.PIKACHU_CRIES and total == PIKACHU_CRY_BYTES,
+		"the cries read %d rows over %d bytes." % [cries.size(), total])
+	_pikapic(record.get("pikapic", {}))
+	_r.note("gen1 pikachu %d emotions, %d cries, %d faces" % [
+		emotions.size(), cries.size(), (record["pikapic"] as Dictionary)["scripts"].size()])
+
+
+func _pikapic(pic: Dictionary) -> void:
+	var scripts: Array = pic.get("scripts", [])
+	var framesets: Array = pic.get("framesets", [])
+	var tilemaps: Array = pic.get("tilemaps", [])
+	var gfx: Array = pic.get("gfx", [])
+	_r.check([scripts.size(), framesets.size(), tilemaps.size(), gfx.size()] == [
+		Gen1Layout.PIKAPIC_SCRIPTS, Gen1Layout.PIKAPIC_FRAMESETS,
+		Gen1Layout.PIKAPIC_TILEMAPS, Gen1Layout.PIKAPIC_GFX,
+	], "the face tables read %s." % [[scripts.size(), framesets.size(), tilemaps.size(), gfx.size()]])
+	var wrong: Array = []
+	for script: Array in scripts:
+		var ended: bool = false
+		for row: Dictionary in script:
+			var cmd: String = String(row["cmd"])
+			if cmd == "loadgfx" and int(row["value"]) >= gfx.size():
+				wrong.append(row)
+			if cmd == "object" and int(row["frameset"]) >= framesets.size():
+				wrong.append(row)
+			ended = ended or cmd in ["jump", "ret"]
+		if not ended:
+			wrong.append(script)
+	var rows: int = 0
+	for frameset: Array in framesets:
+		rows += frameset.size()
+		for row: Array in frameset:
+			if int(row[0]) >= tilemaps.size():
+				wrong.append(row)
+	for index: int in gfx.size():
+		var sheet: Dictionary = _r.data.tile_sheet("pikapic_%02d" % index)
+		if int(sheet.get("tiles", 0)) != int(gfx[index]) and int(gfx[index]) != Gen1Layout.PIKAPIC_PIC_TILES:
+			wrong.append([index, sheet])
+		if sheet.is_empty():
+			wrong.append(index)
+	_r.check(wrong.is_empty(), "the face tables are wrong: %s." % [wrong.slice(0, 4)])
+	_r.check(rows == PIKAPIC_FRAMESET_ROWS, "the frame sets hold %d rows." % rows)

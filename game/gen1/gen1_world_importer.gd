@@ -210,23 +210,23 @@ static func _read_pikapic(rom: RomFile, layout: Dictionary) -> Dictionary:
 		)))
 	var framesets: Array = []
 	for index: int in Gen1Layout.PIKAPIC_FRAMESETS:
-		var at: int = _banked_pointer(rom, bank, int(layout["pikapic_framesets"]), index)
+		var frames: int = _banked_pointer(rom, bank, int(layout["pikapic_framesets"]), index)
 		var rows: Array = []
-		while rom.u8(at) != Gen1Layout.PIKAPIC_FRAMESET_END:
-			rows.append([rom.u8(at), rom.u8(at + 1)])
-			at += 2
+		while rom.u8(frames) != Gen1Layout.PIKAPIC_FRAMESET_END:
+			rows.append([rom.u8(frames), rom.u8(frames + 1)])
+			frames += 2
 		framesets.append(rows)
 	var tilemaps: Array = []
 	for index: int in Gen1Layout.PIKAPIC_TILEMAPS:
-		var at: int = _banked_pointer(rom, bank, int(layout["pikapic_tilemaps"]), index)
-		var rows: int = rom.u8(at)
-		var columns: int = rom.u8(at + 1)
+		var tilemap: int = _banked_pointer(rom, bank, int(layout["pikapic_tilemaps"]), index)
+		var rows: int = rom.u8(tilemap)
+		var columns: int = rom.u8(tilemap + 1)
 		## `PikaAnimTilemap_0` is the one `db -1`, which no frame draws.
 		if rows == Gen1Layout.PIKAPIC_TILE_KEEP:
 			tilemaps.append({"rows": 0, "columns": 0, "tiles": []})
 			continue
 		tilemaps.append({"rows": rows, "columns": columns,
-			"tiles": Array(rom.slice(at + 2, rows * columns))})
+			"tiles": Array(rom.slice(tilemap + 2, rows * columns))})
 	var gfx: Array = []
 	for index: int in Gen1Layout.PIKAPIC_GFX:
 		var size: int = rom.u8(
@@ -3091,6 +3091,10 @@ static func _script_stored_named_more(
 			return _script_fossil_stored(name, state, out, known, a)
 		"pikachu_spawn_state":
 			out.append({"op": "pikachu", "what": "spawn_state", "value": a})
+		"gym_leader_no":
+			## `wLoneAttackNo` is the same byte: a gym leader's fight, which
+			## `InitBattle` tells the follower about and a map load clears.
+			out.append({"op": "volatile", "name": "gym_leader", "set": a != 0})
 	return STORE_OK
 
 
@@ -3120,7 +3124,7 @@ const STORE_NEEDS_A: Array[String] = [
 	"last_map", "last_blackout_map", "npc_relative_perspective", "npc_movement_table",
 	"trainer_no", "battle_type", "emotion_bubble_sprite", "which_emotion_bubble",
 	"warp_destination_map", "destination_warp_id", "player_y", "player_x",
-	"oaks_aide_reward", "pikachu_spawn_state",
+	"oaks_aide_reward", "pikachu_spawn_state", "gym_leader_no",
 ]
 
 
@@ -3165,7 +3169,7 @@ const STORE_NAMES: Array[String] = [
 	"warp_destination_map", "destination_warp_id", "cur_map_text_ptr",
 	"player_y", "player_x", "sprite_map_y", "sprite_map_x", "rival_starter",
 	"player_starter", "cur_party_species", "num_set_bits", "oaks_aide_reward",
-	"fossil_item", "fossil_mon", "pikachu_spawn_state",
+	"fossil_item", "fossil_mon", "pikachu_spawn_state", "gym_leader_no",
 ]
 
 
@@ -3735,6 +3739,14 @@ static func _script_first_box_row(ctx: Dictionary, pc: int) -> bool:
 	return false
 
 
+## `PewterPokecenterJigglypuffText` past its box: the song and the spin are one
+## node, and Yellow walks on from `jigglypuff_tail` to put the follower to sleep.
+static func _script_song(ctx: Dictionary, out: Array) -> int:
+	ctx.erase("first_box")
+	out.append({"op": "jigglypuff", "object": Gen1Layout.JIGGLYPUFF_OBJECT})
+	return int((ctx["layout"] as Dictionary).get("jigglypuff_tail", SCRIPT_END))
+
+
 ## `OaksAideScript` answers in `hOaksAideResult`, so the rest of the row is
 ## walked once each way.
 static func _script_aide_branch(
@@ -3839,7 +3851,7 @@ static func _script_call(
 			## it, which is how the captain's back rub sets its own flag.
 			if not _script_text_row(ctx, int(state.get("hl", 0)), state, out, depth):
 				return SCRIPT_UNREAD
-			return SCRIPT_END if bool(ctx.get("first_box", false)) else next
+			return _script_song(ctx, out) if bool(ctx.get("first_box", false)) else next
 		"text_script_end":
 			return SCRIPT_END
 		"disable_waiting":

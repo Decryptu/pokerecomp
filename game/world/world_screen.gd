@@ -197,6 +197,9 @@ var _audio_waiting: bool = false
 var _script_prompt: String = ""
 var _story_picture: TextureRect = null
 var _pikapic: Gen1PikaPicPage = null
+## `PewterJigglypuff`'s loop: the object, the phase, the frames into it and the
+## facing ring's index.
+var _jigglypuff: Dictionary = {}
 var _pikapic_rect: TextureRect = null
 var _pikapic_pressed: bool = false
 ## `engine/menus/menu_2.asm`'s balance window, up until `closetext` redraws the
@@ -1073,6 +1076,7 @@ func _advance_waits(map_pass: bool) -> void:
 	if _world != null and not _world.pending_script_wait().is_empty():
 		_draw_hang_up()
 		_advance_pikapic()
+		_advance_jigglypuff()
 		var wait_results: Array = _world.advance_script_wait_frame()
 		if not wait_results.is_empty():
 			_show_script_results(wait_results)
@@ -1894,6 +1898,9 @@ func _spend_poison_steps() -> bool:
 	if bool(pass_result.get("sfx", false)):
 		_play_sfx(SFX_POISON)
 		_start_poison_flash()
+	## `.curMonNotPlayerPikachu`'s PIKAHAPPY_PSNFNT, once per member that fell.
+	for slot: int in PackedInt32Array(pass_result.get("fainted", PackedInt32Array())):
+		_world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_PSNFNT, slot)
 	var texts: PackedStringArray = pass_result.get("texts", PackedStringArray())
 	if texts.is_empty():
 		if not PackedInt32Array(pass_result.get("damaged", PackedInt32Array())).is_empty():
@@ -5313,6 +5320,8 @@ func _open_battle_host(request: Dictionary) -> void:
 		values["battle_type"] = Gen2Battle.BATTLETYPE_SAFARI
 	var tutorial: bool = bool(values.get("tutorial", false))
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
+	if _world != null:
+		_world.gen1_pikachu_battle_opened(StringName(values.get("kind", &"")) == &"trainer")
 	_active_battle_save = save
 	_active_battle_persist = save != null and _injected_save == null
 	_active_battle_trainer = StringName(values.get("kind", &"")) == &"trainer"
@@ -5522,6 +5531,7 @@ func _on_battle_finished(result: Dictionary) -> void:
 	if _world == null:
 		return
 	_last_battle_outcome = StringName(result.get("outcome", &""))
+	_world.gen1_pikachu_battle_log(result.get("party_log", {}))
 	## `wEnemyMon` outlives the fight; the next transition reads its level.
 	var last_enemy: Variant = result.get("enemy", {})
 	if last_enemy is Dictionary and (last_enemy as Dictionary).has("level"):
@@ -7618,6 +7628,7 @@ const PRESENTATION_HANDLERS: Dictionary = {
 	&"prof_oaks_pc_boot": &"_event_prof_oaks_pc",
 	&"heal_machine_anim": &"_start_heal_machine_sounds",
 	&"pikapic": &"_start_pikapic",
+	&"jigglypuff": &"_start_jigglypuff",
 	&"gen1_elevator_shake": &"_start_gen1_elevator_shake",
 	&"palette_fade": &"_start_script_fade",
 }
@@ -8464,6 +8475,72 @@ func _start_pikapic(event: Dictionary) -> void:
 	_pikapic_pressed = false
 
 
+## `PewterJigglypuff`: `StopAllMusic` and 32 frames, then the song with the
+## singer's facing turned along `.FacingDirections` every 24 frames until
+## `wChannelSoundIDs` is clear, 48 frames more, and `PlayDefaultMusic`. A run
+## with no audio device renders no driver frames, which ends the song at once.
+const JIGGLYPUFF_RING: Array[int] = [
+	Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_LEFT,
+	Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_RIGHT,
+]
+
+
+func _start_jigglypuff(event: Dictionary) -> void:
+	var index: int = int(event.get("object", -1))
+	var facing: int = _world.objects[index].facing if index >= 0 \
+		and index < _world.objects.size() else Gen2WorldSprite.FACING_DOWN
+	_jigglypuff = {
+		"object": index, "phase": &"hush", "frames": 0,
+		"ring": maxi(JIGGLYPUFF_RING.find(facing), 0),
+	}
+	if _audio_player != null:
+		_audio_player.stop_all()
+
+
+func _advance_jigglypuff() -> void:
+	if _jigglypuff.is_empty():
+		return
+	_jigglypuff["frames"] = int(_jigglypuff["frames"]) + 1
+	var frames: int = int(_jigglypuff["frames"])
+	match StringName(_jigglypuff["phase"]):
+		&"hush":
+			if frames >= Gen1Layout.JIGGLYPUFF_HUSH_FRAMES:
+				_jigglypuff["phase"] = &"sing"
+				_jigglypuff["frames"] = 0
+				_spin_jigglypuff()
+				_play_gen1_music(Gen1Layout.MUSIC_JIGGLYPUFF_SONG)
+		&"sing":
+			var singing: bool = _audio_player != null and _audio_player.music_playing() \
+				and _audio_still_frames <= Gen2AudioPlayer.SERVICE_GAP_FRAMES
+			if frames % Gen1Layout.JIGGLYPUFF_SPIN_FRAMES == 0:
+				if not singing:
+					_jigglypuff["phase"] = &"after"
+					_jigglypuff["frames"] = 0
+					return
+				_spin_jigglypuff()
+		&"after":
+			if frames >= Gen1Layout.JIGGLYPUFF_AFTER_FRAMES:
+				_jigglypuff = {}
+				_play_current_map_music()
+				_world.finish_presentation()
+
+
+func _spin_jigglypuff() -> void:
+	var ring: int = int(_jigglypuff["ring"])
+	_world.gen1_turn_object(int(_jigglypuff["object"]), JIGGLYPUFF_RING[ring])
+	_jigglypuff["ring"] = (ring + 1) % JIGGLYPUFF_RING.size()
+	if _renderer != null:
+		_renderer.refresh()
+
+
+func _play_gen1_music(song: Array[int]) -> void:
+	if _audio_player == null or _data == null:
+		return
+	var record: Dictionary = _data.gen1_sound(int(song[0]), int(song[1]))
+	if not record.is_empty():
+		_audio_player.play_record(record, &"map_music", _audio_assets())
+
+
 ## The map's sprites are off from the border going up until twelve frames
 ## after the box has gone, as the cartridge draws it.
 func _advance_pikapic() -> void:
@@ -9131,7 +9208,7 @@ func _starter_pikachu(save: Gen2SaveData) -> Dictionary:
 	var out: Dictionary = {"alive": false, "surfing": false, "asleep": false, "ailing": false}
 	if save == null:
 		return out
-	var owner: String = save.player_name.substr(0, Gen1Layout.OT_MATCH_LENGTH)
+	var trainer: String = save.player_name.substr(0, Gen1Layout.OT_MATCH_LENGTH)
 	for member: Variant in save.party:
 		if not member is Gen2SaveMon or int((member as Gen2SaveMon).species) \
 			!= Gen2WorldFieldMove.SPECIES_PIKACHU:
@@ -9140,7 +9217,7 @@ func _starter_pikachu(save: Gen2SaveData) -> Dictionary:
 		if mon.moves.has(Gen2WorldFieldMove.MOVE_SURF):
 			out["surfing"] = true
 		if int(mon.ot_id) != int(save.player_id) \
-			or mon.original_trainer.substr(0, Gen1Layout.OT_MATCH_LENGTH) != owner:
+			or mon.original_trainer.substr(0, Gen1Layout.OT_MATCH_LENGTH) != trainer:
 			continue
 		## `.sameOT` answers on the first match, fainted or not.
 		if out.has("slot"):

@@ -599,6 +599,9 @@ var _participants: Dictionary = {PLAYER: {}, ENEMY: {}}
 ## times for going down once. A revive clears the entry, since a revived
 ## Pokemon can faint again in the same fight.
 var _faint_charged: Dictionary = {}
+## `ModifyPikachuHappiness`'s battle callers, each by the party index it named,
+## read by the world once the fight is over.
+var party_log: Dictionary = {"grew": [], "faints": [], "x_items": []}
 
 ## The last direct damage each side took this action pair, which Counter and
 ## Mirror Coat read after the faster side has acted. Cleared each pair: the
@@ -830,6 +833,10 @@ func _charge_faint_happiness(side: int) -> void:
 		return
 	_faint_charged[key] = true
 	var foe: Gen2BattleMon = mon(ENEMY)
+	(party_log["faints"] as Array).append({
+		"index": party(PLAYER).active, "level": fallen.level,
+		"foe_level": foe.level if foe != null else 0,
+	})
 	var kind: int = HAPPINESS_FAINTED
 	if foe != null and foe.level >= fallen.level + 30:
 		kind = HAPPINESS_BEATENBYSTRONGFOE
@@ -2527,6 +2534,7 @@ func use_bag_item(item: int, target_index: int = -1, move_slot: int = -1) -> Dic
 		return _play_poke_flute(item)
 	if (roles["x_stat"] as Dictionary).has(item) \
 		or (roles["x_substatus"] as Dictionary).has(item):
+		(party_log["x_items"] as Array).append(party(PLAYER).active)
 		var applied: Dictionary = _apply_active_item(mon(PLAYER), item)
 		if not bool(applied.get("ok", false)):
 			return _item_failure(StringName(applied.get("reason", &"item_has_no_effect")))
@@ -2742,6 +2750,7 @@ func _give_experience_to(
 	## `LevelUpHappinessMod` sits after `.level_loop`, outside it: an award that
 	## crossed four levels raises happiness once, not four times.
 	if grew:
+		(party_log["grew"] as Array).append(index)
 		_gain_level_happiness(learner)
 		## The `SmallFarFlagAction SET_FLAG` at the end of the same block, which
 		## is what `EvolveAfterBattle` walks the party against once the battle is

@@ -451,6 +451,8 @@ static func commit_link_trade(
 	)
 	if not bool(committed.get("ok", false)):
 		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	## `.doTrade`'s PIKAHAPPY_TRADE on `wTradingWhichPlayerMon`, before the swap.
+	world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_TRADE, offered_slot)
 	return {
 		"ok": true,
 		"handled": true,
@@ -732,6 +734,7 @@ static func use_item(
 	# caller has the snapshot a refused save rolls back to.
 	_register_caught(world, int(effect.get("register_caught", 0)))
 	_register_unown(world, int(effect.get("register_unown", 0)))
+	_gen1_item_happiness(world, item, party_index, StringName(effect.get("effect", &"")))
 	return {
 		"ok": true,
 		"item": item,
@@ -749,6 +752,17 @@ static func use_item(
 		"level": int(effect.get("level", 0)),
 		"restored": int(effect.get("restored", 0)),
 	}
+
+
+## `ItemUseMedicine`'s PIKAHAPPY_USEDITEM for an item up to CALCIUM, and the
+## `.Candy` path's PIKAHAPPY_LEVELUP behind it.
+static func _gen1_item_happiness(
+	world: Gen2WorldAPI, item: int, party_index: int, effect: StringName
+) -> void:
+	if effect == &"rare_candy":
+		world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_LEVELUP, party_index)
+	elif item <= Gen1Layout.ITEM_CALCIUM:
+		world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_USEDITEM, party_index)
 
 
 ## engine/items/tmhm.asm's TeachTMHM, as one candidate transaction beside
@@ -805,6 +819,7 @@ static func teach_tm_hm(
 	)
 	if not bool(committed.get("ok", false)):
 		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_USEDTMHM, party_index)
 	return {
 		"ok": true,
 		"item": item,
