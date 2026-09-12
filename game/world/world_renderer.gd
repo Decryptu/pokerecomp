@@ -848,6 +848,10 @@ func _row_entries(battlers_only: bool) -> Array:
 	if _actors != null and not battlers_only:
 		for sprite: Dictionary in _actors.sprites():
 			drawn.append({"actor": sprite, "row": (sprite["position_cells"] as Vector2).y})
+	## Slot fifteen, drawn the way an actor is: its position is its own pixels.
+	var follower: Dictionary = _world.gen1_pikachu_sprite() if not battlers_only else {}
+	if not follower.is_empty():
+		drawn.append({"actor": follower, "row": (follower["position_cells"] as Vector2).y})
 	## The people on the maps around this one, sorted into the same rows: a view
 	## wide enough to see the next town is wide enough to see somebody standing
 	## in it. They are the world API's read-only copies and take no part in
@@ -1038,15 +1042,34 @@ func _draw_actor(sprite: Dictionary, camera_pixels: Vector2) -> void:
 	# The same sprite offset an object's `jump_step` takes, so an actor on a
 	# ledge arcs over it rather than sliding through it.
 	var jump := Vector2(0, -float(sprite.get("height_offset_pixels", 0.0)))
-	draw_texture(texture, pixel + jump)
-	if _in_grass(Vector2i(roundi(cell_position.x), roundi(cell_position.y))):
-		_draw_grass_over(pixel + jump, _background_camera())
+	if bool(sprite.get("shadow", false)):
+		_draw_actor_shadow(pixel)
+	if not bool(sprite.get("hidden", false)):
+		draw_texture(texture, pixel + jump)
+		var grass_cell: Vector2i = sprite.get(
+			"grass_cell", Vector2i(roundi(cell_position.x), roundi(cell_position.y))
+		)
+		if _in_grass(grass_cell):
+			_draw_grass_over(pixel + jump, _background_camera())
 	## The same bubble a map object's `showemote` puts up, over an actor that
 	## asked for one. Drawn after the grass, as an object's is: `SpawnEmote` is
 	## its own OAM and stands over the tuft rather than behind it.
 	var emote: int = int(sprite.get("emote", Gen2WorldActors.EMOTE_NONE))
 	if emote != Gen2WorldActors.EMOTE_NONE:
 		_draw_emote(emote, pixel)
+
+
+## `LoadPikachuShadowOAMData`: the ledge shadow's tile and its mirror, twelve
+## pixels under the sprite's ground position.
+func _draw_actor_shadow(pixel: Vector2) -> void:
+	var sheet: Dictionary = _effect_sheet(String(Gen2WorldEffects.SPRITE_SHADOW))
+	if sheet.is_empty():
+		return
+	for tile: int in 2:
+		_draw_effect_tile(
+			sheet, 0, Gen2WorldEffects.PAL_OW_EMOTE, tile == 1,
+			pixel + Vector2(8.0 * tile, 12.0), 0
+		)
 
 
 ## The object pass's own order, with a mod's actors sorted into it: the row a
@@ -1088,8 +1111,7 @@ func _draw_emote(emote_id: int, pixel: Vector2) -> void:
 ## RELATIVE_ATTRIBUTES, which are the bottom half of every facing: the grass in
 ## front of the object covers its legs.
 func _in_grass(cell: Vector2i) -> bool:
-	return _world != null and _world.current_map != null \
-		and Gen2WorldCollision.is_grass(_world.gen2_code_at(cell))
+	return _world != null and _world.in_grass(cell)
 
 
 ## Redraws the map over the bottom half of a sprite drawn at [param pixel], with

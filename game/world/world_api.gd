@@ -63,11 +63,9 @@ const STEP_PASSES_FAST: int = 4
 const STEP_PASSES_TURN: int = 4
 ## `Script_ForcedMovement`'s `step_dig 16`, twice per whirlpool.
 const FORCED_TURN_SLEEP_PASSES: int = 16
-## How long each scripted step command takes, from the `STEP_*` speed it hands
-## `InitStep` and that row of `StepVectors`. They differ only in the step type
-## set over the top, and the turning rows keep the direction the command names.
-## The frames are one cell's; the three jumping rows cover two. `turn_step` is
-## not here: `TurnStep` never calls `InitStep`, so it sits with `turn_head`.
+## Each scripted step command's frames, from the `STEP_*` speed it hands
+## `InitStep`; the jumping rows cover two cells. `turn_step` never calls
+## `InitStep`, so it sits with `turn_head`.
 const SCRIPTED_STEP_PASSES: Dictionary = {
 	&"slow_step": STEP_PASSES_NPC_WALK,
 	&"step": STEP_PASSES_WALK,
@@ -144,13 +142,10 @@ static func passes_in_frames(passes: int) -> int:
 	return passes * FRAMES_PER_OVERWORLD_PASS
 
 
-## `InitMapNameSign`. `wCurLandmark` is -1 on a map with no name to show, and the
-## five landmarks `.CheckSpecialMap` names get no sign either, alongside
-## `LANDMARK_SPECIAL`. Crystal indices, since the sign is Crystal's own screen. The
-## two National Park gates are that group's maps 15 and 17, which
-## `.CheckNationalParkGate` names because their environment is not `GATE`.
-## Below, a `warp_event`'s destination byte for `-1`, which names
-## [member backup_warp]: six warp events across five maps carry it.
+## `InitMapNameSign`: -1 and `.CheckSpecialMap`'s five landmarks get no sign,
+## nor `LANDMARK_SPECIAL`; Crystal indices, the sign being Crystal's screen. The
+## National Park gates are `.CheckNationalParkGate`'s two. Below, the `-1`
+## destination byte naming [member backup_warp].
 const BACKUP_WARP_DESTINATION: int = 0xFF
 const MAP_NAME_SIGN_NO_LANDMARK: int = -1
 ## `wLandmarkSignTimer`, decremented once per `PlaceMapNameSign` and so once
@@ -172,11 +167,8 @@ var data: GameData = null
 ## under. Read-only to a mod: a rule that changed mid-run would make the save it
 ## produced unreproducible, which is the whole reason it belongs to the run.
 var rules: Gen2Rules = null
-## The landmark whose one Nuzlocke encounter is standing in front of the player
-## right now, or -1 for none. Set by whoever opens a wild battle and read by
-## [method Gen2WorldPartyHost.capture_wild], which is what keeps a ball from
-## being thrown at an area that has already given up its Pokemon. Not part of
-## the snapshot: a run reloaded mid-battle has no encounter open.
+## The landmark whose one Nuzlocke encounter is open, or -1, read by
+## [method Gen2WorldPartyHost.capture_wild]. Not snapshotted.
 var nuzlocke_area_open: int = -1
 var state: Gen2WorldState = null
 var inventory: Gen2WorldInventory = null
@@ -226,12 +218,9 @@ var dig_warp: Dictionary = {}
 ## running. Not saved: it is read by the host on the same frame the warp is
 ## applied, and a save written after that has the restored party in it.
 var _contest_abort_pending: bool = false
-## `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`: where a warp
-## whose destination is -1 sends the player, and whose landmark a map with
-## `LANDMARK_SPECIAL` borrows. `GetWarpDestCoords`'s `.backup` writes it on
-## arriving at such a warp and `Script_warpmod` writes it outright; empty is a
-## game that has walked through none, which is what a slot written before this
-## existed truthfully says.
+## `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`: where a -1
+## warp sends the player and whose landmark `LANDMARK_SPECIAL` borrows, written
+## by `GetWarpDestCoords`'s `.backup` and `Script_warpmod`. Empty until walked.
 var backup_warp: Dictionary = {}
 ## `wSpawnAfterChampion`, which the induction and Red's credits write and the
 ## next CONTINUE spends; see [member Gen2WorldSnapshot.spawn_after_champion].
@@ -252,10 +241,7 @@ var _map_entry_scene_ran: bool = false
 var _object_visibility_overrides: Dictionary = {}
 var _transient_object_visibility_overrides: Dictionary = {}
 ## Live cells and facings written by moveobject, turnobject, followers and the
-## trainer approach. The cartridge keeps the same values in wMapObjects, which
-## a map load rebuilds from ROM, so these do not outlive the loaded map; see
-## _apply_map(). Flagged disappear/appear visibility is persistent; flagless and
-## movement-level visibility uses a transient override cleared by map rebuild.
+## trainer approach, which a map load drops as `wMapObjects` is rebuilt.
 var _object_position_overrides: Dictionary = {}
 var _object_facing_overrides: Dictionary = {}
 var _object_followers: Dictionary = {}
@@ -278,12 +264,9 @@ var block_revision: int = 0
 ## cartridge would have drawn, so the player keeps the place
 ## [constant PLAYER_VIEW_CELL] puts him in and only the surround grows.
 var view_pixels: Vector2i = VIEW_PIXELS
-## One resolved but uncommitted field move each, held between its `*_request()`
-## and `complete_*()` the way Script_Cut holds wCutWhirlpool* across its
-## writetext. Every one is cleared with the loaded map, since a request cannot
-## outlive the map it was made on: most name a cell, block or object index that
-## belongs to it, and Strength, Flash and the escapes, which name none, would
-## otherwise refuse every later use with `*_in_progress`.
+## One resolved but uncommitted field move each, held between `*_request()` and
+## `complete_*()` as Script_Cut holds wCutWhirlpool* across its writetext, and
+## cleared with the map they were made on.
 var _pending_cut: Dictionary = {}
 var _pending_surf: Dictionary = {}
 var _pending_whirlpool: Dictionary = {}
@@ -416,19 +399,7 @@ static func open_snapshot(
 	var map: Gen2WorldMap = game_data.world_map(world_snapshot.map_id.x, world_snapshot.map_id.y)
 	if map == null or world_snapshot.world_state == null:
 		return null
-	if world_snapshot.player_cell.x < 0 or world_snapshot.player_cell.y < 0 \
-		or world_snapshot.player_cell.x >= map.collision_width \
-		or world_snapshot.player_cell.y >= map.collision_height:
-		return null
-	if world_snapshot.player_facing < Gen2WorldSprite.FACING_DOWN \
-		or world_snapshot.player_facing > Gen2WorldSprite.FACING_RIGHT:
-		return null
-	if world_snapshot.movement_mode not in [MOVEMENT_WALK, MOVEMENT_SURF, MOVEMENT_BIKE]:
-		return null
-	if world_snapshot.world_day < 0 or world_snapshot.world_day >= Gen2WorldClock.DAYS_PER_WEEK \
-		or world_snapshot.world_hour < 0 or world_snapshot.world_hour >= Gen2WorldClock.HOURS_PER_DAY \
-		or world_snapshot.world_minute < 0 \
-		or world_snapshot.world_minute >= Gen2WorldClock.MINUTES_PER_HOUR:
+	if not _snapshot_in_range(world_snapshot, map):
 		return null
 	var tileset: Gen2WorldTileset = game_data.world_tileset(map.tileset)
 	if tileset == null:
@@ -452,6 +423,8 @@ static func open_snapshot(
 	out.gen1_map_pal_offset = world_snapshot.gen1_map_pal_offset
 	out.gen1_rival_name = world_snapshot.gen1_rival_name
 	out.gen1_fossil = world_snapshot.gen1_fossil.duplicate()
+	if out.pikachu != null:
+		out.pikachu.restore(world_snapshot.gen1_pikachu)
 	out.dig_warp = world_snapshot.dig_warp.duplicate()
 	out.backup_warp = world_snapshot.backup_warp.duplicate()
 	## `.SpawnAfterE4` and `.AfterRed`, which stand between `ClockContinue` and
@@ -464,6 +437,22 @@ static func open_snapshot(
 		out.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_NONE
 		out.warp_to_spawn(spawn)
 	return out
+
+
+static func _snapshot_in_range(world_snapshot: Gen2WorldSnapshot, map: Gen2WorldMap) -> bool:
+	if world_snapshot.player_cell.x < 0 or world_snapshot.player_cell.y < 0 \
+		or world_snapshot.player_cell.x >= map.collision_width \
+		or world_snapshot.player_cell.y >= map.collision_height:
+		return false
+	if world_snapshot.player_facing < Gen2WorldSprite.FACING_DOWN \
+		or world_snapshot.player_facing > Gen2WorldSprite.FACING_RIGHT:
+		return false
+	if world_snapshot.movement_mode not in [MOVEMENT_WALK, MOVEMENT_SURF, MOVEMENT_BIKE]:
+		return false
+	return world_snapshot.world_day >= 0 and world_snapshot.world_day < Gen2WorldClock.DAYS_PER_WEEK \
+		and world_snapshot.world_hour >= 0 and world_snapshot.world_hour < Gen2WorldClock.HOURS_PER_DAY \
+		and world_snapshot.world_minute >= 0 \
+		and world_snapshot.world_minute < Gen2WorldClock.MINUTES_PER_HOUR
 
 
 func _init(
@@ -486,6 +475,9 @@ func _init(
 	state.changed.connect(_on_world_state_changed)
 	inventory = Gen2WorldInventory.new(data, state)
 	state.ensure_roaming_mons(data.world_roaming_mons())
+	if data.id == RomRegistry.YELLOW:
+		pikachu = Gen1Pikachu.new()
+		pikachu.set_grass_reader(_gen1_grass_under)
 	current_map = map
 	_gen1_mark_town_visited()
 	_map_placements = {}
@@ -512,12 +504,8 @@ func landmark() -> int:
 
 
 ## The same lookup with the `LANDMARK_SPECIAL` fallback `RegionCheck`, `FlyMap`,
-## `Pokedex_GetLandmark` and both `TownMap_*` routines spell out: a map with no
-## landmark of its own borrows [member backup_warp]'s. Six maps carry it and only
-## one is ordinary, POKECENTER_2F being every Pokemon Center's own upstairs, so
-## the region a radio, a battle track and the dex area answer with is the backup's
-## on every visit. `SetCaughtData` tests POKECENTER_2F by name rather than the
-## landmark, and the two agree everywhere a caught mon can be made.
+## `Pokedex_GetLandmark` and the `TownMap_*` routines share: a map with no
+## landmark borrows [member backup_warp]'s, POKECENTER_2F on every visit.
 func landmark_backup() -> int:
 	## `LoadTownMapEntry` takes `wCurMap` itself, so a Generation 1 map is its own
 	## landmark and the four routines below need no backup to reach one.
@@ -556,11 +544,8 @@ func clear_map_name_sign() -> void:
 	_map_name_sign = MAP_NAME_SIGN_NO_LANDMARK
 
 
-## `InitMapNameSign`, which every map setup script but the submenu's reaches.
-## The sign is Crystal's own screen: pokegold ships neither `MapEntryFrameGFX`
-## nor the routine, so the whole decision is skipped there. `wPrevLandmark` is
-## written on both branches, which is what makes a walk through a gate silent on
-## the way out as well as the way in.
+## `InitMapNameSign`, which pokegold does not ship; `wPrevLandmark` is written
+## on both branches, so a gate is silent both ways.
 func _init_map_name_sign() -> void:
 	var current: int = map_name_sign_landmark()
 	var previous: int = _prev_landmark
@@ -745,11 +730,8 @@ func _start_radio_show(channel: int) -> void:
 	_radio_show.buenas_password_today = _buenas_password_today
 
 
-## `PlayRadio`, the radio a `special MapRadio` switches on over the map. The
-## station is the same show the Pokegear card reads, so it goes through
-## `_start_radio_show` rather than growing a second reader; what differs is that
-## nothing tuned a dial, so the knob and the channel the save keeps are left
-## where they stand.
+## `PlayRadio`, a `special MapRadio`'s show through `_start_radio_show` with
+## the knob and the saved channel left where they stand.
 func play_map_radio(station: int) -> Dictionary:
 	var channel: int = Gen2WorldRadio.map_radio_channel(
 		station,
@@ -875,11 +857,8 @@ func view_origin_subpixel() -> Vector2:
 		- Vector2(view_surround_offset())
 
 
-## The player's screen pixel, which is PLAYER_VIEW_CELL for as long as the
-## player is the thing the view is framed on. `_UpdateSprites` and `ScrollScreen`
-## are one after the other at the end of `HandleMapBackground`, so the shadow OAM
-## a pass wrote and the scroll it computed are latched by the same VBlank and the
-## drawn player never leaves its resting pixel. Only a height offset moves it.
+## The player's screen pixel, PLAYER_VIEW_CELL while the view is framed on
+## them: `_UpdateSprites` and `ScrollScreen` are latched by the same VBlank.
 func player_pixel_position() -> Vector2i:
 	return Vector2i(
 		(player_position_cells() - visible_origin_cells()) * float(CELL_PIXELS)
@@ -937,11 +916,8 @@ func player_height_offset_pixels() -> float:
 	return float(-player_jump_offset())
 
 
-## The in-flight step's presentation offset in fractional walk cells, from 1.0
-## cell behind player_cell down to zero, so a renderer that does not think in
-## hardware pixels can smooth against it without reverse-engineering CELL_PIXELS.
-## A scripted movement commits its path at once, so while its trail drains this is
-## as many cells behind as the player has left to be drawn walking.
+## The in-flight step's offset in fractional walk cells, 1.0 behind player_cell
+## down to zero; a scripted trail is as many cells as are left to draw.
 func player_step_offset_cells() -> Vector2:
 	return step_behind_cells(
 		_player_queued_steps, _player_step_direction,
@@ -972,11 +948,8 @@ static func step_behind_cells(
 	return behind
 
 
-## The two cells the step in flight runs between: `{from, to, progress, kind}`,
-## and `{}` while nothing steps. [method player_step_offset_cells] is this summed
-## over the run, which cannot be taken apart again once a stream turns. A renderer
-## whose plan is not a plain grid puts both ends through its own geometry and
-## moves between the answers, which a fractional cell cannot do across a fold.
+## The two cells the step in flight runs between, `{from, to, progress, kind}`,
+## for a renderer whose plan is not a plain grid; `{}` while nothing steps.
 func player_step_span() -> Dictionary:
 	if _player_step_passes_remaining <= 0 or _player_step_passes_total <= 0:
 		return {}
@@ -1007,7 +980,45 @@ func player_step_kind() -> StringName:
 func player_drawn_facing() -> int:
 	if player_step_kind() in Gen2WorldMovement.SPINNING_KINDS:
 		return Gen2WorldMovement.spin_facing(_player_spin_frame)
+	if _gen1_turn_shown >= 0 and frame_number < _gen1_turn_frame + FRAMES_PER_OVERWORLD_PASS:
+		return _gen1_turn_shown
 	return player_facing
+
+
+## `.handleDirectionButtonPress` on a direction change: the counter for slot
+## fifteen, `BIT_TURNING`, and a `jp OverworldLoop` that spends the pass without
+## `UpdateSprites`, so the old facing stands one pass and the walk the next poll
+## starts is not delayed further. No step here: `StepFunction_Turn` is Crystal's.
+var _gen1_turn_shown: int = -1
+var _gen1_turn_frame: int = 0
+
+
+func _gen1_turn(shown: int) -> void:
+	_gen1_turn_shown = shown
+	_gen1_turn_frame = frame_number
+	_gen1_turn_armed = false
+	if pikachu != null:
+		pikachu.collision_counter = Gen1Pikachu.COLLISION_PASSES
+
+
+func gen1_turned_this_pass() -> bool:
+	return _gen1_turn_shown >= 0 and _gen1_turn_frame == frame_number
+
+
+## `wCheckFor180DegreeTurn` and `wPlayerLastStopDirection`: a poll with nothing
+## held arms the turn and records the direction last moved in, and a press then
+## turns only while armed and naming another direction. A bump arms nothing,
+## which is `CollisionCheckOnLand.collision`'s bare `jp OverworldLoop`.
+var _gen1_turn_armed: bool = true
+var _gen1_last_stop: Vector2i = Vector2i.ZERO
+var _gen1_moving: Vector2i = Vector2i.ZERO
+
+
+func _gen1_turns_on(direction: Vector2i) -> bool:
+	if _gen1_last_stop == Vector2i.ZERO:
+		_gen1_last_stop = _direction_for_facing(player_facing)
+	_gen1_moving = direction
+	return _gen1_turn_armed and direction != _gen1_last_stop
 
 
 ## The player's `Facings` frame, 0 to 3. `Gen2WorldObject.walk_frame()` for an
@@ -1117,6 +1128,11 @@ func _begin_player_step(
 	_player_step_passes_total = maxi(0, frames)
 	_player_step_passes_remaining = _player_step_passes_total
 	_player_step_began = direction != Vector2i.ZERO
+	## `.moveAhead2` zeroes the counter behind every step, and `Func_fcc08` runs
+	## at `.noCollision`, which is the pass the step's first pixels are spent.
+	if pikachu != null and direction != Vector2i.ZERO:
+		pikachu.collision_counter = 0
+		_gen1_pikachu_staged = [direction.sign(), jumping, movement_mode != MOVEMENT_WALK]
 
 
 func _clear_player_step() -> void:
@@ -1133,6 +1149,7 @@ func _clear_player_step() -> void:
 	_player_queued_steps.clear()
 	_player_scripted_steps = false
 	_player_step_frame = 0
+	_gen1_pikachu_staged = []
 
 
 ## Spends one hardware frame of the player's walk-step offset.
@@ -1140,16 +1157,91 @@ func _clear_player_step() -> void:
 ## it never changes player_cell, collision or event results, and a caller that
 ## never starts a step sees no difference.
 func advance_player_step_pass() -> bool:
+	## The pass after a hop lands, which clears the simulated presses and the
+	## ledge flag, runs a frame over as well.
+	if _gen1_hop_landed:
+		_gen1_hop_landed = false
+		_pass_overrun_frames += STEP_START_OVERRUN_FRAMES
 	if _player_step_passes_remaining <= 0:
 		return false
 	if _player_step_kind in Gen2WorldMovement.SPINNING_KINDS:
 		_player_spin_frame = Gen2WorldMovement.spin_advance(_player_spin_frame)
 	if not _player_step_kind in Gen2WorldMovement.SLIDING_KINDS:
 		_player_step_frame = (_player_step_frame + 1) & 0x0F
+	## `HandleLedges`' second simulated step starts a step of its own too, and
+	## the first one, which loads the hop's shadow as well, runs two frames over.
+	var first_pass: bool = _player_step_passes_remaining == _player_step_passes_total
+	var step_start: bool = first_pass \
+		or (_player_jumping and _player_step_passes_remaining * 2 == _player_step_passes_total)
+	if step_start and _player_step_direction != Vector2i.ZERO and _gen1:
+		_commit_gen1_pikachu_step()
+		if pikachu != null or not objects.is_empty():
+			_pass_overrun_frames += STEP_START_OVERRUN_FRAMES
+		if first_pass and _player_jumping:
+			_pass_overrun_frames += STEP_START_OVERRUN_FRAMES
 	_player_step_passes_remaining -= 1
 	if _player_step_passes_remaining <= 0:
+		if pikachu != null:
+			pikachu.on_player_step_landed()
+		_gen1_hop_landed = _gen1 and _player_jumping
+		if _gen1_connection_landing:
+			_gen1_connection_landing = false
+			if pikachu != null:
+				_pass_overrun_frames += CONNECTION_OVERRUN_FRAMES
+				pikachu.schedule_after_map_load(gen1_pikachu_view(false))
 		_start_next_player_step()
 	return true
+
+
+## `BIT_STANDING_ON_DOOR`, set by every `WarpFound2` and read once by
+## `RunNPCMovementScript` on the first pass after: `PlayerStepOutFromDoor`
+## simulates a DOWN when the landing tile is one of the tileset's
+## `DoorTileIDPointers`. Answers whether it queued that step.
+var _gen1_standing_on_door: bool = false
+
+
+func gen1_step_out_of_door() -> bool:
+	if not _gen1_standing_on_door:
+		return false
+	_gen1_standing_on_door = false
+	if current_map == null or not Gen2WorldCollision.gen1_is_door_tile(
+		current_map.tileset, _gen1_tile_drawn_at(player_cell)
+	):
+		return false
+	_gen1_walk_player([{"direction": int(Gen1Layout.PAD_DIRECTIONS[Gen1Layout.PAD_DOWN_MASK]), "steps": 1}])
+	return true
+
+
+## The command a step staged, appended on the pass its first pixels are spent:
+## a held walk queues its next step on the pass the last one lands, a pass
+## before `.noCollision` reaches `Func_fcc08` on the cartridge.
+var _gen1_pikachu_staged: Array = []
+## Frames the pass just spent ran past its own two, read once by the screen's
+## pump: a step's first pass overruns VBlank by one whenever `UpdateSprites` has
+## a slot to run (any object on Red and Blue, slot fifteen always on Yellow), so
+## a step is seventeen frames, and Yellow's `.loadNewMap` landing pass runs five over.
+const STEP_START_OVERRUN_FRAMES: int = 1
+const CONNECTION_OVERRUN_FRAMES: int = 5
+var _pass_overrun_frames: int = 0
+var _gen1_connection_landing: bool = false
+var _gen1_hop_landed: bool = false
+
+
+func take_pass_overrun_frames() -> int:
+	var frames: int = _pass_overrun_frames
+	_pass_overrun_frames = 0
+	if pikachu != null:
+		frames += pikachu.movement_overrun
+		pikachu.movement_overrun = 0
+	return frames
+
+
+func _commit_gen1_pikachu_step() -> void:
+	if _gen1_pikachu_staged.is_empty():
+		return
+	var staged: Array = _gen1_pikachu_staged
+	_gen1_pikachu_staged = []
+	pikachu.on_player_step(staged[0], bool(staged[1]), bool(staged[2]))
 
 
 ## GetPlayerSprite: the sprite for the player's current state, not a fixed one.
@@ -1185,6 +1277,10 @@ func set_party_summary(
 	}
 	for key: Variant in extra:
 		_party_summary[key] = extra[key]
+	if pikachu != null:
+		var starter: Dictionary = extra.get("starter_pikachu", {})
+		pikachu.set_party(bool(starter.get("alive", false)), bool(starter.get("surfing", false)),
+			bool(starter.get("ailing", false)), bool(starter.get("asleep", false)))
 	return {"ok": true}
 
 
@@ -1207,11 +1303,9 @@ const FIELD_MOVE_SOURCE_PARTY: StringName = &"party"
 const FIELD_MOVE_SOURCE_ITEM: StringName = &"item"
 
 
-## WHERE a field move would be used from: `{kind, move, slot, item}`, and `{}`
-## when nothing can use it. The party answers first and exactly what [method
-## party_slot_with_move] did; only when no slot knows the move is an alternate
-## source considered, and only for the seven HM moves. The badge is deliberately
-## not part of this, since every `Try*OW` tests `CheckBadge` in its own order.
+## Where a field move would be used from, `{kind, move, slot, item}`: the party
+## first, an alternate source for the seven HMs after. The badge is each
+## `Try*OW`'s own test.
 func field_move_source(move_id: int) -> Dictionary:
 	var slot: int = party_slot_with_move(move_id)
 	if slot >= 0:
@@ -1547,6 +1641,8 @@ func complete_surf() -> Dictionary:
 	var request: Dictionary = _pending_surf
 	_pending_surf = {}
 	movement_mode = StringName(request.get("movement", MOVEMENT_SURF))
+	if pikachu != null and movement_mode == MOVEMENT_WALK:
+		pikachu.on_surf_ended()
 	player_sprite_number = int(request["sprite"])
 	player_cell = request["cell"]
 	_apply_map_music()
@@ -1784,11 +1880,8 @@ static func _waterfall_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"waterfall_failed", "reason": reason}
 
 
-## FlashFunction .CheckUseFlash. Flash is the one field move that checks no tile
-## at all: its whole test is the badge and then whether this map is a dark one,
-## which is the map header's own palette byte rather than anything under the
-## player. The Aerodactyl chamber's branch is a Ruins of Alph puzzle that is not
-## implemented, so the palette is the only way through.
+## FlashFunction .CheckUseFlash: the badge and the map header's palette byte,
+## no tile. The Aerodactyl chamber's branch is not built.
 func flash_request() -> Dictionary:
 	if current_map == null:
 		return _flash_failure(&"missing_map")
@@ -1861,11 +1954,8 @@ static func _flash_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"flash_failed", "reason": reason}
 
 
-## TryHeadbuttOW and TryHeadbuttFromMenu; the roll belongs to the commit, since
-## HeadbuttScript reaches TreeMonEncounter only after UseHeadbuttText. Headbutt is
-## the one field move with no badge at all: TryHeadbuttOW is CheckPartyMove and
-## nothing else, TryHeadbuttFromMenu the faced tile and nothing else. Its refusal
-## is FieldMoveFailed's generic _CantUseItemText.
+## TryHeadbuttOW and TryHeadbuttFromMenu, with no badge: CheckPartyMove and the
+## faced tile. The roll belongs to the commit, after UseHeadbuttText.
 func headbutt_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _headbutt_failure(&"missing_map")
@@ -1975,11 +2065,9 @@ static func _headbutt_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"headbutt_failed", "reason": reason}
 
 
-## TryRockSmashFromMenu; the roll and the rock both belong to the commit. Rock
-## Smash asks neither a badge nor a tile: `GetFacingObject` is `CheckFacingObject`
-## and then the faced object's own `MAPOBJECT_MOVEMENT` byte against
-## `SPRITEMOVEDATA_SMASHABLE_ROCK`, so the question is which object is in front
-## rather than what the ground is, and it reads the doubled cell `interact()` does.
+## TryRockSmashFromMenu: `GetFacingObject`'s `MAPOBJECT_MOVEMENT` against
+## `SPRITEMOVEDATA_SMASHABLE_ROCK` on the doubled cell `interact()` reads, no
+## badge and no tile; the roll belongs to the commit.
 func rock_smash_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _rock_smash_failure(&"missing_map")
@@ -2145,11 +2233,9 @@ func map_time_of_day() -> int:
 	)
 
 
-## StrengthFunction .TryStrength, which unlike the others is a badge check and
-## nothing else: no faced tile, no block table, no player state, and no check that
-## a boulder is even in front. Its `.AlreadyUsingStrength` branch is annotated
-## unreferenced in both pins, so an already-active flag is not a refusal here.
-## [param species] is the chosen member's, for SetStrengthFlag's wStrengthSpecies.
+## StrengthFunction .TryStrength: the badge and nothing else, its
+## `.AlreadyUsingStrength` unreferenced in both pins. [param species] fills
+## SetStrengthFlag's wStrengthSpecies.
 func strength_request(species: int = 0) -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _strength_failure(&"missing_map")
@@ -2279,11 +2365,9 @@ func bug_contest_minutes_remaining() -> int:
 const STD_BUG_CONTEST_RESULTS_WARP: int = 22
 
 
-## `CheckTimeEvents`' contest branch: the timer is read once a step and the
-## reading that runs out queues `BugCatchingContestOverScript`, the sound, the
-## line and the warp back to the gate. Out of balls reaches the same warp through
-## `BugCatchingContestOutOfBallsScript`, so both are one answer. Answers the
-## queued results, or an empty Array while the contest runs on.
+## `CheckTimeEvents`' contest branch: the reading that runs out queues
+## `BugCatchingContestOverScript`, and `BugCatchingContestOutOfBallsScript`
+## reaches the same warp. Empty while the contest runs on.
 func check_bug_contest_timer() -> Array:
 	if not bug_contest_active():
 		return []
@@ -2372,11 +2456,8 @@ func can_encounter_wild_mon_at(cell: Vector2i) -> bool:
 	return not Gen2WorldCollision.is_ice(code)
 
 
-## Every cell of the current map a wild could be met on, grouped the way
-## [method encounter_request] resolves the terrain: WATER_TILE is `surf`,
-## LAND_TILE is `grass`, and a cave or dungeon floor is grass drawn as grass or
-## not. One narrowing on [method can_encounter_wild_mon]: a cell nothing can
-## stand on is not offered, since a cave's walls pass the gate. Collision only.
+## Every cell a wild could be met on, grouped as [method encounter_request]
+## resolves the terrain, less the cells nothing can stand on. Collision only.
 func visible_encounter_cells() -> Dictionary:
 	var out: Dictionary = {
 		Gen2WorldEncounter.METHOD_GRASS: PackedVector2Array(),
@@ -2432,11 +2513,8 @@ func encounter_tables_key() -> Array:
 	]
 
 
-## The wild table each method would resolve against right now, with the Bug
-## Contest's and the swarm's substitutions made and the time of day picked.
-## `slots` is the flat `{species, min_level, max_level}` list a roll would choose
-## from, which a caller populating a map with visible Pokemon must not derive for
-## itself. The bounds are equal but for the Bug Contest's own level roll.
+## The wild table each method resolves against now, contest and swarm
+## substituted; `slots` is the flat `{species, min_level, max_level}` list.
 func active_encounter_tables() -> Dictionary:
 	var out: Dictionary = {}
 	if current_map == null or data == null:
@@ -2861,12 +2939,9 @@ func mom_purchase(random_row: int = 0) -> Dictionary:
 	}
 
 
-## `Script_SpecialBillCall`: `LoadCallerScript PHONE_BILL` and then
-## `Script_ReceivePhoneCall`, which is the same two rings an incoming call
-## spends. Nothing gates it, so the only caller is the event that owes it.
-## [param script_override] is `Mom_GetScriptPointer`'s own answer: her call is
-## the one place the contact's `PHONE_CONTACT_SCRIPT2` is written before the ring
-## rather than read out of the table.
+## `Script_SpecialBillCall`: `LoadCallerScript PHONE_BILL` then
+## `Script_ReceivePhoneCall`'s two rings. [param script_override] is
+## `Mom_GetScriptPointer`'s answer, written before her ring rather than read.
 func request_caller_phone_call(
 	contact_id: int, script_override: Dictionary = {}
 ) -> Array:
@@ -3149,6 +3224,8 @@ func advance_emotes_frame() -> bool:
 	var changed: bool = _player_object.tick_emote()
 	for object: Gen2WorldObject in objects:
 		changed = object.tick_emote() or changed
+	if pikachu != null:
+		changed = pikachu.tick_emote() or changed
 	return changed
 
 
@@ -3466,11 +3543,8 @@ func warp_index_at(cell: Vector2i) -> int:
 	return 0
 
 
-## `CmdQueue_StoneTable` and `HandleStoneQueue`, as one question: which script does
-## this boulder's cell fire? The guards below are the source's own order, and any
-## refusal answers an empty Dictionary. The row's object id is an
-## `object_const_def` constant, which starts at 2, so it is compared against the
-## object's own index plus two, the same mapping `applymovement` uses.
+## `CmdQueue_StoneTable` and `HandleStoneQueue` as one question, guards in the
+## source's order; the row's `object_const_def` id is the index plus two.
 func stone_queue_script(boulder: Gen2WorldObject) -> Dictionary:
 	if boulder == null or not boulder.is_strength_boulder() or boulder.is_stepping():
 		return {}
@@ -3526,11 +3600,8 @@ func tile_index_at(tile_x: int, tile_y: int) -> int:
 	return current_tileset.tile_index(block, local_tile)
 
 
-## Returns the visible 20x18 graphics-tile page in row-major order. Map padding
-## is expanded through [method drawn_block_at], just like LoadMetatiles.
-## This is [method tile_index_at] for 360 tiles, written out rather than called
-## 360 times: it is on the draw path, and the per-tile call did the same block
-## division and bounds check for every tile of the same block row.
+## The visible 20x18 tile page, padding expanded as LoadMetatiles does:
+## [method tile_index_at] written out for 360 tiles, since it is the draw path.
 func visible_tile_indices() -> PackedInt32Array:
 	return tile_indices_in_window(
 		visible_screen_origin_cell() * Gen2Layout.MAP_BLOCK_CELL_WIDTH,
@@ -3607,11 +3678,8 @@ static func in_hardware_buffer(map: Gen2WorldMap, block_x: int, block_y: int) ->
 
 
 ## Every map the connection graph reaches from the current one, keyed
-## `"group:number"`, each with its origin in the current map's block
-## coordinates. The current map is not in it: it is the origin.
-## Built once per map load and kept, since the graph is header data and nothing
-## a run does moves a map. Ordered nearest first, so a caller that draws them in
-## order draws the far ones under the near ones.
+## `"group:number"` with its origin in the current map's block coordinates,
+## built once per map load and ordered nearest first.
 func map_placements() -> Dictionary:
 	if _map_placements.is_empty() and current_map != null:
 		_map_placements = placements_around(data, current_map)
@@ -3676,12 +3744,9 @@ static func connection_origin_blocks(
 	return Vector2i.ZERO
 
 
-## The same fold for a map that is not the loaded one, which is what a battle
-## staged on a map has: [Gen2BattleWorldContext] names the map and hands over no
-## world, deliberately, so there is no `current_map` to read.
-## [param block_overrides] is a live `changeblock` table, keyed as
-## [method _block_key] keys one. A caller with no world has none, and a map with
-## no world has had no block edited.
+## The same fold for a map that is not the loaded one, which is what
+## [Gen2BattleWorldContext] stages a battle on. [param block_overrides] is a live
+## `changeblock` table keyed as [method _block_key] keys one.
 static func drawn_block_for(
 	data_source: GameData,
 	map: Gen2WorldMap,
@@ -3757,11 +3822,8 @@ static func _block_is_in_connection_strip(
 	if not in_padding:
 		return false
 
-	# The macro stores `_len - _src`, not merely the target map dimension.
-	# Respecting the byte is what reproduces the exact partial strip when a map
-	# is offset far enough that either its source or destination begins in the
-	# three-block padding. Zero supports old hand-built caches that predate the
-	# imported record fields; target bounds still constrain those below.
+	# The macro stores `_len - _src`, which is the partial strip when either end
+	# begins in the three-block padding; zero is a hand-built cache.
 	var length: int = int(connection.get("length", 0))
 	if length <= 0:
 		return true
@@ -3791,8 +3853,15 @@ static func _overridden_block_at(
 ## its collision grid holds the tile a cell draws rather than a permission byte.
 var _gen1: bool = false
 ## `wLastMap`, the outdoor map a [constant Gen1Layout.WARP_TO_LAST_MAP] warp
-## comes back out to. Generation 2 has no such warp and never writes it.
-var _gen1_last_map: int = -1
+## comes back out to; PALLET_TOWN is the zeroed byte's, which is what a house
+## entered on no save reads. Generation 2 has no such warp and never writes it.
+var _gen1_last_map: int = Gen1Layout.PALLET_TOWN
+## Yellow's follower, and null on every other cartridge: `_UpdateSprites` runs
+## slot fifteen on Yellow alone.
+var pikachu: Gen1Pikachu = null
+## `hJoyHeld & PAD_B`, which `CollisionCheckOnLand` reads in front of the
+## follower; the screen writes it beside [member run_held].
+var b_held: bool = false
 ## `wLastBlackoutMap`, which `SetLastBlackoutMap` copies `wLastMap` into at the
 ## Pokemon Center's YES. A blackout, an Escape Rope, Dig and Teleport all land
 ## on its own `FlyWarpDataPtr` tile. A zeroed byte is PALLET_TOWN, which is what
@@ -3970,6 +4039,11 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"random": &"_gen1_node_random",
 	"random_bit": &"_gen1_node_random_bit",
 	"talking_to": &"_gen1_node_talking_to",
+	"pikachu_test": &"_gen1_node_pikachu_test",
+	"pikachu": &"_gen1_node_pikachu",
+	"pikachu_text": &"_gen1_node_pikachu_text",
+	"pikachu_movement": &"_gen1_node_pikachu_movement",
+	"pikachu_talk": &"_gen1_node_pikachu_talk",
 	"oaks_aide": &"_gen1_node_oaks_aide",
 	"filtered_bag": &"_gen1_node_filtered_bag",
 	"menu_cancel": &"_gen1_node_menu_cancel",
@@ -3986,11 +4060,8 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 }
 
 
-## The raw cartridge permission byte at a walk cell.
-## The imported grid already holds the code the tileset gave each cell, so it is
-## the answer unless a changeblock has replaced the block this cell belongs to.
-## An overridden block has to be looked up in the tileset instead, because the
-## imported grid still describes the block the cartridge shipped.
+## The raw permission byte at a walk cell: the imported grid, unless a
+## changeblock replaced the block, which the tileset answers instead.
 func collision_code_at(cell: Vector2i) -> int:
 	if current_map == null or current_tileset == null:
 		return -1
@@ -4019,6 +4090,99 @@ func gen1_last_map() -> int:
 	return _gen1_last_map
 
 
+## `SPRITE_FACING_*` for the player's facing: the row index four apart, and
+## the struct byte `UpdatePlayerSprite` has not rewritten on a turn's own pass.
+func gen1_player_facing() -> int:
+	return player_drawn_facing() * 4
+
+
+## What `SpawnPikachu_` reads off the player. `wYCoord` is the cell a step is
+## leaving until `_AdvancePlayerSprite` lands it, `wWalkCounter` is zero until
+## `.noCollision` has spent a pass, and the screen it measures pixels from has
+## scrolled by what the step has spent.
+func gen1_pikachu_view(font_loaded: bool) -> Gen1Pikachu.View:
+	var view := Gen1Pikachu.View.new()
+	var in_flight: bool = _player_step_passes_remaining > 0
+	var unspent: bool = _player_step_passes_remaining == _player_step_passes_total
+	view.cell = player_cell - _player_step_direction if in_flight else player_cell
+	## `HandleLedges` is two simulated steps, and `wYCoord` lands on the ledge
+	## cell between them.
+	if in_flight and _player_jumping \
+		and _player_step_passes_remaining * 2 <= _player_step_passes_total:
+		view.cell = player_cell - _player_step_direction / 2
+	view.facing = gen1_player_facing()
+	view.walk_counter = 0 if unspent else _player_step_passes_remaining
+	if in_flight and not unspent and _player_step_passes_total > 0:
+		## The hop's vector is already two cells long.
+		view.step_pixels = _player_step_direction * (
+			(_player_step_passes_total - _player_step_passes_remaining)
+			* CELL_PIXELS / _player_step_passes_total
+		)
+	view.riding = movement_mode != MOVEMENT_WALK
+	view.biking = movement_mode == MOVEMENT_BIKE
+	view.font_loaded = font_loaded
+	view.spinning = _player_step_kind in Gen2WorldMovement.SPINNING_KINDS
+	view.ledge = in_flight and _player_jumping
+	view.player_image = player_drawn_facing() * 4 | player_walk_frame()
+	return view
+
+
+## Slot fifteen's turn in `_UpdateSprites`, once an overworld pass.
+func advance_gen1_pikachu_pass(random: RandomNumberGenerator, font_loaded: bool) -> bool:
+	if pikachu == null or random == null:
+		return false
+	if pikachu.movement_running():
+		pikachu.advance_movement_pass(gen1_pikachu_view(font_loaded))
+		return true
+	return pikachu.advance_pass(gen1_pikachu_view(font_loaded), random)
+
+
+func gen1_pikachu_movement_running() -> bool:
+	return pikachu != null and pikachu.movement_running()
+
+
+## `ApplyOutOfBattlePoisonDamage`'s two Pikachu lines behind a counted step.
+func gen1_pikachu_step(random: RandomNumberGenerator) -> void:
+	if pikachu == null or random == null or _gen1_pikachu_script_active():
+		return
+	pikachu.count_step((random.randi() & 1) != 0)
+
+
+## `wPikachuMapScriptFlags`' active bit, a map's own hold on the follower.
+func _gen1_pikachu_script_active() -> bool:
+	return bool(_gen1_volatile.get("pikachu_script_active", false))
+
+
+## `Func_151d`: the landing animation has ended.
+func gen1_pikachu_landed() -> void:
+	if pikachu != null:
+		pikachu.set_hidden(false)
+
+
+## The follower as the renderer draws an actor, or empty while slot fifteen's
+## image index is `$ff`.
+## `EmotionBubble` reads the slot's pixels whether or not its image is drawn, so
+## a hidden follower still carries its bubble.
+func gen1_pikachu_sprite() -> Dictionary:
+	if pikachu == null or data == null or (not pikachu.visible() and pikachu.emote_frames <= 0):
+		return {}
+	var sprite: Gen2WorldSprite = data.overworld_sprite(Gen2WorldSprite.SPRITE_PIKACHU_FOLLOWER)
+	if sprite == null:
+		return {}
+	var height: int = pikachu.movement_height()
+	return {
+		"sprite": sprite,
+		"hidden": not pikachu.visible(),
+		"position_cells": Vector2(pikachu.pixel + Vector2i(0, height)) / float(CELL_PIXELS),
+		"facing": pikachu.drawn_facing(),
+		"frame": pikachu.drawn_frame(),
+		"grass_cell": pikachu.grass_cell(),
+		"emote": pikachu.emote if pikachu.emote_frames > 0 else Gen2WorldActors.EMOTE_NONE,
+		"height_offset_pixels": float(height),
+		"shadow": pikachu.movement_shadow(),
+	}
+
+
 func gen1_last_blackout_map() -> int:
 	return _gen1_last_blackout_map
 
@@ -4033,11 +4197,9 @@ func _gen1_apply_map_pal_offset(target_map: Gen2WorldMap) -> void:
 		gen1_map_pal_offset = 0
 
 
-## `CheckForHiddenEventOrBookshelfOrCardKeyDoor` runs on the A press ahead of
-## everything, and finding a row spends it even when the routine prints nothing.
-## A card key door is the one thing it finds that does not: `PrintBookshelfText`'s
-## `.noMatch` leaves `hItemAlreadyFound` at $ff, so the door's box opens and the
-## sign and sprite check still runs behind it.
+## `CheckForHiddenEventOrBookshelfOrCardKeyDoor` runs first on A and a row
+## found spends the press; a card key door alone leaves `hItemAlreadyFound` at
+## $ff, so the sign and sprite check still runs.
 func _gen1_interact() -> Array:
 	if current_map == null:
 		return []
@@ -4078,6 +4240,10 @@ func _gen1_sign_or_sprite() -> Array:
 	if event.is_empty():
 		event = _gen1_event_at(object_facing_cell(), &"objects")
 		_gen1_last_sprite_index = int(event.get("object_index", -1))
+	if event.is_empty() and pikachu != null \
+		and pikachu.stands_in_front(player_cell, facing_direction()):
+		pikachu.status |= Gen1Pikachu.STATUS_FACE_PLAYER
+		return _gen1_pikachu_talk_steps()
 	var text_id: int = int(event.get("text", 0))
 	var row: Dictionary = gen1_text_at(text_id)
 	var steps: Array = _gen1_trainer_steps(row, event)
@@ -4842,6 +5008,168 @@ func _gen1_node_random_bit(node: Dictionary, steps: Array, run: Dictionary) -> b
 
 func _gen1_node_talking_to(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	return _gen1_resolve_side(node, _gen1_last_sprite_index == int(node["object"]), steps, run)
+
+
+## Red and Blue have no follower, so every fact about it reads false there.
+func _gen1_node_pikachu_test(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var taken: bool = false
+	if pikachu != null:
+		match String(node["what"]):
+			"starter":
+				taken = pikachu.starter_alive()
+			"surfing":
+				taken = pikachu.surfing()
+			"following":
+				taken = pikachu.following()
+			"ailing":
+				taken = pikachu.ailing
+			"happiness":
+				taken = pikachu.happiness < int(node["below"])
+	return _gen1_resolve_side(node, taken, steps, run)
+
+
+func _gen1_node_pikachu(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"pikachu", "what": String(node["what"]),
+		"value": node.get("value", 0)})
+	return true
+
+
+## `ApplyPikachuMovementData` holds the script until its last command, and
+## `TryApplyPikachuMovementData` runs it only for a walking follower already
+## facing the way the row names.
+func _gen1_node_pikachu_movement(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	if node.has("facing") and (pikachu == null or not pikachu.starter_alive()
+		or movement_mode != MOVEMENT_WALK
+		or pikachu.facing_toward_player(player_cell) != int(node["facing"])):
+		return true
+	steps.append({"type": &"pikachu_movement", "bytes": PackedByteArray(node["bytes"]),
+		"refresh": bool(node.get("refresh", false))})
+	steps.append({"type": &"wait", "values": {
+		"type": &"wait", "wait": Gen2WorldScriptRunner.WAIT_MOVEMENT,
+	}})
+	return true
+
+
+func _gen1_node_pikachu_talk(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append_array(_gen1_pikachu_talk_steps())
+	return true
+
+
+## `TalkToPikachu`: `MapSpecificPikachuExpression`'s named cases first, the
+## mood and happiness tables last.
+func _gen1_pikachu_emotion() -> int:
+	var map: int = current_map.number if current_map != null else -1
+	if map == Gen1Layout.POKEMON_FAN_CLUB:
+		if not _gen1_pikachu_script_active():
+			return Gen1Layout.PIKACHU_EMOTION_FAN_CLUB_SEEL
+		if not pikachu.following():
+			return Gen1Layout.PIKACHU_EMOTION_FAN_CLUB_LEFT
+	elif map == Gen1Layout.PEWTER_POKECENTER and not pikachu.following():
+		return Gen1Layout.PIKACHU_EMOTION_PEWTER_ASLEEP
+	elif map == Gen1Layout.BILLS_HOUSE and not pikachu.following():
+		return _gen1_bills_house_emotion()
+	if pikachu.asleep:
+		return Gen1Layout.PIKACHU_EMOTION_ASLEEP
+	if pikachu.ailing:
+		return Gen1Layout.PIKACHU_EMOTION_AILING
+	if map >= Gen1Layout.POKEMON_TOWER_1F and map <= Gen1Layout.POKEMON_TOWER_7F:
+		return Gen1Layout.PIKACHU_EMOTION_TOWER
+	if pikachu.emotion_modifier > 0:
+		return Gen1Layout.PIKACHU_MODIFIER_EMOTIONS[pikachu.emotion_modifier - 1]
+	return pikachu.mood_emotion(data.gen1_pikachu())
+
+
+## `BillsHouse_CheckPikachuEmotion`, off `wBillsHouseCurScript`.
+func _gen1_bills_house_emotion() -> int:
+	var layout: Dictionary = Gen1Layout.for_id(data.id)
+	var script: int = state.gen1_map_script(
+		int(layout["bills_house_script"]) - int(layout["map_scripts"])
+	) if state != null else 0
+	if script == Gen1Layout.BILLS_HOUSE_SCRIPT_HEALED:
+		return Gen1Layout.PIKACHU_EMOTION_BILL_HEALED
+	if script == Gen1Layout.BILLS_HOUSE_SCRIPT_ARRIVED:
+		return Gen1Layout.PIKACHU_EMOTION_BILL_ARRIVED
+	if not event_flag_active(Gen1Layout.MET_BILL_2_EVENT):
+		return Gen1Layout.PIKACHU_EMOTION_BILL_UNMET
+	return Gen1Layout.PIKACHU_EMOTION_BILL_MET
+
+
+## `DoStarterPikachuEmotions`: one emotion's commands as steps. A bubble and a
+## redraw are counted waits, a movement waits on the follower, and the clip and
+## the portrait go out as events for whoever draws them.
+func _gen1_pikachu_talk_steps() -> Array:
+	var steps: Array = []
+	if pikachu == null or data == null:
+		return steps
+	var emotions: Array = data.gen1_pikachu().get("emotions", [])
+	var index: int = _gen1_pikachu_emotion()
+	if index < 0 or index >= emotions.size():
+		return steps
+	steps.append(_gen1_wait_step(&"text_init", Gen1Layout.TEXT_INIT_FRAMES))
+	for row: Dictionary in emotions[index]:
+		match String(row["cmd"]):
+			"text":
+				steps.append({"type": &"text", "text": String(row["text"])})
+			"emote":
+				steps.append({"type": &"pikachu", "what": "emote", "value": int(row["value"])})
+				steps.append(_gen1_wait_step(&"emote", Gen1Layout.EMOTE_FRAMES))
+			"movement":
+				_gen1_node_pikachu_movement({"bytes": row["bytes"]}, steps, {})
+			"delay":
+				steps.append(_gen1_wait_step(&"pikachu_delay", int(row["value"])))
+			"subcmd":
+				steps.append_array(_gen1_pikachu_subcommand_steps(int(row["value"])))
+			"pikapic":
+				steps.append(_gen1_wait_step(&"pikapic", WAIT_UNTIL_FINISHED,
+					{"index": int(row["value"])}))
+			"pcm":
+				steps.append(_gen1_wait_step(&"pikachu_cry",
+					_gen1_pikachu_cry_frames(int(row["value"])), {"index": int(row["value"])}))
+			_:
+				steps.append({"type": &"pikachu", "what": String(row["cmd"]),
+					"value": int(row.get("value", 0))})
+	return steps
+
+
+## `PlayPikachuSoundClip`: three `DelayFrame`s, then the clip's one-bit samples
+## with interrupts off, at the rate measured on the cartridge. Nothing plays
+## the clip here yet; the frames it holds the map for are spent regardless.
+func _gen1_pikachu_cry_frames(index: int) -> int:
+	var cries: Array = data.gen1_pikachu().get("cries", []) if data != null else []
+	if index < 0 or index >= cries.size():
+		return 0
+	return Gen1Layout.PIKACHU_CRY_LEAD_FRAMES \
+		+ ceili(float(int(cries[index]) * 8) / float(Gen1Layout.PIKACHU_CRY_SAMPLES_PER_FRAME))
+
+
+## `.Subcommands`: the redraw spends `Delay3`, and the three map checks put the
+## follower back behind the player.
+func _gen1_pikachu_subcommand_steps(which: int) -> Array:
+	if which == Gen1Layout.PIKACHU_SUBCMD_REDRAW:
+		return [_gen1_wait_step(&"pikachu_delay", Gen1Layout.PIKACHU_REDRAW_FRAMES)]
+	var maps: Dictionary = {
+		Gen1Layout.PIKACHU_SUBCMD_PEWTER: Gen1Layout.PEWTER_POKECENTER,
+		Gen1Layout.PIKACHU_SUBCMD_FAN_CLUB: Gen1Layout.POKEMON_FAN_CLUB,
+		Gen1Layout.PIKACHU_SUBCMD_BILLS: Gen1Layout.BILLS_HOUSE,
+	}
+	if not maps.has(which) or current_map == null or current_map.number != int(maps[which]):
+		return []
+	var steps: Array = [{"type": &"pikachu", "what": "following", "value": true}]
+	if which != Gen1Layout.PIKACHU_SUBCMD_BILLS:
+		steps.append({"type": &"pikachu", "what": "turn_away", "value": 0})
+	return steps
+
+
+## `Func_f1ea2`: the first row the happiness is below, the last row otherwise.
+func _gen1_node_pikachu_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var happiness: int = pikachu.happiness if pikachu != null else 0
+	var texts: Array = node["texts"]
+	var chosen: Dictionary = texts[-1]
+	for row: Dictionary in texts:
+		if int(row["below"]) > 0 and happiness < int(row["below"]):
+			chosen = row
+			break
+	return _gen1_node_text({"op": "text", "text": String(chosen["text"])}, steps, run)
 
 
 func _gen1_node_oaks_aide(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -5987,11 +6315,9 @@ func permission_for_code(code: int, tileset: Gen2WorldTileset = null) -> int:
 	)
 
 
-## The leave-side test one step owes: `GetMovementPermissions`' face mask in
-## Generation 2, and `CheckForTilePairCollisions` in Generation 1, which reads
-## the faced tile as well as the one stood on. [method step_blocked_from] is
-## the same test anchored on a cell the player is not standing on, which a
-## plan drawn from a frontier asks.
+## The leave-side test a step owes: `GetMovementPermissions`' face mask, or
+## Generation 1's `CheckForTilePairCollisions`. [method step_blocked_from] is
+## the same from another cell.
 func step_blocked_from(from: Vector2i, direction: Vector2i) -> bool:
 	return _edge_step_blocked(from, collision_code_at(from + direction), direction)
 
@@ -6008,12 +6334,9 @@ func _edge_step_blocked(from: Vector2i, to_code: int, direction: Vector2i) -> bo
 	)
 
 
-## home/map.asm's GetMovementPermissions for a player standing at [param cell]:
-## the standing code's own walled edges plus each neighbour's wall facing back,
-## profile-split per Gen2WorldCollision.tile_permissions(). A neighbour outside
-## the map answers -1, which side_wall_face_mask() treats as no wall; the
-## cartridge would read a border block there, but callers already refuse an
-## out-of-map destination before this matters.
+## home/map.asm's GetMovementPermissions at [param cell]: the standing code's
+## walled edges plus each neighbour's wall facing back, per
+## Gen2WorldCollision.tile_permissions(). Outside the map answers -1, no wall.
 func tile_permissions_at(cell: Vector2i) -> int:
 	return Gen2WorldCollision.tile_permissions(
 		collision_code_at(cell),
@@ -6075,11 +6398,8 @@ func dispatch_events(cell: Vector2i = player_cell, execute_scripts: bool = false
 	return events
 
 
-## The step path, `CheckTileEvent` (engine/overworld/events.asm): coordinate
-## events only. Background events and object scripts need `CheckAPressOW`, so
-## they belong to interact(); a walk onto a cell carrying one runs nothing.
-## dispatch_events(cell, true) is the explicit-execution call that still reaches
-## every record.
+## The step path, `CheckTileEvent`: coordinate events only. Background events
+## and objects need `CheckAPressOW` and belong to interact().
 func dispatch_script_events(cell: Vector2i = player_cell) -> Array:
 	if _active_script == null and _script_queue.is_empty():
 		var stepped: Array = []
@@ -6335,9 +6655,8 @@ func _gen1_battle_last() -> void:
 
 ## `SetLastBlackoutMap`, whose whole body is the rest-house list: healing in one
 ## of the Safari Zone's three leaves the map a blackout lands on where it was.
-## -1 is no outdoor map walked out of rather than a map id, and records nothing.
 func _gen1_record_blackout_map() -> void:
-	if current_map == null or data == null or _gen1_last_map < 0 \
+	if current_map == null or data == null \
 		or data.gen1_special_warp_list("rest_houses").has(current_map.number):
 		return
 	_gen1_last_blackout_map = _gen1_last_map
@@ -6461,6 +6780,13 @@ func _gen1_kept(step: Dictionary, events: Array) -> bool:
 		&"byte":
 			state.set_gen1_byte(String(step["name"]), int(step["value"]))
 			return true
+		&"pikachu":
+			_gen1_pikachu_written(String(step["what"]), step["value"], events)
+			return true
+		&"pikachu_movement":
+			if pikachu != null:
+				pikachu.start_movement(step["bytes"], bool(step["refresh"]))
+			return true
 		&"text_table":
 			_gen1_text_table = int(step["table"])
 			return true
@@ -6534,9 +6860,33 @@ func _gen1_drawn(step: Dictionary, events: Array) -> bool:
 	return false
 
 
+## The follower's routines a row calls and an emotion's own commands; Red and
+## Blue have nothing to write. The clip and the portrait are events: the
+## follower does not draw either.
+func _gen1_pikachu_written(what: String, value: Variant, events: Array) -> void:
+	if pikachu == null:
+		return
+	match what:
+		"following":
+			pikachu.set_following(bool(value))
+		"drawing":
+			pikachu.set_drawing(bool(value))
+		"spawn_state":
+			pikachu.spawn_state = int(value)
+		"schedule_spawn":
+			pikachu.schedule_after_map_load(gen1_pikachu_view(false))
+		"emote":
+			pikachu.show_emote(int(value))
+		"turn_away":
+			pikachu.face_away_from(gen1_player_facing())
+
+
+## `PIKACHU_SPRITE_INDEX` is slot fifteen, past any map's own objects.
 func _gen1_show_emote(index: int, kind: int) -> void:
 	if index < 0:
 		set_player_emote(kind, true, Gen1Layout.EMOTE_FRAMES)
+	elif index == Gen1Pikachu.SPRITE_INDEX - 1 and pikachu != null:
+		pikachu.show_emote(kind)
 	elif index < objects.size():
 		(objects[index] as Gen2WorldObject).set_emote(kind, true, Gen1Layout.EMOTE_FRAMES)
 
@@ -6874,13 +7224,10 @@ func _gen1_toggle_index(object_index: int) -> int:
 	return (objects[object_index] as Gen2WorldObject).toggle_index
 
 
-## Whether the script holding the world is one that stops the map around it.
-## `ScriptEvents` runs inside `HandleMap`, and `HandleMapObjects` runs on the
-## same iteration, so a script standing in `WaitScript` or `WaitScriptMovement`
-## leaves every object that is not frozen stepping: `FreezeAllOtherObjects` is
-## what stops them, per object, and `applymovement` is its only caller. What
-## does stop the whole map is a textbox, a menu or a host screen, each of which
-## is a loop of its own that never reaches `HandleMap`.
+## Whether the script holding the world stops the map around it. `ScriptEvents`
+## runs inside `HandleMap` beside `HandleMapObjects`, so a `WaitScript` leaves
+## unfrozen objects stepping; a textbox, a menu or a host screen never reaches
+## `HandleMap` at all.
 func script_stops_the_map() -> bool:
 	return script_busy() and pending_script_wait().is_empty()
 
@@ -6968,14 +7315,10 @@ func dispatch_callbacks(callback_type: int = -1) -> Array:
 	return run_event_queue(false)
 
 
-## Runs the callbacks that belong to entering the current map. The scene calls this
-## once after opening a new or validated snapshot; map transitions already queue
-## the same callback set from `_apply_map()`. The scene script is armed only once
-## per entry: `MAPSETUP_ENTER` runs it as part of the map load, so a second call is
-## a caller dispatching twice rather than a second entry, and replaying the scene
-## would walk its `applymovement`s again, which is what put the Dragon Shrine's
-## player through the north wall. The callbacks are re-queued, since each is
-## written to run whenever the map is refreshed.
+## The callbacks that belong to entering the current map, called once after a
+## snapshot opens; `_apply_map()` queues the same set on a transition. The scene
+## script is armed once per entry, as `MAPSETUP_ENTER` runs it: replaying it
+## walked the Dragon Shrine's player through the north wall.
 func dispatch_map_entry() -> Array:
 	if current_map == null:
 		return []
@@ -6988,14 +7331,10 @@ func dispatch_map_entry() -> Array:
 	return events
 
 
-## `LoadObjectMasks`, which is what actually masks an object rather than
-## `ReadObjectEvents`: that one copies every event into `wMapObjects` without
-## looking at a flag. `MapSetupScript_Warp` runs `LoadMapAttributes`, then
-## `HandleNewMap`, whose `MAPCALLBACK_NEWMAP` is where `ToggleDecorationsVisibility`
-## sets the four `EVENT_PLAYERS_HOUSE_2F_*` flags, and only then `LoadMapObjects`,
-## which calls this. So a flag a map-entry callback writes is read *after* it is
-## written; reading it while the record is built puts the console, both dolls and
-## the big doll in the player's bedroom on a new game.
+## `LoadObjectMasks`, which masks an object where `ReadObjectEvents` copies every
+## event unread. `MapSetupScript_Warp` runs `HandleNewMap`'s `MAPCALLBACK_NEWMAP`
+## before `LoadMapObjects`, so a flag an entry callback writes is read after it:
+## reading it earlier put every decoration in the bedroom on a new game.
 func load_object_masks() -> void:
 	_object_masks_pending = false
 	for object: Gen2WorldObject in objects:
@@ -7015,11 +7354,8 @@ func interact() -> Array:
 		return _gen1_interact()
 	var target: Vector2i = facing_cell()
 	var events: Array = []
-	## TryObjectEvent runs before TryBGEvent in the cartridge event loop. Keep
-	## that order even though events_at() exposes the cache's source order.
-	## Only the object half looks across a counter: CheckFacingBGEvent and
-	## TryTileCollisionEvent both read the plain GetFacingTileCoord, which is
-	## what keeps a Pokemon Center PC on the counter itself reachable.
+	## TryObjectEvent before TryBGEvent, and only the object half looks across
+	## a counter: CheckFacingBGEvent reads the plain GetFacingTileCoord.
 	for event: Dictionary in _active_events_at(object_facing_cell()):
 		if event.get("kind", &"") == &"objects" and event.has("script"):
 			events.append(event)
@@ -7044,13 +7380,10 @@ func interact() -> Array:
 	return run_event_queue(false)
 
 
-## TryTileCollisionEvent from `.cut` on. The faced tile picks the branch, in the
-## source's order: a cut tree, then a whirlpool, then a waterfall, then a headbutt
-## tree, and `.surf` as the fallback any other tile reaches. Only the tile-shaped
-## half of each gate is answered here, because only this layer can read the map;
-## the party and the badge belong to the runner, which replays the Ask*Script.
-## `.surf` is the one branch that is silent rather than refused when its own tile
-## checks fail, so an ordinary wall produces no request at all.
+## TryTileCollisionEvent from `.cut` on, in the source's order: cut tree,
+## whirlpool, waterfall, headbutt tree, then `.surf`. Only the tile half of each
+## gate is answered here; the party and the badge are the runner's Ask*Script.
+## `.surf` is silent rather than refused, so a wall raises no request.
 func _field_move_prompt_request(cell: Vector2i) -> Dictionary:
 	if current_map == null or current_tileset == null or data == null:
 		return {}
@@ -7100,11 +7433,8 @@ func _surf_prompt_applies(cell: Vector2i) -> bool:
 	)
 
 
-## engine/events/std_collision.asm's CheckFacingTileForStdScript. Keyed by the
-## faced cell's collision code, not its tile ID despite the source's own
-## comment: GetFacingTileCoord returns wTileUp/Down/Left/Right, which
-## GetMovementPermissions fills from GetCoordTileCollision. Returns an empty
-## Dictionary when the code has no entry in TileCollisionStdScripts.
+## CheckFacingTileForStdScript, keyed by the faced cell's collision code
+## despite the source's comment: wTile* is filled from GetCoordTileCollision.
 func _tile_collision_script_request(cell: Vector2i) -> Dictionary:
 	if current_map == null or data == null:
 		return {}
@@ -7221,13 +7551,10 @@ func _resume_after(advanced: Dictionary) -> Array:
 	return results
 
 
-## Starts each queued script in turn and stops at the first one that waits for the
-## host. A warp applied while resuming a host request leaves the destination's map
-## scene pending exactly as one applied inside [method run_event_queue] does, so
-## this has to pick it up too. Boarding the S.S. Aqua is where that shows:
-## `OlivinePortSailorAtGangwayScript` warps mid-script and the ship's own
-## `FastShip1FEnterShipScript` walks the player away from the door, so dropping it
-## left the player boxed in against the sailor who blocks it.
+## Starts each queued script in turn and stops at the first that waits for the
+## host. A warp applied while resuming a request leaves the destination's scene
+## pending, as inside [method run_event_queue]: `OlivinePortSailorAtGangwayScript`
+## warps mid-script and `FastShip1FEnterShipScript` has to walk the player off the door.
 func _drain_script_queue() -> Array:
 	var results: Array = []
 	while _active_script == null:
@@ -7335,11 +7662,8 @@ func _enqueue_script_events(events: Array) -> void:
 		_enqueue_script(request)
 
 
-## ObjectEventTypeArray's `.itemball` (engine/overworld/events.asm): an item
-## ball's script pointer is not a script. The two bytes it points at are the
-## `itemball` macro's `db item, quantity`, copied into `wItemBallData`, and what
-## runs is PLAYEREVENT_ITEMBALL's FindItemInBallScript. Decoding them here is
-## what keeps the runner from parsing item data as opcodes.
+## `.itemball`: the pointer names the `itemball` macro's `db item, quantity`,
+## copied into `wItemBallData` for FindItemInBallScript, so it is decoded here.
 func _item_ball_request_for_event(event: Dictionary) -> Dictionary:
 	if event.get("kind", &"") != &"objects" or current_map == null or data == null:
 		return {}
@@ -7388,12 +7712,9 @@ func _catalogued_item(event_index: int, item: int, quantity: int) -> Dictionary:
 	return {"item": int(row["item"]), "quantity": maxi(1, int(row["quantity"]))}
 
 
-## `.itemifset`'s own record (engine/overworld/events.asm): a BGEVENT_ITEM
-## pointer is not a script either. The three bytes it points at are the
+## `.itemifset` (engine/overworld/events.asm): a BGEVENT_ITEM pointer names the
 ## `hiddenitem` macro's `dwb event, item`, copied into wHiddenItemData before
-## HiddenItemScript runs, so the flag comes first as a little-endian word and
-## the item last. Decoding them here is what keeps the runner from parsing item
-## data as opcodes, exactly as _item_ball_request_for_event() does.
+## HiddenItemScript runs, so it is decoded here rather than parsed as opcodes.
 func _hidden_item_record(event: Dictionary) -> Dictionary:
 	if data == null or current_map == null:
 		return {"ok": false, "reason": &"missing_bg_event_context"}
@@ -7538,11 +7859,8 @@ func _script_address_for_event(event: Dictionary) -> int:
 
 
 func _enqueue_script(request: Dictionary) -> void:
-	## The two queued requests with no address of their own, both of which the
-	## runner synthesizes a body for the way it does for an item ball: a
-	## field-move prompt, whose Ask*Script the source reaches through CallScript
-	## on a link-time address the pins do not resolve, and a mod's item gift,
-	## which no script anywhere makes.
+	## The two requests with no address of their own, synthesized like an item
+	## ball's: a field-move prompt and a mod's item gift.
 	if int(request.get("script", 0)) <= 0 \
 		and StringName(request.get("kind", &"")) not in [&"field_move_prompt", &"item_gift"]:
 		return
@@ -8177,13 +8495,9 @@ func _clear_transient_object_visibility_overrides() -> void:
 
 
 ## A scripted step commits its cell without a permission check: every step
-## command reaches `NormalStep` (`engine/overworld/movement.asm`), whose
-## `InitStep`/`GetNextTile` (`engine/overworld/map_objects.asm`) only compute the
-## vector, and the movement command set has no collision toggle. Walking through
-## walls is what several cutscenes are built on, the S.S. Aqua's
-## `SSAquaCaptainsCabinWarpsToGrandpasCabinMovement` among them: it crosses five
-## wall rows to carry the player from the captain's cabin into the grandpa's.
-## Only the map bounds still refuse.
+## command reaches `NormalStep`, whose `InitStep`/`GetNextTile` only compute the
+## vector. `SSAquaCaptainsCabinWarpsToGrandpasCabinMovement` crosses five wall
+## rows that way. Only the map bounds refuse.
 func _apply_player_movement(event: Dictionary) -> Array:
 	var generated: Array = []
 	var map_group: int = int(event.get("map_group", -1))
@@ -8309,11 +8623,8 @@ func _validate_script_warp(map_group: int, map_number: int, cell: Vector2i) -> D
 	return {"ok": true}
 
 
-## Applies what a script emitted before it stopped, whether it stopped for good
-## or only to pause. A pause is a resume point rather than an ending in the
-## source: `applymovement` yields the frame it has queued the stream, and the
-## object has to be walking while the script waits for it. The runner drains its
-## own event list per result, so nothing here is applied twice.
+## Applies what a script emitted before it stopped or paused: `applymovement`
+## yields the frame it queued the stream. The runner drains its list per result.
 func _apply_result_events(result: Dictionary) -> Dictionary:
 	if not result.has("events"):
 		return result
@@ -8391,14 +8702,10 @@ func _apply_script_warp(request: Dictionary) -> Dictionary:
 	}
 
 
-## Resolves and applies an ordinary warp at the current cell. The destination
-## field selects a one-based warp in the destination map, as in the original map
-## macro; an invalid target leaves this API unchanged and returns an error record.
-## Below, `CheckWarpTile`'s own answer without walking through the warp, for a
-## host that spends `MapSetupScript_Door`'s fade before the map swaps.
-## `CheckWarpTile` is `GetDestinationWarpNumber` and then `CheckDirectionalWarp`,
-## which clears carry on the four warp carpets: landing on one of those warps
-## nothing, and only [method edge_warp_ready] takes it.
+## Resolves and applies an ordinary warp at the current cell; an invalid target
+## leaves this API unchanged. Below, `CheckWarpTile`'s answer without walking
+## through: `GetDestinationWarpNumber` then `CheckDirectionalWarp`, which clears
+## carry on the four carpets, so only [method edge_warp_ready] takes those.
 func warp_pending(cell: Vector2i = player_cell) -> bool:
 	if warp_at(cell).is_empty():
 		return false
@@ -8409,11 +8716,8 @@ func warp_pending(cell: Vector2i = player_cell) -> bool:
 		and not Gen2WorldCollision.is_directional_warp(code)
 
 
-## `CheckWarpsCollision`, which `CollisionCheckOnLand`'s own carry reaches: a
-## step blocked while standing on a warp still takes it when `ExtraWarpCheck`
-## passes, and that check alone, where a landed step takes a door tile as well.
-## Generation 1's alone, and the only way out of a map whose exit is a warp at
-## its own edge.
+## `CheckWarpsCollision`, reached by `CollisionCheckOnLand`'s carry: a blocked
+## step on a warp takes it under `ExtraWarpCheck` alone. Generation 1's.
 func blocked_step_warps() -> bool:
 	return _gen1 and current_map != null and not warp_at(player_cell).is_empty() \
 		and _gen1_extra_warp_check(player_cell)
@@ -8434,13 +8738,10 @@ func edge_warp_ready(direction: Vector2i) -> bool:
 	return not warp_at(player_cell).is_empty()
 
 
-## `LoadTileBlockMap` fills the three blocks past every edge with the map's own
-## border block, so `_GetTileAndCoordsInFrontOfPlayer` reads that rather than
-## nothing at the edge. -1 stays -1 where the border block is the $FF naming none.
-## `TryDoWildEncounter`'s own gate, which reads the tile a cell draws rather than
-## a permission byte: `wGrassTile` takes the grass rate, $14 the water rate, and
-## an indoor map takes the grass rate anywhere but Viridian Forest and the Safari
-## Zone. Zero is a cell no wild can be met on.
+## `LoadTileBlockMap` fills the three blocks past every edge with the border
+## block, which `_GetTileAndCoordsInFrontOfPlayer` reads there; $FF stays -1.
+## Below, `TryDoWildEncounter`'s gate on the drawn tile: `wGrassTile` the grass
+## rate, $14 the water rate, an indoor map grass anywhere but the Forest and Safari.
 func _gen1_encounter_rate_at(cell: Vector2i) -> int:
 	if current_map == null or current_tileset == null or data == null:
 		return 0
@@ -8468,6 +8769,22 @@ func _gen1_encounter_rate(method: StringName) -> int:
 	return int(data.world_encounter(
 		method, current_map.group, current_map.number
 	).get("rate", 0))
+
+
+## What `OAM_PRIO` is answered from: `GetTileCollision`'s grass code, or on
+## Generation 1 `wGrassTile` against the cell's bottom left tile, the
+## `lda_coord 8, 9` `UpdatePlayerSprite` and `.GetNPCCurrentTile` both read.
+func in_grass(cell: Vector2i) -> bool:
+	if current_map == null:
+		return false
+	if not _gen1:
+		return Gen2WorldCollision.is_grass(gen2_code_at(cell))
+	return current_tileset != null and current_tileset.grass_tile != Gen1Layout.TILESET_NO_TILE \
+		and _gen1_tile_drawn_at(cell) == current_tileset.grass_tile
+
+
+func _gen1_grass_under(cell: Vector2i) -> bool:
+	return in_grass(cell)
 
 
 ## The bottom right tile of the quarter block [param cell] is, which only
@@ -8583,64 +8900,18 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 		target_number = _gen1_last_map
 	var target_map: Gen2WorldMap = data.world_map(target_group, target_number) if data != null else null
 	if target_map == null:
-		return {
-			"ok": false,
-			"kind": &"warp",
-			"reason": &"missing_map",
-			"from_map": map_id(),
-			"from_cell": cell,
-		}
-
-	## `CopyWarpData`'s own `cp -1`: a warp whose destination byte is -1 names no
-	## warp and no map of its own, and the three bytes at `wBackupWarpNumber` are
-	## read contiguously in its place. The map named beside such a byte is a
-	## placeholder (POKECENTER_2F names itself), so it is replaced too.
-	## `warp_event` writes `\4 - 1`, so Generation 1's stored byte already indexes
-	## the destination map's warps where Generation 2's counts from one.
-	var destination_index: int = int(source_warp.get("destination", 0))
-	if not _gen1:
-		destination_index -= 1
-	if not _gen1 and int(source_warp.get("destination", 0)) == BACKUP_WARP_DESTINATION:
-		if backup_warp.is_empty():
-			return {
-				"ok": false,
-				"kind": &"warp",
-				"reason": &"no_backup_warp",
-				"from_map": map_id(),
-				"from_cell": cell,
-			}
-		destination_index = int(backup_warp["warp"]) - 1
-		target_group = int(backup_warp["map_group"])
-		target_number = int(backup_warp["map_number"])
-		target_map = data.world_map(target_group, target_number) if data != null else null
-		if target_map == null:
-			return {
-				"ok": false,
-				"kind": &"warp",
-				"reason": &"missing_map",
-				"from_map": map_id(),
-				"from_cell": cell,
-			}
+		return _warp_refusal(cell, &"missing_map")
+	var resolved: Dictionary = _warp_destination(source_warp, target_map)
+	if resolved.has("reason"):
+		return _warp_refusal(cell, StringName(resolved["reason"]))
+	target_map = resolved["map"]
+	var destination_index: int = int(resolved["index"])
 	var target_warps: Array = target_map.events.get("warps", [])
 	if destination_index < 0 or destination_index >= target_warps.size():
-		return {
-			"ok": false,
-			"kind": &"warp",
-			"reason": &"missing_destination",
-			"from_map": map_id(),
-			"from_cell": cell,
-		}
-
+		return _warp_refusal(cell, &"missing_destination")
 	var target_tileset: Gen2WorldTileset = data.world_tileset(target_map.tileset) if data != null else null
 	if target_tileset == null:
-		return {
-			"ok": false,
-			"kind": &"warp",
-			"reason": &"missing_tileset",
-			"from_map": map_id(),
-			"from_cell": cell,
-		}
-
+		return _warp_refusal(cell, &"missing_tileset")
 	var target_warp: Dictionary = (target_warps[destination_index] as Dictionary).duplicate(true)
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = cell
@@ -8659,6 +8930,13 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	# train name DOOR, FALL and TRAIN, which are one setup-script body.
 	var landing: Vector2i = _warp_landing_cell(target_map, target_warp, cell)
 	_gen1_warped_from = {"warp": maxi(warp_index_at(cell) - 1, 0), "map": from_map.y}
+	_gen1_standing_on_door = _gen1
+	if pikachu != null:
+		pikachu.on_warp(
+			Gen1Layout.is_outside_tileset(current_map.tileset),
+			int(source_warp.get("map_number", -1)) == Gen1Layout.WARP_TO_LAST_MAP,
+			target_number, current_map.number, gen1_player_facing(),
+		)
 	_apply_map(target_map, target_tileset, landing, false, warp_index_at(cell), MAP_ENTRY_DOOR)
 	_gen1_destination_warp = destination_index
 	return {
@@ -8675,13 +8953,37 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	}
 
 
-## Resolves the source connection for a cardinal step beyond the current map. The
-## stored offsets are the signed cell offsets the cartridge's connection macro
-## generates, and no map mutation occurs when the target is invalid. Below, where
-## a step would land, resolved without moving anyone, and every refusal
-## `try_connection()` reports. A caller planning a walk asks that rather than
-## testing the edge coordinate, because a connection spans only part of its edge:
-## Route 8 is forty cells wide and its east connection covers nine of them.
+func _warp_refusal(cell: Vector2i, reason: StringName) -> Dictionary:
+	return {
+		"ok": false, "kind": &"warp", "reason": reason, "from_map": map_id(), "from_cell": cell,
+	}
+
+
+## `CopyWarpData`'s own `cp -1`: a warp whose destination byte is -1 names no
+## warp and no map of its own, and the three bytes at `wBackupWarpNumber` are
+## read contiguously in its place. The map named beside such a byte is a
+## placeholder (POKECENTER_2F names itself), so it is replaced too.
+## `warp_event` writes `\4 - 1`, so Generation 1's stored byte already indexes
+## the destination map's warps where Generation 2's counts from one.
+func _warp_destination(source_warp: Dictionary, target_map: Gen2WorldMap) -> Dictionary:
+	var index: int = int(source_warp.get("destination", 0))
+	if _gen1:
+		return {"index": index, "map": target_map}
+	if index != BACKUP_WARP_DESTINATION:
+		return {"index": index - 1, "map": target_map}
+	if backup_warp.is_empty():
+		return {"reason": &"no_backup_warp"}
+	var backup_map: Gen2WorldMap = data.world_map(
+		int(backup_warp["map_group"]), int(backup_warp["map_number"])
+	) if data != null else null
+	if backup_map == null:
+		return {"reason": &"missing_map"}
+	return {"index": int(backup_warp["warp"]) - 1, "map": backup_map}
+
+
+## The source connection for a cardinal step off the map, with the connection
+## macro's signed cell offsets. Below, where a step would land without moving
+## anyone: a connection spans part of its edge, Route 8's east one nine of forty cells.
 func connection_target(cell: Vector2i, direction: Vector2i) -> Dictionary:
 	var direction_name: String = _direction_name(direction)
 	if direction_name.is_empty() or current_map == null or data == null:
@@ -8726,12 +9028,9 @@ func connection_target(cell: Vector2i, direction: Vector2i) -> Dictionary:
 		or target_cell.x >= target_map.collision_width \
 		or target_cell.y >= target_map.collision_height:
 		return {"ok": false, "reason": &"invalid_target_cell", "direction": direction_name}
-	## A connected step is still a step. The cartridge copies the connection strip
-	## into the same block buffer the current map lives in, so `GetTileCollision`
-	## reads the neighbour's real collision and `.CheckLandPerms` refuses a wall
-	## across an edge exactly as it does inside one. Without this the edge itself
-	## was the only test, and Route 6's northwest corner walked into (10,35) of
-	## Saffron City, a wall cell with no walkable neighbour at all.
+	## The connection strip shares the current map's block buffer, so
+	## `.CheckLandPerms` refuses a wall across an edge as inside one: Route 6's
+	## northwest corner used to walk into Saffron's (10,35).
 	if not _connection_step_allows(target_map, target_cell, direction):
 		return {"ok": false, "reason": &"blocked_target_cell", "direction": direction_name}
 	return {
@@ -8777,16 +9076,23 @@ func try_connection(direction: Vector2i) -> Dictionary:
 
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
+	## `.loadNewMap` runs on the pass the step lands, with the follower's
+	## coordinates rewritten around the player then; the step is begun here, so
+	## slot fifteen is carried into the new map's coordinates now and placed
+	## when the step lands.
+	if pikachu != null:
+		pikachu.on_connection()
+		var shift: Vector2i = target_cell - (from_cell + direction)
+		pikachu.cell += shift
+		pikachu.pixel += shift * CELL_PIXELS
+	_gen1_connection_landing = _gen1
 	_apply_map(
 		target_map, target_tileset, target_cell, false, 0, MAP_ENTRY_CONNECTION
 	)
-	## `CheckMovingOffEdgeOfMap` answers a step that has ALREADY landed: the
-	## player walks the whole step onto the cell the connection strip's blocks
-	## are drawn in, and only then does `EdgeWarpScript`'s `MAPSETUP_CONNECTION`
-	## re-anchor the map around it. So a crossing costs exactly the frames any
-	## other step does. `_apply_map` clears the step it inherits, so the step is
-	## begun after it; the cell it is drawn walking out of is the new map's own
-	## connection strip, which is the same picture the old map's edge was.
+	## `CheckMovingOffEdgeOfMap` answers a step that has already landed on the
+	## connection strip, and `MAPSETUP_CONNECTION` re-anchors the map after: a
+	## crossing costs a step's frames. `_apply_map` clears the inherited step, so
+	## it is begun after it, out of the new map's own strip.
 	player_facing = facing_for_direction(direction)
 	_do_step(direction)
 	_start_player_step(direction, _step_frames_for_movement())
@@ -8851,14 +9157,9 @@ func _step_permission_allows(cell: Vector2i, direction: Vector2i) -> bool:
 	return permission == Gen2WorldCollision.LAND_TILE
 
 
-## [param direction] matches CanObjectMoveInDirection's CanObjectLeaveTile
-## (moving's own cell) and WillObjectBumpIntoTile (the destination) side-wall
-## checks; Vector2i.ZERO skips them for callers that only want the destination
-## permission and occupancy. A swimming object wants the opposite permission:
-## CanObjectMoveInDirection branches on OBJECT_PALETTE's SWIMMING bit into
-## WillObjectBumpIntoLand, which refuses anything but WATER_TILE, where the
-## not-swimming branch refuses anything but LAND_TILE. Everything after that
-## branch is shared, so only the permission differs.
+## [param direction] runs CanObjectMoveInDirection's CanObjectLeaveTile and
+## WillObjectBumpIntoTile side-wall checks; Vector2i.ZERO skips them. A swimming
+## object takes WillObjectBumpIntoLand, WATER_TILE where the rest want LAND_TILE.
 func can_object_walk_to(
 	cell: Vector2i, moving: Gen2WorldObject, direction: Vector2i = Vector2i.ZERO
 ) -> bool:
@@ -8928,11 +9229,8 @@ func _object_landing_cells(
 	return cells
 
 
-## Advances the movement templates whose source behavior is data-driven in this
-## slice. Scripted movement is executed by the script runner, while followers
-## advance after each successful player step.
-## One decision per eligible object per call. A caller wanting the source's
-## pacing uses advance_object_steps_pass(), which spends the durations.
+## One movement decision per eligible object per call; the source's pacing is
+## advance_object_steps_pass().
 func advance_objects(random: RandomNumberGenerator) -> int:
 	var moved: int = 0
 	for object: Gen2WorldObject in objects:
@@ -9074,13 +9372,10 @@ func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 	return changed
 
 
-## Drains the presentation trail an `applymovement` left, and nothing else.
-## Separate from [method advance_object_steps_pass] because a caller stops
-## calling that while a script runs, which is when a stream needs drawing. No
-## cell is written: every one the stream names committed when it was applied.
-## Below, `FreezeAllOtherObjects`: `ApplyMovement` freezes every object with a
-## sprite and clears the bit on the one it is about to move, and
-## `UnfreezeFollowerObject` behind it keeps a `follow` pair walking together.
+## Drains the presentation trail an `applymovement` left, apart from
+## [method advance_object_steps_pass] because a script stops that one. No cell
+## is written. Below, `FreezeAllOtherObjects` and the `UnfreezeFollowerObject`
+## that keeps a `follow` pair walking.
 func freeze_all_other_objects(moving_index: int) -> void:
 	for slot: int in objects.size():
 		var object: Gen2WorldObject = objects[slot]
@@ -9122,12 +9417,9 @@ func advance_scripted_steps_pass() -> bool:
 
 
 ## Spends the frames a script is waiting on and resumes it the frame its wait
-## ends, returning whatever that produced.
-## The two waits are `ScriptEvents`'s own: SCRIPT_WAIT_MOVEMENT, which ends when
-## the stream an `applymovement` started has been drawn, and the counted delay
-## `pause`, `wait`, `deactivatefacing` and `showemote` spend. A host calls this
-## once per frame beside [method advance_scripted_steps_pass], which is what
-## draws the movement the first one waits for.
+## ends: `ScriptEvents`'s SCRIPT_WAIT_MOVEMENT and the counted delay `pause`,
+## `wait`, `deactivatefacing` and `showemote` spend. Once per frame beside
+## [method advance_scripted_steps_pass].
 func advance_script_wait_frame() -> Array:
 	var wait: Dictionary = pending_script_wait()
 	if wait.is_empty():
@@ -9137,6 +9429,11 @@ func advance_script_wait_frame() -> Array:
 		if scripted_movement_in_progress():
 			return []
 		return _complete_script_wait()
+	if int(wait.get("frames", 0)) == WAIT_UNTIL_FINISHED:
+		if not _presentation_finished:
+			return []
+		_presentation_finished = false
+		return _complete_script_wait()
 	if _script_wait_frames < 0:
 		_script_wait_frames = maxi(0, int(wait.get("frames", 0)))
 	if _script_wait_frames > 0:
@@ -9144,6 +9441,15 @@ func advance_script_wait_frame() -> Array:
 	if _script_wait_frames > 0:
 		return []
 	return _complete_script_wait()
+
+
+## A presentation wait with no count of its own, ended by the host that drew it.
+const WAIT_UNTIL_FINISHED: int = -1
+var _presentation_finished: bool = false
+
+
+func finish_presentation() -> void:
+	_presentation_finished = true
 
 
 ## How many frames of the counted wait are left, or -1 when none is running or
@@ -9156,7 +9462,8 @@ func script_wait_remaining() -> int:
 ## wStateFlags' SCRIPTED_MOVEMENT_STATE_F: one flag for all of them, cleared by
 ## whichever stream reaches its own `step_end`.
 func scripted_movement_in_progress() -> bool:
-	return gen1_player_movement_running() or gen1_object_movement_running()
+	return gen1_player_movement_running() or gen1_object_movement_running() \
+		or gen1_pikachu_movement_running()
 
 
 ## Whether this world is a Generation 1 one, which is what says the map has a
@@ -9218,11 +9525,8 @@ func advance_script_presentation_frame() -> Array:
 	return advance_script_wait_frame()
 
 
-## Spends whole waits at the hardware frame rate until the script is no longer
-## standing in one, and returns what resuming it produced last. The entry point
-## for a headless caller that has nothing to draw; [param frame_limit] bounds a
-## wait nothing can end rather than hanging on it, so a caller checks
-## [method pending_script_wait] afterwards to tell a spent wait from a stuck one.
+## Spends whole waits at the frame rate for a headless caller; [param frame_limit]
+## bounds one nothing can end, so [method pending_script_wait] tells the two apart.
 func finish_script_waits(frame_limit: int = 1024) -> Array:
 	var results: Array = []
 	for _frame: int in frame_limit:
@@ -9244,12 +9548,9 @@ func _remember_object_position(object: Gen2WorldObject) -> void:
 	_object_facing_overrides[key] = object.facing
 
 
-## `StartFollow` runs `SetLeaderIfVisible` first and returns on its carry, so a
-## leader that is not on the map leaves the pair that was already following
-## alone; only `SetFollowerIfVisible` drops it, through the `ResetFollower` it
-## opens with. `FollowNotExact` additionally places the follower beside the
-## leader at once, taking the X axis first
-## (engine/overworld/map_objects.asm, engine/overworld/player_object.asm).
+## `StartFollow` returns on `SetLeaderIfVisible`'s carry, so an absent leader
+## leaves the old pair alone; `SetFollowerIfVisible`'s `ResetFollower` drops it.
+## `FollowNotExact` also places the follower beside the leader, X axis first.
 func _start_object_follow(event: Dictionary) -> void:
 	if current_map == null:
 		return
@@ -9296,14 +9597,10 @@ func _follow_object_is_visible(object_index: int) -> bool:
 	return object.active and not object.deleted
 
 
-## Every follower of [param leader_index] steps into the cell that leader has just
-## left. `follow` names the leader first and the follower second, and the follower
-## may be the player, so this is driven by an object's scripted step as well as by
-## a player one; [param leader_index] is -1 for the player. Follower steps commit
-## on the map bounds alone, for the same reason a scripted step and a trainer
-## approach do: MovementFunction_Follow is HandleMovementData over the queued
-## leader commands, so every one of them lands in NormalStep and never reaches
-## CanObjectMoveInDirection.
+## Every follower of [param leader_index] (-1 the player) steps into the cell
+## the leader just left. MovementFunction_Follow is HandleMovementData over the
+## queued leader commands, so a follower step lands in NormalStep and commits on
+## the map bounds alone.
 func _advance_followers(
 	leader_index: int, leader_from_cell: Vector2i, passes: int = STEP_PASSES_WALK
 ) -> void:
@@ -9367,12 +9664,9 @@ func _step_follower(
 	var destination: Vector2i = follower_cell + direction
 	if not _cell_in_bounds(destination):
 		return
-	# The leader's own step duration, not the slower wandering one:
-	# QueueFollowerFirstStep queues `movement_step` and the queue after it holds
-	# the leader's own command bytes. A running player leaves a follower on the
-	# walk row a cell behind every step. The facing rides that queued step, since
-	# a whole stream queues in one call and MovementFunction_Follow turns a
-	# follower as each step begins rather than all at once.
+	# QueueFollowerFirstStep queues the leader's own command bytes, so a running
+	# player leaves a follower on the walk row; MovementFunction_Follow turns the
+	# follower as each queued step begins.
 	if follower == null:
 		player_cell = destination
 		_queue_player_step(direction, passes, false, direction)
@@ -9386,14 +9680,10 @@ func _step_follower(
 	_object_facing_overrides[override_key] = facing_for_direction(direction)
 
 
-## Moves one cell or enters a neighboring map when the step leaves a connected map
-## edge. Below, `DoPlayerMovement`, which is what a button press reaches:
-## `.CheckTurning` and then [method move_result]'s `.TryStep`. `.CheckTurning` runs
-## before any collision check, so a direction that differs from the current facing
-## turns on the spot even into a wall and the walk happens on the next poll; it
-## guards on `wPlayerTurningDirection`, so a turn is only taken from a standstill.
-## Only the input path has it: `applymovement` never reaches `DoPlayerMovement`,
-## which is why a scripted walk turns nothing.
+## Moves one cell or crosses a connection. Below, `DoPlayerMovement`, what a
+## press reaches: `.CheckTurning` before any collision check, guarded on
+## `wPlayerTurningDirection`, then [method move_result]'s `.TryStep`.
+## `applymovement` never reaches it, so a scripted walk turns nothing.
 func player_input_move(direction: Vector2i) -> Dictionary:
 	if abs(direction.x) + abs(direction.y) != 1:
 		return {"ok": false, "kind": &"move", "reason": &"invalid_direction"}
@@ -9406,7 +9696,16 @@ func player_input_move(direction: Vector2i) -> Dictionary:
 	## only ever taken from a standstill. On ice that byte stays set between
 	## steps, which is what makes a slide change direction without spending a
 	## turn on it.
-	if forced == &"none" and _player_turning_direction == 0:
+	if _gen1:
+		if _gen1_turns_on(direction):
+			var shown: int = player_facing
+			player_facing = facing_for_direction(direction)
+			_do_step(direction)
+			_gen1_turn(shown)
+			return {
+				"ok": true, "kind": &"turn", "facing": player_facing, "cell": player_cell,
+			}
+	elif forced == &"none" and _player_turning_direction == 0:
 		var pressed_facing: int = facing_for_direction(direction)
 		if pressed_facing != player_facing:
 			player_facing = pressed_facing
@@ -9469,34 +9768,13 @@ func move_result(direction: Vector2i) -> Dictionary:
 		return _refused_move(direction, &"map_edge")
 	if forced_walk:
 		return _forced_step(direction, destination)
-	if not can_walk_to(destination, direction):
-		## .CheckNPC runs after .CheckLandPerms and before .TryJump, and its own
-		## comment says a movable boulder is treated the same as any NPC in front:
-		## both .bump. So a push starts the boulder and still refuses the player,
-		## and .bump returns without carry, so the ledge hop is tried afterwards
-		## exactly as it would have been.
-		var pushed: Dictionary = _try_push_boulder(direction, destination)
-		var hop: Dictionary = _try_ledge_hop(direction)
-		if not hop.is_empty():
-			return hop
-		if not pushed.is_empty():
-			return pushed
+	if _follower_blocks(direction):
 		return _refused_move(direction, &"blocked")
+	if not can_walk_to(destination, direction):
+		return _blocked_move(direction, destination)
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
-	## .TrySurf's .ExitWater: .GetOutOfWater restores PLAYER_NORMAL and the walking
-	## sprite before .DoStep runs, so the state is already back to walking while
-	## the step onto land is still being taken.
-	var exiting_water: bool = movement_mode == MOVEMENT_SURF \
-		and collision_permission_at(destination) == Gen2WorldCollision.LAND_TILE
-	var kind: StringName = &"move"
-	if exiting_water:
-		movement_mode = MOVEMENT_WALK
-		player_sprite_number = _walking_sprite()
-		_apply_map_music()
-		kind = &"exit_water"
-	elif movement_mode == MOVEMENT_SURF:
-		kind = &"water_move"
+	var kind: StringName = _surf_step_kind(destination)
 	## `.TryStep` reads `wPlayerTileCollision`, the cell being left, and its ice
 	## branch sits in front of `.BikeCheck`.
 	var kind_of_step: StringName = STEP_KIND_WALK
@@ -9520,12 +9798,54 @@ func move_result(direction: Vector2i) -> Dictionary:
 	}
 
 
+## `CollisionCheckOnLand`'s `hTextID` test, between the sprite collision data
+## and the tile pairs: slot fifteen is the one sprite the player's own
+## collision byte leaves out, so this is where the follower is bumped into.
+func _follower_blocks(direction: Vector2i) -> bool:
+	return pikachu != null and movement_mode != MOVEMENT_SURF \
+		and pikachu.stands_in_front(player_cell, direction) and pikachu.blocks_step(b_held)
+
+
+## .CheckNPC treats a movable boulder as any NPC: a push starts it and still
+## `.bump`s the player, without carry, so `.TryJump` still runs. Generation 1's
+## `HandleLedges` writes two simulated presses and returns through `.collision`:
+## the finding pass spends nothing and the next one begins the hop.
+func _blocked_move(direction: Vector2i, destination: Vector2i) -> Dictionary:
+	var pushed: Dictionary = _try_push_boulder(direction, destination)
+	if _gen1 and pushed.is_empty() and _hop_lands(direction):
+		_gen1_ledge_pending = direction
+		return {"ok": false, "kind": &"move", "reason": &"ledge", "bump": false, "ledge": true}
+	var hop: Dictionary = _try_ledge_hop(direction)
+	if not hop.is_empty():
+		return hop
+	if not pushed.is_empty():
+		return pushed
+	return _refused_move(direction, &"blocked")
+
+
+## .TrySurf's .ExitWater: .GetOutOfWater restores PLAYER_NORMAL and the walking
+## sprite before .DoStep runs, so the state is already back to walking while
+## the step onto land is still being taken.
+func _surf_step_kind(destination: Vector2i) -> StringName:
+	if movement_mode != MOVEMENT_SURF:
+		return &"move"
+	if collision_permission_at(destination) != Gen2WorldCollision.LAND_TILE:
+		return &"water_move"
+	movement_mode = MOVEMENT_WALK
+	player_sprite_number = _walking_sprite()
+	_apply_map_music()
+	if pikachu != null:
+		pikachu.on_surf_ended()
+	return &"exit_water"
+
+
 ## `.NotMoving`: `._WalkInPlace` clears the turning byte and `.BumpSound` plays
 ## SFX_BUMP, unless `.CheckWarp` raised `wWalkingIntoEdgeWarp`, which it does
 ## whenever the standing cell carries the carpet naming the pressed direction,
 ## warp or no warp. `.Surf` never runs `.CheckWarp`.
 func _refused_move(direction: Vector2i, reason: StringName) -> Dictionary:
-	_stand_in_place()
+	if not _gen1:
+		_stand_in_place()
 	var into_carpet: bool = movement_mode != MOVEMENT_SURF \
 		and Gen2WorldCollision.directional_warp_direction(
 			gen2_code_at(player_cell)
@@ -9555,6 +9875,14 @@ func _stand_in_place() -> void:
 ## held happens, since a press is what reaches [method player_input_move].
 func note_standing_still() -> void:
 	_stand_in_place()
+	if pikachu != null:
+		pikachu.collision_counter = 0
+	## `.noDirectionButtonsPressed`: the last direction pressed becomes the
+	## stop direction, and only if one was pressed since the last stop.
+	_gen1_turn_armed = true
+	if _gen1_moving != Vector2i.ZERO:
+		_gen1_last_stop = _gen1_moving
+		_gen1_moving = Vector2i.ZERO
 
 
 ## `CheckStandingOnIce`. `PLAYER_SKATE` is deliberately absent: no script in
@@ -9579,7 +9907,13 @@ func effective_input_direction(held: Vector2i) -> Vector2i:
 func forced_movement() -> Dictionary:
 	if current_map == null:
 		return {"kind": &"none"}
+	if _gen1_ledge_pending != Vector2i.ZERO:
+		return {"kind": &"ledge", "direction": _gen1_ledge_pending}
 	return Gen2WorldCollision.forced_action(gen2_code_at(player_cell))
+
+
+## The hop `HandleLedges` has already committed to: see [method move_result].
+var _gen1_ledge_pending: Vector2i = Vector2i.ZERO
 
 
 ## Whatever the standing tile forces, with no input: the source polls .CheckTile
@@ -9591,14 +9925,17 @@ func advance_forced_movement() -> Dictionary:
 			return _forced_turn()
 		&"walk":
 			return move_result(forced["direction"])
+		&"ledge":
+			_gen1_ledge_pending = Vector2i.ZERO
+			var hop: Dictionary = _try_ledge_hop(forced["direction"])
+			hop["sound_played"] = true
+			return hop
 	return {}
 
 
-## PLAYERMOVEMENT_FORCE_TURN, which queues Script_ForcedMovement: it reads
-## VAR_FACING and runs `step_dig 16`, `turn_in <back>`, `step_dig 16`,
-## `turn_head <back>`. `turn_in` reaches `TurningStep` and so `InitStep`, which
-## moves a cell, so a whirlpool spits the player back rather than holding them.
-## `step_dig` is `STEP_TYPE_SLEEP` with OBJECT_ACTION_SPIN: it spins in place.
+## PLAYERMOVEMENT_FORCE_TURN's Script_ForcedMovement: `step_dig 16`,
+## `turn_in <back>`, `step_dig 16`, `turn_head <back>`; `turn_in` reaches
+## `InitStep` and moves a cell, `step_dig` spins in place.
 func _forced_turn() -> Dictionary:
 	var back: Vector2i = -_direction_for_facing(player_facing)
 	var landing: Vector2i = player_cell + back
@@ -9648,13 +9985,9 @@ func _forced_step(direction: Vector2i, destination: Vector2i) -> Dictionary:
 	}
 
 
-## `.CheckStrengthBoulder`, then the boulder's own `MovementFunction_Strength`.
-## The source splits these across two frames with nothing observable between, so
-## both resolve in one call; the player is not moved and the caller still reports
-## a blocked step. Refusals in order: BIKEFLAGS_STRENGTH_ACTIVE_F, a boulder that
-## is not standing, then the destination it would take. A boulder standing on a
-## pit stops for good, which is Blackthorn Gym 2F's puzzle. [param destination]'s
-## permission is read here because `.CheckLandPerms` runs before `.CheckNPC`.
+## `.CheckStrengthBoulder` and the boulder's `MovementFunction_Strength` in one
+## call, the player still refused. Refusals in order: BIKEFLAGS_STRENGTH_ACTIVE_F,
+## a boulder not standing, then its destination; one on a pit stops for good.
 func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary:
 	if not strength_active():
 		return {}
@@ -9679,11 +10012,8 @@ func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary
 			_gen1_boulder_tried = false
 			return {}
 		return _commit_boulder_push(boulder, landing, direction)
-	# CanObjectMoveInDirection with the boulder's own flags: WONT_DELETE,
-	# FIXED_FACING, SLIDING and MOVE_ANYWHERE, palette bit STRENGTH_BOULDER and
-	# no NOCLIP or SWIMMING. That leaves the destination's land permission, both
-	# side-wall rules, and IsNPCAtCoord over the object structs, which start at
-	# the player's own. can_object_walk_to() is those four tests.
+	# CanObjectMoveInDirection with the boulder's flags leaves the land
+	# permission, both side-wall rules and IsNPCAtCoord: can_object_walk_to().
 	if not can_object_walk_to(landing, boulder, direction):
 		return {}
 	return _commit_boulder_push(boulder, landing, direction)
@@ -9744,24 +10074,13 @@ func _commit_boulder_push(
 	}
 
 
-## engine/overworld/player_movement.asm's .TryJump, reached only after an ordinary
-## step into [param direction] is blocked. Reads the collision code of the cell
-## the player already stands on, not the faced cell; on a match the player covers
-## two cells in one bounded action, bypassing collision on both the intervening
-## and landing cells as the source does. An empty Dictionary means no hop, so the
-## caller falls through to an ordinary blocked result. Surfing refuses outright,
-## since .Surf calls .TrySurf then jumps straight to .NotMoving; a landing cell
-## outside the map is refused too, as out-of-range cells always block here.
+## `.TryJump`, reached once a step is blocked: the standing cell's own code, and
+## on a match two cells crossed with no collision on either. Empty is no hop.
+## `.Surf` jumps to `.NotMoving` instead, and a landing outside the map refuses.
 func _try_ledge_hop(direction: Vector2i) -> Dictionary:
-	if movement_mode == MOVEMENT_SURF:
-		return {}
-	if not _allows_hop(direction):
+	if not _hop_lands(direction):
 		return {}
 	var landing: Vector2i = player_cell + direction * 2
-	if landing.x < 0 or landing.y < 0 \
-		or landing.x >= current_map.collision_width \
-		or landing.y >= current_map.collision_height:
-		return {}
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
 	player_cell = landing
@@ -9785,6 +10104,15 @@ func _try_ledge_hop(direction: Vector2i) -> Dictionary:
 ## passable, so the step is refused either way and the hop is the same one.
 func _allows_hop(direction: Vector2i) -> bool:
 	return allows_hop_at(player_cell, direction)
+
+
+func _hop_lands(direction: Vector2i) -> bool:
+	if movement_mode == MOVEMENT_SURF or not _allows_hop(direction):
+		return false
+	var landing: Vector2i = player_cell + direction * 2
+	return landing.x >= 0 and landing.y >= 0 \
+		and landing.x < current_map.collision_width \
+		and landing.y < current_map.collision_height
 
 
 func allows_hop_at(cell: Vector2i, direction: Vector2i) -> bool:
@@ -9959,6 +10287,7 @@ func _apply_map(
 	## `RefreshPlayerSprite` clears `wPlayerTurningDirection`, and every warp and
 	## connection reaches it, so a slide never survives a map change.
 	_stand_in_place()
+	_gen1_ledge_pending = Vector2i.ZERO
 	_block_overrides.clear()
 	block_revision += 1
 	_pending_cut.clear()
@@ -9970,30 +10299,27 @@ func _apply_map(
 	_pending_headbutt.clear()
 	_pending_rock_smash.clear()
 	_pending_flash.clear()
-	# home/map.asm's map load calls ReadObjectEvents, which calls
-	# ClearObjectStructs and re-reads every object event from ROM. moveobject
-	# writes MAPOBJECT_X_COORD/Y_COORD in that same rebuilt table, so a scripted
-	# position never survives a map load; a MAPCALLBACK_OBJECTS callback
-	# re-applies it while its condition holds. Keeping these overrides across a
-	# map change left objects where an earlier visit had put them:
-	# ElmsLabMoveElmCallback moves Elm to (3, 4) during SCENE_ELMSLAB_MEET_ELM,
-	# and the story then found nothing at his authored (5, 2) on returning.
+	# ReadObjectEvents rebuilds every object from ROM, so a moveobject position
+	# never survives a map load; a MAPCALLBACK_OBJECTS callback re-applies it.
+	# Kept across the change, ElmsLabMoveElmCallback's Elm stayed at (3, 4).
 	_object_position_overrides.clear()
 	_object_facing_overrides.clear()
 	# `appear`/`disappear` with an object event flag persist through the source's
 	# temporary map-flag reset. Flagless visibility and movement-level show/hide
 	# are live-map changes, so only those overrides expire on a map load.
 	_clear_transient_object_visibility_overrides()
-	state.reset_map_reload_flags()
+	## `EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1` to `_8` are Crystal's first eight
+	## flags; Generation 1's first eight are Pallet Town's own, the lab visit
+	## and the dex rating among them, and nothing on that cartridge clears a
+	## flag on a map load.
+	if not _gen1:
+		state.reset_map_reload_flags()
 	# EnterMap's own SetUpFiveStepWildEncounterCooldown, which is why the first
 	# steps out of a door are quiet.
 	state.set_wild_encounter_cooldown(Gen2WorldState.WILD_ENCOUNTER_COOLDOWN_STEPS)
-	# HandleNewMap's own resets: ResetBikeFlags drops a used Strength with the
-	# map, ResetFlashIfOutOfCave puts the light out on a route or a town, and
-	# HandleContinueMap behind it runs ClearCmdQueue over every written queue.
-	# Generation 1 has no such reset: `BIT_ALWAYS_ON_BIKE` outlives a map change
-	# and only the two gate scripts clear it, which is what carries a forced ride
-	# from Route 16 all the way to Route 18.
+	# HandleNewMap's resets: ResetBikeFlags, ResetFlashIfOutOfCave and
+	# HandleContinueMap's ClearCmdQueue. Generation 1 has none: `BIT_ALWAYS_ON_BIKE`
+	# outlives the map, which carries a forced ride from Route 16 to Route 18.
 	if not _gen1:
 		state.reset_bike_flags(Gen2WorldState.is_crystal_profile(data))
 	state.clear_flash_if_outdoors(target_map.environment)
@@ -10032,14 +10358,17 @@ func _apply_map(
 	_map_entry_scene_pending = true
 	_map_entry_scene_ran = false
 	_object_masks_pending = true
+	## `ClearVariablesOnEnterMap` and `LoadMapHeader`'s
+	## `SchedulePikachuSpawnForAfterText`, which every `EnterMap` reaches; a
+	## connection runs `LoadMapHeader` alone, on the landing pass.
+	if pikachu != null and entry != MAP_ENTRY_CONNECTION:
+		pikachu.step_counter = 0
+		pikachu.schedule_after_map_load(gen1_pikachu_view(false))
 
 
-## `.SaveDigWarp` and `.SetSpawn`, which run on a map change and only ever fire
-## on the way from an outdoor map into an indoor one. The dig warp is the warp
-## the player came through, so it is recorded only on the path that used one; a
-## scripted `warp` names a destination rather than a warp number and leaves the
-## last walked one standing, as `wPrevWarp` does. Mount Moon Square and the Tin
-## Tower roof are outdoor maps reached from indoor ones, refused by name.
+## `.SaveDigWarp` and `.SetSpawn`, on the way from an outdoor map into an indoor
+## one. A scripted `warp` names no warp number and leaves `wPrevWarp` standing;
+## Mount Moon Square and the Tin Tower roof are outdoor and refused by name.
 func _record_escape_points(target_map: Gen2WorldMap, from_warp: int) -> void:
 	if current_map == null or not _is_outdoor(current_map.environment) \
 			or not _is_indoor(target_map.environment):
@@ -10119,11 +10448,8 @@ func warp_to_spawn_point() -> Dictionary:
 	return {"ok": true, "kind": &"warp_to_spawn_point"}
 
 
-## The two-line tail every escape from a map shares: `farscall
-## Script_AbortBugContest` then `special WarpToSpawnPoint`, in `.FlyScript`,
-## `.UsedDigOrEscapeRopeScript`, `.TeleportScript` and `Script_Whiteout`. It
-## lives on the two warps below rather than on each of the four callers, because
-## those two warps are the whole of what an escape does here.
+## The tail every escape shares, `farscall Script_AbortBugContest` then
+## `special WarpToSpawnPoint`, on the two warps below rather than the four callers.
 func _escape_map_tail() -> void:
 	if bool(abort_bug_contest().get("aborted", false)):
 		_contest_abort_pending = true
@@ -10170,11 +10496,8 @@ func warp_to_spawn(index: int, entry: int = MAP_ENTRY_WARP) -> Dictionary:
 	}
 
 
-## `FlyFunction`'s `.TryFly`: the badge and the map, which is everything it can
-## refuse on before the region map is drawn. The choice itself belongs to
-## whoever draws that map; [method warp_to_spawn] is what answers it.
-## `MarkTownVisitedAndLoadToggleableObjects`' own first half: any map under
-## `FIRST_ROUTE_MAP` marks its bit, which is the list the fly map walks.
+## `FlyFunction`'s `.TryFly`: the badge and the map; [method warp_to_spawn]
+## answers the choice. Below, `MarkTownVisitedAndLoadToggleableObjects`' first half.
 func _gen1_mark_town_visited() -> void:
 	if not _gen1 or state == null or current_map == null \
 		or current_map.number >= Gen1Layout.FIRST_ROUTE_MAP:
@@ -10216,6 +10539,11 @@ func _gen1_fly_request() -> Dictionary:
 ## on a map the overworld tileset always draws.
 func gen1_fly_to(map: int, entry: int = MAP_ENTRY_FLY) -> Dictionary:
 	_gen1_leave_map_on_foot()
+	## `Func_1510` at the choice and `_EnterMapAnim`'s `ld a, $1` on landing; a
+	## blackout's `SpecialEnterMap` runs neither.
+	if pikachu != null and entry != MAP_ENTRY_WARP:
+		pikachu.set_hidden(true)
+		pikachu.spawn_state = Gen1Pikachu.SPAWN_RIGHT
 	var landing: Dictionary = data.gen1_fly_warp(map) if data != null else {}
 	var target_map: Gen2WorldMap = data.world_map(0, map) if not landing.is_empty() else null
 	var target_tileset: Gen2WorldTileset = data.world_tileset(target_map.tileset) \
@@ -10264,6 +10592,10 @@ func gen1_dungeon_fall() -> Dictionary:
 	if hole.is_empty():
 		return {}
 	_gen1_leave_map_on_foot()
+	## `_LeaveMapAnim`'s `Func_1510` and `.dungeonWarpAnimation`'s `ld a, $0`.
+	if pikachu != null:
+		pikachu.set_hidden(true)
+		pikachu.spawn_state = Gen1Pikachu.SPAWN_ON_PLAYER
 	var target_map: Gen2WorldMap = data.world_map(0, int(hole["map"]))
 	var target_tileset: Gen2WorldTileset = data.world_tileset(target_map.tileset) \
 		if target_map != null else null
@@ -10401,12 +10733,9 @@ func dig_request() -> Dictionary:
 	return _stage_escape(&"dig_requested", Gen2WorldFieldMove.MOVE_DIG, -1)
 
 
-## `DoPlayerMovement`'s own speed for a committed step: `STEP_BIKE` while riding,
-## which is `big_step` and so four frames, and `STEP_WALK`'s eight otherwise.
-## `.BikeCheck`'s downhill branch is not modelled: `BIKEFLAGS_DOWNHILL_F` is set
-## by nothing in either pin, so no map can ask for the slower non-down step.
-## [member run_held] is the one addition the cartridge has no branch for, and it
-## reaches the walk alone.
+## `DoPlayerMovement`'s speed: `STEP_BIKE`'s four frames riding, `STEP_WALK`'s
+## eight otherwise. `BIKEFLAGS_DOWNHILL_F` is set by nothing in either pin, and
+## [member run_held] is the one addition, reaching the walk alone.
 func _step_frames_for_movement() -> int:
 	if movement_mode == MOVEMENT_BIKE:
 		return STEP_PASSES_FAST
@@ -10462,6 +10791,9 @@ func _mount_bike() -> Dictionary:
 func _dismount_bike() -> Dictionary:
 	movement_mode = MOVEMENT_WALK
 	player_sprite_number = _walking_sprite()
+	## `ItemUseBicycle`'s `ld a, $00` into `wPikachuSpawnState` on the way off.
+	if pikachu != null:
+		pikachu.spawn_state = Gen1Pikachu.SPAWN_ON_PLAYER
 	_apply_map_music()
 	return {
 		"ok": true, "kind": &"bike_off",
@@ -10478,11 +10810,9 @@ func always_on_bike() -> bool:
 		and state.is_engine_flag_active(Gen2WorldState.always_on_bike_flag(data))
 
 
-## `CheckForceBikeOrSurf`, which `EnterMap` runs behind the map load. A cell of
-## `ForcedBikeOrSurfMaps` mounts the bike and sets `BIT_ALWAYS_ON_BIKE`, except
-## on the two Seafoam Islands floors, which force surfing and set nothing; the
-## flag already standing returns before the walk. The two gates' own per-frame
-## scripts clear it, which is the only way a forced ride ends.
+## `CheckForceBikeOrSurf` behind the map load: a `ForcedBikeOrSurfMaps` cell
+## mounts the bike and sets `BIT_ALWAYS_ON_BIKE`, the two Seafoam floors force
+## surfing instead, and only the gates' scripts clear the flag.
 func _gen1_check_force_bike_or_surf() -> void:
 	if not _gen1 or current_map == null or state == null:
 		return
@@ -10645,11 +10975,9 @@ static func _escape_rope_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"escape_rope_failed", "reason": reason}
 
 
-## `CheckForHiddenItems`, the whole of the Itemfinder: a BGEVENT_ITEM whose flag
-## is still clear, four cells up and left of the player and four down and five
-## right. Below, every BGEVENT_ITEM on the map as `{cell, item, flag, taken}`,
-## scene-free so a probe can walk a map with no game running. An event whose three
-## bytes do not decode is dropped rather than offered with a zero item.
+## `CheckForHiddenItems`, the Itemfinder: a clear BGEVENT_ITEM four cells up
+## and left and four down and five right. Below, every one on the map as
+## `{cell, item, flag, taken}`.
 func hidden_items() -> Array:
 	var out: Array = []
 	if current_map == null:
@@ -10676,12 +11004,9 @@ func hidden_items() -> Array:
 	return out
 
 
-## The map's own hidden-item script at [param cell], queued and run through the
-## ordinary path, so the bag write, the event flag, the save, `verbosegiveitem`'s
-## FOUND text, its fanfare and its pack-full branch are all the host's exactly as
-## a player walking onto the cell would get them. Answers the script results the
-## way [method interact] does, and an empty array when the cell holds no hidden
-## item, when it has already been taken, or when a script is already running.
+## The map's hidden-item script at [param cell], queued through the ordinary
+## path so `verbosegiveitem`'s whole transaction is the host's. Empty when the
+## cell holds none, it was taken, or a script is running.
 func take_hidden_item(cell: Vector2i) -> Array:
 	if current_map == null or _active_script != null or not _script_queue.is_empty():
 		return []
@@ -10702,13 +11027,9 @@ func take_hidden_item(cell: Vector2i) -> Array:
 	return []
 
 
-## `verbosegiveitem`'s own transaction for [param item], queued and run through
-## the ordinary script path, so the bag write, the save, the received line, the
-## fanfare and the pack-full branch are all the host's exactly as they are for a
-## give the map makes. Answers the script results [method take_hidden_item] does,
-## and an empty array when the item is not one the cartridge knows or when a script
-## is already running. There is no cell, no event flag and no map behind it: the
-## mod named the item and nothing else.
+## `verbosegiveitem`'s transaction for [param item] with no cell, flag or map
+## behind it, queued the way [method take_hidden_item] queues one. Empty for an
+## item the cartridge does not know or while a script runs.
 func give_item_gift(item: int, quantity: int = 1) -> Array:
 	if current_map == null or _active_script != null or not _script_queue.is_empty():
 		return []
@@ -10765,11 +11086,8 @@ func _is_on_key_item_map(name: StringName) -> bool:
 	return map_id() == id
 
 
-## `_CardKey`: the map, then `wPlayerDirection & %1100` against `OW_UP`, then the
-## faced tile. Everything it passes is `QueueScript` on a `farsjump` to
-## `CardKeySlotScript`, which no importer pins by name; the map's own
-## `bg_event 14, 2, BGEVENT_UP` is that script, and it is the tile the routine
-## already insists the player is facing.
+## `_CardKey`: the map, `wPlayerDirection` against `OW_UP`, the faced tile,
+## then `CardKeySlotScript`, which is the map's own `bg_event 14, 2, BGEVENT_UP`.
 func card_key_request() -> Dictionary:
 	if not _is_on_key_item_map(&"RADIO_TOWER_3F"):
 		return {"ok": false, "kind": &"card_key_failed", "reason": &"wrong_map"}
@@ -10790,12 +11108,9 @@ func basement_key_request() -> Dictionary:
 	return _faced_bg_event_script_request(&"basement_key_used", &"basement_key_failed")
 
 
-## `_Squirtbottle`, which differs from the other two in never failing:
-## `wItemEffectSucceeded` is set before the script is queued, and
-## `.CheckCanUseSquirtbottle` only picks which half of it runs. So the refusal is
-## the queued script's own `_SquirtbottleNothingText` rather than `.Oak`.
-## The test is `GetFacingObject` and `cp SPRITEMOVEDATA_SUDOWOODO`, the same
-## shape rock_smash_request() uses, behind the Route 36 map check.
+## `_Squirtbottle` never fails: `wItemEffectSucceeded` is set before the script
+## and `.CheckCanUseSquirtbottle` picks its half, so the refusal is
+## `_SquirtbottleNothingText`. The test is `cp SPRITEMOVEDATA_SUDOWOODO` on Route 36.
 func squirtbottle_request() -> Dictionary:
 	var nothing: Dictionary = {"ok": true, "kind": &"squirtbottle_nothing"}
 	if not _is_on_key_item_map(&"ROUTE_36"):
@@ -10812,13 +11127,9 @@ func squirtbottle_request() -> Dictionary:
 	return script
 
 
-## `WateredWeirdTreeScript` is a label inside `SudowoodoScript` that no event
-## points at, so the cache carries no pointer of its own. Its position is
-## structural instead: the object's script opens `checkitem SQUIRTBOTTLE / iftrue
-## .Fight`, and the label sits just past the `closetext` that ends `.Fight`'s
-## yes/no ask. `.Fight` is a branch target and so is cached, which is why the
-## answer is that address and an offset into it rather than a bare address.
-## Empty for anything that does not decode that way.
+## `WateredWeirdTreeScript` is a label inside `SudowoodoScript` no event points
+## at: it sits past the `closetext` ending `.Fight`'s ask, and `.Fight` is a
+## cached branch target, so the answer is that address and an offset into it.
 func _watered_weird_tree_script(object_index: int) -> Dictionary:
 	if data == null or current_map == null:
 		return {}
@@ -10964,7 +11275,8 @@ func reload_current_map() -> Dictionary:
 	_pending_rock_smash.clear()
 	_pending_flash.clear()
 	_clear_transient_object_visibility_overrides()
-	state.reset_map_reload_flags()
+	if not _gen1:
+		state.reset_map_reload_flags()
 	# `Script_reloadmap` asks for MAPSTATUS_ENTER, so a battle's own reload runs
 	# EnterMap and takes its five-step cooldown with it: that is what stops a
 	# second wild the step after the first.
@@ -10986,11 +11298,9 @@ func _on_world_state_changed() -> void:
 		_apply_map_setup_player_state()
 
 
-## `GetMonSprite` itself: a variable slot resolves through the table and is
-## re-read, because a script may assign one a Pokemon sprite, and an unassigned
-## slot answers `WALKING_SPRITE`. A day care byte keeps its own id here and is
-## read for its species by [method _mon_icon_for_sprite]; an empty slot is
-## `.NoBreedmon`, which is the same 1.
+## `GetMonSprite`: a variable slot is re-read through the table, an unassigned
+## one answers `WALKING_SPRITE`, and a day care byte keeps its id for
+## [method _mon_icon_for_sprite].
 func _resolved_sprite(sprite_number: int) -> int:
 	var resolved: int = sprite_number
 	## The table is a byte per slot and a slot may name another one, so the walk
@@ -11025,14 +11335,10 @@ func _day_care_species(sprite_number: int) -> int:
 	return 0 if mon == null else mon.species
 
 
-## One row of a map's object events as a live object. `GetMonSprite`'s `.Variable`
-## branch reads wVariableSprites and falls through to `.NoBreedmon` on a zero slot,
-## whose `ld a, WALKING_SPRITE` is 1 and so `SPRITE_CHRIS` by coincidence of two
-## constant lists. Reaching that fallback is the exception: every slot any map
-## stands an object on has a row, so an object drawn as the player means the table
-## lost one. Below, `LoadOpponentTrainerAndPokemonWithOTSprite`'s tail, which
-## writes a sprite number straight into `wMapObjects` because the Battle Tower's
-## opponent is drawn at random and its object event carries a placeholder.
+## One object event as a live object. `GetMonSprite`'s `.Variable` falls through
+## to `.NoBreedmon` on a zero slot, whose WALKING_SPRITE is `SPRITE_CHRIS` by
+## coincidence, so an object drawn as the player means the table lost a row.
+## Below, `LoadOpponentTrainerAndPokemonWithOTSprite`'s write into `wMapObjects`.
 func set_object_sprite(index: int, sprite_number: int) -> Dictionary:
 	if index < 0 or index >= objects.size() or sprite_number <= 0:
 		return {"ok": false, "reason": &"invalid_object_sprite", "object": index}
@@ -11058,14 +11364,10 @@ func _object_from_event(index: int, value: Dictionary) -> Gen2WorldObject:
 	return Gen2WorldObject.from_event(index, object_event, sprite)
 
 
-## The people standing on the maps [method map_placements] puts around this one,
-## for a view wide enough to see them. Deliberately not part of [member objects]:
-## `ReadObjectEvents` fills `wMapObjects` from the loaded map alone, so on the
-## cartridge a connected map's people do not exist until its own map load builds
-## them. These take no step, run no script, answer no collision and are not talked
-## to; they stand where their map's event data puts them, which is what a town seen
-## from the route next to it looks like. Each entry is `{object, offset}`, the
-## offset being the map's own origin in walk cells.
+## The people on the maps [method map_placements] puts around this one, for a
+## wide view. Not [member objects]: `ReadObjectEvents` fills `wMapObjects` from
+## the loaded map alone, so these take no step and answer nothing. Each entry is
+## `{object, offset}`, the offset the map's origin in walk cells.
 func connected_map_objects() -> Array:
 	if not _connected_objects.is_empty() or current_map == null or data == null:
 		return _connected_objects

@@ -123,6 +123,9 @@ const WARP_MUSIC_FADE_FRAMES: int = 8
 @export var map_group: int = 24
 @export var map_number: int = 3
 @export var start_cell: Vector2i = Vector2i(4, 4)
+## The facing a world opened on [member start_cell] stands with; a save's own
+## snapshot carries its own.
+@export_range(0, 3) var start_facing: int = Gen2WorldSprite.FACING_DOWN
 @export_range(0, 23) var hour: int = 6
 @export_range(0, 59) var minute: int = 0
 @export_range(0, 6) var day: int = 0
@@ -193,6 +196,9 @@ var _audio_player: Gen2AudioPlayer = null
 var _audio_waiting: bool = false
 var _script_prompt: String = ""
 var _story_picture: TextureRect = null
+var _pikapic: Gen1PikaPicPage = null
+var _pikapic_rect: TextureRect = null
+var _pikapic_pressed: bool = false
 ## `engine/menus/menu_2.asm`'s balance window, up until `closetext` redraws the
 ## map behind it.
 var _money_window: TextureRect = null
@@ -387,11 +393,8 @@ var _replay_running: bool = false
 ## Whether a frame is being spent right now, which is what tells a press
 ## delivered from inside the pump from one that arrived between two frames.
 var _spending_frame: bool = false
-## A run of sounds the world owes the driver, spent one entry at a time by
-## [method advance_frame]: `HealMachineAnim`'s, whose entries are due on a frame
-## count of their own, and the ITEMFINDER's, whose are `WaitPlaySFX` and due when
-## the four effect channels are free. Nothing plays two at once, since the script
-## that started one is waiting on it.
+## Sounds the world owes the driver, spent by [method advance_frame]:
+## `HealMachineAnim`'s on a frame count, the ITEMFINDER's on `WaitPlaySFX`.
 var _sound_schedule: Array = []
 var _sound_schedule_frame: int = 0
 ## Whether a screen laid out in 160x144 owns the picture, as last told to the
@@ -413,11 +416,8 @@ var _rate_reading: Dictionary = {}
 
 
 func _ready() -> void:
-	# The map and cell readout and the shortcut legend are scaffolding, and they
-	# are also the two things standing between the player and a full screen on a
-	# phone. Same flag as the shortcuts they describe. The scene keeps them
-	# hidden, so a release build never draws the placeholder text for the frame
-	# between the node entering the tree and this line.
+	# The readout and the legend are scaffolding on the shortcuts' flag, and
+	# kept hidden in the scene so a release build never draws the placeholder.
 	_caption.visible = PokeDebugKeys.enabled()
 	_hint.visible = PokeDebugKeys.enabled()
 	_data = _injected_data if _injected_data != null else _selected_runtime_data()
@@ -443,11 +443,8 @@ func _set_caption(text: String) -> void:
 	_caption.text = _caption_text + _rate_text
 
 
-## The reading changes once a second and the line is rebuilt only then, so this is
-## drawn on the frame it is measuring. `lock` shows only when there is one; `sub`
-## is screen pixels to a hardware one, `1:1` none of the smoothing reaching the
-## panel, and `native` a view drawing at the window's own resolution, which needs
-## none. See [method Gen2WorldAnimation.FrameClock.rate].
+## Rebuilt once a second. `sub` is screen pixels to a hardware one, `1:1` no
+## smoothing, `native` a window-resolution view; see [method Gen2WorldAnimation.FrameClock.rate].
 func _refresh_frame_rate() -> void:
 	if _world == null or _caption == null or not _caption.visible:
 		return
@@ -521,11 +518,8 @@ func _build_world() -> void:
 	var initial_day: int = day
 	var initial_hour: int = hour
 	var initial_minute: int = minute
-	## A world opened for a save plays that save's rules, whoever opened it.
-	## `Gen2GameRuntime._activate_rules` installs the slot's own set when the
-	## launcher chooses one, and nothing does when a test or a tool injects one
-	## through [method set_save]: a Nuzlocke slot then played as the cartridge's
-	## own game, which is the one difference a rules block exists to make.
+	## A world opened for a save plays that save's rules: a test injecting one
+	## through [method set_save] bypasses `Gen2GameRuntime._activate_rules`.
 	var save_rules: Gen2Rules = selected_save.run_rules if selected_save != null else null
 	var continued: bool = selected_save != null and selected_save.world != null
 	if continued:
@@ -579,6 +573,8 @@ func _build_world() -> void:
 		_world = Gen2WorldAPI.open(
 			_data, map_group, map_number, start_cell, development_state
 		)
+	if _world != null and not continued:
+		_world.player_facing = start_facing
 	if _world == null:
 		_show_load_failure(
 			"Map %d/%d unavailable" % [map_group, map_number],
@@ -666,11 +662,8 @@ func _build_world() -> void:
 	_refresh_labels()
 
 
-## Hands this world to the lower display, where the build has one.
-## The display itself belongs to [Gen2GameRuntime] and is up in the launcher too;
-## all this screen owns is which world is on it. Handed back on the way out, so
-## closing a game puts the launcher's own mark back rather than leaving the last
-## frame of a world nobody is playing.
+## Hands this world to [Gen2GameRuntime]'s lower display, and back on the way
+## out so the launcher's own mark returns.
 func _hand_over_second_screen() -> void:
 	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
 	if runtime != null:
@@ -684,12 +677,9 @@ func _exit_tree() -> void:
 		runtime.set_second_screen_world(null, null, null)
 
 
-## Builds the view for the selected renderer and attaches it to the layer that
-## renderer asked for. Constructed through the mod host, so a registered
-## renderer replaces this view without the screen knowing what it draws with. A
-## renderer answering the surface question false gets the screen's rectangle at
-## window resolution instead of the hardware viewport, which is what a 3D or HD
-## view needs; text boxes and menus above it stay hardware pixels either way.
+## The selected renderer's view, built through the mod host and attached to the
+## layer it asked for. One answering the surface question false gets the window
+## rectangle instead of the hardware viewport; boxes above it stay hardware pixels.
 func _build_renderer() -> void:
 	if _world == null:
 		return
@@ -738,11 +728,8 @@ func _set_renderer_world() -> void:
 		_encounters.set_world(_world)
 
 
-## The text box is the screen's, not the renderer's, and over a native-layer view
-## the cartridge's opaque white field is a slab across the map. A renderer may
-## ask for it to be drawn through, and may be told where it is so it can compose
-## around it. Both are pushed here and again whenever the box moves, resizes or
-## is shown, since a renderer swapped in mid-scene has neither.
+## The text box is the screen's; a native-layer renderer may ask for it drawn
+## through and is told where it is, here and whenever it moves or shows.
 func _apply_renderer_interface_style() -> void:
 	if _text_box == null:
 		return
@@ -754,11 +741,8 @@ func _apply_renderer_interface_style() -> void:
 	_apply_interface_mask()
 
 
-## Pushed only when the rectangle actually changes, and never while a page turn
-## is between the box it just closed and the box the next event opens: a renderer
-## composing around the box would otherwise pan away and back inside one
-## conversation. A conversation that really ends pushes the empty rectangle once,
-## because the empty one differs from the occupied one it replaces.
+## Pushed when the rectangle changes and never between one page's box and the
+## next, so a renderer composing around it does not pan away mid-conversation.
 func _push_text_box_rect() -> void:
 	if _text_box == null or _text_box_rect_held > 0:
 		return
@@ -779,11 +763,8 @@ func _render_time_of_day() -> int:
 	return _world.map_time_of_day()
 
 
-## SCREEN FILL: the overworld fills the window with map where every other
-## screen fills it with its own field; every box over it stays inside the
-## 160x144 rectangle [Gen2Screen] centres. The setting is read again here rather
-## than from the frame the screen was born on, since a tool may set it around
-## building this scene. The zoom is the map's alone.
+## SCREEN FILL: the overworld fills the window with map, boxes staying inside
+## the 160x144 [Gen2Screen] centres. Read again here for a tool that sets it late.
 func _apply_screen_fill() -> void:
 	var options: Gen2Options = Gen2OptionsStore.current()
 	_screen.apply_screen_fill()
@@ -793,11 +774,8 @@ func _apply_screen_fill() -> void:
 	_apply_interface_mask()
 
 
-## A screen that hides the map takes the whole picture with it: it is laid out in
-## 160x144, so the surround becomes that screen's own field. The start menu is
-## not one, being a box the map stays visible around; `DoBattleTransition` is.
-## The mask is drawn inside the hardware viewport, so a renderer that already
-## filled the whole surface is told instead and closes its own surround.
+## A screen hiding the map takes the surround with it, `DoBattleTransition`
+## among them and the start menu not; a renderer filling the surface is told instead.
 func _apply_interface_mask() -> void:
 	var owned: bool = _battle_transition != null or _any_host_open(FULLSCREEN_HOSTS)
 	_screen.interface_masked = _screen.expanded and owned \
@@ -867,11 +845,8 @@ func cycle_view() -> Dictionary:
 	return select_view(ids[posmod(at + 1, ids.size())])
 
 
-## Real time becomes hardware frames here and nowhere else in the overworld.
-## Everything that counts frames is spent by [method advance_frame], so GAME
-## SPEED reaches all of it through the clock; the day cycle underneath is the one
-## deliberate reader of `delta`, because Gen II keeps a real-time clock and a
-## wall-clock reading is what the day cycle wants at any speed.
+## Real time becomes hardware frames here alone, so GAME SPEED reaches
+## everything [method advance_frame] spends; the day cycle reads `delta` on purpose.
 func _process(delta: float) -> void:
 	for _frame: int in _frame_clock.tick(delta):
 		advance_frame()
@@ -884,11 +859,8 @@ func _process(delta: float) -> void:
 	_apply_interface_mask()
 
 
-## SMOOTH SCROLL. Where the drawn frame stands in the pass: whole frames off
-## `NextOverworldFrame`'s countdown plus the part of the next one the clock has
-## banked. Banked real time and not a frame count, because a tick spends
-## sometimes no frame and sometimes two and a count alone jumps 0, 1 or 2 pixels
-## for nothing. Called every drawn frame, not every spent one.
+## SMOOTH SCROLL: where the drawn frame stands in the pass, whole frames plus
+## the banked part of the next, since a tick spends none or two frames.
 func _apply_pass_fraction(remainder: float = 0.0) -> void:
 	if _world == null:
 		return
@@ -944,11 +916,8 @@ const FRAME_HOSTS: Array[Array] = [
 ]
 
 
-## One hardware frame of the overworld, in the order it is drawn. Every countdown
-## is spent exactly once here, so each is a function of
-## [member Gen2WorldAPI.frame_number] rather than of banked real time. Half of
-## what follows is `HandleMap`'s own pass and runs once per two frames; the other
-## half is what a command spends its own `DelayFrames` on and is not gated.
+## One hardware frame, in draw order: every countdown is spent once here, off
+## [member Gen2WorldAPI.frame_number]. `HandleMap`'s pass is one frame in two.
 func advance_frame() -> void:
 	_spending_frame = true
 	## `ResetOverworldDelay` and `NextOverworldFrame`: the pass reloads the delay
@@ -962,6 +931,8 @@ func advance_frame() -> void:
 	_advance_presentation(map_pass)
 	_apply_pass_fraction()
 	_advance_movement(map_pass)
+	if map_pass and _world != null:
+		_overworld_delay += _world.take_pass_overrun_frames()
 	_advance_population(map_pass)
 	_advance_waits(map_pass)
 	for row: Array in FRAME_HOSTS:
@@ -1027,8 +998,16 @@ func _advance_presentation(map_pass: bool) -> void:
 ## covers its first two pixels on the pass the press landed on.
 func _advance_movement(map_pass: bool) -> void:
 	if map_pass:
+		_run_gen1_map_script_pass()
 		_advance_forced_movement()
 		_advance_held_direction()
+		## `UpdateSprites` runs slot fifteen behind `JoypadOverworld` and in
+		## front of `AdvancePlayerSprite`, so the follower reads the pass as it
+		## stood before the step spent anything, inside a text box too with
+		## `wFontLoaded` set. A turn's pass jumps back to the loop without it.
+		_refresh_if(not _overlay_open() and not _world.fishing_busy()
+			and not _world.gen1_turned_this_pass()
+			and _world.advance_gen1_pikachu_pass(_object_random, not _objects_may_move()))
 		var stepped: bool = _world != null and _world.advance_player_step_pass()
 		_refresh_if(stepped)
 		## `CheckPlayerState` reads the step flags at the end of `HandleMap`,
@@ -1039,10 +1018,10 @@ func _advance_movement(map_pass: bool) -> void:
 			var landed: Dictionary = _pending_step_events
 			_pending_step_events = {}
 			_complete_player_step(landed)
-		## Polled again on the pass a step lands on: the poll above ran while the
-		## step was still in flight and refused it, so a held direction started the
-		## next step a pass late and the walk froze a frame and doubled the next.
-		if stepped and _world != null and not _world.player_step_in_progress():
+		## Polled again on the landing pass, or a held direction started a pass
+		## late; Generation 1 reads the joypad on the pass after and is not.
+		if stepped and _world != null and not _world.player_step_in_progress() \
+			and not _world.is_gen1():
 			_advance_held_direction()
 	## Not the pass's: an emote's own countdown stands in for the `pause` between
 	## `ShowEmoteScript`'s two movements, and a script's `DelayFrames` is spent
@@ -1093,6 +1072,7 @@ func _advance_waits(map_pass: bool) -> void:
 	# script waiting on it resumes.
 	if _world != null and not _world.pending_script_wait().is_empty():
 		_draw_hang_up()
+		_advance_pikapic()
 		var wait_results: Array = _world.advance_script_wait_frame()
 		if not wait_results.is_empty():
 			_show_script_results(wait_results)
@@ -1110,6 +1090,21 @@ func _advance_waits(map_pass: bool) -> void:
 			_show_script_results(ring_results)
 		_refresh_labels()
 	_advance_audio_wait()
+
+
+## `JoypadOverworld` runs `RunMapScript` on every pass the walk counter is
+## zero, in front of the direction it then reads: Pallet Town's state 0 hands
+## over to its state 1 on one pass and that state opens Oak's box on the next,
+## and a held UP between the two walked out onto Route 1 here.
+func _run_gen1_map_script_pass() -> void:
+	if _world == null or not _world.is_gen1() or _world.player_step_in_progress() \
+		or not _objects_may_move() or _world.script_busy() \
+		or _world.scripted_movement_in_progress():
+		return
+	var results: Array = _world.dispatch_sight_events()
+	if not results.is_empty():
+		_zero_map_name_sign_for(results)
+		_show_script_results(results)
 
 
 ## `RunMapScript` runs on every frame `JoypadOverworld` reads: a state opening
@@ -1239,13 +1234,9 @@ func _advance_day_cycle(delta: float) -> void:
 	_refresh_labels()
 
 
-## `.CheckTile`'s forced walk, which the source polls every frame with no input: a
-## waterfall pushes the player back down and a door, staircase or cave tile steps
-## them off it. The step already in progress paces it.
-## PLAYERMOVEMENT_FORCE_TURN is drained here too: `.CheckTile` reads the standing
-## tile before `.GetAction`'s direction is honoured, so a whirlpool spits the
-## player back out with nothing pressed. Its own run is what stops it repeating,
-## since the cell it leaves them on is not a whirlpool.
+## `.CheckTile`'s forced walk, polled every frame with no input: a waterfall, a
+## door or a cave tile steps the player off it, and PLAYERMOVEMENT_FORCE_TURN
+## spits them out of a whirlpool before `.GetAction`'s direction is read.
 func _advance_forced_movement() -> void:
 	if not _objects_may_move() or _world.script_input_waiting() \
 		or _world.player_step_in_progress():
@@ -1257,13 +1248,9 @@ func _advance_forced_movement() -> void:
 		_after_player_move(forced)
 
 
-## Walking goes on while a direction is held, whatever is holding it: a key, a
-## stick, a d-pad or a thumb on the on-screen controller.
-## Polled rather than driven by repeated events, because the rate a held key
-## repeats at belongs to the operating system and has nothing to do with the
-## hardware. The poll runs once per hardware frame, which is what the source
-## did, and [method move_player] refuses while a step is still in flight, which
-## is what turns sixty polls a second into one step every sixteen frames.
+## A held direction keeps walking, polled once a hardware frame rather than on
+## the operating system's key repeat; [method move_player] refuses while a step
+## is in flight, which makes the poll one step every sixteen frames.
 func _advance_held_direction() -> void:
 	## Polled before the pauses below rather than after, so a recording is what
 	## was held rather than what the world did with it.
@@ -1273,6 +1260,7 @@ func _advance_held_direction() -> void:
 		else Gen2ModHost.run_button_held()
 	if _world != null:
 		_world.run_held = running
+		_world.b_held = not _replaying_input and PokeButton.held(PokeButton.B)
 	if _recording_input and _world != null and direction != PokeButton.NONE:
 		_input_recording.append({
 			"frame": _world.frame_number, "kind": "hold", "button": direction,
@@ -1344,12 +1332,9 @@ func _overlay_open() -> bool:
 		or _start_menu_host != null or _any_host_open(FULLSCREEN_HOSTS)
 
 
-## Wandering objects keep to themselves while anything else owns the world: a
-## trainer approach paces its own object by call count, and an overlay hides the
-## map entirely. A script is not by itself one of those things, which is
-## `Gen2WorldAPI.script_stops_the_map()`: the frames it spends in a wait are
-## `HandleMap`'s own, so the map keeps walking around an `applymovement` except
-## for the objects that command froze.
+## Wandering objects stand while a trainer approach or an overlay owns the world.
+## A script alone does not: `Gen2WorldAPI.script_stops_the_map()`, since a wait's
+## frames are `HandleMap`'s own.
 func _objects_may_move() -> bool:
 	return _world != null and not _overlay_open() \
 		and not _field_move_text and _oak_pc_pages.is_empty() \
@@ -1473,19 +1458,25 @@ const ANSWERING_HOSTS: Array[StringName] = [
 ]
 
 
+## `PikaPicAnimTimerAndJoypad` reads A and B for itself while the face box is up.
+func _swallows_button(button: int) -> bool:
+	if _input_locked():
+		return true
+	if _pikapic == null:
+		return false
+	_pikapic_pressed = _pikapic_pressed or button in [PokeButton.A, PokeButton.B]
+	return true
+
+
 func _handle_button(button: int) -> bool:
-	## First, because a battle hides the map entirely and owns every button while
-	## it does. The fight takes it through this funnel rather than reading events
-	## of its own, so a press inside a battle is recorded once, by the world, and
-	## a replayed log reaches the fight (`tools/replay_world.gd`). An overlay the
-	## fight opened stands in front of it and takes the press: unconditional here,
-	## `NewPokedexEntry`'s page never saw its B and a first catch of a species
-	## froze with the entry on screen.
+	## A battle owns every button through this funnel, so a press is recorded
+	## once and a replay reaches the fight; an overlay the fight opened takes it
+	## first, or `NewPokedexEntry`'s page never sees its B.
 	if _battle_host != null and not _any_host_open(OVERLAY_HOSTS) \
 		and not _any_host_open(ANSWERING_HOSTS):
 		_battle_host.press_button(button)
 		return true
-	if _input_locked():
+	if _swallows_button(button):
 		return true
 	for host_name: StringName in OVERLAY_HOSTS:
 		var host: Object = get(host_name)
@@ -1529,13 +1520,9 @@ func _handle_button(button: int) -> bool:
 	return false
 
 
-## `DoBattleTransition` owns every frame between the encounter and the battle
-## screen with the joypad unread, the same way a map fade does. Without it a
-## press landing in those frames reached `script_input_waiting()` and cancelled
-## the request `startbattle` was waiting on, so the script died with
-## `invalid_battle_outcome`: the fight still ran, and the gym leader's badge, the
-## flag behind it and everything after it never arrived. A player holding A
-## through a trainer's approach is what does it.
+## `DoBattleTransition` owns every frame to the battle screen with the joypad
+## unread: a press there used to cancel `startbattle`'s request and the gym
+## leader's badge never arrived.
 func _input_locked() -> bool:
 	return not _map_fade.is_empty() or not _trainer_approach.is_empty() \
 		or _battle_transition != null or _world.phone_ring_active()
@@ -1629,13 +1616,9 @@ func _settle_unattended_request() -> StringName:
 	return &"return"
 
 
-## Zoom, on the keys every map program uses for it and on the wheel.
-## Only while the map itself has the screen: a text box, a menu or a script is
-## laid out against the 160x144 rectangle and moving the surface under one is
-## the player losing their place. A framed screen refuses the step, since there
-## is no more world to show and it would only shrink the picture
-## ([method Gen2Screen.step_zoom]), and so does a view on the native layer, which
-## has no hardware pixel for the ladder to count.
+## Zoom on the usual keys and the wheel, only while the map itself has the
+## screen: a box or menu is laid out against 160x144. A framed screen and a
+## native-layer view refuse it ([method Gen2Screen.step_zoom]).
 func _handle_zoom(event: InputEvent) -> bool:
 	if not _renderer_input_free() or not _screen.expanded:
 		return false
@@ -1678,11 +1661,8 @@ func _persist_zoom() -> void:
 	Gen2OptionsStore.save(options)
 
 
-## Scaffolding that reaches parts of the world no cartridge control does: the
-## rods, the phone list, the renderer switch and a snapshot write. Debug builds
-## only, so a shipped game offers exactly the eight buttons the hardware had.
-## Every method behind them stays public, which is how the preview tools drive
-## the same paths without a key press.
+## Debug-build scaffolding for what no cartridge control reaches; every method
+## behind it stays public for the preview tools.
 func _handle_debug_key(event: InputEvent) -> bool:
 	if not PokeDebugKeys.enabled():
 		return false
@@ -1749,6 +1729,9 @@ func move_player(direction: Vector2i) -> bool:
 			_zero_map_name_sign_timer()
 			_start_map_fade()
 			return true
+		elif bool(movement.get("ledge", false)):
+			## `HandleLedges`' own `SFX_LEDGE`, on the pass that found the ledge.
+			_play_ledge_hop_sfx()
 		else:
 			_play_bump_sfx(movement)
 		return false
@@ -1784,7 +1767,7 @@ func _play_bump_sfx(movement: Dictionary) -> void:
 ## step to land; see [method _complete_player_step]. Shared with the forced-tile
 ## path, which reaches it without a key press.
 func _after_player_move(movement: Dictionary) -> bool:
-	if movement.get("kind", &"") == &"ledge_hop":
+	if movement.get("kind", &"") == &"ledge_hop" and not bool(movement.get("sound_played", false)):
 		_play_ledge_hop_sfx()
 		if _effects != null:
 			## `JumpStep` spawns the shadow where the hop starts, and it tracks
@@ -1799,12 +1782,9 @@ func _after_player_move(movement: Dictionary) -> bool:
 		_play_current_map_music()
 	if _renderer != null:
 		if movement.get("kind", &"") == &"connection":
-			## `MapSetupScript_Connection`, which is the step itself rather than
-			## a warp: the neighbour's blocks are loaded under a camera that
-			## never stops, and its `FadeToMapMusic` is why crossing a route
-			## boundary into the same track is one continuous piece. It carries
-			## no `LoadMapGraphics` either, so the tile animation is re-pointed
-			## at the new tileset where it stands rather than restarted.
+			## `MapSetupScript_Connection`: `FadeToMapMusic` keeps the same
+			## track continuous, and no `LoadMapGraphics` means the tile
+			## animation is re-pointed rather than restarted.
 			_animation.reload_tileset(_world, _render_time_of_day())
 			_set_renderer_world()
 			_fade_to_map_music()
@@ -1830,6 +1810,11 @@ func _complete_player_step(movement: Dictionary) -> bool:
 	_spend_step_happiness()
 	_spend_egg_steps()
 	_spend_day_care_steps()
+	## `StepCountCheck` and `ApplyOutOfBattlePoisonDamage`'s Pikachu lines, both
+	## in `.moveAhead2`'s tail in front of `CheckWarpsNoCollision`: a turn's pass
+	## never reaches them, and neither runs on an empty party.
+	if movement.get("kind", &"") != &"turn" and int(_world.party_summary().get("count", 0)) > 0:
+		_world.gen1_pikachu_step(_encounter_random)
 	## In front of `CheckWarpsNoCollision`, so the step the timer runs out on ends
 	## the game rather than taking its warp.
 	if _world.gen1_count_safari_step():
@@ -1856,11 +1841,8 @@ func _complete_player_step(movement: Dictionary) -> bool:
 	return _after_map_settled()
 
 
-## `StepHappiness`, which `CountStep` reaches every 256 steps and which acts on
-## every second visit. [method Gen2WorldState.count_step] counts on the step
-## itself, wherever it was taken; the party lives on the save, which is here.
-## The cartridge raises happiness in WRAM and writes SRAM only when the player
-## saves, so this touches the loaded save and persists nothing of its own.
+## `StepHappiness`, reached every 256 steps and acting on every second visit,
+## on the loaded save alone as WRAM is.
 func _spend_step_happiness() -> void:
 	if _world == null or _world.state == null:
 		return
@@ -1874,11 +1856,8 @@ func _spend_step_happiness() -> void:
 		_refresh_labels()
 
 
-## `DoEggStep` and the `PLAYEREVENT_HATCH` it raises. The party lives on the
-## save, so the walk counts the step and this spends it, the way
-## [method _spend_step_happiness] does for `StepHappiness`.
-## `HatchEggs` walks the whole party, so every egg the pass left on zero hatches
-## in one screen rather than one per step.
+## `DoEggStep` and its `PLAYEREVENT_HATCH`, spent here as
+## [method _spend_step_happiness] spends `StepHappiness`; `HatchEggs` walks the whole party.
 func _spend_egg_steps() -> void:
 	if _world == null or _world.state == null or _hatch_host != null:
 		return
@@ -1900,11 +1879,8 @@ func _spend_egg_steps() -> void:
 	_open_hatch(hatches, save)
 
 
-## `DoPoisonStep`, which `CountStep` reaches on the pass `wPoisonStepCount`
-## carries to 4 and which resets the counter whether or not anything is poisoned.
-## The party lives on the save, so the walk counts the step and this spends it.
-## Answers whether it took the screen: everything a step still owes waits behind
-## the presses a faint's own `PLAYEREVENT_WHITEOUT` script asks for.
+## `DoPoisonStep` on the pass `wPoisonStepCount` carries to 4, resetting it
+## either way. Answers whether it took the screen.
 func _spend_poison_steps() -> bool:
 	if _world == null or _world.state == null or _data == null:
 		return false
@@ -1989,13 +1965,9 @@ func _whiteout_texts() -> PackedStringArray:
 	return PackedStringArray([Gen2WorldPartyHost.whited_out_text(player_name)])
 
 
-## Whether this blackout is the end of a Nuzlocke rather than a walk back to a
-## Pokemon Center. A run whose every Pokemon is dead has nothing to heal: the rule
-## is a full wipe ending the run, storage or no storage. Not inside the Bug
-## Catching Contest: `ContestDropOffMons` masks the rest of the party into
-## [member Gen2SaveData.contest_stashed_party] and leaves one Pokemon standing, so
-## a faint there empties a party that is not the run's, and `Script_Whiteout`'s own
-## contest branch gives the others back.
+## Whether this blackout ends a Nuzlocke: a full wipe, storage or no storage.
+## Not inside the Bug Catching Contest, where `ContestDropOffMons` has stashed
+## the rest of the party and `Script_Whiteout`'s contest branch gives it back.
 func _nuzlocke_ends_here(save: Gen2SaveData) -> bool:
 	return _world != null and _world.rules != null and _world.rules.is_nuzlocke() \
 		and save != null and not _world.bug_contest_active() \
@@ -2123,12 +2095,9 @@ func _show_player_event(texts: PackedStringArray, after: Callable) -> void:
 	_show_field_move_text(first)
 
 
-## `DayCareStep`, which `CountStep` reaches on every step that did not hatch an
-## egg: `jr nz, .hatch` jumps over the `farcall`, and the hatch screen standing
-## is what says this step was one of those.
-## The two slots live in the world state rather than on the save, so nothing here
-## is a save transaction; what it can produce is `DAYCAREMAN_HAS_EGG_F`, which
-## the man outside the Day-Care reads.
+## `DayCareStep`, which `CountStep` reaches on every step that did not hatch:
+## the hatch screen standing is the `jr nz, .hatch`. The slots are world state,
+## and what it produces is `DAYCAREMAN_HAS_EGG_F`.
 func _spend_day_care_steps() -> void:
 	if _world == null or _world.state == null or _data == null:
 		return
@@ -2256,11 +2225,8 @@ func _on_hatch_named(party_index: int, nickname: String) -> void:
 	_script_prompt = "%s hatched" % nickname
 
 
-## `GivePoke`'s own prompt, for the thirteen `givepoke` sites that name no OT.
-## `GiveANickname_YesNo` stands between `TryAddMonToParty` and the row being
-## named, so the request is left pending while the screen is up. False when the
-## routine reaches no prompt: an egg, a gift that names an OT, and
-## `.FailedToGiveMon`.
+## `GivePoke`'s `GiveANickname_YesNo` for the thirteen sites naming no OT, the
+## request pending while it is up. False for an egg, a named OT or `.FailedToGiveMon`.
 func _open_gift_nickname(request: Dictionary) -> bool:
 	if _nickname_host != null or _world == null or _data == null:
 		return false
@@ -2296,12 +2262,9 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 	return true
 
 
-## `CheckPartyFullAfterContest`'s own `GiveANickname_YesNo`, which is the same
-## question the gift path asks and reaches no "sent to BILL's PC" line: the box
-## branch prints nothing and the script's `ContestResults_PartyFullText` is what
-## BUGCONTEST_BOXED_MON reaches instead.
-## False when the routine reaches no prompt: nothing was caught, and `.BoxFull`,
-## which writes nothing and answers BUGCONTEST_BOXED_MON where it stands.
+## `CheckPartyFullAfterContest`'s `GiveANickname_YesNo`, the gift path's own
+## question; the box branch prints nothing and BUGCONTEST_BOXED_MON reaches
+## `ContestResults_PartyFullText`. False when no prompt is reached.
 func _open_contest_nickname(_request: Dictionary = {}) -> bool:
 	if _nickname_host != null or _world == null or _data == null or _world.state == null:
 		return false
@@ -2841,6 +2804,12 @@ func preview_move_deleter() -> void:
 ## of them.
 func _after_map_settled() -> bool:
 	_refresh_labels()
+	## `RunNPCMovementScript`'s first pass after a warp: the player on a door
+	## tile walks down out of it on simulated input, which is a step the
+	## sight lines and the map's scripts wait behind like any other.
+	if _world.gen1_step_out_of_door():
+		_renderer.refresh()
+		return true
 	var sight_results: Array = _world.dispatch_sight_events()
 	if sight_results.is_empty():
 		sight_results = _world.dispatch_script_events()
@@ -2848,13 +2817,10 @@ func _after_map_settled() -> bool:
 		_zero_map_name_sign_for(sight_results)
 		_show_script_results(sight_results)
 		return true
-	## `CheckTileEvent`'s own order: the warp and the coord events above, then
-	## `CountStep`, and only then `RandomEncounter`. A poison pass that reaches a
-	## script answers with carry, so the step it runs on rolls no wild, and
-	## `CheckTimeEvents` below is a caller further on. `CheckSpecialPhoneCall` is
-	## `CountStep`'s first test and stands in front of the counters, so the step a
-	## special call rings on is charged nothing: `count_step()` already refused it,
-	## and the poison pass below reads the counter that refusal left standing.
+	## `CheckTileEvent`'s order: warps and coord events, `CountStep`, then
+	## `RandomEncounter`; a poison pass reaching a script answers with carry and
+	## rolls no wild. `CheckSpecialPhoneCall` stands in front of the counters, so
+	## the step a call rings on is charged nothing.
 	var special_attempt: Dictionary = _world.try_special_phone_call()
 	var special_results: Array = special_attempt.get("results", [])
 	if bool(special_attempt.get("attempted", false)) and not special_results.is_empty():
@@ -2911,11 +2877,8 @@ func _after_map_settled() -> bool:
 	return true
 
 
-## The renewal offer a Repel running out owes, or false when nothing is owed.
-## Nothing at all without a registered provider: an unregistered host answers 0
-## and the step rolls exactly as it always did. The fact is held rather than
-## consumed on the step it happened, so an offer landing on a step a warp, a
-## script or a battle already owns waits for one that can spend it.
+## The renewal offer a spent Repel owes, held until a step nothing else owns
+## can spend it; nothing without a registered provider.
 func _offer_repel_renewal() -> bool:
 	if _world == null or _data == null or not _world.repel_expired():
 		return false
@@ -2969,8 +2932,65 @@ func _start_map_fade() -> void:
 	var sfx: int = _warp_sfx()
 	if sfx >= 0:
 		_play_sfx(sfx)
+	if _world.is_gen1() and not _pending_dungeon_fall:
+		_map_fade = {"stage": &"out", "step": 0, "gen1": 0}
+		_apply_gen1_warp_frame()
+		return
 	_map_fade = {"stage": &"out", "step": 0, "frames": Gen2WorldPalette.FADE_STEP_FRAMES}
 	_apply_map_fade_step()
+
+
+## `WarpFound2` on Generation 1, measured on the cartridge: `GBFadeOutToBlack`'s
+## four palettes eight frames apart, the LCD back on over the new map at 39
+## frames indoors and 41 outdoors, `UpdateSprites` ten after that and the first
+## pass thirteen, with no fade in. `PlayMapChangeSound` skips the fade under `wMapPalOffset`.
+const GEN1_WARP_FADE_ORDERS: Array[int] = [0xE4, 0xF9, 0xFE, 0xFF]
+const GEN1_WARP_FADE_STEP_FRAMES: int = 8
+const GEN1_WARP_SWAP_FRAME: int = 36
+const GEN1_WARP_LCD_ON_FRAME: int = 39
+const GEN1_WARP_LCD_ON_OUTSIDE_FRAME: int = 41
+const GEN1_WARP_SPRITES_AFTER_LCD: int = 10
+const GEN1_WARP_LIVE_AFTER_LCD: int = 13
+
+
+func _advance_gen1_warp() -> void:
+	var frame: int = int(_map_fade["gen1"]) + 1
+	var fade_frames: int = GEN1_WARP_FADE_ORDERS.size() * GEN1_WARP_FADE_STEP_FRAMES
+	if _world.gen1_map_pal_offset != 0:
+		frame += fade_frames
+	_map_fade["gen1"] = frame
+	if frame <= fade_frames:
+		_map_fade["step"] = (frame - 1) / GEN1_WARP_FADE_STEP_FRAMES
+	elif frame == GEN1_WARP_SWAP_FRAME:
+		_map_fade["stage"] = &"load"
+		_swap_warped_map()
+		_map_fade["lcd_on"] = GEN1_WARP_LCD_ON_OUTSIDE_FRAME if Gen1Layout.is_outside_tileset(
+			_world.current_map.tileset
+		) else GEN1_WARP_LCD_ON_FRAME
+	var lcd_on: int = int(_map_fade.get("lcd_on", GEN1_WARP_LCD_ON_FRAME))
+	if frame == lcd_on + GEN1_WARP_SPRITES_AFTER_LCD:
+		_world.advance_gen1_pikachu_pass(_object_random, false)
+	elif frame == lcd_on + GEN1_WARP_LIVE_AFTER_LCD - 1:
+		## The pass the loop opens on is the frame after this one.
+		_overworld_delay = 1
+	elif frame >= lcd_on + GEN1_WARP_LIVE_AFTER_LCD:
+		_map_fade = {}
+		_apply_map_fade_step()
+		_after_map_settled()
+		return
+	_apply_gen1_warp_frame()
+
+
+func _apply_gen1_warp_frame() -> void:
+	if _renderer == null or not _renderer.has_method(Gen2ModHost.RENDERER_FADE_METHOD):
+		return
+	var frame: int = int(_map_fade["gen1"])
+	var order: int = GEN1_WARP_FADE_ORDERS[-1]
+	if frame < GEN1_WARP_FADE_ORDERS.size() * GEN1_WARP_FADE_STEP_FRAMES:
+		order = GEN1_WARP_FADE_ORDERS[int(_map_fade["step"])]
+	elif frame >= int(_map_fade.get("lcd_on", GEN1_WARP_LCD_ON_FRAME)):
+		order = Gen2WorldPalette.FADE_IDENTITY
+	_renderer.call(Gen2ModHost.RENDERER_FADE_METHOD, order, false)
 
 
 ## `GetWarpSFX`, off `wPlayerTileCollision`. Generation 1 has no such table:
@@ -2994,6 +3014,9 @@ func _warp_sfx() -> int:
 ## `MapSetupScript_Door`'s list sits.
 func _advance_map_fade() -> void:
 	if _map_fade.is_empty():
+		return
+	if _map_fade.has("gen1"):
+		_advance_gen1_warp()
 		return
 	_map_fade["frames"] = int(_map_fade["frames"]) - 1
 	if int(_map_fade["frames"]) > 0:
@@ -3102,6 +3125,8 @@ func _swap_warped_map() -> void:
 		else _world.try_warp()
 	if not bool(transition.get("ok", false)):
 		return
+	if falling:
+		_world.gen1_pikachu_landed()
 	_clear_script_fade()
 	_animation.configure(_world, _render_time_of_day())
 	_set_renderer_world()
@@ -3132,7 +3157,7 @@ func _bug_contest_placings_text(judged: Dictionary) -> String:
 ## level against. The party lives in the save rather than in the world API, so
 ## the screen is the one place that can answer it.
 func _repel_lead_level() -> int:
-	var save: Gen2SaveData = _selected_runtime_save()
+	var save: Gen2SaveData = _active_party_save()
 	if save == null:
 		return -1
 	for mon: Gen2SaveMon in save.party:
@@ -3144,7 +3169,7 @@ func _repel_lead_level() -> int:
 ## `ApplyCleanseTagEffectOnEncounterRate` walks the whole party, fainted members
 ## included, and halves the rate on the first Cleanse Tag it finds.
 func _party_holds_cleanse_tag() -> bool:
-	var save: Gen2SaveData = _selected_runtime_save()
+	var save: Gen2SaveData = _active_party_save()
 	if save == null:
 		return false
 	for mon: Gen2SaveMon in save.party:
@@ -3168,12 +3193,8 @@ func interact() -> bool:
 		if _actors == null \
 			or not _actors.interact(_world.facing_cell(), _world.player_facing):
 			return false
-		## On the frame of the press, which is what the offer promises. The
-		## actor layer re-collects where the press is consumed, so nothing after
-		## this sees a change to redraw for: `advance_frame` would compare a list
-		## already carrying the new pose against itself and skip its own refresh,
-		## and the picture would wait for the next unrelated change, which for a
-		## mon icon is its two-frame flip nine frames later.
+		## On the frame of the press: the actor layer re-collects where the
+		## press is consumed, so `advance_frame` would see no change to redraw.
 		if _renderer != null:
 			_renderer.refresh()
 		return true
@@ -3265,13 +3286,9 @@ func persist_world_snapshot() -> Dictionary:
 	return Gen2SaveStore.save(save, _data)
 
 
-## `GameTimer`, one call per hardware frame. The play timer belongs to the save
-## rather than to the world, since the cartridge keeps it in wPlayerData.
-## Two source gates decide whether it counts, and neither is `_overlay_open()`:
-## a battle, the pack and the start menu all keep counting. `wGameTimerPaused`
-## is cleared for `Script_halloffame` alone (engine/overworld/scripting.asm:2318)
-## and `wGameLogicPaused` is set by Bill's PC (engine/pokemon/bills_pc.asm:2000)
-## and by saving, which costs no frames here.
+## `GameTimer`, once a hardware frame, on the save as `wPlayerData` keeps it. A
+## battle, the pack and the start menu keep counting; `wGameTimerPaused` is
+## `Script_halloffame`'s and `wGameLogicPaused` Bill's PC's and saving's.
 func _advance_game_time_frame() -> void:
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	if save == null or save.game_time == null:
@@ -3334,11 +3351,8 @@ func _update_time_of_day() -> void:
 		_renderer.set_time_of_day(_render_time_of_day())
 
 
-## Public screenshot driver for the sprites the engine draws over an object
-## rather than as one. `effects` is the scripted emote, `SpawnStrengthBoulderDust`,
-## `ShakeGrass` and `ShakeHeadbuttTree`; `cut` is `OWCutAnimation`'s two halves
-## and the jump shadow. Each is started through the call the game makes, so this
-## photographs the renderer's own path.
+## Screenshot driver for the effect sprites: `effects` is the emote, the dust,
+## the grass and the tree shake, `cut` is `OWCutAnimation` and the jump shadow.
 func preview_effect_sprites(kind: StringName = &"effects") -> void:
 	if _world == null or _renderer == null:
 		return
@@ -3853,11 +3867,8 @@ func preview_pack(rows: Dictionary) -> void:
 		_start_menu_host.handle_button(PokeButton.A)
 
 
-## Public screenshot driver for a field evolution, which is the pack's USE on a
-## stone. Driven twice, like the other `*_use` names: the first call opens the
-## pack on the stone and the second uses it on the party's first member, so the
-## picture is `EvolvingText` and `CongratulationsYourPokemonText` in the pack's
-## own box rather than a staged string.
+## Screenshot driver for a stone evolution, driven twice like the other
+## `*_use` names: the pack on the stone, then USE on the first member.
 func preview_item_evolution_use() -> void:
 	if _world == null or _data == null:
 		return
@@ -4260,11 +4271,8 @@ func preview_script_fade(special: int) -> void:
 	})
 
 
-## Public screenshot driver and scene-test entry for `OverworldHatchEgg`: it
-## stands an egg with one cycle left in the first party slot of an injected save,
-## spends the egg step, and opens the sequence on whatever hatched. [param species]
-## is what is inside the egg; 0 takes the first species the cache holds, so the
-## driver works on all three without a table.
+## Screenshot driver for `OverworldHatchEgg`: an egg with one cycle left in
+## slot one of an injected save. [param species] 0 is the cache's first.
 func preview_egg_hatch(species: int = 0) -> void:
 	if _world == null or _data == null or _hatch_host != null:
 		return
@@ -4289,11 +4297,8 @@ func preview_egg_hatch(species: int = 0) -> void:
 	_open_hatch([summary], save)
 
 
-## Public screenshot driver for `TradeAnimation`, which no fixture cell reaches:
-## the movie is opened over the map with no trade behind it, so its close writes
-## nothing. [param frames] is how far in the picture is taken.
-## `special MagnetTrain`, driven the way the trade animation is: frames in, then
-## the direction.
+## Screenshot drivers for `TradeAnimation` with no trade behind it and, below,
+## `special MagnetTrain`: [param frames] in, then the direction.
 func preview_magnet_train(frames: int = 0, to_goldenrod: int = 0) -> void:
 	if _world == null or _data == null or _magnet_train_host != null:
 		return
@@ -4394,11 +4399,8 @@ func _first_stone_evolution() -> Dictionary:
 	return {}
 
 
-## Public screenshot driver and scene-test entry for `EvolveAfterBattle`'s own
-## presentation: the first party member on the first LEVEL evolution the cache
-## holds, the one path a stone cannot reach since `.pressed_b` lets B cancel
-## it. [method _on_evolution_resolved] applies it the way the after-battle pass
-## does.
+## Screenshot driver for `EvolveAfterBattle`: the first member on the cache's
+## first LEVEL evolution, applied by [method _on_evolution_resolved].
 func preview_level_evolution() -> void:
 	if _world == null or _data == null:
 		return
@@ -4512,11 +4514,8 @@ func preview_mod_views() -> void:
 	_start_menu_host.handle_button(PokeButton.A)
 
 
-## Public screenshot driver for the MOVES entry, which needs a registered
-## field-move source before it exists at all: one call opens the menu on the row
-## and a second opens the list of moves the bag can supply.
-## The provider and the HM are synthetic, exactly as [method preview_pet_actor]'s
-## actor is; the row, the list and the move behind it are the host's own.
+## Screenshot driver for the MOVES entry, with a synthetic field-move source as
+## [method preview_pet_actor]'s actor is: the row, then the list.
 func preview_field_moves_menu() -> void:
 	if _world == null or _data == null:
 		return
@@ -4585,12 +4584,8 @@ class PreviewRepel extends RefCounted:
 		return REPEL if int(inventory.get(REPEL, 0)) > 0 else 0
 
 
-## Public screenshot driver for `_Option`, which is what the start menu's own
-## OPTION row opens. One call, since the picture wanted is the settings screen
-## and not the row that reaches it.
-## Public screenshot driver for `StartMenu_Pokedex`, whose row no map cell
-## reaches. A second call presses A on whatever the dex has up, which is how the
-## Generation 1 side menu and its entry page are reached.
+## Screenshot drivers for `_Option` and, below, `StartMenu_Pokedex`, whose
+## second call presses A on whatever the dex has up.
 func preview_pokedex() -> void:
 	if _world == null or _data == null:
 		return
@@ -4635,11 +4630,8 @@ func preview_options() -> void:
 	_start_menu_host.handle_button(PokeButton.A)
 
 
-## Walks the open start menu's cursor onto [param kind] and answers whether it
-## got there. Bounded by the row count on purpose: a row the menu is not
-## offering, because its gate is shut on this save, is a cursor that never
-## reaches it, and an unbounded walk there spins a core without ever rendering a
-## frame. Every `preview_*` driver below goes through this.
+## Walks the start menu's cursor onto [param kind], bounded by the row count
+## since a gated row is never reached. Every `preview_*` below goes through it.
 func _walk_start_menu_to(kind: StringName) -> bool:
 	if _start_menu_host == null:
 		return false
@@ -4680,11 +4672,8 @@ func preview_pokegear() -> void:
 		_start_menu_host.handle_button(PokeButton.A)
 
 
-## Public screenshot drivers for `SaveMenu`, one per box it puts up:
-## `WouldYouLikeToSaveTheGameText` with its yes/no, `AlreadyASaveFileText` past
-## `_ContText`'s own wait, and `SavingDontTurnOffThePowerText` with no question
-## behind it. An injected save keeps the write in memory, the way
-## [method preview_pack_toss] keeps its stack.
+## Screenshot drivers for `SaveMenu`'s three boxes; an injected save keeps
+## the write in memory as [method preview_pack_toss] keeps its stack.
 func preview_save_menu() -> void:
 	_preview_save_menu(0)
 
@@ -4744,11 +4733,8 @@ func preview_pack_toss() -> void:
 	_start_menu_host.handle_button(PokeButton.A)
 
 
-## Public screenshot driver for ForgetMove. It fills the first party member's
-## four move slots and grants a TM or HM that member can learn, on an injected
-## save so nothing persists, then advances one menu step per call: Pack, the
-## TM/HM, USE, YES, the party member, ForgetMove's ask, and the move list. A
-## species that can learn none reports that rather than opening the menu.
+## Screenshot driver for ForgetMove on an injected save: four moves filled, a
+## learnable TM granted, then one menu step per call to the move list.
 func preview_move_forget() -> void:
 	if _world == null or _data == null:
 		return
@@ -4805,11 +4791,8 @@ func _teachable_tmhm_for(species: int) -> int:
 	return 0
 
 
-## Public screenshot driver for the battle-request host path. It starts the same
-## request shape emitted by [Gen2WorldScriptRunner], without pretending a map
-## event was present in the selected development map. [param battle_type] is
-## `wBattleType`, so [constant Gen2Battle.BATTLETYPE_FORCESHINY] opens the fight
-## the Lake of Rage Gyarados is met in.
+## Screenshot driver for the battle-request path with [Gen2WorldScriptRunner]'s
+## request shape; [param battle_type] is `wBattleType`.
 func preview_battle_request(
 	species: int = 16, at_level: int = 5,
 	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL
@@ -4823,11 +4806,8 @@ func preview_battle_request(
 	})
 
 
-## Public screenshot driver for a wild that is already standing on the map: the
-## one a provider put on [param cell], met exactly as a step onto that cell meets
-## it. The entry's id travels with the request, so the provider is told how the
-## fight ended and can take its Pokemon off the map; a battle started any other
-## way leaves the sprite standing where it was.
+## Screenshot driver for a provider's wild on [param cell], met as a step meets
+## it; the entry's id rides the request so the provider hears how it ended.
 func preview_meet_visible_encounter(cell: Vector2i) -> bool:
 	if _encounters == null or not _encounters.active():
 		return false
@@ -4840,11 +4820,8 @@ func preview_meet_visible_encounter(cell: Vector2i) -> bool:
 	return true
 
 
-## Public screenshot driver for the wild capture bridge: one development Master
-## Ball, an imported wild encounter, the battle overlay on its throw message.
-## `CatchTutorial`: the Dude's own fight, which answers itself. `Route29Tutorial1`
-## loads the same `loadwildmon RATTATA, 5` in front of it. A Generation 1 cache
-## throws the old man's, or Prof. Oak's for [param pikachu].
+## Screenshot drivers for the capture bridge and, below, `CatchTutorial`: the
+## Dude's fight after `loadwildmon RATTATA, 5`, or Generation 1's old man or Oak.
 func preview_catch_tutorial(pikachu: bool = false) -> void:
 	if _data != null and _data.generation == RomRegistry.GEN1:
 		var raw: int = Gen1Layout.BATTLE_TYPE_PIKACHU if pikachu else Gen1Layout.BATTLE_TYPE_OLD_MAN
@@ -4996,6 +4973,25 @@ func preview_wild_encounter() -> void:
 		"values": encounter["values"],
 		"encounter": encounter.duplicate(true),
 	})
+
+
+## Public screenshot driver for Yellow's follower: the injected save's lead
+## becomes the starter, which is what `IsStarterPikachuAliveInOurParty` asks
+## for, and the summary refresh is what lets slot fifteen spawn.
+func preview_pikachu() -> void:
+	if _world == null or _data == null or _world.pikachu == null:
+		return
+	var save: Gen2SaveData = _embedded_party_save()
+	if save == null or save.party.is_empty():
+		return
+	var mon: Gen2SaveMon = save.party[0]
+	mon.species = Gen2WorldFieldMove.SPECIES_PIKACHU
+	mon.is_egg = false
+	mon.hp = maxi(mon.hp, 1)
+	mon.original_trainer = save.player_name
+	mon.ot_id = save.player_id
+	_injected_save = save
+	_refresh_party_summary()
 
 
 ## Public screenshot driver for `.Field`: grants [param item] on an injected
@@ -5170,13 +5166,10 @@ func _build_battle_transition(request: Dictionary) -> Gen2BattleTransition:
 	)
 
 
-## `BattleTransition`'s own three bits: `GetBattleTransitionID_WildOrTrainer`,
-## `..._CompareLevels` and `..._IsDungeonMap` over `DungeonMaps1` and
-## `DungeonMaps2`. The level read is `wCurEnemyLevel`, this battle's own, where
-## Crystal reads the previous fight's `wEnemyMonLevel`.
-## `wCurEnemyLevel`, which `InitBattleEnemyParameters` writes for a wild battle
-## and not for a trainer one, so the level a trainer transition is picked by is
-## whatever wild the player last met.
+## `BattleTransition`'s three bits: `GetBattleTransitionID_WildOrTrainer`,
+## `..._CompareLevels` and `..._IsDungeonMap`. The level is `wCurEnemyLevel`,
+## which `InitBattleEnemyParameters` writes for a wild alone, so a trainer
+## transition is picked by the last wild met.
 var _gen1_cur_enemy_level: int = 0
 
 
@@ -5207,12 +5200,9 @@ func _battle_lead_level() -> int:
 	return int((save.party[0] as Gen2SaveMon).level)
 
 
-## `DoBattleTransition` alone, driven to [param frames] frames in, for a
-## screenshot: the transition over the map it actually runs on, without the
-## battle behind it. A non-zero [param variant] is the trainer branch, which
-## draws the Poke Ball and floods every background tile with `PAL_BG_TEXT`; on a
-## Generation 1 cartridge it is `BattleTransitions`' own index instead, so any of
-## the four wild rows can be photographed on any map.
+## `DoBattleTransition` alone, [param frames] in, for a screenshot. A non-zero
+## [param variant] is the trainer branch, or on Generation 1 `BattleTransitions`'
+## own index.
 func preview_battle_transition(frames: int, variant: int = 0) -> void:
 	_battle_transition = Gen2BattleTransition.create_gen1(variant) \
 		if _data != null and _data.generation == RomRegistry.GEN1 \
@@ -5354,13 +5344,9 @@ func _open_battle_host(request: Dictionary) -> void:
 	host.dex_entry_requested.connect(_on_battle_dex_entry_requested)
 	host.item_used.connect(_on_battle_item_used)
 	_battle_host = host
-	## Started after the connections and here rather than left to the host's own
-	## deferred call: `startbattle` is a script command, so the fight belongs to
-	## the frame the encounter fired on, and a run driven frame by frame (a check,
-	## a replay) never reaches a deferred call at all.
-	## `PlayBattleMusic` has already run, either in front of the transition or
-	## here for a request that had none, and the fight is handed this screen's own
-	## driver, so its first cry takes the channels the track is holding.
+	## Started here rather than deferred: `startbattle` belongs to the frame the
+	## encounter fired on, and a frame-driven run never reaches a deferred call.
+	## The fight takes this screen's driver, so its first cry takes the channels.
 	_play_battle_music(request)
 	host.start_world_battle(request.duplicate(true), save, badges)
 	_claim_nuzlocke_encounter(host, values, save)
@@ -5402,12 +5388,9 @@ func _open_battle_host(request: Dictionary) -> void:
 	_refresh_labels()
 
 
-## The Nuzlocke's first rule, at the one place every battle is opened. An area
-## gives up one encounter the moment the Pokemon is met rather than when a ball
-## lands: beating it or running spends it just the same, which is "no second
-## chances". The claim is written to disk here for the same reason a death is, so
-## a reload cannot hand the area back. Two wild battles claim nothing: the Bug
-## Catching Contest has its own park balls, and a roamer belongs to no area.
+## The Nuzlocke's first rule where every battle opens: an area is spent the
+## moment its Pokemon is met, written to disk so a reload cannot hand it back.
+## The Bug Catching Contest and a roamer claim nothing.
 func _claim_nuzlocke_encounter(
 	host: Gen2BattleScreen, values: Dictionary, save: Gen2SaveData
 ) -> void:
@@ -5567,11 +5550,8 @@ func _on_battle_finished(result: Dictionary) -> void:
 	_finish_battle_exit(result, fought_save)
 
 
-## `BattleEnd_HandleRoamMons`, which `ExitBattle` reaches on the way out of any
-## battle and which does nothing unless `wBattleType` is `BATTLETYPE_ROAMING`.
-## A caught or defeated roamer empties its struct; anything else stores the HP
-## and the DVs the fight leaves behind, so the next encounter is the same
-## Pokemon on the bar the player left it on.
+## `BattleEnd_HandleRoamMons` under `BATTLETYPE_ROAMING`: a caught or beaten
+## roamer empties its struct, anything else keeps the HP and DVs it left with.
 func _record_roam_battle(result: Dictionary) -> void:
 	if _world == null or _world.state == null:
 		return
@@ -5705,12 +5685,9 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 	_refresh_labels()
 
 
-## The Nuzlocke's second rule: a faint is a death, so every party member at zero HP
-## is released and recorded. The battle said the line as each one fell; this is
-## where the row actually goes. Written to disk the moment it happens, whatever the
-## outcome was, which is the whole of the no-resets rule this project can enforce:
-## quitting to the launcher and reopening the slot cannot bring anything back.
-## Answers what it took, so a caller that is about to end the run can say so.
+## The Nuzlocke's second rule: every party member at zero HP is released and
+## recorded, written to disk whatever the outcome so a reopened slot brings
+## nothing back. Answers what it took.
 func _reap_nuzlocke_faints(save: Gen2SaveData, cause: StringName) -> Array:
 	if _world == null or _world.rules == null or not _world.rules.is_nuzlocke():
 		return []
@@ -5823,11 +5800,8 @@ func _on_evolution_resolved(plan: Dictionary, canceled: bool) -> void:
 	var form: int = int(applied.get("register_unown", 0))
 	if form > 0:
 		_world.state.update_unown_dex(form)
-	## `LearnLevelMoves` teaches whatever fits an empty slot, which
-	## [method Gen2WorldPartyHost.apply_evolution] has already done. A move that
-	## needs `ForgetMove` is declined here: that menu lives inside the start menu
-	## screen's own mode machine and this pass has no way into it, and declining
-	## is one of the two answers the cartridge takes.
+	## `LearnLevelMoves` past [method Gen2WorldPartyHost.apply_evolution]: a
+	## move needing `ForgetMove` is declined, one of the cartridge's two answers.
 	_script_prompt = "%s evolved" % String(plan.get("evolving_name", ""))
 
 
@@ -5882,12 +5856,9 @@ func _advance_script_input() -> void:
 	_refresh_labels()
 
 
-## `Script_writetext` is `MapTextbox`, which prints its string a letter at a time
-## and returns behind the last one, so a text ending in `<DONE>` owes no press and
-## the script runs on the frame its last page finishes printing. The box reaches
-## that page three ways: printed where it stands, turned to by the press that
-## clears a `<PARA>`, or scrolled into by `_ContText`. Only the middle one is a
-## press, which is why [method advance_frame] asks this as well.
+## `Script_writetext` is `MapTextbox`, returning behind the last letter, so a
+## `<DONE>` text owes no press and the script runs when its last page finishes;
+## that page is reached by a `<PARA>` press or by `_ContText`'s scroll too.
 func _continue_if_text_settled() -> bool:
 	if _text_box == null or not _text_box.visible or _world == null:
 		return false
@@ -5947,14 +5918,10 @@ func _start_trainer_approach(request: Dictionary) -> void:
 	_refresh_labels()
 
 
-## One hardware frame of `SeenByTrainerScript`'s presentation: the shock emote's
-## own count, the movement delay, then one planned cell at a time. The object's
-## step_passes_remaining, set by
-## [method Gen2WorldAPI.advance_trainer_approach_step], is spent by the same
-## frame, while step_offset() still gives the renderer 16-frame interpolation.
-## [param map_pass] is whether this frame runs `HandleMap`'s own pass. The two
-## countdowns in front of the walk are the script's `DelayFrames` and are spent
-## every frame; the walk itself is `HandleObjectStep`'s and is not.
+## One hardware frame of `SeenByTrainerScript`: the shock emote's count, the
+## movement delay, then one planned cell at a time through
+## [method Gen2WorldAPI.advance_trainer_approach_step]. The two countdowns are
+## `DelayFrames` and spend every frame; the walk is `HandleObjectStep`'s and [param map_pass]'s.
 func _advance_trainer_approach(map_pass: bool) -> void:
 	if _world == null:
 		_trainer_approach = {}
@@ -6047,11 +6014,8 @@ func _open_service_host() -> void:
 	_refresh_labels()
 
 
-## Opens the induction sequence `halloffame` asks for. Public so the screenshot
-## tool and the scene tests can reach it without replaying the whole route.
-## The party is the active save's, so an injected or development save inducts
-## whatever it is carrying. A cache with no font answers nothing rather than
-## drawing an empty screen.
+## The induction `halloffame` asks for, on the active save's party; public for
+## the screenshot tool and the scene tests.
 func open_hall_of_fame() -> void:
 	if _hall_of_fame_host != null or _world == null or _data == null:
 		return
@@ -6087,11 +6051,8 @@ func open_hall_of_fame() -> void:
 	_refresh_labels()
 
 
-## `TradeCenter`, `Colosseum` and `TimeCapsule`, which are the same
-## `LinkCommunications` opening with a different exchange behind it: the two
-## trade rooms open this screen and the Colosseum opens a battle against the
-## peer's own party. Answers whether the request was taken over; a false leaves
-## it for the host, which settles a room with no cable on the other end.
+## `TradeCenter`, `Colosseum` and `TimeCapsule`, one `LinkCommunications`
+## with a different exchange behind it. False leaves a cableless room to the host.
 func _open_link_room(request: Dictionary) -> bool:
 	var values: Dictionary = request.get("values", {})
 	if int(values.get("link_mode", 0)) == Gen2LinkSession.LINK_COLOSSEUM:
@@ -6161,11 +6122,8 @@ func _on_link_screen_closed() -> void:
 	_refresh_labels()
 
 
-## The cable, on the same refresh the party mirror rides. There is no cable on
-## this platform and the only second party that exists on one machine is the
-## player's own other save file, so that is the peer: the first other occupied
-## slot of the same cartridge. No other slot is no cable, which is what the
-## receptionist's "your friend is not ready" answers.
+## The cable: the peer is the first other occupied slot of the same cartridge,
+## and none is the receptionist's "your friend is not ready".
 func _refresh_link_transport(save: Gen2SaveData) -> void:
 	if _world == null or _world.state == null or _data == null:
 		return
@@ -6240,11 +6198,8 @@ func _on_hall_of_fame_rating(sfx: int) -> void:
 	_play_sfx(sfx)
 
 
-## `Script_credits`, which farcalls `RedCredits` and then ends the script.
-## [param skippable] is the `wStatusFlags` byte `Credits` is handed: `RedCredits`
-## passes the live one, which by Red has the Hall of Fame bit in it, while
-## `HallOfFame` pushes the byte before setting that bit, so the induction's own
-## credits cannot be skipped even on a second run.
+## `Script_credits`' `RedCredits`. [param skippable] is the `wStatusFlags` byte
+## `Credits` is handed, which `HallOfFame` pushes before setting its bit.
 func open_credits(skippable: bool = true) -> bool:
 	if _credits_host != null or _world == null or _data == null:
 		return false
@@ -6786,12 +6741,9 @@ func _on_party_closed(_result: Dictionary) -> void:
 	_refresh_labels()
 
 
-## MonMenu_Cut and MonMenu_Surf share a shape: the party menu closes first, then
-## the field-move function runs and either queues its script or pushes its own
-## refusal text. Both refusals and the success message go through the hardware
-## text box, and nothing changes until the acknowledge, matching Script_Cut
-## reaching CutDownTreeOrGrass and UsedSurfScript reaching SurfStartStep only
-## after their text.
+## MonMenu_Cut and MonMenu_Surf: the party menu closes, then the field move
+## queues its script or its refusal, and nothing changes until the text is
+## acknowledged, as CutDownTreeOrGrass and SurfStartStep follow their lines.
 func _on_party_action(action: Dictionary) -> void:
 	var host: Gen2PartyScreen = _party_host
 	_party_host = null
@@ -7041,11 +6993,8 @@ func _sweet_scent_refusal(_reason: StringName, user: String) -> String:
 		+ Gen2TextStream.PAGE_BREAK + Gen2WorldFieldMove.SWEET_SCENT_NOTHING_TEXT
 
 
-## `FieldMoveFailed`, shared by every field move with no text of its own: Fly's
-## `.nostormbadge` and `.indoors`, Dig's `.CantUseDigText`, Teleport, and the two
-## the menu refuses through it, `TryRockSmashFromMenu` and `TryHeadbuttFromMenu`.
-## `AskRockSmashScript`'s `_MaySmashText` belongs to the other path, where the
-## runner owns it, and Headbutt is gated on `CheckPartyMove` and the tile alone.
+## `FieldMoveFailed`, shared by Fly, Dig, Teleport, `TryRockSmashFromMenu` and
+## `TryHeadbuttFromMenu`; `AskRockSmashScript`'s `_MaySmashText` is the runner's.
 func _field_move_refused(_reason: StringName) -> String:
 	return Gen2WorldFieldMove.CANT_USE_TEXT
 
@@ -7302,6 +7251,7 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 			&"escape_applied":
 				_play_sfx(SFX_WARP_TO)
 				_refresh_after_escape()
+				_world.gen1_pikachu_landed()
 			&"waterfall_applied":
 				_play_sfx(SFX_WATERFALL)
 			&"flash_used":
@@ -7615,6 +7565,8 @@ func _advance_fly() -> void:
 
 func _finish_fly() -> void:
 	_pending_fly = {}
+	if _world != null:
+		_world.gen1_pikachu_landed()
 	if _renderer != null:
 		_renderer.sprites_hidden = false
 		_renderer.refresh()
@@ -7640,11 +7592,9 @@ func _on_service_completed(results: Array) -> void:
 	_reopen_start_menu_if_due()
 
 
-## Script event to the method that spends it, each taking the event. Four types
-## are not here: `soft_reset_requested` ends the screen, `tree_shake_requested`
-## has nothing for a host to start because the object animates itself for the
-## frames the stream sleeps, and the rest are in [constant EVENT_FLAGS] and
-## [constant EVENT_PROMPTS].
+## Script event to the method that spends it. `soft_reset_requested` ends the
+## screen, `tree_shake_requested` animates itself, the rest are
+## [constant EVENT_FLAGS] and [constant EVENT_PROMPTS].
 const EVENT_HANDLERS: Dictionary = {
 	&"presentation_special_applied": &"_apply_presentation",
 	&"contest_mons_dropped_off": &"_event_contest_drop_off",
@@ -7667,6 +7617,7 @@ const EVENT_HANDLERS: Dictionary = {
 const PRESENTATION_HANDLERS: Dictionary = {
 	&"prof_oaks_pc_boot": &"_event_prof_oaks_pc",
 	&"heal_machine_anim": &"_start_heal_machine_sounds",
+	&"pikapic": &"_start_pikapic",
 	&"gen1_elevator_shake": &"_start_gen1_elevator_shake",
 	&"palette_fade": &"_start_script_fade",
 }
@@ -7749,11 +7700,8 @@ func _show_script_results(results: Array) -> void:
 	var flags: Dictionary = {}
 	for source_result: Dictionary in results:
 		var result: Dictionary = Gen2ModHost.publish(Gen2ModHost.CHANNEL_WORLD, source_result)
-		## Spent before the status below, and before any branch of it that leaves
-		## the loop: a command's presentation effect happened before the wait the
-		## same result ends on. A `break` that skipped this left a `pokepic`
-		## undrawn, since `Script_pokepic` is followed by the `cry` whose runtime
-		## request breaks out of the loop.
+		## Before the status and any branch leaving the loop: a `break` that
+		## skipped this left `Script_pokepic` undrawn behind its `cry`'s request.
 		for result_event: Dictionary in result.get("events", []):
 			if not _apply_result_event(result_event, flags):
 				return
@@ -7793,11 +7741,8 @@ func _apply_presentation(event: Dictionary) -> void:
 		call(PRESENTATION_HANDLERS[kind], event)
 
 
-## `ContestDropOffMons` masks the party to its lead; the world state keeps the
-## stashed species byte and the save keeps the members themselves.
-## An event, not a runtime request: `halloffame` commits its flag and runs on,
-## and the source's own `end` is the next command, so nothing is waiting to be
-## resumed when this opens.
+## `ContestDropOffMons` masks the party to its lead. Below, `halloffame` as an
+## event: it commits its flag and its `end` is the next command.
 func _event_hall_of_fame(_event: Dictionary) -> void:
 	open_hall_of_fame()
 
@@ -8067,12 +8012,8 @@ func _request_bug_contest_judging(_request: Dictionary) -> StringName:
 	return &"return"
 
 
-## `TryQuickSave`, which is `Link_SaveGame`: the overwrite question, the SAVING
-## box and `SavedTheGame`, on the service screen where BILL'S PC's already are. A
-## driver with no scene behind it still writes rather than hanging.
-## `HallOfFamePC`, which Generation 1's own room script calls and waits on: the
-## induction and the credits, and the script's save and reset behind them run
-## when the credits close.
+## `TryQuickSave`, which is `Link_SaveGame` on the service screen, and below
+## `HallOfFamePC`, whose save and reset run when the credits close.
 func _request_hall_of_fame(_request: Dictionary) -> StringName:
 	open_hall_of_fame()
 	return &"break"
@@ -8315,13 +8256,9 @@ func money_window_open() -> bool:
 	return _money_window != null
 
 
-## `HaircutOrGrooming`'s own `call ChangeHappiness`. The row is the runner's,
-## since the roll that picked it belongs to the seeded generator; the byte it
-## changes belongs to this screen's save. Below, `RemoveMonFromPartyOrBox` with
-## REMOVE_PARTY, which `ReturnShuckie` runs on the row handed back, and
-## `GivePokeMail`, the item onto MON_ITEM and the message into `sPartyMail`. Both
-## are events rather than runtime requests: each routine answers nothing and runs
-## straight on, and the write is the save write a happiness change is.
+## `HaircutOrGrooming`'s `call ChangeHappiness`: the roll is the runner's, the
+## byte this save's. Below, `ReturnShuckie`'s REMOVE_PARTY and `GivePokeMail`,
+## events rather than requests since each runs straight on.
 func _give_party_mail(event: Dictionary) -> void:
 	var save: Gen2SaveData = _embedded_party_save()
 	var slot: int = int(event.get("slot", -1))
@@ -8427,11 +8364,8 @@ func _apply_party_happiness(event: Dictionary) -> void:
 	)
 
 
-## `SelectMonFromParty` opened by one of `engine/events/haircut.asm`'s four
-## routines. The same list the Name Rater and the move deleter open, and the
-## same `_party_host` the start menu uses, so an overlay is named in one place
-## and a press reaches it through one branch. The trade reaches
-## `SelectTradeOrDayCareMon` instead, so it alone asks for the gender column.
+## `SelectMonFromParty` for `haircut.asm`'s four routines, on the start menu's
+## `_party_host`; the trade's `SelectTradeOrDayCareMon` alone asks for the gender column.
 func _open_party_selection(request: Dictionary = {}) -> bool:
 	if _party_host != null or _world == null or _data == null:
 		return false
@@ -8518,9 +8452,60 @@ func _on_party_selection_made(party_index: int) -> void:
 	_refresh_labels()
 
 
-## `Script_pokepic`'s box over the map, which is what a starter's ball and every
-## other `pokepic` shows. The map stays up behind it: `MENU_BACKUP_TILES` is what
-## `ClosePokepic` restores, and an overlay that is removed does that by existing.
+## `Script_pokepic`'s box over the map, `MENU_BACKUP_TILES` restored by removal.
+## Below, `StarterPikachuEmotionCommand_pikapic`'s face box, drawn a frame at a time.
+func _start_pikapic(event: Dictionary) -> void:
+	_hide_pikapic()
+	_pikapic = Gen1PikaPicPage.from_data(_data, _world.current_map, _render_time_of_day())
+	if _pikapic == null:
+		_world.finish_presentation()
+		return
+	_pikapic.start(int(event.get("index", 0)))
+	_pikapic_pressed = false
+
+
+## The map's sprites are off from the border going up until twelve frames
+## after the box has gone, as the cartridge draws it.
+func _advance_pikapic() -> void:
+	if _pikapic == null:
+		return
+	_pikapic.advance_frame(_pikapic_pressed)
+	_pikapic_pressed = false
+	if not _pikapic.running():
+		_hide_pikapic()
+		_world.finish_presentation()
+		return
+	if not _pikapic.box_shown():
+		_hide_pikapic_box()
+		return
+	if _renderer != null and not _renderer.sprites_hidden:
+		_renderer.sprites_hidden = true
+		_renderer.refresh()
+	var image: Image = _pikapic.render()
+	if _pikapic_rect == null:
+		_pikapic_rect = TextureRect.new()
+		_pikapic_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_pikapic_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_pikapic_rect.position = Vector2(_pikapic.position())
+		_screen.display(_pikapic_rect)
+	Gen2PicImage.show(_pikapic_rect, image)
+	_pikapic_rect.size = image.get_size()
+
+
+func _hide_pikapic_box() -> void:
+	if _pikapic_rect != null:
+		_pikapic_rect.queue_free()
+		_pikapic_rect = null
+
+
+func _hide_pikapic() -> void:
+	_pikapic = null
+	_hide_pikapic_box()
+	if _renderer != null and _renderer.sprites_hidden:
+		_renderer.sprites_hidden = false
+		_renderer.refresh()
+
+
 func _show_story_picture(species: int) -> void:
 	if _data == null or _world == null:
 		return
@@ -8547,11 +8532,8 @@ func map_name_sign_passes() -> int:
 	return _map_name_sign_passes
 
 
-## `InitMapNameSign`'s own decision, raised where the map load leaves it: the
-## sign is a window over the bottom four rows and the map keeps moving behind it,
-## which is why a connection crossing shows one without stopping the camera.
-## Gold and Silver ship neither the routine nor `MapEntryFrameGFX`, so the world
-## asks for no sign there and the page would answer none either.
+## `InitMapNameSign`'s decision, raised where the map load leaves it: a window
+## over the bottom four rows with the map moving behind it. Not on Gold and Silver.
 func _raise_map_name_sign() -> void:
 	if _world == null or _data == null:
 		return
@@ -8598,21 +8580,15 @@ func _advance_map_name_sign_pass() -> void:
 		_map_name_sign.visible = true
 
 
-## `PlayerEvents`' own `xor a / ld [wLandmarkSignTimer], a`, which sits behind
-## `DoPlayerEvent` and is skipped for PLAYEREVENT_CONNECTION and
-## PLAYEREVENT_JOYCHANGEFACING alone. Called where this screen dispatches one of
-## the others, rather than keyed on a script being busy: the map's own callbacks
-## are `RunMapCallback`'s work inside map setup and reach `PlayerEvents` never,
-## so a queued one used to take down the very sign the map load had raised.
+## `PlayerEvents`' `xor a / ld [wLandmarkSignTimer], a`, skipped for
+## PLAYEREVENT_CONNECTION and PLAYEREVENT_JOYCHANGEFACING alone. Keyed on a
+## dispatched event, not a busy script: a map callback used to take the sign down.
 func _zero_map_name_sign_timer() -> void:
 	_hide_map_name_sign()
 
 
-## The same, for a batch of script results, since only some of them are a player
-## event. `RunMapCallback`'s work is map setup and reaches `PlayerEvents` never;
-## `RunSceneScript` runs its scene script and then answers carry only when that
-## script set RUN_DEFERRED_SCRIPT, so a scene of bare `end`s (Route 29's two, and
-## most of the map scenes in either pin) raises no event and takes no sign down.
+## The same for a batch of results: `RunMapCallback` never reaches
+## `PlayerEvents`, and a scene of bare `end`s raises no event and takes no sign down.
 func _zero_map_name_sign_for(results: Array) -> void:
 	for result: Dictionary in results:
 		match StringName((result.get("source", {}) as Dictionary).get("kind", &"")):
@@ -8633,11 +8609,8 @@ func _hide_map_name_sign() -> void:
 	_map_name_sign = null
 
 
-## `DisplayUnownWords`: the chamber wall's word in a box of its own, held by
-## `JoyWaitAorB`. The special stages the word as a text the runner is waiting on,
-## so answering the box is what answers that wait; a cache or a map that cannot
-## draw the letters falls back to the text box, which is what puts the word up
-## on any host without the chamber's own tileset.
+## `DisplayUnownWords`: the wall's word in its own box under `JoyWaitAorB`,
+## staged as the text the runner waits on; a cache without the letters uses the text box.
 func _open_unown_wall(word: String) -> bool:
 	if _world == null or _data == null or _unown_wall_box != null:
 		return false
@@ -8806,12 +8779,8 @@ func _mod_hidden_items() -> Array:
 	return _world.hidden_items() if _world != null else []
 
 
-## A mod's item-gift asks, spent the way its hidden-item asks are and on the same
-## gate: `verbosegiveitem`'s own transaction through the ordinary script path, so
-## the fanfare, the box and the pacing are the world screen's exactly as they are
-## for a give the map itself makes.
-## One per frame, since the first one's box owns the world until it is pressed
-## past, and the rest wait in the host's queue.
+## A mod's item-gift asks, spent as its hidden-item asks are: `verbosegiveitem`
+## through the ordinary path, one per frame since the first box owns the world.
 func _spend_item_gift_requests() -> void:
 	if _world == null or not _world_idle_for_mod_request():
 		return
@@ -8966,12 +8935,9 @@ func _start_sound_schedule(schedule: Array) -> void:
 	_sound_schedule_frame = 0
 
 
-## One frame of that schedule, spent from the same pump the script's own wait is.
-## A `wait` entry is `WaitPlaySFX`, and it is a real wait only while the driver
-## is being serviced: a run with no audio device leaves the channels as the last
-## sound left them, so `effect_playing()` would answer true for the rest of the
-## run and the schedule would never drain. The rendered-frame count is what tells
-## the two apart, which is what the battle screen's own `ANIM_WAIT_SFX` does.
+## One frame of that schedule. A `wait` entry is `WaitPlaySFX`, real only while
+## the driver is serviced: with no audio device `effect_playing()` never clears,
+## so the rendered-frame count decides, as the battle's `ANIM_WAIT_SFX` does.
 func _advance_sound_schedule() -> void:
 	while not _sound_schedule.is_empty():
 		var due: Dictionary = _sound_schedule[0]
@@ -9127,6 +9093,7 @@ func _refresh_party_summary() -> void:
 			"id_numbers": id_numbers,
 			"stored_id_numbers": _stored_id_numbers(save),
 			"stored_species": _stored_species(save),
+			"starter_pikachu": _starter_pikachu(save),
 		},
 		fainted
 	)
@@ -9152,6 +9119,36 @@ func _stored_id_numbers(save: Gen2SaveData) -> Array:
 		for slot: Variant in (box as Gen2SaveBox).slots:
 			if slot is Gen2SaveMon:
 				out.append(int((slot as Gen2SaveMon).ot_id))
+	return out
+
+
+## `IsStarterPikachuAliveInOurParty` and `IsSurfingPikachuInParty`: the starter
+## is a Pikachu carrying the player's ID and the first five letters of the
+## player's name, with HP left; the surfer is any Pikachu knowing SURF. The two
+## status facts are `IsPlayerPikachuAsleepInParty` and
+## `CheckPikachuStatusCondition`, read off the same member.
+func _starter_pikachu(save: Gen2SaveData) -> Dictionary:
+	var out: Dictionary = {"alive": false, "surfing": false, "asleep": false, "ailing": false}
+	if save == null:
+		return out
+	var owner: String = save.player_name.substr(0, Gen1Layout.OT_MATCH_LENGTH)
+	for member: Variant in save.party:
+		if not member is Gen2SaveMon or int((member as Gen2SaveMon).species) \
+			!= Gen2WorldFieldMove.SPECIES_PIKACHU:
+			continue
+		var mon: Gen2SaveMon = member as Gen2SaveMon
+		if mon.moves.has(Gen2WorldFieldMove.MOVE_SURF):
+			out["surfing"] = true
+		if int(mon.ot_id) != int(save.player_id) \
+			or mon.original_trainer.substr(0, Gen1Layout.OT_MATCH_LENGTH) != owner:
+			continue
+		## `.sameOT` answers on the first match, fainted or not.
+		if out.has("slot"):
+			continue
+		out["slot"] = save.party.find(member)
+		out["alive"] = mon.hp > 0
+		out["asleep"] = (int(mon.status) & Gen2Status.SLEEP_MASK) != 0
+		out["ailing"] = int(mon.status) != 0
 	return out
 
 

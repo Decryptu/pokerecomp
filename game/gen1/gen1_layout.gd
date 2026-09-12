@@ -453,6 +453,7 @@ const HEAL_MACHINE_BYTES: Array[int] = [
 ## `ShockEmote`, at the $F8 `EmotionBubblesOAMBlock` names. It is the one
 ## `EmotionBubbles` row with a caller: `CheckFightingMapTrainers`.
 const SHOCK_EMOTE_VTILE: int = 0xF8
+const EMOTE_TILES: int = 4
 const SHOCK_EMOTE_BYTES: Array[int] = [
 	0x1F, 0x00, 0x3F, 0x1F, 0x7F, 0x20, 0xFF, 0x41,
 	0xFF, 0x41, 0xFF, 0x41, 0xFF, 0x41, 0xFF, 0x41,
@@ -1137,6 +1138,7 @@ const SCRIPT_SWAP_A: int = 0x37
 const SCRIPT_COORD_SOURCES: Array[String] = ["player_y", "player_x"]
 ## `PAD_DOWN` down to `PAD_RIGHT`, bits 7 to 4, as `Gen2WorldAPI`'s directions.
 const PAD_DIRECTIONS: Dictionary = {0x80: 0, 0x40: 1, 0x20: 2, 0x10: 3}
+const PAD_DOWN_MASK: int = 0x80
 ## `wSimulatedJoypadStatesEnd`'s buffer, one walking step an entry. The longest
 ## the corpus writes is `WalkToLance_RLEList`'s 37.
 const SIMULATED_JOYPAD_MAX: int = 48
@@ -1170,8 +1172,9 @@ const MAP_SCRIPT_STATES: int = 32
 ## What a `<Map>_ScriptPointers` word has to be to be a pointer at all.
 const SCRIPT_LOWEST: int = 0x0100
 const SCRIPT_CEILING: int = 0x8000
-## How deep a `call` to a routine the layout does not name may nest.
-const SCRIPT_CALL_DEPTH: int = 2
+## How deep a `call` to a routine the layout does not name may nest: the Fan
+## Club's second state reaches `InitializePikachuTextID` three calls down.
+const SCRIPT_CALL_DEPTH: int = 3
 const SCRIPT_PUSH_AF: int = 0xF5
 const SCRIPT_POP_AF: int = 0xF1
 const SCRIPT_PUSH_HL: int = 0xE5
@@ -1216,7 +1219,8 @@ const SCRIPT_CALLS: Array[String] = [
 	"player_coords_in_array", "start_trainer_battle", "end_trainer_battle", "force_bike_or_surf",
 	"play_music", "stop_all_music", "random", "set_sprite_position_2", "set_sprite_image",
 	"set_sprite_image_2", "enable_pikachu_drawing", "disable_pikachu_drawing",
-	"check_pikachu_following",
+	"check_pikachu_following", "disable_pikachu_following", "enable_pikachu_following",
+	"apply_pikachu_movement",
 	"set_sprite_facing", "set_sprite_facing_delay", "sprite_stay", "move_sprite",
 	"decode_rle", "decode_arrow_movement", "update_gym_gates",
 	"serial_connect", "fill_memory", "save_end_battle_text", "engage_map_trainer",
@@ -1288,7 +1292,8 @@ const SCRIPT_SILENT_FLAGS: Dictionary = {
 	"status_flags_3": (1 << WARP_FROM_SCRIPT_BIT) | (1 << ON_DUNGEON_WARP_BIT)
 		| (1 << TALKED_TO_TRAINER_BIT) | (1 << PRINT_END_BATTLE_TEXT_BIT),
 	"status_flags_6": 1 << DUNGEON_WARP_BIT,
-	"pikachu_map_script_flags": 0xFF,
+	"pikachu_map_script_flags": 0xFF & ~((1 << PIKACHU_MAP_PAUSE_IGT_BIT)
+		| (1 << PIKACHU_MAP_SURF_SELECT_BIT)),
 	## The champion fight turns battle animations on for itself; the sight walk
 	## owns BIT_SEEN_BY_TRAINER and the renderer BIT_NO_SPRITE_UPDATES.
 	"options": 1 << BATTLE_ANIMATION_BIT,
@@ -1307,10 +1312,87 @@ const PUSHED_BOULDER_BIT: int = 7
 ## Bits clear whenever a state body runs: the fall and the sight walk happen outside it.
 const SCRIPT_ZERO_BITS: Dictionary = {
 	"status_flags_3": (1 << ON_DUNGEON_WARP_BIT) | (1 << TALKED_TO_TRAINER_BIT),
-	"pikachu_spawn_state_flags": 1 << PIKACHU_SPAWN_STARTER_BIT,
 }
+const PIKACHU_SPAWN_SURFING_BIT: int = 6
 const PIKACHU_SPAWN_STARTER_BIT: int = 7
+const PIKACHU_MAP_PAUSE_IGT_BIT: int = 0
+## `PikachuMovement_EnterCellSeparatorNotDown` is the longest, at eight bytes.
+const PIKACHU_MOVEMENT_MAX: int = 32
+## The follower's bank, `PikachuEmotionTable`'s 34 rows and
+## `StarterPikachuEmotionsJumptable`'s commands with their argument widths.
+const PIKACHU_BANK: int = 0x3F
+const TEXT_PIKACHU_ANIM: int = 0xD4
+const PIKACHU_EMOTIONS: int = 34
+const PIKACHU_EMOTION_END: int = 0xFF
+const PIKACHU_EMOTION_COMMANDS: Dictionary = {
+	1: "text", 2: "pcm", 3: "emote", 4: "movement", 5: "pikapic", 6: "subcmd",
+	7: "delay", 9: "turn_away",
+}
+const PIKACHU_EMOTION_SIZES: Dictionary = {1: 2, 2: 1, 3: 1, 4: 2, 5: 1, 6: 1, 7: 1}
+const PIKACHU_HAPPINESS_ROW: int = 6
+## `PikaPicAnimPointers`' 30 rows, `PikaPicAnimBGFramesPointers`' 36,
+## `PikaPicTilemapPointers`' 43 and `PikaPicAnimGFXHeaders`' 63 of four bytes,
+## a compressed one reserving `5 * 5` tiles. The setup commands and their
+## argument widths are `RunPikaPicAnimSetupScript.Jumptable`'s.
+const PIKAPIC_SCRIPTS: int = 30
+const PIKAPIC_FRAMESETS: int = 36
+const PIKAPIC_TILEMAPS: int = 43
+const PIKAPIC_GFX: int = 63
+const PIKAPIC_GFX_HEADER_SIZE: int = 4
+const PIKAPIC_COMPRESSED: int = 0xFF
+const PIKAPIC_PIC_TILES: int = 25
+const PIKAPIC_FRAMESET_END: int = 0xE0
+const PIKAPIC_COMMANDS: Dictionary = {
+	0: "nop", 1: "delay", 2: "loadgfx", 3: "object", 4: "nop", 5: "nop", 6: "delete",
+	7: "nop", 8: "nop", 9: "jump", 10: "duration", 11: "cry", 12: "thunderbolt",
+	13: "run", 14: "ret",
+}
+const PIKAPIC_COMMAND_SIZES: Dictionary = {1: 1, 2: 1, 3: 5, 6: 1, 9: 2, 10: 2, 11: 1}
+const PIKAPIC_JUMP: int = 9
+const PIKAPIC_RET: int = 14
+const PIKAPIC_TILE_KEEP: int = 0xFF
+## `PikachuCriesPointerTable`'s 43 `dba` rows, each clip opening on its byte
+## count; `PlayPikachuSoundClip`'s three `DelayFrame`s, and the eight one-bit
+## samples a byte holds at the 394 samples a frame the cartridge was measured at.
+const PIKACHU_CRIES: int = 43
+const PIKACHU_CRY_ROW_SIZE: int = 3
+const PIKACHU_CRY_LEAD_FRAMES: int = 3
+const PIKACHU_CRY_SAMPLES_PER_FRAME: int = 394
+## `DisplayTextIDInit`'s `CopyScreenTileBufferToVRAM` and `LoadFontTilePatterns`,
+## measured from the A press to `TalkToPikachu` on the cartridge.
+const TEXT_INIT_FRAMES: int = 20
+## `MapSpecificPikachuExpression`'s named rows of that table, its `.Emotions`
+## list under `wPikachuEmotionModifier`, and the maps and script it reads.
+const PIKACHU_EMOTION_FAN_CLUB_SEEL: int = 29
+const PIKACHU_EMOTION_FAN_CLUB_LEFT: int = 30
+const PIKACHU_EMOTION_PEWTER_ASLEEP: int = 26
+const PIKACHU_EMOTION_BILL_HEALED: int = 27
+const PIKACHU_EMOTION_BILL_ARRIVED: int = 23
+const PIKACHU_EMOTION_BILL_UNMET: int = 32
+const PIKACHU_EMOTION_BILL_MET: int = 31
+const PIKACHU_EMOTION_ASLEEP: int = 11
+const PIKACHU_EMOTION_AILING: int = 28
+const PIKACHU_EMOTION_TOWER: int = 22
+const PIKACHU_MODIFIER_EMOTIONS: Array[int] = [18, 21, 23, 24, 25]
+const POKEMON_FAN_CLUB: int = 0x5A
+const PEWTER_POKECENTER: int = 0x3A
+const BILLS_HOUSE: int = 0x58
+const POKEMON_TOWER_1F: int = 0x8E
+const POKEMON_TOWER_7F: int = 0x94
+const MET_BILL_2_EVENT: int = 1372
+const BILLS_HOUSE_SCRIPT_ARRIVED: int = 0
+const BILLS_HOUSE_SCRIPT_HEALED: int = 5
+## `StarterPikachuEmotionCommand_subcmd`'s rows that do anything here.
+const PIKACHU_SUBCMD_REDRAW: int = 2
+const PIKACHU_SUBCMD_PEWTER: int = 4
+const PIKACHU_SUBCMD_FAN_CLUB: int = 5
+const PIKACHU_SUBCMD_BILLS: int = 6
+const PIKACHU_REDRAW_FRAMES: int = 3
+const PIKACHU_MAP_SURF_SELECT_BIT: int = 1
 const PIKACHU_MAP_SCRIPT_ACTIVE_BIT: int = 7
+## `IsStarterPikachuAliveInOurParty` compares `NAME_LENGTH_JP - 1` letters of
+## the OT name against the player's.
+const OT_MATCH_LENGTH: int = 5
 ## Bits that live for one map, held by name until the next map load.
 const SCRIPT_VOLATILE_BITS: Dictionary = {
 	"misc_flags": {PUSHED_BOULDER_BIT: "pushed_boulder"},
@@ -1362,7 +1444,9 @@ const INITIAL_CATCH_TRAINING_EVENT: Dictionary = {RomRegistry.YELLOW: 47}
 ## Routines named by a full ROM offset, the same address in another bank being another routine.
 const SCRIPT_BANKED_CALLS: Array[String] = [
 	"coin_box", "music_rival_start", "music_rival_tempo", "schedule_pikachu_spawn",
-	"music_rival_start_tempo", "music_cities1_tempo",
+	"music_rival_start_tempo", "music_cities1_tempo", "is_starter_pikachu_alive",
+	"check_pikachu_status", "play_pikachu_sound_clip", "celadon_granny_thresholds",
+	"try_apply_pikachu_movement", "mt_moon_pikachu_movement", "cinnabar_pikachu_movement",
 	"emotion_bubble", "find_path_to_player", "calc_player_relative",
 	"hall_of_fame_pc", "is_player_on_dungeon_warp", "load_spinner_arrow_tiles",
 	"pewter_guys", "convert_npc_directions", "heal_party", "save_game_data",
@@ -1372,8 +1456,8 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 ]
 ## The four of those a `farcall` spends nothing on: no node carries a sound.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
-	"music_rival_start", "music_rival_tempo", "music_rival_start_tempo", "schedule_pikachu_spawn",
-	"music_cities1_tempo",
+	"music_rival_start", "music_rival_tempo", "music_rival_start_tempo",
+	"music_cities1_tempo", "play_pikachu_sound_clip",
 	"load_spinner_arrow_tiles", "convert_npc_directions", "pewter_guys",
 ]
 ## The routines that spend nothing here: no node carries a sound, a press
@@ -1386,7 +1470,6 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	## `SetSpritePosition2` puts back what `GetSpritePosition2` saved on the same
 	## visit, which the map's own table answers here; the image index is drawn.
 	"set_sprite_position_2", "set_sprite_image", "set_sprite_image_2",
-	"enable_pikachu_drawing", "disable_pikachu_drawing",
 	## Red and Blue spell `StopAllMusic` as `PlaySound`; only Yellow has a routine.
 	"play_music", "stop_all_music",
 	## A wait is frames of nothing and the map music is nobody's here. The three
@@ -1463,7 +1546,7 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	"current_menu_item", "max_menu_item", "top_menu_item_y", "top_menu_item_x",
 	"menu_watched_keys",
 	"last_menu_item", "menu_item_to_swap", "print_item_prices", "list_menu_id",
-	"filtered_bag_count", "walk_bike_surf_state_copy", "pikachu_spawn_state",
+	"filtered_bag_count", "walk_bike_surf_state_copy",
 	## `AddPartyMon`'s catch-rate byte, read back by a Time Capsule alone.
 	"party_mon_1_catch_rate",
 ]
@@ -1541,6 +1624,7 @@ const ENGINE_FLAG_BYTES: Dictionary = {
 	"status_flags_1": 1,
 	"elite_4_flags": 1,
 	"beat_gym_flags": 1,
+	"pikachu_map_script_flags": 1,
 }
 ## `PrintStrengthText` sets bit 0 and `IsSurfingAllowed` bit 1. Generation 1 has
 ## no `ResetBikeFlags`, so bit 0 outlives the map it was set on.
@@ -2099,6 +2183,7 @@ const RED_BLUE: Dictionary = {
 	"ball_tiles": 0x3A97E,
 	"stats_p": 0x12ADC,
 	"shock_emote_gfx": 0x17CBD,
+	"emote_sheets": 3,
 	"wild_data": 0x0CEEB,
 	"wild_chances": 0x13918,
 	"good_rod": 0x0E27F,
@@ -2546,6 +2631,7 @@ const YELLOW: Dictionary = {
 	"ball_tiles": 0x3AA28,
 	"stats_p": 0x11682,
 	"shock_emote_gfx": 0x411E5,
+	"emote_sheets": 8,
 	"wild_data": 0x0CB95,
 	"wild_chances": 0x138E2,
 	"good_rod": 0x0E12C,
@@ -2721,12 +2807,34 @@ const YELLOW: Dictionary = {
 	"rle_gym_object": 0x1A6D8,
 	"pikachu_map_script_flags": 0xD492,
 	"pikachu_spawn_state_flags": 0xD471,
-	## The follower nothing here draws: its spawn byte and routines.
 	"pikachu_spawn_state": 0xD430,
+	"pikachu_happiness": 0xD46F,
 	"schedule_pikachu_spawn": 0xFC4FA,
 	"enable_pikachu_drawing": 0x1525,
 	"disable_pikachu_drawing": 0x152D,
+	"disable_pikachu_following": 0x153A,
+	"enable_pikachu_following": 0x1542,
 	"check_pikachu_following": 0x154A,
+	"is_starter_pikachu_alive": 0xFCDB8,
+	"check_pikachu_status": 0xFCE73,
+	"play_pikachu_sound_clip": 0xF0000,
+	"celadon_granny_thresholds": 0xF1EA2,
+	"apply_pikachu_movement": 0x159B,
+	"try_apply_pikachu_movement": 0xF0A82,
+	## `MtMoonB2FScript_ApplyPikachuMovementData` and `CinnabarGymScript_74fa3`,
+	## the same gate without the refresh.
+	"mt_moon_pikachu_movement": 0x4A325,
+	"cinnabar_pikachu_movement": 0x74FA3,
+	"pikachu_emotion_table": 0xFD019,
+	"pikachu_mood_table": 0xFD99C,
+	"pikachu_happiness_table": 0xFD9A6,
+	"bills_house_script": 0xD660,
+	"pikapic_scripts": 0xFDA5E,
+	"pikapic_framesets": 0xFDBC9,
+	"pikapic_tilemaps": 0xFDDB8,
+	"pikapic_thunderbolt": 0xFE242,
+	"pikapic_gfx_headers": 0xFE572,
+	"pikachu_cries": 0xF008E,
 	"player_moving_direction": 0xD527,
 	"play_music": 0x2211,
 	"stop_all_music": 0x2233,

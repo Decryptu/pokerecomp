@@ -1893,7 +1893,10 @@ static func _new_mon(
 		return null
 	var out: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(battle_mon)
 	out.nickname = String(data.species(species).get("name", ""))
+	## `AddPartyMon`'s `.trainerID` reads `wPlayerID` beside the name; a trade
+	## and Shuckie overwrite both afterwards.
 	out.original_trainer = save.player_name
+	out.ot_id = save.player_id & 0xFFFF
 	out.is_egg = is_egg
 	if is_egg:
 		out.nickname = "EGG"

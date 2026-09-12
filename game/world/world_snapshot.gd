@@ -47,7 +47,7 @@ var dig_warp: Dictionary = {}
 ## `wLastMap` and `wLastBlackoutMap`, saved player data Generation 1 alone keeps:
 ## the outdoor map an indoor one comes back out to, and the one a blackout, an
 ## Escape Rope, Dig and Teleport land beside. PALLET_TOWN is the zeroed byte's.
-var gen1_last_map: int = -1
+var gen1_last_map: int = Gen1Layout.PALLET_TOWN
 var gen1_last_blackout_map: int = Gen1Layout.PALLET_TOWN
 var gen1_map_pal_offset: int = 0
 var gen1_rival_name: String = ""
@@ -55,6 +55,11 @@ var gen1_rival_name: String = ""
 ## one visit and reads on the next. Empty in a snapshot written before it
 ## existed, which reads as a lab handed nothing.
 var gen1_fossil: Dictionary = {}
+## `wPikachuHappiness`, `wPikachuMood`, `wPikachuEmotionModifier` and the two
+## overworld flag bits a map keeps, saved player data Yellow alone writes. Empty
+## in a snapshot written before it existed, which reads as `InitPlayerData2`'s
+## own ninety and neutral mood.
+var gen1_pikachu: Dictionary = {}
 ## `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`, which
 ## `SavePlayerData` copies into `sCurMapData` alongside the dig warp: where the
 ## stairs out of a Pokemon Center's second floor lead and whose landmark that
@@ -92,6 +97,7 @@ static func from_world(world: Gen2WorldAPI) -> Gen2WorldSnapshot:
 	out.gen1_map_pal_offset = world.gen1_map_pal_offset
 	out.gen1_rival_name = world.gen1_rival_name
 	out.gen1_fossil = world.gen1_fossil.duplicate()
+	out.gen1_pikachu = world.pikachu.to_dict() if world.pikachu != null else {}
 	out.dig_warp = world.dig_warp.duplicate()
 	out.backup_warp = world.backup_warp.duplicate()
 	out.spawn_after_champion = world.spawn_after_champion
@@ -118,6 +124,7 @@ func to_dict() -> Dictionary:
 		"gen1_map_pal_offset": gen1_map_pal_offset,
 		"gen1_rival_name": gen1_rival_name,
 		"gen1_fossil": gen1_fossil.duplicate(),
+		"gen1_pikachu": gen1_pikachu.duplicate(),
 		"dig_warp": dig_warp.duplicate(),
 		"backup_warp": backup_warp.duplicate(),
 		"spawn_after_champion": spawn_after_champion,
@@ -153,7 +160,7 @@ static func from_dict(raw: Variant) -> Gen2WorldSnapshot:
 	out.random_seed = int(source.get("random_seed", 0))
 	out.frame_number = maxi(0, int(source.get("frame_number", 0)))
 	out.last_spawn_map = _vector_from_value(source.get("last_spawn_map", [-1, -1]))
-	out.gen1_last_map = int(source.get("gen1_last_map", -1))
+	out.gen1_last_map = int(source.get("gen1_last_map", Gen1Layout.PALLET_TOWN))
 	out.gen1_last_blackout_map = int(source.get(
 		"gen1_last_blackout_map", Gen1Layout.PALLET_TOWN
 	))
@@ -161,6 +168,8 @@ static func from_dict(raw: Variant) -> Gen2WorldSnapshot:
 	out.gen1_rival_name = String(source.get("gen1_rival_name", ""))
 	var fossil: Variant = source.get("gen1_fossil", {})
 	out.gen1_fossil = (fossil as Dictionary).duplicate() if fossil is Dictionary else {}
+	var pikachu: Variant = source.get("gen1_pikachu", {})
+	out.gen1_pikachu = (pikachu as Dictionary).duplicate() if pikachu is Dictionary else {}
 	out.dig_warp = _warp_from_value(source.get("dig_warp", {}))
 	out.backup_warp = _warp_from_value(source.get("backup_warp", {}))
 	out.spawn_after_champion = clampi(

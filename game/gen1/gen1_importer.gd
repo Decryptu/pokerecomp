@@ -990,6 +990,7 @@ func import_rom(
 		"town_map": _import_town_map(rom, layout),
 		"special_warps": _import_special_warps(rom, layout),
 		"intro_names": _import_intro_names(rom, layout),
+		"pikachu": Gen1WorldImporter.read_pikachu(rom, layout),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -2062,7 +2063,40 @@ func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"first_code": int(sheet["first_code"]),
 			"bits": int(sheet["bits"]),
 		}
-	return out
+	return out if _import_pikapic_gfx(rom, layout, directory, out) else {}
+
+
+## `PikaPicAnimGFXHeaders`' graphics as one strip each, in the tile order
+## `LoadCurPikaPicObjectTilemap` indexes: a raw run as stored, a compressed
+## picture in [Gen1SpriteCodec]'s column-major order. Yellow alone has them.
+func _import_pikapic_gfx(
+	rom: RomFile, layout: Dictionary, directory: String, out: Dictionary
+) -> bool:
+	if not layout.has("pikapic_gfx_headers"):
+		return true
+	var codec := Gen1SpriteCodec.new()
+	for index: int in Gen1Layout.PIKAPIC_GFX:
+		var header: int = int(layout["pikapic_gfx_headers"]) \
+			+ index * Gen1Layout.PIKAPIC_GFX_HEADER_SIZE
+		var size: int = rom.u8(header)
+		var at: int = Gen1Layout.banked(rom.u8(header + 1), rom.u16le(header + 2))
+		var indices: PackedByteArray
+		if size == Gen1Layout.PIKAPIC_COMPRESSED:
+			var raw: PackedByteArray = codec.decompress(rom.bytes(), at)
+			if codec.failed:
+				return false
+			size = codec.columns * codec.rows
+			indices = PokeTiles.decode_2bpp_strip(raw, 0, size)
+		else:
+			indices = PokeTiles.decode_2bpp_strip(rom.bytes(), at, size)
+		var name: String = "pikapic_%02d" % index
+		if not RomCache.write_indices(RomCache.tile_path(directory, name), indices):
+			return false
+		out[name] = {
+			"width": size * PokeTiles.TILE_WIDTH, "height": PokeTiles.TILE_HEIGHT,
+			"tiles": size, "first_code": 0, "bits": 2,
+		}
+	return true
 
 
 func _decode_pic(

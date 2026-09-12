@@ -10037,11 +10037,21 @@ func test_gen1_warp_and_the_way_back_through_last_map() -> void:
 
 ## `HandleLedges` reads the faced tile as well as the one stood on, and the hop
 ## covers two cells as `wSimulatedJoypadStatesIndex`'s 2 does.
+## `HandleLedges` writes its two simulated presses and returns through
+## `.collision`, so the poll that finds the ledge spends nothing but the sound,
+## and the pass after it, reading the simulated DOWN, is the one that hops.
 func test_gen1_ledge_hop_crosses_the_ledge_tile() -> void:
 	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 3))
-	var hop: Dictionary = world.move_result(Vector2i.DOWN)
+	var found: Dictionary = world.move_result(Vector2i.DOWN)
+	assert_false(bool(found.get("ok", true)), "the finding pass moves nothing")
+	assert_true(bool(found.get("ledge", false)), "and plays SFX_LEDGE")
+	assert_false(bool(found.get("bump", true)))
+	assert_eq(world.player_cell, Vector2i(1, 3))
+	assert_eq(StringName(world.forced_movement().get("kind", &"")), &"ledge")
+	var hop: Dictionary = world.advance_forced_movement()
 	assert_eq(StringName(hop.get("kind", &"")), &"ledge_hop")
 	assert_eq(world.player_cell, Vector2i(1, 5))
+	assert_eq(StringName(world.forced_movement().get("kind", &"")), &"none")
 	RomCache.clear(_gen1_directory())
 
 

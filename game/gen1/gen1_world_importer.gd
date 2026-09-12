@@ -162,6 +162,148 @@ static func read_world(
 	}
 
 
+## `PikachuEmotionTable` as command rows, with `PikachuMoodLookupTable` and
+## `PikaPicAnimationScriptPointerLookupTable` beside it: Yellow alone has them.
+## The happiness table's own end is the 255 row.
+static func read_pikachu(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not layout.has("pikachu_emotion_table"):
+		return {}
+	var ctx: Dictionary = {"rom": rom, "layout": layout, "bank": Gen1Layout.PIKACHU_BANK}
+	var table: int = int(layout["pikachu_emotion_table"])
+	var emotions: Array = []
+	for index: int in Gen1Layout.PIKACHU_EMOTIONS:
+		emotions.append(_pikachu_emotion(ctx, Gen1Layout.banked(
+			Gen1Layout.PIKACHU_BANK, rom.u16le(table + index * Gen1Layout.POINTER_SIZE)
+		)))
+	var moods: Array = []
+	var at: int = int(layout["pikachu_mood_table"])
+	while moods.is_empty() or int((moods[-1] as Array)[0]) < 0xFF:
+		moods.append([rom.u8(at), rom.u8(at + 1)])
+		at += 2
+	var happiness: Array = []
+	at = int(layout["pikachu_happiness_table"])
+	while happiness.is_empty() or int((happiness[-1] as Array)[0]) < 0xFF:
+		var row: Array = []
+		for column: int in Gen1Layout.PIKACHU_HAPPINESS_ROW:
+			row.append(rom.u8(at + column))
+		happiness.append(row)
+		at += Gen1Layout.PIKACHU_HAPPINESS_ROW
+	var cries: Array = []
+	for index: int in Gen1Layout.PIKACHU_CRIES:
+		var row: int = int(layout["pikachu_cries"]) + index * Gen1Layout.PIKACHU_CRY_ROW_SIZE
+		cries.append(rom.u16le(Gen1Layout.banked(rom.u8(row), rom.u16le(row + 1))))
+	return {
+		"emotions": emotions, "moods": moods, "happiness": happiness, "cries": cries,
+		"pikapic": _read_pikapic(rom, layout),
+	}
+
+
+## `PikaPicAnimPointers`' scripts, `PikaPicAnimBGFramesPointers`' frame sets,
+## `PikaPicTilemapPointers`' tilemaps, each graphic's reserved tile count and
+## `PikaPicAnimThunderboltPals`. A jump names the row it lands on.
+static func _read_pikapic(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var bank: int = Gen1Layout.PIKACHU_BANK
+	var scripts: Array = []
+	for index: int in Gen1Layout.PIKAPIC_SCRIPTS:
+		scripts.append(_pikapic_script(rom, _banked_pointer(
+			rom, bank, int(layout["pikapic_scripts"]), index
+		)))
+	var framesets: Array = []
+	for index: int in Gen1Layout.PIKAPIC_FRAMESETS:
+		var at: int = _banked_pointer(rom, bank, int(layout["pikapic_framesets"]), index)
+		var rows: Array = []
+		while rom.u8(at) != Gen1Layout.PIKAPIC_FRAMESET_END:
+			rows.append([rom.u8(at), rom.u8(at + 1)])
+			at += 2
+		framesets.append(rows)
+	var tilemaps: Array = []
+	for index: int in Gen1Layout.PIKAPIC_TILEMAPS:
+		var at: int = _banked_pointer(rom, bank, int(layout["pikapic_tilemaps"]), index)
+		var rows: int = rom.u8(at)
+		var columns: int = rom.u8(at + 1)
+		## `PikaAnimTilemap_0` is the one `db -1`, which no frame draws.
+		if rows == Gen1Layout.PIKAPIC_TILE_KEEP:
+			tilemaps.append({"rows": 0, "columns": 0, "tiles": []})
+			continue
+		tilemaps.append({"rows": rows, "columns": columns,
+			"tiles": Array(rom.slice(at + 2, rows * columns))})
+	var gfx: Array = []
+	for index: int in Gen1Layout.PIKAPIC_GFX:
+		var size: int = rom.u8(
+			int(layout["pikapic_gfx_headers"]) + index * Gen1Layout.PIKAPIC_GFX_HEADER_SIZE
+		)
+		gfx.append(Gen1Layout.PIKAPIC_PIC_TILES if size == Gen1Layout.PIKAPIC_COMPRESSED else size)
+	var flashes: Array = []
+	var at: int = int(layout["pikapic_thunderbolt"])
+	while rom.u8(at) != 0xFF:
+		flashes.append([rom.u8(at), rom.u8(at + 1)])
+		at += 2
+	return {"scripts": scripts, "framesets": framesets, "tilemaps": tilemaps,
+		"gfx": gfx, "thunderbolt": flashes}
+
+
+static func _banked_pointer(rom: RomFile, bank: int, table: int, index: int) -> int:
+	return Gen1Layout.banked(bank, rom.u16le(table + index * Gen1Layout.POINTER_SIZE))
+
+
+## One script to its `ret` or its first backward jump, which every other one
+## ends on: `pikapic_looptofinish` waits on the frame and jumps back to itself.
+static func _pikapic_script(rom: RomFile, start: int) -> Array:
+	var out: Array = []
+	var offsets: Dictionary = {}
+	var at: int = start
+	while true:
+		var command: int = rom.u8(at)
+		var size: int = int(Gen1Layout.PIKAPIC_COMMAND_SIZES.get(command, 0))
+		var row: Dictionary = {"cmd": String(Gen1Layout.PIKAPIC_COMMANDS.get(command, "nop"))}
+		offsets[at] = out.size()
+		if command == Gen1Layout.PIKAPIC_JUMP:
+			var target: int = Gen1Layout.banked(Gen1Layout.PIKACHU_BANK, rom.u16le(at + 1))
+			row["to"] = int(offsets.get(target, out.size() + 1))
+		elif size == 2:
+			row["value"] = rom.u16le(at + 1)
+		elif size == 5:
+			row["frameset"] = rom.u8(at + 1)
+			row["tile"] = rom.u8(at + 3)
+			row["x"] = rom.u8(at + 4)
+			row["y"] = rom.u8(at + 5)
+		elif size == 1:
+			row["value"] = rom.u8(at + 1)
+		out.append(row)
+		at += 1 + size
+		if command == Gen1Layout.PIKAPIC_RET or (command == Gen1Layout.PIKAPIC_JUMP
+			and int(row["to"]) < out.size() - 1):
+			return out
+	return out
+
+
+## `DoStarterPikachuEmotions`' commands to the `$ff`: the two nops and the
+## debug-only one are dropped, and a `$ff` clip is no clip.
+static func _pikachu_emotion(ctx: Dictionary, at: int) -> Array:
+	var rom: RomFile = ctx["rom"]
+	var out: Array = []
+	while rom.u8(at) != Gen1Layout.PIKACHU_EMOTION_END:
+		var command: int = rom.u8(at)
+		at += 1
+		var name: String = String(Gen1Layout.PIKACHU_EMOTION_COMMANDS.get(command, ""))
+		var size: int = int(Gen1Layout.PIKACHU_EMOTION_SIZES.get(command, 0))
+		var argument: int = rom.u16le(at) if size == 2 else rom.u8(at) if size == 1 else 0
+		at += size
+		if name.is_empty() or (name == "pcm" and argument == Gen1Layout.PIKACHU_EMOTION_END):
+			continue
+		var row: Dictionary = {"cmd": name}
+		if name == "text":
+			row["text"] = String(_script_box(ctx, argument).get("text", ""))
+		elif name == "movement":
+			row["bytes"] = _pikachu_movement_bytes(
+				rom, Gen1Layout.banked(Gen1Layout.PIKACHU_BANK, argument)
+			)
+		elif size > 0:
+			row["value"] = argument
+		out.append(row)
+	return out
+
+
 ## `TradeMons` in the shared `world_trade` shape. A row stores no DVs and no OT
 ## id: `AddPartyMon` and `InGameTrade_PrepareTradeData` roll them, which -1 asks
 ## for, and the trainer name is the one string every row shares.
@@ -294,7 +436,17 @@ static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Diction
 	)
 	if not bool(shock.get("ok", false)):
 		return shock
-	return {"ok": true, "effects": [machine["effect"], shock["effect"]]}
+	var effects: Array = [machine["effect"], shock["effect"]]
+	## The rows behind `ShockEmote`, by Generation 2's names for the same
+	## bubbles: Red and Blue stop at HappyEmote, Yellow runs to FishEmote.
+	for index: int in range(1, int(layout.get("emote_sheets", 1))):
+		var at: int = int(layout["shock_emote_gfx"]) + index * Gen1Layout.SHOCK_EMOTE_BYTES.size()
+		effects.append({
+			"name": Gen2Layout.EMOTE_NAMES[index], "tiles": Gen1Layout.EMOTE_TILES,
+			"vtile": Gen1Layout.SHOCK_EMOTE_VTILE,
+			"bytes": Array(PokeTiles.decode_2bpp_strip(rom.bytes(), at, Gen1Layout.EMOTE_TILES)),
+		})
+	return {"ok": true, "effects": effects}
 
 
 ## One sheet, refused rather than decoded once the pinned bytes have moved.
@@ -1779,6 +1931,8 @@ const SCRIPT_TESTS_PARTY_MENU: int = -35
 const SCRIPT_TESTS_MON_OT: int = -36
 const SCRIPT_TESTS_NAME_ENTRY: int = -37
 const SCRIPT_TESTS_INDEXED_FLAG: int = -38
+## Yellow's follower: `state["pikachu_test"]` names which of its facts is read.
+const SCRIPT_TESTS_PIKACHU: int = -40
 const SCRIPT_AIDE: int = -3
 const SCRIPT_WALKED: int = -4
 ## What `push af` saves and `pop af` puts back, which is how
@@ -2935,6 +3089,8 @@ static func _script_stored_named_more(
 				state["named_source"] = int(state.get("source", -1))
 		"fossil_item", "fossil_mon":
 			return _script_fossil_stored(name, state, out, known, a)
+		"pikachu_spawn_state":
+			out.append({"op": "pikachu", "what": "spawn_state", "value": a})
 	return STORE_OK
 
 
@@ -2964,7 +3120,7 @@ const STORE_NEEDS_A: Array[String] = [
 	"last_map", "last_blackout_map", "npc_relative_perspective", "npc_movement_table",
 	"trainer_no", "battle_type", "emotion_bubble_sprite", "which_emotion_bubble",
 	"warp_destination_map", "destination_warp_id", "player_y", "player_x",
-	"oaks_aide_reward",
+	"oaks_aide_reward", "pikachu_spawn_state",
 ]
 
 
@@ -3009,7 +3165,7 @@ const STORE_NAMES: Array[String] = [
 	"warp_destination_map", "destination_warp_id", "cur_map_text_ptr",
 	"player_y", "player_x", "sprite_map_y", "sprite_map_x", "rival_starter",
 	"player_starter", "cur_party_species", "num_set_bits", "oaks_aide_reward",
-	"fossil_item", "fossil_mon",
+	"fossil_item", "fossil_mon", "pikachu_spawn_state",
 ]
 
 
@@ -3288,10 +3444,10 @@ static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> Array
 		var whole: Array = _script_tests_byte(layout, source, state)
 		if not whole.is_empty():
 			return whole
-	if bit >= 0 and source == int(layout.get("random_add", -1)):
-		state["random_bit"] = bit
-		return [SCRIPT_TESTS_RANDOM_BIT, false]
 	if bit >= 0:
+		var one: Array = _script_tests_bit(layout, source, bit, state)
+		if not one.is_empty():
+			return one
 		var flag: int = _script_flag(ctx, source, bit)
 		if flag >= 0:
 			return [flag, false]
@@ -3299,6 +3455,24 @@ static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> Array
 		if engine >= 0:
 			return [engine, true]
 	return [SCRIPT_TESTS_NOTHING, false]
+
+
+## `bit n` over a byte that is not a flag run: a roll's bit, or one of
+## `wPikachuSpawnStateFlags`' two party bits.
+static func _script_tests_bit(
+	layout: Dictionary, source: int, bit: int, state: Dictionary
+) -> Array:
+	if source == int(layout.get("random_add", -1)):
+		state["random_bit"] = bit
+		return [SCRIPT_TESTS_RANDOM_BIT, false]
+	if source == int(layout.get("pikachu_spawn_state_flags", -1)) and source >= 0:
+		if bit == Gen1Layout.PIKACHU_SPAWN_STARTER_BIT:
+			state["pikachu_test"] = "starter"
+			return [SCRIPT_TESTS_PIKACHU, false]
+		if bit == Gen1Layout.PIKACHU_SPAWN_SURFING_BIT:
+			state["pikachu_test"] = "surfing"
+			return [SCRIPT_TESTS_PIKACHU, false]
+	return []
 
 
 static func _script_menu_tests(
@@ -3699,16 +3873,35 @@ static func _script_call(
 	return _script_called(ctx, routine, target, state, out, next, depth)
 
 
+## `wPikachuOverworldStateFlags`' two bits a row writes.
+const SCRIPT_PIKACHU_CALLS: Dictionary = {
+	"disable_pikachu_following": ["following", false],
+	"enable_pikachu_following": ["following", true],
+	"disable_pikachu_drawing": ["drawing", false],
+	"enable_pikachu_drawing": ["drawing", true],
+}
+
+
+static func _script_pikachu_tested(state: Dictionary, what: String, in_carry: bool = false) -> void:
+	state["pikachu_test"] = what
+	_script_tested(state, SCRIPT_TESTS_PIKACHU, in_carry)
+
+
 ## The rest of [method _script_call]'s own rows.
 static func _script_called(
 	ctx: Dictionary, routine: String, target: int, state: Dictionary, out: Array,
 	next: int, depth: int
 ) -> int:
+	if SCRIPT_PIKACHU_CALLS.has(routine):
+		var row: Array = SCRIPT_PIKACHU_CALLS[routine]
+		out.append({"op": "pikachu", "what": String(row[0]), "value": bool(row[1])})
+		return next
 	match routine:
 		"check_pikachu_following":
-			## Z: no follower walks here.
-			state["known_zero"] = true
+			_script_pikachu_tested(state, "following")
 			return next
+		"apply_pikachu_movement":
+			return _script_pikachu_movement(ctx, state, out, next, false, false)
 		"has_enough_money":
 			return _script_money_asked(state, next)
 		"has_enough_coins":
@@ -4321,6 +4514,21 @@ static func _script_routine_call(
 	match banked:
 		"route23_copy_badge_text":
 			return _script_name_badge(ctx, state, out, next)
+		"is_starter_pikachu_alive":
+			_script_pikachu_tested(state, "starter", true)
+			return next
+		"check_pikachu_status":
+			_script_pikachu_tested(state, "ailing", true)
+			return next
+		"schedule_pikachu_spawn":
+			out.append({"op": "pikachu", "what": "schedule_spawn"})
+			return next
+		"celadon_granny_thresholds":
+			state["hl_node"] = _script_happiness_texts(ctx, Gen1Layout.banked(bank, target))
+			return next
+		"try_apply_pikachu_movement", "mt_moon_pikachu_movement", "cinnabar_pikachu_movement":
+			return _script_pikachu_movement(ctx, state, out, next, true,
+				banked == "try_apply_pikachu_movement")
 		"name_rater_check_ot":
 			_script_tested(state, SCRIPT_TESTS_MON_OT, true)
 			return next
@@ -4347,6 +4555,65 @@ static func _script_routine_call(
 		return SCRIPT_UNREAD
 	out.append_array(walked as Array)
 	return SCRIPT_WALKED
+
+
+## The movement data at `hl`, read to its `$3f` the way
+## `LoadPikachuMovementCommandData` reads it: a row whose parameter is `$80`
+## takes the next byte. The two gated routines name a facing in `b`, and
+## `TryApplyPikachuMovementData` alone refreshes the follow behind the script.
+static func _script_pikachu_movement(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int, gated: bool, refresh: bool
+) -> int:
+	if not state.has("hl") or (gated and not state.has("b")):
+		return SCRIPT_UNREAD
+	var bytes: Array = _pikachu_movement_bytes(
+		ctx["rom"], Gen1Layout.banked(int(ctx["bank"]), int(state["hl"]))
+	)
+	if bytes.is_empty():
+		return SCRIPT_UNREAD
+	var node: Dictionary = {"op": "pikachu_movement", "bytes": bytes}
+	if gated:
+		node["facing"] = int(state["b"])
+	if refresh:
+		node["refresh"] = true
+	out.append(node)
+	return next
+
+
+## Empty for data no row of the database reads.
+static func _pikachu_movement_bytes(rom: RomFile, at: int) -> Array:
+	var bytes: Array = []
+	while bytes.size() < Gen1Layout.PIKACHU_MOVEMENT_MAX:
+		var code: int = rom.u8(at)
+		at += 1
+		bytes.append(code)
+		if code == Gen1Pikachu.MOVEMENT_END:
+			return bytes
+		var row: Array = Gen1Pikachu.movement_row(code)
+		if row.is_empty():
+			return []
+		for slot: int in [1, 3]:
+			if int(row[slot]) == Gen1Pikachu.MOVEMENT_PARAM_FROM_SCRIPT:
+				bytes.append(rom.u8(at))
+				at += 1
+	return []
+
+
+## `Func_f1ea2`: `dw threshold, text` rows walked until the happiness is below
+## one, the last row's threshold being zero. The routine answers in `hl` and the
+## `call PrintText` behind it prints the node instead.
+static func _script_happiness_texts(ctx: Dictionary, routine: int) -> Dictionary:
+	var rom: RomFile = ctx["rom"]
+	var at: int = Gen1Layout.banked(int(ctx["bank"]), rom.u16le(routine + 1))
+	var texts: Array = []
+	while true:
+		var below: int = rom.u16le(at)
+		var box: Dictionary = _script_box(ctx, rom.u16le(at + 2))
+		texts.append({"below": below & 0xFF, "text": String(box.get("text", ""))})
+		at += 4
+		if below == 0 or below > 0xFF:
+			break
+	return {"op": "pikachu_text", "texts": texts}
 
 
 static func _script_returned(ctx: Dictionary, state: Dictionary) -> int:
@@ -5298,11 +5565,15 @@ static func _script_compared_byte(
 		int(layout.get("obtained_badges", -1)): ["badges", SCRIPT_TESTS_BADGES, 0],
 		int(layout.get("random_add", -1)): ["random_below", SCRIPT_TESTS_RANDOM, 0],
 		int(layout.get("sprite_index_wram", -1)): ["talking", SCRIPT_TESTS_TALKING, -1],
+		int(layout.get("pikachu_happiness", -1)): ["pikachu_below", SCRIPT_TESTS_PIKACHU, 0],
 	}
 	if tests.has(source) and source >= 0:
 		var row: Array = tests[source]
 		state[String(row[0])] = value + int(row[2])
-		_script_tested(state, int(row[1]), int(row[1]) == SCRIPT_TESTS_RANDOM)
+		if int(row[1]) == SCRIPT_TESTS_PIKACHU:
+			state["pikachu_test"] = "happiness"
+		_script_tested(state, int(row[1]),
+			int(row[1]) in [SCRIPT_TESTS_RANDOM, SCRIPT_TESTS_PIKACHU])
 		return true
 	if source == int(layout.get("rival_starter_ball", -1)) \
 		or _script_address_name(layout, source, Gen1Layout.SCRIPT_RUNTIME_SCRATCH) != "":
@@ -5334,6 +5605,10 @@ static func _script_predef_text(
 static func _script_text_row(
 	ctx: Dictionary, pointer: int, state: Dictionary, out: Array, depth: int
 ) -> bool:
+	if state.has("hl_node"):
+		out.append(state["hl_node"])
+		state.erase("hl_node")
+		return true
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), pointer)
 	var decoded: Dictionary = Gen1Text.decode_stream(rom, at)
@@ -5372,7 +5647,11 @@ static func _script_map_text(state: Dictionary, out: Array, next: int) -> int:
 		return next
 	if not state.has("map_text"):
 		return SCRIPT_UNREAD
-	out.append({"op": "map_text", "text": int(state["map_text"])})
+	## `DisplayTextID` hands TEXT_PIKACHU_ANIM to `TalkToPikachu`.
+	if int(state["map_text"]) == Gen1Layout.TEXT_PIKACHU_ANIM:
+		out.append({"op": "pikachu_talk"})
+	else:
+		out.append({"op": "map_text", "text": int(state["map_text"])})
 	state.erase("map_text")
 	return next
 
@@ -5559,7 +5838,22 @@ static func _script_node_state(
 		SCRIPT_TESTS_SCRATCH:
 			return {"op": "scratch_test", "address": int(state["scratch_test"][0]),
 				"value": int(state["scratch_test"][1]), "then": fell, "else": taken}
+		SCRIPT_TESTS_PIKACHU:
+			return _script_node_pikachu(state, taken, fell)
 	return _script_node_menu(tests, taken, fell, state)
+
+
+## `CheckPikachuFollowingPlayer` answers Z when the follower walks; the party
+## bits, the two carries and `cp` under the happiness all take the set side.
+static func _script_node_pikachu(state: Dictionary, taken: Array, fell: Array) -> Dictionary:
+	var what: String = String(state["pikachu_test"])
+	var node: Dictionary = {"op": "pikachu_test", "what": what, "then": taken, "else": fell}
+	if what == "following":
+		node["then"] = fell
+		node["else"] = taken
+	if what == "happiness":
+		node["below"] = int(state["pikachu_below"])
+	return node
 
 
 static func _script_node_menu(
