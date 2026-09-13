@@ -1240,7 +1240,6 @@ func _print_wilds() -> void:
 		])
 
 
-## The map as its collision reads it, which is what a walk has to stay inside.
 func _print_map() -> void:
 	var world: Gen2WorldAPI = _screen.get("_world")
 	var map: Gen2WorldMap = world.current_map

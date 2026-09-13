@@ -154,7 +154,6 @@ func draw(page: Dictionary) -> PackedByteArray:
 	return indices
 
 
-## Where the screen puts the front pic, in pixels.
 static func pic_position() -> Vector2i:
 	return PIC_AT * TILE
 

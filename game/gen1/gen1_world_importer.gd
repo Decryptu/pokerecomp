@@ -449,7 +449,6 @@ static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Diction
 	return {"ok": true, "effects": effects}
 
 
-## One sheet, refused rather than decoded once the pinned bytes have moved.
 static func _read_pinned_sheet(
 	rom: RomFile, at: int, pinned: Array[int], vtile: int, name: String
 ) -> Dictionary:
@@ -816,7 +815,6 @@ static func _bit_count(value: int) -> int:
 	return out
 
 
-## One map header, the blocks it draws and the object block behind it.
 static func _read_map(
 	rom: RomFile, layout: Dictionary, tilesets: Array, map_id: int, script_end: int
 ) -> Dictionary:
@@ -1605,7 +1603,7 @@ static func _read_hidden_rows(
 	var at: int = Gen1Layout.banked(bank, pointer)
 	var out: Array = []
 	while rom.u8(at) != Gen1Layout.HIDDEN_EVENT_END:
-		out.append(_read_hidden_row(rom, layout, at, map_id, names))
+		out.append(_read_hidden_row(rom, layout, at, map_id, names, out.size()))
 		at += Gen1Layout.HIDDEN_EVENT_SIZE
 	return out
 
@@ -1633,18 +1631,20 @@ static func _gym_names(rom: RomFile, layout: Dictionary, bank: int, script: int)
 ## One `hidden_event`: the faced cell, then the routine behind it. Four walk a
 ## table of their own; the rest are machine code, read with the argument in `a`.
 static func _read_hidden_row(
-	rom: RomFile, layout: Dictionary, at: int, map_id: int, names: Array
+	rom: RomFile, layout: Dictionary, at: int, map_id: int, names: Array, index: int
 ) -> Dictionary:
 	var row: Dictionary = {"y": rom.u8(at), "x": rom.u8(at + 1)}
 	var argument: int = rom.u8(at + 2)
 	var bank: int = rom.u8(at + 3)
 	var address: int = rom.u16le(at + 4)
 	var named: String = Gen1Layout.hidden_routine(layout, Gen1Layout.banked(bank, address))
-	var script: Array = decode_script(
-		rom, layout, bank, address, {"hidden_argument": argument}
-	) if named.is_empty() else _hidden_table_nodes(
-		rom, layout, named, bank, map_id, argument, row, names
-	)
+	var script: Array = []
+	if Gen1Layout.banked(bank, address) == int(layout["start_slot_machine"]):
+		script = _slot_machine_nodes(rom, layout, bank, argument, index)
+	elif named.is_empty():
+		script = decode_script(rom, layout, bank, address, {"hidden_argument": argument})
+	else:
+		script = _hidden_table_nodes(rom, layout, named, bank, map_id, argument, row, names)
 	if not script.is_empty():
 		row["script"] = script
 	return row
@@ -1666,6 +1666,40 @@ static func _hidden_table_nodes(
 		"gym_trash":
 			return _gym_trash_nodes(rom, layout, bank, argument)
 	return []
+
+
+## `StartSlotMachine`: a refusal argument prints its `tx_pre_id` row, and
+## `AbleToPlaySlotsCheck` wants the player side on, a COIN CASE and a coin. The
+## machine is lucky when `wHiddenEventIndex + 1` is the byte the map's load rolled.
+static func _slot_machine_nodes(
+	rom: RomFile, layout: Dictionary, bank: int, argument: int, index: int
+) -> Array:
+	if Gen1Layout.SLOTS_REFUSALS.has(argument):
+		var refusal: String = predef_text(rom, layout, bank, String(Gen1Layout.SLOTS_REFUSALS[argument]))
+		return [{"op": "text", "text": refusal}] if not refusal.is_empty() else []
+	var check_bank: int = int(layout["slots_check_bank"])
+	var coin_case: String = predef_text(rom, layout, check_bank, "slots_coin_case")
+	var no_coins: String = predef_text(rom, layout, check_bank, "slots_no_coins")
+	var play: String = Gen1Importer.facility_text(
+		rom, int(layout["slots_text"]) + int(Gen1Layout.SLOTS_TEXT_AT["play"])
+	)
+	if coin_case.is_empty() or no_coins.is_empty() or play.is_empty():
+		return []
+	var asked: Array = [{"op": "has_item", "item": Gen1Layout.ITEM_COIN_CASE,
+		"else": [{"op": "text", "text": coin_case}],
+		"then": [{"op": "has_coins", "coins": 1, "test": "at_least",
+			"else": [{"op": "text", "text": no_coins}],
+			"then": [
+				{"op": "text", "text": play},
+				{"op": "choice", "no": [], "yes": [
+					{"op": "emote", "object": -1, "kind": Gen1Layout.SMILE_BUBBLE},
+					{"op": "slot_machine", "lucky_index": index + 1},
+				]},
+			]}]}]
+	var nodes: Array = []
+	for facing: int in Gen1Layout.SLOTS_FACINGS:
+		nodes = [{"op": "facing", "facing": facing, "then": asked, "else": nodes}]
+	return nodes
 
 
 ## `GymTrashScript`: the argument is the can and the four boxes its `tx_pre` rows.
@@ -2938,8 +2972,11 @@ static func _script_stored_byte(
 		return STORE_OK
 	if not _script_random_source(layout, state):
 		return STORE_REFUSED
-	out.append({"op": "store_byte", "name": name, "random": true,
-		"mask": int(state.get("mask", 0xFF)), "shift": int(state.get("shift", 0))})
+	var node: Dictionary = {"op": "store_byte", "name": name, "random": true,
+		"mask": int(state.get("mask", 0xFF)), "shift": int(state.get("shift", 0))}
+	if bool(state.get("random_rolled", false)):
+		node["rolled"] = true
+	out.append(node)
 	return STORE_OK
 
 
@@ -4548,6 +4585,8 @@ static func _script_routine_call(
 			state["entry_buffer"] = int((ctx["layout"] as Dictionary).get("entry_buffer", -1))
 			_script_tested(state, SCRIPT_TESTS_NAME_ENTRY, true)
 			return next
+		"display_mon_front_sprite_in_box":
+			return _script_picture(ctx, state, out, next)
 	var named: int = _script_predef_named(
 		ctx["layout"], Gen1Layout.banked(bank, target), state, out
 	)
@@ -4679,6 +4718,24 @@ static func _script_pokedex(
 	out.append({"op": "pokedex", "species": dex})
 	state["species_index"] = int(state["a"])
 	state.erase("a")
+	return next
+
+
+## `DisplayMonFrontSpriteInBox` over `wCurPartySpecies`' internal index.
+static func _script_picture(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int
+) -> int:
+	if not state.has("species_index"):
+		return SCRIPT_UNREAD
+	var index: int = int(state["species_index"])
+	var node: Dictionary = {"op": "picture"}
+	if Gen1Layout.SPECIAL_PICS.has(index):
+		node["special"] = String(Gen1Layout.SPECIAL_PICS[index])
+	else:
+		node["species"] = Gen1Layout.dex_of_index(ctx["rom"], ctx["layout"], index)
+		if int(node["species"]) < 1:
+			return SCRIPT_UNREAD
+	out.append(node)
 	return next
 
 
@@ -5584,6 +5641,9 @@ static func _script_compared_byte(
 		state[String(row[0])] = value + int(row[2])
 		if int(row[1]) == SCRIPT_TESTS_PIKACHU:
 			state["pikachu_test"] = "happiness"
+		elif int(row[1]) == SCRIPT_TESTS_RANDOM:
+			## The byte a later store reads is the one this branch rolled.
+			state["random_rolled"] = true
 		_script_tested(state, int(row[1]),
 			int(row[1]) in [SCRIPT_TESTS_RANDOM, SCRIPT_TESTS_PIKACHU])
 		return true
@@ -5640,6 +5700,9 @@ static func _script_text_row(
 	if at == int((ctx["layout"] as Dictionary).get("town_map_text", -1)):
 		out.append({"op": "town_map"})
 		return true
+	for name: String in Gen1Layout.HELP_MENUS:
+		if at == int((ctx["layout"] as Dictionary).get(name, -1)):
+			return _help_menu_nodes(ctx["rom"], ctx["layout"], name, out)
 	var returns: Array = state.get("returns", [])
 	state.erase("returns")
 	var walked: Variant = _walk_script(ctx, code, state, depth + 1)
@@ -5647,6 +5710,47 @@ static func _script_text_row(
 	if not walked is Array:
 		return false
 	out.append_array(walked as Array)
+	return true
+
+
+## `LinkCableHelp` and `ViridianSchoolBlackboard`, read off their own tables.
+static func _help_menu_nodes(rom: RomFile, layout: Dictionary, name: String, out: Array) -> bool:
+	var menu: Dictionary = Gen1Layout.HELP_MENUS[name]
+	var bank: int = RomFile.bank_of(int(layout[name]))
+	var first: String = Gen1Importer.facility_text(rom, int(layout[menu["text_1"]]))
+	var prompt: String = Gen1Importer.facility_text(rom, int(layout[menu["text_2"]]))
+	var rows: Array = []
+	var grid: Array = []
+	for column: Dictionary in menu["columns"]:
+		var text: String = Gen1Text.decode(
+			rom.slice(int(layout[column["strings"]]), Gen1Layout.MENU_STRING_MAX * 4), 0,
+			Gen1Layout.MENU_STRING_MAX * 4
+		)
+		var indices: Array = []
+		var lines: PackedStringArray = text.split(Gen1Layout.MENU_ROW_BREAK)
+		for line: int in lines.size():
+			indices.append(rows.size())
+			rows.append({
+				"text": lines[line],
+				"at": [int(column["at"][0]), int(column["at"][1]) + line * Gen1Layout.HELP_MENU_ROW_STEP],
+				"cursor": [int(column["cursor_x"]), int(column["at"][1]) + line * Gen1Layout.HELP_MENU_ROW_STEP],
+			})
+		grid.append(indices)
+	var replies: Array = []
+	for row: int in rows.size():
+		var reply: String = "" if row in (menu["quit"] as Array) else Gen1Importer.facility_text(
+			rom, Gen1Layout.banked(
+				bank, rom.u16le(int(layout[menu["replies"]]) + row * Gen1Layout.POINTER_SIZE)
+			)
+		)
+		if reply.is_empty() and row not in (menu["quit"] as Array):
+			return false
+		replies.append(reply)
+	if first.is_empty() or prompt.is_empty():
+		return false
+	out.append({"op": "text", "text": first})
+	out.append({"op": "help_menu", "box": menu["box"], "rows": rows, "grid": grid,
+		"prompt": prompt, "replies": replies, "quit": menu["quit"]})
 	return true
 
 

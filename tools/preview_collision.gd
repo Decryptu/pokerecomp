@@ -101,7 +101,6 @@ func _draw_map(
 	return image
 
 
-## One palette per tile of the strip.
 func _tile_palettes(
 	data: GameData, map: Gen2WorldMap, tileset: Gen2WorldTileset, last_map: int
 ) -> Array:

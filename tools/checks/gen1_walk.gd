@@ -310,6 +310,27 @@ const COINS_GIVEN: int = 20
 const GENTLEMAN_PAID: String = "20 coins!"
 const GENTLEMAN_REFUSED: String = "You've got your"
 
+## `hidden_event 3, 0, PrintBlackboardLinkCableText`, faced up from below.
+const VIRIDIAN_SCHOOL: int = 43
+const BLACKBOARD_BESIDE := Vector2i(3, 1)
+const BLACKBOARD_FIRST: String = "The blackboard"
+const BLACKBOARD_QUESTION: String = "Which heading do"
+const BLACKBOARD_BURN: String = "A burn reduces"
+
+## `hidden_event 2, 3, AerodactylFossil`, faced up from the cell below it.
+const MUSEUM_FOSSIL_BESIDE := Vector2i(2, 4)
+const FOSSIL_LINE: String = "AERODACTYL Fossil"
+
+## `hidden_event 18, 15`, the list's first row, and the out-of-order machine.
+const SLOTS_BESIDE := Vector2i(17, 15)
+const SLOTS_BROKEN_BESIDE := Vector2i(5, 12)
+const SLOTS_ASKED: String = "A slot machine!"
+const SLOTS_NO_CASE: String = "A COIN CASE is"
+const SLOTS_NO_COINS: String = "You don't have"
+const SLOTS_OUT_OF_ORDER: String = "OUT OF ORDER"
+const SLOTS_COINS: int = 120
+const SLOTS_LEFT: int = 95
+
 ## Celadon City's TM41, whose receipt box names the item out of the buffer
 ## `CopyToStringBuffer` fills only when the bag took it.
 const CELADON_CITY: int = 6
@@ -808,7 +829,6 @@ func _check_a_card_key_door() -> void:
 		))
 
 
-## Silph Co. 2F opened and entered, standing under its first door facing it.
 func _silph_door() -> Gen2WorldAPI:
 	var world: Gen2WorldAPI = _r.open_world(0, SILPH_CO_2F, SILPH_DOOR_APPROACH)
 	if world == null:
@@ -818,7 +838,6 @@ func _silph_door() -> Gen2WorldAPI:
 	return world
 
 
-## The string one interaction puts in a box, or "" when it opened none.
 func _box_text(world: Gen2WorldAPI) -> String:
 	var results: Array = world.interact()
 	if results.is_empty():
@@ -1556,6 +1575,107 @@ func _check_the_coin_clerks() -> void:
 	_r.note("gen1 walk the coin clerk: %d coins for %d, and three refusals" % [
 		COINS_BOUGHT, COIN_PRICE,
 	])
+	_check_a_slot_machine()
+
+
+## `AbleToPlaySlotsCheck` and `PromptUserToPlaySlots`: YES raises the request
+## with the coins and the lucky byte, and the coins the loop leaves land.
+func _check_a_slot_machine() -> void:
+	var world: Gen2WorldAPI = _slots_world(SLOTS_BESIDE, SLOTS_COINS, 1)
+	if world == null:
+		return
+	world.state.set_gen1_byte(Gen2WorldAPI.GEN1_LUCKY_SLOT, 1)
+	world.interact()
+	var said: String = String(world.pending_script_input().get("text", ""))
+	_r.check(said.begins_with(SLOTS_ASKED), "the machine said %s." % [said])
+	if not _r.check(world.script_input_waiting(), "the machine asked nothing."):
+		return
+	var results: Array = world.choose_script_input(0)
+	var request: Dictionary = _runtime_request(results)
+	if request.is_empty():
+		for _frame: int in Gen1Layout.EMOTE_FRAMES + 1:
+			results = world.run_event_queue(true)
+			request = _runtime_request(results)
+			if not request.is_empty():
+				break
+	var values: Dictionary = request.get("values", {})
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"slot_machine_requested"
+			and int(values.get("coins", -1)) == SLOTS_COINS and bool(values.get("lucky", false)),
+		"YES raised %s." % [request]
+	):
+		return
+	world.complete_runtime_request({"ok": true, "coins": SLOTS_LEFT})
+	_r.check(world.state.coins() == SLOTS_LEFT, "the loop left %d coins." % world.state.coins())
+	world = _slots_world(SLOTS_BESIDE, SLOTS_COINS, 1)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	_r.check(world.interact().is_empty() or _event_text(world.interact()).is_empty(),
+		"a machine faced from below answered.")
+	for row: Array in [
+		[SLOTS_BESIDE, SLOTS_COINS, 0, SLOTS_NO_CASE], [SLOTS_BESIDE, 0, 1, SLOTS_NO_COINS],
+		[SLOTS_BROKEN_BESIDE, SLOTS_COINS, 1, SLOTS_OUT_OF_ORDER],
+	]:
+		world = _slots_world(row[0], int(row[1]), int(row[2]))
+		said = _event_text(world.interact())
+		_r.check(said.begins_with(String(row[3])), "at %s with %d coins and %d cases the machine said %s." % [
+			row[0], int(row[1]), int(row[2]), said,
+		])
+	_r.note("gen1 walk a slot machine: asked, refused three ways and paid back")
+	_check_a_fossil_picture()
+
+
+## `AerodactylFossil`: the picture under a press, then the fossil's own line.
+func _check_a_fossil_picture() -> void:
+	var world: Gen2WorldAPI = _facing_up(MUSEUM_1F, MUSEUM_FOSSIL_BESIDE)
+	if world == null:
+		return
+	var results: Array = world.interact()
+	var shown: Dictionary = _first_event(results, &"pokemon_picture_requested")
+	_r.check(String(shown.get("special", "")) == "fossil_aerodactyl"
+		and StringName(world.pending_script_input().get("type", &"")) == &"button",
+		"the fossil case showed %s and waits on %s." % [shown, world.pending_script_input()])
+	results = world.run_event_queue(true)
+	_r.check(not _first_event(results, &"pokemon_picture_closed").is_empty()
+		and _event_text(results).begins_with(FOSSIL_LINE),
+		"the press left %s." % [results])
+	_r.note("gen1 walk the museum's AERODACTYL fossil: a picture, a press, its line")
+	_check_the_blackboard()
+
+
+## `ViridianSchoolBlackboard`: a heading's text, the menu again, QUIT the way out.
+func _check_the_blackboard() -> void:
+	var world: Gen2WorldAPI = _facing_up(VIRIDIAN_SCHOOL, BLACKBOARD_BESIDE)
+	if world == null:
+		return
+	var said: String = _event_text(world.interact())
+	_r.check(said.begins_with(BLACKBOARD_FIRST), "the blackboard said %s." % [said])
+	var request: Dictionary = _runtime_request(world.run_event_queue(true))
+	var values: Dictionary = request.get("values", {})
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"gen1_menu_requested"
+			and (values.get("rows", []) as Array).size() == 6
+			and (values.get("grid", []) as Array).size() == 2
+			and String(values.get("text", "")).begins_with(BLACKBOARD_QUESTION),
+		"the blackboard opened %s." % [request]
+	):
+		return
+	said = _event_text(world.complete_runtime_request({"ok": true, "row": 3}))
+	_r.check(said.begins_with(BLACKBOARD_BURN), "BRN read %s." % [said])
+	request = _runtime_request(world.run_event_queue(true))
+	_r.check(StringName(request.get("kind", &"")) == &"gen1_menu_requested",
+		"the menu did not come back after BRN.")
+	_r.check(world.complete_runtime_request({"ok": true, "row": 5}).is_empty()
+		or world.pending_runtime_request().is_empty(), "QUIT did not leave.")
+	_r.note("gen1 walk the blackboard: BRN read and QUIT taken")
+
+
+func _slots_world(cell: Vector2i, coins: int, cases: int) -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, GAME_CORNER, cell)
+	if world == null:
+		return null
+	world.player_facing = Gen2WorldSprite.FACING_RIGHT
+	world.state.apply_changes({}, {}, {"coins": coins, "items": {Gen1Layout.ITEM_COIN_CASE: cases}})
+	return world
 
 
 func _check_a_refused_clerk(money: int, coins: int, cases: int, wanted: String) -> void:
@@ -2117,7 +2237,6 @@ func _day_care_world(purse: int) -> Gen2WorldAPI:
 	return world
 
 
-## The slot as it stands after enough experience for three levels.
 func _grown_slot() -> Gen2SaveMon:
 	var mon: Gen2SaveMon = Gen2SaveMon.new()
 	mon.species = DAYCARE_SPECIES
@@ -2654,7 +2773,6 @@ func _check_the_induction(world: Gen2WorldAPI) -> void:
 		"the Plateau's events were not cleared.")
 
 
-## A pressed through every box until a runtime request stands, or {}.
 func _pressed_to_request(world: Gen2WorldAPI) -> Dictionary:
 	for _pass: int in SCRIPTED_WALK_PASSES:
 		if not world.pending_runtime_request().is_empty():
@@ -3307,7 +3425,6 @@ func _lab_answer(request: Dictionary, trainer_class: int, trainer_id: int) -> Di
 	return {"ok": true}
 
 
-## One overworld pass with nobody at the buttons.
 func _drive_one_pass(world: Gen2WorldAPI) -> void:
 	var guard: int = 0
 	while world.script_busy() and world.pending_runtime_request().is_empty() \

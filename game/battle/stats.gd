@@ -123,7 +123,6 @@ static func unown_letter(dvs: int) -> int:
 	return letter + 1
 
 
-## Four DVs into the word the cartridge stores, for a caller building one by hand.
 static func pack_dvs(attack: int, defense: int, speed: int, special: int) -> int:
 	return (clampi(attack, 0, MAX_DV) << DV_ATTACK_SHIFT) \
 		| (clampi(defense, 0, MAX_DV) << DV_DEFENSE_SHIFT) \

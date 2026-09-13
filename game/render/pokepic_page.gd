@@ -32,14 +32,17 @@ static func menu_box() -> Gen2MenuBox:
 
 
 ## The box holding [param species] as an image of its own size, or null when the
-## cache cannot answer for the pic, the font or the palette.
+## cache cannot answer for the pic, the font or the palette. [param pic] stands
+## in for the species where `DisplayMonFrontSpriteInBox` shows a fossil.
 static func render(
 	data: GameData, species: int, map: Gen2WorldMap,
-	time_of_day: int = Gen2WorldPalette.TIME_MORNING
+	time_of_day: int = Gen2WorldPalette.TIME_MORNING, pic: Dictionary = {},
+	last_map: int = -1
 ) -> Image:
 	if data == null or map == null:
 		return null
-	var pic: Dictionary = data.species_pic(species)
+	if pic.is_empty():
+		pic = data.species_pic(species)
 	if pic.is_empty():
 		return null
 	var cell: Dictionary = Gen2PicImage.atlas_cell(
@@ -50,8 +53,10 @@ static func render(
 	var menu: Gen2MenuPage = Gen2MenuPage.from_data(data)
 	if menu == null:
 		return null
-	var slots: Array = Gen2WorldPalette.palette_slots(map.environment, time_of_day)
-	var palette: PackedColorArray = data.world_palette(int(slots[PALETTE_GRAY]))
+	var palette: PackedColorArray = Gen2WorldPalette.gen1_map_colors(data, map, last_map) \
+		if data.generation == RomRegistry.GEN1 else data.world_palette(int(
+			Gen2WorldPalette.palette_slots(map.environment, time_of_day)[PALETTE_GRAY]
+		))
 	if palette.size() < 4:
 		return null
 	var box: Gen2MenuBox = menu_box()

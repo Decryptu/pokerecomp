@@ -3891,7 +3891,6 @@ static func _extra_glyph_rows(rom: RomFile, offset: int, code: int) -> Array[int
 	return rows
 
 
-## Ink in the tile for one character code, in pixels.
 static func _glyph_ink(rom: RomFile, offset: int, code: int) -> int:
 	var at: int = offset + (code - Gen2Layout.FONT_FIRST_CODE) * PokeTiles.TILE_1BPP_BYTES
 	var ink: int = 0
@@ -4048,7 +4047,6 @@ static func verify_battle_graphics(rom: RomFile, layout: Dictionary) -> Dictiona
 	return {"ok": true, "message": ""}
 
 
-## One palette's colours against the values the source spells out.
 static func _verify_colours(
 	rom: RomFile, offset: int, wanted: Array, label: String
 ) -> Dictionary:
@@ -4987,7 +4985,6 @@ func import_rom(
 	return result
 
 
-## Rows of one list across every species, for the manifest's counts.
 static func _count_in(species: Array, key: String) -> int:
 	var out: int = 0
 	for entry: Dictionary in species:
@@ -5311,7 +5308,6 @@ static func read_descriptions(rom: RomFile, at: int, count: int) -> Array[String
 	return out
 
 
-## Both description tables, checked by decoding every entry of each.
 static func verify_descriptions(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read_descriptions(
 		rom, int(layout.get("item_descriptions", -1)), Gen2Layout.ITEM_COUNT
@@ -7719,7 +7715,6 @@ func _decode_into(
 	return true
 
 
-## One decompressed pic into its cell of an atlas.
 func _blit_pic(
 	raw: PackedByteArray, columns: int, rows: int, atlas: Dictionary, slot: int,
 	skip_tiles: int = 0

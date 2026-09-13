@@ -141,6 +141,8 @@ const PIC_BANK_THRESHOLDS: Array[int] = [0x1F, 0x4A, 0x74, 0x99]
 const PIC_BANKS: Array[int] = [0x09, 0x0A, 0x0B, 0x0C, 0x0D]
 const PIC_INDEX_MEW: int = 0x15
 const PIC_INDEX_FOSSIL_KABUTOPS: int = 0xB6
+## `GetMonHeader`'s if-chain, in `special_front`'s slot order.
+const SPECIAL_PICS: Dictionary = {0xB6: "fossil_kabutops", 0xB7: "fossil_aerodactyl", 0xB8: "ghost"}
 const PIC_BANK_FOSSIL_KABUTOPS: int = 0x0B
 
 ## `FontGraphics` and `TextBoxGraphics`, copied to `vFont` and `vChars2 tile $60`
@@ -835,7 +837,10 @@ const PAL_SET_PALETTES: int = 4
 const ATTR_BLK_COUNT_AT: int = 1
 const ATTR_BLK_ROWS_AT: int = 2
 const ATTR_BLK_ROW_SIZE: int = 6
-const ATTR_BLK_MAX_ROWS: int = 3
+## `ATTR_BLK` carries up to eighteen data sets; the opening's packets hold three.
+const ATTR_BLK_MAX_SETS: int = 18
+const OPENING_ATTR_BLK_ROWS: int = 3
+const SLOTS_ATTR_BLK_ROWS: int = 5
 
 ## `LoadPokedexTilePatterns`: `PokedexTileGraphics` at `vChars2 tile $60`, over
 ## the text box sheet, with `PokeballTileGraphics`' first tile at $72 behind it.
@@ -1525,6 +1530,7 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"get_item_quantity", "flag_action", "route23_copy_badge_text", "oaks_aide",
 	"starter_dex", "display_dex_rating",
 	"safari_low_cost", "safari_nag", "name_rater_check_ot", "name_rater_screen",
+	"display_mon_front_sprite_in_box",
 ]
 ## The four of those a `farcall` spends nothing on: no node carries a sound.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
@@ -1602,6 +1608,7 @@ const SPRITE_SLOTS: int = 16
 ## The stores a row is walked past: nothing here reads any of them.
 const SCRIPT_SILENT_STORES: Array[String] = [
 	"joy_held", "auto_text_box_control", "joy_ignore", "update_sprites_enabled",
+	"auto_bg_transfer",
 	## A forced walk writes the pad bit over the player's own facing byte, and
 	## the `walk` node behind it carries the direction anyway.
 	"facing_direction",
@@ -1641,14 +1648,16 @@ const TEXT_PREDEFS: Dictionary = {
 	"gym_statue": 0x0C, "gym_statue_badge": 0x0D, "found_hidden_item": 0x24,
 	"hidden_item_bag_full": 0x25, "found_hidden_coins": 0x2B,
 	"dropped_hidden_coins": 0x2C, "trash": 0x26, "first_lock": 0x3B, "second_lock": 0x3D,
-	"reset": 0x3E,
+	"reset": 0x3E, "slots_out_of_order": 0x28, "slots_out_to_lunch": 0x29,
+	"slots_someones_keys": 0x2A, "slots_no_coins": 0x32, "slots_coin_case": 0x33,
 }
 const TEXT_PREDEFS_YELLOW: Dictionary = {
 	"card_key_success": 0x01, "card_key_fail": 0x02,
 	"gym_statue": 0x0E, "gym_statue_badge": 0x0F, "found_hidden_item": 0x26,
 	"hidden_item_bag_full": 0x27, "found_hidden_coins": 0x2D,
 	"dropped_hidden_coins": 0x2E, "trash": 0x28, "first_lock": 0x3D, "second_lock": 0x3F,
-	"reset": 0x40,
+	"reset": 0x40, "slots_out_of_order": 0x2A, "slots_out_to_lunch": 0x2B,
+	"slots_someones_keys": 0x2C, "slots_no_coins": 0x34, "slots_coin_case": 0x35,
 }
 ## `PrintCardKeyText`: a Silph Co. door draws either of two tiles, the top
 ## floor's own a third, and the block that opens one is $0E under it and $03
@@ -1758,6 +1767,67 @@ const TRASH_ROW_SIZE_YELLOW: int = 9
 const TRASH_TABLE_TAIL: int = 256
 const TRASH_TABLE_TAIL_YELLOW: int = 512
 const TRASH_FIRST_MASK: int = 0x0E
+
+## `DisplayDiploma`: `DiplomaTextPointersAndCoords`' cells, `CableClub_TextBoxBorder`'s
+## tiles over the sheet at $76 and `CircleTile` at $70; Yellow's `DisplayDiplomaTop`
+## alternates two `DiplomaGraphics` tiles along the top and two down each side.
+const DIPLOMA_STRINGS: int = 4
+const DIPLOMA_STRING_MAX: int = 80
+const DIPLOMA_STRINGS_AT: Array[Vector2i] = [
+	Vector2i(5, 2), Vector2i(3, 4), Vector2i(2, 6), Vector2i(9, 16),
+]
+const DIPLOMA_NAME_AT: Vector2i = Vector2i(10, 4)
+const DIPLOMA_BOX_TILES: int = 0x76
+const DIPLOMA_BORDER: Dictionary = {
+	"top_left": 0x78, "top": 0x79, "top_right": 0x7A, "left": 0x7B,
+	"right": 0x77, "bottom_left": 0x7C, "bottom": 0x76, "bottom_right": 0x7D,
+}
+const DIPLOMA_CIRCLE_CODE: int = 0x70
+const DIPLOMA_CIRCLE_TILE: int = 22
+const DIPLOMA_GFX_TILES: int = 127
+const DIPLOMA_YELLOW_TOP: Array[int] = [0x02, 0x01]
+const DIPLOMA_YELLOW_SIDE: Array[int] = [0x04, 0x03]
+const DIPLOMA_PLAYER_SHIFT: int = 33
+const DIPLOMA_OBP0: int = 0x90
+
+## The two looping menus: `TextBoxBorder`'s box, each `PlaceString` column with
+## `wTopMenuItemX` beside it, the text table a row prints from, the quit rows.
+const HELP_MENUS: Dictionary = {
+	"link_cable_help": {
+		"text_1": "link_cable_help_text_1", "text_2": "link_cable_help_text_2",
+		"box": {"x": 0, "y": 0, "width": 13, "height": 8},
+		"columns": [{"strings": "how_to_link_text", "at": [2, 2], "cursor_x": 1}],
+		"replies": "link_cable_info_texts", "quit": [3],
+	},
+	"school_blackboard": {
+		"text_1": "school_blackboard_text_1", "text_2": "school_blackboard_text_2",
+		"box": {"x": 0, "y": 0, "width": 10, "height": 6},
+		"columns": [
+			{"strings": "status_ailment_text_1", "at": [1, 2], "cursor_x": 1},
+			{"strings": "status_ailment_text_2", "at": [6, 2], "cursor_x": 6},
+		],
+		"replies": "blackboard_status_pointers", "quit": [5],
+	},
+}
+const HELP_MENU_ROW_STEP: int = 2
+## `StartSlotMachine`'s three refusal arguments, each a `TextPredefs` row.
+const SLOTS_REFUSALS: Dictionary = {
+	0xFD: "slots_out_of_order", 0xFE: "slots_out_to_lunch", 0xFF: "slots_someones_keys",
+}
+const SMILE_BUBBLE: int = 2
+## `SlotMachineTiles1`, `SlotMachineTiles2`, `SlotMachineMap`'s rows and the
+## three `SlotMachineWheel*` tables of eighteen words.
+const SLOTS_TILES_1: int = 37
+const SLOTS_TILES_2: int = 24
+const SLOTS_TILEMAP_ROWS: int = 12
+const SLOTS_WHEEL_BYTES: int = 36
+const SLOTS_WHEELS: int = 3
+## The machine's boxes as deltas off `_PlaySlotMachineText`, one run on all three.
+const SLOTS_TEXT_AT: Dictionary = {
+	"play": 0x00, "out_of_coins": 0x1F, "bet": 0x38, "start": 0x4D,
+	"not_enough_coins": 0x55, "one_more_go": 0x68, "lined_up": 0x77,
+	"not_this_time": 0x97, "yeah": 0xA7,
+}
 const TRASH_CAN_MASK: int = 0x0F
 const TRASH_THREE_THIRD: int = 0xFF / 3
 const TRASH_TEXTS: Array[String] = ["trash", "first_lock", "second_lock", "reset"]
@@ -1799,6 +1869,9 @@ const FACING_STEPS: Dictionary = {
 	FACING_DOWN: Vector2i(0, 1), FACING_UP: Vector2i(0, -1),
 	FACING_LEFT: Vector2i(-1, 0), FACING_RIGHT: Vector2i(1, 0),
 }
+## `AbleToPlaySlotsCheck` reads bit 3 of the player's image index, which is set
+## facing LEFT ($8) and RIGHT ($C) alone.
+const SLOTS_FACINGS: Array[int] = [FACING_LEFT, FACING_RIGHT]
 ## `PLAYER_DIR_*` as `UpdatePlayerSprite` reads them, one `bit` per row in this
 ## order, so a byte with two set takes the first and zero reaches `.notMoving`,
 ## which leaves the facing byte alone.
@@ -2346,6 +2419,33 @@ const RED_BLUE: Dictionary = {
 	"hidden_coin_coords": 0x76822,
 	"bookshelf_tiles": 0x0FB8B,
 	"text_predefs": 0x03F22,
+	## `StartSlotMachine`, its art, wheels, packets, texts and the bank
+	## `AbleToPlaySlotsCheck` names its two refusals in.
+	"start_slot_machine": 0x37E2D,
+	"pic_fossil_kabutops": 0x2F9E8,
+	"pic_fossil_aerodactyl": 0x36536,
+	"pic_ghost": 0x366B5,
+	"display_mon_front_sprite_in_box": 0x5DBD9,
+	"diploma_strings": 0x56798,
+	"link_cable_help": 0x5DC29,
+	"link_cable_help_text_1": 0x5DC9E,
+	"link_cable_help_text_2": 0x5DCA3,
+	"how_to_link_text": 0x5DCA8,
+	"link_cable_info_texts": 0x5DCD8,
+	"school_blackboard": 0x5DCED,
+	"school_blackboard_text_1": 0x5DDA2,
+	"school_blackboard_text_2": 0x5DDA7,
+	"status_ailment_text_1": 0x5DDAC,
+	"status_ailment_text_2": 0x5DDBB,
+	"blackboard_status_pointers": 0x5DDCC,
+	"slots_tiles_1": 0x37A51,
+	"slots_tiles_2": 0x78BDE,
+	"slots_tilemap": 0x378F5,
+	"slots_wheels": 0x379E5,
+	"pal_packet_slots": 0x72478,
+	"blk_packet_slots": 0x7224F,
+	"slots_text": 0x8818F,
+	"slots_check_bank": 0x0B,
 	"map_badge_flags": 0x62442,
 	"bench_guy_texts": 0x6247E,
 	## The four table routines, by full ROM offset the way
@@ -2380,6 +2480,7 @@ const RED_BLUE: Dictionary = {
 	"sprite_facing_hram": 0xFF8D,
 	"joy_pressed": 0xFFB3,
 	"new_sound_id": 0xC0EE,
+	"auto_bg_transfer": 0xFFBA,
 	"audio_rom_bank": 0xC0EF,
 	"audio_saved_rom_bank": 0xC0F0,
 	"status_flags_5": 0xD730,
@@ -2834,6 +2935,32 @@ const YELLOW: Dictionary = {
 	"hidden_coin_coords": 0x7611E,
 	"bookshelf_tiles": 0x0FA19,
 	"text_predefs": 0x03F67,
+	"start_slot_machine": 0x37ED1,
+	"pic_fossil_kabutops": 0x2FB92,
+	"pic_fossil_aerodactyl": 0x367A1,
+	"pic_ghost": 0x36920,
+	"display_mon_front_sprite_in_box": 0x5DC3E,
+	"diploma_strings": 0xE9A73,
+	"diploma_gfx": 0xE9BFA,
+	"link_cable_help": 0x5DC8E,
+	"link_cable_help_text_1": 0x5DD02,
+	"link_cable_help_text_2": 0x5DD07,
+	"how_to_link_text": 0x5DD0C,
+	"link_cable_info_texts": 0x5DD3C,
+	"school_blackboard": 0x5DD51,
+	"school_blackboard_text_1": 0x5DE06,
+	"school_blackboard_text_2": 0x5DE0B,
+	"status_ailment_text_1": 0x5DE10,
+	"status_ailment_text_2": 0x5DE1F,
+	"blackboard_status_pointers": 0x5DE30,
+	"slots_tiles_1": 0x37C81,
+	"slots_tiles_2": 0x78C17,
+	"slots_tilemap": 0x37B25,
+	"slots_wheels": 0x37C15,
+	"pal_packet_slots": 0x727B1,
+	"blk_packet_slots": 0x72661,
+	"slots_text": 0x9DF58,
+	"slots_check_bank": 0x0B,
 	"map_badge_flags": 0x62611,
 	"bench_guy_texts": 0x6264D,
 	"hidden_items": 0x75F74,
@@ -2864,6 +2991,7 @@ const YELLOW: Dictionary = {
 	"sprite_facing_hram": 0xFF8D,
 	"joy_pressed": 0xFFB3,
 	"new_sound_id": 0xC0EE,
+	"auto_bg_transfer": 0xFFBA,
 	"audio_rom_bank": 0xC0EF,
 	"audio_saved_rom_bank": 0xC0F0,
 	"status_flags_5": 0xD72F,
@@ -3088,7 +3216,6 @@ static func trainer_ai_respects_lock(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
 
 
-## A type number the cartridge really uses.
 static func is_real_type(type: int) -> bool:
 	return type < TYPE_UNUSED_FIRST or type > TYPE_UNUSED_LAST
 
@@ -3604,7 +3731,6 @@ static func flat_super_rod(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
 
 
-## Which of a block's sixteen tiles decides one walk cell.
 static func cell_tile_index(cell_x: int, cell_y: int) -> int:
 	return (cell_y * MAP_BLOCK_CELL_WIDTH + 1) * MAP_BLOCK_TILE_WIDTH \
 		+ cell_x * MAP_BLOCK_CELL_WIDTH

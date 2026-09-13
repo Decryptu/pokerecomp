@@ -198,7 +198,6 @@ func _verify_sites(data: GameData, crystal_commands: bool) -> void:
 	)
 
 
-## The command names one script's bytes decode to, stopping where the walk does.
 func _commands_from(bytes: PackedByteArray, crystal_commands: bool) -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
 	var offset: int = 0

@@ -163,7 +163,6 @@ func _verify_warp_chain(data: GameData, game_id: StringName, room_1: int) -> voi
 	])
 
 
-## The two plain connections, each proved by the map its region crosses onto.
 func _verify_connections(data: GameData, game_id: StringName) -> void:
 	for leg: Array in CONNECTIONS:
 		var label: String = leg[0]
@@ -184,7 +183,6 @@ func _verify_connections(data: GameData, game_id: StringName) -> void:
 	print("%s connections: Viridian west onto Route 22, Route 28 west onto Silver Cave Outside." % game_id)
 
 
-## Pallet Town's lab door reached on foot from Route 1, and Oak inside it.
 func _verify_oaks_lab(data: GameData, game_id: StringName) -> void:
 	var town: Gen2WorldAPI = _open(data, PALLET_GROUP, PALLET_TOWN, PALLET_LANDING)
 	if town != null:
@@ -289,7 +287,6 @@ func _verify_gate(data: GameData, game_id: StringName) -> void:
 	print("%s gate: two arms, each shut by one black belt standing in the one cell that joins it." % game_id)
 
 
-## Silver Cave Outside: the flypoint its map callback sets, and the two doors.
 func _verify_silver_cave_outside(data: GameData, game_id: StringName, crystal: bool) -> void:
 	var route: Gen2WorldAPI = _open(data, SILVER_GROUP, ROUTE_28, ROUTE_28_LANDING)
 	if route != null:

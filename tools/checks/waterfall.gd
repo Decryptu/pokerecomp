@@ -203,7 +203,6 @@ func _waterfall_cells(world: Gen2WorldAPI) -> int:
 	return found
 
 
-## Whirl Islands B2F, the tallest fall either cartridge ships.
 func _verify_whirl_islands(game_id: StringName, data: GameData, crystal: bool) -> void:
 	var number: int = WHIRL_ISLANDS_B2F_CRYSTAL if crystal else WHIRL_ISLANDS_B2F_GOLD_SILVER
 	var world: Gen2WorldAPI = _climber(

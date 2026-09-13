@@ -684,7 +684,6 @@ var enemy: Gen2BattleMon:
 		return party(ENEMY).active_mon()
 
 
-## Two parties, each led by whoever is first in it.
 static func create_parties(
 	game_data: GameData,
 	player_party: Gen2Party,
@@ -3004,7 +3003,6 @@ func _sides(player_first: bool) -> Array:
 	return [PLAYER, ENEMY] if player_first else [ENEMY, PLAYER]
 
 
-## A move's priority, from its effect byte.
 static func priority_of(move: Dictionary) -> int:
 	if int(move.get("number", 0)) == VITAL_THROW:
 		return 0

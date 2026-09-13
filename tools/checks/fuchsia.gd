@@ -149,7 +149,6 @@ func _verify_chain(data: GameData, game_id: StringName, crystal: bool) -> void:
 		])
 
 
-## Route 15's gate, and the city it opens onto.
 func _verify_gate_and_city(data: GameData, game_id: StringName, crystal: bool) -> void:
 	var route: Gen2WorldAPI = _open(data, FUCHSIA_GROUP, ROUTE_15, ROUTE_15_GATE_DOOR)
 	if route != null:
@@ -208,7 +207,6 @@ func _verify_gate_and_city(data: GameData, game_id: StringName, crystal: bool) -
 	print("%s fuchsia city: 352 cells behind the gate, a flypoint and the gym door." % game_id)
 
 
-## The gym, which is a maze with no sight lines in it.
 func _verify_gym(data: GameData, game_id: StringName) -> void:
 	var gym: Gen2WorldAPI = _open(data, FUCHSIA_GROUP, FUCHSIA_GYM, GYM_LANDING)
 	if gym == null:

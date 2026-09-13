@@ -218,7 +218,6 @@ func _on_click(click: InputEventMouseButton) -> void:
 	_settle()
 
 
-## The cards take no pointer events of their own, so hover lives here.
 func _hover(index: int) -> void:
 	for at: int in _cartridges.size():
 		_cartridges[at].set_hovered(at == index)

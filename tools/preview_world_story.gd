@@ -1188,7 +1188,6 @@ func _elm_return_leg(
 	return _warp_entry_leg(world, save, random, data, path, 24, 4, "new_bark_departure")
 
 
-## New Bark Town to the Zephyr Badge, through the gate Route 31 has no edge for.
 func _zephyr_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -1537,7 +1536,6 @@ func _azalea_approach_leg(
 	return {"ok": true}
 
 
-## Kurt, the Rockets in Slowpoke Well, and the apricorn errand they leave.
 func _kurt_and_the_well_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -1758,7 +1756,6 @@ func _plain_badge_path(
 	return {"ok": true}
 
 
-## Ilex Forest: the Farfetch'd chain, HM01, and the tree it is spent on.
 func _ilex_forest_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -2223,7 +2220,6 @@ func _squirtbottle_leg(
 	return {"ok": true}
 
 
-## Route 36 north to Ecruteak and the Burned Tower the gym waits on.
 func _burned_tower_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -2636,7 +2632,6 @@ func _cianwood_secretpotion_leg(
 	return {"ok": true}
 
 
-## Olivine Gym and Jasmine, who is only in it once Amphy is cured.
 func _olivine_gym_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -2687,7 +2682,6 @@ func _glacier_badge_path(
 	return {"ok": true}
 
 
-## Olivine Gym east to Mahogany Town, over Route 42's two lakes.
 func _route_42_crossing(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -6798,7 +6792,6 @@ func _silver_cave_rooms(
 	return {"ok": true}
 
 
-## Cerulean to the Power Plant and back, which is the river both ways.
 func _power_plant_visit(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8145,7 +8138,6 @@ func _warp_step(world: Gen2WorldAPI, group: int, number: int) -> Dictionary:
 	return world.try_warp()
 
 
-## Walks to a warp cell, resolving whatever answers on the way, and takes it.
 func _warp_walk(
 	world: Gen2WorldAPI,
 	cell: Vector2i,
@@ -8535,7 +8527,6 @@ func _answer_input(world: Gen2WorldAPI, input_type: StringName, state: Dictionar
 	return _runtime_request(world, state)
 
 
-## The runtime pause the script stands in, answered by its kind's handler.
 func _runtime_request(world: Gen2WorldAPI, state: Dictionary) -> Array:
 	var request: Dictionary = world.pending_runtime_request()
 	if request.is_empty():
@@ -8819,7 +8810,6 @@ func _record_failure(results: Array, state: Dictionary, whole_result: bool = fal
 		return
 
 
-## The stop a failed answer reports, which is no results and a reason.
 func _request_failed(state: Dictionary, reason: String, details: Variant) -> Array:
 	state["reason"] = reason
 	state["details"] = JSON.stringify(details)

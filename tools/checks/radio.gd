@@ -93,7 +93,6 @@ func run(r: RefCounted) -> void:
 		_verify_route_2(_data, game_id, crystal)
 
 
-## RadioChannels, its three profile splits and the music each station commits.
 func _verify_stations(_data: GameData, game_id: StringName, crystal: bool) -> void:
 	var vermilion: int = LANDMARK_VERMILION_CITY if crystal else LANDMARK_VERMILION_CITY - 1
 	var new_bark: int = LANDMARK_NEW_BARK_TOWN

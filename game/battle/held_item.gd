@@ -156,7 +156,6 @@ static func wants_hp_berry(hp: int, max_hp: int) -> bool:
 	return hp * 2 < max_hp
 
 
-## What Leftovers restores.
 static func leftovers_healing(max_hp: int) -> int:
 	@warning_ignore("integer_division")
 	return maxi(max_hp / LEFTOVERS_DIVISOR, 1)

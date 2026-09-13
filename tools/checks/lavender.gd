@@ -110,7 +110,6 @@ func _verify_route_8_gate(data: GameData, game_id: StringName) -> void:
 	print("%s route 8 gate: a gate building out of Saffron." % game_id)
 
 
-## Route 8, and which of its five sight lines the walk east actually owes.
 func _verify_route_8(data: GameData, game_id: StringName) -> void:
 	var world: Gen2WorldAPI = _open(data, LAVENDER_GROUP, ROUTE_8, ROUTE_8_FROM_GATE)
 	if world == null:
@@ -240,7 +239,6 @@ func _verify_lavender_town(data: GameData, game_id: StringName) -> void:
 	print("%s lavender town: 155 cells, a flypoint, the tower door and two open edges." % game_id)
 
 
-## The gentleman inside, whose EXPN CARD the Cascade Badge's own errand unlocks.
 func _verify_expn_card(data: GameData, game_id: StringName) -> void:
 	var world: Gen2WorldAPI = _open(
 		data, LAVENDER_GROUP, LAV_RADIO_TOWER_1F, TOWER_LANDING

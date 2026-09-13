@@ -314,7 +314,6 @@ func _blank_outside(dex: int, side: int) -> void:
 			return
 
 
-## A whole atlas cell, the picture and the blank around it.
 func _cell(name: String, slot: int) -> Dictionary:
 	return Gen2PicImage.atlas_cell(
 		_r.data.atlas_indices(name), _r.data.atlas(name), {"slot": slot}
@@ -423,7 +422,6 @@ func _trainer_card() -> void:
 	])
 
 
-## The tile columns of an atlas cell that carry ink.
 func _lit_columns(cell: Dictionary) -> Array[int]:
 	var out: Array[int] = []
 	var width: int = int(cell.get("width", 0))

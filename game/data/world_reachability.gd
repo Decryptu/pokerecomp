@@ -215,7 +215,6 @@ static func _cell_key(x: int, y: int) -> int:
 	return (x & 0xFF) << 8 | (y & 0xFF)
 
 
-## A move set as one number, so a flood taken for it can be found again.
 static func _moves_key(moves: Dictionary) -> int:
 	var key: int = 0
 	for index: int in GATE_MOVES.size():

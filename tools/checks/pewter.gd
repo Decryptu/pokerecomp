@@ -192,7 +192,6 @@ func _verify_vermilion_pocket(data: GameData, game_id: StringName, _crystal: boo
 	])
 
 
-## Diglett's Cave: three regions, two ladders and the Route 2 door.
 func _verify_cave(data: GameData, game_id: StringName, crystal: bool) -> void:
 	var number: int = DIGLETTS_CAVE if crystal else DIGLETTS_CAVE_GOLD_SILVER
 	for leg: Array in CAVE_REGIONS:
@@ -225,7 +224,6 @@ func _verify_cave(data: GameData, game_id: StringName, crystal: bool) -> void:
 	print("%s digletts cave: three regions of 14, 99 and 15 cells, crossed by two ladders." % game_id)
 
 
-## Route 2 once its northern tree is cut: the crossing behind it is Pewter's.
 func _verify_route_2_crossing(data: GameData, game_id: StringName, crystal: bool) -> void:
 	var state := Gen2WorldState.new()
 	state.set_engine_flag(
@@ -255,7 +253,6 @@ func _verify_route_2_crossing(data: GameData, game_id: StringName, crystal: bool
 	print("%s route 2: the cut route crosses north onto Pewter City." % game_id)
 
 
-## Pewter City and its gym.
 func _verify_pewter(data: GameData, game_id: StringName, crystal: bool) -> void:
 	var city: Gen2WorldAPI = _open(data, PEWTER_GROUP, PEWTER_CITY, PEWTER_SOUTH_LANDING)
 	if city == null:

@@ -113,7 +113,6 @@ const STATION_NAMES: Dictionary = {
 }
 
 
-## Every knob position the dial can stop on.
 static func knob_values() -> Array[int]:
 	var values: Array[int] = []
 	var knob: int = KNOB_MIN

@@ -212,7 +212,6 @@ func _verify_lances_room(data: GameData, game_id: StringName) -> void:
 	)
 
 
-## The Hall of Fame, which the champion scene warps into rather than walks into.
 func _verify_hall_of_fame(data: GameData, game_id: StringName) -> void:
 	var world: Gen2WorldAPI = _open(data, HALL_OF_FAME_NUMBER, HALL_OF_FAME_ARRIVAL)
 	if world == null:

@@ -1,14 +1,10 @@
 class_name Gen2SlotMachine
 extends RefCounted
 
-## `_SlotMachine`'s own state (engine/games/slot_machine.asm), node-free, which is
-## `SlotsLoop`'s side of it. Five things a reading gets wrong: a reel is
-## manipulated after the button rather than before, the bias being rolled once a
-## bet and the button only deciding when the search starts; `Slots_InitBias` keeps
-## a seven, since SLOTS_SEVEN is zero and its `ret z` leaves it there; Golem,
-## Chansey and the slow advance are searches rather than decorations; a reel action
-## runs once every sixteen units of spin distance rather than once a frame; and the
-## three reel strips repeat their own first three symbols, so nothing wraps.
+## `_SlotMachine`'s own state (engine/games/slot_machine.asm), node-free. A reel
+## is manipulated after the button, the bias being rolled once a bet; Golem,
+## Chansey and the slow advance are searches; a reel action runs once every
+## sixteen units of spin distance; and the strips repeat their first three symbols.
 
 ## `wSlotMatched` values, which are the reel strips' own bytes.
 const SLOTS_SEVEN: int = 0x00
@@ -320,6 +316,12 @@ func take_events() -> Array:
 ## `WaitSFX` answered: the host says the effect channels are free again.
 func sfx_finished() -> void:
 	_waiting_sfx = false
+
+
+## Where the host's two menu cursors stand. Crystal's menus are drawn by the
+## page over the machine, so only [Gen1SlotMachine] reads them.
+func set_menu_cursor(_bet_row: int, _yes_no_row: int) -> void:
+	pass
 
 
 ## `hJoypadSum`, which the three `SlotsAction_WaitReel*` read and clear. A press

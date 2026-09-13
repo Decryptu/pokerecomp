@@ -143,6 +143,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_dex_ratings,
 	_verify_credits,
 	_verify_opening,
+	_verify_slots,
 	_verify_overworld_coords,
 	_verify_field_moves,
 	_verify_intro,
@@ -173,6 +174,9 @@ const OPENING_TILE_SHEETS: Dictionary = {
 	"title_version": {"pin": "title_version_tiles", "tiles": Gen1Layout.TITLE_VERSION_TILES, "first_code": 0, "bits": 1},
 	"title_player": {"pin": "title_player_tiles", "tiles": Gen1Layout.TITLE_PLAYER_TILES, "first_code": 0, "bits": 2},
 	"title_logo_corner": {"pin": "title_logo_corner", "tiles": Gen1Layout.TITLE_LOGO_CORNER_TILES, "first_code": 0, "bits": 2},
+	"slots_1": {"pin": "slots_tiles_1", "tiles": Gen1Layout.SLOTS_TILES_1, "first_code": 0, "bits": 2},
+	"diploma_gfx": {"pin": "diploma_gfx", "tiles": Gen1Layout.DIPLOMA_GFX_TILES, "first_code": 0, "bits": 2},
+	"slots_2": {"pin": "slots_tiles_2", "tiles": Gen1Layout.SLOTS_TILES_2, "first_code": 0, "bits": 2},
 	"title_pikachu_bg": {"pin": "title_pikachu_bg", "tiles": Gen1Layout.TITLE_PIKACHU_BG_TILES, "first_code": 0, "bits": 2},
 	"title_pikachu_ob": {"pin": "title_pikachu_ob", "tiles": Gen1Layout.TITLE_PIKACHU_OB_TILES, "first_code": 0, "bits": 2},
 	"title_nine": {"pin": "title_nine_tile", "tiles": 1, "first_code": 0, "bits": 2},
@@ -616,7 +620,7 @@ static func _verify_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 		if rom.u8(int(layout[name])) != Gen1Layout.PAL_SET_COMMAND:
 			return _fail("%s does not open on PAL_SET." % name)
 	for name: String in ["blk_packet_splash", "blk_packet_intro", "blk_packet_title"]:
-		if read_attr_blocks(rom, int(layout[name])).size() != Gen1Layout.ATTR_BLK_MAX_ROWS:
+		if read_attr_blocks(rom, int(layout[name])).size() != Gen1Layout.OPENING_ATTR_BLK_ROWS:
 			return _fail("%s does not hold three ATTR_BLK rows." % name)
 	for index: int in Gen1Layout.INTRO_TILEMAPS:
 		var row: Dictionary = read_tile_id_list(rom, layout, Gen1Layout.INTRO_TILEMAP_FIRST + index)
@@ -632,6 +636,26 @@ static func _verify_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if layout.has("yellow_intro_frames") \
 			and read_animated_object_frames(rom, layout).size() != Gen1Layout.YELLOW_INTRO_FRAMESETS:
 		return _fail("YellowIntro_AnimatedObjectFramesData does not hold eleven framesets.")
+	return _ok()
+
+
+## `StartSlotMachine` opens on `ld a, [wHiddenEventFunctionArgument]`, every
+## wheel on `SLOTS7`, and the SGB packets and the nine boxes are read whole.
+static func _verify_slots(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if rom.u8(int(layout["start_slot_machine"])) != Gen1Layout.SCRIPT_LD_A_MEM:
+		return _fail("StartSlotMachine does not open on ld a, [nn].")
+	for wheel: int in Gen1Layout.SLOTS_WHEELS:
+		if rom.u16le(int(layout["slots_wheels"]) + wheel * Gen1Layout.SLOTS_WHEEL_BYTES) \
+			!= Gen1SlotMachine.SLOTS7:
+			return _fail("SlotMachineWheel%d does not open on SLOTS7." % (wheel + 1))
+	if rom.u8(int(layout["pal_packet_slots"])) != Gen1Layout.PAL_SET_COMMAND:
+		return _fail("PalPacket_Slots does not open on PAL_SET.")
+	if read_attr_blocks(rom, int(layout["blk_packet_slots"])).size() \
+		!= Gen1Layout.SLOTS_ATTR_BLK_ROWS:
+		return _fail("BlkPacket_Slots does not hold five ATTR_BLK rows.")
+	for name: String in Gen1Layout.SLOTS_TEXT_AT:
+		if facility_text(rom, int(layout["slots_text"]) + int(Gen1Layout.SLOTS_TEXT_AT[name])).is_empty():
+			return _fail("The slot machine's %s box does not decode." % name)
 	return _ok()
 
 
@@ -856,7 +880,6 @@ static func _verify_trainer_ai(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return _ok()
 
 
-## One facility box, already laid out. Empty for a stub that does not decode.
 static func facility_text(rom: RomFile, at: int) -> String:
 	if at < 0:
 		return ""
@@ -1075,6 +1098,9 @@ func import_rom(
 		"oak_ratings": _import_dex_ratings(rom, layout),
 		"credits": read_credits(rom, layout),
 		"opening": read_opening(rom, layout),
+		"slots": read_slots(rom, layout),
+		"diploma": read_diploma(rom, layout),
+		"slots_text": _import_slots_text(rom, layout),
 		"vending": _import_vending(rom, layout, items),
 		"prizes": _import_prizes(rom, layout),
 		"town_map": _import_town_map(rom, layout),
@@ -1794,6 +1820,51 @@ static func read_tile_id_list(rom: RomFile, layout: Dictionary, index: int) -> D
 
 
 ## `PAL_SET`'s four palettes as `SuperPalettes` rows.
+## `DisplayDiploma`'s four strings as raw codes; Red's `DiplomaEmptyText` is skipped.
+static func read_diploma(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var strings: Array = []
+	var at: int = int(layout["diploma_strings"])
+	while strings.size() < Gen1Layout.DIPLOMA_STRINGS:
+		var codes: PackedByteArray = _bytes_until(
+			rom, at, Gen1Text.TERMINATOR, Gen1Layout.DIPLOMA_STRING_MAX
+		)
+		if not codes.is_empty():
+			strings.append(Array(codes))
+		at += codes.size() + 1
+	return {"strings": strings}
+
+
+## `LoadSlotMachineTiles`' map and the three wheels, with `SetPal_Slots`' packets:
+## the four palettes flattened the way `GameData.slots_palette` indexes them.
+static func read_slots(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var wheels: Array = []
+	for wheel: int in Gen1Layout.SLOTS_WHEELS:
+		wheels.append(Array(rom.slice(
+			int(layout["slots_wheels"]) + wheel * Gen1Layout.SLOTS_WHEEL_BYTES,
+			Gen1Layout.SLOTS_WHEEL_BYTES
+		)))
+	var palettes: Array = []
+	for row: Variant in read_pal_packet(rom, layout, int(layout["pal_packet_slots"])):
+		palettes.append_array(row as Array)
+	return {
+		"tilemap": Array(rom.slice(
+			int(layout["slots_tilemap"]), Gen1Layout.SLOTS_TILEMAP_ROWS * Gen1Layout.SCREEN_WIDTH_TILES
+		)),
+		"reels": wheels,
+		"palettes": palettes,
+		"blocks": read_attr_blocks(rom, int(layout["blk_packet_slots"])),
+	}
+
+
+func _import_slots_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for name: String in Gen1Layout.SLOTS_TEXT_AT:
+		out[name] = facility_text(
+			rom, int(layout["slots_text"]) + int(Gen1Layout.SLOTS_TEXT_AT[name])
+		)
+	return out
+
+
 static func read_pal_packet(rom: RomFile, layout: Dictionary, at: int) -> Array:
 	var out: Array = []
 	for slot: int in Gen1Layout.PAL_SET_PALETTES:
@@ -1808,7 +1879,7 @@ static func read_pal_packet(rom: RomFile, layout: Dictionary, at: int) -> Array:
 
 static func read_attr_blocks(rom: RomFile, at: int) -> Array:
 	var count: int = rom.u8(at + Gen1Layout.ATTR_BLK_COUNT_AT)
-	if count < 1 or count > Gen1Layout.ATTR_BLK_MAX_ROWS:
+	if count < 1 or count > Gen1Layout.ATTR_BLK_MAX_SETS:
 		return []
 	var out: Array = []
 	for index: int in count:
@@ -2357,6 +2428,13 @@ func _import_pics(
 	)
 	for slot: int in PLAYER_FRONTPICS.size():
 		_decode_pic(codec, rom, int(layout[PLAYER_FRONTPICS[slot]]), player_front, slot)
+	var special_front: Dictionary = PokeTiles.new_atlas(
+		Gen1Layout.FRONTPIC_MAX_TILES, Gen1Layout.SPECIAL_PICS.size()
+	)
+	var special_slot: int = 0
+	for name: String in Gen1Layout.SPECIAL_PICS.values():
+		_decode_pic(codec, rom, int(layout["pic_%s" % name]), special_front, special_slot)
+		special_slot += 1
 
 	# A wrong offset decodes nothing, so an atlas short of a cell is a bad pin.
 	var wanted: Dictionary = {
@@ -2364,10 +2442,12 @@ func _import_pics(
 		"trainers": Gen1Layout.TRAINER_CLASS_COUNT,
 		"player_back": backpics.size(),
 		"player_front": PLAYER_FRONTPICS.size(),
+		"special_front": Gen1Layout.SPECIAL_PICS.size(),
 	}
 	var atlases: Dictionary = {
 		"front": front, "back": back, "trainers": trainers,
 		"player_back": player_back, "player_front": player_front,
+		"special_front": special_front,
 	}
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}

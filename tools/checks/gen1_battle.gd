@@ -148,7 +148,6 @@ func _every_move() -> void:
 	_r.note("gen1 battle %d moves run, %d took HP off the target" % [used, damaged])
 
 
-## One wild battle to a faint, both sides picking their first move every turn.
 func _a_wild_fight() -> void:
 	var battle: Gen2Battle = _fight(FIGHT_LEVELS[0], FIGHT_LEVELS[1], [], SWEEP_SEED)
 	if not _r.check(battle != null, "no wild fight could be built"):

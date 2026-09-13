@@ -268,7 +268,6 @@ func _open_start_menu() -> Dictionary:
 	return await _open_world_menu(PokeButton.START)
 
 
-## The pack, which draws a list, an item's own picture and the map behind it.
 func _open_pack() -> Dictionary:
 	var opened: Dictionary = await _open_world_menu(PokeButton.START)
 	if opened.is_empty():

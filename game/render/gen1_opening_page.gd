@@ -31,13 +31,22 @@ static func from_data(data: GameData) -> Gen1OpeningPage:
 
 ## The whole 160x144 screen for the frame [param opening] is on.
 func draw(opening: Gen1Opening) -> Image:
-	var shades: PackedByteArray = opening.lcd.render()
-	var attributes: PackedByteArray = attribute_map(opening.blocks())
-	var tables: Array[PackedInt32Array] = []
+	var palettes: Array[PackedColorArray] = []
 	for palette: Variant in opening.palettes():
 		var colors := PackedColorArray()
 		for packed: Variant in palette as Array:
 			colors.append(PokePalette.from_packed(int(packed)))
+		palettes.append(colors)
+	return colour(opening.lcd.render(), opening.blocks(), palettes)
+
+
+## [param shades], a byte a pixel, through the `ATTR_BLK` rows in [param blocks]
+## and the `PAL_SET` palettes they index; a palette the packet does not name is
+## the Game Boy's own greys.
+static func colour(shades: PackedByteArray, blocks: Array, palettes: Array[PackedColorArray]) -> Image:
+	var attributes: PackedByteArray = attribute_map(blocks)
+	var tables: Array[PackedInt32Array] = []
+	for colors: PackedColorArray in palettes:
 		tables.append(Gen2PicImage.lookup(colors))
 	while tables.size() < SHADES:
 		tables.append(Gen2PicImage.lookup(DMG_SHADES))

@@ -108,7 +108,6 @@ static func from_data(data: GameData) -> Gen2MoveScreenPage:
 	return out
 
 
-## Where the screen puts the mon icon, in pixels.
 static func icon_position() -> Vector2i:
 	return ICON_AT
 

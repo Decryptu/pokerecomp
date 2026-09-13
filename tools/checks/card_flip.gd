@@ -366,7 +366,6 @@ func _verify_games(game_id: StringName, data: GameData) -> void:
 	])
 
 
-## One deal: the shuffle behind it and the card it turned over.
 func _verify_deal(
 	game_id: StringName, game_run: int, game: Gen2CardFlip, seen: Dictionary
 ) -> bool:

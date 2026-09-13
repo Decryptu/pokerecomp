@@ -874,7 +874,6 @@ func _mod_rows() -> Array:
 	return rows
 
 
-## The row the cursor is on, empty where there is none.
 func _mod_row() -> Dictionary:
 	var rows: Array = _mod_rows()
 	if _mod_cursor < 0 or _mod_cursor >= rows.size():
@@ -1233,7 +1232,6 @@ func _last_page(text: String) -> String:
 	return "\n".join(pages[pages.size() - 1] as PackedStringArray)
 
 
-## Which page of the result text the box is holding.
 func _pack_result_text() -> String:
 	if _pack_result_pages.is_empty():
 		return ""

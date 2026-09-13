@@ -50,7 +50,6 @@ static func render(
 	return image
 
 
-## One tile of the strip, painted opaque: the box covers the map behind it.
 static func _draw_tile(
 	image: Image, indices: PackedByteArray, palette: PackedColorArray,
 	tile: int, at: Vector2i

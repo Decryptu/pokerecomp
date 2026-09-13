@@ -2539,7 +2539,14 @@ func _open_slot_machine(request: Dictionary) -> bool:
 		return false
 	host.set_audio_player(_audio_player)
 	host.closed.connect(_on_slot_machine_closed)
-	host.sfx_requested.connect(_play_sfx)
+	## A Generation 1 machine names `PlaySound`'s own ids rather than Crystal roles.
+	if _data.generation == RomRegistry.GEN1:
+		host.sfx_requested.connect(
+			func(index: int, _waited: bool) -> void: _play_gen1_sound(index)
+		)
+		host.music_pause_requested.connect(_pause_gen1_music)
+	else:
+		host.sfx_requested.connect(_play_sfx)
 	host.music_requested.connect(_play_music)
 	host.z_index = 30
 	_slot_machine_host = host
@@ -2557,8 +2564,10 @@ func _on_slot_machine_closed(coins: int) -> void:
 		Gen2Screen.drop(host)
 	_script_prompt = ""
 	## `_SlotMachine` stops `MUSIC_GAME_CORNER` nowhere, so the map's own track
-	## is started again where `reanchormap` would have.
-	_play_current_map_music()
+	## is started again where `reanchormap` would have; `PromptUserToPlaySlots`
+	## never touched it.
+	if _data.generation != RomRegistry.GEN1:
+		_play_current_map_music()
 	_show_script_results(_world.complete_runtime_request({
 		"ok": true, "coins": coins,
 	}))
@@ -3596,7 +3605,6 @@ class PreviewPet extends RefCounted:
 		_cried = true
 		return [{"kind": Gen2WorldActors.REQUEST_CRY, "species": CYNDAQUIL}]
 
-	## The faced cell, so a press with nothing in front of the player reaches it.
 	func _cell() -> Vector2i:
 		return _world.facing_cell()
 
@@ -3670,7 +3678,6 @@ func preview_field_move_use() -> void:
 	_preview_field_move_use(Gen2WorldFieldMove.MOVE_CUT)
 
 
-## The same pair for Surf, which needs the scene opened beside water.
 func preview_surf() -> void:
 	_face_surfable_water()
 	_preview_field_move(Gen2WorldFieldMove.MOVE_SURF)
@@ -4118,6 +4125,11 @@ func preview_slot_machine(
 	if _world == null or _data == null or _slot_machine_host != null:
 		return
 	_open_slot_machine({"values": {"coins": coins, "lucky": lucky}})
+	drive_slot_machine(bet, frames)
+
+
+## The open machine driven [param frames] on, A handed over whenever a reel waits.
+func drive_slot_machine(bet: int, frames: int) -> void:
 	var host: Gen2SlotMachineScreen = _slot_machine_host
 	if host == null:
 		return
@@ -4144,11 +4156,18 @@ func preview_slot_machine(
 			and host.machine().waiting_for_sfx():
 			_audio_player.stop_effects()
 		host.advance_frame()
-		if host.machine() != null and host.machine().jumptable_index() in [
-			Gen2SlotMachine.SLOTS_WAIT_REEL1, Gen2SlotMachine.SLOTS_WAIT_REEL2,
-			Gen2SlotMachine.SLOTS_WAIT_REEL3,
-		]:
+		if host.machine() != null and _slot_machine_waits_for_a(host.machine()):
 			host.handle_button(PokeButton.A)
+
+
+## Crystal's three `WaitReel` rows or Generation 1's `.loop2`.
+static func _slot_machine_waits_for_a(machine: Gen2SlotMachine) -> bool:
+	if machine is Gen1SlotMachine:
+		return (machine as Gen1SlotMachine).state() == Gen1SlotMachine.State.SPIN
+	return machine.jumptable_index() in [
+		Gen2SlotMachine.SLOTS_WAIT_REEL1, Gen2SlotMachine.SLOTS_WAIT_REEL2,
+		Gen2SlotMachine.SLOTS_WAIT_REEL3,
+	]
 
 
 ## How long `preview_card_flip` gives the loop to reach a prompt.
@@ -7800,7 +7819,7 @@ func _event_field_move_confirmed(event: Dictionary) -> void:
 
 
 func _event_show_picture(event: Dictionary) -> void:
-	_show_story_picture(int(event.get("pokemon", 0)))
+	_show_story_picture(int(event.get("pokemon", 0)), String(event.get("special", "")))
 
 
 func _event_screen_shake(event: Dictionary) -> void:
@@ -7838,7 +7857,7 @@ func _apply_result_status(result: Dictionary, flags: Dictionary) -> StringName:
 	if event_type == &"text":
 		return _apply_text_pause(event, flags)
 	if event_type == &"button":
-		if _text_box != null:
+		if _text_box != null and bool(event.get("box", true)):
 			_text_box.visible = true
 		_script_prompt = "A: continue script"
 		return &"none"
@@ -8583,11 +8602,12 @@ func _hide_pikapic() -> void:
 		_renderer.refresh()
 
 
-func _show_story_picture(species: int) -> void:
+func _show_story_picture(species: int, special: String = "") -> void:
 	if _data == null or _world == null:
 		return
 	var image: Image = Gen2PokepicPage.render(
-		_data, species, _world.current_map, _render_time_of_day()
+		_data, species, _world.current_map, _render_time_of_day(),
+		_data.gen1_special_pic(special), _world.gen1_last_map()
 	)
 	if image == null:
 		return
@@ -9038,6 +9058,12 @@ func _advance_sound_schedule() -> void:
 		else:
 			_play_sfx(index, bool(due.get("wait", false)))
 	_sound_schedule_frame += 1
+
+
+## `wMuteAudioAndPauseMusic`: the music channels held while a payout counts.
+func _pause_gen1_music(paused: bool) -> void:
+	if _audio_player != null:
+		_audio_player.set_gen1_music_paused(paused)
 
 
 ## A schedule entry naming the sound id `PlaySound` takes, not a Crystal role.

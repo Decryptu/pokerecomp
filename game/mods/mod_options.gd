@@ -45,7 +45,6 @@ static func bind_run(values: Dictionary) -> void:
 	_run = values
 
 
-## Ends the run, so the launcher edits the installation again.
 static func unbind_run() -> void:
 	_run = null
 

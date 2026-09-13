@@ -3577,7 +3577,6 @@ static func mail_input_table_offset(layout: Dictionary, table: int) -> int:
 		+ table * MAIL_INPUT_TABLE_ROWS * MAIL_INPUT_ROW_BYTES
 
 
-## The Battle Tower's own block, empty on a cartridge that has no tower.
 static func battle_tower(layout: Dictionary) -> Dictionary:
 	return layout.get("battle_tower", {}) as Dictionary
 

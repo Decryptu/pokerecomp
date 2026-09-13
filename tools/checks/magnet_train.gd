@@ -131,7 +131,6 @@ func _verify_warp_chain(data: GameData, game_id: StringName) -> void:
 	print("%s warps: %d doors over the errand and both rides." % [game_id, WARP_CHAIN.size()])
 
 
-## The Copycat, who is on the map before anything has given her a sprite.
 func _verify_copycat(data: GameData, game_id: StringName) -> void:
 	var world: Gen2WorldAPI = _open(
 		data, SAFFRON_GROUP, COPYCATS_HOUSE_2F, COPYCAT_HOUSE_2F_LANDING
@@ -226,7 +225,6 @@ func _verify_fan_club(data: GameData, game_id: StringName) -> void:
 	])
 
 
-## The ride itself, drawn against the station's own tileset.
 func _verify_ride(data: GameData, game_id: StringName) -> void:
 	if not _r.check(
 		data.has_magnet_train(),
@@ -271,7 +269,6 @@ func _verify_ride(data: GameData, game_id: StringName) -> void:
 	])
 
 
-## Both stations, which are the same two-region shape.
 func _verify_stations(data: GameData, game_id: StringName) -> void:
 	for station: Array in [
 		["Saffron", SAFFRON_GROUP, SAFFRON_MAGNET_TRAIN_STATION],

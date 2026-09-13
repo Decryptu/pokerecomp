@@ -379,7 +379,6 @@ func _verify_seafoam_gym(data: GameData, game_id: StringName) -> void:
 	])
 
 
-## Viridian Gym, whose entire gate is one event flag on both of its objects.
 func _verify_viridian_gym(data: GameData, game_id: StringName) -> void:
 	var city: Gen2WorldAPI = _open(data, VIRIDIAN_GROUP, VIRIDIAN_CITY, Vector2i(18, 0))
 	if city != null:

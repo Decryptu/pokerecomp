@@ -449,7 +449,6 @@ func _starter_pixel(
 	return indices[offset] if offset >= 0 and offset < indices.size() else 0
 
 
-## One pixel of a tile in a horizontal strip of tile indices.
 func _pixel(
 	strip: PackedByteArray, tile: int, x: int, y: int, flip_x: bool, flip_y: bool
 ) -> int:

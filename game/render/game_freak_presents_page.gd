@@ -284,7 +284,6 @@ func _oam_set(kind: StringName, index: int) -> Array[Dictionary]:
 	return out
 
 
-## One background tile of the word strip into the index buffer.
 func _blit_tile(
 	page: PackedByteArray, width: int, tiles: PackedByteArray, stride: int,
 	tile: int, at: Vector2i

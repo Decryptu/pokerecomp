@@ -101,7 +101,6 @@ func resume() -> void:
 	_frames = 0
 
 
-## One hardware frame; whether the bar moved is what asks for a redraw.
 func advance_frame() -> bool:
 	_segment_ended = false
 	if finished() or _paused:

@@ -315,6 +315,9 @@ func _restart_music() -> void:
 ## `SFXChannelsOff`, which the Unown sounds spend in front of their own
 ## `PlaySFX` so the one still ringing is cut rather than left to refuse the next.
 func stop_effects() -> void:
+	if _generation == RomRegistry.GEN1:
+		_gen1.stop_sfx()
+		return
 	_engine.sfx_channels_off()
 
 
@@ -417,6 +420,12 @@ func set_low_health_alarm(on: bool) -> void:
 		_engine.low_health_alarm |= 1 << Gen2SoundEngine.DANGER_ON_BIT
 		return
 	_engine.low_health_alarm = 0
+
+
+## `wMuteAudioAndPauseMusic`: the music channels held, an effect still playing.
+func set_gen1_music_paused(paused: bool) -> void:
+	if _generation == RomRegistry.GEN1:
+		_gen1.mute_audio_and_pause_music = 1 if paused else 0
 
 
 func low_health_alarm() -> bool:

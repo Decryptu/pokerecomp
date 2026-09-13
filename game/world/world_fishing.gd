@@ -107,7 +107,6 @@ func begin(
 	}
 
 
-## Advances the source cast pause. A bite remains pending until reel_in().
 func advance() -> Dictionary:
 	if _state == STATE_CASTING:
 		if _pending_encounter.is_empty():

@@ -114,7 +114,6 @@ class FrameClock extends RefCounted:
 		_divider = divider
 		return steps
 
-	## The banked remainder, as a share of one hardware frame.
 	func remainder() -> float:
 		return _elapsed / FRAME_SECONDS
 

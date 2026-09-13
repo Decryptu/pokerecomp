@@ -197,7 +197,6 @@ func keyboard() -> int:
 	return table + 1 if is_box else table
 
 
-## The live keyboard's rows, as raw cartridge codes.
 func rows() -> Array:
 	if keyboard() >= _tables.size():
 		return []
@@ -243,7 +242,6 @@ func last_character() -> int:
 	return int(codes[at]) if at >= 0 and at < codes.size() else 0
 
 
-## The rightmost column of the live keyboard, which is what both wraps run to.
 func last_column() -> int:
 	if is_gen1:
 		return GEN1_LAST_COLUMN

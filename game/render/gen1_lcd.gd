@@ -97,7 +97,6 @@ func load_tiles(at: int, strip: PackedByteArray, strip_tiles: int, first: int, c
 				tiles[to + column] = strip[from + column]
 
 
-## One tile of one colour, which Yellow's intro writes by hand.
 func fill_tile(at: int, index: int) -> void:
 	if at < 0 or at >= TILE_COUNT:
 		return
@@ -172,7 +171,6 @@ func render() -> PackedByteArray:
 	return shades
 
 
-## The override a line is drawn with, or the register when none stands.
 static func _line_value(overrides: PackedInt32Array, line: int, register: int) -> int:
 	if line < 0 or line >= overrides.size() or overrides[line] < 0:
 		return register
@@ -187,7 +185,6 @@ func _window_map() -> PackedByteArray:
 	return maps[1] if lcdc & LCDC_WIN_MAP else maps[0]
 
 
-## One background line, wrapping the map both ways.
 func _render_map_line(
 	target: PackedByteArray, row: int, map: PackedByteArray, from_x: int, map_y: int
 ) -> void:

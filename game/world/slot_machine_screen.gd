@@ -2,17 +2,14 @@ class_name Gen2SlotMachineScreen
 extends Control
 
 ## `_SlotMachine`'s own loop, on the overworld's pump. [Gen2SlotMachine] owns the
-## rules and [Gen2SlotMachinePage] the picture; this is `SlotsLoop`, one pass a
-## frame. Three things a screen would otherwise get wrong: `Slots_AskBet` and
-## `Slots_AskPlayAgain` spend frames inside an action, so nothing spins while
-## either box is up, which is what `prompt()` is for; a press is answered where it
-## lands as well as on the frame, `hJoypadSum` being a sum rather than a sample;
-## and `WaitSFX` is the driver's rather than a frame count, so a screen with no
-## player waits nothing.
+## rules and [Gen2SlotMachinePage] the picture. `Slots_AskBet` and
+## `Slots_AskPlayAgain` spend frames inside an action, which is what `prompt()`
+## is for, and `WaitSFX` is the driver's, so a screen with no player waits nothing.
 
 signal closed(coins: int)
 signal sfx_requested(index: int, waited: bool)
 signal music_requested(index: int)
+signal music_pause_requested(paused: bool)
 
 var _machine: Gen2SlotMachine = null
 var _page: Gen2SlotMachinePage = null
@@ -46,10 +43,13 @@ func open(
 		visible = false
 		return false
 	_data = data
-	var strips: Array[PackedByteArray] = []
-	for reel: int in Gen2SlotMachine.REELS:
-		strips.append(data.slots_reel(reel))
-	_machine = Gen2SlotMachine.create(strips, coins, lucky, rng)
+	if data.generation == RomRegistry.GEN1:
+		_machine = Gen1SlotMachine.create_gen1(data, coins, lucky, rng)
+	else:
+		var strips: Array[PackedByteArray] = []
+		for reel: int in Gen2SlotMachine.REELS:
+			strips.append(data.slots_reel(reel))
+		_machine = Gen2SlotMachine.create(strips, coins, lucky, rng)
 	_open = true
 	visible = true
 	_drain()
@@ -174,6 +174,8 @@ func _drain() -> void:
 				music_requested.emit(int(row["index"]))
 			&"text":
 				_text = _data.slots_text(String(row["name"])) if _data != null else ""
+			&"music_paused":
+				music_pause_requested.emit(bool(row["paused"]))
 			_:
 				pass
 
@@ -200,6 +202,7 @@ func close() -> void:
 func _refresh() -> void:
 	if _page == null or _machine == null:
 		return
+	_machine.set_menu_cursor(_bet_cursor, _yes_no_cursor)
 	if _view == null:
 		_view = TextureRect.new()
 		_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

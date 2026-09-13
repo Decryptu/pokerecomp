@@ -241,7 +241,6 @@ static func pack_id(kind: StringName, bank: int, address: int) -> int:
 		| (address & ID_ADDRESS_MASK)
 
 
-## The id of a map EVENT site: an item ball or an item under a tile.
 static func pack_event_id(kind: StringName, group: int, number: int, index: int) -> int:
 	return pack_id(kind, group, ID_EVENT_BIT | (number & 0xFF) << 8 | (index & 0xFF))
 
@@ -284,7 +283,6 @@ func link_at(bank: int, address: int) -> Dictionary:
 	return value if value is Dictionary else {}
 
 
-## Every row, patched, for a mod planning a placement in one pass.
 func rows(kind: StringName = &"") -> Array:
 	var out: Array = []
 	for id: int in ids(kind):

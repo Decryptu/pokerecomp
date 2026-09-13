@@ -360,7 +360,6 @@ func release(button: int) -> void:
 	_held &= ~button
 
 
-## One frame: the code before VBlank, VBlank, then the joypad read behind it.
 func advance_frame() -> Array[Dictionary]:
 	if _finished:
 		return drain_events()
@@ -437,7 +436,6 @@ func _run() -> void:
 			_emit(step["finish"], {})
 
 
-## The step to run: the innermost called routine's next, or the program's own.
 func _next_step() -> Dictionary:
 	while not _calls.is_empty():
 		var routine: Dictionary = _calls[_calls.size() - 1]

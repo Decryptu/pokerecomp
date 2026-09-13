@@ -339,7 +339,6 @@ static func _pick_lowest(scores: Array, attacker: Gen2BattleMon, rng: RandomNumb
 	return candidates[rng.randi_range(0, candidates.size() - 1)]
 
 
-## The move a slot names, or an empty Dictionary for a slot with nothing in it.
 static func _move_at(mon: Gen2BattleMon, data: GameData, slot: int) -> Dictionary:
 	if slot < 0 or slot >= mon.moves.size():
 		return {}
