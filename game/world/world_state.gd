@@ -1756,7 +1756,6 @@ func set_card_key_door(cell: Vector2i) -> void:
 	changed.emit()
 
 
-## Whether that object stands the other way round from its own table row.
 func is_object_toggled(index: int) -> bool:
 	return index >= 0 and bool(_toggled_objects.get(index, false))
 

@@ -243,7 +243,6 @@ static func create(
 	return out
 
 
-## Four DVs rolled the way a wild encounter rolls them.
 static func random_dvs(rng: RandomNumberGenerator) -> int:
 	return Gen2Stats.pack_dvs(
 		rng.randi_range(0, Gen2Stats.MAX_DV), rng.randi_range(0, Gen2Stats.MAX_DV),

@@ -43,7 +43,6 @@ func pixels() -> int:
 	return _pixels
 
 
-## One hardware frame. Answers whether the bar moved, so the screen redraws.
 func advance_frame() -> bool:
 	if finished():
 		return false

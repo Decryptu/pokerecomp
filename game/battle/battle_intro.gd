@@ -71,7 +71,6 @@ func finished() -> bool:
 	return _frame >= frames()
 
 
-## One hardware frame. The settle to zero is a redraw like any other.
 func advance_frame() -> bool:
 	if finished():
 		return false

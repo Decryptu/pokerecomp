@@ -2003,7 +2003,6 @@ func _open_pc_item_list(action: int) -> void:
 	_render_rows()
 
 
-## The list a chosen row reads: the bag for a deposit and the PC otherwise.
 func _pc_list_is_bag() -> bool:
 	return _pc_action == (Gen2WorldPC.GEN1_PLAYERS_PC_DEPOSIT if _gen1_pc \
 		else Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM)
@@ -2351,7 +2350,6 @@ func _write_service_save() -> Dictionary:
 	return save_action.call()
 
 
-## Hardware frames of the save sequence. Public so a test owns its own.
 func advance_save_frames(count: int) -> void:
 	for _step: int in count:
 		if _save_prompt == null:
@@ -3386,7 +3384,6 @@ func _open_card(card: StringName) -> void:
 	_refresh_card()
 
 
-## What the open card reads off the world, which is all of its display state.
 func _refresh_card() -> void:
 	if _pokegear == null:
 		return

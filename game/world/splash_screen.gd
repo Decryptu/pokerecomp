@@ -180,7 +180,6 @@ func music_playing() -> bool:
 	return _audio != null and bool(_audio.audio_status().get("music_active", false))
 
 
-## Which image the coordinator has up, empty while the screen is blank.
 func visible_image() -> StringName:
 	return _visible_id
 

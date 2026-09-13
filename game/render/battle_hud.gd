@@ -158,7 +158,6 @@ func draw_player(
 	)
 
 
-## The fill of one HP bar, which is all that is drawn in the bar's own colour.
 func draw_hp_bar(
 	into: PackedByteArray, width: int, at: Vector2i, hp: int, max_hp: int
 ) -> void:

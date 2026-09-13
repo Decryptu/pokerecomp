@@ -390,7 +390,6 @@ static func open(
 	return Gen2WorldAPI.new(game_data, map, tileset, start_cell, world_state, world_rules)
 
 
-## Opens a validated map/player snapshot without silently clamping its cell.
 static func open_snapshot(
 	game_data: GameData, world_snapshot: Gen2WorldSnapshot, world_rules: Gen2Rules = null
 ) -> Gen2WorldAPI:
@@ -3219,7 +3218,6 @@ func advance_frame_counter() -> int:
 	return frame_number
 
 
-## One hardware frame of every object's emote countdown, the player's included.
 func advance_emotes_frame() -> bool:
 	var changed: bool = _player_object.tick_emote()
 	for object: Gen2WorldObject in objects:
@@ -3972,6 +3970,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"tileset": &"_gen1_node_tileset",
 	"destination_warp": &"_gen1_node_destination_warp",
 	"diploma": &"_gen1_node_diploma",
+	"slot_machine": &"_gen1_node_slot_machine",
 	"ss_anne_leaves": &"_gen1_node_ss_anne_leaves",
 	"screen_tile": &"_gen1_node_screen_tile",
 	"name_item": &"_gen1_node_name_item",
@@ -4512,6 +4511,20 @@ func _gen1_node_diploma(_node: Dictionary, steps: Array, _run: Dictionary) -> bo
 	return true
 
 
+## `PromptUserToPlaySlots`' YES; the coins the loop leaves come back as the answer.
+func _gen1_node_slot_machine(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "slot_machine": true, "values": {
+		"kind": &"slot_machine_requested",
+		"values": {
+			"generation": RomRegistry.GEN1,
+			"coins": state.coins() if state != null else 0,
+			"lucky": state != null
+				and state.gen1_byte(GEN1_LUCKY_SLOT) == int(node["lucky_index"]),
+		},
+	}})
+	return true
+
+
 ## `wDestinationWarpID`: the warp the last `LoadDestinationWarpPosition` landed
 ## on, counted from zero.
 func _gen1_node_destination_warp(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -5032,8 +5045,12 @@ func _gen1_node_scratch_test(node: Dictionary, steps: Array, run: Dictionary) ->
 	)
 
 
+## `Random`'s byte stays in `a` on both sides, so a store behind the branch
+## reads the same roll rather than a second one.
 func _gen1_node_random(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(node, _gen1_roll() < int(node["below"]), steps, run)
+	var roll: int = _gen1_roll()
+	run["roll"] = roll
+	return _gen1_resolve_side(node, roll < int(node["below"]), steps, run)
 
 
 func _gen1_node_random_bit(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -5290,10 +5307,12 @@ func _gen1_node_npc_movement_script(node: Dictionary, steps: Array, _run: Dictio
 	return true
 
 
-func _gen1_node_store_byte(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+func _gen1_node_store_byte(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var value: int = int(node.get("value", 0))
 	if bool(node.get("random", false)):
-		value = (_gen1_roll() & int(node["mask"])) >> int(node["shift"])
+		var roll: int = int(run["roll"]) if bool(node.get("rolled", false)) and run.has("roll") \
+			else _gen1_roll()
+		value = (roll & int(node["mask"])) >> int(node["shift"])
 	steps.append({"type": &"byte", "name": String(node["name"]), "value": value})
 	return true
 
@@ -5323,6 +5342,7 @@ func _gen1_node_gym_trash(node: Dictionary, steps: Array, run: Dictionary) -> bo
 ## Where `CheckFightingMapTrainers`' two increments leave a map's script.
 const GEN1_END_BATTLE_STATE: int = 2
 const GEN1_FIRST_LOCK: String = "first_lock_trash_can"
+const GEN1_LUCKY_SLOT: String = "lucky_slot_index"
 const GEN1_SECOND_LOCK: String = "second_lock_trash_can"
 const GEN1_SECOND_LOCK_ALT: String = "second_lock_trash_can_alt"
 
@@ -7118,6 +7138,8 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		_gen1_steps = _gen1_day_care_after_selection(result) + _gen1_steps
 	elif step.has("elevator"):
 		_gen1_ride_elevator(result)
+	elif step.has("slot_machine") and result.has("coins"):
+		_gen1_steps.push_front({"type": &"coins", "amount": int(result["coins"])})
 	elif step.has("list_menu"):
 		var listed: Array = step["rows"]
 		var chosen: int = int(result.get("row", -1))
@@ -8494,7 +8516,6 @@ func _apply_object_movement(event: Dictionary) -> Array:
 	return generated
 
 
-## One movement command that is not a step or a turn. False ends the stream.
 func _movement_effect(
 	kind: StringName, command: Dictionary, object: Gen2WorldObject, key: String,
 	object_index: int, generated: Array
@@ -11011,7 +11032,6 @@ func pending_escape() -> Dictionary:
 	return _pending_escape.duplicate(true)
 
 
-## The warp the staged escape owes, taken once its line has been acknowledged.
 func complete_escape() -> Dictionary:
 	if _pending_escape.is_empty():
 		return {"ok": false, "kind": &"escape_failed", "reason": &"no_pending_escape"}

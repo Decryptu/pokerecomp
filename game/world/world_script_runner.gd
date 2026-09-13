@@ -841,7 +841,6 @@ const PENDING_CONTINUATIONS: Dictionary = {
 }
 
 
-## Advances until a text/button pause, completion or a bounded failure.
 func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 	if not _phone_context.is_empty() and not _phone_started:
 		_phone_started = true

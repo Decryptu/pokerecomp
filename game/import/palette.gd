@@ -32,7 +32,6 @@ static func from_packed(packed: int) -> Color:
 	)
 
 
-## The four colours a pic is drawn with, in index order.
 static func pic_palette(middle: PackedColorArray) -> PackedColorArray:
 	var out: PackedColorArray = PackedColorArray([Color.WHITE])
 	out.append_array(middle)
@@ -58,7 +57,6 @@ static func through_shades(colors: PackedColorArray, shades: Array[int]) -> Pack
 	return out
 
 
-## Reads one species' entry as { normal, shiny }, each a two-colour array.
 static func decode_entry(data: PackedByteArray, offset: int) -> Dictionary:
 	return {
 		"normal": PackedColorArray([

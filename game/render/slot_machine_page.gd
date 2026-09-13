@@ -148,6 +148,12 @@ var _palettes: Array[PackedColorArray] = []
 static func from_data(data: GameData) -> Gen2SlotMachinePage:
 	if data == null or not data.has_slots():
 		return null
+	if data.generation == RomRegistry.GEN1:
+		var gen1 := Gen2SlotMachinePage.new()
+		gen1._tilemap = data.slots_tilemap()
+		for index: int in Gen1Layout.PAL_SET_PALETTES:
+			gen1._palettes.append(data.slots_palette(index))
+		return gen1
 	var glyphs: Gen2Font = Gen2Font.from_data(data)
 	var one: PackedByteArray = data.slots_indices("slots_1")
 	var two: PackedByteArray = data.slots_indices("slots_2")
@@ -224,6 +230,12 @@ func attributes() -> PackedInt32Array:
 func render(machine: Gen2SlotMachine, state: Dictionary = {}) -> Image:
 	if not ready():
 		return null
+	## A Generation 1 machine draws itself, tiles and objects, into its own LCD.
+	if machine is Gen1SlotMachine:
+		return Gen1OpeningPage.colour(
+			(machine as Gen1SlotMachine).lcd.render(),
+			(machine as Gen1SlotMachine).blocks(), _palettes
+		)
 	var indices := PackedByteArray()
 	indices.resize(WIDTH * HEIGHT)
 	var map: PackedByteArray = tilemap(machine)

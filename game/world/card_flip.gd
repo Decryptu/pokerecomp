@@ -269,7 +269,6 @@ func attributes() -> PackedByteArray:
 	return _attrmap.duplicate()
 
 
-## Which of the two cards the border sprite stands on, or -1 for no border.
 func border_at() -> int:
 	return _border_at
 

@@ -148,7 +148,6 @@ var _battle_tower_section: Dictionary = {}
 var _sections: Dictionary = {}
 
 
-## Opens the cache for a registry game, or null if it has not been imported.
 static func open(game_id: StringName) -> GameData:
 	var rom_hash: String = RomRegistry.sha1_for(game_id)
 	if rom_hash.is_empty():
@@ -325,7 +324,6 @@ func map_count() -> int:
 	return _maps().size()
 
 
-## One map by its stable cartridge group and number, or null when it is absent.
 func world_map(group: int, number: int) -> Gen2WorldMap:
 	var maps: Array = _maps()
 	var at: int = int(_world_map_index.get(Vector2i(group, number), -1))
@@ -419,7 +417,6 @@ func world_script_at(bank: int, address: int) -> PackedByteArray:
 	return best
 
 
-## One imported menu header referenced by an overworld script.
 func world_menu(bank: int, address: int) -> Dictionary:
 	var value: Variant = _menus().get(Gen2WorldScript.pointer_key(bank, address), {})
 	return _coerce_service_dictionary(value)
@@ -1102,7 +1099,6 @@ func overworld_sprite_count() -> int:
 	return _sprites().size()
 
 
-## Indexed pixels for one raw overworld sprite tile strip, loaded on demand.
 func overworld_sprite_indices(number: int) -> PackedByteArray:
 	var key: String = "overworld_sprites/%d" % number
 	if _indices.has(key):
@@ -1140,7 +1136,6 @@ func overworld_effect(name: String) -> Dictionary:
 	return {}
 
 
-## The reusable icon strip indexed by constants/icon_constants.asm.
 func overworld_icon(icon_number: int) -> Gen2WorldSprite:
 	if icon_number <= 0 or icon_number > Gen2Layout.MON_ICON_COUNT:
 		return null
@@ -1958,7 +1953,6 @@ func text(run: StringName, name: String) -> String:
 	return _overlaid_text(run, name, String(value) if value is String else "")
 
 
-## Every run a box can be named under, this cartridge's special runs included.
 func text_runs() -> Array[StringName]:
 	var out: Array[StringName] = TEXT_RUNS.duplicate()
 	for run: Variant in _special_text:
@@ -2368,7 +2362,6 @@ func has_trade_anim() -> bool:
 	return not (_trade_anim.get("maps", []) as Array).is_empty()
 
 
-## One of the trade animation's two tilemaps, in tile numbers.
 func trade_anim_tilemap(name: String) -> PackedByteArray:
 	return tile_indices("trade_anim_%s" % name)
 
@@ -2528,7 +2521,8 @@ func slots_indices(name: String) -> PackedByteArray:
 
 
 ## `Reel1Tilemap`, `Reel2Tilemap` or `Reel3Tilemap` as `SLOTS_*` symbol values,
-## eighteen long: the fifteen the reel carries and its own first three again.
+## eighteen long: the fifteen the reel carries and its own first three again;
+## a Generation 1 cache answers `SlotMachineWheel1` to `3` as bytes.
 func slots_reel(reel: int) -> PackedByteArray:
 	var stored: Variant = _slots.get("reels", [])
 	var out := PackedByteArray()
@@ -2575,8 +2569,14 @@ func slots_palette(index: int) -> PackedColorArray:
 	return colors
 
 
-## One of the slot machine's seven boxes, by the name
-## `Gen2Layout.SLOTS_TEXT_RUNS` gives it.
+## `BlkPacket_Slots`' five `ATTR_BLK` rows; a Crystal cache holds none.
+func slots_blocks() -> Array:
+	var stored: Variant = _slots.get("blocks", [])
+	return (stored as Array).duplicate(true) if stored is Array else []
+
+
+## One of the slot machine's boxes, by the name `Gen2Layout.SLOTS_TEXT_RUNS` or
+## `Gen1Layout.SLOTS_TEXT_AT` gives it.
 func slots_text(name: String) -> String:
 	return String(_slots_text.get(name, ""))
 
@@ -3191,7 +3191,6 @@ func trainer_pic(number: int) -> Dictionary:
 	return {"atlas": "trainers", "slot": number - 1, "width": cell, "height": cell}
 
 
-## Atlas metadata: width, height, cell, columns, decoded.
 func atlas(name: String) -> Dictionary:
 	var value: Variant = _atlases.get(name, {})
 	if not value is Dictionary:
@@ -3203,7 +3202,6 @@ func atlas(name: String) -> Dictionary:
 	return out
 
 
-## The index buffer for an atlas, read on first use and kept afterwards.
 func atlas_indices(name: String) -> PackedByteArray:
 	if _indices.has(name):
 		return _indices[name]
@@ -3213,7 +3211,6 @@ func atlas_indices(name: String) -> PackedByteArray:
 	return indices
 
 
-## Metadata for a 1bpp tile strip: width, height, tiles, first_code.
 func tile_sheet(name: String) -> Dictionary:
 	var value: Variant = _tiles.get(name, {})
 	if not value is Dictionary:
@@ -3225,7 +3222,6 @@ func tile_sheet(name: String) -> Dictionary:
 	return out
 
 
-## The index buffer for a tile strip, read on first use and kept afterwards.
 func tile_indices(name: String) -> PackedByteArray:
 	var key: String = "tiles/%s" % name
 	if _indices.has(key):
@@ -3376,7 +3372,6 @@ func battle_tower() -> Dictionary:
 	return _battle_tower_section
 
 
-## Whether this cartridge ships a Battle Tower at all. Gold and Silver do not.
 func has_battle_tower() -> bool:
 	return not battle_tower().is_empty()
 

@@ -72,7 +72,6 @@ func _eject() -> PackedFloat32Array:
 	return _normalise(buffer, 0.7)
 
 
-## Power on: a rising fifth and octave over a short sub swell.
 func _power() -> PackedFloat32Array:
 	var buffer: PackedFloat32Array = _silence(0.90)
 	_tone(buffer, 0.00, 0.30, 587.33, 587.33, 0.32, 0.008, 2.4, 0.22)

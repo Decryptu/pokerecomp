@@ -77,7 +77,6 @@ const GRASS_TALL: int = 1
 const GRASS_LONG: int = 2
 
 
-## Which grass a cell is, one call for a renderer drawing the two heights apart.
 static func grass_kind(collision_code: int) -> int:
 	if is_long_grass(collision_code):
 		return GRASS_LONG

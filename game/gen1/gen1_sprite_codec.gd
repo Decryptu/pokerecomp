@@ -108,7 +108,6 @@ func _read_bit() -> int:
 	return value
 
 
-## One bit for mode 0, two for the others.
 func _read_mode() -> int:
 	if _read_bit() == 0:
 		return MODE_DELTA

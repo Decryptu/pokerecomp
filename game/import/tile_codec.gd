@@ -160,7 +160,6 @@ static func blit_pic(
 	atlas["decoded"] = int(atlas["decoded"]) + 1
 
 
-## What the manifest keeps about an atlas once its pixels are in their own file.
 static func atlas_record(atlas: Dictionary) -> Dictionary:
 	return {
 		"width": atlas["width"], "height": atlas["height"], "cell": atlas["cell"],

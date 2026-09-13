@@ -53,6 +53,40 @@ const BIAS_LUCKY: Array[Array] = [
 const MAX_COINS: int = 9999
 const BETS: Array[int] = [1, 2, 3]
 
+## `SlotMachineWheel1` to `3` (data/events/slot_machine_wheels.asm), as bytes.
+const GEN1_WHEELS: Array[Array] = [
+	[0x00, 0x02, 0x14, 0x16, 0x0C, 0x0E, 0x04, 0x06, 0x08, 0x0A, 0x00, 0x02,
+		0x0C, 0x0E, 0x10, 0x12, 0x04, 0x06, 0x08, 0x0A, 0x00, 0x02, 0x14, 0x16,
+		0x10, 0x12, 0x04, 0x06, 0x08, 0x0A, 0x00, 0x02, 0x14, 0x16, 0x0C, 0x0E],
+	[0x00, 0x02, 0x0C, 0x0E, 0x08, 0x0A, 0x10, 0x12, 0x14, 0x16, 0x04, 0x06,
+		0x08, 0x0A, 0x0C, 0x0E, 0x10, 0x12, 0x08, 0x0A, 0x04, 0x06, 0x0C, 0x0E,
+		0x10, 0x12, 0x08, 0x0A, 0x14, 0x16, 0x00, 0x02, 0x0C, 0x0E, 0x08, 0x0A],
+	[0x00, 0x02, 0x10, 0x12, 0x0C, 0x0E, 0x08, 0x0A, 0x14, 0x16, 0x10, 0x12,
+		0x0C, 0x0E, 0x08, 0x0A, 0x14, 0x16, 0x10, 0x12, 0x0C, 0x0E, 0x08, 0x0A,
+		0x14, 0x16, 0x10, 0x12, 0x04, 0x06, 0x00, 0x02, 0x10, 0x12, 0x0C, 0x0E],
+]
+## `SlotRewardPointers`' six routines: the coins and the flash count each returns.
+const GEN1_REWARDS: Array[int] = [300, 100, 8, 15, 15, 15]
+const GEN1_FLASHES: Array[int] = [0x14, 0x08, 0x02, 0x04, 0x04, 0x04]
+## `BlkPacket_Slots`' five `ATTR_BLK_DATA` rows.
+const GEN1_BLOCKS: Array[Array] = [
+	[3, 0x05, 0, 0, 19, 11], [3, 0x0A, 0, 4, 19, 9], [2, 0x0F, 0, 6, 19, 7],
+	[3, 0x00, 4, 4, 15, 9], [3, 0x00, 0, 12, 19, 17],
+]
+## `SlotMachineTiles1`, `SlotMachineTiles2` and `SlotMachineMap` by size.
+const GEN1_SHEETS: Dictionary = {"slots_1": 37, "slots_2": 24}
+const GEN1_TILEMAP_CELLS: int = 12 * 20
+const GEN1_TEXTS: Dictionary = {
+	"play": "A slot machine!", "out_of_coins": "Darn!", "bet": "Bet how many",
+	"start": "Start!", "not_enough_coins": "Not enough", "one_more_go": "One more ",
+	"lined_up": " lined up!", "not_this_time": "Not this time!", "yeah": "Yeah!",
+}
+## Twenty free passes, a slip of four a wheel, four rerolls and a 300-coin
+## payout at eight frames a coin; the presses are spaced so one lands on a
+## wheel still slipping as often as on one that has stopped.
+const GEN1_SPIN_FRAME_CAP: int = 3200
+const GEN1_PRESS_GAP: int = 7
+
 ## How many spins a sweep drives per cartridge, and how long one is given to
 ## reach its own end. A spin is three A presses and a payout animation of up to
 ## three hundred coins, which is `PAYOUTS[0]` times the two frames each takes.
@@ -78,9 +112,10 @@ func run(r: RefCounted) -> void:
 		_verify_text(game_id, data)
 		_verify_spins(game_id, data)
 	_r.game_id = &""
+	_verify_gen1_tables()
+	_r.each_game_of(RomRegistry.GEN1, _gen1_game)
 
 
-## The two tables that decide what a spin is worth, against the source's own.
 func _verify_tables() -> void:
 	_r.check(
 		Array(Gen2SlotMachine.PAYOUTS) == PAYOUTS,
@@ -152,7 +187,6 @@ func _verify_section(game_id: StringName, data: GameData) -> void:
 	])
 
 
-## The three reel strips and the sixteen palettes, and the page they build.
 func _verify_strips(game_id: StringName, data: GameData) -> void:
 	for reel: int in REELS.size():
 		_r.check(
@@ -310,3 +344,197 @@ func _verify_window(
 			game_id, spin, matched, bet
 		]
 	)
+
+
+func _verify_gen1_tables() -> void:
+	_r.check(Array(Gen1SlotMachine.REWARDS) == GEN1_REWARDS,
+		"the Generation 1 reward table is not `SlotRewardPointers`.")
+	_r.check(Array(Gen1SlotMachine.FLASHES) == GEN1_FLASHES,
+		"the Generation 1 flash counts are not `SlotReward*Func`'s.")
+
+
+func _gen1_game() -> void:
+	var data: GameData = _r.data
+	if not _r.check(data.has_slots(), "no slot machine art in the cache."):
+		return
+	for wheel: int in GEN1_WHEELS.size():
+		_r.check(Array(data.slots_reel(wheel)) == GEN1_WHEELS[wheel],
+			"wheel %d is not `SlotMachineWheel%d`." % [wheel + 1, wheel + 1])
+	_r.check(data.slots_tilemap().size() == GEN1_TILEMAP_CELLS,
+		"`SlotMachineMap` is %d cells." % data.slots_tilemap().size())
+	var blocks: Array = []
+	for row: Variant in data.slots_blocks():
+		blocks.append(Array(row).map(func(byte: Variant) -> int: return int(byte)))
+	_r.check(blocks == GEN1_BLOCKS, "`BlkPacket_Slots` read %s." % [blocks])
+	for index: int in Gen1Layout.PAL_SET_PALETTES:
+		_r.check(data.slots_palette(index).size() == Gen1Layout.SUPER_PALETTE_COLORS,
+			"palette %d is not four colours." % index)
+	for sheet: String in GEN1_SHEETS:
+		_r.check(int(data.tile_sheet(sheet).get("tiles", 0)) == int(GEN1_SHEETS[sheet]),
+			"%s is not %d tiles." % [sheet, int(GEN1_SHEETS[sheet])])
+	for name: String in GEN1_TEXTS:
+		_r.check(data.slots_text(name).begins_with(String(GEN1_TEXTS[name])),
+			"the %s box reads %s." % [name, data.slots_text(name)])
+	_verify_gen1_screen(data)
+	_verify_gen1_spins(data)
+
+
+## The first frame the machine shows: `SlotMachineMap`, the bet line, the objects.
+func _verify_gen1_screen(data: GameData) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	var machine: Gen1SlotMachine = Gen1SlotMachine.create_gen1(data, 50, false, rng)
+	for _frame: int in Gen1SlotMachine.WHITE_OUT_FRAMES + 1:
+		machine.advance()
+	_r.check(machine.prompt() == Gen2SlotMachine.Prompt.BET,
+		"the machine did not open on the bet menu.")
+	var map: PackedByteArray = machine.lcd.maps[0]
+	var tilemap: PackedByteArray = data.slots_tilemap()
+	var drawn: bool = true
+	for row: int in Gen1Layout.SLOTS_TILEMAP_ROWS:
+		for column: int in Gen1Layout.SCREEN_WIDTH_TILES:
+			var cell: Vector2i = Vector2i(column, row)
+			## The two counts are printed over the map's own row 1, and the bet
+			## box's top edge over its row 11.
+			if row == 1 and column >= Gen1SlotMachine.CREDIT_AT.x \
+				and column < Gen1SlotMachine.PAYOUT_AT.x + Gen1SlotMachine.DIGITS:
+				continue
+			if row == Gen1SlotMachine.BET_BOX_AT.y and column >= Gen1SlotMachine.BET_BOX_AT.x:
+				continue
+			drawn = drawn and map[row * Gen1Lcd.MAP_SIDE + column] \
+				== tilemap[row * Gen1Layout.SCREEN_WIDTH_TILES + column]
+			if not drawn:
+				_r.fail("cell %s is not `SlotMachineMap`'s." % cell)
+				return
+	_r.check(_gen1_cells(machine, Gen1SlotMachine.CREDIT_AT, 4) == Gen1Text.encode("0050"),
+		"the credit reads %s." % [_gen1_cells(machine, Gen1SlotMachine.CREDIT_AT, 4)])
+	_r.check(_gen1_cells(machine, Gen1SlotMachine.TEXT_AT, 12) == Gen1Text.encode("Bet how many"),
+		"the bet line is not up.")
+	_r.check(_gen1_cells(machine, Vector2i(15, 12), 3) == Gen1Text.encode("▶×3"),
+		"the bet cursor is not on ×3.")
+	var page: Gen2SlotMachinePage = Gen2SlotMachinePage.from_data(data)
+	var image: Image = page.render(machine) if page != null else null
+	_r.check(image != null and image.get_width() == Gen1Lcd.WIDTH
+		and image.get_height() == Gen1Lcd.HEIGHT, "the page will not render.")
+	_verify_gen1_objects(machine)
+
+
+## `SlotMachine_AnimWheel`'s objects, each row the next byte behind the offset.
+func _verify_gen1_objects(machine: Gen1SlotMachine) -> void:
+	var offsets: PackedInt32Array = machine.wheel_offsets()
+	for wheel: int in Gen1Layout.SLOTS_WHEELS:
+		var drawn: int = (int(offsets[wheel]) + Gen1SlotMachine.WHEEL_WRAP - 1) \
+			% Gen1SlotMachine.WHEEL_WRAP
+		for row: int in Gen1SlotMachine.WHEEL_ROWS:
+			var left: Dictionary = machine.lcd.sprite(wheel * Gen1SlotMachine.WHEEL_OAM_SLOTS + row * 2)
+			var right: Dictionary = machine.lcd.sprite(wheel * Gen1SlotMachine.WHEEL_OAM_SLOTS + row * 2 + 1)
+			var tile: int = int(GEN1_WHEELS[wheel][drawn + row])
+			var y: int = Gen1SlotMachine.WHEEL_BASE_Y - row * Gen1Lcd.TILE
+			if not _r.check(
+				int(left["y"]) == y and int(right["y"]) == y
+				and int(left["x"]) == Gen1SlotMachine.WHEEL_X[wheel]
+				and int(right["x"]) == Gen1SlotMachine.WHEEL_X[wheel] + Gen1Lcd.TILE
+				and int(left["tile"]) == tile and int(right["tile"]) == tile + 1
+				and int(left["attributes"]) == Gen1Lcd.OAM_PRIO,
+				"wheel %d row %d draws %s %s at offset %d." % [wheel + 1, row, left, right, drawn]
+			):
+				return
+
+
+func _gen1_cells(machine: Gen1SlotMachine, at: Vector2i, count: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	for index: int in count:
+		out.append(machine.lcd.maps[0][at.y * Gen1Lcd.MAP_SIDE + at.x + index])
+	return out
+
+
+## Whole spins on pinned seeds: the bet leaves the purse, every wheel stops on
+## an odd offset, and a payout is for a symbol really on a line the bet paid for.
+func _verify_gen1_spins(data: GameData) -> void:
+	var wins: int = 0
+	var paid: int = 0
+	var seven_bar: int = 0
+	for spin: int in SPINS:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = spin
+		var machine: Gen1SlotMachine = Gen1SlotMachine.create_gen1(data, 200, spin % 2 == 1, rng)
+		var bet: int = BETS[spin % BETS.size()]
+		if not _drive_gen1_spin(machine, bet, spin):
+			_r.fail("spin %d never reached its end." % spin)
+			return
+		var offsets: PackedInt32Array = machine.wheel_offsets()
+		for wheel: int in offsets.size():
+			if not _r.check(int(offsets[wheel]) & 1 == 1,
+				"spin %d stopped wheel %d on offset %d." % [spin, wheel + 1, int(offsets[wheel])]):
+				return
+		var symbol: int = _gen1_lined_up(offsets, bet)
+		var winning: int = machine.winning_symbol()
+		var payout: int = 0 if winning < 0 else GEN1_REWARDS[winning / 4]
+		if winning >= 0:
+			wins += 1
+			paid += payout
+			if winning < Gen1SlotMachine.SEVEN_OR_BAR_LIMIT:
+				seven_bar += 1
+			if not _r.check(symbol - Gen1SlotMachine.SYMBOL_ID_OFFSET == winning,
+				"spin %d paid symbol %d with %d lined up." % [spin, winning, symbol]):
+				return
+		elif not _r.check(symbol < 0 or machine.flags() == 0,
+			"spin %d lined up %d under flags %d and paid nothing." % [spin, symbol, machine.flags()]):
+			return
+		if not _r.check(machine.coins() == 200 - bet + payout,
+			"spin %d left %d coins on a bet of %d paying %d." % [spin, machine.coins(), bet, payout]):
+			return
+	_r.note("%d spins, %d matched, %d sevens or bars, %d coins paid." % [SPINS, wins, seven_bar, paid])
+
+
+func _drive_gen1_spin(machine: Gen1SlotMachine, bet: int, spin: int) -> bool:
+	var frames: int = 0
+	var presses: int = 0
+	var since_press: int = 0
+	while frames < GEN1_SPIN_FRAME_CAP:
+		frames += 1
+		if machine.waiting_for_sfx():
+			machine.sfx_finished()
+			continue
+		match machine.prompt():
+			Gen2SlotMachine.Prompt.BET:
+				machine.answer_bet(4 - bet)
+				continue
+			Gen2SlotMachine.Prompt.TEXT:
+				machine.dismiss_text()
+				continue
+			Gen2SlotMachine.Prompt.PLAY_AGAIN:
+				return true
+			_:
+				pass
+		if machine.state() == Gen1SlotMachine.State.OUT_OF_COINS:
+			return true
+		if machine.state() == Gen1SlotMachine.State.SPIN and presses < 3:
+			since_press += 1
+			if since_press >= GEN1_PRESS_GAP + spin % 3:
+				machine.press_a()
+				presses += 1
+				since_press = 0
+		if not machine.advance():
+			return true
+	return false
+
+
+## `SlotMachine_CheckForMatches`' lines, read off the tables here: the symbol, or -1.
+func _gen1_lined_up(offsets: PackedInt32Array, bet: int) -> int:
+	var windows: Array = []
+	for wheel: int in GEN1_WHEELS.size():
+		var rows: Array = []
+		for row: int in 3:
+			rows.append(int(GEN1_WHEELS[wheel][int(offsets[wheel]) + row * 2]))
+		windows.append(rows)
+	var lines: Array = [[1, 1, 1]]
+	if bet >= 2:
+		lines = [[2, 2, 2], [0, 0, 0]] + lines
+	if bet == 3:
+		lines = [[0, 1, 2], [2, 1, 0]] + lines
+	for line: Array in lines:
+		var symbol: int = int(windows[0][int(line[0])])
+		if int(windows[1][int(line[1])]) == symbol and int(windows[2][int(line[2])]) == symbol:
+			return symbol
+	return -1

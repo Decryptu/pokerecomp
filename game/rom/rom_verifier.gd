@@ -18,7 +18,6 @@ enum Status {
 const CHUNK_SIZE: int = 65536
 
 
-## SHA-1 of a file on disk as lowercase hex, or "" if it could not be read.
 static func sha1_of_file(path: String) -> String:
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if file == null:

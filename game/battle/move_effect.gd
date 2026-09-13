@@ -2104,7 +2104,6 @@ static func _sequences() -> Dictionary:
 	return out
 
 
-## The cartridge's table, built on the first ask and kept.
 static func _table() -> Dictionary:
 	if _cached_sequences.is_empty():
 		_cached_sequences = _sequences()

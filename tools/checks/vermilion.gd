@@ -95,7 +95,6 @@ func _verify_passage(data: GameData, game_id: StringName) -> void:
 	])
 
 
-## The city itself, and the one tree that seals the gym off.
 func _verify_city(data: GameData, game_id: StringName) -> void:
 	var world: Gen2WorldAPI = _open(data, VERMILION_GROUP, CITY, CITY_PASSAGE_DOORS[0])
 	if world == null:

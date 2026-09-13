@@ -217,7 +217,6 @@ func _build_hint_bar() -> Control:
 	return _bar_host
 
 
-## Adds a top-bar action, right aligned, in the order added.
 func add_action(button: Control) -> void:
 	_top_right.add_child(button)
 
@@ -270,7 +269,6 @@ func _focus_page_landing() -> void:
 		target.grab_focus()
 
 
-## The page's own hints, plus the way back every page but the first carries.
 func _refresh_hints() -> void:
 	if _hints == null or _current.is_empty():
 		return

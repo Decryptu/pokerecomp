@@ -143,7 +143,6 @@ static func from_data(data: GameData) -> Gen2MysteryGiftPage:
 	return page
 
 
-## The tilemap the routine leaves behind, as one row-major array of codes.
 func tilemap() -> PackedByteArray:
 	var map := PackedByteArray()
 	map.resize(COLUMNS * ROWS)

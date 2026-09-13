@@ -348,7 +348,6 @@ static func _gen1_spiral_arms() -> Array:
 	return arms
 
 
-## Which screen cell each cell draws, empty for a transition moving none.
 func source_cells() -> PackedInt32Array:
 	return _gen1_map
 

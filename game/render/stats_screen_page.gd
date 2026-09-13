@@ -197,7 +197,6 @@ static func from_data(data: GameData) -> Gen2StatsScreenPage:
 	return out
 
 
-## Where the screen puts the front pic, in pixels, and how wide the cell is.
 static func pic_position() -> Vector2i:
 	return PIC_AT * TILE
 

@@ -604,7 +604,6 @@ func preview_mods_view(view: StringName, id: StringName = &"") -> void:
 			_mods.show_list()
 
 
-## Preview seam: opens one of the settings page's five sections.
 func preview_settings_section(id: StringName) -> void:
 	select_page(&"settings")
 	_settings.select_section(id)
@@ -656,7 +655,6 @@ func preview_sheet(view: StringName) -> void:
 				_mods.remove_mod(row)
 
 
-## Preview seam: switches appearance without writing the options file.
 func preview_theme(wanted: StringName) -> void:
 	_palette = Gen2LauncherTheme.for_mode(wanted)
 	_build()

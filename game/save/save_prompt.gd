@@ -130,7 +130,6 @@ func cancel() -> void:
 	confirm(false)
 
 
-## One hardware frame of the two timed steps.
 func frame() -> void:
 	if reads_joypad() or finished():
 		return

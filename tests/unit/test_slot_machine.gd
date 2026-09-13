@@ -262,3 +262,234 @@ func test_only_a_seven_bias_can_throw_chansey() -> void:
 			)
 	assert_true(seen.has(chansey), "a seven bias reaches Chansey below `24 percent - 1`")
 	assert_eq(seen.size(), 4, "the seven block has all four modes in it")
+
+
+## `PromptUserToPlaySlots` (engine/slots/slot_machine.asm) on a cache holding
+## the three `SlotMachineWheel*` tables and nothing drawn, driven the same way.
+
+const GEN1_WHEELS: Array = [
+	[0x00, 0x02, 0x14, 0x16, 0x0C, 0x0E, 0x04, 0x06, 0x08, 0x0A, 0x00, 0x02,
+		0x0C, 0x0E, 0x10, 0x12, 0x04, 0x06, 0x08, 0x0A, 0x00, 0x02, 0x14, 0x16,
+		0x10, 0x12, 0x04, 0x06, 0x08, 0x0A, 0x00, 0x02, 0x14, 0x16, 0x0C, 0x0E],
+	[0x00, 0x02, 0x0C, 0x0E, 0x08, 0x0A, 0x10, 0x12, 0x14, 0x16, 0x04, 0x06,
+		0x08, 0x0A, 0x0C, 0x0E, 0x10, 0x12, 0x08, 0x0A, 0x04, 0x06, 0x0C, 0x0E,
+		0x10, 0x12, 0x08, 0x0A, 0x14, 0x16, 0x00, 0x02, 0x0C, 0x0E, 0x08, 0x0A],
+	[0x00, 0x02, 0x10, 0x12, 0x0C, 0x0E, 0x08, 0x0A, 0x14, 0x16, 0x10, 0x12,
+		0x0C, 0x0E, 0x08, 0x0A, 0x14, 0x16, 0x10, 0x12, 0x0C, 0x0E, 0x08, 0x0A,
+		0x14, 0x16, 0x10, 0x12, 0x04, 0x06, 0x00, 0x02, 0x10, 0x12, 0x0C, 0x0E],
+]
+const GEN1_SHA1: String = "0000000000000000000000000000000000000002"
+var _gen1_directories: Array[String] = []
+
+
+func after_each() -> void:
+	for directory: String in _gen1_directories:
+		RomCache.clear(directory)
+	_gen1_directories.clear()
+
+
+func _gen1_data() -> GameData:
+	var directory: String = RomCache.directory_for(RomRegistry.RED, GEN1_SHA1)
+	RomCache.clear(directory)
+	RomCache.prepare(directory)
+	_gen1_directories.append(directory)
+	var tilemap: Array = []
+	tilemap.resize(240)
+	tilemap.fill(0)
+	var palettes: Array = []
+	palettes.resize(16)
+	palettes.fill(0x7FFF)
+	RomCache.write_json(RomCache.manifest_path(directory), {
+		"format_version": RomCache.FORMAT_VERSION, "complete": true,
+		"game_id": String(RomRegistry.RED), "generation": RomRegistry.GEN1,
+		"slots": {"tilemap": tilemap, "reels": GEN1_WHEELS, "palettes": palettes, "blocks": []},
+		"slots_text": {
+			"play": "A slot machine!\nWant to play?", "out_of_coins": "Darn!\nRan out of coins!",
+			"bet": "Bet how many\ncoins?", "start": "Start!",
+			"not_enough_coins": "Not enough\ncoins!", "one_more_go": "One more \ngo?",
+			"lined_up": " lined up!\nScored <RAM_CF4B> coins!", "not_this_time": "Not this time!",
+			"yeah": "Yeah!",
+		},
+		"tiles": {},
+	})
+	var data: GameData = GameData.open_directory(directory)
+	data.id = RomRegistry.RED
+	return data
+
+
+func _gen1_machine(coins: int = 200, lucky: bool = false, seed_value: int = 1) -> Gen1SlotMachine:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	return Gen1SlotMachine.create_gen1(_gen1_data(), coins, lucky, rng)
+
+
+## Drives to [param stop_at], pressing A once a spin is in `.loop2` and every
+## box past, the way the check topic does.
+func _gen1_drive(machine: Gen1SlotMachine, stop_at: int, frames: int = FRAME_CAP) -> bool:
+	for _frame: int in frames:
+		if machine.prompt() == stop_at:
+			return true
+		if machine.waiting_for_sfx():
+			machine.sfx_finished()
+			continue
+		if machine.prompt() == Gen2SlotMachine.Prompt.TEXT:
+			machine.dismiss_text()
+			continue
+		if machine.state() == Gen1SlotMachine.State.SPIN:
+			machine.press_a()
+		if not machine.advance():
+			return machine.prompt() == stop_at
+	return false
+
+
+func _gen1_spin(machine: Gen1SlotMachine, bet: int) -> bool:
+	if not _gen1_drive(machine, Gen2SlotMachine.Prompt.BET):
+		return false
+	machine.answer_bet(4 - bet)
+	return _gen1_drive(machine, Gen2SlotMachine.Prompt.PLAY_AGAIN)
+
+
+func _gen1_events(machine: Gen1SlotMachine) -> Array:
+	var out: Array = []
+	for event: Variant in machine.take_events():
+		out.append(event)
+	return out
+
+
+## `GBPalWhiteOutWithDelay3`, then `MainSlotMachineLoop`'s bet menu on `×3`.
+func test_gen1_opens_white_and_lands_on_the_bet_menu() -> void:
+	var machine: Gen1SlotMachine = _gen1_machine()
+	assert_eq(machine.lcd.bgp, 0)
+	for _frame: int in Gen1SlotMachine.WHITE_OUT_FRAMES:
+		machine.advance()
+	assert_eq(machine.prompt(), Gen2SlotMachine.Prompt.BET)
+	assert_eq(machine.lcd.bgp, Gen1SlotMachine.PALETTE_NORMAL)
+	assert_eq(Array(machine.wheel_offsets()), [29, 29, 29], "LoadSlotMachineTiles draws $1c and moves on")
+
+
+## `.loop`'s `jp nz, LoadScreenTilesFromBuffer1`: B leaves the loop with the
+## purse untouched, and the white-out spends its three frames.
+func test_gen1_b_on_the_bet_menu_leaves() -> void:
+	var machine: Gen1SlotMachine = _gen1_machine(50)
+	assert_true(_gen1_drive(machine, Gen2SlotMachine.Prompt.BET))
+	machine.answer_bet(-1)
+	assert_eq(machine.state(), Gen1SlotMachine.State.CLOSING)
+	var frames: int = 0
+	while frames < FRAME_CAP:
+		frames += 1
+		if not machine.advance():
+			break
+	assert_eq(frames, Gen1SlotMachine.WHITE_OUT_FRAMES, "the loop returns on the third VBlank")
+	assert_eq(machine.coins(), 50)
+
+
+## `.skip1`'s compare against `wPlayerCoins`: a bet the purse cannot cover
+## prints `NotEnoughCoinsSlotMachineText` and the menu comes back.
+func test_gen1_a_bet_over_the_balance_is_refused() -> void:
+	var machine: Gen1SlotMachine = _gen1_machine(2)
+	assert_true(_gen1_drive(machine, Gen2SlotMachine.Prompt.BET))
+	machine.answer_bet(1)
+	assert_eq(machine.prompt(), Gen2SlotMachine.Prompt.TEXT)
+	assert_eq(machine.prompt_name(), &"not_enough_coins")
+	machine.dismiss_text()
+	assert_eq(machine.prompt(), Gen2SlotMachine.Prompt.BET)
+	assert_eq(machine.coins(), 2)
+
+
+## Every wheel stops on an odd offset, which is three whole symbols, and the
+## bet left the purse once whatever the spin paid.
+func test_gen1_every_wheel_stops_centred() -> void:
+	for seed_value: int in 6:
+		var machine: Gen1SlotMachine = _gen1_machine(200, seed_value % 2 == 1, seed_value)
+		assert_true(_gen1_spin(machine, 3), "seed %d never ended its spin" % seed_value)
+		for offset: int in machine.wheel_offsets():
+			assert_eq(offset & 1, 1, "seed %d stopped on offset %d" % [seed_value, offset])
+		var payout: int = 0 if machine.winning_symbol() < 0 \
+			else Gen1SlotMachine.REWARDS[machine.winning_symbol() / 4]
+		assert_eq(machine.coins(), 197 + payout)
+
+
+## `.foundMatch` with neither flag set rolls wheel 3 on rather than paying, so
+## a spin the flags forbid ends on `NotThisTimeText` whatever lined up.
+func test_gen1_nothing_pays_while_the_flags_forbid_it() -> void:
+	for seed_value: int in 8:
+		var machine: Gen1SlotMachine = _gen1_machine(200, false, 20 + seed_value)
+		assert_true(_gen1_drive(machine, Gen2SlotMachine.Prompt.BET))
+		machine.answer_bet(1)
+		machine._flags = 0
+		machine._allow_matches = 0
+		assert_true(_gen1_drive(machine, Gen2SlotMachine.Prompt.PLAY_AGAIN))
+		assert_eq(machine.winning_symbol(), -1)
+		assert_eq(machine.coins(), 197)
+
+
+## `SlotMachine_PayCoinsToPlayer`: a coin a step with `SFX_SLOTS_REWARD` each,
+## eight frames apart, `rOBP0` flipped every fifth, and the music held.
+func test_gen1_the_payout_is_walked_over_one_coin_at_a_time() -> void:
+	var machine: Gen1SlotMachine = _gen1_machine(100)
+	assert_true(_gen1_drive(machine, Gen2SlotMachine.Prompt.BET))
+	machine.answer_bet(3)
+	machine._coins = 99
+	machine._winning = 8
+	machine._payout = 8
+	machine._state = Gen1SlotMachine.State.LINED_UP
+	machine._prompt = Gen2SlotMachine.Prompt.TEXT
+	machine.take_events()
+	machine.dismiss_text()
+	assert_true(machine.music_paused())
+	var rewards: int = 0
+	var frames: int = 0
+	while machine.state() == Gen1SlotMachine.State.PAY and frames < FRAME_CAP:
+		if machine.waiting_for_sfx():
+			machine.sfx_finished()
+		machine.advance()
+		frames += 1
+		for event: Variant in _gen1_events(machine):
+			if int((event as Dictionary).get("index", -1)) == Gen1SlotMachine.SFX_SLOTS_REWARD:
+				rewards += 1
+	assert_eq(rewards, 8)
+	assert_eq(machine.coins(), 107)
+	assert_eq(machine.payout(), 0)
+	assert_eq(frames, 8 * Gen1SlotMachine.PAYOUT_FRAMES + 1)
+	assert_false(machine.music_paused())
+	assert_eq(machine.lcd.obp0, Gen1SlotMachine.PALETTE_NORMAL)
+
+
+## `OutOfCoinsSlotMachineText` and `ld c, 60`: no coins left ends the loop
+## without the YES/NO box.
+func test_gen1_running_out_of_coins_ends_the_game_without_asking() -> void:
+	var machine: Gen1SlotMachine = _gen1_machine(1, false, 3)
+	assert_true(_gen1_drive(machine, Gen2SlotMachine.Prompt.BET))
+	machine.answer_bet(3)
+	machine._flags = 0
+	machine._allow_matches = 0
+	assert_true(_gen1_drive(machine, Gen2SlotMachine.Prompt.PLAY_AGAIN, 600)
+		or machine.state() == Gen1SlotMachine.State.OUT_OF_COINS
+		or machine.state() == Gen1SlotMachine.State.CLOSING
+		or machine.finished())
+	assert_ne(machine.prompt(), Gen2SlotMachine.Prompt.PLAY_AGAIN)
+	assert_eq(machine.coins(), 0)
+
+
+## `SlotMachine_StopWheel2Early` stops the wheel once a symbol lines up with
+## wheel 1, and in seven-and-bar mode only on a seven or a bar.
+func test_gen1_wheel_two_stops_on_a_line_up() -> void:
+	var machine: Gen1SlotMachine = _gen1_machine()
+	var one: Gen1SlotMachine.Wheel = machine._wheels[0]
+	var two: Gen1SlotMachine.Wheel = machine._wheels[1]
+	one.offset = 1
+	two.offset = 1
+	two.slip = 4
+	machine._flags = 0
+	assert_true(machine._stop_wheel_2_early(), "wheel 2's bottom seven lines up with wheel 1's")
+	assert_eq(two.slip, 0)
+	two.offset = 3
+	two.slip = 4
+	assert_false(machine._stop_wheel_2_early(), "nothing of $0C, $08, $10 stands on wheel 1's $02, $14, $0C at 1")
+	machine._flags = Gen1SlotMachine.FLAG_CAN_WIN_7_OR_BAR
+	two.offset = 1
+	two.slip = 4
+	assert_true(machine._stop_wheel_2_early(), "a lined-up seven stops it")
+	two.offset = 5
+	two.slip = 4
+	assert_false(machine._stop_wheel_2_early(), "a cherry at the bottom keeps it spinning")

@@ -42,7 +42,6 @@ func _run() -> void:
 		% [lines.size(), total, ProjectSettings.globalize_path(OUTPUT_PATH)])
 
 
-## An error list is the one tree whose rows carry the debugger's own fields.
 func _is_error_list(entries: PackedStringArray) -> bool:
 	for line: String in entries:
 		if line.contains("<GDScript Source>") or line.contains("<C++ Source>"):

@@ -84,6 +84,7 @@ const KIND_HELP: Dictionary = {
 	&"move_tutor": "presses: special MoveTutor. 0 is ChooseMonToLearnTMHM's list, not a box",
 	&"day_care": "presses, routine: 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs. On a Generation 1 cartridge, DaycareGentlemanText faced left from 3,3 on DAYCARE, the second number being wDayCareInUse",
 	&"slot_machine": "frames, bet: special SlotMachine. Bet is 1 to 3, plus 4 for the lucky machine",
+	&"slots": "frames, bet: StartSlotMachine on a Generation 1 GAME_CORNER, faced right from the cell beside a machine with a COIN CASE and coins. YES, the bet, then A three times over that many frames",
 	&"card_flip": "frames, coins in hundreds: special CardFlip",
 	&"unown_puzzle": "frames, picture: special UnownPuzzle. 0 Kabuto, 1 Omanyte, 2 Aerodactyl, 3 Ho-Oh, 4 to 7 solved",
 	&"visible_encounter": "cell: a shiny of the map's own table on the eligible cell nearest the player",
@@ -451,6 +452,7 @@ const STAGERS: Dictionary = {
 	&"whiteout": &"_stage_whiteout",
 	&"unown_puzzle": &"_stage_unown_puzzle",
 	&"slot_machine": &"_stage_slot_machine",
+	&"slots": &"_stage_slots",
 	&"tile_anim": &"_stage_tile_anim",
 	&"card_flip": &"_stage_card_flip",
 	&"day_care": &"_stage_day_care",
@@ -801,6 +803,29 @@ func _stage_slot_machine() -> void:
 	_screen.preview_slot_machine(
 		100, maxi(_cell.y, 0) >= 4, maxi(slots_bet, 1), maxi(_cell.x, 0)
 	)
+
+
+## `StartSlotMachine` from the map: the row's own boxes and its YES, the emote
+## `PromptUserToPlaySlots` raises, then the machine driven the way
+## `preview_slot_machine` drives Crystal's.
+func _stage_slots() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if world != null:
+		world.state.apply_changes({}, {}, {
+			"coins": VENDING_MONEY, "items": {Gen1Layout.ITEM_COIN_CASE: 1},
+		})
+	_screen.press_button(PokeButton.RIGHT)
+	for _frame: int in TEXT_SETTLE_FRAMES:
+		_screen.advance_frame()
+	_screen.interact()
+	for _frame: int in BOX_REVEAL_FRAMES:
+		_screen.advance_frame()
+	_screen.press_button(PokeButton.A)
+	for _frame: int in BOX_REVEAL_FRAMES:
+		if _screen.get("_slot_machine_host") != null:
+			break
+		_screen.advance_frame()
+	_screen.drive_slot_machine(maxi(_cell.y, 1), maxi(_cell.x, 0))
 
 
 ## `AnimateTileset` runs once a hardware frame, so any frame of a map's own water,
@@ -1295,7 +1320,6 @@ func _stage_vending() -> void:
 	_stage_counter({"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_MONEY}})
 
 
-## The prize counter, with the COIN CASE it opens on and coins for any row.
 func _stage_prizes() -> void:
 	_stage_counter({
 		"items": {Gen1Layout.ITEM_COIN_CASE: 1}, "coins": Gen2WorldInventory.MAX_COINS,

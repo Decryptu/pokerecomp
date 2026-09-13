@@ -86,7 +86,6 @@ static func end_run(section: Dictionary, landmark: int, day: int) -> void:
 	}
 
 
-## Whether this area has already given up its one encounter.
 static func area_spent(section: Dictionary, landmark: int) -> bool:
 	var areas: Variant = section.get("areas", {})
 	return areas is Dictionary and (areas as Dictionary).has(str(maxi(landmark, 0)))

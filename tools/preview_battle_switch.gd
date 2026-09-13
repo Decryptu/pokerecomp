@@ -502,7 +502,6 @@ func _settle_icons() -> void:
 	_screen._refresh_menu_layer()
 
 
-## The same drain, stopping on the frame the level-up stats box is up.
 func _drain_to_level_up() -> void:
 	for _press: int in 60:
 		## The box is popped by the bar pump inside `_settle`, not by the press
@@ -554,7 +553,6 @@ func _settle() -> void:
 		guard -= 1
 
 
-## Reads the question to its last page, which is where the yes/no box appears.
 func _read_question() -> void:
 	var box: Gen2TextBox = _screen.get("_box")
 	while box != null and (box.is_revealing() or box.has_pages_left()):

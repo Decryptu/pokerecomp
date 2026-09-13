@@ -195,20 +195,26 @@ const TOGGLE_CENSUS: Dictionary = {
 }
 
 ## One row of each list stands on UNUSED_MAP_6F, which has no header and so no
-## record: the table holds 217 rows on Red and Blue and 213 on Yellow.
+## record: the table holds 217 rows on Red and Blue and 213 on Yellow. Silent:
+## the four cable club Game Boys, the three `DisplayMonFrontSpriteInBox`
+## pictures, the blackboard, the two link cable helps and, on Red and Blue, the
+## three bench guys `BenchGuyTextPointers` misaligns; Yellow prints two pictures.
 const HIDDEN_CENSUS: Dictionary = {
-	&"red": {"rows": 216, "silent": 49, "text": 234, "branch": 117, "flag": 72,
-		"facing": 62, "name_item": 53, "give_item": 53, "facility": 21,
-		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
-		"map_text": 5, "choice": 9, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72},
-	&"blue": {"rows": 216, "silent": 49, "text": 234, "branch": 117, "flag": 72,
-		"facing": 62, "name_item": 53, "give_item": 53, "facility": 21,
-		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
-		"map_text": 5, "choice": 9, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72},
-	&"yellow": {"rows": 212, "silent": 48, "text": 236, "branch": 118, "flag": 73,
-		"facing": 58, "name_item": 54, "give_item": 54, "facility": 17,
-		"badge": 14, "has_item": 12, "add_coins": 12, "has_coins": 12,
-		"map_text": 5, "choice": 9, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "volatile": 12, "map_load_bit": 6, "replace_block": 72},
+	&"red": {"rows": 216, "silent": 13, "text": 435, "branch": 117, "flag": 72,
+		"facing": 128, "name_item": 53, "give_item": 53, "facility": 21,
+		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
+		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
+		"emote": 66, "slot_machine": 66},
+	&"blue": {"rows": 216, "silent": 13, "text": 435, "branch": 117, "flag": 72,
+		"facing": 128, "name_item": 53, "give_item": 53, "facility": 21,
+		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
+		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
+		"emote": 66, "slot_machine": 66},
+	&"yellow": {"rows": 212, "silent": 12, "text": 437, "branch": 118, "flag": 73,
+		"facing": 124, "name_item": 54, "give_item": 54, "facility": 17,
+		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
+		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "volatile": 12, "map_load_bit": 6, "replace_block": 72,
+		"emote": 66, "slot_machine": 66},
 }
 ## Of `BookshelfTileIDs`' 17 rows, all but one decode: the Indigo Plateau
 ## statues read `wXCoord` for which of their two boxes they answer with.
@@ -677,7 +683,6 @@ func _blocks_written(nodes: Array) -> int:
 	return written
 
 
-## A floor's doors each stand under their own flag, on a cell the load walk locks.
 func _check_doors(map: Gen2WorldMap, doors: Array, wrong: Array[String]) -> void:
 	var flags: Dictionary = {}
 	var locked: Dictionary = {}
@@ -835,7 +840,6 @@ func _walk_hidden(
 				_walk_hidden(node[side] as Array, census, wrong, number)
 
 
-## What is wrong with one hidden event node, or "".
 func _hidden_node_fault(node: Dictionary, number: int) -> String:
 	var op: String = String(node["op"])
 	if op == "facing" and not Gen1Layout.FACING_STEPS.has(int(node["facing"])):
@@ -944,7 +948,6 @@ func _geometry() -> void:
 		_r.check(walkable > 0, "map %d has no cell a player can stand on." % map.number)
 
 
-## The map macros' own assertions, plus the tables an event points into.
 func _events() -> void:
 	for map: Gen2WorldMap in _maps.values():
 		var objects: Array = map.events["objects"]
@@ -1070,7 +1073,6 @@ func _pinned_palette(map_id: int, last_map: int, wanted: int) -> void:
 	])
 
 
-## How many rows the cache really holds, for the message when the count is wrong.
 func _palette_count() -> int:
 	var out: int = 0
 	while not _r.data.world_palette(out).is_empty():

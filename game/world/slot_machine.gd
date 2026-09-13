@@ -322,6 +322,12 @@ func sfx_finished() -> void:
 	_waiting_sfx = false
 
 
+## Where the host's two menu cursors stand. Crystal's menus are drawn by the
+## page over the machine, so only [Gen1SlotMachine] reads them.
+func set_menu_cursor(_bet_row: int, _yes_no_row: int) -> void:
+	pass
+
+
 ## `hJoypadSum`, which the three `SlotsAction_WaitReel*` read and clear. A press
 ## is remembered rather than sampled, so a tap between two frames is not lost.
 func press_a() -> void:

@@ -406,7 +406,6 @@ func _run_scene() -> void:
 		pass
 
 
-## One scene body. Answers true when the source falls through into the next.
 func _step_scene() -> bool:
 	match _scene:
 		0:
@@ -860,7 +859,6 @@ func _set_palettes(background: PackedInt32Array, objects: PackedInt32Array) -> v
 		_ob_palettes[index] = objects[index]
 
 
-## Read back as the packed 15-bit values the reordering above works on.
 func _packed(name: String) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	if _data == null:

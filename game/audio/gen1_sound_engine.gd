@@ -530,6 +530,13 @@ func music_channels_active() -> bool:
 	return false
 
 
+## The four effect channels cleared at once, `.playChannel`'s own clear, for a
+## tool that cuts a `WaitForSoundToFinish` short rather than waiting it out.
+func stop_sfx() -> void:
+	for channel: int in range(NUM_MUSIC_CHANS, NUM_CHANNELS):
+		_init_sfx_variables(channel)
+
+
 ## `WaitForSoundToFinish` waits on the four effect channels alone.
 func sfx_active() -> bool:
 	for index: int in range(NUM_MUSIC_CHANS, NUM_CHANNELS):

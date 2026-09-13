@@ -835,7 +835,10 @@ const PAL_SET_PALETTES: int = 4
 const ATTR_BLK_COUNT_AT: int = 1
 const ATTR_BLK_ROWS_AT: int = 2
 const ATTR_BLK_ROW_SIZE: int = 6
-const ATTR_BLK_MAX_ROWS: int = 3
+## `ATTR_BLK` carries up to eighteen data sets; the opening's packets hold three.
+const ATTR_BLK_MAX_SETS: int = 18
+const OPENING_ATTR_BLK_ROWS: int = 3
+const SLOTS_ATTR_BLK_ROWS: int = 5
 
 ## `LoadPokedexTilePatterns`: `PokedexTileGraphics` at `vChars2 tile $60`, over
 ## the text box sheet, with `PokeballTileGraphics`' first tile at $72 behind it.
@@ -1641,14 +1644,16 @@ const TEXT_PREDEFS: Dictionary = {
 	"gym_statue": 0x0C, "gym_statue_badge": 0x0D, "found_hidden_item": 0x24,
 	"hidden_item_bag_full": 0x25, "found_hidden_coins": 0x2B,
 	"dropped_hidden_coins": 0x2C, "trash": 0x26, "first_lock": 0x3B, "second_lock": 0x3D,
-	"reset": 0x3E,
+	"reset": 0x3E, "slots_out_of_order": 0x28, "slots_out_to_lunch": 0x29,
+	"slots_someones_keys": 0x2A, "slots_no_coins": 0x32, "slots_coin_case": 0x33,
 }
 const TEXT_PREDEFS_YELLOW: Dictionary = {
 	"card_key_success": 0x01, "card_key_fail": 0x02,
 	"gym_statue": 0x0E, "gym_statue_badge": 0x0F, "found_hidden_item": 0x26,
 	"hidden_item_bag_full": 0x27, "found_hidden_coins": 0x2D,
 	"dropped_hidden_coins": 0x2E, "trash": 0x28, "first_lock": 0x3D, "second_lock": 0x3F,
-	"reset": 0x40,
+	"reset": 0x40, "slots_out_of_order": 0x2A, "slots_out_to_lunch": 0x2B,
+	"slots_someones_keys": 0x2C, "slots_no_coins": 0x34, "slots_coin_case": 0x35,
 }
 ## `PrintCardKeyText`: a Silph Co. door draws either of two tiles, the top
 ## floor's own a third, and the block that opens one is $0E under it and $03
@@ -1758,6 +1763,25 @@ const TRASH_ROW_SIZE_YELLOW: int = 9
 const TRASH_TABLE_TAIL: int = 256
 const TRASH_TABLE_TAIL_YELLOW: int = 512
 const TRASH_FIRST_MASK: int = 0x0E
+
+## `StartSlotMachine`'s three refusal arguments, each a `TextPredefs` row.
+const SLOTS_REFUSALS: Dictionary = {
+	0xFD: "slots_out_of_order", 0xFE: "slots_out_to_lunch", 0xFF: "slots_someones_keys",
+}
+const SMILE_BUBBLE: int = 2
+## `SlotMachineTiles1`, `SlotMachineTiles2`, `SlotMachineMap`'s rows and the
+## three `SlotMachineWheel*` tables of eighteen words.
+const SLOTS_TILES_1: int = 37
+const SLOTS_TILES_2: int = 24
+const SLOTS_TILEMAP_ROWS: int = 12
+const SLOTS_WHEEL_BYTES: int = 36
+const SLOTS_WHEELS: int = 3
+## The machine's boxes as deltas off `_PlaySlotMachineText`, one run on all three.
+const SLOTS_TEXT_AT: Dictionary = {
+	"play": 0x00, "out_of_coins": 0x1F, "bet": 0x38, "start": 0x4D,
+	"not_enough_coins": 0x55, "one_more_go": 0x68, "lined_up": 0x77,
+	"not_this_time": 0x97, "yeah": 0xA7,
+}
 const TRASH_CAN_MASK: int = 0x0F
 const TRASH_THREE_THIRD: int = 0xFF / 3
 const TRASH_TEXTS: Array[String] = ["trash", "first_lock", "second_lock", "reset"]
@@ -1799,6 +1823,9 @@ const FACING_STEPS: Dictionary = {
 	FACING_DOWN: Vector2i(0, 1), FACING_UP: Vector2i(0, -1),
 	FACING_LEFT: Vector2i(-1, 0), FACING_RIGHT: Vector2i(1, 0),
 }
+## `AbleToPlaySlotsCheck` reads bit 3 of the player's image index, which is set
+## facing LEFT ($8) and RIGHT ($C) alone.
+const SLOTS_FACINGS: Array[int] = [FACING_LEFT, FACING_RIGHT]
 ## `PLAYER_DIR_*` as `UpdatePlayerSprite` reads them, one `bit` per row in this
 ## order, so a byte with two set takes the first and zero reaches `.notMoving`,
 ## which leaves the facing byte alone.
@@ -2346,6 +2373,17 @@ const RED_BLUE: Dictionary = {
 	"hidden_coin_coords": 0x76822,
 	"bookshelf_tiles": 0x0FB8B,
 	"text_predefs": 0x03F22,
+	## `StartSlotMachine`, its art, wheels, packets, texts and the bank
+	## `AbleToPlaySlotsCheck` names its two refusals in.
+	"start_slot_machine": 0x37E2D,
+	"slots_tiles_1": 0x37A51,
+	"slots_tiles_2": 0x78BDE,
+	"slots_tilemap": 0x378F5,
+	"slots_wheels": 0x379E5,
+	"pal_packet_slots": 0x72478,
+	"blk_packet_slots": 0x7224F,
+	"slots_text": 0x8818F,
+	"slots_check_bank": 0x0B,
 	"map_badge_flags": 0x62442,
 	"bench_guy_texts": 0x6247E,
 	## The four table routines, by full ROM offset the way
@@ -2834,6 +2872,15 @@ const YELLOW: Dictionary = {
 	"hidden_coin_coords": 0x7611E,
 	"bookshelf_tiles": 0x0FA19,
 	"text_predefs": 0x03F67,
+	"start_slot_machine": 0x37ED1,
+	"slots_tiles_1": 0x37C81,
+	"slots_tiles_2": 0x78C17,
+	"slots_tilemap": 0x37B25,
+	"slots_wheels": 0x37C15,
+	"pal_packet_slots": 0x727B1,
+	"blk_packet_slots": 0x72661,
+	"slots_text": 0x9DF58,
+	"slots_check_bank": 0x0B,
 	"map_badge_flags": 0x62611,
 	"bench_guy_texts": 0x6264D,
 	"hidden_items": 0x75F74,
@@ -3088,7 +3135,6 @@ static func trainer_ai_respects_lock(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
 
 
-## A type number the cartridge really uses.
 static func is_real_type(type: int) -> bool:
 	return type < TYPE_UNUSED_FIRST or type > TYPE_UNUSED_LAST
 
@@ -3604,7 +3650,6 @@ static func flat_super_rod(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
 
 
-## Which of a block's sixteen tiles decides one walk cell.
 static func cell_tile_index(cell_x: int, cell_y: int) -> int:
 	return (cell_y * MAP_BLOCK_CELL_WIDTH + 1) * MAP_BLOCK_TILE_WIDTH \
 		+ cell_x * MAP_BLOCK_CELL_WIDTH

@@ -490,7 +490,6 @@ func _handle_gen1_entry(button: int) -> bool:
 	return true
 
 
-## How many description pages this entry prints, none of them unless owned.
 func _gen1_entry_pages() -> int:
 	var entry: Dictionary = _dex.entry()
 	if not bool(entry.get("caught", false)):

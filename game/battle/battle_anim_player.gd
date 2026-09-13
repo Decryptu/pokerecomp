@@ -298,7 +298,6 @@ func frame_commands() -> Array:
 	return _frame_commands
 
 
-## The live objects, for a caller that wants more than their sprites.
 func objects() -> Array:
 	var out: Array = []
 	for object: Gen2BattleAnimObject in _objects:

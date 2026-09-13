@@ -444,7 +444,6 @@ class Field extends ColorRect:
 		Gen2Screen.note_field(self, color)
 
 
-## Takes the surround's colour from a field a screen has just drawn.
 static func note_field(target: CanvasItem, field: Color) -> void:
 	if target == null or field.a <= 0.0:
 		return
@@ -608,7 +607,6 @@ func _run_cover_rebuild() -> void:
 	rebuild.call()
 
 
-## The close, frame by frame, ending on the screen fully black.
 func _cover_close_frames() -> Array[PackedByteArray]:
 	var out: Array[PackedByteArray] = []
 	var outro: Gen2BattleTransition = Gen2BattleTransition.create_outro()

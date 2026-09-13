@@ -74,13 +74,11 @@ static func apply_damage_modifier(damage: int, tenths: int) -> int:
 	return clampi(damage * tenths / MODIFIER_DIVISOR, 1, MAX_DAMAGE)
 
 
-## What one turn of Sandstorm costs whoever is not exempt from it.
 static func sandstorm_damage(max_hp: int) -> int:
 	@warning_ignore("integer_division")
 	return maxi(max_hp / SANDSTORM_DIVISOR, 1)
 
 
-## Whether a Sandstorm reaches this Pokémon.
 static func hits_in_sandstorm(types: Array, substatus: int) -> bool:
 	if Gen2Substatus.has(substatus, Gen2Substatus.UNDERGROUND):
 		return false

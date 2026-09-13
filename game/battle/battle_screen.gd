@@ -3521,7 +3521,6 @@ func _safari_base_catch_rate() -> int:
 	return int(_data.species(_battle.mon(Gen2Battle.ENEMY).species).get("catch_rate", 0))
 
 
-## The screen the fight draws on, for an overlay the world opens over it.
 func hardware_screen() -> Gen2Screen:
 	return _screen
 
@@ -3717,7 +3716,6 @@ func _hurt(mon: Gen2BattleMon) -> void:
 	_read_hp()
 
 
-## Development turn driver: random player move and the opponent's usual policy.
 func take_turn() -> void:
 	if _battle == null or _battle.is_over() or not _pending.is_empty():
 		return

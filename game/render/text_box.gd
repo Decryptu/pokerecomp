@@ -305,7 +305,6 @@ func text_columns() -> int:
 	return maxi(columns - TEXT_LEFT * 2, 0)
 
 
-## Lines of text the box shows at once, given that they sit two rows apart.
 func text_rows() -> int:
 	@warning_ignore("integer_division")
 	return maxi((rows - 1 - TEXT_TOP) / LINE_SPACING + 1, 0)

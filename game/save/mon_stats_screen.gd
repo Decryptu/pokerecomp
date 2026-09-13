@@ -80,7 +80,6 @@ func advance_animation() -> void:
 		_animation_pixels = PackedByteArray()
 
 
-## The box the animation is on, empty once it has ended and where there is none.
 func animation_indices() -> PackedByteArray:
 	if _animation == null:
 		return PackedByteArray()

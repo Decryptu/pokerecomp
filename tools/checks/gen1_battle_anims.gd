@@ -236,7 +236,6 @@ func _verify_tables(anims: Gen2BattleAnimData) -> void:
 		)
 
 
-## POUND end to end, down to the first sprite that lands on screen.
 func _verify_pound(anims: Gen2BattleAnimData) -> void:
 	var address: int = anims.pointer(Gen2BattleAnimData.GEN1_REGION, POUND_INDEX)
 	var byte: int = anims.byte_at(Gen2BattleAnimData.GEN1_REGION, address)
@@ -301,7 +300,6 @@ func _verify_transforms(anims: Gen2BattleAnimData) -> void:
 	)
 
 
-## Every animation on both turns, run to its end.
 func _play_every_animation(anims: Gen2BattleAnimData) -> void:
 	var count: int = Gen1Layout.anim_count(_r.game_id)
 	var frames: int = 0

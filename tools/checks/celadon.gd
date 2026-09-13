@@ -210,7 +210,6 @@ func _verify_route_7_connection(data: GameData, game_id: StringName) -> void:
 	print("%s route 7: an open west connection onto Celadon City on %s." % [game_id, crossed])
 
 
-## The city itself, and the one tree that seals the gym yard off.
 func _verify_city(data: GameData, game_id: StringName) -> void:
 	var world: Gen2WorldAPI = _open(data, CELADON_GROUP, CELADON_CITY, CELADON_FROM_ROUTE_7[0])
 	if world == null:

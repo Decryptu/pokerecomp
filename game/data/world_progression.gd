@@ -201,6 +201,5 @@ static func _is_placed(catalog: Gen2WorldCatalog, item: int) -> bool:
 	return catalog.item_sources().has(item)
 
 
-## The badge an HM's own move needs, or -1 for anything else.
 static func _badge_for_item(catalog: Gen2WorldCatalog, item: int) -> int:
 	return catalog.badge_for_hm_item(item)
