@@ -1,14 +1,11 @@
 class_name Gen2Damage
 extends RefCounted
 
-## The damage formula, in the order and the arithmetic the hardware uses. Every
-## step truncates and none of them commute, so this is a sequence rather than an
-## expression: the matchup applies one type at a time with a truncation between,
-## the critical multiplier lands before the cap and minimum, and the spread after
-## everything. The cartridge's four commands are [method damage_stats],
-## [method damage_calc], [method stab_damage] and [method apply_variation], run
-## one at a time because half a dozen effects write between two of them;
-## [method calculate_with] is the composition.
+## The damage formula in the hardware's order: every step truncates and none
+## commute, so it is a sequence. The cartridge's four commands are
+## [method damage_stats], [method damage_calc], [method stab_damage] and
+## [method apply_variation], run one at a time because half a dozen effects
+## write between two of them; [method calculate_with] is the composition.
 
 ## The cap lands before the minimum is added, so the biggest hit is 999 and the
 ## smallest that connects at all is 2.

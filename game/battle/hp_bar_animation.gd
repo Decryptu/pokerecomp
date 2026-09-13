@@ -1,12 +1,10 @@
 class_name Gen2HpBarAnimation
 extends RefCounted
 
-## The HP bar draining or filling, one pixel at a time
-## (engine/battle/anim_hp_bar.asm). The bar arrives before the message that
-## describes the hit: `NormalHit` runs `applydamage` before `criticaltext`.
-## `_AnimateHPBar`'s two branches are keyed on whether the maximum reaches
-## `HP_BAR_LENGTH_PX`; both redraw one pixel per iteration, and what differs is
-## the HP number [method hp] answers.
+## The HP bar draining or filling a pixel at a time (engine/battle/anim_hp_bar.asm).
+## It arrives before the hit's message: `NormalHit` runs `applydamage` before
+## `criticaltext`. `_AnimateHPBar`'s two branches key on whether the maximum
+## reaches `HP_BAR_LENGTH_PX`; what differs is the HP number [method hp] answers.
 
 ## `HP_BAR_LENGTH * TILE_WIDTH`, the bar's full width in pixels.
 const LENGTH_PX: int = Gen2BattleHud.HP_BAR_TILES * Gen2BattleHud.TILE

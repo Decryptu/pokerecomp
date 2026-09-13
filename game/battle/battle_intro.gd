@@ -1,14 +1,11 @@
 class_name Gen2BattleIntro
 extends RefCounted
 
-## `BattleIntroSlidingPics` (engine/battle/sliding_intro.asm) is a background
-## scroll, not a moving object: `SCX` is rewritten part way down the frame so the
-## top band comes in from one side and the middle from the other, and a band edge
-## falls inside the status panel, hence per scanline. The one part of the battle
-## presentation the two games do not share: Crystal drives `wLYOverrides` while
-## pokegold busy-waits on `rLY`. Neither band lands on zero, and
+## `BattleIntroSlidingPics` (engine/battle/sliding_intro.asm): `SCX` is
+## rewritten part way down the frame, so the top band comes in from one side
+## and the middle from the other, per scanline. Crystal drives `wLYOverrides`
+## while pokegold busy-waits on `rLY`. Neither band lands on zero;
 ## `InitBattleDisplay`'s `xor a` / `ldh [hSCX], a` settles it.
-## [method sprites] says why the player is in two pieces while it runs.
 
 ## 32 tiles of 8, what an offset wraps at; past the screen's 160 is blank.
 const MAP_WIDTH: int = 256

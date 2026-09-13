@@ -1,14 +1,12 @@
 class_name Gen2PokedexPage
 extends RefCounted
 
-## The Pokedex's own tile screens (engine/pokedex/pokedex.asm). [Gen2Pokedex] owns
-## the listing, the cursor and the mode; this is the picture. Every layout is one
-## of the source's `Pokedex_Draw*BG` routines read as tile writes. Three sheets
-## share the dex's VRAM numbering: `$00` to `$30` is the font inverted, since
-## `Pokedex_LoadInvertedFont` XORs every byte and the whole screen is light on
-## dark; `$31` to `$6a` is `PokedexLZ`; `$6b` up is `LoadFontsExtra`, inverted by
-## the same pass. The main screen is not a plain grid: its listing is in the
-## window layer at `hWX`, so it is composed in pixels by [method image_main].
+## The Pokedex's tile screens (engine/pokedex/pokedex.asm), each a
+## `Pokedex_Draw*BG` routine read as tile writes; [Gen2Pokedex] owns the
+## listing. `$00` to `$30` is the font inverted by `Pokedex_LoadInvertedFont`,
+## `$31` to `$6a` `PokedexLZ`, `$6b` up `LoadFontsExtra` inverted the same way.
+## The main screen's listing is in the window layer at `hWX`, so
+## [method image_main] composes it in pixels.
 
 const COLUMNS: int = 20
 const ROWS: int = 18

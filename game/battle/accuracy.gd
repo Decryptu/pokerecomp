@@ -1,12 +1,9 @@
 class_name Gen2Accuracy
 extends RefCounted
 
-## Whether a move connects.
-## Accuracy is a byte out of 255, not a percentage: "100%" stores 255 and "90%"
-## stores 229. Kept as the byte, because the roll is against it and a stored 255
-## is a special case that never misses.
-## Accuracy and evasion use their own multiplier table, a different shape from
-## the other stats', so -1 accuracy and -1 Attack are different fractions.
+## Whether a move connects. Accuracy is a byte out of 255, kept as the byte
+## because the roll is against it and a stored 255 never misses. Accuracy and
+## evasion have their own multiplier table, so -1 accuracy and -1 Attack differ.
 
 ## The move accuracy that cannot miss. Anything the stages leave below this rolls.
 const ALWAYS_HITS: int = 255

@@ -1,13 +1,9 @@
 class_name Gen2BattleMon
 extends RefCounted
 
-## One Pokémon as a battle sees it: its stats, what it knows, how much is left
-## and how far its stats have been pushed around. Scene-free, reading cartridge
-## content through [GameData] and never a ROM.
-##
-## Stats are worked out at build time, which is when the cartridge works them
-## out, and only a level up recalculates them. Stages are applied on the way out
-## to the unmodified stat every time, hence stored separately.
+## One Pokémon as a battle sees it. Stats are worked out at build time, as the
+## cartridge does, and only a level up recalculates them; stages apply on the
+## way out to the unmodified stat every time, hence stored separately.
 
 ## What a Pokémon can carry into a battle, which is the same four slots
 ## [Gen2Learnset] fills.

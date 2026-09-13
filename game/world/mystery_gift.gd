@@ -1,13 +1,11 @@
 class_name Gen2MysteryGift
 extends RefCounted
 
-## `engine/link/mystery_gift.asm`: the SRAM block, the staged block the two Game
-## Boys swap over IR, and `DoMysteryGift`'s own chain of refusals between the
-## exchange and the gift. Not the cable link play [Gen2LinkSession] runs: it never
-## touches `wLinkMode`, it has its own `sMysteryGiftData` section outside the
-## checksummed save, and its peer is an infrared window rather than a wire, so the
-## transport is its own too. Everything here is the section and the decision; the
-## pixels are [Gen2MysteryGiftPage] and the host is [Gen2MysteryGiftScreen].
+## `engine/link/mystery_gift.asm`: the SRAM block, the staged block the two
+## Game Boys swap over IR, and `DoMysteryGift`'s chain of refusals. Not
+## [Gen2LinkSession]'s cable play: it never touches `wLinkMode` and its
+## `sMysteryGiftData` sits outside the checksummed save. The pixels are
+## [Gen2MysteryGiftPage] and the host is [Gen2MysteryGiftScreen].
 
 ## `constants/serial_constants.asm`. Five gifts in a day, and one per person.
 const MAX_PARTNERS: int = 5

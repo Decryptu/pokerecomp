@@ -1,14 +1,10 @@
 class_name Gen2Font
 extends RefCounted
 
-## The cartridge's own font, drawn a tile at a time. Text here is tilemapped, not
-## typeset: every character is one 8x8 tile of equal width and a character code is
-## already the tile number that draws it, so nothing is measured or kerned. A code
-## with no tile draws nothing rather than a placeholder, which is what the space
-## at $7F is. Three sheets, because the hardware has three loaded at once and one
-## changes: `_LoadFontsBattleExtra` replaces $60 to $78, and which is up is
-## [Gen2Text]'s font argument, so a caller says which screen it is drawing rather
-## than which sheet a byte came from. Node-free.
+## The cartridge's own font: a character code is already the tile number that
+## draws it, and a code with no tile draws nothing, which is what the space at
+## $7F is. Three sheets because `_LoadFontsBattleExtra` replaces $60 to $78;
+## which is up is [Gen2Text]'s font argument. Node-free.
 
 const TILE: int = 8
 

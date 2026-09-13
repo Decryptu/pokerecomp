@@ -1,13 +1,11 @@
 class_name Gen2LauncherSheet
 extends Control
 
-## A modal card over the launcher, used instead of an OS dialog: Godot's own open
-## a second window with its own decorations, which no amount of theming makes
-## belong here and which mobile has no place to put. Sized against the window
-## rather than against its own content, because a [CenterContainer] grants a card
-## its minimum size whatever that is and a sheet with more rows than the window is
-## tall hung its actions off the bottom edge. The body scrolls and the card is
-## capped, so the title, the actions and the way out are always on screen.
+## A modal card over the launcher in place of an OS dialog, which opens a second
+## window mobile has no place for. Sized against the window, not its content: a
+## [CenterContainer] grants a card its minimum size, and a sheet taller than the
+## window hung its actions off the bottom edge. The body scrolls and the card is
+## capped.
 
 signal closed
 

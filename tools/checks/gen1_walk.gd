@@ -2165,8 +2165,6 @@ func _check_a_hidden_object() -> void:
 
 ## `TextScript_PokemonCenterPC` and `TextScript_ItemStoragePC`: each prints the
 ## machine's own boot line and then hands the world a `pc_requested`.
-## `OpenPokemonCenterPC`'s `cp SPRITE_FACING_UP` is what refuses the machine to a
-## player standing beside it.
 func _check_a_pc_opens() -> void:
 	for machine: Array in PC_MACHINES:
 		var world: Gen2WorldAPI = _facing_up(
@@ -2192,6 +2190,8 @@ func _check_a_pc_opens() -> void:
 	_check_the_pc_refuses_a_player_beside_it()
 
 
+## `OpenPokemonCenterPC`'s `cp SPRITE_FACING_UP` is what refuses the machine to a
+## player standing beside it.
 func _check_the_pc_refuses_a_player_beside_it() -> void:
 	var world: Gen2WorldAPI = _r.open_world(
 		0, VIRIDIAN_POKECENTER, POKECENTER_PC_CELL + Vector2i.LEFT

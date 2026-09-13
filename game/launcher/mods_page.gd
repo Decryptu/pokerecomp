@@ -1,12 +1,10 @@
 class_name Gen2ModsPage
 extends VBoxContainer
 
-## The mod manager: a list grouped by where each mod came from, a page per mod,
-## and a page for the sources the player follows. The model is a package
-## manager's, so removing a mod a source lists uninstalls it and leaves it listed
-## while removing one from a file deletes the only copy; [Gen2ModCatalogue]
-## decides both. A change is applied where it is made: the host is reset and every
-## entry script runs again, nothing here withdrawing one registration on its own.
+## The mod manager: a list grouped by source, a page per mod, and a page for the
+## sources followed. Removing a mod a source lists uninstalls it and leaves it
+## listed; removing one from a file deletes the only copy; [Gen2ModCatalogue]
+## decides both. A change resets the host and runs every entry script again.
 
 ## Asks the launcher for its file picker: the page owns no OS dialog.
 signal install_requested

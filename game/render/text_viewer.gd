@@ -1,12 +1,9 @@
 extends Control
 
-## Development view: the cartridge's font and text box on a real 160x144 screen.
-## Scaffolding like `pic_viewer.tscn`, for the same reason: a font slid by one
-## tile still draws letters and a border with its six tiles out of order still
-## draws a box, so both are checked by looking rather than by counting bytes. The
-## chart draws all 128 glyphs in code order, so anything out of place is a blank
-## mid-word or a letter in a gap. Space advances, F cycles the border, C toggles
-## the chart, and each is a plain method `tools/screenshot.gd` can drive.
+## Development view: the font and text box on a real 160x144 screen. A font
+## slid by one tile still draws letters, so this is checked by looking. The
+## chart draws all 128 glyphs in code order. Space advances, F cycles the
+## border, C toggles the chart, each a plain method `tools/screenshot.gd` drives.
 
 const BACKGROUND: Color = Color.WHITE
 

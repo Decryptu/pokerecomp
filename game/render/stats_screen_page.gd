@@ -1,14 +1,12 @@
 class_name Gen2StatsScreenPage
 extends RefCounted
 
-## The stats screen (`engine/pokemon/stats_screen.asm`), on the tile grid the
-## hardware uses. `StatsScreen_InitUpperHalf` draws the top seven rows once and
-## each of the three page routines fills the ten under the divider, so the page
-## number picks the lower half and nothing else; an egg replaces the whole screen
-## with `EggStatsScreen`. `StatsScreen_LoadFont` is `_LoadFontsBattleExtra` plus
-## the bar borders, so every glyph here is that strip's and the dividers, page
-## indicators and end caps come off [method Gen2BattleTiles.stats_page].
-## Node-free; the Pokemon's pic has its own palette and is composed by the screen.
+## The stats screen (`engine/pokemon/stats_screen.asm`). `StatsScreen_InitUpperHalf`
+## draws the top seven rows once and each page routine fills the ten under the
+## divider; an egg replaces the whole screen with `EggStatsScreen`.
+## `StatsScreen_LoadFont` is `_LoadFontsBattleExtra` plus the bar borders, so
+## the dividers and end caps come off [method Gen2BattleTiles.stats_page]. The
+## Pokemon's pic has its own palette and is composed by the screen.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

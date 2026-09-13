@@ -1,12 +1,9 @@
 class_name Gen2Stats
 extends RefCounted
 
-## Base stats, DVs and stat experience into the numbers a battle is fought with.
-##
-## Integer arithmetic in the hardware's order: every division truncates, and a
-## tidier rearrangement gives a different answer often enough to matter. A DV is
-## four bits per stat, and HP's is assembled from the other four rather than
-## stored, which is the same reading that decides shininess.
+## Base stats, DVs and stat experience into the numbers a battle is fought with,
+## in the hardware's integer order: every division truncates. HP's DV is
+## assembled from the other four, the same reading that decides shininess.
 
 ## The floors the formula ends on: a level 1 Pokémon still has 5 and 11.
 const STAT_MIN_NORMAL: int = 5

@@ -1,12 +1,9 @@
 class_name Gen2ControlsSection
 extends VBoxContainer
 
-## The controls card in the launcher's settings: what each of the eight buttons
-## is bound to, and how the on-screen controller behaves.
-##
-## Every change is written straight to the options file and installed in the
-## live [InputMap], the same as the rest of the settings page: there is no state
-## here worth an apply button.
+## The controls card in the launcher's settings: the eight bindings and the
+## on-screen controller. Every change is written straight to the options file
+## and installed in the live [InputMap]; there is no state worth an apply button.
 
 ## Emitted after a change that the page has to write.
 signal changed()

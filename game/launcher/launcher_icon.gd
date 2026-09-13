@@ -1,14 +1,12 @@
 class_name PokeLauncherIcon
 extends TextureRect
 
-## The launcher's custom filled icon set, rasterised from SVG at the size it is
-## drawn; the sources stay editable in `assets/launcher/icons` and their
-## `currentColor` fill is replaced with the palette colour at runtime. `github`,
-## `discord` and `bug` are the project's own drawings, so the Material Symbols
-## licence beside them does not cover those three. Each source carries
-## `importer="keep"` because this reads the SVG text rather than Godot's imported
-## texture: an imported `.svg` ships as its `.ctex` alone, so every glyph drew
-## nothing on an exported build. `test_launcher_ui.gd` asserts the importer.
+## The launcher's icon set, rasterised from `assets/launcher/icons` with
+## `currentColor` replaced by the palette colour at runtime. `github`, `discord`
+## and `bug` are the project's own drawings, outside the Material Symbols
+## licence beside them. Each source carries `importer="keep"` because this reads
+## the SVG text: an imported `.svg` ships as its `.ctex` alone, so every glyph
+## drew nothing on an exported build. `test_launcher_ui.gd` asserts the importer.
 const GRID: int = 24
 
 const ICON_DIRECTORY: String = "res://assets/launcher/icons"

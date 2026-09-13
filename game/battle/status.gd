@@ -1,13 +1,10 @@
 class_name Gen2Status
 extends RefCounted
 
-## One byte as the cartridge stores it: the low three bits are turns of sleep
-## left and the four above are one flag each. That is the rule as well as the
-## storage, since one status at a time falls out of checking the byte whole.
-##
-## Sleep, freeze and paralysis are checked before a move; burn and paralysis bend
-## a stat where it is read; burn and poison take a slice at the end of the turn.
-## The arithmetic behind that, holding no state.
+## One status byte as the cartridge stores it: the low three bits are turns of
+## sleep left and the four above are one flag each, which is why one status
+## holds at a time. Sleep, freeze and paralysis are checked before a move; burn
+## and paralysis bend a stat where it is read; burn and poison bite at turn end.
 
 ## The low three bits: turns of sleep left, from 1 to 7.
 const SLEEP_MASK: int = 0b111

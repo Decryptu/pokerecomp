@@ -1,12 +1,10 @@
 class_name Gen2PartyMenuPage
 extends RefCounted
 
-## The party menu as the hardware draws it: `WritePartyMenuTilemap`'s
-## `PARTYMENUACTION_SWITCH` quality set plus `PlacePartyMenuText`.
-## `SetUpBattlePartyMenu` clears the battle off the screen, so the page is the
-## whole 160x144, and each quality steps two rows per member because
-## `PartyMenu2DMenuData`'s cursor offset is `dn 2, 0`. [Gen2BattleSwitchMenu]
-## owns the rows; this owns `InitPartyMenuGFX`'s icons and their frame state.
+## The party menu as `WritePartyMenuTilemap`'s `PARTYMENUACTION_SWITCH` quality
+## set plus `PlacePartyMenuText` draw it. `SetUpBattlePartyMenu` clears the
+## battle, so the page is the whole 160x144, and each quality steps two rows a
+## member because `PartyMenu2DMenuData`'s cursor offset is `dn 2, 0`.
 
 const TILE: int = Gen2Font.TILE
 

@@ -2,12 +2,9 @@ class_name Gen2AboutPage
 extends VBoxContainer
 
 ## What this build is, which cartridges it accepts, the release check, and the
-## two places a player can reach the project from.
-##
-## The check only ever runs from its button: it reaches a third party and says
-## this build exists, so it is the player's act and never a side effect of
-## opening the launcher. Every link here is the same: nothing leaves the machine
-## until a button is pressed.
+## project's links. The check reaches a third party and says this build exists,
+## so it runs from its button alone; nothing leaves the machine until a button
+## is pressed.
 
 signal update_check_requested
 
