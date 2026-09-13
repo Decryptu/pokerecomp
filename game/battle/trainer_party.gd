@@ -1,13 +1,9 @@
 class_name Gen2TrainerParty
 extends RefCounted
 
-## Turns one of a trainer class's individual trainers into a battle-ready party.
-## Lives here rather than beside [Gen2Learnset] because it produces
-## [Gen2BattleMon]s and the data layer holds no battle types.
-##
-## A NORMAL or ITEM trainer's Pokemon knows what its level teaches; a MOVES or
-## ITEM_MOVES trainer's knows exactly the moves stored with it. DVs are the
-## per-class word rather than [constant Gen2BattleMon.PERFECT_DVS]. This is also
+## One of a trainer class's individual trainers as a battle-ready party. A
+## NORMAL or ITEM trainer's Pokemon knows what its level teaches; MOVES and
+## ITEM_MOVES know the stored moves. DVs are the per-class word. This is also
 ## where [constant Gen2Rules.CHALLENGE_HARD]'s rules land, one rule not 800 teams.
 
 

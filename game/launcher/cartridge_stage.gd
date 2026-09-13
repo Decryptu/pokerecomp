@@ -1,13 +1,10 @@
 class_name Gen2CartridgeStage
 extends Control
 
-## The shelf itself: a carousel that wraps, with the selected cartridge always in
-## the middle at full size and every other one the same step smaller beside it.
-##
-## Placement runs off one continuous [member _scroll] rather than off the integer
-## selection, so a step animates as a slide and the cartridge that has to cross
-## the row does it off the edge instead of through the middle. Children are placed
-## by hand because a container would fight the animations for the same
+## The shelf: a wrapping carousel with the selected cartridge in the middle at
+## full size. Placement runs off one continuous [member _scroll], so a step
+## slides and the cartridge crossing the row goes off the edge. Children are
+## placed by hand because a container would fight the animations for
 ## [member Control.position].
 
 signal selection_changed(game_id: StringName)

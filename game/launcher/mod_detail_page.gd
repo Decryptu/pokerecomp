@@ -1,12 +1,9 @@
 class_name Gen2ModDetailPage
 extends VBoxContainer
 
-## One mod's own page: what it is, where it came from, and its settings.
-##
-## Everything the list deliberately does not carry is here, which is why the
-## list can stay one line per mod. The settings are built from what the mod
-## registered on [Gen2ModHost] rather than from anything written here, so this
-## page and the game's own MODS menu are one registration seen twice.
+## One mod's own page: what it is, where it came from, and its settings, built
+## from what the mod registered on [Gen2ModHost], so this page and the game's
+## own MODS menu are one registration seen twice.
 
 signal closed
 signal enabled_changed(row: Dictionary, on: bool)

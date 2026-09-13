@@ -1,14 +1,11 @@
 class_name Gen2TrainerCardPage
 extends RefCounted
 
-## One page of the trainer card (`engine/menus/trainer_card.asm`), on the tile
-## grid the hardware uses. The card is a tilemap screen rather than a text screen,
-## so this keeps the cartridge's own VRAM window and writes tile numbers into a
-## map exactly as `TrainerCard_InitBorder` does, then resolves each number to
-## pixels. The window is `GetCardPic`'s 35-tile player pic at $00,
-## `TrainerCardGFX`'s frame pieces at $23, 86 tiles at $29 and the font from $80.
-## Page 1's 86 start at `CardStatusGFX`, which is only six tiles long, so the copy
-## runs straight on into `LeaderGFX`: that overrun is the cartridge's own.
+## One page of the trainer card (`engine/menus/trainer_card.asm`), a tilemap
+## screen written as `TrainerCard_InitBorder` writes it. `GetCardPic`'s 35-tile
+## player pic at $00, `TrainerCardGFX`'s frame pieces at $23, 86 tiles at $29,
+## the font from $80. Page 1's 86 start at `CardStatusGFX`, only six tiles long,
+## so the copy runs on into `LeaderGFX`: that overrun is the cartridge's own.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

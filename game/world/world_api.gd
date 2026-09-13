@@ -5186,8 +5186,7 @@ func _gen1_pikachu_cry_frames(index: int) -> int:
 	var cries: Array = data.gen1_pikachu().get("cries", []) if data != null else []
 	if index < 0 or index >= cries.size():
 		return 0
-	return Gen1Layout.PIKACHU_CRY_LEAD_FRAMES \
-		+ ceili(float(int(cries[index]) * 8) / float(Gen1Layout.PIKACHU_CRY_SAMPLES_PER_FRAME))
+	return Gen1Layout.pikachu_cry_frames(int(cries[index]))
 
 
 ## `.Subcommands`: the redraw spends `Delay3`, and the three map checks put the

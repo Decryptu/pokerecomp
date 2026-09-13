@@ -1,13 +1,11 @@
 class_name Gen2TitlePage
 extends RefCounted
 
-## The title screen, on the tile grid the hardware uses. Two screens under one
-## name, the way [Gen2TitleScene] is: Crystal draws its logo with
-## `DrawTitleGraphic`, keeps a strip of Suicune under it that `LoadSuicuneFrame`
-## re-points every eighth frame, and stands the crystal in front as thirty 8x16
-## objects, while Gold and Silver write `TitleScreenTilemap` straight into the BG
-## map and fly one bird over it. [Gen2TitleScene] owns the frames and the
-## positions; this owns the pixels.
+## The title screen: Crystal draws its logo with `DrawTitleGraphic`, keeps a
+## strip of Suicune `LoadSuicuneFrame` re-points every eighth frame, and stands
+## the crystal in front as thirty 8x16 objects; Gold and Silver write
+## `TitleScreenTilemap` into the BG map and fly one bird. [Gen2TitleScene] owns
+## the frames and positions; this owns the pixels.
 
 const TILE: int = PokeTiles.TILE_WIDTH
 const COLUMNS: int = 20

@@ -1,12 +1,10 @@
 class_name Gen2Cartridge
 extends Control
 
-## One cartridge on the stage: an empty bay until its dump is imported, and the
-## cartridge itself once it is.
-##
-## The cartridge owns only presentation, and not even its own presses: importing,
-## verification and launching belong to the launcher, and reading a press belongs
-## to the stage, which is the only node that knows whether one became a drag.
+## One cartridge on the stage: an empty bay until its dump is imported. It owns
+## only presentation: importing, verification and launching belong to the
+## launcher, and reading a press to the stage, which alone knows whether one
+## became a drag.
 
 const ART: Dictionary = {
 	&"red": preload("res://assets/cartridges/red.webp"),

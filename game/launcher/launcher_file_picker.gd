@@ -1,13 +1,12 @@
 class_name Gen2LauncherFilePicker
 extends FileDialog
 
-## The one file picker every launcher dialog is built from, reached through
-## [method Gen2LauncherUI.file_picker] and shown with [method show_picker]. Four
-## ways a platform offers a file, in the order they are preferred: the engine's
-## native dialog, which Windows, macOS, Linux and Android answer and whose Android
-## grant covers the one file chosen; the `NativeFilePicker` singleton for iOS,
+## The one file picker every launcher dialog is built from, through
+## [method Gen2LauncherUI.file_picker] and [method show_picker]. In order of
+## preference: the engine's native dialog (Windows, macOS, Linux, Android, whose
+## grant covers the one file chosen); the `NativeFilePicker` singleton for iOS,
 ## where `DisplayServerIOS` implements no `file_dialog_show`; [Gen2BrowseSheet]
-## wherever there is no pointer; and the engine's own browser for the rest.
+## wherever there is no pointer; the engine's own browser for the rest.
 
 ## The plugin's singleton, present only on a build that carries it.
 const NATIVE_SINGLETON: StringName = &"NativeFilePicker"

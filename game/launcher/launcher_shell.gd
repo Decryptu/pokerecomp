@@ -1,12 +1,10 @@
 class_name Gen2LauncherShell
 extends Control
 
-## The frame every launcher screen sits in: a backdrop, a top bar carrying the
-## clock, the tabs and the charge, the page, and the bar of button hints along
-## the bottom. Neither bar changes edge with the window; what changes is whether
-## the tabs are named. The strip above the page is what makes a pad predictable:
-## up leaves the page, down returns, and the shoulders step the strip from
-## anywhere without moving the ring.
+## The frame every launcher screen sits in: backdrop, top bar with clock, tabs
+## and charge, the page, and the button hints along the bottom. The strip above
+## the page is what makes a pad predictable: up leaves the page, down returns,
+## and the shoulders step the strip from anywhere.
 
 signal page_selected(id: StringName)
 

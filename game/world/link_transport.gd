@@ -1,14 +1,11 @@
 class_name Gen2LinkTransport
 extends RefCounted
 
-## The cable, as the only thing above it needs it to be. `home/serial.asm` reaches
-## the other Game Boy through exactly three operations and every routine the cable
-## club runs is built from them: read `hSerialConnectionStatus`, exchange one byte,
-## and exchange a block. There is no cable on a modern platform, so this class is
-## the three operations and nothing about wires, timing or bit order. Scene free
-## and injected: a transport with no peer is the honest default and a real game
-## path, since `WaitForLinkedFriend` times out. The one peer today is another of
-## this player's slots; a network transport overrides the three operations.
+## The cable as `home/serial.asm` reaches it: read `hSerialConnectionStatus`,
+## exchange one byte, exchange a block. Every cable club routine is built from
+## the three. A transport with no peer is the default and a real game path,
+## since `WaitForLinkedFriend` times out; the one peer today is another of this
+## player's slots, and a network transport overrides the three operations.
 
 ## constants/serial_constants.asm. `CONNECTION_NOT_ESTABLISHED` is what
 ## `Link_ResetSerialRegistersAfterLinkClosure` writes back.

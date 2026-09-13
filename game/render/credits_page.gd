@@ -1,12 +1,11 @@
 class_name Gen2CreditsPage
 extends RefCounted
 
-## The credits screen, on the tile grid the hardware uses. [Gen2Credits] owns the
-## BG map and the attribute map; this resolves a tile number to pixels and
-## colours it through `CreditsPalettes`. The VRAM window is the banner's 4x4 mon
-## cell at $00, `CreditsBorderGFX` at $20, `TheEndGFX` at $40, `CopyrightGFX` at
-## $60 and the font from $80. `Credits_LYOverride` scrolls the two border bands
-## alone, two pixels a cycle.
+## The credits screen. [Gen2Credits] owns the BG and attribute maps; this
+## colours a tile through `CreditsPalettes`. The VRAM window is the banner's
+## 4x4 mon cell at $00, `CreditsBorderGFX` at $20, `TheEndGFX` at $40,
+## `CopyrightGFX` at $60 and the font from $80. `Credits_LYOverride` scrolls
+## the two border bands alone, two pixels a cycle.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = Gen2Credits.COLUMNS

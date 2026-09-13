@@ -1,13 +1,9 @@
 class_name PokeButton
 extends RefCounted
 
-## The eight buttons the hardware had, and the input actions that stand for them.
-##
-## Every screen that reads the cartridge's own controls speaks this vocabulary
-## and nothing else, so a key, a pad button and an on-screen button are already
-## the same thing by the time a screen sees one. What a device has to do to
-## produce a button is [PokeInputActions]' business, and which device the player
-## is holding is [PokeInputDevice]'s.
+## The eight buttons the hardware had. Every screen speaks this vocabulary and
+## nothing else; what a device does to produce one is [PokeInputActions]'
+## business, and which device the player is holding is [PokeInputDevice]'s.
 
 const NONE: int = 0
 const UP: int = 1

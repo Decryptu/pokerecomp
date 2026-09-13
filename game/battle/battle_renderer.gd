@@ -1,12 +1,10 @@
 class_name Gen2BattleRenderer
 extends Control
 
-## Draws the battle field: two pics, two status panels, two HP bars, the exp bar
-## and whatever an animation is putting over them. Call [method set_battle_data]
-## once, then [method set_view] whenever the screen has new display values.
-## The pics are drawn through `wTilemap` rather than placed at a corner, because
-## that map is what an animation edits. Panels compose into one screen-sized index
-## buffer with index 0 transparent. Every background layer is one plane, so the
+## Draws the battle field: pics, status panels, HP and exp bars and whatever an
+## animation puts over them. [method set_battle_data] once, then
+## [method set_view] per display change. The pics go through `wTilemap`, which
+## is what an animation edits; every background layer is one plane, so the
 ## per-scanline scroll applies to all of them and to none of the objects.
 
 const TILE: int = Gen2Font.TILE

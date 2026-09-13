@@ -1,14 +1,12 @@
 class_name Gen2TextBox
 extends TextureRect
 
-## A bordered text window, drawn the way the hardware draws one. Everything is on
-## the tile grid at the games' own measurements: the border is six tiles of the
-## chosen frame printed as box-drawing characters, and text sits one tile in from
-## the left on every second row, since a line is eight pixels tall in a box whose
-## rows are sixteen apart. The box composes into one index buffer, so a glyph and
-## a Pokemon are lit by the same code. Text reveals a tile at a time;
-## [method advance] and [method finish] are plain methods as well as key handlers,
-## so a screen can be photographed mid-sentence.
+## A bordered text window at the games' own measurements: six frame tiles as
+## box-drawing characters, text one tile in on every second row, since a line
+## is eight pixels tall in a box whose rows are sixteen apart. It composes into
+## one index buffer, so a glyph and a Pokemon are lit by the same code.
+## [method advance] and [method finish] are plain methods as well as key
+## handlers, so a screen can be photographed mid-sentence.
 
 ## Emitted when the last page has been shown and advanced past.
 signal finished

@@ -1,13 +1,11 @@
 class_name Gen2BattleAI
 extends RefCounted
 
-## Scores an enemy trainer's move choice the way the cartridge's own AI does.
-## Every slot starts at 20, or 80 with no PP. Each bit set in the trainer class's
-## [constant Gen2Layout.ATTR_AI_MOVE_WEIGHTS] runs one scoring layer over the four
-## slots, nudging scores up (discourage) or down (encourage); lowest wins, ties
-## broken at random. `scoring.asm` finds that minimum by decrementing counters,
-## which is an argmin rather than a rule, so [method choose_slot] takes it
-## directly. Percent chances use the cartridge's `X * 255 / 100` macro.
+## The cartridge's own AI move scoring: every slot starts at 20, or 80 with no
+## PP; each bit of the class's [constant Gen2Layout.ATTR_AI_MOVE_WEIGHTS] runs
+## one layer, discouraging up and encouraging down; lowest wins, ties at random.
+## `scoring.asm`'s decrementing counters are an argmin, which
+## [method choose_slot] takes directly. Chances use `X * 255 / 100`.
 
 ## Everything one scoring layer is allowed to read, which the cartridge reads
 ## straight out of WRAM.

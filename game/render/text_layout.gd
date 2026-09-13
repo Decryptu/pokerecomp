@@ -1,12 +1,10 @@
 class_name Gen2TextLayout
 extends RefCounted
 
-## Breaking a string into the lines and pages a text box can show. Pure rules, no
-## font and no screen, so a conversation's pagination can be checked without
-## drawing anything. Widths count tiles rather than characters, since a ligature
-## like "'s" is two of one and [method String.length] would wrap a column early.
-## The cartridges do not wrap at all, their text being pre-broken at authoring
-## time; a mod's string and a long name are what needs it.
+## Breaking a string into the lines and pages a text box can show, with no font
+## or screen. Widths count tiles, since a ligature like "'s" is one and
+## [method String.length] would wrap early. The cartridges never wrap, their
+## text being pre-broken; a mod's string and a long name are what needs it.
 
 
 ## `Textbox`'s inner area: `TEXTBOX_INNERW` wide, and two rows two apart.

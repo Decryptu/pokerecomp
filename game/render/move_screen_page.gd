@@ -1,14 +1,12 @@
 class_name Gen2MoveScreenPage
 extends RefCounted
 
-## The move screen (`MoveScreenLoop` in `engine/pokemon/mon_menu.asm`), on the
-## tile grid the hardware uses. `SetUpMoveScreenBG` draws the two boxes and the
-## nickname once and `MoveScreenLoop` adds the two arrows, which
-## `ChooseMoveToDelete` does not; `PlaceMoveData` fills the bottom box with
-## whichever row the cursor is on, and swapping replaces it with `Where?`. It
-## loads nothing the stats screen does not, so the two share
-## [method Gen2BattleTiles.stats_page]. Node-free; the mon icon is an object with
-## a palette of its own and is composed over the page by the screen.
+## The move screen (`MoveScreenLoop` in `engine/pokemon/mon_menu.asm`).
+## `SetUpMoveScreenBG` draws the boxes and nickname once, `MoveScreenLoop` adds
+## the two arrows `ChooseMoveToDelete` lacks, `PlaceMoveData` fills the bottom
+## box and swapping replaces it with `Where?`. It shares
+## [method Gen2BattleTiles.stats_page]; the mon icon is an object the screen
+## composes over the page.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

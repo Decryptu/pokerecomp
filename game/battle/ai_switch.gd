@@ -1,13 +1,10 @@
 class_name Gen2AISwitch
 extends RefCounted
 
-## Whether a trainer pulls its Pokemon out, and which one it sends instead:
-## `CheckAbleToSwitch` and its five party scans in `engine/battle/ai/switch.asm`,
-## plus the three frequency gates in `items.asm`.
-## The cartridge works in six-bit masks and reuses one variable as both a score
-## and a party index; here the masks are arrays of indices and the two uses are
-## separate return values. Nothing changes: every scan keeps party order, and
-## every mask-to-index conversion takes the lowest index set.
+## `CheckAbleToSwitch` and its five party scans (`engine/battle/ai/switch.asm`)
+## plus the three frequency gates in `items.asm`. The cartridge's six-bit masks
+## are arrays of indices here; every scan keeps party order and a mask-to-index
+## conversion takes the lowest index set.
 
 ## `BASE_AI_SWITCH_SCORE`, where [method matchup_score] starts before anything
 ## nudges it.

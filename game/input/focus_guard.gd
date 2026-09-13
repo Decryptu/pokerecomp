@@ -1,12 +1,10 @@
 class_name Gen2FocusGuard
 extends Node
 
-## Gives a controller somewhere to start, and somewhere to go. Godot moves focus
-## on `ui_up` and the rest of that family, but only once something already has
-## it, and nothing does when a screen opens. The ring goes up only for a keyboard
-## or a pad, and is never taken away, since a click that dropped focus would
-## empty the field it had just filled. A modal takes the whole guard with it, or
-## the geometric search joins a control in it to one on the page behind.
+## Gives a controller somewhere to start. Godot moves focus on `ui_up` only once
+## something has it, and nothing does when a screen opens. The ring goes up only
+## for a keyboard or a pad and is never taken away, since a click that dropped
+## focus would empty the field it had just filled. A modal takes the guard with it.
 
 ## Nodes in this group are modal: while one is in the tree it is the only part of
 ## the screen the guard looks at. Named rather than typed, so the guard owes

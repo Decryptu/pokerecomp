@@ -1,14 +1,13 @@
 class_name Gen2SecondScreenHost
 extends Node
 
-## Puts a [Gen2SecondScreen] on a real second display, and reports touches back.
-## Two backends, because the screen above must not know which one it got: `panel`
-## is a handheld's secondary Android display reached through the platform plugin,
-## one bitmap per drawn frame, and `window` is a second [Window] on any desktop.
-## The panel backend copies pixels rather than sharing a context, which is why
-## [Gen2SecondScreen] draws in hardware pixels: 148 KB a frame against the panel's
-## own 5.4 MB. Sharing would mean a Vulkan swapchain per display, which this
-## project cannot have while it renders through the compatibility backend.
+## Puts a [Gen2SecondScreen] on a real second display and reports touches back.
+## `panel` is a handheld's secondary Android display through the platform
+## plugin, one bitmap per drawn frame; `window` is a second [Window] on a
+## desktop. The panel copies pixels, which is why [Gen2SecondScreen] draws in
+## hardware pixels: 148 KB a frame against the panel's 5.4 MB. Sharing a
+## context would need a Vulkan swapchain per display, and this project renders
+## through the compatibility backend.
 
 ## The Android plugin singleton. Its contract is four calls and three signals:
 ## `open() -> bool`, `close()`, `panel_size() -> PackedInt32Array` of two,

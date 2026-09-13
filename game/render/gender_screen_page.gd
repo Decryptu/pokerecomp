@@ -1,12 +1,9 @@
 class_name Gen2GenderScreenPage
 extends RefCounted
 
-## `engine/menus/init_gender.asm`'s screen on the hardware tile grid: the
-## question in the standard text box and the two-option menu over it.
-## Positions are the source's own. The menu is [Gen2MenuPage]'s, drawn from
-## `.MenuHeader`'s `menu_coords 6, 4, 12, 9` and its three flags, so nothing
-## about the box is decided here.
-## Crystal only, since pokegold ships neither the routine nor its text.
+## `engine/menus/init_gender.asm`'s screen: the question in the standard text
+## box and [Gen2MenuPage]'s two-option menu from `.MenuHeader`'s
+## `menu_coords 6, 4, 12, 9`. Crystal only; pokegold ships neither.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

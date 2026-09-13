@@ -2,11 +2,10 @@ class_name Gen2TradeAnimation
 extends RefCounted
 
 ## `TradeAnimation` and `TradeAnimationPlayer2` (engine/movie/trade_animation.asm),
-## the movie both a link trade and an `NPCTrade` run. `DoTradeAnimation` is one
-## command a frame and then `PlaySpriteAnimations`, so that is the shape here, and
-## [member _delay] is the frames a command spends inside `DelayFrames` with nothing
-## else running. The screen is a tilemap of character codes, which is what the
-## cartridge writes; [Gen2TradeAnimationPage] draws it.
+## the movie a link trade and an `NPCTrade` run. `DoTradeAnimation` is one
+## command a frame and then `PlaySpriteAnimations`; [member _delay] is the
+## frames a command spends inside `DelayFrames`. [Gen2TradeAnimationPage] draws
+## the tilemap of character codes.
 
 const MUSIC_EVOLUTION: int = 0x22
 const SFX_POKEBALLS_PLACED_ON_TABLE: int = 0x03

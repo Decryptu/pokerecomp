@@ -1,12 +1,9 @@
 class_name Gen2Party
 extends RefCounted
 
-## The Pokémon one side of a battle has, and which of them is out.
-## An ordered list and a cursor into it, not a set: the order is what a switch
-## menu shows and what a replacement is chosen from, and the first entry leads. A
-## wild battle is a party of one, so it needs no special case.
-## Fainted Pokémon stay in the list, still counting against the six. A battle is
-## lost when all of them are down, not when the list runs out.
+## The Pokémon one side has and which is out: an ordered list and a cursor, the
+## order a switch menu shows. A wild battle is a party of one. Fainted Pokémon
+## stay in the list; a battle is lost when all of them are down.
 
 ## What a trainer can carry. Six is a rule of these games rather than of this
 ## class, but a party that is longer is a bug somewhere upstream and is worth

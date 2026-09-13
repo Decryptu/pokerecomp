@@ -1,14 +1,12 @@
 class_name Gen2MartPage
 extends RefCounted
 
-## `BuyMenu`'s screen (`engine/items/mart.asm`): `BlankScreen`, the money box in
-## the corner, `MenuHeader_Buy`'s scrolling list of names and BCD prices, and the
-## speech box `UpdateItemDescription` writes into. [Gen2WorldMartHost] owns the
-## list and the transaction; this is the picture. Three things a redraw has to
-## keep: `ScrollingMenu` draws no frame, so the names sit on the blank screen; the
-## fourth row's price lands on row 11, because `.PrintBCDPrices` prints one row
-## below a name already on the last row the height allows; and the down arrow is
-## drawn whenever the list has arrows while the up one waits for a scroll.
+## `BuyMenu`'s screen (`engine/items/mart.asm`); [Gen2WorldMartHost] owns the
+## list and the transaction. `ScrollingMenu` draws no frame, so the names sit
+## on the blank screen; the fourth row's price lands on row 11, because
+## `.PrintBCDPrices` prints one row below a name already on the last row; the
+## down arrow is drawn whenever the list has arrows while the up one waits for
+## a scroll.
 
 const TILE: int = Gen2Font.TILE
 

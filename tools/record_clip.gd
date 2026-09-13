@@ -1133,9 +1133,6 @@ func _overlay_state() -> String:
 	]
 
 
-## The line ON SCREEN rather than the message that was handed to the box: a
-## faint and the Nuzlocke death behind it are two pages of one message, and only
-## the box says which of them is up.
 ## Whether the box still owes letters or pages, which is what a question with
 ## more than one paragraph waits on before it will take an answer.
 static func _reading(owner: Object, property: String) -> bool:
@@ -1145,6 +1142,9 @@ static func _reading(owner: Object, property: String) -> bool:
 	return bool(box.call("is_revealing")) or bool(box.call("has_pages_left"))
 
 
+## The line ON SCREEN rather than the message that was handed to the box: a
+## faint and the Nuzlocke death behind it are two pages of one message, and only
+## the box says which of them is up.
 static func _box_lines(owner: Object, property: String) -> PackedStringArray:
 	var box: Object = owner.get(property)
 	return box.call("text_lines") if box != null else PackedStringArray()

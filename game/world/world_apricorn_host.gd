@@ -2,13 +2,9 @@ class_name Gen2WorldApricornHost
 extends RefCounted
 
 ## `Kurt_GiveUpSelectedQuantityOfSelectedApricorn` (`engine/events/kurt.asm`) as
-## a validated candidate-save transaction. The selection itself is
-## [Gen2WorldApricorn]; this only takes the apricorns and resumes the script.
-##
-## The source routine collects every bag stack of the item, sorts them and
-## empties them in turn ("Compatible with multiple stacks"). The flat item model
-## holds one stack per item, so the walk collapses to a single `Kurt_GetRidOfItem`.
-## Nothing observable differs until the save model can hold two stacks of one item.
+## a validated candidate-save transaction; the selection is [Gen2WorldApricorn].
+## The source empties every bag stack of the item in turn; the flat item model
+## holds one stack per item, so the walk is a single `Kurt_GetRidOfItem`.
 
 static func complete_runtime_request(
 	world: Gen2WorldAPI,

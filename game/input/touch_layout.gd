@@ -2,12 +2,9 @@ class_name PokeTouchLayout
 extends RefCounted
 
 ## Where the on-screen controller's five clusters sit, how big they are and how
-## much of the screen they hide. Geometry only: [Gen2TouchPad] draws and reads
-## touches, which is what lets the settings page show a live preview and a test
-## check placement without a viewport. Positions are a fraction of the area the
-## controller was given rather than pixels, so a layout arranged on a phone means
-## the same on a tablet; portrait and landscape keep separate positions, because a
-## cluster reachable by the thumb in one is mid-screen in the other.
+## solid. Geometry only, so the settings page previews it without a viewport.
+## Positions are a fraction of the controller's area, so a phone's layout means
+## the same on a tablet; portrait and landscape keep separate positions.
 
 const GROUP_PAD: StringName = &"pad"
 const GROUP_A: StringName = &"a"

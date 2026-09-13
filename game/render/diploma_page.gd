@@ -1,14 +1,11 @@
 class_name Gen2DiplomaPage
 extends RefCounted
 
-## `PlaceDiplomaOnScreen` and `PrintDiplomaPage2` (`engine/events/diploma.asm`),
-## the two whole screens the diploma is. Each is a stored tilemap with a few
-## strings written into it, so this owns the tilemap walk and the strings and
-## nothing else; node-free, so a check can read it back headless.
-##
-## A cell under `FONT_FIRST_CODE` names a tile of `DiplomaGFX` and a cell at or
-## above it names a font glyph, which is the hardware's own split: the art is
-## loaded into `vTiles2` and the font is already at the codes it prints under.
+## `PlaceDiplomaOnScreen` and `PrintDiplomaPage2` (`engine/events/diploma.asm`):
+## a stored tilemap each with a few strings written in, node-free. A cell under
+## `FONT_FIRST_CODE` names a tile of `DiplomaGFX` and one at or above it a font
+## glyph, the hardware's own split: the art is in `vTiles2` and the font already
+## at the codes it prints under.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

@@ -1,12 +1,9 @@
 class_name Gen2OptionsStore
 extends RefCounted
 
-## Persistence for [Gen2Options].
-##
-## Deliberately not the save store's checksummed two-file container. Options
-## carry no player progress and [method Gen2Options.parse] clamps every field,
-## so the worst a damaged file costs is a return to defaults. A save cannot
-## afford that, which is why it keeps the heavier scheme.
+## Persistence for [Gen2Options], deliberately not the save store's checksummed
+## container: [method Gen2Options.parse] clamps every field, so a damaged file
+## costs a return to defaults.
 
 const PATH: String = "user://options.json"
 ## Where a test writes instead. The suite shares `user://` with the game, so

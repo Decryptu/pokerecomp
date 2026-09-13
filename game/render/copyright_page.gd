@@ -1,13 +1,10 @@
 class_name Gen2CopyrightPage
 extends RefCounted
 
-## The copyright screen (`Copyright`, `engine/menus/intro_menu.asm`), on the tile
-## grid the hardware uses. The whole screen is one graphic and one code run:
-## `ClearTilemap` blanks the map, `CopyrightGFX` is requested into
-## `vTiles2 tile $60`, and `CopyrightString` is placed at (2,7). None of its codes
-## is a character, so nothing here reads the font. `PlaceString` pushes the line's
-## own start and `NextLineChar` pops it and adds `SCREEN_WIDTH * 2`, so the three
-## rows start in the same column two rows apart. Node-free.
+## The copyright screen (`Copyright`, `engine/menus/intro_menu.asm`): `ClearTilemap`,
+## `CopyrightGFX` into `vTiles2 tile $60`, `CopyrightString` at (2,7). None of
+## its codes is a character. `PlaceString` pushes the line's start and
+## `NextLineChar` adds `SCREEN_WIDTH * 2`, so the rows sit two apart. Node-free.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

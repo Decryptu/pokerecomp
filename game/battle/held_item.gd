@@ -1,14 +1,10 @@
 class_name Gen2HeldItem
 extends RefCounted
 
-## `ITEMATTR_EFFECT` and `ITEMATTR_PARAM` read: tables and arithmetic, the shape
-## [Gen2Status], [Gen2Substatus] and [Gen2Weather] have.
-##
-## Only the effects a real item carries are named; the twenty more
-## `constants/item_data_constants.asm` defines reach no item, which
-## `HandleStatBoostingHeldItems`' own comment says. Thick Club and Light Ball
-## carry no held effect at all and are checked by number through
-## `SpeciesItemBoost`.
+## `ITEMATTR_EFFECT` and `ITEMATTR_PARAM` read. Only the effects a real item
+## carries are named; the twenty more `constants/item_data_constants.asm`
+## defines reach no item, as `HandleStatBoostingHeldItems`' own comment says.
+## Thick Club and Light Ball are checked by number through `SpeciesItemBoost`.
 
 const NONE: int = 0
 

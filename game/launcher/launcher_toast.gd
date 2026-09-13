@@ -1,13 +1,10 @@
 class_name Gen2LauncherToast
 extends Control
 
-## What the launcher has to say about the last thing that happened, shown only
-## while it is worth saying: a screen with nothing to report should look like one.
-## Success and information fade out on their own; a refusal and a running import
-## stay until they are replaced, and a message that stays carries a dismiss
-## button. A running import is the exception, since a button offering to hide it
-## would be offering to cancel something it cannot: its glyph turns instead, which
-## is the whole difference between a launcher that is working and one stopped.
+## What the launcher has to say about the last thing that happened. Success and
+## information fade out; a refusal stays with a dismiss button; a running import
+## stays with no button, since hiding it would look like cancelling it, and its
+## glyph turns instead.
 
 ## How long a message that reports no problem stays up.
 const LINGER: float = 3.6

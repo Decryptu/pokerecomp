@@ -1,13 +1,10 @@
 class_name Gen2SecondScreenTabs
 extends RefCounted
 
-## Which pages a second display may show, and the icon each is reached by. The
-## gate is [Gen2WorldStartMenu]'s, filtered to the entries that are a picture
-## rather than an action, so a tab appears on exactly the frame its START menu row
-## does: the team page cannot be opened before Elm has handed over a starter.
-## SAVE, OPTION and EXIT do something rather than show something, and a mod's own
-## row is a screen this cannot draw, so neither reaches a tab. Node-free: it
-## answers a list and an icon image, and the view decides where to put them.
+## Which pages a second display may show, and each one's icon. The gate is
+## [Gen2WorldStartMenu]'s, filtered to entries that are a picture, so a tab
+## appears on the frame its START menu row does. SAVE, OPTION, EXIT and a mod's
+## own row do something rather than show something, so none reaches a tab.
 
 ## The START menu rows that are a page. In `SetUpMenuItems` order, which is the
 ## order they are drawn in.

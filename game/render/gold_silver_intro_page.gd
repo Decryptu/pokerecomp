@@ -1,14 +1,11 @@
 class_name Gen2GoldSilverIntroPage
 extends RefCounted
 
-## `GoldSilverIntro`'s screen, on the tile grid the hardware uses.
-## [Gen2GoldSilverIntro] owns the BG map, palettes, scroll and sprite structs;
-## this turns a tile number into pixels. Two differences from
-## [Gen2IntroMoviePage]: the BG map wraps and `hLCDCPointer` = LOW(rSCY) gives
-## every scanline its own `hSCY`, so the screen is sampled row by row; and every
-## attribute byte is zero, so there is one background palette rather than eight.
-## The starters are the one thing not read out of the intro's own sheets, their
-## OAM sets indexing the pic atlas the cache holds.
+## `GoldSilverIntro`'s screen; [Gen2GoldSilverIntro] owns the BG map, palettes,
+## scroll and sprite structs. Unlike [Gen2IntroMoviePage] the BG map wraps and
+## `hLCDCPointer` = LOW(rSCY) gives every scanline its own `hSCY`, and every
+## attribute byte is zero, so there is one background palette. The starters'
+## OAM sets index the pic atlas the cache holds.
 
 const TILE: int = PokeTiles.TILE_WIDTH
 const WIDTH: int = Gen2Screen.WIDTH

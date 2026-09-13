@@ -1,13 +1,11 @@
 class_name Gen2Battle
 extends RefCounted
 
-## A battle: two parties, a turn at a time. Scene-free with randomness injected,
-## so a whole battle can be fought in a test with no display.
-## A turn answers with events carrying their own numbers, never a string:
-## sentences, animation and draining bars are the screen's job. A side is a party
-## and a wild encounter a party of one. A turn ending with somebody down says so
-## through [method must_replace] and stands still until [method replace_fallen],
-## the only entry point besides [method take_actions] that moves a battle on.
+## A battle: two parties, a turn at a time, scene-free with randomness injected.
+## A turn answers with events carrying numbers, never a string. A turn ending
+## with somebody down says so through [method must_replace] and stands still
+## until [method replace_fallen], the only entry point besides
+## [method take_actions] that moves a battle on.
 
 ## Plain numbers rather than an enum: they are dictionary keys and event payloads
 ## throughout, and everything reading one compares it against these two.

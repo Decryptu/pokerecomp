@@ -1,14 +1,9 @@
 class_name Gen2BattleMenu
 extends RefCounted
 
-## What the player is asked on their own turn: `BattleMenu`'s FIGHT/PKMN/PACK/RUN
-## and `MoveSelectionScreen`'s move list (`engine/battle/core.asm`,
-## `engine/battle/menu.asm`).
-##
-## Scene-free, like [Gen2BattleSwitchMenu]: the geometry is [Gen2MenuBox]'s, the
-## rows and the cursor rules are here, and the battle screen owns the presses and
-## the drawing. Nothing here reads a battle; a caller builds the move rows from
-## the Pokemon that is out.
+## `BattleMenu`'s FIGHT/PKMN/PACK/RUN and `MoveSelectionScreen`'s move list
+## (`engine/battle/core.asm`, `engine/battle/menu.asm`), scene-free: the rows
+## and cursor rules are here, the battle screen owns the presses and drawing.
 
 ## `wBattleMenuCursorPosition`, which `BattleMenu.next` compares against: the
 ## menu's own 1-based position, counted along the rows.

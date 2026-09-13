@@ -1,14 +1,11 @@
 class_name Gen2SecondScreen
 extends Control
 
-## The lower display: one of the game's own pages, with a row of tabs under it.
-## Every page is the screen the START menu opens, built and drawn exactly as the
-## overworld builds it and then never handed a button, so a page cannot drift from
-## the one the player sees and cannot change anything either. The tab row is the
-## one thing that takes a touch, and which tabs exist is the START menu's own
-## gate. Everything is drawn inside a [SubViewport] the size of
-## [member canvas_size] in hardware pixels, because a second panel is reached by a
-## bitmap and a copy that size can be made sixty times a second.
+## The lower display: one of the START menu's own pages, built as the overworld
+## builds it and never handed a button, with a row of tabs under it that is the
+## one thing taking a touch. Drawn inside a [SubViewport] of [member canvas_size]
+## hardware pixels, because a second panel is reached by a bitmap copied sixty
+## times a second.
 
 ## The page, which is the cartridge's own screen and never another size.
 const PAGE_SIZE := Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)

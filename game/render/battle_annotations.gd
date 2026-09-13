@@ -1,12 +1,10 @@
 class_name Gen2BattleAnnotations
 extends RefCounted
 
-## What a registered battle-information provider draws on the hardware interface,
-## validated once and drawn once. The grid is the cartridge's own screen in tiles,
-## so a placement is said in the same coordinates `hlcoord` is and lands in the
-## same cells whichever renderer is underneath. A mod supplies a string or a tile
-## and nothing else: where a cell may be drawn, what a tile's bytes mean, which
-## provider owns a cell and when the layer is hidden are all the host's.
+## What a registered battle-information provider draws on the hardware
+## interface, validated once and drawn once, in `hlcoord`'s own cells. A mod
+## supplies a string or a tile; where a cell may be drawn, what a tile's bytes
+## mean and when the layer is hidden are the host's.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = Gen2Screen.WIDTH / TILE

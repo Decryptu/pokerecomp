@@ -1,12 +1,11 @@
 class_name Gen1PikaPicPage
 extends RefCounted
 
-## `StarterPikachuEmotionCommand_pikapic` (`engine/pikachu/pikachu_pic_animation.asm`):
-## the box Yellow's follower makes a face in. `PlacePikapicTextBoxBorder` puts a
-## `TextBoxBorder` at `hlcoord 6, 5` sized `5, 5`, `ExecutePikaPicAnimScript`
-## loops a setup script and up to four tilemap objects at one `Delay3` a turn
-## until the duration runs out or A or B is pressed, and the border is placed
-## again on the way out. `pikapic_cry` is a PCM clip nothing here plays yet.
+## `StarterPikachuEmotionCommand_pikapic` (`engine/pikachu/pikachu_pic_animation.asm`).
+## `PlacePikapicTextBoxBorder` puts a `TextBoxBorder` at `hlcoord 6, 5` sized
+## `5, 5`; `ExecutePikaPicAnimScript` loops a setup script and up to four
+## tilemap objects at one `Delay3` a turn until the duration runs out or A or
+## B is pressed. `pikapic_cry` is a PCM clip nothing here plays yet.
 
 const TILE: int = Gen2Font.TILE
 ## `hlcoord 6, 5` and `lb bc, 5, 5`: the border's corner and the interior.

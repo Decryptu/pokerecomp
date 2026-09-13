@@ -1,13 +1,10 @@
 class_name Gen2BindingSheet
 extends Gen2LauncherSheet
 
-## What one button is bound to, and how to change it.
-##
-## A button carries several bindings at once, normally a key or two and a pad
-## button, so this lists them rather than offering a single slot. The last one
-## cannot be removed: a button with nothing bound is a button the player cannot
-## press, and the options file would silently put the default back on the next
-## load anyway.
+## What one button is bound to, and how to change it. A button carries several
+## bindings at once, so this lists them. The last one cannot be removed: a
+## button with nothing bound cannot be pressed, and the options file would put
+## the default back on the next load anyway.
 
 signal bindings_changed()
 

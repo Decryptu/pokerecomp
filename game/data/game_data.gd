@@ -81,6 +81,7 @@ var _unown_words: PackedStringArray = PackedStringArray()
 var _unown_walls: PackedStringArray = PackedStringArray()
 var _odd_eggs: Array = []
 var _credits: Dictionary = {}
+var _opening: Dictionary = {}
 var _intro_movie: Dictionary = {}
 var _unown_puzzle: Dictionary = {}
 var _diploma: Dictionary = {}
@@ -199,6 +200,7 @@ const MANIFEST_DICTIONARIES: Dictionary = {
 	"decorations": "_decorations",
 	"mom_phone": "_mom_phone",
 	"credits": "_credits",
+	"opening": "_opening",
 	"intro_movie": "_intro_movie",
 	"unown_puzzle": "_unown_puzzle",
 	"diploma": "_diploma",
@@ -2289,6 +2291,12 @@ func credits_string(index: int) -> PackedByteArray:
 ## string printed from column 2. -1 on a cache without the credits.
 func credits_index(name: String) -> int:
 	return int(_credits.get(name, -1))
+
+
+## `PlayIntro`'s and `DisplayTitleScreen`'s tables, as [method Gen1Importer.read_opening]
+## wrote them. Empty on a cache with no Generation 1 opening.
+func opening() -> Dictionary:
+	return _opening
 
 
 ## Generation 1's own `db -n` column per string; -1 outside the table.

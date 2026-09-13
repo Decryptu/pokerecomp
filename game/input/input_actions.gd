@@ -1,14 +1,11 @@
 class_name PokeInputActions
 extends RefCounted
 
-## What a device has to do to produce a [PokeButton], as data: a plain dictionary,
-## so the whole control scheme survives a trip through the options file and the
-## remap UI can describe one without holding an [InputEvent]. Three kinds cover
-## every device the engine reports, `key`, `pad_button` and `pad_axis`, each with
-## a `code` and the axis one a `sign`. Keys bind by physical keycode, so the d-pad
-## keeps the WASD positions on a layout that does not spell WASD there, and
-## [method describe] asks the platform what that key is labelled. Nothing here
-## reads or writes the options file.
+## What a device has to do to produce a [PokeButton], as a plain dictionary so
+## the scheme survives the options file. Three kinds, `key`, `pad_button` and
+## `pad_axis`, each with a `code` and the axis one a `sign`. Keys bind by
+## physical keycode, so the d-pad keeps the WASD positions on any layout, and
+## [method describe] asks the platform what that key is labelled.
 
 const KIND_KEY: StringName = &"key"
 const KIND_PAD_BUTTON: StringName = &"pad_button"
