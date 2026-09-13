@@ -16,29 +16,23 @@ an empty body. -->
 
 ## Added
 
-- Yellow's Pikachu walks behind the player: the follow buffer, the eight movement commands and their hop arcs, the tricks a hop earns, the spawn state every warp and connection leaves, and the happiness and mood bytes. A 2222-frame route from the bedroom over Route 1's ledge matches the cartridge frame for frame.
-- Talking to the follower opens its face box, with `PikachuEmotionTable`'s bubbles, movements and faces timed from the A press. Its scenes run: the Fan Club's Seel, Bill's house, the Pewter center, Mt Moon, Cinnabar Gym, Oak's lab, Viridian City, Pokemon Tower 2F and the Game Corner.
-- Pewter's Jigglypuff sings on all three cartridges, turning every 24 frames until the channels fall silent, and Yellow's follower falls asleep behind it.
-- Happiness moves from all eleven of the cartridge's callers: walking, the PC deposit, items, a Rare Candy, a TM, a poison faint, a trade, the level-up, a faint, the X items and a gym leader's fight.
-- Trainers on Red, Blue and Yellow fight with the cartridge's own head. The move roll is `SelectEnemyMove`'s, the three scoring layers are `AIEnemyTrainerChooseMoves`', and each class's routine spends its item or switches where its move would have been: Brock's Full Heal, Misty's X Defend, Erika's Super Potion, the Jugglers' switches, Agatha's, Lance's Hyper Potion, every one at the odds its `cp` leaves.
-- Gym leaders and the Elite Four carry their signature moves: Brock's Onix knows BIDE, Misty's Starmie BUBBLEBEAM, Lorelei's Lapras BLIZZARD, the champion's Pidgeot SKY ATTACK and its starter the move its species names, and Yellow's own per-trainer rows.
-- The trainer's own withdraw and item lines, `AIBattleWithdrawText` and `AIBattleUseItemText`, with the trainer named.
+- Red, Blue and Yellow open the way the cartridges do: the copyright screen, GAME FREAK presents, the Gengar and Nidorino movie or Yellow's Pikachu intro, and the title screen with its Pokemon rolling past. Against a real cartridge over 3000 frames the LCD registers match on every frame and the sprites on all but one on Red and Blue; Yellow's surf scene tears its own sprites for 23 frames and this port draws them whole.
+- The Game Corner's slot machines play. A machine is faced from the side with a COIN CASE and a coin, asks, takes a bet of one to three, and its wheels stop on whole symbols with the cartridge's own odds: the flags roll once a bet, wheel 3 rolls on past a match they forbid, a 300 win halves them, and the payout counts a coin at a time with the music held. The lucky machine is the one the map rolled on entry.
+- The three out-of-order machines say so, and a machine faced from below, without a COIN CASE or with an empty one answers the way it does on the cartridge.
+- Pewter Museum's two fossils, Route 15's binoculars and Yellow's Fan Club pictures pop their picture up in a box over the map.
+- The Viridian School blackboard and the link cable help in Celadon open their menus: a heading prints its own text and the menu comes back until QUIT or B.
+- The Celadon Mansion game designer's diploma draws once the Pokedex is complete, with the player's sprite behind it on Red and Blue and Yellow's own border.
 
 ## Changed
 
-- The cache format is 135. Import your cartridges again.
-- Generation 1 steps take seventeen frames where the cartridge's do, a turn shows one pass, a ledge is found on one pass and hopped on the next, and a warp follows `GBFadeOutToBlack`'s timeline with the screen back at 39 frames indoors and 41 out.
-- Every `EmotionBubbles` row of Red, Blue and Yellow is imported under Generation 2's names.
+- The cache format is 137. Import your cartridges again.
+- The title screen's Pokemon are this port's roll; on a cartridge they come off its timer.
 
 ## Fixed
 
-- An opponent's PP was spent on Generation 1, where the cartridge never spends it.
-- Quick Attack went at ordinary speed and Counter did not go last on Generation 1.
-- A gift Pokemon's OT id was not the player's.
-- A held direction walked past Oak on the north path.
-- Event flags 0 to 7 were lost across a map load on Generation 1.
-- The first door out of a house did not open on a new game, `wLastMap` starting empty.
-- Pewter's mart could not be opened by the replay tool on the three Generation 1 caches.
+- A script that rolled once and stored the result rolled twice, which is what picked the lucky slot machine.
+- Yellow's Route 15 binoculars said nothing.
+- A Generation 1 sound cut short by a screenshot tool went on playing.
 
 ## Which file
 
