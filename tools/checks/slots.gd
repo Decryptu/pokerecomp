@@ -1,13 +1,8 @@
 extends RefCounted
 
-## Sweeps `_SlotMachine` on freshly imported real caches, all three cartridges.
-## Every expectation is transcribed from pokecrystal's own
-## engine/games/slot_machine.asm rather than read back out of the implementation,
-## which is the only way the topic can go red, and the art is re-read out of the
-## dump beside the cache. The class of bug it catches is a reel that lines up
-## something the bias did not ask for: `Slots_CheckMatchedAllThreeReels` is five row
-## tests behind a bet and a window read one symbol out still matches something, so
-## the check drives whole spins on a pinned seed and asserts what stopped where.
+## Sweeps `_SlotMachine` and `PromptUserToPlaySlots` on real caches. Every
+## expectation is transcribed from the sources rather than read back out of the
+## implementation, and whole spins on pinned seeds assert what stopped where.
 
 ## `Reel1Tilemap`, `Reel2Tilemap` and `Reel3Tilemap`, byte for byte, including
 ## the first three symbols each repeats behind itself.

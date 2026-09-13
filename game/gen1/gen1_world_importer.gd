@@ -2972,9 +2972,11 @@ static func _script_stored_byte(
 		return STORE_OK
 	if not _script_random_source(layout, state):
 		return STORE_REFUSED
-	out.append({"op": "store_byte", "name": name, "random": true,
-		"rolled": bool(state.get("random_rolled", false)),
-		"mask": int(state.get("mask", 0xFF)), "shift": int(state.get("shift", 0))})
+	var node: Dictionary = {"op": "store_byte", "name": name, "random": true,
+		"mask": int(state.get("mask", 0xFF)), "shift": int(state.get("shift", 0))}
+	if bool(state.get("random_rolled", false)):
+		node["rolled"] = true
+	out.append(node)
 	return STORE_OK
 
 
@@ -4583,6 +4585,8 @@ static func _script_routine_call(
 			state["entry_buffer"] = int((ctx["layout"] as Dictionary).get("entry_buffer", -1))
 			_script_tested(state, SCRIPT_TESTS_NAME_ENTRY, true)
 			return next
+		"display_mon_front_sprite_in_box":
+			return _script_picture(ctx, state, out, next)
 	var named: int = _script_predef_named(
 		ctx["layout"], Gen1Layout.banked(bank, target), state, out
 	)
@@ -4714,6 +4718,24 @@ static func _script_pokedex(
 	out.append({"op": "pokedex", "species": dex})
 	state["species_index"] = int(state["a"])
 	state.erase("a")
+	return next
+
+
+## `DisplayMonFrontSpriteInBox` over `wCurPartySpecies`' internal index.
+static func _script_picture(
+	ctx: Dictionary, state: Dictionary, out: Array, next: int
+) -> int:
+	if not state.has("species_index"):
+		return SCRIPT_UNREAD
+	var index: int = int(state["species_index"])
+	var node: Dictionary = {"op": "picture"}
+	if Gen1Layout.SPECIAL_PICS.has(index):
+		node["special"] = String(Gen1Layout.SPECIAL_PICS[index])
+	else:
+		node["species"] = Gen1Layout.dex_of_index(ctx["rom"], ctx["layout"], index)
+		if int(node["species"]) < 1:
+			return SCRIPT_UNREAD
+	out.append(node)
 	return next
 
 
@@ -5678,6 +5700,9 @@ static func _script_text_row(
 	if at == int((ctx["layout"] as Dictionary).get("town_map_text", -1)):
 		out.append({"op": "town_map"})
 		return true
+	for name: String in Gen1Layout.HELP_MENUS:
+		if at == int((ctx["layout"] as Dictionary).get(name, -1)):
+			return _help_menu_nodes(ctx["rom"], ctx["layout"], name, out)
 	var returns: Array = state.get("returns", [])
 	state.erase("returns")
 	var walked: Variant = _walk_script(ctx, code, state, depth + 1)
@@ -5685,6 +5710,47 @@ static func _script_text_row(
 	if not walked is Array:
 		return false
 	out.append_array(walked as Array)
+	return true
+
+
+## `LinkCableHelp` and `ViridianSchoolBlackboard`, read off their own tables.
+static func _help_menu_nodes(rom: RomFile, layout: Dictionary, name: String, out: Array) -> bool:
+	var menu: Dictionary = Gen1Layout.HELP_MENUS[name]
+	var bank: int = RomFile.bank_of(int(layout[name]))
+	var first: String = Gen1Importer.facility_text(rom, int(layout[menu["text_1"]]))
+	var prompt: String = Gen1Importer.facility_text(rom, int(layout[menu["text_2"]]))
+	var rows: Array = []
+	var grid: Array = []
+	for column: Dictionary in menu["columns"]:
+		var text: String = Gen1Text.decode(
+			rom.slice(int(layout[column["strings"]]), Gen1Layout.MENU_STRING_MAX * 4), 0,
+			Gen1Layout.MENU_STRING_MAX * 4
+		)
+		var indices: Array = []
+		var lines: PackedStringArray = text.split(Gen1Layout.MENU_ROW_BREAK)
+		for line: int in lines.size():
+			indices.append(rows.size())
+			rows.append({
+				"text": lines[line],
+				"at": [int(column["at"][0]), int(column["at"][1]) + line * Gen1Layout.HELP_MENU_ROW_STEP],
+				"cursor": [int(column["cursor_x"]), int(column["at"][1]) + line * Gen1Layout.HELP_MENU_ROW_STEP],
+			})
+		grid.append(indices)
+	var replies: Array = []
+	for row: int in rows.size():
+		var reply: String = "" if row in (menu["quit"] as Array) else Gen1Importer.facility_text(
+			rom, Gen1Layout.banked(
+				bank, rom.u16le(int(layout[menu["replies"]]) + row * Gen1Layout.POINTER_SIZE)
+			)
+		)
+		if reply.is_empty() and row not in (menu["quit"] as Array):
+			return false
+		replies.append(reply)
+	if first.is_empty() or prompt.is_empty():
+		return false
+	out.append({"op": "text", "text": first})
+	out.append({"op": "help_menu", "box": menu["box"], "rows": rows, "grid": grid,
+		"prompt": prompt, "replies": replies, "quit": menu["quit"]})
 	return true
 
 

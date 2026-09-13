@@ -37,12 +37,22 @@ var palette: PackedColorArray = PackedColorArray()
 
 var _tiles: PackedByteArray = PackedByteArray()
 var _maps: Array[PackedByteArray] = []
+var _gen1: GameData = null
+var _gen1_strings: Array[PackedByteArray] = []
 
 
 static func from_data(data: GameData) -> Gen2DiplomaPage:
 	if data == null or not data.has_diploma():
 		return null
 	var page := Gen2DiplomaPage.new()
+	if data.generation == RomRegistry.GEN1:
+		page._gen1 = data
+		page._gen1_strings = data.gen1_diploma_strings()
+		var generic: Array = (data.opening().get("palettes", {}) as Dictionary).get("generic", [])
+		for packed: Variant in (generic[0] as Array) if not generic.is_empty() else []:
+			page.palette.append(PokePalette.from_packed(int(packed)))
+		return page if page._gen1_strings.size() == Gen1Layout.DIPLOMA_STRINGS \
+			and not page.palette.is_empty() else null
 	page.font = Gen2Font.from_data(data)
 	page.palette = data.diploma_palette()
 	page._tiles = data.diploma_indices()
@@ -72,6 +82,8 @@ const CANCEL_STRING: String = "Press B to Cancel"
 func render(
 	page: int, player: String, play_time: Dictionary = {}, status: String = ""
 ) -> Image:
+	if _gen1 != null:
+		return _render_gen1(player)
 	var indices := PackedByteArray()
 	indices.resize(WIDTH * HEIGHT)
 	var map: PackedByteArray = _maps[clampi(page, 1, 2) - 1]
@@ -143,3 +155,95 @@ func _blit(into: PackedByteArray, code: int, at: Vector2i) -> void:
 	Gen2Font.blit_slot(
 		_tiles, Gen2Layout.DIPLOMA_TILES * TILE, code, into, WIDTH, at.x * TILE, at.y * TILE
 	)
+
+
+## `DisplayDiploma` on a [Gen1Lcd], with `DrawPlayerCharacter`'s sprite moved 33
+## pixels right behind the background; Yellow's `DisplayDiplomaTop` draws none.
+func _render_gen1(player: String) -> Image:
+	var lcd := Gen1Lcd.new()
+	lcd.wy = Gen1Opening.WINDOW_OFF
+	lcd.bgp = Gen1Opening.GB_PAL_NORMAL_BGP
+	lcd.obp0 = Gen1Layout.DIPLOMA_OBP0
+	lcd.fill_map(0, Gen1Text.SPACE)
+	_gen1_load(lcd, "font", Gen1Lcd.BLOCK_TILES)
+	if _gen1.id == RomRegistry.YELLOW:
+		_gen1_load(lcd, "diploma_gfx", Gen1Lcd.SIGNED_BASE)
+		_gen1_yellow_border(lcd)
+	else:
+		_gen1_load(lcd, "trainer_card_box", Gen1Lcd.SIGNED_BASE + Gen1Layout.DIPLOMA_BOX_TILES)
+		_gen1_load(lcd, "trainer_card_names", Gen1Lcd.SIGNED_BASE + Gen1Layout.DIPLOMA_CIRCLE_CODE,
+			Gen1Layout.DIPLOMA_CIRCLE_TILE, 1)
+		_gen1_border(lcd)
+		_gen1_load(lcd, "title_player", 0)
+		_gen1_player_sprite(lcd)
+	for index: int in _gen1_strings.size():
+		_gen1_place(lcd, Gen1Layout.DIPLOMA_STRINGS_AT[index], _gen1_strings[index])
+	_gen1_place(lcd, Gen1Layout.DIPLOMA_NAME_AT, Gen1Text.encode(player))
+	return Gen1OpeningPage.colour(lcd.render(), [], [palette])
+
+
+func _gen1_load(lcd: Gen1Lcd, sheet: String, at: int, first: int = 0, count: int = -1) -> void:
+	var tiles: int = int(_gen1.tile_sheet(sheet).get("tiles", 0))
+	lcd.load_tiles(at, _gen1.tile_indices(sheet), tiles, first, count if count >= 0 else tiles)
+
+
+## `CableClub_TextBoxBorder` with `lb bc, 16, 18`.
+func _gen1_border(lcd: Gen1Lcd) -> void:
+	var edge: Dictionary = Gen1Layout.DIPLOMA_BORDER
+	var map: PackedByteArray = lcd.maps[0]
+	for row: int in ROWS:
+		for column: int in COLUMNS:
+			var tile: int = -1
+			if row == 0:
+				tile = int(edge["top_left"]) if column == 0 \
+					else (int(edge["top_right"]) if column == COLUMNS - 1 else int(edge["top"]))
+			elif row == ROWS - 1:
+				tile = int(edge["bottom_left"]) if column == 0 \
+					else (int(edge["bottom_right"]) if column == COLUMNS - 1 else int(edge["bottom"]))
+			elif column == 0:
+				tile = int(edge["left"])
+			elif column == COLUMNS - 1:
+				tile = int(edge["right"])
+			if tile >= 0:
+				map[row * Gen1Lcd.MAP_SIDE + column] = tile
+
+
+## `DiplomaDrawHorizontalBorder` and `..VerticalBorder`, the corners written 0.
+func _gen1_yellow_border(lcd: Gen1Lcd) -> void:
+	var map: PackedByteArray = lcd.maps[0]
+	for column: int in COLUMNS:
+		map[column] = Gen1Layout.DIPLOMA_YELLOW_TOP[column % 2]
+	for row: int in ROWS:
+		for column: int in [0, COLUMNS - 1]:
+			map[row * Gen1Lcd.MAP_SIDE + column] = Gen1Layout.DIPLOMA_YELLOW_SIDE[row % 2]
+	map[0] = 0
+	map[COLUMNS - 1] = 0
+
+
+## `DrawPlayerCharacter`, then `.adjustPlayerGfxLoop` over every slot.
+func _gen1_player_sprite(lcd: Gen1Lcd) -> void:
+	var tile: int = 0
+	for row: int in Gen1Opening.TITLE_PLAYER_ROWS:
+		for column: int in Gen1Opening.TITLE_PLAYER_COLUMNS:
+			lcd.set_sprite(
+				tile, Gen1Opening.TITLE_PLAYER_AT.y + row * TILE,
+				Gen1Opening.TITLE_PLAYER_AT.x + column * TILE + Gen1Layout.DIPLOMA_PLAYER_SHIFT,
+				tile, Gen1Lcd.OAM_PRIO
+			)
+			tile += 1
+
+
+## `PlaceString`: `next` drops two rows and `PlaceNextChar` spells `#` out.
+func _gen1_place(lcd: Gen1Lcd, at: Vector2i, codes: PackedByteArray) -> void:
+	var cell: Vector2i = at
+	for code: int in codes:
+		if code == Gen1Text.NEXT_LINE:
+			cell = Vector2i(at.x, cell.y + 2)
+			continue
+		var word: String = String(Gen1Text.CONTROL_CHARACTERS.get(code, ""))
+		var tiles: PackedByteArray = Gen1Text.encode(word) if not word.is_empty() \
+			and not word.begins_with("<") else PackedByteArray([code])
+		for tile: int in tiles:
+			if cell.x < COLUMNS and cell.y < ROWS:
+				lcd.maps[0][cell.y * Gen1Lcd.MAP_SIDE + cell.x] = tile
+			cell.x += 1

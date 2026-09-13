@@ -175,6 +175,7 @@ const OPENING_TILE_SHEETS: Dictionary = {
 	"title_player": {"pin": "title_player_tiles", "tiles": Gen1Layout.TITLE_PLAYER_TILES, "first_code": 0, "bits": 2},
 	"title_logo_corner": {"pin": "title_logo_corner", "tiles": Gen1Layout.TITLE_LOGO_CORNER_TILES, "first_code": 0, "bits": 2},
 	"slots_1": {"pin": "slots_tiles_1", "tiles": Gen1Layout.SLOTS_TILES_1, "first_code": 0, "bits": 2},
+	"diploma_gfx": {"pin": "diploma_gfx", "tiles": Gen1Layout.DIPLOMA_GFX_TILES, "first_code": 0, "bits": 2},
 	"slots_2": {"pin": "slots_tiles_2", "tiles": Gen1Layout.SLOTS_TILES_2, "first_code": 0, "bits": 2},
 	"title_pikachu_bg": {"pin": "title_pikachu_bg", "tiles": Gen1Layout.TITLE_PIKACHU_BG_TILES, "first_code": 0, "bits": 2},
 	"title_pikachu_ob": {"pin": "title_pikachu_ob", "tiles": Gen1Layout.TITLE_PIKACHU_OB_TILES, "first_code": 0, "bits": 2},
@@ -1098,6 +1099,7 @@ func import_rom(
 		"credits": read_credits(rom, layout),
 		"opening": read_opening(rom, layout),
 		"slots": read_slots(rom, layout),
+		"diploma": read_diploma(rom, layout),
 		"slots_text": _import_slots_text(rom, layout),
 		"vending": _import_vending(rom, layout, items),
 		"prizes": _import_prizes(rom, layout),
@@ -1818,6 +1820,20 @@ static func read_tile_id_list(rom: RomFile, layout: Dictionary, index: int) -> D
 
 
 ## `PAL_SET`'s four palettes as `SuperPalettes` rows.
+## `DisplayDiploma`'s four strings as raw codes; Red's `DiplomaEmptyText` is skipped.
+static func read_diploma(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var strings: Array = []
+	var at: int = int(layout["diploma_strings"])
+	while strings.size() < Gen1Layout.DIPLOMA_STRINGS:
+		var codes: PackedByteArray = _bytes_until(
+			rom, at, Gen1Text.TERMINATOR, Gen1Layout.DIPLOMA_STRING_MAX
+		)
+		if not codes.is_empty():
+			strings.append(Array(codes))
+		at += codes.size() + 1
+	return {"strings": strings}
+
+
 ## `LoadSlotMachineTiles`' map and the three wheels, with `SetPal_Slots`' packets:
 ## the four palettes flattened the way `GameData.slots_palette` indexes them.
 static func read_slots(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -2412,6 +2428,13 @@ func _import_pics(
 	)
 	for slot: int in PLAYER_FRONTPICS.size():
 		_decode_pic(codec, rom, int(layout[PLAYER_FRONTPICS[slot]]), player_front, slot)
+	var special_front: Dictionary = PokeTiles.new_atlas(
+		Gen1Layout.FRONTPIC_MAX_TILES, Gen1Layout.SPECIAL_PICS.size()
+	)
+	var special_slot: int = 0
+	for name: String in Gen1Layout.SPECIAL_PICS.values():
+		_decode_pic(codec, rom, int(layout["pic_%s" % name]), special_front, special_slot)
+		special_slot += 1
 
 	# A wrong offset decodes nothing, so an atlas short of a cell is a bad pin.
 	var wanted: Dictionary = {
@@ -2419,10 +2442,12 @@ func _import_pics(
 		"trainers": Gen1Layout.TRAINER_CLASS_COUNT,
 		"player_back": backpics.size(),
 		"player_front": PLAYER_FRONTPICS.size(),
+		"special_front": Gen1Layout.SPECIAL_PICS.size(),
 	}
 	var atlases: Dictionary = {
 		"front": front, "back": back, "trainers": trainers,
 		"player_back": player_back, "player_front": player_front,
+		"special_front": special_front,
 	}
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}

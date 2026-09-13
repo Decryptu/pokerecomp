@@ -2,13 +2,9 @@ class_name Gen2CardFlipScreen
 extends Control
 
 ## `_CardFlip`'s own loop, on the overworld's pump. [Gen2CardFlip] owns the rules
-## and [Gen2CardFlipPage] the picture; this is `.MasterLoop`, one pass a frame,
-## with the boxes answered where the cartridge's blocking calls stood. Two things
-## a screen would otherwise get wrong: `YesNoBox` spends frames inside a state, so
-## nothing deals and no coin is paid while either box is up, while
-## `.ChooseACard`'s toggle reads the joypad on frames the loop is still spending;
-## and `WaitSFX` is the driver's rather than a frame count, so a screen with no
-## player waits nothing.
+## and [Gen2CardFlipPage] the picture. `YesNoBox` spends frames inside a state,
+## `.ChooseACard`'s toggle reads the joypad on frames the loop is still spending,
+## and `WaitSFX` is the driver's, so a screen with no player waits nothing.
 
 signal closed(coins: int)
 signal sfx_requested(index: int, waited: bool)

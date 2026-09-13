@@ -2,10 +2,8 @@ class_name Gen2SlotMachinePage
 extends RefCounted
 
 ## `_SlotMachine`'s screen: `SlotsTilemap` under the reels' objects, node-free.
-## The reels are objects, which is why one can sit between two symbols;
-## `.InitGFX` sets `B_LCDC_OBJ_SIZE`, so a symbol is two OAM entries; an
-## object's palette is its tile number shifted twice, so `SLOTS_STARYU` ($14)
-## draws in object palette 5; the bet lights are four cells each, thirteen apart.
+## `.InitGFX` sets `B_LCDC_OBJ_SIZE`, so a symbol is two OAM entries, and an
+## object's palette is its tile number shifted twice.
 
 const TILE: int = Gen2Font.TILE
 const SCREEN_COLUMNS: int = Gen2Layout.SLOTS_TILEMAP_COLUMNS

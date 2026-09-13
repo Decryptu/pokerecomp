@@ -3971,6 +3971,8 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"destination_warp": &"_gen1_node_destination_warp",
 	"diploma": &"_gen1_node_diploma",
 	"slot_machine": &"_gen1_node_slot_machine",
+	"picture": &"_gen1_node_picture",
+	"help_menu": &"_gen1_node_help_menu",
 	"ss_anne_leaves": &"_gen1_node_ss_anne_leaves",
 	"screen_tile": &"_gen1_node_screen_tile",
 	"name_item": &"_gen1_node_name_item",
@@ -4508,6 +4510,30 @@ func _gen1_node_diploma(_node: Dictionary, steps: Array, _run: Dictionary) -> bo
 	steps.append({"type": &"request", "values": {
 		"kind": &"diploma_requested", "values": {"printing": false},
 	}})
+	return true
+
+
+## `LinkCableHelp`'s `.linkHelpLoop`: the menu again after a row's own text.
+func _gen1_node_help_menu(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({
+		"type": &"request", "replies": node["replies"], "quit": node["quit"],
+		"values": {"kind": &"gen1_menu_requested", "values": {
+			"box": node["box"], "rows": node["rows"], "grid": node["grid"],
+			"text": String(node["prompt"]),
+		}},
+	})
+	return true
+
+
+## `DisplayMonFrontSpriteInBox`: the box up under `WaitForTextScrollButtonPress`.
+func _gen1_node_picture(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var shown: Dictionary = {"type": &"pokemon_picture_requested"}
+	if node.has("special"):
+		shown["special"] = String(node["special"])
+	else:
+		shown["pokemon"] = int(node["species"])
+	steps.append({"type": &"button", "events": [shown]})
+	steps.append({"type": &"event", "event": {"type": &"pokemon_picture_closed"}})
 	return true
 
 
@@ -6766,6 +6792,12 @@ func _gen1_waiting_result(step: Dictionary) -> Dictionary:
 		}
 	if type == &"choice":
 		return {"ok": true, "status": &"waiting", "event": {"type": &"choice"}}
+	## `WaitForTextScrollButtonPress` over nothing printed.
+	if type == &"button":
+		return {
+			"ok": true, "status": &"waiting", "event": {"type": &"button", "box": false},
+			"events": (step.get("events", []) as Array).duplicate(true),
+		}
 	## A counted wait and whatever it starts on the frame it opens on.
 	if type == &"wait":
 		return {
@@ -6882,6 +6914,9 @@ func _gen1_kept(step: Dictionary, events: Array) -> bool:
 			return true
 		&"npc_trade":
 			state.apply_changes({}, {}, {"npc_trades": {int(step["trade_id"]): true}})
+			return true
+		&"event":
+			events.append((step["event"] as Dictionary).duplicate(true))
 			return true
 	return _gen1_drawn(step, events)
 
@@ -7140,13 +7175,8 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		_gen1_ride_elevator(result)
 	elif step.has("slot_machine") and result.has("coins"):
 		_gen1_steps.push_front({"type": &"coins", "amount": int(result["coins"])})
-	elif step.has("list_menu"):
-		var listed: Array = step["rows"]
-		var chosen: int = int(result.get("row", -1))
-		_gen1_steps = ([
-			{"type": &"text", "text": String((listed[chosen] as Dictionary)["text"])}, step,
-		] if chosen >= 0 and chosen < listed.size() \
-			else (step["done"] as Array).duplicate(true)) + _gen1_steps
+	elif step.has("replies") or step.has("list_menu"):
+		_gen1_steps = _gen1_menu_answered(step, int(result.get("row", -1))) + _gen1_steps
 	elif step.has("answers"):
 		var answers: Array = step["answers"]
 		var row: int = int(result.get("row", -1))
@@ -7162,6 +7192,18 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		] as Array).duplicate(true) + _gen1_steps
 	_gen1_battle_won(step, result)
 	return _gen1_result()
+
+
+func _gen1_menu_answered(step: Dictionary, chosen: int) -> Array:
+	if step.has("replies"):
+		var replies: Array = step["replies"]
+		if chosen < 0 or chosen >= replies.size() or chosen in (step["quit"] as Array):
+			return []
+		return [{"type": &"text", "text": String(replies[chosen])}, step]
+	var listed: Array = step["rows"]
+	if chosen < 0 or chosen >= listed.size():
+		return (step["done"] as Array).duplicate(true)
+	return [{"type": &"text", "text": String((listed[chosen] as Dictionary)["text"])}, step]
 
 
 ## The side a staged request came back on, with its answer on the run.
@@ -7376,6 +7418,8 @@ func pending_script_input() -> Dictionary:
 	var box: Dictionary = _gen1_step(&"text")
 	if not box.is_empty():
 		return {"type": &"text", "text": String(box["text"])}
+	if not _gen1_step(&"button").is_empty():
+		return {"type": &"button"}
 	var wait: Dictionary = _gen1_step(&"wait")
 	if not wait.is_empty():
 		return (wait["values"] as Dictionary).duplicate(true)

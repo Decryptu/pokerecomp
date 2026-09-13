@@ -2420,7 +2420,18 @@ func unown_puzzle_palette() -> PackedColorArray:
 ## its page number. A cache imported before format 84 carries neither, which is
 ## what `has_diploma` answers for.
 func has_diploma() -> bool:
-	return not (_diploma.get("page1", []) as Array).is_empty()
+	return not (_diploma.get("page1", []) as Array).is_empty() \
+		or not (_diploma.get("strings", []) as Array).is_empty()
+
+
+func gen1_diploma_strings() -> Array[PackedByteArray]:
+	var out: Array[PackedByteArray] = []
+	for codes: Variant in _diploma.get("strings", []) as Array:
+		var row := PackedByteArray()
+		for code: Variant in codes as Array:
+			row.append(int(code))
+		out.append(row)
+	return out
 
 
 func diploma_indices() -> PackedByteArray:
@@ -3315,6 +3326,15 @@ func _supplied_pic(art: Variant) -> Dictionary:
 ## `GetAnimatedEnemyFrontpic` copies out of the run behind the picture. Empty
 ## for a cartridge with no pic animation and for a mod's own supplied picture,
 ## neither of which has frames to draw.
+## One of `GetMonHeader`'s three pictures outside the species run, by name.
+func gen1_special_pic(name: String) -> Dictionary:
+	var slot: int = Gen1Layout.SPECIAL_PICS.values().find(name)
+	var cell: int = int(atlas("special_front").get("cell", 0))
+	if slot < 0 or cell <= 0:
+		return {}
+	return {"atlas": "special_front", "slot": slot, "width": cell, "height": cell}
+
+
 func species_pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	if pic_animation(number, unown_form).is_empty():
 		return {}

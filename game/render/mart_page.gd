@@ -486,7 +486,7 @@ func render_gen1_script_menu(state: Dictionary) -> Image:
 	) - at
 	for index: int in rows.size():
 		_text(indices, width, String((rows[index] as Dictionary).get("text", "")),
-			entries + Vector2i(0, index * ROW_STEP))
+			_gen1_row_at(rows[index], "at", entries + Vector2i(0, index * ROW_STEP), at))
 	for label: Dictionary in state.get("labels", []) as Array:
 		var placed := Vector2i(int(label.get("x", 0)), int(label.get("y", 0))) - at
 		for line: int in (label.get("rows", []) as Array).size():
@@ -494,10 +494,20 @@ func render_gen1_script_menu(state: Dictionary) -> Image:
 				placed + Vector2i(0, line * ROW_STEP))
 	var cursor: int = int(state.get("cursor", -1))
 	if cursor >= 0 and cursor < rows.size():
-		_code(indices, width, CURSOR_CODE,
-			Vector2i(entries.x - 1, entries.y + cursor * ROW_STEP))
+		_code(indices, width, CURSOR_CODE, _gen1_row_at(
+			rows[cursor], "cursor", Vector2i(entries.x - 1, entries.y + cursor * ROW_STEP), at
+		))
 	_blit_panel(image, indices, size, at)
 	return image
+
+
+## A row's own cell under [param key], or [param fallback] down the one column.
+static func _gen1_row_at(
+	row: Dictionary, key: String, fallback: Vector2i, corner: Vector2i
+) -> Vector2i:
+	if row.has(key):
+		return Vector2i(int(row[key][0]), int(row[key][1])) - corner
+	return fallback
 
 
 ## `CeladonPrizeMenu`'s box: `TextBoxBorder hlcoord 0, 2` at eight by sixteen,

@@ -141,6 +141,8 @@ const PIC_BANK_THRESHOLDS: Array[int] = [0x1F, 0x4A, 0x74, 0x99]
 const PIC_BANKS: Array[int] = [0x09, 0x0A, 0x0B, 0x0C, 0x0D]
 const PIC_INDEX_MEW: int = 0x15
 const PIC_INDEX_FOSSIL_KABUTOPS: int = 0xB6
+## `GetMonHeader`'s if-chain, in `special_front`'s slot order.
+const SPECIAL_PICS: Dictionary = {0xB6: "fossil_kabutops", 0xB7: "fossil_aerodactyl", 0xB8: "ghost"}
 const PIC_BANK_FOSSIL_KABUTOPS: int = 0x0B
 
 ## `FontGraphics` and `TextBoxGraphics`, copied to `vFont` and `vChars2 tile $60`
@@ -1528,6 +1530,7 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"get_item_quantity", "flag_action", "route23_copy_badge_text", "oaks_aide",
 	"starter_dex", "display_dex_rating",
 	"safari_low_cost", "safari_nag", "name_rater_check_ot", "name_rater_screen",
+	"display_mon_front_sprite_in_box",
 ]
 ## The four of those a `farcall` spends nothing on: no node carries a sound.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
@@ -1605,6 +1608,7 @@ const SPRITE_SLOTS: int = 16
 ## The stores a row is walked past: nothing here reads any of them.
 const SCRIPT_SILENT_STORES: Array[String] = [
 	"joy_held", "auto_text_box_control", "joy_ignore", "update_sprites_enabled",
+	"auto_bg_transfer",
 	## A forced walk writes the pad bit over the player's own facing byte, and
 	## the `walk` node behind it carries the direction anyway.
 	"facing_direction",
@@ -1764,6 +1768,48 @@ const TRASH_TABLE_TAIL: int = 256
 const TRASH_TABLE_TAIL_YELLOW: int = 512
 const TRASH_FIRST_MASK: int = 0x0E
 
+## `DisplayDiploma`: `DiplomaTextPointersAndCoords`' cells, `CableClub_TextBoxBorder`'s
+## tiles over the sheet at $76 and `CircleTile` at $70; Yellow's `DisplayDiplomaTop`
+## alternates two `DiplomaGraphics` tiles along the top and two down each side.
+const DIPLOMA_STRINGS: int = 4
+const DIPLOMA_STRING_MAX: int = 80
+const DIPLOMA_STRINGS_AT: Array[Vector2i] = [
+	Vector2i(5, 2), Vector2i(3, 4), Vector2i(2, 6), Vector2i(9, 16),
+]
+const DIPLOMA_NAME_AT: Vector2i = Vector2i(10, 4)
+const DIPLOMA_BOX_TILES: int = 0x76
+const DIPLOMA_BORDER: Dictionary = {
+	"top_left": 0x78, "top": 0x79, "top_right": 0x7A, "left": 0x7B,
+	"right": 0x77, "bottom_left": 0x7C, "bottom": 0x76, "bottom_right": 0x7D,
+}
+const DIPLOMA_CIRCLE_CODE: int = 0x70
+const DIPLOMA_CIRCLE_TILE: int = 22
+const DIPLOMA_GFX_TILES: int = 127
+const DIPLOMA_YELLOW_TOP: Array[int] = [0x02, 0x01]
+const DIPLOMA_YELLOW_SIDE: Array[int] = [0x04, 0x03]
+const DIPLOMA_PLAYER_SHIFT: int = 33
+const DIPLOMA_OBP0: int = 0x90
+
+## The two looping menus: `TextBoxBorder`'s box, each `PlaceString` column with
+## `wTopMenuItemX` beside it, the text table a row prints from, the quit rows.
+const HELP_MENUS: Dictionary = {
+	"link_cable_help": {
+		"text_1": "link_cable_help_text_1", "text_2": "link_cable_help_text_2",
+		"box": {"x": 0, "y": 0, "width": 13, "height": 8},
+		"columns": [{"strings": "how_to_link_text", "at": [2, 2], "cursor_x": 1}],
+		"replies": "link_cable_info_texts", "quit": [3],
+	},
+	"school_blackboard": {
+		"text_1": "school_blackboard_text_1", "text_2": "school_blackboard_text_2",
+		"box": {"x": 0, "y": 0, "width": 10, "height": 6},
+		"columns": [
+			{"strings": "status_ailment_text_1", "at": [1, 2], "cursor_x": 1},
+			{"strings": "status_ailment_text_2", "at": [6, 2], "cursor_x": 6},
+		],
+		"replies": "blackboard_status_pointers", "quit": [5],
+	},
+}
+const HELP_MENU_ROW_STEP: int = 2
 ## `StartSlotMachine`'s three refusal arguments, each a `TextPredefs` row.
 const SLOTS_REFUSALS: Dictionary = {
 	0xFD: "slots_out_of_order", 0xFE: "slots_out_to_lunch", 0xFF: "slots_someones_keys",
@@ -2376,6 +2422,22 @@ const RED_BLUE: Dictionary = {
 	## `StartSlotMachine`, its art, wheels, packets, texts and the bank
 	## `AbleToPlaySlotsCheck` names its two refusals in.
 	"start_slot_machine": 0x37E2D,
+	"pic_fossil_kabutops": 0x2F9E8,
+	"pic_fossil_aerodactyl": 0x36536,
+	"pic_ghost": 0x366B5,
+	"display_mon_front_sprite_in_box": 0x5DBD9,
+	"diploma_strings": 0x56798,
+	"link_cable_help": 0x5DC29,
+	"link_cable_help_text_1": 0x5DC9E,
+	"link_cable_help_text_2": 0x5DCA3,
+	"how_to_link_text": 0x5DCA8,
+	"link_cable_info_texts": 0x5DCD8,
+	"school_blackboard": 0x5DCED,
+	"school_blackboard_text_1": 0x5DDA2,
+	"school_blackboard_text_2": 0x5DDA7,
+	"status_ailment_text_1": 0x5DDAC,
+	"status_ailment_text_2": 0x5DDBB,
+	"blackboard_status_pointers": 0x5DDCC,
 	"slots_tiles_1": 0x37A51,
 	"slots_tiles_2": 0x78BDE,
 	"slots_tilemap": 0x378F5,
@@ -2418,6 +2480,7 @@ const RED_BLUE: Dictionary = {
 	"sprite_facing_hram": 0xFF8D,
 	"joy_pressed": 0xFFB3,
 	"new_sound_id": 0xC0EE,
+	"auto_bg_transfer": 0xFFBA,
 	"audio_rom_bank": 0xC0EF,
 	"audio_saved_rom_bank": 0xC0F0,
 	"status_flags_5": 0xD730,
@@ -2873,6 +2936,23 @@ const YELLOW: Dictionary = {
 	"bookshelf_tiles": 0x0FA19,
 	"text_predefs": 0x03F67,
 	"start_slot_machine": 0x37ED1,
+	"pic_fossil_kabutops": 0x2FB92,
+	"pic_fossil_aerodactyl": 0x367A1,
+	"pic_ghost": 0x36920,
+	"display_mon_front_sprite_in_box": 0x5DC3E,
+	"diploma_strings": 0xE9A73,
+	"diploma_gfx": 0xE9BFA,
+	"link_cable_help": 0x5DC8E,
+	"link_cable_help_text_1": 0x5DD02,
+	"link_cable_help_text_2": 0x5DD07,
+	"how_to_link_text": 0x5DD0C,
+	"link_cable_info_texts": 0x5DD3C,
+	"school_blackboard": 0x5DD51,
+	"school_blackboard_text_1": 0x5DE06,
+	"school_blackboard_text_2": 0x5DE0B,
+	"status_ailment_text_1": 0x5DE10,
+	"status_ailment_text_2": 0x5DE1F,
+	"blackboard_status_pointers": 0x5DE30,
 	"slots_tiles_1": 0x37C81,
 	"slots_tiles_2": 0x78C17,
 	"slots_tilemap": 0x37B25,
@@ -2911,6 +2991,7 @@ const YELLOW: Dictionary = {
 	"sprite_facing_hram": 0xFF8D,
 	"joy_pressed": 0xFFB3,
 	"new_sound_id": 0xC0EE,
+	"auto_bg_transfer": 0xFFBA,
 	"audio_rom_bank": 0xC0EF,
 	"audio_saved_rom_bank": 0xC0F0,
 	"status_flags_5": 0xD72F,

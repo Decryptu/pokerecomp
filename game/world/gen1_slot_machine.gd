@@ -4,8 +4,7 @@ extends Gen2SlotMachine
 ## `PromptUserToPlaySlots` (engine/slots/slot_machine.asm), one VBlank an
 ## [method advance], drawn into a [Gen1Lcd]. A wheel's offset is one byte past
 ## the row it has drawn, so it stops on an odd offset and shows three whole
-## symbols; the odds are rolled once a bet and only decide whether wheel 3 rolls
-## on past a match; every box, menu and cursor is a tile write.
+## symbols; the odds only decide whether wheel 3 rolls on past a match.
 
 ## `dw SLOTS7` and its neighbours: the low byte is the bottom row's first tile,
 ## the high byte the top row's, and `wSlotMachineWinningSymbol` is the high less two.
@@ -187,9 +186,9 @@ static func create_gen1(
 	machine._lucky = lucky
 	machine._chance = CHANCE_LUCKY if lucky else CHANCE_NORMAL
 	for wheel: int in Gen1Layout.SLOTS_WHEELS:
-		var state := Wheel.new()
-		state.table = data.slots_reel(wheel)
-		machine._wheels.append(state)
+		var reel := Wheel.new()
+		reel.table = data.slots_reel(wheel)
+		machine._wheels.append(reel)
 	machine._load_screen()
 	machine._white_out()
 	machine._wait = WHITE_OUT_FRAMES
@@ -702,8 +701,8 @@ func _anim_wheels() -> void:
 
 
 ## `SlotMachine_LightBalls` and `..._PutOutLitBalls`: the rows a bet reaches.
-func _light_balls(tile: int, bet: int) -> void:
-	for level: int in mini(bet, BALL_ROWS.size()):
+func _light_balls(tile: int, wager: int) -> void:
+	for level: int in mini(wager, BALL_ROWS.size()):
 		for row: int in BALL_ROWS[level]:
 			for column: int in BALL_COLUMNS:
 				_write(Vector2i(column, row), tile)

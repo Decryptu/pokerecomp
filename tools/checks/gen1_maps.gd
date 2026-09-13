@@ -196,25 +196,24 @@ const TOGGLE_CENSUS: Dictionary = {
 
 ## One row of each list stands on UNUSED_MAP_6F, which has no header and so no
 ## record: the table holds 217 rows on Red and Blue and 213 on Yellow. Silent:
-## the four cable club Game Boys, the three `DisplayMonFrontSpriteInBox`
-## pictures, the blackboard, the two link cable helps and, on Red and Blue, the
-## three bench guys `BenchGuyTextPointers` misaligns; Yellow prints two pictures.
+## the four cable club Game Boys, which read `hSerialConnectionStatus`, and on
+## Red and Blue the three bench guys `BenchGuyTextPointers` misaligns.
 const HIDDEN_CENSUS: Dictionary = {
-	&"red": {"rows": 216, "silent": 13, "text": 435, "branch": 117, "flag": 72,
-		"facing": 128, "name_item": 53, "give_item": 53, "facility": 21,
+	&"red": {"rows": 216, "silent": 7, "text": 441, "branch": 117, "flag": 72,
+		"facing": 129, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66},
-	&"blue": {"rows": 216, "silent": 13, "text": 435, "branch": 117, "flag": 72,
-		"facing": 128, "name_item": 53, "give_item": 53, "facility": 21,
+		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3},
+	&"blue": {"rows": 216, "silent": 7, "text": 441, "branch": 117, "flag": 72,
+		"facing": 129, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66},
-	&"yellow": {"rows": 212, "silent": 12, "text": 437, "branch": 118, "flag": 73,
-		"facing": 124, "name_item": 54, "give_item": 54, "facility": 17,
+		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3},
+	&"yellow": {"rows": 212, "silent": 4, "text": 445, "branch": 118, "flag": 73,
+		"facing": 125, "name_item": 54, "give_item": 54, "facility": 17,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "volatile": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66},
+		"emote": 66, "slot_machine": 66, "picture": 5, "help_menu": 3},
 }
 ## Of `BookshelfTileIDs`' 17 rows, all but one decode: the Indigo Plateau
 ## statues read `wXCoord` for which of their two boxes they answer with.
@@ -855,6 +854,12 @@ func _hidden_node_fault(node: Dictionary, number: int) -> String:
 	if op in ["give_item", "has_item", "name_item"] \
 		and _r.data.item_name(int(node["item"])).is_empty():
 		return "names item %d" % int(node["item"])
+	if op == "help_menu" and ((node["rows"] as Array).size() != (node["replies"] as Array).size()
+		or (node["rows"] as Array).size() > 6):
+		return "draws a menu of %d rows" % (node["rows"] as Array).size()
+	if op == "picture" and (_r.data.gen1_special_pic(String(node.get("special", ""))).is_empty()
+		if node.has("special") else _r.data.species_pic(int(node["species"])).is_empty()):
+		return "shows a picture the cache has not got: %s" % [node]
 	return ""
 
 

@@ -2,18 +2,13 @@ class_name Gen2SlotMachineScreen
 extends Control
 
 ## `_SlotMachine`'s own loop, on the overworld's pump. [Gen2SlotMachine] owns the
-## rules and [Gen2SlotMachinePage] the picture; this is `SlotsLoop`, one pass a
-## frame. Three things a screen would otherwise get wrong: `Slots_AskBet` and
-## `Slots_AskPlayAgain` spend frames inside an action, so nothing spins while
-## either box is up, which is what `prompt()` is for; a press is answered where it
-## lands as well as on the frame, `hJoypadSum` being a sum rather than a sample;
-## and `WaitSFX` is the driver's rather than a frame count, so a screen with no
-## player waits nothing.
+## rules and [Gen2SlotMachinePage] the picture. `Slots_AskBet` and
+## `Slots_AskPlayAgain` spend frames inside an action, which is what `prompt()`
+## is for, and `WaitSFX` is the driver's, so a screen with no player waits nothing.
 
 signal closed(coins: int)
 signal sfx_requested(index: int, waited: bool)
 signal music_requested(index: int)
-## `wMuteAudioAndPauseMusic`, which a Generation 1 payout holds up.
 signal music_pause_requested(paused: bool)
 
 var _machine: Gen2SlotMachine = null

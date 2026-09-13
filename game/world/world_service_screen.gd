@@ -850,11 +850,12 @@ func _open_script_menu(values: Dictionary) -> void:
 
 
 func _press_script_menu(button: int) -> void:
-	var rows: Array = _script_menu.get("rows", [])
 	if button == PokeButton.UP or button == PokeButton.DOWN:
-		_cursor = clampi(
-			_cursor + (-1 if button == PokeButton.UP else 1), 0, maxi(rows.size() - 1, 0)
-		)
+		_cursor = _script_menu_moved(button == PokeButton.UP)
+		_render_script_menu()
+		return
+	if button == PokeButton.LEFT or button == PokeButton.RIGHT:
+		_cursor = _script_menu_sideways(button == PokeButton.LEFT)
 		_render_script_menu()
 		return
 	if button == PokeButton.B:
@@ -862,6 +863,31 @@ func _press_script_menu(button: int) -> void:
 		return
 	if button == PokeButton.A:
 		_finish_runtime({"ok": true, "row": _cursor})
+
+
+## `HandleMenuInput` with no wrap, down one column of the grid the menu names.
+func _script_menu_moved(up: bool) -> int:
+	var column: Array = _script_menu_column()
+	var at: int = column.find(_cursor)
+	return int(column[clampi(at + (-1 if up else 1), 0, column.size() - 1)])
+
+
+## The blackboard's LEFT and RIGHT: `wMenuItemOffset` moves, `wCurrentMenuItem` stands.
+func _script_menu_sideways(left: bool) -> int:
+	var grid: Array = _script_menu.get("grid", [])
+	var column: Array = _script_menu_column()
+	var index: int = grid.find(column)
+	if index < 0:
+		return _cursor
+	var target: Array = grid[clampi(index + (-1 if left else 1), 0, grid.size() - 1)]
+	return int(target[mini(column.find(_cursor), target.size() - 1)])
+
+
+func _script_menu_column() -> Array:
+	for column: Variant in _script_menu.get("grid", []) as Array:
+		if (column as Array).has(_cursor):
+			return column
+	return range((_script_menu.get("rows", []) as Array).size())
 
 
 func _render_script_menu() -> void:

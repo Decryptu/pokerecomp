@@ -422,8 +422,7 @@ func set_low_health_alarm(on: bool) -> void:
 	_engine.low_health_alarm = 0
 
 
-## `wMuteAudioAndPauseMusic`: set, the next driver frame silences the music
-## channels and holds them until it is cleared; an effect still plays over it.
+## `wMuteAudioAndPauseMusic`: the music channels held, an effect still playing.
 func set_gen1_music_paused(paused: bool) -> void:
 	if _generation == RomRegistry.GEN1:
 		_gen1.mute_audio_and_pause_music = 1 if paused else 0

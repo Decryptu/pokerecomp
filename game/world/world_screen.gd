@@ -7819,7 +7819,7 @@ func _event_field_move_confirmed(event: Dictionary) -> void:
 
 
 func _event_show_picture(event: Dictionary) -> void:
-	_show_story_picture(int(event.get("pokemon", 0)))
+	_show_story_picture(int(event.get("pokemon", 0)), String(event.get("special", "")))
 
 
 func _event_screen_shake(event: Dictionary) -> void:
@@ -7857,7 +7857,7 @@ func _apply_result_status(result: Dictionary, flags: Dictionary) -> StringName:
 	if event_type == &"text":
 		return _apply_text_pause(event, flags)
 	if event_type == &"button":
-		if _text_box != null:
+		if _text_box != null and bool(event.get("box", true)):
 			_text_box.visible = true
 		_script_prompt = "A: continue script"
 		return &"none"
@@ -8602,11 +8602,12 @@ func _hide_pikapic() -> void:
 		_renderer.refresh()
 
 
-func _show_story_picture(species: int) -> void:
+func _show_story_picture(species: int, special: String = "") -> void:
 	if _data == null or _world == null:
 		return
 	var image: Image = Gen2PokepicPage.render(
-		_data, species, _world.current_map, _render_time_of_day()
+		_data, species, _world.current_map, _render_time_of_day(),
+		_data.gen1_special_pic(special), _world.gen1_last_map()
 	)
 	if image == null:
 		return

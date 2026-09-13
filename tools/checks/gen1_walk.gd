@@ -310,6 +310,17 @@ const COINS_GIVEN: int = 20
 const GENTLEMAN_PAID: String = "20 coins!"
 const GENTLEMAN_REFUSED: String = "You've got your"
 
+## `hidden_event 3, 0, PrintBlackboardLinkCableText`, faced up from below.
+const VIRIDIAN_SCHOOL: int = 43
+const BLACKBOARD_BESIDE := Vector2i(3, 1)
+const BLACKBOARD_FIRST: String = "The blackboard"
+const BLACKBOARD_QUESTION: String = "Which heading do"
+const BLACKBOARD_BURN: String = "A burn reduces"
+
+## `hidden_event 2, 3, AerodactylFossil`, faced up from the cell below it.
+const MUSEUM_FOSSIL_BESIDE := Vector2i(2, 4)
+const FOSSIL_LINE: String = "AERODACTYL Fossil"
+
 ## `hidden_event 18, 15`, the list's first row, and the out-of-order machine.
 const SLOTS_BESIDE := Vector2i(17, 15)
 const SLOTS_BROKEN_BESIDE := Vector2i(5, 12)
@@ -1610,6 +1621,52 @@ func _check_a_slot_machine() -> void:
 			row[0], int(row[1]), int(row[2]), said,
 		])
 	_r.note("gen1 walk a slot machine: asked, refused three ways and paid back")
+	_check_a_fossil_picture()
+
+
+## `AerodactylFossil`: the picture under a press, then the fossil's own line.
+func _check_a_fossil_picture() -> void:
+	var world: Gen2WorldAPI = _facing_up(MUSEUM_1F, MUSEUM_FOSSIL_BESIDE)
+	if world == null:
+		return
+	var results: Array = world.interact()
+	var shown: Dictionary = _first_event(results, &"pokemon_picture_requested")
+	_r.check(String(shown.get("special", "")) == "fossil_aerodactyl"
+		and StringName(world.pending_script_input().get("type", &"")) == &"button",
+		"the fossil case showed %s and waits on %s." % [shown, world.pending_script_input()])
+	results = world.run_event_queue(true)
+	_r.check(not _first_event(results, &"pokemon_picture_closed").is_empty()
+		and _event_text(results).begins_with(FOSSIL_LINE),
+		"the press left %s." % [results])
+	_r.note("gen1 walk the museum's AERODACTYL fossil: a picture, a press, its line")
+	_check_the_blackboard()
+
+
+## `ViridianSchoolBlackboard`: a heading's text, the menu again, QUIT the way out.
+func _check_the_blackboard() -> void:
+	var world: Gen2WorldAPI = _facing_up(VIRIDIAN_SCHOOL, BLACKBOARD_BESIDE)
+	if world == null:
+		return
+	var said: String = _event_text(world.interact())
+	_r.check(said.begins_with(BLACKBOARD_FIRST), "the blackboard said %s." % [said])
+	var request: Dictionary = _runtime_request(world.run_event_queue(true))
+	var values: Dictionary = request.get("values", {})
+	if not _r.check(
+		StringName(request.get("kind", &"")) == &"gen1_menu_requested"
+			and (values.get("rows", []) as Array).size() == 6
+			and (values.get("grid", []) as Array).size() == 2
+			and String(values.get("text", "")).begins_with(BLACKBOARD_QUESTION),
+		"the blackboard opened %s." % [request]
+	):
+		return
+	said = _event_text(world.complete_runtime_request({"ok": true, "row": 3}))
+	_r.check(said.begins_with(BLACKBOARD_BURN), "BRN read %s." % [said])
+	request = _runtime_request(world.run_event_queue(true))
+	_r.check(StringName(request.get("kind", &"")) == &"gen1_menu_requested",
+		"the menu did not come back after BRN.")
+	_r.check(world.complete_runtime_request({"ok": true, "row": 5}).is_empty()
+		or world.pending_runtime_request().is_empty(), "QUIT did not leave.")
+	_r.note("gen1 walk the blackboard: BRN read and QUIT taken")
 
 
 func _slots_world(cell: Vector2i, coins: int, cases: int) -> Gen2WorldAPI:

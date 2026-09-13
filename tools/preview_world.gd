@@ -220,7 +220,7 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"coins": BOX_REVEAL_FRAMES, &"deal": BOX_REVEAL_FRAMES,
 	&"ticket": BOX_REVEAL_FRAMES, &"day_care": BOX_REVEAL_FRAMES,
 	&"name_rater": BOX_REVEAL_FRAMES,
-	&"poke_flute": BOX_REVEAL_FRAMES,
+	&"poke_flute": BOX_REVEAL_FRAMES, &"script_menu": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
 const BOX_REVEAL_FRAMES: int = 120

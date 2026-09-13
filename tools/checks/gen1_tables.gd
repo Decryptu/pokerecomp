@@ -188,6 +188,34 @@ func _one_game() -> void:
 	_pikachu()
 	_intro()
 	_hall_of_fame()
+	_diploma()
+
+
+## `DisplayDiploma`'s four strings and the page they draw.
+func _diploma() -> void:
+	var data: GameData = _r.data
+	var strings: Array[PackedByteArray] = data.gen1_diploma_strings()
+	if not _r.check(strings.size() == Gen1Layout.DIPLOMA_STRINGS,
+		"the diploma holds %d strings." % strings.size()):
+		return
+	var yellow: bool = data.id == RomRegistry.YELLOW
+	var circle: int = Gen1Layout.DIPLOMA_CIRCLE_CODE if not yellow else 0x10
+	_r.check(strings[0][0] == circle and Gen1Text.decode(strings[0], 1, 7) == "Diploma"
+		and strings[0][strings[0].size() - 1] == circle, "DiplomaText reads %s." % [strings[0]])
+	_r.check(Gen1Text.decode(strings[1], 0, 8) == "Player"
+		and Gen1Text.decode(strings[3], 0, 12) == "GAME FREAK",
+		"the labels read %s and %s." % [Gen1Text.decode(strings[1], 0, 8), Gen1Text.decode(strings[3], 0, 12)])
+	_r.check(Gen1Text.decode(strings[2], 0, 80).count("<NEXT>") == 4
+		and Gen1Text.decode(strings[2], 0, 80).ends_with("POKéDEX."),
+		"DiplomaCongrats reads %s." % Gen1Text.decode(strings[2], 0, 80))
+	var page: Gen2DiplomaPage = Gen2DiplomaPage.from_data(data)
+	var image: Image = page.render(1, "RED") if page != null else null
+	if not _r.check(image != null and image.get_width() == Gen1Lcd.WIDTH, "the diploma will not draw."):
+		return
+	var edge: Color = image.get_pixel(0, Gen1Lcd.TILE * 8)
+	var inside: Color = image.get_pixel(Gen1Lcd.TILE * 4 + 3, Gen1Lcd.TILE * 12 + 3)
+	_r.check(edge != inside, "the border and the page's inside are one colour.")
+	_r.note("gen1 diploma: %d strings, %s" % [strings.size(), "Yellow's own border" if yellow else "the card's border and the player"])
 
 
 func _intro() -> void:

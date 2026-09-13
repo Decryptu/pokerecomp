@@ -1,14 +1,10 @@
 class_name Gen2CardFlip
 extends RefCounted
 
-## `_CardFlip`'s own state (engine/games/card_flip.asm), node-free, and
-## `.MasterLoop`'s side of it. Five things a reading gets wrong: the deck is dealt
-## rather than drawn, `.CheckTheCard` reading a pair fixed at shuffle time;
-## `.ChooseACard`'s toggle is the choice, there being no cursor over the two
-## cards; a bet is one of forty-eight cells and six are unreachable, four of them
-## `.Impossible` entries that lose; the board's marks are drawn one round late;
-## and a shuffle is not a reset, `.Continue` reshuffling only on the twelfth
-## round. Randomness is injected, so a seeded run repeats.
+## `_CardFlip`'s own state (engine/games/card_flip.asm), node-free. The deck is
+## dealt rather than drawn, `.ChooseACard`'s toggle is the choice, six of the
+## forty-eight bet cells are unreachable, the board's marks are drawn one round
+## late, and `.Continue` reshuffles only on the twelfth round.
 
 ## `CARDFLIP_DECK_SIZE`, which is four Pokemon by six levels.
 const DECK_SIZE: int = 24
