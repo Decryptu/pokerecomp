@@ -2,13 +2,11 @@ class_name Gen2BattleTransition
 extends RefCounted
 
 ## `DoBattleTransition` (engine/battle/battle_transition.asm) and Generation 1's
-## `BattleTransition` (engine/battle/battle_transitions.asm): what the overworld
-## does between the encounter and the battle screen. Node-free, so a whole one
-## steps headless, answering with a screen of cells, a DMG palette order and a
-## per-scanline offset. Crystal walks a jumptable an entry a frame and
-## Generation 1 is straight-line, but `BattleTransition_CircleData1` to `...5`
-## are [constant WEDGES] byte for byte and the two half-circle tables cover
-## [constant SPIN_QUADRANTS]' twenty positions.
+## `BattleTransition` (engine/battle/battle_transitions.asm), node-free: a whole
+## one steps headless into cells, a DMG palette order and a per-scanline offset.
+## Crystal walks a jumptable an entry a frame and Generation 1 is straight-line,
+## but `BattleTransition_CircleData1` to `...5` are [constant WEDGES] byte for
+## byte and the two half-circle tables cover [constant SPIN_QUADRANTS].
 
 const COLUMNS: int = 20
 const ROWS: int = 18

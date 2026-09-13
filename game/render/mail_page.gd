@@ -1,14 +1,12 @@
 class_name Gen2MailPage
 extends RefCounted
 
-## `ReadAnyMail` and the ten `Load*MailGFX` routines behind it on the hardware
-## tile grid. Each mail type builds its own VRAM window out of one flat 1bpp run
-## and then writes a tilemap over it, so the page is two transcribed programs per
-## type rather than a picture, which is what makes ten near-identical routines
-## readable and lets `tools/checks/mail.gd` sweep every one. The 1bpp run has one
-## ink level and the three `LoadMailGFX_Color*` write it into plane 0, plane 1 or
-## both, which is why one sheet draws in three shades. PORTRAITMAIL's pic is in
-## the buffer rather than a layer, since `PlaceGraphic` writes it into the tilemap.
+## `ReadAnyMail` and the ten `Load*MailGFX` routines. Each type builds its own
+## VRAM window out of one 1bpp run and writes a tilemap over it, so the page is
+## two transcribed programs per type, which is what `tools/checks/mail.gd`
+## sweeps. The three `LoadMailGFX_Color*` write the one ink level into plane 0,
+## plane 1 or both, which is why one sheet draws in three shades. PORTRAITMAIL's
+## pic is in the buffer, since `PlaceGraphic` writes it into the tilemap.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

@@ -1,12 +1,10 @@
 class_name Gen2BattleAnimData
 extends RefCounted
 
-## The imported battle animation tables, read the way the cartridge reads them.
-## An importer caches a table as a whole region because every pointer inside one
-## is bank-local; this resolves them, an address minus the region's base being an
-## index into its bytes, which is what `add hl, de` does with the bank paged in.
-## Crystal gives each table a region; Generation 1 interleaves all four through
-## bank $1E, so it caches one and [method gen1_pointer] takes the table.
+## The imported battle animation tables. A table is cached as a whole region
+## because every pointer inside one is bank-local: an address minus the region's
+## base indexes its bytes. Generation 1 interleaves all four through bank $1E,
+## so it caches one and [method gen1_pointer] takes the table.
 
 ## `BattleAnimObjects` row fields, in the order `InitBattleAnimation` copies them.
 const OBJECT_FIELDS: Array[StringName] = [

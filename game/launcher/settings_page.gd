@@ -1,12 +1,10 @@
 class_name Gen2SettingsPage
 extends BoxContainer
 
-## Edits [Gen2Options] in five sections: how the launcher looks, how the app
-## behaves, the controls, the rules a run is created with, and the cartridge's
-## own OPTION menu. Every change writes immediately, because a half-applied file
-## is worse than none. One section shows at a time, from a rail beside the rows
-## on a wide window and a strip above them on a narrow one: five cards in one
-## pane was forty focus stops from the first row to the last.
+## Edits [Gen2Options] in five sections, every change written immediately. One
+## section shows at a time, from a rail beside the rows on a wide window and a
+## strip above them on a narrow one: five cards in one pane was forty focus
+## stops from the first row to the last.
 
 signal appearance_changed
 

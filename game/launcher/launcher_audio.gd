@@ -1,12 +1,9 @@
 class_name Gen2LauncherAudio
 extends Node
 
-## The launcher's own sound effects, separate from [Gen2AudioPlayer] because
-## none of these come from a cartridge.
-##
-## Clips are synthesised by `tools/generate_launcher_sfx.gd`. Volume follows the
-## app block's sound setting, and a muted setting silences the launcher without
-## touching the game.
+## The launcher's own sound effects, synthesised by
+## `tools/generate_launcher_sfx.gd`. Volume follows the app block's sound
+## setting, so a muted launcher leaves the game alone.
 
 const CLIPS: Dictionary = {
 	&"hover": preload("res://assets/launcher/sfx/hover.wav"),

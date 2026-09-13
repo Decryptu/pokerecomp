@@ -1,14 +1,12 @@
 class_name Gen2Rules
 extends RefCounted
 
-## Which behaviour a run is played under: the places this project and the
-## cartridge disagree on purpose, and which challenge the run was created under.
-## Separate from [Gen2Options], because a rule changes what the engine DOES and so
-## belongs to the run that produced a save. A flag is edited in Settings and the
-## next new game takes a copy; [member challenge] is chosen when the game is made
-## and never moves again. Every flag is named for the cartridge's behaviour, so a
-## flag that is off is this project's corrected answer and a flag added later
-## defaults to whatever [constant MODE_CURRENT] says.
+## The places this project and the cartridge disagree on purpose, and which
+## challenge the run was created under. Separate from [Gen2Options] because a
+## rule changes what the engine DOES and belongs to the save. A flag is edited
+## in Settings and the next new game takes a copy; [member challenge] never
+## moves. Every flag is named for the cartridge's behaviour, so off is this
+## project's corrected answer and a flag added later takes [constant MODE_CURRENT].
 
 ## Every named flag, mapped to what [constant MODE_CURRENT] does today. The
 ## descriptions belong beside the branch, not here; each key names the

@@ -1,12 +1,11 @@
 class_name Gen2TouchPad
 extends Control
 
-## The on-screen controller: a d-pad, A and B, START and SELECT. It draws what
-## [PokeTouchLayout] places and turns a finger into the same button a key or a pad
-## produces, so no screen has to know a touchscreen exists. Touches are read in
-## [method _input] rather than [method _gui_input] because more than one finger is
-## normal here and the GUI layer only tracks one pointer. In edit mode nothing is
-## pressed and a drag moves a cluster instead, editing the layout in place.
+## The on-screen controller: it draws what [PokeTouchLayout] places and turns a
+## finger into the same button a key produces. Touches are read in
+## [method _input], not [method _gui_input], because the GUI layer tracks one
+## pointer and more than one finger is normal here. In edit mode a drag moves a
+## cluster instead.
 
 const FILL: Color = Color(0.04, 0.06, 0.09, 0.80)
 const FILL_PRESSED: Color = Color(0.30, 0.55, 0.80, 0.95)

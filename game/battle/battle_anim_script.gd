@@ -2,12 +2,10 @@ class_name Gen2BattleAnimScript
 extends RefCounted
 
 ## The battle animation command interpreter (engine/battle_anims/anim_commands.asm).
-## Nothing here draws, plays a sound or touches a palette: the commands are
-## reported and whoever is drawing decides what they look like.
-## Anything below [constant FIRST_COMMAND] is a delay rather than a command, so
-## `anim_wait N` is exactly N frames. The control flow is the cartridge's single
-## `wBattleAnimParent` word and single `wBattleAnimLoops` byte, so a call inside a
-## call loses the outer one; both are reproduced rather than generalised.
+## Nothing here draws: the commands are reported. Anything below
+## [constant FIRST_COMMAND] is a delay of exactly that many frames. The control
+## flow is one `wBattleAnimParent` word and one `wBattleAnimLoops` byte, so a
+## call inside a call loses the outer one.
 
 ## `FIRST_BATTLE_ANIM_CMD` (macros/scripts/battle_anims.asm). Every byte under it
 ## is a delay.

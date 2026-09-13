@@ -1,14 +1,10 @@
 class_name Gen2StartMenuPage
 extends RefCounted
 
-## `StartMenu`'s own box over the map, the `_Option` screen behind it, and
-## `SaveMenu`'s three boxes over the map as well. In-game mod rows borrow the
-## OPTION layout because they have no cartridge screen of their own.
-##
-## Node-free presentation, like the other pages: geometry is [Gen2MenuBox]'s and
-## the models are [Gen2WorldStartMenu] and [Gen2WorldOptionsMenu]. The list is a
-## box in the top-right of the map with the map still showing around it, so it
-## is drawn as a transparent overlay; OPTION owns the whole screen.
+## `StartMenu`'s box over the map, the `_Option` screen, and `SaveMenu`'s three
+## boxes; mod rows borrow the OPTION layout. Node-free: the models are
+## [Gen2WorldStartMenu] and [Gen2WorldOptionsMenu]. The list is a transparent
+## overlay with the map showing around it; OPTION owns the whole screen.
 
 const TILE: int = Gen2Font.TILE
 ## The hardware tile grid, which every page in here counts in.

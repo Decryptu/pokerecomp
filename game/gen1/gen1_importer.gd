@@ -142,12 +142,44 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_facility_text,
 	_verify_dex_ratings,
 	_verify_credits,
+	_verify_opening,
 	_verify_overworld_coords,
 	_verify_field_moves,
 	_verify_intro,
 	_verify_world,
 	_verify_gym_gates,
 ]
+
+## The opening's art, each strip under its layout pin; a pin a cartridge lacks
+## is a sheet it has no screen for.
+const OPENING_TILE_SHEETS: Dictionary = {
+	"splash_star": {"pin": "splash_falling_star", "tiles": Gen1Layout.SPLASH_STAR_TILES, "first_code": 0, "bits": 2},
+	"splash_logo": {"pin": "splash_logo_tiles", "tiles": Gen1Layout.SPLASH_LOGO_TILES, "first_code": 0, "bits": 2},
+	"intro_back_mon": {"pin": "intro_back_mon", "tiles": Gen1Layout.INTRO_BACK_MON_TILES, "first_code": 0, "bits": 2},
+	"intro_front_mon": {
+		"pin": "intro_front_mon",
+		"tiles": Gen1Layout.INTRO_FRONT_MON_POSE_TILES * Gen1Layout.INTRO_FRONT_MON_POSES,
+		"first_code": 0, "bits": 2,
+	},
+	"title_logo": {
+		"pin": "title_logo_tiles",
+		"tiles": {
+			RomRegistry.RED: Gen1Layout.TITLE_LOGO_TILES_RED_BLUE,
+			RomRegistry.BLUE: Gen1Layout.TITLE_LOGO_TILES_RED_BLUE,
+			RomRegistry.YELLOW: Gen1Layout.TITLE_LOGO_TILES_YELLOW,
+		},
+		"first_code": 0, "bits": 2,
+	},
+	"title_version": {"pin": "title_version_tiles", "tiles": Gen1Layout.TITLE_VERSION_TILES, "first_code": 0, "bits": 1},
+	"title_player": {"pin": "title_player_tiles", "tiles": Gen1Layout.TITLE_PLAYER_TILES, "first_code": 0, "bits": 2},
+	"title_logo_corner": {"pin": "title_logo_corner", "tiles": Gen1Layout.TITLE_LOGO_CORNER_TILES, "first_code": 0, "bits": 2},
+	"title_pikachu_bg": {"pin": "title_pikachu_bg", "tiles": Gen1Layout.TITLE_PIKACHU_BG_TILES, "first_code": 0, "bits": 2},
+	"title_pikachu_ob": {"pin": "title_pikachu_ob", "tiles": Gen1Layout.TITLE_PIKACHU_OB_TILES, "first_code": 0, "bits": 2},
+	"title_nine": {"pin": "title_nine_tile", "tiles": 1, "first_code": 0, "bits": 2},
+	"yellow_intro_gfx_1": {"pin": "yellow_intro_gfx_1", "tiles": Gen1Layout.YELLOW_INTRO_GFX_1_TILES, "first_code": 0, "bits": 2},
+	"yellow_intro_gfx_2": {"pin": "yellow_intro_gfx_2", "tiles": Gen1Layout.YELLOW_INTRO_GFX_2_TILES, "first_code": 0, "bits": 2},
+	"yellow_intro_clouds": {"pin": "yellow_intro_clouds", "tiles": Gen1Layout.YELLOW_INTRO_CLOUD_TILES, "first_code": 0, "bits": 2},
+}
 
 const NEW_NAME: String = "NEW NAME"
 
@@ -572,6 +604,34 @@ static func _verify_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
 		or rom.u8(warp + Gen1Layout.NEW_GAME_WARP_TILESET_AT) \
 			>= Gen1Layout.tileset_count(rom.id):
 		return _fail("NewGameWarp names map %d." % rom.u8(warp))
+	return _ok()
+
+
+## The opening's tables, each pinned by a byte only it carries.
+static func _verify_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var waves: Array = read_small_star_waves(rom, layout)
+	if waves.size() != Gen1Layout.SPLASH_SMALL_STAR_WAVES:
+		return _fail("SmallStarsWaveCoordsPointerTable does not hold four waves.")
+	for name: String in ["pal_packet_splash", "pal_packet_intro", "pal_packet_title"]:
+		if rom.u8(int(layout[name])) != Gen1Layout.PAL_SET_COMMAND:
+			return _fail("%s does not open on PAL_SET." % name)
+	for name: String in ["blk_packet_splash", "blk_packet_intro", "blk_packet_title"]:
+		if read_attr_blocks(rom, int(layout[name])).size() != Gen1Layout.ATTR_BLK_MAX_ROWS:
+			return _fail("%s does not hold three ATTR_BLK rows." % name)
+	for index: int in Gen1Layout.INTRO_TILEMAPS:
+		var row: Dictionary = read_tile_id_list(rom, layout, Gen1Layout.INTRO_TILEMAP_FIRST + index)
+		if int(row.get("columns", 0)) != Gen2PicImage.FRONTPIC_TILES \
+				or int(row.get("rows", 0)) != Gen2PicImage.FRONTPIC_TILES:
+			return _fail("GengarIntroTiles%d is not 7x7." % (index + 1))
+	if layout.has("title_mons"):
+		for slot: int in Gen1Layout.TITLE_MONS:
+			if Gen1Layout.dex_of_index(rom, layout, rom.u8(int(layout["title_mons"]) + slot)) < 1:
+				return _fail("TitleMons row %d is no species." % slot)
+		if read_nidorino_animations(rom, layout).size() != Gen1Layout.INTRO_NIDORINO_ANIMS:
+			return _fail("IntroNidorinoAnimation1 to 7 do not each end on ANIMATION_END.")
+	if layout.has("yellow_intro_frames") \
+			and read_animated_object_frames(rom, layout).size() != Gen1Layout.YELLOW_INTRO_FRAMESETS:
+		return _fail("YellowIntro_AnimatedObjectFramesData does not hold eleven framesets.")
 	return _ok()
 
 
@@ -1014,6 +1074,7 @@ func import_rom(
 		"special_text": _import_facility_text(rom, layout),
 		"oak_ratings": _import_dex_ratings(rom, layout),
 		"credits": read_credits(rom, layout),
+		"opening": read_opening(rom, layout),
 		"vending": _import_vending(rom, layout, items),
 		"prizes": _import_prizes(rom, layout),
 		"town_map": _import_town_map(rom, layout),
@@ -1630,6 +1691,241 @@ static func read_credits(rom: RomFile, layout: Dictionary) -> Dictionary:
 	}
 
 
+## Everything `PlayIntro` and `DisplayTitleScreen` read that is not a tile.
+static func read_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {
+		"shooting_star_oam": read_oam_rows(
+			rom, int(layout["splash_shooting_star_oam"]), Gen1Layout.SPLASH_SHOOTING_STAR_SPRITES
+		),
+		"logo_oam": read_oam_rows(
+			rom, int(layout["splash_logo_oam"]), Gen1Layout.SPLASH_LOGO_OAM_SPRITES
+		),
+		"small_star_oam": read_oam_rows(rom, int(layout["splash_small_star_oam"]), 1)[0],
+		"small_star_waves": read_small_star_waves(rom, layout),
+		"palettes": {},
+		"blocks": {},
+	}
+	for name: String in ["splash", "intro", "title", "generic", "beach"]:
+		if layout.has("pal_packet_%s" % name):
+			out["palettes"][name] = read_pal_packet(rom, layout, int(layout["pal_packet_%s" % name]))
+		if layout.has("blk_packet_%s" % name):
+			out["blocks"][name] = read_attr_blocks(rom, int(layout["blk_packet_%s" % name]))
+	var tilemaps: Array = []
+	for index: int in Gen1Layout.INTRO_TILEMAPS:
+		tilemaps.append(
+			read_tile_id_list(rom, layout, Gen1Layout.INTRO_TILEMAP_FIRST + index)["ids"]
+		)
+	out["gengar_tilemaps"] = tilemaps
+	if layout.has("title_mons"):
+		out["nidorino_anims"] = read_nidorino_animations(rom, layout)
+		var mons: Array = []
+		for slot: int in Gen1Layout.TITLE_MONS:
+			mons.append(Gen1Layout.dex_of_index(rom, layout, rom.u8(int(layout["title_mons"]) + slot)))
+		out["title_mons"] = mons
+		out["version_text"] = Array(_bytes_until(
+			rom, int(layout["title_version_text"]), Gen1Text.TERMINATOR,
+			Gen1Layout.TITLE_VERSION_TEXT_MAX
+		))
+	if layout.has("yellow_intro_frames"):
+		out["yellow"] = read_yellow_opening(rom, layout)
+	return out
+
+
+## `dbsprite` rows as `[y, x, tile, attributes]`.
+static func read_oam_rows(rom: RomFile, at: int, count: int) -> Array:
+	var out: Array = []
+	for index: int in count:
+		var row: int = at + index * Gen1Layout.OAM_ROW_SIZE
+		out.append([rom.u8(row), rom.u8(row + 1), rom.u8(row + 2), rom.u8(row + 3)])
+	return out
+
+
+## `SmallStarsWaveCoordsPointerTable`'s four waves of four `[y, x]`; Yellow's
+## Color palette byte behind each pair is stepped over by the stride.
+static func read_small_star_waves(rom: RomFile, layout: Dictionary) -> Array:
+	var table: int = int(layout["splash_small_star_waves"])
+	var bank: int = RomFile.bank_of(table)
+	var out: Array = []
+	var starts: Array[int] = []
+	for wave: int in Gen1Layout.SPLASH_SMALL_STAR_WAVES + 1:
+		starts.append(Gen1Layout.banked(bank, rom.u16le(table + wave * Gen1Layout.POINTER_SIZE)))
+	if rom.u8(starts[Gen1Layout.SPLASH_SMALL_STAR_WAVES]) != 0xFF:
+		return []
+	var stride: int = (starts[1] - starts[0]) / Gen1Layout.SPLASH_SMALL_STAR_WAVE_SPRITES
+	if stride < 2:
+		return []
+	for wave: int in Gen1Layout.SPLASH_SMALL_STAR_WAVES:
+		var rows: Array = []
+		for sprite: int in Gen1Layout.SPLASH_SMALL_STAR_WAVE_SPRITES:
+			var at: int = starts[wave] + sprite * stride
+			rows.append([rom.u8(at), rom.u8(at + 1)])
+		out.append(rows)
+	return out
+
+
+static func read_nidorino_animations(rom: RomFile, layout: Dictionary) -> Array:
+	var out: Array = []
+	var at: int = int(layout["intro_nidorino_anims"])
+	for table: int in Gen1Layout.INTRO_NIDORINO_ANIMS:
+		var rows: Array = []
+		while rom.in_bounds(at, 2) and rom.u8(at) != Gen1Layout.INTRO_ANIMATION_END:
+			rows.append([_signed(rom.u8(at)), _signed(rom.u8(at + 1))])
+			at += 2
+			if rows.size() > Gen1Layout.INTRO_ANIMATION_END:
+				return []
+		if not rom.in_bounds(at, 1):
+			return []
+		at += 1
+		out.append(rows)
+	return out
+
+
+static func read_tile_id_list(rom: RomFile, layout: Dictionary, index: int) -> Dictionary:
+	var table: int = int(layout["tile_id_lists"])
+	var row: int = table + index * Gen1Layout.TILE_ID_LIST_ROW_SIZE
+	var at: int = Gen1Layout.banked(RomFile.bank_of(table), rom.u16le(row))
+	var shape: int = rom.u8(row + Gen1Layout.POINTER_SIZE)
+	var columns: int = shape & 0xF
+	var rows: int = shape >> 4
+	var ids: Array = []
+	for cell: int in columns * rows:
+		ids.append(rom.u8(at + cell))
+	return {"ids": ids, "columns": columns, "rows": rows}
+
+
+## `PAL_SET`'s four palettes as `SuperPalettes` rows.
+static func read_pal_packet(rom: RomFile, layout: Dictionary, at: int) -> Array:
+	var out: Array = []
+	for slot: int in Gen1Layout.PAL_SET_PALETTES:
+		var named: int = rom.u16le(at + Gen1Layout.PAL_SET_ROW + slot * Gen1Layout.POINTER_SIZE)
+		var row: int = Gen1Layout.super_palette_offset(layout, named)
+		var colors: Array = []
+		for index: int in Gen1Layout.SUPER_PALETTE_COLORS:
+			colors.append(rom.u16le(row + index * PokePalette.COLOR_BYTES))
+		out.append(colors)
+	return out
+
+
+static func read_attr_blocks(rom: RomFile, at: int) -> Array:
+	var count: int = rom.u8(at + Gen1Layout.ATTR_BLK_COUNT_AT)
+	if count < 1 or count > Gen1Layout.ATTR_BLK_MAX_ROWS:
+		return []
+	var out: Array = []
+	for index: int in count:
+		var row: int = at + Gen1Layout.ATTR_BLK_ROWS_AT + index * Gen1Layout.ATTR_BLK_ROW_SIZE
+		var values: Array = []
+		for byte: int in Gen1Layout.ATTR_BLK_ROW_SIZE:
+			values.append(rom.u8(row + byte))
+		out.append(values)
+	return out
+
+
+## Yellow's own intro and title tables.
+static func read_yellow_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var tilemaps: Array = []
+	for index: int in Gen1Layout.YELLOW_INTRO_TILEMAPS.size():
+		var shape: Vector2i = Gen1Layout.YELLOW_INTRO_TILEMAPS[index]
+		var ids: Array = []
+		var at: int = int(layout["yellow_intro_tilemap_%d" % (index + 1)])
+		for cell: int in shape.x * shape.y:
+			ids.append(rom.u8(at + cell))
+		tilemaps.append({"columns": shape.x, "rows": shape.y, "ids": ids})
+	var bars: Array = []
+	for index: int in Gen1Layout.YELLOW_INTRO_SPEED_BARS:
+		var at: int = int(layout["yellow_intro_speed_bars"]) + index * 3
+		bars.append([rom.u8(at), rom.u8(at + 1), rom.u8(at + 2)])
+	var spawns: Array = []
+	for index: int in Gen1Layout.YELLOW_INTRO_SPAWN_STATES:
+		var at: int = int(layout["yellow_intro_spawn_states"]) + index * 3
+		spawns.append([rom.u8(at), rom.u8(at + 1), rom.u8(at + 2)])
+	var sine: Array = []
+	for index: int in Gen1Layout.YELLOW_INTRO_SINE_BYTES:
+		sine.append(_signed(rom.u8(int(layout["yellow_intro_sine"]) + index)))
+	var words: Array = []
+	for index: int in Gen1Layout.YELLOW_INTRO_SINE_WORDS:
+		words.append(rom.u16le(int(layout["yellow_intro_sine_words"]) + index * 2))
+	return {
+		"tilemaps": tilemaps,
+		"speed_bars": bars,
+		"pal_flash": Array(_bytes_until(
+			rom, int(layout["yellow_intro_pal_flash"]), Gen1Layout.YELLOW_INTRO_PAL_END, 64
+		)),
+		"pal_fade": Array(_bytes_until(
+			rom, int(layout["yellow_intro_pal_fade"]), Gen1Layout.YELLOW_INTRO_PAL_END, 64
+		)),
+		"spawn_states": spawns,
+		"frames": read_animated_object_frames(rom, layout),
+		"oam_sets": read_animated_object_oam(rom, layout),
+		"title_logo_tilemap": _tilemap_rows(rom, int(layout["title_logo_tilemap"]), Gen1Layout.TITLE_LOGO_TILEMAP),
+		"title_bubble_tilemap": _tilemap_rows(rom, int(layout["title_bubble_tilemap"]), Gen1Layout.TITLE_BUBBLE_TILEMAP),
+		"title_pikachu_tilemap": _tilemap_rows(rom, int(layout["title_pikachu_tilemap"]), Gen1Layout.TITLE_PIKACHU_TILEMAP),
+		"title_eyes_oam": read_oam_rows(rom, int(layout["title_eyes_oam"]), Gen1Layout.TITLE_EYES_SPRITES),
+		"sine": sine,
+		"sine_words": words,
+	}
+
+
+## `YellowIntro_AnimatedObjectFramesData`, `endanim` kept as -1 and `dorestart` as -2.
+static func read_animated_object_frames(rom: RomFile, layout: Dictionary) -> Array:
+	var table: int = int(layout["yellow_intro_frames"])
+	var bank: int = RomFile.bank_of(table)
+	var out: Array = []
+	for index: int in Gen1Layout.YELLOW_INTRO_FRAMESETS:
+		var at: int = Gen1Layout.banked(bank, rom.u16le(table + index * Gen1Layout.POINTER_SIZE))
+		var rows: Array = []
+		while rom.in_bounds(at, 1):
+			var command: int = rom.u8(at)
+			if command == Gen1Layout.ANIM_FRAME_END:
+				rows.append([-1, 0])
+				break
+			if command == Gen1Layout.ANIM_FRAME_RESTART:
+				rows.append([-2, 0])
+				break
+			rows.append([command, rom.u8(at + 1)])
+			at += 2
+			if rows.size() > 64:
+				return []
+		if rows.is_empty() or rows[rows.size() - 1][0] >= 0:
+			return []
+		out.append(rows)
+	return out
+
+
+## `YellowIntro_AnimatedObjectOAMData`: a tile offset and a counted list a row.
+static func read_animated_object_oam(rom: RomFile, layout: Dictionary) -> Array:
+	var table: int = int(layout["yellow_intro_oam"])
+	var bank: int = RomFile.bank_of(table)
+	var out: Array = []
+	for index: int in Gen1Layout.YELLOW_INTRO_OAM_SETS:
+		var row: int = table + index * 3
+		var at: int = Gen1Layout.banked(bank, rom.u16le(row + 1))
+		out.append({
+			"tile": rom.u8(row),
+			"sprites": read_oam_rows(rom, at + 1, rom.u8(at)),
+		})
+	return out
+
+
+static func _tilemap_rows(rom: RomFile, at: int, shape: Vector2i) -> Array:
+	var ids: Array = []
+	for cell: int in shape.x * shape.y:
+		ids.append(rom.u8(at + cell))
+	return ids
+
+
+static func _bytes_until(rom: RomFile, at: int, stop: int, limit: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	for index: int in limit:
+		if not rom.in_bounds(at + index, 1) or rom.u8(at + index) == stop:
+			return out
+		out.append(rom.u8(at + index))
+	return out
+
+
+static func _signed(byte: int) -> int:
+	return byte - 0x100 if byte >= 0x80 else byte
+
+
 static func read_credits_order(rom: RomFile, layout: Dictionary) -> PackedByteArray:
 	var out := PackedByteArray()
 	var at: int = int(layout["credits_order"])
@@ -2190,6 +2486,14 @@ func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for sheet: String in BATTLE_TILE_SHEETS:
 		var run: Dictionary = (BATTLE_TILE_SHEETS[sheet] as Dictionary).duplicate()
 		run["offset"] = int(layout[sheet])
+		sheets[sheet] = run
+	for sheet: String in OPENING_TILE_SHEETS:
+		var run: Dictionary = (OPENING_TILE_SHEETS[sheet] as Dictionary).duplicate()
+		if not layout.has(run["pin"]):
+			continue
+		run["offset"] = int(layout[run["pin"]])
+		if run["tiles"] is Dictionary:
+			run["tiles"] = int(run["tiles"].get(rom.id, 0))
 		sheets[sheet] = run
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}

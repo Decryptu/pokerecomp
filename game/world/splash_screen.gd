@@ -20,6 +20,8 @@ var _presents_page: Gen2GameFreakPresentsPage = null
 var _movie_page: Gen2IntroMoviePage = null
 var _gs_movie_page: Gen2GoldSilverIntroPage = null
 var _title_page: Gen2TitlePage = null
+## A Generation 1 cache's whole opening, which draws every phase.
+var _gen1_page: Gen1OpeningPage = null
 ## What `hJoyDown` holds this frame. `TitleScreenMain` reads the held state, and
 ## its two chords cannot be expressed as presses.
 var _held: Array[int] = []
@@ -30,6 +32,12 @@ var _visible_id: StringName = &""
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## The buffer the title's backdrop was drawn for, zero while there is none.
 var _backdrop_view: Vector2i = Vector2i.ZERO
+## `PAD_*` bits for a Generation 1 joypad read.
+const GEN1_PAD_BITS: Dictionary = {
+	PokeButton.A: Gen1Opening.PAD_A, PokeButton.B: Gen1Opening.PAD_B,
+	PokeButton.SELECT: Gen1Opening.PAD_SELECT, PokeButton.START: Gen1Opening.PAD_START,
+	PokeButton.UP: Gen1Opening.PAD_UP,
+}
 var _closed: bool = false
 ## The last `PlayMusic` handed to the driver, which is the only place the
 ## opening's own music can be observed from outside.
@@ -40,6 +48,13 @@ var _last_music: Dictionary = {}
 ## caller's cue to go straight on rather than to run an empty boot.
 func open(data: GameData) -> bool:
 	_data = data
+	_gen1_page = Gen1OpeningPage.from_data(data)
+	if _gen1_page != null:
+		_cinema = Gen2BootCinema.new()
+		_cinema.start(data.id, data)
+		if is_inside_tree():
+			_refresh()
+		return true
 	_page = Gen2CopyrightPage.from_data(data)
 	if _page == null:
 		return false
@@ -99,6 +114,10 @@ func advance_frames(count: int) -> void:
 func handle_button(button: int) -> bool:
 	if _cinema == null:
 		return true
+	if _cinema.gen1() != null:
+		# `CheckForUserInterruption` reads `hJoyHeld`, so the opening keeps it.
+		_cinema.gen1().press(GEN1_PAD_BITS.get(button, 0))
+		return true
 	if _cinema.phase() == Gen2BootCinema.PHASE_TITLE:
 		# The title screen has no press of its own: a chord is a held state, so a
 		# press only adds a button and the release below takes it away.
@@ -127,6 +146,8 @@ func handle_button(button: int) -> bool:
 ## The other half of `hJoyDown`, which a press-only host has no way to say.
 func release_button(button: int) -> void:
 	_held.erase(button)
+	if _cinema != null and _cinema.gen1() != null:
+		_cinema.gen1().release(GEN1_PAD_BITS.get(button, 0))
 
 
 ## How many frames the splash still owes, so a driver can settle it with a loop
@@ -135,6 +156,8 @@ func release_button(button: int) -> void:
 func frames_left() -> int:
 	if _cinema == null or _cinema.phase() == Gen2BootCinema.PHASE_FINISHED:
 		return 0
+	if _cinema.gen1() != null:
+		return 1
 	if _cinema.phase() == Gen2BootCinema.PHASE_TITLE:
 		# `TitleScreenMain` waits on a button or on its own timer, so what is
 		# left is however much of that timer is still standing.
@@ -201,6 +224,16 @@ func _apply(events: Array[Dictionary]) -> void:
 				_play_music(
 					int(event.get("music", 0)), bool(event.get("restart", true))
 				)
+			&"gen1_play_sfx", &"gen1_play_music":
+				_play_gen1_sound(
+					int(event.get("bank", -1)),
+					int(event.get("sfx", event.get("music", 0))),
+					&"music" if event["type"] == &"gen1_play_music" else &"sfx"
+				)
+			&"gen1_stop_music":
+				_play_music(MUSIC_NONE_INDEX, true)
+			&"gen1_play_cry":
+				_play_gen1_cry(int(event.get("species", 0)))
 			&"finish_intro":
 				_refresh()
 				_finish()
@@ -259,6 +292,8 @@ func _on_view_size_changed(_size: Vector2i) -> void:
 ## What the current phase draws: the copyright graphic, one frame of the
 ## GameFreak animation, or the cleared screen either of them starts and ends on.
 func _frame_image() -> Image:
+	if _gen1_page != null and _cinema != null and _cinema.gen1() != null:
+		return _gen1_page.draw(_cinema.gen1())
 	if _visible_id == &"copyright":
 		return _image
 	if _visible_id == &"game_freak_presents" and _presents_page != null:
@@ -297,6 +332,30 @@ func _play_sfx(sfx: int, channels_off: bool = false) -> void:
 	_audio.play_record(_data.world_audio(&"sfx", sfx), &"sfx", _audio_assets())
 
 
+## `PlaySound` on a Generation 1 cache, by the id and bank `PlayIntro` names.
+func _play_gen1_sound(bank: int, id: int, kind: StringName) -> void:
+	_ensure_audio()
+	if _data == null or id <= 0:
+		return
+	var record: Dictionary = _data.gen1_sound(bank, id)
+	var answer: Dictionary = _audio.play_record(record, kind, _audio_assets(), true)
+	if kind == &"music":
+		_last_music = {
+			"music": id, "restart": true, "played": bool(answer.get("ok", false)),
+			"frame": _cinema.frame() if _cinema != null else 0,
+		}
+
+
+## `PlayCry` at the title's end.
+func _play_gen1_cry(species: int) -> void:
+	_ensure_audio()
+	if _data == null:
+		return
+	var record: Dictionary = _data.species_cry(species)
+	if not record.is_empty():
+		_audio.play_record(record, &"cry", _audio_assets())
+
+
 ## `PlayMusic`, which the copyright's own start, both movies and the title
 ## screen each ask for. `MUSIC_NONE` is a stop rather than a stream, and the
 ## player answers it as `_InitSound` does.
@@ -319,6 +378,9 @@ func _play_music(music: int, restart: bool) -> void:
 ## drumkits, which every request here shares.
 func _audio_assets() -> Dictionary:
 	return _data.audio_assets()
+
+
+const MUSIC_NONE_INDEX: int = 0
 
 
 ## `ClearTilemap` leaves the blank tile everywhere, which through this palette

@@ -1,12 +1,10 @@
 class_name Gen2LauncherScroll
 extends ScrollContainer
 
-## A vertical scroll pane that can be read without a pointer, which Godot does
-## not give. A pad walking the controls inside brings the pane with it; a pane of
-## prose has nothing focusable, so it takes focus itself and reads an up or a down
-## as scrolling. A finger is the third way: [constant Control.MOUSE_FILTER_STOP]
-## ends a pointer event at the button it reaches, so the pane reads the touch in
-## [method Node._input] and leaves the engine's own drag off.
+## A vertical scroll pane readable without a pointer. A pad walking the controls
+## inside brings the pane with it; a pane of prose takes focus itself and reads
+## up and down as scrolling. [constant Control.MOUSE_FILTER_STOP] ends a pointer
+## event at the button it reaches, so touch is read in [method Node._input].
 
 ## How far one press moves the pane, as a fraction of what it shows.
 const PAGE: float = 0.42

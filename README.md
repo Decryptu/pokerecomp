@@ -123,7 +123,7 @@ whatever shape it is, with a way back to the shipped art. It is kept under
 | Trainers, NPC trades | Class names, pics, palettes, AI flags, DVs and parties; trade records with DVs and OT data |
 | Sprites, palettes | Front/back for 251 species and 26 Unown forms; normal and shiny 15-bit colours |
 | Font, borders, HUD | 128 glyphs, eight text-box frames, HP/EXP bars and panels |
-| Splash, title, intro | Each cartridge's opening art, tilemaps and palette runs, including Crystal's 35-entry intro section |
+| Splash, title, intro | Each cartridge's opening art, tilemaps and palette runs, including Crystal's 35-entry intro section and Generation 1's `PlayIntro`, `DisplayTitleScreen` and `YellowIntro` tables |
 | Region map | Three graphics sheets, both region tilemaps, the per-tile palette map and 96 landmarks |
 | Prof Oak's PC, credits | The 19 `OakRatings` rows and their texts; `CreditsScript`'s whole command stream, or Generation 1's `CreditsOrder`, its strings, `CreditsMons` and `TheEndGfx` |
 | Overworld | Maps, tilesets, collisions, events, scripts, movement, palettes, animation and object sprites |
@@ -366,7 +366,7 @@ or a group, or `all`; with no argument it lists them.
 | `art` | Both intro movies, the credits of all six cartridges, the region map, all 278 battle animations, the map name sign |
 | `tables` | TM/HM, naming, world scripts, the opening lane |
 | `trainers` | The Route 30 trainer on each profile |
-| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, the key-item and usable-item tables behind the bag, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, the text box, shop inventory and wild encounter a map reads, every trainer and standing wild an object stands on, all 202 or 203 battle animations, the Hall of Fame's own pages, and Yellow's follower: its emotion table, its faces, its cries and the spawn every warp leaves it |
+| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, the key-item and usable-item tables behind the bag, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, the text box, shop inventory and wild encounter a map reads, every trainer and standing wild an object stands on, all 202 or 203 battle animations, the Hall of Fame's own pages, the opening from the copyright screen to the title on all three, and Yellow's follower: its emotion table, its faces, its cries and the spawn every warp leaves it |
 
 The rest are previews and dumps, each driving a real screen or table:
 

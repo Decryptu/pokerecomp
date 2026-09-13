@@ -1,14 +1,12 @@
 class_name Gen2CardFlipPage
 extends RefCounted
 
-## `_CardFlip`'s screen: `CardFlipTilemap` and the two card slots beside it, under
-## the border and cursor objects `CardFlip_CopyOAM` writes. Node-free, so the
-## whole table can be read back headless. Four things a reading gets wrong: every
-## object here is eight by eight, since `_CardFlip` never touches
-## `B_LCDC_OBJ_SIZE`; the objects are drawn in the map's own palettes, since
-## `DmgToCgbObjPals` reorders with the identity; the lamps are characters, copied
-## over the font's gender signs; and Crystal's digits stand one pixel higher, from
-## `CardFlip_ShiftDigitsUpOnePixel`, which pokegold marks unreferenced.
+## `_CardFlip`'s screen: `CardFlipTilemap`, the two card slots, and the objects
+## `CardFlip_CopyOAM` writes, node-free. Every object is eight by eight, since
+## `_CardFlip` never touches `B_LCDC_OBJ_SIZE`; objects use the map's own
+## palettes, since `DmgToCgbObjPals` reorders with the identity; the lamps are
+## characters over the font's gender signs; Crystal's digits stand one pixel
+## higher, from `CardFlip_ShiftDigitsUpOnePixel`, unreferenced in pokegold.
 
 const TILE: int = Gen2Font.TILE
 const SCREEN_COLUMNS: int = Gen2CardFlip.SCREEN_COLUMNS

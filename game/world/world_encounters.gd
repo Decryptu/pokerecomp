@@ -1,14 +1,12 @@
 class_name Gen2WorldEncounters
 extends RefCounted
 
-## Wild Pokemon a mod puts on the map instead of a step roll, driven and validated
-## by the host. The screen gives a registered PROVIDER a snapshot of where a wild
-## may stand and which table each method resolves to, spends one frame of it per
-## hardware frame, and takes back a bounded list of entries. The division is the
-## point: the provider owns the population, and the host owns every rule a mod
-## must not re-derive. Nothing here reads a node. [Gen2WorldActors] is the layer
-## next to this one and the two are different contracts: an actor is presentation,
-## a visible encounter is met and fought.
+## Wild Pokemon a mod puts on the map instead of a step roll. The screen gives
+## a registered PROVIDER a snapshot of where a wild may stand and which table
+## each method resolves to, spends one frame of it per hardware frame, and takes
+## back a bounded list. The provider owns the population; the host owns every
+## rule a mod must not re-derive. [Gen2WorldActors] is presentation; a visible
+## encounter is met and fought.
 
 ## Checked at registration, where the mod's name is still in hand.
 const PROVIDER_METHODS: Array[String] = [

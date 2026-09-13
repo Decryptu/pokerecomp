@@ -1,13 +1,10 @@
 class_name Gen2LinkPage
 extends RefCounted
 
-## The two screens the cable club draws: `InitTradeMenuDisplay`'s trade screen and
-## `ReadAndPrintLinkBattleRecord`'s record page. Both are drawn with
-## `LinkTextboxAtHL` rather than `Textbox`, which is a border of its own out of
-## `LinkCommsBorderGFX` and not the frame the OPTION menu chooses. The two
-## cartridges lay that border out differently and this is the one place it shows:
-## Crystal puts a whole screen of seventy tiles down, while Gold and Silver load
-## nine and draw two ordinary boxes. Node-free.
+## `InitTradeMenuDisplay`'s trade screen and `ReadAndPrintLinkBattleRecord`'s
+## record page, both drawn with `LinkTextboxAtHL`, a border out of
+## `LinkCommsBorderGFX` and not the OPTION frame. Crystal puts a whole screen of
+## seventy tiles down; Gold and Silver load nine and draw two boxes. Node-free.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

@@ -1065,9 +1065,6 @@ func _stage_door() -> void:
 			break
 
 
-## `StepFunction_PlayerJump` at the top of its arc: the player is walked south until a
-## cell allows the hop below it, and the picture is the frame `UpdateJumpPosition`
-## draws highest (`crystal 24 4 ... ledge 5 4`).
 ## Yellow's follower: the lead is made the starter, the first number of steps
 ## is walked holding the second number's direction, then eight frames a step
 ## settle the last one and the follower's own.
@@ -1085,6 +1082,9 @@ func _stage_pikachu() -> void:
 		_screen.advance_frame()
 
 
+## `StepFunction_PlayerJump` at the top of its arc: the player is walked south until a
+## cell allows the hop below it, and the picture is the frame `UpdateJumpPosition`
+## draws highest (`crystal 24 4 ... ledge 5 4`).
 func _stage_ledge() -> void:
 	for _frame: int in WARP_FRAME_CAP:
 		_screen.move_down()
@@ -1413,12 +1413,6 @@ func _stage_diploma() -> void:
 	_screen.preview_diploma(_cell.x >= 1, maxi(_cell.y, 1))
 
 
-## `SetUpMenuItems`' own gates opened, because the list worth photographing is the
-## eight rows a finished save carries: they fill the box exactly, so the host's MODS
-## row and any a mod registered are what the window has to be scrolled to. The first
-## number is how many rows down to walk before the picture, and a second number of 1
-## or more runs the Bug Catching Contest, which is the list `SetUpMenuItems` drops
-## PACK from and puts QUIT in SAVE's slot.
 ## `StartMenu_Pokedex`. The first number walks the listing down and the second
 ## spends A presses on it, so `1 2` is the second row's entry page.
 func _stage_pokedex() -> void:
@@ -1441,6 +1435,12 @@ func _stage_trainer_card() -> void:
 	_screen.preview_trainer_card()
 
 
+## `SetUpMenuItems`' own gates opened, because the list worth photographing is the
+## eight rows a finished save carries: they fill the box exactly, so the host's MODS
+## row and any a mod registered are what the window has to be scrolled to. The first
+## number is how many rows down to walk before the picture, and a second number of 1
+## or more runs the Bug Catching Contest, which is the list `SetUpMenuItems` drops
+## PACK from and puts QUIT in SAVE's slot.
 func _stage_start_menu() -> void:
 	if _cell.y >= 1:
 		var contest_world: Gen2WorldAPI = _screen.get("_world")
@@ -1468,9 +1468,6 @@ func _stage_start_menu() -> void:
 		_screen.advance_frame()
 
 
-## `_BillsPC`, which no preview cell reaches: the first number is how many rows down
-## the top menu to stand and the second how many A presses to spend from there, so `1
-## 1` is the DEPOSIT list and `1 2` its submenu on the first party member.
 ## `StartMenu_Item`'s own list, which no map cell reaches. The rows are walked
 ## down after the first A press, so a first number of 0 scrolls the list itself
 ## and anything above it walks the submenu that press opened.
@@ -1500,8 +1497,10 @@ func _generation() -> int:
 	return data.generation if data != null else RomRegistry.GEN2
 
 
-## `@d,0` is a second run of DOWN presses, spent before the last A: a Generation
-## 1 machine's menus are two deep and one number cannot reach both.
+## `_BillsPC`: rows down the top menu, then A presses from there, so `1 1` is
+## the DEPOSIT list and `1 2` its submenu on the first party member. `@d,0` is
+## a second run of DOWN presses spent before the last A: a Generation 1
+## machine's menus are two deep and one number cannot reach both.
 func _stage_pc() -> void:
 	_screen.call(SCREEN_DRIVER % _kind)
 	var presses: int = maxi(_cell.y, 0)

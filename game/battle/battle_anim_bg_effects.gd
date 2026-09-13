@@ -1,13 +1,10 @@
 class_name Gen2BattleAnimBgEffects
 extends RefCounted
 
-## The `BATTLE_BG_EFFECT_*` jumptable and the routines it dispatches
-## (engine/battle_anims/bg_effects.asm): the screen shakes, the scanline
-## deformations, the palette fades and the tilemap edits. Five run at once.
-## An effect id is profile-local and is never normalised: pokegold ships no
-## `BATTLE_BG_EFFECT_BODY_SLAM`, so every id from $25 on names a different effect
-## in the two games; both jumptables are kept whole and dispatch is by name. The
-## Color branch is taken wherever the source asks `hCGB`, as everywhere else here.
+## The `BATTLE_BG_EFFECT_*` jumptable and its routines
+## (engine/battle_anims/bg_effects.asm); five run at once. An effect id is
+## profile-local: pokegold ships no `BATTLE_BG_EFFECT_BODY_SLAM`, so every id
+## from $25 on names a different effect, and dispatch is by name.
 
 ## `BattleBGEffects`, Crystal's own order. The index is the cartridge's effect
 ## id and entry 0 is `BattleBGEffect_End`, which is also the free-slot marker.

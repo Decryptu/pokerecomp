@@ -1,13 +1,16 @@
 extends SceneTree
 
-## Dumps the opening's shadow OAM, one line per sprite per frame, against a real
-## cache. `phase` is `presents`, `intro`, `gs_intro`, `title` or `trade`, and the
-## artefact is the one the verification order asks for: two faithful
-## implementations of `PlaySpriteAnimations` put the same sprites in the same
-## slots on the same frames. A line is `frame slot y x tile`, the OAM bytes as a
-## cartridge's buffer holds them. `<game> <phase> [out.txt] [frames]`.
+## Dumps the opening's shadow OAM against a real cache, one `frame slot y x
+## tile` line per sprite per frame, the OAM bytes as a cartridge's buffer holds
+## them: two faithful implementations of `PlaySpriteAnimations` put the same
+## sprites in the same slots on the same frames. `<game> <phase> [out.txt]
+## [frames] [picks]`, with `phase` one of PHASES. `gen1` runs the whole opening,
+## writes the LCD registers beside the trace as `<out>.regs`, shoots in the Game
+## Boy's greys, and `picks` are the dex numbers a cartridge's title chose.
 
-const PHASES: Array[String] = ["presents", "intro", "gs_intro", "title", "trade"]
+const PHASES: Array[String] = ["presents", "intro", "gs_intro", "title", "trade", "gen1"]
+## The whole opening and the first title mons; Red's title never ends alone.
+const GEN1_FRAME_CAP: int = 3000
 
 ## The title screen runs until its own timeout, which is longer than anything
 ## worth diffing; this is well past `TitleScreenEnd`'s own count.
@@ -41,27 +44,8 @@ func _initialize() -> void:
 			return
 		_shot_prefix = args[2].get_basename()
 	if args.size() > 3:
-		for value: String in args[3].split(","):
-			var dash: int = value.find("-", 1)
-			if dash < 0:
-				_shots[int(value)] = true
-				continue
-			for frame: int in range(
-				int(value.left(dash)), int(value.substr(dash + 1)) + 1
-			):
-				_shots[frame] = true
-	var lines: PackedStringArray
-	match args[1]:
-		"presents":
-			lines = _trace_presents(data)
-		"intro":
-			lines = _trace_intro(data)
-		"gs_intro":
-			lines = _trace_gs_intro(data)
-		"trade":
-			lines = _trace_trade(data)
-		_:
-			lines = _trace_title(data)
+		_parse_shots(args[3])
+	var lines: PackedStringArray = _trace(args, data)
 	if args.size() > 2:
 		var file := FileAccess.open(args[2], FileAccess.WRITE)
 		if file == null:
@@ -77,6 +61,33 @@ func _initialize() -> void:
 	else:
 		print("\n".join(lines))
 	quit(0)
+
+
+## `3,10-12` marks frames 3, 10, 11 and 12 for a PNG each.
+func _parse_shots(spec: String) -> void:
+	for value: String in spec.split(","):
+		var dash: int = value.find("-", 1)
+		if dash < 0:
+			_shots[int(value)] = true
+			continue
+		for frame: int in range(int(value.left(dash)), int(value.substr(dash + 1)) + 1):
+			_shots[frame] = true
+
+
+func _trace(args: PackedStringArray, data: GameData) -> PackedStringArray:
+	match args[1]:
+		"presents":
+			return _trace_presents(data)
+		"intro":
+			return _trace_intro(data)
+		"gs_intro":
+			return _trace_gs_intro(data)
+		"trade":
+			return _trace_trade(data)
+		"gen1":
+			var out_path: String = args[2] if args.size() > 2 else ""
+			return _trace_gen1(data, out_path, args[4] if args.size() > 4 else "")
+	return _trace_title(data)
 
 
 ## `GameFreakPresentsScene` from its first frame to the one it sets its own exit
@@ -223,6 +234,55 @@ func _trace_title(data: GameData) -> PackedStringArray:
 		scene.advance_frame()
 		frame += 1
 	print("frame %d: finished" % frame)
+	return out
+
+
+## The opening with nothing pressed; the register file is
+## `frame LCDC SCY SCX WY BGP OBP0 OBP1 phase`.
+func _trace_gen1(data: GameData, out_path: String, picks: String) -> PackedStringArray:
+	var page: Gen1OpeningPage = Gen1OpeningPage.from_data(data)
+	if page == null:
+		push_error("%s has no opening." % data.id)
+		return PackedStringArray()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	var opening: Gen1Opening = Gen1Opening.create(data, rng)
+	if not picks.is_empty():
+		var chosen: Array[int] = []
+		for value: String in picks.split(","):
+			chosen.append(int(value))
+		opening.set_title_picks(chosen)
+	var out := PackedStringArray()
+	var regs := PackedStringArray()
+	var frame: int = 0
+	var phase: StringName = &""
+	var species: int = 0
+	while not opening.finished() and frame < GEN1_FRAME_CAP:
+		opening.advance_frame()
+		var live: Array[Dictionary] = []
+		for entry: Dictionary in opening.shadow_oam():
+			if int(entry["y"]) != 0 or int(entry["x"]) != 0 or int(entry["tile"]) != 0:
+				live.append(entry)
+		_append_frame(out, frame, live)
+		var lcd: Gen1Lcd = opening.lcd
+		regs.append("%d %02x %02x %02x %02x %02x %02x %02x %s" % [
+			frame, lcd.lcdc, lcd.scy, lcd.scx, lcd.wy, lcd.bgp, lcd.obp0, lcd.obp1,
+			opening.phase(),
+		])
+		if _shots.has(frame):
+			page.draw_shades(opening).save_png("%s_f%d.png" % [_shot_prefix, frame])
+		if opening.phase() != phase:
+			phase = opening.phase()
+			print("frame %d: %s" % [frame, phase])
+		if opening.title_species() != species:
+			species = opening.title_species()
+			print("frame %d: title mon %d" % [frame, species])
+		frame += 1
+	print("frame %d: finished" % frame)
+	if not out_path.is_empty():
+		var file := FileAccess.open(out_path + ".regs", FileAccess.WRITE)
+		if file != null:
+			file.store_string("\n".join(regs) + "\n")
 	return out
 
 

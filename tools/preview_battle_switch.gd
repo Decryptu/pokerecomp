@@ -202,10 +202,6 @@ class Annotations extends RefCounted:
 		return out
 
 
-## The trainer's second Pokémon coming in, which is what `OfferSwitch` asks
-## about, or the player's own going down, which is what `AskUseNextPokemon` and
-## `ForcePlayerMonChoice` follow. SHIFT is forced on rather than read out of the
-## options file, since the question is the thing being photographed.
 ## Whether this stage stands the battle up in the state an information provider
 ## has something to say about. Registering a provider is a separate question:
 ## see [constant MENU_STAGES].
@@ -342,6 +338,10 @@ func _open_world_stage() -> void:
 		_settle()
 
 
+## The trainer's second Pokémon coming in, which is what `OfferSwitch` asks
+## about, or the player's own going down, which is what `AskUseNextPokemon` and
+## `ForcePlayerMonChoice` follow. SHIFT is forced on rather than read out of the
+## options file, since the question is the thing being photographed.
 func _open_battle_stage() -> void:
 	var data: GameData = _screen.get("_data")
 	var gen1: bool = data.generation == RomRegistry.GEN1
@@ -515,12 +515,9 @@ func _drain_to_level_up() -> void:
 		_screen.advance()
 
 
-## The same drain, stopping at `BattleMenu` rather than at a switch question.
-## `BattleMenu`'s own first opening. The menu is looked for after the frames the
-## entrance owes have been spent and before the next press, not before both: the
-## check used to stand in front of the whole iteration, so the press that opened
-## the menu was followed by one more that chose FIGHT, and every stage below
-## photographed a turn instead of the list it asked for.
+## The same drain, stopping at `BattleMenu`. The menu is looked for after the
+## entrance's frames are spent and before the next press, or the press that
+## opened it is followed by one that chooses FIGHT.
 func _drain_to_menu() -> void:
 	for _press: int in 60:
 		_settle()

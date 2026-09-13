@@ -1,12 +1,9 @@
 class_name Gen2BattleWorldContext
 extends RefCounted
 
-## Where a battle is being fought, as the world was when it started: the map and
-## its tileset, the player's cell and facing, and the time of day. A renderer
-## staging the fight on the map rather than on a white field needs the place as
-## well as the display values [Gen2BattleScreen] hands it. A copy taken at battle
-## start, not a handle on the world, so the two screens stay independent; the map
-## and tileset are named by number, which is what [method GameData.world_map]
+## Where a battle is fought, as the world was when it started: map, tileset,
+## the player's cell and facing, the time of day. A copy, not a handle on the
+## world; map and tileset are numbers, which is what [method GameData.world_map]
 ## takes.
 
 ## Group and number, the pair every map is addressed by, as

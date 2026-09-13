@@ -28,6 +28,11 @@ const PHASE_FINISHED: StringName = &"finished"
 const PHASE_ORDER: Array[StringName] = [
 	PHASE_COPYRIGHT, PHASE_PRESENTS, PHASE_INTRO_MOVIE, PHASE_TITLE,
 ]
+## The image id a host names for each phase.
+const GEN1_IMAGE_IDS: Dictionary = {
+	PHASE_COPYRIGHT: &"copyright", PHASE_PRESENTS: &"game_freak_presents",
+	PHASE_INTRO_MOVIE: &"intro_movie", PHASE_TITLE: &"title",
+}
 
 var _profile: StringName = &"gold"
 var _phase: StringName = &""
@@ -46,6 +51,8 @@ var _data: GameData = null
 var _presents: Gen2GameFreakPresents = null
 ## `TitleScreenScene`'s own state while the title phase is up, null outside it.
 var _title: Gen2TitleScene = null
+## A Generation 1 cache's opening, one program for all four phases.
+var _gen1: Gen1Opening = null
 ## The `BattleAnimSineWave` the presents phase reads its motion out of, handed
 ## in by the host that has a cache open.
 var _sine: Gen2BattleAnimData = null
@@ -73,6 +80,16 @@ func start(
 	_movie = null
 	_gs_movie = null
 	_available = available.duplicate()
+	_gen1 = Gen1Opening.create(data)
+	if _gen1 != null:
+		_phase = _gen1.phase()
+		_frame = 0
+		_phase_frame = 0
+		_waiting_sound = &""
+		_events.clear()
+		_emit(&"play_music", {"music": MUSIC_NONE, "restart": true})
+		_emit(&"show_image", {"id": GEN1_IMAGE_IDS[_phase]})
+		return
 	if not is_available(PHASE_COPYRIGHT):
 		_phase = PHASE_COPYRIGHT
 		_frame = 0
@@ -142,6 +159,9 @@ func advance_frame(held: Array = []) -> Array[Dictionary]:
 		return drain_events()
 	_frame += 1
 	_phase_frame += 1
+	if _gen1 != null:
+		_advance_gen1()
+		return drain_events()
 	match _phase:
 		PHASE_COPYRIGHT:
 			_advance_copyright()
@@ -199,6 +219,35 @@ func _advance_title(held: Array) -> void:
 ## drawing. Null outside the title phase.
 func title() -> Gen2TitleScene:
 	return _title
+
+
+## The live Generation 1 opening, null on a Generation 2 cache.
+func gen1() -> Gen1Opening:
+	return _gen1
+
+
+## One frame of the Generation 1 opening: its sounds and phases pass through,
+## its end is `MainMenu`, or `jp Init` on Yellow's timeout.
+func _advance_gen1() -> void:
+	var before: StringName = _gen1.phase()
+	var events: Array[Dictionary] = _gen1.advance_frame()
+	if _gen1.phase() != before:
+		_phase = _gen1.phase()
+		_phase_frame = 0
+		_emit(&"show_image", {"id": GEN1_IMAGE_IDS.get(_phase, _phase)})
+	for event: Dictionary in events:
+		match StringName(event.get("type", &"")):
+			&"play_sfx", &"play_music", &"stop_music", &"play_cry":
+				var values: Dictionary = event.duplicate()
+				for key: String in ["type", "frame", "phase"]:
+					values.erase(key)
+				_emit(StringName("gen1_" + String(event["type"])), values)
+			&"title_menu":
+				_emit(&"title_menu", {"profile": _profile})
+			&"restart_opening":
+				start(_profile, _data, _available, _sine)
+				_emit(&"restart_opening", {"profile": _profile})
+				return
 
 
 func wait_sound(token: StringName) -> void:

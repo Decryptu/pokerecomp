@@ -1,11 +1,9 @@
 extends Control
 
-## Development view: one species on a real 160x144 screen. Deliberate
-## scaffolding: it proves the whole path from cartridge to lit pixel and makes a
-## wrong decode visible without a tool writing a PNG. Left/right change species, S
-## toggles shiny, B swaps front for back, T switches to the trainer classes, which
-## have one palette each and no back pic. Each is also a plain method so
-## `tools/screenshot.gd` can drive it.
+## Development view: one species on a real 160x144 screen, so a wrong decode is
+## visible without a PNG. Left/right change species, S toggles shiny, B swaps
+## front for back, T switches to the trainer classes. Each is also a plain
+## method `tools/screenshot.gd` can drive.
 
 ## The white the hardware fills a pic window with. Index 0 of every pic is this
 ## colour, so a sprite on it looks exactly as it does in the game.

@@ -1,14 +1,12 @@
 class_name Gen2UnownPuzzlePage
 extends RefCounted
 
-## `_UnownPuzzle`'s screen: the board tilemap and the two object sets over it.
-## Node-free, so the whole board can be read back headless. Four things a reading
-## gets wrong: a puzzle picture is doubled rather than drawn, destination tile
-## `(2r + h, 2c + w)` being source tile `(r, c)`'s own quarter; the borders are
-## ORed onto the pieces in bitplanes, reaching the eight tiles around each piece's
-## centre; the board is drawn in vTiles0 and so from tile $00, `rLCDC`'s
-## `%10010011` being the unsigned tile base; and the cursor is red because
-## `_CGB_UnownPuzzle` overwrites object colour 0, not because of a tile.
+## `_UnownPuzzle`'s screen: the board tilemap and two object sets, node-free.
+## A puzzle picture is doubled, destination tile `(2r + h, 2c + w)` being
+## source `(r, c)`'s quarter; the borders are ORed onto the pieces in
+## bitplanes; the board is drawn from tile $00 in vTiles0, `rLCDC`'s `%10010011`
+## being the unsigned base; the cursor is red because `_CGB_UnownPuzzle`
+## overwrites object colour 0.
 
 const TILE: int = PokeTiles.TILE_WIDTH
 const TILE_PIXELS: int = PokeTiles.TILE_PIXELS

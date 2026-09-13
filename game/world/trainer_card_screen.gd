@@ -2,13 +2,11 @@ class_name Gen2TrainerCardScreen
 extends Control
 
 ## The trainer card (`engine/menus/trainer_card.asm`), embedded in the overworld
-## the way the Hall of Fame and the PC overlays are. Three pages: the card itself,
-## then the Johto and Kanto badge pages. Page 3 is unreachable exactly as it is on
-## the cartridge, both `.KantoBadgeCheck` branches that would reach it being
-## unreferenced in either pin; it is built all the same, so the day something
-## references it there is nothing to add. The badges are objects with their own
-## palette drawn over the page, and the play timer's colon blinks off the same
-## frame counter.
+## like the Hall of Fame. Three pages: the card, then the Johto and Kanto badge
+## pages. Page 3 is unreachable exactly as on the cartridge, both
+## `.KantoBadgeCheck` branches being unreferenced in either pin, and built all
+## the same. The badges are objects with their own palette, and the play
+## timer's colon blinks off the same frame counter.
 
 signal closed()
 

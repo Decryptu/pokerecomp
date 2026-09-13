@@ -1,14 +1,12 @@
 class_name Gen2MapNameSignPage
 extends RefCounted
 
-## `PlaceMapNameFrame` and `PlaceMapNameCenterAlign`: the sign a map entry raises,
-## drawn out of `MapEntryFrameGFX`'s own fourteen tiles with the landmark's name
-## centred on its lower interior row. Four rows of the window, which the hardware
-## can only run to the bottom of the screen from, so `rWY` $70 is what puts the
-## sign at the bottom. Crystal's own screen: Gold and Silver ship neither routine
-## nor sheet. [method render_notice] is the same four rows carrying a mod's two
-## lines and an icon, so a notice is vanilla by construction; a cache with no
-## sheet falls back to the ordinary text-box frame.
+## `PlaceMapNameFrame` and `PlaceMapNameCenterAlign`: `MapEntryFrameGFX`'s
+## fourteen tiles with the landmark's name centred on the lower interior row.
+## Four rows of the window, so `rWY` $70 puts the sign at the bottom. Crystal's
+## own: Gold and Silver ship neither. [method render_notice] is the same four
+## rows carrying a mod's two lines and an icon; a cache with no sheet falls back
+## to the text-box frame.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

@@ -1,14 +1,12 @@
 class_name Gen2IntroMoviePage
 extends RefCounted
 
-## The intro movie's screen, on the tile grid the hardware uses. [Gen2IntroMovie]
-## owns the BG map, the attribute plane, the palettes, the scroll and the sprite
-## structs; this turns a tile number into pixels. Two things are not a plain
-## tilemap draw: the BG map wraps and `hLCDCPointer` = LOW(rSCX) gives every
-## scanline its own `hSCX`, which is what runs the grass and the trees at
-## different speeds, so the screen is sampled scanline by scanline; and a BG tile
-## below $80 reads from `vTiles2` and $80 up from `vTiles1`. Shadow OAM holds
-## forty sprites, so `IntroScene10`'s forty-first, Pichu's last tile, is not drawn.
+## The intro movie's screen; [Gen2IntroMovie] owns the BG map, attribute plane,
+## palettes, scroll and sprite structs. The BG map wraps and `hLCDCPointer` =
+## LOW(rSCX) gives every scanline its own `hSCX`, which runs the grass and the
+## trees at different speeds; a BG tile below $80 reads from `vTiles2` and $80
+## up from `vTiles1`. Shadow OAM holds forty sprites, so `IntroScene10`'s
+## forty-first, Pichu's last tile, is not drawn.
 
 const TILE: int = PokeTiles.TILE_WIDTH
 const WIDTH: int = Gen2Screen.WIDTH

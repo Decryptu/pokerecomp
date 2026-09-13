@@ -1,12 +1,10 @@
 class_name Gen2Options
 extends RefCounted
 
-## Player options, in two independent blocks.
-## The cartridge block is the real `wOptions` .. `wOptionsEnd` bytes, so the
-## in-game OPTION menu and this launcher screen can never disagree about what a
-## setting means. The app block is everything the hardware had no concept of.
-## `data/default_options.asm` is byte identical between the two pins, so nothing
-## here is profile split.
+## Player options in two blocks: the cartridge's real `wOptions` .. `wOptionsEnd`
+## bytes, so the OPTION menu and the launcher never disagree, and the app block
+## the hardware had no concept of. `data/default_options.asm` is byte identical
+## between the two pins.
 
 const FORMAT_VERSION: int = 2
 

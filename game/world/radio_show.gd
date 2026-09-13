@@ -1,14 +1,12 @@
 class_name Gen2RadioShow
 extends RefCounted
 
-## `engine/pokegear/radio.asm`: the words a tuned station prints into the radio
-## card's text box, one line at a time. [Gen2WorldRadio] is the dial, its
-## availability rules and the music a station commits; this is `RadioJumptable`,
-## dispatched once a hardware frame the way `PlayRadioShow` is. Scene-free and
-## injected with its own generator: a caller hands it the facts the source reads
-## off WRAM and spends frames. Segments are named after the source's own labels
-## rather than numbered, because the numbers are profile split: Gold and Silver
-## ship no Buena's Password, so every segment past `$04` sits fifteen lower.
+## `engine/pokegear/radio.asm`: `RadioJumptable`, dispatched once a hardware
+## frame the way `PlayRadioShow` is; [Gen2WorldRadio] is the dial. Scene-free
+## with its own generator: a caller hands it the facts the source reads off
+## WRAM. Segments are named after the source's labels because the numbers are
+## profile split: Gold and Silver ship no Buena's Password, so every segment
+## past `$04` sits fifteen lower.
 
 ## `wCurRadioLine`'s own RADIO_SCROLL entry, which every printing segment leaves
 ## behind it.

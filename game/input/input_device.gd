@@ -1,14 +1,11 @@
 class_name PokeInputDevice
 extends RefCounted
 
-## Which kind of device an event came from.
-##
-## The engine reports what happened, never what the player is holding, and the
-## two questions have different answers: a phone with a pad plugged in has a
-## touchscreen it is not using, and a laptop with a touchscreen has one the
-## player touches once an hour. Only the device actually in use should decide
-## whether on-screen controls are drawn or a focus ring is shown, so
-## [Gen2InputRuntime] keeps the last answer this gives and publishes it.
+## Which kind of device an event came from. The engine reports what happened,
+## never what the player is holding: a phone with a pad plugged in has a
+## touchscreen it is not using. Only the device in use decides whether on-screen
+## controls are drawn or a focus ring shown, so [Gen2InputRuntime] keeps the
+## last answer this gives.
 
 const KEYBOARD: StringName = &"keyboard"
 const MOUSE: StringName = &"mouse"

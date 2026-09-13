@@ -783,6 +783,60 @@ const COPYRIGHT_TILES_RED_BLUE: int = 28
 const COPYRIGHT_TILES_YELLOW: int = 30
 const COPYRIGHT_ROWS: int = 3
 
+## `PlayIntro` and `DisplayTitleScreen`: `GameFreakIntro` is thirteen tiles,
+## six and a blank; the Gengar 95 and a blank; the front mon three poses of 36.
+const SPLASH_LOGO_TILES: int = 20
+const SPLASH_STAR_TILES: int = 1
+const INTRO_BACK_MON_TILES: int = 96
+const INTRO_FRONT_MON_POSE_TILES: int = 36
+const INTRO_FRONT_MON_POSES: int = 3
+const INTRO_NIDORINO_ANIMS: int = 7
+const INTRO_ANIMATION_END: int = 80
+const INTRO_TILEMAP_FIRST: int = 3
+const INTRO_TILEMAPS: int = 3
+const TILE_ID_LIST_ROW_SIZE: int = 3
+const SPLASH_LOGO_OAM_SPRITES: int = 16
+const SPLASH_SHOOTING_STAR_SPRITES: int = 4
+const SPLASH_SMALL_STAR_WAVES: int = 4
+const SPLASH_SMALL_STAR_WAVE_SPRITES: int = 4
+const TITLE_LOGO_TILES_RED_BLUE: int = 112
+const TITLE_LOGO_TILES_YELLOW: int = 115
+const TITLE_PLAYER_TILES: int = 35
+const TITLE_MONS: int = 16
+const TITLE_VERSION_TILES: Dictionary = {RomRegistry.RED: 10, RomRegistry.BLUE: 8}
+const TITLE_VERSION_TEXT_MAX: int = 16
+const TITLE_LOGO_CORNER_TILES: int = 3
+const TITLE_PIKACHU_BG_TILES: int = 64
+const TITLE_PIKACHU_OB_TILES: int = 12
+const TITLE_EYES_SPRITES: int = 8
+const TITLE_LOGO_TILEMAP: Vector2i = Vector2i(16, 7)
+const TITLE_BUBBLE_TILEMAP: Vector2i = Vector2i(7, 4)
+const TITLE_PIKACHU_TILEMAP: Vector2i = Vector2i(12, 9)
+## `YellowIntroGraphics2` less the last tile `CopyVideoData` is told to leave.
+const YELLOW_INTRO_GFX_1_TILES: int = 128
+const YELLOW_INTRO_GFX_2_TILES: int = 255
+const YELLOW_INTRO_CLOUD_TILES: int = 8
+const YELLOW_INTRO_TILEMAPS: Array[Vector2i] = [Vector2i(20, 6), Vector2i(4, 3), Vector2i(2, 2)]
+const YELLOW_INTRO_SPEED_BARS: int = 8
+const YELLOW_INTRO_SPAWN_STATES: int = 11
+const YELLOW_INTRO_FRAMESETS: int = 11
+const YELLOW_INTRO_OAM_SETS: int = 20
+const YELLOW_INTRO_SINE_BYTES: int = 32
+const YELLOW_INTRO_SINE_WORDS: int = 32
+const YELLOW_INTRO_PAL_END: int = 0xFF
+const ANIM_FRAME_END: int = 0xFF
+const ANIM_FRAME_RESTART: int = 0xFE
+const ANIM_FRAME_DURATION_MASK: int = 0x3F
+## `PAL_SET`'s and `ATTR_BLK`'s bytes.
+const PAL_SET_COMMAND: int = 0x51
+const PAL_SET_ROW: int = 1
+const OAM_ROW_SIZE: int = 4
+const PAL_SET_PALETTES: int = 4
+const ATTR_BLK_COUNT_AT: int = 1
+const ATTR_BLK_ROWS_AT: int = 2
+const ATTR_BLK_ROW_SIZE: int = 6
+const ATTR_BLK_MAX_ROWS: int = 3
+
 ## `LoadPokedexTilePatterns`: `PokedexTileGraphics` at `vChars2 tile $60`, over
 ## the text box sheet, with `PokeballTileGraphics`' first tile at $72 behind it.
 const POKEDEX_TILES: int = 18
@@ -1370,6 +1424,12 @@ const PIKACHU_CRIES: int = 43
 const PIKACHU_CRY_ROW_SIZE: int = 3
 const PIKACHU_CRY_LEAD_FRAMES: int = 3
 const PIKACHU_CRY_SAMPLES_PER_FRAME: int = 394
+
+
+## `PlayPikachuSoundClip`'s frames for a clip of [param clip_bytes].
+static func pikachu_cry_frames(clip_bytes: int) -> int:
+	return PIKACHU_CRY_LEAD_FRAMES \
+		+ ceili(float(clip_bytes * 8) / float(PIKACHU_CRY_SAMPLES_PER_FRAME))
 ## `DisplayTextIDInit`'s `CopyScreenTileBufferToVRAM` and `LoadFontTilePatterns`,
 ## measured from the A press to `TalkToPikachu` on the cartridge.
 const TEXT_INIT_FRAMES: int = 20
@@ -2144,6 +2204,28 @@ const RED_BLUE: Dictionary = {
 	"credits_the_end": 0x7473E,
 	"copyright_tiles": 0x120C8,
 	"copyright_text": 0x04556,
+	"splash_falling_star": 0x70190,
+	"splash_logo_tiles": 0x41959,
+	"splash_small_star_oam": 0x700EE,
+	"splash_small_star_waves": 0x700F2,
+	"splash_logo_oam": 0x70140,
+	"splash_shooting_star_oam": 0x70180,
+	"intro_back_mon": 0x41A99,
+	"intro_front_mon": 0x42099,
+	"intro_nidorino_anims": 0x41910,
+	"tile_id_lists": 0x79AEA,
+	"title_logo_tiles": 0x11380,
+	"title_version_tiles": 0x6802F,
+	"title_player_tiles": 0x126A8,
+	"title_mons": 0x04588,
+	"title_version_text": 0x045A1,
+	"pal_packet_title": 0x72488,
+	"pal_packet_intro": 0x724B8,
+	"pal_packet_splash": 0x724C8,
+	"pal_packet_generic": 0x724A8,
+	"blk_packet_title": 0x7228E,
+	"blk_packet_intro": 0x722C1,
+	"blk_packet_splash": 0x723DD,
 	"change_box_text": 0x73909,
 	"choose_box_text": 0x739D4,
 	"dex_ratings": 0x441D1,
@@ -2607,6 +2689,44 @@ const YELLOW: Dictionary = {
 	"credits_the_end": 0xF181B,
 	"copyright_tiles": 0x10C48,
 	"copyright_text": 0x04355,
+	"splash_falling_star": 0x701B6,
+	"splash_logo_tiles": 0x41AA6,
+	"splash_small_star_oam": 0x70101,
+	"splash_small_star_waves": 0x70105,
+	"splash_logo_oam": 0x70166,
+	"splash_shooting_star_oam": 0x701A6,
+	"tile_id_lists": 0x79C46,
+	"title_logo_tiles": 0xF46FB,
+	"title_logo_corner": 0xF4E2B,
+	"title_pikachu_bg": 0xF4E5B,
+	"title_pikachu_ob": 0xF525B,
+	"title_nine_tile": 0x10E08,
+	"title_logo_tilemap": 0xF45F9,
+	"title_bubble_tilemap": 0xF4673,
+	"title_pikachu_tilemap": 0xF468F,
+	"title_eyes_oam": 0xF45C7,
+	"yellow_intro_gfx_1": 0xFA35A,
+	"yellow_intro_gfx_2": 0xFAB5A,
+	"yellow_intro_clouds": 0xF9C2C,
+	"yellow_intro_tilemap_1": 0xF9B6E,
+	"yellow_intro_tilemap_2": 0xF9BE6,
+	"yellow_intro_tilemap_3": 0xF9BF2,
+	"yellow_intro_speed_bars": 0xF99F0,
+	"yellow_intro_pal_flash": 0xF9DD6,
+	"yellow_intro_pal_fade": 0xF9E0A,
+	"yellow_intro_spawn_states": 0xF9FDA,
+	"yellow_intro_frames": 0xFA0EA,
+	"yellow_intro_oam": 0xFA13D,
+	"yellow_intro_sine": 0xF9ED8,
+	"yellow_intro_sine_words": 0xFA0AA,
+	"pal_packet_title": 0x727C1,
+	"pal_packet_intro": 0x727F1,
+	"pal_packet_splash": 0x72801,
+	"pal_packet_generic": 0x727E1,
+	"pal_packet_beach": 0x72811,
+	"blk_packet_title": 0x72681,
+	"blk_packet_intro": 0x726A1,
+	"blk_packet_splash": 0x72731,
 	"change_box_text": 0x73C52,
 	"choose_box_text": 0x73D10,
 	"dex_ratings": 0x441D1,
