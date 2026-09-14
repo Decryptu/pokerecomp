@@ -16,7 +16,7 @@ const GEN2_REGIONS: Array[StringName] = [&"scripts", &"objects", &"framesets", &
 ## Generation 1's one, whose four tables are interleaved inside it.
 const GEN1_REGION: StringName = &"anims"
 ## Where three of them stand in it; `AttackAnimationPointers` is its base.
-const GEN1_TABLES: Array[StringName] = [&"subanims", &"frame_blocks", &"base_coords"]
+const GEN1_TABLES: Array[StringName] = [&"subanims", &"frame_blocks", &"base_coords", &"move_sounds"]
 
 var _regions: Dictionary = {}
 var _gfx: Array = []
@@ -105,6 +105,20 @@ func gen1() -> bool:
 func gen1_pointer(table: StringName, index: int) -> int:
 	var at: int = int(_tables.get(table, -1))
 	return -1 if at < 0 else word_at(GEN1_REGION, at + index * Gen1Layout.POINTER_SIZE)
+
+
+## `GetMoveSound`'s row for [param move]: `{ sound_id, pitch, tempo }`, or
+## empty for `NO_MOVE - 1`, a move past the table or a cache without it.
+func gen1_move_sound(move: int) -> Dictionary:
+	var at: int = int(_tables.get(&"move_sounds", -1))
+	if at < 0 or move < 1 or move > Gen1Layout.MOVE_COUNT:
+		return {}
+	at += (move - 1) * Gen1Layout.MOVE_SOUND_SIZE
+	return {
+		"sound_id": byte_at(GEN1_REGION, at),
+		"pitch": byte_at(GEN1_REGION, at + 1),
+		"tempo": byte_at(GEN1_REGION, at + 2),
+	}
 
 
 ## One `FrameBlockBaseCoords` row as the y and x `DrawFrameBlock` adds.

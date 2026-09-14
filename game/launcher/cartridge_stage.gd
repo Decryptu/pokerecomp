@@ -11,8 +11,7 @@ signal selection_changed(game_id: StringName)
 signal insert_requested(game_id: StringName)
 signal play_requested(game_id: StringName)
 
-## How big a cartridge beside the selection is, as a fraction of it.
-const SIDE: float = 0.56
+const SIDE: float = 0.56  ## How big a cartridge beside the selection is, as a fraction of it.
 ## The space between two cartridges, as a fraction of the selected one's width.
 const GAP: float = 0.18
 ## The narrowest the selected cartridge gets, as a fraction of the stage, once
@@ -25,10 +24,8 @@ const MIN_HEIGHT: float = 130.0
 ## Slots past the first that a cartridge is pushed out by, so the one wrapping
 ## round is well off the visible group before it crosses.
 const EXILE: float = 2.6
-## Where a cartridge has faded out completely, in slots.
-const VANISH: float = 1.34
-## How far a pointer may move while pressed and still count as a click.
-const TAP: float = 6.0
+const VANISH: float = 1.34  ## Where a cartridge has faded out completely, in slots.
+const TAP: float = 6.0  ## How far a pointer may move while pressed and still count as a click.
 
 var selected: int = 0
 

@@ -53,10 +53,12 @@ const IMPLEMENTED_EFFECTS: Dictionary = {&"red": 36, &"blue": 36, &"yellow": 36}
 ## The whole engine in two numbers: a delay read wrong moves the frames and a
 ## transform read wrong moves the sprites. Yellow is one animation short and the
 ## same sprites, `ZigZagScreenAnim` being `SE_WAVY_SCREEN` alone.
+## The tileset copy in front of every subanimation is `CopyVideoData`'s frame per
+## eight tiles and one more, and `AnimationCleanOAM` is a frame before each clear.
 const EXPECTED_TOTALS: Dictionary = {
-	&"red": [24908, 141730],
-	&"blue": [24908, 141730],
-	&"yellow": [24396, 141730],
+	&"red": [32684, 161445],
+	&"blue": [32684, 161445],
+	&"yellow": [32172, 161445],
 }
 
 ## `AnimationTypePointerTable`'s six routines, as the frames each spends: the
@@ -272,7 +274,9 @@ func _verify_pound(anims: Gen2BattleAnimData) -> void:
 	var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(anims, POUND_INDEX)
 	if not _r.check(player != null, "%s: POUND would not start." % _r.game_id):
 		return
-	player.advance_frame()
+	## `LoadMoveAnimationTiles` first: the block lands after the tileset's frames.
+	for _frame: int in TILESET_TILES[0] / Gen2BattleAnimPlayer.GEN1_COPY_TILES_PER_FRAME + 2:
+		player.advance_frame()
 	var sprites: Array = player.sprites()
 	if not _r.check(sprites.size() == POUND_SPRITES, "%s: POUND drew %d sprites on its first frame, expected %d." % [_r.game_id, sprites.size(), POUND_SPRITES]):
 		return

@@ -16,8 +16,7 @@ var slot: int = -1
 var move_number: int = 0
 var move: Dictionary = {}
 
-## The same Array [method Gen2Battle.take_actions] hands its caller back.
-var events: Array = []
+var events: Array = []  ## The same Array [method Gen2Battle.take_actions] hands its caller back.
 
 var damage: int = 0
 var critical: bool = false
@@ -45,11 +44,9 @@ var level_override: int = -1
 ## MOVE_EFFECT` once a doll has broken, so the steps behind it read a plain hit.
 var effect_override: int = -1
 
-## What was taken off, not [member damage]: three hit points left takes three.
-var dealt: int = 0
+var dealt: int = 0  ## What was taken off, not [member damage]: three hit points left takes three.
 
-## A command has decided the move is finished, however it finished.
-var ended: bool = false
+var ended: bool = false  ## A command has decided the move is finished, however it finished.
 
 ## The release turn of a two-turn move, whose PP was spent on the charge turn:
 ## what [method Gen2EffectCommands._do_turn] reads.
@@ -65,8 +62,7 @@ var disobeyed: bool = false
 ## zero for none. [Gen2Battle] consumes it as soon as the command returns.
 var called_move_number: int = 0
 
-## `StoreEnergy`'s Bide release, which skips `UsedMoveText`.
-var bide_release: bool = false
+var bide_release: bool = false  ## `StoreEnergy`'s Bide release, which skips `UsedMoveText`.
 
 ## The accuracy byte rolled against, -1 for the move's own. Only
 ## [method Gen2EffectCommands._thunder_accuracy] sets it.

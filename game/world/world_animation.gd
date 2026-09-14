@@ -512,6 +512,29 @@ func _tile_bytes(tile: int) -> PackedByteArray:
 	return out
 
 
+## A tile written from outside the sequence, as `LoadSpinnerArrowTiles` writes
+## VRAM over the tileset's own: [param pixels] is the tile's sixty-four colour
+## indices. Answers whether anything moved, which is what a repaint is gated on.
+func write_tile_indices(tile: int, pixels: PackedByteArray) -> bool:
+	if tileset == null or tile < 0 or tile >= tileset.tile_count \
+		or pixels.size() < PokeTiles.TILE_PIXELS:
+		return false
+	var width: int = tileset.tile_count * PokeTiles.TILE_WIDTH
+	var moved: bool = false
+	for y: int in PokeTiles.TILE_HEIGHT:
+		for x: int in PokeTiles.TILE_WIDTH:
+			var at: int = y * width + tile * PokeTiles.TILE_WIDTH + x
+			var value: int = int(pixels[y * PokeTiles.TILE_WIDTH + x])
+			if _indices[at] == value:
+				continue
+			_indices[at] = value
+			moved = true
+	if moved:
+		_changed = true
+		_changed_tiles[tile] = true
+	return moved
+
+
 func _set_tile_bytes(tile: int, bytes: PackedByteArray) -> void:
 	if tile < 0 or tile >= tileset.tile_count or bytes.size() < TILE_BYTES:
 		return

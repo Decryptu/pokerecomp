@@ -19,8 +19,7 @@ const SLOTS_NO_BIAS: int = -1
 
 const REEL_SIZE: int = Gen2Layout.SLOTS_REEL_SIZE
 const REELS: int = 3
-## `MAX_COINS`, which `Slots_CheckCoinCaseFull` refuses to pass.
-const MAX_COINS: int = 9999
+const MAX_COINS: int = 9999  ## `MAX_COINS`, which `Slots_CheckCoinCaseFull` refuses to pass.
 
 ## `SlotsJumptable` indices. `SLOTS_END_LOOP_F` is bit 7 of the same byte, which
 ## is what `SlotsLoop` leaves on.
@@ -95,10 +94,8 @@ const FLASH_FRAMES: int = 16
 ## `Slots_AskPlayAgain`'s sixty behind the ran-out-of-coins line.
 const WAIT_SFX_FRAMES: int = 16
 const RAN_OUT_FRAMES: int = 60
-## `REEL_MANIP_COUNTER`'s own 4, one per reel.
-const MANIP_COUNTER: int = 4
-## `Slots_StopReel`'s `REEL_STOP_DELAY`.
-const STOP_DELAY: int = 3
+const MANIP_COUNTER: int = 4  ## `REEL_MANIP_COUNTER`'s own 4, one per reel.
+const STOP_DELAY: int = 3  ## `Slots_StopReel`'s `REEL_STOP_DELAY`.
 
 ## `Slots_InitBias.Normal` and `.Lucky`: (threshold, symbol), walked until the
 ## rolled byte is at or below a threshold. A threshold is `percent`, which is
@@ -191,16 +188,14 @@ var _stopped: Array[PackedByteArray] = [
 var _keep_seven_chance: bool = false
 ## `wScriptVar`, which the map's own `setval` in front of the special leaves.
 var _lucky: bool = false
-## `hJoypadSum`, which the loop clears and a press adds to.
-var _pressed_a: bool = false
+var _pressed_a: bool = false  ## `hJoypadSum`, which the loop clears and a press adds to.
 ## Which sub-step of a blocking routine is next, and what is being asked for.
 var _prompt: int = Prompt.NONE
 var _prompt_name: StringName = &""
 var _resume: StringName = &""
 ## `DelayFrames` inside an action, which the whole loop spends rather than a pass.
 var _stall: int = 0
-## `WaitSFX`, which the host answers off its own driver.
-var _waiting_sfx: bool = false
+var _waiting_sfx: bool = false  ## `WaitSFX`, which the host answers off its own driver.
 ## The steps of an action that outlive the pass it started on, in the routine's
 ## own order. A `wait` step holds the loop until the channels are free.
 var _script: Array = []

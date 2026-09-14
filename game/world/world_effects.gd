@@ -16,6 +16,10 @@ var _shake_step: int = 1
 var _kind: StringName = &"none"
 var _source: Dictionary = {}
 var _sprites: Array = []
+## `VermilionDockSSAnneLeavesScript`'s frame, empty while no ship is leaving.
+var _ss_anne: Dictionary = {}
+## An OAM coordinate less what puts it on screen: y 16 and x 8.
+const OAM_ORIGIN: Vector2i = Vector2i(8, 16)
 
 ## The effect sprites, each named for the sheet it draws from.
 const SPRITE_BOULDER_DUST: StringName = &"boulder_dust"
@@ -85,6 +89,9 @@ const HEAL_MACHINE_FLASHES: int = 8
 ## A palette of the sprite's own rather than one of the map's: `.LoadPalettes`
 ## in Crystal and `rOBP1` in Generation 1.
 const HEAL_MACHINE_PALETTE: int = -1
+## A Generation 1 sprite wearing `rOBP1`: the record's `rotation` is the byte.
+const OBP_PALETTE: int = -2
+const SPRITE_SMOKE: StringName = &"smoke"
 
 const FLY_FROM_FRAMES: int = 128
 const FLY_TO_FRAMES: int = 64
@@ -385,7 +392,8 @@ func advance_pass() -> bool:
 ## One hardware frame: the four sprites whose source routine spins on
 ## `DelayFrame` rather than being stepped by `HandleObjectStep`.
 func advance_frame() -> bool:
-	return _spend_sprites(false)
+	_advance_ss_anne()
+	return _spend_sprites(false) or ss_anne_active()
 
 
 func _spend_sprites(pass_paced: bool) -> bool:
@@ -408,7 +416,7 @@ func active() -> bool:
 
 
 func sprites_active() -> bool:
-	return not _sprites.is_empty()
+	return not _sprites.is_empty() or ss_anne_active()
 
 
 ## `StepFunction_ScreenShake.Run` reaches hSCY and nothing else: the whole shake
@@ -432,7 +440,7 @@ func offset() -> Vector2:
 ## That anchor is the cell for the headbutt tree, which stands still, and the
 ## tracked object's own drawn position for the other two.
 func sprites() -> Array:
-	var out: Array = []
+	var out: Array = _ss_anne_puffs()
 	for sprite: Dictionary in _sprites:
 		if StringName(sprite["kind"]) == SPRITE_FLY_MON:
 			out.append_array(_fly_records(sprite))
@@ -446,6 +454,107 @@ func sprites() -> Array:
 			"rotation": _palette_rotation(sprite),
 			"frame": int(sprite["frame"]),
 			"tiles": _tiles_for(sprite),
+		})
+	return out
+
+
+## `AnimateBoulderDust`: `LoadSmokeTileFourTimes`' block two cells past the
+## player, walked a pixel back a step and flashing `rOBP1`. [param player] is
+## `wSpritePlayerStateData1YPixels` and its neighbour, [param facing] the
+## DOWN, UP, LEFT, RIGHT index and [param offsets] the cartridge's own table.
+func start_gen1_boulder_dust(player: Vector2i, facing: int, offsets: Array) -> void:
+	if facing < 0 or facing >= offsets.size():
+		return
+	_sprites.append({
+		"kind": SPRITE_SMOKE,
+		"cell": Vector2i.ZERO,
+		"object_index": -1,
+		"screen": true,
+		"palette": OBP_PALETTE,
+		"frame": 0,
+		"duration": Gen1Layout.BOULDER_DUST_STEPS * Gen1Layout.BOULDER_DUST_STEP_FRAMES,
+		"pixel": player + (offsets[facing] as Vector2i) - OAM_ORIGIN,
+		"drift": Gen1Layout.BOULDER_DUST_DRIFT[facing],
+		"obp": Gen1Layout.BOULDER_DUST_OBP1,
+		"flash": Gen1Layout.BOULDER_DUST_OBP1_FLASH,
+	})
+
+
+## `VermilionDockSSAnneLeavesScript` from its `ld c, 120`: eight columns, each a
+## puff over the funnel and sixteen drifts of eight frames scrolling the band
+## `SyncScrollWithLY` writes `rSCX` inside, then the erase, the horn and its
+## `ld c, 120`. Each drift moves every puff two pixels right; the puffs wear
+## `rOBP1` at zero and stand until `wUpdateSpritesEnabled` comes back.
+func start_gen1_ss_anne() -> void:
+	_ss_anne = {"frame": 0}
+
+
+func ss_anne_active() -> bool:
+	return not _ss_anne.is_empty()
+
+
+## `rSCX` for lines $50 to $7F this frame, which is the drifts done so far.
+func ss_anne_band_offset() -> int:
+	if _ss_anne.is_empty():
+		return 0
+	var frame: int = int(_ss_anne["frame"]) - Gen1Layout.SS_ANNE_LEAD_FRAMES
+	var drifting: int = Gen1Layout.SS_ANNE_COLUMNS * Gen1Layout.SS_ANNE_DRIFTS \
+		* Gen1Layout.SS_ANNE_DRIFT_FRAMES
+	if frame < 0 or frame >= drifting:
+		return 0
+	return frame / Gen1Layout.SS_ANNE_DRIFT_FRAMES
+
+
+func _advance_ss_anne() -> void:
+	if _ss_anne.is_empty():
+		return
+	var frame: int = int(_ss_anne["frame"])
+	var drifting: int = Gen1Layout.SS_ANNE_COLUMNS * Gen1Layout.SS_ANNE_DRIFTS \
+		* Gen1Layout.SS_ANNE_DRIFT_FRAMES
+	var total: int = Gen1Layout.SS_ANNE_LEAD_FRAMES + drifting \
+		+ Gen1Layout.SS_ANNE_ERASE_FRAMES + Gen1Layout.SS_ANNE_TAIL_FRAMES
+	if frame >= total:
+		_ss_anne = {}
+		return
+	_ss_anne["frame"] = frame + 1
+
+
+## The puffs as [method sprites] records: one per column begun, each drifted
+## two pixels for every drift begun since it was emitted, the emitting drift
+## included. Gone with the erase, when the sprites come back under `UpdateSprites`.
+func _ss_anne_puffs() -> Array:
+	var out: Array = []
+	if _ss_anne.is_empty():
+		return out
+	var frame: int = int(_ss_anne["frame"]) - Gen1Layout.SS_ANNE_LEAD_FRAMES
+	var column_frames: int = Gen1Layout.SS_ANNE_DRIFTS * Gen1Layout.SS_ANNE_DRIFT_FRAMES
+	if frame < 0 or frame >= Gen1Layout.SS_ANNE_COLUMNS * column_frames:
+		return out
+	var drift: int = frame / Gen1Layout.SS_ANNE_DRIFT_FRAMES
+	for column: int in Gen1Layout.SS_ANNE_COLUMNS:
+		if column * Gen1Layout.SS_ANNE_DRIFTS > drift:
+			break
+		var moved: int = drift - column * Gen1Layout.SS_ANNE_DRIFTS + 1
+		var pixel: Vector2i = Vector2i(
+			Gen1Layout.SS_ANNE_SMOKE_START_X - Gen1Layout.SS_ANNE_SMOKE_STEP * (column + 1)
+				+ Gen1Layout.SS_ANNE_SMOKE_DRIFT * moved,
+			Gen1Layout.SS_ANNE_SMOKE_Y
+		) - OAM_ORIGIN
+		out.append({
+			"kind": SPRITE_SMOKE, "cell": Vector2i.ZERO, "object_index": -1,
+			"screen": true, "palette": OBP_PALETTE, "rotation": 0, "frame": frame,
+			"tiles": _smoke_tiles(pixel),
+		})
+	return out
+
+
+## `WriteOAMBlock` of one tile four times: the 2x2 at [param pixel].
+static func _smoke_tiles(pixel: Vector2i) -> Array:
+	var out: Array = []
+	for index: int in 4:
+		out.append({
+			"offset": pixel + Vector2i((index & 1) * 8, (index >> 1) * 8),
+			"tile": 0, "flip_x": false,
 		})
 	return out
 
@@ -550,6 +659,10 @@ func _tiles_for(sprite: Dictionary) -> Array:
 			]
 		SPRITE_HEAL_MACHINE:
 			return _heal_machine_tiles(sprite, frame)
+		SPRITE_SMOKE:
+			## One `Delay3` a step, the block moved before the first.
+			var step: int = frame / Gen1Layout.BOULDER_DUST_STEP_FRAMES + 1
+			return _smoke_tiles((sprite["pixel"] as Vector2i) + (sprite["drift"] as Vector2i) * step)
 		SPRITE_BOULDER_DUST:
 			## `SetFacingBoulderDust` swaps FACING_BOULDER_DUST_1 and _2 on bit 1
 			## of the step frame, and each draws its one tile four times in a
@@ -686,6 +799,10 @@ func _heal_machine_tiles(sprite: Dictionary, frame: int) -> Array:
 ## own palette reports which rotation is up. Eight rotations of four leave the
 ## palette where it started, which is why the animation needs no restore.
 func _palette_rotation(sprite: Dictionary) -> int:
+	if StringName(sprite["kind"]) == SPRITE_SMOKE:
+		## The xor lands before the first `Delay3`, so the first step is flashed.
+		var step: int = int(sprite["frame"]) / Gen1Layout.BOULDER_DUST_STEP_FRAMES
+		return int(sprite["obp"]) ^ (int(sprite["flash"]) if step % 2 == 0 else 0)
 	if StringName(sprite["kind"]) != SPRITE_HEAL_MACHINE:
 		return 0
 	var flashes_at: int = int(sprite["balls"]) * HEAL_MACHINE_BALL_FRAMES

@@ -2863,14 +2863,38 @@ func _check_an_arrow_tile() -> void:
 	if world == null:
 		return
 	world.dispatch_sight_events()
+	## `LoadSpinnerArrowTiles` on every `.moveAhead` pass: the facing walks
+	## `SpinnerPlayerFacingDirections` and the arrows alternate on the parity of
+	## `wSimulatedJoypadStatesIndex`; `res BIT_SPINNING` leaves the last facing.
 	var passes: int = 0
+	var facings: Array[int] = []
+	var alternates: Array[bool] = []
 	while world.gen1_player_movement_running() and passes < SCRIPTED_WALK_PASSES:
+		var spinner: Dictionary = world.gen1_spinner()
+		_r.check(not spinner.is_empty() and int(spinner["tileset"]) == Gen1Layout.TILESET_GYM,
+			"the ride is not spinning on the gym's arrows: %s" % [spinner])
+		if alternates.is_empty() or alternates.back() != bool(spinner.get("alternate", false)):
+			alternates.append(bool(spinner.get("alternate", false)))
+		if facings.is_empty() or facings.back() != world.player_drawn_facing():
+			facings.append(world.player_drawn_facing())
+		_r.check(world.player_walk_frame() == 0, "the spinning player walked a frame.")
 		world.advance_player_step_pass()
 		passes += 1
 	_r.check(world.player_cell == VIRIDIAN_GYM_SPUN,
 		"the arrow tile spun the player to %s, not %s." % [
 			world.player_cell, VIRIDIAN_GYM_SPUN,
 		])
+	_r.check(world.gen1_spinner().is_empty(), "BIT_SPINNING outlived the ride.")
+	_r.check(facings.size() >= passes - 1 and facings.slice(0, 4) == [
+		Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_RIGHT,
+		Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_LEFT,
+	], "the player turned %s over %d passes." % [facings.slice(0, 6), passes])
+	_r.check(alternates.size() == 9, "the arrows alternated %d times over nine steps." % alternates.size())
+	## The landing pass turns once more after the last reading above.
+	var stopped: int = Gen1Layout.SPINNER_NEXT_FACING[facings.back()]
+	_r.check(world.player_facing == stopped, "the spin stopped facing %d and the player faces %d." % [
+		stopped, world.player_facing,
+	])
 	var still: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_GYM, VIRIDIAN_GYM_STILL)
 	if still == null:
 		return
@@ -3432,9 +3456,12 @@ func _drive_one_pass(world: Gen2WorldAPI) -> void:
 		world.run_event_queue(true)
 		guard += 1
 	world.advance_script_wait_frame()
+	## `CheckWarpsNoCollision` runs behind a landed step and nowhere else: a
+	## player turned onto a carpet by a script stands on it.
+	var stepping: bool = world.player_step_in_progress()
 	world.advance_player_step_pass()
 	world.advance_scripted_steps_pass()
-	if not world.player_step_in_progress() and world.warp_pending():
+	if stepping and not world.player_step_in_progress() and world.warp_pending():
 		world.try_warp()
 
 
@@ -4257,7 +4284,11 @@ const VERMILION_DOCK: int = 94
 const DOCK_GANGWAY := Vector2i(14, 2)
 const SS_ANNE_LEFT_FLAG: int = 1506
 const VERMILION_PAST_SAILOR := Vector2i(18, 29)
-const SHIP_LEAVES_PASSES: int = 1400
+const SHIP_LEAVES_PASSES: int = 1600
+## `ld c, 120` and `Delay3`, the drift, `EraseSSAnne` and `ld c, 120`.
+const SHIP_LEAVES_FRAMES: int = 123 + 8 * 16 * 8 + 2 + 120
+const SHIP_HORN_FRAMES: Array[int] = [123, 123 + 8 * 16 * 8 + 2]
+const SHIP_WATER_BLOCK: int = 0x0D
 
 
 func _check_the_ship_leaves() -> void:
@@ -4272,12 +4303,33 @@ func _check_the_ship_leaves() -> void:
 	if not _r.check(world != null and bool(world.try_warp().get("ok", false)),
 		"the gangway did not lead to the dock."):
 		return
-	for _pass: int in SHIP_LEAVES_PASSES:
+	var opened: Array = world.dispatch_sight_events()
+	var wait: Dictionary = world.pending_script_wait()
+	_r.check(
+		int(wait.get("frames", 0)) == SHIP_LEAVES_FRAMES,
+		"the dock holds the player for %s, not %d frames." % [wait, SHIP_LEAVES_FRAMES]
+	)
+	_r.check(_horn_frames(opened) == SHIP_HORN_FRAMES, "the horn sounds at %s." % [_horn_frames(opened)])
+	_r.check(
+		world.player_facing == Gen2WorldSprite.FACING_DOWN, "the player did not turn to the ship."
+	)
+	## The blocks land on the pass after the wait's last frame, with the steps
+	## behind it.
+	var wait_over: int = -1
+	var erased: bool = false
+	for pass_index: int in SHIP_LEAVES_PASSES:
 		world.dispatch_sight_events()
 		_drive_one_pass(world)
+		if wait_over < 0 and world.pending_script_wait().is_empty():
+			wait_over = pass_index
+		if not erased and wait_over >= 0 and pass_index > wait_over \
+			and world.map_id() == Vector2i(0, VERMILION_DOCK):
+			erased = true
+			_check_ship_erased(world)
 		if not world.scripted_movement_in_progress() and world.map_id() == Vector2i(0, VERMILION_CITY) \
 			and world.player_cell == VERMILION_PAST_SAILOR:
 			break
+	_r.check(erased, "the dock never reached EraseSSAnne.")
 	_r.check(world.event_flag_active(SS_ANNE_LEFT_FLAG), "EVENT_SS_ANNE_LEFT is clear.")
 	_r.check(world.map_id() == Vector2i(0, VERMILION_CITY) and world.player_cell == VERMILION_PAST_SAILOR,
 		"the ship left the player on %s at %s." % [world.map_id(), world.player_cell])
@@ -4287,6 +4339,32 @@ func _check_the_ship_leaves() -> void:
 	_r.check(not dock.warp_at(DOCK_GANGWAY).is_empty(),
 		"the gangway is gone from a dock loaded fresh.")
 	_r.note("gen1 walk the S.S. ANNE left, and the dock walked the player out past the sailor")
+
+
+## `SFX_SS_ANNE_HORN`'s frames out of the `ss_anne_leaves` event.
+func _horn_frames(opened: Array) -> Array:
+	var horns: Array = []
+	for result: Dictionary in opened:
+		for event: Dictionary in result.get("events", []):
+			if StringName(event.get("kind", &"")) != &"ss_anne_leaves":
+				continue
+			for sound: Dictionary in event.get("sounds", []):
+				if int(sound.get("index", 0)) == Gen1Layout.SFX_SS_ANNE_HORN:
+					horns.append(int(sound["frame"]))
+	return horns
+
+
+## `EraseSSAnne`'s five water blocks and six rows of overrides.
+func _check_ship_erased(world: Gen2WorldAPI) -> void:
+	for column: int in 5:
+		_r.check(
+			world.block_at(5 + column, 2) == SHIP_WATER_BLOCK,
+			"block %d of the ship's lower half still stands." % column
+		)
+	_r.check(
+		world.screen_tile_overrides().size() == 6 * Gen1Lcd.MAP_SIDE,
+		"EraseSSAnne wrote %d tiles." % world.screen_tile_overrides().size()
+	)
 
 
 ## `Route8GateMovePlayerRightScript` fills the joypad buffer by hand.

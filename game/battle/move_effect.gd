@@ -88,10 +88,8 @@ const SUPER_FANG: int = 40
 ## Sonicboom and Dragon Rage: the move's own power field, taken directly as the
 ## whole of the hit rather than as an input to the formula.
 const STATIC_DAMAGE: int = 41
-## Seismic Toss and Night Shade: the user's own level, exactly.
-const LEVEL_DAMAGE: int = 87
-## Psywave: a roll of the user's own, [method Gen2Damage.psywave_damage].
-const PSYWAVE: int = 88
+const LEVEL_DAMAGE: int = 87  ## Seismic Toss and Night Shade: the user's own level, exactly.
+const PSYWAVE: int = 88  ## Psywave: a roll of the user's own, [method Gen2Damage.psywave_damage].
 
 ## The substatuses: flinching and confusion in both shapes, plus Hyper Beam, the
 ## only move that recharges. Numbers read off the real move table with
@@ -307,8 +305,7 @@ const FRUSTRATION: int = 123
 const MAGNITUDE: int = 126
 const HIDDEN_POWER: int = 135
 
-## Present, which is a fourth power row that heals the target instead.
-const PRESENT: int = 122
+const PRESENT: int = 122  ## Present, which is a fourth power row that heals the target instead.
 
 ## Flail and Reversal, which share [constant Gen2EffectCommands.FIXED_DAMAGE]
 ## with the four constant-damage effects and are the only branch of it that runs
@@ -320,8 +317,7 @@ const REVERSAL: int = 99
 const FURY_CUTTER: int = 119
 const TRIPLE_KICK: int = 104
 
-## False Swipe, which leaves what it hits standing on one hit point.
-const FALSE_SWIPE: int = 101
+const FALSE_SWIPE: int = 101  ## False Swipe, which leaves what it hits standing on one hit point.
 
 ## Heal Bell, which is the only move that reaches the party behind the Pokémon on
 ## the field.

@@ -12,8 +12,7 @@ extends RefCounted
 ## number on all three cartridges.
 const MUSIC_CREDITS: int = 0x24
 const MUSIC_POST_CREDITS: int = 0x5C
-## `ld a, 32 / ld [wMusicFade], a`.
-const POST_CREDITS_FADE_FRAMES: int = 32
+const POST_CREDITS_FADE_FRAMES: int = 32  ## `ld a, 32 / ld [wMusicFade], a`.
 
 const COLUMNS: int = 20
 const ROWS: int = 18
@@ -25,8 +24,7 @@ const THIRD_ROWS: int = ROWS / THIRDS
 
 ## `.Jumptable`'s own length, which is what makes a tick thirteen frames.
 const CYCLE_FRAMES: int = 13
-## `ParseCredits`, always the entry the cycle opens on.
-const STEP_PARSE: int = 0
+const STEP_PARSE: int = 0  ## `ParseCredits`, always the entry the cycle opens on.
 ## The entries running `Credits_UpdateGFXRequestPath`.
 const GFX_STEPS: Array[int] = [4, 10]
 const GFX_STEPS_GOLD_SILVER: Array[int] = [5]
@@ -51,8 +49,7 @@ const BORDER_TOP_ROW: int = 4
 const BORDER_BOTTOM_ROW: int = 17
 const BORDER_BOTTOM_ROW_GOLD_SILVER: int = 13
 
-## `.parse`'s `hlcoord 0, 5` and the rows it fills.
-const TEXT_FIRST_ROW: int = 5
+const TEXT_FIRST_ROW: int = 5  ## `.parse`'s `hlcoord 0, 5` and the rows it fills.
 ## `hlcoord 0, 6` plus `SCREEN_WIDTH * 2` per line, so a batch's lines sit two
 ## rows apart.
 const TEXT_TOP_ROW: int = 6
@@ -107,8 +104,7 @@ var _frame: int = BLANK_FRAME
 ## Which sixteen-tile block of the mon run the banner draws, or -1 for
 ## `wCreditsBlankFrame2bpp`.
 var _block: int = -1
-## `wCreditsLYOverride`, the rSCX the two border bands are sampled through.
-var _scroll: int = 0
+var _scroll: int = 0  ## `wCreditsLYOverride`, the rSCX the two border bands are sampled through.
 ## `wTilemap`, `wAttrmap` and the BG map the first is copied into.
 var _tilemap := PackedInt32Array()
 var _attributes := PackedInt32Array()

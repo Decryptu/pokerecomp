@@ -289,6 +289,8 @@ var _learning_move: int = 0
 ## The moves a field evolution offered that would not fit, offered one at a time
 ## the way `EvolveAfterBattle` calls `LearnMove` over the new learnset.
 var _evolution_offers: Array[int] = []
+## The evolution a Rare Candy owes once its level box and moves are done.
+var _pending_evolution: Dictionary = {}
 
 ## `SaveMenu`'s own state: the text standing in the speech box, which of its
 ## lines is on the top row, `wMenuCursorY` for the yes/no, and the frames the
@@ -1935,14 +1937,18 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 		if StringName(result.get("reason", &"")) == &"move_slot_required":
 			_open_pp_move_list(number, party_index)
 			return
+		if StringName(result.get("reason", &"")) == &"starter_refuses":
+			_refuse_stone(party_index)
+			return
 		_show_pack_result(_use_refusal(StringName(result.get("reason", &"")), number), false)
 		return
 	if StringName(result.get("effect", &"")) == &"rare_candy":
 		## `RareCandyEffect` prints its level-up box and then runs
 		## `LearnLevelMoves`, whose full-moveset case is the same `ForgetMove` the
-		## TM path opens.
+		## TM path opens, and `EvolvePokemon` behind both with B able to refuse it.
 		_forget_party_index = party_index
 		_evolution_offers.assign(result.get("move_offers", []))
+		_pending_evolution = _candy_evolution_plan(party_index, result.get("evolution_row", {}))
 		_show_pack_result(_use_summary(item, result), true, _offer_next_evolution_move)
 		return
 	if StringName(result.get("effect", &"")) == &"evolution":
@@ -1973,6 +1979,11 @@ func _offer_next_evolution_move() -> void:
 	if _evolution_offers.is_empty():
 		_learning_move = 0
 		_forget_move_name = ""
+		if not _pending_evolution.is_empty():
+			var plan: Dictionary = _pending_evolution
+			_pending_evolution = {}
+			evolution_animation_requested.emit(plan, _offer_next_evolution_move)
+			return
 		_open_pack_mode(false)
 		return
 	var move: int = _evolution_offers.pop_front()
@@ -1995,6 +2006,36 @@ func _offer_next_evolution_move() -> void:
 	_offer_next_evolution_move()
 
 
+## `EvolvePokemon` off `RareCandyEffect`: the same plan the after-battle pass
+## builds, `wForceEvolution` clear, written by the world only once the screen
+## has run. Empty when the level owes no evolution.
+func _candy_evolution_plan(party_index: int, row: Dictionary) -> Dictionary:
+	if row.is_empty() or _pack_save == null or party_index >= _pack_save.party.size():
+		return {}
+	var mon: Gen2SaveMon = _pack_save.party[party_index]
+	return {
+		"index": party_index,
+		"old_species": mon.species,
+		"new_species": int(row.get("target", 0)),
+		"evolving_name": _target_name(party_index),
+		"statused": Gen2Evolution.is_statused(mon),
+		"shiny": Gen2Stats.is_shiny(mon.dvs),
+		"can_cancel": true,
+		"row": row.duplicate(true),
+		"apply": true,
+	}
+
+
+## The offers `EvolvePokemon`'s own `LearnLevelMoves` left, handed back by the
+## world once the row is written, in front of whatever the level already owed.
+func offer_evolution_moves(party_index: int, moves: Array) -> void:
+	_forget_party_index = party_index
+	var offers: Array[int] = []
+	offers.assign(moves)
+	offers.append_array(_evolution_offers)
+	_evolution_offers = offers
+
+
 ## The source has no single "it worked" line: the effect routine prints its own.
 ## These name what changed, from the values Gen2WorldPartyHost already returns.
 func _use_summary(item: Dictionary, result: Dictionary) -> String:
@@ -2015,6 +2056,17 @@ func _use_summary(item: Dictionary, result: Dictionary) -> String:
 	if int(result.get("status_cleared", 0)) != 0:
 		return "%s cured the status." % item_name
 	return "%s was used." % item_name
+
+
+## Yellow's `ItemUseEvoStone.notPlayerPikachu` not taken: `RefusingText` over
+## `GetPartyMonName`, the mood write, and `.canceledItemUse` keeping the stone.
+## `PlayPikachuSoundClip`'s clip 28 has no player here, as no clip has.
+func _refuse_stone(party_index: int) -> void:
+	_world.gen1_pikachu_mood(&"refused_stone")
+	_show_pack_result(Gen2TextStream.fill_marker(
+		_data.special_text("stone_refusal", "refusing"), Gen2TextStream.RAM_MARKER,
+		_target_name(party_index)
+	), false)
 
 
 ## `UseItem` and `UseRegisteredItem` refuse the same item in two words: the

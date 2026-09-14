@@ -28,8 +28,7 @@ const TOWN_MAP_FRAME_CORNER: Vector2i = Vector2i(7, 0)
 const TOWN_MAP_FRAME_BAR_AT: Vector2i = Vector2i(8, 2)
 const TOWN_MAP_FRAME_BAR_WIDTH: int = 11
 
-## `InitPokegearTilemap.Map`'s single bar under the card icons.
-const CARD_BAR_ROW: int = 2
+const CARD_BAR_ROW: int = 2  ## `InitPokegearTilemap.Map`'s single bar under the card icons.
 
 ## `Pokedex_GetArea.PlaceString_MonsNest`: the top row blanked, the same bar one
 ## row down and the header printed from column 2.
@@ -140,8 +139,7 @@ const NAME_AT: Vector2i = Vector2i(9, 0)
 ## which `LineFeedChar` answers by dropping one row at the string's own column.
 const NAME_BREAK_CODES: Array[int] = [0x1F, 0x25]
 
-## `PAL_TOWNMAP_CITY`, the one slot `FemalePokegearPals` changes.
-const CITY_PALETTE: int = 3
+const CITY_PALETTE: int = 3  ## `PAL_TOWNMAP_CITY`, the one slot `FemalePokegearPals` changes.
 
 ## Generation 1 draws one screen out of `CompressedMap` and prints over it.
 ## `DisplayTownMap` puts the cursor's name at (1,0), and `.townMapLoop` clears
@@ -168,8 +166,7 @@ var font: Gen2Font = null
 ## The region map screens have no box and never read it.
 var frame_style: int = 0
 var _tiles: Dictionary = {}
-## The three card tilemaps, by the names the cache keys them with.
-var _cards: Dictionary = {}
+var _cards: Dictionary = {}  ## The three card tilemaps, by the names the cache keys them with.
 ## `FlyMapLabelBorderGFX`, which the fly map loads over the first six Pokegear
 ## tiles, so it is a second window rather than more of the first.
 var _fly_tiles: Dictionary = {}

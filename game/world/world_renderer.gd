@@ -526,6 +526,51 @@ func _draw_transition(
 			)
 
 
+## `VermilionDock_SyncScrollWithLY`: lines $50 to $7F scroll by the drifts
+## done, the rest sit still. The columns the scroll brings in past the screen's
+## twentieth are `ScheduleEastColumnRedraw`'s copies of its eighteenth and
+## nineteenth, two a column pass, rather than anything the map holds there. A
+## view wider than the screen scrolls its whole width the same way.
+func _draw_ss_anne_band(background: Vector2) -> void:
+	if _effects == null or _atlas == null or not _effects.ss_anne_active():
+		return
+	var offset: int = _effects.ss_anne_band_offset()
+	if offset <= 0:
+		return
+	var screen: Vector2 = screen_offset()
+	var first_x: int = floori((background.x + screen.x) / PokeTiles.TILE_WIDTH)
+	var first_y: int = floori((background.y + screen.y) / PokeTiles.TILE_HEIGHT)
+	var shift: int = posmod(offset, PokeTiles.TILE_WIDTH)
+	var top: int = Gen1Layout.SS_ANNE_BAND_TOP / PokeTiles.TILE_HEIGHT
+	var bottom: int = Gen1Layout.SS_ANNE_BAND_BOTTOM / PokeTiles.TILE_HEIGHT
+	var columns: int = Gen2WorldAPI.VIEW_PIXELS.x / PokeTiles.TILE_WIDTH
+	var band := Rect2(
+		Vector2(0, screen.y + Gen1Layout.SS_ANNE_BAND_TOP),
+		Vector2(view_pixels().x, Gen1Layout.SS_ANNE_BAND_BOTTOM - Gen1Layout.SS_ANNE_BAND_TOP)
+	)
+	var size := Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT)
+	var left: int = -int(screen.x) / PokeTiles.TILE_WIDTH
+	var right: int = (view_pixels().x - int(screen.x)) / PokeTiles.TILE_WIDTH + 1
+	for row: int in range(top, bottom):
+		for column: int in range(left, right):
+			var source: int = column + offset / PokeTiles.TILE_WIDTH
+			if source >= columns:
+				source = columns - 2 + (source & 1)
+			var tile: int = _drawn_tile_at(first_x + source, first_y + row)
+			if tile < 0:
+				continue
+			var at := Rect2(
+				screen + Vector2(column * PokeTiles.TILE_WIDTH - shift, row * PokeTiles.TILE_HEIGHT),
+				size
+			)
+			var covered: Rect2 = at.intersection(band)
+			if covered.size.x <= 0.0:
+				continue
+			draw_texture_rect_region(_atlas, covered, Rect2(
+				Vector2(tile * PokeTiles.TILE_WIDTH, 0) + (covered.position - at.position), covered.size
+			))
+
+
 ## Where the cell at [param index] takes its map tile from, or -1 for its own.
 func _transition_source(index: int) -> int:
 	if index >= _transition_sources.size():
@@ -789,6 +834,8 @@ func _draw() -> void:
 	var camera_pixels: Vector2 = _camera_pixels()
 	var background: Vector2 = _background_camera()
 	_draw_hidden_trees(background)
+	_draw_tile_overrides(background)
+	_draw_ss_anne_band(background)
 	if not _transition_cells.is_empty():
 		_draw_transition(background)
 	if _transition_sprites == Gen2BattleTransition.SPRITES_NONE:
@@ -806,6 +853,24 @@ func _draw() -> void:
 	if battlers_only:
 		return
 	_draw_free_sprites(camera_pixels, player)
+
+
+## [method Gen2WorldAPI.screen_tile_overrides]: a tile written straight into
+## the background map, painted over the quad that still draws the block's own.
+func _draw_tile_overrides(background: Vector2) -> void:
+	for cell: Vector2i in _world.screen_tile_overrides():
+		var tile: int = int(_world.screen_tile_overrides()[cell])
+		draw_texture_rect_region(
+			_atlas,
+			Rect2(
+				Vector2(cell * PokeTiles.TILE_WIDTH) - background,
+				Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT),
+			),
+			Rect2(
+				Vector2(tile * PokeTiles.TILE_WIDTH, 0),
+				Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT),
+			),
+		)
 
 
 func _draw_hidden_trees(background: Vector2) -> void:
@@ -1434,13 +1499,16 @@ func _effect_palette(sheet: Dictionary, palette_index: int, rotation_step: int) 
 	var own: PackedColorArray = sheet.get("colors", PackedColorArray())
 	if own.is_empty():
 		## Generation 1's machine wears `rOBP1`, which `FlashSprite8Times` xors
-		## $28 into: two shades of the map's own four trade places where
-		## Crystal's four rotate.
+		## $28 into, and the smoke wears the byte its record carries: the map's
+		## own four through a DMG order, where Crystal's four rotate.
+		if palette_index == Gen2WorldEffects.OBP_PALETTE:
+			return Gen2WorldPalette.fade_palette(_gen1_map_colors(), rotation_step)
 		if palette_index == Gen2WorldEffects.HEAL_MACHINE_PALETTE \
 			and _world.data.generation == RomRegistry.GEN1:
-			var shades: Array[int] = []
-			shades.assign(Gen1Layout.HEAL_MACHINE_SHADES[rotation_step & 1])
-			return PokePalette.through_shades(_gen1_map_colors(), shades)
+			var flashed: int = Gen1Layout.HEAL_MACHINE_OBP1_FLASH if rotation_step & 1 else 0
+			return Gen2WorldPalette.fade_palette(
+				_gen1_map_colors(), Gen1Layout.HEAL_MACHINE_OBP1 ^ flashed
+			)
 		return _overworld_sprite_colors(palette_index)
 	var rotated := PackedColorArray()
 	for slot: int in own.size():

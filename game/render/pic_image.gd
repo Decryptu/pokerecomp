@@ -257,7 +257,8 @@ static func x_flipped(image: Image) -> Image:
 ## [param mirrored] is `wBoxAlignment`, which `LoadOrientedFrontpic` reads:
 ## reversing the columns leaves the trailing blank on the left instead.
 ## [param generation] is `LoadUncompressedSpriteData`'s `(8 - w) / 2`, which
-## does centre the pic.
+## does centre the pic, and `wSpriteFlipped` mirrors the whole seven-tile box,
+## so a six-wide pic's blank column crosses over.
 static func frontpic_pad_columns(
 	width: int, mirrored: bool = false, generation: int = RomRegistry.GEN2
 ) -> int:
@@ -265,7 +266,8 @@ static func frontpic_pad_columns(
 		return 0
 	if generation == RomRegistry.GEN1:
 		@warning_ignore("integer_division")
-		return (FRONTPIC_TILES + 1 - width) / 2
+		var centred: int = (FRONTPIC_TILES + 1 - width) / 2
+		return FRONTPIC_TILES - width - centred if mirrored else centred
 	return FRONTPIC_TILES - 1 - width if mirrored else 1
 
 
@@ -324,6 +326,38 @@ static func animation_box_indices(
 				for x: int in PokeTiles.TILE_WIDTH:
 					out[to + x] = pixels[from + x]
 	return out
+
+
+## `LoadMonFrontSprite`'s `vFrontPic`: the 7x7 box as forty-nine column-major
+## tiles of colour indices, the pic centred by `LoadUncompressedSpriteData`'s
+## `(8 - w) / 2` and bottom-aligned. [param flipped] is `wSpriteFlipped`, which
+## mirrors the whole box, padding included.
+static func gen1_front_strip(data: GameData, species: int, flipped: bool = false) -> PackedByteArray:
+	var side: int = FRONTPIC_TILES
+	var strip := PackedByteArray()
+	strip.resize(side * side * PokeTiles.TILE_PIXELS)
+	var pic: Dictionary = data.species_pic(species)
+	var cell: Dictionary = atlas_cell(
+		data.atlas_indices(String(pic.get("atlas", ""))), data.atlas(String(pic.get("atlas", ""))), pic
+	) if not pic.is_empty() else {}
+	if cell.is_empty():
+		return strip
+	var width: int = int(cell["width"])
+	var height: int = int(cell["height"])
+	var indices: PackedByteArray = x_flipped_indices(cell["indices"], width) if flipped \
+		else cell["indices"]
+	var left: int = frontpic_pad_columns(width / PokeTiles.TILE_WIDTH, flipped, RomRegistry.GEN1) \
+		* PokeTiles.TILE_WIDTH
+	var top: int = side * PokeTiles.TILE_WIDTH - height
+	var stride: int = side * side * PokeTiles.TILE_WIDTH
+	for y: int in height:
+		for x: int in width:
+			var bx: int = left + x
+			var by: int = top + y
+			var tile: int = (bx / PokeTiles.TILE_WIDTH) * side + by / PokeTiles.TILE_WIDTH
+			strip[(by % PokeTiles.TILE_WIDTH) * stride + tile * PokeTiles.TILE_WIDTH + bx % PokeTiles.TILE_WIDTH] = \
+				indices[y * width + x]
+	return strip
 
 
 ## `LoadOrientedFrontpic`'s `.x_flip` on its own: every tile's pixels reversed

@@ -436,7 +436,13 @@ static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Diction
 	)
 	if not bool(shock.get("ok", false)):
 		return shock
-	var effects: Array = [machine["effect"], shock["effect"]]
+	var smoke: Dictionary = _read_pinned_sheet(
+		rom, int(layout.get("smoke_gfx", -1)),
+		Gen1Layout.SMOKE_BYTES, Gen1Layout.SMOKE_VTILE, "smoke"
+	)
+	if not bool(smoke.get("ok", false)):
+		return smoke
+	var effects: Array = [machine["effect"], shock["effect"], smoke["effect"]]
 	## The rows behind `ShockEmote`, by Generation 2's names for the same
 	## bubbles: Red and Blue stop at HappyEmote, Yellow runs to FishEmote.
 	for index: int in range(1, int(layout.get("emote_sheets", 1))):

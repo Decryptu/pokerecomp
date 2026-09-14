@@ -8,8 +8,7 @@ extends RefCounted
 
 const SCREEN_WIDTH: int = 20
 const SCREEN_HEIGHT: int = 18
-## `SCREEN_HEIGHT_PX`, the scanlines a table entry can be read for.
-const SCREEN_LINES: int = 144
+const SCREEN_LINES: int = 144  ## `SCREEN_HEIGHT_PX`, the scanlines a table entry can be read for.
 
 ## `wLYOverrides` and `wLYOverridesBackup` are each `align 8`, and every routine
 ## that indexes one loads only the low byte (`ld h, HIGH(...)` then `ld l, a`),
@@ -23,8 +22,7 @@ const LY_PAGE: int = 256
 const LY_CLEAR_LIVE: int = 0x99
 const LY_CLEAR_BACKUP: int = 0x91
 
-## `' '`, which is what `ClearBox` fills with.
-const BLANK_TILE: int = 0x7F
+const BLANK_TILE: int = 0x7F  ## `' '`, which is what `ClearBox` fills with.
 
 ## What `hLCDCPointer` names: the register the scanline table is written into.
 ## Zero is the table switched off, which is what `PushLYOverrides` checks.
@@ -36,16 +34,14 @@ const LCDC_BGP: int = 0x47
 ## `%11100100`, the DMG palette that maps every colour to itself.
 const PALETTE_IDENTITY: int = 0xE4
 
-## `NUM_PALS`: eight background and eight object palettes.
-const PALETTE_COUNT: int = 8
+const PALETTE_COUNT: int = 8  ## `NUM_PALS`: eight background and eight object palettes.
 ## `PAL_BATTLE_BG_*` and `PAL_BATTLE_OB_*` slots the effects name.
 const PAL_BG_PLAYER: int = 0
 const PAL_BG_ENEMY: int = 1
 const PAL_OB_ENEMY: int = 0
 const PAL_OB_PLAYER: int = 1
 const PAL_OB_GRAY: int = 2
-## `LoadTrainerHudOAM` draws the party balls on this one.
-const PAL_OB_YELLOW: int = 3
+const PAL_OB_YELLOW: int = 3  ## `LoadTrainerHudOAM` draws the party balls on this one.
 
 ## `wSurfWaveBGEffect`, the 64-entry wave `BattleBGEffect_Surf` rotates.
 const SURF_WAVE_LENGTH: int = 0x40
@@ -79,8 +75,7 @@ var r_obp0: int = PALETTE_IDENTITY
 var bg_palette_maps: PackedByteArray = PackedByteArray()
 var ob_palette_maps: PackedByteArray = PackedByteArray()
 
-## `hCGBPalUpdate`.
-var palettes_dirty: bool = false
+var palettes_dirty: bool = false  ## `hCGBPalUpdate`.
 
 ## `wTilemap`, the 20x18 screen the battler pictures are drawn into. Effects
 ## clear boxes in it, shift its rows and stamp resized pictures over it.
@@ -90,8 +85,7 @@ var bg_map: PackedByteArray = PackedByteArray()
 var bg_map_mode: int = 0
 var bg_map_third: int = 0
 
-## `wSurfWaveBGEffect`.
-var surf_wave: PackedByteArray = PackedByteArray()
+var surf_wave: PackedByteArray = PackedByteArray()  ## `wSurfWaveBGEffect`.
 
 ## What the tilemap effects did to each battler's picture, keyed by `player_side`.
 ## `BattleBGEffect_HideMon`, `..._RemoveMon` and `..._RunPicResizeScript` say it

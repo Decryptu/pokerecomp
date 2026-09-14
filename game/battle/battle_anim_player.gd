@@ -7,8 +7,7 @@ extends RefCounted
 ## it yields, steps every live object and collects `wShadowOAM`.
 ## [method unimplemented] reports what an animation asked for and did not get.
 
-## `NUM_BATTLE_ANIM_STRUCTS`: an eleventh object is simply not spawned.
-const MAX_OBJECTS: int = 10
+const MAX_OBJECTS: int = 10  ## `NUM_BATTLE_ANIM_STRUCTS`: an eleventh object is simply not spawned.
 
 const OBJECT_STRUCT_BYTES: int = 24
 
@@ -18,8 +17,7 @@ const OBJECT_STRUCT_BYTES: int = 24
 ## the cartridge's own bug (docs/bugs_and_glitches.md), reproduced.
 const CLEAR_OBJS_BYTES: int = 0xA0
 
-## The hardware's forty sprites.
-const MAX_SPRITES: int = 40
+const MAX_SPRITES: int = 40  ## The hardware's forty sprites.
 
 ## The five sheets `anim_1gfx` through `anim_5gfx` may have loaded at once.
 const TILE_DICT_ENTRIES: int = 5
@@ -29,8 +27,7 @@ const TILE_DICT_ENTRIES: int = 5
 ## five-sheet animation can silently load fewer.
 const MAX_TILES: int = 128 - Gen2BattleAnimObject.BASE_TILE
 
-## `wBattleAnimFlags` bits (constants/ram_constants.asm).
-const FLAG_KEEP_SPRITES: int = 1 << 3
+const FLAG_KEEP_SPRITES: int = 1 << 3  ## `wBattleAnimFlags` bits (constants/ram_constants.asm).
 
 ## The two `AnimObjGFX` rows with no sheet: the battler graphics commands fill
 ## them from whichever picture is on the field.
@@ -87,8 +84,7 @@ var _enemy_turn: bool = false
 
 var _objects: Array[Gen2BattleAnimObject] = []
 var _last_object_index: int = 0
-## `wBattleAnimTileDict`: five (graphics id, tile offset) pairs.
-var _tile_dict: Array = []
+var _tile_dict: Array = []  ## `wBattleAnimTileDict`: five (graphics id, tile offset) pairs.
 ## [code]{ gfx, tile }[/code] per loaded tile, so a renderer knows where an OAM
 ## tile id's pixels come from.
 var _tiles: Array = []
@@ -118,8 +114,8 @@ var _gen1_steps: Array = []
 var _gen1_wait: int = 0
 ## A routine rather than a row: the step list is the whole animation.
 var _gen1_steps_only: bool = false
-## `wNumShakes`, which `DoBallShakeSpecialEffects` counts off.
-var _gen1_shakes: int = 0
+var _gen1_sound: int = Gen1Layout.MOVE_SOUND_NONE  ## `wAnimSoundID`, the row's move whose sound plays.
+var _gen1_shakes: int = 0  ## `wNumShakes`, which `DoBallShakeSpecialEffects` counts off.
 
 ## `wCurItem`, read by `GetBallAnimPal` to colour a thrown ball. Nothing else
 ## asks, and a non-ball falls out of `BallColors` on its own terminator.
@@ -165,7 +161,7 @@ static func create(
 
 ## `PlayAnimation`: `battle_anim` rows, each a special effect or a subanimation
 ## of frame blocks drawn straight into `wShadowOAM`. There is no `param` and no
-## wobble list, and a row's sound byte is not a step this player holds.
+## wobble list; a row's sound byte is raised as [constant GEN1_MOVE_SOUND].
 static func create_gen1(
 	anim_data: Gen2BattleAnimData, index: int, on_enemy_turn: bool = false,
 	shakes: int = 0
@@ -571,7 +567,11 @@ func _do_battle_anim_frame(object: Gen2BattleAnimObject) -> void:
 
 ## `BattleAnim_ClearOAM`. Keeping the sprites does not keep their colours: every
 ## one is moved onto `PAL_BATTLE_OB_ENEMY`, which the source asserts is zero.
+## `PlayAnimation` clears nothing on its way out: a last block of
+## `FRAMEBLOCKMODE_03` leaves its sprites for the next `ClearSprites`.
 func _finish() -> void:
+	if _gen1:
+		return
 	if not _keep_sprites:
 		_sprites = []
 		return
@@ -615,33 +615,49 @@ func _gen1_step() -> void:
 		_gen1_read_row()
 
 
-## One `battle_anim` row; $FF is the terminator before it is an effect id.
+## One `battle_anim` row; $FF is the terminator before it is an effect id. A
+## special effect's sound plays as it starts; a subanimation's waits for its
+## tileset and plays with the first block.
 func _gen1_read_row() -> void:
 	var byte: int = _gen1_byte(_gen1_at)
 	if byte == Gen1Layout.ANIM_END:
 		_gen1_done = true
 		return
+	_gen1_sound = _gen1_byte(_gen1_at + 1)
 	if byte >= Gen1Layout.ANIM_FIRST_SE_ID:
 		_gen1_at += Gen1Layout.ANIM_SE_SIZE
+		_gen1_play_move_sound()
 		_gen1_begin_effect(byte)
 		return
 	_gen1_delay = byte & Gen1Layout.ANIM_DELAY_MASK
 	var subanim: int = _gen1_byte(_gen1_at + 2)
 	_gen1_at += Gen1Layout.ANIM_SUBANIM_SIZE
-	_gen1_load_tileset(byte >> Gen1Layout.ANIM_TILESET_SHIFT)
+	_gen1_wait = _gen1_load_tileset(byte >> Gen1Layout.ANIM_TILESET_SHIFT)
 	_gen1_begin_subanim(subanim)
 
 
 ## `LoadMoveAnimationTiles`: one sheet at `vSprites tile $31`, which every frame
-## block tile is counted from, so the window is the sheet itself.
-func _gen1_load_tileset(tileset: int) -> void:
+## block tile is counted from, so the window is the sheet itself. Answers the
+## frames `CopyVideoData` spends on it: one per eight tiles and one more.
+func _gen1_load_tileset(tileset: int) -> int:
 	var row: Dictionary = _data.gfx(tileset)
 	if row.is_empty():
-		return
+		return 0
 	_tiles = []
 	_tiles.resize(int(row["tiles"]))
 	for tile: int in _tiles.size():
 		_tiles[tile] = {"gfx": tileset, "tile": tile}
+	@warning_ignore("integer_division")
+	return _tiles.size() / GEN1_COPY_TILES_PER_FRAME + 1
+
+
+## `PlaySubanimation`'s `PlaySound`, for the host to resolve through
+## `GetMoveSound`; `NO_MOVE - 1` plays nothing.
+func _gen1_play_move_sound() -> void:
+	if _gen1_sound == Gen1Layout.MOVE_SOUND_NONE:
+		return
+	_frame_commands.append({"name": GEN1_MOVE_SOUND, "byte": 0, "operands": [_gen1_sound]})
+	_gen1_sound = Gen1Layout.MOVE_SOUND_NONE
 
 
 ## `LoadSubanimation`: the transform the header's type answers against whose
@@ -668,8 +684,8 @@ func _gen1_begin_subanim(index: int) -> void:
 func _gen1_subanim_step() -> void:
 	if _gen1_mode >= 0:
 		var counter: int = _gen1_rows.size() - _gen1_row + 1
-		_gen1_end_block()
-		_gen1_steps = _gen1_block_effect_steps(counter)
+		var cleaned: Array = [{&"frames": 1}, {&"sprites": []}] if _gen1_end_block() else []
+		_gen1_steps = cleaned + _gen1_block_effect_steps(counter)
 		if not _gen1_steps.is_empty():
 			return
 	if _gen1_row >= _gen1_rows.size():
@@ -677,6 +693,8 @@ func _gen1_subanim_step() -> void:
 		return
 	var row: Dictionary = _gen1_rows[_gen1_row]
 	_gen1_row += 1
+	if _gen1_row == 1:
+		_gen1_play_move_sound()
 	_gen1_block = _gen1_write
 	_gen1_draw_block(int(row["frame_block"]), int(row["base_coord"]))
 	_gen1_mode = int(row["mode"])
@@ -686,18 +704,18 @@ func _gen1_subanim_step() -> void:
 
 ## After `DrawFrameBlock`'s delay: `FRAMEBLOCKMODE_04` rewinds so the next block
 ## lands on this one, and GROWL keeps the buffer while rewinding to the top.
-func _gen1_end_block() -> void:
+## True when `AnimationCleanOAM` follows, which is a frame and then the clear.
+func _gen1_end_block() -> bool:
 	var mode: int = _gen1_mode
 	_gen1_mode = -1
 	if mode == Gen1Layout.FRAMEBLOCKMODE_KEEP_NO_DELAY \
 			or mode == Gen1Layout.FRAMEBLOCKMODE_KEEP:
-		return
+		return false
 	if mode == Gen1Layout.FRAMEBLOCKMODE_HOLD:
 		_gen1_write = _gen1_block
-		return
-	if _anim_index != GEN1_GROWL:
-		_sprites = []
+		return false
 	_gen1_write = 0
+	return _anim_index + 1 != GEN1_GROWL
 
 
 ## One frame block into `wShadowOAM`: every sum is a byte, every tile plus `$31`.
@@ -752,10 +770,11 @@ func _gen1_begin_effect(id: int) -> void:
 
 func _gen1_effect_step() -> void:
 	var step: Dictionary = _gen1_steps.pop_front()
+	_gen1_wait = 0
 	for key: StringName in GEN1_EFFECT_KEYS:
 		if step.has(key):
 			_gen1_apply(key, step[key])
-	_gen1_wait = int(step.get(&"frames", 0))
+	_gen1_wait += int(step.get(&"frames", 0))
 
 
 ## One step's effect. `visible`, `shift` and `scale` name a side the way
@@ -802,10 +821,14 @@ func _gen1_apply(key: StringName, value: Variant) -> void:
 		&"rows":
 			_gen1_shake_rows(int(value))
 		&"tileset":
-			_gen1_load_tileset(int(value))
+			_gen1_wait = _gen1_load_tileset(int(value))
 		&"sprites":
 			_sprites = (value as Array).duplicate()
 			_gen1_write = _sprites.size()
+		&"sfx":
+			_frame_commands.append({"name": GEN1_SOUND, "byte": 0, "operands": [int(value)]})
+		_:
+			_gen1_command(GEN1_HOST_COMMANDS[key])
 
 
 func _gen1_side(flipped: bool) -> bool:
@@ -918,8 +941,32 @@ const GEN1_SE_WAVY_SCREEN: int = 0xD8
 const GEN1_EFFECT_KEYS: Array[StringName] = [
 	&"tileset", &"bgp", &"obp0", &"scx", &"scy", &"visible", &"shift", &"squish",
 	&"scale", &"substitute", &"minimize", &"wavy", &"rows", &"sprites",
-	&"copy_sprites", &"end_subanim", &"rewind",
+	&"copy_sprites", &"end_subanim", &"rewind", &"sfx", &"hide_pic", &"clear_screen",
 ]
+
+## The frame commands a Generation 1 routine raises for its host: `PlaySound`
+## with the sound id, `ClearMonPicFromTileMap` and `ClearScreen`.
+const GEN1_SOUND: StringName = &"gen1_sound"
+const GEN1_HOST_COMMANDS: Dictionary = {
+	&"hide_pic": &"gen1_hide_pic", &"clear_screen": &"gen1_clear_screen",
+}
+const GEN1_MOVE_SOUND: StringName = &"gen1_move_sound"
+const GEN1_COPY_TILES_PER_FRAME: int = 8
+const GEN1_HIDE_PIC: StringName = GEN1_HOST_COMMANDS[&"hide_pic"]
+const GEN1_CLEAR_SCREEN: StringName = GEN1_HOST_COMMANDS[&"clear_screen"]
+
+## `TradeHidePokemon`'s counter, `TradeShakePokeball`'s `BallMoveDistances1`
+## and `TradeJumpPokeball`'s `BallMoveDistances2`, with the frames each spends,
+## the scroll a jump takes and the two sounds.
+const GEN1_TRADE_HIDE_COUNTER: int = 6
+const GEN1_TRADE_SHAKE_MOVES: Array[int] = [-12, -12, -8]
+const GEN1_TRADE_JUMP_MOVES: Array[int] = [11, 12, -12, -7, 7, 12, -8, 8]
+const GEN1_TRADE_JUMP_FRAMES: int = 5
+const GEN1_TRADE_JUMP_SCX: int = -8
+const GEN1_TRADE_JUMP_SOUND_MOVE: int = 12
+const GEN1_TRADE_BALL_SPRITES: int = 4
+const GEN1_SFX_TRADE_MACHINE: int = 152
+const GEN1_SFX_SWAP: int = 174
 
 ## `%00011011`, `AnimationFlashScreen`'s inverted palette, and the white it
 ## follows it with. Two frames each, then the palette that was there.
@@ -978,6 +1025,7 @@ const GEN1_SQUISH_FRAMES: int = 3
 const GEN1_MOVE_FRAMES: int = 3
 
 const GEN1_DELAY_FRAMES: int = 10
+const GEN1_DELAY3_FRAMES: int = 3
 
 ## `WavyScreenLineOffsets`, rotated one entry per frame for 255 of them.
 const GEN1_WAVY_OFFSETS: Array[int] = [
@@ -1487,7 +1535,61 @@ func _gen1_block_effect_steps(counter: int) -> Array:
 			return [{&"obp0": _background.obp0 ^ GEN1_BALL_FLASH}]
 		Gen1Layout.ANIM_ID_SHAKE:
 			return _gen1_ball_shake_steps(counter)
+		Gen1Layout.ANIM_ID_TRADE_DROP:
+			return [{&"hide_pic": true}] if counter == GEN1_TRADE_HIDE_COUNTER else []
+		Gen1Layout.ANIM_ID_TRADE_SHAKE:
+			return _gen1_trade_shake_steps() if counter == 1 else []
+		Gen1Layout.ANIM_ID_TRADE_TILT:
+			return _gen1_trade_jump_steps()
 	return []
+
+
+## `TradeShakePokeball`'s tail: the ball's four sprites up by each distance
+## with `Delay3` between, `AnimationCleanOAM` and `SFX_TRADE_MACHINE`.
+func _gen1_trade_shake_steps() -> Array:
+	var out: Array = []
+	for distance: int in GEN1_TRADE_SHAKE_MOVES:
+		out.append({&"frames": GEN1_DELAY3_FRAMES, &"sprites": _gen1_ball_moved(out, distance)})
+	out.append({&"frames": 1})
+	out.append({&"sprites": [], &"sfx": GEN1_SFX_TRADE_MACHINE})
+	return out
+
+
+## `TradeJumpPokeball`: each distance, `SFX_SWAP` before a 12 and after the
+## last, five frames, the screen eight to the left, then `ClearScreen`.
+func _gen1_trade_jump_steps() -> Array:
+	var out: Array = []
+	var scx: int = _background.scx
+	for index: int in GEN1_TRADE_JUMP_MOVES.size():
+		var step: Dictionary = {
+			&"frames": GEN1_TRADE_JUMP_FRAMES,
+			&"sprites": _gen1_ball_moved(out, GEN1_TRADE_JUMP_MOVES[index]),
+		}
+		var next: int = GEN1_TRADE_JUMP_MOVES[index + 1] \
+			if index + 1 < GEN1_TRADE_JUMP_MOVES.size() else GEN1_TRADE_JUMP_SOUND_MOVE
+		if next == GEN1_TRADE_JUMP_SOUND_MOVE:
+			step[&"sfx"] = GEN1_SFX_SWAP
+		out.append(step)
+		scx = (scx + GEN1_TRADE_JUMP_SCX) & 0xFF
+		out.append({&"scx": scx})
+	out.append({&"frames": GEN1_DELAY3_FRAMES, &"clear_screen": true})
+	return out
+
+
+## The ball's sprites as the last step of [param out] left them, or as the
+## block drew them, each moved [param dy] down.
+func _gen1_ball_moved(out: Array, dy: int) -> Array:
+	var ball: Array = _sprites
+	for index: int in range(out.size() - 1, -1, -1):
+		if (out[index] as Dictionary).has(&"sprites"):
+			ball = out[index][&"sprites"]
+			break
+	var moved: Array = []
+	for index: int in mini(ball.size(), GEN1_TRADE_BALL_SPRITES):
+		var sprite: Dictionary = (ball[index] as Dictionary).duplicate()
+		sprite["y"] = (int(sprite["y"]) + dy) & 0xFF
+		moved.append(sprite)
+	return moved
 
 
 func _gen1_flash_when(condition: bool) -> Array:

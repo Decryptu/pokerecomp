@@ -312,6 +312,9 @@ const GEN1_COORDS: int = BASE + 0x80
 ## `BASECOORD_00`, which every case below is placed from.
 const GEN1_BASE_Y: int = 0x10
 const GEN1_BASE_X: int = 0x68
+## `LoadMoveAnimationTiles` on a 79-tile sheet: `CopyVideoData`'s nine full
+## frames and the one for the tail, before the first block lands.
+const GEN1_TILESET_FRAMES: int = 10
 
 
 ## One animation playing subanimation 0 at [param delay], whose one row draws
@@ -356,7 +359,8 @@ func _gen1_sprite(
 	var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
 		_gen1_data(kind, 0, 4, 1, attributes), 0, enemy_turn
 	)
-	player.advance_frame()
+	for _frame: int in GEN1_TILESET_FRAMES + 1:
+		player.advance_frame()
 	return (player.sprites() as Array)[0]
 
 
@@ -421,33 +425,41 @@ func test_the_hvflip_transform_drops_an_attribute_it_does_not_recognise() -> voi
 	assert_eq(sprite["attributes"], 0)
 
 
-## The delay is what a frame block is shown for, and `FRAMEBLOCKMODE_00` clears
-## the buffer after it where `FRAMEBLOCKMODE_02` keeps it and takes no delay.
+## The tileset copies first. The delay is what a frame block is shown for, and
+## `FRAMEBLOCKMODE_00`'s `AnimationCleanOAM` is a frame more and then the clear,
+## where `FRAMEBLOCKMODE_03` keeps the buffer past the animation's end and
+## `FRAMEBLOCKMODE_02` takes no delay.
 func test_a_generation_1_frame_block_is_shown_for_its_own_delay() -> void:
 	var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
 		_gen1_data(Gen1Layout.SUBANIMTYPE_NORMAL, 0, 3, 2), 0
 	)
 	var counts: Array[int] = []
-	for _frame: int in 8:
+	for _frame: int in GEN1_TILESET_FRAMES + 10:
 		player.advance_frame()
 		counts.append((player.sprites() as Array).size())
-	assert_eq(counts, [1, 1, 1, 1, 1, 1, 0, 0], "three frames a block, two blocks")
+	assert_eq(counts.slice(0, GEN1_TILESET_FRAMES), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	assert_eq(
+		counts.slice(GEN1_TILESET_FRAMES), [1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+		"three frames a block and one to clean, two blocks"
+	)
 
 	var kept: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
 		_gen1_data(Gen1Layout.SUBANIMTYPE_NORMAL, Gen1Layout.FRAMEBLOCKMODE_KEEP, 3, 2), 0
 	)
 	var stacked: Array[int] = []
-	for _frame: int in 7:
+	for _frame: int in GEN1_TILESET_FRAMES + 7:
 		kept.advance_frame()
 		stacked.append((kept.sprites() as Array).size())
-	assert_eq(stacked, [1, 1, 1, 2, 2, 2, 0], "FRAMEBLOCKMODE_03 keeps the buffer")
+	assert_eq(stacked.slice(GEN1_TILESET_FRAMES), [1, 1, 1, 2, 2, 2, 2], "FRAMEBLOCKMODE_03 keeps the buffer")
+	assert_true(kept.finished())
 
 	var quick: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
 		_gen1_data(
 			Gen1Layout.SUBANIMTYPE_NORMAL, Gen1Layout.FRAMEBLOCKMODE_KEEP_NO_DELAY, 3, 2
 		), 0
 	)
-	quick.advance_frame()
+	for _frame: int in GEN1_TILESET_FRAMES + 1:
+		quick.advance_frame()
 	assert_true(
 		quick.finished(), "FRAMEBLOCKMODE_02 takes no delay, so both blocks land at once"
 	)

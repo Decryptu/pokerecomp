@@ -10,10 +10,8 @@ extends RefCounted
 const DECK_SIZE: int = 24
 const MONS: int = 4
 const LEVELS: int = 6
-## `MAX_COINS`, which `.IsCoinCaseFull` refuses to pass.
-const MAX_COINS: int = 9999
-## `.DeductCoins`' own `cp 3`, and the `ld de, -3` behind it.
-const COST: int = 3
+const MAX_COINS: int = 9999  ## `MAX_COINS`, which `.IsCoinCaseFull` refuses to pass.
+const COST: int = 3  ## `.DeductCoins`' own `cp 3`, and the `ld de, -3` behind it.
 ## `.Continue`'s `cp 12`: a round is two cards, so twelve of them is the deck.
 const ROUNDS: int = DECK_SIZE / 2
 
@@ -65,17 +63,14 @@ const MUSIC_GAME_CORNER: int = 0x12
 ## flashes each spend.
 const DEAL_FRAMES: int = 20
 const TOGGLE_FRAMES: int = 4
-## `.loop2`'s own `ld a, $3`.
-const FLASHES: int = 3
-## `.Payout`'s `ld c, 2` per coin.
-const PAYOUT_FRAMES: int = 2
+const FLASHES: int = 3  ## `.loop2`'s own `ld a, $3`.
+const PAYOUT_FRAMES: int = 2  ## `.Payout`'s `ld c, 2` per coin.
 
 ## The two boxes that end in `prompt` rather than `done`, which is the only
 ## thing that reaches `LoadBlinkingCursor`: no arrow blinks over "Yeah!".
 const PROMPT_TEXTS: Array[String] = ["not_enough_coins", "shuffled"]
 
-## `CardFlip_InitTilemap`'s `ld a, $29`, which is the green felt.
-const GREEN_TILE: int = 0x29
+const GREEN_TILE: int = 0x29  ## `CardFlip_InitTilemap`'s `ld a, $29`, which is the green felt.
 ## `CardFlipTilemap` sits at `hlcoord 9, 0`; the two cards stand in the nine
 ## columns and twelve rows left of it, which `.ChooseACard` fills green.
 const BOARD_AT: Vector2i = Vector2i(Gen2Layout.CARD_FLIP_TILEMAP_AT_COLUMN, 0)
@@ -176,10 +171,8 @@ var _attrmap: PackedByteArray = PackedByteArray()
 ## neither.
 var _border_at: int = -1
 var _cursor_visible: bool = false
-## `CardFlipTilemap`, the board the cache carries.
-var _board: PackedByteArray = PackedByteArray()
-## Whether the box standing now loaded a cursor.
-var _blinking: bool = false
+var _board: PackedByteArray = PackedByteArray()  ## `CardFlipTilemap`, the board the cache carries.
+var _blinking: bool = false  ## Whether the box standing now loaded a cursor.
 ## Frames left in whatever the current pass is spending, and where in the
 ## current state's own sequence the next pass picks up.
 var _delay: int = 0

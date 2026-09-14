@@ -148,13 +148,14 @@ static func stopped_evolving_text(mon_name: String) -> String:
 ## `EvolveAfterBattle`'s master loop, as a list of plans rather than a walk that
 ## evolves as it goes: nothing here writes a party row, so a caller can show
 ## `EvolutionAnimation` for each and apply only the ones not cancelled.
-## [param evolvable] is `wEvolvableFlags` as
-## [method Gen2Battle.evolvable_indices] answers it, mapped through the one rule
-## that knows an egg keeps its party slot without being a combatant. Only
-## `.level`, `.happiness` and `.stat` are reachable here: `wForceEvolution` is
-## zero and `.trade` demands a `wLinkMode` this project has none of.
+## [param evolvable] is `wEvolvableFlags` as [method Gen2Battle.evolvable_indices]
+## answers it, mapped through the one rule that knows an egg keeps its party
+## slot without being a combatant. `.trade` demands a `wLinkMode` this project
+## has none of. [param active_species] is the player's battler on the way out,
+## which Generation 1's loop reads; see [method red_blue_stone_row].
 static func after_battle(
-	data: GameData, save: Gen2SaveData, evolvable: Array, time_of_day: int
+	data: GameData, save: Gen2SaveData, evolvable: Array, time_of_day: int,
+	active_species: int = 0
 ) -> Array:
 	var plans: Array = []
 	if data == null or save == null:
@@ -174,6 +175,8 @@ static func after_battle(
 		if battle_mon == null:
 			continue
 		var row: Dictionary = level_evolution(data, battle_mon, time_of_day)
+		if row.is_empty():
+			row = red_blue_stone_row(data, battle_mon, active_species)
 		if row.is_empty():
 			continue
 		var target: int = int(row.get("target", 0))
@@ -202,6 +205,24 @@ static func after_battle(
 			"row": row.duplicate(true),
 		})
 	return plans
+
+
+## Red and Blue's `.checkItemEvo` compares a stone row against `wCurItem`, which
+## is `wCurPartySpecies`: the last thing `DrawPlayerHUDAndHPBar` wrote there is
+## the player's own battler, so a party member that gained a level evolves off a
+## stone whose item id is that battler's index. Measured on both cartridges: a
+## GROWLITHE ($21, THUNDER_STONE) winning evolves a PIKACHU behind it, and
+## Yellow's `wIsInBattle` test refuses the row.
+static func red_blue_stone_row(data: GameData, mon: Gen2BattleMon, active_species: int) -> Dictionary:
+	if data == null or mon == null or data.generation != RomRegistry.GEN1 \
+		or data.id == RomRegistry.YELLOW or active_species <= 0:
+		return {}
+	var index: int = int(data.species(active_species).get("index", 0))
+	for row: Dictionary in data.evolutions(mon.species):
+		if int(row.get("method", 0)) == Gen2Layout.EVOLVE_ITEM \
+			and int(row.get("parameter", 0)) == index:
+			return row.duplicate(true)
+	return {}
 
 
 ## `CheckFaintedFrzSlp`, which `EvolutionAnimation.check_statused` asks about the

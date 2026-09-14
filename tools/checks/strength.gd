@@ -264,3 +264,46 @@ func _gen1_push() -> void:
 		boulder.cell == GEN1_PUSH_CELL + Vector2i.UP,
 		"the second bump left the boulder at %s." % boulder.cell
 	)
+	## `DoBoulderDustAnimation` holds back while `BIT_SCRIPTED_NPC_MOVEMENT`
+	## stands, then `AnimateBoulderDust`'s eight `Delay3`s and `SFX_CUT`.
+	_r.check(world.dispatch_sight_events().is_empty(), "the dust ran during the slide.")
+	var passes: int = 0
+	var random := RandomNumberGenerator.new()
+	while boulder.is_stepping() and passes < 40:
+		world.advance_object_steps_pass(random)
+		passes += 1
+	var dust: Array = world.dispatch_sight_events()
+	var wait: Dictionary = world.pending_script_wait()
+	_r.check(
+		StringName(wait.get("kind", &"")) == &"gen1_boulder_dust" and int(wait.get("frames", 0)) == 24,
+		"the slide's end owed %s, not the dust's 24 frames." % [wait]
+	)
+	var cut: Array = []
+	for result: Dictionary in dust:
+		for event: Dictionary in result.get("events", []):
+			if StringName(event.get("kind", &"")) == &"gen1_boulder_dust":
+				_r.check(int(event.get("facing", -1)) == Gen2WorldSprite.FACING_UP, "the dust faces %s." % [event])
+				cut = event.get("sounds", [])
+	_r.check(
+		cut.size() == 1 and int(cut[0].get("index", 0)) == Gen1Layout.SFX_CUT
+			and int(cut[0].get("frame", 0)) == 24,
+		"the dust ends on %s." % [cut]
+	)
+	var effects := Gen2WorldEffects.new()
+	effects.start_gen1_boulder_dust(
+		Gen1Layout.PLAYER_SPRITE_PIXELS, Gen2WorldSprite.FACING_UP, _r.data.gen1_boulder_dust_offsets()
+	)
+	var first: Dictionary = effects.sprites()[0]
+	_r.check(
+		first["tiles"][0]["offset"] == Vector2i(64, 33) and int(first["rotation"]) == 0x80,
+		"the dust opens at %s wearing $%02X." % [first["tiles"][0]["offset"], int(first["rotation"])]
+	)
+	for _frame: int in 23:
+		effects.advance_frame()
+	var last: Dictionary = effects.sprites()[0]
+	_r.check(
+		last["tiles"][0]["offset"] == Vector2i(64, 40) and int(last["rotation"]) == 0xE4,
+		"the dust ends at %s wearing $%02X." % [last["tiles"][0]["offset"], int(last["rotation"])]
+	)
+	effects.advance_frame()
+	_r.check(effects.sprites().is_empty(), "the dust outlived its twenty-four frames.")

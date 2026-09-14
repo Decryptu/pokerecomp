@@ -1,5 +1,5 @@
 class_name Gen1Opening
-extends RefCounted
+extends Gen1Movie
 
 ## `PlayIntro` and `DisplayTitleScreen` (engine/movie/splash.asm, intro.asm,
 ## title.asm) a frame at a time against a [Gen1Lcd]: a step list of the
@@ -12,10 +12,8 @@ const PHASE_COPYRIGHT: StringName = &"copyright"
 const PHASE_PRESENTS: StringName = &"presents"
 const PHASE_INTRO_MOVIE: StringName = &"intro_movie"
 const PHASE_TITLE: StringName = &"title"
-const PHASE_FINISHED: StringName = &"finished"
 
 ## `SFX_Headers_3`'s ids, all in bank $1F, `Init`'s `wAudioROMBank`.
-const AUDIO_BANK: int = 0x1F
 const SFX_INTRO_LUNGE: int = 184
 const SFX_INTRO_HIP: int = 185
 const SFX_INTRO_HOP: int = 186
@@ -35,18 +33,6 @@ const PAD_START: int = 1 << 3
 const PAD_UP: int = 1 << 6
 const CHORD_CLEAR_SAVE: int = PAD_UP | PAD_SELECT | PAD_B
 
-const COLUMNS: int = 20
-const ROWS: int = 18
-const TILEMAP_CELLS: int = COLUMNS * ROWS
-const BLANK: int = 0x7F
-## `AutoBgMapTransfer`'s rows a VBlank, and its destination as a row of the
-## 64 across both maps: `vBGMap0 + $300` is row 24, `vBGMap1` row 32.
-const TRANSFER_ROWS: int = 6
-const MAP_ROWS: int = 32
-const DEST_MAP0: int = 0
-const DEST_MAP0_PLUS_300: int = 24
-const DEST_MAP1: int = 32
-const COPY_TILES_PER_FRAME: int = 8
 
 ## `LoadCopyrightAndTextBoxTiles`: both sheets at `vChars2 tile $60`.
 const COPYRIGHT_TILE: int = 2 * Gen1Lcd.BLOCK_TILES + 0x60
@@ -70,7 +56,6 @@ const SHOOTING_STAR_OBP0: int = 0xF9
 const SHOOTING_STAR_OBP1: int = 0xA4
 const BIG_STAR_STEP: int = 4
 const BIG_STAR_END_Y: int = 0xA0
-const OFF_SCREEN_Y: int = Gen1Lcd.HEIGHT + Gen1Lcd.OAM_Y_OFFSET
 const LOGO_FLASHES: int = 3
 const LOGO_FLASH_FRAMES: int = 10
 const SMALL_STARS: int = 24
@@ -83,7 +68,6 @@ const SMALL_STAR_FALL_FRAMES: int = 3
 const SMALL_STAR_OBP1_TOGGLE: int = 0xA0
 const LOGO_OAM_FIRST_SLOT: int = 24
 const AFTER_STARS_DELAY: int = 40
-const DELAY3: int = 3
 
 ## `PlayIntroScene`'s own numbers.
 const INTRO_PALETTE: int = 0xE4
@@ -114,7 +98,6 @@ const GB_PAL_NORMAL_OBP0: int = 0xD0
 
 ## `DisplayTitleScreen`.
 const TITLE_SCY: int = 0x40
-const WINDOW_OFF: int = 0x90
 const WINDOW_HALF: int = 0x40
 const TITLE_LOGO_AT: Vector2i = Vector2i(2, 1)
 const TITLE_LOGO_COLUMNS: int = 16
@@ -224,42 +207,9 @@ const YELLOW_TITLE_CRY_CLOSE: int = 10
 const INTERRUPT_BUTTONS: int = PAD_START | PAD_A
 const YELLOW_INTRO_BUTTONS: int = PAD_A | PAD_B | PAD_START
 
-var lcd: Gen1Lcd = Gen1Lcd.new()
-
-var _profile: StringName = &"red"
-var _data: GameData = null
 var _opening: Dictionary = {}
 var _rng: RandomNumberGenerator = null
-var _sound: Gen1SoundEngine = null
 var _yellow_intro: Gen1YellowIntro = null
-
-## `wTileMap`, `wShadowOAM`, `hSCX`, `hSCY` and `hWY`, which VBlank copies.
-var _tilemap: PackedByteArray = PackedByteArray()
-var _shadow_oam: PackedByteArray = PackedByteArray()
-var _hscx: int = 0
-var _hscy: int = 0
-var _hwy: int = 0
-var _transfer_enabled: bool = false
-var _transfer_dest: int = DEST_MAP1
-var _transfer_portion: int = 0
-var _pending_copy: Dictionary = {}
-## `SaveScreenTilesToBuffer1` and `2`.
-var _buffer1: PackedByteArray = PackedByteArray()
-var _buffer2: PackedByteArray = PackedByteArray()
-
-var _steps: Array = []
-var _labels: Dictionary = {}
-var _pc: int = 0
-## Steps a `do` handed back, a called routine run to its end first.
-var _calls: Array[Dictionary] = []
-var _wait: int = 0
-var _check_left: int = 0
-var _check_skip: StringName = &""
-var _sound_wait: bool = false
-var _frame: int = 0
-var _phase: StringName = PHASE_COPYRIGHT
-var _finished: bool = false
-var _events: Array[Dictionary] = []
 
 var _held: int = 0
 var _held_at_read: int = 0
@@ -280,41 +230,12 @@ static func create(data: GameData, rng: RandomNumberGenerator = null) -> Gen1Ope
 	if data == null or data.generation != RomRegistry.GEN1 or data.opening().is_empty():
 		return null
 	var out := Gen1Opening.new()
-	out._data = data
-	out._profile = data.id
+	out._init_machine(data)
 	out._opening = data.opening()
 	out._rng = rng if rng != null else RandomNumberGenerator.new()
-	out._sound = Gen1SoundEngine.new()
-	out._sound.set_assets(data.audio_assets())
-	out._sound.yellow = data.id == RomRegistry.YELLOW
-	out._sound.audio_rom_bank = AUDIO_BANK
-	out._sound.saved_rom_bank = AUDIO_BANK
-	out._tilemap.resize(TILEMAP_CELLS)
-	out._shadow_oam.resize(Gen1Lcd.OAM_SLOTS * Gen1Lcd.OAM_BYTES)
-	# `PrepareOAMData`'s first VBlank runs before `Init` writes
-	# `wUpdateSpritesEnabled`, and a zero there is `HideSprites`.
-	for slot: int in Gen1Lcd.OAM_SLOTS:
-		out._shadow_oam[slot * Gen1Lcd.OAM_BYTES] = OFF_SCREEN_Y
-	out._buffer1.resize(TILEMAP_CELLS)
-	out._buffer2.resize(TILEMAP_CELLS)
+	out._phase = PHASE_COPYRIGHT
 	out._build()
 	return out
-
-
-func phase() -> StringName:
-	return _phase
-
-
-func finished() -> bool:
-	return _finished
-
-
-func frame() -> int:
-	return _frame
-
-
-func profile() -> StringName:
-	return _profile
 
 
 ## The `wTitleMonSpecies` on screen, as a dex number.
@@ -332,22 +253,16 @@ func palette_command() -> String:
 	return _palette_command
 
 
+func set_palette_command(name: String) -> void:
+	_palette_command = name
+
+
 func palettes() -> Array:
 	return (_opening.get("palettes", {}) as Dictionary).get(_palette_command, [])
 
 
 func blocks() -> Array:
 	return (_opening.get("blocks", {}) as Dictionary).get(_palette_command, [])
-
-
-func shadow_oam() -> Array[Dictionary]:
-	return lcd.shadow_oam()
-
-
-func drain_events() -> Array[Dictionary]:
-	var out: Array[Dictionary] = _events.duplicate(true)
-	_events.clear()
-	return out
 
 
 ## `hJoyHeld`: a button held from this frame on, until [method release].
@@ -360,40 +275,13 @@ func release(button: int) -> void:
 	_held &= ~button
 
 
-func advance_frame() -> Array[Dictionary]:
-	if _finished:
-		return drain_events()
-	_frame += 1
-	# An `rLY` wait scrolls one frame only.
-	lcd.line_scx = PackedInt32Array()
-	if _sound_wait and not _sound_active():
-		_sound_wait = false
-	if _wait == 0 and _check_left == 0 and not _sound_wait:
-		_run()
-	# No LCD, no VBlank, no driver.
-	if lcd.lcdc & Gen1Lcd.LCDC_ON:
-		_vblank()
-		_sound.fade_out_audio()
-		_sound.update_music()
-	if _wait > 0:
-		_wait -= 1
-	if _wait == 0 and _check_left > 0:
-		_check_left -= 1
-		if _interrupted():
-			_check_left = 0
-			_jump(_check_skip)
-		elif _check_left > 0:
-			_wait = 1
+func _end_frame() -> void:
 	_tapped = 0
-	return drain_events()
 
 
-## `WaitForSoundToFinish`: channels 5, 6 and 8 of `wChannelSoundIDs`.
-func _sound_active() -> bool:
-	for channel: int in [4, 5, 7]:
-		if _sound.channel_sound_id(channel) != 0:
-			return true
-	return false
+func _after_vblank() -> void:
+	if _yellow_intro != null:
+		_yellow_intro.vblank()
 
 
 ## `CheckForUserInterruption`'s read: Up+Select+B held, or START or A newly down.
@@ -406,278 +294,6 @@ func _read_pressed() -> int:
 	var pressed: int = (_held & ~_held_at_read) | _tapped
 	_held_at_read = _held
 	return pressed
-
-
-func _run() -> void:
-	while _wait == 0 and _check_left == 0 and not _sound_wait and not _finished:
-		var step: Dictionary = _next_step()
-		if step.is_empty():
-			return
-		if step.has("do"):
-			var more: Variant = (step["do"] as Callable).call()
-			if more is Array and not (more as Array).is_empty():
-				_calls.append({"steps": more, "pc": 0})
-		elif step.has("delay"):
-			_wait = int(step["delay"])
-		elif step.has("check"):
-			_wait = 1
-			_check_left = int(step["check"])
-			_check_skip = step["skip"]
-		elif step.has("jump"):
-			_jump(step["jump"])
-		elif step.has("wait_sound"):
-			_sound_wait = _sound_active()
-		elif step.has("phase"):
-			_phase = step["phase"]
-			_emit(&"phase", {"phase": _phase})
-		elif step.has("finish"):
-			_finished = true
-			_phase = PHASE_FINISHED
-			_emit(step["finish"], {})
-
-
-func _next_step() -> Dictionary:
-	while not _calls.is_empty():
-		var routine: Dictionary = _calls[_calls.size() - 1]
-		var steps: Array = routine["steps"]
-		if int(routine["pc"]) < steps.size():
-			routine["pc"] = int(routine["pc"]) + 1
-			return steps[int(routine["pc"]) - 1]
-		_calls.pop_back()
-	if _pc >= _steps.size():
-		return {}
-	_pc += 1
-	return _steps[_pc - 1]
-
-
-## A `ret c` chain: the program continues at a label, the called routine dropped.
-func _jump(label: StringName) -> void:
-	_pc = int(_labels[label])
-	_calls.clear()
-
-
-func _index_labels() -> void:
-	_labels.clear()
-	for index: int in _steps.size():
-		var step: Dictionary = _steps[index]
-		if step.has("label"):
-			_labels[step["label"]] = index
-
-
-func _emit(type: StringName, values: Dictionary) -> void:
-	var event: Dictionary = {"type": type, "frame": _frame, "phase": _phase}
-	event.merge(values, true)
-	_events.append(event)
-
-
-## The VBlank handler: the scroll registers, `AutoBgMapTransfer`'s third,
-## `VBlankCopy`'s eight tiles and `hDMARoutine`'s OAM.
-func _vblank() -> void:
-	lcd.scx = _hscx
-	lcd.scy = _hscy
-	lcd.wy = _hwy
-	if _transfer_enabled and _pending_copy.is_empty():
-		_transfer_third()
-	_land_copy()
-	for index: int in _shadow_oam.size():
-		lcd.oam[index] = _shadow_oam[index]
-	if _yellow_intro != null:
-		_yellow_intro.vblank()
-
-
-func _transfer_third() -> void:
-	var first_row: int = _transfer_portion * TRANSFER_ROWS
-	for row: int in TRANSFER_ROWS:
-		var source: int = first_row + row
-		var dest: int = (_transfer_dest + source) % (2 * MAP_ROWS)
-		var map: PackedByteArray = lcd.maps[dest / MAP_ROWS]
-		var at: int = (dest % MAP_ROWS) * Gen1Lcd.MAP_SIDE
-		for column: int in COLUMNS:
-			map[at + column] = _tilemap[source * COLUMNS + column]
-	_transfer_portion = (_transfer_portion + 1) % 3
-
-
-func _land_copy() -> void:
-	if _pending_copy.is_empty():
-		return
-	var count: int = mini(COPY_TILES_PER_FRAME, int(_pending_copy["left"]))
-	lcd.load_tiles(
-		int(_pending_copy["at"]), _pending_copy["strip"], int(_pending_copy["strip_tiles"]),
-		int(_pending_copy["first"]), count
-	)
-	_pending_copy["at"] = int(_pending_copy["at"]) + count
-	_pending_copy["first"] = int(_pending_copy["first"]) + count
-	_pending_copy["left"] = int(_pending_copy["left"]) - count
-	if int(_pending_copy["left"]) <= 0:
-		_pending_copy = {}
-
-
-## `CopyVideoData`: `c / 8 + 1` VBlanks with the auto transfer held off.
-func copy_video_steps(sheet: String, at: int, first: int, count: int) -> Array:
-	var strip: PackedByteArray = _data.tile_indices(sheet)
-	var strip_tiles: int = int(_data.tile_sheet(sheet).get("tiles", 0))
-	return [
-		{"do": func() -> void:
-			_pending_copy = {
-				"strip": strip, "strip_tiles": strip_tiles,
-				"at": at, "first": first, "left": count,
-			}},
-		{"delay": count / COPY_TILES_PER_FRAME + 1},
-	]
-
-
-## `FarCopyData` under a disabled LCD, which lands at once.
-func _load_sheet(sheet: String, at: int, first: int = 0, count: int = -1) -> void:
-	var strip_tiles: int = int(_data.tile_sheet(sheet).get("tiles", 0))
-	lcd.load_tiles(
-		at, _data.tile_indices(sheet), strip_tiles,
-		first, count if count >= 0 else strip_tiles - first
-	)
-
-
-## What [Gen1YellowIntro] writes through.
-func set_transfer(enabled: bool, dest: int) -> void:
-	_transfer_enabled = enabled
-	_transfer_dest = dest
-
-
-func set_scroll(x: int, y: int) -> void:
-	_hscx = x & 0xFF
-	_hscy = y & 0xFF
-
-
-func scroll_x() -> int:
-	return _hscx
-
-
-func set_window(y: int) -> void:
-	_hwy = y & 0xFF
-
-
-func set_palettes(bgp: int, obp0: int, obp1: int) -> void:
-	lcd.bgp = bgp & 0xFF
-	lcd.obp0 = obp0 & 0xFF
-	lcd.obp1 = obp1 & 0xFF
-
-
-func set_palette_command(name: String) -> void:
-	_palette_command = name
-
-
-func play_music(id: int) -> void:
-	_play_music(id)
-
-
-func fill_tilemap(id: int) -> void:
-	_fill_tilemap(id)
-
-
-func fill_tilemap_rows(first: int, count: int, id: int) -> void:
-	_fill_tilemap_rows(first, count, id)
-
-
-func write_map(which: int, at: Vector2i, columns: int, rows: int, ids: Array) -> void:
-	var bytes := PackedByteArray()
-	for id: Variant in ids:
-		bytes.append(int(id) & 0xFF)
-	lcd.write_map(which, at, columns, rows, bytes)
-
-
-func clear_sprites() -> void:
-	_clear_sprites()
-
-
-func shadow_byte(at: int) -> int:
-	return _shadow_oam[at]
-
-
-func set_shadow_byte(at: int, value: int) -> void:
-	_shadow_oam[at] = value & 0xFF
-
-
-func _set_sprite(slot: int, y: int, x: int, tile: int, attributes: int) -> void:
-	var at: int = slot * Gen1Lcd.OAM_BYTES
-	_shadow_oam[at] = y & 0xFF
-	_shadow_oam[at + 1] = x & 0xFF
-	_shadow_oam[at + 2] = tile & 0xFF
-	_shadow_oam[at + 3] = attributes & 0xFF
-
-
-func _sprite_byte(slot: int, byte: int) -> int:
-	return _shadow_oam[slot * Gen1Lcd.OAM_BYTES + byte]
-
-
-func _set_sprite_byte(slot: int, byte: int, value: int) -> void:
-	_shadow_oam[slot * Gen1Lcd.OAM_BYTES + byte] = value & 0xFF
-
-
-func _clear_sprites() -> void:
-	_shadow_oam.fill(0)
-
-
-func _fill_tilemap(id: int) -> void:
-	_tilemap.fill(id)
-
-
-func _write_tilemap(at: Vector2i, columns: int, rows: int, ids: Array) -> void:
-	for row: int in rows:
-		for column: int in columns:
-			var x: int = at.x + column
-			var y: int = at.y + row
-			var source: int = row * columns + column
-			if x < 0 or x >= COLUMNS or y < 0 or y >= ROWS or source >= ids.size():
-				continue
-			_tilemap[y * COLUMNS + x] = int(ids[source]) & 0xFF
-
-
-func _fill_tilemap_rows(first: int, count: int, id: int) -> void:
-	for cell: int in range(first * COLUMNS, (first + count) * COLUMNS):
-		_tilemap[cell] = id
-
-
-func _play_sfx(id: int) -> void:
-	_sound.play_sound(id)
-	_emit(&"play_sfx", {"sfx": id, "bank": AUDIO_BANK})
-
-
-func _play_music(id: int) -> void:
-	_sound.play_music(AUDIO_BANK, id)
-	_emit(&"play_music", {"music": id, "bank": AUDIO_BANK})
-
-
-func _stop_music() -> void:
-	_sound.play_sound(Gen1SoundEngine.SFX_STOP_ALL_MUSIC)
-	_emit(&"stop_music", {})
-
-
-## `PlayCry` through the same driver, so the wait behind it ends with the cry.
-func _play_cry(species: int) -> void:
-	var record: Dictionary = _data.species_cry(species)
-	if not record.is_empty():
-		_sound.frequency_modifier = int(record.get("cry_pitch", 0)) & 0xFF
-		_sound.tempo_modifier = int(record.get("cry_length", 0x80)) & 0xFF
-		_sound.play_sound(int(record.get("sound_id", 0)))
-	_emit(&"play_cry", {"species": species})
-
-
-func wait_sound_step() -> Dictionary:
-	return {"wait_sound": true}
-
-
-func delay_step(frames: int) -> Dictionary:
-	return {"delay": frames}
-
-
-func check_step(frames: int, skip: StringName) -> Dictionary:
-	return {"check": frames, "skip": skip}
-
-
-func do_step(callable: Callable) -> Dictionary:
-	return {"do": callable}
-
-
-func label_step(name: StringName) -> Dictionary:
-	return {"label": name}
 
 
 func _build() -> void:
@@ -1151,10 +767,10 @@ func _load_title_mon_steps() -> Array:
 		_title_species, TITLE_MON_LOAD_DEFAULT
 	)) - TITLE_MON_LOAD_TAIL
 	var steps: Array = [delay_step(frames)]
-	var cell: Dictionary = _front_pic_box(_title_species)
+	var strip: PackedByteArray = Gen2PicImage.gen1_front_strip(_data, _title_species)
 	steps.append(do_step(func() -> void:
 		_pending_copy = {
-			"strip": cell["strip"], "strip_tiles": TITLE_MON_TILES,
+			"strip": strip, "strip_tiles": TITLE_MON_TILES,
 			"at": TITLE_MON_VRAM, "first": 0, "left": TITLE_MON_TILES,
 		}))
 	steps.append(delay_step(TITLE_MON_TILES / COPY_TILES_PER_FRAME + 1))
@@ -1165,34 +781,6 @@ func _load_title_mon_steps() -> Array:
 				ids.append(column * Gen2PicImage.FRONTPIC_TILES + row)
 		_write_tilemap(TITLE_MON_AT, Gen2PicImage.FRONTPIC_TILES, Gen2PicImage.FRONTPIC_TILES, ids)))
 	return steps
-
-
-## A front pic as `vFrontPic`'s 49 column-major tiles, padded.
-func _front_pic_box(species: int) -> Dictionary:
-	var strip := PackedByteArray()
-	strip.resize(TITLE_MON_TILES * Gen1Lcd.TILE_PIXELS)
-	var pic: Dictionary = _data.species_pic(species)
-	var cell: Dictionary = Gen2PicImage.atlas_cell(
-		_data.atlas_indices(String(pic.get("atlas", ""))), _data.atlas(String(pic.get("atlas", ""))), pic
-	) if not pic.is_empty() else {}
-	if cell.is_empty():
-		return {"strip": strip}
-	var width: int = int(cell["width"])
-	var height: int = int(cell["height"])
-	var box: int = Gen2PicImage.FRONTPIC_TILES * Gen1Lcd.TILE
-	var left: int = Gen2PicImage.frontpic_pad_columns(width / Gen1Lcd.TILE, false, RomRegistry.GEN1) \
-		* Gen1Lcd.TILE
-	var top: int = box - height
-	var indices: PackedByteArray = cell["indices"]
-	var stride: int = TITLE_MON_TILES * Gen1Lcd.TILE
-	for y: int in height:
-		for x: int in width:
-			var bx: int = left + x
-			var by: int = top + y
-			var tile: int = (bx / Gen1Lcd.TILE) * Gen2PicImage.FRONTPIC_TILES + by / Gen1Lcd.TILE
-			strip[(by % Gen1Lcd.TILE) * stride + tile * Gen1Lcd.TILE + bx % Gen1Lcd.TILE] = \
-				indices[y * width + x]
-	return {"strip": strip}
 
 
 ## `.bouncePokemonLogoLoop`, the crash sound on the first -3.

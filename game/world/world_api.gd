@@ -355,8 +355,7 @@ var _player_step_frame: int = 0
 var _player_step_kind: StringName = &""
 ## OBJECT_STEP_FRAME's spin use. See [method Gen2WorldMovement.spin_advance].
 var _player_spin_frame: int = 0
-## What runs when the player's queued run drains.
-var _player_step_tail: Callable = Callable()
+var _player_step_tail: Callable = Callable()  ## What runs when the player's queued run drains.
 ## Frames left of the counted wait a script is standing in, -1 while it is not
 ## standing in one or has not started counting.
 var _script_wait_frames: int = -1
@@ -979,9 +978,35 @@ func player_step_kind() -> StringName:
 func player_drawn_facing() -> int:
 	if player_step_kind() in Gen2WorldMovement.SPINNING_KINDS:
 		return Gen2WorldMovement.spin_facing(_player_spin_frame)
+	if _gen1_spinning:
+		return _gen1_spin_facing
 	if _gen1_turn_shown >= 0 and frame_number < _gen1_turn_frame + FRAMES_PER_OVERWORLD_PASS:
 		return _gen1_turn_shown
 	return player_facing
+
+
+## `LoadSpinnerArrowTiles` on every `.moveAhead` pass: the facing steps along
+## `SpinnerPlayerFacingDirections`. The state's own `res BIT_SPINNING` comes
+## once `wSimulatedJoypadStatesIndex` is spent, and leaves the player facing
+## wherever the spin stopped.
+func _advance_gen1_spinner() -> void:
+	if _gen1_spinning and _player_step_passes_remaining > 0:
+		_gen1_spin_facing = Gen1Layout.SPINNER_NEXT_FACING[_gen1_spin_facing]
+
+
+func _end_gen1_spinner() -> void:
+	if _gen1_spinning and not gen1_player_movement_running():
+		_gen1_spinning = false
+		player_facing = _gen1_spin_facing
+
+
+## The spinner tiles a screen has to write this frame, empty off a spin: the
+## tileset and whether `wSimulatedJoypadStatesIndex` is odd, which is the
+## alternate graphics.
+func gen1_spinner() -> Dictionary:
+	if not _gen1_spinning or current_map == null:
+		return {}
+	return {"tileset": current_map.tileset, "alternate": (_player_queued_steps.size() & 1) == 1}
 
 
 ## `.handleDirectionButtonPress` on a direction change: the counter for slot
@@ -1026,7 +1051,9 @@ func player_walk_frame() -> int:
 	## StepFunction_Turn writes OBJECT_WALKING = STANDING for the whole four
 	## frames. Once an ordinary step ends, SetFacingStanding selects the standing
 	## drawing even though OBJECT_STEP_FRAME itself retains its counter.
-	if _player_step_passes_remaining <= 0 or _player_step_direction == Vector2i.ZERO:
+	## `UpdateSprites` skips the walk frame under BIT_SPINNING.
+	if _player_step_passes_remaining <= 0 or _player_step_direction == Vector2i.ZERO \
+		or _gen1_spinning:
 		return 0
 	if _player_step_kind in Gen2WorldMovement.SLIDING_KINDS:
 		return 0
@@ -1161,6 +1188,7 @@ func advance_player_step_pass() -> bool:
 	if _gen1_hop_landed:
 		_gen1_hop_landed = false
 		_pass_overrun_frames += STEP_START_OVERRUN_FRAMES
+	_advance_gen1_spinner()
 	if _player_step_passes_remaining <= 0:
 		return false
 	if _player_step_kind in Gen2WorldMovement.SPINNING_KINDS:
@@ -1189,6 +1217,7 @@ func advance_player_step_pass() -> bool:
 				_pass_overrun_frames += CONNECTION_OVERRUN_FRAMES
 				pikachu.schedule_after_map_load(gen1_pikachu_view(false))
 		_start_next_player_step()
+		_end_gen1_spinner()
 	return true
 
 
@@ -2649,6 +2678,8 @@ func _fishing_request(
 	)
 	if fishing.is_empty():
 		return {}
+	## `FishingInit.notInBattle`, behind `ItemUseText00` and before the response.
+	gen1_pikachu_mood(&"rod_cast")
 	fishing["map"] = map_id()
 	_stamp_encounter(fishing)
 	fishing["cell"] = player_cell
@@ -3455,6 +3486,23 @@ func object_at(cell: Vector2i, visible_only: bool = true) -> Gen2WorldObject:
 	return null
 
 
+## A write into the background map's rows from [param first_row] of the screen,
+## across its thirty-two columns from the view's own: the tiles keep the value
+## until the next map load, wherever the view scrolls to.
+func erase_screen_rows(first_row: int, rows: int, tile: int) -> void:
+	var origin: Vector2i = Vector2i(
+		(visible_origin_cells() * float(CELL_PIXELS)).floor()
+	) / PokeTiles.TILE_WIDTH
+	for row: int in rows:
+		for column: int in Gen1Lcd.MAP_SIDE:
+			_screen_tile_overrides[origin + Vector2i(column, first_row + row)] = tile
+	block_revision += 1
+
+
+func screen_tile_overrides() -> Dictionary:
+	return _screen_tile_overrides
+
+
 func block_at(block_x: int, block_y: int) -> int:
 	if current_map == null:
 		return 0
@@ -3871,6 +3919,18 @@ var gen1_map_pal_offset: int = 0
 ## `wMiscFlags`' `BIT_TRIED_PUSH_BOULDER`, which is not saved data and so rides
 ## no snapshot: a cartridge reload arms the next push the same way.
 var _gen1_boulder_tried: bool = false
+## `VermilionDock_EraseSSAnne`'s `CopyVideoData` into the background map: the
+## map tiles a screen write covered, by tile cell, until the next map load
+## redraws them from the blocks. What a renderer paints over the quads.
+var _screen_tile_overrides: Dictionary = {}
+## `BIT_SPINNING`, set by the spinner rows' `StartSimulatingJoypadStates` and
+## clear once their walk is spent, and the facing `LoadSpinnerArrowTiles` has
+## turned the player to on the way.
+var _gen1_spinning: bool = false
+var _gen1_spin_facing: int = 0
+## `BIT_BOULDER_DUST`: the facing a push was made in, until the slide it started
+## has ended and `DoBoulderDustAnimation` has run.
+var _gen1_dust_facing: int = -1
 ## The [method GameData.special_text] run `DisplayPokemonCenterDialogue_`'s own
 ## boxes are imported under.
 const GEN1_POKECENTER_RUN: String = "pokecenter"
@@ -3908,8 +3968,7 @@ const GEN1_BATTLE_OUTCOMES: Dictionary = {
 	Gen1Layout.BATTLE_OUTCOME_WON: [Gen2WorldBattleAdapter.OUTCOME_WON],
 }
 
-## What the last battle a script asked for answered.
-var _gen1_battle_outcome: StringName = &""
+var _gen1_battle_outcome: StringName = &""  ## What the last battle a script asked for answered.
 ## `wSavedCoordIndex`, the row a state matched and the state behind it reads.
 var _gen1_saved_coord_index: int = 0
 ## `wSafariZoneGameOver`: scratch, the way the cartridge's own byte is.
@@ -4153,6 +4212,21 @@ func gen1_pikachu_happiness(kind: int, slot: int = -1) -> void:
 	pikachu.modify_happiness(kind, slot < 0 or int(starter.get("slot", -1)) == slot)
 
 
+## One of [constant Gen1Pikachu.MOOD_WRITES], from wherever a host reaches it.
+func gen1_pikachu_mood(kind: StringName) -> void:
+	if pikachu != null:
+		pikachu.set_mood(kind)
+
+
+## `LearnMoveFromLevelUp`'s and `TeachTMHM`'s THUNDERBOLT and THUNDER test on
+## `IsThisPartyMonStarterPikachu`, for a move [param slot] just learned.
+func gen1_pikachu_learned(move_id: int, slot: int) -> void:
+	if pikachu == null or move_id not in Gen1Pikachu.THUNDER_MOVES:
+		return
+	if int(_party_summary.get("starter_pikachu", {}).get("slot", -1)) == slot:
+		gen1_pikachu_mood(&"thunder")
+
+
 ## `ModifyPikachuHappiness`'s battle callers off [member Gen2Battle.party_log]:
 ## `.printGrewLevelText`, `UpdateFaintedPlayerMon`'s two rows thirty levels
 ## apart, and the four X items.
@@ -4168,6 +4242,8 @@ func gen1_pikachu_battle_log(party_log: Dictionary) -> void:
 			else Gen1Pikachu.HAPPY_FAINTED, int(faint["index"]))
 	for index: int in party_log.get("x_items", []):
 		gen1_pikachu_happiness(Gen1Pikachu.HAPPY_USEDXITEM, index)
+	for learned: Dictionary in party_log.get("learned", []):
+		gen1_pikachu_learned(int(learned["move"]), int(learned["index"]))
 
 
 ## `InitBattle`'s `wLoneAttackNo` test, which is `wGymLeaderNo` under another name.
@@ -4557,13 +4633,32 @@ func _gen1_node_destination_warp(node: Dictionary, steps: Array, run: Dictionary
 	return _gen1_resolve_side(node, _gen1_destination_warp == int(node["warp"]), steps, run)
 
 
-## `VermilionDockSSAnneLeavesScript`: `ld c, 120` in front of the horn, then
-## eight columns of sixteen drifts of eight frames, and `dec [wNumberOfWarps]`.
-const SS_ANNE_LEAVES_FRAMES: int = 120 + 8 * 16 * 8
-
-
+## `VermilionDockSSAnneLeavesScript`: MUSIC_SURFING, the horn behind the lead,
+## the drift, `EraseSSAnne`'s five water blocks under the second horn, and
+## `dec [wNumberOfWarps]`.
 func _gen1_node_ss_anne_leaves(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append(_gen1_wait_step(&"ss_anne_leaves", SS_ANNE_LEAVES_FRAMES, {}))
+	var horn_at: int = Gen1Layout.SS_ANNE_LEAD_FRAMES
+	var drifted: int = horn_at + Gen1Layout.SS_ANNE_COLUMNS * Gen1Layout.SS_ANNE_DRIFTS \
+		* Gen1Layout.SS_ANNE_DRIFT_FRAMES + Gen1Layout.SS_ANNE_ERASE_FRAMES
+	## `ld [wSpritePlayerStateData1ImageIndex]` of zero turns the player down.
+	steps.append({"type": &"player_facing", "facing": Gen2WorldSprite.FACING_DOWN})
+	steps.append(_gen1_wait_step(
+		&"ss_anne_leaves", drifted + Gen1Layout.SS_ANNE_TAIL_FRAMES, {"sounds": [
+			{"frame": 0, "kind": &"music", "index": Gen2WorldFieldMove.MUSIC_SURF},
+			{"frame": horn_at, "gen1": true, "index": Gen1Layout.SFX_SS_ANNE_HORN},
+			{"frame": drifted, "gen1": true, "index": Gen1Layout.SFX_SS_ANNE_HORN},
+		]}
+	))
+	steps.append({
+		"type": &"erase_rows", "first_row": Gen1Layout.SS_ANNE_BAND_TOP / PokeTiles.TILE_HEIGHT,
+		"rows": (Gen1Layout.SS_ANNE_BAND_BOTTOM - Gen1Layout.SS_ANNE_BAND_TOP) / PokeTiles.TILE_HEIGHT,
+		"tile": Gen1Layout.SS_ANNE_WATER_TILE,
+	})
+	for column: int in Gen1Layout.SS_ANNE_ERASE_BLOCKS:
+		steps.append({
+			"type": &"block", "x": Gen1Layout.SS_ANNE_ERASE_AT.x + column,
+			"y": Gen1Layout.SS_ANNE_ERASE_AT.y, "block": Gen1Layout.SS_ANNE_WATER_BLOCK,
+		})
 	steps.append({"type": &"drop_last_warp"})
 	return true
 
@@ -4684,7 +4779,9 @@ func _gen1_node_arrow_movement(node: Dictionary, steps: Array, run: Dictionary) 
 	for cell: Dictionary in node["cells"] as Array:
 		if player_cell != Vector2i(int(cell["x"]), int(cell["y"])):
 			continue
-		steps.append({"type": &"walk", "moves": (cell["moves"] as Array).duplicate(true)})
+		steps.append({
+			"type": &"walk", "moves": (cell["moves"] as Array).duplicate(true), "spinner": true,
+		})
 		return _gen1_resolve_side(node, true, steps, run)
 	return _gen1_resolve_side(node, false, steps, run)
 
@@ -6521,6 +6618,25 @@ func dispatch_sight_events() -> Array:
 	return run_event_queue(false)
 
 
+## `DoBoulderDustAnimation`, which `RunMapScript` reaches on every pass
+## `BIT_BOULDER_DUST` stands and `BIT_SCRIPTED_NPC_MOVEMENT` does not: the
+## smoke's twenty-four frames hold the map, and `SFX_CUT` follows them.
+func _gen1_boulder_dust() -> Array:
+	if _gen1_dust_facing < 0 or gen1_object_movement_running():
+		return []
+	if _gen1_last_boulder >= 0 and _gen1_last_boulder < objects.size() \
+		and (objects[_gen1_last_boulder] as Gen2WorldObject).is_stepping():
+		return []
+	var facing: int = _gen1_dust_facing
+	_gen1_dust_facing = -1
+	var frames: int = Gen1Layout.BOULDER_DUST_STEPS * Gen1Layout.BOULDER_DUST_STEP_FRAMES
+	_gen1_steps = [_gen1_wait_step(&"gen1_boulder_dust", frames, {
+		"facing": facing,
+		"sounds": [{"frame": frames, "gen1": true, "index": Gen1Layout.SFX_CUT}],
+	})]
+	return _gen1_result()
+
+
 ## `CheckFightingMapTrainers`: the shock bubble and `TrainerWalkUpToPlayer` in
 ## front of `DisplayEnemyTrainerTextAndStartBattle`, which is `TalkToTrainer`
 ## with BIT_SEEN_BY_TRAINER already set and so opens on the before-battle line.
@@ -6528,6 +6644,9 @@ func _gen1_sight() -> Array:
 	if _gen1_holding():
 		return []
 	advance_gen1_movement_script()
+	var dust: Array = _gen1_boulder_dust()
+	if not dust.is_empty():
+		return dust
 	var ended: Array = _gen1_safari_check()
 	if not ended.is_empty():
 		return ended
@@ -6951,6 +7070,9 @@ func _gen1_drawn(step: Dictionary, events: Array) -> bool:
 			return true
 		&"walk":
 			events.append_array(_gen1_walk_player(step["moves"] as Array))
+			if bool(step.get("spinner", false)) and gen1_player_movement_running():
+				_gen1_spinning = true
+				_gen1_spin_facing = player_facing
 			return true
 		&"object_move":
 			_gen1_last_sprite_index = int(step["index"])
@@ -6967,6 +7089,9 @@ func _gen1_drawn(step: Dictionary, events: Array) -> bool:
 			return true
 		&"riding":
 			set_movement_mode(StringName(step["mode"]))
+			return true
+		&"erase_rows":
+			erase_screen_rows(int(step["first_row"]), int(step["rows"]), int(step["tile"]))
 			return true
 		&"block":
 			## `PrintCardKeyText` writes `wCardKeyDoorY` and its neighbour behind
@@ -7055,8 +7180,7 @@ func _gen1_warp_to(map_number: int, warp: int) -> Dictionary:
 		return {}
 	var row: Dictionary = warps[warp]
 	var from_map: Vector2i = map_id()
-	## The state's own steps behind the warp still stand.
-	var rest: Array = _gen1_steps
+	var rest: Array = _gen1_steps  ## The state's own steps behind the warp still stand.
 	_apply_map(
 		target_map, data.world_tileset(target_map.tileset),
 		Vector2i(int(row["x"]), int(row["y"])), true, 0, MAP_ENTRY_DOOR
@@ -7263,8 +7387,7 @@ func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 	if bool(step.get("standing_wild", false)):
 		gen1_toggle_object(_gen1_toggle_index(int(step.get("object_index", -1))), true)
 	load_object_masks()
-	## `TextCommand_ASM` behind the end-battle line the fight printed.
-	var ending: Array = []
+	var ending: Array = []  ## `TextCommand_ASM` behind the end-battle line the fight printed.
 	for node: Dictionary in step.get("end_script", []) as Array:
 		if String(node.get("op", "")) != "text":
 			ending.append(node)
@@ -10180,6 +10303,8 @@ func _commit_boulder_push(
 	_remember_object_position(boulder)
 	_gen1_last_boulder = boulder.index
 	_gen1_volatile["pushed_boulder"] = true
+	if _gen1:
+		_gen1_dust_facing = player_facing
 	var pushed: Dictionary = {
 		"index": boulder.index,
 		"from_cell": landing - direction,
@@ -10429,6 +10554,7 @@ func _apply_map(
 	_stand_in_place()
 	_gen1_ledge_pending = Vector2i.ZERO
 	_block_overrides.clear()
+	_screen_tile_overrides.clear()
 	block_revision += 1
 	_pending_cut.clear()
 	_pending_surf.clear()
@@ -11403,6 +11529,7 @@ func reload_current_map() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return {"ok": false, "reason": &"missing_map"}
 	_block_overrides.clear()
+	_screen_tile_overrides.clear()
 	block_revision += 1
 	_pending_cut.clear()
 	_pending_surf.clear()

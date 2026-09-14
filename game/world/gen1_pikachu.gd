@@ -103,8 +103,7 @@ const FAST_PASSES: int = 4
 const HAPPY_WALK_THRESHOLD: int = 80
 ## `IsSpriteInFrontOfPlayer`'s exact match and `wPikachuCollisionCounter`'s eight.
 const COLLISION_PASSES: int = 8
-## `EmotionBubble`'s `ld c, 60`.
-const EMOTE_FRAMES: int = 60
+const EMOTE_FRAMES: int = 60  ## `EmotionBubble`'s `ld c, 60`.
 ## `.Facings`, clockwise.
 const CLOCKWISE: Dictionary = {
 	FACING_DOWN: FACING_LEFT, FACING_LEFT: FACING_UP,
@@ -133,8 +132,7 @@ var flags: int = 0
 var spawn_state: int = SPAWN_ON_PLAYER
 var spawn_flags: int = 0
 var collision_counter: int = 0
-## `wStepCounter`, zeroed by `ClearVariablesOnEnterMap`.
-var step_counter: int = 0
+var step_counter: int = 0  ## `wStepCounter`, zeroed by `ClearVariablesOnEnterMap`.
 ## Whether A found the follower in front of the player: `wd435`.
 var talked_to: bool = false
 var ailing: bool = false
@@ -153,8 +151,7 @@ var walk_counter: int = 0
 var grass_priority: bool = false
 ## `wd432` and `wd431`: the arc row the pixels currently carry.
 var arc_offset: Vector2i = Vector2i.ZERO
-## Oldest first; `wPikachuFollowCommandBufferSize` is `size() - 1`.
-var buffer: Array[int] = []
+var buffer: Array[int] = []  ## Oldest first; `wPikachuFollowCommandBufferSize` is `size() - 1`.
 ## `ShowPikachuEmoteBubble`: `EmotionBubble` over slot fifteen for its sixty frames.
 var emote: int = -1
 var emote_frames: int = 0
@@ -303,9 +300,32 @@ func count_step(coin: bool) -> void:
 		emotion_modifier = 0
 
 
-func set_mood(value: int, modifier: int) -> void:
-	mood = value
-	emotion_modifier = modifier
+## `IsThisMonStarterPikachu`: a PIKACHU carrying the player's ID and the first
+## five letters of the player's name, fainted or not.
+static func is_starter_of(save: Gen2SaveData, mon: Gen2SaveMon) -> bool:
+	if save == null or mon == null or mon.species != Gen2WorldFieldMove.SPECIES_PIKACHU:
+		return false
+	return int(mon.ot_id) == int(save.player_id) \
+		and mon.original_trainer.substr(0, Gen1Layout.OT_MATCH_LENGTH) \
+			== save.player_name.substr(0, Gen1Layout.OT_MATCH_LENGTH)
+
+
+## The four routines that write `wPikachuEmotionModifier` with a mood beside it:
+## `ItemUseBall` behind a catch, a rod's `FishingInit`, Yellow's `ItemUseEvoStone`
+## refusing the starter, and THUNDERBOLT or THUNDER learned by level or TM.
+const MOOD_WRITES: Dictionary = {
+	&"caught": [1, 0x85], &"rod_cast": [2, 0x81],
+	&"refused_stone": [4, 0x82], &"thunder": [5, 0x85],
+}
+const THUNDER_MOVES: Array[int] = [85, 87]
+
+
+func set_mood(kind: StringName) -> void:
+	var write: Array = MOOD_WRITES.get(kind, [])
+	if write.is_empty():
+		return
+	emotion_modifier = int(write[0])
+	mood = int(write[1])
 
 
 ## `Func_fcc08`: the command a player step appends, read off the direction
@@ -924,8 +944,7 @@ var movement: Movement = null
 var movement_base: Vector2i = Vector2i.ZERO
 var movement_offset: Vector2i = Vector2i.ZERO
 var movement_image: int = 0
-## The one `DelayFrame` the script spends after its last command.
-var movement_overrun: int = 0
+var movement_overrun: int = 0  ## The one `DelayFrame` the script spends after its last command.
 
 
 func movement_running() -> bool:
