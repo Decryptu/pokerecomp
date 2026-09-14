@@ -76,7 +76,7 @@ const BANK_BASE: int = 0x4000
 ## order that lets each be checked against the tables it indexes.
 const ANIM_TABLES: Array[String] = [
 	"special_effects", "frame_blocks", "subanims", "attack_anims", "base_coords",
-	"anim_tilesets", "falling_deltas",
+	"anim_tilesets", "falling_deltas", "move_sounds",
 ]
 ## Byte position of the tile id in one `dbsprite`, after its y and x offsets.
 const FRAME_BLOCK_TILE: int = 2
@@ -183,6 +183,9 @@ const OPENING_TILE_SHEETS: Dictionary = {
 	"yellow_intro_gfx_1": {"pin": "yellow_intro_gfx_1", "tiles": Gen1Layout.YELLOW_INTRO_GFX_1_TILES, "first_code": 0, "bits": 2},
 	"yellow_intro_gfx_2": {"pin": "yellow_intro_gfx_2", "tiles": Gen1Layout.YELLOW_INTRO_GFX_2_TILES, "first_code": 0, "bits": 2},
 	"yellow_intro_clouds": {"pin": "yellow_intro_clouds", "tiles": Gen1Layout.YELLOW_INTRO_CLOUD_TILES, "first_code": 0, "bits": 2},
+	"spinner_arrows": {"pin": "spinner_arrow_tiles", "tiles": Gen1Layout.SPINNER_ANIM_TILES, "first_code": 0, "bits": 2},
+	"trade_gfx": {"pin": "trade_gfx", "tiles": Gen1Layout.TRADE_GFX_TILES, "first_code": 0, "bits": 2},
+	"trade_ball": {"pin": "trade_ball_gfx", "tiles": Gen1Layout.TRADE_BALL_TILES, "first_code": 0, "bits": 2},
 }
 
 const NEW_NAME: String = "NEW NAME"
@@ -243,6 +246,9 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"change_box": ["change_box_text", Gen1Layout.CHANGE_BOX_TEXT_AT],
 	"choose_box": ["choose_box_text", Gen1Layout.CHOOSE_BOX_TEXT_AT],
 	"oaks_aide": ["oaks_aide_text", Gen1Layout.OAKS_AIDE_TEXT_AT],
+	"evolution": ["evolution_text", Gen1Layout.EVOLUTION_TEXT_AT],
+	"stone_refusal": ["stone_refusal_text", Gen1Layout.STONE_REFUSAL_TEXT_AT],
+	"trade_anim": ["trade_anim_text", Gen1Layout.TRADE_ANIM_TEXT_AT],
 }
 const CREDITS_ORDER_MAX: int = 256
 const CARD_KEY_TEXT_NAMES: Array[String] = ["card_key_success", "card_key_fail"]
@@ -577,6 +583,9 @@ static func _verify_facility_text(rom: RomFile, layout: Dictionary) -> Dictionar
 	for run: String in runs:
 		var key: String = String((runs[run] as Array)[0])
 		var slots: Dictionary = (runs[run] as Array)[1]
+		## Yellow's `RefusingText` is the one run the other two do not ship.
+		if not layout.has(key):
+			continue
 		for name: String in slots:
 			var at: int = Gen1Layout.facility_text_offset(layout, key, slots, name)
 			if facility_text(rom, at).is_empty():
@@ -627,6 +636,14 @@ static func _verify_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 		if int(row.get("columns", 0)) != Gen2PicImage.FRONTPIC_TILES \
 				or int(row.get("rows", 0)) != Gen2PicImage.FRONTPIC_TILES:
 			return _fail("GengarIntroTiles%d is not 7x7." % (index + 1))
+	for name: String in Gen1Layout.TRADE_TILEMAPS:
+		var row: Dictionary = read_tile_id_list(rom, layout, int(Gen1Layout.TRADE_TILEMAPS[name]))
+		var ids: Array = row["ids"]
+		if ids.is_empty() or int(ids.min()) < Gen1Layout.ANIM_BASE_TILE \
+				or int(ids.max()) >= Gen1Layout.ANIM_BASE_TILE + Gen1Layout.TRADE_GFX_TILES:
+			return _fail("%s's tilemap names a tile past TradingAnimationGraphics." % name)
+	if rom.u8(int(layout["trade_info_text"])) != Gen1Layout.TRADE_INFO_RULE:
+		return _fail("Trade_MonInfoText does not open on a rule.")
 	if layout.has("title_mons"):
 		for slot: int in Gen1Layout.TITLE_MONS:
 			if Gen1Layout.dex_of_index(rom, layout, rom.u8(int(layout["title_mons"]) + slot)) < 1:
@@ -1107,6 +1124,7 @@ func import_rom(
 		"special_warps": _import_special_warps(rom, layout),
 		"intro_names": _import_intro_names(rom, layout),
 		"pikachu": Gen1WorldImporter.read_pikachu(rom, layout),
+		"trade_anim": _import_trade_anim(rom, layout),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -1419,7 +1437,17 @@ func _import_special_warps(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"bike_riding_tilesets": _byte_list(rom, int(layout["bike_riding_tilesets"])),
 		"forced_bike_surf": _forced_bike_surf(rom, layout),
 		"snorlax_flute": _snorlax_flute(rom, layout),
+		"boulder_dust_offsets": _boulder_dust_offsets(rom, layout),
 	}
+
+
+## `BoulderDustAnimationOffsets`: an `x, y` pair per facing, signed.
+static func _boulder_dust_offsets(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout["boulder_dust_offsets"])
+	var out: Array = []
+	for facing: int in Gen1Layout.BOULDER_DUST_DRIFT.size():
+		out.append({"x": rom.s8(at + facing * 2), "y": rom.s8(at + facing * 2 + 1)})
+	return out
 
 
 ## `Route12SnorlaxFluteCoords` and `Route16SnorlaxFluteCoords`, adjacent the way
@@ -1601,6 +1629,8 @@ func _import_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for run: String in FACILITY_TEXT_RUNS:
 		var key: String = String((FACILITY_TEXT_RUNS[run] as Array)[0])
 		var slots: Dictionary = (FACILITY_TEXT_RUNS[run] as Array)[1]
+		if not layout.has(key):
+			continue
 		var boxes: Dictionary = {}
 		for name: String in slots:
 			boxes[name] = facility_text(
@@ -2039,6 +2069,47 @@ static func read_copyright_rows(rom: RomFile, layout: Dictionary) -> Array:
 	return []
 
 
+## `TileIDListPointerTable`'s two trade rows as `trade_anim_<name>` index files,
+## `Trade_MonInfoText`'s lines as codes, and the addresses its `text_ram`s name,
+## in the section shape [method GameData.has_trade_anim] reads for Crystal.
+func _import_trade_anim(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not layout.has("trade_gfx"):
+		return {}
+	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
+	var shapes: Dictionary = {}
+	for name: String in Gen1Layout.TRADE_TILEMAPS:
+		var tilemap: Dictionary = read_tile_id_list(rom, layout, int(Gen1Layout.TRADE_TILEMAPS[name]))
+		var ids := PackedByteArray()
+		for id: Variant in tilemap["ids"]:
+			ids.append(int(id))
+		if not RomCache.write_indices(RomCache.tile_path(directory, "trade_anim_%s" % name), ids):
+			return {}
+		shapes[name] = [int(tilemap["columns"]), int(tilemap["rows"])]
+	var lines: Array = []
+	var line: Array = []
+	for code: int in _bytes_until(
+		rom, int(layout["trade_info_text"]), Gen1Text.TERMINATOR, Gen1Layout.TRADE_INFO_TEXT_MAX
+	):
+		if code == Gen1Text.NEXT_LINE:
+			lines.append(line)
+			line = []
+		else:
+			line.append(code)
+	lines.append(line)
+	if lines.size() != Gen1Layout.TRADE_INFO_TEXT_LINES:
+		return {}
+	return {
+		"maps": Gen1Layout.TRADE_TILEMAPS.keys(),
+		"shapes": shapes,
+		"info_text": lines,
+		"buffers": {
+			"string": int(layout["string_buffer"]),
+			"name": int(layout["name_buffer"]),
+			"enemy_trainer": int(layout["link_enemy_trainer_name"]),
+		},
+	}
+
+
 ## `InGameTradeTextPointers`' three tables of five and the two boxes the swap
 ## prints, in the one run both generations' trades are read from.
 func _import_trade_text(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -2405,6 +2476,9 @@ func _import_pics(
 		var slot: int = int(entry["number"]) - 1
 		var offsets: Dictionary = entry["pic_offsets"]
 		_decode_pic(codec, rom, int(offsets["front"]), front, slot)
+		## What `UncompressMonSprite` reads, which is what its time is spent on;
+		## see [method Gen1Layout.pic_load_frames].
+		entry["front_bytes"] = codec.consumed
 		_decode_pic(codec, rom, int(offsets["back"]), back, slot)
 		if on_progress.is_valid():
 			on_progress.call("pics", slot + 1, Gen1Layout.SPECIES_COUNT)
@@ -2673,7 +2747,7 @@ func _import_battle_anims(rom: RomFile, layout: Dictionary, directory: String) -
 		return {}
 
 	var spans: Array = [anims, subanims, frame_blocks]
-	var lowest: int = int(tables["attack_anims"])
+	var lowest: int = mini(int(tables["attack_anims"]), int(tables["move_sounds"]))
 	var highest: int = int(tables["base_coords"]) \
 		+ Gen1Layout.BASE_COORD_COUNT * Gen1Layout.BASE_COORD_SIZE
 	for span: Dictionary in spans:
@@ -2692,6 +2766,7 @@ func _import_battle_anims(rom: RomFile, layout: Dictionary, directory: String) -
 				"subanims": tables["subanims"],
 				"frame_blocks": tables["frame_blocks"],
 				"base_coords": tables["base_coords"],
+				"move_sounds": tables["move_sounds"],
 			},
 			"special_effects": effects,
 			"falling_deltas": _bank_bytes(

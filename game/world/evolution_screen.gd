@@ -2,21 +2,22 @@ class_name Gen2EvolutionScreen
 extends Control
 
 ## `EvolveAfterBattle`'s `.proceed` and the `EvolutionAnimation` it farcalls, for
-## one plan at a time out of [method Gen2Evolution.after_battle]. Presentation
-## only: nothing here writes a party row, and each plan is announced with
-## [signal resolved] at the point `.proceed` writes the new species, so the caller
-## applies it in the source's own order. Two pieces of `.PlayEvolvedSFX` are not
-## drawn: the thirty-two balls of light are sprite-anim objects and this project
-## has no such layer outside the intro, so their frames are spent and the screen
-## holds the new picture through them.
+## one plan at a time out of [method Gen2Evolution.after_battle], or Generation
+## 1's `.doEvolution` and `EvolveMon` over the same plans. Presentation only:
+## nothing here writes a party row, and each plan is announced with [signal
+## resolved] where `.proceed` writes the new species, so the caller applies it in
+## the source's own order. `.PlayEvolvedSFX`'s thirty-two balls of light are
+## sprite-anim objects and this project has no such layer outside the intro, so
+## their frames are spent and the screen holds the new picture through them.
 
 signal resolved(plan: Dictionary, canceled: bool)
 signal closed()
-## `PlayMonCry`, `PlaySFX` and `PlayMusic`, all through the overworld's own
-## driver the way the Hall of Fame's and the Pokedex's are.
+## `PlayMonCry`, `PlaySFX` and `PlayMusic`, through the overworld's own driver.
+## A Generation 1 screen names `PlaySound`'s own effect ids and Crystal's music roles.
 signal cry_requested(species: int)
 signal sfx_requested(index: int)
 signal music_requested(index: int)
+signal map_music_requested()  ## `RestartMapMusic` or `PlayDefaultMusic` once a plan began.
 
 ## constants/music_constants.asm.
 const MUSIC_NONE: int = 0
@@ -46,6 +47,10 @@ const REPLACE_FRAMES: int = 1
 ## `.done` spends 32 more.
 const BALLS_FRAMES: int = 64
 
+const GEN1_DELAY3: int = 3  ## Behind `SFX_TINK` and inside `Evolution_ChangeMonPic`.
+const GEN1_FLICKER_START_WAIT: int = 0x10  ## `.animLoop`'s `lb bc, $1, $10`.
+const GEN1_JINGLE_FRAMES: int = 40  ## `EvolutionAfterBattle`'s `ld c, 40` behind the jingle.
+
 enum Phase {
 	EVOLVING,
 	HOLD,
@@ -56,9 +61,22 @@ enum Phase {
 	CONGRATULATIONS,
 	CANCELED,
 	DONE,
+	TINK,
+	LOAD,
+	CRY,
+	SETTLE,
+	CRY_NEW,
+	JINGLE,
 }
 
 var _data: GameData = null
+var _gen1: bool = false
+var _audio: Gen2AudioPlayer = null  ## `WaitForSoundToFinish`, which Generation 1 spends.
+var _wait_watch: Dictionary = {}
+var _jingle_started: bool = false
+var _gen1_palette: PackedColorArray = PackedColorArray()  ## `SetPal_PokemonWholeScreen`'s row.
+var _change_frames: int = 0  ## `Evolution_ChangeMonPic`'s `Delay3` still owed.
+var _tried: bool = false  ## `wMonTriedToEvolve`, which is `wEvolutionOccurred`.
 var _plans: Array = []
 var _index: int = 0
 var _phase: int = Phase.DONE
@@ -84,8 +102,13 @@ var _text_box: Gen2TextBox = null
 ## closes on the frame it is opened, the way the Hall of Fame's does.
 func set_context(data: GameData, plans: Array) -> void:
 	_data = data
+	_gen1 = data != null and data.generation == RomRegistry.GEN1
 	_plans = plans.duplicate()
 	_index = 0
+
+
+func set_audio_player(player: Gen2AudioPlayer) -> void:
+	_audio = player
 
 
 func _ready() -> void:
@@ -192,8 +215,22 @@ func _begin_plan() -> void:
 	## it down, so this phase draws no backdrop of its own.
 	_backdrop.visible = false
 	_pic.visible = false
-	_show_text(Gen2Evolution.evolving_text(String(plan.get("evolving_name", ""))))
+	_tried = true
+	_show_text(_line("is_evolving", Gen2Evolution.evolving_text(
+		String(plan.get("evolving_name", ""))
+	)))
 	_enter(Phase.EVOLVING, EVOLVING_FRAMES)
+
+
+## One of Generation 1's own boxes with its `text_ram` filled, or [param crystal].
+func _line(box: String, crystal: String, ram: String = "") -> String:
+	if not _gen1:
+		return crystal
+	var filling: String = ram if not ram.is_empty() \
+		else String(current_plan().get("evolving_name", ""))
+	return Gen2TextStream.fill_all_markers(
+		_data.special_text("evolution", box), Gen2TextStream.RAM_MARKER, filling
+	)
 
 
 func _enter(next: int, frames: int) -> void:
@@ -225,6 +262,13 @@ func advance_frame() -> void:
 	## the wait frames alone, so a press is offered to this frame and dropped.
 	var pressed_b: bool = _b_held
 	_b_held = false
+	if _gen1:
+		_advance_gen1(pressed_b)
+	else:
+		_advance_crystal(pressed_b)
+
+
+func _advance_crystal(pressed_b: bool) -> void:
 	match _phase:
 		Phase.EVOLVING:
 			if _spend():
@@ -322,17 +366,23 @@ func _begin_balls() -> void:
 
 ## `.cancel_evo`: the old stage stays, `.PlayEvolvedSFX` returns without a sound
 ## because `wEvolutionCanceled` is set, and a Pokemon that is not statused cries.
+## `EvolveMon.evolutionCancelled` is the same through `.done`: the music stops,
+## the old species cries and the screen takes its palette back.
 func _cancel() -> void:
 	_canceled = true
 	_show_stage(false)
 	var plan: Dictionary = current_plan()
-	if not bool(plan.get("statused", false)):
+	if _gen1:
+		music_requested.emit(MUSIC_NONE)
+	if _gen1 or not bool(plan.get("statused", false)):
 		cry_requested.emit(int(plan.get("old_species", 0)))
+	if _gen1:
+		_apply_gen1_palette(_data.palette(int(plan.get("old_species", 0))))
 	_phase = Phase.CANCELED
 	_backdrop.visible = true
-	_show_text(Gen2Evolution.stopped_evolving_text(
+	_show_text(_line("stopped_evolving", Gen2Evolution.stopped_evolving_text(
 		String(plan.get("evolving_name", ""))
-	))
+	)))
 
 
 ## `AnimateFrontpic ANIM_MON_EVOLVE`, skipped for a statused Pokemon along with
@@ -395,6 +445,8 @@ func _finish_plan() -> void:
 		_text_box.visible = false
 	if _index >= _plans.size():
 		_phase = Phase.DONE
+		if _tried:
+			map_music_requested.emit()
 		closed.emit()
 		return
 	_begin_plan()
@@ -417,11 +469,12 @@ func _draw_species(species: int) -> void:
 		return
 	var image: Image = Gen2PicImage.from_atlas(
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
-		_data.palette(species, _plan_shiny())
+		_gen1_palette if _gen1_palette.size() == 4 else _data.palette(species, _plan_shiny())
 	)
 	## `.PlaceFrontpic` is `PrepMonFrontpic`, which sets `wBoxAlignment`, so the
 	## stage on screen is mirrored and a pic shorter than the block is
-	## bottom-aligned against the far column.
+	## bottom-aligned against the far column. `Evolution_LoadPic` is
+	## `LoadFlippedFrontSpriteByMonIndex`, the same mirror.
 	image = Gen2PicImage.x_flipped(image)
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
@@ -451,3 +504,179 @@ func _draw_animation_box() -> void:
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
 	_pic.position = Vector2(PIC_AT.x * TILE, PIC_AT.y * TILE)
+
+
+## `EvolutionAfterBattle.doEvolution` from its `ld c, 50` on, and `EvolveMon` whole.
+func _advance_gen1(pressed_b: bool) -> void:
+	match _phase:
+		Phase.EVOLVING:
+			if _spend():
+				_open_gen1_animation()
+		Phase.TINK:
+			if _spend():
+				_begin_gen1_load()
+		Phase.LOAD:
+			if _spend():
+				_begin_gen1_cry()
+		Phase.CRY:
+			if not _still_waiting():
+				_begin_gen1_music()
+		Phase.HOLD:
+			if _spend():
+				_begin_gen1_flicker()
+		Phase.FLASH:
+			_advance_gen1_flicker(pressed_b)
+		Phase.SETTLE:
+			if _spend():
+				_begin_gen1_new_cry()
+		Phase.CRY_NEW:
+			if not _still_waiting():
+				_open_gen1_evolved()
+		Phase.JINGLE:
+			_advance_gen1_jingle()
+		Phase.CONGRATULATIONS:
+			if _spend():
+				_finish_plan()
+		Phase.CANCELED:
+			pass
+
+
+## `WaitForSoundToFinish`, bounded the way every other wait on the driver is.
+func _still_waiting() -> bool:
+	return _audio != null and _audio.still_waiting(_wait_watch)
+
+
+func _begin_wait() -> void:
+	_wait_watch = {}
+
+
+## `ClearScreenArea`'s twelve rows over the box, `ClearSprites`, and `EvolveMon`
+## up to its first `Delay3`: the music stops and `SFX_TINK` plays.
+func _open_gen1_animation() -> void:
+	_backdrop.visible = true
+	_pic.visible = false
+	music_requested.emit(MUSIC_NONE)
+	sfx_requested.emit(Gen1Layout.SFX_TINK)
+	_enter(Phase.TINK, GEN1_DELAY3)
+
+
+## `EvolutionSetWholeScreenPalette` with `c` at 0, then `Evolution_LoadPic` for
+## the new species into `vBackPic` and again for the old one, the field standing
+## bare under `hAutoBGTransferEnabled` off until the second has landed.
+func _begin_gen1_load() -> void:
+	var plan: Dictionary = current_plan()
+	_apply_gen1_palette(_data.palette(int(plan.get("old_species", 0))))
+	_enter(Phase.LOAD, _data.gen1_pic_load_frames(int(plan.get("new_species", 0)))
+		+ Gen1Layout.PIC_BACK_COPY_FRAMES
+		+ _data.gen1_pic_load_frames(int(plan.get("old_species", 0))))
+
+
+## The old picture shown and its `PlayCry`, which `WaitForSoundToFinish` waits on.
+func _begin_gen1_cry() -> void:
+	_pic.visible = true
+	_show_stage(false)
+	cry_requested.emit(int(current_plan().get("old_species", 0)))
+	_begin_wait()
+	_phase = Phase.CRY
+
+
+## `PlayMusic` with `MUSIC_SAFARI_ZONE` and the `ld c, 80` behind it.
+func _begin_gen1_music() -> void:
+	music_requested.emit(MUSIC_EVOLUTION)
+	_enter(Phase.HOLD, MUSIC_FRAMES)
+
+
+## `EvolutionSetWholeScreenPalette` with `c` at 1, then `.animLoop`'s
+## `lb bc, $1, $10`.
+func _begin_gen1_flicker() -> void:
+	_apply_gen1_palette(_data.world_palette(Gen1Layout.PAL_BLACK))
+	_flash_b = 1
+	_flash_c = GEN1_FLICKER_START_WAIT
+	_flash_left = _flash_c
+	_flashes_left = _flash_b * 2
+	_change_frames = 0
+	_phase = Phase.FLASH
+
+
+## `.animLoop`: `Evolution_CheckForCancel` spends `c` frames reading B on each,
+## then `Evolution_BackAndForthAnim` changes the picture `2b` times with a
+## `Delay3` behind each. `wForceEvolution` is `.pressedB`'s, which the plan
+## carries. A count that runs out does the next thing in the same frame.
+func _advance_gen1_flicker(pressed_b: bool) -> void:
+	if _flash_left > 0:
+		if pressed_b and bool(current_plan().get("can_cancel", true)):
+			_cancel()
+			return
+		_flash_left -= 1
+		if _flash_left > 0:
+			return
+	else:
+		_change_frames -= 1
+		if _change_frames > 0:
+			return
+		if _flashes_left == 0:
+			_next_gen1_pass()
+			return
+	_flashes_left -= 1
+	_show_stage(not _showing_new)
+	_change_frames = GEN1_DELAY3
+
+
+## `inc b` and the two `dec c`, or the change to the new picture once `c` is out.
+func _next_gen1_pass() -> void:
+	_flash_c -= 2
+	if _flash_c <= 0:
+		_show_stage(true)
+		_enter(Phase.SETTLE, GEN1_DELAY3)
+		return
+	_flash_b += 1
+	_flash_left = _flash_c
+	_flashes_left = _flash_b * 2
+
+
+## `.done` for the new species: `PlayCry` waits on its own `WaitForSoundToFinish`.
+func _begin_gen1_new_cry() -> void:
+	music_requested.emit(MUSIC_NONE)
+	cry_requested.emit(int(current_plan().get("new_species", 0)))
+	_begin_wait()
+	_phase = Phase.CRY_NEW
+
+
+## The palette behind the cry, then `EvolvedText` and `IntoText` in one box.
+func _open_gen1_evolved() -> void:
+	var new_species: int = int(current_plan().get("new_species", 0))
+	_apply_gen1_palette(_data.palette(new_species))
+	_phase = Phase.JINGLE
+	_jingle_started = false
+	_begin_wait()
+	_show_text(_line("evolved", "") + _line(
+		"into", "", String(_data.species(new_species).get("name", ""))
+	))
+
+
+## `PlaySoundWaitForCurrent` lets the cry finish before `SFX_GET_ITEM_2`, and
+## `WaitForSoundToFinish` lets the jingle finish before the `ld c, 40`.
+func _advance_gen1_jingle() -> void:
+	if _still_waiting():
+		return
+	if not _jingle_started:
+		_jingle_started = true
+		sfx_requested.emit(Gen1Layout.SFX_GET_ITEM_2)
+		_begin_wait()
+		return
+	_enter(Phase.CONGRATULATIONS, GEN1_JINGLE_FRAMES)
+
+
+## `BlkPacket_WholeScreen`: every cell wears the one row, box and field included.
+func _apply_gen1_palette(colors: PackedColorArray) -> void:
+	if colors.size() < 4:
+		return
+	_gen1_palette = colors
+	_backdrop.color = Gen2PicImage.quantized(PackedColorArray([colors[0]]))[0]
+	_text_box.palette = colors
+	if _pic.visible:
+		_show_stage(_showing_new)
+
+
+func gen1_palette() -> PackedColorArray:
+	return _gen1_palette

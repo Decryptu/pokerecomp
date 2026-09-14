@@ -88,8 +88,7 @@ const MACHINE_PRICE_UNIT: int = 1000
 const DEX_TEXT_FAR: int = 0x17
 const DEX_CATEGORY_MAX: int = 16
 
-## Every near-pointer table in these cartridges is two bytes a row.
-const POINTER_SIZE: int = 2
+const POINTER_SIZE: int = 2  ## Every near-pointer table in these cartridges is two bytes a row.
 
 ## `MonsterPalettes` names an SGB palette a row, `SuperPalettes` holds the four
 ## colours of each, and a DMG reads neither and shows four greys.
@@ -113,6 +112,7 @@ const PAL_REDMON: int = 0x12
 const PAL_YELLOWMON: int = 0x18
 const PAL_BADGE: int = 0x22
 const PAL_CAVE: int = 0x23
+const PAL_BLACK: int = 0x1E  ## `SetPal_PokemonWholeScreen`'s row while `EvolveMon` flickers.
 ## The three rows `GetHealthBarColor` picks between, under the names
 ## [method GameData.bar_palette] takes them by. Generation 1 has no exp bar.
 const HP_BAR_PALETTES: Dictionary = {
@@ -130,8 +130,7 @@ const EVOLVE_SIZES: Dictionary = {
 	EVOLVE_TRADE: 3,
 }
 
-## `CryData`: base cry, pitch and length.
-const CRY_SIZE: int = 3
+const CRY_SIZE: int = 3  ## `CryData`: base cry, pitch and length.
 
 ## `UncompressMonSprite`'s if-chain, as the first internal index of each bank:
 ## `TANGELA + 1`, `MOLTRES + 1`, `BEEDRILL + 2`, `STARMIE + 1`. The Kabutops
@@ -275,6 +274,12 @@ const ANIM_TILESET_POINTER: int = 1
 ## loaded tileset.
 const ANIM_BANK: int = 0x1E
 const ANIM_BASE_TILE: int = 0x31
+## `MoveSoundTable`: a sound id, `wFrequencyModifier` and `wTempoModifier` per
+## move, which `PlaySubanimation` plays through `GetMoveSound`. GROWL and ROAR
+## are `IsCryMove`, the actor's cry with the two modifiers added to its own.
+const MOVE_SOUND_SIZE: int = 3
+const MOVE_SOUND_NONE: int = 0xFF
+const CRY_MOVES: Array[int] = [0x2D, 0x2E]
 
 ## `SetAnimationPalette` on the Super Game Boy: `rOBP0` while a subanimation
 ## draws is `wAnimPalette`, $F0, and `rOBP1` is $6C throughout.
@@ -296,6 +301,11 @@ const ANIM_ID_GREATTOSS: int = 0xC5
 const ANIM_ID_ULTRATOSS: int = 0xC6
 const ANIM_ID_SHAKE_SCREEN: int = 0xC7
 const ANIM_ID_HIDEPIC: int = 0xC8
+## `TRADE_BALL_DROP_ANIM` to `TRADE_BALL_POOF_ANIM`, `Trade_ShowAnimation`'s four.
+const ANIM_ID_TRADE_DROP: int = 0xAA
+const ANIM_ID_TRADE_SHAKE: int = 0xAB
+const ANIM_ID_TRADE_TILT: int = 0xAC
+const ANIM_ID_TRADE_POOF: int = 0xAD
 
 ## `ItemUsePtrTable`'s five `ItemUseBall` rows, which `TossBallAnimation` also
 ## picks a throw off; [constant BALL_ITEMS] gathers them in ball pocket order.
@@ -481,10 +491,68 @@ const HEAL_MACHINE_OAM: Array = [
 ]
 const HEAL_MACHINE_OAM_XFLIP: int = 0x20
 
-## `rOBP1` as `AnimateHealingMachine` writes it, and the same byte once
-## `FlashSprite8Times` has xored $28 into it: two shades swap places where
-## Crystal rotates all four.
-const HEAL_MACHINE_SHADES: Array = [[0, 0, 2, 3], [0, 2, 0, 3]]
+## `rOBP1` as `AnimateHealingMachine` writes it, and the $28 `FlashSprite8Times`
+## xors into it.
+const HEAL_MACHINE_OBP1: int = 0xE0
+const HEAL_MACHINE_OBP1_FLASH: int = 0x28
+
+## `SSAnneSmokePuffTile`, which `LoadSmokeTileFourTimes` puts at $7C to $7F for
+## the boulder dust and the ship's smoke alike.
+const SMOKE_VTILE: int = 0x7C
+const SMOKE_BYTES: Array[int] = [
+	0x00, 0x18, 0x1A, 0x66, 0x04, 0x42, 0x0B, 0x81,
+	0x56, 0x89, 0x1A, 0x2E, 0x4C, 0x12, 0x38, 0x38,
+]
+## `AnimateBoulderDust`: eight steps of `Delay3`, each moving the block a pixel
+## back toward the player and xoring `rOBP1`, which opens at $E4.
+const BOULDER_DUST_STEPS: int = 8
+const BOULDER_DUST_STEP_FRAMES: int = 3
+const BOULDER_DUST_OBP1: int = 0xE4
+const BOULDER_DUST_OBP1_FLASH: int = 0x64
+## `MoveBoulderDustFunctionPointerTable`'s pixel per step, by facing.
+const BOULDER_DUST_DRIFT: Array[Vector2i] = [
+	Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, 0), Vector2i(-1, 0),
+]
+## `VermilionDockSSAnneLeavesScript`: `ld c, 120` and `Delay3` in front of the
+## horn, eight columns of sixteen drifts of eight frames, `EraseSSAnne`'s two
+## frames of `CopyVideoData`, the horn again and `ld c, 120`. A puff opens at
+## `wSSAnneSmokeX` less sixteen, OAM y 100, and every puff drifts two pixels
+## right per drift; the band `SyncScrollWithLY` scrolls is lines $50 to $7F.
+const SS_ANNE_LEAD_FRAMES: int = 120 + 3
+const SS_ANNE_COLUMNS: int = 8
+const SS_ANNE_DRIFTS: int = 16
+const SS_ANNE_DRIFT_FRAMES: int = 8
+const SS_ANNE_ERASE_FRAMES: int = 2
+const SS_ANNE_TAIL_FRAMES: int = 120
+const SS_ANNE_SMOKE_START_X: int = 88
+const SS_ANNE_SMOKE_STEP: int = 16
+const SS_ANNE_SMOKE_Y: int = 100
+const SS_ANNE_SMOKE_DRIFT: int = 2
+const SS_ANNE_BAND_TOP: int = 0x50
+const SS_ANNE_BAND_BOTTOM: int = 0x80
+## `VermilionDock_EraseSSAnne`: the band's rows of the background map filled
+## with the water tile, then `hlowcoord 5, 2` and five water blocks.
+const SS_ANNE_ERASE_AT: Vector2i = Vector2i(5, 2)
+const SS_ANNE_ERASE_BLOCKS: int = 5
+const SS_ANNE_WATER_BLOCK: int = 0x0D
+const SS_ANNE_WATER_TILE: int = 0x14
+const SFX_SS_ANNE_HORN: int = 169
+## `LoadSpinnerArrowTiles`: `FacilitySpinnerArrows` and `GymSpinnerArrows` as
+## the tileset tile each row rewrites and the `SpinnerArrowAnimTiles` tile it
+## takes on an odd `wSimulatedJoypadStatesIndex`; `SpinnerPlayerFacingDirections`
+## is the facing after each, indexed by the facing before.
+const SPINNER_ARROW_TILES: Dictionary = {
+	TILESET_FACILITY: [[0x20, 0], [0x21, 1], [0x30, 2], [0x31, 3]],
+	TILESET_GYM: [[0x3C, 1], [0x3D, 3], [0x4C, 0], [0x4D, 2]],
+}
+const SPINNER_ANIM_TILES: int = 4
+const SPINNER_NEXT_FACING: Array[int] = [2, 3, 1, 0]
+const SFX_ARROW_TILES: int = 167
+## `TryPushingBoulder`'s own sound and the one `DoBoulderDustAnimation` ends on.
+const SFX_PUSH_BOULDER: int = 168
+const SFX_CUT: int = 172
+## `wSpritePlayerStateData1YPixels` and `XPixels`: where the player stands.
+const PLAYER_SPRITE_PIXELS: Vector2i = Vector2i(64, 60)
 
 ## `TX_SCRIPT_*`: a text pointer standing at one of these opens a facility
 ## rather than a box, `DisplayTextID` dispatching before it prints.
@@ -537,8 +605,7 @@ const VENDING_DRINKS_LENGTH: int = 0x25
 const VENDING_CANCEL: String = "CANCEL"
 const VENDING_PRICES_AT: int = 0x67
 const VENDING_ROWS: int = 3
-## `vend_item`: one item byte and a `bcd3` price.
-const VENDING_ROW_SIZE: int = 4
+const VENDING_ROW_SIZE: int = 4  ## `vend_item`: one item byte and a `bcd3` price.
 
 ## `CableClubNPC`'s stubs by the delta from the first. Only the three a port
 ## with no cable reaches are named; the rest want a link partner.
@@ -610,6 +677,29 @@ const POKE_FLUTE_TEXT_AT: Dictionary = {
 	"no_effect": 0x00, "woke_up": 0x05, "had_effect": 0x0A,
 }
 const SAFARI_BATTLE_TEXT_AT: Dictionary = {"eating": 0x00, "angry": 0x05}
+## `evos_moves.asm`'s four stubs in file order. `IntoText` is printed into
+## `EvolvedText`'s own box with `PrintText_NoCreatingTextBox`, so the two are one
+## page here. Yellow's `RefusingText` is the starter turning a stone down.
+const EVOLUTION_TEXT_AT: Dictionary = {
+	"evolved": 0x00, "into": 0x05, "stopped_evolving": 0x0A, "is_evolving": 0x0F,
+}
+const STONE_REFUSAL_TEXT_AT: Dictionary = {"refusing": 0x00}
+## `engine/movie/trade.asm`'s eight stubs, each behind the routine that prints
+## it, so the offsets from `TradeWentToText` are not five apart.
+const TRADE_ANIM_TEXT_AT: Dictionary = {
+	"went_to": 0x00, "for": 0x17, "sends": 0x1C, "waves_farewell": 0x36,
+	"transferred": 0x3B, "take_care": 0x49, "will_trade": 0x60, "trade_for": 0x65,
+}
+## `TradingAnimationGraphics` (`game_boy` and `link_cable`, into `vChars2 tile
+## $31`) and `TradingAnimationGraphics2` (`cable_ball`, into `vSprites tile $7c`).
+const TRADE_GFX_TILES: int = 49
+const TRADE_BALL_TILES: int = 4
+## `TileIDListPointerTable`'s two trade rows, by name.
+const TRADE_TILEMAPS: Dictionary = {"game_boy": 6, "link_cable": 7}
+## `Trade_MonInfoText`'s four `next` lines, opening on `charmap "─", $7a`.
+const TRADE_INFO_TEXT_LINES: int = 4
+const TRADE_INFO_RULE: int = 0x7A
+const TRADE_INFO_TEXT_MAX: int = 32
 ## `AIBattleWithdrawText` and `AIBattleUseItemText`, $C3 apart on every cartridge.
 const TRAINER_AI_TEXT_AT: Dictionary = {"withdraw": 0x00, "use_item": 0xC3}
 const SAFARI_TEXT_AT: Dictionary = {"times_up": 0x00, "game_over": 0x05}
@@ -891,8 +981,7 @@ const TOWN_MAP_BLINK_FRAMES: int = 25
 const FLY_WARP_COUNT: int = 13
 const FLY_WARP_ROW_SIZE: int = 4
 const FLY_WARP_RECORD_AT: int = 2
-## `wBeatGymFlags`' own bit for the badge `.fly` asks for.
-const THUNDERBADGE: int = 2
+const THUNDERBADGE: int = 2  ## `wBeatGymFlags`' own bit for the badge `.fly` asks for.
 
 ## `LoadSpecialWarpData`'s other pair. A `DungeonWarpList` row is a destination
 ## map and a hole index; `DungeonWarpData`'s row at the same place is a `fly_warp`.
@@ -948,6 +1037,7 @@ const FIELD_MOVE_BADGES: Dictionary = {
 }
 
 const TILESET_GYM: int = 7
+const TILESET_FACILITY: int = 22
 const CUT_TREE_TILE: int = 0x3D
 const CUT_GRASS_TILE: int = 0x52
 const CUT_GYM_TREE_TILE: int = 0x50
@@ -1160,8 +1250,7 @@ const SCRIPT_LD_B_A: int = 0x47
 const SCRIPT_LD_C_A: int = 0x4F
 ## `ld a, b`, which carries a facing chosen either side of a branch past it.
 const SCRIPT_LD_A_B: int = 0x78
-## `GuardDrinksList`, three drinks under a zero.
-const GUARD_DRINK_MAX: int = 8
+const GUARD_DRINK_MAX: int = 8  ## `GuardDrinksList`, three drinks under a zero.
 ## `map_coord_movement`: `db y, x` and a pointer, under a $FF.
 const ARROW_ROW_SIZE: int = 4
 const ARROW_TILE_MAX: int = 64
@@ -1690,8 +1779,7 @@ const SCRIPT_SET_BASE: int = 0xC0
 const SCRIPT_PREFIX_BLOCK: int = 0x40
 const SCRIPT_OPERAND_A: int = 7
 const SCRIPT_OPERAND_HL: int = 6
-## `flag_array NUM_EVENTS`: 2,560 events on all three cartridges.
-const EVENT_FLAG_BYTES: int = 320
+const EVENT_FLAG_BYTES: int = 320  ## `flag_array NUM_EVENTS`: 2,560 events on all three cartridges.
 ## Generation 1's own saved flag runs, which Crystal's engine flag table names
 ## none of, so they sit above every Crystal index. The value is the run's width
 ## in bytes and the order is what fixes where each one starts.
@@ -1716,8 +1804,7 @@ const ENGINE_FLAG_BITS: int = 8
 ## `flag_array NUM_CITY_MAPS`, rounded up to the two bytes the array occupies.
 const TOWN_VISITED_FLAG_BYTES: int = 2
 
-## `BAG_ITEM_CAPACITY`: one list of slots, not four pockets.
-const BAG_ITEM_CAPACITY: int = 20
+const BAG_ITEM_CAPACITY: int = 20  ## `BAG_ITEM_CAPACITY`: one list of slots, not four pockets.
 ## The one type byte every Generation 1 item wears, so the shared pack draws the
 ## bag as the single `DisplayListMenuID` list `engine/menus/start_sub_menus.asm`
 ## opens.
@@ -2033,8 +2120,7 @@ const TRAINER_PARTY_LEVELS: int = 0xFF
 
 ## `AIMoveChoiceModificationFunctionPointers` names four layers.
 const TRAINER_AI_LAYER_COUNT: int = 4
-## `TrainerAIPointers`: a use count and a near pointer.
-const TRAINER_AI_ROW_SIZE: int = 3
+const TRAINER_AI_ROW_SIZE: int = 3  ## `TrainerAIPointers`: a use count and a near pointer.
 ## Each cartridge's `TrainerAIPointers` targets by bank-local address; Yellow
 ## retuned Koga, Blaine and Sabrina.
 const TRAINER_AI_ROUTINES: Dictionary = {
@@ -2103,6 +2189,14 @@ const RED_BLUE: Dictionary = {
 	"usable_items_party": 0x13434,
 	"usable_items_close": 0x13459,
 	"item_use_text": 0x0E5C0,
+	"evolution_text": 0x3AF3E,
+	## `InternalClockTradeAnim`'s art, its eight `text_far` stubs from
+	## `TradeWentToText`, `Trade_MonInfoText` and the third buffer the stubs name.
+	"trade_gfx": 0x3A9BE,
+	"trade_ball_gfx": 0x3ACCE,
+	"trade_anim_text": 0x4160C,
+	"trade_info_text": 0x427E5,
+	"link_enemy_trainer_name": 0xD887,
 	"coin_case_text": 0x0E247,
 	"party_menu_text": 0x12E7F,
 	"toss_text": 0x0E755,
@@ -2393,6 +2487,8 @@ const RED_BLUE: Dictionary = {
 	"mon_icons": 0x717C0,
 	"mon_icon_species": 0x7190D,
 	"heal_machine_gfx": 0x704B7,
+	"smoke_gfx": 0x79FDD,
+	"boulder_dust_offsets": 0x0F097,
 	"ball_tiles": 0x3A97E,
 	"stats_p": 0x12ADC,
 	"shock_emote_gfx": 0x17CBD,
@@ -2411,6 +2507,7 @@ const RED_BLUE: Dictionary = {
 	"special_effects": 0x790DA,
 	"anim_tilesets": 0x781F2,
 	"falling_deltas": 0x79D0D,
+	"move_sounds": 0x798BC,
 	## `CheckForHiddenEventOrBookshelfOrCardKeyDoor`: the hidden events per map,
 	## the two coordinate lists, the bookshelf tiles and `TextPredefs`.
 	"hidden_event_maps": 0x46A40,
@@ -2427,6 +2524,7 @@ const RED_BLUE: Dictionary = {
 	"pic_ghost": 0x366B5,
 	"display_mon_front_sprite_in_box": 0x5DBD9,
 	"diploma_strings": 0x56798,
+	"spinner_arrow_tiles": 0x45087,
 	"link_cable_help": 0x5DC29,
 	"link_cable_help_text_1": 0x5DC9E,
 	"link_cable_help_text_2": 0x5DCA3,
@@ -2637,6 +2735,13 @@ const YELLOW: Dictionary = {
 	"usable_items_party": 0x11FDE,
 	"usable_items_close": 0x12003,
 	"item_use_text": 0x0E4FF,
+	"evolution_text": 0x3AFEF,
+	"trade_gfx": 0x3AA68,
+	"trade_ball_gfx": 0x3AD78,
+	"trade_anim_text": 0x41921,
+	"trade_info_text": 0x41C62,
+	"link_enemy_trainer_name": 0xD886,
+	"stone_refusal_text": 0x0D8A2,
 	"coin_case_text": 0x0E0F4,
 	"party_menu_text": 0x11A38,
 	"toss_text": 0x0E699,
@@ -2911,6 +3016,8 @@ const YELLOW: Dictionary = {
 	"mon_icons": 0x7184D,
 	"mon_icon_species": 0x719BA,
 	"heal_machine_gfx": 0x7050B,
+	"smoke_gfx": 0x7A18A,
+	"boulder_dust_offsets": 0x0EF17,
 	"ball_tiles": 0x3AA28,
 	"stats_p": 0x11682,
 	"shock_emote_gfx": 0x411E5,
@@ -2928,6 +3035,7 @@ const YELLOW: Dictionary = {
 	"special_effects": 0x79145,
 	"anim_tilesets": 0x7822B,
 	"falling_deltas": 0x79E96,
+	"move_sounds": 0x79A18,
 	## Yellow writes each pointer beside its own map id and keeps no second table.
 	"hidden_event_maps": 0xF268D,
 	"hidden_event_pointers": 0,
@@ -2942,6 +3050,7 @@ const YELLOW: Dictionary = {
 	"display_mon_front_sprite_in_box": 0x5DC3E,
 	"diploma_strings": 0xE9A73,
 	"diploma_gfx": 0xE9BFA,
+	"spinner_arrow_tiles": 0x45127,
 	"link_cable_help": 0x5DC8E,
 	"link_cable_help_text_1": 0x5DD02,
 	"link_cable_help_text_2": 0x5DD07,
@@ -3788,6 +3897,27 @@ const SFX_GO_INSIDE: int = 173
 const SFX_HEALING_MACHINE: int = 158
 const MUSIC_PKMN_HEALED: int = 232
 const SFX_GO_OUTSIDE: int = 181
+## `EvolveMon`'s tink in front of the old picture and the jingle behind `IntoText`.
+const SFX_TINK: int = 140
+const SFX_GET_ITEM_2: int = 137
+## What `LoadMonFrontSprite` costs with the LCD on, measured on Red for eight
+## pictures: `UncompressMonSprite` runs 16 to 43 frames, a least-squares fit on
+## the picture's tiles and its compressed bytes within three frames of each, then
+## `LoadUncompressedSpriteData`, `InterlaceMergeSpriteBuffers` and
+## `CopyVideoData`'s seven frames for 7x7 tiles.
+const PIC_UNCOMPRESS_TILE_THOUSANDTHS: int = 415
+const PIC_UNCOMPRESS_BYTE_THOUSANDTHS: int = 30
+const PIC_UNCOMPRESS_BASE_THOUSANDTHS: int = 2000
+const PIC_LOAD_COPY_FRAMES: int = 9
+## `EvolveMon`'s `CopyVideoData` of `PIC_SIZE` from `vFrontPic` to `vBackPic`.
+const PIC_BACK_COPY_FRAMES: int = 6
+
+
+static func pic_load_frames(tiles: int, bytes: int) -> int:
+	return (
+		tiles * PIC_UNCOMPRESS_TILE_THOUSANDTHS + bytes * PIC_UNCOMPRESS_BYTE_THOUSANDTHS
+		+ PIC_UNCOMPRESS_BASE_THOUSANDTHS
+	) / 1000 + PIC_LOAD_COPY_FRAMES
 
 ## The one seam every Crystal-numbered effect request reaches: a role spelled as
 ## Crystal's own number, answered with the Generation 1 sound id that plays it.
@@ -3805,6 +3935,7 @@ const SFX_ROLES: Dictionary = {
 	0x16: 162, ## SFX_JUMP_OVER_LEDGE is SFX_LEDGE
 	0x18: 164, ## SFX_FLY
 	0x19: 165, ## SFX_WRONG is SFX_DENIED
+	0x1B: 168, ## SFX_STRENGTH is SFX_PUSH_BOULDER, which TryPushingBoulder plays
 	0x1F: 173, ## SFX_ENTER_DOOR is SFX_GO_INSIDE
 	0x20: 157, ## SFX_SWITCH_POKEMON is SFX_SWITCH
 	0x22: 178, ## SFX_TRANSACTION is SFX_PURCHASE
@@ -3837,6 +3968,7 @@ const MUSIC_ROLES: Dictionary = {
 	0x13: [0x1F, 210], ## MUSIC_BICYCLE is Music_BikeRiding
 	0x14: [0x1F, 202], ## MUSIC_HALL_OF_FAME
 	0x21: [0x1F, 214], ## MUSIC_SURF is Music_Surfing
+	0x22: [0x02, 229], ## MUSIC_EVOLUTION is Music_SafariZone, which EvolveMon plays
 	0x24: [0x1F, 199], ## MUSIC_CREDITS
 	0x29: [0x08, 240], ## MUSIC_JOHTO_WILD_BATTLE
 	0x2A: [0x08, 237], ## MUSIC_JOHTO_TRAINER_BATTLE

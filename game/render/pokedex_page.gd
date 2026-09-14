@@ -17,8 +17,7 @@ const HEIGHT: int = ROWS * TILE
 ## Where `PokedexLZ` lands, which is what a sheet tile number is offset by.
 const SHEET_FIRST_TILE: int = 0x31
 
-## `Pokedex_PlaceFrontpicAtHL`'s own box, which is also `PadFrontpic`'s.
-const PIC_COLUMNS: int = 7
+const PIC_COLUMNS: int = 7  ## `Pokedex_PlaceFrontpicAtHL`'s own box, which is also `PadFrontpic`'s.
 
 ## `Pokedex_FillBackgroundColor2`'s fill, and the tile every cleared cell is.
 const BACKGROUND_TILE: int = 0x32
@@ -182,8 +181,7 @@ const MAIN_SCX: int = 5
 ## composed in pixels.
 const MAIN_WINDOW_X: int = 0x47 - 7
 const MAIN_WINDOW_X_OLD: int = 0x4A - 7
-## `DrawPokedexListWindow` writes twelve columns and no more.
-const WINDOW_COLUMNS: int = 12
+const WINDOW_COLUMNS: int = 12  ## `DrawPokedexListWindow` writes twelve columns and no more.
 
 ## `String_SELECT_OPTION` and `String_START_SEARCH`, which are tile runs rather
 ## than text: the two button pictures are drawn out of the dex sheet.
@@ -1029,8 +1027,7 @@ const GEN1_SIDE_CURSOR_X: int = 15
 const GEN1_LINE: int = 0x71
 const GEN1_LINE_ALT: int = 0x70
 const GEN1_LINE_HEIGHT: int = 9
-## `.writeTile`'s pokeball, beside every species owned.
-const GEN1_CAUGHT_BALL: int = 0x72
+const GEN1_CAUGHT_BALL: int = 0x72  ## `.writeTile`'s pokeball, beside every species owned.
 
 ## `ShowPokedexDataInternal`'s border and the divider under the picture.
 const GEN1_ENTRY_TOP_LEFT: int = 0x63

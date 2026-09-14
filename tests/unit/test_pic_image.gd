@@ -163,6 +163,10 @@ func test_frontpic_pad_columns_is_padfrontpics_own_alignment() -> void:
 	assert_eq(Gen2PicImage.frontpic_pad_columns(6, true), 0)
 	assert_eq(Gen2PicImage.frontpic_pad_columns(5, true), 1)
 	assert_eq(Gen2PicImage.frontpic_pad_columns(0), 0, "a pic the cache has no size for")
+	## `LoadUncompressedSpriteData` centres, and `wSpriteFlipped` mirrors the box.
+	assert_eq(Gen2PicImage.frontpic_pad_columns(6, false, RomRegistry.GEN1), 1)
+	assert_eq(Gen2PicImage.frontpic_pad_columns(6, true, RomRegistry.GEN1), 0)
+	assert_eq(Gen2PicImage.frontpic_pad_columns(5, true, RomRegistry.GEN1), 1)
 
 
 ## `AnimateFrontpic`, which draws through the same box these pads describe. The

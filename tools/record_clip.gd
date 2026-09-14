@@ -59,10 +59,8 @@ var _failed: bool = false
 ## frame is counted from it, so a `do=` lands on the hardware frame it names
 ## whatever the warm-up cost.
 var _base: int = -1
-## The scripted frames still to run, lowest first.
-var _pending: Array[int] = []
-## Every distinct cell the player stood on, for `probe=walk`.
-var _path: Array[Vector2i] = []
+var _pending: Array[int] = []  ## The scripted frames still to run, lowest first.
+var _path: Array[Vector2i] = []  ## Every distinct cell the player stood on, for `probe=walk`.
 ## Whether the mod's renderer asked for by `view=` is the one being drawn.
 var _chosen: bool = false
 var _game: StringName = &""
@@ -77,14 +75,10 @@ var _challenge: StringName = Gen2Rules.CHALLENGE_VANILLA
 ## Each member as `{species, level, shiny, hp, brink}`, or empty for the default
 ## six.
 var _party: Array[Dictionary] = []
-## Bag contents as item number to count.
-var _items: Dictionary = {}
-## `progress=`, as name to amount.
-var _progress: Dictionary = {}
-## `flags=`, the event flags the run has already set.
-var _flags: Array[int] = []
-## The last line `probe=trace` printed, so only a change is printed.
-var _traced: String = ""
+var _items: Dictionary = {}  ## Bag contents as item number to count.
+var _progress: Dictionary = {}  ## `progress=`, as name to amount.
+var _flags: Array[int] = []  ## `flags=`, the event flags the run has already set.
+var _traced: String = ""  ## The last line `probe=trace` printed, so only a change is printed.
 ## Frames spent before the clip proper, which the video is trimmed by. Raised
 ## for a clip waiting on something the map spends on its own clock rather than on
 ## a button: the visible-encounter mod's shiny sparkle is one, and it runs for
@@ -102,15 +96,13 @@ var _holds_scripted: bool = false
 ## `Engine.get_frames_drawn()` when the clip proper started, which is what
 ## [method _every_frame_drawn] measures the video against.
 var _drawn_at_start: int = 0
-## Whether `text=auto` is on: an A press whenever the box wants one.
-var _auto_text: bool = false
+var _auto_text: bool = false  ## Whether `text=auto` is on: an A press whenever the box wants one.
 ## `read=` and `beat=`, the two gaps above.
 var _read_gap: int = TEXT_GAP
 var _beat_gap: int = STATE_GAP
 ## `at=` entries still waiting for their state, in the order they were written.
 var _waits: Array[Dictionary] = []
-## `always=` entries, state to action, none of which is ever spent.
-var _always: Dictionary = {}
+var _always: Dictionary = {}  ## `always=` entries, state to action, none of which is ever spent.
 ## The world frame before which nothing scripted by state may be spent, so two
 ## presses a viewer has to follow are a beat apart rather than on one frame.
 var _state_ready: int = 0

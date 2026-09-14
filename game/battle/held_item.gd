@@ -8,14 +8,12 @@ extends RefCounted
 
 const NONE: int = 0
 
-## Berry, Gold Berry and Berry Juice: [code]parameter[/code] HP under half.
-const BERRY: int = 1
+const BERRY: int = 1  ## Berry, Gold Berry and Berry Juice: [code]parameter[/code] HP under half.
 
 ## A sixteenth of maximum HP a turn; its parameter of 10 is read by nothing.
 const LEFTOVERS: int = 3
 
-## Mysteryberry, which refills the first move that ran out.
-const RESTORE_PP: int = 6
+const RESTORE_PP: int = 6  ## Mysteryberry, which refills the first move that ran out.
 
 ## Cleanse Tag, which is an overworld encounter-rate item and not a battle one.
 const CLEANSE_TAG: int = 8
@@ -30,25 +28,20 @@ const HEAL_PARALYZE: int = 14
 const HEAL_STATUS: int = 15
 const HEAL_CONFUSION: int = 16
 
-## Metal Powder, which is only worth anything on a Ditto.
-const METAL_POWDER: int = 42
+const METAL_POWDER: int = 42  ## Metal Powder, which is only worth anything on a Ditto.
 
 ## The seventeen type boosts, `HELD_NORMAL_BOOST` up in type-chart order, each
 ## with a parameter of 10 percent.
 const NORMAL_BOOST: int = 50
 const STEEL_BOOST: int = 66
 
-## The Smoke Ball, which [method Gen2Battle.run_odds] already reads.
-const ESCAPE: int = 72
+const ESCAPE: int = 72  ## The Smoke Ball, which [method Gen2Battle.run_odds] already reads.
 
-## Scope Lens: one more critical level.
-const CRITICAL_UP: int = 73
+const CRITICAL_UP: int = 73  ## Scope Lens: one more critical level.
 
-## Quick Claw: a chance to go first whatever the speeds say.
-const QUICK_CLAW: int = 74
+const QUICK_CLAW: int = 74  ## Quick Claw: a chance to go first whatever the speeds say.
 
-## King's Rock: a chance to make an ordinary attack flinch.
-const FLINCH: int = 75
+const FLINCH: int = 75  ## King's Rock: a chance to make an ordinary attack flinch.
 
 ## Amulet Coin: `CheckAmuletCoin` at every player send-out, which doubles both
 ## `.give_money`'s prize and `CheckPayDay`'s coins.
@@ -57,8 +50,7 @@ const AMULET_COIN: int = 76
 ## BrightPowder: its parameter comes straight off the attacker's accuracy.
 const BRIGHTPOWDER: int = 77
 
-## Focus Band: a chance to survive on one hit point.
-const FOCUS_BAND: int = 79
+const FOCUS_BAND: int = 79  ## Focus Band: a chance to survive on one hit point.
 
 ## `TypeBoostItems` (data/types/type_boost_items.asm). Dragon Scale rather than
 ## Dragon Fang boosts Dragon, a shipped bug (`docs/bugs_and_glitches.md`) that
@@ -118,8 +110,7 @@ const CRITICAL_LEVELS: int = 1
 ## `BattleRandom` against the parameter byte: a parameter of 30 is 30 in 256.
 const CHANCE_RANGE: int = 256
 
-## `GetSixteenthMaxHP`'s at-least-one sixteenth.
-const LEFTOVERS_DIVISOR: int = 16
+const LEFTOVERS_DIVISOR: int = 16  ## `GetSixteenthMaxHP`'s at-least-one sixteenth.
 
 ## Mysteryberry's refill, and Sketch's smaller one, which the cartridge's own
 ## comment calls a lousy hack.

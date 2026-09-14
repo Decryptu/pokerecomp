@@ -1408,6 +1408,18 @@ func world_tileset_indices(number: int) -> PackedByteArray:
 ## number. Out of range is a question, not a crash: a mod may well ask.
 ## A Generation 1 internal index as the dex number the cache speaks, off the
 ## `index` each species row keeps; 0 for a slot no species stands in.
+## `LoadMonFrontSprite`'s cost for one species, off its own picture; see
+## [method Gen1Layout.pic_load_frames]. Zero outside Generation 1.
+func gen1_pic_load_frames(number: int) -> int:
+	var entry: Dictionary = species(number)
+	if generation != RomRegistry.GEN1 or not entry.has("front_tiles"):
+		return 0
+	var tiles: Array = entry["front_tiles"]
+	return Gen1Layout.pic_load_frames(
+		int(tiles[0]) * int(tiles[1]), int(entry.get("front_bytes", 0))
+	)
+
+
 func gen1_dex_of_index(index: int) -> int:
 	for number: int in range(1, species_count() + 1):
 		if int(species(number).get("index", -1)) == index:
@@ -2366,6 +2378,22 @@ func trade_anim_tilemap(name: String) -> PackedByteArray:
 	return tile_indices("trade_anim_%s" % name)
 
 
+## A Generation 1 trade tilemap's `[columns, rows]`, off `TileIDListPointerTable`.
+func gen1_trade_tilemap_shape(name: String) -> Array:
+	return (_trade_anim.get("shapes", {}) as Dictionary).get(name, [0, 0])
+
+
+## `Trade_MonInfoText`'s four lines as codes.
+func gen1_trade_info_lines() -> Array:
+	return _trade_anim.get("info_text", [])
+
+
+## The address one of the trade's `text_ram` buffers stands at: `string`,
+## `name` or `enemy_trainer`. Zero on a cache without the movie.
+func gen1_trade_buffer(name: String) -> int:
+	return int((_trade_anim.get("buffers", {}) as Dictionary).get(name, 0))
+
+
 func trade_anim_palette(name: String) -> PackedColorArray:
 	var stored: Variant = (_trade_anim.get("palettes", {}) as Dictionary).get(name, [])
 	var colors := PackedColorArray()
@@ -2783,6 +2811,14 @@ func gen1_forces_ride(map: int, cell: Vector2i) -> bool:
 			and int(entry.get("y", -1)) == cell.y:
 			return true
 	return false
+
+
+## `BoulderDustAnimationOffsets` as pixel offsets from the player, by facing.
+func gen1_boulder_dust_offsets() -> Array:
+	var out: Array = []
+	for row: Variant in _special_warps.get("boulder_dust_offsets", []) as Array:
+		out.append(Vector2i(int((row as Dictionary)["x"]), int((row as Dictionary)["y"])))
+	return out
 
 
 ## The Snorlax whose flute cells hold [param cell] on [param map], as the

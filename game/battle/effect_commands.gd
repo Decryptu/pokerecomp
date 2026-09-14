@@ -8,8 +8,7 @@ extends RefCounted
 ## Announces the move. First, because a move that fails still says it was used.
 const USED_MOVE_TEXT: StringName = &"usedmovetext"
 
-## Spends the PP.
-const DO_TURN: StringName = &"doturn"
+const DO_TURN: StringName = &"doturn"  ## Spends the PP.
 
 ## The five steps a hit is worked out in, five commands rather than one because
 ## effects reach inside the formula between them: Present sets the power between
@@ -57,8 +56,7 @@ const RESET_TYPE_MATCHUP: StringName = &"resettypematchup"
 
 const HEAL_BELL: StringName = &"healbell"
 
-## Snore, which fails unless its user is asleep.
-const SNORE: StringName = &"snore"
+const SNORE: StringName = &"snore"  ## Snore, which fails unless its user is asleep.
 
 ## Tri Attack's one-in-three pick between paralysis, freeze and burn.
 const TRI_STATUS_CHANCE: StringName = &"tristatuschance"
@@ -168,8 +166,7 @@ const SELFDESTRUCT: StringName = &"selfdestruct"
 ## Takes the damage off, and reports what was actually taken.
 const APPLY_DAMAGE: StringName = &"applydamage"
 
-## Takes a quarter of what was dealt off the attacker.
-const RECOIL: StringName = &"recoil"
+const RECOIL: StringName = &"recoil"  ## Takes a quarter of what was dealt off the attacker.
 
 ## Reports whoever is down. Both can be, since recoil can take the attacker with
 ## the defender.
@@ -2310,8 +2307,7 @@ static func _rollout_power(turn: Gen2Turn) -> void:
 		turn.damage = mini(turn.damage * 2, 0xFFFF)
 
 
-## `MAX_ROLLOUT_COUNT`.
-const ROLLOUT_MAX_COUNT: int = 5
+const ROLLOUT_MAX_COUNT: int = 5  ## `MAX_ROLLOUT_COUNT`.
 
 
 ## Thrash, Petal Dance and Outrage share the rampage flag: the first turn rolls

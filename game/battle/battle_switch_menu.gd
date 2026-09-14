@@ -8,11 +8,9 @@ extends RefCounted
 ## CANCEL is a row in both because `SetUpBattlePartyMenu` goes through
 ## `InitPartyMenuWithCancel`.
 
-## `PartyMenu2DMenuData`'s `_2DMENU_WRAP_UP_DOWN`, its only movement flag.
-const WRAPS: bool = true
+const WRAPS: bool = true  ## `PartyMenu2DMenuData`'s `_2DMENU_WRAP_UP_DOWN`, its only movement flag.
 
-## `InitPartyMenuWithCancel`'s `wMenuCursorY` 1: the first member.
-const DEFAULT_CURSOR: int = 0
+const DEFAULT_CURSOR: int = 0  ## `InitPartyMenuWithCancel`'s `wMenuCursorY` 1: the first member.
 
 ## `ForcePickPartyMonInBattle`'s refusal and `PartyMenuSelect`'s exits.
 const SFX_WRONG: int = 0x19
@@ -30,14 +28,11 @@ const CANNOT_CANCEL: StringName = &"cannot_cancel"
 ## exactly what [Gen2PartyMenuPage] draws and its icon needs.
 var rows: Array = []
 
-## `ForcePickSwitchMonInBattle` rather than `PickSwitchMonInBattle`.
-var forced: bool = false
+var forced: bool = false  ## `ForcePickSwitchMonInBattle` rather than `PickSwitchMonInBattle`.
 
-## What `SwitchMonAlreadyOut` compares against.
-var active: int = -1
+var active: int = -1  ## What `SwitchMonAlreadyOut` compares against.
 
-## Zero-based over [method item_count], the CANCEL row last.
-var cursor: int = DEFAULT_CURSOR
+var cursor: int = DEFAULT_CURSOR  ## Zero-based over [method item_count], the CANCEL row last.
 
 
 static func for_party(party: Gen2Party, is_forced: bool = false) -> Gen2BattleSwitchMenu:

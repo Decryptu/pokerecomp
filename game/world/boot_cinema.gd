@@ -44,22 +44,19 @@ var _movie: Gen2IntroMovie = null
 ## `GoldSilverIntro`'s, which is the other cartridges' movie. `IntroSequence`
 ## runs one movie here, so the two share the phase rather than taking one each.
 var _gs_movie: Gen2GoldSilverIntro = null
-## The cache the movie reads its art out of, handed in by the host.
-var _data: GameData = null
+var _data: GameData = null  ## The cache the movie reads its art out of, handed in by the host.
 ## `GameFreakPresentsScene` and the sprite beside it, which own every frame of
 ## the presents phase. Null until that phase is entered.
 var _presents: Gen2GameFreakPresents = null
 ## `TitleScreenScene`'s own state while the title phase is up, null outside it.
 var _title: Gen2TitleScene = null
-## A Generation 1 cache's opening, one program for all four phases.
-var _gen1: Gen1Opening = null
+var _gen1: Gen1Opening = null  ## A Generation 1 cache's opening, one program for all four phases.
 ## The `BattleAnimSineWave` the presents phase reads its motion out of, handed
 ## in by the host that has a cache open.
 var _sine: Gen2BattleAnimData = null
 var _waiting_sound: StringName = &""
 var _events: Array[Dictionary] = []
-## The phases the host can draw, empty for all of them.
-var _available: Array[StringName] = []
+var _available: Array[StringName] = []  ## The phases the host can draw, empty for all of them.
 
 
 ## [param available] names the phases the host has art for. One left out does

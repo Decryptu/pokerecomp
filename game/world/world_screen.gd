@@ -240,6 +240,10 @@ var _evolution_after: Callable = Callable()
 ## The party the open pass applies to, which is the fought save rather than
 ## whatever is selected while the screen is up.
 var _evolution_save: Gen2SaveData = null
+## Whether a resolved plan is written through [method
+## Gen2WorldPartyHost.evolve_member]'s own transaction, which a Rare Candy's is;
+## the after-battle pass writes the fought save and persists it as one.
+var _evolution_transaction: bool = false
 ## `OverworldHatchEgg`'s screen and the save whose party it has already written.
 var _hatch_host: Gen2EggHatchScreen = null
 var _hatch_save: Gen2SaveData = null
@@ -359,12 +363,10 @@ var _battles_fought: int = 0
 ## the fight's own result rather than the party's: a lost battle heals the party
 ## on the way out, so the outcome is what says the turn resolved at all.
 var _last_battle_outcome: StringName = &""
-## The audio driver's rendered-frame count as of the last frame, for the one
-## script wait that reads it. See [method Gen2AudioPlayer.timeline_updates].
-var _audio_rendered_seen: int = 0
-## How many frames it has stood still for, against
-## [constant Gen2AudioPlayer.SERVICE_GAP_FRAMES].
-var _audio_still_frames: int = 0
+## The one script wait's [method Gen2AudioPlayer.still_waiting] watch.
+var _audio_watch: Dictionary = {}
+## See [method _apply_gen1_spinner].
+var _gen1_spinner_shown: Dictionary = {}
 ## Which of `HangUp`'s seven writes is on the box, so each is written once
 ## rather than every frame of its twenty.
 var _hang_up_phase: StringName = &""
@@ -993,6 +995,7 @@ func _advance_presentation(map_pass: bool) -> void:
 	## animate on every frame while the objects standing on them move on passes.
 	if _animation != null and _animation.advance_frame() and _renderer != null:
 		_renderer.refresh_animation()
+	_apply_gen1_spinner()
 
 
 ## `GetJoypad` and `PlayerEvents` are both inside the pass, so a held direction
@@ -1096,6 +1099,32 @@ func _advance_waits(map_pass: bool) -> void:
 	_advance_audio_wait()
 
 
+## `LoadSpinnerArrowTiles`' other half: the tileset's four arrow tiles rewritten
+## with `SpinnerArrowAnimTiles` while `wSimulatedJoypadStatesIndex` is odd and
+## with their own graphics while it is even, and their own again once the spin
+## is over. [member _gen1_spinner_shown] is what the strip holds now.
+func _apply_gen1_spinner() -> void:
+	if _world == null or _animation == null or _data == null or not _world.is_gen1():
+		return
+	var spinner: Dictionary = _world.gen1_spinner()
+	if spinner == _gen1_spinner_shown:
+		return
+	var tileset: int = int(spinner.get("tileset", _gen1_spinner_shown.get("tileset", -1)))
+	_gen1_spinner_shown = spinner
+	var rows: Array = Gen1Layout.SPINNER_ARROW_TILES.get(tileset, [])
+	var arrows: PackedByteArray = _data.tile_indices("spinner_arrows")
+	var own: PackedByteArray = _data.world_tileset_indices(tileset)
+	var tiles: int = own.size() / PokeTiles.TILE_PIXELS
+	var moved: bool = false
+	for row: Array in rows:
+		var pixels: PackedByteArray = PokeTiles.strip_tile(
+			arrows, Gen1Layout.SPINNER_ANIM_TILES, int(row[1])
+		) if bool(spinner.get("alternate", false)) else PokeTiles.strip_tile(own, tiles, int(row[0]))
+		moved = _animation.write_tile_indices(int(row[0]), pixels) or moved
+	if moved and _renderer != null:
+		_renderer.refresh_animation()
+
+
 ## `JoypadOverworld` runs `RunMapScript` on every pass the walk counter is
 ## zero, in front of the direction it then reads: Pallet Town's state 0 hands
 ## over to its state 1 on one pass and that state opens Oak's box on the next,
@@ -1135,14 +1164,9 @@ func _run_settled_gen1_map_script() -> void:
 ## bounded by [constant Gen2AudioPlayer.SERVICE_GAP_FRAMES] as the battle's
 ## `ANIM_WAIT_SFX` is.
 func _advance_audio_wait() -> void:
-	var audio_rendered: int = _audio_player.timeline_updates() if _audio_player != null else 0
-	_audio_still_frames = 0 if audio_rendered != _audio_rendered_seen \
-		else _audio_still_frames + 1
-	_audio_rendered_seen = audio_rendered
 	if not _audio_waiting or _audio_player == null:
 		return
-	if _audio_player.effect_playing() \
-		and _audio_still_frames <= Gen2AudioPlayer.SERVICE_GAP_FRAMES:
+	if _audio_player.still_waiting(_audio_watch):
 		return
 	_audio_waiting = false
 	var audio_result: Dictionary = Gen2WorldHost.complete_runtime_request(
@@ -1713,47 +1737,44 @@ func move_player(direction: Vector2i) -> bool:
 		return false
 	var movement: Dictionary = _world.player_input_move(direction)
 	if not bool(movement.get("ok", false)):
-		## A push bumps the player and starts the boulder, so the step reports
-		## blocked while the map still changed. MovementFunction_Strength plays
-		## SFX_STRENGTH here, not the menu that set the flag.
-		if movement.has("boulder_pushed"):
-			_play_sfx(SFX_STRENGTH)
-			var pushed: Dictionary = movement["boulder_pushed"]
-			if _effects != null:
-				## SpawnStrengthBoulderDust runs where MovementFunction_Strength
-				## starts the slide, and the dust tracks the boulder from there.
-				_effects.start_boulder_dust(
-					int(pushed["index"]), pushed["to_cell"], pushed["direction"],
-					Gen2WorldAPI.STEP_PASSES_BOULDER_PUSH,
-				)
-			if _renderer != null:
-				_renderer.refresh()
-			_refresh_labels()
-		elif _world.blocked_step_warps():
-			_zero_map_name_sign_timer()
-			_start_map_fade()
-			return true
-		elif bool(movement.get("ledge", false)):
-			## `HandleLedges`' own `SFX_LEDGE`, on the pass that found the ledge.
-			_play_ledge_hop_sfx()
-		else:
-			_play_bump_sfx(movement)
-		return false
-	## A whirlpool spins the player rather than moving them, so nothing a completed
-	## step owes applies: no warp, no encounter, no repel step.
+		return _after_blocked_move(movement)
 	## A turn on the spot costs a facing and four frames and nothing else, so it
 	## owes none of what a completed step owes.
-	if movement.get("kind", &"") == &"turn":
-		if _renderer != null:
-			_renderer.refresh()
-		_refresh_labels()
-		return true
-	if movement.get("kind", &"") == &"forced_turn":
+	if movement.get("kind", &"") in [&"turn", &"forced_turn"]:
 		if _renderer != null:
 			_renderer.refresh()
 		_refresh_labels()
 		return true
 	return _after_player_move(movement)
+
+
+## A push bumps the player and starts the boulder, so the step reports blocked
+## while the map still changed. `MovementFunction_Strength` plays SFX_STRENGTH
+## here, not the menu that set the flag. True for a warp behind the step.
+func _after_blocked_move(movement: Dictionary) -> bool:
+	if movement.has("boulder_pushed"):
+		_play_sfx(SFX_STRENGTH)
+		var pushed: Dictionary = movement["boulder_pushed"]
+		## `SpawnStrengthBoulderDust` runs where the slide starts and tracks the
+		## boulder from there; Generation 1's dust is `DoBoulderDustAnimation`'s.
+		if _effects != null and not _world.is_gen1():
+			_effects.start_boulder_dust(
+				int(pushed["index"]), pushed["to_cell"], pushed["direction"],
+				Gen2WorldAPI.STEP_PASSES_BOULDER_PUSH,
+			)
+		if _renderer != null:
+			_renderer.refresh()
+		_refresh_labels()
+	elif _world.blocked_step_warps():
+		_zero_map_name_sign_timer()
+		_start_map_fade()
+		return true
+	elif bool(movement.get("ledge", false)):
+		## `HandleLedges`' own `SFX_LEDGE`, on the pass that found the ledge.
+		_play_ledge_hop_sfx()
+	else:
+		_play_bump_sfx(movement)
+	return false
 
 
 ## `.BumpSound` opens on `CheckSFX` and returns on carry, so a refusal during
@@ -2152,9 +2173,7 @@ func _open_trade_animation(context: Dictionary, results: Array = []) -> bool:
 	var host := Gen2TradeAnimationScreen.new()
 	host.set_context(_data, context)
 	host.closed.connect(_on_trade_animation_closed)
-	host.cry_requested.connect(_play_species_cry)
-	host.sfx_requested.connect(_play_sfx)
-	host.music_requested.connect(_play_evolution_music)
+	_connect_trade_animation(host)
 	host.z_index = 40
 	_trade_anim_results = results.duplicate(true)
 	_trade_anim_host = host
@@ -2165,6 +2184,17 @@ func _open_trade_animation(context: Dictionary, results: Array = []) -> bool:
 	_script_prompt = "Trading"
 	_refresh_labels()
 	return true
+
+
+## `TradeAnimation` names Crystal's sounds and `InternalClockTradeAnim` names
+## `PlaySound`'s own ids.
+func _connect_trade_animation(host: Gen2TradeAnimationScreen) -> void:
+	host.cry_requested.connect(_play_species_cry)
+	if _data.generation == RomRegistry.GEN1:
+		host.sfx_requested.connect(_play_gen1_sound)
+	else:
+		host.sfx_requested.connect(_play_sfx)
+	host.music_requested.connect(_play_evolution_music)
 
 
 ## `special MagnetTrain`, which borrows the station's own tileset and the clock's
@@ -4354,6 +4384,7 @@ func preview_trade_animation(frames: int = 0, half: int = 0) -> void:
 	var host := Gen2TradeAnimationScreen.new()
 	host.set_context(_data, context, half)
 	host.closed.connect(_on_trade_animation_closed)
+	_connect_trade_animation(host)
 	host.z_index = 40
 	_trade_anim_host = host
 	_screen.display(host)
@@ -5633,7 +5664,8 @@ func _after_battle_evolution_plans(result: Dictionary, save: Gen2SaveData) -> Ar
 	if StringName(result.get("outcome", &"")) != Gen2WorldBattleAdapter.OUTCOME_WON:
 		return []
 	return Gen2Evolution.after_battle(
-		_data, save, result.get("evolvable", []), _world.object_time_of_day
+		_data, save, result.get("evolvable", []), _world.object_time_of_day,
+		int(result.get("player_active", 0))
 	)
 
 
@@ -5768,14 +5800,15 @@ func _start_mom_purchase_call() -> void:
 		_show_script_results(results)
 
 
-## `EvoStoneEffect`'s evolution, which the pack has already applied: only the
-## animation is left, and it is the after-battle pass's own screen so both ways
-## in draw the same thing.
+## `EvoStoneEffect`'s evolution, which the pack has already applied, or
+## `RareCandyEffect`'s, which the plan asks this screen to `apply` once the
+## animation has run: both are the after-battle pass's own screen.
 func _on_pack_evolution(plan: Dictionary, after: Callable) -> void:
-	## No [member _evolution_save]: the row is already written, so [method
-	## _on_evolution_resolved] has nothing to apply and the dex write was the
-	## pack transaction's.
-	_open_evolution([plan], null, after)
+	## No [member _evolution_save] for a stone: the row is already written, so
+	## [method _on_evolution_resolved] has nothing to apply and the dex write was
+	## the pack transaction's.
+	_evolution_transaction = bool(plan.get("apply", false))
+	_open_evolution([plan], _active_party_save() if _evolution_transaction else null, after)
 
 
 ## `EvolveAfterBattle`'s screen. [param plans] is
@@ -5793,9 +5826,16 @@ func _open_evolution(plans: Array, save: Gen2SaveData, after: Callable) -> void:
 	_evolution_after = after
 	host.resolved.connect(_on_evolution_resolved)
 	host.closed.connect(_on_evolution_closed)
+	host.set_audio_player(_audio_player)
 	host.cry_requested.connect(_play_species_cry)
-	host.sfx_requested.connect(_play_sfx)
+	## `EvolveMon` names `PlaySound`'s own ids where `EvolutionAnimation` names
+	## Crystal's, and both name their music by the role.
+	if _data.generation == RomRegistry.GEN1:
+		host.sfx_requested.connect(_play_gen1_sound)
+	else:
+		host.sfx_requested.connect(_play_sfx)
 	host.music_requested.connect(_play_evolution_music)
+	host.map_music_requested.connect(_play_current_map_music)
 	## Into the 160x144 viewport rather than over the whole window: the first box
 	## is printed over the map, so it has to be composited with it the way the
 	## world's own text box is.
@@ -5818,17 +5858,27 @@ func _on_evolution_resolved(plan: Dictionary, canceled: bool) -> void:
 	if canceled or _evolution_save == null or _data == null:
 		return
 	var index: int = int(plan.get("index", -1))
-	if index < 0 or index >= _evolution_save.party.size():
+	if index < 0 or index >= _evolution_save.party.size() or _world == null:
+		return
+	if _evolution_transaction:
+		var written: Dictionary = Gen2WorldPartyHost.evolve_member(
+			_world, _evolution_save, index, plan.get("row", {}), _injected_save == null
+		)
+		if bool(written.get("ok", false)) and _start_menu_host != null:
+			_start_menu_host.offer_evolution_moves(index, written.get("move_offers", []))
+		_script_prompt = "%s evolved" % String(plan.get("evolving_name", ""))
 		return
 	var applied: Dictionary = Gen2WorldPartyHost.apply_evolution(
 		_data, _evolution_save.party[index], plan.get("row", {})
 	)
-	if applied.is_empty() or _world == null or _world.state == null:
+	if applied.is_empty() or _world.state == null:
 		return
 	_world.state.set_species_caught(int(applied["register_caught"]))
 	var form: int = int(applied.get("register_unown", 0))
 	if form > 0:
 		_world.state.update_unown_dex(form)
+	for move: int in applied.get("moves_learned", []):
+		_world.gen1_pikachu_learned(move, index)
 	## `LearnLevelMoves` past [method Gen2WorldPartyHost.apply_evolution]: a
 	## move needing `ForgetMove` is declined, one of the cartridge's two answers.
 	_script_prompt = "%s evolved" % String(plan.get("evolving_name", ""))
@@ -5838,6 +5888,7 @@ func _on_evolution_closed() -> void:
 	var host: Gen2EvolutionScreen = _evolution_host
 	_evolution_host = null
 	_evolution_save = null
+	_evolution_transaction = false
 	if host != null:
 		Gen2Screen.drop(host)
 	if _renderer != null:
@@ -7649,6 +7700,8 @@ const PRESENTATION_HANDLERS: Dictionary = {
 	&"pikapic": &"_start_pikapic",
 	&"jigglypuff": &"_start_jigglypuff",
 	&"gen1_elevator_shake": &"_start_gen1_elevator_shake",
+	&"gen1_boulder_dust": &"_start_gen1_boulder_dust",
+	&"ss_anne_leaves": &"_start_gen1_ss_anne",
 	&"palette_fade": &"_start_script_fade",
 }
 
@@ -8529,8 +8582,8 @@ func _advance_jigglypuff() -> void:
 				_spin_jigglypuff()
 				_play_gen1_music(Gen1Layout.MUSIC_JIGGLYPUFF_SONG)
 		&"sing":
-			var singing: bool = _audio_player != null and _audio_player.music_playing() \
-				and _audio_still_frames <= Gen2AudioPlayer.SERVICE_GAP_FRAMES
+			var singing: bool = _audio_player != null \
+				and _audio_player.still_waiting(_jigglypuff, true)
 			if frames % Gen1Layout.JIGGLYPUFF_SPIN_FRAMES == 0:
 				if not singing:
 					_jigglypuff["phase"] = &"after"
@@ -8761,6 +8814,7 @@ func _handle_audio_request(request: Dictionary) -> Array:
 	if kind == &"sound_wait":
 		if _audio_player.effect_playing():
 			_audio_waiting = true
+			_audio_watch = {}
 			_script_prompt = "Waiting for sound effect"
 			_refresh_labels()
 			return []
@@ -9017,6 +9071,27 @@ func _start_gen1_elevator_shake(_event: Dictionary) -> void:
 		_renderer.refresh()
 
 
+## `AnimateBoulderDust` once the slide has ended, and the `SFX_CUT` behind it.
+func _start_gen1_boulder_dust(event: Dictionary) -> void:
+	_start_sound_schedule((event.get("sounds", []) as Array).duplicate(true))
+	if _effects != null and _data != null:
+		_effects.start_gen1_boulder_dust(
+			Gen1Layout.PLAYER_SPRITE_PIXELS, int(event.get("facing", 0)),
+			_data.gen1_boulder_dust_offsets()
+		)
+	if _renderer != null:
+		_renderer.refresh()
+
+
+## `VermilionDockSSAnneLeavesScript`'s music, two horns and the ship's drift.
+func _start_gen1_ss_anne(event: Dictionary) -> void:
+	_start_sound_schedule((event.get("sounds", []) as Array).duplicate(true))
+	if _effects != null:
+		_effects.start_gen1_ss_anne()
+	if _renderer != null:
+		_renderer.refresh()
+
+
 func _start_heal_machine_sounds(event: Dictionary) -> void:
 	_start_sound_schedule((event.get("sounds", []) as Array).duplicate(true))
 	if _effects != null:
@@ -9039,14 +9114,8 @@ func _advance_sound_schedule() -> void:
 	while not _sound_schedule.is_empty():
 		var due: Dictionary = _sound_schedule[0]
 		if bool(due.get("wait", false)):
-			if _audio_player != null and _audio_player.effect_playing():
-				var rendered: int = _audio_player.timeline_updates()
-				var still: int = 0 if int(due.get("rendered", -1)) != rendered \
-					else int(due.get("still", 0)) + 1
-				if still <= Gen2AudioPlayer.SERVICE_GAP_FRAMES:
-					due["rendered"] = rendered
-					due["still"] = still
-					break
+			if _audio_player != null and _audio_player.still_waiting(due):
+				break
 		elif int(due.get("frame", 0)) > _sound_schedule_frame:
 			break
 		_sound_schedule.pop_front()
@@ -9234,7 +9303,6 @@ func _starter_pikachu(save: Gen2SaveData) -> Dictionary:
 	var out: Dictionary = {"alive": false, "surfing": false, "asleep": false, "ailing": false}
 	if save == null:
 		return out
-	var trainer: String = save.player_name.substr(0, Gen1Layout.OT_MATCH_LENGTH)
 	for member: Variant in save.party:
 		if not member is Gen2SaveMon or int((member as Gen2SaveMon).species) \
 			!= Gen2WorldFieldMove.SPECIES_PIKACHU:
@@ -9242,8 +9310,7 @@ func _starter_pikachu(save: Gen2SaveData) -> Dictionary:
 		var mon: Gen2SaveMon = member as Gen2SaveMon
 		if mon.moves.has(Gen2WorldFieldMove.MOVE_SURF):
 			out["surfing"] = true
-		if int(mon.ot_id) != int(save.player_id) \
-			or mon.original_trainer.substr(0, Gen1Layout.OT_MATCH_LENGTH) != trainer:
+		if not Gen1Pikachu.is_starter_of(save, mon):
 			continue
 		## `.sameOT` answers on the first match, fainted or not.
 		if out.has("slot"):

@@ -84,6 +84,12 @@ const FONT_EXTRA_CHARACTERS: Dictionary = {
 }
 
 const ELLIPSIS_CODE: int = 0x75
+const BOX_TOP_LEFT: int = 0x79
+const BOX_TOP: int = 0x7A
+const BOX_TOP_RIGHT: int = 0x7B
+const BOX_SIDE: int = 0x7C
+const BOX_BOTTOM_LEFT: int = 0x7D
+const BOX_BOTTOM_RIGHT: int = 0x7E
 
 ## `charmap "▲", $ed`. `LoadTownMap_Fly` copies `TownMapUpArrow` over the tile
 ## the menu cursor is drawn from, so one code is both while that screen is up.
@@ -102,6 +108,26 @@ const MAX_LIGATURE: int = 2
 
 static var _table: Dictionary = {}
 static var _codes: Dictionary = {}
+
+
+## `TextBoxBorder`: the rows of a box around an [param inner] interior, as codes.
+static func text_box_rows(inner: Vector2i) -> Array:
+	var rows: Array = []
+	for row: int in inner.y + 2:
+		var codes: Array = []
+		for column: int in inner.x + 2:
+			var code: int = SPACE
+			if row == 0:
+				code = BOX_TOP_LEFT if column == 0 \
+					else (BOX_TOP_RIGHT if column == inner.x + 1 else BOX_TOP)
+			elif row == inner.y + 1:
+				code = BOX_BOTTOM_LEFT if column == 0 \
+					else (BOX_BOTTOM_RIGHT if column == inner.x + 1 else BOX_TOP)
+			elif column == 0 or column == inner.x + 1:
+				code = BOX_SIDE
+			codes.append(code)
+		rows.append(codes)
+	return rows
 
 
 ## Up to a terminator or [param max_length] characters, whichever comes first.

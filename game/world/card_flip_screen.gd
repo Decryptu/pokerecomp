@@ -15,15 +15,12 @@ var _page: Gen2CardFlipPage = null
 var _view: TextureRect = null
 var _audio: Gen2AudioPlayer = null
 var _data: GameData = null
-## The box under the table, which is `PrintTextboxText`'s own.
-var _text: String = ""
-## `wMenuCursorY` for whichever `YesNoBox` is up.
-var _yes_no_cursor: int = 1
+var _text: String = ""  ## The box under the table, which is `PrintTextboxText`'s own.
+var _yes_no_cursor: int = 1  ## `wMenuCursorY` for whichever `YesNoBox` is up.
 ## Whether this frame's pass has already run, which a press does.
 var _acted: bool = false
 var _open: bool = false
-## `hVBlankCounter`, which `_BlinkCursor` counts the arrow's own phase off.
-var _frames: int = 0
+var _frames: int = 0  ## `hVBlankCounter`, which `_BlinkCursor` counts the arrow's own phase off.
 
 
 func _ready() -> void:

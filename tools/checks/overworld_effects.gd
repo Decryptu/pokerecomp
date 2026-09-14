@@ -33,7 +33,7 @@ var _first: Dictionary = {}
 
 ## The two sheets Generation 1 draws over the map. The machine wears `rOBP1`
 ## rather than a palette of its own, and its monitor is three rows of $7E.
-const GEN1_EXPECTED: Array = [["heal_machine", 2, 0x7C], ["shock", 4, 0xF8]]
+const GEN1_EXPECTED: Array = [["heal_machine", 2, 0x7C], ["shock", 4, 0xF8], ["smoke", 1, 0x7C]]
 
 ## `PokeCenterOAMData` read back to the pixel each object reaches the screen at:
 ## the monitor, then six balls in two mirrored columns five rows apart.
@@ -63,9 +63,20 @@ func _check_gen1_game() -> void:
 	## `ld a, $e0 / ldh [rOBP1]` and `ld d, $28 / call FlashSprite8Times`: the
 	## xor swaps the two inner shades and leaves the ends alone.
 	_r.check(
-		Gen1Layout.HEAL_MACHINE_SHADES == [[0, 0, 2, 3], [0, 2, 0, 3]],
-		"the heal machine shades are %s." % [Gen1Layout.HEAL_MACHINE_SHADES]
+		Gen1Layout.HEAL_MACHINE_OBP1 ^ Gen1Layout.HEAL_MACHINE_OBP1_FLASH == 0xC8,
+		"the heal machine flashes to $%02X." % [
+			Gen1Layout.HEAL_MACHINE_OBP1 ^ Gen1Layout.HEAL_MACHINE_OBP1_FLASH,
+		]
 	)
+	_check_gen1_smoke()
+
+
+## `BoulderDustAnimationOffsets`, read off the cartridge: two blocks past the
+## player in each facing.
+func _check_gen1_smoke() -> void:
+	var offsets: Array = _r.data.gen1_boulder_dust_offsets()
+	var expected: Array = [Vector2i(8, 52), Vector2i(8, -12), Vector2i(-24, 20), Vector2i(40, 20)]
+	_r.check(offsets == expected, "the boulder dust offsets are %s." % [offsets])
 
 
 func _check_game() -> void:

@@ -23,8 +23,7 @@ const STATS_TILES_AT: int = Gen2Layout.STATS_FIRST_TILE
 ## one that is.
 const PAGE_SQUARE_SMALL: int = 0x36
 const PAGE_SQUARE_LARGE: int = 0x3A
-## `'⁂'`, the shiny marker, at this sheet's own charmap code.
-const SHINY: int = 0x3F
+const SHINY: int = 0x3F  ## `'⁂'`, the shiny marker, at this sheet's own charmap code.
 ## The vertical divider both `StatsScreen_PlaceVerticalDivider` and each page
 ## draw, and the two exp bar end caps the pink page closes its bar with.
 const STATS_DIVIDER: int = 0x31

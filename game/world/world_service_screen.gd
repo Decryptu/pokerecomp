@@ -83,8 +83,7 @@ const MART_TEXT_PREFIX: Dictionary = {
 	&"standard": "", &"bitter": "bitter_", &"bargain": "bargain_",
 	&"pharmacy": "pharmacy_", &"rooftop_mart_1": "", &"rooftop_mart_2": "",
 }
-## `PlayTransactionSound`, once the money has been taken.
-const SFX_TRANSACTION: int = 0x22
+const SFX_TRANSACTION: int = 0x22  ## `PlayTransactionSound`, once the money has been taken.
 
 ## `PC_PlaySwapItemsSound`, which asks for the same effect twice through
 ## `WaitPlaySFX`. Hexadecimal, the way `constants/sfx_constants.asm` counts.
@@ -93,8 +92,7 @@ const SFX_SWITCH_POKEMON: int = 0x20
 const SFX_BOOT_PC: int = 0x0D
 const SFX_SHUT_DOWN_PC: int = 0x0E
 const SFX_CHOOSE_PC_OPTION: int = 0x0F
-## `BillsPC_PlaceEmptyBoxString_SFX`'s own `SFX_WRONG`.
-const SFX_WRONG: int = 0x19
+const SFX_WRONG: int = 0x19  ## `BillsPC_PlaceEmptyBoxString_SFX`'s own `SFX_WRONG`.
 ## `PokegearPhone_MakePhoneCall`'s own `SFX_CALL`, and the `SFX_NO_SIGNAL`
 ## `Phone_NoSignal` answers a map with no service with.
 const SFX_CALL: int = 0x6A
@@ -254,8 +252,7 @@ var _box_index: int = 0
 ## Whether storage was opened without the machine around it, so its B leaves the
 ## host rather than stepping back to a menu. See [method open_bills_pc].
 var _bills_pc_only: bool = false
-## `.UseBillsPC`'s `push af`/`pop bc` around a row's routine.
-var _bills_pc_cursor: int = 0
+var _bills_pc_cursor: int = 0  ## `.UseBillsPC`'s `push af`/`pop bc` around a row's routine.
 ## Whether the menu on screen is the host's own question rather than a script's.
 ## See [method open_prompt].
 var _host_prompt: bool = false

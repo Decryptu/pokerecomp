@@ -107,12 +107,6 @@ const YES_NO_BOX_INNER: Vector2i = Vector2i(4, 3)
 const YES_NO_TEXT_AT: Vector2i = Vector2i(16, 13)
 const YES_NO_CURSOR_X: int = 15
 const YES_NO_ROWS: Array[String] = ["YES", "NO"]
-const BORDER_TOP_LEFT: int = 0x79
-const BORDER_TOP: int = 0x7A
-const BORDER_TOP_RIGHT: int = 0x7B
-const BORDER_SIDE: int = 0x7C
-const BORDER_BOTTOM_LEFT: int = 0x7D
-const BORDER_BOTTOM_RIGHT: int = 0x7E
 const CURSOR: int = Gen1Text.ARROW_UP
 const DOWN_ARROW: int = Gen1Text.ARROW_DOWN
 
@@ -776,18 +770,11 @@ func _draw_yes_no() -> void:
 
 
 func _draw_box(at: Vector2i, inner: Vector2i) -> void:
-	for row: int in inner.y + 2:
-		for column: int in inner.x + 2:
-			var tile: int = Gen1Text.SPACE
-			if row == 0:
-				tile = BORDER_TOP_LEFT if column == 0 \
-					else (BORDER_TOP_RIGHT if column == inner.x + 1 else BORDER_TOP)
-			elif row == inner.y + 1:
-				tile = BORDER_BOTTOM_LEFT if column == 0 \
-					else (BORDER_BOTTOM_RIGHT if column == inner.x + 1 else BORDER_TOP)
-			elif column == 0 or column == inner.x + 1:
-				tile = BORDER_SIDE
-			_write(at + Vector2i(column, row), tile)
+	var rows: Array = Gen1Text.text_box_rows(inner)
+	for row: int in rows.size():
+		var codes: Array = rows[row]
+		for column: int in codes.size():
+			_write(at + Vector2i(column, row), int(codes[column]))
 
 
 func _place_string(at: Vector2i, text: String) -> void:

@@ -735,6 +735,8 @@ static func use_item(
 	_register_caught(world, int(effect.get("register_caught", 0)))
 	_register_unown(world, int(effect.get("register_unown", 0)))
 	_gen1_item_happiness(world, item, party_index, StringName(effect.get("effect", &"")))
+	for move: int in effect.get("moves_learned", []):
+		world.gen1_pikachu_learned(move, party_index)
 	return {
 		"ok": true,
 		"item": item,
@@ -747,6 +749,7 @@ static func use_item(
 		"new_species": int(effect.get("new_species", 0)),
 		"evolving_name": String(effect.get("evolving_name", "")),
 		"move_offers": effect.get("move_offers", []).duplicate(),
+		"evolution_row": (effect.get("evolution_row", {}) as Dictionary).duplicate(true),
 		"bitter": bool(effect.get("bitter", false)),
 		"stat": String(effect.get("stat", "")),
 		"level": int(effect.get("level", 0)),
@@ -820,6 +823,7 @@ static func teach_tm_hm(
 	if not bool(committed.get("ok", false)):
 		return _failure(StringName(committed["reason"]), committed.get("details", {}))
 	world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_USEDTMHM, party_index)
+	world.gen1_pikachu_learned(move, party_index)
 	return {
 		"ok": true,
 		"item": item,
@@ -939,6 +943,7 @@ static func learn_move(
 	)
 	if not bool(committed.get("ok", false)):
 		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	world.gen1_pikachu_learned(move, party_index)
 	return {
 		"ok": true,
 		"party_index": party_index,
@@ -1372,6 +1377,9 @@ static func capture_wild(
 	## `CheckCaughtCelebi` reads it once the fight is over.
 	if bool(outcome.get("caught", false)) and battle_type == Gen2Battle.BATTLETYPE_CELEBI:
 		world.state.set_battle_caught_celebi(true)
+	## Yellow's `ItemUseBall.skipShowingPokedexData`, behind every catch.
+	if bool(outcome.get("caught", false)):
+		world.gen1_pikachu_mood(&"caught")
 	return {
 		"ok": true,
 		"handled": true,
@@ -1997,9 +2005,13 @@ static func _apply_item_effect(
 		## alone and every `max_pp` in the game is the move's base. Building this
 		## is a save-format addition.
 		return {"ok": false, "reason": &"pp_up_unsupported", "item": item}
-	var evolution: Dictionary = _apply_item_evolution(data, mon, item)
-	if not evolution.is_empty():
-		return evolution
+	var evolution_row: Dictionary = _item_evolution_row(data, mon, item)
+	if not evolution_row.is_empty():
+		## Yellow's `ItemUseEvoStone` asks `IsThisPartyMonStarterPikachu` once the
+		## stone matches a row and prints `RefusingText` instead of evolving.
+		if data.id == RomRegistry.YELLOW and Gen1Pikachu.is_starter_of(save, mon):
+			return {"ok": false, "reason": &"starter_refuses", "party_index": party_index}
+		return apply_evolution(data, mon, evolution_row)
 	var vitamin: Dictionary = _apply_vitamin(data, mon, item, effects["vitamin"])
 	if not vitamin.is_empty():
 		return vitamin
@@ -2147,6 +2159,7 @@ static func _apply_rare_candy(
 	## `LearnLevelMoves`: an empty slot takes the move unasked and a full moveset
 	## is what the caller has to open `ForgetMove` for.
 	var move_offers: Array[int] = []
+	var moves_learned: Array[int] = []
 	for move: int in data.moves_learned_at(mon.species, mon.level):
 		if mon.moves.has(move):
 			continue
@@ -2156,27 +2169,53 @@ static func _apply_rare_candy(
 			continue
 		mon.moves[empty] = move
 		mon.pp[empty] = int(data.move(move).get("pp", 0))
+		moves_learned.append(move)
 	var levelled: Dictionary = {
 		"ok": true, "effect": &"rare_candy", "level": mon.level,
-		"move_offers": move_offers,
+		"move_offers": move_offers, "moves_learned": moves_learned,
 	}
 	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, mon)
 	if battle_mon == null or time_of_day < 0:
 		return levelled
+	## `EvolvePokemon` runs behind the level-up box and its moves with
+	## `wForceEvolution` clear, so the row rides the result for the caller to show
+	## and B to refuse; [method evolve_member] is what writes it.
 	var row: Dictionary = Gen2Evolution.level_evolution(data, battle_mon, time_of_day)
-	if row.is_empty():
-		return levelled
-	var evolved: Dictionary = apply_evolution(data, mon, row)
-	if evolved.is_empty():
-		return levelled
-	## `EvolvePokemon` runs behind the level-up box, so the caller owes both: the
-	## moves the level taught are already written and the evolution's own offers
-	## follow them.
-	var offers: Array = move_offers.duplicate()
-	offers.append_array(evolved.get("move_offers", []))
-	evolved["move_offers"] = offers
-	evolved["level"] = mon.level
-	return evolved
+	if not row.is_empty():
+		levelled["evolution_row"] = row
+	return levelled
+
+
+## `.proceed` as its own transaction, for the screen that ran `EvolutionAnimation`
+## off a Rare Candy: the row is written, the dex marks the new species caught
+## and the moves it learned unasked are reported with the ones still owed.
+static func evolve_member(
+	world: Gen2WorldAPI, save: Gen2SaveData, party_index: int, row: Dictionary,
+	persist: bool = true
+) -> Dictionary:
+	if world == null or save == null or world.data == null:
+		return _failure(&"missing_save", {})
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return _failure(StringName(opened["reason"]), opened.get("details", {}))
+	var candidate: Gen2SaveData = opened["candidate"]
+	var mon: Gen2SaveMon = _party_member(candidate, party_index)
+	if mon == null:
+		return _failure(&"invalid_party_index", {"party_index": party_index})
+	var applied: Dictionary = apply_evolution(world.data, mon, row)
+	if applied.is_empty():
+		return _failure(&"evolution_failed", {"party_index": party_index})
+	var before: Gen2WorldSnapshot = world.snapshot()
+	var committed: Dictionary = Gen2WorldTransaction.commit(
+		world, save, candidate, before, persist
+	)
+	if not bool(committed.get("ok", false)):
+		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	_register_caught(world, int(applied.get("register_caught", 0)))
+	_register_unown(world, int(applied.get("register_unown", 0)))
+	for move: int in applied.get("moves_learned", []):
+		world.gen1_pikachu_learned(move, party_index)
+	return applied
 
 
 ## `RestorePPEffect`: MAX ETHER and MAX ELIXER fill a move, ETHER and ELIXER add
@@ -2279,7 +2318,7 @@ static func _apply_sacred_ash(data: GameData, save: Gen2SaveData) -> Dictionary:
 ## names none is a cartridge stone, dispatched through `EvoStoneEffect` the way
 ## `.item` is. Everything past the predicate is shared, which is what keeps the
 ## adapter, the HP delta and the move offers in one place.
-static func _apply_item_evolution(data: GameData, mon: Gen2SaveMon, item: int) -> Dictionary:
+static func _item_evolution_row(data: GameData, mon: Gen2SaveMon, item: int) -> Dictionary:
 	var declared: Dictionary = data.item(item).get("evolution", {}) as Dictionary
 	var method: int = int(declared.get("method", 0))
 	if method == 0 and item not in Gen2Evolution.stone_items(data):
@@ -2303,9 +2342,7 @@ static func _apply_item_evolution(data: GameData, mon: Gen2SaveMon, item: int) -
 			row = Gen2Evolution.trade_evolution(data, battle_mon)
 		_:
 			return {}
-	if row.is_empty():
-		return {}
-	return apply_evolution(data, mon, row)
+	return row
 
 
 ## `.proceed` and everything past it: the species is replaced, `CalcMonStats`
@@ -2324,10 +2361,13 @@ static func apply_evolution(data: GameData, mon: Gen2SaveMon, row: Dictionary) -
 	if result.is_empty():
 		return {}
 	var move_offers: Array[int] = []
+	var moves_learned: Array[int] = []
 	for move: int in data.moves_learned_at(battle_mon.species, battle_mon.level):
 		if battle_mon.moves.has(move):
 			continue
-		if not battle_mon.learn_move(move):
+		if battle_mon.learn_move(move):
+			moves_learned.append(move)
+		else:
 			move_offers.append(move)
 	var evolved_from: int = mon.species
 	# `GetNickname` / `CopyName1` fill wStringBuffer2 BEFORE the species is
@@ -2367,6 +2407,7 @@ static func apply_evolution(data: GameData, mon: Gen2SaveMon, row: Dictionary) -
 			mon.species, mon.dvs, {"destination": &"party"}
 		),
 		"move_offers": move_offers,
+		"moves_learned": moves_learned,
 	}
 
 

@@ -167,6 +167,19 @@ static func atlas_record(atlas: Dictionary) -> Dictionary:
 	}
 
 
+## One tile of a strip [param tiles] wide, as its sixty-four indices row by row.
+static func strip_tile(strip: PackedByteArray, tiles: int, tile: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	if tile < 0 or tile >= tiles or strip.size() < tiles * TILE_PIXELS:
+		return out
+	out.resize(TILE_PIXELS)
+	var width: int = tiles * TILE_WIDTH
+	for y: int in TILE_HEIGHT:
+		for x: int in TILE_WIDTH:
+			out[y * TILE_WIDTH + x] = strip[y * width + tile * TILE_WIDTH + x]
+	return out
+
+
 ## Copies an index buffer into a larger one.
 static func blit(
 	source: PackedByteArray,

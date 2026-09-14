@@ -32,16 +32,14 @@ const BOX: int = Gen2PicImage.FRONTPIC_TILES
 const EGG_AT: Vector2i = Vector2i(7, 4)
 const HATCHLING_AT: Vector2i = Vector2i(6, 3)
 
-## `ld c, 80` between `MUSIC_EVOLUTION` and the wobble.
-const OPENING_FRAMES: int = 80
+const OPENING_FRAMES: int = 80  ## `ld c, 80` between `MUSIC_EVOLUTION` and the wobble.
 ## `.outerloop` runs while the counter before the `inc` is under 8, so its
 ## passes are e = 1 to 8.
 const WOBBLE_PASSES: int = 8
 ## Each half of a wobble is `EggHatch_DoAnimFrame`'s own `DelayFrame` plus
 ## `ld c, 2`, and a wobble is both halves.
 const WOBBLE_HALF_FRAMES: int = 3
-## `ld c, 16` at the end of every pass.
-const PASS_TAIL_FRAMES: int = 16
+const PASS_TAIL_FRAMES: int = 16  ## `ld c, 16` at the end of every pass.
 ## `hSCX` is written 2 and then -2, which scrolls the background the other way.
 const WOBBLE_SHIFT: int = 2
 ## `Hatch_InitShellFragments`' own closing `EggHatch_DoAnimFrame` and

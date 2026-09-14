@@ -23,8 +23,7 @@ const FAINTED: StringName = &"fainted"
 ## A multi-hit move's summary, once every planned hit has landed. A target that
 ## faints partway gets none, the loop ending the move first.
 const HIT_TIMES: StringName = &"hit_times"
-## A draining move healed the attacker off what it dealt.
-const DRAINED: StringName = &"drained"
+const DRAINED: StringName = &"drained"  ## A draining move healed the attacker off what it dealt.
 ## A one-hit KO landed. Its own event rather than a flag on [constant HIT]: the
 ## cartridge shows neither a critical nor an effectiveness line, the damage
 ## having been multiplied by neither.
@@ -47,8 +46,7 @@ const CONFUSE_INFLICTED: StringName = &"confuse_inflicted"
 ## Confusion said every turn it is still there, and the turn it lifts.
 const CONFUSED: StringName = &"confused"
 const SNAPPED_OUT: StringName = &"snapped_out"
-## A confused Pokémon hit itself instead of moving.
-const HURT_ITSELF: StringName = &"hurt_itself"
+const HURT_ITSELF: StringName = &"hurt_itself"  ## A confused Pokémon hit itself instead of moving.
 ## The first half of a two-turn move: the user is locked in and nothing else
 ## happens this turn. See [method move_for] for the second half.
 const CHARGING_UP: StringName = &"charging_up"
@@ -530,8 +528,7 @@ var landmark: int = LANDMARK_NONE
 ## and for a class carrying `NO_ITEM` twice.
 var enemy_items: Array[int] = []
 
-## `wTrainerClass`, zero for a wild.
-var enemy_trainer_class: int = 0
+var enemy_trainer_class: int = 0  ## `wTrainerClass`, zero for a wild.
 ## `wAICount` and `wAILayer2Encouragement`, the `ExecuteEnemyMove`s since a
 ## faint replacement. Generation 1 alone reads either.
 var gen1_ai_count: int = Gen1TrainerAI.COUNT_UNLOADED
@@ -565,8 +562,7 @@ var _fled: bool = false
 ## than switching anybody. `BattleTurn`'s `jr nz, .quit` ends it and the
 ## `SetBattleDraw` beside it is why [method winner] answers nobody.
 var _forced_out: bool = false
-## Which side was blown out, for a screen that has to say who left.
-var _forced_out_side: int = -1
+var _forced_out_side: int = -1  ## Which side was blown out, for a screen that has to say who left.
 
 ## The half-run turn a Baton Pass stopped, as [code]{"acting": Array, "actions":
 ## Dictionary, "index": int}[/code], which [method pass_to] lets finish.
@@ -594,8 +590,7 @@ var _use_next_answered: bool = false
 ## ends the turn on it, so the action it would have taken is spent.
 var _pursuit_spent: int = -1
 
-## The two sides, keyed by [constant PLAYER] and [constant ENEMY].
-var parties: Dictionary = {}
+var parties: Dictionary = {}  ## The two sides, keyed by [constant PLAYER] and [constant ENEMY].
 
 ## Which party indices have fought since the current opponent came in, a
 ## Dictionary used for its keys: seeded at [method create_parties], added to on
@@ -611,7 +606,7 @@ var _participants: Dictionary = {PLAYER: {}, ENEMY: {}}
 var _faint_charged: Dictionary = {}
 ## `ModifyPikachuHappiness`'s battle callers, each by the party index it named,
 ## read by the world once the fight is over.
-var party_log: Dictionary = {"grew": [], "faints": [], "x_items": []}
+var party_log: Dictionary = {"grew": [], "faints": [], "x_items": [], "learned": []}
 
 ## The last direct damage each side took this action pair, which Counter and
 ## Mirror Coat read after the faster side has acted. Cleared each pair: the
@@ -1383,6 +1378,8 @@ func learn_move(side: int, forget_slot: int) -> Array:
 	if not learner.replace_move(forget_slot, int(offer["move"])):
 		return []
 	(_move_learn_queue[side] as Array).pop_front()
+	if side == PLAYER:
+		(party_log["learned"] as Array).append({"index": int(offer["index"]), "move": int(offer["move"])})
 
 	# LearnMove clears a Disable naming the move that went, in battle only. The
 	# cartridge compares numbers against wDisabledMove; Disable is a slot here and
@@ -2825,6 +2822,7 @@ func _offer_moves_learned_at(learner: Gen2BattleMon, index: int, level: int, eve
 		if learner.moves.has(move):
 			continue
 		if learner.learn_move(move):
+			(party_log["learned"] as Array).append({"index": index, "move": move})
 			events.append({
 				"type": MOVE_LEARNED, "side": PLAYER, "index": index,
 				"species": learner.species, "move": move, "slot": learner.moves.size() - 1,

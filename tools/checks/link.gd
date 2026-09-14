@@ -23,6 +23,48 @@ const TRADE_ANIM_RECEIVED: int = 25
 ## Where the offered Pokemon's picture and its stats are both on screen.
 const TRADE_ANIM_DRAWN_FRAME: int = 180
 
+## `InternalClockTradeAnim` with BULBASAUR for IVYSAUR: the frame each routine
+## of `InternalClockTradeFuncSequence` starts on, `Trade_LoadMonSprite` and the
+## inner `Trade_ShowClearedWindow` included, the cries and `SFX_HEAL_HP`'s wait
+## spent on the silent driver. Red's hooks put the routines at 0, 3, 8, 315, 332,
+## 500, 741, 841, 844, 1184, 1350, 1653, 1894, 1897, 1914, 2010, 2016, 2325 and
+## 2425 and Yellow's at 0, 3, 8, 319, 341, 509, 781, 881, 884, 1224, 1390, 1693,
+## 1965, 1968, 1990, 2086, 2092, 2408 and 2508; `pic_load_frames` is the rest.
+const GEN1_TRADE_ROUTINES: Dictionary = {
+	RomRegistry.RED: [
+		1, 2, 8, 312, 329, 497, 738, 838, 841, 1181, 1347, 1650, 1891, 1894, 1911,
+		2007, 2013, 2318, 2418,
+	],
+	RomRegistry.BLUE: [
+		1, 2, 8, 312, 329, 497, 738, 838, 841, 1181, 1347, 1650, 1891, 1894, 1911,
+		2007, 2013, 2318, 2418,
+	],
+	RomRegistry.YELLOW: [
+		1, 2, 8, 317, 339, 507, 779, 879, 882, 1222, 1388, 1691, 1963, 1966, 1988,
+		2084, 2090, 2403, 2503,
+	],
+}
+## `SFX_HEAL_HP` twice, `SFX_TRADE_MACHINE`, fifteen `SFX_TINK`s and three
+## `SFX_SWAP`s; the two cries; the eight boxes of the internal sequence.
+const GEN1_TRADE_SFX: int = 21
+const GEN1_TRADE_CRIES: int = 2
+const GEN1_TRADE_TEXTS: Array[String] = [
+	"went_to", "for", "sends", "waves_farewell", "transferred", "take_care",
+]
+const GEN1_TRADE_GIVEN: int = 1
+const GEN1_TRADE_RECEIVED: int = 2
+## `ExternalClockTradeFuncSequence`'s length and its own box order, which no
+## cartridge here reaches without a cable.
+const GEN1_TRADE_EXTERNAL_FRAMES: Dictionary = {
+	RomRegistry.RED: 2458, RomRegistry.BLUE: 2458, RomRegistry.YELLOW: 2543,
+}
+const GEN1_TRADE_EXTERNAL_TEXTS: Array[String] = [
+	"will_trade", "trade_for", "waves_farewell", "transferred", "take_care", "went_to",
+]
+## `Trade_ShowPlayerMon` with BULBASAUR up and its box slid in.
+const GEN1_TRADE_DRAWN_FRAME: int = 150
+const GEN1_TRADE_PIC_FRAME_TAIL: int = 20
+
 ## `newgroup CABLE_CLUB`, the same group and numbers in both pins.
 const CABLE_CLUB_GROUP: int = 20
 const POKECENTER_2F: int = 1
@@ -75,6 +117,156 @@ func run(r: RefCounted) -> void:
 	)
 	_verify_compatibility()
 	_verify_record()
+	_r.each_game_of(RomRegistry.GEN1, func() -> void:
+		_verify_gen1_trade_anim_art()
+		_verify_gen1_trade_anim_run()
+		_verify_gen1_trade_anim_corpus()
+	)
+
+
+## `TradingAnimationGraphics`' two sheets, the two `TileIDListPointerTable`
+## rows naming tiles inside the first, `Trade_MonInfoText`'s four lines, the
+## three `text_ram` buffers and the eight boxes that name them.
+func _verify_gen1_trade_anim_art() -> void:
+	var data: GameData = _r.data
+	if not _r.check(data.has_trade_anim(), "no trade animation art in the cache"):
+		return
+	for row: Array in [["trade_gfx", Gen1Layout.TRADE_GFX_TILES], ["trade_ball", Gen1Layout.TRADE_BALL_TILES]]:
+		var strip: PackedByteArray = data.tile_indices(String(row[0]))
+		_r.check(
+			strip.size() == int(row[1]) * PokeTiles.TILE_PIXELS,
+			"%s is not %d tiles" % [String(row[0]), int(row[1])]
+		)
+	for name: String in Gen1Layout.TRADE_TILEMAPS:
+		var shape: Array = data.gen1_trade_tilemap_shape(name)
+		var cells: PackedByteArray = data.trade_anim_tilemap(name)
+		if not _r.check(
+			cells.size() == int(shape[0]) * int(shape[1]) and cells.size() > 0,
+			"trade %s is %d cells for a %s shape" % [name, cells.size(), str(shape)]
+		):
+			continue
+		for cell: int in cells:
+			if not _r.check(
+				cell >= Gen1Layout.ANIM_BASE_TILE
+					and cell < Gen1Layout.ANIM_BASE_TILE + Gen1Layout.TRADE_GFX_TILES,
+				"trade %s names tile $%02x, outside TradingAnimationGraphics" % [name, cell]
+			):
+				break
+	_r.check(
+		data.gen1_trade_info_lines().size() == Gen1Layout.TRADE_INFO_TEXT_LINES,
+		"Trade_MonInfoText is not four lines"
+	)
+	for buffer: String in ["string", "name", "enemy_trainer"]:
+		_r.check(data.gen1_trade_buffer(buffer) > 0, "no %s buffer address" % buffer)
+	for name: String in Gen1Layout.TRADE_ANIM_TEXT_AT:
+		var text: String = data.special_text(Gen1TradeAnimation.TRADE_TEXT_RUN, name)
+		_r.check(not text.is_empty(), "no %s box" % name)
+		var marker: String = "%s%04X>" % [
+			Gen2TextStream.RAM_MARKER, data.gen1_trade_buffer(
+				"string" if name in ["for", "trade_for", "went_to"] else "name"
+			)
+		]
+		_r.check(
+			text.contains(marker) or name in ["waves_farewell", "will_trade"] and text.contains(
+				"%s%04X>" % [Gen2TextStream.RAM_MARKER, data.gen1_trade_buffer("enemy_trainer")]
+			),
+			"%s names no buffer of its own: %s" % [name, text]
+		)
+
+
+## The internal clock whole: every routine on its frame, every sound, both
+## cries and the six boxes, then one frame drawn with the picture up.
+func _verify_gen1_trade_anim_run() -> void:
+	var movie: Gen1TradeAnimation = _gen1_trade_movie(GEN1_TRADE_GIVEN, GEN1_TRADE_RECEIVED)
+	if not _r.check(movie != null, "the Generation 1 trade animation will not build"):
+		return
+	var routines: Array = []
+	var sfx: int = 0
+	var cries: int = 0
+	var texts: Array = []
+	var guard: int = 20000
+	while not movie.finished() and guard > 0:
+		guard -= 1
+		for event: Dictionary in movie.advance_frame():
+			match StringName(event["type"]):
+				&"routine":
+					routines.append(int(event["frame"]))
+				&"play_sfx":
+					sfx += 1
+				&"play_cry":
+					cries += 1
+				&"text":
+					texts.append(String(event["name"]))
+	_r.check(movie.finished(), "the internal clock never finished")
+	_r.check(
+		routines == GEN1_TRADE_ROUTINES.get(_r.game_id, []),
+		"the routines started on %s" % str(routines)
+	)
+	_r.check(sfx == GEN1_TRADE_SFX, "the movie asked for %d sounds" % sfx)
+	_r.check(cries == GEN1_TRADE_CRIES, "the movie played %d cries" % cries)
+	_r.check(texts == GEN1_TRADE_TEXTS, "the movie printed %s" % str(texts))
+	var external: Gen1TradeAnimation = _gen1_trade_movie(
+		GEN1_TRADE_GIVEN, GEN1_TRADE_RECEIVED, Gen1TradeAnimation.PLAYER_2
+	)
+	var external_texts: Array = []
+	guard = 20000
+	while not external.finished() and guard > 0:
+		guard -= 1
+		for event: Dictionary in external.advance_frame():
+			if StringName(event["type"]) == &"text":
+				external_texts.append(String(event["name"]))
+	_r.check(
+		external.frame() == int(GEN1_TRADE_EXTERNAL_FRAMES.get(_r.game_id, 0)),
+		"the external clock ran %d frames" % external.frame()
+	)
+	_r.check(external_texts == GEN1_TRADE_EXTERNAL_TEXTS, "the external clock printed %s" % str(external_texts))
+	var drawn: Gen1TradeAnimation = _gen1_trade_movie(GEN1_TRADE_GIVEN, GEN1_TRADE_RECEIVED)
+	for _frame: int in GEN1_TRADE_DRAWN_FRAME:
+		drawn.advance_frame()
+	var image: Image = Gen1OpeningPage.colour(drawn.lcd.render(), [], drawn.palettes())
+	_r.check(
+		_ink(image) > (image.get_width() * image.get_height()) / 20,
+		"the trade animation drew a near-empty frame at %d" % GEN1_TRADE_DRAWN_FRAME
+	)
+	_r.check(
+		drawn.palette_species() == GEN1_TRADE_GIVEN,
+		"the picture is up under palette %d" % drawn.palette_species()
+	)
+
+
+## Every species as far as `Trade_LoadMonSprite` has its picture in VRAM: a
+## strip the cache cannot fill draws blank tiles, which the ink count catches.
+func _verify_gen1_trade_anim_corpus() -> void:
+	var data: GameData = _r.data
+	for species: int in range(1, data.species_count() + 1):
+		var movie: Gen1TradeAnimation = _gen1_trade_movie(species, species)
+		if movie == null:
+			return
+		var frames: int = data.gen1_pic_load_frames(species) + GEN1_TRADE_PIC_FRAME_TAIL
+		for _frame: int in frames:
+			movie.advance_frame()
+		var strip: PackedByteArray = movie.lcd.tiles.slice(
+			Gen1TradeAnimation.FRONT_PIC_TILE * PokeTiles.TILE_PIXELS,
+			(Gen1TradeAnimation.FRONT_PIC_TILE + Gen1TradeAnimation.PIC_TILES) * PokeTiles.TILE_PIXELS
+		)
+		if not _r.check(strip.count(0) < strip.size(), "species %d loaded a blank picture" % species):
+			return
+
+
+func _gen1_trade_movie(given: int, received: int, half: int = Gen1TradeAnimation.PLAYER_1) -> Gen1TradeAnimation:
+	var data: GameData = _r.data
+	return Gen1TradeAnimation.create(data, {
+		"player": {
+			"species": given,
+			"species_name": String(data.species(given).get("name", "")),
+			"sender_name": "RED", "ot_name": "RED", "ot_id": 12345,
+		},
+		"ot": {
+			"species": received,
+			"species_name": String(data.species(received).get("name", "")),
+			"sender_name": "TRAINER", "ot_name": "TRAINER", "ot_id": 54321,
+		},
+	}, half)
 
 
 ## `LinkCommsBorderGFX` and the tilemaps behind it, which are the one part of

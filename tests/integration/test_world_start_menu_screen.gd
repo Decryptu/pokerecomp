@@ -821,6 +821,98 @@ func test_an_evolution_offers_its_new_move_and_a_full_moveset_opens_forget() -> 
 	assert_eq(_world_screen._injected_save.party[0].moves[0], OFFERED_MOVE)
 
 
+## `RareCandyEffect` with a level evolution due: the stats box first, then
+## `EvolvePokemon` with `wForceEvolution` clear, so the species is written only
+## once the screen has run and B during the flash leaves it as it was.
+func _write_candy_evolution() -> void:
+	_write_stone_item()
+	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
+	for raw: Dictionary in items:
+		if int(raw.get("number", 0)) == Gen2WorldPartyHost.ITEM_RARE_CANDY:
+			raw["name"] = "RARE CANDY"
+			raw["pocket"] = Gen2WorldPack.TYPE_ITEM
+			raw["field_menu"] = Gen2WorldPack.ITEMMENU_PARTY
+	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
+	var level: int = Gen2SaveStore.create_development_save(_data, 0).party[0].level
+	var species: Array = RomCache.read_json(RomCache.species_path(Fixture.directory()))
+	for raw: Dictionary in species:
+		if int(raw.get("number", 0)) == 155:
+			raw["evolutions"] = [{
+				"method": Gen2Layout.EVOLVE_LEVEL, "parameter": level + 1,
+				"condition": 0, "target": EVOLVED_SPECIES,
+			}]
+	RomCache.write_json(RomCache.species_path(Fixture.directory()), species)
+	_data = GameData.open_directory(Fixture.directory())
+
+
+func _open_candy_pack() -> Gen2StartMenuScreen:
+	_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_RARE_CANDY: 1}}
+	)
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_PACK)
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	var pockets: Array = host.get("_pack_pockets")
+	for index: int in pockets.size():
+		if int((pockets[index] as Dictionary)["pocket"]) == Gen2WorldPack.TYPE_ITEM:
+			host.set("_pack_pocket_index", index)
+			break
+	var rows: Array = host.call("_current_pocket_items")
+	for index: int in rows.size():
+		if int((rows[index] as Dictionary).get("item", 0)) == Gen2WorldPartyHost.ITEM_RARE_CANDY:
+			host.set("_pack_cursor", index)
+			break
+	return host
+
+
+func _candy_evolution(cancel: bool) -> void:
+	_write_candy_evolution()
+	await _open_world()
+	var save: Gen2SaveData = _world_screen._injected_save
+	var level: int = save.party[0].level
+	var host: Gen2StartMenuScreen = await _open_candy_pack()
+	await _use_stone_on_first_member(host)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT, "the level box first")
+	assert_eq(save.party[0].level, level + 1)
+	assert_eq(save.party[0].species, 155, "nothing evolves behind the level box")
+	assert_null(_world_screen.get("_evolution_host"))
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	var screen: Gen2EvolutionScreen = _world_screen.get("_evolution_host")
+	assert_not_null(screen, "the animation screen opens behind the box")
+	assert_true(bool(screen.current_plan().get("can_cancel", false)), "wForceEvolution is clear")
+	assert_eq(save.party[0].species, 155, "and the species waits on it")
+	for _frame: int in 4000:
+		if _world_screen.get("_evolution_host") == null:
+			break
+		_world_screen.advance_frame()
+		screen = _world_screen.get("_evolution_host")
+		if screen == null:
+			break
+		if cancel and screen.phase() == Gen2EvolutionScreen.Phase.FLASH:
+			_world_screen.press_button(PokeButton.B)
+		elif screen.awaiting_press():
+			_world_screen.press_button(PokeButton.A)
+	await get_tree().process_frame
+	assert_null(_world_screen.get("_evolution_host"), "the screen closed")
+	assert_eq(save.party[0].species, 155 if cancel else EVOLVED_SPECIES)
+	assert_eq(
+		_world_screen._world.state.has_caught_species(EVOLVED_SPECIES), not cancel,
+		"SetSeenAndCaughtMon"
+	)
+
+
+func test_a_rare_candy_evolves_behind_its_level_box_and_writes_the_row_after() -> void:
+	await _candy_evolution(false)
+
+
+func test_b_during_a_rare_candy_evolution_keeps_the_species() -> void:
+	await _candy_evolution(true)
+
+
 func _write_tmhm_item(learnable: bool = true) -> void:
 	var table: Array = []
 	for index: int in Gen2Layout.TMHM_TM_COUNT + Gen2Layout.TMHM_HM_COUNT:

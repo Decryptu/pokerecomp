@@ -261,8 +261,7 @@ var _enemy_trainer_pic: int = 0
 ## `LoadTrainerHudOAM`'s six sprites a side and the border they hang in.
 var _hud_balls: Array = []
 var _hud_border: Array = []
-## `SlideBattlePicOut`, one entry per square still sliding off.
-var _slides: Array[Dictionary] = []
+var _slides: Array[Dictionary] = []  ## `SlideBattlePicOut`, one entry per square still sliding off.
 ## How far each square's picture has walked off it, in pixels along x, signed the
 ## way the walk goes: the player leaves to the left and the opponent to the
 ## right. Kept after the walk ends rather than dropped with the slide's entry,
@@ -456,16 +455,14 @@ var _menu_position: int = Gen2BattleMenu.FIGHT
 ## `wListMoves_MoveIndicesBuffer` as [method Gen2BattleMenu.move_rows] shapes it,
 ## rebuilt every time the list is opened because PP and Disable move under it.
 var _move_rows: Array = []
-## `wCurMoveNum`, which the list opens its cursor on.
-var _move_cursor: int = 0
+var _move_cursor: int = 0  ## `wCurMoveNum`, which the list opens its cursor on.
 ## `MoveInfoBox`, which is its own `Textbox` beside the list rather than part of
 ## it, so it is drawn into a layer of its own.
 var _info_layer: TextureRect = null
 ## `.skip_exp_bar_animation`'s stats box, over the upper screen while the
 ## grew-to-level line it accompanies is up.
 var _level_up_layer: TextureRect = null
-## The stats that box is showing, empty while there is no box.
-var _level_up_stats: Dictionary = {}
+var _level_up_stats: Dictionary = {}  ## The stats that box is showing, empty while there is no box.
 ## The menu itself, which unlike [member _menu_layer] sits over the text box.
 var _battle_menu_layer: TextureRect = null
 
@@ -492,8 +489,7 @@ var _enemy_hp: int = 0
 var _enemy_max_hp: int = 0
 var _player_hp: int = 0
 var _player_max_hp: int = 0
-## The committed exp bar, in `PlaceExpBar`'s pixels.
-var _exp: int = 0
+var _exp: int = 0  ## The committed exp bar, in `PlaceExpBar`'s pixels.
 
 var _box: Gen2TextBox = null
 
@@ -2005,8 +2001,7 @@ const HUD_BORDER_AT: Dictionary = {false: Vector2i(1, 2), true: Vector2i(18, 10)
 const HUD_BORDER_TILES: Dictionary = {
 	false: [0x6D, 0x74, 0x78, 0x76], true: [0x73, 0x5C, 0x6F, 0x76],
 }
-## `ld b, 8`, the run of bottom edge between the two corners.
-const HUD_BORDER_EDGE: int = 8
+const HUD_BORDER_EDGE: int = 8  ## `ld b, 8`, the run of bottom edge between the two corners.
 
 const SFX_EXP_BAR: int = 0x8C
 const SFX_HIT_END_OF_EXP_BAR: int = 0xB6
@@ -2166,18 +2161,10 @@ func _run_next_anim_step() -> void:
 				_push_view()
 				return
 			ANIM_WAIT_SFX:
-				## `WaitSFX`, bounded by
-				## [constant Gen2AudioPlayer.SERVICE_GAP_FRAMES] as the world's is.
-				if _audio_player != null and _audio_player.effect_playing():
-					var rendered: int = _audio_player.timeline_updates()
-					var still: int = 0 if int(step.get("rendered", -1)) != rendered \
-						else int(step.get("still", 0)) + 1
-					if still <= Gen2AudioPlayer.SERVICE_GAP_FRAMES:
-						step["rendered"] = rendered
-						step["still"] = still
-						_anim_plan.push_front(step)
-						_anim_delay = 1
-						return
+				if _audio_player != null and _audio_player.still_waiting(step):
+					_anim_plan.push_front(step)
+					_anim_delay = 1
+					return
 			ANIM_SFX:
 				_play_sfx(int(step["sfx"]))
 			ANIM_HIT_SOUND:
@@ -2381,6 +2368,10 @@ func _after_anim_frame() -> void:
 				_play_anim_sound(int(sound[1]), int(sound[0]))
 			Gen2BattleAnimScript.CRY:
 				_play_anim_cry(int((command["operands"] as Array)[0]))
+			Gen2BattleAnimPlayer.GEN1_SOUND:
+				_play_gen1_sound(int((command["operands"] as Array)[0]))
+			Gen2BattleAnimPlayer.GEN1_MOVE_SOUND:
+				_play_gen1_move_sound(int((command["operands"] as Array)[0]))
 			Gen2BattleAnimScript.RAISE_SUB, Gen2BattleAnimScript.DROP_SUB:
 				# `BattleAnimCmd_RaiseSub` and `..._DropSub` write the actor's own
 				# tiles, and the actor is `hBattleTurn`, which is whose animation
@@ -2503,6 +2494,40 @@ func _play_anim_sound(sfx: int, tracks: int) -> void:
 			tracks, bool(_anim_event.get("enemy_turn", false))
 		)
 	)
+
+
+## `PlaySound` with the id a Generation 1 routine names.
+func _play_gen1_sound(sound_id: int) -> void:
+	if _audio_player == null or _data == null:
+		return
+	var record: Dictionary = _data.gen1_sound(-1, sound_id)
+	if not record.is_empty():
+		_audio_player.play_record(record, &"sound", _audio_assets())
+
+
+## `GetMoveSound` and the `PlaySound` behind it: `MoveSoundTable`'s row, or for
+## `IsCryMove` the actor's cry with the row's two modifiers added to its own.
+func _play_gen1_move_sound(move: int) -> void:
+	if _audio_player == null or _data == null or _anim == null:
+		return
+	var row: Dictionary = _anim.data().gen1_move_sound(move)
+	if row.is_empty():
+		return
+	var record: Dictionary
+	if Gen1Layout.CRY_MOVES.has(move):
+		var enemy_turn: bool = bool(_anim_event.get("enemy_turn", false))
+		record = _data.species_cry(_enemy if enemy_turn else _player)
+		if record.is_empty():
+			return
+		record["cry_pitch"] = (int(record["cry_pitch"]) + int(row["pitch"])) & 0xFF
+		record["cry_length"] = (int(record["cry_length"]) + int(row["tempo"])) & 0xFF
+	else:
+		record = _data.gen1_sound(-1, int(row["sound_id"]))
+		if record.is_empty():
+			return
+		record["cry_pitch"] = int(row["pitch"])
+		record["cry_length"] = int(row["tempo"])
+	_audio_player.play_record(record, &"cry" if Gen1Layout.CRY_MOVES.has(move) else &"sound", _audio_assets())
 
 
 ## `BattleAnimCmd_Cry`: whichever battler `hBattleTurn` names, at its own
@@ -4272,6 +4297,8 @@ func _finish_world_battle() -> void:
 		## after a battle that was WON, so a fight that was lost or run from
 		## carries nothing for the overworld's own `EvolveAfterBattle` to walk.
 		result["evolvable"] = _battle.evolvable_indices()
+		var active: Gen2BattleMon = _battle.party(Gen2Battle.PLAYER).active_mon()
+		result["player_active"] = active.species if active != null else 0
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_LOST:
 		result["recovery"] = _world_battle_recovery.duplicate(true)
 	result["enemy"] = _enemy_battler_record()

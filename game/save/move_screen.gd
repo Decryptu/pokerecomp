@@ -10,8 +10,7 @@ extends RefCounted
 ## moves that trade places trade their PP with them, which is `.place_move`
 ## copying `wPartyMon1Moves` and `wPartyMon1PP` in the same shape.
 
-## `.exit`, which is B with nothing held.
-signal closed
+signal closed  ## `.exit`, which is B with nothing held.
 ## `PlayClickSFX` on every press this screen answers, and `SFX_SWITCH_POKEMON`
 ## twice once two moves have traded places.
 signal sfx_requested(index: int, waited: bool)
@@ -27,10 +26,8 @@ const SFX_SWITCH_POKEMON: int = Gen2PartyScreen.SFX_SWITCH_POKEMON
 var _data: GameData = null
 var _party: Array = []
 var _cursor: int = 0
-## `wMenuCursorY` less one: the row the arrow is on.
-var _row: int = 0
-## `wSwappingMove` less one: the row being moved, or -1 when nothing is held.
-var _held: int = -1
+var _row: int = 0  ## `wMenuCursorY` less one: the row the arrow is on.
+var _held: int = -1  ## `wSwappingMove` less one: the row being moved, or -1 when nothing is held.
 ## `ChooseMoveToDelete`'s own list. `DeleteMoveScreen2DMenuData` accepts
 ## `PAD_UP | PAD_DOWN | PAD_A | PAD_B` and nothing else, so there is no cycling
 ## between members and no move to hold: A answers the caller and B is its carry.

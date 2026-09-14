@@ -14,8 +14,7 @@ extends Control
 ## on the entry closes the dex rather than going back to one.
 var _entry_only: bool = false
 
-## Emitted on B from the listing, which is where `DEXSTATE_EXIT` lands.
-signal closed
+signal closed  ## Emitted on B from the listing, which is where `DEXSTATE_EXIT` lands.
 
 ## Emitted by the entry screen's CRY button, since this screen owns no audio
 ## player: the overworld's own answers it, the way it answers a script's cry.
@@ -39,8 +38,7 @@ const CURSOR_BLINK_FRAMES: int = 8
 ## `Pokedex_DisplayChangingModesMessage`'s two `ld c, 64` / `call DelayFrames`,
 ## with `SFX_CHANGE_DEX_MODE` played between them.
 const CHANGING_MODES_FRAMES: int = 64
-## constants/sfx_constants.asm.
-const SFX_CHANGE_DEX_MODE: int = 0x15
+const SFX_CHANGE_DEX_MODE: int = 0x15  ## constants/sfx_constants.asm.
 
 ## `AnimateDexSearchSlowpoke`: twenty-five steps of seven frames each, then
 ## thirty-two more with the Slowpoke back on its first frame. The whole run is
@@ -48,8 +46,7 @@ const SFX_CHANGE_DEX_MODE: int = 0x15
 const _SEARCH_ANIMATION_FRAMES: int = \
 	Gen2PokedexPage.SLOWPOKE_STEPS * Gen2PokedexPage.SLOWPOKE_FRAME_HOLD
 const SEARCH_FRAMES: int = _SEARCH_ANIMATION_FRAMES + Gen2PokedexPage.SLOWPOKE_SETTLE
-## `Pokedex_DisplayTypeNotFoundMessage`'s own `ld c, $80`.
-const TYPE_NOT_FOUND_FRAMES: int = 0x80
+const TYPE_NOT_FOUND_FRAMES: int = 0x80  ## `Pokedex_DisplayTypeNotFoundMessage`'s own `ld c, $80`.
 
 ## `DexEntryScreen_ArrowCursorData`'s four positions, in its own order. PRNT
 ## wants a printer, which is deliberately out, so it is drawn and refuses.

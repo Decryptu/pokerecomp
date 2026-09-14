@@ -59,6 +59,9 @@ const KIND_HELP: Dictionary = {
 	&"pet_actor_arc": "cell: the same actor mid-ledge, at the top of the arc its span names",
 	&"warp": "warp tile: MapSetupScript_Door at its whitest, the frame the new map loads on",
 	&"dungeon_fall": "0 or 1: the step north onto a Generation 1 dungeon hole. 0 is LeaveMapAnim at its whitest, 1 the map DungeonWarpData lands on",
+	&"ss_anne": "frames: VermilionDockSSAnneLeavesScript that many frames past the dock's load, walked off the ship's gangway with HM01 (`red 0 95 ... ss_anne@26,0 700`)",
+	&"boulder_dust": "frames: AnimateBoulderDust that many frames in, the boulder above pushed up from the cell after the @ (`red 0 108 ... boulder_dust@5,16 6`)",
+	&"spinner": "frames: LoadSpinnerArrowTiles that many frames into the ride the arrow above the cell after the @ starts (`red 0 45 ... spinner@19,12 40`)",
 	&"cycling_road": "none: the walk east into Route 16's gate and back out onto ForcedBikeOrSurfMaps' own cell, with the Bicycle refused behind it (`red 0 27 ... cycling_road@16,10`)",
 	&"field_move": "move, presses: one of `.outOfBattleMovePointers`' rows through the party submenu. Move 0 is CUT, faced up from the cell below the tree, 1 SURF, faced down from the cell above the water, 2 STRENGTH and 3 FLASH; 0 presses is the submenu, 1 the box the row writes and 2 what the acknowledge commits (`red 0 1 ... field_move@8,23 0 1`)",
 	&"dark_cave": "presses: the walk north into ROCK_TUNNEL_1F, which is the one map wMapPalOffset darkens, with Flash behind it. 0 the dark floor, 1 the submenu, 2 the box Flash writes, 3 the floor it lit (`red 0 21 ... dark_cave@8,18 0`)",
@@ -468,6 +471,9 @@ const STAGERS: Dictionary = {
 	&"elevator": &"_stage_elevator",
 	&"warp": &"_stage_warp",
 	&"dungeon_fall": &"_stage_dungeon_fall",
+	&"ss_anne": &"_stage_ss_anne",
+	&"boulder_dust": &"_stage_boulder_dust",
+	&"spinner": &"_stage_spinner",
 	&"cycling_road": &"_stage_cycling_road",
 	&"field_move": &"_stage_field_move",
 	&"dark_cave": &"_stage_dark_cave",
@@ -1014,6 +1020,54 @@ func _stage_dungeon_fall() -> void:
 	for _frame: int in WARP_FRAME_CAP:
 		if _screen.map_fade().is_empty():
 			break
+		_screen.advance_frame()
+
+
+## EVENT_GOT_HM01, which `VermilionDock_Script` reads before `wDestinationWarpID`.
+const GOT_HM01_FLAG: int = 1504
+const VERMILION_DOCK: int = 94
+
+
+## Off the gangway with HM01, then the script's own frames.
+func _stage_ss_anne() -> void:
+	_screen._world.state.set_event_flag(GOT_HM01_FLAG)
+	for _frame: int in WARP_FRAME_CAP:
+		_screen.move_up()
+		_screen.advance_frame()
+		if _screen._world.map_id() == Vector2i(0, VERMILION_DOCK) and _screen.map_fade().is_empty():
+			break
+	for _frame: int in maxi(_cell.x, 0):
+		_screen.advance_frame()
+
+
+## The step up onto the arrow, then `_cell.x` frames of the ride.
+func _stage_spinner() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	_screen._world.player_facing = Gen2WorldSprite.FACING_UP
+	for _press: int in MAP_SCRIPT_STEP_FRAMES:
+		if world.gen1_player_movement_running():
+			break
+		_screen.press_button(PokeButton.UP)
+		_screen.advance_frame()
+	_screen.advance_frames(maxi(_cell.x, 0))
+
+
+## STRENGTH on, the boulder above pushed on the second bump, then the slide and
+## the dust behind it.
+func _stage_boulder_dust() -> void:
+	_screen._world.state.set_engine_flag(
+		Gen1Layout.status_flag_1(Gen1Layout.STRENGTH_ACTIVE_BIT)
+	)
+	_screen._world.player_facing = Gen2WorldSprite.FACING_UP
+	for _press: int in 2:
+		_screen.move_up()
+		for _frame: int in Gen2WorldAPI.STEP_PASSES_WALK:
+			_screen.advance_frame()
+	for _frame: int in WARP_FRAME_CAP:
+		_screen.advance_frame()
+		if not _screen._world.pending_script_wait().is_empty():
+			break
+	for _frame: int in maxi(_cell.x, 0):
 		_screen.advance_frame()
 
 

@@ -241,7 +241,9 @@ func _play_gen1_record(
 		return {"ok": false, "played": false, "reason": &"audio_record_unplayable"}
 	if _is_music(request_kind):
 		return _play_gen1_music(record, bank, id, assets, restart)
-	if request_kind in [&"cry", &"cries", &"mon_cry"]:
+	## `wFrequencyModifier` and `wTempoModifier`: a cry's own row, or
+	## `MoveSoundTable`'s two bytes on a move's effect.
+	if record.has("cry_pitch"):
 		_gen1.frequency_modifier = int(record.get("cry_pitch", 0)) & 0xFF
 		_gen1.tempo_modifier = int(record.get("cry_length", 0x80)) & 0xFF
 	_start_stream()
@@ -456,6 +458,21 @@ func effect_playing() -> bool:
 ## the dummy audio driver reports true and consumes nothing.
 func timeline_updates() -> int:
 	return _timeline_updates
+
+
+## `WaitSFX` for one caller's frame: true while the effect, or the music with
+## [param music], is still playing and the driver has rendered within
+## [constant SERVICE_GAP_FRAMES]. [param watch] is the caller's own dictionary,
+## carried across its frames; a fresh one starts a new wait.
+func still_waiting(watch: Dictionary, music: bool = false) -> bool:
+	if not (music_playing() if music else effect_playing()):
+		return false
+	var rendered: int = timeline_updates()
+	var still: int = 0 if int(watch.get("rendered", -1)) != rendered \
+		else int(watch.get("still", 0)) + 1
+	watch["rendered"] = rendered
+	watch["still"] = still
+	return still <= SERVICE_GAP_FRAMES
 
 
 func audio_status() -> Dictionary:
