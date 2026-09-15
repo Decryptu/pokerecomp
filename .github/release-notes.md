@@ -16,23 +16,27 @@ an empty body. -->
 
 ## Added
 
-- Red, Blue and Yellow open the way the cartridges do: the copyright screen, GAME FREAK presents, the Gengar and Nidorino movie or Yellow's Pikachu intro, and the title screen with its Pokemon rolling past. Against a real cartridge over 3000 frames the LCD registers match on every frame and the sprites on all but one on Red and Blue; Yellow's surf scene tears its own sprites for 23 frames and this port draws them whole.
-- The Game Corner's slot machines play. A machine is faced from the side with a COIN CASE and a coin, asks, takes a bet of one to three, and its wheels stop on whole symbols with the cartridge's own odds: the flags roll once a bet, wheel 3 rolls on past a match they forbid, a 300 win halves them, and the payout counts a coin at a time with the music held. The lucky machine is the one the map rolled on entry.
-- The three out-of-order machines say so, and a machine faced from below, without a COIN CASE or with an empty one answers the way it does on the cartridge.
-- Pewter Museum's two fossils, Route 15's binoculars and Yellow's Fan Club pictures pop their picture up in a box over the map.
-- The Viridian School blackboard and the link cable help in Celadon open their menus: a heading prints its own text and the menu comes back until QUIT or B.
-- The Celadon Mansion game designer's diploma draws once the Pokedex is complete, with the player's sprite behind it on Red and Blue and Yellow's own border.
+- The Cable Club on Red, Blue and Yellow links two saves of the same cartridge. The receptionist saves the game, the menu offers the Trade Center and the Colosseum, and either room loads with your friend on the far stool: the other occupied save slot of that game.
+- The Trade Center trades: both parties side by side, STATS on either Pokemon, the trade movie, an evolution on arrival for the species that evolve by trade, and CANCEL back to the room.
+- The Colosseum fights the other save's party as a link battle: the versus box with the Poke Ball rows, RUN as a forfeit, the verdict, and a healed party back in the room.
+- Yellow's COLOSSEUM2 offers the PIKA, PETIT and POKE CUP with each cup's level, count and evolution rules, and the cups' own sleep cap.
+- A Pokemon evolves after a fight, by stone or by Rare Candy, on the cartridge's evolution screen with its flicker and cries; cancelling with B works.
+- An in-game trade plays its movie on all three cartridges, with Yellow's own palette timing.
+- The S.S. Anne sails out of Vermilion under its smoke, a pushed boulder raises its dust, and the spinner tiles spin the player.
+- SAVE reads RESET while linked, and the bag is refused in a link room.
 
 ## Changed
 
-- The cache format is 137. Import your cartridges again.
-- The title screen's Pokemon are this port's roll; on a cartridge they come off its timer.
+- The cache format is 140. Import your cartridges again.
 
 ## Fixed
 
-- A script that rolled once and stored the result rolled twice, which is what picked the lucky slot machine.
-- Yellow's Route 15 binoculars said nothing.
-- A Generation 1 sound cut short by a screenshot tool went on playing.
+- Every secondary move effect on Red, Blue and Yellow (a paralysis, a burn, a flinch, a stat drop) had never triggered. They now roll at the cartridge's own odds.
+- Attack animations on Red, Blue and Yellow read garbage after a fresh import.
+- Running from a link battle on Gold, Silver and Crystal is a forfeit and counts as a loss; a link or Battle Tower fight awards no experience.
+- A YES/NO question over a multi-page text opened its menu on the first page.
+- On Crystal, a Pokemon that evolves after a link trade showed no evolution screen, and STATS on the link screen did nothing.
+- A six-tile-wide picture drawn flipped lost a column on the evolution and stats screens.
 
 ## Which file
 
