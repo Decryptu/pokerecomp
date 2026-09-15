@@ -1096,6 +1096,241 @@ func _check_the_cable_club() -> void:
 	_r.check(rows == CABLE_CLUB_ROWS, "%d receptionists stand on a TX_SCRIPT row." % rows)
 	_walk_the_receptionist(false, Gen1Layout.CABLE_CLUB_PREPARING_FRAMES, "making_preparations")
 	_walk_the_receptionist(true, Gen1Layout.CABLE_CLUB_TIMEOUT_FRAMES, "area_reserved")
+	_walk_the_link_menu()
+	_walk_the_link_rooms()
+
+
+static func _cable_partner() -> Gen2LinkTransport:
+	var transport := Gen2LinkTransport.new()
+	transport.peer = {
+		"name": "BLUE", "id": 4242, "gender": 0,
+		"generation": Gen2LinkTransport.GENERATION_1, "room": 0,
+		"party": [{"species": 1, "level": 5, "hp": 20, "moves": [1, 0, 0, 0]}],
+	}
+	return transport
+
+
+## `.establishedConnection` on to `LinkMenu`, and each of NO, CANCEL and a room.
+func _walk_the_link_menu() -> void:
+	var world: Gen2WorldAPI = _open_linked_counter()
+	if world == null:
+		return
+	var results: Array = world.interact()
+	_r.check(not bool((results[0].get("event", {}) as Dictionary).get("prompt", true)),
+		"a linked welcome waited for a press.")
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_CONNECTED_FRAMES)
+	_r.check(String(world.pending_script_input().get("text", "")) \
+		== _r.data.special_text("cable_club", "please_apply"), "the link asked %s." % [
+			world.pending_script_input()])
+	world.choose_script_input(1)
+	var refused: Array = _spend_wait(world, Gen1Layout.CABLE_CLUB_CLOSE_FRAMES)
+	_r.check(_event_text(refused) == _r.data.special_text("cable_club", "come_again")
+		and not world.gen1_link_connected(), "NO answered %s." % [refused])
+	world = _open_linked_counter()
+	if world == null:
+		return
+	world.interact()
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_CONNECTED_FRAMES)
+	world.choose_script_input(0)
+	var save: Dictionary = world.pending_runtime_request()
+	if not _r.check(StringName(save.get("kind", &"")) == &"quick_save_requested",
+		"YES asked for %s rather than the save." % [save]):
+		return
+	world.complete_runtime_request({"ok": true})
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
+	var menu: Dictionary = world.pending_runtime_request()
+	var rows: Array = (menu.get("values", {}) as Dictionary).get("rows", [])
+	var options: PackedStringArray = _r.data.special_text("cable_club_strings", "options").split("\n")
+	if not _r.check(StringName(menu.get("kind", &"")) == &"gen1_menu_requested"
+		and _menu_names(rows) == Array(options), "LinkMenu offered %s." % [menu]):
+		return
+	_r.check(world.gen1_link_connected(), "LinkMenu did not raise BIT_LINK_CONNECTED.")
+	_r.check(_menu_kinds(Gen2WorldStartMenu.from_world(world)).has(Gen2WorldStartMenu.ITEM_RESET),
+		"the START menu kept SAVE over an open link.")
+	world.complete_runtime_request({"ok": true, "row": rows.size() - 1})
+	var canceled: Array = _spend_wait(world, Gen1Layout.LINK_MENU_CANCEL_FRAMES)
+	_r.check(_event_text(canceled) == _r.data.special_text("link", "canceled"),
+		"CANCEL answered %s." % [canceled])
+	world.run_event_queue(true)
+	_r.check(not world.gen1_link_connected() and not world.script_busy(),
+		"CANCEL did not close the link.")
+	world = _linked_menu()
+	if world == null:
+		return
+	var entering: Array = world.complete_runtime_request({"ok": true, "row": Gen1Layout.LINK_MENU_TRADE})
+	_r.check(_event_text(entering) == _r.data.special_text("link", "please_wait"),
+		"the room was entered behind %s." % [entering])
+	_spend_wait(world, Gen1Layout.LINK_MENU_WAIT_FRAMES + Gen1Layout.LINK_MENU_WARP_FRAMES)
+	world.run_event_queue(true)
+	var warp: Dictionary = _r.data.gen1_cable_club_warp("trade_center")
+	_r.check(world.map_id() == Vector2i(0, int(warp["map"]))
+		and world.player_cell == Vector2i(int(warp["x"]), int(warp["y"]))
+		and world.player_facing == Gen2WorldSprite.FACING_DOWN
+		and world.gen1_link_state() == Gen1Layout.LINK_STATE_IN_CABLE_CLUB,
+		"TRADE CENTER put the player on map %s at %s facing %d in state %d." % [
+			world.map_id(), world.player_cell, world.player_facing, world.gen1_link_state()])
+	_r.check(world.gen1_last_map() == Gen1Layout.PALLET_TOWN
+		and world.snapshot().map_id == Vector2i(0, VIRIDIAN_POKECENTER)
+		and world.snapshot().player_cell == CABLE_CLUB_COUNTER,
+		"the room's snapshot stands at %s on %s." % [
+			world.snapshot().player_cell, world.snapshot().map_id])
+	world.dispatch_map_entry()
+	var friend: Gen2WorldObject = world.objects[0]
+	_r.check(friend.cell == Vector2i(int(warp["x"]) + 3, int(warp["y"]))
+		and friend.facing == Gen2WorldSprite.FACING_LEFT,
+		"the friend stood at %s facing %d." % [friend.cell, friend.facing])
+	_r.note("gen1 walk the CABLE CLUB: NO, CANCEL, and the TRADE CENTER entered at %s" % [
+		world.player_cell])
+	if rows.size() > 3:
+		_walk_the_cups()
+
+
+## Yellow's COLOSSEUM2: `PokeCup` refusing a party of two and a partner at
+## level 5, and three at level 50 let through.
+func _walk_the_cups() -> void:
+	var world: Gen2WorldAPI = _cup_menu([1, 4], [50, 50])
+	if world == null:
+		return
+	var refused: Array = world.complete_runtime_request({"ok": true, "row": 0})
+	_r.check(_event_text(refused) == _r.data.special_text("colosseum2", "three_mons"),
+		"two members were answered %s." % [refused])
+	world.run_event_queue(true)
+	_r.check(StringName(world.pending_runtime_request().get("kind", &"")) == &"gen1_menu_requested",
+		"the cup menu did not reopen.")
+	world.complete_runtime_request({"ok": true, "row": 3})
+	var canceled: Array = _spend_wait(world, Gen1Layout.LINK_MENU_CANCEL_FRAMES)
+	world.run_event_queue(true)
+	_r.check(_event_text(canceled) == _r.data.special_text("link", "canceled")
+		and not world.gen1_link_connected(), "CANCEL on the cups answered %s." % [canceled])
+	world = _cup_menu([1, 4, 7], [50, 50, 55])
+	if world == null:
+		return
+	var ineligible: Array = world.complete_runtime_request({"ok": true, "row": 0})
+	_r.check(_event_text(ineligible) == _r.data.special_text("colosseum2", "ineligible"),
+		"a level 5 partner was answered %s." % [ineligible])
+	world = _cup_menu([1, 4, 7], [50, 50, 55], 50)
+	if world == null:
+		return
+	var entering: Array = world.complete_runtime_request({"ok": true, "row": 0})
+	_r.check(_event_text(entering) == _r.data.special_text("link", "please_wait")
+		and world.state.link_session().gen1_stadium_cup == 1,
+		"the Poke Cup answered %s with cup %d." % [entering, world.state.link_session().gen1_stadium_cup])
+	_spend_wait(world, Gen1Layout.LINK_MENU_WAIT_FRAMES + Gen1Layout.LINK_MENU_WARP_FRAMES)
+	world.run_event_queue(true)
+	_r.check(world.map_id() == Vector2i(0, int(_r.data.gen1_cable_club_warp("colosseum")["map"])),
+		"the Poke Cup did not reach the COLOSSEUM.")
+	_r.note("gen1 walk the COLOSSEUM2 cups: refused twice and entered once")
+
+
+func _cup_menu(species: Array, levels: Array, partner_level: int = 5) -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _linked_menu()
+	if world == null:
+		return null
+	world.set_party_summary(species.size(), false, Array(species, TYPE_INT, "", null),
+		[], [], [], {"levels": levels})
+	var party: Array = []
+	for member: int in [4, 7, 1]:
+		party.append({"species": member, "level": partner_level, "hp": 20, "moves": [1, 0, 0, 0]})
+	world.state.link_transport().peer["party"] = party
+	world.complete_runtime_request({"ok": true, "row": Gen1Layout.LINK_MENU_COLOSSEUM2})
+	_spend_wait(world, Gen1Layout.CUP_HANDSHAKE_FRAMES + Gen1Layout.CUP_MENU_OPEN_FRAMES)
+	var menu: Dictionary = world.pending_runtime_request()
+	var rows: Array = (menu.get("values", {}) as Dictionary).get("rows", [])
+	return world if _r.check(_menu_names(rows) == Array(_r.data.special_text(
+		"cable_club_strings", "rows").split("\n")), "the cup menu offered %s." % [menu]) else null
+
+
+static func _menu_kinds(menu: Gen2WorldStartMenu) -> Array:
+	var out: Array = []
+	for item: Dictionary in menu.items():
+		out.append(StringName(item.get("kind", &"")))
+	return out
+
+
+func _open_linked_counter() -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_POKECENTER, CABLE_CLUB_COUNTER)
+	if world == null:
+		return null
+	world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+	world.state.set_link_transport(_cable_partner())
+	if world.pikachu != null:
+		world.pikachu.set_following(true)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	return world
+
+
+func _linked_menu() -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _open_linked_counter()
+	if world == null:
+		return null
+	world.interact()
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_CONNECTED_FRAMES)
+	world.choose_script_input(0)
+	world.complete_runtime_request({"ok": true})
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
+	return world if _r.check(
+		StringName(world.pending_runtime_request().get("kind", &"")) == &"gen1_menu_requested",
+		"the menu never opened.") else null
+
+
+func _spend_wait(world: Gen2WorldAPI, frames: int) -> Array:
+	if world.pending_script_wait().is_empty():
+		world.run_event_queue(true)
+	var wait: Dictionary = world.pending_script_wait()
+	if not _r.check(int(wait.get("frames", 0)) == frames,
+		"a wait of %s stood where %d frames were owed." % [wait.get("frames", 0), frames]):
+		return []
+	var spent: int = 0
+	var landed: Array = []
+	while not world.pending_script_wait().is_empty() and spent <= frames:
+		landed = world.advance_script_wait_frame()
+		spent += 1
+	return landed
+
+
+## `CableClubLeftGameboy` from (3, 4) facing right, and the room reloaded after.
+func _walk_the_link_rooms() -> void:
+	for room: Array in [
+		["trade_center", Gen2LinkTransport.LINK_TRADECENTER, Gen1Layout.LINK_STATE_START_TRADE],
+		["colosseum", Gen2LinkTransport.LINK_COLOSSEUM, Gen1Layout.LINK_STATE_START_BATTLE],
+	]:
+		var warp: Dictionary = _r.data.gen1_cable_club_warp(String(room[0]))
+		var state := Gen2WorldState.new()
+		state.set_link_transport(_cable_partner())
+		state.link_session().gen1_link_state = Gen1Layout.LINK_STATE_IN_CABLE_CLUB
+		state.link_session().gen1_link_connected = true
+		var world: Gen2WorldAPI = _r.open_world(
+			0, int(warp["map"]), Vector2i(int(warp["x"]), int(warp["y"])), state
+		)
+		if world == null:
+			continue
+		world.dispatch_map_entry()
+		world.player_facing = Gen2WorldSprite.FACING_UP
+		_r.check(world.interact().is_empty(), "%s's table answered a player facing up." % room[0])
+		world.player_facing = Gen2WorldSprite.FACING_RIGHT
+		var opened: Array = world.interact()
+		_r.check(_event_text(opened) == _r.data.special_text("just_a_moment", "just_a_moment")
+			and world.gen1_link_state() == int(room[2]),
+			"%s's Game Boy said %s in state %d." % [room[0], _event_text(opened), world.gen1_link_state()])
+		_spend_wait(world, Gen1Layout.CABLE_CLUB_RUN_FRAMES)
+		var request: Dictionary = world.pending_runtime_request()
+		if not _r.check(StringName(request.get("kind", &"")) == &"link_room_requested"
+			and int((request.get("values", {}) as Dictionary).get("link_mode", 0)) == int(room[1]),
+			"%s's Game Boy asked for %s." % [room[0], request]):
+			continue
+		world.complete_runtime_request({"ok": true})
+		if int(room[1]) == Gen2LinkTransport.LINK_COLOSSEUM:
+			_r.check(StringName(world.pending_runtime_request().get("kind", &"")) == &"party_heal_requested",
+				"the fight was not healed after.")
+			world.complete_runtime_request({"ok": true})
+		_r.check(world.gen1_link_state() == Gen1Layout.LINK_STATE_IN_CABLE_CLUB
+			and world.map_id() == Vector2i(0, int(warp["map"]))
+			and world.player_cell == Vector2i(int(warp["x"]), int(warp["y"]))
+			and not world.script_busy(),
+			"%s came back in state %d at %s." % [room[0], world.gen1_link_state(), world.player_cell])
+		_r.note("gen1 walk the %s's Game Boy to its exchange and back" % room[0])
 
 
 func _walk_the_receptionist(dex: bool, frames: int, said: String) -> void:

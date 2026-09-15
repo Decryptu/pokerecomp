@@ -16,7 +16,11 @@ const GEN2_REGIONS: Array[StringName] = [&"scripts", &"objects", &"framesets", &
 ## Generation 1's one, whose four tables are interleaved inside it.
 const GEN1_REGION: StringName = &"anims"
 ## Where three of them stand in it; `AttackAnimationPointers` is its base.
-const GEN1_TABLES: Array[StringName] = [&"subanims", &"frame_blocks", &"base_coords", &"move_sounds"]
+## `MoveSoundTable` stands below `AttackAnimationPointers` in the bank, so the
+## region's own base is the lower of the two and every table is named.
+const GEN1_TABLES: Array[StringName] = [
+	&"attack_anims", &"subanims", &"frame_blocks", &"base_coords", &"move_sounds",
+]
 
 var _regions: Dictionary = {}
 var _gfx: Array = []

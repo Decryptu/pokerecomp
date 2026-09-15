@@ -67,6 +67,36 @@ const INTRO_NAMES: Dictionary = {
 const INTRO_SPECIES: Dictionary = {
 	&"red": [33, 30], &"blue": [33, 30], &"yellow": [25, 25],
 }
+## `TradeCenterPlayerWarp` to `ColosseumFriendWarp`, the same on all three.
+const CABLE_CLUB_WARPS: Dictionary = {
+	"trade_center": {"map": 239, "x": 3, "y": 4, "tileset": 21},
+	"trade_center_friend": {"map": 239, "x": 6, "y": 4, "tileset": 21},
+	"colosseum": {"map": 240, "x": 3, "y": 4, "tileset": 21},
+	"colosseum_friend": {"map": 240, "x": 6, "y": 4, "tileset": 21},
+}
+const LINK_MENU_ROWS: Dictionary = {
+	&"red": ["TRADE CENTER", "COLOSSEUM", "CANCEL"],
+	&"blue": ["TRADE CENTER", "COLOSSEUM", "CANCEL"],
+	&"yellow": ["TRADE CENTER", "COLOSSEUM", "COLOSSEUM2", "CANCEL"],
+}
+const CABLE_CLUB_TEXTS: Dictionary = {
+	"cable_club": ["area_reserved", "welcome", "please_apply", "please_wait", "link_closed",
+		"come_again", "making_preparations"],
+	"link": ["where_to", "please_wait", "canceled"],
+	"trade_center": ["will_be_traded"],
+	"just_a_moment": ["just_a_moment"],
+	"link_battle": ["defeated", "lost", "items"],
+	"start_menu": ["cannot_use_items", "cannot_get_off"],
+	"cable_club_strings": ["options", "please_wait", "cancel", "stats_trade", "waiting",
+		"trade_completed", "trade_canceled", "win", "lose", "draw"],
+}
+## `effect_chance` as the `*_SIDE_EFFECT` routines roll it: THUNDERBOLT and
+## BLIZZARD 10%, BODY SLAM and FIRE BLAST 30%, POISON STING and TWINEEDLE 20%,
+## SLUDGE 40%, BUBBLE 33%, PSYBEAM 10%, and nothing on TACKLE.
+const SIDE_CHANCES: Dictionary = {
+	85: 26, 59: 26, 34: 77, 126: 77, 40: 52, 41: 52, 124: 103, 145: 85, 60: 25, 33: 0,
+}
+const SIDE_CHANCE_CENSUS: Dictionary = {0: 133, 26: 13, 77: 7, 52: 2, 103: 2, 85: 6, 25: 2}
 const NEW_GAME_WARP: Dictionary = {"map": 38, "x": 3, "y": 6, "tileset": 4}
 ## `_DexSeenOwnedText` with 12 and 3 in its slots, `_DexRatingText` whose
 ## `<COLON>` is one tile, and `AnimateHallOfFame`'s six pages per member.
@@ -325,6 +355,26 @@ func _new_game_warp() -> void:
 		Gen1Layout.INTRO_TEXT_AT.size() + Gen1Layout.INTRO_NAME_TEXT_AT.size(),
 		snapshot.map_id.y, snapshot.player_cell,
 	])
+	_cable_club()
+
+
+## The four rows behind `NewGameWarp`, `LinkMenu`'s rows and every box and
+## `db` string the club, the trade screen and a link fight print.
+func _cable_club() -> void:
+	for name: String in Gen1Layout.CABLE_CLUB_WARP_ROWS:
+		var warp: Dictionary = _r.data.gen1_cable_club_warp(name)
+		_r.check(warp == CABLE_CLUB_WARPS[name], "%s's special warp reads %s." % [name, warp])
+	var options: Array = Array(_r.data.special_text("cable_club_strings", "options").split("\n"))
+	_r.check(options == LINK_MENU_ROWS[_r.game_id], "LinkMenu offers %s." % [options])
+	var missing: Array[String] = []
+	for section: String in CABLE_CLUB_TEXTS:
+		for name: String in CABLE_CLUB_TEXTS[section]:
+			if _r.data.special_text(section, name).is_empty():
+				missing.append("%s/%s" % [section, name])
+	_r.check(missing.is_empty(), "the cable club's boxes are missing %s." % [missing])
+	var version: String = _r.data.special_text("link", "version")
+	_r.check(version.is_empty() != (_r.game_id == &"yellow"),
+		"ColosseumVersionText reads %s." % [version])
 
 
 func _species() -> void:
@@ -450,6 +500,13 @@ func _moves() -> void:
 				number, str(read), str(want)
 			])
 	_move_effects()
+	var chances: Dictionary = {}
+	for number: int in range(1, MOVE_COUNT + 1):
+		var chance: int = int(data.move(number).get("effect_chance", 0))
+		chances[chance] = int(chances.get(chance, 0)) + 1
+		if SIDE_CHANCES.has(number):
+			_r.check(chance == int(SIDE_CHANCES[number]), "move %d rolls %d of 256." % [number, chance])
+	_r.check(chances == SIDE_CHANCE_CENSUS, "the side chances count %s." % [chances])
 	_r.note("%d moves" % MOVE_COUNT)
 
 

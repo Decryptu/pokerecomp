@@ -1648,7 +1648,9 @@ static func _read_hidden_row(
 	if Gen1Layout.banked(bank, address) == int(layout["start_slot_machine"]):
 		script = _slot_machine_nodes(rom, layout, bank, argument, index)
 	elif named.is_empty():
-		script = decode_script(rom, layout, bank, address, {"hidden_argument": argument})
+		script = decode_script(
+			rom, layout, bank, address, {"hidden_argument": argument, "cur_map": map_id}
+		)
 	else:
 		script = _hidden_table_nodes(rom, layout, named, bank, map_id, argument, row, names)
 	if not script.is_empty():
@@ -1973,6 +1975,8 @@ const SCRIPT_TESTS_NAME_ENTRY: int = -37
 const SCRIPT_TESTS_INDEXED_FLAG: int = -38
 ## Yellow's follower: `state["pikachu_test"]` names which of its facts is read.
 const SCRIPT_TESTS_PIKACHU: int = -40
+## `hSerialConnectionStatus`, which only the two link rooms compare.
+const SCRIPT_TESTS_SERIAL: int = -41
 const SCRIPT_AIDE: int = -3
 const SCRIPT_WALKED: int = -4
 ## What `push af` saves and `pop af` puts back, which is how
@@ -2832,6 +2836,10 @@ static func _script_loaded_known(layout: Dictionary, address: int, state: Dictio
 	if address == int(layout.get("channel_sound_ids", -1)):
 		state["a"] = 0
 		state.erase("source")
+	## `wCurMap` is the map the row was read off, which the walk is told.
+	if address == int(layout.get("cur_map", -1)) and state.has("cur_map"):
+		state["a"] = int(state["cur_map"])
+		state.erase("source")
 
 
 ## `jp` reaching `TextScriptEnd`, a routine the layout names, or an address in
@@ -3124,6 +3132,10 @@ static func _script_stored_named_more(
 		"player_y", "player_x":
 			out.append({"op": "set_player_coord",
 				"axis": Gen1Layout.SCRIPT_COORD_SOURCES.find(name), "value": a})
+		"link_state":
+			if not known:
+				return STORE_REFUSED
+			out.append({"op": "link_state", "value": a})
 		"num_set_bits":
 			## `wNamedObjectIndex` is the same byte.
 			if known:
@@ -3212,7 +3224,7 @@ const STORE_NAMES: Array[String] = [
 	"warp_destination_map", "destination_warp_id", "cur_map_text_ptr",
 	"player_y", "player_x", "sprite_map_y", "sprite_map_x", "rival_starter",
 	"player_starter", "cur_party_species", "num_set_bits", "oaks_aide_reward",
-	"fossil_item", "fossil_mon", "pikachu_spawn_state", "gym_leader_no",
+	"fossil_item", "fossil_mon", "pikachu_spawn_state", "gym_leader_no", "link_state",
 ]
 
 
@@ -5638,6 +5650,7 @@ static func _script_compared_byte(
 		return true
 	var tests: Dictionary = {
 		int(layout.get("obtained_badges", -1)): ["badges", SCRIPT_TESTS_BADGES, 0],
+		int(layout.get("serial_connection_status", -1)): ["serial", SCRIPT_TESTS_SERIAL, 0],
 		int(layout.get("random_add", -1)): ["random_below", SCRIPT_TESTS_RANDOM, 0],
 		int(layout.get("sprite_index_wram", -1)): ["talking", SCRIPT_TESTS_TALKING, -1],
 		int(layout.get("pikachu_happiness", -1)): ["pikachu_below", SCRIPT_TESTS_PIKACHU, 0],
@@ -5880,6 +5893,7 @@ const SCRIPT_MATCH_NODES: Dictionary = {
 	SCRIPT_TESTS_DEX: ["dex_count", "count", "dex_count"],
 	SCRIPT_TESTS_TILESET: ["tileset", "tileset", "tileset"],
 	SCRIPT_TESTS_WARP_ID: ["destination_warp", "warp", "warp_id"],
+	SCRIPT_TESTS_SERIAL: ["serial_status", "status", "serial"],
 }
 
 

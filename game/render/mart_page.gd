@@ -185,11 +185,8 @@ static func money_string(amount: int, left_align: bool = false) -> String:
 	return text if left_align else text.lpad(MONEY_CELLS)
 
 
-## One of the three balance windows as an image and the tile it stands at:
-## `{"image": Image, "at": Vector2i}`, empty when the font is missing. The three
-## are one routine's neighbours, which is why they are drawn here rather than
-## beside the overworld: `PlaceMoneyTopRight` is the box this screen already
-## draws and the other two are the same file's.
+## One of the three balance windows as `{"image": Image, "at": Vector2i}`,
+## empty without a font; `PlaceMoneyTopRight` and its two file neighbours.
 static func balance_window(
 	data: GameData, kind: StringName, money: int, coins: int
 ) -> Dictionary:
@@ -476,29 +473,59 @@ func render_gen1_script_menu(state: Dictionary) -> Image:
 	var height: int = int(box.get("height", -1))
 	if height < 0:
 		height = rows.size() * Gen1Layout.SCRIPT_MENU_ROWS_PER_ENTRY
-	var size := Vector2i(int(box.get("width", 0)) + 2, height + 2)
-	var indices: PackedByteArray = _panel(size)
-	var width: int = size.x * TILE
-	font.draw_box(frame_style, indices, width, 0, 0, size.x, size.y)
+	## The menu's own box first; a label lands in whichever panel holds its cell.
+	var panels: Array = [_gen1_panel(at, Vector2i(int(box.get("width", 0)) + 2, height + 2))]
+	for extra: Dictionary in state.get("boxes", []) as Array:
+		panels.append(_gen1_panel(
+			Vector2i(int(extra.get("x", 0)), int(extra.get("y", 0))),
+			Vector2i(int(extra.get("width", 0)) + 2, int(extra.get("height", 0)) + 2)
+		))
 	var entries: Vector2i = Vector2i(
 		int((state.get("entries_at", {}) as Dictionary).get("x", at.x + 2)),
 		int((state.get("entries_at", {}) as Dictionary).get("y", at.y + 2))
-	) - at
+	)
 	for index: int in rows.size():
-		_text(indices, width, String((rows[index] as Dictionary).get("text", "")),
-			_gen1_row_at(rows[index], "at", entries + Vector2i(0, index * ROW_STEP), at))
-	for label: Dictionary in state.get("labels", []) as Array:
-		var placed := Vector2i(int(label.get("x", 0)), int(label.get("y", 0))) - at
-		for line: int in (label.get("rows", []) as Array).size():
-			_text(indices, width, String((label["rows"] as Array)[line]),
-				placed + Vector2i(0, line * ROW_STEP))
+		_gen1_place(panels, String((rows[index] as Dictionary).get("text", "")),
+			_gen1_row_at(rows[index], "at", entries + Vector2i(0, index * ROW_STEP), Vector2i.ZERO))
 	var cursor: int = int(state.get("cursor", -1))
+	var labels: Array = (state.get("labels", []) as Array).duplicate()
+	## `Func_f56bd`: the highlighted row's own text.
+	var by_cursor: Dictionary = state.get("cursor_labels", {})
+	if (by_cursor.get("rows", {}) as Dictionary).has(cursor):
+		labels.append({"x": by_cursor.get("x", 0), "y": by_cursor.get("y", 0),
+			"step": by_cursor.get("step", ROW_STEP), "rows": (by_cursor["rows"] as Dictionary)[cursor]})
+	for label: Dictionary in labels:
+		var placed := Vector2i(int(label.get("x", 0)), int(label.get("y", 0)))
+		for line: int in (label.get("rows", []) as Array).size():
+			_gen1_place(panels, String((label["rows"] as Array)[line]),
+				placed + Vector2i(0, line * int(label.get("step", ROW_STEP))))
 	if cursor >= 0 and cursor < rows.size():
-		_code(indices, width, CURSOR_CODE, _gen1_row_at(
-			rows[cursor], "cursor", Vector2i(entries.x - 1, entries.y + cursor * ROW_STEP), at
-		))
-	_blit_panel(image, indices, size, at)
+		## `LinkMenu`'s `.updateCursorPosition` leaves `▷` on the chosen row.
+		var panel: Dictionary = panels[0]
+		_code(panel["indices"], int(panel["size"].x) * TILE,
+			GEN1_HELD_CODE if bool(state.get("held", false)) else CURSOR_CODE,
+			_gen1_row_at(rows[cursor], "cursor",
+				Vector2i(entries.x - 1, entries.y + cursor * ROW_STEP), Vector2i.ZERO) - at)
+	for panel: Dictionary in panels:
+		_blit_panel(image, panel["indices"], panel["size"], panel["at"])
 	return image
+
+
+func _gen1_panel(at: Vector2i, size: Vector2i) -> Dictionary:
+	var indices: PackedByteArray = _panel(size)
+	font.draw_box(frame_style, indices, size.x * TILE, 0, 0, size.x, size.y)
+	return {"at": at, "size": size, "indices": indices}
+
+
+## Draws [param text] at screen cell [param cell] into the panel holding it.
+func _gen1_place(panels: Array, text: String, cell: Vector2i) -> void:
+	for panel: Dictionary in panels:
+		var at: Vector2i = panel["at"]
+		var size: Vector2i = panel["size"]
+		if cell.x < at.x or cell.y < at.y or cell.x >= at.x + size.x or cell.y >= at.y + size.y:
+			continue
+		_text(panel["indices"], size.x * TILE, text, cell - at)
+		return
 
 
 ## A row's own cell under [param key], or [param fallback] down the one column.

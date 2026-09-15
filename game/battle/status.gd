@@ -74,8 +74,13 @@ static func tick_sleep(status: int) -> int:
 	return (status & ~SLEEP_MASK) | ((status & SLEEP_MASK) - 1)
 
 
-## `BattleCommand_SleepTarget`: the Tower mask limits the initial count to 2..4.
-static func roll_sleep(rng: RandomNumberGenerator, battle_tower: bool = false) -> int:
+## `BattleCommand_SleepTarget`: the Tower mask limits the initial count to 2..4,
+## and Yellow's `SleepEffect` under `wUnknownSerialFlag_d499` `and $3`s it to 1..3.
+static func roll_sleep(
+	rng: RandomNumberGenerator, battle_tower: bool = false, stadium_cup: bool = false
+) -> int:
+	if stadium_cup:
+		return rng.randi_range(MIN_SLEEP, 3)
 	return rng.randi_range(MIN_SLEEP, 4 if battle_tower else MAX_SLEEP)
 
 

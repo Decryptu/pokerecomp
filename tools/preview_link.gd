@@ -1,16 +1,15 @@
 extends SceneTree
 
-## Captures the cable club's two screens against a real imported cache.
+## Captures the cable club's screens against a real imported cache, headless.
 ##   Godot --headless --path . -s res://tools/preview_link.gd -- <game> <out.png> [screen]
-## [screen] is `trade`, `wait`, `confirm`, `record` or `all`, the default. The trade
-## screen is the one page whose picture differs between the two cartridges for a
-## reason rather than by accident, so the same call on the three caches is the whole
-## comparison. Composed into an [Image], so this runs headless.
-## `anim` draws the movie behind the trade instead, six sampled frames;
-## `anim:<frame>[,<frame>...]` names its own.
+## [screen] is `trade`, `wait`, `confirm`, `record` or `all`, the default; a
+## Generation 1 cache adds `stats`, `versus` and `verdict`. `anim` draws the
+## movie behind the trade instead, six sampled frames; `anim:<frame>[,...]`
+## names its own.
 
 const COLUMNS: int = 2
 const SCREENS: Array[String] = ["wait", "trade", "confirm", "record"]
+const GEN1_SCREENS: Array[String] = ["wait", "trade", "stats", "confirm", "versus", "verdict"]
 
 ## A pair of parties long enough that both lists reach the cursor rows, with the
 ## partner's one shorter so the two halves are told apart in the picture.
@@ -50,8 +49,8 @@ func _initialize() -> void:
 	if wanted.begins_with("anim"):
 		_capture_animation(data, args[0], args[1], wanted)
 		return
-	var screens: Array[String] = SCREENS.duplicate() if wanted == "all" \
-		else ([wanted] as Array[String])
+	var screens: Array[String] = (GEN1_SCREENS if page.gen1 else SCREENS).duplicate() \
+		if wanted == "all" else ([wanted] as Array[String])
 	var columns: int = mini(COLUMNS, screens.size())
 	@warning_ignore("integer_division")
 	var rows: int = (screens.size() + columns - 1) / columns
@@ -76,6 +75,8 @@ func _initialize() -> void:
 
 
 func _draw(page: Gen2LinkPage, screen: String) -> PackedByteArray:
+	if page.gen1:
+		return _draw_gen1(page, screen)
 	match screen:
 		"wait":
 			return page.draw_please_wait()
@@ -89,6 +90,27 @@ func _draw(page: Gen2LinkPage, screen: String) -> PackedByteArray:
 			}))
 		_:
 			return page.draw_trade(_trade_state({"footer": Gen2LinkScreen.FOOTER_TRADE}))
+
+
+func _draw_gen1(page: Gen2LinkPage, screen: String) -> PackedByteArray:
+	match screen:
+		"wait":
+			return page.draw_please_wait()
+		"stats":
+			return page.draw_gen1_trade(_trade_state({"footer": Gen2LinkScreen.FOOTER_STATS, "held": true}))
+		"confirm":
+			return page.draw_gen1_trade(_trade_state({
+				"held": true, "partner_choice": 1, "confirm": 0,
+				"message": ["CHIKORITA and", "SQUIRTLE will"],
+			}))
+		"versus", "verdict":
+			return page.draw_gen1_versus({
+				"player": {"name": PLAYER_NAME, "balls": [0, 1, 2, 0, 3, 3]},
+				"enemy": {"name": PARTNER_NAME, "balls": [0, 0, 2, 3, 3, 3]},
+				"result": "" if screen == "versus" else String(page.strings.get("win", "YOU WIN")),
+			})
+		_:
+			return page.draw_gen1_trade(_trade_state({"list": Gen2LinkScreen.LIST_PARTNER, "index": 1}))
 
 
 func _trade_state(extra: Dictionary) -> Dictionary:

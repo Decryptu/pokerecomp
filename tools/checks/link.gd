@@ -121,7 +121,210 @@ func run(r: RefCounted) -> void:
 		_verify_gen1_trade_anim_art()
 		_verify_gen1_trade_anim_run()
 		_verify_gen1_trade_anim_corpus()
+		_verify_gen1_trade_center()
+		_verify_gen1_colosseum()
 	)
+
+
+## Generation 1's Cable Club on the real world screen: VIRIDIAN_POKECENTER's counter.
+const GEN1_POKECENTER: int = 41
+const GEN1_COUNTER := Vector2i(11, 3)
+const GEN1_PARTNER_NAME: String = "BLUE"
+## Past these a visit is stuck; a fight spends 65 frames a line and gets its own.
+const GEN1_VISIT_GUARD: int = 6000
+const GEN1_FIGHT_GUARD: int = 30000
+const GEN1_PRESS_EVERY: int = 14
+
+
+func _gen1_partner() -> Gen2LinkTransport:
+	var transport := Gen2LinkTransport.new()
+	var members: Array = []
+	## Level 2, so a fight is short.
+	for species: int in [4, 7]:
+		var mon: Gen2BattleMon = Gen2BattleMon.create(_r.data, species, 2, _r.data.moves_at_level(species, 2))
+		members.append(mon)
+	var save: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
+		_r.data.id, _r.data.sha1, 1, Gen2Party.create(members), GEN1_PARTNER_NAME
+	)
+	transport.peer = Gen2LinkTransport.peer_from_save(save)
+	return transport
+
+
+func _gen1_open_screen(map: int, cell: Vector2i, in_room: bool) -> Gen2WorldScreen:
+	var screen: Gen2WorldScreen = (load("res://game/world/world_screen.tscn") as PackedScene).instantiate()
+	screen.map_group = 0
+	screen.map_number = map
+	screen.start_cell = cell
+	screen.encounter_seed = 1
+	screen.set_data(_r.data)
+	screen.set_save(Gen2SaveStore.create_development_save(_r.data, 0))
+	(Engine.get_main_loop() as SceneTree).root.add_child(screen)
+	screen.set_process(false)
+	var world: Gen2WorldAPI = screen.world()
+	world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+	world.state.set_link_transport(_gen1_partner())
+	if world.pikachu != null:
+		world.pikachu.set_following(true)
+	if in_room:
+		world.state.link_session().gen1_link_state = Gen1Layout.LINK_STATE_IN_CABLE_CLUB
+		world.state.link_session().gen1_link_connected = true
+	return screen
+
+
+func _gen1_close_screen(screen: Gen2WorldScreen) -> void:
+	(Engine.get_main_loop() as SceneTree).root.remove_child(screen)
+	screen.free()
+
+
+## Frames until [param until] answers true, [param press] pressed every few; -1
+## past the guard.
+func _gen1_drive(
+	screen: Gen2WorldScreen, until: Callable, press: int = PokeButton.A, guard: int = GEN1_VISIT_GUARD
+) -> int:
+	for frame: int in guard:
+		if until.call():
+			return frame
+		screen.advance_frame()
+		if press != PokeButton.NONE and frame % GEN1_PRESS_EVERY == 0:
+			screen.press_button(press)
+	return -1
+
+
+## `CableClubNPC`, `LinkMenu`, the special warp, `CableClubLeftGameboy`,
+## `TradeCenter_SelectMon`, one trade, CANCEL and `ReturnToCableClubRoom`.
+func _verify_gen1_trade_center() -> void:
+	var screen: Gen2WorldScreen = _gen1_open_screen(GEN1_POKECENTER, GEN1_COUNTER, false)
+	var world: Gen2WorldAPI = screen.world()
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	screen.press_button(PokeButton.A)
+	var warp: Dictionary = _r.data.gen1_cable_club_warp("trade_center")
+	var entered: int = _gen1_drive(screen, func() -> bool:
+		return world.map_id() == Vector2i(0, int(warp["map"])))
+	if not _r.check(entered >= 0, "the receptionist never sent the player into the Trade Center"):
+		_gen1_close_screen(screen)
+		return
+	_r.note("gen1 cable club: the TRADE CENTER entered in %d frames" % entered)
+	var settled: int = _gen1_drive(screen, func() -> bool:
+		return not world.script_busy() and world.pending_runtime_request().is_empty(), PokeButton.NONE)
+	_r.check(settled >= 0 and world.player_cell == Vector2i(int(warp["x"]), int(warp["y"])),
+		"the room settled at %s" % [world.player_cell])
+	world.player_facing = Gen2WorldSprite.FACING_RIGHT
+	screen.press_button(PokeButton.A)
+	var opened: int = _gen1_drive(screen, func() -> bool: return screen.get("_link_host") != null, PokeButton.NONE)
+	if not _r.check(opened >= 0, "the Game Boy opened no trade screen"):
+		_gen1_close_screen(screen)
+		return
+	var host: Gen2LinkScreen = screen.get("_link_host")
+	var listed: int = _gen1_drive(screen, func() -> bool: return host.step() == Gen2LinkScreen.STEP.SELECT, PokeButton.NONE)
+	## The pump spends the frame a host opens on, so a count from the open is one under.
+	_r.check(listed == Gen1Layout.CABLE_CLUB_EXCHANGE_FRAMES - 1, "PLEASE WAIT! stood %d frames" % listed)
+	var lists: Dictionary = host.trade_state()
+	_r.check(String((lists["partner"] as Dictionary).get("name", "")) == GEN1_PARTNER_NAME
+		and ((lists["partner"] as Dictionary).get("species", []) as Array).size() == 2,
+		"the partner's list read %s" % [lists["partner"]])
+	var given: int = (screen.active_save().party[0] as Gen2SaveMon).species
+	_gen1_trade_one(screen, host)
+	var species: Array = screen.active_save().party.map(func(mon: Gen2SaveMon) -> int: return mon.species)
+	_r.check(not species.has(given) and species.back() == 4,
+		"the trade left the party as %s" % [species])
+	_r.check(screen.active_save().world.map_id == Vector2i(0, GEN1_POKECENTER),
+		"the trade's save stands on map %s" % [screen.active_save().world.map_id])
+	var rows: int = (host.trade_state()["player"]["species"] as Array).size()
+	for _row: int in rows:
+		screen.press_button(PokeButton.DOWN)
+	_r.check(bool(host.trade_state().get("cancel", false)), "DOWN past the list did not reach CANCEL")
+	screen.press_button(PokeButton.A)
+	var back: int = _gen1_drive(screen, func() -> bool: return screen.get("_link_host") == null, PokeButton.NONE)
+	_r.check(back == Gen1Layout.TRADE_WAITING_FRAMES, "CANCEL took %d frames" % back)
+	_r.check(world.gen1_link_state() == Gen1Layout.LINK_STATE_IN_CABLE_CLUB
+		and world.map_id() == Vector2i(0, int(warp["map"])) and not world.script_busy(),
+		"the room came back in state %d on %s" % [world.gen1_link_state(), world.map_id()])
+	_gen1_close_screen(screen)
+
+
+## One trade: the player's first row for the partner's, through the question,
+## the movie and the boxes behind it back to the lists.
+func _gen1_trade_one(screen: Gen2WorldScreen, host: Gen2LinkScreen) -> void:
+	screen.press_button(PokeButton.A)
+	_r.check(host.step() == Gen2LinkScreen.STEP.FOOTER
+		and int(host.trade_state().get("footer", -1)) == Gen2LinkScreen.FOOTER_STATS,
+		"A on a row opened %d" % host.step())
+	screen.press_button(PokeButton.RIGHT)
+	screen.press_button(PokeButton.A)
+	var asked: int = _gen1_drive(screen, func() -> bool: return host.step() == Gen2LinkScreen.STEP.GEN1_ASK, PokeButton.NONE)
+	_r.check(asked == Gen1Layout.TRADE_WAITING_FRAMES + Gen1Layout.TRADE_CENTER_DELAY_FRAMES,
+		"the question took %d frames" % asked)
+	var state: Dictionary = host.trade_state()
+	_r.check(int(state.get("partner_choice", -1)) == 0 and bool(state.get("held", false))
+		and not (state.get("message", []) as Array).is_empty(),
+		"the question stood over %s" % [state])
+	screen.press_button(PokeButton.A)
+	screen.press_button(PokeButton.A)
+	_r.check(host.step() == Gen2LinkScreen.STEP.CONFIRM, "the question's pages led to %d" % host.step())
+	screen.press_button(PokeButton.A)
+	var movie: int = _gen1_drive(screen, func() -> bool: return screen.get("_trade_anim_host") != null, PokeButton.NONE)
+	_r.check(movie == Gen1Layout.TRADE_WAITING_FRAMES + Gen1Layout.TRADE_CENTER_DELAY_FRAMES,
+		"the movie opened after %d frames" % movie)
+	var played: int = _gen1_drive(screen, func() -> bool: return screen.get("_trade_anim_host") == null, PokeButton.NONE)
+	_r.check(played > 0 and host.step() == Gen2LinkScreen.STEP.GEN1_WAITING,
+		"the movie closed onto %d after %d frames" % [host.step(), played])
+	var listed: int = _gen1_drive(screen, func() -> bool: return host.step() == Gen2LinkScreen.STEP.SELECT, PokeButton.NONE)
+	_r.check(listed == Gen1Layout.TRADE_WAITING_FRAMES + Gen1Layout.TRADE_COMPLETED_LEAD_FRAMES
+		+ Gen1Layout.TRADE_COMPLETED_FRAMES + Gen1Layout.CABLE_CLUB_EXCHANGE_FRAMES,
+		"the lists came back after %d frames" % listed)
+
+
+## The Colosseum's Game Boy: PLEASE WAIT!, the versus box, the wipe, the fight,
+## the verdict, `HealParty` and the room.
+func _verify_gen1_colosseum() -> void:
+	var warp: Dictionary = _r.data.gen1_cable_club_warp("colosseum")
+	var screen: Gen2WorldScreen = _gen1_open_screen(int(warp["map"]), Vector2i(int(warp["x"]), int(warp["y"])), true)
+	var world: Gen2WorldAPI = screen.world()
+	var settled: int = _gen1_drive(screen, func() -> bool:
+		return not world.script_busy() and world.pending_runtime_request().is_empty(), PokeButton.NONE)
+	_r.check(settled >= 0, "the Colosseum never settled")
+	world.player_facing = Gen2WorldSprite.FACING_RIGHT
+	screen.press_button(PokeButton.A)
+	var opened: int = _gen1_drive(screen, func() -> bool: return screen.get("_link_host") != null, PokeButton.NONE)
+	if not _r.check(opened >= 0, "the Game Boy opened no wait screen"):
+		_gen1_close_screen(screen)
+		return
+	var host: Gen2LinkScreen = screen.get("_link_host")
+	var versus: int = _gen1_drive(screen, func() -> bool: return host.step() == Gen2LinkScreen.STEP.GEN1_VERSUS, PokeButton.NONE)
+	_r.check(versus == Gen1Layout.CABLE_CLUB_EXCHANGE_FRAMES + Gen1Layout.CABLE_CLUB_CLOSE_FRAMES - 1,
+		"the versus box opened after %d frames" % versus)
+	var wiped: int = _gen1_drive(screen, func() -> bool: return host.step() == Gen2LinkScreen.STEP.GEN1_TRANSITION, PokeButton.NONE)
+	_r.check(wiped == Gen1Layout.VERSUS_FRAMES, "the versus box stood %d frames" % wiped)
+	var fought: int = _gen1_drive(screen, func() -> bool: return screen.get("_battle_host") != null, PokeButton.NONE)
+	_r.check(fought > 0, "the wipe opened no battle")
+	var battle: Gen2BattleScreen = screen.get("_battle_host")
+	_r.check(battle.battler_side(Gen2Battle.ENEMY).get("trainer_class", 0) == Gen2BattleScreen.LINK_OPPONENT_PIC,
+		"the partner wore class %s" % [battle.battler_side(Gen2Battle.ENEMY)])
+	var messages: Array[String] = []
+	var ended: int = _gen1_drive(screen, func() -> bool:
+		var current: Gen2BattleScreen = screen.get("_battle_host")
+		if current != null:
+			var line: String = String(current.battle_snapshot().get("message", ""))
+			if not line.is_empty() and (messages.is_empty() or messages.back() != line):
+				messages.append(line)
+		return current == null, PokeButton.A, GEN1_FIGHT_GUARD)
+	_r.check(ended > 0, "the fight never ended")
+	var verdict: Gen2LinkScreen = screen.get("_link_host")
+	_r.check(verdict != null and verdict.mode == Gen2LinkScreen.MODE_VERSUS_RESULT,
+		"no verdict box followed the fight")
+	var closed: int = _gen1_drive(screen, func() -> bool: return screen.get("_link_host") == null, PokeButton.NONE)
+	_r.check(closed == Gen1Layout.VERSUS_RESULT_FRAMES - 1, "the verdict stood %d frames" % closed)
+	var back: int = _gen1_drive(screen, func() -> bool:
+		return not world.script_busy() and world.pending_runtime_request().is_empty(), PokeButton.NONE)
+	_r.check(back >= 0 and world.gen1_link_state() == Gen1Layout.LINK_STATE_IN_CABLE_CLUB
+		and world.map_id() == Vector2i(0, int(warp["map"])), "the room came back in state %d" % world.gen1_link_state())
+	var healed: bool = true
+	for mon: Gen2SaveMon in screen.active_save().party:
+		var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(_r.data, mon)
+		healed = healed and battle_mon != null and mon.hp == battle_mon.max_hp() and mon.status == 0
+	_r.check(healed, "HealParty left the party hurt")
+	_r.note("gen1 cable club: the COLOSSEUM fought in %d frames, %d lines" % [ended, messages.size()])
+	_gen1_close_screen(screen)
 
 
 ## `TradingAnimationGraphics`' two sheets, the two `TileIDListPointerTable`

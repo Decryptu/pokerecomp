@@ -199,21 +199,24 @@ const TOGGLE_CENSUS: Dictionary = {
 ## the four cable club Game Boys, which read `hSerialConnectionStatus`, and on
 ## Red and Blue the three bench guys `BenchGuyTextPointers` misaligns.
 const HIDDEN_CENSUS: Dictionary = {
-	&"red": {"rows": 216, "silent": 7, "text": 441, "branch": 117, "flag": 72,
-		"facing": 129, "name_item": 53, "give_item": 53, "facility": 21,
+	&"red": {"rows": 216, "silent": 3, "text": 445, "branch": 117, "flag": 72,
+		"facing": 133, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3},
-	&"blue": {"rows": 216, "silent": 7, "text": 441, "branch": 117, "flag": 72,
-		"facing": 129, "name_item": 53, "give_item": 53, "facility": 21,
+		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3,
+		"serial_status": 4, "link_state": 4},
+	&"blue": {"rows": 216, "silent": 3, "text": 445, "branch": 117, "flag": 72,
+		"facing": 133, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3},
-	&"yellow": {"rows": 212, "silent": 4, "text": 445, "branch": 118, "flag": 73,
-		"facing": 125, "name_item": 54, "give_item": 54, "facility": 17,
+		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3,
+		"serial_status": 4, "link_state": 4},
+	&"yellow": {"rows": 212, "silent": 0, "text": 449, "branch": 118, "flag": 73,
+		"facing": 129, "name_item": 54, "give_item": 54, "facility": 17,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "volatile": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66, "picture": 5, "help_menu": 3},
+		"emote": 66, "slot_machine": 66, "picture": 5, "help_menu": 3,
+		"serial_status": 4, "link_state": 4},
 }
 ## Of `BookshelfTileIDs`' 17 rows, all but one decode: the Indigo Plateau
 ## statues read `wXCoord` for which of their two boxes they answer with.

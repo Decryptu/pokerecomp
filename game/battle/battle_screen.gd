@@ -66,13 +66,8 @@ const INFLICTED: Dictionary = {
 	&"paralysis": "is paralyzed!",
 }
 
-## What a two-turn move says on its charge turn, from
-## `BattleCommand_Charge.UsedText` (data/text/common_2.asm), which picks its line
-## by move number rather than by effect: Fly and Dig share an effect byte and do
-## not share a sentence.
-## The source's own `line` is a line break in a fixed-width box rather than part
-## of the sentence, so these read as one flowing string the way every other
-## message here does.
+## `BattleCommand_Charge.UsedText` (data/text/common_2.asm), picked by move
+## number rather than effect: Fly and Dig share a byte and not a sentence.
 const CHARGE_TEXT: Dictionary = {
 	Gen2MoveEffect.RAZOR_WIND_MOVE: "made a whirlwind!",
 	Gen2MoveEffect.SOLARBEAM_MOVE: "took in sunlight!",
@@ -129,12 +124,9 @@ const WEATHER_ENDED_TEXT: Dictionary = {
 	Gen2Weather.SANDSTORM: "The SANDSTORM subsided.",
 }
 
-## The two lines each screen has. The set lines are `BattleCommand_Screen`'s and
-## `BattleCommand_Safeguard`'s own, which describe the stat rather than the
-## screen. The faded lines are `HandleScreens`', and they name the side rather
-## than the Pokémon: `.Copy` fills `wStringBuffer1` with "Your" or "Enemy" ahead
-## of " #MON's", which is the wording that fits a screen outliving whoever put it
-## up. `HandleSafeguard`'s is the odd one and is a plain `<USER>`.
+## `BattleCommand_Screen`'s and `BattleCommand_Safeguard`'s set lines, and
+## `HandleScreens`' faded ones, which name the side: `.Copy` fills
+## `wStringBuffer1` with "Your" or "Enemy". `HandleSafeguard`'s is a plain `<USER>`.
 const SCREEN_SET_TEXT: Dictionary = {
 	Gen2Screens.LIGHT_SCREEN: "%s's SPCL.DEF rose!",
 	Gen2Screens.REFLECT: "%s's DEFENSE rose!",
@@ -258,6 +250,8 @@ var _player_backpic: String = ""
 ## `InitEnemyTrainer`'s `PlaceGraphic`: the trainer class whose picture is on the
 ## enemy's square, zero once that trainer has sent something out.
 var _enemy_trainer_pic: int = 0
+## `GetTrainerInformation.linkBattle`: the partner wears `RedPicFront`.
+const LINK_OPPONENT_PIC: int = -1
 ## `LoadTrainerHudOAM`'s six sprites a side and the border they hang in.
 var _hud_balls: Array = []
 var _hud_border: Array = []
@@ -994,6 +988,7 @@ func advance_hardware_frame() -> bool:
 	## complete the page forever and never acknowledge it.
 	if _box != null:
 		_box.advance_frame()
+		_advance_link_text_frames()
 	## The prompt draws its own box, and its `YesNoBox` does not appear until
 	## that box owes nothing, so it is spent a frame at a time like this one.
 	if _capture_nickname_host != null:
@@ -1363,12 +1358,9 @@ func _drawn_hp(side: int) -> int:
 	return animation.hp()
 
 
-## `HandleHPPals`, which sets `wLowHealthAlarm`'s DANGER_ON bit while the
-## player's own bar reads HP_RED and clears it otherwise. The colour follows what
-## is drawn rather than the numbers behind it, so a draining bar arms the alarm
-## on the frame it turns red. `StopDangerSound` silences it the moment the
-## Pokemon faints and `CleanUpBattleRAM` at the end of the battle, which is what
-## the two zero cases here are.
+## `HandleHPPals`: DANGER_ON while the drawn bar reads HP_RED, so a draining
+## bar arms the alarm on the frame it turns red; `StopDangerSound` and
+## `CleanUpBattleRAM` are the two zero cases.
 func _update_low_health_alarm() -> void:
 	if _audio_player == null:
 		return
@@ -1440,9 +1432,13 @@ func _init_battle_display() -> void:
 	## the one battler already standing there as itself.
 	_enemy_hud_visible = false
 	_player_hud_visible = false
-	_enemy_trainer_pic = _enemy_trainer_class
+	_enemy_trainer_pic = _link_opponent_pic()
 	_player_backpic = player_backpic_kind()
 	_push_view()
+
+
+func _link_opponent_pic() -> int:
+	return LINK_OPPONENT_PIC if _gen1_link_battle() else _enemy_trainer_class
 
 
 ## `GetTrainerBackpic`'s choice: the Dude for the catching tutorial, and the
@@ -1508,14 +1504,10 @@ func advance_intro() -> bool:
 	return true
 
 
-## `BattleStartMessage` and the opening of `DoBattle`, which the sliding pics run
-## straight into: one stage per step, spent in order by
-## [method _advance_entrance]. Measured against a real cartridge frame by frame,
-## which is where the frame counts and the two presses come from.
-## `AnimateFrontpic` is the enemy's alone and is where its cry comes from, both
-## send-outs `jr .skip_cry` past `PlayStereoCry`. Crystal's alone: pokegold has no
-## `pic_animation.asm` and reaches `PlayStereoCry` directly, the `.cry_no_anim`
-## branch this project falls back on. The player's send-out has no animation.
+## `BattleStartMessage` and `DoBattle`'s opening, one stage per step for
+## [method _advance_entrance], measured on a cartridge frame by frame. The
+## enemy's cry is `AnimateFrontpic`'s on Crystal and `PlayStereoCry`'s on
+## pokegold, the `.cry_no_anim` branch; the player's send-out has no animation.
 func _build_entrance() -> void:
 	_entrance_stages = []
 	var text: String = _intro_message
@@ -1886,12 +1878,9 @@ const ANIM_SEND_OUT: StringName = &"send_out"
 ## come out of its script.
 const ANIM_SFX: StringName = &"sfx"
 
-## Whose square is showing the substitute's doll rather than the mon itself. The
-## cartridge keeps this in VRAM rather than in a variable: `GetSubstitutePic`
-## writes the doll over the battler's tiles and `DropPlayerSub` writes the picture
-## back, so what is on the field is whatever was drawn last. The three writers are
-## `anim_raisesub`/`anim_dropsub`, the two `noanim` commands the battle-scene
-## option reaches instead, and a send-out.
+## Whose square shows the doll: VRAM on the cartridge, `GetSubstitutePic` and
+## `DropPlayerSub` writing over the tiles, so the field is whatever was drawn
+## last by `anim_raisesub`, `anim_dropsub`, their `noanim` twins or a send-out.
 var _substitute_pic: Dictionary = {Gen2Battle.PLAYER: false, Gen2Battle.ENEMY: false}
 
 ## The second answer the same three writers give. `GetBattleMonBackpic` tests
@@ -1914,13 +1903,9 @@ const ANIM_MOVE_LIMIT: int = 0x100
 ## (constants/move_constants.asm).
 const ANIM_THROW_POKE_BALL: int = 0x100
 
-## `.shake_and_break_free`'s four texts, indexed by how many times the ball
-## rocked. `PokeBallEffect` reads `wThrownBallWobbleCount`, one higher than the
-## count of rocks, which is what [method Gen2WorldPartyHost._failed_wobbles]
-## answers. There is no line for a rock on its own. Beside them:
-## `BallBlockedText` and `BallDontBeAThiefText`, two boxes rather than one line,
-## `BallBoxFullText`, said before the ball is thrown, and `_NewDexDataText`, which
-## names the Pokemon and plays a sound of its own.
+## `.shake_and_break_free`'s four texts by `wThrownBallWobbleCount`, one over
+## the rocks ([method Gen2WorldPartyHost._failed_wobbles]); then
+## `BallBlockedText`, `BallDontBeAThiefText`, `BallBoxFullText` and `_NewDexDataText`.
 const NEW_DEX_DATA_TEXT: String = "%s's data\nwas newly added to\nthe #DEX."
 const BALL_BLOCKED_TEXT: String = "The trainer\nblocked the BALL!"
 const BALL_DONT_BE_A_THIEF_TEXT: String = "Don't be a thief!"
@@ -2095,12 +2080,9 @@ func _begin_animation(event: Dictionary) -> void:
 	_run_next_anim_step()
 
 
-## The doll the animation would have drawn, written straight into the picture
-## when the battle-scene option is off and the script never runs.
-## `BattleCommand_LowerSub` and `..._RaiseSub` both branch to their own `noanim`
-## routine on `_CheckBattleScene`, and `BattleCommand_Substitute`'s own
-## `.no_anim` calls `RaiseSubNoAnim`, so the three animation parameters answer
-## the same two pictures with the scenes turned off as with them on.
+## The doll written straight into the picture with the battle scene off:
+## `BattleCommand_LowerSub`, `..._RaiseSub` and `BattleCommand_Substitute`'s
+## `.no_anim` reach the same two pictures as their animations.
 func _apply_sub_pic_no_anim(index: int, param: int) -> void:
 	if index != Gen2EffectCommands.SUBSTITUTE_MOVE:
 		return
@@ -2439,12 +2421,8 @@ func _clear_kept_sprites() -> void:
 	_push_view()
 
 
-## `PlayBattleMusic`, which `FindFirstAliveMonAndStartBattle` runs in front of
-## `DoBattleTransition`: the piece playing is stopped, the volume goes back to
-## maximum, and the battle's own track starts. A world battle has already had it
-## started by the screen that ran the transition, on the same driver and from the
-## same request, so this asks for a track already playing and the driver
-## continues it. A battle standing on its own is where it actually starts.
+## `PlayBattleMusic`, in front of `DoBattleTransition`. A world battle's track
+## is already playing from the transition, and the driver continues it.
 func _play_battle_music() -> void:
 	_battle_music = Gen2Battle.MUSIC_NONE
 	if _audio_player == null or _data == null or _battle == null:
@@ -2629,12 +2607,9 @@ func _drawn_exp() -> int:
 	return _exp if _exp_bar == null else _exp_bar.pixels()
 
 
-## Begins the fill [param event]'s award earns, which is `AnimateExpBar`, from
-## the [param from_pixels] the bar stood at before the award was committed. The
-## segments are read out of the events still queued behind this one: one per level
-## crossed, then `.FinishExpBar`'s partial fill. Both of the routine's own guards
-## are kept: a gainer who is not the Pokemon on the field animates nothing
-## (`wCurPartyMon` against `wCurBattleMon`), and neither does one at `MAX_LEVEL`.
+## `AnimateExpBar` from [param from_pixels], one segment per level queued
+## behind this event and `.FinishExpBar`'s fill; a gainer off the field or at
+## `MAX_LEVEL` animates nothing.
 func _start_exp_bar(event: Dictionary, from_pixels: int) -> void:
 	_exp_bar = null
 	if _battle == null or _battle.player == null:
@@ -2727,8 +2702,10 @@ func show_message(text: String, prompt: bool = true) -> void:
 	## `StdBattleTextbox` blocks on a press for a line it printed; an empty box
 	## is the one a menu is drawn over and owes nothing.
 	_message_awaits_press = prompt and not text.is_empty()
+	## `PromptText` draws no `▼` in a Generation 1 link battle.
+	_link_text_frames = Gen1Layout.LINK_BATTLE_TEXT_FRAMES if _gen1_link_battle() else 0
 	if _box != null:
-		_box.show_text(text, prompt)
+		_box.show_text(text, prompt and _link_text_frames == 0)
 
 
 ## What the animation layer is doing right now, for a scene test or a screenshot
@@ -2993,7 +2970,7 @@ func open_battle_pack() -> Dictionary:
 		return {"ok": false, "reason": &"battle_events_pending"}
 	_close_battle_menu()
 	if not _battle.allows_bag_items():
-		show_message("Items can't be\nused here.")
+		show_message(_gen1_item_text("items", "Items can't be\nused here.", "link_battle"))
 		return {"ok": false, "reason": &"items_cant_be_used_here"}
 	if _pack_rows.is_empty():
 		show_message("You have no items to use!")
@@ -3344,12 +3321,8 @@ func _ball_box_full_text() -> String:
 	return GEN1_BALL_BOX_FULL_TEXT % Gen2TextStream.SCROLL_BREAK
 
 
-## `PokeBallEffect`'s own `PlayBattleAnim` on `ANIM_THROW_POKE_BALL`: the throw,
-## the poof, the opponent going in, the wobbles and the click or the break free,
-## one script rather than five. The catch is already resolved when this runs, the
-## way the source resolves it in front of the animation, so the queue is
-## `GetPokeBallWobble`'s answers in order. The opponent leaving and coming back
-## are `BATTLE_BG_EFFECT_RETURN_MON` and `..._ENTER_MON` inside the script.
+## `PokeBallEffect`'s `ANIM_THROW_POKE_BALL`, one script: the catch is
+## resolved in front of it, so the queue is `GetPokeBallWobble`'s answers.
 func _begin_capture_animation(ball: int, wobbles: int, caught: bool) -> void:
 	if ball <= 0:
 		return
@@ -3998,11 +3971,27 @@ func _confirm_forget_slot() -> void:
 	_show_next_event()
 
 
+## `ManualTextScroll`'s `.inLinkBattle`: the frames stand in for the press.
+var _link_text_frames: int = 0
+
+
+func _gen1_link_battle() -> bool:
+	return _battle != null and _battle.is_link_battle and _generation() == RomRegistry.GEN1
+
+
+func _advance_link_text_frames() -> void:
+	if _link_text_frames <= 0 or not _message_awaits_press or _box.is_revealing():
+		return
+	_link_text_frames -= 1
+	if _link_text_frames == 0:
+		advance()
+
+
 ## What a button press does. Finishes the current message if it is still
 ## revealing, then moves on to the next event, sends out whoever is owed, and
 ## starts a turn when there is nothing left to say.
 func advance() -> void:
-	if _box == null:
+	if _box == null or (_link_text_frames > 0 and _message_awaits_press):
 		return
 	## The exp bar stopped at a level boundary is under `.LoopLevels`' own
 	## `StdBattleTextbox`, which blocks on a button: this press is that button,
@@ -4280,6 +4269,9 @@ func _finish_world_battle() -> void:
 			else Gen2WorldBattleAdapter.OUTCOME_LOST
 		)
 	)
+	## A forfeit is `BATTLEACTION_FORFEIT`'s LOSE and `wBattleResult` 1.
+	if _battle.has_fled() and _battle.is_link_battle:
+		outcome = Gen2WorldBattleAdapter.OUTCOME_LOST
 	var result: Dictionary = {
 		"ok": true,
 		"outcome": outcome,
@@ -4303,6 +4295,13 @@ func _finish_world_battle() -> void:
 		result["recovery"] = _world_battle_recovery.duplicate(true)
 	result["enemy"] = _enemy_battler_record()
 	result["party_log"] = _battle.party_log.duplicate(true)
+	## `EndOfBattle`'s versus balls read every enemy row, status written back.
+	if _battle.is_link_battle:
+		var rows: Array = []
+		for slot: int in _battle.party(Gen2Battle.ENEMY).size():
+			var member: Gen2BattleMon = _battle.party(Gen2Battle.ENEMY).at(slot)
+			rows.append({"hp": member.hp, "status": member.status} if member != null else {})
+		result["enemy_party"] = rows
 	_world_battle_completion_sent = true
 	battle_finished.emit(result)
 
@@ -4399,7 +4398,7 @@ func _show_world_battle_result_picture() -> bool:
 		for index: int in 8 * Gen2BattleScreenMap.COLUMNS:
 			_bg_map[index] = Gen2BattleScreenMap.BLANK_TILE
 	_enemy_hud_visible = false
-	_enemy_trainer_pic = _enemy_trainer_class
+	_enemy_trainer_pic = _link_opponent_pic()
 	_slid_pixels[Gen2Battle.ENEMY] = 56.0
 	Gen2BattleScreenMap.result_trainer_step(_bg_map, 1)
 	_slides.append({"incoming": true, "step": 1, "delay": 4})
@@ -4460,12 +4459,8 @@ func _prepare_world_battle_recovery() -> bool:
 	return true
 
 
-## Answers a Baton Pass that stopped the turn, and whether there was one. The
-## player's target is `ForcePickSwitchMonInBattle`, the party menu with no way out
-## of it, so the list stays open until a row answers; the enemy's is
-## `FindMonInOTPartyToSwitchIntoBattle`, which
-## [method Gen2Battle.baton_pass_target] makes. Answered before a replacement,
-## because a turn left standing here has not finished.
+## A Baton Pass that stopped the turn: `ForcePickSwitchMonInBattle` for the
+## player, [method Gen2Battle.baton_pass_target] for the enemy.
 func _answer_baton_pass() -> bool:
 	if _battle == null:
 		return false
@@ -4684,12 +4679,8 @@ func _answer_switch_offer() -> bool:
 	return true
 
 
-## `OfferSwitch`'s own `lb bc, 1, 7` through `_YesNoBox`, which stores the left
-## and top it is handed and adds five and four for the other two. The flags, the
-## options and the `db 1` that opens the cursor on YES are `YesNoMenuHeader`'s.
-## `InterpretTwoOptionMenu`'s fifteen frames are not spent, as no menu delay here
-## is. Below: `ItemSubmenu.UsableMenuHeader`'s two rows. Every item a battle lists
-## is usable, so `.UnusableMenuData`'s single QUIT row is unreachable here.
+## `OfferSwitch`'s `lb bc, 1, 7` through `_YesNoBox`, five and four added for
+## the far corner. Below: `ItemSubmenu.UsableMenuHeader`'s two rows.
 const PACK_ACTION_LEFT: int = 13
 const PACK_ACTION_TOP: int = 7
 const PACK_ACTION_SPAN: Vector2i = Vector2i(6, 4)
@@ -5121,12 +5112,8 @@ func _draw_menu_layer() -> void:
 			_menu_layer.visible = false
 
 
-## `DisplayCaughtContestMonStats`: the screen is cleared and the two boxes are
-## drawn over it, STOCK #MON above THIS #MON, each with a name, a level and a
-## HEALTH number, with `PlaceYesNoBox`' own box beside the lower one.
-## One image on the menu layer, the way the party page is: all three boxes go
-## into the tilemap on the cartridge too, and the text box under them is this
-## screen's own, which is where `ContestAskSwitchText` is already being said.
+## `DisplayCaughtContestMonStats`: STOCK #MON over THIS #MON, each a name, a
+## level and a HEALTH number, with `PlaceYesNoBox` beside the lower one.
 func _draw_contest_stats() -> void:
 	if _menu_page == null or _menu_page.font == null:
 		_menu_layer.visible = false
@@ -5188,12 +5175,8 @@ func _draw_contest_box(
 			"at": CONTEST_HP_AT + Vector2i(0, top),
 		},
 	])
-	## The title sits on the border row, and `PlaceString` writes its own leading
-	## and trailing spaces as $7f, which is a tile write like any other and blanks
-	## the frame under them. [method Gen2Font.draw_code] draws nothing for a
-	## space, on purpose, so the cells are cleared here first: without it the
-	## border shows through the gaps either side of STOCK #MON. Drawn after the
-	## box for the same reason the source places it after `Textbox`.
+	## `PlaceString`'s spaces are $7f writes that blank the border row under
+	## them, and [method Gen2Font.draw_code] draws nothing for a space.
 	var title_at: Vector2i = CONTEST_TITLE_AT + Vector2i(0, top)
 	_blank_tiles(indices, width, title_at, Gen2Text.encoded_length(title))
 	_menu_page.font.draw_text(
@@ -6426,12 +6409,8 @@ func _build_renderer() -> void:
 	_apply_renderer_interface_style()
 
 
-## Who fills the buffer SCREEN FILL gave the fight. The built-in arena is
-## `_BattleScene`'s own 160x144 and has nothing to put in a wider buffer, so the
-## screen fills the surround with the arena's own field. A renderer on the native
-## layer, staged on the map the encounter fired on, fills the surface itself and
-## the mask would only crop it. The interface does not move either way: panels,
-## bars and boxes stay in the rectangle [Gen2Screen] centres in the buffer.
+## Who fills the buffer SCREEN FILL gave the fight: the arena's own field
+## around `_BattleScene`'s 160x144, or a native renderer's own surface.
 func _apply_screen_fill() -> void:
 	_screen.interface_masked = Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
 
@@ -6616,12 +6595,8 @@ func _push_view() -> void:
 		## `BattleStart_TrainerHuds`' party balls and the frame they hang in.
 		"trainer_hud_balls": _hud_balls,
 		"trainer_hud_border": _hud_border,
-		## `wTilemap` and the video state an animation writes over it. The
-		## running animation's own copy is the live one: `RunBattleAnimScript`
-		## hands the tilemap in and takes it back out, and every effect that
-		## blanks, sinks or resizes a picture edits it a frame at a time, so a
-		## view given the screen's copy meanwhile watched an animation happen to
-		## a picture that never moved.
+		## The running animation's own `wTilemap` is the live one:
+		## `RunBattleAnimScript` hands it in and takes it back out.
 		"bg_map": _anim.background().bg_map if _anim != null else _bg_map,
 		"bg_vbank1": _bg_vbank1,
 		"bg_palette_maps": _background_maps(&"bg"),
@@ -6658,7 +6633,7 @@ func battler_side(side: int) -> Dictionary:
 	var backpic: String = _player_backpic if player_side else ""
 	var trainer_class: int = 0 if player_side else _enemy_trainer_pic
 	var species: int = _player if player_side else _enemy
-	var person: bool = not backpic.is_empty() if player_side else trainer_class > 0
+	var person: bool = not backpic.is_empty() if player_side else trainer_class != 0
 	var offset: float = 0.0
 	var kind: StringName = &"mon"
 	if _intro != null:

@@ -154,6 +154,8 @@ const TEXT_COIN_CASE: String = "coin_case"
 ## effect fails says `.Oak`.
 const TEXT_CANNOT_GET_OFF: String = "cannot_get_off"
 const TEXT_NO_CYCLING: String = "no_cycling"
+## `StartMenu_Item`'s first line, while `wLinkState` says a link room.
+const TEXT_CANNOT_USE_ITEMS: String = "cannot_use_items"
 const GEN1_BIKE_REFUSALS: Dictionary = {
 	&"cannot_get_off": TEXT_CANNOT_GET_OFF,
 	&"no_cycling_here": TEXT_NO_CYCLING,
@@ -161,6 +163,7 @@ const GEN1_BIKE_REFUSALS: Dictionary = {
 const GEN1_PACK_TEXTS: Dictionary = {
 	TEXT_OAK: ["item_use", "not_time"],
 	TEXT_CANNOT_GET_OFF: ["start_menu", "cannot_get_off"],
+	TEXT_CANNOT_USE_ITEMS: ["start_menu", "cannot_use_items"],
 	TEXT_NO_CYCLING: ["item_use", "no_cycling"],
 	TEXT_COIN_CASE: ["coin_case", "coins"],
 	TEXT_TOSS_ASK_QUANTITY: ["toss", "ok_to_toss"],
@@ -728,9 +731,15 @@ func _confirm_list() -> void:
 		return
 	match _menu.selected_kind():
 		Gen2WorldStartMenu.ITEM_PACK:
+			if _gen1_pack() and _world != null \
+				and _world.gen1_link_state() == Gen1Layout.LINK_STATE_IN_CABLE_CLUB:
+				_show_pack_result(_pack_text(TEXT_CANNOT_USE_ITEMS), false, _open_list_mode)
+				return
 			_open_pack_mode()
 		Gen2WorldStartMenu.ITEM_SAVE:
 			_open_save_confirm_mode()
+		Gen2WorldStartMenu.ITEM_RESET:
+			soft_reset_confirmed.emit()
 		Gen2WorldStartMenu.ITEM_QUIT:
 			_enter_save_mode(Mode.QUIT_ASK, QUIT_ASK_LINES, 0)
 		Gen2WorldStartMenu.ITEM_OPTION:

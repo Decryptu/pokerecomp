@@ -482,6 +482,8 @@ var is_trainer_battle: bool = false
 
 var in_battle_tower: bool = false
 var is_link_battle: bool = false
+## Yellow's `wUnknownSerialFlag_d499`, a COLOSSEUM2 cup's rules on the fight.
+var gen1_stadium_cup: bool = false
 var player_id: int = -1
 
 ## `wBattleType`, set by `loadvar VAR_BATTLETYPE` before `startbattle`.
@@ -975,6 +977,9 @@ func run_odds(runner_speed: int = -1) -> Dictionary:
 		return {"outcome": &"fled", "how": &"battle_type", "battle_type": battle_type}
 	if battle_type in NEVER_ESCAPES:
 		return {"outcome": &"blocked", "reason": &"battle_type", "battle_type": battle_type}
+	## `.can_escape` on `wLinkMode`: a forfeit, a loss unless both sides do.
+	if is_link_battle:
+		return {"outcome": &"fled", "how": &"forfeit"}
 	if is_trainer_battle:
 		return {"outcome": &"blocked", "reason": &"trainer"}
 
@@ -2385,7 +2390,10 @@ func _tick_encore(acting: Array, events: Array) -> void:
 ## status damage. [constant FAINTED] clears the member out of
 ## [member _participants] on either side; only [method _give_experience_for] is
 ## asymmetric.
+## `GiveExperiencePoints` returns on `wLinkMode` and `wInBattleTowerBattle`.
 func _award_experience(events: Array) -> void:
+	if is_link_battle or in_battle_tower:
+		return
 	for event: Dictionary in events.duplicate():
 		if StringName(event.get("type", "")) != FAINTED:
 			continue

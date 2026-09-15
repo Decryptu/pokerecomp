@@ -2836,7 +2836,16 @@ func gen1_snorlax_flute(map: int, cell: Vector2i) -> Dictionary:
 
 
 func gen1_new_game_warp() -> Dictionary:
-	var stored: Variant = _special_warps.get("new_game_warp", {})
+	return _special_warp(_special_warps.get("new_game_warp", {}))
+
+
+## One of `LoadSpecialWarpData`'s four cable club rows, by its name in
+## `Gen1Layout.CABLE_CLUB_WARP_ROWS`; empty outside Generation 1.
+func gen1_cable_club_warp(name: String) -> Dictionary:
+	return _special_warp((_special_warps.get("cable_club_warps", {}) as Dictionary).get(name, {}))
+
+
+func _special_warp(stored: Variant) -> Dictionary:
 	if not stored is Dictionary or (stored as Dictionary).is_empty():
 		return {}
 	var row: Dictionary = stored
