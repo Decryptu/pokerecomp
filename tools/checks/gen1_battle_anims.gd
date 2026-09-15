@@ -239,7 +239,7 @@ func _verify_tables(anims: Gen2BattleAnimData) -> void:
 
 
 func _verify_pound(anims: Gen2BattleAnimData) -> void:
-	var address: int = anims.pointer(Gen2BattleAnimData.GEN1_REGION, POUND_INDEX)
+	var address: int = anims.gen1_pointer(&"attack_anims", POUND_INDEX)
 	var byte: int = anims.byte_at(Gen2BattleAnimData.GEN1_REGION, address)
 	_r.check(
 		byte == POUND_DELAY and byte >> Gen1Layout.ANIM_TILESET_SHIFT == 0,
@@ -360,7 +360,7 @@ func _play_every_animation(anims: Gen2BattleAnimData) -> void:
 func _count_effects(
 	anims: Gen2BattleAnimData, index: int, missing: Dictionary, answered: Dictionary
 ) -> void:
-	var at: int = anims.pointer(Gen2BattleAnimData.GEN1_REGION, index)
+	var at: int = anims.gen1_pointer(&"attack_anims", index)
 	for _row: int in Gen2BattleAnimPlayer.GEN1_MAX_STEPS:
 		var byte: int = anims.byte_at(Gen2BattleAnimData.GEN1_REGION, at)
 		if byte == Gen1Layout.ANIM_END:

@@ -1,26 +1,26 @@
 class_name Gen2LinkScreen
 extends Control
 
-## `LinkCommunications` from the console the player used to the moment the room
-## lets them go: the trade screen's own two-list menu and `_DisplayLinkRecord`'s
-## one page. Embedded in the overworld the way the Hall of Fame viewer and BILL'S
-## PC are. The cable is [Gen2LinkTransport] and the commit is
-## [method Gen2WorldPartyHost.commit_link_trade]; this screen owns the cursor, the
-## boxes and the order they are shown in, and nothing else. The Colosseum is not
-## here: `Colosseum` runs the same opening and then a battle, which the world
-## screen already opens through its own battle host.
+## `LinkCommunications` and `TradeCenter_SelectMon`: the two-list menu, and
+## `_DisplayLinkRecord`'s page. The cable is [Gen2LinkTransport], the commit
+## [method Gen2WorldPartyHost.commit_link_trade]; the fight is the world's own
+## battle host, in front of which this only draws the versus box.
 
 signal closed()
-## `LinkMonStatsScreen`, which the overworld opens over this the way the party
-## menu opens one. [param side] is 0 for the player's list and 1 for the
-## partner's.
-signal stats_requested(side: int, index: int)
+## `LinkMonStatsScreen`'s and `TradeCenter_DisplayStats`' cry.
+signal cry_requested(species: int)
 ## One completed trade, as [method Gen2WorldPartyHost.commit_link_trade]
 ## reported it.
 signal traded(result: Dictionary)
+## `.doTrade`'s `MUSIC_SAFARI_ZONE`, by the role `EvolveMon` names it under.
+signal music_requested(music: int)
 
 const MODE_TRADE: int = 0
 const MODE_RECORD: int = 1
+## `CableClub_DoBattleOrTrade`'s PLEASE WAIT! and versus box in front of a fight.
+const MODE_BATTLE_WAIT: int = 2
+## `EndOfBattle`'s own versus box with YOU WIN, YOU LOSE or DRAW in it.
+const MODE_VERSUS_RESULT: int = 3
 
 ## `LinkCommunications`' own `ld c, 80 / call DelayFrames` twice, spent behind
 ## the "Please wait!" box while the two parties are exchanged.
@@ -38,9 +38,13 @@ const LIST_PARTNER: int = 1
 const FOOTER_STATS: int = 0
 const FOOTER_TRADE: int = 1
 
-## What the screen is showing, in the order `LinkTrade` reaches them.
+## What the screen is showing, in the order `LinkTrade` reaches them, then
+## `TradeCenter_SelectMon`'s own.
 enum STEP {
 	PLEASE_WAIT, SELECT, FOOTER, OFFERING, CONFIRM, RESULT, LEAVING, DONE,
+	GEN1_ASK_DELAY, GEN1_ASK, GEN1_WAITING, GEN1_TRADING, GEN1_MOVIE,
+	GEN1_COMPLETED_LEAD, GEN1_COMPLETED, GEN1_EXCHANGE, GEN1_CANCELED_DELAY,
+	GEN1_VERSUS_LEAD, GEN1_VERSUS, GEN1_TRANSITION,
 }
 
 var mode: int = MODE_TRADE
@@ -56,6 +60,9 @@ var _page: Gen2LinkPage = null
 var _background: TextureRect = null
 
 var _step: int = STEP.PLEASE_WAIT
+## `LinkMonStatsScreen`, or `StatusScreen` and `StatusScreen2`, over the lists.
+var _stats: Gen2MonStatsScreen = null
+var _stats_page: Gen2StatsScreenPage = null
 var _frames: int = 0
 var _list: int = LIST_PLAYER
 var _index: int = 0
@@ -68,6 +75,16 @@ var _message: Array = []
 var _message_spacing: int = Gen2LinkPage.MESSAGE_PRINTED_SPACING
 var _partner_choice: int = -1
 var _partner: Dictionary = {}
+## Generation 1 alone: what a `Waiting...!` goes on to, the question's pages
+## and `TryEvolvingMon`'s plan.
+var _gen1: bool = false
+var _gen1_after_waiting: int = STEP.SELECT
+var _gen1_pages: Array = []
+var _gen1_page: int = 0
+var _gen1_evolution: Dictionary = {}
+var _versus: Dictionary = {}
+## `BattleTransition`'s row 0, `.linkBattle`'s.
+var _transition: Gen2BattleTransition = null
 
 
 func set_context(
@@ -82,9 +99,12 @@ func set_context(
 	_world = world
 	_save = save
 	_transport = transport if transport != null else Gen2LinkTransport.new()
-	mode = screen_mode if screen_mode in [MODE_TRADE, MODE_RECORD] else MODE_TRADE
+	mode = screen_mode if screen_mode in [
+		MODE_TRADE, MODE_RECORD, MODE_BATTLE_WAIT, MODE_VERSUS_RESULT,
+	] else MODE_TRADE
 	persist = persist_writes
 	_page = Gen2LinkPage.from_data(data)
+	_gen1 = data != null and data.generation == RomRegistry.GEN1
 	_partner = _transport.peer.duplicate(true)
 
 
@@ -100,6 +120,12 @@ func _ready() -> void:
 	add_child(_background)
 	if mode == MODE_RECORD:
 		_step = STEP.DONE
+	elif mode == MODE_VERSUS_RESULT:
+		_step = STEP.GEN1_VERSUS
+		_frames = Gen1Layout.VERSUS_RESULT_FRAMES
+	elif _gen1:
+		_step = STEP.PLEASE_WAIT
+		_frames = Gen1Layout.CABLE_CLUB_EXCHANGE_FRAMES
 	elif not _transport.connected():
 		## A room whose cable has nothing on the other end never gets past
 		## `LinkCommunications`' own opening box; `Link_CheckCommunicationError`
@@ -117,10 +143,17 @@ func step() -> int:
 
 
 func advance_frame() -> void:
+	if _stats != null:
+		_stats.advance_animation()
+		_refresh()
+		return
 	if _frames <= 0:
 		return
 	_frames -= 1
 	if _frames > 0:
+		return
+	if _gen1:
+		_gen1_advance()
 		return
 	match _step:
 		STEP.PLEASE_WAIT:
@@ -152,6 +185,11 @@ func settle(limit: int = 600) -> void:
 func handle_button(button: int) -> bool:
 	if _page == null:
 		return false
+	if _stats != null:
+		_stats.handle_button(button)
+		if _stats != null:
+			_refresh()
+		return true
 	if mode == MODE_RECORD:
 		if button in [PokeButton.A, PokeButton.B]:
 			closed.emit()
@@ -160,11 +198,13 @@ func handle_button(button: int) -> bool:
 		return true
 	match _step:
 		STEP.SELECT:
-			return _press_select(button)
+			return _gen1_press_select(button) if _gen1 else _press_select(button)
 		STEP.FOOTER:
-			return _press_footer(button)
+			return _gen1_press_footer(button) if _gen1 else _press_footer(button)
 		STEP.CONFIRM:
 			return _press_confirm(button)
+		STEP.GEN1_ASK:
+			return _gen1_press_ask(button)
 	return true
 
 
@@ -195,7 +235,7 @@ func _press_select(button: int) -> bool:
 				## partner's row; the row the cursor is left on is the offer the
 				## transport answers with.
 				_partner_index = _index
-				stats_requested.emit(LIST_PARTNER, _index)
+				_open_stats(LIST_PARTNER, _index)
 			else:
 				_step = STEP.FOOTER
 				_footer = FOOTER_TRADE
@@ -233,7 +273,7 @@ func _press_footer(button: int) -> bool:
 		PokeButton.A:
 			if _footer == FOOTER_STATS:
 				_step = STEP.SELECT
-				stats_requested.emit(LIST_PLAYER, _index)
+				_open_stats(LIST_PLAYER, _index)
 			else:
 				_offer()
 	_refresh()
@@ -284,7 +324,10 @@ func _press_confirm(button: int) -> bool:
 			return true
 		PokeButton.A:
 			if _confirm == 0:
-				_commit()
+				if _gen1:
+					_gen1_start_trade()
+				else:
+					_commit()
 			else:
 				_cancel_trade()
 			return true
@@ -295,6 +338,9 @@ func _press_confirm(button: int) -> bool:
 func _cancel_trade() -> void:
 	_confirm = 0
 	_partner_choice = -1
+	if _gen1:
+		_gen1_cancel_trade()
+		return
 	_step = STEP.RESULT
 	_frames = WAITING_FRAMES
 	_place_message(Gen2LinkPage.TRADE_CANCELED)
@@ -332,6 +378,277 @@ func _leave() -> void:
 	_cancel_sent = true
 	_step = STEP.LEAVING
 	_frames = WAITING_FRAMES
+	_refresh()
+
+
+## `TradeCenter_SelectMon`: DOWN off a list's last row is
+## `.selectedCancelMenuItem`, RIGHT and LEFT swap lists with the row clamped.
+func _gen1_press_select(button: int) -> bool:
+	if _on_cancel:
+		match button:
+			PokeButton.A:
+				_gen1_leave()
+			PokeButton.UP:
+				_on_cancel = false
+				_list = LIST_PLAYER
+				_index = maxi(_rows(LIST_PLAYER) - 1, 0)
+		_refresh()
+		return true
+	match button:
+		PokeButton.A:
+			if _list == LIST_PARTNER:
+				_partner_index = _index
+				_open_stats(LIST_PARTNER, _index)
+			else:
+				_step = STEP.FOOTER
+				_footer = FOOTER_STATS
+		PokeButton.UP:
+			_index = maxi(_index - 1, 0)
+		PokeButton.DOWN:
+			if _index + 1 < _rows(_list):
+				_index += 1
+			else:
+				_on_cancel = true
+		PokeButton.RIGHT:
+			if _list == LIST_PLAYER:
+				_list = LIST_PARTNER
+				_index = mini(_index, maxi(_rows(LIST_PARTNER) - 1, 0))
+		PokeButton.LEFT:
+			if _list == LIST_PARTNER:
+				_list = LIST_PLAYER
+				_index = mini(_index, maxi(_rows(LIST_PLAYER) - 1, 0))
+	_refresh()
+	return true
+
+
+## `.selectStatsMenuItem` and `.selectTradeMenuItem`.
+func _gen1_press_footer(button: int) -> bool:
+	match button:
+		PokeButton.RIGHT:
+			_footer = FOOTER_TRADE
+		PokeButton.LEFT:
+			_footer = FOOTER_STATS
+		PokeButton.B:
+			_step = STEP.SELECT
+		PokeButton.A:
+			if _footer == FOOTER_STATS:
+				_step = STEP.SELECT
+				_open_stats(LIST_PLAYER, _index)
+			else:
+				_gen1_wait_then(STEP.GEN1_ASK_DELAY)
+	_refresh()
+	return true
+
+
+## `Serial_PrintWaitingTextAndSyncAndExchangeNybble`: the box and `ld c, 50`.
+func _gen1_wait_then(next: int) -> void:
+	_step = STEP.GEN1_WAITING
+	_gen1_after_waiting = next
+	_frames = Gen1Layout.TRADE_WAITING_FRAMES
+
+
+func _gen1_advance() -> void:
+	match _step:
+		STEP.PLEASE_WAIT:
+			if mode == MODE_BATTLE_WAIT:
+				_step = STEP.GEN1_VERSUS_LEAD
+				_frames = Gen1Layout.CABLE_CLUB_CLOSE_FRAMES
+			else:
+				_step = STEP.SELECT
+		STEP.GEN1_VERSUS_LEAD:
+			_step = STEP.GEN1_VERSUS
+			_frames = Gen1Layout.VERSUS_FRAMES
+			if _versus.is_empty():
+				set_versus(_player_rows(), _partner.get("party", []), "")
+		STEP.GEN1_VERSUS:
+			if mode != MODE_BATTLE_WAIT:
+				closed.emit()
+				return
+			_step = STEP.GEN1_TRANSITION
+			_transition = Gen2BattleTransition.create_gen1(0)
+			_frames = 1
+		STEP.GEN1_TRANSITION:
+			_transition.advance_frame()
+			if _transition.finished():
+				closed.emit()
+				return
+			_frames = 1
+		STEP.GEN1_WAITING:
+			_gen1_after_waiting_step()
+		STEP.GEN1_ASK_DELAY:
+			_gen1_open_ask()
+		STEP.GEN1_TRADING:
+			_gen1_commit()
+			return
+		STEP.GEN1_COMPLETED_LEAD:
+			_step = STEP.GEN1_COMPLETED
+			_frames = Gen1Layout.TRADE_COMPLETED_FRAMES
+			_place_message(String(_page.strings.get("trade_completed", "")))
+		STEP.GEN1_COMPLETED:
+			_step = STEP.GEN1_EXCHANGE
+			_frames = Gen1Layout.CABLE_CLUB_EXCHANGE_FRAMES
+		STEP.GEN1_EXCHANGE, STEP.GEN1_CANCELED_DELAY:
+			_step = STEP.SELECT
+			_message = []
+		STEP.LEAVING:
+			closed.emit()
+			return
+	_refresh()
+
+
+## Where a `Waiting...!` goes on to; `.choseTrade`'s `$f` is back to the lists.
+func _gen1_after_waiting_step() -> void:
+	match _gen1_after_waiting:
+		STEP.GEN1_ASK_DELAY:
+			_partner_choice = _transport_choice()
+			if _partner_choice < 0:
+				_step = STEP.SELECT
+				return
+			_step = STEP.GEN1_ASK_DELAY
+			_frames = Gen1Layout.TRADE_CENTER_DELAY_FRAMES
+		STEP.GEN1_TRADING:
+			_step = STEP.GEN1_TRADING
+			_frames = Gen1Layout.TRADE_CENTER_DELAY_FRAMES
+			music_requested.emit(Gen2EvolutionScreen.MUSIC_EVOLUTION)
+		STEP.GEN1_CANCELED_DELAY:
+			_step = STEP.GEN1_CANCELED_DELAY
+			_frames = Gen1Layout.TRADE_CANCELED_FRAMES
+		STEP.GEN1_COMPLETED_LEAD:
+			_step = STEP.GEN1_COMPLETED_LEAD
+			_frames = Gen1Layout.TRADE_COMPLETED_LEAD_FRAMES
+		STEP.LEAVING:
+			closed.emit()
+		_:
+			_step = STEP.SELECT
+
+
+## `TradeCenter_Trade`: `WillBeTradedText` at `bccoord 1, 14`, its `cont` a press.
+func _gen1_open_ask() -> void:
+	_step = STEP.GEN1_ASK
+	var incoming: Dictionary = _partner_mon(_partner_choice)
+	var text: String = _data.special_text("trade_center", "will_be_traded")
+	var mine: String = ""
+	if _save != null and _index < _save.party.size():
+		mine = _species_name((_save.party[_index] as Gen2SaveMon).species)
+	var layout: Dictionary = Gen1Layout.for_id(_data.id)
+	for buffer: Array in [
+		["name_of_player_mon_to_be_traded", mine],
+		["name_buffer", _species_name(int(incoming.get("species", 0)))],
+	]:
+		text = text.replace(
+			"%s%04X>" % [Gen2TextStream.RAM_MARKER, int(layout[buffer[0]])], String(buffer[1])
+		)
+	_message_spacing = Gen2LinkPage.MESSAGE_PRINTED_SPACING
+	_gen1_pages = Gen2TextLayout.lay_out(text, Gen2LinkPage.GEN1_MESSAGE_BOX.size.x, 2)
+	_gen1_page = 0
+	_message = Array(_gen1_pages[0]) if not _gen1_pages.is_empty() else []
+
+
+func _gen1_press_ask(button: int) -> bool:
+	if button not in [PokeButton.A, PokeButton.B]:
+		return true
+	_gen1_page += 1
+	if _gen1_page < _gen1_pages.size():
+		_message = Array(_gen1_pages[_gen1_page])
+	else:
+		_step = STEP.CONFIRM
+		_confirm = 0
+	_refresh()
+	return true
+
+
+## `.tradeConfirmed`: `$2` under `Waiting...!`, then the music and `ld c, 100`.
+func _gen1_start_trade() -> void:
+	_confirm = 0
+	_gen1_wait_then(STEP.GEN1_TRADING)
+	_refresh()
+
+
+## `TradeCanceled` under `Waiting...!`, then `.tradeCancelled`'s hundred.
+func _gen1_cancel_trade() -> void:
+	_place_message(String(_page.strings.get("trade_canceled", "")))
+	_gen1_wait_then(STEP.GEN1_CANCELED_DELAY)
+	_refresh()
+
+
+## `.doTrade`: the swap, then the movie, which the host says the end of.
+func _gen1_commit() -> void:
+	var result: Dictionary = Gen2WorldPartyHost.commit_link_trade(
+		_world, _save, _index, _partner_mon(_partner_choice),
+		{"name": String(_partner.get("name", "")), "link_mode": _link_mode()},
+		persist
+	)
+	_message = []
+	if not bool(result.get("ok", false)):
+		_gen1_cancel_trade()
+		return
+	_take_partner_mon(_partner_choice)
+	_partner_choice = -1
+	_index = mini(_index, maxi(_rows(LIST_PLAYER) - 1, 0))
+	_gen1_evolution = result.get("evolution_plan", {})
+	_step = STEP.GEN1_MOVIE
+	_frames = 0
+	_refresh()
+	traded.emit(result)
+
+
+## After the movie and `TryEvolvingMon`: `ClearScreen` and `Waiting...!`.
+func animation_closed() -> void:
+	if not _gen1 or _step != STEP.GEN1_MOVIE:
+		return
+	_gen1_wait_then(STEP.GEN1_COMPLETED_LEAD)
+	_refresh()
+
+
+## `SetupPlayerAndEnemyPokeballs`' two rows and `EndOfBattle`'s verdict.
+func set_versus(player_rows: Array, enemy_rows: Array, result: String) -> void:
+	_versus = {
+		"player": {"name": _save.player_name if _save != null else "", "balls": _versus_balls(player_rows)},
+		"enemy": {"name": String(_partner.get("name", "")), "balls": _versus_balls(enemy_rows)},
+		"result": result,
+	}
+	_refresh()
+
+
+static func _versus_balls(rows: Array) -> Array:
+	var out: Array = []
+	for slot: int in Gen2Party.MAX_SIZE:
+		out.append(Gen2LinkPage.versus_ball(rows[slot] if slot < rows.size() else {}))
+	return out
+
+
+func take_evolution_plan() -> Dictionary:
+	var plan: Dictionary = _gen1_evolution
+	_gen1_evolution = {}
+	return plan
+
+
+## `.cancelMenuItem_APressed`: `▷`, `$f` under `Waiting...!`, the room.
+func _gen1_leave() -> void:
+	_cancel_sent = true
+	_gen1_wait_then(STEP.LEAVING)
+	_refresh()
+
+
+## `LinkMonStatsScreen` and `TradeCenter_DisplayStats`, on the row chosen.
+func _open_stats(list: int, index: int) -> void:
+	var mons: Array = []
+	if list == LIST_PARTNER:
+		for row: Dictionary in _partner.get("party", []) as Array:
+			mons.append(Gen2SaveMon.from_dict(row))
+	elif _save != null:
+		mons.append_array(_save.party)
+	if mons.is_empty() or index < 0 or index >= mons.size():
+		return
+	_stats = Gen2MonStatsScreen.create(_data, mons, index)
+	_stats.closed.connect(_close_stats)
+	_stats.cry_requested.connect(cry_requested.emit)
+	_stats.announce()
+	_refresh()
+
+
+func _close_stats() -> void:
+	_stats = null
 	_refresh()
 
 
@@ -439,6 +756,14 @@ func _special_text(box: String, buffers: Dictionary) -> Array:
 func _refresh() -> void:
 	if _background == null or _page == null:
 		return
+	if _stats != null:
+		if _stats_page == null:
+			_stats_page = Gen2StatsScreenPage.from_data(_data)
+		var page: Image = Gen2StatsScreenPage.compose(_stats_page, _data, _stats)
+		if page != null:
+			Gen2PicImage.show(_background, page)
+			_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
+		return
 	var indices: PackedByteArray
 	if mode == MODE_RECORD:
 		indices = _page.draw_record(
@@ -448,6 +773,14 @@ func _refresh() -> void:
 		)
 	elif _step == STEP.PLEASE_WAIT:
 		indices = _page.draw_please_wait()
+	elif _step == STEP.GEN1_VERSUS_LEAD:
+		indices = _page.draw_gen1_trade({"blank": true})
+	elif _step == STEP.GEN1_VERSUS:
+		indices = _page.draw_gen1_versus(_versus)
+	elif _step == STEP.GEN1_TRANSITION:
+		indices = _page.draw_gen1_transition(_transition, _data.tile_indices("battle_transition"))
+	elif _gen1:
+		indices = _page.draw_gen1_trade(trade_state())
 	else:
 		indices = _page.draw_trade(trade_state())
 	Gen2PicImage.show(_background, _page.image(indices))
@@ -475,7 +808,14 @@ func trade_state() -> Dictionary:
 		"confirm": _confirm if _step == STEP.CONFIRM else -1,
 		"message": _message.duplicate(),
 		"message_spacing": _message_spacing,
-		"waiting": _step in [STEP.OFFERING, STEP.LEAVING],
+		"waiting": _step in [STEP.OFFERING, STEP.LEAVING, STEP.GEN1_WAITING,
+			STEP.GEN1_TRADING, STEP.GEN1_CANCELED_DELAY],
+		"held": _step in [STEP.FOOTER, STEP.GEN1_ASK_DELAY, STEP.GEN1_ASK, STEP.CONFIRM,
+			STEP.GEN1_TRADING, STEP.GEN1_CANCELED_DELAY] \
+			or (_step == STEP.GEN1_WAITING and _gen1_after_waiting != STEP.LEAVING),
+		"blank": _step in [STEP.GEN1_MOVIE, STEP.GEN1_COMPLETED_LEAD, STEP.GEN1_COMPLETED,
+			STEP.GEN1_EXCHANGE]
+			or (_step == STEP.GEN1_WAITING and _gen1_after_waiting == STEP.GEN1_COMPLETED_LEAD),
 	}
 
 

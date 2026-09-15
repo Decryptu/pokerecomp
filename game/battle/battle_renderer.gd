@@ -314,7 +314,9 @@ func _ensure_pixels() -> void:
 		bool(_view.get("enemy_minimized", false)),
 	]
 	if enemy_key != _enemy_pixels_key:
-		if int(enemy_key[3]) > 0:
+		if int(enemy_key[3]) == Gen2BattleScreen.LINK_OPPONENT_PIC:
+			_enemy_pixels = padded_pic(_data, _data.player_frontpic(), Gen2BattleScreenMap.ENEMY_SIDE)
+		elif int(enemy_key[3]) > 0:
 			_enemy_pixels = padded_pic(_data,
 				_data.trainer_pic(int(enemy_key[3])), Gen2BattleScreenMap.ENEMY_SIDE
 			)

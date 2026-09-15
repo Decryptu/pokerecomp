@@ -168,7 +168,9 @@ static func create_gen1(
 ) -> Gen2BattleAnimPlayer:
 	if anim_data == null or not anim_data.gen1():
 		return null
-	var address: int = anim_data.pointer(Gen2BattleAnimData.GEN1_REGION, index)
+	if index < 0 or index >= anim_data.count(Gen2BattleAnimData.GEN1_REGION):
+		return null
+	var address: int = anim_data.gen1_pointer(&"attack_anims", index)
 	if address < 0:
 		return null
 	var player: Gen2BattleAnimPlayer = _seeded_gen1(anim_data, index, on_enemy_turn)

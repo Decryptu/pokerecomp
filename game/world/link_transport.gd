@@ -113,13 +113,9 @@ func peer_room(chosen_room: int) -> int:
 	return int(peer.get("room", chosen_room))
 
 
-## Which row of its own party the peer offers in a trade. A save file has nobody
-## behind it to choose, so the base transport answers with the row the player
-## left the partner's list on, which is the list `LinkTrade_OTPartyMenu` already
-## lets them move a cursor through; a network transport answers with the row
-## that actually came back in `wOtherPlayerLinkMode`.
-##
-## [param context] carries `ot_cursor` and `ot_count`.
+## Which row the peer offers. A save file has nobody to choose, so it is the
+## row the player left the partner's list on; a network transport answers with
+## `wOtherPlayerLinkMode`. [param context] carries `ot_cursor` and `ot_count`.
 func choose_trade_slot(context: Dictionary) -> int:
 	var rows: int = int(context.get("ot_count", 0))
 	if rows <= 0:
@@ -140,7 +136,8 @@ static func peer_from_save(save: Gen2SaveData, room: int = CABLECLUBROOM_NULL) -
 		"name": save.player_name,
 		"id": save.player_id,
 		"gender": save.gender,
-		"generation": GENERATION_2,
+		"generation": GENERATION_1 if RomRegistry.generation_for(save.game_id) \
+			== RomRegistry.GEN1 else GENERATION_2,
 		"room": room,
 		"party": party,
 		"slot": save.slot,

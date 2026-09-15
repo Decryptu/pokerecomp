@@ -23,13 +23,8 @@ var world_day: int = 0
 var world_hour: int = 6
 var world_minute: int = 0
 var dst_enabled: bool = false
-## The host second this save was written at, stamped by [method Gen2SaveStore.save]
-## rather than taken here: a snapshot is compared frame for frame by
-## `tools/replay_world.gd`, and a wall clock inside one would make two identical
-## runs differ. It is what lets a world opened later catch up to the time that
-## passed while the game was closed (`Gen2WorldClock.catch_up`); zero in a save
-## written before it was kept, which reads as "resume where it stopped" rather
-## than as 1970.
+## The host second [method Gen2SaveStore.save] wrote at, which
+## `Gen2WorldClock.catch_up` reads; zero resumes where the clock stopped.
 var world_clock_stamp: float = 0.0
 ## What a replay needs beside the state: the seed the world's generators were
 ## built from and how many hardware frames it has been pumped for. Both are zero
@@ -84,6 +79,17 @@ static func from_world(world: Gen2WorldAPI) -> Gen2WorldSnapshot:
 	out.player_facing = world.player_facing
 	out.movement_mode = world.movement_mode
 	out.player_sprite_number = world.player_sprite_number
+	out.gen1_last_map = world.gen1_last_map()
+	## A Generation 1 link room is never in SRAM: `SavePartyAndDexData` is all
+	## a trade writes, so the cell on disk stays the receptionist's.
+	var saved: Dictionary = world.gen1_saved_position()
+	if not saved.is_empty():
+		out.map_id = saved["map"]
+		out.player_cell = saved["cell"]
+		out.player_facing = int(saved["facing"])
+		out.movement_mode = saved["movement_mode"]
+		out.player_sprite_number = int(saved["sprite"])
+		out.gen1_last_map = int(saved["last_map"])
 	var clock: Dictionary = world.world_clock()
 	out.world_day = int(clock.get("day", 0))
 	out.world_hour = int(clock.get("hour", 6))
@@ -92,7 +98,6 @@ static func from_world(world: Gen2WorldAPI) -> Gen2WorldSnapshot:
 	out.random_seed = world.random_seed
 	out.frame_number = world.frame_number
 	out.last_spawn_map = world.last_spawn_map
-	out.gen1_last_map = world.gen1_last_map()
 	out.gen1_last_blackout_map = world.gen1_last_blackout_map()
 	out.gen1_map_pal_offset = world.gen1_map_pal_offset
 	out.gen1_rival_name = world.gen1_rival_name

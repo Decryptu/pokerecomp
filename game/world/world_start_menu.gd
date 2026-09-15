@@ -1,14 +1,9 @@
 class_name Gen2WorldStartMenu
 extends RefCounted
 
-## Scene-free model of the cartridge start menu (engine/menus/start_menu.asm).
-## `StartMenu.SetUpMenuItems` appends items in a fixed source order, skipping only
-## what its own gate refuses: Pokedex behind STATUSFLAGS_POKEDEX_F, Pokemon behind
-## a non-zero wPartyCount, Pokegear behind POKEGEAR_OBTAINED_F. QUIT stands where
-## SAVE does while the Bug Catching Contest runs and PACK leaves the list with it.
-## Entries registered on [Gen2ModHost] are spliced in ahead of EXIT, so a mod can
-## add a screen without reordering anything the cartridge shipped.
-## `STATICMENU_WRAP` is source flag data, so the cursor wraps at both ends.
+## `StartMenu.SetUpMenuItems` (engine/menus/start_menu.asm) as scene-free data:
+## the source order, each row behind its own gate, QUIT in SAVE's slot during the
+## Bug Catching Contest, and [Gen2ModHost]'s entries spliced in ahead of EXIT.
 
 ## constants/engine_flags.asm: ENGINE_POKEGEAR = 4, ENGINE_POKEDEX = 11. Both
 ## indices are identical in pokecrystal and pokegold (unlike the badge and
@@ -27,6 +22,9 @@ const ITEM_PACK: StringName = &"pack"
 const ITEM_POKEGEAR: StringName = &"pokegear"
 const ITEM_PLAYER: StringName = &"player"
 const ITEM_SAVE: StringName = &"save"
+## `StartMenuResetText`, the SAVE slot's other word while BIT_LINK_CONNECTED
+## stands: `StartMenu_SaveReset` is `jp Init` then.
+const ITEM_RESET: StringName = &"reset"
 const ITEM_OPTION: StringName = &"option"
 const ITEM_EXIT: StringName = &"exit"
 ## `STARTMENUITEM_QUIT`, the Bug Catching Contest's own row: it retires from the
@@ -58,14 +56,9 @@ const GATE_POKEGEAR: StringName = &"pokegear"
 ## while a contest runs, because the only ball a contest throws is the park's.
 const GATE_NO_CONTEST: StringName = &"no_contest"
 
-## `SetUpMenuItems` in source order, as data rather than a run of appends, so the
-## host's registered entries can be spliced in without the order becoming a
-## question. EXIT stays last of the source's own: it is what closes the menu, and
-## the source never puts anything after it. Only [constant ITEM_LAUNCHER], which
-## the source has no row for at all, is below it. The labels are `.PokedexString`
-## and its siblings verbatim; `#` is the charmap's own $54 and expands to "POKe",
-## and `<PLAYER>` is filled in by [method build] because `PlaceString` reads
-## `wPlayerName` for it.
+## `SetUpMenuItems` in source order, EXIT last of the source's own and only
+## [constant ITEM_LAUNCHER] below it. The labels are `.PokedexString` and its
+## siblings verbatim; `<PLAYER>` is filled by [method build].
 const SOURCE_ENTRIES: Array[Dictionary] = [
 	{"kind": ITEM_POKEDEX, "label": "#DEX", "available": true, "gate": GATE_POKEDEX},
 	{"kind": ITEM_POKEMON, "label": "#MON", "available": true, "gate": GATE_PARTY},
@@ -107,12 +100,8 @@ var cursor: int = 0
 var _items: Array = []
 
 
-## `party_count`, `pokedex_obtained` and `pokegear_obtained` come from the
-## live world (party summary and engine flags 11 and 4); this stays scene-free
-## the same way Gen2WorldMenu does. `previous_cursor` mirrors the source's
-## `wBattleMenuCursorPosition`, which survives a reopen after a submenu closes;
-## it is clamped to the rebuilt list so a shrunk list cannot leave the cursor
-## out of range.
+## `previous_cursor` is `wBattleMenuCursorPosition`, which survives a reopen,
+## clamped to the rebuilt list.
 static func build(
 	party_count: int,
 	pokedex_obtained: bool,
@@ -122,6 +111,7 @@ static func build(
 	field_moves: bool = false,
 	bug_contest: bool = false,
 	generation: int = RomRegistry.GEN2,
+	link_connected: bool = false,
 ) -> Gen2WorldStartMenu:
 	var menu := Gen2WorldStartMenu.new()
 	var passes: Dictionary = {
@@ -164,6 +154,9 @@ static func build(
 		if kind == ITEM_SAVE and bug_contest:
 			kind = ITEM_QUIT
 			label = "QUIT"
+		elif kind == ITEM_SAVE and link_connected:
+			kind = ITEM_RESET
+			label = "RESET"
 		rows.append(_entry(kind, label, bool(entry["available"])))
 	menu._items = rows
 	menu.cursor = clampi(previous_cursor, 0, maxi(rows.size() - 1, 0))
@@ -186,6 +179,7 @@ static func from_world(world: Gen2WorldAPI, previous_cursor: int = 0) -> Gen2Wor
 		not world.item_field_move_offers().is_empty(),
 		world.bug_contest_active(),
 		world.data.generation if world.data != null else RomRegistry.GEN2,
+		world.gen1_link_connected(),
 	)
 	menu.load_descriptions(world.data)
 	return menu

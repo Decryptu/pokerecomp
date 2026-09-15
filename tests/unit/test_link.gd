@@ -306,6 +306,46 @@ func test_a_link_battle_pays_no_badge_boost() -> void:
 	assert_eq(battle.player.stat("attack"), int(battle.player.stats["attack"]))
 
 
+## `.can_escape` on `wLinkMode` and `TryRunningFromBattle`'s LINK_STATE_BATTLING:
+## RUN is a forfeit, and `GiveExperiencePoints` returns on `wLinkMode`.
+func test_a_link_battle_is_left_at_will_and_pays_no_experience() -> void:
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data,
+		{"values": {
+			"kind": &"link_battle", "trainer_name": "BLUE",
+			"enemy_party": [_mon(SPECIES_TWO).to_dict()],
+		}},
+		Gen2WorldBattleAdapter.fallback_party(_data, SPECIES_ONE, 5, 1),
+		RandomNumberGenerator.new(), 0xFFFF
+	)
+	assert_true(bool(prepared.get("ok", false)), String(prepared.get("reason", "")))
+	var battle: Gen2Battle = prepared["battle"]
+	assert_eq(StringName(battle.run_odds().get("outcome", &"")), &"fled")
+	assert_eq(StringName(battle.run_odds().get("how", &"")), &"forfeit")
+	var before: int = battle.player.exp
+	battle.enemy.hp = 1
+	var fainted: bool = false
+	for _turn: int in 8:
+		for event: Dictionary in battle.take_actions(Gen2Battle.use_move(0), Gen2Battle.use_move(0)):
+			fainted = fainted or StringName(event.get("type", &"")) == Gen2Battle.FAINTED
+		if fainted:
+			break
+	assert_true(fainted, "the partner's last Pokemon never fainted")
+	assert_eq(battle.player.exp, before)
+
+
+## Yellow's `SleepEffect` under a COLOSSEUM2 cup `and $3`s the counter.
+func test_a_stadium_cup_caps_sleep_at_three_turns() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var highest: int = 0
+	for _roll: int in 200:
+		var turns: int = Gen2Status.roll_sleep(rng, false, true)
+		assert_true(turns >= 1 and turns <= 3, "rolled %d" % turns)
+		highest = maxi(highest, turns)
+	assert_eq(highest, 3)
+
+
 ## A link battle is a whole-party exchange with no trainer class behind it,
 ## which is `battle_tower`'s shape one caller further out.
 func test_a_link_battle_request_builds_the_peers_party() -> void:

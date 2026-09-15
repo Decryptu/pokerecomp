@@ -70,6 +70,12 @@ var connection_status: int = CONNECTION_NOT_ESTABLISHED
 ## The peer's own block from the last exchange: its name, id and party. Empty
 ## until a room has been agreed.
 var peer: Dictionary = {}
+## Generation 1's `wLinkState` and BIT_LINK_CONNECTED, which only `Init` clears.
+var gen1_link_state: int = Gen1Layout.LINK_STATE_NONE
+var gen1_link_connected: bool = false
+## Yellow's `wUnknownSerialFlag_d499`: the Stadium cup chosen plus one, which
+## `SleepEffect` reads.
+var gen1_stadium_cup: int = 0
 
 
 ## `SetBitsForLinkTradeRequest` and `SetBitsForBattleRequest`, which are one
@@ -98,13 +104,9 @@ func wait_for_linked_friend(transport: Gen2LinkTransport) -> int:
 	return 1
 
 
-## `CheckLinkTimeout_Receptionist`, which sets `wPlayerLinkAction` to 1 and runs
-## `Link_CheckCommunicationError`: FALSE is a link that dropped while the two
-## players were saving, and the peer's own action lands in
-## `wOtherPlayerLinkMode` for the `readmem` that follows.
-## A Gen 1 game has no `wPlayerLinkAction` to raise, so what comes back from one
-## is zero, which is the whole of the "can't link to the past" branch and the
-## whole of what makes the Time Capsule legal.
+## `CheckLinkTimeout_Receptionist`: FALSE is a link that dropped while both
+## saved, and `wOtherPlayerLinkMode` is zero from a Gen 1 game, which is the
+## whole of the "can't link to the past" branch.
 func check_link_timeout(transport: Gen2LinkTransport) -> int:
 	player_link_action = 1
 	if transport == null or not transport.connected():
@@ -183,13 +185,9 @@ func which_chris(transport: Gen2LinkTransport) -> int:
 	return 1 if side == USING_EXTERNAL_CLOCK else 0
 
 
-## `CheckTimeCapsuleCompatibility`, in the order the routine runs its three
-## tests: every species slot first, then mail, then moves. The answer is the
-## wScriptVar value and the party slot the box names, which is the slot the test
-## stopped on rather than the first slot of the party.
-## [param party] is the world's own party mirror: the parallel `species`,
-## `held_items` and `moves` arrays [method Gen2WorldAPI.set_party_summary]
-## carries, which is where every other party-reading special gets its answer.
+## `CheckTimeCapsuleCompatibility` in its own order, species then mail then
+## moves; the slot named is the one the test stopped on. [param party] is
+## [method Gen2WorldAPI.set_party_summary]'s mirror.
 static func time_capsule_compatibility(party: Dictionary) -> Dictionary:
 	var species: Array = party.get("species", [])
 	var held_items: Array = party.get("held_items", [])
@@ -220,14 +218,10 @@ static func _incompatible(value: int, slot: int, species: int, move: int) -> Dic
 	return {"value": value, "slot": slot, "species": species, "move": move}
 
 
-## `ValidateOTTrademon`: the offered Pokemon's own species must match the row the
-## party list names it by, unless that row says EGG, and its level must be one a
-## level can be. The Time Capsule adds a third test, the only one that needs the
-## peer to say anything about itself: a Gen 1 game reports the typing it holds,
-## and one whose typing this generation changed is refused, Magnemite and Magneton
-## being excused by name because theirs is that change. [param mon] carries `types`
-## only when the peer is a Gen 1 game, so a Gen 2 peer skips the test rather than
-## failing an empty one.
+## `ValidateOTTrademon`: the species must match the list's row unless it says
+## EGG, the level must be legal, and in the Time Capsule the Gen 1 typing must
+## still hold, Magnemite and Magneton excused by name. [param mon] carries
+## `types` only from a Gen 1 peer.
 static func validate_ot_trademon(
 	mon: Dictionary, listed_species: int, listed_is_egg: bool, mode: int,
 	base_types: Array = []
@@ -247,11 +241,8 @@ static func validate_ot_trademon(
 		and int(reported[1]) == int(base_types[1])
 
 
-## `CheckAnyOtherAliveMonsForTrade`. A trade that would leave this side with
-## nothing that can fight is refused, so the offered slot is skipped here and
-## the incoming Pokemon is what answers for it.
-## Carry set is the refusal in the source, so this answers the opposite: TRUE
-## means the trade may go ahead.
+## `CheckAnyOtherAliveMonsForTrade`, answered the other way up: TRUE lets the
+## trade go ahead.
 static func any_other_alive_mons_for_trade(
 	party: Array, offered_slot: int, incoming: Dictionary
 ) -> bool:
@@ -263,13 +254,8 @@ static func any_other_alive_mons_for_trade(
 	return int(incoming.get("hp", 0)) > 0
 
 
-## `AddLastLinkBattleToLinkRecord`. The totals rise first, then the opponent's
-## own row: an existing row for that ID and name is raised, and a new opponent
-## takes the last of the five, which `.FindOpponentAndAppendRecord`'s sort has
-## kept for the least successful one. Both counters stop at
-## [constant MAX_LINK_RECORD] rather than wrapping.
-## [param result] is `wins`, `losses` or `draws`, which is `wBattleResult`'s own
-## WIN/LOSE/DRAW one name further on.
+## `AddLastLinkBattleToLinkRecord`: the totals, then the opponent's row, a new
+## one taking the last of the five; both stop at [constant MAX_LINK_RECORD].
 static func add_battle_to_record(
 	record: Dictionary, opponent: Dictionary, result: StringName
 ) -> Dictionary:

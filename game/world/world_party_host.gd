@@ -422,9 +422,11 @@ static func commit_link_trade(
 	var party_rows: Array = []
 	for mon: Gen2SaveMon in candidate.party:
 		party_rows.append(mon.to_dict())
-	if not Gen2LinkSession.any_other_alive_mons_for_trade(
-		party_rows, offered_slot, incoming
-	):
+	## `TradeCenter_Trade` asks nothing of the rest of the party.
+	if world.data.generation != RomRegistry.GEN1 \
+		and not Gen2LinkSession.any_other_alive_mons_for_trade(
+			party_rows, offered_slot, incoming
+		):
 		return _failure(&"trade_would_leave_no_battler", {"slot": offered_slot})
 
 	var given: Gen2SaveMon = candidate.party[offered_slot]
@@ -432,6 +434,7 @@ static func commit_link_trade(
 	candidate.party.remove_at(offered_slot)
 	candidate.party.append(received)
 	var evolution: Dictionary = {}
+	var plan: Dictionary = {}
 	if not received.is_egg:
 		var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(
 			world.data, received
@@ -439,6 +442,7 @@ static func commit_link_trade(
 		if battle_mon != null:
 			var row: Dictionary = Gen2Evolution.trade_evolution(world.data, battle_mon)
 			if not row.is_empty():
+				plan = _trade_evolution_plan(world.data, received, candidate.party.size() - 1, row)
 				evolution = apply_evolution(world.data, received, row)
 
 	var before: Gen2WorldSnapshot = world.snapshot()
@@ -462,11 +466,32 @@ static func commit_link_trade(
 		"received_slot": save.party.size() - 1,
 		"partner": String(peer.get("name", "")),
 		"evolution": evolution.duplicate(true),
+		"evolution_plan": plan,
 		"animation": trade_animation_context(
 			world.data, given, received, save.player_name,
 			String(peer.get("name", "")),
 			int(peer.get("link_mode", Gen2LinkSession.LINK_TRADECENTER))
 		),
+	}
+
+
+## `EvolvePokemon` and `TryEvolvingMon` under `wForceEvolution`, so B cancels
+## nothing; the row is written here, the way a stone's is.
+static func _trade_evolution_plan(
+	data: GameData, mon: Gen2SaveMon, index: int, row: Dictionary
+) -> Dictionary:
+	return {
+		"index": index,
+		"old_species": mon.species,
+		"new_species": int(row.get("target", 0)),
+		"level": mon.level,
+		"evolving_name": mon.nickname if not mon.nickname.is_empty() \
+			else String(data.species(mon.species).get("name", "")),
+		"statused": Gen2Evolution.is_statused(mon),
+		"shiny": Gen2Stats.is_shiny(mon.dvs),
+		"can_cancel": false,
+		"row": row.duplicate(true),
+		"apply": false,
 	}
 
 

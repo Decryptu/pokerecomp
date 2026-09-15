@@ -3935,6 +3935,9 @@ var _gen1_dust_facing: int = -1
 ## boxes are imported under.
 const GEN1_POKECENTER_RUN: String = "pokecenter"
 const GEN1_CABLE_CLUB_RUN: String = "cable_club"
+const GEN1_CABLE_CLUB_STRINGS: String = "cable_club_strings"
+const GEN1_LINK_RUN: String = "link"
+const GEN1_COLOSSEUM2_RUN: String = "colosseum2"
 const GEN1_PICK_UP_RUN: String = "pick_up_item"
 ## `InGameTradeTextPointers`' fifteen and the two boxes the swap prints, which
 ## both generations' trades read under one run name.
@@ -3978,6 +3981,9 @@ var _gen1_entry_steps: Array = []
 ## `wCurrentMapScriptFlags` bits a script set back for the next `RunMapScript`.
 var _gen1_map_load_pending: int = 0
 var _gen1_volatile: Dictionary = {}
+## Where `LoadSpecialWarpData` took the player from, which is the cell SRAM
+## keeps: `SavePartyAndDexData` never rewrites it. Empty outside a link room.
+var _gen1_cable_club_origin: Dictionary = {}
 var _gen1_last_boulder: int = -1
 var _gen1_last_sprite_index: int = -1
 var _gen1_text_table: int = -1
@@ -4007,6 +4013,8 @@ const GEN1_WAITING_STEPS: Array[StringName] = [&"request", &"choice", &"wait"]
 ## drops the whole interaction, the way an undecoded row does.
 const GEN1_SCRIPT_NODES: Dictionary = {
 	"text": &"_gen1_node_text",
+	"serial_status": &"_gen1_node_serial_status",
+	"link_state": &"_gen1_node_link_state",
 	"flag": &"_gen1_node_flag",
 	"branch": &"_gen1_node_branch",
 	"flag_test": &"_gen1_node_flag_test",
@@ -4480,7 +4488,12 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 
 
 func _gen1_node_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	steps.append(_gen1_script_box(node, String(run["named"]), run.get("buffers", {})))
+	var box: Dictionary = _gen1_script_box(node, String(run["named"]), run.get("buffers", {}))
+	steps.append(box)
+	if run.has("cable_club_run"):
+		box["press"] = false
+		steps.append_array(_gen1_cable_club_run_steps(int(run["cable_club_run"])))
+		run.erase("cable_club_run")
 	return true
 
 
@@ -6304,22 +6317,321 @@ func _gen1_vending_steps() -> Array:
 	}}]
 
 
-## `CableClubNPC`. Without the Pokedex it is the welcome, sixty frames and
-## `CableClubNPCMakingPreparationsText`; with it, `.establishConnectionLoop`
-## spends `wLinkTimeoutCounter` on a partner that is not there and lands on
-## `.failedToEstablishConnection`. Nothing past that has a caller.
+## `CableClubNPC`: no Pokedex, or Yellow's follower not walking, is
+## `MakingPreparationsText`; nobody on the cable is `wLinkTimeoutCounter` and
+## `.failedToEstablishConnection`; a partner is `.establishedConnection`.
 func _gen1_cable_club_steps() -> Array:
-	var linked: bool = state != null \
-		and state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX)
+	var ready: bool = state != null \
+		and state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX) \
+		and (pikachu == null or pikachu.following())
+	var welcome: Dictionary = _gen1_facility_box(GEN1_CABLE_CLUB_RUN, "welcome")
+	if not ready:
+		return [
+			welcome,
+			_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PREPARING_FRAMES),
+			_gen1_facility_box(GEN1_CABLE_CLUB_RUN, "making_preparations"),
+		]
+	if state.link_transport().status() == Gen2LinkTransport.CONNECTION_NOT_ESTABLISHED:
+		return [
+			welcome,
+			_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_TIMEOUT_FRAMES),
+			_gen1_facility_box(GEN1_CABLE_CLUB_RUN, "area_reserved"),
+		]
+	welcome["press"] = false
 	return [
-		_gen1_facility_box(GEN1_CABLE_CLUB_RUN, "welcome"),
-		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_TIMEOUT_FRAMES \
-			if linked else Gen1Layout.CABLE_CLUB_PREPARING_FRAMES),
-		_gen1_facility_box(
-			GEN1_CABLE_CLUB_RUN,
-			"area_reserved" if linked else "making_preparations"
-		),
+		welcome,
+		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_CONNECTED_FRAMES),
+		{
+			"type": &"choice",
+			"text": gen1_filled_text(data.special_text(GEN1_CABLE_CLUB_RUN, "please_apply")),
+			"yes": _gen1_cable_club_save_steps(),
+			"no": [
+				_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_CLOSE_FRAMES),
+				_gen1_facility_box(GEN1_CABLE_CLUB_RUN, "come_again"),
+			],
+		},
 	]
+
+
+## YES: `SaveGameData` writes silently, `SFX_SAVE`, `PleaseWaitText`'s
+## `text_pause`, and `Serial_SyncAndExchangeNybble`, which a save-file peer answers.
+func _gen1_cable_club_save_steps() -> Array:
+	var please_wait: Dictionary = _gen1_facility_box(GEN1_CABLE_CLUB_RUN, "please_wait")
+	please_wait["press"] = false
+	return [
+		{"type": &"request", "values": {"kind": &"quick_save_requested", "values": {}}},
+		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PAUSE_FRAMES, {
+			"sounds": [{"frame": 0, "gen1": true, "index": Gen1Layout.SFX_SAVE}],
+		}),
+		please_wait,
+		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PAUSE_FRAMES),
+	] + _gen1_link_menu_steps()
+
+
+## `LinkMenu`: BIT_LINK_CONNECTED, `WhereWouldYouLikeText` under
+## `CableClubOptionsText`'s rows; B and CANCEL are `.choseCancel`.
+func _gen1_link_menu_steps() -> Array:
+	var rows: Array = []
+	for label: String in data.special_text(GEN1_CABLE_CLUB_STRINGS, "options").split("\n"):
+		rows.append({"text": label})
+	var box: Rect2i = Gen1Layout.LINK_MENU_BOX_YELLOW if rows.size() > 3 \
+		else Gen1Layout.LINK_MENU_BOX
+	var answers: Array = []
+	for row: int in rows.size():
+		answers.append(_gen1_link_menu_answer(row, rows.size()))
+	answers.append(_gen1_link_menu_cancel_steps())
+	var question: Dictionary = _gen1_facility_box(GEN1_LINK_RUN, "where_to")
+	return [
+		{"type": &"link_connected", "set": true},
+		{"type": &"request", "menu": true, "answers": answers, "values": {
+			"kind": &"gen1_menu_requested", "values": {
+				"box": {"x": box.position.x, "y": box.position.y,
+					"width": box.size.x, "height": box.size.y},
+				"entries_at": {"x": box.position.x + 2, "y": box.position.y + 2},
+				"labels": [], "rows": rows, "text": String(question["text"]),
+				"hold_frames": Gen1Layout.LINK_MENU_HOLD_FRAMES,
+			},
+		}},
+	]
+
+
+## One row's own walk; Yellow's COLOSSEUM2 is `.asm_f5963`'s handshake first.
+func _gen1_link_menu_answer(row: int, rows: int) -> Array:
+	if row == rows - 1:
+		return _gen1_link_menu_cancel_steps()
+	if row == Gen1Layout.LINK_MENU_COLOSSEUM2:
+		return [
+			_gen1_wait_step(&"cable_club_wait",
+				Gen1Layout.CUP_HANDSHAKE_FRAMES + Gen1Layout.CUP_MENU_OPEN_FRAMES),
+			{"type": &"cup_menu"},
+		]
+	return _gen1_link_room_steps(row)
+
+
+## `.next`: `PleaseWaitText`, `PrepareForSpecialWarp` and the room's own row.
+func _gen1_link_room_steps(row: int) -> Array:
+	var please_wait: Dictionary = _gen1_facility_box(GEN1_LINK_RUN, "please_wait")
+	please_wait["press"] = false
+	return [
+		please_wait,
+		_gen1_wait_step(&"cable_club_wait",
+			Gen1Layout.LINK_MENU_WAIT_FRAMES + Gen1Layout.LINK_MENU_WARP_FRAMES),
+		{"type": &"link_state", "value": Gen1Layout.LINK_STATE_IN_CABLE_CLUB},
+		{"type": &"special_warp", "name": Gen1Layout.CABLE_CLUB_WARP_ROWS[
+			row * 2 if row == Gen1Layout.LINK_MENU_TRADE else 2
+		]},
+	]
+
+
+## `Func_f531b`: a row walked to its cup's verdict on both parties, a refusal
+## reopening the menu; CANCEL and B are `asm_f547f`'s carry.
+func _gen1_cup_menu_steps() -> Array:
+	state.link_session().gen1_stadium_cup = 0
+	var rows: Array = []
+	for label: String in data.special_text(GEN1_CABLE_CLUB_STRINGS, "rows").split("\n"):
+		rows.append({"text": label})
+	var cup_rules: Dictionary = {}
+	for cup: int in Gen1Layout.CUP_COUNT:
+		cup_rules[cup] = Array(data.special_text(GEN1_CABLE_CLUB_STRINGS, "rules_%d" % cup).split("\n"))
+	var answers: Array = []
+	for cup: int in Gen1Layout.CUP_COUNT:
+		answers.append(_gen1_cup_answer(cup))
+	answers.append(_gen1_link_menu_cancel_steps())
+	answers.append(_gen1_link_menu_cancel_steps())
+	return [{"type": &"request", "menu": true, "answers": answers, "values": {
+		"kind": &"gen1_menu_requested", "values": {
+			"box": _gen1_box(Gen1Layout.CUP_MENU_BOX),
+			"entries_at": {"x": Gen1Layout.CUP_MENU_ROWS_AT.x, "y": Gen1Layout.CUP_MENU_ROWS_AT.y},
+			"labels": [{
+				"x": Gen1Layout.CUP_VIEW_AT.x, "y": Gen1Layout.CUP_VIEW_AT.y, "step": 1,
+				"rows": Array(data.special_text(GEN1_CABLE_CLUB_STRINGS, "view_rules").split("\n")),
+			}],
+			"boxes": [_gen1_box(Gen1Layout.CUP_VIEW_BOX), _gen1_box(Gen1Layout.CUP_RULES_BOX)],
+			"cursor_labels": {
+				"x": Gen1Layout.CUP_RULES_AT.x, "y": Gen1Layout.CUP_RULES_AT.y, "step": 1,
+				"rows": cup_rules,
+			},
+			"rows": rows, "text": "", "hold_frames": Gen1Layout.CUP_MENU_HOLD_FRAMES,
+		},
+	}}]
+
+
+static func _gen1_box(box: Rect2i) -> Dictionary:
+	return {"x": box.position.x, "y": box.position.y, "width": box.size.x, "height": box.size.y}
+
+
+func _gen1_cup_answer(cup: int) -> Array:
+	var refusal: String = _gen1_cup_refusal(
+		cup, _party_summary.get("species", []), _party_summary.get("levels", [])
+	)
+	if not refusal.is_empty():
+		return [{"type": &"text", "text": refusal}, {"type": &"cup_menu"}]
+	var species: Array = []
+	var levels: Array = []
+	for row: Dictionary in state.link_transport().peer.get("party", []) as Array:
+		species.append(int(row.get("species", 0)))
+		levels.append(int(row.get("level", 0)))
+	if not _gen1_cup_refusal(cup, species, levels).is_empty():
+		return [_gen1_facility_box(GEN1_COLOSSEUM2_RUN, "ineligible"), {"type": &"cup_menu"}]
+	return [{"type": &"stadium_cup", "cup": cup + 1}] \
+		+ _gen1_link_room_steps(Gen1Layout.LINK_MENU_COLOSSEUM)
+
+
+## `PokeCup`, `PikaCup` and `PetitCup` in their own order; empty lets the
+## party in.
+func _gen1_cup_refusal(cup: int, species: Array, levels: Array) -> String:
+	if species.size() != Gen1Layout.CUP_PARTY_SIZE:
+		return _gen1_cup_text("three_mons")
+	if species.has(Gen1Layout.CUP_MEW):
+		return _gen1_cup_text("mew")
+	if species[0] == species[1] or species[0] == species[2] or species[1] == species[2]:
+		return _gen1_cup_text("different_mons")
+	if cup == Gen1Layout.CUP_PETIT:
+		var sized: String = _gen1_petit_refusal(species)
+		if not sized.is_empty():
+			return sized
+	var bounds: Array = Gen1Layout.CUP_LEVELS[cup]
+	var names: Array = Gen1Layout.CUP_REFUSALS[cup]
+	var total: int = 0
+	for level: Variant in levels:
+		if int(level) > int(bounds[1]):
+			return _gen1_cup_text(String(names[1]))
+		if int(level) < int(bounds[0]):
+			return _gen1_cup_text(String(names[0]))
+		total += int(level)
+	if total > int(bounds[2]):
+		return _gen1_cup_text(String(names[2]))
+	return ""
+
+
+## `Func_3b10f` over every member, then the Pokedex's inches and pounds.
+func _gen1_petit_refusal(species: Array) -> String:
+	for member: Variant in species:
+		if _gen1_is_evolved(int(member)):
+			return _gen1_cup_text("evolved", int(member))
+	for member: Variant in species:
+		var dex: Dictionary = data.dex_entry(int(member))
+		var height: int = int(dex.get("height", 0))
+		@warning_ignore("integer_division")
+		if (height / 100) * 12 + height % 100 > Gen1Layout.CUP_PETIT_MAX_INCHES:
+			return _gen1_cup_text("height", int(member))
+		if int(dex.get("weight", 0)) > Gen1Layout.CUP_PETIT_MAX_WEIGHT:
+			return _gen1_cup_text("weight", int(member))
+	return ""
+
+
+func _gen1_is_evolved(species: int) -> bool:
+	for number: int in range(1, data.species_count() + 1):
+		for row: Dictionary in data.evolutions(number):
+			if int(row.get("target", 0)) == species:
+				return true
+	return false
+
+
+func _gen1_cup_text(name: String, species: int = 0) -> String:
+	var text: String = data.special_text(GEN1_COLOSSEUM2_RUN, name)
+	if species > 0:
+		text = text.replace(
+			"%s%04X>" % [Gen2TextStream.RAM_MARKER, int(Gen1Layout.for_id(data.id)["name_buffer"])],
+			String(data.species(species).get("name", ""))
+		)
+	return text
+
+
+func _gen1_link_menu_cancel_steps() -> Array:
+	return [
+		_gen1_wait_step(&"cable_club_wait", Gen1Layout.LINK_MENU_CANCEL_FRAMES),
+		_gen1_facility_box(GEN1_LINK_RUN, "canceled"),
+		{"type": &"link_connected", "set": false},
+	]
+
+
+## `CableClub_Run`: `ld c, 80` behind "Just a moment.",
+## `CableClub_DoBattleOrTrade`, `HealParty` after a fight, `ReturnToCableClubRoom`.
+func _gen1_cable_club_run_steps(link_state: int) -> Array:
+	var battle: bool = link_state == Gen1Layout.LINK_STATE_START_BATTLE
+	var out: Array = [
+		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_RUN_FRAMES),
+		{"type": &"request", "values": {"kind": &"link_room_requested", "values": {
+			"link_mode": Gen2LinkTransport.LINK_COLOSSEUM if battle \
+				else Gen2LinkTransport.LINK_TRADECENTER,
+			"gen1": true,
+		}}},
+	]
+	if battle:
+		out.append({"type": &"request", "values": {
+			"kind": &"party_heal_requested", "values": {},
+		}})
+	out.append({"type": &"cable_club_return"})
+	return out
+
+
+func _gen1_node_serial_status(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var status: int = state.link_transport().status() if state != null \
+		else Gen2LinkTransport.CONNECTION_NOT_ESTABLISHED
+	return _gen1_resolve_side(node, status == int(node["status"]), steps, run)
+
+
+## `CableClub_Run` reads a `LINK_STATE_START_*` store on the next box's first
+## joypad poll, so that box owes no press.
+func _gen1_node_link_state(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var value: int = int(node["value"])
+	steps.append({"type": &"link_state", "value": value})
+	if value in [Gen1Layout.LINK_STATE_START_TRADE, Gen1Layout.LINK_STATE_START_BATTLE]:
+		run["cable_club_run"] = value
+	return true
+
+
+## `LoadSpecialWarpData` and `SpecialEnterMap`: on foot, facing down, `wLastMap`
+## left at PALLET_TOWN, and the cell left from kept for the snapshot.
+func _gen1_special_warp(name: String) -> Dictionary:
+	var warp: Dictionary = data.gen1_cable_club_warp(name) if data != null else {}
+	var target: Gen2WorldMap = data.world_map(0, int(warp.get("map", -1))) if not warp.is_empty() else null
+	if target == null:
+		return {}
+	if _gen1_cable_club_origin.is_empty():
+		_gen1_cable_club_origin = {
+			"map": map_id(), "cell": player_cell, "facing": player_facing,
+			"movement_mode": movement_mode, "sprite": player_sprite_number,
+			"last_map": _gen1_last_map,
+		}
+	var from_map: Vector2i = map_id()
+	movement_mode = MOVEMENT_WALK
+	player_sprite_number = _walking_sprite()
+	player_facing = Gen2WorldSprite.FACING_DOWN
+	_apply_map(
+		target, data.world_tileset(target.tileset),
+		Vector2i(int(warp["x"]), int(warp["y"])), true, 0, MAP_ENTRY_WARP
+	)
+	_gen1_last_map = Gen1Layout.PALLET_TOWN
+	return {"type": &"warp", "from_map": from_map, "to_map": map_id(), "to_cell": player_cell}
+
+
+## `ReturnToCableClubRoom` and `CableClub_Run`'s tail: `wStatusFlags3` zeroed,
+## the room loaded again, LINK_STATE_IN_CABLE_CLUB.
+func gen1_return_to_cable_club_room() -> Array:
+	if current_map == null:
+		return []
+	var rest: Array = _gen1_steps
+	_apply_map(current_map, current_tileset, player_cell, true, 0, MAP_ENTRY_WARP)
+	_gen1_steps = rest
+	state.link_session().gen1_link_state = Gen1Layout.LINK_STATE_IN_CABLE_CLUB
+	return [{"type": &"map_reloaded", "map": map_id(), "cell": player_cell}]
+
+
+## `wLinkState`.
+func gen1_link_state() -> int:
+	return state.link_session().gen1_link_state if state != null else Gen1Layout.LINK_STATE_NONE
+
+
+## BIT_LINK_CONNECTED, under which `DrawStartMenu` spells SAVE as RESET.
+func gen1_link_connected() -> bool:
+	return state != null and state.link_session().gen1_link_connected
+
+
+## The cell SRAM holds: the receptionist's while the player is in a link room.
+func gen1_saved_position() -> Dictionary:
+	return _gen1_cable_club_origin
 
 
 ## `MartDialog`'s counter is the whole of a Generation 1 shop, so the request
@@ -6998,6 +7310,32 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 			return true
 		&"starter":
 			state.set_gen1_starter(String(step["who"]), int(step["value"]))
+			return true
+	return _gen1_linked(step, events)
+
+
+## The rest of [method _gen1_written]: what the cable club writes.
+func _gen1_linked(step: Dictionary, events: Array) -> bool:
+	match StringName(step["type"]):
+		&"link_state":
+			state.link_session().gen1_link_state = int(step["value"])
+			return true
+		&"link_connected":
+			state.link_session().gen1_link_connected = bool(step["set"])
+			return true
+		&"special_warp":
+			var warped: Dictionary = _gen1_special_warp(String(step["name"]))
+			if not warped.is_empty():
+				events.append(warped)
+			return true
+		&"cable_club_return":
+			events.append_array(gen1_return_to_cable_club_room())
+			return true
+		&"cup_menu":
+			_gen1_steps = _gen1_steps.slice(0, 1) + _gen1_cup_menu_steps() + _gen1_steps.slice(1)
+			return true
+		&"stadium_cup":
+			state.link_session().gen1_stadium_cup = int(step["cup"])
 			return true
 	return _gen1_kept(step, events)
 
@@ -9213,12 +9551,9 @@ func _warp_refusal(cell: Vector2i, reason: StringName) -> Dictionary:
 	}
 
 
-## `CopyWarpData`'s own `cp -1`: a warp whose destination byte is -1 names no
-## warp and no map of its own, and the three bytes at `wBackupWarpNumber` are
-## read contiguously in its place. The map named beside such a byte is a
-## placeholder (POKECENTER_2F names itself), so it is replaced too.
-## `warp_event` writes `\4 - 1`, so Generation 1's stored byte already indexes
-## the destination map's warps where Generation 2's counts from one.
+## `CopyWarpData`'s `cp -1`: a -1 destination reads `wBackupWarpNumber`'s
+## three bytes in its place, map included. `warp_event` writes `\4 - 1`, so
+## Generation 1's byte already indexes where Generation 2's counts from one.
 func _warp_destination(source_warp: Dictionary, target_map: Gen2WorldMap) -> Dictionary:
 	var index: int = int(source_warp.get("destination", 0))
 	if _gen1:

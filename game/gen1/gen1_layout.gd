@@ -182,6 +182,20 @@ const MOVE_EFFECT_BY_MOVE: Dictionary = {
 const MOVE_POWER_BY_MOVE: Dictionary = {49: 20, 82: 40}
 
 
+## The side chance each `*_SIDE_EFFECT` routine compares `BattleRandom`
+## against, as `effect_chance`'s own byte: `20 percent + 1` and `40 percent + 1`
+## in `PoisonEffect`, 10 and 30 in `FreezeBurnParalyzeEffect` and
+## `FlinchSideEffect`, `33 percent + 1` in `StatModifierDownEffect`, `10 percent`
+## in `ConfusionSideEffect`, and Twineedle's own rewrite to POISON_SIDE_EFFECT1.
+const SIDE_EFFECT_CHANCES: Dictionary = {
+	0x02: 52, 0x21: 103,
+	0x04: 26, 0x05: 26, 0x06: 26, 0x22: 77, 0x23: 77, 0x24: 77,
+	0x1F: 26, 0x25: 77,
+	0x44: 85, 0x45: 85, 0x46: 85, 0x47: 85,
+	0x4C: 25, 0x4D: 52,
+}
+
+
 static func move_effect(number: int, effect: int) -> int:
 	if MOVE_EFFECT_BY_MOVE.has(number):
 		return int(MOVE_EFFECT_BY_MOVE[number])
@@ -607,16 +621,112 @@ const VENDING_PRICES_AT: int = 0x67
 const VENDING_ROWS: int = 3
 const VENDING_ROW_SIZE: int = 4  ## `vend_item`: one item byte and a `bcd3` price.
 
-## `CableClubNPC`'s stubs by the delta from the first. Only the three a port
-## with no cable reaches are named; the rest want a link partner.
+## `CableClubNPC`'s stubs; `PleaseWaitText`'s `text_pause` is the odd byte.
 const CABLE_CLUB_TEXT_AT: Dictionary = {
-	"area_reserved": 0x00, "welcome": 0x05, "making_preparations": 0x1F,
+	"area_reserved": 0x00, "welcome": 0x05, "please_apply": 0x0A, "please_wait": 0x0F,
+	"link_closed": 0x15, "come_again": 0x1A, "making_preparations": 0x1F,
 }
+const LINK_TEXT_AT: Dictionary = {"where_to": 0x00, "please_wait": 0x05, "canceled": 0x0A}
+const LINK_VERSION_TEXT_AT: Dictionary = {"version": 0x00}
+## `WillBeTradedText` and the two `db` strings behind it.
+const TRADE_CENTER_TEXT_AT: Dictionary = {"will_be_traded": 0x00}
+const TRADE_COMPLETED_AT: int = 0x05
+const TRADE_CANCELED_AT: int = 0x16
+const LINK_RESULT_STRINGS_AT: Dictionary = {"win": 0x00, "lose": 0x08, "draw": 0x11}
+const CABLE_CLUB_STRING_MAX: int = 48
 
 ## `ld c, 60 / call DelayFrames` before the preparations line, and
 ## `wLinkTimeoutCounter`, one frame a pass of `.establishConnectionLoop`.
 const CABLE_CLUB_PREPARING_FRAMES: int = 60
 const CABLE_CLUB_TIMEOUT_FRAMES: int = 90
+## `.establishedConnection`'s `DelayFrame` and `ld c, 50`, `CloseLinkConnection`'s
+## `Delay3`, and `TX_PAUSE`.
+const CABLE_CLUB_CONNECTED_FRAMES: int = 51
+const CABLE_CLUB_CLOSE_FRAMES: int = 3
+const CABLE_CLUB_PAUSE_FRAMES: int = 30
+## `LinkMenu`'s `ld c, 40` hold, `.choseCancel`'s two `Delay3`s, `PleaseWaitText`'s
+## 50, and the 20 each side of `PrepareForSpecialWarp`.
+const LINK_MENU_HOLD_FRAMES: int = 40
+const LINK_MENU_CANCEL_FRAMES: int = 6
+const LINK_MENU_WAIT_FRAMES: int = 50
+const LINK_MENU_WARP_FRAMES: int = 40
+## `TextBoxBorder` at (5, 5) with `lb bc, 6, 13`; Yellow's fourth row is
+## COLOSSEUM2 and its box two rows taller.
+const LINK_MENU_BOX: Rect2i = Rect2i(5, 5, 13, 6)
+const LINK_MENU_BOX_YELLOW: Rect2i = Rect2i(5, 3, 13, 8)
+const LINK_MENU_ROW_STEP: int = 2
+const LINK_MENU_CURSOR_COLUMN: int = 6
+const LINK_MENU_TRADE: int = 0
+const LINK_MENU_COLOSSEUM: int = 1
+const LINK_MENU_COLOSSEUM2: int = 2
+## Yellow's `Func_f531b`: `ld c, $14`, three `TextBoxBorder`s, a chosen row's
+## twenty frames of zero bytes and `ld c, 40`; `.asm_f5963`'s loops before it.
+const CUP_MENU_BOX: Rect2i = Rect2i(8, 0, 10, 8)
+const CUP_MENU_ROWS_AT: Vector2i = Vector2i(10, 2)
+const CUP_VIEW_BOX: Rect2i = Rect2i(0, 0, 5, 4)
+const CUP_VIEW_AT: Vector2i = Vector2i(1, 2)
+const CUP_RULES_BOX: Rect2i = Rect2i(0, 10, 18, 6)
+const CUP_RULES_AT: Vector2i = Vector2i(1, 12)
+const CUP_MENU_OPEN_FRAMES: int = 20
+const CUP_MENU_HOLD_FRAMES: int = 60
+const CUP_HANDSHAKE_FRAMES: int = 72
+const CUP_COUNT: int = 3
+const CUP_PARTY_SIZE: int = 3
+const CUP_MEW: int = 151
+const CUP_LEVELS: Array = [[50, 55, 155], [15, 20, 50], [25, 30, 80]]
+const CUP_PETIT: int = 2
+## `PetitCup`'s `cp $51` on the inches and `$1b9` on the tenths of a pound.
+const CUP_PETIT_MAX_INCHES: int = 80
+const CUP_PETIT_MAX_WEIGHT: int = 440
+const COLOSSEUM2_TEXT_AT: Dictionary = {
+	"three_mons": 0x00, "mew": 0x05, "different_mons": 0x0A,
+	"max_l55": 0x0F, "min_l50": 0x14, "total_l155": 0x19,
+	"max_l30": 0x1E, "min_l25": 0x23, "total_l80": 0x28,
+	"max_l20": 0x2D, "min_l15": 0x32, "total_l50": 0x37,
+	"height": 0x3C, "weight": 0x41, "evolved": 0x46, "ineligible": 0x4B,
+}
+const CUP_REFUSALS: Array = [
+	["min_l50", "max_l55", "total_l155"], ["min_l15", "max_l20", "total_l50"],
+	["min_l25", "max_l30", "total_l80"],
+]
+## `CableClub_DoBattleOrTrade`'s `ld c, 80` and the internal clock's `ld c, 66`.
+const CABLE_CLUB_RUN_FRAMES: int = 80
+const CABLE_CLUB_EXCHANGE_FRAMES: int = 66
+## `TradeCenter_Trade`'s `ld c, 100`s, `PrintWaitingText`'s 50, and the 40 and
+## 50 around "Trade completed!".
+const TRADE_CENTER_DELAY_FRAMES: int = 100
+const TRADE_CANCELED_FRAMES: int = 100
+const TRADE_WAITING_FRAMES: int = 50
+const TRADE_COMPLETED_LEAD_FRAMES: int = 40
+const TRADE_COMPLETED_FRAMES: int = 50
+## `wLinkState`.
+const LINK_STATE_NONE: int = 0x00
+const LINK_STATE_IN_CABLE_CLUB: int = 0x01
+const LINK_STATE_START_TRADE: int = 0x02
+const LINK_STATE_START_BATTLE: int = 0x03
+const LINK_STATE_BATTLING: int = 0x04
+const LINK_STATE_TRADING: int = 0x32
+## `TradeCenterPlayerWarp` to `ColosseumFriendWarp`, behind `NewGameWarp`.
+const CABLE_CLUB_WARP_ROWS: Array[String] = [
+	"trade_center", "trade_center_friend", "colosseum", "colosseum_friend",
+]
+const SPECIAL_WARP_SIZE: int = 8
+## `OPP_RIVAL1`: `InitOpponent` fights a link partner as the rival's class.
+const LINK_TRAINER_CLASS: int = 25
+## `ManualTextScroll` in a link battle: `ld c, 65` where a press would be.
+const LINK_BATTLE_TEXT_FRAMES: int = 65
+## `DisplayLinkBattleVersusTextBox`'s box, names, VS and ball rows for
+## `ld c, 150`; `EndOfBattle`'s verdict at (6, 8) for 200.
+const VERSUS_BOX: Rect2i = Rect2i(3, 4, 12, 7)
+const VERSUS_PLAYER_AT: Vector2i = Vector2i(4, 5)
+const VERSUS_ENEMY_AT: Vector2i = Vector2i(4, 10)
+const VERSUS_VS_AT: Vector2i = Vector2i(9, 8)
+const VERSUS_RESULT_AT: Vector2i = Vector2i(6, 8)
+const VERSUS_BALL_X: int = 0x50
+const VERSUS_BALL_STEP: int = 8
+const VERSUS_BALL_Y: Array[int] = [0x40, 0x68]
+const VERSUS_FRAMES: int = 150
+const VERSUS_RESULT_FRAMES: int = 200
 
 ## `script_mart` writes its inventory into the text pointer itself: the $FE,
 ## a count, that many item ids, and a $FF nothing reads. `LoadItemList` copies
@@ -744,7 +854,7 @@ const SAFARI_NAG_BALLS: int = 1
 ## `CannotGetOffHereText`, which `.useOrTossItem` prints in front of `UseItem`
 ## rather than through `ItemUseFailed`. `CannotUseItemsHereText` above it is the
 ## Colosseum's and no screen here reaches it.
-const START_MENU_TEXT_AT: Dictionary = {"cannot_get_off": 0x00}
+const START_MENU_TEXT_AT: Dictionary = {"cannot_use_items": 0x00, "cannot_get_off": 0x05}
 ## `start_sub_menus.asm`'s own six in file order, and `field_move_messages.asm`'s
 ## four. Yellow keeps each run whole and moves the second away from the first.
 const FIELD_MOVE_TEXT_AT: Dictionary = {
@@ -1466,6 +1576,8 @@ const DUNGEON_WARP_BIT: int = 4
 const WARP_FROM_SCRIPT_BIT: int = 3
 const ON_DUNGEON_WARP_BIT: int = 4
 const NO_NPC_FACE_PLAYER_BIT: int = 5
+## `ReturnToCableClubRoom` zeroes the byte and reloads the room.
+const INIT_TRADE_CENTER_FACING_BIT: int = 0
 const TALKED_TO_TRAINER_BIT: int = 6
 const PRINT_END_BATTLE_TEXT_BIT: int = 7
 const PUSHED_BOULDER_BIT: int = 7
@@ -1563,7 +1675,10 @@ const OT_MATCH_LENGTH: int = 5
 const SCRIPT_VOLATILE_BITS: Dictionary = {
 	"misc_flags": {PUSHED_BOULDER_BIT: "pushed_boulder"},
 	"gym_quiz_flags": {7: "gym_quiz_answered"},
-	"status_flags_3": {NO_NPC_FACE_PLAYER_BIT: "no_npc_face_player"},
+	"status_flags_3": {
+		NO_NPC_FACE_PLAYER_BIT: "no_npc_face_player",
+		INIT_TRADE_CENTER_FACING_BIT: "trade_center_facing",
+	},
 	"pikachu_map_script_flags": {PIKACHU_MAP_SCRIPT_ACTIVE_BIT: "pikachu_script_active"},
 }
 const SCRIPT_TEMP_BYTES: Array[String] = ["object_to_hide", "object_to_show"]
@@ -2064,11 +2179,8 @@ const SUPER_ROD_THRESHOLDS_YELLOW: Array[int] = [0x65, 0xB1, 0xE4, 0xFF]
 const SUPER_ROD_MAX_SLOTS: int = 4
 const ROD_LIST_END: int = 0xFF
 
-## A walk cell's collision tile is the bottom-left of its 2x2 quarter of the
-## block, the corner Generation 2 also picks. `_GetTileAndCoordsInFrontOfPlayer`
-## reads (8, 11), (8, 7), (6, 9) and (10, 9) and the player's cell starts at
-## screen (8, 8); reading them as top-left leaves 53 of Red's 226 maps with no
-## cell a player can stand on, the Pokemon Centers among them.
+## A walk cell's collision tile is the bottom-left of its 2x2 quarter:
+## `_GetTileAndCoordsInFrontOfPlayer` reads (8, 11) under a cell at (8, 8).
 const MAP_BLOCK_TILE_WIDTH: int = 4
 const MAP_BLOCK_CELL_WIDTH: int = 2
 
@@ -2262,6 +2374,7 @@ const RED_BLUE: Dictionary = {
 	"filtered_bag_items": 0xCC5B,
 	"filtered_bag_count": 0xCD37,
 	"name_buffer": 0xCD6D,
+	"name_of_player_mon_to_be_traded": 0xCD3F,
 	"string_buffer": 0xCF4B,
 	## `NameRatersHouseNameRaterText`'s four routines, `wBuffer` and `wNameBuffer`.
 	"display_party_menu": 0x13FC,
@@ -2356,6 +2469,23 @@ const RED_BLUE: Dictionary = {
 	"mart_text": 0x06E0C,
 	"pokecenter_text": 0x0705D,
 	"cable_club_text": 0x072B3,
+	## `LinkMenu`, `TradeCenter_Trade` and the `db` strings the trade screen places.
+	"link_text": 0x05D43,
+	"link_menu_rows": 0x05D97,
+	"trade_center_text": 0x05A24,
+	"please_wait_string": 0x0550F,
+	"cancel_string": 0x057C0,
+	"stats_trade_string": 0x0571F,
+	"waiting_string": 0x04C28,
+	"just_a_moment_text": 0x21865,
+	"link_result_strings": 0x13853,
+	"link_battle_defeated_text": 0x3C6E9,
+	"link_battle_lost_text": 0x3C88E,
+	"link_battle_items_text": 0x3D0C5,
+	"trainer_name_wram": 0xD04A,
+	"link_state": 0xD12B,
+	"cur_map": 0xD35E,
+	"serial_connection_status": 0xFFAA,
 	"vending_text": 0x74F99,
 	"pc_text": 0x17F23,
 	"players_pc_text": 0x07B22,
@@ -2459,7 +2589,7 @@ const RED_BLUE: Dictionary = {
 	"snorlax_flute_coords": 0x0E1FD,
 	"poke_flute_text": 0x0E20B,
 	"bicycle_text": 0x0E5F2,
-	"start_menu_text": 0x1342F,
+	"start_menu_text": 0x1342A,
 	"field_move_text": 0xA40A9,
 	"strength_text": 0xA403C,
 	"cut_text": 0xA82F8,
@@ -2800,6 +2930,7 @@ const YELLOW: Dictionary = {
 	"filtered_bag_items": 0xCC5B,
 	"filtered_bag_count": 0xCD37,
 	"name_buffer": 0xCD6D,
+	"name_of_player_mon_to_be_traded": 0xCD3F,
 	"string_buffer": 0xCF4A,
 	"display_party_menu": 0x11C8,
 	"get_party_mon_name": 0x1394,
@@ -2881,6 +3012,27 @@ const YELLOW: Dictionary = {
 	"mart_text": 0x06B91,
 	"pokecenter_text": 0x06ED0,
 	"cable_club_text": 0x07188,
+	"link_text": 0xF5A02,
+	"link_version_text": 0xF5A11,
+	"colosseum2_text": 0xF57BC,
+	"cup_rules_strings": 0xF56F4,
+	"cup_view_rules_string": 0xF5791,
+	"cup_rows_string": 0xF579C,
+	"link_menu_rows": 0xF5A17,
+	"trade_center_text": 0x05AD8,
+	"please_wait_string": 0x055A9,
+	"cancel_string": 0x05860,
+	"stats_trade_string": 0x057C0,
+	"waiting_string": 0x04BAB,
+	"just_a_moment_text": 0x218A7,
+	"link_result_strings": 0x1381D,
+	"link_battle_defeated_text": 0x3C70B,
+	"link_battle_lost_text": 0x3C8F3,
+	"link_battle_items_text": 0x3D1C8,
+	"trainer_name_wram": 0xD049,
+	"link_state": 0xD12A,
+	"cur_map": 0xD35D,
+	"serial_connection_status": 0xFFAA,
 	"vending_text": 0x747DE,
 	"pc_text": 0x17DA7,
 	"players_pc_text": 0x079C9,
@@ -2986,7 +3138,7 @@ const YELLOW: Dictionary = {
 	"snorlax_flute_coords": 0x0E0AC,
 	"poke_flute_text": 0x0E0BA,
 	"bicycle_text": 0x0E536,
-	"start_menu_text": 0x11FD9,
+	"start_menu_text": 0x11FD4,
 	"field_move_text": 0xB40A7,
 	"strength_text": 0xB417E,
 	"cut_text": 0xB7166,
@@ -3897,6 +4049,7 @@ const SFX_GO_INSIDE: int = 173
 const SFX_HEALING_MACHINE: int = 158
 const MUSIC_PKMN_HEALED: int = 232
 const SFX_GO_OUTSIDE: int = 181
+const SFX_SAVE: int = 182
 ## `EvolveMon`'s tink in front of the old picture and the jingle behind `IntoText`.
 const SFX_TINK: int = 140
 const SFX_GET_ITEM_2: int = 137

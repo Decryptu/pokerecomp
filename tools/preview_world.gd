@@ -31,6 +31,9 @@ const KIND_HELP: Dictionary = {
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
 	&"sign": "frames: DisplayTextID's box, read by facing up from where the player stands. 0 spends the whole reveal, which is past a box owing no press",
 	&"gift": "presses: a `GiveItem` row, faced up from the cell after the @. 0 is the offer's first page, 4 the receipt box a bag with room earns",
+	&"cable_club": "presses: the Generation 1 receptionist with a partner on the cable, faced up from the cell after the @; one press is YES to the save and lands on LinkMenu's box, `-- red 0 41 <out.png> live cable_club@11,3 1 0`",
+	&"cup_menu": "frames: Yellow's COLOSSEUM2 cup menu, reached from the receptionist the way `cable_club` is, `-- yellow 0 41 <out.png> live cup_menu@11,3 0 0`",
+	&"link_room": "frames: a Generation 1 link room entered from its receptionist, the friend placed by the map's own script, `-- red 0 239 <out.png> live link_room@3,4 0 0`",
 	&"script_menu": "presses, rows: the box a Generation 1 script draws for itself, faced up from the cell after the @. The bag holds all three drinks, so Celadon Mart Roof's little girl is `-- red 0 126 <out.png> live script_menu@5,6 2 0`",
 	&"trainer": "presses, frames: TalkToTrainer on the map's first trainer, faced from the cell below. 0 the before-battle box, 1 the fight the press behind it opens; a second number stops that many frames into the transition instead",
 	&"map_script": "frames, 0: RunMapScript's own state, stepped into by walking up out of the cell after the @. Route 22 Gate's guard is `-- red 0 193 <out.png> live map_script@4,3 300 0`",
@@ -224,9 +227,11 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"ticket": BOX_REVEAL_FRAMES, &"day_care": BOX_REVEAL_FRAMES,
 	&"name_rater": BOX_REVEAL_FRAMES,
 	&"poke_flute": BOX_REVEAL_FRAMES, &"script_menu": BOX_REVEAL_FRAMES,
+	&"cable_club": BOX_REVEAL_FRAMES,
 }
 ## Enough for the longest box in the game to finish revealing.
 const BOX_REVEAL_FRAMES: int = 120
+const CUP_MENU_FRAME_CAP: int = 1200
 
 const PREVIEW_BATTLE_SPECIES: int = 16 ## `preview_battle_request`'s PIDGEY.
 
@@ -488,6 +493,9 @@ const STAGERS: Dictionary = {
 	&"sign": &"_stage_sign",
 	&"gift": &"_stage_gift",
 	&"script_menu": &"_stage_script_menu",
+	&"cable_club": &"_stage_cable_club",
+	&"cup_menu": &"_stage_cup_menu",
+	&"link_room": &"_stage_link_room",
 	&"trainer": &"_stage_trainer",
 	&"sight": &"_stage_sight",
 	&"map_script": &"_stage_map_script",
@@ -1345,6 +1353,62 @@ func _stage_script_menu() -> void:
 		Gen1Layout.ITEM_LEMONADE: 1, SCRIPT_MENU_DOME_FOSSIL: 1,
 		SCRIPT_MENU_HELIX_FOSSIL: 1,
 	}})
+
+
+func _cable_partner() -> Gen2LinkTransport:
+	var data: GameData = _screen.get("_data")
+	var members: Array = []
+	for species: int in [4, 7]:
+		members.append(Gen2BattleMon.create(data, species, 5, data.moves_at_level(species, 5)))
+	var transport := Gen2LinkTransport.new()
+	transport.peer = Gen2LinkTransport.peer_from_save(Gen2SaveBattleAdapter.from_battle_party(
+		data.id, data.sha1, 1, Gen2Party.create(members), "BLUE"
+	))
+	return transport
+
+
+func _stage_cable_club() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+	world.state.set_link_transport(_cable_partner())
+	if world.pikachu != null:
+		world.pikachu.set_following(true)
+	_stage_counter({}, PokeButton.UP, 0)
+
+
+func _stage_cup_menu() -> void:
+	var save: Gen2SaveData = _stage_party()
+	save.party = []
+	for species: int in [1, 4, 7]:
+		save.party.append(Gen2SaveBattleAdapter.from_battle_mon(
+			Gen2BattleMon.create(_screen._data, species, 50, _screen._data.moves_at_level(species, 50))
+		))
+	_screen._refresh_party_summary()
+	_cell.x = 0
+	_stage_cable_club()
+	for _frame: int in CUP_MENU_FRAME_CAP:
+		var host: Gen2WorldServiceScreen = _screen.get("_service_host")
+		if host != null and (host.get("_script_menu") as Dictionary).has("hold_frames"):
+			break
+		_screen.advance_frame()
+		if _frame % BOX_REVEAL_FRAMES == 0:
+			_screen.press_button(PokeButton.A)
+	_screen.press_button(PokeButton.DOWN)
+	_screen.press_button(PokeButton.DOWN)
+	_screen.press_button(PokeButton.A)
+	for _frame: int in Gen1Layout.LINK_MENU_HOLD_FRAMES + Gen1Layout.CUP_HANDSHAKE_FRAMES \
+		+ Gen1Layout.CUP_MENU_OPEN_FRAMES + BOX_REVEAL_FRAMES:
+		_screen.advance_frame()
+
+
+func _stage_link_room() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	world.state.set_link_transport(_cable_partner())
+	world.state.link_session().gen1_link_connected = true
+	## Entered again: the script placed the friend for a cable with nobody on it.
+	world.gen1_return_to_cable_club_room()
+	for _frame: int in maxi(_cell.x, 0):
+		_screen.advance_frame()
 
 
 func _stage_gift() -> void:

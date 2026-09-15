@@ -103,6 +103,7 @@ static func prepare(
 	battle.battle_type = battle_type
 	battle.in_battle_tower = kind == &"battle_tower"
 	battle.is_link_battle = kind == &"link_battle"
+	battle.gen1_stadium_cup = bool(values.get("stadium_cup", false))
 	battle.player_id = player_id
 	## `InitEnemyTrainer` belongs to setting the opponent up rather than to
 	## whoever draws the fight, so every host gets the class's two items, its

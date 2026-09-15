@@ -381,11 +381,8 @@ var _selected_rod: StringName = Gen2WorldEncounter.METHOD_OLD_ROD
 ## The overworld's hardware-frame clock: see [method _process].
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 var _pass_moved: bool = false
-## `(frame, button)` input, recorded from a run and played back into another.
-## Both are opt-in and off in play. A replay applies a log's entries on the frame
-## that recorded them, from inside the pump, so a host that owes two frames
-## delivers the input of both rather than only of the later one; that is what
-## makes a replay independent of the frame rate it was recorded at.
+## `(frame, button)` input, recorded from a run and played back into another
+## from inside the pump, so a replay is independent of the frame rate.
 var _input_recording: Array = []
 var _recording_input: bool = false
 var _input_replay: Dictionary = {}
@@ -2247,6 +2244,7 @@ func _on_trade_animation_closed() -> void:
 	_refresh_labels()
 	if not results.is_empty():
 		_show_script_results(results)
+	_resume_link_after_animation()
 
 
 ## `InitName`, which writes whatever the naming screen left into the row's
@@ -5231,6 +5229,9 @@ var _gen1_cur_enemy_level: int = 0
 
 
 func _build_gen1_battle_transition(values: Dictionary) -> Gen2BattleTransition:
+	## `.linkBattle`'s row 0 is drawn by [Gen2LinkScreen] over its cleared screen.
+	if bool(values.get("link", false)):
+		return null
 	_gen1_cur_enemy_level = int(values.get("level", _gen1_cur_enemy_level))
 	var map_id: int = _world.current_map.number if _world.current_map != null else 0
 	var index: int = 0
@@ -5607,7 +5608,40 @@ func _on_battle_finished(result: Dictionary) -> void:
 			_finish_battle_exit(result, fought_save)
 		)
 		return
+	if _open_gen1_versus_result(result, fought_save):
+		return
 	_finish_battle_exit(result, fought_save)
+
+
+## `EndOfBattle`'s link half: the versus box with its verdict for `ld c, 200`.
+func _open_gen1_versus_result(result: Dictionary, fought_save: Gen2SaveData) -> bool:
+	var request: Dictionary = result.get("request", {})
+	if _data == null or _data.generation != RomRegistry.GEN1 \
+		or StringName(request.get("kind", &"")) != &"link_battle":
+		return false
+	if not _open_link_screen(Gen2LinkScreen.MODE_VERSUS_RESULT):
+		return false
+	var rows: Array = []
+	if fought_save != null:
+		for mon: Gen2SaveMon in fought_save.party:
+			rows.append(mon.to_dict())
+	var verdict: String = "draw"
+	match StringName(result.get("outcome", &"")):
+		Gen2WorldBattleAdapter.OUTCOME_WON:
+			verdict = "win"
+		Gen2WorldBattleAdapter.OUTCOME_LOST:
+			verdict = "lose"
+	_link_host.set_versus(rows, result.get("enemy_party", []),
+		_data.special_text("cable_club_strings", verdict))
+	_link_host.closed.disconnect(_on_link_screen_closed)
+	_link_host.closed.connect(func() -> void:
+		var host: Gen2LinkScreen = _link_host
+		_link_host = null
+		if host != null:
+			Gen2Screen.drop(host)
+		_finish_battle_exit(result, fought_save)
+	)
+	return true
 
 
 ## `BattleEnd_HandleRoamMons` under `BATTLETYPE_ROAMING`: a caught or beaten
@@ -5927,12 +5961,45 @@ func _advance_script_input() -> void:
 	if _text_box.advance():
 		_continue_if_text_settled()
 		return
+	if not _choice_last_page.is_empty():
+		_open_service_host()
+		return
 	_text_box_rect_held += 1
 	_text_box.visible = false
 	_script_prompt = ""
 	_show_script_results(_world.run_event_queue(true))
 	_text_box_rect_held -= 1
 	_push_text_box_rect()
+	_refresh_labels()
+
+
+## The page a YES/NO stands beside once its question has printed to its last break.
+var _choice_last_page: String = ""
+
+
+## `YesNoChoice` opens over whatever the box's last `para` or `cont` left, so a
+## question that pages prints to that break first.
+func _open_choice_host() -> void:
+	var input: Dictionary = _world.pending_script_input()
+	var text: String = String(input.get("text", ""))
+	var cut: int = -1
+	for marker: String in [
+		Gen2TextStream.PAGE_BREAK, Gen2TextStream.SCROLL_BREAK, Gen2TextStream.SCROLL_NOWAIT_BREAK,
+	]:
+		cut = maxi(cut, text.rfind(marker))
+	if cut < 0 or _text_box == null or _text_box.font == null \
+		or StringName(input.get("type", &"")) != &"choice":
+		_open_service_host()
+		return
+	_choice_last_page = "\n".join(Gen2TextLayout.lay_out(
+		text, Gen2WorldServicePage.MESSAGE_BOX.size.x - 2, 2,
+		_data.generation if _data != null else RomRegistry.GEN2
+	).back())
+	_text_awaits_press = true
+	_apply_text_box_options()
+	_text_box.show_text(text.substr(0, cut), true)
+	_text_box.visible = true
+	_script_prompt = "A: advance text"
 	_refresh_labels()
 
 
@@ -6080,6 +6147,8 @@ func _open_service_host() -> void:
 	add_child(host)
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	var persist: bool = save != null and _injected_save == null
+	host.question_page = _choice_last_page
+	_choice_last_page = ""
 	if not host.open_pending(_world, _data, save, persist):
 		Gen2Screen.drop(host)
 		_script_prompt = "Service request unavailable"
@@ -6135,33 +6204,56 @@ func open_hall_of_fame() -> void:
 ## with a different exchange behind it. False leaves a cableless room to the host.
 func _open_link_room(request: Dictionary) -> bool:
 	var values: Dictionary = request.get("values", {})
-	if int(values.get("link_mode", 0)) == Gen2LinkSession.LINK_COLOSSEUM:
-		return _start_link_battle(request)
-	return _open_link_screen(Gen2LinkScreen.MODE_TRADE)
+	if int(values.get("link_mode", 0)) != Gen2LinkSession.LINK_COLOSSEUM:
+		return _open_link_screen(Gen2LinkScreen.MODE_TRADE)
+	## `CableClub_DoBattleOrTrade`'s PLEASE WAIT! and versus box come first.
+	if bool(values.get("gen1", false)):
+		_link_battle_request = request.duplicate(true)
+		return _open_link_screen(Gen2LinkScreen.MODE_BATTLE_WAIT)
+	return _start_link_battle(request)
+
+
+var _link_battle_request: Dictionary = {}
 
 
 ## `Colosseum`, which is `LinkCommunications` and then one battle against the
 ## party that came back. The transport supplies the peer's choices, and the
-## record is written where `AddLastLinkBattleToLinkRecord` writes it.
+## record is written where `AddLastLinkBattleToLinkRecord` writes it. A
+## Generation 1 cartridge keeps no record and fights the partner as OPP_RIVAL1.
 func _start_link_battle(request: Dictionary) -> bool:
 	var peer: Dictionary = _link_transport().peer
 	var party: Array = peer.get("party", [])
 	if party.is_empty():
 		return false
-	_link_battle_peer = peer.duplicate(true)
-	_start_battle_request({
-		"kind": &"link_room_requested",
-		"values": {
-			"kind": &"link_battle",
-			"special": int((request.get("values", {}) as Dictionary).get("special", 0)),
-			## `wLinkMode` is non-zero for the whole fight, which is what makes
-			## the switch menu the player's own rather than the AI's.
-			"link": true,
-			"trainer_name": String(peer.get("name", "")),
-			"enemy_party": party.duplicate(true),
-		},
-	})
+	var gen1: bool = _data != null and _data.generation == RomRegistry.GEN1
+	if not gen1:
+		_link_battle_peer = peer.duplicate(true)
+	var values: Dictionary = {
+		"kind": &"link_battle",
+		"special": int((request.get("values", {}) as Dictionary).get("special", 0)),
+		## `wLinkMode` is non-zero for the whole fight, which is what makes
+		## the switch menu the player's own rather than the AI's.
+		"link": true,
+		"trainer_name": String(peer.get("name", "")),
+		"enemy_party": party.duplicate(true),
+	}
+	if gen1:
+		values["trainer_class"] = Gen1Layout.LINK_TRAINER_CLASS
+		values["stadium_cup"] = _world.state.link_session().gen1_stadium_cup > 0
+		for row: Array in [["win_text", "defeated"], ["loss_text", "lost"]]:
+			values[String(row[0])] = {"text": _gen1_link_battle_text(
+				String(row[1]), String(peer.get("name", ""))
+			)}
+	_start_battle_request({"kind": &"link_room_requested", "values": values})
 	return true
+
+
+## `TrainerDefeatedText` and `LinkBattleLostText` over `wTrainerName`.
+func _gen1_link_battle_text(text: String, partner: String) -> String:
+	var layout: Dictionary = Gen1Layout.for_id(_data.id)
+	return _world.gen1_filled_text(_data.special_text("link_battle", text).replace(
+		"%s%04X>" % [Gen2TextStream.RAM_MARKER, int(layout["trainer_name_wram"])], partner
+	))
 
 
 func _open_link_screen(screen_mode: int) -> bool:
@@ -6175,6 +6267,8 @@ func _open_link_screen(screen_mode: int) -> bool:
 	)
 	host.closed.connect(_on_link_screen_closed)
 	host.traded.connect(_on_link_traded)
+	host.cry_requested.connect(_play_species_cry)
+	host.music_requested.connect(_play_evolution_music)
 	_link_host = host
 	_screen.display(host)
 	if _link_host == null:
@@ -6191,11 +6285,32 @@ func _on_link_traded(result: Dictionary) -> void:
 	_open_trade_animation(result.get("animation", {}))
 
 
+## `EvolvePokemon` and `TryEvolvingMon` behind the movie, already written by
+## the trade's own transaction, so the screen only plays it, as a stone's does.
+func _resume_link_after_animation() -> void:
+	if _link_host == null:
+		return
+	var plan: Dictionary = _link_host.take_evolution_plan()
+	if plan.is_empty():
+		_link_host.animation_closed()
+		return
+	_evolution_transaction = false
+	_open_evolution([plan], null, func() -> void:
+		if _link_host != null:
+			_link_host.animation_closed()
+	)
+
+
 func _on_link_screen_closed() -> void:
 	var host: Gen2LinkScreen = _link_host
 	_link_host = null
+	var battle: Dictionary = _link_battle_request
+	_link_battle_request = {}
 	if host != null:
+		var to_battle: bool = host.mode == Gen2LinkScreen.MODE_BATTLE_WAIT
 		Gen2Screen.drop(host)
+		if to_battle and _start_link_battle(battle):
+			return
 	_show_script_results(_world.complete_runtime_request({"ok": true}))
 	if _renderer != null:
 		_renderer.refresh()
@@ -7703,6 +7818,7 @@ const PRESENTATION_HANDLERS: Dictionary = {
 	&"gen1_boulder_dust": &"_start_gen1_boulder_dust",
 	&"ss_anne_leaves": &"_start_gen1_ss_anne",
 	&"palette_fade": &"_start_script_fade",
+	&"cable_club_wait": &"_start_presentation_sounds",
 }
 
 ## Events the results loop only records, and what each raises.
@@ -7918,7 +8034,7 @@ func _apply_result_status(result: Dictionary, flags: Dictionary) -> StringName:
 		_script_prompt = "Script waiting on %s" % String(event.get("wait", &"frames"))
 		return &"none"
 	if event_type in [&"choice", &"menu"]:
-		_open_service_host()
+		_open_choice_host()
 		return &"break"
 	if event_type == &"runtime_request":
 		return _handle_runtime_request(event.get("request", {}))
@@ -8110,8 +8226,10 @@ func _request_soft_reset(_request: Dictionary) -> StringName:
 	return &"break"
 
 
+## `TryQuickSave`'s box; Generation 1's `SaveGameData` writes with none.
 func _request_quick_save(_request: Dictionary) -> StringName:
-	if _service_host == null and _open_quick_save_screen():
+	var silent: bool = _data != null and _data.generation == RomRegistry.GEN1
+	if not silent and _service_host == null and _open_quick_save_screen():
 		return &"break"
 	var written: Dictionary = persist_world_snapshot()
 	_show_script_results(_world.complete_runtime_request({
@@ -8888,11 +9006,8 @@ func _play_music_track(index: int) -> void:
 	_audio_player.play_record(record, &"map_music", _audio_assets())
 
 
-## Plays whatever `wMapMusic` currently holds. `Gen2WorldAPI` owns the write,
-## following PlayMapMusic and its SpecialMapMusic surf override on map entry, so
-## the track a tuned radio station left there survives until the player leaves the
-## map. Restarting a piece already playing is a presentation difference from the
-## source, which compares before it restarts.
+## Plays whatever `wMapMusic` holds, which `Gen2WorldAPI` writes on map entry
+## and a tuned radio station leaves behind.
 func _play_current_map_music() -> void:
 	if _audio_player == null or _data == null or _world == null or _world.current_map == null:
 		return
@@ -9043,11 +9158,8 @@ func _play_ledge_hop_sfx() -> void:
 	_play_sfx(SFX_JUMP_OVER_LEDGE)
 
 
-## `BattleAnimCmd_Sound` from a shiny pulse. The interpreter has no audio device,
-## as it has none in a battle either, so the screen spends what its commands
-## asked for. A cry is not one of them: the sparkle's script has no `anim_cry`.
-## The pulse plays on the enemy's side, as a battle plays it, so its sound pans
-## there.
+## `BattleAnimCmd_Sound` from a shiny pulse, panned to the enemy's side; the
+## sparkle's script has no `anim_cry`.
 func _play_encounter_sounds() -> void:
 	if _audio_player == null or _data == null:
 		return
@@ -9090,6 +9202,11 @@ func _start_gen1_ss_anne(event: Dictionary) -> void:
 		_effects.start_gen1_ss_anne()
 	if _renderer != null:
 		_renderer.refresh()
+
+
+func _start_presentation_sounds(event: Dictionary) -> void:
+	_start_sound_schedule((event.get("sounds", []) as Array).duplicate(true))
+	_advance_sound_schedule()
 
 
 func _start_heal_machine_sounds(event: Dictionary) -> void:
@@ -9176,11 +9293,8 @@ func _active_party_save() -> Gen2SaveData:
 	return _injected_save if _injected_save != null else _selected_runtime_save()
 
 
-## Mirrors the active save's party size and Pokerus state onto the world so a
-## queued script can answer VAR_PARTYCOUNT and CheckPokerus without the
-## scene-free world owning a save. Cleared, not zeroed, when no save is
-## selected, so a missing wiring fails loudly instead of reading an invented
-## empty party.
+## Mirrors the active save's party onto the world for VAR_PARTYCOUNT and
+## CheckPokerus; cleared rather than zeroed when no save is selected.
 func _refresh_party_summary() -> void:
 	if _world == null:
 		return
@@ -9294,11 +9408,8 @@ func _stored_id_numbers(save: Gen2SaveData) -> Array:
 	return out
 
 
-## `IsStarterPikachuAliveInOurParty` and `IsSurfingPikachuInParty`: the starter
-## is a Pikachu carrying the player's ID and the first five letters of the
-## player's name, with HP left; the surfer is any Pikachu knowing SURF. The two
-## status facts are `IsPlayerPikachuAsleepInParty` and
-## `CheckPikachuStatusCondition`, read off the same member.
+## `IsStarterPikachuAliveInOurParty`, `IsSurfingPikachuInParty`,
+## `IsPlayerPikachuAsleepInParty` and `CheckPikachuStatusCondition`.
 func _starter_pikachu(save: Gen2SaveData) -> Dictionary:
 	var out: Dictionary = {"alive": false, "surfing": false, "asleep": false, "ailing": false}
 	if save == null:

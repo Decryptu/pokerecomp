@@ -6,11 +6,8 @@ extends Control
 ## hosts and API.
 
 signal completed(results: Array)
-## The sound this screen asks for, played by whoever owns the driver: the world
-## screen owns the one player a map's music and its effects share, and
-## [Gen2WorldAudioHost] is an inspection probe that must never stand in for it.
-## [param waited] is `WaitPlaySFX`, or a `WaitSFX` spent by hand, so the request
-## is never the one `PlaySFX`'s gate refuses; the wait itself is not spent.
+## The sound this screen asks for, played by the world screen's own driver.
+## [param waited] is `WaitPlaySFX`; the wait itself is not spent.
 signal sfx_requested(index: int, waited: bool)
 ## `PlayMonCry2` from a screen this one opens, passed on for the same reason.
 signal cry_requested(species: int)
@@ -66,11 +63,8 @@ const MART_SELL_CONFIRM: StringName = &"sell_confirm"
 const MART_SELL_STAGES: Array[StringName] = [
 	MART_SELL, MART_SELL_QUANTITY, MART_SELL_CONFIRM,
 ]
-## `MenuHeader_BuySell`'s three rows, inline in `engine/items/mart.asm` and
-## reached by no script, the way [Gen2WorldPC]'s BILL'S PC rows are.
-## `BuySellQuitText` spells the same three, in a box `data/text_boxes.asm` puts
-## at (0,0) to (10,6) whose first row is the one under the border: the string is
-## placed at (2,1) rather than through `_InitVerticalMenuCursor`.
+## `MenuHeader_BuySell`'s three rows, and `BuySellQuitText`'s box at (0,0) to
+## (10,6) with its string at (2,1).
 const MART_TOP_ROWS: Array[String] = ["BUY", "SELL", "QUIT"]
 const GEN1_TOP_MENU_BOX := Rect2i(0, 0, 10, 6)
 const MART_TOP_BUY: int = 0
@@ -722,6 +716,10 @@ func _press_elevator(button: int) -> void:
 	_render_elevator()
 
 
+## The page under a YES/NO whose question paged.
+var question_page: String = ""
+
+
 func _open_menu(input: Dictionary) -> void:
 	_mode = MODE.MENU
 	_menu_input = input.duplicate(true)
@@ -731,7 +729,7 @@ func _open_menu(input: Dictionary) -> void:
 	_title = "MENU"
 	## The question the box behind this menu is still showing. An unattached menu
 	## says nothing: a command name is an internal key, never a printed one.
-	_summary = String(input.get("text", ""))
+	_summary = question_page if not question_page.is_empty() else String(input.get("text", ""))
 	_status = ""
 	_render_rows()
 
@@ -841,12 +839,19 @@ func _open_script_menu(values: Dictionary) -> void:
 	_mode = MODE.SCRIPT_MENU
 	_script_menu = values.duplicate(true)
 	_cursor = 0
+	_script_menu_hold = 0
 	_set_overlay_open(true)
 	_open_map_overlay_view()
 	_render_script_menu()
 
 
+## `LinkMenu` holds the chosen row under a hollow cursor for `hold_frames`.
+var _script_menu_hold: int = 0
+
+
 func _press_script_menu(button: int) -> void:
+	if _script_menu_hold > 0:
+		return
 	if button == PokeButton.UP or button == PokeButton.DOWN:
 		_cursor = _script_menu_moved(button == PokeButton.UP)
 		_render_script_menu()
@@ -855,11 +860,22 @@ func _press_script_menu(button: int) -> void:
 		_cursor = _script_menu_sideways(button == PokeButton.LEFT)
 		_render_script_menu()
 		return
-	if button == PokeButton.B:
-		_finish_runtime({"ok": true, "row": -1})
+	if button not in [PokeButton.A, PokeButton.B]:
 		return
-	if button == PokeButton.A:
-		_finish_runtime({"ok": true, "row": _cursor})
+	var row: int = _cursor if button == PokeButton.A else -1
+	_script_menu_hold = int(_script_menu.get("hold_frames", 0))
+	if _script_menu_hold <= 0:
+		_finish_runtime({"ok": true, "row": row})
+		return
+	_script_menu["held_row"] = row
+	_render_script_menu()
+
+
+func _advance_script_menu_hold() -> void:
+	_script_menu_hold -= 1
+	if _script_menu_hold > 0:
+		return
+	_finish_runtime({"ok": true, "row": int(_script_menu.get("held_row", -1))})
 
 
 ## `HandleMenuInput` with no wrap, down one column of the grid the menu names.
@@ -898,6 +914,9 @@ func _render_script_menu() -> void:
 		return
 	var page: Dictionary = _script_menu.duplicate(true)
 	page["cursor"] = _cursor
+	if _script_menu_hold > 0:
+		page["held"] = true
+		page["cursor"] = int(_script_menu.get("held_row", -1))
 	var image: Image = _service_page.render(
 		"", "", [], -1, String(_script_menu.get("text", ""))
 	)
@@ -1234,11 +1253,8 @@ func _gen1_mart() -> bool:
 	return _data != null and _data.generation == RomRegistry.GEN1
 
 
-## `w2DMenuNumRows`: the CANCEL row is only on offer when the whole list fits,
-## because `ScrollingMenu_InitFlags` adds it to the row count and `.d_down`
-## stops scrolling at `size - height`. `DisplayListMenuID` instead fixes
-## `wMaxMenuItem` at 2 and prints a fourth name the cursor never reaches, so its
-## CANCEL is always on offer and its list always scrolls.
+## `w2DMenuNumRows`: `ScrollingMenu_InitFlags` counts CANCEL only when the list
+## fits; `DisplayListMenuID` fixes `wMaxMenuItem` at 2 and always scrolls.
 func _mart_row_count() -> int:
 	var rows: int = _mart_list().size()
 	if _gen1_mart():
@@ -3301,11 +3317,8 @@ func _on_boxes_cry(species: int) -> void:
 	cry_requested.emit(species)
 
 
-## `Gen2BoxScreen.closed` carries the result its own host would have resumed a
-## script with; nothing is waiting here, because the PC's request is still open.
 ## `_HallOfFamePC.MasterLoop`: one stored team at a time, newest first, until
-## `LoadHOFTeam` runs out of records or B leaves; `PKMNLeaguePC` walks them
-## oldest first. The panels are the induction's own.
+## the records run out or B leaves; `PKMNLeaguePC` walks them oldest first.
 func _open_hall_of_fame(index: int) -> void:
 	var records: Array = _save.hall_of_fame if _save != null else []
 	var pages: Array = Gen2HallOfFame.record_pages(
@@ -3468,6 +3481,9 @@ func radio_music_playing() -> int:
 ## One hardware frame of whichever card is open. Only the radio card spends any:
 ## `PlayRadioShow` is the one thing the Pokegear runs per frame.
 func advance_frame() -> void:
+	if _mode == MODE.SCRIPT_MENU and _script_menu_hold > 0:
+		_advance_script_menu_hold()
+		return
 	if _pokegear == null or _pokegear.card() != Gen2PokegearScreen.CARD_RADIO:
 		return
 	if _world.advance_radio_frame():
@@ -3536,12 +3552,8 @@ func open_town_map(world: Gen2WorldAPI, data: GameData, save: Gen2SaveData) -> b
 	return _town_map != null
 
 
-## `_FlyMap` opened as an overlay of its own: the region map with the flypoint
-## cursor, and nothing of the Pokegear around it.
-##
-## The chosen spawn is reported through [signal completed] as
-## `{ "kind": &"fly_chosen", "spawn": index }`, and a cancel reports -1, which is
-## the `ld a, -1` `.pressedB` leaves.
+## `_FlyMap` as an overlay of its own, reporting `{ "kind": &"fly_chosen",
+## "spawn": index }` through [signal completed], -1 being `.pressedB`'s.
 func open_fly_map(
 	world: Gen2WorldAPI, data: GameData, save: Gen2SaveData, request: Dictionary
 ) -> bool:
@@ -4091,11 +4103,8 @@ func _dial_image() -> Image:
 	)
 
 
-## The `menu_coords` box this mode's own list sits in. `null` draws no box,
-## which is what MODE.MENU falls back to before a menu is loaded.
-## `TextBoxBorder hlcoord 0, 0` with each menu's own height, as the corners
-## `menu_coords` would name: every one of them places its strings at (2,2) with
-## the cursor on column 1. The top menu's height is the rows it offers.
+## `TextBoxBorder hlcoord 0, 0` with each menu's own height, strings at (2,2)
+## and the cursor on column 1; `null` draws no box.
 const GEN1_PC_BOXES: Dictionary = {
 	MODE.PC_ITEMS: Rect2i(0, 0, 15, 9),
 	MODE.PC_BOXES: Rect2i(0, 0, 13, 11),

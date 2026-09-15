@@ -345,6 +345,7 @@ func _gen1_data(
 		{"bank": Gen1Layout.ANIM_BANK, "address": BASE, "count": 1, "data": _bytes(bytes)},
 		[{"tiles": 79, "sheet": true}],
 		{
+			&"attack_anims": BASE,
 			&"subanims": GEN1_SUBANIMS,
 			&"frame_blocks": GEN1_BLOCKS,
 			&"base_coords": GEN1_COORDS,

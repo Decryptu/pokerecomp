@@ -1918,7 +1918,9 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 		_animate_current_move(turn)
 
 	if flag == Gen2Status.SLEEP_MASK:
-		defender.status = Gen2Status.roll_sleep(turn.rng(), turn.battle.in_battle_tower)
+		defender.status = Gen2Status.roll_sleep(
+			turn.rng(), turn.battle.in_battle_tower, turn.battle.gen1_stadium_cup
+		)
 	else:
 		defender.status |= flag
 

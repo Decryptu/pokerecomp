@@ -107,8 +107,46 @@ const RECORD_DIGITS: int = 4
 const RECORD_EMPTY_NAME: String = "  ---"
 const RECORD_EMPTY_COUNTS: String = "-"
 
+## `TradeCenter_DrawPartyLists` and the boxes over it, each
+## `CableClub_TextBoxBorder`'s inside.
+const GEN1_PLAYER_NAME_AT: Vector2i = Vector2i(5, 0)
+const GEN1_PARTNER_NAME_AT: Vector2i = Vector2i(5, 8)
+const GEN1_PLAYER_LIST_AT: Vector2i = Vector2i(2, 1)
+const GEN1_PARTNER_LIST_AT: Vector2i = Vector2i(2, 9)
+const GEN1_CURSOR_COLUMN: int = 1
+## `TradeCenter_DrawCancelBox`: `$7e` over 49 cells, then the box at (0, 15).
+const GEN1_FILL_TILE: int = 8
+const GEN1_FILL_AT: Vector2i = Vector2i(11, 15)
+const GEN1_FILL_CELLS: int = 2 * COLUMNS + 9
+const GEN1_CANCEL_BOX: Rect2i = Rect2i(0, 15, 9, 1)
+const GEN1_CANCEL_AT: Vector2i = Vector2i(2, 16)
+const GEN1_CANCEL_ARROW_AT: Vector2i = Vector2i(1, 16)
+const GEN1_FOOTER_BOX: Rect2i = Rect2i(0, 14, 18, 2)
+const GEN1_FOOTER_AT: Vector2i = Vector2i(2, 16)
+## `TradeCenter_Trade`'s box and `TRADE_CANCEL_MENU`'s.
+const GEN1_MESSAGE_BOX: Rect2i = Rect2i(0, 12, 18, 4)
+const GEN1_MESSAGE_AT: Vector2i = Vector2i(1, 14)
+const GEN1_CONFIRM_BOX: Rect2i = Rect2i(10, 7, 7, 3)
+const GEN1_CONFIRM_AT: Vector2i = Vector2i(12, 8)
+const GEN1_CONFIRM_ROW_SPACING: int = 1
+const GEN1_CONFIRM_CURSOR_COLUMN: int = 11
+const GEN1_WAITING_BOX: Rect2i = Rect2i(3, 10, 11, 1)
+const GEN1_WAITING_AT: Vector2i = Vector2i(4, 11)
+const GEN1_PLEASE_WAIT_BOX: Rect2i = Rect2i(3, 8, 12, 2)
+const GEN1_PLEASE_WAIT_AT: Vector2i = Vector2i(4, 10)
+
+## `PokeballTileGraphics`' four, as `PickPokeball` chooses them.
+const VERSUS_BALL: int = 0
+const VERSUS_BALL_STATUSED: int = 1
+const VERSUS_BALL_FAINTED: int = 2
+const VERSUS_BALL_EMPTY: int = 3
+const VERSUS_VS: String = "<BOLD_V><BOLD_S>"
+
 var font: Gen2Font = null
 var palette: PackedColorArray = PackedColorArray()
+var strings: Dictionary = {}
+var gen1: bool = false
+var _balls: PackedByteArray = PackedByteArray()
 
 var _tiles: PackedByteArray = PackedByteArray()
 var _tile_count: int = 0
@@ -119,7 +157,11 @@ var _box_tiles: Array[int] = CRYSTAL_BOX_TILES
 
 
 static func from_data(data: GameData) -> Gen2LinkPage:
-	if data == null or not data.has_link_border():
+	if data == null:
+		return null
+	if data.generation == RomRegistry.GEN1:
+		return _from_gen1_data(data)
+	if not data.has_link_border():
 		return null
 	var page := Gen2LinkPage.new()
 	page.font = Gen2Font.from_data(data)
@@ -139,20 +181,37 @@ static func from_data(data: GameData) -> Gen2LinkPage:
 	return page
 
 
+## `LoadTrainerInfoTextBoxTiles`' nine at `$76`: Gold and Silver's block.
+static func _from_gen1_data(data: GameData) -> Gen2LinkPage:
+	var tiles: PackedByteArray = data.tile_indices("trainer_card_box")
+	if tiles.is_empty():
+		return null
+	var page := Gen2LinkPage.new()
+	page.font = Gen2Font.from_data(data)
+	if page.font == null:
+		return null
+	page.gen1 = true
+	page.palette = PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	page._tiles = tiles
+	page._tile_count = Gen1Layout.TRAINER_CARD_BOX_TILES
+	page._box_tiles = GOLD_SILVER_BOX_TILES
+	page._balls = data.tile_indices("battle_balls")
+	for name: String in [
+		"please_wait", "cancel", "stats_trade", "waiting", "trade_completed", "trade_canceled",
+		"win", "lose", "draw",
+	]:
+		page.strings[name] = data.special_text("cable_club_strings", name)
+	return page
+
+
 ## Whether this cartridge lays the trade screen out from a tilemap, which is
 ## Crystal alone.
 func has_screen_tilemap() -> bool:
 	return not _screen.is_empty()
 
 
-## `InitTradeMenuDisplay` and everything `LinkTradeMenu` draws over it.
-## [param state] carries what is on screen rather than what the player may do:
-## `player`/`partner` are `{name, species}` with the species names resolved,
-## `list` is 0 for the player's half and 1 for the partner's, `index` the cursor
-## row, `partner_choice` the row `LinkTradePlaceArrow` marks or -1, `footer` -1 or
-## 0/1 for STATS or TRADE, `cancel` whether the cursor is on CANCEL, `message` the
-## bottom box's lines, `confirm` the TRADE/CANCEL row or -1, and `waiting` whether
-## `WAITING..!` stands.
+## `InitTradeMenuDisplay` and everything `LinkTradeMenu` draws over it, off
+## [method Gen2LinkScreen.trade_state]: what is on screen, not what may be pressed.
 func draw_trade(state: Dictionary) -> PackedByteArray:
 	var indices := PackedByteArray()
 	indices.resize(WIDTH * HEIGHT)
@@ -222,10 +281,145 @@ func draw_please_wait() -> PackedByteArray:
 	indices.resize(WIDTH * HEIGHT)
 	if font == null:
 		return indices
+	if gen1:
+		_box(indices, GEN1_PLEASE_WAIT_BOX)
+		_text(indices, String(strings.get("please_wait", "")), GEN1_PLEASE_WAIT_AT)
+		return indices
 	_draw_trade_background(indices)
 	_box(indices, PLEASE_WAIT_BOX)
 	_text(indices, PLEASE_WAIT_STRING, PLEASE_WAIT_AT)
 	return indices
+
+
+## [method draw_trade]'s state, with `held` for a chosen row's `▷` and `blank`
+## for the cleared screen behind the movie.
+func draw_gen1_trade(state: Dictionary) -> PackedByteArray:
+	var indices := PackedByteArray()
+	indices.resize(WIDTH * HEIGHT)
+	if font == null:
+		return indices
+	if not bool(state.get("blank", false)):
+		_draw_gen1_lists(indices, state)
+	var message: Array = state.get("message", [])
+	if not message.is_empty():
+		_box(indices, GEN1_MESSAGE_BOX)
+		var spacing: int = int(state.get("message_spacing", MESSAGE_PRINTED_SPACING))
+		for line: int in message.size():
+			_text(indices, String(message[line]), GEN1_MESSAGE_AT + Vector2i(0, line * spacing))
+	var confirm: int = int(state.get("confirm", -1))
+	if confirm >= 0:
+		_box(indices, GEN1_CONFIRM_BOX)
+		for row: int in CONFIRM_ROWS.size():
+			_text(indices, CONFIRM_ROWS[row], GEN1_CONFIRM_AT + Vector2i(0, row * GEN1_CONFIRM_ROW_SPACING))
+		_text(indices, CANCEL_ARROW, Vector2i(
+			GEN1_CONFIRM_CURSOR_COLUMN, GEN1_CONFIRM_AT.y + confirm * GEN1_CONFIRM_ROW_SPACING
+		))
+	if bool(state.get("waiting", false)):
+		_box(indices, GEN1_WAITING_BOX)
+		_text(indices, String(strings.get("waiting", "")), GEN1_WAITING_AT)
+	return indices
+
+
+## `DisplayLinkBattleVersusTextBox`, with `EndOfBattle`'s `result` over the VS.
+func draw_gen1_versus(state: Dictionary) -> PackedByteArray:
+	var indices := PackedByteArray()
+	indices.resize(WIDTH * HEIGHT)
+	if font == null:
+		return indices
+	_box(indices, Gen1Layout.VERSUS_BOX)
+	var player: Dictionary = state.get("player", {})
+	var enemy: Dictionary = state.get("enemy", {})
+	_text(indices, String(player.get("name", "")), Gen1Layout.VERSUS_PLAYER_AT)
+	_text(indices, String(enemy.get("name", "")), Gen1Layout.VERSUS_ENEMY_AT)
+	var result: String = String(state.get("result", ""))
+	if result.is_empty():
+		_text(indices, VERSUS_VS, Gen1Layout.VERSUS_VS_AT)
+	else:
+		_text(indices, result, Gen1Layout.VERSUS_RESULT_AT)
+	for side: int in 2:
+		var balls: Array = (enemy if side == 1 else player).get("balls", [])
+		for slot: int in balls.size():
+			_ball(indices, int(balls[slot]),
+				Gen1Layout.VERSUS_BALL_X + slot * Gen1Layout.VERSUS_BALL_STEP - Gen1Lcd.OAM_X_OFFSET,
+				Gen1Layout.VERSUS_BALL_Y[side] - Gen1Lcd.OAM_Y_OFFSET)
+	return indices
+
+
+## `BattleTransition` over the cleared screen, under `rBGP`'s order.
+func draw_gen1_transition(transition: Gen2BattleTransition, square: PackedByteArray) -> PackedByteArray:
+	var indices := PackedByteArray()
+	indices.resize(WIDTH * HEIGHT)
+	if transition == null:
+		return indices
+	var cells: PackedByteArray = transition.cells()
+	for index: int in cells.size():
+		var at := Vector2i(index % COLUMNS, index / COLUMNS)
+		match int(cells[index]):
+			Gen2BattleTransition.CELL_BLACK:
+				for y: int in TILE:
+					for x: int in TILE:
+						indices[(at.y * TILE + y) * WIDTH + at.x * TILE + x] = 3
+			Gen2BattleTransition.CELL_SQUARE:
+				if square.size() >= TILE * TILE:
+					Gen2Font.blit_slot(square, TILE, 0, indices, WIDTH, at.x * TILE, at.y * TILE)
+	var order: int = transition.palette_order()
+	for pixel: int in indices.size():
+		indices[pixel] = (order >> (2 * int(indices[pixel]))) & 3
+	return indices
+
+
+## `PickPokeball`.
+static func versus_ball(row: Dictionary) -> int:
+	if row.is_empty():
+		return VERSUS_BALL_EMPTY
+	if int(row.get("hp", 0)) <= 0:
+		return VERSUS_BALL_FAINTED
+	return VERSUS_BALL_STATUSED if int(row.get("status", 0)) != 0 else VERSUS_BALL
+
+
+func _ball(indices: PackedByteArray, tile: int, x: int, y: int) -> void:
+	if _balls.is_empty():
+		return
+	Gen2Font.blit_slot(_balls, _balls.size() / TILE, tile, indices, WIDTH, x, y)
+
+
+func _draw_gen1_lists(indices: PackedByteArray, state: Dictionary) -> void:
+	_box(indices, Rect2i(0, 0, 18, 6))
+	_box(indices, Rect2i(0, 8, 18, 6))
+	var player: Dictionary = state.get("player", {})
+	var partner: Dictionary = state.get("partner", {})
+	_text(indices, String(player.get("name", "")), GEN1_PLAYER_NAME_AT)
+	_text(indices, String(partner.get("name", "")), GEN1_PARTNER_NAME_AT)
+	for row: int in (player.get("species", []) as Array).size():
+		_text(indices, String(player["species"][row]), GEN1_PLAYER_LIST_AT + Vector2i(0, row))
+	for row: int in (partner.get("species", []) as Array).size():
+		_text(indices, String(partner["species"][row]), GEN1_PARTNER_LIST_AT + Vector2i(0, row))
+	for cell: int in GEN1_FILL_CELLS:
+		var at: int = GEN1_FILL_AT.y * COLUMNS + GEN1_FILL_AT.x + cell
+		_blit(indices, GEN1_FILL_TILE, Vector2i(at % COLUMNS, at / COLUMNS))
+	_box(indices, GEN1_CANCEL_BOX)
+	_text(indices, String(strings.get("cancel", "")), GEN1_CANCEL_AT)
+	var partner_choice: int = int(state.get("partner_choice", -1))
+	if partner_choice >= 0:
+		_text(indices, PARTNER_ARROW, Vector2i(
+			GEN1_CURSOR_COLUMN, GEN1_PARTNER_LIST_AT.y + partner_choice
+		))
+	if bool(state.get("cancel", false)):
+		_text(indices, CANCEL_ARROW_SENT if bool(state.get("cancel_sent", false)) \
+			else CANCEL_ARROW, GEN1_CANCEL_ARROW_AT)
+	elif int(state.get("index", -1)) >= 0:
+		var list: int = int(state.get("list", 0))
+		_text(indices, CANCEL_ARROW_SENT if bool(state.get("held", false)) else CANCEL_ARROW,
+			Vector2i(GEN1_CURSOR_COLUMN,
+				(GEN1_PARTNER_LIST_AT.y if list == 1 else GEN1_PLAYER_LIST_AT.y)
+				+ int(state["index"])))
+	var footer: int = int(state.get("footer", -1))
+	if footer >= 0:
+		_box(indices, GEN1_FOOTER_BOX)
+		_text(indices, String(strings.get("stats_trade", "")), GEN1_FOOTER_AT)
+		_text(indices, CANCEL_ARROW, Vector2i(
+			FOOTER_TRADE_COLUMN if footer == 1 else FOOTER_STATS_COLUMN, FOOTER_CURSOR_ROW
+		))
 
 
 ## `ReadAndPrintLinkBattleRecord`. [param record] is

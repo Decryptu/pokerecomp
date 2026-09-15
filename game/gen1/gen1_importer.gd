@@ -249,8 +249,36 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"evolution": ["evolution_text", Gen1Layout.EVOLUTION_TEXT_AT],
 	"stone_refusal": ["stone_refusal_text", Gen1Layout.STONE_REFUSAL_TEXT_AT],
 	"trade_anim": ["trade_anim_text", Gen1Layout.TRADE_ANIM_TEXT_AT],
+	"link": ["link_text", Gen1Layout.LINK_TEXT_AT],
+	"link_version": ["link_version_text", Gen1Layout.LINK_VERSION_TEXT_AT],
+	"trade_center": ["trade_center_text", Gen1Layout.TRADE_CENTER_TEXT_AT],
+	"just_a_moment": ["just_a_moment_text", {"just_a_moment": 0x00}],
+	"colosseum2": ["colosseum2_text", Gen1Layout.COLOSSEUM2_TEXT_AT],
+}
+const CUP_STRINGS: Dictionary = {
+	"view_rules": ["cup_view_rules_string", 0],
+	"rows": ["cup_rows_string", 0],
+}
+const CUP_RULES_MAX: int = 64
+const LINK_BATTLE_TEXTS: Dictionary = {
+	"defeated": "link_battle_defeated_text", "lost": "link_battle_lost_text",
+	"items": "link_battle_items_text",
+}
+## The cable club's `db` strings, by layout key and delta.
+const CABLE_CLUB_STRINGS: Dictionary = {
+	"options": ["link_menu_rows", 0],
+	"please_wait": ["please_wait_string", 0],
+	"cancel": ["cancel_string", 0],
+	"stats_trade": ["stats_trade_string", 0],
+	"waiting": ["waiting_string", 0],
+	"trade_completed": ["trade_center_text", Gen1Layout.TRADE_COMPLETED_AT],
+	"trade_canceled": ["trade_center_text", Gen1Layout.TRADE_CANCELED_AT],
+	"win": ["link_result_strings", Gen1Layout.LINK_RESULT_STRINGS_AT["win"]],
+	"lose": ["link_result_strings", Gen1Layout.LINK_RESULT_STRINGS_AT["lose"]],
+	"draw": ["link_result_strings", Gen1Layout.LINK_RESULT_STRINGS_AT["draw"]],
 }
 const CREDITS_ORDER_MAX: int = 256
+const LINK_MENU_FIRST_ROW: String = "TRADE CENTER"
 const CARD_KEY_TEXT_NAMES: Array[String] = ["card_key_success", "card_key_fail"]
 
 const INTRO_TEXT_RUNS: Dictionary = {
@@ -617,6 +645,17 @@ static func _verify_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
 		or rom.u8(warp + Gen1Layout.NEW_GAME_WARP_TILESET_AT) \
 			>= Gen1Layout.tileset_count(rom.id):
 		return _fail("NewGameWarp names map %d." % rom.u8(warp))
+	for row: int in Gen1Layout.CABLE_CLUB_WARP_ROWS.size():
+		var at: int = warp + (row + 1) * Gen1Layout.SPECIAL_WARP_SIZE
+		if rom.u8(at) != rom.u8(warp + (row | 1) * Gen1Layout.SPECIAL_WARP_SIZE) \
+			or not Gen1Layout.is_real_map(rom.u8(at)):
+			return _fail("%s's special warp names map %d." % [
+				Gen1Layout.CABLE_CLUB_WARP_ROWS[row], rom.u8(at),
+			])
+	if not Gen1Text.decode(
+		rom.bytes(), int(layout["link_menu_rows"]), Gen1Layout.CABLE_CLUB_STRING_MAX
+	).begins_with(LINK_MENU_FIRST_ROW):
+		return _fail("CableClubOptionsText does not open on TRADE CENTER.")
 	return _ok()
 
 
@@ -1381,6 +1420,9 @@ func _import_moves(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 			),
 			# The byte itself too, which `AIMoveChoiceModification*` compare.
 			"gen1_effect": rom.u8(entry + Gen1Layout.MOVE_EFFECT),
+			"effect_chance": int(Gen1Layout.SIDE_EFFECT_CHANCES.get(
+				rom.u8(entry + Gen1Layout.MOVE_EFFECT), 0
+			)),
 			"power": Gen1Layout.move_power(
 				move, rom.u8(entry + Gen1Layout.MOVE_POWER)
 			),
@@ -1422,22 +1464,29 @@ func _import_special_warps(rom: RomFile, layout: Dictionary) -> Dictionary:
 		(rows[index] as Dictionary)["y"] = rom.u8(record)
 		(rows[index] as Dictionary)["x"] = rom.u8(record + 1)
 	var new_game: int = int(layout["new_game_warp"])
-	var home: int = new_game + Gen1Layout.NEW_GAME_WARP_RECORD_AT \
-		+ Gen1Layout.FLY_WARP_RECORD_AT
+	var cable_club: Dictionary = {}
+	for row: int in Gen1Layout.CABLE_CLUB_WARP_ROWS.size():
+		cable_club[Gen1Layout.CABLE_CLUB_WARP_ROWS[row]] = _special_warp(
+			rom, new_game + (row + 1) * Gen1Layout.SPECIAL_WARP_SIZE
+		)
 	return {
 		"dungeon_warps": rows,
-		"new_game_warp": {
-			"map": rom.u8(new_game),
-			"y": rom.u8(home),
-			"x": rom.u8(home + 1),
-			"tileset": rom.u8(new_game + Gen1Layout.NEW_GAME_WARP_TILESET_AT),
-		},
+		"new_game_warp": _special_warp(rom, new_game),
+		"cable_club_warps": cable_club,
 		"escape_rope_tilesets": _byte_list(rom, int(layout["escape_rope_tilesets"])),
 		"rest_houses": _byte_list(rom, int(layout["rest_houses"])),
 		"bike_riding_tilesets": _byte_list(rom, int(layout["bike_riding_tilesets"])),
 		"forced_bike_surf": _forced_bike_surf(rom, layout),
 		"snorlax_flute": _snorlax_flute(rom, layout),
 		"boulder_dust_offsets": _boulder_dust_offsets(rom, layout),
+	}
+
+
+static func _special_warp(rom: RomFile, at: int) -> Dictionary:
+	var cell: int = at + Gen1Layout.NEW_GAME_WARP_RECORD_AT + Gen1Layout.FLY_WARP_RECORD_AT
+	return {
+		"map": rom.u8(at), "y": rom.u8(cell), "x": rom.u8(cell + 1),
+		"tileset": rom.u8(at + Gen1Layout.NEW_GAME_WARP_TILESET_AT),
 	}
 
 
@@ -1640,6 +1689,43 @@ func _import_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	out["npc_trade"] = _import_trade_text(rom, layout)
 	out["card_key"] = _import_card_key_text(rom, layout)
 	out["safari_labels"] = _import_safari_labels(rom, layout)
+	out["cable_club_strings"] = _import_cable_club_strings(rom, layout)
+	if out.has("link_version"):
+		(out["link"] as Dictionary).merge(out["link_version"])
+		out.erase("link_version")
+	if layout.has("cup_rules_strings"):
+		out["cable_club_strings"].merge(_import_cup_strings(rom, layout))
+	var link_battle: Dictionary = {}
+	for name: String in LINK_BATTLE_TEXTS:
+		link_battle[name] = facility_text(rom, int(layout[String(LINK_BATTLE_TEXTS[name])]))
+	out["link_battle"] = link_battle
+	return out
+
+
+func _import_cup_strings(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	var next: String = String(Gen1Text.CONTROL_CHARACTERS[Gen1Text.NEXT_LINE])
+	for name: String in CUP_STRINGS:
+		var row: Array = CUP_STRINGS[name]
+		out[name] = Gen1Text.decode(
+			rom.bytes(), int(layout[String(row[0])]) + int(row[1]), CUP_RULES_MAX
+		).replace(next, "\n")
+	var at: int = int(layout["cup_rules_strings"])
+	for cup: int in Gen1Layout.CUP_COUNT:
+		out["rules_%d" % cup] = Gen1Text.decode(rom.bytes(), at, CUP_RULES_MAX).replace(next, "\n")
+		at = Gen1Text.terminated_end(rom.bytes(), at, CUP_RULES_MAX)
+	return out
+
+
+## A `db` string's rows, `<NEXT>` kept where `PlaceString` would drop a row.
+func _import_cable_club_strings(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for name: String in CABLE_CLUB_STRINGS:
+		var row: Array = CABLE_CLUB_STRINGS[name]
+		out[name] = Gen1Text.decode(
+			rom.bytes(), int(layout[String(row[0])]) + int(row[1]),
+			Gen1Layout.CABLE_CLUB_STRING_MAX
+		).replace(String(Gen1Text.CONTROL_CHARACTERS[Gen1Text.NEXT_LINE]), "\n")
 	return out
 
 
@@ -2763,6 +2849,7 @@ func _import_battle_anims(rom: RomFile, layout: Dictionary, directory: String) -
 				"bytes": _bank_bytes(bank, lowest, highest),
 			},
 			"tables": {
+				"attack_anims": tables["attack_anims"],
 				"subanims": tables["subanims"],
 				"frame_blocks": tables["frame_blocks"],
 				"base_coords": tables["base_coords"],
