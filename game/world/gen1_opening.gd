@@ -199,7 +199,7 @@ const YELLOW_BLINK_MASK: int = 0xF3
 const YELLOW_TIMER_RESTARTS: Array[int] = [0x00, 0x80, 0x90]
 const YELLOW_RESET_FRAMES: int = 0xC00
 const YELLOW_BUBBLE_DELAY: int = DELAY3
-## The two `PlayPikachuSoundClip`s, spent in silence.
+## The two `PlayPikachuSoundClip`s.
 const YELLOW_TITLE_CRY: int = 0
 const YELLOW_TITLE_CRY_CLOSE: int = 10
 
@@ -980,7 +980,7 @@ func _yellow_title_steps() -> Array:
 			_place_yellow_bubble()
 			_hwy = Gen1Lcd.HEIGHT),
 		delay_step(YELLOW_BUBBLE_DELAY),
-		delay_step(Gen1YellowIntro.pikachu_clip_frames(_data, YELLOW_TITLE_CRY)),
+		do_step(func() -> Array: return pikachu_clip_steps(YELLOW_TITLE_CRY)),
 		wait_sound_step(),
 		do_step(func() -> void:
 			_stop_music()
@@ -1004,7 +1004,7 @@ func _yellow_title_steps() -> Array:
 		do_step(func() -> void: _stop_music()),
 		{"finish": &"restart_opening"},
 		label_step(&"yellow_title_end"),
-		delay_step(Gen1YellowIntro.pikachu_clip_frames(_data, YELLOW_TITLE_CRY_CLOSE)),
+		do_step(func() -> Array: return pikachu_clip_steps(YELLOW_TITLE_CRY_CLOSE)),
 	])
 	steps.append_array(_leave_title_steps())
 	return steps

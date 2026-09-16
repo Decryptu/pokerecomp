@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the lost-doll errand between Saffron and Vermilion and the Magnet Train
-## ride it pays for, for both command profiles. Three findings carry the leg. The
-## Copycat is a variable sprite whose row is InitializeEventsScript's SPRITE_LASS
-## until her own script overwrites it, and GetMonSprite answers SPRITE_CHRIS for a
-## slot with no row at all, which is what a lost table looks like. Each station is
-## two regions with no walkable seam, so the only way onto a train is the officer's
-## own forced `applymovement`. And the errand is a three-legged loop whose order the
-## cartridge enforces through the Fan Club's own event check.
+## The lost-doll errand and the Magnet Train ride it pays for. The Copycat is a
+## variable sprite whose row is SPRITE_LASS until her script overwrites it, each
+## station is two regions joined only by the officer's forced `applymovement`,
+## and the errand's order is enforced through the Fan Club's own event check.
 
 
 ## constants/map_constants.asm. Nothing on this leg splits between the profiles.

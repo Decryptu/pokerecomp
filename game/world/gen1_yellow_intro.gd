@@ -136,14 +136,6 @@ static func create(host: Gen1Opening, data: GameData) -> Gen1YellowIntro:
 	return out
 
 
-## Frames one of `PikachuCriesPointerTable`'s clips holds the game.
-static func pikachu_clip_frames(data: GameData, index: int) -> int:
-	var cries: Array = data.gen1_pikachu().get("cries", []) if data != null else []
-	if index < 0 or index >= cries.size():
-		return 0
-	return Gen1Layout.pikachu_cry_frames(int(cries[index]))
-
-
 func finished() -> bool:
 	return _scene & SCENE_DONE != 0
 

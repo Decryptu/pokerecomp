@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Every tileset's `wTilesetAnim` command list, on all three cartridges, run for a
-## whole cycle. The list and its commands are byte identical between the pins apart
-## from the addresses `Gen2Layout`'s `world_animation_functions` names. What a
-## reading of them costs is which command ticks `wTileAnimationTimer`:
-## `StandingTileFrame8` and `StandingTileFrame` do, and so does
-## `ScrollTileRightLeft`, which is the one tick the cave, dark cave and ice
-## path lists have. A timer that never moves leaves those three maps with a still
-## water palette and a tile scrolling one way for ever.
+## Every tileset's `wTilesetAnim` command list, run for a whole cycle. What a
+## reading costs is which command ticks `wTileAnimationTimer`:
+## `StandingTileFrame8`, `StandingTileFrame` and `ScrollTileRightLeft`, the one
+## tick the cave, dark cave and ice path lists have.
 
 ## The whole set `Gen2WorldAnimation.tick` implements, which is every label
 ## `_AnimateTileset` can `jp hl` to. An operation outside it is an unread

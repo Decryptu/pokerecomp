@@ -13,6 +13,8 @@ signal closed()
 
 ## `PokeAnim_CryNoWait` inside Crystal's ANIM_MON_HOF, pokegold's `PlayMonCry`.
 signal cry_requested(species: int)
+## Yellow's `PlayPikachuSoundClip` for the starter, in place of its cry.
+signal pikachu_clip_requested(index: int)
 
 ## `ProfOaksPCRating`'s `PlayMusic MUSIC_NONE` and `PlaySFX`.
 signal rating_reached(sfx: int)
@@ -153,7 +155,10 @@ func _refresh() -> void:
 	set_process(_hold_frames > 0)
 	if StringName(page.get("kind", &"")) == Gen2HallOfFame.PAGE_MON \
 		and bool(page.get("cry", true)):
-		cry_requested.emit(int(page.get("species", 0)))
+		if page.has("pikachu_clip"):
+			pikachu_clip_requested.emit(int(page["pikachu_clip"]))
+		else:
+			cry_requested.emit(int(page.get("species", 0)))
 	if page.has("sfx"):
 		rating_reached.emit(int(page["sfx"]))
 	if bool(page.get("music", false)):

@@ -1,13 +1,9 @@
 extends RefCounted
 
-## Sweeps link play against freshly imported real caches, all three cartridges. The
-## class this exists to catch is a cable club that answers a question the cartridge
-## does not ask: every one of the three receptionist scripts is the same shape and
-## none can be reached without a peer, so the two paths that matter are the one a
-## single console gets and the one a peer gets, and both are driven on the real map.
-## `LinkCommsBorderGFX` is checked as the two different things it is, seventy tiles
-## and a screen tilemap on Crystal against nine tiles and no tilemap on Gold and
-## Silver, which is the whole difference between the two trade screens.
+## Link play on all three cartridges: the path a single console gets and the
+## one a peer gets, both driven on the real map, and `LinkCommsBorderGFX` as
+## the two things it is, seventy tiles and a tilemap on Crystal against nine
+## tiles and none on Gold and Silver.
 
 ## `TradeAnimation` is swept over every species the corpus ships.
 

@@ -69,6 +69,7 @@ func _one_game() -> void:
 	_the_bag_in_a_fight()
 	_a_safari_battle()
 	_the_tutor_throws()
+	_a_wild_fight_on_the_screen()
 
 
 ## `AddPartyMon`'s four base moves and `WriteMonMoves` over them, for every
@@ -640,3 +641,48 @@ func _drive_tutor(screen: Gen2WorldScreen) -> Dictionary:
 		if bool(snapshot.get("awaits_press", false)):
 			screen.press_button(PokeButton.A)
 	return {"frames": frames, "messages": messages}
+
+
+## The same wild fight on the real screen, pressed through to its end:
+## `PlayBattleVictoryMusic`'s MUSIC_DEFEATED_WILD_MON out of bank $08 once the
+## wild has gone down, which the engine alone cannot hear.
+var _watched: Gen2BattleScreen = null
+
+
+func _a_wild_fight_on_the_screen() -> void:
+	var screen: Gen2WorldScreen = _open_screen(PALLET_TOWN, TUTOR_CELL, true)
+	## Yellow's starter leads: a PIKACHU carrying the save's own ID and name.
+	var save: Gen2SaveData = screen.active_save()
+	var lead: Gen2SaveMon = save.party[0]
+	lead.species = PIKACHU_DEX
+	lead.ot_id = save.player_id
+	lead.original_trainer = save.player_name
+	screen.preview_battle_request(SWEEP_ENEMY, FIGHT_LEVELS[1])
+	var frames: int = 0
+	var result: Dictionary = {}
+	var over: bool = false
+	var starter: bool = false
+	while frames < TUTOR_GUARD_FRAMES:
+		frames += 1
+		screen.advance_frame()
+		var host: Gen2BattleScreen = screen.get("_battle_host")
+		if host == null:
+			if over:
+				break
+			continue
+		if host != _watched:
+			_watched = host
+			host.battle_finished.connect(func(finished: Dictionary) -> void: result.merge(finished))
+			starter = host._battle.mon(Gen2Battle.PLAYER).starter_pikachu
+		var snapshot: Dictionary = host.battle_snapshot()
+		over = bool(snapshot.get("battle_over", false))
+		if bool(snapshot.get("awaits_press", false)) or StringName(snapshot.get("menu_stage", &"")) != &"":
+			screen.press_button(PokeButton.A)
+	var victory: int = int(result.get("victory_music", -1))
+	_r.check(over and not result.is_empty(), "the wild fight on the screen never ended.")
+	_r.check(victory == Gen1Layout.MUSIC_DEFEATED_WILD_MON,
+		"the win played music %d rather than MUSIC_DEFEATED_WILD_MON." % victory)
+	_r.check(starter == (_r.game_id == RomRegistry.YELLOW),
+		"the lead PIKACHU is %s the starter." % ["not" if not starter else "read as"])
+	_r.note("gen1 battle the screen's wild fight ended in %d frames on piece %d" % [frames, victory])
+	_close_screen(screen)

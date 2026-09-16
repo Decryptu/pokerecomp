@@ -1513,8 +1513,24 @@ func entrance_events(side: int, ball: bool = true) -> Array:
 	if Gen2WorldState.is_crystal_profile(data) and (entering.is_fainted() \
 			or (entering.status & (Gen2Status.FREEZE | Gen2Status.SLEEP_MASK)) != 0):
 		return out
-	out.append({"type": CRY, "side": side, "species": entering.species})
+	out.append(cry_event(side, entering))
 	return out
+
+
+## Yellow's `SendOutMon.starterPikachu`: `PikachuCry37` while it sleeps.
+const PIKACHU_CLIP_SENT_OUT: int = 10
+const PIKACHU_CLIP_SENT_OUT_ASLEEP: int = 36
+const PIKACHU_CLIP_FAINTED: int = 3
+
+
+func cry_event(side: int, battler: Gen2BattleMon, clip: int = -1) -> Dictionary:
+	var event: Dictionary = {"type": CRY, "side": side, "species": battler.species}
+	if battler.starter_pikachu:
+		if clip < 0:
+			clip = PIKACHU_CLIP_SENT_OUT_ASLEEP \
+				if (battler.status & Gen2Status.SLEEP_MASK) != 0 else PIKACHU_CLIP_SENT_OUT
+		event["pikachu_clip"] = clip
+	return event
 
 
 ## `CheckAmuletCoin`, run by `SendOutPlayerMon` and so by the opening entrance
@@ -3123,6 +3139,10 @@ const MUSIC_JOHTO_GYM_LEADER_BATTLE: int = 0x2E
 const MUSIC_CHAMPION_BATTLE: int = 0x2F
 const MUSIC_RIVAL_BATTLE: int = 0x30
 const MUSIC_ROCKET_BATTLE: int = 0x31
+## `PlayVictoryMusic`'s three.
+const MUSIC_TRAINER_VICTORY: int = 0x11
+const MUSIC_WILD_VICTORY: int = 0x12
+const MUSIC_GYM_VICTORY: int = 0x13
 const MUSIC_JOHTO_WILD_BATTLE_NIGHT: int = 0x4A
 const MUSIC_SUICUNE_BATTLE: int = 0x64
 

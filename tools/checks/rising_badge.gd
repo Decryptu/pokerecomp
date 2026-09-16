@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the gates between Blackthorn Gym's door and the Rising Badge, for both
-## command profiles. Gym 2F's map events and `BlackthornGym1FBouldersCallback` are
-## byte identical between the pins; Gold and Silver have no Dragon Shrine, so their
-## B1F carries no warp to it and the shrine checks are Crystal only. What is worth
-## pinning is not the scripts but the four places the leg would silently stop: the
-## two boulders that seal 2F's pockets, the two 1F `changeblock`s that open Clair's
-## room, the lake that is the only way to the Dragon's Den door, and the whirlpool
-## between the den ladder and the shrine's one landfall.
+## The gates between Blackthorn Gym's door and the Rising Badge: the two boulders
+## sealing 2F's pockets, the two 1F `changeblock`s opening Clair's room, the lake
+## to the Dragon's Den door, and the whirlpool before the shrine's one landfall.
+## Gold and Silver have no Dragon Shrine.
 
 
 ## data/maps/maps.asm group/number pairs. The gym floors and the city sit at the

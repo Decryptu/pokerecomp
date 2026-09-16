@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies Strength and boulder pushing against freshly imported real caches, for
-## both command profiles. Expected values come from the pinned sources:
-## StrengthFunction, TryStrengthOW, AskStrengthScript, `.CheckStrengthBoulder`,
-## `MovementFunction_Strength` and `CanObjectMoveInDirection`, all byte identical
-## between the pins, so nothing here is profile split except the two engine flag
-## numbers. The real-cartridge counterpart to the Strength cases in the two world
-## unit tests; Cianwood Gym is the acceptance case, its three-boulder wall being
-## what a playthrough meets first.
+## Strength and boulder pushing: `StrengthFunction`, `TryStrengthOW`,
+## `AskStrengthScript`, `MovementFunction_Strength` and
+## `CanObjectMoveInDirection`. Cianwood Gym's three-boulder wall is the
+## acceptance case.
 
 
 ## constants/map_constants.asm, CIANWOOD group. Unlike Dragon's Den, the group

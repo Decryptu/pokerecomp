@@ -1,13 +1,8 @@
 extends RefCounted
 
-## Sweeps every cached map script on all three cartridges for the `special` command
-## and asserts that each index it reaches is one this project answers, or one of the
-## named routines it deliberately does not. The class this exists to stop is a
-## dispatch gap rather than a wrong reading: an index the runner does not name stops
-## the script where it stands, so one missing entry is a wall in front of every NPC
-## that reaches it. `data/events/special_pointers.asm` is the corpus and the
-## runner's own match is the claim, so the difference is derived:
-## `EXPECTED_DEFERRED` names what is left.
+## Every `special` index a cached map script reaches is one this project
+## answers, or one `EXPECTED_DEFERRED` names: an index the runner does not name
+## stops the script where it stands, a wall in front of every NPC reaching it.
 
 ## Every index the corpus reaches that this project answers with nothing, and
 ## the feature each belongs to. `Gen2WorldScriptRunner` is checked against this

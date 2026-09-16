@@ -256,3 +256,44 @@ func test_the_stop_id_clears_every_channel() -> void:
 	for channel: int in Gen1SoundEngine.NUM_CHANNELS:
 		assert_eq(engine.channel_sound_id(channel), 0, "channel %d" % channel)
 	assert_false(engine.any_channel_active())
+
+
+## `PlayPikachuSoundClip`: channel 3 is taken with wave RAM filled and saved,
+## the APU renders the clip in its place at the measured rate, and the tail puts
+## wave RAM back, drops channel 3 off both terminals and zeroes the four effect
+## channels' ids while the music's own stand.
+func test_a_pikachu_clip_takes_channel_three_and_hands_it_back() -> void:
+	var engine: Gen1SoundEngine = _engine({200: [[0, [0xFF]]], 3: [[4, [0xFF]]]})
+	assert_true(engine.play_music(BANK, 200))
+	engine.play_sound(3)
+	engine.apu.write(Gen1SoundEngine.WAVE_RAM, 0x12)
+	engine.apu.write(NR51, 0xFF)
+	var clip: PackedByteArray = PackedByteArray()
+	clip.resize(Gen1Layout.PIKACHU_CRY_SAMPLES_PER_FRAME / 4)
+	clip.fill(0xAA)
+	engine.begin_pikachu_clip(clip)
+	assert_eq(engine.apu.read(Gen1SoundEngine.WAVE_RAM), 0xFF, "wave RAM is filled")
+	assert_true(engine.apu.pcm_active())
+	var rendered: int = 0
+	var loud: bool = false
+	while engine.apu.pcm_active() and rendered < 8:
+		for sample: int in engine.apu.render_frame_pcm():
+			loud = loud or sample != 0
+		rendered += 1
+	assert_eq(rendered, 2, "two bytes short of a frame's bits is two frames")
+	assert_true(loud, "the clip reached the mix")
+	engine.end_pikachu_clip()
+	assert_eq(engine.apu.read(Gen1SoundEngine.WAVE_RAM), 0x12, "wave RAM is restored")
+	assert_eq(engine.apu.read(NR51) & Gen1SoundEngine.HW_ENABLE_MASK[Gen1SoundEngine.CHAN3], 0)
+	assert_eq(engine.channel_sound_id(0), 200, "the music channel keeps its id")
+	assert_eq(engine.channel_sound_id(Gen1SoundEngine.CHAN5), 0, "the effect channel is cleared")
+
+
+## `Audio1_OverwriteChannelPointer` rows name their channel: the alternate start
+## and tempo of `MeetRival` rewrite channel 1 twice in one routine.
+func test_channel_pointers_are_overwritten_by_row() -> void:
+	var engine: Gen1SoundEngine = _engine({200: [[0, [0xFF]], [1, [0xFF]]]})
+	assert_true(engine.play_music(BANK, 200))
+	engine.overwrite_channel_pointers([[0, 0x1234], [1, 0x2345], [0, 0x3456]])
+	assert_eq(engine.channel_command_pointer(0), 0x3456)
+	assert_eq(engine.channel_command_pointer(1), 0x2345)

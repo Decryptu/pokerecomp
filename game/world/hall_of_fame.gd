@@ -123,6 +123,9 @@ static func _gen1_pages(data: GameData, save: Gen2SaveData, state: Gen2WorldStat
 		if mon.is_egg:
 			continue
 		var page: Dictionary = _gen1_mon_page(data, mon)
+		## `HoFDisplayAndRecordMonInfo`: the starter's `PikachuCry35`.
+		if data.id == RomRegistry.YELLOW and Gen1Pikachu.is_starter_of(save, mon):
+			page["pikachu_clip"] = PIKACHU_CLIP_FAMED
 		out.append(_gen1_with(page, {"slide": true, "hold": GEN1_SLIDE_FRAMES, "cry": false}))
 		out.append(_gen1_with(page, {"hold": GEN1_INFO_FRAMES}))
 		out.append(_gen1_with(page, {"famed": true, "hold": GEN1_FAMED_FRAMES, "cry": false}))
@@ -146,6 +149,9 @@ static func _gen1_fade(page: Dictionary) -> Array:
 
 
 ## `HoFDisplayMonInfo`: the nickname, the level, `PrintMonType`'s one or two.
+const PIKACHU_CLIP_FAMED: int = 34
+
+
 static func _gen1_mon_page(data: GameData, mon: Gen2SaveMon) -> Dictionary:
 	var entry: Dictionary = data.species(mon.species)
 	var species_name: String = String(entry.get("name", ""))

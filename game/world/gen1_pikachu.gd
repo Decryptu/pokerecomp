@@ -303,11 +303,15 @@ func count_step(coin: bool) -> void:
 ## `IsThisMonStarterPikachu`: a PIKACHU carrying the player's ID and the first
 ## five letters of the player's name, fainted or not.
 static func is_starter_of(save: Gen2SaveData, mon: Gen2SaveMon) -> bool:
-	if save == null or mon == null or mon.species != Gen2WorldFieldMove.SPECIES_PIKACHU:
+	return save != null and is_starter_mon(int(save.player_id), save.player_name, mon)
+
+
+static func is_starter_mon(player_id: int, player_name: String, mon: Gen2SaveMon) -> bool:
+	if mon == null or mon.species != Gen2WorldFieldMove.SPECIES_PIKACHU:
 		return false
-	return int(mon.ot_id) == int(save.player_id) \
+	return int(mon.ot_id) == player_id \
 		and mon.original_trainer.substr(0, Gen1Layout.OT_MATCH_LENGTH) \
-			== save.player_name.substr(0, Gen1Layout.OT_MATCH_LENGTH)
+			== player_name.substr(0, Gen1Layout.OT_MATCH_LENGTH)
 
 
 ## The four routines that write `wPikachuEmotionModifier` with a mood beside it:

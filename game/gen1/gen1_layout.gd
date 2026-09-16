@@ -909,6 +909,9 @@ const BILLS_PC_TEXT_AT: Dictionary = {
 const BILLS_PC_RELEASE_TEXT_AT: Dictionary = {
 	"once_released": 0x00, "mon_was_released": 0x05,
 }
+## Yellow's `SleepingPikachuText2` and `PikachuUnhappyText`.
+const BILLS_PC_SLEEPING_TEXT_AT: Dictionary = {"no_response": 0x00}
+const BILLS_PC_UNHAPPY_TEXT_AT: Dictionary = {"unhappy": 0x00}
 
 ## `engine/menus/oaks_pc.asm`'s three, the second spending a `text_waitbutton`.
 const OAKS_PC_TEXT_AT: Dictionary = {
@@ -1623,10 +1626,10 @@ const PIKAPIC_COMMAND_SIZES: Dictionary = {1: 1, 2: 1, 3: 5, 6: 1, 9: 2, 10: 2, 
 const PIKAPIC_JUMP: int = 9
 const PIKAPIC_RET: int = 14
 const PIKAPIC_TILE_KEEP: int = 0xFF
-## `PikachuCriesPointerTable`'s 43 `dba` rows, each clip opening on its byte
+## `PikachuCriesPointerTable`'s 42 `dba` rows, each clip opening on its byte
 ## count; `PlayPikachuSoundClip`'s three `DelayFrame`s, and the eight one-bit
 ## samples a byte holds at the 394 samples a frame the cartridge was measured at.
-const PIKACHU_CRIES: int = 43
+const PIKACHU_CRIES: int = 42
 const PIKACHU_CRY_ROW_SIZE: int = 3
 const PIKACHU_CRY_LEAD_FRAMES: int = 3
 const PIKACHU_CRY_SAMPLES_PER_FRAME: int = 394
@@ -1736,28 +1739,35 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"safari_low_cost", "safari_nag", "name_rater_check_ot", "name_rater_screen",
 	"display_mon_front_sprite_in_box",
 ]
-## The four of those a `farcall` spends nothing on: no node carries a sound.
+## The three of those a `farcall` spends nothing on.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
-	"music_rival_start", "music_rival_tempo", "music_rival_start_tempo",
-	"music_cities1_tempo", "play_pikachu_sound_clip",
 	"load_spinner_arrow_tiles", "convert_npc_directions", "pewter_guys",
 ]
-## The routines that spend nothing here: no node carries a sound, a press
-## already ends every box, and `wAutoTextBoxDrawingControl` has no counterpart.
+## `Music_RivalAlternateStart` and the three beside it.
+const SCRIPT_ALTERNATE_MUSIC: Array[String] = [
+	"music_rival_start", "music_rival_tempo", "music_rival_start_tempo",
+	"music_cities1_tempo",
+]
+## The sound routines a row calls, by what each spends.
+const SCRIPT_SOUND_CALLS: Dictionary = {
+	"play_sound": "sound", "play_sound_wait": "sound", "play_cry": "cry",
+	"play_music": "music", "stop_all_music": "stop_all", "wait_for_sound": "wait",
+	"play_default_music": "map_music",
+}
+## The routines that spend nothing here: a press already ends every box, and
+## `wAutoTextBoxDrawingControl` has no counterpart.
 const SCRIPT_SILENT_CALLS: Array[String] = [
-	"play_cry", "wait_for_sound", "wait_for_button",
+	"wait_for_button",
 	"auto_textbox_on", "auto_textbox_off", "count_set_bits", "update_sprites",
-	"play_sound", "play_sound_wait", "load_gym_names",
+	"load_gym_names",
 	"random",
 	## `SetSpritePosition2` puts back what `GetSpritePosition2` saved on the same
 	## visit, which the map's own table answers here; the image index is drawn.
 	"set_sprite_position_2", "set_sprite_image", "set_sprite_image_2",
-	## Red and Blue spell `StopAllMusic` as `PlaySound`; only Yellow has a routine.
-	"play_music", "stop_all_music",
-	## A wait is frames of nothing and the map music is nobody's here. The three
-	## trainer rows every fighting map's own table opens with are the sight walk
+	## A wait is frames of nothing. The three trainer rows every fighting map's
+	## own table opens with are the sight walk
 	## `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
-	"delay_frame", "delay_frames", "delay_3", "play_default_music", "check_map_trainers",
+	"delay_frame", "delay_frames", "delay_3", "check_map_trainers",
 	"start_trainer_battle", "end_trainer_battle",
 	"force_bike_or_surf",
 	"serial_connect", "fade_out_white", "fade_in_white", "fade_out_black",
@@ -1781,6 +1791,11 @@ const ROUTE23_OPCODE_SIZES: Dictionary = {
 	0x0D: 1, 0xB8: 1, 0x20: 2, 0xD0: 1, 0x7B: 1, 0xE0: 2, 0x79: 1, 0xEA: 3, 0x06: 2,
 	0x3E: 2, 0xCD: 3,
 }
+## What `Music_RivalAlternateStart` and its siblings are read through.
+const ALTERNATE_MUSIC_OPCODE_SIZES: Dictionary = {
+	0x0E: 2, 0x3E: 2, 0x11: 3, 0x21: 3, 0xEA: 3, 0xCD: 3, 0x7B: 1, 0x22: 1, 0x7A: 1,
+}
+const ALTERNATE_MUSIC_STEP_CAP: int = 24
 const EMOTE_FRAMES: int = 60
 const RIVAL_CLASSES: Array[int] = [0x19, 0x2A, 0x2B]
 const BADGE_COUNT: int = 8
@@ -1816,7 +1831,8 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	## A forced walk writes the pad bit over the player's own facing byte, and
 	## the `walk` node behind it carries the direction anyway.
 	"facing_direction",
-	## `hJoyPressed` beside `hJoyHeld`, and the sound id no node here carries.
+	## `hJoyPressed` beside `hJoyHeld`, and `wNewSoundID`, which `PlaySound`
+	## takes out of `a` again.
 	"joy_pressed", "new_sound_id",
 	## The captain's back rub swaps the audio bank around its jingle.
 	"audio_rom_bank", "audio_saved_rom_bank",
@@ -2708,6 +2724,8 @@ const RED_BLUE: Dictionary = {
 	"sprite_facing_hram": 0xFF8D,
 	"joy_pressed": 0xFFB3,
 	"new_sound_id": 0xC0EE,
+	"map_music_sound_id": 0xD35B,
+	"audio_fade_reload": 0xCFC8,
 	"auto_bg_transfer": 0xFFBA,
 	"audio_rom_bank": 0xC0EF,
 	"audio_saved_rom_bank": 0xC0F0,
@@ -3038,6 +3056,8 @@ const YELLOW: Dictionary = {
 	"players_pc_text": 0x079C9,
 	"bills_pc_text": 0x21826,
 	"bills_pc_release_text": 0x2185D,
+	"bills_pc_sleeping_text": 0x2160E,
+	"bills_pc_unhappy_text": 0x21853,
 	"oaks_pc_text": 0x1E2D4,
 	"hof_pc_text": 0x75F02,
 	"hof_dex_text": 0x70452,
@@ -3252,6 +3272,8 @@ const YELLOW: Dictionary = {
 	"sprite_facing_hram": 0xFF8D,
 	"joy_pressed": 0xFFB3,
 	"new_sound_id": 0xC0EE,
+	"map_music_sound_id": 0xD35A,
+	"audio_fade_reload": 0xCFC7,
 	"auto_bg_transfer": 0xFFBA,
 	"audio_rom_bank": 0xC0EF,
 	"audio_saved_rom_bank": 0xC0F0,
@@ -4053,6 +4075,14 @@ const SFX_SAVE: int = 182
 ## `EvolveMon`'s tink in front of the old picture and the jingle behind `IntoText`.
 const SFX_TINK: int = 140
 const SFX_GET_ITEM_2: int = 137
+## `FaintEnemyPokemon`'s two, and `PlayBattleVictoryMusic`'s three in bank $08.
+const SFX_DENIED: int = 165
+const SFX_FAINT_THUD: int = 149
+const SFX_FAINT_FALL: int = 158
+const MUSIC_DEFEATED_TRAINER: int = 246
+const MUSIC_DEFEATED_WILD_MON: int = 249
+const MUSIC_DEFEATED_GYM_LEADER: int = 252
+const VICTORY_MUSIC_BANK: int = 0x08
 ## What `LoadMonFrontSprite` costs with the LCD on, measured on Red for eight
 ## pictures: `UncompressMonSprite` runs 16 to 43 frames, a least-squares fit on
 ## the picture's tiles and its compressed bytes within three frames of each, then
@@ -4087,7 +4117,7 @@ const SFX_ROLES: Dictionary = {
 	0x15: 144, ## SFX_CHANGE_DEX_MODE is SFX_PRESS_AB
 	0x16: 162, ## SFX_JUMP_OVER_LEDGE is SFX_LEDGE
 	0x18: 164, ## SFX_FLY
-	0x19: 165, ## SFX_WRONG is SFX_DENIED
+	0x19: SFX_DENIED, ## SFX_WRONG
 	0x1B: 168, ## SFX_STRENGTH is SFX_PUSH_BOULDER, which TryPushingBoulder plays
 	0x1F: 173, ## SFX_ENTER_DOOR is SFX_GO_INSIDE
 	0x20: 157, ## SFX_SWITCH_POKEMON is SFX_SWITCH
@@ -4097,7 +4127,7 @@ const SFX_ROLES: Dictionary = {
 	0x25: 182, ## SFX_SAVE
 	0x28: 145, ## SFX_THROW_BALL is SFX_BALL_TOSS
 	0x29: 147, ## SFX_BALL_POOF
-	0x2E: 165, ## the move tutor's own SFX_WRONG
+	0x2E: SFX_DENIED, ## the move tutor's own SFX_WRONG
 	0x5E: 233, ## SFX_SHINE is SFX_TRAINER_APPEARED
 	0x62: 157, ## SFX_SWITCH_POCKETS is SFX_SWITCH
 	0x8C: 140, ## SFX_EXP_BAR is SFX_TINK

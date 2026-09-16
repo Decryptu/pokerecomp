@@ -24,6 +24,7 @@ signal sfx_requested(index: int, waited: bool)
 ## `PlayMonCry2`, which the stats screen this menu opens plays on every mon it
 ## loads. Emitted for the same reason [signal sfx_requested] is.
 signal cry_requested(species: int)
+signal pikachu_clip_requested(index: int)
 ## `PartyMenuSelect`'s own answer, when the list was opened as
 ## `SelectMonFromParty` rather than as `StartMenu_Pokemon`: the chosen party
 ## index, or -1 for the carry a CANCEL row or a B press returns. Every caller of
@@ -505,9 +506,10 @@ func _confirm_option(option: StringName) -> void:
 func _open_stats() -> void:
 	if _data == null or _save == null or _member_cursor >= _party_size():
 		return
-	_stats = Gen2MonStatsScreen.create(_data, _save.party, _member_cursor)
+	_stats = Gen2MonStatsScreen.create(_data, _save.party, _member_cursor, _save)
 	_stats.closed.connect(_close_stats)
 	_stats.cry_requested.connect(cry_requested.emit)
+	_stats.pikachu_clip_requested.connect(pikachu_clip_requested.emit)
 	## `StatsScreenInit` clears the tilemap before it draws, so the submenu is
 	## gone rather than standing behind the screen.
 	_submenu_open = false

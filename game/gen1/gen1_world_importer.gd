@@ -2550,10 +2550,10 @@ static func _script_flow(
 	var rom: RomFile = ctx["rom"]
 	match rom.u8(at):
 		Gen1Layout.SCRIPT_LD_A_MEM:
-			_script_loaded(ctx, rom.u16le(at + 1), state)
+			_script_loaded(ctx, rom.u16le(at + 1), state, out)
 			return pc + Gen1Layout.SCRIPT_LONG_SIZE
 		Gen1Layout.SCRIPT_LDH_A_MEM:
-			_script_loaded(ctx, Gen1Layout.SCRIPT_HRAM_BASE + rom.u8(at + 1), state)
+			_script_loaded(ctx, Gen1Layout.SCRIPT_HRAM_BASE + rom.u8(at + 1), state, out)
 			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 		Gen1Layout.SCRIPT_LD_MEM_A:
 			return pc + Gen1Layout.SCRIPT_LONG_SIZE \
@@ -2796,7 +2796,10 @@ const SCRIPT_LOADED_STATE: Array = [
 
 ## `ld a, [nn]`. `ShowPokedexDataInternal` leaves `wPokedexNum` in
 ## `wCurPartySpecies`, and `wHiddenEventFunctionArgument` is `wWhichTrade`'s byte.
-static func _script_loaded(ctx: Dictionary, address: int, state: Dictionary) -> void:
+static func _script_loaded(ctx: Dictionary, address: int, state: Dictionary, out: Array) -> void:
+	## `ld a, [wChannelSoundIDs]` is only ever spun on until a jingle ends.
+	if address == int((ctx["layout"] as Dictionary).get("channel_sound_ids", -1)):
+		out.append({"op": "sound", "what": "wait", "music": true})
 	_script_wrote_a(state)
 	state.erase("a")
 	state["source"] = address
@@ -3879,8 +3882,56 @@ static func _script_silent_call(routine: String, state: Dictionary, out: Array, 
 	return next
 
 
-## The routines a row may call. No node carries a sound, so a cry and the wait
-## behind it spend nothing and the walk carries on past them.
+## A routine spent without being walked: one that does nothing here, or a sound.
+static func _script_spent_call(
+	ctx: Dictionary, routine: String, state: Dictionary, out: Array, next: int
+) -> int:
+	if routine in Gen1Layout.SCRIPT_SILENT_CALLS:
+		return _script_silent_call(routine, state, out, next)
+	if Gen1Layout.SCRIPT_SOUND_CALLS.has(routine):
+		return _script_sound(ctx, routine, state, out, next)
+	return SCRIPT_NOT_SHAPED
+
+
+## `PlaySound` and its kin: the id in `a`, or `wMapMusicSoundID` read into it.
+static func _script_sound(
+	ctx: Dictionary, routine: String, state: Dictionary, out: Array, next: int
+) -> int:
+	var what: String = Gen1Layout.SCRIPT_SOUND_CALLS[routine]
+	var node: Dictionary = {"op": "sound", "what": what}
+	if what in ["wait", "map_music"]:
+		node["wait"] = true
+		out.append(node)
+		return next
+	if what == "stop_all":
+		node["what"] = "sound"
+		node["index"] = Gen1SoundEngine.SFX_STOP_ALL_MUSIC
+		out.append(node)
+		return next
+	## An id the walk does not hold is passed in silence, as the row was before.
+	if not _script_known_a(state):
+		if int(state.get("source", -1)) != int((ctx["layout"] as Dictionary).get("map_music_sound_id", -2)):
+			return next
+		node["what"] = "map_music"
+		out.append(node)
+		return next
+	node["index"] = int(state["a"]) & 0xFF
+	if what == "cry":
+		## `PlayCry` takes an internal index; the cache speaks dex numbers.
+		node["index"] = Gen1Layout.dex_of_index(ctx["rom"], ctx["layout"], int(node["index"]))
+		if int(node["index"]) < 1:
+			return next
+	if what == "music":
+		if not state.has("c"):
+			return next
+		node["bank"] = int(state["c"])
+	if routine == "play_sound_wait":
+		node["wait"] = true
+	out.append(node)
+	return next
+
+
+## The routines a row may call.
 static func _script_call(
 	ctx: Dictionary, pc: int, target: int, state: Dictionary, out: Array, depth: int
 ) -> int:
@@ -3890,8 +3941,9 @@ static func _script_call(
 	## reading them rather than whatever set them before it.
 	_script_untested(state)
 	var routine: String = _script_routine(layout, target)
-	if routine in Gen1Layout.SCRIPT_SILENT_CALLS:
-		return _script_silent_call(routine, state, out, next)
+	var spent: int = _script_spent_call(ctx, routine, state, out, next)
+	if spent != SCRIPT_NOT_SHAPED:
+		return spent
 	var shaped: int = _script_shaped_routine(ctx, target, state, out)
 	if shaped == SCRIPT_NOT_SHAPED:
 		shaped = _script_card_key_call(ctx, target, state, out)
@@ -4578,7 +4630,14 @@ static func _script_routine_call(
 	var banked: String = _script_banked_routine(ctx["layout"], bank, target)
 	if banked in Gen1Layout.SCRIPT_SILENT_BANKED_CALLS:
 		return next
+	if banked in Gen1Layout.SCRIPT_ALTERNATE_MUSIC:
+		out.append({"op": "sound", "what": "alternate_music", "name": banked})
+		return next
 	match banked:
+		"play_pikachu_sound_clip":
+			out.append({"op": "sound", "what": "pikachu_clip",
+				"index": int(state.get("de", 0)) & 0xFF})
+			return next
 		"route23_copy_badge_text":
 			return _script_name_badge(ctx, state, out, next)
 		"is_starter_pikachu_alive":

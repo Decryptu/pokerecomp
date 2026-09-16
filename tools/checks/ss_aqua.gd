@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the S.S. Aqua's interior against freshly imported real caches, for both
-## command profiles. All five maps' event tables are byte identical between the pins
-## and every event flag below has the same number in both, so nothing here is
-## profile split; only the text and Crystal's own gender branch differ. The crossing
-## is one puzzle: B1F's two sailors stand on (30,6) and (31,6) and the coord events
-## below them each move the visible one onto the player's own column, so the corridor
-## west is sealed while the map scene is SCENE_FASTSHIPB1F_SAILOR_BLOCKS. Nothing on
-## B1F opens it: the lazy sailor's own script is what retires both coord events.
+## The S.S. Aqua's interior. B1F's two sailors stand on (30,6) and (31,6) and
+## the coord events below them move the visible one onto the player's column,
+## sealing the corridor west while the scene is SCENE_FASTSHIPB1F_SAILOR_BLOCKS;
+## the lazy sailor's own script is what retires both.
 
 
 ## `constants/map_constants.asm`'s 15th `newgroup`.

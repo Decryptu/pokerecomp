@@ -173,14 +173,10 @@ func _check_tilesets(pin: String) -> void:
 				"tileset %d collision" % number, tileset.collision, collision,
 				tileset.collision.size()
 			)
-		# `_LoadOverworldAttrmapPals` indexes `wTilesetPalettes` with the raw tile
-		# number and nothing bounds the read, so a palette map is only as long as
-		# the distance to the next one: Crystal's is 112 bytes, the two graphics
-		# blocks with the sixteen `$ff` the unusable $60..$7F range costs between
-		# them, and Gold and Silver's is 48, the first block alone. The importer
-		# reads Gen2Layout.WORLD_PALETTE_MAP_BYTES for both, which is the overread
-		# the cartridge performs, so the pin's length is the comparable span and
-		# `_check_palette_reach` is what says the rest is reachable.
+		# `_LoadOverworldAttrmapPals` bounds nothing, so a palette map is as long
+		# as the distance to the next one: 112 bytes on Crystal, 48 on Gold and
+		# Silver. The importer reads WORLD_PALETTE_MAP_BYTES for both, the
+		# cartridge's own overread, so the pin's length is the comparable span.
 		var palettes: PackedByteArray = _palette_map_bytes(
 			pin.path_join(paths.get("%sPalMap" % label, ""))
 		)

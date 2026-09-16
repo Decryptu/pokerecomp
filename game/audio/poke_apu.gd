@@ -85,6 +85,11 @@ var _lfsr_wide: bool = false
 var _lfsr_div: int = 0
 var _wave_position: int = 0
 var _capacitor: PackedFloat32Array = PackedFloat32Array()
+## `PlayPikachuPCM`: one-bit samples written to `rAUD3LEVEL` by hand, which
+## take the wave channel's place until the last bit is spent.
+var _pcm: PackedByteArray = PackedByteArray()
+var _pcm_bit: int = 0
+var _pcm_bits_per_frame: int = 0
 
 var _registers: PackedByteArray = PackedByteArray()
 var _master_left: int = 0
@@ -166,6 +171,7 @@ func reset() -> void:
 	_lfsr_wide = false
 	_lfsr_div = 0
 	_wave_position = 0
+	_pcm = PackedByteArray()
 	_master_left = 0
 	_master_right = 0
 	for index: int in REGISTER_COUNT:
@@ -267,12 +273,7 @@ func _write_output_mix(value: int) -> void:
 ## Renders one LCD frame. The returned buffer is reused, so a caller that keeps
 ## it past the next call must copy it.
 func render_frame(out: PackedVector2Array) -> void:
-	var mix: PackedInt32Array = _mix
-	mix.fill(0)
-	_render_square(mix, 0)
-	_render_square(mix, 1)
-	_render_wave(mix)
-	_render_noise(mix)
+	var mix: PackedInt32Array = _render_channels()
 	if out.size() != SAMPLES_PER_FRAME:
 		out.resize(SAMPLES_PER_FRAME)
 	for index: int in SAMPLES_PER_FRAME:
@@ -285,13 +286,31 @@ func render_frame(out: PackedVector2Array) -> void:
 ## Same block of samples as [method render_frame], as interleaved 16-bit values.
 ## Only the offline render and trace tools use this.
 func render_frame_pcm() -> PackedInt32Array:
+	return _render_channels()
+
+
+func _render_channels() -> PackedInt32Array:
 	var mix: PackedInt32Array = _mix
 	mix.fill(0)
 	_render_square(mix, 0)
 	_render_square(mix, 1)
-	_render_wave(mix)
+	if pcm_active():
+		_render_pcm(mix)
+	else:
+		_render_wave(mix)
 	_render_noise(mix)
 	return mix
+
+
+## Hands the wave channel to a clip, [param bits_per_frame] of it a frame.
+func start_pcm(bits: PackedByteArray, bits_per_frame: int) -> void:
+	_pcm = bits
+	_pcm_bit = 0
+	_pcm_bits_per_frame = maxi(1, bits_per_frame)
+
+
+func pcm_active() -> bool:
+	return _pcm_bit < _pcm.size() * 8
 
 
 func _set_enabled(channel: int, enable: bool) -> void:
@@ -486,6 +505,34 @@ func _render_wave(mix: PackedInt32Array) -> void:
 	_len_counter[2] = len_counter
 	_capacitor[2] = capacitor
 	_freq_inc[2] = freq_inc
+
+
+## A set bit is level $20 over wave RAM of $ff, nibble 7; a clear one is the
+## mute code with the DAC on, nibble 0. Both cross the wave channel's capacitor.
+func _render_pcm(mix: PackedInt32Array) -> void:
+	var total: int = _pcm.size() * 8
+	var first: int = _pcm_bit
+	var capacitor: float = _capacitor[2]
+	var gain: float = channel_gain[2]
+	var left: float = float(_on_left[2] * _master_left) * gain
+	var right: float = float(_on_right[2] * _master_right) * gain
+	@warning_ignore("integer_division")
+	var high: int = ((0x0F >> 1) - 8) * WAVE_STEP / 4
+	@warning_ignore("integer_division")
+	var low: int = (0 - 8) * WAVE_STEP / 4
+	for index: int in SAMPLES_PER_FRAME:
+		@warning_ignore("integer_division")
+		var bit: int = first + index * _pcm_bits_per_frame / SAMPLES_PER_FRAME
+		var on: bool = bit < total and (_pcm[bit >> 3] & (0x80 >> (bit & 7))) != 0
+		var raw: float = float(high if on else low) * INV_FULL_SCALE
+		var filtered: float = raw - capacitor
+		capacitor = raw - filtered * 0.996
+		var sample: int = int(filtered * FULL_SCALE)
+		var at: int = index * 2
+		mix[at] += int(float(sample) * left)
+		mix[at + 1] += int(float(sample) * right)
+	_capacitor[2] = capacitor
+	_pcm_bit = mini(total, first + _pcm_bits_per_frame)
 
 
 func _render_noise(mix: PackedInt32Array) -> void:

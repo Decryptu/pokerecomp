@@ -58,6 +58,10 @@ var _wait: int = 0
 var _check_left: int = 0
 var _check_skip: StringName = &""
 var _sound_wait: bool = false
+## `PlayPikachuSoundClip`'s three `DelayFrame`s and its `di` to `ei`.
+var _clip_lead: int = 0
+var _clip_hold: int = 0
+var _clip: PackedByteArray = PackedByteArray()
 var _frame: int = 0
 var _phase: StringName = &""
 var _finished: bool = false
@@ -122,8 +126,9 @@ func advance_frame() -> Array[Dictionary]:
 	# No LCD, no VBlank, no driver.
 	if lcd.lcdc & Gen1Lcd.LCDC_ON:
 		_vblank()
-		_sound.fade_out_audio()
-		_sound.update_music()
+		if not _clip_frame():
+			_sound.fade_out_audio()
+			_sound.update_music()
 	if _wait > 0:
 		_wait -= 1
 	if _wait == 0 and _check_left > 0:
@@ -419,6 +424,37 @@ func _play_cry(species: int) -> void:
 		_sound.tempo_modifier = int(record.get("cry_length", 0x80)) & 0xFF
 		_sound.play_sound(int(record.get("sound_id", 0)))
 	_emit(&"play_cry", {"species": species})
+
+
+## Yellow's `PlayPikachuSoundClip`, handed to whoever renders the audio.
+func _play_pikachu_clip(index: int) -> void:
+	_clip = _data.gen1_pikachu_cry(index)
+	_clip_lead = Gen1Layout.PIKACHU_CRY_LEAD_FRAMES
+	_clip_hold = Gen1Layout.pikachu_cry_frames(_clip.size()) - _clip_lead
+	_emit(&"play_pikachu_clip", {"index": index})
+
+
+## A `PlayPikachuSoundClip` step: the clip started, and its frames spent.
+func pikachu_clip_steps(index: int) -> Array:
+	return [
+		do_step(func() -> void: _play_pikachu_clip(index)),
+		delay_step(Gen1Layout.pikachu_cry_frames(_data.gen1_pikachu_cry(index).size())),
+	]
+
+
+## True on a frame the clip holds the driver.
+func _clip_frame() -> bool:
+	if _clip_lead > 0:
+		_clip_lead -= 1
+		if _clip_lead == 0:
+			_sound.begin_pikachu_clip(_clip)
+		return false
+	if _clip_hold <= 0:
+		return false
+	_clip_hold -= 1
+	if _clip_hold == 0:
+		_sound.end_pikachu_clip()
+	return true
 
 
 func wait_sound_step() -> Dictionary:

@@ -233,6 +233,10 @@ func _apply(events: Array[Dictionary]) -> void:
 				_play_music(MUSIC_NONE_INDEX, true)
 			&"gen1_play_cry":
 				_play_gen1_cry(int(event.get("species", 0)))
+			&"gen1_play_pikachu_clip":
+				_ensure_audio()
+				if _data != null:
+					_audio.play_pikachu_clip(_data.gen1_pikachu_cry(int(event.get("index", 0))))
 			&"finish_intro":
 				_refresh()
 				_finish()

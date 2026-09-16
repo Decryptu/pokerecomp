@@ -159,6 +159,7 @@ static func to_battle_party(data: GameData, save: Gen2SaveData) -> Gen2Party:
 		var mon: Gen2BattleMon = to_battle_mon(data, saved)
 		if mon == null:
 			return null
+		mon.starter_pikachu = data.id == RomRegistry.YELLOW and Gen1Pikachu.is_starter_of(save, saved)
 		members.append(mon)
 	return Gen2Party.create(members)
 

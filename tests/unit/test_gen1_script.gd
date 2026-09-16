@@ -103,6 +103,7 @@ const LAYOUT: Dictionary = {
 	"move_sprite": 0x0410,
 	"decode_rle": 0x0420,
 	"play_music": 0x0430,
+	"dex_order": 0x3F00,
 	"last_map": 0xD365,
 	"check_boulder_coords": 0x0440,
 	"trainer_no": 0xD05D,
@@ -452,13 +453,42 @@ func test_a_call_this_decoder_does_not_read_answers_nothing() -> void:
 	assert_eq(_decode(_print(HELLO) + _call(UNREAD_CALL), _boxes()), [])
 
 
-func test_a_cry_and_its_wait_are_walked_past() -> void:
+## `PlayCry` names its species in `a` and `WaitForSoundToFinish` holds the row;
+## a cry whose register the walk does not hold is passed in silence.
+func test_a_cry_and_its_wait_are_sound_nodes() -> void:
+	## `PokedexOrder` puts internal index 1 at dex number 112.
 	var script: Array = _decode(
+		[0x3E, 0x01] + _call(int(LAYOUT["play_cry"])) + _call(int(LAYOUT["wait_for_sound"]))
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes(), {int(LAYOUT["dex_order"]): 112}
+	)
+	assert_eq(script, [
+		{"op": "sound", "what": "cry", "index": 112},
+		{"op": "sound", "what": "wait", "wait": true},
+		{"op": "text", "text": "HI"},
+	])
+	var unknown: Array = _decode(
 		_call(int(LAYOUT["play_cry"])) + _call(int(LAYOUT["wait_for_sound"]))
 			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
 		_boxes()
 	)
-	assert_eq(script, [{"op": "text", "text": "HI"}])
+	assert_eq(unknown, [{"op": "sound", "what": "wait", "wait": true}, {"op": "text", "text": "HI"}])
+
+
+## `PlaySound` with its id, `PlaySoundWaitForCurrent`'s wait in front, and
+## `PlayMusic`'s bank in `c`.
+func test_a_sound_and_a_piece_carry_their_ids() -> void:
+	var script: Array = _decode(
+		[0x3E, 0xA5] + _call(int(LAYOUT["play_sound_wait"]))
+			+ [0x0E, 0x02, 0x3E, 0xDE] + _call(int(LAYOUT["play_music"]))
+			+ _print(HELLO) + _call(int(LAYOUT["text_script_end"])),
+		_boxes()
+	)
+	assert_eq(script, [
+		{"op": "sound", "what": "sound", "index": 0xA5, "wait": true},
+		{"op": "sound", "what": "music", "index": 0xDE, "bank": 2},
+		{"op": "text", "text": "HI"},
+	])
 
 
 ## `CheckEvent`: `ld a, [wEventFlags + n]` then `bit b, a`.

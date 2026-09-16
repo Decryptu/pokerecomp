@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the menu mon icons a party page draws, against freshly imported real
-## caches: `MonMenuIcons`, `IconPointers`' art behind it, `HeldItemIcons` and
-## `PartyMenuOBPals`. The whole corpus rather than a sample: every species on all
-## three cartridges resolves to an icon whose eight tiles decode and carry ink. The
-## table is a plain byte run, so a wrong offset lands on neighbouring data that
-## still reads as numbers; what says it is the right run is that every entry is in
-## range, that the first and last species are the shapes the source names, and that
-## the three cartridges agree entry for entry.
+## The menu mon icons a party page draws: `MonMenuIcons`, `IconPointers`,
+## `HeldItemIcons` and `PartyMenuOBPals`, every species on all three cartridges.
+## The table is a plain byte run, so what says it is the right run is that every
+## entry is in range and the three cartridges agree entry for entry.
 
 ## Generation 1's own run: `MonPartyData` holds a nybble per dex number and the
 ## cache stores it one higher, `ICON_MON` being zero. `MonPartySpritePointers`

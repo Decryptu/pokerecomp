@@ -25,6 +25,8 @@ signal evolution_animation_requested(plan: Dictionary, after: Callable)
 ## `PlaySFX`, which this screen has no driver of its own for: the world that
 ## hosts it owns the player. `SFX_SAVE` is the only one it asks for.
 signal sfx_requested(sfx: int, waited: bool)
+## Yellow's `PlayPikachuSoundClip`, which the refused stone plays.
+signal pikachu_clip_requested(index: int)
 ## A field move chosen off the MOVES row, in the same shape a party member's own
 ## submenu emits: the world runs the one and the other through one path.
 signal field_move_chosen(action: Dictionary)
@@ -2067,10 +2069,13 @@ func _use_summary(item: Dictionary, result: Dictionary) -> String:
 	return "%s was used." % item_name
 
 
-## Yellow's `ItemUseEvoStone.notPlayerPikachu` not taken: `RefusingText` over
-## `GetPartyMonName`, the mood write, and `.canceledItemUse` keeping the stone.
-## `PlayPikachuSoundClip`'s clip 28 has no player here, as no clip has.
+## Yellow's `ItemUseEvoStone.notPlayerPikachu` not taken: `PikachuCry28`,
+## `RefusingText`, the mood write, and `.canceledItemUse` keeping the stone.
+const PIKACHU_CLIP_REFUSED_STONE: int = 27
+
+
 func _refuse_stone(party_index: int) -> void:
+	pikachu_clip_requested.emit(PIKACHU_CLIP_REFUSED_STONE)
 	_world.gen1_pikachu_mood(&"refused_stone")
 	_show_pack_result(Gen2TextStream.fill_marker(
 		_data.special_text("stone_refusal", "refusing"), Gen2TextStream.RAM_MARKER,

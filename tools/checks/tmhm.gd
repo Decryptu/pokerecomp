@@ -2,14 +2,9 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the TM/HM table and compatibility flags against freshly imported real
-## caches, for both command profiles. Expected values come from the pinned sources:
-## `TMHMMoves`, `GetTMHMNumber`, `GetNumberedTMHM`, `CanLearnTMHMMove`,
-## `AskTeachTMHM` and `TeachTMHM`, all byte identical between the pins apart from
-## one stubbed trainer-ranking call. The real-cartridge counterpart to
-## tests/unit/test_world_tmhm.gd. The census is what actually pins it: every
-## species' learnable set is compared against the table rather than spot checked, so
-## a wrong flag bit order shows up at once.
+## The TM/HM table and compatibility flags: `TMHMMoves`, `GetTMHMNumber`,
+## `CanLearnTMHMMove`, `AskTeachTMHM` and `TeachTMHM`. Every species' learnable
+## set is compared against the table, so a wrong flag bit order shows at once.
 
 
 ## constants/item_constants.asm: fifty TMs and seven HMs in both games, plus

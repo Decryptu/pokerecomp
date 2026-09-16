@@ -607,7 +607,10 @@ static func day_care_mon(
 	if not bool(moved.get("ok", false)):
 		Gen2WorldTransaction.restore(world, before)
 		return _failure(StringName(moved.get("reason", &"day_care_move_failed")), request)
-	var resumed: Array = world.complete_runtime_request({"ok": true})
+	var resumed: Array = world.complete_runtime_request({
+		"ok": true, "species": int(moved.get("species", 0)),
+		"starter_pikachu": bool(moved.get("starter_pikachu", false)),
+	})
 	if resumed.is_empty() or not bool(resumed[0].get("ok", false)):
 		return _failure(&"runtime_request_failed", {
 			"request": request, "results": resumed,
@@ -631,11 +634,15 @@ static func _move_day_care_mon(
 ) -> Dictionary:
 	if StringName(values.get("action", &"")) == &"deposit":
 		var party_index: int = int(values.get("party_index", -1))
+		var moving: Gen2SaveMon = candidate.party[party_index] \
+			if party_index >= 0 and party_index < candidate.party.size() else null
 		if not Gen2WorldDayCare.deposit(
 			world.state, candidate, Gen2WorldDayCare.SLOT_MAN, party_index
 		):
 			return {"ok": false, "reason": &"day_care_deposit_refused"}
-		return {"ok": true, "kind": &"deposit", "party_index": party_index}
+		return _day_care_moved({"ok": true, "kind": &"deposit", "party_index": party_index},
+			world.data, candidate, moving)
+	var kept: Gen2SaveMon = world.state.day_care_mon(Gen2WorldDayCare.SLOT_MAN)
 	var taken: Dictionary = Gen2WorldDayCare.retrieve(
 		world.state, candidate, world.data, Gen2WorldDayCare.SLOT_MAN
 	)
@@ -643,7 +650,18 @@ static func _move_day_care_mon(
 		return {"ok": false, "reason": &"day_care_slot_empty"}
 	taken["ok"] = true
 	taken["kind"] = &"withdraw"
-	return taken
+	return _day_care_moved(taken, world.data, candidate, kept)
+
+
+## The `PlayCry` behind either move, and Yellow's starter test in front of it.
+static func _day_care_moved(
+	moved: Dictionary, data: GameData, save: Gen2SaveData, mon: Gen2SaveMon
+) -> Dictionary:
+	if mon != null:
+		moved["species"] = int(mon.species)
+		moved["starter_pikachu"] = data != null and data.id == RomRegistry.YELLOW \
+			and Gen1Pikachu.is_starter_of(save, mon)
+	return moved
 
 
 ## `Softboiled_MilkDrinkFunction`: a fifth of the user's own maximum health moved

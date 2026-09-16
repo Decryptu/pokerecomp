@@ -330,6 +330,9 @@ func test_victory_displays_imported_text_reloads_objects_and_keeps_player_cell()
 	host = _battle_host()
 	var result_text: Dictionary = host.battle_snapshot()
 	assert_eq(result_text["message"], "YOU WON.")
+	## `WinTrainerBattle`'s `PlayVictoryMusic`: the fixture's trainer is class
+	## 1, FALKNER, so `IsGymLeader` answers the gym piece.
+	assert_eq(host.victory_music(), Gen2Battle.MUSIC_GYM_VICTORY)
 
 	## `.give_money` prints behind `PrintWinLossText`, so the win takes one more
 	## press: 25 base times the last member's level of 5, four quarters over.

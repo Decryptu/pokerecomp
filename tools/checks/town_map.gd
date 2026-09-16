@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the region map against freshly imported real caches, on all three
-## cartridges, and the Pokegear's other three cards with it, since they are the same
-## VRAM window, palettes and page. Expected values come from the pinned sources'
-## landmarks, the two region `.bin`s, the palette map and `_TownMap`. The
-## real-cartridge counterpart to tests/unit/test_town_map.gd. What only a real cache
-## can say is that the 96 landmarks and the two 360-cell maps decoded, that the
-## Gold/Silver split is exactly the one `BATTLE TOWER` causes, and that `FindNest`
-## keeps each region's own wild tables over all 251 species.
+## The region map on all three cartridges, and the Pokegear's other three cards
+## with it: the 96 landmarks and two 360-cell maps decode, the Gold/Silver split
+## is exactly the one `BATTLE TOWER` causes, and `FindNest` keeps each region's
+## own wild tables over all 251 species.
 
 
 ## The one landmark Gold and Silver do not ship, and the two either side of it in

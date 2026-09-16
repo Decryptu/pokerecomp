@@ -2,14 +2,9 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the Pokemon Center PC's imported menu tables against freshly imported
-## real caches, in all three games. Expected values come from the pinned sources'
-## `PokemonCenterPC.Jumptable`, its `.WhichPC`, `PlayersPCMenuPointers` and that
-## menu's own `.WhichPC`, plus the fourteen `text_far` stubs. One pinned address per
-## cartridge finds all of it, so what says the address is right is the content: two
-## runs of `@`-terminated strings, five lists whose entries all name rows those runs
-## have, and fourteen stubs that decode. The three games ship the block identical
-## bar the two boxes carrying a WRAM address of their own.
+## The Pokemon Center PC's menu tables: `PokemonCenterPC.Jumptable`, its
+## `.WhichPC`, `PlayersPCMenuPointers` and the fourteen `text_far` stubs. One
+## pinned address finds all of it, so the content is what says it is right.
 
 ## `.Jumptable`'s strings, in its own order. The first keeps the `<PLAYER>`
 ## marker the cartridge stores.

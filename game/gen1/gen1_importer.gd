@@ -240,6 +240,8 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"players_pc": ["players_pc_text", Gen1Layout.PLAYERS_PC_TEXT_AT],
 	"bills_pc": ["bills_pc_text", Gen1Layout.BILLS_PC_TEXT_AT],
 	"bills_pc_2": ["bills_pc_release_text", Gen1Layout.BILLS_PC_RELEASE_TEXT_AT],
+	"bills_pc_sleeping": ["bills_pc_sleeping_text", Gen1Layout.BILLS_PC_SLEEPING_TEXT_AT],
+	"bills_pc_unhappy": ["bills_pc_unhappy_text", Gen1Layout.BILLS_PC_UNHAPPY_TEXT_AT],
 	"oaks_pc": ["oaks_pc_text", Gen1Layout.OAKS_PC_TEXT_AT],
 	"hof_pc": ["hof_pc_text", Gen1Layout.HOF_PC_TEXT_AT],
 	"hall_of_fame": ["hof_dex_text", Gen1Layout.HOF_DEX_TEXT_AT],
@@ -3064,12 +3066,101 @@ static func read_audio(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"sfx": sfx,
 			"cries": cries["rows"],
 			"mon_cries": _read_mon_cries(rom, layout),
+			"pikachu_cries": _read_pikachu_cries(rom, layout),
+			"alternate_music": _read_alternate_music(rom, layout),
 			"poke_flute": [
 				int(layout["poke_flute_ch5"]), int(layout["poke_flute_ch6"]),
 				int(layout["poke_flute_ch7"]),
 			],
 		},
 	}
+
+
+## `Music_RivalAlternateStart` and the three beside it, read as machine code:
+## `PlayMusic`'s registers, every `ld de` an overwrite takes, a sibling's rows
+## first, and `Music_Cities1AlternateTempo`'s fade reload and `DelayFrames`.
+static func _read_alternate_music(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for name: String in Gen1Layout.SCRIPT_ALTERNATE_MUSIC:
+		if layout.has(name):
+			out[name] = _alternate_music_routine(rom, layout, int(layout[name]))
+	return out
+
+
+static func _alternate_music_routine(rom: RomFile, layout: Dictionary, start: int) -> Dictionary:
+	var row: Dictionary = {"bank": -1, "id": -1, "pointers": [], "fade_frames": 0, "delay_frames": 0}
+	@warning_ignore("integer_division")
+	var bank: int = start / RomFile.BANK_SIZE
+	var at: int = start
+	var a: int = 0
+	var c: int = 0
+	var channel: int = 0
+	var pending: int = -1
+	for _step: int in Gen1Layout.ALTERNATE_MUSIC_STEP_CAP:
+		var op: int = rom.u8(at)
+		match op:
+			Gen1Layout.SCRIPT_LD_A:
+				a = rom.u8(at + 1)
+			Gen1Layout.SCRIPT_LD_C:
+				c = rom.u8(at + 1)
+			Gen1Layout.SCRIPT_LD_DE:
+				pending = rom.u16le(at + 1)
+			Gen1Layout.SCRIPT_LD_HL:
+				channel = 0
+			Gen1Layout.SCRIPT_LD_MEM_A:
+				if rom.u16le(at + 1) == int(layout.get("audio_fade_reload", -1)):
+					row["fade_frames"] = a
+			Gen1Layout.SCRIPT_JR:
+				at += 2 + _signed_byte(rom.u8(at + 1))
+				continue
+			Gen1Layout.SCRIPT_CALL, Gen1Layout.SCRIPT_JP:
+				var target: int = rom.u16le(at + 1)
+				if target == int(layout.get("play_music", -1)):
+					row["bank"] = c
+					row["id"] = a
+				elif target == int(layout.get("delay_frames", -1)):
+					row["delay_frames"] = c
+				elif Gen1Layout.banked(bank, target) == int(layout.get("music_rival_start", -1)):
+					var inner: Dictionary = _alternate_music_routine(
+						rom, layout, Gen1Layout.banked(bank, target)
+					)
+					row["bank"] = int(inner["bank"])
+					row["id"] = int(inner["id"])
+					row["pointers"] = inner["pointers"]
+				elif pending >= 0:
+					(row["pointers"] as Array).append([channel, pending])
+					channel += 1
+					pending = -1
+				if op == Gen1Layout.SCRIPT_JP:
+					return row
+			Gen1Layout.SCRIPT_RET:
+				## `Music_RivalAlternateStart` inlines its last overwrite.
+				if pending >= 0:
+					(row["pointers"] as Array).append([channel, pending])
+				return row
+		at += int(Gen1Layout.ALTERNATE_MUSIC_OPCODE_SIZES.get(op, 1))
+	return row
+
+
+static func _signed_byte(value: int) -> int:
+	return value - 0x100 if value >= 0x80 else value
+
+
+## `PikachuCriesPointerTable`: a `dw` byte count in front of each clip.
+static func _read_pikachu_cries(rom: RomFile, layout: Dictionary) -> Array:
+	var out: Array = []
+	if not layout.has("pikachu_cries"):
+		return out
+	for index: int in Gen1Layout.PIKACHU_CRIES:
+		var row: int = int(layout["pikachu_cries"]) + index * Gen1Layout.PIKACHU_CRY_ROW_SIZE
+		var at: int = Gen1Layout.banked(rom.u8(row), rom.u16le(row + 1))
+		var count: int = rom.u16le(at)
+		out.append({
+			"index": index,
+			"bytes": Array(rom.slice(at + Gen1Layout.POINTER_SIZE, count)),
+			"byte_count": count,
+		})
+	return out
 
 
 static func _audio_bank_row(rom: RomFile, index: int, bank: int, records: int) -> Dictionary:

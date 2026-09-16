@@ -4108,6 +4108,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"random_bit": &"_gen1_node_random_bit",
 	"talking_to": &"_gen1_node_talking_to",
 	"pikachu_test": &"_gen1_node_pikachu_test",
+	"sound": &"_gen1_node_sound",
 	"pikachu": &"_gen1_node_pikachu",
 	"pikachu_text": &"_gen1_node_pikachu_text",
 	"pikachu_movement": &"_gen1_node_pikachu_movement",
@@ -4218,6 +4219,11 @@ func gen1_pikachu_happiness(kind: int, slot: int = -1) -> void:
 		return
 	var starter: Dictionary = _party_summary.get("starter_pikachu", {})
 	pikachu.modify_happiness(kind, slot < 0 or int(starter.get("slot", -1)) == slot)
+
+
+## `IsThisPartyMonStarterPikachu` by party slot, or -1 with no starter.
+func gen1_starter_slot() -> int:
+	return int((_party_summary.get("starter_pikachu", {}) as Dictionary).get("slot", -1))
 
 
 ## One of [constant Gen1Pikachu.MOOD_WRITES], from wherever a host reaches it.
@@ -5324,8 +5330,7 @@ func _gen1_pikachu_talk_steps() -> Array:
 				steps.append(_gen1_wait_step(&"pikapic", WAIT_UNTIL_FINISHED,
 					{"index": int(row["value"])}))
 			"pcm":
-				steps.append(_gen1_wait_step(&"pikachu_cry",
-					_gen1_pikachu_cry_frames(int(row["value"])), {"index": int(row["value"])}))
+				steps.append(_gen1_sound_step("pikachu_clip", {"index": int(row["value"])}))
 			_:
 				steps.append({"type": &"pikachu", "what": String(row["cmd"]),
 					"value": int(row.get("value", 0))})
@@ -5333,13 +5338,74 @@ func _gen1_pikachu_talk_steps() -> Array:
 
 
 ## `PlayPikachuSoundClip`: three `DelayFrame`s, then the clip's one-bit samples
-## with interrupts off, at the rate measured on the cartridge. Nothing plays
-## the clip here yet; the frames it holds the map for are spent regardless.
+## with interrupts off, at the rate measured on the cartridge.
 func _gen1_pikachu_cry_frames(index: int) -> int:
 	var cries: Array = data.gen1_pikachu().get("cries", []) if data != null else []
 	if index < 0 or index >= cries.size():
 		return 0
 	return Gen1Layout.pikachu_cry_frames(int(cries[index]))
+
+
+## A row's `PlaySound`, `PlayCry`, `WaitForSoundToFinish` or Yellow's
+## `PlayPikachuSoundClip`: a schedule the screen sounds, and the hold behind it.
+func _gen1_node_sound(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append(_gen1_sound_step(String(node["what"]), node))
+	return true
+
+
+func _gen1_sound_step(what: String, node: Dictionary = {}) -> Dictionary:
+	var index: int = int(node.get("index", 0))
+	match what:
+		"cry":
+			return _gen1_sound_wait([{"frame": 0, "cry": index}])
+		"wait":
+			return _gen1_sound_wait([], bool(node.get("music", false)))
+		"map_music":
+			## `PlayDefaultMusic` waits for the effect channels first.
+			if bool(node.get("wait", false)):
+				return _gen1_sound_wait([{"wait": true, "map_music": true}])
+			return _gen1_sound_event([{"frame": 0, "map_music": true}])
+		"pikachu_clip":
+			return _gen1_wait_step(&"gen1_sound", _gen1_pikachu_cry_frames(index), {
+				"sounds": [{"frame": 0, "pikachu_clip": index}],
+			})
+		"alternate_music":
+			return _gen1_alternate_music_step(String(node.get("name", "")))
+		"music":
+			return _gen1_sound_event([{
+				"frame": 0, "gen1": true, "kind": &"music", "index": index,
+				"bank": int(node.get("bank", -1)),
+			}])
+	return _gen1_sound_event([
+		{"frame": 0, "gen1": true, "index": index, "wait": bool(node.get("wait", false))},
+	])
+
+
+## `Music_Cities1AlternateTempo` fades the room's piece out and spends
+## `DelayFrames` in front of its `PlayMusic`; the rival's three start at once.
+func _gen1_alternate_music_step(name: String) -> Dictionary:
+	var record: Dictionary = data.gen1_alternate_music(name) if data != null else {}
+	var delay: int = int(record.get("delay_frames", 0))
+	var sounds: Array = [{"frame": delay, "alternate_music": name}]
+	if int(record.get("fade_frames", 0)) > 0:
+		sounds.push_front({"frame": 0, "fade": int(record["fade_frames"])})
+	if delay > 0:
+		return _gen1_wait_step(&"gen1_sound", delay, {"sounds": sounds})
+	return _gen1_sound_event(sounds)
+
+
+## A `WaitForSoundToFinish` behind whatever [param sounds] start.
+func _gen1_sound_wait(sounds: Array, music: bool = false) -> Dictionary:
+	var step: Dictionary = _gen1_wait_step(&"gen1_sound", 0, {"sounds": sounds})
+	(step["values"] as Dictionary)["until_sound"] = true
+	(step["values"] as Dictionary)["music"] = music
+	return step
+
+
+func _gen1_sound_event(sounds: Array) -> Dictionary:
+	return {"type": &"event", "event": {
+		"type": &"presentation_special_applied", "kind": &"gen1_sound", "sounds": sounds,
+	}}
 
 
 ## `.Subcommands`: the redraw spends `Delay3`, and the three map checks put the
@@ -5932,9 +5998,22 @@ func _gen1_day_care_after_selection(result: Dictionary) -> Array:
 		return [_gen1_day_care_box("knows_hm_move")]
 	return [
 		_gen1_day_care_box("will_look_after", String(result.get("nickname", ""))),
-		_gen1_day_care_request(&"deposit", party_index),
+		_gen1_day_care_request(&"deposit", party_index, PIKACHU_CLIP_DAY_CARE_IN),
 		_gen1_day_care_box("come_see_me"),
 	]
+
+
+## `PlayCry` on `wCurPartySpecies`, or Yellow's `PikachuCry28` going in and
+## `PikachuCry35` coming out; both ride the request's completion.
+const PIKACHU_CLIP_DAY_CARE_IN: int = 27
+const PIKACHU_CLIP_DAY_CARE_OUT: int = 34
+
+
+func _gen1_cry_after(step: Dictionary, result: Dictionary) -> Array:
+	if bool(result.get("starter_pikachu", false)):
+		return [_gen1_sound_step("pikachu_clip", {"index": int(step["cry_after"])})]
+	var species: int = int(result.get("species", 0))
+	return [_gen1_sound_step("cry", {"index": species})] if species > 0 else []
 
 
 ## `.daycareInUse`: the level the slot reached and the price behind it.
@@ -5971,13 +6050,13 @@ func _gen1_day_care_payment(price: int, nickname: String) -> Array:
 		{"type": &"money", "amount": purse - price},
 		{"type": &"money_box", "kind": &"money_top_right"},
 		_gen1_day_care_box("heres_your_mon"),
-		_gen1_day_care_request(&"withdraw", -1),
+		_gen1_day_care_request(&"withdraw", -1, PIKACHU_CLIP_DAY_CARE_OUT),
 		_gen1_day_care_box("got_mon_back", nickname),
 	]
 
 
-func _gen1_day_care_request(action: StringName, party_index: int) -> Dictionary:
-	return {"type": &"request", "values": {
+func _gen1_day_care_request(action: StringName, party_index: int, clip: int) -> Dictionary:
+	return {"type": &"request", "cry_after": clip, "values": {
 		"kind": &"day_care_mon_requested",
 		"values": {"action": action, "party_index": party_index},
 	}}
@@ -7375,6 +7454,13 @@ func _gen1_kept(step: Dictionary, events: Array) -> bool:
 		&"event":
 			events.append((step["event"] as Dictionary).duplicate(true))
 			return true
+		&"wait":
+			## A `WaitForSoundToFinish` with no driver to ask ends where it starts.
+			if not bool((step["values"] as Dictionary).get("until_sound", false)) \
+					or sound_playing.is_valid():
+				return false
+			events.append_array((step.get("events", []) as Array).duplicate(true))
+			return true
 	return _gen1_drawn(step, events)
 
 
@@ -7633,6 +7719,8 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		_gen1_steps = _gen1_trade_after_selection(step, result) + _gen1_steps
 	elif step.has("day_care"):
 		_gen1_steps = _gen1_day_care_after_selection(result) + _gen1_steps
+	elif step.has("cry_after"):
+		_gen1_steps = _gen1_cry_after(step, result) + _gen1_steps
 	elif step.has("elevator"):
 		_gen1_ride_elevator(result)
 	elif step.has("slot_machine") and result.has("coins"):
@@ -9298,11 +9386,14 @@ func _apply_script_warp(request: Dictionary) -> Dictionary:
 ## leaves this API unchanged. Below, `CheckWarpTile`'s answer without walking
 ## through: `GetDestinationWarpNumber` then `CheckDirectionalWarp`, which clears
 ## carry on the four carpets, so only [method edge_warp_ready] takes those.
-func warp_pending(cell: Vector2i = player_cell) -> bool:
+## [param facing] is the direction the player would face on [param cell]; zero
+## reads the facing the player has now. Generation 1's `ExtraWarpCheck` asks
+## it, so a plan that arrives sideways on an edge warp is not a warp.
+func warp_pending(cell: Vector2i = player_cell, facing: Vector2i = Vector2i.ZERO) -> bool:
 	if warp_at(cell).is_empty():
 		return false
 	if _gen1:
-		return _warp_tile_allows(cell)
+		return _warp_tile_allows(cell, facing)
 	var code: int = collision_code_at(cell)
 	return Gen2WorldCollision.is_warp_tile(code) \
 		and not Gen2WorldCollision.is_directional_warp(code)
@@ -9447,7 +9538,7 @@ func _warp_landing_cell(
 ## of tests in Generation 1: a warp fires at once off a warp or a door tile, and
 ## otherwise wants a carpet or the edge of the map in front of the player, who
 ## is still holding the direction that walked them onto it.
-func _warp_tile_allows(cell: Vector2i) -> bool:
+func _warp_tile_allows(cell: Vector2i, facing: Vector2i = Vector2i.ZERO) -> bool:
 	var standing: int = collision_code_at(cell)
 	if not _gen1:
 		return Gen2WorldCollision.is_warp_tile(standing)
@@ -9457,15 +9548,15 @@ func _warp_tile_allows(cell: Vector2i) -> bool:
 	if Gen2WorldCollision.gen1_is_warp_tile(tileset, standing) \
 		or Gen2WorldCollision.gen1_is_door_tile(tileset, standing):
 		return true
-	return _gen1_extra_warp_check(cell)
+	return _gen1_extra_warp_check(cell, facing)
 
 
 ## `ExtraWarpCheck`: `IsWarpTileInFrontOfPlayer` on the maps and tilesets it
 ## names and `IsPlayerFacingEdgeOfMap` on the rest, which compares the player's
 ## own coordinate against the map where the carpet test reads the drawn tile and
 ## so sees the border.
-func _gen1_extra_warp_check(cell: Vector2i) -> bool:
-	var direction: Vector2i = _direction_for_facing(player_facing)
+func _gen1_extra_warp_check(cell: Vector2i, facing: Vector2i = Vector2i.ZERO) -> bool:
+	var direction: Vector2i = facing if facing != Vector2i.ZERO else _direction_for_facing(player_facing)
 	var ahead: Vector2i = cell + direction
 	if current_map.number == Gen1Layout.MAP_SS_ANNE_BOW:
 		return _gen1_tile_drawn_at(ahead) == Gen1Layout.SS_ANNE_BOW_WARP_TILE
@@ -10018,6 +10109,12 @@ func advance_script_wait_frame() -> Array:
 		if scripted_movement_in_progress():
 			return []
 		return _complete_script_wait()
+	if bool(wait.get("until_sound", false)):
+		if sound_playing.is_valid() \
+				and bool(sound_playing.call(_sound_watch, bool(wait.get("music", false)))):
+			return []
+		_sound_watch = {}
+		return _complete_script_wait()
 	if int(wait.get("frames", 0)) == WAIT_UNTIL_FINISHED:
 		if not _presentation_finished:
 			return []
@@ -10035,6 +10132,10 @@ func advance_script_wait_frame() -> Array:
 ## A presentation wait with no count of its own, ended by the host that drew it.
 const WAIT_UNTIL_FINISHED: int = -1
 var _presentation_finished: bool = false
+## `WaitForSoundToFinish`, answered each frame by the host's driver in
+## [method Gen2AudioPlayer.still_waiting]'s shape. Unset, nothing is playing.
+var sound_playing: Callable = Callable()
+var _sound_watch: Dictionary = {}
 
 
 func finish_presentation() -> void:

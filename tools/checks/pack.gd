@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the pack submenu's three permission tests against freshly imported real
-## caches, over every item row rather than a sampled one. Expected values come from
-## the pinned sources' `.ItemBallsKey_LoadSubmenu`, which asks `_CheckTossableItem`,
-## `CheckSelectableItem` and `CheckItemMenu` in that order, `RegisterItem`, and
-## `.GiveItem`. `data/items/attributes.asm` is byte identical between the pins.
-## All 256 rows are swept because a bit read the wrong way round is invisible on
-## the one item a screen test picks: it is set on the item that *cannot* do the
-## thing, so an inverted read offers TOSS on every key item.
+## The pack submenu's three permission tests over all 256 item rows:
+## `_CheckTossableItem`, `CheckSelectableItem` and `CheckItemMenu` in
+## `.ItemBallsKey_LoadSubmenu`'s order. A bit is set on the item that *cannot*
+## do the thing, so an inverted read offers TOSS on every key item.
 
 ## The ten rows whose field-menu nibble is ITEMMENU_CLOSE, byte identical
 ## between the pins. The unit tier writes the nibble onto its own fixture, so
