@@ -643,6 +643,7 @@ func _build_world() -> void:
 	_audio_player = AUDIO_PLAYER_SCRIPT.new()
 	_audio_player.name = "AudioPlayer"
 	add_child(_audio_player)
+	_world.sound_playing = _audio_player.still_waiting
 	_play_current_map_music()
 	_text_box = Gen2TextBox.new()
 	# The overworld owns the frame, so the reveal is spent in [method
@@ -1916,9 +1917,14 @@ func _spend_poison_steps() -> bool:
 	if bool(pass_result.get("sfx", false)):
 		_play_sfx(SFX_POISON)
 		_start_poison_flash()
-	## `.curMonNotPlayerPikachu`'s PIKAHAPPY_PSNFNT, once per member that fell.
+	## `.curMonNotPlayerPikachu`'s PIKAHAPPY_PSNFNT, once per member that fell,
+	## and `PikachuCry4` behind the starter's own box.
+	var starter_fell: bool = false
 	for slot: int in PackedInt32Array(pass_result.get("fainted", PackedInt32Array())):
 		_world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_PSNFNT, slot)
+		starter_fell = starter_fell or _world.gen1_starter_slot() == slot
+	var after: Callable = _play_pikachu_clip.bind(Gen2Battle.PIKACHU_CLIP_FAINTED) \
+		if starter_fell else Callable()
 	var texts: PackedStringArray = pass_result.get("texts", PackedStringArray())
 	if texts.is_empty():
 		if not PackedInt32Array(pass_result.get("damaged", PackedInt32Array())).is_empty():
@@ -1933,11 +1939,22 @@ func _spend_poison_steps() -> bool:
 		lines.append(Gen2Nuzlocke.death_text(Gen2Nuzlocke.grave_name(_data, lost)))
 	if bool(pass_result.get("whiteout", false)):
 		lines.append_array(_whiteout_texts())
-		_hold_poison_flash(_show_player_event.bind(lines, _finish_whiteout))
+		_hold_poison_flash(_show_player_event.bind(lines, _then(after, _finish_whiteout)))
 	else:
 		_persist_after_poison_step(save)
-		_hold_poison_flash(_show_player_event.bind(lines, Callable()))
+		_hold_poison_flash(_show_player_event.bind(lines, after))
 	return true
+
+
+## Both callables in order, either of which may be unset.
+static func _then(first: Callable, second: Callable) -> Callable:
+	if not first.is_valid():
+		return second
+	if not second.is_valid():
+		return first
+	return func() -> void:
+		first.call()
+		second.call()
 
 
 ## `.PlayPoisonSFX` floods the background and spends four frames of its own.
@@ -4081,6 +4098,7 @@ func _preview_pc(mode: StringName) -> void:
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host
 	_script_prompt = "PC open"
 	_refresh_labels()
@@ -4106,6 +4124,7 @@ func preview_mom_bank(mode: StringName, saved: int, held: int) -> void:
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host
 	_refresh_labels()
 
@@ -6158,6 +6177,7 @@ func _open_service_host() -> void:
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host
 	_script_prompt = "Service host open"
 	_refresh_labels()
@@ -6187,6 +6207,7 @@ func open_hall_of_fame() -> void:
 	host.set_context(_data, pages)
 	host.closed.connect(_on_hall_of_fame_closed)
 	host.cry_requested.connect(_play_species_cry)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	host.rating_reached.connect(_on_hall_of_fame_rating)
 	host.music_requested.connect(_play_hall_of_fame_music)
 	host.music_fade_requested.connect(_fade_hall_of_fame_music)
@@ -6510,6 +6531,7 @@ func _open_start_menu_host(entry: Callable) -> void:
 	host.field_move_chosen.connect(_on_start_menu_field_move)
 	host.evolution_animation_requested.connect(_on_pack_evolution)
 	host.sfx_requested.connect(_play_sfx)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_start_menu_host = host
 	_script_prompt = "Start menu open"
 	if entry.is_valid():
@@ -6921,6 +6943,7 @@ func _open_embedded_party() -> void:
 	## `OpenPartyStats`' `PlayMonCry2` reaches the same player the Pokedex's own
 	## CRY button does.
 	host.cry_requested.connect(_on_pokedex_cry_requested)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_party_host = host
 	_script_prompt = "Party open"
 	_refresh_labels()
@@ -7563,6 +7586,7 @@ func _open_host_prompt(text: String) -> bool:
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host
 	_script_prompt = "A: answer"
 	_refresh_labels()
@@ -7600,6 +7624,7 @@ func _open_service_overlay(kind: StringName) -> void:
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host
 	_script_prompt = "%s open" % label
 	_refresh_labels()
@@ -7661,6 +7686,7 @@ func _adopt_service_overlay(host: Gen2WorldServiceScreen, prompt: String) -> voi
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host
 	_script_prompt = prompt
 	_refresh_labels()
@@ -7819,6 +7845,7 @@ const PRESENTATION_HANDLERS: Dictionary = {
 	&"ss_anne_leaves": &"_start_gen1_ss_anne",
 	&"palette_fade": &"_start_script_fade",
 	&"cable_club_wait": &"_start_presentation_sounds",
+	&"gen1_sound": &"_start_presentation_sounds",
 }
 
 ## Events the results loop only records, and what each raises.
@@ -8256,6 +8283,7 @@ func _open_quick_save_screen() -> bool:
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host
 	_script_prompt = "Saving"
 	_refresh_labels()
@@ -8585,6 +8613,7 @@ func _open_party_selection(request: Dictionary = {}) -> bool:
 	host.selection_made.connect(_on_party_selection_made)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_on_pokedex_cry_requested)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	host.set_screen(_screen)
 	add_child(host)
 	host.open_selection(
@@ -9231,19 +9260,60 @@ func _advance_sound_schedule() -> void:
 	while not _sound_schedule.is_empty():
 		var due: Dictionary = _sound_schedule[0]
 		if bool(due.get("wait", false)):
-			if _audio_player != null and _audio_player.still_waiting(due):
+			if _audio_player != null and _audio_player.still_waiting(due, bool(due.get("music", false))):
 				break
 		elif int(due.get("frame", 0)) > _sound_schedule_frame:
 			break
 		_sound_schedule.pop_front()
-		var index: int = int(due.get("index", 0))
-		if bool(due.get("gen1", false)):
-			_play_gen1_sound(index)
-		elif StringName(due.get("kind", &"sound")) == &"music":
-			_play_music(index)
-		else:
-			_play_sfx(index, bool(due.get("wait", false)))
+		_play_scheduled(due)
 	_sound_schedule_frame += 1
+
+
+## One entry of the schedule.
+func _play_scheduled(due: Dictionary) -> void:
+	if bool(due.get("map_music", false)):
+		_play_current_map_music()
+		return
+	if due.has("cry"):
+		_play_species_cry(int(due["cry"]))
+	elif due.has("pikachu_clip"):
+		_play_pikachu_clip(int(due["pikachu_clip"]))
+	elif due.has("alternate_music"):
+		_play_gen1_alternate_music(String(due["alternate_music"]))
+	elif due.has("fade"):
+		if _audio_player != null:
+			_audio_player.fade_out(int(due["fade"]))
+	elif bool(due.get("gen1", false)):
+		_play_scheduled_gen1(due)
+	elif StringName(due.get("kind", &"sound")) == &"music":
+		_play_music(int(due.get("index", 0)))
+	else:
+		_play_sfx(int(due.get("index", 0)), bool(due.get("wait", false)))
+
+
+func _play_scheduled_gen1(due: Dictionary) -> void:
+	var index: int = int(due.get("index", 0))
+	if StringName(due.get("kind", &"sound")) == &"music":
+		var song: Array[int] = [int(due.get("bank", -1)), index]
+		_play_gen1_music(song)
+		return
+	_play_gen1_sound(index)
+
+
+## `Music_RivalAlternateStart` and its siblings.
+func _play_gen1_alternate_music(routine: String) -> void:
+	if _audio_player == null or _data == null:
+		return
+	var record: Dictionary = _data.gen1_alternate_music(routine)
+	if not record.is_empty():
+		_audio_player.play_record(record, &"map_music", _audio_assets())
+
+
+## `PlayPikachuSoundClip`.
+func _play_pikachu_clip(index: int) -> void:
+	if _audio_player == null or _data == null:
+		return
+	_audio_player.play_pikachu_clip(_data.gen1_pikachu_cry(index))
 
 
 ## `wMuteAudioAndPauseMusic`: the music channels held while a payout counts.

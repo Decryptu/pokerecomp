@@ -563,6 +563,36 @@ func gen1_sound(bank: int, sound_id: int) -> Dictionary:
 	return row
 
 
+## One of Yellow's `PikachuCriesPointerTable` clips, empty elsewhere.
+func gen1_pikachu_cry(index: int) -> PackedByteArray:
+	var rows: Variant = _audio().get("pikachu_cries", [])
+	if not rows is Array or index < 0 or index >= (rows as Array).size():
+		return PackedByteArray()
+	var row: Variant = (rows as Array)[index]
+	if not row is Dictionary:
+		return PackedByteArray()
+	return _payload_bytes(
+		row if (row as Dictionary).has(RomCache.PAYLOAD_KEY) else (row as Dictionary).get("bytes", []),
+		_blob("audio")
+	)
+
+
+## `Music_RivalAlternateStart` and its three siblings: the piece's record with
+## the routine's own channel pointers, fade and wait on it.
+func gen1_alternate_music(name: String) -> Dictionary:
+	var rows: Variant = _audio().get("alternate_music", {})
+	if not rows is Dictionary or not (rows as Dictionary).has(name):
+		return {}
+	var row: Dictionary = _coerce_service_dictionary((rows as Dictionary)[name], _blob("audio"))
+	var record: Dictionary = gen1_sound(int(row.get("bank", -1)), int(row.get("id", -1)))
+	if record.is_empty():
+		return {}
+	record["pointers"] = row.get("pointers", [])
+	record["fade_frames"] = int(row.get("fade_frames", 0))
+	record["delay_frames"] = int(row.get("delay_frames", 0))
+	return record
+
+
 func gen1_poke_flute() -> Dictionary:
 	var channels: Variant = _audio().get("poke_flute", [])
 	if not channels is Array or (channels as Array).size() < 3:

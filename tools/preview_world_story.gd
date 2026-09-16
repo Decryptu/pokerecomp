@@ -8755,7 +8755,7 @@ func _reachable_step(
 	# cell it was asked to reach, which is what makes Ecruteak Gym's thirty
 	# holes a maze instead of open floor. A warp_event on ordinary floor is
 	# inert, as CheckWarpCollision has it, so it is not a wall.
-	if direct != warp_target and (world.warp_pending(direct) \
+	if direct != warp_target and (world.warp_pending(direct, step) \
 		or not world.gen1_dungeon_hole_at(direct).is_empty()):
 		return Vector2i(-1, -1)
 	# A whirlpool traps rather than moves: .CheckTile answers

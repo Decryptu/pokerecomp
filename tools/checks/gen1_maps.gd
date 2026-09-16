@@ -129,7 +129,7 @@ const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
 
 ## The `text_asm` rows read as a script, and the nodes under them.
 const SCRIPT_CENSUS: Dictionary = {
-	&"red": {"rows": 322, "text": 621, "branch": 162, "choice": 45, "flag": 254,
+	&"red": {"rows": 336, "text": 635, "sound": 60, "branch": 162, "choice": 45, "flag": 254,
 		"give_item": 44, "has_item": 20, "take_item": 11, "unknown": 0, "pokedex": 13,
 		"give_pokemon": 33, "saved_coord_index": 1, "emote": 1, "player_facing": 11,
 		"badges_byte": 1, "walk": 20, "set_map_script": 113, "npc_movement_script": 2,
@@ -145,7 +145,7 @@ const SCRIPT_CENSUS: Dictionary = {
 		"safari_steps": 1, "save_coord_index": 2, "map_load_bit": 6, "copy_name": 4,
 		"set_fossil": 6, "party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1,
 		"list_menu": 1},
-	&"blue": {"rows": 322, "text": 621, "branch": 162, "choice": 45, "flag": 254,
+	&"blue": {"rows": 336, "text": 635, "sound": 60, "branch": 162, "choice": 45, "flag": 254,
 		"give_item": 44, "has_item": 20, "take_item": 11, "unknown": 0, "pokedex": 13,
 		"give_pokemon": 33, "saved_coord_index": 1, "emote": 1, "player_facing": 11,
 		"badges_byte": 1, "walk": 20, "set_map_script": 113, "npc_movement_script": 2,
@@ -161,7 +161,7 @@ const SCRIPT_CENSUS: Dictionary = {
 		"safari_steps": 1, "save_coord_index": 2, "map_load_bit": 6, "copy_name": 4,
 		"set_fossil": 6, "party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1,
 		"list_menu": 1},
-	&"yellow": {"rows": 385, "text": 649, "branch": 168, "choice": 41, "flag": 234,
+	&"yellow": {"rows": 402, "text": 666, "sound": 94, "branch": 168, "choice": 41, "flag": 234,
 		"give_item": 41, "has_item": 15, "take_item": 10, "unknown": 6, "pokedex": 10,
 		"give_pokemon": 10, "saved_coord_index": 2, "player_facing": 16, "emote": 8,
 		"badges_byte": 1, "walk": 23, "set_map_script": 100, "npc_movement_script": 2,
@@ -199,19 +199,19 @@ const TOGGLE_CENSUS: Dictionary = {
 ## the four cable club Game Boys, which read `hSerialConnectionStatus`, and on
 ## Red and Blue the three bench guys `BenchGuyTextPointers` misaligns.
 const HIDDEN_CENSUS: Dictionary = {
-	&"red": {"rows": 216, "silent": 3, "text": 445, "branch": 117, "flag": 72,
+	&"red": {"rows": 216, "silent": 3, "sound": 49, "text": 445, "branch": 117, "flag": 72,
 		"facing": 133, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
 		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3,
 		"serial_status": 4, "link_state": 4},
-	&"blue": {"rows": 216, "silent": 3, "text": 445, "branch": 117, "flag": 72,
+	&"blue": {"rows": 216, "silent": 3, "sound": 49, "text": 445, "branch": 117, "flag": 72,
 		"facing": 133, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
 		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3,
 		"serial_status": 4, "link_state": 4},
-	&"yellow": {"rows": 212, "silent": 0, "text": 449, "branch": 118, "flag": 73,
+	&"yellow": {"rows": 212, "silent": 0, "sound": 49, "text": 449, "branch": 118, "flag": 73,
 		"facing": 129, "name_item": 54, "give_item": 54, "facility": 17,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "volatile": 12, "map_load_bit": 6, "replace_block": 72,
@@ -233,7 +233,7 @@ const CALLBACK_CENSUS: Dictionary = {
 ## The maps with a state machine, the states reachable from index 0 and from
 ## every `set_map_script` already read, and the bodies the walker gets whole.
 const STATE_CENSUS: Dictionary = {
-	&"red": {"tables": 98, "states": 373, "read": 183, "branch": 71, "player_coord": 53,
+	&"red": {"tables": 98, "states": 373, "read": 183, "sound": 72, "branch": 71, "player_coord": 53,
 		"player_facing": 58, "flag": 264, "set_map_script": 318, "save_coord_index": 9,
 		"map_text": 142, "toggle_object": 155, "object_facing": 75, "set_player_coord": 1,
 		"object_path": 2, "movement_running": 70, "npc_movement_script": 1,
@@ -247,7 +247,7 @@ const STATE_CENSUS: Dictionary = {
 		"save_game": 1, "reset_game": 1, "object_coord_move": 1, "warp_to": 1, "set_last_map": 1,
 		"safari_balls": 1, "set_riding": 1, "replace_block": 24, "volatile": 1,
 		"volatile_test": 1, "coord_lookup": 3, "trainer_battle_object": 1},
-	&"blue": {"tables": 98, "states": 373, "read": 183, "branch": 71, "player_coord": 53,
+	&"blue": {"tables": 98, "states": 373, "read": 183, "sound": 72, "branch": 71, "player_coord": 53,
 		"player_facing": 58, "flag": 264, "set_map_script": 318, "save_coord_index": 9,
 		"map_text": 142, "toggle_object": 155, "object_facing": 75, "set_player_coord": 1,
 		"object_path": 2, "movement_running": 70, "npc_movement_script": 1,
@@ -261,7 +261,7 @@ const STATE_CENSUS: Dictionary = {
 		"save_game": 1, "reset_game": 1, "object_coord_move": 1, "warp_to": 1, "set_last_map": 1,
 		"safari_balls": 1, "set_riding": 1, "replace_block": 24, "volatile": 1,
 		"volatile_test": 1, "coord_lookup": 3, "trainer_battle_object": 1},
-	&"yellow": {"tables": 98, "states": 411, "read": 226, "branch": 123, "player_coord": 86,
+	&"yellow": {"tables": 98, "states": 411, "read": 226, "sound": 114, "branch": 123, "player_coord": 86,
 		"flag": 308, "player_facing": 63, "set_map_script": 393, "save_coord_index": 15,
 		"map_text": 181, "object_position": 28, "toggle_object": 195, "object_facing": 97,
 		"set_player_coord": 1, "object_path": 2, "movement_running": 83, "wild_battle": 6,
@@ -718,24 +718,52 @@ func _walk_script(
 	for node: Dictionary in nodes:
 		var op: String = String(node["op"])
 		census[op] = int(census.get(op, 0)) + 1
-		if op == "text" and not _drawn(font, String(node["text"]).replace("\n", "")) \
-			and wrong.size() < 4:
-			wrong.append("map %d draws a blank tile" % number)
-		if op == "text" and String(node["text"]).contains(Gen2TextStream.NUMBER_MARKER) \
-			and wrong.size() < 4:
-			wrong.append("map %d prints a number nothing wrote" % number)
-		if node.has("flag") and op in ["flag", "branch", "flag_test"]:
-			var flag: int = int(node["flag"])
-			if (flag < 0 or flag >= Gen1Layout.EVENT_FLAG_BYTES * 8) and wrong.size() < 4:
-				wrong.append("map %d names flag %d" % [number, flag])
-		## A marker below zero is a row only the runtime resolves to an item.
-		if (op == "give_item" or op == "has_item" or op == "take_item") \
-			and int(node["item"]) >= 0:
-			_r.check(not _r.data.item_name(int(node["item"])).is_empty(),
-				"map %d names item %d, which has no name." % [number, int(node["item"])])
+		var fault: String = _node_fault(font, node, number)
+		if not fault.is_empty() and wrong.size() < 4:
+			wrong.append(fault)
 		for side: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
 			if node.has(side):
 				_walk_script(font, node[side] as Array, census, wrong, number)
+
+
+## What is wrong with one node, or nothing. A marker below zero on an item is a
+## row only the runtime resolves.
+func _node_fault(font: Gen2Font, node: Dictionary, number: int) -> String:
+	var op: String = String(node["op"])
+	if op == "text" and not _drawn(font, String(node["text"]).replace("\n", "")):
+		return "map %d draws a blank tile" % number
+	if op == "text" and String(node["text"]).contains(Gen2TextStream.NUMBER_MARKER):
+		return "map %d prints a number nothing wrote" % number
+	if node.has("flag") and op in ["flag", "branch", "flag_test"]:
+		var flag: int = int(node["flag"])
+		if flag < 0 or flag >= Gen1Layout.EVENT_FLAG_BYTES * 8:
+			return "map %d names flag %d" % [number, flag]
+	if (op == "give_item" or op == "has_item" or op == "take_item") \
+		and int(node["item"]) >= 0 and _r.data.item_name(int(node["item"])).is_empty():
+		return "map %d names item %d, which has no name." % [number, int(node["item"])]
+	if op == "sound" and not _sound_playable(node):
+		return "map %d sounds %s" % [number, node]
+	return ""
+
+
+## Every sound node resolves to something the driver can play.
+func _sound_playable(node: Dictionary) -> bool:
+	var index: int = int(node.get("index", 0))
+	match String(node.get("what", "")):
+		"cry":
+			return not _r.data.species_cry(index).is_empty()
+		"sound":
+			return index == Gen1SoundEngine.SFX_STOP_ALL_MUSIC \
+				or not _r.data.gen1_sound(-1, index).is_empty()
+		"music":
+			return not _r.data.gen1_sound(int(node.get("bank", -1)), index).is_empty()
+		"alternate_music":
+			return not _r.data.gen1_alternate_music(String(node.get("name", ""))).is_empty()
+		"pikachu_clip":
+			return not _r.data.gen1_pikachu_cry(index).is_empty()
+		"wait", "map_music":
+			return true
+	return false
 
 
 func _elevators() -> void:

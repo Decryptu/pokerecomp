@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the profile map ids `tools/preview_world_story.gd` resolves by name
-## against freshly imported real caches, for both command profiles. A map number
-## counts from its group's first entry, so a map pokegold does not ship shifts every
-## later number in that group: group 3 runs eight lower from UNION_CAVE_1F on. The
-## route walker names only the maps it reaches by id, and only Ilex Forest is on a
-## walked leg today, so a wrong number in the other three would be silent. Each row
-## carries the map's own block dimensions from its `map_const`, which is what makes
-## a wrong number loud.
+## The profile map ids `tools/preview_world_story.gd` resolves by name. A map
+## pokegold does not ship shifts every later number in its group, and each row
+## carries the map's own `map_const` dimensions, which is what makes a wrong
+## number loud.
 
 
 ## name: [crystal id, gold id, block width, block height]. The dimensions are

@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the way into Saffron City and its gym's warp maze, for both command
-## profiles. The city, the gym and the gate are byte identical between the pins;
-## Route 6 differs only in the two extra Pokefans Crystal puts on (9,12) and
-## (10,12), both sight range 0, so nothing here is profile split. Two things are
-## worth pinning. Saffron has a real south connection to Route 6, but the city's own
-## south row is wall everywhere that edge aligns to, so the gate is the only way in.
-## And Saffron Gym is nine rooms with no walkable path between them, joined by
-## fifteen pairs of self-warps, so the way to Sabrina is a fixed chain.
+## The way into Saffron City and its gym's warp maze. The city's south row is
+## wall everywhere its Route 6 connection aligns, so the gate is the only way in,
+## and the gym is nine rooms joined by fifteen pairs of self-warps, so the way to
+## Sabrina is a fixed chain.
 
 
 ## constants/map_constants.asm.

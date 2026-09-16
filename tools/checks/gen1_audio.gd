@@ -27,7 +27,81 @@ func run(r: RefCounted) -> void:
 		_verify_every_cry()
 		_verify_the_role_tables()
 		_verify_the_poke_flute()
+		_verify_the_alternate_starts()
+		_verify_the_victory_pieces()
+		_verify_the_pikachu_clips()
 	)
+
+
+## `Music_RivalAlternateStart` and its three siblings: piece, rewritten
+## channels, fade and wait, and every pointer starting a stream that plays.
+const ALTERNATE_STARTS: Dictionary = {
+	"music_rival_start": [222, 3, 0, 0], "music_rival_tempo": [222, 1, 0, 0],
+	"music_rival_start_tempo": [222, 4, 0, 0], "music_cities1_tempo": [195, 1, 10, 100],
+}
+
+
+func _verify_the_alternate_starts() -> void:
+	for name: String in ALTERNATE_STARTS:
+		var wanted: Array = ALTERNATE_STARTS[name]
+		var record: Dictionary = _r.data.gen1_alternate_music(name)
+		if not _r.check(not record.is_empty(), "%s decoded to nothing." % name):
+			continue
+		var pointers: Array = record.get("pointers", [])
+		_r.check([int(record["sound_id"]), pointers.size(), int(record["fade_frames"]),
+			int(record["delay_frames"])] == wanted, "%s reads %s." % [name, record])
+		_engine.audio_rom_bank = int(record["bank"])
+		_engine.play_sound(Gen1SoundEngine.SFX_STOP_ALL_MUSIC)
+		_engine.play_music(int(record["bank"]), int(record["sound_id"]))
+		_engine.overwrite_channel_pointers(pointers)
+		_engine.apu.trace_lines = PackedStringArray()
+		for _frame: int in FRAMES:
+			_engine.update_music()
+		_r.check(_engine.music_channels_active() and not _engine.apu.trace_lines.is_empty(),
+			"%s wrote no register from its own pointers." % name)
+
+
+func _verify_the_victory_pieces() -> void:
+	for id: int in [Gen1Layout.MUSIC_DEFEATED_TRAINER, Gen1Layout.MUSIC_DEFEATED_WILD_MON,
+			Gen1Layout.MUSIC_DEFEATED_GYM_LEADER]:
+		_r.check(not _r.data.gen1_sound(Gen1Layout.VICTORY_MUSIC_BANK, id).is_empty(),
+			"victory piece %d is not in bank $%02X." % [id, Gen1Layout.VICTORY_MUSIC_BANK])
+	for id: int in [Gen1Layout.SFX_FAINT_FALL, Gen1Layout.SFX_FAINT_THUD, Gen1Layout.SFX_DENIED]:
+		_r.check(not _r.data.gen1_sound(-1, id).is_empty(), "effect %d is not in the cache." % id)
+
+
+## `PikachuCriesPointerTable`'s 42 clips on Yellow alone, and one played
+## through the driver: held for its frames, rendered, effect ids zeroed after.
+func _verify_the_pikachu_clips() -> void:
+	var lengths: Array = _r.data.gen1_pikachu().get("cries", [])
+	var clips: int = 0
+	for index: int in Gen1Layout.PIKACHU_CRIES:
+		var bytes: int = _r.data.gen1_pikachu_cry(index).size()
+		if bytes == 0:
+			continue
+		clips += 1
+		_r.check(bytes == int(lengths[index]),
+			"clip %d holds %d bytes, not %d." % [index, bytes, int(lengths[index])])
+	_r.check(clips == (Gen1Layout.PIKACHU_CRIES if _r.game_id == RomRegistry.YELLOW else 0),
+		"%d clips are cached." % clips)
+	if clips == 0:
+		return
+	var clip: PackedByteArray = _r.data.gen1_pikachu_cry(0)
+	_engine.play_sound(Gen1Layout.SFX_DENIED)
+	_engine.begin_pikachu_clip(clip)
+	var frames: int = 0
+	var loud: int = 0
+	while _engine.apu.pcm_active() and frames < 1000:
+		var pcm: PackedInt32Array = _engine.apu.render_frame_pcm()
+		for sample: int in pcm:
+			loud += 1 if absi(sample) > 0 else 0
+		frames += 1
+	_engine.end_pikachu_clip()
+	var wanted: int = Gen1Layout.pikachu_cry_frames(clip.size()) - Gen1Layout.PIKACHU_CRY_LEAD_FRAMES
+	_r.check(frames == wanted, "clip 0 rendered %d frames, not %d." % [frames, wanted])
+	_r.check(loud > frames * PokeApu.SAMPLES_PER_FRAME, "clip 0 rendered %d live samples." % loud)
+	_r.check(not _engine.sfx_active(), "the clip left an effect channel on.")
+	_r.note("pikachu clips: %d, clip 0 over %d frames." % [clips, frames])
 
 
 func _verify_the_poke_flute() -> void:

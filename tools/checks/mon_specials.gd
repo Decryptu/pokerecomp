@@ -2,14 +2,9 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the two specials that open `SelectMonFromParty` against freshly
-## imported real caches: the boxes each prints, the markers they carry, and every
-## map script in the corpus that reaches either. One pinned address per cartridge
-## finds every text, so what says the address is right is the content, the way the
-## mart's own topic reads its stubs. The corpus half is the script sweep: the Name
-## Rater's index differs by one between the two command profiles where the
-## deleter's does not, so a wrong normalization shows up as a map reaching a
-## different routine.
+## The two specials that open `SelectMonFromParty`: the boxes, their markers,
+## and every map script reaching either. The Name Rater's index differs by one
+## between the two command profiles where the deleter's does not.
 
 ## Enough of each of the Name Rater's boxes to say which stub decoded. His two
 ## questions and the three endings that need no new name are the branches a

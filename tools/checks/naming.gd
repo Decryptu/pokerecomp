@@ -2,14 +2,9 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the four name-input keyboards against freshly imported real caches, in
-## all three games. Expected values come from the pinned sources'
-## `data/text/name_input_chars.asm`, read by `NamingScreen_ApplyTextInputMode` and
-## `NamingScreen_GetLastCharacter`. The block is one contiguous 374-byte run with
-## every row 17 bytes, so a wrong offset slides every table after it. What pins it
-## is the content: the letter rows, the symbol rows and the command row are all
-## checked by value, and the whole block is compared between the three games, which
-## ship it byte identical.
+## The four name-input keyboards: `data/text/name_input_chars.asm`, one 374-byte
+## run of 17-byte rows, so a wrong offset slides every table after it. The rows
+## are checked by value and the block compared between the three games.
 
 
 ## Rows per table, in block order. A name keyboard is 5 rows and a box keyboard

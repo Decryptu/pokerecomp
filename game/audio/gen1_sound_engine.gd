@@ -117,13 +117,20 @@ const RAUDTERM: int = 0xFF25
 const RAUDENA: int = 0xFF26
 const RAUD1SWEEP: int = 0xFF10
 const RAUD3ENA: int = 0xFF1A
+const RAUD3LEN: int = 0xFF1B
 const RAUD3LEVEL: int = 0xFF1C
+const RAUD3LOW: int = 0xFF1D
+const RAUD3HIGH: int = 0xFF1E
 const AUD3ENA_ON: int = 0x80
 const AUD1SWEEP_DOWN: int = 0x08
 const AUD1HIGH_LENGTH_ON: int = 0x40
 const WAVE_RAM: int = 0xFF30
 const WAVE_RAM_SIZE: int = 16
 const MAX_VOLUME: int = 0x77
+## `PlayPikachuSoundClip`'s channel 3 setup.
+const PCM_LEVEL: int = 0x20
+const PCM_LOW: int = 0xFF
+const PCM_HIGH: int = 0x87
 const DEFAULT_TEMPO: int = 0x100
 
 ## `audio/notes.asm`, read rather than derived: `Audio1_CalculateFrequency`
@@ -162,6 +169,8 @@ var frequency_modifier: int = 0
 var tempo_modifier: int = 0x80
 var low_health_alarm: int = 0
 
+## `wSavedAudioWavePattern`.
+var _saved_wave: PackedByteArray = PackedByteArray()
 ## `wAudioFadeOutControl` and the two counters `FadeOutAudio` runs off.
 var fade_out_control: int = 0
 var fade_out_counter: int = 0
@@ -516,11 +525,14 @@ func play_poke_flute_in_battle(pointers: Array) -> void:
 		_pointers[CMD_POINTERS + CHAN5 + index] = int(pointers[index]) & 0xFFFF
 
 
-## Overwrites the channel pointers a piece has just loaded, which is what the two
-## alternate `MeetRival` starts and `Music_Cities1AlternateTempo` do.
+## `Audio1_OverwriteChannelPointer`, one `[channel, pointer]` row each.
 func overwrite_channel_pointers(pointers: Array) -> void:
-	for index: int in mini(pointers.size(), NUM_MUSIC_CHANS):
-		_pointers[CMD_POINTERS + index] = int(pointers[index]) & 0xFFFF
+	for row: Variant in pointers:
+		if not row is Array or (row as Array).size() != 2:
+			continue
+		var channel: int = int((row as Array)[0])
+		if channel >= 0 and channel < NUM_MUSIC_CHANS:
+			_pointers[CMD_POINTERS + channel] = int((row as Array)[1]) & 0xFFFF
 
 
 func music_channels_active() -> bool:
@@ -547,6 +559,37 @@ func sfx_active() -> bool:
 
 func any_channel_active() -> bool:
 	return music_channels_active() or sfx_active()
+
+
+## `PlayPikachuSoundClip` past its three `DelayFrame`s, `di` to `ei`: the
+## driver runs no frame while [method PokeApu.pcm_active] holds.
+func begin_pikachu_clip(clip: PackedByteArray) -> void:
+	apu.write(RAUDENA, AUD3ENA_ON)
+	apu.write(RAUDVOL, MAX_VOLUME)
+	apu.write(RAUD3ENA, 0)
+	_saved_wave.resize(WAVE_RAM_SIZE)
+	for index: int in WAVE_RAM_SIZE:
+		_saved_wave[index] = apu.read(WAVE_RAM + index)
+		apu.write(WAVE_RAM + index, 0xFF)
+	apu.write(RAUD3ENA, AUD3ENA_ON)
+	apu.write(RAUDTERM, apu.read(RAUDTERM) | HW_ENABLE_MASK[CHAN3])
+	apu.write(RAUD3LEN, 0xFF)
+	apu.write(RAUD3LEVEL, PCM_LEVEL)
+	apu.write(RAUD3LOW, PCM_LOW)
+	apu.write(RAUD3HIGH, PCM_HIGH)
+	apu.start_pcm(clip, Gen1Layout.PIKACHU_CRY_SAMPLES_PER_FRAME)
+
+
+## The routine's tail.
+func end_pikachu_clip() -> void:
+	apu.write(RAUDENA, AUD3ENA_ON)
+	apu.write(RAUD3ENA, 0)
+	for index: int in _saved_wave.size():
+		apu.write(WAVE_RAM + index, _saved_wave[index])
+	apu.write(RAUD3ENA, AUD3ENA_ON)
+	apu.write(RAUDTERM, apu.read(RAUDTERM) & (~HW_ENABLE_MASK[CHAN3] & 0xFF))
+	for channel: int in range(NUM_MUSIC_CHANS, NUM_CHANNELS):
+		_wram[SOUND_IDS + channel] = 0
 
 
 

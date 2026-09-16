@@ -1,29 +1,19 @@
 class_name Gen2AudioPlayer
 extends Node
 
-## Runs the cartridge sound driver in real time.
-##
-## One [Gen2SoundEngine] and one [PokeApu] behind a single generator stream:
-## music, effects and cries share the four hardware channels and steal them from
-## each other exactly as they do on the cartridge, so nothing here mixes or
-## prioritises. Each serviced step is one `_UpdateSound` plus the frame of
-## samples the APU produced from it.
+## Runs the cartridge sound driver in real time: one engine and one [PokeApu]
+## behind a generator stream, a serviced step being one `_UpdateSound` and the
+## frame of samples it produced. Nothing here mixes or prioritises.
 
-## The generator's depth, which Godot rounds up to 4,096 output frames: seven
-## driver frames. This is capacity, not latency: [member _target_frames] is how
-## much of it is kept filled, and the rest is headroom a long frame is caught up
-## into. See [method _service_timeline].
+## The generator's depth, seven driver frames once Godot rounds it up. Capacity,
+## not latency: [member _target_frames] is how much of it is kept filled.
 const BUFFER_SECONDS: float = 0.1
 
-## Driver frames kept queued ahead of the output, and so the press-to-sound delay
-## this player adds before the platform's own: three frames is 50 ms at
-## [constant PokeApu.SAMPLE_RATE]. Measured worst emptiness on a desktop run was a
-## quarter of the buffer's 125 ms depth, about two driver frames between two
-## services; three is that with one to spare, and a device that cannot hold it
-## says so by running the queue dry, which raises the target.
+## Driver frames kept queued ahead of the output, the press-to-sound delay this
+## player adds: 50 ms. Measured worst emptiness on a desktop was two frames, and
+## a device that cannot hold three runs the queue dry, which raises the target.
 const TARGET_FRAMES_MIN: int = 3
-## The ceiling the target grows to, which is the whole buffer: past it there is
-## nothing left to raise.
+## The whole buffer, past which there is nothing left to raise.
 const TARGET_FRAMES_MAX: int = 7
 
 ## Real seconds the output may take nothing from the driver before it is treated
@@ -81,6 +71,10 @@ var _starved_seconds: float = 0.0
 ## audio_status] and for a check that has to say a device held up.
 var _underruns: int = 0
 var _restarts: int = 0
+## `PlayPikachuSoundClip`'s clip and its three `DelayFrame`s.
+var _clip: PackedByteArray = PackedByteArray()
+var _clip_lead: int = 0
+var _clip_begun: bool = false
 
 
 ## How many of the CALLER's frames the driver may go without rendering before a
@@ -113,25 +107,18 @@ func _process(delta: float) -> void:
 	_service_timeline(delta)
 
 
-## The audio session, on every platform that says anything about it. Android and
-## iOS send the two APPLICATION notifications and desktop the two FOCUS ones.
-## Coming back is what needs handling: the driver kept running and the player
-## still reports `playing`, so pushing into a playback nothing consumes is silence
-## over live music. A resume shortens the watchdog's window rather than rebuilding
-## outright, because an alt-tab is a FOCUS_IN too. Going away needs nothing:
-## `_process` stops with the main loop.
+## The audio session coming back: the player still reports `playing` over a
+## playback nothing consumes. A resume shortens the watchdog's window rather
+## than rebuilding outright, because an alt-tab is a FOCUS_IN too.
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN:
 			_starved_seconds = maxf(_starved_seconds, STALL_SECONDS - RESUME_GRACE_SECONDS)
 
 
-## The settings the driver owns. The two volumes reach its mix rather than the
-## stream player, since music and effects share the four hardware channels. Read
-## every frame because the object is shared and edited in place, and pushed only
-## when a value moves; a SOUND change also spends `Options_Sound`'s own
-## `RestartMapMusic`, because `Music_StereoPanning` has already narrowed
-## `channel.tracks` and only a restart widens them again.
+## The two volumes reach the driver's mix, since music and effects share the
+## four channels. A SOUND change spends `Options_Sound`'s own `RestartMapMusic`,
+## because only a restart widens `channel.tracks` again.
 func _apply_settings() -> void:
 	if _engine == null:
 		return
@@ -262,11 +249,14 @@ func _play_gen1_music(
 		_forget_music()
 		return {"ok": true, "played": true, "stopped": true}
 	var key: String = "%d:%d" % [bank, id]
-	if not restart and key == _music_key:
+	## `Music_RivalAlternateStart` restarts the piece to write its pointers.
+	var pointers: Array = record.get("pointers", [])
+	if not restart and key == _music_key and pointers.is_empty():
 		return {"ok": true, "played": false, "continued": true}
 	_start_stream()
 	if not _gen1.play_music(bank, id):
 		return {"ok": false, "played": false, "reason": &"audio_record_unplayable"}
+	_gen1.overwrite_channel_pointers(pointers)
 	_music_key = key
 	_music_record = record
 	_music_assets = assets
@@ -291,13 +281,47 @@ func _gen1_result(request_kind: StringName, bank: int, id: int) -> Dictionary:
 ## and the full-volume write on every other frame come from.
 func _advance_driver() -> void:
 	if _generation == RomRegistry.GEN1:
+		if _advance_pikachu_clip():
+			return
 		_gen1.fade_out_audio()
 		_gen1.update_music()
 		return
 	_engine.update_sound()
 
 
+## Yellow's `PlayPikachuSoundClip`. Answers the frames the caller is held for.
+func play_pikachu_clip(clip: PackedByteArray) -> Dictionary:
+	if clip.is_empty():
+		return {"ok": false, "played": false, "reason": &"audio_data_unavailable"}
+	_generation = RomRegistry.GEN1
+	_start_stream()
+	_clip = clip
+	_clip_lead = Gen1Layout.PIKACHU_CRY_LEAD_FRAMES
+	_clip_begun = false
+	return {"ok": true, "played": true, "frames": Gen1Layout.pikachu_cry_frames(clip.size())}
+
+
+## True on a frame the clip owns: the `DelayFrame`s run the driver, `di` to
+## `ei` does not, and the tail is spent on the frame after the last bit.
+func _advance_pikachu_clip() -> bool:
+	if _clip.is_empty():
+		return false
+	if _clip_lead > 0:
+		_clip_lead -= 1
+		return false
+	if not _clip_begun:
+		_clip_begun = true
+		_gen1.begin_pikachu_clip(_clip)
+	if _apu.pcm_active():
+		return true
+	_gen1.end_pikachu_clip()
+	_clip = PackedByteArray()
+	return false
+
+
 func _any_channel_active() -> bool:
+	if not _clip.is_empty():
+		return true
 	return _gen1.any_channel_active() if _generation == RomRegistry.GEN1 \
 		else _engine.any_channel_active()
 
@@ -401,6 +425,8 @@ func _fade_to_gen1(record: Dictionary, frames: int, assets: Dictionary) -> bool:
 func stop_all() -> void:
 	_engine.init_sound()
 	_gen1.play_sound(Gen1SoundEngine.SFX_STOP_ALL_MUSIC)
+	_clip = PackedByteArray()
+	_apu.start_pcm(_clip, 1)
 	_forget_music()
 	if _player != null:
 		_player.stop()
@@ -449,13 +475,9 @@ func effect_playing() -> bool:
 	return _gen1.sfx_active() if _generation == RomRegistry.GEN1 else _engine.sfx_active()
 
 
-## How many driver frames this player has actually rendered. The engine only
-## advances inside [method _service_timeline], which needs room in an output
-## stream, so a headless run, a check or a replay would leave [method
-## effect_playing] true for the rest of the run. Anything waiting on a sound
-## compares this count across frames and stops once it has stood still for
-## [constant SERVICE_GAP_FRAMES]. `AudioStreamPlayer.playing` is not that test:
-## the dummy audio driver reports true and consumes nothing.
+## Driver frames rendered. A headless run renders none and would leave [method
+## effect_playing] true forever, so a wait on a sound stops once this count has
+## stood still for [constant SERVICE_GAP_FRAMES].
 func timeline_updates() -> int:
 	return _timeline_updates
 
@@ -544,13 +566,9 @@ func _start_stream() -> void:
 		_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
 
 
-## Fills the generator up to [member _target_frames] ahead of the output.
-##
-## Audio time is the driver's clock, not the renderer's: a long game frame is
-## caught up here rather than slowing the music down, and GAME SPEED never
-## reaches it, because [param delta] is only ever the dead-output watchdog's.
-## Filling to a target rather than to the brim is what makes the rest of the
-## depth headroom instead of latency.
+## Fills the generator up to [member _target_frames] ahead of the output. Audio
+## time is the driver's clock: a long game frame is caught up here, and
+## [param delta] is only ever the dead-output watchdog's.
 func _service_timeline(delta: float = 0.0) -> void:
 	if _player == null:
 		return
@@ -594,12 +612,9 @@ func _service_timeline(delta: float = 0.0) -> void:
 	_watch_for_a_dead_output(delta, pushed)
 
 
-## Rebuilds an output that has taken nothing from the driver for
-## [constant STALL_SECONDS] while the driver had sound for it. The platforms that
-## announce an interruption are handled in [method _notification]; this is the
-## ones that do not. `AudioStreamPlayer` reports `playing` over a dead device, so
-## what the queue does is the only honest evidence: a live one consumes 59.7
-## driver frames a second whatever the host's frame rate.
+## Rebuilds an output that has taken nothing for [constant STALL_SECONDS] while
+## the driver had sound: `AudioStreamPlayer` reports `playing` over a dead
+## device, so the queue draining is the only honest evidence.
 func _watch_for_a_dead_output(delta: float, pushed: int) -> void:
 	if pushed > 0 or not _any_channel_active():
 		_starved_seconds = 0.0

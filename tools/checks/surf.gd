@@ -2,14 +2,9 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies Surf against freshly imported real caches, for both command profiles.
-## Expected values come from the pinned sources: SurfFunction (.TrySurf,
-## GetSurfType, CheckDirection) and UsedSurfScript, SurfStartStep, and
-## `.TrySurf`/`.ExitWater`. The real-cartridge counterpart to
-## tests/unit/test_world_field_move.gd, which uses a synthetic cache. New Bark Town
-## is the acceptance case: its east shore is the first real water a player walks up
-## to, and both its `.blk` and the johto collision table are byte identical between
-## the pins, so the same cells answer on all three games.
+## Surf: `SurfFunction`'s `.TrySurf`, `GetSurfType` and `CheckDirection`,
+## `UsedSurfScript`, `SurfStartStep` and `.ExitWater`. New Bark Town's east shore
+## is the acceptance case, the first real water a player walks up to.
 
 
 ## constants/map_constants.asm, NEW_BARK group. Unlike Ilex Forest, Crystal's

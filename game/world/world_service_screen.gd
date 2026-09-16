@@ -11,6 +11,8 @@ signal completed(results: Array)
 signal sfx_requested(index: int, waited: bool)
 ## `PlayMonCry2` from a screen this one opens, passed on for the same reason.
 signal cry_requested(species: int)
+## Yellow's `PlayPikachuSoundClip` where the starter takes its cry's place.
+signal pikachu_clip_requested(index: int)
 
 enum MODE {
 	MENU, MART, PHONE, TOWN_MAP, CARD,
@@ -2781,10 +2783,21 @@ func _confirm_gen1_mon_row() -> void:
 	if _cursor >= _gen1_mon_entries.size():
 		_open_gen1_bills()
 		return
+	var mon: Gen2SaveMon = (_gen1_mon_entries[_cursor] as Dictionary).get("mon", null) as Gen2SaveMon
 	if _gen1_bills_row == Gen2WorldPC.GEN1_BILLS_PC_RELEASE:
+		## `BillsPCRelease` never asks about the starter.
+		if _gen1_starter(mon):
+			pikachu_clip_requested.emit(PIKACHU_CLIP_UNHAPPY)
+			_open_gen1_text([_gen1_filled_mon("bills_pc_unhappy", "unhappy", 1, mon)], &"gen1_bills")
+			return
 		_open_gen1_ask(
 			&"release", _gen1_filled_mon("bills_pc_2", "once_released", 1)
 		)
+		return
+	## `BillsPCDeposit`: a starter out on the map answers `SleepingPikachuText2`.
+	if _gen1_bills_row == Gen2WorldPC.GEN1_BILLS_PC_DEPOSIT and _gen1_starter(mon) \
+			and _world != null and _world.pikachu != null and _world.pikachu.following():
+		_open_gen1_box_text("bills_pc_sleeping", "no_response", &"gen1_bills")
 		return
 	_mode = MODE.PC_MON_ACTION
 	_pc_rows = [
@@ -2809,6 +2822,18 @@ func _confirm_gen1_mon_action(row: int) -> void:
 			_reopen_gen1_mon_list()
 
 
+## `PikachuCry28`, `PikachuCry35` and `PikachuCry40`.
+const PIKACHU_CLIP_STORED: int = 27
+const PIKACHU_CLIP_TAKEN_OUT: int = 34
+const PIKACHU_CLIP_UNHAPPY: int = 39
+
+
+## `IsThisPartyMonStarterPikachu` and `IsThisBoxMonStarterPikachu`.
+func _gen1_starter(mon: Gen2SaveMon) -> bool:
+	return _data != null and _data.id == RomRegistry.YELLOW \
+		and Gen1Pikachu.is_starter_of(_save, mon)
+
+
 ## `MoveMon` and `RemovePokemon`, which is [Gen2SaveStorage]'s own move.
 func _apply_gen1_mon_move() -> void:
 	var entry: Dictionary = _gen1_mon_entries[_gen1_mon_cursor]
@@ -2828,7 +2853,10 @@ func _apply_gen1_mon_move() -> void:
 	## `.depositedText`'s PIKAHAPPY_DEPOSITED, ahead of the `MoveMon`.
 	if deposit and _world != null:
 		_world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_DEPOSITED, int(entry["slot"]))
-	cry_requested.emit(mon.species if mon != null else 0)
+	if _gen1_starter(mon):
+		pikachu_clip_requested.emit(PIKACHU_CLIP_STORED if deposit else PIKACHU_CLIP_TAKEN_OUT)
+	else:
+		cry_requested.emit(mon.species if mon != null else 0)
 	_open_gen1_text([_gen1_mon_text(
 		"bills_pc", "mon_was_stored" if deposit else "mon_is_taken_out", mon
 	)], &"gen1_mon_list")
@@ -2841,9 +2869,10 @@ func _open_gen1_mon_stats() -> void:
 		mons.append(entry["mon"])
 	if _data == null or mons.is_empty():
 		return
-	_stats = Gen2MonStatsScreen.create(_data, mons, _gen1_mon_cursor)
+	_stats = Gen2MonStatsScreen.create(_data, mons, _gen1_mon_cursor, _save)
 	_stats.closed.connect(_close_gen1_mon_stats)
 	_stats.cry_requested.connect(cry_requested.emit)
+	_stats.pikachu_clip_requested.connect(pikachu_clip_requested.emit)
 	_stats.announce()
 	_frame_clock.reset()
 	set_process(true)

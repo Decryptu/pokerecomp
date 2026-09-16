@@ -644,6 +644,15 @@ func _check_warps() -> void:
 				edge += 1
 				_r.check(world.blocked_step_warps(),
 					"map %d warp %d takes no blocked step." % [map.number, index])
+				## The facing asked for rather than the player's: a plan that
+				## arrives sideways on Victory Road 1F's door cell is not a warp.
+				var ahead: Vector2i = world._direction_for_facing(facing)
+				var sideways := Vector2i(-ahead.y, ahead.x)
+				var off_map: bool = world.collision_code_at(cell + sideways) < 0
+				_r.check(world.warp_pending(cell, ahead) and (
+					Gen1Layout.warp_wants_carpet(map.number, map.tileset)
+					or world.warp_pending(cell, sideways) == off_map
+				), "map %d warp %d does not fire by the facing asked." % [map.number, index])
 			## A `LAST_MAP` warp names no map of its own until one is walked out
 			## of, which [method _check_last_map_round_trip] is; the lift's two
 			## name a map with no header at all.
@@ -2458,7 +2467,15 @@ func _day_care_move(world: Gen2WorldAPI, save: Gen2SaveData) -> Array:
 		return []
 	var moved: Dictionary = Gen2WorldPartyHost.day_care_mon(world, save, request, false)
 	_r.check(bool(moved.get("ok", false)), "the move failed: %s." % [moved])
-	return moved.get("results", []) as Array
+	var results: Array = moved.get("results", []) as Array
+	## The `PlayCry` on `wCurPartySpecies` behind the move.
+	var sounds: Array = _first_event(results, &"presentation_special_applied").get("sounds", [])
+	_r.check(
+		sounds.size() == 1 and int((sounds[0] as Dictionary).get("cry", 0))
+			== int((moved.get("transaction", {}) as Dictionary).get("species", -1)),
+		"the move sounded %s." % [sounds]
+	)
+	return results
 
 
 func _day_care_world(purse: int) -> Gen2WorldAPI:
@@ -2909,7 +2926,14 @@ func _check_a_map_script_runs() -> void:
 		if not _r.check(spoken.begins_with(wanted),
 			"the gate guard said %s with the badge %s." % [spoken, badge]):
 			continue
-		world.run_event_queue(true)
+		var results: Array = world.run_event_queue(true)
+		## `Route22GateGuardNoBoulderbadgeText`'s own `text_asm` plays SFX_DENIED.
+		var sounds: Array = _first_event(results, &"presentation_special_applied").get("sounds", [])
+		_r.check(
+			sounds == ([{"frame": 0, "gen1": true, "index": Gen1Layout.SFX_DENIED, "wait": true}]
+				if not badge else []),
+			"the gate sounded %s with the badge %s." % [sounds, badge]
+		)
 		_r.check(
 			world.state.gen1_map_script(ROUTE_22_GATE_BYTE)
 				== (ROUTE_22_GATE_NOOP if badge else ROUTE_22_GATE_MOVING),

@@ -16,11 +16,16 @@ signal closed
 ## and not when a page is turned. Emitted rather than played: the audio player
 ## belongs to whoever embedded this.
 signal cry_requested(species: int)
+## Yellow's `StatusScreen`: `PikachuCry17` for the starter in place of its cry.
+signal pikachu_clip_requested(index: int)
+const PIKACHU_CLIP_STATUS: int = 16
 
 const PINK_PAGE: int = Gen2StatsScreenPage.PINK_PAGE
 
 var _data: GameData = null
 var _mons: Array = []
+## The save the party or box belongs to, for `IsThisPartyMonStarterPikachu`.
+var _save: Gen2SaveData = null
 var _cursor: int = 0
 ## `wStatsScreenFlags`' page bits, `StatsScreenMain` opening on `PINK_PAGE`.
 var _page: int = PINK_PAGE
@@ -30,10 +35,13 @@ var _animation: Gen2PicAnimation = null
 var _animation_pixels: PackedByteArray = PackedByteArray()
 
 
-static func create(data: GameData, mons: Array, start_cursor: int = 0) -> Gen2MonStatsScreen:
+static func create(
+	data: GameData, mons: Array, start_cursor: int = 0, save: Gen2SaveData = null
+) -> Gen2MonStatsScreen:
 	var out := Gen2MonStatsScreen.new()
 	out._data = data
 	out._mons = mons
+	out._save = save
 	out._cursor = clampi(start_cursor, 0, maxi(mons.size() - 1, 0))
 	return out
 
@@ -51,7 +59,10 @@ func announce() -> void:
 		return
 	var record: Dictionary = _data.pic_animation(mon.species, _unown_form(mon))
 	if record.is_empty():
-		cry_requested.emit(mon.species)
+		if _data.id == RomRegistry.YELLOW and Gen1Pikachu.is_starter_of(_save, mon):
+			pikachu_clip_requested.emit(PIKACHU_CLIP_STATUS)
+		else:
+			cry_requested.emit(mon.species)
 		return
 	if mon.hp <= 0 or Gen2Status.has(mon.status, Gen2Status.FREEZE) \
 		or Gen2Status.is_asleep(mon.status):

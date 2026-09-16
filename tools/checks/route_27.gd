@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies why the walked route stops on Route 27, for both command profiles.
-## `TohjoFalls.blk` is byte identical between the pins; `Route27.blk` is not, so its
-## land census is profile split. Two halves. The first is geometry, and it is why
-## this leg waited on Waterfall: Route 27's landfall region reaches no map edge, the
-## only crossing east of it starts in a pocket that can only be left through Tohjo
-## Falls, and the cave's two lower channels reach each other only over
-## `COLL_WATERFALL` cells. The second is the way through: with the Rising Badge the
-## climb reaches the pool in a single commit.
+## Why the walked route stops on Route 27. Its landfall region reaches no map
+## edge, the only crossing east of it can only be left through Tohjo Falls, whose
+## two lower channels meet only over `COLL_WATERFALL` cells; with the Rising Badge
+## the climb reaches the pool in a single commit.
 
 
 ## data/maps/maps.asm group/number pairs. Route 27 sits at the same pair in both

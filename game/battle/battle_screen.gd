@@ -224,6 +224,10 @@ var _bars: Dictionary = {}
 ## `MonFaintedAnimation`s still running, oldest first. A double faint runs two,
 ## one after the other, the way the source's two calls do.
 var _faints: Array[Dictionary] = []
+## Sounds a Generation 1 faint queues behind its slide; a `wait` entry is a
+## `WaitForSoundToFinish`.
+var _sound_queue: Array[Dictionary] = []
+var _sound_watch: Dictionary = {}
 var _exp_bar: Gen2ExpBarAnimation = null
 ## The running [Gen2BattleIntro], or null once the pics have slid into place.
 var _intro: Gen2BattleIntro = null:
@@ -527,6 +531,8 @@ var _audio_player: Gen2AudioPlayer = null
 var _owns_audio_player: bool = false
 ## `PlayBattleMusic`'s answer for this fight; see [method battle_music].
 var _battle_music: int = Gen2Battle.MUSIC_NONE
+## `PlayVictoryMusic`'s; see [method victory_music].
+var _victory_music: int = Gen2Battle.MUSIC_NONE
 
 @onready var _screen: Gen2Screen = %Screen
 
@@ -575,7 +581,7 @@ func _process(delta: float) -> void:
 func frames_running() -> bool:
 	var bars: bool = not _bars.is_empty() or (_exp_bar != null and not _exp_bar.paused())
 	return bars or _intro != null or animation_running() or fainting() or sliding() \
-		or animating_frontpic()
+		or animating_frontpic() or not _sound_queue.is_empty()
 
 
 ## One hardware frame of everything that counts them. Public through
@@ -588,6 +594,7 @@ func advance_frame() -> bool:
 	var moved: bool = advance_intro()
 	moved = advance_bars() or moved
 	moved = advance_faint() or moved
+	moved = _advance_sound_queue() or moved
 	moved = advance_slide() or moved
 	moved = advance_frontpic() or moved
 	moved = advance_animation() or moved
@@ -628,7 +635,45 @@ func advance_faint() -> bool:
 			_player_hud_visible = false
 		else:
 			_enemy_hud_visible = false
+		if _battle != null and _battle.is_gen1():
+			_queue_gen1_faint_sounds(bool(faint["player_side"]))
 	_push_view()
+	return true
+
+
+## `RemoveFaintedPlayerMon`'s `PlayCry` and `FaintEnemyPokemon`'s fall and
+## thud, once the picture has slid off. A wild's faint is answered by the music.
+func _queue_gen1_faint_sounds(player_side: bool) -> void:
+	if player_side:
+		var fallen: Gen2BattleMon = _battle.mon(Gen2Battle.PLAYER)
+		if fallen != null:
+			_sound_queue.append(_battle.cry_event(
+				Gen2Battle.PLAYER, fallen, Gen2Battle.PIKACHU_CLIP_FAINTED
+			))
+		return
+	if not _battle.is_trainer_battle:
+		return
+	_sound_queue.append({"wait": true, "gen1": true, "index": Gen1Layout.SFX_FAINT_FALL})
+	_sound_queue.append({"wait": true, "gen1": true, "index": Gen1Layout.SFX_FAINT_THUD})
+	_sound_queue.append({"wait": true})
+
+
+## One frame of the queue; [method Gen2AudioPlayer.still_waiting] ends a wait
+## on its own once nothing renders.
+func _advance_sound_queue() -> bool:
+	if _sound_queue.is_empty():
+		return false
+	while not _sound_queue.is_empty():
+		var due: Dictionary = _sound_queue[0]
+		if bool(due.get("wait", false)) and _audio_player != null \
+				and _audio_player.still_waiting(_sound_watch):
+			return true
+		_sound_watch = {}
+		_sound_queue.pop_front()
+		if due.has("species"):
+			_play_entrance_cry(int(due["side"]), int(due["species"]), int(due.get("pikachu_clip", -1)))
+		elif due.has("index"):
+			_play_gen1_sound(int(due["index"]))
 	return true
 
 
@@ -2445,6 +2490,47 @@ func battle_music() -> int:
 	return _battle_music
 
 
+## `PlayVictoryMusic` and `PlayBattleVictoryMusic`, once, in front of the win's
+## text; a link fight plays none.
+func _play_victory_music(event: Dictionary) -> void:
+	if _victory_music != Gen2Battle.MUSIC_NONE or _audio_player == null or _data == null \
+			or _battle == null or bool(event.get("fled", false)) \
+			or event["winner"] != Gen2Battle.PLAYER or _battle.is_link_battle:
+		return
+	var record: Dictionary
+	if _battle.is_gen1():
+		_victory_music = _gen1_victory_music()
+		record = _data.gen1_sound(Gen1Layout.VICTORY_MUSIC_BANK, _victory_music)
+	else:
+		_victory_music = _crystal_victory_music()
+		record = _data.world_audio(&"music", _victory_music)
+	if not record.is_empty():
+		_audio_player.play_record(record, &"map_music", _audio_assets(), true)
+
+
+func _gen1_victory_music() -> int:
+	if not _battle.is_trainer_battle:
+		return Gen1Layout.MUSIC_DEFEATED_WILD_MON
+	var values: Dictionary = _world_battle_request.get("values", _world_battle_request)
+	if int(values.get("lone_attack", 0)) != 0 \
+			or _battle.enemy_trainer_class == Gen1Layout.RIVAL3_CLASS:
+		return Gen1Layout.MUSIC_DEFEATED_GYM_LEADER
+	return Gen1Layout.MUSIC_DEFEATED_TRAINER
+
+
+func _crystal_victory_music() -> int:
+	if not _battle.is_trainer_battle:
+		return Gen2Battle.MUSIC_WILD_VICTORY
+	var leader: bool = Gen2Battle.KANTO_GYM_LEADERS.has(_battle.enemy_trainer_class) \
+		or Gen2Battle.JOHTO_GYM_LEADERS.has(_battle.enemy_trainer_class)
+	return Gen2Battle.MUSIC_GYM_VICTORY if leader else Gen2Battle.MUSIC_TRAINER_VICTORY
+
+
+## Which piece [method _play_victory_music] chose, for a check that cannot hear it.
+func victory_music() -> int:
+	return _victory_music
+
+
 ## `PlaySFX`, which is every effect this screen plays that is not an animation's
 ## own. Its `wCurSFX` gate is what stops two of them piling up; [param waited] is
 ## a `WaitSFX` the source spends first, which the gate must not then refuse.
@@ -2525,8 +2611,11 @@ func _play_anim_cry(pitch: int) -> void:
 
 ## `PlayStereoCry` behind an entrance, which names its own species rather than
 ## reading the field: the event is spent before its own panel is drawn.
-func _play_entrance_cry(side: int, species: int) -> void:
+func _play_entrance_cry(side: int, species: int, pikachu_clip: int = -1) -> void:
 	if _audio_player == null or _data == null:
+		return
+	if pikachu_clip >= 0:
+		_audio_player.play_pikachu_clip(_data.gen1_pikachu_cry(pikachu_clip))
 		return
 	var record: Dictionary = _data.species_cry(species)
 	if record.is_empty():
@@ -4179,6 +4268,7 @@ func _continue_capture_turn() -> bool:
 
 ## `.HandleEndOfBattle`, outside the battle loop.
 func _finish_battle() -> void:
+	_play_victory_music({"winner": _battle.winner(), "fled": _battle.has_fled()})
 	if _world_battle_active and not _battle.has_fled():
 		# A run shows neither a win nor a loss text and blacks nobody out:
 		# `wBattleResult` is DRAW and the party is still standing.
@@ -4295,6 +4385,7 @@ func _finish_world_battle() -> void:
 		result["recovery"] = _world_battle_recovery.duplicate(true)
 	result["enemy"] = _enemy_battler_record()
 	result["party_log"] = _battle.party_log.duplicate(true)
+	result["victory_music"] = _victory_music
 	## `EndOfBattle`'s versus balls read every enemy row, status written back.
 	if _battle.is_link_battle:
 		var rows: Array = []
@@ -5627,7 +5718,37 @@ func _apply_event(event: Dictionary) -> void:
 	_start_bar(Gen2Battle.PLAYER, before_player, before_player_max)
 
 
+## The events whose whole effect on the screen is one call with the event.
+const EVENT_STATE_HANDLERS: Dictionary = {
+	## `FaintYourPokemon` and `FaintEnemyPokemon` sink the picture before
+	## either prints, so the line waits on the animation.
+	Gen2Battle.FAINTED: &"_begin_faint_event",
+	Gen2Battle.MOVE_FORGOTTEN: &"_play_move_forgotten",
+	Gen2Battle.SUBSTITUTE_PIC: &"_set_substitute_pic_event",
+	Gen2Battle.MINIMIZED: &"_set_minimize_pic_event",
+}
+
+
+func _begin_faint_event(event: Dictionary) -> void:
+	_begin_faint(int(event["side"]))
+
+
+func _play_move_forgotten(_event: Dictionary) -> void:
+	_play_sfx(Gen2MoveForget.SFX_SWITCH_POKEMON)
+
+
+func _set_substitute_pic_event(event: Dictionary) -> void:
+	_set_substitute_pic(int(event["side"]), bool(event["raised"]))
+
+
+func _set_minimize_pic_event(event: Dictionary) -> void:
+	_set_minimize_pic(int(event["side"]), true)
+
+
 func _apply_event_state(event: Dictionary) -> void:
+	if EVENT_STATE_HANDLERS.has(event["type"]):
+		call(EVENT_STATE_HANDLERS[event["type"]], event)
+		return
 	match event["type"]:
 		Gen2Battle.HIT, Gen2Battle.RECOIL, Gen2Battle.DRAINED, Gen2Battle.OHKO:
 			var target: int = int(event.get("target", event["side"]))
@@ -5641,16 +5762,6 @@ func _apply_event_state(event: Dictionary) -> void:
 				set_hp(int(event["hp"]), int(event["max_hp"]), _player_hp, _player_max_hp)
 			else:
 				set_hp(_enemy_hp, _enemy_max_hp, int(event["hp"]), int(event["max_hp"]))
-		Gen2Battle.FAINTED:
-			# `FaintYourPokemon` and `FaintEnemyPokemon` sink the picture before
-			# either prints, so the line waits on the animation.
-			_begin_faint(int(event["side"]))
-		Gen2Battle.MOVE_FORGOTTEN:
-			_play_sfx(Gen2MoveForget.SFX_SWITCH_POKEMON)
-		Gen2Battle.SUBSTITUTE_PIC:
-			_set_substitute_pic(int(event["side"]), bool(event["raised"]))
-		Gen2Battle.MINIMIZED:
-			_set_minimize_pic(int(event["side"]), true)
 		Gen2Battle.TRANSFORMED:
 			# `BattleCommand_Transform` copies the species and the DVs onto the
 			# actor, and every reload of the square after it draws the target.
@@ -5664,7 +5775,7 @@ func _apply_event_state(event: Dictionary) -> void:
 				_player_shiny = bool(event.get("shiny", false))
 			_push_view()
 		Gen2Battle.CRY:
-			_play_entrance_cry(int(event["side"]), int(event["species"]))
+			_play_entrance_cry(int(event["side"]), int(event["species"]), int(event.get("pikachu_clip", -1)))
 		Gen2Battle.SENT_OUT:
 			# The pic and the panel both change, and both come out of the event
 			# rather than out of the party, for the same reason every other number

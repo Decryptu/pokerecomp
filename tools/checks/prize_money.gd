@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies what a beaten trainer pays, against freshly imported real caches, on
-## all three cartridges. Two halves. `TrainerClassAttributes`' base rewards are
-## transcribed below from the pinned `data/trainers/attributes.asm` rather than read
-## back out of the cache, so an importer that shifted a row by a byte goes red. Then
-## every individual trainer in the corpus is walked through the seam a battle uses,
-## and what comes out is checked against the arithmetic the source spells: four
-## quarters of base times the last member's level, doubled by the Amulet Coin,
-## split with Mom whole.
+## What a beaten trainer pays. `TrainerClassAttributes`' base rewards are
+## transcribed from `data/trainers/attributes.asm` rather than read back, and
+## every trainer is walked through the battle's own seam: four quarters of base
+## times the last member's level, doubled by the Amulet Coin, split with Mom.
 
 ## `data/trainers/attributes.asm`, in class order from FALKNER. Gold and Silver
 ## are the first 66 of these; Crystal adds MYSTICALMAN, the 67th, and the rows

@@ -234,7 +234,7 @@ func _advance_gen1() -> void:
 		_emit(&"show_image", {"id": GEN1_IMAGE_IDS.get(_phase, _phase)})
 	for event: Dictionary in events:
 		match StringName(event.get("type", &"")):
-			&"play_sfx", &"play_music", &"stop_music", &"play_cry":
+			&"play_sfx", &"play_music", &"stop_music", &"play_cry", &"play_pikachu_clip":
 				var values: Dictionary = event.duplicate()
 				for key: String in ["type", "frame", "phase"]:
 					values.erase(key)

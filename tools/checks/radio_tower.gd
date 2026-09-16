@@ -2,14 +2,9 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the gates the Goldenrod Radio Tower leg turns, for both command
-## profiles. Expected values come from the pinned sources' BlackthornCity,
-## RadioTower2F, RadioTower3F and the switch room; Blackthorn's event rows,
-## RadioTower3F whole, and the switch room's `ugdoor_def` table and update body are
-## byte identical between the pins, and every event flag below has the same number
-## in both. The leg is route work, so what is worth pinning is not the scripts but
-## the three places a wrong flag or a missed `changeblock` would silently seal it:
-## the gym door, the tower's stairs and card-key shutter, and the eleven doors.
+## The gates the Goldenrod Radio Tower leg turns: the gym door, the tower's
+## stairs and card-key shutter, and the switch room's eleven `ugdoor_def` doors,
+## each of which a wrong flag or a missed `changeblock` would silently seal.
 
 
 ## data/maps/maps.asm group/number pairs. Blackthorn City and the Radio Tower

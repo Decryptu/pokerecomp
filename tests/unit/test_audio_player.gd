@@ -138,6 +138,23 @@ func test_an_effect_is_playing_until_its_stream_ends() -> void:
 	assert_false(_player.effect_playing())
 
 
+## Yellow's `PlayPikachuSoundClip` holds the driver: three `DelayFrame`s run
+## it, the clip's own frames do not, and the frame after the last bit runs it
+## again with the effect channels cleared.
+func test_a_pikachu_clip_holds_the_driver_for_its_frames() -> void:
+	var clip: PackedByteArray = PackedByteArray()
+	clip.resize(Gen1Layout.PIKACHU_CRY_SAMPLES_PER_FRAME / 2)
+	assert_true(_player.play_pikachu_clip(clip)["played"])
+	assert_eq(int(_player.play_pikachu_clip(clip)["frames"]), Gen1Layout.pikachu_cry_frames(clip.size()))
+	var held: int = 0
+	for _frame: int in Gen1Layout.pikachu_cry_frames(clip.size()) + 2:
+		held += 1 if _player._advance_pikachu_clip() else 0
+		_player._apu.render_frame_pcm()
+	assert_eq(held, Gen1Layout.pikachu_cry_frames(clip.size()) - Gen1Layout.PIKACHU_CRY_LEAD_FRAMES)
+	assert_false(_player._apu.pcm_active())
+	assert_true(_player.play_pikachu_clip(PackedByteArray()).has("reason"), "no clip, no frames")
+
+
 ## The queue is kept a fixed few frames ahead of the output rather than full, so
 ## the rest of the generator's depth is headroom instead of press-to-sound delay.
 func test_the_queue_is_kept_to_its_latency_target_not_to_the_brim() -> void:

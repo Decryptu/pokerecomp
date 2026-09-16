@@ -2,14 +2,9 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Every effect byte's command list against the pins' own `data/moves/effects.asm`.
-## A move is a short program and [Gen2MoveEffect] is the whole table of them
-## transcribed by hand, so the comparable artefact is the command list itself: the
-## pin's `MoveEffectsPointers` in order, each label's commands resolved through its
-## fallthrough, against [method Gen2MoveEffect.sequence_for]. That catches a step in
-## the wrong place, which no unit test of one move can, and it is the static half of
-## the battle-command trace an oracle runs against a real cartridge. A missing
-## checkout skips rather than fails.
+## Every effect byte's command list against the pins' `data/moves/effects.asm`:
+## `MoveEffectsPointers` in order, each label resolved through its fallthrough,
+## against [method Gen2MoveEffect.sequence_for]. A missing checkout skips.
 
 const PINS: Dictionary = {
 	&"gold": "pokegold", &"silver": "pokegold", &"crystal": "pokecrystal",
