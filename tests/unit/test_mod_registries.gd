@@ -392,7 +392,7 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	assert_eq(host.battle_info_ids().size(), 1)
 	assert_true(Gen2ModHost.allows_item_field_move(Gen2WorldFieldMove.MOVE_FLY))
 	assert_true(Gen2ModHost.awards_catch_experience())
-	assert_eq(host.repel_renewal_item({0x2B: 1}), 0x2B, "the only one owned")
+	assert_eq(host.repel_renewal_item({0x2B: 1}, Gen2WorldPartyHost.REPEL_STEPS), 0x2B, "the only one owned")
 	## 16: how many DV words one wild is drawn with, and the bag the provider
 	## reads the charm out of. No world is open here, so the bag is empty and the
 	## example answers the cartridge's own single roll.

@@ -163,8 +163,8 @@ func _verify_item_numbers(game_id: StringName, data: GameData) -> void:
 		)
 	# HM01 is where the HM run starts, which is also where ConsumeTM stops.
 	_r.check(
-		Gen2WorldTMHM.is_hm(Gen2Layout.ITEM_HM01)
-			and not Gen2WorldTMHM.is_hm(Gen2Layout.ITEM_HM01 - 1),
+		Gen2WorldTMHM.is_hm(Gen2Layout.ITEM_HM01, RomRegistry.GEN2)
+			and not Gen2WorldTMHM.is_hm(Gen2Layout.ITEM_HM01 - 1, RomRegistry.GEN2),
 		"%s: the HM threshold is not at $%02X." % [game_id, Gen2Layout.ITEM_HM01]
 	)
 	# The run ends where the byte does. `cp TM01` needs no ceiling on hardware;
@@ -173,7 +173,7 @@ func _verify_item_numbers(game_id: StringName, data: GameData) -> void:
 	_r.check(
 		Gen2WorldTMHM.is_tm_hm(Gen2Layout.ITEM_BYTE_MAX)
 			and not Gen2WorldTMHM.is_tm_hm(Gen2ContentOverlay.FIRST_MOD_NUMBER)
-			and not Gen2WorldTMHM.is_hm(Gen2ContentOverlay.FIRST_MOD_NUMBER),
+			and not Gen2WorldTMHM.is_hm(Gen2ContentOverlay.FIRST_MOD_NUMBER, RomRegistry.GEN2),
 		"%s: a defined item past $%02X still reads as a TM/HM." % [
 			game_id, Gen2Layout.ITEM_BYTE_MAX,
 		]

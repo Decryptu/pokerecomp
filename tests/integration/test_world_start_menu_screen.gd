@@ -2182,6 +2182,35 @@ func test_a_registered_pc_row_opens_storage_and_returns_to_the_menu() -> void:
 	Gen2ModHost.reset()
 
 
+## The same row on a Generation 1 cartridge opens `BillsPC_`'s own menu, and
+## SEE YA! leaves the host the same way.
+func test_a_registered_pc_row_opens_the_generation_1_machine() -> void:
+	Gen2ModHost.reset()
+	Gen2ModHost.instance().register_menu_entry(
+		Gen2ModHost.MENU_START, &"qol", {
+			"label": "PC", "action": Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+		}
+	)
+	await _open_gen1_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	assert_true(_world_screen._walk_start_menu_to(&"qol"))
+	_world_screen._start_menu_host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	var service: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(service)
+	assert_eq(service.get("_mode"), Gen2WorldServiceScreen.MODE.PC_BOXES)
+	assert_eq(service.get("_pc_rows"), Gen2WorldPC.gen1_bills_pc_menu(), "BillsPCMenu's rows")
+	for _row: int in Gen2WorldPC.GEN1_BILLS_PC_SEE_YA:
+		service.handle_button(PokeButton.DOWN)
+	assert_eq(int(service.get("_cursor")), Gen2WorldPC.GEN1_BILLS_PC_SEE_YA)
+	service.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	assert_null(_world_screen._service_host, "SEE YA! leaves the host")
+	assert_not_null(_world_screen._start_menu_host)
+	Gen2ModHost.reset()
+
+
 ## A registered Repel renewal: the step that runs an active Repel out asks
 ## before the encounter roll, and YES spends exactly one item through the pack's
 ## own transaction.
@@ -2189,8 +2218,8 @@ func test_a_repel_running_out_offers_a_renewal_and_yes_spends_one() -> void:
 	Gen2ModHost.reset()
 	var script := GDScript.new()
 	script.source_code = """extends RefCounted
-func repel_to_use(inventory: Dictionary) -> int:
-	return %d if int(inventory.get(%d, 0)) > 0 else 0
+func repel_to_use(context: Dictionary) -> int:
+	return %d if int(context["inventory"].get(%d, 0)) > 0 else 0
 """ % [REPEL, REPEL]
 	script.reload()
 	assert_true(bool(
@@ -2222,8 +2251,8 @@ func test_a_declined_renewal_and_an_empty_bag_both_change_nothing() -> void:
 	Gen2ModHost.reset()
 	var script := GDScript.new()
 	script.source_code = """extends RefCounted
-func repel_to_use(inventory: Dictionary) -> int:
-	return %d if int(inventory.get(%d, 0)) > 0 else 0
+func repel_to_use(context: Dictionary) -> int:
+	return %d if int(context["inventory"].get(%d, 0)) > 0 else 0
 """ % [REPEL, REPEL]
 	script.reload()
 	Gen2ModHost.instance().register_repel_renewal(&"qol", script.new())

@@ -2075,6 +2075,27 @@ func test_the_menu_offers_only_moves_the_badge_allows() -> void:
 	)
 
 
+## Kanto's HM01 is $C4 and its badge is `CheckCascadeBadge`'s: the same seam
+## resolves both through the cartridge's own tables.
+func test_a_generation_1_hm_in_the_bag_is_a_source_behind_kantos_badge() -> void:
+	_register_source()
+	var data: GameData = GameData.open_directory(_directory)
+	data.generation = RomRegistry.GEN1
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(
+		data, 1, 1, TREE_CELL + Vector2i.UP, Gen2WorldState.new()
+	)
+	_give(world, Gen1Layout.HM_FIRST_ITEM)
+	var source: Dictionary = world.field_move_source(Gen2WorldFieldMove.MOVE_CUT)
+	assert_eq(StringName(source.get("kind", &"")), Gen2WorldAPI.FIELD_MOVE_SOURCE_ITEM)
+	assert_eq(int(source["item"]), Gen1Layout.HM_FIRST_ITEM)
+	assert_eq(world.item_field_move_offers(), [], "no CASCADEBADGE, no CUT row")
+	world.state.set_engine_flag(Gen2WorldState.gen1_badge_flag(Gen1Layout.CASCADEBADGE))
+	var offers: Array = world.item_field_move_offers()
+	assert_eq(offers.size(), 1)
+	assert_eq(int((offers[0] as Dictionary)["move"]), Gen2WorldFieldMove.MOVE_CUT)
+	assert_eq(int((offers[0] as Dictionary)["badge"]), Gen1Layout.CASCADEBADGE)
+
+
 ## `.SpawnAfterE4`: a slot whose `wSpawnAfterChampion` is SPAWN_LANCE opens at
 ## New Bark Town rather than where the credits caught the player, and
 ## `PostCreditsSpawn` clears the byte so the next CONTINUE is ordinary.

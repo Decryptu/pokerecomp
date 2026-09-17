@@ -600,15 +600,13 @@ class FieldMoves:
 class RepelRenewal:
 	extends RefCounted
 
-	const REPEL: int = 0x14
-	const SUPER_REPEL: int = 0x2A
-	const MAX_REPEL: int = 0x2B
-
-	func repel_to_use(inventory: Dictionary) -> int:
-		for item: int in [REPEL, SUPER_REPEL, MAX_REPEL]:
-			if int(inventory.get(item, 0)) > 0:
-				return item
-		return 0
+	func repel_to_use(context: Dictionary) -> int:
+		var best: int = 0
+		for item: int in context["repels"]:
+			if int(context["inventory"].get(item, 0)) > 0 \
+				and (best == 0 or int(context["repels"][item]) < int(context["repels"][best])):
+				best = item
+		return best
 
 
 ## How many words a wild's DVs are drawn from. 1 is the cartridge's own roll.

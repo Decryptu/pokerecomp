@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 35 | `Gen2ModHost.generation()` and `generation` on the battle snapshot; `repel_to_use` handed the cartridge's Repel table; an HM in the bag as a field-move source, Exp. All and `OPEN_BILLS_PC` on Red, Blue and Yellow |
 | 34 | Red, Blue and Yellow draw a shiny shiny, offer registered party rows, answer `hidden_items()`, `take_hidden_item()` and `hidden_item_nearby()` from their own hidden-item rows, and say `Gen2WorldAPI.cartridge_follower_out()` |
 | 33 | A registered stats page turns on Red, Blue and Yellow |
 | 32 | `map_group`, `map_number` and a Generation 1 counter's `text_id` on the mart a `MENU_MART` filter is asked about |
@@ -1102,6 +1103,15 @@ printed for a Pokemon that never fought is told from either pass.
 `award_win_experience()` and `award_capture_experience()` both run the same pass,
 so a skipped fight and a capture split the same way.
 
+On Red, Blue and Yellow the item is the bag's EXP.ALL, and `exp_share_holders` is
+every living party index while the bag holds one, empty otherwise. The
+cartridge's own second pass (`HandleEnemyMonFainted`) halves the seven-byte block
+in place, pays the participants, then pays the whole party off what that pass
+left, divided by the party count with fainted members counted. Every living index
+is then a holder, so a claimed share finds no bystander to pay and its one effect
+is the same as on Gold: the halving is suppressed and the participants keep their
+full award. Without EXP.ALL there is no holder and a share changes nothing.
+
 ## Annotating the battle
 
 `register_battle_info(id, provider)` draws read-only annotations on the hardware
@@ -1161,6 +1171,7 @@ The snapshot carries what a subscriber of past events cannot know:
 
 | Key | |
 |---|---|
+| `generation` | `RomRegistry.GEN1` or `GEN2`. A Generation 1 mon has one SPECIAL stage, mirrored onto `sp_attack` and `sp_defense` |
 | `player_stages`, `enemy_stages` | `Gen2BattleMon.stages`, live |
 | `player_species`, `enemy_species`, `player_level`, `enemy_level` | Who is standing |
 | `enemy_types`, `enemy_identified` | The defender, and whether Foresight named it |
@@ -1468,6 +1479,10 @@ per channel, so adding a line does not cost a mod that seam.
 
 ## Reading the bag
 
+`Gen2ModHost.generation()` answers `RomRegistry.GEN1` or `GEN2` for the target
+game, so a policy that only means something on one cartridge (weather, a held
+item) is registered there alone.
+
 `Gen2ModHost.inventory()` answers the live world's `{item: quantity}`, and `{}`
 when no world is open. Read only, and a copy.
 
@@ -1671,7 +1686,8 @@ The host owns everything else:
 The party is asked first, so a game with no provider resolves every field move
 exactly as before, and a Pokemon that knows the move keeps its submenu row. Only
 the seven HM moves have an alternate source: CUT, FLY, SURF, STRENGTH, FLASH,
-WHIRLPOOL and WATERFALL. Rock Smash is a TM.
+WHIRLPOOL and WATERFALL. Rock Smash is a TM. On Red, Blue and Yellow the HM is
+Kanto's ($C4 to $C8) and the badge test is each `Check*Badge`'s.
 
 The source is carried through every entrance: the party submenu, `Gen2WorldAPI`'s
 staged request and complete pairs, the A-button prompts at a tree, water, a
@@ -1690,14 +1706,19 @@ on, before the encounter roll:
 
 ```gdscript
 class Weakest:
-	func repel_to_use(inventory: Dictionary) -> int:
-		for item: int in [ITEM_REPEL, ITEM_SUPER_REPEL, ITEM_MAX_REPEL]:
-			if int(inventory.get(item, 0)) > 0:
-				return item
-		return 0
+	func repel_to_use(context: Dictionary) -> int:
+		var best: int = 0
+		for item: int in context["repels"]:
+			if int(context["inventory"].get(item, 0)) > 0 \
+				and (best == 0 or context["repels"][item] < context["repels"][best]):
+				best = item
+		return best
 ```
 
-`inventory` is a copy of the bag. Answering an item number puts the cartridge's
+`context.inventory` is a copy of the bag and `context.repels` the cartridge's own
+`{item: steps}` Repel table (`RepelEffect`'s three counts, Kanto's numbering on
+Red, Blue and Yellow), so a provider carries no item numbers. An answer that is
+not a Repel owned changes nothing. Answering an item number puts the cartridge's
 YES/NO box over the map; YES runs the pack's own field item transaction, so exactly
 one item is spent and its step count applied. Answering 0 changes nothing.
 
@@ -1815,7 +1836,8 @@ host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
 ```
 
 `Gen2ModHost.START_ACTIONS` is the allow list. `OPEN_BILLS_PC` opens BILL'S PC at
-the same top menu the Pokemon Center's machine reaches. An optional
+the same top menu the Pokemon Center's machine reaches, `BillsPC_`'s on Red, Blue
+and Yellow. An optional
 `visible(context)` predicate is asked with a copy of
 `{party_count, pokedex, pokegear}` and leaves the row *absent* rather than present
 and refused. The host applies its own gate after the predicate, so a row cannot be

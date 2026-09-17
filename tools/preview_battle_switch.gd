@@ -8,10 +8,8 @@ extends SceneTree
 ##       crystal /tmp/s.png [stage] [presses] [passes]
 
 const WINDOW_SIZE := Vector2i(1152, 648)
-## Enough frames for the scene to lay out and for the hardware viewport to hold
-## what the menus were driven to; the intro and the turn are settled by hand
-## below rather than by waiting. A shorter run photographs the composite as it
-## was a few frames before the presses.
+## Enough frames for the scene to lay out and the hardware viewport to hold what
+## the menus were driven to; the intro and the turn are settled by hand below.
 const SETTLE_FRAMES: int = 30
 
 ## The Pokemon `wContestMon` is holding for the `contest_replace` stage. A
@@ -370,15 +368,8 @@ func _open_battle_stage() -> void:
 	battle.battle_style_set = false
 	battle.init_enemy_trainer(trainer_class)
 	_screen.set("_battle", battle)
-	if _stage == "gen1_item":
-		## A burned Geodude and the player's Growl, so the second half is the Full Heal.
-		battle.enemy.status = Gen2Status.BURN
-		_screen.set("_pending", battle.take_actions(
-			Gen2Battle.use_move(1), Gen2Battle.use_move(0)
-		))
-		_drain_to_line("FULL HEAL")
-		_screen.finish()
-		_settle_icons()
+	if LINE_STAGES.has(_stage):
+		_open_line_stage(battle)
 		return
 	if _stage in ["use_next", "replace"]:
 		## Through the screen's own quarter, so the HUD in the picture is the HUD
@@ -440,6 +431,25 @@ func _open_battle_stage() -> void:
 		_read_question()
 	## A refusal is a line the box is still revealing, and the capture does not
 	## wait on real time.
+	_screen.finish()
+	_settle_icons()
+
+
+## One line of a turn: the line, and the move the player picks to reach it.
+const LINE_STAGES: Dictionary = {"gen1_item": ["FULL HEAL", 1], "exp_all": ["EXP.ALL", 0]}
+
+
+func _open_line_stage(battle: Gen2Battle) -> void:
+	if _stage == "gen1_item":
+		## A burned Geodude and the player's Growl, so the second half is the Full Heal.
+		battle.enemy.status = Gen2Status.BURN
+	else:
+		battle.exp_all_in_bag = true
+		battle.enemy.hp = 1
+	_screen.set("_pending", battle.take_actions(
+		Gen2Battle.use_move(int(LINE_STAGES[_stage][1])), Gen2Battle.use_move(0)
+	))
+	_drain_to_line(String(LINE_STAGES[_stage][0]))
 	_screen.finish()
 	_settle_icons()
 

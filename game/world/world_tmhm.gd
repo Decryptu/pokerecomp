@@ -31,7 +31,7 @@ static func is_tm_hm(item: int, generation: int = RomRegistry.GEN2) -> bool:
 
 
 ## IsHM, which TeachTMHM asks before ConsumeTM: an HM is never used up.
-static func is_hm(item: int, generation: int = RomRegistry.GEN2) -> bool:
+static func is_hm(item: int, generation: int) -> bool:
 	if generation == RomRegistry.GEN1:
 		return Gen1Layout.is_hm_item(item)
 	return item >= ITEM_HM01 and item <= ITEM_BYTE_MAX
