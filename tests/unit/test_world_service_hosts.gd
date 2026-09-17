@@ -71,6 +71,10 @@ func test_mart_purchase_updates_money_items_and_save_atomically() -> void:
 
 	var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(_world)
 	assert_true(resolved["ok"])
+	var opened: Dictionary = resolved["data"]["mart"]
+	assert_eq(Vector2i(int(opened["map_group"]), int(opened["map_number"])), _world.map_id(),
+		"a mart filter is told where the counter was opened")
+	assert_false(opened.has("text_id"), "only a Generation 1 counter carries a text row")
 	var purchase: Dictionary = Gen2WorldMartHost.purchase(
 		_world, _save, resolved["data"]["mart"], 7, 2, false
 	)
@@ -85,6 +89,23 @@ func test_mart_purchase_updates_money_items_and_save_atomically() -> void:
 	)
 	assert_true(complete["ok"])
 	assert_eq(complete["results"][0]["status"], &"complete")
+
+
+## `script_mart` has no mart id, so a Generation 1 counter is named by its map
+## and the text row it was opened on, and a filter sees both.
+func test_a_generation_1_counter_names_its_map_and_text_row() -> void:
+	var steps: Array = _world._gen1_facility_steps(
+		{"command": Gen1Layout.TEXT_SCRIPT_MART, "items": [7]}, 3
+	)
+	var values: Dictionary = steps[0]["values"]["values"]
+	assert_eq(int(values["text_id"]), 3)
+	assert_eq(Vector2i(int(values["map_group"]), int(values["map_number"])), _world.map_id())
+	var resolved: Dictionary = Gen2WorldHost._resolve_mart(_world, values)
+	assert_true(resolved["ok"])
+	var mart: Dictionary = resolved["data"]["mart"]
+	assert_eq(int(mart["mart_id"]), 0)
+	assert_eq(int(mart["text_id"]), 3)
+	assert_eq(int(mart["map_number"]), _world.map_id().y)
 
 
 func test_mart_purchase_refuses_insufficient_money_without_mutation() -> void:

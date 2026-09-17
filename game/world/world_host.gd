@@ -302,8 +302,7 @@ static func _resolve_data_request(world: Gen2WorldAPI, request: Dictionary) -> D
 static func _resolve_mart(world: Gen2WorldAPI, values: Dictionary) -> Dictionary:
 	var dialog_id: int = int(values.get("dialog", 0))
 	var mart_id: int = int(values.get("address", 0)) & 0xFF
-	## `{item, price}` is the shape `Gen2WorldMartHost.entries` already reads, so
-	## a shelf travelling with the request charges its own prices.
+	## `{item, price}` is what `Gen2WorldMartHost.entries` reads, so a shelf on the request charges its own prices.
 	var inline: Array = values["items"] if values.get("items", null) is Array else []
 	var mart_result: Dictionary = Gen2WorldMartHost.resolve_mart(
 		world.data, dialog_id, mart_id, world.state.hall_of_fame(), world.state, inline
@@ -314,6 +313,11 @@ static func _resolve_mart(world: Gen2WorldAPI, values: Dictionary) -> Dictionary
 			"reason": StringName(mart_result.get("reason", &"mart_data_unavailable")),
 		}
 	var mart: Dictionary = mart_result["mart"]
+	var place: Vector2i = world.map_id()
+	mart["map_group"] = place.x
+	mart["map_number"] = place.y
+	if values.has("text_id"):
+		mart["text_id"] = int(values["text_id"])
 	return {
 		"ok": true,
 		"data": {"mart": mart, "mart_id": mart_id, "dialog": dialog_id},
