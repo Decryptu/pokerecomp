@@ -16,23 +16,25 @@ an empty body. -->
 
 ## Added
 
-- Red, Blue and Yellow's OPTION menu is the cartridge's own: three sections on Red and Blue, and Yellow's one page with SOUND over MONO and the three EARPHONE settings, which now reach the sound driver, and PRINT.
-- SAVE on Red, Blue and Yellow asks the cartridge's question over the START menu, saves before "Now saving..." (Yellow's "Saving..."), and closes the menu either way, as the cartridge does.
-- Yellow is coloured as a Game Boy Color colours it: every species, bar, town map and map palette comes out of the table the hardware reads, and the intro and battle sprites carry their own palette bits.
-- Yellow's Pikachu has its voice: the 42 clips play from the title, the emotion table, scripts, battles, the Hall of Fame, the status screen, Bill's PC, the day care and a poison faint.
-- Every script sound on Red, Blue and Yellow plays, and the rival's theme and the Champion's room music start where the cartridge starts them.
-- A mod's stats page turns on Red, Blue and Yellow, after the moves page, with A (`api_version` 33).
-- A mod asked about a mart is told the map and, on Red, Blue and Yellow, the counter it was opened at (`api_version` 32).
+- Yellow's Surfing Pikachu minigame runs whole at Pikachu's Beach: the waves, the jumps, the radness score, the high score and the printer's high score page, measured against the cartridge frame by frame.
+- Yellow's printer pages: the diploma, the Pokemon portrait and the surfing high score, each drawn as the cartridge draws them.
+- Bill's Pokemon list, the Indigo Plateau statues, the beach house and the Fan Club chairman's printer all run their scripts; no Generation 1 script arm is left unknown.
+- A shiny is drawn shiny on Red, Blue and Yellow, with Gold, Silver or Crystal's colours when one of those is imported, and the shine plays on the send-out (`api_version` 34).
+- Mods reach Red, Blue and Yellow: hidden items, a row on a party member's menu, whether Yellow's Pikachu is out, and `generation()` to tell the cartridges apart (`api_version` 34 and 35).
+- Exp. All. The EXP.ALL in the bag halves the block, pays the Pokemon that fought, then pays the whole party the way the cartridge does, and the "with EXP.ALL," line prints.
+- An HM in the bag can be a field-move source on Red, Blue and Yellow, behind Kanto's badges, for a mod that allows it.
+- A mod's PC row opens Bill's own PC on Red, Blue and Yellow.
 
 ## Changed
 
-- The cache format is 142. Import your cartridges again.
+- The cache format is 144. Import your cartridges again.
+- A Repel renewal mod is handed the cartridge's own Repel table instead of carrying item numbers (`api_version` 35).
 
 ## Fixed
 
-- "#DEX" drew "?DEX" on a Generation 1 font, on the save box and everywhere else the source writes `#`.
-- Yellow's SOUND option had never reached the sound driver.
-- A catalogued shop behind another clerk's script was filed under that clerk's entry point: Goldenrod Dept Store 2F's second counter.
+- A Generation 1 hidden item's flag was read as an event flag; it is an engine flag.
+- Some Generation 1 script rows were never matched because the cache stored their numbers as floats.
+- `tools/preview_pics.gd --shiny` drew Red's shinies the same as their normals.
 
 ## Which file
 
