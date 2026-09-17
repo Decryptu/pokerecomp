@@ -37,7 +37,10 @@ const POUND_ROWS: Array = [[0x01, 0x0F, 0x00], [0x01, 0x1D, 0x00]]
 const POUND_SPRITES: int = 9
 ## Where the first of them lands with `BASECOORD_0F`, which is `$20, $70`: the
 ## base coordinate plus the sprite's own zero offsets, and `$31` over its tile.
+## Yellow's `wdef4` gives an x of $70 the enemy's Color palette, 3, which a
+## cartridge's live OAM reads as `32 112 93 3`.
 const POUND_FIRST_SPRITE: Array[int] = [0x20, 0x70, 0x31 + 0x2C, 0x00]
+const POUND_FIRST_SPRITE_YELLOW: Array[int] = [0x20, 0x70, 0x31 + 0x2C, 0x03]
 
 ## `SUBANIMTYPE_ENEMY` reads the other way round: it flips on the player's turn
 ## and not on the enemy's. `Subanim_1StarBigMoving` is a plain one beside it.
@@ -281,11 +284,12 @@ func _verify_pound(anims: Gen2BattleAnimData) -> void:
 	if not _r.check(sprites.size() == POUND_SPRITES, "%s: POUND drew %d sprites on its first frame, expected %d." % [_r.game_id, sprites.size(), POUND_SPRITES]):
 		return
 	var first: Dictionary = sprites[0]
+	var wanted: Array[int] = POUND_FIRST_SPRITE_YELLOW if _r.game_id == RomRegistry.YELLOW \
+		else POUND_FIRST_SPRITE
 	_r.check(
-		[first["y"], first["x"], first["tile"], first["attributes"]] == POUND_FIRST_SPRITE,
+		[first["y"], first["x"], first["tile"], first["attributes"]] == wanted,
 		"%s: POUND's first sprite is %s, expected %s." % [
-			_r.game_id, [first["y"], first["x"], first["tile"], first["attributes"]],
-			POUND_FIRST_SPRITE,
+			_r.game_id, [first["y"], first["x"], first["tile"], first["attributes"]], wanted,
 		]
 	)
 

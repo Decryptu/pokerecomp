@@ -1044,6 +1044,12 @@ const ATTR_BLK_ROW_SIZE: int = 6
 const ATTR_BLK_MAX_SETS: int = 18
 const OPENING_ATTR_BLK_ROWS: int = 3
 const SLOTS_ATTR_BLK_ROWS: int = 5
+const BATTLE_ATTR_BLK_ROWS: int = 5
+## `LoadBGMapAttributes`' header: `rVDMA_LEN`, then the second copy's offset
+## from byte 3; the first copy starts sixteen bytes in.
+const BG_MAP_ATTRIBUTES_ROWS_AT: int = 16
+const BG_MAP_ATTRIBUTES_OFFSET_AT: int = 3
+const BG_MAP_ATTRIBUTES_DMA_UNIT: int = 16
 
 ## `LoadPokedexTilePatterns`: `PokedexTileGraphics` at `vChars2 tile $60`, over
 ## the text box sheet, with `PokeballTileGraphics`' first tile at $72 behind it.
@@ -2539,6 +2545,8 @@ const RED_BLUE: Dictionary = {
 	"blk_packet_title": 0x7228E,
 	"blk_packet_intro": 0x722C1,
 	"blk_packet_splash": 0x723DD,
+	"blk_packet_generic": 0x7219E,
+	"blk_packet_battle": 0x721B5,
 	"change_box_text": 0x73909,
 	"choose_box_text": 0x739D4,
 	"dex_ratings": 0x441D1,
@@ -2896,6 +2904,7 @@ const YELLOW: Dictionary = {
 	"tmhm_moves": 0x1232D,
 	"mon_palettes": 0x72921,
 	"super_palettes": 0x729B9,
+	"cgb_base_palettes": 0x72AF9,
 	"trainer_names": 0x3997E,
 	"evos_moves": 0x3B1E5,
 	"evos_moves_bank": 0x0E,
@@ -3105,6 +3114,10 @@ const YELLOW: Dictionary = {
 	"blk_packet_title": 0x72681,
 	"blk_packet_intro": 0x726A1,
 	"blk_packet_splash": 0x72731,
+	"blk_packet_generic": 0x72611,
+	"blk_packet_battle": 0x72621,
+	"pal_packet_pointers": 0x725E2,
+	"bg_map_attributes_pointers": 0xBF4DE,
 	"change_box_text": 0x73C52,
 	"choose_box_text": 0x73D10,
 	"dex_ratings": 0x441D1,
@@ -3622,8 +3635,15 @@ static func mon_palette_offset(layout: Dictionary, dex: int) -> int:
 	return int(layout["mon_palettes"]) + dex
 
 
-static func super_palette_offset(layout: Dictionary, palette: int) -> int:
-	return int(layout["super_palettes"]) + palette * SUPER_PALETTE_BYTES
+## A palette id's row in the table the hardware reads: `CGBBasePalettes` on a
+## Game Boy Color, which only Yellow carries, and `SuperPalettes` elsewhere.
+static func color_palette_offset(layout: Dictionary, palette: int) -> int:
+	return int(layout.get("cgb_base_palettes", layout["super_palettes"])) \
+		+ palette * SUPER_PALETTE_BYTES
+
+
+static func on_cgb(id: StringName) -> bool:
+	return for_id(id).has("cgb_base_palettes")
 
 
 ## `SetPal_Overworld`: the `SuperPalettes` row a map's four colours come from.

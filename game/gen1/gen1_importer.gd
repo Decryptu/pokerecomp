@@ -60,13 +60,13 @@ const FIRST_BASE_COORD: Array[int] = [0x10, 0x68]
 const FIRST_MATCHUP: Array[int] = [0x15, 0x14, 20]
 
 ## Bulbasaur's `MonsterPalettes` row, PAL_GREENMON, and the colours
-## `SuperPalettes` gives it: two tables in one check, one being an index into
-## the other. Yellow retuned them all for the Game Boy Color.
+## `SuperPalettes` gives it on Red and Blue and `CGBBasePalettes` on Yellow: two
+## tables in one check, one being an index into the other.
 const FIRST_SUPER_PALETTE: int = 0x16
 const FIRST_PALETTE_COLORS: Dictionary = {
 	RomRegistry.RED: [32703, 17236, 11913, 2115],
 	RomRegistry.BLUE: [32703, 17236, 11913, 2115],
-	RomRegistry.YELLOW: [31743, 19352, 16045, 6342],
+	RomRegistry.YELLOW: [32767, 12273, 6849, 3171],
 }
 
 ## Where a bank-local pointer points: every one of them addresses $4000 up.
@@ -456,7 +456,7 @@ static func _verify_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var named: int = rom.u8(Gen1Layout.mon_palette_offset(layout, 1))
 	if named != FIRST_SUPER_PALETTE:
 		return _fail("Bulbasaur's MonsterPalettes row names palette %d." % named)
-	var at: int = Gen1Layout.super_palette_offset(layout, named)
+	var at: int = Gen1Layout.color_palette_offset(layout, named)
 	var colors: Array[int] = []
 	for slot: int in Gen1Layout.SUPER_PALETTE_COLORS:
 		colors.append(rom.u16le(at + slot * PokePalette.COLOR_BYTES))
@@ -661,17 +661,54 @@ static func _verify_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return _ok()
 
 
+## Every `BGMapAttributes_*` table the Color path loads is the packet's own
+## `ATTR_BLK` rows rasterised over the screen, cell for cell.
+static func _verify_bg_map_attributes(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not layout.has("bg_map_attributes_pointers"):
+		return _ok()
+	for name: String in ["splash", "intro", "title", "generic", "battle", "slots"]:
+		var packet: int = int(layout["blk_packet_%s" % name])
+		var table: Array = read_bg_map_attributes(rom, layout, packet)
+		var raster: PackedByteArray = Gen1OpeningPage.attribute_map(read_attr_blocks(rom, packet))
+		if table.size() < 2 * Gen1OpeningPage.CELLS_DOWN * Gen1Lcd.MAP_SIDE:
+			return _fail("BGMapAttributes for %s holds %d bytes." % [name, table.size()])
+		for cell: int in raster.size():
+			@warning_ignore("integer_division")
+			var row: int = cell / Gen1OpeningPage.CELLS_ACROSS
+			var at: int = row * Gen1Lcd.MAP_SIDE + cell % Gen1OpeningPage.CELLS_ACROSS
+			if int(table[at]) != raster[cell]:
+				return _fail("BGMapAttributes for %s differs from its ATTR_BLK at cell %d." % [
+					name, cell,
+				])
+	return _ok()
+
+
+## Every `PAL_SET` and `ATTR_BLK` packet the layout names, by its row count.
+static func _verify_packets(rom: RomFile, layout: Dictionary) -> Dictionary:
+	for name: String in ["pal_packet_splash", "pal_packet_intro", "pal_packet_title"]:
+		if rom.u8(int(layout[name])) != Gen1Layout.PAL_SET_COMMAND:
+			return _fail("%s does not open on PAL_SET." % name)
+	var rows: Dictionary = {
+		"blk_packet_splash": Gen1Layout.OPENING_ATTR_BLK_ROWS,
+		"blk_packet_intro": Gen1Layout.OPENING_ATTR_BLK_ROWS,
+		"blk_packet_title": Gen1Layout.OPENING_ATTR_BLK_ROWS,
+		"blk_packet_battle": Gen1Layout.BATTLE_ATTR_BLK_ROWS,
+		"blk_packet_generic": 1,
+	}
+	for name: String in rows:
+		if read_attr_blocks(rom, int(layout[name])).size() != int(rows[name]):
+			return _fail("%s does not hold %d ATTR_BLK rows." % [name, int(rows[name])])
+	return _verify_bg_map_attributes(rom, layout)
+
+
 ## The opening's tables, each pinned by a byte only it carries.
 static func _verify_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var waves: Array = read_small_star_waves(rom, layout)
 	if waves.size() != Gen1Layout.SPLASH_SMALL_STAR_WAVES:
 		return _fail("SmallStarsWaveCoordsPointerTable does not hold four waves.")
-	for name: String in ["pal_packet_splash", "pal_packet_intro", "pal_packet_title"]:
-		if rom.u8(int(layout[name])) != Gen1Layout.PAL_SET_COMMAND:
-			return _fail("%s does not open on PAL_SET." % name)
-	for name: String in ["blk_packet_splash", "blk_packet_intro", "blk_packet_title"]:
-		if read_attr_blocks(rom, int(layout[name])).size() != Gen1Layout.OPENING_ATTR_BLK_ROWS:
-			return _fail("%s does not hold three ATTR_BLK rows." % name)
+	var packets: Dictionary = _verify_packets(rom, layout)
+	if not bool(packets["ok"]):
+		return packets
 	for index: int in Gen1Layout.INTRO_TILEMAPS:
 		var row: Dictionary = read_tile_id_list(rom, layout, Gen1Layout.INTRO_TILEMAP_FIRST + index)
 		if int(row.get("columns", 0)) != Gen2PicImage.FRONTPIC_TILES \
@@ -1299,7 +1336,7 @@ static func _pic_offset(rom: RomFile, layout: Dictionary, at: int, index: int) -
 static func _import_bar_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	for name: String in Gen1Layout.HP_BAR_PALETTES:
-		var at: int = Gen1Layout.super_palette_offset(
+		var at: int = Gen1Layout.color_palette_offset(
 			layout, int(Gen1Layout.HP_BAR_PALETTES[name])
 		)
 		var colors: Array = []
@@ -1313,7 +1350,7 @@ static func _import_bar_palettes(rom: RomFile, layout: Dictionary) -> Dictionary
 ## four colours, `TownMapOrder` and one landmark a map id, so the cursor walk and
 ## every icon read the same table [Gen2TownMapPage] draws Crystal's regions from.
 static func _import_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var palette: int = Gen1Layout.super_palette_offset(layout, Gen1Layout.PAL_TOWNMAP)
+	var palette: int = Gen1Layout.color_palette_offset(layout, Gen1Layout.PAL_TOWNMAP)
 	var colors: Array = []
 	for slot: int in Gen1Layout.SUPER_PALETTE_COLORS:
 		colors.append(rom.u16le(palette + slot * PokePalette.COLOR_BYTES))
@@ -1397,7 +1434,7 @@ static func _town_map_landmarks(rom: RomFile, layout: Dictionary) -> Array:
 ## as the cartridge's own packed 15-bit values.
 static func _import_palette(rom: RomFile, layout: Dictionary, dex: int) -> Dictionary:
 	var named: int = rom.u8(Gen1Layout.mon_palette_offset(layout, dex))
-	var at: int = Gen1Layout.super_palette_offset(layout, named)
+	var at: int = Gen1Layout.color_palette_offset(layout, named)
 	var colors: Array = []
 	for slot: int in Gen1Layout.SUPER_PALETTE_COLORS:
 		colors.append(rom.u16le(at + slot * PokePalette.COLOR_BYTES))
@@ -1848,12 +1885,23 @@ static func read_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"small_star_waves": read_small_star_waves(rom, layout),
 		"palettes": {},
 		"blocks": {},
+		"attributes": {},
 	}
-	for name: String in ["splash", "intro", "title", "generic", "beach"]:
+	# `generic` and `beach` are `YellowIntroPaletteAction`'s, which sends the
+	# `PAL_SET` alone and leaves the attributes the splash loaded.
+	for name: String in ["splash", "intro", "title", "generic", "beach", "battle"]:
 		if layout.has("pal_packet_%s" % name):
 			out["palettes"][name] = read_pal_packet(rom, layout, int(layout["pal_packet_%s" % name]))
-		if layout.has("blk_packet_%s" % name):
-			out["blocks"][name] = read_attr_blocks(rom, int(layout["blk_packet_%s" % name]))
+		if not layout.has("blk_packet_%s" % name):
+			continue
+		var blk: int = int(layout["blk_packet_%s" % name])
+		out["blocks"][name] = read_attr_blocks(rom, blk)
+		if layout.has("bg_map_attributes_pointers"):
+			out["attributes"][name] = read_bg_map_attributes(rom, layout, blk)
+	if layout.has("cgb_base_palettes") and out["palettes"].has("beach"):
+		# `YellowIntroPaletteAction` puts `PalPacket_Generic`'s first row behind
+		# palette 1 of the beach on a Game Boy Color.
+		out["palettes"]["beach"][1] = out["palettes"]["generic"][0]
 	var tilemaps: Array = []
 	for index: int in Gen1Layout.INTRO_TILEMAPS:
 		tilemaps.append(
@@ -1971,6 +2019,8 @@ static func read_slots(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"reels": wheels,
 		"palettes": palettes,
 		"blocks": read_attr_blocks(rom, int(layout["blk_packet_slots"])),
+		"attributes": read_bg_map_attributes(rom, layout, int(layout["blk_packet_slots"])) \
+			if layout.has("bg_map_attributes_pointers") else [],
 	}
 
 
@@ -1987,12 +2037,39 @@ static func read_pal_packet(rom: RomFile, layout: Dictionary, at: int) -> Array:
 	var out: Array = []
 	for slot: int in Gen1Layout.PAL_SET_PALETTES:
 		var named: int = rom.u16le(at + Gen1Layout.PAL_SET_ROW + slot * Gen1Layout.POINTER_SIZE)
-		var row: int = Gen1Layout.super_palette_offset(layout, named)
+		var row: int = Gen1Layout.color_palette_offset(layout, named)
 		var colors: Array = []
 		for index: int in Gen1Layout.SUPER_PALETTE_COLORS:
 			colors.append(rom.u16le(row + index * PokePalette.COLOR_BYTES))
 		out.append(colors)
 	return out
+
+
+## `TranslatePalPacketToBGMapAttributes`: the `BGMapAttributes_*` table for the
+## `ATTR_BLK` packet at [param packet], found by its address in `PalPacketPointers`.
+## `LoadBGMapAttributes` DMAs the header's length onto each tile map, the second
+## copy from the offset the header names, so both copies are returned in turn.
+static func read_bg_map_attributes(rom: RomFile, layout: Dictionary, packet: int) -> Array:
+	var pointers: int = int(layout["pal_packet_pointers"])
+	var count: int = rom.u8(pointers)
+	var address: int = RomFile.BANK_SIZE + packet % RomFile.BANK_SIZE
+	var tables: int = int(layout["bg_map_attributes_pointers"])
+	for index: int in count:
+		if rom.u16le(pointers + 1 + index * Gen1Layout.POINTER_SIZE) != address:
+			continue
+		var at: int = RomFile.linear(
+			RomFile.bank_of(tables),
+			rom.u16le(tables + (count - index - 1) * Gen1Layout.POINTER_SIZE)
+		)
+		var length: int = (rom.u8(at) + 1) * Gen1Layout.BG_MAP_ATTRIBUTES_DMA_UNIT
+		if length > Gen1Lcd.MAP_BYTES:
+			return []
+		var second: int = at + Gen1Layout.BG_MAP_ATTRIBUTES_OFFSET_AT + rom.u16le(
+			at + Gen1Layout.BG_MAP_ATTRIBUTES_OFFSET_AT - Gen1Layout.POINTER_SIZE
+		)
+		return Array(rom.slice(at + Gen1Layout.BG_MAP_ATTRIBUTES_ROWS_AT, length)) \
+			+ Array(rom.slice(second, length))
+	return []
 
 
 static func read_attr_blocks(rom: RomFile, at: int) -> Array:

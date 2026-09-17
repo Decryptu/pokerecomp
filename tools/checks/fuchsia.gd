@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the walk south from Lavender Town to Fuchsia City and the Soul Badge,
-## for both command profiles. Two findings carry the leg. The way south is four
-## plain connections with one gate at the end, so what it costs is trainers rather
-## than errands, and which trainers is not the same question as how many: shutting
-## each sight line's cells in turn shows Crystal owes two of Route 13's five and
-## nothing on Routes 12, 14 and 15, while Gold and Silver owe a different set. And
-## Fuchsia Gym is a maze rather than a gate: none of its six objects is an
-## OBJECTTYPE_TRAINER, and Janine sets her four disguised trainers' flags herself.
+## Lavender Town south to Fuchsia City and the Soul Badge, both profiles. The way
+## costs trainers: shutting each sight line in turn shows Crystal owes two of
+## Route 13's five and nothing on Routes 12, 14 and 15, Gold and Silver another
+## set. Fuchsia Gym has no OBJECTTYPE_TRAINER; Janine sets her four's flags herself.
 
 
 ## constants/map_constants.asm. Route 12 belongs to the LAVENDER group; Routes

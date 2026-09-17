@@ -81,12 +81,13 @@ const POWER_PLANT_WILD: Dictionary = {100: 6, 101: 2, 145: 1}
 ## the elevator's own script rewrites the destination before either is taken.
 const SILPH_CO_ELEVATOR: int = 236
 
-## `NUM_SGB_PALS`, and `PAL_ROUTE`'s own four, the row every route draws in.
+## `NUM_SGB_PALS`, and `PAL_ROUTE`'s own four, the row every route draws in:
+## `SuperPalettes`' on Red and Blue, `CGBBasePalettes`' on Yellow.
 const PALETTE_COUNTS: Dictionary = {&"red": 37, &"blue": 37, &"yellow": 40}
 const ROUTE_COLORS: Dictionary = {
 	&"red": [0x7FBF, 0x2F95, 0x7F54, 0x0843],
 	&"blue": [0x7FBF, 0x2F95, 0x7F54, 0x0843],
-	&"yellow": [0x7BFF, 0x4F57, 0x7F77, 0x18C6],
+	&"yellow": [0x7FFF, 0x13F0, 0x7EEB, 0x0C63],
 }
 
 ## Every branch of `SetPal_Overworld`, as map id, `wLastMap` and the row wanted.

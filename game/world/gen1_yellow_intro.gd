@@ -24,8 +24,6 @@ const STRUCT_VAR2: int = 12
 const STRUCT_SIZE: int = 16
 const OAM_END: int = Gen1Lcd.OAM_SLOTS * Gen1Lcd.OAM_BYTES
 
-## `SetCurrentAnimatedObjectOAMAttributes`.
-const OAM_HIGH_PALS: int = 1 << 3
 const FLIP_MASK: int = Gen1Lcd.OAM_XFLIP | Gen1Lcd.OAM_YFLIP | Gen1Lcd.OAM_PRIO
 const FRAME_FLIP_SHIFT: int = 1
 const FRAME_FLIP_MASK: int = 0xC0
@@ -81,6 +79,7 @@ const CLOUD_FRAME_MASK: int = 7
 const CLOUD_SET_MASK: int = 8
 ## The scenes' `vBGMap0` addresses as (column, row).
 const FLY_PIC_AT: Vector2i = Vector2i(20, 6)
+const FLY_PIC_CGB_PALETTE: int = 1
 const FLY_PIC_SIDE: int = 6
 const FLY_PIC_FIRST_TILE: int = 0x90
 const FLY_PIC_ROW_STEP: int = 0x10
@@ -323,6 +322,8 @@ func _scene_2() -> void:
 		for column: int in FLY_PIC_SIDE:
 			ids.append(FLY_PIC_FIRST_TILE + row * FLY_PIC_ROW_STEP + column)
 		_host.write_map(0, FLY_PIC_AT + Vector2i(0, row), FLY_PIC_SIDE, 1, ids)
+	# "We can actually set palettes!": a Game Boy Color gives the picture palette 1.
+	_host.lcd.fill_attributes(0, FLY_PIC_AT, FLY_PIC_SIDE, FLY_PIC_SIDE, FLY_PIC_CGB_PALETTE)
 	# `ld e, [hl]`: the row's first byte is the X `SpawnAnimatedObject` takes in `e`.
 	for bar: Array in _yellow.get("speed_bars", []):
 		var index: int = _spawn(8, int(bar[0]), int(bar[1]))
@@ -343,6 +344,7 @@ func _scene_3() -> void:
 
 func _scene_4() -> void:
 	_ly_pointer_on = false
+	_host.lcd.fill_attributes(0, FLY_PIC_AT, FLY_PIC_SIDE, FLY_PIC_SIDE, 0)
 	_draw_bars()
 	_current = _spawn(2, OBJECT_AT, OBJECT_AT)
 	_timer = SCENE_TIMER
@@ -623,7 +625,7 @@ func _update_frame(object: PackedByteArray) -> bool:
 		var attributes: int = ((int(sprite[3]) ^ flips) & FLIP_MASK) \
 			| (int(sprite[3]) & Gen1Lcd.OAM_PAL1)
 		if attributes & Gen1Lcd.OAM_PAL1:
-			attributes |= OAM_HIGH_PALS
+			attributes |= Gen1Lcd.OAM_HIGH_PALS
 		_host.set_shadow_byte(_oam_offset, y)
 		_host.set_shadow_byte(_oam_offset + 1, x)
 		_host.set_shadow_byte(_oam_offset + 2, (vtile + int(sprite[2])) & 0xFF)

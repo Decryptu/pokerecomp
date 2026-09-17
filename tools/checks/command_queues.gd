@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the imported `cmdqueue` payloads against freshly imported real caches,
-## for both command profiles. Expected values come from the pinned sources' own
-## macros, `CmdQueue_StoneTable`, `HandleStoneQueue` and the two maps that write
-## one, BlackthornGym2F and IcePathB1F, both byte identical between the pins. The
-## importer skips a queue pointer it cannot resolve, because a script slice running
-## past its own end can decode stray bytes as a `writecmdqueue`; this is what makes
-## that tolerance safe, asserting the two real tables are present, complete and
-## correct rather than trusting the scan not to have missed one.
+## The imported `cmdqueue` payloads of BlackthornGym2F and IcePathB1F against
+## `CmdQueue_StoneTable` and `HandleStoneQueue`, both profiles. The importer skips
+## a queue pointer it cannot resolve, since a slice run past its end can decode as
+## a `writecmdqueue`; asserting both real tables whole is what makes that safe.
 
 
 ## Blackthorn Gym 2F and Ice Path B1F, the only two maps in either game with a

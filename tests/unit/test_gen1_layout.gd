@@ -349,8 +349,15 @@ func test_every_palette_row_is_inside_the_table() -> void:
 		var layout: Dictionary = Gen1Layout.for_id(id)
 		var count: int = Gen1Layout.super_palette_count(id)
 		assert_lt(
-			Gen1Layout.super_palette_offset(layout, count) - 1, GEN1_ROM_SIZE,
-			"%s SuperPalettes" % id
+			Gen1Layout.color_palette_offset(layout, count) - 1, GEN1_ROM_SIZE,
+			"%s palette table" % id
+		)
+		# Only Yellow reads `CGBBasePalettes`, which sits right behind its `SuperPalettes`.
+		assert_eq(Gen1Layout.on_cgb(id), id == RomRegistry.YELLOW, "%s on_cgb" % id)
+		assert_eq(
+			Gen1Layout.color_palette_offset(layout, 0) - int(layout["super_palettes"]),
+			count * Gen1Layout.SUPER_PALETTE_BYTES if Gen1Layout.on_cgb(id) else 0,
+			"%s table base" % id
 		)
 		for map_id: int in Gen1Layout.map_count(id):
 			for tileset: int in Gen1Layout.tileset_count(id):

@@ -753,8 +753,18 @@ func _gen1_place(sprite: Dictionary, base: Vector2i) -> Dictionary:
 		"y": y & 0xFF,
 		"x": x & 0xFF,
 		"tile": (int(sprite["tile"]) + Gen1Layout.ANIM_BASE_TILE) & 0xFF,
-		"attributes": flags & 0xFF,
+		"attributes": (flags | _gen1_palette(x & 0xFF, y & 0xFF, GEN1_PALETTE_SIDE)) & 0xFF,
 	}
+
+
+func _gen1_palette(x: int, y: int, rule: int) -> int:
+	if _data.profile() != RomRegistry.YELLOW:
+		return 0
+	if rule == GEN1_PALETTE_SIDE:
+		return Gen2BattleRenderer.GEN1_PAL_ENEMY_MON if x >= GEN1_PALETTE_SPLIT_X \
+			else Gen2BattleRenderer.GEN1_PAL_PLAYER_MON
+	var out: int = 1 + (1 if y >= GEN1_PALETTE_SPLIT_Y else 0) + (2 if x >= GEN1_PALETTE_SPLIT_X else 0)
+	return out & Gen1Lcd.PALETTE_SLOT_MASK if rule == GEN1_PALETTE_MASKED else out
 
 
 func _gen1_byte(address: int) -> int:
@@ -1037,6 +1047,15 @@ const GEN1_WAVY_OFFSETS: Array[int] = [
 const GEN1_WAVY_FRAMES: int = 0xFF
 
 const GEN1_TILE: int = 8
+
+## Yellow's `wdef4`, the Color palette an OAM entry carries: `DrawFrameBlock`
+## and the spiral balls part at x 88 between the two battlers' palettes;
+## `BattleAnimWriteOAMEntry` counts 1, one more from y 40 and two from x 88,
+## unmasked, so the far corner reads `rOBP1`'s; falling objects and droplets
+## mask the same sum to 3. Red and Blue's writers leave the bits clear.
+const GEN1_PALETTE_SPLIT_X: int = 88
+const GEN1_PALETTE_SPLIT_Y: int = 40
+enum { GEN1_PALETTE_SIDE, GEN1_PALETTE_ENTRY, GEN1_PALETTE_MASKED }
 
 ## `AnimationIdSpecialEffects`' flashing rows, as how often each flashes.
 const GEN1_FLASH_EVERY_FOUR: int = 4
@@ -1377,9 +1396,10 @@ func _gen1_balls(base: Vector2i, from: int, count: int) -> Array:
 
 func _gen1_ball(base: Vector2i, index: int) -> Dictionary:
 	var at: Vector2i = GEN1_SPIRAL_COORDS[mini(index, GEN1_SPIRAL_COORDS.size() - 1)]
+	var x: int = (base.x + at.x) & 0xFF
 	return {
-		"y": (base.y + at.y) & 0xFF, "x": (base.x + at.x) & 0xFF,
-		"tile": GEN1_BALL_TILE, "attributes": 0,
+		"y": (base.y + at.y) & 0xFF, "x": x,
+		"tile": GEN1_BALL_TILE, "attributes": _gen1_palette(x, 0, GEN1_PALETTE_SIDE),
 	}
 
 
@@ -1388,9 +1408,11 @@ func _gen1_ball(base: Vector2i, index: int) -> Dictionary:
 func _gen1_pillar_steps(base: Vector2i, balls: int) -> Array:
 	var out: Array = []
 	var rows: Array[int] = []
+	var attributes: Array[int] = []
 	for index: int in balls:
 		rows.append((base.y + GEN1_TILE * (index + 1)) & 0xFF)
-	out.append({&"frames": 1, &"sprites": _gen1_pillar(base.x, rows)})
+		attributes.append(_gen1_palette(base.x, rows[index], GEN1_PALETTE_ENTRY))
+	out.append({&"frames": 1, &"sprites": _gen1_pillar(base.x, rows, attributes)})
 	var live: int = balls
 	while live > 0:
 		for index: int in balls:
@@ -1399,14 +1421,16 @@ func _gen1_pillar_steps(base: Vector2i, balls: int) -> Array:
 				live -= 1
 			elif rows[index] != 0:
 				rows[index] = (rows[index] - GEN1_BALL_RISE) & 0xFF
-		out.append({&"frames": 1, &"sprites": _gen1_pillar(base.x, rows)})
+		out.append({&"frames": 1, &"sprites": _gen1_pillar(base.x, rows, attributes)})
 	return out
 
 
-func _gen1_pillar(x: int, rows: Array[int]) -> Array:
+func _gen1_pillar(x: int, rows: Array[int], attributes: Array[int]) -> Array:
 	var out: Array = []
-	for row: int in rows:
-		out.append({"y": row, "x": x, "tile": GEN1_BALL_TILE, "attributes": 0})
+	for index: int in rows.size():
+		out.append({
+			"y": rows[index], "x": x, "tile": GEN1_BALL_TILE, "attributes": attributes[index],
+		})
 	return out
 
 
@@ -1448,7 +1472,8 @@ func _gen1_falling_steps(tile: int, count: int) -> Array:
 			columns[index] = (columns[index] - step if left else columns[index] + step) & 0xFF
 			frame.append({
 				"y": rows[index], "x": columns[index], "tile": tile,
-				"attributes": Gen2BattleAnimObject.OAM_XFLIP if left else 0,
+				"attributes": (Gen2BattleAnimObject.OAM_XFLIP if left else 0)
+					| _gen1_palette(columns[index], rows[index], GEN1_PALETTE_MASKED),
 			})
 		out.append({&"frames": GEN1_FALLING_FRAMES, &"sprites": frame})
 	return out
@@ -1474,7 +1499,8 @@ func _gen1_droplet_steps() -> Array:
 			while true:
 				x = (x + GEN1_DROPLET_STEP) & 0xFF
 				grid.append({
-					"y": row, "x": x, "tile": GEN1_DROPLET_TILE, "attributes": 0,
+					"y": row, "x": x, "tile": GEN1_DROPLET_TILE,
+					"attributes": _gen1_palette(x, row, GEN1_PALETTE_MASKED),
 				})
 				if x < GEN1_DROPLET_WRAP_X:
 					continue
