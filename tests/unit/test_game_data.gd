@@ -464,6 +464,24 @@ func test_shiny_is_a_different_palette_and_the_same_pixels() -> void:
 	assert_ne(data.palette(1, true), data.palette(1, false))
 
 
+## A `SuperPalettes` row has no shiny half, so the port turns the two middle
+## colours and keeps the row's own white and black.
+func test_a_generation_1_row_answers_a_shiny_between_its_own_ends() -> void:
+	_write_cache()
+	var row: Dictionary = _species(1, "BULBASAUR", 0x1234, 0x5678)
+	row["palette"] = {"colors": [0x7FFF, 0x1234, 0x5678, 0x0000]}
+	RomCache.write_json(RomCache.species_path(_directory), [row])
+	var data: GameData = GameData.open_directory(_directory)
+	var normal: PackedColorArray = data.palette(1, false)
+	var shiny: PackedColorArray = data.palette(1, true)
+	assert_ne(shiny, normal)
+	assert_eq(shiny[0], normal[0])
+	assert_eq(shiny[3], normal[3])
+	var derived: PackedColorArray = PokePalette.derived_shiny_pair(normal)
+	assert_eq(derived.size(), 2)
+	assert_ne(derived[0], normal[1])
+
+
 func test_a_species_pic_reports_its_own_size_not_the_cell_size() -> void:
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)

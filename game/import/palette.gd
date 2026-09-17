@@ -39,6 +39,18 @@ static func pic_palette(middle: PackedColorArray) -> PackedColorArray:
 	return out
 
 
+## About how far the cartridge's own shiny pairs sit from their normals.
+const DERIVED_SHINY_HUE_TURN: float = 1.0 / 3.0
+
+
+static func derived_shiny_pair(colors: PackedColorArray) -> PackedColorArray:
+	var out := PackedColorArray()
+	for index: int in [1, 2]:
+		var color: Color = colors[index] if index < colors.size() else Color.WHITE
+		out.append(Color.from_hsv(fposmod(color.h + DERIVED_SHINY_HUE_TURN, 1.0), color.s, color.v))
+	return out
+
+
 ## The four shades a Game Boy shows where nothing has applied a palette.
 static func monochrome() -> PackedColorArray:
 	return pic_palette(PackedColorArray([

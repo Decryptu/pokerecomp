@@ -1757,6 +1757,8 @@ static func _hidden_item_nodes(
 	var full: String = predef_text(rom, layout, bank, "hidden_item_bag_full")
 	if found.is_empty() or full.is_empty():
 		return []
+	row["hidden_item"] = item
+	row["hidden_item_flag"] = flag
 	return [{"op": "branch", "flag": flag, "engine": true, "then": [], "else": [
 		{"op": "name_item", "item": item},
 		{"op": "text", "text": found, "press": false},

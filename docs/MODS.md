@@ -39,7 +39,7 @@ user://mods/<id>/
 | `description` | Optional |
 | `icon`, `thumbnail` | Optional paths, when the art is not at a conventional name |
 | `dependencies` | Optional map of required mod ids to SemVer ranges |
-| `games` | Optional list of cartridge ids: `gold`, `silver`, `crystal` |
+| `games` | Optional list of cartridge ids: `red`, `blue`, `yellow`, `gold`, `silver`, `crystal` |
 
 Dependency ranges accept an exact version, `*`, wildcards (`1.x`, `1.4.*`),
 comparison chains (`>=1.2.0 <2.0.0`), and caret or tilde ranges. Dependencies
@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 34 | Red, Blue and Yellow draw a shiny shiny, offer registered party rows, answer `hidden_items()`, `take_hidden_item()` and `hidden_item_nearby()` from their own hidden-item rows, and say `Gen2WorldAPI.cartridge_follower_out()` |
 | 33 | A registered stats page turns on Red, Blue and Yellow |
 | 32 | `map_group`, `map_number` and a Generation 1 counter's `text_id` on the mart a `MENU_MART` filter is asked about |
 | 31 | `patch_text()` and `patch_world_text()`, and `GameData.text()` with the run listings beside it |
@@ -1204,6 +1205,11 @@ machine, `day_care` over either counter, and `trade` in the cable. Both are read
 off the running script's own pending state and hold nothing, so the answer is true
 again on the frame the host finishes the scene.
 
+`Gen2WorldAPI.cartridge_follower_out()` is true for exactly the frames the host
+draws its own follower: Yellow's Pikachu out of its ball and on the map. It is
+false on Red, Blue and every Generation 2 cartridge, so a mod walking a party
+member stays in its ball while the cartridge's own walks.
+
 A mod drawing a party member on the map puts it away for those frames. Do not
 reach for `script_busy()` or `script_stops_the_map()` instead: both are true for
 every textbox, sign and menu, so a follower hiding on them blinks out whenever the
@@ -1403,8 +1409,9 @@ the save, and runs `hiddenitem`'s own `verbosegiveitem` with its FOUND text,
 fanfare and pack-full branch.
 
 `Gen2WorldAPI.hidden_items()` is the read: one entry per `BGEVENT_ITEM` on the
-current map, taken or not. Scene-free, so a probe can walk a map with no game
-running.
+current map, taken or not, and on Red, Blue and Yellow one per `hidden_event`
+row whose routine is `HiddenItems`. Scene-free, so a probe can walk a map with
+no game running.
 
 | Key | Meaning |
 |---|---|
@@ -1626,6 +1633,13 @@ has unlocked.
 
 Providers compose additively rather than by registration order: the total is the
 cartridge's own roll plus the sum of what each provider adds past it.
+
+A shiny is drawn shiny on Red, Blue and Yellow too, whose `SuperPalettes` rows
+have no shiny half: `GameData.palette(species, true)` puts the species' Generation
+2 shiny pair between the row's own white and black when a Gold, Silver or Crystal
+cache is imported, and `PokePalette.derived_shiny_pair`'s hue turn of the row's
+own two colours otherwise. The send-out plays `SFX_SHINE` for the sparkle's forty
+frames.
 
     rolls = 1 + sum over providers of max(0, provider answer - 1)
 

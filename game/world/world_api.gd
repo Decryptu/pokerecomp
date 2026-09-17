@@ -8035,6 +8035,11 @@ func party_with_player() -> bool:
 	return String(party_holder()).is_empty()
 
 
+## Yellow's Pikachu out of its ball and on the map; false on every other cartridge.
+func cartridge_follower_out() -> bool:
+	return pikachu != null and pikachu.following() and pikachu.visible()
+
+
 func pending_script_input() -> Dictionary:
 	var step: Dictionary = _gen1_step(&"choice")
 	if not step.is_empty():
@@ -11764,6 +11769,14 @@ func hidden_items() -> Array:
 	var out: Array = []
 	if current_map == null:
 		return out
+	## Generation 1's are `HiddenItems` rows, their bit an engine flag.
+	for row: Dictionary in current_map.events.get("hidden_events", []) as Array:
+		if row.has("hidden_item"):
+			out.append({
+				"cell": Vector2i(int(row["x"]), int(row["y"])),
+				"item": int(row["hidden_item"]), "flag": int(row["hidden_item_flag"]),
+				"taken": state != null and state.is_engine_flag_active(int(row["hidden_item_flag"])),
+			})
 	var rows: Array = current_map.events.get("bg_events", [])
 	for index: int in rows.size():
 		var bg_event: Dictionary = (rows[index] as Dictionary).duplicate(true)
@@ -11790,8 +11803,14 @@ func hidden_items() -> Array:
 ## path so `verbosegiveitem`'s whole transaction is the host's. Empty when the
 ## cell holds none, it was taken, or a script is running.
 func take_hidden_item(cell: Vector2i) -> Array:
-	if current_map == null or _active_script != null or not _script_queue.is_empty():
+	if current_map == null or _active_script != null or not _script_queue.is_empty() \
+			or _gen1_holding():
 		return []
+	for row: Dictionary in current_map.events.get("hidden_events", []) as Array:
+		if row.has("hidden_item") and Vector2i(int(row["x"]), int(row["y"])) == cell \
+				and not (state != null and state.is_engine_flag_active(int(row["hidden_item_flag"]))):
+			_gen1_steps = _gen1_script_steps({"script": row.get("script", [])})
+			return _gen1_result()
 	## [method events_at] rather than the raw list: it is what stamps `kind` and
 	## `event_index`, both of which the request below is built from.
 	for event: Dictionary in events_at(cell):

@@ -2597,6 +2597,33 @@ func _check_a_hidden_item() -> void:
 	_r.check(int(world.state.items().get(HIDDEN_POTION, 0)) == 1,
 		"the bag holds %d POTION." % int(world.state.items().get(HIDDEN_POTION, 0)))
 	_r.check(world.interact().is_empty(), "the taken POTION answered twice.")
+	_check_hidden_items_are_listed()
+
+
+## The same POTION through the mod boundary.
+func _check_hidden_items_are_listed() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_CITY, HIDDEN_POTION_CELL + Vector2i(0, 3))
+	if world == null:
+		return
+	var listed: Dictionary = {}
+	for entry: Dictionary in world.hidden_items():
+		listed[entry["cell"]] = entry
+	var potion: Dictionary = listed.get(HIDDEN_POTION_CELL, {})
+	if not _r.check(int(potion.get("item", 0)) == HIDDEN_POTION and not bool(potion.get("taken", true)),
+		"hidden_items listed %s for the POTION." % [potion]):
+		return
+	_r.check(world.hidden_item_nearby(), "the POTION was not nearby three cells off.")
+	var taken: Array = world.take_hidden_item(HIDDEN_POTION_CELL)
+	_r.check(not taken.is_empty() and _event_text(taken) == _hidden_item_box(),
+		"take_hidden_item said %s." % [taken])
+	var results: Array = world.run_event_queue(true)
+	while not results.is_empty():
+		results = world.run_event_queue(true)
+	_r.check(world.state.is_engine_flag_active(int(potion["flag"]))
+		and int(world.state.items().get(HIDDEN_POTION, 0)) == 1, "the asked POTION was not taken.")
+	_r.check(world.take_hidden_item(HIDDEN_POTION_CELL).is_empty(), "a taken row was asked again.")
+	_r.check(not world.cartridge_follower_out() or _r.game_id == RomRegistry.YELLOW,
+		"a cartridge without a follower says one is out.")
 
 
 func _check_the_trash_cans() -> void:

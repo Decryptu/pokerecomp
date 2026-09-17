@@ -1466,10 +1466,8 @@ func send_out(
 		"species": current.active_mon().species, "level": current.active_mon().level,
 		"hp": current.active_mon().hp, "max_hp": current.active_mon().max_hp(),
 		"unown_form": unown_form_of(current.active_mon()),
-		## `BattleCheckPlayerShininess`/`BattleCheckEnemyShininess` again, which
-		## is what `CGB_BattleColors` picks the pic's palette with: the same
-		## reading [method entrance_events] takes the sparkle from, so the gold
-		## sweep and the colours under it can never disagree.
+		## `BattleCheckPlayerShininess`/`BattleCheckEnemyShininess`, the reading
+		## `CGB_BattleColors` and [method entrance_events] share.
 		"shiny": Gen2Stats.is_shiny(current.active_mon().dvs),
 		"line": send_out_line(side),
 	})
@@ -1501,10 +1499,8 @@ func entrance_events(side: int, ball: bool = true) -> Array:
 	if ball:
 		out.append(_send_out_animation(enemy_turn, SEND_OUT_ANIM_NORMAL))
 	# `BattleCheckPlayerShininess`/`BattleCheckEnemyShininess`, which read the
-	# live DVs: a Transform has already copied the target's over them. Neither
-	# routine exists on a Generation 1 cartridge, which has no shininess.
-	if data != null and data.generation != RomRegistry.GEN1 \
-			and Gen2Stats.is_shiny(entering.dvs):
+	# live DVs: a Transform has already copied the target's over them.
+	if Gen2Stats.is_shiny(entering.dvs):
 		out.append(_send_out_animation(enemy_turn, SEND_OUT_ANIM_SHINY))
 	# `CheckFaintedFrzSlp`: no cry from a fainted, frozen or sleeping Pokemon.
 	# Crystal's alone: pokegold's `SendOutPlayerMon` and
