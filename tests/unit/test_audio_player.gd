@@ -303,6 +303,19 @@ func test_the_sound_option_reaches_the_driver_and_restarts_the_piece() -> void:
 	options.stereo = was
 
 
+## Yellow's SOUND row is `wOptions & SOUND_MASK` shifted right once, an offset
+## of one `Audio1_HWChannelEnableMasks` row per EARPHONE step.
+func test_yellows_earphone_option_offsets_the_enable_mask_rows() -> void:
+	var options: Gen2Options = Gen2OptionsStore.current()
+	var was: int = options.earphone
+	options.earphone = 2
+	_player._apply_settings()
+	assert_eq(_player._gen1.mono_stereo_offset, 2 * Gen1SoundEngine.NUM_CHANNELS)
+	options.earphone = was
+	_player._apply_settings()
+	assert_eq(_player._gen1.mono_stereo_offset, was * Gen1SoundEngine.NUM_CHANNELS)
+
+
 ## A `stereo_sfx` request is `PlayStereoSFX`, so the mask it carries is
 ## `wStereoPanningMask` rather than a cry's tracks.
 func test_a_stereo_sfx_request_carries_its_panning_mask() -> void:

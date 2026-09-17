@@ -4760,7 +4760,18 @@ func preview_save_writing() -> void:
 	_preview_save_menu(3)
 
 
-## [param answers] is how many A presses to spend past the first question.
+## `SavedTheGame`'s box, the write's own frames spent.
+func preview_save_saved() -> void:
+	_preview_save_menu(3)
+	if _start_menu_host == null:
+		return
+	var prompt: Gen2SavePrompt = _start_menu_host.get("_save_prompt")
+	while prompt != null and prompt.step == Gen2SavePrompt.Step.SAVING:
+		_start_menu_host.advance_save_frame()
+
+
+## [param answers] is how many A presses to spend past the first question,
+## `PrintSaveScreenText`'s 30 frames spent before each.
 func _preview_save_menu(answers: int) -> void:
 	if _world == null or _data == null or _start_menu_host != null:
 		return
@@ -4772,6 +4783,9 @@ func _preview_save_menu(answers: int) -> void:
 		return
 	for _press: int in answers + 1:
 		_start_menu_host.handle_button(PokeButton.A)
+		var prompt: Gen2SavePrompt = _start_menu_host.get("_save_prompt")
+		while prompt != null and prompt.holding_info():
+			_start_menu_host.advance_save_frame()
 
 
 ## Public screenshot driver for `TossMenu`. Grants a stack on an injected save

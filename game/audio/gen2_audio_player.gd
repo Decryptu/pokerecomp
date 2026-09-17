@@ -78,10 +78,9 @@ var _clip_begun: bool = false
 
 
 ## How many of the CALLER's frames the driver may go without rendering before a
-## wait on a sound decides nobody is servicing it and gives up. Not one: the
-## buffer is filled to a depth rather than by the frame, and read as one frame
-## every `waitsfx` in the game ended on the frame after it started, so every item
-## jingle printed its line and replaced it before it could be read.
+## wait on a sound decides nobody is servicing it. Not one: the buffer is filled
+## to a depth, and read as one frame every `waitsfx` ended a frame after it
+## started.
 const SERVICE_GAP_FRAMES: int = 12
 
 
@@ -126,6 +125,7 @@ func _apply_settings() -> void:
 	if options.stereo != stereo:
 		stereo = options.stereo
 		_restart_music()
+	_gen1.mono_stereo_offset = options.earphone * Gen1SoundEngine.NUM_CHANNELS
 	var music: float = float(options.music_volume) / float(Gen2Options.MAX_VOLUME)
 	var sfx: float = float(options.sfx_volume) / float(Gen2Options.MAX_VOLUME)
 	music *= volume_scale

@@ -441,6 +441,68 @@ func test_a_no_refuses_and_the_link_save_opens_on_the_overwrite_question() -> vo
 	assert_true(quick.refused())
 
 
+## pokered's `SaveMenu`: `PrintSaveScreenText`'s 30 frames read no press, the
+## file's own player is never asked `OlderFileWillBeErasedText`, `SaveGameData`
+## runs before `NowSavingString`'s 120 frames, and `GameSavedText` owes `SFX_SAVE`.
+func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -> void:
+	var written: Array = []
+	var prompt: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.GEN1_MENU, "RED",
+		func() -> Dictionary:
+			written.append(true)
+			return {"ok": true}
+	)
+	assert_true(prompt.holding_info())
+	assert_false(prompt.reads_joypad())
+	assert_true(prompt.lines.is_empty(), "no text box under the info box yet")
+	prompt.confirm(true)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.ASK, "a press during the hold is dropped")
+	prompt.frames_elapsed(30)
+	assert_false(prompt.holding_info())
+	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_ASK_LINES)
+	assert_eq(prompt.cursor, 0)
+
+	prompt.confirm(true)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
+	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_SAVING_LINES)
+	assert_eq(written.size(), 1, "SaveGameData ran before the string went up")
+	assert_true(prompt.writing_now())
+	prompt.frames_elapsed(119)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
+	prompt.frames_elapsed(1)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVED)
+	assert_true(prompt.sfx_owed())
+	assert_eq(prompt.lines, ["RED saved", "the game!"])
+	prompt.frames_elapsed(Gen2SavePrompt.DONE_FRAMES)
+	assert_true(prompt.finished())
+
+	var refused: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.GEN1_MENU, "RED", Callable()
+	)
+	refused.frames_elapsed(30)
+	refused.cancel()
+	assert_true(refused.refused())
+
+	## Yellow: `ld c, 10` after the box, `SavingText` for 128 and 10 before
+	## `SFX_SAVE`.
+	var yellow: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.YELLOW_MENU, "RED", func() -> Dictionary: return {"ok": true}
+	)
+	yellow.frames_elapsed(39)
+	assert_true(yellow.holding_info())
+	yellow.frames_elapsed(1)
+	assert_eq(yellow.lines, Gen2SavePrompt.GEN1_ASK_LINES)
+	yellow.confirm(true)
+	assert_eq(yellow.lines, Gen2SavePrompt.YELLOW_SAVING_LINES)
+	yellow.frames_elapsed(128)
+	assert_eq(yellow.step, Gen2SavePrompt.Step.SAVED)
+	assert_false(yellow.sfx_owed())
+	yellow.frames_elapsed(10)
+	assert_true(yellow.sfx_owed())
+	yellow.frames_elapsed(30)
+	assert_true(yellow.finished())
+
+
 func _spend_insert_frames() -> void:
 	_box_screen.advance_saving_frames(
 		Gen2SavePrompt.LEAVE_ON_FRAMES + Gen2SavePrompt.INSERT_SAVED_FRAMES

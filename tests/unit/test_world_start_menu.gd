@@ -357,6 +357,82 @@ func test_the_dex_row_is_blank_without_the_pokedex_flag() -> void:
 	RomCache.clear(Fixture.directory())
 
 
+## pokered's `PrintSaveScreenText` draws its box over the START menu's list
+## without clearing it, and `PrintNumOwnedMons` prints whether or not the
+## Pokedex is owned, so the list's own row shows between the box and the text
+## and the dex row is never blank. Before `WouldYouLikeToSaveText` there is no
+## text box at all.
+func test_the_generation_1_save_screen_stands_over_the_list() -> void:
+	Fixture.build()
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	var page: Gen2StartMenuPage = Gen2StartMenuPage.from_data(data)
+	var list: Image = page.render_list(
+		["POKéMON", "ITEM", "PLAYER", "SAVE", "OPTION", "EXIT"], 3, "", false, null, {}, {}, true
+	)
+	var state: Dictionary = _save_state(true, 0)
+	var asked: Image = page.render_save(state, list)
+	assert_true(_opaque(asked, Vector2i(4, 0)), "the info box's own corner")
+	assert_true(_opaque(asked, Vector2i(10, 10)), "the list's border between the boxes")
+	assert_true(_opaque(asked, Vector2i(0, 12)), "the speech box")
+	state["lines"] = []
+	state["cursor"] = -1
+	var holding: Image = page.render_save(state, list)
+	assert_false(_opaque(holding, Vector2i(0, 12)), "no text box during the hold")
+	assert_true(_opaque(holding, Vector2i(4, 0)))
+	state["info"] = false
+	var over_list: Image = page.render_save(state, list)
+	assert_false(_opaque(over_list, Vector2i(4, 0)), "a question that is not about the file")
+	RomCache.clear(Fixture.directory())
+
+
+## `DisplayOptionMenu`'s three boxes at rows 0, 5 and 10, CANCEL at (2, 16)
+## with none, and `PlaceMenuCursor`'s arrow in the chosen value's own column.
+func test_the_generation_1_option_screen_is_three_boxes_and_a_cancel_row() -> void:
+	Fixture.build()
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	var page: Gen2StartMenuPage = Gen2StartMenuPage.from_data(data)
+	var menu: Gen2WorldOptionsMenu = Gen2WorldOptionsMenu.build(
+		Gen2Options.new(), Gen2WorldOptionsMenu.Layout.GEN1
+	)
+	var image: Image = page.render_gen1_options(menu.rows(), menu.cursor)
+	## `ClearScreen` first, so a tile nothing wrote is the screen's own blank.
+	var blank: Color = image.get_pixel(19 * Gen2Font.TILE + 4, 15 * Gen2Font.TILE + 4)
+	for top: int in [0, 5, 10]:
+		assert_false(_tile_is(image, Vector2i(0, top), blank), "box corner at row %d" % top)
+		assert_false(_tile_is(image, Vector2i(19, top + 4), blank), "and its far one")
+	assert_true(_tile_is(image, Vector2i(0, 15), blank), "CANCEL stands in no box")
+	assert_false(_tile_is(image, Vector2i(2, 16), blank), "CANCEL")
+	assert_false(_tile_is(image, Vector2i(1, 16), blank), "its hollow arrow")
+	assert_false(_tile_is(image, Vector2i(7, 3), blank), "MEDIUM's arrow")
+	assert_true(_tile_is(image, Vector2i(1, 3), blank), "FAST has none")
+	assert_false(_tile_is(image, Vector2i(1, 8), blank), "ON's arrow")
+	assert_true(_tile_is(image, Vector2i(10, 8), blank), "OFF has none")
+	RomCache.clear(Fixture.directory())
+
+
+## Yellow's `InitOptionsMenu`: one box round the screen, `AllOptionsText` at
+## column 2, values at each handler's `hlcoord` and the cursor in column 1.
+func test_yellows_option_screen_is_one_box_with_values_beside_the_labels() -> void:
+	Fixture.build()
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	var page: Gen2StartMenuPage = Gen2StartMenuPage.from_data(data)
+	var menu: Gen2WorldOptionsMenu = Gen2WorldOptionsMenu.build(
+		Gen2Options.new(), Gen2WorldOptionsMenu.Layout.YELLOW
+	)
+	menu.cursor = Gen2WorldOptionsMenu.YELLOW_SOUND
+	var image: Image = page.render_yellow_options(menu.rows(), menu.cursor)
+	var blank: Color = image.get_pixel(18 * Gen2Font.TILE + 4, 12 * Gen2Font.TILE + 4)
+	assert_false(_tile_is(image, Vector2i(0, 0), blank), "the box's corner")
+	assert_false(_tile_is(image, Vector2i(19, 17), blank), "and its far one")
+	assert_false(_tile_is(image, Vector2i(14, 2), blank), "MID beside TEXT SPEED")
+	assert_false(_tile_is(image, Vector2i(8, 8), blank), "MONO beside SOUND")
+	assert_true(_tile_is(image, Vector2i(14, 8), blank), "and nothing at column 14")
+	assert_false(_tile_is(image, Vector2i(1, 8), blank), "the cursor on SOUND")
+	assert_true(_tile_is(image, Vector2i(1, 2), blank), "and not on TEXT SPEED")
+	assert_false(_tile_is(image, Vector2i(2, 16), blank), "CANCEL")
+	RomCache.clear(Fixture.directory())
+
+
 func _tile_is(image: Image, tile: Vector2i, color: Color) -> bool:
 	for y: int in Gen2Font.TILE:
 		for x: int in Gen2Font.TILE:

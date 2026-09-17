@@ -864,8 +864,7 @@ func _prompt() -> String:
 
 
 ## `PartyMenuStrings` on Crystal and `PartyMenuMessagePointers` on Generation 1,
-## whose boxes are imported: the constants here spell POKéMON with the `#` only
-## Crystal's charmap has a glyph for, so a Generation 1 font drew "?MON".
+## whose boxes are imported and worded differently.
 static func prompt_text(data: GameData, row: StringName, crystal: String) -> String:
 	if data == null or data.generation != RomRegistry.GEN1:
 		return crystal
