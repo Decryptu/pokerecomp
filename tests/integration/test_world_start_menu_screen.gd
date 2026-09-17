@@ -2581,3 +2581,45 @@ func test_a_generation_1_toss_asks_no_quantity_question_and_removes_the_row() ->
 	await get_tree().process_frame
 	assert_eq(String(host.get("_pack_result")), "Threw away\nPOTION.")
 	assert_eq(_world_screen._world.state.item_quantity(GEN1_POTION), 1)
+
+
+## `StartMenu_Option`'s `DisplayOptionMenu`: three sections and CANCEL rather
+## than Crystal's eight rows, and `.exitMenu` on B from any of them.
+func test_a_generation_1_option_row_opens_display_option_menu() -> void:
+	await _open_gen1_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_OPTION)
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.OPTIONS)
+	var menu: Gen2WorldOptionsMenu = host.get("_options_menu")
+	assert_eq(menu.layout, Gen2WorldOptionsMenu.Layout.GEN1)
+	assert_eq(menu.size(), 4)
+	menu.cursor = Gen2WorldOptionsMenu.GEN1_BATTLE_STYLE
+	host.handle_button(PokeButton.LEFT)
+	assert_true(Gen2OptionsStore.current().battle_style_set)
+	host.handle_button(PokeButton.B)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LIST)
+
+
+## pokered's `SaveMenu`: `PrintSaveScreenText`'s 30 frames read no press, and
+## `StartMenu_SaveReset` ends in `HoldTextDisplayOpen` whichever way the
+## question was answered, so NO closes the menu rather than reopening the list.
+func test_a_generation_1_save_holds_and_no_closes_the_menu() -> void:
+	await _open_gen1_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_SAVE)
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.SAVE_ASK)
+	var prompt: Gen2SavePrompt = host.get("_save_prompt")
+	assert_true(prompt.holding_info())
+	host.handle_button(PokeButton.B)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.SAVE_ASK, "B during the hold is dropped")
+	host.advance_save_frames(30)
+	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_ASK_LINES)
+	host.handle_button(PokeButton.B)
+	await get_tree().process_frame
+	assert_null(_world_screen._start_menu_host)

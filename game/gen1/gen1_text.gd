@@ -232,6 +232,8 @@ static func encode(text: String) -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
 	var at: int = 0
 	var words: Dictionary = _word_tiles()
+	## `PlaceNextChar`'s `dict '#', PlacePOKe`: the source's "#" is four tiles.
+	text = text.replace(Gen2Text.POKE_SHORTHAND, CONTROL_CHARACTERS[0x54])
 	while at < text.length():
 		var taken: int = 0
 		for spelling: String in words:

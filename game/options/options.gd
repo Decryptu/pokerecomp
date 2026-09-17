@@ -29,6 +29,7 @@ const BIT_BATTLE_SCENE: int = 7
 const BIT_MENU_ACCOUNT: int = 0
 
 const FRAME_COUNT: int = 8
+const EARPHONE_COUNT: int = 4
 ## `GetPrinterSetting` maps only these five values; anything else reads NORMAL.
 const PRINTER_BRIGHTNESS: Array[int] = [0x00, 0x20, 0x40, 0x60, 0x7F]
 const PRINTER_NORMAL_INDEX: int = 2
@@ -74,6 +75,10 @@ var text_speed: int = 1
 var battle_scene: bool = true
 var battle_style_set: bool = false
 var stereo: bool = false
+## Yellow's SOUND row, `wOptions & SOUND_MASK`: MONO and EARPHONE1 to 3, each an
+## `Audio1_HWChannelEnableMasks` row. Its own field because Crystal's bit is a
+## STEREO switch and neither cartridge reads the other's.
+var earphone: int = 0
 var printer_brightness: int = PRINTER_NORMAL_INDEX
 var menu_account: bool = true
 var textbox_frame: int = 0
@@ -83,12 +88,9 @@ var fast_text_delay: bool = true
 var music_volume: int = 7
 var sfx_volume: int = 7
 var video_mode: StringName = &"windowed"
-## SCREEN FILL. The window is not the Game Boy's 10:9 and the black bars around
-## a framed screen are room this project can draw into, so the buffer grows to
-## the window instead ([member Gen2Screen.expanded]) on every screen. The
-## overworld fills it with map; everything else fills it with its own field.
-## Interface stays inside the 160x144 rectangle centred in it, so nothing the
-## cartridge laid out moves.
+## SCREEN FILL. The buffer grows to the window ([member Gen2Screen.expanded]):
+## the overworld fills it with map, everything else with its own field, and the
+## interface stays inside the 160x144 rectangle centred in it.
 var screen_fill: bool = true
 ## SMOOTH SCROLL: see [member Gen2WorldAPI.pass_fraction]. Off is the hardware's.
 var smooth_scroll: bool = true
@@ -100,9 +102,8 @@ var max_fps: int = 0
 var second_screen: StringName = &"auto"
 var game_speed: StringName = &"normal"
 var ui_theme: StringName = &"light"
-## Button bindings, in the shape [PokeInputActions] stores. Held as data rather
-## than as an [InputMap] state so the file is the whole scheme and nothing has
-## to read the engine back to know what the player chose.
+## Button bindings, in the shape [PokeInputActions] stores, so the file is the
+## whole scheme.
 ## What the engine does where this project and the cartridge disagree, and the
 ## difficulty. Its own object because it belongs to a run rather than to this
 ## installation: see [Gen2Rules] and [member Gen2SaveData.run_rules].
@@ -163,10 +164,8 @@ func text_reveal_speed() -> float:
 
 
 ## Hardware frames per real second, as a multiple of the cartridge's own rate.
-## Applied by [Gen2WorldAnimation.FrameClock] and nowhere else, which is what
-## keeps it off the sound driver: [Gen2AudioPlayer] fills its generator from the
-## output's own demand, so music, effects and cries run at the cartridge's tempo
-## and pitch at every setting.
+## Applied by [Gen2WorldAnimation.FrameClock] and nowhere else, so music,
+## effects and cries keep the cartridge's tempo and pitch at every setting.
 func speed_scale() -> float:
 	var row: int = GAME_SPEEDS.find(game_speed)
 	return GAME_SPEED_SCALES[row] if row >= 0 else 1.0
@@ -213,6 +212,7 @@ func to_dict() -> Dictionary:
 		"battle_scene": battle_scene,
 		"battle_style_set": battle_style_set,
 		"stereo": stereo,
+		"earphone": earphone,
 		"printer_brightness": printer_brightness,
 		"menu_account": menu_account,
 		"textbox_frame": textbox_frame,
@@ -249,6 +249,7 @@ static func parse(raw: Variant) -> Gen2Options:
 	options.battle_scene = bool(row.get("battle_scene", true))
 	options.battle_style_set = bool(row.get("battle_style_set", false))
 	options.stereo = bool(row.get("stereo", false))
+	options.earphone = clampi(int(row.get("earphone", 0)), 0, EARPHONE_COUNT - 1)
 	options.printer_brightness = clampi(
 		int(row.get("printer_brightness", PRINTER_NORMAL_INDEX)),
 		0,
