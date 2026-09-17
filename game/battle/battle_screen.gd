@@ -1283,6 +1283,7 @@ func _begin_world_battle(prepared: Dictionary, save: Gen2SaveData) -> void:
 	## `LevelUpHappinessMod` compares it against the winner's caught location.
 	_battle.landmark = _world_context.landmark if _world_context != null \
 		else Gen2Battle.LANDMARK_NONE
+	_battle.exp_all_in_bag = _world_context != null and _world_context.exp_all
 	var player_party_ready: Gen2Party = prepared["player_party"]
 	var enemy_party_ready: Gen2Party = prepared["enemy_party"]
 	_player = player_party_ready.active_mon().species
@@ -2881,6 +2882,7 @@ func info_snapshot() -> Dictionary:
 		rows.append(out)
 	return {
 		"ready": is_ready(),
+		"generation": _data.generation if _data != null else RomRegistry.GEN2,
 		"player_species": _player, "enemy_species": _enemy,
 		"player_level": _player_level, "enemy_level": _enemy_level,
 		"player_stages": player.stages.duplicate() if player != null else {},
@@ -5862,11 +5864,6 @@ const LINES: Dictionary = {
 	Gen2Battle.STAGES_COPIED: ["%s copied the target's stat changes!", &"name:side"],
 	# `PlayStereoCry` prints nothing.
 	Gen2Battle.CRY: [""],
-	Gen2Battle.EXP_GAINED: [
-		"%s gained %d EXP. Points!",
-		&"species:species",
-		&"int:amount",
-	],
 	# The cartridge never prints a line of its own for this: it happens silently
 	# behind the EXP. Points message above it.
 	Gen2Battle.STAT_EXP_GAINED: [""],
@@ -6049,6 +6046,7 @@ const LINE_HANDLERS: Dictionary = {
 	Gen2Battle.FLED: &"_fled_text",
 	Gen2Battle.RUN_BLOCKED: &"_run_blocked_text",
 	Gen2Battle.OVER: &"_over_text",
+	Gen2Battle.EXP_GAINED: &"_exp_gained_text",
 }
 
 ## Which of the three weather tables an event reads.
@@ -6104,6 +6102,14 @@ func _hit_text(event: Dictionary) -> String:
 	if int(event["effectiveness"]) < Gen2Layout.MATCHUP_EFFECTIVE:
 		return "It's not very effective..."
 	return ""
+
+
+## `GainedText`, with `WithExpAllText` inside it on the `wBoostExpByExpAll` pass.
+func _exp_gained_text(event: Dictionary) -> String:
+	var learner: String = _name_of(int(event["species"]))
+	if bool(event.get("exp_share", false)) and _battle != null and _battle.is_gen1():
+		return "%s gained\nwith EXP.ALL,\n%d EXP. Points!" % [learner, int(event["amount"])]
+	return "%s gained %d EXP. Points!" % [learner, int(event["amount"])]
 
 
 func _hit_times_text(event: Dictionary) -> String:

@@ -2870,6 +2870,77 @@ func test_an_exp_share_halves_the_fighters_award_and_pays_the_bench() -> void:
 	assert_true(bool(gains[1]["exp_share"]), "earned by holding")
 
 
+## Generation 1's EXP.ALL is the bag's, and `HandleEnemyMonFainted` runs
+## `GainExperience` twice: the halved block for the participants, then the
+## quotients that pass wrote back divided again by `wPartyCount` for everyone.
+func test_exp_all_in_the_bag_pays_the_whole_party_off_the_halved_block() -> void:
+	_data.generation = RomRegistry.GEN1
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([
+			_mon(Fixture.PIKACHU, 100, [Fixture.THUNDERBOLT]),
+			_mon(Fixture.CHARMANDER, 5, [Fixture.TACKLE]),
+			_mon(Fixture.CHARMANDER, 5, [Fixture.TACKLE]),
+		]),
+		Gen2Party.of(_mon(Fixture.BULBASAUR, 5, [Fixture.TACKLE])), _rng
+	)
+	battle.exp_all_in_bag = true
+	var events: Array = battle.take_turn(0, 0)
+	var gains: Array = _of_type(events, Gen2Battle.EXP_GAINED)
+
+	assert_eq(gains.size(), 4, "the fighter, then all three")
+	# Base exp 64 halved is 32: floor(32*5/7) = 22 for the one participant.
+	assert_eq(gains[0]["index"], 0)
+	assert_eq(gains[0]["amount"], 22)
+	assert_false(bool(gains[0]["exp_share"]))
+	# The second pass divides the 32 left in `wEnemyMonBaseExp` by three:
+	# floor(10*5/7) = 7, to each of the three, the fighter again included.
+	for gain: Dictionary in gains.slice(1):
+		assert_eq(gain["amount"], 7)
+		assert_true(bool(gain["exp_share"]), "`wBoostExpByExpAll`")
+	assert_eq(gains[1]["index"], 0)
+	assert_eq(gains[3]["index"], 2)
+	# Bulbasaur's 49 attack: 24 to the fighter, then 24 / 3 = 8 to everyone.
+	var stat_gains: Array = _of_type(events, Gen2Battle.STAT_EXP_GAINED)
+	assert_eq(stat_gains[0]["gains"]["attack"], 24)
+	assert_eq(stat_gains[3]["gains"]["attack"], 8)
+
+
+## A fainted member is flagged with the rest and skipped by `.partyMonLoop`, so
+## it still counts in the divisor and collects nothing.
+func test_exp_all_counts_a_fainted_member_in_the_split_and_pays_it_nothing() -> void:
+	_data.generation = RomRegistry.GEN1
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([
+			_mon(Fixture.PIKACHU, 100, [Fixture.THUNDERBOLT]),
+			_mon(Fixture.CHARMANDER, 5, [Fixture.TACKLE]),
+		]),
+		Gen2Party.of(_mon(Fixture.BULBASAUR, 5, [Fixture.TACKLE])), _rng
+	)
+	battle.exp_all_in_bag = true
+	battle.party(Gen2Battle.PLAYER).at(1).hp = 0
+	var gains: Array = _of_type(battle.take_turn(0, 0), Gen2Battle.EXP_GAINED)
+	assert_eq(gains.size(), 2, "the fighter twice, the fainted one never")
+	assert_eq(gains[0]["amount"], 22)
+	assert_eq(gains[1]["amount"], 11, "32 / 2 = 16, floor(16*5/7)")
+	assert_eq(gains[1]["index"], 0)
+
+
+## Without EXP.ALL a Generation 1 faint is the plain single pass, whatever a
+## member holds: Kanto has no held items and no Exp. Share.
+func test_a_generation_1_faint_without_exp_all_pays_one_pass() -> void:
+	_data.generation = RomRegistry.GEN1
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 100, [Fixture.THUNDERBOLT]),
+		_mon(Fixture.BULBASAUR, 5, [Fixture.TACKLE])
+	)
+	battle.player.item = Fixture.EXP_SHARE
+	var gains: Array = _of_type(battle.take_turn(0, 0), Gen2Battle.EXP_GAINED)
+	assert_eq(gains.size(), 1)
+	assert_eq(gains[0]["amount"], 45)
+
+
 ## A Pokémon that both fought and holds one is in both passes, and the cartridge
 ## awards it twice rather than merging the two shares.
 func test_a_fighter_holding_the_exp_share_is_paid_by_both_passes() -> void:

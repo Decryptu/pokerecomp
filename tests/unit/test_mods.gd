@@ -235,7 +235,12 @@ func test_retargeting_keeps_live_mods_when_the_enabled_set_is_unchanged() -> voi
 	var entry: Object = host.mod_entry(&"everygame")
 	assert_true(host.retarget_if_same_mod_set(RomRegistry.GOLD))
 	assert_eq(host.target_game(), RomRegistry.GOLD)
+	assert_eq(host.generation(), RomRegistry.GEN2)
 	assert_same(host.mod_entry(&"everygame"), entry, "the entry script was not rerun")
+	host.set_target_game(RomRegistry.RED)
+	assert_eq(host.generation(), RomRegistry.GEN1)
+	host.set_target_game(&"")
+	assert_eq(host.generation(), 0, "no target, no generation")
 
 
 func test_retargeting_refuses_to_keep_a_different_eligible_mod_set() -> void:
@@ -2059,13 +2064,17 @@ func awards_catch_experience() -> bool:
 
 	var repel := GDScript.new()
 	repel.source_code = """extends RefCounted
-func repel_to_use(inventory: Dictionary) -> int:
-	return 0x2A if int(inventory.get(0x2A, 0)) > 0 else 0
+func repel_to_use(context: Dictionary) -> int:
+	var repels: Dictionary = context["repels"]
+	return repels.keys()[1] if int(context["inventory"].get(repels.keys()[1], 0)) > 0 else 0
 """
 	repel.reload()
 	assert_true(bool(host.register_repel_renewal(&"repel", repel.new()).get("ok", false)))
-	assert_eq(host.repel_renewal_item({}), 0, "an empty bag renews nothing")
-	assert_eq(host.repel_renewal_item({0x2A: 3}), 0x2A)
+	var repels: Dictionary = Gen2WorldPartyHost.REPEL_STEPS
+	assert_eq(host.repel_renewal_item({}, repels), 0, "an empty bag renews nothing")
+	assert_eq(host.repel_renewal_item({0x2A: 3}, repels), 0x2A)
+	assert_eq(host.repel_renewal_item({0x38: 3}, Gen1Layout.ITEM_REPEL_STEPS), 0x38,
+		"the cartridge's own table is what the provider reads")
 
 
 ## A start-menu row that opens one of the host's own screens names the opening

@@ -3053,7 +3053,9 @@ func _offer_repel_renewal() -> bool:
 	if _world.repel_steps() > 0:
 		_world.clear_repel_expired()
 		return false
-	var item: int = Gen2ModHost.instance().repel_renewal_item(_world.state.items())
+	var item: int = Gen2ModHost.instance().repel_renewal_item(
+		_world.state.items(), Gen2WorldPartyHost.item_effects(_data)["repel"]
+	)
 	if item <= 0:
 		_world.clear_repel_expired()
 		return false
@@ -4120,9 +4122,6 @@ func preview_diploma(printing: bool = false, page: int = 1) -> void:
 ## reaches: every PC on a preview map is a script's, and the machine wants a
 ## party before it opens at all.
 func preview_bills_pc() -> void:
-	if _data != null and _data.generation == RomRegistry.GEN1:
-		_preview_pc(&"gen1_bills_pc")
-		return
 	if _world == null or _data == null or _service_host != null:
 		return
 	var save: Gen2SaveData = _embedded_party_save()
@@ -4800,12 +4799,16 @@ func preview_repel_renewal() -> void:
 		_refresh_labels()
 
 
-## What a registered renewal provider is: the weakest Repel owned.
 class PreviewRepel extends RefCounted:
 	const REPEL: int = 0x14
 
-	func repel_to_use(inventory: Dictionary) -> int:
-		return REPEL if int(inventory.get(REPEL, 0)) > 0 else 0
+	func repel_to_use(context: Dictionary) -> int:
+		var best: int = 0
+		for item: int in context["repels"]:
+			if int(context["inventory"].get(item, 0)) > 0 \
+				and (best == 0 or int(context["repels"][item]) < int(context["repels"][best])):
+				best = item
+		return best
 
 
 ## Screenshot drivers for `_Option` and, below, `StartMenu_Pokedex`, whose
@@ -7720,10 +7723,8 @@ func _open_pokegear() -> void:
 	_open_service_overlay(&"pokegear")
 
 
-## The `OPEN_BILLS_PC` start-menu action: storage on its own, through the same
-## host and the same box screen the Pokemon Center's machine opens. The row is
-## already gated on a party, so a refusal here is a cache or save fault rather
-## than the empty-party one.
+## The `OPEN_BILLS_PC` start-menu action: storage on its own, through the host
+## the Pokemon Center's machine opens. The row is already gated on a party.
 func _open_bills_pc() -> void:
 	_open_service_overlay(&"bills_pc")
 

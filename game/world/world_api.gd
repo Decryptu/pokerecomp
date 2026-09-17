@@ -1356,7 +1356,8 @@ func item_field_move_source(move_id: int) -> int:
 		return 0
 	for raw_item: Variant in state.items():
 		var item: int = int(raw_item)
-		if Gen2WorldTMHM.is_hm(item) and Gen2WorldTMHM.move_for_item(data, item) == move_id:
+		if Gen2WorldTMHM.is_hm(item, data.generation) \
+			and Gen2WorldTMHM.move_for_item(data, item) == move_id:
 			return item
 	return 0
 
@@ -1369,18 +1370,29 @@ func item_field_move_offers() -> Array:
 	var out: Array = []
 	if data == null or state == null:
 		return out
-	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
 	for move_id: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
 		var source: Dictionary = field_move_source(move_id)
 		if StringName(source.get("kind", &"")) != FIELD_MOVE_SOURCE_ITEM:
 			continue
-		var badge: int = Gen2WorldFieldMove.badge_for_move(move_id)
-		if badge >= 0 and not state.is_engine_flag_active(
-			Gen2WorldState.badge_flag(badge, crystal)
-		):
+		if not _has_field_move_badge(move_id):
 			continue
-		out.append({"move": move_id, "item": int(source["item"]), "badge": badge})
+		out.append({"move": move_id, "item": int(source["item"]), "badge": _field_move_badge(move_id)})
 	return out
+
+
+func _field_move_badge(move_id: int) -> int:
+	if _gen1:
+		return int(Gen1Layout.FIELD_MOVE_BADGES.get(move_id, -1))
+	return Gen2WorldFieldMove.badge_for_move(move_id)
+
+
+func _has_field_move_badge(move_id: int) -> bool:
+	if _gen1:
+		return _gen1_has_badge(move_id)
+	var badge: int = Gen2WorldFieldMove.badge_for_move(move_id)
+	return badge < 0 or state.is_engine_flag_active(
+		Gen2WorldState.badge_flag(badge, Gen2WorldState.is_crystal_profile(data))
+	)
 
 
 ## Cleared so a stale count cannot answer a read after the caller stops

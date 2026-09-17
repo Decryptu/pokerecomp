@@ -525,6 +525,9 @@ var time_of_day: int = Gen2WorldPalette.TIME_DAY
 ## nobody told is nowhere, and no Pokémon was caught there.
 var landmark: int = LANDMARK_NONE
 
+## `HandleEnemyMonFainted`'s `IsItemInBag EXP_ALL`; nothing past Generation 1.
+var exp_all_in_bag: bool = false
+
 ## `wEnemyTrainerItem1` and `wEnemyTrainerItem2`, one copy for the whole battle
 ## and each removed as it is spent (`xor a; ld [de], a`). Empty for a wild battle
 ## and for a class carrying `NO_ITEM` twice.
@@ -2433,11 +2436,29 @@ func _give_experience_for(defeated: Gen2BattleMon, events: Array) -> void:
 	})
 	var halved: bool = not holders.is_empty() and share <= 0.0
 
-	var award: int = _award_share(defeated, participants, halved, false, events)
-	_award_share(defeated, holders, halved, true, events)
+	var award: int = _gen1_award(defeated, participants, halved, events) if is_gen1() \
+		else _award_share(defeated, participants, halved, false, events)
+	if not is_gen1():
+		_award_share(defeated, holders, halved, true, events)
 	_award_bystanders(defeated, participants, holders, living, halved, share, award, events)
 
 	_participants[PLAYER] = {party(PLAYER).active: true}
+
+
+## EXP.ALL: the block halved in place, `GainExperience` for the participants,
+## then again for the whole party off the quotients the first run wrote back.
+func _gen1_award(defeated: Gen2BattleMon, participants: Array, halved: bool, events: Array) -> int:
+	var block: Dictionary = Gen2Experience.shared_block(
+		defeated.base_stat_exp_shape(), defeated.base_exp(), halved, participants.size()
+	)
+	var award: int = _award_block(defeated, block, participants, false, events)
+	if exp_all_in_bag:
+		var everyone: Array = range(party(PLAYER).size())
+		block = Gen2Experience.shared_block(
+			block["stats"], int(block["base_exp"]), false, everyone.size()
+		)
+		_award_block(defeated, block, everyone, true, events)
+	return award
 
 
 ## Every living index neither pass paid, at [param share] of [param award]. Its
@@ -2483,6 +2504,12 @@ func _award_share(
 	var block: Dictionary = Gen2Experience.shared_block(
 		defeated.base_stat_exp_shape(), defeated.base_exp(), halved, recipients.size()
 	)
+	return _award_block(defeated, block, recipients, by_exp_share, events)
+
+
+func _award_block(
+	defeated: Gen2BattleMon, block: Dictionary, recipients: Array, by_exp_share: bool, events: Array
+) -> int:
 	var award: int = _scaled_award(Gen2Experience.award_for(
 		defeated.level, int(block["base_exp"]), is_trainer_battle
 	))
@@ -2765,7 +2792,10 @@ static func _item_failure(reason: StringName) -> Dictionary:
 
 ## `IsAnyMonHoldingExpShare`: every living party index carrying one, in order. A
 ## fainted holder is skipped before the item is looked at, so it splits nothing.
+## Generation 1's is the bag's EXP.ALL: every living index or none.
 func _exp_share_holders() -> Array:
+	if is_gen1():
+		return _living_party_indices() if exp_all_in_bag else []
 	var out: Array = []
 	var party_side: Gen2Party = party(PLAYER)
 	for index: int in party_side.size():

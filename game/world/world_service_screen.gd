@@ -1927,6 +1927,9 @@ func open_bills_pc(
 		return false
 	_bills_pc_only = true
 	_bills_pc_cursor = 0
+	if _data.generation == RomRegistry.GEN1:
+		_open_gen1_pc(&"gen1_bills_pc")
+		return true
 	_open_bills_pc_menu()
 	return true
 
@@ -2574,6 +2577,9 @@ func _confirm_gen1_top_row(row: int) -> void:
 
 ## `LogOff`, and `ExitPlayerPC` and `ExitBillsPC` with no top menu behind them.
 func _leave_gen1_machine() -> void:
+	if _bills_pc_only:
+		_finish([])
+		return
 	_finish_runtime({"ok": true, "script_value": 0})
 
 

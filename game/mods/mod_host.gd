@@ -702,10 +702,9 @@ static func allows_item_field_move(move: int) -> bool:
 	return false
 
 
-## Registers a REPEL RENEWAL provider under [param id]: `repel_to_use(inventory)`
-## is handed a read-only copy of the bag and answers which owned Repel to offer
-## when an active one runs out, or 0. Which of the three to prefer is the mod's;
-## the prompt, the transaction, the step count and the ordering are the host's.
+## Registers a REPEL RENEWAL provider under [param id]: `repel_to_use(context)`
+## takes `{"inventory": bag, "repels": {item: steps}}` and answers the Repel to
+## offer when an active one runs out, or 0. The transaction is the host's.
 func register_repel_renewal(id: StringName, provider: Object) -> Dictionary:
 	return _register_provider(_repel_renewals, REPEL_PROVIDER_METHODS, id, provider)
 
@@ -714,14 +713,12 @@ func repel_renewal_ids() -> Array:
 	return _repel_renewals.keys()
 
 
-## The item the first provider to answer would spend, or 0. [param bag] is copied
-## per provider, so answering cannot change what the next one is asked. Named for
-## what it holds rather than for [method inventory], which is a mod's own read of
-## the same thing and would shadow this parameter.
-func repel_renewal_item(bag: Dictionary) -> int:
+## The item the first provider to answer would spend, or 0.
+func repel_renewal_item(bag: Dictionary, repels: Dictionary) -> int:
 	for provider: Object in _repel_renewals.values():
-		var item: int = int(provider.call("repel_to_use", bag.duplicate(true)))
-		if item > 0:
+		var context: Dictionary = {"inventory": bag.duplicate(true), "repels": repels.duplicate(true)}
+		var item: int = int(provider.call("repel_to_use", context))
+		if item > 0 and repels.has(item) and int(bag.get(item, 0)) > 0:
 			return item
 	return 0
 
@@ -2126,6 +2123,11 @@ func set_target_game(game_id: StringName) -> void:
 
 func target_game() -> StringName:
 	return _target_game
+
+
+## `RomRegistry.GEN1` or `GEN2` of the target game; 0 with none chosen.
+func generation() -> int:
+	return RomRegistry.generation_for(_target_game)
 
 
 ## Retargets the live registrations when the cartridge filter selects exactly

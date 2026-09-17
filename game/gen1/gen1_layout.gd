@@ -361,6 +361,7 @@ const ITEM_GOOD_ROD: int = 0x4D
 const ITEM_SUPER_ROD: int = 0x4E
 const ITEM_POKE_DOLL: int = 0x33
 const ITEM_POKE_FLUTE: int = 0x49
+const ITEM_EXP_ALL: int = 0x4B
 
 ## `ItemUseXStat`'s `sub X_ATTACK - ATTACK_UP1_EFFECT`, in the move effects' own
 ## stat order, with `SPECIAL_STAGE_TWIN` carrying X SPECIAL's other half, and
