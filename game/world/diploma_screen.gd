@@ -20,14 +20,21 @@ const MUSIC_PRINTER: int = 0x5B
 ## on it reaches.
 const STATUS_CONNECTION_ERROR: String = "error_2"
 
+## Yellow's three `Print*` pages hold in `PrintDiplomaPage`'s loop the same way.
+const GEN1_MUSIC_PRINTER: Array[int] = [0x20, 163]
+const GEN1_PAGES: Array[String] = ["diploma", "high_score", "portrait"]
+
 var _page: Gen2DiplomaPage = null
 var _view: TextureRect = null
 var _player: String = ""
 var _play_time: Dictionary = {}
 var _status: String = ""
+var _cancel: String = ""
 var _printing: bool = false
 var _shown_page: int = 1
 var _open: bool = false
+var _gen1_kind: String = ""
+var _gen1_values: Dictionary = {}
 
 
 func _ready() -> void:
@@ -39,7 +46,7 @@ func _ready() -> void:
 ## a cache with no diploma art, which is what the caller refuses the special on
 ## rather than opening an empty page.
 func open(
-	data: GameData, player: String, play_time: Dictionary, printing: bool = false
+	data: GameData, player: String, play_time: Dictionary, sends: bool = false
 ) -> bool:
 	_page = Gen2DiplomaPage.from_data(data)
 	if _page == null:
@@ -47,11 +54,31 @@ func open(
 		return false
 	_player = player
 	_play_time = play_time.duplicate()
-	_printing = printing
-	_status = data.printer_status_string(STATUS_CONNECTION_ERROR) if printing else ""
+	_printing = sends
+	_status = data.printer_status_string(STATUS_CONNECTION_ERROR) if sends else ""
 	_open = true
 	visible = true
-	if printing:
+	if sends:
+		music_requested.emit(MUSIC_PRINTER)
+	_refresh()
+	return true
+
+
+## [param preview] is the high-score page held for a press rather than printed.
+func open_gen1_printer(data: GameData, kind: String, values: Dictionary, preview: bool) -> bool:
+	_page = Gen2DiplomaPage.from_data(data)
+	if _page == null or kind not in GEN1_PAGES \
+			or (not preview and data.printer_status_string(STATUS_CONNECTION_ERROR).is_empty()):
+		visible = false
+		return false
+	_gen1_kind = kind
+	_gen1_values = values.duplicate()
+	_printing = not preview
+	_status = data.printer_status_string(STATUS_CONNECTION_ERROR) if _printing else ""
+	_cancel = data.printer_status_string("press_b")
+	_open = true
+	visible = true
+	if _printing:
 		music_requested.emit(MUSIC_PRINTER)
 	_refresh()
 	return true
@@ -59,6 +86,14 @@ func open(
 
 func page() -> Gen2DiplomaPage:
 	return _page
+
+
+func gen1_kind() -> String:
+	return _gen1_kind
+
+
+func printing() -> bool:
+	return _printing
 
 
 ## Which of the two pages is on screen, for a check that would otherwise read
@@ -100,6 +135,9 @@ func _refresh() -> void:
 		_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_view)
+	if not _gen1_kind.is_empty():
+		Gen2PicImage.show(_view, _page.render_gen1_printer(_gen1_kind, _gen1_values, _status, _cancel))
+		return
 	Gen2PicImage.show(_view, _page.render(
 		_shown_page, _player, _play_time,
 		_status if _shown_page == 1 else ""

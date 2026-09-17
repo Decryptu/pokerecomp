@@ -162,8 +162,8 @@ const SCRIPT_CENSUS: Dictionary = {
 		"safari_steps": 1, "save_coord_index": 2, "map_load_bit": 6, "copy_name": 4,
 		"set_fossil": 6, "party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1,
 		"list_menu": 1},
-	&"yellow": {"rows": 402, "text": 666, "sound": 94, "branch": 168, "choice": 41, "flag": 234,
-		"give_item": 41, "has_item": 15, "take_item": 10, "unknown": 6, "pokedex": 10,
+	&"yellow": {"rows": 402, "text": 677, "sound": 94, "branch": 168, "choice": 43, "flag": 236,
+		"give_item": 41, "has_item": 15, "take_item": 10, "unknown": 0, "pokedex": 10,
 		"give_pokemon": 10, "saved_coord_index": 2, "player_facing": 16, "emote": 8,
 		"badges_byte": 1, "walk": 23, "set_map_script": 100, "npc_movement_script": 2,
 		"toggle_object": 23, "trainer_battle_object": 27, "random": 5, "facing": 12,
@@ -177,7 +177,8 @@ const SCRIPT_CENSUS: Dictionary = {
 		"has_coins": 4, "add_coins": 4, "replace_block": 1, "trainer_battle": 1,
 		"safari_balls": 3, "safari_steps": 3, "safari_admission": 2, "save_coord_index": 2,
 		"map_load_bit": 6, "talking_to": 14, "volatile_test": 6, "copy_name": 4, "set_fossil": 6,
-		"party_menu": 1, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1, "list_menu": 1},
+		"party_menu": 2, "name_party_mon": 1, "mon_ot": 1, "name_mon": 1, "list_menu": 1,
+		"printer": 6, "surfing_minigame": 2},
 }
 ## `SilphCo11FPorygonText` is a `call DisplayPokedex` the disassembly marks
 ## unreferenced. The `trade` rows are the eight `predef DoInGameTradeDialogue`
@@ -200,28 +201,27 @@ const TOGGLE_CENSUS: Dictionary = {
 ## the four cable club Game Boys, which read `hSerialConnectionStatus`, and on
 ## Red and Blue the three bench guys `BenchGuyTextPointers` misaligns.
 const HIDDEN_CENSUS: Dictionary = {
-	&"red": {"rows": 216, "silent": 3, "sound": 49, "text": 445, "branch": 117, "flag": 72,
+	&"red": {"rows": 216, "silent": 3, "sound": 49, "text": 446, "branch": 117, "flag": 72,
 		"facing": 133, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
-		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3,
+		"map_text": 5, "choice": 75, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
+		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 4,
 		"serial_status": 4, "link_state": 4},
-	&"blue": {"rows": 216, "silent": 3, "sound": 49, "text": 445, "branch": 117, "flag": 72,
+	&"blue": {"rows": 216, "silent": 3, "sound": 49, "text": 446, "branch": 117, "flag": 72,
 		"facing": 133, "name_item": 53, "give_item": 53, "facility": 21,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
-		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 3,
+		"map_text": 5, "choice": 75, "dex_count": 1, "gym_trash": 15, "scratch": 12, "map_load_bit": 6, "replace_block": 72,
+		"emote": 66, "slot_machine": 66, "picture": 3, "help_menu": 4,
 		"serial_status": 4, "link_state": 4},
-	&"yellow": {"rows": 212, "silent": 0, "sound": 49, "text": 449, "branch": 118, "flag": 73,
+	&"yellow": {"rows": 212, "silent": 0, "sound": 49, "text": 450, "branch": 118, "flag": 73,
 		"facing": 129, "name_item": 54, "give_item": 54, "facility": 17,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
-		"map_text": 5, "choice": 75, "unknown": 1, "dex_count": 1, "gym_trash": 15, "scratch": 12, "volatile": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66, "picture": 5, "help_menu": 3,
+		"map_text": 5, "choice": 75, "dex_count": 1, "gym_trash": 15, "scratch": 12, "volatile": 12, "map_load_bit": 6, "replace_block": 72,
+		"emote": 66, "slot_machine": 66, "picture": 5, "help_menu": 4,
 		"serial_status": 4, "link_state": 4},
 }
-## Of `BookshelfTileIDs`' 17 rows, all but one decode: the Indigo Plateau
-## statues read `wXCoord` for which of their two boxes they answer with.
-const BOOKSHELF_COUNTS: Dictionary = {&"red": 16, &"blue": 16, &"yellow": 16}
+## `BookshelfTileIDs`' 17 rows.
+const BOOKSHELF_COUNTS: Dictionary = {&"red": 17, &"blue": 17, &"yellow": 17}
 const CARD_KEY_FLOORS: int = 10
 ## `gated` is every map `wCurrentMapScriptFlags` changes the script of, `walks`
 ## its load-time walks, and `blocks` the writes on the walk `EnterMap` runs.
@@ -886,7 +886,8 @@ func _hidden_node_fault(node: Dictionary, number: int) -> String:
 	if op in ["give_item", "has_item", "name_item"] \
 		and _r.data.item_name(int(node["item"])).is_empty():
 		return "names item %d" % int(node["item"])
-	if op == "help_menu" and ((node["rows"] as Array).size() != (node["replies"] as Array).size()
+	if op == "help_menu" and ((node["rows"] as Array).size()
+		!= (node.get("replies", node.get("pokedex", [])) as Array).size()
 		or (node["rows"] as Array).size() > 6):
 		return "draws a menu of %d rows" % (node["rows"] as Array).size()
 	if op == "picture" and (_r.data.gen1_special_pic(String(node.get("special", ""))).is_empty()

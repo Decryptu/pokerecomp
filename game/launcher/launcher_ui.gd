@@ -19,13 +19,9 @@ const BAR_VERTICAL_PADDING: float = 24.0
 const TOUCH_TARGET: float = 48.0
 
 
-## Whether this display server hands out the screen's own pixels rather than
-## points. A platform that cannot open a second window is one whose window is the
-## whole screen, and every one of them measures in physical pixels. Asked of the
-## display server rather than of a list of platform names, so a console this
-## project has not met yet is covered on the day it arrives. A headless run
-## answers no to every feature there is, so it is asked first whether it draws at
-## all; without that a test tier would measure itself as a handheld.
+## Whether the display server measures in physical pixels: a platform with no
+## second window does. A headless run answers no to every feature, so it is asked
+## first whether it draws at all.
 static func draws_in_screen_pixels() -> bool:
 	return (
 		DisplayServer.window_can_draw()
@@ -33,14 +29,8 @@ static func draws_in_screen_pixels() -> bool:
 	)
 
 
-## How many window pixels one launcher unit is drawn at, so a unit is a
-## device-independent point rather than a pixel. Every size the launcher is
-## written in is a desktop pixel, comfortable only because a desktop screen is
-## about 100 pixels to the inch; a phone is three to four times that, so the same
-## numbers arrive at a third of the size and the window measures wide enough to be
-## taken for a desktop. iOS and Android both report the backing scale. A Switch
-## reports neither: 237 dots per inch in the hands and 96 in the dock, which the
-## same formula turns into 1.5 and 1.
+## Window pixels per launcher unit, so a unit is a device-independent point. A
+## Switch reports no backing scale: 237 dots per inch in the hands and 96 docked.
 static func display_density() -> float:
 	if preview_density > 0.0:
 		return preview_density

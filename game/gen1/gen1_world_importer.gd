@@ -2592,6 +2592,11 @@ static func _script_and_a(ctx: Dictionary, pc: int, state: Dictionary) -> int:
 	if state.get("tests") is Array and state.has("mask"):
 		state["tests_and_a"] = true
 		return pc + 1
+	## `ldh a, [hCanceledPrinting]` behind a printer arm is a byte the walk chose.
+	if _script_known_a(state) and not state.has("source"):
+		_script_untested(state)
+		state["known_zero"] = int(state["a"]) == 0
+		return pc + 1
 	var zero: bool = Gen1Layout.script_zero_source(
 		ctx["layout"], int(state.get("source", -1))
 	)
@@ -3527,6 +3532,13 @@ static func _script_tests_bit(
 	if source == int(layout.get("random_add", -1)):
 		state["random_bit"] = bit
 		return [SCRIPT_TESTS_RANDOM_BIT, false]
+	## `IndigoPlateauStatues` reads `wXCoord`'s bit 0 for which of its two boxes.
+	for axis: int in Gen1Layout.SCRIPT_COORD_SOURCES.size():
+		if source == int(layout[Gen1Layout.SCRIPT_COORD_SOURCES[axis]]):
+			state["axis"] = axis
+			state["coord"] = bit
+			state["coord_bit"] = true
+			return [SCRIPT_TESTS_COORD, false]
 	if source == int(layout.get("pikachu_spawn_state_flags", -1)) and source >= 0:
 		if bit == Gen1Layout.PIKACHU_SPAWN_STARTER_BIT:
 			state["pikachu_test"] = "starter"
@@ -3805,7 +3817,8 @@ static func _script_song(ctx: Dictionary, out: Array) -> int:
 	return int((ctx["layout"] as Dictionary).get("jigglypuff_tail", SCRIPT_END))
 
 
-## `OaksAideScript` answers in `hOaksAideResult`, so the rest of the row is
+## `OaksAideScript` answers in `hOaksAideResult`, and a Game Boy Printer routine
+## in `hCanceledPrinting`, which is the same byte, so the rest of the row is
 ## walked once each way.
 static func _script_aide_branch(
 	ctx: Dictionary, next: int, state: Dictionary, depth: int, out: Array
@@ -3814,11 +3827,16 @@ static func _script_aide_branch(
 		"op": "oaks_aide", "requirement": int(state.get("aide_requirement", 0)),
 		"item": int(state.get("aide_item", 0)),
 	}
-	for arm: String in ["got", "other"]:
+	var arms: Array = [["got", Gen1Layout.OAKS_AIDE_GOT_ITEM], ["other", 0]]
+	if state.has("printer_page"):
+		node = {"op": "printer", "page": String(state["printer_page"])}
+		state.erase("printer_page")
+		arms = [["then", 1], ["else", 0]]
+	for arm: Array in arms:
 		var branch: Dictionary = state.duplicate()
-		branch["aide_outcome"] = Gen1Layout.OAKS_AIDE_GOT_ITEM if arm == "got" else 0
+		branch["aide_outcome"] = int(arm[1])
 		var walked: Variant = _walk_script(ctx, next, branch, depth + 1)
-		node[arm] = walked if walked is Array else [{"op": "unknown"}]
+		node[arm[0]] = walked as Array if walked is Array else [{"op": "unknown"}]
 	out.append(node)
 	return out
 
@@ -4623,6 +4641,19 @@ static func _map_script_byte(layout: Dictionary, address: int) -> int:
 ## A `call` to a routine the layout does not name, walked in [param bank] and
 ## returned from: `MtMoonB2FReceivedFossilText` is an `ld hl` and a tail
 ## `jp PrintText`, and Yellow keeps 22 rows behind a `callfar`.
+## The printer routines branch the row on `hCanceledPrinting`.
+const SCRIPT_BANKED_NODES: Dictionary = {
+	"schedule_pikachu_spawn": {"op": "pikachu", "what": "schedule_spawn"},
+	"surfing_minigame": {"op": "surfing_minigame"},
+	"high_score_page": {"op": "printer", "page": "high_score", "preview": true},
+}
+const SCRIPT_PRINTER_CALLS: Array[String] = ["print_diploma", "print_high_score", "print_portrait"]
+const SCRIPT_BANKED_TESTS: Dictionary = {
+	"is_starter_pikachu_alive": ["starter"], "check_pikachu_status": ["ailing"],
+	"name_rater_check_ot": [SCRIPT_TESTS_MON_OT],
+}
+
+
 static func _script_routine_call(
 	ctx: Dictionary, bank: int, target: int, state: Dictionary, out: Array,
 	next: int, depth: int
@@ -4640,30 +4671,31 @@ static func _script_routine_call(
 			return next
 		"route23_copy_badge_text":
 			return _script_name_badge(ctx, state, out, next)
-		"is_starter_pikachu_alive":
-			_script_pikachu_tested(state, "starter", true)
-			return next
-		"check_pikachu_status":
-			_script_pikachu_tested(state, "ailing", true)
-			return next
-		"schedule_pikachu_spawn":
-			out.append({"op": "pikachu", "what": "schedule_spawn"})
-			return next
 		"celadon_granny_thresholds":
 			state["hl_node"] = _script_happiness_texts(ctx, Gen1Layout.banked(bank, target))
 			return next
 		"try_apply_pikachu_movement", "mt_moon_pikachu_movement", "cinnabar_pikachu_movement":
 			return _script_pikachu_movement(ctx, state, out, next, true,
 				banked == "try_apply_pikachu_movement")
-		"name_rater_check_ot":
-			_script_tested(state, SCRIPT_TESTS_MON_OT, true)
-			return next
 		"name_rater_screen":
 			state["entry_buffer"] = int((ctx["layout"] as Dictionary).get("entry_buffer", -1))
 			_script_tested(state, SCRIPT_TESTS_NAME_ENTRY, true)
 			return next
 		"display_mon_front_sprite_in_box":
 			return _script_picture(ctx, state, out, next)
+	if SCRIPT_BANKED_NODES.has(banked):
+		out.append((SCRIPT_BANKED_NODES[banked] as Dictionary).duplicate())
+		return next
+	if SCRIPT_BANKED_TESTS.has(banked):
+		var test: Array = SCRIPT_BANKED_TESTS[banked]
+		if test[0] is String:
+			_script_pikachu_tested(state, String(test[0]), true)
+		else:
+			_script_tested(state, int(test[0]), true)
+		return next
+	if banked in SCRIPT_PRINTER_CALLS:
+		state["printer_page"] = banked.trim_prefix("print_")
+		return SCRIPT_AIDE
 	var named: int = _script_predef_named(
 		ctx["layout"], Gen1Layout.banked(bank, target), state, out
 	)
@@ -5814,21 +5846,32 @@ static func _help_menu_nodes(rom: RomFile, layout: Dictionary, name: String, out
 				"cursor": [int(column["cursor_x"]), int(column["at"][1]) + line * Gen1Layout.HELP_MENU_ROW_STEP],
 			})
 		grid.append(indices)
+	var node: Dictionary = {"op": "help_menu", "box": menu["box"], "rows": rows, "grid": grid,
+		"prompt": prompt, "quit": menu["quit"]}
 	var replies: Array = []
+	var quit: Array = menu["quit"]
 	for row: int in rows.size():
-		var reply: String = "" if row in (menu["quit"] as Array) else Gen1Importer.facility_text(
-			rom, Gen1Layout.banked(
+		if row in quit and menu.has("replies"):
+			replies.append("")
+		elif row in quit:
+			replies.append(0)
+		elif menu.has("replies"):
+			replies.append(Gen1Importer.facility_text(rom, Gen1Layout.banked(
 				bank, rom.u16le(int(layout[menu["replies"]]) + row * Gen1Layout.POINTER_SIZE)
-			)
-		)
-		if reply.is_empty() and row not in (menu["quit"] as Array):
+			)))
+		else:
+			replies.append(Gen1Layout.dex_of_index(
+				rom, layout, rom.u8(int(layout[menu["pokedex_add"]]) + 1) + row
+			))
+		if replies[row] is String and String(replies[row]).is_empty() and row not in quit:
 			return false
-		replies.append(reply)
+		if replies[row] is int and int(replies[row]) < 1 and row not in quit:
+			return false
+	node["replies" if menu.has("replies") else "pokedex"] = replies
 	if first.is_empty() or prompt.is_empty():
 		return false
 	out.append({"op": "text", "text": first})
-	out.append({"op": "help_menu", "box": menu["box"], "rows": rows, "grid": grid,
-		"prompt": prompt, "replies": replies, "quit": menu["quit"]})
+	out.append(node)
 	return true
 
 
@@ -5967,6 +6010,10 @@ static func _script_node_compared(
 			return {"op": "screen_tile", "screen": int(state["screen"]),
 				"tile": int(state["tile"]), "then": fell, "else": taken}
 		SCRIPT_TESTS_COORD:
+			if state.has("coord_bit"):
+				state.erase("coord_bit")
+				return {"op": "player_coord", "axis": int(state["axis"]),
+					"value": int(state["coord"]), "test": "bit", "then": taken, "else": fell}
 			return {"op": "player_coord", "axis": int(state["axis"]),
 				"value": int(state["coord"]), "test": "below" if carry else "exactly",
 				"then": taken if carry else fell, "else": fell if carry else taken}

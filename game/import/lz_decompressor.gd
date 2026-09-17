@@ -1,14 +1,8 @@
 class_name Gen2Lz
 extends RefCounted
 
-## The LZ variant Generation 1 and 2 use for every compressed graphic. A stream is
-## a run of commands terminated by $FF, each packing a 3-bit opcode and a length;
-## opcode 7 escapes to a long form so one command can span 1024 bytes. The seven
-## are literal, iterate, alternate, zero, and the three back-references repeat,
-## flipped and reversed. A back-reference offset is a one-byte distance back (high
-## bit set) or a two-byte absolute position (high bit clear), and sources may
-## overlap the bytes being written, so the copy is byte-at-a-time. The
-## bit-reversing opcode exists because a mirrored 2bpp sprite half is those bytes.
+## Generation 2's LZ: commands to $FF, a 3-bit opcode and a length, opcode 7
+## the long form. A back-reference may overlap the bytes being written.
 
 enum Op {
 	LITERAL,

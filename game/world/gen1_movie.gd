@@ -185,7 +185,11 @@ func _run() -> void:
 		elif step.has("wait_sound"):
 			_sound_wait = _sound_active()
 		elif step.has("until"):
-			if not (step["until"] as Callable).call():
+			var answer: Variant = (step["until"] as Callable).call()
+			if answer is Array:
+				_rewind()
+				_calls.append({"steps": answer, "pc": 0})
+			elif not bool(answer):
 				_wait = 1
 				_rewind()
 		elif step.has("phase"):
@@ -357,6 +361,10 @@ func shadow_byte(at: int) -> int:
 	return _shadow_oam[at]
 
 
+func shadow_oam_buffer() -> PackedByteArray:
+	return _shadow_oam
+
+
 func set_shadow_byte(at: int, value: int) -> void:
 	_shadow_oam[at] = value & 0xFF
 
@@ -406,9 +414,9 @@ func _play_sfx(id: int) -> void:
 	_emit(&"play_sfx", {"sfx": id, "bank": AUDIO_BANK})
 
 
-func _play_music(id: int) -> void:
-	_sound.play_music(AUDIO_BANK, id)
-	_emit(&"play_music", {"music": id, "bank": AUDIO_BANK})
+func _play_music(id: int, bank: int = AUDIO_BANK) -> void:
+	_sound.play_music(bank, id)
+	_emit(&"play_music", {"music": id, "bank": bank})
 
 
 func _stop_music() -> void:
@@ -478,6 +486,7 @@ func label_step(name: StringName) -> Dictionary:
 
 
 ## A routine that spends frames of its own: [param each] runs once a frame and
-## answers true on the frame it is done, which spends nothing more.
+## answers true on the frame it is done, which spends nothing more, or a list of
+## steps to run before it is asked again.
 func until_step(each: Callable) -> Dictionary:
 	return {"until": each}

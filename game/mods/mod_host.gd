@@ -21,13 +21,8 @@ const WORLD_RENDERER_METHODS: Array[String] = [
 const BATTLE_RENDERER_METHODS: Array[String] = [
 	"set_battle_data", "set_view", "refresh",
 ]
-## Optional. A renderer defining this and answering false gets the screen's own
-## rectangle at window resolution instead of the 160x144 viewport. A view built
-## from geometry cannot be drawn into a 160x144 buffer and magnified, so this is
-## what makes a 3D or HD renderer possible at all.
-## A renderer that does not define it draws in hardware pixels, which is what the
-## built-in ones do and what a tile-recolouring mod wants. Shared by both
-## renderer kinds.
+## Optional: a renderer answering false gets the screen's rectangle at window
+## resolution rather than the 160x144 viewport, which is what a 3D or HD one needs.
 const RENDERER_SURFACE_METHOD: String = "uses_hardware_viewport"
 ## Optional. Called with the native layer's size in window pixels when it is
 ## created and whenever the window changes it. Only reached by a renderer that

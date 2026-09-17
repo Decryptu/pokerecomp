@@ -90,6 +90,8 @@ const KIND_HELP: Dictionary = {
 	&"move_tutor": "presses: special MoveTutor. 0 is ChooseMonToLearnTMHM's list, not a box",
 	&"day_care": "presses, routine: 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs. On a Generation 1 cartridge, DaycareGentlemanText faced left from 3,3 on DAYCARE, the second number being wDayCareInUse",
 	&"slot_machine": "frames, bet: special SlotMachine. Bet is 1 to 3, plus 4 for the lucky machine",
+	&"surfing": "frames, hold: Yellow's SurfingPikachuMinigame that many frames in, RIGHT held from frame 400 for that many frames, `-- yellow 0 248 <out.png> live surfing 600 40`; a negative second number is a routine row reached first, `40 -4` the results screen",
+	&"printer": "page, preview: Yellow's Game Boy Printer pages, 0 PrintDiploma, 1 PrintSurfingMinigameHighScore, 2 PrintFanClubPortrait; a second number of 1 is the high-score page held for a press",
 	&"slots": "frames, bet: StartSlotMachine on a Generation 1 GAME_CORNER, faced right from the cell beside a machine with a COIN CASE and coins. YES, the bet, then A three times over that many frames",
 	&"card_flip": "frames, coins in hundreds: special CardFlip",
 	&"unown_puzzle": "frames, picture: special UnownPuzzle. 0 Kabuto, 1 Omanyte, 2 Aerodactyl, 3 Ho-Oh, 4 to 7 solved",
@@ -425,6 +427,7 @@ func _settle_mon_special(host_property: String) -> void:
 
 ## The kinds that drove themselves to the frame they want. Every other kind
 ## stages a sprite and then spends the frames it needs.
+const SURFING_HOLD_FROM: int = 400
 const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine", &"fly", &"pikachu",
 	&"battle", &"battle_caught", &"battle_transition", &"level_evolution",
@@ -436,7 +439,7 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"catch_nickname", &"catch_dex", &"mom_bank", &"bills_pc", &"players_pc",
 	&"pokemon_center_pc", &"start_menu", &"pokedex", &"trainer_card",
 	&"mod_notice", &"mod_page", &"sight", &"map_script",
-	&"reset_question", &"launcher_question",
+	&"reset_question", &"launcher_question", &"surfing", &"printer",
 ]
 
 
@@ -460,6 +463,8 @@ const STAGERS: Dictionary = {
 	&"whiteout": &"_stage_whiteout",
 	&"unown_puzzle": &"_stage_unown_puzzle",
 	&"slot_machine": &"_stage_slot_machine",
+	&"surfing": &"_stage_surfing",
+	&"printer": &"_stage_printer",
 	&"slots": &"_stage_slots",
 	&"tile_anim": &"_stage_tile_anim",
 	&"card_flip": &"_stage_card_flip",
@@ -816,6 +821,21 @@ func _stage_slot_machine() -> void:
 	var slots_bet: int = maxi(_cell.y, 0) % 4
 	_screen.preview_slot_machine(
 		100, maxi(_cell.y, 0) >= 4, maxi(slots_bet, 1), maxi(_cell.x, 0)
+	)
+
+
+## A negative second number is a `RunSurfingMinigameRoutine` row to reach first.
+func _stage_surfing() -> void:
+	_screen.preview_surfing(
+		maxi(_cell.x, 0), SURFING_HOLD_FROM if _cell.y > 0 else -1, maxi(_cell.y, 0),
+		-_cell.y if _cell.y < 0 else -1
+	)
+
+
+func _stage_printer() -> void:
+	_screen.preview_printer(
+		Gen2DiplomaScreen.GEN1_PAGES[clampi(_cell.x, 0, Gen2DiplomaScreen.GEN1_PAGES.size() - 1)],
+		_cell.y == 1
 	)
 
 

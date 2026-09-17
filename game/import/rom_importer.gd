@@ -3411,13 +3411,8 @@ static func read_evos_attacks(rom: RomFile, layout: Dictionary, species: int) ->
 	return {"evolutions": evolutions, "learnset": learnset}
 
 
-## One species' inherited move list from EggMovePointers. Returns { moves } on
-## success, including an empty list, and an empty Dictionary for a malformed
-## pointer, move id or unterminated list.
-## The address has no bank byte, so it must name the switchable window and is
-## resolved against the pointer table's bank. The walk stops at that bank's end,
-## not merely the dump's end: continuing into the next bank would turn a missing
-## terminator into plausible data from an unrelated section.
+## One species' `EggMovePointers` list, or an empty Dictionary for a malformed
+## one; the walk stops at the pointer table's bank end.
 static func read_egg_moves(rom: RomFile, layout: Dictionary, species: int) -> Dictionary:
 	if species < 1 or species > Gen2Layout.SPECIES_COUNT \
 		or not layout.has("egg_move_pointers"):
@@ -3557,13 +3552,8 @@ static func read_dex_entry(rom: RomFile, layout: Dictionary, species: int) -> Di
 	return {"category": category, "height": height, "weight": weight, "pages": pages}
 
 
-## The evolution and learnset table, checked species by species. Nothing says
-## which species an entry belongs to, so the shape is checked: 251 pointers into
-## the banked window, each naming evolutions whose methods come from a set of five
-## and whose targets are real species, then level-up moves at real levels teaching
-## real moves. A wrong pointer fails on its first byte, since most byte values are
-## neither a method nor a terminator. On top of that, levels ascend in all but one
-## species, the totals are known, and both ends are independently known content.
+## The evolution and learnset table by shape: five methods, real targets, real
+## moves at real levels, ascending in all but one species.
 static func verify_evos_attacks(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entries: Array = []
 	var evolutions: int = 0
@@ -3733,13 +3723,9 @@ static func read_dex_order(rom: RomFile, layout: Dictionary, key: String) -> Pac
 	return out
 
 
-## The Pokedex entries and the two order tables. The entries have no
-## self-identifying field, so they are checked the way the palettes are: every one
-## of the 251 has to walk to a category and two pages without leaving the
-## cartridge, and both ends have to say what they are independently known to say.
-## A pointer table one entry out still walks into readable text, which is why the
-## measurements are checked too. Each order table has to be a permutation of the
-## whole species range, which a run of legal species numbers elsewhere would fail.
+## The Pokedex entries and the two order tables: every entry walks to a category
+## and two pages, the measurements are checked since a table one entry out still
+## reads, and each order is a permutation of the species.
 static func verify_pokedex(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if not layout.has("pokedex"):
 		return {"ok": false, "message": "No Pokedex offsets for this game."}
@@ -3958,13 +3944,9 @@ static func verify_frames(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"ok": true, "message": ""}
 
 
-## The battle HUD's graphics, checked by the one thing they do that nothing else
-## in the section does: they count. A bar's fill levels are consecutive tiles each
-## lighting one more column, so the ink climbs by exactly two pixels a step, which
-## a wrong offset does not land on. The two HUD borders have neither content nor a
-## progression, so they are checked like the text box frames, every tile inked and
-## no two alike. The pinned palette values every bar and page is drawn with are
-## checked here too, the stats screen's included.
+## The battle HUD's graphics: a bar's fill levels each light one more column,
+## which a wrong offset does not land on; the borders are every tile inked and
+## no two alike.
 static func verify_battle_graphics(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var data: PackedByteArray = rom.bytes()
 

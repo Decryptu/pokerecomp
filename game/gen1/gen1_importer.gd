@@ -143,6 +143,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_dex_ratings,
 	_verify_credits,
 	_verify_opening,
+	_verify_surfing,
 	_verify_slots,
 	_verify_overworld_coords,
 	_verify_field_moves,
@@ -186,6 +187,12 @@ const OPENING_TILE_SHEETS: Dictionary = {
 	"spinner_arrows": {"pin": "spinner_arrow_tiles", "tiles": Gen1Layout.SPINNER_ANIM_TILES, "first_code": 0, "bits": 2},
 	"trade_gfx": {"pin": "trade_gfx", "tiles": Gen1Layout.TRADE_GFX_TILES, "first_code": 0, "bits": 2},
 	"trade_ball": {"pin": "trade_ball_gfx", "tiles": Gen1Layout.TRADE_BALL_TILES, "first_code": 0, "bits": 2},
+	"surfing_gfx_1": {"pin": "surfing_gfx_1", "tiles": Gen1Layout.SURFING_GFX_1_TILES, "first_code": 0, "bits": 2},
+	"surfing_gfx_2": {"pin": "surfing_gfx_2", "tiles": Gen1Layout.SURFING_GFX_2_TILES, "first_code": 0, "bits": 2},
+	"surfing_gfx_3": {"pin": "surfing_gfx_3", "tiles": Gen1Layout.SURFING_GFX_3_TILES, "first_code": 0, "bits": 2},
+	"high_score_gfx": {"pin": "high_score_gfx", "tiles": Gen1Layout.SURFING_PRINT_GFX_TILES, "first_code": 0, "bits": 2},
+	"portrait_hp": {"pin": "portrait_hp_gfx", "tiles": 1, "first_code": 0, "bits": 1},
+	"portrait_lv": {"pin": "portrait_lv_gfx", "tiles": 1, "first_code": 0, "bits": 1},
 }
 
 const NEW_NAME: String = "NEW NAME"
@@ -728,9 +735,25 @@ static func _verify_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 				return _fail("TitleMons row %d is no species." % slot)
 		if read_nidorino_animations(rom, layout).size() != Gen1Layout.INTRO_NIDORINO_ANIMS:
 			return _fail("IntroNidorinoAnimation1 to 7 do not each end on ANIMATION_END.")
-	if layout.has("yellow_intro_frames") \
-			and read_animated_object_frames(rom, layout).size() != Gen1Layout.YELLOW_INTRO_FRAMESETS:
+	if layout.has("yellow_intro_frames") and read_animated_object_frames(
+			rom, int(layout["yellow_intro_frames"]), Gen1Layout.YELLOW_INTRO_FRAMESETS
+		).size() != Gen1Layout.YELLOW_INTRO_FRAMESETS:
 		return _fail("YellowIntro_AnimatedObjectFramesData does not hold eleven framesets.")
+	return _ok()
+
+
+static func _verify_surfing(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not layout.has("surfing_minigame"):
+		return _ok()
+	if read_wave_functions(rom, layout).size() != Gen1Layout.SURFING_WAVE_FUNCTIONS:
+		return _fail("SurfingMinigame's WaveFunctions do not each load a slice and its heights.")
+	if read_animated_object_frames(
+		rom, int(layout["surfing_frames"]), Gen1Layout.SURFING_FRAMESETS
+	).size() != Gen1Layout.SURFING_FRAMESETS:
+		return _fail("SurfingPikachuFrames does not hold 28 framesets.")
+	if rom.u8(int(layout["surfing_minigame"])) != Gen1Layout.SCRIPT_CALL \
+			or rom.u8(int(layout["print_diploma"]) + 3) != Gen1Layout.SCRIPT_CALL:
+		return _fail("SurfingPikachuMinigame or PrintDiploma does not open where pinned.")
 	return _ok()
 
 
@@ -1203,6 +1226,8 @@ func import_rom(
 		"intro_names": _import_intro_names(rom, layout),
 		"pikachu": Gen1WorldImporter.read_pikachu(rom, layout),
 		"trade_anim": _import_trade_anim(rom, layout),
+		"surfing": read_surfing(rom, layout),
+		"printer_strings": read_printer_strings(rom, layout),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -1889,9 +1914,11 @@ static func read_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 	}
 	# `generic` and `beach` are `YellowIntroPaletteAction`'s, which sends the
 	# `PAL_SET` alone and leaves the attributes the splash loaded.
-	for name: String in ["splash", "intro", "title", "generic", "beach", "battle"]:
-		if layout.has("pal_packet_%s" % name):
-			out["palettes"][name] = read_pal_packet(rom, layout, int(layout["pal_packet_%s" % name]))
+	## `SetPal_PikachusBeach` sends the beach's own packet under a whole-screen block.
+	for name: String in ["splash", "intro", "title", "generic", "beach", "battle", "surfing_title", "surfing"]:
+		var packet: String = "pal_packet_%s" % ("beach" if name == "surfing" else name)
+		if layout.has(packet):
+			out["palettes"][name] = read_pal_packet(rom, layout, int(layout[packet]))
 		if not layout.has("blk_packet_%s" % name):
 			continue
 		var blk: int = int(layout["blk_packet_%s" % name])
@@ -1920,6 +1947,123 @@ static func read_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 		))
 	if layout.has("yellow_intro_frames"):
 		out["yellow"] = read_yellow_opening(rom, layout)
+	return out
+
+
+static func read_surfing(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not layout.has("surfing_minigame"):
+		return {}
+	var out: Dictionary = {
+		"spawn_states": _byte_rows(rom, int(layout["surfing_spawn_states"]), Gen1Layout.SURFING_SPAWN_STATES, 3),
+		"frames": read_animated_object_frames(rom, int(layout["surfing_frames"]), Gen1Layout.SURFING_FRAMESETS),
+		"oam_sets": read_animated_object_oam(rom, int(layout["surfing_oam"]), Gen1Layout.SURFING_OAM_SETS),
+		"ly_sine": [],
+		"sine_words": [],
+		"metatiles": _byte_rows(rom, int(layout["surfing_metatiles"]), Gen1Layout.SURFING_METATILES, Gen1Layout.SURFING_METATILE_TILES),
+		"wave_patterns": _byte_rows(rom, int(layout["surfing_wave_patterns"]), Gen1Layout.SURFING_WAVE_PATTERNS, Gen1Layout.SURFING_WAVE_PATTERN_SIZE),
+		"wave_functions": read_wave_functions(rom, layout),
+		"wave_starts": Array(rom.slice(int(layout["surfing_wave_starts"]), Gen1Layout.SURFING_WAVE_STARTS)),
+		"tempos": [],
+		"tilemaps": {
+			"beach_intro": _tilemap_rows(rom, int(layout["surfing_beach_intro"]), Gen1Layout.SURFING_BEACH_INTRO),
+			"title": _tilemap_rows(rom, int(layout["surfing_title_tilemap"]), Gen1Layout.SURFING_TITLE_TILEMAP),
+			"beach_outro": _tilemap_rows(rom, int(layout["surfing_beach_outro"]), Gen1Layout.SURFING_BEACH_OUTRO),
+			"use_control_pad": Array(rom.slice(int(layout["surfing_use_control_pad"]), Gen1Layout.SURFING_USE_CONTROL_PAD_TILES)),
+			"to_surf_rad": Array(rom.slice(int(layout["surfing_to_surf_rad"]), Gen1Layout.SURFING_TO_SURF_RAD_TILES)),
+		},
+		"texts": {},
+		"static_tiles": Array(rom.slice(int(layout["surfing_static_tiles"]), Gen1Layout.SURFING_STATIC_TILES)),
+		"status_bar": Array(rom.slice(int(layout["surfing_status_bar"]), Gen1Layout.SURFING_STATUS_BAR_TILES)),
+		"high_score": {
+			"tilemap_1": _tilemap_rows(rom, int(layout["high_score_tilemap_1"]), Gen1Layout.HIGH_SCORE_TILEMAP_1),
+			"tilemap_2": _tilemap_rows(rom, int(layout["high_score_tilemap_2"]), Gen1Layout.HIGH_SCORE_TILEMAP_2),
+		},
+		"portrait": {},
+	}
+	for index: int in Gen1Layout.SURFING_LY_SINE_BYTES:
+		out["ly_sine"].append(_signed(rom.u8(int(layout["surfing_ly_sine"]) + index)))
+	for index: int in Gen1Layout.SURFING_SINE_WORDS:
+		out["sine_words"].append(rom.u16le(int(layout["surfing_sine_words"]) + index * 2))
+	for index: int in Gen1Layout.SURFING_TEMPOS:
+		out["tempos"].append(rom.u16le(int(layout["surfing_tempos"]) + index * 2))
+	for name: String in Gen1Layout.SURFING_TEXT_TILES:
+		out["texts"][name] = Array(rom.slice(
+			int(layout["surfing_%s_text" % name]), int(Gen1Layout.SURFING_TEXT_TILES[name])
+		))
+	for name: String in ["beach", "hi", "points"]:
+		out["high_score"][name] = Array(_bytes_until(
+			rom, int(layout["high_score_%s_text" % name]), Gen1Text.TERMINATOR,
+			Gen1Layout.PRINTER_STRING_MAX
+		))
+	for name: String in ["ot", "id", "stats", "blank"]:
+		out["portrait"][name] = Array(_bytes_until(
+			rom, int(layout["portrait_%s_text" % name]), Gen1Text.TERMINATOR,
+			Gen1Layout.PRINTER_STRING_MAX
+		))
+	return out
+
+
+static func _byte_rows(rom: RomFile, at: int, count: int, size: int) -> Array:
+	var out: Array = []
+	for index: int in count:
+		out.append(Array(rom.slice(at + index * size, size)))
+	return out
+
+
+## `.WaveFunctions`, each routine read for its `lb bc` heights, its `ld de`
+## slice and its tail; empty when a row is not that shape.
+static func read_wave_functions(rom: RomFile, layout: Dictionary) -> Array:
+	var table: int = int(layout["surfing_wave_functions"])
+	var bank: int = RomFile.bank_of(table)
+	var patterns: int = int(layout["surfing_wave_patterns"])
+	var out: Array = []
+	for index: int in Gen1Layout.SURFING_WAVE_FUNCTIONS:
+		var at: int = Gen1Layout.banked(bank, rom.u16le(table + index * Gen1Layout.POINTER_SIZE))
+		if at == int(layout["surfing_choose_wave"]):
+			out.append({"kind": "choose"})
+			continue
+		if rom.u8(at) != Gen1Layout.SCRIPT_LD_BC or rom.u8(at + 3) != Gen1Layout.SCRIPT_LD_DE:
+			return []
+		var slice: int = Gen1Layout.banked(bank, rom.u16le(at + 4)) - patterns
+		if slice < 0 or slice % Gen1Layout.SURFING_WAVE_PATTERN_SIZE != 0 \
+				or slice / Gen1Layout.SURFING_WAVE_PATTERN_SIZE >= Gen1Layout.SURFING_WAVE_PATTERNS:
+			return []
+		var row: Dictionary = {
+			"kind": "hold", "left": rom.u8(at + 2), "right": rom.u8(at + 1),
+			"pattern": slice / Gen1Layout.SURFING_WAVE_PATTERN_SIZE,
+		}
+		if rom.u8(at + 6) == Gen1Layout.SCRIPT_JP:
+			var target: int = Gen1Layout.banked(bank, rom.u16le(at + 7))
+			if target == int(layout["surfing_advance_wave"]):
+				row["kind"] = "advance"
+			elif target == int(layout["surfing_reset_wave"]):
+				row["kind"] = "reset"
+			else:
+				return []
+		elif rom.u8(at + 6) != Gen1Layout.SCRIPT_RET:
+			return []
+		out.append(row)
+	return out
+
+
+## `GBPrinter_UpdateStatusMessage`'s rows under Generation 2's names.
+static func read_printer_strings(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not layout.has("printer_strings"):
+		return {}
+	var table: int = int(layout["printer_strings"])
+	var bank: int = RomFile.bank_of(table)
+	var out: Dictionary = {}
+	for index: int in mini(Gen1Layout.PRINTER_STRINGS, Gen2Layout.PRINTER_STATUS_STRINGS.size()):
+		var at: int = Gen1Layout.banked(bank, rom.u16le(table + index * Gen1Layout.POINTER_SIZE))
+		out[Gen2Layout.PRINTER_STATUS_STRINGS[index]] = Gen1Text.decode(
+			rom.bytes(), at, Gen1Layout.PRINTER_STRING_MAX
+		)
+	out["wrong_device"] = Gen1Text.decode(rom.bytes(), Gen1Layout.banked(
+		bank, rom.u16le(table + (Gen1Layout.PRINTER_STRINGS - 1) * Gen1Layout.POINTER_SIZE)
+	), Gen1Layout.PRINTER_STRING_MAX)
+	out["press_b"] = Gen1Text.decode(
+		rom.bytes(), int(layout["printer_press_b"]), Gen1Layout.PRINTER_STRING_MAX
+	)
 	return out
 
 
@@ -2120,8 +2264,12 @@ static func read_yellow_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 			rom, int(layout["yellow_intro_pal_fade"]), Gen1Layout.YELLOW_INTRO_PAL_END, 64
 		)),
 		"spawn_states": spawns,
-		"frames": read_animated_object_frames(rom, layout),
-		"oam_sets": read_animated_object_oam(rom, layout),
+		"frames": read_animated_object_frames(
+			rom, int(layout["yellow_intro_frames"]), Gen1Layout.YELLOW_INTRO_FRAMESETS
+		),
+		"oam_sets": read_animated_object_oam(
+			rom, int(layout["yellow_intro_oam"]), Gen1Layout.YELLOW_INTRO_OAM_SETS
+		),
 		"title_logo_tilemap": _tilemap_rows(rom, int(layout["title_logo_tilemap"]), Gen1Layout.TITLE_LOGO_TILEMAP),
 		"title_bubble_tilemap": _tilemap_rows(rom, int(layout["title_bubble_tilemap"]), Gen1Layout.TITLE_BUBBLE_TILEMAP),
 		"title_pikachu_tilemap": _tilemap_rows(rom, int(layout["title_pikachu_tilemap"]), Gen1Layout.TITLE_PIKACHU_TILEMAP),
@@ -2131,38 +2279,37 @@ static func read_yellow_opening(rom: RomFile, layout: Dictionary) -> Dictionary:
 	}
 
 
-## `YellowIntro_AnimatedObjectFramesData`, `endanim` kept as -1 and `dorestart` as -2.
-static func read_animated_object_frames(rom: RomFile, layout: Dictionary) -> Array:
-	var table: int = int(layout["yellow_intro_frames"])
+## [param count] framesets, the four commands kept as [Gen1AnimatedObjects]'
+## negative rows; a `delanim` reads the next frameset's first byte as its duration.
+static func read_animated_object_frames(rom: RomFile, table: int, count: int) -> Array:
 	var bank: int = RomFile.bank_of(table)
 	var out: Array = []
-	for index: int in Gen1Layout.YELLOW_INTRO_FRAMESETS:
+	for index: int in count:
 		var at: int = Gen1Layout.banked(bank, rom.u16le(table + index * Gen1Layout.POINTER_SIZE))
 		var rows: Array = []
 		while rom.in_bounds(at, 1):
 			var command: int = rom.u8(at)
-			if command == Gen1Layout.ANIM_FRAME_END:
-				rows.append([-1, 0])
-				break
-			if command == Gen1Layout.ANIM_FRAME_RESTART:
-				rows.append([-2, 0])
-				break
-			rows.append([command, rom.u8(at + 1)])
+			if Gen1Layout.ANIM_FRAME_ROWS.has(command):
+				rows.append([int(Gen1Layout.ANIM_FRAME_ROWS[command]), rom.u8(at + 1)])
+				if command != Gen1Layout.ANIM_FRAME_REPEAT:
+					break
+			else:
+				rows.append([command, rom.u8(at + 1)])
 			at += 2
 			if rows.size() > 64:
 				return []
-		if rows.is_empty() or rows[rows.size() - 1][0] >= 0:
+		if rows.is_empty() or rows[rows.size() - 1][0] >= 0 \
+				or rows[rows.size() - 1][0] == Gen1AnimatedObjects.ROW_REPEAT:
 			return []
 		out.append(rows)
 	return out
 
 
-## `YellowIntro_AnimatedObjectOAMData`: a tile offset and a counted list a row.
-static func read_animated_object_oam(rom: RomFile, layout: Dictionary) -> Array:
-	var table: int = int(layout["yellow_intro_oam"])
+## A tile offset and a counted list a row.
+static func read_animated_object_oam(rom: RomFile, table: int, count: int) -> Array:
 	var bank: int = RomFile.bank_of(table)
 	var out: Array = []
-	for index: int in Gen1Layout.YELLOW_INTRO_OAM_SETS:
+	for index: int in count:
 		var row: int = table + index * 3
 		var at: int = Gen1Layout.banked(bank, rom.u16le(row + 1))
 		out.append({

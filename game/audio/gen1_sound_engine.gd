@@ -202,6 +202,14 @@ func channel_sound_id(channel: int) -> int:
 	return _wram[SOUND_IDS + channel]
 
 
+## `SurfingMinigame_UpdateMusicTempo`'s gate.
+func music_notes_ending() -> bool:
+	for channel: int in NUM_MUSIC_CHANS - 1:
+		if _wram[NOTE_DELAY + channel] != 1:
+			return false
+	return true
+
+
 func channel_command_pointer(channel: int) -> int:
 	return _pointers[CMD_POINTERS + channel]
 

@@ -157,15 +157,205 @@ func _blit(into: PackedByteArray, code: int, at: Vector2i) -> void:
 	)
 
 
-## `DisplayDiploma` on a [Gen1Lcd], with `DrawPlayerCharacter`'s sprite moved 33
-## pixels right behind the background; Yellow's `DisplayDiplomaTop` draws none.
-func _render_gen1(player: String) -> Image:
+## `GBPrinter_UpdateStatusMessage`'s `TextBoxBorder`.
+const GEN1_STATUS_BOX_AT: Vector2i = Vector2i(0, 5)
+const GEN1_STATUS_BOX_INNER: Vector2i = Vector2i(18, 10)
+## `Printer_PrepareSurfingMinigameHighScoreTileMap`; the digits are `-10` off.
+const HIGH_SCORE_EDGE_ROW: Array[int] = [0, 1]
+const HIGH_SCORE_EDGE_COLUMN: Array[int] = [2, 3]
+const HIGH_SCORE_CORNER: int = 4
+const HIGH_SCORE_BOX_1_AT: Vector2i = Vector2i(10, 8)
+const HIGH_SCORE_BOX_2_AT: Vector2i = Vector2i(2, 11)
+const HIGH_SCORE_BEACH_AT: Vector2i = Vector2i(3, 2)
+const HIGH_SCORE_NAME_AT: Vector2i = Vector2i(2, 4)
+const HIGH_SCORE_NAME_CELLS: int = 8
+const HIGH_SCORE_HI_AT: Vector2i = Vector2i(9, 4)
+const HIGH_SCORE_POINTS_AT: Vector2i = Vector2i(12, 6)
+const HIGH_SCORE_DIGITS_AT: Vector2i = Vector2i(7, 6)
+const HIGH_SCORE_DIGIT_TILE: int = 0xF6
+## `Printer_GetMonStats`: `lv.1bpp` over $6e and `hp.1bpp` over $71.
+const PORTRAIT_LV_TILE: int = 0x6E
+const PORTRAIT_HP_TILE: int = 0x71
+const PORTRAIT_BOX_INNER: Vector2i = Vector2i(18, 16)
+const PORTRAIT_MOVES_BOX_AT: Vector2i = Vector2i(0, 12)
+const PORTRAIT_MOVES_BOX_INNER: Vector2i = Vector2i(18, 4)
+const PORTRAIT_LEVEL_AT: Vector2i = Vector2i(2, 10)
+const PORTRAIT_HP_AT: Vector2i = Vector2i(2, 11)
+const PORTRAIT_HP_DIGITS: int = 3
+const PORTRAIT_NICKNAME_AT: Vector2i = Vector2i(8, 2)
+const PORTRAIT_SPECIES_AT: Vector2i = Vector2i(9, 3)
+const PORTRAIT_DEX_AT: Vector2i = Vector2i(2, 8)
+const PORTRAIT_DEX_DIGITS: int = 3
+const PORTRAIT_OT_LABEL_AT: Vector2i = Vector2i(8, 4)
+const PORTRAIT_OT_AT: Vector2i = Vector2i(9, 5)
+const PORTRAIT_ID_LABEL_AT: Vector2i = Vector2i(9, 6)
+const PORTRAIT_ID_AT: Vector2i = Vector2i(13, 6)
+const PORTRAIT_ID_DIGITS: int = 5
+const PORTRAIT_STATS_AT: Vector2i = Vector2i(9, 8)
+const PORTRAIT_STAT_VALUES_AT: Vector2i = Vector2i(16, 8)
+const PORTRAIT_STAT_DIGITS: int = 3
+const PORTRAIT_STATS: Array[String] = ["attack", "defense", "speed", "sp_attack"]
+const PORTRAIT_MOVES_AT: Vector2i = Vector2i(1, 13)
+const PORTRAIT_PIC_AT: Vector2i = Vector2i(1, 1)
+const PORTRAIT_DEX_MARK: Array[int] = [0x74, 0xF2]
+const PORTRAIT_SPACE: int = Gen1Text.SPACE
+
+
+## Yellow's printer pages; [param values] carries `player`, `hi_score` and a portrait's `mon`.
+func render_gen1_printer(kind: String, values: Dictionary, status: String, cancel: String) -> Image:
+	var lcd: Gen1Lcd
+	var colors: PackedColorArray = palette
+	var pic: Image = null
+	match kind:
+		"high_score":
+			lcd = _gen1_high_score_lcd(String(values.get("player", "")), int(values.get("hi_score", 0)))
+		"portrait":
+			var mon: Dictionary = values.get("mon", {})
+			lcd = _gen1_portrait_lcd(mon)
+			colors = _gen1.world_palette(Gen1Layout.PAL_BROWNMON)
+			pic = _gen1_portrait_pic(mon)
+		_:
+			lcd = _gen1_diploma_lcd(String(values.get("player", "")))
+	if not status.is_empty():
+		_gen1_status_box(lcd, status, cancel)
+	var image: Image = Gen1OpeningPage.colour(lcd.render(), [], [colors])
+	if pic != null:
+		image.blit_rect(pic, Rect2i(Vector2i.ZERO, pic.get_size()), PORTRAIT_PIC_AT * TILE
+			+ Gen2PicImage.frontpic_origin(pic.get_size(), true, RomRegistry.GEN1))
+	return image
+
+
+func _gen1_status_box(lcd: Gen1Lcd, status: String, cancel: String) -> void:
+	var rows: Array = Gen1Text.text_box_rows(GEN1_STATUS_BOX_INNER)
+	for row: int in rows.size():
+		_gen1_place(lcd, GEN1_STATUS_BOX_AT + Vector2i(0, row), PackedByteArray(rows[row]))
+	var lines: PackedStringArray = status.split(Gen1Layout.MENU_ROW_BREAK)
+	for line: int in lines.size():
+		_gen1_place(lcd, STATUS_TEXT_AT + Vector2i(0, 2 * line), Gen1Text.encode(lines[line]))
+	_gen1_place(lcd, CANCEL_AT, Gen1Text.encode(cancel))
+
+
+func _gen1_high_score_lcd(player: String, hi_score: int) -> Gen1Lcd:
+	var lcd: Gen1Lcd = _gen1_blank_lcd()
+	_gen1_load(lcd, "high_score_gfx", Gen1Lcd.SIGNED_BASE)
+	var map: PackedByteArray = lcd.maps[0]
+	for column: int in COLUMNS:
+		for row: int in [0, ROWS - 1]:
+			map[row * Gen1Lcd.MAP_SIDE + column] = HIGH_SCORE_EDGE_ROW[column % 2]
+	for row: int in ROWS:
+		for column: int in [0, COLUMNS - 1]:
+			map[row * Gen1Lcd.MAP_SIDE + column] = HIGH_SCORE_EDGE_COLUMN[row % 2]
+	for corner: Vector2i in [Vector2i(0, 0), Vector2i(0, ROWS - 1), Vector2i(COLUMNS - 1, 0), Vector2i(COLUMNS - 1, ROWS - 1)]:
+		map[corner.y * Gen1Lcd.MAP_SIDE + corner.x] = HIGH_SCORE_CORNER
+	var high: Dictionary = _gen1.surfing().get("high_score", {})
+	_gen1_box(lcd, HIGH_SCORE_BOX_1_AT, Gen1Layout.HIGH_SCORE_TILEMAP_1, high.get("tilemap_1", []))
+	_gen1_box(lcd, HIGH_SCORE_BOX_2_AT, Gen1Layout.HIGH_SCORE_TILEMAP_2, high.get("tilemap_2", []))
+	_gen1_place(lcd, HIGH_SCORE_BEACH_AT, PackedByteArray(high.get("beach", [])))
+	_gen1_place(lcd, HIGH_SCORE_HI_AT, PackedByteArray(high.get("hi", [])))
+	_gen1_place(lcd, HIGH_SCORE_POINTS_AT, PackedByteArray(high.get("points", [])))
+	## `.find_end_of_name` counts the terminator: the name ends a cell short.
+	var name: PackedByteArray = Gen1Text.encode(player)
+	var shift: int = maxi(HIGH_SCORE_NAME_CELLS - 1 - name.size(), 0)
+	_gen1_place(lcd, HIGH_SCORE_NAME_AT + Vector2i(shift, 0), name)
+	var digits := PackedByteArray()
+	for digit: int in 4:
+		digits.append(HIGH_SCORE_DIGIT_TILE + ((hi_score >> ((3 - digit) * 4)) & 0xF))
+	_gen1_place(lcd, HIGH_SCORE_DIGITS_AT, digits)
+	return lcd
+
+
+func _gen1_portrait_lcd(mon: Dictionary) -> Gen1Lcd:
+	var lcd: Gen1Lcd = _gen1_blank_lcd()
+	_gen1_load(lcd, "battle_font", Gen1Lcd.SIGNED_BASE + Gen1Layout.BATTLE_FONT_FIRST_CODE)
+	_gen1_load(lcd, "portrait_lv", Gen1Lcd.SIGNED_BASE + PORTRAIT_LV_TILE)
+	_gen1_load(lcd, "portrait_hp", Gen1Lcd.SIGNED_BASE + PORTRAIT_HP_TILE)
+	_gen1_text_box(lcd, Vector2i.ZERO, PORTRAIT_BOX_INNER)
+	_gen1_text_box(lcd, PORTRAIT_MOVES_BOX_AT, PORTRAIT_MOVES_BOX_INNER)
+	var strings: Dictionary = _gen1.surfing().get("portrait", {})
+	## `PrintLevelFull`, then `$6e` and a space over its first two cells.
+	_gen1_place(lcd, PORTRAIT_LEVEL_AT, PackedByteArray([PORTRAIT_LV_TILE, PORTRAIT_SPACE]))
+	_gen1_place(lcd, PORTRAIT_LEVEL_AT + Vector2i(2, 0), _gen1_number(int(mon.get("level", 0)), 3, false, true))
+	_gen1_place(lcd, PORTRAIT_HP_AT, PackedByteArray([PORTRAIT_HP_TILE]))
+	_gen1_place(lcd, PORTRAIT_HP_AT + Vector2i(2, 0), _gen1_number(int(mon.get("max_hp", 0)), PORTRAIT_HP_DIGITS, false, false))
+	_gen1_place(lcd, PORTRAIT_NICKNAME_AT, Gen1Text.encode(String(mon.get("nickname", ""))))
+	_gen1_place(lcd, PORTRAIT_SPECIES_AT, Gen1Text.encode(String(mon.get("species_name", ""))))
+	_gen1_place(lcd, PORTRAIT_DEX_AT, PackedByteArray(PORTRAIT_DEX_MARK)
+		+ _gen1_number(int(mon.get("dex_number", 0)), PORTRAIT_DEX_DIGITS, true, false))
+	_gen1_place(lcd, PORTRAIT_OT_LABEL_AT, PackedByteArray(strings.get("ot", [])))
+	_gen1_place(lcd, PORTRAIT_OT_AT, Gen1Text.encode(String(mon.get("ot_name", ""))))
+	_gen1_place(lcd, PORTRAIT_ID_LABEL_AT, PackedByteArray(strings.get("id", [])))
+	_gen1_place(lcd, PORTRAIT_ID_AT, _gen1_number(int(mon.get("ot_id", 0)), PORTRAIT_ID_DIGITS, true, false))
+	## BIT_SINGLE_SPACED_LINES is set for the four stat names, so a `next` is one row.
+	_gen1_place(lcd, PORTRAIT_STATS_AT, PackedByteArray(strings.get("stats", [])), 1)
+	var stats: Dictionary = mon.get("stats", {})
+	for index: int in PORTRAIT_STATS.size():
+		_gen1_place(lcd, PORTRAIT_STAT_VALUES_AT + Vector2i(0, index),
+			_gen1_number(int(stats.get(PORTRAIT_STATS[index], 0)), PORTRAIT_STAT_DIGITS, false, false))
+	var moves: Array = mon.get("moves", [])
+	for slot: int in 4:
+		var move: int = int(moves[slot]) if slot < moves.size() else 0
+		_gen1_place(lcd, PORTRAIT_MOVES_AT + Vector2i(0, slot), Gen1Text.encode(String(_gen1.move(move).get("name", "")))
+			if move > 0 else PackedByteArray(strings.get("blank", [])))
+	return lcd
+
+
+## `LoadFlippedFrontSpriteByMonIndex`, in the row `SetPal_Pokedex` gives the box.
+func _gen1_portrait_pic(mon: Dictionary) -> Image:
+	var species: int = int(mon.get("species", 0))
+	var pic: Dictionary = _gen1.species_pic(species)
+	if species <= 0 or pic.is_empty():
+		return null
+	var art: Image = Gen2PicImage.from_atlas(
+		_gen1.atlas_indices(pic["atlas"]), _gen1.atlas(pic["atlas"]), pic, _gen1.palette(species)
+	)
+	return Gen2PicImage.x_flipped(art) if art != null else null
+
+
+static func _gen1_number(value: int, cells: int, leading_zeros: bool, left_align: bool) -> PackedByteArray:
+	var text: String = String.num_int64(maxi(value, 0))
+	if text.length() > cells:
+		text = text.substr(text.length() - cells)
+	var out := PackedByteArray()
+	if left_align:
+		return Gen1Text.encode(text)
+	for _blank: int in cells - text.length():
+		out.append(HIGH_SCORE_DIGIT_TILE if leading_zeros else PORTRAIT_SPACE)
+	out.append_array(Gen1Text.encode(text))
+	return out
+
+
+func _gen1_text_box(lcd: Gen1Lcd, at: Vector2i, inner: Vector2i) -> void:
+	var rows: Array = Gen1Text.text_box_rows(inner)
+	for row: int in rows.size():
+		_gen1_place(lcd, at + Vector2i(0, row), PackedByteArray(rows[row]))
+
+
+func _gen1_box(lcd: Gen1Lcd, at: Vector2i, shape: Vector2i, ids: Array) -> void:
+	for row: int in shape.y:
+		for column: int in shape.x:
+			var index: int = row * shape.x + column
+			if index < ids.size():
+				lcd.maps[0][(at.y + row) * Gen1Lcd.MAP_SIDE + at.x + column] = int(ids[index])
+
+
+func _gen1_blank_lcd() -> Gen1Lcd:
 	var lcd := Gen1Lcd.new()
 	lcd.wy = Gen1Opening.WINDOW_OFF
 	lcd.bgp = Gen1Opening.GB_PAL_NORMAL_BGP
 	lcd.obp0 = Gen1Layout.DIPLOMA_OBP0
 	lcd.fill_map(0, Gen1Text.SPACE)
 	_gen1_load(lcd, "font", Gen1Lcd.BLOCK_TILES)
+	return lcd
+
+
+## `DisplayDiploma` on a [Gen1Lcd], with `DrawPlayerCharacter`'s sprite moved 33
+## pixels right behind the background; Yellow's `DisplayDiplomaTop` draws none.
+func _render_gen1(player: String) -> Image:
+	return Gen1OpeningPage.colour(_gen1_diploma_lcd(player).render(), [], [palette])
+
+
+func _gen1_diploma_lcd(player: String) -> Gen1Lcd:
+	var lcd: Gen1Lcd = _gen1_blank_lcd()
 	if _gen1.id == RomRegistry.YELLOW:
 		_gen1_load(lcd, "diploma_gfx", Gen1Lcd.SIGNED_BASE)
 		_gen1_yellow_border(lcd)
@@ -179,7 +369,7 @@ func _render_gen1(player: String) -> Image:
 	for index: int in _gen1_strings.size():
 		_gen1_place(lcd, Gen1Layout.DIPLOMA_STRINGS_AT[index], _gen1_strings[index])
 	_gen1_place(lcd, Gen1Layout.DIPLOMA_NAME_AT, Gen1Text.encode(player))
-	return Gen1OpeningPage.colour(lcd.render(), [], [palette])
+	return lcd
 
 
 func _gen1_load(lcd: Gen1Lcd, sheet: String, at: int, first: int = 0, count: int = -1) -> void:
@@ -233,12 +423,12 @@ func _gen1_player_sprite(lcd: Gen1Lcd) -> void:
 			tile += 1
 
 
-## `PlaceString`: `next` drops two rows and `PlaceNextChar` spells `#` out.
-func _gen1_place(lcd: Gen1Lcd, at: Vector2i, codes: PackedByteArray) -> void:
+## `PlaceString`, with `PlaceNextChar` spelling `#` out.
+func _gen1_place(lcd: Gen1Lcd, at: Vector2i, codes: PackedByteArray, line_step: int = 2) -> void:
 	var cell: Vector2i = at
 	for code: int in codes:
 		if code == Gen1Text.NEXT_LINE:
-			cell = Vector2i(at.x, cell.y + 2)
+			cell = Vector2i(at.x, cell.y + line_step)
 			continue
 		var word: String = String(Gen1Text.CONTROL_CHARACTERS.get(code, ""))
 		var tiles: PackedByteArray = Gen1Text.encode(word) if not word.is_empty() \

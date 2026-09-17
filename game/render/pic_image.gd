@@ -493,14 +493,8 @@ static func show(target: TextureRect, image: Image) -> void:
 	Gen2Screen.note_picture(target, image)
 
 
-## What a picture is mostly made of, which is the colour a screen carries out past
-## the hardware rectangle it was laid out in. The picture's own field rather than
-## its border, since a cartridge screen puts a box frame along its edge often
-## enough that the edge says black where the screen reads white. Sampled on a
-## stride, because tile art is flat in blocks of eight. A picture with any
-## transparency has no field at all: the hardware has no alpha, so one that is not
-## opaque is a layer over another screen, and answering for the screen underneath
-## is what painted a black band over the map.
+## The colour a screen carries out past the hardware rectangle: the field rather
+## than the border, sampled on a stride, and none for a picture with transparency.
 static func field_color(image: Image, stride: int = FIELD_STRIDE) -> Color:
 	if image == null or image.is_empty() or image.get_format() != Image.FORMAT_RGBA8:
 		return TRANSPARENT

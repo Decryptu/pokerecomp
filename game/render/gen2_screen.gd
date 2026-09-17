@@ -644,13 +644,8 @@ func _draw_cover() -> void:
 			)
 
 
-## The surround, drawn rather than left empty: four rectangles around the 160x144
-## the interface is laid out in. Not a filled surface, because the middle is not
-## always the interface's -- a battle transition is the renderer's own screen and
-## has to stay visible inside it.
-## A backdrop the size of the buffer is drawn through the same four bands, so a
-## screen with real art out there paints it and a screen without paints its own
-## field colour.
+## Four bands around the 160x144, since a battle transition has to stay visible
+## inside them; a backdrop paints through the same four.
 func _draw_mask() -> void:
 	var inside := Rect2(_interface.position, Vector2(WIDTH, HEIGHT))
 	var whole := Vector2(_view_size)

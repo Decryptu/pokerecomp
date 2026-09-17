@@ -8,7 +8,9 @@ extends SceneTree
 ## writes the LCD registers beside the trace as `<out>.regs`, shoots in the Game
 ## Boy's greys, and `picks` are the dex numbers a cartridge's title chose.
 
-const PHASES: Array[String] = ["presents", "intro", "gs_intro", "title", "trade", "gen1"]
+const PHASES: Array[String] = ["presents", "intro", "gs_intro", "title", "trade", "gen1", "surfing"]
+## `surfing` runs Yellow's minigame on the cartridge trace's `random` column.
+const SURFING_FRAME_CAP: int = 6200
 ## The whole opening and the first title mons; Red's title never ends alone.
 const GEN1_FRAME_CAP: int = 3000
 
@@ -87,7 +89,61 @@ func _trace(args: PackedStringArray, data: GameData) -> PackedStringArray:
 		"gen1":
 			var out_path: String = args[2] if args.size() > 2 else ""
 			return _trace_gen1(data, out_path, args[4] if args.size() > 4 else "")
+		"surfing":
+			return _trace_surfing(data, args[4] if args.size() > 4 else "")
 	return _trace_title(data)
+
+
+## `frame state routine pikachu scx hp distance speed height wave random` a
+## frame, then the live OAM slots.
+func _trace_surfing(data: GameData, picks_path: String) -> PackedStringArray:
+	var game: Gen1SurfingMinigame = Gen1SurfingMinigame.create(
+		data, RandomNumberGenerator.new(), 0, false, false
+	)
+	if game == null:
+		push_error("%s has no beach." % data.id)
+		return PackedStringArray()
+	if not picks_path.is_empty():
+		game.set_wave_picks(_surfing_picks(picks_path))
+	var out := PackedStringArray()
+	var frame: int = 0
+	while not game.finished() and frame < SURFING_FRAME_CAP:
+		game.advance_frame()
+		out.append("%d state %d %d %d %04x %d %04x %d %d %d" % [
+			frame, game.routine(), game.pikachu_state(), game.lcd.scx, game.hp(),
+			game.distance(), game.speed(), game.pikachu_height(), game.wave_function(),
+			game.wave_random(),
+		])
+		var slots: Array[Dictionary] = game.shadow_oam()
+		for slot: int in slots.size():
+			var entry: Dictionary = slots[slot]
+			if int(entry["y"]) != 0 or int(entry["x"]) != 0 or int(entry["tile"]) != 0:
+				out.append("%d %d %d %d %d %d" % [frame, slot, int(entry["y"]), int(entry["x"]),
+					int(entry["tile"]), int(entry["attributes"])])
+		if _shots.has(frame):
+			Gen1OpeningPage.colour(game.lcd.render(), game.blocks(), game.palettes(), game.lcd.slots) \
+				.save_png("%s_f%d.png" % [_shot_prefix, frame])
+		frame += 1
+	return out
+
+
+## The cartridge's `random` column on its `RunGame` passes, in order.
+static func _surfing_picks(path: String) -> Array:
+	var picks: Array = []
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return picks
+	var started: bool = false
+	var hp: String = ""
+	while not file.eof_reached():
+		var words: PackedStringArray = file.get_line().split(" ")
+		if words.size() < 11 or words[1] != "state":
+			continue
+		started = started or int(words[2]) == Gen1SurfingMinigame.Routine.START
+		if started and int(words[2]) == Gen1SurfingMinigame.Routine.RUN and words[5] != hp:
+			picks.append(int(words[10]))
+		hp = words[5]
+	return picks
 
 
 ## `GameFreakPresentsScene` from its first frame to the one it sets its own exit
