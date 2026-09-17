@@ -2,7 +2,8 @@ class_name Gen1OpeningPage
 extends RefCounted
 
 ## A Generation 1 opening's frame in colour: [Gen1Lcd]'s shades through the
-## `ATTR_BLK` palette of the cell each pixel sits in, objects and all.
+## `ATTR_BLK` palette of the cell each pixel sits in, objects and all, or on a
+## Game Boy Color through the palette slot the LCD kept for each pixel.
 
 const CELLS_ACROSS: int = Gen1Lcd.WIDTH / Gen1Lcd.TILE
 const CELLS_DOWN: int = Gen1Lcd.HEIGHT / Gen1Lcd.TILE
@@ -37,20 +38,29 @@ func draw(opening: Gen1Opening) -> Image:
 		for packed: Variant in palette as Array:
 			colors.append(PokePalette.from_packed(int(packed)))
 		palettes.append(colors)
-	return colour(opening.lcd.render(), opening.blocks(), palettes)
+	var shades: PackedByteArray = opening.lcd.render()
+	return colour(shades, opening.blocks(), palettes, opening.lcd.slots)
 
 
 ## [param shades], a byte a pixel, through the `ATTR_BLK` rows in [param blocks]
-## and the `PAL_SET` palettes they index; a palette the packet does not name is
-## the Game Boy's own greys.
-static func colour(shades: PackedByteArray, blocks: Array, palettes: Array[PackedColorArray]) -> Image:
-	var attributes: PackedByteArray = attribute_map(blocks)
+## and the `PAL_SET` palettes they index, or through [param slots] when the LCD
+## kept a palette slot a pixel; a palette the packet does not name is the Game
+## Boy's own greys.
+static func colour(
+	shades: PackedByteArray, blocks: Array, palettes: Array[PackedColorArray],
+	slots: PackedByteArray = PackedByteArray()
+) -> Image:
 	var tables: Array[PackedInt32Array] = []
 	for colors: PackedColorArray in palettes:
 		tables.append(Gen2PicImage.lookup(colors))
 	while tables.size() < SHADES:
 		tables.append(Gen2PicImage.lookup(DMG_SHADES))
 	var pixels: PackedInt32Array = Gen2PicImage.canvas(Gen1Lcd.WIDTH, Gen1Lcd.HEIGHT)
+	if slots.size() == shades.size():
+		for at: int in shades.size():
+			pixels[at] = tables[slots[at] & Gen1Lcd.PALETTE_SLOT_MASK][shades[at]]
+		return Gen2PicImage.canvas_image(pixels, Gen1Lcd.WIDTH, Gen1Lcd.HEIGHT)
+	var attributes: PackedByteArray = attribute_map(blocks)
 	for y: int in Gen1Lcd.HEIGHT:
 		var row: int = y * Gen1Lcd.WIDTH
 		var cell_row: int = (y / Gen1Lcd.TILE) * CELLS_ACROSS

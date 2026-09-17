@@ -44,6 +44,7 @@ const GEN1_PAL_ENEMY_MON: int = 3
 var _data: GameData = null
 var _hud: Gen2BattleHud = null
 var _view: Dictionary = {}
+var _gen1_blocks: PackedByteArray = PackedByteArray()
 
 var _enemy_pic: TextureRect = null
 var _player_pic: TextureRect = null
@@ -812,21 +813,24 @@ func _blit_sprite(into: Image, sprite: Dictionary, backpic: bool = false) -> voi
 	if pixels.is_empty():
 		return
 	var attributes: int = int(sprite.get("attributes", 0))
-	var palette: PackedColorArray = _gen1_object_palette(attributes) if _gen1() \
-		else _object_palette(attributes & OAM_PALETTE)
+	var left: int = int(sprite.get("x", 0)) - 8
+	var top: int = int(sprite.get("y", 0)) - 16
 	var grayscale: PackedColorArray = _grayscale()
+	var lookup: Image
 	if not grayscale.is_empty():
-		palette = grayscale
-	elif not _gen1():
-		palette = _remap(palette, _palette_map("ob_palette_maps", attributes & OAM_PALETTE))
-	var lookup: Image = Gen2PicImage.from_indices(pixels, TILE, TILE, palette, true)
+		lookup = Gen2PicImage.from_indices(pixels, TILE, TILE, grayscale, true)
+	elif _gen1():
+		lookup = _gen1_object_image(pixels, attributes, left, top, _anim_obp0())
+	else:
+		lookup = Gen2PicImage.from_indices(pixels, TILE, TILE, _remap(
+			_object_palette(attributes & OAM_PALETTE),
+			_palette_map("ob_palette_maps", attributes & OAM_PALETTE)
+		), true)
 	if (attributes & OAM_XFLIP) != 0:
 		lookup.flip_x()
 	if (attributes & OAM_YFLIP) != 0:
 		lookup.flip_y()
 
-	var left: int = int(sprite.get("x", 0)) - 8
-	var top: int = int(sprite.get("y", 0)) - 16
 	var clip: Rect2i = Rect2i(0, 0, TILE, TILE)
 	if left < 0:
 		clip.position.x = -left
@@ -905,16 +909,56 @@ static func pic_tile(pixels: PackedByteArray, side: int, index: int) -> PackedBy
 	return out
 
 
-## `SetAnimationPalette` and the `rOBP0` `PlayAnimation` swaps in for the length
-## of a subanimation. Its $F0 reads only colours 0 and 3, which every
-## `SuperPalettes` row shares, so the Super Game Boy block a sprite happens to be
-## over cannot change what it is drawn in; $6C, which the attribute bit picks,
-## reads the two between and takes the square's own.
-func _gen1_object_palette(attributes: int) -> PackedColorArray:
-	var dmg: int = Gen1Layout.ANIM_OBP1 \
-		if (attributes & Gen1Layout.ANIM_OAM_OBP1) != 0 \
-		else int(_view.get("anim_obp0", Gen1Layout.ANIM_OBP0))
-	return _remap(gen1_screen_palette(GEN1_PAL_PLAYER_MON), dmg)
+func _anim_obp0() -> int:
+	return int(_view.get("anim_obp0", Gen1Layout.ANIM_OBP0))
+
+
+## Each pixel through [method gen1_object_palette] where the caller's flips land it.
+func _gen1_object_image(
+	pixels: PackedByteArray, attributes: int, left: int, top: int, obp0: int
+) -> Image:
+	var out: Image = Image.create_empty(TILE, TILE, false, Image.FORMAT_RGBA8)
+	var palettes: Dictionary = {}
+	for row: int in TILE:
+		var y: int = top + (TILE - 1 - row if attributes & OAM_YFLIP else row)
+		for column: int in TILE:
+			var index: int = pixels[row * TILE + column]
+			if index == 0:
+				continue
+			var x: int = left + (TILE - 1 - column if attributes & OAM_XFLIP else column)
+			var cell: int = _gen1_cell(x, y)
+			if not palettes.has(cell):
+				palettes[cell] = gen1_object_palette(attributes, x, y, obp0)
+			out.set_pixel(column, row, (palettes[cell] as PackedColorArray)[index])
+	return out
+
+
+## A Game Boy Color reads the slot the OAM byte carries and `rOBP1` behind
+## `OAM_HIGH_PALS`; a Super Game Boy colours the finished picture, so an object
+## takes the `BlkPacket_Battle` block its cell sits in and `rOBP1` behind
+## `OAM_PAL1`. $F0 reads only colours 0 and 3, which every row shares.
+func gen1_object_palette(attributes: int, x: int, y: int, obp0: int) -> PackedColorArray:
+	var cgb: bool = Gen1Layout.on_cgb(_data.id)
+	var slot: int = attributes & Gen1Lcd.PALETTE_SLOT_MASK if cgb else _gen1_block(x, y)
+	var high: int = Gen1Lcd.OAM_HIGH_PALS if cgb else Gen1Lcd.OAM_PAL1
+	var dmg: int = Gen1Layout.ANIM_OBP1 if (attributes & high) != 0 else obp0
+	return _remap(gen1_screen_palette(slot), dmg)
+
+
+func _gen1_block(x: int, y: int) -> int:
+	if _gen1_blocks.is_empty():
+		_gen1_blocks = Gen1OpeningPage.attribute_map(
+			(_data.opening().get("blocks", {}) as Dictionary).get("battle", [])
+		)
+	var cell: int = _gen1_cell(x, y)
+	return _gen1_blocks[cell] if cell >= 0 and cell < _gen1_blocks.size() else 0
+
+
+static func _gen1_cell(x: int, y: int) -> int:
+	if x < 0 or x >= Gen2Screen.WIDTH or y < 0 or y >= Gen2Screen.HEIGHT:
+		return -1
+	@warning_ignore("integer_division")
+	return (y / TILE) * Gen1OpeningPage.CELLS_ACROSS + x / TILE
 
 
 ## `PAL_BATTLE_OB_*`. Slots 0 and 1 are the two battlers' own rather than

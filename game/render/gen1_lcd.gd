@@ -4,7 +4,8 @@ extends RefCounted
 ## The Game Boy's picture state: 384 tiles of VRAM, the two BG maps, forty OAM
 ## slots, `rLCDC`, the scroll and window registers and the DMG palettes.
 ## [method render] draws a frame a scanline at a time, as shades; the page
-## colours them through the Super Game Boy block each cell sits in.
+## colours them through the Super Game Boy block each cell sits in, or under
+## [member cgb] through the palette slot [member slots] keeps for each pixel.
 
 const WIDTH: int = 160
 const HEIGHT: int = 144
@@ -39,12 +40,22 @@ const OAM_PRIO: int = 1 << 7
 const OAM_YFLIP: int = 1 << 6
 const OAM_XFLIP: int = 1 << 5
 const OAM_PAL1: int = 1 << 4
+## `OAM_HIGH_PALS`: `InitCGBPalettes` builds Color palettes 4 to 7 through
+## `rOBP1`, so this bit rather than [constant OAM_PAL1] picks the register there.
+const OAM_HIGH_PALS: int = 1 << 2
+const PALETTE_SLOT_MASK: int = 3
+const ATTRIBUTE_PALETTE_MASK: int = 7
 
 ## Per-pixel colour indices, one byte each, tile after tile.
 var tiles: PackedByteArray = PackedByteArray()
 ## `vBGMap0` and `vBGMap1`.
 var maps: Array[PackedByteArray] = []
+## VRAM bank 1: a Game Boy Color's attribute per tile of each map.
+var attribute_maps: Array[PackedByteArray] = []
 var oam: PackedByteArray = PackedByteArray()
+var cgb: bool = false
+## The palette slot each pixel of the last [method render] drew in.
+var slots: PackedByteArray = PackedByteArray()
 var lcdc: int = LCDC_DEFAULT
 var scx: int = 0
 var scy: int = 0
@@ -67,6 +78,11 @@ func _init() -> void:
 	var map1 := PackedByteArray()
 	map1.resize(MAP_BYTES)
 	maps = [map0, map1]
+	var attributes0 := PackedByteArray()
+	attributes0.resize(MAP_BYTES)
+	var attributes1 := PackedByteArray()
+	attributes1.resize(MAP_BYTES)
+	attribute_maps = [attributes0, attributes1]
 	oam.resize(OAM_SLOTS * OAM_BYTES)
 
 
@@ -74,6 +90,8 @@ func clear_vram() -> void:
 	tiles.fill(0)
 	maps[0].fill(0)
 	maps[1].fill(0)
+	attribute_maps[0].fill(0)
+	attribute_maps[1].fill(0)
 
 
 func clear_oam() -> void:
@@ -122,6 +140,26 @@ func fill_map(which: int, id: int) -> void:
 	maps[which].fill(id)
 
 
+## `LoadBGMapAttributes`: two copies of one length, one onto each map.
+func load_attributes(rows: PackedByteArray) -> void:
+	@warning_ignore("integer_division")
+	var half: int = mini(rows.size() / 2, MAP_BYTES)
+	for at: int in half:
+		attribute_maps[0][at] = rows[at]
+		attribute_maps[1][at] = rows[half + at]
+
+
+## `YellowIntroScene2_PlaceGraphic`'s rectangle of one attribute.
+func fill_attributes(which: int, at: Vector2i, columns: int, rows: int, attribute: int) -> void:
+	var map: PackedByteArray = attribute_maps[which]
+	for row: int in rows:
+		for column: int in columns:
+			var x: int = at.x + column
+			var y: int = at.y + row
+			if x >= 0 and x < MAP_SIDE and y >= 0 and y < MAP_SIDE:
+				map[y * MAP_SIDE + x] = attribute
+
+
 func set_sprite(slot: int, y: int, x: int, tile: int, attributes: int) -> void:
 	if slot < 0 or slot >= OAM_SLOTS:
 		return
@@ -149,6 +187,9 @@ func shadow_oam() -> Array[Dictionary]:
 func render() -> PackedByteArray:
 	var shades := PackedByteArray()
 	shades.resize(WIDTH * HEIGHT)
+	slots = PackedByteArray()
+	if cgb:
+		slots.resize(WIDTH * HEIGHT)
 	if lcdc & LCDC_ON == 0:
 		return shades
 	var background := PackedByteArray()
@@ -160,7 +201,7 @@ func render() -> PackedByteArray:
 		var line_x: int = _line_value(line_scx, y - line_lag, scx)
 		var line_y: int = _line_value(line_scy, y - line_lag, scy)
 		if lcdc & LCDC_BG:
-			_render_map_line(background, row, _bg_map(), line_x, line_y + y)
+			_render_map_line(background, row, _bg_map(), _bg_attributes(), line_x, line_y + y)
 		if lcdc & LCDC_WINDOW and y >= wy and wx - WINDOW_X_OFFSET < WIDTH:
 			_render_window_line(background, row, window_line)
 			window_line += 1
@@ -181,12 +222,21 @@ func _bg_map() -> PackedByteArray:
 	return maps[1] if lcdc & LCDC_BG_MAP else maps[0]
 
 
+func _bg_attributes() -> PackedByteArray:
+	return attribute_maps[1] if lcdc & LCDC_BG_MAP else attribute_maps[0]
+
+
 func _window_map() -> PackedByteArray:
 	return maps[1] if lcdc & LCDC_WIN_MAP else maps[0]
 
 
+func _window_attributes() -> PackedByteArray:
+	return attribute_maps[1] if lcdc & LCDC_WIN_MAP else attribute_maps[0]
+
+
 func _render_map_line(
-	target: PackedByteArray, row: int, map: PackedByteArray, from_x: int, map_y: int
+	target: PackedByteArray, row: int, map: PackedByteArray, palettes: PackedByteArray,
+	from_x: int, map_y: int
 ) -> void:
 	var y: int = map_y & 0xFF
 	var map_row: int = (y >> 3) * MAP_SIDE
@@ -194,25 +244,32 @@ func _render_map_line(
 	var x: int = 0
 	while x < WIDTH:
 		var map_x: int = (from_x + x) & 0xFF
-		var tile: int = _bg_tile(map[map_row + (map_x >> 3)]) * TILE_PIXELS + tile_row
+		var cell: int = map_row + (map_x >> 3)
+		var tile: int = _bg_tile(map[cell]) * TILE_PIXELS + tile_row
+		var slot: int = palettes[cell] & ATTRIBUTE_PALETTE_MASK
 		var column: int = map_x & 7
 		while column < TILE and x < WIDTH:
 			target[row + x] = tiles[tile + column]
+			if cgb:
+				slots[row + x] = slot
 			column += 1
 			x += 1
 
 
 func _render_window_line(target: PackedByteArray, row: int, window_line: int) -> void:
 	var map: PackedByteArray = _window_map()
+	var palettes: PackedByteArray = _window_attributes()
 	var map_row: int = ((window_line >> 3) & (MAP_SIDE - 1)) * MAP_SIDE
 	var tile_row: int = (window_line & 7) * TILE
 	var left: int = wx - WINDOW_X_OFFSET
 	var x: int = maxi(left, 0)
 	while x < WIDTH:
 		var window_x: int = x - left
-		var tile: int = _bg_tile(map[map_row + ((window_x >> 3) & (MAP_SIDE - 1))]) \
-			* TILE_PIXELS + tile_row
+		var cell: int = map_row + ((window_x >> 3) & (MAP_SIDE - 1))
+		var tile: int = _bg_tile(map[cell]) * TILE_PIXELS + tile_row
 		target[row + x] = tiles[tile + (window_x & 7)]
+		if cgb:
+			slots[row + x] = palettes[cell] & ATTRIBUTE_PALETTE_MASK
 		x += 1
 
 
@@ -261,7 +318,8 @@ func _render_object_line(
 	if attributes & OAM_YFLIP:
 		tile_row = TILE - 1 - tile_row
 	var tile: int = oam[at + 2] * TILE_PIXELS + tile_row * TILE
-	var palette: PackedByteArray = palettes[1 if attributes & OAM_PAL1 else 0]
+	var high: int = OAM_HIGH_PALS if cgb else OAM_PAL1
+	var palette: PackedByteArray = palettes[1 if attributes & high else 0]
 	var behind: bool = attributes & OAM_PRIO != 0
 	var row: int = y * WIDTH
 	for column: int in TILE:
@@ -277,6 +335,8 @@ func _render_object_line(
 		if behind and background[row + x] != 0:
 			continue
 		shades[row + x] = palette[index]
+		if cgb:
+			slots[row + x] = attributes & PALETTE_SLOT_MASK
 
 
 static func _palette_shades(byte: int) -> PackedByteArray:

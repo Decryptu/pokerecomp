@@ -166,3 +166,55 @@ func test_the_attribute_map_paints_inside_line_and_outside() -> void:
 	assert_eq(map[2 * 20 + 2], 2)
 	assert_eq(map[4 * 20 + 4], 2)
 	assert_eq(map[0], 0)
+
+
+func test_a_colour_lcd_keeps_a_palette_slot_a_pixel() -> void:
+	_lcd.cgb = true
+	_lcd.load_tiles(Gen1Lcd.SIGNED_BASE + 7, _solid(1), 1, 0, 1)
+	_lcd.maps[0][0] = 7
+	_lcd.attribute_maps[0][0] = 3
+	_lcd.load_tiles(3, _solid(2), 1, 0, 1)
+	_lcd.obp1 = 0b00110000
+	_lcd.set_sprite(0, 16, 8 + 20, 3, Gen1Lcd.OAM_HIGH_PALS | 2)
+	_lcd.set_sprite(1, 16, 8 + 40, 3, Gen1Lcd.OAM_PAL1 | 1)
+	_lcd.lcdc = Gen1Lcd.LCDC_ON | Gen1Lcd.LCDC_BG | Gen1Lcd.LCDC_OBJS
+	var shades: PackedByteArray = _lcd.render()
+	assert_eq(_pixel(_lcd.slots, 0, 0), 3, "the tile's attribute is its slot")
+	assert_eq(_pixel(_lcd.slots, 8, 0), 0, "a cell with no attribute is slot 0")
+	assert_eq(_pixel(_lcd.slots, 20, 0), 2, "an object's low bits are its slot")
+	assert_eq(_pixel(shades, 20, 0), 3, "OAM_HIGH_PALS reads OBP1 on a Color")
+	assert_eq(_pixel(shades, 40, 0), 2, "OAM_PAL1 alone reads OBP0 there")
+	_lcd.cgb = false
+	assert_eq(_pixel(_lcd.render(), 40, 0), 3, "and OBP1 on a Game Boy")
+	assert_true(_lcd.slots.is_empty())
+
+
+func test_attributes_load_one_copy_onto_each_map() -> void:
+	var rows := PackedByteArray()
+	rows.resize(4 * Gen1Lcd.MAP_SIDE)
+	rows.fill(1)
+	for at: int in range(2 * Gen1Lcd.MAP_SIDE, 4 * Gen1Lcd.MAP_SIDE):
+		rows[at] = 2
+	_lcd.load_attributes(rows)
+	assert_eq(_lcd.attribute_maps[0][Gen1Lcd.MAP_SIDE + 5], 1)
+	assert_eq(_lcd.attribute_maps[0][2 * Gen1Lcd.MAP_SIDE], 0, "the first copy is two rows")
+	assert_eq(_lcd.attribute_maps[1][Gen1Lcd.MAP_SIDE + 5], 2)
+	_lcd.fill_attributes(1, Vector2i(20, 6), 2, 2, 3)
+	assert_eq(_lcd.attribute_maps[1][7 * Gen1Lcd.MAP_SIDE + 21], 3)
+	assert_eq(_lcd.attribute_maps[1][8 * Gen1Lcd.MAP_SIDE + 21], 0)
+
+
+func test_colour_takes_the_slot_over_the_block_when_the_lcd_kept_one() -> void:
+	var shades := PackedByteArray()
+	shades.resize(Gen1Lcd.WIDTH * Gen1Lcd.HEIGHT)
+	shades.fill(1)
+	var slots := PackedByteArray()
+	slots.resize(shades.size())
+	slots[5] = 1
+	var red := PackedColorArray([Color.WHITE, Color.RED, Color.BLACK, Color.BLACK])
+	var blue := PackedColorArray([Color.WHITE, Color.BLUE, Color.BLACK, Color.BLACK])
+	var image: Image = Gen1OpeningPage.colour(shades, [[7, 0, 0, 0, 19, 17]], [red, blue], slots)
+	assert_eq(image.get_pixel(5, 0), Color.BLUE)
+	assert_eq(image.get_pixel(6, 0), Color.RED)
+	image = Gen1OpeningPage.colour(shades, [[7, 0x15, 0, 0, 19, 17]], [red, blue])
+	assert_eq(image.get_pixel(5, 0), Color.BLUE, "the block rows without a slot map")

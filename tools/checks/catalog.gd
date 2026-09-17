@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies [Gen2WorldCatalog] against freshly imported real caches, on all three
-## cartridges. The catalog is derived rather than imported: it walks the decoded
-## scripts and map events and calls certain shapes starters, gifts, statics,
-## trades, prizes, items, badges and shops. A derivation like that quietly stops
-## being true, so what is pinned is not a count alone but the SEMANTICS: the three
-## starters by name, sixteen distinct badges, the legendaries among the statics at
-## their own levels, and the Game Corner's own prices. A census pin catches a decode
-## that drifts; a semantic pin catches one that drifts into something plausible.
+## [Gen2WorldCatalog] on all three cartridges. The catalog is derived from the
+## decoded scripts and events, so what is pinned is the meaning as well as the
+## count: the three starters by name, sixteen distinct badges, the legendaries at
+## their levels and the Game Corner's prices, against a decode that drifts.
 
 ## constants/pokemon_constants.asm.
 const CHIKORITA: int = 152

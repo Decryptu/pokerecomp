@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies Cut against freshly imported real caches, for both command profiles.
-## Expected values come from the pinned sources: CutFunction,
-## CheckMapForSomethingToCut, CheckCutCollision, CutTreeBlockPointers, and
-## constants/tileset_constants.asm, whose PARK and FOREST numbers are the only part
-## of that table that differs between the two games. The real-cartridge counterpart
-## to tests/unit/test_world_field_move.gd, which uses a synthetic cache. Ilex
-## Forest is the acceptance case, because its single cut tree gates the route west
-## out of the forest.
+## Cut on real caches, both profiles: CutFunction, CheckMapForSomethingToCut,
+## CheckCutCollision and CutTreeBlockPointers, whose PARK and FOREST tileset
+## numbers are the only split. Ilex Forest is the acceptance case, its one tree
+## gating the way west; tests/unit/test_world_field_move.gd is the synthetic half.
 
 
 ## constants/map_constants.asm, DUNGEONS group; Crystal's sit eight later.

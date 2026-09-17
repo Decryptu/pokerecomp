@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the walk south from Pewter to Cinnabar Island, east to Seafoam Gym and
-## back north to Viridian Gym, for both command profiles. Three findings carry the
-## leg: Cinnabar Island is two land regions with no seam between them and the
-## crossing off Route 21 can land on either, so which cell it lands on decides
-## whether Blue is reachable at all; Route 20's west channel is walled off from the
-## open sea on every side, so the gym mouth's island is landed on from the east; and
-## Viridian Gym has no puzzle and no trainer, both its objects hiding behind
-## EVENT_VIRIDIAN_GYM_BLUE, so the whole gate is Cinnabar's Blue clearing it.
+## Pewter south to Cinnabar Island, east to Seafoam Gym and north to Viridian
+## Gym, both profiles. Cinnabar is two land regions with no seam, so the Route 21
+## crossing's landing cell decides whether Blue is reachable; Route 20's west
+## channel is walled off, and Viridian Gym's two objects hide behind Blue's event.
 
 
 ## constants/map_constants.asm. Nothing on this leg splits between the profiles.

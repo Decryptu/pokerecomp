@@ -617,22 +617,22 @@ static func _read_rod_group(
 	return {"ok": true, "group": {"slots": slots}}
 
 
-## `SuperPalettes`. `SetPal_Overworld` names one row a map and the
-## `BlkPacket_WholeScreen` behind it gives that row art and objects alike.
+## The palette table the hardware reads. `SetPal_Overworld` names one row a map
+## and the `BlkPacket_WholeScreen` behind it gives that row art and objects alike.
 static func _read_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var count: int = Gen1Layout.super_palette_count(rom.id)
-	var at: int = int(layout["super_palettes"])
+	var at: int = Gen1Layout.color_palette_offset(layout, 0)
 	if not rom.in_bounds(at, count * Gen1Layout.SUPER_PALETTE_BYTES):
-		return _error("SuperPalettes is outside the ROM.")
+		return _error("The palette table is outside the ROM.")
 	var out: Array = []
 	for row: int in count:
 		var colors: Array = []
 		for slot: int in Gen1Layout.SUPER_PALETTE_COLORS:
 			var packed: int = rom.u16le(
-				Gen1Layout.super_palette_offset(layout, row) + slot * PokePalette.COLOR_BYTES
+				Gen1Layout.color_palette_offset(layout, row) + slot * PokePalette.COLOR_BYTES
 			)
 			if (packed & 0x8000) != 0:
-				return _error("SuperPalettes row %d has bit 15 set." % row)
+				return _error("Palette row %d has bit 15 set." % row)
 			colors.append(packed)
 		out.append(colors)
 	return {"ok": true, "palettes": out}
