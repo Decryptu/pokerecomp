@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the walk north from Saffron to Cerulean City and the way from there to
-## the Power Plant, for both command profiles. The load-bearing finding: Misty and
-## her three swimmers all hide behind EVENT_TRAINERS_IN_CERULEAN_GYM, cleared by a
-## scene armed by the gym's grunt and he by `PowerPlantManager`, so the badge waits
-## on the Power Plant. The plant is not walked to: its door sits in a region with no
-## map edge and no walkable neighbour, and the way in is Route 9's river, sixty
-## cells of water opened by the same cut, meeting the south edge on columns 56 and
-## 57 and coming out one step from the plant's shore.
+## Saffron to Cerulean City and on to the Power Plant, both profiles. Misty and
+## her swimmers hide behind EVENT_TRAINERS_IN_CERULEAN_GYM, which the gym's grunt
+## arms and `PowerPlantManager` arms him, so the badge waits on the plant, whose
+## door is reached only by Route 9's river: sixty water cells behind one cut.
 
 
 ## constants/map_constants.asm: the CERULEAN group is 7, SAFFRON 25, LAVENDER 18.

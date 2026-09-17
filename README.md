@@ -121,7 +121,7 @@ whatever shape it is, with a way back to the shipped art. It is kept under
 | Items, types | 255 items with prices, effects, pockets and healing metadata; 28 type names |
 | Type chart | Every matchup and the two Foresight-cancelled entries |
 | Trainers, NPC trades | Class names, pics, palettes, AI flags, DVs and parties; trade records with DVs and OT data |
-| Sprites, palettes | Front/back for 251 species and 26 Unown forms; normal and shiny 15-bit colours |
+| Sprites, palettes | Front/back for 251 species and 26 Unown forms; normal and shiny 15-bit colours. Red and Blue colour as a Super Game Boy does, Yellow as a Game Boy Color |
 | Font, borders, HUD | 128 glyphs, eight text-box frames, HP/EXP bars and panels |
 | Splash, title, intro | Each cartridge's opening art, tilemaps and palette runs, including Crystal's 35-entry intro section and Generation 1's `PlayIntro`, `DisplayTitleScreen` and `YellowIntro` tables |
 | Region map | Three graphics sheets, both region tilemaps, the per-tile palette map and 96 landmarks |

@@ -6,6 +6,7 @@ extends SceneTree
 ## [frame] is how many source frames to spend before the shot, so Crystal's
 ## twenty-eight-frame entrance, its Suicune cycle and Gold's bird can each be looked
 ## at where they are. Several separated by `;` write one file each, numbered.
+## A Generation 1 cache runs its whole opening, so a frame counts from the copyright.
 
 
 func _initialize() -> void:
@@ -24,16 +25,19 @@ func _initialize() -> void:
 		quit(1)
 		return
 
+	var frames: Array = []
+	for step: String in (args[2] if args.size() > 2 else "0").split(";", false):
+		frames.append(maxi(int(step.strip_edges()), 0))
+	frames.sort()
+	if data.generation == RomRegistry.GEN1:
+		quit(0 if _gen1(data, args[1], frames) else 1)
+		return
+
 	var page: Gen2TitlePage = Gen2TitlePage.from_data(data)
 	if page == null:
 		push_error("The %s cache holds no title screen art." % args[0])
 		quit(1)
 		return
-
-	var frames: Array = []
-	for step: String in (args[2] if args.size() > 2 else "0").split(";", false):
-		frames.append(maxi(int(step.strip_edges()), 0))
-	frames.sort()
 
 	var scene: Gen2TitleScene = Gen2TitleScene.create(data.id, Gen2BattleAnimData.from_game_data(data))
 	var spent: int = 0
@@ -55,3 +59,30 @@ func _initialize() -> void:
 		])
 		written += 1
 	quit(0 if written > 0 else 1)
+
+
+## `PlayIntro` and `DisplayTitleScreen` through [Gen1OpeningPage], one PNG a frame.
+func _gen1(data: GameData, out: String, frames: Array) -> bool:
+	var page: Gen1OpeningPage = Gen1OpeningPage.from_data(data)
+	if page == null:
+		push_error("The %s cache holds no opening." % data.id)
+		return false
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	var opening: Gen1Opening = Gen1Opening.create(data, rng)
+	var spent: int = 0
+	var written: int = 0
+	for wanted: int in frames:
+		while spent < wanted and not opening.finished():
+			opening.advance_frame()
+			spent += 1
+		var path: String = out if frames.size() == 1 \
+			else "%s-%d.%s" % [out.get_basename(), wanted, out.get_extension()]
+		if page.draw(opening).save_png(path) != OK:
+			push_error("Could not write %s" % path)
+			return false
+		print("Wrote %s, frame %d, phase %s, palette %s" % [
+			path, spent, opening.phase(), opening.palette_command(),
+		])
+		written += 1
+	return written > 0

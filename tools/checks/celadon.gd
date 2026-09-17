@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the way west from Saffron City to Celadon City and its gym against
-## freshly imported real caches, for both command profiles. Route7.asm, its gate
-## and all four .blk files are byte identical between the pins, so nothing here is
-## profile split. Three things are worth pinning: Saffron's west connection to
-## Route 7 is a dead end landing in a sealed four-cell corner; Route 7's own west
-## edge is the open half, a real connection onto Celadon that needs no gate; and
-## the gate that replaces it is inside the city, one COLL_CUT_TREE on (28,35)
-## sealing the whole gym yard, which makes Cut the price of the Rainbow Badge.
+## Saffron City west to Celadon City and its gym, both profiles; Route7.asm and
+## its maps are byte identical between the pins. Saffron's west connection lands
+## in a sealed four-cell corner, Route 7's west edge is the open half, and one
+## COLL_CUT_TREE on (28,35) seals the gym yard, so Cut prices the Rainbow Badge.
 
 
 ## constants/map_constants.asm: the CELADON group is 21 and the SAFFRON group 25.

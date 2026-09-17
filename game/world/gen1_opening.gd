@@ -232,6 +232,7 @@ static func create(data: GameData, rng: RandomNumberGenerator = null) -> Gen1Ope
 	var out := Gen1Opening.new()
 	out._init_machine(data)
 	out._opening = data.opening()
+	out.lcd.cgb = Gen1Layout.on_cgb(data.id)
 	out._rng = rng if rng != null else RandomNumberGenerator.new()
 	out._phase = PHASE_COPYRIGHT
 	out._build()
@@ -253,8 +254,13 @@ func palette_command() -> String:
 	return _palette_command
 
 
+## `SendSGBPackets`: a Game Boy Color loads the packet's `BGMapAttributes_*` too.
 func set_palette_command(name: String) -> void:
 	_palette_command = name
+	if lcd.cgb:
+		lcd.load_attributes(RomCache.packed_bytes(
+			(_opening.get("attributes", {}) as Dictionary).get(name, [])
+		))
 
 
 func palettes() -> Array:
@@ -316,7 +322,7 @@ func _splash_steps() -> Array:
 	var steps: Array = [
 		{"phase": PHASE_COPYRIGHT},
 		do_step(func() -> void:
-			_palette_command = "splash"
+			set_palette_command("splash")
 			_hwy = 0
 			_fill_tilemap(BLANK)
 			_transfer_enabled = true
@@ -498,7 +504,7 @@ func _intro_steps() -> Array:
 	var steps: Array = [
 		{"phase": PHASE_INTRO_MOVIE},
 		do_step(func() -> void:
-			_palette_command = "intro"
+			set_palette_command("intro")
 			lcd.bgp = INTRO_PALETTE
 			lcd.obp0 = INTRO_PALETTE
 			lcd.obp1 = INTRO_PALETTE
@@ -669,7 +675,7 @@ func _title_steps() -> Array:
 			_transfer_dest = DEST_MAP0),
 		delay_step(DELAY3),
 		do_step(func() -> void:
-			_palette_command = "title"
+			set_palette_command("title")
 			lcd.bgp = GB_PAL_NORMAL_BGP
 			lcd.obp0 = TITLE_OBP0),
 	]
@@ -967,7 +973,7 @@ func _yellow_title_steps() -> Array:
 			_transfer_dest = DEST_MAP0),
 		delay_step(DELAY3),
 		do_step(func() -> void:
-			_palette_command = "title"
+			set_palette_command("title")
 			lcd.bgp = GB_PAL_NORMAL_BGP
 			lcd.obp0 = YELLOW_TITLE_OBP0),
 	]

@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the corridor from the Indigo Plateau Pokemon Center to the Hall of
-## Fame, for both command profiles. The Pokemon Center and the Hall of Fame are byte
-## identical between the pins and the four rooms differ only in their `reanchormap`
-## operand; Lance's room is the profile split, Gold and Silver putting Lance one row
-## further up, warping out on y=0 and ending the champion scene with `warp` rather
-## than `warpfacing`. What is worth pinning is the two block changes each room turns
-## on: nothing else stops the leg, the door behind the player being walled by the
-## entrance scene and the door ahead opened only by the boss.
+## The Indigo Plateau Pokemon Center to the Hall of Fame, both profiles. Lance's
+## room is the split: Gold and Silver put him a row up, warp out on y=0 and end
+## the scene with `warp`. Each room's two block changes are the whole gate: the
+## entrance scene walls the door behind and the boss opens the one ahead.
 
 
 ## constants/map_constants.asm's INDIGO group, the 16th `newgroup`.

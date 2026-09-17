@@ -2,14 +2,10 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies `PlayBattleMusic` against freshly imported real caches, on all three
-## cartridges. The routine is a walk down a list of compares, so its failure is a
-## row that stops being reachable or a track the audio importer does not hold. Both
-## are swept over the whole corpus: every map through `RegionCheck`, so the wild
-## rows are asked at every landmark, and every trainer class and individual trainer,
-## so the RIVAL2 id split and both leader lists are reached by real data. Every
-## track named is then looked up in the imported audio index. Gold and Silver never
-## reach `MUSIC_SUICUNE_BATTLE`, so that row is asked of Crystal alone.
+## `PlayBattleMusic` on all three cartridges: every map through `RegionCheck`
+## and every trainer class and trainer, so each compare row is reached by real
+## data, and every track named is looked up in the audio index. Gold and Silver
+## never reach `MUSIC_SUICUNE_BATTLE`, so that row is asked of Crystal alone.
 
 ## The two hours the wild rows split on. Only Johto has a night track.
 const HOURS: Array[int] = [Gen2WorldPalette.TIME_DAY, Gen2WorldPalette.TIME_NIGHT]

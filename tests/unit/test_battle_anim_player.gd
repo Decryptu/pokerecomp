@@ -321,7 +321,8 @@ const GEN1_TILESET_FRAMES: int = 10
 ## frame block 0 at base coordinate 0 in [param mode]. The frame block is one
 ## sprite at the corner, so a transform shows as the coordinates alone.
 func _gen1_data(
-	kind: int, mode: int = 0, delay: int = 4, rows: int = 1, attributes: int = 0
+	kind: int, mode: int = 0, delay: int = 4, rows: int = 1, attributes: int = 0,
+	profile: StringName = RomRegistry.RED
 ) -> Gen2BattleAnimData:
 	var bytes: Array = []
 	bytes.resize(0x100)
@@ -350,7 +351,7 @@ func _gen1_data(
 			&"frame_blocks": GEN1_BLOCKS,
 			&"base_coords": GEN1_COORDS,
 		},
-		PackedInt32Array(), PackedInt32Array()
+		PackedInt32Array(), PackedInt32Array(), profile
 	)
 
 
@@ -525,3 +526,28 @@ func test_a_generation_1_animation_outside_the_table_answers_null() -> void:
 		Gen2BattleAnimPlayer.create_gen1(_data(RET), 0),
 		"a Generation 2 layer has no `anims` region to walk"
 	)
+
+
+## Yellow's `DrawFrameBlock` writes `wdef4` into the low bits: the enemy's Color
+## palette from x 88, the player's below it. Red's writer leaves them clear.
+func test_yellow_gives_a_frame_block_sprite_the_palette_of_its_side() -> void:
+	var yellow: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
+		_gen1_data(Gen1Layout.SUBANIMTYPE_NORMAL, 0, 4, 1, 0, RomRegistry.YELLOW), 0, false
+	)
+	for _frame: int in GEN1_TILESET_FRAMES + 1:
+		yellow.advance_frame()
+	var sprite: Dictionary = (yellow.sprites() as Array)[0]
+	assert_eq(int(sprite["x"]), GEN1_BASE_X)
+	assert_eq(int(sprite["attributes"]), Gen2BattleRenderer.GEN1_PAL_ENEMY_MON, "x $68 is the enemy's")
+	var flipped: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
+		_gen1_data(Gen1Layout.SUBANIMTYPE_HVFLIP, 0, 4, 1, 0, RomRegistry.YELLOW), 0, true
+	)
+	for _frame: int in GEN1_TILESET_FRAMES + 1:
+		flipped.advance_frame()
+	sprite = (flipped.sprites() as Array)[0]
+	assert_lt(int(sprite["x"]), 88)
+	assert_eq(
+		int(sprite["attributes"]) & Gen1Lcd.PALETTE_SLOT_MASK,
+		Gen2BattleRenderer.GEN1_PAL_PLAYER_MON, "flipped under 88 is the player's"
+	)
+	assert_eq(int(_gen1_sprite(Gen1Layout.SUBANIMTYPE_NORMAL, false)["attributes"]), 0, "Red")
