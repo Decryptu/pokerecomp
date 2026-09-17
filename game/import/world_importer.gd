@@ -411,13 +411,8 @@ static func _read_overworld_sprites(rom: RomFile, layout: Dictionary) -> Diction
 		if default_palette < 0 or default_palette >= Gen2Layout.OVERWORLD_SPRITE_PALETTE_COUNT:
 			return _error("Overworld sprite %d has palette %d." % [number, default_palette])
 
-		# A walking sprite's record names half its graphics. GetUsedSprite
-		# (engine/overworld/overworld.asm, identical in both pins) copies the
-		# recorded length to vTiles0 and then the same length again, from
-		# straight after it, to vTiles1: the standing drawings and the walking
-		# ones. Only a still sprite is skipped, by _DoesSpriteHaveFacings, and a
-		# standing sprite's second half is whatever follows it, which nothing
-		# ever draws because a standing sprite never steps.
+		# `GetUsedSprite` copies the recorded length twice for a walking sprite,
+		# the standing drawings and then the walking ones.
 		var read_size: int = byte_size * 2 if sprite_type == Gen2WorldSprite.TYPE_WALKING \
 			else byte_size
 		var graphics_offset: int = RomFile.linear(bank, address)
@@ -585,14 +580,8 @@ static func _read_party_menu_ob_palettes(rom: RomFile, layout: Dictionary) -> Di
 	return {"ok": true, "palettes": palettes}
 
 
-## The sprites the engine draws over an object rather than as one: the eight
-## showemote bubbles, the jump shadow, the fishing rod, Strength's boulder dust
-## and the tall-grass rustle, plus ShakeHeadbuttTree's own sheet. The emote table
-## pins its own entries: LoadEmote copies each sheet to the VRAM address the
-## record carries, and the twelve tile numbers are the layout FacingEmote,
-## FacingShadow and FacingBoulderDust1 index. A record naming any other tile is a
-## wrong table rather than a cartridge difference: all three ship this byte
-## identical.
+## The sheets `LoadEmote` copies over an object; the twelve tile numbers are the
+## ones `FacingEmote`, `FacingShadow` and `FacingBoulderDust1` index.
 const EMOTE_TILE_LAYOUT: Array = [
 	[4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8],
 	[1, 0xFC], [2, 0xFC], [2, 0xFE], [1, 0xFE],

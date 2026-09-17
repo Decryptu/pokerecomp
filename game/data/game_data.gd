@@ -89,6 +89,7 @@ var _mystery_gift: Dictionary = {}
 var _link_border: Dictionary = {}
 var _other_player_link_mode: int = -1
 var _printer_strings: Dictionary = {}
+var _surfing: Dictionary = {}
 var _slots: Dictionary = {}
 var _slots_text: Dictionary = {}
 var _card_flip: Dictionary = {}
@@ -206,6 +207,7 @@ const MANIFEST_DICTIONARIES: Dictionary = {
 	"mystery_gift": "_mystery_gift",
 	"link_border": "_link_border",
 	"printer_strings": "_printer_strings",
+	"surfing": "_surfing",
 	"slots": "_slots",
 	"slots_text": "_slots_text",
 	"card_flip": "_card_flip",
@@ -2327,6 +2329,11 @@ func credits_string(index: int) -> PackedByteArray:
 ## string printed from column 2. -1 on a cache without the credits.
 func credits_index(name: String) -> int:
 	return int(_credits.get(name, -1))
+
+
+## `SurfingPikachuMinigame`'s tables; empty off Yellow.
+func surfing() -> Dictionary:
+	return _surfing
 
 
 ## `PlayIntro`'s and `DisplayTitleScreen`'s tables, as [method Gen1Importer.read_opening]

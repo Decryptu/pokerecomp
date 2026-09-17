@@ -101,13 +101,8 @@ const CONFUSE_HIT: int = 76
 const CONFUSE: int = 49
 const RECHARGE_HIT: int = 80
 
-## The two-turn moves: charge on the first turn, hit on the second. Razor Wind,
-## Solarbeam, Fly and Dig share the plain shape; Sky Attack and Skull Bash each
-## add one thing behind the hit, which is why they keep their own effect byte
-## rather than folding into the plain one. Fly and Dig share 155 with each
-## other and nothing else, since both leave the field for their charge turn on
-## the cartridge. Their shared charge command now carries the two distinct
-## semi-invulnerability flags and the incoming hit check reads them.
+## The two-turn moves; Sky Attack and Skull Bash keep their own effect byte for
+## what each adds behind the hit, and Fly and Dig share 155.
 const RAZOR_WIND: int = 39
 const SKY_ATTACK: int = 75
 const SKULL_BASH: int = 145

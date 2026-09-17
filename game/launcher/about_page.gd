@@ -165,13 +165,8 @@ func open_report_sheet() -> void:
 	sheet.open(_host if _host != null else self)
 
 
-## Writes the bundle and shows the player where it went.
-##
-## The file manager is opened rather than the file: a zip handed to the desktop
-## would be unpacked or opened by whatever is registered for it, and what the
-## player needs is the file itself, selected, ready to drag into an issue or a
-## chat. A platform with no file manager answers nothing and the path in the
-## line below is what the player goes by.
+## Writes the bundle and opens the file manager on it rather than the zip, which
+## the desktop would unpack.
 func _save_report_file() -> void:
 	var diagnostics: Gen2Diagnostics = Gen2Diagnostics.instance()
 	if diagnostics == null:

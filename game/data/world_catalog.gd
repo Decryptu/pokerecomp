@@ -1,13 +1,9 @@
 class_name Gen2WorldCatalog
 extends RefCounted
 
-## Every stable gameplay SITE the cartridge hands something out at, decoded once
-## and addressed by an id that does not move: starters, gifts, static battles,
-## trades, prizes, ground items, badges and shops. The host owns the decoding and
-## the mod owns the placement, so a randomizer needs no private copy of cartridge
-## semantics. A patch changes a FIELD of a row and never the script behind it.
-## Nothing is imported for this: every row is derived from the cache and written
-## beside it as a sidecar, so an absent or stale one is rebuilt rather than bumped.
+## Every site the cartridge hands something out at, by an id that does not move,
+## derived from the cache into a sidecar; a patch changes a field of a row, never
+## the script behind it.
 
 const KIND_STARTER: StringName = &"starter"
 const KIND_GIFT: StringName = &"gift"

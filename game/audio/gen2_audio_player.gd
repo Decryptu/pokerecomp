@@ -50,6 +50,7 @@ var _engine: Gen2SoundEngine = null
 ## generation reaches the same four hardware channels through its own engine, and
 ## the record the caller hands over is what says which.
 var _gen1: Gen1SoundEngine = null
+var _gen1_tempo_request: int = -1
 var _generation: int = RomRegistry.GEN2
 var _apu: PokeApu = null
 var _music_key: String = ""
@@ -284,6 +285,8 @@ func _advance_driver() -> void:
 		if _advance_pikachu_clip():
 			return
 		_gen1.fade_out_audio()
+		if _gen1_tempo_request >= 0 and _gen1.music_notes_ending():
+			_gen1.music_tempo = _gen1_tempo_request
 		_gen1.update_music()
 		return
 	_engine.update_sound()
@@ -454,6 +457,11 @@ func set_low_health_alarm(on: bool) -> void:
 func set_gen1_music_paused(paused: bool) -> void:
 	if _generation == RomRegistry.GEN1:
 		_gen1.mute_audio_and_pause_music = 1 if paused else 0
+
+
+## `wMusicTempo` as the surfing minigame writes it, on the driver's own frame; -1 leaves it.
+func set_gen1_music_tempo_request(tempo: int) -> void:
+	_gen1_tempo_request = tempo
 
 
 func low_health_alarm() -> bool:

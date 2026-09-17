@@ -495,6 +495,11 @@ func _one_game() -> void:
 	_check_a_gym_statue()
 	_check_a_bench_guy()
 	_check_a_bookshelf()
+	_check_bills_list()
+	_check_the_plateau_statues()
+	if _r.game_id == RomRegistry.YELLOW:
+		_check_the_beach_house()
+		_check_the_chairmans_print()
 	_check_a_card_key_door()
 	_check_an_elevator()
 	_check_a_script_menu()
@@ -1027,8 +1032,8 @@ func _runtime_request(results: Array) -> Dictionary:
 	return {}
 
 
-func _facing_up(map: int, cell: Vector2i) -> Gen2WorldAPI:
-	var world: Gen2WorldAPI = _r.open_world(0, map, cell)
+func _facing_up(map: int, cell: Vector2i, state: Gen2WorldState = null) -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _r.open_world(0, map, cell, state)
 	if world != null:
 		world.player_facing = Gen2WorldSprite.FACING_UP
 	return world
@@ -1374,6 +1379,10 @@ func _walk_the_receptionist(dex: bool, frames: int, said: String) -> void:
 
 func _event_text(results: Array) -> String:
 	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+
+
+static func _ended(results: Array) -> bool:
+	return not results.is_empty() and StringName(results[0].get("status", &"")) == &"done"
 
 
 ## `VendingMachineMenu`'s three `VendingPrices` rows and the purchase
@@ -1908,8 +1917,7 @@ func _check_the_blackboard() -> void:
 	request = _runtime_request(world.run_event_queue(true))
 	_r.check(StringName(request.get("kind", &"")) == &"gen1_menu_requested",
 		"the menu did not come back after BRN.")
-	_r.check(world.complete_runtime_request({"ok": true, "row": 5}).is_empty()
-		or world.pending_runtime_request().is_empty(), "QUIT did not leave.")
+	_r.check(_ended(world.complete_runtime_request({"ok": true, "row": 5})), "QUIT did not leave.")
 	_r.note("gen1 walk the blackboard: BRN read and QUIT taken")
 
 
@@ -2726,6 +2734,126 @@ func _check_a_bookshelf() -> void:
 		_r.check(beside.interact().is_empty(), "the shelf answered from the side.")
 
 
+## `BillsHousePC.displayBillsHousePokemonList`.
+func _check_bills_list() -> void:
+	var record: Gen2WorldMap = _r.data.world_map(0, BILLS_HOUSE)
+	var pc: Dictionary = {}
+	for row: Dictionary in record.events["hidden_events"] as Array:
+		for node: Dictionary in row.get("script", []) as Array:
+			if String(node.get("op", "")) == "facing":
+				pc = row
+	if not _r.check(not pc.is_empty(), "Bill's PC is not among the house's hidden events."):
+		return
+	var world: Gen2WorldAPI = _facing_up(BILLS_HOUSE, Vector2i(int(pc["x"]), int(pc["y"]) + 1))
+	if world == null:
+		return
+	world.set_event_flag(BILLS_LEFT_FLAG)
+	var opened: String = _box_text(world)
+	_r.check(opened.begins_with(BILLS_LIST_BOX), "Bill's PC opened on %s." % opened)
+	world.run_event_queue(true)
+	var menu: Dictionary = world.pending_runtime_request()
+	var rows: Array = (menu.get("values", {}) as Dictionary).get("rows", [])
+	if not _r.check(StringName(menu.get("kind", &"")) == &"gen1_menu_requested"
+		and _menu_names(rows) == BILLS_LIST_ROWS, "Bill's list offered %s." % [menu]):
+		return
+	world.complete_runtime_request({"ok": true, "row": 0})
+	var page: Dictionary = world.pending_runtime_request()
+	_r.check(StringName(page.get("kind", &"")) == &"pokedex_entry_requested"
+		and int((page.get("values", {}) as Dictionary).get("species", 0)) == BILLS_EEVEE,
+		"EEVEE's row opened %s." % [page])
+	world.complete_runtime_request({"ok": true})
+	_r.check(StringName(world.pending_runtime_request().get("kind", &"")) == &"gen1_menu_requested",
+		"the list did not come back behind the page.")
+	_r.check(_ended(world.complete_runtime_request({"ok": true, "row": rows.size() - 1})),
+		"CANCEL left Bill's list open.")
+
+
+## `IndigoPlateauStatues`: `bit 0` of `wXCoord` picks the box.
+func _check_the_plateau_statues() -> void:
+	var statues: Array[Vector2i] = _tile_cells(INDIGO_PLATEAU, [PLATEAU_STATUE_TILE])
+	var picked: Dictionary = {}
+	for cell: Vector2i in statues:
+		picked[cell.x & 1] = cell
+	if not _r.check(picked.size() == 2, "the plateau's statues stand at %s." % [statues]):
+		return
+	var boxes: Array = []
+	for parity: int in [0, 1]:
+		var world: Gen2WorldAPI = _facing_up(INDIGO_PLATEAU, picked[parity] + Vector2i.DOWN)
+		if world == null:
+			return
+		boxes.append(_spoken(world))
+	_r.check(boxes[0].size() == 2 and boxes[1].size() == 2
+		and String(boxes[0][0]) == PLATEAU_STATUE_BOX and String(boxes[1][0]) == PLATEAU_STATUE_BOX
+		and boxes[0][1] != boxes[1][1], "the statues said %s." % [boxes])
+
+
+## The dude's YES runs the minigame; the printer offers its hi score.
+func _check_the_beach_house() -> void:
+	var world: Gen2WorldAPI = _facing_up(SUMMER_BEACH_HOUSE, BEACH_DUDE + Vector2i.DOWN)
+	if world == null:
+		return
+	world.pikachu.set_party(true, true)
+	world.interact()
+	var asked: String = String(world.pending_script_input().get("text", ""))
+	_r.check(asked.begins_with(BEACH_DUDE_BOX), "the dude asked %s." % asked)
+	world.choose_script_input(0)
+	var request: Dictionary = world.pending_runtime_request()
+	if not _r.check(StringName(request.get("kind", &"")) == &"surfing_minigame_requested"
+		and not bool((request.get("values", {}) as Dictionary).get("select_quits", true)),
+		"YES asked for %s." % [request]):
+		return
+	world.complete_runtime_request({"ok": true, "hi_score": BEACH_HI_SCORE})
+	_r.check(world.gen1_surf_hi_score() == BEACH_HI_SCORE, "the hi score did not stand.")
+	world = _facing_up(SUMMER_BEACH_HOUSE, BEACH_PRINTER + Vector2i.DOWN, world.state)
+	world.pikachu.set_party(true, true)
+	var said: String = _box_text(world)
+	_r.check(said.begins_with(BEACH_PRINTER_BOX), "the printer said %s." % said)
+	world.run_event_queue(true)
+	world.choose_script_input(0)
+	request = world.pending_runtime_request()
+	var values: Dictionary = request.get("values", {})
+	if not _r.check(StringName(request.get("kind", &"")) == &"printer_requested"
+		and String(values.get("page", "")) == "high_score" and not bool(values.get("preview", true))
+		and int(values.get("hi_score", 0)) == BEACH_HI_SCORE, "PRINT asked for %s." % [request]):
+		return
+	var cancelled: Array = world.complete_runtime_request({"ok": true, "printed": false})
+	_r.check(_event_text(cancelled).begins_with(BEACH_PRINT_ERROR), "a cancelled print said %s." % [cancelled])
+	world = _facing_up(SUMMER_BEACH_HOUSE, BEACH_PRINTER + Vector2i.DOWN, world.state)
+	world.pikachu.set_party(true, true)
+	world.interact()
+	world.run_event_queue(true)
+	world.choose_script_input(1)
+	request = world.pending_runtime_request()
+	_r.check(StringName(request.get("kind", &"")) == &"printer_requested"
+		and bool((request.get("values", {}) as Dictionary).get("preview", false)),
+		"NO showed %s." % [request])
+
+
+## `PokemonFanClubChairmanText` past the voucher.
+func _check_the_chairmans_print() -> void:
+	var world: Gen2WorldAPI = _facing_up(POKEMON_FAN_CLUB, FAN_CLUB_CHAIRMAN + Vector2i.DOWN)
+	if world == null:
+		return
+	world.set_event_flag(FAN_CLUB_LEFT_FLAG)
+	world.interact()
+	var asked: String = String(world.pending_script_input().get("text", ""))
+	_r.check(asked.begins_with(CHAIRMAN_PRINT_BOX), "the chairman asked %s." % asked)
+	world.choose_script_input(0)
+	var request: Dictionary = world.pending_runtime_request()
+	if not _r.check(StringName(request.get("kind", &"")) == &"party_selection_requested",
+		"YES asked for %s." % [request]):
+		return
+	world.complete_runtime_request(_name_rater_row(true))
+	request = world.pending_runtime_request()
+	var values: Dictionary = request.get("values", {})
+	if not _r.check(StringName(request.get("kind", &"")) == &"printer_requested"
+		and String(values.get("page", "")) == "portrait" and int(values.get("party_index", -1)) == 0,
+		"the member opened %s." % [request]):
+		return
+	var cancelled: Array = world.complete_runtime_request({"ok": true, "printed": false})
+	_r.check(_event_text(cancelled).begins_with(CHAIRMAN_CANCELLED_BOX), "a cancelled portrait said %s." % [cancelled])
+
+
 ## `bookshelf_tile HOUSE, $3D, TownMapText`: the poster in Blue's house, whose
 ## box is followed by the region map rather than by another line.
 func _check_the_town_map_poster() -> void:
@@ -3394,15 +3522,21 @@ func _bookshelf_cell(map: int) -> Vector2i:
 
 
 func _tile_cell(map: int, tiles: Array) -> Vector2i:
+	var cells: Array[Vector2i] = _tile_cells(map, tiles)
+	return cells[0] if not cells.is_empty() else Vector2i(-1, -1)
+
+
+func _tile_cells(map: int, tiles: Array) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
 	var world: Gen2WorldAPI = _r.open_world(0, map, Vector2i.ZERO)
 	if world == null:
-		return Vector2i(-1, -1)
+		return out
 	var record: Gen2WorldMap = world.current_map
 	for y: int in record.collision_height - 1:
 		for x: int in record.collision_width:
 			if tiles.has(world.collision_code_at(Vector2i(x, y))):
-				return Vector2i(x, y)
-	return Vector2i(-1, -1)
+				out.append(Vector2i(x, y))
+	return out
 
 
 ## `_GymStatueText1`'s two `text_ram` markers filled from the map script.
@@ -4436,6 +4570,28 @@ func _check_a_connection_lands_aligned() -> void:
 
 ## `ViridianMartDefaultScript`'s two clerk rows sit past the three the objects name.
 const VIRIDIAN_MART: int = 42
+const BILLS_HOUSE: int = 88
+const BILLS_LEFT_FLAG: int = 1375
+const BILLS_LIST_BOX: String = "BILL's favorite"
+const BILLS_LIST_ROWS: Array = ["EEVEE", "FLAREON", "JOLTEON", "VAPOREON", "CANCEL"]
+const BILLS_EEVEE: int = 133
+const INDIGO_PLATEAU: int = 9
+const PLATEAU_STATUE_BOX: String = "INDIGO PLATEAU"
+const PLATEAU_STATUE_TILE: int = 0x30
+const SUMMER_BEACH_HOUSE: int = 248
+const BEACH_DUDE := Vector2i(2, 3)
+const BEACH_PRINTER := Vector2i(13, 1)
+const BEACH_DUDE_BOX: String = "Whoa!"
+const BEACH_PRINTER_BOX: String = "SUMMER BEACH HOUSE
+PRINTER, it says."
+const BEACH_PRINT_ERROR: String = "PRINT error!"
+const BEACH_HI_SCORE: int = 0x1234
+const POKEMON_FAN_CLUB: int = 90
+const FAN_CLUB_CHAIRMAN := Vector2i(3, 1)
+const FAN_CLUB_LEFT_FLAG: int = 338
+const CHAIRMAN_PRINT_BOX: String = "Hi there, "
+const CHAIRMAN_CANCELLED_BOX: String = "Maybe we won't
+PRINT this now."
 const VIRIDIAN_MART_MAT := Vector2i(3, 7)
 const VIRIDIAN_MART_WALKED := Vector2i(2, 5)
 const OAKS_PARCEL_ITEM: int = 0x46

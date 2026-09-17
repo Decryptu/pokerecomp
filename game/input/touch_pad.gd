@@ -84,14 +84,8 @@ func is_editing() -> bool:
 	return _edit_mode
 
 
-## The rectangle in device-independent points: the pad's own, less whatever the
-## screen keeps for itself along the edges the pad actually reaches. A phone
-## counts its notch, its home indicator and its rounded corners as display, so a
-## face button anchored hard against the edge is drawn under glass that no finger
-## reaches through; held upright the controller sits below the map and is nowhere
-## near the notch, so reserving that end of it would only push the buttons down.
-## Every rect, every hit test and every drag is measured from here, so insetting
-## it moves all three.
+## The pad's rectangle in points, less the safe area along the edges it reaches;
+## every rect, hit test and drag is measured from it.
 func area() -> Rect2:
 	var unit: float = Gen2LauncherUI.point_scale(self)
 	var window: Window = get_window()

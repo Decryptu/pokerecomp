@@ -27,13 +27,8 @@ const WINDOW_PANEL := Vector2i(1240, 1080)
 ## laptop. The panel itself gets six.
 const WINDOW_SCALE: int = 4
 
-## An animating page is copied at half the host's rate rather than every drawn
-## frame. The trainer card's colon, the party's icons and the region map's player
-## are the only things on the panel that move, and all three are slower than this.
-## A still page is not copied on a clock at all: it is sent for a few frames after
-## the screen says it has redrawn, and not again, which matters because the
-## launcher's own page is drawn at the panel's full resolution and one of those is
-## 5.4 MB where a hardware-pixel canvas is 148 KB.
+## An animating page is copied at half the host's rate; a still one only for a
+## few frames after a redraw, since a full-resolution page is 5.4 MB.
 const PANEL_HZ: float = 30.0
 ## How many frames a still page is sent for after it changes. More than one,
 ## because the viewport draws what it was given on the frame after it was given

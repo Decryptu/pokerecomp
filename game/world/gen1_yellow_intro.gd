@@ -2,31 +2,14 @@ class_name Gen1YellowIntro
 extends RefCounted
 
 ## Yellow's `PlayIntroScene` (engine/movie/intro_yellow.asm): eighteen scenes
-## over `RunObjectAnimations` (engine/gfx/animated_objects.asm), ten object
-## structs each walking a frameset of OAM sets into `wShadowOAM` once a frame.
-## [Gen1Opening] owns the frame loop and the LCD.
+## over [Gen1AnimatedObjects]. [Gen1Opening] owns the frame loop and the LCD.
 
-## `wAnimatedObjectDataStructs`: ten of them, and the offsets read here.
-const OBJECTS: int = 10
-const STRUCT_LIVE: int = 0
-const STRUCT_FRAMESET: int = 1
-const STRUCT_CALLBACK: int = 2
-const STRUCT_VTILE: int = 3
-const STRUCT_X: int = 4
-const STRUCT_Y: int = 5
-const STRUCT_XOFF: int = 6
-const STRUCT_YOFF: int = 7
-const STRUCT_TIMER: int = 8
-const STRUCT_DURATION_OFFSET: int = 9
-const STRUCT_FRAME: int = 10
-const STRUCT_VAR1: int = 11
-const STRUCT_VAR2: int = 12
-const STRUCT_SIZE: int = 16
-const OAM_END: int = Gen1Lcd.OAM_SLOTS * Gen1Lcd.OAM_BYTES
-
-const FLIP_MASK: int = Gen1Lcd.OAM_XFLIP | Gen1Lcd.OAM_YFLIP | Gen1Lcd.OAM_PRIO
-const FRAME_FLIP_SHIFT: int = 1
-const FRAME_FLIP_MASK: int = 0xC0
+const STRUCT_CALLBACK: int = Gen1AnimatedObjects.STRUCT_CALLBACK
+const STRUCT_X: int = Gen1AnimatedObjects.STRUCT_X
+const STRUCT_Y: int = Gen1AnimatedObjects.STRUCT_Y
+const STRUCT_YOFF: int = Gen1AnimatedObjects.STRUCT_YOFF
+const STRUCT_VAR1: int = Gen1AnimatedObjects.STRUCT_VAR1
+const STRUCT_VAR2: int = Gen1AnimatedObjects.STRUCT_VAR2
 
 ## The two `wShadowOAM` attribute passes `.loop` runs on scenes 7 and 11.
 const SCENE_SURF: int = 7
@@ -110,13 +93,11 @@ const LY_COPY_BYTES: int = 7 * PokeTiles.TILE_BYTES
 var _host: Gen1Opening = null
 var _data: GameData = null
 var _yellow: Dictionary = {}
-var _structs: Array[PackedByteArray] = []
+var _objects: Gen1AnimatedObjects = Gen1AnimatedObjects.new()
 var _scene: int = 0
 var _timer: int = 0
 var _pass: int = 0
 var _current: int = -1
-var _loaded: int = 0
-var _oam_offset: int = 0
 var _ly_pointer_on: bool = false
 var _ly_overrides: PackedByteArray = PackedByteArray()
 var _ly_buffer: PackedByteArray = PackedByteArray()
@@ -129,9 +110,11 @@ static func create(host: Gen1Opening, data: GameData) -> Gen1YellowIntro:
 	out._host = host
 	out._data = data
 	out._yellow = data.opening().get("yellow", {})
+	out._objects.tables = out._yellow
+	out._objects.shadow = host.shadow_oam_buffer()
+	out._objects.callback = out._callback
 	out._ly_overrides.resize(LY_LINES)
 	out._ly_buffer.resize(LY_LINES)
-	out._clear_objects()
 	return out
 
 
@@ -163,7 +146,7 @@ func init_steps() -> Array:
 	))
 	steps.append(_host.delay_step(INIT_TAIL_FRAMES))
 	steps.append(_host.do_step(func() -> void:
-		_clear_objects()
+		_objects.clear()
 		_host.set_palette_command("generic")
 		_scene = 0
 		_timer = 0
@@ -179,7 +162,9 @@ func loop_steps() -> Array:
 	_pass += 1
 	var steps: Array = _scene_steps()
 	steps.append(_host.do_step(func() -> Array:
-		_run_object_animations()
+		## Scene 7's pass leaves every attribute byte where it stands.
+		_objects.write_attributes = _scene != SCENE_SURF
+		_objects.run()
 		if _scene == SCENE_SURF:
 			_or_attributes(SCENE_7_SLOTS)
 		elif _scene == SCENE_FLY:
@@ -298,7 +283,7 @@ func _timer_expired() -> bool:
 
 func _scene_0() -> void:
 	_ly_pointer_on = false
-	_current = _spawn(1, OBJECT_AT, OBJECT_AT)
+	_current = _objects.spawn(1, OBJECT_AT, OBJECT_AT)
 	_host.set_scroll(0, 0)
 	_host.set_window(Gen1Opening.WINDOW_OFF)
 	_host.set_palettes(PALETTE_NORMAL, PALETTE_NORMAL, PALETTE_OBP1_RUN)
@@ -309,7 +294,7 @@ func _scene_0() -> void:
 func _scene_wait_and_mask() -> void:
 	if not _timer_expired():
 		return
-	_mask(_current)
+	_objects.mask(_current)
 	_next_scene()
 
 
@@ -326,16 +311,16 @@ func _scene_2() -> void:
 	_host.lcd.fill_attributes(0, FLY_PIC_AT, FLY_PIC_SIDE, FLY_PIC_SIDE, FLY_PIC_CGB_PALETTE)
 	# `ld e, [hl]`: the row's first byte is the X `SpawnAnimatedObject` takes in `e`.
 	for bar: Array in _yellow.get("speed_bars", []):
-		var index: int = _spawn(8, int(bar[0]), int(bar[1]))
+		var index: int = _objects.spawn(8, int(bar[0]), int(bar[1]))
 		if index >= 0:
-			_structs[index][STRUCT_VAR1] = int(bar[2])
+			_objects.object(index)[STRUCT_VAR1] = int(bar[2])
 	_timer = SCENE_TIMER
 	_next_scene()
 
 
 func _scene_3() -> void:
 	if _timer_expired():
-		_mask_all()
+		_objects.mask_all()
 		_next_scene()
 		return
 	if _host.scroll_x() != FLY_SCROLL_END:
@@ -346,7 +331,7 @@ func _scene_4() -> void:
 	_ly_pointer_on = false
 	_host.lcd.fill_attributes(0, FLY_PIC_AT, FLY_PIC_SIDE, FLY_PIC_SIDE, 0)
 	_draw_bars()
-	_current = _spawn(2, OBJECT_AT, OBJECT_AT)
+	_current = _objects.spawn(2, OBJECT_AT, OBJECT_AT)
 	_timer = SCENE_TIMER
 	_next_scene()
 
@@ -376,14 +361,14 @@ func _scene_6() -> void:
 		line_ids.append_array(SEA_LINE_TILES)
 	_host.write_map(0, Vector2i(0, SEA_LINE_ROW), Gen1Lcd.MAP_SIDE, 1, line_ids)
 	_fill_rows(SEA_LINE_ROW + 1, SEA_ROWS, SEA_TILE)
-	_current = _spawn(5, SURF_OBJECT_AT.x, SURF_OBJECT_AT.y)
+	_current = _objects.spawn(5, SURF_OBJECT_AT.x, SURF_OBJECT_AT.y)
 	_timer = SURF_TIMER
 	_next_scene()
 
 
 func _scene_7() -> void:
 	if _timer_expired():
-		_mask(_current)
+		_objects.mask(_current)
 		_next_scene()
 		return
 	_host.set_scroll((_host.scroll_x() + SURF_SCROLL_STEP) & 0xFF, 0)
@@ -397,7 +382,7 @@ func _scene_7() -> void:
 func _scene_8() -> void:
 	_ly_pointer_on = false
 	_draw_bars()
-	_current = _spawn(3, OBJECT_AT, OBJECT_AT)
+	_current = _objects.spawn(3, OBJECT_AT, OBJECT_AT)
 	_timer = SCENE_TIMER
 	_next_scene()
 
@@ -413,14 +398,14 @@ func _scene_10() -> void:
 		_host.write_map(
 			0, FLY_BOX_AT[index], int(tilemap["columns"]), int(tilemap["rows"]), tilemap["ids"]
 		)
-	_current = _spawn(6, FLY_OBJECT_AT.x, FLY_OBJECT_AT.y)
+	_current = _objects.spawn(6, FLY_OBJECT_AT.x, FLY_OBJECT_AT.y)
 	_timer = SCENE_TIMER
 	_next_scene()
 
 
 func _scene_11() -> void:
 	if _timer_expired():
-		_mask(_current)
+		_objects.mask(_current)
 		_next_scene()
 		return
 	if _timer & CLOUD_FRAME_MASK != 0:
@@ -439,7 +424,7 @@ func _scene_12() -> void:
 		_host.write_map(0, CLOSE_UP_AT + Vector2i(0, row), CLOSE_UP_SIZE.x, 1, ids)
 	for extra: Array in CLOSE_UP_EXTRA:
 		_host.write_map(0, extra[0], 1, 1, [int(extra[1])])
-	_current = _spawn(9, CLOSE_OBJECT_AT.x, CLOSE_OBJECT_AT.y)
+	_current = _objects.spawn(9, CLOSE_OBJECT_AT.x, CLOSE_OBJECT_AT.y)
 	_timer = SCENE_TIMER
 	_next_scene()
 
@@ -447,7 +432,7 @@ func _scene_12() -> void:
 func _scene_13() -> void:
 	if not _timer_expired():
 		return
-	_spawn(10, BOLT_OBJECT_AT.x, BOLT_OBJECT_AT.y)
+	_objects.spawn(10, BOLT_OBJECT_AT.x, BOLT_OBJECT_AT.y)
 	_next_scene()
 
 
@@ -457,7 +442,7 @@ func _scene_14() -> Array:
 	if value >= 0:
 		_host.set_palettes(value, value, value & 0xF0)
 		return []
-	_mask_all()
+	_objects.mask_all()
 	_host.clear_sprites()
 	_host.fill_tilemap(BAR_TILE)
 	_host.fill_tilemap_rows(BAR_ROWS, Gen1Opening.ROWS - 2 * BAR_ROWS, 0)
@@ -467,7 +452,7 @@ func _scene_14() -> Array:
 		_host.do_step(func() -> void:
 			_host.set_transfer(false, Gen1Opening.DEST_MAP0)
 			_host.set_palettes(PALETTE_NORMAL, PALETTE_NORMAL, _host.lcd.obp1)
-			_current = _spawn(7, OBJECT_AT, OBJECT_AT)
+			_current = _objects.spawn(7, OBJECT_AT, OBJECT_AT)
 			_next_scene()
 			_timer = FLASH_TIMER),
 	]
@@ -505,64 +490,8 @@ func _scene_16() -> void:
 	_next_scene()
 
 
-func _clear_objects() -> void:
-	_structs = []
-	for _index: int in OBJECTS:
-		var object := PackedByteArray()
-		object.resize(STRUCT_SIZE)
-		_structs.append(object)
-	_loaded = 0
-	_oam_offset = 0
-
-
-## `SpawnAnimatedObject`: the first free struct, or -1 with none left.
-func _spawn(kind: int, x: int, y: int) -> int:
-	var spawns: Array = _yellow.get("spawn_states", [])
-	if kind >= spawns.size():
-		return -1
-	for index: int in OBJECTS:
-		var object: PackedByteArray = _structs[index]
-		if object[STRUCT_LIVE] != 0:
-			continue
-		_loaded += 1
-		object.fill(0)
-		object[STRUCT_LIVE] = _loaded & 0xFF
-		object[STRUCT_FRAMESET] = int(spawns[kind][0])
-		object[STRUCT_CALLBACK] = int(spawns[kind][1])
-		object[STRUCT_X] = x & 0xFF
-		object[STRUCT_Y] = y & 0xFF
-		object[STRUCT_FRAME] = 0xFF
-		return index
-	return -1
-
-
-func _mask(index: int) -> void:
-	if index >= 0 and index < OBJECTS:
-		_structs[index][STRUCT_LIVE] = 0
-
-
-func _mask_all() -> void:
-	for object: PackedByteArray in _structs:
-		object[STRUCT_LIVE] = 0
-
-
-## `RunObjectAnimations`, the rest of the buffer zeroed.
-func _run_object_animations() -> void:
-	_oam_offset = 0
-	for index: int in OBJECTS:
-		var object: PackedByteArray = _structs[index]
-		if object[STRUCT_LIVE] == 0:
-			continue
-		_callback(object)
-		if not _update_frame(object):
-			return
-	while _oam_offset < OAM_END:
-		_host.set_shadow_byte(_oam_offset, 0)
-		_oam_offset += 1
-
-
 ## `YellowIntro_AnimatedObjectJumptable`.
-func _callback(object: PackedByteArray) -> void:
+func _callback(object: PackedByteArray, _index: int) -> void:
 	match object[STRUCT_CALLBACK]:
 		2:
 			# `Func_fa008`: left four a frame to $58.
@@ -601,78 +530,6 @@ func _sine(angle: int, amplitude: int) -> int:
 		return 0
 	var value: int = (int(words[index]) * amplitude) >> 8
 	return -value if negative else value
-
-
-## `UpdateCurrentAnimatedObjectFrame`; false once the buffer is full.
-func _update_frame(object: PackedByteArray) -> bool:
-	var frame: Dictionary = _advance_duration(object)
-	var set_id: int = int(frame["set"])
-	if set_id < 0:
-		return true
-	var sets: Array = _yellow.get("oam_sets", [])
-	if set_id >= sets.size():
-		return true
-	var oam_set: Dictionary = sets[set_id]
-	var vtile: int = (object[STRUCT_VTILE] + int(oam_set["tile"])) & 0xFF
-	var flips: int = int(frame["flips"])
-	for sprite: Array in oam_set["sprites"]:
-		if _oam_offset >= OAM_END:
-			return false
-		var y: int = (object[STRUCT_Y] + object[STRUCT_YOFF]
-			+ _flipped(int(sprite[0]), flips & Gen1Lcd.OAM_YFLIP)) & 0xFF
-		var x: int = (object[STRUCT_X] + object[STRUCT_XOFF]
-			+ _flipped(int(sprite[1]), flips & Gen1Lcd.OAM_XFLIP)) & 0xFF
-		var attributes: int = ((int(sprite[3]) ^ flips) & FLIP_MASK) \
-			| (int(sprite[3]) & Gen1Lcd.OAM_PAL1)
-		if attributes & Gen1Lcd.OAM_PAL1:
-			attributes |= Gen1Lcd.OAM_HIGH_PALS
-		_host.set_shadow_byte(_oam_offset, y)
-		_host.set_shadow_byte(_oam_offset + 1, x)
-		_host.set_shadow_byte(_oam_offset + 2, (vtile + int(sprite[2])) & 0xFF)
-		if _scene != SCENE_SURF:
-			_host.set_shadow_byte(_oam_offset + 3, attributes)
-		_oam_offset += Gen1Lcd.OAM_BYTES
-	return true
-
-
-## `GetCurrentAnimatedObjectTileYCoordinate` and its X twin.
-static func _flipped(offset: int, flipped: int) -> int:
-	if flipped == 0:
-		return offset
-	return (-(offset + Gen1Lcd.TILE)) & 0xFF
-
-
-## `UpdateDurationTimerAndFrameStateForCurrentAnimatedObject`.
-func _advance_duration(object: PackedByteArray) -> Dictionary:
-	var framesets: Array = _yellow.get("frames", [])
-	var rows: Array = framesets[object[STRUCT_FRAMESET]] \
-		if object[STRUCT_FRAMESET] < framesets.size() else []
-	for _guard: int in 8:
-		if object[STRUCT_TIMER] != 0:
-			object[STRUCT_TIMER] -= 1
-			var row: Array = _row(rows, object[STRUCT_FRAME])
-			return {"set": int(row[0]), "flips": (int(row[1]) & FRAME_FLIP_MASK) >> FRAME_FLIP_SHIFT}
-		object[STRUCT_FRAME] = (object[STRUCT_FRAME] + 1) & 0xFF
-		var next: Array = _row(rows, object[STRUCT_FRAME])
-		var command: int = int(next[0])
-		if command == -2:
-			object[STRUCT_TIMER] = 0
-			object[STRUCT_FRAME] = 0xFF
-			continue
-		if command == -1:
-			object[STRUCT_TIMER] = 0
-			object[STRUCT_FRAME] = (object[STRUCT_FRAME] - 2) & 0xFF
-			continue
-		object[STRUCT_TIMER] = ((int(next[1]) & Gen1Layout.ANIM_FRAME_DURATION_MASK)
-			+ object[STRUCT_DURATION_OFFSET]) & 0xFF
-		return {"set": command, "flips": (int(next[1]) & FRAME_FLIP_MASK) >> FRAME_FLIP_SHIFT}
-	return {"set": -1, "flips": 0}
-
-
-static func _row(rows: Array, index: int) -> Array:
-	if index < 0 or index >= rows.size():
-		return [-1, 0]
-	return rows[index]
 
 
 func _or_attributes(slots: Array[int]) -> void:

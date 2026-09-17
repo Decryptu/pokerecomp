@@ -1,14 +1,8 @@
 class_name Gen2WorldClock
 extends RefCounted
 
-## Deterministic host clock for the real-time Generation 2 day cycle: one elapsed
-## host second is one cartridge clock second, a tick is published at each completed
-## game minute, and time-of-day changes use the cartridge's 04:00, 10:00 and 18:00
-## boundaries. Seconds rather than hardware frames on purpose, since the cartridge
-## reads a real-time clock for the day cycle; a test or a replay reaches any
-## boundary by asking for the seconds. The clock keeps its own time while the game
-## is not running, which is what an RTC does: without that a save resumed at the
-## hour it was written at. It does not move roaming Pokemon.
+## The day cycle's clock in seconds, a tick a game minute, time of day changing
+## at 04:00, 10:00 and 18:00. It keeps running while the game is closed, as an RTC does.
 
 const SECONDS_PER_MINUTE: float = 60.0
 const MINUTES_PER_HOUR: int = 60

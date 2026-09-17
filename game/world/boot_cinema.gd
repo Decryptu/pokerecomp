@@ -1,13 +1,8 @@
 class_name Gen2BootCinema
 extends RefCounted
 
-## Scene-free boot coordinator for SplashScreen, IntroSequence and the title
-## handoff. Presentation hosts consume the requests; this object only advances
-## source hardware frames and waits for explicit completion dependencies.
-##
-## Source: pokegold/engine/movie/splash.asm, engine/movie/intro.asm and
-## engine/menus/intro_menu.asm (SplashScreen, IntroSceneJumper,
-## TitleScreenScene, Copyright).
+## `SplashScreen`, `IntroSceneJumper` and `TitleScreenScene` as hardware frames;
+## the presentation hosts consume the requests.
 
 const COPYRIGHT_PRELUDE_FRAMES: int = 10
 const COPYRIGHT_HOLD_FRAMES: int = 100

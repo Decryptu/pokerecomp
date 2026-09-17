@@ -119,13 +119,8 @@ static func note_caught(section: Dictionary, landmark: int) -> void:
 		(entry as Dictionary)["caught"] = true
 
 
-## Removes every fainted party member and records it, answering the rows it
-## took in party order. The Pokemon is released rather than boxed: that is the
-## rule as written, and a grave box would be six party slots a player could
-## still reach.
-##
-## Eggs are skipped. An egg has no HP to lose and the cartridge never lets one
-## take damage, so a zero there is a row shape rather than a death.
+## Releases every fainted party member, answering the rows it took in order;
+## an egg's zero HP is a row shape rather than a death.
 static func reap(save: Gen2SaveData, cause: StringName, landmark: int) -> Array:
 	if save == null:
 		return []

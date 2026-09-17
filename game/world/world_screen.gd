@@ -279,6 +279,7 @@ var _unown_puzzle_host: Gen2UnownPuzzleScreen = null
 var _diploma_host: Gen2DiplomaScreen = null
 var _unown_printer_host: Gen2UnownPrinterScreen = null
 var _slot_machine_host: Gen2SlotMachineScreen = null
+var _surfing_host: Gen1SurfingMinigameScreen = null
 var _card_flip_host: Gen2CardFlipScreen = null
 ## What `DayCareManOutside` left in wScriptVar, held between the screen finishing
 ## and the request completing. -1 while no routine has written one.
@@ -915,6 +916,7 @@ const FRAME_HOSTS: Array[Array] = [
 	["_day_care_host", "advance_frame"],
 	["_unown_puzzle_host", "advance_frame"],
 	["_slot_machine_host", "advance_frame"],
+	["_surfing_host", "advance_frame"],
 	["_card_flip_host", "advance_frame"],
 ]
 
@@ -1335,6 +1337,7 @@ const FULLSCREEN_HOSTS: Array[StringName] = [
 	&"_day_care_host",
 	&"_unown_puzzle_host",
 	&"_slot_machine_host",
+	&"_surfing_host",
 	&"_card_flip_host",
 	&"_diploma_host",
 	&"_unown_printer_host",
@@ -1387,6 +1390,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	var released: int = PokeButton.released_in(event)
 	if released != PokeButton.NONE and _unown_puzzle_host != null:
 		_unown_puzzle_host.release_button(released)
+		accept_event()
+		return
+	if released != PokeButton.NONE and _surfing_host != null:
+		_surfing_host.release_button(released)
 		accept_event()
 		return
 	if released != PokeButton.NONE and _pokedex_host != null:
@@ -1461,6 +1468,7 @@ const OVERLAY_HOSTS: Array[StringName] = [
 	&"_diploma_host",
 	&"_unown_puzzle_host",
 	&"_slot_machine_host",
+	&"_surfing_host",
 	&"_card_flip_host",
 	## Before the PC and the party overlay because the Hall of Fame is the one
 	## overlay a script opens with nothing behind it: there is no map to go back
@@ -2599,6 +2607,104 @@ func _open_slot_machine(request: Dictionary) -> bool:
 	_script_prompt = "Slot machine"
 	_refresh_labels()
 	return true
+
+
+## `farcall SurfingPikachuMinigame`, its `Random` the world's generator.
+func _open_surfing_minigame(request: Dictionary) -> bool:
+	if _surfing_host != null or _world == null or _data == null:
+		return false
+	var values: Dictionary = request.get("values", {})
+	var host := Gen1SurfingMinigameScreen.new()
+	host.z_index = 30
+	_screen.display(host)
+	if not host.open(
+		_data, _encounter_random, int(values.get("hi_score", 0)),
+		bool(values.get("surfing_pikachu", false)), bool(values.get("select_quits", false))
+	):
+		Gen2Screen.drop(host)
+		_script_prompt = "Surfing minigame unavailable: no beach on this cartridge"
+		return false
+	host.closed.connect(_on_surfing_closed)
+	host.sfx_requested.connect(_play_gen1_sound)
+	host.music_requested.connect(_play_gen1_music)
+	host.pikachu_clip_requested.connect(_play_pikachu_clip)
+	host.tempo_requested.connect(func(tempo: int) -> void:
+		if _audio_player != null:
+			_audio_player.set_gen1_music_tempo_request(tempo))
+	_surfing_host = host
+	_apply_interface_mask()
+	_script_prompt = "Surfing minigame"
+	_refresh_labels()
+	return true
+
+
+## `ReloadMapAfterSurfingMinigame` and `PlayDefaultMusic`.
+func _on_surfing_closed(hi_score: int) -> void:
+	var host: Gen1SurfingMinigameScreen = _surfing_host
+	_surfing_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	if _audio_player != null:
+		_audio_player.set_gen1_music_tempo_request(-1)
+	_script_prompt = ""
+	_play_current_map_music()
+	_show_script_results(_world.complete_runtime_request({"ok": true, "hi_score": hi_score}))
+
+
+## Yellow's printer pages on the diploma's screen: `Printer Error 2` until B.
+func _open_printer(request: Dictionary) -> bool:
+	if _diploma_host != null or _world == null or _data == null:
+		return false
+	var values: Dictionary = request.get("values", {})
+	var host := Gen2DiplomaScreen.new()
+	host.z_index = 30
+	_screen.display(host)
+	if not host.open_gen1_printer(_data, String(values.get("page", "")), {
+		"player": _player_display_name(),
+		"hi_score": int(values.get("hi_score", 0)),
+		"mon": _printer_portrait_mon(int(values.get("party_index", -1))),
+	}, bool(values.get("preview", false))):
+		Gen2Screen.drop(host)
+		_script_prompt = "Printer page unavailable: no printer strings on this cartridge"
+		return false
+	host.closed.connect(_on_printer_closed)
+	host.music_requested.connect(func(_index: int) -> void:
+		_play_gen1_music(Gen2DiplomaScreen.GEN1_MUSIC_PRINTER))
+	_diploma_host = host
+	_apply_interface_mask()
+	_script_prompt = "Printer"
+	_refresh_labels()
+	return true
+
+
+## `Printer_GetMonStats`' `LoadMonData` on `wWhichPokemon`.
+func _printer_portrait_mon(index: int) -> Dictionary:
+	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
+	if save == null or index < 0 or index >= save.party.size():
+		return {}
+	var mon: Gen2SaveMon = save.party[index]
+	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(_data, mon)
+	var species: Dictionary = _data.species(mon.species)
+	return {
+		"species": mon.species, "dex_number": mon.species,
+		"species_name": String(species.get("name", "")),
+		"nickname": mon.nickname if not mon.nickname.is_empty() else String(species.get("name", "")),
+		"level": mon.level, "max_hp": battle_mon.max_hp() if battle_mon != null else 0,
+		"stats": battle_mon.stats if battle_mon != null else {},
+		"moves": mon.moves.duplicate(), "ot_name": mon.original_trainer, "ot_id": mon.ot_id,
+	}
+
+
+## `Printer_PlayMapMusic`; B is the one way out with nothing on the link.
+func _on_printer_closed() -> void:
+	var host: Gen2DiplomaScreen = _diploma_host
+	_diploma_host = null
+	var printing: bool = host != null and host.printing()
+	if host != null:
+		Gen2Screen.drop(host)
+	if printing:
+		_play_current_map_music()
+	_show_script_results(_world.complete_runtime_request({"ok": true, "printed": false}))
 
 
 ## The machine's own `wCoins`, which it has been writing all game.
@@ -4160,6 +4266,50 @@ func preview_day_care(role: StringName) -> void:
 
 ## How long `preview_slot_machine` gives the loop to reach its bet menu.
 const SLOT_MACHINE_MENU_FRAME_CAP: int = 16
+
+
+## Screenshot driver: [param frames] in, or past the first frame of
+## [param until_routine], RIGHT held from [param hold_from].
+func preview_surfing(
+	frames: int, hold_from: int = -1, hold_frames: int = 0, until_routine: int = -1
+) -> void:
+	if _world == null or _data == null or _surfing_host != null:
+		return
+	if not _open_surfing_minigame({"values": {"hi_score": 0, "surfing_pikachu": true}}):
+		return
+	var host: Gen1SurfingMinigameScreen = _surfing_host
+	var game: Gen1SurfingMinigame = host.game()
+	var left: int = maxi(frames, 0)
+	var reached: bool = until_routine < 0
+	while _surfing_host != null and (not reached or left > 0) and game.frame() < SURFING_FRAME_CAP:
+		if game.frame() == hold_from:
+			host.handle_button(PokeButton.RIGHT)
+		if hold_from >= 0 and game.frame() == hold_from + hold_frames:
+			host.release_button(PokeButton.RIGHT)
+		var waiting: bool = game.routine() in [
+			Gen1SurfingMinigame.Routine.EXIT, Gen1SurfingMinigame.Routine.GAME_OVER,
+		]
+		if waiting:
+			host.handle_button(PokeButton.A)
+		host.advance_frame()
+		if waiting:
+			host.release_button(PokeButton.A)
+		if game.routine() == until_routine:
+			reached = true
+		if reached:
+			left -= 1
+
+
+const SURFING_FRAME_CAP: int = 20000
+
+
+## Screenshot driver for one of [constant Gen2DiplomaScreen.GEN1_PAGES].
+func preview_printer(page: String, preview: bool = false) -> void:
+	if _world == null or _data == null or _diploma_host != null:
+		return
+	_open_printer({"values": {
+		"page": page, "preview": preview, "hi_score": 0x1234, "party_index": 0,
+	}})
 
 
 ## Public screenshot driver and scene-test entry for `special SlotMachine`,
@@ -7913,6 +8063,8 @@ const REQUEST_OPENERS: Dictionary = {
 	## No slots or card flip art gives the coins back rather than stopping.
 	&"slot_machine_requested": [&"_open_slot_machine", &"coins", {}],
 	&"card_flip_requested": [&"_open_card_flip", &"coins", {}],
+	&"surfing_minigame_requested": [&"_open_surfing_minigame", &"values", {"ok": true}],
+	&"printer_requested": [&"_open_printer", &"values", {"ok": true, "printed": false}],
 	## `ret z` on an empty dex, and the same for a cache with no glyphs or art.
 	&"unown_printer_requested": [&"_open_unown_printer", &"values", {"ok": true}],
 	&"diploma_requested": [&"_open_diploma", &"values", {"ok": true}],

@@ -29,14 +29,8 @@ const WALKING_HALF_TILES: int = 12
 ## two `.Frameset_PartyMon` steps through.
 const MON_ICON_FRAME_TILES: int = 4
 
-## data/sprites/player_sprites.asm's ChrisStateSprites and KrisStateSprites, the
-## wPlayerState to sprite lookup GetPlayerSprite walks. ChrisStateSprites is
-## identical in both pins and the numbers themselves
-## (constants/sprite_constants.asm) agree too; pokegold ships no KrisStateSprites
-## at all, which is why the female rows are Crystal only.
-##
-## The two tables differ in their PLAYER_NORMAL and PLAYER_BIKE rows and share
-## PLAYER_SURF and PLAYER_SURF_PIKA, so surfing looks the same either way.
+## `ChrisStateSprites` and `KrisStateSprites`, the `wPlayerState` lookup
+## `GetPlayerSprite` walks; pokegold ships no `KrisStateSprites`.
 const SPRITE_PLAYER: int = 0x01
 const SPRITE_PLAYER_BIKE: int = 0x02
 const SPRITE_SURFING_PIKACHU: int = 0x34

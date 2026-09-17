@@ -504,13 +504,9 @@ static func raw_opcode(source_opcode_value: int, crystal_commands: bool = true) 
 	return source_opcode_value + 2 if source_opcode_value >= 0x9E else source_opcode_value + 1
 
 
-## Converts a raw SPECIAL operand into the Crystal-canonical index the runner's
-## handlers are numbered with. data/events/special_pointers.asm's
-## SpecialsPointers agrees for the first 47 entries, then Crystal inserts
-## BattleTowerFade at 47 and a mobile/Battle Tower block at 109, so Gold/Silver
-## 47-107 sit one lower and its last three entries land after that block.
-## Gold/Silver 110 is MrChrono, which Crystal has no entry for; -1 leaves it
-## unhandled rather than aliasing it onto an unrelated routine.
+## A `special` operand as Crystal numbers it: `SpecialsPointers` agree to 47,
+## then Crystal inserts `BattleTowerFade` and a block at 109. Gold's 110 is
+## `MrChrono`, which Crystal has no row for, so -1.
 static func special_index(raw_special: int, crystal_commands: bool = true) -> int:
 	if crystal_commands or raw_special <= 46:
 		return raw_special

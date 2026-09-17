@@ -4038,6 +4038,8 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"destination_warp": &"_gen1_node_destination_warp",
 	"diploma": &"_gen1_node_diploma",
 	"slot_machine": &"_gen1_node_slot_machine",
+	"surfing_minigame": &"_gen1_node_surfing_minigame",
+	"printer": &"_gen1_node_printer",
 	"picture": &"_gen1_node_picture",
 	"help_menu": &"_gen1_node_help_menu",
 	"ss_anne_leaves": &"_gen1_node_ss_anne_leaves",
@@ -4608,15 +4610,19 @@ func _gen1_node_diploma(_node: Dictionary, steps: Array, _run: Dictionary) -> bo
 	return true
 
 
-## `LinkCableHelp`'s `.linkHelpLoop`: the menu again after a row's own text.
+## `LinkCableHelp`'s `.linkHelpLoop`: the menu again after a row's own text or page.
 func _gen1_node_help_menu(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({
-		"type": &"request", "replies": node["replies"], "quit": node["quit"],
+	var step: Dictionary = {
+		"type": &"request", "quit": node["quit"],
 		"values": {"kind": &"gen1_menu_requested", "values": {
 			"box": node["box"], "rows": node["rows"], "grid": node["grid"],
 			"text": String(node["prompt"]),
 		}},
-	})
+	}
+	for key: String in ["replies", "pokedex"]:
+		if node.has(key):
+			step[key] = node[key]
+	steps.append(step)
 	return true
 
 
@@ -4644,6 +4650,55 @@ func _gen1_node_slot_machine(node: Dictionary, steps: Array, _run: Dictionary) -
 		},
 	}})
 	return true
+
+
+## `wSurfingMinigameHiScore`.
+const GEN1_SURF_HI_SCORE: Array[String] = ["surf_hi_score_low", "surf_hi_score_high"]
+
+
+func gen1_surf_hi_score() -> int:
+	if state == null:
+		return 0
+	return state.gen1_byte(GEN1_SURF_HI_SCORE[1]) << 8 | state.gen1_byte(GEN1_SURF_HI_SCORE[0])
+
+
+func set_gen1_surf_hi_score(score: int) -> void:
+	if state == null:
+		return
+	state.set_gen1_byte(GEN1_SURF_HI_SCORE[0], score & 0xFF)
+	state.set_gen1_byte(GEN1_SURF_HI_SCORE[1], (score >> 8) & 0xFF)
+
+
+## `farcall SurfingPikachuMinigame`; BIT_PIKACHU_MAP_SURF_SELECT lets SELECT quit it.
+func _gen1_node_surfing_minigame(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": &"request", "surfing": true, "values": {
+		"kind": &"surfing_minigame_requested",
+		"values": {
+			"hi_score": gen1_surf_hi_score(),
+			"surfing_pikachu": pikachu != null and pikachu.surfing(),
+			"select_quits": event_flag_active(
+				Gen1Layout.engine_flag_base("pikachu_map_script_flags")
+				+ Gen1Layout.PIKACHU_MAP_SURF_SELECT_BIT
+			),
+		},
+	}})
+	return true
+
+
+## A printer page, its arms `hCanceledPrinting`'s; a preview is held for a press.
+func _gen1_node_printer(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var values: Dictionary = {
+		"kind": &"printer_requested",
+		"values": {
+			"page": String(node["page"]), "preview": bool(node.get("preview", false)),
+			"hi_score": gen1_surf_hi_score(),
+			"party_index": int((run.get("party", {}) as Dictionary).get("index", -1)),
+		},
+	}
+	if bool(node.get("preview", false)):
+		steps.append({"type": &"request", "values": values})
+		return true
+	return _gen1_stage_later(node, steps, run, values, &"printed")
 
 
 ## `wDestinationWarpID`: the warp the last `LoadDestinationWarpPosition` landed
@@ -4707,8 +4762,12 @@ func _gen1_node_player_coord(node: Dictionary, steps: Array, run: Dictionary) ->
 	var axis: int = int(node["axis"])
 	var standing: int = player_cell.y if axis == 0 else player_cell.x
 	var value: int = int(node["value"])
-	var holds: bool = standing < value if String(node.get("test", "exactly")) == "below" \
-		else standing == value
+	var holds: bool = standing == value
+	match String(node.get("test", "exactly")):
+		"below":
+			holds = standing < value
+		"bit":
+			holds = standing & (1 << value) != 0
 	return _gen1_resolve_side(node, holds, steps, run)
 
 
@@ -7730,7 +7789,9 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 		_gen1_ride_elevator(result)
 	elif step.has("slot_machine") and result.has("coins"):
 		_gen1_steps.push_front({"type": &"coins", "amount": int(result["coins"])})
-	elif step.has("replies") or step.has("list_menu"):
+	elif step.has("surfing") and result.has("hi_score"):
+		set_gen1_surf_hi_score(int(result["hi_score"]))
+	elif step.has("replies") or step.has("pokedex") or step.has("list_menu"):
 		_gen1_steps = _gen1_menu_answered(step, int(result.get("row", -1))) + _gen1_steps
 	elif step.has("answers"):
 		var answers: Array = step["answers"]
@@ -7750,10 +7811,16 @@ func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
 
 
 func _gen1_menu_answered(step: Dictionary, chosen: int) -> Array:
-	if step.has("replies"):
-		var replies: Array = step["replies"]
-		if chosen < 0 or chosen >= replies.size() or chosen in (step["quit"] as Array):
+	if step.has("replies") or step.has("pokedex"):
+		var replies: Array = step.get("replies", step.get("pokedex", []))
+		## The cache's numbers are floats, which `Array.has` tells from an int.
+		if chosen < 0 or chosen >= replies.size() or _gen1_row_named(step["quit"], chosen):
 			return []
+		if step.has("pokedex"):
+			return [{"type": &"request", "values": {
+				"kind": &"pokedex_entry_requested",
+				"values": {"species": int(replies[chosen])},
+			}}, step]
 		return [{"type": &"text", "text": String(replies[chosen])}, step]
 	var listed: Array = step["rows"]
 	if chosen < 0 or chosen >= listed.size():
@@ -7761,11 +7828,20 @@ func _gen1_menu_answered(step: Dictionary, chosen: int) -> Array:
 	return [{"type": &"text", "text": String((listed[chosen] as Dictionary)["text"])}, step]
 
 
+static func _gen1_row_named(rows: Array, row: int) -> bool:
+	for named: Variant in rows:
+		if int(named) == row:
+			return true
+	return false
+
+
 ## The side a staged request came back on, with its answer on the run.
 func _gen1_resolve_later(step: Dictionary, result: Dictionary) -> Array:
 	var run: Dictionary = (step.get("run", {}) as Dictionary).duplicate(true)
 	var cancelled: bool = true
-	if StringName(step.get("answer", &"")) == &"party_index":
+	if StringName(step.get("answer", &"")) == &"printed":
+		cancelled = not bool(result.get("printed", false))
+	elif StringName(step.get("answer", &"")) == &"party_index":
 		cancelled = int(result.get("party_index", -1)) < 0
 		if not cancelled:
 			run["party"] = {

@@ -1029,8 +1029,49 @@ const YELLOW_INTRO_OAM_SETS: int = 20
 const YELLOW_INTRO_SINE_BYTES: int = 32
 const YELLOW_INTRO_SINE_WORDS: int = 32
 const YELLOW_INTRO_PAL_END: int = 0xFF
+## `SurfingPikachu1Graphics1` and `3` as `FarCopyData` sizes them: the files are
+## 65 and 139 tiles, and the copies run on into what follows.
+const SURFING_GFX_1_TILES: int = 80
+const SURFING_GFX_2_TILES: int = 256
+const SURFING_GFX_3_TILES: int = 144
+const SURFING_PRINT_GFX_TILES: int = 96
+const SURFING_SPAWN_STATES: int = 13
+const SURFING_CALLBACKS: int = 5
+const SURFING_FRAMESETS: int = 28
+const SURFING_OAM_SETS: int = 36
+const SURFING_LY_SINE_BYTES: int = 32
+const SURFING_SINE_WORDS: int = 32
+const SURFING_METATILES: int = 22
+const SURFING_METATILE_TILES: int = 4
+const SURFING_WAVE_PATTERNS: int = 30
+const SURFING_WAVE_PATTERN_SIZE: int = 8
+const SURFING_WAVE_FUNCTIONS: int = 0x7C
+const SURFING_WAVE_STARTS: int = 8
+const SURFING_TEMPOS: int = 5
+const SURFING_STATIC_TILES: int = 14
+const SURFING_STATUS_BAR_TILES: int = 9
+const SURFING_BEACH_INTRO: Vector2i = Vector2i(20, 12)
+const SURFING_TITLE_TILEMAP: Vector2i = Vector2i(12, 6)
+const SURFING_BEACH_OUTRO: Vector2i = Vector2i(20, 10)
+const SURFING_USE_CONTROL_PAD_TILES: int = 15
+const SURFING_TO_SURF_RAD_TILES: int = 13
+const SURFING_TEXT_TILES: Dictionary = {
+	"hi_score": 9, "hp_left": 7, "radness": 7, "total": 5,
+}
+const HIGH_SCORE_TILEMAP_1: Vector2i = Vector2i(8, 3)
+const HIGH_SCORE_TILEMAP_2: Vector2i = Vector2i(16, 6)
+const PRINTER_STRINGS: int = 9
+const PRINTER_STRING_MAX: int = 64
 const ANIM_FRAME_END: int = 0xFF
 const ANIM_FRAME_RESTART: int = 0xFE
+const ANIM_FRAME_REPEAT: int = 0xFD
+const ANIM_FRAME_DELETE: int = 0xFC
+const ANIM_FRAME_ROWS: Dictionary = {
+	ANIM_FRAME_END: Gen1AnimatedObjects.ROW_END,
+	ANIM_FRAME_RESTART: Gen1AnimatedObjects.ROW_RESTART,
+	ANIM_FRAME_REPEAT: Gen1AnimatedObjects.ROW_REPEAT,
+	ANIM_FRAME_DELETE: Gen1AnimatedObjects.ROW_DELETE,
+}
 const ANIM_FRAME_DURATION_MASK: int = 0x3F
 ## `PAL_SET`'s and `ATTR_BLK`'s bytes.
 const PAL_SET_COMMAND: int = 0x51
@@ -1499,7 +1540,8 @@ const SCRIPT_CALLS: Array[String] = [
 	"add_party_mon", "get_item_name", "get_mon_name", "get_sprite_position_2",
 	"display_party_menu", "get_party_mon_name",
 	"gb_pal_white_out_delay", "restore_screen_tiles", "load_gb_pal",
-	"save_screen_1", "load_screen_1", "save_screen_2", "reload_map_data", "copy_data",
+	"save_screen_1", "load_screen_1", "save_screen_2", "load_screen_2", "reload_map_data",
+	"copy_data", "reload_tileset_patterns", "gb_pal_normal", "load_current_map_view",
 	"init_battle_enemy", "set_sprite_position", "get_sprite_position",
 	"fade_out_white", "fade_in_white", "fade_out_black", "fade_in_black", "init",
 ]
@@ -1743,7 +1785,8 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"get_item_quantity", "flag_action", "route23_copy_badge_text", "oaks_aide",
 	"starter_dex", "display_dex_rating",
 	"safari_low_cost", "safari_nag", "name_rater_check_ot", "name_rater_screen",
-	"display_mon_front_sprite_in_box",
+	"display_mon_front_sprite_in_box", "surfing_minigame", "high_score_page",
+	"print_diploma", "print_high_score", "print_portrait",
 ]
 ## The three of those a `farcall` spends nothing on.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
@@ -1780,7 +1823,8 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	"fade_in_black", "get_sprite_position", "init_battle_enemy",
 	"gb_pal_white_out_delay", "restore_screen_tiles", "load_gb_pal",
 	"get_sprite_position_2", "save_screen_1", "load_screen_1", "save_screen_2",
-	"reload_map_data", "copy_data",
+	"load_screen_2", "reload_map_data", "copy_data", "reload_tileset_patterns",
+	"gb_pal_normal", "load_current_map_view",
 ]
 const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
 ## The two of them the zero flag answers, `true` calling on a clear one.
@@ -2031,6 +2075,13 @@ const HELP_MENUS: Dictionary = {
 			{"strings": "status_ailment_text_2", "at": [6, 2], "cursor_x": 6},
 		],
 		"replies": "blackboard_status_pointers", "quit": [5],
+	},
+	## `BillsHousePokemonList`: a row opens `DisplayPokedex` on `add EEVEE` plus the row.
+	"bills_pokemon_list": {
+		"text_1": "bills_list_text_1", "text_2": "bills_list_text_2",
+		"box": {"x": 0, "y": 0, "width": 9, "height": 10},
+		"columns": [{"strings": "bills_mon_list_text", "at": [2, 2], "cursor_x": 1}],
+		"pokedex_add": "bills_species_add", "quit": [4],
 	},
 }
 const HELP_MENU_ROW_STEP: int = 2
@@ -2679,6 +2730,11 @@ const RED_BLUE: Dictionary = {
 	"display_mon_front_sprite_in_box": 0x5DBD9,
 	"diploma_strings": 0x56798,
 	"spinner_arrow_tiles": 0x45087,
+	"bills_pokemon_list": 0x1EC05,
+	"bills_list_text_1": 0x1EC7F,
+	"bills_mon_list_text": 0x1EC84,
+	"bills_list_text_2": 0x1ECAA,
+	"bills_species_add": 0x1EC58,
 	"link_cable_help": 0x5DC29,
 	"link_cable_help_text_1": 0x5DC9E,
 	"link_cable_help_text_2": 0x5DCA3,
@@ -2838,6 +2894,10 @@ const RED_BLUE: Dictionary = {
 	"save_screen_1": 0x3719,
 	"load_screen_1": 0x3725,
 	"save_screen_2": 0x36F4,
+	"load_screen_2": 0x3701,
+	"reload_tileset_patterns": 0x3090,
+	"gb_pal_normal": 0x3DDC,
+	"load_current_map_view": 0x0CAA,
 	"reload_map_data": 0x3071,
 	"copy_data": 0x00B5,
 	"oaks_aide": 0x59035,
@@ -3106,6 +3166,56 @@ const YELLOW: Dictionary = {
 	"yellow_intro_oam": 0xFA13D,
 	"yellow_intro_sine": 0xF9ED8,
 	"yellow_intro_sine_words": 0xFA0AA,
+	"surfing_minigame": 0xF8000,
+	"surfing_gfx_1": 0x80F14,
+	"surfing_gfx_2": 0x81324,
+	"surfing_gfx_3": 0x82324,
+	"surfing_spawn_states": 0xF93D3,
+	"surfing_callbacks": 0xF93FA,
+	"surfing_frames": 0xF9405,
+	"surfing_oam": 0xF9507,
+	"surfing_ly_sine": 0xF96C5,
+	"surfing_metatiles": 0xF96E5,
+	"surfing_wave_patterns": 0xF973D,
+	"surfing_wave_functions": 0xF8D53,
+	"surfing_wave_starts": 0xF8E75,
+	"surfing_choose_wave": 0xF8E4B,
+	"surfing_advance_wave": 0xF8FA9,
+	"surfing_reset_wave": 0xF8FAE,
+	"surfing_sine_words": 0xF9393,
+	"surfing_tempos": 0xF80F5,
+	"surfing_beach_intro": 0xF90BC,
+	"surfing_use_control_pad": 0xF91AC,
+	"surfing_to_surf_rad": 0xF91BB,
+	"surfing_title_tilemap": 0xF91C8,
+	"surfing_beach_outro": 0xF8946,
+	"surfing_hi_score_text": 0xF8A89,
+	"surfing_hp_left_text": 0xF8AA2,
+	"surfing_radness_text": 0xF8AF4,
+	"surfing_total_text": 0xF8B8D,
+	"surfing_static_tiles": 0xF8248,
+	"surfing_status_bar": 0xF8279,
+	"pal_packet_surfing_title": 0x72821,
+	"blk_packet_surfing_title": 0x72751,
+	"blk_packet_surfing": 0x72611,
+	"print_diploma": 0xE8CB1,
+	"print_high_score": 0xE8C5C,
+	"print_portrait": 0xE8E24,
+	"high_score_page": 0xE910A,
+	"printer_strings": 0xE8FCA,
+	"printer_press_b": 0xE8FB8,
+	"high_score_gfx": 0xE928A,
+	"high_score_tilemap_1": 0xE91C4,
+	"high_score_tilemap_2": 0xE91DC,
+	"high_score_beach_text": 0xE923C,
+	"high_score_hi_text": 0xE924B,
+	"high_score_points_text": 0xE9256,
+	"portrait_ot_text": 0xEA52F,
+	"portrait_id_text": 0xEA533,
+	"portrait_stats_text": 0xEA537,
+	"portrait_blank_text": 0xEA554,
+	"portrait_hp_gfx": 0xEA563,
+	"portrait_lv_gfx": 0xEA56B,
 	"pal_packet_title": 0x727C1,
 	"pal_packet_intro": 0x727F1,
 	"pal_packet_splash": 0x72801,
@@ -3236,6 +3346,11 @@ const YELLOW: Dictionary = {
 	"diploma_strings": 0xE9A73,
 	"diploma_gfx": 0xE9BFA,
 	"spinner_arrow_tiles": 0x45127,
+	"bills_pokemon_list": 0x1E5DB,
+	"bills_list_text_1": 0x1E654,
+	"bills_mon_list_text": 0x1E659,
+	"bills_list_text_2": 0x1E67F,
+	"bills_species_add": 0x1E62D,
 	"link_cable_help": 0x5DC8E,
 	"link_cable_help_text_1": 0x5DD02,
 	"link_cable_help_text_2": 0x5DD07,
@@ -3397,6 +3512,10 @@ const YELLOW: Dictionary = {
 	"save_screen_1": 0x370F,
 	"load_screen_1": 0x371B,
 	"save_screen_2": 0x36EC,
+	"load_screen_2": 0x36F8,
+	"reload_tileset_patterns": 0x2F83,
+	"gb_pal_normal": 0x3DE0,
+	"load_current_map_view": 0x0B06,
 	"reload_map_data": 0x2F66,
 	"copy_data": 0x00B1,
 	"oaks_aide": 0x58ECC,
