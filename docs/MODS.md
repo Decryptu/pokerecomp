@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 32 | `map_group`, `map_number` and a Generation 1 counter's `text_id` on the mart a `MENU_MART` filter is asked about |
 | 31 | `patch_text()` and `patch_world_text()`, and `GameData.text()` with the run listings beside it |
 | 30 | The classes both generations reach take the `Poke` prefix: `PokeTiles`, `PokePalette`, `PokeRaster`, `PokeApu`, `PokeAudioRender`, `PokeGameTime`, `PokeModManifest`, `PokeModVersion` and the input and launcher classes beside them. `RomLayout` becomes `Gen2Layout`, beside the new `Gen1Layout`. Nothing else changed, so a mod moves by renaming what it names |
 
@@ -1818,8 +1819,11 @@ pocket its own definition names. Two mods claiming one entry id is refused with
 `duplicate_menu_entry`.
 
 A mart filter receives the resolved mart dictionary, including `mart_id`,
-`dialog_id` and `variant`. Its row is omitted when the filter answers false or the
-source shelf already sells that item. Selection goes through the ordinary mart
+`dialog_id`, `variant`, the `map_group` and `map_number` the counter was opened
+on, and on a Generation 1 cartridge `text_id`, the counter's text row: `script_mart`
+writes the shelf into the text pointer, so every Generation 1 counter has
+`mart_id` 0 and the map and text row are what tell one from another. Its row is
+omitted when the filter answers false or the source shelf already sells that item. Selection goes through the ordinary mart
 transaction, including money, stack limits and save validation.
 
 ## Adding a row to a party member's menu

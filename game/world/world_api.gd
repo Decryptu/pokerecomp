@@ -6334,7 +6334,7 @@ func _gen1_facility_steps(row: Dictionary, text_id: int = 0) -> Array:
 		return _gen1_pc_steps(GEN1_PC_MACHINES[command] as Array)
 	match command:
 		Gen1Layout.TEXT_SCRIPT_MART:
-			return _gen1_mart_steps(row)
+			return _gen1_mart_steps(row, text_id)
 		Gen1Layout.TEXT_SCRIPT_POKECENTER_NURSE:
 			return _gen1_nurse_steps()
 		Gen1Layout.TEXT_SCRIPT_CABLE_CLUB:
@@ -6715,16 +6715,21 @@ func gen1_saved_position() -> Dictionary:
 
 ## `MartDialog`'s counter is the whole of a Generation 1 shop, so the request
 ## carries the inventory `script_mart` wrote behind the id.
-func _gen1_mart_steps(row: Dictionary) -> Array:
+## `script_mart` writes the shelf into the text pointer, so a counter is named by its map and text row.
+func _gen1_mart_steps(row: Dictionary, text_id: int) -> Array:
 	var items: Variant = row.get("items", [])
 	if not items is Array or (items as Array).is_empty():
 		return []
+	var place: Vector2i = map_id()
 	return [{"type": &"request", "values": {
 		"kind": &"mart_requested",
 		"values": {
 			"dialog": Gen2WorldMartHost.MARTTYPE_STANDARD,
 			"address": 0,
 			"items": (items as Array).duplicate(),
+			"map_group": place.x,
+			"map_number": place.y,
+			"text_id": text_id,
 		},
 	}}]
 

@@ -188,8 +188,13 @@ func _add_an_item_and_its_shelf(host: Gen2ModHost, id: StringName) -> void:
 		# Half what the pack values it at, so the shelf price is visibly the
 		# shelf's rather than the item's.
 		"price": 400,
+		# A standard counter, and never the one on map group 0 number 0: the
+		# mart says where it was opened (`api_version` 32), a Generation 1
+		# counter by `map_number` and `text_id` since every one has `mart_id` 0.
 		"available": func(mart: Dictionary) -> bool:
-			return int(mart.get("variant", 0)) == 0,
+			return int(mart.get("variant", 0)) == 0 \
+				and Vector2i(int(mart.get("map_group", -1)), int(mart.get("map_number", -1))) \
+					!= Vector2i.ZERO,
 	})
 
 
