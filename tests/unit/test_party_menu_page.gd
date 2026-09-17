@@ -33,7 +33,17 @@ func after_each() -> void:
 	Gen2ModHost.reset()
 
 
-func _write_cache() -> void:
+## Generation 1's own sheets, the ones `Gen2BattleTiles.gen1_stats_page` and
+## `_gen1_page` copy from, at the sizes the importer writes them.
+const GEN1_SHEETS: Dictionary = {
+	"font_extra": Gen1Layout.FONT_EXTRA_TILES,
+	"battle_font": Gen1Layout.BATTLE_FONT_TILES,
+	"battle_hud_1": 8, "battle_hud_2": 8, "stats_p": 1,
+	"font": Gen2Layout.FONT_TILES,
+}
+
+
+func _write_cache(generation: int = RomRegistry.GEN2) -> void:
 	var sheets: Dictionary = {}
 	var written: Dictionary = {
 		"exp_bar": Gen2Layout.EXP_BAR_TILES,
@@ -45,9 +55,10 @@ func _write_cache() -> void:
 		## Only the stats and move screens read this one, and both are drawn from
 		## the same cache the party menu is.
 		"stats_tiles": Gen2Layout.STATS_TILES,
-	}
+	} if generation == RomRegistry.GEN2 else GEN1_SHEETS
 	var first_codes: Dictionary = {
 		"font": Gen2Layout.FONT_FIRST_CODE, "frames": Gen2Layout.FRAME_FIRST_CODE,
+		"font_extra": Gen1Layout.FONT_EXTRA_FIRST_CODE,
 	}
 	for row_name: String in written:
 		var tiles: int = written[row_name]
@@ -69,6 +80,7 @@ func _write_cache() -> void:
 		"format_version": RomCache.FORMAT_VERSION,
 		"game_id": "partypagetest",
 		"sha1": "0123456789abcdef",
+		"generation": generation,
 		"tiles": sheets,
 		"bar_palettes": {
 			"hp_green": [0x02E0, 0x02E0],
@@ -533,6 +545,39 @@ func test_a_registered_page_draws_its_placements_and_only_the_lower_half() -> vo
 	]:
 		assert_ne(_ink_in_tile(image, 10, row), 0, "the divider down column 10")
 	assert_eq(_ink_in_tile(image, 0, 3), 0, "and nothing above the divider")
+
+
+## On Generation 1 the page follows `StatusScreen2`'s, keeps what that page left
+## in the upper half, and draws a `divider` with the Generation 1 line tile.
+func test_a_registered_page_draws_on_generation_1_with_its_own_line_tile() -> void:
+	RomCache.clear(_directory)
+	RomCache.prepare(_directory)
+	_write_cache(RomRegistry.GEN1)
+	assert_true(bool(Gen2ModHost.instance().register_stats_page(&"testmod", {
+		"build": func(_snapshot: Dictionary) -> Array:
+			return [{"divider": 10}, {"text": "DV", "at": Vector2i(12, 9)}, {"text": "OFF", "at": Vector2i(0, 3)}],
+	})["ok"]))
+	var page: Gen2StatsScreenPage = _stats_page()
+	assert_not_null(page)
+	var number: int = Gen2StatsScreenPage.PINK_PAGE + Gen2StatsScreenPage.GEN1_PAGES
+	var image: Image = _stats_image(_stats_snapshot(number))
+	assert_ne(_ink_in_tile(image, 12, 9), 0, "the placement's text")
+	assert_eq(_ink_in_tile(image, 0, 3), 0, "and nothing above the lower half")
+	assert_ne(
+		_ink_in_tile(image, Gen2StatsScreenPage.GEN1_NAME_AT.x, Gen2StatsScreenPage.GEN1_NAME_AT.y),
+		0, "the species name StatusScreen2 left"
+	)
+	var drawn: PackedByteArray = page.draw(_stats_snapshot(number))
+	var width: int = Gen2StatsScreenPage.COLUMNS * Gen2Font.TILE
+	var expected := PackedByteArray()
+	expected.resize(Gen2Font.TILE * Gen2Font.TILE)
+	page.tiles.draw(Gen2BattleTiles.GEN1_LINE_VERTICAL, expected, Gen2Font.TILE, 0, 0)
+	for row: int in [Gen2StatsScreenPage.LOWER_FIRST_ROW, Gen2StatsScreenPage.ROWS - 1]:
+		var at: int = row * Gen2Font.TILE * width + 10 * Gen2Font.TILE
+		assert_eq(
+			drawn.slice(at, at + Gen2Font.TILE), expected.slice(0, Gen2Font.TILE),
+			"the divider down column 10 is the Generation 1 line tile, row %d" % row
+		)
 
 
 ## Each page fills the ten rows under the divider and nothing above it, which is

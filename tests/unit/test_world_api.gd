@@ -8858,6 +8858,36 @@ func test_a_patched_shop_sells_its_own_shelf_at_its_own_prices() -> void:
 	assert_eq(int(entries[0]["price"]), 4242, "at the patched price")
 
 
+## A cached script is a fixed span past its own `end`, so a site in the script
+## behind it decodes twice, and its `script_base` is the entry point a map
+## reaches it through: Goldenrod Dept Store 2F's second clerk stands eight bytes
+## past the first's script and sells the second mart, not the first.
+func test_a_site_behind_a_scripts_end_names_its_own_entry_point() -> void:
+	_write_service_cache()
+	var marts: Dictionary = RomCache.read_json(RomCache.world_marts_path(_directory))
+	(marts["marts"] as Array).append({"index": 1, "bank": 48, "address": 0x4010, "items": [8]})
+	RomCache.write_json(RomCache.world_marts_path(_directory), marts)
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	var second: Array = [0x94, 0, 1, 0, Gen2WorldScript.END]
+	scripts["48:6F80"] = [0x94, 0, 0, 0, Gen2WorldScript.END] + second
+	scripts["48:6F85"] = second
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var maps: Array = RomCache.read_json(RomCache.world_maps_path(_directory))
+	(maps[1] as Dictionary)["events"]["bank"] = 48
+	(maps[1] as Dictionary)["events"]["objects"] = [
+		{"sprite": 1, "x": 13, "y": 5, "script": 0x6F80,
+			"object_type": Gen2WorldImporter.OBJECTTYPE_SCRIPT},
+		{"sprite": 1, "x": 13, "y": 6, "script": 0x6F85,
+			"object_type": Gen2WorldImporter.OBJECTTYPE_SCRIPT},
+	]
+	RomCache.write_json(RomCache.world_maps_path(_directory), maps)
+	var data: GameData = GameData.open_directory(_directory)
+	var bases: Dictionary = {}
+	for row: Dictionary in data.catalog().rows(Gen2WorldCatalog.KIND_SHOP):
+		bases[int(row["mart"])] = [int(row["script_base"]), row.get("map")]
+	assert_eq(bases, {0: [0x6F80, Vector2i(1, 2)], 1: [0x6F85, Vector2i(1, 2)]})
+
+
 ## Both halves of a trade take the patch, and the cartridge record they came from
 ## is left alone for whatever other site names it.
 func test_a_patched_trade_uses_both_halves_without_moving_the_record() -> void:

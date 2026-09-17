@@ -749,6 +749,30 @@ func test_a_registered_page_joins_the_turn_order_and_becomes_the_last() -> void:
 	assert_signal_emitted(screen, "closed")
 
 
+## `StatusScreen2`'s press turns to a registered page on Generation 1 and the
+## next press is the exit. Under the same ceiling of registered pages as
+## Generation 2, counted from the cartridge's own two.
+func test_a_registered_page_follows_the_moves_page_on_generation_1() -> void:
+	var directory: String = RomCache.directory_for(&"gen1screentest", "0123456789abcdef")
+	var gen1: GameData = Fixture.build(directory, "testgame", RomRegistry.GEN1)
+	assert_true(bool(Gen2ModHost.instance().register_stats_page(
+		&"testmod", {"build": func(_page: Dictionary) -> Array: return []}
+	)["ok"]))
+	assert_eq(Gen2StatsScreenPage.page_count(true), Gen2StatsScreenPage.GEN1_PAGES + 1)
+	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(gen1, _save().party)
+	watch_signals(screen)
+	screen.handle_button(PokeButton.A)
+	screen.handle_button(PokeButton.A)
+	assert_signal_not_emitted(screen, "closed")
+	assert_eq(
+		int(screen.snapshot()["page"]),
+		Gen2StatsScreenPage.PINK_PAGE + Gen2StatsScreenPage.GEN1_PAGES
+	)
+	screen.handle_button(PokeButton.A)
+	assert_signal_emitted(screen, "closed")
+	RomCache.clear(directory)
+
+
 ## The two halves of a Pokémon no cartridge page prints. A registered page is
 ## handed the snapshot and nothing else, so both are in it whether or not one is
 ## registered, and the copy is the mon's rather than the mon's own dictionary.

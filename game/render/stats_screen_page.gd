@@ -302,11 +302,13 @@ static func pic_palette(data: GameData, snapshot: Dictionary) -> PackedColorArra
 	)
 
 
-## How many pages the screen turns between: the cartridge's three plus whatever
-## mods have registered, capped at [constant MAX_PAGES]. Every page number in
+## How many pages the screen turns between: the cartridge's three, or
+## Generation 1's two, plus whatever mods have registered, the registered ones
+## capped at [constant MAX_PAGES] less [constant NUM_PAGES]. Every page number in
 ## this screen is one-based off [constant PINK_PAGE], so the last is this.
-static func page_count() -> int:
-	return mini(NUM_PAGES + Gen2ModHost.instance().stats_pages().size(), MAX_PAGES)
+static func page_count(generation_1: bool = false) -> int:
+	var own: int = GEN1_PAGES if generation_1 else NUM_PAGES
+	return own + mini(Gen2ModHost.instance().stats_pages().size(), MAX_PAGES - NUM_PAGES)
 
 
 ## The 2x2 indicator blocks for [param count] pages. The run ends against the
@@ -650,7 +652,10 @@ func _draw_blue(page: Dictionary, into: PackedByteArray) -> void:
 ## them with the screen's font and the same divider the pink and blue pages
 ## stand, so a page it draws cannot reach the upper half or the front pic.
 ## Anything outside the lower ten rows is dropped rather than clipped.
-func _draw_registered(page: Dictionary, into: PackedByteArray, index: int) -> void:
+func _draw_registered(
+	page: Dictionary, into: PackedByteArray, index: int,
+	divider: int = Gen2BattleTiles.STATS_DIVIDER
+) -> void:
 	var builders: Array = extra_page_builders()
 	if index < 0 or index >= builders.size():
 		return
@@ -664,8 +669,7 @@ func _draw_registered(page: Dictionary, into: PackedByteArray, index: int) -> vo
 			if column < 0 or column >= COLUMNS:
 				continue
 			tiles.draw_run_down(
-				Gen2BattleTiles.STATS_DIVIDER, LOWER_ROWS, into, width,
-				column * TILE, LOWER_FIRST_ROW * TILE
+				divider, LOWER_ROWS, into, width, column * TILE, LOWER_FIRST_ROW * TILE
 			)
 			continue
 		var at: Vector2i = placement.get("at", Vector2i.ZERO)
@@ -740,7 +744,8 @@ func _code(into: PackedByteArray, width: int, code: int, at: Vector2i) -> void:
 ## `StatusScreen` and `StatusScreen2` (`engine/pokemon/status_screen.asm`): two
 ## pages, one press each, on a screen never cleared between them. The picture
 ## and the first rule survive the turn; the second page clears the block under
-## the name and covers the lower half.
+## the name and covers the lower half. A registered page follows the second and
+## is drawn as `StatusScreen2` left the upper half.
 const GEN1_PAGES: int = 2
 const GEN1_PIC_AT: Vector2i = Vector2i(1, 0)
 ## `DrawLineBox hlcoord 19, 1 / lb bc, 6, 10` and `hlcoord 19, 9 / lb bc, 8, 6`
@@ -803,7 +808,8 @@ const GEN1_ROW_STEP: int = 2
 ## `GetMonName`'s species name.
 func _draw_gen1(page: Dictionary, into: PackedByteArray) -> void:
 	var width: int = COLUMNS * TILE
-	var moves: bool = int(page.get("page", PINK_PAGE)) > PINK_PAGE
+	var number: int = int(page.get("page", PINK_PAGE))
+	var moves: bool = number > PINK_PAGE
 	_gen1_rule(into, width, GEN1_NAME_RULE)
 	_tile(into, width, Gen2BattleTiles.GEN1_NUMERO, GEN1_NUMERO_AT)
 	_text(into, width, ".", GEN1_NUMERO_AT + Vector2i(1, 0))
@@ -815,6 +821,12 @@ func _draw_gen1(page: Dictionary, into: PackedByteArray) -> void:
 	_text(into, width, String(
 		page.get("species_name", "") if moves else page.get("nickname", "")
 	), GEN1_NAME_AT)
+	if number >= PINK_PAGE + GEN1_PAGES:
+		_tile(into, width, Gen2BattleTiles.GEN1_LINE_VERTICAL, GEN1_DIVIDER_AT)
+		_draw_registered(
+			page, into, number - PINK_PAGE - GEN1_PAGES, Gen2BattleTiles.GEN1_LINE_VERTICAL
+		)
+		return
 	if moves:
 		_draw_gen1_moves(page, into)
 		return

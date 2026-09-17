@@ -170,11 +170,8 @@ func _gen1() -> bool:
 	return _data != null and _data.generation == RomRegistry.GEN1
 
 
-## `StatusScreen` and `StatusScreen2` are the whole of Generation 1's screen,
-## and no mod page is registered against them.
 func _page_count() -> int:
-	return Gen2StatsScreenPage.GEN1_PAGES if _gen1() \
-		else Gen2StatsScreenPage.page_count()
+	return Gen2StatsScreenPage.page_count(_gen1())
 
 
 ## `.d_right`'s wrap point, which is the blue page until a mod registers one past

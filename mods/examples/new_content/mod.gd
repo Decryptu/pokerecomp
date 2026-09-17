@@ -246,6 +246,8 @@ func _walk_something_behind_the_player(host: Gen2ModHost, id: StringName) -> voi
 ## what keeps a page off the name, the level and the front pic. The snapshot is
 ## the same one the cartridge pages are drawn from, plus the two halves of a
 ## Pokémon none of them prints: the packed DV word and the stat experience.
+## On Red, Blue and Yellow the page follows the moves page, turned to with A
+## (`api_version` 33).
 func _add_a_stats_page(host: Gen2ModHost, id: StringName) -> void:
 	host.register_stats_page(id, {"build": _build_stats_page})
 
