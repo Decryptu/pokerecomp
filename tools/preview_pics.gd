@@ -161,7 +161,6 @@ func _render(
 ## no colours for a trainer or a back pic, so those come out in Game Boy greys.
 func _palettes(directory: String, name: String, shiny: bool) -> Array:
 	var out: Array = []
-	var key: String = "shiny" if shiny else "normal"
 
 	if name == "player_back":
 		return [_palette_of([])]
@@ -171,16 +170,14 @@ func _palettes(directory: String, name: String, shiny: bool) -> Array:
 			out.append(_palette_of(entry.get("palette", [])))
 		return out
 
-	var species: Array = RomCache.read_json(RomCache.species_path(directory))
+	var data: GameData = GameData.open_directory(directory)
 	if name.begins_with("unown"):
-		var unown: Dictionary = species[Gen2Layout.UNOWN_SPECIES - 1]
 		for form: int in Gen2Layout.UNOWN_FORMS:
-			out.append(_palette_of(unown["palette"][key]))
+			out.append(data.palette(Gen2Layout.UNOWN_SPECIES, shiny))
 		return out
 
-	for entry: Dictionary in species:
-		var palette: Dictionary = entry["palette"]
-		out.append(_palette_of(palette.get("colors", palette.get(key, []))))
+	for dex: int in range(1, data.species_count() + 1):
+		out.append(data.palette(dex, shiny))
 	return out
 
 

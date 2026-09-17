@@ -284,21 +284,16 @@ static func submenu_items_for(
 	## `SwitchPartyMons` makes its own `cp 2` refusal rather than being greyed
 	## out, so the row is offered whatever the party holds.
 	items.append(_option_entry(OPTION_SWITCH, "SWITCH"))
-	## `PokemonMenuEntries` is those two and CANCEL: Generation 1 reorders no
-	## moveset from here and its party carries nothing to give or take.
-	if data != null and data.generation == RomRegistry.GEN1:
-		items.append(_option_entry(OPTION_CANCEL, "CANCEL"))
-		return items
-	items.append(_option_entry(OPTION_MOVE, "MOVE"))
-	## `GetMonSubmenuItems`: `ItemIsMail` decides between the two rows, so a
-	## member holding mail has no ITEM row at all.
-	if Gen2HeldItem.is_mail(mon.item):
-		items.append(_option_entry(OPTION_MAIL, "MAIL"))
-	else:
-		items.append(_option_entry(OPTION_ITEM, "ITEM"))
-	## After every cartridge action and before CANCEL, which is the source's own
-	## last row and the way out of the box. A mod cannot displace one: the list
-	## still stops at `NUM_MONMENU_ITEMS`, so rows past it are simply not offered.
+	## `PokemonMenuEntries` is those two and CANCEL.
+	if data == null or data.generation != RomRegistry.GEN1:
+		items.append(_option_entry(OPTION_MOVE, "MOVE"))
+		## `GetMonSubmenuItems`: `ItemIsMail` decides between the two rows, so a
+		## member holding mail has no ITEM row at all.
+		if Gen2HeldItem.is_mail(mon.item):
+			items.append(_option_entry(OPTION_MAIL, "MAIL"))
+		else:
+			items.append(_option_entry(OPTION_ITEM, "ITEM"))
+	## Before CANCEL, and the list still stops at `NUM_MONMENU_ITEMS`.
 	for entry: Dictionary in Gen2ModHost.instance().party_member_entries(slot, in_battle):
 		if items.size() >= MAX_SUBMENU_ITEMS:
 			break
@@ -969,6 +964,10 @@ static func gen1_mon_menu_box(items: Array) -> Gen2MenuBox:
 		left = mini(left, int(Gen2WorldFieldMove.GEN1_FIELD_MOVES.get(
 			int(entry.get("move", 0)), GEN1_SUBMENU_COLUMN
 		)))
+	for entry: Dictionary in items:
+		if StringName(entry.get("kind", &"")) == &"mod_party_action":
+			moves += 1
+			left = mini(left, SUBMENU_RIGHT - 1 - String(entry.get("label", "")).length())
 	if moves == 0:
 		return Gen2MenuBox.from_coords(
 			GEN1_SUBMENU_COLUMN - 1, GEN1_SUBMENU_TOP, SUBMENU_RIGHT, SUBMENU_BOTTOM,

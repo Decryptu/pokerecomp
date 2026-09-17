@@ -2006,6 +2006,7 @@ const SFX_SUPER_EFFECTIVE: int = 0xAD
 ## the one `.LoopLevels` and `.skip_exp_bar_animation` both play before their
 ## grew-to-level line. `BattleStartMessage`'s own, in front of a trainer's line.
 const SFX_SHINE: int = 0x5E
+const GEN1_SHINE_FRAMES: int = 40
 
 ## The twenty frames `BattleStartMessage` spends after `SFX_SHINE`, and the forty
 ## `DoBattle` spends before the player's Pokemon is sent out.
@@ -2108,7 +2109,7 @@ func _begin_animation(event: Dictionary) -> void:
 		_step(ANIM_WAIT_SFX, {})
 		_step(ANIM_HIT_SOUND, {})
 		if gen1 and index == Gen2Battle.ANIM_SEND_OUT_MON:
-			_gen1_send_out_steps(bool(event.get("enemy_turn", false)))
+			_gen1_send_out_steps(bool(event.get("enemy_turn", false)), int(event.get("param", 0)))
 		elif gen1 and index == ANIM_THROW_POKE_BALL:
 			_gen1_toss_ball_steps(event)
 		else:
@@ -2289,7 +2290,11 @@ func _gen1_animation_type(index: int, after: int) -> int:
 
 ## `SendOutMon`'s `POOF_ANIM` and `AnimateSendingOutMon`, which is the whole of
 ## `ANIM_SEND_OUT_MON` here. `EnemySendOut` has no poof in front of it.
-func _gen1_send_out_steps(enemy_turn: bool) -> void:
+func _gen1_send_out_steps(enemy_turn: bool, param: int = Gen2Battle.SEND_OUT_ANIM_NORMAL) -> void:
+	if param == Gen2Battle.SEND_OUT_ANIM_SHINY:
+		_step(ANIM_SFX, {"sfx": SFX_SHINE})
+		_step(ANIM_DELAY, {"frames": GEN1_SHINE_FRAMES})
+		return
 	if not enemy_turn:
 		# `ld a, $1 / ldh [hWhoseTurn]` ahead of the poof, either side.
 		_step(ANIM_SCRIPT, {"index": Gen1Layout.ANIM_ID_POOF, "enemy_turn": true})

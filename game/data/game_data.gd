@@ -1870,13 +1870,44 @@ func palette(number: int, shiny: bool = false) -> PackedColorArray:
 		var colors: PackedColorArray = PackedColorArray()
 		for packed: Variant in entry_palette["colors"] as Array:
 			colors.append(PokePalette.from_packed(int(packed)))
-		return colors
+		return _gen1_shiny_row(number, colors) if shiny else colors
 
 	var stored: Array = entry_palette["shiny" if shiny else "normal"]
 	return PokePalette.pic_palette(PackedColorArray([
 		PokePalette.from_packed(int(stored[0])),
 		PokePalette.from_packed(int(stored[1])),
 	]))
+
+
+static var _gen2_shiny_pairs: Dictionary = {}
+static var _gen2_shiny_pairs_read: bool = false
+
+
+## `SuperPalettes` has no shiny half: the Generation 2 pair, or a turn of the row's own.
+func _gen1_shiny_row(number: int, colors: PackedColorArray) -> PackedColorArray:
+	if colors.size() < PokePalette.COLORS_PER_PIC:
+		return colors
+	var pair: PackedColorArray = _gen2_shiny_pair(number)
+	if pair.is_empty():
+		pair = PokePalette.derived_shiny_pair(colors)
+	return PackedColorArray([colors[0], pair[0], pair[1], colors[3]])
+
+
+static func _gen2_shiny_pair(number: int) -> PackedColorArray:
+	if not _gen2_shiny_pairs_read:
+		_gen2_shiny_pairs_read = true
+		for cartridge: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN2):
+			var other: GameData = open(cartridge)
+			if other == null:
+				continue
+			for dex: int in range(1, Gen1Layout.SPECIES_COUNT + 1):
+				var stored: Array = (other.species(dex).get("palette", {}) as Dictionary).get("shiny", [])
+				if stored.size() >= 2:
+					_gen2_shiny_pairs[dex] = PackedColorArray([
+						PokePalette.from_packed(int(stored[0])), PokePalette.from_packed(int(stored[1])),
+					])
+			break
+	return _gen2_shiny_pairs.get(number, PackedColorArray())
 
 
 ## One of the battle bars' palettes, by the names in

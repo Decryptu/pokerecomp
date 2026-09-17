@@ -8987,6 +8987,8 @@ func test_hidden_items_lists_every_record_on_the_map_with_its_flag() -> void:
 	assert_true(world.hidden_item_nearby())
 	world.set_event_flag(30)
 	assert_false(world.hidden_item_nearby())
+	## Only Yellow walks a follower of its own.
+	assert_false(world.cartridge_follower_out())
 
 
 ## The mod names a cell; the map's own script runs through the ordinary path, so

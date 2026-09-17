@@ -1014,6 +1014,32 @@ func test_a_generation_1_member_is_offered_its_field_moves_stats_switch_and_canc
 	RomCache.clear(RomCache.directory_for(&"gen1screentest", "0123456789abcdef"))
 
 
+## A registered row is offered on Generation 1 after the cartridge's own three
+## and before CANCEL, and widens the box the way a long field move does.
+func test_a_generation_1_member_is_offered_a_registered_row_before_cancel() -> void:
+	var gen1: GameData = Fixture.build(
+		RomCache.directory_for(&"gen1screentest", "0123456789abcdef"),
+		"testgame", RomRegistry.GEN1
+	)
+	Gen2ModHost.reset()
+	Gen2ModHost.instance().register_party_member_menu(&"follow", {
+		"label": func(_slot: int) -> String: return "FOLLOWING",
+		"handler": func(_slot: int) -> void: pass,
+	})
+	var mon := Gen2SaveMon.new()
+	mon.species = Fixture.BULBASAUR
+	mon.moves = [Fixture.TACKLE, 0, 0, 0]
+	var rows: Array = Gen2PartyScreen.submenu_items_for(gen1, mon, 1)
+	var labels: Array = []
+	for row: Dictionary in rows:
+		labels.append(String(row.get("label", "")))
+	assert_eq(labels, ["STATS", "SWITCH", "FOLLOWING", "CANCEL"])
+	var box: Gen2MenuBox = Gen2PartyScreen.gen1_mon_menu_box(rows)
+	assert_eq(Vector2i(box.left, box.top), Vector2i(8, 8))
+	Gen2ModHost.reset()
+	RomCache.clear(RomCache.directory_for(&"gen1screentest", "0123456789abcdef"))
+
+
 ## `DisplayFieldMoveMonMenu`: `hlcoord 11, 11` with no field move at all, and
 ## every one after that raising the top two rows and widening the box to the
 ## smallest `FieldMoveDisplayData` column its moves name. STRENGTH's is $0A.
