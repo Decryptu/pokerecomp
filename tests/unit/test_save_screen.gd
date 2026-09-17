@@ -441,6 +441,68 @@ func test_a_no_refuses_and_the_link_save_opens_on_the_overwrite_question() -> vo
 	assert_true(quick.refused())
 
 
+## pokered's `SaveMenu`: `PrintSaveScreenText`'s 30 frames read no press, the
+## file's own player is never asked `OlderFileWillBeErasedText`, `SaveGameData`
+## runs before `NowSavingString`'s 120 frames, and `GameSavedText` owes `SFX_SAVE`.
+func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -> void:
+	var written: Array = []
+	var prompt: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.GEN1_MENU, "RED",
+		func() -> Dictionary:
+			written.append(true)
+			return {"ok": true}
+	)
+	assert_true(prompt.holding_info())
+	assert_false(prompt.reads_joypad())
+	assert_true(prompt.lines.is_empty(), "no text box under the info box yet")
+	prompt.confirm(true)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.ASK, "a press during the hold is dropped")
+	prompt.frames_elapsed(30)
+	assert_false(prompt.holding_info())
+	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_ASK_LINES)
+	assert_eq(prompt.cursor, 0)
+
+	prompt.confirm(true)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
+	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_SAVING_LINES)
+	assert_eq(written.size(), 1, "SaveGameData ran before the string went up")
+	assert_true(prompt.writing_now())
+	prompt.frames_elapsed(119)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
+	prompt.frames_elapsed(1)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVED)
+	assert_true(prompt.sfx_owed())
+	assert_eq(prompt.lines, ["RED saved", "the game!"])
+	prompt.frames_elapsed(Gen2SavePrompt.DONE_FRAMES)
+	assert_true(prompt.finished())
+
+	var refused: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.GEN1_MENU, "RED", Callable()
+	)
+	refused.frames_elapsed(30)
+	refused.cancel()
+	assert_true(refused.refused())
+
+	## Yellow: `ld c, 10` after the box, `SavingText` for 128 and 10 before
+	## `SFX_SAVE`.
+	var yellow: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.YELLOW_MENU, "RED", func() -> Dictionary: return {"ok": true}
+	)
+	yellow.frames_elapsed(39)
+	assert_true(yellow.holding_info())
+	yellow.frames_elapsed(1)
+	assert_eq(yellow.lines, Gen2SavePrompt.GEN1_ASK_LINES)
+	yellow.confirm(true)
+	assert_eq(yellow.lines, Gen2SavePrompt.YELLOW_SAVING_LINES)
+	yellow.frames_elapsed(128)
+	assert_eq(yellow.step, Gen2SavePrompt.Step.SAVED)
+	assert_false(yellow.sfx_owed())
+	yellow.frames_elapsed(10)
+	assert_true(yellow.sfx_owed())
+	yellow.frames_elapsed(30)
+	assert_true(yellow.finished())
+
+
 func _spend_insert_frames() -> void:
 	_box_screen.advance_saving_frames(
 		Gen2SavePrompt.LEAVE_ON_FRAMES + Gen2SavePrompt.INSERT_SAVED_FRAMES
@@ -747,6 +809,30 @@ func test_a_registered_page_joins_the_turn_order_and_becomes_the_last() -> void:
 	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.BLUE_PAGE + 1)
 	screen.handle_button(PokeButton.A)
 	assert_signal_emitted(screen, "closed")
+
+
+## `StatusScreen2`'s press turns to a registered page on Generation 1 and the
+## next press is the exit. Under the same ceiling of registered pages as
+## Generation 2, counted from the cartridge's own two.
+func test_a_registered_page_follows_the_moves_page_on_generation_1() -> void:
+	var directory: String = RomCache.directory_for(&"gen1screentest", "0123456789abcdef")
+	var gen1: GameData = Fixture.build(directory, "testgame", RomRegistry.GEN1)
+	assert_true(bool(Gen2ModHost.instance().register_stats_page(
+		&"testmod", {"build": func(_page: Dictionary) -> Array: return []}
+	)["ok"]))
+	assert_eq(Gen2StatsScreenPage.page_count(true), Gen2StatsScreenPage.GEN1_PAGES + 1)
+	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(gen1, _save().party)
+	watch_signals(screen)
+	screen.handle_button(PokeButton.A)
+	screen.handle_button(PokeButton.A)
+	assert_signal_not_emitted(screen, "closed")
+	assert_eq(
+		int(screen.snapshot()["page"]),
+		Gen2StatsScreenPage.PINK_PAGE + Gen2StatsScreenPage.GEN1_PAGES
+	)
+	screen.handle_button(PokeButton.A)
+	assert_signal_emitted(screen, "closed")
+	RomCache.clear(directory)
 
 
 ## The two halves of a Pokémon no cartridge page prints. A registered page is

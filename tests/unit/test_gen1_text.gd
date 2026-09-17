@@ -113,6 +113,9 @@ func test_pkmn_places_its_own_two_tiles() -> void:
 
 
 ## `PlacePOKe` prints four characters for `#`, all of which the font draws, so
-## the word needs no pair of its own.
+## the word needs no pair of its own, and the source's own `#` spells them:
+## `SaveScreenInfoText`'s "#DEX" is seven tiles.
 func test_poke_is_four_letters() -> void:
 	assert_eq(Gen1Text.encode(Gen1Text.character(0x54)).size(), 4)
+	assert_eq(Gen1Text.encode("#DEX"), Gen1Text.encode("POKéDEX"))
+	assert_eq(Gen1Text.encode("#DEX").size(), 7)

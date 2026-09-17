@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 33 | A registered stats page turns on Red, Blue and Yellow |
 | 32 | `map_group`, `map_number` and a Generation 1 counter's `text_id` on the mart a `MENU_MART` filter is asked about |
 | 31 | `patch_text()` and `patch_world_text()`, and `GameData.text()` with the run listings beside it |
 | 30 | The classes both generations reach take the `Poke` prefix: `PokeTiles`, `PokePalette`, `PokeRaster`, `PokeApu`, `PokeAudioRender`, `PokeGameTime`, `PokeModManifest`, `PokeModVersion` and the input and launcher classes beside them. `RomLayout` becomes `Gen2Layout`, beside the new `Gen1Layout`. Nothing else changed, so a mod moves by renaming what it names |
@@ -1881,7 +1882,10 @@ Pages turn with LEFT and RIGHT and wrap, A on the last page leaves the screen, a
 the 2x2 page indicators are centred against the right arrow. Five pages is the
 ceiling (`Gen2StatsScreenPage.MAX_PAGES`); past it registration is refused with
 `stats_pages_full`, and a second mod claiming one id with `duplicate_stats_page`.
-An egg has no pages at all.
+An egg has no pages at all. On Red, Blue and Yellow the page follows
+`StatusScreen2`'s moves page, turned to with A alone and with no indicators, as
+the cartridge's two are; the same two registered pages fit, and a `divider` is
+drawn with the Generation 1 line tile.
 
 ## Holding a run rather than an installation
 

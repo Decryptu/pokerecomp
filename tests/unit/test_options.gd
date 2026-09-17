@@ -165,6 +165,16 @@ func test_out_of_range_values_are_clamped_rather_than_refused() -> void:
 	assert_eq(options.max_fps, 0, "an unlisted frame cap falls back to the display")
 
 
+## Yellow's SOUND row has four values where Crystal's STEREO bit has two, so it
+## is its own field, clamped like every other.
+func test_the_earphone_row_round_trips_and_clamps() -> void:
+	var options := Gen2Options.new()
+	assert_eq(options.earphone, 0, "MONO, the setting a cartridge starts on")
+	options.earphone = 3
+	assert_eq(Gen2Options.parse(options.to_dict()).earphone, 3)
+	assert_eq(Gen2Options.parse({"earphone": 9}).earphone, Gen2Options.EARPHONE_COUNT - 1)
+
+
 ## SCREEN FILL and its zoom step are view preferences rather than part of a run,
 ## so they live in the options file and survive a session.
 func test_the_screen_fill_rows_round_trip_and_default_on() -> void:

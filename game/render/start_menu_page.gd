@@ -72,13 +72,20 @@ const OPTIONS_CURSOR_COLUMN: int = 1
 const OPTIONS_VISIBLE_ROWS: int = 8
 const OPTIONS_VISIBLE_VALUE_ROWS: int = 7
 
-## The cells a row's own words are drawn in, from its column to the last one
-## before the right-hand border. Every cartridge option is written to fit; a
-## mod's name and a view's label are not, so both are drawn bounded and a cut
-## one ends in an ellipsis. Documented in `docs/MODS.md` as the budget a mod
-## names itself to.
+## A row's cells up to the right-hand border. Every cartridge option fits; a
+## mod's name is drawn bounded and a cut one ends in an ellipsis (`docs/MODS.md`).
 const OPTIONS_LABEL_CELLS: int = COLUMNS - 1 - OPTIONS_LABEL_COLUMN
 const OPTIONS_VALUE_CELLS: int = COLUMNS - 1 - OPTIONS_VALUE_COLUMN
+
+## `DisplayOptionMenu`'s three `TextBoxBorder`s at rows 0, 5 and 10, `b = 3`
+## and `c = 18`, the label a row in and its values two rows under it, CANCEL at
+## `hlcoord 2, 16` in no box, `PlaceMenuCursor` filling the current section's
+## `▷`.
+const GEN1_OPTIONS_BOX_SIZE: Vector2i = Vector2i(20, 5)
+const GEN1_OPTIONS_LABEL_AT: Vector2i = Vector2i(1, 1)
+const GEN1_OPTIONS_VALUES_ROW: int = 3
+const GEN1_OPTIONS_CANCEL_AT: Vector2i = Vector2i(2, 16)
+const GEN1_OPTIONS_HOLLOW_CODE: int = 0xEC
 
 ## `DisplaySaveInfoOnSave`'s `lb de, 4, 0` through `_OffsetMenuHeader`, which
 ## keeps `menu_coords 0, 0, 15, 9`'s span and moves its left edge to column 4.
@@ -139,10 +146,9 @@ static func from_data(data: GameData) -> Gen2StartMenuPage:
 	return out
 
 
-## How many rows the box can show at once: it grows two rows an entry plus its
-## own border, and the screen is where it stops. The cartridge never needs this,
-## because `SetUpMenuItems` can append at most the eight rows that fit exactly;
-## a mod's `MENU_START` entry is what asks for a ninth (`docs/MODS.md`).
+## How many rows the box can show: two an entry plus its border, stopping at
+## the screen. `SetUpMenuItems`' eight fit exactly; a mod's `MENU_START` entry
+## asks for a ninth (`docs/MODS.md`).
 static func visible_rows(contest: bool = false) -> int:
 	@warning_ignore("integer_division")
 	return (ROWS - (LIST_CONTEST_TOP if contest else LIST_TOP) - 1) / 2
@@ -159,15 +165,13 @@ static func list_box(count: int, contest: bool = false) -> Gen2MenuBox:
 	)
 
 
-## The menu over the map: the whole screen, transparent everywhere the map is
-## still showing. [param description] is `.MenuDesc`'s two lines and is drawn
-## only when MENU ACCOUNT is on, which is what `.IsMenuAccountOn` decides.
-## [param frame] overrides the geometry for a list the cartridge does not have:
-## the MOVES row's own is `PopulateMonMenu`'s wider box, since its rows are move
-## names rather than the eight-character words the source list holds.
+## The menu over the map. [param description] is `.MenuDesc`'s two lines,
+## drawn only when MENU ACCOUNT is on. [param frame] overrides the geometry for
+## a list the cartridge does not have: MOVES is `PopulateMonMenu`'s wider box.
 func render_list(
 	labels: Array, cursor: int, description: String = "", contest: bool = false,
-	frame: Gen2MenuBox = null, status: Dictionary = {}, safari: Dictionary = {}
+	frame: Gen2MenuBox = null, status: Dictionary = {}, safari: Dictionary = {},
+	hollow: bool = false
 ) -> Image:
 	if menu == null or font == null:
 		return null
@@ -175,6 +179,11 @@ func render_list(
 		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 	)
 	var box: Gen2MenuBox = frame if frame != null else list_box(labels.size(), contest)
+	## `RedisplayStartMenu.buttonPressed`'s `PlaceUnfilledArrowMenuCursor`.
+	var extras: Array = []
+	if hollow and cursor >= 0 and cursor < labels.size():
+		extras.append({"text": "▷", "at": box.cursor_position(cursor)})
+		cursor = -1
 	if contest:
 		## `.DrawBugContestStatusBox` and `.DrawBugContestStatus`, both of which
 		## the flag alone decides. Drawn before the list, because the list's box
@@ -183,20 +192,18 @@ func render_list(
 	if not safari.is_empty():
 		## `RedisplayStartMenu` draws it behind `DrawStartMenu`, left of the list.
 		_blit(image, _render_safari_steps(safari), Vector2i.ZERO)
-	_blit(image, menu.render(box, labels, cursor), box.border_position())
+	_blit(image, menu.render(box, labels, cursor, "", 0, extras), box.border_position())
 	if not description.is_empty():
 		_blit(image, _render_account(description), ACCOUNT_AT)
 	return image
 
 
-## `SaveMenu`'s screen: `DisplaySaveInfoOnSave`'s box in the top-right,
-## `SpeechTextbox` at the foot, and `PlaceYesNoBox`'s own box on the left when a
-## question is up. Transparent everywhere else, since the map stays behind it.
-## [param state] is what [Gen2StartMenuScreen] holds: `player_name`, `badges`,
-## `pokedex` (STATUSFLAGS_POKEDEX_F, which blanks the #DEX row), `caught`, `hours`
-## and `minutes`, the text's own whole `lines`, `line` for which is on the top row
-## and `cursor` at -1 while no yes/no box is up. [param behind] is what the
-## question stands over.
+## `SaveMenu`'s screen: `DisplaySaveInfoOnSave`'s box top right, `SpeechTextbox`
+## at the foot while there are `lines`, `PlaceYesNoBox` on the left while
+## `cursor` is not -1, and the map everywhere else. `pokedex` is
+## STATUSFLAGS_POKEDEX_F, which blanks the #DEX row; `info` at false is a
+## question that is not about the file. pokered's `PrintSaveScreenText` draws
+## over the START menu's list, which is [param behind].
 func render_save(state: Dictionary, behind: Image = null) -> Image:
 	if menu == null or font == null:
 		return null
@@ -205,9 +212,10 @@ func render_save(state: Dictionary, behind: Image = null) -> Image:
 	)
 	if behind != null:
 		_blit(image, behind, Vector2i.ZERO)
-	else:
+	if bool(state.get("info", true)):
 		_blit(image, _render_save_info(state), Vector2i(SAVE_INFO_LEFT, SAVE_INFO_TOP))
-	_blit(image, _render_save_textbox(state), SAVE_TEXTBOX_AT)
+	if not (state.get("lines", []) as Array).is_empty():
+		_blit(image, _render_save_textbox(state), SAVE_TEXTBOX_AT)
 	var cursor: int = int(state.get("cursor", -1))
 	if cursor >= 0:
 		var box: Gen2MenuBox = Gen2MenuBox.from_coords(
@@ -379,6 +387,66 @@ func render_options(rows: Array, cursor: int) -> Image:
 			Gen2MenuPage.CURSOR_CODE, indices, Gen2Screen.WIDTH,
 			OPTIONS_CURSOR_COLUMN * TILE, (OPTIONS_FIRST_ROW + 2 * cursor) * TILE
 		)
+	return Gen2PicImage.from_indices(
+		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, _palette()
+	)
+
+
+## [param rows] are [method Gen2WorldOptionsMenu.rows] on a Generation 1 menu.
+func render_gen1_options(rows: Array, cursor: int) -> Image:
+	if font == null:
+		return null
+	var indices := PackedByteArray()
+	indices.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	for index: int in rows.size():
+		var row: Dictionary = rows[index]
+		var columns: Array = row.get("columns", [])
+		var top: int = index * GEN1_OPTIONS_BOX_SIZE.y
+		var arrow_row: int = top + GEN1_OPTIONS_VALUES_ROW
+		if int(row.get("index", 0)) == Gen2WorldOptionsMenu.GEN1_CANCEL:
+			_text(indices, String(row.get("label", "")), GEN1_OPTIONS_CANCEL_AT.x, GEN1_OPTIONS_CANCEL_AT.y)
+			arrow_row = GEN1_OPTIONS_CANCEL_AT.y
+		else:
+			font.draw_box(
+				frame_style, indices, Gen2Screen.WIDTH, 0, top * TILE,
+				GEN1_OPTIONS_BOX_SIZE.x, GEN1_OPTIONS_BOX_SIZE.y
+			)
+			_text(indices, String(row.get("label", "")), GEN1_OPTIONS_LABEL_AT.x, top + GEN1_OPTIONS_LABEL_AT.y)
+			_text(indices, String(row.get("values", "")), GEN1_OPTIONS_LABEL_AT.x, arrow_row)
+		var choice: int = clampi(int(row.get("choice", 0)), 0, maxi(columns.size() - 1, 0))
+		if columns.is_empty():
+			continue
+		font.draw_code(
+			Gen2MenuPage.CURSOR_CODE if index == cursor else GEN1_OPTIONS_HOLLOW_CODE,
+			indices, Gen2Screen.WIDTH, int(columns[choice]) * TILE, arrow_row * TILE
+		)
+	return Gen2PicImage.from_indices(
+		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, _palette()
+	)
+
+
+## Yellow's `InitOptionsMenu`: the whole-screen `TextBoxBorder`, each row's
+## label at column 2 and its value at the handler's own `hlcoord`, and
+## `OptionsMenu_UpdateCursorPosition`'s `▶` in column 1.
+func render_yellow_options(rows: Array, cursor: int) -> Image:
+	if font == null:
+		return null
+	var indices := PackedByteArray()
+	indices.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	font.draw_box(frame_style, indices, Gen2Screen.WIDTH, 0, 0, COLUMNS, ROWS)
+	for index: int in rows.size():
+		var row: Dictionary = rows[index]
+		var at: int = int(row.get("row", 0))
+		_text(indices, String(row.get("label", "")), OPTIONS_LABEL_COLUMN, at)
+		var values: Array = row.get("values", [])
+		var choice: int = int(row.get("choice", 0))
+		if choice >= 0 and choice < values.size():
+			_text(indices, String(values[choice]), int(row.get("column", 0)), at)
+		if index == cursor:
+			font.draw_code(
+				Gen2MenuPage.CURSOR_CODE, indices, Gen2Screen.WIDTH,
+				OPTIONS_CURSOR_COLUMN * TILE, at * TILE
+			)
 	return Gen2PicImage.from_indices(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, _palette()
 	)

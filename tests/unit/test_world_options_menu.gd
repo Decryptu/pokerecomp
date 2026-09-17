@@ -162,3 +162,100 @@ func test_a_null_options_object_builds_defaults() -> void:
 	var menu: Gen2WorldOptionsMenu = Gen2WorldOptionsMenu.build(null)
 	assert_not_null(menu.options())
 	assert_eq(menu.rows().size(), Gen2WorldOptionsMenu.NUM_OPTIONS)
+
+
+## `DisplayOptionMenu`: three sections and CANCEL over the same three fields.
+## `.pressedLeftInTextSpeed` stops at FAST and the right press at SLOW, where
+## `.cursorInBattleAnimation` and `.cursorInBattleStyle` toggle on either.
+func test_the_generation_1_menu_is_display_option_menus_own() -> void:
+	var menu: Gen2WorldOptionsMenu = Gen2WorldOptionsMenu.build(
+		_options, Gen2WorldOptionsMenu.Layout.GEN1
+	)
+	assert_eq(menu.size(), 4)
+	var labels: Array = []
+	for row: Dictionary in menu.rows():
+		labels.append(String(row["label"]))
+	assert_eq(labels, ["TEXT SPEED", "BATTLE ANIMATION", "BATTLE STYLE", "CANCEL"])
+	assert_eq(String(menu.rows()[0]["values"]), " FAST  MEDIUM SLOW")
+
+	## `InitOptions`' TEXT_DELAY_MEDIUM stands in `TextSpeedOptionData`'s column 7.
+	assert_eq(int(menu.rows()[0]["choice"]), 1)
+	assert_eq(int((menu.rows()[0]["columns"] as Array)[int(menu.rows()[0]["choice"])]), 7)
+	assert_true(menu.adjust(-1))
+	assert_eq(_options.text_speed, 0)
+	assert_false(menu.adjust(-1), "FAST is the left end")
+	assert_true(menu.adjust(1))
+	assert_true(menu.adjust(1))
+	assert_eq(_options.text_speed, 2)
+	assert_false(menu.adjust(1), "SLOW is the right end")
+
+	menu.cursor = Gen2WorldOptionsMenu.GEN1_BATTLE_ANIMATION
+	assert_true(menu.adjust(-1))
+	assert_false(_options.battle_scene)
+	assert_eq(int(menu.rows()[1]["choice"]), 1, "OFF is column 10")
+	assert_true(menu.adjust(-1))
+	assert_true(_options.battle_scene)
+
+	menu.cursor = Gen2WorldOptionsMenu.GEN1_BATTLE_STYLE
+	assert_true(menu.adjust(1))
+	assert_true(_options.battle_style_set)
+	assert_eq(int(menu.rows()[2]["choice"]), 1, "SET is column 10")
+
+	menu.cursor = Gen2WorldOptionsMenu.GEN1_CANCEL
+	assert_true(menu.is_cancel())
+	assert_false(menu.adjust(1))
+	## `.downPressed`'s `ld b, -13` from row 16 lands on row 3 again.
+	menu.move(1)
+	assert_eq(menu.cursor, Gen2WorldOptionsMenu.GEN1_TEXT_SPEED)
+	menu.move(-1)
+	assert_true(menu.is_cancel())
+
+
+## Yellow's `DisplayOptionMenu_`: five rows and CANCEL on one page, every cycle
+## wrapping, SOUND over `Audio1_HWChannelEnableMasks`' four rows and
+## `OptionsControl` stepping over the two dummy rows between PRINT and CANCEL.
+func test_yellows_menu_adds_sound_and_print_and_wraps_every_cycle() -> void:
+	var menu: Gen2WorldOptionsMenu = Gen2WorldOptionsMenu.build(
+		_options, Gen2WorldOptionsMenu.Layout.YELLOW
+	)
+	assert_eq(menu.size(), 6)
+	var labels: Array = []
+	for row: Dictionary in menu.rows():
+		labels.append(String(row["label"]))
+	assert_eq(labels, [
+		"TEXT SPEED :", "ANIMATION  :", "BATTLESTYLE:", "SOUND:", "PRINT:", "CANCEL",
+	])
+	assert_true(menu.adjust(-1))
+	assert_eq(_options.text_speed, 0)
+	assert_true(menu.adjust(-1), "FAST wraps to SLOW")
+	assert_eq(_options.text_speed, 2)
+
+	menu.cursor = Gen2WorldOptionsMenu.YELLOW_SOUND
+	for expected: int in [1, 2, 3, 0]:
+		assert_true(menu.adjust(1))
+		assert_eq(_options.earphone, expected)
+	assert_eq(String((menu.rows()[3]["values"] as Array)[menu.rows()[3]["choice"]]), "MONO     ")
+	assert_true(menu.adjust(-1))
+	assert_eq(_options.earphone, 3)
+
+	menu.cursor = Gen2WorldOptionsMenu.YELLOW_PRINT
+	assert_true(menu.adjust(1))
+	assert_eq(_options.printer_brightness, 3)
+	menu.cursor = Gen2WorldOptionsMenu.YELLOW_CANCEL
+	assert_true(menu.is_cancel())
+	menu.move(1)
+	assert_eq(menu.cursor, Gen2WorldOptionsMenu.YELLOW_TEXT_SPEED)
+	menu.move(-1)
+	assert_eq(menu.cursor, Gen2WorldOptionsMenu.YELLOW_CANCEL)
+	menu.move(-1)
+	assert_eq(menu.cursor, Gen2WorldOptionsMenu.YELLOW_PRINT)
+
+
+func test_layout_follows_the_cache() -> void:
+	assert_eq(Gen2WorldOptionsMenu.layout_for(null), Gen2WorldOptionsMenu.Layout.CRYSTAL)
+	var data := GameData.new()
+	data.generation = RomRegistry.GEN1
+	data.id = RomRegistry.BLUE
+	assert_eq(Gen2WorldOptionsMenu.layout_for(data), Gen2WorldOptionsMenu.Layout.GEN1)
+	data.id = RomRegistry.YELLOW
+	assert_eq(Gen2WorldOptionsMenu.layout_for(data), Gen2WorldOptionsMenu.Layout.YELLOW)

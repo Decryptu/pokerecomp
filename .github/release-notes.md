@@ -16,27 +16,23 @@ an empty body. -->
 
 ## Added
 
-- The Cable Club on Red, Blue and Yellow links two saves of the same cartridge. The receptionist saves the game, the menu offers the Trade Center and the Colosseum, and either room loads with your friend on the far stool: the other occupied save slot of that game.
-- The Trade Center trades: both parties side by side, STATS on either Pokemon, the trade movie, an evolution on arrival for the species that evolve by trade, and CANCEL back to the room.
-- The Colosseum fights the other save's party as a link battle: the versus box with the Poke Ball rows, RUN as a forfeit, the verdict, and a healed party back in the room.
-- Yellow's COLOSSEUM2 offers the PIKA, PETIT and POKE CUP with each cup's level, count and evolution rules, and the cups' own sleep cap.
-- A Pokemon evolves after a fight, by stone or by Rare Candy, on the cartridge's evolution screen with its flicker and cries; cancelling with B works.
-- An in-game trade plays its movie on all three cartridges, with Yellow's own palette timing.
-- The S.S. Anne sails out of Vermilion under its smoke, a pushed boulder raises its dust, and the spinner tiles spin the player.
-- SAVE reads RESET while linked, and the bag is refused in a link room.
+- Red, Blue and Yellow's OPTION menu is the cartridge's own: three sections on Red and Blue, and Yellow's one page with SOUND over MONO and the three EARPHONE settings, which now reach the sound driver, and PRINT.
+- SAVE on Red, Blue and Yellow asks the cartridge's question over the START menu, saves before "Now saving..." (Yellow's "Saving..."), and closes the menu either way, as the cartridge does.
+- Yellow is coloured as a Game Boy Color colours it: every species, bar, town map and map palette comes out of the table the hardware reads, and the intro and battle sprites carry their own palette bits.
+- Yellow's Pikachu has its voice: the 42 clips play from the title, the emotion table, scripts, battles, the Hall of Fame, the status screen, Bill's PC, the day care and a poison faint.
+- Every script sound on Red, Blue and Yellow plays, and the rival's theme and the Champion's room music start where the cartridge starts them.
+- A mod's stats page turns on Red, Blue and Yellow, after the moves page, with A (`api_version` 33).
+- A mod asked about a mart is told the map and, on Red, Blue and Yellow, the counter it was opened at (`api_version` 32).
 
 ## Changed
 
-- The cache format is 140. Import your cartridges again.
+- The cache format is 142. Import your cartridges again.
 
 ## Fixed
 
-- Every secondary move effect on Red, Blue and Yellow (a paralysis, a burn, a flinch, a stat drop) had never triggered. They now roll at the cartridge's own odds.
-- Attack animations on Red, Blue and Yellow read garbage after a fresh import.
-- Running from a link battle on Gold, Silver and Crystal is a forfeit and counts as a loss; a link or Battle Tower fight awards no experience.
-- A YES/NO question over a multi-page text opened its menu on the first page.
-- On Crystal, a Pokemon that evolves after a link trade showed no evolution screen, and STATS on the link screen did nothing.
-- A six-tile-wide picture drawn flipped lost a column on the evolution and stats screens.
+- "#DEX" drew "?DEX" on a Generation 1 font, on the save box and everywhere else the source writes `#`.
+- Yellow's SOUND option had never reached the sound driver.
+- A catalogued shop behind another clerk's script was filed under that clerk's entry point: Goldenrod Dept Store 2F's second counter.
 
 ## Which file
 

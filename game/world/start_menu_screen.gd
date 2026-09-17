@@ -2,9 +2,8 @@ class_name Gen2StartMenuScreen
 extends Control
 
 ## The overworld pause menu (engine/menus/start_menu.asm). The list, `_Option`,
-## `SaveMenu` and every box the pack opens are the cartridge's own screens through
-## [Gen2StartMenuPage] and [Gen2PackPage], drawn into whichever [Gen2Screen] the
-## host hands over; a caller handing over none keeps the panel below. Pokedex,
+## `SaveMenu` and every box the pack opens are drawn through [Gen2StartMenuPage]
+## and [Gen2PackPage] into whichever [Gen2Screen] the host hands over. Pokedex,
 ## Pokemon and Pokegear are the world's, so this only reports the choice.
 
 ## An available entry this screen does not own (Pokedex, Pokemon, Pokegear,
@@ -258,8 +257,7 @@ var _toss_confirm_cursor: int = 0
 
 ## GIVE's two directions. `_giving` is the pack's own: the item is chosen and the
 ## party list picks who holds it. `_give_target` is `GiveTakePartyMonItem`'s,
-## where the Pokemon is already chosen and the pack list is `DepositSellPack`,
-## which acts on the item rather than opening a submenu over it.
+## where the Pokemon is already chosen and the pack list is `DepositSellPack`.
 var _giving: bool = false
 var _give_target: int = -1
 ## `PokemonAskSwapItemText`'s yes/no, who it is about and the question itself,
@@ -315,18 +313,15 @@ const MOD_ROW_VIEW: StringName = &"view"
 const MOD_ROW_MOD: StringName = &"mod"
 
 ## The MODS entry: which mod is being configured and where each cursor sits.
-## The rows themselves are the host's registrations, read fresh on every render
-## so a value changed from the launcher is never shown stale. The VIEW row in
-## front of them is the host's own and belongs to no mod: see [method _mod_rows].
+## The rows are the host's registrations, read fresh on every render so a value
+## changed from the launcher is never shown stale; see [method _mod_rows].
 var _mod_ids: Array[StringName] = []
 var _mod_cursor: int = 0
 var _mod_id: StringName = &""
 var _mod_option_cursor: int = 0
 
 ## The cartridge's own screens, drawn into whichever [Gen2Screen] the host
-## handed over. `StartMenu`'s box sits over the map, so it goes into the world's
-## own screen rather than one of this node's; without one, nothing is drawn at
-## all, which is what a test or the launcher gets.
+## handed over; without one nothing is drawn, which is what a test gets.
 var _screen: Gen2Screen = null
 ## `ComposeMailMessage`: the keyboard GIVE opens for a mail item, and what it
 ## wrote, held until [method _give_selected_item] runs the transaction with it.
@@ -378,9 +373,7 @@ func open(world: Gen2WorldAPI, data: GameData, save_action: Callable, previous_c
 
 ## The save the pack's USE applies to, and whether that write reaches disk.
 ## Without it the pack lists items and refuses to use one, which is what a
-## screenshot tool driving an injected world gets. Passed rather than wrapped the
-## way `save_action` is: USE is a [Gen2WorldPartyHost] transaction over this same
-## save, not a snapshot write only the world screen can do.
+## screenshot tool driving an injected world gets.
 func set_party_context(save: Gen2SaveData, persist: bool = true) -> void:
 	_pack_save = save
 	_pack_persist = persist
@@ -402,10 +395,9 @@ func open_give(party_index: int) -> void:
 	_open_pack_mode()
 
 
-## `SelectMenu`. `CheckRegisteredItem` answers first, and its `.NotRegistered`
-## carry is `MayRegisterItemText` rather than a pack at all; otherwise
-## `UseRegisteredItem` runs `CheckItemMenu`'s jumptable over the registered item,
-## which is the same one the pack's own USE reads.
+## `SelectMenu`. `CheckRegisteredItem`'s `.NotRegistered` carry is
+## `MayRegisterItemText`; otherwise `UseRegisteredItem` runs `CheckItemMenu`'s
+## jumptable over the registered item, the same one the pack's USE reads.
 func open_registered_item() -> void:
 	if _defer_entry(open_registered_item):
 		return
@@ -818,11 +810,9 @@ func _open_list_mode() -> void:
 	_render_list()
 
 
-## The window the list is drawn through. The box is the height of the screen and
-## the cartridge's own eight rows fill it exactly, so a `MENU_START` entry a mod
-## registers is a row past the bottom; `_move_pack_cursor` solves the same thing
-## for a pocket, and this is its twin. `STATICMENU_WRAP` still wraps the cursor,
-## and the window follows it round, so EXIT is one press up from the top row.
+## The window the list is drawn through: the cartridge's eight rows fill the
+## screen, so a mod's `MENU_START` entry is a row past the bottom.
+## `STATICMENU_WRAP` still wraps the cursor and the window follows it round.
 func _scroll_list_to_cursor() -> void:
 	if _menu == null:
 		_list_scroll = 0
@@ -843,12 +833,13 @@ func _render_list() -> void:
 
 
 ## `StartMenu_Option`'s `farcall Option`. The model edits the shared
-## [Gen2OptionsStore] object, so the launcher's settings card and this menu can
-## never disagree about a value, which is the same reason the cartridge block
-## exists at all.
+## [Gen2OptionsStore] object, so the launcher's settings card and this menu
+## never disagree about a value.
 func _open_options_mode() -> void:
 	_mode = Mode.OPTIONS
-	_options_menu = Gen2WorldOptionsMenu.build(Gen2OptionsStore.current())
+	_options_menu = Gen2WorldOptionsMenu.build(
+		Gen2OptionsStore.current(), Gen2WorldOptionsMenu.layout_for(_data)
+	)
 	_render_options_menu()
 
 
@@ -873,11 +864,9 @@ func _open_mods_mode() -> void:
 	_render_mods()
 
 
-## The rows MODS shows: the host's own VIEW row where there is more than one view
-## to choose from, then one row per mod that registered a setting. The view is
-## the host's rather than any mod's, since `Gen2ModHost` holds one selection for
-## both surfaces; `V` is behind [method PokeDebugKeys.enabled], so this is the
-## only place a shipped build can change it.
+## The rows MODS shows: the host's own VIEW row where there is more than one
+## view, then one row per mod that registered a setting. `V` is behind
+## [method PokeDebugKeys.enabled], so this is where a shipped build changes it.
 func _mod_rows() -> Array:
 	var rows: Array = []
 	if Gen2ModHost.instance().view_ids().size() > 1:
@@ -927,8 +916,7 @@ func _open_field_moves_mode() -> void:
 
 ## `PokemonActionSubmenu`'s own exit: the menu closes and the move runs. The
 ## action is the party submenu's shape with no slot in it, so the world's one
-## dispatch decides what the move does and the source's own text names the
-## player rather than a Pokemon.
+## dispatch decides what the move does.
 func _confirm_field_move() -> void:
 	if _field_move_cursor < 0 or _field_move_cursor >= _field_move_rows.size():
 		return
@@ -988,8 +976,7 @@ func _press_mod_option() -> void:
 
 ## One step either way: a rung, wrapping the way the cartridge's own value rows
 ## do, or one of a number's own steps. Written through the host, so the file is
-## committed on the press and whatever registered the setting hears about it at
-## once.
+## committed on the press.
 func _adjust_mod_option(rows: Array, delta: int) -> void:
 	var row: Dictionary = rows[_mod_option_cursor]
 	if StringName(row.get("kind", Gen2ModHost.OPTION_LADDER)) == Gen2ModHost.OPTION_BUTTON:
@@ -1480,10 +1467,8 @@ func _confirm_give_swap() -> void:
 
 
 ## `UseItem`'s jumptable: `.Oak` refuses, `.Current` and `.Field` apply straight
-## away, and `.Party` asks which Pokemon first. `.Field` runs the effect here and
-## quits the pack only when it succeeded, which is `wItemEffectSucceeded`; a CLOSE
-## item this project has no effect for leaves the byte clear and lands on `.Oak`
-## with every other refusal.
+## away, and `.Party` asks which Pokemon first. `.Field` quits the pack only on
+## `wItemEffectSucceeded`; a CLOSE item with no effect here lands on `.Oak`.
 func _confirm_use() -> void:
 	var item: Dictionary = _selected_item()
 	if item.is_empty():
@@ -1574,10 +1559,9 @@ func _confirm_gen1_current(item: int) -> void:
 			_show_pack_result(_pack_text(TEXT_OAK), false)
 
 
-## `.Field`: `DoItemEffect` and then `wItemEffectSucceeded`. The effects that run
-## in the overworld are resolved here and reported to the host, which is what
-## `QueueScript` is on the cartridge; the pack itself only decides whether to
-## quit.
+## `.Field`: `DoItemEffect` and then `wItemEffectSucceeded`. The effect is
+## resolved here and reported to the host, which is `QueueScript`; the pack
+## itself only decides whether to quit.
 func _use_field_item(item: int) -> void:
 	var request: Dictionary = _resolve_field_item(item) if _world != null else {}
 	if not bool(request.get("ok", false)):
@@ -1652,9 +1636,8 @@ func _resolve_field_item(item: int) -> Dictionary:
 
 
 ## `.Party`'s party list. Reads the same save the USE will be applied to, so a
-## screen without one offers no targets and answers `.NoPokemon`. The rows are
-## `WritePartyMenuTilemap`'s, in the shape [Gen2PartyMenuPage] draws and
-## [Gen2PartyScreen] builds, since the list this opens is that same menu.
+## screen without one answers `.NoPokemon`. The rows are
+## `WritePartyMenuTilemap`'s, in the shape [Gen2PartyMenuPage] draws.
 func _party_targets() -> Array:
 	if _pack_save == null:
 		return []
@@ -1684,10 +1667,9 @@ func _party_targets() -> Array:
 
 
 ## `PlacePartyMonTMHMCompatibility`'s `CanLearnTMHMMove` and
-## `PlacePartyMonEvoStoneCompatibility`'s walk, which is the plain question here:
-## its ten-byte window and three-byte stride, the two bugs
-## `docs/bugs_and_glitches.md` records, reach every stone entry in both corpora,
-## Eevee's three being the first three.
+## `PlacePartyMonEvoStoneCompatibility`'s walk, the plain question here: its
+## ten-byte window and three-byte stride (`docs/bugs_and_glitches.md`) reach
+## every stone entry in both corpora.
 func _target_quality_text(mon: Gen2SaveMon) -> String:
 	var item: int = int(_selected_item().get("item", 0))
 	match _target_quality():
@@ -2346,20 +2328,33 @@ func _render_pack_result() -> void:
 ## every mode below. [Gen2SavePrompt] is the sequence; this draws its box.
 func _open_save_confirm_mode() -> void:
 	_save_prompt = Gen2SavePrompt.open(
-		Gen2SavePrompt.Kind.MENU,
+		_save_kind(),
 		_pack_save.player_name if _pack_save != null else "",
 		_save_action
 	)
 	_sync_save_prompt()
 
 
+func _save_kind() -> Gen2SavePrompt.Kind:
+	match Gen2WorldOptionsMenu.layout_for(_data):
+		Gen2WorldOptionsMenu.Layout.GEN1:
+			return Gen2SavePrompt.Kind.GEN1_MENU
+		Gen2WorldOptionsMenu.Layout.YELLOW:
+			return Gen2SavePrompt.Kind.YELLOW_MENU
+	return Gen2SavePrompt.Kind.MENU
+
+
 func _sync_save_prompt() -> void:
 	if _save_prompt == null:
 		return
 	if _save_prompt.refused():
-		## `.refused`'s carry, which `StartMenu_Save` answers with 0.
+		## `.refused`'s carry, which `StartMenu_Save` answers with 0;
+		## `StartMenu_SaveReset` ends in `HoldTextDisplayOpen` either way.
 		_save_prompt = null
-		_open_list_mode()
+		if _gen1_pack():
+			closed.emit()
+		else:
+			_open_list_mode()
 		return
 	if _save_prompt.finished():
 		## `StartMenu_Save`'s `ld a, 1`, `StartMenu`'s exit and not `.Reopen`.
@@ -2392,10 +2387,8 @@ func _enter_save_mode(mode: Mode, lines: Array, cursor_index: int) -> void:
 
 func _confirm_save() -> void:
 	match _mode:
-		## `.refused` on NO, which is the carry `StartMenu_Save` answers with 0:
-		## back to the list rather than out of the menu.
-		## `StartMenu_Quit`'s `jr c, .DontEndContest`, which is the same 0 the
-		## save question answers NO with: back to the list. YES queues
+		## `StartMenu_Quit`'s `jr c, .DontEndContest`, the same 0 the save
+		## question answers NO with: back to the list. YES queues
 		## `BugCatchingContestReturnToGateScript`, which is the world's.
 		Mode.QUIT_ASK:
 			if _save_cursor == 1:
@@ -2490,7 +2483,7 @@ func _process(delta: float) -> void:
 			advance_target_icons()
 		return
 	_target_clock.reset()
-	if _mode != Mode.SAVE_SAVING and _mode != Mode.SAVE_SAVED:
+	if _save_prompt == null or _save_prompt.reads_joypad() or _save_prompt.finished():
 		_save_clock.reset()
 		return
 	for _frame: int in _save_clock.tick(delta):
@@ -2508,9 +2501,10 @@ func _save_state() -> Dictionary:
 	return {
 		"player_name": _pack_save.player_name if _pack_save != null else "",
 		"badges": state.badge_count(crystal) if state != null else 0,
-		"pokedex": state != null and state.is_engine_flag_active(
+		## `PrintNumOwnedMons` prints whether or not the Pokedex is owned.
+		"pokedex": _gen1_pack() or (state != null and state.is_engine_flag_active(
 			Gen2WorldStartMenu.ENGINE_POKEDEX
-		),
+		)),
 		"caught": state.caught_count() if state != null else 0,
 		"hours": time.hours,
 		"minutes": time.minutes,
@@ -2551,7 +2545,7 @@ func _exit_tree() -> void:
 
 ## `StartMenu`'s own list, which is the picture behind every question asked off
 ## a row of it.
-func _list_image() -> Image:
+func _list_image(hollow: bool = false) -> Image:
 	if _menu == null or _page == null:
 		return null
 	var contest: bool = _world != null and _world.bug_contest_active()
@@ -2566,7 +2560,7 @@ func _list_image() -> Image:
 	return _page.render_list(
 		labels.slice(_list_scroll, _list_scroll + shown),
 		_menu.cursor - _list_scroll, description, contest, null,
-		_contest_status() if contest else {}, _safari_status()
+		_contest_status() if contest else {}, _safari_status(), hollow
 	)
 
 
@@ -2631,13 +2625,17 @@ func _hardware_image() -> Image:
 			return _list_image()
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
 		Mode.SAVE_FAILED:
-			return _page.render_save(_save_state())
+			return _page.render_save(
+				_save_state(), _list_image(true) if _gen1_pack() else null
+			)
 		## `StartMenu_Quit` and the two rows this port added below it ask over the
 		## list they were chosen from. Only `SaveMenu` puts up
 		## `Continue_LoadMenuHeader`'s panel of badges, Pokedex and play time,
 		## because only the save question is about the file.
 		Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
-			return _page.render_save(_save_state(), _list_image())
+			var state: Dictionary = _save_state()
+			state["info"] = false
+			return _page.render_save(state, _list_image())
 		Mode.OPTIONS:
 			return _options_image()
 		Mode.PACK:
@@ -2672,6 +2670,11 @@ func _hardware_image() -> Image:
 func _options_image() -> Image:
 	if _options_menu == null:
 		return null
+	match _options_menu.layout:
+		Gen2WorldOptionsMenu.Layout.GEN1:
+			return _page.render_gen1_options(_options_menu.rows(), _options_menu.cursor)
+		Gen2WorldOptionsMenu.Layout.YELLOW:
+			return _page.render_yellow_options(_options_menu.rows(), _options_menu.cursor)
 	return _page.render_options(_options_menu.rows(), _options_menu.cursor)
 
 

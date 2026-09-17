@@ -238,14 +238,13 @@ func _walk_something_behind_the_player(host: Gen2ModHost, id: StringName) -> voi
 	host.register_world_actor(id, Pet.new())
 
 
-## A fourth page on a Pokémon's stats screen (`api_version` 8).
-##
-## The mod answers WHERE its strings go and the host writes them with the
-## screen's own font, so a page needs no node, no renderer and no art of its own.
-## The lower half is rows 8 to 17 and a placement outside it is dropped, which is
-## what keeps a page off the name, the level and the front pic. The snapshot is
-## the same one the cartridge pages are drawn from, plus the two halves of a
-## Pokémon none of them prints: the packed DV word and the stat experience.
+## A fourth page on a Pokémon's stats screen (`api_version` 8), and on Red,
+## Blue and Yellow the page after the moves, turned to with A (`api_version`
+## 33). The mod answers WHERE its strings go and the host writes them with the
+## screen's own font, so a page needs no node, renderer or art. The lower half
+## is rows 8 to 17 and a placement outside it is dropped, which keeps a page off
+## the name, the level and the front pic. The snapshot is the cartridge pages'
+## own plus the packed DV word and the stat experience.
 func _add_a_stats_page(host: Gen2ModHost, id: StringName) -> void:
 	host.register_stats_page(id, {"build": _build_stats_page})
 

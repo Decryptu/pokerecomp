@@ -54,7 +54,7 @@ const MAX_ROUTINES: int = 16
 
 ## The sidecar's own shape. Bumped when a row, a link or a kind changes meaning,
 ## which rebuilds every cache's sidecar without touching the cache format.
-const FORMAT_VERSION: int = 1
+const FORMAT_VERSION: int = 2
 
 ## The row and link fields whose value is a StringName rather than a String:
 ## `kind` on every row, and `role` on a link. See [method _restore_value].
@@ -606,17 +606,23 @@ func _attribute_maps() -> void:
 	var references: Dictionary = {}
 	for map: Gen2WorldMap in _data.world_maps():
 		_walk_map_scripts(map, crystal, owner, references)
+	var entries: Array = owner.keys()
+	entries.sort()
 	for id: Variant in _rows:
 		var row: Dictionary = _rows[id]
 		if row.has("map") or not row.has("address"):
 			continue
-		## The site's own byte first, then the entry point its blob starts at:
-		## a site inside a routine is reached through the routine, not at it.
-		for address: int in [int(row["address"]), int(row.get("script_base", row["address"]))]:
-			var key: int = (int(row["bank"]) & 0xFF) << ID_BANK_SHIFT | (address & ID_ADDRESS_MASK)
-			if owner.has(key):
-				row["map"] = owner[key]
-				break
+		## A blob decodes past `end` into the script behind it, so the entry
+		## point a site is reached through is the last one at or before it, no
+		## earlier than the blob's own start: Goldenrod Dept Store 2F's clerks.
+		var bank: int = (int(row["bank"]) & 0xFF) << ID_BANK_SHIFT
+		var base: int = int(row.get("script_base", row["address"]))
+		var site: int = bank | (int(row["address"]) & ID_ADDRESS_MASK)
+		var at: int = entries.bsearch(site, false) - 1
+		if at >= 0 and int(entries[at]) >= (bank | (base & ID_ADDRESS_MASK)) \
+			and (int(entries[at]) & ~ID_ADDRESS_MASK) == bank:
+			row["script_base"] = int(entries[at]) & ID_ADDRESS_MASK
+			row["map"] = owner[entries[at]]
 
 
 func _walk_map_scripts(
