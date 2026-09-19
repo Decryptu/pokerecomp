@@ -3025,27 +3025,27 @@ func is_gen1() -> bool:
 ## recharge, a charged move, a rampage or a Rollout opens no menu at all.
 ## `MainInBattleLoop` asks the same of a recharge, Rage, a rampage and a charge.
 func player_menu_skipped() -> bool:
-	var player: Gen2BattleMon = mon(PLAYER)
-	if Gen2Substatus.has(player.substatus, Gen2Substatus.RECHARGING | Gen2Substatus.RAMPAGING):
+	var out: Gen2BattleMon = mon(PLAYER)
+	if Gen2Substatus.has(out.substatus, Gen2Substatus.RECHARGING | Gen2Substatus.RAMPAGING):
 		return true
-	if player.charged_move != 0:
+	if out.charged_move != 0:
 		return true
 	if is_gen1():
-		return Gen2Substatus.has(player.substatus, Gen2Substatus.RAGE)
-	return Gen2Substatus.has(player.substatus, Gen2Substatus.ROLLOUT)
+		return Gen2Substatus.has(out.substatus, Gen2Substatus.RAGE)
+	return Gen2Substatus.has(out.substatus, Gen2Substatus.ROLLOUT)
 
 
 ## `ParsePlayerAction`'s `.locked_in` behind FIGHT: Bide shows the main menu
 ## and no move list. Generation 1 skips the list for a sleeping or frozen
 ## Pokemon and for either side's trapping move as well.
 func player_move_menu_skipped() -> bool:
-	var player: Gen2BattleMon = mon(PLAYER)
-	if Gen2Substatus.has(player.substatus, Gen2Substatus.BIDE):
+	var out: Gen2BattleMon = mon(PLAYER)
+	if Gen2Substatus.has(out.substatus, Gen2Substatus.BIDE):
 		return true
 	if not is_gen1():
 		return false
-	return Gen2Status.is_asleep(player.status) \
-		or Gen2Status.has(player.status, Gen2Status.FREEZE) \
+	return Gen2Status.is_asleep(out.status) \
+		or Gen2Status.has(out.status, Gen2Status.FREEZE) \
 		or gen1_trapping_move(PLAYER) != 0 or gen1_trapping_move(ENEMY) != 0
 
 
