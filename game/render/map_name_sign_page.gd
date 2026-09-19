@@ -49,12 +49,8 @@ const NOTICE_COLUMNS: int = COLUMNS - NOTICE_TEXT_COLUMN - 1
 
 
 ## `PAL_BG_TEXT`, the slot `InitMapSignAttrmap` writes over every tile of the
-## sign. On a map that is the map's OWN palette 7, which `LoadMapPalettes` fills
-## out of `bg_tiles.pal`'s per-environment, per-time-of-day "text" row: cream,
-## cream, brown, black, which is what makes the sign read as wood. The blue
-## `Palette_TextBG7` this used to draw with is `LoadOW_BGPal7`'s, and nothing in
-## `MapSetupScript_Connection` or `RefreshMapSprites` runs that before the sign
-## is placed.
+## sign: the map's own palette 7, `bg_tiles.pal`'s "text" row, which is what
+## makes the sign read as wood. `LoadOW_BGPal7`'s blue is never loaded first.
 const PAL_BG_TEXT: int = 7
 
 
@@ -96,13 +92,10 @@ static func render(
 	return Gen2PicImage.from_indices(indices, width, ROWS * TILE, palette)
 
 
-## The same four rows carrying [param title] over [param line], with the first
-## two interior columns left clear for the icon the caller draws over them.
-##
-## [param frame_style] is the player's chosen text-box border, used only where
-## the cache carries no `MapEntryFrameGFX`: that is every Gold and Silver cache,
-## and a notice has to reach those players too. Null only when there is no font,
-## which is a cache with no cartridge behind it at all.
+## The same four rows carrying [param title] over [param line], the first two
+## interior columns left clear for the icon. [param frame_style] is the
+## player's text-box border, used where the cache carries no `MapEntryFrameGFX`,
+## which is every Gold and Silver cache.
 static func render_notice(
 	data: GameData,
 	title: String,
@@ -147,35 +140,18 @@ static func render_notice(
 
 
 ## The 16x16 a notice wears, out of the vocabulary an actor and a battle
-## annotation already share. Null where the cache carries no art for what was
-## asked, which draws a notice with no icon rather than a placeholder. `badge` is
-## `TrainerCard_JohtoBadgesOAM`'s four tiles, 0 to 7, the Kanto eight having no
-## art on the cartridge; `species` is [method GameData.species_icon_indices];
-## `sprite` is an `OverworldSprites` row facing down; and `tile` is raw indices in
-## [Gen2BattleAnnotations]' own shape, drawn in the frame's palette.
+## annotation already share, or null where the cache carries no art for it.
+## `badge` is a row of the sixteen-badge order, [method _badge_icon]; `species`
+## is [method GameData.species_icon_indices]; `sprite` is an `OverworldSprites`
+## row facing down; and `tile` is raw indices in [Gen2BattleAnnotations]' own
+## shape, drawn in the frame's palette.
 static func render_notice_icon(
 	data: GameData, icon: Dictionary, time_of_day: int = Gen2WorldPalette.TIME_MORNING
 ) -> Image:
 	if data == null or icon.is_empty():
 		return null
-	var side: int = NOTICE_ICON_TILES * TILE
 	if icon.has("badge"):
-		var badge: int = int(icon["badge"])
-		if badge < 0 or badge >= BADGE_ART_ROWS:
-			return null
-		var tiles: PackedByteArray = data.tile_indices("card_badges")
-		if tiles.is_empty():
-			return null
-		@warning_ignore("integer_division")
-		var strip: int = tiles.size() / PokeTiles.TILE_PIXELS
-		var table: PackedInt32Array = Gen2PicImage.lookup(data.card_badge_palette())
-		var pixels: PackedInt32Array = Gen2PicImage.canvas(side, side)
-		for quadrant: int in 4:
-			Gen2PicImage.blit_tile(
-				pixels, side, side, tiles, strip, badge * 4 + quadrant,
-				(quadrant % 2) * TILE, (quadrant >> 1) * TILE, table, false, false, 0
-			)
-		return Gen2PicImage.canvas_image(pixels, side, side)
+		return _badge_icon(data, int(icon["badge"]))
 	if icon.has("species"):
 		var species: int = int(icon["species"])
 		var indices: PackedByteArray = data.species_icon_indices(species)
@@ -205,6 +181,7 @@ static func render_notice_icon(
 		if colors.size() < 4:
 			return null
 		var table: PackedInt32Array = Gen2PicImage.lookup(colors)
+		var side: int = NOTICE_ICON_TILES * TILE
 		var pixels: PackedInt32Array = Gen2PicImage.canvas(side, side)
 		for pixel: int in raw.size():
 			@warning_ignore("integer_division")
@@ -240,6 +217,53 @@ static func _notice_tile_indices(value: Variant) -> PackedByteArray:
 ## `TrainerCard_JohtoBadgesOAM`'s own length. `TrainerCard_KantoBadgesOAM` reuses
 ## the same eight pictures, so a Kanto badge has no art of its own to ask for.
 const BADGE_ART_ROWS: int = 8
+
+
+## `TrainerCard_JohtoBadgesOAM`'s four tiles for 0 to 7 on Generation 2, whose
+## Kanto eight reuse those pictures, and `GymLeaderFaceAndBadgeTileGraphics`'
+## badge for 8 to 15 on Generation 1, which draws no Johto.
+static func _badge_icon(data: GameData, badge: int) -> Image:
+	if data.generation == RomRegistry.GEN1:
+		return _gen1_badge_icon(data, badge - Gen2WorldState.KANTO_BADGE_FIRST)
+	if badge < 0 or badge >= BADGE_ART_ROWS:
+		return null
+	var tiles: PackedByteArray = data.tile_indices("card_badges")
+	if tiles.is_empty():
+		return null
+	var side: int = NOTICE_ICON_TILES * TILE
+	@warning_ignore("integer_division")
+	var strip: int = tiles.size() / PokeTiles.TILE_PIXELS
+	var table: PackedInt32Array = Gen2PicImage.lookup(data.card_badge_palette())
+	var pixels: PackedInt32Array = Gen2PicImage.canvas(side, side)
+	for quadrant: int in 4:
+		Gen2PicImage.blit_tile(
+			pixels, side, side, tiles, strip, badge * 4 + quadrant,
+			(quadrant % 2) * TILE, (quadrant >> 1) * TILE, table, false, false, 0
+		)
+	return Gen2PicImage.canvas_image(pixels, side, side)
+
+
+## Each quadrant in the colours `BlkPacket_TrainerCard` gives that cell of the card.
+static func _gen1_badge_icon(data: GameData, badge: int) -> Image:
+	if badge < 0 or badge >= BADGE_ART_ROWS:
+		return null
+	var tiles: PackedByteArray = data.tile_indices("badge_faces")
+	if tiles.is_empty():
+		return null
+	var side: int = NOTICE_ICON_TILES * TILE
+	@warning_ignore("integer_division")
+	var strip: int = tiles.size() / PokeTiles.TILE_PIXELS
+	var first: int = badge * Gen1Layout.BADGE_FACE_STRIDE + Gen1Layout.BADGE_FACE_BADGE_AT
+	var pixels: PackedInt32Array = Gen2PicImage.canvas(side, side)
+	for quadrant: int in 4:
+		var table: PackedInt32Array = Gen2PicImage.lookup(data.world_palette(
+			Gen2TrainerCardPage.gen1_badge_cell_palette(badge, quadrant)
+		))
+		Gen2PicImage.blit_tile(
+			pixels, side, side, tiles, strip, first + quadrant,
+			(quadrant % 2) * TILE, (quadrant >> 1) * TILE, table, false, false, 0
+		)
+	return Gen2PicImage.canvas_image(pixels, side, side)
 
 
 ## `Textbox`'s own border, for a cache with no `MapEntryFrameGFX`: the same four

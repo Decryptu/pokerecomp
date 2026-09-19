@@ -607,6 +607,18 @@ func gen1_attributes() -> PackedInt32Array:
 	return map
 
 
+## The `SuperPalettes` row a badge's quadrant wears on the card.
+static func gen1_badge_cell_palette(badge: int, quadrant: int) -> int:
+	@warning_ignore("integer_division")
+	var cell: Vector2i = GEN1_BADGE_ROWS[badge / GEN1_BADGES_PER_ROW] \
+		+ Vector2i((badge % GEN1_BADGES_PER_ROW) * GEN1_BADGE_STRIDE + 1 + quadrant % 2, 1 + quadrant / 2)
+	for block: Array in GEN1_ATTRIBUTE_BLOCKS:
+		if cell.x >= int(block[0]) and cell.x <= int(block[2]) \
+			and cell.y >= int(block[1]) and cell.y <= int(block[3]):
+			return GEN1_PALETTES[int(block[4])]
+	return GEN1_PALETTES[0]
+
+
 ## `hlcoord 15, 1`'s own write, which runs past the right edge onto the next row.
 func _put_wrapped(map: PackedInt32Array, cell: int, tile: int) -> void:
 	if cell < 0 or cell >= map.size():
