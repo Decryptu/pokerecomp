@@ -90,6 +90,7 @@ static func calculate_with(
 	)
 	out["stab"] = stabbed["stab"]
 	out["immune"] = stabbed["immune"]
+	out["missed"] = bool(stabbed.get("missed", false))
 	out["effectiveness"] = stabbed["effectiveness"]
 	damage = int(stabbed["damage"])
 
@@ -111,11 +112,25 @@ static func damage_stats(
 ) -> Array:
 	if attacker == null or defender == null:
 		return [1, 1]
+	var attack: int = _attack_stat(attacker, defender, move_type, critical)
+	var defense: int = _defense_stat(attacker, defender, move_type, critical, defender_screens)
+	if attacker.data != null and attacker.data.generation == RomRegistry.GEN1:
+		return gen1_scale_stats(attack, defense)
 	return metal_powder_pair(defender, truncate_stats(
-		_attack_stat(attacker, defender, move_type, critical),
-		_defense_stat(attacker, defender, move_type, critical, defender_screens),
-		Gen2WorldState.is_crystal_profile(attacker.data) and not link_battle
+		attack, defense, Gen2WorldState.is_crystal_profile(attacker.data) and not link_battle
 	))
+
+
+## `GetDamageVarsForPlayerAttack.scaleStats`: one shift of two for both when
+## either is over a byte, then the low byte of each. A defense wrapping to zero
+## hangs the cartridge in `Divide`; [method base_damage] floors it instead.
+static func gen1_scale_stats(attack: int, defense: int) -> Array:
+	var out_attack: int = attack
+	var out_defense: int = defense
+	if out_attack > STAT_BYTE_MAX or out_defense > STAT_BYTE_MAX:
+		out_attack = maxi(out_attack >> 2, 1)
+		out_defense = out_defense >> 2
+	return [out_attack & STAT_BYTE_MAX, out_defense & STAT_BYTE_MAX]
 
 
 ## `BattleCommand_DamageCalc`: Selfdestruct's halved defense, the formula, the
@@ -214,9 +229,13 @@ static func stab_damage(
 			return out
 		# One type at a time, never down to nothing: a hit that landed cannot be
 		# rounded away, and a powerless move stays at nothing regardless.
+		# `AdjustDamageForMoveType` has no floor: a two rounded away is a miss.
 		if worked > 0:
 			@warning_ignore("integer_division")
-			worked = maxi(worked * multiplier / Gen2Layout.MATCHUP_EFFECTIVE, 1)
+			worked = worked * multiplier / Gen2Layout.MATCHUP_EFFECTIVE
+			if worked == 0 and data.generation == RomRegistry.GEN1:
+				out["missed"] = true
+			worked = maxi(worked, 1) if data.generation != RomRegistry.GEN1 else worked
 
 	out["damage"] = worked
 	return out
@@ -234,13 +253,10 @@ static func base_damage(level: int, power: int, attack: int, defense: int) -> in
 	return out
 
 
-## `TruncateHL_BC`: both stats shifted right two bits at a time until each fits in
-## a byte, flooring at one. Not cosmetic: `base_damage` multiplies by the attack
-## before it divides by the defense, so shifting both changes the answer.
-## [param crystal] is the single-player fix, `.finish` looping back while
-## `wLinkMode` is not `LINK_COLOSSEUM`. pokegold has no such check, so anything
-## still over a byte wraps, which is `docs/bugs_and_glitches.md`'s Reflect and
-## Light Screen wrap.
+## `TruncateHL_BC`: both stats shifted right two bits at a time until each fits
+## in a byte, flooring at one. [param crystal] is the single-player fix,
+## `.finish` looping back outside `LINK_COLOSSEUM`; pokegold has no such check,
+## so anything still over a byte wraps (`docs/bugs_and_glitches.md`).
 static func truncate_stats(attack: int, defense: int, crystal: bool = true) -> Array:
 	var out_attack: int = attack
 	var out_defense: int = defense
@@ -331,9 +347,11 @@ static func confusion_damage(
 	var defense: int = mon.stat("defense")
 	if Gen2Screens.has(screens, Gen2Screens.REFLECT):
 		defense *= Gen2Screens.DEFENCE_MULTIPLIER
-	var truncated: Array = truncate_stats(
-		mon.stat("attack"), defense, Gen2WorldState.is_crystal_profile(mon.data) and not link_battle
-	)
+	var truncated: Array = gen1_scale_stats(mon.stat("attack"), defense) \
+		if mon.data != null and mon.data.generation == RomRegistry.GEN1 else truncate_stats(
+			mon.stat("attack"), defense,
+			Gen2WorldState.is_crystal_profile(mon.data) and not link_battle
+		)
 	return damage_calc(
 		mon, CONFUSION_POWER, int(truncated[0]), int(truncated[1]),
 		int(move.get("effect", -1)) == Gen2MoveEffect.SELFDESTRUCT,

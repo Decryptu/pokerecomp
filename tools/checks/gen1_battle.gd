@@ -48,6 +48,53 @@ const CRITICAL_CHANCES: Array = [
 	[255, 127, 31, 255],
 ]
 
+## `PlayerCalcMoveDamage`'s four routines, against what the cartridges
+## themselves answered: the oracle's `battle/gen1_damage.py` runs them on a
+## real dump and prints `wDamage` and `wMoveMissed` per case, and
+## [method _damage_oracle_sweep] prints the same 5,972 lines. `rand` is what
+## `Random` answers, which `RandomizeDamage` rotates right before it compares.
+const DAMAGE_ORACLE_HEAD: String = "power type effect level attack defense " \
+	+ "party_attack party_defense screens critical atk_types def_types rand -> damage missed"
+const DAMAGE_ORACLE_DIGEST: String = "b7a2ca24ee9c82d4c6e4f0a6948d9f4704d34189"
+const DAMAGE_ATTACKS: Array[int] = [1, 50, 130, 255, 256, 300, 600, 999]
+const DAMAGE_DEFENSES: Array[int] = [1, 30, 100, 255, 256, 400, 999]
+const DAMAGE_POWERS: Array[int] = [40, 90, 250]
+const DAMAGE_LEVELS: Array[int] = [5, 50, 100]
+const DAMAGE_RANDS: Array[int] = [217, 255]
+const DAMAGE_LIGHT_SCREEN: int = 1 << 1
+const DAMAGE_REFLECT: int = 1 << 2
+const DAMAGE_EXPLODE_EFFECT: int = 0x07
+const DAMAGE_TYPES: Array[int] = [
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x07, 0x08,
+	0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A,
+]
+const DAMAGE_PAIRS: Array = [
+	[0x00, 0x02], [0x01, 0x03], [0x03, 0x04], [0x05, 0x04], [0x07, 0x16],
+	[0x07, 0x03], [0x08, 0x03], [0x15, 0x19], [0x15, 0x02], [0x16, 0x03],
+	[0x17, 0x02], [0x05, 0x15], [0x19, 0x18], [0x1A, 0x02], [0x14, 0x02],
+	[0x04, 0x05], [0x18, 0x15],
+]
+const DAMAGE_TYPE_STATS: Array = [[10, 250, 10], [120, 60, 120]]
+const DAMAGE_PSYCHIC: int = 0x18
+const DAMAGE_DRAGON: int = 0x1A
+
+## `CalculateModifiedStats`, `ApplyBurnAndParalysisPenaltiesToPlayer` and
+## `ApplyBadgeStatBoosts` in a row, then the boosts once more, against the
+## oracle's `battle/gen1_stats.py` and its 612 lines from the cartridges.
+const STATS_ORACLE_HEAD: String = "atk def spd spc mods status badges -> atk def spd spc | boosted again"
+const STATS_ORACLE_DIGEST: String = "f59fbb99feef06220731c1818ba62369dc81b589"
+const STATS_ORACLE_ROWS: Array = [
+	[1, 1, 1, 1], [7, 9, 11, 13], [100, 100, 100, 100], [255, 256, 511, 512],
+	[700, 800, 900, 999], [888, 889, 890, 891],
+]
+const STATS_ORACLE_STAGED_ROWS: Array = [
+	[100, 100, 100, 100], [255, 256, 511, 512], [700, 800, 900, 999],
+]
+const STATS_ORACLE_STATUSES: Array[int] = [0, Gen2Status.PARALYSIS, Gen2Status.BURN]
+const STATS_ORACLE_BADGES: Array[int] = [0x00, 0x01, 0x04, 0x10, 0x40, 0x55, 0xAA, 0xFF]
+const STATS_ORACLE_KEYS: Array[String] = ["attack", "defense", "speed", "sp_attack"]
+const STATS_NEUTRAL_MOD: int = 7
+
 var _r: RefCounted = null
 
 
@@ -59,9 +106,15 @@ func run(r: RefCounted) -> void:
 func _one_game() -> void:
 	_created_knowing()
 	_critical_chances()
+	_damage_oracle_sweep()
+	_stats_oracle_sweep()
 	_every_move()
 	_a_wild_fight()
 	_haze_clears_more_than_stages()
+	_the_turn_bleeds_behind_each_move()
+	_the_stored_stats_compound()
+	_a_sleeper_loses_the_turn_it_wakes_on()
+	_a_freeze_and_a_screen_outlive_the_turn()
 	_a_trapping_move_holds_its_target()
 	_the_trap_counter_distribution()
 	_conversion_copies_the_target()
@@ -168,6 +221,145 @@ func _a_wild_fight() -> void:
 	])
 
 
+func _damage_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([DAMAGE_ORACLE_HEAD])
+	for attack: int in DAMAGE_ATTACKS:
+		for defense: int in DAMAGE_DEFENSES:
+			for power: int in DAMAGE_POWERS:
+				for level: int in DAMAGE_LEVELS:
+					for critical: int in [0, 1]:
+						for screens: int in [0, DAMAGE_REFLECT]:
+							for rand: int in DAMAGE_RANDS:
+								lines.append(_damage_line([
+									power, 0, 0, level, attack, defense, attack + 7,
+									defense + 3, screens, critical, [0, 0], [0, 0], rand,
+								]))
+	for attack: int in [90, 400]:
+		for defense: int in [70, 300]:
+			for screens: int in [0, DAMAGE_LIGHT_SCREEN, DAMAGE_REFLECT]:
+				lines.append(_damage_line([
+					95, DAMAGE_PSYCHIC, 0, 60, attack, defense, attack, defense, screens,
+					0, [DAMAGE_PSYCHIC, DAMAGE_PSYCHIC], [0x01, 0x03], 255,
+				]))
+	var pairs: Array = []
+	for kind: int in DAMAGE_TYPES:
+		pairs.append([kind, kind])
+	pairs.append_array(DAMAGE_PAIRS)
+	for move_type: int in DAMAGE_TYPES:
+		for pair: Array in pairs:
+			for stab: int in [0, 1]:
+				for row: Array in DAMAGE_TYPE_STATS:
+					lines.append(_damage_line([
+						int(row[2]), move_type, 0, 30, int(row[0]), int(row[1]),
+						int(row[0]), int(row[1]), 0, 0,
+						[move_type if stab == 1 else DAMAGE_DRAGON, DAMAGE_DRAGON], pair, 255,
+					]))
+	for defense: int in [30, 255, 256, 1000]:
+		for attack: int in [100, 300]:
+			lines.append(_damage_line([
+				170, 0, DAMAGE_EXPLODE_EFFECT, 50, attack, defense, attack, defense,
+				0, 0, [0, 0], [0, 0], 255,
+			]))
+	if _r.digest_matches("damage oracle", lines, DAMAGE_ORACLE_DIGEST):
+		_r.note("gen1 battle %d damage cases answered as the cartridge does" % (lines.size() - 1))
+
+
+func _stats_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([STATS_ORACLE_HEAD])
+	var neutral: Array[int] = [STATS_NEUTRAL_MOD, STATS_NEUTRAL_MOD, STATS_NEUTRAL_MOD, STATS_NEUTRAL_MOD]
+	for row: Array in STATS_ORACLE_ROWS:
+		for status: int in STATS_ORACLE_STATUSES:
+			for badges: int in STATS_ORACLE_BADGES:
+				lines.append(_stats_line(row, neutral, status, badges))
+	for stage: int in range(1, 14):
+		for index: int in 4:
+			var mods: Array[int] = neutral.duplicate()
+			mods[index] = stage
+			for row: Array in STATS_ORACLE_STAGED_ROWS:
+				for status: int in STATS_ORACLE_STATUSES:
+					lines.append(_stats_line(row, mods, status, 0x55))
+	if _r.digest_matches("stat oracle", lines, STATS_ORACLE_DIGEST):
+		_r.note("gen1 battle %d stored-stat cases answered as the cartridge does" % (lines.size() - 1))
+
+
+func _stats_line(row: Array, mods: Array[int], status: int, badges: int) -> String:
+	var mon: Gen2BattleMon = Gen2BattleMon.create(_r.data, SWEEP_PLAYER, SWEEP_LEVEL)
+	for index: int in 4:
+		mon.stats[STATS_ORACLE_KEYS[index]] = int(row[index])
+		mon.stages[STATS_ORACLE_KEYS[index]] = mods[index] - STATS_NEUTRAL_MOD
+	mon.stats["sp_defense"] = int(row[3])
+	mon.stages["sp_defense"] = mods[3] - STATS_NEUTRAL_MOD
+	mon.status = status
+	mon.gen1_badges = badges
+	mon.gen1_stats = {}
+	mon.gen1_recalculate_stats()
+	mon.gen1_apply_penalties()
+	mon.gen1_apply_badge_boosts()
+	var first: String = _stats_text(mon)
+	mon.gen1_apply_badge_boosts()
+	return "%d %d %d %d %x%x%x%x %d %d -> %s | %s" % [
+		row[0], row[1], row[2], row[3], mods[0], mods[1], mods[2], mods[3], status,
+		badges, first, _stats_text(mon),
+	]
+
+
+func _stats_text(mon: Gen2BattleMon) -> String:
+	return "%d %d %d %d" % [
+		mon.gen1_stats["attack"], mon.gen1_stats["defense"], mon.gen1_stats["speed"],
+		mon.gen1_stats["special"],
+	]
+
+
+## A defense the shift leaves at zero hangs the cartridge, which prints HUNG.
+func _damage_line(case: Array) -> String:
+	var special: bool = int(case[1]) >= Gen2Layout.SPECIAL_TYPES_START
+	var attacker: Gen2BattleMon = _stat_mon(
+		int(case[3]), int(case[4]), int(case[6]), case[10] as Array, special, true
+	)
+	var defender: Gen2BattleMon = _stat_mon(
+		int(case[3]), int(case[5]), int(case[7]), case[11] as Array, special, false
+	)
+	var screens: int = int(case[8])
+	var critical: bool = int(case[9]) == 1
+	var move: Dictionary = {
+		"number": 1, "type": int(case[1]), "power": int(case[0]),
+		"effect": Gen2MoveEffect.SELFDESTRUCT if int(case[2]) == DAMAGE_EXPLODE_EFFECT else 0,
+	}
+	var head: String = "%d %d %d %d %d %d %d %d %d %d %d,%d %d,%d %d" % [
+		case[0], case[1], case[2], case[3], case[4], case[5], case[6], case[7],
+		case[8], case[9], case[10][0], case[10][1], case[11][0], case[11][1], case[12],
+	]
+	var flags: int = (DAMAGE_REFLECT if screens & DAMAGE_REFLECT else 0) \
+		| (DAMAGE_LIGHT_SCREEN if screens & DAMAGE_LIGHT_SCREEN else 0)
+	var port_screens: int = (Gen2Screens.REFLECT if flags & DAMAGE_REFLECT else 0) \
+		| (Gen2Screens.LIGHT_SCREEN if flags & DAMAGE_LIGHT_SCREEN else 0)
+	var stats: Array = Gen2Damage.damage_stats(
+		attacker, defender, int(case[1]), critical, port_screens
+	)
+	if int(stats[1]) == 0:
+		return "%s -> HUNG HUNG" % head
+	var rand: int = int(case[12])
+	var result: Dictionary = Gen2Damage.calculate_with(
+		attacker, defender, move, critical, ((rand >> 1) | ((rand & 1) << 7)) & 0xFF,
+		Gen2Weather.NONE, port_screens
+	)
+	var missed: int = 1 if bool(result["missed"]) or bool(result["immune"]) else 0
+	return "%s -> %d %d" % [head, int(result["damage"]), missed]
+
+
+func _stat_mon(
+	level: int, stored: int, party: int, types: Array, special: bool, attacking: bool
+) -> Gen2BattleMon:
+	var mon: Gen2BattleMon = Gen2BattleMon.create(_r.data, SWEEP_PLAYER, level)
+	var key: String = "special" if special else ("attack" if attacking else "defense")
+	mon.gen1_stats = {"attack": 1, "defense": 1, "speed": 1, "special": 1}
+	mon.gen1_stats[key] = stored
+	for party_key: String in (["sp_attack", "sp_defense"] if special else [key]):
+		mon.stats[party_key] = party
+	mon.battle_types = [int(types[0]), int(types[1])]
+	return mon
+
+
 ## [param moves] empty takes whatever the level gives, which is what a wild
 ## encounter and a party member both carry.
 ## The Pidgey's own Whirlwind outspeeds a Bulbasaur and ends a wild battle, so
@@ -208,6 +400,11 @@ const CONVERSION_MOVE: int = 160
 const TELEPORT_MOVE: int = 100
 const ROAR_MOVE: int = 46
 const SPLASH_MOVE: int = 150
+const SWORDS_DANCE_MOVE: int = 14
+const TOXIC_MOVE: int = 92
+const LEECH_SEED_MOVE: int = 73
+const REFLECT_MOVE: int = 115
+const BADGES_ATTACK_SPEED: int = 0x11
 ## `TYPE_NORMAL` and `TYPE_FLYING` as `type_constants.asm` numbers them.
 const PIDGEY_TYPES: Array[int] = [0, 2]
 
@@ -247,6 +444,117 @@ func _haze_clears_more_than_stages() -> void:
 	_r.check(
 		battle.screens[Gen2Battle.PLAYER] == Gen2Screens.NONE, "HAZE left a screen up"
 	)
+
+
+## `HandlePoisonBurnLeechSeed` behind each side's move: a sixteenth, and a
+## seed on a badly poisoned Pokemon stepping the toxic counter twice a turn.
+func _the_turn_bleeds_behind_each_move() -> void:
+	var battle: Gen2Battle = _fight(
+		SWEEP_LEVEL, SWEEP_LEVEL, [TOXIC_MOVE, LEECH_SEED_MOVE], SWEEP_SEED, [SPLASH_MOVE]
+	)
+	if not _r.check(battle != null, "no battle could be built for TOXIC"):
+		return
+	battle.player.status = Gen2Status.POISON
+	var before: int = battle.player.hp
+	var events: Array = battle.take_turn(0, 0)
+	var order: Array = []
+	for event: Dictionary in events:
+		var type: StringName = StringName(event.get("type", &""))
+		if type == Gen2Battle.HURT_BY_STATUS or type == Gen2Battle.USED_MOVE:
+			order.append("%s:%d" % [type, int(event.get("side", -1))])
+	_r.check(
+		before - battle.player.hp == maxi(battle.player.max_hp() >> Gen1Layout.RESIDUAL_SHIFT, 1),
+		"a poisoned mover bled %d of %d" % [before - battle.player.hp, battle.player.max_hp()]
+	)
+	var player_moves: int = order.find("used_move:0")
+	var hurt: int = order.find("hurt_by_status:0")
+	_r.check(
+		player_moves >= 0 and hurt > player_moves
+		and (order.find("used_move:1") < 0 or order.find("used_move:1") > hurt
+			or order.find("used_move:1") < player_moves),
+		"the poison landed at %s" % str(order)
+	)
+	if not Gen2Status.has(battle.enemy.status, Gen2Status.POISON):
+		return
+	while not Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.LEECH_SEED):
+		if battle.enemy.is_fainted() or battle.player.is_fainted():
+			return
+		battle.take_turn(1, 0)
+	var counter: int = battle.enemy.toxic_counter
+	battle.take_turn(1, 0)
+	_r.check(battle.enemy.toxic_counter == counter + 2,
+		"a seeded TOXIC counter went from %d to %d" % [counter, battle.enemy.toxic_counter])
+
+
+## `ApplyBadgeStatBoosts` at the send-out and again behind a stat-up.
+func _the_stored_stats_compound() -> void:
+	var battle: Gen2Battle = _fight(
+		SWEEP_LEVEL, SWEEP_LEVEL, [SWORDS_DANCE_MOVE], SWEEP_SEED, [SPLASH_MOVE]
+	)
+	if not _r.check(battle != null, "no battle could be built for SWORDS DANCE"):
+		return
+	battle.set_player_badges(BADGES_ATTACK_SPEED << Gen2WorldState.KANTO_BADGE_FIRST)
+	var attack: int = battle.player.unmodified_stat("attack")
+	var speed: int = battle.player.unmodified_stat("speed")
+	_r.check(
+		battle.player.stat("attack") == mini(attack + (attack >> 3), 999)
+		and battle.player.stat("speed") == mini(speed + (speed >> 3), 999)
+		and battle.player.stat("defense") == battle.player.unmodified_stat("defense"),
+		"the badges read %d %d %d off %d %d" % [
+			battle.player.stat("attack"), battle.player.stat("speed"),
+			battle.player.stat("defense"), attack, speed,
+		]
+	)
+	battle.player.status = Gen2Status.PARALYSIS
+	battle.player.gen1_apply_penalties()
+	var quartered: int = battle.player.stat("speed")
+	battle.take_turn(0, 0)
+	var doubled: int = mini(attack * 2, 999)
+	_r.check(battle.player.stat("attack") == mini(doubled + (doubled >> 3), 999),
+		"SWORDS DANCE left the attack at %d off %d" % [battle.player.stat("attack"), attack])
+	_r.check(battle.player.stat("speed") == mini(quartered + (quartered >> 3), 999),
+		"the speed was boosted again to %d from %d" % [battle.player.stat("speed"), quartered])
+	battle.take_turn(0, 0)
+	var tripled: int = mini(attack * 3, 999)
+	_r.check(battle.player.stat("attack") == mini(tripled + (tripled >> 3), 999),
+		"a second SWORDS DANCE left %d off %d" % [battle.player.stat("attack"), attack])
+
+
+## `.WakeUp` falls into `ExecutePlayerMoveDone`, and `SleepEffect` rolls 1..7.
+func _a_sleeper_loses_the_turn_it_wakes_on() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [SPLASH_MOVE], SWEEP_SEED, [SPLASH_MOVE])
+	if not _r.check(battle != null, "no battle could be built for a sleeper"):
+		return
+	battle.enemy.status = 1
+	var events: Array = battle.take_turn(0, 0)
+	var woke: bool = false
+	var moved: bool = false
+	for event: Dictionary in events:
+		var type: StringName = StringName(event.get("type", &""))
+		woke = woke or type == Gen2Battle.WOKE_UP
+		moved = moved or (type == Gen2Battle.USED_MOVE and int(event.get("side", -1)) == Gen2Battle.ENEMY)
+	_r.check(woke and not moved, "the sleeper woke %s and moved %s" % [woke, moved])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SWEEP_SEED
+	var seen: Dictionary = {}
+	for _roll: int in 400:
+		seen[Gen2Status.roll_sleep(rng, false, false, true)] = true
+	_r.check(seen.size() == 7 and seen.has(1) and seen.has(7), "SleepEffect rolled %s" % str(seen.keys()))
+
+
+## No `HandleDefrost` and no `HandleScreens`.
+func _a_freeze_and_a_screen_outlive_the_turn() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [REFLECT_MOVE, SPLASH_MOVE], SWEEP_SEED, [SPLASH_MOVE])
+	if not _r.check(battle != null, "no battle could be built for REFLECT"):
+		return
+	battle.enemy.status = Gen2Status.FREEZE
+	battle.take_turn(0, 0)
+	for _turn: int in 8:
+		battle.take_turn(1, 0)
+	_r.check(Gen2Status.has(battle.enemy.status, Gen2Status.FREEZE), "the freeze thawed")
+	_r.check(Gen2Screens.has(battle.screens[Gen2Battle.PLAYER], Gen2Screens.REFLECT),
+		"REFLECT faded")
+	_r.check(not battle.mon(Gen2Battle.ENEMY).is_fainted(), "the frozen target went down")
 
 
 ## `TrappingEffect` and `.HeldInPlaceCheck`: the user repeats the move for the

@@ -187,6 +187,10 @@ const MOVE_POWER_BY_MOVE: Dictionary = {49: 20, 82: 40}
 ## in `PoisonEffect`, 10 and 30 in `FreezeBurnParalyzeEffect` and
 ## `FlinchSideEffect`, `33 percent + 1` in `StatModifierDownEffect`, `10 percent`
 ## in `ConfusionSideEffect`, and Twineedle's own rewrite to POISON_SIDE_EFFECT1.
+## `HandlePoisonBurnLeechSeed_DecreaseOwnHP`'s four shifts: a sixteenth, where
+## Crystal's `GetEighthMaxHP` takes an eighth.
+const RESIDUAL_SHIFT: int = 4
+
 const SIDE_EFFECT_CHANCES: Dictionary = {
 	0x02: 52, 0x21: 103,
 	0x04: 26, 0x05: 26, 0x06: 26, 0x22: 77, 0x23: 77, 0x24: 77,

@@ -164,11 +164,7 @@ func _oracle_sweep() -> void:
 			for first: int in [0, 11, 12, 24, 25, 100, 255]:
 				for second: int in [0, 255]:
 					lines.append(_line([0x04, rate, 100, 100, status, first, second]))
-	var digest: String = ("\n".join(lines) + "\n").sha1_text()
-	if digest != ORACLE_DIGEST:
-		_r.fail("the %d-case oracle sweep is %s, the cartridge %s." % [
-			lines.size() - 1, digest, ORACLE_DIGEST,
-		])
+	_r.digest_matches("catch oracle", lines, ORACLE_DIGEST)
 
 
 ## Every species' own catch rate through every ball: the oracle above names its

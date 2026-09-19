@@ -62,6 +62,18 @@ var stages: Dictionary = {}
 var badge_stat_boosts: Dictionary = {}
 var badge_type_boost_mask: int = 0
 
+## `wBattleMonAttack` to `wBattleMonSpecial`: Generation 1 fights with a stored
+## stat it rewrites on its own triggers, so a badge boost, a burn and a
+## paralysis compound where Crystal reads each off the party stat.
+var gen1_stats: Dictionary = {}
+var gen1_badges: int = 0
+
+const GEN1_STAT_KEYS: Array[String] = ["attack", "defense", "speed", "special"]
+## `ApplyBadgeStatBoosts`: Boulder, Thunder, Soul and Volcano at bits 0, 2, 4
+## and 6 of `wObtainedBadges`, in the stats' own order.
+const GEN1_BADGE_BITS: Array[int] = [0, 2, 4, 6]
+const GEN1_BADGE_BOOST_SHIFT: int = 3
+
 ## The status byte, as the cartridge packs it: see [Gen2Status]. It survives a
 ## switch and a battle, unlike a stage, which is why it sits with the health
 ## rather than with them.
@@ -269,11 +281,74 @@ func recalculate() -> void:
 		"sp_defense": _stat(base, "sp_defense", Gen2Stats.special_dv(dvs), "special"),
 	}
 	hp = mini(hp, max_hp())
+	# `.recalcStatChanges` behind a level up.
+	if is_gen1() and not gen1_stats.is_empty():
+		gen1_recalculate_stats()
+		gen1_apply_penalties()
+		gen1_apply_badge_boosts()
+
+
+func is_gen1() -> bool:
+	return data != null and data.generation == RomRegistry.GEN1
+
+
+static func gen1_stat_key(key: String) -> String:
+	return "special" if SPECIAL_STAGE_TWIN.has(key) else key
+
+
+## `LoadBattleMonFromParty`'s tail: the party stats, the penalties, the badges.
+func gen1_load_stats(badges: int) -> void:
+	gen1_badges = badges
+	gen1_reset_stats()
+	gen1_apply_penalties()
+	gen1_apply_badge_boosts()
+
+
+## `HazeEffect_`'s `ResetStats`: the unmodified stats copied back whole.
+func gen1_reset_stats() -> void:
+	gen1_stats = {}
+	for key: String in GEN1_STAT_KEYS:
+		gen1_stats[key] = unmodified_stat("sp_attack" if key == "special" else key)
+
+
+func gen1_recalculate_stats() -> void:
+	for key: String in GEN1_STAT_KEYS:
+		gen1_recalculate_stat(key)
+
+
+## `CalculateModifiedStat`: the burn, the paralysis and the badges are dropped
+## with it, which is the stat modification glitch.
+func gen1_recalculate_stat(key: String) -> void:
+	var stored: String = gen1_stat_key(key)
+	var party: String = "sp_attack" if stored == "special" else stored
+	gen1_stats[stored] = Gen2Stats.apply_stage(unmodified_stat(party), stage(party))
+
+
+## `QuarterSpeedDueToParalysis` and `HalveAttackDueToBurn` on the stored value,
+## floored at one: called again, they land again.
+func gen1_apply_penalties() -> void:
+	if Gen2Status.has(status, Gen2Status.PARALYSIS):
+		gen1_stats["speed"] = Gen2Status.apply_paralysis(int(gen1_stats["speed"]))
+	if Gen2Status.has(status, Gen2Status.BURN):
+		gen1_stats["attack"] = Gen2Status.apply_burn(int(gen1_stats["attack"]))
+
+
+## `ApplyBadgeStatBoosts`: an eighth on top of whatever the stat holds now.
+func gen1_apply_badge_boosts() -> void:
+	for index: int in GEN1_STAT_KEYS.size():
+		if gen1_badges & (1 << GEN1_BADGE_BITS[index]) == 0:
+			continue
+		var key: String = GEN1_STAT_KEYS[index]
+		var stored: int = int(gen1_stats[key])
+		gen1_stats[key] = mini(stored + (stored >> GEN1_BADGE_BOOST_SHIFT), Gen2Stats.MAX_STAT_VALUE)
 
 
 ## Installs the source's single-player badge effects on this active mon.
 func set_badge_boosts(mask: int) -> void:
 	badge_stat_boosts = {}
+	if is_gen1():
+		gen1_load_stats(mask)
+		return
 	if mask & (1 << 0):
 		badge_stat_boosts["attack"] = true
 	if mask & (1 << 2):
@@ -300,6 +375,8 @@ func set_badge_boosts(mask: int) -> void:
 func clear_badge_boosts() -> void:
 	badge_stat_boosts = {}
 	badge_type_boost_mask = 0
+	gen1_stats = {}
+	gen1_badges = 0
 
 
 func _badge_boosted(value: int, key: String) -> int:
@@ -329,6 +406,10 @@ func stat(key: String) -> int:
 	var value: int = int(stats.get(key, 0))
 	if not STAGED_STATS.has(key):
 		return value
+	if is_gen1():
+		if gen1_stats.is_empty():
+			gen1_load_stats(0)
+		return int(gen1_stats[gen1_stat_key(key)])
 
 	var out: int = _badge_boosted(Gen2Stats.apply_stage(value, int(stages.get(key, 0))), key)
 	if key == "attack" and Gen2Status.has(status, Gen2Status.BURN):
@@ -450,6 +531,7 @@ func reset_volatile() -> void:
 	bide_move = 0
 	rage_count = 0
 	minimized = false
+	gen1_stats = {}
 
 
 func transform_into(target: Gen2BattleMon) -> bool:
@@ -460,6 +542,7 @@ func transform_into(target: Gen2BattleMon) -> bool:
 			"species": species, "dvs": dvs, "moves": moves.duplicate(),
 			"pp": pp.duplicate(), "stats": stats.duplicate(),
 			"stages": stages.duplicate(), "battle_types": battle_types.duplicate(),
+			"gen1_stats": gen1_stats.duplicate(),
 		}
 	species = target.species
 	dvs = target.dvs
@@ -470,6 +553,8 @@ func transform_into(target: Gen2BattleMon) -> bool:
 	for key: String in ["attack", "defense", "speed", "sp_attack", "sp_defense"]:
 		stats[key] = int(target.stats.get(key, stats.get(key, 1)))
 	stages = target.stages.duplicate()
+	# `TransformEffect_` copies the stored stats with the unmodified ones.
+	gen1_stats = target.gen1_stats.duplicate()
 	battle_types.clear()
 	for type_number: int in target.types():
 		battle_types.append(type_number)
@@ -488,6 +573,7 @@ func restore_transform() -> void:
 	pp = (transform_original["pp"] as Array).duplicate()
 	stats = (transform_original["stats"] as Dictionary).duplicate()
 	stages = (transform_original["stages"] as Dictionary).duplicate()
+	gen1_stats = (transform_original["gen1_stats"] as Dictionary).duplicate()
 	battle_types.clear()
 	for type_number: int in transform_original["battle_types"]:
 		battle_types.append(type_number)
