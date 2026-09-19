@@ -183,6 +183,20 @@ const MOVE_EFFECT_BY_MOVE: Dictionary = {
 }
 const MOVE_POWER_BY_MOVE: Dictionary = {49: 20, 82: 40}
 
+## `ResidualEffects1` and `ResidualEffects2`, by the row's own byte:
+## `ExecutePlayerMove` jumps out on either before `.notDone`, and the first
+## list also skips `GetDamageVarsForPlayerAttack`.
+const RESIDUAL_EFFECTS_1: Array[int] = [
+	0x18, 0x19, 0x1C, 0x2E, 0x2F, 0x31, 0x38, 0x39, 0x40, 0x41, 0x42, 0x43, 0x4F,
+	0x52, 0x54, 0x55,
+]
+const RESIDUAL_EFFECTS_2: Array[int] = [
+	0x01, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+	0x1A, 0x20, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F,
+]
+const CHARGE_EFFECT: int = 0x27
+const FLY_EFFECT: int = 0x2B
+
 
 ## The side chance each `*_SIDE_EFFECT` routine compares `BattleRandom`
 ## against, as `effect_chance`'s own byte: `20 percent + 1` and `40 percent + 1`

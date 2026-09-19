@@ -78,13 +78,10 @@ func advance_frame() -> bool:
 	return true
 
 
-## `.LoadTrainerBackpicAsOAM` and `.subfunction3` together: the top three tile
-## rows of the player's back pic drawn as OAM, where this frame leaves them, each
-## { tile, x, y } with OAM's own biased coordinates. The bottom of that pic is on
-## the background and comes in with the middle band; without the sprites the
-## player has no head or shoulders for the whole slide. Gold and Silver walk the
-## same eighteen, and Crystal's walk is measured against a real cartridge sprite
-## by sprite, x 158 to 16, with Gold ending on the same 16.
+## `.LoadTrainerBackpicAsOAM` and `.subfunction3`: the top three tile rows of
+## the player's back pic as OAM, each { tile, x, y } in OAM's biased coordinates.
+## The rest of the pic rides the middle band. Crystal's walk is measured against
+## a cartridge sprite by sprite, x 158 to 16; Gold and Silver end on the same 16.
 func sprites() -> Array:
 	var out: Array = []
 	if finished():
@@ -130,14 +127,10 @@ func offsets() -> PackedInt32Array:
 	return out
 
 
-## How far the picture standing in each band is from its resting square, along x
-## and in pixels, for a renderer with no background plane. Taken from the band's
-## own arithmetic rather than from [method offsets], because a scroll register
-## cannot say which way a picture is travelling: the same `$02` reads as +254 or
-## -2 depending only on when it was sampled. The top band carries the opponent, in
-## from the left, so its displacement climbs to zero; the middle carries the
-## player, in from the right, so its own falls to zero and then to the -2 Crystal
-## overshoots by.
+## Each band's picture's x displacement from its resting square, in pixels,
+## from the band's own arithmetic: a scroll register's `$02` reads as +254 or
+## -2 depending only on when it was sampled. The opponent's climbs to zero, the
+## player's falls to zero and then to the -2 Crystal overshoots by.
 func enemy_offset() -> float:
 	return 0.0 if finished() else float(-_top_scx())
 

@@ -532,8 +532,12 @@ func reset_volatile() -> void:
 	gen1_stats = {}
 
 
+## `TransformEffect_` copies a transformed target as it stands and keeps the
+## Disable `ResetActorDisable` clears.
 func transform_into(target: Gen2BattleMon) -> bool:
-	if target == null or Gen2Substatus.has(target.substatus, Gen2Substatus.TRANSFORMED):
+	if target == null:
+		return false
+	if Gen2Substatus.has(target.substatus, Gen2Substatus.TRANSFORMED) and not is_gen1():
 		return false
 	if transform_original.is_empty():
 		transform_original = {
@@ -547,7 +551,8 @@ func transform_into(target: Gen2BattleMon) -> bool:
 	moves = target.moves.duplicate()
 	pp = []
 	for move_number: int in moves:
-		pp.append(1 if move_number == 166 else 5) # Sketch is the source exception.
+		# `.pp_loop`: an empty slot stays empty, Sketch takes one, the rest five.
+		pp.append(0 if move_number == 0 else (1 if move_number == 166 else 5))
 	for key: String in ["attack", "defense", "speed", "sp_attack", "sp_defense"]:
 		stats[key] = int(target.stats.get(key, stats.get(key, 1)))
 	stages = target.stages.duplicate()
@@ -556,8 +561,9 @@ func transform_into(target: Gen2BattleMon) -> bool:
 	battle_types.clear()
 	for type_number: int in target.types():
 		battle_types.append(type_number)
-	disabled_slot = -1
-	disable_turns = 0
+	if not is_gen1():
+		disabled_slot = -1
+		disable_turns = 0
 	substatus |= Gen2Substatus.TRANSFORMED
 	return true
 

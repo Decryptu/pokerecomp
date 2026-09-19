@@ -479,6 +479,27 @@ func test_the_effect_table_covers_every_effect_byte() -> void:
 		assert_between(Gen1Layout.MOVE_EFFECTS[effect], 0, 0x9C, "effect $%02X" % effect)
 
 
+## `data/battle/residual_effects_1.asm` and `_2.asm`: 16 and 27 bytes, none
+## shared, all inside the pointer table, and none of them a damaging move's.
+func test_the_residual_lists_are_the_cartridge_s_own() -> void:
+	assert_eq(Gen1Layout.RESIDUAL_EFFECTS_1.size(), 16)
+	assert_eq(Gen1Layout.RESIDUAL_EFFECTS_2.size(), 27)
+	for byte: int in Gen1Layout.RESIDUAL_EFFECTS_1:
+		assert_false(Gen1Layout.RESIDUAL_EFFECTS_2.has(byte), "$%02X is in both" % byte)
+		assert_lt(byte, Gen1Layout.MOVE_EFFECTS.size())
+	for byte: int in Gen1Layout.RESIDUAL_EFFECTS_2:
+		assert_lt(byte, Gen1Layout.MOVE_EFFECTS.size())
+	# TRANSFORM_EFFECT and POISON_EFFECT in the first, BIDE_EFFECT and every
+	# stat stage in the second; EXPLODE_EFFECT, DISABLE_EFFECT and RAGE_EFFECT in neither.
+	assert_true(Gen1Layout.RESIDUAL_EFFECTS_1.has(0x39))
+	assert_true(Gen1Layout.RESIDUAL_EFFECTS_1.has(0x42))
+	assert_true(Gen1Layout.RESIDUAL_EFFECTS_2.has(0x1A))
+	assert_true(Gen1Layout.RESIDUAL_EFFECTS_2.has(0x0A))
+	assert_true(Gen1Layout.RESIDUAL_EFFECTS_2.has(0x3F))
+	for byte: int in [0x07, 0x56, 0x51, Gen1Layout.CHARGE_EFFECT, Gen1Layout.FLY_EFFECT]:
+		assert_false(Gen1Layout.RESIDUAL_EFFECTS_1.has(byte) or Gen1Layout.RESIDUAL_EFFECTS_2.has(byte))
+
+
 ## The three routines that stand for more than one of Crystal's effects, split
 ## by the move number the routine itself compares against.
 func test_a_move_that_shares_an_effect_byte_is_split_by_number() -> void:

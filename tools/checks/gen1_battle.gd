@@ -95,6 +95,48 @@ const STATS_ORACLE_BADGES: Array[int] = [0x00, 0x01, 0x04, 0x10, 0x40, 0x55, 0xA
 const STATS_ORACLE_KEYS: Array[String] = ["attack", "defense", "speed", "sp_attack"]
 const STATS_NEUTRAL_MOD: int = 7
 
+## `battle/gen1_turn.py`: `ExecutePlayerMove` whole, one move per effect byte.
+const TURN_ORACLE_HEAD: String = "move variant -> missed rage beyond hits damage"
+const TURN_ORACLE_DIGEST: String = "bf2342f7ecfd64e93ffcdabd95ffb1c6b06e020b"
+const TRANSFORM_ORACLE_HEAD: String = "side sub target_transformed invulnerable -> user after"
+const TRANSFORM_ORACLE_DIGEST: String = "f22be46ca73e7087e0946d31f57babee082833bc"
+const ORACLE_STALE_DAMAGE: int = 1234
+const ORACLE_LEVEL: int = 50
+const ORACLE_STAT: int = 100
+const ORACLE_HP: int = 300
+const ORACLE_SUB_HP: int = 255
+const ORACLE_USER: int = 1
+const ORACLE_TARGET: int = 19
+const ORACLE_DRAGON: int = 0x1A
+const ORACLE_NORMAL: int = 0x00
+const ORACLE_USER_TYPES: Array[int] = [ORACLE_DRAGON, ORACLE_DRAGON]
+const ORACLE_FILLER: Array[int] = [33, 33, 33, 33]
+const ORACLE_SKIPPED_MOVES: Array[int] = [118, 119, 102]
+const ORACLE_TURN_VARIANTS: Array[String] = ["hit", "miss", "sub"]
+const ORACLE_BIDE_VARIANTS: Dictionary = {
+	"store": [2, 100, ORACLE_STALE_DAMAGE], "release": [1, 100, ORACLE_STALE_DAMAGE],
+	"release_small": [1, 10, 0], "release_zero": [1, 0, 0],
+	"store_wrap": [2, 0xFFF0, ORACLE_STALE_DAMAGE], "release_wrap": [1, 0x9000, 0],
+}
+const ORACLE_HIT_EVENTS: Array[StringName] = [
+	Gen2Battle.HIT, Gen2Battle.OHKO, Gen2Battle.SUBSTITUTE_TOOK_DAMAGE,
+]
+const ORACLE_MISS_EVENTS: Array[StringName] = [Gen2Battle.MISSED, Gen2Battle.NO_EFFECT]
+const ORACLE_PRINTED_EVENTS: Array[StringName] = [
+	Gen2Battle.USED_MOVE, Gen2Battle.BIDE_STORING, Gen2Battle.BIDE_UNLEASHED,
+	Gen2Battle.MOVE_FAILED, Gen2Battle.RAGE_BUILDING, Gen2Battle.STAT_CHANGED,
+]
+const ORACLE_TRANSFORM_STATS: Array[int] = [200, 201, 202, 203]
+const ORACLE_TRANSFORM_UNMODIFIED: Array[int] = [150, 151, 152, 153]
+const ORACLE_TRANSFORM_STAGE_KEYS: Array[String] = [
+	"attack", "defense", "speed", "sp_attack", "accuracy", "evasion",
+]
+const ORACLE_TRANSFORM_MOVES: Array[int] = [33, 6, 7, 0]
+const ORACLE_DISABLED_SLOT: int = 1
+const ORACLE_DISABLED_TURNS: int = 2
+const ORACLE_TWO_TO_FIVE_EFFECT: int = 0x1D
+const ORACLE_SIDE_DROP_EFFECTS: Array[int] = [0x44, 0x45, 0x46, 0x47]
+
 var _r: RefCounted = null
 
 
@@ -108,6 +150,8 @@ func _one_game() -> void:
 	_critical_chances()
 	_damage_oracle_sweep()
 	_stats_oracle_sweep()
+	_turn_oracle_sweep()
+	_transform_oracle_sweep()
 	_every_move()
 	_a_wild_fight()
 	_haze_clears_more_than_stages()
@@ -311,6 +355,217 @@ func _stats_line(row: Array, mods: Array[int], status: int, badges: int) -> Stri
 	]
 
 
+func _oracle_moves() -> Array[int]:
+	var by_effect: Dictionary = {}
+	for number: int in range(1, MOVE_COUNT + 1):
+		var byte: int = int(_r.data.move(number).get("gen1_effect", -1))
+		if not by_effect.has(byte):
+			by_effect[byte] = number
+	var out: Array[int] = []
+	out.assign(by_effect.values())
+	if not out.has(COUNTER_MOVE):
+		out.append(COUNTER_MOVE)
+	out.sort()
+	return out.filter(func(number: int) -> bool: return not ORACLE_SKIPPED_MOVES.has(number))
+
+
+func _turn_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([TURN_ORACLE_HEAD])
+	for move: int in _oracle_moves():
+		for variant: String in ORACLE_TURN_VARIANTS:
+			lines.append(_turn_line(move, variant))
+	for variant: String in ORACLE_BIDE_VARIANTS:
+		lines.append(_bide_line(variant))
+	if _r.digest_matches("turn oracle", lines, TURN_ORACLE_DIGEST):
+		_r.note("gen1 battle %d turn cases answered as the cartridge does" % (lines.size() - 1))
+
+
+func _oracle_fight(move: int, target_moves: Array, user_types: Array) -> Gen2Battle:
+	var generator := RandomNumberGenerator.new()
+	generator.seed = SWEEP_SEED
+	var battle: Gen2Battle = Gen2Battle.create(
+		_r.data,
+		Gen2BattleMon.create(_r.data, ORACLE_USER, ORACLE_LEVEL, [move] + ORACLE_FILLER.slice(1), 0),
+		Gen2BattleMon.create(_r.data, ORACLE_TARGET, ORACLE_LEVEL, target_moves, 0),
+		generator
+	)
+	if battle == null:
+		return null
+	_flatten(battle.player, user_types)
+	_flatten(battle.enemy, [ORACLE_NORMAL, ORACLE_NORMAL])
+	battle.enemy.substatus |= Gen2Substatus.RAGE
+	battle.last_damage_dealt = ORACLE_STALE_DAMAGE
+	battle.gen1_selected_moves[Gen2Battle.ENEMY] = TACKLE_MOVE
+	return battle
+
+
+func _flatten(mon: Gen2BattleMon, types: Array) -> void:
+	for key: String in ["attack", "defense", "speed", "sp_attack", "sp_defense"]:
+		mon.stats[key] = ORACLE_STAT
+	mon.stats["hp"] = ORACLE_HP
+	mon.hp = ORACLE_HP
+	mon.battle_types = [int(types[0]), int(types[1])]
+	mon.gen1_load_stats(0)
+
+
+func _turn_line(move: int, variant: String) -> String:
+	var battle: Gen2Battle = _oracle_fight(move, ORACLE_FILLER, ORACLE_USER_TYPES)
+	if battle == null:
+		return "%d %s -> no battle" % [move, variant]
+	if variant == "miss":
+		battle.enemy.substatus |= Gen2Substatus.FLYING
+	else:
+		battle.player.substatus |= Gen2Substatus.X_ACCURACY
+	if variant == "sub":
+		battle.enemy.substatus |= Gen2Substatus.SUBSTITUTE
+		battle.enemy.substitute_hp = ORACLE_SUB_HP
+	var events: Array = []
+	battle._act(Gen2Battle.PLAYER, 0, move, events)
+	var hits: int = _count_events(events, ORACLE_HIT_EVENTS, Gen2Battle.ENEMY)
+	var lost: int = ORACLE_HP - battle.enemy.hp
+	if variant == "sub":
+		lost = ORACLE_SUB_HP - battle.enemy.substitute_hp \
+			if Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.SUBSTITUTE) else ORACLE_SUB_HP
+	var rage: int = _count_events(events, [Gen2Battle.RAGE_BUILDING])
+	return "%d %s -> missed %d rage %s beyond %+d hits %s damage %s" % [
+		move, variant, mini(_count_events(events, ORACLE_MISS_EVENTS), 1), _rage_text(rage, hits),
+		battle.enemy.stage("attack") - _side_drops(events, move) - rage,
+		_hits_text(hits, move), _damage_class(battle.last_damage_dealt, lost, hits),
+	]
+
+
+## The two figures a roll decides, folded the way the harness folds them.
+func _hits_text(hits: int, move: int) -> String:
+	if hits >= 2 and int(_r.data.move(move).get("gen1_effect", -1)) == ORACLE_TWO_TO_FIVE_EFFECT:
+		return "2+"
+	return str(hits)
+
+
+func _rage_text(rage: int, hits: int) -> String:
+	return "each" if rage > 0 and rage == hits else str(rage)
+
+
+## The harness's roll never lands a `*_DOWN_SIDE_EFFECT`.
+func _side_drops(events: Array, move: int) -> int:
+	if not ORACLE_SIDE_DROP_EFFECTS.has(int(_r.data.move(move).get("gen1_effect", -1))):
+		return 0
+	var dropped: int = 0
+	for event: Dictionary in events:
+		if StringName(event.get("type", &"")) == Gen2Battle.STAT_CHANGED \
+			and int(event.get("target", -1)) == Gen2Battle.ENEMY \
+			and String(event.get("stat", "")) == "attack" and int(event.get("by", 0)) < 0:
+			dropped += int(event.get("by", 0))
+	return dropped
+
+
+func _bide_line(variant: String) -> String:
+	var battle: Gen2Battle = _oracle_fight(BIDE_MOVE, ORACLE_FILLER, ORACLE_USER_TYPES)
+	if battle == null:
+		return "%d %s -> no battle" % [BIDE_MOVE, variant]
+	var preset: Array = ORACLE_BIDE_VARIANTS[variant]
+	battle.player.substatus |= Gen2Substatus.X_ACCURACY | Gen2Substatus.BIDE
+	battle.player.bide_turns = int(preset[0])
+	battle.player.bide_damage = int(preset[1])
+	battle.player.bide_move = BIDE_MOVE
+	battle.last_damage_dealt = int(preset[2])
+	var events: Array = []
+	battle._act(Gen2Battle.PLAYER, 0, BIDE_MOVE, events)
+	var missed: int = _count_events(events, ORACLE_MISS_EVENTS) \
+		+ _count_events(events, [Gen2Battle.MOVE_FAILED])
+	return "%d %s -> missed %d rage %d storing %d left %d acc %d damage %d printed %d" % [
+		BIDE_MOVE, variant, mini(missed, 1), _count_events(events, [Gen2Battle.RAGE_BUILDING]),
+		1 if Gen2Substatus.has(battle.player.substatus, Gen2Substatus.BIDE) else 0,
+		battle.player.bide_turns, battle.player.bide_damage, battle.last_damage_dealt,
+		_count_events(events, ORACLE_PRINTED_EVENTS),
+	]
+
+
+func _count_events(events: Array, kinds: Array, target: int = -1) -> int:
+	var count: int = 0
+	for event: Dictionary in events:
+		if kinds.has(StringName(event.get("type", &""))) \
+			and (target < 0 or int(event.get("target", -1)) == target):
+			count += 1
+	return count
+
+
+func _damage_class(damage: int, lost: int, hits: int) -> String:
+	if damage == 0:
+		return "zero"
+	if damage == ORACLE_STALE_DAMAGE:
+		return "stale"
+	if hits > 0 and lost == damage * hits:
+		return "dealt"
+	@warning_ignore("integer_division")
+	if hits > 0 and lost / hits > 0 and damage == maxi(lost / hits / 2, 1):
+		return "half"
+	return str(damage)
+
+
+func _transform_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([TRANSFORM_ORACLE_HEAD])
+	for side: int in [Gen2Battle.PLAYER, Gen2Battle.ENEMY]:
+		for sub: int in [0, 1]:
+			for transformed: int in [0, 1]:
+				for invulnerable: int in [0, 1]:
+					lines.append(_transform_line(side, sub, transformed, invulnerable))
+	if _r.digest_matches("transform oracle", lines, TRANSFORM_ORACLE_DIGEST):
+		_r.note("gen1 battle %d transform cases answered as the cartridge does" % (lines.size() - 1))
+
+
+func _transform_line(side: int, sub: int, transformed: int, invulnerable: int) -> String:
+	var battle: Gen2Battle = _oracle_fight(TRANSFORM_MOVE, ORACLE_TRANSFORM_MOVES, ORACLE_USER_TYPES)
+	if battle == null:
+		return "%d %d %d %d -> no battle" % [side, sub, transformed, invulnerable]
+	var user: Gen2BattleMon = battle.mon(side)
+	var target: Gen2BattleMon = battle.mon(1 - side)
+	battle.enemy.substatus &= ~Gen2Substatus.RAGE
+	user.species = ORACLE_USER
+	target.species = ORACLE_TARGET
+	user.moves = [TRANSFORM_MOVE, 0, 0, 0]
+	user.pp = [10, 0, 0, 0]
+	user.dvs = 0x1234
+	user.battle_types = ORACLE_USER_TYPES.duplicate()
+	user.disabled_slot = ORACLE_DISABLED_SLOT
+	user.disable_turns = ORACLE_DISABLED_TURNS
+	target.moves = ORACLE_TRANSFORM_MOVES.duplicate()
+	target.pp = [10, 10, 10, 0]
+	target.dvs = 0xABCD
+	target.battle_types = [ORACLE_NORMAL, 0x03]
+	for index: int in 4:
+		target.gen1_stats[Gen2BattleMon.GEN1_STAT_KEYS[index]] = ORACLE_TRANSFORM_STATS[index]
+		target.stats[STATS_ORACLE_KEYS[index]] = ORACLE_TRANSFORM_UNMODIFIED[index]
+	target.stats["sp_defense"] = ORACLE_TRANSFORM_UNMODIFIED[3]
+	for index: int in ORACLE_TRANSFORM_STAGE_KEYS.size():
+		target.stages[ORACLE_TRANSFORM_STAGE_KEYS[index]] = index + 1
+	target.stages["sp_defense"] = 4
+	if sub == 1:
+		target.substatus |= Gen2Substatus.SUBSTITUTE
+	if transformed == 1:
+		target.substatus |= Gen2Substatus.TRANSFORMED
+	if invulnerable == 1:
+		target.substatus |= Gen2Substatus.FLYING
+	var events: Array = []
+	battle._act(side, 0, TRANSFORM_MOVE, events)
+	var stages: String = ""
+	for key: String in ORACLE_TRANSFORM_STAGE_KEYS:
+		stages += "%x" % (user.stage(key) + STATS_NEUTRAL_MOD)
+	return (
+		"%d %d %d %d -> failed %d now %d species %d hp %d level %d types %d %d moves %s "
+		+ "dvs %04x maxhp %d stats %s pp %s unmodified %s mods %s original %s disable %d"
+	) % [
+		side, sub, transformed, invulnerable, _count_events(events, [Gen2Battle.MOVE_FAILED]),
+		1 if Gen2Substatus.has(user.substatus, Gen2Substatus.TRANSFORMED) else 0,
+		user.species, user.hp, user.level, user.battle_types[0], user.battle_types[1],
+		" ".join(user.moves.map(func(number: int) -> String: return str(number))),
+		user.dvs, user.max_hp(), _stats_text(user),
+		" ".join(user.pp.map(func(left: int) -> String: return str(left))),
+		" ".join(STATS_ORACLE_KEYS.map(func(key: String) -> String: return str(user.stats[key]))),
+		stages, "%04x" % user.persistent_dvs() if side == Gen2Battle.ENEMY else "-",
+		1 if user.disabled_slot >= 0 else 0,
+	]
+
+
 func _stats_text(mon: Gen2BattleMon) -> String:
 	return "%d %d %d %d" % [
 		mon.gen1_stats["attack"], mon.gen1_stats["defense"], mon.gen1_stats["speed"],
@@ -414,6 +669,7 @@ const RAGE_MOVE: int = 99
 const MIMIC_MOVE: int = 102
 const DOUBLESLAP_MOVE: int = 3
 const BIDE_MOVE: int = 117
+const TRANSFORM_MOVE: int = 144
 const FISSURE_MOVE: int = 90
 const SWIFT_MOVE: int = 129
 const FLY_MOVE: int = 19

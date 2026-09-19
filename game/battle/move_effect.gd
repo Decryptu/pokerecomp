@@ -1019,13 +1019,9 @@ const BATON_PASS_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## Whirlwind and Roar. `checkhit` is the one thing in front of the command.
-## The list carries no `failuretext`, so on the cartridge a missed Whirlwind
-## reaches `forceswitch`, takes `.missed` and says "But it failed!" with no miss
-## line at all. Here `checkhit` ends the move and announces the miss, which is
-## the standing `failuretext` divergence and not a second one: nothing switches
-## either way, only the line differs. Every other list without a `failuretext`,
-## `DoParalyze` among them, already reads this way.
+## Whirlwind and Roar. No `failuretext`, so a missed Whirlwind reaches
+## `forceswitch` and its `.missed` says "But it failed!"; here `checkhit`
+## announces the miss instead, the standing divergence every such list shares.
 const FORCE_SWITCH_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -1099,13 +1095,10 @@ const PURSUIT_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## Beat Up: one pass of the loop per party member, `endloop` jumping back to
-## `critical` rather than to the top, so `checkhit` is outside the loop and rolls
-## once for the whole move.
-## No `damagestats` and no `stab`: the command loads the formula's two stats
-## itself, from base stats rather than from either Pokémon's real ones, and
-## nothing multiplies the result by a matchup. `CheckTurn` leaves `wTypeModifier`
-## at `EFFECTIVE` for the whole turn, so `supereffectivetext` says nothing.
+## Beat Up: one loop pass per party member, `endloop` jumping back to `critical`
+## so `checkhit` rolls once. No `damagestats` and no `stab`: the command loads
+## base stats itself and nothing multiplies by a matchup, `CheckTurn` leaving
+## `wTypeModifier` at `EFFECTIVE`.
 const BEAT_UP_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -1281,13 +1274,9 @@ const DREAM_EATER_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## [constant SUPER_FANG], [constant STATIC_DAMAGE], [constant LEVEL_DAMAGE] and
-## [constant PSYWAVE]: one shared list, the way the cartridge shares one script
-## (`StaticDamage:`) across all four labels. The shortest damaging list in the
-## game, with no critical, stats, formula, matchup or spread, because the number
-## is [constant Gen2EffectCommands.FIXED_DAMAGE]'s to decide outright.
-## [constant Gen2EffectCommands.RESET_TYPE_MATCHUP] behind the hit check answers
-## an immunity and flattens the effectiveness none of the four earned.
+## `StaticDamage:`, shared by Super Fang, Sonicboom, Seismic Toss and Psywave:
+## no critical, stats, formula or spread, and `resettypematchup` behind the hit
+## check answers an immunity and flattens the effectiveness none of them earned.
 const FIXED_DAMAGE_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -1582,11 +1571,12 @@ const CONVERSION_2_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## The five lists Generation 1 reads instead, keyed by the same effect byte.
+## The six lists Generation 1 reads instead, keyed by the same effect byte.
 ## Three are one command swapped; the fourth moves `gen1traptarget` in front of
 ## `checkhit`, because `TrappingEffect` is in `SpecialEffectsCont` and runs
 ## before `MoveHitTest`, which is what lets a miss undo it; the fifth is Bide
-## with no `checkhit`, `.UnleashEnergy` jumping past `MoveHitTest`.
+## with no `checkhit`, `.UnleashEnergy` jumping past `MoveHitTest`; the sixth
+## is Disable, whose `MoveHitTest` sits inside `DisableEffect` behind `.notDone`.
 const GEN1_SEQUENCES: Dictionary = {
 	BIDE: [
 		Gen2EffectCommands.STORE_ENERGY,
@@ -1597,6 +1587,15 @@ const GEN1_SEQUENCES: Dictionary = {
 		Gen2EffectCommands.MOVE_ANIM,
 		Gen2EffectCommands.APPLY_DAMAGE,
 		Gen2EffectCommands.CHECK_FAINT,
+		Gen2EffectCommands.BUILD_OPPONENT_RAGE,
+		Gen2EffectCommands.END_MOVE,
+	],
+	DISABLE: [
+		Gen2EffectCommands.USED_MOVE_TEXT,
+		Gen2EffectCommands.DO_TURN,
+		Gen2EffectCommands.BUILD_OPPONENT_RAGE,
+		Gen2EffectCommands.CHECK_HIT,
+		Gen2EffectCommands.DISABLE,
 		Gen2EffectCommands.END_MOVE,
 	],
 	HAZE: [
@@ -2117,7 +2116,7 @@ static func _table() -> Dictionary:
 ## A registered effect wins over the cartridge's, which is what lets a mod
 ## rewrite one as well as add one. [method register_effect] is where that is
 ## refused for the effects the engine relies on reading back off a turn.
-## [param generation] picks [constant GEN1_SEQUENCES]' four.
+## [param generation] picks [constant GEN1_SEQUENCES]' six.
 static func sequence_for(effect: int, generation: int = RomRegistry.GEN2) -> Array:
 	if _registered_sequences.has(effect):
 		return _registered_sequences[effect]

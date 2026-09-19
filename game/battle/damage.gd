@@ -49,13 +49,10 @@ const STAT_BYTE_MAX: int = 0xFF
 const TRUNCATE_SHIFT: int = 4
 
 
-## A hit with both rolls decided: deterministic, and the whole formula, for a
-## caller with no list to put the four steps in. Present, Triple Kick, Fury Cutter
-## and Rollout each write between two of them, which is why the effect commands
-## call the four rather than this. Returns { damage, critical, effectiveness,
-## stab, immune }: the effectiveness is in tenths and is the announced number
-## rather than always the one damage used, and `immune` is a matchup of zero.
-## Selfdestruct's halved defense comes off the move's own effect byte, the way
+## The whole formula with both rolls decided, for a caller with no command list.
+## Returns { damage, critical, effectiveness, stab, immune }: the effectiveness
+## is in tenths and is the announced number, and `immune` is a matchup of zero.
+## Selfdestruct's halved defense comes off the effect byte, as
 ## `BattleCommand_DamageCalc` reads it.
 static func calculate_with(
 	attacker: Gen2BattleMon,
