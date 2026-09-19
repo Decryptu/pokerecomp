@@ -16,25 +16,25 @@ an empty body. -->
 
 ## Added
 
-- Yellow's Surfing Pikachu minigame runs whole at Pikachu's Beach: the waves, the jumps, the radness score, the high score and the printer's high score page, measured against the cartridge frame by frame.
-- Yellow's printer pages: the diploma, the Pokemon portrait and the surfing high score, each drawn as the cartridge draws them.
-- Bill's Pokemon list, the Indigo Plateau statues, the beach house and the Fan Club chairman's printer all run their scripts; no Generation 1 script arm is left unknown.
-- A shiny is drawn shiny on Red, Blue and Yellow, with Gold, Silver or Crystal's colours when one of those is imported, and the shine plays on the send-out (`api_version` 34).
-- Mods reach Red, Blue and Yellow: hidden items, a row on a party member's menu, whether Yellow's Pikachu is out, and `generation()` to tell the cartridges apart (`api_version` 34 and 35).
-- Exp. All. The EXP.ALL in the bag halves the block, pays the Pokemon that fought, then pays the whole party the way the cartridge does, and the "with EXP.ALL," line prints.
-- An HM in the bag can be a field-move source on Red, Blue and Yellow, behind Kanto's badges, for a mod that allows it.
-- A mod's PC row opens Bill's own PC on Red, Blue and Yellow.
+- Battles on Red, Blue and Yellow run on the cartridge's own turn rules: stored stats with the badge boosts and status penalties compounding the way they do there, poison and Leech Seed at a sixteenth, sleep for 1 to 7 turns with the waking turn lost, Rest, Disable, Thrash, Counter, Rage, Bide, Substitute, Mimic, Fissure, Swift, Metronome, Struggle and the multi-hit moves each doing what the cartridge does.
+- MIMIC puts the opponent's move list up and you pick the copy, as the cartridge does; the enemy rolls.
+- Mods reach the gameplay catalog on Red, Blue and Yellow: starters, gifts, statics, trades, prizes, items, badges and shops can be listed and patched (`api_version` 37), a mod can validate its placement against Kanto's map graph, and the Old and Good Rod are fishing groups like any other.
+- A Kanto badge notice icon draws from the trainer card's own sheet on Red, Blue and Yellow (`api_version` 36).
 
 ## Changed
 
-- The cache format is 144. Import your cartridges again.
-- A Repel renewal mod is handed the cartridge's own Repel table instead of carrying item numbers (`api_version` 35).
+- The cache format is 146. Import your cartridges again.
+- Bide prints nothing while it stores on Red, Blue and Yellow, adds and doubles the way the cartridge's byte arithmetic does, and a hit on a Substitute counts toward it.
+- Rage builds once per hit of a multi-hit move, on a missed Explosion and on Disable, and never on a stat move, a status move or Transform, as `HandleBuildingRage` sits on the cartridge.
+- Transform on Red, Blue and Yellow copies a Pokemon in the air, underground or already transformed, keeps a Disable running over the new moves, and a Substitute in front of the target does not stop it.
+- A confused Pokemon hitting itself, or crashing after a missed Jump Kick, behind its own Substitute spends the opponent's Substitute instead, and a Jump Kick crash costs one point, which is what the cartridge does.
+- "It hurt itself in its confusion!" and "kept going and crashed!" print before the health bar moves.
 
 ## Fixed
 
-- A Generation 1 hidden item's flag was read as an event flag; it is an engine flag.
-- Some Generation 1 script rows were never matched because the cache stored their numbers as floats.
-- `tools/preview_pics.gd --shiny` drew Red's shinies the same as their normals.
+- Transform gave an empty move slot five PP on every cartridge; it gives none.
+- Full paralysis landed 64 times in 256; the cartridge's check is 63.
+- A mod that registered by generation at boot kept those registrations after Play selected a cartridge of another generation.
 
 ## Which file
 
