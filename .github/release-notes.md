@@ -16,25 +16,23 @@ an empty body. -->
 
 ## Added
 
-- Battles on Red, Blue and Yellow run on the cartridge's own turn rules: stored stats with the badge boosts and status penalties compounding the way they do there, poison and Leech Seed at a sixteenth, sleep for 1 to 7 turns with the waking turn lost, Rest, Disable, Thrash, Counter, Rage, Bide, Substitute, Mimic, Fissure, Swift, Metronome, Struggle and the multi-hit moves each doing what the cartridge does.
-- MIMIC puts the opponent's move list up and you pick the copy, as the cartridge does; the enemy rolls.
-- Mods reach the gameplay catalog on Red, Blue and Yellow: starters, gifts, statics, trades, prizes, items, badges and shops can be listed and patched (`api_version` 37), a mod can validate its placement against Kanto's map graph, and the Old and Good Rod are fishing groups like any other.
-- A Kanto badge notice icon draws from the trainer card's own sheet on Red, Blue and Yellow (`api_version` 36).
+- A lost fight on Red, Blue and Yellow blacks out: the party is healed, the money halved and the player wakes at the last Pokemon Center, as `HandleBlackOut` does. Before this a lost trainer fight left you standing beside the trainer with a fainted party.
+- The battle says its own line on the way out: "is out of useable POKéMON! blacked out!" under the black palette, the rival's "Yeah! Am I great or what?" behind his picture, and no blackout at all after the starter fight in Oak's Lab. A poison faint prints the same line on the map, and Yellow ends the Safari game there.
+- A wild Pokemon in Pokemon Tower without the SILPH SCOPE is a GHOST: your Pokemon is too scared to move, the ghost says "Get out...", a thrown ball is dodged and running always works. The restless soul with the scope is unveiled as MAROWAK over the cartridge's own 153-frame animation.
+- A traded Pokemon on Red, Blue and Yellow disobeys the way it does there: the MARSH badge is the one at 70, a sleeping Pokemon gets no special line, and the random move it picks instead follows the cartridge's own off-by-one roll.
 
 ## Changed
 
-- The cache format is 146. Import your cartridges again.
-- Bide prints nothing while it stores on Red, Blue and Yellow, adds and doubles the way the cartridge's byte arithmetic does, and a hit on a Substitute counts toward it.
-- Rage builds once per hit of a multi-hit move, on a missed Explosion and on Disable, and never on a stat move, a status move or Transform, as `HandleBuildingRage` sits on the cartridge.
-- Transform on Red, Blue and Yellow copies a Pokemon in the air, underground or already transformed, keeps a Disable running over the new moves, and a Substitute in front of the target does not stop it.
-- A confused Pokemon hitting itself, or crashing after a missed Jump Kick, behind its own Substitute spends the opponent's Substitute instead, and a Jump Kick crash costs one point, which is what the cartridge does.
-- "It hurt itself in its confusion!" and "kept going and crashed!" print before the health bar moves.
+- The cache format is 147. Import your cartridges again.
+- Every battle line on Red, Blue and Yellow reads the cartridge's own wording with its own line breaks: "wants to fight!", "sent out", "Critical hit!", "Nothing happened!", "No effect!", "greatly rose!", "Come back!", "Hit the enemy 2 times!" and the rest.
+- A trainer's defeat prints "was defeated!" on Gold, Silver and Crystal and "defeated" on Red, Blue and Yellow. The port's own "Player won!" and "The enemy won!" lines are gone.
+- The rival is named by his own name in a battle on every cartridge.
 
 ## Fixed
 
-- Transform gave an empty move slot five PP on every cartridge; it gives none.
-- Full paralysis landed 64 times in 256; the cartridge's check is 63.
-- A mod that registered by generation at boot kept those registrations after Play selected a cartridge of another generation.
+- Crystal forgot the rival's name once the naming screen closed, so every later line about him read "???".
+- A Red, Blue or Yellow trainer's name printed with a stray space before "wants to battle!".
+- The GHOST and the two fossils were drawn from the corner of their box rather than padded like a front picture.
 
 ## Which file
 
