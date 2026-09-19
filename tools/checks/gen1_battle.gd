@@ -418,6 +418,7 @@ const FISSURE_MOVE: int = 90
 const SWIFT_MOVE: int = 129
 const FLY_MOVE: int = 19
 const SING_MOVE: int = 47
+const X_ATTACK_ITEM: int = 0x41
 const GUST_MOVE: int = 16
 const TACKLE_MOVE: int = 33
 const GASTLY: int = 92
@@ -538,6 +539,14 @@ func _the_stored_stats_compound() -> void:
 	var tripled: int = mini(attack * 3, 999)
 	_r.check(battle.player.stat("attack") == mini(tripled + (tripled >> 3), 999),
 		"a second SWORDS DANCE left %d off %d" % [battle.player.stat("attack"), attack])
+	# `ItemUseXStat` is the same routine: X ATTACK moves the stage to +5 and
+	# boosts every badge stat again.
+	var speed_before: int = battle.player.stat("speed")
+	battle.apply_x_item(battle.player, X_ATTACK_ITEM)
+	var raised: int = mini(attack * 7 / 2, 999)
+	_r.check(battle.player.stat("attack") == mini(raised + (raised >> 3), 999)
+		and battle.player.stat("speed") == mini(speed_before + (speed_before >> 3), 999),
+		"X ATTACK left %d and %d" % [battle.player.stat("attack"), battle.player.stat("speed")])
 
 
 ## `.WakeUp` falls into `ExecutePlayerMoveDone`, and `SleepEffect` rolls 1..7.

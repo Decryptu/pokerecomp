@@ -2737,8 +2737,25 @@ func _apply_active_item(user: Gen2BattleMon, item: int) -> Dictionary:
 	var stat: String = String((roles["x_stat"] as Dictionary)[item])
 	if user.stage(stat) >= Gen2Stats.MAX_STAGE:
 		return {"ok": false, "reason": &"item_has_no_effect"}
-	user.change_stage(stat, 1)
+	var moved: bool = user.change_stage(stat, 1)
+	# `ItemUseXStat` and `AIIncreaseStat` both run `StatModifierUpEffect` on the
+	# user's own turn, tail included.
+	if moved and is_gen1():
+		var side: int = PLAYER if user == mon(PLAYER) else ENEMY
+		gen1_stat_moved(side, stat, side)
 	return {"ok": true, "stat": stat, "stages": 1}
+
+
+## `UpdateStatDone`'s tail for a stage moved outside a move: the stat
+## recalculated bare, the badges back over all four of the player's, and the
+## two penalties on [param user]'s opponent again.
+func gen1_stat_moved(side: int, stat: String, user: int) -> void:
+	var changed: Gen2BattleMon = mon(side)
+	if Gen2BattleMon.STAGED_STATS.has(stat):
+		changed.gen1_recalculate_stat(stat)
+	if side == PLAYER:
+		changed.gen1_apply_badge_boosts()
+	mon(opponent_of(user)).gen1_apply_penalties()
 
 
 ## The ITEMMENU_PARTY half, whose target `UseItem_SelectMon` has chosen, in the

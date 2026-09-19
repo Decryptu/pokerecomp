@@ -217,11 +217,9 @@ const OHKO: StringName = &"ohko"
 ## list rather than anything a target-facing command touches.
 const RECHARGE: StringName = &"recharge"
 
-## `BattleCommand_CheckCharge`, the first command of every two-turn list: on the
-## release turn it clears the lock and skips over [constant CHARGE], so the rest
-## of the list runs as an ordinary attack, which [method Gen2Battle.move_for]
-## makes the user's only option. On the charging turn it does nothing and the
-## list falls into `doturn` and [constant CHARGE].
+## `BattleCommand_CheckCharge`, first in every two-turn list: on the release
+## turn it clears the lock and skips over [constant CHARGE], so the rest runs
+## as an ordinary attack; on the charging turn it does nothing.
 const CHARGE_MOVE: StringName = &"chargemove"
 
 ## `BattleCommand_Charge`: the charging turn's own line in front of
@@ -807,11 +805,9 @@ static func _rage_damage(turn: Gen2Turn) -> void:
 	turn.damage = mini(base * (turn.attacker().rage_count + 1), 0xFFFF)
 
 
-## `BattleCommand_BuildOpponentRage`: one count on the target's Rage per hit it
-## takes, and the line that says so. It stands behind `checkfaint`, which ends
-## the move when the target has fallen, so a Rage that faints does not build; a
-## substitute is not a gate, the doll spending the hit still counting.
-## `inc a / ret z` is the saturation: 255 increments to 0 and is not stored.
+## `BattleCommand_BuildOpponentRage`: one count on the target's Rage per hit
+## it takes, behind `checkfaint`, a doll's hit counting too. `inc a / ret z`
+## is the saturation: 255 increments to 0 and is not stored.
 static func _build_opponent_rage(turn: Gen2Turn) -> void:
 	if turn.missed or turn.battle.is_gen1():
 		return
@@ -1124,11 +1120,8 @@ static func _tri_status_chance(turn: Gen2Turn) -> void:
 			_status_target(turn, Gen2Status.BURN)
 
 
-## `BattleCommand_Defrost`: Flame Wheel and Sacred Fire thaw whoever used them.
-## The user, not the target, which is what tells this apart from the `Defrost`
-## subroutine [method _defrost] is. It clears the freeze bit rather than the
-## whole status byte, which comes to the same thing while a freeze is the only
-## status a Pokémon can be under.
+## `BattleCommand_Defrost`: Flame Wheel and Sacred Fire thaw whoever used
+## them, the user rather than the target [method _defrost] thaws.
 static func _defrost_user(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 	if not Gen2Status.has(mon.status, Gen2Status.FREEZE):
@@ -2236,11 +2229,9 @@ static func _fixed_damage(turn: Gen2Turn) -> void:
 ## subtracted off.
 const OHKO_LEVEL_BONUS: int = 2
 
-## Guillotine, Horn Drill and Fissure: an instant faint with its own accuracy
-## rule. A higher-level defender is immune outright with no roll; otherwise the
-## stored accuracy, a shade under 30%, rises by two per level the attacker leads
-## by and rolls through the ordinary stage machinery, so evasion and accuracy
-## stages help a one-hit KO like any other move.
+## Guillotine, Horn Drill and Fissure: a higher-level defender is immune with
+## no roll, and otherwise the stored accuracy rises by two per level the
+## attacker leads by and rolls through the ordinary stage machinery.
 static func _ohko(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	var defender: Gen2BattleMon = turn.defender()
@@ -2783,11 +2774,9 @@ static func _trap_target(turn: Gen2Turn) -> void:
 	})
 
 
-## Stops the target running or being recalled while the user stays out.
-## `BattleCommand_ArenaTrap` fails against a flying or underground target
-## (`CheckHiddenOpponent`) and against one already held, where "already held"
-## reads the user's own flag: two Mean Looks from the same Pokémon fail, not one
-## on a target the opponent's previous Pokémon had caught.
+## `BattleCommand_ArenaTrap` fails against a hidden target and against one
+## already held, "already held" reading the user's own flag: two Mean Looks
+## from the same Pokémon fail, not one on a target a previous Pokémon caught.
 static func _arena_trap(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	if _is_hidden(turn.defender().substatus) \
@@ -3130,11 +3119,9 @@ const FORCE_SWITCH_REFUSED_TYPES: Array[int] = [
 ]
 
 
-## `.trainer` and `.vs_trainer`: drag a random standing party member out. The
-## went-first gate is the non-obvious half: both branches refuse unless the
-## *opponent* moved first, `wEnemyGoesFirst` read from each side's own point of
-## view, so a Whirlwind that moved first does nothing. Priority 0 makes that rare
-## rather than impossible, a slower opponent using Counter sharing it.
+## `.trainer` and `.vs_trainer`: drag a random standing party member out, and
+## only when the *opponent* moved first, `wEnemyGoesFirst` read from each
+## side's own point of view.
 static func _force_switch_trainer(turn: Gen2Turn) -> void:
 	var party: Gen2Party = turn.battle.party(turn.target)
 	if _standing_others(party).is_empty():
@@ -3781,12 +3768,7 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 static func _gen1_stat_changed(
 	turn: Gen2Turn, side: int, stat_key: String, user: int = turn.side
 ) -> void:
-	var changed: Gen2BattleMon = turn.battle.mon(side)
-	if Gen2BattleMon.STAGED_STATS.has(stat_key):
-		changed.gen1_recalculate_stat(stat_key)
-	if side == Gen2Battle.PLAYER:
-		changed.gen1_apply_badge_boosts()
-	turn.battle.mon(turn.battle.opponent_of(user)).gen1_apply_penalties()
+	turn.battle.gen1_stat_moved(side, stat_key, user)
 
 
 ## `HandleBuildingRage`, behind every move that got past its miss and left the
