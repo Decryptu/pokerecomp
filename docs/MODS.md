@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 36 | A notice's `{"badge": 8..15}` drawn from the Gen 1 card's own `badge_faces` on Red, Blue and Yellow |
 | 35 | `Gen2ModHost.generation()` and `generation` on the battle snapshot; `repel_to_use` handed the cartridge's Repel table; an HM in the bag as a field-move source, Exp. All and `OPEN_BILLS_PC` on Red, Blue and Yellow |
 | 34 | Red, Blue and Yellow draw a shiny shiny, offer registered party rows, answer `hidden_items()`, `take_hidden_item()` and `hidden_item_nearby()` from their own hidden-item rows, and say `Gen2WorldAPI.cartridge_follower_out()` |
 | 33 | A registered stats page turns on Red, Blue and Yellow |
@@ -1574,7 +1575,7 @@ already share, so a mod never composes pixels:
 
 | Key | Drawn from |
 |---|---|
-| `{"badge": 0..7}` | The trainer card's own badge art, which is the only place the game draws a badge. The Kanto eight reuse the Johto pictures on the cartridge and have none of their own |
+| `{"badge": n}` | The trainer card's own badge art, in the sixteen-row order `Gen2WorldState.badge_flag` numbers. Generation II draws 0..7 from `TrainerCard_JohtoBadgesOAM` and nothing for the Kanto eight, which reuse those pictures on the cartridge; Generation I draws 8..15 from `GymLeaderFaceAndBadgeTileGraphics` and nothing for Johto's |
 | `{"species": n}` | The party menu's icon for that species |
 | `{"sprite": n}` | An `OverworldSprites` row, facing down |
 | `{"tile": indices}` | A raw 16x16 of palette indices, drawn in the banner's own palette |

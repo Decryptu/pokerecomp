@@ -148,3 +148,37 @@ func _changed_tiles(before: PackedByteArray, after: PackedByteArray) -> Array:
 					out.append(Vector2i(column, row))
 					break
 	return out
+
+
+## A notice's `{"badge": n}` on a Generation 1 cache is the card's own badge
+## out of `badge_faces`, in the sixteen-row order: Kanto's 8..15 draw and
+## Johto's 0..7 have no art there.
+func test_a_kanto_badge_icon_comes_off_the_gen1_card_sheet() -> void:
+	var count: int = Gen1Layout.BADGE_FACE_TILES * PokeTiles.TILE_PIXELS
+	var indices := PackedByteArray()
+	indices.resize(count)
+	for index: int in count:
+		indices[index] = (index / 3) % 4
+	RomCache.write_indices(RomCache.tile_path(Fixture.directory(), "badge_faces"), indices)
+	_data.generation = RomRegistry.GEN1
+	assert_null(Gen2MapNameSignPage.render_notice_icon(_data, {"badge": 0}))
+	assert_null(Gen2MapNameSignPage.render_notice_icon(
+		_data, {"badge": Gen2WorldState.KANTO_BADGE_FIRST + 8}
+	))
+	var icon: Image = Gen2MapNameSignPage.render_notice_icon(
+		_data, {"badge": Gen2WorldState.KANTO_BADGE_FIRST}
+	)
+	assert_not_null(icon)
+	if icon == null:
+		return
+	assert_eq(icon.get_size(), Vector2i(16, 16))
+	var colours: Dictionary = {}
+	for y: int in icon.get_height():
+		for x: int in icon.get_width():
+			colours[icon.get_pixel(x, y)] = true
+	assert_gt(colours.size(), 1, "the badge is drawn in more than one colour")
+	assert_eq(
+		Gen2TrainerCardPage.gen1_badge_cell_palette(3, 0), Gen1Layout.PAL_MEWMON,
+		"the Rainbow badge's first cell is outside every block"
+	)
+	assert_eq(Gen2TrainerCardPage.gen1_badge_cell_palette(1, 0), Gen1Layout.PAL_BADGE)
