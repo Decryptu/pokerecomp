@@ -3239,11 +3239,9 @@ func _fishing_context(rod: StringName) -> Dictionary:
 ## is `wRodResponse` 2, the empty slot list below rather than a refusal.
 func _gen1_fishing_context(rod: StringName, target: Vector2i) -> Dictionary:
 	var group: int = data.world_fishing_map(current_map.number) \
-		if rod == Gen2WorldEncounter.METHOD_SUPER_ROD else 0
+		if rod == Gen2WorldEncounter.METHOD_SUPER_ROD else int(GameData.GEN1_ROD_GROUPS.find_key(rod))
 	var record: Dictionary = data.world_fishing_group(group) if group > 0 else {}
-	if rod != Gen2WorldEncounter.METHOD_SUPER_ROD:
-		record = {"slots": Gen1Layout.rod_slots(rod)}
-	elif record.is_empty():
+	if record.is_empty():
 		record = {"slots": []}
 	return {
 		"ok": true,
@@ -4495,7 +4493,7 @@ func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
 		var op: String = String(node.get("op", ""))
 		## Each of the three owns every step behind it, so the row ends there.
 		if op == "trade":
-			return _gen1_trade(int(node["trade_id"]), steps)
+			return _gen1_trade(node, steps)
 		if op == "choice":
 			return _gen1_script_choice(node, steps, run)
 		if op == "menu":
@@ -4527,14 +4525,30 @@ func _gen1_node_flag_index(node: Dictionary, run: Dictionary) -> int:
 
 func _gen1_node_flag(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var shadow: Dictionary = run["engine_flags" if bool(node.get("engine", false)) else "flags"]
-	shadow[_gen1_node_flag_index(node, run)] = bool(node["set"])
+	var flag: int = _gen1_badge_flag_granted(node, _gen1_node_flag_index(node, run))
+	shadow[flag] = bool(node["set"])
 	steps.append({
 		"type": &"flag",
-		"flag": _gen1_node_flag_index(node, run),
+		"flag": flag,
 		"set": bool(node["set"]),
 		"engine": bool(node.get("engine", false)),
 	})
 	return true
+
+
+## The badge a site grants IS its engine flag, so a patched row moves the bit.
+func _gen1_badge_flag_granted(node: Dictionary, flag: int) -> int:
+	if data == null or not data.has_content_overlay() or not node.has("at") \
+		or not bool(node.get("engine", false)):
+		return flag
+	var badge: int = data.catalog().badge_for_engine_flag(flag)
+	if badge < 0:
+		return flag
+	var site: Dictionary = data.catalog().gen1_site(
+		Gen2WorldCatalog.KIND_BADGE, int(node["at"]), {"badge": badge}
+	)
+	var moved: int = int(site.get("badge", badge)) - Gen2WorldState.KANTO_BADGE_FIRST
+	return Gen2WorldState.gen1_badge_flag(moved) if moved >= 0 and moved < Gen1Layout.BADGE_COUNT else flag
 
 
 func _gen1_node_replace_block(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
@@ -4557,9 +4571,10 @@ func _gen1_node_has_item(node: Dictionary, steps: Array, run: Dictionary) -> boo
 
 
 func _gen1_node_has_money(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, int(run["money"]) >= int(node["price"]), steps, run
-	)
+	var price: int = int(_gen1_linked_site(
+		Gen2WorldCatalog.KIND_PRIZE, "ask_address", node, {"price": int(node["price"])}
+	)["price"])
+	return _gen1_resolve_side(node, int(run["money"]) >= price, steps, run)
 
 
 func _gen1_node_has_coins(node: Dictionary, steps: Array, run: Dictionary) -> bool:
@@ -4573,7 +4588,10 @@ func _gen1_node_has_coins(node: Dictionary, steps: Array, run: Dictionary) -> bo
 ## `SubBCD` over `wPlayerMoney`, whose `.fill` writes zeroes across a balance it
 ## borrowed past.
 func _gen1_node_spend_money(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var left: int = maxi(int(run["money"]) - int(node["amount"]), 0)
+	var amount: int = int(_gen1_linked_site(
+		Gen2WorldCatalog.KIND_PRIZE, "spend_address", node, {"price": int(node["amount"])}
+	)["price"])
+	var left: int = maxi(int(run["money"]) - amount, 0)
 	run["money"] = left
 	steps.append({"type": &"money", "amount": left})
 	return true
@@ -4846,8 +4864,12 @@ func _gen1_node_battle_outcome(node: Dictionary, steps: Array, run: Dictionary) 
 
 
 func _gen1_node_wild_battle(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var site: Dictionary = _gen1_site(
+		[Gen2WorldCatalog.KIND_STATIC], node,
+		{"species": int(node["species"]), "level": int(node["level"])}
+	)
 	var values: Dictionary = {
-		"kind": &"wild", "pokemon": int(node["species"]), "level": int(node["level"]),
+		"kind": &"wild", "pokemon": int(site["species"]), "level": int(site["level"]),
 	}
 	values.merge(Gen1Layout.battle_type_values(int(node.get("battle_type", 0))))
 	steps.append({"type": &"request", "values": {"kind": &"battle_requested", "values": values}})
@@ -5125,6 +5147,13 @@ func _gen1_node_set_player_coord(node: Dictionary, steps: Array, _run: Dictionar
 func _gen1_node_set_starter(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var value: int = _gen1_scratch_read(run, int(node["scratch"]), 0) if node.has("scratch") \
 		else int(node["value"])
+	if String(node["who"]) == "player" and data != null:
+		var linked: Dictionary = _gen1_linked_site(
+			Gen2WorldCatalog.KIND_STARTER, "starter_address", node,
+			{"species": data.gen1_dex_of_index(value)}
+		)
+		if linked.has("species"):
+			value = int(data.species(int(linked["species"])).get("index", value))
 	steps.append({"type": &"starter", "who": String(node["who"]), "value": value})
 	return true
 
@@ -5544,6 +5573,42 @@ func _gen1_aide_box(name: String) -> Dictionary:
 
 const GEN1_OAKS_AIDE_RUN: StringName = &"oaks_aide"
 
+## A `give_pokemon` is one of three kinds; the site is tried under each.
+const GEN1_GIVING_KINDS: Array[StringName] = [
+	Gen2WorldCatalog.KIND_STARTER, Gen2WorldCatalog.KIND_PRIZE, Gen2WorldCatalog.KIND_GIFT,
+]
+
+
+## A site node's numbers with any mod patch folded in, the way
+## [method Gen2WorldScriptRunner._catalogued] substitutes a command's operands.
+func _gen1_site(kinds: Array, node: Dictionary, fields: Dictionary) -> Dictionary:
+	if data == null or not data.has_content_overlay() or not node.has("at"):
+		return fields
+	for kind: StringName in kinds:
+		var row: Dictionary = data.catalog().gen1_site(kind, int(node["at"]), fields)
+		if not row.is_empty():
+			return row
+	return fields
+
+
+## The same for a table row of this map: an object, a hidden item, a clerk, a prize.
+func _gen1_event_site(kind: StringName, source: int, index: int, fields: Dictionary) -> Dictionary:
+	if data == null or current_map == null or index < 0 or not data.has_content_overlay():
+		return fields
+	var row: Dictionary = data.catalog().check(Gen2WorldCatalog.pack_event_id(
+		kind, source, current_map.number, index
+	))
+	return row if not row.is_empty() else fields
+
+
+## A node carrying one of a site's numbers: the `wPlayerStarter` store beside
+## Oak's give, the money test and spend around the salesman's. See `LINK_ROLES`.
+func _gen1_linked_site(kind: StringName, key: String, node: Dictionary, fields: Dictionary) -> Dictionary:
+	if data == null or not data.has_content_overlay() or not node.has("at"):
+		return fields
+	var row: Dictionary = data.catalog().gen1_linked(kind, key, int(node["at"]), fields)
+	return row if not row.is_empty() else fields
+
 
 func _gen1_node_starter(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var held: int = state.gen1_starter(String(node["who"])) if state != null else 0
@@ -5940,9 +6005,12 @@ func _gen1_resolve_gift_pokemon(node: Dictionary, steps: Array, run: Dictionary)
 		if String(node.get("from", "")) == "fossil_mon" else int(node["species"])
 	if species < 1:
 		return false
+	var site: Dictionary = _gen1_site(
+		GEN1_GIVING_KINDS, node, {"species": species, "level": int(node["level"])}
+	)
 	var step: Dictionary = {"type": &"request", "values": {
 		"kind": &"pokemon_requested",
-		"values": {"pokemon": species, "level": int(node["level"])},
+		"values": {"pokemon": int(site["species"]), "level": int(site["level"])},
 	}}
 	if node.has("ok"):
 		var taken: Array = []
@@ -5958,10 +6026,17 @@ func _gen1_resolve_gift_pokemon(node: Dictionary, steps: Array, run: Dictionary)
 
 ## `AddItemToInventory` and its carry; only a gift that landed is named.
 func _gen1_resolve_gift(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var item: int = int(node["item"])
+	var site: Dictionary = {"item": int(node["item"]), "quantity": int(node["count"])}
+	if node.has("hidden"):
+		site = _gen1_event_site(
+			Gen2WorldCatalog.KIND_ITEM, Gen2WorldCatalog.GEN1_SOURCE_HIDDEN, int(node["hidden"]), site
+		)
+	else:
+		site = _gen1_site([Gen2WorldCatalog.KIND_ITEM], node, site)
+	var item: int = int(site["item"])
 	var bag: Dictionary = run["bag"]
 	var room: Dictionary = Gen2WorldPack.receive_check(
-		data, bag, item, int(node["count"])
+		data, bag, item, maxi(1, int(site["quantity"]))
 	)
 	var taken: bool = bool(room.get("ok", false))
 	if taken:
@@ -5978,7 +6053,10 @@ func _gen1_resolve_gift(node: Dictionary, steps: Array, run: Dictionary) -> bool
 ## item object outside `ToggleableObjectStates`.
 func _gen1_pick_up_item(_node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var object: Dictionary = run.get("object", {})
-	var item: int = int(object.get("item", 0))
+	var item: int = int(_gen1_event_site(
+		Gen2WorldCatalog.KIND_ITEM, Gen2WorldCatalog.GEN1_SOURCE_OBJECT,
+		int(object.get("object_index", -1)), {"item": int(object.get("item", 0))}
+	)["item"])
 	var toggle: int = int(object.get("toggle_index", -1))
 	if item < 1 or toggle < 0:
 		return false
@@ -6154,8 +6232,14 @@ func _gen1_party_moves(party_index: int) -> Array:
 ## `DoInGameTradeDialogue` over the row's own `wWhichTrade`:
 ## `wCompletedInGameTradeFlags` answers TRADETEXT_AFTER_TRADE alone once the swap
 ## has happened, and the offer is a `YesNoChoice` under TRADETEXT_WANNA_TRADE.
-func _gen1_trade(trade_id: int, steps: Array) -> bool:
-	var record: Dictionary = Gen2WorldPartyHost.trade_record(data, {"trade_id": trade_id})
+func _gen1_trade(node: Dictionary, steps: Array) -> bool:
+	var trade_id: int = int(node["trade_id"])
+	var values: Dictionary = {"trade_id": trade_id}
+	var site: Dictionary = _gen1_site([Gen2WorldCatalog.KIND_TRADE], node, {"trade": trade_id})
+	if site.has("species"):
+		values["offered_species"] = int(site["species"])
+		values["requested_species"] = int(site["requested_species"])
+	var record: Dictionary = Gen2WorldPartyHost.trade_record(data, values)
 	if record.is_empty():
 		return false
 	if state != null and state.npc_trade_done(trade_id):
@@ -6169,7 +6253,7 @@ func _gen1_trade(trade_id: int, steps: Array) -> bool:
 		"yes": [{
 			"type": &"request",
 			"values": {"kind": &"party_selection_requested", "values": {
-				"routine": &"npc_trade", "trade": {"trade_id": trade_id},
+				"routine": &"npc_trade", "trade": values,
 			}},
 			"trade": trade_id,
 		}],
@@ -6436,13 +6520,23 @@ func _gen1_prize_steps(text_id: int) -> Array:
 	if first <= 0 or menu < 0 or menu >= menus.size():
 		return []
 	var chosen: Dictionary = menus[menu]
+	var tms: bool = bool(chosen.get("tms", false))
+	var rows: Array = []
+	for index: int in (chosen.get("rows", []) as Array).size():
+		var row: Dictionary = chosen["rows"][index]
+		var site: Dictionary = _gen1_event_site(
+			Gen2WorldCatalog.KIND_PRIZE, Gen2WorldCatalog.GEN1_SOURCE_PRIZE,
+			menu << Gen2WorldCatalog.GEN1_PRIZE_MENU_SHIFT | index,
+			{"item" if tms else "species": int(row.get("item", 0)), "price": int(row.get("cost", 0)),
+				"level": int(row.get("level", 0))}
+		)
+		rows.append({
+			"item": int(site["item" if tms else "species"]), "cost": int(site["price"]),
+			"level": int(site.get("level", 0)),
+		})
 	return [{"type": &"request", "values": {
 		"kind": &"prize_requested",
-		"values": {
-			"menu": menu,
-			"tms": bool(chosen.get("tms", false)),
-			"rows": (chosen.get("rows", []) as Array).duplicate(true),
-		},
+		"values": {"menu": menu, "tms": tms, "rows": rows},
 	}}]
 
 
@@ -6788,7 +6882,10 @@ func gen1_saved_position() -> Dictionary:
 ## carries the inventory `script_mart` wrote behind the id.
 ## `script_mart` writes the shelf into the text pointer, so a counter is named by its map and text row.
 func _gen1_mart_steps(row: Dictionary, text_id: int) -> Array:
-	var items: Variant = row.get("items", [])
+	var items: Variant = _gen1_event_site(
+		Gen2WorldCatalog.KIND_SHOP, Gen2WorldCatalog.GEN1_SOURCE_TEXT, text_id - 1,
+		{"items": row.get("items", [])}
+	)["items"]
 	if not items is Array or (items as Array).is_empty():
 		return []
 	var place: Vector2i = map_id()
@@ -6932,11 +7029,12 @@ func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
 ## above it a trainer class and party, below a species and a level.
 func _gen1_battle_values(header: Dictionary, event: Dictionary) -> Dictionary:
 	if not event.has("trainer_class"):
-		return {
-			"kind": &"wild",
-			"pokemon": int(event.get("species", 0)),
-			"level": int(event.get("level", 0)),
-		}
+		var site: Dictionary = _gen1_event_site(
+			Gen2WorldCatalog.KIND_STATIC, Gen2WorldCatalog.GEN1_SOURCE_OBJECT,
+			int(event.get("object_index", -1)),
+			{"species": int(event.get("species", 0)), "level": int(event.get("level", 0))}
+		)
+		return {"kind": &"wild", "pokemon": int(site["species"]), "level": int(site["level"])}
 	var trainer_class: int = int(event["trainer_class"])
 	var spoken: Dictionary = {"text": "%s: %s" % [
 		data.trainer_name(trainer_class) if data != null else "",

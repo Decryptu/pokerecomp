@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 37 | The gameplay catalog on Red, Blue and Yellow, `validate_placement` walking their map graph, the Old and Good Rod as `GameData.GEN1_OLD_ROD_GROUP` and `GEN1_GOOD_ROD_GROUP`; a `register` that read `generation()` or `target_game()` runs again when the answer changes |
 | 36 | A notice's `{"badge": 8..15}` drawn from the Gen 1 card's own `badge_faces` on Red, Blue and Yellow |
 | 35 | `Gen2ModHost.generation()` and `generation` on the battle snapshot; `repel_to_use` handed the cartridge's Repel table; an HM in the bag as a field-move source, Exp. All and `OPEN_BILLS_PC` on Red, Blue and Yellow |
 | 34 | Red, Blue and Yellow draw a shiny shiny, offer registered party rows, answer `hidden_items()`, `take_hidden_item()` and `hidden_item_nearby()` from their own hidden-item rows, and say `Gen2WorldAPI.cartridge_follower_out()` |
@@ -164,9 +165,11 @@ a mod that is present asks first, and replacing one removes files the new versio
 dropped.
 
 An installed mod loads immediately, without a restart. So does a change to the
-list: switching one on or off, deleting one, or choosing a different cartridge
-reloads every mod against a fresh host. Mods load the same way in an exported
-build as in the editor.
+list: switching one on or off, or deleting one, reloads every mod against a
+fresh host. Choosing a different cartridge reloads when it changes which mods
+are eligible, or when a `register` read `target_game()` or `generation()` and
+the new cartridge changes that answer; otherwise the live registrations are
+kept. Mods load the same way in an exported build as in the editor.
 
 `user://mods/` is `app_userdata/pokerecomp/mods` on desktop, the app's
 `Documents/mods` on iOS (visible in the Files app), and internal app storage on
@@ -387,6 +390,11 @@ host.patch_encounter(manifest.id, &"grass", 3, 2, {
 host.patch_fishing_group(manifest.id, 1, {"rods": [...]})
 ```
 
+On Red, Blue and Yellow a group is `SuperRodData`'s one-based row and holds
+`slots`, `{level, species}` rows (Yellow's with a `threshold`), replaced whole.
+The Old and Good Rod read no map, so their slots are the two groups
+`GameData.GEN1_OLD_ROD_GROUP` and `GEN1_GOOD_ROD_GROUP`, patched the same way.
+
 The method is one of `grass`, `surf`, `swarm_grass` and `swarm_water`. `slots`
 and `rates` replace whole. The patched row is what every reader gets, including
 the region walk `FindNest` uses.
@@ -439,7 +447,10 @@ A box this cartridge does not ship is not filled in: a mod rewriting a Crystal-o
 Everything else a cartridge hands out is a site in a script or a map event, not a
 table: a starter, a gift, a static battle, a trade, a Game Corner prize, an item
 on the ground, a badge, a shop. `GameData.catalog()` decodes them once and gives
-each a stable id, so a mod places rewards without holding a script address.
+each a stable id, so a mod places rewards without holding a script address. The
+same eight kinds and the same ids answer on Red, Blue and Yellow, decoded from
+the imported node trees rather than from bytecode; the table below names both
+shapes where they differ.
 
 ```gdscript
 var catalog := data.catalog()
@@ -447,16 +458,16 @@ for row in catalog.rows(Gen2WorldCatalog.KIND_STATIC):
 	host.patch_check(manifest.id, row["id"], {"species": 25, "level": 5})
 ```
 
-| Kind | A row carries | Decoded from |
-|---|---|---|
-| `KIND_STARTER` | `species`, `level`, `item` | A `givepoke` whose script also shows the species with `pokepic`, which only Elm's three balls do |
-| `KIND_GIFT` | `species`, `level`, `item` | Any other `givepoke` or `giveegg` |
-| `KIND_PRIZE` | `species`, `level`, `price` | A give site that spends `takecoins`, priced by the branch's own take |
-| `KIND_STATIC` | `species`, `level` | A `loadwildmon` with the `startbattle` that makes it one |
-| `KIND_TRADE` | `trade`, `species`, `requested_species` | A `trade` command and the record it names |
-| `KIND_ITEM` | `item`, `quantity`, `hidden` | `giveitem`, `verbosegiveitem`, an `itemball` object, a `hiddenitem` bg event |
-| `KIND_BADGE` | `badge`, `engine_flag` | A `setflag` of a badge's engine flag |
-| `KIND_SHOP` | `mart`, `dialog`, `items` | A `pokemart` command. `items` is the resolved shelf, `{item, price}` per row |
+| Kind | A row carries | Decoded from | On Red, Blue and Yellow |
+|---|---|---|---|
+| `KIND_STARTER` | `species`, `level`, `item` | A `givepoke` whose script also shows the species with `pokepic`, which only Elm's three balls do | A `GivePokemon` with a `wPlayerStarter` store on the way to it: Oak's three balls, Yellow's Pikachu |
+| `KIND_GIFT` | `species`, `level`, `item` | Any other `givepoke` or `giveegg` | Any other `GivePokemon` naming its species; the fossil revival takes its species from the fossil and is not a row |
+| `KIND_PRIZE` | `species` or `item`, `level`, `price` | A give site that spends `takecoins`, priced by the branch's own take | `PrizeMenus`' rows, priced in coins, and the Magikarp salesman's give, priced in the money it spends |
+| `KIND_STATIC` | `species`, `level` | A `loadwildmon` with the `startbattle` that makes it one | A script's wild battle, or an object standing as a wild Pokemon; `battle_type` rides along where the script sets one |
+| `KIND_TRADE` | `trade`, `species`, `requested_species` | A `trade` command and the record it names | `DoInGameTradeDialogue` and the record it names |
+| `KIND_ITEM` | `item`, `quantity`, `hidden` | `giveitem`, `verbosegiveitem`, an `itemball` object, a `hiddenitem` bg event | `GiveItem`, an object with an item, a `HiddenItems` row |
+| `KIND_BADGE` | `badge`, `engine_flag` | A `setflag` of a badge's engine flag | A store setting one bit of `wObtainedBadges`; `badge` counts from `Gen2WorldState.KANTO_BADGE_FIRST` |
+| `KIND_SHOP` | `mart`, `dialog`, `items` | A `pokemart` command. `items` is the resolved shelf, `{item, price}` per row | A `TX_SCRIPT_MART` row, with `text` its clerk's text id and `items` its shelf |
 
 Every row also carries `id`, `kind`, its `bank` and `address` (or `map` and
 `event_index`), the `map` it stands on where one could be attributed, and
@@ -471,13 +482,14 @@ A field is effective at its whole transaction, not at one command:
 
 | Patch | Also drives |
 |---|---|
-| a starter's `species` | the `pokepic` its ball shows |
-| a prize's `price` | its `checkcoins` branch and its `takecoins` deduction |
+| a starter's `species` | the `pokepic` its ball shows; on Red and Blue the `wPlayerStarter` store, so the rival's pick still follows the table |
+| a prize's `price` | its `checkcoins` branch and its `takecoins` deduction, or the salesman's `HasEnoughMoney` and his deduction |
 | a trade's `species` / `requested_species` | both halves of the trade, carried beside the cartridge record so another site naming that record is unaffected |
 | a shop's `items` | the shelf the counter sells |
+| a badge's `badge` | which bit of `wObtainedBadges` the gym sets |
 
 The catalog is derived, not imported, so it needs no cache bump and no re-import.
-`tools/checks/catalog.gd` pins both the census and the semantics on all three
+`tools/checks/catalog.gd` pins both the census and the semantics on all six
 cartridges.
 
 ### Proving a placement finishes
@@ -499,9 +511,11 @@ a generator retries against `missing`.
 never became satisfiable. Behind it:
 
 - `Gen2WorldReachability` floods each map's collision grid from the cells a player
-  arrives on, asking the same tile questions the overworld does.
+  arrives on, asking the same tile questions the overworld does. Red, Blue and
+  Yellow start from `NewGameWarp`, and a door back to the last map leads to every
+  map whose door reaches it.
 - An HM is a way past something only once its badge is in hand
-  (`Gen2WorldFieldMove.badge_for_move`).
+  (`catalog.badge_for_move`).
 - `catalog.possible_starters()`, `catalog.field_hm_items()` and
   `catalog.is_progression(row)` are the same facts for a mod planning its own.
 

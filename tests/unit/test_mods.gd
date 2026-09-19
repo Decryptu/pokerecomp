@@ -243,6 +243,51 @@ func test_retargeting_keeps_live_mods_when_the_enabled_set_is_unchanged() -> voi
 	assert_eq(host.generation(), 0, "no target, no generation")
 
 
+func test_retargeting_reruns_a_mod_that_registered_by_generation() -> void:
+	_write_dependency_mod("%s/by_generation" % ROOT, "bygeneration", "1.0.0")
+	_write("%s/by_generation/mod.gd" % ROOT, """extends RefCounted
+func register(host, manifest) -> void:
+	if host.generation() == RomRegistry.GEN1:
+		host.register_menu_entry(host.MENU_START, manifest.id, {\"label\": manifest.name})
+""")
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.discover(ROOT)
+	host.load_discovered()
+	assert_eq(host.menu_entries(host.MENU_START).size(), 0, "generation 0 registers nothing")
+	assert_false(
+		host.retarget_if_same_mod_set(RomRegistry.RED),
+		"the answer it registered off changed, so the entry runs again"
+	)
+	assert_eq(host.target_game(), &"", "a refused retarget leaves the host intact")
+	host.set_target_game(RomRegistry.RED)
+	Gen2ModHost.reset()
+	host = Gen2ModHost.instance()
+	host.set_target_game(RomRegistry.RED)
+	host.discover(ROOT)
+	host.load_discovered()
+	assert_eq(host.menu_entries(host.MENU_START).size(), 1)
+	assert_true(
+		host.retarget_if_same_mod_set(RomRegistry.YELLOW), "the same generation keeps it"
+	)
+	assert_false(
+		host.retarget_if_same_mod_set(RomRegistry.GOLD), "another generation does not"
+	)
+
+
+func test_retargeting_reruns_a_mod_that_registered_by_cartridge() -> void:
+	_write_dependency_mod("%s/by_game" % ROOT, "bygame", "1.0.0")
+	_write("%s/by_game/mod.gd" % ROOT, """extends RefCounted
+func register(host, manifest) -> void:
+	host.register_menu_entry(host.MENU_START, manifest.id, {\"label\": String(host.target_game())})
+""")
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.set_target_game(RomRegistry.RED)
+	host.discover(ROOT)
+	host.load_discovered()
+	assert_true(host.retarget_if_same_mod_set(RomRegistry.RED))
+	assert_false(host.retarget_if_same_mod_set(RomRegistry.YELLOW))
+
+
 func test_retargeting_refuses_to_keep_a_different_eligible_mod_set() -> void:
 	_write_dependency_mod("%s/crystal_only" % ROOT, "crystalonly", "1.0.0")
 	_write("%s/crystal_only/mod.json" % ROOT, JSON.stringify({

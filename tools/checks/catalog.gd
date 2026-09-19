@@ -2,9 +2,9 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## [Gen2WorldCatalog] on all three cartridges. The catalog is derived from the
+## [Gen2WorldCatalog] on all six cartridges. The catalog is derived from the
 ## decoded scripts and events, so what is pinned is the meaning as well as the
-## count: the three starters by name, sixteen distinct badges, the legendaries at
+## count: the starters by name, every badge granted once, the legendaries at
 ## their levels and the Game Corner's prices, against a decode that drifts.
 
 ## constants/pokemon_constants.asm.
@@ -19,12 +19,45 @@ const SUDOWOODO: int = 185
 const SNORLAX: int = 143
 const RED_GYARADOS: int = 130
 
+## constants/pokemon_constants.asm on Red, Blue and Yellow.
+const BULBASAUR: int = 1
+const CHARMANDER: int = 4
+const SQUIRTLE: int = 7
+const PIKACHU: int = 25
+const MAROWAK: int = 105
+const ARTICUNO: int = 144
+const ZAPDOS: int = 145
+const MOLTRES: int = 146
+const MEWTWO: int = 150
+const GOLD_TEETH: int = 0x40
+const HM04: int = 199
+
 ## Per game: total rows, and the count under each kind in
 ## [constant Gen2WorldCatalog.KINDS]' own order.
 const EXPECTED_CENSUS: Dictionary = {
 	&"gold": [449, 3, 9, 15, 8, 9, 352, 16, 37],
 	&"silver": [449, 3, 9, 15, 8, 9, 352, 16, 37],
 	&"crystal": [516, 3, 11, 14, 9, 6, 419, 16, 38],
+	&"red": [270, 3, 4, 16, 9, 10, 206, 8, 14],
+	&"blue": [270, 3, 4, 16, 9, 10, 206, 8, 14],
+	&"yellow": [276, 1, 7, 18, 7, 10, 211, 8, 14],
+}
+
+## Oak's three balls, and Yellow's one Pikachu.
+const EXPECTED_STARTERS: Dictionary = {
+	&"gold": [CHIKORITA, CYNDAQUIL, TOTODILE],
+	&"silver": [CHIKORITA, CYNDAQUIL, TOTODILE],
+	&"crystal": [CHIKORITA, CYNDAQUIL, TOTODILE],
+	&"red": [BULBASAUR, CHARMANDER, SQUIRTLE],
+	&"blue": [BULBASAUR, CHARMANDER, SQUIRTLE],
+	&"yellow": [PIKACHU],
+}
+
+## The birds, Mewtwo, the two Snorlax and the ghost Marowak, from the map
+## scripts and the standing objects alike.
+const GEN1_STATICS: Dictionary = {
+	ARTICUNO: [50], ZAPDOS: [50], MOLTRES: [50], MEWTWO: [70], SNORLAX: [30, 30],
+	MAROWAK: [30],
 }
 
 ## The legendaries and set pieces every profile has to place, and at what level.
@@ -36,32 +69,44 @@ const EXPECTED_STATICS: Dictionary = {
 		LUGIA: [60], HO_OH: [60], CELEBI: [30], SUICUNE: [40],
 		SNORLAX: [50], SUDOWOODO: [20], RED_GYARADOS: [30],
 	},
+	&"red": GEN1_STATICS, &"blue": GEN1_STATICS, &"yellow": GEN1_STATICS,
 }
 
 ## `maps/GoldenrodGameCorner.asm` and `maps/CeladonGameCorner.asm`'s own
-## `EQU` prices, in the order the corpus walk reaches them.
+## `EQU` prices, in the order the corpus walk reaches them. Generation 1's are
+## the Magikarp salesman's ¥500 and then `PrizeMenus`' three lists of coins.
 const EXPECTED_PRIZE_PRICES: Dictionary = {
 	&"gold": [200, 700, 2100, 200, 700, 2100, 3333, 6666, 9999],
 	&"silver": [200, 700, 2100, 200, 700, 2100, 3333, 6666, 9999],
 	&"crystal": [100, 800, 1500, 2222, 5555, 8888],
+	&"red": [500, 180, 500, 1200, 2800, 5500, 9999, 3300, 5500, 7700],
+	&"blue": [500, 120, 750, 1200, 2500, 4600, 6500, 3300, 5500, 7700],
+	&"yellow": [500, 230, 1000, 2680, 6500, 6500, 9999, 3300, 5500, 7700],
 }
 
 
 func run(r: RefCounted) -> void:
 	_r = r
-	_r.each_game(func() -> void:
-		var _catalog: Gen2WorldCatalog = _r.data.catalog()
-		_verify_census(_catalog)
-		_verify_starters(_catalog)
-		_verify_statics(_catalog)
-		_verify_prizes(_catalog)
-		_verify_badges(_catalog)
-		_verify_ids(_catalog)
-		_verify_patching(_catalog)
+	_r.each_game(_one_game)
+	_r.each_game_of(RomRegistry.GEN1, _one_game)
+
+
+func _one_game() -> void:
+	var _catalog: Gen2WorldCatalog = _r.data.catalog()
+	_verify_census(_catalog)
+	_verify_starters(_catalog)
+	_verify_statics(_catalog)
+	_verify_prizes(_catalog)
+	_verify_badges(_catalog)
+	_verify_ids(_catalog)
+	_verify_patching(_catalog)
+	if _r.data.generation == RomRegistry.GEN1:
+		_verify_gen1_links(_catalog)
+		_verify_gen1_progression(_catalog)
+	else:
 		_verify_links(_catalog)
 		_verify_progression(_catalog)
-		_verify_sidecar(_catalog)
-	)
+	_verify_sidecar(_catalog)
 
 
 ## The sidecar is what a player actually reads: the scan costs thirteen seconds
@@ -109,14 +154,15 @@ func _verify_census(_catalog: Gen2WorldCatalog) -> void:
 
 
 ## The one shape only Elm's three balls take: a `pokepic` of the species a
-## `givepoke` in the same script hands over. If that stops being unique, this is
-## where it shows.
+## `givepoke` in the same script hands over; on Red and Blue, a `wPlayerStarter`
+## store on the way to the give. If either stops being unique, this is where it
+## shows.
 func _verify_starters(_catalog: Gen2WorldCatalog) -> void:
 	var found: Array[int] = _catalog.possible_starters()
 	found.sort()
-	var wanted: Array[int] = [CHIKORITA, CYNDAQUIL, TOTODILE]
+	var wanted: Array = EXPECTED_STARTERS[_r.game_id]
 	_r.check(
-		found == wanted, "starters are %s, not the three Elm offers." % str(found)
+		Array(found) == wanted, "starters are %s, not the pinned %s." % [str(found), str(wanted)]
 	)
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_STARTER):
 		_r.check(
@@ -160,7 +206,8 @@ func _verify_prizes(_catalog: Gen2WorldCatalog) -> void:
 	)
 
 
-## Sixteen badges exist and each is granted somewhere. Gold and Silver set two of
+## Sixteen badges exist and each is granted somewhere; Kanto's eight sit from
+## `KANTO_BADGE_FIRST` on a Generation 1 cartridge. Gold and Silver set two of
 ## them from a second script as well, which is why the row count is not the badge
 ## count and why the test is over the SET rather than the list.
 func _verify_badges(_catalog: Gen2WorldCatalog) -> void:
@@ -172,11 +219,12 @@ func _verify_badges(_catalog: Gen2WorldCatalog) -> void:
 		)
 	var badges: Array = seen.keys()
 	badges.sort()
+	var wanted: Array = range(Gen2WorldState.BADGE_ENGINE_FLAGS.size())
+	if _r.data.generation == RomRegistry.GEN1:
+		wanted = range(Gen2WorldState.KANTO_BADGE_FIRST, Gen2WorldState.BADGE_ENGINE_FLAGS.size())
 	_r.check(
-		badges.size() == Gen2WorldState.BADGE_ENGINE_FLAGS.size(),
-		"%d distinct badges are granted, not %d." % [
-			badges.size(), Gen2WorldState.BADGE_ENGINE_FLAGS.size(),
-		]
+		badges == wanted,
+		"badges %s are granted, not %s." % [str(badges), str(wanted)]
 	)
 
 
@@ -195,7 +243,7 @@ func _verify_ids(_catalog: Gen2WorldCatalog) -> void:
 		var recomputed: int = Gen2WorldCatalog.pack_id(
 			StringName(row["kind"]), int(row["bank"]), int(row["address"])
 		)
-		if recomputed != id:
+		if recomputed != id & ~Gen2WorldCatalog.ID_VARIANT_MASK:
 			_r.check(false, "id %d does not recompute from its own address." % id)
 			return
 	_r.note("%d ids, each naming one site." % seen.size())
@@ -260,7 +308,7 @@ func _verify_progression(_catalog: Gen2WorldCatalog) -> void:
 		if _catalog.move_for_hm_item(item) == Gen2WorldFieldMove.MOVE_SURF:
 			surf_item = item
 	var walk: Gen2WorldReachability = Gen2WorldReachability.build(data)
-	var dry: Dictionary = walk.reachable(Gen2WorldProgression.START_MAP, {})
+	var dry: Dictionary = walk.reachable(Gen2WorldProgression.start_map(data), {})
 	var behind: int = -1
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
 		if not row.has("map"):
@@ -332,4 +380,87 @@ func _verify_patching(_catalog: Gen2WorldCatalog) -> void:
 	_r.check(
 		Gen2ContentOverlay.shared().is_empty(),
 		"the check leaked into the shared overlay."
+	)
+
+
+## Oak's three balls are one `AddPartyMon` at one address, so they are three
+## rows at it, and the `wPlayerStarter` store beside it answers for each by the
+## species that reaches it. The Magikarp salesman's two money commands link the
+## same way a prize's coin commands do.
+func _verify_gen1_links(_catalog: Gen2WorldCatalog) -> void:
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_STARTER):
+		if not _r.check(row.has("starter_address"), "a starter has no linked wPlayerStarter store."):
+			return
+		var linked: Dictionary = _catalog.gen1_linked(
+			Gen2WorldCatalog.KIND_STARTER, "starter_address",
+			RomFile.linear(int(row["bank"]), int(row["starter_address"])),
+			{"species": int(row["species"])}
+		)
+		_r.check(
+			int(linked.get("id", -1)) == int(row["id"]),
+			"the store beside starter %d does not answer for it." % int(row["species"])
+		)
+	var linked_prizes: int = 0
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_PRIZE):
+		if not row.has("address"):
+			continue
+		linked_prizes += 1
+		for key: String in ["ask_address", "spend_address"]:
+			if not _r.check(row.has(key), "the money prize has no linked %s." % key):
+				return
+			var linked: Dictionary = _catalog.link_at(int(row["bank"]), int(row[key]))
+			_r.check(
+				int(linked.get("id", -1)) == int(row["id"])
+					and StringName(linked.get("role", &"")) == &"price",
+				"the money prize's %s does not link back to it." % key
+			)
+	_r.check(linked_prizes == 1, "%d prizes are script sites, not the salesman alone." % linked_prizes)
+	var stocked: int = 0
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_SHOP):
+		if not (row.get("items", []) as Array).is_empty():
+			stocked += 1
+	_r.check(
+		stocked == _catalog.ids(Gen2WorldCatalog.KIND_SHOP).size(),
+		"%d shop sites carry no shelf." % (_catalog.ids(Gen2WorldCatalog.KIND_SHOP).size() - stocked)
+	)
+
+
+## The cartridge's own placement finishes; one that takes the Gold Teeth away
+## leaves the Warden's HM04 behind the item he asks for, and says so.
+func _verify_gen1_progression(_catalog: Gen2WorldCatalog) -> void:
+	var data: GameData = GameData.open(_r.game_id)
+	if data == null:
+		return
+	var vanilla: Dictionary = Gen2WorldProgression.validate(data, {})
+	_r.check(
+		bool(vanilla["ok"]),
+		"the cartridge's own placement does not validate: %s." % str(vanilla.get("missing", {}))
+	)
+	_r.note("progression: %d checks reached, %d of them critical." % [
+		int(vanilla["reached"]), int(vanilla["critical"]),
+	])
+	var teeth: int = -1
+	var warden: int = -1
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+		if int(row["item"]) == GOLD_TEETH:
+			teeth = int(row["id"])
+		if int(row["item"]) == HM04 and row["requires"].has({"item": GOLD_TEETH}):
+			warden = int(row["id"])
+	if not _r.check(teeth >= 0 and warden >= 0, "no Gold Teeth ball or no Warden asking for them."):
+		return
+	var gone: Dictionary = {teeth: {"item": Gen2Layout.ITEM_TM01}}
+	var locked: Dictionary = Gen2WorldProgression.validate(data, gone)
+	_r.check(not bool(locked["ok"]), "a placement with no Gold Teeth validated.")
+	var missing: Dictionary = locked.get("missing", {})
+	_r.check(
+		int(missing.get("check", -1)) == warden and missing.get("requirement", {}) == {"item": GOLD_TEETH},
+		"the refusal named %s rather than the Warden's Gold Teeth." % str(missing)
+	)
+	_r.check(
+		Gen2WorldProgression.validate(data, gone) == locked,
+		"two validations of one placement disagreed."
+	)
+	_r.check(
+		bool(Gen2WorldProgression.validate(data, {})["ok"]),
+		"a rejected placement was left installed."
 	)

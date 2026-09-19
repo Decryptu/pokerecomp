@@ -104,8 +104,29 @@ func _edges_for(moves: Dictionary) -> Dictionary:
 			_data, map, tileset, Vector2i.ZERO, Gen2WorldState.new()
 		)
 		out[map_key(map.group, map.number)] = _exits(world, map, moves)
+	_resolve_last_map_exits(out)
 	_edges[key] = out
 	return out
+
+
+## Generation 1's `WARP_TO_LAST_MAP` leads back to whichever map the player came
+## in from, so a map with one exits to every map whose usable warps reach it.
+func _resolve_last_map_exits(edges: Dictionary) -> void:
+	var last: int = map_key(0, Gen1Layout.WARP_TO_LAST_MAP)
+	var inbound: Dictionary = {}
+	for source: int in edges:
+		for target: int in edges[source]:
+			var sources: Array = inbound.get(target, [])
+			sources.append(source)
+			inbound[target] = sources
+	for key: int in edges:
+		var exits: Array = edges[key]
+		if not exits.has(last):
+			continue
+		exits.erase(last)
+		for source: int in inbound.get(key, []):
+			if not exits.has(source):
+				exits.append(source)
 
 
 ## The maps one map's usable exits lead to. An exit is usable when it stands in
@@ -172,27 +193,32 @@ func _seed(
 		or cell.y >= map.collision_height:
 		return
 	var key: int = _cell_key(cell.x, cell.y)
-	if region.has(key) or not _standable(world.collision_code_at(cell), moves):
+	if region.has(key) or not _standable(world, map, world.collision_code_at(cell), moves):
 		return
 	region[key] = true
 	frontier.append(cell)
 
 
-## Whether a player with [param moves] can be on a cell of this code. The four
-## water gates are the cartridge's own tile tests; everything else is the
-## permission byte, which is what makes a wall a wall.
-static func _standable(code: int, moves: Dictionary) -> bool:
-	match Gen2WorldCollision.permission_for(code):
+## Whether a player with [param moves] can be on a cell of this code: the water
+## gates are the cartridge's own tile tests, the rest is the permission byte.
+func _standable(
+	world: Gen2WorldAPI, map: Gen2WorldMap, code: int, moves: Dictionary
+) -> bool:
+	var gen1: bool = _data.generation == RomRegistry.GEN1
+	match world.permission_for_code(code):
 		Gen2WorldCollision.LAND_TILE:
 			return true
 		Gen2WorldCollision.WATER_TILE:
-			if Gen2WorldFieldMove.waterfall_tile(code):
+			if not gen1 and Gen2WorldFieldMove.waterfall_tile(code):
 				return moves.has(Gen2WorldFieldMove.MOVE_WATERFALL)
-			if Gen2WorldFieldMove.whirlpool_tile(code):
+			if not gen1 and Gen2WorldFieldMove.whirlpool_tile(code):
 				return moves.has(Gen2WorldFieldMove.MOVE_WHIRLPOOL)
 			return moves.has(Gen2WorldFieldMove.MOVE_SURF)
 	## A cut tree is not walkable until it is cut, and then it is ordinary ground.
-	return Gen2WorldFieldMove.cuttable(code) and moves.has(Gen2WorldFieldMove.MOVE_CUT)
+	if not moves.has(Gen2WorldFieldMove.MOVE_CUT):
+		return false
+	return Gen1Layout.cut_tile(map.tileset, code) >= 0 if gen1 \
+		else Gen2WorldFieldMove.cuttable(code)
 
 
 ## Whether the flood touched the side a connection leaves by.

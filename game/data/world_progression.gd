@@ -21,7 +21,15 @@ const REASON_NO_CATALOG: StringName = &"missing_catalog"
 const MAX_ROUNDS: int = 64
 
 ## `Gen2WorldSpawn`'s own new-game map, which is where every walk starts.
+## Generation 1's is the cartridge's `NewGameWarp` row. See [method start_map].
 const START_MAP := Vector2i(Gen2WorldSpawn.NEW_BARK_GROUP, Gen2WorldSpawn.PLAYERS_HOUSE_2F)
+
+
+static func start_map(data: GameData) -> Vector2i:
+	if data.generation == RomRegistry.GEN1:
+		return Vector2i(0, int(data.gen1_new_game_warp().get("map", 0)))
+	return START_MAP
+
 
 ## Cache directory to the scratch cache, overlay, catalog and map graph a
 ## validation runs against. See [method validate].
@@ -65,12 +73,14 @@ static func validate(data: GameData, patches: Dictionary = {}) -> Dictionary:
 		overlay.patch(
 			Gen2ContentOverlay.KIND_CHECK, &"progression", int(id), patches[id]
 		)
-	return _walk(held["catalog"], held["walk"])
+	return _walk(held["catalog"], held["walk"], start_map(held["data"]))
 
 
 ## The closure itself. Split from [method validate] so a caller holding a catalog
 ## it built for another reason can ask directly.
-static func _walk(catalog: Gen2WorldCatalog, walk: Gen2WorldReachability) -> Dictionary:
+static func _walk(
+	catalog: Gen2WorldCatalog, walk: Gen2WorldReachability, start: Vector2i = START_MAP
+) -> Dictionary:
 	## Resolved once: the overlay does not move during a walk, and re-resolving
 	## every row every round is what made this seconds rather than milliseconds.
 	var rows: Array = catalog.rows()
@@ -93,7 +103,7 @@ static func _walk(catalog: Gen2WorldCatalog, walk: Gen2WorldReachability) -> Dic
 		var usable: Dictionary = _usable_moves(catalog, items, badges)
 		if usable != last_moves or maps.is_empty():
 			last_moves = usable
-			maps = walk.reachable(START_MAP, usable)
+			maps = walk.reachable(start, usable)
 		for row: Dictionary in rows:
 			var id: int = int(row["id"])
 			if reached.has(id):
@@ -141,7 +151,7 @@ static func _usable_moves(
 		var move: int = catalog.move_for_hm_item(int(item))
 		if move <= 0:
 			continue
-		var badge: int = Gen2WorldFieldMove.badge_for_move(move)
+		var badge: int = catalog.badge_for_move(move)
 		if badge < 0 or badges.has(badge):
 			out[move] = true
 	return out
