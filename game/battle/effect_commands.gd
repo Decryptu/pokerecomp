@@ -197,10 +197,8 @@ const PARALYZE_TARGET: StringName = &"paralyzetarget"
 const TOXIC_TARGET: StringName = &"toxictarget"
 
 ## The two things a move can leave on [Gen2Substatus] rather than the status
-## byte. Flinch is only ever a secondary effect, obeying
-## [member Gen2Turn.failed_chance] like the five above; confusion comes both ways,
-## as its own status move (Confuse Ray, Supersonic) and as a secondary effect
-## (Confusion, Psybeam), so [Gen2MoveEffect] reaches for it from both shapes.
+## byte: a flinch, only ever a secondary effect, and a confusion, which comes
+## as its own move and as a secondary effect alike.
 const FLINCH_TARGET: StringName = &"flinchtarget"
 const CONFUSE_TARGET: StringName = &"confusetarget"
 
@@ -208,11 +206,9 @@ const CONFUSE_TARGET: StringName = &"confusetarget"
 ## Dream Eater behind its own rule inside [constant CHECK_HIT].
 const DRAIN_TARGET: StringName = &"draintarget"
 
-## Overwrites what [constant DAMAGE_CALC] worked out with the number
-## [constant Gen2MoveEffect.SUPER_FANG], [constant Gen2MoveEffect.STATIC_DAMAGE],
-## [constant Gen2MoveEffect.LEVEL_DAMAGE] and [constant Gen2MoveEffect.PSYWAVE]
-## actually deal. [constant DAMAGE_CALC]'s own roll still ran first, and its
-## immunity answer is the one thing about it this keeps.
+## Overwrites what [constant DAMAGE_CALC] worked out with the fixed figure
+## Super Fang, Seismic Toss, Night Shade and Psywave deal; the immunity answer
+## is the one thing of the calculation this keeps.
 const FIXED_DAMAGE: StringName = &"fixeddamage"
 
 ## Guillotine, Horn Drill and Fissure's own accuracy rule and their own damage:
@@ -230,11 +226,9 @@ const RECHARGE: StringName = &"recharge"
 ## list falls into `doturn` and [constant CHARGE].
 const CHARGE_MOVE: StringName = &"chargemove"
 
-## `BattleCommand_Charge`: the charging turn's own line, and the end of the move.
-## It stands behind `doturn` and in front of `usedmovetext`, so a charging turn
-## announces "made a whirlwind!" and never "used RAZOR WIND!"; Skull Bash is the
-## one that carries on, skipping to [constant END_TURN] for the Defense raise
-## behind it.
+## `BattleCommand_Charge`: the charging turn's own line in front of
+## `usedmovetext`, so it never says "used RAZOR WIND!"; Skull Bash carries on
+## to [constant END_TURN] for the Defense raise behind it.
 const CHARGE: StringName = &"charge"
 
 ## `endturn_command`, which ends the read cycle the way [constant END_MOVE] does.
@@ -306,11 +300,9 @@ const MIST: StringName = &"mist"
 ## switch. Fails, without re-applying, on a second use.
 const FOCUS_ENERGY: StringName = &"focusenergy"
 
-## Binds the target for a rolled number of turns: it can neither run nor be
-## recalled, and loses a sixteenth of its health at the end of each of them.
-## Nothing here stops it moving, which is the Generation 2 rule. A target that is
-## already bound is left alone without a failure message, since
-## `BattleCommand_TrapTarget` simply returns.
+## Binds the target for a rolled number of turns, a sixteenth a turn, and
+## nothing stops it moving. A target already bound is left alone in silence,
+## `BattleCommand_TrapTarget` simply returning.
 const TRAP_TARGET: StringName = &"traptarget"
 
 ## Mean Look and Spider Web: the target can neither run nor be recalled, with no
@@ -441,11 +433,8 @@ const ALTERNATING_ANIM_EFFECTS: Array[int] = [
 	Gen2MoveEffect.CONVERSION,
 ]
 
-## Raises and lowers a stat by one stage or two, named as the cartridge names
-## them and in [constant Gen2BattleMon.STAGED_STATS] plus
-## [constant Gen2BattleMon.STAGED_ODDS] order, which is also the order the effect
-## bytes run in: seven in a row for "up by one", seven more for "down by one",
-## and so on. [Gen2MoveEffect] turns that run into a table; this names the stops.
+## Raises and lowers a stat by one stage or two, in [constant Gen2BattleMon.STAGED_STATS]
+## plus [constant Gen2BattleMon.STAGED_ODDS] order, the effect bytes' own run.
 const ATTACK_UP: StringName = &"attackup"
 const DEFENSE_UP: StringName = &"defenseup"
 const SPEED_UP: StringName = &"speedup"
@@ -482,11 +471,8 @@ const EVASION_DOWN_2: StringName = &"evasiondown2"
 ## loops over the stats a stage multiplies a real number for, so not the odds.
 const ALL_STATS_UP: StringName = &"allstatsup"
 
-## The stat commands in the run order the cartridge's effect bytes use, indexed
-## by [Gen2MoveEffect] rather than named one at a time there. Each entry is
-## [param stat_key, param amount, param targets_user]: the key
-## [method Gen2BattleMon.change_stage] takes, how many stages it moves by, and
-## whether the move points it at whoever used it rather than the other side.
+## The stat commands as [code][stat_key, amount, targets_user][/code], in the
+## run order the cartridge's effect bytes use.
 const STAT_COMMANDS: Dictionary = {
 	ATTACK_UP: ["attack", 1, true], DEFENSE_UP: ["defense", 1, true],
 	SPEED_UP: ["speed", 1, true], SP_ATTACK_UP: ["sp_attack", 1, true],
@@ -779,6 +765,10 @@ static func _store_energy(turn: Gen2Turn) -> void:
 	var user: Gen2BattleMon = turn.attacker()
 	if not Gen2Substatus.has(user.substatus, Gen2Substatus.BIDE):
 		return
+	# `.BideCheck` adds `wDamage` as it stands at the user's turn, whoever dealt
+	# it last and however stale it is.
+	if turn.battle.is_gen1():
+		user.bide_damage = mini(user.bide_damage + turn.battle.last_damage_dealt, 0xFFFF)
 	user.bide_turns -= 1
 	if user.bide_turns > 0:
 		turn.emit(Gen2Battle.BIDE_STORING)
@@ -1412,10 +1402,11 @@ static func _miss(turn: Gen2Turn, event: StringName = Gen2Battle.MISSED) -> void
 	turn.missed = true
 	## `MoveHitTest.moveMissed` zeroes `wDamage` and clears
 	## `USING_TRAPPING_MOVE`, so a Wrap that misses binds nothing at all.
+	if turn.battle.is_gen1():
+		turn.battle.last_damage_dealt = 0
 	if turn.battle.gen1_trapping_move(turn.side) != 0:
 		turn.defender().trapped_turns = 0
 		turn.defender().trapping_move = 0
-		turn.battle.last_damage_dealt = 0
 	turn.emit(event, {"target": turn.target})
 	if not CONTINUES_AFTER_MISS.has(turn.effect()):
 		_failure_text(turn)
@@ -2844,7 +2835,9 @@ static func _substitute(turn: Gen2Turn) -> void:
 	# Substitute leaves the byte set and the flag clear.
 	var cost: int = Gen2Substatus.substitute_hp_for(user.max_hp())
 	user.substitute_hp = cost
-	if user.hp <= cost:
+	# `SubstituteEffect_` branches on the carry alone, so a user at exactly a
+	# quarter makes the doll and is left at nothing.
+	if user.hp < cost or (user.hp == cost and not turn.battle.is_gen1()):
 		_refused_substitute_raises(turn)
 		turn.emit(Gen2Battle.SUBSTITUTE_TOO_WEAK)
 		return

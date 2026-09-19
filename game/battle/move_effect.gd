@@ -1582,11 +1582,23 @@ const CONVERSION_2_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## The four lists Generation 1 reads instead, keyed by the same effect byte.
+## The five lists Generation 1 reads instead, keyed by the same effect byte.
 ## Three are one command swapped; the fourth moves `gen1traptarget` in front of
 ## `checkhit`, because `TrappingEffect` is in `SpecialEffectsCont` and runs
-## before `MoveHitTest`, which is what lets a miss undo it.
+## before `MoveHitTest`, which is what lets a miss undo it; the fifth is Bide
+## with no `checkhit`, `.UnleashEnergy` jumping past `MoveHitTest`.
 const GEN1_SEQUENCES: Dictionary = {
+	BIDE: [
+		Gen2EffectCommands.STORE_ENERGY,
+		Gen2EffectCommands.DO_TURN,
+		Gen2EffectCommands.USED_MOVE_TEXT,
+		Gen2EffectCommands.UNLEASH_ENERGY,
+		Gen2EffectCommands.RESET_TYPE_MATCHUP,
+		Gen2EffectCommands.MOVE_ANIM,
+		Gen2EffectCommands.APPLY_DAMAGE,
+		Gen2EffectCommands.CHECK_FAINT,
+		Gen2EffectCommands.END_MOVE,
+	],
 	HAZE: [
 		Gen2EffectCommands.USED_MOVE_TEXT,
 		Gen2EffectCommands.DO_TURN,

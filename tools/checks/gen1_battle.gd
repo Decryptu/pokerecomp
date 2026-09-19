@@ -118,6 +118,8 @@ func _one_game() -> void:
 	_counter_doubles_the_last_damage()
 	_rage_raises_a_stage()
 	_mimic_asks_the_player_and_rolls_for_the_enemy()
+	_a_multi_hit_repeats_its_first_figure()
+	_bide_stores_the_last_damage_at_each_turn()
 	_a_trapping_move_holds_its_target()
 	_the_trap_counter_distribution()
 	_conversion_copies_the_target()
@@ -408,6 +410,8 @@ const SWORDS_DANCE_MOVE: int = 14
 const COUNTER_MOVE: int = 68
 const RAGE_MOVE: int = 99
 const MIMIC_MOVE: int = 102
+const DOUBLESLAP_MOVE: int = 3
+const BIDE_MOVE: int = 117
 const GUST_MOVE: int = 16
 const TACKLE_MOVE: int = 33
 const GASTLY: int = 92
@@ -641,6 +645,53 @@ func _mimic_asks_the_player_and_rolls_for_the_enemy() -> void:
 	rolled.take_turn(0, 0)
 	_r.check(rolled.awaiting_mimic() < 0 and int(rolled.enemy.moves[0]) == SPLASH_MOVE,
 		"the enemy's MIMIC left %s" % str(rolled.enemy.moves))
+
+
+## `jp nz, GetPlayerAnimationType`: every hit of a multi-hit move is the first
+## one's damage, the calculation and the roll happening once.
+func _a_multi_hit_repeats_its_first_figure() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [DOUBLESLAP_MOVE], SWEEP_SEED, [SPLASH_MOVE])
+	if not _r.check(battle != null, "no battle could be built for DOUBLESLAP"):
+		return
+	var seen: Dictionary = {}
+	for _turn: int in 12:
+		var amounts: Array = []
+		for event: Dictionary in battle.take_turn(0, 0):
+			if StringName(event.get("type", &"")) == Gen2Battle.HIT and int(event.get("target", -1)) == Gen2Battle.ENEMY:
+				amounts.append(int(event.get("amount", 0)))
+		if amounts.size() > 1:
+			seen[amounts.size()] = true
+			_r.check(amounts.count(amounts[0]) == amounts.size() or battle.enemy.is_fainted(),
+				"DOUBLESLAP dealt %s" % str(amounts))
+		if battle.enemy.is_fainted() or battle.player.is_fainted():
+			break
+	_r.check(not seen.is_empty(), "DOUBLESLAP never hit twice")
+
+
+## `.BideCheck` adds `wDamage` at each of the user's turns and unleashes twice
+## the total with no `MoveHitTest`: a faster TACKLE every turn is summed from
+## the turn after BIDE was chosen.
+func _bide_stores_the_last_damage_at_each_turn() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [BIDE_MOVE], SWEEP_SEED, [TACKLE_MOVE])
+	if not _r.check(battle != null, "no battle could be built for BIDE"):
+		return
+	var stored: int = 0
+	for turn: int in 6:
+		var player_before: int = battle.player.hp
+		var enemy_before: int = battle.enemy.hp
+		var events: Array = battle.take_turn(0, 0)
+		var released: bool = events.any(func(event: Dictionary) -> bool:
+			return StringName(event.get("type", &"")) == Gen2Battle.BIDE_UNLEASHED)
+		if turn > 0:
+			stored += player_before - battle.player.hp
+		if released:
+			var paid: int = enemy_before - battle.enemy.hp
+			_r.check(paid == stored * 2 or battle.enemy.is_fainted(),
+				"BIDE paid %d back for %d stored" % [paid, stored])
+			return
+		if battle.player.is_fainted():
+			break
+	_r.fail("BIDE never unleashed")
 
 
 ## `TrappingEffect` and `.HeldInPlaceCheck`: the user repeats the move for the

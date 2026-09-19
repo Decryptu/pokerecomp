@@ -907,7 +907,7 @@ func record_damage_taken(target: int, source: int, move_number: int, effect: int
 		"effect": effect,
 	}
 	var target_mon: Gen2BattleMon = mon(target)
-	if Gen2Substatus.has(target_mon.substatus, Gen2Substatus.BIDE):
+	if Gen2Substatus.has(target_mon.substatus, Gen2Substatus.BIDE) and not is_gen1():
 		target_mon.bide_damage = mini(target_mon.bide_damage + amount, 0xFFFF)
 
 
@@ -3218,7 +3218,12 @@ func run_move_effect(turn: Gen2Turn, depth: int = 0) -> void:
 			# `.loop_back_to_critical` scans down for `critical` and resumes on
 			# it, not behind it.
 			turn.loop_back = false
-			var back: int = sequence.rfind(Gen2EffectCommands.CRITICAL, counter - 1)
+			# `jp nz, GetPlayerAnimationType`: Generation 1 works the damage and
+			# the hit out once and replays the animation and the hit alone.
+			var back: int = sequence.rfind(
+				Gen2EffectCommands.MOVE_ANIM_NO_SUB if is_gen1() else Gen2EffectCommands.CRITICAL,
+				counter - 1
+			)
 			if back < 0:
 				push_error("a looping effect has no critical to return to")
 				return
