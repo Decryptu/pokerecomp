@@ -570,6 +570,9 @@ var _pending_turn: Dictionary = {}
 ## The side owing a Baton Pass target, or -1. `ForcePickSwitchMonInBattle` cannot
 ## be backed out of, so everything else is refused until it is answered.
 var _pending_baton_pass: int = -1
+## `MimicEffect.letPlayerChooseMove`: the slot MIMIC was used from while the
+## player picks one of the target's moves, empty otherwise.
+var _pending_mimic: Dictionary = {}
 ## `OfferSwitch`'s pending question, the slot the enemy is about to send out or
 ## -1. SHIFT alone sets it, and the turn stands still until
 ## [method answer_switch_offer] closes it.
@@ -1192,7 +1195,8 @@ func replacement_target(side: int) -> int:
 ## against that. Only a trainer replacing on its own reaches `EnemySwitch`.
 func replace_fallen(index: int = -1) -> Array:
 	var events: Array = []
-	if is_over() or _pending_switch_offer >= 0 or _pending_baton_pass >= 0:
+	if is_over() or _pending_switch_offer >= 0 or _pending_baton_pass >= 0 \
+		or not _pending_mimic.is_empty():
 		return events
 
 	if must_replace(PLAYER):
@@ -1293,6 +1297,46 @@ func pass_to(index: int) -> Array:
 ## [method Gen2EffectCommands._baton_pass] is the only caller.
 func request_baton_pass(side: int) -> void:
 	_pending_baton_pass = side
+
+
+## Stops the turn while the player picks the target's move to copy.
+func request_mimic(side: int, slot: int) -> void:
+	_pending_mimic = {"side": side, "slot": slot}
+
+
+func awaiting_mimic() -> int:
+	return int(_pending_mimic.get("side", -1))
+
+
+## `wEnemyMonMoves` as the list `MoveSelectionMenu` draws for MIMIC: the target's
+## slots, empty ones included, so the cursor's row is the cartridge's index.
+func mimic_choices() -> Array:
+	if _pending_mimic.is_empty():
+		return []
+	return mon(opponent_of(int(_pending_mimic["side"]))).moves.duplicate()
+
+
+## Answers a pending MIMIC with the target's slot [param choice] and finishes
+## the turn behind it; the animation and the line play once the choice is made.
+func answer_mimic(choice: int) -> Array:
+	if _pending_mimic.is_empty():
+		return []
+	var side: int = int(_pending_mimic["side"])
+	var slot: int = int(_pending_mimic["slot"])
+	var copied: Array = mimic_choices()
+	if choice < 0 or choice >= copied.size() or int(copied[choice]) == 0:
+		return []
+	_pending_mimic = {}
+	var events: Array = []
+	var turn: Gen2Turn = Gen2Turn.create(
+		self, side, slot, Gen2MoveEffect.MIMIC_MOVE, data.move(Gen2MoveEffect.MIMIC_MOVE), events
+	)
+	Gen2EffectCommands.gen1_mimic_learn(turn, slot, int(copied[choice]))
+	_close_turn_bracket(side, (_pending_turn["actions"] as Dictionary)[side])
+	if is_gen1():
+		_gen1_residual(side, events)
+	_pending_turn["index"] = int(_pending_turn["index"]) + 1
+	return _run_turn(events)
 
 
 ## `FindMonInOTPartyToSwitchIntoBattle`, reached because Baton Pass zeroes
@@ -1670,7 +1714,7 @@ func take_actions(player_action: Dictionary, enemy_action: Dictionary) -> Array:
 		return events
 	# A turn already part way through cannot be started again: the one standing
 	# is finished by [method pass_to] and by nothing else.
-	if _pending_baton_pass >= 0 or _pending_switch_offer >= 0:
+	if _pending_baton_pass >= 0 or _pending_switch_offer >= 0 or not _pending_mimic.is_empty():
 		return events
 
 	# In front of `BattleMenu`, so it is paid before the refusal below too.
@@ -1819,7 +1863,7 @@ func _run_action(side: int, action: Dictionary, actions: Dictionary, events: Arr
 			gen1_enemy_moves += 1
 		_act(side, slot, move_for(side, slot), events)
 		_report_unannounced_action_faints(events, action_event_start)
-	return _pending_baton_pass >= 0
+	return _pending_baton_pass >= 0 or not _pending_mimic.is_empty()
 
 
 ## Core checks both battlers after every action, whether or not the effect list

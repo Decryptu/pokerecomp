@@ -4137,6 +4137,8 @@ func _continue_after_messages() -> void:
 		return
 	if _answer_baton_pass():
 		return
+	if _answer_mimic():
+		return
 	if _answer_switch_offer():
 		return
 	if _replace_the_fallen():
@@ -4558,6 +4560,34 @@ func _answer_baton_pass() -> bool:
 	return true
 
 
+## `MimicEffect.letPlayerChooseMove`: `MoveSelectionMenu` over the enemy's
+## moves with `wMoveMenuType` 1, where A and B alike take the cursor's row.
+func _answer_mimic() -> bool:
+	if _battle == null or _battle.awaiting_mimic() < 0:
+		return false
+	if _menu_stage != &"mimic":
+		_move_rows = Gen2BattleMenu.move_rows(_battle.mon(Gen2Battle.ENEMY), _data)
+		_move_cursor = 0
+		_menu_stage = &"mimic"
+		show_message("")
+		_reopen_menu_layer()
+	return true
+
+
+func _answer_mimic_menu(button: int) -> void:
+	match button:
+		PokeButton.UP, PokeButton.DOWN:
+			_move_cursor = Gen2BattleMenu.move_cursor_moved(
+				_move_cursor, button, _move_rows.size()
+			)
+			_refresh_menu_layer()
+		PokeButton.A, PokeButton.B:
+			var slot: int = int((_move_rows[_move_cursor] as Dictionary).get("slot", 0))
+			_close_battle_menu()
+			_pending = _battle.answer_mimic(slot)
+			_show_next_event()
+
+
 ## `BattleMenu`: what the player is asked once the turn before it has finished
 ## being shown, `EmptyBattleTextbox` first so it opens over a clear box.
 ## `CheckPlayerHasUsableMoves` runs inside `MoveSelectionScreen` rather than here,
@@ -4607,6 +4637,8 @@ func _answer_menu(button: int) -> void:
 			_answer_battle_menu(button)
 		&"move":
 			_answer_move_menu(button)
+		&"mimic":
+			_answer_mimic_menu(button)
 		&"refused":
 			## `.place_textbox_start_over` blocks on the line and then jumps back
 			## to `MoveSelectionScreen`, which redraws the list.
@@ -5192,7 +5224,7 @@ func _draw_menu_layer() -> void:
 	match _menu_stage:
 		&"main":
 			_draw_battle_menu()
-		&"move":
+		&"move", &"mimic":
 			_draw_move_menu()
 		_:
 			_menu_layer.visible = false

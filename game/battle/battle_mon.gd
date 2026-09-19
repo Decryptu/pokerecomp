@@ -795,6 +795,18 @@ func mimic_move(slot: int, move: int) -> bool:
 	return true
 
 
+## `MimicEffect`'s write: the move alone, the slot's PP left as it stands.
+func gen1_mimic_move(slot: int, move: int) -> bool:
+	if slot < 0 or slot >= moves.size():
+		return false
+	if mimicked_slot < 0:
+		mimicked_slot = slot
+		mimic_original_move = int(moves[slot])
+		mimic_original_pp = pp_left(slot)
+	moves[slot] = move
+	return true
+
+
 func persistent_move(slot: int) -> int:
 	if not transform_original.is_empty():
 		var original_moves: Array = transform_original.get("moves", [])
@@ -808,7 +820,7 @@ func persistent_pp(slot: int) -> int:
 	if not transform_original.is_empty():
 		var original_pp: Array = transform_original.get("pp", [])
 		return int(original_pp[slot]) if slot >= 0 and slot < original_pp.size() else 0
-	if slot == mimicked_slot:
+	if slot == mimicked_slot and not is_gen1():
 		return mimic_original_pp
 	return pp_left(slot)
 
@@ -816,7 +828,10 @@ func persistent_pp(slot: int) -> int:
 func restore_mimic() -> void:
 	if mimicked_slot >= 0 and mimicked_slot < moves.size():
 		moves[mimicked_slot] = mimic_original_move
-		pp[mimicked_slot] = mimic_original_pp
+		# `wBattleMonPP` goes back to the party whole on Generation 1, so what
+		# the copy spent stays spent.
+		if not is_gen1():
+			pp[mimicked_slot] = mimic_original_pp
 	mimicked_slot = -1
 	mimic_original_move = 0
 	mimic_original_pp = 0

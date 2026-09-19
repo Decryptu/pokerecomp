@@ -1183,6 +1183,9 @@ static func _mirror_move(turn: Gen2Turn) -> void:
 ## `BattleCommand_Mimic`: replace the Mimic slot with five PP of the copy, leaving
 ## the party move alone, and [method Gen2BattleMon.reset_volatile] restores it.
 static func _mimic(turn: Gen2Turn) -> void:
+	if turn.battle.is_gen1():
+		_gen1_mimic(turn)
+		return
 	_clear_last_move_for_call(turn)
 	var copied: int = turn.defender().last_counter_move
 	var slot: int = _last_slot_holding(turn.attacker(), Gen2MoveEffect.MIMIC_MOVE)
@@ -1192,6 +1195,37 @@ static func _mimic(turn: Gen2Turn) -> void:
 		_fail_called_move(turn)
 		return
 	if not turn.attacker().mimic_move(slot, copied):
+		_fail_called_move(turn)
+		return
+	_animate_current_move(turn)
+	turn.emit(Gen2Battle.MIMIC_LEARNED, {"move": copied, "slot": slot})
+
+
+## `MimicEffect`: the copy lands in the slot MIMIC was used from and keeps
+## that slot's PP. The enemy and a link partner take `BattleRandom & 3` until a
+## slot holds a move; the player is asked (`.letPlayerChooseMove`).
+static func _gen1_mimic(turn: Gen2Turn) -> void:
+	if _is_hidden(turn.defender().substatus):
+		_fail_called_move(turn)
+		return
+	var slot: int = turn.slot if turn.slot >= 0 \
+		else maxi(_last_slot_holding(turn.attacker(), Gen2MoveEffect.MIMIC_MOVE), 0)
+	if turn.side == Gen2Battle.PLAYER and not turn.battle.is_link_battle:
+		turn.battle.request_mimic(turn.side, slot)
+		turn.end()
+		return
+	var copied: Array = turn.defender().moves
+	var picked: int = 0
+	while picked == 0:
+		var index: int = turn.rng().randi_range(0, Gen2BattleMon.MAX_MOVES - 1)
+		picked = int(copied[index]) if index < copied.size() else 0
+	gen1_mimic_learn(turn, slot, picked)
+
+
+## The tail both paths share: the slot rewritten, `PlayCurrentMoveAnimation`
+## and `MimicLearnedMoveText`.
+static func gen1_mimic_learn(turn: Gen2Turn, slot: int, copied: int) -> void:
+	if not turn.attacker().gen1_mimic_move(slot, copied):
 		_fail_called_move(turn)
 		return
 	_animate_current_move(turn)

@@ -117,6 +117,7 @@ func _one_game() -> void:
 	_a_freeze_and_a_screen_outlive_the_turn()
 	_counter_doubles_the_last_damage()
 	_rage_raises_a_stage()
+	_mimic_asks_the_player_and_rolls_for_the_enemy()
 	_a_trapping_move_holds_its_target()
 	_the_trap_counter_distribution()
 	_conversion_copies_the_target()
@@ -125,6 +126,7 @@ func _one_game() -> void:
 	_a_safari_battle()
 	_the_tutor_throws()
 	_a_wild_fight_on_the_screen()
+	_mimic_on_the_screen()
 
 
 ## `AddPartyMon`'s four base moves and `WriteMonMoves` over them, for every
@@ -405,6 +407,8 @@ const SPLASH_MOVE: int = 150
 const SWORDS_DANCE_MOVE: int = 14
 const COUNTER_MOVE: int = 68
 const RAGE_MOVE: int = 99
+const MIMIC_MOVE: int = 102
+const GUST_MOVE: int = 16
 const TACKLE_MOVE: int = 33
 const GASTLY: int = 92
 const TOXIC_MOVE: int = 92
@@ -611,6 +615,32 @@ func _rage_raises_a_stage() -> void:
 	_r.check(battle.player.rage_count == 0, "a Generation 1 RAGE counted %d" % battle.player.rage_count)
 	_r.check(battle.player.is_fainted() or battle.player_menu_skipped(),
 		"a raging player was offered the menu")
+
+
+## `MimicEffect`: the player picks off the target's list, the enemy rolls, and
+## the copy sits in MIMIC's own slot with MIMIC's own PP.
+func _mimic_asks_the_player_and_rolls_for_the_enemy() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [MIMIC_MOVE], SWEEP_SEED, [GUST_MOVE])
+	if not _r.check(battle != null, "no battle could be built for MIMIC"):
+		return
+	battle.take_turn(0, 0)
+	if not _r.check(battle.awaiting_mimic() == Gen2Battle.PLAYER, "MIMIC asked nobody"):
+		return
+	_r.check(battle.mimic_choices() == [GUST_MOVE], "the list read %s" % str(battle.mimic_choices()))
+	_r.check(battle.answer_mimic(1).is_empty(), "an empty row was taken")
+	battle.answer_mimic(0)
+	_r.check(battle.awaiting_mimic() < 0 and int(battle.player.moves[0]) == GUST_MOVE
+		and battle.player.pp_left(0) == int(_r.data.move(MIMIC_MOVE).get("pp", 0)) - 1,
+		"the copy left slot 0 as %d with %d PP" % [battle.player.moves[0], battle.player.pp_left(0)])
+	battle.player.reset_volatile()
+	_r.check(int(battle.player.moves[0]) == MIMIC_MOVE
+		and battle.player.pp_left(0) == int(_r.data.move(MIMIC_MOVE).get("pp", 0)) - 1,
+		"the switch gave back %d with %d PP" % [battle.player.moves[0], battle.player.pp_left(0)])
+
+	var rolled: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [SPLASH_MOVE], SWEEP_SEED, [MIMIC_MOVE])
+	rolled.take_turn(0, 0)
+	_r.check(rolled.awaiting_mimic() < 0 and int(rolled.enemy.moves[0]) == SPLASH_MOVE,
+		"the enemy's MIMIC left %s" % str(rolled.enemy.moves))
 
 
 ## `TrappingEffect` and `.HeldInPlaceCheck`: the user repeats the move for the
@@ -1049,4 +1079,37 @@ func _a_wild_fight_on_the_screen() -> void:
 	_r.check(starter == (_r.game_id == RomRegistry.YELLOW),
 		"the lead PIKACHU is %s the starter." % ["not" if not starter else "read as"])
 	_r.note("gen1 battle the screen's wild fight ended in %d frames on piece %d" % [frames, victory])
+	_close_screen(screen)
+
+
+## The same fight with MIMIC alone: the screen puts the enemy's list up under
+## `wMoveMenuType` 1, and A takes the row and the fight goes on.
+func _mimic_on_the_screen() -> void:
+	var screen: Gen2WorldScreen = _open_screen(PALLET_TOWN, TUTOR_CELL, true)
+	var lead: Gen2SaveMon = screen.active_save().party[0]
+	lead.moves = [MIMIC_MOVE, 0, 0, 0]
+	lead.pp = [int(_r.data.move(MIMIC_MOVE).get("pp", 0)), 0, 0, 0]
+	screen.preview_battle_request(SWEEP_ENEMY, FIGHT_LEVELS[1])
+	var frames: int = 0
+	var asked: bool = false
+	var copied: int = 0
+	while frames < TUTOR_GUARD_FRAMES:
+		frames += 1
+		screen.advance_frame()
+		var host: Gen2BattleScreen = screen.get("_battle_host")
+		if host == null:
+			continue
+		var snapshot: Dictionary = host.battle_snapshot()
+		if bool(snapshot.get("battle_over", false)):
+			break
+		var stage: StringName = StringName(snapshot.get("menu_stage", &""))
+		if stage == &"mimic":
+			asked = true
+		if asked and copied == 0 and host._battle.awaiting_mimic() < 0:
+			copied = int(host._battle.mon(Gen2Battle.PLAYER).moves[0])
+			break
+		if bool(snapshot.get("awaits_press", false)) or stage != &"":
+			screen.press_button(PokeButton.A)
+	_r.check(asked, "the screen never put MIMIC's list up.")
+	_r.check(copied != 0 and copied != MIMIC_MOVE, "the screen's MIMIC copied %d." % copied)
 	_close_screen(screen)
