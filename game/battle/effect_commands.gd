@@ -1463,7 +1463,10 @@ static func _check_hit(turn: Gen2Turn) -> void:
 
 	# `.DrainSub`, third: nothing drains out of a doll, so the two effects that
 	# heal off what they deal read as a miss rather than a hit healing nothing.
-	if _substitute_refuses(turn) and turn.effect() in DRAINING_EFFECTS:
+	# `MoveHitTest`'s own copy is dead code, `CheckTargetSubstitute` having
+	# overwritten the effect byte it compares, so a Generation 1 drain lands.
+	if _substitute_refuses(turn) and turn.effect() in DRAINING_EFFECTS \
+		and not turn.battle.is_gen1():
 		_miss(turn)
 		return
 
@@ -1751,8 +1754,11 @@ static func _doubles_minimize_damage(turn: Gen2Turn) -> bool:
 ## BattleCommand_Recoil takes at least one, even after a doll clears wCurDamage.
 static func _recoil(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
+	# `RecoilEffect_`'s `cp STRUGGLE` skips the second shift: half, not a quarter.
+	var divisor: int = 2 if turn.battle.is_gen1() and turn.move_number == Gen2Damage.STRUGGLE \
+		else RECOIL_DIVISOR
 	@warning_ignore("integer_division")
-	var taken: int = attacker.take_damage(maxi(turn.damage / RECOIL_DIVISOR, 1))
+	var taken: int = attacker.take_damage(maxi(turn.damage / divisor, 1))
 	turn.emit(Gen2Battle.RECOIL, {
 		"amount": taken, "hp": attacker.hp, "max_hp": attacker.max_hp(),
 	})

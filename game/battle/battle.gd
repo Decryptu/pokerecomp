@@ -2253,11 +2253,9 @@ func _tick_held_items(events: Array) -> void:
 		use_confusion_berry(side, events)
 
 
-## `HandleBerserkGene`, at the top of the loop and before either side has chosen:
-## the holder spends the Gene, is confused, and takes `BattleCommand_AttackUp2`'s
-## two stages. A Pokemon put out mid-turn waits for the next one. No count is
-## written, so the confusion runs on the byte [method Gen2Party.send_out] carried
-## over, and a zero one wraps to 256 (`docs/bugs_and_glitches.md`).
+## `HandleBerserkGene`, at the top of the loop: the holder spends the Gene, is
+## confused with no count written, so a carried zero wraps to 256
+## (`docs/bugs_and_glitches.md`), and takes `BattleCommand_AttackUp2`'s two.
 func _handle_berserk_gene(events: Array) -> void:
 	for side: int in [PLAYER, ENEMY]:
 		var holder: Gen2BattleMon = mon(side)
@@ -2469,10 +2467,8 @@ func _tick_encore(acting: Array, events: Array) -> void:
 		events.append({"type": ENCORE_ENDED, "side": side})
 
 
-## Experience for every enemy Pokémon that fainted this turn, to a move or to
-## status damage. [constant FAINTED] clears the member out of
-## [member _participants] on either side; only [method _give_experience_for] is
-## asymmetric.
+## Experience for every enemy Pokémon that fainted this turn. [constant FAINTED]
+## clears the member out of [member _participants] on either side, and
 ## `GiveExperiencePoints` returns on `wLinkMode` and `wInBattleTowerBattle`.
 func _award_experience(events: Array) -> void:
 	if is_link_battle or in_battle_tower:
@@ -2625,11 +2621,8 @@ func award_capture_experience() -> Array:
 	return events
 
 
-## Spends one of the trainer's two items, which costs the turn. The item is gone
-## whether or not it changed anything, `AI_TryItem` clearing the slot the moment a
-## check said yes. What the cartridge clears beside it is
-## [method _reset_action_counters]'s work and
-## [method reset_damage_taken]'s.
+## Spends one of the trainer's two items, which costs the turn: `AI_TryItem`
+## clears the slot the moment a check said yes, whether or not it changed anything.
 func _use_trainer_item(side: int, item: int, events: Array) -> void:
 	if item == 0:
 		return
