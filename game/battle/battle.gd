@@ -3181,8 +3181,6 @@ func _act(side: int, slot: int, move_number: int, events: Array) -> void:
 	# sequence has to remember to include it.
 	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
 	run_move_effect(turn)
-	if is_gen1():
-		Gen2EffectCommands.gen1_build_rage(turn)
 
 
 ## `DoMove`'s read cycle over the list an effect byte picks, with

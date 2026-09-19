@@ -741,6 +741,8 @@ static func _used_move_text(turn: Gen2Turn) -> void:
 ## neither does a two-turn release, whose PP went on the charge turn: that is what
 ## [member Gen2Turn.locked] means here.
 static func _do_turn(turn: Gen2Turn) -> void:
+	if turn.battle.is_gen1():
+		_gen1_reset_damage(turn)
 	if turn.locked or turn.called:
 		return
 
@@ -755,25 +757,43 @@ static func _do_turn(turn: Gen2Turn) -> void:
 		turn.attacker().spend_pp(turn.slot)
 
 
+## `GetDamageVarsForPlayerAttack` zeroes `wDamage` for every effect but
+## `ResidualEffects1`'s; Counter reads the word first, and a trapping move's
+## later turns and a charge's first jump past it.
+static func _gen1_reset_damage(turn: Gen2Turn) -> void:
+	var byte: int = turn.gen1_effect()
+	var charging: bool = byte in [Gen1Layout.CHARGE_EFFECT, Gen1Layout.FLY_EFFECT] \
+		and not turn.locked
+	if Gen1Layout.RESIDUAL_EFFECTS_1.has(byte) or charging \
+		or turn.effect() == Gen2MoveEffect.COUNTER \
+		or turn.battle.gen1_trapping_move(turn.side) == turn.move_number:
+		return
+	turn.battle.last_damage_dealt = 0
+
+
 ## `engine/battle/move_effects/bide.asm`: an active Bide counts down before
 ## acting, storing until the last turn, which doubles the word and releases.
 static func _store_energy(turn: Gen2Turn) -> void:
 	var user: Gen2BattleMon = turn.attacker()
 	if not Gen2Substatus.has(user.substatus, Gen2Substatus.BIDE):
 		return
+	var gen1: bool = turn.battle.is_gen1()
 	# `.BideCheck` adds `wDamage` as it stands at the user's turn, whoever dealt
-	# it last and however stale it is.
-	if turn.battle.is_gen1():
-		user.bide_damage = mini(user.bide_damage + turn.battle.last_damage_dealt, 0xFFFF)
+	# it last and however stale it is, with `add / adc` and no cap.
+	if gen1:
+		user.bide_damage = (user.bide_damage + turn.battle.last_damage_dealt) & 0xFFFF
 	user.bide_turns -= 1
 	if user.bide_turns > 0:
-		turn.emit(Gen2Battle.BIDE_STORING)
+		# `.BideCheck` prints nothing on a storing turn.
+		if not gen1:
+			turn.emit(Gen2Battle.BIDE_STORING)
 		turn.end()
 		return
 	user.substatus &= ~Gen2Substatus.BIDE
 	turn.bide_release = true
 	turn.skip_to = UNLEASH_ENERGY
-	turn.damage = mini(user.bide_damage * 2, 0xFFFF)
+	# `.UnleashEnergy` doubles with `add a / rl a`, so the top bit falls off.
+	turn.damage = (user.bide_damage * 2) & 0xFFFF if gen1 else mini(user.bide_damage * 2, 0xFFFF)
 	user.bide_damage = 0
 	turn.emit(Gen2Battle.BIDE_UNLEASHED)
 	if turn.damage == 0:
@@ -809,7 +829,10 @@ static func _rage_damage(turn: Gen2Turn) -> void:
 ## it takes, behind `checkfaint`, a doll's hit counting too. `inc a / ret z`
 ## is the saturation: 255 increments to 0 and is not stored.
 static func _build_opponent_rage(turn: Gen2Turn) -> void:
-	if turn.missed or turn.battle.is_gen1():
+	if turn.battle.is_gen1():
+		_gen1_build_rage(turn)
+		return
+	if turn.missed:
 		return
 	var defender: Gen2BattleMon = turn.defender()
 	if not Gen2Substatus.has(defender.substatus, Gen2Substatus.RAGE):
@@ -852,10 +875,14 @@ static func _pay_day(turn: Gen2Turn) -> void:
 
 ## Copies the active opponent's species, moves, DVs, five combat stats, stages
 ## and types. HP, level, status, item and experience remain the user's.
+## `TransformEffect_` refuses nothing: its INVULNERABLE test reads the wrong
+## byte on either turn and a transformed target is copied as it stands.
 static func _transform(turn: Gen2Turn) -> void:
-	turn.attacker().last_move_used = 0 # ClearLastMove opens the source routine.
-	turn.attacker().last_counter_move = 0
-	if _is_hidden(turn.defender().substatus) \
+	var gen1: bool = turn.battle.is_gen1()
+	if not gen1:
+		turn.attacker().last_move_used = 0 # ClearLastMove opens the source routine.
+		turn.attacker().last_counter_move = 0
+	if (_is_hidden(turn.defender().substatus) and not gen1) \
 		or not turn.attacker().transform_into(turn.defender()):
 		turn.emit(Gen2Battle.MOVE_FAILED)
 		turn.end()
@@ -1529,19 +1556,18 @@ static func _failure_text(turn: Gen2Turn) -> void:
 
 
 ## `GetFailureResultText`'s own tail: a missed Jump Kick costs its user an
-## eighth of the damage it would have dealt, never less than one. Nothing is taken
-## against an immune target, the routine returning on a modifier of zero, and the
-## effect byte gates the block: Jump Kick points at `NormalHit` like any other
-## move and this is the only place the two are told apart.
+## eighth of the damage it would have dealt, never less than one, and nothing
+## against an immune target. The effect byte is the one thing that gates it.
 static func _jump_kick_crash(turn: Gen2Turn) -> void:
-	if turn.effect() != Gen2MoveEffect.JUMP_KICK or turn.immune:
+	if turn.effect() != Gen2MoveEffect.JUMP_KICK:
 		return
-	var attacker: Gen2BattleMon = turn.attacker()
-	var crash: int = maxi(turn.damage >> 3, 1)
-	var taken: int = attacker.take_damage(crash)
-	turn.emit(Gen2Battle.CRASHED, {
-		"amount": taken, "hp": attacker.hp, "max_hp": attacker.max_hp(),
-	})
+	# `PrintMoveFailureText` shifts a `wDamage` the miss zeroed: one point, always.
+	if turn.battle.is_gen1():
+		_self_damage(turn, Gen2Battle.CRASHED, 1)
+		return
+	if turn.immune:
+		return
+	_self_damage(turn, Gen2Battle.CRASHED, maxi(turn.damage >> 3, 1))
 
 
 ## `BattleCommand_ApplyDamage` rolls the defender's Focus Band first, whether
@@ -1577,6 +1603,9 @@ static func _apply_damage(turn: Gen2Turn) -> void:
 		turn.battle.record_damage_taken(
 			turn.target, turn.side, turn.move_number, turn.effect(), turn.damage
 		)
+	# `AttackSubstitute` leaves `wDamage` at the figure worked out, uncapped.
+	if turn.battle.is_gen1():
+		turn.battle.last_damage_dealt = turn.damage
 
 	if behind_sub:
 		_substitute_damage(turn)
@@ -1628,7 +1657,9 @@ static func _substitute_damage(turn: Gen2Turn) -> void:
 			turn.effect_override = Gen2MoveEffect.NORMAL_HIT_EFFECT
 
 	turn.dealt = 0
-	turn.damage = 0
+	# `jp nz, GetPlayerAnimationType` replays the same `wDamage` on the doll.
+	if not turn.battle.is_gen1():
+		turn.damage = 0
 
 
 ## The five whose own command reads the effect byte back to decide how many hits
@@ -2191,7 +2222,11 @@ static func _confuse_target(turn: Gen2Turn) -> void:
 static func _drain_target(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	@warning_ignore("integer_division")
-	var healed: int = attacker.heal(maxi(turn.damage / 2, 1))
+	var half: int = maxi(turn.damage / 2, 1)
+	# `DrainHPEffect_` shifts `wDamage` in place, so a Bide behind it stores half.
+	if turn.battle.is_gen1():
+		turn.battle.last_damage_dealt = half
+	var healed: int = attacker.heal(half)
 	turn.emit(Gen2Battle.DRAINED, {
 		# "from" rather than "target": the healing lands on the attacker, whose
 		# hp and max_hp these are, but the message names who it was sucked from.
@@ -3771,15 +3806,16 @@ static func _gen1_stat_changed(
 	turn.battle.gen1_stat_moved(side, stat_key, user)
 
 
-## `HandleBuildingRage`, behind every move that got past its miss and left the
-## target standing, status moves included: `StatModifierUpEffect` with the turn
-## flipped, so the raging side is the user of the raise and its tail.
-static func gen1_build_rage(turn: Gen2Turn) -> void:
+## `HandleBuildingRage` at `.notDone`, which every hit of a multi-hit passes,
+## a missed Explosion reaches, and a `ResidualEffects` byte never does:
+## `StatModifierUpEffect` with the turn flipped, so the raging side is the
+## user of the raise and its tail.
+static func _gen1_build_rage(turn: Gen2Turn) -> void:
 	var raging: Gen2BattleMon = turn.defender()
-	if not turn.announced or raging.is_fainted() \
+	var byte: int = turn.gen1_effect()
+	if raging.is_fainted() or Gen1Layout.RESIDUAL_EFFECTS_1.has(byte) \
+		or Gen1Layout.RESIDUAL_EFFECTS_2.has(byte) \
 		or not Gen2Substatus.has(raging.substatus, Gen2Substatus.RAGE):
-		return
-	if turn.missed and turn.effect() != Gen2MoveEffect.SELFDESTRUCT:
 		return
 	if not raging.change_stage("attack", 1):
 		return
@@ -3979,10 +4015,26 @@ static func _hurt_self(turn: Gen2Turn) -> void:
 	# reads the target's Reflect over it.
 	var gen1: bool = turn.battle.is_gen1()
 	var screens_side: int = turn.target if gen1 else turn.side
-	var dealt: int = user.take_damage(Gen2Damage.confusion_damage(
+	var amount: int = Gen2Damage.confusion_damage(
 		user, turn.battle.screens[screens_side], turn.battle.is_link_battle,
 		{} if gen1 else turn.effective_move()
-	))
-	turn.emit(Gen2Battle.HURT_ITSELF, {
-		"amount": dealt, "hp": user.hp, "max_hp": user.max_hp(),
-	})
+	)
+	_self_damage(turn, Gen2Battle.HURT_ITSELF, amount)
+
+
+## The line prints before the figure lands. On Generation 1
+## `ApplyDamageToPlayerPokemon` then tests the user's doll and `AttackSubstitute`
+## spends the opponent's, the turn never flipped; `wDamage` holds the figure.
+static func _self_damage(turn: Gen2Turn, event: StringName, amount: int) -> void:
+	var user: Gen2BattleMon = turn.attacker()
+	var gen1: bool = turn.battle.is_gen1()
+	var doll: bool = gen1 and Gen2Substatus.has(user.substatus, Gen2Substatus.SUBSTITUTE)
+	var dealt: int = 0 if doll else mini(amount, user.hp)
+	turn.emit(event, {"amount": dealt, "hp": user.hp - dealt, "max_hp": user.max_hp()})
+	if gen1:
+		turn.battle.last_damage_dealt = amount if doll else dealt
+	if doll:
+		turn.damage = amount
+		_substitute_damage(turn)
+		return
+	user.take_damage(amount)

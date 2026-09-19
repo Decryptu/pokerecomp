@@ -165,13 +165,9 @@ const FORGET_RIGHT: int = 19
 const FORGET_BOTTOM: int = 11
 const FORGET_FLAGS: int = Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
 
-## The other three lists a battle puts in front of the player: the pack, the balls
-## it can throw, and the move an Ether goes on. `BattleMenu_Pack` opens `Pack`
-## itself on the cartridge, four pockets with a description under them. The battle
-## here is handed the flat list of usable items rather than the pockets, so there
-## is no pocket axis to draw: the same rows opened out to the full width, with
-## `ScrollingMenu`'s arrows for the rows outside the window and the text box below
-## kept for `UpdateItemDescription`.
+## The pack, the balls and the move an Ether goes on. `BattleMenu_Pack` opens
+## `Pack`'s four pockets; the battle here is handed the flat list, drawn full
+## width with `ScrollingMenu`'s arrows and `UpdateItemDescription`'s box below.
 const LIST_LEFT: int = 0
 const LIST_TOP: int = 2
 const LIST_RIGHT: int = 19

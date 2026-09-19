@@ -4833,6 +4833,15 @@ func test_transform_restores_party_data_on_switch_and_save_writeback() -> void:
 	assert_eq(original.moves, [Fixture.TRANSFORM, Fixture.TACKLE])
 
 
+## `.pp_loop`: a blank slot copies as a blank, not as five.
+func test_transform_gives_no_pp_to_an_empty_slot() -> void:
+	var battle: Gen2Battle = _battle()
+	battle.enemy.moves = [Fixture.TACKLE, 0]
+	battle.enemy.pp = [35, 0]
+	_run_move(battle, Fixture.TRANSFORM)
+	assert_eq(battle.player.pp, [5, 0])
+
+
 func test_transform_refuses_an_already_transformed_target() -> void:
 	var battle: Gen2Battle = _battle()
 	battle.enemy.substatus |= Gen2Substatus.TRANSFORMED

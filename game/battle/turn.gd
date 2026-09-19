@@ -147,6 +147,12 @@ func effect() -> int:
 	return int(move.get("effect", -1))
 
 
+## `wPlayerMoveEffect` as the cartridge's own byte: the row's, or the zero
+## `BideEffect` wrote over it for the release.
+func gen1_effect() -> int:
+	return 0 if bide_release else int(move.get("gen1_effect", 0))
+
+
 ## The row with [member power_override] and [member type_override] over it,
 ## copied rather than written into: [member move] is the cache's own row.
 func effective_move() -> Dictionary:

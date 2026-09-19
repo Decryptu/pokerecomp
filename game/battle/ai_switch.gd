@@ -68,13 +68,9 @@ static func decide(battle: Gen2Battle, flags: int, rng: RandomNumberGenerator) -
 	return {"switch": true, "index": int(choice["index"])}
 
 
-## `FindMonInOTPartyToSwitchIntoBattle`: who the AI would rather have in, with no
-## opinion about whether it should switch at all.
-## [method decide] is the ordinary route and answers both questions at once.
-## Baton Pass is the one caller that has already settled the first, so it needs
-## the pick on its own. Nobody standing answers -1; a shortlist that resists
-## nothing falls back to the lowest index still up, which is `.not_2` walking the
-## alive mask from the top.
+## `FindMonInOTPartyToSwitchIntoBattle`: the pick alone, for Baton Pass, where
+## [method decide] answers whether to switch as well. Nobody standing is -1; a
+## shortlist that resists nothing falls back to `.not_2`'s lowest index up.
 static func pick_target(battle: Gen2Battle) -> int:
 	var alive: Array = _alive_others(battle)
 	if alive.is_empty():
@@ -107,13 +103,9 @@ static func evaluate(battle: Gen2Battle) -> Dictionary:
 	return _no_counter_choice(battle, alive)
 
 
-## `CheckAbleToSwitch`'s opening branch: the turn before Perish Song finishes the
-## Pokemon that is out, get somebody else in. Empty means the matchup half decides
-## instead. Only a count of exactly one qualifies; two is too early and zero has
-## already killed. The tier is [constant TIER_HIGH] either way, so what the
-## shortlist changes is who comes in rather than how much the AI wants the switch:
-## without a super-effective answer, `.not_2` takes the lowest party index still
-## standing.
+## `CheckAbleToSwitch`'s opening branch: a Perish count of exactly one gets
+## somebody else in at [constant TIER_HIGH], `.not_2` taking the lowest party
+## index standing when nothing is super effective. Empty leaves it to the matchup.
 static func _perish_choice(battle: Gen2Battle, alive: Array) -> Dictionary:
 	var enemy: Gen2BattleMon = battle.mon(Gen2Battle.ENEMY)
 	if not Gen2Substatus.has(enemy.substatus, Gen2Substatus.PERISH):
@@ -353,13 +345,9 @@ static func _resisting(battle: Gen2Battle, candidates: Array) -> Array:
 	return out
 
 
-## `FindEnemyMonsWithASuperEffectiveMove`, with `FindAliveEnemyMons` folded in
-## the way `FindAliveEnemyMonsWithASuperEffectiveMove` folds it.
-## Answers [code]{"index": int, "quality": int}[/code]: quality 2 for the first
-## candidate holding a move that is super effective against whoever the player
-## has out, 1 for the first that at least has a neutral one, and 0 for nobody.
-## Both non-zero answers take the earliest such party index, which is what the
-## cartridge's mask-to-index conversion comes to.
+## `FindAliveEnemyMonsWithASuperEffectiveMove`: [code]{"index", "quality"}[/code],
+## quality 2 for the first candidate with a super-effective move against the
+## player's battler, 1 for the first with a neutral one, 0 for nobody.
 static func _best_answer(battle: Gen2Battle, candidates: Array) -> Dictionary:
 	var party: Gen2Party = battle.party(Gen2Battle.ENEMY)
 	var player: Gen2BattleMon = battle.mon(Gen2Battle.PLAYER)
