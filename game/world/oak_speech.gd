@@ -32,7 +32,7 @@ const NAME_RIVAL: String = "rival"
 const POKEMON_PROF: int = 0x0A
 const CAL: int = 0x0C
 const GEN1_PROF_OAK: int = 0x1A
-const GEN1_RIVAL1: int = 0x19
+const GEN1_RIVAL1: int = Gen1Layout.RIVAL1_CLASS
 ## `OakSpeech` is `ld a, MARILL` in pokegold and `ld a, WOOPER` in pokecrystal.
 const MARILL: int = 183
 const WOOPER: int = 194

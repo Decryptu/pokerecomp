@@ -1,14 +1,11 @@
 class_name Gen2WorldMapLayer
 extends Node2D
 
-## One map's blocks, drawn as a single quad. `LoadMetatiles` resolves a block byte
-## to sixteen graphics tiles every time it refreshes the screen, and the renderer
-## used to do the same on the CPU: 380 draws for a hardware screen, tens of
-## thousands for a window-filling view and hundreds of thousands for a region.
-## So the fold moves to the GPU: the block buffer, the metatile table and the
-## coloured tile strip go across as three byte textures and the fragment shader
-## does what [method Gen2WorldAPI.drawn_block_at] does. Nothing is baked, so the
-## strip the animation repaints is the one this samples.
+## One map's blocks, drawn as a single quad. `LoadMetatiles` resolves a block
+## byte to sixteen tiles on every refresh, hundreds of thousands of draws for a
+## region on the CPU, so the block buffer, the metatile table and the tile strip
+## go across as byte textures and the fragment shader does what
+## [method Gen2WorldAPI.drawn_block_at] does, off the strip the animation repaints.
 
 ## The three lookups a tile costs, in one pass. `map_blocks` of zero is the void
 ## fill: every block is the border block, which is what surrounds a map on the

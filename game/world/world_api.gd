@@ -419,7 +419,7 @@ static func open_snapshot(
 	out._gen1_last_map = world_snapshot.gen1_last_map
 	out._gen1_last_blackout_map = world_snapshot.gen1_last_blackout_map
 	out.gen1_map_pal_offset = world_snapshot.gen1_map_pal_offset
-	out.gen1_rival_name = world_snapshot.gen1_rival_name
+	out.rival_name = world_snapshot.rival_name
 	out.gen1_fossil = world_snapshot.gen1_fossil.duplicate()
 	if out.pikachu != null:
 		out.pikachu.restore(world_snapshot.gen1_pikachu)
@@ -4010,8 +4010,8 @@ var _gen1_destination_warp: int = -1
 var _gen1_warps_dropped: int = 0
 var _gen1_warp_entry: Dictionary = {}
 
-## `wRivalName`, which no Generation 1 save model holds yet.
-var gen1_rival_name: String = Gen2WorldScriptRunner.UNNAMED
+## `wRivalName`.
+var rival_name: String = Gen2WorldScriptRunner.UNNAMED
 ## What `DisplayTextID` is holding `HandleMap` with, in order, since there is no
 ## script here to hold the world instead: a box waiting for its press, a YES/NO,
 ## a frame wait, or a facility request waiting for its host. A plain text is one
@@ -4452,7 +4452,7 @@ func gen1_filled_text(text: String) -> String:
 	return Gen2TextStream.fill_names(text, {
 		"player": _player_name if not _player_name.is_empty() \
 			else Gen2WorldScriptRunner.UNNAMED,
-		"rival": gen1_rival_name,
+		"rival": rival_name,
 	})
 
 
@@ -5796,16 +5796,17 @@ func _gen1_node_trainer_battle_object(
 func _gen1_trainer_request(
 	trainer_class: int, number: int, end_texts: Dictionary, object_index: int
 ) -> Dictionary:
-	var speaker: String = gen1_rival_name if trainer_class in Gen1Layout.RIVAL_CLASSES \
-		else (data.trainer_name(trainer_class) if data != null else "")
-	var won: Dictionary = {"text": "%s: %s" % [speaker, String(end_texts.get("won", ""))]}
-	var lost: Dictionary = {"text": "%s: %s" % [speaker, String(end_texts.get("lost", ""))]}
+	var won: Dictionary = {"text": "%s: %s" % [
+		_gen1_trainer_name(trainer_class), String(end_texts.get("won", "")),
+	]}
 	return {
 		"type": &"request",
 		"values": {"kind": &"battle_requested", "values": {
 			"kind": &"trainer", "trainer_group": trainer_class, "trainer_class": trainer_class,
 			"trainer_id": maxi(number - 1, 0), "object_index": object_index,
-			"win_text": won, "loss_text": lost,
+			"trainer_name": _gen1_trainer_name(trainer_class),
+			"win_text": won, "loss_text": _gen1_loss_text(trainer_class),
+			"defeated_text": _gen1_defeated_text(trainer_class),
 		}},
 		"object_index": object_index,
 	}
@@ -7037,8 +7038,7 @@ func _gen1_battle_values(header: Dictionary, event: Dictionary) -> Dictionary:
 		return {"kind": &"wild", "pokemon": int(site["species"]), "level": int(site["level"])}
 	var trainer_class: int = int(event["trainer_class"])
 	var spoken: Dictionary = {"text": "%s: %s" % [
-		data.trainer_name(trainer_class) if data != null else "",
-		String(header["end"]),
+		_gen1_trainer_name(trainer_class), String(header["end"]),
 	]}
 	return {
 		"kind": &"trainer",
@@ -7046,9 +7046,70 @@ func _gen1_battle_values(header: Dictionary, event: Dictionary) -> Dictionary:
 		"trainer_class": trainer_class,
 		"trainer_id": maxi(int(event.get("trainer_number", 1)) - 1, 0),
 		"object_index": int(event.get("object_index", -1)),
+		"trainer_name": _gen1_trainer_name(trainer_class),
 		"win_text": spoken,
-		"loss_text": spoken,
+		"loss_text": _gen1_loss_text(trainer_class),
+		"defeated_text": _gen1_defeated_text(trainer_class),
 	}
+
+
+## `GetTrainerName_`: the rival's own name for his three classes.
+func _gen1_trainer_name(trainer_class: int) -> String:
+	if trainer_class in Gen1Layout.RIVAL_CLASSES:
+		return rival_name
+	return data.trainer_name(trainer_class) if data != null else ""
+
+
+## `TrainerDefeatedText`, the first line `TrainerBattleVictory` prints.
+func _gen1_defeated_text(trainer_class: int) -> String:
+	return gen1_trainer_text("defeated", _gen1_trainer_name(trainer_class))
+
+
+## A `link_battle` row with `wTrainerName`'s marker filled with [param name].
+func gen1_trainer_text(text: String, name: String) -> String:
+	if data == null:
+		return ""
+	var layout: Dictionary = Gen1Layout.for_id(data.id)
+	return gen1_filled_text(data.special_text("link_battle", text).replace(
+		"%s%04X>" % [Gen2TextStream.RAM_MARKER, int(layout["trainer_name_wram"])], name
+	))
+
+
+## `HandlePlayerBlackOut`: OPP_RIVAL1 alone says a line on a loss. The lose row
+## `SaveEndBattleTextPointers` keeps is printed by nothing.
+func _gen1_loss_text(trainer_class: int) -> Dictionary:
+	if trainer_class != Gen1Layout.RIVAL1_CLASS or data == null:
+		return {}
+	return {"text": gen1_filled_text(data.special_text("link_battle", "rival1_win"))}
+
+
+## `IsGhostBattle` and `PrintBeginningBattleText`'s `.pokemonTower`: a wild on
+## the tower's floors is a GHOST without a SILPH SCOPE in the bag, and
+## RESTLESS_SOUL, the MAROWAK, appears as one and is unveiled with it.
+func gen1_ghost_kind(species: int) -> StringName:
+	if not _gen1 or current_map == null or state == null \
+		or current_map.number < Gen1Layout.POKEMON_TOWER_1F \
+		or current_map.number > Gen1Layout.POKEMON_TOWER_7F:
+		return &""
+	if state.item_quantity(Gen1Layout.ITEM_SILPH_SCOPE) <= 0:
+		return Gen1Layout.GHOST_UNIDENTIFIED
+	return Gen1Layout.GHOST_UNVEILED if species == Gen1Layout.RESTLESS_SOUL else &""
+
+
+## `PlayerBlackedOutText2`, printed over the fight the party was lost in.
+func gen1_blackout_text() -> String:
+	return gen1_filled_text(data.special_text("link_battle", "blacked_out")) \
+		if _gen1 and data != null else ""
+
+
+## `.battleOccurred`'s `AnyPartyAlive` behind every Generation 1 fight but one on
+## OAKS_LAB, whatever the fight came to. With no save to read, the outcome stands in.
+func gen1_blackout_due(save: Gen2SaveData, outcome: StringName) -> bool:
+	if not _gen1 or current_map == null or current_map.number == Gen1Layout.OAKS_LAB:
+		return false
+	if save == null:
+		return outcome == Gen2WorldBattleAdapter.OUTCOME_LOST
+	return not Gen2WorldPartyHost.party_has_fit_mon(save)
 
 
 ## A Generation 2 collision code at [param cell], or -1 on a Generation 1 map,
@@ -7305,6 +7366,15 @@ func _gen1_leave_safari_zone() -> void:
 	var byte: int = gen1_safari_gate_byte()
 	if byte >= 0:
 		state.set_gen1_map_script(byte, 0)
+
+
+## `TEXT_BLACKED_OUT`'s tail: the balls, the steps, the flag and both gate bytes.
+func gen1_map_blackout() -> void:
+	if not _gen1 or data == null or not Gen1Layout.poison_blackout_ends_safari(data.id):
+		return
+	_gen1_leave_safari_zone()
+	state.set_safari_steps(0)
+	_gen1_saved_coord_index = 0
 
 
 func _gen1_safari_box(name: String) -> Dictionary:
@@ -8745,31 +8815,34 @@ func _enqueue_script(request: Dictionary) -> void:
 		var cell_value: Variant = request.get("cell", player_cell)
 		var cell: Vector2i = cell_value if cell_value is Vector2i else player_cell
 		request["collision"] = collision_code_at(cell)
-	if not request.has("clock"):
-		request["clock"] = world_clock()
-	if current_map != null and not request.has("environment"):
-		request["environment"] = current_map.environment
-	if not request.has("facing"):
-		request["facing"] = player_facing
-	if not request.has("player_cell"):
-		## `wXCoord`/`wYCoord`. Distinct from "cell", which is whichever cell the
-		## script hangs off: a background event's faced tile or an object's own
-		## square. SnorlaxAwake wants where the player is standing.
-		request["player_cell"] = player_cell
-	## wPlayerID, which `ReadCaughtData` compares a row's OT ID against.
-	if not request.has("player_id") and _player_id >= 0:
-		request["player_id"] = _player_id
-	if not request.has("party") and not _party_summary.is_empty():
-		request["party"] = _party_summary.duplicate()
-	if not request.has("field_move_items"):
-		var alternates: Dictionary = _field_move_items()
-		if not alternates.is_empty():
-			request["field_move_items"] = alternates
-	if not request.has("player_name") and not _player_name.is_empty():
-		request["player_name"] = _player_name
-	if not request.has("object_event_flags"):
-		request["object_event_flags"] = _object_event_flags()
+	var defaults: Dictionary = _request_defaults()
+	for key: String in defaults:
+		if not request.has(key):
+			request[key] = defaults[key]
 	_script_queue.append(request)
+
+
+## What every script request carries unless it came with its own. `player_cell`
+## is `wXCoord`/`wYCoord`, where "cell" is the one the script hangs off.
+func _request_defaults() -> Dictionary:
+	var defaults: Dictionary = {
+		"clock": world_clock(), "facing": player_facing, "player_cell": player_cell,
+		"object_event_flags": _object_event_flags(),
+	}
+	if current_map != null:
+		defaults["environment"] = current_map.environment
+	if _player_id >= 0:
+		defaults["player_id"] = _player_id
+	if not _party_summary.is_empty():
+		defaults["party"] = _party_summary.duplicate()
+	var alternates: Dictionary = _field_move_items()
+	if not alternates.is_empty():
+		defaults["field_move_items"] = alternates
+	if not _player_name.is_empty():
+		defaults["player_name"] = _player_name
+	if not rival_name.is_empty():
+		defaults["rival_name"] = rival_name
+	return defaults
 
 
 ## The runner reads `CheckPartyMove` off the party mirror and can reach neither
@@ -8919,6 +8992,7 @@ const SCRIPT_EVENT_HANDLERS: Dictionary = {
 	&"object_follow": &"_script_object_follow",
 	&"object_stop_follow": &"_script_object_stop_follow",
 	&"player_face_object": &"_script_player_face_object",
+	&"rival_name_changed": &"_script_rival_named",
 }
 
 ## The three that edit the loaded object itself, all behind the same bounds test.
@@ -9103,6 +9177,12 @@ func _script_object_follow(event: Dictionary) -> Array:
 
 func _script_object_stop_follow(_event: Dictionary) -> Array:
 	_object_followers.clear()
+	return []
+
+
+## `NamingScreen`'s `.Rival` writes `wRivalName`.
+func _script_rival_named(event: Dictionary) -> Array:
+	rival_name = String(event.get("name", rival_name))
 	return []
 
 

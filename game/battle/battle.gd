@@ -476,6 +476,8 @@ var in_battle_tower: bool = false
 var is_link_battle: bool = false
 ## Yellow's `wUnknownSerialFlag_d499`, a COLOSSEUM2 cup's rules on the fight.
 var gen1_stadium_cup: bool = false
+## `IsGhostBattle`: nobody moves, the ball is dodged and every run succeeds.
+var gen1_ghost: bool = false
 var player_id: int = -1
 
 ## `wBattleType`, set by `loadvar VAR_BATTLETYPE` before `startbattle`.
@@ -975,6 +977,9 @@ func has_fled() -> bool:
 ## not, `.cant_escape` writing no `BATTLEPLAYERACTION_USEITEM`.
 ## [param runner_speed] is `wPartyMon1Speed` from `AskUseNextPokemon`.
 func run_odds(runner_speed: int = -1) -> Dictionary:
+	## `TryRunningFromBattle`'s first test.
+	if gen1_ghost:
+		return {"outcome": &"fled", "how": &"ghost"}
 	if battle_type in ALWAYS_ESCAPES:
 		return {"outcome": &"fled", "how": &"battle_type", "battle_type": battle_type}
 	if battle_type in NEVER_ESCAPES:
@@ -3176,11 +3181,28 @@ func _act(side: int, slot: int, move_number: int, events: Array) -> void:
 		or (is_gen1() and Gen2Substatus.has(active_substatus, Gen2Substatus.RAGE))
 	) and move_number != 0
 
+	if _gen1_ghost_holds(turn):
+		return
 	# Whether the Pokémon can move at all is asked before the effect is looked up,
 	# which is the cartridge's arrangement: every move goes through it, so no
 	# sequence has to remember to include it.
 	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
 	run_move_effect(turn)
+
+
+## `PrintGhostText`: a sleeping or frozen player reads its own status line instead.
+func _gen1_ghost_holds(turn: Gen2Turn) -> bool:
+	if not gen1_ghost:
+		return false
+	if turn.side == PLAYER:
+		var status: int = mon(PLAYER).status
+		if Gen2Status.is_asleep(status) or (status & Gen2Status.FREEZE) != 0:
+			return false
+		turn.emit(CANNOT_MOVE, {"reason": &"scared"})
+	else:
+		turn.emit(CANNOT_MOVE, {"reason": &"get_out"})
+	turn.end()
+	return true
 
 
 ## `DoMove`'s read cycle over the list an effect byte picks, with

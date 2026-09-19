@@ -16,7 +16,7 @@ const KIND_HELP: Dictionary = {
 	&"gym_gates": "gate mask: Cinnabar Gym after its map-entry redraw (`red 0 166 ... gym_gates@17,6 0 0`)",
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
 	&"battle_transition": "frames, index: DoBattleTransition over the map. 1 is the trainer branch; a Generation 1 cartridge reads BattleTransitions' own index, 0 the double circle, 2 the circle, 4 the horizontal stripes, 6 the vertical",
-	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it and 2 plays the POKé FLUTE from it",
+	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it, 2 plays the POKé FLUTE from it, 3 loses it, which on a Generation 1 cartridge is PlayerBlackedOutText2 under PAL_BLACK, and 4 is the RESTLESS_SOUL with a SILPH SCOPE, that many frames into MarowakAnim (`red 0 144 ... battle 90 4`)",
 	&"battle_caught": "frames: the same fight against a species the dex already holds",
 	&"safari": "frames, 0: the Safari game's own battle menu over a Safari Zone map. 1 draws PrintSafariZoneSteps' window on the START menu instead",
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in. A Generation 1 cartridge throws the old man's ball, or Prof. Oak's with a second number of 1",
@@ -236,6 +236,11 @@ const BOX_REVEAL_FRAMES: int = 120
 const CUP_MENU_FRAME_CAP: int = 1200
 
 const PREVIEW_BATTLE_SPECIES: int = 16 ## `preview_battle_request`'s PIDGEY.
+const SPLASH_MOVE: int = 150
+const LOSS_PRESSES: int = 8
+const PREVIEW_UNVEIL_LEVEL: int = 30
+const LOSS_PP: int = 40
+const LOSS_FRAMES: int = 6000
 
 var _screen: Gen2WorldScreen = null
 var _output_path: String = ""
@@ -623,19 +628,70 @@ func _stage_battle() -> void:
 	var caught: bool = _kind == &"battle_caught"
 	if caught:
 		_screen.world().state.set_species_caught(PREVIEW_BATTLE_SPECIES)
-	var flute: bool = _cell.y >= 2 and _generation() == RomRegistry.GEN1
+	var flute: bool = _cell.y == 2 and _generation() == RomRegistry.GEN1
 	if flute:
 		_screen.world().state.apply_changes(
 			{}, {}, {"items": {Gen1Layout.ITEM_POKE_FLUTE: 1}}
 		)
+	if _cell.y == 4:
+		_screen.world().state.apply_changes(
+			{}, {}, {"items": {Gen1Layout.ITEM_SILPH_SCOPE: 1}}
+		)
+		_screen.preview_battle_request(Gen1Layout.RESTLESS_SOUL, PREVIEW_UNVEIL_LEVEL)
+		_screen.settle_battle_transition()
+		_unveil_ghost(frames)
+		return
 	_screen.preview_battle_request()
 	_screen.settle_battle_transition()
 	_screen.advance_frames(frames)
 	for _press: int in (3 if caught else 0):
 		_screen.press_button(PokeButton.A)
 		_screen.advance_frames(frames)
-	if _cell.y >= 1:
+	if _cell.y == 3:
+		_lose_battle(frames)
+	elif _cell.y >= 1:
 		_open_battle_bag(frames, flute)
+
+
+## Pressed up to `MarowakAnim` and that many frames into it.
+func _unveil_ghost(frames: int) -> void:
+	var host: Gen2BattleScreen = _screen.get("_battle_host")
+	if host == null:
+		return
+	for _frame: int in LOSS_FRAMES:
+		if not (host.get("_unveil") as Dictionary).is_empty():
+			break
+		if bool(host.battle_snapshot().get("awaits_press", false)):
+			_screen.press_button(PokeButton.A)
+		_screen.advance_frame()
+	_screen.advance_frames(frames)
+
+
+## The lead on one HP knowing SPLASH alone and the rest down, pressed on until
+## the box says the party is out.
+func _lose_battle(frames: int) -> void:
+	var host: Gen2BattleScreen = _screen.get("_battle_host")
+	if host == null:
+		return
+	for _press: int in LOSS_PRESSES:
+		if StringName(host.get("_menu_stage")) == &"main":
+			break
+		_screen.press_button(PokeButton.A)
+		_screen.advance_frames(frames)
+	var party: Array = host._battle.party(Gen2Battle.PLAYER).mons
+	for member: Gen2BattleMon in party:
+		member.hp = 0
+	(party[0] as Gen2BattleMon).hp = 1
+	(party[0] as Gen2BattleMon).moves = [SPLASH_MOVE, 0, 0, 0]
+	(party[0] as Gen2BattleMon).pp = [LOSS_PP, 0, 0, 0]
+	for _frame: int in LOSS_FRAMES:
+		var snapshot: Dictionary = host.battle_snapshot()
+		if String(snapshot.get("message", "")).contains("out of"):
+			break
+		if bool(snapshot.get("awaits_press", false)) or StringName(host.get("_menu_stage")) != &"":
+			_screen.press_button(PokeButton.A)
+		_screen.advance_frame()
+	_screen.advance_frames(maxi(_cell.x, STAGED_FRAMES))
 
 
 ## The Safari game with the fee already paid: its battle menu, or the window

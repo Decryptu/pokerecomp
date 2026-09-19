@@ -1,14 +1,11 @@
 class_name Gen2UnownPuzzle
 extends RefCounted
 
-## `_UnownPuzzle`, the sliding-piece puzzle the four Ruins of Alph chambers open.
-## The board is `wPuzzlePieces`, six by six cells holding a piece number or zero;
-## only the inner four by four is the picture and the ring around it is where the
-## pieces are scattered, less the four cells the START>CANCEL box stands on.
-## Node-free and scene-free, with the generator injected. Three things a reading
-## gets wrong: the cursor walks cells rather than tiles and its edges are
-## hand-listed; a press is refused rather than ignored, both bad presses reaching
-## `UnownPuzzle_InvalidAction`; and holding a piece stops the cursor blinking.
+## `_UnownPuzzle`, the sliding-piece puzzle the Ruins of Alph chambers open.
+## `wPuzzlePieces` is six by six, the inner four by four the picture and the ring
+## where the pieces scatter, less the START>CANCEL box's four cells. The cursor
+## walks cells with hand-listed edges, a bad press reaches
+## `UnownPuzzle_InvalidAction`, and holding a piece stops the cursor blinking.
 
 ## `wPuzzlePieces` is six by six and `puzcoord` is `row * 6 + column`.
 const COLUMNS: int = 6

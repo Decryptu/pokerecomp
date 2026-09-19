@@ -45,7 +45,8 @@ var dig_warp: Dictionary = {}
 var gen1_last_map: int = Gen1Layout.PALLET_TOWN
 var gen1_last_blackout_map: int = Gen1Layout.PALLET_TOWN
 var gen1_map_pal_offset: int = 0
-var gen1_rival_name: String = ""
+## `wRivalName`, under the key the first saves wrote it by.
+var rival_name: String = ""
 ## `wFossilItem` and `wFossilMon`, saved player data the Cinnabar lab writes on
 ## one visit and reads on the next. Empty in a snapshot written before it
 ## existed, which reads as a lab handed nothing.
@@ -100,7 +101,7 @@ static func from_world(world: Gen2WorldAPI) -> Gen2WorldSnapshot:
 	out.last_spawn_map = world.last_spawn_map
 	out.gen1_last_blackout_map = world.gen1_last_blackout_map()
 	out.gen1_map_pal_offset = world.gen1_map_pal_offset
-	out.gen1_rival_name = world.gen1_rival_name
+	out.rival_name = world.rival_name
 	out.gen1_fossil = world.gen1_fossil.duplicate()
 	out.gen1_pikachu = world.pikachu.to_dict() if world.pikachu != null else {}
 	out.dig_warp = world.dig_warp.duplicate()
@@ -127,7 +128,7 @@ func to_dict() -> Dictionary:
 		"gen1_last_map": gen1_last_map,
 		"gen1_last_blackout_map": gen1_last_blackout_map,
 		"gen1_map_pal_offset": gen1_map_pal_offset,
-		"gen1_rival_name": gen1_rival_name,
+		"gen1_rival_name": rival_name,
 		"gen1_fossil": gen1_fossil.duplicate(),
 		"gen1_pikachu": gen1_pikachu.duplicate(),
 		"dig_warp": dig_warp.duplicate(),
@@ -170,7 +171,7 @@ static func from_dict(raw: Variant) -> Gen2WorldSnapshot:
 		"gen1_last_blackout_map", Gen1Layout.PALLET_TOWN
 	))
 	out.gen1_map_pal_offset = maxi(0, int(source.get("gen1_map_pal_offset", 0)))
-	out.gen1_rival_name = String(source.get("gen1_rival_name", ""))
+	out.rival_name = String(source.get("gen1_rival_name", ""))
 	var fossil: Variant = source.get("gen1_fossil", {})
 	out.gen1_fossil = (fossil as Dictionary).duplicate() if fossil is Dictionary else {}
 	var pikachu: Variant = source.get("gen1_pikachu", {})

@@ -104,6 +104,7 @@ static func prepare(
 	battle.in_battle_tower = kind == &"battle_tower"
 	battle.is_link_battle = kind == &"link_battle"
 	battle.gen1_stadium_cup = bool(values.get("stadium_cup", false))
+	battle.gen1_ghost = StringName(values.get("gen1_ghost", &"")) == Gen1Layout.GHOST_UNIDENTIFIED
 	battle.player_id = player_id
 	## `InitEnemyTrainer` belongs to setting the opponent up rather than to
 	## whoever draws the fight, so every host gets the class's two items, its

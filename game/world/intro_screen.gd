@@ -290,7 +290,7 @@ func _on_speech_finished(player_name: String) -> void:
 	created.gender = _gender
 	created.label = _label
 	if created.world != null:
-		created.world.gen1_rival_name = _speech.rival_name() if _speech != null else ""
+		created.world.rival_name = _speech.rival_name() if _speech != null else ""
 		created.world.world_day = int(_clock["day"])
 		created.world.world_hour = int(_clock["hour"])
 		created.world.world_minute = int(_clock["minute"])

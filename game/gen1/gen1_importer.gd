@@ -269,9 +269,11 @@ const CUP_STRINGS: Dictionary = {
 	"rows": ["cup_rows_string", 0],
 }
 const CUP_RULES_MAX: int = 64
+## `TrainerBattleVictory`'s and `HandlePlayerBlackOut`'s rows, and the map's own.
 const LINK_BATTLE_TEXTS: Dictionary = {
 	"defeated": "link_battle_defeated_text", "lost": "link_battle_lost_text",
-	"items": "link_battle_items_text",
+	"items": "link_battle_items_text", "rival1_win": "rival1_win_text",
+	"blacked_out": "blacked_out_text", "blacked_out_map": "blacked_out_map_text",
 }
 ## The cable club's `db` strings, by layout key and delta.
 const CABLE_CLUB_STRINGS: Dictionary = {

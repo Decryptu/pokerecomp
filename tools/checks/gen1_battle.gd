@@ -162,6 +162,7 @@ func _one_game() -> void:
 	_counter_doubles_the_last_damage()
 	_rage_raises_a_stage()
 	_mimic_asks_the_player_and_rolls_for_the_enemy()
+	_a_traded_pokemon_disobeys()
 	_a_multi_hit_repeats_its_first_figure()
 	_bide_stores_the_last_damage_at_each_turn()
 	_fissure_reads_speed_and_swift_reaches_the_air()
@@ -175,6 +176,8 @@ func _one_game() -> void:
 	_the_tutor_throws()
 	_a_wild_fight_on_the_screen()
 	_mimic_on_the_screen()
+	_a_lost_fight_on_the_screen()
+	_a_ghost_on_the_screen()
 
 
 ## `AddPartyMon`'s four base moves and `WriteMonMoves` over them, for every
@@ -677,6 +680,7 @@ const SING_MOVE: int = 47
 const X_ATTACK_ITEM: int = 0x41
 const GUST_MOVE: int = 16
 const TACKLE_MOVE: int = 33
+const GROWL_MOVE: int = 45
 const GASTLY: int = 92
 const TOXIC_MOVE: int = 92
 const LEECH_SEED_MOVE: int = 73
@@ -1475,3 +1479,260 @@ func _mimic_on_the_screen() -> void:
 	_r.check(asked, "the screen never put MIMIC's list up.")
 	_r.check(copied != 0 and copied != MIMIC_MOVE, "the screen's MIMIC copied %d." % copied)
 	_close_screen(screen)
+
+
+## `HandlePlayerBlackOut` on the real screen and `.battleOccurred` behind it. A
+## row is the map, the opponent (-1 the map's first trainer, 0 a wild, else a
+## class), the lines the fight says, whether each wore PAL_BLACK, and whether
+## the map's blackout follows.
+const ROUTE_3: int = 14
+const ROUTE_22: int = 33
+const LOSS_MONEY: int = 3001
+const LOSS_ROWS: Array = [
+	[ROUTE_3, 0, ["blacked_out"], [true], true],
+	[ROUTE_3, -1, ["blacked_out"], [true], true],
+	[ROUTE_22, Gen1Layout.RIVAL1_CLASS, ["rival1_win", "blacked_out"], [false, true], true],
+	[Gen1Layout.OAKS_LAB, Gen1Layout.RIVAL1_CLASS, ["rival1_win"], [false], false],
+]
+
+
+func _a_lost_fight_on_the_screen() -> void:
+	for row: Array in LOSS_ROWS:
+		var screen: Gen2WorldScreen = _open_screen(int(row[0]), TUTOR_CELL, true)
+		var world: Gen2WorldAPI = screen.world()
+		world.state.apply_changes({}, {}, {"money": {0: LOSS_MONEY}})
+		var from: Vector2i = world.player_cell
+		if int(row[1]) < 0:
+			_talk_to_first_trainer(screen)
+		elif int(row[1]) == 0:
+			screen.preview_battle_request(SWEEP_ENEMY, FIGHT_LEVELS[0])
+		else:
+			screen._start_battle_request(world._gen1_trainer_request(int(row[1]), 1, {}, -1)["values"])
+		var fought: Dictionary = _drive_loss(screen)
+		var messages: Array = fought["messages"]
+		var black: Array = fought["black"]
+		for index: int in range(messages.size() - 1, -1, -1):
+			if String(messages[index]).ends_with("fainted!"):
+				messages = messages.slice(index + 1)
+				black = black.slice(index + 1)
+				break
+		var said: Array = []
+		for name: String in row[2]:
+			said.append(world.gen1_filled_text(_r.data.special_text("link_battle", name)))
+		_r.check(messages == said, "the lost fight on map %d said %s, expected %s" % [
+			row[0], messages, said])
+		_r.check(black == row[3], "the lost fight on map %d wore PAL_BLACK %s, expected %s" % [
+			row[0], black, row[3]])
+		var save: Gen2SaveData = screen.active_save()
+		var landing: Dictionary = _r.data.gen1_fly_warp(PALLET_TOWN)
+		if bool(row[4]):
+			_r.check(world.current_map.number == PALLET_TOWN
+				and world.player_cell == Vector2i(int(landing["x"]), int(landing["y"])),
+				"the blackout from map %d landed on map %d at %s." % [row[0], world.current_map.number, world.player_cell])
+			_r.check(world.state.money(0) == LOSS_MONEY / 2, "the blackout left ¥%d." % world.state.money(0))
+			_r.check(save.party[0].hp == Gen2SaveBattleAdapter.to_battle_mon(_r.data, save.party[0]).max_hp(),
+				"the blackout left the lead on %d HP." % save.party[0].hp)
+		else:
+			_r.check(world.current_map.number == int(row[0]) and world.player_cell == from,
+				"a loss in OAKS_LAB moved the player to map %d %s." % [world.current_map.number, world.player_cell])
+			_r.check(world.state.money(0) == LOSS_MONEY and save.party[0].hp == 0,
+				"a loss in OAKS_LAB cost ¥%d and healed to %d." % [LOSS_MONEY - world.state.money(0), save.party[0].hp])
+		_r.check(not screen._field_move_text and not screen._script_prompt.begins_with("Blackout"),
+			"the loss on map %d left the map on %s." % [row[0], screen._script_prompt])
+		_r.note("gen1 battle a loss on map %d to %d said %d lines in %d frames" % [
+			row[0], row[1], said.size(), fought["frames"]])
+		_close_screen(screen)
+
+
+## `TalkToTrainer` on the map's first trainer, pressed past the before line.
+func _talk_to_first_trainer(screen: Gen2WorldScreen) -> void:
+	var world: Gen2WorldAPI = screen.world()
+	for object: Gen2WorldObject in world.objects:
+		if object.object_type == Gen2WorldObject.OBJECTTYPE_TRAINER:
+			world.player_cell = object.cell + Vector2i.DOWN
+			break
+	screen.press_button(PokeButton.UP)
+	screen.advance_frames(TUTOR_SETTLE_FRAMES)
+	screen.interact()
+	screen.advance_frames(TUTOR_SETTLE_FRAMES)
+	screen.press_button(PokeButton.A)
+
+
+const TUTOR_SETTLE_FRAMES: int = 120
+
+
+## The fight lost by the enemy's own move: the lead on one HP knowing SPLASH
+## alone and the rest down. Every line printed and its palette, to the map.
+func _drive_loss(screen: Gen2WorldScreen) -> Dictionary:
+	var messages: Array[String] = []
+	var black: Array[bool] = []
+	var frames: int = 0
+	var host: Gen2BattleScreen = null
+	var felled: bool = false
+	while frames < TUTOR_GUARD_FRAMES:
+		frames += 1
+		screen.advance_frame()
+		var current: Gen2BattleScreen = screen.get("_battle_host")
+		if current == null:
+			if host != null:
+				break
+			continue
+		host = current
+		var snapshot: Dictionary = host.battle_snapshot()
+		if not felled and StringName(snapshot.get("menu_stage", &"")) != &"":
+			felled = true
+			var party: Array = host._battle.party(Gen2Battle.PLAYER).mons
+			for member: Gen2BattleMon in party:
+				member.hp = 0
+			(party[0] as Gen2BattleMon).hp = 1
+			(party[0] as Gen2BattleMon).moves = [SPLASH_MOVE, 0, 0, 0]
+			(party[0] as Gen2BattleMon).pp = [1, 0, 0, 0]
+		var line: String = String(snapshot.get("message", ""))
+		if felled and not line.is_empty() and (messages.is_empty() or messages.back() != line):
+			messages.append(line)
+			black.append(bool(host.get("_gen1_black")))
+		if bool(snapshot.get("awaits_press", false)) or StringName(snapshot.get("menu_stage", &"")) != &"":
+			screen.press_button(PokeButton.A)
+	return {"frames": frames, "messages": messages, "black": black}
+
+
+## `CheckForDisobedience` on a traded lead of 40 with no badge: every outcome
+## over 400 seeds, `.useRandomMove`'s pick never the slot above the one chosen,
+## and no `ignored orders...sleeping` since the routine has no sleep test.
+## MARSHBADGE alone, bit 6, lifts the ceiling to 70.
+const DISOBEY_LEVEL: int = 40
+const DISOBEY_SEEDS: int = 400
+const DISOBEY_BADGES: int = 0
+const MARSH_BADGE: int = 1 << 6
+
+
+func _a_traded_pokemon_disobeys() -> void:
+	var outcomes: Dictionary = {}
+	var picked: Dictionary = {}
+	for seed_value: int in DISOBEY_SEEDS:
+		var battle: Gen2Battle = _disobedience_fight(seed_value, DISOBEY_BADGES)
+		for event: Dictionary in battle.take_turn(0, 0):
+			if event.get("type", &"") == Gen2Battle.CANNOT_MOVE:
+				outcomes[event["reason"]] = true
+			elif event.get("type", &"") == Gen2Battle.USED_MOVE \
+				and int(event.get("side", -1)) == Gen2Battle.PLAYER:
+				picked[int(event["move"])] = true
+	for outcome: StringName in [&"began_to_nap", &"wont_obey", &"loafing", &"turned_away", &"ignored_orders"]:
+		_r.check(outcomes.has(outcome), "no seed reached %s" % outcome)
+	_r.check(not outcomes.has(&"ignored_sleeping"), "a Generation 1 lead ignored orders sleeping")
+	_r.check(picked.has(GROWL_MOVE) and picked.has(TACKLE_MOVE) and not picked.has(SPLASH_MOVE),
+		"the disobedient picks were %s" % [picked.keys()])
+	var obedient: int = 0
+	for seed_value: int in DISOBEY_SEEDS:
+		var battle: Gen2Battle = _disobedience_fight(seed_value, MARSH_BADGE)
+		var disobeyed: bool = false
+		for event: Dictionary in battle.take_turn(0, 0):
+			disobeyed = disobeyed or event.get("type", &"") == Gen2Battle.CANNOT_MOVE
+		obedient += 0 if disobeyed else 1
+	_r.check(obedient == DISOBEY_SEEDS, "MARSHBADGE left %d of %d seeds disobeying" % [
+		DISOBEY_SEEDS - obedient, DISOBEY_SEEDS])
+	_r.note("gen1 battle disobedience reached %d outcomes, picking %s" % [outcomes.size(), picked.keys()])
+
+
+## GROWL, SPLASH and TACKLE, GROWL chosen: the roll compared with the one-based
+## cursor skips SPLASH and the zero-based slot reaches GROWL again.
+func _disobedience_fight(seed_value: int, badges: int) -> Gen2Battle:
+	var battle: Gen2Battle = _fight(
+		DISOBEY_LEVEL, SWEEP_LEVEL, [GROWL_MOVE, SPLASH_MOVE, TACKLE_MOVE], seed_value, [SPLASH_MOVE]
+	)
+	battle.player_id = 1
+	battle.player.ot_id = 2
+	battle.set_player_badges(badges << Gen2WorldState.KANTO_BADGE_FIRST)
+	return battle
+
+
+## `IsGhostBattle` on the real screen: a GASTLY on Pokemon Tower 3F with no
+## SILPH SCOPE is a GHOST nobody can move against and everybody runs from, and
+## the RESTLESS_SOUL with the scope is unveiled as a MAROWAK over
+## `MarowakAnim`'s 153 frames.
+const POKEMON_TOWER_3F: int = 0x90
+const GHOST_LINES: Array[String] = [
+	"GHOST\nappeared!", "Darn! The GHOST\ncan't be ID'd!", "Go! BULBASAUR!",
+	"GHOST: Get out...\nGet out...", "BULBASAUR is too\nscared to move!", "Got away safely!",
+]
+const UNVEIL_LINES: Array[String] = [
+	"GHOST\nappeared!", "SILPH SCOPE\nunveiled the" + Gen2TextStream.SCROLL_BREAK + "GHOST's identity!",
+	"Wild MAROWAK\nappeared!", "Go! BULBASAUR!",
+]
+
+
+func _a_ghost_on_the_screen() -> void:
+	var screen: Gen2WorldScreen = _open_screen(POKEMON_TOWER_3F, TUTOR_CELL, true)
+	var world: Gen2WorldAPI = screen.world()
+	_r.check(world.gen1_ghost_kind(GASTLY) == Gen1Layout.GHOST_UNIDENTIFIED
+		and world.gen1_ghost_kind(Gen1Layout.RESTLESS_SOUL) == Gen1Layout.GHOST_UNIDENTIFIED,
+		"a tower wild without the scope is not a ghost")
+	screen.preview_battle_request(GASTLY, SWEEP_LEVEL)
+	var fought: Dictionary = _drive_ghost(screen, true)
+	_r.check(fought["messages"] == GHOST_LINES, "the ghost fight said %s" % [fought["messages"]])
+	_r.check(fought["name"] == "Enemy GHOST" and fought["pic"] == "true",
+		"the ghost stood as %s, ghosted %s" % [fought["name"], fought["pic"]])
+	_r.check(bool(fought["ran"]), "the ghost fight did not end on the run")
+	_close_screen(screen)
+	screen = _open_screen(POKEMON_TOWER_3F, TUTOR_CELL, true)
+	world = screen.world()
+	world.state.apply_changes({}, {}, {"items": {Gen1Layout.ITEM_SILPH_SCOPE: 1}})
+	_r.check(world.gen1_ghost_kind(GASTLY) == &""
+		and world.gen1_ghost_kind(Gen1Layout.RESTLESS_SOUL) == Gen1Layout.GHOST_UNVEILED,
+		"the scope does not unveil the MAROWAK alone")
+	screen.preview_battle_request(Gen1Layout.RESTLESS_SOUL, SWEEP_LEVEL)
+	var unveiled: Dictionary = _drive_ghost(screen, false)
+	_r.check(unveiled["messages"] == UNVEIL_LINES, "the unveiling said %s" % [unveiled["messages"]])
+	_r.check(unveiled["name"] == "Enemy MAROWAK" and unveiled["pic"] == "false",
+		"the unveiled ghost stood as %s, ghosted %s" % [unveiled["name"], unveiled["pic"]])
+	## Sampled before each frame, so the one that clears it is not counted.
+	_r.check(int(unveiled["unveil_frames"]) == Gen2BattleScreen.UNVEIL_FRAMES - 1,
+		"MarowakAnim ran %d frames" % int(unveiled["unveil_frames"]))
+	_r.note("gen1 battle the ghost said %d lines and the unveiling %d over %d frames" % [
+		GHOST_LINES.size(), UNVEIL_LINES.size(), int(unveiled["unveil_frames"])])
+	_close_screen(screen)
+
+
+## Every line to the first menu, then FIGHT's first move and RUN when
+## [param runs], with what the enemy stood as at the menu.
+func _drive_ghost(screen: Gen2WorldScreen, runs: bool) -> Dictionary:
+	var messages: Array[String] = []
+	var frames: int = 0
+	var unveil_frames: int = 0
+	var host: Gen2BattleScreen = null
+	var menus: int = 0
+	var out: Dictionary = {"name": "", "pic": "", "ran": false}
+	while frames < TUTOR_GUARD_FRAMES:
+		frames += 1
+		screen.advance_frame()
+		var current: Gen2BattleScreen = screen.get("_battle_host")
+		if current == null:
+			if host != null:
+				break
+			continue
+		host = current
+		if not (host.get("_unveil") as Dictionary).is_empty():
+			unveil_frames += 1
+		var snapshot: Dictionary = host.battle_snapshot()
+		var line: String = String(snapshot.get("message", ""))
+		if not line.is_empty() and (messages.is_empty() or messages.back() != line):
+			messages.append(line)
+		if StringName(snapshot.get("menu_stage", &"")) == &"main":
+			if menus == 0:
+				out["name"] = String(host._battler_name(Gen2Battle.ENEMY))
+				out["pic"] = str(host._enemy_ghosted)
+			menus += 1
+			if not runs or menus > 2:
+				break
+			if menus == 2:
+				screen.press_button(PokeButton.DOWN)
+				screen.advance_frame()
+				screen.press_button(PokeButton.RIGHT)
+				screen.advance_frame()
+			screen.press_button(PokeButton.A)
+		elif bool(snapshot.get("awaits_press", false)) or StringName(snapshot.get("menu_stage", &"")) != &"":
+			screen.press_button(PokeButton.A)
+	out["ran"] = host == null or not is_instance_valid(host) or host.get_parent() == null
+	out["messages"] = messages
+	out["unveil_frames"] = unveil_frames
+	return out

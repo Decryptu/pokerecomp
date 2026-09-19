@@ -204,13 +204,9 @@ static func _download_label(row: Dictionary) -> String:
 
 
 ## The switch that turns a mod's renderers on, or null for a mod that registered
-## none. One choice covers both surfaces, so this is a switch and not a pair:
-## see [method Gen2ModHost.select_view]. Turning it off returns to the built-in
-## view, and turning one mod's on takes it off whichever mod had it.
-##
-## A mod is only listed here once it has registered, which is at load: an
-## installed mod switched off, or one the running cartridge is not for, has no
-## renderers to offer and no row.
+## none. One choice covers both surfaces ([method Gen2ModHost.select_view]):
+## turning one mod's on takes it off whichever mod had it. A mod is listed once
+## it has registered, so a mod switched off or for another cartridge has no row.
 func _view_field(id: StringName) -> Control:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	var surfaces: Dictionary = host.view_surfaces(id)

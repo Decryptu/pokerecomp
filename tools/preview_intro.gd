@@ -295,7 +295,7 @@ func _on_new_game_written(save: Gen2SaveData, data: GameData) -> void:
 		"bag": [world.world_state.items(), {}],
 		"party": [save.party.size(), 0],
 		"player": [save.player_name, data.gen1_default_names(false)[PRESET_ROW]],
-		"rival": [world.gen1_rival_name, data.gen1_default_names(true)[PRESET_ROW]],
+		"rival": [world.rival_name, data.gen1_default_names(true)[PRESET_ROW]],
 	}
 	var failures: int = 0
 	for field: String in wanted:

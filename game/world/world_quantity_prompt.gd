@@ -2,13 +2,10 @@ class_name Gen2WorldQuantityPrompt
 extends RefCounted
 
 ## `BuySellToss_InterpretJoypad` (`engine/items/buy_sell_toss.asm`), the dial
-## every source quantity prompt reads its joypad through. It owns
-## `wItemQuantity` (the ceiling) and `wItemQuantityChange` (the shown value) and
-## nothing else; the caller owns the box the number is drawn in.
-##
-## `Kurt_SelectQuantity` is the first caller here. `SelectQuantityToToss` and the
-## mart's own prompt are the same routine over their own headers, so the pack's
-## TOSS needs this model and a box rather than a second dial.
+## every quantity prompt reads its joypad through: `wItemQuantity` (the ceiling)
+## and `wItemQuantityChange` (the shown value), while the caller owns the box.
+## Kurt, `SelectQuantityToToss` and the mart are the one routine over their own
+## headers.
 
 const PAGE_STEP: int = 10
 
