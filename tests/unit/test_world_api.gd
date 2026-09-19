@@ -10208,6 +10208,96 @@ func test_gen1_script_branches_read_pending_flags_and_scratch_in_each_choice() -
 	RomCache.clear(_gen1_directory())
 
 
+## The catalog over the Generation 1 fixture: a give and a `wPlayerStarter`
+## store in one row are a starter, an object with an item is an item ball, a
+## mart row is a shop, and a patch reaches the request the NODE makes.
+func test_gen1_a_catalogued_site_hands_over_what_a_mod_patched() -> void:
+	_write_gen1_cache()
+	var maps: Array = RomCache.read_json(RomCache.world_maps_path(_gen1_directory()))
+	var town: Dictionary = maps[0]
+	## `OaksLabMonChoiceMenu`'s shape: the store, then `AddPartyMon`, both at
+	## addresses in bank 7.
+	town["texts"] = [
+		{"command": 8, "text": "", "script": [
+			{"op": "set_starter", "who": "player", "value": 176, "at": 7 * 0x4000 + 0x11C7},
+			{"op": "give_pokemon", "species": 4, "level": 5, "at": 7 * 0x4000 + 0x120D},
+			{"op": "wild_battle", "species": 143, "level": 30, "at": 22 * 0x4000 + 0x1636},
+		]},
+		{"command": Gen1Layout.TEXT_SCRIPT_MART, "text": "", "items": [4, 20]},
+	]
+	(town["events"] as Dictionary)["objects"] = [
+		{"sprite": 1, "x": 1, "y": 2, "text": 1, "movement": 0, "item": 0x1D, "toggle_index": 3},
+	]
+	RomCache.write_json(RomCache.world_maps_path(_gen1_directory()), maps)
+	## Dex numbers to internal indices, the way `PokedexOrder` maps them.
+	var species: Array = []
+	for number: int in 151:
+		species.append({"number": number + 1, "name": "MON%d" % (number + 1), "index": {
+			1: 153, 4: 176, 7: 177, 25: 84, 143: 132,
+		}.get(number + 1, number + 1)})
+	RomCache.write_json(RomCache.species_path(_gen1_directory()), species)
+	var stocked: Array = []
+	for number: int in 0x1D:
+		stocked.append({"number": number + 1, "name": "ITEM%d" % (number + 1), "price": 100, "pocket": 1})
+	RomCache.write_json(RomCache.items_path(_gen1_directory()), stocked)
+	var overlay := Gen2ContentOverlay.new()
+	var data: GameData = GameData.open_directory(_gen1_directory())
+	data.set_content_overlay(overlay)
+	var catalog: Gen2WorldCatalog = data.catalog()
+	var starters: Array = catalog.rows(Gen2WorldCatalog.KIND_STARTER)
+	assert_eq(starters.size(), 1, JSON.stringify(starters))
+	assert_eq(int(starters[0]["id"]), Gen2WorldCatalog.pack_id(Gen2WorldCatalog.KIND_STARTER, 7, 0x520D))
+	assert_eq(int(starters[0]["starter_address"]), 0x51C7)
+	assert_eq(catalog.possible_starters(), [4] as Array[int])
+	assert_eq(catalog.rows(Gen2WorldCatalog.KIND_STATIC).size(), 1)
+	var items: Array = catalog.rows(Gen2WorldCatalog.KIND_ITEM)
+	assert_eq(items.size(), 1, JSON.stringify(items))
+	assert_eq(int(items[0]["id"]), Gen2WorldCatalog.pack_event_id(
+		Gen2WorldCatalog.KIND_ITEM, Gen2WorldCatalog.GEN1_SOURCE_OBJECT, 0, 0
+	))
+	var shops: Array = catalog.rows(Gen2WorldCatalog.KIND_SHOP)
+	assert_eq(shops.size(), 1)
+	assert_eq((shops[0]["items"] as Array).size(), 2)
+
+	overlay.patch(Gen2ContentOverlay.KIND_CHECK, &"mod", int(starters[0]["id"]), {"species": 7})
+	overlay.patch(Gen2ContentOverlay.KIND_CHECK, &"mod", int(items[0]["id"]), {"item": 1})
+	overlay.patch(Gen2ContentOverlay.KIND_CHECK, &"mod", int(shops[0]["id"]), {
+		"items": [{"item": 3, "price": 1}],
+	})
+	overlay.patch(
+		Gen2ContentOverlay.KIND_CHECK, &"mod",
+		int(catalog.rows(Gen2WorldCatalog.KIND_STATIC)[0]["id"]), {"species": 25, "level": 3}
+	)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 0, 0, Vector2i(1, 2), Gen2WorldState.new())
+	var steps: Array = world._gen1_script_steps(world.current_map.texts[0])
+	assert_eq(steps.size(), 3, JSON.stringify(steps))
+	assert_eq(int(steps[0]["value"]), 177, "the store follows the patched species' own index")
+	assert_eq(int(steps[1]["values"]["values"]["pokemon"]), 7, "the give hands over the patch")
+	assert_eq(int(steps[2]["values"]["values"]["pokemon"]), 25)
+	assert_eq(int(steps[2]["values"]["values"]["level"]), 3)
+	var shelf: Array = world._gen1_mart_steps(world.current_map.texts[1], 2)
+	assert_eq(shelf[0]["values"]["values"]["items"], [{"item": 3, "price": 1}])
+	var picked: Array = []
+	var run: Dictionary = world._gen1_run(world.current_map.events["objects"][0])
+	run["object"]["object_index"] = 0
+	assert_true(world._gen1_pick_up_item({}, picked, run))
+	assert_eq(picked[0]["items"], {1: 1}, "the ball holds the patched item")
+
+	## The Old and Good Rod are two fishing groups above the Super Rod's.
+	assert_eq(
+		data.world_fishing_group(GameData.GEN1_OLD_ROD_GROUP)["slots"],
+		Gen1Layout.rod_slots(Gen2WorldEncounter.METHOD_OLD_ROD)
+	)
+	overlay.patch(Gen2ContentOverlay.KIND_FISHING, &"mod", GameData.GEN1_GOOD_ROD_GROUP, {
+		"slots": [{"level": 20, "species": 130}],
+	})
+	assert_eq(data.world_fishing_group(GameData.GEN1_GOOD_ROD_GROUP)["slots"], [{"level": 20, "species": 130}])
+	var cast: Dictionary = world._gen1_fishing_context(Gen2WorldEncounter.METHOD_GOOD_ROD, Vector2i(1, 1))
+	assert_eq(cast["record"]["slots"], [{"level": 20, "species": 130}])
+	assert_eq(Gen2WorldProgression.start_map(data), Vector2i(0, 0))
+	RomCache.clear(_gen1_directory())
+
+
 ## `OverworldLoop` reads `wCurOpponent` after the script has returned, so a
 ## flag the row sets behind the store is set before the fight opens, and the
 ## `wBattleType` byte rides the request read across onto Crystal's numbering.

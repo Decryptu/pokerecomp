@@ -12,6 +12,11 @@ extends RefCounted
 ## Where installed mods live. Under user:// because a mod is not part of the
 ## build and must survive an update of it.
 const ROOT: String = "user://mods"
+
+## What a `register` asked about its target. See [method retarget_if_same_mod_set].
+const READ_GAME: int = 1
+const READ_GENERATION: int = 2
+
 ## The methods a world renderer has to provide. A registration that is missing
 ## one is refused at registration, where the mod's name is still in hand, rather
 ## than failing on the first frame it is asked to draw.
@@ -200,6 +205,10 @@ var _entries: Dictionary = {}
 ## checked against. Empty until one is chosen, and an empty target restricts
 ## nothing: the launcher runs before Play is pressed.
 var _target_game: StringName = &""
+## Mod id to the [constant READ_GAME] and [constant READ_GENERATION] bits its
+## `register` read. See [method retarget_if_same_mod_set].
+var _target_reads: Dictionary = {}
+var _registering: StringName = &""
 var _options: Dictionary = {}
 var _actions: Dictionary = {}
 var _world_renderers: Dictionary = {}
@@ -2122,24 +2131,40 @@ func set_target_game(game_id: StringName) -> void:
 
 
 func target_game() -> StringName:
+	_note_target_read(READ_GAME)
 	return _target_game
 
 
 ## `RomRegistry.GEN1` or `GEN2` of the target game; 0 with none chosen.
 func generation() -> int:
+	_note_target_read(READ_GENERATION)
 	return RomRegistry.generation_for(_target_game)
 
 
+func _note_target_read(bit: int) -> void:
+	if _registering != &"":
+		_target_reads[_registering] = int(_target_reads.get(_registering, 0)) | bit
+
+
 ## Retargets the live registrations when the cartridge filter selects exactly
-## the same enabled manifests. Entry scripts can be expensive (a randomizer may
-## build its tables while registering), so rerunning an unchanged set on Play
-## would block the launcher without changing what the host provides.
+## the same enabled manifests and no `register` read an answer the new target
+## changes: one that read [method generation] with no cartridge chosen
+## registered for generation 0. Entry scripts can be expensive, so an
+## unchanged set is not rerun on Play.
 func retarget_if_same_mod_set(game_id: StringName) -> bool:
+	var generation_changes: bool = (
+		RomRegistry.generation_for(_target_game) != RomRegistry.generation_for(game_id)
+	)
 	for raw_manifest: Variant in _manifests.values():
 		var manifest: PokeModManifest = raw_manifest
 		if not Gen2ModState.is_enabled(manifest.id):
 			continue
 		if manifest.supports_game(_target_game) != manifest.supports_game(game_id):
+			return false
+		var reads: int = int(_target_reads.get(manifest.id, 0))
+		if reads & READ_GAME and _target_game != game_id:
+			return false
+		if reads & READ_GENERATION and generation_changes:
 			return false
 	_target_game = game_id
 	return true
@@ -2387,7 +2412,9 @@ func load_mod(manifest: PokeModManifest) -> Dictionary:
 	var mod: Object = (script as Script).new()
 	if mod == null or not mod.has_method("register"):
 		return _refuse_load(manifest, &"entry_has_no_register", path)
+	_registering = manifest.id
 	mod.call("register", self, manifest)
+	_registering = &""
 	# Kept for as long as the mod is loaded. A Callable does not keep a
 	# RefCounted alive, so an entry that connects to option_changed and is then
 	# dropped has connected a signal to an object about to be collected; holding

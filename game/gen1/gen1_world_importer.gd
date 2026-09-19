@@ -1762,7 +1762,7 @@ static func _hidden_item_nodes(
 	return [{"op": "branch", "flag": flag, "engine": true, "then": [], "else": [
 		{"op": "name_item", "item": item},
 		{"op": "text", "text": found, "press": false},
-		{"op": "give_item", "item": item, "count": 1,
+		{"op": "give_item", "item": item, "count": 1, "hidden": index,
 			"ok": [{"op": "flag", "flag": flag, "set": true, "engine": true}],
 			"full": [{"op": "text", "text": full}]},
 	]}]
@@ -1921,6 +1921,12 @@ const MAP_SCRIPT_MIRROR: int = -1
 const TRAINER_STATES: Array = [0, 1, 2]
 const SCRIPT_BUDGET: int = 4096
 const SCRIPT_DEPTH: int = 16
+## [Gen2WorldCatalog]'s site nodes, each stamped `at` its instruction's linear
+## address so the copies a branch walk makes of one routine stay one site.
+const SITE_OPS: Array[String] = [
+	"give_pokemon", "give_item", "wild_battle", "trade", "set_starter", "picture",
+	"has_money", "spend_money", "flag",
+]
 const SCRIPT_END: int = -2
 const SCRIPT_UNREAD: int = -1
 ## What a branch is testing: an event flag by index, or one of these.
@@ -2053,7 +2059,9 @@ static func _walk_script_in(
 		if Gen1Layout.SCRIPT_RET_BRANCHES.has(op) \
 			or Gen1Layout.SCRIPT_RET_CARRY_BRANCHES.has(op):
 			return _script_ret_branch(ctx, op, pc, state, depth, out)
+		var emitted: int = out.size()
 		var next: int = _script_step(ctx, pc, state, out, depth)
+		_stamp_sites(ctx, out, emitted, pc)
 		if next == SCRIPT_END:
 			return _script_ended(state, out)
 		if next == SCRIPT_WALKED:
@@ -2064,6 +2072,26 @@ static func _walk_script_in(
 			return _script_aide_branch(ctx, pc + Gen1Layout.SCRIPT_LONG_SIZE, state, depth, out)
 		pc = next
 	return null
+
+
+static func _stamp_sites(ctx: Dictionary, out: Array, from: int, pc: int) -> void:
+	for index: int in range(from, out.size()):
+		var node: Variant = out[index]
+		if node is Dictionary and _is_site(node):
+			(node as Dictionary)["at"] = Gen1Layout.banked(int(ctx["bank"]), pc)
+
+
+## A `flag` store is a site when it grants one of `wObtainedBadges`' eight bits.
+static func _is_site(node: Dictionary) -> bool:
+	var op: String = String(node.get("op", ""))
+	if op != "flag":
+		return op in SITE_OPS
+	if not bool(node.get("engine", false)) or not bool(node.get("set", false)):
+		return false
+	for bit: int in Gen1Layout.BADGE_COUNT:
+		if Gen2WorldState.gen1_badge_flag(bit) == int(node.get("flag", -1)):
+			return true
+	return false
 
 
 const SCRIPT_TEST_DOMAINS: Dictionary = {
@@ -3786,13 +3814,16 @@ static func _script_call_branch(
 	if node == null:
 		return null
 	out.append(node)
+	_stamp_sites(ctx, out, out.size() - 1, pc)
 	return out
 
 
 static func _script_call_walked_on(
 	ctx: Dictionary, pc: int, target: int, state: Dictionary, depth: int, out: Array
 ) -> Variant:
+	var emitted: int = out.size()
 	var called: int = _script_call(ctx, pc, target, state, out, depth)
+	_stamp_sites(ctx, out, emitted, pc)
 	if called == SCRIPT_UNREAD:
 		return null
 	if called == SCRIPT_END:
@@ -5540,6 +5571,7 @@ static func _script_branch(
 	if node == null:
 		return _script_refused(ctx, pc)
 	out.append(node)
+	_stamp_sites(ctx, out, out.size() - 1, pc)
 	return out
 
 
@@ -5598,6 +5630,7 @@ static func _script_ret_branch(
 	if node == null:
 		return null
 	out.append(node)
+	_stamp_sites(ctx, out, out.size() - 1, pc)
 	return out
 
 

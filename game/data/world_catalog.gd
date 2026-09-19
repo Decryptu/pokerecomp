@@ -20,13 +20,10 @@ const KINDS: Array[StringName] = [
 	KIND_BADGE, KIND_SHOP,
 ]
 
-## `id = kind << 40 | bank << 24 | absolute address`. The address is ABSOLUTE,
-## the script's own base plus the command's offset, and that is what makes the id
-## stable: two entry points into one routine overlap, so a site addressed by
-## (blob, offset) would be counted once per blob that reaches it. A site that is a
-## map EVENT has no address and uses the map's group as the bank with
-## [constant ID_EVENT_BIT] over the map number and event index, so the two spaces
-## cannot collide.
+## `id = kind << 40 | bank << 24 | absolute address`: two entry points into one
+## routine overlap, so a (blob, offset) address would count a site once per blob.
+## A map EVENT has no address and packs its group, map number and event index
+## behind [constant ID_EVENT_BIT], so the two spaces cannot collide.
 const ID_KIND_SHIFT: int = 40
 const ID_BANK_SHIFT: int = 24
 const ID_ADDRESS_MASK: int = 0xFFFFFF
@@ -36,55 +33,72 @@ const ID_EVENT_BIT: int = 0x800000
 const OBJECT_TYPE_ITEMBALL: int = Gen2WorldObject.OBJECTTYPE_ITEMBALL
 const BGEVENT_ITEM: int = Gen2WorldAPI.BGEVENT_ITEM
 
-## How far back a site looks for the conditions guarding it. The whole script, in
-## practice; this is the guard against a decode that runs away.
+## The guard against a decode that runs away.
 const MAX_SCRIPT_COMMANDS: int = 4096
 
-## The cache stores every script as a fixed 512-byte window rather than as its
-## own length, so a walk that ran the whole window would spend most of it
-## decoding whatever the ROM put after the script. A blob holds one routine and
-## the branch labels behind it: the Game Corner's vendor, the busiest shape
-## either game has, is a loop and three prizes, which is five. Sixteen is well
-## past anything real and is what keeps this a second rather than eight.
+## The cache stores every script as a fixed 512-byte window, so a walk over the
+## whole window would mostly decode what the ROM put after the script. The Game
+## Corner's vendor, the busiest shape, is a loop and three prizes: five routines.
 const MAX_ROUTINES: int = 16
 
 ## The sidecar's own shape. Bumped when a row, a link or a kind changes meaning,
 ## which rebuilds every cache's sidecar without touching the cache format.
-const FORMAT_VERSION: int = 2
+const FORMAT_VERSION: int = 3
 
-## The row and link fields whose value is a StringName rather than a String:
-## `kind` on every row, and `role` on a link. See [method _restore_value].
+## A Generation 1 site node carries `at`, its instruction's linear ROM address,
+## so its id is a Generation 2 command's. Table rows are map events whose group
+## byte names the table.
+const GEN1_SOURCE_OBJECT: int = 0
+const GEN1_SOURCE_HIDDEN: int = 1
+const GEN1_SOURCE_TEXT: int = 2
+const GEN1_SOURCE_PRIZE: int = 3
+## Row fields naming a command of the site's own transaction. See [method link_at].
+const LINK_ROLES: Dictionary = {
+	"picture_address": &"picture", "check_address": &"price", "take_address": &"price",
+	"starter_address": &"starter", "ask_address": &"price", "spend_address": &"price",
+}
+const GEN1_BRANCHES: Array[String] = ["then", "else", "ok", "full", "yes", "no"]
+## `PRIZE_MENUS` rows, each `PRIZE_ROWS` deep, packed into one event index.
+const GEN1_PRIZE_MENU_SHIFT: int = 4
+## Oak's three balls all reach `OaksLabMonChoiceMenu`'s one `AddPartyMon`, so
+## each distinct set of numbers at an address is its own row, numbered in walk
+## order above the address. See [method gen1_site].
+const ID_VARIANT_SHIFT: int = 16
+const MAX_VARIANTS: int = 8
+const ID_VARIANT_MASK: int = (MAX_VARIANTS - 1) << ID_VARIANT_SHIFT
+const GEN1_SITE_FIELDS: Array[String] = [
+	"species", "level", "item", "quantity", "trade", "badge", "price",
+]
+
+## The fields whose value is a StringName. See [method _restore_value].
 const STRING_NAME_FIELDS: Array[String] = ["kind", "role"]
-## The one field whose value is a Vector2i, the map a site stands on. JSON has
-## no vector, so it goes out as a two-element array.
+## The one Vector2i field, written as a two-element array.
 const VECTOR_FIELDS: Array[String] = ["map"]
 
 var _data: GameData = null
 var _rows: Dictionary = {}
 var _by_kind: Dictionary = {}
-## The commands a site's fields also have to reach, keyed by the byte they sit
-## at: `bank << 24 | address` to `{id, role}`. A starter's species is its ball's
-## PICTURE as well as its `givepoke`, and a prize's price is both the
-## `checkcoins` that decides affordability and the `takecoins` that charges. See
-## [method link_at].
+## `bank << 24 | address` of a command a site's fields also reach, to
+## `{id, role}`. See [method link_at].
 var _links: Dictionary = {}
 ## Built on first ask. See [method item_sources].
 var _item_sources: Dictionary = {}
 ## Built on first ask. See [method field_hm_items].
 var _field_hms: Array[int] = []
 
-## How many scripts [method build_reporting] decodes between two checks of the
-## clock. Small enough that a chunk is far shorter than a frame.
+## Scripts [method build_reporting] decodes between two checks of the clock.
 const SCAN_CHUNK: int = 64
 
 
-## Builds the catalog for [param data]. Walks every imported script once and
-## every map's events once, which is why a caller holds the result rather than
-## asking twice; [method GameData.catalog] does that holding.
+## Walks every imported script and every map's events once;
+## [method GameData.catalog] holds the result.
 static func build(data: GameData) -> Gen2WorldCatalog:
 	var out := Gen2WorldCatalog.new()
 	out._data = data
 	if data == null:
+		return out
+	if data.generation == RomRegistry.GEN1:
+		out._scan_gen1()
 		return out
 	out._scan_keys(out._script_keys(), 0, -1)
 	out._scan_map_events()
@@ -92,17 +106,17 @@ static func build(data: GameData) -> Gen2WorldCatalog:
 	return out
 
 
-## The same scan, in chunks, handing the main loop a frame between them and saying
-## how far along it is. This walk is seven eighths of a cartridge import's wall
-## clock, and run whole it is the one stretch long enough for a player to decide
-## the launcher has stopped. The lazy rebuild behind [method GameData.catalog]
-## uses [method build] instead, having no screen to keep alive.
+## The same scan in chunks, handing the main loop a frame between them: this
+## walk is seven eighths of an import's wall clock.
 static func build_reporting(
 	data: GameData, on_progress: Callable = Callable(), yield_ms: int = 0
 ) -> Gen2WorldCatalog:
 	var out := Gen2WorldCatalog.new()
 	out._data = data
 	if data == null:
+		return out
+	if data.generation == RomRegistry.GEN1:
+		out._scan_gen1()
 		return out
 	var keys: Array = out._script_keys()
 	var last_yield: int = Time.get_ticks_msec()
@@ -123,12 +137,8 @@ static func build_reporting(
 	return out
 
 
-## The scan's result, for the sidecar. Ids are dictionary keys, so they go out
-## as decimal strings and come back as ints; every one is well under the 2^53
-## a JSON number carries exactly.
-## The lazy answers ([member _item_sources], [member _field_hms]) are not here:
-## both are derived from these rows in a millisecond and would only be a second
-## copy to keep in step.
+## The scan's result, for the sidecar. Ids go out as decimal string keys and
+## come back as ints; the lazy answers are derived from these rows on demand.
 func to_dict() -> Dictionary:
 	var stored_rows: Dictionary = {}
 	for id: int in _rows:
@@ -177,13 +187,9 @@ static func from_dict(data: GameData, source: Variant) -> Gen2WorldCatalog:
 	return out
 
 
-## JSON has one number type and no StringName, so a row that went out as ints
-## and a `kind` comes back as floats and a String. A reader compares these with
-## `==` against typed literals, so the shapes have to be restored rather than
-## coerced at every site.
-## Whole floats become ints: every number a row carries is an id, a bank, an
-## address, an item, a quantity or a price, and none of them is fractional. The
-## two String fields that are StringNames name themselves.
+## JSON has one number type and no StringName; readers compare with `==` against
+## typed literals, so whole floats become ints and the two StringName fields
+## name themselves.
 static func _stored_value(value: Variant) -> Variant:
 	if value is Array:
 		var list: Array = []
@@ -268,12 +274,8 @@ func size() -> int:
 
 
 ## The site a command at [param bank]:[param address] belongs to but is not
-## itself, as `{id, role}`, or empty. `role` is `picture` for a starter's
-## `pokepic` and `price` for a prize's `checkcoins` or `takecoins`.
-## This is what makes a patched field effective at the whole TRANSACTION rather
-## than at one command of it: the ball that shows a Bellsprout hands over a
-## Bellsprout, and a prize the mod priced at 500 is refused at 499 coins and
-## charges 500.
+## itself, as `{id, role}`, or empty: what makes a patched field effective at the
+## whole transaction, so the ball that shows a Bellsprout hands one over.
 func link_at(bank: int, address: int) -> Dictionary:
 	var value: Variant = _links.get((bank & 0xFF) << ID_BANK_SHIFT | (address & ID_ADDRESS_MASK), null)
 	return value if value is Dictionary else {}
@@ -308,7 +310,7 @@ func field_hm_items() -> Array[int]:
 		return out
 	var count: int = _data.tmhm_moves().size()
 	for number: int in count:
-		var item: int = Gen2Layout.item_for_tmhm_number(number + 1, count)
+		var item: int = Gen2WorldTMHM.item_for_number(_data, number + 1)
 		if not Gen2WorldTMHM.is_hm(item, _data.generation):
 			continue
 		if Gen2WorldFieldMove.is_field_move(_data.tmhm_move(number + 1), _data):
@@ -323,11 +325,17 @@ func badge_for_engine_flag(flag: int) -> int:
 	return _badge_for_flag(flag)
 
 
-## The badge [param item]'s own move needs before the overworld will run it, or
-## -1 for an item that is not a field HM. `GetTMHMItemMove` and the field
-## functions' own `CheckBadge` arguments, neither of them written down here.
+## The badge [param item]'s move needs in the overworld, or -1 off a field HM.
 func badge_for_hm_item(item: int) -> int:
-	return Gen2WorldFieldMove.badge_for_move(move_for_hm_item(item))
+	return badge_for_move(move_for_hm_item(item))
+
+
+## The badge [param move] needs, in the shared sixteen-badge numbering.
+func badge_for_move(move: int) -> int:
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		var bit: int = int(Gen1Layout.FIELD_MOVE_BADGES.get(move, -1))
+		return Gen2WorldState.KANTO_BADGE_FIRST + bit if bit >= 0 else -1
+	return Gen2WorldFieldMove.badge_for_move(move)
 
 
 func move_for_hm_item(item: int) -> int:
@@ -337,9 +345,7 @@ func move_for_hm_item(item: int) -> int:
 	return move if Gen2WorldFieldMove.is_field_move(move, _data) else 0
 
 
-## Every item some check in this catalog hands over, as a set. An item outside it
-## is bought, found in a mart or given by a story script, so asking for it gates
-## no placement.
+## Every item some check hands over, as a set; asking for any other gates nothing.
 func item_sources() -> Dictionary:
 	if not _item_sources.is_empty():
 		return _item_sources
@@ -352,19 +358,15 @@ func item_sources() -> Dictionary:
 	return _item_sources
 
 
-## Whether a row's reward is one a later check may be gated behind: a badge, or a
-## field HM. A placement that moves one of these has to prove the seed still
-## finishes; a placement that moves a Potion does not.
+## Whether a later check may be gated behind this reward: a badge or a field HM.
 func is_progression(row: Dictionary) -> bool:
 	if StringName(row.get("kind", &"")) == KIND_BADGE:
 		return true
 	return field_hm_items().has(int(row.get("item", 0)))
 
 
-## Walks every imported script, decoding linearly from its first byte. A command
-## the decoder does not know ends that script's walk rather than guessing an
-## operand width, which is the same rule `scan_references` follows: a site found
-## past an unknown command would be at an invented offset.
+## Every imported script. A command the decoder does not know ends its walk, the
+## rule `scan_references` follows: a site past it would be at an invented offset.
 func _script_keys() -> Array:
 	return _data.world_script_keys()
 
@@ -392,13 +394,9 @@ func _scan_one_script(
 
 	var commands: Array = []
 	var offset: int = 0
-	## The walk does NOT stop at the first `end` or `sjump`: a bounded blob holds a
-	## routine and the branch bodies behind it, and the Game Corner's three prizes
-	## are exactly that. The bound counts `end`s rather than every command that
-	## never returns. It DOES stop at the first byte no command owns, since
-	## everything after would be text or a data table read as code. Two guards sit
-	## behind it: a site's numbers have to be ones the cartridge can hold, and a
-	## static has to be followed by the `startbattle` that makes it one.
+	## The walk runs past `end` and `sjump`, since a blob holds a routine and the
+	## branch bodies behind it, and stops at the first byte no command owns:
+	## everything after would be text or a data table read as code.
 	var terminators: int = 0
 	for _step: int in MAX_SCRIPT_COMMANDS:
 		if offset >= body.size():
@@ -412,12 +410,9 @@ func _scan_one_script(
 			terminators += 1
 			if terminators >= MAX_ROUTINES:
 				break
-	## Two facts about the WHOLE script decide what its give sites mean: a
-	## `takecoins` makes them purchases, and a `pokepic` of the species a
-	## `givepoke` later hands over is the only shape Elm's three balls take and
-	## the only shape anything else in either game does not.
-	## The price is per SITE, not per script: a prize vendor's three branches sit
-	## in one script and each spends its own `takecoins`.
+	## A `pokepic` of the species a `givepoke` later hands over is the shape only
+	## Elm's three balls take. The price is per SITE: a vendor's three branches
+	## each spend their own `takecoins`.
 	var pictured: Dictionary = {}
 	for command: Dictionary in commands:
 		if StringName(command["name"]) == &"pokepic":
@@ -588,12 +583,9 @@ func _mart_items(index: int) -> Array:
 	return out
 
 
-## Stamps every script site with the MAP whose events reach it, which is the one
-## thing a script address does not carry and a placement cannot do without: a
-## badge is only completable if its gym can be walked to. Each map's event scripts
-## are followed through `scall`, `sjump`, `farscall` and the branch commands, the
-## same closure the importer walks. A script two maps reach is stamped with the
-## first in map order, so the answer is stable; one no map reaches keeps none.
+## Stamps every script site with the MAP whose events reach it, following each
+## map's scripts through `scall`, `sjump`, `farscall` and the branches. A script
+## two maps reach is stamped with the first in map order, so the answer is stable.
 func _attribute_maps() -> void:
 	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
 	var owner: Dictionary = {}
@@ -684,16 +676,19 @@ static func _followed_by(commands: Array, at: int, name: StringName, within: int
 ## block one apart, so the answer is the cartridge's own list rather than a
 ## constant.
 func _badge_for_flag(flag: int) -> int:
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		for bit: int in Gen1Layout.BADGE_COUNT:
+			if Gen2WorldState.gen1_badge_flag(bit) == flag:
+				return Gen2WorldState.KANTO_BADGE_FIRST + bit
+		return -1
 	var flags: Array[int] = Gen2WorldState.BADGE_ENGINE_FLAGS \
 		if Gen2WorldState.is_crystal_profile(_data) \
 		else Gen2WorldState.BADGE_ENGINE_FLAGS_GOLD_SILVER
 	return flags.find(flag)
 
 
-## The item balls and the items under a tile, which are map EVENTS and carry no
-## script of their own: `itemball`'s two bytes are the object's script pointer
-## read as data, and `hiddenitem` is a `bg_event` of type
-## [constant BGEVENT_ITEM].
+## Item balls and hidden items are map EVENTS: `itemball`'s two bytes are the
+## object's script pointer read as data, `hiddenitem` a [constant BGEVENT_ITEM].
 func _scan_map_events() -> void:
 	for map: Gen2WorldMap in _data.world_maps():
 		var bank: int = int(map.events.get("bank", 0))
@@ -704,9 +699,7 @@ func _scan_map_events() -> void:
 				continue
 			if int((object as Dictionary).get("object_type", 0)) != OBJECT_TYPE_ITEMBALL:
 				continue
-			## `db item, quantity` behind the object's script pointer, read as
-			## data. `Gen2WorldAPI._item_ball_request_for_event` decodes the same
-			## two bytes at runtime and asks this catalog for them.
+			## `db item, quantity`, which `_item_ball_request_for_event` also reads.
 			var raw: PackedByteArray = _data.world_script(
 				bank, int((object as Dictionary).get("script", 0))
 			)
@@ -762,10 +755,8 @@ func _add_event(
 	_store(row)
 
 
-## A linear walk over bounded blobs finds real sites and, occasionally, three
-## bytes of text that read as a command. A row whose numbers are outside what the
-## cartridge can hold is one of those, and is dropped rather than offered to a
-## mod as somewhere to put a Pokemon.
+## A linear walk occasionally reads three bytes of text as a command; a row with
+## numbers the cartridge cannot hold is one of those.
 func _plausible(row: Dictionary) -> bool:
 	var species: int = int(row.get("species", 0))
 	if row.has("species") and (species < 1 or species > Gen2Layout.SPECIES_COUNT):
@@ -786,11 +777,11 @@ func _store(row: Dictionary) -> void:
 	if id < 0 or _rows.has(id) or not _plausible(row):
 		return
 	_rows[id] = row
-	for key: String in ["picture_address", "check_address", "take_address"]:
+	for key: String in LINK_ROLES:
 		if not row.has(key):
 			continue
 		_links[(int(row["bank"]) & 0xFF) << ID_BANK_SHIFT | (int(row[key]) & ID_ADDRESS_MASK)] = {
-			"id": id, "role": &"picture" if key == "picture_address" else &"price",
+			"id": id, "role": LINK_ROLES[key],
 		}
 	var kind: StringName = StringName(row["kind"])
 	var list: Array = _by_kind.get(kind, [])
@@ -798,22 +789,16 @@ func _store(row: Dictionary) -> void:
 	_by_kind[kind] = list
 
 
-## What the script tested BEFORE reaching this site: the event and engine flags
-## it checked and the items it asked for. The decoded graph fact a placement
-## needs, and no more than a fact: it does not say the site is unreachable
-## without them, only that the cartridge looked.
-## Read in source order up to the site rather than over the whole script, since a
-## `checkevent` after a `givepoke` guards something else.
+## The flags and items the script tested BEFORE this site: that the cartridge
+## looked, not that the site is unreachable without them.
 func _requirements(commands: Array, at: int, crystal: bool) -> Array:
 	var out: Array = []
 	var seen: Dictionary = {}
 	for command: Dictionary in commands:
 		if int(command["offset"]) >= at:
 			break
-		## A blob holds several routines back to back, and a condition before the
-		## last `end` or `sjump` guards one of the earlier ones. Reading the whole
-		## blob put thirteen conditions on a starter, two of them badges the
-		## cartridge plainly does not ask a starter for.
+		## A condition before the last terminator guards an earlier routine:
+		## reading the whole blob put thirteen conditions on a starter.
 		if not Gen2WorldScript.continues_after(int(command["opcode"]), crystal):
 			out.clear()
 			seen.clear()
@@ -828,11 +813,288 @@ func _requirements(commands: Array, at: int, crystal: bool) -> Array:
 	return out
 
 
-## One entry per distinct condition. Two entry points into one routine overlap in
-## the cache, so the same `checkevent` is walked once per blob that reaches it.
+## One entry per distinct condition: two blobs reaching one routine walk it twice.
 static func _append_once(out: Array, seen: Dictionary, entry: Dictionary) -> void:
 	var key: String = str(entry)
 	if seen.has(key):
 		return
 	seen[key] = true
 	out.append(entry)
+
+
+## Every Generation 1 site, each stamped with the map whose tree it stands in.
+func _scan_gen1() -> void:
+	for map: Gen2WorldMap in _data.world_maps():
+		for index: int in map.texts.size():
+			_walk_gen1(map, (map.texts[index] as Dictionary).get("script", []), [])
+			_add_gen1_shop(map, index)
+		for table: Variant in map.alternate_texts:
+			for row: Dictionary in map.alternate_texts[table] as Array:
+				_walk_gen1(map, row.get("script", []), [])
+		for row: Dictionary in map.events.get("hidden_events", []) as Array:
+			_walk_gen1(map, row.get("script", []), [], [], row)
+		_walk_gen1(map, map.scripts.get("entry", []), [])
+		for key: String in ["states", "callbacks"]:
+			for row: Dictionary in map.scripts.get(key, []) as Array:
+				_walk_gen1(map, row.get("nodes", []), [])
+		_scan_gen1_objects(map)
+	_scan_gen1_prizes()
+
+
+## [param ancestors] is every node the walk is inside, where a site's conditions
+## are read; [param scopes] every node list on the way down, where its routine's
+## other stores are.
+func _walk_gen1(
+	map: Gen2WorldMap, nodes: Variant, ancestors: Array, scopes: Array = [],
+	hidden: Dictionary = {}
+) -> void:
+	if not nodes is Array:
+		return
+	var here: Array = scopes + [nodes]
+	for raw: Variant in nodes as Array:
+		if not raw is Dictionary:
+			continue
+		var node: Dictionary = raw
+		_record_gen1_site(map, node, ancestors, here, hidden)
+		var below: Array = ancestors + [node]
+		for branch: String in GEN1_BRANCHES:
+			if node.has(branch):
+				_walk_gen1(map, node[branch], below, here, hidden)
+		for row: Variant in node.get("rows", []) as Array:
+			if row is Dictionary:
+				_walk_gen1(map, (row as Dictionary).get("then", []), below, here, hidden)
+
+
+func _record_gen1_site(
+	map: Gen2WorldMap, node: Dictionary, ancestors: Array, scopes: Array, hidden: Dictionary
+) -> void:
+	var at: int = int(node.get("at", -1))
+	match String(node.get("op", "")):
+		"give_pokemon":
+			if at < 0 or int(node.get("species", 0)) < 1:
+				return
+			var row: Dictionary = {
+				"species": int(node["species"]), "level": int(node["level"]), "item": 0,
+				"price": 0,
+			}
+			row.merge(_gen1_price(ancestors, node), true)
+			var kind: StringName = KIND_GIFT
+			if int(row["price"]) > 0:
+				kind = KIND_PRIZE
+			elif _gen1_starter_set(scopes) >= 0:
+				kind = KIND_STARTER
+				row["starter_address"] = _gen1_starter_set(scopes)
+			_add_gen1(kind, map, at, row, ancestors)
+		"give_item":
+			if node.has("hidden"):
+				_add_gen1_event(KIND_ITEM, map, GEN1_SOURCE_HIDDEN, int(node["hidden"]), {
+					"item": int(node["item"]), "quantity": 1, "hidden": true,
+					"engine_flag": int(hidden.get("hidden_item_flag", 0)),
+				}, ancestors)
+			elif at >= 0:
+				_add_gen1(KIND_ITEM, map, at, {
+					"item": int(node["item"]), "quantity": maxi(1, int(node["count"])),
+					"price": 0, "hidden": false,
+				}, ancestors)
+		"wild_battle":
+			if at >= 0:
+				_add_gen1(KIND_STATIC, map, at, {
+					"species": int(node["species"]), "level": int(node["level"]),
+				}, ancestors)
+		"trade":
+			if at >= 0:
+				var record: Dictionary = _data.world_trade(int(node["trade_id"]))
+				_add_gen1(KIND_TRADE, map, at, {
+					"trade": int(node["trade_id"]),
+					"species": int(record.get("offered_species", 0)),
+					"requested_species": int(record.get("requested_species", 0)),
+				}, ancestors)
+		"flag":
+			var badge: int = _badge_for_flag(int(node.get("flag", -1)))
+			if at >= 0 and badge >= 0 and bool(node.get("engine", false)) and bool(node.get("set", false)):
+				_add_gen1(KIND_BADGE, map, at, {
+					"badge": badge, "engine_flag": int(node["flag"]),
+				}, ancestors)
+
+
+## `wPlayerStarter`'s store on the way to the give: Oak's balls, Yellow's Pikachu.
+static func _gen1_starter_set(scopes: Array) -> int:
+	for nodes: Array in scopes:
+		for raw: Variant in nodes:
+			if raw is Dictionary and String((raw as Dictionary).get("op", "")) == "set_starter" \
+				and String((raw as Dictionary).get("who", "")) == "player":
+				return int((raw as Dictionary).get("at", -1))
+	return -1
+
+
+## The `has_money` this give sits under whose price its `ok` branch spends: the
+## Magikarp salesman. Empty for a give that costs nothing.
+static func _gen1_price(ancestors: Array, node: Dictionary) -> Dictionary:
+	for raw: Variant in node.get("ok", []) as Array:
+		if not (raw is Dictionary and String((raw as Dictionary).get("op", "")) == "spend_money"):
+			continue
+		var spend: Dictionary = raw
+		for above: Dictionary in ancestors:
+			if String(above.get("op", "")) == "has_money" \
+				and int(above.get("price", 0)) == int(spend.get("amount", 0)):
+				return {
+					"price": int(above["price"]),
+					"ask_address": int(above.get("at", -1)), "spend_address": int(spend.get("at", -1)),
+				}
+	return {}
+
+
+## What the tree tested on the way down: a flag, an item, a badge.
+func _gen1_requirements(ancestors: Array) -> Array:
+	var out: Array = []
+	var seen: Dictionary = {}
+	for node: Dictionary in ancestors:
+		match String(node.get("op", "")):
+			"branch":
+				var key: String = "engine_flag" if bool(node.get("engine", false)) else "event"
+				_append_once(out, seen, {key: int(node.get("flag", 0))})
+			"has_item":
+				_append_once(out, seen, {"item": int(node.get("item", 0))})
+			"badge":
+				_append_once(out, seen, {
+					"engine_flag": Gen2WorldState.gen1_badge_flag(int(node.get("badge", 0))),
+				})
+	return out
+
+
+## `PickUpItem`'s item balls and `CheckForEngagingTrainers`' standing wilds.
+func _scan_gen1_objects(map: Gen2WorldMap) -> void:
+	var objects: Array = map.events.get("objects", [])
+	for index: int in objects.size():
+		var object: Dictionary = objects[index]
+		if int(object.get("item", 0)) > 0:
+			_add_gen1_event(KIND_ITEM, map, GEN1_SOURCE_OBJECT, index, {
+				"item": int(object["item"]), "quantity": 1, "hidden": false,
+			}, [])
+		elif int(object.get("species", 0)) > 0 and not object.has("trainer_class"):
+			_add_gen1_event(KIND_STATIC, map, GEN1_SOURCE_OBJECT, index, {
+				"species": int(object["species"]), "level": int(object.get("level", 0)),
+			}, [])
+
+
+## A `TX_SCRIPT_MART` row keeps its shelf; the clerk's own text id is the site.
+func _add_gen1_shop(map: Gen2WorldMap, index: int) -> void:
+	var row: Dictionary = map.texts[index]
+	if int(row.get("command", 0)) != Gen1Layout.TEXT_SCRIPT_MART:
+		return
+	var items: Array = []
+	for item: Variant in row.get("items", []) as Array:
+		if int(item) > 0:
+			items.append({"item": int(item), "price": int(_data.item(int(item)).get("price", 0))})
+	_add_gen1_event(KIND_SHOP, map, GEN1_SOURCE_TEXT, index, {
+		"text": index + 1, "items": items,
+	}, [])
+
+
+## `PrizeMenus`' rows, priced in coins, standing where the vendors are.
+func _scan_gen1_prizes() -> void:
+	var map: Gen2WorldMap = _gen1_prize_map()
+	if map == null:
+		return
+	var menus: Array = _data.prize_menus()
+	for menu: int in menus.size():
+		var entries: Array = (menus[menu] as Dictionary).get("rows", [])
+		var tms: bool = bool((menus[menu] as Dictionary).get("tms", false))
+		for index: int in entries.size():
+			var row: Dictionary = entries[index]
+			var fields: Dictionary = {"price": int(row.get("cost", 0))}
+			if tms:
+				fields["item"] = int(row.get("item", 0))
+			else:
+				fields["species"] = int(row.get("item", 0))
+				fields["level"] = int(row.get("level", 0))
+				fields["item"] = 0
+			_add_gen1_event(
+				KIND_PRIZE, map, GEN1_SOURCE_PRIZE, menu << GEN1_PRIZE_MENU_SHIFT | index, fields, []
+			)
+
+
+func _gen1_prize_map() -> Gen2WorldMap:
+	for map: Gen2WorldMap in _data.world_maps():
+		for row: Dictionary in map.texts:
+			if int(row.get("command", 0)) == Gen1Layout.TEXT_SCRIPT_PRIZE_VENDOR:
+				return map
+	return null
+
+
+func _add_gen1(
+	kind: StringName, map: Gen2WorldMap, at: int, fields: Dictionary, ancestors: Array
+) -> void:
+	var row: Dictionary = fields.duplicate()
+	var bank: int = RomFile.bank_of(at)
+	var address: int = _gen1_address(at)
+	var id: int = pack_id(kind, bank, address)
+	for variant: int in MAX_VARIANTS:
+		var held: Variant = _rows.get(id | variant << ID_VARIANT_SHIFT, null)
+		if held == null:
+			id |= variant << ID_VARIANT_SHIFT
+			break
+		if _gen1_same_site(held, row, true):
+			return
+	row["id"] = id
+	row["kind"] = kind
+	row["bank"] = bank
+	row["address"] = address
+	row["map"] = Vector2i(map.group, map.number)
+	row["requires"] = _gen1_requirements(ancestors)
+	for key: String in LINK_ROLES:
+		if row.has(key):
+			row[key] = _gen1_address(int(row[key]))
+	_store(row)
+
+
+## Every site field the caller named, or every one there is when [param whole].
+static func _gen1_same_site(held: Dictionary, fields: Dictionary, whole: bool = false) -> bool:
+	for key: String in GEN1_SITE_FIELDS:
+		if (whole or fields.has(key)) and held.get(key, null) != fields.get(key, null):
+			return false
+	return true
+
+
+## The row at [param kind]'s site [param at] whose cartridge numbers are
+## [param fields], patches folded in; empty for no such site.
+func gen1_site(kind: StringName, at: int, fields: Dictionary) -> Dictionary:
+	var id: int = pack_id(kind, RomFile.bank_of(at), _gen1_address(at))
+	for variant: int in MAX_VARIANTS:
+		var held: Variant = _rows.get(id | variant << ID_VARIANT_SHIFT, null)
+		if held == null:
+			return {}
+		if _gen1_same_site(held, fields):
+			return check(id | variant << ID_VARIANT_SHIFT)
+	return {}
+
+
+## The row whose [param key] is the node at [param at]: the site a linked node
+## belongs to. See [constant LINK_ROLES].
+func gen1_linked(kind: StringName, key: String, at: int, fields: Dictionary) -> Dictionary:
+	var address: int = _gen1_address(at)
+	for id: int in _by_kind.get(kind, []):
+		var held: Dictionary = _rows[id]
+		if int(held.get(key, -1)) == address and int(held.get("bank", -1)) == RomFile.bank_of(at) \
+			and _gen1_same_site(held, fields):
+			return check(id)
+	return {}
+
+
+## The GB address a linear offset is read at, as `Gen1Layout.banked` inverts it.
+static func _gen1_address(linear: int) -> int:
+	var bank: int = RomFile.bank_of(linear)
+	return linear - bank * RomFile.BANK_SIZE + (RomFile.BANK_SIZE if bank > 0 else 0)
+
+
+func _add_gen1_event(
+	kind: StringName, map: Gen2WorldMap, source: int, index: int, fields: Dictionary,
+	ancestors: Array
+) -> void:
+	var row: Dictionary = fields.duplicate()
+	row["id"] = pack_event_id(kind, source, map.number, index)
+	row["kind"] = kind
+	row["map"] = Vector2i(map.group, map.number)
+	row["event_index"] = index
+	row["requires"] = _gen1_requirements(ancestors)
+	_store(row)

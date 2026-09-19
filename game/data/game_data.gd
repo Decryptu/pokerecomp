@@ -816,11 +816,27 @@ func world_encounter_region_rows(method: StringName, region: String) -> Array:
 	return out
 
 
+## `ItemUseOldRod`'s pair and `GoodRodMons`' two, as fishing groups above every
+## `SuperRodData` row so a mod patches them the way it patches a Super Rod group.
+const GEN1_OLD_ROD_GROUP: int = 0x100
+const GEN1_GOOD_ROD_GROUP: int = 0x101
+const GEN1_ROD_GROUPS: Dictionary = {
+	GEN1_OLD_ROD_GROUP: Gen2WorldEncounter.METHOD_OLD_ROD,
+	GEN1_GOOD_ROD_GROUP: Gen2WorldEncounter.METHOD_GOOD_ROD,
+}
+
+
 ## One imported fishing group, indexed by the source map-header value. Group
 ## zero is the cartridge's no-fishing sentinel.
 func world_fishing_group(group: int) -> Dictionary:
 	if group < 1:
 		return {}
+	if GEN1_ROD_GROUPS.has(group):
+		if generation != RomRegistry.GEN1:
+			return {}
+		return _overlaid(Gen2ContentOverlay.KIND_FISHING, group, {
+			"slots": Gen1Layout.rod_slots(GEN1_ROD_GROUPS[group]),
+		})
 	var fishing: Variant = _encounters().get("fishing", {})
 	if not fishing is Dictionary:
 		return {}

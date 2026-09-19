@@ -818,8 +818,9 @@ func test_a_gift_folds_both_sides_of_its_carry_onto_one_node() -> void:
 			+ _print(BYE) + _call(int(LAYOUT["text_script_end"])),
 		_boxes()
 	)
+	## `at` is the byte the node was folded at, the `jr nc` behind the call.
 	assert_eq(script, [{
-		"op": "give_item", "item": 0xF1, "count": 1,
+		"op": "give_item", "item": 0xF1, "count": 1, "at": AT + 6,
 		"ok": [{"op": "text", "text": "HI"}],
 		"full": [{"op": "text", "text": "BYE"}],
 	}])
@@ -1002,7 +1003,7 @@ func _trade(row: int) -> Array:
 
 func test_a_trade_predef_keeps_the_row_it_was_handed() -> void:
 	assert_eq(_decode(_trade(6) + _call(int(LAYOUT["text_script_end"]))),
-		[{"op": "scratch", "address": 0xCD3D, "value": 6}, {"op": "trade", "trade_id": 6}])
+		[{"op": "scratch", "address": 0xCD3D, "value": 6}, {"op": "trade", "trade_id": 6, "at": AT + 7}])
 
 
 func test_a_trade_predef_with_no_row_written_answers_nothing() -> void:
@@ -1015,7 +1016,7 @@ func test_xor_a_writes_the_row_a_load_of_zero_would() -> void:
 		[Gen1Layout.SCRIPT_XOR_A, Gen1Layout.SCRIPT_LD_MEM_A,
 			int(LAYOUT["which_trade"]) & 0xFF, int(LAYOUT["which_trade"]) >> 8]
 			+ _predef(4) + _call(int(LAYOUT["text_script_end"]))
-	), [{"op": "scratch", "address": 0xCD3D, "value": 0}, {"op": "trade", "trade_id": 0}])
+	), [{"op": "scratch", "address": 0xCD3D, "value": 0}, {"op": "trade", "trade_id": 0, "at": AT + 6}])
 
 
 ## `CheckEvent flag, 1`: one `rrca` per bit up to the one asked about, which a
@@ -1101,7 +1102,7 @@ func test_a_money_test_keeps_the_price_and_both_sides() -> void:
 		_boxes()
 	)
 	assert_eq(script, [{
-		"op": "has_money", "price": 500,
+		"op": "has_money", "price": 500, "at": AT + 15,
 		"then": [{"op": "text", "text": "HI"}],
 		"else": [{"op": "text", "text": "BYE"}],
 	}])
@@ -1132,7 +1133,8 @@ func _spend(price: Array) -> Array:
 func test_the_subtraction_predef_becomes_the_price_it_takes() -> void:
 	assert_eq(
 		_decode(_spend([0x00, 0x05, 0x00]) + _call(int(LAYOUT["text_script_end"]))),
-		[{"op": "scratch", "address": 0xCD3D, "value": 0}, {"op": "spend_money", "amount": 500}]
+		[{"op": "scratch", "address": 0xCD3D, "value": 0},
+			{"op": "spend_money", "amount": 500, "at": AT + 25}]
 	)
 
 
@@ -1268,7 +1270,7 @@ func test_the_zero_side_of_and_a_knows_the_register() -> void:
 	assert_eq(script, [{
 		"op": "choice",
 		"yes": [{
-			"op": "has_money", "price": 500,
+			"op": "has_money", "price": 500, "at": AT + 20,
 			"then": [{"op": "text", "text": "HI"}],
 			"else": [{"op": "text", "text": "BYE"}],
 		}],
