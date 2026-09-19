@@ -120,6 +120,8 @@ func _one_game() -> void:
 	_mimic_asks_the_player_and_rolls_for_the_enemy()
 	_a_multi_hit_repeats_its_first_figure()
 	_bide_stores_the_last_damage_at_each_turn()
+	_fissure_reads_speed_and_swift_reaches_the_air()
+	_sleep_lands_on_a_recharging_target()
 	_a_trapping_move_holds_its_target()
 	_the_trap_counter_distribution()
 	_conversion_copies_the_target()
@@ -412,6 +414,10 @@ const RAGE_MOVE: int = 99
 const MIMIC_MOVE: int = 102
 const DOUBLESLAP_MOVE: int = 3
 const BIDE_MOVE: int = 117
+const FISSURE_MOVE: int = 90
+const SWIFT_MOVE: int = 129
+const FLY_MOVE: int = 19
+const SING_MOVE: int = 47
 const GUST_MOVE: int = 16
 const TACKLE_MOVE: int = 33
 const GASTLY: int = 92
@@ -692,6 +698,46 @@ func _bide_stores_the_last_damage_at_each_turn() -> void:
 		if battle.player.is_fainted():
 			break
 	_r.fail("BIDE never unleashed")
+
+
+## `OneHitKOEffect_` misses a faster target whatever the levels, and Swift
+## returns from `MoveHitTest` in front of the Fly and Dig check.
+func _fissure_reads_speed_and_swift_reaches_the_air() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [FISSURE_MOVE], SWEEP_SEED, [SPLASH_MOVE])
+	if not _r.check(battle != null, "no battle could be built for FISSURE"):
+		return
+	_r.check(battle.player.stat("speed") < battle.enemy.stat("speed"), "the user is not slower")
+	for _turn: int in 4:
+		for event: Dictionary in battle.take_turn(0, 0):
+			_r.check(StringName(event.get("type", &"")) != Gen2Battle.OHKO, "FISSURE landed from below")
+	var swift: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [SWIFT_MOVE], SWEEP_SEED, [FLY_MOVE])
+	var hits: int = 0
+	var flying: int = 0
+	for _turn: int in 6:
+		var events: Array = swift.take_turn(0, 0)
+		if not Gen2Substatus.has(swift.enemy.substatus, Gen2Substatus.FLYING):
+			continue
+		flying += 1
+		for event: Dictionary in events:
+			if StringName(event.get("type", &"")) == Gen2Battle.HIT and int(event.get("target", -1)) == Gen2Battle.ENEMY:
+				hits += 1
+		if swift.enemy.is_fainted() or swift.player.is_fainted():
+			break
+	_r.check(flying > 0 and hits == flying, "SWIFT hit %d times over %d turns in the air" % [hits, flying])
+
+
+## `SleepEffect` skips every test for a target that needs to recharge, the
+## status it already carries included.
+func _sleep_lands_on_a_recharging_target() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, FIGHT_LEVELS[1], [SING_MOVE], SWEEP_SEED, [SPLASH_MOVE])
+	if not _r.check(battle != null, "no battle could be built for SING"):
+		return
+	battle.enemy.status = Gen2Status.PARALYSIS
+	battle.enemy.substatus |= Gen2Substatus.RECHARGING
+	battle.take_turn(0, 0)
+	_r.check(Gen2Status.is_asleep(battle.enemy.status)
+		and not Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.RECHARGING),
+		"SING left the recharging target at status %d" % battle.enemy.status)
 
 
 ## `TrappingEffect` and `.HeldInPlaceCheck`: the user repeats the move for the

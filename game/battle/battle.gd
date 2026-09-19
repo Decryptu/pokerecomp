@@ -328,11 +328,9 @@ const SUBSTITUTE_FADED: StringName = &"substitute_faded"
 ## battle state. An animated drop is the animation's own `anim_dropsub`.
 const SUBSTITUTE_PIC: StringName = &"substitute_pic"
 
-## `MinimizeDropSub`, `BattleCommand_StatUp`'s tail: the byte
-## `wPlayerMinimized`/`wEnemyMinimized` that reloads the actor's square as
-## `GetMinimizePic`'s dot, and keeps reloading it as that for as long as the
-## Pokemon stays in. Cleared by a send-out the way every other volatile is, so
-## there is no event for the other direction.
+## `MinimizeDropSub`: `wPlayerMinimized` reloads the actor's square as
+## `GetMinimizePic`'s dot for as long as the Pokemon stays in, and a send-out
+## clears it with every other volatile, so there is no event the other way.
 const MINIMIZED: StringName = &"minimized"
 
 ## Leech Seed, on the Pokémon that was seeded rather than the one that seeded it.
@@ -1960,11 +1958,9 @@ func _close_turn_bracket(side: int, action: Dictionary) -> void:
 	)
 
 
-## Whether an action runs inside that wrapper, which the two sides disagree on:
-## the player's runs on everything, both orderings calling `PlayerTurn_End...`
-## unconditionally, and the enemy's is jumped past whenever `AI_SwitchOrTryItem`
-## answers. So a player's Protect survives an enemy switch and an enemy's does not
-## survive a player switch.
+## Whether an action runs inside that wrapper: the player's always, the
+## enemy's not when `AI_SwitchOrTryItem` answers, so a player's Protect
+## survives an enemy switch and an enemy's does not survive a player switch.
 func _brackets_turn(side: int, action: Dictionary) -> bool:
 	return side == PLAYER or not (_is_switch(action) or _is_item(action))
 
@@ -2219,11 +2215,9 @@ func _tick_wrap(events: Array) -> void:
 			note_faint(side, events)
 
 
-## `HandlePerishSong`: one off each count, said out loud, and whoever reaches zero
-## is finished where it stands. Behind [method _tick_wrap] and ahead of the
-## leftovers block, player first as every handler here is. The line prints on
-## every tick including the last, and the kill is `xor a` into the HP word rather
-## than damage, so no held item can answer it.
+## `HandlePerishSong`: one off each count, said out loud on every tick, and
+## the kill is `xor a` into the HP word rather than damage, so no held item
+## can answer it.
 func _tick_perish(events: Array) -> void:
 	for side: int in [PLAYER, ENEMY]:
 		var current: Gen2BattleMon = mon(side)
@@ -2242,11 +2236,9 @@ func _tick_perish(events: Array) -> void:
 		note_faint(side, events)
 
 
-## `HandleBetweenTurnEffects`' leftovers block: `HandleLeftovers`,
-## `HandleMysteryberry`, then `HandleHealingItems`, after the wrap tick and before
-## Encore. The first two read `GetUserItem` so the player is first, the third
-## `GetOpponentItem` so the enemy is. `HandleDefrost`, `HandleSafeguard` and
-## `HandleScreens` sit among them and are not item effects.
+## `HandleBetweenTurnEffects`' leftovers block: the first two read
+## `GetUserItem` so the player is first, `HandleHealingItems` `GetOpponentItem`
+## so the enemy is, and the defrost, Safeguard and screen ticks sit among them.
 func _tick_held_items(events: Array) -> void:
 	for side: int in [PLAYER, ENEMY]:
 		_use_leftovers(side, events)
@@ -2494,11 +2486,9 @@ func _award_experience(events: Array) -> void:
 			_give_experience_for(mon(ENEMY), events)
 
 
-## Splits what [param defeated] is worth, then resets the participant set to
-## whoever is standing, so the trainer's next Pokémon starts its own count.
-## `UpdateFaintedPlayerMon` awards in two passes when anything alive holds an
-## Exp. Share: the block is halved, then split among the participants and again
-## among the holders. A Pokémon in both passes is awarded twice.
+## Splits what [param defeated] is worth, then resets the participant set.
+## With an Exp. Share out the block is halved and split twice, among the
+## participants and among the holders, and a Pokémon in both is paid twice.
 func _give_experience_for(defeated: Gen2BattleMon, events: Array) -> void:
 	var participants: Array = (_participants[PLAYER] as Dictionary).keys()
 	var holders: Array = _exp_share_holders()
@@ -3058,11 +3048,9 @@ func gen1_trapping_move(side: int) -> int:
 	return mon(1 - side).trapping_move
 
 
-## Who goes first, as the two sides in the order they act. A switch is settled
-## first at any speed or priority, the incoming Pokémon taking the other side's
-## move, and two switches go to the player as outside a link battle. Otherwise
-## priority decides, then a Quick Claw, then speed with stages applied, then a
-## coin flip.
+## Who goes first. A switch is settled first at any speed, two switches go to
+## the player, and otherwise priority, then a Quick Claw, then speed with
+## stages applied, then a coin flip.
 func order(chosen: Dictionary, actions: Dictionary = {}) -> Array:
 	# A failed run is settled before the enemy moves, as a switch is: the turn is
 	# spent as BATTLEPLAYERACTION_USEITEM, which resolves at once.

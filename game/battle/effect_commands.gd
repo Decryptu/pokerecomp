@@ -1236,7 +1236,11 @@ static func _metronome(turn: Gen2Turn) -> void:
 		var picked: int = turn.rng().randi_range(0, 255)
 		if picked <= 0 or picked > Gen2Layout.MOVE_COUNT:
 			continue
-		if METRONOME_EXCEPTS.has(picked) or turn.attacker().moves.has(picked):
+		# `MetronomePickMove` refuses only METRONOME and STRUGGLE and up.
+		if turn.battle.is_gen1():
+			if picked == Gen2MoveEffect.METRONOME_MOVE or picked >= Gen2Damage.STRUGGLE:
+				continue
+		elif METRONOME_EXCEPTS.has(picked) or turn.attacker().moves.has(picked):
 			continue
 		if turn.data().move(picked).is_empty():
 			continue
@@ -1410,6 +1414,29 @@ static func _miss(turn: Gen2Turn, event: StringName = Gen2Battle.MISSED) -> void
 		_failure_text(turn)
 
 
+## `.swiftCheck` comes in front of `.checkForDigOrFlyStatus` on Generation 1,
+## so Swift reaches a Pokemon in the air or underground, and `SleepEffect`
+## never asks `MoveHitTest` for a target that needs to recharge.
+static func _gen1_hits_outright(turn: Gen2Turn) -> bool:
+	if not turn.battle.is_gen1():
+		return false
+	if turn.effect() == Gen2MoveEffect.ALWAYS_HIT:
+		return true
+	return turn.effect() == Gen2MoveEffect.SLEEP \
+		and Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.RECHARGING)
+
+
+## `.ThunderRain`, `.XAccuracy` and the perfect-accuracy check, in that order
+## and all ahead of the stat modifiers: Swift, Faint Attack and Vital Throw
+## carry `NormalHit`'s list and a stored accuracy of 100.
+static func _hits_without_a_roll(turn: Gen2Turn) -> bool:
+	if turn.effect() == Gen2MoveEffect.THUNDER and turn.battle.weather == Gen2Weather.RAIN:
+		return true
+	if Gen2Substatus.has(turn.attacker().substatus, Gen2Substatus.X_ACCURACY):
+		return true
+	return turn.effect() == Gen2MoveEffect.ALWAYS_HIT
+
+
 static func _check_hit(turn: Gen2Turn) -> void:
 	if turn.immune:
 		_miss(turn, Gen2Battle.NO_EFFECT)
@@ -1419,6 +1446,9 @@ static func _check_hit(turn: Gen2Turn) -> void:
 	if turn.effect() == Gen2MoveEffect.DREAM_EATER \
 		and not Gen2Status.is_asleep(turn.defender().status):
 		_miss(turn)
+		return
+
+	if _gen1_hits_outright(turn):
 		return
 
 	# `.Protect`, second, and ahead of everything but the Dream Eater question.
@@ -1457,21 +1487,7 @@ static func _check_hit(turn: Gen2Turn) -> void:
 		_miss(turn)
 		return
 
-	# `.ThunderRain`, ahead of the stat modifiers and the roll: Thunder never
-	# misses in rain, whatever either side's accuracy and evasion say.
-	if turn.effect() == Gen2MoveEffect.THUNDER \
-		and turn.battle.weather == Gen2Weather.RAIN:
-		return
-
-	# `.XAccuracy`, immediately after it: an X Accuracy makes everything the
-	# holder throws land, for the rest of the time it is out.
-	if Gen2Substatus.has(turn.attacker().substatus, Gen2Substatus.X_ACCURACY):
-		return
-
-	# The perfect-accuracy check, last before the stat modifiers. Swift, Faint
-	# Attack and Vital Throw carry `NormalHit`'s list and a stored accuracy of 100,
-	# so this one comparison is the whole of what makes them never miss.
-	if turn.effect() == Gen2MoveEffect.ALWAYS_HIT:
+	if _hits_without_a_roll(turn):
 		return
 
 	# `.StatModifiers`, whose Foresight branch returns before multiplying: an
@@ -1937,6 +1953,9 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	if not primary and _substitute_refuses(turn):
 		return
 
+	if _gen1_sleeps_through_recharge(turn, flag):
+		return
+
 	if _primary_status_misses(turn, flag):
 		turn.emit(Gen2Battle.MOVE_FAILED)
 		return
@@ -2001,6 +2020,24 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	turn.battle.use_status_berry(turn.target, turn.events)
 
 	_status_interrupts(turn, flag)
+
+
+## `SleepEffect` clears `NEEDS_TO_RECHARGE` and, when it was set, skips every
+## test to `.setSleepCounter`, the existing status and `MoveHitTest` included.
+static func _gen1_sleeps_through_recharge(turn: Gen2Turn, flag: int) -> bool:
+	var defender: Gen2BattleMon = turn.defender()
+	if not turn.battle.is_gen1() or flag != Gen2Status.SLEEP_MASK \
+		or not Gen2Substatus.has(defender.substatus, Gen2Substatus.RECHARGING):
+		return false
+	defender.substatus &= ~Gen2Substatus.RECHARGING
+	defender.status = Gen2Status.roll_sleep(turn.rng(), false, turn.battle.gen1_stadium_cup, true)
+	_animate_current_move(turn)
+	turn.emit(Gen2Battle.STATUS_INFLICTED, {
+		"target": turn.target, "status": defender.status,
+		"name": Gen2Status.name_of(defender.status),
+	})
+	_status_interrupts(turn, flag)
+	return true
 
 
 static func _status_interrupts(turn: Gen2Turn, flag: int) -> void:
@@ -2202,15 +2239,22 @@ static func _ohko(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	var defender: Gen2BattleMon = turn.defender()
 
-	if attacker.level < defender.level:
+	# `OneHitKOEffect_` reads no level: the user's stored Speed under the
+	# target's is `wMoveMissed`, and the move's own 30 rolls otherwise.
+	if turn.battle.is_gen1():
+		if attacker.stat("speed") < defender.stat("speed"):
+			_miss(turn)
+			turn.end()
+			return
+	elif attacker.level < defender.level:
 		turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
 		turn.end()
 		return
-
-	turn.accuracy = clampi(
-		int(turn.move.get("accuracy", 0)) + (attacker.level - defender.level) * OHKO_LEVEL_BONUS,
-		0, Gen2Accuracy.ALWAYS_HITS
-	)
+	else:
+		turn.accuracy = clampi(
+			int(turn.move.get("accuracy", 0)) + (attacker.level - defender.level) * OHKO_LEVEL_BONUS,
+			0, Gen2Accuracy.ALWAYS_HITS
+		)
 	_check_hit(turn)
 	if turn.missed:
 		return
