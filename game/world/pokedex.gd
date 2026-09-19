@@ -483,13 +483,10 @@ func entry() -> Dictionary:
 
 
 ## `_PrintNum` for this screen's two calls: [param digits] digits with
-## [param before_point] before a decimal point, and neither the money nor the
-## leading-zero flag set. A leading zero is neither printed nor replaced,
-## `.PrintLeadingZero` writing nothing while the flag is clear and
-## `.AdvancePointer` stepping over the cell anyway, which is why this answers a
-## fixed-width field of spaces rather than a trimmed number. The digit in front of
-## the point always prints: `.PrintDigit` latches as `e` runs out, which makes a
-## height of 8 read 0'08" not blank.
+## [param before_point] before a decimal point, no money and no leading-zero
+## flag. `.PrintLeadingZero` writes nothing while `.AdvancePointer` steps over
+## the cell anyway, so this answers a fixed-width field of spaces; the digit in
+## front of the point always prints, which makes a height of 8 read 0'08".
 static func print_num(value: int, digits: int, before_point: int) -> String:
 	var text: String = ""
 	var padded: String = String.num_int64(maxi(value, 0)).lpad(digits, "0").right(digits)

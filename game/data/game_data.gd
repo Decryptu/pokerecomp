@@ -3461,7 +3461,8 @@ func gen1_special_pic(name: String) -> Dictionary:
 	var cell: int = int(atlas("special_front").get("cell", 0))
 	if slot < 0 or cell <= 0:
 		return {}
-	return {"atlas": "special_front", "slot": slot, "width": cell, "height": cell}
+	var side: int = int(Gen1Layout.SPECIAL_PIC_TILES.get(name, 0)) * PokeTiles.TILE_WIDTH
+	return {"atlas": "special_front", "slot": slot, "width": side, "height": side}
 
 
 func species_pic_animation(number: int, unown_form: int = 0) -> Dictionary:

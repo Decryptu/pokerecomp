@@ -1,14 +1,11 @@
 class_name Gen2WorldCollision
 extends RefCounted
 
-## Collision-code permissions. A map's grid stores the raw code from the tileset's
-## four-cell table and the game looks it up in a second table before letting
-## ordinary walking in; keeping that lookup here leaves the code itself available
-## for water, ledges and warps. [constant PERMISSIONS] is
-## `CollisionPermissionTable` entry for entry, the same 256 bytes in all three
-## games, carried whole rather than as a list of interesting codes: a code left off
-## such a list silently becomes ordinary ground, which is how the waterfall,
-## current and buoy families were once walkable here.
+## Collision-code permissions. A map's grid stores the tileset's raw code and the
+## game looks it up in a second table, kept here so the code stays readable for
+## water, ledges and warps. [constant PERMISSIONS] is `CollisionPermissionTable`
+## whole, the same 256 bytes in all three games: a code left off a list of
+## interesting ones becomes ordinary ground, which the waterfall family once was.
 
 const LAND_TILE: int = 0x00
 const WATER_TILE: int = 0x01

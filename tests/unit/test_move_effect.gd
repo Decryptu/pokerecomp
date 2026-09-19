@@ -4952,6 +4952,12 @@ func test_obedience_badge_thresholds_use_only_the_four_source_badges() -> void:
 			if mask & (1 << int(row[0])):
 				expected = int(row[1])
 		assert_eq(Gen2EffectCommands._obedience_level(mask), expected)
+		## `.monIsTraded`: MARSHBADGE is bit 6 of `wObtainedBadges`.
+		var kanto: int = 10
+		for row: Array in [[1, 30], [3, 50], [6, 70], [7, 101]]:
+			if mask & (1 << int(row[0])):
+				kanto = int(row[1])
+		assert_eq(Gen2EffectCommands._obedience_level(mask, true), kanto)
 
 
 func test_disobedience_reaches_every_outcome_and_clears_encore() -> void:

@@ -1,14 +1,11 @@
 class_name Gen2WorldMomPhone
 extends RefCounted
 
-## `engine/events/mom_phone.asm`: what Mom's savings buy while the player is out,
-## and the call she makes about it. `MomTriesToBuySomething` runs after a trainer
-## battle, on the same `Script_reloadmapafterbattle` branch `Script_SpecialBillCall`
-## sits opposite. It reads her balance, decides whether a purchase is due, hands
-## the item over and puts her on the line. Scene-free like the other world hosts,
-## and split the way the source is: this file is the decision, applying it is
-## [method Gen2WorldAPI.mom_purchase] and the call is
-## [method Gen2WorldAPI.request_caller_phone_call].
+## `engine/events/mom_phone.asm`: what Mom's savings buy and the call about it.
+## `MomTriesToBuySomething` runs after a trainer battle on the
+## `Script_reloadmapafterbattle` branch opposite `Script_SpecialBillCall`. This
+## file is the decision; applying it is [method Gen2WorldAPI.mom_purchase] and
+## the call is [method Gen2WorldAPI.request_caller_phone_call].
 
 ## `PhoneContacts` index. Mom is the second row on all three cartridges.
 const CONTACT_MOM: int = 1

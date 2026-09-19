@@ -85,7 +85,7 @@ const CABLE_CLUB_TEXTS: Dictionary = {
 	"link": ["where_to", "please_wait", "canceled"],
 	"trade_center": ["will_be_traded"],
 	"just_a_moment": ["just_a_moment"],
-	"link_battle": ["defeated", "lost", "items"],
+	"link_battle": ["defeated", "lost", "items", "rival1_win", "blacked_out", "blacked_out_map"],
 	"start_menu": ["cannot_use_items", "cannot_get_off"],
 	"cable_club_strings": ["options", "please_wait", "cancel", "stats_trade", "waiting",
 		"trade_completed", "trade_canceled", "win", "lose", "draw"],

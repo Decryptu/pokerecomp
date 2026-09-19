@@ -36,13 +36,10 @@ const STEP_DIRECTIONS: Array[Vector2i] = [
 ]
 
 ## How many steps an entry's `glow` amount is rounded onto, and the palette colour
-## it leaves alone. The rung count is the host's rather than the mod's: both world
-## renderers cache one sprite texture per distinct set of four colours and neither
-## evicts, so a glow interpolated freely would leave a texture behind on every
-## frame the map is up. Eight rather than four because a mark meant to be subtle
-## has to keep a cycle after the rounding: a glow whose peak is under half the
-## walk has four steps left on eighths and one on quarters. Colour 0 is the icon's
-## cut-out, so walking it would change the cache key and no pixel.
+## it leaves alone. Both world renderers cache one sprite texture per set of four
+## colours and never evict, so a free interpolation leaks a texture a frame. Eight
+## keeps a cycle for a glow whose peak is under half the walk. Colour 0 is the
+## icon's cut-out, so walking it would change the cache key and no pixel.
 const GLOW_RUNGS: int = 8
 const GLOW_CUTOUT_COLOR: int = 0
 

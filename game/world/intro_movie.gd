@@ -1,14 +1,11 @@
 class_name Gen2IntroMovie
 extends RefCounted
 
-## `CrystalIntro` (engine/movie/intro.asm): the movie between the GameFreak logo
-## and the title screen. Twenty-eight scenes behind one jumptable, stepped once
-## per hardware frame. Half of them are setup, loading a sheet, a 32x32 BG map and
-## its attribute plane and a palette run; the other half animate for a fixed
-## number of frames by writing the palettes, `hSCX`, `hSCY`, `wLYOverrides` and a
-## handful of sprite animation structs. This owns all of that state and
-## [Gen2IntroMoviePage] turns it into pixels, the same split the credits use.
-## Crystal only: `GoldSilverIntro` is a different movie.
+## `CrystalIntro` (engine/movie/intro.asm): twenty-eight scenes behind one
+## jumptable, stepped once per hardware frame, half of them loading a sheet, a
+## BG map and a palette run and half animating the palettes, `hSCX`, `hSCY`,
+## `wLYOverrides` and the sprite animation structs. This owns the state and
+## [Gen2IntroMoviePage] draws it. Crystal only: `GoldSilverIntro` is another movie.
 
 ## `wBGPals2` and the `wOBPals2` behind it, which is what the screen shows.
 ## Every scene's `ld bc, 16 palettes` runs off the end of the background

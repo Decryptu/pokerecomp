@@ -25,14 +25,11 @@ const ICON_TILE: int = 8
 const ICON_SIZE: int = ICON_TILE * 2
 const ICON_MAX: int = 18
 
-## Where each tab's icon is cut from: the cache's own sheet name, the top-left
-## pixel in that sheet's own grid, how many tiles wide that grid is, and how many
-## whole pixels one source pixel is drawn as. Every one is art the page it opens
-## already draws: #DEX is the caught marker as `HUDBallIcons` draws it, on white
-## rather than on the dex's black field; PACK is the middle of `PackGFX`'s bag;
-## GEAR is `.PlacePokegearCardIcon`'s MAP icon; and the player tab is the head of
-## `GetCardPic`'s own picture. #MON has no entry: its icon is the party's lead,
-## read live.
+## Where each tab's icon is cut from: the sheet, the top-left pixel in its grid,
+## the grid's width in tiles and the pixel scale. Every one is art the page it
+## opens draws: `HUDBallIcons`' caught marker, the middle of `PackGFX`'s bag,
+## `.PlacePokegearCardIcon`'s MAP icon and the head of `GetCardPic`'s picture.
+## #MON has no entry: its icon is the party's lead, read live.
 const ICONS: Dictionary = {
 	Gen2WorldStartMenu.ITEM_POKEDEX: {
 		"sheet": "ball_icons", "at": Vector2i(0, 0), "size": Vector2i(8, 8),

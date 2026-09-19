@@ -455,14 +455,11 @@ static func note_field(target: CanvasItem, field: Color) -> void:
 	screen._take_field(target, field)
 
 
-## Takes the surround's colour from a picture a screen has just drawn. Called from
-## [method Gen2PicImage.show] rather than by each screen: that is the one place a
-## redrawn picture reaches the node showing it, so the surround follows a palette
-## fade and a screen swap without either knowing this exists. Only a picture the
-## size of the hardware screen counts, and only one opaque everywhere it is
-## sampled. Whether the surround is showing is deliberately not a condition: the
-## mask goes up on the same frame in the other order, so a colour recorded only
-## while it was up would be the colour of the screen before this one.
+## Takes the surround's colour from a picture a screen has just drawn, from
+## [method Gen2PicImage.show] so a fade and a screen swap both reach it. Only a
+## screen-sized picture opaque everywhere it is sampled counts. Whether the
+## surround is showing is not a condition: the mask goes up on the same frame in
+## the other order, so a colour recorded only then would be the last screen's.
 static func note_picture(target: CanvasItem, image: Image) -> void:
 	if target == null or image == null:
 		return
@@ -515,13 +512,10 @@ func clear_field() -> void:
 		_mask.queue_redraw()
 
 
-## Hides a view switch behind the cartridge's own way of going black. Building a
-## renderer is a stall, and nothing on one thread can animate over its own freeze,
-## but the middle of a wipe is a still picture: the close is spent on the renderer
-## still running, [param rebuild] is called on the frame the screen is fully
-## black, and the open is spent on the one it built.
-## `StartTrainerBattle_SpeckleToBlack` is the pattern, so the switch reads as the
-## game's own and costs no art. Around the switch rather than at one caller,
+## Hides a view switch behind `StartTrainerBattle_SpeckleToBlack`. Building a
+## renderer is a stall, but the middle of a wipe is a still picture: the close is
+## spent on the renderer still running, [param rebuild] is called on the frame
+## the screen is fully black, and the open is spent on the one it built. Here
 ## because every way of choosing a view reaches [signal Gen2ModHost.view_changed].
 func play_view_cover(rebuild: Callable) -> void:
 	if not _can_animate_cover():

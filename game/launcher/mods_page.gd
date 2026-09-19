@@ -292,14 +292,10 @@ static func _clipped(label: Label) -> Label:
 	return label
 
 
-## What a row can do: download a mod that is not installed, update one a source
-## offers a newer version of, replace a copy this host would not load, and remove
-## whatever is on disk. Download, update and replace are the same press, since a
-## source hands over an archive and the installer replaces what was there.
-##
-## The remove button follows `present` rather than `installed`, or a copy whose
-## manifest was refused has no button that does anything: the download over it is
-## refused by the directory and there is nothing else to press.
+## What a row can do: download, update, replace a copy this host would not
+## load, and remove whatever is on disk. The first three are the same press,
+## since the installer replaces what was there. The remove button follows
+## `present` rather than `installed`, or a refused copy has no button that works.
 func _action_buttons(row: Dictionary) -> Array[Control]:
 	var out: Array[Control] = []
 	var action: StringName = Gen2ModCatalogue.action_for(row)

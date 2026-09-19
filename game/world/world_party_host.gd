@@ -811,14 +811,11 @@ static func _gen1_item_happiness(
 		world.gen1_pikachu_happiness(Gen1Pikachu.HAPPY_USEDITEM, party_index)
 
 
-## engine/items/tmhm.asm's TeachTMHM, as one candidate transaction beside
-## `use_item()`. The pack's own USE reaches this rather than `UseItem`'s
-## jumptable. The refusal order is the source's: CanLearnTMHMMove, then KnowsMove,
-## then LearnMove's own search for an empty slot, each answering before anything is
-## written. A full moveset is where LearnMove reaches ForgetMove, which is a menu,
-## so this is called twice, once with [param forget_slot] at -1 to run the
-## compatibility checks and again with the slot the player gave up. An empty slot
-## always wins over a passed slot. An HM is not consumed: TeachTMHM skips both.
+## engine/items/tmhm.asm's TeachTMHM, one candidate transaction the pack's USE
+## reaches. The refusals are the source's: CanLearnTMHMMove, KnowsMove, then
+## LearnMove's search for an empty slot. A full moveset reaches ForgetMove, a
+## menu, so this is called twice, with [param forget_slot] at -1 and again with
+## the slot given up; an empty slot always wins. An HM is not consumed.
 static func teach_tm_hm(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -922,14 +919,10 @@ static func _teach_tm_hm_refusal(
 	return {"ok": true, "move": move, "slot": slot, "forgot": forgot}
 
 
-## `LearnMove` on its own, without the TM/HM that usually reaches it: what an
-## evolution offers a Pokemon whose four slots are full. The refusal order is
-## `LearnMove`'s own, an empty slot always winning over a passed
-## [param forget_slot] the way `.loop` does, and by default nothing is consumed and
-## no happiness moves because no item was used. [param compatibility_checked] is
-## `CheckCanLearnMoveTutorMove`'s own `predef CanLearnTMHMMove` and
-## [param happiness_kind] its `ld c, HAPPINESS_LEARNMOVE`; a level-up offer passes
-## neither, which is what makes it the plain `LearnMove` it is.
+## `LearnMove` on its own, as an evolution or a level offers it: an empty slot
+## wins over a passed [param forget_slot] the way `.loop` does, and nothing is
+## consumed. [param compatibility_checked] is `CheckCanLearnMoveTutorMove`'s
+## `predef CanLearnTMHMMove` and [param happiness_kind] its HAPPINESS_LEARNMOVE.
 static func learn_move(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -1346,7 +1339,8 @@ static func capture_wild(
 	persist: bool = true,
 	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL,
 	thrower: Gen2BattleMon = null,
-	safari_catch_rate: int = -1
+	safari_catch_rate: int = -1,
+	ghost: bool = false
 ) -> Dictionary:
 	if world == null or save == null or world.data == null or wild == null:
 		return _failure(&"missing_capture_context", {})
@@ -1376,7 +1370,7 @@ static func capture_wild(
 	if random == null:
 		generator.randomize()
 	var outcome: Dictionary = _capture_outcome(
-		world.data, wild, ball, generator, battle_type, thrower, safari_catch_rate
+		world.data, wild, ball, generator, battle_type, thrower, safari_catch_rate, ghost
 	)
 	var candidate: Gen2SaveData = opened["candidate"]
 	var stored: Dictionary = _store_capture(
@@ -1431,6 +1425,7 @@ static func capture_wild(
 		"quantity": next_quantity,
 		"catch_rate": int(outcome.get("catch_rate", 0)),
 		"wobbles": int(outcome.get("wobbles", 0)),
+		"dodged": bool(outcome.get("dodged", false)),
 		"species": wild.species,
 		"destination": destination.duplicate(true),
 		"box_full": box_full,
@@ -2527,8 +2522,12 @@ static func _capture_outcome(
 	random: RandomNumberGenerator,
 	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL,
 	thrower: Gen2BattleMon = null,
-	safari_catch_rate: int = -1
+	safari_catch_rate: int = -1,
+	ghost: bool = false
 ) -> Dictionary:
+	## `ItemUseBall`'s `IsGhostBattle` in front of every other test.
+	if ghost:
+		return {"caught": false, "catch_rate": 0, "wobbles": 0, "dodged": true}
 	if ball == ITEM_MASTER_BALL or battle_type == Gen2Battle.BATTLETYPE_TUTORIAL:
 		return {"caught": true, "catch_rate": 255, "wobbles": 3}
 	if _generation(data) == RomRegistry.GEN1:
@@ -2555,10 +2554,8 @@ static func _capture_outcome(
 	}
 
 
-## `ItemUseBall`, which settles no catch rate at all. `.setAnimData`'s $10, the
-## ball that cannot be thrown at a ghost, has no caller: nothing puts a Pokemon
-## Tower ghost on the screen. The Safari Zone's branch spends `wNumSafariBalls`
-## rather than the bag and changes nothing else.
+## `ItemUseBall`, which settles no catch rate at all. The Safari Zone's branch
+## spends `wNumSafariBalls` rather than the bag and changes nothing else.
 static func _gen1_capture_outcome(
 	data: GameData, wild: Gen2BattleMon, ball: int, random: RandomNumberGenerator,
 	catch_rate: int = -1

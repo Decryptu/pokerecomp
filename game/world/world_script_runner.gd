@@ -716,6 +716,7 @@ static func begin(
 	)
 	runner._last_item = int(request.get("item", 0))
 	runner.player_name = String(request.get("player_name", ""))
+	runner._rival_name = String(request.get("rival_name", UNNAMED))
 	var bank: int = int(request.get("bank", 0))
 	var address: int = int(request.get("script", request.get("address", 0)))
 	var trainer_phase: StringName = StringName(request.get("trainer_phase", &""))
@@ -724,12 +725,9 @@ static func begin(
 	if not trainer_phase.is_empty():
 		## LoadTrainer_continue clears wRunningTrainerBattleScript for every
 		## trainer encounter, talked to or seen (home/trainers.asm), and only
-		## StartBattleWithMapTrainerScript's `loadmem wRunningTrainerBattleScript,
-		## -1` sets it again. Without this the flag committed by one battle
-		## outlives it, so `endifjustbattled` ends the after-battle script on
-		## every later conversation and nothing past that command ever runs. The
-		## Rocket hideout's two password grunts are the first place on the walked
-		## route where that content is load bearing.
+		## StartBattleWithMapTrainerScript's `loadmem` sets it again. Left set,
+		## `endifjustbattled` ends the after-battle script on every later
+		## conversation, which the hideout's two password grunts depend on.
 		runner._stage_just_battled(false)
 	if trainer_phase == &"initial" and trainer is Dictionary:
 		started = runner._push_frame(
@@ -2982,12 +2980,16 @@ func _command_loadwildmon(_source_opcode: int, command: Dictionary, _bank: int) 
 
 func _command_loadtrainer(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	_loaded_battle_type = -1
+	var trainer_group: int = int(command.get("trainer_group", 0))
 	_battle_setup = _new_battle_setup({
-		"kind": &"trainer", "trainer_group": int(command.get("trainer_group", 0)),
+		"kind": &"trainer", "trainer_group": trainer_group,
 		# The cartridge's loadtrainer operand is one-based; the imported
 		# party table API is zero-based.
 		"trainer_id": maxi(int(command.get("trainer_id", 0)) - 1, 0),
 	})
+	## `PlaceEnemysName`'s `.rival`.
+	if trainer_group in [Gen2Battle.TRAINER_CLASS_RIVAL1, Gen2Battle.TRAINER_CLASS_RIVAL2]:
+		_battle_setup["trainer_name"] = _rival_name
 	_emit_runtime_event(&"battle_setup_changed", _battle_setup)
 	return {"ok": true}
 

@@ -112,7 +112,6 @@ const CLOCKWISE: Dictionary = {
 ## `SetPikachuSpawnOutside`'s two lists and its named maps.
 const OUTSIDE_BELOW_MAPS: Array[int] = [0xC2, 0x4C, 0x4F, 0xBA, 0xBE, 0xB8, 0x54]
 const OUTSIDE_FACING_MAPS: Array[int] = [0x2F, 0xE6, 0x3E, 0x5E, 0x80, 0x31, 0xA4]
-const OAKS_LAB: int = 0x28
 const ROUTE_22_GATE: int = 0xC1
 const ROUTE_2_GATE: int = 0x31
 const MT_MOON_B1F: int = 0x3C
@@ -404,7 +403,7 @@ func on_warp(
 
 ## `SetPikachuSpawnOutside`, run on the way into a building from a town or route.
 func _spawn_outside(destination: int, player_facing: int) -> int:
-	if destination == OAKS_LAB:
+	if destination == Gen1Layout.OAKS_LAB:
 		return SPAWN_LEFT
 	if destination == ROUTE_22_GATE:
 		return SPAWN_ON_PLAYER_DOWN if player_facing == FACING_DOWN else SPAWN_RIGHT

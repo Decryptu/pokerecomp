@@ -1,14 +1,11 @@
 class_name Gen2TownMapScreen
 extends Control
 
-## The region map, embedded in the overworld the way the trainer card and the Hall
-## of Fame are. [Gen2TownMap] owns the cursor walk and the region choice,
-## [Gen2TownMapPage] the tile screen; this composes the two and draws the cursor
-## and player icon over them. `Pokedex_GetArea`'s AREA screen is the same two
-## pieces with a third object set: no cursor, one blinking nest icon per landmark,
-## and the player icon while SELECT is held. Landmark coordinates are shadow-OAM
-## values with the hardware's offsets already in them, which the importer takes
-## back off, so a stored point is the centre of its 16x16 icon.
+## The region map over the overworld: [Gen2TownMap] owns the walk and the
+## region choice, [Gen2TownMapPage] the tiles, and this draws the cursor and
+## player icon over them. `Pokedex_GetArea`'s AREA screen is the same with no
+## cursor, a blinking nest icon per landmark and the player while SELECT is
+## held. A stored landmark is the centre of its 16x16 icon.
 
 signal closed()
 

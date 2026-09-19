@@ -159,7 +159,7 @@ func _draw_pics() -> void:
 	var map: PackedByteArray = _bg_map()
 	_ensure_pixels()
 	var raster: Array = _raster_key()
-	var gray: bool = bool(_view.get("grayscale", false))
+	var gray: PackedColorArray = _grayscale()
 	# A packed array is passed by reference, so a key holding the screen's own
 	# map is a key that changes with it: every animation that edits nothing but
 	# the tilemap, which is most of them, would compare equal to what is on
@@ -308,10 +308,15 @@ func _ensure_pixels() -> void:
 	var enemy_key: Array = [
 		int(_view.get("enemy_species", 0)), bool(_view.get("enemy_substitute", false)),
 		int(_view.get("enemy_unown_form", 0)), int(_view.get("enemy_trainer_pic", 0)),
-		bool(_view.get("enemy_minimized", false)),
+		bool(_view.get("enemy_minimized", false)), String(_view.get("enemy_special_pic", "")),
 	]
 	if enemy_key != _enemy_pixels_key:
-		if int(enemy_key[3]) == Gen2BattleScreen.LINK_OPPONENT_PIC:
+		if not String(enemy_key[5]).is_empty():
+			## `GhostPic` and the two fossils, outside the species run.
+			_enemy_pixels = padded_pic(_data,
+				_data.gen1_special_pic(String(enemy_key[5])), Gen2BattleScreenMap.ENEMY_SIDE, true
+			)
+		elif int(enemy_key[3]) == Gen2BattleScreen.LINK_OPPONENT_PIC:
 			_enemy_pixels = padded_pic(_data, _data.player_frontpic(), Gen2BattleScreenMap.ENEMY_SIDE)
 		elif int(enemy_key[3]) > 0:
 			_enemy_pixels = padded_pic(_data,
@@ -580,7 +585,12 @@ func _battler_palette(species: int, slot: int, shiny: bool) -> PackedColorArray:
 	var grayscale: PackedColorArray = _grayscale()
 	if not grayscale.is_empty():
 		return grayscale
-	return _remap(_data.palette(species, shiny), _palette_map("bg_palette_maps", slot))
+	## `MarowakAnim`'s `rOBP1` over the enemy's square alone.
+	var dmg: int = int(_view.get("enemy_pic_dmg", -1)) \
+		if slot == Gen2BattleAnimBackground.PAL_BG_ENEMY else -1
+	if dmg < 0:
+		dmg = _palette_map("bg_palette_maps", slot)
+	return _remap(_data.palette(species, shiny), dmg)
 
 
 ## One of `SetPal_Battle`'s four. Every `SuperPalettes` row shares colour 0 and
@@ -588,6 +598,9 @@ func _battler_palette(species: int, slot: int, shiny: bool) -> PackedColorArray:
 ## whichever block covers it; only the bars and the pictures read the two
 ## between.
 func gen1_screen_palette(slot: int) -> PackedColorArray:
+	var black: PackedColorArray = _grayscale()
+	if not black.is_empty():
+		return black
 	var player: bool = slot == GEN1_PAL_PLAYER_BAR or slot == GEN1_PAL_PLAYER_MON
 	var base: PackedColorArray = _data.palette(
 		int(_view.get("player_species" if player else "enemy_species", 0)),
@@ -603,10 +616,15 @@ func gen1_screen_palette(slot: int) -> PackedColorArray:
 
 
 ## `_CGB_BattleGrayscale`'s palette while the view says the battle is still in
-## it, which is every frame up to `GetSGBLayout SCGB_BATTLE_COLORS`. Empty once
-## the colours are loaded, which is what every other palette here answers to.
+## it, which is every frame up to `GetSGBLayout SCGB_BATTLE_COLORS`, and
+## `SET_PAL_BATTLE_BLACK`'s PAL_BLACK behind all five blocks of a lost
+## Generation 1 fight. Empty otherwise.
 func _grayscale() -> PackedColorArray:
-	if not bool(_view.get("grayscale", false)) or _data == null:
+	if _data == null:
+		return PackedColorArray()
+	if bool(_view.get("gen1_black", false)):
+		return _data.world_palette(Gen1Layout.PAL_BLACK)
+	if not bool(_view.get("grayscale", false)):
 		return PackedColorArray()
 	return _data.battle_grayscale_palette()
 
@@ -677,7 +695,8 @@ func _draw_panels() -> void:
 			else PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 		)
 
-	if _layer_changed(&"enemy_bar", [enemy_hp, enemy_max_hp, enemy_hud, raster]):
+	var gray: PackedColorArray = _grayscale()
+	if _layer_changed(&"enemy_bar", [enemy_hp, enemy_max_hp, enemy_hud, raster, gray]):
 		var enemy: PackedByteArray = _new_buffer()
 		if enemy_hud:
 			_hud.draw_hp_bar(
@@ -685,7 +704,7 @@ func _draw_panels() -> void:
 			)
 		_show_layer(_enemy_bar, enemy, _hp_palette(enemy_hp, enemy_max_hp))
 
-	if _layer_changed(&"player_bar", [player_hp, player_max_hp, player_hud, raster]):
+	if _layer_changed(&"player_bar", [player_hp, player_max_hp, player_hud, raster, gray]):
 		var player: PackedByteArray = _new_buffer()
 		if player_hud:
 			_hud.draw_hp_bar(
@@ -1005,6 +1024,9 @@ func _show_image(into: TextureRect, image: Image) -> void:
 ## An HP bar is green, yellow or red by how much of it is lit rather than by the
 ## hit points behind it, which is the rule the games use.
 func _hp_palette(hp: int, max_hp: int) -> PackedColorArray:
+	var black: PackedColorArray = _grayscale()
+	if not black.is_empty():
+		return black
 	var lit: int = Gen2BattleHud.bar_pixels(
 		hp, max_hp, Gen2BattleHud.HP_BAR_TILES * Gen2BattleHud.TILE
 	)

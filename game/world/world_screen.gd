@@ -1947,6 +1947,7 @@ func _spend_poison_steps() -> bool:
 		lines.append(Gen2Nuzlocke.death_text(Gen2Nuzlocke.grave_name(_data, lost)))
 	if bool(pass_result.get("whiteout", false)):
 		lines.append_array(_whiteout_texts())
+		_world.gen1_map_blackout()
 		_hold_poison_flash(_show_player_event.bind(lines, _then(after, _finish_whiteout)))
 	else:
 		_persist_after_poison_step(save)
@@ -2005,13 +2006,17 @@ func _persist_after_poison_step(save: Gen2SaveData) -> void:
 	_refresh_labels()
 
 
-## `_WhitedOutText`, with the player name the save carries, or the line that
-## replaces it once a Nuzlocke has nothing left to send out.
+## `_WhitedOutText` or `TEXT_BLACKED_OUT`, with the player name the save
+## carries, or the line that replaces it once a Nuzlocke has nothing left.
 func _whiteout_texts() -> PackedStringArray:
 	var save: Gen2SaveData = active_save()
 	var player_name: String = save.player_name if save != null else "<PLAYER>"
 	if _nuzlocke_ends_here(save):
 		return PackedStringArray([Gen2Nuzlocke.run_over_text(player_name)])
+	if _world != null and _world.is_gen1():
+		return PackedStringArray([_world.gen1_filled_text(
+			_data.special_text("link_battle", "blacked_out_map")
+		)])
 	return PackedStringArray([Gen2WorldPartyHost.whited_out_text(player_name)])
 
 
@@ -5549,12 +5554,21 @@ func _is_a_safari_fight(values: Dictionary) -> bool:
 		and Gen1Layout.is_safari_battle_map(_world.current_map.number)
 
 
+func _stamp_gen1_battle_values(values: Dictionary) -> void:
+	if _world == null or not _world.is_gen1():
+		return
+	values["blackout_text"] = _world.gen1_blackout_text()
+	if StringName(values.get("kind", &"")) == &"wild":
+		values["gen1_ghost"] = _world.gen1_ghost_kind(int(values.get("pokemon", 0)))
+
+
 func _open_battle_host(request: Dictionary) -> void:
 	if _battle_host != null or _data == null:
 		return
 	var values: Dictionary = request.get("values", {})
 	if _is_a_safari_fight(values):
 		values["battle_type"] = Gen2Battle.BATTLETYPE_SAFARI
+	_stamp_gen1_battle_values(values)
 	var tutorial: bool = bool(values.get("tutorial", false))
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	if _world != null:
@@ -5707,7 +5721,7 @@ func _on_capture_requested(ball: int) -> void:
 		else Gen2WorldPartyHost.capture_wild(
 			_world, save, target, ball, _encounter_random, 0, _active_battle_persist,
 			_battle_host.capture_battle_type(), _battle_host.capture_thrower(),
-			_battle_host.capture_safari_catch_rate()
+			_battle_host.capture_safari_catch_rate(), _battle_host.capture_ghost()
 		)
 	)
 	_battle_host.complete_capture(result)
@@ -5916,6 +5930,14 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 		## synced back carries it, so this is where it reaches disk.
 		_persist_after_battle(fought_save)
 	var resumed: Array = _world.complete_runtime_request(result)
+	## `AllPokemonFainted`: one `RunMapScript` under LOST_BATTLE, then `HandleBlackOut`.
+	if _world.gen1_blackout_due(fought_save, StringName(result.get("outcome", &""))):
+		_active_battle_save = null
+		_active_battle_persist = false
+		_show_script_results(resumed)
+		_show_script_results(_world.dispatch_sight_events())
+		_finish_whiteout()
+		return
 	if resumed.is_empty():
 		## `WildBattleScript` is `randomwildmon`, `startbattle`,
 		## `reloadmapafterbattle`, `end`: a wild encounter reloads the map on the
@@ -5948,7 +5970,8 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 		## `WildBattleScript` ends in `reloadmapafterbattle` like every other
 		## battle, so a wild fight that was lost reaches `Script_BattleWhiteout`
 		## even though no script of the map's was suspended.
-		if StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_LOST:
+		if StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_LOST \
+			and not _world.is_gen1():
 			_active_battle_save = null
 			_active_battle_persist = false
 			_start_whiteout()
@@ -6428,20 +6451,13 @@ func _start_link_battle(request: Dictionary) -> bool:
 	if gen1:
 		values["trainer_class"] = Gen1Layout.LINK_TRAINER_CLASS
 		values["stadium_cup"] = _world.state.link_session().gen1_stadium_cup > 0
+		## `TrainerDefeatedText` and `LinkBattleLostText` over `wTrainerName`.
 		for row: Array in [["win_text", "defeated"], ["loss_text", "lost"]]:
-			values[String(row[0])] = {"text": _gen1_link_battle_text(
+			values[String(row[0])] = {"text": _world.gen1_trainer_text(
 				String(row[1]), String(peer.get("name", ""))
 			)}
 	_start_battle_request({"kind": &"link_room_requested", "values": values})
 	return true
-
-
-## `TrainerDefeatedText` and `LinkBattleLostText` over `wTrainerName`.
-func _gen1_link_battle_text(text: String, partner: String) -> String:
-	var layout: Dictionary = Gen1Layout.for_id(_data.id)
-	return _world.gen1_filled_text(_data.special_text("link_battle", text).replace(
-		"%s%04X>" % [Gen2TextStream.RAM_MARKER, int(layout["trainer_name_wram"])], partner
-	))
 
 
 func _open_link_screen(screen_mode: int) -> bool:

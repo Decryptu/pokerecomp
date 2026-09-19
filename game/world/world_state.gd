@@ -636,13 +636,9 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	restored.set_last_dex_mode(int(source.get("last_dex_mode", Gen2Layout.DEXMODE_NEW)))
 	restored.set_kurt_apricorn_quantity(int(source.get("kurt_apricorn_quantity", 0)))
 	## Absent in a state written before the Unown dex, which reads as an empty
-	## one: the flag that unlocks the mode is an engine flag and survives on its
-	## own, so an old save shows the mode with nothing listed under it, which is
-	## what a player who has caught none would see anyway.
-	## Read before the forms below, because [method update_unown_dex] writes this
-	## byte too: a state that carries one keeps it, and one written before the
-	## byte was kept falls back to the first form caught, which is the same
-	## answer for every save whose first Unown was caught rather than only met.
+	## one under a mode the engine flag unlocks on its own. Read before the
+	## forms below, because [method update_unown_dex] writes this byte too: a
+	## state without one falls back to the first form caught.
 	restored.note_first_unown_seen(int(source.get("first_unown_seen", 0)))
 	for raw_form: Variant in _list(source, "unown_dex"):
 		restored.update_unown_dex(int(raw_form))

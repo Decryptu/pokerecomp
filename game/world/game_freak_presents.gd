@@ -1,14 +1,11 @@
 class_name Gen2GameFreakPresents
 extends RefCounted
 
-## `GameFreakPresentsScene` and the sprite animation beside it, which is the
-## second half of `SplashScreen`. Two cartridges, two sequences: Crystal bounces a
-## Ditto in on `BattleAnim_Sine_e` and fades its pink to orange as it turns into
-## the logo, while Gold and Silver throw a star that leaves the logo behind it and
-## spray sparkles out of it. Every frame here is a frame the cartridge spends, and
-## the two jumptables run in one `advance_frame()` in the order that profile's
-## loop calls them. Scene-free: a host reads [method sprites], [method words] and
-## [method fade_step] and draws them.
+## `GameFreakPresentsScene` and its sprite animation, `SplashScreen`'s second
+## half. Crystal bounces a Ditto in on `BattleAnim_Sine_e` and fades its pink to
+## orange; Gold and Silver throw a star that leaves the logo behind it. Both
+## jumptables run in one `advance_frame()` in the profile's own order, and a host
+## reads [method sprites], [method words] and [method fade_step].
 
 ## `GameFreakLogoSpriteAnim`'s own jumptable, which is the Ditto's, and Gold's
 ## three objects. A host maps each onto the sheet it draws from.

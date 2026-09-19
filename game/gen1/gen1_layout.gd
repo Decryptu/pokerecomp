@@ -142,6 +142,8 @@ const PIC_INDEX_MEW: int = 0x15
 const PIC_INDEX_FOSSIL_KABUTOPS: int = 0xB6
 ## `GetMonHeader`'s if-chain, in `special_front`'s slot order.
 const SPECIAL_PICS: Dictionary = {0xB6: "fossil_kabutops", 0xB7: "fossil_aerodactyl", 0xB8: "ghost"}
+## `.specialID`'s `wMonHSpriteDim`: $66, $77 and $66.
+const SPECIAL_PIC_TILES: Dictionary = {"fossil_kabutops": 6, "fossil_aerodactyl": 7, "ghost": 6}
 const PIC_BANK_FOSSIL_KABUTOPS: int = 0x0B
 
 ## `FontGraphics` and `TextBoxGraphics`, copied to `vFont` and `vChars2 tile $60`
@@ -732,8 +734,11 @@ const CABLE_CLUB_WARP_ROWS: Array[String] = [
 	"trade_center", "trade_center_friend", "colosseum", "colosseum_friend",
 ]
 const SPECIAL_WARP_SIZE: int = 8
+const RIVAL1_CLASS: int = 0x19
 ## `OPP_RIVAL1`: `InitOpponent` fights a link partner as the rival's class.
-const LINK_TRAINER_CLASS: int = 25
+const LINK_TRAINER_CLASS: int = RIVAL1_CLASS
+## `.battleOccurred`'s one map: a loss here is the starter fight and no blackout.
+const OAKS_LAB: int = 0x28
 ## `ManualTextScroll` in a link battle: `ld c, 65` where a press would be.
 const LINK_BATTLE_TEXT_FRAMES: int = 65
 ## `DisplayLinkBattleVersusTextBox`'s box, names, VS and ball rows for
@@ -1729,6 +1734,12 @@ const PEWTER_POKECENTER: int = 0x3A
 const BILLS_HOUSE: int = 0x58
 const POKEMON_TOWER_1F: int = 0x8E
 const POKEMON_TOWER_7F: int = 0x94
+## `IsGhostBattle`: a wild on those floors with no SILPH_SCOPE in the bag, and
+## `RESTLESS_SOUL`, the MAROWAK the scope unveils.
+const ITEM_SILPH_SCOPE: int = 0x48
+const RESTLESS_SOUL: int = 105
+const GHOST_UNIDENTIFIED: StringName = &"ghost"
+const GHOST_UNVEILED: StringName = &"unveil"
 const MET_BILL_2_EVENT: int = 1372
 const BILLS_HOUSE_SCRIPT_ARRIVED: int = 0
 const BILLS_HOUSE_SCRIPT_HEALED: int = 5
@@ -1868,7 +1879,7 @@ const ALTERNATE_MUSIC_OPCODE_SIZES: Dictionary = {
 }
 const ALTERNATE_MUSIC_STEP_CAP: int = 24
 const EMOTE_FRAMES: int = 60
-const RIVAL_CLASSES: Array[int] = [0x19, 0x2A, 0x2B]
+const RIVAL_CLASSES: Array[int] = [RIVAL1_CLASS, 0x2A, 0x2B]
 const BADGE_COUNT: int = 8
 const MOVE_DOWN: int = 0
 const MOVE_UP: int = 1
@@ -2576,6 +2587,9 @@ const RED_BLUE: Dictionary = {
 	"link_battle_defeated_text": 0x3C6E9,
 	"link_battle_lost_text": 0x3C88E,
 	"link_battle_items_text": 0x3D0C5,
+	"rival1_win_text": 0x3C884,
+	"blacked_out_text": 0x3C889,
+	"blacked_out_map_text": 0x02ABA,
 	"trainer_name_wram": 0xD04A,
 	"link_state": 0xD12B,
 	"cur_map": 0xD35E,
@@ -3137,6 +3151,9 @@ const YELLOW: Dictionary = {
 	"link_battle_defeated_text": 0x3C70B,
 	"link_battle_lost_text": 0x3C8F3,
 	"link_battle_items_text": 0x3D1C8,
+	"rival1_win_text": 0x3C8E9,
+	"blacked_out_text": 0x3C8EE,
+	"blacked_out_map_text": 0x029B3,
 	"trainer_name_wram": 0xD049,
 	"link_state": 0xD12A,
 	"cur_map": 0xD35D,
@@ -3846,6 +3863,11 @@ static func map_count(id: StringName) -> int:
 ## `.inBattle`'s `wWereAnyMonsAsleep`: Yellow's `ld c, a` counts the wild's own
 ## sleep, where Red and Blue clear it and print `PlayedFluteNoEffectText` anyway.
 static func flute_counts_wild(id: StringName) -> bool:
+	return id == RomRegistry.YELLOW
+
+
+## `DisplayPlayerBlackedOutText`'s tail: Yellow alone ends the Safari game.
+static func poison_blackout_ends_safari(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
 
 

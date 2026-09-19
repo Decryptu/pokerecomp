@@ -9653,7 +9653,7 @@ func _gen1_story_path(data: GameData) -> Dictionary:
 	var world: Gen2WorldAPI = Gen2WorldAPI.open_snapshot(data, spawn) if spawn != null else null
 	if world == null:
 		return {"ok": false, "reason": "missing new-game spawn"}
-	world.gen1_rival_name = String(GEN1_RIVAL_NAMES.get(data.id, "BLUE"))
+	world.rival_name = String(GEN1_RIVAL_NAMES.get(data.id, "BLUE"))
 	world.set_player_name("RED")
 	var random := RandomNumberGenerator.new()
 	random.seed = 7

@@ -1,14 +1,11 @@
 class_name Gen2SplashScreen
 extends Control
 
-## `SplashScreen`, as far as this project has the art for it: the copyright
-## screen, the GameFreak logo animation, the intro movie and the title screen.
-## [Gen2BootCinema] is started with the phases this cache has art for, and one it
-## has none for is skipped rather than held on a blank screen. The pacing is the
-## source's: the copyright half is ten frames of blank and the screen for a hundred
-## with no button read at all, the GameFreak half reads one and a press there ends
-## the animation early, and the title screen reads a held button because every
-## `TitleScreenMain` branch is `hJoyDown`.
+## `SplashScreen`: the copyright, the GameFreak logo, the intro movie and the
+## title, each skipped when the cache has no art for it. The copyright is ten
+## blank frames and a hundred with no button read, the GameFreak half ends on a
+## press, and the title reads a held button since every `TitleScreenMain`
+## branch is `hJoyDown`.
 
 ## Emitted once the last phase this host can draw has finished.
 signal closed()

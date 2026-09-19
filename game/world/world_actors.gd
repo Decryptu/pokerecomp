@@ -1,14 +1,11 @@
 class_name Gen2WorldActors
 extends RefCounted
 
-## The sprites a mod puts in the world, driven and resolved by the host: a mod
-## wanting a follower or a marker registers an actor rather than a whole renderer,
-## and the screen drives it with one `advance_frame` per world frame and a
-## `sprites()` read per DRAWN one. PRESENTATION and nothing else: an actor's sprite
-## occupies no cell, blocks nothing, is talked to by nobody, is seen by no trainer
-## and is in no snapshot, which is why it is a layer of its own rather than a map
-## object. A mod names cartridge art and never composes pixels, the strip, palette
-## and animation rate being resolved here.
+## The sprites a mod puts in the world: a follower or a marker is an actor
+## rather than a renderer, driven by one `advance_frame` per world frame and a
+## `sprites()` read per drawn one. Presentation only: it occupies no cell, blocks
+## nothing, is seen by nobody and is in no snapshot. A mod names cartridge art
+## and never composes pixels; the strip, palette and rate are resolved here.
 
 ## Checked at registration, where the mod's name is still in hand.
 const ACTOR_METHODS: Array[String] = ["set_world", "advance_frame", "sprites"]

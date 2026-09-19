@@ -1,14 +1,11 @@
 class_name Gen2GoldSilverIntro
 extends RefCounted
 
-## `GoldSilverIntro`: the movie between the GameFreak logo and the title screen on
-## Gold and Silver. Seventeen scenes behind one jumptable, stepped once per
-## hardware frame, over three cutscenes. Crystal runs [Gen2IntroMovie] instead,
-## which is a different movie entirely. Two things are not that movie's shape: the
-## colour model is `DmgToCgbBGPals` rather than palette runs, so the whole movie is
-## one background palette at a time; and `hLCDCPointer` is LOW(rSCY) rather than
-## LOW(rSCX), which is what makes the water wobble, [method scroll_y_at] being the
-## seam. [Gen2GoldSilverIntroPage] turns all of it into pixels.
+## `GoldSilverIntro`: seventeen scenes behind one jumptable, stepped once per
+## hardware frame, over three cutscenes; Crystal runs [Gen2IntroMovie]. Its colour
+## model is `DmgToCgbBGPals`, one background palette at a time, and
+## `hLCDCPointer` is LOW(rSCY), which wobbles the water through
+## [method scroll_y_at]. [Gen2GoldSilverIntroPage] draws it.
 
 ## `wBGPals1` and `wOBPals1`, of which this movie only ever fills the first
 ## background palette and the first two object ones.

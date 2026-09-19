@@ -1936,7 +1936,7 @@ static func _check_status(turn: Gen2Turn) -> void:
 	if mon.disabled_slot >= 0 and mon.disabled_slot < mon.moves.size() \
 		and turn.move_number == int(mon.moves[mon.disabled_slot]):
 		_cant_move(mon)
-		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"disabled"})
+		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"disabled", "move": turn.move_number})
 		turn.end()
 		return
 
@@ -3927,20 +3927,26 @@ static func check_obedience(turn: Gen2Turn) -> void:
 		return
 	if user.ot_id < 0 or user.ot_id == battle.player_id:
 		return
-	var limit: int = _obedience_level(battle.player_badge_mask)
+	var gen1: bool = battle.is_gen1()
+	var limit: int = _obedience_level(
+		battle.gen1_badge_byte() if gen1 else battle.player_badge_mask, gen1
+	)
 	if user.level <= limit:
 		return
 	var total: int = mini(limit + user.level, 255)
 	if _obedience_roll(turn, total, true) < limit:
 		return
-	if SLEEPING_MOVES.has(turn.move_number) and Gen2Status.is_asleep(user.status):
+	## `CheckForDisobedience` has no `.CheckSleep` in front of its second roll.
+	if not gen1 and SLEEPING_MOVES.has(turn.move_number) and Gen2Status.is_asleep(user.status):
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"ignored_sleeping"})
 		turn.end()
 		return
-	if _obedience_roll(turn, total, false) < limit:
-		_disobedient_move(turn)
-	else:
+	if _obedience_roll(turn, total, false) >= limit:
 		_disobedient_action(turn, user.level - limit)
+	elif gen1:
+		_gen1_disobedient_move(turn)
+	else:
+		_disobedient_move(turn)
 	user.last_move_used = 0
 	user.last_counter_move = 0
 	user.encored_slot = -1
@@ -3948,8 +3954,9 @@ static func check_obedience(turn: Gen2Turn) -> void:
 	turn.end()
 
 
-static func _obedience_level(badges: int) -> int:
-	for row: Array in [[7, 101], [5, 70], [3, 50], [1, 30]]:
+## `.monIsTraded`'s ladder: Kanto's MARSHBADGE is bit 6, Johto's GLACIERBADGE 5.
+static func _obedience_level(badges: int, gen1: bool = false) -> int:
+	for row: Array in [[7, 101], [6 if gen1 else 5, 70], [3, 50], [1, 30]]:
 		if badges & (1 << int(row[0])):
 			return int(row[1])
 	return 10
@@ -3976,6 +3983,33 @@ static func _disobedient_move(turn: Gen2Turn) -> void:
 		return
 	var chosen: int = turn.rng().randi_range(0, 255) & 3
 	while not available.has(chosen):
+		chosen = turn.rng().randi_range(0, 255) & 3
+	var number: int = int(user.moves[chosen])
+	var alternate: Gen2Turn = Gen2Turn.create(
+		turn.battle, turn.side, chosen, number, turn.data().move(number), turn.events
+	)
+	alternate.disobeyed = true
+	turn.battle.run_move_effect(alternate)
+
+
+## `.useRandomMove`: nothing with one move, a disabled move, Struggle, or only the
+## chosen move holding PP. The roll is compared with the one-based cursor and
+## used as a zero-based slot, so it can pick the chosen move and never the one
+## above it; a roll of the count reads past the list and is retried here.
+static func _gen1_disobedient_move(turn: Gen2Turn) -> void:
+	var user: Gen2BattleMon = turn.attacker()
+	var count: int = 0
+	var pp_total: int = 0
+	for slot: int in user.moves.size():
+		if int(user.moves[slot]) > 0:
+			count = slot + 1
+			pp_total += user.pp_left(slot)
+	if count < 2 or user.disabled_slot >= 0 or turn.move_number == Gen2Damage.STRUGGLE \
+		or pp_total == user.pp_left(turn.slot):
+		_disobedient_idle(turn)
+		return
+	var chosen: int = turn.rng().randi_range(0, 255) & 3
+	while chosen >= count or chosen == turn.slot + 1 or user.pp_left(chosen) == 0:
 		chosen = turn.rng().randi_range(0, 255) & 3
 	var number: int = int(user.moves[chosen])
 	var alternate: Gen2Turn = Gen2Turn.create(

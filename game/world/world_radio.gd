@@ -1,14 +1,12 @@
 class_name Gen2WorldRadio
 extends RefCounted
 
-## The Pokegear radio card's tuning knob, its station table, and the music each
-## station leaves in `wMapMusic`. Scene-free and stateless: a caller passes the
-## knob position and the facts the source reads off WRAM and gets back the station
-## that answers. Modelled here: `UpdateRadioStation`, `RadioChannels`, each
-## handler's availability check, `LoadStation_*`, `PlayRadioShow`'s Rocket override
-## and `StartRadioStation`'s music commit. The words a station prints are
-## [Gen2RadioShow]. Channel ids are Crystal-canonical, so Gold and Silver's own
-## ids from PLACES_AND_PEOPLE on sit one lower; `raw_channel()` converts.
+## The Pokegear radio's knob, its station table and the music each station leaves
+## in `wMapMusic`: `UpdateRadioStation`, `RadioChannels`, each handler's
+## availability check, `LoadStation_*`, `PlayRadioShow`'s Rocket override and
+## `StartRadioStation`'s commit, scene-free. The words are [Gen2RadioShow].
+## Channel ids are Crystal's; Gold and Silver's sit one lower from
+## PLACES_AND_PEOPLE on, which `raw_channel()` converts.
 
 ## constants/radio_constants.asm.
 const OAKS_POKEMON_TALK: int = 0
