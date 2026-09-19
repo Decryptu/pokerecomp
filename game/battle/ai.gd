@@ -233,12 +233,9 @@ static func _locked_in(mon: Gen2BattleMon) -> bool:
 	return false
 
 
-## Picks a move slot for [param attacker] against [param defender], scored the
-## way [param ai_move_weights] says to. The two turn counts are
-## `wEnemyTurnsTaken` and `wPlayerTurnsTaken` read before the turn is spent.
-## [param has_bench] and [param matchup_score] are `FindAliveEnemyMons` and
-## `CheckPlayerMoveTypeMatchups` supplied rather than read, since this scores a
-## pairing rather than a battle.
+## Picks a move slot, scored the way [param ai_move_weights] says. The turn
+## counts are read before the turn is spent; [param has_bench] and
+## [param matchup_score] are `FindAliveEnemyMons` and `CheckPlayerMoveTypeMatchups`.
 static func choose_slot(
 	attacker: Gen2BattleMon,
 	defender: Gen2BattleMon,
@@ -1050,12 +1047,9 @@ static func _smart_heal(scores: Array, slot: int, c: Context) -> void:
 		_discourage(scores, slot, 1)
 
 
-## `AI_Smart_PerishSong`, three branches in the source's own order. `.no`, with
-## nobody on the bench, is the only one that moves a score without a roll: five
-## points against, since a song the AI cannot walk away from kills it too. A
-## player held by Mean Look or Spider Web is `.yes`, 50% to encourage. Otherwise
-## the AI only bothers when the matchup is one it is not losing. The branch that
-## says yes is the trapped one, not the winning one.
+## `AI_Smart_PerishSong`: `.no` with nobody on the bench is five against with
+## no roll, a player held by Mean Look or Spider Web is `.yes` at 50%, and
+## otherwise the AI bothers only when the matchup is one it is not losing.
 static func _smart_perish_song(scores: Array, slot: int, c: Context) -> void:
 	if not c.has_bench:
 		_discourage(scores, slot, 5)

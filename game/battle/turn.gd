@@ -23,6 +23,7 @@ var critical: bool = false
 var effectiveness: int = Gen2Layout.MATCHUP_EFFECTIVE
 var immune: bool = false
 var missed: bool = false
+var announced: bool = false  ## `UsedMoveText` ran, so the move got past its status checks.
 
 ## The truncated pair `damagestats` leaves for `damagecalc`: two commands rather
 ## than one, so Present can set the power between them.

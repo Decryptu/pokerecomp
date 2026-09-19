@@ -166,11 +166,9 @@ const DUDE_AUTO_INPUT: Dictionary = {
 	],
 }
 
-## Polls one frame of each stage is worth: `.wait_input` spends a `DelayFrame` a
-## pass and `Do2DMenuRTCJoypad.loopRTC` spends none. Measured on a cartridge
-## through Route 29's tutorial, from the `_DudeAutoInput_*` call: A lands on
-## frame 80 of the text stream, DOWN on 29 and A on 53 of the menu's, RIGHT on 51
-## and A on 102 of the pack's.
+## Polls one frame of each stage is worth, measured on a cartridge through
+## Route 29's tutorial: A on frame 80 of the text stream, DOWN on 29 and A on
+## 53 of the menu's, RIGHT on 51 and A on 102 of the pack's.
 const DUDE_POLLS_PER_FRAME: Dictionary = {
 	&"text": 1.0, &"menu": 36.0, &"pack": 0.176,
 }
@@ -210,11 +208,8 @@ var _world_battle_result_picture_shown: bool = false
 var _world_battle_terminal_text_shown: bool = false
 var _world_battle_recovery_shown: bool = false
 var _world_battle_recovery: Dictionary = {}
-## `.give_money` and `CheckPayDay`, the two credits the way out of a won battle
-## pays. Computed once by [method _earnings] and then read by the snapshot
-## [method _save_battle_result] writes, by the line that announces the prize and
-## by the completion result the world credits its live state from, so no two of
-## the three can disagree about what the fight was worth.
+## `.give_money` and `CheckPayDay`, computed once by [method _earnings] and
+## read by the snapshot, the prize line and the completion result alike.
 var _earnings_computed: Dictionary = {}
 var _prize_text_shown: bool = false
 var _pay_day_text_shown: bool = false
@@ -241,10 +236,8 @@ var _intro_message: String = ""
 ## `BattleStartMessage` and `DoBattle`'s own opening, one step per entry, spent
 ## once the pics have finished sliding. See [method _build_entrance].
 var _entrance_stages: Array[Dictionary] = []
-## Which panel is on the map. `InitBattleDisplay` clears the player's box and its
-## caller only reaches `UpdateEnemyHUD` for a wild battle, so a battle opens with
-## neither: the enemy's arrives when the opening line is pressed past (wild) or
-## when the trainer has sent something out, and the player's inside
+## Which panel is on the map: a battle opens with neither, the enemy's arrives
+## behind the opening line or the trainer's send-out, the player's inside
 ## `SendOutPlayerMon`.
 var _enemy_hud_visible: bool = true
 var _player_hud_visible: bool = true
@@ -422,11 +415,8 @@ var _forget_moves: Array = []
 var _forget_cursor: int = 0
 var _forget_confirm_cursor: int = 0
 
-## Where a switch has got to. [code]&"offer"[/code] is `OfferSwitch`'s
-## `PlaceYesNoBox`, [code]&"use_next"[/code] `AskUseNextPokemon`'s own box in the
-## same place, and [code]&"pick"[/code] the party menu `SetUpBattlePartyMenu`
-## puts up behind either, which Baton Pass and a replacement open straight into.
-## Empty when none of them is on screen.
+## Where a switch has got to: `OfferSwitch`'s box, `AskUseNextPokemon`'s, or
+## the party menu behind either, which Baton Pass and a replacement open into.
 var _switch_stage: StringName = &"":
 	set(value):
 		_switch_stage = value
@@ -511,11 +501,9 @@ var _bg_map: PackedByteArray = Gen2BattleScreenMap.seeded()
 ## the imported tables, opened once.
 var _anim_data: Gen2BattleAnimData = null
 var _anim: Gen2BattleAnimPlayer = null
-## `anim_keepsprites`: what the last script left on the screen. `BattleAnim_ClearOAM`
-## is skipped for it, so the objects stay drawn after the script has returned and
-## until something clears OAM. The catch is the one script that asks
-## (`BattleAnim_ThrowPokeBall.Click`), and the ball has to stay under
-## `Text_GotchaMonWasCaught`.
+## `anim_keepsprites`: `BattleAnim_ClearOAM` is skipped, so the objects stay
+## drawn until something clears OAM. `BattleAnim_ThrowPokeBall.Click` is the one
+## script that asks, its ball staying under `Text_GotchaMonWasCaught`.
 var _kept_sprites: Array = []
 var _kept_tiles: Array = []
 var _anim_plan: Array = []
@@ -573,11 +561,9 @@ func _process(delta: float) -> void:
 			break
 
 
-## Whether anything is counting hardware frames right now. Public with
-## [method advance_frame] so a test or a screenshot driver can settle the screen
-## without waiting on real time. An exp bar stopped at a level boundary is waiting
-## on the press that dismisses `.LoopLevels`' textbox rather than on frames, so it
-## is excluded and a caller draining frames stops instead of spinning.
+## Whether anything is counting hardware frames right now, so a driver can
+## settle the screen. An exp bar stopped at a level boundary waits on a press,
+## not on frames, so it is excluded and a caller draining frames stops.
 func frames_running() -> bool:
 	var bars: bool = not _bars.is_empty() or (_exp_bar != null and not _exp_bar.paused())
 	return bars or _intro != null or animation_running() or fainting() or sliding() \
@@ -602,11 +588,9 @@ func advance_frame() -> bool:
 	return moved
 
 
-## What the source does when the frames a command spends run out: it runs on to
-## the next command. Nothing in `DoMove`'s loop reads a button between an
-## animation, `AnimateHPBar` and `MonFaintedAnimation` and what follows them. The
-## waits that are real are all a box, and [method _continue_after_messages] owns
-## that test: a message on screen is left alone, and so is a bar holding one.
+## When a command's frames run out the source runs on to the next command;
+## nothing in `DoMove`'s loop reads a button between them. The real waits are
+## all a box, which [method _continue_after_messages] owns.
 func _resume_after_frames(was_running: bool) -> void:
 	if not was_running or frames_running():
 		return
@@ -2228,13 +2212,10 @@ func _run_next_anim_step() -> void:
 	_push_view()
 
 
-## `AttackAnimationPointers` rows for the ids `PlayOpponentBattleAnim` names past
-## a move number, as [code][on the player, on the enemy][/code]: that event's
-## `enemy_turn` is inverted, so the index is the side it is drawn on.
-## `FreezeBurnParalyzeEffect` plays `ENEMY_HUD_SHAKE_ANIM` on `.burn1`, `.freeze1`
-## and `paralyze1` and nothing on the three the opponent's attack reaches, and
-## `PoisonEffect`'s side-effect branch answers `SHAKE_SCREEN_ANIM` there. A
-## confusion is the move's own animation, so `ANIM_CONFUSED` has no row.
+## `AttackAnimationPointers` rows for `PlayOpponentBattleAnim`'s ids, as
+## [code][on the player, on the enemy][/code]. `FreezeBurnParalyzeEffect` plays
+## `ENEMY_HUD_SHAKE_ANIM` on the player's three and nothing on the enemy's,
+## `PoisonEffect` `SHAKE_SCREEN_ANIM`; a confusion is the move's own animation.
 const GEN1_ANIM_IDS: Dictionary = {
 	Gen2BattleAnimPlayer.ANIM_BRN: [0, Gen1Layout.ANIM_ID_ENEMY_HUD_SHAKE],
 	Gen2BattleAnimPlayer.ANIM_FRZ: [0, Gen1Layout.ANIM_ID_ENEMY_HUD_SHAKE],
@@ -4156,6 +4137,8 @@ func _continue_after_messages() -> void:
 		return
 	if _answer_baton_pass():
 		return
+	if _answer_mimic():
+		return
 	if _answer_switch_offer():
 		return
 	if _replace_the_fallen():
@@ -4577,6 +4560,34 @@ func _answer_baton_pass() -> bool:
 	return true
 
 
+## `MimicEffect.letPlayerChooseMove`: `MoveSelectionMenu` over the enemy's
+## moves with `wMoveMenuType` 1, where A and B alike take the cursor's row.
+func _answer_mimic() -> bool:
+	if _battle == null or _battle.awaiting_mimic() < 0:
+		return false
+	if _menu_stage != &"mimic":
+		_move_rows = Gen2BattleMenu.move_rows(_battle.mon(Gen2Battle.ENEMY), _data)
+		_move_cursor = 0
+		_menu_stage = &"mimic"
+		show_message("")
+		_reopen_menu_layer()
+	return true
+
+
+func _answer_mimic_menu(button: int) -> void:
+	match button:
+		PokeButton.UP, PokeButton.DOWN:
+			_move_cursor = Gen2BattleMenu.move_cursor_moved(
+				_move_cursor, button, _move_rows.size()
+			)
+			_refresh_menu_layer()
+		PokeButton.A, PokeButton.B:
+			var slot: int = int((_move_rows[_move_cursor] as Dictionary).get("slot", 0))
+			_close_battle_menu()
+			_pending = _battle.answer_mimic(slot)
+			_show_next_event()
+
+
 ## `BattleMenu`: what the player is asked once the turn before it has finished
 ## being shown, `EmptyBattleTextbox` first so it opens over a clear box.
 ## `CheckPlayerHasUsableMoves` runs inside `MoveSelectionScreen` rather than here,
@@ -4585,6 +4596,9 @@ func _open_battle_menu() -> void:
 	if _battle == null or _battle.is_over() or not _pending.is_empty():
 		return
 	if _battle.awaiting_move_learn() or _battle.must_replace(Gen2Battle.PLAYER):
+		return
+	if _battle.player_menu_skipped():
+		_take_turn_with_slot(_move_cursor)
 		return
 	_menu_stage = &"main"
 	show_message("")
@@ -4607,6 +4621,10 @@ func _open_move_menu() -> void:
 		_close_battle_menu()
 		_take_turn_with_slot(0)
 		return
+	if _battle.player_move_menu_skipped():
+		_close_battle_menu()
+		_take_turn_with_slot(_move_cursor)
+		return
 	_move_cursor = clampi(_move_cursor, 0, _move_rows.size() - 1)
 	_menu_stage = &"move"
 	show_message("")
@@ -4619,6 +4637,8 @@ func _answer_menu(button: int) -> void:
 			_answer_battle_menu(button)
 		&"move":
 			_answer_move_menu(button)
+		&"mimic":
+			_answer_mimic_menu(button)
 		&"refused":
 			## `.place_textbox_start_over` blocks on the line and then jumps back
 			## to `MoveSelectionScreen`, which redraws the list.
@@ -5204,7 +5224,7 @@ func _draw_menu_layer() -> void:
 	match _menu_stage:
 		&"main":
 			_draw_battle_menu()
-		&"move":
+		&"move", &"mimic":
 			_draw_move_menu()
 		_:
 			_menu_layer.visible = false

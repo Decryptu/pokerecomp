@@ -131,12 +131,16 @@ static func roll_confusion(rng: RandomNumberGenerator) -> int:
 	return rng.randi_range(MIN_CONFUSION, MAX_CONFUSION)
 
 
-static func roll_rampage_turns(rng: RandomNumberGenerator) -> int:
-	return rng.randi_range(MIN_RAMPAGE_TURNS, MAX_RAMPAGE_TURNS)
+## `ThrashPetalDanceEffect` counts `and $1 / inc a / inc a` more turns, one
+## over Crystal's, and `.ThrashingAboutCheck` confuses for `and 3` plus two.
+static func roll_rampage_turns(rng: RandomNumberGenerator, gen1: bool = false) -> int:
+	return rng.randi_range(MIN_RAMPAGE_TURNS + 1, MAX_RAMPAGE_TURNS + 1) if gen1 \
+		else rng.randi_range(MIN_RAMPAGE_TURNS, MAX_RAMPAGE_TURNS)
 
 
-static func roll_rampage_confusion(rng: RandomNumberGenerator) -> int:
-	return rng.randi_range(MIN_RAMPAGE_CONFUSION, MAX_RAMPAGE_CONFUSION)
+static func roll_rampage_confusion(rng: RandomNumberGenerator, gen1: bool = false) -> int:
+	return roll_confusion(rng) if gen1 \
+		else rng.randi_range(MIN_RAMPAGE_CONFUSION, MAX_RAMPAGE_CONFUSION)
 
 
 static func rolls_confusion_hit(rng: RandomNumberGenerator) -> bool:
@@ -144,8 +148,11 @@ static func rolls_confusion_hit(rng: RandomNumberGenerator) -> bool:
 
 
 ## The reroll on zero is the cartridge's; the constant one added afterward is
-## folded in here rather than left for a caller to remember.
-static func roll_disable(rng: RandomNumberGenerator) -> int:
+## folded in here rather than left for a caller to remember. Generation 1's
+## `DisableEffect` keeps the zero: `and $7 / inc a` is 1 to 8.
+static func roll_disable(rng: RandomNumberGenerator, gen1: bool = false) -> int:
+	if gen1:
+		return rng.randi_range(0, 7) + 1
 	var roll: int = 0
 	while roll == 0:
 		roll = rng.randi_range(0, 7)

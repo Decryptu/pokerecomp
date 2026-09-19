@@ -33,8 +33,9 @@ const REST_SLEEP_TURNS: int = 2
 const BURN_ATTACK_SHIFT: int = 1
 const PARALYSIS_SPEED_SHIFT: int = 2
 
-## Being fully paralysed is a quarter of the time, out of 256.
-const PARALYSIS_CHANCE: int = 64
+## `cp 25 percent / ret nc` in both generations, and `25 percent` is 63, not
+## 64: the macro is `* $ff / 100`, the way [constant THAW_CHANCE]'s 25 is.
+const PARALYSIS_CHANCE: int = 63
 const CHANCE_RANGE: int = 256
 
 ## `HandleDefrost`'s own `cp 10 percent`, which is 25 and not 26: the `percent`
@@ -76,11 +77,16 @@ static func tick_sleep(status: int) -> int:
 
 ## `BattleCommand_SleepTarget`: the Tower mask limits the initial count to 2..4,
 ## and Yellow's `SleepEffect` under `wUnknownSerialFlag_d499` `and $3`s it to 1..3.
+## Generation 1's `SleepEffect` keeps `and SLP_MASK`'s whole 1..7, where
+## Crystal's `cp 7 / jr z` rerolls the seventh.
 static func roll_sleep(
-	rng: RandomNumberGenerator, battle_tower: bool = false, stadium_cup: bool = false
+	rng: RandomNumberGenerator, battle_tower: bool = false, stadium_cup: bool = false,
+	gen1: bool = false
 ) -> int:
 	if stadium_cup:
 		return rng.randi_range(MIN_SLEEP, 3)
+	if gen1:
+		return rng.randi_range(1, SLEEP_MASK)
 	return rng.randi_range(MIN_SLEEP, 4 if battle_tower else MAX_SLEEP)
 
 
