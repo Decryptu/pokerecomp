@@ -609,6 +609,10 @@ var party_log: Dictionary = {"grew": [], "faints": [], "x_items": [], "learned":
 ## cartridge's `wCurDamage` is move-local, not a history.
 var _last_damage_taken: Dictionary = {PLAYER: {}, ENEMY: {}}
 
+## `wPlayerSelectedMove` and `wEnemySelectedMove`, which a switch or an item
+## leaves standing and `HandleCounterMove` reads off the target.
+var gen1_selected_moves: Dictionary = {PLAYER: 0, ENEMY: 0}
+
 ## `wDamage` outliving the move that wrote it. Generation 1's trapping moves are
 ## the one reader: `.MultiturnMoveCheck` jumps past the damage calculation, so a
 ## continuation deals the first hit's figure again.
@@ -1704,6 +1708,9 @@ func take_actions(player_action: Dictionary, enemy_action: Dictionary) -> Array:
 		PLAYER: _move_for_action(PLAYER, player_action),
 		ENEMY: _move_for_action(ENEMY, enemy_action),
 	}
+	for side: int in [PLAYER, ENEMY]:
+		if StringName((actions[side] as Dictionary).get("type", ACTION_MOVE)) == ACTION_MOVE:
+			gen1_selected_moves[side] = int(chosen[side])
 
 	var acting: Array = order(chosen, actions)
 	enemy_goes_first = int(acting[0]) == ENEMY
@@ -2957,12 +2964,45 @@ func move_for(side: int, slot: int) -> int:
 	var held: int = gen1_trapping_move(side)
 	if held != 0:
 		return held
+	# `.RageCheck`: `USING_RAGE` is never cleared but by a switch, so the user
+	# thrashes with RAGE for the rest of its stay, and `PlayerCanExecuteMove`
+	# spends no PP on it.
+	if is_gen1() and Gen2Substatus.has(attacker.substatus, Gen2Substatus.RAGE):
+		return Gen2MoveEffect.RAGE_MOVE
 	var chosen_slot: int = effective_slot(side, slot)
 	return int(attacker.moves[chosen_slot]) if attacker.can_use(chosen_slot) else Gen2Damage.STRUGGLE
 
 
 func is_gen1() -> bool:
 	return data != null and data.generation == RomRegistry.GEN1
+
+
+## `CheckPlayerLockedIn`, which `BattleTurn` asks before `BattleMenu`: a
+## recharge, a charged move, a rampage or a Rollout opens no menu at all.
+## `MainInBattleLoop` asks the same of a recharge, Rage, a rampage and a charge.
+func player_menu_skipped() -> bool:
+	var player: Gen2BattleMon = mon(PLAYER)
+	if Gen2Substatus.has(player.substatus, Gen2Substatus.RECHARGING | Gen2Substatus.RAMPAGING):
+		return true
+	if player.charged_move != 0:
+		return true
+	if is_gen1():
+		return Gen2Substatus.has(player.substatus, Gen2Substatus.RAGE)
+	return Gen2Substatus.has(player.substatus, Gen2Substatus.ROLLOUT)
+
+
+## `ParsePlayerAction`'s `.locked_in` behind FIGHT: Bide shows the main menu
+## and no move list. Generation 1 skips the list for a sleeping or frozen
+## Pokemon and for either side's trapping move as well.
+func player_move_menu_skipped() -> bool:
+	var player: Gen2BattleMon = mon(PLAYER)
+	if Gen2Substatus.has(player.substatus, Gen2Substatus.BIDE):
+		return true
+	if not is_gen1():
+		return false
+	return Gen2Status.is_asleep(player.status) \
+		or Gen2Status.has(player.status, Gen2Status.FREEZE) \
+		or gen1_trapping_move(PLAYER) != 0 or gen1_trapping_move(ENEMY) != 0
 
 
 ## `USING_TRAPPING_MOVE` read from the user's side: while the opponent is bound,
@@ -3091,6 +3131,7 @@ func _act(side: int, slot: int, move_number: int, events: Array) -> void:
 		or Gen2Substatus.has(active_substatus, Gen2Substatus.RAMPAGING)
 		or Gen2Substatus.has(active_substatus, Gen2Substatus.BIDE)
 		or gen1_trapping_move(side) == move_number
+		or (is_gen1() and Gen2Substatus.has(active_substatus, Gen2Substatus.RAGE))
 	) and move_number != 0
 
 	# Whether the Pokémon can move at all is asked before the effect is looked up,
@@ -3098,6 +3139,8 @@ func _act(side: int, slot: int, move_number: int, events: Array) -> void:
 	# sequence has to remember to include it.
 	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
 	run_move_effect(turn)
+	if is_gen1():
+		Gen2EffectCommands.gen1_build_rage(turn)
 
 
 ## `DoMove`'s read cycle over the list an effect byte picks, with

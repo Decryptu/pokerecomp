@@ -116,18 +116,19 @@ const PINNED_MOVES: Dictionary = {
 ## as effect id to how many of the 165 moves land on it. The whole table stands
 ## behind this: a row that moves shows up as two counts that disagree.
 const EFFECT_CENSUS: Dictionary = {
-	0: 31, 1: 5, 2: 3, 3: 3, 4: 4, 5: 3, 6: 6, 7: 2, 8: 1, 9: 1, 10: 2, 11: 3,
+	0: 30, 1: 5, 2: 3, 3: 3, 4: 4, 5: 3, 6: 6, 7: 2, 8: 1, 9: 1, 10: 2, 11: 3,
 	13: 1, 16: 2, 17: 1, 18: 1, 19: 2, 20: 1, 23: 4, 25: 1, 26: 1, 27: 2, 28: 3,
 	29: 7, 30: 1, 31: 7, 32: 3, 33: 1, 34: 1, 35: 1, 38: 3, 39: 4, 40: 1, 41: 2,
 	42: 4, 44: 2, 45: 2, 46: 1, 47: 1, 48: 4, 49: 2, 50: 1, 51: 2, 52: 1, 53: 1,
 	57: 1, 59: 1, 65: 1, 66: 2, 67: 3, 68: 1, 69: 1, 70: 3, 71: 1, 76: 2, 77: 1,
-	79: 1, 80: 1, 81: 1, 82: 1, 83: 1, 84: 1, 85: 1, 86: 1, 87: 2, 88: 1, 155: 2,
+	79: 1, 80: 1, 81: 1, 82: 1, 83: 1, 84: 1, 85: 1, 86: 1, 87: 2, 88: 1, 89: 1,
+	155: 2,
 }
 
-## The seven rows `SpecialDamageEffect`, `PoisonEffect` and `ChargeEffect` split
+## The eight rows `SpecialDamageEffect`, `PoisonEffect`, `ChargeEffect` and COUNTER split
 ## by move, and the two the first of them carries its damage in.
 const PINNED_EFFECTS: Dictionary = {
-	49: [41, 20], 69: [87, 1], 82: [41, 40], 91: [155, 100],
+	49: [41, 20], 68: [89, 1], 69: [87, 1], 82: [41, 40], 91: [155, 100],
 	92: [33, 0], 101: [87, 0], 149: [88, 1],
 }
 

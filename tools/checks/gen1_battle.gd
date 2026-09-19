@@ -115,6 +115,8 @@ func _one_game() -> void:
 	_the_stored_stats_compound()
 	_a_sleeper_loses_the_turn_it_wakes_on()
 	_a_freeze_and_a_screen_outlive_the_turn()
+	_counter_doubles_the_last_damage()
+	_rage_raises_a_stage()
 	_a_trapping_move_holds_its_target()
 	_the_trap_counter_distribution()
 	_conversion_copies_the_target()
@@ -401,6 +403,10 @@ const TELEPORT_MOVE: int = 100
 const ROAR_MOVE: int = 46
 const SPLASH_MOVE: int = 150
 const SWORDS_DANCE_MOVE: int = 14
+const COUNTER_MOVE: int = 68
+const RAGE_MOVE: int = 99
+const TACKLE_MOVE: int = 33
+const GASTLY: int = 92
 const TOXIC_MOVE: int = 92
 const LEECH_SEED_MOVE: int = 73
 const REFLECT_MOVE: int = 115
@@ -526,6 +532,10 @@ func _a_sleeper_loses_the_turn_it_wakes_on() -> void:
 	if not _r.check(battle != null, "no battle could be built for a sleeper"):
 		return
 	battle.enemy.status = 1
+	battle.player.status = 2
+	_r.check(battle.player_move_menu_skipped() and not battle.player_menu_skipped(),
+		"a sleeper was offered the move list")
+	battle.player.status = Gen2Status.NONE
 	var events: Array = battle.take_turn(0, 0)
 	var woke: bool = false
 	var moved: bool = false
@@ -555,6 +565,52 @@ func _a_freeze_and_a_screen_outlive_the_turn() -> void:
 	_r.check(Gen2Screens.has(battle.screens[Gen2Battle.PLAYER], Gen2Screens.REFLECT),
 		"REFLECT faded")
 	_r.check(not battle.mon(Gen2Battle.ENEMY).is_fainted(), "the frozen target went down")
+
+
+## `HandleCounterMove` reads the target's selected move and doubles `wDamage`
+## with no type chart in the way, so a Gastly's TACKLE is paid back twice.
+func _counter_doubles_the_last_damage() -> void:
+	var generator := RandomNumberGenerator.new()
+	generator.seed = SWEEP_SEED
+	var battle: Gen2Battle = Gen2Battle.create(
+		_r.data,
+		Gen2BattleMon.create(_r.data, SWEEP_PLAYER, SWEEP_LEVEL, [COUNTER_MOVE]),
+		Gen2BattleMon.create(_r.data, GASTLY, SWEEP_LEVEL, [TACKLE_MOVE]),
+		generator
+	)
+	if not _r.check(battle != null, "no battle could be built for COUNTER"):
+		return
+	for _turn: int in 8:
+		var player_before: int = battle.player.hp
+		var enemy_before: int = battle.enemy.hp
+		battle.take_turn(0, 0)
+		var taken: int = player_before - battle.player.hp
+		if taken <= 0 or battle.enemy.is_fainted():
+			continue
+		_r.check(enemy_before - battle.enemy.hp == taken * 2,
+			"COUNTER paid %d back for %d" % [enemy_before - battle.enemy.hp, taken])
+		return
+	_r.fail("no turn saw TACKLE land and COUNTER answer")
+
+
+## `HandleBuildingRage` is `StatModifierUpEffect` on the raging side: a stage,
+## not a multiplier, and one per move that lands.
+func _rage_raises_a_stage() -> void:
+	var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [RAGE_MOVE], SWEEP_SEED, [TACKLE_MOVE])
+	if not _r.check(battle != null, "no battle could be built for RAGE"):
+		return
+	var built: int = 0
+	for _turn: int in 4:
+		for event: Dictionary in battle.take_turn(0, 0):
+			if StringName(event.get("type", &"")) == Gen2Battle.RAGE_BUILDING:
+				built += 1
+		if battle.enemy.is_fainted() or battle.player.is_fainted():
+			break
+	_r.check(built >= 2 and battle.player.stage("attack") == built,
+		"%d hits left RAGE at stage %d" % [built, battle.player.stage("attack")])
+	_r.check(battle.player.rage_count == 0, "a Generation 1 RAGE counted %d" % battle.player.rage_count)
+	_r.check(battle.player.is_fainted() or battle.player_menu_skipped(),
+		"a raging player was offered the menu")
 
 
 ## `TrappingEffect` and `.HeldInPlaceCheck`: the user repeats the move for the

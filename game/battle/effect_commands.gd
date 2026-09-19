@@ -751,6 +751,7 @@ static func _used_move_text(turn: Gen2Turn) -> void:
 	# `UpdateUsedMoves` runs inside `UsedMoveText`, so a turn that announces
 	# nothing remembers nothing.
 	turn.battle.record_used_move(turn.side, turn.move_number)
+	turn.announced = true
 	turn.emit(Gen2Battle.USED_MOVE, {"move": turn.move_number})
 
 
@@ -824,7 +825,7 @@ static func _rage_damage(turn: Gen2Turn) -> void:
 ## substitute is not a gate, the doll spending the hit still counting.
 ## `inc a / ret z` is the saturation: 255 increments to 0 and is not stored.
 static func _build_opponent_rage(turn: Gen2Turn) -> void:
-	if turn.missed:
+	if turn.missed or turn.battle.is_gen1():
 		return
 	var defender: Gen2BattleMon = turn.defender()
 	if not Gen2Substatus.has(defender.substatus, Gen2Substatus.RAGE):
@@ -1604,6 +1605,9 @@ const SUBSTITUTE_KEEPS_EFFECT: Array[int] = [
 
 
 static func _counter(turn: Gen2Turn, mirror_coat: bool) -> void:
+	if turn.battle.is_gen1():
+		_gen1_counter(turn)
+		return
 	var remembered: Dictionary = turn.battle.last_damage_taken(turn.side)
 	var expected_effect: int = (
 		Gen2MoveEffect.MIRROR_COAT if mirror_coat else Gen2MoveEffect.COUNTER
@@ -1635,6 +1639,32 @@ static func _counter(turn: Gen2Turn, mirror_coat: bool) -> void:
 
 	turn.emit(Gen2Battle.MOVE_FAILED)
 	turn.end()
+
+
+## `HandleCounterMove`: the target's selected move must have power and be
+## Normal or Fighting and not Counter, and the figure doubled is `wDamage`,
+## whoever dealt it. `AdjustDamageForMoveType` is jumped past, so a Ghost is
+## hit; `MoveHitTest` still runs.
+static func _gen1_counter(turn: Gen2Turn) -> void:
+	var selected: Dictionary = turn.data().move(
+		int(turn.battle.gen1_selected_moves.get(turn.target, 0))
+	)
+	var selected_type: int = int(selected.get("type", Gen2Layout.TYPE_NORMAL))
+	var countered: bool = not selected.is_empty() \
+		and int(selected.get("effect", -1)) != Gen2MoveEffect.COUNTER \
+		and int(selected.get("power", 0)) > 0 \
+		and (selected_type == Gen2Layout.TYPE_NORMAL or selected_type == Gen2Layout.TYPE_FIGHTING) \
+		and turn.battle.last_damage_dealt > 0
+	if not countered:
+		_miss(turn)
+		turn.end()
+		return
+	turn.damage = mini(turn.battle.last_damage_dealt * 2, 0xFFFF)
+	turn.critical = false
+	turn.effectiveness = Gen2Layout.MATCHUP_EFFECTIVE
+	turn.immune = false
+	turn.missed = false
+	_check_hit(turn)
 
 
 ## Selfdestruct's command clears the user's status and zeroes its HP, the faint
@@ -3673,13 +3703,32 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 ## `UpdateStatDone`'s tail: the stat recalculated bare, `ApplyBadgeStatBoosts`
 ## over all four when the player's own stat moved, and the two penalties on the
 ## user's opponent again, the source's own "these shouldn't be here".
-static func _gen1_stat_changed(turn: Gen2Turn, side: int, stat_key: String) -> void:
+static func _gen1_stat_changed(
+	turn: Gen2Turn, side: int, stat_key: String, user: int = turn.side
+) -> void:
 	var changed: Gen2BattleMon = turn.battle.mon(side)
 	if Gen2BattleMon.STAGED_STATS.has(stat_key):
 		changed.gen1_recalculate_stat(stat_key)
 	if side == Gen2Battle.PLAYER:
 		changed.gen1_apply_badge_boosts()
-	turn.battle.mon(turn.battle.opponent_of(turn.side)).gen1_apply_penalties()
+	turn.battle.mon(turn.battle.opponent_of(user)).gen1_apply_penalties()
+
+
+## `HandleBuildingRage`, behind every move that got past its miss and left the
+## target standing, status moves included: `StatModifierUpEffect` with the turn
+## flipped, so the raging side is the user of the raise and its tail.
+static func gen1_build_rage(turn: Gen2Turn) -> void:
+	var raging: Gen2BattleMon = turn.defender()
+	if not turn.announced or raging.is_fainted() \
+		or not Gen2Substatus.has(raging.substatus, Gen2Substatus.RAGE):
+		return
+	if turn.missed and turn.effect() != Gen2MoveEffect.SELFDESTRUCT:
+		return
+	if not raging.change_stage("attack", 1):
+		return
+	turn.emit(Gen2Battle.RAGE_BUILDING, {"target": turn.target})
+	turn.emit(Gen2Battle.STAT_CHANGED, {"target": turn.target, "stat": "attack", "by": 1})
+	_gen1_stat_changed(turn, turn.target, "attack", turn.target)
 
 
 ## `BattleCommand_StatDown`'s `.ComputerMiss`: an enemy lowering one of the

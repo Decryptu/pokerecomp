@@ -173,11 +173,13 @@ const MOVE_EFFECTS: Array[int] = [
 	79, 80, 81, 82, 83, 84, 85, 86, # SUBSTITUTE to DISABLE
 ]
 
-## Those two entries split, `ChargeEffect`'s own `cp DIG`, and the two damage
-## constants that come with the first: `SONICBOOM_DAMAGE` and
-## `DRAGON_RAGE_DAMAGE` sit in the routine here and in the power column there.
+## Those two entries split, `ChargeEffect`'s own `cp DIG`, the two damage
+## constants that come with the first (`SONICBOOM_DAMAGE` and
+## `DRAGON_RAGE_DAMAGE` sit in the routine here and in the power column there),
+## and COUNTER, which `HandleCounterMove` finds by move number under a zero
+## effect byte.
 const MOVE_EFFECT_BY_MOVE: Dictionary = {
-	49: 41, 69: 87, 82: 41, 91: 155, 92: 33, 101: 87, 149: 88,
+	49: 41, 68: 89, 69: 87, 82: 41, 91: 155, 92: 33, 101: 87, 149: 88,
 }
 const MOVE_POWER_BY_MOVE: Dictionary = {49: 20, 82: 40}
 

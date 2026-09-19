@@ -468,13 +468,11 @@ func reset_stages() -> void:
 		stages[key] = 0
 
 
-## What Baton Pass hands to whoever comes in behind it. On the cartridge none of
-## this is the Pokemon's: `wPlayerSubStatus1` through `5` are battle-position
-## state, cleared on an ordinary entrance only because `NewBattleMonStatus` says
-## so, where `PassedBattleMonEntrance` does not. Here the same state is
-## per-Pokemon and copied across, with `ResetBatonPassStatus` naming what does not
-## survive the trip. The list is [method reset_volatile]'s plus the stages, which
-## is why the two sit together: a field added to one belongs in the other.
+## What Baton Pass hands to whoever comes in behind it: `wPlayerSubStatus1`
+## through `5` are battle-position state on the cartridge, per-Pokemon here and
+## copied across, with `ResetBatonPassStatus` naming what does not survive. The
+## list is [method reset_volatile]'s plus the stages: a field added to one
+## belongs in the other.
 const PASSED_FIELDS: Array[String] = [
 	"substatus", "confusion_turns", "charged_move", "rollout_count",
 	"rampage_turns", "rampage_move", "toxic_counter", "disabled_slot",
@@ -588,13 +586,10 @@ func persistent_dvs() -> int:
 	return int(transform_original.get("dvs", dvs))
 
 
-## `GetGender`, which folds the Attack DV into a byte's high nibble and the Speed
-## DV into its low and compares that against the species ratio. Ratio 0 is always
-## male, 254 always female and 255 genderless, with no comparison at all.
-## Otherwise `cp b` puts the ratio against the byte and `jr c` takes male, so a
-## byte ABOVE the ratio is male and one equal to it is female; the source's own
-## comment there reads the other way round. `ratio + 1` values of 256 are female,
-## which is the percentage each GENDER_F* constant is named for.
+## `GetGender`: the Attack DV in a byte's high nibble and the Speed DV in its
+## low, against the species ratio. 0 is always male, 254 always female and 255
+## genderless; otherwise `cp b / jr c` takes male, so a byte ABOVE the ratio is
+## male and one equal to it female, the reverse of the source's own comment.
 const GENDER_F0: int = 0
 const GENDER_F100: int = 254
 const GENDER_UNKNOWN: int = 255
