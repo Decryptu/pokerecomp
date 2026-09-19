@@ -4784,3 +4784,21 @@ func test_tower_and_link_battles_refuse_bag_items_and_free_switches() -> void:
 		if mode > 0:
 			assert_eq(result["reason"], &"items_cant_be_used_here")
 			assert_eq(player.hp, 1)
+
+
+func test_a_locked_in_player_opens_no_menu_and_bide_no_move_list() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
+		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	)
+	assert_false(battle.player_menu_skipped())
+	assert_false(battle.player_move_menu_skipped())
+	battle.player.substatus |= Gen2Substatus.RECHARGING
+	assert_true(battle.player_menu_skipped())
+	battle.player.substatus = Gen2Substatus.BIDE
+	assert_false(battle.player_menu_skipped())
+	assert_true(battle.player_move_menu_skipped())
+	# `CheckPlayerLockedIn` reads no sleep: a sleeper still picks a move.
+	battle.player.substatus = Gen2Substatus.NONE
+	battle.player.status = 3
+	assert_false(battle.player_move_menu_skipped())

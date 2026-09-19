@@ -131,11 +131,9 @@ const CONTINUES_AFTER_MISS: Array[int] = [
 	Gen2MoveEffect.SELFDESTRUCT, Gen2MoveEffect.ROLLOUT, Gen2MoveEffect.FURY_CUTTER,
 ]
 
-## The effects `BattleCommand_FailureText`'s `.multihit` names, and the whole of
-## what puts a missing user's own doll back. Beat Up and Triple Kick lower the
-## doll in front of the same `checkhit` and are not named, so a miss leaves both
-## of them standing in front of a dropped Substitute: `docs/bugs_and_glitches.md`'s
-## Beat Up entry, mirrored rather than fixed.
+## The effects `BattleCommand_FailureText`'s `.multihit` names. Beat Up and
+## Triple Kick lower the doll in front of the same `checkhit` and are not named,
+## `docs/bugs_and_glitches.md`'s Beat Up entry, mirrored rather than fixed.
 const MULTI_HIT_RAISES_SUB: Array[int] = [
 	Gen2MoveEffect.MULTI_HIT, Gen2MoveEffect.DOUBLE_HIT, Gen2MoveEffect.TWINEEDLE,
 ]
@@ -197,10 +195,8 @@ const PARALYZE_TARGET: StringName = &"paralyzetarget"
 const TOXIC_TARGET: StringName = &"toxictarget"
 
 ## The two things a move can leave on [Gen2Substatus] rather than the status
-## byte. Flinch is only ever a secondary effect, obeying
-## [member Gen2Turn.failed_chance] like the five above; confusion comes both ways,
-## as its own status move (Confuse Ray, Supersonic) and as a secondary effect
-## (Confusion, Psybeam), so [Gen2MoveEffect] reaches for it from both shapes.
+## byte: a flinch, only ever a secondary effect, and a confusion, which comes
+## as its own move and as a secondary effect alike.
 const FLINCH_TARGET: StringName = &"flinchtarget"
 const CONFUSE_TARGET: StringName = &"confusetarget"
 
@@ -208,11 +204,9 @@ const CONFUSE_TARGET: StringName = &"confusetarget"
 ## Dream Eater behind its own rule inside [constant CHECK_HIT].
 const DRAIN_TARGET: StringName = &"draintarget"
 
-## Overwrites what [constant DAMAGE_CALC] worked out with the number
-## [constant Gen2MoveEffect.SUPER_FANG], [constant Gen2MoveEffect.STATIC_DAMAGE],
-## [constant Gen2MoveEffect.LEVEL_DAMAGE] and [constant Gen2MoveEffect.PSYWAVE]
-## actually deal. [constant DAMAGE_CALC]'s own roll still ran first, and its
-## immunity answer is the one thing about it this keeps.
+## Overwrites what [constant DAMAGE_CALC] worked out with the fixed figure
+## Super Fang, Seismic Toss, Night Shade and Psywave deal; the immunity answer
+## is the one thing of the calculation this keeps.
 const FIXED_DAMAGE: StringName = &"fixeddamage"
 
 ## Guillotine, Horn Drill and Fissure's own accuracy rule and their own damage:
@@ -223,18 +217,14 @@ const OHKO: StringName = &"ohko"
 ## list rather than anything a target-facing command touches.
 const RECHARGE: StringName = &"recharge"
 
-## `BattleCommand_CheckCharge`, the first command of every two-turn list: on the
-## release turn it clears the lock and skips over [constant CHARGE], so the rest
-## of the list runs as an ordinary attack, which [method Gen2Battle.move_for]
-## makes the user's only option. On the charging turn it does nothing and the
-## list falls into `doturn` and [constant CHARGE].
+## `BattleCommand_CheckCharge`, first in every two-turn list: on the release
+## turn it clears the lock and skips over [constant CHARGE], so the rest runs
+## as an ordinary attack; on the charging turn it does nothing.
 const CHARGE_MOVE: StringName = &"chargemove"
 
-## `BattleCommand_Charge`: the charging turn's own line, and the end of the move.
-## It stands behind `doturn` and in front of `usedmovetext`, so a charging turn
-## announces "made a whirlwind!" and never "used RAZOR WIND!"; Skull Bash is the
-## one that carries on, skipping to [constant END_TURN] for the Defense raise
-## behind it.
+## `BattleCommand_Charge`: the charging turn's own line in front of
+## `usedmovetext`, so it never says "used RAZOR WIND!"; Skull Bash carries on
+## to [constant END_TURN] for the Defense raise behind it.
 const CHARGE: StringName = &"charge"
 
 ## `endturn_command`, which ends the read cycle the way [constant END_MOVE] does.
@@ -306,11 +296,9 @@ const MIST: StringName = &"mist"
 ## switch. Fails, without re-applying, on a second use.
 const FOCUS_ENERGY: StringName = &"focusenergy"
 
-## Binds the target for a rolled number of turns: it can neither run nor be
-## recalled, and loses a sixteenth of its health at the end of each of them.
-## Nothing here stops it moving, which is the Generation 2 rule. A target that is
-## already bound is left alone without a failure message, since
-## `BattleCommand_TrapTarget` simply returns.
+## Binds the target for a rolled number of turns, a sixteenth a turn, and
+## nothing stops it moving. A target already bound is left alone in silence,
+## `BattleCommand_TrapTarget` simply returning.
 const TRAP_TARGET: StringName = &"traptarget"
 
 ## Mean Look and Spider Web: the target can neither run nor be recalled, with no
@@ -441,11 +429,8 @@ const ALTERNATING_ANIM_EFFECTS: Array[int] = [
 	Gen2MoveEffect.CONVERSION,
 ]
 
-## Raises and lowers a stat by one stage or two, named as the cartridge names
-## them and in [constant Gen2BattleMon.STAGED_STATS] plus
-## [constant Gen2BattleMon.STAGED_ODDS] order, which is also the order the effect
-## bytes run in: seven in a row for "up by one", seven more for "down by one",
-## and so on. [Gen2MoveEffect] turns that run into a table; this names the stops.
+## Raises and lowers a stat by one stage or two, in [constant Gen2BattleMon.STAGED_STATS]
+## plus [constant Gen2BattleMon.STAGED_ODDS] order, the effect bytes' own run.
 const ATTACK_UP: StringName = &"attackup"
 const DEFENSE_UP: StringName = &"defenseup"
 const SPEED_UP: StringName = &"speedup"
@@ -482,11 +467,8 @@ const EVASION_DOWN_2: StringName = &"evasiondown2"
 ## loops over the stats a stage multiplies a real number for, so not the odds.
 const ALL_STATS_UP: StringName = &"allstatsup"
 
-## The stat commands in the run order the cartridge's effect bytes use, indexed
-## by [Gen2MoveEffect] rather than named one at a time there. Each entry is
-## [param stat_key, param amount, param targets_user]: the key
-## [method Gen2BattleMon.change_stage] takes, how many stages it moves by, and
-## whether the move points it at whoever used it rather than the other side.
+## The stat commands as [code][stat_key, amount, targets_user][/code], in the
+## run order the cartridge's effect bytes use.
 const STAT_COMMANDS: Dictionary = {
 	ATTACK_UP: ["attack", 1, true], DEFENSE_UP: ["defense", 1, true],
 	SPEED_UP: ["speed", 1, true], SP_ATTACK_UP: ["sp_attack", 1, true],
@@ -751,6 +733,7 @@ static func _used_move_text(turn: Gen2Turn) -> void:
 	# `UpdateUsedMoves` runs inside `UsedMoveText`, so a turn that announces
 	# nothing remembers nothing.
 	turn.battle.record_used_move(turn.side, turn.move_number)
+	turn.announced = true
 	turn.emit(Gen2Battle.USED_MOVE, {"move": turn.move_number})
 
 
@@ -778,6 +761,10 @@ static func _store_energy(turn: Gen2Turn) -> void:
 	var user: Gen2BattleMon = turn.attacker()
 	if not Gen2Substatus.has(user.substatus, Gen2Substatus.BIDE):
 		return
+	# `.BideCheck` adds `wDamage` as it stands at the user's turn, whoever dealt
+	# it last and however stale it is.
+	if turn.battle.is_gen1():
+		user.bide_damage = mini(user.bide_damage + turn.battle.last_damage_dealt, 0xFFFF)
 	user.bide_turns -= 1
 	if user.bide_turns > 0:
 		turn.emit(Gen2Battle.BIDE_STORING)
@@ -818,13 +805,11 @@ static func _rage_damage(turn: Gen2Turn) -> void:
 	turn.damage = mini(base * (turn.attacker().rage_count + 1), 0xFFFF)
 
 
-## `BattleCommand_BuildOpponentRage`: one count on the target's Rage per hit it
-## takes, and the line that says so. It stands behind `checkfaint`, which ends
-## the move when the target has fallen, so a Rage that faints does not build; a
-## substitute is not a gate, the doll spending the hit still counting.
-## `inc a / ret z` is the saturation: 255 increments to 0 and is not stored.
+## `BattleCommand_BuildOpponentRage`: one count on the target's Rage per hit
+## it takes, behind `checkfaint`, a doll's hit counting too. `inc a / ret z`
+## is the saturation: 255 increments to 0 and is not stored.
 static func _build_opponent_rage(turn: Gen2Turn) -> void:
-	if turn.missed:
+	if turn.missed or turn.battle.is_gen1():
 		return
 	var defender: Gen2BattleMon = turn.defender()
 	if not Gen2Substatus.has(defender.substatus, Gen2Substatus.RAGE):
@@ -945,6 +930,8 @@ static func _stab(turn: Gen2Turn) -> void:
 	turn.damage = int(result["damage"])
 	turn.effectiveness = int(result["effectiveness"])
 	turn.immune = bool(result["immune"])
+	if bool(result.get("missed", false)):
+		turn.missed = true
 
 
 ## `BattleCommand_DamageVariation`: the 85% to 100% spread, last.
@@ -1133,11 +1120,8 @@ static func _tri_status_chance(turn: Gen2Turn) -> void:
 			_status_target(turn, Gen2Status.BURN)
 
 
-## `BattleCommand_Defrost`: Flame Wheel and Sacred Fire thaw whoever used them.
-## The user, not the target, which is what tells this apart from the `Defrost`
-## subroutine [method _defrost] is. It clears the freeze bit rather than the
-## whole status byte, which comes to the same thing while a freeze is the only
-## status a Pokémon can be under.
+## `BattleCommand_Defrost`: Flame Wheel and Sacred Fire thaw whoever used
+## them, the user rather than the target [method _defrost] thaws.
 static func _defrost_user(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 	if not Gen2Status.has(mon.status, Gen2Status.FREEZE):
@@ -1180,6 +1164,9 @@ static func _mirror_move(turn: Gen2Turn) -> void:
 ## `BattleCommand_Mimic`: replace the Mimic slot with five PP of the copy, leaving
 ## the party move alone, and [method Gen2BattleMon.reset_volatile] restores it.
 static func _mimic(turn: Gen2Turn) -> void:
+	if turn.battle.is_gen1():
+		_gen1_mimic(turn)
+		return
 	_clear_last_move_for_call(turn)
 	var copied: int = turn.defender().last_counter_move
 	var slot: int = _last_slot_holding(turn.attacker(), Gen2MoveEffect.MIMIC_MOVE)
@@ -1189,6 +1176,37 @@ static func _mimic(turn: Gen2Turn) -> void:
 		_fail_called_move(turn)
 		return
 	if not turn.attacker().mimic_move(slot, copied):
+		_fail_called_move(turn)
+		return
+	_animate_current_move(turn)
+	turn.emit(Gen2Battle.MIMIC_LEARNED, {"move": copied, "slot": slot})
+
+
+## `MimicEffect`: the copy lands in the slot MIMIC was used from and keeps
+## that slot's PP. The enemy and a link partner take `BattleRandom & 3` until a
+## slot holds a move; the player is asked (`.letPlayerChooseMove`).
+static func _gen1_mimic(turn: Gen2Turn) -> void:
+	if _is_hidden(turn.defender().substatus):
+		_fail_called_move(turn)
+		return
+	var slot: int = turn.slot if turn.slot >= 0 \
+		else maxi(_last_slot_holding(turn.attacker(), Gen2MoveEffect.MIMIC_MOVE), 0)
+	if turn.side == Gen2Battle.PLAYER and not turn.battle.is_link_battle:
+		turn.battle.request_mimic(turn.side, slot)
+		turn.end()
+		return
+	var copied: Array = turn.defender().moves
+	var picked: int = 0
+	while picked == 0:
+		var index: int = turn.rng().randi_range(0, Gen2BattleMon.MAX_MOVES - 1)
+		picked = int(copied[index]) if index < copied.size() else 0
+	gen1_mimic_learn(turn, slot, picked)
+
+
+## The tail both paths share: the slot rewritten, `PlayCurrentMoveAnimation`
+## and `MimicLearnedMoveText`.
+static func gen1_mimic_learn(turn: Gen2Turn, slot: int, copied: int) -> void:
+	if not turn.attacker().gen1_mimic_move(slot, copied):
 		_fail_called_move(turn)
 		return
 	_animate_current_move(turn)
@@ -1211,7 +1229,11 @@ static func _metronome(turn: Gen2Turn) -> void:
 		var picked: int = turn.rng().randi_range(0, 255)
 		if picked <= 0 or picked > Gen2Layout.MOVE_COUNT:
 			continue
-		if METRONOME_EXCEPTS.has(picked) or turn.attacker().moves.has(picked):
+		# `MetronomePickMove` refuses only METRONOME and STRUGGLE and up.
+		if turn.battle.is_gen1():
+			if picked == Gen2MoveEffect.METRONOME_MOVE or picked >= Gen2Damage.STRUGGLE:
+				continue
+		elif METRONOME_EXCEPTS.has(picked) or turn.attacker().moves.has(picked):
 			continue
 		if turn.data().move(picked).is_empty():
 			continue
@@ -1375,13 +1397,37 @@ static func _miss(turn: Gen2Turn, event: StringName = Gen2Battle.MISSED) -> void
 	turn.missed = true
 	## `MoveHitTest.moveMissed` zeroes `wDamage` and clears
 	## `USING_TRAPPING_MOVE`, so a Wrap that misses binds nothing at all.
+	if turn.battle.is_gen1():
+		turn.battle.last_damage_dealt = 0
 	if turn.battle.gen1_trapping_move(turn.side) != 0:
 		turn.defender().trapped_turns = 0
 		turn.defender().trapping_move = 0
-		turn.battle.last_damage_dealt = 0
 	turn.emit(event, {"target": turn.target})
 	if not CONTINUES_AFTER_MISS.has(turn.effect()):
 		_failure_text(turn)
+
+
+## `.swiftCheck` comes in front of `.checkForDigOrFlyStatus` on Generation 1,
+## so Swift reaches a Pokemon in the air or underground, and `SleepEffect`
+## never asks `MoveHitTest` for a target that needs to recharge.
+static func _gen1_hits_outright(turn: Gen2Turn) -> bool:
+	if not turn.battle.is_gen1():
+		return false
+	if turn.effect() == Gen2MoveEffect.ALWAYS_HIT:
+		return true
+	return turn.effect() == Gen2MoveEffect.SLEEP \
+		and Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.RECHARGING)
+
+
+## `.ThunderRain`, `.XAccuracy` and the perfect-accuracy check, in that order
+## and all ahead of the stat modifiers: Swift, Faint Attack and Vital Throw
+## carry `NormalHit`'s list and a stored accuracy of 100.
+static func _hits_without_a_roll(turn: Gen2Turn) -> bool:
+	if turn.effect() == Gen2MoveEffect.THUNDER and turn.battle.weather == Gen2Weather.RAIN:
+		return true
+	if Gen2Substatus.has(turn.attacker().substatus, Gen2Substatus.X_ACCURACY):
+		return true
+	return turn.effect() == Gen2MoveEffect.ALWAYS_HIT
 
 
 static func _check_hit(turn: Gen2Turn) -> void:
@@ -1393,6 +1439,9 @@ static func _check_hit(turn: Gen2Turn) -> void:
 	if turn.effect() == Gen2MoveEffect.DREAM_EATER \
 		and not Gen2Status.is_asleep(turn.defender().status):
 		_miss(turn)
+		return
+
+	if _gen1_hits_outright(turn):
 		return
 
 	# `.Protect`, second, and ahead of everything but the Dream Eater question.
@@ -1407,7 +1456,10 @@ static func _check_hit(turn: Gen2Turn) -> void:
 
 	# `.DrainSub`, third: nothing drains out of a doll, so the two effects that
 	# heal off what they deal read as a miss rather than a hit healing nothing.
-	if _substitute_refuses(turn) and turn.effect() in DRAINING_EFFECTS:
+	# `MoveHitTest`'s own copy is dead code, `CheckTargetSubstitute` having
+	# overwritten the effect byte it compares, so a Generation 1 drain lands.
+	if _substitute_refuses(turn) and turn.effect() in DRAINING_EFFECTS \
+		and not turn.battle.is_gen1():
 		_miss(turn)
 		return
 
@@ -1431,21 +1483,7 @@ static func _check_hit(turn: Gen2Turn) -> void:
 		_miss(turn)
 		return
 
-	# `.ThunderRain`, ahead of the stat modifiers and the roll: Thunder never
-	# misses in rain, whatever either side's accuracy and evasion say.
-	if turn.effect() == Gen2MoveEffect.THUNDER \
-		and turn.battle.weather == Gen2Weather.RAIN:
-		return
-
-	# `.XAccuracy`, immediately after it: an X Accuracy makes everything the
-	# holder throws land, for the rest of the time it is out.
-	if Gen2Substatus.has(turn.attacker().substatus, Gen2Substatus.X_ACCURACY):
-		return
-
-	# The perfect-accuracy check, last before the stat modifiers. Swift, Faint
-	# Attack and Vital Throw carry `NormalHit`'s list and a stored accuracy of 100,
-	# so this one comparison is the whole of what makes them never miss.
-	if turn.effect() == Gen2MoveEffect.ALWAYS_HIT:
+	if _hits_without_a_roll(turn):
 		return
 
 	# `.StatModifiers`, whose Foresight branch returns before multiplying: an
@@ -1473,13 +1511,9 @@ static func _check_hit(turn: Gen2Turn) -> void:
 	_miss(turn)
 
 
-## `BattleCommand_FailureText`, the half of it that is state rather than words.
-## Which line a miss says is the standing divergence; what it leaves behind is not.
-## `.fly_dig` reads `BATTLE_VARS_MOVE_ANIM` rather than the effect byte, so it is
-## the move that names it, and `checkcharge` has already cleared both bits on the
-## release turn: a missed Fly or Dig owes the picture back, which is what
-## `AppearUserRaiseSub` pays. Whether it shows depends on what the charge
-## animation left, which [method Gen2BattleScreen.animation_snapshot] reports.
+## `BattleCommand_FailureText`, the state rather than the words. `.fly_dig`
+## reads `BATTLE_VARS_MOVE_ANIM`, so the move names it, and `checkcharge` has
+## cleared both bits: a missed Fly or Dig owes the picture back.
 static func _failure_text(turn: Gen2Turn) -> void:
 	_jump_kick_crash(turn)
 	if turn.move_number in [Gen2MoveEffect.FLY_MOVE, Gen2MoveEffect.DIG_MOVE]:
@@ -1606,6 +1640,9 @@ const SUBSTITUTE_KEEPS_EFFECT: Array[int] = [
 
 
 static func _counter(turn: Gen2Turn, mirror_coat: bool) -> void:
+	if turn.battle.is_gen1():
+		_gen1_counter(turn)
+		return
 	var remembered: Dictionary = turn.battle.last_damage_taken(turn.side)
 	var expected_effect: int = (
 		Gen2MoveEffect.MIRROR_COAT if mirror_coat else Gen2MoveEffect.COUNTER
@@ -1637,6 +1674,32 @@ static func _counter(turn: Gen2Turn, mirror_coat: bool) -> void:
 
 	turn.emit(Gen2Battle.MOVE_FAILED)
 	turn.end()
+
+
+## `HandleCounterMove`: the target's selected move must have power and be
+## Normal or Fighting and not Counter, and the figure doubled is `wDamage`,
+## whoever dealt it. `AdjustDamageForMoveType` is jumped past, so a Ghost is
+## hit; `MoveHitTest` still runs.
+static func _gen1_counter(turn: Gen2Turn) -> void:
+	var selected: Dictionary = turn.data().move(
+		int(turn.battle.gen1_selected_moves.get(turn.target, 0))
+	)
+	var selected_type: int = int(selected.get("type", Gen2Layout.TYPE_NORMAL))
+	var countered: bool = not selected.is_empty() \
+		and int(selected.get("effect", -1)) != Gen2MoveEffect.COUNTER \
+		and int(selected.get("power", 0)) > 0 \
+		and (selected_type == Gen2Layout.TYPE_NORMAL or selected_type == Gen2Layout.TYPE_FIGHTING) \
+		and turn.battle.last_damage_dealt > 0
+	if not countered:
+		_miss(turn)
+		turn.end()
+		return
+	turn.damage = mini(turn.battle.last_damage_dealt * 2, 0xFFFF)
+	turn.critical = false
+	turn.effectiveness = Gen2Layout.MATCHUP_EFFECTIVE
+	turn.immune = false
+	turn.missed = false
+	_check_hit(turn)
 
 
 ## Selfdestruct's command clears the user's status and zeroes its HP, the faint
@@ -1684,8 +1747,11 @@ static func _doubles_minimize_damage(turn: Gen2Turn) -> bool:
 ## BattleCommand_Recoil takes at least one, even after a doll clears wCurDamage.
 static func _recoil(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
+	# `RecoilEffect_`'s `cp STRUGGLE` skips the second shift: half, not a quarter.
+	var divisor: int = 2 if turn.battle.is_gen1() and turn.move_number == Gen2Damage.STRUGGLE \
+		else RECOIL_DIVISOR
 	@warning_ignore("integer_division")
-	var taken: int = attacker.take_damage(maxi(turn.damage / RECOIL_DIVISOR, 1))
+	var taken: int = attacker.take_damage(maxi(turn.damage / divisor, 1))
 	turn.emit(Gen2Battle.RECOIL, {
 		"amount": taken, "hp": attacker.hp, "max_hp": attacker.max_hp(),
 	})
@@ -1752,6 +1818,9 @@ static func _check_sleep(turn: Gen2Turn) -> void:
 			turn.locked = false
 			mon.substatus &= ~Gen2Substatus.NIGHTMARE
 			turn.emit(Gen2Battle.WOKE_UP)
+			# `.WakeUp` falls into `.sleepDone`'s `ExecutePlayerMoveDone`.
+			if turn.battle.is_gen1():
+				turn.end()
 
 
 ## CheckTurn checks recharge, sleep, freeze, flinch, Disable, confusion, Attract,
@@ -1883,6 +1952,9 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	if not primary and _substitute_refuses(turn):
 		return
 
+	if _gen1_sleeps_through_recharge(turn, flag):
+		return
+
 	if _primary_status_misses(turn, flag):
 		turn.emit(Gen2Battle.MOVE_FAILED)
 		return
@@ -1919,10 +1991,14 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 
 	if flag == Gen2Status.SLEEP_MASK:
 		defender.status = Gen2Status.roll_sleep(
-			turn.rng(), turn.battle.in_battle_tower, turn.battle.gen1_stadium_cup
+			turn.rng(), turn.battle.in_battle_tower, turn.battle.gen1_stadium_cup,
+			turn.battle.is_gen1()
 		)
 	else:
 		defender.status |= flag
+		# `QuarterSpeedDueToParalysis` and `HalveAttackDueToBurn`.
+		if turn.battle.is_gen1():
+			defender.gen1_apply_penalties()
 
 	# The status is on before the animation plays, the order all four `*Target`
 	# commands use: the bit, `UpdateOpponentInParty` and any `Apply*Effect`, then
@@ -1943,6 +2019,24 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	turn.battle.use_status_berry(turn.target, turn.events)
 
 	_status_interrupts(turn, flag)
+
+
+## `SleepEffect` clears `NEEDS_TO_RECHARGE` and, when it was set, skips every
+## test to `.setSleepCounter`, the existing status and `MoveHitTest` included.
+static func _gen1_sleeps_through_recharge(turn: Gen2Turn, flag: int) -> bool:
+	var defender: Gen2BattleMon = turn.defender()
+	if not turn.battle.is_gen1() or flag != Gen2Status.SLEEP_MASK \
+		or not Gen2Substatus.has(defender.substatus, Gen2Substatus.RECHARGING):
+		return false
+	defender.substatus &= ~Gen2Substatus.RECHARGING
+	defender.status = Gen2Status.roll_sleep(turn.rng(), false, turn.battle.gen1_stadium_cup, true)
+	_animate_current_move(turn)
+	turn.emit(Gen2Battle.STATUS_INFLICTED, {
+		"target": turn.target, "status": defender.status,
+		"name": Gen2Status.name_of(defender.status),
+	})
+	_status_interrupts(turn, flag)
+	return true
 
 
 static func _status_interrupts(turn: Gen2Turn, flag: int) -> void:
@@ -1966,10 +2060,14 @@ static func _status_type_refuses(turn: Gen2Turn, flag: int) -> bool:
 	var types: Array = turn.defender().types()
 	if flag == Gen2Status.POISON:
 		return types.has(Gen2Layout.TYPE_POISON)
+	var move_type: int = int(turn.move.get("type", Gen2Layout.TYPE_NORMAL))
+	# `FreezeBurnParalyzeEffect`'s `cp b / ret z` over both of the target's
+	# types, paralysis included; the primary routines ask no such thing.
+	if turn.battle.is_gen1():
+		return not _status_move_animates(turn, flag) and types.has(move_type)
 	if flag != Gen2Status.BURN and flag != Gen2Status.FREEZE:
 		return false
 
-	var move_type: int = int(turn.move.get("type", Gen2Layout.TYPE_NORMAL))
 	if move_type == Gen2Layout.TYPE_NORMAL:
 		return false
 	return types.has(move_type)
@@ -2131,24 +2229,29 @@ static func _fixed_damage(turn: Gen2Turn) -> void:
 ## subtracted off.
 const OHKO_LEVEL_BONUS: int = 2
 
-## Guillotine, Horn Drill and Fissure: an instant faint with its own accuracy
-## rule. A higher-level defender is immune outright with no roll; otherwise the
-## stored accuracy, a shade under 30%, rises by two per level the attacker leads
-## by and rolls through the ordinary stage machinery, so evasion and accuracy
-## stages help a one-hit KO like any other move.
+## Guillotine, Horn Drill and Fissure: a higher-level defender is immune with
+## no roll, and otherwise the stored accuracy rises by two per level the
+## attacker leads by and rolls through the ordinary stage machinery.
 static func _ohko(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	var defender: Gen2BattleMon = turn.defender()
 
-	if attacker.level < defender.level:
+	# `OneHitKOEffect_` reads no level: the user's stored Speed under the
+	# target's is `wMoveMissed`, and the move's own 30 rolls otherwise.
+	if turn.battle.is_gen1():
+		if attacker.stat("speed") < defender.stat("speed"):
+			_miss(turn)
+			turn.end()
+			return
+	elif attacker.level < defender.level:
 		turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
 		turn.end()
 		return
-
-	turn.accuracy = clampi(
-		int(turn.move.get("accuracy", 0)) + (attacker.level - defender.level) * OHKO_LEVEL_BONUS,
-		0, Gen2Accuracy.ALWAYS_HITS
-	)
+	else:
+		turn.accuracy = clampi(
+			int(turn.move.get("accuracy", 0)) + (attacker.level - defender.level) * OHKO_LEVEL_BONUS,
+			0, Gen2Accuracy.ALWAYS_HITS
+		)
 	_check_hit(turn)
 	if turn.missed:
 		return
@@ -2332,7 +2435,7 @@ static func _check_rampage(turn: Gen2Turn) -> void:
 	# about to be confused.
 	if _safeguard_refuses(turn, turn.side):
 		return
-	mon.confusion_turns = Gen2Substatus.roll_rampage_confusion(turn.rng())
+	mon.confusion_turns = Gen2Substatus.roll_rampage_confusion(turn.rng(), turn.battle.is_gen1())
 	mon.substatus |= Gen2Substatus.CONFUSED
 
 
@@ -2344,7 +2447,7 @@ static func _rampage(turn: Gen2Turn) -> void:
 		return
 	mon.substatus |= Gen2Substatus.RAMPAGING
 	mon.rampage_move = turn.move_number
-	mon.rampage_turns = Gen2Substatus.roll_rampage_turns(turn.rng())
+	mon.rampage_turns = Gen2Substatus.roll_rampage_turns(turn.rng(), turn.battle.is_gen1())
 	turn.someone_is_rampaging = true
 
 
@@ -2389,6 +2492,7 @@ static func _gen1_haze(turn: Gen2Turn) -> void:
 static func _gen1_cure_volatile(battle: Gen2Battle, side: int) -> void:
 	var mon: Gen2BattleMon = battle.mon(side)
 	mon.reset_stages()
+	mon.gen1_reset_stats()
 	mon.substatus &= ~(
 		Gen2Substatus.CONFUSED | Gen2Substatus.X_ACCURACY | Gen2Substatus.MIST
 		| Gen2Substatus.FOCUS_ENERGY | Gen2Substatus.LEECH_SEED
@@ -2528,22 +2632,47 @@ static func _disable(turn: Gen2Turn) -> void:
 		turn.emit(Gen2Battle.MOVE_FAILED)
 		return
 
-	var last_move: int = defender.last_counter_move
-	if last_move == 0 or last_move == Gen2Damage.STRUGGLE:
-		turn.emit(Gen2Battle.MOVE_FAILED)
-		return
-
-	var slot: int = defender.moves.find(last_move)
-	if slot < 0 or defender.pp_left(slot) <= 0:
+	var slot: int
+	if turn.battle.is_gen1():
+		slot = _gen1_disable_slot(turn, defender)
+	else:
+		var last_move: int = defender.last_counter_move
+		if last_move == 0 or last_move == Gen2Damage.STRUGGLE:
+			turn.emit(Gen2Battle.MOVE_FAILED)
+			return
+		slot = defender.moves.find(last_move)
+		if slot >= 0 and defender.pp_left(slot) <= 0:
+			slot = -1
+	if slot < 0:
 		turn.emit(Gen2Battle.MOVE_FAILED)
 		return
 
 	defender.disabled_slot = slot
-	defender.disable_turns = Gen2Substatus.roll_disable(turn.rng())
+	defender.disable_turns = Gen2Substatus.roll_disable(turn.rng(), turn.battle.is_gen1())
 	_animate_current_move(turn)
 	turn.emit(Gen2Battle.DISABLE_INFLICTED, {
-		"target": turn.target, "slot": slot, "move": last_move,
+		"target": turn.target, "slot": slot, "move": int(defender.moves[slot]),
 	})
+
+
+## `DisableEffect.pickMoveToDisable`: `BattleRandom & 3` until a slot holding a
+## move, with PP left unless `.playerTurnNotLinkBattle` reads none off an enemy.
+static func _gen1_disable_slot(turn: Gen2Turn, defender: Gen2BattleMon) -> int:
+	var checks_pp: bool = turn.side == Gen2Battle.ENEMY or turn.battle.is_link_battle
+	if checks_pp:
+		var total: int = 0
+		for index: int in defender.moves.size():
+			total += defender.pp_left(index)
+		if total == 0:
+			return -1
+	while true:
+		var slot: int = turn.rng().randi_range(0, Gen2BattleMon.MAX_MOVES - 1)
+		if slot >= defender.moves.size() or int(defender.moves[slot]) == 0:
+			continue
+		if checks_pp and defender.pp_left(slot) <= 0:
+			continue
+		return slot
+	return -1
 
 
 ## Locks the target into repeating [member Gen2BattleMon.last_move_used], found
@@ -2645,11 +2774,9 @@ static func _trap_target(turn: Gen2Turn) -> void:
 	})
 
 
-## Stops the target running or being recalled while the user stays out.
-## `BattleCommand_ArenaTrap` fails against a flying or underground target
-## (`CheckHiddenOpponent`) and against one already held, where "already held"
-## reads the user's own flag: two Mean Looks from the same Pokémon fail, not one
-## on a target the opponent's previous Pokémon had caught.
+## `BattleCommand_ArenaTrap` fails against a hidden target and against one
+## already held, "already held" reading the user's own flag: two Mean Looks
+## from the same Pokémon fail, not one on a target a previous Pokémon caught.
 static func _arena_trap(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	if _is_hidden(turn.defender().substatus) \
@@ -2745,7 +2872,9 @@ static func _substitute(turn: Gen2Turn) -> void:
 	# Substitute leaves the byte set and the flag clear.
 	var cost: int = Gen2Substatus.substitute_hp_for(user.max_hp())
 	user.substitute_hp = cost
-	if user.hp <= cost:
+	# `SubstituteEffect_` branches on the carry alone, so a user at exactly a
+	# quarter makes the doll and is left at nothing.
+	if user.hp < cost or (user.hp == cost and not turn.battle.is_gen1()):
 		_refused_substitute_raises(turn)
 		turn.emit(Gen2Battle.SUBSTITUTE_TOO_WEAK)
 		return
@@ -2990,11 +3119,9 @@ const FORCE_SWITCH_REFUSED_TYPES: Array[int] = [
 ]
 
 
-## `.trainer` and `.vs_trainer`: drag a random standing party member out. The
-## went-first gate is the non-obvious half: both branches refuse unless the
-## *opponent* moved first, `wEnemyGoesFirst` read from each side's own point of
-## view, so a Whirlwind that moved first does nothing. Priority 0 makes that rare
-## rather than impossible, a slower opponent using Counter sharing it.
+## `.trainer` and `.vs_trainer`: drag a random standing party member out, and
+## only when the *opponent* moved first, `wEnemyGoesFirst` read from each
+## side's own point of view.
 static func _force_switch_trainer(turn: Gen2Turn) -> void:
 	var party: Gen2Party = turn.battle.party(turn.target)
 	if _standing_others(party).is_empty():
@@ -3308,12 +3435,20 @@ static func _safeguard_refuses(turn: Gen2Turn, side: int) -> bool:
 	return Gen2Screens.has(turn.battle.screens[side], Gen2Screens.SAFEGUARD)
 
 
+## `HealEffect_`'s full-health test: `cp [hl]` over the high bytes sets only
+## the carry, so a maximum 255 or 511 above the health reads as full.
+static func _gen1_heal_refuses(attacker: Gen2BattleMon) -> bool:
+	var carry: int = 1 if (attacker.hp >> 8) < (attacker.max_hp() >> 8) else 0
+	return ((attacker.hp & 0xFF) - (attacker.max_hp() & 0xFF) - carry) & 0xFF == 0
+
+
 ## `BattleCommand_Heal`. The full-HP refusal comes first, so Rest at full health
 ## fails whatever status sits on it; it writes `REST_SLEEP_TURNS + 1` over the
 ## whole status byte, which is why it cures a burn or a paralysis.
 static func _heal(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
-	if attacker.hp >= attacker.max_hp():
+	var gen1: bool = turn.battle.is_gen1()
+	if attacker.hp >= attacker.max_hp() or (gen1 and _gen1_heal_refuses(attacker)):
 		turn.emit(Gen2Battle.HP_ALREADY_FULL)
 		return
 
@@ -3321,7 +3456,8 @@ static func _heal(turn: Gen2Turn) -> void:
 	if is_rest:
 		var had_status: bool = Gen2Status.is_afflicted(attacker.status)
 		attacker.toxic_counter = 0
-		attacker.status = Gen2Status.REST_SLEEP_TURNS + 1
+		# `HealEffect_` writes 2, and the turn it wakes on is lost.
+		attacker.status = Gen2Status.REST_SLEEP_TURNS + (0 if gen1 else 1)
 		turn.emit(Gen2Battle.RESTED if had_status else Gen2Battle.WENT_TO_SLEEP)
 
 	@warning_ignore("integer_division")
@@ -3413,13 +3549,9 @@ static func _play_fx_anim(
 	})
 
 
-## `PlayOpponentBattleAnim`, the fifth route an animation reaches the screen by
-## and the only one that is not the move's own: `wFXAnimID` from `de`,
-## `wBattleAfterAnim` cleared, `PlayBattleAnim` between two `SwitchTurn` calls,
-## and `wBattleAnimParam` left alone. Its five callers are all secondary-effect
-## commands with ids past `wFXAnimID`'s low byte, so `BattleAnimRunScript` takes
-## `.not_move` and skips `CheckBattleScene`: a status animation plays with the
-## battle-scene option off.
+## `PlayOpponentBattleAnim`: `wBattleAfterAnim` cleared and `PlayBattleAnim`
+## between two `SwitchTurn`s. Its ids sit past `wFXAnimID`'s low byte, so
+## `BattleAnimRunScript` skips `CheckBattleScene` and the option cannot hide it.
 static func _play_opponent_battle_anim(turn: Gen2Turn, index: int) -> void:
 	_play_fx_anim(turn, index, Gen2BattleAnimPlayer.AFTER_ANIM_NONE, false, true)
 
@@ -3452,13 +3584,9 @@ static func _move_anim(turn: Gen2Turn) -> void:
 	_play_fx_anim(turn, turn.move_number, _damage_after_anim(turn), reappears)
 
 
-## `BattleCommand_LowerSub`: the user's doll dropped out of the way of whatever
-## is about to be drawn, as the SUBSTITUTE animation's own `.dropsub` branch.
-## Nothing is dropped for a user with no doll up, and nothing is dropped on the
-## turn a two-turn move is charging either: `CheckUserIsCharging` is what
-## [method _do_turn] reads as [member Gen2Turn.locked] or
-## [member Gen2Turn.called], and a doll already dropped by the charge turn is
-## still down.
+## `BattleCommand_LowerSub`: the user's doll dropped out of the way. Nothing
+## drops on a charge turn, `CheckUserIsCharging` being [member Gen2Turn.locked]
+## or [member Gen2Turn.called] here.
 static func _lower_sub(turn: Gen2Turn) -> void:
 	if not Gen2Substatus.has(turn.attacker().substatus, Gen2Substatus.SUBSTITUTE):
 		return
@@ -3518,12 +3646,9 @@ static func _stat_change_anim(turn: Gen2Turn, after_anim: int) -> void:
 	_play_fx_anim(turn, turn.move_number, after_anim)
 
 
-## Which of the five status commands carries an `AnimateCurrentMove` of its own.
-## `BattleCommand_SleepTarget`, `..._Poison` and `..._Paralyze` are the status
-## moves' own commands and do; `..._PoisonTarget`, `..._ParalyzeTarget`,
-## `..._BurnTarget` and `..._FreezeTarget` are the secondary-effect commands and
-## do not, since the move that carried them has already played its `moveanim`.
-## One command serves both here, so the effect byte is what tells them apart.
+## Which status commands carry an `AnimateCurrentMove` of their own: the three
+## status moves' do, the four `*Target` secondaries do not, and one command
+## serves both here, so the effect byte tells them apart.
 static func _status_move_animates(turn: Gen2Turn, flag: int) -> bool:
 	match flag:
 		Gen2Status.SLEEP_MASK:
@@ -3555,12 +3680,9 @@ static func _status_target_anim(turn: Gen2Turn, flag: int) -> int:
 	return -1
 
 
-## `AnimateCurrentMove`, which is `LoadMoveAnim` between a `lowersub` and a
-## `raisesub`: the move's own animation with `wBattleAfterAnim` cleared, so no
-## damage flash follows it. Not a list command. Fifteen commands call it from
-## inside their own bodies, and it is the whole animation of every move whose
-## effect list carries no animation command. `wBattleAnimParam` is pushed across
-## the drop rather than cleared, so whatever the last animation left stands.
+## `AnimateCurrentMove`: `LoadMoveAnim` between a `lowersub` and a `raisesub`
+## with `wBattleAfterAnim` cleared. `wBattleAnimParam` is pushed across the
+## drop rather than cleared, so whatever the last animation left stands.
 static func _animate_current_move(turn: Gen2Turn) -> void:
 	var param: int = turn.battle.battle_anim_param
 	_lower_sub(turn)
@@ -3569,13 +3691,9 @@ static func _animate_current_move(turn: Gen2Turn) -> void:
 	_raise_sub(turn)
 
 
-## `BattleCommand_HeldFlinch`: a King's Rock on the attacker makes an ordinary
-## attack flinch, out of the item's own parameter.
-## The `wAttackMissed` guard is structural here, since [method _check_hit] ends
-## the move on a miss and [method _check_faint] ends it on a KO, so this step is
-## only ever reached by a hit that left the target standing. The Substitute check
-## sits between the item and the roll, exactly where `BattleCommand_HeldFlinch`
-## puts it, so a King's Rock aimed at a doll draws no roll.
+## `BattleCommand_HeldFlinch`: a King's Rock on the attacker, out of the item's
+## own parameter. The Substitute check sits between the item and the roll, so a
+## King's Rock aimed at a doll draws no roll.
 static func _kings_rock(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	if Gen2HeldItem.effect_of(turn.data(), attacker.item) != Gen2HeldItem.FLINCH:
@@ -3592,13 +3710,9 @@ static func _kings_rock(turn: Gen2Turn) -> void:
 	turn.defender().substatus |= Gen2Substatus.FLINCHED
 
 
-## Moves one stat by one command's worth and writes down who it happened to and
-## whether it moved, for the message step behind it. A drop against Mist never
-## reaches [method Gen2BattleMon.change_stage]: every lowering entry targets the
-## opponent, which is what Mist blocks, and a rise always targets the user. The
+## Moves one stat by one command's worth, for the message step behind it. The
 ## order is `BattleCommand_StatDown`'s: `CheckMist`, the stage that cannot move,
-## then `.DidntMiss`'s `CheckSubstituteOpp` and `wEffectFailed`, each with its own
-## `wFailedMessage`, so a failed secondary roll still says the line.
+## then `CheckSubstituteOpp` and `wEffectFailed`, each with its own message.
 static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 	var entry: Array = STAT_COMMANDS[command]
 	var stat_key: String = String(entry[0])
@@ -3633,6 +3747,8 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 		return
 
 	turn.stat_moved = turn.battle.mon(side).change_stage(stat_key, amount)
+	if turn.stat_moved and turn.battle.is_gen1():
+		_gen1_stat_changed(turn, side, stat_key)
 
 	# `MinimizeDropSub`, `BattleCommand_StatUp`'s tail and reached only when the
 	# raise took. The flag is set off the move rather than an effect byte, Minimize
@@ -3644,6 +3760,32 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 		# other half, taking a raised doll off the picture, is undone by the
 		# `raisesub` two commands later in every list that reaches here.
 		turn.emit(Gen2Battle.MINIMIZED, {"side": side})
+
+
+## `UpdateStatDone`'s tail: the stat recalculated bare, `ApplyBadgeStatBoosts`
+## over all four when the player's own stat moved, and the two penalties on the
+## user's opponent again, the source's own "these shouldn't be here".
+static func _gen1_stat_changed(
+	turn: Gen2Turn, side: int, stat_key: String, user: int = turn.side
+) -> void:
+	turn.battle.gen1_stat_moved(side, stat_key, user)
+
+
+## `HandleBuildingRage`, behind every move that got past its miss and left the
+## target standing, status moves included: `StatModifierUpEffect` with the turn
+## flipped, so the raging side is the user of the raise and its tail.
+static func gen1_build_rage(turn: Gen2Turn) -> void:
+	var raging: Gen2BattleMon = turn.defender()
+	if not turn.announced or raging.is_fainted() \
+		or not Gen2Substatus.has(raging.substatus, Gen2Substatus.RAGE):
+		return
+	if turn.missed and turn.effect() != Gen2MoveEffect.SELFDESTRUCT:
+		return
+	if not raging.change_stage("attack", 1):
+		return
+	turn.emit(Gen2Battle.RAGE_BUILDING, {"target": turn.target})
+	turn.emit(Gen2Battle.STAT_CHANGED, {"target": turn.target, "stat": "attack", "by": 1})
+	_gen1_stat_changed(turn, turn.target, "attack", turn.target)
 
 
 ## `BattleCommand_StatDown`'s `.ComputerMiss`: an enemy lowering one of the
@@ -3725,13 +3867,9 @@ static func _stat_message(turn: Gen2Turn) -> void:
 	})
 
 
-## Says a stat could not move. Only reached from a status move's sequence, the
-## only place [code]data/moves/effects.asm[/code] follows a message step with
-## [code]statdownfailtext[/code]; an on-hit drop blocked by Mist fails silently,
-## like any on-hit drop that misses its roll.
-## Mist gets its own line, because
-## [code]BattleCommand_StatDownFailText[/code] prints
-## [code]ProtectedByMistText[/code] here rather than "won't go any lower".
+## `BattleCommand_StatDownFailText`, which only a status move's list carries:
+## an on-hit drop blocked by Mist fails silently. Mist gets its own line,
+## `ProtectedByMistText`, rather than "won't go any lower".
 static func _stat_fail_text(turn: Gen2Turn) -> void:
 	if turn.stat_moved:
 		return
@@ -3836,8 +3974,14 @@ static func _disobedient_idle(turn: Gen2Turn) -> void:
 
 static func _hurt_self(turn: Gen2Turn) -> void:
 	var user: Gen2BattleMon = turn.attacker()
+	# `HandleSelfConfusionDamage` writes the user's Defense over the enemy's
+	# and runs `GetDamageVarsForPlayerAttack` under a zero effect byte, which
+	# reads the target's Reflect over it.
+	var gen1: bool = turn.battle.is_gen1()
+	var screens_side: int = turn.target if gen1 else turn.side
 	var dealt: int = user.take_damage(Gen2Damage.confusion_damage(
-		user, turn.battle.screens[turn.side], turn.battle.is_link_battle, turn.effective_move()
+		user, turn.battle.screens[screens_side], turn.battle.is_link_battle,
+		{} if gen1 else turn.effective_move()
 	))
 	turn.emit(Gen2Battle.HURT_ITSELF, {
 		"amount": dealt, "hp": user.hp, "max_hp": user.max_hp(),

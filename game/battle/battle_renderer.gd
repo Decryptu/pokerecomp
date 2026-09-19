@@ -253,14 +253,10 @@ func _bg_map() -> PackedByteArray:
 	return Gen2BattleScreenMap.seeded()
 
 
-## One screen-sized index buffer holding every cell of [param map] whose tile id
-## falls inside this pic's own run, drawn from the pic's padded box. A tile is
-## `base + column * side + row`, the column-major order `PlaceGraphic` walks.
-## [param vbank1] is `wAttrmap` bit 3 and [param animated] is whether this layer
-## owns bank 1. `PokeAnim_SetVBank1` is why both are needed: bank 1 holds the
-## enemy's picture *and* `AnimateFrontpic`'s frames from the same tile 49, so the
-## two sheets overlap in number and are told apart by the bank alone. One flat
-## sheet puts the animation's tiles over the player and the player's over the enemy.
+## One index buffer of every cell of [param map] inside this pic's own run,
+## `base + column * side + row` as `PlaceGraphic` walks. [param vbank1] is
+## `wAttrmap` bit 3 and [param animated] whether this layer owns bank 1, which
+## holds the enemy's picture and `AnimateFrontpic`'s frames from the same tile.
 func _pic_layer(
 	map: PackedByteArray, base: int, side: int, pixels: PackedByteArray,
 	vbank1: PackedByteArray = PackedByteArray(), animated: bool = false
@@ -480,13 +476,9 @@ static func pic_stride(pixels: PackedByteArray, side: int) -> int:
 	return strip
 
 
-## [param front] is whether `PadFrontpic` runs over this one: a back pic fills
-## its own box and a trainer's is already the whole 7x7, so neither is padded.
-## Static because a check sweeping three caches builds the box the way the
-## renderer does. [param animation] is the same species' `front_anim` cell, which
-## becomes the tile columns behind the box: `GetAnimatedEnemyFrontpic` loads them
-## at `7 * 7 tiles` past the picture. [param mirrored] is `wBoxAlignment`, whose
-## `LoadOrientedFrontpic` flips each tile's own pixels as it loads.
+## [param front] is whether `PadFrontpic` runs: a back pic and a trainer's are
+## not padded. [param animation] is the `front_anim` cell `GetAnimatedEnemyFrontpic`
+## loads `7 * 7 tiles` past the picture, [param mirrored] `wBoxAlignment`.
 static func padded_pic(
 	data: GameData, pic: Dictionary, side: int, front: bool = false,
 	animation: Dictionary = {}, mirrored: bool = false
@@ -638,12 +630,9 @@ func _palette_map(key: String, slot: int) -> int:
 	return int((maps as PackedByteArray)[slot])
 
 
-## The panels, and then each bar over them in its own colour. The hardware gives
-## every background tile its own palette, so a green HP bar sits in a panel of
-## black text; here that is one buffer per palette, which is why the bars are
-## drawn apart from the panels. `BattleAnimClearHud` takes one side off the map
-## for the length of a move animation and `BattleAnimRestoreHuds` puts it back,
-## and the view's `hud_visible` is the summary of the two per-side keys.
+## The panels, then each bar over them in its own colour: one buffer per
+## palette. `BattleAnimClearHud` takes one side off for a move animation and
+## `BattleAnimRestoreHuds` puts it back.
 func _draw_panels() -> void:
 	var raster: Array = _raster_key()
 	var enemy_hp: int = int(_view.get("enemy_hp", 0))
@@ -799,12 +788,9 @@ func _draw_sprites() -> void:
 	_sprites.position = Vector2.ZERO
 
 
-## One OAM entry. The stored y and x are the hardware's, which subtracts sixteen
-## and eight, so a zero in either is off screen rather than at the corner.
-## [param backpic] names the player's back pic as the sprite sheet rather than
-## the animation window: `CopyBackpic` decompresses it into `vTiles0` and
-## `.LoadTrainerBackpicAsOAM` addresses it there, tile by tile, before it is ever
-## copied to `vTiles2 tile $31`.
+## One OAM entry, y and x the hardware's (sixteen and eight subtracted).
+## [param backpic] names the player's back pic as the sheet: `CopyBackpic`
+## puts it in `vTiles0` and `.LoadTrainerBackpicAsOAM` addresses it there.
 func _blit_sprite(into: Image, sprite: Dictionary, backpic: bool = false) -> void:
 	var index: int = int(sprite.get("tile", 0))
 	var pixels: PackedByteArray = _battler_tile(
@@ -847,12 +833,9 @@ func _blit_sprite(into: Image, sprite: Dictionary, backpic: bool = false) -> voi
 	into.blend_rect(lookup, clip, Vector2i(left, top))
 
 
-## The eight pixels by eight of one animation tile, found through the window
-## [method Gen2BattleAnimPlayer.tiles] describes, counted from
-## `BATTLEANIM_BASE_TILE`.
-## A window tile is either an imported sheet's or one of the battle's own two
-## pictures, which is what `anim_battlergfx_1row` and `..._2row` put there so an
-## effect can move a battler as objects.
+## One animation tile out of the window [method Gen2BattleAnimPlayer.tiles]
+## describes, counted from `BATTLEANIM_BASE_TILE`: an imported sheet's, or one
+## of the two pictures `anim_battlergfx_1row` and `..._2row` put there.
 func _sprite_tile(tile: int) -> PackedByteArray:
 	var window: Array = _view.get("anim_tiles", [])
 	var at: int = tile - Gen2BattleAnimObject.BASE_TILE

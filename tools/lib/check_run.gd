@@ -72,6 +72,23 @@ func note(message: String) -> void:
 	print("%s: %s" % [game_id, message] if game_id != &"" else message)
 
 
+## Whether [param lines] hash to [param digest]. With `CHECK_DUMP` naming a
+## directory the lines are written there, so a wrong digest can be diffed.
+func digest_matches(name: String, lines: PackedStringArray, digest: String) -> bool:
+	var text: String = "\n".join(lines) + "\n"
+	var dump_dir: String = OS.get_environment("CHECK_DUMP")
+	if not dump_dir.is_empty():
+		var file: FileAccess = FileAccess.open(
+			"%s/%s.%s.txt" % [dump_dir, name, game_id], FileAccess.WRITE
+		)
+		if file != null:
+			file.store_string(text)
+	var answered: String = text.sha1_text()
+	return check(answered == digest, "the %d-case %s sweep is %s, the cartridge %s." % [
+		lines.size() - 1, name, answered, digest,
+	])
+
+
 ## Runs [param body] once per Generation 2 cartridge with [member data],
 ## [member game_id] and [member crystal] set.
 func each_game(body: Callable) -> void:

@@ -173,11 +173,13 @@ const MOVE_EFFECTS: Array[int] = [
 	79, 80, 81, 82, 83, 84, 85, 86, # SUBSTITUTE to DISABLE
 ]
 
-## Those two entries split, `ChargeEffect`'s own `cp DIG`, and the two damage
-## constants that come with the first: `SONICBOOM_DAMAGE` and
-## `DRAGON_RAGE_DAMAGE` sit in the routine here and in the power column there.
+## Those two entries split, `ChargeEffect`'s own `cp DIG`, the two damage
+## constants that come with the first (`SONICBOOM_DAMAGE` and
+## `DRAGON_RAGE_DAMAGE` sit in the routine here and in the power column there),
+## and COUNTER, which `HandleCounterMove` finds by move number under a zero
+## effect byte.
 const MOVE_EFFECT_BY_MOVE: Dictionary = {
-	49: 41, 69: 87, 82: 41, 91: 155, 92: 33, 101: 87, 149: 88,
+	49: 41, 68: 89, 69: 87, 82: 41, 91: 155, 92: 33, 101: 87, 149: 88,
 }
 const MOVE_POWER_BY_MOVE: Dictionary = {49: 20, 82: 40}
 
@@ -187,6 +189,10 @@ const MOVE_POWER_BY_MOVE: Dictionary = {49: 20, 82: 40}
 ## in `PoisonEffect`, 10 and 30 in `FreezeBurnParalyzeEffect` and
 ## `FlinchSideEffect`, `33 percent + 1` in `StatModifierDownEffect`, `10 percent`
 ## in `ConfusionSideEffect`, and Twineedle's own rewrite to POISON_SIDE_EFFECT1.
+## `HandlePoisonBurnLeechSeed_DecreaseOwnHP`'s four shifts: a sixteenth, where
+## Crystal's `GetEighthMaxHP` takes an eighth.
+const RESIDUAL_SHIFT: int = 4
+
 const SIDE_EFFECT_CHANCES: Dictionary = {
 	0x02: 52, 0x21: 103,
 	0x04: 26, 0x05: 26, 0x06: 26, 0x22: 77, 0x23: 77, 0x24: 77,
