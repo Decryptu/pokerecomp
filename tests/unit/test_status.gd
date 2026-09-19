@@ -84,7 +84,7 @@ func test_full_paralysis_is_about_a_quarter_of_the_time() -> void:
 	for _roll: int in 2000:
 		if Gen2Status.rolls_full_paralysis(_rng):
 			stopped += 1
-	assert_between(stopped, 400, 600, "64 in 256, which is a quarter")
+	assert_between(stopped, 400, 600, "63 in 256, a quarter less a byte")
 
 
 func test_thawing_is_about_a_tenth_of_the_time() -> void:

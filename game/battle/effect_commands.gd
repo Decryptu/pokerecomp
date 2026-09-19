@@ -131,11 +131,9 @@ const CONTINUES_AFTER_MISS: Array[int] = [
 	Gen2MoveEffect.SELFDESTRUCT, Gen2MoveEffect.ROLLOUT, Gen2MoveEffect.FURY_CUTTER,
 ]
 
-## The effects `BattleCommand_FailureText`'s `.multihit` names, and the whole of
-## what puts a missing user's own doll back. Beat Up and Triple Kick lower the
-## doll in front of the same `checkhit` and are not named, so a miss leaves both
-## of them standing in front of a dropped Substitute: `docs/bugs_and_glitches.md`'s
-## Beat Up entry, mirrored rather than fixed.
+## The effects `BattleCommand_FailureText`'s `.multihit` names. Beat Up and
+## Triple Kick lower the doll in front of the same `checkhit` and are not named,
+## `docs/bugs_and_glitches.md`'s Beat Up entry, mirrored rather than fixed.
 const MULTI_HIT_RAISES_SUB: Array[int] = [
 	Gen2MoveEffect.MULTI_HIT, Gen2MoveEffect.DOUBLE_HIT, Gen2MoveEffect.TWINEEDLE,
 ]

@@ -33,8 +33,9 @@ const REST_SLEEP_TURNS: int = 2
 const BURN_ATTACK_SHIFT: int = 1
 const PARALYSIS_SPEED_SHIFT: int = 2
 
-## Being fully paralysed is a quarter of the time, out of 256.
-const PARALYSIS_CHANCE: int = 64
+## `cp 25 percent / ret nc` in both generations, and `25 percent` is 63, not
+## 64: the macro is `* $ff / 100`, the way [constant THAW_CHANCE]'s 25 is.
+const PARALYSIS_CHANCE: int = 63
 const CHANCE_RANGE: int = 256
 
 ## `HandleDefrost`'s own `cp 10 percent`, which is 25 and not 26: the `percent`
