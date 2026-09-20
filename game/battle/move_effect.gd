@@ -517,7 +517,9 @@ const RECOIL_HIT_SEQUENCE: Array = [
 
 ## A move that is nothing but a status: no damage, and the status is the whole of
 ## what it does. Sleep is the odd one of the three, because nothing is immune to
-## it: there is no matchup step in its list, where the other two have one.
+## it: there is no `stab` in its list, where the other two have one. None of the
+## three carries `checkimmune`: the matchup is one of the questions the status
+## command itself asks, in its own place among them.
 const SLEEP_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -532,7 +534,6 @@ const POISON_SEQUENCE: Array = [
 	Gen2EffectCommands.DO_TURN,
 	Gen2EffectCommands.CHECK_HIT,
 	Gen2EffectCommands.STAB,
-	Gen2EffectCommands.CHECK_IMMUNE,
 	Gen2EffectCommands.CHECK_SAFEGUARD,
 	Gen2EffectCommands.POISON_TARGET,
 	Gen2EffectCommands.END_MOVE,
@@ -545,20 +546,17 @@ const TOXIC_SEQUENCE: Array = [
 	Gen2EffectCommands.DO_TURN,
 	Gen2EffectCommands.CHECK_HIT,
 	Gen2EffectCommands.STAB,
-	Gen2EffectCommands.CHECK_IMMUNE,
 	Gen2EffectCommands.CHECK_SAFEGUARD,
 	Gen2EffectCommands.TOXIC_TARGET,
 	Gen2EffectCommands.END_MOVE,
 ]
 
 ## The matchup before the roll rather than after it, which is the order the
-## cartridge lists them in and the reason Thunder Wave against a Ground type says
-## it had no effect rather than that it missed.
+## cartridge lists them in.
 const PARALYZE_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
 	Gen2EffectCommands.STAB,
-	Gen2EffectCommands.CHECK_IMMUNE,
 	Gen2EffectCommands.CHECK_HIT,
 	Gen2EffectCommands.CHECK_SAFEGUARD,
 	Gen2EffectCommands.PARALYZE_TARGET,
@@ -1822,6 +1820,15 @@ const STAT_UP_2_BASE: int = 50
 const STAT_DOWN_2_BASE: int = 58
 const STAT_DOWN_HIT_BASE: int = 68
 const STAT_RUN_LENGTH: int = 7
+
+
+static func in_run(effect: int, base: int) -> bool:
+	return effect >= base and effect < base + STAT_RUN_LENGTH
+
+
+## The fourteen lists whose own `statdownfailtext` words a miss.
+static func is_stat_down(effect: int) -> bool:
+	return in_run(effect, STAT_DOWN_BASE) or in_run(effect, STAT_DOWN_2_BASE)
 
 ## The second of that run, `EFFECT_DEFENSE_DOWN_HIT`, which is the only one whose
 ## list differs from its six neighbours.

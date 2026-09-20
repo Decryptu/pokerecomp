@@ -131,6 +131,26 @@ const CONTINUES_AFTER_MISS: Array[int] = [
 	Gen2MoveEffect.SELFDESTRUCT, Gen2MoveEffect.ROLLOUT, Gen2MoveEffect.FURY_CUTTER,
 ]
 
+## The effects whose own command reads `wAttackMissed` back among its other
+## refusals and words them all; `stab`'s immunity is theirs too.
+const SAYS_ITS_OWN_MISS: Array[int] = [
+	Gen2MoveEffect.SLEEP, Gen2MoveEffect.POISON, Gen2MoveEffect.TOXIC,
+	Gen2MoveEffect.PARALYZE, Gen2MoveEffect.LEECH_SEED, Gen2MoveEffect.CONFUSE,
+]
+
+## The other lists with no `failuretext`, whose command behind `checkhit` prints
+## `ButItFailedText` (`FailMove`, `bidefailtext`) or `DidntAffect1Text`
+## (`PrintDidntAffect2`). The fourteen stat drops are `statdownfailtext`'s.
+const FAILS_ON_MISS: Array[int] = [
+	Gen2MoveEffect.FORCE_SWITCH, Gen2MoveEffect.MIMIC, Gen2MoveEffect.DISABLE,
+	Gen2MoveEffect.CONVERSION_2, Gen2MoveEffect.FORESIGHT, Gen2MoveEffect.ATTRACT,
+	Gen2MoveEffect.BIDE,
+]
+const DIDNT_AFFECT_ON_MISS: Array[int] = [
+	Gen2MoveEffect.ENCORE, Gen2MoveEffect.PAIN_SPLIT, Gen2MoveEffect.SPITE,
+	Gen2MoveEffect.LOCK_ON,
+]
+
 ## The effects `BattleCommand_FailureText`'s `.multihit` names. Beat Up and
 ## Triple Kick lower the doll in front of the same `checkhit` and are not named,
 ## `docs/bugs_and_glitches.md`'s Beat Up entry, mirrored rather than fixed.
@@ -1429,9 +1449,21 @@ static func _miss(turn: Gen2Turn, event: StringName = Gen2Battle.MISSED) -> void
 	if turn.battle.gen1_trapping_move(turn.side) != 0:
 		turn.defender().trapped_turns = 0
 		turn.defender().trapping_move = 0
-	turn.emit(event, {"target": turn.target})
+	if SAYS_ITS_OWN_MISS.has(turn.effect()) or Gen2MoveEffect.is_stat_down(turn.effect()):
+		return
+	turn.emit(_miss_line(turn.effect()) if event == Gen2Battle.MISSED else event, {
+		"target": turn.target, "missed": true,
+	})
 	if not CONTINUES_AFTER_MISS.has(turn.effect()):
 		_failure_text(turn)
+
+
+static func _miss_line(effect: int) -> StringName:
+	if DIDNT_AFFECT_ON_MISS.has(effect):
+		return Gen2Battle.STATUS_DIDNT_AFFECT
+	if FAILS_ON_MISS.has(effect):
+		return Gen2Battle.MOVE_FAILED
+	return Gen2Battle.MISSED
 
 
 ## `.swiftCheck` comes in front of `.checkForDigOrFlyStatus` on Generation 1,
@@ -1458,7 +1490,8 @@ static func _hits_without_a_roll(turn: Gen2Turn) -> bool:
 
 
 static func _check_hit(turn: Gen2Turn) -> void:
-	if turn.immune:
+	# `BattleCommand_CheckHit` never reads `wTypeModifier`.
+	if turn.immune and not SAYS_ITS_OWN_MISS.has(turn.effect()):
 		_miss(turn, Gen2Battle.NO_EFFECT)
 		return
 
@@ -1966,28 +1999,18 @@ static func _effect_chance(turn: Gen2Turn) -> void:
 		turn.failed_chance = true
 
 
-## The four `*Target` commands share their order: existing status, weather,
-## type, and only then `wEffectFailed`, so a burn whose roll failed still
-## reaches `Defrost`.
+## The four `*Target` commands' order: a doll, existing status, weather, type,
+## then `wEffectFailed`, so a burn whose roll failed still reaches `Defrost`.
 static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 	if defender.is_fainted():
 		return
 
-	# The four secondary `*Target` commands open on `CheckSubstituteOpp`, ahead of
-	# the status check, so a doll stops even the thaw a burn would have given. The
-	# three primary commands ask after theirs. Everything between the two
-	# positions is a refusal that says nothing here, so `Defrost` is the only
-	# place the split shows.
-	var primary: bool = _status_move_animates(turn, flag)
-	if not primary and _substitute_refuses(turn):
+	if _status_move_animates(turn, flag):
+		_primary_status(turn, flag)
 		return
 
-	if _gen1_sleeps_through_recharge(turn, flag):
-		return
-
-	if _primary_status_misses(turn, flag):
-		turn.emit(Gen2Battle.MOVE_FAILED)
+	if _substitute_refuses(turn):
 		return
 
 	if Gen2Status.is_afflicted(defender.status):
@@ -2005,9 +2028,6 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	if _status_type_refuses(turn, flag):
 		return
 
-	if primary and _substitute_refuses(turn):
-		return
-
 	if turn.failed_chance:
 		return
 
@@ -2017,9 +2037,108 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	if _safeguard_refuses(turn, turn.target):
 		return
 
-	if _status_move_animates(turn, flag):
-		_animate_current_move(turn)
+	_inflict_status(turn, flag)
 
+
+## `BattleCommand_SleepTarget`, `BattleCommand_Poison` and
+## `BattleCommand_Paralyze`: the first refusal row that holds is the line said.
+static func _primary_status(turn: Gen2Turn, flag: int) -> void:
+	if _gen1_sleeps_through_recharge(turn, flag):
+		return
+	var refusal: StringName = _primary_refusal(turn, flag)
+	if refusal != &"":
+		turn.emit(refusal, {"target": turn.target, "status": flag, "missed": turn.missed})
+		return
+	_animate_current_move(turn)
+	_inflict_status(turn, flag)
+
+
+## `BattleCommand_Confuse`'s key in the same tables, one no status byte carries.
+const CONFUSE_KEY: int = 0
+
+## Each command's refusals in its own order: a question and the line it says.
+const PRIMARY_REFUSALS: Dictionary = {
+	CONFUSE_KEY: [
+		[&"already", Gen2Battle.STATUS_ALREADY], [&"substitute", Gen2Battle.STATUS_DIDNT_AFFECT],
+		[&"missed", Gen2Battle.STATUS_DIDNT_AFFECT],
+	],
+	Gen2Status.SLEEP_MASK: [
+		[&"already", Gen2Battle.STATUS_ALREADY], [&"missed", Gen2Battle.STATUS_DIDNT_AFFECT],
+		[&"computer", Gen2Battle.STATUS_DIDNT_AFFECT], [&"afflicted", Gen2Battle.STATUS_DIDNT_AFFECT],
+		[&"substitute", Gen2Battle.STATUS_DIDNT_AFFECT],
+	],
+	Gen2Status.POISON: [
+		[&"immune", Gen2Battle.NO_EFFECT], [&"type", Gen2Battle.NO_EFFECT],
+		[&"already", Gen2Battle.STATUS_ALREADY], [&"afflicted", Gen2Battle.STATUS_DIDNT_AFFECT],
+		[&"computer", Gen2Battle.STATUS_DIDNT_AFFECT], [&"substitute", Gen2Battle.STATUS_DIDNT_AFFECT],
+		[&"missed", Gen2Battle.STATUS_DIDNT_AFFECT],
+	],
+	Gen2Status.PARALYSIS: [
+		[&"already", Gen2Battle.STATUS_ALREADY], [&"immune", Gen2Battle.NO_EFFECT],
+		[&"computer", Gen2Battle.STATUS_DIDNT_AFFECT], [&"afflicted", Gen2Battle.STATUS_DIDNT_AFFECT],
+		[&"missed", Gen2Battle.STATUS_DIDNT_AFFECT], [&"substitute", Gen2Battle.STATUS_DIDNT_AFFECT],
+	],
+}
+
+## `SleepEffect` and `ParalyzeEffect_` never ask about a doll; nothing rolls a
+## computer failure.
+const GEN1_PRIMARY_REFUSALS: Dictionary = {
+	CONFUSE_KEY: [
+		[&"substitute", Gen2Battle.MOVE_FAILED], [&"missed", Gen2Battle.MOVE_FAILED],
+		[&"already", Gen2Battle.MOVE_FAILED],
+	],
+	Gen2Status.SLEEP_MASK: [
+		[&"already", Gen2Battle.STATUS_ALREADY], [&"afflicted", Gen2Battle.STATUS_DIDNT_AFFECT],
+		[&"missed", Gen2Battle.STATUS_DIDNT_AFFECT],
+	],
+	Gen2Status.POISON: [
+		[&"substitute", Gen2Battle.STATUS_DIDNT_AFFECT], [&"afflicted", Gen2Battle.STATUS_DIDNT_AFFECT],
+		[&"type", Gen2Battle.STATUS_DIDNT_AFFECT], [&"missed", Gen2Battle.STATUS_DIDNT_AFFECT],
+	],
+	Gen2Status.PARALYSIS: [
+		[&"afflicted", Gen2Battle.STATUS_DIDNT_AFFECT], [&"immune", Gen2Battle.NO_EFFECT],
+		[&"missed", Gen2Battle.STATUS_DIDNT_AFFECT],
+	],
+}
+
+
+static func _primary_refusal(turn: Gen2Turn, flag: int) -> StringName:
+	var rows: Array = (GEN1_PRIMARY_REFUSALS if turn.battle.is_gen1() else PRIMARY_REFUSALS)[flag]
+	for row: Array in rows:
+		if _primary_refusal_holds(turn, flag, row[0]):
+			return row[1]
+	return &""
+
+
+## `immune` is `wTypeModifier`, or `ParalyzeEffect_`'s Electric-against-Ground test.
+static func _primary_refusal_holds(turn: Gen2Turn, flag: int, question: StringName) -> bool:
+	var defender: Gen2BattleMon = turn.defender()
+	match question:
+		&"already":
+			if flag == CONFUSE_KEY:
+				return Gen2Substatus.has(defender.substatus, Gen2Substatus.CONFUSED)
+			return Gen2Status.has(defender.status, flag)
+		&"afflicted":
+			return Gen2Status.is_afflicted(defender.status)
+		&"missed":
+			return turn.missed
+		&"computer":
+			return _computer_effect_misses(turn)
+		&"substitute":
+			return _substitute_refuses(turn)
+		&"type":
+			return _status_type_refuses(turn, flag)
+		&"immune":
+			if not turn.battle.is_gen1():
+				return turn.immune
+			return int(turn.move.get("type", Gen2Layout.TYPE_NORMAL)) == Gen2Layout.TYPE_ELECTRIC \
+				and defender.types().has(Gen2Layout.TYPE_GROUND)
+	return false
+
+
+## From the bit onwards, the primary and secondary commands agree.
+static func _inflict_status(turn: Gen2Turn, flag: int) -> void:
+	var defender: Gen2BattleMon = turn.defender()
 	if flag == Gen2Status.SLEEP_MASK:
 		defender.status = Gen2Status.roll_sleep(
 			turn.rng(), turn.battle.in_battle_tower, turn.battle.gen1_stadium_cup,
@@ -2092,8 +2211,7 @@ static func _status_type_refuses(turn: Gen2Turn, flag: int) -> bool:
 	if flag == Gen2Status.POISON:
 		return types.has(Gen2Layout.TYPE_POISON)
 	var move_type: int = int(turn.move.get("type", Gen2Layout.TYPE_NORMAL))
-	# `FreezeBurnParalyzeEffect`'s `cp b / ret z` over both of the target's
-	# types, paralysis included; the primary routines ask no such thing.
+	# `FreezeBurnParalyzeEffect`'s `cp b / ret z`, paralysis included.
 	if turn.battle.is_gen1():
 		return not _status_move_animates(turn, flag) and types.has(move_type)
 	if flag != Gen2Status.BURN and flag != Gen2Status.FREEZE:
@@ -2114,35 +2232,19 @@ static func _defrost(turn: Gen2Turn, defender: Gen2BattleMon) -> void:
 	turn.emit(Gen2Battle.THAWED, {"side": turn.target})
 
 
-## Poisons the target as [constant POISON_TARGET] does and starts the counter that
-## makes it Toxic, which [method Gen2Status.toxic_damage] reads back at the end of
-## every turn from here on.
+## `BattleCommand_Poison`'s `.toxic` branch: the same refusals, then the counter
+## [method Gen2Status.toxic_damage] reads back every turn.
 static func _toxic_target(turn: Gen2Turn) -> void:
-	if turn.failed_chance:
-		return
-
 	var defender: Gen2BattleMon = turn.defender()
-	if defender.is_fainted() or Gen2Status.is_afflicted(defender.status):
+	if defender.is_fainted():
 		return
 
-	# Toxic is `BattleCommand_Poison` with a different branch at the end, so it
-	# passes that command's own `CheckIfTargetIsPoisonType` on the way in: a
-	# Poison-type is no more badly poisoned than ordinarily poisoned.
-	if _status_type_refuses(turn, Gen2Status.POISON):
+	var refusal: StringName = _primary_refusal(turn, Gen2Status.POISON)
+	if refusal != &"":
+		turn.emit(refusal, {"target": turn.target, "status": Gen2Status.POISON, "missed": turn.missed})
 		return
 
-	if _computer_effect_misses(turn):
-		turn.emit(Gen2Battle.MOVE_FAILED)
-		return
-
-	# `.dont_sample_failure`, which is where that command asks about the doll:
-	# behind the type and status checks rather than in front of them.
-	if _substitute_refuses(turn):
-		return
-
-	# `BattleCommand_Poison`'s `.toxic` branch reaches the same `.apply_poison`,
-	# so Toxic animates from inside the command and never reaches
-	# `PlayOpponentBattleAnim`: no `ANIM_PSN` follows it.
+	# `.apply_poison` animates from inside the command: no `ANIM_PSN` follows.
 	_animate_current_move(turn)
 	defender.status |= Gen2Status.POISON
 	defender.toxic_counter = 1
@@ -2174,34 +2276,32 @@ static func _flinch_target(turn: Gen2Turn) -> void:
 	defender.substatus |= Gen2Substatus.FLINCHED
 
 
-## Sets the target confused and rolls its duration. An already-confused Pokémon is
-## refused rather than restarted ([Gen2Substatus.CONFUSED]), and unlike a status
-## it sits alongside one: a poisoned Pokémon can still be confused.
+## Sets the target confused and rolls its duration; an already-confused Pokémon
+## is refused rather than restarted, and a poisoned one can still be confused.
+## `BattleCommand_Confuse` words its refusals and `..._ConfuseTarget` is silent.
 static func _confuse_target(turn: Gen2Turn) -> void:
 	if turn.failed_chance:
 		return
-
-	# `BattleCommand_ConfuseTarget`'s own `SafeCheckSafeguard`, ahead of the
-	# substitute and already-confused checks and silent like the four statuses'.
-	if _safeguard_refuses(turn, turn.target):
-		return
-
-	# Where `..._ConfuseTarget` asks it. `..._Confuse` asks one step later, after
-	# the already-confused check, and both refusals are silent, so the two orders
-	# cannot be told apart here.
-	if _substitute_refuses(turn):
-		return
-
 	var defender: Gen2BattleMon = turn.defender()
-	if defender.is_fainted() or Gen2Substatus.has(defender.substatus, Gen2Substatus.CONFUSED):
+	if defender.is_fainted():
 		return
+
+	if turn.effect() == Gen2MoveEffect.CONFUSE:
+		var refusal: StringName = _primary_refusal(turn, CONFUSE_KEY)
+		if refusal != &"":
+			turn.emit(refusal, {"target": turn.target, "status": CONFUSE_KEY, "missed": turn.missed})
+			return
+	else:
+		# `BattleCommand_ConfuseTarget`'s own `SafeCheckSafeguard` comes first.
+		if _safeguard_refuses(turn, turn.target) or _substitute_refuses(turn) \
+			or Gen2Substatus.has(defender.substatus, Gen2Substatus.CONFUSED):
+			return
 
 	defender.substatus |= Gen2Substatus.CONFUSED
 	defender.confusion_turns = Gen2Substatus.roll_confusion(turn.rng())
 
-	# `BattleCommand_FinishConfusingTarget`'s `.got_effect` skips the move's own
-	# animation for the three effects that already played one. Only
-	# `EFFECT_CONFUSE_HIT` is checked, the other two being unwritten.
+	# `.got_effect` skips the move's own animation for the three effects that
+	# already played one; only `EFFECT_CONFUSE_HIT` is checked here.
 	if turn.effect() != Gen2MoveEffect.CONFUSE_HIT:
 		_animate_current_move(turn)
 
@@ -2209,8 +2309,7 @@ static func _confuse_target(turn: Gen2Turn) -> void:
 	# whichever way the move reached here.
 	_play_opponent_battle_anim(turn, Gen2BattleAnimPlayer.ANIM_CONFUSED)
 
-	# Not [constant Gen2Battle.STATUS_INFLICTED]: that event's [code]status[/code]
-	# field is the status byte, and confusion never touches it.
+	# Not [constant Gen2Battle.STATUS_INFLICTED]: confusion is no status byte.
 	turn.emit(Gen2Battle.CONFUSE_INFLICTED, {"target": turn.target})
 
 	# `BattleCommand_Confuse` reaches `UseConfusionHealingItem` the moment the
@@ -2938,19 +3037,18 @@ static func _refused_substitute_raises(turn: Gen2Turn) -> void:
 		_raise_sub(turn)
 
 
-## The seed [method Gen2Battle._residual_leech_seed] reads back every turn.
-## Refusals in the source's order: a Substitute and an already-seeded target say
-## `EvadedText`, a Grass-type `DoesntAffectText`, and the missed branch in front
-## of them is structural here. Every refusal reaches `AnimateFailedMove`, forty
-## frames with no animation, so only a seed that lands is drawn.
+## Refusals in the source's order: a miss, a Substitute and an already-seeded
+## target say `EvadedText`, a Grass-type `DoesntAffectText`. `LeechSeedEffect_`
+## asks nothing about a doll and says `EvadedAttackText` of a Grass-type too.
 static func _leech_seed(turn: Gen2Turn) -> void:
-	if _substitute_refuses(turn):
-		turn.emit(Gen2Battle.EVADED, {"target": turn.target})
+	var gen1: bool = turn.battle.is_gen1()
+	if turn.missed or (_substitute_refuses(turn) and not gen1):
+		turn.emit(Gen2Battle.EVADED, {"target": turn.target, "missed": turn.missed})
 		return
 
 	var defender: Gen2BattleMon = turn.defender()
 	if defender.types().has(Gen2Layout.TYPE_GRASS):
-		turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
+		turn.emit(Gen2Battle.EVADED if gen1 else Gen2Battle.NO_EFFECT, {"target": turn.target})
 		return
 
 	if Gen2Substatus.has(defender.substatus, Gen2Substatus.LEECH_SEED):
@@ -3007,7 +3105,7 @@ static func _curse_stage(turn: Gen2Turn, user: Gen2BattleMon, key: String, by: i
 	turn.stat_key = key
 	turn.stat_by = by
 	turn.stat_target = turn.side
-	turn.stat_mist_blocked = false
+	turn.stat_failure = &""
 	turn.stat_moved = user.change_stage(key, by)
 	_stat_message(turn)
 
@@ -3478,8 +3576,7 @@ static func _gen1_heal_refuses(attacker: Gen2BattleMon) -> bool:
 
 
 ## `BattleCommand_Heal`. The full-HP refusal comes first, so Rest at full health
-## fails whatever status sits on it; it writes `REST_SLEEP_TURNS + 1` over the
-## whole status byte, which is why it cures a burn or a paralysis.
+## fails whatever status sits on it.
 static func _heal(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	var gen1: bool = turn.battle.is_gen1()
@@ -3490,8 +3587,10 @@ static func _heal(turn: Gen2Turn) -> void:
 	var is_rest: bool = turn.move_number == Gen2MoveEffect.REST_MOVE
 	if is_rest:
 		var had_status: bool = Gen2Status.is_afflicted(attacker.status)
-		attacker.toxic_counter = 0
-		# `HealEffect_` writes 2, and the turn it wakes on is lost.
+		# `HealEffect_` writes 2 over the status byte alone: `BADLY_POISONED` and
+		# `wPlayerToxicCounter` outlive the sleep, and the turn it wakes on is lost.
+		if not gen1:
+			attacker.toxic_counter = 0
 		attacker.status = Gen2Status.REST_SLEEP_TURNS + (0 if gen1 else 1)
 		turn.emit(Gen2Battle.RESTED if had_status else Gen2Battle.WENT_TO_SLEEP)
 
@@ -3682,8 +3781,7 @@ static func _stat_change_anim(turn: Gen2Turn, after_anim: int) -> void:
 
 
 ## Which status commands carry an `AnimateCurrentMove` of their own: the three
-## status moves' do, the four `*Target` secondaries do not, and one command
-## serves both here, so the effect byte tells them apart.
+## primary moves' do, the four `*Target` secondaries do not.
 static func _status_move_animates(turn: Gen2Turn, flag: int) -> bool:
 	match flag:
 		Gen2Status.SLEEP_MASK:
@@ -3695,11 +3793,9 @@ static func _status_move_animates(turn: Gen2Turn, flag: int) -> bool:
 	return false
 
 
-## Which status animation `PlayOpponentBattleAnim` plays on the target, or -1.
-## The four secondary-effect commands each play one and the primary status moves'
-## commands play none, each ending at `AnimateCurrentMove`; Toxic reaches
-## `.apply_poison` too, so [method _toxic_target] plays none either. The exact
-## inverse of [method _status_move_animates] rather than a second rule.
+## Which status animation `PlayOpponentBattleAnim` plays on the target, or -1:
+## the four secondary commands each play one and the primary commands none,
+## the exact inverse of [method _status_move_animates].
 static func _status_target_anim(turn: Gen2Turn, flag: int) -> int:
 	if _status_move_animates(turn, flag):
 		return -1
@@ -3758,27 +3854,19 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 	turn.stat_key = stat_key
 	turn.stat_by = amount
 	turn.stat_target = side
-	turn.stat_mist_blocked = false
+	turn.stat_failure = &""
 	turn.stat_moved = false
 
-	if not targets_user and Gen2Substatus.has(turn.battle.mon(side).substatus, Gen2Substatus.MIST):
-		turn.stat_mist_blocked = true
-		return
-
-	if not turn.battle.mon(side).stage_has_room(stat_key, amount):
-		return
-
-	if not targets_user and _computer_stat_down_misses(turn):
-		return
-
-	if not targets_user and _substitute_refuses(turn):
-		return
+	if targets_user:
+		if not turn.battle.mon(side).stage_has_room(stat_key, amount):
+			turn.stat_failure = STAT_FLOOR
+			return
+	else:
+		turn.stat_failure = _stat_down_refusal(turn, side, stat_key, amount)
+		if turn.stat_failure != &"":
+			return
 
 	if turn.failed_chance:
-		return
-
-	# `CheckHiddenOpponent`: a target part way through Fly or Dig is not there.
-	if not targets_user and _is_hidden(turn.battle.mon(side).substatus):
 		return
 
 	turn.stat_moved = turn.battle.mon(side).change_stage(stat_key, amount)
@@ -3841,23 +3929,6 @@ static func _computer_effect_misses(turn: Gen2Turn) -> bool:
 	return turn.rng().randi_range(0, 0xFF) < 64
 
 
-static func _primary_status_misses(turn: Gen2Turn, flag: int) -> bool:
-	if not _status_move_animates(turn, flag):
-		return false
-	var status: int = turn.defender().status
-	match flag:
-		Gen2Status.SLEEP_MASK:
-			if Gen2Status.is_asleep(status) or turn.missed:
-				return false
-		Gen2Status.POISON:
-			if Gen2Status.is_afflicted(status) or _status_type_refuses(turn, flag) or turn.immune:
-				return false
-		Gen2Status.PARALYSIS:
-			if Gen2Status.has(status, flag) or turn.immune:
-				return false
-	return _computer_effect_misses(turn)
-
-
 ## Minimize's move number, which is the whole of what `MinimizeDropSub` compares
 ## against and what makes a Stomp hurt twice as much.
 const MINIMIZE_MOVE: int = 107
@@ -3892,9 +3963,8 @@ static func _all_stats_up(turn: Gen2Turn) -> void:
 		turn.emit(Gen2Battle.STAT_CHANGED, {"target": turn.side, "stat": "all", "by": 1})
 
 
-## Says a stat moved, or says nothing. A move whose sequence has no fail-text
-## step behind this, which is every secondary effect, is silent either way when
-## the stage was already at its limit.
+## Says a stat moved, or says nothing: a secondary effect's list has no fail-text
+## step behind this, so it is silent either way at the stage's limit.
 static func _stat_message(turn: Gen2Turn) -> void:
 	if not turn.stat_moved:
 		return
@@ -3904,17 +3974,58 @@ static func _stat_message(turn: Gen2Turn) -> void:
 
 
 ## `BattleCommand_StatDownFailText`, which only a status move's list carries:
-## an on-hit drop blocked by Mist fails silently. Mist gets its own line,
-## `ProtectedByMistText`, rather than "won't go any lower".
+## an on-hit drop blocked by Mist fails silently.
 static func _stat_fail_text(turn: Gen2Turn) -> void:
 	if turn.stat_moved:
 		return
-	if turn.stat_mist_blocked:
-		turn.emit(Gen2Battle.MIST_PROTECTED, {"target": turn.stat_target})
-		return
-	turn.emit(Gen2Battle.STAT_CHANGE_FAILED, {
-		"target": turn.stat_target, "stat": turn.stat_key, "by": turn.stat_by,
-	})
+	match turn.stat_failure:
+		STAT_MIST:
+			turn.emit(Gen2Battle.MIST_PROTECTED, {"target": turn.stat_target})
+		STAT_FAILED:
+			turn.emit(Gen2Battle.MOVE_FAILED, {"target": turn.stat_target, "missed": turn.missed})
+		_:
+			turn.emit(Gen2Battle.STAT_CHANGE_FAILED, {
+				"target": turn.stat_target, "stat": turn.stat_key, "by": turn.stat_by,
+			})
+
+
+const STAT_FAILED: StringName = &"failed"
+const STAT_MIST: StringName = &"mist"
+const STAT_FLOOR: StringName = &"floor"
+
+## `wFailedMessage` by `BattleCommand_StatDown`'s and `StatModifierDownEffect`'s
+## own question orders.
+const STAT_DOWN_REFUSALS: Array = [
+	[&"mist", STAT_MIST], [&"floor", STAT_FLOOR], [&"computer", STAT_FAILED],
+	[&"substitute", STAT_FAILED], [&"missed", STAT_FAILED], [&"hidden", STAT_FAILED],
+]
+const GEN1_STAT_DOWN_REFUSALS: Array = [
+	[&"computer", STAT_FAILED], [&"substitute", STAT_FAILED], [&"mist", STAT_MIST],
+	[&"missed", STAT_FAILED], [&"hidden", STAT_FAILED], [&"floor", STAT_FLOOR],
+]
+
+
+static func _stat_down_refusal(turn: Gen2Turn, side: int, stat_key: String, amount: int) -> StringName:
+	var mon: Gen2BattleMon = turn.battle.mon(side)
+	var rows: Array = GEN1_STAT_DOWN_REFUSALS if turn.battle.is_gen1() else STAT_DOWN_REFUSALS
+	for row: Array in rows:
+		var holds: bool = false
+		match row[0]:
+			&"mist":
+				holds = Gen2Substatus.has(mon.substatus, Gen2Substatus.MIST)
+			&"floor":
+				holds = not mon.stage_has_room(stat_key, amount)
+			&"computer":
+				holds = _computer_stat_down_misses(turn)
+			&"substitute":
+				holds = _substitute_refuses(turn)
+			&"missed":
+				holds = turn.missed
+			&"hidden":
+				holds = _is_hidden(mon.substatus)
+		if holds:
+			return row[1]
+	return &""
 
 
 ## `BattleCommand_CheckObedience` runs before every effect list, after CheckTurn.

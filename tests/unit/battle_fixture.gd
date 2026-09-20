@@ -71,6 +71,9 @@ const TRANSFORM: int = 144
 const THUNDER_WAVE: int = 86
 const SLEEP_POWDER: int = 79
 const POISON_POWDER: int = 77
+## Paralysis off a Normal-type move: what `ParalyzeEffect_`'s one type test,
+## Electric against Ground, has nothing to say about.
+const GLARE: int = 137
 const EMBER_BURNS: int = 92
 const NEVER_BURNS: int = 93
 const FLAME_WHEEL: int = 172
@@ -605,6 +608,7 @@ static func _moves() -> Array:
 		THUNDER_WAVE: ["THUNDERWAVE", 0, ELECTRIC, 255, 20, Gen2MoveEffect.PARALYZE, 0, 0x43],
 		SLEEP_POWDER: ["SLEEP POWDER", 0, GRASS, 255, 15, Gen2MoveEffect.SLEEP, 0, 0x20],
 		POISON_POWDER: ["POISONPOWDER", 0, POISON, 255, 35, Gen2MoveEffect.POISON, 0, 0x42],
+		GLARE: ["GLARE", 0, NORMAL, 255, 30, Gen2MoveEffect.PARALYZE, 0, 0x43],
 		# A chance of 256 is one the roll cannot fail, which is how a test gets a
 		# burn without a seed. Its opposite is a chance of zero.
 		EMBER_BURNS: ["EMBER", 40, FIRE, 255, 25, Gen2MoveEffect.BURN_HIT, 256],
