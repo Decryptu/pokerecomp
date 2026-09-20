@@ -1,10 +1,9 @@
 class_name Gen2StartMenuScreen
 extends Control
 
-## The overworld pause menu (engine/menus/start_menu.asm). The list, `_Option`,
-## `SaveMenu` and every box the pack opens are drawn through [Gen2StartMenuPage]
-## and [Gen2PackPage] into whichever [Gen2Screen] the host hands over. Pokedex,
-## Pokemon and Pokegear are the world's, so this only reports the choice.
+## The overworld pause menu (engine/menus/start_menu.asm), drawn through
+## [Gen2StartMenuPage] and [Gen2PackPage] into whichever [Gen2Screen] the host
+## hands over. Pokedex, Pokemon and Pokegear are the world's: this reports the choice.
 
 ## An available entry this screen does not own (Pokedex, Pokemon, Pokegear,
 ## Player); the caller opens it. [param id] is the registering mod's where the
@@ -24,6 +23,7 @@ signal evolution_animation_requested(plan: Dictionary, after: Callable)
 ## `PlaySFX`, which this screen has no driver of its own for: the world that
 ## hosts it owns the player. `SFX_SAVE` is the only one it asks for.
 signal sfx_requested(sfx: int, waited: bool)
+signal gen1_sfx_requested(sound_id: int)
 ## Yellow's `PlayPikachuSoundClip`, which the refused stone plays.
 signal pikachu_clip_requested(index: int)
 ## A field move chosen off the MOVES row, in the same shape a party member's own
@@ -121,6 +121,54 @@ const PP_RESTORED: String = "PP was restored."
 const PP_UP_UNSUPPORTED: String = "PP UP has no effect\nin this port yet."
 ## `_RepelUsedEarlierIsStillInEffectText`, printed instead of spending the item.
 const REPEL_STILL_IN_EFFECT: String = "The REPEL used\nearlier is still\nin effect."
+## `ItemUseText00`, `PrintItemUseTextAndRemoveItem`'s line.
+const GEN1_USED_ITEM: String = "<PLAYER> used\n%s!"
+## `ItemStatRoseText` and `VitaminStatRoseText` over `StatStrings`' names.
+const STAT_ROSE: String = "%s's\n%s rose."
+const VITAMIN_STAT_NAMES: Dictionary = {
+	"hp": "HEALTH", "attack": "ATTACK", "defense": "DEFENSE", "speed": "SPEED",
+	"special": "SPECIAL",
+}
+
+## `PrintPartyMenuActionText`'s `.MenuActionTexts` and `PartyMenuItemUseMessagePointers`.
+const PARTY_ACTION_HEAL: StringName = &"heal"
+const PARTY_ACTION_REVIVE: StringName = &"revive"
+const PARTY_ACTION_LEVEL: StringName = &"level"
+## `GetItemHealingAction` names the line by the item's mask: a FULL HEAL says health returned.
+const STATUS_ACTIONS: Dictionary = {
+	Gen2Status.POISON: &"poison", Gen2Status.BURN: &"burn", Gen2Status.FREEZE: &"freeze",
+	Gen2Status.SLEEP_MASK: &"sleep", Gen2Status.PARALYSIS: &"paralysis",
+	Gen2Status.ANY: &"all",
+}
+const PARTY_ACTION_TEXTS: Dictionary = {
+	PARTY_ACTION_HEAL: "%s\nrecovered %dHP!",
+	PARTY_ACTION_REVIVE: "%s\nis revitalized.",
+	PARTY_ACTION_LEVEL: "%s grew to\nlevel %d!",
+	&"poison": "%s's\ncured of poison.",
+	&"burn": "%s's\nburn was healed.",
+	&"freeze": "%s\nwas defrosted.",
+	&"sleep": "%s\nwoke up.",
+	&"paralysis": "%s's\nrid of paralysis.",
+	&"all": "%s's\nhealth returned.",
+}
+const GEN1_PARTY_ACTION_TEXTS: Dictionary = {
+	PARTY_ACTION_HEAL: "%s\nrecovered by %d!",
+	PARTY_ACTION_REVIVE: "%s\nis revitalized!",
+	PARTY_ACTION_LEVEL: "%s grew\nto level %d!",
+	&"poison": "%s was\ncured of poison!",
+	&"burn": "%s's\nburn was healed!",
+	&"freeze": "%s was\ndefrosted!",
+	&"sleep": "%s\nwoke up!",
+	&"paralysis": "%s's\nrid of paralysis!",
+	&"all": "%s's\nhealth returned!",
+}
+## `ItemActionTextWaitButton`'s `DelayFrames 50`, and `.showHealingItemMessage`'s.
+const PARTY_RESULT_HOLD_FRAMES: int = 50
+## `HealHP_SFX_GFX`'s and `Play_SFX_FULL_HEAL`'s, roles Generation 1 answers too.
+const SFX_POTION: int = 0x04
+const SFX_FULL_HEAL: int = 0x05
+## `_GrewToLevelText`'s own `sound_dex_fanfare_50_79`; Generation 1's candy is silent.
+const SFX_DEX_FANFARE_50_79: int = 0x00
 
 const SAVE_SAVING_FRAMES: int = Gen2SavePrompt.SAVING_FRAMES
 const SAVE_WRITE_FRAMES: int = Gen2SavePrompt.WRITE_FRAMES
@@ -133,9 +181,8 @@ const SFX_SWITCH_POKEMON: int = 0x20
 const SFX_SWITCH_POCKETS: int = 0x62
 
 ## The pack's five imported texts, by the key `GameData.menu_text` holds each
-## under. `UseItem`'s two refusals and `TossMenu`'s three; "(S)" is three literal
-## characters in the charmap rather than a plural rule, so the cartridge really
-## does say "POTION(S)".
+## under: `UseItem`'s two refusals and `TossMenu`'s three. "(S)" is three literal
+## characters, so the cartridge really does say "POTION(S)".
 const TEXT_OAK: String = "oak_no_time"
 const TEXT_NO_MON: String = "no_mon"
 const TEXT_TOSS_ASK: String = "toss_ask"
@@ -181,12 +228,13 @@ const TEXT_FALLBACKS: Dictionary = {
 	TEXT_TOSS_ASK_QUANTITY: "Throw away <NUM_>\n<RAM_>(S)?",
 	TEXT_TOSS_THREW: "Threw away\n<RAM_>(S).",
 }
+## `ItemUseMedicine`'s own `.emptyPartyText`, inline, so no run holds it.
+const GEN1_TEXT_FALLBACKS: Dictionary = {TEXT_NO_MON: "You don't have\nany #MON!"}
 
 
-## The pack's submenus, `MENU_BACKUP_TILES` boxes over the pack's own screen.
-## `MenuHeader_UsableKeyItem` and its five siblings differ only in where the box
-## starts: `menu_coords 13, y, SCREEN_WIDTH - 1, TEXTBOX_Y - 1`, y being
-## `TEXTBOX_Y - 1 - 2 * items` so the rows end on the text box.
+## The pack's submenus: `MenuHeader_UsableKeyItem` and its five siblings differ
+## only in where the box starts, `menu_coords 13, y, SCREEN_WIDTH - 1, TEXTBOX_Y - 1`
+## with y `TEXTBOX_Y - 1 - 2 * items`, so the rows end on the text box.
 const ITEM_MENU_LEFT: int = 13
 const ITEM_MENU_RIGHT: int = 19
 const ITEM_MENU_BOTTOM: int = 11
@@ -237,7 +285,9 @@ var _pack_page: Gen2PackPage = null
 ## overworld's `MenuTextbox` over the map.
 var _mart_page: Gen2MartPage = null
 var _service_page: Gen2WorldServicePage = null
-var _pack_result_ok: bool = false
+## The party list a result stands under: `rows`, the row's `anim` and `cursor`,
+## the `hold` before a press is read, and a RARE CANDY's `stats`.
+var _party_result: Dictionary = {}
 ## `PrintText` waits per page, so a result longer than the box's two rows is
 ## pressed through rather than cut off at the frame.
 var _pack_result_pages: Array = []
@@ -335,6 +385,7 @@ var _page: Gen2StartMenuPage = null
 ## `LoadPartyMenuGFX`: the target list is the party menu, so it is drawn by the
 ## page that draws the party menu everywhere else.
 var _target_page: Gen2PartyMenuPage = null
+var _menu_page: Gen2MenuPage = null
 ## The target list's icon clock.
 var _target_clock := Gen2WorldAnimation.FrameClock.new()
 
@@ -405,10 +456,10 @@ func open_registered_item() -> void:
 	_open_pack_mode()
 	_using_registered = true
 	if item <= 0:
-		_show_pack_result(Gen2WorldPack.may_register_text(), false)
+		_show_pack_result(Gen2WorldPack.may_register_text())
 		return
 	if not _select_pack_item(item):
-		_show_pack_result(Gen2WorldPack.may_register_text(), false)
+		_show_pack_result(Gen2WorldPack.may_register_text())
 		return
 	_confirm_use()
 
@@ -487,10 +538,8 @@ func _press_pack_select() -> void:
 	_apply_switch_press()
 
 
-## One press of `SwitchItemsInBag`: the pocket's own rows, the row an earlier
-## SELECT marked and the row the cursor is on. A press that moved something is
-## written through [Gen2WorldBagHost], so the order the player arranged is in the
-## save rather than in this screen.
+## One press of `SwitchItemsInBag`. A press that moved something is written
+## through [Gen2WorldBagHost], so the arranged order is in the save.
 func _apply_switch_press() -> void:
 	var order: Array = []
 	for row: Dictionary in _current_pocket_items():
@@ -553,10 +602,9 @@ func _move_wrapped(step: int, at: StringName, rows: int, render: StringName) -> 
 		call(render)
 
 
-## `InitPartyMenuWithCancel`: CANCEL is the row after the last member and the
-## cursor wraps around it, which is `w2DMenuNumRows` being the party count plus
-## one. Generation 1's `PartyMenuInit` stops at `wPartyCount - 1` instead and
-## leaves B as the only way out, so its list is the members and nothing else.
+## `InitPartyMenuWithCancel`: CANCEL is the row after the last member, which is
+## `w2DMenuNumRows` being the party count plus one. Generation 1's
+## `PartyMenuInit` stops at `wPartyCount - 1` and leaves B as the only way out.
 func _target_rows() -> int:
 	var targets: Array = _party_targets()
 	if targets.is_empty():
@@ -665,6 +713,8 @@ func _confirm() -> void:
 
 ## A pack opened over one Pokemon has no menu to go back to; A and B agree.
 func _leave_pack_result() -> void:
+	if party_result_holding():
+		return
 	if _pack_result_advanced():
 		return
 	if _pack_result_continued():
@@ -727,7 +777,7 @@ func _confirm_list() -> void:
 		Gen2WorldStartMenu.ITEM_PACK:
 			if _gen1_pack() and _world != null \
 				and _world.gen1_link_state() == Gen1Layout.LINK_STATE_IN_CABLE_CLUB:
-				_show_pack_result(_pack_text(TEXT_CANNOT_USE_ITEMS), false, _open_list_mode)
+				_show_pack_result(_pack_text(TEXT_CANNOT_USE_ITEMS), _open_list_mode)
 				return
 			_open_pack_mode()
 		Gen2WorldStartMenu.ITEM_SAVE:
@@ -1160,10 +1210,9 @@ func _pack_map(text: String) -> PackedInt32Array:
 	)
 
 
-## The pack's screen with one of its `MENU_BACKUP_TILES` boxes over it.
-## [param draw_page] writes tiles into the map the pack just built, so the box wears
-## the attrmap `_CGB_PackPals` left rather than being a layer of its own.
-## `TossItem_`'s `hlcoord 14, 7`, the box `_YesNoBox` opens on Generation 2.
+## The pack's screen with one of its `MENU_BACKUP_TILES` boxes over it:
+## [param draw_page] writes tiles into the map the pack just built, so the box
+## wears the attrmap `_CGB_PackPals` left. `TossItem_`'s box is at `hlcoord 14, 7`.
 func _blend_gen1_yes_no(image: Image, cursor_index: int) -> void:
 	if _service_page == null:
 		return
@@ -1219,10 +1268,8 @@ func _item_menu_box(count: int) -> Gen2MenuBox:
 	)
 
 
-## What a box is left holding after the prints in front of a question: `YesNoBox`
-## opens over the last page of the last `PrintText`, so a question preceded by
-## more words than two rows hold shows its tail rather than its head.
-## `AskTeachTMHM`'s pair of texts is the one that reaches past a page.
+## `YesNoBox` opens over the last page of the last `PrintText`, so a question
+## longer than two rows shows its tail; `AskTeachTMHM`'s pair reaches past a page.
 func _last_page(text: String) -> String:
 	var pages: Array = Gen2TextLayout.lay_out(
 		text, Gen2PackPage.TEXTBOX_COLUMNS - 2, Gen2PackPage.TEXTBOX_ROWS_OF_TEXT
@@ -1317,7 +1364,7 @@ func _confirm_item_action() -> void:
 ## `GiveItem`'s own party list, which `.NoPokemon` answers when there is none.
 func _open_give_target() -> void:
 	if _party_targets().is_empty():
-		_show_pack_result(_pack_text(TEXT_NO_MON), false)
+		_show_pack_result(_pack_text(TEXT_NO_MON))
 		return
 	_giving = true
 	_open_target_mode()
@@ -1331,20 +1378,20 @@ func _register_selected_item() -> void:
 	if item.is_empty():
 		return
 	if _world == null:
-		_show_pack_result("No world is loaded.", false)
+		_show_pack_result("No world is loaded.")
 		return
 	var result: Dictionary = Gen2WorldBagHost.register(
 		_world, _pack_save, int(item.get("item", 0)), _pack_persist
 	)
 	if not bool(result.get("ok", false)):
 		if StringName(result.get("reason", &"")) == &"item_cannot_be_registered":
-			_show_pack_result(Gen2WorldPack.cant_register_text(), false)
+			_show_pack_result(Gen2WorldPack.cant_register_text())
 			return
 		_show_pack_result(
-			"Could not register that (%s)." % String(result.get("reason", "")), false
+			"Could not register that (%s)." % String(result.get("reason", ""))
 		)
 		return
-	_show_pack_result(Gen2WorldPack.registered_text(String(result.get("name", ""))), true)
+	_show_pack_result(Gen2WorldPack.registered_text(String(result.get("name", ""))))
 
 
 ## `TryGiveItemToPartymon`, from either direction: the pack's GIVE names the
@@ -1355,11 +1402,11 @@ func _give_selected_item(party_index: int, swap: bool = false) -> void:
 	if item.is_empty():
 		return
 	if _pack_save == null or _world == null:
-		_show_pack_result("No save is loaded.", false)
+		_show_pack_result("No save is loaded.")
 		return
 	var number: int = int(item.get("item", 0))
 	if not Gen2WorldPack.can_hold(_data, number):
-		_show_pack_result(Gen2WorldPack.cant_hold_text(), false)
+		_show_pack_result(Gen2WorldPack.cant_hold_text())
 		return
 	## `GivePartyItem` writes the item and then runs `ComposeMailMessage`; here
 	## the message is written first, because the transaction is what commits and
@@ -1377,8 +1424,7 @@ func _give_selected_item(party_index: int, swap: bool = false) -> void:
 		_show_pack_result(
 			Gen2WorldPack.swap_text(target_name, held_name, String(result.get("name", ""))) \
 				if int(result.get("held", 0)) > 0 \
-				else Gen2WorldPack.hold_text(target_name, String(result.get("name", ""))),
-			true
+				else Gen2WorldPack.hold_text(target_name, String(result.get("name", "")))
 		)
 		return
 	var reason: StringName = StringName(result.get("reason", &""))
@@ -1387,7 +1433,7 @@ func _give_selected_item(party_index: int, swap: bool = false) -> void:
 			(result.get("details", {}) as Dictionary).get("held_name", "")
 		))
 		return
-	_show_pack_result(_give_refusal(reason, party_index), false)
+	_show_pack_result(_give_refusal(reason, party_index))
 
 
 ## `_ComposeMailMessage` over the party menu's own screen. The entry is the
@@ -1399,7 +1445,7 @@ func _open_mail_composer(item: int, party_index: int, swap: bool) -> void:
 	var host := Gen2NamingScreenScreen.new()
 	if not host.open(_data, "", Gen2NamingScreenScreen.KIND_MAIL):
 		host.free()
-		_show_pack_result("The mail keyboard is not in this cache.", false)
+		_show_pack_result("The mail keyboard is not in this cache.")
 		return
 	_naming = host
 	_mail_item = item
@@ -1485,7 +1531,7 @@ func _confirm_use() -> void:
 	match Gen2WorldPack.field_use_kind(_data, number):
 		Gen2WorldPack.ITEMMENU_PARTY:
 			if _party_targets().is_empty():
-				_show_pack_result(_pack_text(TEXT_NO_MON), false)
+				_show_pack_result(_pack_text(TEXT_NO_MON))
 				return
 			_open_target_mode()
 		Gen2WorldPack.ITEMMENU_CURRENT:
@@ -1493,12 +1539,12 @@ func _confirm_use() -> void:
 			## `_CoinCaseCountText` and nothing else: the count is shown where the
 			## pack already prints, and the pack stays open behind it.
 			if number == Gen2WorldPack.ITEM_COIN_CASE:
-				_show_pack_result(_coin_case_text(), true)
+				_show_pack_result(_coin_case_text())
 				return
 			## `BlueCardEffect` is the same routine over a different text and a
 			## different counter, and it closes nothing either.
 			if number == Gen2WorldPack.ITEM_BLUE_CARD:
-				_show_pack_result(_blue_card_text(), true)
+				_show_pack_result(_blue_card_text())
 				return
 			if Gen2WorldPack.TROPHY_BOXES.has(number):
 				_open_trophy_box(number)
@@ -1507,7 +1553,7 @@ func _confirm_use() -> void:
 		Gen2WorldPack.ITEMMENU_CLOSE:
 			_use_field_item(number)
 		_:
-			_show_pack_result(_pack_text(TEXT_OAK), false)
+			_show_pack_result(_pack_text(TEXT_OAK))
 
 
 ## `UseItem_`'s jumptable on Generation 1, reached through the same three menu
@@ -1524,20 +1570,18 @@ func _confirm_gen1_use(item: int) -> void:
 			if _party_targets().is_empty():
 				## `ItemUseMedicine`'s own `.emptyParty`, which no other
 				## `.Party` routine has: the rest open the menu on nothing.
-				_show_pack_result(_pack_text(TEXT_NO_MON), false)
+				_show_pack_result(_pack_text(TEXT_NO_MON))
 				return
 			_open_target_mode()
 		Gen2WorldPack.ITEMMENU_CURRENT:
 			_confirm_gen1_current(item)
 		_:
-			_show_pack_result(_pack_text(TEXT_OAK), false)
+			_show_pack_result(_pack_text(TEXT_OAK))
 
 
-## The `.Current` rows that are neither `UnusableItem` nor battle-only.
-## `ItemUsePokedex` and `ItemUseTownMap` are screens the world owns,
-## `ItemUseCoinCase` prints over the pack, and `ItemUseOaksParcel` is the one
-## refusal with a text of its own.
-## The rest land on `ItemUseNotTime`, the box `.Oak` prints.
+## The `.Current` rows that are neither `UnusableItem` nor battle-only:
+## `ItemUsePokedex` and `ItemUseTownMap` are the world's screens, `ItemUseCoinCase`
+## prints over the pack, `ItemUseOaksParcel` refuses in its own words, the rest `.Oak`.
 func _confirm_gen1_current(item: int) -> void:
 	match item:
 		Gen1Layout.ITEM_POKEDEX:
@@ -1545,10 +1589,10 @@ func _confirm_gen1_current(item: int) -> void:
 		Gen1Layout.ITEM_TOWN_MAP:
 			action_chosen.emit(Gen2WorldStartMenu.ITEM_TOWN_MAP, &"")
 		Gen1Layout.ITEM_COIN_CASE:
-			_show_pack_result(_coin_case_text(), true)
+			_show_pack_result(_coin_case_text())
 		Gen1Layout.ITEM_OAKS_PARCEL:
 			_show_pack_result(
-				_data.special_text("item_use", "not_yours"), false
+				_data.special_text("item_use", "not_yours")
 			)
 		_:
 			## `ItemUseRepel` and its two siblings are the only other rows with
@@ -1556,7 +1600,7 @@ func _confirm_gen1_current(item: int) -> void:
 			if Gen2WorldPartyHost.item_effects(_data)["repel"].has(item):
 				_use_selected_item(-1)
 				return
-			_show_pack_result(_pack_text(TEXT_OAK), false)
+			_show_pack_result(_pack_text(TEXT_OAK))
 
 
 ## `.Field`: `DoItemEffect` and then `wItemEffectSucceeded`. The effect is
@@ -1569,7 +1613,7 @@ func _use_field_item(item: int) -> void:
 		## `CantUseItem`, which is the one thing the two jumptables disagree on.
 		_show_pack_result(_use_refusal(
 			StringName(request.get("reason", &"item_effect_failed")), item
-		), false)
+		))
 		return
 	## `.CheckIfRegistered`: the Bicycle's two scripts each have a silent copy.
 	request["registered"] = _using_registered
@@ -1684,15 +1728,12 @@ func _target_quality_text(mon: Gen2SaveMon) -> String:
 	return ""
 
 
-## `PartyMenuStrings`, picked by the `wPartyMenuActionText` each of the three
-## entrances writes: `TeachTMHM`'s PARTYMENUACTION_TEACH_TMHM, `GiveItem`'s
-## PARTYMENUACTION_GIVE_ITEM, and the PARTYMENUACTION_HEALING_ITEM every
-## `.Party` item effect writes.
+## `PartyMenuStrings`, picked by the `wPartyMenuActionText` each entrance writes:
+## `TeachTMHM`'s, `GiveItem`'s and the PARTYMENUACTION_HEALING_ITEM of every `.Party` effect.
 func _target_prompt() -> String:
-	## `PartyMenuMessagePointers` on Generation 1, picked by the
-	## `wPartyMenuTypeOrMessageID` each entrance writes: `ItemUseTMHM`'s
-	## TMHM_PARTY_MENU and the USE_ITEM_PARTY_MENU every medicine writes. There
-	## is no GIVE there, the bag holding nothing a Pokemon can carry.
+	## `PartyMenuMessagePointers`, by the `wPartyMenuTypeOrMessageID` each
+	## entrance writes: `ItemUseTMHM`'s TMHM_PARTY_MENU and every medicine's
+	## USE_ITEM_PARTY_MENU. There is no GIVE, the bag holding nothing a Pokemon carries.
 	if _gen1_pack():
 		return _data.special_text("party_menu", "use_tm" if _teaching else "item_use")
 	if _teaching:
@@ -1725,7 +1766,7 @@ func advance_target_icons() -> void:
 func _open_teach_mode(item: int) -> void:
 	_teach_prompt = Gen2WorldTMHM.teach_prompt(_data, item)
 	if not bool(_teach_prompt.get("ok", false)):
-		_show_pack_result(_pack_text(TEXT_OAK), false)
+		_show_pack_result(_pack_text(TEXT_OAK))
 		return
 	_teaching = false
 	_teach_cursor = 0
@@ -1744,7 +1785,7 @@ func _confirm_teach() -> void:
 		_open_pack_mode(false)
 		return
 	if _party_targets().is_empty():
-		_show_pack_result(_pack_text(TEXT_NO_MON), false)
+		_show_pack_result(_pack_text(TEXT_NO_MON))
 		return
 	_teaching = true
 	_open_target_mode()
@@ -1752,7 +1793,7 @@ func _confirm_teach() -> void:
 
 func _teach_selected_item(party_index: int) -> void:
 	if _pack_save == null or _world == null:
-		_show_pack_result("No save is loaded.", false)
+		_show_pack_result("No save is loaded.")
 		return
 	var item: int = int(_teach_prompt.get("item", 0))
 	_learning_move = 0
@@ -1772,11 +1813,16 @@ func _teach_selected_item(party_index: int) -> void:
 			if not _forget_moves.is_empty():
 				_open_forget_ask()
 				return
-		_show_pack_result(_teach_refusal(reason, party_index), false)
+		_show_pack_result(_teach_refusal(reason, party_index), Callable(), _over_party(party_index))
 		return
 	_show_pack_result(Gen2MoveForget.learned_text(
-		_target_name(party_index), String(_teach_prompt.get("move_name", ""))
-	), true)
+		_target_name(party_index), String(_teach_prompt.get("move_name", "")), _data.generation
+	), Callable(), _over_party(party_index))
+
+
+## `LearnMove` prints over the party list `ChooseMonToLearnTMHM` left up.
+func _over_party(party_index: int) -> Dictionary:
+	return {"rows": _party_targets(), "cursor": party_index}
 
 
 ## ForgetMove's own AskForgetMoveText yes/no, which it prints before the list.
@@ -1821,7 +1867,7 @@ func _confirm_forget() -> void:
 		return
 	var entry: Dictionary = _forget_moves[_forget_cursor]
 	if not bool(entry.get("forgettable", false)):
-		_forget_refusal = Gen2MoveForget.cant_forget_hm_text()
+		_forget_refusal = Gen2MoveForget.cant_forget_hm_text(_data.generation)
 		_render_forget_list()
 		return
 	var slot: int = int(entry.get("slot", -1))
@@ -1833,16 +1879,22 @@ func _confirm_forget() -> void:
 	)
 	if not bool(result.get("ok", false)):
 		_show_pack_result(
-			_teach_refusal(StringName(result.get("reason", &"")), _forget_party_index), false,
-			_offer_next_evolution_move if _learning_move > 0 else Callable()
+			_teach_refusal(StringName(result.get("reason", &"")), _forget_party_index),
+			_offer_next_evolution_move if _learning_move > 0 else Callable(),
+			_over_party(_forget_party_index)
 		)
 		return
 	var target_name: String = _target_name(_forget_party_index)
-	sfx_requested.emit(Gen2MoveForget.SFX_SWITCH_POKEMON, false)
-	_show_pack_result("%s %s" % [
-		Gen2MoveForget.forgot_text(target_name, String(entry.get("name", ""))),
-		Gen2MoveForget.learned_text(target_name, _forget_move_name),
-	], true, _offer_next_evolution_move if _learning_move > 0 else Callable())
+	if _gen1_pack():
+		gen1_sfx_requested.emit(Gen2MoveForget.GEN1_SFX_SWAP)
+	else:
+		sfx_requested.emit(Gen2MoveForget.SFX_SWITCH_POKEMON, false)
+	_show_pack_result("%s%s%s" % [
+		Gen2MoveForget.forgot_text(target_name, String(entry.get("name", "")), _data.generation),
+		Gen2TextStream.PAGE_BREAK,
+		Gen2MoveForget.learned_text(target_name, _forget_move_name, _data.generation),
+	], _offer_next_evolution_move if _learning_move > 0 else Callable(),
+		_over_party(_forget_party_index))
 
 
 ## LearnMove.cancel, reached from the ask's no and from B in the list alike.
@@ -1863,8 +1915,9 @@ func _confirm_stop_learning() -> void:
 		_open_forget_ask()
 		return
 	_show_pack_result(Gen2MoveForget.did_not_learn_text(
-		_target_name(_forget_party_index), _forget_move_name
-	), false, _offer_next_evolution_move if _learning_move > 0 else Callable())
+		_target_name(_forget_party_index), _forget_move_name, _data.generation
+	), _offer_next_evolution_move if _learning_move > 0 else Callable(),
+		_over_party(_forget_party_index))
 
 
 func _target_name(party_index: int) -> String:
@@ -1875,9 +1928,8 @@ func _target_name(party_index: int) -> String:
 
 
 ## TeachTMHM's own refusals, verbatim from data/text/common_2.asm and
-## common_3.asm. A full moveset is not among them: it opens ForgetMove's menu
-## instead, so the only way to reach the two forget-slot reasons here is a
-## revalidation failing between the two teach_tm_hm() calls.
+## common_3.asm. A full moveset opens ForgetMove's menu instead, so the two
+## forget-slot reasons are reached only by a revalidation failing between the two calls.
 func _teach_refusal(reason: StringName, party_index: int) -> String:
 	var move_name: String = _forget_move_name if not _forget_move_name.is_empty() \
 		else String(_teach_prompt.get("move_name", "that move"))
@@ -1888,7 +1940,7 @@ func _teach_refusal(reason: StringName, party_index: int) -> String:
 		&"already_knows_move":
 			return Gen2WorldTMHM.knows_move_text(target_name, move_name)
 		&"cannot_forget_hm":
-			return Gen2MoveForget.cant_forget_hm_text()
+			return Gen2MoveForget.cant_forget_hm_text(_data.generation)
 		&"invalid_forget_slot":
 			return "%s can't forget that move." % target_name
 		&"cannot_teach_egg":
@@ -1920,9 +1972,10 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 	if item.is_empty():
 		return
 	if _pack_save == null or _world == null:
-		_show_pack_result("No save is loaded.", false)
+		_show_pack_result("No save is loaded.")
 		return
 	var number: int = int(item.get("item", 0))
+	var rows: Array = _party_targets()
 	var result: Dictionary = Gen2WorldPartyHost.use_item(
 		_world, _pack_save, number, party_index, _pack_persist, move_slot
 	)
@@ -1933,7 +1986,11 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 		if StringName(result.get("reason", &"")) == &"starter_refuses":
 			_refuse_stone(party_index)
 			return
-		_show_pack_result(_use_refusal(StringName(result.get("reason", &"")), number), false)
+		## `NoEffectMessage` is `PrintText` over the party list.
+		_show_pack_result(
+			_use_refusal(StringName(result.get("reason", &"")), number), Callable(),
+			{"rows": rows, "cursor": party_index} if party_index >= 0 else {}
+		)
 		return
 	if StringName(result.get("effect", &"")) == &"rare_candy":
 		## `RareCandyEffect` prints its level-up box and then runs
@@ -1942,15 +1999,14 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 		_forget_party_index = party_index
 		_evolution_offers.assign(result.get("move_offers", []))
 		_pending_evolution = _candy_evolution_plan(party_index, result.get("evolution_row", {}))
-		_show_pack_result(_use_summary(item, result), true, _offer_next_evolution_move)
+		_show_party_result(item, result, party_index, rows, _offer_next_evolution_move)
 		return
 	if StringName(result.get("effect", &"")) == &"evolution":
 		_forget_party_index = party_index
 		_evolution_offers.assign(result.get("move_offers", []))
 		## `EvoStoneEffect` reaches `EvolvePokemon` with `wForceEvolution` set, so
-		## the same `EvolutionAnimation` runs and its B does nothing: the whole
-		## presentation is the screen the after-battle pass uses, and this path
-		## prints no box of its own.
+		## the after-battle pass's `EvolutionAnimation` runs with B doing nothing,
+		## and this path prints no box of its own.
 		evolution_animation_requested.emit({
 			"index": party_index,
 			"old_species": int(result.get("old_species", 0)),
@@ -1963,7 +2019,147 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 			"can_cancel": false,
 		}, _offer_next_evolution_move)
 		return
-	_show_pack_result(_use_summary(item, result), true)
+	if party_index >= 0:
+		_show_party_result(item, result, party_index, rows)
+		return
+	## `UseRepel` prints nothing; `PrintItemUseTextAndRemoveItem` says `ItemUseText00`.
+	if not _gen1_pack():
+		if _using_registered:
+			closed.emit()
+		else:
+			_open_pack_mode(false)
+		return
+	sfx_requested.emit(SFX_FULL_HEAL, false)
+	_show_pack_result((GEN1_USED_ITEM % String(item.get("name", ""))).replace(
+		Gen2WorldPC.PLAYER_MARKER, _pack_save.player_name
+	))
+
+
+## `ItemActionTextWaitButton` and `.showHealingItemMessage`, `HealHP_SFX_GFX`'s
+## `AnimateHPBar` in front of an HP item's.
+func _show_party_result(
+	item: Dictionary, result: Dictionary, party_index: int, rows: Array,
+	next: Callable = Callable()
+) -> void:
+	var kind: StringName = _party_action_kind(item, result)
+	var party: Dictionary = {"rows": rows, "cursor": -1 if kind != &"" else party_index}
+	if kind == PARTY_ACTION_HEAL or kind == PARTY_ACTION_REVIVE:
+		var row: Dictionary = rows[party_index]
+		sfx_requested.emit(SFX_POTION, true)
+		party["row"] = party_index
+		party["anim"] = Gen2HpBarAnimation.create(
+			int(row.get("hp", 0)), int(row.get("hp", 0)) + int(result.get("healed", 0)),
+			int(row.get("max_hp", 0))
+		)
+		party["prompt"] = _target_prompt()
+	elif kind == PARTY_ACTION_LEVEL:
+		sfx_requested.emit(SFX_DEX_FANFARE_50_79, false)
+		party["stats"] = _party_stats(party_index)
+	else:
+		sfx_requested.emit(SFX_FULL_HEAL, false)
+	if kind != &"" and not party.has("anim"):
+		party["hold"] = PARTY_RESULT_HOLD_FRAMES
+	_show_pack_result(_party_result_text(item, result, party_index, kind), next, party)
+
+
+## The `.MenuActionTexts` row a use earned, or nothing for a plain `PrintText`.
+func _party_action_kind(item: Dictionary, result: Dictionary) -> StringName:
+	if int(result.get("level", 0)) > 0:
+		return PARTY_ACTION_LEVEL
+	if StringName(result.get("effect", &"")) == &"revive":
+		return PARTY_ACTION_REVIVE
+	if int(result.get("healed", 0)) > 0:
+		return PARTY_ACTION_HEAL
+	if int(result.get("status_cleared", 0)) == 0:
+		return &""
+	var mask: int = int(_data.item(int(item.get("item", 0))).get("status_mask", 0))
+	return STATUS_ACTIONS.get(mask, &"all")
+
+
+func _party_result_text(
+	item: Dictionary, result: Dictionary, party_index: int, kind: StringName
+) -> String:
+	var target: String = _target_name(party_index)
+	if kind != &"":
+		var texts: Dictionary = GEN1_PARTY_ACTION_TEXTS if _gen1_pack() else PARTY_ACTION_TEXTS
+		var line: String = String(texts[kind])
+		if kind == PARTY_ACTION_LEVEL:
+			return line % [target, int(result.get("level", 0))]
+		if kind == PARTY_ACTION_HEAL:
+			return line % [target, int(result.get("healed", 0))]
+		return line % target
+	if int(result.get("restored", 0)) > 0:
+		return PP_RESTORED
+	var stat: String = String(result.get("stat", ""))
+	if not stat.is_empty():
+		return STAT_ROSE % [target, String(VITAMIN_STAT_NAMES.get(stat, stat.to_upper()))]
+	return "%s was used." % String(item.get("name", "ITEM"))
+
+
+func _party_stats(party_index: int) -> Dictionary:
+	if _pack_save == null or party_index < 0 or party_index >= _pack_save.party.size():
+		return {}
+	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(
+		_data, _pack_save.party[party_index] as Gen2SaveMon
+	)
+	return {} if battle_mon == null else battle_mon.stats.duplicate()
+
+
+## One frame of the bar filling or of `DelayFrames 50`, public for a driver.
+func advance_party_result() -> void:
+	if _party_result.is_empty() or _mode != Mode.PACK_RESULT:
+		return
+	var anim: Gen2HpBarAnimation = _party_result.get("anim", null)
+	if anim != null:
+		anim.advance_frame()
+		if anim.finished():
+			((_party_result["rows"] as Array)[int(_party_result["row"])] as Dictionary)["hp"] = anim.hp()
+			_party_result.erase("anim")
+			_party_result.erase("prompt")
+			_party_result["hold"] = PARTY_RESULT_HOLD_FRAMES
+		_render_hardware()
+		return
+	if int(_party_result.get("hold", 0)) > 0:
+		_party_result["hold"] = int(_party_result["hold"]) - 1
+
+
+func party_result_holding() -> bool:
+	return _party_result.has("anim") or int(_party_result.get("hold", 0)) > 0
+
+
+func _pack_result_image() -> Image:
+	if not _party_result.is_empty():
+		return _party_result_image()
+	return _gen1_pack_image() if _gen1_pack() else _pack_overlay(box_text(), Callable())
+
+
+func _party_result_image() -> Image:
+	if _party_menu_page() == null:
+		return null
+	var rows: Array = (_party_result["rows"] as Array).duplicate(true)
+	var anim: Gen2HpBarAnimation = _party_result.get("anim", null)
+	if anim != null:
+		(rows[int(_party_result["row"])] as Dictionary)["hp"] = anim.hp()
+	## `ErasePartyMenuCursors` runs with the redraw that prints the line.
+	var image: Image = _target_page.render(
+		rows, int(_party_result["row"]) if anim != null else int(_party_result.get("cursor", -1)),
+		String(_party_result.get("prompt", box_text())), true, -1, false,
+		not _party_result.has("prompt")
+	)
+	var stats: Dictionary = _party_result.get("stats", {})
+	if image == null or stats.is_empty():
+		return image
+	if _menu_page == null:
+		_menu_page = Gen2MenuPage.from_data(_data)
+	if _menu_page == null:
+		return image
+	var box: Gen2MenuBox = Gen2BattleMenu.level_up_box(_gen1_pack())
+	var over: Image = _menu_page.render(
+		box, [], -1, "", 0, Gen2BattleMenu.level_up_placements(stats, _gen1_pack())
+	)
+	if over != null:
+		image.blend_rect(over, Rect2i(Vector2i.ZERO, over.get_size()), box.border_position() * Gen2Font.TILE)
+	return image
 
 
 ## `EvolveAfterBattle`'s tail: `LearnMove` over what the new species knows at its
@@ -1987,8 +2183,8 @@ func _offer_next_evolution_move() -> void:
 	)
 	if bool(result.get("ok", false)):
 		_show_pack_result(Gen2MoveForget.learned_text(
-			_target_name(_forget_party_index), _forget_move_name
-		), true, _offer_next_evolution_move)
+			_target_name(_forget_party_index), _forget_move_name, _data.generation
+		), _offer_next_evolution_move, _over_party(_forget_party_index))
 		return
 	if StringName(result.get("reason", &"")) == &"moveset_full":
 		var details: Dictionary = result.get("details", {})
@@ -2029,28 +2225,6 @@ func offer_evolution_moves(party_index: int, moves: Array) -> void:
 	_evolution_offers = offers
 
 
-## The source has no single "it worked" line: the effect routine prints its own.
-## These name what changed, from the values Gen2WorldPartyHost already returns.
-func _use_summary(item: Dictionary, result: Dictionary) -> String:
-	var item_name: String = String(item.get("name", "ITEM"))
-	if int(result.get("repel_steps", -1)) >= 0:
-		return "%s will repel weak Pokemon for %d steps." % [
-			item_name, int(result.get("repel_steps", 0)),
-		]
-	if int(result.get("level", 0)) > 0:
-		return "%s grew to level %d!" % [
-			_target_name(_forget_party_index), int(result.get("level", 0)),
-		]
-	if int(result.get("restored", 0)) > 0:
-		return PP_RESTORED
-	var healed: int = int(result.get("healed", 0))
-	if healed > 0:
-		return "%s restored %d HP." % [item_name, healed]
-	if int(result.get("status_cleared", 0)) != 0:
-		return "%s cured the status." % item_name
-	return "%s was used." % item_name
-
-
 ## Yellow's `ItemUseEvoStone.notPlayerPikachu` not taken: `PikachuCry28`,
 ## `RefusingText`, the mood write, and `.canceledItemUse` keeping the stone.
 const PIKACHU_CLIP_REFUSED_STONE: int = 27
@@ -2062,7 +2236,7 @@ func _refuse_stone(party_index: int) -> void:
 	_show_pack_result(Gen2TextStream.fill_marker(
 		_data.special_text("stone_refusal", "refusing"), Gen2TextStream.RAM_MARKER,
 		_target_name(party_index)
-	), false)
+	))
 
 
 ## `UseItem` and `UseRegisteredItem` refuse the same item in two words: the
@@ -2099,7 +2273,7 @@ func _open_pp_move_list(item: int, party_index: int) -> void:
 		and party_index < _pack_save.party.size() else null
 	_forget_moves = Gen2MoveForget.options(_data, mon.moves) if mon != null else []
 	if _forget_moves.is_empty():
-		_show_pack_result(_use_refusal(&"item_has_no_effect", item), false)
+		_show_pack_result(_use_refusal(&"item_has_no_effect", item))
 		return
 	_mode = Mode.PACK_PP_MOVE
 	_pp_item = item
@@ -2127,7 +2301,7 @@ func _open_toss_quantity() -> void:
 	## `USE_TOSS_MENU_TEMPLATE` is one box for every item, so `TossItem_` refuses
 	## a key item and an HM after the row is chosen and past `.skipAskingQuantity`.
 	if not Gen2WorldPack.can_toss(_data, number):
-		_show_pack_result(_pack_text(TEXT_TOO_IMPORTANT), false)
+		_show_pack_result(_pack_text(TEXT_TOO_IMPORTANT))
 		return
 	_mode = Mode.PACK_TOSS_QUANTITY
 	_toss_prompt = Gen2WorldQuantityPrompt.open(
@@ -2162,20 +2336,20 @@ func _confirm_toss() -> void:
 		return
 	var item: Dictionary = _selected_item()
 	if _world == null or item.is_empty() or _toss_prompt == null:
-		_show_pack_result("No world is loaded.", false)
+		_show_pack_result("No world is loaded.")
 		return
 	var result: Dictionary = Gen2WorldBagHost.toss(
 		_world, _pack_save, int(item.get("item", 0)), _toss_prompt.value, _pack_persist
 	)
 	if not bool(result.get("ok", false)):
 		_show_pack_result(
-			"Could not throw that away (%s)." % String(result.get("reason", "")), false
+			"Could not throw that away (%s)." % String(result.get("reason", ""))
 		)
 		return
 	## The result box keeps whatever summary the mode before it left, and the
 	## question is not it: `ThrewAwayText` is printed under the item's own name.
 	_show_pack_result(
-		_fill_item_text(_pack_text(TEXT_TOSS_THREW), String(result.get("name", ""))), true
+		_fill_item_text(_pack_text(TEXT_TOSS_THREW), String(result.get("name", "")))
 	)
 
 
@@ -2229,14 +2403,14 @@ func _blue_card_text() -> String:
 ## the box is spent whether or not the trophy was already owned.
 func _open_trophy_box(item: int) -> void:
 	if _world == null or _world.state == null or _data == null:
-		_show_pack_result("No world is loaded.", false)
+		_show_pack_result("No world is loaded.")
 		return
 	Gen2WorldDecoration.set_owned_by_flag(
 		_data, _world.state, int(Gen2WorldPack.TROPHY_BOXES[item])
 	)
 	if _world.inventory != null:
 		_world.inventory.change_item_quantity(item, -1)
-	_show_pack_result(_trophy_text(), true)
+	_show_pack_result(_trophy_text())
 
 
 ## `_SentTrophyHomeText`, whose second paragraph names `wPlayerName`.
@@ -2262,8 +2436,8 @@ func _pack_text(key: String) -> String:
 	var text: String = ""
 	if _gen1_pack():
 		var run: Array = GEN1_PACK_TEXTS.get(key, [])
-		if not run.is_empty():
-			text = _data.special_text(String(run[0]), String(run[1]))
+		text = _data.special_text(String(run[0]), String(run[1])) if not run.is_empty() \
+			else String(GEN1_TEXT_FALLBACKS.get(key, ""))
 	else:
 		text = _data.menu_text(key) if _data != null else ""
 		if text.is_empty():
@@ -2286,11 +2460,14 @@ func _fill_item_text(text: String, item_name: String, quantity: int = -1) -> Str
 	return Gen2TextStream.fill_marker(out, Gen2TextStream.RAM_MARKER, item_name)
 
 
-func _show_pack_result(message: String, ok: bool, next: Callable = Callable()) -> void:
+## [param party] is the list a party item's line stands under.
+func _show_pack_result(
+	message: String, next: Callable = Callable(), party: Dictionary = {}
+) -> void:
 	_mode = Mode.PACK_RESULT
 	_pack_result_next = next
 	_pack_result = message
-	_pack_result_ok = ok
+	_party_result = party
 	_pack_result_pages = Gen2TextLayout.lay_out(
 		message, Gen2PackPage.TEXTBOX_COLUMNS - 2, Gen2PackPage.TEXTBOX_ROWS_OF_TEXT
 	)
@@ -2482,6 +2659,10 @@ func _process(delta: float) -> void:
 		for _frame: int in _target_clock.tick(delta):
 			advance_target_icons()
 		return
+	if _mode == Mode.PACK_RESULT and party_result_holding():
+		for _frame: int in _target_clock.tick(delta):
+			advance_party_result()
+		return
 	_target_clock.reset()
 	if _save_prompt == null or _save_prompt.reads_joypad() or _save_prompt.finished():
 		_save_clock.reset()
@@ -2586,10 +2767,10 @@ func box_text() -> String:
 			return String(_teach_prompt.get("text", ""))
 		Mode.PACK_FORGET_ASK:
 			return Gen2MoveForget.ask_text(
-				_target_name(_forget_party_index), _forget_move_name
+				_target_name(_forget_party_index), _forget_move_name, _data.generation
 			)
 		Mode.PACK_STOP_LEARNING:
-			return Gen2MoveForget.stop_text(_forget_move_name)
+			return Gen2MoveForget.stop_text(_forget_move_name, _data.generation)
 		Mode.PACK_TOSS_CONFIRM:
 			## `IsItOKToTossItemText` names the item and no count, where
 			## `AskQuantityThrowAwayText` prints both.
@@ -2605,7 +2786,7 @@ func box_text() -> String:
 			return _pack_text(TEXT_TOSS_ASK)
 		Mode.PACK_FORGET:
 			return _forget_refusal if not _forget_refusal.is_empty() \
-				else Gen2MoveForget.which_text()
+				else Gen2MoveForget.which_text(_data.generation)
 		Mode.PACK_PP_MOVE:
 			return RESTORE_PP_WHICH_MOVE
 		Mode.PACK_RESULT:
@@ -2629,8 +2810,7 @@ func _hardware_image() -> Image:
 				_save_state(), _list_image(true) if _gen1_pack() else null
 			)
 		## `StartMenu_Quit` and the two rows this port added below it ask over the
-		## list they were chosen from. Only `SaveMenu` puts up
-		## `Continue_LoadMenuHeader`'s panel of badges, Pokedex and play time,
+		## list; only `SaveMenu` puts up `Continue_LoadMenuHeader`'s panel,
 		## because only the save question is about the file.
 		Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
 			var state: Dictionary = _save_state()
@@ -2650,8 +2830,7 @@ func _hardware_image() -> Image:
 		Mode.PACK_FORGET, Mode.PACK_PP_MOVE:
 			return _move_list_image()
 		Mode.PACK_RESULT:
-			return _gen1_pack_image() if _gen1_pack() \
-				else _pack_overlay(box_text(), Callable())
+			return _pack_result_image()
 		Mode.PACK_TARGET:
 			return _target_image()
 		Mode.FIELD_MOVES:

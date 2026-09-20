@@ -404,8 +404,10 @@ const STONE_ITEMS: Array[int] = [ITEM_MOON_STONE, 0x20, 0x21, 0x22, 0x2F]
 
 ## `.addHealAmount`'s ladder; FULL_RESTORE and MAX_POTION heal past
 ## [constant Gen2Stats.MAX_STAT_VALUE], which is the maximum to the party host.
+const ITEM_POTION: int = 0x14
+const EVENT_MET_BILL: int = 0x550
 const ITEM_HEAL_AMOUNTS: Dictionary = {
-	ITEM_FULL_RESTORE: 999, 0x11: 999, 0x12: 200, 0x13: 50, 0x14: 20,
+	ITEM_FULL_RESTORE: 999, 0x11: 999, 0x12: 200, 0x13: 50, ITEM_POTION: 20,
 	0x3C: 50, 0x3D: 60, 0x3E: 80,
 }
 ## `.cureStatusAilment`'s own five and the `$ff` its fall-through carries, which
@@ -4335,11 +4337,14 @@ static func pic_load_frames(tiles: int, bytes: int) -> int:
 const SFX_ROLES: Dictionary = {
 	0x01: 134, ## SFX_ITEM, which is SFX_Get_Item1_1
 	0x02: 154, ## SFX_CAUGHT_MON, the battle bank's own
+	0x04: 141, ## SFX_POTION is SFX_HEAL_HP
+	0x05: 142, ## SFX_FULL_HEAL is SFX_HEAL_AILMENT
 	0x08: 144, ## SFX_READ_TEXT_2 is SFX_PRESS_AB
 	0x0B: 151, ## SFX_POISON is SFX_POISONED
 	0x0D: 153, ## SFX_BOOT_PC is SFX_TURN_ON_PC
 	0x0E: 154, ## SFX_SHUT_DOWN_PC is SFX_TURN_OFF_PC
 	0x0F: 155, ## SFX_CHOOSE_PC_OPTION is SFX_ENTER_PC
+	0x12: SFX_HEALING_MACHINE, ## SFX_SECOND_PART_OF_ITEMFINDER, ItemUseItemfinder's own
 	0x13: 173, ## SFX_WARP_TO is SFX_GO_INSIDE
 	0x15: 144, ## SFX_CHANGE_DEX_MODE is SFX_PRESS_AB
 	0x16: 162, ## SFX_JUMP_OVER_LEDGE is SFX_LEDGE

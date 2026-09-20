@@ -561,6 +561,16 @@ func _stage_kind() -> void:
 		_screen.call(SCREEN_DRIVER % _kind)
 		if String(_kind).ends_with("_use") or String(_kind).ends_with("_question"):
 			_screen.call(SCREEN_DRIVER % _kind)
+			## The first number is A presses past the answer, the second frames
+			## of the pack's own clock after them.
+			for _press: int in maxi(_cell.x, 0):
+				for _frame: int in TEXT_SETTLE_FRAMES:
+					_screen.advance_frame()
+				_screen.press_button(PokeButton.A)
+			var host: Gen2StartMenuScreen = _screen.get("_start_menu_host")
+			for _frame: int in maxi(_cell.y, 0):
+				if host != null:
+					host.advance_party_result()
 		return
 	## The fall-through stages a pile of debug sprites and an emote, which a bare
 	## capture does not want; the three kinds named ahead of it are pictures of

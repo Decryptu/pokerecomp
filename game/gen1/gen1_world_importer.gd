@@ -4180,7 +4180,8 @@ static func _script_name_species(
 	return next
 
 
-## `AddPartyMon` for the starter: the party is empty, so nothing asks about room.
+## `AddPartyMon` for the starter: the party is empty, so nothing asks about
+## room, and it prints no `GotMonText` of its own, only `AskName`'s question.
 static func _script_party_mon(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int
 ) -> int:
@@ -4189,7 +4190,10 @@ static func _script_party_mon(
 	var dex: int = Gen1Layout.dex_of_index(ctx["rom"], ctx["layout"], int(state["species_index"]))
 	if dex < 1:
 		return SCRIPT_UNREAD
-	out.append({"op": "give_pokemon", "species": dex, "level": int(state["level"])})
+	out.append({
+		"op": "give_pokemon", "species": dex, "level": int(state["level"]),
+		"routine": "add_party_mon",
+	})
 	state.erase("level")
 	return next
 

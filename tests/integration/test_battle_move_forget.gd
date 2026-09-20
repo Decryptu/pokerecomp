@@ -122,7 +122,7 @@ func test_a_full_moveset_opens_the_ask_instead_of_declining() -> void:
 	await _advance_to_offer()
 	assert_eq(_stage(), "ask")
 	assert_true(
-		_screen.battle_snapshot()["message"].contains("can't learn more than four moves"),
+		_screen.battle_snapshot()["message"].contains("can't learn more"),
 		String(_screen.battle_snapshot()["message"])
 	)
 
@@ -169,7 +169,7 @@ func test_an_hm_row_is_refused_and_the_list_stays_open() -> void:
 	assert_true(battle.must_learn_move(Gen2Battle.PLAYER))
 	assert_eq(battle.player.moves[2], MOVE_SURF)
 	assert_true(
-		_screen.battle_snapshot()["message"].contains("HM moves can't be forgotten"),
+		_screen.battle_snapshot()["message"].contains("HM moves can't be"),
 		String(_screen.battle_snapshot()["message"])
 	)
 

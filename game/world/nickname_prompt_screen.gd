@@ -9,10 +9,12 @@ extends Control
 ## The nickname the player settled on, emitted once, before [signal closed].
 signal named(nickname: String)
 signal closed()
+signal sfx_requested(sfx: int, waited: bool)
 
 const TILE: int = Gen2Font.TILE
 
 enum Phase {
+	BEFORE_TEXT,
 	ASK,
 	NAMING,
 	AFTER_TEXT,
@@ -33,6 +35,14 @@ var _after_text_format: String = ""
 ## `_CaughtAskNicknameText` unless the caller names `PokeBallEffect`'s own
 ## `_AskGiveNicknameText` instead.
 var _question: String = ""
+## `GotMonText` in front of the question, its `sound_get_item_1` holding the box.
+var _before_text: String = ""
+var _before_sfx: int = -1
+var _before_sounded: bool = false
+## `_BoxIsFullText`, the whole routine.
+var _before_alone: bool = false
+var _audio: Gen2AudioPlayer = null
+var _wait_watch: Dictionary = {}
 ## Whether the YES/NO is skipped and the keyboard opened outright, which is the
 ## Nuzlocke's "every Pokemon is nicknamed": a question with one allowed answer
 ## is worse than no question.
@@ -62,6 +72,16 @@ func set_context(
 		else Gen2WorldPartyHost.caught_nickname_question(species_name)
 
 
+func set_before_text(text: String, sfx: int = -1, alone: bool = false) -> void:
+	_before_text = text
+	_before_sfx = sfx
+	_before_alone = alone
+
+
+func set_audio_player(player: Gen2AudioPlayer) -> void:
+	_audio = player
+
+
 ## `.Pokemon`'s icon. [param dvs] is `GetGender`'s input; -1 leaves the sign off.
 func set_species(species: int, dvs: int = -1) -> void:
 	_species = species
@@ -76,8 +96,17 @@ func _ready() -> void:
 		return
 	_build()
 	_answer = _species_name
-	_phase = Phase.ASK
 	_yes = true
+	if not _before_text.is_empty():
+		_phase = Phase.BEFORE_TEXT
+		_text_box.visible = true
+		_text_box.show_text(_before_text, _before_alone)
+		return
+	_ask()
+
+
+func _ask() -> void:
+	_phase = Phase.ASK
 	if _forced:
 		_answer_question(true)
 		return
@@ -118,7 +147,24 @@ func advance_frame() -> void:
 		return
 	if _text_box != null and _text_box.visible:
 		_text_box.advance_frame()
+	if _phase == Phase.BEFORE_TEXT:
+		_advance_before_text()
+		return
 	_refresh_yes_no()
+
+
+## `TextCommand_SOUND` and its `WaitForSoundToFinish`.
+func _advance_before_text() -> void:
+	if _text_owes_frames() or _before_alone:
+		return
+	if not _before_sounded:
+		_before_sounded = true
+		if _before_sfx >= 0:
+			sfx_requested.emit(_before_sfx, false)
+		return
+	if _audio != null and _audio.still_waiting(_wait_watch):
+		return
+	_ask()
 
 
 ## `GiveANickname_YesNo` is `PrintText` and then `YesNoBox`, so the box appears
@@ -143,6 +189,15 @@ func handle_button(button: int) -> bool:
 	match _phase:
 		Phase.NAMING:
 			return _naming.handle_button(button) if _naming != null else false
+		Phase.BEFORE_TEXT:
+			if button != PokeButton.A or not _before_alone:
+				return false
+			if _text_owes_frames():
+				_text_box.advance()
+				return true
+			_answer = ""
+			_finish()
+			return true
 		Phase.ASK:
 			if _text_owes_frames():
 				if button == PokeButton.A:
@@ -211,7 +266,7 @@ func _answer_question(yes: bool) -> void:
 	_naming = Gen2NamingScreenScreen.new()
 	if not _naming.open(
 		_data,
-		Gen2WorldPartyHost.nickname_prompt(_species_name),
+		Gen2WorldPartyHost.nickname_prompt(_species_name, _data.generation),
 		Gen2NamingScreenScreen.KIND_MON
 	):
 		_naming = null

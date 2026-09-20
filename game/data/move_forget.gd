@@ -1,24 +1,21 @@
 class_name Gen2MoveForget
 extends RefCounted
 
-## engine/pokemon/learn.asm's `LearnMove` and `ForgetMove`. Shared here because
-## `LearnMove` is reached from both `TeachTMHM` and a level-up in battle, so
-## neither [Gen2WorldPartyHost] nor [Gen2Battle] owns it. Identical in both pins.
-##
-## The order the source asks in: `AskForgetMoveText`'s yes/no, then
-## `MoveAskForgetText` and the move list, where an HM row prints
-## `MoveCantForgetHMText` and loops rather than cancelling. B or a no reaches
-## `LearnMove.cancel`, ending in `DidNotLearnMoveText` or asking again.
+## engine/pokemon/learn.asm's `LearnMove` and `ForgetMove`, reached from
+## `TeachTMHM` and from a level-up alike: `AskForgetMoveText`'s yes/no, then
+## `MoveAskForgetText` and the list, where an HM row prints
+## `MoveCantForgetHMText` and loops. B or a no reaches `LearnMove.cancel`.
 
 ## How many moves a Pokémon can know at once, NUM_MOVES.
 const MOVE_SLOTS: int = 4
 
-## `Text_1_2_and_Poof`'s own `PlaySFX`, where the text turns into `_MoveForgotText`.
+## `Text_1_2_and_Poof`'s own `PlaySFX`; `OneTwoAndText` plays SFX_SWAP by `PlaySound` id.
 const SFX_SWITCH_POKEMON: int = 0x20
+const GEN1_SFX_SWAP: int = 174
 
-## home/hm_moves.asm's `IsHMMove.HMMoves`, in source order. Seven, against the
-## four [constant Gen2WorldFieldMove.FIELD_MOVES] the overworld acts on:
-## forgetting is gated on every HM, not on the ones with a field effect here.
+## home/hm_moves.asm's `IsHMMove.HMMoves`, in source order: forgetting is gated
+## on every HM, not on the four the overworld acts on. `data/moves/hm_moves.asm`
+## is the first five, Generation 1's WATERFALL being an ordinary move.
 const HM_MOVES: Array[int] = [
 	0x0F,  # CUT
 	0x13,  # FLY
@@ -28,11 +25,34 @@ const HM_MOVES: Array[int] = [
 	0x7F,  # WATERFALL
 	0xFA,  # WHIRLPOOL
 ]
+const GEN1_HM_MOVE_COUNT: int = 5
+
+## `data/text/common_3.asm` and `data/text/text_4.asm` with their own breaks:
+## a digit, a question and every full stop differ.
+const TEXTS: Dictionary = {
+	&"ask": "%s is\ntrying to learn\ue001%s.\ue000But %s\ncan't learn more\ue001than four moves.\ue000Delete an older\nmove to make room\ue001for %s?",
+	&"which": "Which move should\nbe forgotten?",
+	&"stop": "Stop learning\n%s?",
+	&"did_not_learn": "%s\ndid not learn\ue001%s.",
+	&"forgot": "1, 2 and… Poof!\ue000%s forgot\n%s.\ue000And…",
+	&"learned": "%s learned\n%s!",
+	&"cant_forget_hm": "HM moves can't be\nforgotten now.",
+}
+const GEN1_TEXTS: Dictionary = {
+	&"ask": "%s is\ntrying to learn\ue001%s!\ue000But, %s\ncan't learn more\ue001than 4 moves!\ue000Delete an older\nmove to make room\ue001for %s?",
+	&"which": "Which move should\nbe forgotten?",
+	&"stop": "Abandon learning\n%s?",
+	&"did_not_learn": "%s\ndid not learn\ue001%s!",
+	&"forgot": "1, 2 and... Poof!\ue000%s forgot\n%s!\ue000And...",
+	&"learned": "%s learned\n%s!",
+	&"cant_forget_hm": "HM techniques\ncan't be deleted!",
+}
 
 
 ## `IsHMMove`: an HM's move, which `ForgetMove` refuses to give up.
-static func is_hm_move(move: int) -> bool:
-	return HM_MOVES.has(move)
+static func is_hm_move(move: int, generation: int = RomRegistry.GEN2) -> bool:
+	var index: int = HM_MOVES.find(move)
+	return index >= 0 and (generation != RomRegistry.GEN1 or index < GEN1_HM_MOVE_COUNT)
 
 
 ## `ListMoves`' rows: it stops at the first zero, so a padded slot is not listed.
@@ -50,44 +70,51 @@ static func options(data: GameData, moves: Array) -> Array:
 			"slot": slot,
 			"move": move,
 			"name": String(data.move(move).get("name", "MOVE")),
-			"forgettable": not is_hm_move(move),
+			"forgettable": not is_hm_move(move, data.generation),
 		})
 	return out
 
 
-## `AskForgetMoveText`. The source prints it as one box of three paragraphs.
-static func ask_text(mon_name: String, move_name: String) -> String:
-	return "%s is trying to learn %s. But %s can't learn more than four moves. Delete an older move to make room for %s?" % [
-		mon_name, move_name, mon_name, move_name,
-	]
+static func _text(key: StringName, generation: int) -> String:
+	return String((GEN1_TEXTS if generation == RomRegistry.GEN1 else TEXTS)[key])
+
+
+## `AskForgetMoveText` and `TryingToLearnText`.
+static func ask_text(mon_name: String, move_name: String, generation: int = RomRegistry.GEN2) -> String:
+	return _text(&"ask", generation) % [mon_name, move_name, mon_name, move_name]
 
 
 ## `MoveAskForgetText`, the heading over the move list.
-static func which_text() -> String:
-	return "Which move should be forgotten?"
+static func which_text(generation: int = RomRegistry.GEN2) -> String:
+	return _text(&"which", generation)
 
 
-## `StopLearningMoveText`, `LearnMove.cancel`'s own yes/no.
-static func stop_text(move_name: String) -> String:
-	return "Stop learning %s?" % move_name
+## `StopLearningMoveText` and `AbandonLearningText`, `LearnMove.cancel`'s own yes/no.
+static func stop_text(move_name: String, generation: int = RomRegistry.GEN2) -> String:
+	return _text(&"stop", generation) % move_name
 
 
 ## `DidNotLearnMoveText`, the end of a cancelled offer.
-static func did_not_learn_text(mon_name: String, move_name: String) -> String:
-	return "%s did not learn %s." % [mon_name, move_name]
+static func did_not_learn_text(
+	mon_name: String, move_name: String, generation: int = RomRegistry.GEN2
+) -> String:
+	return _text(&"did_not_learn", generation) % [mon_name, move_name]
 
 
-## `Text_1_2_and_Poof` then `_MoveForgotText`, as one line where the source
-## shows two. Its caller plays [constant SFX_SWITCH_POKEMON] with it.
-static func forgot_text(mon_name: String, old_move_name: String) -> String:
-	return "1, 2 and… Poof! %s forgot %s. And…" % [mon_name, old_move_name]
+## `Text_1_2_and_Poof` then `_MoveForgotText`; `OneTwoAndText` through `ForgotAndText`.
+static func forgot_text(
+	mon_name: String, old_move_name: String, generation: int = RomRegistry.GEN2
+) -> String:
+	return _text(&"forgot", generation) % [mon_name, old_move_name]
 
 
-## `LearnedMoveText`, which `LearnMove.learned` prints on either path into it.
-static func learned_text(mon_name: String, move_name: String) -> String:
-	return "%s learned %s!" % [mon_name, move_name]
+## `LearnedMoveText` and `LearnedMove1Text`.
+static func learned_text(
+	mon_name: String, move_name: String, generation: int = RomRegistry.GEN2
+) -> String:
+	return _text(&"learned", generation) % [mon_name, move_name]
 
 
-## `MoveCantForgetHMText`. The list stays open, since `.hmmove` is `jr .loop`.
-static func cant_forget_hm_text() -> String:
-	return "HM moves can't be forgotten now."
+## `MoveCantForgetHMText` and `HMCantDeleteText`; `.hmmove` is `jr .loop`.
+static func cant_forget_hm_text(generation: int = RomRegistry.GEN2) -> String:
+	return _text(&"cant_forget_hm", generation)

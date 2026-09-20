@@ -99,6 +99,7 @@ func run(r: RefCounted) -> void:
 		_verify_battle_item_effects(game_id, data)
 		_verify_screen(game_id, data)
 		_verify_descriptions(game_id, data)
+	_r.each_game(_verify_party_results)
 	## `UseItem`'s jumptable is the same three answers on Generation 1, and the
 	## pack that reads it is this one, so its `.Party` rows are swept here too.
 	_r.each_game_of(RomRegistry.GEN1, func() -> void:
@@ -107,7 +108,89 @@ func run(r: RefCounted) -> void:
 		)
 		_verify_party_item_effects(_r.game_id, _r.data, GEN1_TM_HM_PARTY_ROWS)
 		_verify_battle_item_effects(_r.game_id, _r.data)
+		_verify_party_results()
 	)
+
+
+## A POTION, an ANTIDOTE and a REPEL through the real pack: `PrintPartyMenuActionText`
+## and `RedrawPartyMenu` under the list, and `UseRepel`'s silence against `ItemUseText00`.
+const PARTY_RESULT_ITEMS: Dictionary = {
+	RomRegistry.GEN2: {"potion": 0x12, "antidote": 0x09, "repel": 0x14},
+	RomRegistry.GEN1: {"potion": 0x14, "antidote": 0x0B, "repel": 0x1E},
+}
+const PARTY_RESULT_MAP: Dictionary = {
+	RomRegistry.GEN2: [Vector2i(26, 2), Vector2i(2, 17)],
+	RomRegistry.GEN1: [Vector2i(0, 38), Vector2i(3, 6)],
+}
+const PARTY_RESULT_LINES: Dictionary = {
+	RomRegistry.GEN2: ["<MON>\nrecovered <N>HP!", "<MON>'s\ncured of poison.", ""],
+	RomRegistry.GEN1: ["<MON>\nrecovered by <N>!", "<MON> was\ncured of poison!", "<PLAYER> used\nREPEL!"],
+}
+const POTION_HEAL: int = 20
+
+
+func _verify_party_results() -> void:
+	var generation: int = _r.data.generation
+	var items: Dictionary = PARTY_RESULT_ITEMS[generation]
+	var map: Array = PARTY_RESULT_MAP[generation]
+	var screen: Gen2WorldScreen = _r.open_screen(map[0].x, map[0].y, map[1])
+	var save: Gen2SaveData = screen.active_save()
+	var lead: Gen2SaveMon = save.party[0]
+	lead.hp = 1
+	lead.status = Gen2Status.POISON
+	var max_hp: int = Gen2SaveBattleAdapter.to_battle_mon(_r.data, lead).max_hp()
+	var healed: int = mini(POTION_HEAL, max_hp - 1)
+	var lead_name: String = lead.nickname if not lead.nickname.is_empty() \
+		else String(_r.data.species(lead.species).get("name", ""))
+	screen.preview_pack({items["potion"]: 1, items["antidote"]: 1, items["repel"]: 1})
+	var host: Gen2StartMenuScreen = screen.get("_start_menu_host")
+	if not _r.check(host != null, "%s: the pack did not open." % _r.game_id):
+		_r.close_screen(screen)
+		return
+	var lines: Array = PARTY_RESULT_LINES[generation]
+	for step: int in 3:
+		var item: int = int(items.values()[step])
+		host.call("_select_pack_item", item)
+		host.handle_button(PokeButton.A)
+		host.handle_button(PokeButton.A)
+		if step < 2:
+			host.handle_button(PokeButton.A)
+		var want: String = String(lines[step]).replace("<MON>", lead_name).replace(
+			"<N>", str(healed)).replace("<PLAYER>", save.player_name)
+		if want.is_empty():
+			_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK,
+				"%s: the REPEL printed %s." % [_r.game_id, host.get("_pack_result")])
+			continue
+		var party: Dictionary = host.get("_party_result")
+		_r.check(String(host.get("_pack_result")) == want,
+			"%s: %s printed %s rather than %s." % [
+				_r.game_id, items.keys()[step], host.get("_pack_result"), want])
+		if step == 0:
+			_r.check(party.has("anim") and int(party.get("cursor", 0)) == -1,
+				"%s: the POTION's bar did not fill under the list." % _r.game_id)
+			for _frame: int in 400:
+				if not host.party_result_holding():
+					break
+				host.advance_party_result()
+			_r.check(int((party["rows"][0] as Dictionary)["hp"]) == 1 + healed,
+				"%s: the row stands at %d once the bar has filled." % [
+					_r.game_id, int((party["rows"][0] as Dictionary)["hp"])])
+		elif step == 1:
+			_r.check(not party.is_empty() and not party.has("anim"),
+				"%s: the ANTIDOTE's line did not stand under the list." % _r.game_id)
+			for _frame: int in 400:
+				if not host.party_result_holding():
+					break
+				host.advance_party_result()
+		host.handle_button(PokeButton.A)
+		_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK,
+			"%s: the pocket did not come back behind %s." % [_r.game_id, items.keys()[step]])
+	_r.check(save.party[0].hp == 1 + healed and save.party[0].status == 0
+		and screen.world().state.repel_steps() == 100,
+		"%s: the three uses left hp %d, status %d, repel %d." % [
+			_r.game_id, save.party[0].hp, save.party[0].status, screen.world().state.repel_steps()])
+	print("%s: the POTION, the ANTIDOTE and the REPEL print their own lines." % _r.game_id)
+	_r.close_screen(screen)
 
 
 ## `CheckSelectableItem` over the real rows. The eight named key items are the

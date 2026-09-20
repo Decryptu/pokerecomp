@@ -175,6 +175,7 @@ func _one_game() -> void:
 	_a_safari_battle()
 	_the_tutor_throws()
 	_a_wild_fight_on_the_screen()
+	_a_boxed_catch_asks_its_name()
 	_mimic_on_the_screen()
 	_a_lost_fight_on_the_screen()
 	_a_ghost_on_the_screen()
@@ -1433,6 +1434,72 @@ func _a_wild_fight_on_the_screen() -> void:
 		"the lead PIKACHU is %s the starter." % ["not" if not starter else "read as"])
 	_r.note("gen1 battle the screen's wild fight ended in %d frames on piece %d" % [frames, victory])
 	_close_screen(screen)
+
+
+## `ItemUseBall.sendToBox`: `SendNewMonToBox` asks `AskName`, `_ItemUseBallText07`
+## or `08` names the PC's owner off EVENT_MET_BILL, and the catch heads the box.
+const BOXED_QUESTION: String = "Do you want to"
+const BOXED_OWNERS: Dictionary = {false: "someone's PC!", true: "BILL's PC!"}
+
+
+func _a_boxed_catch_asks_its_name() -> void:
+	for met_bill: bool in [false, true]:
+		var screen: Gen2WorldScreen = _open_screen(PALLET_TOWN, TUTOR_CELL, true)
+		var save: Gen2SaveData = screen.active_save()
+		while save.party.size() < Gen2SaveData.MAX_PARTY:
+			save.party.append(Gen2SaveMon.from_dict((save.party[0] as Gen2SaveMon).to_dict()))
+		var world: Gen2WorldAPI = screen.world()
+		world.state.set_event_flag(Gen1Layout.EVENT_MET_BILL, met_bill)
+		world.state.apply_changes({}, {}, {"items": {Gen1Layout.ITEM_MASTER_BALL: 1}})
+		screen.preview_battle_request(SWEEP_ENEMY, FIGHT_LEVELS[1])
+		var prompt: Gen2NicknamePromptScreen = _throw_until_asked(screen)
+		if prompt == null:
+			_r.check(false, "the boxed catch never asked for a name.")
+			_close_screen(screen)
+			continue
+		var asked: String = " ".join(_r.settle_prompt(screen, prompt))
+		_r.check(asked.begins_with(BOXED_QUESTION), "the boxed catch asked %s." % asked)
+		screen.press_button(PokeButton.B)
+		var transferred: String = " ".join(_r.settle_prompt(screen, prompt))
+		var species: String = String(_r.data.species(SWEEP_ENEMY).get("name", ""))
+		_r.check(transferred.begins_with("%s was" % species)
+			and transferred.ends_with(String(BOXED_OWNERS[met_bill])),
+			"with EVENT_MET_BILL %s the box line was %s." % [met_bill, transferred])
+		screen.press_button(PokeButton.A)
+		for _frame: int in TUTOR_GUARD_FRAMES:
+			screen.advance_frame()
+			if screen.get("_battle_host") == null:
+				break
+		var front: Gen2SaveMon = save.boxes[save.current_box].slots[0]
+		_r.check(front != null and front.species == SWEEP_ENEMY,
+			"the catch is not at the front of the box.")
+		_close_screen(screen)
+	_r.note("gen1 battle a boxed catch is named and goes to the front of the box")
+
+
+## The first menu, `DisplayPlayerBag` on the MASTER BALL and USE, to the prompt.
+func _throw_until_asked(screen: Gen2WorldScreen) -> Gen2NicknamePromptScreen:
+	var presses: int = 0
+	for _frame: int in TUTOR_GUARD_FRAMES:
+		screen.advance_frame()
+		var host: Gen2BattleScreen = screen.get("_battle_host")
+		if host == null:
+			continue
+		var prompt: Gen2NicknamePromptScreen = host.get("_capture_nickname_host")
+		if prompt != null:
+			return prompt
+		var snapshot: Dictionary = host.battle_snapshot()
+		if bool(snapshot.get("awaits_press", false)):
+			screen.press_button(PokeButton.A)
+		elif presses == 0 and StringName(snapshot.get("menu_stage", &"")) != &"":
+			if not bool(host.open_battle_pack().get("ok", false)):
+				continue
+			host.select_pack_row((host.get("_pack_rows") as Array).find(Gen1Layout.ITEM_MASTER_BALL))
+			presses = 1
+		elif presses in [1, 2]:
+			screen.press_button(PokeButton.A)
+			presses += 1
+	return null
 
 
 ## The same fight with MIMIC alone: the screen puts the enemy's list up under

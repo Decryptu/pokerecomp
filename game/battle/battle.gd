@@ -1422,7 +1422,7 @@ func learn_move(side: int, forget_slot: int) -> Array:
 		return []
 
 	var forgot: int = int(learner.moves[forget_slot])
-	if Gen2MoveForget.is_hm_move(forgot):
+	if Gen2MoveForget.is_hm_move(forgot, data.generation if data != null else RomRegistry.GEN2):
 		return []
 	if not learner.replace_move(forget_slot, int(offer["move"])):
 		return []

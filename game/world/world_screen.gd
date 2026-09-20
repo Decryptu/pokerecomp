@@ -2305,14 +2305,21 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 	var save: Gen2SaveData = _injected_save if _injected_save != null \
 		else _selected_runtime_save()
 	var destination: StringName = Gen2WorldPartyHost.gift_destination(save)
-	if destination == &"full":
+	var gen1: bool = _data.generation == RomRegistry.GEN1
+	if destination == &"full" and not gen1:
 		return false
 	var host := Gen2NicknamePromptScreen.new()
-	host.set_context(
-		_data, species_name,
-		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if destination == &"box" else "",
-		"", _nuzlocke_names_everything()
-	)
+	if gen1:
+		_set_gen1_gift_context(
+			host, species_name, destination, save,
+			StringName(values.get("routine", &"")) == &"add_party_mon"
+		)
+	else:
+		host.set_context(
+			_data, species_name,
+			Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if destination == &"box" else "",
+			"", _nuzlocke_names_everything()
+		)
 	host.set_species(species)
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
@@ -2325,6 +2332,34 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 	_script_prompt = "Nickname"
 	_refresh_labels()
 	return true
+
+
+## `_GivePokemon`: `GotMonText`, `AskName` out of `AddPartyMon` or
+## `SendNewMonToBox`, `SentToBoxText` behind the box, `BoxIsFullText` alone.
+## [param bare] is the lab's own `AddPartyMon`, which is `AskName` and nothing else.
+func _set_gen1_gift_context(
+	host: Gen2NicknamePromptScreen, species_name: String, destination: StringName,
+	save: Gen2SaveData, bare: bool
+) -> void:
+	if destination == &"full" and not bare:
+		host.set_context(_data, species_name)
+		host.set_before_text(Gen2WorldPartyHost.gen1_box_is_full_text(), -1, true)
+		return
+	host.set_context(
+		_data, species_name,
+		Gen2WorldPartyHost.gen1_sent_to_box_format(save.current_box + 1) \
+			if destination == &"box" and not bare else "",
+		Gen2WorldPartyHost.capture_nickname_question(species_name, RomRegistry.GEN1),
+		_nuzlocke_names_everything()
+	)
+	if bare:
+		return
+	host.set_before_text(
+		Gen2WorldPartyHost.gen1_got_mon_text(_player_display_name(), species_name),
+		Gen2WorldScriptRunner.SFX_ITEM
+	)
+	host.set_audio_player(_audio_player)
+	host.sfx_requested.connect(_play_sfx)
 
 
 ## `CheckPartyFullAfterContest`'s `GiveANickname_YesNo`, the gift path's own
@@ -4152,13 +4187,16 @@ func preview_pack_use() -> void:
 		return
 	(save.party[0] as Gen2SaveMon).hp = 1
 	_injected_save = save
-	_world.state.apply_changes({}, {}, {"items": {Gen2WorldPartyHost.ITEM_POTION: 1}})
+	var potion: int = Gen1Layout.ITEM_POTION if _data.generation == RomRegistry.GEN1 \
+		else Gen2WorldPartyHost.ITEM_POTION
+	_world.state.apply_changes({}, {}, {"items": {potion: 1}})
 	_open_start_menu()
 	if _start_menu_host == null:
 		return
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
 		return
 	_start_menu_host.handle_button(PokeButton.A)
+	_start_menu_host.call("_select_pack_item", potion)
 
 
 ## Public screenshot driver for the bag itself, which no map cell opens: the
@@ -6851,6 +6889,7 @@ func _open_start_menu_host(entry: Callable) -> void:
 	host.field_move_chosen.connect(_on_start_menu_field_move)
 	host.evolution_animation_requested.connect(_on_pack_evolution)
 	host.sfx_requested.connect(_play_sfx)
+	host.gen1_sfx_requested.connect(_play_gen1_sound)
 	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_start_menu_host = host
 	_script_prompt = "Start menu open"

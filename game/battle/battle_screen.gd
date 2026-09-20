@@ -2859,15 +2859,12 @@ func _refresh_level_up_box() -> void:
 	if _level_up_stats.is_empty() or _menu_page == null:
 		_level_up_layer.visible = false
 		return
-	var box: Gen2MenuBox = Gen2BattleMenu.level_up_box()
+	var gen1: bool = _generation() == RomRegistry.GEN1
+	var box: Gen2MenuBox = Gen2BattleMenu.level_up_box(gen1)
 	_show_layer_image(
 		_level_up_layer,
 		_menu_page.render(
-			box, [], -1, "", 0,
-			Gen2StatsScreenPage.stats_placements(
-				Gen2BattleMenu.LEVEL_UP_STATS_AT, _level_up_stats,
-				Gen2BattleMenu.LEVEL_UP_STATS_SPACING
-			)
+			box, [], -1, "", 0, Gen2BattleMenu.level_up_placements(_level_up_stats, gen1)
 		),
 		box.border_position() * Gen2Font.TILE
 	)
@@ -3753,21 +3750,18 @@ func _open_capture_nickname() -> bool:
 		return true
 	var destination: Dictionary = _capture_result.get("destination", {})
 	var boxed: bool = StringName(destination.get("destination", &"")) == &"box"
-	## `AskName` is reached from inside `AddPartyMon`, so Generation 1 names only
-	## the catch that joins the party and answers a boxed one with the transfer
-	## line alone.
-	if boxed and _generation() == RomRegistry.GEN1:
-		_capture_nickname_asked = true
-		show_message(Gen2WorldPartyHost.sent_to_box_text(species_name, RomRegistry.GEN1))
-		return true
 	_capture_nickname_asked = true
 	_capture_nickname = species_name
 	var host := Gen2NicknamePromptScreen.new()
-	## `.SendToPC` prints `BallSentToPCText` behind the naming and the party
-	## branch prints nothing, which is the one difference between the two.
+	## `.SendToPC` prints `BallSentToPCText` behind the naming; `SendNewMonToBox`
+	## asks `AskName` too and `_ItemUseBallText07` names BILL's PC after EVENT_MET_BILL.
+	var after: String = ""
+	if boxed:
+		after = Gen2WorldPartyHost.gen1_transferred_format(
+			_world_context != null and _world_context.met_bill
+		) if _generation() == RomRegistry.GEN1 else Gen2WorldPartyHost.SENT_TO_BOX_FORMAT
 	host.set_context(
-		_data, species_name,
-		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if boxed else "",
+		_data, species_name, after,
 		Gen2WorldPartyHost.capture_nickname_question(species_name, _generation()),
 		## A Nuzlocke nicknames every catch, so the question is not asked.
 		_rules().is_nuzlocke()
@@ -4088,7 +4082,7 @@ func _show_forget_confirm() -> void:
 ## `ForgetMove.loop`: `MoveAskForgetText` in the box and the list in its own
 ## frame over the field, both drawn again on every pass round the loop.
 func _show_forget_list() -> void:
-	show_message(Gen2MoveForget.which_text())
+	show_message(Gen2MoveForget.which_text(_generation()))
 	_reopen_menu_layer()
 
 
@@ -4135,8 +4129,8 @@ func _answer_forget(button: int) -> void:
 
 func _forget_prompt_text() -> String:
 	if _forget_stage == &"stop":
-		return Gen2MoveForget.stop_text(_forget_move_name())
-	return Gen2MoveForget.ask_text(_forget_learner_name(), _forget_move_name())
+		return Gen2MoveForget.stop_text(_forget_move_name(), _generation())
+	return Gen2MoveForget.ask_text(_forget_learner_name(), _forget_move_name(), _generation())
 
 
 func _confirm_forget_stage() -> void:
@@ -4159,8 +4153,9 @@ func _confirm_forget_slot() -> void:
 		return
 	var entry: Dictionary = _forget_moves[_forget_cursor]
 	if not bool(entry.get("forgettable", false)):
-		show_message("%s %s" % [
-			Gen2MoveForget.cant_forget_hm_text(), Gen2MoveForget.which_text(),
+		show_message("%s%s%s" % [
+			Gen2MoveForget.cant_forget_hm_text(_generation()), Gen2TextStream.PAGE_BREAK,
+			Gen2MoveForget.which_text(_generation()),
 		])
 		return
 	var events: Array = _battle.learn_move(Gen2Battle.PLAYER, int(entry.get("slot", -1)))
@@ -5923,7 +5918,10 @@ func _begin_faint_event(event: Dictionary) -> void:
 
 
 func _play_move_forgotten(_event: Dictionary) -> void:
-	_play_sfx(Gen2MoveForget.SFX_SWITCH_POKEMON)
+	if _generation() == RomRegistry.GEN1:
+		_play_gen1_sound(Gen2MoveForget.GEN1_SFX_SWAP)
+	else:
+		_play_sfx(Gen2MoveForget.SFX_SWITCH_POKEMON)
 
 
 func _set_substitute_pic_event(event: Dictionary) -> void:

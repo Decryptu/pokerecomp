@@ -148,6 +148,26 @@ func close_screen(screen: Gen2WorldScreen) -> void:
 	screen.free()
 
 
+## A prompt's box printed to its end or its YES/NO, every line held once.
+func settle_prompt(
+	screen: Gen2WorldScreen, prompt: Gen2NicknamePromptScreen, frames: int = 2000
+) -> PackedStringArray:
+	for _frame: int in frames:
+		if prompt.phase() == Gen2NicknamePromptScreen.Phase.ASK and prompt.question_ready():
+			break
+		var box: Gen2TextBox = prompt.get("_text_box")
+		if box != null and not box.is_revealing():
+			if not box.has_pages_left():
+				break
+			screen.press_button(PokeButton.A)
+		screen.advance_frame()
+	var out: PackedStringArray = PackedStringArray()
+	for line: String in prompt.text_lines():
+		if out.is_empty() or out[out.size() - 1] != line:
+			out.append(line)
+	return out
+
+
 ## Every cell reachable on foot from [param from], which is what says two parts
 ## of a map are joined or sealed off from each other.
 func region(world: Gen2WorldAPI, from: Vector2i) -> Dictionary:

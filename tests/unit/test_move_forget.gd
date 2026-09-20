@@ -134,21 +134,42 @@ func test_options_answers_empty_without_data() -> void:
 	assert_eq(Gen2MoveForget.options(_data(), []), [])
 
 
-## The wording is the source's, so a screen reads it rather than inventing one.
+## The wording and the breaks are the source's, so a screen reads them rather
+## than inventing its own: `_AskForgetMoveText`'s `line`, `cont` and `para`.
 func test_prompts_name_the_pokemon_and_both_moves() -> void:
+	var para: String = Gen2TextStream.PAGE_BREAK
+	var cont: String = Gen2TextStream.SCROLL_BREAK
 	assert_eq(
 		Gen2MoveForget.ask_text("GEODUDE", "STRENGTH"),
-		"GEODUDE is trying to learn STRENGTH. But GEODUDE can't learn more than four moves. Delete an older move to make room for STRENGTH?"
+		"GEODUDE is\ntrying to learn%sSTRENGTH.%sBut GEODUDE\ncan't learn more%sthan four moves.%sDelete an older\nmove to make room%sfor STRENGTH?" % [
+			cont, para, cont, para, cont,
+		]
 	)
-	assert_eq(Gen2MoveForget.which_text(), "Which move should be forgotten?")
-	assert_eq(Gen2MoveForget.stop_text("STRENGTH"), "Stop learning STRENGTH?")
+	assert_eq(Gen2MoveForget.which_text(), "Which move should\nbe forgotten?")
+	assert_eq(Gen2MoveForget.stop_text("STRENGTH"), "Stop learning\nSTRENGTH?")
 	assert_eq(
 		Gen2MoveForget.did_not_learn_text("GEODUDE", "STRENGTH"),
-		"GEODUDE did not learn STRENGTH."
+		"GEODUDE\ndid not learn%sSTRENGTH." % cont
 	)
 	assert_eq(
 		Gen2MoveForget.forgot_text("GEODUDE", "TACKLE"),
-		"1, 2 and… Poof! GEODUDE forgot TACKLE. And…"
+		"1, 2 and… Poof!%sGEODUDE forgot\nTACKLE.%sAnd…" % [para, para]
 	)
-	assert_eq(Gen2MoveForget.learned_text("GEODUDE", "STRENGTH"), "GEODUDE learned STRENGTH!")
-	assert_eq(Gen2MoveForget.cant_forget_hm_text(), "HM moves can't be forgotten now.")
+	assert_eq(Gen2MoveForget.learned_text("GEODUDE", "STRENGTH"), "GEODUDE learned\nSTRENGTH!")
+	assert_eq(Gen2MoveForget.cant_forget_hm_text(), "HM moves can't be\nforgotten now.")
+
+
+## `TryingToLearnText`, `AbandonLearningText`, `DidNotLearnText`, `OneTwoAndText`
+## and `HMCantDeleteText`: a digit, a question and every full stop differ, and
+## `data/moves/hm_moves.asm` stops at FLASH, so WATERFALL is forgettable.
+func test_generation_one_says_its_own_lines() -> void:
+	var gen1: int = RomRegistry.GEN1
+	assert_string_contains(Gen2MoveForget.ask_text("GEODUDE", "STRENGTH", gen1), "than 4 moves!")
+	assert_string_contains(Gen2MoveForget.ask_text("GEODUDE", "STRENGTH", gen1), "But, GEODUDE")
+	assert_eq(Gen2MoveForget.stop_text("STRENGTH", gen1), "Abandon learning\nSTRENGTH?")
+	assert_string_contains(Gen2MoveForget.did_not_learn_text("GEODUDE", "STRENGTH", gen1), "STRENGTH!")
+	assert_string_contains(Gen2MoveForget.forgot_text("GEODUDE", "TACKLE", gen1), "1, 2 and... Poof!")
+	assert_eq(Gen2MoveForget.cant_forget_hm_text(gen1), "HM techniques\ncan't be deleted!")
+	assert_true(Gen2MoveForget.is_hm_move(0x7F))
+	assert_false(Gen2MoveForget.is_hm_move(0x7F, gen1))
+	assert_true(Gen2MoveForget.is_hm_move(0x94, gen1))

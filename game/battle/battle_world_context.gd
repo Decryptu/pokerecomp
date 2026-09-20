@@ -19,6 +19,7 @@ var time_of_day: int = Gen2WorldPalette.TIME_DAY
 ## reads and so what `PlayBattleMusic` picks a wild track off.
 var landmark: int = Gen2WorldRadio.LANDMARK_SPECIAL
 var exp_all: bool = false
+var met_bill: bool = false
 
 
 ## The world's own values, read once. [param drawn_time_of_day] is the caller's,
@@ -35,8 +36,9 @@ static func capture(
 	out.player_cell = world.player_cell
 	out.player_facing = world.player_facing
 	out.landmark = world.landmark_backup()
-	out.exp_all = world.data != null and world.data.generation == RomRegistry.GEN1 \
-		and int(world.state.items().get(Gen1Layout.ITEM_EXP_ALL, 0)) > 0
+	var gen1: bool = world.data != null and world.data.generation == RomRegistry.GEN1
+	out.exp_all = gen1 and int(world.state.items().get(Gen1Layout.ITEM_EXP_ALL, 0)) > 0
+	out.met_bill = gen1 and world.state.is_event_flag_active(Gen1Layout.EVENT_MET_BILL)
 	out.time_of_day = clampi(
 		drawn_time_of_day if drawn_time_of_day >= 0 else world.map_time_of_day(), 0, 3
 	)
@@ -60,4 +62,5 @@ func to_dictionary() -> Dictionary:
 		"time_of_day": time_of_day,
 		"landmark": landmark,
 		"exp_all": exp_all,
+		"met_bill": met_bill,
 	}
