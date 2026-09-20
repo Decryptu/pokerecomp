@@ -8220,6 +8220,19 @@ func cartridge_follower_out() -> bool:
 	return pikachu != null and pikachu.following() and pikachu.visible()
 
 
+## The cells the follower is drawn on while it is out: its own, and both a step
+## in flight is drawn between, the way an object's are held.
+func gen1_pikachu_cells() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if not cartridge_follower_out():
+		return out
+	var drawn: Vector2 = Vector2(pikachu.pixel) / float(CELL_PIXELS)
+	for cell: Vector2i in [pikachu.cell, Vector2i(drawn.floor()), Vector2i(drawn.ceil())]:
+		if not out.has(cell):
+			out.append(cell)
+	return out
+
+
 func pending_script_input() -> Dictionary:
 	var step: Dictionary = _gen1_step(&"choice")
 	if not step.is_empty():

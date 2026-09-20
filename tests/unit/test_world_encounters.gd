@@ -25,6 +25,34 @@ func test_grass_uses_the_selected_time_of_day_slots() -> void:
 	assert_eq(result["values"]["kind"], &"wild")
 
 
+## `slot_chance` is the gap between two cumulative entries, in the roll's own
+## units, and every slot `active_slots` answers carries it.
+func test_a_slot_carries_its_chance_in_the_rolls_own_units() -> void:
+	var grass: Array[int] = []
+	for index: int in Gen2Layout.WILD_GRASS_PROBABILITIES.size():
+		grass.append(Gen2WorldEncounter.slot_chance(index, Gen2WorldEncounter.METHOD_GRASS))
+	assert_eq(grass, [30, 30, 20, 10, 5, 4, 1] as Array[int])
+	var water: Array[int] = []
+	for index: int in Gen2Layout.WILD_WATER_PROBABILITIES.size():
+		water.append(Gen2WorldEncounter.slot_chance(index, Gen2WorldEncounter.METHOD_SURF))
+	assert_eq(water, [60, 30, 10] as Array[int])
+	var kanto: Array[int] = []
+	for index: int in Gen1Layout.WILD_SLOT_CHANCES.size():
+		kanto.append(Gen2WorldEncounter.slot_chance(index, Gen2WorldEncounter.METHOD_GRASS, true))
+	assert_eq(kanto, [51, 51, 39, 25, 25, 25, 13, 13, 11, 3] as Array[int])
+	assert_eq(Gen2WorldEncounter.slot_chance(10, Gen2WorldEncounter.METHOD_GRASS, true), 0)
+	var day: Array = []
+	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
+		day.append({"level": 7, "species": 19})
+	var slots: Array = Gen2WorldEncounter.active_slots(
+		{"rates": [0, 255, 0], "slots": [day, day, day]},
+		Gen2WorldEncounter.METHOD_GRASS, Gen2WorldPalette.TIME_DAY
+	)
+	assert_eq(int(slots[0]["chance"]), 30)
+	assert_eq(int(slots[6]["chance"]), 1)
+	assert_eq(int(Gen2WorldBugContest.active_slots([{"species": 10, "percent": 20}])[0]["chance"]), 20)
+
+
 func test_zero_rate_does_not_resolve_even_when_not_forced() -> void:
 	var result: Dictionary = Gen2WorldEncounter.resolve(
 		{"rates": [0, 0, 0], "slots": [[{"level": 3, "species": 16}]]},
