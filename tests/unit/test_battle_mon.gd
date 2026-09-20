@@ -309,10 +309,11 @@ func test_gaining_experience_can_cross_a_level_threshold() -> void:
 	assert_eq(mon.level_for_exp(), 51, "51 cubed is exactly 132651")
 
 
-func test_experience_is_capped_at_the_three_byte_maximum() -> void:
+func test_experience_is_capped_at_the_level_100_total_of_its_curve() -> void:
 	var mon: Gen2BattleMon = Gen2BattleMon.create(_data, Fixture.PIKACHU, 50)
 	mon.gain_exp(Gen2Experience.MAX_EXP)
-	assert_eq(mon.exp, Gen2Experience.MAX_EXP)
+	assert_eq(mon.exp, 1000000, "medium fast's 100 cubed")
+	assert_eq(mon.level_for_exp(), Gen2Experience.MAX_LEVEL)
 
 
 func test_stat_experience_accumulates_across_more_than_one_gain() -> void:

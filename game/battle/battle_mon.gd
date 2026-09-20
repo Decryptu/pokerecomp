@@ -672,8 +672,9 @@ func base_stat_exp_shape() -> Dictionary:
 
 
 ## Adds experience, capped the way the cartridge's own three-byte total is.
+## `GiveExperiencePoints` and `GainExperience` cap at `CalcExpAtLevel MAX_LEVEL`.
 func gain_exp(amount: int) -> void:
-	exp = clampi(exp + amount, 0, Gen2Experience.MAX_EXP)
+	exp = clampi(exp + amount, 0, Gen2Experience.total_exp_at(growth_rate(), Gen2Experience.MAX_LEVEL))
 
 
 ## Adds a level's worth of stat experience, one entry per key in [param gains],
@@ -684,18 +685,13 @@ func gain_stat_exp(gains: Dictionary) -> void:
 		stat_exp[key] = clampi(total, 0, Gen2Stats.MAX_STAT_EXP)
 
 
-## The level [member exp] has actually reached on this species' curve, which is
-## not necessarily [member level]: a caller awards experience first and asks
-## this after, one level at a time, so that a move learned partway up a
-## multi-level jump is offered at the level that actually teaches it.
+## The level [member exp] has reached on this species' curve, asked after an award.
 func level_for_exp() -> int:
 	return Gen2Experience.level_for_exp(growth_rate(), exp)
 
 
-## Raises the level by one and recalculates every stat, the same call
-## [method create] makes and the only other place this happens. Current HP gains
-## the max-HP *difference* rather than refilling: a Pokémon one hit from fainting
-## before the level up is still one hit from fainting after it.
+## One level up with every stat recalculated; current HP gains the max-HP
+## difference rather than refilling.
 func level_up() -> void:
 	if level >= Gen2Experience.MAX_LEVEL:
 		return

@@ -2780,10 +2780,8 @@ func set_exp(pixels: int) -> void:
 	_push_view()
 
 
-## Where the player's Pokémon sits between its current level's threshold and the
-## next, on its growth curve. Recomputed at battle start and whenever
-## [constant Gen2Battle.EXP_GAINED] or [constant Gen2Battle.GREW_LEVEL] moves the
-## number behind it.
+## Where the player's Pokémon sits between its level's threshold and the next,
+## recomputed at battle start and on every award and level.
 func _refresh_exp_bar() -> void:
 	if _battle == null or _battle.player == null:
 		set_exp(0)
@@ -2793,8 +2791,7 @@ func _refresh_exp_bar() -> void:
 	set_exp(Gen2ExpBarAnimation.pixels_for(mon.growth_rate(), mon.level, mon.exp))
 
 
-## What the exp bar is drawing: the animation's pixels while one runs, and the
-## committed count otherwise.
+## The animation's pixels while one runs, and the committed count otherwise.
 func _drawn_exp() -> int:
 	return _exp if _exp_bar == null else _exp_bar.pixels()
 
@@ -6355,13 +6352,19 @@ func _hit_text(event: Dictionary) -> String:
 	return ""
 
 
-## `GainedText`, with `WithExpAllText` inside it on the `wBoostExpByExpAll` pass.
+## `GainedText` with `WithExpAllText` on the `wBoostExpByExpAll` pass and
+## `BoostedText` on a traded learner's; `Text_MonGainedExpPoint` has the second alone.
 func _exp_gained_text(event: Dictionary) -> String:
 	var learner: String = _name_of(int(event["species"]))
+	var boosted: bool = bool(event.get("boosted", false))
 	if _generation() != RomRegistry.GEN1:
-		return "%s gained %d EXP. Points!" % [learner, int(event["amount"])]
+		return "%s gained %s%d EXP. Points!" % [
+			learner, "a boosted " if boosted else "", int(event["amount"])
+		]
 	if bool(event.get("exp_share", false)):
 		return "%s gained\nwith EXP.ALL,%s%d EXP. Points!" % [learner, SCROLL, int(event["amount"])]
+	if boosted:
+		return "%s gained\na boosted%s%d EXP. Points!" % [learner, SCROLL, int(event["amount"])]
 	return "%s gained\n%d EXP. Points!" % [learner, int(event["amount"])]
 
 

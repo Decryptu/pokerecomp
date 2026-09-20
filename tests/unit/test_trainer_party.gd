@@ -123,6 +123,16 @@ func test_a_trainer_classs_whole_party_shares_its_own_dvs() -> void:
 	assert_eq(party.at(1).dvs, 0x9A77)
 
 
+## `LoadEnemyMon`'s `ld a, ATKDEFDV_TRAINER / ld b, SPDSPCDV_TRAINER`: no table,
+## the same $9888 for every class, whatever the record carries.
+func test_a_generation_1_trainers_pokemon_carry_the_fixed_dv_word() -> void:
+	_data.generation = RomRegistry.GEN1
+	var party: Gen2Party = Gen2TrainerParty.build(_data, 1, 0)
+	assert_eq(party.at(0).dvs, Gen1Layout.TRAINER_DVS)
+	assert_eq(Gen2Stats.attack_dv(party.at(0).dvs), 9)
+	assert_eq(Gen2Stats.hp_dv(party.at(0).dvs), 8)
+
+
 func test_a_stored_moves_trainers_pokemon_knows_exactly_what_is_stored() -> void:
 	var party: Gen2Party = Gen2TrainerParty.build(_data, 1, 1)
 	var mon: Gen2BattleMon = party.at(0)

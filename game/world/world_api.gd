@@ -7400,9 +7400,12 @@ func _gen1_safari_box(name: String) -> Dictionary:
 ## `wSafariZoneGateCurScript`'s offset, read off the gate's own dispatch: it is
 ## the one map whose state a routine outside that map writes.
 func gen1_safari_gate_byte() -> int:
-	var gate: Gen2WorldMap = data.world_map(0, Gen1Layout.SAFARI_ZONE_GATE_MAP) \
-		if data != null else null
-	return _gen1_dispatch_byte(gate) if gate != null else -1
+	return _gen1_map_script_byte_of(Gen1Layout.SAFARI_ZONE_GATE_MAP)
+
+
+func _gen1_map_script_byte_of(number: int) -> int:
+	var map: Gen2WorldMap = data.world_map(0, number) if data != null else null
+	return _gen1_dispatch_byte(map) if map != null else -1
 
 
 ## `w<Map>CurScript`'s value for the map stood on, or -1 where the map
@@ -10997,7 +11000,7 @@ func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary
 		if not _gen1_boulder_tried:
 			_gen1_boulder_tried = true
 			return {}
-		if _gen1_boulder_blocked(boulder, landing):
+		if _gen1_boulder_blocked(landing):
 			_gen1_boulder_tried = false
 			return {}
 		return _commit_boulder_push(boulder, landing, direction)
@@ -11009,13 +11012,14 @@ func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary
 
 
 ## `CheckForCollisionWhenPushingBoulder`: the tile two ahead must be passable,
-## must not pair with the one stood on, must not be the stairs and must be empty.
-func _gen1_boulder_blocked(boulder: Gen2WorldObject, landing: Vector2i) -> bool:
+## must not pair with the one stood on (`GetTileTwoStepsInFrontOfPlayer` has put
+## it in `wTileInFrontOfPlayer`), must not be the stairs and must be empty.
+func _gen1_boulder_blocked(landing: Vector2i) -> bool:
 	if collision_permission_at(landing) != Gen2WorldCollision.LAND_TILE:
 		return true
 	if Gen2WorldCollision.gen1_pair_blocked(
 		current_map.tileset, _gen1_tile_drawn_at(player_cell),
-		_gen1_tile_drawn_at(boulder.cell), false
+		_gen1_tile_drawn_at(landing), false
 	):
 		return true
 	if _gen1_tile_drawn_at(landing) == Gen1Layout.BOULDER_STAIRS_TILE:
@@ -11847,6 +11851,15 @@ func _gen1_check_force_bike_or_surf() -> void:
 		return
 	if always_on_bike() or not data.gen1_forces_ride(current_map.number, player_cell):
 		return
+	## Both `w<Map>CurScript` stores sit in front of their own `cp`, so a match
+	## on any map writes B3F's and only B3F's own cell skips B4F's.
+	state.set_gen1_map_script(
+		_gen1_map_script_byte_of(Gen1Layout.SEAFOAM_ISLANDS_B3F), Gen1Layout.SEAFOAM_MOVE_OBJECT
+	)
+	if current_map.number != Gen1Layout.SEAFOAM_ISLANDS_B3F:
+		state.set_gen1_map_script(
+			_gen1_map_script_byte_of(Gen1Layout.SEAFOAM_ISLANDS_B4F), Gen1Layout.SEAFOAM_MOVE_OBJECT
+		)
 	if current_map.number in [
 		Gen1Layout.SEAFOAM_ISLANDS_B3F, Gen1Layout.SEAFOAM_ISLANDS_B4F,
 	]:

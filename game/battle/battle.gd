@@ -2472,9 +2472,8 @@ func _tick_encore(acting: Array, events: Array) -> void:
 		events.append({"type": ENCORE_ENDED, "side": side})
 
 
-## Experience for every enemy Pokémon that fainted this turn. [constant FAINTED]
-## clears the member out of [member _participants] on either side, and
-## `GiveExperiencePoints` returns on `wLinkMode` and `wInBattleTowerBattle`.
+## Experience for every enemy Pokémon that fainted this turn; `GiveExperiencePoints`
+## returns on `wLinkMode` and `wInBattleTowerBattle`.
 func _award_experience(events: Array) -> void:
 	if is_link_battle or in_battle_tower:
 		return
@@ -2487,9 +2486,8 @@ func _award_experience(events: Array) -> void:
 			_give_experience_for(mon(ENEMY), events)
 
 
-## Splits what [param defeated] is worth, then resets the participant set.
-## With an Exp. Share out the block is halved and split twice, among the
-## participants and among the holders, and a Pokémon in both is paid twice.
+## Splits what [param defeated] is worth, then resets the participant set. With
+## an Exp. Share out the block is halved and split twice, a Pokémon in both paid twice.
 func _give_experience_for(defeated: Gen2BattleMon, events: Array) -> void:
 	var participants: Array = (_participants[PLAYER] as Dictionary).keys()
 	var holders: Array = _exp_share_holders()
@@ -2577,20 +2575,32 @@ func _award_share(
 func _award_block(
 	defeated: Gen2BattleMon, block: Dictionary, recipients: Array, by_exp_share: bool, events: Array
 ) -> int:
-	var award: int = _scaled_award(Gen2Experience.award_for(
-		defeated.level, int(block["base_exp"]), is_trainer_battle
-	))
 	var stat_gains: Dictionary = block["stats"]
 	for index: int in recipients:
 		var learner: Gen2BattleMon = party(PLAYER).at(int(index))
 		if learner != null and not learner.is_fainted():
-			_give_experience_to(learner, int(index), award, stat_gains, by_exp_share, events)
-	return award
+			_give_experience_to(learner, int(index), _award_to(learner, defeated, block),
+				stat_gains, by_exp_share, events)
+	return _scaled_award(Gen2Experience.award_for(
+		defeated.level, int(block["base_exp"]), is_trainer_battle
+	))
 
 
-## The one place a registered experience scale is applied, so everything a player
-## means by 2x is downstream. It truncates the way `Gen2Experience` does, with a
-## non-zero award floored at 1 or a 0.5x run would never level at all.
+## `wPlayerID` against `MON_ID`, and `MON_ITEM` against LUCKY_EGG, which no
+## Generation 1 row carries: its byte there is the catch rate.
+func _award_to(learner: Gen2BattleMon, defeated: Gen2BattleMon, block: Dictionary) -> int:
+	return _scaled_award(Gen2Experience.award_for(
+		defeated.level, int(block["base_exp"]), is_trainer_battle, _is_traded(learner),
+		not is_gen1() and learner.item == Gen2Experience.LUCKY_EGG_ITEM
+	))
+
+
+func _is_traded(learner: Gen2BattleMon) -> bool:
+	return player_id >= 0 and learner.ot_id >= 0 and learner.ot_id != player_id
+
+
+## The one place a registered experience scale is applied; a non-zero award is
+## floored at 1 or a 0.5x run would never level at all.
 func _scaled_award(award: int) -> int:
 	var scale: float = Gen2ModHost.experience_scale()
 	if is_equal_approx(scale, 1.0) or award <= 0:
@@ -2599,8 +2609,7 @@ func _scaled_award(award: int) -> int:
 
 
 ## What a won battle owes when nothing simulated the turns that won it: every
-## enemy Pokémon fainted in party order through [method _give_experience_for],
-## with the participant set never growing past whoever is out.
+## enemy Pokémon fainted in party order through [method _give_experience_for].
 func award_win_experience() -> Array:
 	var events: Array = []
 	if data == null or parties.is_empty():
@@ -2616,8 +2625,7 @@ func award_win_experience() -> Array:
 
 
 ## What a capture owes under [method Gen2ModHost.awards_catch_experience]:
-## `PokeBallEffect` awards none, so this is off by default. The same pass a
-## faint takes, with the opponent's HP left where the throw left it.
+## `PokeBallEffect` awards none, so this is off by default.
 func award_capture_experience() -> Array:
 	var events: Array = []
 	if data == null or parties.is_empty():
@@ -2861,8 +2869,7 @@ static func _item_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"item_failed", "reason": reason}
 
 
-## `IsAnyMonHoldingExpShare`: every living party index carrying one, in order. A
-## fainted holder is skipped before the item is looked at, so it splits nothing.
+## `IsAnyMonHoldingExpShare`: every living party index carrying one, in order.
 ## Generation 1's is the bag's EXP.ALL: every living index or none.
 func _exp_share_holders() -> Array:
 	if is_gen1():
@@ -2885,11 +2892,12 @@ func _give_experience_to(
 	events.append({
 		"type": EXP_GAINED, "side": PLAYER, "index": index,
 		"species": learner.species, "amount": award, "exp": learner.exp,
-		# Which pass this came from. The cartridge prints one line either way; this
-		# tells a Pokémon in both passes from one awarded twice otherwise.
+		# Which pass this came from: a Pokémon in both passes is paid twice.
 		"exp_share": by_exp_share,
 		# Neither pass: a BYSTANDER SHARE paid a Pokemon that never fought.
 		"bystander": bystander,
+		# `wStringBuffer2 + 2` and `wGainBoostedExp`: the traded line, and only it.
+		"boosted": _is_traded(learner),
 	})
 
 	learner.gain_stat_exp(stat_gains)
@@ -2902,7 +2910,12 @@ func _give_experience_to(
 	while learner.level < target_level:
 		var old_level: int = learner.level
 		var old_stats: Dictionary = learner.stats.duplicate()
-		learner.level_up()
+		## `.level_loop` raises one level a pass with `LearnLevelMoves` behind
+		## each; `GainExperience` jumps to `CalcLevelFromExperience`'s answer,
+		## says `GrewLevelText` once and runs `LearnMoveFromLevelUp` there alone.
+		var step_to: int = target_level if is_gen1() else old_level + 1
+		while learner.level < step_to:
+			learner.level_up()
 		events.append({
 			"type": GREW_LEVEL, "side": PLAYER, "index": index, "species": learner.species,
 			"old_level": old_level, "new_level": learner.level,
@@ -2910,24 +2923,17 @@ func _give_experience_to(
 		})
 		_offer_moves_learned_at(learner, index, learner.level, events)
 
-	## `LevelUpHappinessMod` sits after `.level_loop`, outside it: an award that
-	## crossed four levels raises happiness once, not four times.
+	## `LevelUpHappinessMod` and the `SmallFarFlagAction SET_FLAG` both sit after
+	## `.level_loop`, once an award; `EvolveAfterBattle` runs on the overworld.
 	if grew:
 		(party_log["grew"] as Array).append(index)
 		_gain_level_happiness(learner)
-		## The `SmallFarFlagAction SET_FLAG` at the end of the same block, which
-		## is what `EvolveAfterBattle` walks the party against once the battle is
-		## over and won. Nothing evolves in here: `ExitBattle` runs the pass on
-		## the overworld, so a Pokemon that levels up and then loses the fight
-		## does not evolve at all.
 		if not _evolvable.has(index):
 			_evolvable.append(index)
 
 
-## `LevelUpHappinessMod`: HAPPINESS_GAINLEVELATHOME when the Pokémon is standing
-## on the landmark it was caught on and HAPPINESS_GAINLEVEL anywhere else. The
-## compare is Crystal's alone; Gold and Silver inline HAPPINESS_GAINLEVEL with no
-## row to reach for, which is also why their table is one row shorter.
+## `LevelUpHappinessMod`: HAPPINESS_GAINLEVELATHOME on the landmark it was
+## caught on, Crystal alone; Gold and Silver inline HAPPINESS_GAINLEVEL.
 func _gain_level_happiness(learner: Gen2BattleMon) -> void:
 	var kind: int = HAPPINESS_GAINLEVEL
 	if Gen2WorldState.is_crystal_profile(data) and landmark != LANDMARK_NONE \

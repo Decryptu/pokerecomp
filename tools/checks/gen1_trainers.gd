@@ -55,6 +55,8 @@ const FIGHT_CLASS: int = 1
 const FIGHT_INDEX: int = 0
 const FIGHT_PARTY: Array = [[11, 19], [11, 23]]
 const FIGHT_BASE_MONEY: int = 15
+## Its RATTATA at `ATKDEFDV_TRAINER`/`SPDSPCDV_TRAINER` through `CalcStat` at level 11.
+const FIGHT_FIRST_STATS: Dictionary = {"hp": 29, "attack": 19}
 const FIGHT_LEAD: int = 1
 const FIGHT_LEAD_LEVEL: int = 50
 const FIGHT_SEED: int = 20260930
@@ -556,6 +558,14 @@ func _a_trainer_is_beaten() -> void:
 	]):
 		return
 	var enemy: Gen2Party = Gen2TrainerParty.build(_r.data, FIGHT_CLASS, FIGHT_INDEX)
+	for member: Gen2BattleMon in enemy.mons:
+		_r.check(member.dvs == Gen1Layout.TRAINER_DVS,
+			"a trainer's species %d carries DVs %04x." % [member.species, member.dvs])
+	for key: String in FIGHT_FIRST_STATS:
+		_r.check(enemy.at(0).unmodified_stat(key) == int(FIGHT_FIRST_STATS[key]),
+			"the first member's %s is %d, wanted %d." % [
+				key, enemy.at(0).unmodified_stat(key), int(FIGHT_FIRST_STATS[key])
+			])
 	var generator := RandomNumberGenerator.new()
 	generator.seed = FIGHT_SEED
 	var battle: Gen2Battle = Gen2Battle.create_parties(

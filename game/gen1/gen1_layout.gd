@@ -385,6 +385,9 @@ const ITEM_POKE_DOLL: int = 0x33
 const ITEM_POKE_FLUTE: int = 0x49
 const ITEM_EXP_ALL: int = 0x4B
 
+## `ATKDEFDV_TRAINER` and `SPDSPCDV_TRAINER`, every trainer Pokemon's DV word.
+const TRAINER_DVS: int = 0x9888
+
 ## `ItemUseXStat`'s `sub X_ATTACK - ATTACK_UP1_EFFECT`, in the move effects' own
 ## stat order, with `SPECIAL_STAGE_TWIN` carrying X SPECIAL's other half, and
 ## then the three that `set` a bit of `wPlayerBattleStatus2` instead.
@@ -1225,6 +1228,8 @@ const FORCED_BIKE_SURF_ROW_SIZE: int = 3
 const FORCED_BIKE_SURF_ROWS: int = 8
 const SEAFOAM_ISLANDS_B3F: int = 0xA1
 const SEAFOAM_ISLANDS_B4F: int = 0xA2
+## `SCRIPT_SEAFOAMISLANDSB3F_MOVE_OBJECT` and B4F's, `CheckForceBikeOrSurf`'s row.
+const SEAFOAM_MOVE_OBJECT: int = 2
 ## `res BIT_ALWAYS_ON_BIKE, [hl]`: bit 5 of `wStatusFlags6`, which only Route 16
 ## Gate 1F's and Route 18 Gate 1F's per-frame scripts open with.
 const ALWAYS_ON_BIKE_BIT: int = 5
@@ -1272,8 +1277,7 @@ const CUT_BLOCK_SWAP_END: int = 0xFF
 ## the Vermilion dock alone.
 const SHORE_TILES: Array[int] = [0x48, 0x32]
 
-## `IsSurfingAllowed`'s Seafoam branch, which nothing reaches yet: only that
-## map's own per-frame script sets either boulder event.
+## `IsSurfingAllowed`'s Seafoam branch and the two events its map script sets.
 const SEAFOAM_B4F_STAIRS := Vector2i(7, 11)
 const SEAFOAM_BOULDER_EVENTS: Array[int] = [2512, 2513]
 
@@ -1693,6 +1697,7 @@ const PUSHED_BOULDER_BIT: int = 7
 ## Bits clear whenever a state body runs: the fall and the sight walk happen outside it.
 const SCRIPT_ZERO_BITS: Dictionary = {
 	"status_flags_3": (1 << ON_DUNGEON_WARP_BIT) | (1 << TALKED_TO_TRAINER_BIT),
+	"status_flags_6": 1 << DUNGEON_WARP_BIT,
 }
 const PIKACHU_SPAWN_SURFING_BIT: int = 6
 const PIKACHU_SPAWN_STARTER_BIT: int = 7
