@@ -16,20 +16,32 @@ an empty body. -->
 
 ## Added
 
-- Leaving and entering a map on Red, Blue and Yellow plays the cartridge's own animations: a warp pad lifts you off the floor and sets you down, a hole swallows the top half of your sprite and drops you onto the floor below, an Escape Rope, Dig or Teleport spins you in place and up, and Fly turns you into the bird that flaps off the screen and glides back in. The white fades, every teleport and fly sound, and the fifty-frame drop through a hole are frame for frame the cartridge's, measured on Red and Yellow.
-- `Gen2WorldTileset.name`, the `TILESET_*` constant's name on every cartridge, and `GameData.world_tileset_named()`, so a mod keyed by tileset reads the same on Gold, whose numbering sits three lower than Crystal's past KANTO. `api_version` 40.
-- `Gen2BattleColors`, the colours a battle is drawn in on either generation, for any renderer a mod registers; `Gen2WorldPalette.overworld_sprite_colors`, `Gen2WorldMap.is_outside()` and `Gen2WorldCollision.gen1_ledge_direction` beside it. `api_version` 39.
-- Every slot a visible-encounter provider is handed carries `chance`, its weight in the roll, a shiny wild on Red, Blue and Yellow is announced with the shine sound, and Yellow's Pikachu is held in `occupied`. `api_version` 38.
+- Using a Potion, a status cure, a Revive or a Rare Candy from the party menu on Red, Blue and Yellow prints the cartridge's own line in the speech box, fills the bar under the Potion sound first, and a Rare Candy shows the level-up stat box. Vitamins, PP restores and refusals print over the list as it stands.
+- A gift Pokemon, a caught Pokemon sent to the box and a move learned over a full set say their Red, Blue and Yellow lines: "Got EEVEE!", the nickname question, "sent to BILL's PC" once Bill has been met, "There's no room" when neither has any, and the Move Deleter's own wording with its swap sound.
+- A Repel wearing off says so, on every cartridge. Before this, the count ran out in silence unless a mod renewed it.
+- A status move that lands on nothing says what its own routine says: "It didn't affect", "already asleep", "already paralyzed", "already poisoned", "already confused", "evaded the attack" or "But it failed!". Every one of them had said "attack missed" or nothing.
 
 ## Changed
 
-- The mod contract is `api_version` 40; both example mods declare it.
+- Trainer Pokemon on Red, Blue and Yellow carry the cartridge's DVs (`$9888`) rather than perfect ones, so a trainer's Pokemon has the HP and stats the cartridge gives it.
+- Gaining several levels in one fight on Red, Blue and Yellow jumps straight to the final level, says "grew to level N" once and offers only that level's moves, which is what the cartridge does.
+- Withdrawing a Pokemon from the PC on Gold, Silver and Crystal restores its HP and clears its status, and depositing one restores its PP.
+- The imported cache is format 149 and is rebuilt on first launch.
 
 ## Fixed
 
-- A Red, Blue or Yellow map numbered a block 0 and it was drawn as the map's border: 118 blocks on Red, the east end of Oak's Lab in Pallet Town among them, stood as tall grass or trees.
-- After a fly, an Escape Rope, Dig, Teleport or a fall through a hole on Red, Blue and Yellow the player faces down on landing, as `ResetPlayerSpriteData` leaves them; a fall had kept the facing you fell in with.
-- A Red, Blue or Yellow battle drawn by a mod's renderer printed its text box in white and black.
+- Thunder Wave, Sing, Stun Spore, Glare and Leech Seed land behind a Substitute on Red, Blue and Yellow, as they do on the cartridge; Glare paralyses a Ghost-type there too.
+- A trainer's Thunder Wave, Sleep Powder or Toxic on Red, Blue and Yellow no longer fails a quarter of the time. That roll is Gold, Silver and Crystal's.
+- Rest on Red, Blue and Yellow no longer resets a bad poisoning's counter, so a Pokemon that was badly poisoned and rested is hurt the way the cartridge hurts it when poisoned again.
+- Seafoam Islands' strong current runs on Red, Blue and Yellow; its B3F script never ran on a frame with no boulder pushed, and the puzzle could not be finished.
+- Pushing a boulder on Red, Blue and Yellow checks the tile two cells ahead, as the cartridge does; the port had checked the boulder's own tile and let a push through where the cartridge refuses one.
+- Yellow's Underground Path trade evolves the MACHOKE into MACHAMP, and a link trade records both the species that arrived and what it became.
+- Walking out of a door or a warp on Red, Blue and Yellow no longer spends three quiet steps: only a fight arms the wild cooldown, and a step onto a map through a warp counts neither for poison nor for an encounter, on any cartridge.
+- The Pokemon Center on Red, Blue and Yellow asks "Shall we heal your POKéMON?" on the first visit only, then greets you with the yes/no box.
+- A vending machine on Red, Blue and Yellow checks for ¥200 whatever the drink costs and a purchase that would go below zero leaves ¥0, both as the cartridge does.
+- Yellow's VAPOREON learns HAZE at level 42 and never MIST, as on the cartridge.
+- The last poisoned party member fainting on the overworld on Red, Blue and Yellow is silent, as on the cartridge.
+- The cartridge's battle level-up box on Red, Blue and Yellow shows SPECIAL, where the port had shown SPCL.ATK and SPCL.DEF.
 
 ## Which file
 
