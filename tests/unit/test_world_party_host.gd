@@ -2219,6 +2219,32 @@ func test_the_last_member_fainting_to_poison_whites_the_player_out() -> void:
 	assert_true(bool(pass_result["whiteout"]))
 
 
+## `ApplyOutOfBattlePoisonDamage`'s `.countPoisonedLoop` reads every status
+## byte behind the damage, and the faint has just cleared its own, so the one
+## poisoned member fainting is silent and a second one still poisoned is not.
+func test_generation_1_sounds_the_poison_only_while_somebody_stays_poisoned() -> void:
+	_data.generation = RomRegistry.GEN1
+	var first: Gen2SaveMon = _save.party[0]
+	first.is_egg = false
+	first.hp = 1
+	first.status = Gen2Status.POISON
+	var second: Gen2SaveMon = Gen2SaveMon.new()
+	second.species = first.species
+	second.level = first.level
+	second.hp = 9
+	second.status = Gen2Status.NONE
+	_save.party.append(second)
+	var quiet: Dictionary = Gen2WorldPartyHost.apply_poison_step(_data, _save)
+	assert_eq(Array(quiet["fainted"]), [0])
+	assert_false(bool(quiet["sfx"]), "the lone faint sounds nothing")
+	first.hp = 1
+	first.status = Gen2Status.POISON
+	second.status = Gen2Status.POISON
+	var loud: Dictionary = Gen2WorldPartyHost.apply_poison_step(_data, _save)
+	assert_eq(Array(loud["fainted"]), [0])
+	assert_true(bool(loud["sfx"]), "the survivor's own status byte")
+
+
 ## `CheckPlayerPartyForFitMon` ORs HP words and never asks about eggs, and
 ## `GiveEgg` zeroes an egg's HP, so an egg cannot keep a fainted party standing.
 func test_an_egg_is_not_a_fit_mon() -> void:

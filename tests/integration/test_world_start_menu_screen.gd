@@ -2279,11 +2279,14 @@ func repel_to_use(context: Dictionary) -> int:
 	await _open_world()
 	var world: Gen2WorldAPI = _world_screen._world
 
-	## An empty bag: the provider answers nothing and the step rolls as it did.
+	## An empty bag: the provider answers nothing and the cartridge's line prints.
 	world.state.apply_changes({}, {}, {"repel_steps": 1})
 	world.state.count_step()
-	assert_false(_world_screen._offer_repel_renewal())
+	assert_true(_world_screen._offer_repel_renewal())
 	assert_false(world.repel_expired(), "answered and spent, with no question asked")
+	assert_null(_world_screen._service_host)
+	assert_true(_world_screen._field_move_text, "`_RepelWoreOffText` in the map's own box")
+	_world_screen._acknowledge_field_move_text()
 
 	world.state.apply_changes({}, {}, {"items": {REPEL: 2}, "repel_steps": 1})
 	world.state.count_step()
@@ -2295,16 +2298,23 @@ func repel_to_use(context: Dictionary) -> int:
 	Gen2ModHost.reset()
 
 
-## Nothing at all without a provider, which is every unmodded game.
-func test_a_repel_running_out_asks_nothing_with_no_provider_registered() -> void:
+## `RepelWoreOffScript` without a provider, which is every unmodded game: the
+## step's own box says `_RepelWoreOffText` and nothing is spent.
+func test_a_repel_running_out_prints_the_cartridges_line_with_no_provider_registered() -> void:
 	Gen2ModHost.reset()
 	await _open_world()
 	var world: Gen2WorldAPI = _world_screen._world
 	world.state.apply_changes({}, {}, {"items": {REPEL: 2}, "repel_steps": 1})
 	world.state.count_step()
-	assert_false(_world_screen._offer_repel_renewal())
+	assert_true(_world_screen._offer_repel_renewal())
 	assert_null(_world_screen._service_host)
+	assert_true(_world_screen._field_move_text)
+	assert_eq(
+		"\n".join(_world_screen._text_box.text_lines()), Gen2WorldScreen.REPEL_WORE_OFF_TEXT
+	)
+	assert_false(world.repel_expired(), "spent by the line")
 	assert_eq(world.state.item_quantity(REPEL), 2)
+	_world_screen._acknowledge_field_move_text()
 
 
 ## `SetUpMenuItems` already fills the box: eight rows reach the last row of the

@@ -58,8 +58,9 @@ static func fill_moves(
 
 
 ## The moves offered on reaching exactly [param level], in the order the list
-## carries them. Empty for a level at which nothing is learned.
-static func moves_learned_at(learnset: Array, level: int) -> Array:
+## carries them. [param first_only] is `LearnMoveFromLevelUp`, which returns
+## behind the first row: Yellow's VAPOREON lists HAZE and MIST at 42 and learns HAZE.
+static func moves_learned_at(learnset: Array, level: int, first_only: bool = false) -> Array:
 	var out: Array = []
 
 	for entry: Dictionary in learnset:
@@ -68,5 +69,7 @@ static func moves_learned_at(learnset: Array, level: int) -> Array:
 		var move: int = int(entry["move"])
 		if not out.has(move):
 			out.append(move)
+		if first_only:
+			break
 
 	return out

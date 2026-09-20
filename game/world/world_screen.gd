@@ -251,6 +251,8 @@ var _magnet_train_host: Gen2MagnetTrainScreen = null
 ## `TradeAnimation` and the script results it stands in front of.
 var _trade_anim_host: Gen2TradeAnimationScreen = null
 var _trade_anim_results: Array = []
+## The evolution an in-game trade wrote, played once its movie closes.
+var _trade_anim_evolution: Dictionary = {}
 ## `GiveANickname_YesNo`'s screen, standing between `givepoke` staging the
 ## request and the party host applying it.
 var _nickname_host: Gen2NicknamePromptScreen = null
@@ -284,11 +286,11 @@ var _card_flip_host: Gen2CardFlipScreen = null
 ## What `DayCareManOutside` left in wScriptVar, held between the screen finishing
 ## and the request completing. -1 while no routine has written one.
 var _day_care_script_value: int = -1
-## The renewal question a Repel running out asks, which the cartridge has no
-## line for: Gen II never offers one. Authored here beside the save menu's own
-## four, and the item is the one a registered provider chose rather than the one
-## that wore off.
+## The renewal question a registered provider asks in `RepelWoreOffScript`'s
+## place; the cartridge has no such line, and the item is the provider's choice.
 const REPEL_RENEWAL_TEXT: String = "REPEL wore off!\nUse a %s?"
+## `_RepelWoreOffText`, spelled the same in `common_1.asm` and `text_4.asm`.
+const REPEL_WORE_OFF_TEXT: String = "REPEL's effect\nwore off."
 
 ## Whether a field-move message is on screen waiting for its acknowledge. The
 ## world is idle while it is, the same way a script text pause holds it.
@@ -1643,8 +1645,9 @@ func _settle_unattended_request() -> StringName:
 	if results.is_empty():
 		return &"none"
 	var summary: Dictionary = settled.get("transaction", {})
-	if bool(summary.get("accepted", false)) \
-		and _open_trade_animation(summary.get("animation", {}), results):
+	if bool(summary.get("accepted", false)) and _open_trade_animation(
+		summary.get("animation", {}), results, summary.get("evolution_plan", {})
+	):
 		return &"break"
 	_show_script_results(results)
 	return &"return"
@@ -1869,7 +1872,8 @@ func _complete_player_step(movement: Dictionary) -> bool:
 		_pending_dungeon_fall = true
 		_start_map_fade()
 		return true
-	return _after_map_settled()
+	## `NewBattle` refuses a step the game is controlling, which a Generation 1 hop is.
+	return _after_map_settled(not (_world.is_gen1() and kind == &"ledge_hop"))
 
 
 ## `StepHappiness`, reached every 256 steps and acting on every second visit,
@@ -2194,7 +2198,9 @@ func _open_hatch(hatches: Array, save: Gen2SaveData) -> void:
 
 ## `RunTradeAnimScript`. [param results] are shown when the movie ends. False
 ## when the cache carries no trade art, which leaves them to the caller.
-func _open_trade_animation(context: Dictionary, results: Array = []) -> bool:
+func _open_trade_animation(
+	context: Dictionary, results: Array = [], evolution_plan: Dictionary = {}
+) -> bool:
 	if _trade_anim_host != null or _data == null or context.is_empty():
 		return false
 	var host := Gen2TradeAnimationScreen.new()
@@ -2203,6 +2209,7 @@ func _open_trade_animation(context: Dictionary, results: Array = []) -> bool:
 	_connect_trade_animation(host)
 	host.z_index = 40
 	_trade_anim_results = results.duplicate(true)
+	_trade_anim_evolution = evolution_plan.duplicate(true)
 	_trade_anim_host = host
 	_screen.display(host)
 	if _trade_anim_host == null:
@@ -2269,9 +2276,16 @@ func _on_trade_animation_closed() -> void:
 		Gen2Screen.drop(host)
 	var results: Array = _trade_anim_results
 	_trade_anim_results = []
+	var plan: Dictionary = _trade_anim_evolution
+	_trade_anim_evolution = {}
 	if _renderer != null:
 		_renderer.refresh()
 	_refresh_labels()
+	## `InGameTrade_CheckForTradeEvo` between the movie and `TradedForText`.
+	if not plan.is_empty():
+		_evolution_transaction = false
+		_open_evolution([plan], null, _show_script_results.bind(results))
+		return
 	if not results.is_empty():
 		_show_script_results(results)
 	_resume_link_after_animation()
@@ -3009,7 +3023,7 @@ func preview_move_deleter() -> void:
 ## an ordinary step reaches on the frame it finished: the sight lines, the map's
 ## scripts, the two phone paths, the contest timer, and the wild roll behind all
 ## of them.
-func _after_map_settled() -> bool:
+func _after_map_settled(stepped: bool = true) -> bool:
 	_refresh_labels()
 	## `RunNPCMovementScript`'s first pass after a warp: the player on a door
 	## tile walks down out of it on simulated input, which is a step the
@@ -3054,6 +3068,10 @@ func _after_map_settled() -> bool:
 		_show_script_results(contest_over)
 		return true
 	_show_script_results([])
+	## `EnterMap` runs `DisableEvents` behind every entry but a connection, so a
+	## warp's landing pass reaches neither `CountStep` nor `RandomEncounter`.
+	if not stepped:
+		return true
 	## `CountStep`'s Repel countdown reaching zero, offered before
 	## `RandomEncounter` and taking the step's own player event, so nothing is met
 	## underneath the question.
@@ -3081,26 +3099,30 @@ func _after_map_settled() -> bool:
 			"values": encounter["values"],
 			"encounter": encounter.duplicate(true),
 		})
+		return true
+	## `TryDoWildEncounter`'s `.lastRepelStep`; a Generation 2 step offered it above.
+	_offer_repel_renewal()
 	return true
 
 
-## The renewal offer a spent Repel owes, held until a step nothing else owns
-## can spend it; nothing without a registered provider.
+## `RepelWoreOffScript`'s line, held until a step nothing else owns can print
+## it, or the renewal question a registered provider asks in its place.
 func _offer_repel_renewal() -> bool:
 	if _world == null or _data == null or not _world.repel_expired():
 		return false
-	## A Repel used by hand while the offer waited has already answered it.
+	## A Repel used by hand while the line waited has already answered it.
 	if _world.repel_steps() > 0:
 		_world.clear_repel_expired()
+		return false
+	if _service_host != null or _overlay_open() or _field_move_text:
 		return false
 	var item: int = Gen2ModHost.instance().repel_renewal_item(
 		_world.state.items(), Gen2WorldPartyHost.item_effects(_data)["repel"]
 	)
 	if item <= 0:
 		_world.clear_repel_expired()
-		return false
-	if _service_host != null or _overlay_open() or _field_move_text:
-		return false
+		_show_player_event(PackedStringArray([REPEL_WORE_OFF_TEXT]), Callable())
+		return true
 	var repel: String = _data.item_name(item)
 	if not _open_host_prompt(REPEL_RENEWAL_TEXT % (repel if not repel.is_empty() else "REPEL")):
 		return false
@@ -3188,7 +3210,7 @@ func _advance_gen1_warp() -> void:
 	elif frame >= lcd_on + GEN1_WARP_LIVE_AFTER_LCD:
 		_map_fade = {}
 		_apply_map_fade_step()
-		_after_map_settled()
+		_after_map_settled(false)
 		return
 	_apply_gen1_warp_frame()
 
@@ -3341,7 +3363,7 @@ func _finish_gen1_map_anim(anim: Dictionary) -> void:
 		_renderer.refresh()
 	_refresh_labels()
 	if StringName(anim["kind"]) in [&"pad", &"hole"]:
-		_after_map_settled()
+		_after_map_settled(false)
 
 
 ## `GetWarpSFX`, off `wPlayerTileCollision`. Generation 1 has no such table:
@@ -3389,7 +3411,7 @@ func _advance_map_fade() -> void:
 	_apply_map_fade_step()
 	## `EnterMap` runs the map's own scripts once the setup script has finished,
 	## which is the frame the fade lands on.
-	_after_map_settled()
+	_after_map_settled(false)
 
 
 ## The palette order this step of the fade draws with. `FillWhiteBGColor` is the
@@ -3504,8 +3526,11 @@ func _bug_contest_placings_text(judged: Dictionary) -> String:
 ## the screen is the one place that can answer it.
 func _repel_lead_level() -> int:
 	var save: Gen2SaveData = _active_party_save()
-	if save == null:
+	if save == null or save.party.is_empty():
 		return -1
+	## `TryDoWildEncounter` reads `wPartyMon1Level` whatever its HP says.
+	if _world != null and _world.is_gen1():
+		return save.party[0].level
 	for mon: Gen2SaveMon in save.party:
 		if mon.hp > 0:
 			return mon.level
@@ -6104,6 +6129,7 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 		## before a registered policy's experience exists. The party the battle
 		## synced back carries it, so this is where it reaches disk.
 		_persist_after_battle(fought_save)
+	_world.gen1_end_of_battle()
 	var resumed: Array = _world.complete_runtime_request(result)
 	## `AllPokemonFainted`: one `RunMapScript` under LOST_BATTLE, then `HandleBlackOut`.
 	if _world.gen1_blackout_due(fought_save, StringName(result.get("outcome", &""))):
@@ -6273,7 +6299,11 @@ func _open_evolution(plans: Array, save: Gen2SaveData, after: Callable) -> void:
 ## `SetSeenAndCaughtMon` and `UpdateUnownDex` are here rather than in the screen:
 ## the screen draws, the world owns the dex and the party.
 func _on_evolution_resolved(plan: Dictionary, canceled: bool) -> void:
-	if canceled or _evolution_save == null or _data == null:
+	if canceled or _data == null or _world == null or _world.state == null:
+		return
+	## A trade's row is already written; the movie's own write is the dex flag.
+	if _evolution_save == null:
+		_world.state.set_species_caught(int(plan.get("new_species", 0)))
 		return
 	var index: int = int(plan.get("index", -1))
 	if index < 0 or index >= _evolution_save.party.size() or _world == null:

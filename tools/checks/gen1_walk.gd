@@ -223,6 +223,7 @@ const VENDING_MACHINES: int = 3
 ## `VendingPrices`: FRESH_WATER, SODA_POP and LEMONADE at 200, 300 and 350.
 const VENDING_PRICES: Array = [[0x3C, 200], [0x3D, 300], [0x3E, 350]]
 const VENDING_PURSE: int = 1000
+const VENDING_SHORT_PURSE: int = 250
 
 ## `GameCornerPrizeRoom_Object`'s three vendors, read from below, and
 ## `PrizeDifferentMenuPtrs`' lists as [name, cost, level]. All three cartridges
@@ -398,6 +399,10 @@ const TRADE_ROW: int = 0
 ## Any species the row does not ask for, which is TRADETEXT_WRONG_MON.
 const TRADE_WRONG_SPECIES: int = 25
 const TRADE_PARTY_SLOT: int = 2
+const TRADE_ARRIVAL_LEVEL: int = 20
+const TRADE_EVOLUTIONS: Dictionary = {
+	RomRegistry.RED: [], RomRegistry.BLUE: [], RomRegistry.YELLOW: ["MACHOKE>MACHAMP"],
+}
 
 ## `RedsHouse2F`'s SNES and Viridian City's own hidden POTION.
 const REDS_HOUSE_2F: int = 0x26
@@ -491,6 +496,7 @@ func _one_game() -> void:
 	_check_the_vending_machine()
 	_check_the_prize_counter()
 	_check_a_trade()
+	_check_every_trade_arrives()
 	_check_the_magikarp_salesman()
 	_check_the_museum_ticket()
 	_check_the_coin_clerks()
@@ -571,6 +577,21 @@ func _check_the_nurse_heals() -> void:
 	world.run_event_queue(true)
 	if not _r.check(world.script_input_waiting(), "the nurse asked nothing."):
 		return
+	_r.check(
+		String(world.pending_script_input().get("text", ""))
+			== _r.data.special_text("pokecenter", "shall_we_heal"),
+		"the first visit was not asked `ShallWeHealYourPokemonText`."
+	)
+	world.choose_script_input(1)
+	world.run_event_queue(true)
+	_r.check(not world.script_busy(), "NO did not end on the farewell.")
+	## `BIT_USED_POKECENTER` stands now, so the question opens over the welcome.
+	world.interact()
+	_r.check(
+		world.script_input_waiting() and String(world.pending_script_input().get("text", ""))
+			== _r.data.special_text("pokecenter", "welcome"),
+		"the second visit did not ask over the welcome."
+	)
 	world.choose_script_input(0)
 	world.run_event_queue(true)
 	var request: Dictionary = world.pending_runtime_request()
@@ -1498,12 +1519,24 @@ func _check_the_vending_machine() -> void:
 			Gen2WorldMartHost.MONEY_ACCOUNT
 		)]
 	)
-	## `HasEnoughMoney` refuses before `GiveItem` does.
+	## `HasEnoughMoney` refuses before `GiveItem` does, against ¥200 whatever
+	## the row costs, and `SubBCD`'s borrow leaves ¥0 behind a dearer drink.
 	world.state.apply_changes({}, {}, {"money": {Gen2WorldMartHost.MONEY_ACCOUNT: 0}})
 	_r.check(
 		StringName(Gen2WorldMartHost.vend(world, null, drink, false).get("reason", &""))
 			== &"insufficient_money",
 		"an empty purse bought a drink."
+	)
+	var dearest: Dictionary = rows[rows.size() - 1]
+	world.state.apply_changes({}, {}, {"money": {Gen2WorldMartHost.MONEY_ACCOUNT: VENDING_SHORT_PURSE}})
+	_r.check(
+		bool(Gen2WorldMartHost.vend(world, null, dearest, false).get("ok", false))
+			and world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == 0
+			and world.state.item_quantity(int(dearest["item"])) == 1,
+		"¥%d did not buy the ¥%d drink for everything: ¥%d left." % [
+			VENDING_SHORT_PURSE, int(dearest["price"]),
+			world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
+		]
 	)
 	world.complete_runtime_request({"ok": true})
 	_r.check(not world.script_busy(), "the machine never closed.")
@@ -2162,6 +2195,58 @@ func _walk_the_swap(wanted: int) -> void:
 	var again: String = _trade_offer(world)
 	_r.check(again == _trade_text("after_"), "a done trade said %s." % [again])
 	_r.note("gen1 walk one in-game trade, both refusals and a wrong species")
+
+
+## `InGameTrade_CheckForTradeEvo` over every `TradeMons` row: what arrives is
+## the row's own species, but for Yellow's MACHOKE, which `TryEvolvingMon` makes
+## a MACHAMP behind the movie with its dex flag and its nickname kept.
+func _check_every_trade_arrives() -> void:
+	var world: Gen2WorldAPI = _facing_up(ROUTE_11_GATE_2F, TRADE_YOUNGSTER)
+	if world == null:
+		return
+	var evolved: Array[String] = []
+	for row: int in _r.data.world_trade_count():
+		var trade: Dictionary = _r.data.world_trade(row)
+		var wanted: int = int(trade.get("requested_species", 0))
+		var offered: int = int(trade.get("offered_species", 0))
+		var save: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
+			_r.data.id, _r.data.sha1, 1, Gen2Party.create([Gen2BattleMon.create(
+				_r.data, wanted, TRADE_ARRIVAL_LEVEL, _r.data.moves_at_level(wanted, TRADE_ARRIVAL_LEVEL)
+			)]), "RED"
+		)
+		var applied: Dictionary = Gen2WorldPartyHost._apply_trade_request(
+			world, save, {"values": {"trade_id": row, "party_index": 0}}, {}, RandomNumberGenerator.new()
+		)
+		if not _r.check(bool(applied.get("ok", false)), "trade %d was refused: %s" % [row, applied]):
+			continue
+		var arrived: Gen2SaveMon = save.party[0]
+		var plan: Dictionary = (applied["summary"] as Dictionary).get("evolution_plan", {})
+		var target: int = offered
+		for evolution: Dictionary in _r.data.evolutions(offered):
+			if int(evolution.get("method", 0)) == Gen2Layout.EVOLVE_TRADE \
+				and Gen1Layout.trade_evolves(
+					_r.data.id, offered, String(_r.data.species(offered).get("name", ""))
+				):
+				target = int(evolution.get("target", 0))
+		_r.check(
+			arrived.species == target and plan.is_empty() == (target == offered)
+				and int(applied.get("register_caught", 0)) == offered
+				and arrived.nickname == String(trade.get("nickname", "")),
+			"trade %d: species %d arrived as %d with plan %s, expected %d." % [
+				row, offered, arrived.species, plan, target,
+			]
+		)
+		if target != offered:
+			evolved.append("%s>%s" % [
+				_r.data.species(offered).get("name", ""), _r.data.species(target).get("name", ""),
+			])
+	_r.check(
+		evolved == TRADE_EVOLUTIONS[_r.game_id],
+		"the trades that evolve are %s, not %s." % [evolved, TRADE_EVOLUTIONS[_r.game_id]]
+	)
+	_r.note("gen1 walk %d trade rows, %d evolving on arrival" % [
+		_r.data.world_trade_count(), evolved.size(),
+	])
 
 
 ## The question the youngster opens with, on a world that may already carry the

@@ -428,6 +428,8 @@ static func commit_link_trade(
 	var given_species: int = given.species
 	candidate.party.remove_at(offered_slot)
 	candidate.party.append(received)
+	## `AddTempmonToParty` registers the species that arrived, `EvolvePokemon` the new one.
+	var arrived: int = received.species
 	var evolution: Dictionary = {}
 	var plan: Dictionary = {}
 	if not received.is_egg:
@@ -441,7 +443,7 @@ static func commit_link_trade(
 				evolution = apply_evolution(world.data, received, row)
 
 	var before: Gen2WorldSnapshot = world.snapshot()
-	_register_caught(world, received.species)
+	_register_caught(world, arrived)
 	_register_unown(world, _unown_form(
 		received.species, received.dvs, {"destination": &"party"}
 	))
@@ -1155,12 +1157,10 @@ static func gift_destination(save: Gen2SaveData) -> StringName:
 
 
 ## `DoEggStep`, spent [param times] over. Each pass walks the party from the
-## front taking one hatch cycle off every egg, and stops on the first egg whose
-## counter reaches zero, so an egg behind that one keeps its cycle for that
-## step. Answers the party index of the egg that is ready to hatch, or -1.
-## The counter lives in the happiness byte, which is what `GiveEgg` wrote and
-## what `HatchEggs` reads; [method apply_step_happiness] skips eggs for the same
-## reason.
+## front taking one hatch cycle off every egg and stops on the first whose
+## counter reaches zero, so an egg behind it keeps its cycle for that step.
+## Answers the party index of the egg ready to hatch, or -1. The counter is the
+## happiness byte `GiveEgg` wrote, which is why [method apply_step_happiness] skips eggs.
 static func apply_egg_steps(save: Gen2SaveData, times: int = 1) -> int:
 	if save == null or times <= 0:
 		return -1
@@ -1214,12 +1214,14 @@ static func apply_poison_step(data: GameData, save: Gen2SaveData) -> Dictionary:
 		fainted.append(index)
 	out["damaged"] = damaged
 	out["fainted"] = fainted
-	if fainted.is_empty():
-		out["sfx"] = not damaged.is_empty()
-		return out
 	## `.Script_MonFaintedToPoison` opens with `.PlayPoisonSFX` whatever the
-	## flags were, so a faint plays the same sound a survivor does.
-	out["sfx"] = true
+	## flags were, so a faint plays the same sound a survivor does. Generation
+	## 1's `.countPoisonedLoop` reads every status byte behind the damage, a
+	## member the point finished having lost its own, so a lone faint is silent.
+	out["sfx"] = _any_poisoned(save) if data.generation == RomRegistry.GEN1 \
+		else not damaged.is_empty() or not fainted.is_empty()
+	if fainted.is_empty():
+		return out
 	var texts: PackedStringArray = PackedStringArray()
 	for index: int in fainted:
 		var mon: Gen2SaveMon = save.party[index] as Gen2SaveMon
@@ -1236,6 +1238,13 @@ static func apply_poison_step(data: GameData, save: Gen2SaveData) -> Dictionary:
 	out["texts"] = texts
 	out["whiteout"] = not party_has_fit_mon(save)
 	return out
+
+
+static func _any_poisoned(save: Gen2SaveData) -> bool:
+	for mon: Gen2SaveMon in save.party:
+		if mon != null and Gen2Status.has(mon.status, Gen2Status.POISON):
+			return true
+	return false
 
 
 ## `_PoisonFaintText`, whose `wStringBuffer3` is the nickname `GetPartyNickname`
@@ -1289,12 +1298,10 @@ static func whiteout(
 
 
 ## `ContestDropOffMons` past its fainted-lead branch: the party masked to its lead
-## for the length of the Bug Catching Contest. The cartridge drops `wPartyCount` to
-## 1 and writes a terminator over the second species byte, leaving the members in
-## `wPartyMon`; nothing here counts a party by a terminator, so the masked members
-## move to [member Gen2SaveData.contest_stashed_party] instead and the stashed
-## species byte stays as the world state's own. Answers the species
-## `wBugContestSecondPartySpecies` takes, or 0 when the party was one long already.
+## for the Bug Catching Contest. The cartridge drops `wPartyCount` to 1 and writes
+## a terminator over the second species byte; nothing here counts a party by a
+## terminator, so the masked members move to [member Gen2SaveData.contest_stashed_party].
+## Answers the species `wBugContestSecondPartySpecies` takes, or 0 for a party of one.
 static func contest_drop_off_mons(save: Gen2SaveData) -> int:
 	if save == null or save.party.size() <= 1:
 		return 0
@@ -1513,12 +1520,10 @@ static func _fills_its_box(save: Gen2SaveData, destination: Dictionary) -> bool:
 
 
 ## `CheckPartyFullAfterContest`, which takes home what the Bug Catching Contest
-## caught. `wContestMon` is already a party struct, so the party branch is a copy
-## and the box branch an `InsertPokemonIntoBox`, each behind its own
-## `GiveANickname_YesNo`, and `SetCaughtData` is overwritten with
-## LANDMARK_NATIONAL_PARK. Three things a reading gets wrong: `.BoxFull` writes
-## nothing and still answers BUGCONTEST_BOXED_MON, losing the catch; the box
-## branch prints no "sent to BILL's PC"; and only that branch keeps `wContestMon`.
+## caught: a party copy or an `InsertPokemonIntoBox`, each behind its own
+## `GiveANickname_YesNo`, with `SetCaughtData` overwritten to LANDMARK_NATIONAL_PARK.
+## `.BoxFull` writes nothing and still answers BUGCONTEST_BOXED_MON, losing the
+## catch; the box branch prints no "sent to BILL's PC" and alone keeps `wContestMon`.
 static func _apply_contest_mon(
 	world: Gen2WorldAPI,
 	candidate: Gen2SaveData,
@@ -1581,11 +1586,9 @@ static func _apply_contest_mon(
 
 ## `InitNickname`, which `PokeBallEffect` runs once the row is already in the
 ## party or the box: `NamingScreen` writes into `wPartyMonNicknames` or
-## `sBoxMonNicknames` rather than into the struct the catch built, so the rename
-## is its own write and not part of [method capture_wild]'s transaction.
-## [param destination] is that method's own answer. Nothing is written when the
-## player kept the species name, which is what NO and an empty entry both leave
-## in `wStringBuffer1`.
+## `sBoxMonNicknames`, so the rename is its own write and not part of
+## [method capture_wild]'s transaction, whose answer [param destination] is. NO
+## and an empty entry both leave the species name, and neither writes anything.
 static func name_captured_mon(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -1852,9 +1855,16 @@ static func _apply_trade_request(
 	## is why `DoNPCTrade` fills the row through `Trade_GetAttributeOfLastPartymon`.
 	candidate.party.remove_at(requested_index)
 	candidate.party.append(received)
+	## `InGameTrade_CheckForTradeEvo`: Yellow's MACHOKE leaves the Underground Path a MACHAMP.
+	var animation: Dictionary = trade_animation_context(
+		world.data, requested, received, candidate.player_name,
+		String(trade.get("ot_name", "")), Gen2LinkSession.LINK_TRADECENTER
+	)
+	var arrived: int = received.species
+	var plan: Dictionary = _gen1_npc_trade_evolution(world.data, received, candidate.party.size() - 1)
 	return {
 		"ok": true, "accepted": true, "script_value": 1,
-		"register_caught": received.species,
+		"register_caught": arrived,
 		## The append is the PARTYMON `GeneratePartyMonStats` registers.
 		"register_unown": _unown_form(
 			received.species, received.dvs, {"destination": &"party"}
@@ -1867,12 +1877,26 @@ static func _apply_trade_request(
 			"received_species": received.species,
 			## `DoNPCTrade` fills the trade buffers and `.TradeAnimation` runs
 			## straight off them.
-			"animation": trade_animation_context(
-				world.data, requested, received, candidate.player_name,
-				String(trade.get("ot_name", "")), Gen2LinkSession.LINK_TRADECENTER
-			),
+			"animation": animation,
+			"evolution_plan": plan,
 		},
 	}
+
+
+## `TryEvolvingMon` under LINK_STATE_TRADING, written here as a link trade's is.
+static func _gen1_npc_trade_evolution(data: GameData, received: Gen2SaveMon, index: int) -> Dictionary:
+	if data.generation != RomRegistry.GEN1 or not Gen1Layout.trade_evolves(
+		data.id, received.species, String(data.species(received.species).get("name", ""))
+	):
+		return {}
+	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, received)
+	if battle_mon == null:
+		return {}
+	var row: Dictionary = Gen2Evolution.trade_evolution(data, battle_mon)
+	if row.is_empty():
+		return {}
+	var plan: Dictionary = _trade_evolution_plan(data, received, index, row)
+	return plan if not apply_evolution(data, received, row).is_empty() else {}
 
 ## `AddPartyMon`'s `.registerpokedex`, which an egg never reaches: the source
 ## checks `cp EGG` first and jumps past `SetSeenAndCaughtMon`, so a Pokemon is
@@ -2782,13 +2806,11 @@ static func _love_ball(data: GameData, catch_rate: int, case: Dictionary) -> int
 	return _ball_shift(catch_rate, 3) if wild_gender == player_gender else catch_rate
 
 
-## The health term, as the cartridge's own bytes rather than as arithmetic that
-## happens to agree with them. Both operands are shifted right twice only when
-## `3 * max HP` does not fit in one byte, and everything after that is a byte:
-## `ld b, e` keeps the low byte of the divisor, `sub c` wraps, and `hQuotient + 3`
-## is the low byte of the quotient. Above 341 max HP the shifted divisor no longer
-## fits either, which is `docs/bugs_and_glitches.md`'s catch-rate break, and all
-## three truncations are what make it break.
+## The health term, as the cartridge's own bytes. Both operands are shifted
+## right twice only when `3 * max HP` does not fit in one byte, and everything
+## after that is a byte: `ld b, e` keeps the low byte of the divisor, `sub c`
+## wraps, and `hQuotient + 3` is the low byte of the quotient. Above 341 max HP
+## the shifted divisor no longer fits either, `docs/bugs_and_glitches.md`'s catch-rate break.
 static func _source_hp_catch_rate(max_hp: int, current_hp: int, catch_rate: int) -> int:
 	var three_max: int = 3 * max_hp
 	var two_current: int = 2 * current_hp

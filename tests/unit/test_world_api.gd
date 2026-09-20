@@ -10173,6 +10173,55 @@ func test_gen1_ledge_hop_crosses_the_ledge_tile() -> void:
 	assert_eq(StringName(hop.get("kind", &"")), &"ledge_hop")
 	assert_eq(world.player_cell, Vector2i(1, 5))
 	assert_eq(StringName(world.forced_movement().get("kind", &"")), &"none")
+	assert_eq(
+		world.state.poison_step_count(), 0,
+		"`.doneStepCounting` skips the counter under the hop's simulated presses"
+	)
+	RomCache.clear(_gen1_directory())
+
+
+## `EnterMap` writes `wNumberOfNoRandomBattleStepsLeft` only under the bit
+## `EndOfBattle` sets, so a door costs no quiet steps, a fight's reload three,
+## and a door taken inside those three starts them again.
+func test_gen1_only_a_fight_arms_the_wild_encounter_cooldown() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 2))
+	assert_eq(world.state.wild_encounter_cooldown(), 0, "opening a map arms nothing")
+	world.player_cell = Vector2i(1, 1)
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	assert_true(bool(world.try_warp().get("ok", false)))
+	assert_eq(world.state.wild_encounter_cooldown(), 0, "and neither does a door")
+	world.gen1_end_of_battle()
+	assert_eq(world.state.wild_encounter_cooldown(), Gen1Layout.WILD_ENCOUNTER_COOLDOWN_STEPS)
+	assert_true(world.state.consume_wild_encounter_cooldown())
+	assert_true(bool(world.try_warp().get("ok", false)), "back out through LAST_MAP")
+	assert_eq(
+		world.state.wild_encounter_cooldown(), Gen1Layout.WILD_ENCOUNTER_COOLDOWN_STEPS,
+		"a door under the bit re-arms the count"
+	)
+	world.state.set_wild_encounter_cooldown(0)
+	assert_true(world.reload_current_map()["ok"])
+	assert_eq(world.state.wild_encounter_cooldown(), Gen1Layout.WILD_ENCOUNTER_COOLDOWN_STEPS)
+	RomCache.clear(_gen1_directory())
+
+
+## `TryDoWildEncounter` counts the Repel down behind its door and edge tests
+## and in front of the tile's rate, where `CountStep` spends nothing: a step on
+## bare ground costs one, a step onto a door none, and the step it runs out on
+## is `.lastRepelStep`.
+func test_gen1_the_repel_is_spent_by_the_encounter_check() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 3))
+	world.state.set_repel_steps(2)
+	assert_true(world.count_step(), "the step is counted")
+	assert_eq(world.state.repel_steps(), 2, "and `CountStep` spent no Repel step")
+	assert_true(world.encounter_request(_seeded()).is_empty(), "bare ground rolls nothing here")
+	assert_eq(world.state.repel_steps(), 1, "but the check spent one")
+	world.player_cell = Vector2i(1, 1)
+	assert_true(world.encounter_request(_seeded()).is_empty())
+	assert_eq(world.state.repel_steps(), 1, "`IsPlayerStandingOnDoorTileOrWarpTile` returns first")
+	world.player_cell = Vector2i(1, 3)
+	assert_true(world.encounter_request(_seeded()).is_empty())
+	assert_eq(world.state.repel_steps(), 0)
+	assert_true(world.repel_expired(), "`.lastRepelStep`")
 	RomCache.clear(_gen1_directory())
 
 

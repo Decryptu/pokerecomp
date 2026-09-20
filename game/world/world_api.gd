@@ -483,9 +483,7 @@ func _init(
 	block_revision += 1
 	current_tileset = tileset
 	player_cell = _clamp_cell(start_cell)
-	# Opening a world is `StartMap`, which falls into `EnterMap`: the five-step
-	# cooldown is set here for the same reason _apply_map() sets it on a warp.
-	state.set_wild_encounter_cooldown(Gen2WorldState.WILD_ENCOUNTER_COOLDOWN_STEPS)
+	_arm_wild_encounter_cooldown(false)
 	_prev_landmark = map_name_sign_landmark()
 	_load_objects()
 	_apply_map_music()
@@ -2517,6 +2515,17 @@ func visible_encounter_cells() -> Dictionary:
 	return out
 
 
+## `RandomEncounter`'s gates in its order: the cooldown a map entry set, then
+## `CanEncounterWildMon`. `TryDoWildEncounter` counts the Repel down between
+## them, behind its door and edge tests and in front of the tile's rate.
+func _encounter_step_refused() -> bool:
+	if state.consume_wild_encounter_cooldown():
+		return true
+	if _gen1 and (not _gen1_encounter_step_open(player_cell) or state.spend_repel_step()):
+		return true
+	return not can_encounter_wild_mon()
+
+
 ## The table a step on [param cell] rolls on, empty for a cell that stands on
 ## neither. `.gotWildEncounterType` reads the bottom left tile of the quarter
 ## block in Generation 1; Generation 2 reads the standing permission itself.
@@ -2606,15 +2615,10 @@ func encounter_request(
 		Gen2WorldEncounter.METHOD_GRASS, Gen2WorldEncounter.METHOD_SURF,
 	]:
 		return {}
-	## `RandomEncounter`'s own two gates, in its order: the cooldown a map entry
-	## set, then `CanEncounterWildMon`. A forced request is a preview or a story
-	## walk asking for the table's answer rather than the step's, so it skips
-	## both the way it already skips the rate roll.
-	if not force_encounter:
-		if state.consume_wild_encounter_cooldown():
-			return {}
-		if not can_encounter_wild_mon():
-			return {}
+	## A forced request is a preview or a story walk asking for the table's
+	## answer rather than the step's, so it skips the gates and the rate roll.
+	if not force_encounter and _encounter_step_refused():
+		return {}
 	var terrain_method: StringName = _terrain_method(player_cell) \
 		if method == &"auto" else method
 	if terrain_method not in [Gen2WorldEncounter.METHOD_GRASS, Gen2WorldEncounter.METHOD_SURF]:
@@ -3053,13 +3057,31 @@ func special_phone_call_ready() -> bool:
 	).get("ok", false))
 
 
+## `SetUpFiveStepWildEncounterCooldown` on every Generation 2 map entry;
+## Generation 1's `EnterMap` re-arms a running count and starts none.
+func _arm_wild_encounter_cooldown(after_battle: bool) -> void:
+	if not _gen1:
+		state.set_wild_encounter_cooldown(Gen2WorldState.WILD_ENCOUNTER_COOLDOWN_STEPS)
+		return
+	if after_battle or state.wild_encounter_cooldown() > 0:
+		state.set_wild_encounter_cooldown(Gen1Layout.WILD_ENCOUNTER_COOLDOWN_STEPS)
+	## `ClearVariablesOnEnterMap` zeroes `wStepCounter` on every entry.
+	state.clear_poison_step_count()
+
+
+## `EndOfBattle`'s `set BIT_WILD_ENCOUNTER_COOLDOWN` and the `EnterMap` behind it.
+func gen1_end_of_battle() -> void:
+	if _gen1 and state != null:
+		_arm_wild_encounter_cooldown(true)
+
+
 ## `CountStep` whole: the two guards in front of the counters, which every step
 ## taken here goes through. A special call about to ring and a Repel that has
 ## just worn off each reach `.doscript`, and neither step is counted.
 func count_step() -> bool:
 	if state == null or special_phone_call_ready():
 		return false
-	return state.count_step()
+	return state.count_step(not _gen1)
 
 
 ## `DoBikeStep`, which `CountStep` reaches behind the poison branch: the three
@@ -6914,17 +6936,20 @@ func _gen1_mart_steps(row: Dictionary, text_id: int) -> Array:
 	}}]
 
 
-## `DisplayPokemonCenterDialogue_`. `BIT_USED_POKECENTER` only decides whether
-## the question is asked again, and `YesNoChoicePokeCenter` runs either way, so
-## the box is spent every time here rather than the first time only.
-## `SetLastBlackoutMap` is YES's, ahead of the heal.
+## `DisplayPokemonCenterDialogue_`: `ShallWeHealYourPokemonText` is the first
+## visit's alone, `BIT_USED_POKECENTER` set behind it, and `YesNoChoicePokeCenter`
+## opens over whichever box was last. `SetLastBlackoutMap` is YES's, ahead of the heal.
 func _gen1_nurse_steps() -> Array:
+	var used: int = Gen1Layout.status_flag_4(Gen1Layout.USED_POKECENTER_BIT)
+	var asked: bool = state.is_engine_flag_active(used)
+	state.set_engine_flag(used, true)
 	var farewell: Array = [_gen1_pokecenter_box("farewell")]
-	return [
-		_gen1_pokecenter_box("welcome"),
+	var steps: Array = [] if asked else [_gen1_pokecenter_box("welcome")]
+	return steps + [
 		{
 			"type": &"choice",
-			"text": _gen1_pokecenter_text("shall_we_heal"),
+			"text": String(_gen1_pokecenter_box("welcome")["text"]) if asked \
+				else _gen1_pokecenter_text("shall_we_heal"),
 			"yes": [
 				{"type": &"blackout_map"},
 				_gen1_pokecenter_box("need_your_pokemon"),
@@ -9688,9 +9713,8 @@ func _apply_script_warp(request: Dictionary) -> Dictionary:
 ## leaves this API unchanged. Below, `CheckWarpTile`'s answer without walking
 ## through: `GetDestinationWarpNumber` then `CheckDirectionalWarp`, which clears
 ## carry on the four carpets, so only [method edge_warp_ready] takes those.
-## [param facing] is the direction the player would face on [param cell]; zero
-## reads the facing the player has now. Generation 1's `ExtraWarpCheck` asks
-## it, so a plan that arrives sideways on an edge warp is not a warp.
+## [param facing] is what the player would face on [param cell], zero the facing
+## now; Generation 1's `ExtraWarpCheck` asks it, so a sideways arrival is no warp.
 func warp_pending(cell: Vector2i = player_cell, facing: Vector2i = Vector2i.ZERO) -> bool:
 	if warp_at(cell).is_empty():
 		return false
@@ -9723,21 +9747,25 @@ func edge_warp_ready(direction: Vector2i) -> bool:
 	return not warp_at(player_cell).is_empty()
 
 
+## `TryDoWildEncounter`'s two tests in front of the Repel: a door or warp tile,
+## and `IsPlayerJustOutsideMap`, which compares each coordinate with the map's
+## own dimension doubled, so one cell past the bottom or right edge alone.
+func _gen1_encounter_step_open(cell: Vector2i) -> bool:
+	if current_map == null or current_tileset == null or data == null:
+		return false
+	if cell.x == current_map.collision_width or cell.y == current_map.collision_height:
+		return false
+	var standing: int = _gen1_tile_drawn_at(cell)
+	return not Gen2WorldCollision.gen1_is_warp_tile(current_map.tileset, standing) \
+		and not Gen2WorldCollision.gen1_is_door_tile(current_map.tileset, standing)
+
+
 ## `LoadTileBlockMap` fills the three blocks past every edge with the border
 ## block, which `_GetTileAndCoordsInFrontOfPlayer` reads there; $FF stays -1.
 ## Below, `TryDoWildEncounter`'s gate on the drawn tile: `wGrassTile` the grass
 ## rate, $14 the water rate, an indoor map grass anywhere but the Forest and Safari.
 func _gen1_encounter_rate_at(cell: Vector2i) -> int:
-	if current_map == null or current_tileset == null or data == null:
-		return 0
-	## `IsPlayerJustOutsideMap`, which compares each coordinate with the map's own
-	## dimension doubled: exactly one cell past the bottom or right edge, and
-	## nothing on the other two sides.
-	if cell.x == current_map.collision_width or cell.y == current_map.collision_height:
-		return 0
-	var standing: int = _gen1_tile_drawn_at(cell)
-	if Gen2WorldCollision.gen1_is_warp_tile(current_map.tileset, standing) \
-		or Gen2WorldCollision.gen1_is_door_tile(current_map.tileset, standing):
+	if not _gen1_encounter_step_open(cell):
 		return 0
 	var tile: int = _gen1_encounter_tile_at(cell)
 	if tile == current_tileset.grass_tile:
@@ -11080,7 +11108,9 @@ func _try_ledge_hop(direction: Vector2i) -> Dictionary:
 	var from_cell: Vector2i = player_cell
 	player_cell = landing
 	player_facing = facing_for_direction(direction)
-	count_step()
+	## `.doneStepCounting` skips the counter under `HandleLedges`' simulated presses.
+	if not _gen1:
+		count_step()
 	_advance_followers(-1, from_cell)
 	_do_step(direction)
 	_start_player_step(direction * 2, STEP_PASSES_HOP, true, STEP_KIND_HOP)
@@ -11319,9 +11349,7 @@ func _apply_map(
 	## flag on a map load.
 	if not _gen1:
 		state.reset_map_reload_flags()
-	# EnterMap's own SetUpFiveStepWildEncounterCooldown, which is why the first
-	# steps out of a door are quiet.
-	state.set_wild_encounter_cooldown(Gen2WorldState.WILD_ENCOUNTER_COOLDOWN_STEPS)
+	_arm_wild_encounter_cooldown(false)
 	# HandleNewMap's resets: ResetBikeFlags, ResetFlashIfOutOfCave and
 	# HandleContinueMap's ClearCmdQueue. Generation 1 has none: `BIT_ALWAYS_ON_BIKE`
 	# outlives the map, which carries a forced ride from Route 16 to Route 18.
@@ -12335,10 +12363,7 @@ func reload_current_map() -> Dictionary:
 	_clear_transient_object_visibility_overrides()
 	if not _gen1:
 		state.reset_map_reload_flags()
-	# `Script_reloadmap` asks for MAPSTATUS_ENTER, so a battle's own reload runs
-	# EnterMap and takes its five-step cooldown with it: that is what stops a
-	# second wild the step after the first.
-	state.set_wild_encounter_cooldown(Gen2WorldState.WILD_ENCOUNTER_COOLDOWN_STEPS)
+	_arm_wild_encounter_cooldown(true)
 	# `EnterMap`'s one entry-method branch: `hMapEntryMethod` is
 	# MAPSETUP_RELOADMAP here and nowhere else, and that method alone zeroes
 	# `wPoisonStepCount`. So a battle, a `reloadmap` and the catch tutorial each
