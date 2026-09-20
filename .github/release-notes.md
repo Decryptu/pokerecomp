@@ -16,23 +16,20 @@ an empty body. -->
 
 ## Added
 
-- A lost fight on Red, Blue and Yellow blacks out: the party is healed, the money halved and the player wakes at the last Pokemon Center, as `HandleBlackOut` does. Before this a lost trainer fight left you standing beside the trainer with a fainted party.
-- The battle says its own line on the way out: "is out of useable POKéMON! blacked out!" under the black palette, the rival's "Yeah! Am I great or what?" behind his picture, and no blackout at all after the starter fight in Oak's Lab. A poison faint prints the same line on the map, and Yellow ends the Safari game there.
-- A wild Pokemon in Pokemon Tower without the SILPH SCOPE is a GHOST: your Pokemon is too scared to move, the ghost says "Get out...", a thrown ball is dodged and running always works. The restless soul with the scope is unveiled as MAROWAK over the cartridge's own 153-frame animation.
-- A traded Pokemon on Red, Blue and Yellow disobeys the way it does there: the MARSH badge is the one at 70, a sleeping Pokemon gets no special line, and the random move it picks instead follows the cartridge's own off-by-one roll.
+- Leaving and entering a map on Red, Blue and Yellow plays the cartridge's own animations: a warp pad lifts you off the floor and sets you down, a hole swallows the top half of your sprite and drops you onto the floor below, an Escape Rope, Dig or Teleport spins you in place and up, and Fly turns you into the bird that flaps off the screen and glides back in. The white fades, every teleport and fly sound, and the fifty-frame drop through a hole are frame for frame the cartridge's, measured on Red and Yellow.
+- `Gen2WorldTileset.name`, the `TILESET_*` constant's name on every cartridge, and `GameData.world_tileset_named()`, so a mod keyed by tileset reads the same on Gold, whose numbering sits three lower than Crystal's past KANTO. `api_version` 40.
+- `Gen2BattleColors`, the colours a battle is drawn in on either generation, for any renderer a mod registers; `Gen2WorldPalette.overworld_sprite_colors`, `Gen2WorldMap.is_outside()` and `Gen2WorldCollision.gen1_ledge_direction` beside it. `api_version` 39.
+- Every slot a visible-encounter provider is handed carries `chance`, its weight in the roll, a shiny wild on Red, Blue and Yellow is announced with the shine sound, and Yellow's Pikachu is held in `occupied`. `api_version` 38.
 
 ## Changed
 
-- The cache format is 147. Import your cartridges again.
-- Every battle line on Red, Blue and Yellow reads the cartridge's own wording with its own line breaks: "wants to fight!", "sent out", "Critical hit!", "Nothing happened!", "No effect!", "greatly rose!", "Come back!", "Hit the enemy 2 times!" and the rest.
-- A trainer's defeat prints "was defeated!" on Gold, Silver and Crystal and "defeated" on Red, Blue and Yellow. The port's own "Player won!" and "The enemy won!" lines are gone.
-- The rival is named by his own name in a battle on every cartridge.
+- The mod contract is `api_version` 40; both example mods declare it.
 
 ## Fixed
 
-- Crystal forgot the rival's name once the naming screen closed, so every later line about him read "???".
-- A Red, Blue or Yellow trainer's name printed with a stray space before "wants to battle!".
-- The GHOST and the two fossils were drawn from the corner of their box rather than padded like a front picture.
+- A Red, Blue or Yellow map numbered a block 0 and it was drawn as the map's border: 118 blocks on Red, the east end of Oak's Lab in Pallet Town among them, stood as tall grass or trees.
+- After a fly, an Escape Rope, Dig, Teleport or a fall through a hole on Red, Blue and Yellow the player faces down on landing, as `ResetPlayerSpriteData` leaves them; a fall had kept the facing you fell in with.
+- A Red, Blue or Yellow battle drawn by a mod's renderer printed its text box in white and black.
 
 ## Which file
 
