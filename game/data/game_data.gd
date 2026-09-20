@@ -3669,8 +3669,18 @@ func _tilesets() -> Dictionary:
 	if _claim_section("tilesets"):
 		for value: Dictionary in _read_section(RomCache.world_tilesets_path(directory), true):
 			var tileset: Gen2WorldTileset = Gen2WorldTileset.from_cache(value)
+			tileset.name = Gen1Layout.tileset_name(id, tileset.number) \
+				if generation == RomRegistry.GEN1 \
+				else Gen2Layout.tileset_name(Gen2WorldState.is_crystal_game_id(id), tileset.number)
 			_world_tilesets[tileset.number] = tileset
 	return _world_tilesets
+
+
+func world_tileset_named(name: StringName) -> Gen2WorldTileset:
+	for tileset: Gen2WorldTileset in _tilesets().values():
+		if tileset.name == name:
+			return tileset
+	return null
 
 
 func _encounters() -> Dictionary:

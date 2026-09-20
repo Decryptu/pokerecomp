@@ -9067,6 +9067,17 @@ func test_expanded_blocks_are_the_hardware_buffer_inside_it() -> void:
 			)
 
 
+## The tileset's constant name rides the record out of the cache, and the same
+## drawing is found under it whatever number the profile gives it.
+func test_a_tileset_carries_its_constants_name() -> void:
+	var world: Gen2WorldAPI = _world()
+	var tileset: Gen2WorldTileset = world.current_tileset
+	assert_eq(tileset.name, Gen2Layout.tileset_name(true, tileset.number))
+	assert_null(world.data.world_tileset_named(&"BEACH_HOUSE"))
+	tileset.name = &"JOHTO"
+	assert_eq(world.data.world_tileset_named(&"JOHTO"), tileset)
+
+
 ## `LoadMetatiles` draws the border block for a `$00` byte and Generation 1's
 ## `LoadTileBlockMap` draws block 0, and every reader folds through one rule.
 func test_block_zero_is_the_border_on_crystal_and_a_block_on_red() -> void:

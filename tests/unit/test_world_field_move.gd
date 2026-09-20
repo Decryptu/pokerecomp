@@ -762,11 +762,21 @@ func test_cut_tree_block_table_matches_the_pinned_rows() -> void:
 func test_park_and_forest_tileset_numbers_are_profile_split() -> void:
 	var park: Array = [[0x13, 0x03, 1], [0x03, 0x04, 1]]
 	var forest: Array = [[0x0F, 0x17, 0]]
+	## `constants/tileset_constants.asm` on each: PARK is $19 and $16, FOREST
+	## $1F and $1C.
+	assert_eq(Gen2Layout.tileset_number(true, &"PARK"), 0x19)
+	assert_eq(Gen2Layout.tileset_number(false, &"PARK"), 0x16)
+	assert_eq(Gen2Layout.tileset_number(true, &"FOREST"), 0x1F)
+	assert_eq(Gen2Layout.tileset_number(false, &"FOREST"), 0x1C)
+	assert_eq(Gen2Layout.tileset_number(false, &"POKECOM_CENTER"), -1)
+	assert_eq(Gen2Layout.tileset_name(true, 0x24), &"AERODACTYL_WORD_ROOM")
+	assert_eq(Gen2Layout.tileset_name(false, 0x1C), &"FOREST")
+	assert_eq(Gen2Layout.tileset_name(false, 0x1D), &"")
+	assert_eq(Gen1Layout.tileset_name(RomRegistry.RED, 22), &"FACILITY")
+	assert_eq(Gen1Layout.tileset_name(RomRegistry.RED, 24), &"")
+	assert_eq(Gen1Layout.tileset_name(RomRegistry.YELLOW, 24), &"BEACH_HOUSE")
 	var cases: Array = [
-		[Gen2WorldFieldMove.TILESET_PARK_CRYSTAL, true, park],
-		[Gen2WorldFieldMove.TILESET_PARK_GOLD_SILVER, false, park],
-		[Gen2WorldFieldMove.TILESET_FOREST_CRYSTAL, true, forest],
-		[Gen2WorldFieldMove.TILESET_FOREST_GOLD_SILVER, false, forest],
+		[0x19, true, park], [0x16, false, park], [0x1F, true, forest], [0x1C, false, forest],
 	]
 	for case: Array in cases:
 		for row: Array in case[2] as Array:
@@ -970,7 +980,7 @@ func test_whirlpool_block_table_matches_the_pinned_row() -> void:
 	).get("ok", false)))
 	for tileset: int in [
 		Gen2WorldFieldMove.TILESET_JOHTO_MODERN, Gen2WorldFieldMove.TILESET_KANTO,
-		Gen2WorldFieldMove.TILESET_FOREST_CRYSTAL, TILESET_NO_ENTRY,
+		Gen2Layout.tileset_number(true, &"FOREST"), TILESET_NO_ENTRY,
 	]:
 		assert_false(bool(Gen2WorldFieldMove.whirlpool_replacement(
 			tileset, BLOCK_WHIRLPOOL

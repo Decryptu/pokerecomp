@@ -104,15 +104,11 @@ const CUTTABLE_COLLISIONS: Array[int] = [
 const ANIMATION_TREE: int = 0
 const ANIMATION_GRASS: int = 1
 
-## constants/tileset_constants.asm: 1 to 3 agree, and pokegold ships three fewer
-## tilesets after them, so PARK and FOREST shift.
+## `CutTreeBlockPointers`' tilesets by name: pokegold numbers PARK and FOREST three lower.
+const CUT_TILESETS: Array[StringName] = [&"JOHTO", &"JOHTO_MODERN", &"KANTO", &"PARK", &"FOREST"]
 const TILESET_JOHTO: int = 0x01
 const TILESET_JOHTO_MODERN: int = 0x02
 const TILESET_KANTO: int = 0x03
-const TILESET_PARK_CRYSTAL: int = 0x19
-const TILESET_PARK_GOLD_SILVER: int = 0x16
-const TILESET_FOREST_CRYSTAL: int = 0x1F
-const TILESET_FOREST_GOLD_SILVER: int = 0x1C
 
 ## data/collision/field_move_blocks.asm's CutTreeBlockPointers, byte identical
 ## between the pins: facing block to [replacement block, animation]. Only its
@@ -234,15 +230,15 @@ static func cut_tree_tile(collision_code: int) -> bool:
 	return CUT_TREE_COLLISIONS.has(collision_code)
 
 
-## A function rather than two constants, so the lists above stay single-sourced.
 static func _cut_tables(is_crystal: bool) -> Dictionary:
-	return {
-		TILESET_JOHTO: CUT_BLOCKS_JOHTO,
-		TILESET_JOHTO_MODERN: CUT_BLOCKS_JOHTO_MODERN,
-		TILESET_KANTO: CUT_BLOCKS_KANTO,
-		TILESET_PARK_CRYSTAL if is_crystal else TILESET_PARK_GOLD_SILVER: CUT_BLOCKS_PARK,
-		TILESET_FOREST_CRYSTAL if is_crystal else TILESET_FOREST_GOLD_SILVER: CUT_BLOCKS_FOREST,
-	}
+	var blocks: Array = [
+		CUT_BLOCKS_JOHTO, CUT_BLOCKS_JOHTO_MODERN, CUT_BLOCKS_KANTO, CUT_BLOCKS_PARK,
+		CUT_BLOCKS_FOREST,
+	]
+	var out: Dictionary = {}
+	for index: int in CUT_TILESETS.size():
+		out[Gen2Layout.tileset_number(is_crystal, CUT_TILESETS[index])] = blocks[index]
+	return out
 
 
 ## CheckOverworldTileArrays against CutTreeBlockPointers; an absent tileset and
@@ -265,8 +261,7 @@ const WHIRLPOOL_COLLISIONS: Array[int] = [
 	Gen2WorldCollision.COLL_WHIRLPOOL_2C,
 ]
 
-## WhirlpoolBlockPointers, which names only TILESET_JOHTO, $01 in both games, so
-## unlike the cut table it needs no profile split.
+## WhirlpoolBlockPointers, which names only TILESET_JOHTO, $01 in both games.
 const WHIRLPOOL_BLOCKS_JOHTO: Dictionary = {
 	0x07: [0x36, ANIMATION_TREE],
 }
@@ -276,8 +271,7 @@ static func whirlpool_tile(collision_code: int) -> bool:
 	return WHIRLPOOL_COLLISIONS.has(collision_code)
 
 
-## CheckOverworldTileArrays against WhirlpoolBlockPointers, cut_replacement()'s
-## counterpart down to both misses answering the same way.
+## CheckOverworldTileArrays against WhirlpoolBlockPointers.
 static func whirlpool_replacement(tileset: int, block: int) -> Dictionary:
 	if tileset != TILESET_JOHTO:
 		return {"ok": false}

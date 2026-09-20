@@ -329,6 +329,11 @@ func _rebuild_terrain() -> void:
 func _cell_color(cell: Vector2i, permission: int) -> Color:
 	if permission == Gen2WorldCollision.WATER_TILE:
 		return Color("#2f6ad6")
+	# A tileset is what a drawing is, and its name is the one identity that
+	# survives pokegold numbering it three lower than Crystal: a cave floor is
+	# a cave floor on all six cartridges by asking for it by name.
+	if _world.current_tileset.name in [&"CAVE", &"DARK_CAVE", &"CAVERN"]:
+		return Color("#6b5a4e")
 	var palettes: Array = Gen2WorldPalette.tile_palettes(
 		_world.data, _world.current_map, _world.current_tileset, _time_of_day
 	)

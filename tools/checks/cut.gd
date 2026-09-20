@@ -59,19 +59,12 @@ func run(r: RefCounted) -> void:
 ## number this profile uses, so a wrong split would fail loudly rather than
 ## quietly making a tileset uncuttable.
 func _verify_tileset_numbers(game_id: StringName, data: GameData, crystal: bool) -> void:
-	var expected: Array[int] = [
-		Gen2WorldFieldMove.TILESET_JOHTO,
-		Gen2WorldFieldMove.TILESET_JOHTO_MODERN,
-		Gen2WorldFieldMove.TILESET_KANTO,
-		Gen2WorldFieldMove.TILESET_PARK_CRYSTAL if crystal \
-			else Gen2WorldFieldMove.TILESET_PARK_GOLD_SILVER,
-		Gen2WorldFieldMove.TILESET_FOREST_CRYSTAL if crystal \
-			else Gen2WorldFieldMove.TILESET_FOREST_GOLD_SILVER,
-	]
-	for number: int in expected:
+	for name: StringName in Gen2WorldFieldMove.CUT_TILESETS:
+		var number: int = Gen2Layout.tileset_number(crystal, name)
+		var tileset: Gen2WorldTileset = data.world_tileset(number)
 		_r.check(
-			data.world_tileset(number) != null,
-			"%s: tileset %d from CutTreeBlockPointers is missing." % [game_id, number]
+			tileset != null and tileset.name == name and data.world_tileset_named(name) == tileset,
+			"%s: tileset %s from CutTreeBlockPointers is missing under %d." % [game_id, name, number]
 		)
 
 
@@ -125,8 +118,7 @@ func _verify_ilex_forest(game_id: StringName, data: GameData, crystal: bool) -> 
 	_r.field_move_party(world)
 
 	var tileset: int = world.current_map.tileset
-	var expected_tileset: int = Gen2WorldFieldMove.TILESET_FOREST_CRYSTAL if crystal \
-		else Gen2WorldFieldMove.TILESET_FOREST_GOLD_SILVER
+	var expected_tileset: int = Gen2Layout.tileset_number(crystal, &"FOREST")
 	_r.check(
 		tileset == expected_tileset,
 		"%s: Ilex Forest is tileset %d, not the expected FOREST %d." % [
