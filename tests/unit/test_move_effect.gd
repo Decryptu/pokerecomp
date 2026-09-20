@@ -1302,7 +1302,7 @@ func test_mist_blocks_a_drop_aimed_at_its_own_side() -> void:
 	var turn: Gen2Turn = _turn(battle, Fixture.TACKLE)
 	Gen2EffectCommands.run(Gen2EffectCommands.ATTACK_DOWN, turn)
 	assert_false(turn.stat_moved)
-	assert_true(turn.stat_mist_blocked)
+	assert_eq(turn.stat_failure, Gen2EffectCommands.STAT_MIST)
 	assert_eq(battle.enemy.stage("attack"), 0)
 
 
@@ -1812,6 +1812,22 @@ func test_rest_at_full_health_fails_without_sleeping() -> void:
 	assert_eq(mon.status, Gen2Status.BURN, "the burn survives")
 	assert_eq(Gen2Status.sleep_turns(mon.status), 0)
 	assert_false(_first(turn.events, Gen2Battle.HP_ALREADY_FULL).is_empty())
+
+
+## `HealEffect_` writes over the status byte and nothing else: a badly poisoned
+## Pokemon that Rests keeps `BADLY_POISONED` and its counter, so the next poison
+## or Leech Seed tick multiplies where Crystal's `res SUBSTATUS_TOXIC` starts over.
+func test_a_generation_1_rest_keeps_the_toxic_counter() -> void:
+	for generation: int in [RomRegistry.GEN2, RomRegistry.GEN1]:
+		_data.generation = generation
+		var battle: Gen2Battle = _battle()
+		var mon: Gen2BattleMon = battle.player
+		mon.hp = 10
+		mon.status = Gen2Status.POISON
+		mon.toxic_counter = 3
+		_run_move(battle, Fixture.REST)
+		assert_eq(Gen2Status.sleep_turns(mon.status), 2 if generation == RomRegistry.GEN1 else 3)
+		assert_eq(mon.toxic_counter, 3 if generation == RomRegistry.GEN1 else 0)
 
 
 ## Half by default, and matching the move's own time of day buys nothing: it is
@@ -3196,14 +3212,14 @@ func test_a_stat_drop_names_its_own_reason_even_when_the_roll_failed() -> void:
 	var turn: Gen2Turn = _turn(misted, Fixture.PSYCHIC_NEVER)
 	turn.failed_chance = true
 	Gen2EffectCommands.run(Gen2EffectCommands.SP_DEFENSE_DOWN, turn)
-	assert_true(turn.stat_mist_blocked)
+	assert_eq(turn.stat_failure, Gen2EffectCommands.STAT_MIST)
 
 	var floored: Gen2Battle = _battle()
 	floored.enemy.change_stage("sp_defense", -6)
 	var bottom: Gen2Turn = _turn(floored, Fixture.PSYCHIC_NEVER)
 	bottom.failed_chance = true
 	Gen2EffectCommands.run(Gen2EffectCommands.SP_DEFENSE_DOWN, bottom)
-	assert_false(bottom.stat_mist_blocked)
+	assert_eq(bottom.stat_failure, Gen2EffectCommands.STAT_FLOOR)
 	assert_false(bottom.stat_moved)
 
 
@@ -3364,14 +3380,14 @@ func test_protect_refuses_a_user_behind_its_own_doll() -> void:
 
 ## `BattleCommand_CheckHit`'s `.Protect` is one gate for every list that carries
 ## `checkhit`, which is why a status move and a stat drop are turned away as
-## surely as an attack.
-##
-## Thunder Wave is run against the Charmander rather than the default Geodude:
-## `checkimmune` stands in for `failuretext` here and sits in front of
-## `checkhit`, so a Ground-type would end the move before the gate is reached.
-## That ordering is the standing divergence rather than anything about Protect.
+## surely as an attack. Only `failuretext` says the attack missed: Thunder Wave's
+## own command answers `PrintDidntAffect2` and Growl's `TryPrintButItFailed`.
 func test_a_protect_turns_away_an_attack_a_status_move_and_a_stat_drop() -> void:
-	for move_number: int in [Fixture.TACKLE, Fixture.THUNDER_WAVE, Fixture.GROWL]:
+	var lines: Dictionary = {
+		Fixture.TACKLE: Gen2Battle.MISSED, Fixture.THUNDER_WAVE: Gen2Battle.STATUS_DIDNT_AFFECT,
+		Fixture.GROWL: Gen2Battle.MOVE_FAILED,
+	}
+	for move_number: int in lines:
 		var battle: Gen2Battle = _electric_battle()
 		battle.enemy.substatus |= Gen2Substatus.PROTECT
 		var before: int = battle.enemy.hp
@@ -3381,7 +3397,7 @@ func test_a_protect_turns_away_an_attack_a_status_move_and_a_stat_drop() -> void
 			_of_type(turn.events, Gen2Battle.PROTECTING_ITSELF).size(), 1,
 			"move %d says so" % move_number
 		)
-		assert_eq(_of_type(turn.events, Gen2Battle.MISSED).size(), 1)
+		assert_eq(_of_type(turn.events, lines[move_number]).size(), 1)
 		assert_eq(battle.enemy.hp, before)
 		assert_eq(battle.enemy.status, Gen2Status.NONE)
 		assert_eq(battle.enemy.stage("attack"), 0)
@@ -3769,10 +3785,8 @@ func test_foresight_identifies_the_target_and_refuses_a_second() -> void:
 	assert_eq(_of_type(again.events, Gen2Battle.MOVE_FAILED).size(), 1)
 
 
-## A target out of sight is not identified. Foresight's own `CheckHiddenOpponent`
-## is not what refuses it: `checkhit` sits in front of the command and sets
-## `wAttackMissed` first, which is the standing `failuretext` divergence, so the
-## line is the miss rather than "But it failed!".
+## A target out of sight is not identified: `checkhit` sets `wAttackMissed` and
+## `BattleCommand_Foresight`'s `.failed` is `FailMove`, "But it failed!".
 func test_foresight_refuses_a_target_that_is_out_of_sight() -> void:
 	for flag: int in [Gen2Substatus.FLYING, Gen2Substatus.UNDERGROUND]:
 		var battle: Gen2Battle = _battle()
@@ -3781,7 +3795,7 @@ func test_foresight_refuses_a_target_that_is_out_of_sight() -> void:
 
 		assert_false(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.IDENTIFIED))
 		assert_true(turn.missed)
-		assert_eq(_of_type(turn.events, Gen2Battle.MISSED).size(), 1)
+		assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1)
 
 
 ## `.StatModifiers`' Foresight branch returns before it multiplies anything, and

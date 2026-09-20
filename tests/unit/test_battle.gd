@@ -988,6 +988,121 @@ func test_one_status_at_a_time() -> void:
 	assert_eq(battle.enemy.status, Gen2Status.BURN, "the burn is not replaced")
 
 
+## `BattleCommand_Paralyze`'s `.failed` is `PrintDidntAffect2` and its
+## `.paralyzed` is `AlreadyParalyzedText`, neither of them the "attack missed"
+## `checkhit` leaves to `failuretext`.
+func test_a_status_move_words_its_own_refusals() -> void:
+	var lines: Dictionary = {}
+	for reason: String in ["burned", "paralysed", "hidden"]:
+		var battle: Gen2Battle = _battle(
+			_mon(Fixture.PIKACHU, 50, [Fixture.THUNDER_WAVE]),
+			_mon(Fixture.CHARMANDER, 50, [Fixture.SPLASH])
+		)
+		battle.enemy.status = {"burned": Gen2Status.BURN, "paralysed": Gen2Status.PARALYSIS}.get(reason, 0)
+		if reason == "hidden":
+			battle.enemy.substatus |= Gen2Substatus.FLYING
+		var events: Array = battle.take_turn(0, 0)
+		assert_eq(_of_type(events, Gen2Battle.MISSED).size(), 0, reason)
+		assert_eq(_of_type(events, Gen2Battle.STATUS_INFLICTED).size(), 0, reason)
+		for kind: StringName in [Gen2Battle.STATUS_DIDNT_AFFECT, Gen2Battle.STATUS_ALREADY]:
+			if not _of_type(events, kind).is_empty():
+				lines[reason] = kind
+	assert_eq(lines, {
+		"burned": Gen2Battle.STATUS_DIDNT_AFFECT, "paralysed": Gen2Battle.STATUS_ALREADY,
+		"hidden": Gen2Battle.STATUS_DIDNT_AFFECT,
+	})
+
+
+## `BattleCommand_StatDown`'s `.Failed` and `BattleCommand_Confuse`'s
+## `PrintDidntAffect2` and `AlreadyConfusedText`: a doll, a miss and a repeat
+## each have their own line, and none of them is "attack missed".
+func test_a_stat_drop_and_a_confusion_word_their_own_refusals() -> void:
+	var lines: Dictionary = {}
+	for reason: String in ["growl_doll", "growl_hidden", "growl_floor", "sonic_doll", "sonic_hidden", "sonic_again"]:
+		var move: int = Fixture.GROWL if reason.begins_with("growl") else Fixture.SUPERSONIC
+		var battle: Gen2Battle = _battle(
+			_mon(Fixture.PIKACHU, 50, [move]), _mon(Fixture.CHARMANDER, 50, [Fixture.SPLASH])
+		)
+		if reason.ends_with("doll"):
+			battle.enemy.substatus |= Gen2Substatus.SUBSTITUTE
+			battle.enemy.substitute_hp = 20
+		if reason.ends_with("hidden"):
+			battle.enemy.substatus |= Gen2Substatus.FLYING
+		if reason.ends_with("floor"):
+			battle.enemy.change_stage("attack", -6)
+		if reason.ends_with("again"):
+			battle.enemy.substatus |= Gen2Substatus.CONFUSED
+			battle.enemy.confusion_turns = 3
+		var events: Array = battle.take_turn(0, 0)
+		assert_eq(_of_type(events, Gen2Battle.MISSED).size(), 0, reason)
+		for kind: StringName in [
+			Gen2Battle.MOVE_FAILED, Gen2Battle.STAT_CHANGE_FAILED,
+			Gen2Battle.STATUS_DIDNT_AFFECT, Gen2Battle.STATUS_ALREADY,
+		]:
+			if not _of_type(events, kind).is_empty():
+				lines[reason] = kind
+	assert_eq(lines, {
+		"growl_doll": Gen2Battle.MOVE_FAILED, "growl_hidden": Gen2Battle.MOVE_FAILED,
+		"growl_floor": Gen2Battle.STAT_CHANGE_FAILED, "sonic_doll": Gen2Battle.STATUS_DIDNT_AFFECT,
+		"sonic_hidden": Gen2Battle.STATUS_DIDNT_AFFECT, "sonic_again": Gen2Battle.STATUS_ALREADY,
+	})
+
+
+## `BattleCommand_LeechSeed` reads `wAttackMissed` first and answers `EvadedText`.
+func test_a_missed_leech_seed_says_the_target_evaded() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.BULBASAUR, 50, [Fixture.LEECH_SEED]),
+		_mon(Fixture.CHARMANDER, 50, [Fixture.SPLASH])
+	)
+	battle.enemy.substatus |= Gen2Substatus.FLYING
+	var events: Array = battle.take_turn(0, 0)
+	assert_eq(_of_type(events, Gen2Battle.MISSED).size(), 0)
+	assert_eq(_of_type(events, Gen2Battle.EVADED).size(), 1)
+	assert_false(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.LEECH_SEED))
+
+
+## `SleepEffect`, `ParalyzeEffect_` and `LeechSeedEffect_` never ask about a
+## doll, `ParalyzeEffect_` asks only whether an Electric move met a Ground-type,
+## and `PoisonEffect` says `DidntAffectText` of a Poison-type. Measured on all
+## three cartridges by `tools/checks/gen1_battle.gd`'s status sweep.
+func test_generation_1_status_moves_reach_a_doll_and_a_ghost() -> void:
+	_data.generation = RomRegistry.GEN1
+	var cases: Array = [
+		[Fixture.THUNDER_WAVE, Fixture.CHARMANDER, true, Gen2Battle.STATUS_INFLICTED],
+		[Fixture.SLEEP_POWDER, Fixture.CHARMANDER, true, Gen2Battle.STATUS_INFLICTED],
+		[Fixture.LEECH_SEED, Fixture.CHARMANDER, true, Gen2Battle.WAS_SEEDED],
+		[Fixture.POISON_POWDER, Fixture.CHARMANDER, true, Gen2Battle.STATUS_DIDNT_AFFECT],
+		[Fixture.GLARE, Fixture.GASTLY, false, Gen2Battle.STATUS_INFLICTED],
+		[Fixture.THUNDER_WAVE, Fixture.GEODUDE, false, Gen2Battle.NO_EFFECT],
+		[Fixture.POISON_POWDER, Fixture.GASTLY, false, Gen2Battle.STATUS_DIDNT_AFFECT],
+	]
+	for row: Array in cases:
+		var battle: Gen2Battle = _battle(
+			_mon(Fixture.PIKACHU, 50, [int(row[0])]), _mon(int(row[1]), 50, [Fixture.SPLASH])
+		)
+		battle.player.substatus |= Gen2Substatus.X_ACCURACY
+		if bool(row[2]):
+			battle.enemy.substatus |= Gen2Substatus.SUBSTITUTE
+			battle.enemy.substitute_hp = 20
+		var events: Array = battle.take_turn(0, 0)
+		assert_eq(_of_type(events, row[3]).size(), 1, "move %d against %d" % [row[0], row[1]])
+
+
+## Nothing in `SleepEffect`, `PoisonEffect` or `ParalyzeEffect_` rolls a
+## computer failure: that quarter is Crystal's alone.
+func test_a_generation_1_trainer_status_move_never_fails_on_its_own() -> void:
+	_data.generation = RomRegistry.GEN1
+	for seed_value: int in 40:
+		var battle: Gen2Battle = _battle(
+			_mon(Fixture.PIKACHU, 50, [Fixture.SPLASH]),
+			_mon(Fixture.CHARMANDER, 50, [Fixture.THUNDER_WAVE])
+		)
+		battle.rng.seed = seed_value
+		battle.enemy.substatus |= Gen2Substatus.X_ACCURACY
+		battle.take_turn(0, 0)
+		assert_true(Gen2Status.has(battle.player.status, Gen2Status.PARALYSIS), str(seed_value))
+
+
 func test_a_type_that_cannot_be_touched_cannot_be_paralysed_either() -> void:
 	# Thunder Wave against a Ground type. A status move is stopped by an immunity
 	# exactly as an attack is, and it says so rather than saying it missed.

@@ -98,6 +98,8 @@ const STATS_NEUTRAL_MOD: int = 7
 ## `battle/gen1_turn.py`: `ExecutePlayerMove` whole, one move per effect byte.
 const TURN_ORACLE_HEAD: String = "move variant -> missed rage beyond hits damage"
 const TURN_ORACLE_DIGEST: String = "bf2342f7ecfd64e93ffcdabd95ffb1c6b06e020b"
+const STATUS_ORACLE_HEAD: String = "move variant -> missed status seeded sub texts"
+const STATUS_ORACLE_DIGEST: String = "3a62128163c0ef034b92ded2e7f0b0db5b2a30eb"
 const TRANSFORM_ORACLE_HEAD: String = "side sub target_transformed invulnerable -> user after"
 const TRANSFORM_ORACLE_DIGEST: String = "f22be46ca73e7087e0946d31f57babee082833bc"
 const ORACLE_STALE_DAMAGE: int = 1234
@@ -135,6 +137,39 @@ const ORACLE_TRANSFORM_MOVES: Array[int] = [33, 6, 7, 0]
 const ORACLE_DISABLED_SLOT: int = 1
 const ORACLE_DISABLED_TURNS: int = 2
 const ORACLE_TWO_TO_FIVE_EFFECT: int = 0x1D
+## Sing, Leech Seed, PoisonPowder, Stun Spore, Thunder Wave, Toxic, Glare,
+## Growl, Supersonic and Disable, each against every target
+## `gen1_turn.py status` writes.
+const ORACLE_STATUS_MOVES: Array[int] = [47, 73, 77, 78, 86, 92, 137, 45, 48, 50]
+const ORACLE_STATUS_VARIANTS: Dictionary = {
+	"hit": {}, "miss": {"hidden": true}, "sub": {"sub": true},
+	"burned": {"status": Gen2Status.BURN}, "same": {"same": true},
+	"ground": {"types": [Gen2Layout.TYPE_GROUND, Gen2Layout.TYPE_GROUND]},
+	"ghost": {"types": [Gen2Layout.TYPE_GHOST, Gen2Layout.TYPE_GHOST]},
+	"grass": {"types": [Gen2Layout.TYPE_GRASS, Gen2Layout.TYPE_GRASS]},
+	"poison": {"types": [Gen2Layout.TYPE_POISON, Gen2Layout.TYPE_POISON]},
+}
+const ORACLE_SAME_STATUS: Dictionary = {
+	47: Gen2Status.SLEEP_MASK, 77: Gen2Status.POISON, 92: Gen2Status.POISON,
+	78: Gen2Status.PARALYSIS, 86: Gen2Status.PARALYSIS, 137: Gen2Status.PARALYSIS,
+}
+const ORACLE_LEECH_SEED: int = 73
+const ORACLE_SUPERSONIC: int = 48
+const ORACLE_DISABLE: int = 50
+## What `PrintText` is handed for each event, by pokered's label.
+const ORACLE_TEXT_OF: Dictionary = {
+	Gen2Battle.USED_MOVE: "UsedMoveText", Gen2Battle.MISSED: "AttackMissedText",
+	Gen2Battle.NO_EFFECT: "DoesntAffectMonText", Gen2Battle.EVADED: "EvadedAttackText",
+	Gen2Battle.WAS_SEEDED: "WasSeededText",
+	Gen2Battle.STATUS_DIDNT_AFFECT: "DidntAffectText", Gen2Battle.STATUS_ALREADY: "AlreadyAsleepText",
+	Gen2Battle.MOVE_FAILED: "ButItFailedText", Gen2Battle.STAT_CHANGED: "MonsStatsFellText",
+	Gen2Battle.STAT_CHANGE_FAILED: "NothingHappenedText",
+	Gen2Battle.CONFUSE_INFLICTED: "BecameConfusedText", Gen2Battle.DISABLE_INFLICTED: "MoveWasDisabledText",
+}
+const ORACLE_INFLICTED_TEXT: Dictionary = {
+	&"sleep": "FellAsleepText", &"poison": "PoisonedText", &"toxic": "BadlyPoisonedText",
+	&"paralysis": "ParalyzedMayNotAttackText",
+}
 const ORACLE_SIDE_DROP_EFFECTS: Array[int] = [0x44, 0x45, 0x46, 0x47]
 
 var _r: RefCounted = null
@@ -151,6 +186,7 @@ func _one_game() -> void:
 	_damage_oracle_sweep()
 	_stats_oracle_sweep()
 	_turn_oracle_sweep()
+	_status_oracle_sweep()
 	_transform_oracle_sweep()
 	_every_move()
 	_a_wild_fight()
@@ -384,6 +420,63 @@ func _turn_oracle_sweep() -> void:
 		_r.note("gen1 battle %d turn cases answered as the cartridge does" % (lines.size() - 1))
 
 
+## `SleepEffect`, `PoisonEffect`, `ParalyzeEffect_` and `LeechSeedEffect_`
+## against every target that could refuse them: the line and what is left.
+func _status_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([STATUS_ORACLE_HEAD])
+	for move: int in ORACLE_STATUS_MOVES:
+		for variant: String in ORACLE_STATUS_VARIANTS:
+			lines.append(_status_line(move, variant))
+	if _r.digest_matches("status oracle", lines, STATUS_ORACLE_DIGEST):
+		_r.note("gen1 battle %d status cases answered as the cartridge does" % (lines.size() - 1))
+
+
+func _status_line(move: int, variant: String) -> String:
+	var battle: Gen2Battle = _oracle_fight(move, ORACLE_FILLER, ORACLE_USER_TYPES)
+	if battle == null:
+		return "%d %s -> no battle" % [move, variant]
+	battle.enemy.substatus &= ~Gen2Substatus.RAGE
+	var preset: Dictionary = ORACLE_STATUS_VARIANTS[variant]
+	if bool(preset.get("hidden", false)):
+		battle.enemy.substatus |= Gen2Substatus.FLYING
+	else:
+		battle.player.substatus |= Gen2Substatus.X_ACCURACY
+	if bool(preset.get("sub", false)):
+		battle.enemy.substatus |= Gen2Substatus.SUBSTITUTE
+		battle.enemy.substitute_hp = ORACLE_SUB_HP
+	if preset.has("types"):
+		_flatten(battle.enemy, preset["types"])
+	battle.enemy.status = int(preset.get("status", 0))
+	if bool(preset.get("same", false)):
+		if move == ORACLE_LEECH_SEED:
+			battle.enemy.substatus |= Gen2Substatus.LEECH_SEED
+		elif move == ORACLE_SUPERSONIC:
+			battle.enemy.substatus |= Gen2Substatus.CONFUSED
+			battle.enemy.confusion_turns = 2
+		elif move == ORACLE_DISABLE:
+			battle.enemy.disabled_slot = ORACLE_DISABLED_SLOT
+			battle.enemy.disable_turns = ORACLE_DISABLED_TURNS
+		elif ORACLE_SAME_STATUS.has(move):
+			battle.enemy.status = int(ORACLE_SAME_STATUS[move])
+	var events: Array = []
+	battle._act(Gen2Battle.PLAYER, 0, move, events)
+	var texts: PackedStringArray = PackedStringArray()
+	for event: Dictionary in events:
+		var kind: StringName = StringName(event.get("type", &""))
+		if kind == Gen2Battle.STATUS_INFLICTED:
+			texts.append(String(ORACLE_INFLICTED_TEXT.get(event.get("name", &""), "?")))
+		elif ORACLE_TEXT_OF.has(kind):
+			texts.append(String(ORACLE_TEXT_OF[kind]))
+	var status: int = battle.enemy.status
+	return "%d %s -> missed %d status %s seeded %d sub %d texts %s" % [
+		move, variant, _missed(events),
+		"slp" if Gen2Status.is_asleep(status) else "%02x" % status,
+		1 if Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.LEECH_SEED | Gen2Substatus.CONFUSED) else 0,
+		1 if Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.SUBSTITUTE) else 0,
+		",".join(texts) if not texts.is_empty() else "-",
+	]
+
+
 func _oracle_fight(move: int, target_moves: Array, user_types: Array) -> Gen2Battle:
 	var generator := RandomNumberGenerator.new()
 	generator.seed = SWEEP_SEED
@@ -432,7 +525,7 @@ func _turn_line(move: int, variant: String) -> String:
 			if Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.SUBSTITUTE) else ORACLE_SUB_HP
 	var rage: int = _count_events(events, [Gen2Battle.RAGE_BUILDING])
 	return "%d %s -> missed %d rage %s beyond %+d hits %s damage %s" % [
-		move, variant, mini(_count_events(events, ORACLE_MISS_EVENTS), 1), _rage_text(rage, hits),
+		move, variant, _missed(events), _rage_text(rage, hits),
 		battle.enemy.stage("attack") - _side_drops(events, move) - rage,
 		_hits_text(hits, move), _damage_class(battle.last_damage_dealt, lost, hits),
 	]
@@ -482,6 +575,17 @@ func _bide_line(variant: String) -> String:
 		battle.player.bide_turns, battle.player.bide_damage, battle.last_damage_dealt,
 		_count_events(events, ORACLE_PRINTED_EVENTS),
 	]
+
+
+## `wMoveMissed`: `MoveHitTest`'s own line, or a refusal that carries the answer.
+static func _missed(events: Array) -> int:
+	for event: Dictionary in events:
+		if event.has("missed"):
+			if bool(event["missed"]):
+				return 1
+		elif ORACLE_MISS_EVENTS.has(StringName(event.get("type", &""))):
+			return 1
+	return 0
 
 
 func _count_events(events: Array, kinds: Array, target: int = -1) -> int:

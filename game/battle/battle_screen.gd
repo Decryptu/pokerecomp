@@ -6176,6 +6176,7 @@ const LINES: Dictionary = {
 	Gen2Battle.WAS_SEEDED: ["%s was seeded!", &"name:target"],
 	Gen2Battle.LEECH_SEED_SAPPED: ["LEECH SEED saps %s!", &"name:side"],
 	Gen2Battle.EVADED: ["%s evaded the attack!", &"name:target"],
+	Gen2Battle.STATUS_DIDNT_AFFECT: ["It didn't affect %s!", &"name:target"],
 	Gen2Battle.NIGHTMARE_STARTED: ["%s started to have a NIGHTMARE!", &"name:target"],
 	Gen2Battle.HURT_BY_NIGHTMARE: ["%s has a NIGHTMARE!", &"name:side"],
 	# PutACurseText is one text with a paragraph break in it, so the two halves are
@@ -6250,6 +6251,7 @@ const GEN1_LINES: Dictionary = {
 	Gen2Battle.WAS_SEEDED: ["%s\nwas seeded!", &"name:target"],
 	Gen2Battle.LEECH_SEED_SAPPED: ["LEECH SEED saps\n%s!", &"name:side"],
 	Gen2Battle.EVADED: ["%s\nevaded attack!", &"name:target"],
+	Gen2Battle.STATUS_DIDNT_AFFECT: ["It didn't affect\n%s!", &"name:target"],
 	Gen2Battle.MIST_SET: ["%s's\nshrouded in mist!", &"name:side"],
 	Gen2Battle.FOCUS_ENERGY_SET: ["%s's\ngetting pumped!", &"name:side"],
 	Gen2Battle.MIST_PROTECTED: ["But, it failed!"],
@@ -6270,6 +6272,7 @@ const LINE_HANDLERS: Dictionary = {
 	Gen2Battle.FAINTED: &"_fainted_text",
 	Gen2Battle.CANNOT_MOVE: &"_cannot_move_text",
 	Gen2Battle.STATUS_INFLICTED: &"_status_inflicted_text",
+	Gen2Battle.STATUS_ALREADY: &"_status_already_text",
 	Gen2Battle.HURT_BY_STATUS: &"_hurt_by_status_text",
 	Gen2Battle.CHARGING_UP: &"_charging_up_text",
 	Gen2Battle.STAT_CHANGED: &"_stat_changed_text",
@@ -6410,6 +6413,19 @@ func _status_inflicted_text(event: Dictionary) -> String:
 	if _generation() == RomRegistry.GEN1 and GEN1_INFLICTED.has(event["name"]):
 		return who + String(GEN1_INFLICTED[event["name"]])
 	return "%s %s" % [who, INFLICTED.get(event["name"], "was hurt!")]
+
+
+## `AlreadyAsleepText` and its two siblings; Generation 1 reaches only the first.
+const ALREADY_TEXT: Dictionary = {
+	Gen2Status.SLEEP_MASK: "asleep", Gen2Status.POISON: "poisoned", Gen2Status.PARALYSIS: "paralyzed",
+	Gen2EffectCommands.CONFUSE_KEY: "confused",
+}
+
+
+func _status_already_text(event: Dictionary) -> String:
+	return ("%s's\nalready %s!" if _generation() == RomRegistry.GEN1 else "%s's already %s!") % [
+		_battler_name(int(event["target"])), ALREADY_TEXT[int(event["status"])],
+	]
 
 
 func _hurt_by_status_text(event: Dictionary) -> String:

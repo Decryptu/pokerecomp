@@ -83,9 +83,9 @@ var stat_moved: bool = false
 ## `wSomeoneIsRampaging`, read by `BattleCommand_LowerSub` alone.
 var someone_is_rampaging: bool = false
 
-## A drop blocked by Mist, which the fail-text step says differently from an
-## "already at the bottom" one.
-var stat_mist_blocked: bool = false
+## `wFailedMessage`: which of `BattleCommand_StatDown`'s three refusals the
+## fail-text step says, or empty for a stat that moved.
+var stat_failure: StringName = &""
 
 ## `SkipToBattleCommand`: the command the runner walks forward to without running
 ## anything, the named one included. Empty for the ordinary next step.

@@ -530,10 +530,9 @@ static func _apply_setup(scores: Array, c: Context) -> void:
 		if not attacker.can_use(slot):
 			continue
 		var effect: int = _effect(_move_at(attacker, data, slot))
-		var is_up: bool = _in_run(effect, Gen2MoveEffect.STAT_UP_BASE) \
-			or _in_run(effect, Gen2MoveEffect.STAT_UP_2_BASE)
-		var is_down: bool = _in_run(effect, Gen2MoveEffect.STAT_DOWN_BASE) \
-			or _in_run(effect, Gen2MoveEffect.STAT_DOWN_2_BASE)
+		var is_up: bool = Gen2MoveEffect.in_run(effect, Gen2MoveEffect.STAT_UP_BASE) \
+			or Gen2MoveEffect.in_run(effect, Gen2MoveEffect.STAT_UP_2_BASE)
+		var is_down: bool = Gen2MoveEffect.is_stat_down(effect)
 
 		if is_up:
 			if atk_turns == 0:
@@ -547,10 +546,6 @@ static func _apply_setup(scores: Array, c: Context) -> void:
 					_encourage(scores, slot, 2)
 			elif not _roll(rng, 12):
 				_discourage(scores, slot, 2)
-
-
-static func _in_run(effect: int, base: int) -> bool:
-	return effect >= base and effect < base + Gen2MoveEffect.STAT_RUN_LENGTH
 
 
 ## [constant Gen2Layout.AI_TYPES]: dismiss a move the defender is immune to,

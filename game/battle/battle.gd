@@ -361,6 +361,10 @@ const RELEASED_BY: StringName = &"released_by"
 ## [constant MISSED], which is `GetFailureResultText`'s own line.
 const EVADED: StringName = &"evaded"
 
+## `DidntAffect1Text` and `AlreadyAsleepText`'s three, in place of [constant MISSED].
+const STATUS_DIDNT_AFFECT: StringName = &"status_didnt_affect"
+const STATUS_ALREADY: StringName = &"status_already"
+
 ## A drop blocked by Mist. Not [constant STAT_CHANGE_FAILED]: the cartridge's own
 ## "It's protected by mist!" rather than the "won't go any lower" a drop at its
 ## floor gets.

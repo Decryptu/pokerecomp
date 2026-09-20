@@ -46,6 +46,8 @@ const PLAYER_LEVEL: int = 30
 ## Four moves on the lead, so `MoveSelectionScreen`'s list is a full one:
 ## TACKLE, GROWL, TAIL_WHIP and BITE (constants/move_constants.asm).
 const LEAD_MOVES: Array[int] = [33, 45, 39, 44]
+## THUNDER WAVE in the first slot for the `status_refused` stage.
+const STATUS_LEAD_MOVES: Array[int] = [86, 45, 39, 44]
 ## The `info` stages' own four, one per effectiveness the annotation can mark
 ## against Pidgey's NORMAL/FLYING: THUNDERSHOCK is super effective, TACKLE
 ## neutral, VINE WHIP resisted and EARTHQUAKE has no effect at all.
@@ -348,7 +350,7 @@ func _open_battle_stage() -> void:
 	rng.seed = 3
 	var members: Array = []
 	for species: int in GEN1_PLAYER_SPECIES if gen1 else PLAYER_SPECIES:
-		var lead: Array[int] = INFO_MOVES if _informing() else LEAD_MOVES
+		var lead: Array[int] = _lead_moves()
 		members.append(Gen2BattleMon.create(
 			data, species, PLAYER_LEVEL,
 			lead.duplicate() if members.is_empty() else [33]
@@ -436,12 +438,23 @@ func _open_battle_stage() -> void:
 
 
 ## One line of a turn: the line, and the move the player picks to reach it.
-const LINE_STAGES: Dictionary = {"gen1_item": ["FULL HEAL", 1], "exp_all": ["EXP.ALL", 0]}
+const LINE_STAGES: Dictionary = {
+	"gen1_item": ["FULL HEAL", 1], "exp_all": ["EXP.ALL", 0], "status_refused": ["didn't affect", 0],
+}
+
+
+func _lead_moves() -> Array[int]:
+	if _informing():
+		return INFO_MOVES
+	return STATUS_LEAD_MOVES if _stage == "status_refused" else LEAD_MOVES
 
 
 func _open_line_stage(battle: Gen2Battle) -> void:
 	if _stage == "gen1_item":
 		## A burned Geodude and the player's Growl, so the second half is the Full Heal.
+		battle.enemy.status = Gen2Status.BURN
+	elif _stage == "status_refused":
+		## A burned lead met by THUNDER WAVE: `DidntAffectText`.
 		battle.enemy.status = Gen2Status.BURN
 	else:
 		battle.exp_all_in_bag = true
