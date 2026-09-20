@@ -260,13 +260,10 @@ var _phone_receive_cycle: int = 0
 var _phone_receive_minutes: int = PHONE_RECEIVE_DELAYS[0]
 var _pending_special_phone_call: int = 0
 var _script_memory: Dictionary = {}
-## `wMapMusic`, `wRadioTuningKnob` and `wCurRadioLine`. The music is state rather
-## than something derived from the current map because `PlayMapMusic` writes it and
-## compares against it, and because a tuned radio station overwrites it and survives
-## the Pokegear closing; `SnorlaxAwake` reads exactly that byte. Below,
-## `wStatusFlags`' `STATUSFLAGS_FLASH_F`, its own byte on the cartridge rather than
-## an engine flag: `ResetFlashIfOutOfCave` clears it on entering a ROUTE or a TOWN,
-## so a lit cave goes dark again the moment the player leaves and comes back.
+## `wMapMusic`, `wRadioTuningKnob` and `wCurRadioLine`: `PlayMapMusic` writes and
+## compares the music, and a tuned station overwrites it and outlives the Pokegear.
+## Below, `STATUSFLAGS_FLASH_F`, its own byte: `ResetFlashIfOutOfCave` clears it
+## on entering a ROUTE or a TOWN, so a lit cave is dark again on return.
 var _used_flash: bool = false
 
 ## `wBikeStep`, the two bytes `DoBikeStep` counts a bike ride in. Saved player
@@ -377,20 +374,15 @@ var _mom_item_trigger_balance: int = Gen2Layout.MOM_MONEY
 
 ## `wVariableSprites`, the sixteen `SPRITE_VARS` slots `GetMonSprite` resolves a
 ## variable sprite through. It sits inside `wPlayerData`, which `SaveData` copies
-## whole into `sPlayerData`, so the table is saved and restored: an assignment
-## made in one session is still there in the next. Keeping it on the world
-## instead cost the port every one of them on reload, which drew the nine
-## `InitializeEventsScript` rows as `SPRITE_CHRIS` (see [constant
-## INITIAL_VARIABLE_SPRITES]).
+## whole, so the table is saved: kept on the world instead, every assignment was
+## lost on reload and the nine `InitializeEventsScript` rows drew `SPRITE_CHRIS`.
 var _variable_sprites: Dictionary = {}
 
-## `InitializeEventsScript`, which the player's bedroom runs once at new game
-## behind `EVENT_INITIALIZED_EVENTS`. A fresh state starts with these for the same
-## reason [method Gen2WorldSpawn.apply_initial_decorations] exists: every state the
-## game can be in has run it, and a slot with no row is `.NoBreedmon`'s
-## `WALKING_SPRITE`, which is the player. The four `SPRITE_CONSOLE`..`SPRITE_BIG_DOLL`
-## slots are deliberately absent, `ToggleDecorationsVisibility` filling those on
-## every entry to the bedroom. The numbers are the same on all three cartridges.
+## `InitializeEventsScript`, which the bedroom runs once at new game behind
+## `EVENT_INITIALIZED_EVENTS`: every state the game can be in has run it, and a
+## slot with no row is `.NoBreedmon`'s `WALKING_SPRITE`, the player. The four
+## `SPRITE_CONSOLE`..`SPRITE_BIG_DOLL` slots are absent on purpose,
+## `ToggleDecorationsVisibility` filling them on every entry to the bedroom.
 const INITIAL_VARIABLE_SPRITES: Dictionary = {
 	0xF4: 0x52,  # SPRITE_WEIRD_TREE      -> SPRITE_SUDOWOODO
 	0xF5: 0x04,  # SPRITE_OLIVINE_RIVAL   -> SPRITE_RIVAL
@@ -994,13 +986,10 @@ static func badge_flag(badge: int, crystal: bool = true) -> int:
 	return flags[badge] if badge >= 0 and badge < flags.size() else -1
 
 
-## [param crystal_index] resolved onto the table [param crystal] selects. The
-## two tables differ only in that pokegold ships no ENGINE_MOBILE_SYSTEM, so
-## everything past that one index sits one lower there. The named pairs above
-## are this same shift written out for the flags a runtime path reads; a caller
-## holding a Crystal index and no pair asks here. ENGINE_MOBILE_SYSTEM itself
-## answers -1 off Crystal, which is_engine_flag_active() reads as inactive,
-## since Gold and Silver have no flag to map it onto.
+## [param crystal_index] resolved onto the table [param crystal] selects: pokegold
+## ships no ENGINE_MOBILE_SYSTEM, so everything past it sits one lower there. The
+## named pairs above are the same shift for the flags a runtime path reads.
+## ENGINE_MOBILE_SYSTEM itself answers -1 off Crystal, which reads as inactive.
 static func engine_flag(crystal_index: int, crystal: bool = true) -> int:
 	if crystal or crystal_index < ENGINE_MOBILE_SYSTEM:
 		return crystal_index
@@ -1679,6 +1668,19 @@ func repel_steps() -> int:
 	return _repel_steps
 
 
+## One step off an active Repel, answering on the step it runs out on. The edge
+## is never saved: a save reloaded on that step owes no line.
+func spend_repel_step() -> bool:
+	if _repel_steps <= 0:
+		return false
+	_repel_steps -= 1
+	if _repel_steps > 0:
+		return false
+	_repel_expired = true
+	changed.emit()
+	return true
+
+
 ## Whether a step has taken an active Repel to zero and nobody has spent the
 ## fact yet. Held rather than cleared by the read, so an offer that lands on a
 ## step already owned by a warp, a script or a battle waits for one that can
@@ -1838,18 +1840,12 @@ func npc_trade_done(trade_id: int) -> bool:
 ## on the pass `wStepCount` wraps, once per step the player finishes wherever it
 ## was taken. `DoRepelStep` stands in front of the counters and the step a Repel
 ## runs out on reaches `.doscript` with carry, so that step counts for neither
-## poison, happiness, an egg nor the Day-Care. Answers whether it was counted.
-func count_step() -> bool:
-	if _repel_steps > 0:
-		_repel_steps -= 1
-		if _repel_steps == 0:
-			## Where a renewal offer belongs: every way of taking a step reaches
-			## CountStep, so this is the only place the edge exists. Runtime
-			## only, and never saved: a save reloaded on the step a Repel ended
-			## has no offer owed.
-			_repel_expired = true
-			changed.emit()
-			return false
+## poison, happiness, an egg nor the Day-Care. Generation 1 counts the Repel
+## down inside `TryDoWildEncounter` ([param spend_repel] false). Answers whether
+## it was counted.
+func count_step(spend_repel: bool = true) -> bool:
+	if spend_repel and spend_repel_step():
+		return false
 	_poison_step_count = (_poison_step_count + 1) & 0xFF
 	_step_count = (_step_count + 1) & 0xFF
 	if _step_count == 0:
@@ -1867,12 +1863,10 @@ func count_step() -> bool:
 
 
 ## `DoBikeStep`, which `CountStep` reaches behind the poison branch. The caller
-## answers the three gates in front of the counter, since only it knows the map and
-## the player's state: [param armed] is `STATUSFLAGS2_BIKE_SHOP_CALL_F` and the
-## bike, and [param in_service] is `GetMapPhoneService`. The counter saturates at
-## `$ffff` rather than wrapping, which is what the two `cp 255` tests do, and the
-## call is queued the first counted step past 1024 that finds no other special call
-## already waiting.
+## answers the three gates, knowing the map and the player: [param armed] is
+## `STATUSFLAGS2_BIKE_SHOP_CALL_F` and the bike, [param in_service]
+## `GetMapPhoneService`. The counter saturates at `$ffff` (the two `cp 255`), and
+## the call is queued the first counted step past 1024 with no special call waiting.
 func do_bike_step(armed: bool, in_service: bool) -> bool:
 	if not armed or not in_service:
 		return false

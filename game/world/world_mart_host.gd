@@ -153,8 +153,9 @@ static func purchase(
 	}
 
 
-## `VendingMachineMenu`'s purchase: `HasEnoughMoney` refuses first, then
-## `GiveItem`, at the machine's price rather than `ItemPrices`'.
+## `VendingMachineMenu`'s purchase: `HasEnoughMoney` against ¥200 whatever the
+## row costs, then `GiveItem` at the machine's own price, and `SubBCD`'s borrow
+## fills the purse with zeroes, so ¥250 buys a LEMONADE and leaves ¥0.
 static func vend(
 	world: Gen2WorldAPI, save: Gen2SaveData, row: Dictionary, persist: bool = true
 ) -> Dictionary:
@@ -163,7 +164,7 @@ static func vend(
 	var item: int = int(row.get("item", 0))
 	var price: int = int(row.get("price", 0))
 	var balance: int = world.state.money(MONEY_ACCOUNT)
-	if price > balance:
+	if Gen1Layout.VENDING_MONEY_CHECK > balance:
 		return _failure(&"insufficient_money", {"item": item, "price": price})
 	var owned: int = world.state.item_quantity(item)
 	var room: Dictionary = Gen2WorldPack.receive_check(
@@ -172,9 +173,10 @@ static func vend(
 	if not bool(room.get("ok", false)):
 		return _failure(StringName(room["reason"]), {"item": item, "owned": owned})
 	var before: Gen2WorldSnapshot = world.snapshot()
+	var left: int = maxi(0, balance - price)
 	var applied: Dictionary = world.state.apply_changes({}, {}, {
 		"items": {item: int(room["quantity"])},
-		"money": {MONEY_ACCOUNT: balance - price},
+		"money": {MONEY_ACCOUNT: left},
 	})
 	if not bool(applied.get("ok", false)):
 		return _failure(&"purchase_state_failed", applied)
@@ -182,7 +184,7 @@ static func vend(
 	if not bool(committed.get("ok", false)):
 		return committed
 	return {
-		"ok": true, "item": item, "price": price, "balance": balance - price,
+		"ok": true, "item": item, "price": price, "balance": left,
 		"name": world.data.item_name(item),
 	}
 

@@ -1412,6 +1412,15 @@ const NPC_TRADE_TEXT_AT: Dictionary = {"cable": 0x00, "traded_for": 0x05}
 ## address: the species the row asks for and the one it offers.
 const TRADE_GIVE_NAME: int = 0xCD13
 const TRADE_RECEIVE_NAME: int = 0xCD1E
+## `InGameTrade_CheckForTradeEvo`: Yellow names the four trade species, Red and
+## Blue read the received name for Japanese Blue's GRAVELER and SPECTRE.
+const TRADE_EVOLUTION_DEX: Array[int] = [64, 75, 67, 93]
+
+
+static func trade_evolves(id: StringName, dex: int, name: String) -> bool:
+	if id == RomRegistry.YELLOW:
+		return TRADE_EVOLUTION_DEX.has(dex)
+	return name.begins_with("G") or name.begins_with("SP")
 
 ## `object_event`'s two movement bytes as one shared template. Byte 1 is WALK or
 ## STAY; byte 2 is a fixed direction, the axis a random walk keeps to, or
@@ -2055,6 +2064,8 @@ const ENGINE_FLAG_BITS: int = 8
 const TOWN_VISITED_FLAG_BYTES: int = 2
 
 const BAG_ITEM_CAPACITY: int = 20  ## `BAG_ITEM_CAPACITY`: one list of slots, not four pockets.
+## `VendingMachineMenu`'s `HasEnoughMoney` test, `hMoney` written as ¥200 for every row.
+const VENDING_MONEY_CHECK: int = 200
 ## The one type byte every Generation 1 item wears, so the shared pack draws the
 ## bag as the single `DisplayListMenuID` list `engine/menus/start_sub_menus.asm`
 ## opens.
@@ -2295,6 +2306,9 @@ const TILESET_BLOCKS_YELLOW: Array[int] = [
 ## `IsNextTileShoreOrWater` calls water on one of them.
 const TILESET_LIST_END: int = 0xFF
 const WATER_TILE: int = 0x14
+## `EnterMap`'s `wNumberOfNoRandomBattleStepsLeft`, written only under the bit
+## `EndOfBattle` sets and the third counted step clears.
+const WILD_ENCOUNTER_COOLDOWN_STEPS: int = 3
 
 ## The two tilesets `SetPal_Overworld` tests before the map id, the two
 ## `CheckIfInOutsideMap` calls a town or a route, and the two beside them that
@@ -4208,6 +4222,14 @@ static func is_shore_or_water(tileset: int, water: bool, tile: int) -> bool:
 ## Where `wStatusFlags1`'s two bits sit in the shared engine flag space.
 static func status_flag_1(bit: int) -> int:
 	return engine_flag_base("status_flags_1") + bit
+
+
+## `BIT_USED_POKECENTER`, which the first visit's `ShallWeHealYourPokemonText` reads.
+const USED_POKECENTER_BIT: int = 2
+
+
+static func status_flag_4(bit: int) -> int:
+	return engine_flag_base("status_flags_4") + bit
 
 
 ## `LoadGBPal`, whose `sub b` counts bytes back from `FadePal4`. An offset past

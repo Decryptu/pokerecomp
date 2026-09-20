@@ -113,6 +113,13 @@ func test_a_level_that_teaches_nothing_offers_nothing() -> void:
 	assert_eq(Gen2Learnset.moves_learned_at(_golbat(), 13), [])
 
 
+## `LearnMoveFromLevelUp` returns behind the first row at the level, which is
+## why Yellow's VAPOREON is taught HAZE at 42 and never MIST.
+func test_generation_1_teaches_the_first_move_at_a_level_alone() -> void:
+	assert_eq(Gen2Learnset.moves_learned_at(_muk(), 45, true), [SLUDGE])
+	assert_eq(Gen2Learnset.moves_learned_at(_golbat(), 13, true), [])
+
+
 func test_the_same_move_is_offered_once_at_a_level() -> void:
 	assert_eq(Gen2Learnset.moves_learned_at(_golbat(), 1), [SCREECH, LEECH_LIFE, SUPERSONIC])
 	assert_eq(Gen2Learnset.moves_learned_at(_muk(), 1), [POISON_GAS, POUND, HARDEN])

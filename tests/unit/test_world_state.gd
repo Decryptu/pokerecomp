@@ -644,6 +644,20 @@ func test_the_step_that_runs_a_repel_out_is_an_edge_the_reader_holds() -> void:
 	assert_false(walking.repel_expired())
 
 
+## Generation 1 counts the Repel down inside `TryDoWildEncounter`: `count_step`
+## leaves it alone and `spend_repel_step` is the one decrement, answering on
+## the step it runs out on.
+func test_a_step_counted_without_the_repel_leaves_it_to_the_encounter_check() -> void:
+	var state := Gen2WorldState.new({}, {}, {}, {}, 0, {}, 2)
+	assert_true(state.count_step(false), "the step is counted")
+	assert_eq(state.repel_steps(), 2)
+	assert_eq(state.poison_step_count(), 1)
+	assert_false(state.spend_repel_step(), "one left is not the edge")
+	assert_true(state.spend_repel_step())
+	assert_true(state.repel_expired())
+	assert_false(state.spend_repel_step(), "nothing to spend")
+
+
 ## `DoRepelStep` stands in front of the counters and its wear-off answers with
 ## carry, so `CountStep` reaches `.doscript` and charges the step to nothing:
 ## not the poison phase, not the step count, not the Day-Care.

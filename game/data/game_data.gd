@@ -1593,7 +1593,9 @@ func starting_moves(number: int) -> Array:
 ## question asked again: see [Gen2Learnset] for why Muk's own list answers the
 ## two differently.
 func moves_learned_at(number: int, level: int) -> Array:
-	return Gen2Learnset.moves_learned_at(learnset(number), level)
+	return Gen2Learnset.moves_learned_at(
+		learnset(number), level, generation == RomRegistry.GEN1
+	)
 
 
 ## One of the per-species lists, with every named field coerced out of JSON's
