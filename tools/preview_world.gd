@@ -61,7 +61,10 @@ const KIND_HELP: Dictionary = {
 	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
 	&"pet_actor_arc": "cell: the same actor mid-ledge, at the top of the arc its span names",
 	&"warp": "warp tile: MapSetupScript_Door at its whitest, the frame the new map loads on",
-	&"dungeon_fall": "0 or 1: the step north onto a Generation 1 dungeon hole. 0 is LeaveMapAnim at its whitest, 1 the map DungeonWarpData lands on",
+	&"dungeon_fall": "frames: the step north onto a Generation 1 dungeon hole, then that many frames of LeaveMapThroughHoleAnim, the load and EnterMapAnim's spin (`red 0 192 ... dungeon_fall@17,7 140`)",
+	&"warp_pad": "frames: the step north onto a warp pad, then that many frames of _LeaveMapAnim's rise and EnterMapAnim's fall (`red 0 208 ... warp_pad@23,12 4`)",
+	&"escape_rope": "frames: ItemUseEscapeRope where the player stands, that many frames into _LeaveMapAnim's spin and the landing (`red 0 192 ... escape_rope@17,5 100`)",
+	&"gen1_fly": "frames: Fly to Viridian from where the player stands, that many frames into the bird's flight out and in (`red 0 0 ... gen1_fly@5,5 80`)",
 	&"ss_anne": "frames: VermilionDockSSAnneLeavesScript that many frames past the dock's load, walked off the ship's gangway with HM01 (`red 0 95 ... ss_anne@26,0 700`)",
 	&"boulder_dust": "frames: AnimateBoulderDust that many frames in, the boulder above pushed up from the cell after the @ (`red 0 108 ... boulder_dust@5,16 6`)",
 	&"spinner": "frames: LoadSpinnerArrowTiles that many frames into the ride the arrow above the cell after the @ starts (`red 0 45 ... spinner@19,12 40`)",
@@ -445,6 +448,7 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"pokemon_center_pc", &"start_menu", &"pokedex", &"trainer_card",
 	&"mod_notice", &"mod_page", &"sight", &"map_script",
 	&"reset_question", &"launcher_question", &"surfing", &"printer",
+	&"dungeon_fall", &"warp_pad", &"escape_rope", &"gen1_fly",
 ]
 
 
@@ -485,7 +489,10 @@ const STAGERS: Dictionary = {
 	&"mart_sell": &"_stage_mart",
 	&"elevator": &"_stage_elevator",
 	&"warp": &"_stage_warp",
-	&"dungeon_fall": &"_stage_dungeon_fall",
+	&"dungeon_fall": &"_stage_map_anim",
+	&"warp_pad": &"_stage_map_anim",
+	&"escape_rope": &"_stage_map_anim",
+	&"gen1_fly": &"_stage_map_anim",
 	&"ss_anne": &"_stage_ss_anne",
 	&"boulder_dust": &"_stage_boulder_dust",
 	&"spinner": &"_stage_spinner",
@@ -1088,28 +1095,27 @@ func _stage_warp() -> void:
 			break
 
 
-## `HandleFlyWarpOrDungeonWarp`: the step north onto a hole and the fade behind
-## it, whose last order is the frame the destination loads on. A first number of
-## 1 spends the fade in too (`red 0 192 ... dungeon_fall@17,7 1 0`).
-func _stage_dungeon_fall() -> void:
-	for _frame: int in WARP_FRAME_CAP:
-		_screen.move_up()
-		_screen.advance_frame()
-		var fade: Dictionary = _screen.map_fade()
-		if StringName(fade.get("stage", &"")) == &"out" \
-			and int(fade.get("step", 0)) == Gen2WorldPalette.FADE_OUT_ORDERS.size() - 1:
-			break
-	if _cell.x <= 0:
-		return
-	for _frame: int in WARP_FRAME_CAP:
-		if _screen.map_fade().is_empty():
-			break
-		_screen.advance_frame()
+func _stage_map_anim() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	match _kind:
+		&"escape_rope":
+			world.escape_rope_request()
+			_screen._start_gen1_map_anim(&"escape")
+		&"gen1_fly":
+			_screen._start_fly(VIRIDIAN_CITY)
+		_:
+			for _frame: int in WARP_FRAME_CAP:
+				if _screen.map_fade().has("anim"):
+					break
+				_screen.move_up()
+				_screen.advance_frame()
+	_screen.advance_frames(maxi(_cell.x, 0))
 
 
 ## EVENT_GOT_HM01, which `VermilionDock_Script` reads before `wDestinationWarpID`.
 const GOT_HM01_FLAG: int = 1504
 const VERMILION_DOCK: int = 94
+const VIRIDIAN_CITY: int = 1
 
 
 ## Off the gangway with HM01, then the script's own frames.

@@ -10,14 +10,8 @@ extends Node2D
 const PLAYER_COLOR: Color = Color("#d34a5a")
 const FALLBACK_BACKGROUND: Color = Color("#f5f1d8")
 
-## `.InitSprite` writes an object's OAM y as `add OAM_Y_OFS - 4` against a plain
-## `add OAM_X_OFS` on the other axis, so a 16x16 overworld sprite stands four
-## pixels above its own cell and nothing shifts it sideways. Every map object
-## shares the one write: the emote, the shadow, the boulder dust and the shaking
-## grass are tracking objects that copy the tracked object's `OBJECT_SPRITE_Y`,
-## and the jump arc, the tracking bob and the fishing rod are offsets added in
-## front of it. The tuft of grass over a sprite's legs is background rather than
-## OAM and takes no lift; OAM_PRIO is what draws it.
+## `.InitSprite`'s `add OAM_Y_OFS - 4`: every map object and tracking sprite
+## stands four pixels above its cell; the grass tuft is background and takes none.
 const SPRITE_LIFT := Vector2(0, -4)
 
 var _world: Gen2WorldAPI = null
@@ -402,13 +396,9 @@ func _palette_tables(palettes: Array) -> Array:
 	return out
 
 
-## `DoBattleTransition`, drawn over whatever the map was already showing.
-## [param cells] is [method Gen2BattleTransition.cells], [param tiles] the two
-## tiles `LoadBattleTransitionGFX` loads as index buffers, and [param palette] the
-## four colours the whole map is flooded with while a trainer's ball is up. An
-## empty palette is the wild branch, which floods nothing: its black tile is
-## colour 3 of whatever palette the cell was drawn in, and every overworld
-## palette's colour 3 is (7,7,7). [param order] is the flash's `wBGP`.
+## `DoBattleTransition` over the map: [param tiles] are `LoadBattleTransitionGFX`'s
+## two, [param palette] the trainer flood (empty on a wild, whose black is the
+## cell's own colour 3) and [param order] the flash's `wBGP`.
 func set_transition(
 	cells: PackedByteArray, tiles: PackedByteArray, palette: PackedColorArray,
 	sprites: int = Gen2BattleTransition.SPRITES_ALL, opponent: int = -1,
@@ -455,13 +445,9 @@ func clear_transition() -> void:
 	queue_redraw()
 
 
-## The transition's own cells. `wTilemap` is the background, and OAM draws over
-## the background, so these go under every sprite: the player and the NPCs stay
-## on top of the wedges until `StartTrainerBattle_Finish` takes them away.
-##
-## [param clip] is the rectangle to draw inside, and [param priority] the
-## OAM_PRIO pass a sprite standing in grass wants: colour 0 loses that test, so
-## it is left transparent there and drawn like any other colour here.
+## The transition's cells are `wTilemap`, under every sprite until
+## `StartTrainerBattle_Finish`; [param priority] is the OAM_PRIO pass, where
+## colour 0 is left transparent.
 func _draw_transition(
 	camera_pixels: Vector2, clip: Rect2 = Rect2(), priority: bool = false
 ) -> void:
@@ -658,12 +644,9 @@ func _subpixel_steps() -> int:
 	return maxi(1, int(surface.canvas_transform.get_scale().x))
 
 
-## Lays the map quads out under this frame's camera, in the order the cartridge's
-## own buffer would be read in if it had one this wide: the border block under
-## everything, then each connected map furthest first, then `wOverworldMapBlocks`
-## over the top. That last one keeps the three-block margin byte for byte the
-## cartridge's, since a connection strip stops at the `length` the macro stored
-## and a neighbour map drawn whole does not.
+## The map quads under this frame's camera: the border block, each connected
+## map furthest first, then `wOverworldMapBlocks`, whose three-block margin a
+## whole neighbour map would overdraw past the strip's `length`.
 func _sync_map_layers() -> void:
 	if _world == null or _world.current_map == null or _world.current_tileset == null \
 		or _atlas == null:
@@ -899,12 +882,8 @@ func _draw_hidden_trees(background: Vector2) -> void:
 func _row_entries(battlers_only: bool) -> Array:
 	var objects: Array = _world.visible_objects()
 	objects.sort_custom(_sort_objects)
-	## A mod's actors are drawn in the same pass and sorted into the same rows:
-	## a follower one cell below an NPC has to be drawn over it, and one cell
-	## above it under it. They carry no effect sprite and no grass of their own
-	## beyond the tuft the map draws over anything standing in it, an emote only
-	## when the entry asked for one, and they are map objects here, so the
-	## respawn takes them with the rest.
+	## A mod's actors are sorted into the same rows, carry no effect sprite, and
+	## are map objects here, so the respawn takes them with the rest.
 	var drawn: Array = []
 	for object: Gen2WorldObject in objects:
 		if battlers_only and object.index != _transition_opponent:
@@ -971,6 +950,10 @@ func _draw_row_entries(
 
 func _draw_player(background: Vector2) -> Vector2:
 	var player: Vector2 = Vector2(_world.player_view_pixel()) + SPRITE_LIFT
+	var anim: Dictionary = _effects.player_anim() if _effects != null else {}
+	if not anim.is_empty():
+		_draw_player_anim(anim, player)
+		return player
 	## The jump arc is a sprite offset, not a position: the shadow and the grass
 	## the hop leaves behind stay on the ground.
 	var jump: Vector2 = Vector2(0, _world.player_jump_offset())
@@ -996,6 +979,37 @@ func _draw_player(background: Vector2) -> Vector2:
 		draw_line(marker.position, marker.end, PLAYER_COLOR, 1.0)
 		draw_line(Vector2(marker.end.x, marker.position.y), Vector2(marker.position.x, marker.end.y), PLAYER_COLOR, 1.0)
 	return player
+
+
+## `PrepareOAMData`'s player under `_LeaveMapAnim` and `EnterMapAnim`, clipped
+## to the 160x144 pane; `LeaveMapThroughHoleAnim` moves the top half a row down.
+func _draw_player_anim(anim: Dictionary, player: Vector2) -> void:
+	if bool(anim.get("hidden", false)):
+		return
+	var sprite: Gen2WorldSprite = _world.data.overworld_sprite(Gen1Layout.SPRITE_BIRD) \
+		if bool(anim.get("bird", false)) else _world.player_sprite()
+	var image: int = int(anim.get("image", 0))
+	var texture: Texture2D = _actor_texture(
+		sprite, _world.player_palette(), image >> 2, image & 3
+	)
+	if texture == null:
+		return
+	var at: Vector2 = player + Vector2(
+		int(anim.get("x", Gen1Layout.PLAYER_SPRITE_PIXELS.x)) - Gen1Layout.PLAYER_SPRITE_PIXELS.x,
+		int(anim.get("y", Gen1Layout.PLAYER_SPRITE_PIXELS.y)) - Gen1Layout.PLAYER_SPRITE_PIXELS.y
+	)
+	var region := Rect2(Vector2.ZERO, texture.get_size())
+	if bool(anim.get("half", false)):
+		region.size.y *= 0.5
+		at.y += region.size.y
+	var shown: Rect2 = Rect2(at, region.size).intersection(
+		Rect2(screen_offset(), Vector2(Gen2WorldAPI.VIEW_PIXELS))
+	)
+	if shown.size.x <= 0.0 or shown.size.y <= 0.0:
+		return
+	draw_texture_rect_region(
+		texture, shown, Rect2(region.position + shown.position - at, shown.size)
+	)
 
 
 ## The sprites the source draws from `wShadowOAMSprite36` up.

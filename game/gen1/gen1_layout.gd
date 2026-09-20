@@ -550,6 +550,35 @@ const BOULDER_DUST_OBP1_FLASH: int = 0x64
 const BOULDER_DUST_DRIFT: Array[Vector2i] = [
 	Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, 0), Vector2i(-1, 0),
 ]
+## `WarpPadAndHoleData`: tileset, the tile under `lda_coord 8, 9`, and the value.
+const WARP_PAD_HOLE_TILES: Array[Array] = [
+	[TILESET_FACILITY, 0x20, 1], [TILESET_FACILITY, 0x11, 2],
+	[TILESET_CAVERN, 0x22, 2], [TILESET_INTERIOR, 0x55, 1],
+]
+const STANDING_ON_WARP_PAD: int = 1
+const STANDING_ON_HOLE: int = 2
+const SPRITE_BIRD: int = 0x09
+const SFX_TELEPORT_EXIT_1: int = 159
+const SFX_TELEPORT_ENTER_1: int = 160
+const SFX_TELEPORT_EXIT_2: int = 161
+const SFX_TELEPORT_ENTER_2: int = 163
+const SFX_FLY: int = 164
+## `DoFlyAnimation`'s three (y, x) lists; the last row of the second is inside its eleven.
+const FLY_ENTER_COORDS: Array[Vector2i] = [
+	Vector2i(0x05, 0x98), Vector2i(0x0F, 0x90), Vector2i(0x18, 0x88), Vector2i(0x20, 0x80),
+	Vector2i(0x27, 0x78), Vector2i(0x2D, 0x70), Vector2i(0x32, 0x68), Vector2i(0x36, 0x60),
+	Vector2i(0x39, 0x58), Vector2i(0x3B, 0x50), Vector2i(0x3C, 0x48), Vector2i(0x3C, 0x40),
+]
+const FLY_EXIT_COORDS_1: Array[Vector2i] = [
+	Vector2i(0x3C, 0x48), Vector2i(0x3C, 0x50), Vector2i(0x3B, 0x58), Vector2i(0x3A, 0x60),
+	Vector2i(0x39, 0x68), Vector2i(0x37, 0x70), Vector2i(0x37, 0x78), Vector2i(0x33, 0x80),
+	Vector2i(0x30, 0x88), Vector2i(0x2D, 0x90), Vector2i(0x2A, 0x98), Vector2i(0x27, 0xA0),
+]
+const FLY_EXIT_COORDS_2: Array[Vector2i] = [
+	Vector2i(0x1A, 0x90), Vector2i(0x19, 0x80), Vector2i(0x17, 0x70), Vector2i(0x15, 0x60),
+	Vector2i(0x12, 0x50), Vector2i(0x0F, 0x40), Vector2i(0x0C, 0x30), Vector2i(0x09, 0x20),
+	Vector2i(0x05, 0x10), Vector2i(0x00, 0x00), Vector2i(0xF0, 0x00),
+]
 ## `VermilionDockSSAnneLeavesScript`: `ld c, 120` and `Delay3` in front of the
 ## horn, eight columns of sixteen drifts of eight frames, `EraseSSAnne`'s two
 ## frames of `CopyVideoData`, the horn again and `ld c, 120`. A puff opens at
@@ -1262,6 +1291,7 @@ const FADE_PALS: Array[int] = [
 	0xE4, 0xD0, 0xE0, 0x90, 0x80, 0x90, 0x40, 0x40, 0x40, 0x00, 0x00, 0x00,
 ]
 const FADE_PAL_BASE: int = 9
+const FADE_PAL_ROW: int = 3
 const FADE_PAL_BACKGROUND: int = 0
 const FADE_PAL_OBJECT: int = 1
 
@@ -2249,6 +2279,7 @@ const WATER_TILE: int = 0x14
 ## `CheckIfInOutsideMap` calls a town or a route, and the two beside them that
 ## `ExtraWarpCheck` reads a carpet on.
 const TILESET_CEMETERY: int = 15
+const TILESET_INTERIOR: int = 16
 const TILESET_CAVERN: int = 17
 const TILESET_OVERWORLD: int = 0
 const TILESET_PLATEAU: int = 23

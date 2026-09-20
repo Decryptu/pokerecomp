@@ -11590,6 +11590,34 @@ func gen1_dungeon_fall() -> Dictionary:
 	}
 
 
+## `IsPlayerStandingOnWarpPadOrHole`.
+func gen1_warp_pad_or_hole() -> int:
+	if not _gen1 or current_map == null:
+		return 0
+	var tile: int = _gen1_screen_tile(Gen1Layout.SCREEN_PLAYER_COLUMN, Gen1Layout.SCREEN_PLAYER_ROW)
+	for row: Array in Gen1Layout.WARP_PAD_HOLE_TILES:
+		if int(row[0]) == current_map.tileset and int(row[1]) == tile:
+			return int(row[2])
+	return 0
+
+
+## `WarpFound2.indoorMaps`: off a pad, to a map of its own, `LeaveMapAnim` runs
+## and `PlayMapChangeSound` does not.
+func gen1_warp_pad_pending() -> bool:
+	if not _gen1 or current_map == null \
+		or current_map.tileset == Gen1Layout.TILESET_OVERWORLD:
+		return false
+	var warp: Dictionary = _gen1_warp_entry_over(player_cell, warp_at(player_cell))
+	if warp.is_empty() or int(warp.get("map_number", -1)) == Gen1Layout.WARP_TO_LAST_MAP:
+		return false
+	return gen1_warp_pad_or_hole() == Gen1Layout.STANDING_ON_WARP_PAD
+
+
+## `wSpritePlayerStateData1ImageIndex` as the player stands.
+func gen1_player_image() -> int:
+	return player_drawn_facing() << 2
+
+
 ## `PlayMapChangeSound`'s own test: `lda_coord 8, 8`, a row above every other
 ## read, against the OVERWORLD door tile, whatever tileset the map wears.
 func gen1_entered_a_door() -> bool:
@@ -11817,6 +11845,8 @@ func _gen1_leave_map_on_foot() -> void:
 	player_sprite_number = _walking_sprite()
 	gen1_map_pal_offset = 0
 	state.set_engine_flag(Gen2WorldState.always_on_bike_flag(data), false)
+	## `SpecialEnterMap`'s `ResetPlayerSpriteData` zeroes the image index.
+	player_facing = Gen2WorldSprite.FACING_DOWN
 
 
 ## `LoadBikePlayerSpriteGraphics`' own sheet. Generation 1's is `RedBikeSprite`,

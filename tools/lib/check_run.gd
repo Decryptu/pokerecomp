@@ -127,6 +127,27 @@ func open_world(
 	return world
 
 
+func open_screen(group: int, number: int, cell: Vector2i, party: bool = true) -> Gen2WorldScreen:
+	var screen: Gen2WorldScreen = (load("res://game/world/world_screen.tscn") as PackedScene).instantiate()
+	screen.map_group = group
+	screen.map_number = number
+	screen.start_cell = cell
+	screen.encounter_seed = 1
+	screen.set_data(data)
+	var save: Gen2SaveData = Gen2SaveStore.create_development_save(data, 0)
+	if not party:
+		save.party = []
+	screen.set_save(save)
+	(Engine.get_main_loop() as SceneTree).root.add_child(screen)
+	screen.set_process(false)
+	return screen
+
+
+func close_screen(screen: Gen2WorldScreen) -> void:
+	(Engine.get_main_loop() as SceneTree).root.remove_child(screen)
+	screen.free()
+
+
 ## Every cell reachable on foot from [param from], which is what says two parts
 ## of a map are joined or sealed off from each other.
 func region(world: Gen2WorldAPI, from: Vector2i) -> Dictionary:

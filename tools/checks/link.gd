@@ -147,15 +147,7 @@ func _gen1_partner() -> Gen2LinkTransport:
 
 
 func _gen1_open_screen(map: int, cell: Vector2i, in_room: bool) -> Gen2WorldScreen:
-	var screen: Gen2WorldScreen = (load("res://game/world/world_screen.tscn") as PackedScene).instantiate()
-	screen.map_group = 0
-	screen.map_number = map
-	screen.start_cell = cell
-	screen.encounter_seed = 1
-	screen.set_data(_r.data)
-	screen.set_save(Gen2SaveStore.create_development_save(_r.data, 0))
-	(Engine.get_main_loop() as SceneTree).root.add_child(screen)
-	screen.set_process(false)
+	var screen: Gen2WorldScreen = _r.open_screen(0, map, cell)
 	var world: Gen2WorldAPI = screen.world()
 	world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
 	world.state.set_link_transport(_gen1_partner())
@@ -168,8 +160,7 @@ func _gen1_open_screen(map: int, cell: Vector2i, in_room: bool) -> Gen2WorldScre
 
 
 func _gen1_close_screen(screen: Gen2WorldScreen) -> void:
-	(Engine.get_main_loop() as SceneTree).root.remove_child(screen)
-	screen.free()
+	_r.close_screen(screen)
 
 
 ## Frames until [param until] answers true, [param press] pressed every few; -1

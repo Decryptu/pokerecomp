@@ -1,13 +1,9 @@
 class_name Gen2WorldEffects
 extends RefCounted
 
-## Scene-free presentation state for effects the overworld engine paces in hardware
-## frames: the renderer owns the pixels and this owns the source duration,
-## amplitude and deterministic offsets. Two shapes live here. `ShakeScreen` is one
-## packed byte of duration and amplitude. The rest are the sprites the engine draws
-## over the map rather than as map objects, `SpawnStrengthBoulderDust`,
-## `ShakeGrass`, `ShakeHeadbuttTree`, `OWCutAnimation` and `SpawnShadow`, each its
-## own frameset over one of the sheets `GameData.overworld_effect()` holds.
+## Scene-free state for the effects the overworld paces in hardware frames:
+## `ShakeScreen`'s packed byte, and the sprites drawn over the map rather than
+## as map objects, each a frameset over a `GameData.overworld_effect()` sheet.
 
 var _frame: int = 0
 var _duration: int = 0
@@ -31,12 +27,9 @@ const SPRITE_SHADOW: StringName = &"shadow"
 const SPRITE_HEAL_MACHINE: StringName = &"heal_machine"
 const SPRITE_FLY_MON: StringName = &"fly_mon"
 
-## `HealMachineAnim`'s two OAM tables, as (screen pixel, tile, flip). An OAM byte
-## pair is (y + 16, x + 8), so each `dbsprite` is read back to the pixel the
-## renderer draws at. `.PC_ElmsLab_OAM` starts with the two `$7c` halves of the
-## machine itself, which `.PC_LoadBallsOntoMachine` places before the party loop
-## and `.HOF_LoadBallsOntoMachine` does not; the six behind them are the balls,
-## one a party member.
+## `HealMachineAnim`'s OAM tables as (screen pixel, tile, flip), the `dbsprite`
+## (y + 16, x + 8) taken off. `.PC_ElmsLab_OAM` opens with the machine's two
+## `$7c` halves, which `.HOF_LoadBallsOntoMachine` does not place.
 const HEAL_MACHINE_BAR: Array = [
 	[Vector2i(26, 16), 0, false],
 	[Vector2i(30, 16), 0, false],
@@ -227,12 +220,8 @@ func start_headbutt_tree(cell: Vector2i) -> void:
 	})
 
 
-## `OWCutAnimation`, over the cell the block being cut is faced from. Index 0 is
-## the splitting tree and index 1 the four leaves (`Gen2WorldFieldMove`'s
-## ANIMATION_TREE and ANIMATION_GRASS), which is the byte
-## `CheckOverworldTileArrays` returns beside the replacement block.
-## [param player_cell] is where the player stands, which is what picks the
-## leaves' own corner of the block.
+## `OWCutAnimation`: [param animation] is `CheckOverworldTileArrays`' byte, 0 the
+## splitting tree and 1 the leaves, whose corner of the block [param player_cell] picks.
 func start_cut(
 	cell: Vector2i, animation: int, direction: Vector2i, player_cell: Vector2i
 ) -> void:
@@ -307,12 +296,8 @@ func start_boulder_dust(object_index: int, cell: Vector2i, direction: Vector2i, 
 	})
 
 
-## `HealMachineAnim`, which is neither a map object nor an object-tracking
-## sprite: its OAM is written at fixed screen pixels while the script waits, and
-## it wears `gfx/overworld/heal_machine.pal` over `wOBPals2`' PAL_OW_TREE slot
-## rather than an overworld palette, which is what `palette: -1` says here.
-## [param balls] is `wPartyCount`; the source returns before writing anything
-## when it is zero.
+## `HealMachineAnim`: OAM at fixed screen pixels, wearing
+## `gfx/overworld/heal_machine.pal` (`palette: -1`); [param balls] is `wPartyCount`.
 func start_heal_machine(
 	machine_type: int, balls: int, generation: int = RomRegistry.GEN2
 ) -> void:
@@ -364,6 +349,209 @@ static func fly_sfx_frames(arriving: bool) -> Array[int]:
 		if left >= FLY_HOLD_FRAMES and left % 8 == 0:
 			out.append(frame)
 	return out
+
+
+## `engine/overworld/player_animations.asm` as steps a screen spends a frame at
+## a time: the drawing left standing (`image`, `y`, `x`, `bird`, `half`,
+## `hidden`), `hold` frames or a `wait` on the driver, and the screen's actions.
+const PLAYER_ANIM_SPIN_IMAGES: Array[int] = [0x00, 0x08, 0x04, 0x0C]
+## `GetPlayerTeleportAnimFrameDelay` under `wOnSGB`, which `SpinPlayerSprite`
+## also draws as the image while rising or falling: `hl` is left on the delay byte.
+const PLAYER_ANIM_DELAY: int = 2
+const PLAYER_ANIM_STEP_Y: int = 0x10
+const PLAYER_ANIM_OFF_SCREEN_Y: int = 0xEC - 0x100
+const PLAYER_ANIM_SETUP_FRAMES: int = 3
+const PLAYER_ANIM_STOP_MUSIC_FADE: int = 4
+const PLAYER_ANIM_EXIT_SPIN_DELAY: int = 16
+const PLAYER_ANIM_ENTER_SPIN_END: int = 8
+const PLAYER_ANIM_NOT_ON_PAD_FRAMES: int = 10
+const PLAYER_ANIM_HOLE_HALF_FRAMES: int = 2
+const PLAYER_ANIM_HOLE_WAIT_FRAMES: int = 50
+const PLAYER_ANIM_FLAPS_IN_PLACE: int = 8
+const PLAYER_ANIM_FLAP_FRAMES: int = 3
+const PLAYER_ANIM_FLY_REST_FRAMES: int = 40
+const PLAYER_ANIM_FLY_OUT_IMAGE: int = 0x0C
+const PLAYER_ANIM_FLY_BACK_IMAGE: int = 0x08
+## `LoadBirdSpriteGraphics`' two `CopyVideoData`s, with Red and Blue's twelve tiles ahead.
+const PLAYER_ANIM_BIRD_LOAD_FRAMES: int = 4
+const PLAYER_ANIM_BIRD_ENTER_LOAD_FRAMES: Dictionary = {
+	RomRegistry.RED: 6, RomRegistry.BLUE: 6, RomRegistry.YELLOW: 4,
+}
+## `LoadPlayerSpriteGraphics` behind the landing, the bird's index still drawn.
+const PLAYER_ANIM_PLAYER_LOAD_FRAMES: int = 4
+## `RestoreFacingDirectionAndYScreenPos` to `EnterMapAnim`, measured, and
+## `LoadMapData` alone behind a pad.
+const PLAYER_ANIM_SPECIAL_LOAD_FRAMES: Dictionary = {
+	RomRegistry.RED: 32, RomRegistry.BLUE: 32, RomRegistry.YELLOW: 36,
+}
+const PLAYER_ANIM_PAD_LOAD_FRAMES: Dictionary = {
+	RomRegistry.RED: 12, RomRegistry.BLUE: 12, RomRegistry.YELLOW: 16,
+}
+## `GBFadeOutToWhite` and `GBFadeInFromWhite`'s rows; Yellow's `UpdateCGBPal_BGP` holds one more.
+const PLAYER_ANIM_FADE_OUT_ROWS: Array[int] = [5, 6, 7]
+const PLAYER_ANIM_FADE_IN_ROWS: Array[int] = [6, 5, 4]
+const PLAYER_ANIM_FADE_STEP_FRAMES: int = 8
+const PLAYER_ANIM_CGB_FADE_FRAMES: Dictionary = {RomRegistry.YELLOW: 1}
+const PLAYER_ANIM_KINDS: Array[StringName] = [&"fly", &"escape", &"pad", &"hole"]
+
+var _player_anim: Dictionary = {}
+
+
+func player_anim() -> Dictionary:
+	return _player_anim.duplicate()
+
+
+func apply_player_anim(step: Dictionary) -> bool:
+	var changed: bool = false
+	for key: String in ["image", "y", "x", "bird", "hidden", "half"]:
+		if step.has(key) and _player_anim.get(key) != step[key]:
+			_player_anim[key] = step[key]
+			changed = true
+	return changed
+
+
+func clear_player_anim() -> void:
+	_player_anim = {}
+
+
+## `_LeaveMapAnim` from `HandleFlyWarpOrDungeonWarp` or `WarpFound2.indoorMaps`
+## to the `swap`; [param image] is what `InitFacingDirectionList` saves.
+static func gen1_leave_steps(kind: StringName, id: StringName, image: int) -> Array:
+	var steps: Array = [_standing(image)]
+	match kind:
+		&"pad":
+			steps.append({"sfx": Gen1Layout.SFX_TELEPORT_EXIT_1})
+			steps.append_array(_spin_moving(-PLAYER_ANIM_STEP_Y, PLAYER_ANIM_OFF_SCREEN_Y))
+		&"hole":
+			steps.append({"hold": PLAYER_ANIM_SETUP_FRAMES})
+			steps.append({"half": true, "hold": PLAYER_ANIM_HOLE_HALF_FRAMES})
+			steps.append({"hidden": true})
+		&"escape":
+			steps.append({"hold": PLAYER_ANIM_SETUP_FRAMES})
+			steps.append({"stop_music": PLAYER_ANIM_STOP_MUSIC_FADE, "wait": &"music"})
+			steps.append_array(_spin_in_place(
+				PLAYER_ANIM_EXIT_SPIN_DELAY, -1, 0, Gen1Layout.SFX_TELEPORT_EXIT_2, 0
+			))
+			steps.append({"sfx": Gen1Layout.SFX_TELEPORT_EXIT_1})
+			steps.append_array(_spin_moving(-PLAYER_ANIM_STEP_Y, PLAYER_ANIM_OFF_SCREEN_Y))
+			steps.append({"hold": PLAYER_ANIM_NOT_ON_PAD_FRAMES})
+		&"fly":
+			steps.append({"hold": PLAYER_ANIM_SETUP_FRAMES})
+			steps.append({"stop_music": PLAYER_ANIM_STOP_MUSIC_FADE, "wait": &"music"})
+			steps.append({"hold": PLAYER_ANIM_BIRD_LOAD_FRAMES})
+			steps.append_array(_fly_flaps(PLAYER_ANIM_FLY_OUT_IMAGE, PLAYER_ANIM_FLAPS_IN_PLACE, []))
+			steps.append({"sfx": Gen1Layout.SFX_FLY})
+			steps.append_array(_fly_flaps(
+				PLAYER_ANIM_FLY_OUT_IMAGE, Gen1Layout.FLY_EXIT_COORDS_1.size(),
+				Gen1Layout.FLY_EXIT_COORDS_1
+			))
+			steps.append({"hold": PLAYER_ANIM_FLY_REST_FRAMES})
+			steps.append_array(_fly_flaps(
+				PLAYER_ANIM_FLY_BACK_IMAGE, Gen1Layout.FLY_EXIT_COORDS_2.size(),
+				Gen1Layout.FLY_EXIT_COORDS_2
+			))
+	steps.append_array(_fade_steps(PLAYER_ANIM_FADE_OUT_ROWS, id))
+	steps.append(_standing(image))
+	steps.append({"swap": true})
+	return steps
+
+
+## `EnterMapAnim` from `RestoreFacingDirectionAndYScreenPos`'s frame.
+static func gen1_enter_steps(kind: StringName, id: StringName, image: int, on_pad: bool) -> Array:
+	var loading: Dictionary = PLAYER_ANIM_PAD_LOAD_FRAMES if kind == &"pad" \
+		else PLAYER_ANIM_SPECIAL_LOAD_FRAMES
+	var steps: Array = [{"hold": int(loading[id])}]
+	var arrived: Dictionary = _standing(image)
+	arrived["y"] = PLAYER_ANIM_OFF_SCREEN_Y
+	arrived["hold"] = PLAYER_ANIM_SETUP_FRAMES
+	steps.append(arrived)
+	steps.append_array(_fade_steps(PLAYER_ANIM_FADE_IN_ROWS, id))
+	if kind == &"fly":
+		steps.append({"hold": int(PLAYER_ANIM_BIRD_ENTER_LOAD_FRAMES[id])})
+		steps.append({"sfx": Gen1Layout.SFX_FLY})
+		steps.append_array(_fly_flaps(
+			PLAYER_ANIM_FLY_BACK_IMAGE, Gen1Layout.FLY_ENTER_COORDS.size(),
+			Gen1Layout.FLY_ENTER_COORDS
+		))
+		steps.append({"bird": false, "hold": PLAYER_ANIM_PLAYER_LOAD_FRAMES})
+		steps.append({"wait": &"sfx"})
+		steps.append({"music": true})
+	else:
+		steps.append({"sfx": Gen1Layout.SFX_TELEPORT_ENTER_1})
+		if kind == &"hole":
+			steps.append({"hold": PLAYER_ANIM_HOLE_WAIT_FRAMES})
+		steps.append_array(_spin_moving(PLAYER_ANIM_STEP_Y, Gen1Layout.PLAYER_SPRITE_PIXELS.y))
+		if kind != &"hole":
+			steps.append({"sfx": Gen1Layout.SFX_TELEPORT_ENTER_2})
+		if kind != &"hole" and not on_pad:
+			## `ld hl, wFacingDirectionList` after the fall's five rotations.
+			steps.append_array(_spin_in_place(
+				0, 1, PLAYER_ANIM_ENTER_SPIN_END, -1, PLAYER_ANIM_SPIN_IMAGES.size() + 1
+			))
+			steps.append({"wait": &"sfx"})
+			steps.append({"music": true})
+	steps.append(_standing(image))
+	return steps
+
+
+static func _standing(image: int) -> Dictionary:
+	return {
+		"image": image, "y": Gen1Layout.PLAYER_SPRITE_PIXELS.y,
+		"x": Gen1Layout.PLAYER_SPRITE_PIXELS.x, "bird": false, "hidden": false, "half": false,
+	}
+
+
+## `PlayerSpinInPlace`, which ends the moment the delay reaches [param end].
+static func _spin_in_place(delay: int, delta: int, end: int, sfx: int, first: int) -> Array:
+	var steps: Array = []
+	var index: int = first
+	while true:
+		var step: Dictionary = {"image": PLAYER_ANIM_SPIN_IMAGES[index % PLAYER_ANIM_SPIN_IMAGES.size()]}
+		index += 1
+		if delay & 3 == 0 and sfx >= 0:
+			step["sfx"] = sfx
+		delay += delta
+		steps.append(step)
+		if delay == end:
+			return steps
+		step["hold"] = delay
+	return steps
+
+
+## `PlayerSpinWhileMovingUpOrDown`.
+static func _spin_moving(delta_y: int, to_y: int) -> Array:
+	var steps: Array = []
+	var y: int = PLAYER_ANIM_OFF_SCREEN_Y if delta_y > 0 else Gen1Layout.PLAYER_SPRITE_PIXELS.y
+	while y != to_y:
+		y += delta_y
+		var step: Dictionary = {"image": PLAYER_ANIM_DELAY, "y": y}
+		steps.append(step)
+		if y != to_y:
+			step["hold"] = PLAYER_ANIM_DELAY
+	return steps
+
+
+## `DoFlyAnimation`: a flap, `Delay3`, then the list's next pair.
+static func _fly_flaps(image: int, count: int, coords: Array) -> Array:
+	var steps: Array = []
+	for index: int in count:
+		image ^= 1
+		steps.append({"image": image, "bird": true, "hold": PLAYER_ANIM_FLAP_FRAMES})
+		if not coords.is_empty():
+			var pair: Vector2i = coords[index]
+			steps.append({"y": _signed(pair.x), "x": pair.y})
+	return steps
+
+
+static func _fade_steps(rows: Array[int], id: StringName) -> Array:
+	var steps: Array = []
+	var frames: int = PLAYER_ANIM_FADE_STEP_FRAMES + int(PLAYER_ANIM_CGB_FADE_FRAMES.get(id, 0))
+	for row: int in rows:
+		steps.append({
+			"fade": Gen1Layout.FADE_PALS[row * Gen1Layout.FADE_PAL_ROW + Gen1Layout.FADE_PAL_BACKGROUND],
+			"hold": frames,
+		})
+	return steps
 
 
 ## The three sprites that are temporary map objects on the cartridge, so their
