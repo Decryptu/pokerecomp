@@ -3103,13 +3103,16 @@ func script_fade() -> Dictionary:
 ## `MapSetupScript_Door`'s `FadeOutToWhite` is the first thing the setup script
 ## spends: four palette orders, two frames each, before anything is loaded.
 func _start_map_fade() -> void:
-	var sfx: int = _warp_sfx()
-	if sfx >= 0:
-		_play_sfx(sfx)
-	if _world.is_gen1() and not _pending_dungeon_fall:
+	if _world.is_gen1():
+		var kind: StringName = _gen1_map_anim_kind()
+		if kind != &"":
+			_start_gen1_map_anim(kind)
+			return
+		_play_sfx(_warp_sfx())
 		_map_fade = {"stage": &"out", "step": 0, "gen1": 0}
 		_apply_gen1_warp_frame()
 		return
+	_play_sfx(_warp_sfx())
 	_map_fade = {"stage": &"out", "step": 0, "frames": Gen2WorldPalette.FADE_STEP_FRAMES}
 	_apply_map_fade_step()
 
@@ -3167,11 +3170,148 @@ func _apply_gen1_warp_frame() -> void:
 	_renderer.call(Gen2ModHost.RENDERER_FADE_METHOD, order, false)
 
 
-## `GetWarpSFX`, off `wPlayerTileCollision`. Generation 1 has no such table:
-## `PlayMapChangeSound` reads one tile and the fall's own anim plays nothing.
-func _warp_sfx() -> int:
+## `HandleFlyWarpOrDungeonWarp` off a hole and `WarpFound2.indoorMaps` off a pad.
+func _gen1_map_anim_kind() -> StringName:
 	if _pending_dungeon_fall:
-		return -1
+		return &"hole"
+	if _world.gen1_warp_pad_pending():
+		return &"pad"
+	return &""
+
+
+## `_LeaveMapAnim`, the load and `EnterMapAnim` as [Gen2WorldEffects]' steps,
+## riding [member _map_fade] since the joypad is read through none of it.
+func _start_gen1_map_anim(kind: StringName, fields: Dictionary = {}) -> void:
+	_zero_map_name_sign_timer()
+	_map_fade = {"stage": &"anim", "anim": {
+		"kind": kind, "fields": fields, "index": -1, "hold": 0, "frame": 0,
+		"trace": [], "watch": {},
+		"steps": Gen2WorldEffects.gen1_leave_steps(kind, _data.id, _world.gen1_player_image()),
+	}}
+	_advance_gen1_map_anim_steps()
+
+
+var _gen1_map_anim_trace: Array = []
+
+
+func gen1_map_anim_trace() -> Array:
+	if _map_fade.has("anim"):
+		return (_map_fade["anim"]["trace"] as Array).duplicate()
+	return _gen1_map_anim_trace.duplicate()
+
+
+func _advance_gen1_map_anim() -> void:
+	var anim: Dictionary = _map_fade["anim"]
+	anim["frame"] = int(anim["frame"]) + 1
+	if int(anim["hold"]) > 0:
+		anim["hold"] = int(anim["hold"]) - 1
+		if int(anim["hold"]) > 0:
+			return
+	_advance_gen1_map_anim_steps()
+
+
+## A step is applied on the frame its hold runs out, as `DelayFrames` returns.
+func _advance_gen1_map_anim_steps() -> void:
+	var anim: Dictionary = _map_fade["anim"]
+	while not _map_fade.is_empty():
+		var index: int = int(anim["index"])
+		var steps: Array = anim["steps"]
+		if index >= 0 and index < steps.size() and _gen1_map_anim_waiting(anim, steps[index]):
+			return
+		index += 1
+		if index >= steps.size():
+			_finish_gen1_map_anim(anim)
+			return
+		anim["index"] = index
+		var step: Dictionary = steps[index]
+		_apply_gen1_map_anim_step(anim, step)
+		if int(step.get("hold", 0)) > 0:
+			anim["hold"] = int(step["hold"])
+			return
+
+
+## `StopMusic`'s `.wait` and `PlayDefaultMusic`'s `WaitForSoundToFinish`; a
+## driver that has never rendered a frame is waited on for none.
+func _gen1_map_anim_waiting(anim: Dictionary, step: Dictionary) -> bool:
+	if not step.has("wait") or _audio_player == null or _audio_player.timeline_updates() == 0:
+		return false
+	return _audio_player.still_waiting(anim["watch"], StringName(step["wait"]) == &"music")
+
+
+func _apply_gen1_map_anim_step(anim: Dictionary, step: Dictionary) -> void:
+	if _effects != null and _effects.apply_player_anim(step) and _renderer != null:
+		_renderer.refresh()
+	var trace: Array = anim["trace"]
+	var frame: int = int(anim["frame"])
+	if step.has("sfx"):
+		_play_gen1_sound(int(step["sfx"]))
+		trace.append("%d sfx %d" % [frame, int(step["sfx"])])
+	if step.has("fade"):
+		trace.append("%d fade $%02X" % [frame, int(step["fade"])])
+		if _renderer != null and _renderer.has_method(Gen2ModHost.RENDERER_FADE_METHOD):
+			_renderer.call(Gen2ModHost.RENDERER_FADE_METHOD, int(step["fade"]), false)
+	if step.has("stop_music"):
+		trace.append("%d stop_music %d" % [frame, int(step["stop_music"])])
+		if _audio_player != null:
+			_audio_player.fade_out(int(step["stop_music"]))
+	if step.has("wait"):
+		anim["watch"] = {}
+	if bool(step.get("swap", false)):
+		trace.append("%d swap" % frame)
+		_gen1_map_anim_swap(anim)
+	if bool(step.get("music", false)):
+		trace.append("%d music" % frame)
+		_play_current_map_music()
+
+
+## `LoadMapData` under BIT_FLY_WARP or BIT_DUNGEON_WARP starts no music.
+func _gen1_map_anim_swap(anim: Dictionary) -> void:
+	var kind: StringName = anim["kind"]
+	var landed: Dictionary = {}
+	match kind:
+		&"fly":
+			landed = _world.gen1_fly_to(int((anim["fields"] as Dictionary).get("spawn", -1)))
+		&"escape":
+			landed = _world.complete_escape()
+		&"hole":
+			_pending_dungeon_fall = false
+			landed = _world.gen1_dungeon_fall()
+		&"pad":
+			landed = _world.try_warp()
+	if not bool(landed.get("ok", false)):
+		_finish_gen1_map_anim(anim)
+		return
+	if kind in [&"fly", &"escape"]:
+		_refresh_after_escape(false)
+	else:
+		_clear_script_fade()
+		_animation.configure(_world, _render_time_of_day())
+		_set_renderer_world()
+	anim["steps"] = Gen2WorldEffects.gen1_enter_steps(
+		kind, _data.id, _world.gen1_player_image(),
+		_world.gen1_warp_pad_or_hole() == Gen1Layout.STANDING_ON_WARP_PAD
+	)
+	anim["index"] = -1
+
+
+func _finish_gen1_map_anim(anim: Dictionary) -> void:
+	_gen1_map_anim_trace = anim["trace"]
+	_map_fade = {}
+	if _effects != null:
+		_effects.clear_player_anim()
+	_apply_map_fade_step()
+	_world.gen1_pikachu_landed()
+	_overworld_delay = 1
+	if _renderer != null:
+		_renderer.refresh()
+	_refresh_labels()
+	if StringName(anim["kind"]) in [&"pad", &"hole"]:
+		_after_map_settled()
+
+
+## `GetWarpSFX`, off `wPlayerTileCollision`. Generation 1 has no such table:
+## `PlayMapChangeSound` reads one tile.
+func _warp_sfx() -> int:
 	if _data != null and _data.generation == RomRegistry.GEN1:
 		return SFX_ENTER_DOOR if _world.gen1_entered_a_door() else SFX_EXIT_BUILDING
 	match _world.collision_code_at(_world.player_cell):
@@ -3188,6 +3328,9 @@ func _warp_sfx() -> int:
 ## `MapSetupScript_Door`'s list sits.
 func _advance_map_fade() -> void:
 	if _map_fade.is_empty():
+		return
+	if _map_fade.has("anim"):
+		_advance_gen1_map_anim()
 		return
 	if _map_fade.has("gen1"):
 		_advance_gen1_warp()
@@ -3293,14 +3436,8 @@ func _clear_script_fade() -> void:
 ## screen at its whitest, and `FadeToMapMusic` is the eight-step fade the new
 ## map's track arrives behind rather than a restart.
 func _swap_warped_map() -> void:
-	var falling: bool = _pending_dungeon_fall
-	_pending_dungeon_fall = false
-	var transition: Dictionary = _world.gen1_dungeon_fall() if falling \
-		else _world.try_warp()
-	if not bool(transition.get("ok", false)):
+	if not bool(_world.try_warp().get("ok", false)):
 		return
-	if falling:
-		_world.gen1_pikachu_landed()
 	_clear_script_fade()
 	_animation.configure(_world, _render_time_of_day())
 	_set_renderer_world()
@@ -7624,6 +7761,9 @@ func _acknowledge_field_move_text() -> void:
 		_commit_field_move(_world.complete_flash(), "Flash")
 		return
 	if not _world.pending_escape().is_empty():
+		if _world.is_gen1():
+			_start_gen1_map_anim(&"escape")
+			return
 		_commit_field_move(_world.complete_escape(), "Escape")
 		return
 	if not _world.pending_headbutt().is_empty():
@@ -7912,6 +8052,9 @@ func _apply_fly_choice(results: Array) -> bool:
 ## `.FlyScript`: `callasm HideSprites`, `FlyFromAnim`, the warp, `FlyToAnim`,
 ## then `.ReturnFromFly`'s `RespawnPlayer` and `UpdatePlayerSprite`.
 func _start_fly(spawn: int) -> void:
+	if _world.is_gen1():
+		_start_gen1_map_anim(&"fly", {"spawn": spawn})
+		return
 	_begin_fly_animation(false, {"spawn": spawn})
 	if _renderer != null:
 		_renderer.sprites_hidden = true
@@ -7953,11 +8096,8 @@ func _advance_fly() -> void:
 		return
 	var spawn: int = int(_pending_fly["spawn"])
 	## `newloadmap MAPSETUP_FLY`, whose setup script opens on `JumpRoamMons`: a
-	## flight scatters the beasts rather than stepping them. Generation 1's own
-	## answer is the destination map, which `.usedFlyWarp` lands on directly.
-	var warped: Dictionary = _world.gen1_fly_to(spawn) \
-		if _data != null and _data.generation == RomRegistry.GEN1 \
-		else _world.warp_to_spawn(spawn, Gen2WorldAPI.MAP_ENTRY_FLY)
+	## flight scatters the beasts rather than stepping them.
+	var warped: Dictionary = _world.warp_to_spawn(spawn, Gen2WorldAPI.MAP_ENTRY_FLY)
 	if not bool(warped.get("ok", false)):
 		_finish_fly()
 		return
@@ -8533,7 +8673,8 @@ func _settle_after_results(flags: Dictionary) -> void:
 ## renderer, the animation and the music all belong to the map that is now under
 ## the player. A warp reached through a script goes through the script result
 ## instead; an escape move has no script here to carry it.
-func _refresh_after_escape() -> void:
+## [param music] is false under `LoadMapData`'s BIT_FLY_WARP test.
+func _refresh_after_escape(music: bool = true) -> void:
 	if _world == null:
 		return
 	## `Script_AbortBugContest`'s `special ContestReturnMons`, which the warp
@@ -8544,7 +8685,8 @@ func _refresh_after_escape() -> void:
 	_set_renderer_world()
 	if _renderer != null:
 		_renderer.set_time_of_day(_render_time_of_day())
-	_play_current_map_music()
+	if music:
+		_play_current_map_music()
 	_refresh_labels()
 
 

@@ -1361,24 +1361,11 @@ func _the_tutor_throws() -> void:
 
 
 func _open_screen(map: int, cell: Vector2i, party: bool) -> Gen2WorldScreen:
-	var screen: Gen2WorldScreen = (load("res://game/world/world_screen.tscn") as PackedScene).instantiate()
-	screen.map_group = 0
-	screen.map_number = map
-	screen.start_cell = cell
-	screen.encounter_seed = 1
-	screen.set_data(_r.data)
-	var save: Gen2SaveData = Gen2SaveStore.create_development_save(_r.data, 0)
-	if not party:
-		save.party = []
-	screen.set_save(save)
-	(Engine.get_main_loop() as SceneTree).root.add_child(screen)
-	screen.set_process(false)
-	return screen
+	return _r.open_screen(0, map, cell, party)
 
 
 func _close_screen(screen: Gen2WorldScreen) -> void:
-	(Engine.get_main_loop() as SceneTree).root.remove_child(screen)
-	screen.free()
+	_r.close_screen(screen)
 
 
 func _drive_tutor(screen: Gen2WorldScreen) -> Dictionary:

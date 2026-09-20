@@ -511,6 +511,7 @@ func _one_game() -> void:
 	_check_flying()
 	_check_a_dungeon_fall()
 	_check_an_escape_rope()
+	_check_the_map_animations()
 	_check_the_bicycle()
 	_check_the_poke_flute()
 	_check_a_cut_tree()
@@ -2981,6 +2982,161 @@ func _check_a_dungeon_fall() -> void:
 			and road.player_cell == VICTORY_ROAD_LANDING,
 		"Victory Road's hole landed on %s at %s." % [road.map_id(), road.player_cell]
 	)
+
+
+const SILPH_CO_3F: int = 208
+const MAP_ANIM_GUARD_FRAMES: int = 600
+## Off the cartridge from `HandleFlyWarpOrDungeonWarp`'s frame, the two driver
+## waits taken out and `GetPlayerTeleportAnimFrameDelay` read under `wOnSGB`.
+const MAP_ANIM_TRACES: Dictionary = {
+	&"escape": [
+		"3 stop_music 4", "3 sfx 161", "57 sfx 161", "95 sfx 161", "117 sfx 161",
+		"123 sfx 159", "141 fade $90", "149 fade $40", "157 fade $00", "165 swap",
+		"200 fade $40", "208 fade $90", "216 fade $E4", "224 sfx 160", "232 sfx 163",
+		"260 music",
+	],
+	&"fly": [
+		"3 stop_music 4", "31 sfx 164", "140 fade $90", "148 fade $40", "156 fade $00",
+		"164 swap", "199 fade $40", "207 fade $90", "215 fade $E4", "229 sfx 164",
+		"269 music",
+	],
+	&"pad": [
+		"0 sfx 159", "8 fade $90", "16 fade $40", "24 fade $00", "32 swap",
+		"47 fade $40", "55 fade $90", "63 fade $E4", "71 sfx 160", "79 sfx 163",
+	],
+	&"hole": [
+		"5 fade $90", "13 fade $40", "21 fade $00", "29 swap", "64 fade $40",
+		"72 fade $90", "80 fade $E4", "88 sfx 160",
+	],
+}
+const MAP_ANIM_TRACES_YELLOW: Dictionary = {
+	&"escape": [
+		"3 stop_music 4", "3 sfx 161", "57 sfx 161", "95 sfx 161", "117 sfx 161",
+		"123 sfx 159", "141 fade $90", "150 fade $40", "159 fade $00", "168 swap",
+		"207 fade $40", "216 fade $90", "225 fade $E4", "234 sfx 160", "242 sfx 163",
+		"270 music",
+	],
+	&"fly": [
+		"3 stop_music 4", "31 sfx 164", "140 fade $90", "149 fade $40", "158 fade $00",
+		"167 swap", "206 fade $40", "215 fade $90", "224 fade $E4", "237 sfx 164",
+		"277 music",
+	],
+	&"pad": [
+		"0 sfx 159", "8 fade $90", "17 fade $40", "26 fade $00", "35 swap",
+		"54 fade $40", "63 fade $90", "72 fade $E4", "81 sfx 160", "89 sfx 163",
+	],
+	&"hole": [
+		"5 fade $90", "14 fade $40", "23 fade $00", "32 swap", "71 fade $40",
+		"80 fade $90", "89 fade $E4", "98 sfx 160",
+	],
+}
+const MAP_ANIM_FRAMES: Dictionary = {
+	&"escape": {57: [0x00, 0x3C, 0x40, false], 125: [0x02, 0x1C, 0x40, false], 236: [0x0C, 0x3C, 0x40, false]},
+	&"fly": {46: [0x0C, 0x39, 0x68, true], 110: [0x08, 0x1A, 0x90, true], 244: [0x08, 0x27, 0x78, true], 267: [0x08, 0x3C, 0x40, false]},
+	&"pad": {1: [0x02, 0x2C, 0x40, false], 72: [0x02, 0xFC, 0x40, false]},
+	&"hole": {4: [0x04, 0x3C, 0x40, false], 100: [0x00, 0xEC, 0x40, false], 140: [0x02, 0x0C, 0x40, false]},
+}
+const MAP_ANIM_FRAMES_YELLOW: Dictionary = {
+	&"escape": {57: [0x00, 0x3C, 0x40, false], 125: [0x02, 0x1C, 0x40, false], 246: [0x0C, 0x3C, 0x40, false]},
+	&"fly": {46: [0x0C, 0x39, 0x68, true], 110: [0x08, 0x1A, 0x90, true], 252: [0x08, 0x27, 0x78, true], 275: [0x08, 0x3C, 0x40, false]},
+	&"pad": {1: [0x02, 0x2C, 0x40, false], 82: [0x02, 0xFC, 0x40, false]},
+	&"hole": {4: [0x04, 0x3C, 0x40, false], 110: [0x00, 0xEC, 0x40, false], 150: [0x02, 0x0C, 0x40, false]},
+}
+
+
+## `engine/overworld/player_animations.asm` on the real screen, all four ways
+## out; `CHECK_DUMP` writes every frame.
+func _check_the_map_animations() -> void:
+	for kind: StringName in Gen2WorldEffects.PLAYER_ANIM_KINDS:
+		var screen: Gen2WorldScreen = _map_anim_screen(kind)
+		if screen == null:
+			continue
+		var lines: PackedStringArray = []
+		var frames: int = 0
+		while frames < MAP_ANIM_GUARD_FRAMES:
+			if not screen.map_fade().has("anim"):
+				break
+			var anim: Dictionary = screen._effects.player_anim()
+			lines.append("%d state image=$%02X y=$%02X x=$%02X bird=%d bgp=$%02X map=%d" % [
+				int(screen.map_fade()["anim"]["frame"]), int(anim.get("image", 0)),
+				int(anim.get("y", 0)) & 0xFF, int(anim.get("x", 0)) & 0xFF,
+				int(bool(anim.get("bird", false))), int(screen._renderer.get("_fade_order")),
+				screen.world().current_map.number,
+			])
+			frames += 1
+			screen.advance_frame()
+		var trace: Array = screen.gen1_map_anim_trace()
+		var wanted: Array = (MAP_ANIM_TRACES_YELLOW if _r.game_id == RomRegistry.YELLOW \
+			else MAP_ANIM_TRACES)[kind]
+		_r.check(trace == wanted, "the %s animation spent %s, the cartridge %s." % [kind, trace, wanted])
+		var samples: Dictionary = (MAP_ANIM_FRAMES_YELLOW if _r.game_id == RomRegistry.YELLOW \
+			else MAP_ANIM_FRAMES)[kind]
+		for frame: int in samples:
+			var row: Array = samples[frame]
+			var line: String = "%d state image=$%02X y=$%02X x=$%02X bird=%d" % [
+				frame, int(row[0]), int(row[1]), int(row[2]), int(bool(row[3])),
+			]
+			_r.check(frame < lines.size() and lines[frame].begins_with(line),
+				"the %s animation's frame %d drew %s, the cartridge %s." % [
+					kind, frame, lines[frame] if frame < lines.size() else "nothing", line,
+				])
+		_r.check(screen.map_fade().is_empty() and screen._effects.player_anim().is_empty(),
+			"the %s animation never let the map go." % kind)
+		var dump_dir: String = OS.get_environment("CHECK_DUMP")
+		if not dump_dir.is_empty():
+			var file: FileAccess = FileAccess.open(
+				"%s/map_anim_%s.%s.txt" % [dump_dir, kind, _r.game_id], FileAccess.WRITE
+			)
+			if file != null:
+				file.store_string("\n".join(lines) + "\n" + "\n".join(trace) + "\n")
+		_r.note("gen1 walk %s animation over %d frames, %d events" % [kind, frames, trace.size()])
+		_r.close_screen(screen)
+
+
+func _map_anim_screen(kind: StringName) -> Gen2WorldScreen:
+	match kind:
+		&"fly":
+			var screen: Gen2WorldScreen = _r.open_screen(0, PALLET_TOWN, PALLET_DOOR)
+			screen._start_fly(VIRIDIAN_CITY)
+			return screen
+		&"escape":
+			var screen: Gen2WorldScreen = _r.open_screen(0, SEAFOAM_1F, SEAFOAM_HOLE + Vector2i.UP)
+			if not _r.check(bool(screen.world().escape_rope_request().get("ok", false)),
+				"the rope was refused on the screen."):
+				_r.close_screen(screen)
+				return null
+			screen._start_gen1_map_anim(&"escape")
+			return screen
+		&"pad":
+			var pad: Vector2i = _first_warp_pad(SILPH_CO_3F)
+			if not _r.check(pad.x >= 0, "Silph Co. 3F has no warp pad on a warp."):
+				return null
+			return _stepped_onto(SILPH_CO_3F, pad)
+	return _stepped_onto(SEAFOAM_1F, SEAFOAM_HOLE)
+
+
+func _first_warp_pad(map: int) -> Vector2i:
+	var world: Gen2WorldAPI = _r.open_world(0, map, Vector2i.ZERO)
+	if world == null:
+		return Vector2i(-1, -1)
+	for warp: Dictionary in world.current_map.events.get("warps", []):
+		world.player_cell = Vector2i(int(warp["x"]), int(warp["y"]))
+		if world.gen1_warp_pad_or_hole() == Gen1Layout.STANDING_ON_WARP_PAD:
+			return world.player_cell
+	return Vector2i(-1, -1)
+
+
+func _stepped_onto(map: int, cell: Vector2i) -> Gen2WorldScreen:
+	var screen: Gen2WorldScreen = _r.open_screen(0, map, cell + Vector2i.DOWN)
+	screen.world().player_facing = Gen2WorldSprite.FACING_UP
+	for _frame: int in MAP_ANIM_GUARD_FRAMES:
+		if screen.map_fade().has("anim"):
+			return screen
+		screen.move_up()
+		screen.advance_frame()
+	_r.fail("the step onto %s on map %d opened no animation." % [cell, map])
+	_r.close_screen(screen)
+	return null
 
 
 ## `ItemUseBicycle` and `CheckForceBikeOrSurf` walked together: mounted in Pallet
