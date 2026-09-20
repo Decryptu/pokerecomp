@@ -9460,18 +9460,62 @@ const GEN1_SEAFOAM_ISLANDS_B3F: int = 161
 const GEN1_ROUTE_19_SHORE: Dictionary = {
 	&"red": Vector2i(8, 9), &"blue": Vector2i(8, 9), &"yellow": Vector2i(8, 11),
 }
-## A rock column at x = 62 parts Route 20's two seas below the islands' north
-## field, so the sea from Fuchsia lands there and reaches the west door alone;
-## the east door's own beach opens on the sea to Cinnabar.
+## A rock column at x = 62 parts Route 20's two seas: Fuchsia's reaches the west door alone.
 const GEN1_ROUTE_20_NORTH_FIELD := Vector2i(61, 3)
 const GEN1_ROUTE_20_SEAFOAM_WEST := Vector2i(48, 5)
 const GEN1_SEAFOAM_1F_WEST_LADDER := Vector2i(7, 5)
 const GEN1_SEAFOAM_B1F_WEST_LADDER := Vector2i(13, 7)
 const GEN1_SEAFOAM_B2F_WEST_LADDER := Vector2i(5, 13)
-## `TilePairCollisionsWater`'s CAVERN row keeps $05 banks off the pool, so the
-## way across B3F is the one $15 bank on each side.
+## `TilePairCollisionsWater`'s CAVERN row leaves one $15 bank on each side of B3F's pool.
 const GEN1_SEAFOAM_B3F_WEST_BANK := Vector2i(15, 7)
 const GEN1_SEAFOAM_B3F_SHORE := Vector2i(23, 9)
+const GEN1_SEAFOAM_ISLANDS_B4F: int = 162
+## The stairs out of B4F's pool, and the pocket ladders above them.
+const GEN1_SEAFOAM_B4F_POOL_STAIRS := Vector2i(23, 5)
+const GEN1_SEAFOAM_B4F_POCKET_LADDER := Vector2i(25, 4)
+const GEN1_SEAFOAM_B3F_POCKET_LADDER := Vector2i(25, 3)
+const GEN1_SEAFOAM_B3F_POCKET_DOWN := Vector2i(25, 4)
+const GEN1_SEAFOAM_B2F_POCKET_LADDER := Vector2i(25, 3)
+const GEN1_SEAFOAM_B4F_POOL_WARP := Vector2i(20, 17)
+## `Seafoam<N>HolesCoords` and the boulder each floor's script drops through
+## them, EVENT_SEAFOAM1 to EVENT_SEAFOAM3, whose last pair stops B3F's current.
+## A push is [step, approach, direction, count].
+const GEN1_SEAFOAM_PUZZLE: Array = [
+	["strength", "seafoam_1f_strength"],
+	["push", "seafoam_1f_boulder_1_up", Vector2i(18, 11), Vector2i.UP, 4],
+	["push", "seafoam_1f_boulder_1_into_hole", Vector2i(19, 6), Vector2i.LEFT, 1],
+	["push", "seafoam_1f_boulder_2_left", Vector2i(27, 7), Vector2i.LEFT, 2],
+	["push", "seafoam_1f_boulder_2_into_hole", Vector2i(24, 8), Vector2i.UP, 1],
+	["flags", "seafoam_1f_boulders_down", [1294, 1295], "EVENT_SEAFOAM1_BOULDER"],
+	["warp", GEN1_SEAFOAM_ISLANDS_B1F, "seafoam_1f_east_ladder", Vector2i(25, 3)],
+	["push", "seafoam_b1f_boulder_2_into_hole", Vector2i(21, 6), Vector2i.RIGHT, 1],
+	["warp", GEN1_SEAFOAM_ISLANDS_1F, "seafoam_b1f_east_ladder_up", Vector2i(25, 3)],
+	["warp", GEN1_SEAFOAM_ISLANDS_B1F, "seafoam_1f_to_b1f", GEN1_SEAFOAM_1F_WEST_LADDER],
+	["push", "seafoam_b1f_boulder_1_into_hole", Vector2i(16, 6), Vector2i.RIGHT, 1],
+	["flags", "seafoam_b1f_boulders_down", [2496, 2497], "EVENT_SEAFOAM2_BOULDER"],
+	["warp", GEN1_SEAFOAM_ISLANDS_B2F, "seafoam_b1f_northwest_ladder", Vector2i(4, 2)],
+	["push", "seafoam_b2f_boulder_1_into_hole", Vector2i(17, 6), Vector2i.RIGHT, 1],
+	["warp", GEN1_SEAFOAM_ISLANDS_B1F, "seafoam_b2f_northwest_ladder_up", Vector2i(5, 3)],
+	["warp", GEN1_SEAFOAM_ISLANDS_B2F, "seafoam_b1f_to_b2f", GEN1_SEAFOAM_B1F_WEST_LADDER],
+	["warp", GEN1_SEAFOAM_ISLANDS_B3F, "seafoam_b2f_to_b3f", GEN1_SEAFOAM_B2F_WEST_LADDER],
+	["surf", "seafoam_b3f_current", GEN1_SEAFOAM_B3F_WEST_BANK, Gen2WorldSprite.FACING_DOWN,
+		GEN1_SEAFOAM_ISLANDS_B4F],
+	["walk", "seafoam_b4f_pool_stairs", GEN1_SEAFOAM_B4F_POOL_STAIRS],
+	["warp", GEN1_SEAFOAM_ISLANDS_B3F, "seafoam_b4f_pocket_ladder", GEN1_SEAFOAM_B4F_POCKET_LADDER],
+	["warp", GEN1_SEAFOAM_ISLANDS_B2F, "seafoam_b3f_pocket_ladder", GEN1_SEAFOAM_B3F_POCKET_LADDER],
+	["push", "seafoam_b2f_boulder_2_into_hole", Vector2i(24, 6), Vector2i.LEFT, 1],
+	["flags", "seafoam_b2f_boulders_down", [2504, 2505], "EVENT_SEAFOAM3_BOULDER"],
+	["warp", GEN1_SEAFOAM_ISLANDS_B3F, "seafoam_b2f_pocket_ladder_down", GEN1_SEAFOAM_B2F_POCKET_LADDER],
+	["warp", GEN1_SEAFOAM_ISLANDS_B4F, "seafoam_b3f_pocket_down", GEN1_SEAFOAM_B3F_POCKET_DOWN],
+	["surf", "seafoam_b4f_surf_back", GEN1_SEAFOAM_B4F_POOL_STAIRS, Gen2WorldSprite.FACING_DOWN,
+		GEN1_SEAFOAM_ISLANDS_B4F],
+	["warp", GEN1_SEAFOAM_ISLANDS_B3F, "seafoam_b4f_to_b3f", GEN1_SEAFOAM_B4F_POOL_WARP],
+	["walk", "seafoam_b3f_east_bank", GEN1_SEAFOAM_B3F_SHORE],
+	["warp", GEN1_SEAFOAM_ISLANDS_B2F, "seafoam_b3f_to_b2f", GEN1_SEAFOAM_B2F_EAST_LADDER],
+	["warp", GEN1_SEAFOAM_ISLANDS_B1F, "seafoam_b2f_to_b1f", GEN1_SEAFOAM_B1F_EAST_LADDER],
+	["warp", GEN1_SEAFOAM_ISLANDS_1F, "seafoam_b1f_to_1f", GEN1_SEAFOAM_1F_EAST_LADDER],
+	["warp", GEN1_ROUTE_20, "seafoam_east_door", GEN1_SEAFOAM_1F_EAST_DOOR],
+]
 const GEN1_SEAFOAM_B2F_EAST_LADDER := Vector2i(25, 14)
 const GEN1_SEAFOAM_B1F_EAST_LADDER := Vector2i(25, 11)
 const GEN1_SEAFOAM_1F_EAST_LADDER := Vector2i(23, 15)
@@ -9499,8 +9543,7 @@ const GEN1_EVENT_MANSION_SWITCH_ON: int = 632
 const GEN1_NUGGET: int = 0x31
 const GEN1_CINNABAR_GYM: int = 166
 const GEN1_CINNABAR_GYM_DOOR := Vector2i(18, 3)
-## Each machine's cell below it and `hGymGateAnswer`, the `wCurrentMenuItem` it
-## wants: 0 is YES.
+## Each machine's cell below it and `hGymGateAnswer`, the row it wants: 0 is YES.
 const GEN1_CINNABAR_QUIZ: Array = [
 	[Vector2i(15, 8), 0], [Vector2i(10, 2), 1], [Vector2i(9, 8), 1],
 	[Vector2i(9, 14), 1], [Vector2i(1, 14), 0], [Vector2i(1, 8), 1],
@@ -9533,8 +9576,7 @@ const GEN1_ROUTE_23_NORTH_BANK := Vector2i(8, 71)
 const GEN1_ROUTE_23_VICTORY_ROAD_DOOR := Vector2i(4, 31)
 ## 1F's boulder to its switch at (17, 13): down to the entrance row, along it,
 ## up column 9 from the door cell (whose edge is never faced), along row 14, up
-## column 16, right and down. Each row is a step name, the cell pushed from, the
-## way and how many times.
+## column 16, right and down. A row is [step, approach, direction, count].
 const GEN1_VICTORY_ROAD_1F_PUSHES: Array = [
 	["victory_road_1f_push_down", Vector2i(5, 14), Vector2i.DOWN, 1],
 	["victory_road_1f_push_right", Vector2i(4, 16), Vector2i.RIGHT, 4],
@@ -9556,13 +9598,21 @@ const GEN1_VICTORY_ROAD_2F_PUSHES: Array = [
 const GEN1_EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1: int = 1336
 const GEN1_EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2: int = 1343
 ## 3F's boulder into its hole, which `VictoryRoad3FDefaultScript` answers by
-## showing 2F's own on (23, 16), and the player after it: that one goes left
-## along the bottom row to the second switch at (9, 16), which opens the way to
-## the east ladder's own $05 floor.
+## showing 2F's own on (23, 16); that one goes left along the bottom row to the
+## second switch at (9, 16), which opens the way to the east ladder's floor.
 const GEN1_VICTORY_ROAD_2F_LADDER := Vector2i(23, 7)
-## The boulder standing in the wall's one gap at (13, 12), pushed out of it and
-## once more off the cell below.
-const GEN1_VICTORY_ROAD_3F_GAP_ABOVE := Vector2i(13, 11)
+## The (22, 3) boulder to 3F's switch at (3, 5), whose block (5, 3) opens onto
+## the hole's floor. The gap boulder at (13, 12) is a trap: pushed once it
+## shuts (13, 13), and the cartridge refuses a second push ($20/$05 tile pair).
+const GEN1_VICTORY_ROAD_3F_PUSHES: Array = [
+	["victory_road_3f_push_up", Vector2i(22, 4), Vector2i.UP, 2],
+	["victory_road_3f_push_left", Vector2i(23, 1), Vector2i.LEFT, 16],
+	["victory_road_3f_push_down", Vector2i(6, 0), Vector2i.DOWN, 1],
+	["victory_road_3f_push_left_again", Vector2i(7, 2), Vector2i.LEFT, 4],
+	["victory_road_3f_push_down_again", Vector2i(2, 1), Vector2i.DOWN, 3],
+	["victory_road_3f_push_onto_switch", Vector2i(1, 5), Vector2i.RIGHT, 1],
+]
+const GEN1_EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1: int = 1632
 const GEN1_VICTORY_ROAD_3F_HOLE_SIDE := Vector2i(21, 15)
 const GEN1_VICTORY_ROAD_3F_HOLE := Vector2i(23, 15)
 const GEN1_VICTORY_ROAD_2F_FALLEN_BOULDER_SIDE := Vector2i(24, 16)
@@ -11064,12 +11114,13 @@ func _gen1_cinnabar_leg(
 	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
 	path: Array
 ) -> Dictionary:
-	var taught: Dictionary = _teach_tm_hm(world, save, GEN1_HM03)
-	_mirror_party(world, save)
-	var stepped: Dictionary = _gen1_step(path, "saffron_teach_surf", world, taught, {
-		"moves": _party_moves(save)})
-	if not bool(stepped["ok"]):
-		return stepped
+	var stepped: Dictionary = {}
+	for hm: Array in [[GEN1_HM03, "saffron_teach_surf"], [GEN1_HM04, "saffron_teach_strength"]]:
+		var taught: Dictionary = _teach_tm_hm(world, save, int(hm[0]))
+		_mirror_party(world, save)
+		stepped = _gen1_step(path, String(hm[1]), world, taught, {"moves": _party_moves(save)})
+		if not bool(stepped["ok"]):
+			return stepped
 	var legs: Array = []
 	for pad: int in GEN1_SAFFRON_GYM_PADS_OUT.size():
 		legs.append([GEN1_SAFFRON_GYM, "saffron_gym_pad_out_%d" % (pad + 1), GEN1_SAFFRON_GYM_PADS_OUT[pad]])
@@ -11109,28 +11160,10 @@ func _gen1_cinnabar_leg(
 		return stepped
 	stepped = _gen1_warp_legs(path, world, save, random, data, [
 		[GEN1_SEAFOAM_ISLANDS_1F, "seafoam_west_door", GEN1_ROUTE_20_SEAFOAM_WEST],
-		[GEN1_SEAFOAM_ISLANDS_B1F, "seafoam_1f_to_b1f", GEN1_SEAFOAM_1F_WEST_LADDER],
-		[GEN1_SEAFOAM_ISLANDS_B2F, "seafoam_b1f_to_b2f", GEN1_SEAFOAM_B1F_WEST_LADDER],
-		[GEN1_SEAFOAM_ISLANDS_B3F, "seafoam_b2f_to_b3f", GEN1_SEAFOAM_B2F_WEST_LADDER],
 	])
 	if not bool(stepped["ok"]):
 		return stepped
-	stepped = _gen1_step(path, "seafoam_b3f_surf", world, _gen1_surf(
-		world, GEN1_SEAFOAM_B3F_WEST_BANK, Gen2WorldSprite.FACING_DOWN, save, random, data
-	))
-	if not bool(stepped["ok"]):
-		return stepped
-	stepped = _gen1_step(path, "seafoam_b3f_east_bank", world, _gen1_walk(
-		world, GEN1_SEAFOAM_B3F_SHORE, save, random, data
-	))
-	if not bool(stepped["ok"]):
-		return stepped
-	stepped = _gen1_warp_legs(path, world, save, random, data, [
-		[GEN1_SEAFOAM_ISLANDS_B2F, "seafoam_b3f_to_b2f", GEN1_SEAFOAM_B2F_EAST_LADDER],
-		[GEN1_SEAFOAM_ISLANDS_B1F, "seafoam_b2f_to_b1f", GEN1_SEAFOAM_B1F_EAST_LADDER],
-		[GEN1_SEAFOAM_ISLANDS_1F, "seafoam_b1f_to_1f", GEN1_SEAFOAM_1F_EAST_LADDER],
-		[GEN1_ROUTE_20, "seafoam_east_door", GEN1_SEAFOAM_1F_EAST_DOOR],
-	])
+	stepped = _gen1_seafoam_puzzle(path, world, save, random, data)
 	if not bool(stepped["ok"]):
 		return stepped
 	stepped = _gen1_step(path, "route_20_surf_again", world, _gen1_surf(
@@ -11141,6 +11174,50 @@ func _gen1_cinnabar_leg(
 	return _gen1_warp_legs(path, world, save, random, data, [
 		["west", GEN1_CINNABAR_ISLAND, "route_20_to_cinnabar"],
 	])
+
+
+## [constant GEN1_SEAFOAM_PUZZLE], one row a step, from 1F's west door.
+func _gen1_seafoam_puzzle(
+	path: Array, world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator,
+	data: GameData
+) -> Dictionary:
+	for row: Array in GEN1_SEAFOAM_PUZZLE:
+		var stepped: Dictionary = _gen1_seafoam_row(path, world, save, random, data, row)
+		if not bool(stepped["ok"]):
+			return stepped
+	return {"ok": true}
+
+
+func _gen1_seafoam_row(
+	path: Array, world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator,
+	data: GameData, row: Array
+) -> Dictionary:
+	var step: String = String(row[2] if row[0] == "warp" else row[1])
+	match String(row[0]):
+		"strength":
+			var strength: Dictionary = world.strength_request()
+			if bool(strength.get("ok", false)):
+				strength = world.complete_strength()
+			return _gen1_step(path, step, world, strength)
+		"push":
+			return _gen1_push(path, step, world, row[2], row[3], int(row[4]), save, random, data)
+		"flags":
+			for flag: int in row[2] as Array:
+				var checked: Dictionary = _gen1_flag_leg(path, step, world, flag, String(row[3]))
+				if not bool(checked["ok"]):
+					return checked
+			return {"ok": true}
+		"warp":
+			return _gen1_warp_legs(path, world, save, random, data, [row.slice(1)])
+		"walk":
+			return _gen1_step(path, step, world, _gen1_walk(world, row[2], save, random, data))
+		"surf":
+			## The current, settled through: the step names the floor it lands on.
+			var surfed: Dictionary = _gen1_surf(world, row[2], int(row[3]), save, random, data)
+			if bool(surfed.get("ok", false)) and world.map_id() != Vector2i(0, int(row[4])):
+				surfed = {"ok": false, "reason": "the surf ended on %s" % _map_value(world)}
+			return _gen1_step(path, step, world, surfed)
+	return {"ok": false, "path": path, "reason": "%s: unknown row" % step}
 
 
 ## `Mansion<N>Script_Switches`: the statue in front of [param cell] pressed, and
@@ -11347,19 +11424,12 @@ func _gen1_push(
 	return _gen1_step(path, step, world, {"ok": true}, {"boulder": pushes})
 
 
-## STRENGTH on the LAPRAS, Route 22, its gate, and Route 23's guards and river
-## to Victory Road's door.
+## Route 22, its gate, and Route 23's guards and river to Victory Road's door.
 func _gen1_route_23_leg(
 	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
 	path: Array
 ) -> Dictionary:
-	var taught: Dictionary = _teach_tm_hm(world, save, GEN1_HM04)
-	_mirror_party(world, save)
-	var stepped: Dictionary = _gen1_step(path, "viridian_teach_strength", world, taught, {
-		"moves": _party_moves(save)})
-	if not bool(stepped["ok"]):
-		return stepped
-	stepped = _gen1_warp_legs(path, world, save, random, data, [
+	var stepped: Dictionary = _gen1_warp_legs(path, world, save, random, data, [
 		["west", GEN1_ROUTE_22, "viridian_to_route_22"],
 		[GEN1_ROUTE_22_GATE, "route_22_gate", GEN1_ROUTE_22_GATE_DOOR],
 		[GEN1_ROUTE_23, "route_22_gate_north", GEN1_ROUTE_22_GATE_NORTH],
@@ -11381,8 +11451,8 @@ func _gen1_route_23_leg(
 	])
 
 
-## Victory Road's three switches: 1F's boulder to the ladder, 2F's first to the
-## east, 3F's into its hole and down onto 2F's second, then out to the Plateau.
+## Victory Road's four switches: 1F's, 2F's first, 3F's own across the floor,
+## 3F's hole boulder down onto 2F's second, then out to the Plateau.
 func _gen1_victory_road_leg(
 	world: Gen2WorldAPI, save: Gen2SaveData, random: RandomNumberGenerator, data: GameData,
 	path: Array
@@ -11419,8 +11489,12 @@ func _gen1_victory_road_leg(
 	])
 	if not bool(stepped["ok"]):
 		return stepped
-	stepped = _gen1_push(path, "victory_road_3f_push_gap", world, GEN1_VICTORY_ROAD_3F_GAP_ABOVE,
-		Vector2i.DOWN, 2, save, random, data)
+	for push: Array in GEN1_VICTORY_ROAD_3F_PUSHES:
+		stepped = _gen1_push(path, String(push[0]), world, push[1], push[2], int(push[3]), save, random, data)
+		if not bool(stepped["ok"]):
+			return stepped
+	stepped = _gen1_flag_leg(path, "victory_road_3f_switch", world,
+		GEN1_EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1, "EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1")
 	if not bool(stepped["ok"]):
 		return stepped
 	stepped = _gen1_push(path, "victory_road_3f_push_into_hole", world, GEN1_VICTORY_ROAD_3F_HOLE_SIDE,

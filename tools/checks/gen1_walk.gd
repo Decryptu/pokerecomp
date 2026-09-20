@@ -440,7 +440,12 @@ const SEAFOAM_LANDING := Vector2i(18, 7)
 const SEAFOAM_B2F: int = 160
 const SEAFOAM_B3F: int = 161
 const SEAFOAM_B2F_HOLE := Vector2i(19, 6)
-const SEAFOAM_B3F_LANDING := Vector2i(18, 7)
+## `SeafoamIslandsB3FMoveObjectScript` returns once both boulders are down;
+## before that `.RLEList_StrongCurrentNearLeftBoulder` ends down 6, right 2,
+## down 4 from the landing, on SCRIPT_SEAFOAMISLANDSB3F_OBJECT_MOVING2.
+const SEAFOAM_B3F_CURRENT_END := Vector2i(20, 17)
+const SEAFOAM_OBJECT_MOVING2: int = 3
+const SEAFOAM_CURRENT_PASSES: int = 400
 const VICTORY_ROAD_3F: int = 198
 const VICTORY_ROAD_2F: int = 194
 const VICTORY_ROAD_SWITCH := Vector2i(3, 5)
@@ -3024,13 +3029,30 @@ func _check_a_dungeon_fall() -> void:
 		deeper.gen1_dungeon_fall()
 		_r.check(
 			deeper.map_id() == Vector2i(0, SEAFOAM_B3F)
-				and deeper.player_cell == SEAFOAM_B3F_LANDING
 				and deeper.movement_mode == Gen2WorldAPI.MOVEMENT_SURF
 				and deeper.player_sprite_number == Gen2WorldSprite.SPRITE_SEEL,
 			"the fall into B3F's water left the player %s on sprite %d." % [
 				deeper.movement_mode, deeper.player_sprite_number,
 			]
 		)
+		## `CheckForceBikeOrSurf`'s store, which the landing pass has moved on from.
+		_r.check(deeper.gen1_map_script_state() == SEAFOAM_OBJECT_MOVING2
+			and deeper.scripted_movement_in_progress(),
+			"B3F's script byte reads %d after the fall." % deeper.gen1_map_script_state())
+		var passes: int = 0
+		while passes < SEAFOAM_CURRENT_PASSES:
+			deeper.dispatch_sight_events()
+			deeper.run_event_queue(true)
+			deeper.advance_script_wait_frame()
+			deeper.advance_player_step_pass()
+			deeper.advance_scripted_steps_pass()
+			passes += 1
+			if passes > 1 and not deeper.scripted_movement_in_progress():
+				break
+		_r.check(deeper.player_cell == SEAFOAM_B3F_CURRENT_END,
+			"the strong current left the player at %s after %d passes." % [
+				deeper.player_cell, passes,
+			])
 	var road: Gen2WorldAPI = _r.open_world(0, VICTORY_ROAD_3F, VICTORY_ROAD_SWITCH)
 	if road == null:
 		return

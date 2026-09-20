@@ -3197,11 +3197,12 @@ func trainer_attributes(number: int) -> Dictionary:
 	}
 
 
-## A trainer class's own DVs, packed the same way [method Gen2BattleMon.create]
-## takes them as [code]dv_word[/code]. [constant Gen2BattleMon.PERFECT_DVS] for
-## a class the cache does not carry, which is the same default a caller gets by
-## not passing one at all.
+## A trainer class's own DVs as [method Gen2BattleMon.create]'s [code]dv_word[/code],
+## [constant Gen2BattleMon.PERFECT_DVS] for a class the cache does not carry.
+## Generation 1 has no table: `LoadEnemyMon` writes one word for every class.
 func trainer_dvs(number: int) -> int:
+	if generation == RomRegistry.GEN1:
+		return Gen1Layout.TRAINER_DVS
 	var entry: Dictionary = trainer(number)
 	if entry.is_empty():
 		return Gen2BattleMon.PERFECT_DVS

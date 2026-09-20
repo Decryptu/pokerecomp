@@ -44,9 +44,12 @@ const MIN_PARTICIPANTS_TO_SPLIT: int = 2
 const EXP_SHARE_ITEM: int = 39
 
 ## `BoostExp` is `value + floor(value / 2)`, not multiply-then-divide, and the
-## two disagree. The traded and Lucky Egg boosts have no OT ID to read.
+## two disagree.
 const TRAINER_BONUS_NUMERATOR: int = 3
 const TRAINER_BONUS_DENOMINATOR: int = 2
+
+## `GiveExperiencePoints`' `cp LUCKY_EGG`, by number the way `EXP_SHARE_ITEM` is.
+const LUCKY_EGG_ITEM: int = 0x7E
 
 
 ## Level 1 is hard-coded to zero, which is pret's own fix: the medium slow curve
@@ -86,14 +89,21 @@ static func level_for_exp(growth_rate: int, experience_points: int) -> int:
 	return level
 
 
-## `floor(base_exp * level / 7)`, then a trainer battle's 1.5x.
-## [param defeated_base_exp] is *already* divided by [method shared_block], since
-## `wEnemyMonBaseExp` is in the block `.EvenlyDivideExpAmongParticipants` walks;
-## dividing the award instead truncates in the wrong place.
-static func award_for(defeated_level: int, defeated_base_exp: int, is_trainer_battle: bool) -> int:
+## `floor(base_exp * level / 7)`, then `BoostExp` once each for a traded
+## learner, a trainer battle and a Lucky Egg, in that order. [param
+## defeated_base_exp] is *already* divided by [method shared_block]: dividing
+## the award instead truncates in the wrong place.
+static func award_for(
+	defeated_level: int, defeated_base_exp: int, is_trainer_battle: bool,
+	traded: bool = false, lucky_egg: bool = false
+) -> int:
 	@warning_ignore("integer_division")
 	var award: int = (defeated_base_exp * defeated_level) / 7
+	if traded:
+		award = _boost(award)
 	if is_trainer_battle:
+		award = _boost(award)
+	if lucky_egg:
 		award = _boost(award)
 	return clampi(award, 0, MAX_EXP)
 

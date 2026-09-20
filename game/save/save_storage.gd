@@ -33,6 +33,7 @@ static func deposit_party_to_box(
 	if not bool(placed.get("ok", false)):
 		return _failure(StringName(placed.get("reason", &"box_insert_failed")))
 	candidate.party.remove_at(party_index)
+	_deposited(data, mon)
 	return _commit(save, data, candidate, {
 		"kind": &"party_to_box",
 		"party_index": party_index,
@@ -66,12 +67,34 @@ static func withdraw_box_to_party(
 		return _failure(&"empty_box_slot")
 	box.slots[box_slot] = null
 	candidate.party.append(mon)
+	_withdrawn(data, mon)
 	return _commit(save, data, candidate, {
 		"kind": &"box_to_party",
 		"party_index": candidate.party.size() - 1,
 		"box": box_index,
 		"slot": box_slot,
 	}, persist)
+
+
+## `SendGetMonIntoFromBox`'s PC_DEPOSIT tail, `RestorePPOfDepositedPokemon`;
+## Generation 1's `_MoveMon` copies the row whole and touches nothing.
+static func _deposited(data: GameData, mon: Gen2SaveMon) -> void:
+	if data.generation == RomRegistry.GEN1:
+		return
+	for slot: int in Gen2SaveMon.MAX_MOVES:
+		var move: int = int(mon.moves[slot])
+		if move > 0:
+			mon.pp[slot] = int(data.move(move).get("pp", 0))
+
+
+## Its PC_WITHDRAW tail: `CalcMonStats`, no status and MON_MAXHP into MON_HP,
+## or an egg's zero. Generation 1 keeps the health and status it was stored with.
+static func _withdrawn(data: GameData, mon: Gen2SaveMon) -> void:
+	if data.generation == RomRegistry.GEN1:
+		return
+	mon.status = Gen2Status.NONE
+	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, mon)
+	mon.hp = battle_mon.max_hp() if battle_mon != null else 0
 
 
 ## `RemoveMonFromPartyOrBox` behind both `.release`s: the same atomic write the

@@ -1535,6 +1535,80 @@ func test_levelling_up_learns_a_move_into_an_empty_slot_without_asking() -> void
 	assert_false(battle.must_learn_move(Gen2Battle.PLAYER))
 
 
+## Generation 1's `GainExperience` jumps to `CalcLevelFromExperience`'s level,
+## prints `GrewLevelText` once and runs `LearnMoveFromLevelUp` at that level
+## alone, so a jump over level 6 never offers Ember.
+func test_a_generation_1_level_jump_is_one_event_and_learns_the_last_levels_moves() -> void:
+	_data.generation = RomRegistry.GEN1
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.CHARMANDER, 5, [Fixture.TACKLE]),
+		_mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])
+	)
+	battle.player.hp = battle.player.max_hp() * 10
+	battle.enemy.hp = 1
+	var events: Array = battle.take_turn(0, 0)
+
+	var grew: Array = _of_type(events, Gen2Battle.GREW_LEVEL)
+	assert_eq(grew.size(), 1)
+	assert_eq(grew[0]["old_level"], 5)
+	assert_eq(grew[0]["new_level"], 8)
+	assert_eq(battle.player.level, 8)
+	assert_true(_of_type(events, Gen2Battle.MOVE_LEARNED).is_empty(), "level 6's Ember")
+	assert_eq(battle.player.moves, [Fixture.TACKLE])
+
+
+## `BoostExp` for a learner whose `MON_ID` is not `wPlayerID`, before the trainer
+## boost, and the line says so; a Lucky Egg is a third `BoostExp` after both.
+func test_a_traded_learner_and_a_lucky_egg_each_add_half_again() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 10, [Fixture.THUNDERBOLT]),
+		_mon(Fixture.BULBASAUR, 5, [Fixture.TACKLE])
+	)
+	battle.player_id = 1234
+	battle.player.ot_id = 1234
+	battle.enemy.hp = 1
+	assert_eq(_first(battle.take_turn(0, 0), Gen2Battle.EXP_GAINED)["amount"], 45)
+
+	battle = _battle(
+		_mon(Fixture.PIKACHU, 10, [Fixture.THUNDERBOLT]),
+		_mon(Fixture.BULBASAUR, 5, [Fixture.TACKLE])
+	)
+	battle.player_id = 1234
+	battle.player.ot_id = 4321
+	battle.enemy.hp = 1
+	var gained: Dictionary = _first(battle.take_turn(0, 0), Gen2Battle.EXP_GAINED)
+	assert_eq(gained["amount"], 67, "45 + 22")
+	assert_true(bool(gained["boosted"]))
+
+	battle = _battle(
+		_mon(Fixture.PIKACHU, 10, [Fixture.THUNDERBOLT]),
+		_mon(Fixture.BULBASAUR, 5, [Fixture.TACKLE])
+	)
+	battle.player_id = 1234
+	battle.player.ot_id = 4321
+	battle.enemy.hp = 1
+	battle.player.item = Gen2Experience.LUCKY_EGG_ITEM
+	battle.is_trainer_battle = true
+	gained = _first(battle.take_turn(0, 0), Gen2Battle.EXP_GAINED)
+	assert_eq(gained["amount"], 150, "67, then 100, then 150")
+
+
+## Generation 1 has no held item: the byte at MON_ITEM is the catch rate.
+func test_a_generation_1_learner_takes_the_traded_boost_and_no_lucky_egg() -> void:
+	_data.generation = RomRegistry.GEN1
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 10, [Fixture.THUNDERBOLT]),
+		_mon(Fixture.BULBASAUR, 5, [Fixture.TACKLE])
+	)
+	battle.player_id = 1234
+	battle.player.ot_id = 4321
+	battle.enemy.hp = 1
+	battle.player.item = Gen2Experience.LUCKY_EGG_ITEM
+	var gained: Dictionary = _first(battle.take_turn(0, 0), Gen2Battle.EXP_GAINED)
+	assert_eq(gained["amount"], 67)
+	assert_true(bool(gained["boosted"]))
+
+
 ## `wEvolvableFlags`: the `SmallFarFlagAction SET_FLAG` at the end of the same
 ## block as `.level_loop`, so the flag is set once per party member that gained a
 ## level rather than once per level. Nothing evolves in here at all:
@@ -2945,7 +3019,7 @@ func test_a_generation_1_faint_without_exp_all_pays_one_pass() -> void:
 ## awards it twice rather than merging the two shares.
 func test_a_fighter_holding_the_exp_share_is_paid_by_both_passes() -> void:
 	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 100, [Fixture.THUNDERBOLT]),
+		_mon(Fixture.PIKACHU, 50, [Fixture.THUNDERBOLT]),
 		_mon(Fixture.BULBASAUR, 5, [Fixture.TACKLE])
 	)
 	battle.player.item = Fixture.EXP_SHARE

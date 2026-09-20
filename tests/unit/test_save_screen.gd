@@ -636,6 +636,38 @@ func test_pc_storage_refuses_depositing_the_last_party_member() -> void:
 	assert_null(save.boxes[0].slots[0])
 
 
+## `RestorePPOfDepositedPokemon` behind PC_DEPOSIT, and PC_WITHDRAW's
+## `CalcMonStats` with `xor a` over MON_STATUS and MON_MAXHP copied into MON_HP.
+func test_a_deposit_restores_pp_and_a_withdrawal_heals() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	(save.party[0] as Gen2SaveMon).pp[0] = 3
+	(save.party[0] as Gen2SaveMon).hp = 5
+	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 0, 0, -1, false)["ok"])
+	var stored: Gen2SaveMon = save.boxes[0].slots[0]
+	assert_eq(int(stored.pp[0]), int(_data.move(Fixture.TACKLE)["pp"]), "PP back on the way in")
+	assert_eq(stored.hp, 5, "health waits for the way out")
+	assert_eq(stored.status, Gen2Status.POISON)
+	assert_true(Gen2SaveStorage.withdraw_box_to_party(save, _data, 0, 0, false)["ok"])
+	var out: Gen2SaveMon = save.party[1]
+	assert_eq(out.status, Gen2Status.NONE)
+	assert_eq(out.hp, Gen2SaveBattleAdapter.to_battle_mon(_data, out).max_hp())
+
+
+## Generation 1's `_MoveMon` copies BOXMON_STRUCT_LENGTH bytes each way, HP and
+## status inside them, and restores nothing.
+func test_a_generation_1_box_keeps_health_status_and_pp() -> void:
+	_data.generation = RomRegistry.GEN1
+	var save: Gen2SaveData = _save_with_two()
+	(save.party[0] as Gen2SaveMon).pp[0] = 3
+	(save.party[0] as Gen2SaveMon).hp = 5
+	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 0, 0, -1, false)["ok"])
+	assert_true(Gen2SaveStorage.withdraw_box_to_party(save, _data, 0, 0, false)["ok"])
+	var out: Gen2SaveMon = save.party[1]
+	assert_eq(int(out.pp[0]), 3)
+	assert_eq(out.hp, 5)
+	assert_eq(out.status, Gen2Status.POISON)
+
+
 func test_pc_storage_can_commit_in_memory_without_writing_slot() -> void:
 	var save: Gen2SaveData = _save_with_two()
 	var result: Dictionary = Gen2SaveStorage.deposit_party_to_box(save, _data, 0, 0, -1, false)
