@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 40 | `Gen2WorldTileset.name`, the `TILESET_*` constant's name on every cartridge, `GameData.world_tileset_named()`, and `Gen2Layout.tileset_name()` and `tileset_number()` between Crystal's numbering and Gold and Silver's |
 | 39 | A Generation 1 map draws block 0 as block 0, through `Gen2WorldAPI.drawn_block_of`; `Gen2BattleColors`, the colours a battle is drawn in on either generation, for any renderer; `Gen2BattleRenderer.back_pixels`; `Gen2WorldPalette.overworld_sprite_colors`, `Gen2WorldMap.is_outside()` and `Gen2WorldCollision.gen1_ledge_direction` |
 | 38 | `chance` on every slot `active_encounter_tables()` answers; a shiny pulse announced with `SFX_SHINE` on Red, Blue and Yellow; Yellow's Pikachu in `occupied` |
 | 37 | The gameplay catalog on Red, Blue and Yellow, `validate_placement` walking their map graph, the Old and Good Rod as `GameData.GEN1_OLD_ROD_GROUP` and `GEN1_GOOD_ROD_GROUP`; a `register` that read `generation()` or `target_game()` runs again when the answer changes |
@@ -1013,6 +1014,13 @@ whose square it is, grey through the entrance slide and black behind a lost
 Generation 1 fight. The built-in renderer reads the same one. The back pic in
 its box, doubled on Generation 1, is `Gen2BattleRenderer.back_pixels(data, pic)`,
 beside `padded_pic`, `doubled_pic` and `pic_tile`.
+
+A tileset is what a drawing is, and pokegold numbers every tileset past KANTO
+three lower than Crystal, so a table keyed by number lands on another drawing
+there. `Gen2WorldTileset.name` is the `TILESET_*` constant's own name on every
+cartridge (`&"POKECENTER"`, Yellow's `&"BEACH_HOUSE"` last), `GameData.world_tileset_named(name)`
+finds the tileset under it, and `Gen2Layout.tileset_number(crystal, name)` is
+the number it has on a profile.
 
 A world renderer has the same two on its side: an overworld sprite's colours on
 either generation are `Gen2WorldPalette.overworld_sprite_colors(data, map,

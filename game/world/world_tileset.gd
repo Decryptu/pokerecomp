@@ -7,6 +7,8 @@ extends RefCounted
 ## needs them without opening the cartridge.
 
 var number: int = 0
+## The `TILESET_*` constant's own name, stamped by [GameData].
+var name: StringName = &""
 var block_count: int = 0
 var tile_count: int = Gen2Layout.TILESET_TILE_COUNT
 ## The three lookup tables are cartridge bytes and are read once per drawn tile,

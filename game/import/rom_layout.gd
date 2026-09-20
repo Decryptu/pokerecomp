@@ -96,6 +96,34 @@ const WILD_SURF_LEVEL_THRESHOLDS: Array[int] = [89, 165, 216, 242]
 ## blank at 96..127. Eight tilesets compress one block only, so the import
 ## blanks the second, and an unused entry may hold $FF, which resolves to 0.
 const TILESET_RECORD_SIZE: int = 15
+## `constants/tileset_constants.asm` from 1; pokegold's sit three lower past KANTO.
+const TILESET_NAMES_CRYSTAL: Array[StringName] = [
+	&"JOHTO", &"JOHTO_MODERN", &"KANTO", &"BATTLE_TOWER_OUTSIDE", &"HOUSE",
+	&"PLAYERS_HOUSE", &"POKECENTER", &"GATE", &"PORT", &"LAB", &"FACILITY",
+	&"MART", &"MANSION", &"GAME_CORNER", &"ELITE_FOUR_ROOM", &"TRADITIONAL_HOUSE",
+	&"TRAIN_STATION", &"CHAMPIONS_ROOM", &"LIGHTHOUSE", &"PLAYERS_ROOM",
+	&"POKECOM_CENTER", &"BATTLE_TOWER_INSIDE", &"TOWER", &"CAVE", &"PARK",
+	&"RUINS_OF_ALPH", &"RADIO_TOWER", &"UNDERGROUND", &"ICE_PATH", &"DARK_CAVE",
+	&"FOREST", &"BETA_WORD_ROOM", &"HO_OH_WORD_ROOM", &"KABUTO_WORD_ROOM",
+	&"OMANYTE_WORD_ROOM", &"AERODACTYL_WORD_ROOM",
+]
+const TILESET_NAMES_GOLD_SILVER: Array[StringName] = [
+	&"JOHTO", &"JOHTO_MODERN", &"KANTO", &"HOUSE", &"PLAYERS_HOUSE", &"POKECENTER",
+	&"GATE", &"PORT", &"LAB", &"FACILITY", &"MART", &"MANSION", &"GAME_CORNER",
+	&"ELITE_FOUR_ROOM", &"TRADITIONAL_HOUSE", &"TRAIN_STATION", &"CHAMPIONS_ROOM",
+	&"LIGHTHOUSE", &"PLAYERS_ROOM", &"TOWER", &"CAVE", &"PARK", &"RUINS_OF_ALPH",
+	&"RADIO_TOWER", &"UNDERGROUND", &"ICE_PATH", &"DARK_CAVE", &"FOREST",
+]
+
+
+static func tileset_name(crystal: bool, number: int) -> StringName:
+	var names: Array[StringName] = TILESET_NAMES_CRYSTAL if crystal else TILESET_NAMES_GOLD_SILVER
+	return names[number - 1] if number >= 1 and number <= names.size() else &""
+
+
+static func tileset_number(crystal: bool, name: StringName) -> int:
+	var at: int = (TILESET_NAMES_CRYSTAL if crystal else TILESET_NAMES_GOLD_SILVER).find(name)
+	return at + 1 if at >= 0 else -1
 const TILESET_TILE_COUNT: int = 224
 const TILESET_BLOCK_TILES: int = 96
 const TILESET_BLOCK_STRIDE: int = 128
