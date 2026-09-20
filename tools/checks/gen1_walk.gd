@@ -479,6 +479,7 @@ func _one_game() -> void:
 	if _r.game_id != RomRegistry.YELLOW:
 		_check_a_script_hides_an_object()
 	_check_a_script_gives_a_pokemon()
+	_check_a_gift_on_the_screen()
 	_check_either_event_set()
 	_check_the_nurse_heals()
 	_check_the_cable_club()
@@ -995,6 +996,68 @@ func _check_a_script_gives_a_pokemon() -> void:
 				"" if accepted else "still ", "" if accepted else "not ",
 			]
 		)
+
+
+## `_GivePokemon` on the real screen. A row is the party's size, whether the box
+## is full, the ball's first line, the line behind the question, and a landing.
+const GIFT_ROWS: Array = [
+	[1, false, "<PLAYER> got EEVEE!", "", true],
+	[6, false, "<PLAYER> got EEVEE!", "There's no more room for #MON! EEVEE was sent to #MON BOX 1 on PC!", true],
+	[6, true, "There's no more room for #MON! The #MON BOX is full and can't accept any more! Change the BOX at a #MON CENTER!", "", false],
+]
+const GIFT_QUESTION: String = "Do you want to give a nickname to EEVEE?"
+const GIFT_GUARD_FRAMES: int = 2000
+
+
+func _check_a_gift_on_the_screen() -> void:
+	for row: Array in GIFT_ROWS:
+		var screen: Gen2WorldScreen = _r.open_screen(0, EEVEE_HOUSE, EEVEE_BALL_CELL + Vector2i.DOWN)
+		var save: Gen2SaveData = screen.active_save()
+		while save.party.size() < int(row[0]):
+			save.party.append(Gen2SaveMon.from_dict((save.party[0] as Gen2SaveMon).to_dict()))
+		if bool(row[1]):
+			for box: Gen2SaveBox in save.boxes:
+				for slot: int in Gen2SaveBox.CAPACITY:
+					box.put(Gen2SaveMon.from_dict((save.party[0] as Gen2SaveMon).to_dict()), slot)
+		screen.world().player_facing = Gen2WorldSprite.FACING_UP
+		screen.interact()
+		var prompt: Gen2NicknamePromptScreen = null
+		for _frame: int in GIFT_GUARD_FRAMES:
+			screen.advance_frame()
+			prompt = screen.get("_nickname_host")
+			if prompt != null:
+				break
+		if prompt == null:
+			_r.check(false, "the EEVEE ball opened no prompt with %d in the party." % int(row[0]))
+			_r.close_screen(screen)
+			continue
+		var opened: String = " ".join(_r.settle_prompt(screen, prompt))
+		var want: String = String(row[2]).replace(Gen2WorldPC.PLAYER_MARKER, save.player_name)
+		_r.check(opened == want, "the EEVEE ball opened on %s rather than %s." % [opened, want])
+		if prompt.phase() == Gen2NicknamePromptScreen.Phase.BEFORE_TEXT and not bool(row[1]):
+			## `sound_get_item_1` holds the box until the jingle ends.
+			for _frame: int in GIFT_GUARD_FRAMES:
+				screen.advance_frame()
+				if prompt.phase() != Gen2NicknamePromptScreen.Phase.BEFORE_TEXT:
+					break
+			var asked: String = " ".join(_r.settle_prompt(screen, prompt))
+			_r.check(asked == GIFT_QUESTION, "the EEVEE ball asked %s." % asked)
+			screen.press_button(PokeButton.B)
+			var after: String = " ".join(_r.settle_prompt(screen, prompt))
+			_r.check(after == String(row[3]), "behind the question the ball said %s." % after)
+		if screen.get("_nickname_host") != null:
+			screen.press_button(PokeButton.A)
+		for _frame: int in GIFT_GUARD_FRAMES:
+			screen.advance_frame()
+			if screen.get("_nickname_host") == null:
+				break
+		var landed: bool = (save.party.back() as Gen2SaveMon).species == EEVEE_DEX \
+			if int(row[0]) < Gen2SaveData.MAX_PARTY \
+			else save.boxes[0].slots[0] != null and (save.boxes[0].slots[0] as Gen2SaveMon).species == EEVEE_DEX
+		_r.check(landed == bool(row[4]), "the EEVEE %s with %d in the party." % [
+			"landed" if landed else "did not land", int(row[0])])
+		_r.close_screen(screen)
+	_r.note("gen1 walk the EEVEE ball says its own three lines on the screen")
 
 
 ## `CheckEitherEventSet`'s two flags, one `wEventFlags` byte and one mask: the

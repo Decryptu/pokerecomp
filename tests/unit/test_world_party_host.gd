@@ -1433,21 +1433,30 @@ func _gen1_throw(ball: int, case: Dictionary, rolls: Array) -> Dictionary:
 	)
 
 
-## `_DoYouWantToNicknameText` and `_ItemUseBallText08`, which are their own
-## words. The Generation 1 box line is the one `EVENT_MET_BILL` has not replaced,
-## no Generation 1 event model holding that flag.
+## `_DoYouWantToNicknameText`, `_ItemUseBallText07` and `_ItemUseBallText08`,
+## which are their own words: EVENT_MET_BILL picks the PC's owner, and the line
+## prints the name the keyboard left rather than the species.
 func test_generation_one_says_its_own_catch_lines() -> void:
 	assert_string_contains(
 		Gen2WorldPartyHost.capture_nickname_question("PIKACHU", RomRegistry.GEN1),
 		"Do you want to"
 	)
 	assert_string_contains(
-		Gen2WorldPartyHost.sent_to_box_text("PIKACHU", RomRegistry.GEN1),
-		"someone's PC!"
+		Gen2WorldPartyHost.gen1_transferred_format(false) % "SPARKY", "SPARKY was"
 	)
 	assert_string_contains(
-		Gen2WorldPartyHost.sent_to_box_text("PIKACHU"), "BILL's PC."
+		Gen2WorldPartyHost.gen1_transferred_format(false), "someone's PC!"
 	)
+	assert_string_contains(Gen2WorldPartyHost.gen1_transferred_format(true), "BILL's PC!")
+	assert_string_contains(Gen2WorldPartyHost.SENT_TO_BOX_FORMAT, "BILL's PC.")
+	assert_string_contains(
+		Gen2WorldPartyHost.gen1_sent_to_box_format(3) % "SPARKY", "SPARKY was"
+	)
+	assert_string_contains(Gen2WorldPartyHost.gen1_sent_to_box_format(3), "BOX 3 on PC!")
+	assert_string_contains(Gen2WorldPartyHost.gen1_box_is_full_text(), "Change the BOX at")
+	assert_eq(Gen2WorldPartyHost.gen1_got_mon_text("RED", "EEVEE"), "RED got\nEEVEE!")
+	assert_eq(Gen2WorldPartyHost.nickname_prompt("EEVEE", RomRegistry.GEN1), "EEVEE")
+	assert_eq(Gen2WorldPartyHost.nickname_prompt("EEVEE"), "EEVEE'S\nNICKNAME?")
 
 
 ## `GivePokemon`, which the Game Corner's prize counter reaches with a species

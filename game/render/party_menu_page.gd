@@ -196,16 +196,15 @@ func _use_gen1_layout() -> void:
 	prompt_at = GEN1_PROMPT
 
 
-## The whole screen, with the arrow on [param cursor] counting CANCEL as the row
-## after the last member. [param rows] is [member Gen2BattleSwitchMenu.rows].
+## The whole screen, [param cursor] counting CANCEL as the row after the last
+## member and [param rows] being [member Gen2BattleSwitchMenu.rows].
 ## `SwitchPartyMons` opens through `InitPartyMenuNoCancel`, so [param cancel] is
-## false while a member is being moved, and [param held] is that member's row,
-## which wears `▷` instead of nothing. [param quality] is the four
-## `PartyMenuQualityPointers` rows that are not `.Default`: each replaces the HP
-## bar and its digits with one string, which the row carries as `quality`.
+## false while a member is being moved and [param held] wears `▷`. [param quality]
+## is the four `PartyMenuQualityPointers` rows that are not `.Default`, one string
+## over the bar. [param speech] is `PrintPartyMenuActionText`'s `SpeechTextbox`.
 func render(
 	rows: Array, cursor: int, prompt: String, cancel: bool = true, held: int = -1,
-	quality: bool = false
+	quality: bool = false, speech: bool = false
 ) -> Image:
 	var width: int = Gen2Screen.WIDTH
 	var height: int = Gen2Screen.HEIGHT
@@ -225,7 +224,7 @@ func render(
 			CURSOR_COLUMN * TILE, (cursor_row + held * ROW_STEP) * TILE
 		)
 	_draw_cursor(page, width, cursor)
-	_draw_prompt(page, width, prompt)
+	_draw_prompt(page, width, prompt, speech)
 
 	var pixels: PackedInt32Array = Gen2PicImage.canvas_from_indices(
 		page, width, height, PokePalette.pic_palette(
@@ -524,16 +523,18 @@ func _draw_cursor(page: PackedByteArray, width: int, cursor: int) -> void:
 	)
 
 
-func _draw_prompt(page: PackedByteArray, width: int, prompt: String) -> void:
+func _draw_prompt(page: PackedByteArray, width: int, prompt: String, speech: bool) -> void:
+	var box_at: Vector2i = GEN1_TEXTBOX if speech else textbox_at
+	var text_at: Vector2i = GEN1_PROMPT if speech else prompt_at
 	font.draw_box(
-		frame_style, page, width, textbox_at.x * TILE, textbox_at.y * TILE,
-		TEXTBOX_COLUMNS, textbox_rows
+		frame_style, page, width, box_at.x * TILE, box_at.y * TILE,
+		TEXTBOX_COLUMNS, GEN1_TEXTBOX_ROWS if speech else textbox_rows
 	)
 	## `PlacePartyMenuText`'s string is one line and every `PartyMenuMessagePointers`
 	## box is two, so a break is a row two down, which is where `<LINE>` lands.
 	var line: int = 0
 	for row: String in prompt.split("\n", false):
 		font.draw_text(
-			row, page, width, prompt_at.x * TILE, (prompt_at.y + line * ROW_STEP) * TILE
+			row, page, width, text_at.x * TILE, (text_at.y + line * ROW_STEP) * TILE
 		)
 		line += 1

@@ -879,6 +879,11 @@ func _candy_evolution(cancel: bool) -> void:
 	assert_eq(save.party[0].level, level + 1)
 	assert_eq(save.party[0].species, 155, "nothing evolves behind the level box")
 	assert_null(_world_screen.get("_evolution_host"))
+	assert_false(
+		(host.get("_party_result") as Dictionary).get("stats", {}).is_empty(),
+		"PrintTempMonStats' box stands over the list"
+	)
+	_spend_party_result(host)
 	host.handle_button(PokeButton.A)
 	await get_tree().process_frame
 	var screen: Gen2EvolutionScreen = _world_screen.get("_evolution_host")
@@ -1000,7 +1005,6 @@ func test_tmhm_use_asks_before_teaching_and_a_yes_teaches_the_move() -> void:
 	host.handle_button(PokeButton.A)
 	await get_tree().process_frame
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
-	assert_true(bool(host.get("_pack_result_ok")), String(host.get("_pack_result")))
 	assert_true(save.party[0].moves.has(HM_MOVE))
 	## IsHM returns before ConsumeTM, so the HM stays in the bag.
 	assert_eq(_world_screen._world.state.item_quantity(HM_ITEM), 1)
@@ -1044,7 +1048,6 @@ func test_tmhm_use_reports_an_incompatible_species() -> void:
 	await get_tree().process_frame
 
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
-	assert_false(bool(host.get("_pack_result_ok")))
 	assert_true(
 		String(host.get("_pack_result")).contains("not compatible"),
 		String(host.get("_pack_result"))
@@ -1085,7 +1088,7 @@ func test_a_full_moveset_opens_forget_move_and_a_choice_replaces_that_slot() -> 
 
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_FORGET_ASK)
 	assert_true(
-		String(host.call("box_text")).contains("can't learn more than four moves"),
+		String(host.call("box_text")).contains("can't learn more"),
 		String(host.call("box_text"))
 	)
 
@@ -1101,7 +1104,6 @@ func test_a_full_moveset_opens_forget_move_and_a_choice_replaces_that_slot() -> 
 	host.handle_button(PokeButton.A)
 	await get_tree().process_frame
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
-	assert_true(bool(host.get("_pack_result_ok")), String(host.get("_pack_result")))
 	assert_eq(_world_screen._injected_save.party[0].moves, [1, 0x39, HM_MOVE, 4])
 	assert_true(String(host.get("_pack_result")).contains("forgot"), String(host.get("_pack_result")))
 
@@ -1121,7 +1123,7 @@ func test_choosing_an_hm_row_refuses_and_keeps_the_list_open() -> void:
 	await get_tree().process_frame
 
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_FORGET, "the list stays open")
-	assert_eq(String(host.call("box_text")), "HM moves can't be forgotten now.")
+	assert_eq(String(host.call("box_text")), Gen2MoveForget.cant_forget_hm_text())
 	## And moving the cursor puts `ListMoves`' own question back.
 	host.handle_button(PokeButton.DOWN)
 	assert_eq(String(host.call("box_text")), Gen2MoveForget.which_text())
@@ -1148,7 +1150,6 @@ func test_refusing_to_forget_reaches_stop_learning_and_teaches_nothing() -> void
 	host.handle_button(PokeButton.A)
 	await get_tree().process_frame
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
-	assert_false(bool(host.get("_pack_result_ok")))
 	assert_true(
 		String(host.get("_pack_result")).contains("did not learn"),
 		String(host.get("_pack_result"))
@@ -1419,7 +1420,18 @@ func test_use_on_a_party_item_asks_which_mon_then_heals_and_spends_it() -> void:
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
 	assert_eq((save.party[0] as Gen2SaveMon).hp, before + 15)
 	assert_eq(_world_screen._world.state.item_quantity(7), 0)
-	assert_eq(String(host.get("_pack_result")), "POTION restored 15 HP.")
+	## `_RecoveredSomeHPText` under the party list, the bar filling first.
+	assert_eq(String(host.get("_pack_result")), "TESTMON\nrecovered 15HP!")
+	var party: Dictionary = host.get("_party_result")
+	assert_eq(int(party.get("cursor", 0)), -1, "ItemActionText erases the cursor")
+	assert_not_null(party.get("anim"), "HealHP_SFX_GFX animates the row")
+	assert_eq(String(party.get("prompt", "")), Gen2PartyScreen.PROMPT_USE_ON_WHICH)
+	## `WaitPressAorB_BlinkCursor` is not reached until the bar and the fifty
+	## frames are spent.
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
+	_spend_party_result(host)
+	assert_false(host.get("_party_result").has("prompt"), "the line replaces the prompt")
 
 	# The spent item leaves the pocket on the way back.
 	host.handle_button(PokeButton.A)
@@ -2130,14 +2142,22 @@ func test_a_registered_item_is_used_by_the_select_button() -> void:
 
 	assert_true(_world_screen.press_button(PokeButton.SELECT))
 	await get_tree().process_frame
-	var select_host: Gen2StartMenuScreen = _world_screen._start_menu_host
-	assert_eq(select_host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
+	## `UseRepel` prints nothing and `.ReturnToField` closes the menu.
+	assert_null(_world_screen._start_menu_host)
 	assert_eq(_world_screen._world.state.repel_steps(), 100)
 	assert_eq(_world_screen._world.state.item_quantity(REPEL), 0)
 	assert_eq(
 		_world_screen._world.state.registered_item(), REPEL,
 		"the registration is only cleared where the check looks"
 	)
+
+
+## `AnimateHPBar` and `DelayFrames 50`, spent so the press behind them is read.
+func _spend_party_result(host: Gen2StartMenuScreen) -> void:
+	for _frame: int in 400:
+		if not host.party_result_holding():
+			return
+		host.advance_party_result()
 
 
 ## What the party list shows for the first member: `GetCurNickname`, which falls

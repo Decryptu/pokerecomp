@@ -1219,7 +1219,7 @@ func test_a_boxed_catch_prints_bills_pc_with_the_name_the_keyboard_stored() -> v
 	assert_eq(entered.length(), 1, "the one letter that was entered, not the species")
 	assert_eq(
 		" ".join(prompt.text_lines()),
-		Gen2WorldPartyHost.sent_to_box_text(entered).replace("\n", " ")
+		(Gen2WorldPartyHost.SENT_TO_BOX_FORMAT % entered).replace("\n", " ")
 	)
 	host.press_button(PokeButton.A)
 	await get_tree().process_frame
@@ -1882,7 +1882,7 @@ func test_a_boxed_gift_prints_bills_pc_and_keeps_the_species_name() -> void:
 	)
 	assert_eq(
 		" ".join(host.text_lines()),
-		Gen2WorldPartyHost.sent_to_box_text(species_name).replace("\n", " ")
+		(Gen2WorldPartyHost.SENT_TO_BOX_FORMAT % species_name).replace("\n", " ")
 	)
 	_world_screen.press_button(PokeButton.A)
 	assert_null(_world_screen.get("_nickname_host"))

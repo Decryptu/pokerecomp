@@ -144,6 +144,24 @@ func test_the_level_up_stats_box_is_the_source_rectangle() -> void:
 	assert_eq(placements[4], {"text": "SPEED", "at": Vector2i(11, 9)})
 	assert_eq(placements[5], {"text": " 12", "at": Vector2i(15, 2)})
 	assert_eq(placements[9], {"text": "  7", "at": Vector2i(15, 10)})
+	assert_eq(placements, Gen2BattleMenu.level_up_placements({"attack": 12, "speed": 7}))
+
+
+## `PrintStatsBox`'s LEVEL_UP_STATS_BOX: `hlcoord 9, 2` with `lb bc, 8, 9`, four
+## names from `hlcoord 11, 3` and each number a row down and four on, the one
+## SPECIAL standing where Crystal splits it.
+func test_the_generation_one_level_up_box_holds_four_stats() -> void:
+	var box: Gen2MenuBox = Gen2BattleMenu.level_up_box(true)
+	assert_eq(box.border_position(), Vector2i(9, 2))
+	assert_eq(box.border_size(), Vector2i(11, 10))
+	var placements: Array = Gen2BattleMenu.level_up_placements(
+		{"attack": 12, "speed": 7, "sp_attack": 45}, true
+	)
+	assert_eq(placements.size(), 8)
+	assert_eq(placements[0], {"text": "ATTACK", "at": Vector2i(11, 3)})
+	assert_eq(placements[1], {"text": " 12", "at": Vector2i(15, 4)})
+	assert_eq(placements[6], {"text": "SPECIAL", "at": Vector2i(11, 9)})
+	assert_eq(placements[7], {"text": " 45", "at": Vector2i(15, 10)})
 
 
 ## `MenuHeaders_UnownWalls`' `menu_coords 9 - n, 4, 10 + n, 9`: the box is built

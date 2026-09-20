@@ -6022,6 +6022,8 @@ func _gen1_resolve_gift_pokemon(node: Dictionary, steps: Array, run: Dictionary)
 		"kind": &"pokemon_requested",
 		"values": {"pokemon": int(site["species"]), "level": int(site["level"])},
 	}}
+	if node.has("routine"):
+		(step["values"]["values"] as Dictionary)["routine"] = StringName(node["routine"])
 	if node.has("ok"):
 		var taken: Array = []
 		var full: Array = []

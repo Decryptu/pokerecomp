@@ -70,6 +70,11 @@ const LEVEL_UP_RIGHT: int = 19
 const LEVEL_UP_BOTTOM: int = 11
 const LEVEL_UP_STATS_AT := Vector2i(11, 1)
 const LEVEL_UP_STATS_SPACING: int = 4
+## `PrintStatsBox`'s LEVEL_UP_STATS_BOX: `hlcoord 9, 2`, `lb bc, 8, 9`, names at 11, 3.
+const GEN1_LEVEL_UP_TOP: int = 2
+const GEN1_LEVEL_UP_STATS_AT := Vector2i(11, 3)
+const GEN1_LEVEL_UP_STAT_NAMES: Array[String] = ["ATTACK", "DEFENSE", "SPEED", "SPECIAL"]
+const GEN1_LEVEL_UP_STAT_KEYS: Array[String] = ["attack", "defense", "speed", "sp_attack"]
 
 ## `BattleText_TheresNoPPLeftForThisMove` and `BattleText_TheMoveIsDisabled`,
 ## which `.use_move` prints over the list and then reopens it behind.
@@ -149,10 +154,30 @@ static func info_box() -> Gen2MenuBox:
 	)
 
 
-static func level_up_box() -> Gen2MenuBox:
+static func level_up_box(gen1: bool = false) -> Gen2MenuBox:
 	return Gen2MenuBox.from_coords(
-		LEVEL_UP_LEFT, LEVEL_UP_TOP, LEVEL_UP_RIGHT, LEVEL_UP_BOTTOM, 0
+		LEVEL_UP_LEFT, GEN1_LEVEL_UP_TOP if gen1 else LEVEL_UP_TOP,
+		LEVEL_UP_RIGHT, LEVEL_UP_BOTTOM, 0
 	)
+
+
+static func level_up_placements(stats: Dictionary, gen1: bool = false) -> Array:
+	if not gen1:
+		return Gen2StatsScreenPage.stats_placements(
+			LEVEL_UP_STATS_AT, stats, LEVEL_UP_STATS_SPACING
+		)
+	var out: Array = []
+	for index: int in GEN1_LEVEL_UP_STAT_NAMES.size():
+		var at: Vector2i = GEN1_LEVEL_UP_STATS_AT \
+			+ Vector2i(0, index * Gen2StatsScreenPage.STAT_ROW_STEP)
+		out.append({"text": GEN1_LEVEL_UP_STAT_NAMES[index], "at": at})
+		out.append({
+			"text": str(int(stats.get(GEN1_LEVEL_UP_STAT_KEYS[index], 0))).lpad(
+				Gen2StatsScreenPage.STAT_DIGITS
+			),
+			"at": at + Vector2i(LEVEL_UP_STATS_SPACING, 1),
+		})
+	return out
 
 
 ## `ForgetMove`'s own list, drawn over the field while `MoveAskForgetText` stands
