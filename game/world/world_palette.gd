@@ -222,6 +222,17 @@ static func gen1_map_colors(
 	)
 
 
+## An overworld sprite's colours on either generation: one of Crystal's eight,
+## or the map's own four through `rOBP0`.
+static func overworld_sprite_colors(
+	data: GameData, map: Gen2WorldMap, palette: int, time_of_day: int,
+	last_map: int = -1, map_pal_offset: int = 0
+) -> PackedColorArray:
+	if data.generation != RomRegistry.GEN1:
+		return data.overworld_sprite_palette(palette, time_of_day)
+	return gen1_object_colors(gen1_map_colors(data, map, last_map), map_pal_offset)
+
+
 ## The same four through `GBPalNormal`'s `rOBP0`, which is what every object on
 ## a Generation 1 map is drawn with. Colour 0 is the object's transparent index,
 ## so a sprite never shows the map's own background colour. `LoadGBPal` writes

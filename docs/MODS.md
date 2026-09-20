@@ -133,6 +133,9 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 40 | `Gen2WorldTileset.name`, the `TILESET_*` constant's name on every cartridge, `GameData.world_tileset_named()`, and `Gen2Layout.tileset_name()` and `tileset_number()` between Crystal's numbering and Gold and Silver's |
+| 39 | A Generation 1 map draws block 0 as block 0, through `Gen2WorldAPI.drawn_block_of`; `Gen2BattleColors`, the colours a battle is drawn in on either generation, for any renderer; `Gen2BattleRenderer.back_pixels`; `Gen2WorldPalette.overworld_sprite_colors`, `Gen2WorldMap.is_outside()` and `Gen2WorldCollision.gen1_ledge_direction` |
+| 38 | `chance` on every slot `active_encounter_tables()` answers; a shiny pulse announced with `SFX_SHINE` on Red, Blue and Yellow; Yellow's Pikachu in `occupied` |
 | 37 | The gameplay catalog on Red, Blue and Yellow, `validate_placement` walking their map graph, the Old and Good Rod as `GameData.GEN1_OLD_ROD_GROUP` and `GEN1_GOOD_ROD_GROUP`; a `register` that read `generation()` or `target_game()` runs again when the answer changes |
 | 36 | A notice's `{"badge": 8..15}` drawn from the Gen 1 card's own `badge_faces` on Red, Blue and Yellow |
 | 35 | `Gen2ModHost.generation()` and `generation` on the battle snapshot; `repel_to_use` handed the cartridge's Repel table; an HM in the bag as a field-move source, Exp. All and `OPEN_BILLS_PC` on Red, Blue and Yellow |
@@ -685,7 +688,10 @@ includes water.
 `Gen2WorldAPI.drawn_block_at(x, y)` is the block a coordinate is *drawn* from
 rather than the block stored there: `LoadMetatiles` substitutes the border block
 for a `$00` byte, and `FillMapConnections` fills three blocks of padding around
-the map with a neighbour's art.
+the map with a neighbour's art. Generation 1's `LoadTileBlockMap` has no such
+substitution, so on Red, Blue and Yellow block 0 is the block it is;
+`Gen2WorldAPI.drawn_block_of(data, map, block)` is the one rule both readers go
+through.
 
 A caller with no world reads the same fold through
 `Gen2WorldAPI.drawn_block_for(data, map, x, y)`. That is what a battle has: a
@@ -997,6 +1003,30 @@ first, so the text box, the forget-move list, the pack rows and ball selection e
 take their press and what arrives here is pointer and stick motion. Those three
 also withhold everything else while up. A draining bar, the opening slide and a
 move animation do not, since none reads input.
+
+What the field is coloured in is `Gen2BattleColors`, built on the `GameData`
+and fed each `set_view(view)`: `pic_palette(back)`, `panel_palette()`,
+`hp_palette(hp, max_hp)`, `gen1_screen_palette(slot)`, `object_palette(slot)`,
+`object_image(pixels, attributes, left, top)` and `grayscale()`, which is the
+species' palette through the square's background map, a trainer's or the back
+pic's own on the Color hardware, on a Super Game Boy the palette of the mon
+whose square it is, grey through the entrance slide and black behind a lost
+Generation 1 fight. The built-in renderer reads the same one. The back pic in
+its box, doubled on Generation 1, is `Gen2BattleRenderer.back_pixels(data, pic)`,
+beside `padded_pic`, `doubled_pic` and `pic_tile`.
+
+A tileset is what a drawing is, and pokegold numbers every tileset past KANTO
+three lower than Crystal, so a table keyed by number lands on another drawing
+there. `Gen2WorldTileset.name` is the `TILESET_*` constant's own name on every
+cartridge (`&"POKECENTER"`, Yellow's `&"BEACH_HOUSE"` last), `GameData.world_tileset_named(name)`
+finds the tileset under it, and `Gen2Layout.tileset_number(crystal, name)` is
+the number it has on a profile.
+
+A world renderer has the same two on its side: an overworld sprite's colours on
+either generation are `Gen2WorldPalette.overworld_sprite_colors(data, map,
+palette, time_of_day, last_map, map_pal_offset)`, and whether a map is
+outdoors is `Gen2WorldMap.is_outside()`. `Gen2WorldCollision.gen1_ledge_direction(tileset, tile)`
+is the facing `LedgeTiles` names for a Generation 1 ledge tile.
 
 `view` says what is on the field and nothing about the place.
 `Gen2BattleWorldContext` is the place: `map_id` (group and number), `tileset`,
@@ -1354,8 +1384,8 @@ The context is a snapshot, never a live handle:
 |---|---|
 | `map` | `Vector2i(group, number)` |
 | `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on. `CanEncounterWildMon` per cell. Taken again, and pushed, if a script runs `wildoff` or `wildon` while the map is up |
-| `occupied` | The walk cells the map's own objects hold this frame: NPCs, item balls, all four cells of a big object, and both cells of one mid-step. Refreshed with `player`, not with `map`. An entry outside `eligible` is dropped, so the two are deliberately separate. Refusing an occupied cell is the provider's choice. The player's cell is not in it |
-| `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read now, with swarm and Bug Contest substitutions and the time of day already applied. A slot is `{species, min_level, max_level}`. Refreshed while the map is up, whenever the hour, a swarm or the Bug Contest moves what a roll would read |
+| `occupied` | The walk cells the map's own objects hold this frame: NPCs, item balls, all four cells of a big object, both cells of one mid-step, and Yellow's Pikachu while it follows. Refreshed with `player`, not with `map`. An entry outside `eligible` is dropped, so the two are deliberately separate. Refusing an occupied cell is the provider's choice. The player's cell is not in it |
+| `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read now, with swarm and Bug Contest substitutions and the time of day already applied. A slot is `{species, min_level, max_level, chance}`, `chance` its weight in the roll's own units (of 100 on Generation 2, of 256 on Generation 1, the row's own percent in the Bug Contest). Refreshed while the map is up, whenever the hour, a swarm or the Bug Contest moves what a roll would read |
 | `player` | `{cell, facing}` |
 | `run_seed` | The run's seed, so a population is reproducible |
 | `generation` | Bumped on every map change; an older one means the context is stale |
@@ -1413,9 +1443,11 @@ What the host does with a valid population:
   dropped the same way, so a provider may ask on every frame.
 - Discards the population, its sprites and any running pulse on a map change.
 - Plays `ANIM_SEND_OUT_MON` with the shiny param over a pulsing shiny entry, sound
-  included. A request inside `Gen2WorldEncounters.PULSE_FRAMES` of the last one is
-  dropped, so a provider may ask on spawn and every ten seconds. A pulse on an
-  ordinary Pokemon draws nothing.
+  included; on Red, Blue and Yellow the mark is `SFX_SHINE` alone, the way their
+  send-out marks one, answered through `frame_commands()`. A request inside
+  `Gen2WorldEncounters.PULSE_FRAMES` of the last one is dropped, so a provider
+  may ask on spawn and every ten seconds. A pulse on an ordinary Pokemon draws
+  nothing.
 
 A world renderer that wants to draw the sparkle itself takes the optional
 `set_encounters(encounters: Gen2WorldEncounters)`.

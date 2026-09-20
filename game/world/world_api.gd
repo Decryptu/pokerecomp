@@ -3718,8 +3718,9 @@ func expanded_block_at(block_x: int, block_y: int) -> int:
 		if local.x < 0 or local.y < 0 \
 			or local.x >= map.width_blocks or local.y >= map.height_blocks:
 			continue
-		var block: int = _overridden_block_at(map, local.x, local.y, _block_overrides)
-		return map.border_block if block == 0 else block
+		return drawn_block_of(
+			data, map, _overridden_block_at(map, local.x, local.y, _block_overrides)
+		)
 	return current_map.border_block
 
 
@@ -3822,7 +3823,15 @@ static func drawn_block_for(
 		)
 	if block < 0:
 		return map.border_block
-	return map.border_block if block == 0 else block
+	return drawn_block_of(data_source, map, block)
+
+
+## `LoadMetatiles` draws `wMapBorderBlock` for a `$00` byte; Generation 1's
+## `LoadTileBlockMap` draws block 0 as the block it is.
+static func drawn_block_of(data_source: GameData, map: Gen2WorldMap, block: int) -> int:
+	if block == 0 and (data_source == null or data_source.generation != RomRegistry.GEN1):
+		return map.border_block
+	return block
 
 
 ## Reads the three-block connection padding assembled by FillMapConnections.
@@ -8218,6 +8227,18 @@ func party_with_player() -> bool:
 ## Yellow's Pikachu out of its ball and on the map; false on every other cartridge.
 func cartridge_follower_out() -> bool:
 	return pikachu != null and pikachu.following() and pikachu.visible()
+
+
+## The follower's cell and both a step in flight is drawn between, while out.
+func gen1_pikachu_cells() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if not cartridge_follower_out():
+		return out
+	var drawn: Vector2 = Vector2(pikachu.pixel) / float(CELL_PIXELS)
+	for cell: Vector2i in [pikachu.cell, Vector2i(drawn.floor()), Vector2i(drawn.ceil())]:
+		if not out.has(cell):
+			out.append(cell)
+	return out
 
 
 func pending_script_input() -> Dictionary:

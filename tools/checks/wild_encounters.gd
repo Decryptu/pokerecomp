@@ -209,7 +209,96 @@ func _gen1_rolls() -> void:
 			met, GEN1_ROLL_STEPS, share, wanted,
 		])
 	_gen1_indoor_branch()
+	_gen1_slot_chances(world, generator)
+	_gen1_visible_pulse(world, Vector2i(grass[0]), generator)
 	_r.note("gen1 Route 1 met %d of %d steps" % [met, GEN1_ROLL_STEPS])
+
+
+## `Gen2WorldEncounter.slot_chance` against the roll itself: each slot's share of
+## [constant GEN1_ROLL_STEPS] draws within the tolerance, and the ten sum to 256.
+func _gen1_slot_chances(world: Gen2WorldAPI, generator: RandomNumberGenerator) -> void:
+	var met: Dictionary = {}
+	for _step: int in GEN1_ROLL_STEPS:
+		var slot: int = Gen2WorldEncounter._choose_slot(generator, Gen2WorldEncounter.METHOD_GRASS, true)
+		met[slot] = int(met.get(slot, 0)) + 1
+	var table: Dictionary = world.active_encounter_tables()[Gen2WorldEncounter.METHOD_GRASS]
+	var slots: Array = table["slots"]
+	var total: int = 0
+	for index: int in slots.size():
+		var chance: int = int(slots[index]["chance"])
+		total += chance
+		var share: float = float(met.get(index, 0)) / float(GEN1_ROLL_STEPS)
+		_r.check(absf(share - float(chance) / 256.0) < GEN1_ROLL_TOLERANCE,
+			"slot %d was drawn %.3f of the time against a chance of %d/256." % [index, share, chance])
+	_r.check(total == 256 and slots.size() == Gen1Layout.WILD_SLOT_COUNT,
+		"the ten slots' chances sum to %d." % total)
+
+
+## A shiny visible encounter on a Generation 1 world is announced with
+## `SFX_SHINE` alone, on the frame it is admitted, and once a window.
+func _gen1_visible_pulse(world: Gen2WorldAPI, cell: Vector2i, generator: RandomNumberGenerator) -> void:
+	var table: Dictionary = world.active_encounter_tables()[Gen2WorldEncounter.METHOD_GRASS]
+	var slot: Dictionary = (table["slots"] as Array)[0]
+	var driver := Gen2WorldEncounters.new()
+	var provider: Object = _pulse_provider(cell, int(slot["species"]), int(slot["min_level"]))
+	driver.set_providers([provider])
+	driver.set_world(world, null)
+	if world.pikachu != null:
+		## `SetPikachuSpawnWarpPad`'s right-hand spawn, so it stands beside the
+		## player rather than hidden under them.
+		world.pikachu.set_party(true, true)
+		world.pikachu.set_following(true)
+		world.pikachu.spawn_state = Gen1Pikachu.SPAWN_RIGHT
+		for _pass: int in 4:
+			world.advance_gen1_pikachu_pass(generator, false)
+	driver.advance_frame()
+	if world.pikachu != null:
+		var held: Array[Vector2i] = world.gen1_pikachu_cells()
+		var occupied: PackedVector2Array = (provider.get("context") as Dictionary).get("occupied", PackedVector2Array())
+		_r.check(not held.is_empty() and occupied.has(Vector2(held[0])),
+			"the follower's %s is not in occupied %s." % [held, occupied])
+	if not _r.check(driver.entries().size() == 1 and bool(driver.entries()[0]["shiny"]),
+		"the shiny entry was not admitted: %s" % [driver.entries()]):
+		return
+	var commands: Array = driver.frame_commands()
+	_r.check(commands.size() == 1 and int((commands[0]["operands"] as Array)[1]) == Gen2BattleScreen.SFX_SHINE,
+		"the pulse answered %s, not SFX_SHINE." % [commands])
+	_r.check(driver.pulse_sprites().is_empty(), "a Generation 1 pulse put sprites in OAM.")
+	var again: int = 0
+	for _frame: int in 8:
+		driver.advance_frame()
+		again += driver.frame_commands().size()
+	_r.check(again == 0, "the shine sounded %d more times inside the window." % again)
+	_r.note("gen1 visible shiny announced with SFX_SHINE on frame 1")
+
+
+func _pulse_provider(cell: Vector2i, species: int, level: int) -> Object:
+	var script := GDScript.new()
+	script.source_code = """extends RefCounted
+
+var entry: Dictionary = {}
+var context: Dictionary = {}
+
+func set_context(given) -> void:
+	context = given
+
+func advance_frame() -> void:
+	pass
+
+func encounters() -> Array:
+	return [entry]
+
+func battle_finished(_id, _result) -> void:
+	pass
+"""
+	script.reload()
+	var out: Object = script.new()
+	## `CheckShininess`: the attack mask and three tens.
+	out.set("entry", {
+		"id": &"one", "cell": cell, "species": species, "level": level,
+		"dvs": Gen2Stats.pack_dvs(2, 10, 10, 10), "pulse": true,
+	})
+	return out
 
 
 ## The branch behind the two tile tests: an indoor map rolls on any tile, and

@@ -22,6 +22,10 @@ const MAX_ENTRIES: int = 32
 ## animation a second time with the param set (engine/battle/core.asm).
 const SHINY_ANIM: int = 0x101
 const SHINY_ANIM_PARAM: int = 1
+## Generation 1 has no sparkle: its send-out marks a shiny with `SFX_SHINE` alone.
+const GEN1_PULSE_COMMANDS: Array = [
+	{"name": Gen2BattleAnimScript.SOUND, "operands": [0, Gen2BattleScreen.SFX_SHINE]},
+]
 
 ## A pulse for an id that pulsed fewer frames ago than this is dropped, so a
 ## provider may ask on every frame and get the cadence it asked for once.
@@ -306,6 +310,11 @@ func _occupied_cells() -> PackedVector2Array:
 						continue
 					seen[cell] = true
 					out.append(cell)
+	## Yellow's own Pikachu is slot fifteen rather than a map object.
+	for cell: Vector2i in _world.gen1_pikachu_cells():
+		if not seen.has(Vector2(cell)):
+			seen[Vector2(cell)] = true
+			out.append(Vector2(cell))
 	return out
 
 
@@ -598,12 +607,18 @@ func _table_offers(method: StringName, species: int, level: int) -> bool:
 ## ordinary Pokemon is dropped rather than drawn as something the cartridge has
 ## no animation for.
 func _start_pulse(entry: Dictionary) -> void:
-	if not bool(entry["shiny"]) or _anim_data == null:
+	if not bool(entry["shiny"]):
 		return
 	var id: StringName = StringName(entry["id"])
 	if _pulse != null and _pulse_id == id:
 		return
 	if _pulsed.has(id) and _frame - int(_pulsed[id]) < PULSE_FRAMES:
+		return
+	if _world != null and _world.is_gen1():
+		_pulsed[id] = _frame
+		_frame_commands = GEN1_PULSE_COMMANDS.duplicate(true)
+		return
+	if _anim_data == null:
 		return
 	var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create(
 		_anim_data, SHINY_ANIM, true, SHINY_ANIM_PARAM

@@ -19,32 +19,24 @@ const ROWS: int = Gen2BattleScreenMap.ROWS
 const MAP_WIDTH: int = 256
 const MAP_HEIGHT: int = 256
 
-## `%11100100`, the DMG palette byte that maps every colour to itself.
-const PALETTE_IDENTITY: int = 0xE4
-
-## OAM attribute bits, as [Gen2BattleAnimObject] writes them.
-const OAM_YFLIP: int = 1 << 6
-const OAM_XFLIP: int = 1 << 5
-const OAM_PALETTE: int = 0x07
+const PALETTE_IDENTITY: int = Gen2BattleColors.PALETTE_IDENTITY
+const OAM_YFLIP: int = Gen2BattleColors.OAM_YFLIP
+const OAM_XFLIP: int = Gen2BattleColors.OAM_XFLIP
+const OAM_PALETTE: int = Gen2BattleColors.OAM_PALETTE
 
 ## The white the hardware fills the battle background with; Generation 1 fills it
-## with `SuperPalettes`' own, from [method gen1_screen_palette].
+## with `SuperPalettes`' own, from [method Gen2BattleColors.gen1_screen_palette].
 const BACKGROUND: Color = Color.WHITE
 
-## `BlkPacket_Battle`'s five blocks name one of four Super Game Boy palettes for
-## every cell of a Generation 1 battle and `SetPal_Battle` fills them: 0 and 1
-## are `PAL_GREENBAR` plus each side's HP bar colour, 2 and 3 are
-## `DeterminePaletteID`'s. Block 1 gives rows 12 to 17 palette 2 and everything
-## outside them palette 0.
-const GEN1_PAL_PLAYER_BAR: int = 0
-const GEN1_PAL_ENEMY_BAR: int = 1
-const GEN1_PAL_PLAYER_MON: int = 2
-const GEN1_PAL_ENEMY_MON: int = 3
+const GEN1_PAL_PLAYER_BAR: int = Gen2BattleColors.GEN1_PAL_PLAYER_BAR
+const GEN1_PAL_ENEMY_BAR: int = Gen2BattleColors.GEN1_PAL_ENEMY_BAR
+const GEN1_PAL_PLAYER_MON: int = Gen2BattleColors.GEN1_PAL_PLAYER_MON
+const GEN1_PAL_ENEMY_MON: int = Gen2BattleColors.GEN1_PAL_ENEMY_MON
 
 var _data: GameData = null
 var _hud: Gen2BattleHud = null
 var _view: Dictionary = {}
-var _gen1_blocks: PackedByteArray = PackedByteArray()
+var _colors: Gen2BattleColors = null
 
 var _enemy_pic: TextureRect = null
 var _player_pic: TextureRect = null
@@ -115,6 +107,7 @@ func _raster_key() -> Array:
 ## [method Gen2BattleHud.from_data].
 func set_battle_data(data: GameData) -> bool:
 	_data = data
+	_colors = Gen2BattleColors.new(data)
 	_hud = Gen2BattleHud.from_data(data)
 	if _hud == null:
 		return false
@@ -141,6 +134,7 @@ func set_battle_data(data: GameData) -> bool:
 ## since a turn resolves at once and is then shown an event at a time.
 func set_view(view: Dictionary) -> void:
 	_view = view
+	_colors.set_view(view)
 	refresh()
 
 
@@ -159,7 +153,7 @@ func _draw_pics() -> void:
 	var map: PackedByteArray = _bg_map()
 	_ensure_pixels()
 	var raster: Array = _raster_key()
-	var gray: PackedColorArray = _grayscale()
+	var gray: PackedColorArray = _colors.grayscale()
 	# A packed array is passed by reference, so a key holding the screen's own
 	# map is a key that changes with it: every animation that edits nothing but
 	# the tilemap, which is most of them, would compare equal to what is on
@@ -167,19 +161,7 @@ func _draw_pics() -> void:
 	var map_key: PackedByteArray = map.duplicate()
 
 	var enemy: int = int(_view.get("enemy_species", 0))
-	var enemy_shiny: bool = bool(_view.get("enemy_shiny", false))
-	var enemy_palette: PackedColorArray = _battler_palette(
-		enemy, Gen2BattleAnimBackground.PAL_BG_ENEMY, enemy_shiny
-	)
-	# `GetFrontpicPalettePointer` reads `wTrainerClass` rather than a species
-	# when the square is holding a trainer, which it is until that trainer has
-	# sent something out.
-	var enemy_trainer: int = int(_view.get("enemy_trainer_pic", 0))
-	if enemy_trainer > 0 and not bool(_view.get("grayscale", false)) and not _gen1():
-		enemy_palette = _remap(
-			_data.trainer_palette(enemy_trainer),
-			_palette_map("bg_palette_maps", Gen2BattleAnimBackground.PAL_BG_ENEMY)
-		)
+	var enemy_palette: PackedColorArray = _colors.pic_palette(false)
 	var vbank1: PackedByteArray = _vbank1()
 	var enemy_key: Array = [
 		map_key, enemy, _enemy_pixels_key, enemy_palette, raster, vbank1.duplicate(), gray,
@@ -195,18 +177,7 @@ func _draw_pics() -> void:
 			enemy_palette
 		)
 	var player: int = int(_view.get("player_species", 0))
-	var player_shiny: bool = bool(_view.get("player_shiny", false))
-	var player_palette: PackedColorArray = _battler_palette(
-		player, Gen2BattleAnimBackground.PAL_BG_PLAYER, player_shiny
-	)
-	# `GetPlayerOrMonPalettePointer`'s `and a / jp nz`: a zero species is the
-	# player standing there, and the palette is the player's own.
-	var backpic: String = String(_view.get("player_backpic", ""))
-	if not backpic.is_empty() and not bool(_view.get("grayscale", false)) and not _gen1():
-		player_palette = _remap(
-			_data.player_palette(String(_view.get("player_backpic_palette", "chris"))),
-			_palette_map("bg_palette_maps", Gen2BattleAnimBackground.PAL_BG_PLAYER)
-		)
+	var player_palette: PackedColorArray = _colors.pic_palette(true)
 	var player_key: Array = [
 		map_key, player, _player_pixels_key, player_palette, raster,
 		vbank1.duplicate(), gray,
@@ -224,12 +195,8 @@ func _draw_pics() -> void:
 		)
 
 
-## `BlkPacket_Battle` gives each square one of four Super Game Boy palettes and
-## `SetPal_Battle` fills two of them from `DeterminePaletteID`, which reads a
-## species and nothing else. So a Generation 1 trainer, the player's back pic
-## included, wears the palette of the mon whose square it is standing in.
 func _gen1() -> bool:
-	return _data != null and _data.generation == RomRegistry.GEN1
+	return _colors != null and _colors.gen1()
 
 
 ## `wAttrmap` bit 3 over the screen, which is the VRAM bank each cell's tile
@@ -342,24 +309,24 @@ func _ensure_pixels() -> void:
 	]
 	if player_key != _player_pixels_key:
 		if not String(player_key[3]).is_empty():
-			_player_pixels = _back_pixels(_data.player_backpic(String(player_key[3])))
+			_player_pixels = back_pixels(_data, _data.player_backpic(String(player_key[3])))
 		elif bool(player_key[1]):
 			_player_pixels = _substitute_pic(true)
 		elif bool(player_key[4]):
 			_player_pixels = _minimize_pic(true)
 		else:
-			_player_pixels = _back_pixels(
+			_player_pixels = back_pixels(_data,
 				_battler_pic(int(player_key[0]), int(player_key[2]), true)
 			)
 		_player_pixels_key = player_key
 
 
 ## The back pic in its own box, which Generation 1 doubles on the way in.
-func _back_pixels(pic: Dictionary) -> PackedByteArray:
-	var side: int = Gen2BattleScreenMap.player_box_side(_data.generation)
-	if _data.generation == RomRegistry.GEN1:
-		return doubled_pic(_data, pic, side)
-	return padded_pic(_data, pic, side)
+static func back_pixels(data: GameData, pic: Dictionary) -> PackedByteArray:
+	var side: int = Gen2BattleScreenMap.player_box_side(data.generation)
+	if data.generation == RomRegistry.GEN1:
+		return doubled_pic(data, pic, side)
+	return padded_pic(data, pic, side)
 
 
 ## `ScaleSpriteByTwo`: a 32x32 back pic drawn 56x56. It walks 28 of the 32 rows
@@ -576,78 +543,6 @@ static func _append_animation(
 				out[to + x] = indices[from + x]
 
 
-## A battler pic's own palette, permuted by whatever DMG byte the animation's
-## last `BattleAnimRequestPals` left on that palette slot.
-## `CGB_BattleColors` reads `CheckShininess` on both sides, so the shiny palette
-## is the picture's for the whole fight and not just the gold sweep the entrance
-## plays over it.
-func _battler_palette(species: int, slot: int, shiny: bool) -> PackedColorArray:
-	var grayscale: PackedColorArray = _grayscale()
-	if not grayscale.is_empty():
-		return grayscale
-	## `MarowakAnim`'s `rOBP1` over the enemy's square alone.
-	var dmg: int = int(_view.get("enemy_pic_dmg", -1)) \
-		if slot == Gen2BattleAnimBackground.PAL_BG_ENEMY else -1
-	if dmg < 0:
-		dmg = _palette_map("bg_palette_maps", slot)
-	return _remap(_data.palette(species, shiny), dmg)
-
-
-## One of `SetPal_Battle`'s four. Every `SuperPalettes` row shares colour 0 and
-## colour 3, so a 1bpp surface reads the same white and near-black out of
-## whichever block covers it; only the bars and the pictures read the two
-## between.
-func gen1_screen_palette(slot: int) -> PackedColorArray:
-	var black: PackedColorArray = _grayscale()
-	if not black.is_empty():
-		return black
-	var player: bool = slot == GEN1_PAL_PLAYER_BAR or slot == GEN1_PAL_PLAYER_MON
-	var base: PackedColorArray = _data.palette(
-		int(_view.get("player_species" if player else "enemy_species", 0)),
-		bool(_view.get("player_shiny" if player else "enemy_shiny", false))
-	) if slot == GEN1_PAL_PLAYER_MON or slot == GEN1_PAL_ENEMY_MON else _hp_palette(
-		int(_view.get("player_hp" if player else "enemy_hp", 0)),
-		int(_view.get("player_max_hp" if player else "enemy_max_hp", 0))
-	)
-	# `rBGP` is one byte for the whole screen where the Color hardware has a map
-	# per palette, so every block takes slot 0's. It is what
-	# `SetAnimationBGPalette` and `AnimationFlashScreen` darken the screen with.
-	return _remap(base, _palette_map("bg_palette_maps", 0))
-
-
-## `_CGB_BattleGrayscale`'s palette while the view says the battle is still in
-## it, which is every frame up to `GetSGBLayout SCGB_BATTLE_COLORS`, and
-## `SET_PAL_BATTLE_BLACK`'s PAL_BLACK behind all five blocks of a lost
-## Generation 1 fight. Empty otherwise.
-func _grayscale() -> PackedColorArray:
-	if _data == null:
-		return PackedColorArray()
-	if bool(_view.get("gen1_black", false)):
-		return _data.world_palette(Gen1Layout.PAL_BLACK)
-	if not bool(_view.get("grayscale", false)):
-		return PackedColorArray()
-	return _data.battle_grayscale_palette()
-
-
-## `CopyPals`: colour [code]index[/code] of the result is colour
-## [code](byte >> index * 2) & 3[/code] of the pristine palette, which is why a
-## remap never compounds.
-static func _remap(palette: PackedColorArray, dmg: int) -> PackedColorArray:
-	if palette.size() < PokePalette.COLORS_PER_PIC or dmg == PALETTE_IDENTITY:
-		return palette
-	var out := PackedColorArray()
-	for index: int in PokePalette.COLORS_PER_PIC:
-		out.append(palette[(dmg >> (index * 2)) & 3])
-	return out
-
-
-func _palette_map(key: String, slot: int) -> int:
-	var maps: Variant = _view.get(key, null)
-	if not maps is PackedByteArray or slot < 0 or slot >= (maps as PackedByteArray).size():
-		return PALETTE_IDENTITY
-	return int((maps as PackedByteArray)[slot])
-
-
 ## The panels, then each bar over them in its own colour: one buffer per
 ## palette. `BattleAnimClearHud` takes one side off for a move animation and
 ## `BattleAnimRestoreHuds` puts it back.
@@ -691,18 +586,17 @@ func _draw_panels() -> void:
 		## 1bpp, so one layer serves.
 		_show_layer(
 			_panels, panels,
-			gen1_screen_palette(GEN1_PAL_PLAYER_BAR) if _gen1()
-			else PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+			_colors.panel_palette()
 		)
 
-	var gray: PackedColorArray = _grayscale()
+	var gray: PackedColorArray = _colors.grayscale()
 	if _layer_changed(&"enemy_bar", [enemy_hp, enemy_max_hp, enemy_hud, raster, gray]):
 		var enemy: PackedByteArray = _new_buffer()
 		if enemy_hud:
 			_hud.draw_hp_bar(
 				enemy, Gen2Screen.WIDTH, Gen2BattleHud.ENEMY_BAR, enemy_hp, enemy_max_hp
 			)
-		_show_layer(_enemy_bar, enemy, _hp_palette(enemy_hp, enemy_max_hp))
+		_show_layer(_enemy_bar, enemy, _colors.hp_palette(enemy_hp, enemy_max_hp))
 
 	if _layer_changed(&"player_bar", [player_hp, player_max_hp, player_hud, raster, gray]):
 		var player: PackedByteArray = _new_buffer()
@@ -710,7 +604,7 @@ func _draw_panels() -> void:
 			_hud.draw_hp_bar(
 				player, Gen2Screen.WIDTH, Gen2BattleHud.PLAYER_BAR, player_hp, player_max_hp
 			)
-		_show_layer(_player_bar, player, _hp_palette(player_hp, player_max_hp))
+		_show_layer(_player_bar, player, _colors.hp_palette(player_hp, player_max_hp))
 
 	if _layer_changed(&"exp_bar", [exp_pixels, player_hud, raster]):
 		var gained: PackedByteArray = _new_buffer()
@@ -773,7 +667,7 @@ func _draw_hud_balls() -> void:
 	# and does not take the scroll the background layers do.
 	var image: Image = Gen2PicImage.from_indices(
 		buffer, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
-		_object_palette(Gen2BattleAnimBackground.PAL_OB_YELLOW), true
+		_colors.object_palette(Gen2BattleAnimBackground.PAL_OB_YELLOW), true
 	)
 	Gen2PicImage.show(_hud_balls, image)
 	_hud_balls.size = image.get_size()
@@ -820,21 +714,7 @@ func _blit_sprite(into: Image, sprite: Dictionary, backpic: bool = false) -> voi
 	var attributes: int = int(sprite.get("attributes", 0))
 	var left: int = int(sprite.get("x", 0)) - 8
 	var top: int = int(sprite.get("y", 0)) - 16
-	var grayscale: PackedColorArray = _grayscale()
-	var lookup: Image
-	if not grayscale.is_empty():
-		lookup = Gen2PicImage.from_indices(pixels, TILE, TILE, grayscale, true)
-	elif _gen1():
-		lookup = _gen1_object_image(pixels, attributes, left, top, _anim_obp0())
-	else:
-		lookup = Gen2PicImage.from_indices(pixels, TILE, TILE, _remap(
-			_object_palette(attributes & OAM_PALETTE),
-			_palette_map("ob_palette_maps", attributes & OAM_PALETTE)
-		), true)
-	if (attributes & OAM_XFLIP) != 0:
-		lookup.flip_x()
-	if (attributes & OAM_YFLIP) != 0:
-		lookup.flip_y()
+	var lookup: Image = _colors.object_image(pixels, attributes, left, top)
 
 	var clip: Rect2i = Rect2i(0, 0, TILE, TILE)
 	if left < 0:
@@ -911,77 +791,6 @@ static func pic_tile(pixels: PackedByteArray, side: int, index: int) -> PackedBy
 	return out
 
 
-func _anim_obp0() -> int:
-	return int(_view.get("anim_obp0", Gen1Layout.ANIM_OBP0))
-
-
-## Each pixel through [method gen1_object_palette] where the caller's flips land it.
-func _gen1_object_image(
-	pixels: PackedByteArray, attributes: int, left: int, top: int, obp0: int
-) -> Image:
-	var out: Image = Image.create_empty(TILE, TILE, false, Image.FORMAT_RGBA8)
-	var palettes: Dictionary = {}
-	for row: int in TILE:
-		var y: int = top + (TILE - 1 - row if attributes & OAM_YFLIP else row)
-		for column: int in TILE:
-			var index: int = pixels[row * TILE + column]
-			if index == 0:
-				continue
-			var x: int = left + (TILE - 1 - column if attributes & OAM_XFLIP else column)
-			var cell: int = _gen1_cell(x, y)
-			if not palettes.has(cell):
-				palettes[cell] = gen1_object_palette(attributes, x, y, obp0)
-			out.set_pixel(column, row, (palettes[cell] as PackedColorArray)[index])
-	return out
-
-
-## A Game Boy Color reads the slot the OAM byte carries and `rOBP1` behind
-## `OAM_HIGH_PALS`; a Super Game Boy colours the finished picture, so an object
-## takes the `BlkPacket_Battle` block its cell sits in and `rOBP1` behind
-## `OAM_PAL1`. $F0 reads only colours 0 and 3, which every row shares.
-func gen1_object_palette(attributes: int, x: int, y: int, obp0: int) -> PackedColorArray:
-	var cgb: bool = Gen1Layout.on_cgb(_data.id)
-	var slot: int = attributes & Gen1Lcd.PALETTE_SLOT_MASK if cgb else _gen1_block(x, y)
-	var high: int = Gen1Lcd.OAM_HIGH_PALS if cgb else Gen1Lcd.OAM_PAL1
-	var dmg: int = Gen1Layout.ANIM_OBP1 if (attributes & high) != 0 else obp0
-	return _remap(gen1_screen_palette(slot), dmg)
-
-
-func _gen1_block(x: int, y: int) -> int:
-	if _gen1_blocks.is_empty():
-		_gen1_blocks = Gen1OpeningPage.attribute_map(
-			(_data.opening().get("blocks", {}) as Dictionary).get("battle", [])
-		)
-	var cell: int = _gen1_cell(x, y)
-	return _gen1_blocks[cell] if cell >= 0 and cell < _gen1_blocks.size() else 0
-
-
-static func _gen1_cell(x: int, y: int) -> int:
-	if x < 0 or x >= Gen2Screen.WIDTH or y < 0 or y >= Gen2Screen.HEIGHT:
-		return -1
-	@warning_ignore("integer_division")
-	return (y / TILE) * Gen1OpeningPage.CELLS_ACROSS + x / TILE
-
-
-## `PAL_BATTLE_OB_*`. Slots 0 and 1 are the two battlers' own rather than
-## `BattleObjectPals` rows, which is what `_CGB_BattleScreenLayout` fills them
-## with.
-func _object_palette(slot: int) -> PackedColorArray:
-	return _data.battle_object_palette(
-		slot,
-		_battler_pair(int(_view.get("enemy_species", 0))),
-		_battler_pair(int(_view.get("player_species", 0)))
-	)
-
-
-func _battler_pair(species: int) -> Array:
-	var entry: Dictionary = _data.species(species)
-	if entry.is_empty():
-		return []
-	var stored: Variant = (entry.get("palette", {}) as Dictionary).get("normal", [])
-	return stored if stored is Array else []
-
-
 func _new_layer() -> TextureRect:
 	var out := TextureRect.new()
 	# Nearest, or the integer-scaled viewport is undone on the last hop.
@@ -1019,15 +828,3 @@ func _show_image(into: TextureRect, image: Image) -> void:
 	Gen2PicImage.show(into, image)
 	into.size = image.get_size()
 	into.position = Vector2.ZERO
-
-
-## An HP bar is green, yellow or red by how much of it is lit rather than by the
-## hit points behind it, which is the rule the games use.
-func _hp_palette(hp: int, max_hp: int) -> PackedColorArray:
-	var black: PackedColorArray = _grayscale()
-	if not black.is_empty():
-		return black
-	var lit: int = Gen2BattleHud.bar_pixels(
-		hp, max_hp, Gen2BattleHud.HP_BAR_TILES * Gen2BattleHud.TILE
-	)
-	return _data.bar_palette(GameData.hp_bar_palette_name(lit))

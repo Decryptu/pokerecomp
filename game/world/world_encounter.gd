@@ -381,16 +381,30 @@ static func active_slots(
 	record: Dictionary, method: StringName, time_of_day: int, gen1: bool = false
 ) -> Array:
 	var out: Array = []
-	for slot: Variant in _slots(record, method, time_of_day, gen1):
-		if not slot is Dictionary:
+	var slots: Array = _slots(record, method, time_of_day, gen1)
+	for index: int in slots.size():
+		if not slots[index] is Dictionary:
 			continue
-		var level: int = int((slot as Dictionary).get("level", 0))
+		var level: int = int((slots[index] as Dictionary).get("level", 0))
 		out.append({
-			"species": int((slot as Dictionary).get("species", 0)),
+			"species": int((slots[index] as Dictionary).get("species", 0)),
 			"min_level": level,
 			"max_level": level,
+			"chance": slot_chance(index, method, gen1),
 		})
 	return out
+
+
+## What one slot weighs in [method _choose_slot]'s roll, in the cartridge's own
+## units: a share of 100 on Generation 2, of 256 on Generation 1.
+static func slot_chance(index: int, method: StringName, gen1: bool = false) -> int:
+	var cumulative: Array[int] = Gen1Layout.WILD_SLOT_CHANCES if gen1 \
+		else (Gen2Layout.WILD_WATER_PROBABILITIES if method == METHOD_SURF
+			else Gen2Layout.WILD_GRASS_PROBABILITIES)
+	if index < 0 or index >= cumulative.size():
+		return 0
+	var below: int = cumulative[index - 1] if index > 0 else (-1 if gen1 else 0)
+	return cumulative[index] - below
 
 
 static func _choose_slot(

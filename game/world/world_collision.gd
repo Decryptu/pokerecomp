@@ -568,6 +568,23 @@ static func gen1_pair_blocked(
 	return false
 
 
+## The facing `LedgeTiles` names for [param ledge], as `Gen2WorldSprite.FACING_*`,
+## or -1 off the table.
+static func gen1_ledge_direction(tileset_number: int, ledge: int) -> int:
+	if tileset_number != Gen1Layout.TILESET_OVERWORLD:
+		return -1
+	for row: Array in GEN1_LEDGES:
+		if row[2] == ledge:
+			return GEN1_LEDGE_FACINGS[int(row[0])]
+	return -1
+
+
+const GEN1_LEDGE_FACINGS: Dictionary = {
+	FACE_DOWN: Gen2WorldSprite.FACING_DOWN, FACE_LEFT: Gen2WorldSprite.FACING_LEFT,
+	FACE_RIGHT: Gen2WorldSprite.FACING_RIGHT,
+}
+
+
 ## `HandleLedges`, which runs before the passability check and hops on a match.
 static func gen1_allows_hop(
 	tileset_number: int, standing: int, ahead: int, direction: Vector2i

@@ -108,7 +108,6 @@ const BATTLE_TYPE: int = Gen2Battle.BATTLETYPE_CONTEST
 ## `.RandomLevel`: a level between the row's own two, taken as
 ## `ContestMons` in the shape [method Gen2WorldEncounter.active_slots] answers
 ## in, which is how a caller reads the table the contest replaces the map's with.
-## The percentages are the roll's and are not part of what a slot offers.
 static func active_slots(mons: Array) -> Array:
 	var out: Array = []
 	for row: Variant in mons:
@@ -119,6 +118,7 @@ static func active_slots(mons: Array) -> Array:
 			"species": int((row as Dictionary).get("species", 0)),
 			"min_level": low,
 			"max_level": maxi(low, int((row as Dictionary).get("max_level", low))),
+			"chance": int((row as Dictionary).get("percent", 0)),
 		})
 	return out
 

@@ -433,6 +433,19 @@ class Population:
 				_entries.remove_at(at)
 				return
 
+	## `chance` is what the slot weighs in the step roll itself, in the roll's
+	## own units, so a population drawn on it looks like the grass it stands in.
+	static func _weighted_slot(table: Array, rolls: RandomNumberGenerator) -> Dictionary:
+		var total: int = 0
+		for slot: Dictionary in table:
+			total += int(slot.get("chance", 1))
+		var pick: int = rolls.randi_range(0, maxi(total, 1) - 1)
+		for slot: Dictionary in table:
+			pick -= int(slot.get("chance", 1))
+			if pick < 0:
+				return slot
+		return table[table.size() - 1]
+
 	func _repopulate() -> void:
 		_entries = []
 		var cells: PackedVector2Array = (
@@ -459,7 +472,7 @@ class Population:
 		if Gen2Rules.active().challenge == Gen2Rules.CHALLENGE_HARD:
 			count += 1
 		for at: int in mini(count, cells.size()):
-			var slot: Dictionary = table[rolls.randi_range(0, table.size() - 1)]
+			var slot: Dictionary = _weighted_slot(table, rolls)
 			var cell: Vector2i = Vector2i(cells[rolls.randi_range(0, cells.size() - 1)])
 			if taken.has(cell):
 				continue

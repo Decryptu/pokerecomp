@@ -329,6 +329,11 @@ func _rebuild_terrain() -> void:
 func _cell_color(cell: Vector2i, permission: int) -> Color:
 	if permission == Gen2WorldCollision.WATER_TILE:
 		return Color("#2f6ad6")
+	# A tileset is what a drawing is, and its name is the one identity that
+	# survives pokegold numbering it three lower than Crystal: a cave floor is
+	# a cave floor on all six cartridges by asking for it by name.
+	if _world.current_tileset.name in [&"CAVE", &"DARK_CAVE", &"CAVERN"]:
+		return Color("#6b5a4e")
 	var palettes: Array = Gen2WorldPalette.tile_palettes(
 		_world.data, _world.current_map, _world.current_tileset, _time_of_day
 	)
@@ -398,7 +403,7 @@ func _rebuild_objects() -> void:
 		var mesh := BoxMesh.new()
 		mesh.size = Vector3(0.6, 1.0, 0.6)
 		marker.mesh = mesh
-		marker.material_override = _material(Color("#f3c969"))
+		marker.material_override = _material(_object_color(object))
 		# The same fractional offset the player box reads, from the object's
 		# own in-flight step, so a wandering NPC eases between cells here
 		# without this renderer knowing anything about hardware pixels.
@@ -407,6 +412,20 @@ func _rebuild_objects() -> void:
 			+ Vector3(offset.x, 0.0, offset.y) * CELL_SIZE \
 			+ Vector3(0.0, 0.5, 0.0)
 		_objects.add_child(marker)
+
+
+## The colours the 2D view draws an object in, on either generation: one of
+## Crystal's eight object palettes, or on Red the map's own four through
+## `rOBP0`. Colour 2 is the sprite's main body colour on every sheet.
+func _object_color(object: Gen2WorldObject) -> Color:
+	var colors: PackedColorArray = Gen2WorldPalette.overworld_sprite_colors(
+		_world.data, _world.current_map, object.palette, _time_of_day,
+		_world.gen1_last_map(), _world.gen1_map_pal_offset
+	)
+	if colors.size() < 3:
+		return Color("#f3c969")
+	# A route or a town is lit by the day; indoors the marker keeps its own.
+	return colors[2] if _world.current_map.is_outside() else colors[2].lightened(0.2)
 
 
 func _material(color: Color) -> StandardMaterial3D:

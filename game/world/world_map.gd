@@ -10,6 +10,7 @@ extends RefCounted
 
 var group: int = 0
 var number: int = 0
+var generation: int = RomRegistry.GEN2
 var tileset: int = 0
 var environment: int = 0
 var location: int = 0
@@ -43,6 +44,13 @@ var texts: Array = []
 var alternate_texts: Dictionary = {}
 ## `RunNPCMovementScript`'s two RLE lists per table this map runs, by table.
 var movement_scripts: Dictionary = {}
+
+
+## `CheckIfInOutsideMap` on Generation 1, a town or route environment on 2.
+func is_outside() -> bool:
+	if generation == RomRegistry.GEN1:
+		return Gen1Layout.is_outside_tileset(tileset)
+	return Gen2WorldPhoneHost.is_outside_environment(environment)
 
 
 static func from_cache(value: Dictionary) -> Gen2WorldMap:

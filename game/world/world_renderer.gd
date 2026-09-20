@@ -658,6 +658,7 @@ func _sync_map_layers() -> void:
 	var view := Vector2(view_pixels())
 	var block_pixels: int = Gen2Layout.MAP_BLOCK_CELL_WIDTH * Gen2WorldAPI.CELL_PIXELS
 	var used: int = 0
+	var zero_is_border: bool = Gen2WorldAPI.drawn_block_of(_world.data, map, 0) != 0
 
 	var fill: Gen2WorldMapLayer = _map_layer(used)
 	used += 1
@@ -689,7 +690,7 @@ func _sync_map_layers() -> void:
 			layer.configure(
 				strip["texture"], blocks, _tiles_texture(near_tileset),
 				Vector2i(near.width_blocks, near.height_blocks), near.border_block,
-				near_tileset.block_count, near_tileset.tile_count, false,
+				near_tileset.block_count, near_tileset.tile_count, false, zero_is_border,
 			)
 			layer.place(at, size)
 
@@ -703,7 +704,7 @@ func _sync_map_layers() -> void:
 		used += 1
 		layer.configure(
 			_atlas, buffer, _tiles_texture(tileset), span, map.border_block,
-			tileset.block_count, tileset.tile_count, false,
+			tileset.block_count, tileset.tile_count, false, zero_is_border,
 		)
 		layer.place(
 			Vector2.ONE * float(-Gen2WorldAPI.BUFFER_BLOCKS * block_pixels) - camera,
@@ -1048,14 +1049,10 @@ func _sprite_palette(palette: int) -> PackedColorArray:
 	return _overworld_sprite_colors(palette)
 
 
-## A Generation 1 map has no sprite palettes: `BlkPacket_WholeScreen` gives its
-## objects the four colours the background is drawn in, through `GBPalNormal`'s
-## own `rOBP0`.
 func _overworld_sprite_colors(palette: int) -> PackedColorArray:
-	if _world.data.generation != RomRegistry.GEN1:
-		return _world.data.overworld_sprite_palette(palette, _time_of_day)
-	return Gen2WorldPalette.gen1_object_colors(
-		_gen1_map_colors(), _world.gen1_map_pal_offset
+	return Gen2WorldPalette.overworld_sprite_colors(
+		_world.data, _world.current_map, palette, _time_of_day,
+		_world.gen1_last_map(), _world.gen1_map_pal_offset
 	)
 
 

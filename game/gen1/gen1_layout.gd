@@ -2248,6 +2248,20 @@ const DUNGEON_MAP_RANGES: Array = [
 ## pointers, three counter tiles, the grass tile and the animation kind, with
 ## $FF for "none" in all four tile columns.
 const TILESET_RECORD_SIZE: int = 12
+## `constants/tileset_constants.asm`, from 0; Yellow adds BEACH_HOUSE last.
+const TILESET_NAMES: Array[StringName] = [
+	&"OVERWORLD", &"REDS_HOUSE_1", &"MART", &"FOREST", &"REDS_HOUSE_2", &"DOJO",
+	&"POKECENTER", &"GYM", &"HOUSE", &"FOREST_GATE", &"MUSEUM", &"UNDERGROUND",
+	&"GATE", &"SHIP", &"SHIP_PORT", &"CEMETERY", &"INTERIOR", &"CAVERN", &"LOBBY",
+	&"MANSION", &"LAB", &"CLUB", &"FACILITY", &"PLATEAU",
+]
+const TILESET_NAME_BEACH_HOUSE: StringName = &"BEACH_HOUSE"
+
+
+static func tileset_name(id: StringName, number: int) -> StringName:
+	if number >= 0 and number < TILESET_NAMES.size():
+		return TILESET_NAMES[number]
+	return TILESET_NAME_BEACH_HOUSE if id == RomRegistry.YELLOW and number == TILESET_NAMES.size() else &""
 const TILESET_COUNT_RED_BLUE: int = 24
 const TILESET_COUNT_YELLOW: int = 25
 const TILESET_COUNTER_TILES: int = 3

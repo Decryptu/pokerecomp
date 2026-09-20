@@ -214,6 +214,7 @@ const DUDE_POLLS_PER_FRAME: Dictionary = {
 }
 
 var _data: GameData = null
+var _colors: Gen2BattleColors = null
 var _injected_data: GameData = null
 ## Whatever the mod host supplies. Typed as Node because a registered renderer
 ## only has to satisfy Gen2ModHost.BATTLE_RENDERER_METHODS, not extend the
@@ -6920,16 +6921,15 @@ func _enemy_trainer_name() -> String:
 
 
 ## `BlkPacket_Battle`'s message box block names palette 2, so the box a
-## Generation 1 battle prints in wears the player's own Pokemon's colours.
-func _push_gen1_text_palette() -> void:
+## Generation 1 battle prints in wears the player's own Pokemon's colours,
+## whichever renderer is drawing the fight.
+func _push_gen1_text_palette(view: Dictionary) -> void:
 	if _box == null or _data == null or _data.generation != RomRegistry.GEN1:
 		return
-	## A renderer of a mod's own that does not answer leaves it white and black.
-	if _renderer == null or not _renderer.has_method("gen1_screen_palette"):
-		return
-	_box.palette = _renderer.gen1_screen_palette(
-		Gen2BattleRenderer.GEN1_PAL_PLAYER_MON
-	)
+	if _colors == null:
+		_colors = Gen2BattleColors.new(_data)
+	_colors.set_view(view)
+	_box.palette = _colors.gen1_screen_palette(Gen2BattleColors.GEN1_PAL_PLAYER_MON)
 
 
 ## Pushes the current display values to the renderer. Plain values only, never
@@ -6939,8 +6939,7 @@ func _push_view() -> void:
 	_update_low_health_alarm()
 	if not _renderer_ready:
 		return
-	_push_gen1_text_palette()
-	_renderer.set_view({
+	var view: Dictionary = {
 		"enemy_species": _enemy, "player_species": _player,
 		"enemy_unown_form": _enemy_unown_form,
 		"player_unown_form": _player_unown_form,
@@ -7023,7 +7022,9 @@ func _push_view() -> void:
 			"player": battler_side(Gen2Battle.PLAYER),
 			"enemy": battler_side(Gen2Battle.ENEMY),
 		},
-	})
+	}
+	_push_gen1_text_palette(view)
+	_renderer.set_view(view)
 	if _box != null:
 		_box.raster_scx = _box_raster_offsets()
 	## Every state change a provider could annotate reaches this, so the layer is
