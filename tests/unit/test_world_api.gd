@@ -9067,6 +9067,23 @@ func test_expanded_blocks_are_the_hardware_buffer_inside_it() -> void:
 			)
 
 
+## `LoadMetatiles` draws the border block for a `$00` byte and Generation 1's
+## `LoadTileBlockMap` draws block 0, and every reader folds through one rule.
+func test_block_zero_is_the_border_on_crystal_and_a_block_on_red() -> void:
+	var world: Gen2WorldAPI = _world()
+	var map: Gen2WorldMap = world.current_map
+	assert_eq(Gen2WorldAPI.drawn_block_of(world.data, map, 0), map.border_block)
+	assert_eq(Gen2WorldAPI.drawn_block_of(world.data, map, 5), 5)
+	assert_eq(Gen2WorldAPI.drawn_block_of(null, map, 0), map.border_block)
+	assert_false(map.is_outside(), "a map with no town or route environment")
+	world.data.generation = RomRegistry.GEN1
+	assert_eq(Gen2WorldAPI.drawn_block_of(world.data, map, 0), 0)
+	map.generation = RomRegistry.GEN1
+	map.tileset = Gen1Layout.TILESET_OVERWORLD
+	assert_true(map.is_outside(), "`CheckIfInOutsideMap` on the OVERWORLD tileset")
+	world.data.generation = RomRegistry.GEN2
+
+
 ## Past it, the neighbour answers with its own blocks rather than the border
 ## block the cartridge's buffer holds there.
 func test_expanded_blocks_read_the_placed_neighbour_past_the_buffer() -> void:

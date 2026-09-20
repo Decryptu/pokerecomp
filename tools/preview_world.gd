@@ -1783,7 +1783,7 @@ func _render(data: GameData, map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Im
 
 	for tile_y: int in map.height_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
 		for tile_x: int in map.width_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
-			var block: int = map.block_at(tile_x >> 2, tile_y >> 2)
+			var block: int = Gen2WorldAPI.drawn_block_for(data, map, tile_x >> 2, tile_y >> 2)
 			var tile: int = tileset.tile_index(block, (tile_y & 3) * 4 + (tile_x & 3))
 			for pixel_y: int in PokeTiles.TILE_HEIGHT:
 				for pixel_x: int in PokeTiles.TILE_WIDTH:

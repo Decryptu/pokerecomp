@@ -3621,6 +3621,7 @@ func _maps() -> Array:
 	if _claim_section("maps"):
 		for value: Dictionary in _read_section(RomCache.world_maps_path(directory), true):
 			var map: Gen2WorldMap = Gen2WorldMap.from_cache(value)
+			map.generation = generation
 			# The first record of a duplicated identity wins, matching the scan
 			# this replaced.
 			var key := Vector2i(map.group, map.number)

@@ -449,6 +449,12 @@ func test_gen1_hops_are_the_ledge_table_on_the_overworld_tileset() -> void:
 	assert_true(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x37, Vector2i.DOWN))
 	assert_false(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x37, Vector2i.UP))
 	assert_false(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x36, Vector2i.DOWN))
+	## `LedgeTiles` read by the ledge tile alone: the facing it is hopped in.
+	assert_eq(Gen2WorldCollision.gen1_ledge_direction(0, 0x37), Gen2WorldSprite.FACING_DOWN)
+	assert_eq(Gen2WorldCollision.gen1_ledge_direction(0, 0x27), Gen2WorldSprite.FACING_LEFT)
+	assert_eq(Gen2WorldCollision.gen1_ledge_direction(0, 0x1D), Gen2WorldSprite.FACING_RIGHT)
+	assert_eq(Gen2WorldCollision.gen1_ledge_direction(0, 0x2C), -1)
+	assert_eq(Gen2WorldCollision.gen1_ledge_direction(3, 0x37), -1)
 	assert_true(Gen2WorldCollision.gen1_allows_hop(0, 0x39, 0x36, Vector2i.DOWN))
 	assert_true(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x27, Vector2i.LEFT))
 	assert_true(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x1D, Vector2i.RIGHT))

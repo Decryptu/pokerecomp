@@ -82,6 +82,38 @@ func test_the_built_in_renderer_draws_the_matchup_and_reports_ready() -> void:
 	assert_true(_battle_screen.battle_snapshot()["ready"])
 
 
+## `Gen2BattleColors` is the same resolution the built-in renderer draws with,
+## on the same view, so a registered renderer asking it draws the same colours.
+func test_a_renderer_can_ask_the_battles_colours_off_the_view() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 5, 5)
+	_battle_screen.set_hp(10, 20, 3, 4)
+	var renderer: Gen2BattleRenderer = _battle_screen._renderer
+	var view: Dictionary = renderer._view
+	var colors := Gen2BattleColors.new(_data)
+	colors.set_view(view)
+	assert_eq(colors.pic_palette(false), renderer._colors.pic_palette(false))
+	assert_eq(colors.pic_palette(true), renderer._colors.pic_palette(true))
+	assert_eq(colors.hp_palette(3, 4), renderer._colors.hp_palette(3, 4))
+	assert_eq(colors.grayscale(), renderer._colors.grayscale())
+	## The species' own once the entrance has landed.
+	_settle_intro()
+	colors.set_view(renderer._view)
+	assert_true(colors.grayscale().is_empty())
+	assert_eq(colors.pic_palette(true), _data.palette(155, false))
+	assert_eq(
+		Gen2BattleColors.remapped(PackedColorArray([Color.RED, Color.GREEN, Color.BLUE, Color.BLACK]), 0x1B),
+		PackedColorArray([Color.BLACK, Color.BLUE, Color.GREEN, Color.RED])
+	)
+	var backpic: Dictionary = _data.player_backpic("chris")
+	if not backpic.is_empty():
+		assert_eq(
+			Gen2BattleRenderer.back_pixels(_data, backpic).size(),
+			Gen2BattleScreenMap.player_box_side(_data.generation) ** 2
+				* PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT
+		)
+
+
 func test_a_registered_stub_renderer_receives_battle_data_and_a_matching_view() -> void:
 	var script: GDScript = _stub_script("""extends Control
 

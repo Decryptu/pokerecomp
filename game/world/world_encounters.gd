@@ -22,8 +22,7 @@ const MAX_ENTRIES: int = 32
 ## animation a second time with the param set (engine/battle/core.asm).
 const SHINY_ANIM: int = 0x101
 const SHINY_ANIM_PARAM: int = 1
-## Generation 1 has no sparkle: its send-out marks a shiny with `SFX_SHINE`
-## alone (`Gen2BattleScreen._gen1_send_out_steps`), so the field does the same.
+## Generation 1 has no sparkle: its send-out marks a shiny with `SFX_SHINE` alone.
 const GEN1_PULSE_COMMANDS: Array = [
 	{"name": Gen2BattleAnimScript.SOUND, "operands": [0, Gen2BattleScreen.SFX_SHINE]},
 ]

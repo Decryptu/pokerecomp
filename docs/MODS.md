@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 39 | A Generation 1 map draws block 0 as block 0, through `Gen2WorldAPI.drawn_block_of`; `Gen2BattleColors`, the colours a battle is drawn in on either generation, for any renderer; `Gen2BattleRenderer.back_pixels`; `Gen2WorldPalette.overworld_sprite_colors`, `Gen2WorldMap.is_outside()` and `Gen2WorldCollision.gen1_ledge_direction` |
 | 38 | `chance` on every slot `active_encounter_tables()` answers; a shiny pulse announced with `SFX_SHINE` on Red, Blue and Yellow; Yellow's Pikachu in `occupied` |
 | 37 | The gameplay catalog on Red, Blue and Yellow, `validate_placement` walking their map graph, the Old and Good Rod as `GameData.GEN1_OLD_ROD_GROUP` and `GEN1_GOOD_ROD_GROUP`; a `register` that read `generation()` or `target_game()` runs again when the answer changes |
 | 36 | A notice's `{"badge": 8..15}` drawn from the Gen 1 card's own `badge_faces` on Red, Blue and Yellow |
@@ -686,7 +687,10 @@ includes water.
 `Gen2WorldAPI.drawn_block_at(x, y)` is the block a coordinate is *drawn* from
 rather than the block stored there: `LoadMetatiles` substitutes the border block
 for a `$00` byte, and `FillMapConnections` fills three blocks of padding around
-the map with a neighbour's art.
+the map with a neighbour's art. Generation 1's `LoadTileBlockMap` has no such
+substitution, so on Red, Blue and Yellow block 0 is the block it is;
+`Gen2WorldAPI.drawn_block_of(data, map, block)` is the one rule both readers go
+through.
 
 A caller with no world reads the same fold through
 `Gen2WorldAPI.drawn_block_for(data, map, x, y)`. That is what a battle has: a
@@ -998,6 +1002,23 @@ first, so the text box, the forget-move list, the pack rows and ball selection e
 take their press and what arrives here is pointer and stick motion. Those three
 also withhold everything else while up. A draining bar, the opening slide and a
 move animation do not, since none reads input.
+
+What the field is coloured in is `Gen2BattleColors`, built on the `GameData`
+and fed each `set_view(view)`: `pic_palette(back)`, `panel_palette()`,
+`hp_palette(hp, max_hp)`, `gen1_screen_palette(slot)`, `object_palette(slot)`,
+`object_image(pixels, attributes, left, top)` and `grayscale()`, which is the
+species' palette through the square's background map, a trainer's or the back
+pic's own on the Color hardware, on a Super Game Boy the palette of the mon
+whose square it is, grey through the entrance slide and black behind a lost
+Generation 1 fight. The built-in renderer reads the same one. The back pic in
+its box, doubled on Generation 1, is `Gen2BattleRenderer.back_pixels(data, pic)`,
+beside `padded_pic`, `doubled_pic` and `pic_tile`.
+
+A world renderer has the same two on its side: an overworld sprite's colours on
+either generation are `Gen2WorldPalette.overworld_sprite_colors(data, map,
+palette, time_of_day, last_map, map_pal_offset)`, and whether a map is
+outdoors is `Gen2WorldMap.is_outside()`. `Gen2WorldCollision.gen1_ledge_direction(tileset, tile)`
+is the facing `LedgeTiles` names for a Generation 1 ledge tile.
 
 `view` says what is on the field and nothing about the place.
 `Gen2BattleWorldContext` is the place: `map_id` (group and number), `tileset`,

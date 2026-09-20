@@ -23,6 +23,7 @@ uniform highp float border_block = 0.0;
 uniform highp float block_count = 1.0;
 uniform highp float tile_count = 1.0;
 uniform bool fill_border = false;
+uniform bool zero_is_border = true;
 
 varying highp vec2 local_pos;
 
@@ -36,7 +37,7 @@ void fragment() {
 	highp float block = border_block;
 	if (at.x >= 0.0 && at.y >= 0.0 && at.x < map_blocks.x && at.y < map_blocks.y) {
 		block = floor(texture(blocks, (at + 0.5) / max(map_blocks, vec2(1.0))).r * 255.0 + 0.5);
-		if (block < 0.5) {
+		if (zero_is_border && block < 0.5) {
 			block = border_block;
 		}
 	} else if (!fill_border) {
@@ -71,8 +72,8 @@ func _init() -> void:
 
 
 ## [param blocks] is one byte per block in row-major order, [param block_tiles]
-## the tileset's own sixteen-bytes-a-block metatile table, and [param atlas] the
-## coloured tile strip the renderer already keeps.
+## the tileset's sixteen-bytes-a-block metatile table, [param atlas] the coloured
+## tile strip, and [param zero_is_border] `LoadMetatiles`' rule, which Generation 1 lacks.
 func configure(
 	atlas: Texture2D,
 	blocks: Texture2D,
@@ -82,7 +83,9 @@ func configure(
 	block_count: int,
 	tile_count: int,
 	fill_border: bool,
+	zero_is_border: bool = true,
 ) -> void:
+	_material.set_shader_parameter(&"zero_is_border", zero_is_border)
 	_material.set_shader_parameter(&"atlas", atlas)
 	_material.set_shader_parameter(&"blocks", blocks)
 	_material.set_shader_parameter(&"block_tiles", block_tiles)
