@@ -1473,6 +1473,7 @@ func _draw_effect_sprite(sprite: Dictionary, anchor: Vector2) -> void:
 			bool(tile["flip_x"]),
 			anchor + Vector2(tile["offset"] as Vector2i),
 			int(sprite.get("rotation", 0)),
+			bool(tile.get("flip_y", false)),
 		)
 
 
@@ -1532,9 +1533,26 @@ func _effect_sheet(sheet_name: String) -> Dictionary:
 		return {}
 	if _effect_sheets.has(sheet_name):
 		return _effect_sheets[sheet_name]
-	var sheet: Dictionary = _world.data.overworld_effect(sheet_name)
+	var sheet: Dictionary = _gen1_cut_sheet(sheet_name)
+	if sheet.is_empty():
+		sheet = _world.data.overworld_effect(sheet_name)
 	_effect_sheets[sheet_name] = sheet
 	return sheet
+
+
+## `InitCutAnimOAM` copies its tiles out of `Overworld_GFX` for a tree and
+## `MoveAnimationTiles1` for grass, so the cut records index those strips whole.
+func _gen1_cut_sheet(sheet_name: String) -> Dictionary:
+	var strip: PackedByteArray = PackedByteArray()
+	if sheet_name == Gen2WorldEffects.SPRITE_GEN1_CUT_TREE:
+		strip = _world.data.world_tileset_indices(Gen1Layout.TILESET_OVERWORLD)
+	elif sheet_name == Gen2WorldEffects.SPRITE_GEN1_CUT_GRASS:
+		strip = _world.data.battle_anim_gfx_indices(0)
+	if strip.is_empty():
+		return {}
+	@warning_ignore("integer_division")
+	var tiles: int = strip.size() / PokeTiles.TILE_PIXELS
+	return {"name": sheet_name, "tiles": tiles, "vtile": 0, "colors": PackedColorArray(), "indices": strip}
 
 
 ## One 8x8 tile of an effect sheet. Index 0 is the transparent colour here, as it
@@ -1543,10 +1561,10 @@ func _effect_sheet(sheet_name: String) -> Dictionary:
 ## carrying its own palette can be asked for.
 func _draw_effect_tile(
 	sheet: Dictionary, tile: int, palette_index: int, flip_x: bool, at: Vector2,
-	rotation_step: int = 0
+	rotation_step: int = 0, flip_y: bool = false
 ) -> void:
-	var key: String = "%s:%d:%d:%d:%d:%d" % [
-		sheet["name"], tile, palette_index, int(flip_x), _time_of_day, rotation_step,
+	var key: String = "%s:%d:%d:%d:%d:%d:%d" % [
+		sheet["name"], tile, palette_index, int(flip_x), _time_of_day, rotation_step, int(flip_y),
 	]
 	var texture: Texture2D = _effect_textures.get(key, null)
 	if texture == null:
@@ -1569,6 +1587,8 @@ func _draw_effect_tile(
 				image.set_pixel(x, y, color)
 		if flip_x:
 			image.flip_x()
+		if flip_y:
+			image.flip_y()
 		texture = ImageTexture.create_from_image(image)
 		_effect_textures[key] = texture
 	draw_texture(texture, at)

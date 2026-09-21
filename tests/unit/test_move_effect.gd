@@ -5005,6 +5005,7 @@ func test_disobedience_reaches_every_outcome_and_clears_encore() -> void:
 			if event["type"] == Gen2Battle.USED_MOVE:
 				outcomes[&"alternate"] = true
 				assert_eq(int(event["move"]), Fixture.SPLASH)
+				assert_true(bool(event["instead"]), "UsedInsteadText")
 				assert_eq(int(battle.player.pp[1]), 19)
 	for outcome: StringName in [&"obeyed", &"began_to_nap", &"hurt_self", &"alternate",
 		&"loafing", &"wont_obey", &"turned_away", &"ignored_orders"]:

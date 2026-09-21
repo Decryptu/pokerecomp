@@ -85,6 +85,9 @@ const HEAL_MACHINE_PALETTE: int = -1
 ## A Generation 1 sprite wearing `rOBP1`: the record's `rotation` is the byte.
 const OBP_PALETTE: int = -2
 const SPRITE_SMOKE: StringName = &"smoke"
+## `AnimCut`'s block, each record carrying its precomputed OAM frames.
+const SPRITE_GEN1_CUT_TREE: StringName = &"gen1_cut_tree"
+const SPRITE_GEN1_CUT_GRASS: StringName = &"gen1_cut_grass"
 
 const FLY_FROM_FRAMES: int = 128
 const FLY_TO_FRAMES: int = 64
@@ -114,11 +117,8 @@ const PAL_OW_ROCK: int = 7
 const HEADBUTT_TREE_FRAMES: int = 32
 const CUT_FRAMES: int = 32
 
-## `.Frameset_CutTree`, as [first frame, tile offsets] pairs. `oamframe X, n`
-## lasts n + 1 frames and `oamwait n` draws nothing for n + 1, which is what puts
-## the two gaps in: the tree stands for three frames, splits for seventeen, and
-## then its halves slide apart in two steps of two. `oamdelete` ends it four
-## frames before the counter does.
+## `.Frameset_CutTree`, as [first frame, tile offsets] pairs: `oamframe X, n`
+## lasts n + 1 frames and `oamwait n` draws nothing for n + 1.
 const CUT_TREE_STEPS: Array = [
 	[0, [Vector2i(0, 0), Vector2i(8, 0), Vector2i(0, 8), Vector2i(8, 8)]],
 	[3, [Vector2i(-2, 0), Vector2i(10, 0), Vector2i(-2, 8), Vector2i(10, 8)]],
@@ -129,11 +129,8 @@ const CUT_TREE_STEPS: Array = [
 	[28, []],
 ]
 
-## `Cut_GetLeafSpawnCoords`, as pixel offsets from where the player is drawn.
-## Its own table is screen coordinates, indexed by the facing and then by which
-## quarter of the block the player stands in, because Cut clears the whole block
-## and the leaves are spawned over it. Order is the source's: DOWN, UP, LEFT,
-## RIGHT, each with top-left, top-right, bottom-left, bottom-right.
+## `Cut_GetLeafSpawnCoords` as pixel offsets from the player, by facing and then
+## by the quarter of the block the player stands in.
 const CUT_LEAF_ORIGINS: Array[Vector2i] = [
 	Vector2i(16, 16), Vector2i(0, 16), Vector2i(16, 32), Vector2i(0, 32),
 	Vector2i(16, -16), Vector2i(0, -16), Vector2i(16, 0), Vector2i(0, 0),
@@ -319,11 +316,7 @@ func start_heal_machine(
 
 
 ## `FlyFromAnim` and `FlyToAnim`, one record whose frame counter drives the icon
-## and every leaf in the air. The two `depixel`s and every offset below are OAM
-## coordinates, which count from (8, 16). `SpriteAnimFunc_FlyFrom` holds until
-## VAR2 reaches $40, then rises two pixels a frame while VAR4 widens the swing to
-## $40; `SpriteAnimFunc_FlyTo` descends two a frame into a swing narrowing by two
-## and stops on the frame its wrapped row matches the departure's.
+## and every leaf in the air, every offset an OAM coordinate from (8, 16).
 ## `.Frameset_RedWalk` alternates the icon's two drawings every nine frames and
 ## `.SpawnLeaf` puts a leaf at column zero every eight.
 func start_fly(icon: int, arriving: bool) -> void:
@@ -555,10 +548,7 @@ static func _fade_steps(rows: Array[int], id: StringName) -> Array:
 
 
 ## The three sprites that are temporary map objects on the cartridge, so their
-## countdowns are `HandleMap`'s passes rather than screen frames
-## (Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS). The other four are a routine's own
-## `DelayFrame` loop: `ShakeHeadbuttTree`, `OWCutAnimation` and `HealMachineAnim`
-## each spin on one while the script waits, so they keep the screen's rate.
+## countdowns are `HandleMap`'s passes; the rest are a routine's own `DelayFrame` loop.
 const PASS_PACED_SPRITES: Array[StringName] = [
 	SPRITE_SHADOW, SPRITE_GRASS_RUSTLE, SPRITE_BOULDER_DUST,
 ]
@@ -607,11 +597,8 @@ func sprites_active() -> bool:
 	return not _sprites.is_empty() or ss_anne_active()
 
 
-## `StepFunction_ScreenShake.Run` reaches hSCY and nothing else: the whole shake
-## is one vertical scroll offset whose sign `.GetSign` flips on what is left of
-## the duration, and the pass that runs it out deletes the object with the offset
-## undone. In hardware pixels, and the background's alone, since a scroll moves
-## no sprite.
+## `StepFunction_ScreenShake.Run` reaches hSCY and nothing else: one vertical
+## scroll offset whose sign `.GetSign` flips on what is left of the duration.
 func offset() -> Vector2:
 	if not active():
 		return Vector2.ZERO
@@ -668,11 +655,77 @@ func start_gen1_boulder_dust(player: Vector2i, facing: int, offsets: Array) -> v
 	})
 
 
-## `VermilionDockSSAnneLeavesScript` from its `ld c, 120`: eight columns, each a
-## puff over the funnel and sixteen drifts of eight frames scrolling the band
-## `SyncScrollWithLY` writes `rSCX` inside, then the erase, the horn and its
-## `ld c, 120`. Each drift moves every puff two pixels right; the puffs wear
-## `rOBP1` at zero and stand until `wUpdateSpritesEnabled` comes back.
+## `InitCutAnimOAM` writes the block at `CutAnimationOffsets` from the player's
+## pixels and `AnimCut` walks it, [param grass] being `wCutTile` at $52.
+func start_gen1_cut(player: Vector2i, facing: int, grass: bool) -> void:
+	if facing < 0 or facing >= Gen1Layout.CUT_ANIMATION_OFFSETS.size():
+		return
+	var frames: Array = _gen1_cut_grass_frames() if grass else _gen1_cut_tree_frames()
+	_sprites.append({
+		"kind": SPRITE_GEN1_CUT_GRASS if grass else SPRITE_GEN1_CUT_TREE,
+		"cell": Vector2i.ZERO,
+		"object_index": -1,
+		"screen": true,
+		"palette": OBP_PALETTE,
+		"frame": 0,
+		"duration": frames.size(),
+		"pixel": player + Gen1Layout.CUT_ANIMATION_OFFSETS[facing] - OAM_ORIGIN,
+		"frames": frames,
+		"obp": Gen1Layout.BOULDER_DUST_OBP1,
+		"flash": Gen1Layout.BOULDER_DUST_OBP1_FLASH,
+	})
+
+
+## `WriteOAMBlock`'s order: upper left, upper right, lower left, lower right.
+static func _gen1_cut_block(tiles: Array, flips: Array) -> Array:
+	var out: Array = []
+	for index: int in 4:
+		out.append({
+			"offset": Vector2i((index & 1) * 8, (index >> 1) * 8),
+			"tile": int(tiles[index]),
+			"flip_x": bool(flips[index][0]),
+			"flip_y": bool(flips[index][1]),
+		})
+	return out
+
+
+## `.cutTreeLoop`: the top pair a pixel right and the bottom pair a pixel left.
+static func _gen1_cut_tree_frames() -> Array:
+	var block: Array = _gen1_cut_block(
+		Gen1Layout.CUT_TREE_TILES, [[false, false], [false, false], [false, false], [false, false]]
+	)
+	var frames: Array = []
+	for _tree_frame: int in Gen1Layout.CUT_TREE_FRAMES:
+		for index: int in block.size():
+			(block[index] as Dictionary)["offset"] += Vector2i(Gen1Layout.CUT_TREE_SPREAD[index], 0)
+		frames.append(block.duplicate(true))
+	return frames
+
+
+## `.cutGrassLoop`: the leaves flipped X, Y, X, Y, spread 1, 2, -2, -1 a frame,
+## the pairs swapped between spreads and the block dropped after each pass.
+static func _gen1_cut_grass_frames() -> Array:
+	var block: Array = _gen1_cut_block(
+		[Gen1Layout.CUT_LEAF_ANIM_TILE, Gen1Layout.CUT_LEAF_ANIM_TILE,
+			Gen1Layout.CUT_LEAF_ANIM_TILE, Gen1Layout.CUT_LEAF_ANIM_TILE],
+		[[true, false], [false, true], [true, false], [false, true]]
+	)
+	var frames: Array = []
+	for _pass: int in Gen1Layout.CUT_GRASS_PASSES:
+		for _spread: int in 2:
+			for _spread_frame: int in Gen1Layout.CUT_GRASS_SPREAD_FRAMES:
+				for index: int in block.size():
+					(block[index] as Dictionary)["offset"] += Vector2i(Gen1Layout.CUT_GRASS_SPREAD[index], 0)
+				frames.append(block.duplicate(true))
+			block = [block[2], block[3], block[0], block[1]]
+		for entry: Dictionary in block:
+			entry["offset"] += Vector2i(0, Gen1Layout.CUT_GRASS_DROP)
+	return frames
+
+
+## `VermilionDockSSAnneLeavesScript` from its `ld c, 120`: eight columns of a
+## puff over the funnel, sixteen drifts of eight frames each moving every puff
+## two pixels right, then the erase, the horn and its `ld c, 120`.
 func start_gen1_ss_anne() -> void:
 	_ss_anne = {"frame": 0}
 
@@ -851,6 +904,13 @@ func _tiles_for(sprite: Dictionary) -> Array:
 			## One `Delay3` a step, the block moved before the first.
 			var step: int = frame / Gen1Layout.BOULDER_DUST_STEP_FRAMES + 1
 			return _smoke_tiles((sprite["pixel"] as Vector2i) + (sprite["drift"] as Vector2i) * step)
+		SPRITE_GEN1_CUT_TREE, SPRITE_GEN1_CUT_GRASS:
+			var placed: Array = []
+			for entry: Dictionary in (sprite["frames"] as Array)[frame]:
+				var moved: Dictionary = entry.duplicate()
+				moved["offset"] = (sprite["pixel"] as Vector2i) + (entry["offset"] as Vector2i)
+				placed.append(moved)
+			return placed
 		SPRITE_BOULDER_DUST:
 			## `SetFacingBoulderDust` swaps FACING_BOULDER_DUST_1 and _2 on bit 1
 			## of the step frame, and each draws its one tile four times in a
@@ -987,9 +1047,12 @@ func _heal_machine_tiles(sprite: Dictionary, frame: int) -> Array:
 ## own palette reports which rotation is up. Eight rotations of four leave the
 ## palette where it started, which is why the animation needs no restore.
 func _palette_rotation(sprite: Dictionary) -> int:
-	if StringName(sprite["kind"]) == SPRITE_SMOKE:
-		## The xor lands before the first `Delay3`, so the first step is flashed.
-		var step: int = int(sprite["frame"]) / Gen1Layout.BOULDER_DUST_STEP_FRAMES
+	var kind: StringName = StringName(sprite["kind"])
+	if kind == SPRITE_SMOKE or kind == SPRITE_GEN1_CUT_TREE or kind == SPRITE_GEN1_CUT_GRASS:
+		## The xor lands before the first delay, so the first step is flashed.
+		var step: int = int(sprite["frame"]) / (
+			Gen1Layout.BOULDER_DUST_STEP_FRAMES if kind == SPRITE_SMOKE else 1
+		)
 		return int(sprite["obp"]) ^ (int(sprite["flash"]) if step % 2 == 0 else 0)
 	if StringName(sprite["kind"]) != SPRITE_HEAL_MACHINE:
 		return 0

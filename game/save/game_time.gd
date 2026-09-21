@@ -1,13 +1,10 @@
 class_name PokeGameTime
 extends RefCounted
 
-## The play timer the trainer card prints (`home/game_time.asm`, `GameTimer`). Not
-## the day cycle: [Gen2WorldClock] is real time and answers what hour the world is
-## in, while this counts hardware frames of actual play. The cartridge keeps both
-## and they disagree the moment the game is closed. `GameTimer` counts 60 frames
-## to a second even though a frame is 1/59.7275 s, so the play timer runs about
-## half a percent slow against a wall clock: the cartridge's own arithmetic,
-## mirrored rather than corrected.
+## The play timer the trainer card prints (`home/game_time.asm`, `GameTimer`),
+## counting hardware frames of play where [Gen2WorldClock] is real time.
+## `GameTimer` counts 60 frames to a second though a frame is 1/59.7275 s, the
+## cartridge's own arithmetic mirrored.
 
 ## `GameTimer.Function`'s own comparisons.
 const FRAMES_PER_SECOND: int = 60
@@ -18,13 +15,15 @@ const MAX_HOURS: int = 1000
 const CAPPED_HOURS: int = MAX_HOURS - 1
 const CAPPED_MINUTES: int = SECONDS_PER_MINUTE - 1
 const CAPPED_SECONDS: int = SECONDS_PER_MINUTE - 1
+## `TrackPlayTime` sets `wPlayTimeMaxed` as the hour byte reaches $ff, the
+## minutes and seconds just zeroed.
+const GEN1_MAX_HOURS: int = 0xFF
 
 var hours: int = 0
 var minutes: int = 0
 var seconds: int = 0
 var frames: int = 0
-## `wGameTimeCap`'s `GAME_TIME_CAPPED` bit. Held rather than derived, because
-## the source stops counting on the bit and never looks at the hours again.
+## `wGameTimeCap`'s `GAME_TIME_CAPPED` bit, on which the source stops counting.
 var capped: bool = false
 
 
@@ -41,13 +40,9 @@ static func create(
 	return time
 
 
-## One hardware frame, which is what `GameTimer` is called with. Returns whether
-## anything visible on the card changed, so a screen knows when to redraw.
-##
-## The source's two gates before the count are `wGameLogicPaused` and
-## `wGameTimerPaused`; the caller owns both, since only it knows whether the
-## game is running.
-func advance_frame() -> bool:
+## One hardware frame. Returns whether anything visible on the card changed.
+## The gates in front, `wGameLogicPaused` and `wGameTimerPaused`, are the caller's.
+func advance_frame(gen1: bool = false) -> bool:
 	if capped:
 		return false
 	frames += 1
@@ -63,6 +58,9 @@ func advance_frame() -> bool:
 		return true
 	minutes = 0
 	hours += 1
+	if gen1:
+		capped = hours >= GEN1_MAX_HOURS
+		return true
 	if hours < MAX_HOURS:
 		return true
 	## `.ok` is skipped: the source writes 59 to minutes and seconds and leaves
@@ -74,12 +72,11 @@ func advance_frame() -> bool:
 	return true
 
 
-## Whole frames at once, for a host that ran several between calls the way
-## [method Gen2WorldAnimation.advance] catches up.
-func advance_frames(count: int) -> bool:
+## Whole frames at once, for a host that ran several between calls.
+func advance_frames(count: int, gen1: bool = false) -> bool:
 	var changed: bool = false
 	for _frame: int in maxi(count, 0):
-		changed = advance_frame() or changed
+		changed = advance_frame(gen1) or changed
 	return changed
 
 
@@ -93,8 +90,7 @@ func to_dict() -> Dictionary:
 	}
 
 
-## Clamped rather than refused, the way [Gen2Options] clamps: a play timer is
-## not progress, and a damaged one should not cost the save.
+## Clamped rather than refused: a damaged play timer should not cost the save.
 static func parse(raw: Variant) -> PokeGameTime:
 	if raw is not Dictionary:
 		return PokeGameTime.new()
@@ -108,9 +104,8 @@ static func parse(raw: Variant) -> PokeGameTime:
 	)
 
 
-## `TrainerCard_Page1_PrintGameTime`: hours right-aligned in four spaces, then
-## the two-digit minutes with leading zeros. The separator is the caller's,
-## since the source blinks it.
+## `TrainerCard_Page1_PrintGameTime`: hours right-aligned in four, minutes in
+## two with leading zeros; the separator is the caller's, since the source blinks it.
 func hours_text() -> String:
 	return "%4d" % hours
 

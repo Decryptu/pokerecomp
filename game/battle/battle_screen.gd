@@ -6025,7 +6025,6 @@ func _apply_event_state(event: Dictionary) -> void:
 ## takes. An argument is `kind:field`, which [method _line_argument] resolves off
 ## the event: a battler's name, a move, an item, a species, a type or a number.
 const LINES: Dictionary = {
-	Gen2Battle.USED_MOVE: ["%s used %s!", &"name:side", &"move:move"],
 	Gen2Battle.MISSED: ["%s's attack missed!", &"name:side"],
 	Gen2Battle.NO_EFFECT: ["It doesn't affect %s!", &"name:target"],
 	Gen2Battle.RECOIL: ["%s is hit with recoil!", &"name:side"],
@@ -6204,7 +6203,6 @@ const LINES: Dictionary = {
 
 ## [constant LINES]' Generation 1 rows; a row missing here reads Crystal's.
 const GEN1_LINES: Dictionary = {
-	Gen2Battle.USED_MOVE: ["%s\nused %s!", &"name:side", &"move:move"],
 	Gen2Battle.MISSED: ["%s's\nattack missed!", &"name:side"],
 	Gen2Battle.NO_EFFECT: ["It doesn't affect\n%s!", &"name:target"],
 	Gen2Battle.RECOIL: ["%s's\nhit with recoil!", &"name:side"],
@@ -6293,6 +6291,7 @@ const LINE_HANDLERS: Dictionary = {
 	Gen2Battle.RUN_BLOCKED: &"_run_blocked_text",
 	Gen2Battle.OVER: &"_over_text",
 	Gen2Battle.EXP_GAINED: &"_exp_gained_text",
+	Gen2Battle.USED_MOVE: &"_used_move_text",
 }
 
 ## Which of the three weather tables an event reads.
@@ -6344,6 +6343,16 @@ func _line_argument(code: StringName, event: Dictionary) -> Variant:
 		"type":
 			return _data.type_name(int(event[field]))
 	return int(event[field])
+
+
+## `UsedMoveText_CheckObedience`: `_UsedInsteadText` on a disobedient turn.
+func _used_move_text(event: Dictionary) -> String:
+	var who: String = _battler_name(int(event.get("side", Gen2Battle.PLAYER)))
+	var move: String = String(_data.move(int(event["move"])).get("name", ""))
+	var instead: bool = bool(event.get("instead", false))
+	if _generation() == RomRegistry.GEN1:
+		return "%s\nused %s%s!" % [who, "instead," + SCROLL if instead else "", move]
+	return "%s used %s%s!" % [who, "instead, " if instead else "", move]
 
 
 func _hit_text(event: Dictionary) -> String:

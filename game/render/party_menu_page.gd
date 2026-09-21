@@ -8,9 +8,8 @@ extends RefCounted
 
 const TILE: int = Gen2Font.TILE
 
-## `hlcoord` columns and the first row of each quality, from
-## `PlacePartyNicknames`, `PlacePartyHPBar`, `PlacePartyMenuHPDigits`,
-## `PlacePartyMonLevel` and `PlacePartyMonStatus`.
+## `hlcoord` columns and the first row of each quality, from the five
+## `PlaceParty*` routines.
 const NICKNAME: Vector2i = Vector2i(3, 1)
 const HP_BAR: Vector2i = Vector2i(11, 2)
 const HP_DIGITS: Vector2i = Vector2i(13, 1)
@@ -44,8 +43,7 @@ const PROMPT: Vector2i = Vector2i(1, 16)
 ## Both HP numbers print through `PrintNum` three digits wide, space padded.
 const HP_NUMBER_DIGITS: int = 3
 
-## `.string_able`/`.string_not_able`, shared by the TM/HM and stone columns, and
-## `PlacePartyMonGender`'s own three.
+## `.string_able`/`.string_not_able` and `PlacePartyMonGender`'s own three.
 const ABLE: String = "ABLE"
 const NOT_ABLE: String = "NOT ABLE"
 const GENDER_STRINGS: Dictionary = {
@@ -89,13 +87,9 @@ const ICON_ITEM_TILE: int = Gen2Layout.HELD_ITEM_ICON_ITEM
 const ICON_MAIL_TILE: int = Gen2Layout.HELD_ITEM_ICON_MAIL
 const ICON_ITEM_QUADRANT: int = 2
 
-## Generation 1's own columns and first rows, from `DrawPartyMenu_`: the
-## nickname at `hlcoord 3, 0`, `PrintLevel` ten columns on and
-## `PrintStatusCondition` fourteen, with `DrawHPBar` a row below at
-## `hlcoord 4, 1` and `DrawHP2`'s fraction nine columns past the bar's own left
-## end. `ErasePartyMenuCursors` walks `hlcoord 0, 1` two rows at a time, so the
-## arrow stands beside the bar rather than the nickname, and there is no CANCEL
-## row: `PartyMenuInit` stops the list at `wPartyCount - 1` and B is the way out.
+## `DrawPartyMenu_`'s own `hlcoord`s. `ErasePartyMenuCursors` walks `hlcoord 0, 1`
+## two rows at a time, and `PartyMenuInit` stops the list at `wPartyCount - 1`:
+## no CANCEL row.
 const GEN1_NICKNAME: Vector2i = Vector2i(3, 0)
 const GEN1_LEVEL: Vector2i = Vector2i(13, 0)
 const GEN1_STATUS: Vector2i = Vector2i(17, 0)
@@ -197,11 +191,9 @@ func _use_gen1_layout() -> void:
 
 
 ## The whole screen, [param cursor] counting CANCEL as the row after the last
-## member and [param rows] being [member Gen2BattleSwitchMenu.rows].
-## `SwitchPartyMons` opens through `InitPartyMenuNoCancel`, so [param cancel] is
-## false while a member is being moved and [param held] wears `▷`. [param quality]
-## is the four `PartyMenuQualityPointers` rows that are not `.Default`, one string
-## over the bar. [param speech] is `PrintPartyMenuActionText`'s `SpeechTextbox`.
+## member. `SwitchPartyMons` opens through `InitPartyMenuNoCancel`, so [param
+## cancel] is false while [param held] wears `▷`. [param quality] is a
+## `PartyMenuQualityPointers` row over the bar, [param speech] a `SpeechTextbox`.
 func render(
 	rows: Array, cursor: int, prompt: String, cancel: bool = true, held: int = -1,
 	quality: bool = false, speech: bool = false
@@ -218,10 +210,11 @@ func render(
 			Gen2BattleSwitchMenu.cancel_label(), page, width,
 			CANCEL_COLUMN * TILE, (nickname_at.y + rows.size() * ROW_STEP) * TILE
 		)
+	## `SwitchPartyMons` and `RedrawPartyMenu_` both write it on the nickname's row.
 	if held >= 0 and held < rows.size():
 		font.draw_code(
 			HELD_CODE, page, width,
-			CURSOR_COLUMN * TILE, (cursor_row + held * ROW_STEP) * TILE
+			CURSOR_COLUMN * TILE, (nickname_at.y + held * ROW_STEP) * TILE
 		)
 	_draw_cursor(page, width, cursor)
 	_draw_prompt(page, width, prompt, speech)
@@ -238,11 +231,8 @@ func render(
 	return Gen2PicImage.canvas_image(pixels, width, height)
 
 
-## One pass of `PlaySpriteAnimations` over `InitPartyMenuGFX`'s structs: the
-## sequence first and then the frameset, which is the order
-## `DoNextFrameForAllSprites` calls them in. Called once per hardware frame by
-## whoever owns the screen; the structs are rebuilt when the party behind them
-## changes, the way a reopened menu respawns them.
+## One pass of `PlaySpriteAnimations` over `InitPartyMenuGFX`'s structs, the
+## sequence before the frameset as `DoNextFrameForAllSprites` orders them.
 func advance(rows: Array, cursor: int) -> void:
 	if _icons.size() != rows.size():
 		reset(rows)
@@ -255,12 +245,9 @@ func advance(rows: Array, cursor: int) -> void:
 		_step_icon_frame(icon)
 
 
-## `AnimatePartyMon` behind `GetAnimationSpeed`: one counter for the whole menu,
-## which `HandleMenuInput_` zeroes every time it redraws the cursor, and only
-## the chosen row moved. `.resetSprites` puts every icon back on its first frame
-## at zero and `.animateSprite` swaps the chosen one at the speed its bar colour
-## names, so the counter runs to twice that. A ball or a helix takes
-## `.editCoords` and shakes a pixel down where the rest change tile.
+## `AnimatePartyMon`: one counter for the whole menu, zeroed with every cursor
+## redraw, and only the chosen row moved at the speed its bar colour names. A
+## ball or a helix takes `.editCoords` and shakes a pixel down.
 func _advance_gen1(cursor: int) -> void:
 	if cursor != _gen1_cursor:
 		_gen1_cursor = cursor
@@ -468,6 +455,9 @@ func _draw_member(
 			page, width, Vector2i(hp_bar_at.x, hp_bar_at.y + step), hud.tiles.hp_bar_end
 		)
 	hud.draw_level(page, width, Vector2i(level_at.x, level_at.y + step), int(row.get("level", 0)))
+	## `.teachMoveMenu` jumps over `PrintStatusCondition`; Crystal's `.TMHM` keeps STATUS.
+	if quality and gen1:
+		return
 	font.draw_text(
 		_status_string(row), page, width, status_at.x * TILE, (status_at.y + step) * TILE
 	)

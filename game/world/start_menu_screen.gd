@@ -167,7 +167,7 @@ const PARTY_RESULT_HOLD_FRAMES: int = 50
 ## `HealHP_SFX_GFX`'s and `Play_SFX_FULL_HEAL`'s, roles Generation 1 answers too.
 const SFX_POTION: int = 0x04
 const SFX_FULL_HEAL: int = 0x05
-## `_GrewToLevelText`'s own `sound_dex_fanfare_50_79`; Generation 1's candy is silent.
+## `_GrewToLevelText`'s own `sound_dex_fanfare_50_79`, a waited text sound.
 const SFX_DEX_FANFARE_50_79: int = 0x00
 
 const SAVE_SAVING_FRAMES: int = Gen2SavePrompt.SAVING_FRAMES
@@ -179,6 +179,8 @@ const SAVE_DONE_FRAMES: int = Gen2SavePrompt.DONE_FRAMES
 ## `WaitPlaySFX`, and a pocket cycle asks for SFX_SWITCH_POCKETS.
 const SFX_SWITCH_POKEMON: int = 0x20
 const SFX_SWITCH_POCKETS: int = 0x62
+## `TeachTMHM`'s `PlaySFX` and `ItemUseTMHM`'s SFX_DENIED under the incompatible line.
+const SFX_WRONG: int = 0x19
 
 ## The pack's five imported texts, by the key `GameData.menu_text` holds each
 ## under: `UseItem`'s two refusals and `TossMenu`'s three. "(S)" is three literal
@@ -286,7 +288,8 @@ var _pack_page: Gen2PackPage = null
 var _mart_page: Gen2MartPage = null
 var _service_page: Gen2WorldServicePage = null
 ## The party list a result stands under: `rows`, the row's `anim` and `cursor`,
-## the `hold` before a press is read, and a RARE CANDY's `stats`.
+## the `hold` before a press is read, and a RARE CANDY's `stats`, standing in
+## `stats_after_press` until the line's own press.
 var _party_result: Dictionary = {}
 ## `PrintText` waits per page, so a result longer than the box's two rows is
 ## pressed through rather than cut off at the frame.
@@ -713,6 +716,11 @@ func _confirm() -> void:
 ## A pack opened over one Pokemon has no menu to go back to; A and B agree.
 func _leave_pack_result() -> void:
 	if party_result_holding():
+		return
+	if _party_result.has("stats_after_press"):
+		_party_result["stats"] = _party_result["stats_after_press"]
+		_party_result.erase("stats_after_press")
+		_render_hardware()
 		return
 	if _pack_result_advanced():
 		return
@@ -1812,7 +1820,13 @@ func _teach_selected_item(party_index: int) -> void:
 			if not _forget_moves.is_empty():
 				_open_forget_ask()
 				return
-		_show_pack_result(_teach_refusal(reason, party_index), Callable(), _over_party(party_index))
+		if reason == &"not_compatible":
+			sfx_requested.emit(SFX_WRONG, false)
+		## `ItemUseTMHM`'s refusals `jr .chooseMon`; `TeachTMHM`'s `.nope` returns to the pack.
+		var again: Callable = Callable()
+		if _gen1_pack() and (reason == &"not_compatible" or reason == &"already_knows_move"):
+			again = _confirm_teach
+		_show_pack_result(_teach_refusal(reason, party_index), again, _over_party(party_index))
 		return
 	_show_pack_result(Gen2MoveForget.learned_text(
 		_target_name(party_index), String(_teach_prompt.get("move_name", "")), _data.generation
@@ -1935,9 +1949,9 @@ func _teach_refusal(reason: StringName, party_index: int) -> String:
 	var target_name: String = _target_name(party_index)
 	match reason:
 		&"not_compatible":
-			return Gen2WorldTMHM.not_compatible_text(target_name, move_name)
+			return Gen2WorldTMHM.not_compatible_text(target_name, move_name, _data.generation)
 		&"already_knows_move":
-			return Gen2WorldTMHM.knows_move_text(target_name, move_name)
+			return Gen2WorldTMHM.knows_move_text(target_name, move_name, _data.generation)
 		&"cannot_forget_hm":
 			return Gen2MoveForget.cant_forget_hm_text(_data.generation)
 		&"invalid_forget_slot":
@@ -2052,11 +2066,13 @@ func _show_party_result(
 		)
 		party["prompt"] = _target_prompt()
 	elif kind == PARTY_ACTION_LEVEL:
-		sfx_requested.emit(SFX_DEX_FANFARE_50_79, false)
-		party["stats"] = _party_stats(party_index)
+		## Both texts end in `text_promptbutton`, and `PrintTempMonStats`' box is
+		## drawn behind that press with no `DelayFrames` in front.
+		sfx_requested.emit(SFX_DEX_FANFARE_50_79, true)
+		party["stats_after_press"] = _party_stats(party_index)
 	else:
 		sfx_requested.emit(SFX_FULL_HEAL, false)
-	if kind != &"" and not party.has("anim"):
+	if kind != &"" and not party.has("anim") and kind != PARTY_ACTION_LEVEL:
 		party["hold"] = PARTY_RESULT_HOLD_FRAMES
 	_show_pack_result(_party_result_text(item, result, party_index, kind), next, party)
 

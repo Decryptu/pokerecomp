@@ -754,7 +754,7 @@ static func _used_move_text(turn: Gen2Turn) -> void:
 	# nothing remembers nothing.
 	turn.battle.record_used_move(turn.side, turn.move_number)
 	turn.announced = true
-	turn.emit(Gen2Battle.USED_MOVE, {"move": turn.move_number})
+	turn.emit(Gen2Battle.USED_MOVE, {"move": turn.move_number, "instead": turn.disobeyed})
 
 
 ## Struggle spends nothing and is the one move that arrives without a slot, and

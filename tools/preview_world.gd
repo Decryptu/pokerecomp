@@ -21,7 +21,7 @@ const KIND_HELP: Dictionary = {
 	&"safari": "frames, 0: the Safari game's own battle menu over a Safari Zone map. 1 draws PrintSafariZoneSteps' window on the START menu instead",
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in. A Generation 1 cartridge throws the old man's ball, or Prof. Oak's with a second number of 1",
 	&"catch_dex": "none: NewPokedexEntry's page, over the fight the catch that opened it is still in",
-	&"cut": "cell: OWCutAnimation's two halves and the jump shadow",
+	&"cut": "cell: OWCutAnimation's two halves and the jump shadow; on a Generation 1 cartridge AnimCut's tree block below the player and its grass block above, two frames in",
 	&"fly": "none: FlyFromAnim 80 frames in, with HideSprites' empty OAM behind it",
 	&"tile_anim": "frames: the map that many AnimateTileset frames in",
 	&"unown_wall": "cell: DisplayUnownWords' box. Group 3 maps 23 to 26 say HO-OH, ESCAPE, WATER, LIGHT",
@@ -1460,6 +1460,9 @@ func _stage_sight() -> void:
 func _staged_frames() -> int:
 	if _kind == &"sign" and _cell.x > 0:
 		return _cell.x
+	## `AnimCut`'s tree is eight frames long; the Crystal kind's twelve outlive it.
+	if _kind == &"cut" and _generation() == RomRegistry.GEN1:
+		return STAGED_FRAMES
 	return int(STAGED_FRAMES_BY_KIND.get(_kind, STAGED_FRAMES))
 
 

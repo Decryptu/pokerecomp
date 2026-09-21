@@ -217,7 +217,7 @@ const HIDDEN_CENSUS: Dictionary = {
 		"facing": 129, "name_item": 54, "give_item": 54, "facility": 17,
 		"badge": 14, "has_item": 78, "add_coins": 12, "has_coins": 78,
 		"map_text": 5, "choice": 75, "dex_count": 1, "gym_trash": 15, "scratch": 12, "volatile": 12, "map_load_bit": 6, "replace_block": 72,
-		"emote": 66, "slot_machine": 66, "picture": 5, "help_menu": 4,
+		"redraw_map_view": 6, "emote": 66, "slot_machine": 66, "picture": 5, "help_menu": 4,
 		"serial_status": 4, "link_state": 4},
 }
 ## `BookshelfTileIDs`' 17 rows.
@@ -275,7 +275,7 @@ const STATE_CENSUS: Dictionary = {
 		"pikachu_test": 10, "pikachu_talk": 6, "volatile_test": 3, "volatile": 12, "random": 1,
 		"boulder_on": 3, "map_load_bit": 10, "hall_of_fame": 1, "set_blackout_map": 1,
 		"save_game": 1, "reset_game": 1, "warp_to": 1, "set_last_map": 1, "safari_balls": 1,
-		"set_riding": 1, "scratch_test": 3, "replace_block": 36, "coord_lookup": 3,
+		"set_riding": 1, "scratch_test": 3, "replace_block": 36, "redraw_map_view": 3, "coord_lookup": 3,
 		"trainer_battle_object": 2},
 }
 

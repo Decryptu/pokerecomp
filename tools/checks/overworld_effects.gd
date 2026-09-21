@@ -69,6 +69,7 @@ func _check_gen1_game() -> void:
 		]
 	)
 	_check_gen1_smoke()
+	_check_gen1_cut()
 
 
 ## `BoulderDustAnimationOffsets`, read off the cartridge: two blocks past the
@@ -77,6 +78,50 @@ func _check_gen1_smoke() -> void:
 	var offsets: Array = _r.data.gen1_boulder_dust_offsets()
 	var expected: Array = [Vector2i(8, 52), Vector2i(8, -12), Vector2i(-24, 20), Vector2i(40, 20)]
 	_r.check(offsets == expected, "the boulder dust offsets are %s." % [offsets])
+
+
+## `CutAnimationOffsets` against the cartridge's own bytes, and each block's last
+## frame: the second pass's swap and drop land behind the last `DelayFrame`.
+func _check_gen1_cut() -> void:
+	var rom: RomFile = RomFile.open_verified("res://roms/%s.gb" % _r.game_id)
+	if not _r.check(rom != null, "roms/%s.gb is unreadable." % _r.game_id):
+		return
+	var at: int = int(Gen1Layout.for_id(_r.game_id)["boulder_dust_offsets"]) \
+		- Gen1Layout.CUT_ANIMATION_OFFSETS.size() * 2
+	for facing: int in Gen1Layout.CUT_ANIMATION_OFFSETS.size():
+		var read := Vector2i(rom.s8(at + facing * 2), rom.s8(at + facing * 2 + 1))
+		_r.check(read == Gen1Layout.CUT_ANIMATION_OFFSETS[facing],
+			"CutAnimationOffsets row %d is %s." % [facing, read])
+	var effects := Gen2WorldEffects.new()
+	effects.start_gen1_cut(Gen1Layout.PLAYER_SPRITE_PIXELS, Gen2WorldSprite.FACING_DOWN, false)
+	effects.start_gen1_cut(Gen1Layout.PLAYER_SPRITE_PIXELS, Gen2WorldSprite.FACING_UP, true)
+	var tree: Array = []
+	var grass: Array = []
+	var frames: int = 0
+	while effects.sprites_active():
+		for sprite: Dictionary in effects.sprites():
+			if StringName(sprite["kind"]) == Gen2WorldEffects.SPRITE_GEN1_CUT_TREE:
+				tree = sprite["tiles"]
+			else:
+				grass = sprite["tiles"]
+		effects.advance_frame()
+		frames += 1
+	_r.check(frames == Gen1Layout.cut_animation_frames(true)
+		and Gen1Layout.cut_animation_frames(false) == 8,
+		"the cut animations ran %d frames." % frames)
+	var corners: Array = []
+	for entry: Dictionary in tree:
+		corners.append(entry["offset"])
+	_r.check(corners == [Vector2i(72, 80), Vector2i(80, 80), Vector2i(56, 88), Vector2i(64, 88)],
+		"the tree's last frame stands at %s." % [corners])
+	corners = []
+	for entry: Dictionary in grass:
+		corners.append([entry["offset"], entry["flip_x"], entry["flip_y"]])
+	_r.check(corners == [
+		[Vector2i(48, 58), true, false], [Vector2i(88, 58), false, true],
+		[Vector2i(48, 50), true, false], [Vector2i(88, 50), false, true],
+	], "the leaves' last frame stands at %s." % [corners])
+	_r.note("gen1 cut: the offsets, 8 tree frames and %d leaf frames" % frames)
 
 
 func _check_game() -> void:

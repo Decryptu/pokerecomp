@@ -118,6 +118,10 @@ const PARTY_RESULT_ITEMS: Dictionary = {
 	RomRegistry.GEN2: {"potion": 0x12, "antidote": 0x09, "repel": 0x14},
 	RomRegistry.GEN1: {"potion": 0x14, "antidote": 0x0B, "repel": 0x1E},
 }
+const GREW_LINES: Dictionary = {
+	RomRegistry.GEN2: "<MON> grew to\nlevel <L>!",
+	RomRegistry.GEN1: "<MON> grew\nto level <L>!",
+}
 const PARTY_RESULT_MAP: Dictionary = {
 	RomRegistry.GEN2: [Vector2i(26, 2), Vector2i(2, 17)],
 	RomRegistry.GEN1: [Vector2i(0, 38), Vector2i(3, 6)],
@@ -142,7 +146,11 @@ func _verify_party_results() -> void:
 	var healed: int = mini(POTION_HEAL, max_hp - 1)
 	var lead_name: String = lead.nickname if not lead.nickname.is_empty() \
 		else String(_r.data.species(lead.species).get("name", ""))
-	screen.preview_pack({items["potion"]: 1, items["antidote"]: 1, items["repel"]: 1})
+	var candy: int = int(Gen2WorldPartyHost.item_effects(_r.data)["rare_candy"])
+	var machine: int = _incompatible_machine(lead.species)
+	screen.preview_pack({
+		items["potion"]: 1, items["antidote"]: 1, items["repel"]: 1, candy: 1, machine: 1,
+	})
 	var host: Gen2StartMenuScreen = screen.get("_start_menu_host")
 	if not _r.check(host != null, "%s: the pack did not open." % _r.game_id):
 		_r.close_screen(screen)
@@ -189,8 +197,77 @@ func _verify_party_results() -> void:
 		and screen.world().state.repel_steps() == 100,
 		"%s: the three uses left hp %d, status %d, repel %d." % [
 			_r.game_id, save.party[0].hp, save.party[0].status, screen.world().state.repel_steps()])
-	print("%s: the POTION, the ANTIDOTE and the REPEL print their own lines." % _r.game_id)
+	_verify_rare_candy(screen, host, lead_name, candy)
+	_verify_machine_refusal(host, lead_name, machine)
+	print("%s: the POTION, the ANTIDOTE, the REPEL, a RARE CANDY and a refused TM print their own lines." % _r.game_id)
 	_r.close_screen(screen)
+
+
+## The first TM the species cannot learn, which every species has at least one of.
+func _incompatible_machine(species: int) -> int:
+	for number: int in range(1, _r.data.tmhm_moves().size() + 1):
+		var item: int = Gen2WorldTMHM.item_for_number(_r.data, number)
+		if not Gen2WorldTMHM.can_learn(_r.data, species, Gen2WorldTMHM.move_for_item(_r.data, item)):
+			return item
+	return 0
+
+
+## `TeachTMHM`'s SFX_WRONG and its `.nope` back to the pack; `ItemUseTMHM`'s
+## SFX_DENIED and its `jr .chooseMon` back to the party list.
+func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machine: int) -> void:
+	var sounds: Array = []
+	host.sfx_requested.connect(func(sfx: int, _waited: bool) -> void: sounds.append(sfx))
+	if not _r.check(host.call("_select_pack_item", machine), "%s: no TM %d in the pack." % [_r.game_id, machine]):
+		return
+	for _press: int in 4:
+		host.handle_button(PokeButton.A)
+	var gen1: bool = _r.data.generation == RomRegistry.GEN1
+	var want: String = Gen2WorldTMHM.not_compatible_text(
+		lead_name, String(_r.data.move(Gen2WorldTMHM.move_for_item(_r.data, machine)).get("name", "")),
+		_r.data.generation
+	)
+	_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK_RESULT
+		and String(host.get("_pack_result")) == want and sounds == [Gen2StartMenuScreen.SFX_WRONG],
+		"%s: the refused TM printed %s in mode %d under %s." % [
+			_r.game_id, host.get("_pack_result"), host.get("_mode"), sounds])
+	## `PrintText` pages the two sentences, so the box owes a press a page.
+	for _page: int in (host.get("_pack_result_pages") as Array).size():
+		host.handle_button(PokeButton.A)
+	var mode: int = host.get("_mode")
+	_r.check(mode == (Gen2StartMenuScreen.Mode.PACK_TARGET if gen1 else Gen2StartMenuScreen.Mode.PACK),
+		"%s: the refusal's press landed in mode %d." % [_r.game_id, mode])
+
+
+## `_GrewToLevelText` and `RareCandyText`: the line under its waited sound, the
+## stats box behind the `text_promptbutton`, a second press before the pocket.
+func _verify_rare_candy(
+	screen: Gen2WorldScreen, host: Gen2StartMenuScreen, lead_name: String, candy: int
+) -> void:
+	var save: Gen2SaveData = screen.active_save()
+	var level: int = save.party[0].level
+	var sounds: Array = []
+	host.sfx_requested.connect(func(sfx: int, waited: bool) -> void: sounds.append([sfx, waited]))
+	host.call("_select_pack_item", candy)
+	for _press: int in 3:
+		host.handle_button(PokeButton.A)
+	var want: String = String(GREW_LINES[_r.data.generation]).replace(
+		"<MON>", lead_name).replace("<L>", str(level + 1))
+	var party: Dictionary = host.get("_party_result")
+	_r.check(String(host.get("_pack_result")) == want and not party.has("stats")
+		and party.has("stats_after_press") and not host.party_result_holding(),
+		"%s: the RARE CANDY printed %s over %s with no press owed." % [
+			_r.game_id, host.get("_pack_result"), party.keys()])
+	_r.check(sounds == [[Gen2StartMenuScreen.SFX_DEX_FANFARE_50_79, true]],
+		"%s: the RARE CANDY's line sounded %s." % [_r.game_id, sounds])
+	host.handle_button(PokeButton.A)
+	_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK_RESULT
+		and (host.get("_party_result") as Dictionary).has("stats"),
+		"%s: the first press did not draw the stats box." % _r.game_id)
+	host.handle_button(PokeButton.A)
+	_r.check(host.get("_mode") != Gen2StartMenuScreen.Mode.PACK_RESULT
+		and save.party[0].level == level + 1,
+		"%s: the second press left mode %d at level %d." % [
+			_r.game_id, host.get("_mode"), save.party[0].level])
 
 
 ## `CheckSelectableItem` over the real rows. The eight named key items are the

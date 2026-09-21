@@ -1,29 +1,22 @@
 class_name Gen2WorldTMHM
 extends RefCounted
 
-## Scene-free tables and gates for teaching a TM or HM (engine/items/tmhm.asm).
-## The TM/HM pocket does not reach `UseItem`'s jumptable at all: its own USE entry
-## runs AskTeachTMHM, then ChooseMonToLearnTMHM, then TeachTMHM. This class owns
-## the first and the checks the third makes;
-## [method Gen2WorldPartyHost.teach_tm_hm] owns the transaction. Everything here is
-## byte identical between the pins, pokegold's TeachTMHM differing by one line, a
-## stubbed trainer-ranking call that does nothing.
+## Tables and gates for teaching a TM or HM (engine/items/tmhm.asm): the pocket's
+## USE runs AskTeachTMHM, ChooseMonToLearnTMHM, then TeachTMHM. This class owns
+## the first and the checks the third makes; `Gen2WorldPartyHost.teach_tm_hm`
+## owns the transaction.
 
-## constants/item_constants.asm. The run from TM01 to HM07 is not contiguous:
-## ITEM_C3 and ITEM_DC sit inside it as dummies, which is why the number a TM
-## carries comes from Gen2Layout.tmhm_number_for_item() rather than subtraction.
+## constants/item_constants.asm. ITEM_C3 and ITEM_DC sit inside the TM01 to HM07
+## run as dummies, so a TM's number comes from Gen2Layout.tmhm_number_for_item().
 const ITEM_TM01: int = Gen2Layout.ITEM_TM01
 const ITEM_HM01: int = Gen2Layout.ITEM_HM01
-## `cp TM01` needs no ceiling on hardware because an item number is a byte. A
-## defined item is not one: Gen2ContentOverlay.FIRST_MOD_NUMBER is 256, so
-## without this every mod item read as a TM, and as an HM.
+## `cp TM01` needs no ceiling on hardware; a mod item numbers from
+## Gen2ContentOverlay.FIRST_MOD_NUMBER, 256, and would read as an HM without one.
 const ITEM_BYTE_MAX: int = Gen2Layout.ITEM_BYTE_MAX
 
 
-## AskTeachTMHM's first test, `cp TM01` before anything else: an item below TM01
-## is not a TM or HM and the prompt never appears. Generation 1 numbers the two
-## runs the other way up, five HMs at $C4 with the fifty TMs above them, so the
-## comparison is its own.
+## AskTeachTMHM's first test, `cp TM01`. Generation 1 numbers the two runs the
+## other way up, five HMs at $C4 with the fifty TMs above them.
 static func is_tm_hm(item: int, generation: int = RomRegistry.GEN2) -> bool:
 	if generation == RomRegistry.GEN1:
 		return Gen1Layout.machine_number(item) > 0
@@ -75,8 +68,7 @@ static func move_for_item(data: GameData, item: int) -> int:
 
 
 ## CanLearnTMHMMove: the species' own flag bit for the TM/HM that teaches
-## [param move]. A move no TM/HM teaches answers false, matching the source's
-## `.end` branch, which returns c = 0 after walking off the end of TMHMMoves.
+## [param move]; a move no machine teaches is `.end`'s c = 0.
 static func can_learn(data: GameData, species: int, move: int) -> bool:
 	if data == null:
 		return false
@@ -95,9 +87,8 @@ static func can_learn(data: GameData, species: int, move: int) -> bool:
 	return (byte & (1 << (index & 7))) != 0
 
 
-## KnowsMove (engine/pokemon/knows_move.asm), which TeachTMHM asks after
-## compatibility and before LearnMove: all four slots, zeros included, though a
-## zero can never match a real move.
+## KnowsMove (engine/pokemon/knows_move.asm), asked after compatibility and
+## before LearnMove over all four slots.
 static func knows_move(moves: Array, move: int) -> bool:
 	return moves.has(move)
 
@@ -112,8 +103,7 @@ static func first_empty_slot(moves: Array) -> int:
 
 
 ## AskTeachTMHM's two texts, BootedTMText/BootedHMText then ContainedMoveText,
-## as the one prompt this project shows before its yes/no. The source prints them
-## as two boxes; the wording is verbatim.
+## as one prompt before the yes/no.
 static func teach_prompt(data: GameData, item: int) -> Dictionary:
 	var move: int = move_for_item(data, item)
 	if move <= 0:
@@ -132,14 +122,25 @@ static func teach_prompt(data: GameData, item: int) -> Dictionary:
 
 
 ## `_TMHMNotCompatibleText` (data/text/common_2.asm), which `TeachTMHM` and
-## `CheckCanLearnMoveTutorMove` both print when `CanLearnTMHMMove` says no.
-static func not_compatible_text(mon_name: String, move_name: String) -> String:
+## `CheckCanLearnMoveTutorMove` both print when `CanLearnTMHMMove` says no;
+## `_MonCannotLearnMachineMoveText` on Generation 1.
+static func not_compatible_text(
+	mon_name: String, move_name: String, generation: int = RomRegistry.GEN2
+) -> String:
+	if generation == RomRegistry.GEN1:
+		return "%s is not\ncompatible with\ue001%s.\ue000It can't learn\n%s." % [
+			mon_name, move_name, move_name,
+		]
 	return "%s is not compatible with %s. It can't learn %s." % [
 		move_name, mon_name, move_name,
 	]
 
 
 ## `_KnowsMoveText` (data/text/common_3.asm), printed by `KnowsMove` itself, so
-## every caller that reaches it shows this line and no other.
-static func knows_move_text(mon_name: String, move_name: String) -> String:
+## every caller that reaches it shows this line; `_AlreadyKnowsText` on Generation 1.
+static func knows_move_text(
+	mon_name: String, move_name: String, generation: int = RomRegistry.GEN2
+) -> String:
+	if generation == RomRegistry.GEN1:
+		return "%s knows\n%s!" % [mon_name, move_name]
 	return "%s knows %s." % [mon_name, move_name]

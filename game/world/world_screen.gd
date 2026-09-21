@@ -3657,16 +3657,16 @@ func persist_world_snapshot() -> Dictionary:
 	return Gen2SaveStore.save(save, _data)
 
 
-## `GameTimer`, once a hardware frame, on the save as `wPlayerData` keeps it. A
-## battle, the pack and the start menu keep counting; `wGameTimerPaused` is
-## `Script_halloffame`'s and `wGameLogicPaused` Bill's PC's and saving's.
+## `GameTimer`, once a hardware frame; `wGameTimerPaused` is `Script_halloffame`'s.
+## `TrackPlayTime` runs from VBlank with no pause bit, the Hall of Fame included.
 func _advance_game_time_frame() -> void:
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	if save == null or save.game_time == null:
 		return
-	if _hall_of_fame_host != null:
+	var gen1: bool = _data != null and _data.generation == RomRegistry.GEN1
+	if _hall_of_fame_host != null and not gen1:
 		return
-	save.game_time.advance_frames(1)
+	save.game_time.advance_frames(1, gen1)
 
 
 ## Deterministic driver for tests and screenshot tooling. The live scene uses
@@ -3728,7 +3728,11 @@ func preview_effect_sprites(kind: StringName = &"effects") -> void:
 	if _world == null or _renderer == null:
 		return
 	if kind == &"cut":
-		if _effects != null:
+		if _effects != null and _data != null and _data.generation == RomRegistry.GEN1:
+			## `AnimCut`'s tree block below the player and its grass block above.
+			_effects.start_gen1_cut(Gen1Layout.PLAYER_SPRITE_PIXELS, Gen2WorldSprite.FACING_DOWN, false)
+			_effects.start_gen1_cut(Gen1Layout.PLAYER_SPRITE_PIXELS, Gen2WorldSprite.FACING_UP, true)
+		elif _effects != null:
 			## Both halves of `OWCutAnimation` at once, over the cell Cut would
 			## clear, plus the shadow `JumpStep` spawns under a ledge hop.
 			_effects.start_cut(_world.facing_cell(), 0, _world.facing_direction(), _world.player_cell)
@@ -7878,17 +7882,19 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 					_effects.start_headbutt_tree(applied.get("cell", Vector2i.ZERO))
 			&"rock_smash_applied":
 				_play_sfx(SFX_STRENGTH)
-			_:
-				## `OWCutAnimation` plays it, which is why the sound and the
-				## animation start together.
-				_play_sfx(SFX_CUT)
-				if _effects != null and StringName(applied.get("kind", &"")) == &"cut_applied":
-					_effects.start_cut(
-						applied.get("cell", Vector2i.ZERO),
-						int(applied.get("animation", 0)),
-						_world.facing_direction(),
-						_world.player_cell,
-					)
+			&"cut_applied":
+				if _data != null and _data.generation == RomRegistry.GEN1:
+					_show_script_results(_world.gen1_cut_animation(applied))
+				else:
+					## `OWCutAnimation` plays it as the animation starts.
+					_play_sfx(SFX_CUT)
+					if _effects != null:
+						_effects.start_cut(
+							applied.get("cell", Vector2i.ZERO),
+							int(applied.get("animation", 0)),
+							_world.facing_direction(),
+							_world.player_cell,
+						)
 		if _renderer != null:
 			_renderer.refresh()
 		_script_prompt = label
@@ -8232,6 +8238,7 @@ const PRESENTATION_HANDLERS: Dictionary = {
 	&"jigglypuff": &"_start_jigglypuff",
 	&"gen1_elevator_shake": &"_start_gen1_elevator_shake",
 	&"gen1_boulder_dust": &"_start_gen1_boulder_dust",
+	&"gen1_cut": &"_start_gen1_cut",
 	&"ss_anne_leaves": &"_start_gen1_ss_anne",
 	&"palette_fade": &"_start_script_fade",
 	&"cable_club_wait": &"_start_presentation_sounds",
@@ -9613,6 +9620,16 @@ func _start_gen1_boulder_dust(event: Dictionary) -> void:
 		_effects.start_gen1_boulder_dust(
 			Gen1Layout.PLAYER_SPRITE_PIXELS, int(event.get("facing", 0)),
 			_data.gen1_boulder_dust_offsets()
+		)
+	if _renderer != null:
+		_renderer.refresh()
+
+
+func _start_gen1_cut(event: Dictionary) -> void:
+	_start_sound_schedule((event.get("sounds", []) as Array).duplicate(true))
+	if _effects != null:
+		_effects.start_gen1_cut(
+			Gen1Layout.PLAYER_SPRITE_PIXELS, int(event.get("facing", 0)), bool(event.get("grass", false))
 		)
 	if _renderer != null:
 		_renderer.refresh()
