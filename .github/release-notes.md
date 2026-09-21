@@ -16,32 +16,31 @@ an empty body. -->
 
 ## Added
 
-- Using a Potion, a status cure, a Revive or a Rare Candy from the party menu on Red, Blue and Yellow prints the cartridge's own line in the speech box, fills the bar under the Potion sound first, and a Rare Candy shows the level-up stat box. Vitamins, PP restores and refusals print over the list as it stands.
-- A gift Pokemon, a caught Pokemon sent to the box and a move learned over a full set say their Red, Blue and Yellow lines: "Got EEVEE!", the nickname question, "sent to BILL's PC" once Bill has been met, "There's no room" when neither has any, and the Move Deleter's own wording with its swap sound.
-- A Repel wearing off says so, on every cartridge. Before this, the count ran out in silence unless a mod renewed it.
-- A status move that lands on nothing says what its own routine says: "It didn't affect", "already asleep", "already paralyzed", "already poisoned", "already confused", "evaded the attack" or "But it failed!". Every one of them had said "attack missed" or nothing.
+- The START menu, the PC, the Cable Club and the trainer card on Red, Blue and Yellow show the POKéDEX once Prof. Oak has handed it over. The row never appeared before, on any of the three, and a save that already has the Pokedex sees it on load.
+- The low-health alarm sounds in a Red, Blue or Yellow battle when the bar turns red, and stops when it turns back.
+- Cutting a tree or grass on Red, Blue and Yellow plays the cartridge's own cut: the block splits apart under the cut sound, or the leaves scatter, with the view redrawn on either side.
+- Selecting an item with SELECT on Red, Blue and Yellow and pressing it on another swaps the two rows, in the bag and in the mart's sell list.
+- Talking to someone on Red, Blue and Yellow turns them to face you, and someone who stands still turns back afterwards, as on the cartridge.
 
 ## Changed
 
-- Trainer Pokemon on Red, Blue and Yellow carry the cartridge's DVs (`$9888`) rather than perfect ones, so a trainer's Pokemon has the HP and stats the cartridge gives it.
-- Gaining several levels in one fight on Red, Blue and Yellow jumps straight to the final level, says "grew to level N" once and offers only that level's moves, which is what the cartridge does.
-- Withdrawing a Pokemon from the PC on Gold, Silver and Crystal restores its HP and clears its status, and depositing one restores its PP.
-- The imported cache is format 149 and is rebuilt on first launch.
+- A Pokemon's HP bar on Red, Blue and Yellow turns yellow under 27 pixels, where Gold, Silver and Crystal's turns under 24.
+- Someone more than half a screen away on Red, Blue and Yellow stands frozen, as on the cartridge, and a trainer there cannot see you.
+- Pewter City's two guides walk you to the museum door or the gym sign from wherever they meet you, as the cartridge's tables say, and stand back where they were afterwards.
+- The two Cinnabar Gym doors and every other block a script swaps in view on Red, Blue and Yellow hold the frames the cartridge's redraw spends.
+- Pressing a direction on Red, Blue and Yellow is read on the overworld's own pass, behind the map's script, so a tap on the step onto Pallet Town's north path meets Prof. Oak rather than walking out onto Route 1.
+- The imported cache is format 151 and is rebuilt on first launch.
 
 ## Fixed
 
-- Thunder Wave, Sing, Stun Spore, Glare and Leech Seed land behind a Substitute on Red, Blue and Yellow, as they do on the cartridge; Glare paralyses a Ghost-type there too.
-- A trainer's Thunder Wave, Sleep Powder or Toxic on Red, Blue and Yellow no longer fails a quarter of the time. That roll is Gold, Silver and Crystal's.
-- Rest on Red, Blue and Yellow no longer resets a bad poisoning's counter, so a Pokemon that was badly poisoned and rested is hurt the way the cartridge hurts it when poisoned again.
-- Seafoam Islands' strong current runs on Red, Blue and Yellow; its B3F script never ran on a frame with no boulder pushed, and the puzzle could not be finished.
-- Pushing a boulder on Red, Blue and Yellow checks the tile two cells ahead, as the cartridge does; the port had checked the boulder's own tile and let a push through where the cartridge refuses one.
-- Yellow's Underground Path trade evolves the MACHOKE into MACHAMP, and a link trade records both the species that arrived and what it became.
-- Walking out of a door or a warp on Red, Blue and Yellow no longer spends three quiet steps: only a fight arms the wild cooldown, and a step onto a map through a warp counts neither for poison nor for an encounter, on any cartridge.
-- The Pokemon Center on Red, Blue and Yellow asks "Shall we heal your POKéMON?" on the first visit only, then greets you with the yes/no box.
-- A vending machine on Red, Blue and Yellow checks for ¥200 whatever the drink costs and a purchase that would go below zero leaves ¥0, both as the cartridge does.
-- Yellow's VAPOREON learns HAZE at level 42 and never MIST, as on the cartridge.
-- The last poisoned party member fainting on the overworld on Red, Blue and Yellow is silent, as on the cartridge.
-- The cartridge's battle level-up box on Red, Blue and Yellow shows SPECIAL, where the port had shown SPCL.ATK and SPCL.DEF.
+- Prof. Oak's PIKACHU battle on Yellow no longer freezes on an empty text box before "Wild PIKACHU appeared!". A battle screen refresh had left the low-health alarm byte at a value Yellow's sound driver reads as "hold the first sound channel", so every cry hung and the text waiting behind it never came; on Android with sound on, no Yellow battle got past its first cry.
+- The first cry of a session on Red, Blue and Yellow no longer waits about four seconds before its text: a fresh driver's wave channel counted 255 frames on a cry that never used it.
+- A move used instead of the one you chose on Red, Blue and Yellow says "used instead," as the cartridge does.
+- A Rare Candy and a level gained in battle on Red, Blue and Yellow play their sound and wait for a press before the stat box, and a TM a Pokemon cannot learn or already knows says so in the cartridge's words with its refusal sound and returns to the party list.
+- The mart on Red, Blue and Yellow returns to BUY/SELL/QUIT after "not enough money", "bag full" and "can't sell that", and to the sell list after a sale, with no extra box.
+- Pewter Gym's trainer by the door on Red, Blue and Yellow no longer spots you from a column he cannot see.
+- A trainer's Pokemon in the swap list on Red, Blue and Yellow prints no ABLE/NOT ABLE beside every row where the cartridge prints none, and the swap arrow stands on the nickname's row.
+- The play timer on Red, Blue and Yellow stops at 255 hours and keeps counting through the Hall of Fame.
 
 ## Which file
 
