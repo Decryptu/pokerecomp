@@ -1389,7 +1389,6 @@ func _stage_map_script() -> void:
 
 
 
-## `PewterGuys`: the guide beside the player, talked to and answered NO.
 func _stage_guide() -> void:
 	var world: Gen2WorldAPI = _screen.get("_world")
 	if world == null:
@@ -1402,7 +1401,6 @@ func _stage_guide() -> void:
 		world.player_facing = world._facing_toward(world.player_cell, guide.cell)
 		_screen.interact()
 	else:
-		## The youngster's four trigger cells are one step up from the cell given.
 		for _frame: int in BOX_REVEAL_FRAMES:
 			if world.script_input_waiting():
 				break
