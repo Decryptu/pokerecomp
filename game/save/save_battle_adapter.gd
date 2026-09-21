@@ -117,6 +117,9 @@ static func from_world_battle(
 ) -> Gen2SaveData:
 	if data == null or battle == null or source_save == null:
 		return null
+	## `.FinishTutorial` keeps nothing: the tutor's stand-in party is not the player's.
+	if battle.battle_type == Gen2Battle.BATTLETYPE_TUTORIAL:
+		return Gen2SaveData.from_dict(source_save.to_dict())
 	if battle.in_battle_tower:
 		# RunBattleTowerTrainer reloads Pokemon data, then heals the restored party.
 		var restored: Gen2SaveData = Gen2SaveData.from_dict(source_save.to_dict())

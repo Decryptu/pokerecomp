@@ -10182,6 +10182,21 @@ func test_gen1_ledge_hop_crosses_the_ledge_tile() -> void:
 	RomCache.clear(_gen1_directory())
 
 
+## `.battleOccurred`'s `AnyPartyAlive` over `wPartyCount` zero loops 256 times
+## across WRAM and answers alive, so Yellow's Pikachu demo, fought before the
+## player owns a Pokemon, blacks nobody out; a fainted party still does.
+func test_gen1_an_empty_party_does_not_black_out_after_a_fight() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 2))
+	var save := Gen2SaveData.new()
+	assert_false(world.gen1_blackout_due(save, Gen2WorldBattleAdapter.OUTCOME_WON))
+	assert_false(world.gen1_blackout_due(save, Gen2WorldBattleAdapter.OUTCOME_LOST))
+	var fainted := Gen2SaveMon.new()
+	fainted.species = 1
+	fainted.hp = 0
+	save.party = [fainted]
+	assert_true(world.gen1_blackout_due(save, Gen2WorldBattleAdapter.OUTCOME_LOST))
+
+
 ## `EnterMap` writes `wNumberOfNoRandomBattleStepsLeft` only under the bit
 ## `EndOfBattle` sets, so a door costs no quiet steps, a fight's reload three,
 ## and a door taken inside those three starts them again.

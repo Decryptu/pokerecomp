@@ -103,6 +103,8 @@ func advance_frames(count: int) -> void:
 		if _closed or _cinema.phase() == Gen2BootCinema.PHASE_FINISHED:
 			_finish()
 			return
+		if not is_processing() and _audio != null:
+			_audio.advance_driver_frame()
 		_apply(_cinema.advance_frame(_held))
 
 
@@ -150,11 +152,11 @@ func release_button(button: int) -> void:
 ## How many frames the splash still owes, so a driver can settle it with a loop
 ## rather than a clock. The GameFreak half is a sequence rather than a budget, so
 ## it answers one until that sequence says it has finished.
-func frames_left() -> int:
+func animation_frames_left() -> int:
 	if _cinema == null or _cinema.phase() == Gen2BootCinema.PHASE_FINISHED:
 		return 0
 	if _cinema.gen1() != null:
-		return 1
+		return 0 if _cinema.gen1().reads_joypad() else 1
 	if _cinema.phase() == Gen2BootCinema.PHASE_TITLE:
 		# `TitleScreenMain` waits on a button or on its own timer, so what is
 		# left is however much of that timer is still standing.

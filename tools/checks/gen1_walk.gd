@@ -248,13 +248,10 @@ const PRIZE_MENUS: Dictionary = {
 	],
 }
 
-## Three `text_asm` rows driven on the world, since a decoded script is only
-## worth the box it puts up. `BikeShopYoungsterText` turns on EVENT_GOT_BICYCLE,
-## `LavenderTownLittleGirlText` asks and branches on the answer, and
-## `GameCornerFishingGuruText` reaches `Has9990Coins` only with the COIN CASE in
-## the bag, so its own flag decides which of two boxes it opens.
-## Route 16 and the cell its gate's south door lands on, which
-## `ForcedBikeOrSurfMaps`' first row names.
+## Three `text_asm` rows driven on the world: `BikeShopYoungsterText` turns on
+## EVENT_GOT_BICYCLE, `LavenderTownLittleGirlText` branches on its answer, and
+## `GameCornerFishingGuruText` opens one of two boxes on the COIN CASE.
+## Route 16 and the cell its gate's south door lands on (`ForcedBikeOrSurfMaps`).
 const ROUTE_16: int = 27
 const ROUTE_16_GATE_DOOR := Vector2i(17, 10)
 const BIKE_SHOP: int = 66
@@ -3259,19 +3256,21 @@ func _check_a_dungeon_fall() -> void:
 
 const SILPH_CO_3F: int = 208
 const MAP_ANIM_GUARD_FRAMES: int = 600
-## Off the cartridge from `HandleFlyWarpOrDungeonWarp`'s frame, the two driver
-## waits taken out and `GetPlayerTeleportAnimFrameDelay` read under `wOnSGB`.
+## Off the cartridge from `HandleFlyWarpOrDungeonWarp`'s frame with
+## `GetPlayerTeleportAnimFrameDelay` read under `wOnSGB`, plus the two driver
+## waits the screen spends for real: `StopMusic 4` fades `rAUDVOL` from $77 in
+## eight steps of five frames, and `PlayDefaultMusic` waits the last effect out.
 const MAP_ANIM_TRACES: Dictionary = {
 	&"escape": [
-		"3 stop_music 4", "3 sfx 161", "57 sfx 161", "95 sfx 161", "117 sfx 161",
-		"123 sfx 159", "141 fade $90", "149 fade $40", "157 fade $00", "165 swap",
-		"200 fade $40", "208 fade $90", "216 fade $E4", "224 sfx 160", "232 sfx 163",
-		"260 music",
+		"3 stop_music 4", "43 sfx 161", "97 sfx 161", "135 sfx 161", "157 sfx 161",
+		"163 sfx 159", "181 fade $90", "189 fade $40", "197 fade $00", "205 swap",
+		"240 fade $40", "248 fade $90", "256 fade $E4", "264 sfx 160", "272 sfx 163",
+		"345 music",
 	],
 	&"fly": [
-		"3 stop_music 4", "31 sfx 164", "140 fade $90", "148 fade $40", "156 fade $00",
-		"164 swap", "199 fade $40", "207 fade $90", "215 fade $E4", "229 sfx 164",
-		"269 music",
+		"3 stop_music 4", "71 sfx 164", "180 fade $90", "188 fade $40", "196 fade $00",
+		"204 swap", "239 fade $40", "247 fade $90", "255 fade $E4", "269 sfx 164",
+		"318 music",
 	],
 	&"pad": [
 		"0 sfx 159", "8 fade $90", "16 fade $40", "24 fade $00", "32 swap",
@@ -3284,15 +3283,15 @@ const MAP_ANIM_TRACES: Dictionary = {
 }
 const MAP_ANIM_TRACES_YELLOW: Dictionary = {
 	&"escape": [
-		"3 stop_music 4", "3 sfx 161", "57 sfx 161", "95 sfx 161", "117 sfx 161",
-		"123 sfx 159", "141 fade $90", "150 fade $40", "159 fade $00", "168 swap",
-		"207 fade $40", "216 fade $90", "225 fade $E4", "234 sfx 160", "242 sfx 163",
-		"270 music",
+		"3 stop_music 4", "43 sfx 161", "97 sfx 161", "135 sfx 161", "157 sfx 161",
+		"163 sfx 159", "181 fade $90", "190 fade $40", "199 fade $00", "208 swap",
+		"247 fade $40", "256 fade $90", "265 fade $E4", "274 sfx 160", "282 sfx 163",
+		"355 music",
 	],
 	&"fly": [
-		"3 stop_music 4", "31 sfx 164", "140 fade $90", "149 fade $40", "158 fade $00",
-		"167 swap", "206 fade $40", "215 fade $90", "224 fade $E4", "237 sfx 164",
-		"277 music",
+		"3 stop_music 4", "71 sfx 164", "180 fade $90", "189 fade $40", "198 fade $00",
+		"207 swap", "246 fade $40", "255 fade $90", "264 fade $E4", "277 sfx 164",
+		"326 music",
 	],
 	&"pad": [
 		"0 sfx 159", "8 fade $90", "17 fade $40", "26 fade $00", "35 swap",
@@ -3304,14 +3303,14 @@ const MAP_ANIM_TRACES_YELLOW: Dictionary = {
 	],
 }
 const MAP_ANIM_FRAMES: Dictionary = {
-	&"escape": {57: [0x00, 0x3C, 0x40, false], 125: [0x02, 0x1C, 0x40, false], 236: [0x0C, 0x3C, 0x40, false]},
-	&"fly": {46: [0x0C, 0x39, 0x68, true], 110: [0x08, 0x1A, 0x90, true], 244: [0x08, 0x27, 0x78, true], 267: [0x08, 0x3C, 0x40, false]},
+	&"escape": {97: [0x00, 0x3C, 0x40, false], 165: [0x02, 0x1C, 0x40, false], 276: [0x0C, 0x3C, 0x40, false]},
+	&"fly": {86: [0x0C, 0x39, 0x68, true], 150: [0x08, 0x1A, 0x90, true], 284: [0x08, 0x27, 0x78, true], 307: [0x08, 0x3C, 0x40, false]},
 	&"pad": {1: [0x02, 0x2C, 0x40, false], 72: [0x02, 0xFC, 0x40, false]},
 	&"hole": {4: [0x04, 0x3C, 0x40, false], 100: [0x00, 0xEC, 0x40, false], 140: [0x02, 0x0C, 0x40, false]},
 }
 const MAP_ANIM_FRAMES_YELLOW: Dictionary = {
-	&"escape": {57: [0x00, 0x3C, 0x40, false], 125: [0x02, 0x1C, 0x40, false], 246: [0x0C, 0x3C, 0x40, false]},
-	&"fly": {46: [0x0C, 0x39, 0x68, true], 110: [0x08, 0x1A, 0x90, true], 252: [0x08, 0x27, 0x78, true], 275: [0x08, 0x3C, 0x40, false]},
+	&"escape": {97: [0x00, 0x3C, 0x40, false], 165: [0x02, 0x1C, 0x40, false], 286: [0x0C, 0x3C, 0x40, false]},
+	&"fly": {86: [0x0C, 0x39, 0x68, true], 150: [0x08, 0x1A, 0x90, true], 292: [0x08, 0x27, 0x78, true], 315: [0x08, 0x3C, 0x40, false]},
 	&"pad": {1: [0x02, 0x2C, 0x40, false], 82: [0x02, 0xFC, 0x40, false]},
 	&"hole": {4: [0x04, 0x3C, 0x40, false], 110: [0x00, 0xEC, 0x40, false], 150: [0x02, 0x0C, 0x40, false]},
 }

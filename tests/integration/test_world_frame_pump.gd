@@ -314,35 +314,31 @@ func test_a_party_heal_request_is_settled_where_it_is_staged() -> void:
 	assert_true((save.party[0] as Gen2SaveMon).hp > 1, "the party healed with no press")
 
 
-## `Script_waitsfx` holds the script until the effect channels are free, and a
-## driver nobody is servicing would hold it for ever, so the wait gives up once
-## the rendered-frame count has stood still. Counted over
-## [constant Gen2AudioPlayer.SERVICE_GAP_FRAMES] rather than over one frame: the
-## buffer is filled to a depth rather than by the frame, and read as one frame
-## every `waitsfx` in the game ended on the frame after it started, so a badge, a
-## TM and every item jingle printed their line and replaced it unread.
-func test_a_sound_wait_survives_a_frame_the_driver_rendered_nothing_in() -> void:
+## `Script_waitsfx` holds the script until the effect channels are free. A
+## screen spending frames by hand spends the driver's frame with each of them,
+## so the wait lasts exactly as long as the effect does, past the
+## [constant Gen2AudioPlayer.SERVICE_GAP_FRAMES] a dead output is given up on.
+func test_a_sound_wait_lasts_as_long_as_the_effect_on_a_driven_screen() -> void:
 	_world_screen = await _open_world()
 	var player: Gen2AudioPlayer = _world_screen._audio_player
 	assert_not_null(player)
-	## What `playsound` leaves behind: `_CheckSFX` reads the channels rather than
-	## the request, so one of them being on is the whole of "a sound is playing".
-	var engine: Gen2SoundEngine = player.get("_engine")
-	engine.channels[Gen2SoundEngine.NUM_MUSIC_CHANNELS].channel_on = true
+	## One effect channel of two `sfx_note`s 64 ticks long, then `endchannel`.
+	var record: Dictionary = {
+		"index": 1, "bank": 2, "address": 0x4000, "data_address": 0x4000,
+		"bytes": [Gen2SoundEngine.NUM_MUSIC_CHANNELS, 0x03, 0x40,
+			0x3F, 0xF1, 0x00, 0x07, 0x3F, 0xF1, 0x00, 0x07, 0xFF],
+	}
+	assert_true(bool(player.play_record(record, &"sfx")["played"]))
 	assert_true(player.effect_playing())
-
+	var rendered: int = player.timeline_updates()
 	_world_screen._audio_waiting = true
-	_world_screen.advance_frame()
-	assert_true(
-		_world_screen._audio_waiting,
-		"one frame the driver rendered nothing in is not a stall"
-	)
-	for _frame: int in Gen2AudioPlayer.SERVICE_GAP_FRAMES + 2:
+	var held: int = 0
+	while _world_screen._audio_waiting and held < 600:
 		_world_screen.advance_frame()
-	assert_false(
-		_world_screen._audio_waiting,
-		"and a driver nobody services still gives the script back"
-	)
+		held += 1
+	assert_gt(held, Gen2AudioPlayer.SERVICE_GAP_FRAMES + 2, "the wait outlasts the gap a dead output is given")
+	assert_false(player.effect_playing(), "and ends the frame the effect does")
+	assert_eq(player.timeline_updates() - rendered, held, "one driver frame a screen frame")
 
 
 ## `Script_pokepic` puts its box up and `Script_cry` is the next command, so the

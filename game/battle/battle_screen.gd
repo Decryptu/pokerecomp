@@ -621,6 +621,10 @@ func frames_running() -> bool:
 ## [method advance_bars] and [method advance_intro] so a test or a screenshot
 ## driver can settle either without waiting on real time.
 func advance_frame() -> bool:
+	## The same rule as [method Gen2WorldScreen.advance_frame]: a fight driven by
+	## hand on a driver of its own clocks that driver a frame a frame.
+	if _owns_audio_player and not is_processing() and _audio_player != null:
+		_audio_player.advance_driver_frame()
 	if _box != null:
 		_box.advance_frame()
 	var was_running: bool = frames_running()
@@ -1048,9 +1052,21 @@ func _spend_auto_input_poll() -> void:
 ## One button, from the funnel rather than from an [InputEvent]. Public so the
 ## world can forward what it consumed and a tool can drive a fight by hand.
 func press_button(button: int) -> bool:
-	if not is_ready() or button == PokeButton.NONE:
+	if not is_ready() or button == PokeButton.NONE or _auto_input_owns_the_pad():
 		return false
 	return _handle_button(button)
+
+
+## `.oldManBattle` draws its cursors over `DelayFrames` and `TutorialPack` reads
+## `wSimulatedJoypadStates`, so a thumb on A while the tutor is choosing moves
+## nothing: a press that reached the menu here fought the demo with the tutor's
+## own stand-in party, and wrote that party over the player's empty one.
+func _auto_input_owns_the_pad() -> bool:
+	if _world_battle_active and _world_battle_tutorial:
+		var stage: StringName = _dude_auto_input_stage()
+		if stage != _auto_input_stage and _auto_input_streams().has(stage):
+			return true
+	return _auto_input_index < _auto_input.size() or _auto_input_delay > 0
 
 
 ## One hardware frame of everything this screen counts, including the party icons

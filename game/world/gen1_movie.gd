@@ -61,6 +61,7 @@ var _sound_wait: bool = false
 ## `PlayPikachuSoundClip`'s three `DelayFrame`s and its `di` to `ei`.
 var _clip_lead: int = 0
 var _clip_hold: int = 0
+var _clip_frames: int = 0
 var _clip: PackedByteArray = PackedByteArray()
 var _frame: int = 0
 var _phase: StringName = &""
@@ -153,6 +154,11 @@ func _sound_active() -> bool:
 ## `CheckForUserInterruption`, which only the opening reads.
 func _interrupted() -> bool:
 	return false
+
+
+## Whether this frame is inside a `check` step, the only frames a press reaches.
+func reads_joypad() -> bool:
+	return _check_left > 0
 
 
 ## The joypad's own end of frame.
@@ -438,7 +444,8 @@ func _play_cry(species: int) -> void:
 func _play_pikachu_clip(index: int) -> void:
 	_clip = _data.gen1_pikachu_cry(index)
 	_clip_lead = Gen1Layout.PIKACHU_CRY_LEAD_FRAMES
-	_clip_hold = Gen1Layout.pikachu_cry_frames(_clip.size()) - _clip_lead
+	_clip_frames = Gen1Layout.pikachu_cry_frames(_clip.size()) - _clip_lead
+	_clip_hold = _clip_frames
 	_emit(&"play_pikachu_clip", {"index": index})
 
 
@@ -459,6 +466,8 @@ func _clip_frame() -> bool:
 		return false
 	if _clip_hold <= 0:
 		return false
+	if _clip_hold < _clip_frames:
+		_sound.apu.advance_pcm_frame()
 	_clip_hold -= 1
 	if _clip_hold == 0:
 		_sound.end_pikachu_clip()

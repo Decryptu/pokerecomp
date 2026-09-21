@@ -1,12 +1,9 @@
 extends RefCounted
 
-## A Generation 1 fight, swept on Red, Blue and Yellow: the four moves every one
-## of the 151 species is created knowing, all 165 moves used once each through
-## the shared engine, `CriticalHitTest`'s chance over the whole base speed
-## column, one wild battle fought to a faint, and the four routines Generation 1
-## keeps where Crystal's command list does something else. The move sweep is what
-## the effect translation is worth: an effect byte that lands on the wrong list
-## either throws or stops producing events.
+## A Generation 1 fight, swept on Red, Blue and Yellow: the four moves every
+## species is created knowing, all 165 moves used once each, `CriticalHitTest`'s
+## chance over the base speed column, one wild battle to a faint, and the four
+## routines Generation 1 keeps where Crystal's command list does something else.
 
 const SPECIES_COUNT: int = 151
 const MOVE_COUNT: int = 165
@@ -1470,8 +1467,7 @@ func _check_oaks_throw(lab: Gen2WorldScreen, oak: Dictionary, how: String) -> vo
 
 
 ## The same fight the way a player reaches it, UP pressed a frame at a time up
-## Pallet Town's north path, with the sound driver clocked a frame a frame so
-## every `WaitForSoundToFinish` is waited for real.
+## Pallet Town's north path.
 const NORTH_PATH_CELL := Vector2i(10, 3)
 const NORTH_PATH_FRAMES: int = 1200
 const WILD_LINE_FRAMES: int = 200
@@ -1492,9 +1488,8 @@ func _oaks_battle_from_the_north_path() -> void:
 		if world.script_input_waiting() or (box.visible and not box.is_revealing()):
 			screen.press_button(PokeButton.A)
 		screen.advance_frame()
-		player.advance_driver_frame()
 	_r.check(screen.get("_battle_host") != null, "Oak never fought after %d frames." % frames)
-	var oak: Dictionary = _drive_tutor(screen, player)
+	var oak: Dictionary = _drive_tutor(screen)
 	var wild: String = WILD_LINE % String(_r.data.species(PIKACHU_DEX).get("name", ""))
 	var line_at: int = int((oak["frames_at"] as Dictionary).get(wild, TUTOR_GUARD_FRAMES))
 	_r.check(line_at < WILD_LINE_FRAMES, "%s took %d frames of the fight." % [wild.replace("\n", " "), line_at])
@@ -1512,7 +1507,7 @@ func _close_screen(screen: Gen2WorldScreen) -> void:
 	_r.close_screen(screen)
 
 
-func _drive_tutor(screen: Gen2WorldScreen, player: Gen2AudioPlayer = null) -> Dictionary:
+func _drive_tutor(screen: Gen2WorldScreen) -> Dictionary:
 	var messages: Array[String] = []
 	var frames_at: Dictionary = {}
 	var frames: int = 0
@@ -1520,8 +1515,6 @@ func _drive_tutor(screen: Gen2WorldScreen, player: Gen2AudioPlayer = null) -> Di
 	while frames < TUTOR_GUARD_FRAMES:
 		frames += 1
 		screen.advance_frame()
-		if player != null:
-			player.advance_driver_frame()
 		var current: Gen2BattleScreen = screen.get("_battle_host")
 		if host == null:
 			host = current

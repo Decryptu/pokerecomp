@@ -309,6 +309,13 @@ func start_pcm(bits: PackedByteArray, bits_per_frame: int) -> void:
 	_pcm_bits_per_frame = maxi(1, bits_per_frame)
 
 
+## The clip's bits are spent on the driver's clock rather than the output's, so
+## a screen spending frames by hand ends the clip on the same frame the device
+## does; a render reads the frame's own bits and moves nothing.
+func advance_pcm_frame() -> void:
+	_pcm_bit = mini(_pcm.size() * 8, _pcm_bit + _pcm_bits_per_frame)
+
+
 func pcm_active() -> bool:
 	return _pcm_bit < _pcm.size() * 8
 
@@ -532,7 +539,6 @@ func _render_pcm(mix: PackedInt32Array) -> void:
 		mix[at] += int(float(sample) * left)
 		mix[at + 1] += int(float(sample) * right)
 	_capacitor[2] = capacitor
-	_pcm_bit = mini(total, first + _pcm_bits_per_frame)
 
 
 func _render_noise(mix: PackedInt32Array) -> void:

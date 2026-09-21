@@ -1034,6 +1034,25 @@ func test_a_mystery_gift_block_round_trips_through_the_file() -> void:
 	assert_eq(restored.mystery_gift, save.mystery_gift)
 
 
+## `.FinishTutorial` keeps nothing: the tutor's stand-in party is not the
+## player's, and the save the battle writes carries the party it started with.
+func test_a_tutorial_writes_the_party_it_started_with() -> void:
+	var source: Gen2SaveData = _save()
+	var original: Gen2SaveMon = source.party[0]
+	var party: Gen2Party = Gen2WorldBattleAdapter.fallback_party(_data)
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data, party, Gen2Party.of(Gen2BattleMon.create(_data, Fixture.PIKACHU, 5, [Fixture.TACKLE])),
+		RandomNumberGenerator.new(), false
+	)
+	battle.battle_type = Gen2Battle.BATTLETYPE_TUTORIAL
+	party.at(0).hp = 1
+	var written: Gen2SaveData = Gen2SaveBattleAdapter.from_world_battle(_data, battle, source)
+	assert_not_null(written)
+	assert_eq(written.party.size(), source.party.size())
+	assert_eq((written.party[0] as Gen2SaveMon).species, original.species)
+	assert_eq((written.party[0] as Gen2SaveMon).hp, original.hp)
+
+
 func test_tower_exit_restores_the_original_party_and_heals_it() -> void:
 	for tower: bool in [false, true]:
 		var source: Gen2SaveData = _save()

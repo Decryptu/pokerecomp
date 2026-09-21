@@ -416,11 +416,9 @@ const SAFFRON_MAGNET_TRAIN_STATION_NUMBER: int = 9
 ## `yesorno` answers, zero-based the way RADIO_CARD_ANSWERS is: yes boards.
 const BOARD_THE_TRAIN: Array[int] = [0]
 
-## `maps/SaffronGym.asm` is nine rooms walled off from each other, joined only by
-## fifteen pairs of self-warps. Sabrina's room holds exactly one pad, warp 32 on
-## (11,9), and the only pad that reaches it is warp 17 on (1,5), so the way in is
-## a fixed chain rather than anything a walk can plan: the entrance room's only
-## pad, then one pad per room until the corner room that holds warp 17.
+## `maps/SaffronGym.asm` is nine rooms joined only by fifteen pairs of
+## self-warps, and the one pad into Sabrina's room is warp 17 on (1,5), so the
+## way in is a fixed chain of pads rather than anything a walk can plan.
 const SAFFRON_GYM_MAZE: Array[Vector2i] = [
 	Vector2i(11, 15),  # warp 3 -> 18 (19,17)
 	Vector2i(15, 17),  # warp 11 -> 26 (5,15)
@@ -459,10 +457,8 @@ const SAFFRON_ROUTE_7_GATE_DOOR: Vector2i = Vector2i(0, 24)
 ## price of this badge the way it was of the Thunder Badge.
 const CELADON_GYM_TREE_APPROACH: Vector2i = Vector2i(28, 34)
 ## `maps/CeladonGym.asm` declares neither a scene nor a callback, so Erika
-## answers as soon as she is faced. Her four trainers are sight lines across the
-## flower beds: the twins on (4,10)/(5,10) and Beauty Julia on (3,5) each watch
-## a whole row's only gap, and row 8's four cells are covered by Picnicker Tanya
-## and Lass Michelle between them, so three of the five fights are unavoidable.
+## answers as soon as she is faced. Her trainers' sight lines cover every gap in
+## the flower beds, so three of the five fights are unavoidable.
 const CELADON_GYM_DOOR: Vector2i = Vector2i(10, 29)
 const ERIKA_FACE: Vector2i = Vector2i(5, 4)
 ## ENGINE_RAINBOWBADGE's place in source badge order, and Celadon's flypoint.
@@ -490,11 +486,9 @@ const POWER_PLANT_NUMBER: int = 10
 const ROUTE_24_NUMBER: int = 15
 const ROUTE_25_NUMBER: int = 16
 
-## Route 9 is sealed from Cerulean's own crossing by one COLL_CUT_TREE on (5,8),
-## faced from (4,8) heading east and from (6,8) heading back west. The same cut
-## opens the shore on (42,4), which is the only way to the Power Plant: the
-## plant's region has no map edge and no walkable neighbour, and Route 10
-## North's own southern shore is behind a buoy line that walls its north face.
+## Route 9 is sealed from Cerulean by one COLL_CUT_TREE on (5,8), faced from
+## (4,8) heading east and (6,8) heading back. The same cut opens the shore on
+## (42,4), the only way to the Power Plant.
 const ROUTE_9_CUT_EAST_APPROACH: Vector2i = Vector2i(4, 8)
 const ROUTE_9_CUT_WEST_APPROACH: Vector2i = Vector2i(6, 8)
 const ROUTE_9_SHORE: Vector2i = Vector2i(42, 4)
@@ -650,11 +644,9 @@ const BLUE_FACE: Vector2i = Vector2i(8, 6)
 const EVENT_VIRIDIAN_GYM_BLUE: int = 1910
 const ENGINE_FLYPOINT_CINNABAR: int = 63
 
-## Cinnabar's east edge is one cell, (19,16), and it is water, so the leg surfs
-## again from the same shore it landed on. `Route20ClearRocksCallback` is a
-## MAPCALLBACK_NEWMAP, so arriving is what sets EVENT_CINNABAR_ROCKS_CLEARED and
-## unseals Fuchsia's south edge; nothing on the route walks that way, but the
-## flag is the reason this leg comes before Viridian's.
+## Cinnabar's east edge is one water cell, (19,16), so the leg surfs again from
+## the shore it landed on. Arriving runs `Route20ClearRocksCallback`, which sets
+## EVENT_CINNABAR_ROCKS_CLEARED: the reason this leg comes before Viridian's.
 const CINNABAR_SURF_APPROACH: Vector2i = Vector2i(4, 10)
 const EVENT_CINNABAR_ROCKS_CLEARED: int = 215
 ## Route 20's island is landed on from the east: its west channel is walled off
@@ -694,11 +686,9 @@ const ROUTE_22_NUMBER: int = 2
 ## `maps/SilverCaveOutside.asm`'s MAPCALLBACK_NEWMAP, the leg's one flypoint.
 const ENGINE_FLYPOINT_SILVER_CAVE: int = 76
 
-## Pallet Town and Oak's lab. `maps/OaksLab.asm`'s Oak reads VAR_BADGES and takes
-## `.OpenMtSilver` only on `ifequal NUM_BADGES`, which is sixteen
-## (`constants/ram_constants.asm`), so this errand is the last badge's own
-## reward. Every branch then falls into `.CheckPokedex` and its
-## `special ProfOaksPCBoot`.
+## Pallet Town and Oak's lab. `maps/OaksLab.asm`'s Oak takes `.OpenMtSilver`
+## only on `ifequal NUM_BADGES`, sixteen, so this errand is the last badge's own
+## reward; every branch then falls into `.CheckPokedex`.
 const OAKS_LAB_DOOR: Vector2i = Vector2i(12, 11)
 const OAKS_LAB_EXIT: Vector2i = Vector2i(4, 11)
 const OAK_FACE: Vector2i = Vector2i(4, 3)
@@ -934,11 +924,8 @@ func _players_house_leg(
 	data: GameData,
 	path: Array,
 ) -> Dictionary:
-	# The bedroom's MAPCALLBACK_NEWMAP is what runs InitializeEventsScript
-	# (maps/PlayersHouse2F.asm's PlayersHouse2FInitializeRoomCallback), which
-	# sets the story's initial event flags. Skipping it left the walked route on
-	# a different flag baseline from a real new game, where world_screen.gd
-	# dispatches the same callbacks on the spawn map.
+	# The bedroom's MAPCALLBACK_NEWMAP runs InitializeEventsScript, which sets
+	# the story's initial event flags the way a real new game's spawn does.
 	var bedroom_run: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data, true
 	)
@@ -1230,11 +1217,8 @@ func _zephyr_badge_path(
 	if not bool(pokecenter.get("ok", false)):
 		return pokecenter
 
-	# VioletPokecenter1F places the nurse object at block (3,1); the counter
-	# tile directly below her at (3,2) is not walkable, so ordinary pathfinding
-	# cannot reach it (a counter, not a ledge; Gen2WorldCollision.allows_hop
-	# does not apply). The player is placed there directly rather than
-	# guessing an unverified counter-side approach.
+	# VioletPokecenter1F's nurse stands on (3,1) behind a counter no walk can
+	# reach across, so the player is placed on (3,2) directly.
 	world.player_cell = Vector2i(3, 2)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	var nurse_events: Array = world.interact()
@@ -3074,11 +3058,9 @@ func _rocket_hideout_transmitter_leg(
 	})
 	if not bool(transmitter_door.get("ok", false)):
 		return _leg_failed(path, "B2F transmitter door failed", transmitter_door)
-	# Stepping onto the cell north of that door is the executive's coord event,
-	# and it ends by arming the electrodes.
-	# The scene walks the player itself and then confines them with the
-	# electrodes, so the walk is expected not to reach its own target: what says
-	# the executive happened is the scene moving on.
+	# The cell north of that door is the executive's coord event, whose scene
+	# walks the player itself and confines them with the electrodes: the scene
+	# moving on is what says it happened, not the walk reaching its target.
 	var boss_f: Dictionary = _walk_cell_resolving(world, Vector2i(14, 11), save, random, data)
 	var electrodes_armed: bool = world.state.map_scene(rocket_b2f.x, rocket_b2f.y) == 2
 	path.append({
@@ -3180,11 +3162,9 @@ func _mahogany_gym_leg(
 		"badge_count": world.state.badge_count(Gen2WorldState.is_crystal_profile(data)),
 		"engine_flags": world.state.engine_flags(),
 		"items": _named_items(data, world.state.items()),
-		# The badge is not all Pryce commits. `readvar VAR_BADGES` then
 		# `scall MahoganyGymActivateRockets` reaches RadioTowerRocketsScript at
-		# seven badges, which is what retires Mahogany's RageCandyBar coord
-		# events and hides the merchant blocking the east exit. Reported here
-		# because the next leg cannot start without both.
+		# seven badges, which retires the RageCandyBar coord events and hides
+		# the merchant blocking the east exit; the next leg needs both.
 		"mahogany_scene": world.state.map_scene(
 			MAHOGANY_TOWN_GROUP, MAHOGANY_TOWN_NUMBER
 		),
@@ -3965,10 +3945,8 @@ func _kanto_approach_path(
 
 
 ## The Dragon's Den back to New Bark Town, the way in reversed. Crystal clears
-## the whirlpool twice: `complete_whirlpool()` is a transient block override, so
-## the warp into the shrine restored (10,20). Gold and Silver enter no map in
-## between, so their first clear holds. Blackthorn's exit is south: Route 45 into
-## Route 46 into the Route 29 gate, Route 46 walked downhill only.
+## the whirlpool twice, the warp into the shrine having restored (10,20).
+## Blackthorn's exit is south: Route 45, Route 46 downhill, the Route 29 gate.
 func _blackthorn_departure(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4007,11 +3985,8 @@ func _blackthorn_departure(
 	if not bool(entered.get("ok", false)):
 		return _leg_failed(path, "Dragon's Den return surf failed", entered)
 
-	# The Rising Badge is in, so WATERFALL is usable from here on, and this is
-	# the water it can be learned on: Dragon's Den B1F's own table is the only
-	# one the walked route surfs that carries a species which learns it
-	# (`data/wild/johto_water.asm` DRATINI, against MAGIKARP in the other two
-	# slots). None of the party can.
+	# WATERFALL is usable from here on, and Dragon's Den B1F's water is the only
+	# table the route surfs with a species that learns it: DRATINI.
 	var dratini: Dictionary = _catch_field_move_mon(
 		world, save, random, data, path,
 		Gen2WorldFieldMove.MOVE_WATERFALL, "dragons_den_catch_for_waterfall"
@@ -4374,11 +4349,9 @@ func _victory_road_gate_leg(
 	return {"ok": true}
 
 
-## Victory Road and Route 23 to the Indigo Plateau Pokemon Center.
-## Victory Road is a warp maze, not one floor: the gate's entrance region
-## reaches only the ladder at (1,49), whose pair lands on (1,35) in a second
-## region, whose ladder at (13,31) lands on (13,17) in the third. Only that
-## third region holds the rival's coord event and the exit to Route 23.
+## Victory Road and Route 23 to the Indigo Plateau Pokemon Center. Victory Road
+## is three regions joined by two ladder pairs, and only the third holds the
+## rival's coord event and the exit to Route 23.
 func _victory_road_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4425,10 +4398,8 @@ func _victory_road_leg(
 	if not bool(to_plateau.get("ok", false)):
 		return _leg_failed(path, "Indigo Plateau unreachable", to_plateau)
 
-	# PlateauRivalBattle1 and 2 open on EVENT_BEAT_RIVAL_IN_MT_MOON, which this
-	# route never reaches, so the coord event runs to PlateauRivalScriptDone. That
-	# branch ends without a `setscene`, so the event stays armed: the cell is
-	# stepped onto once rather than walked to, or a resolving walk would
+	# PlateauRivalScriptDone ends without a `setscene`, so the event stays
+	# armed: the cell is stepped onto once, or a resolving walk would
 	# re-dispatch it until it ran out of attempts.
 	var approach: Dictionary = _walk_cell_resolving(
 		world, PLATEAU_RIVAL_APPROACH, save, random, data
@@ -4704,11 +4675,8 @@ func _kanto_crossing_path(
 	return {"ok": true, "world": spawned}
 
 
-## Olivine Port to Vermilion City on the S.S. Aqua. `HallOfFameEnterScript`
-## swaps the two port sprite flags, moving the sailor off the port's coord event
-## at (7,15). The first crossing is the granddaughter's: `.CanArrive` wants
-## EVENT_FAST_SHIP_FOUND_GIRL or EVENT_FAST_SHIP_FIRST_TIME, so the ship docks
-## only once `SSAquaMetalCoatAndDocking` has run, which sets both flags itself.
+## Olivine Port to Vermilion City on the S.S. Aqua. The first crossing is the
+## granddaughter's: `.CanArrive` wants a flag `SSAquaMetalCoatAndDocking` sets.
 func _ss_aqua_crossing(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4756,11 +4724,9 @@ func _ss_aqua_crossing(
 	return _ss_aqua_worried_grandpa(world, save, random, data, path)
 
 
-## New Bark Town back to Olivine City, the way the route first walked it, in
-## reverse where it overlaps and forward where it does not.
-## Two of the joins are gate buildings rather than map connections: Route 31's
-## west edge is wall on every row, so `Route31VioletGate` is the only way into
-## Violet City, and Ecruteak's west exit is `Route38EcruteakGate`.
+## New Bark Town back to Olivine City. Two of the joins are gate buildings:
+## `Route31VioletGate` is the only way into Violet City, and Ecruteak's west
+## exit is `Route38EcruteakGate`.
 func _walk_west_to_olivine(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4945,11 +4911,8 @@ func _ss_aqua_b1f_sailor(
 	return {"ok": true}
 
 
-## The lazy sailor in the NE cabin, whose own script stands the B1F pair down.
-## `FastShipLazySailorScript` is a trainer battle inside an OBJECTTYPE_SCRIPT
-## object, and its tail is what matters here: `setevent
-## EVENT_FAST_SHIP_LAZY_SAILOR` and `setmapscene FAST_SHIP_B1F,
-## SCENE_FASTSHIPB1F_NOOP`, which retires both coord events for good.
+## The lazy sailor in the NE cabin: `FastShipLazySailorScript`'s tail sets
+## EVENT_FAST_SHIP_LAZY_SAILOR and SCENE_FASTSHIPB1F_NOOP, retiring both coord events.
 func _ss_aqua_lazy_sailor(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -5142,11 +5105,8 @@ func _marsh_badge_path(
 	return _saffron_gym_leg(world, save, random, data, path)
 
 
-## The warp maze, then Sabrina.
-## Every pad is one half of a bidirectional pair, so a wrong one is recoverable
-## rather than fatal, but only warp 17 reaches Sabrina's room at all. The walk
-## between pads is ordinary: within a room the floor is open, and the BFS treats
-## every other pad as a wall, which is what keeps it from wandering onto one.
+## The warp maze, then Sabrina. Every pad is half of a pair, so a wrong one is
+## recoverable, and the BFS treats every other pad as a wall.
 func _saffron_gym_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -5429,11 +5389,9 @@ func _machine_part_errand(
 	return _cerulean_gym_leg(world, save, random, data, path)
 
 
-## Misty, once the errand has put her in her gym. Swimmer Diana watches the one
-## row every route to Misty crosses, and Parker and Briana the pool's two
-## columns, so one of the pair is met either way. All three walk over water to
-## the player, since `SeenByTrainerScript`'s steps reach `NormalStep` and check no
-## permission. Misty sets all three beaten flags with her own.
+## Misty, once the errand has put her in her gym. Her swimmers' sight lines
+## cover every way to her and they walk over water to the player, since
+## `SeenByTrainerScript`'s steps check no permission.
 func _cerulean_gym_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -5476,11 +5434,9 @@ func _cerulean_gym_leg(
 	return _lavender_leg(world, save, random, data, path)
 
 
-## Cerulean Gym back through Saffron to Lavender Town and the Kanto Radio Tower.
-## Of Route 8's five trainers only Super Nerd Tom cannot be routed around: the
-## three bikers watch the corridor west of the eight `$a3` hop-down ledges, and
-## the walk hops off row 6 onto row 8 east of them. The leg is for the EXPN CARD,
-## gated on `EVENT_RETURNED_MACHINE_PART`, which the Cerulean errand already set.
+## Cerulean Gym back through Saffron to Lavender Town and the Kanto Radio Tower,
+## for the EXPN CARD behind `EVENT_RETURNED_MACHINE_PART`. Of Route 8's five
+## trainers only Super Nerd Tom cannot be routed around.
 func _lavender_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -5808,11 +5764,9 @@ func _magnet_train_ride(
 	return {"ok": true}
 
 
-## Lavender Town south to Fuchsia City and the Soul Badge: four plain connections
-## and one door, with eighteen trainers on the way. `tools/checks/fuchsia.gd`
-## measures which a walk owes: only Route 13's Pokefan Joshua and Hiker Kenny
-## stand where their sight line seals the way south. The gym's four disguised
-## trainers are `OBJECTTYPE_SCRIPT`, so Janine sets their beaten flags herself.
+## Lavender Town south to Fuchsia City and the Soul Badge. `tools/checks/fuchsia.gd`
+## measures which of the eighteen trainers a walk owes: Route 13's Pokefan
+## Joshua and Hiker Kenny. Janine sets her disguised trainers' flags herself.
 func _fuchsia_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,

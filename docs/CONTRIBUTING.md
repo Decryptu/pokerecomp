@@ -75,6 +75,13 @@ not corrected.
 trace. That trace is the parity artefact: any faithful implementation of the
 same driver writes the same registers in the same order on the same frames.
 
+The driver's clock is the audio output's on a device and the screen's frame
+when a tool, a check or a replay spends frames by hand (`advance_frame` with
+the screen's own `_process` off): `Gen2AudioPlayer.advance_driver_frame` runs
+one driver frame, and once a caller has taken the clock the output's timeline
+stands aside. A wait on a sound is therefore real in every check, and one that
+never ends fails there rather than on a phone.
+
 ## Generations
 
 Each generation owns its offsets, its importer and its text codec, and shares
