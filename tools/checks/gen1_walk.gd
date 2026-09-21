@@ -1650,8 +1650,16 @@ func _check_the_mart_counter_flow() -> void:
 	_press_the_counter(host, [PokeButton.DOWN, PokeButton.A, PokeButton.DOWN, PokeButton.A])
 	_r.check(host._mart_stage == Gen2WorldServiceScreen.MART_TOP,
 		"an HM left the shop on %s." % host._mart_stage)
-	## SELL, one POTION, YES: the list again, straight away.
-	_press_the_counter(host, [PokeButton.DOWN, PokeButton.A, PokeButton.A, PokeButton.A])
+	## SELL, then `HandleItemListSwapping`: SELECT on the POTION, SELECT on the
+	## HM, and the two rows trade places.
+	_press_the_counter(host, [PokeButton.DOWN, PokeButton.A, PokeButton.SELECT, PokeButton.DOWN,
+		PokeButton.SELECT])
+	_r.check(host._mart_stage == Gen2WorldServiceScreen.MART_SELL
+		and int((host._mart_sell_entries[0] as Dictionary).get("item", 0)) == HM01_ITEM
+		and int((host._mart_sell_entries[1] as Dictionary).get("item", 0)) == Gen1Layout.ITEM_POTION,
+		"SELECT twice left the bag as %s." % [host._mart_sell_entries])
+	## One POTION off its new row, YES: the list again, straight away.
+	_press_the_counter(host, [PokeButton.A, PokeButton.A])
 	_r.check(host._mart_stage == Gen2WorldServiceScreen.MART_SELL_CONFIRM,
 		"the sale asked on %s." % host._mart_stage)
 	host.handle_button(PokeButton.A)
@@ -1664,7 +1672,7 @@ func _check_the_mart_counter_flow() -> void:
 			world.state.item_quantity(Gen1Layout.ITEM_POTION),
 		])
 	_r.close_screen(screen)
-	_r.note("gen1 walk the mart's two refusals and a sale on the screen")
+	_r.note("gen1 walk the mart's two refusals, a SELECT swap and a sale on the screen")
 
 
 ## The greeting's presses until `mart_requested` opens the counter.

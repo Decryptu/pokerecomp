@@ -181,6 +181,8 @@ var _pc_action: int = -1
 var _pc_entries: Array = []
 ## `wSwitchItem` less one: the PC row an earlier SELECT marked, or -1 for none.
 var _pc_switch: int = -1
+## `wMenuItemToSwap` less one on a Generation 1 counter's sell list.
+var _mart_sell_switch: int = -1
 var _pc_quantity: int = 1
 ## The PC's own text boxes and what happens once the last is acknowledged:
 ## `PROF.OAK'S PC` returns to the top menu and `TURN OFF` shuts the machine down.
@@ -505,14 +507,16 @@ func _apply_pc_switch_press() -> void:
 	var order: Array = []
 	for entry: Dictionary in _pc_entries:
 		order.append(int(entry.get("item", 0)))
-	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pc_switch, _cursor)
+	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pc_switch, _cursor, _gen1_pc)
 	var next_order: Array = answer["order"]
 	if next_order != order and _world != null:
 		Gen2WorldBagHost.reorder(_world, _save, next_order, not _pc_list_is_bag())
 		_refresh_pc_entries()
-		## `PC_PlaySwapItemsSound`, which is the pack's own pair of effects.
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+		## `PC_PlaySwapItemsSound`, which is the pack's own pair of effects;
+		## `HandleItemListSwapping` plays nothing.
+		if not _gen1_pc:
+			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
 	_pc_switch = int(answer["held"])
 	_render_rows()
 
@@ -1490,6 +1494,7 @@ func _open_mart_sell() -> void:
 	_refresh_mart_sell_entries()
 	_mart_scroll = 0
 	_mart_quantity = 1
+	_mart_sell_switch = -1
 	if _mart_sell_entries.is_empty():
 		## `PokemartItemBagEmptyText`, which Generation 2's `SellMenu` has no
 		## box for; both shops ask again behind it.
@@ -1522,6 +1527,8 @@ func _press_mart_sell_list(button: int) -> void:
 			_move_mart_cursor(1)
 		PokeButton.B:
 			_leave_mart()
+		PokeButton.SELECT:
+			_press_mart_sell_select()
 		PokeButton.A:
 			var entry: Dictionary = _mart_selection()
 			if entry.is_empty():
@@ -1533,11 +1540,32 @@ func _press_mart_sell_list(button: int) -> void:
 				_show_mart_text(_mart_text("cant_buy"), _gen1_refusal_after(MART_SELL))
 				return
 			_mart_quantity = 1
+			## `DisplayListMenuID` zeroes `wMenuItemToSwap` on A and on entry.
+			_mart_sell_switch = -1
 			_mart_pages = Gen2TextLayout.lay_out(
 				_mart_text("sell_how_many"), MART_TEXT_COLUMNS, MART_TEXT_ROWS
 			)
 			_mart_stage = MART_SELL_QUANTITY
 			_render_mart()
+
+
+## `.sellMenuLoop` is an `ITEMLISTMENU`, so `HandleItemListSwapping` runs on
+## its SELECT the way it does in the bag; `DepositSellPack` has none.
+func _press_mart_sell_select() -> void:
+	if not _gen1_mart():
+		return
+	var order: Array = []
+	for entry: Dictionary in _mart_sell_entries:
+		order.append(int(entry.get("item", 0)))
+	var answer: Dictionary = Gen2WorldPack.switch_items(
+		order, _mart_sell_switch, _mart_scroll + _cursor, true
+	)
+	var next_order: Array = answer["order"]
+	if next_order != order and _world != null:
+		Gen2WorldBagHost.reorder(_world, _save, next_order, false, _persist)
+		_refresh_mart_sell_entries()
+	_mart_sell_switch = int(answer["held"])
+	_render_mart()
 
 
 ## `Toss_Sell_Loop` is the same dial the purchase uses, bounded by the stack the

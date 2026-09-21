@@ -544,14 +544,17 @@ func _apply_switch_press() -> void:
 	var order: Array = []
 	for row: Dictionary in _current_pocket_items():
 		order.append(int(row.get("item", 0)))
-	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pack_switch, _pack_cursor)
+	var gen1: bool = _data != null and _data.generation == RomRegistry.GEN1
+	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pack_switch, _pack_cursor, gen1)
 	var next_order: Array = answer["order"]
 	if next_order != order and _world != null:
 		Gen2WorldBagHost.reorder(_world, _pack_save, next_order, false, _pack_persist)
 		_open_pack_mode(false)
-		## `.place_insert` asks for the same effect twice through `WaitPlaySFX`.
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+		## `.place_insert` asks for the same effect twice through `WaitPlaySFX`;
+		## `HandleItemListSwapping` plays nothing.
+		if not gen1:
+			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
 	_pack_switch = int(answer["held"])
 
 

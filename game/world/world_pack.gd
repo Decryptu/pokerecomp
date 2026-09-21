@@ -214,10 +214,22 @@ static func row_description(data: GameData, item: int) -> String:
 ## zero means none; -1 is that same "none" here. `.try_combining_stacks` cannot
 ## fire: the flat item model has one stack per item, so no two rows carry the same
 ## item number.
-static func switch_items(order: Array, held: int, cursor: int) -> Dictionary:
+## Generation 1's `HandleItemListSwapping` is [param exchange]: the two rows
+## trade places, a press on CANCEL or on the marked row itself is ignored with
+## the mark kept, and `.swapSameItemType` cannot fire for the same reason.
+static func switch_items(order: Array, held: int, cursor: int, exchange: bool = false) -> Dictionary:
 	var moved: Array[int] = []
 	for entry: Variant in order:
 		moved.append(int(entry))
+	if exchange:
+		if cursor < 0 or cursor >= moved.size() or cursor == held:
+			return {"order": moved, "held": held}
+		if held < 0 or held >= moved.size():
+			return {"order": moved, "held": cursor}
+		var first: int = moved[held]
+		moved[held] = moved[cursor]
+		moved[cursor] = first
+		return {"order": moved, "held": -1}
 	if held < 0 or held >= moved.size():
 		## `.init`: the first press only marks. A press on CANCEL marks nothing,
 		## because `ItemSwitch_GetNthItem` would read the terminator.
