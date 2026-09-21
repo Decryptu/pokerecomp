@@ -166,7 +166,9 @@ func _background(page: Dictionary, data: GameData) -> PackedInt32Array:
 	)
 	return Gen2PicImage.canvas_from_attributes(
 		indices, COLUMNS * TILE, ROWS * TILE, attributes(), COLUMNS,
-		[data.move_screen_palette(), data.bar_palette(GameData.hp_bar_palette_name(lit))]
+		[data.move_screen_palette(), data.bar_palette(
+			GameData.hp_bar_palette_name(lit, data.generation == RomRegistry.GEN1)
+		)]
 	)
 
 

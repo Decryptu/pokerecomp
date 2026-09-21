@@ -340,6 +340,7 @@ var _player_step_direction: Vector2i = Vector2i.ZERO
 var _player_step_passes_total: int = 0
 var _player_step_passes_remaining: int = 0
 var _player_step_began: bool = false
+var _player_step_landed_frame: int = -1
 ## Whether the step in flight is a ledge hop, which is the only one the source
 ## gives a jump arc. See player_jump_offset().
 var _player_jumping: bool = false
@@ -1206,6 +1207,7 @@ func advance_player_step_pass() -> bool:
 			_pass_overrun_frames += STEP_START_OVERRUN_FRAMES
 	_player_step_passes_remaining -= 1
 	if _player_step_passes_remaining <= 0:
+		_player_step_landed_frame = frame_number
 		if pikachu != null:
 			pikachu.on_player_step_landed()
 		_gen1_hop_landed = _gen1 and _player_jumping
@@ -4136,6 +4138,8 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"warp_to": &"_gen1_node_warp_to",
 	"text_table": &"_gen1_node_text_table",
 	"object_position": &"_gen1_node_object_position",
+	"object_position_save": &"_gen1_node_object_position_kept",
+	"object_position_restore": &"_gen1_node_object_position_kept",
 	"heal_party": &"_gen1_node_heal_party",
 	"hall_of_fame": &"_gen1_node_hall_of_fame",
 	"save_game": &"_gen1_node_save_game",
@@ -4408,6 +4412,7 @@ func _gen1_sign_or_sprite() -> Array:
 	if event.is_empty():
 		event = _gen1_event_at(object_facing_cell(), &"objects")
 		_gen1_last_sprite_index = int(event.get("object_index", -1))
+		_gen1_face_talked_object(_gen1_last_sprite_index)
 	if event.is_empty() and pikachu != null \
 		and pikachu.stands_in_front(player_cell, facing_direction()):
 		pikachu.status |= Gen1Pikachu.STATUS_FACE_PLAYER
@@ -4423,6 +4428,16 @@ func _gen1_sign_or_sprite() -> Array:
 		return steps
 	var text: String = gen1_filled_text(String(row.get("text", "")))
 	return [] if text.is_empty() else [{"type": &"text", "text": text}]
+
+
+## `IsSpriteInFrontOfPlayer`'s BIT_FACE_PLAYER; the talk's $7f lands on slot fifteen.
+func _gen1_face_talked_object(index: int) -> void:
+	if index < 0 or index >= objects.size() \
+		or bool(_gen1_volatile.get("no_npc_face_player", false)):
+		return
+	(objects[index] as Gen2WorldObject).facing = _facing_toward(
+		(objects[index] as Gen2WorldObject).cell, player_cell
+	)
 
 
 ## `PrintCardKeyText`: the CARD KEY opens the door in front of the player and
@@ -5858,6 +5873,12 @@ func _gen1_node_object_position(node: Dictionary, steps: Array, _run: Dictionary
 		"type": &"object_position", "index": int(node["object"]),
 		"axis": String(node["axis"]), "value": int(node["value"]),
 	})
+	return true
+
+
+## `GetSpritePosition2` and `SetSpritePosition2`, WRAM the same visit reads back.
+func _gen1_node_object_position_kept(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append({"type": StringName(node["op"]), "index": int(node["object"])})
 	return true
 
 
@@ -7351,8 +7372,7 @@ func gen1_safari_active() -> bool:
 		and state.is_event_flag_active(Gen1Layout.IN_SAFARI_ZONE_EVENT)
 
 
-## `SafariZoneCheckSteps`, in front of `CheckWarpsNoCollision`. The counter is
-## read before it is decremented, so a zero ends the game on that step.
+## `SafariZoneCheckSteps`: the counter is read before it is decremented.
 func gen1_count_safari_step() -> bool:
 	if not gen1_safari_active():
 		return false
@@ -7772,8 +7792,8 @@ func _gen1_drawn(step: Dictionary, events: Array) -> bool:
 		&"warp_to":
 			events.append(_gen1_warp_to(int(step["map"]), int(step["warp"])))
 			return true
-		&"object_position":
-			_gen1_place_object(int(step["index"]), String(step["axis"]), int(step["value"]))
+		&"object_position", &"object_position_save", &"object_position_restore":
+			_gen1_object_position_step(step)
 			return true
 		&"walk":
 			events.append_array(_gen1_walk_player(step["moves"] as Array))
@@ -7896,6 +7916,21 @@ func _gen1_warp_to(map_number: int, warp: int) -> Dictionary:
 	return {"type": &"warp", "from_map": from_map, "to_map": map_id(), "to_cell": player_cell}
 
 
+func _gen1_object_position_step(step: Dictionary) -> void:
+	var index: int = int(step["index"])
+	var type: StringName = StringName(step["type"])
+	if type == &"object_position":
+		_gen1_place_object(index, String(step["axis"]), int(step["value"]))
+	elif index < 0 or index >= objects.size():
+		return
+	elif type == &"object_position_save":
+		_gen1_saved_object_position = {"index": index, "cell": objects[index].cell}
+	elif int(_gen1_saved_object_position.get("index", -1)) == index:
+		var cell: Vector2i = _gen1_saved_object_position["cell"]
+		_gen1_place_object(index, "y", cell.y)
+		_gen1_place_object(index, "x", cell.x)
+
+
 func _gen1_place_object(index: int, axis: String, value: int) -> void:
 	if index < 0 or index >= objects.size():
 		return
@@ -7905,6 +7940,9 @@ func _gen1_place_object(index: int, axis: String, value: int) -> void:
 	else:
 		object.cell.x = value
 	_remember_object_position(object)
+
+
+var _gen1_saved_object_position: Dictionary = {}
 
 
 func _gen1_start_movement_script(table: int, object: int) -> void:
@@ -7967,10 +8005,19 @@ func _gen1_pallet_movement(function: int, events: Array) -> void:
 			_gen1_movement_script = {}
 
 
+## `PewterGuys` writes the player's row over the last press `DecodeRLEList` wrote.
 func _gen1_pewter_movement(table: int, function: int, events: Array) -> void:
 	if function == 0:
 		var lists: Dictionary = _gen1_movement_lists(table)
-		events.append_array(_gen1_walk_player(lists.get("player", [])))
+		var walk: Array = (lists.get("player", []) as Array).duplicate(true)
+		for row: Dictionary in lists.get("approaches", []):
+			if int(row["y"]) != player_cell.y or int(row["x"]) != player_cell.x:
+				continue
+			if not walk.is_empty():
+				(walk[0] as Dictionary)["steps"] = int((walk[0] as Dictionary)["steps"]) - 1
+			walk = (row["presses"] as Array) + walk
+			break
+		events.append_array(_gen1_walk_player(walk))
 		events.append_array(_gen1_walk_object(
 			int(_gen1_movement_script["object"]), lists.get("object", [])
 		))
@@ -8123,10 +8170,14 @@ func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
 
 
 ## `CollisionCheckOnLand` skips every test while `wSimulatedJoypadStatesIndex`
-## stands, so only the map bounds refuse. The row ends before the walk is drawn.
+## stands, so only the map bounds refuse.
 func _gen1_walk_player(moves: Array) -> Array:
 	var generated: Array = []
 	for leg: Dictionary in moves:
+		if int(leg["direction"]) == Gen1Layout.MOVE_NONE:
+			for _pass: int in int(leg["steps"]):
+				_queue_player_step(Vector2i.ZERO, 1, false, Vector2i.ZERO, STEP_KIND_WALK)
+			continue
 		var direction: Vector2i = movement_direction(int(leg["direction"]))
 		for _step: int in int(leg["steps"]):
 			var destination: Vector2i = player_cell + direction
@@ -8145,8 +8196,7 @@ func _gen1_walk_player(moves: Array) -> Array:
 
 ## `MoveSprite`, whose whole list is queued here and drawn a step at a time by
 ## [method advance_scripted_steps_pass]. `CanWalkOntoTile` allows a scripted step
-## outright, so only the map bounds refuse one, and `.reachedEnd` puts STAY back
-## over the movement byte the map gave the object.
+## outright, so only the map bounds refuse one.
 func _gen1_walk_object(index: int, moves: Array) -> Array:
 	var generated: Array = []
 	if current_map == null or index < 0 or index >= objects.size():
@@ -8178,8 +8228,7 @@ func _gen1_walk_object(index: int, moves: Array) -> Array:
 
 
 ## `SetSpriteMovementBytesToFF`: STAY over movement byte 1 and NONE over byte 2,
-## which is the template a script stops a wanderer with. The write is WRAM the
-## next map load fills from `wMapSpriteData`, so nothing is recorded for it.
+## WRAM the next map load fills from `wMapSpriteData`, so nothing is recorded.
 func _gen1_stand_object(index: int) -> void:
 	if index < 0 or index >= objects.size():
 		return
@@ -10260,15 +10309,13 @@ func _decide_object_movement(object: Gen2WorldObject, random: RandomNumberGenera
 	var direction: Vector2i = object.next_direction(random)
 	if direction == Vector2i.ZERO:
 		return false
-	# InitStep writes the facing before CanObjectMoveInDirection is asked, so a
-	# refused step still turns the object.
+	# InitStep writes the facing before CanObjectMoveInDirection is asked.
 	object.apply_direction(direction)
 	var destination: Vector2i = object.cell + direction
 	if not _object_may_leave(object, destination, direction) \
-		or not _object_stays_on_screen(destination) \
+		or not _object_stays_on_screen(object.cell, direction) \
 		or not can_object_walk_to(destination, object, direction):
-		# _RandomWalkContinue's .new_duration branch: a blocked object keeps its
-		# cell and waits again before trying another direction.
+		# _RandomWalkContinue's .new_duration branch: a blocked object waits again.
 		object.start_idle(_rolled_idle_passes(random, IDLE_MASK_SLOW))
 		return false
 	object.cell = destination
@@ -10276,7 +10323,6 @@ func _decide_object_movement(object: Gen2WorldObject, random: RandomNumberGenera
 	return true
 
 
-## The four spin templates: pick a facing, wait, never step.
 func _decide_object_spin(object: Gen2WorldObject, random: RandomNumberGenerator) -> bool:
 	if object.movement in Gen2WorldObject.SPIN_NEXT_FACING:
 		var table: Array = Gen2WorldObject.SPIN_NEXT_FACING[object.movement]
@@ -10289,8 +10335,7 @@ func _decide_object_spin(object: Gen2WorldObject, random: RandomNumberGenerator)
 		return true
 	if object.movement != Gen2WorldObject.MOVEMENT_SPINRANDOM_FAST:
 		return false
-	# MovementFunction_RandomSpinFast turns a repeat into the opposite facing,
-	# `xor %00001100` on the direction being `^ 3` here, so it never stands twice.
+	# MovementFunction_RandomSpinFast's `xor %00001100` is `^ 3`: never the same twice.
 	var rolled: int = random.randi() & 3
 	object.facing = rolled if rolled != object.facing else rolled ^ 3
 	object.start_idle(_rolled_idle_passes(random, IDLE_MASK_FAST))
@@ -10304,8 +10349,7 @@ func _rolled_idle_passes(random: RandomNumberGenerator, mask: int) -> int:
 
 
 ## The movement radius in Generation 2, and in Generation 1 the displacement
-## counters of [constant Gen1Layout.OBJECT_WALK_ORIGIN], which the distance the
-## object has come carries: each accepted step moves both alike.
+## counters of [constant Gen1Layout.OBJECT_WALK_ORIGIN], carried by the distance come.
 func _object_may_leave(
 	object: Gen2WorldObject, destination: Vector2i, direction: Vector2i
 ) -> bool:
@@ -10320,13 +10364,30 @@ func _object_may_leave(
 	return direction.x >= 0 or walked.x > 0
 
 
-## `IsObjectMovingOffEdgeOfScreen`, the refusal beside the movement radius in
-## `CanObjectMoveInDirection`; MOVE_ANYWHERE skips both. Measured: Cherrygrove's
-## teacher settles on the far cell of its band from four columns, not eight.
-func _object_stays_on_screen(destination: Vector2i) -> bool:
-	var offset: Vector2i = destination - player_cell
+## `IsObjectMovingOffEdgeOfScreen`, beside the movement radius; MOVE_ANYWHERE
+## skips both. Measured: Cherrygrove's teacher settles from four columns, not
+## eight. `CanWalkOntoTile` adds one pixel and the last row and column sit on
+## $80 and $90 themselves, so a Generation 1 sprite there moves only back in.
+func _object_stays_on_screen(from_cell: Vector2i, direction: Vector2i) -> bool:
+	if not _cell_on_screen(from_cell + direction):
+		return false
+	if not _gen1:
+		return true
+	var now: Vector2i = from_cell - player_cell
+	return (now.y != OBJECT_SCREEN_MAX.y or direction.y < 0) \
+		and (now.x != OBJECT_SCREEN_MAX.x or direction.x < 0)
+
+
+func _cell_on_screen(cell: Vector2i) -> bool:
+	var offset: Vector2i = cell - player_cell
 	return offset.x >= OBJECT_SCREEN_MIN.x and offset.x <= OBJECT_SCREEN_MAX.x \
 		and offset.y >= OBJECT_SCREEN_MIN.y and offset.y <= OBJECT_SCREEN_MAX.y
+
+
+## `CheckSpriteAvailability`: a sprite off the window above is $ff, which
+## `UpdateNonPlayerSprite` returns on and `TrainerEngage` refuses.
+func gen1_sprite_visible(object: Gen2WorldObject) -> bool:
+	return _cell_on_screen(object.cell)
 
 
 ## One hardware frame of the data-driven movement templates.
@@ -10334,52 +10395,68 @@ func _object_stays_on_screen(destination: Vector2i) -> bool:
 ## a decision: STEP_TYPE_CONTINUE_WALK, _SLEEP and _FROM_MOVEMENT. The cell
 ## commits when the step starts, as InitStep does, and the offset trails.
 func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
-	if random == null or objects.is_empty():
+	if random == null or objects.is_empty() or (_gen1 and gen1_turned_this_pass()):
 		return false
 	var changed: bool = false
 	for object: Gen2WorldObject in objects:
-		if not object.active or object.deleted:
+		# A scripted trail belongs to advance_scripted_steps_pass(); `HandleStepType`
+		# returns before every step function while FROZEN_F is set.
+		if not object.active or object.deleted or object.scripted_steps \
+			or object.frozen or (_gen1 and not gen1_sprite_visible(object)):
 			continue
-		# A scripted trail belongs to advance_scripted_steps_pass(). Draining it
-		# here too would walk it at twice the speed while both drivers run.
-		if object.scripted_steps:
-			continue
-		# `HandleStepType` returns before every step function while FROZEN_F is
-		# set, so a frozen object spends no step frame, no wait frame and takes
-		# no decision. `applymovement` is what freezes the rest of the map.
-		if object.frozen:
-			continue
-		# A step in flight is drained whatever put it there, so a pushed boulder
-		# slides even though its template decides nothing.
-		# StepFunction_StrengthBoulder rolls no wait, which is why only a
-		# deciding template reaches start_idle below.
-		if object.is_stepping():
-			if object.tick_step():
-				changed = true
-				if not object.is_stepping() and object.movement_advances():
-					# StepFunction_ContinueWalk rolls a new wait the moment
-					# the step duration reaches zero.
-					object.start_idle(_rolled_idle_passes(random, IDLE_MASK_SLOW))
-			continue
-		# `MovementFunction_Bouncing` decides nothing and leaves the picture to
-		# OBJECT_ACTION_BOUNCE, which `HandleObjectAction` runs every pass. No
-		# _remember_object_position(): this is a drawing, not a facing.
-		if object.movement == Gen2WorldObject.MOVEMENT_POKEMON:
-			if object.tick_bounce():
-				changed = true
-			continue
-		if not object.movement_advances():
-			continue
-		if object.tick_idle():
-			continue
-		var facing_before: int = object.facing
-		if _decide_object_movement(object, random):
-			_remember_object_position(object)
-			changed = true
-		elif object.facing != facing_before:
-			_remember_object_position(object)
+		if _advance_object_pass(object, random):
 			changed = true
 	return changed
+
+
+## One object's frame. A step in flight is drained whatever put it there, so a
+## pushed boulder slides though its template decides nothing and rolls no wait;
+## `MovementFunction_Bouncing` leaves the picture to OBJECT_ACTION_BOUNCE.
+func _advance_object_pass(object: Gen2WorldObject, random: RandomNumberGenerator) -> bool:
+	if object.is_stepping():
+		if not object.tick_step():
+			return false
+		if not object.is_stepping() and object.movement_advances():
+			# StepFunction_ContinueWalk rolls a new wait the moment the step ends.
+			object.start_idle(_rolled_idle_passes(random, IDLE_MASK_SLOW))
+		return true
+	if object.movement == Gen2WorldObject.MOVEMENT_POKEMON:
+		return object.tick_bounce()
+	if not object.movement_advances():
+		return _gen1_fixed_object_pass(object, random)
+	if object.tick_idle() or not _gen1_objects_may_decide():
+		return false
+	var facing_before: int = object.facing
+	var moved: bool = _decide_object_movement(object, random)
+	if moved or object.facing != facing_before:
+		_remember_object_position(object)
+		return true
+	return false
+
+
+## A STAY sprite on `$D0` to `$D3` decides like any other, and `TryWalking`
+## writes byte 2's facing back before `CanWalkOntoTile` refuses the step.
+func _gen1_fixed_object_pass(object: Gen2WorldObject, random: RandomNumberGenerator) -> bool:
+	if not _gen1 or not object.movement in Gen2WorldObject.FIXED_MOVEMENTS:
+		return false
+	if object.tick_idle() or not _gen1_objects_may_decide():
+		return false
+	var turned: bool = object.facing != object.initial_facing()
+	object.facing = object.initial_facing()
+	object.start_idle(_rolled_idle_passes(random, IDLE_MASK_SLOW))
+	if turned:
+		_remember_object_position(object)
+	return turned
+
+
+## `UpdateNPCSprite` returns on `wWalkCounter` before a decision, and a step's
+## first pass runs `UpdateSprites` in front of the write; a turn's pass runs none.
+func _gen1_objects_may_decide() -> bool:
+	if not _gen1:
+		return true
+	if _player_step_passes_remaining <= 0:
+		return _player_step_landed_frame != frame_number
+	return _player_step_passes_remaining == _player_step_passes_total - 1
 
 
 ## Drains the presentation trail an `applymovement` left, apart from
@@ -12524,7 +12601,8 @@ func _find_sight_request() -> Dictionary:
 			or object.object_type != Gen2WorldObject.OBJECTTYPE_TRAINER \
 			or object.sight_range <= 0 or (object.event_script <= 0 and not _gen1):
 			continue
-		if object.event_flag_active(state) or object.trainer_flag_active(state):
+		if object.event_flag_active(state) or object.trainer_flag_active(state) \
+			or (_gen1 and not gen1_sprite_visible(object)):
 			continue
 		var sight: Dictionary = _sight_distance(object)
 		if sight.is_empty() or int(sight["distance"]) > object.sight_range:

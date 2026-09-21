@@ -181,6 +181,7 @@ var _pc_action: int = -1
 var _pc_entries: Array = []
 ## `wSwitchItem` less one: the PC row an earlier SELECT marked, or -1 for none.
 var _pc_switch: int = -1
+var _mart_sell_switch: int = -1
 var _pc_quantity: int = 1
 ## The PC's own text boxes and what happens once the last is acknowledged:
 ## `PROF.OAK'S PC` returns to the top menu and `TURN OFF` shuts the machine down.
@@ -488,8 +489,7 @@ func handle_button(button: int) -> bool:
 
 
 ## `PCItemsJoypad`'s `.select_1` and `.a_select_2`, one press of
-## `SwitchItemsInBag` over `wPCItems`. A deposit is `DepositSellPack`, whose
-## joypad handler has no SELECT in it.
+## `SwitchItemsInBag` over `wPCItems`; a deposit is `DepositSellPack`.
 func _press_pc_item_select() -> bool:
 	if _mode != MODE.PC_ITEM_LIST:
 		return false
@@ -505,14 +505,15 @@ func _apply_pc_switch_press() -> void:
 	var order: Array = []
 	for entry: Dictionary in _pc_entries:
 		order.append(int(entry.get("item", 0)))
-	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pc_switch, _cursor)
+	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pc_switch, _cursor, _gen1_pc)
 	var next_order: Array = answer["order"]
 	if next_order != order and _world != null:
 		Gen2WorldBagHost.reorder(_world, _save, next_order, not _pc_list_is_bag())
 		_refresh_pc_entries()
 		## `PC_PlaySwapItemsSound`, which is the pack's own pair of effects.
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+		if not _gen1_pc:
+			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
 	_pc_switch = int(answer["held"])
 	_render_rows()
 
@@ -1255,6 +1256,12 @@ func _gen1_mart() -> bool:
 	return _data != null and _data.generation == RomRegistry.GEN1
 
 
+## `.notEnoughMoney`, `.bagFull` and `.unsellableItem` all jump to
+## `.returnToMainPokemartMenu`, the BUY/SELL/QUIT menu.
+func _gen1_refusal_after(after: StringName) -> StringName:
+	return MART_TOP if _gen1_mart() else after
+
+
 ## `w2DMenuNumRows`: `ScrollingMenu_InitFlags` counts CANCEL only when the list
 ## fits; `DisplayListMenuID` fixes `wMaxMenuItem` at 2 and always scrolls.
 func _mart_row_count() -> int:
@@ -1423,7 +1430,7 @@ func _buy_mart_selection() -> void:
 			_mart_stage = MART_LIST
 			_render_mart()
 			return
-		_show_mart_text(_mart_text(slot, {"name": entry.get("name", "")}), MART_LIST)
+		_show_mart_text(_mart_text(slot, {"name": entry.get("name", "")}), _gen1_refusal_after(MART_LIST))
 		return
 	_mart_purchased = true
 	## `PlayTransactionSound` is a `WaitSFX` and then the sound.
@@ -1435,8 +1442,7 @@ func _buy_mart_selection() -> void:
 	}), MART_LIST)
 
 
-## B off the buy or sell list. `.Buy` and `.Sell` both fall into
-## `.AnythingElse`, so a standard shop asks again rather than saying goodbye;
+## B off the buy or sell list: `.Buy` and `.Sell` both fall into `.AnythingElse`;
 ## only `.Quit` and the four single-list shop types print the come-again box.
 func _leave_mart() -> void:
 	if _mart_standard():
@@ -1477,23 +1483,21 @@ func _press_mart_top(button: int) -> void:
 
 
 ## `.Sell`: `DepositSellPack` over the whole pack. A pack with nothing sellable
-## in it answers `wPackUsedItem` zero at once, which is `SellMenu.quit`, so the
-## shop asks again rather than opening an empty list.
+## answers `wPackUsedItem` zero at once, which is `SellMenu.quit`.
 func _open_mart_sell() -> void:
 	_refresh_mart_sell_entries()
 	_mart_scroll = 0
 	_mart_quantity = 1
+	_mart_sell_switch = -1
 	if _mart_sell_entries.is_empty():
-		## `PokemartItemBagEmptyText`, which Generation 2's `SellMenu` has no
-		## box for; both shops ask again behind it.
+		## `PokemartItemBagEmptyText`, which Generation 2's `SellMenu` has no box for.
 		_show_mart_text(_mart_text("bag_empty"), MART_TOP, true)
 		return
 	_show_mart_text(_mart_text("sell_intro"), MART_SELL, true)
 
 
-## The pack as rows this list can draw, at `GetMartPrice`'s halved price per
-## unit. `SellMenu.TryToSellItem` refuses a key item after it is chosen, so the
-## row is on offer and the refusal is `MartCantBuyText`.
+## The pack as rows at `GetMartPrice`'s halved price per unit; a key item is on
+## offer, since `SellMenu.TryToSellItem` refuses it after it is chosen.
 func _refresh_mart_sell_entries() -> void:
 	_mart_sell_entries = []
 	for pocket: Dictionary in Gen2WorldPack.build(_data, _world.state):
@@ -1515,17 +1519,20 @@ func _press_mart_sell_list(button: int) -> void:
 			_move_mart_cursor(1)
 		PokeButton.B:
 			_leave_mart()
+		PokeButton.SELECT:
+			_press_mart_sell_select()
 		PokeButton.A:
 			var entry: Dictionary = _mart_selection()
 			if entry.is_empty():
 				_leave_mart()
 				return
 			if not Gen2WorldMartHost.can_sell(_data, int(entry.get("item", 0))):
-				## `.try_sell`'s `_CheckTossableItem` refusal, which leaves the
-				## list up rather than ending the sale.
-				_show_mart_text(_mart_text("cant_buy"), MART_SELL)
+				## `.try_sell`'s `_CheckTossableItem` refusal, which leaves the list up.
+				_show_mart_text(_mart_text("cant_buy"), _gen1_refusal_after(MART_SELL))
 				return
 			_mart_quantity = 1
+			## `DisplayListMenuID` zeroes `wMenuItemToSwap` on A and on entry.
+			_mart_sell_switch = -1
 			_mart_pages = Gen2TextLayout.lay_out(
 				_mart_text("sell_how_many"), MART_TEXT_COLUMNS, MART_TEXT_ROWS
 			)
@@ -1533,8 +1540,25 @@ func _press_mart_sell_list(button: int) -> void:
 			_render_mart()
 
 
-## `Toss_Sell_Loop` is the same dial the purchase uses, bounded by the stack the
-## player owns rather than by ninety-nine.
+## `.sellMenuLoop` is an `ITEMLISTMENU`, so `HandleItemListSwapping` runs on it.
+func _press_mart_sell_select() -> void:
+	if not _gen1_mart():
+		return
+	var order: Array = []
+	for entry: Dictionary in _mart_sell_entries:
+		order.append(int(entry.get("item", 0)))
+	var answer: Dictionary = Gen2WorldPack.switch_items(
+		order, _mart_sell_switch, _mart_scroll + _cursor, true
+	)
+	var next_order: Array = answer["order"]
+	if next_order != order and _world != null:
+		Gen2WorldBagHost.reorder(_world, _save, next_order, false, _persist)
+		_refresh_mart_sell_entries()
+	_mart_sell_switch = int(answer["held"])
+	_render_mart()
+
+
+## `Toss_Sell_Loop` is the purchase's dial, bounded by the stack the player owns.
 func _press_mart_sell_quantity(button: int) -> void:
 	var maximum: int = maxi(1, int(_mart_selection().get("quantity", 1)))
 	match button:
@@ -1582,7 +1606,7 @@ func _sell_mart_selection() -> void:
 	if not bool(sold.get("ok", false)):
 		var reason: StringName = StringName(sold.get("reason", &""))
 		if reason == &"item_cannot_be_sold":
-			_show_mart_text(_mart_text("cant_buy"), MART_SELL)
+			_show_mart_text(_mart_text("cant_buy"), _gen1_refusal_after(MART_SELL))
 			return
 		_status = "Sale failed: %s" % String(reason)
 		_mart_stage = MART_SELL
@@ -1592,6 +1616,12 @@ func _sell_mart_selection() -> void:
 	_refresh_mart_sell_entries()
 	_mart_scroll = mini(_mart_scroll, maxi(0, _mart_sell_entries.size() - 1))
 	_cursor = mini(_cursor, maxi(0, _mart_sell_entries.size() - _mart_scroll - 1))
+	## `DisplayPokemartDialogue_` jumps to `.sellMenuLoop` behind a sale, no box.
+	if _gen1_mart():
+		_mart_stage = MART_SELL
+		_mart_over_map = false
+		_render_mart()
+		return
 	_show_mart_text(
 		_mart_text("bought", {
 			"name": sold.get("name", ""), "quantity": _mart_quantity,
@@ -1601,8 +1631,7 @@ func _sell_mart_selection() -> void:
 	)
 
 
-## The view every counter standing over the map draws into, after the panel's
-## own: the menu behind a counter is hidden anyway.
+## The view every counter standing over the map draws into, after the panel's own.
 func _open_map_overlay_view() -> void:
 	if _mart_view != null or _service_hardware == null:
 		return

@@ -527,31 +527,30 @@ func handle_button(button: int) -> bool:
 	return false
 
 
-## `Pack_InterpretJoypad`'s `.select` and `.switching_item`'s own SELECT, which
-## are the same press: the first marks a row and the second places the held item
-## on the row the cursor is on.
+## `Pack_InterpretJoypad`'s `.select` and `.switching_item`'s own SELECT: the
+## first marks a row and the second places the held item on the cursor's.
 func _press_pack_select() -> void:
 	if _give_target >= 0:
-		## `DepositSellPack` runs its own joypad handler with no `.select` in it,
-		## so a pack opened to pick one item does not reorder anything.
+		## `DepositSellPack` runs its own joypad handler with no `.select` in it.
 		return
 	_apply_switch_press()
 
 
-## One press of `SwitchItemsInBag`. A press that moved something is written
-## through [Gen2WorldBagHost], so the arranged order is in the save.
+## One press of `SwitchItemsInBag`, written through [Gen2WorldBagHost] when it moved.
 func _apply_switch_press() -> void:
 	var order: Array = []
 	for row: Dictionary in _current_pocket_items():
 		order.append(int(row.get("item", 0)))
-	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pack_switch, _pack_cursor)
+	var gen1: bool = _data != null and _data.generation == RomRegistry.GEN1
+	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pack_switch, _pack_cursor, gen1)
 	var next_order: Array = answer["order"]
 	if next_order != order and _world != null:
 		Gen2WorldBagHost.reorder(_world, _pack_save, next_order, false, _pack_persist)
 		_open_pack_mode(false)
 		## `.place_insert` asks for the same effect twice through `WaitPlaySFX`.
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+		if not gen1:
+			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
 	_pack_switch = int(answer["held"])
 
 

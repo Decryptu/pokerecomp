@@ -396,6 +396,22 @@ func test_a_press_on_cancel_keeps_the_mark_and_moves_nothing() -> void:
 	assert_eq(answer["held"], 0)
 
 
+## `HandleItemListSwapping` (engine/menus/swap_items.asm): the two rows trade
+## places, and a press on CANCEL or on the marked row itself is ignored with the
+## mark kept, where Crystal's `.trivial` clears it.
+func test_a_generation_1_swap_exchanges_the_two_rows() -> void:
+	var answer: Dictionary = Gen2WorldPack.switch_items([10, 20, 30, 40], 0, 2, true)
+	assert_eq(answer["order"], [30, 20, 10, 40])
+	assert_eq(answer["held"], -1)
+	answer = Gen2WorldPack.switch_items([10, 20, 30], -1, 3, true)
+	assert_eq(answer["held"], -1)
+	answer = Gen2WorldPack.switch_items([10, 20, 30], 1, 1, true)
+	assert_eq(answer["order"], [10, 20, 30])
+	assert_eq(answer["held"], 1)
+	answer = Gen2WorldPack.switch_items([10, 20, 30], 1, 3, true)
+	assert_eq(answer["held"], 1)
+
+
 ## The cartridge has four packed arrays and this port one insertion-ordered map,
 ## so a move inside a pocket permutes only the positions that pocket holds.
 func test_a_pocket_reorder_leaves_the_other_pockets_where_they_sit() -> void:

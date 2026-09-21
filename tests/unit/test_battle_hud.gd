@@ -164,6 +164,11 @@ func test_the_bar_colour_follows_what_is_drawn_not_the_hit_points() -> void:
 	assert_eq(GameData.hp_bar_palette_name(Gen2Layout.HP_GREEN_PIXELS - 1), "hp_yellow")
 	assert_eq(GameData.hp_bar_palette_name(Gen2Layout.HP_YELLOW_PIXELS), "hp_yellow")
 	assert_eq(GameData.hp_bar_palette_name(Gen2Layout.HP_YELLOW_PIXELS - 1), "hp_red")
+	# `GetHealthBarColor`'s `cp 27`: Generation 1 turns yellow three pixels sooner.
+	assert_eq(GameData.hp_bar_palette_name(Gen1Layout.HP_GREEN_PIXELS, true), "hp_green")
+	assert_eq(GameData.hp_bar_palette_name(Gen1Layout.HP_GREEN_PIXELS - 1, true), "hp_yellow")
+	assert_eq(GameData.hp_bar_palette_name(Gen2Layout.HP_GREEN_PIXELS, true), "hp_yellow")
+	assert_eq(GameData.hp_bar_palette_name(Gen2Layout.HP_YELLOW_PIXELS - 1, true), "hp_red")
 
 
 func test_a_bar_palette_comes_back_as_four_colours() -> void:

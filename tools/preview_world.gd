@@ -37,6 +37,7 @@ const KIND_HELP: Dictionary = {
 	&"script_menu": "presses, rows: the box a Generation 1 script draws for itself, faced up from the cell after the @. The bag holds all three drinks, so Celadon Mart Roof's little girl is `-- red 0 126 <out.png> live script_menu@5,6 2 0`",
 	&"trainer": "presses, frames: TalkToTrainer on the map's first trainer, faced from the cell below. 0 the before-battle box, 1 the fight the press behind it opens; a second number stops that many frames into the transition instead",
 	&"map_script": "frames, 0: RunMapScript's own state, stepped into by walking up out of the cell after the @. Route 22 Gate's guard is `-- red 0 193 <out.png> live map_script@4,3 300 0`",
+	&"guide": "frames, 0: PewterGuys' walk, the museum guy talked to from the cell after the @ and answered NO, or the youngster's trigger stepped up onto from it. `-- red 0 2 <out.png> live guide@26,17 760 0` is the museum door and `guide@35,18 1000 0` the gym sign",
 	&"lab_rival": "frames, 0: OaksLabRivalStartsExitScript with the rival beside the player at the cell after the @, counted from his first step. `-- red 0 40 <out.png> live lab_rival@5,6 20 0` has the player turned to watch him go",
 	&"sight": "frames, 0: CheckFightingMapTrainers on the map's first trainer who sees, walked into from the far end of its own line. 40 stands in the shock bubble, 120 in the walk-up, 400 in the before-battle box",
 	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
@@ -517,6 +518,7 @@ const STAGERS: Dictionary = {
 	&"sight": &"_stage_sight",
 	&"map_script": &"_stage_map_script",
 	&"lab_rival": &"_stage_lab_rival",
+	&"guide": &"_stage_guide",
 	&"nurse": &"_stage_nurse",
 	&"vending": &"_stage_vending",
 	&"prizes": &"_stage_prizes",
@@ -1385,6 +1387,38 @@ func _stage_map_script() -> void:
 		_screen.advance_frame()
 	_screen.advance_frames(maxi(_cell.x, 0))
 
+
+
+func _stage_guide() -> void:
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if world == null:
+		return
+	var guide: Gen2WorldObject = null
+	for object: Gen2WorldObject in world.objects:
+		if object.cell.distance_squared_to(world.player_cell) == 1:
+			guide = object
+	if guide != null:
+		world.player_facing = world._facing_toward(world.player_cell, guide.cell)
+		_screen.interact()
+	else:
+		for _frame: int in BOX_REVEAL_FRAMES:
+			if world.script_input_waiting():
+				break
+			_screen.press_button(PokeButton.UP)
+			_screen.advance_frame()
+	for _press: int in GUIDE_PRESSES:
+		for _frame: int in BOX_REVEAL_FRAMES:
+			_screen.advance_frame()
+		if not world.pending_script_input().is_empty() \
+			and StringName(world.pending_script_input().get("type", &"")) == &"choice":
+			_screen.press_button(PokeButton.DOWN)
+		_screen.press_button(PokeButton.A)
+		if world.gen1_movement_script_running():
+			break
+	_screen.advance_frames(maxi(_cell.x, 0))
+
+
+const GUIDE_PRESSES: int = 4
 
 
 ## `OaksLabRivalStartsExitScript`, the rival where `FindPathToPlayer` left him.

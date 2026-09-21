@@ -208,16 +208,25 @@ static func row_description(data: GameData, item: int) -> String:
 
 ## `SwitchItemsInBag`, one press of SELECT or of the A that places the held item.
 ## [param order] is one pocket's item numbers in list order, [param held] the row
-## an earlier SELECT marked or -1 for none, and [param cursor] the row the press
-## landed on, where a row past the last item is the CANCEL terminator the source
-## reads as -1. The source stores the held row as `wSwitchItem` = row + 1 so that
-## zero means none; -1 is that same "none" here. `.try_combining_stacks` cannot
-## fire: the flat item model has one stack per item, so no two rows carry the same
-## item number.
-static func switch_items(order: Array, held: int, cursor: int) -> Dictionary:
+## an earlier SELECT marked or -1 for none (`wSwitchItem` is row + 1), and
+## [param cursor] the row the press landed on, where a row past the last item is
+## the CANCEL terminator the source reads as -1. `.try_combining_stacks` and
+## `.swapSameItemType` cannot fire: the flat item model has one stack per item.
+## Generation 1's `HandleItemListSwapping` is [param exchange]: the rows trade
+## places and a press on CANCEL or the marked row keeps the mark.
+static func switch_items(order: Array, held: int, cursor: int, exchange: bool = false) -> Dictionary:
 	var moved: Array[int] = []
 	for entry: Variant in order:
 		moved.append(int(entry))
+	if exchange:
+		if cursor < 0 or cursor >= moved.size() or cursor == held:
+			return {"order": moved, "held": held}
+		if held < 0 or held >= moved.size():
+			return {"order": moved, "held": cursor}
+		var first: int = moved[held]
+		moved[held] = moved[cursor]
+		moved[cursor] = first
+		return {"order": moved, "held": -1}
 	if held < 0 or held >= moved.size():
 		## `.init`: the first press only marks. A press on CANCEL marks nothing,
 		## because `ItemSwitch_GetNthItem` would read the terminator.

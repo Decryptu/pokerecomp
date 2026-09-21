@@ -1461,7 +1461,9 @@ func _update_low_health_alarm() -> void:
 	var lit: int = Gen2BattleHud.bar_pixels(
 		hp, _player_max_hp, Gen2BattleHud.HP_BAR_TILES * Gen2Font.TILE
 	)
-	_audio_player.set_low_health_alarm(GameData.hp_bar_palette_name(lit) == "hp_red")
+	_audio_player.set_low_health_alarm(
+		GameData.hp_bar_palette_name(lit, _data.generation == RomRegistry.GEN1) == "hp_red"
+	)
 
 
 func bars_animating() -> bool:
