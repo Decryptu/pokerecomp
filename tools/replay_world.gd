@@ -1,13 +1,9 @@
 extends SceneTree
 
 ## Records `(frame, button)` from a run of the real world screen and replays it
-## into a fresh world, then diffs the two. A seed, an input log and a frame number
-## should reproduce a world exactly, and the compared value is
-## [Gen2WorldSnapshot] JSON plus the play timer, which either matches byte for byte
-## or does not. Four runs per route from the same seed and log: record, replay, and
-## the same log driven by `_process` at 30 and 144 fps, which is what says the pump
-## rather than the host spends frames. Each of the three profiles runs nine
-## generated walks, one scripted errand and one wild battle: thirty-three routes.
+## into a fresh world, then diffs the snapshot and play timer byte for byte. Four
+## runs per route from one seed and log: record, replay, and the log driven by
+## `_process` at 30 and 144 fps. Nine walks, one errand and one wild battle a profile.
 
 const GAMES: Array[StringName] = [&"gold", &"silver", &"crystal"]
 ## Twenty seconds of hardware frames: long enough for several walks, a script
@@ -26,12 +22,10 @@ const DIRECTIONS: Array[int] = [
 const ROUTE_GROUP: int = Gen2WorldSpawn.NEW_BARK_GROUP
 const ROUTE_MAPS: int = 8
 
-## Cherrygrove's mart, map 1/8 with the clerk on (1,3) and its door cells on
-## (2,7) and (3,7) in all three Generation 2 caches; Pewter's on the three
-## Generation 1 ones, map 0/56 with the clerk on (0,5) and the same door. The
-## counter row is where the walk up stops, and the column the counter is faced
-## from: `CheckFacingObject` reaches two cells over a `$90`, Generation 1's
-## `TalkToTrainer` one over its counter tile.
+## Cherrygrove's mart (clerk on (1,3)) on Generation 2, Pewter's (clerk on
+## (0,5)) on Generation 1, both with door cells on row 7. The counter is where
+## the walk up stops and the column it is faced from: `CheckFacingObject`
+## reaches two cells over a `$90`, `TalkToTrainer` one over its counter tile.
 const MARTS: Dictionary = {
 	RomRegistry.GEN2: {"map": Vector2i(1, 8), "door": Vector2i(3, 7), "counter": Vector2i(3, 3)},
 	RomRegistry.GEN1: {"map": Vector2i(0, 56), "door": Vector2i(3, 7), "counter": Vector2i(2, 5)},
@@ -137,10 +131,8 @@ func _routes_for(data: GameData) -> Array:
 
 
 ## The first map this cache holds with two adjacent cells a wild roll can fire
-## on, walked between. Found rather than named, because a map id is not the same
-## number on the three profiles and a grass cell is a `.blk` fact: the story
-## walker paid for both lessons already. Iterated in id order, so one cache always
-## answers with the same map.
+## on, walked between: a map id differs across the three profiles and a grass
+## cell is a `.blk` fact. In id order, so one cache always answers the same map.
 func _battle_route(data: GameData) -> Dictionary:
 	for map: Gen2WorldMap in data.world_maps():
 		if (data.world_encounter(
@@ -336,11 +328,9 @@ func _run(
 	}
 
 
-## The compared artefact: the world snapshot the save would carry, the play timer
-## beside it, the frame both are read at, and the party.
-## The party is what a battle changes, the snapshot carrying none of it: HP, level,
-## experience, moves and PP are the whole outcome of a fight, so a route that
-## fights is only proved replayable by comparing them.
+## The compared artefact: the world snapshot, the play timer, the frame both are
+## read at, and the party, which is the whole outcome of a fight and which the
+## snapshot carries none of.
 func _state(screen: Gen2WorldScreen, save: Gen2SaveData) -> String:
 	return JSON.stringify({
 		"frame": screen._world.frame_number,
@@ -371,11 +361,9 @@ func _party(save: Gen2SaveData) -> Array:
 	return out
 
 
-## Drives the run itself instead of replaying a program: hold a direction in the
-## grass until something appears, then press A on the mart errand's own cadence,
-## which is every button a wild battle asks for (FIGHT, the first move, and the
-## boxes on either side of it). Every press goes through the world's own
-## `press_button`, so the recording is what a replay is then fed.
+## Drives the run itself: hold a direction in the grass until something appears,
+## then press A on the errand's cadence, which is every button a wild battle
+## asks for. Every press goes through `press_button`, so the recording replays.
 func _drive(screen: Gen2WorldScreen, frames: int) -> int:
 	var battles: int = 0
 	var in_battle: bool = false
@@ -402,11 +390,8 @@ func _drive(screen: Gen2WorldScreen, frames: int) -> int:
 					cursor_moved += 1
 		else:
 			in_battle = false
-			## Two cells, alternating, so every step lands on grass and the roll
-			## keeps being offered. A step is STEP_PASSES_WALK passes long and
-			## this loop spends hardware frames, so the direction is held for
-			## `passes_in_frames` of them: half that flips it mid-step and the
-			## player turns back before landing on anything.
+			## Two cells, alternating, so every step lands on grass; a direction
+			## flipped mid-step turns the player back before landing on anything.
 			@warning_ignore("integer_division")
 			var step: int = screen._world.frame_number \
 				/ Gen2WorldAPI.passes_in_frames(Gen2WorldAPI.STEP_PASSES_WALK)
@@ -447,13 +432,9 @@ func _walk_frames() -> int:
 	return Gen2WorldAPI.passes_in_frames(Gen2WorldAPI.STEP_PASSES_WALK)
 
 
-## The scripted errand: walk the door column up to the counter row, hold LEFT
-## long enough to turn into the clerk and step to the counter column, and then
-## press A on a cadence for the rest of the run. That one button carries the
-## whole leg, because every step of it answers a press: the clerk's `pokemart`
-## dialog, the mart overlay's own A, and the boxes on either side. Held rather
-## than counted out step by step: `move_player` refuses while a step is in
-## flight, so a direction held to the counter arrives whatever the walk rate is.
+## The scripted errand: UP to the counter row, LEFT into the clerk, then A on a
+## cadence, which is every press the leg answers. Held rather than counted out:
+## `move_player` refuses mid-step, so a held direction arrives at any walk rate.
 func _errand_program(frames: int, mart: Dictionary) -> Array:
 	var log_lines: Array = []
 	var door: Vector2i = mart["door"]

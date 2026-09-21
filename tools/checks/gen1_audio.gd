@@ -96,6 +96,7 @@ func _verify_the_pikachu_clips() -> void:
 		var pcm: PackedInt32Array = _engine.apu.render_frame_pcm()
 		for sample: int in pcm:
 			loud += 1 if absi(sample) > 0 else 0
+		_engine.apu.advance_pcm_frame()
 		frames += 1
 	_engine.end_pikachu_clip()
 	var wanted: int = Gen1Layout.pikachu_cry_frames(clip.size()) - Gen1Layout.PIKACHU_CRY_LEAD_FRAMES

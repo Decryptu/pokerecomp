@@ -131,7 +131,7 @@ func test_the_copyright_screen_comes_before_the_gender_question() -> void:
 	_screen.begin(_data, SLOT, LABEL, false)
 	assert_true(_screen.current() is Gen2SplashScreen)
 	var splash: Gen2SplashScreen = _screen.current() as Gen2SplashScreen
-	splash.advance_frames(splash.frames_left() - 1)
+	splash.advance_frames(splash.animation_frames_left() - 1)
 	assert_eq(splash.visible_image(), &"copyright", "and it is not cut short")
 	splash.advance_frames(1)
 	assert_eq(splash.visible_image(), &"game_freak_presents")

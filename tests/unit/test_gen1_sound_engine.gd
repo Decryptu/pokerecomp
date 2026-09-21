@@ -279,6 +279,7 @@ func test_a_pikachu_clip_takes_channel_three_and_hands_it_back() -> void:
 	while engine.apu.pcm_active() and rendered < 8:
 		for sample: int in engine.apu.render_frame_pcm():
 			loud = loud or sample != 0
+		engine.apu.advance_pcm_frame()
 		rendered += 1
 	assert_eq(rendered, 2, "two bytes short of a frame's bits is two frames")
 	assert_true(loud, "the clip reached the mix")

@@ -127,6 +127,8 @@ func _process(delta: float) -> void:
 
 func advance_frames(count: int) -> void:
 	for _frame: int in count:
+		if not is_processing() and _audio != null:
+			_audio.advance_driver_frame()
 		if _text_box != null:
 			_text_box.advance_frame()
 		if _phase != Phase.ANIMATING:

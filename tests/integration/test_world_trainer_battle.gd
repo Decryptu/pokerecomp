@@ -606,6 +606,7 @@ func test_the_dude_plays_the_catching_tutorial_and_keeps_nothing() -> void:
 	var messages: Array[String] = []
 	var throw_frame: int = -1
 	var frames: int = 0
+	var refused: int = 0
 	while _world_screen._battle_host != null and frames < DUDE_FRAME_GUARD:
 		frames += 1
 		var line: String = String(host.battle_snapshot()["message"])
@@ -613,7 +614,12 @@ func test_the_dude_plays_the_catching_tutorial_and_keeps_nothing() -> void:
 			messages.append(line)
 			if throw_frame < 0 and line == "DUDE used the\nPOKE BALL.":
 				throw_frame = frames
+		## A thumb on A while `DudeAutoInputs` owns the pad moves nothing: a
+		## press that reached the menu fought the demo with the Dude's party.
+		if host.battle_snapshot()["menu_stage"] == &"main" and not host.press_button(PokeButton.A):
+			refused += 1
 		host.advance_hardware_frame()
+	assert_gt(refused, 0, "the menu refused a real press while the Dude was choosing")
 	assert_lt(frames, DUDE_FRAME_GUARD, "the tutorial answers itself: %s" % JSON.stringify(messages))
 	print("dude: ball thrown on frame %d, tutorial over on %d" % [throw_frame, frames])
 	assert_between(throw_frame, 1, DUDE_TUTORIAL_FRAMES,

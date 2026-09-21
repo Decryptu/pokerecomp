@@ -17,6 +17,7 @@ const PRESENTS_FIRST_FRAME: int = Gen2BootCinema.COPYRIGHT_PRELUDE_FRAMES \
 const TITLE_GUARD: int = 20000
 const NAME_MENU_GUARD: int = 200
 const NEW_GAME_GUARD: int = 400
+const HOLD_FRAMES: int = 4
 const PRESET_ROW: int = 1
 const SAVE_ROOT: String = "user://preview_intro_slots"
 
@@ -275,10 +276,13 @@ func _run_new_game(data: GameData) -> void:
 			return
 		_settle_frames(intro)
 		var screen: Control = intro.current()
-		if screen != null and bool(screen.call(&"choosing_name")):
+		if screen != null and screen.has_method(&"choosing_name") and bool(screen.call(&"choosing_name")):
 			for _row: int in PRESET_ROW:
 				intro.handle_button(PokeButton.DOWN)
+		## Held: Yellow's loops poll every other frame, so a one-frame tap lands nowhere.
 		intro.handle_button(PokeButton.A)
+		intro.advance_frames(HOLD_FRAMES)
+		intro.release_button(PokeButton.A)
 	push_error("The opening did not reach its save in %d presses." % NEW_GAME_GUARD)
 	quit(1)
 

@@ -395,6 +395,9 @@ var _replay_held_direction: int = PokeButton.NONE
 ## A direction pressed since the last pass, held for the whole of the next one:
 ## `GetJoypad` is read inside the pass, behind `RunMapScript`.
 var _pressed_direction: int = PokeButton.NONE
+## A, START or SELECT pressed since the last pass on Generation 1, whose
+## `hJoyPressed` is read inside the pass behind `RunMapScript` too.
+var _pressed_action: int = PokeButton.NONE
 ## Beside the held direction: a hold that changes a step's duration and is not in
 ## the log makes every replay taken while running wrong.
 var _replay_running: bool = false
@@ -930,6 +933,10 @@ const FRAME_HOSTS: Array[Array] = [
 ## [member Gen2WorldAPI.frame_number]. `HandleMap`'s pass is one frame in two.
 func advance_frame() -> void:
 	_spending_frame = true
+	## A screen whose frames a tool, a check or a replay spends owns the driver's
+	## frame too: nothing else turns it, and a wait on a sound is then real.
+	if not is_processing() and _audio_player != null:
+		_audio_player.advance_driver_frame()
 	## `ResetOverworldDelay` and `NextOverworldFrame`: the pass reloads the delay
 	## and then spends it, so the first frame of a world is a pass and every
 	## FRAMES_PER_OVERWORLD_PASS-th frame after it is the next one.
@@ -1010,6 +1017,7 @@ func _advance_presentation(map_pass: bool) -> void:
 func _advance_movement(map_pass: bool) -> void:
 	if map_pass:
 		_run_gen1_map_script_pass()
+		_advance_pressed_action()
 		_advance_forced_movement()
 		_advance_held_direction()
 		## `UpdateSprites` runs slot fifteen behind `JoypadOverworld` and in
@@ -1548,16 +1556,37 @@ func _handle_button(button: int) -> bool:
 	## `CheckMenuOW`, so A, START and SELECT are all refused until the run ends.
 	if _world.standing_on_ice():
 		return true
+	if button not in [PokeButton.A, PokeButton.START, PokeButton.SELECT]:
+		return false
+	if _world.is_gen1():
+		_pressed_action = button
+		return true
+	return _press_action(button)
+
+
+func _press_action(button: int) -> bool:
 	match button:
 		PokeButton.A:
 			return interact()
 		PokeButton.START:
 			_open_start_menu()
-			return true
 		PokeButton.SELECT:
 			open_select_menu()
-			return true
-	return false
+	return true
+
+
+## `.checkIfStartIsPressed` and the A press behind it, read from `hJoyPressed`
+## once `RunMapScript` has had the pass: a state the closing box armed runs
+## before a second talk can, and `.displayDialogue` skips a turning pass.
+func _advance_pressed_action() -> void:
+	var button: int = _pressed_action
+	_pressed_action = PokeButton.NONE
+	if button == PokeButton.NONE or _battle_host != null or _swallows_button(button) \
+		or _any_host_open(OVERLAY_HOSTS) or _any_host_open(ANSWERING_HOSTS) \
+		or _world.script_input_waiting() or _world.fishing_busy() \
+		or _world.standing_on_ice() or _world.gen1_turned_this_pass():
+		return
+	_press_action(button)
 
 
 ## `DoBattleTransition` owns every frame to the battle screen with the joypad
@@ -3291,10 +3320,9 @@ func _advance_gen1_map_anim_steps() -> void:
 			return
 
 
-## `StopMusic`'s `.wait` and `PlayDefaultMusic`'s `WaitForSoundToFinish`; a
-## driver that has never rendered a frame is waited on for none.
+## `StopMusic`'s `.wait` and `PlayDefaultMusic`'s `WaitForSoundToFinish`.
 func _gen1_map_anim_waiting(anim: Dictionary, step: Dictionary) -> bool:
-	if not step.has("wait") or _audio_player == null or _audio_player.timeline_updates() == 0:
+	if not step.has("wait") or _audio_player == null:
 		return false
 	return _audio_player.still_waiting(anim["watch"], StringName(step["wait"]) == &"music")
 
@@ -8749,11 +8777,9 @@ func _settle_after_results(flags: Dictionary) -> void:
 	_refresh_labels()
 
 
-## What a map change owes the screen once the world has already applied it: the
-## renderer, the animation and the music all belong to the map that is now under
-## the player. A warp reached through a script goes through the script result
-## instead; an escape move has no script here to carry it.
-## [param music] is false under `LoadMapData`'s BIT_FLY_WARP test.
+## What a map change owes the screen once the world has applied it: the
+## renderer, the animation and the music. A scripted warp goes through the
+## script result instead. [param music] is false under `LoadMapData`'s BIT_FLY_WARP.
 func _refresh_after_escape(music: bool = true) -> void:
 	if _world == null:
 		return

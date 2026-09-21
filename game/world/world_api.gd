@@ -7168,13 +7168,15 @@ func gen1_blackout_text() -> String:
 
 
 ## `.battleOccurred`'s `AnyPartyAlive` behind every Generation 1 fight but one on
-## OAKS_LAB, whatever the fight came to. With no save to read, the outcome stands in.
+## OAKS_LAB, whatever the fight came to. With no save to read, the outcome stands
+## in. A `wPartyCount` of zero, which is Yellow's Pikachu demo, runs its loop 256
+## times over the WRAM past the party and ORs a nonzero byte: alive.
 func gen1_blackout_due(save: Gen2SaveData, outcome: StringName) -> bool:
 	if not _gen1 or current_map == null or current_map.number == Gen1Layout.OAKS_LAB:
 		return false
 	if save == null:
 		return outcome == Gen2WorldBattleAdapter.OUTCOME_LOST
-	return not Gen2WorldPartyHost.party_has_fit_mon(save)
+	return not save.party.is_empty() and not Gen2WorldPartyHost.party_has_fit_mon(save)
 
 
 ## A Generation 2 collision code at [param cell], or -1 on a Generation 1 map,
@@ -9815,12 +9817,10 @@ func _apply_script_warp(request: Dictionary) -> Dictionary:
 	}
 
 
-## Resolves and applies an ordinary warp at the current cell; an invalid target
-## leaves this API unchanged. Below, `CheckWarpTile`'s answer without walking
-## through: `GetDestinationWarpNumber` then `CheckDirectionalWarp`, which clears
-## carry on the four carpets, so only [method edge_warp_ready] takes those.
-## [param facing] is what the player would face on [param cell], zero the facing
-## now; Generation 1's `ExtraWarpCheck` asks it, so a sideways arrival is no warp.
+## `CheckWarpTile`'s answer without walking through: `GetDestinationWarpNumber`
+## then `CheckDirectionalWarp`, which clears carry on the four carpets, so only
+## [method edge_warp_ready] takes those. [param facing] is what the player would
+## face on [param cell]; `ExtraWarpCheck` asks it, so a sideways arrival is no warp.
 func warp_pending(cell: Vector2i = player_cell, facing: Vector2i = Vector2i.ZERO) -> bool:
 	if warp_at(cell).is_empty():
 		return false

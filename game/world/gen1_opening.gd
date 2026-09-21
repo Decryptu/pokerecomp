@@ -271,6 +271,10 @@ func blocks() -> Array:
 	return (_opening.get("blocks", {}) as Dictionary).get(_palette_command, [])
 
 
+var _joypad_read: bool = false
+var _joypad_read_last_frame: bool = false
+
+
 ## `hJoyHeld`: a button held from this frame on, until [method release].
 func press(button: int) -> void:
 	_held |= button
@@ -283,11 +287,19 @@ func release(button: int) -> void:
 
 func _end_frame() -> void:
 	_tapped = 0
+	_joypad_read_last_frame = _joypad_read
+	_joypad_read = false
 
 
 func _after_vblank() -> void:
 	if _yellow_intro != null:
 		_yellow_intro.vblank()
+
+
+## Whether the last frame read `hJoy5`: a `check` step, or one of Yellow's two
+## `.loop`s, which poll it from a `do` step of their own.
+func reads_joypad() -> bool:
+	return _joypad_read_last_frame
 
 
 ## `CheckForUserInterruption`'s read: Up+Select+B held, or START or A newly down.
@@ -297,6 +309,7 @@ func _interrupted() -> bool:
 
 ## `hJoy5`: down now and not at the last read, plus any tap between.
 func _read_pressed() -> int:
+	_joypad_read = true
 	var pressed: int = (_held & ~_held_at_read) | _tapped
 	_held_at_read = _held
 	return pressed

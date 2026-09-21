@@ -45,6 +45,8 @@ var _playback: AudioStreamGeneratorPlayback = null
 ## Driver frames rendered, which is what says the timeline is moving at all. See
 ## [method timeline_updates].
 var _timeline_updates: int = 0
+## Set once a caller clocks the driver itself; see [method advance_driver_frame].
+var _driven: bool = false
 var _engine: Gen2SoundEngine = null
 ## The Generation 1 driver, which shares the APU: a cache written by either
 ## generation reaches the same four hardware channels through its own engine, and
@@ -287,8 +289,11 @@ func _gen1_result(request_kind: StringName, bank: int, id: int) -> Dictionary:
 	}
 
 
-## One driver frame on a caller's clock, for a check with no output to wait on.
+## One driver frame on a caller's clock: a screen spending its frames by hand
+## spends the driver's with them, so a `WaitForSoundToFinish` is waited for the
+## way the device waits for it. The output's timeline then stands aside.
 func advance_driver_frame() -> void:
+	_driven = true
 	_timeline_updates += 1
 	_advance_driver()
 
@@ -333,6 +338,8 @@ func _advance_pikachu_clip() -> bool:
 	if not _clip_begun:
 		_clip_begun = true
 		_gen1.begin_pikachu_clip(_clip)
+		return true
+	_apu.advance_pcm_frame()
 	if _apu.pcm_active():
 		return true
 	_gen1.end_pikachu_clip()
@@ -630,7 +637,7 @@ func _start_stream() -> void:
 ## time is the driver's clock: a long game frame is caught up here, and
 ## [param delta] is only ever the dead-output watchdog's.
 func _service_timeline(delta: float = 0.0) -> void:
-	if _player == null:
+	if _player == null or _driven:
 		return
 	if not _player.playing:
 		# A stopped output under a driver whose channels are still on is silence

@@ -2538,6 +2538,17 @@ func _gen1_pack() -> Gen2StartMenuScreen:
 	return host
 
 
+## `.checkIfStartIsPressed` reads `hJoyPressed` inside the pass, behind
+## `JoypadOverworld`'s `RunMapScript`, so a Generation 1 START opens the menu
+## on the pass after the press and not on the press.
+func test_a_generation_1_start_is_read_on_the_pass_after_it() -> void:
+	await _open_gen1_world()
+	assert_true(_world_screen.press_button(PokeButton.START))
+	assert_null(_world_screen._start_menu_host, "the press itself opens nothing")
+	_world_screen.advance_frames(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS)
+	assert_not_null(_world_screen._start_menu_host, "the pass reads it")
+
+
 ## `StartMenu_Item` opens one list, and `USE_TOSS_MENU_TEMPLATE` is the only
 ## submenu behind a row of it.
 func test_a_generation_1_bag_lists_one_pocket_and_offers_use_and_toss() -> void:

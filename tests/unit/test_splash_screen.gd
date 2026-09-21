@@ -50,12 +50,12 @@ func test_the_copyright_appears_and_clears_on_the_source_frames() -> void:
 func test_it_closes_once_and_owes_no_more_frames() -> void:
 	assert_true(_splash.open(_data))
 	assert_eq(
-		_splash.frames_left(),
+		_splash.animation_frames_left(),
 		Gen2BootCinema.COPYRIGHT_PRELUDE_FRAMES + Gen2BootCinema.COPYRIGHT_HOLD_FRAMES
 	)
 	_splash.advance_frames(1000)
 	assert_eq(_closed, 1)
-	assert_eq(_splash.frames_left(), 0)
+	assert_eq(_splash.animation_frames_left(), 0)
 	_splash.advance_frames(60)
 	assert_eq(_closed, 1, "a driver that keeps spending frames does not reopen it")
 
