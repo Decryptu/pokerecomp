@@ -286,6 +286,11 @@ func movement_supported() -> bool:
 	]
 
 
+const FIXED_MOVEMENTS: Array[int] = [
+	MOVEMENT_FIXED_DOWN, MOVEMENT_FIXED_UP, MOVEMENT_FIXED_LEFT, MOVEMENT_FIXED_RIGHT,
+]
+
+
 ## The templates that decide something: the three random-walk rows and the four
 ## spins. Standing and fixed-facing resolve once, and a bounce is an action.
 func movement_advances() -> bool:

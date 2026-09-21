@@ -4413,6 +4413,7 @@ func _gen1_sign_or_sprite() -> Array:
 	if event.is_empty():
 		event = _gen1_event_at(object_facing_cell(), &"objects")
 		_gen1_last_sprite_index = int(event.get("object_index", -1))
+		_gen1_face_talked_object(_gen1_last_sprite_index)
 	if event.is_empty() and pikachu != null \
 		and pikachu.stands_in_front(player_cell, facing_direction()):
 		pikachu.status |= Gen1Pikachu.STATUS_FACE_PLAYER
@@ -4428,6 +4429,20 @@ func _gen1_sign_or_sprite() -> Array:
 		return steps
 	var text: String = gen1_filled_text(String(row.get("text", "")))
 	return [] if text.is_empty() else [{"type": &"text", "text": text}]
+
+
+## `IsSpriteInFrontOfPlayer` sets BIT_FACE_PLAYER and `MakeNPCFacePlayer`
+## turns the sprite against `wPlayerDirection`, unless the captain's bit
+## stands. Its wait is its own: `UpdateSpriteFacingOffsetAndDelayMovement`
+## writes its $7f through `hCurrentSpriteOffset`, which `UpdateSprites` left
+## on slot fifteen. Measured: `.claude/oracle/battle/gen1_npc_walk.py`.
+func _gen1_face_talked_object(index: int) -> void:
+	if index < 0 or index >= objects.size() \
+		or bool(_gen1_volatile.get("no_npc_face_player", false)):
+		return
+	(objects[index] as Gen2WorldObject).facing = _facing_toward(
+		(objects[index] as Gen2WorldObject).cell, player_cell
+	)
 
 
 ## `PrintCardKeyText`: the CARD KEY opens the door in front of the player and
@@ -10434,6 +10449,8 @@ func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 				changed = true
 			continue
 		if not object.movement_advances():
+			if _gen1_fixed_object_pass(object, random):
+				changed = true
 			continue
 		if object.tick_idle() or not _gen1_objects_may_decide():
 			continue
@@ -10445,6 +10462,22 @@ func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 			_remember_object_position(object)
 			changed = true
 	return changed
+
+
+## A STAY sprite on `$D0` to `$D3` decides like any other: `TryWalking` writes
+## byte 2's facing back before `CanWalkOntoTile` refuses the step and rolls the
+## next wait, so a turn a talk gave it lasts until its own delay runs out.
+func _gen1_fixed_object_pass(object: Gen2WorldObject, random: RandomNumberGenerator) -> bool:
+	if not _gen1 or not object.movement in Gen2WorldObject.FIXED_MOVEMENTS:
+		return false
+	if object.tick_idle() or not _gen1_objects_may_decide():
+		return false
+	var turned: bool = object.facing != object.initial_facing()
+	object.facing = object.initial_facing()
+	object.start_idle(_rolled_idle_passes(random, IDLE_MASK_SLOW))
+	if turned:
+		_remember_object_position(object)
+	return turned
 
 
 ## `UpdateNPCSprite` returns on `wWalkCounter` in front of a ready sprite's

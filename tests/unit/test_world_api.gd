@@ -10314,6 +10314,34 @@ func test_gen1_a_ready_object_decides_on_a_standing_pass_or_a_steps_first() -> v
 	RomCache.clear(_gen1_directory())
 
 
+## `IsSpriteInFrontOfPlayer` sets BIT_FACE_PLAYER, so a talked-to sprite turns
+## to the player and keeps its own wait; a STAY sprite on `$D1` writes UP back
+## through `TryWalking` once that wait runs out. Measured on the cartridge
+## (`.claude/oracle/battle/gen1_npc_walk.py`).
+func test_gen1_a_talked_to_sprite_faces_the_player_until_its_own_wait_ends() -> void:
+	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(1, 10))
+	var walker: Gen2WorldObject = world.objects[0]
+	walker.movement = Gen2WorldObject.MOVEMENT_FIXED_UP
+	walker.restore_default_movement()
+	walker.start_idle(5)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	## The fixture's row has no text behind it; the turn is the talk's own.
+	world.interact()
+	assert_eq(walker.facing, Gen2WorldSprite.FACING_DOWN)
+	assert_eq(walker.idle_passes_remaining, 5, "the talk rewrote the sprite's own wait")
+	world.run_event_queue(true)
+	var random := RandomNumberGenerator.new()
+	random.seed = 3
+	var passes: int = 0
+	while walker.facing == Gen2WorldSprite.FACING_DOWN and passes < 300:
+		world.frame_number += Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS
+		world.advance_object_steps_pass(random)
+		passes += 1
+	assert_eq(walker.facing, Gen2WorldSprite.FACING_UP, "it never turned back")
+	assert_eq(passes, 6, "it turned back on the pass after its wait")
+	RomCache.clear(_gen1_directory())
+
+
 func test_gen1_script_branches_read_pending_flags_and_scratch_in_each_choice() -> void:
 	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 2))
 	var source: int = 0xCC55
