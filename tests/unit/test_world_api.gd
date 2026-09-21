@@ -10257,6 +10257,63 @@ func test_gen1_wanderer_climbs_eight_cells_and_never_comes_back_down() -> void:
 	RomCache.clear(_gen1_directory())
 
 
+## `CanWalkOntoTile` tests `YPIXELS + 4 + d < $80` with a one-pixel delta, so
+## a wanderer on the window's last row steps only up; `CheckSpriteAvailability`
+## returns before any wait or turn for one outside the window. Measured on the
+## cartridge (`.claude/oracle/battle/gen1_npc_walk.py`).
+func test_gen1_a_wanderer_on_the_last_row_steps_up_and_one_off_the_screen_freezes() -> void:
+	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(2, 5))
+	var walker: Gen2WorldObject = world.objects[0]
+	walker.movement = Gen2WorldObject.MOVEMENT_WANDER
+	walker.restore_default_movement()
+	var random := RandomNumberGenerator.new()
+	random.seed = 20260921
+	var climbed: int = 0
+	for _decision: int in 40:
+		world.player_cell = Vector2i(2, walker.cell.y - Gen2WorldAPI.OBJECT_SCREEN_MAX.y)
+		var before: Vector2i = walker.cell
+		world.advance_objects(random)
+		assert_true(walker.cell.y <= before.y, "it stepped down off the last row")
+		assert_eq(walker.cell.x, before.x, "it stepped along the last row")
+		climbed += before.y - walker.cell.y
+	assert_true(climbed > 0, "it never stepped up from the last row")
+	world.player_cell = Vector2i(2, walker.cell.y - Gen2WorldAPI.OBJECT_SCREEN_MAX.y - 2)
+	var cell: Vector2i = walker.cell
+	var facing: int = walker.facing
+	for _frame: int in 300:
+		assert_false(world.advance_object_steps_pass(random), "an unseen sprite changed")
+	assert_eq(walker.cell, cell)
+	assert_eq(walker.facing, facing)
+	RomCache.clear(_gen1_directory())
+
+
+## `UpdateNPCSprite` returns on `wWalkCounter` in front of a ready sprite's
+## decision, and the pass that starts the player's step runs `UpdateSprites`
+## before the counter is written. Measured: five of five step starts on the
+## cartridge fell on the pass the player's own step began
+## (`.claude/oracle/battle/gen1_npc_walk.py`).
+func test_gen1_a_ready_object_decides_on_a_standing_pass_or_a_steps_first() -> void:
+	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(2, 8))
+	var walker: Gen2WorldObject = world.objects[0]
+	var random := RandomNumberGenerator.new()
+	random.seed = 7
+	walker.start_idle(0)
+	assert_true(bool(world.move_result(Vector2i.DOWN).get("ok", false)))
+	world.frame_number += 1
+	world.advance_player_step_pass()
+	assert_true(world.advance_object_steps_pass(random), "the step's first pass decides")
+	while walker.is_stepping():
+		walker.tick_step()
+	walker.start_idle(0)
+	while world.player_step_in_progress():
+		world.frame_number += 1
+		world.advance_player_step_pass()
+		assert_false(world.advance_object_steps_pass(random), "a pass mid-step decided")
+	world.frame_number += 1
+	assert_true(world.advance_object_steps_pass(random), "the standing pass after decides")
+	RomCache.clear(_gen1_directory())
+
+
 func test_gen1_script_branches_read_pending_flags_and_scratch_in_each_choice() -> void:
 	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 2))
 	var source: int = 0xCC55

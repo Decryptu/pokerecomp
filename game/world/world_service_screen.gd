@@ -1255,6 +1255,13 @@ func _gen1_mart() -> bool:
 	return _data != null and _data.generation == RomRegistry.GEN1
 
 
+## `.notEnoughMoney`, `.bagFull` and `.unsellableItem` all jump to
+## `.returnToMainPokemartMenu`, so a Generation 1 refusal ends on
+## `PokemartAnythingElseText` and the BUY/SELL/QUIT menu, not on the list.
+func _gen1_refusal_after(after: StringName) -> StringName:
+	return MART_TOP if _gen1_mart() else after
+
+
 ## `w2DMenuNumRows`: `ScrollingMenu_InitFlags` counts CANCEL only when the list
 ## fits; `DisplayListMenuID` fixes `wMaxMenuItem` at 2 and always scrolls.
 func _mart_row_count() -> int:
@@ -1423,7 +1430,7 @@ func _buy_mart_selection() -> void:
 			_mart_stage = MART_LIST
 			_render_mart()
 			return
-		_show_mart_text(_mart_text(slot, {"name": entry.get("name", "")}), MART_LIST)
+		_show_mart_text(_mart_text(slot, {"name": entry.get("name", "")}), _gen1_refusal_after(MART_LIST))
 		return
 	_mart_purchased = true
 	## `PlayTransactionSound` is a `WaitSFX` and then the sound.
@@ -1523,7 +1530,7 @@ func _press_mart_sell_list(button: int) -> void:
 			if not Gen2WorldMartHost.can_sell(_data, int(entry.get("item", 0))):
 				## `.try_sell`'s `_CheckTossableItem` refusal, which leaves the
 				## list up rather than ending the sale.
-				_show_mart_text(_mart_text("cant_buy"), MART_SELL)
+				_show_mart_text(_mart_text("cant_buy"), _gen1_refusal_after(MART_SELL))
 				return
 			_mart_quantity = 1
 			_mart_pages = Gen2TextLayout.lay_out(
@@ -1582,7 +1589,7 @@ func _sell_mart_selection() -> void:
 	if not bool(sold.get("ok", false)):
 		var reason: StringName = StringName(sold.get("reason", &""))
 		if reason == &"item_cannot_be_sold":
-			_show_mart_text(_mart_text("cant_buy"), MART_SELL)
+			_show_mart_text(_mart_text("cant_buy"), _gen1_refusal_after(MART_SELL))
 			return
 		_status = "Sale failed: %s" % String(reason)
 		_mart_stage = MART_SELL
@@ -1592,6 +1599,13 @@ func _sell_mart_selection() -> void:
 	_refresh_mart_sell_entries()
 	_mart_scroll = mini(_mart_scroll, maxi(0, _mart_sell_entries.size() - 1))
 	_cursor = mini(_cursor, maxi(0, _mart_sell_entries.size() - _mart_scroll - 1))
+	## `DisplayPokemartDialogue_` jumps to `.sellMenuLoop` behind a sale with no
+	## box, whatever is left in the bag; `AddAmountSoldToMoney` played the sound.
+	if _gen1_mart():
+		_mart_stage = MART_SELL
+		_mart_over_map = false
+		_render_mart()
+		return
 	_show_mart_text(
 		_mart_text("bought", {
 			"name": sold.get("name", ""), "quantity": _mart_quantity,

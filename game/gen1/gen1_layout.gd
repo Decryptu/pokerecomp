@@ -1888,9 +1888,8 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	"auto_textbox_on", "auto_textbox_off", "count_set_bits", "update_sprites",
 	"load_gym_names",
 	"random",
-	## `SetSpritePosition2` puts back what `GetSpritePosition2` saved on the same
-	## visit, which the map's own table answers here; the image index is drawn.
-	"set_sprite_position_2", "set_sprite_image", "set_sprite_image_2",
+	## The image index is drawn.
+	"set_sprite_image", "set_sprite_image_2",
 	## A wait is frames of nothing. The three trainer rows every fighting map's
 	## own table opens with are the sight walk
 	## `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
@@ -1900,7 +1899,7 @@ const SCRIPT_SILENT_CALLS: Array[String] = [
 	"serial_connect", "fade_out_white", "fade_in_white", "fade_out_black",
 	"fade_in_black", "get_sprite_position", "init_battle_enemy",
 	"gb_pal_white_out_delay", "restore_screen_tiles", "load_gb_pal",
-	"get_sprite_position_2", "save_screen_1", "load_screen_1", "save_screen_2",
+	"save_screen_1", "load_screen_1", "save_screen_2",
 	"load_screen_2", "reload_map_data", "copy_data", "reload_tileset_patterns",
 	"gb_pal_normal", "load_current_map_view",
 ]
@@ -1944,6 +1943,15 @@ const MOVEMENT_SCRIPT_LISTS: Dictionary = {
 		MOVEMENT_SCRIPT_GYM: ["rle_gym_player", "rle_gym_object"],
 	},
 }
+## `PewterGuysCoordsTable`: a `dw` per guide onto rows of `db y, x` and a `dw`
+## to the presses that line the player up, four rows for the museum guy and
+## five for the gym guy, with no terminator on either.
+const PEWTER_GUY_ROWS: Dictionary = {MOVEMENT_SCRIPT_MUSEUM: 4, MOVEMENT_SCRIPT_GYM: 5}
+const PEWTER_GUY_ROW_SIZE: int = 4
+## `PewterGuys` copies the presses over the last byte the RLE list wrote and
+## `JoypadOverworld` spends the buffer from its top, so the presses land in
+## front of the walk, last written first, and `NO_INPUT` stands a pass.
+const MOVE_NONE: int = -1
 const NPC_CHANGE_FACING: int = 0xE0
 const BADGE_NAME_MAX: int = 13
 ## `wSpriteStateData1`: sixteen slots of sixteen bytes, the player's own first
@@ -2949,6 +2957,7 @@ const RED_BLUE: Dictionary = {
 	"is_player_on_dungeon_warp": 0x46981,
 	"load_spinner_arrow_tiles": 0x44FD7,
 	"pewter_guys": 0x37CA1,
+	"pewter_guys_coords": 0x37CE6,
 	"convert_npc_directions": 0x0F9A0,
 	"heal_party": 0x0F6A5,
 	"save_game_data": 0x73848,
@@ -3566,6 +3575,7 @@ const YELLOW: Dictionary = {
 	"is_player_on_dungeon_warp": 0x46BF3,
 	"load_spinner_arrow_tiles": 0x45077,
 	"pewter_guys": 0x1A6E5,
+	"pewter_guys_coords": 0x1A72A,
 	"convert_npc_directions": 0x0F830,
 	"heal_party": 0x0F52B,
 	"save_game_data": 0x73B91,

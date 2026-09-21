@@ -974,10 +974,7 @@ static func _movement_scripts(rom: RomFile, layout: Dictionary, map_id: int) -> 
 		var keys: Array = tables[table]
 		var player: Array = []
 		for pair: Array in _rle_pairs(rom, int(layout[keys[0]])):
-			if Gen1Layout.PAD_DIRECTIONS.has(int(pair[0])):
-				player.push_front({
-					"direction": int(Gen1Layout.PAD_DIRECTIONS[int(pair[0])]), "steps": int(pair[1]),
-				})
+			player.push_front(_press_leg(int(pair[0]), int(pair[1])))
 		var object: Array = []
 		for pair: Array in _rle_pairs(rom, int(layout[keys[1]])):
 			if int(pair[0]) & Gen1Layout.NPC_MOVEMENT_LOW_BITS != 0:
@@ -985,7 +982,34 @@ static func _movement_scripts(rom: RomFile, layout: Dictionary, map_id: int) -> 
 			for _step: int in int(pair[1]):
 				object.append(int(pair[0]) >> Gen1Layout.NPC_MOVEMENT_SHIFT)
 		out[str(table)] = {"player": player, "object": object}
+		if Gen1Layout.PEWTER_GUY_ROWS.has(table):
+			(out[str(table)] as Dictionary)["approaches"] = _pewter_guy_approaches(rom, layout, table)
 	return out
+
+
+## `PewterGuysCoordsTable`'s rows for one guide, each carrying its presses in
+## the order `JoypadOverworld` spends them: the copy's last byte first.
+static func _pewter_guy_approaches(rom: RomFile, layout: Dictionary, table: int) -> Array:
+	var rows: Array = []
+	var bank: int = RomFile.bank_of(int(layout["pewter_guys_coords"]))
+	var list: int = RomFile.linear(bank, rom.u16le(
+		int(layout["pewter_guys_coords"]) + 2 * (table - Gen1Layout.MOVEMENT_SCRIPT_MUSEUM)
+	))
+	for row: int in int(Gen1Layout.PEWTER_GUY_ROWS[table]):
+		var at: int = list + row * Gen1Layout.PEWTER_GUY_ROW_SIZE
+		var presses: Array = []
+		var press_at: int = RomFile.linear(bank, rom.u16le(at + 2))
+		while rom.in_bounds(press_at, 1) and rom.u8(press_at) != Gen1Layout.RLE_END \
+			and presses.size() < Gen1Layout.SIMULATED_JOYPAD_MAX:
+			presses.push_front(_press_leg(rom.u8(press_at), 1))
+			press_at += 1
+		rows.append({"y": rom.u8(at), "x": rom.u8(at + 1), "presses": presses})
+	return rows
+
+
+## A simulated press as a walking leg; `NO_INPUT` is a pass spent standing.
+static func _press_leg(press: int, steps: int) -> Dictionary:
+	return {"direction": int(Gen1Layout.PAD_DIRECTIONS.get(press, Gen1Layout.MOVE_NONE)), "steps": steps}
 
 
 static func _rle_pairs(rom: RomFile, at: int) -> Array:
@@ -4130,6 +4154,13 @@ static func _script_called_more(
 			return _script_boulder_coords(ctx, state, next)
 		"set_sprite_position":
 			return _script_sprite_position(state, out, next)
+		"get_sprite_position_2", "set_sprite_position_2":
+			## `wSavedSprite*`, which only Pewter City's two guides read and write.
+			if not state.has("sprite_index_wram"):
+				return SCRIPT_UNREAD
+			out.append({"op": "object_position_" + ("save" if routine.begins_with("get") else "restore"),
+				"object": int(state["sprite_index_wram"]) - 1})
+			return next
 		"get_mon_name":
 			return _script_name_species(ctx, state, out, next)
 		"get_item_name":

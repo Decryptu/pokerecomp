@@ -30,11 +30,13 @@ const CODED_HEADER_FLAGS: Dictionary = {
 ## `view_range << 4` is a pixel distance, so the stored range is a nibble.
 const MAX_SIGHT_RANGE: int = 5
 
-## Sight lines walked, cells engaging their own trainer, and cells behind one.
+## Sight lines walked, cells engaging their own trainer, cells behind one, and
+## cells inside a range but outside `CheckSpriteAvailability`'s window: Pewter
+## Gym's range-5 trainer facing right, five cells from column 8.
 const SIGHT_CENSUS: Dictionary = {
-	&"red": {"lines": 295, "cells": 880, "behind": 0},
-	&"blue": {"lines": 295, "cells": 880, "behind": 0},
-	&"yellow": {"lines": 291, "cells": 868, "behind": 0},
+	&"red": {"lines": 295, "cells": 879, "behind": 0, "unseen": 1},
+	&"blue": {"lines": 295, "cells": 879, "behind": 0, "unseen": 1},
+	&"yellow": {"lines": 291, "cells": 867, "behind": 0, "unseen": 1},
 }
 
 ## `BattleTransitions`' four trainer rows and the frames each runs to black in.
@@ -280,12 +282,12 @@ func _every_routine_acts() -> void:
 
 
 ## `CheckFightingMapTrainers` walked from every cell of every trainer's own
-## line: inside the range the shock bubble and the walk-up open, and one cell
-## past it or one cell behind, nothing does. `CheckPlayerIsInFrontOfSprite`
+## line: inside the range and the window the shock bubble and the walk-up open,
+## and one cell past it or one cell behind, nothing does. `CheckPlayerIsInFrontOfSprite`
 ## exempts the Power Plant, but every fake item there carries `view_range` 0,
 ## which `CheckSpriteCanSeePlayer` refuses at any distance, so `behind` is 0.
 func _every_trainer_sees() -> void:
-	var census: Dictionary = {"lines": 0, "cells": 0, "behind": 0}
+	var census: Dictionary = {"lines": 0, "cells": 0, "behind": 0, "unseen": 0}
 	for map: Gen2WorldMap in _r.data.world_maps():
 		var rows: Array = map.events["objects"]
 		var world: Gen2WorldAPI = null
@@ -311,6 +313,12 @@ func _one_sight_line(
 	var where: String = "map %d object %d" % [map.number, index]
 	census["lines"] += 1
 	for distance: int in range(1, object.sight_range + 1):
+		world.player_cell = object.cell + step * distance
+		if not world.gen1_sprite_visible(object):
+			census["unseen"] += 1
+			_r.check(_engaged_at(world, world.player_cell) != index,
+				"%s saw %d cells ahead from off the screen." % [where, distance])
+			continue
 		var engaged: int = _engaged_at(world, object.cell + step * distance)
 		if not _r.check(engaged >= 0 and engaged <= index,
 			"%s saw nobody %d cells ahead." % [where, distance]):
