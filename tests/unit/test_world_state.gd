@@ -93,6 +93,28 @@ func test_engine_flags_round_trip_and_daily_reset_preserves_hall_of_fame() -> vo
 	assert_false(restored.reset_daily_flags())
 
 
+## `DrawStartMenu` and `DisplayPCMainMenu` `CheckEvent EVENT_GOT_POKEDEX`, which
+## is what Oak's Lab sets, so on a Generation 1 world the engine flag every
+## reader asks for is that event, both ways, and a saved event survives alone.
+func test_the_gen1_pokedex_flag_is_event_got_pokedex() -> void:
+	var state := Gen2WorldState.new()
+	state.gen1 = true
+	var dex: int = int(Gen2WorldState.GEN1_ENGINE_EVENTS[Gen2WorldState.ENGINE_POKEDEX])
+	assert_false(state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX))
+	state.set_event_flag(dex, true)
+	assert_true(state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX))
+	state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, false)
+	assert_false(state.is_event_flag_active(dex), "a clear reaches the event")
+	assert_false(state.engine_flags().has(Gen2WorldState.ENGINE_POKEDEX), "and no engine flag is kept")
+	state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+	var restored := Gen2WorldState.from_dict(state.to_dict())
+	restored.gen1 = true
+	assert_true(restored.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX))
+	restored.gen1 = false
+	assert_false(restored.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX),
+		"a Generation 2 world reads its own flag")
+
+
 func test_badge_count_matches_active_flags_across_both_bytes() -> void:
 	var state := Gen2WorldState.new()
 	assert_eq(state.badge_count(), 0)
