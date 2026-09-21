@@ -16,31 +16,18 @@ an empty body. -->
 
 ## Added
 
-- The START menu, the PC, the Cable Club and the trainer card on Red, Blue and Yellow show the POKéDEX once Prof. Oak has handed it over. The row never appeared before, on any of the three, and a save that already has the Pokedex sees it on load.
-- The low-health alarm sounds in a Red, Blue or Yellow battle when the bar turns red, and stops when it turns back.
-- Cutting a tree or grass on Red, Blue and Yellow plays the cartridge's own cut: the block splits apart under the cut sound, or the leaves scatter, with the view redrawn on either side.
-- Selecting an item with SELECT on Red, Blue and Yellow and pressing it on another swaps the two rows, in the bag and in the mart's sell list.
-- Talking to someone on Red, Blue and Yellow turns them to face you, and someone who stands still turns back afterwards, as on the cartridge.
+- A new game on Red, Blue and Yellow is now played through by a check on the real screens before every release: from the copyright screen to the save, then the bedroom, Prof. Oak, the starter, the rival, the parcel, the Pokedex, Viridian Forest and Brock, every button pressed the way a player presses it and the sound driver running. Every fix below came out of its first run.
 
 ## Changed
 
-- A Pokemon's HP bar on Red, Blue and Yellow turns yellow under 27 pixels, where Gold, Silver and Crystal's turns under 24.
-- Someone more than half a screen away on Red, Blue and Yellow stands frozen, as on the cartridge, and a trainer there cannot see you.
-- Pewter City's two guides walk you to the museum door or the gym sign from wherever they meet you, as the cartridge's tables say, and stand back where they were afterwards.
-- The two Cinnabar Gym doors and every other block a script swaps in view on Red, Blue and Yellow hold the frames the cartridge's redraw spends.
-- Pressing a direction on Red, Blue and Yellow is read on the overworld's own pass, behind the map's script, so a tap on the step onto Pallet Town's north path meets Prof. Oak rather than walking out onto Route 1.
-- The imported cache is format 151 and is rebuilt on first launch.
+- Every check that drives a screen by hand now runs the sound driver with it, so a text box waiting on a sound that never ends fails in a check rather than on a phone.
+- Pressing A, START or SELECT on Red, Blue and Yellow is read on the overworld's own pass behind the map's script, as a direction already was. Talking to Prof. Oak again the moment his parcel text closes no longer lands in front of your rival's entrance.
 
 ## Fixed
 
-- Prof. Oak's PIKACHU battle on Yellow no longer freezes on an empty text box before "Wild PIKACHU appeared!". A battle screen refresh had left the low-health alarm byte at a value Yellow's sound driver reads as "hold the first sound channel", so every cry hung and the text waiting behind it never came; on Android with sound on, no Yellow battle got past its first cry.
-- The first cry of a session on Red, Blue and Yellow no longer waits about four seconds before its text: a fresh driver's wave channel counted 255 frames on a cry that never used it.
-- A move used instead of the one you chose on Red, Blue and Yellow says "used instead," as the cartridge does.
-- A Rare Candy and a level gained in battle on Red, Blue and Yellow play their sound and wait for a press before the stat box, and a TM a Pokemon cannot learn or already knows says so in the cartridge's words with its refusal sound and returns to the party list.
-- The mart on Red, Blue and Yellow returns to BUY/SELL/QUIT after "not enough money", "bag full" and "can't sell that", and to the sell list after a sale, with no extra box.
-- Pewter Gym's trainer by the door on Red, Blue and Yellow no longer spots you from a column he cannot see.
-- A trainer's Pokemon in the swap list on Red, Blue and Yellow prints no ABLE/NOT ABLE beside every row where the cartridge prints none, and the swap arrow stands on the nickname's row.
-- The play timer on Red, Blue and Yellow stops at 255 hours and keeps counting through the Hall of Fame.
+- Pressing A during Prof. Oak's PIKACHU catch on Yellow, or the old man's catch in Viridian City, no longer takes over the battle. A press that reached the menu fought the demo with the demonstrator's own two Pokemon, and those two were then written into your party as if they were yours.
+- Yellow no longer sends you home to your bedroom after Prof. Oak's catch when your party is still empty.
+- Flying and using an Escape Rope on Red, Blue and Yellow hold the frames the cartridge spends fading the music out and waiting for the last sound, which the check that pins them had not been counting.
 
 ## Which file
 
