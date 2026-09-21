@@ -297,3 +297,89 @@ func test_channel_pointers_are_overwritten_by_row() -> void:
 	engine.overwrite_channel_pointers([[0, 0x1234], [1, 0x2345], [0, 0x3456]])
 	assert_eq(engine.channel_command_pointer(0), 0x3456)
 	assert_eq(engine.channel_command_pointer(1), 0x2345)
+
+
+## A cry header names channels 5, 6 and 8, and `.playSoundCommon` hands channel
+## 7 the cry's id over a `sound_ret` it never initialised, so that channel counts
+## down from whatever `wChannelNoteDelayCounters` held. `Init`'s `StopAllSounds`
+## leaves one there; a zero is 255 frames of an effect that never plays.
+const CRY: int = 23
+const CRY_STREAMS: Array = [
+	[4, [0x23, 0xF0, 0x00, 0x07, 0xFF]],
+	[5, [0x21, 0xF0, 0x00, 0x07, 0xFF]],
+	[7, [0x21, 0xF0, 0x00, 0xFF]],
+]
+
+
+func _cry_frames(engine: Gen1SoundEngine) -> int:
+	var frames: int = 0
+	while engine.sfx_active() and frames < 300:
+		engine.update_music()
+		frames += 1
+	return frames
+
+
+func test_a_cry_ends_on_every_channel_of_a_fresh_driver() -> void:
+	var engine: Gen1SoundEngine = _engine({CRY: CRY_STREAMS})
+	engine.play_sound(CRY)
+	assert_eq(engine.channel_sound_id(Gen1SoundEngine.CHAN7), CRY, "the wave channel carries the cry's id")
+	assert_eq(_cry_frames(engine), 5, "channel 5's four frames and its ret, then the rewound channels' own")
+	assert_eq(engine.channel_sound_id(Gen1SoundEngine.CHAN7), 0)
+
+
+## `PlaySound` under a `wNewSoundID`, which only `PlayMusic` writes, zeroes the
+## four effect ids before the piece is started.
+func test_play_music_takes_the_effect_channels_with_it() -> void:
+	var engine: Gen1SoundEngine = _engine({200: [[0, [0xFF]]], CRY: CRY_STREAMS})
+	engine.play_sound(CRY)
+	assert_true(engine.play_music(BANK, 200))
+	assert_false(engine.sfx_active())
+
+
+## `PlayNextNote` holds the first effect channel while the alarm bit stands, in
+## Red and Blue's battle copy of the driver and in Yellow's one `UpdateMusic`.
+func test_the_alarm_holds_channel_five_in_the_copies_that_read_it() -> void:
+	var rows: Array = [
+		[BANK, false, false], [Gen1Layout.AUDIO_BANK_ROM[1], false, true],
+		[BANK, true, true], [Gen1Layout.AUDIO_BANK_ROM[1], true, true],
+	]
+	for row: Array in rows:
+		var engine: Gen1SoundEngine = _engine({CRY: CRY_STREAMS})
+		var entry: Dictionary = _bank({CRY: CRY_STREAMS})
+		entry["bank"] = int(row[0])
+		engine.register_bank(entry)
+		engine.audio_rom_bank = int(row[0])
+		engine.yellow = bool(row[1])
+		engine.play_sound(CRY)
+		engine.low_health_alarm = Gen1SoundEngine.BIT_LOW_HEALTH_ALARM
+		var held: bool = _cry_frames(engine) >= 300
+		assert_eq(held, bool(row[2]), "bank $%02X, yellow %s" % [int(row[0]), row[1]])
+
+
+## `Music_DoLowHealthAlarm`: $ff is the silencing tone and a clear, the bit runs
+## a thirty-frame timer with the high tone at 0 and the low at 20, and channel
+## 5's id reads CRY_SFX_END for as long as it runs.
+func test_the_alarm_writes_its_tones_on_the_timer_and_ff_silences_it() -> void:
+	var engine: Gen1SoundEngine = _engine({})
+	engine.apu.tracing = true
+	engine.low_health_alarm = Gen1SoundEngine.BIT_LOW_HEALTH_ALARM
+	engine.apu.trace_lines = PackedStringArray()
+	for frame: int in 32:
+		engine.apu.trace_frame = frame
+		engine.do_low_health_alarm()
+	var writes: Array = []
+	for line: String in engine.apu.trace_lines:
+		var parts: PackedStringArray = line.split(" ")
+		writes.append([int(parts[0]), parts[1].hex_to_int(), parts[2].hex_to_int()])
+	assert_eq(_frames_of(writes, NR13), [0, 11, 31], "the high tone, the low tone at 20, the high again at 0")
+	assert_eq(_values(writes, NR13), [0x50, 0xEE, 0x50])
+	assert_eq(engine.channel_sound_id(Gen1SoundEngine.CHAN5), Gen1SoundEngine.CRY_SFX_END)
+	engine.low_health_alarm = Gen1SoundEngine.DISABLE_LOW_HEALTH_ALARM
+	engine.apu.trace_lines = PackedStringArray()
+	engine.do_low_health_alarm()
+	assert_eq(engine.low_health_alarm, 0)
+	assert_eq(engine.channel_sound_id(Gen1SoundEngine.CHAN5), 0)
+	var silence: Array = []
+	for line: String in engine.apu.trace_lines:
+		silence.append(line.split(" ")[2].hex_to_int())
+	assert_eq(silence, [0, 0, 0, 0, 0x80], "the silencing tone, sweep first")

@@ -392,6 +392,9 @@ var _input_replay: Dictionary = {}
 var _replaying_input: bool = false
 ## What a replay is holding down, in place of the runtime's own poll.
 var _replay_held_direction: int = PokeButton.NONE
+## A direction pressed since the last pass, held for the whole of the next one:
+## `GetJoypad` is read inside the pass, behind `RunMapScript`.
+var _pressed_direction: int = PokeButton.NONE
 ## Beside the held direction: a hold that changes a step's duration and is not in
 ## the log makes every replay taken while running wrong.
 var _replay_running: bool = false
@@ -1031,6 +1034,7 @@ func _advance_movement(map_pass: bool) -> void:
 		if stepped and _world != null and not _world.player_step_in_progress() \
 			and not _world.is_gen1():
 			_advance_held_direction()
+		_pressed_direction = PokeButton.NONE
 	## Not the pass's: an emote's own countdown stands in for the `pause` between
 	## `ShowEmoteScript`'s two movements, and a script's `DelayFrames` is spent
 	## from inside the command rather than by `NextOverworldFrame`.
@@ -1128,9 +1132,7 @@ func _apply_gen1_spinner() -> void:
 
 
 ## `JoypadOverworld` runs `RunMapScript` on every pass the walk counter is
-## zero, in front of the direction it then reads: Pallet Town's state 0 hands
-## over to its state 1 on one pass and that state opens Oak's box on the next,
-## and a held UP between the two walked out onto Route 1 here.
+## zero, in front of the direction it then reads.
 func _run_gen1_map_script_pass() -> void:
 	if _world == null or not _world.is_gen1() or _world.player_step_in_progress() \
 		or not _objects_may_move() or _world.script_busy() \
@@ -1286,6 +1288,8 @@ func _advance_held_direction() -> void:
 	## was held rather than what the world did with it.
 	var direction: int = _replay_held_direction if _replaying_input \
 		else Gen2InputRuntime.instance().held_direction()
+	if direction == PokeButton.NONE:
+		direction = _pressed_direction
 	var running: bool = _replay_running if _replaying_input \
 		else Gen2ModHost.run_button_held()
 	if _world != null:
@@ -1537,7 +1541,7 @@ func _handle_button(button: int) -> bool:
 	## `CheckStandingOnIce` in `OWPlayerInput` and has already decided what a
 	## direction means while a slide is running.
 	if PokeButton.is_direction(button):
-		move_player(_world.effective_input_direction(PokeButton.vector(button)))
+		_pressed_direction = button
 		return true
 	## `OWPlayerInput`'s own comment: "Can't perform button actions while sliding
 	## on ice." `CheckStandingOnIce` stands in front of `CheckAPressOW` and
@@ -5745,7 +5749,7 @@ func _play_battle_music(request: Dictionary) -> void:
 	if record.is_empty():
 		_audio_player.stop_all()
 		return
-	_audio_player.play_record(record, &"map_music", _audio_assets())
+	_audio_player.play_record(record, &"battle_music", _audio_assets())
 
 
 ## `InitBattleVariables` reads `wCurMap` alone, so every wild fight on the Safari
