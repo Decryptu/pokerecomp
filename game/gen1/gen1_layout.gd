@@ -118,6 +118,8 @@ const PAL_BLACK: int = 0x1E  ## `SetPal_PokemonWholeScreen`'s row while `EvolveM
 const HP_BAR_PALETTES: Dictionary = {
 	"hp_green": 0x1F, "hp_yellow": 0x20, "hp_red": 0x21,
 }
+## `GetHealthBarColor`'s `cp 27`; the yellow floor is Crystal's 10.
+const HP_GREEN_PIXELS: int = 27
 
 ## Evolutions by method until a zero byte, then (level, move) pairs until
 ## another; `EVOLVE_ITEM` is the only four-byte row.

@@ -429,7 +429,9 @@ func render(page: Dictionary, data: GameData) -> Image:
 	)
 	var tint: Color = Color.WHITE if egg else data.stats_page_tint(number)
 	var palettes: Array = [
-		_tinted(data.bar_palette(GameData.hp_bar_palette_name(lit)), tint),
+		_tinted(data.bar_palette(
+			GameData.hp_bar_palette_name(lit, data.generation == RomRegistry.GEN1)
+		), tint),
 		data.egg_palette() if egg \
 			else data.palette(int(page.get("species", 0)), bool(page.get("shiny", false))),
 		_tinted(data.bar_palette(GameData.EXP_BAR_PALETTE), tint),
@@ -976,7 +978,7 @@ func _blend_gen1_bar(
 		hp, max_hp, Gen2BattleHud.HP_BAR_TILES * TILE
 	)
 	var table: PackedInt32Array = Gen2PicImage.lookup(
-		data.bar_palette(GameData.hp_bar_palette_name(lit)), true
+		data.bar_palette(GameData.hp_bar_palette_name(lit, data.generation == RomRegistry.GEN1)), true
 	)
 	var left: int = (GEN1_HP_BAR_AT.x + 2) * TILE
 	for y: int in TILE:

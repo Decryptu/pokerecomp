@@ -82,7 +82,7 @@ func hp_palette(hp: int, max_hp: int) -> PackedColorArray:
 	var lit: int = Gen2BattleHud.bar_pixels(
 		hp, max_hp, Gen2BattleHud.HP_BAR_TILES * Gen2BattleHud.TILE
 	)
-	return _data.bar_palette(GameData.hp_bar_palette_name(lit))
+	return _data.bar_palette(GameData.hp_bar_palette_name(lit, _data.generation == RomRegistry.GEN1))
 
 
 ## One of `SetPal_Battle`'s four; every `SuperPalettes` row shares colours 0

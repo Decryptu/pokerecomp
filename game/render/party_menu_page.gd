@@ -291,7 +291,7 @@ func reset(rows: Array) -> void:
 		var speed: int = GameData.hp_bar_palette_index(Gen2BattleHud.bar_pixels(
 			int(member.get("hp", 0)), int(member.get("max_hp", 0)),
 			Gen2BattleHud.HP_BAR_TILES * TILE
-		))
+		), data.generation == RomRegistry.GEN1)
 		## `PlacePartyMenuHPBar` never runs for an egg, so the speed byte behind
 		## its icon is whatever the last party left in `wHPPals`. Zero here, the
 		## green one, rather than a stale byte no save can reproduce.
@@ -491,7 +491,7 @@ func _blend_bar(pixels: PackedInt32Array, index: int, row: Dictionary) -> void:
 		hp, max_hp, Gen2BattleHud.HP_BAR_TILES * TILE
 	)
 	var table: PackedInt32Array = Gen2PicImage.lookup(
-		data.bar_palette(GameData.hp_bar_palette_name(lit)), true
+		data.bar_palette(GameData.hp_bar_palette_name(lit, data.generation == RomRegistry.GEN1)), true
 	)
 	var left: int = (hp_bar_at.x + 2) * TILE
 	for y: int in TILE:

@@ -3092,14 +3092,15 @@ const EXP_BAR_PALETTE: String = "exp"
 ## Which HP bar palette a bar of [param lit] pixels is drawn in. The colour
 ## follows what is drawn rather than the numbers behind it, which is why a bar
 ## can turn red on a Pokémon that still has a good few hit points.
-static func hp_bar_palette_name(lit: int) -> String:
-	return HP_BAR_PALETTE_NAMES[hp_bar_palette_index(lit)]
+static func hp_bar_palette_name(lit: int, gen1: bool = false) -> String:
+	return HP_BAR_PALETTE_NAMES[hp_bar_palette_index(lit, gen1)]
 
 
 ## `GetHPPal`'s own answer, HP_GREEN, HP_YELLOW or HP_RED, for the callers that
-## index a table with it rather than naming a palette.
-static func hp_bar_palette_index(lit: int) -> int:
-	if lit >= Gen2Layout.HP_GREEN_PIXELS:
+## index a table with it rather than naming a palette. Generation 1's
+## `GetHealthBarColor` turns yellow under 27 pixels, Crystal's under 24.
+static func hp_bar_palette_index(lit: int, gen1: bool = false) -> int:
+	if lit >= (Gen1Layout.HP_GREEN_PIXELS if gen1 else Gen2Layout.HP_GREEN_PIXELS):
 		return 0
 	if lit >= Gen2Layout.HP_YELLOW_PIXELS:
 		return 1
