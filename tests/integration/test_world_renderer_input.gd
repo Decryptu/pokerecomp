@@ -177,11 +177,14 @@ func test_a_renderer_never_receives_a_movement_or_interaction_button() -> void:
 	var renderer: Node = await _open_world_with_renderer()
 	var before: Vector2i = _world_screen._world.player_cell
 	## The first press is `.CheckTurning`'s turn on the spot, since the player
-	## spawns facing down; the walk is the press after it.
+	## spawns facing down; the walk is the press after it. A press is read on
+	## the pass after it, so each is followed by one.
 	_world_screen._unhandled_input(_press(KEY_RIGHT))
+	_world_screen.advance_frames(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS)
 	while _world_screen._world.player_step_in_progress():
 		_world_screen._world.advance_player_step_pass()
 	_world_screen._unhandled_input(_press(KEY_RIGHT))
+	_world_screen.advance_frames(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS)
 	_world_screen._unhandled_input(_press(KEY_SPACE))
 	# The screen claimed both: the player moved, and neither key was offered on.
 	assert_ne(_world_screen._world.player_cell, before)

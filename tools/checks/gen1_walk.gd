@@ -4267,6 +4267,11 @@ func _check_the_lab_parcel(world: Gen2WorldAPI, spoken: Array[String]) -> void:
 	_drive_the_lab(world, spoken, LAB_NOOP)
 	_r.check(world.event_flag_active(OAK_GOT_PARCEL_FLAG), "EVENT_OAK_GOT_PARCEL is clear.")
 	_r.check(world.event_flag_active(GOT_POKEDEX_FLAG), "EVENT_GOT_POKEDEX is clear.")
+	_r.check(world.state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX)
+		and Gen2WorldStartMenu.from_world(world).items().any(
+			func(item: Dictionary) -> bool:
+				return StringName(item.get("kind", &"")) == Gen2WorldStartMenu.ITEM_POKEDEX),
+		"the START menu has no POKéDEX row after Oak gave it.")
 	_r.check(world.event_flag_active(ROUTE22_RIVAL_WANTS_BATTLE_FLAG),
 		"EVENT_ROUTE22_RIVAL_WANTS_BATTLE is clear.")
 	for index: int in LAB_POKEDEXES:

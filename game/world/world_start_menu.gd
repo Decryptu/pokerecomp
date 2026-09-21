@@ -74,12 +74,10 @@ const SOURCE_ENTRIES: Array[Dictionary] = [
 	{"kind": ITEM_LAUNCHER, "label": "HOME", "available": true, "gate": GATE_NO_CONTEST},
 ]
 
-## `DrawStartMenu` (engine/menus/draw_start_menu.asm), which prints its labels
-## as literal characters rather than through the `#` and `<POKE>` markers
-## Generation 2's charmap holds. Its list has no Pokegear and no contest, and
-## `StartMenu_Pokemon` is drawn whatever `wPartyCount` says: the row itself
-## returns on an empty party. `EVENT_GOT_POKEDEX` is the only gate, read here
-## off the same engine flag [Gen2WorldAPI] holds it in.
+## `DrawStartMenu` (engine/menus/draw_start_menu.asm), whose labels are literal
+## characters rather than Generation 2's `#` and `<POKE>` markers. No Pokegear,
+## no contest, `StartMenu_Pokemon` drawn whatever `wPartyCount` says, and
+## `EVENT_GOT_POKEDEX` the only gate.
 const GEN1_ENTRIES: Array[Dictionary] = [
 	{"kind": ITEM_POKEDEX, "label": "POKéDEX", "available": true, "gate": GATE_POKEDEX},
 	{"kind": ITEM_POKEMON, "label": "POKéMON", "available": true, "gate": &""},

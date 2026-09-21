@@ -25,6 +25,7 @@ func run(r: RefCounted) -> void:
 		_verify_every_record_plays()
 		_verify_every_map_track()
 		_verify_every_cry()
+		_verify_every_cry_ends()
 		_verify_the_role_tables()
 		_verify_the_poke_flute()
 		_verify_the_alternate_starts()
@@ -224,6 +225,52 @@ func _verify_every_cry() -> void:
 	])
 	_r.check(missing.is_empty(), "%d cries do not resolve: %s." % [
 		missing.size(), ", ".join(missing.slice(0, 8)),
+	])
+
+
+## Every cry on a driver as `Init` leaves it, out of every bank: the effect
+## channels fall silent, the wave channel the header never initialised included.
+const CRY_FRAMES_TOTAL: int = 7868
+const CRY_FRAMES_LONGEST: int = 135
+const CRY_FRAMES_CAP: int = 300
+
+
+func _verify_every_cry_ends() -> void:
+	var assets: Dictionary = _r.data.audio_assets()
+	var total: int = 0
+	var longest: int = 0
+	var stuck: Array[String] = []
+	for number: int in range(1, Gen1Layout.SPECIES_COUNT + 1):
+		var record: Dictionary = _r.data.species_cry(number)
+		var frames: Array[int] = []
+		for bank: int in Gen1Layout.AUDIO_BANK_ROM:
+			var engine := Gen1SoundEngine.new()
+			engine.yellow = _engine.yellow
+			engine.set_assets(assets)
+			if not engine.bank_is_registered(bank):
+				continue
+			engine.audio_rom_bank = bank
+			engine.frequency_modifier = int(record.get("cry_pitch", 0)) & 0xFF
+			engine.tempo_modifier = int(record.get("cry_length", 0x80)) & 0xFF
+			engine.play_sound(int(record["sound_id"]))
+			var count: int = 0
+			while engine.sfx_active() and count < CRY_FRAMES_CAP:
+				engine.update_music()
+				count += 1
+			frames.append(count)
+		if frames.max() >= CRY_FRAMES_CAP or frames.min() != frames.max():
+			stuck.append("species %d: %s" % [number, frames])
+		total += frames[0]
+		longest = maxi(longest, frames[0])
+	_r.check(stuck.is_empty(), "%d cries hang or differ by bank: %s." % [
+		stuck.size(), ", ".join(stuck.slice(0, 8)),
+	])
+	_r.check(total == CRY_FRAMES_TOTAL and longest == CRY_FRAMES_LONGEST,
+		"the cries take %d frames with the longest at %d, not %d and %d." % [
+			total, longest, CRY_FRAMES_TOTAL, CRY_FRAMES_LONGEST,
+		])
+	_r.note("cries: %d frames over %d species, the longest %d." % [
+		total, Gen1Layout.SPECIES_COUNT, longest,
 	])
 
 

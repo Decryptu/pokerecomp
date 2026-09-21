@@ -57,6 +57,8 @@ const ENGINE_HALL_OF_FAME: int = ENGINE_CREDITS_SKIP
 ## `CheckReceivedDex`'s own flag, which is what the Pokemon Center PC's list
 ## selection reads before the Hall of Fame one.
 const ENGINE_POKEDEX: int = 11
+## Generation 1 keeps it in EVENT_GOT_POKEDEX, which `DrawStartMenu` checks.
+const GEN1_ENGINE_EVENTS: Dictionary = {ENGINE_POKEDEX: 37}
 ## The next bit of the same `wStatusFlags` byte, `STATUSFLAGS_UNOWN_DEX_F`, which
 ## `Pokedex_CheckUnlockedUnownMode` reads and only the Ruins of Alph research
 ## centre's scientist sets. Ahead of ENGINE_MOBILE_SYSTEM, so it is one index on
@@ -307,6 +309,8 @@ var _toggled_objects: Dictionary = {}
 ## run: which state of its own machine a map's per-frame script stands on. Zero
 ## is the cartridge's own new game, so only a byte a script has moved is kept.
 var _gen1_map_scripts: Dictionary = {}
+## Stamped by [Gen2WorldAPI] and never saved: the numbers inside are the cartridge's.
+var gen1: bool = false
 ## `wPlayerStarter` and `wRivalStarter`, the cartridge's own bytes: a species
 ## index on Red and Blue, and Yellow's RIVAL_STARTER_* for the rival.
 var _gen1_starters: Dictionary = {}
@@ -904,11 +908,16 @@ func event_flags() -> Dictionary:
 
 
 func is_engine_flag_active(flag: int) -> bool:
+	if gen1 and GEN1_ENGINE_EVENTS.has(flag):
+		return is_event_flag_active(int(GEN1_ENGINE_EVENTS[flag]))
 	return flag >= 0 and bool(_engine_flags.get(flag, false))
 
 
 func set_engine_flag(flag: int, active: bool = true) -> void:
 	if flag < 0:
+		return
+	if gen1 and GEN1_ENGINE_EVENTS.has(flag):
+		set_event_flag(int(GEN1_ENGINE_EVENTS[flag]), active)
 		return
 	var was_active: bool = is_engine_flag_active(flag)
 	if was_active == active:

@@ -1455,14 +1455,53 @@ func _the_tutor_throws() -> void:
 		return
 	var lab: Gen2WorldScreen = _open_screen(PALLET_TOWN, TUTOR_CELL, false)
 	lab.preview_catch_tutorial(true)
-	var oak: Dictionary = _drive_tutor(lab)
+	_check_oaks_throw(lab, _drive_tutor(lab), "preview")
+	_close_screen(lab)
+	_oaks_battle_from_the_north_path()
+
+
+func _check_oaks_throw(lab: Gen2WorldScreen, oak: Dictionary, how: String) -> void:
 	var pikachu: String = String(_r.data.species(PIKACHU_DEX).get("name", ""))
 	_r.check(oak["frames"] < TUTOR_GUARD_FRAMES, "Prof. Oak's battle never ended: %s" % [oak])
 	_r.check((oak["messages"] as Array).has(TUTOR_USED % "PROF.OAK")
 		and (oak["messages"] as Array).has(TUTOR_CAUGHT % pikachu), "Prof. Oak's throw said %s" % [oak])
 	_r.check(lab.active_save().party.is_empty(), "Prof. Oak's PIKACHU joined the party.")
-	_r.note("gen1 tutor: Prof. Oak's %s in %d frames" % [pikachu, oak["frames"]])
-	_close_screen(lab)
+	_r.note("gen1 tutor: Prof. Oak's %s in %d frames, %s" % [pikachu, oak["frames"], how])
+
+
+## The same fight the way a player reaches it, UP pressed a frame at a time up
+## Pallet Town's north path, with the sound driver clocked a frame a frame so
+## every `WaitForSoundToFinish` is waited for real.
+const NORTH_PATH_CELL := Vector2i(10, 3)
+const NORTH_PATH_FRAMES: int = 1200
+const WILD_LINE_FRAMES: int = 200
+const WILD_LINE: String = "Wild %s
+appeared!"
+
+
+func _oaks_battle_from_the_north_path() -> void:
+	var screen: Gen2WorldScreen = _open_screen(PALLET_TOWN, NORTH_PATH_CELL, false)
+	var world: Gen2WorldAPI = screen.world()
+	var player: Gen2AudioPlayer = screen.get("_audio_player")
+	var frames: int = 0
+	while frames < NORTH_PATH_FRAMES and screen.get("_battle_host") == null:
+		frames += 1
+		if not world.script_input_waiting() and world.player_cell.y > 0:
+			screen.press_button(PokeButton.UP)
+		var box: Gen2TextBox = screen.get("_text_box")
+		if world.script_input_waiting() or (box.visible and not box.is_revealing()):
+			screen.press_button(PokeButton.A)
+		screen.advance_frame()
+		player.advance_driver_frame()
+	_r.check(screen.get("_battle_host") != null, "Oak never fought after %d frames." % frames)
+	var oak: Dictionary = _drive_tutor(screen, player)
+	var wild: String = WILD_LINE % String(_r.data.species(PIKACHU_DEX).get("name", ""))
+	var line_at: int = int((oak["frames_at"] as Dictionary).get(wild, TUTOR_GUARD_FRAMES))
+	_r.check(line_at < WILD_LINE_FRAMES, "%s took %d frames of the fight." % [wild.replace("\n", " "), line_at])
+	_r.check(not player.low_health_alarm() and not player.effect_playing(),
+		"the fight left the driver on %s." % [player.audio_status()])
+	_check_oaks_throw(screen, oak, "north path")
+	_close_screen(screen)
 
 
 func _open_screen(map: int, cell: Vector2i, party: bool) -> Gen2WorldScreen:
@@ -1473,13 +1512,16 @@ func _close_screen(screen: Gen2WorldScreen) -> void:
 	_r.close_screen(screen)
 
 
-func _drive_tutor(screen: Gen2WorldScreen) -> Dictionary:
+func _drive_tutor(screen: Gen2WorldScreen, player: Gen2AudioPlayer = null) -> Dictionary:
 	var messages: Array[String] = []
+	var frames_at: Dictionary = {}
 	var frames: int = 0
 	var host: Gen2BattleScreen = null
 	while frames < TUTOR_GUARD_FRAMES:
 		frames += 1
 		screen.advance_frame()
+		if player != null:
+			player.advance_driver_frame()
 		var current: Gen2BattleScreen = screen.get("_battle_host")
 		if host == null:
 			host = current
@@ -1490,9 +1532,11 @@ func _drive_tutor(screen: Gen2WorldScreen) -> Dictionary:
 		var line: String = String(snapshot.get("message", ""))
 		if messages.is_empty() or messages.back() != line:
 			messages.append(line)
+			if not frames_at.has(line):
+				frames_at[line] = frames
 		if bool(snapshot.get("awaits_press", false)):
 			screen.press_button(PokeButton.A)
-	return {"frames": frames, "messages": messages}
+	return {"frames": frames, "messages": messages, "frames_at": frames_at}
 
 
 ## The same wild fight on the real screen, pressed through to its end:

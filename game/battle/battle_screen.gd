@@ -2586,7 +2586,7 @@ func _play_battle_music() -> void:
 	var record: Dictionary = _data.world_audio(&"music", _battle_music)
 	if record.is_empty():
 		return
-	_audio_player.play_record(record, &"map_music", _audio_assets())
+	_audio_player.play_record(record, &"battle_music", _audio_assets())
 
 
 ## Which track [method _play_battle_music] chose, for a check or a test that
@@ -2675,7 +2675,8 @@ func _play_gen1_sound(sound_id: int) -> void:
 
 
 ## `GetMoveSound` and the `PlaySound` behind it: `MoveSoundTable`'s row, or for
-## `IsCryMove` the actor's cry with the row's two modifiers added to its own.
+## `IsCryMove` the actor's cry with the row's two modifiers added to its own,
+## which reaches `PlaySound` too and never `PlayCry`.
 func _play_gen1_move_sound(move: int) -> void:
 	if _audio_player == null or _data == null or _anim == null:
 		return
@@ -2696,7 +2697,7 @@ func _play_gen1_move_sound(move: int) -> void:
 			return
 		record["cry_pitch"] = int(row["pitch"])
 		record["cry_length"] = int(row["tempo"])
-	_audio_player.play_record(record, &"cry" if Gen1Layout.CRY_MOVES.has(move) else &"sound", _audio_assets())
+	_audio_player.play_record(record, &"sound", _audio_assets())
 
 
 ## `BattleAnimCmd_Cry`: whichever battler `hBattleTurn` names, at its own

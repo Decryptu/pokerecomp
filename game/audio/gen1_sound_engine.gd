@@ -1,14 +1,10 @@
 class_name Gen1SoundEngine
 extends RefCounted
 
-## The Generation 1 sound driver, ported from `audio/engine_1.asm`.
-##
-## [method update_music] is one `Audio1_UpdateMusic`, run once per LCD frame: it
-## walks each of the eight channel streams and writes the hardware registers, and
-## [PokeApu] turns those writes into samples. The three near-identical copies of
-## the driver differ only in what [member audio_rom_bank] selects, so one port
-## carries all of them and reads that bank's own header table, effects, wave
-## instruments and music.
+## The Generation 1 sound driver, `audio/engine_1.asm`. [method update_music]
+## is one `Audio1_UpdateMusic`, once per LCD frame, whose register writes
+## [PokeApu] turns into samples; [member audio_rom_bank] picks which copy of the
+## driver, with its own header table, effects, instruments and music, is read.
 
 const NUM_CHANNELS: int = 8
 const NUM_MUSIC_CHANS: int = 4
@@ -195,6 +191,7 @@ func _init(shared_apu: PokeApu = null) -> void:
 	apu = shared_apu if shared_apu != null else PokeApu.new()
 	_pointers.resize(NUM_CHANNELS * 2)
 	_wram.resize(WRAM_SLOTS)
+	_reset_counters()
 
 
 ## `wChannelSoundIDs`, which is what says a channel is playing anything.
@@ -261,6 +258,8 @@ func play_music(bank: int, id: int) -> bool:
 	fade_out_control = 0
 	audio_rom_bank = bank
 	saved_rom_bank = bank
+	for channel: int in range(CHAN5, NUM_CHANNELS):
+		_wram[SOUND_IDS + channel] = 0
 	play_sound(id)
 	return true
 
@@ -282,10 +281,8 @@ func play_sound(id: int) -> void:
 	_play_sound_common()
 
 
-## `.playSfx`'s channel loop, which walks the header's channels from the last to
-## the first and is also the gate that refuses a request while a higher-priority
-## effect holds one. False is its own `ret`, which drops the whole request with
-## the channels it has already cleared left cleared.
+## `.playSfx`'s channel loop, last channel first, refusing the whole request
+## while a higher-priority effect holds one; the channels already cleared stay so.
 func _claim_sfx_channels() -> bool:
 	var header: int = _header_address(sound_id)
 	var index: int = (_bank_byte(audio_rom_bank, header) >> 6) & 0x03
@@ -336,9 +333,8 @@ func _play_sound_common() -> void:
 	apu.write(RAUDVOL, MAX_VOLUME)
 
 
-## `Audio<N>_CryRet` is one `sound_ret` byte, and the pointer at it is only ever
-## read and rewound onto itself, so the header table's own $ff padding answers
-## for it without a fourth symbol to pin per bank.
+## `Audio<N>_CryRet` is one `sound_ret` byte, only ever read and rewound onto
+## itself, so the header table's own $ff padding answers for it.
 func _cry_ret_address() -> int:
 	return HEADER_TABLE_ADDRESS + 1
 
@@ -394,6 +390,15 @@ func _init_music_variables() -> void:
 	apu.write(RAUDVOL, MAX_VOLUME)
 
 
+## `.stopAllAudio`'s three fills of one, run by `Init` before anything plays: a
+## cry's wave channel is never initialised and counts down from what stands there.
+func _reset_counters() -> void:
+	for index: int in NUM_CHANNELS:
+		_wram[NOTE_DELAY + index] = 1
+		_wram[LOOP_COUNTERS + index] = 1
+		_wram[NOTE_SPEEDS + index] = 1
+
+
 ## Every array the two clears zero, plus the three they set to one. The delay
 ## fraction, the octave and the volume are deliberately outside it.
 func _clear_channel(channel: int) -> void:
@@ -443,10 +448,7 @@ func _stop_all_audio() -> void:
 	music_tempo = DEFAULT_TEMPO
 	sfx_tempo = DEFAULT_TEMPO
 	_fill_channel_block(176 if yellow else 160)
-	for index: int in NUM_CHANNELS:
-		_wram[NOTE_DELAY + index] = 1
-		_wram[LOOP_COUNTERS + index] = 1
-		_wram[NOTE_SPEEDS + index] = 1
+	_reset_counters()
 	stereo_panning = 0xFF
 
 
@@ -494,8 +496,8 @@ func start_fade(frames: int, queued_id: int, queued_bank: int) -> void:
 	saved_rom_bank = queued_bank if queued_bank > 0 else audio_rom_bank
 
 
-## `Music_DoLowHealthAlarm`, which the battle loop runs beside the driver rather
-## than inside it. The tone it writes stays on channel 1 until it is changed.
+## `Music_DoLowHealthAlarm`, which VBlank runs in front of `UpdateMusic` on every
+## frame. The tone it writes stays on channel 1 until it is changed.
 func do_low_health_alarm() -> void:
 	if low_health_alarm == DISABLE_LOW_HEALTH_ALARM:
 		low_health_alarm = 0
@@ -680,10 +682,9 @@ func _apply_vibrato(c: int) -> void:
 func _play_next_note(c: int) -> void:
 	_wram[VIBRATO_DELAY + c] = _wram[VIBRATO_RELOAD + c]
 	_wram[FLAGS1 + c] &= ~(BIT_PITCH_SLIDE_ON | BIT_PITCH_SLIDE_DECREASING)
-	## Yellow holds the first effect channel still while the alarm owns it,
-	## re-enabling its output rather than reading another command.
-	if yellow and c == CHAN5 and (low_health_alarm & BIT_LOW_HEALTH_ALARM) != 0:
-		_enable_channel_output(c)
+	if c == CHAN5 and _alarm_holds_channel():
+		if yellow:
+			_enable_channel_output(c)
 		return
 	var steps: int = 0
 	while _run_command(c, _get_next_music_byte(c)):
@@ -693,6 +694,14 @@ func _play_next_note(c: int) -> void:
 			push_warning("Gen1SoundEngine: channel %d read %d commands without a note."
 				% [c, MAX_PARSE_STEPS])
 			return
+
+
+## `PlayNextNote` holds the first effect channel under the alarm bit in Red and
+## Blue's battle copy alone; Yellow's one `Audio1_UpdateMusic` serves every bank.
+func _alarm_holds_channel() -> bool:
+	if (low_health_alarm & BIT_LOW_HEALTH_ALARM) == 0:
+		return false
+	return yellow or audio_rom_bank == Gen1Layout.AUDIO_BANK_ROM[1]
 
 
 ## `Audio1_sound_ret` down to `Audio1_note_pitch`, in the source's own order.
@@ -924,9 +933,8 @@ func _note(c: int, d: int) -> void:
 	_note_pitch(c, length_byte)
 
 
-## The one place `Audio1_note_length` returns to its caller rather than falling
-## into `Audio1_note_pitch`, which is every effect channel and the music noise
-## channel outside `execute_music`.
+## Where `Audio1_note_length` returns rather than falling into `Audio1_note_pitch`:
+## every effect channel and the music noise channel outside `execute_music`.
 func _note_length_returns(c: int) -> bool:
 	return (_wram[FLAGS2 + c] & BIT_EXECUTE_MUSIC) == 0 \
 		and (_wram[FLAGS1 + c] & BIT_NOISE_OR_SFX) != 0
@@ -1100,9 +1108,8 @@ func _stop_pitch_slide(c: int) -> void:
 
 
 ## `Audio1_InitPitchSlideVars`. The length modifier becomes the divisor, and the
-## borrow the source takes from the current frequency rather than from the target
-## is the cartridge's own bug: an upward slide whose low byte has wrapped starts
-## $200 further away than it should.
+## borrow taken from the current frequency rather than the target is the
+## cartridge's own: an upward slide whose low byte wrapped starts $200 further.
 func _init_pitch_slide_vars(c: int, frequency: int) -> void:
 	_wram[SLIDE_CURRENT_HIGH + c] = (frequency >> 8) & 0xFF
 	_wram[SLIDE_CURRENT_LOW + c] = frequency & 0xFF

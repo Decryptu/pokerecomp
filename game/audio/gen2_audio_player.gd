@@ -51,6 +51,8 @@ var _engine: Gen2SoundEngine = null
 ## the record the caller hands over is what says which.
 var _gen1: Gen1SoundEngine = null
 var _gen1_tempo_request: int = -1
+## `wLowHealthAlarm` as Yellow's `PlayCry` pushed it, or -1 outside a cry.
+var _gen1_alarm_held: int = -1
 var _generation: int = RomRegistry.GEN2
 var _apu: PokeApu = null
 var _music_key: String = ""
@@ -174,7 +176,7 @@ func play_record(
 	_start_stream()
 	var started: bool = false
 	match request_kind:
-		&"cry", &"cries", &"mon_cry":
+		_ when _is_cry(request_kind):
 			# `PlayStereoCry` writes wCryTracks and puts 1 in wStereoPanningMask;
 			# `PlayMonCry2` zeroes both. Written per request rather than kept, so
 			# one battler's side cannot leak into the next cry.
@@ -228,12 +230,14 @@ func _play_gen1_record(
 	if id <= 0:
 		return {"ok": false, "played": false, "reason": &"audio_record_unplayable"}
 	if _is_music(request_kind):
-		return _play_gen1_music(record, bank, id, assets, restart)
+		return _play_gen1_music(record, bank, id, assets, restart, request_kind)
 	## `wFrequencyModifier` and `wTempoModifier`: a cry's own row, or
 	## `MoveSoundTable`'s two bytes on a move's effect.
 	if record.has("cry_pitch"):
 		_gen1.frequency_modifier = int(record.get("cry_pitch", 0)) & 0xFF
 		_gen1.tempo_modifier = int(record.get("cry_length", 0x80)) & 0xFF
+	if _is_cry(request_kind):
+		_hold_gen1_alarm_for_cry()
 	_start_stream()
 	if request_kind == &"poke_flute":
 		_gen1.play_poke_flute_in_battle(record.get("channels", []))
@@ -243,7 +247,8 @@ func _play_gen1_record(
 
 
 func _play_gen1_music(
-	record: Dictionary, bank: int, id: int, assets: Dictionary, restart: bool
+	record: Dictionary, bank: int, id: int, assets: Dictionary, restart: bool,
+	request_kind: StringName
 ) -> Dictionary:
 	if id == Gen1SoundEngine.SFX_STOP_ALL_MUSIC:
 		_gen1.play_sound(id)
@@ -255,6 +260,11 @@ func _play_gen1_music(
 	if not restart and key == _music_key and pointers.is_empty():
 		return {"ok": true, "played": false, "continued": true}
 	_start_stream()
+	## `PlayBattleMusic` zeroes `wLowHealthAlarm` and stops everything first.
+	if request_kind == &"battle_music":
+		_gen1.low_health_alarm = 0
+		_gen1_alarm_held = -1
+		_gen1.play_sound(Gen1SoundEngine.SFX_STOP_ALL_MUSIC)
 	if not _gen1.play_music(bank, id):
 		return {"ok": false, "played": false, "reason": &"audio_record_unplayable"}
 	_gen1.overwrite_channel_pointers(pointers)
@@ -277,6 +287,12 @@ func _gen1_result(request_kind: StringName, bank: int, id: int) -> Dictionary:
 	}
 
 
+## One driver frame on a caller's clock, for a check with no output to wait on.
+func advance_driver_frame() -> void:
+	_timeline_updates += 1
+	_advance_driver()
+
+
 ## One LCD frame of whichever driver is live. Generation 1's VBlank runs
 ## `FadeOutAudio` in front of `Audio<N>_UpdateMusic`, and that is where the fade
 ## and the full-volume write on every other frame come from.
@@ -285,9 +301,11 @@ func _advance_driver() -> void:
 		if _advance_pikachu_clip():
 			return
 		_gen1.fade_out_audio()
+		_gen1.do_low_health_alarm()
 		if _gen1_tempo_request >= 0 and _gen1.music_notes_ending():
 			_gen1.music_tempo = _gen1_tempo_request
 		_gen1.update_music()
+		_resume_gen1_alarm_after_cry()
 		return
 	_engine.update_sound()
 
@@ -428,6 +446,7 @@ func _fade_to_gen1(record: Dictionary, frames: int, assets: Dictionary) -> bool:
 func stop_all() -> void:
 	_engine.init_sound()
 	_gen1.play_sound(Gen1SoundEngine.SFX_STOP_ALL_MUSIC)
+	_gen1_alarm_held = -1
 	_clip = PackedByteArray()
 	_apu.start_pcm(_clip, 1)
 	_forget_music()
@@ -436,21 +455,47 @@ func stop_all() -> void:
 	_playback = null
 
 
-## `wLowHealthAlarm`'s DANGER_ON bit, which is what `PlayDanger` runs off.
-## `HandleHPPals` sets it while the player's bar is HP_RED and clears it
-## otherwise; `StopDangerSound` and `CleanUpBattleRAM` zero the byte whole,
-## which is what clearing it here does, timer and all.
+## `wLowHealthAlarm`'s DANGER_ON bit, set by `HandleHPPals` while the player's
+## bar is HP_RED; `StopDangerSound` and `CleanUpBattleRAM` zero the byte whole.
 func set_low_health_alarm(on: bool) -> void:
 	if _generation == RomRegistry.GEN1:
-		## `Music_DoLowHealthAlarm` clears the byte through $ff rather than zero,
-		## so the silencing tone is written on the frame it is switched off.
-		_gen1.low_health_alarm = Gen1SoundEngine.BIT_LOW_HEALTH_ALARM if on \
-			else Gen1SoundEngine.DISABLE_LOW_HEALTH_ALARM
+		_set_gen1_alarm(on)
 		return
 	if on:
 		_engine.low_health_alarm |= 1 << Gen2SoundEngine.DANGER_ON_BIT
 		return
 	_engine.low_health_alarm = 0
+
+
+## `DrawPlayerHUDAndHPBar` sets the bit over the timer it keeps; a switch-off
+## while it sounds is `HandleEnemyMonFainted`'s $ff, the silencing tone's cue.
+func _set_gen1_alarm(on: bool) -> void:
+	var byte: int = _gen1_alarm_held if _gen1_alarm_held >= 0 else _gen1.low_health_alarm
+	if on:
+		byte |= Gen1SoundEngine.BIT_LOW_HEALTH_ALARM
+	else:
+		byte = Gen1SoundEngine.DISABLE_LOW_HEALTH_ALARM \
+			if (byte & Gen1SoundEngine.BIT_LOW_HEALTH_ALARM) != 0 else 0
+	if _gen1_alarm_held >= 0:
+		_gen1_alarm_held = byte
+	else:
+		_gen1.low_health_alarm = byte
+
+
+## Yellow's `PlayCry` zeroes `wLowHealthAlarm` around the cry and its wait, its
+## driver holding the first effect channel while the bit stands; Red's does not.
+func _hold_gen1_alarm_for_cry() -> void:
+	if not _gen1.yellow or _gen1_alarm_held >= 0:
+		return
+	_gen1_alarm_held = _gen1.low_health_alarm
+	_gen1.low_health_alarm = 0
+
+
+func _resume_gen1_alarm_after_cry() -> void:
+	if _gen1_alarm_held < 0 or _gen1.sfx_active():
+		return
+	_gen1.low_health_alarm = _gen1_alarm_held
+	_gen1_alarm_held = -1
 
 
 ## `wMuteAudioAndPauseMusic`: the music channels held, an effect still playing.
@@ -491,11 +536,14 @@ func timeline_updates() -> int:
 
 
 ## `WaitSFX` for one caller's frame: true while the effect, or the music with
-## [param music], is still playing and the driver has rendered within
-## [constant SERVICE_GAP_FRAMES]. [param watch] is the caller's own dictionary,
-## carried across its frames; a fresh one starts a new wait.
+## [param music], plays and the driver rendered within [constant SERVICE_GAP_FRAMES].
+## [param watch] is the caller's own dictionary, carried across its frames.
 func still_waiting(watch: Dictionary, music: bool = false) -> bool:
 	if not (music_playing() if music else effect_playing()):
+		return false
+	## `WaitForSoundToFinish` returns at once while the alarm bit stands.
+	if not music and _generation == RomRegistry.GEN1 \
+		and (_gen1.low_health_alarm & Gen1SoundEngine.BIT_LOW_HEALTH_ALARM) != 0:
 		return false
 	var rendered: int = timeline_updates()
 	var still: int = 0 if int(watch.get("rendered", -1)) != rendered \
@@ -545,7 +593,11 @@ func _exit_tree() -> void:
 
 
 func _is_music(request_kind: StringName) -> bool:
-	return request_kind in [&"music", &"map_music", &"encounter_music"]
+	return request_kind in [&"music", &"map_music", &"encounter_music", &"battle_music"]
+
+
+func _is_cry(request_kind: StringName) -> bool:
+	return request_kind in [&"cry", &"cries", &"mon_cry"]
 
 
 func _ensure_output() -> void:
@@ -596,15 +648,13 @@ func _service_timeline(delta: float = 0.0) -> void:
 		if _playback == null:
 			return
 	var available: int = _playback.get_frames_available()
-	# The depth Godot actually gave, which is the length it was asked for rounded
-	# up to a power of two. Read rather than computed, and highest wins: the
-	# buffer is only this empty before the first fill.
+	# The depth Godot gave, the length asked for rounded up to a power of two,
+	# read rather than computed; highest wins, the buffer only this empty at first.
 	var known: int = _capacity
 	_capacity = maxi(_capacity, available)
 	# A buffer that drained to empty was heard as a gap, so the target rises and
-	# the device tunes itself rather than needing a build and an ear per target.
-	# Only once a depth is known: a fresh stream is legitimately empty, and a
-	# rebuilt output has to learn the new device's depth before it can be short.
+	# the device tunes itself. Only once a depth is known: a fresh stream and a
+	# rebuilt output's are legitimately empty.
 	if known > 0 and available >= known and _timeline_updates > 0:
 		_underruns += 1
 		_target_frames = mini(_target_frames + 1, TARGET_FRAMES_MAX)

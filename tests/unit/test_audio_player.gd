@@ -322,3 +322,106 @@ func test_a_stereo_sfx_request_carries_its_panning_mask() -> void:
 	_player._engine.stereo = true
 	assert_true(_player.play_record(_record(2), &"stereo_sfx", {}, false, 0x0F)["played"])
 	assert_eq(_player._engine.stereo_panning_mask, 0x0F)
+
+
+## One Generation 1 bank: a music header at 200 on channel 1 and a cry at 23 on
+## channels 5, 6 and 8, each stream a note and a `sound_ret`.
+const GEN1_MUSIC: int = 200
+const GEN1_CRY: int = 23
+
+
+func _gen1_assets(yellow: bool) -> Dictionary:
+	var origin: int = Gen1SoundEngine.HEADER_TABLE_ADDRESS
+	var bytes := PackedByteArray()
+	bytes.resize(0x1000)
+	bytes.fill(Gen1SoundEngine.SOUND_RET_CMD)
+	var streams: Array = [
+		[GEN1_MUSIC, 0, [0xD8, 0x00, 0xE7, 0x03, 0xFF]],
+		[GEN1_CRY, 4, [0x23, 0xF0, 0x00, 0x07, 0xFF]],
+		[GEN1_CRY, 5, [0x21, 0xF0, 0x00, 0x07, 0xFF]],
+		[GEN1_CRY, 7, [0x21, 0xF0, 0x00, 0xFF]],
+	]
+	var at: int = 0x200
+	var index: Dictionary = {}
+	for row: Array in streams:
+		var id: int = int(row[0])
+		var slot: int = int(index.get(id, 0))
+		index[id] = slot + 1
+		var header: int = id * Gen1SoundEngine.HEADER_ENTRY_SIZE + slot * 3
+		bytes[header] = int(row[1]) | ((2 << 6) if slot == 0 and id == GEN1_CRY else 0)
+		bytes[header + 1] = (origin + at) & 0xFF
+		bytes[header + 2] = ((origin + at) >> 8) & 0xFF
+		for value: int in row[2] as Array:
+			bytes[at] = value
+			at += 1
+	return {
+		"generation": RomRegistry.GEN1, "yellow": yellow,
+		"audio_banks": [{
+			"bank": Gen1Layout.AUDIO_BANK_ROM[0], "bytes": bytes, "data_address": origin,
+			"wave_pointers": origin + 0xF00, "max_sfx_id": 100,
+		}],
+	}
+
+
+func _gen1_record(id: int) -> Dictionary:
+	var record: Dictionary = {"sound_id": id, "bank": Gen1Layout.AUDIO_BANK_ROM[0]}
+	if id == GEN1_CRY:
+		record["cry_pitch"] = 0
+		record["cry_length"] = 0x80
+	return record
+
+
+## `DrawPlayerHUDAndHPBar` sets the bit over the timer, `HandleEnemyMonFainted`
+## switches a sounding alarm off through $ff, and the driver's next frame is
+## `Music_DoLowHealthAlarm` turning that into zero with the silencing tone.
+func test_the_gen1_alarm_keeps_its_timer_and_is_cleared_by_the_driver() -> void:
+	assert_true(_player.play_record(_gen1_record(GEN1_MUSIC), &"map_music", _gen1_assets(false))["played"])
+	_player.set_low_health_alarm(false)
+	assert_eq(_player._gen1.low_health_alarm, 0, "off over off writes zero")
+	_player.set_low_health_alarm(true)
+	_player._advance_driver()
+	_player._advance_driver()
+	assert_eq(_player._gen1.low_health_alarm, 29 | Gen1SoundEngine.BIT_LOW_HEALTH_ALARM)
+	_player.set_low_health_alarm(true)
+	assert_eq(_player._gen1.low_health_alarm, 29 | Gen1SoundEngine.BIT_LOW_HEALTH_ALARM,
+		"a HUD redraw keeps the timer")
+	assert_true(_player.low_health_alarm())
+	_player.set_low_health_alarm(false)
+	assert_eq(_player._gen1.low_health_alarm, Gen1SoundEngine.DISABLE_LOW_HEALTH_ALARM)
+	assert_false(_player.still_waiting({}), "WaitForSoundToFinish returns on the bit")
+	_player._advance_driver()
+	assert_eq(_player._gen1.low_health_alarm, 0)
+	assert_eq(_player._gen1.channel_sound_id(Gen1SoundEngine.CHAN5), 0)
+
+
+## Yellow's `PlayCry` zeroes `wLowHealthAlarm` for the cry and puts it back after
+## `WaitForSoundToFinish`, so the whole cry plays and the alarm resumes.
+func test_yellows_cry_holds_the_alarm_and_gives_it_back() -> void:
+	assert_true(_player.play_record(_gen1_record(GEN1_MUSIC), &"map_music", _gen1_assets(true))["played"])
+	_player.set_low_health_alarm(true)
+	_player._advance_driver()
+	var timer: int = _player._gen1.low_health_alarm
+	assert_true(_player.play_record(_gen1_record(GEN1_CRY), &"cry", _gen1_assets(true))["played"])
+	assert_eq(_player._gen1.low_health_alarm, 0, "the byte is zero for the cry")
+	_player.set_low_health_alarm(true)
+	assert_eq(_player._gen1.low_health_alarm, 0, "a redraw lands on the pushed copy")
+	var frames: int = 0
+	while _player._gen1.sfx_active() and frames < 300:
+		_player._advance_driver()
+		frames += 1
+	assert_eq(frames, 5, "the cry ran whole, channel 5 included")
+	assert_eq(_player._gen1.low_health_alarm, timer, "the alarm is back where PlayCry left it")
+	_player._advance_driver()
+	assert_eq(_player._gen1.low_health_alarm, timer - 1, "and counting again")
+
+
+## `PlayBattleMusic` zeroes the alarm and spends `StopAllMusic` before its piece,
+## and the same piece asked for again is continued rather than restarted.
+func test_gen1_battle_music_stops_everything_first_and_then_continues() -> void:
+	assert_true(_player.play_record(_gen1_record(GEN1_CRY), &"cry", _gen1_assets(false))["played"])
+	_player._gen1.low_health_alarm = Gen1SoundEngine.BIT_LOW_HEALTH_ALARM
+	assert_true(_player.play_record(_gen1_record(GEN1_MUSIC), &"battle_music", _gen1_assets(false))["played"])
+	assert_eq(_player._gen1.low_health_alarm, 0)
+	assert_false(_player._gen1.sfx_active(), "StopAllMusic took the cry")
+	assert_eq(_player._gen1.channel_sound_id(0), GEN1_MUSIC)
+	assert_true(_player.play_record(_gen1_record(GEN1_MUSIC), &"battle_music", _gen1_assets(false))["continued"])

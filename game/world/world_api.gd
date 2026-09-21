@@ -471,6 +471,7 @@ func _init(
 	rules = world_rules if world_rules != null else Gen2Rules.active()
 	Gen2Rules.install(rules)
 	state = world_state if world_state != null else Gen2WorldState.new()
+	state.gen1 = _gen1
 	state.changed.connect(_on_world_state_changed)
 	inventory = Gen2WorldInventory.new(data, state)
 	state.ensure_roaming_mons(data.world_roaming_mons())
