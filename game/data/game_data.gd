@@ -3097,8 +3097,7 @@ static func hp_bar_palette_name(lit: int, gen1: bool = false) -> String:
 
 
 ## `GetHPPal`'s own answer, HP_GREEN, HP_YELLOW or HP_RED, for the callers that
-## index a table with it rather than naming a palette. Generation 1's
-## `GetHealthBarColor` turns yellow under 27 pixels, Crystal's under 24.
+## index a table with it rather than naming a palette; `GetHealthBarColor`'s 27.
 static func hp_bar_palette_index(lit: int, gen1: bool = false) -> int:
 	if lit >= (Gen1Layout.HP_GREEN_PIXELS if gen1 else Gen2Layout.HP_GREEN_PIXELS):
 		return 0

@@ -1619,11 +1619,8 @@ func _check_the_bike_shop_menu() -> void:
 	_r.note("gen1 walk the drink menu, the empty bag and the BIKE SHOP's own two rows")
 
 
-## `DisplayPokemartDialogue_` on the screen: `.notEnoughMoney` and
-## `.unsellableItem` jump to `.returnToMainPokemartMenu`, which is
-## `PokemartAnythingElseText` and the BUY/SELL/QUIT menu, and a sale jumps to
-## `.sellMenuLoop` with no box behind it. Pewter's clerk over the counter, since
-## Viridian's hands the parcel over first.
+## `DisplayPokemartDialogue_` on the screen: a refusal lands on the BUY/SELL/QUIT
+## menu and a sale on the list. Pewter's clerk, since Viridian's hands the parcel over.
 const PEWTER_MART: int = 0x38
 const MART_FLOW_FRAMES: int = 900
 const MART_FLOW_PRESSES: int = 12
@@ -1642,23 +1639,19 @@ func _check_the_mart_counter_flow() -> void:
 	if host == null:
 		_r.close_screen(screen)
 		return
-	## BUY, the first row, one of it, YES: an empty purse.
 	_press_the_counter(host, [PokeButton.A, PokeButton.A, PokeButton.A, PokeButton.A])
 	_r.check(host._mart_stage == Gen2WorldServiceScreen.MART_TOP,
 		"an empty purse left the shop on %s." % host._mart_stage)
-	## SELL, the HM's row: unsellable.
 	_press_the_counter(host, [PokeButton.DOWN, PokeButton.A, PokeButton.DOWN, PokeButton.A])
 	_r.check(host._mart_stage == Gen2WorldServiceScreen.MART_TOP,
 		"an HM left the shop on %s." % host._mart_stage)
-	## SELL, then `HandleItemListSwapping`: SELECT on the POTION, SELECT on the
-	## HM, and the two rows trade places.
+	## SELECT on the POTION and on the HM: `HandleItemListSwapping` trades the rows.
 	_press_the_counter(host, [PokeButton.DOWN, PokeButton.A, PokeButton.SELECT, PokeButton.DOWN,
 		PokeButton.SELECT])
 	_r.check(host._mart_stage == Gen2WorldServiceScreen.MART_SELL
 		and int((host._mart_sell_entries[0] as Dictionary).get("item", 0)) == HM01_ITEM
 		and int((host._mart_sell_entries[1] as Dictionary).get("item", 0)) == Gen1Layout.ITEM_POTION,
 		"SELECT twice left the bag as %s." % [host._mart_sell_entries])
-	## One POTION off its new row, YES: the list again, straight away.
 	_press_the_counter(host, [PokeButton.A, PokeButton.A])
 	_r.check(host._mart_stage == Gen2WorldServiceScreen.MART_SELL_CONFIRM,
 		"the sale asked on %s." % host._mart_stage)
@@ -1675,7 +1668,6 @@ func _check_the_mart_counter_flow() -> void:
 	_r.note("gen1 walk the mart's two refusals, a SELECT swap and a sale on the screen")
 
 
-## The greeting's presses until `mart_requested` opens the counter.
 func _open_the_counter(screen: Gen2WorldScreen) -> Gen2WorldServiceScreen:
 	screen.interact()
 	for _frame: int in MART_FLOW_FRAMES:
@@ -1690,7 +1682,6 @@ func _open_the_counter(screen: Gen2WorldScreen) -> Gen2WorldServiceScreen:
 	return null
 
 
-## Each press, and the A's a box in front of the next stage takes.
 func _press_the_counter(host: Gen2WorldServiceScreen, presses: Array) -> void:
 	for button: int in presses:
 		for _page: int in MART_FLOW_PRESSES:
@@ -4307,10 +4298,8 @@ func _spoken_this_pass(world: Gen2WorldAPI) -> Array[String]:
 	return out
 
 
-## `PewterGuys`: the four cells round the museum guy and the five that trigger
-## the gym guy each open the walk with the row's own presses over the last of
-## the RLE list's, so every approach lands under the museum door or beside the
-## gym sign, and every cell on the way is one the player may walk.
+## `PewterGuys`: every cell a guide is met on lands under the museum door or
+## beside the gym sign, over cells the player may walk.
 const PEWTER_CITY: int = 2
 const PEWTER_MUSEUM_GUY: int = 2
 const PEWTER_GYM_GUY: int = 4
@@ -4327,8 +4316,7 @@ const PEWTER_GYM_APPROACHES: Array[Vector2i] = [
 	Vector2i(34, 16), Vector2i(35, 17), Vector2i(37, 18), Vector2i(37, 19), Vector2i(36, 17),
 ]
 const GUIDE_PASSES: int = 1500
-## The RLE list's presses less the one `PewterGuys` overwrites, plus the row's
-## own directions: `.three` and `.five` bring three and eight pauses.
+## The RLE list's presses less the one overwritten, plus the row's own directions.
 const GUIDE_STEPS: Dictionary = {
 	Vector2i(27, 18): 23, Vector2i(27, 16): 23, Vector2i(26, 17): 23, Vector2i(28, 17): 23,
 	Vector2i(34, 16): 41, Vector2i(35, 17): 41, Vector2i(37, 18): 40, Vector2i(37, 19): 41,
@@ -4356,12 +4344,33 @@ func _walk_with_a_guide(guide: int, cell: Vector2i) -> int:
 	var guy: Gen2WorldObject = world.objects[guide]
 	var where: String = "map %d guide %d from %s" % [PEWTER_CITY, guide, cell]
 	world.player_facing = _facing_toward(cell, guy.cell)
-	## Four of the youngster's cells are the map script's own trigger; the rest
-	## talk to the guide.
+	if not _r.check(_meet_the_guide(world, guide == PEWTER_GYM_GUY),
+		"%s never started the guide's walk." % where):
+		return 0
+	var walk: Dictionary = _follow_the_guide(world, guy, cell)
+	var cells: Array = walk["cells"]
+	var landings: Array = PEWTER_GUIDE_LANDINGS[guide]
+	_r.check(world.player_cell == landings[0],
+		"%s landed the player on %s after %d passes." % [where, world.player_cell, walk["passes"]])
+	_r.check(walk["guide"] == landings[1], "%s left the guide on %s." % [where, walk["guide"]])
+	_r.check(guy.active and guy.cell == guy.initial_cell,
+		"%s left the guide standing on %s after %d passes." % [where, guy.cell, walk["passes"]])
+	for step: Vector2i in cells:
+		_r.check(world.collision_permission_at(step) == Gen2WorldCollision.LAND_TILE
+			or step == guy.initial_cell,
+			"%s walked the player over %s." % [where, step])
+	_r.check(cells.size() - 1 == int(GUIDE_STEPS[cell]),
+		"%s walked %d cells." % [where, cells.size() - 1])
+	return cells.size() - 1
+
+
+## Four of the youngster's cells are the map script's own trigger; the museum
+## guy walks a player who answers no. Whether the movement script started.
+func _meet_the_guide(world: Gen2WorldAPI, youngster: bool) -> bool:
 	var results: Array = world.dispatch_sight_events()
 	if results.is_empty() and not world.script_busy():
 		results = world.interact()
-	var opened: bool = false
+	var opened: bool = youngster
 	for _turn: int in Gen1Layout.MAX_OBJECT_EVENTS:
 		if results.is_empty() and not world.script_busy():
 			break
@@ -4373,12 +4382,12 @@ func _walk_with_a_guide(guide: int, cell: Vector2i) -> int:
 			results = world.complete_runtime_request({"ok": true})
 		else:
 			results = world.run_event_queue(true)
-	## The museum guy walks a player who answers no; the youngster asks nothing.
-	if not _r.check((opened or guide == PEWTER_GYM_GUY) and world.gen1_movement_script_running(),
-		"%s never started the guide's walk." % where):
-		return 0
-	## The drawn cell a pass at a time, since the walk commits its cells up
-	## front; the guide's own landing is read the pass his walk ends.
+	return opened and world.gen1_movement_script_running()
+
+
+## The drawn cell a pass at a time, since the walk commits its cells up front,
+## the guide's drawn cell the pass his walk ends, and the passes spent.
+func _follow_the_guide(world: Gen2WorldAPI, guy: Gen2WorldObject, cell: Vector2i) -> Dictionary:
 	var cells: Array[Vector2i] = [cell]
 	var guide_landing: Vector2i = Vector2i(-1, -1)
 	var passes: int = 0
@@ -4396,22 +4405,7 @@ func _walk_with_a_guide(guide: int, cell: Vector2i) -> int:
 		if started and world.state.gen1_map_script(PEWTER_CITY_BYTE) == 0 \
 			and not world.scripted_movement_in_progress():
 			break
-	var landings: Array = PEWTER_GUIDE_LANDINGS[guide]
-	_r.check(world.player_cell == landings[0],
-		"%s landed the player on %s after %d passes." % [where, world.player_cell, passes])
-	_r.check(guide_landing == landings[1], "%s left the guide on %s." % [where, guide_landing])
-	## `SetSpritePosition2` and `ShowObject`: the guide is back where the map put him.
-	_r.check(guy.active and guy.cell == guy.initial_cell,
-		"%s left the guide standing on %s (active %s, byte %d) after %d passes." % [
-			where, guy.cell, guy.active, world.state.gen1_map_script(PEWTER_CITY_BYTE), passes,
-		])
-	for step: Vector2i in cells:
-		_r.check(world.collision_permission_at(step) == Gen2WorldCollision.LAND_TILE
-			or step == guy.initial_cell,
-			"%s walked the player over %s." % [where, step])
-	_r.check(cells.size() - 1 == int(GUIDE_STEPS[cell]),
-		"%s walked %d cells." % [where, cells.size() - 1])
-	return cells.size() - 1
+	return {"cells": cells, "guide": guide_landing, "passes": passes}
 
 
 func _facing_toward(from: Vector2i, to: Vector2i) -> int:

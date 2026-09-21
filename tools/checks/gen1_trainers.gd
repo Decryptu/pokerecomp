@@ -31,8 +31,7 @@ const CODED_HEADER_FLAGS: Dictionary = {
 const MAX_SIGHT_RANGE: int = 5
 
 ## Sight lines walked, cells engaging their own trainer, cells behind one, and
-## cells inside a range but outside `CheckSpriteAvailability`'s window: Pewter
-## Gym's range-5 trainer facing right, five cells from column 8.
+## cells inside a range but off `CheckSpriteAvailability`'s window: Pewter Gym's.
 const SIGHT_CENSUS: Dictionary = {
 	&"red": {"lines": 295, "cells": 879, "behind": 0, "unseen": 1},
 	&"blue": {"lines": 295, "cells": 879, "behind": 0, "unseen": 1},

@@ -2,13 +2,10 @@ class_name Gen1Layout
 extends RefCounted
 
 ## Where the data lives inside each Generation 1 cartridge, the counterpart of
-## [Gen2Layout]. Offsets are absolute positions in the 1 MiB dump, so a decoder
-## never thinks about banking. Red and Blue share every table here: the 668
-## symbols that move between them are all bank $1D's map scripts.
-## Every offset was read off pret's own build of the pinned sources, which
-## reproduces each dump byte for byte (`roms.sha1` holds the three SHA-1s
-## [RomRegistry] does). A table is still a claim about a specific dump, so an
-## uncharacterised ROM is refused rather than guessed at.
+## [Gen2Layout]: absolute offsets into the 1 MiB dump, read off pret's own
+## build of the pinned sources, which reproduces each dump byte for byte. Red
+## and Blue share every table here: the 668 symbols that move between them are
+## all bank $1D's map scripts. An uncharacterised ROM is refused, not guessed at.
 
 ## 151 dex entries over 190 cartridge slots. `MonsterNames`, `PokedexEntryPointers`,
 ## `EvosMovesPointerTable` and `CryData` are indexed by the slot; `BaseStats` and
@@ -1945,14 +1942,10 @@ const MOVEMENT_SCRIPT_LISTS: Dictionary = {
 		MOVEMENT_SCRIPT_GYM: ["rle_gym_player", "rle_gym_object"],
 	},
 }
-## `PewterGuysCoordsTable`: a `dw` per guide onto rows of `db y, x` and a `dw`
-## to the presses that line the player up, four rows for the museum guy and
-## five for the gym guy, with no terminator on either.
+## `PewterGuysCoordsTable`: a `dw` per guide onto unterminated rows of `db y, x, dw`.
 const PEWTER_GUY_ROWS: Dictionary = {MOVEMENT_SCRIPT_MUSEUM: 4, MOVEMENT_SCRIPT_GYM: 5}
 const PEWTER_GUY_ROW_SIZE: int = 4
-## `PewterGuys` copies the presses over the last byte the RLE list wrote and
-## `JoypadOverworld` spends the buffer from its top, so the presses land in
-## front of the walk, last written first, and `NO_INPUT` stands a pass.
+## `NO_INPUT` in a simulated joypad buffer, a pass spent standing.
 const MOVE_NONE: int = -1
 const NPC_CHANGE_FACING: int = 0xE0
 const BADGE_NAME_MAX: int = 13

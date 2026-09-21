@@ -10260,7 +10260,7 @@ func test_gen1_wanderer_climbs_eight_cells_and_never_comes_back_down() -> void:
 ## `CanWalkOntoTile` tests `YPIXELS + 4 + d < $80` with a one-pixel delta, so
 ## a wanderer on the window's last row steps only up; `CheckSpriteAvailability`
 ## returns before any wait or turn for one outside the window. Measured on the
-## cartridge (`.claude/oracle/battle/gen1_npc_walk.py`).
+## cartridge.
 func test_gen1_a_wanderer_on_the_last_row_steps_up_and_one_off_the_screen_freezes() -> void:
 	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(2, 5))
 	var walker: Gen2WorldObject = world.objects[0]
@@ -10290,8 +10290,7 @@ func test_gen1_a_wanderer_on_the_last_row_steps_up_and_one_off_the_screen_freeze
 ## `UpdateNPCSprite` returns on `wWalkCounter` in front of a ready sprite's
 ## decision, and the pass that starts the player's step runs `UpdateSprites`
 ## before the counter is written. Measured: five of five step starts on the
-## cartridge fell on the pass the player's own step began
-## (`.claude/oracle/battle/gen1_npc_walk.py`).
+## cartridge fell on the pass the player's own step began.
 func test_gen1_a_ready_object_decides_on_a_standing_pass_or_a_steps_first() -> void:
 	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(2, 8))
 	var walker: Gen2WorldObject = world.objects[0]
@@ -10316,8 +10315,7 @@ func test_gen1_a_ready_object_decides_on_a_standing_pass_or_a_steps_first() -> v
 
 ## `IsSpriteInFrontOfPlayer` sets BIT_FACE_PLAYER, so a talked-to sprite turns
 ## to the player and keeps its own wait; a STAY sprite on `$D1` writes UP back
-## through `TryWalking` once that wait runs out. Measured on the cartridge
-## (`.claude/oracle/battle/gen1_npc_walk.py`).
+## through `TryWalking` once that wait runs out. Measured on the cartridge.
 func test_gen1_a_talked_to_sprite_faces_the_player_until_its_own_wait_ends() -> void:
 	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(1, 10))
 	var walker: Gen2WorldObject = world.objects[0]

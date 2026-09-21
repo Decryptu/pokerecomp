@@ -987,8 +987,7 @@ static func _movement_scripts(rom: RomFile, layout: Dictionary, map_id: int) -> 
 	return out
 
 
-## `PewterGuysCoordsTable`'s rows for one guide, each carrying its presses in
-## the order `JoypadOverworld` spends them: the copy's last byte first.
+## One guide's rows, each with its presses in the order `JoypadOverworld` spends them.
 static func _pewter_guy_approaches(rom: RomFile, layout: Dictionary, table: int) -> Array:
 	var rows: Array = []
 	var bank: int = RomFile.bank_of(int(layout["pewter_guys_coords"]))
@@ -1007,7 +1006,6 @@ static func _pewter_guy_approaches(rom: RomFile, layout: Dictionary, table: int)
 	return rows
 
 
-## A simulated press as a walking leg; `NO_INPUT` is a pass spent standing.
 static func _press_leg(press: int, steps: int) -> Dictionary:
 	return {"direction": int(Gen1Layout.PAD_DIRECTIONS.get(press, Gen1Layout.MOVE_NONE)), "steps": steps}
 
