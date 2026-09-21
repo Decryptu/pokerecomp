@@ -4275,19 +4275,24 @@ static func _script_fill_memory(
 	return next
 
 
-## `UpdateCinnabarGymGateTileBlocks_` counts gates six through one.
+## `UpdateCinnabarGymGateTileBlocks_` counts gates six through one; Yellow's
+## writes through `CinnabarGym_ReplaceTileBlock` and redraws once after the six.
 static func _script_gym_gates(ctx: Dictionary) -> Array:
 	var rom: RomFile = ctx["rom"]
-	var table: int = int((ctx["layout"] as Dictionary)["gym_gate_coords"])
+	var layout: Dictionary = ctx["layout"]
+	var table: int = int(layout["gym_gate_coords"])
+	var once: bool = layout.has("gym_gates_replace")
 	var nodes: Array = []
 	for gate: int in range(6, 0, -1):
 		var at: int = table + (gate - 1) * 4
 		var block: Dictionary = {"op": "replace_block", "x": rom.u8(at),
-			"y": rom.u8(at + 1), "block": 0x0E}
+			"y": rom.u8(at + 1), "block": 0x0E, "redraw": not once}
 		var closed: Dictionary = block.duplicate()
 		closed["block"] = rom.u8(at + 2)
 		nodes.append({"op": "branch", "flag": 0x2A8 + gate,
 			"then": [block], "else": [closed]})
+	if once:
+		nodes.append({"op": "redraw_map_view"})
 	return nodes
 
 

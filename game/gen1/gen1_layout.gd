@@ -554,6 +554,34 @@ const BOULDER_DUST_OBP1_FLASH: int = 0x64
 const BOULDER_DUST_DRIFT: Array[Vector2i] = [
 	Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, 0), Vector2i(-1, 0),
 ]
+## `CutAnimationOffsets`, the eight bytes in front of the dust's, and the
+## `Overworld_GFX` tiles `InitCutAnimOAM` copies to $7C whatever the tileset.
+const CUT_ANIMATION_OFFSETS: Array[Vector2i] = [
+	Vector2i(8, 36), Vector2i(8, 4), Vector2i(-8, 20), Vector2i(24, 20),
+]
+const CUT_TREE_TILES: Array[int] = [0x2D, 0x2E, 0x3D, 0x3E]
+## `LoadCutGrassAnimationTilePattern`: `MoveAnimationTiles1 tile 6`, four times.
+const CUT_LEAF_ANIM_TILE: int = 6
+## `AnimCut`: eight frames for a tree, two passes of two eight-frame spreads
+## for grass, `rOBP1` xored the dust's $64 every frame.
+const CUT_TREE_FRAMES: int = 8
+const CUT_GRASS_PASSES: int = 2
+const CUT_GRASS_SPREAD_FRAMES: int = 8
+const CUT_GRASS_DROP: int = 2
+const CUT_GRASS_SPREAD: Array[int] = [1, 2, -2, -1]
+const CUT_TREE_SPREAD: Array[int] = [1, 1, -1, -1]
+
+
+## `RedrawMapView`: one `DelayFrame` per row of 2x2 tiles, `SCREEN_HEIGHT / 2`.
+## `wOverworldMap` carries three border blocks a side.
+const REDRAW_MAP_VIEW_FRAMES: int = 9
+const MAP_BORDER_BLOCKS: int = 3
+
+
+static func cut_animation_frames(grass: bool) -> int:
+	if grass:
+		return CUT_GRASS_PASSES * 2 * CUT_GRASS_SPREAD_FRAMES
+	return CUT_TREE_FRAMES
 ## `WarpPadAndHoleData`: tileset, the tile under `lda_coord 8, 9`, and the value.
 const WARP_PAD_HOLE_TILES: Array[Array] = [
 	[TILESET_FACILITY, 0x20, 1], [TILESET_FACILITY, 0x11, 2],
@@ -3522,6 +3550,8 @@ const YELLOW: Dictionary = {
 	"update_gym_gates": 0x3EF0,
 	"update_gym_gates_far": 0x1E4BF,
 	"gym_gate_coords": 0x1E503,
+	## `CinnabarGym_ReplaceTileBlock`, Yellow's copy without the redraw.
+	"gym_gates_replace": 0x1E51B,
 	"gym_quiz_flags": 0xD474,
 	"sprite_pointer_1": 0x34F9,
 	"sprite_pointer_2": 0x34FD,
@@ -4367,6 +4397,7 @@ static func pic_load_frames(tiles: int, bytes: int) -> int:
 ## Crystal's own number, answered with the Generation 1 sound id that plays it.
 ## An unlisted number belongs to a screen no Generation 1 cartridge opens.
 const SFX_ROLES: Dictionary = {
+	0x00: 134, ## SFX_DEX_FANFARE_50_79 is RareCandyText's sound_get_item_1
 	0x01: 134, ## SFX_ITEM, which is SFX_Get_Item1_1
 	0x02: 154, ## SFX_CAUGHT_MON, the battle bank's own
 	0x04: 141, ## SFX_POTION is SFX_HEAL_HP

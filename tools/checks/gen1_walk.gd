@@ -843,6 +843,12 @@ func _check_a_card_key_door() -> void:
 	world.run_event_queue(true)
 	_r.check(world.block_at(SILPH_DOOR.x, SILPH_DOOR.y) == SILPH_OPEN_BLOCK,
 		"the opened door draws block $%02X." % world.block_at(SILPH_DOOR.x, SILPH_DOOR.y))
+	## `ReplaceTileBlock`'s redraw, then `set BIT_CUR_MAP_LOADED_1` and SFX_GO_INSIDE.
+	var redrawn: Dictionary = _spend_redraw(world)
+	var sounds: Array = _first_event(redrawn["results"], &"presentation_special_applied").get("sounds", [])
+	_r.check(int(redrawn["frames"]) == Gen1Layout.REDRAW_MAP_VIEW_FRAMES and sounds.size() == 1
+		and int((sounds[0] as Dictionary).get("index", 0)) == Gen1Layout.SFX_GO_INSIDE,
+		"the door redrew over %d frames and sounded %s." % [int(redrawn["frames"]), sounds])
 	_r.check(world.state.card_key_door() == SILPH_DOOR,
 		"the door opened at %s was remembered as %s." % [
 			SILPH_DOOR, world.state.card_key_door(),
@@ -862,7 +868,7 @@ func _check_a_card_key_door() -> void:
 	)
 	if again == null:
 		return
-	again.dispatch_map_entry()
+	_land(again)
 	_r.check(again.block_at(SILPH_DOOR.x, SILPH_DOOR.y) == SILPH_OPEN_BLOCK,
 		"the reloaded floor blocked the opened door with $%02X." % again.block_at(
 			SILPH_DOOR.x, SILPH_DOOR.y
@@ -877,7 +883,7 @@ func _silph_door() -> Gen2WorldAPI:
 	var world: Gen2WorldAPI = _r.open_world(0, SILPH_CO_2F, SILPH_DOOR_APPROACH)
 	if world == null:
 		return null
-	world.dispatch_map_entry()
+	_land(world)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	return world
 
@@ -887,6 +893,25 @@ func _box_text(world: Gen2WorldAPI) -> String:
 	if results.is_empty():
 		return ""
 	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+
+
+## `EnterMap`'s first `RunMapScript` pass, whose callback blocks redraw in
+## front of the joypad.
+func _land(world: Gen2WorldAPI) -> void:
+	world.dispatch_map_entry()
+	world.dispatch_sight_events()
+	_spend_redraw(world)
+
+
+## `RedrawMapView`'s frames behind an in-view block swap: how many were spent,
+## and what the frame that finished the last one wrote.
+func _spend_redraw(world: Gen2WorldAPI) -> Dictionary:
+	var spent: int = 0
+	var results: Array = []
+	while StringName(world.pending_script_wait().get("kind", &"")) == &"gen1_redraw" and spent < 100:
+		results = world.advance_script_wait_frame()
+		spent += 1
+	return {"frames": spent, "results": results}
 
 
 ## A decoded `text_asm` row driven on the world, both ways about its own flag.
@@ -3620,6 +3645,7 @@ func _check_an_elite_room_settles() -> void:
 	world.complete_runtime_request({"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_WON})
 	var boxes: int = 0
 	for _pass: int in 6:
+		_spend_redraw(world)
 		if not world.pending_script_input().is_empty():
 			boxes += 1
 			world.run_event_queue(true)
@@ -4018,6 +4044,46 @@ func _check_a_cut_tree() -> void:
 		StringName(world.cut_request().get("reason", &"")) == &"nothing_to_cut",
 		"Cut was offered with nothing in front."
 	)
+	_check_the_cut_on_screen()
+
+
+## `UsedCut` on the real screen: the press, the swap, a redraw, `AnimCut`,
+## `SFX_CUT` and the second redraw, the map held throughout.
+func _check_the_cut_on_screen() -> void:
+	var screen: Gen2WorldScreen = _r.open_screen(0, VIRIDIAN_CITY, CUT_TREE_CELL + Vector2i.DOWN)
+	if screen == null:
+		return
+	var world: Gen2WorldAPI = screen.world()
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var before: int = world.block_at(CUT_TREE_BLOCK.x, CUT_TREE_BLOCK.y)
+	screen.preview_field_move_row_use(Gen2WorldFieldMove.MOVE_CUT)
+	for _frame: int in 30:
+		screen.advance_frame()
+	_r.check(bool(screen.get("_field_move_text")) and world.block_at(CUT_TREE_BLOCK.x, CUT_TREE_BLOCK.y) == before,
+		"the tree went before UsedCutText's press.")
+	screen.press_button(PokeButton.A)
+	var effects: Gen2WorldEffects = screen.get("_effects")
+	var held: int = 0
+	var animated: Array = []
+	var sounded: int = -1
+	var owed: bool = false
+	while not world.pending_script_wait().is_empty() and held < 100:
+		if effects.sprites_active():
+			animated.append(held)
+		owed = owed or not (screen.get("_sound_schedule") as Array).is_empty()
+		if owed and sounded < 0 and (screen.get("_sound_schedule") as Array).is_empty():
+			sounded = held
+		screen.advance_frame()
+		held += 1
+	var redraw: int = Gen1Layout.REDRAW_MAP_VIEW_FRAMES
+	_r.check(held == redraw * 2 + Gen1Layout.CUT_TREE_FRAMES
+		and animated == range(redraw, redraw + Gen1Layout.CUT_TREE_FRAMES)
+		and sounded == redraw + Gen1Layout.CUT_TREE_FRAMES
+		and world.block_at(CUT_TREE_BLOCK.x, CUT_TREE_BLOCK.y) != before,
+		"the cut held %d frames, animated on %s and sounded on %d over block $%02X." % [
+			held, animated, sounded, world.block_at(CUT_TREE_BLOCK.x, CUT_TREE_BLOCK.y)])
+	_r.note("gen1 walk cut on screen: the press, the swap, %d held frames and the sound" % held)
+	_r.close_screen(screen)
 
 
 ## `wMapPalOffset`: the warp into ROCK_TUNNEL_1F darkens both floors, `.flash`
@@ -4550,7 +4616,7 @@ func _check_a_mansion_switch() -> void:
 	var world: Gen2WorldAPI = _r.open_world(0, POKEMON_MANSION_3F, MANSION_3F_SWITCH)
 	if world == null:
 		return
-	world.dispatch_map_entry()
+	_land(world)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	var shut: bool = not world.can_walk_to(MANSION_3F_DOOR)
 	world.interact()
@@ -4562,6 +4628,7 @@ func _check_a_mansion_switch() -> void:
 	world.choose_script_input(0)
 	world.run_event_queue(true)
 	world.dispatch_sight_events()
+	_spend_redraw(world)
 	_r.check(world.event_flag_active(MANSION_SWITCH_FLAG), "the pressed switch left the event clear.")
 	_r.check(shut and world.can_walk_to(MANSION_3F_DOOR),
 		"the door at %s stood %s before and %s after." % [
@@ -4963,7 +5030,7 @@ func _check_the_cinnabar_quiz() -> void:
 	var world: Gen2WorldAPI = _r.open_world(0, CINNABAR_GYM, Vector2i(17, 3))
 	if world == null:
 		return
-	world.dispatch_map_entry()
+	_land(world)
 	var machines: Array = _quiz_machines(world)
 	if not _r.check(machines.size() == CINNABAR_GATES.size(), "%d quiz machines answer." % machines.size()):
 		return
@@ -4982,6 +5049,10 @@ func _check_the_cinnabar_quiz() -> void:
 		"a wrong answer opened the gate.")
 	var trainer: Gen2WorldObject = world.objects[QUIZ_TRAINER_OBJECT]
 	var stood: Vector2i = trainer.cell
+	## `set BIT_CUR_MAP_LOADED_1` behind the right answer: the next pass's
+	## `UpdateCinnabarGymGateTileBlocks_` redraws every gate in view again.
+	world.dispatch_sight_events()
+	_spend_redraw(world)
 	world.dispatch_sight_events()
 	_r.check(world.scripted_movement_in_progress() or trainer.cell != stood,
 		"the trainer did not walk up after a wrong answer.")
@@ -5038,6 +5109,7 @@ func _quiz_answered(world: Gen2WorldAPI, choice: int) -> String:
 	var said: Array[String] = []
 	while not results.is_empty() and said.size() < Gen1Layout.MAX_OBJECT_EVENTS:
 		said.append(_event_text(results))
+		_spend_redraw(world)
 		results = world.run_event_queue(true)
 	return "\n".join(said)
 
@@ -5056,7 +5128,7 @@ func _check_cinnabar_trainer(trainer: int, won: bool) -> void:
 	var world: Gen2WorldAPI = _r.open_world(0, CINNABAR_GYM, Vector2i(17, 3))
 	if world == null:
 		return
-	world.dispatch_map_entry()
+	_land(world)
 	var object: Dictionary = (world.current_map.events["objects"] as Array)[trainer]
 	world.player_cell = Vector2i(int(object["x"]), int(object["y"]) + 1)
 	world.player_facing = Gen2WorldSprite.FACING_UP
@@ -5077,12 +5149,13 @@ func _check_cinnabar_trainer(trainer: int, won: bool) -> void:
 	for _pass: int in 12:
 		world.run_event_queue(true)
 		world.dispatch_sight_events()
+		_spend_redraw(world)
 	_r.check(world.event_flag_active(665 + trainer) == won, "the trainer's beaten flag is wrong")
 	_r.check(world.event_flag_active(679 + trainer) == won, "the trainer's gate flag is wrong")
 	_check_cinnabar_blocks(world, trainer, won)
 	var returned: Gen2WorldAPI = _r.open_world(0, CINNABAR_GYM, Vector2i(17, 3), world.state)
 	if returned != null:
-		returned.dispatch_map_entry()
+		_land(returned)
 		_check_cinnabar_blocks(returned, trainer, won)
 
 

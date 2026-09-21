@@ -4168,6 +4168,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"menu_item": &"_gen1_node_menu_item",
 	"dex_rating": &"_gen1_node_dex_rating",
 	"set_fossil": &"_gen1_node_set_fossil",
+	"redraw_map_view": &"_gen1_node_redraw",
 	"copy_name": &"_gen1_node_copy_name",
 	"party_menu": &"_gen1_node_party_menu",
 	"name_mon": &"_gen1_node_name_mon",
@@ -4455,7 +4456,8 @@ func _gen1_card_key_steps() -> Array:
 	## `set BIT_CUR_MAP_LOADED_1` behind the block: the floor's callback flags
 	## the door on the next frame, so leaving and returning keeps it open.
 	return [_gen1_card_key_box("card_key_success"), door,
-		{"type": &"map_load", "bit": Gen1Layout.MAP_LOADED_1_BIT}]
+		{"type": &"map_load", "bit": Gen1Layout.MAP_LOADED_1_BIT},
+		_gen1_sound_step("sound", {"index": Gen1Layout.SFX_GO_INSIDE})]
 
 
 func _gen1_card_key_box(name: String) -> Dictionary:
@@ -4600,8 +4602,13 @@ func _gen1_badge_flag_granted(node: Dictionary, flag: int) -> int:
 func _gen1_node_replace_block(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
 	steps.append({
 		"type": &"block", "x": int(node["x"]), "y": int(node["y"]),
-		"block": int(node["block"]),
+		"block": int(node["block"]), "redraw": bool(node.get("redraw", true)),
 	})
+	return true
+
+
+func _gen1_node_redraw(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append(_gen1_redraw_step())
 	return true
 
 
@@ -7320,6 +7327,20 @@ func _gen1_boulder_dust() -> Array:
 	return _gen1_result()
 
 
+## `UsedCut`'s tail: `RedrawMapView`, `AnimCut`, `SFX_CUT` and a second redraw.
+func gen1_cut_animation(applied: Dictionary) -> Array:
+	if not _gen1 or _gen1_holding():
+		return []
+	var grass: bool = int(applied.get("animation", 0)) == Gen2WorldFieldMove.ANIMATION_GRASS
+	var frames: int = Gen1Layout.cut_animation_frames(grass)
+	_gen1_steps = [_gen1_redraw_step(), _gen1_wait_step(&"gen1_cut", frames, {
+		"facing": player_facing,
+		"grass": grass,
+		"sounds": [{"frame": frames, "gen1": true, "index": Gen1Layout.SFX_CUT}],
+	}), _gen1_redraw_step()]
+	return _gen1_result()
+
+
 ## `CheckFightingMapTrainers`: the shock bubble and `TrainerWalkUpToPlayer` in
 ## front of `DisplayEnemyTrainerTextAndStartBattle`, which is `TalkToTrainer`
 ## with BIT_SEEN_BY_TRAINER already set and so opens on the before-battle line.
@@ -7538,15 +7559,24 @@ func _gen1_step(type: StringName) -> Dictionary:
 func _gen1_result() -> Array:
 	_gen1_battle_last()
 	var events: Array = []
-	while not _gen1_steps.is_empty() and _gen1_written(_gen1_steps[0], events):
+	while not _gen1_steps.is_empty() and _gen1_written(_gen1_steps[0], events, _gen1_steps):
 		_gen1_steps.pop_front()
 	if _gen1_steps.is_empty():
 		_gen1_close_money_window(events)
 		return [] if events.is_empty() \
 			else [{"ok": true, "status": &"done", "events": events}]
+	_gen1_stand_sprites_still()
 	var result: Dictionary = _gen1_waiting_result(_gen1_steps[0])
 	result["events"] = events + (result.get("events", []) as Array)
 	return [result]
+
+
+## `DisplayTextIDInit`'s `.spriteStandStillLoop`: `and $fc` on every image
+## index, the counter behind it untouched.
+func _gen1_stand_sprites_still() -> void:
+	for object: Gen2WorldObject in objects:
+		if object.active and not object.deleted and object.is_stepping():
+			object.frame = 0
 
 
 ## `OverworldLoop` reads `wCurOpponent` once the script has returned, so the
@@ -7630,7 +7660,8 @@ func _gen1_waiting_result(step: Dictionary) -> Dictionary:
 	}
 
 
-func _gen1_written(step: Dictionary, events: Array) -> bool:
+## [param steps] is the list [param step] heads, which an in-view block queues onto.
+func _gen1_written(step: Dictionary, events: Array, steps: Array) -> bool:
 	match StringName(step["type"]):
 		&"money":
 			state.apply_changes({}, {}, {
@@ -7693,11 +7724,11 @@ func _gen1_written(step: Dictionary, events: Array) -> bool:
 		&"starter":
 			state.set_gen1_starter(String(step["who"]), int(step["value"]))
 			return true
-	return _gen1_linked(step, events)
+	return _gen1_linked(step, events, steps)
 
 
 ## The rest of [method _gen1_written]: what the cable club writes.
-func _gen1_linked(step: Dictionary, events: Array) -> bool:
+func _gen1_linked(step: Dictionary, events: Array, steps: Array) -> bool:
 	match StringName(step["type"]):
 		&"link_state":
 			state.link_session().gen1_link_state = int(step["value"])
@@ -7714,16 +7745,18 @@ func _gen1_linked(step: Dictionary, events: Array) -> bool:
 			events.append_array(gen1_return_to_cable_club_room())
 			return true
 		&"cup_menu":
-			_gen1_steps = _gen1_steps.slice(0, 1) + _gen1_cup_menu_steps() + _gen1_steps.slice(1)
+			var cup: Array = _gen1_cup_menu_steps()
+			for index: int in cup.size():
+				steps.insert(1 + index, cup[index])
 			return true
 		&"stadium_cup":
 			state.link_session().gen1_stadium_cup = int(step["cup"])
 			return true
-	return _gen1_kept(step, events)
+	return _gen1_kept(step, events, steps)
 
 
 ## The rest of [method _gen1_written]: what a row leaves behind it.
-func _gen1_kept(step: Dictionary, events: Array) -> bool:
+func _gen1_kept(step: Dictionary, events: Array, steps: Array) -> bool:
 	match StringName(step["type"]):
 		&"scratch":
 			_gen1_scratch[int(step["address"])] = int(step["value"])
@@ -7764,11 +7797,11 @@ func _gen1_kept(step: Dictionary, events: Array) -> bool:
 				return false
 			events.append_array((step.get("events", []) as Array).duplicate(true))
 			return true
-	return _gen1_drawn(step, events)
+	return _gen1_drawn(step, events, steps)
 
 
 ## The rest of [method _gen1_written]: what a row moves or redraws.
-func _gen1_drawn(step: Dictionary, events: Array) -> bool:
+func _gen1_drawn(step: Dictionary, events: Array, steps: Array) -> bool:
 	match StringName(step["type"]):
 		&"object_facing":
 			_gen1_last_sprite_index = int(step["index"])
@@ -7821,17 +7854,37 @@ func _gen1_drawn(step: Dictionary, events: Array) -> bool:
 			erase_screen_rows(int(step["first_row"]), int(step["rows"]), int(step["tile"]))
 			return true
 		&"block":
-			## `PrintCardKeyText` writes `wCardKeyDoorY` and its neighbour behind
-			## the box, so the floor's own callback can flag the door next load.
-			if bool(step.get("card_key", false)) and state != null:
-				state.set_card_key_door(Vector2i(int(step["x"]), int(step["y"])))
-			var changed: Dictionary = change_block(
-				int(step["x"]), int(step["y"]), int(step["block"])
-			)
-			if bool(changed.get("ok", false)):
-				events.append(changed)
+			_gen1_block_written(step, events, steps)
 			return true
 	return false
+
+
+## `PrintCardKeyText` writes `wCardKeyDoorY` and its neighbour behind the box,
+## so the floor's own callback can flag the door next load.
+func _gen1_block_written(step: Dictionary, events: Array, steps: Array) -> void:
+	if bool(step.get("card_key", false)) and state != null:
+		state.set_card_key_door(Vector2i(int(step["x"]), int(step["y"])))
+	var changed: Dictionary = change_block(int(step["x"]), int(step["y"]), int(step["block"]))
+	if not bool(changed.get("ok", false)):
+		return
+	events.append(changed)
+	if bool(step.get("redraw", true)) and _gen1_block_in_view(int(step["x"]), int(step["y"])):
+		steps.insert(1, _gen1_redraw_step())
+
+
+func _gen1_redraw_step() -> Dictionary:
+	return _gen1_wait_step(&"gen1_redraw", Gen1Layout.REDRAW_MAP_VIEW_FRAMES)
+
+
+## `ReplaceTileBlock` redraws when the block's padded address lies within four
+## rows plus six blocks of `wCurrentTileBlockMapViewPointer`, compared linearly.
+func _gen1_block_in_view(block_x: int, block_y: int) -> bool:
+	if current_map == null:
+		return false
+	var stride: int = current_map.width_blocks + Gen1Layout.MAP_BORDER_BLOCKS * 2
+	var offset: int = (block_y - (player_cell.y >> 1) + 2) * stride \
+		+ block_x - (player_cell.x >> 1) + 2
+	return offset >= 0 and offset < 4 * stride + 6
 
 
 ## The follower's routines a row calls and an emotion's own commands; Red and
@@ -8253,10 +8306,13 @@ func _gen1_toggle_index(object_index: int) -> int:
 
 
 ## Whether the script holding the world stops the map around it. `ScriptEvents`
-## runs inside `HandleMap` beside `HandleMapObjects`, so a `WaitScript` leaves
-## unfrozen objects stepping; a textbox, a menu or a host screen never reaches
-## `HandleMap` at all.
+## runs inside `HandleMap`, so a `WaitScript` leaves unfrozen objects stepping;
+## a textbox never reaches it. `UpdateSprites` runs from `OverworldLoop` alone,
+## so a Generation 1 routine's own `DelayFrames` freezes every sprite.
 func script_stops_the_map() -> bool:
+	if _gen1_holding():
+		return StringName(pending_script_wait().get("wait", &"")) \
+			!= Gen2WorldScriptRunner.WAIT_MOVEMENT
 	return script_busy() and pending_script_wait().is_empty()
 
 
@@ -9019,7 +9075,7 @@ func _spend_gen1_nodes(nodes: Array) -> Array:
 	if nodes.is_empty() or not _gen1_resolve_script(nodes, steps, _gen1_run({})):
 		return []
 	var events: Array = []
-	while not steps.is_empty() and _gen1_written(steps[0], events):
+	while not steps.is_empty() and _gen1_written(steps[0], events, steps):
 		steps.pop_front()
 	return steps
 

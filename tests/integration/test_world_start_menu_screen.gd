@@ -879,11 +879,17 @@ func _candy_evolution(cancel: bool) -> void:
 	assert_eq(save.party[0].level, level + 1)
 	assert_eq(save.party[0].species, 155, "nothing evolves behind the level box")
 	assert_null(_world_screen.get("_evolution_host"))
+	## `_GrewToLevelText`'s `text_promptbutton` stands in front of
+	## `PrintTempMonStats`' box, which the press draws over the list.
+	assert_true(
+		(host.get("_party_result") as Dictionary).get("stats", {}).is_empty(),
+		"the box was drawn before the line's own press"
+	)
+	host.handle_button(PokeButton.A)
 	assert_false(
 		(host.get("_party_result") as Dictionary).get("stats", {}).is_empty(),
 		"PrintTempMonStats' box stands over the list"
 	)
-	_spend_party_result(host)
 	host.handle_button(PokeButton.A)
 	await get_tree().process_frame
 	var screen: Gen2EvolutionScreen = _world_screen.get("_evolution_host")

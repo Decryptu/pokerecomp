@@ -9973,6 +9973,8 @@ func _gen1_wander_map() -> Dictionary:
 		"sprite": 1, "x": 1, "y": 9, "text": 1,
 		"movement": Gen2WorldObject.MOVEMENT_WALK_UP_DOWN,
 	}]
+	(map["events"] as Dictionary)["bg_events"] = [{"x": 0, "y": 0, "text": 2}]
+	map["texts"] = [{"text": ""}, {"text": "A sign."}]
 	return map
 
 
@@ -10337,6 +10339,36 @@ func test_gen1_a_talked_to_sprite_faces_the_player_until_its_own_wait_ends() -> 
 		passes += 1
 	assert_eq(walker.facing, Gen2WorldSprite.FACING_UP, "it never turned back")
 	assert_eq(passes, 6, "it turned back on the pass after its wait")
+	RomCache.clear(_gen1_directory())
+
+
+## `DisplayTextIDInit`'s `.spriteStandStillLoop`: `and $fc` on every visible
+## image index, and nothing on the counter `UpdateSpriteImage` rebuilds it from.
+func test_gen1_a_text_box_draws_a_sprite_mid_step_standing() -> void:
+	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(0, 1))
+	var walker: Gen2WorldObject = world.objects[0]
+	walker.cell = Vector2i(1, 3)
+	walker.start_step(Vector2i.UP, 16)
+	for _frame: int in 5:
+		walker.tick_step()
+	assert_eq(walker.frame, 1, "five frames in is the first walking frame")
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var said: Array = world.interact()
+	assert_eq(String((said[0] as Dictionary)["event"]["text"]), "A sign.")
+	assert_eq(walker.frame, 0, "the box left the walking frame up")
+	assert_eq(walker.step_frame, 5, "the box touched the counter")
+	world.run_event_queue(true)
+	walker.tick_step()
+	assert_eq(walker.frame, 1, "the step did not walk on from its own counter")
+	## `UpdateSprites` runs from `OverworldLoop` alone, so `RedrawMapView`'s
+	## `DelayFrame`s hold every sprite still; a movement wait is the loop's own.
+	world.set("_gen1_steps", [world.call("_gen1_redraw_step")])
+	assert_true(world.script_stops_the_map(), "a routine's own wait let the map run")
+	world.set("_gen1_steps", [{"type": &"wait", "values": {
+		"type": &"wait", "wait": Gen2WorldScriptRunner.WAIT_MOVEMENT,
+	}}])
+	assert_false(world.script_stops_the_map(), "a movement wait stopped the map")
+	world.set("_gen1_steps", [])
 	RomCache.clear(_gen1_directory())
 
 

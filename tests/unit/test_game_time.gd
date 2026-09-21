@@ -45,6 +45,22 @@ func test_the_timer_caps_at_999_59_59_and_stays_there() -> void:
 	assert_eq(time.hours, PokeGameTime.CAPPED_HOURS)
 
 
+## `TrackPlayTime`'s `cp $ff` behind the hour increment, the lower bytes zeroed
+## on the way there.
+func test_generation_1_caps_at_255_hours_flat() -> void:
+	var time := PokeGameTime.create(254, 59, 59, 59)
+	assert_true(time.advance_frame(true))
+	assert_true(time.capped)
+	assert_eq(time.hours, PokeGameTime.GEN1_MAX_HOURS)
+	assert_eq(time.minutes, 0)
+	assert_eq(time.seconds, 0)
+	assert_false(time.advance_frames(60, true))
+	assert_eq(time.frames, 0)
+	var crystal := PokeGameTime.create(254, 59, 59, 59)
+	assert_true(crystal.advance_frame())
+	assert_false(crystal.capped)
+
+
 func test_many_frames_at_once_match_the_same_frames_one_at_a_time() -> void:
 	var stepped := PokeGameTime.new()
 	for _frame: int in 3 * PokeGameTime.FRAMES_PER_SECOND + 7:
