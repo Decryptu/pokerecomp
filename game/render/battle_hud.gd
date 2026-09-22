@@ -20,12 +20,14 @@ const ENEMY_NAME: Vector2i = Vector2i(1, 0)
 ## `DrawEnemyHUDBorder`'s `hlcoord 1, 1`, under the name's first letter.
 const ENEMY_CAUGHT: Vector2i = Vector2i(1, 1)
 const ENEMY_LEVEL: Vector2i = Vector2i(6, 1)
+const ENEMY_GENDER: Vector2i = Vector2i(9, 1)
 const ENEMY_BAR: Vector2i = Vector2i(2, 2)
 const ENEMY_EDGE: Vector2i = Vector2i(1, 2)
 
 ## The player's, which is the same idea mirrored and two rows taller.
 const PLAYER_NAME: Vector2i = Vector2i(10, 7)
 const PLAYER_LEVEL: Vector2i = Vector2i(14, 8)
+const PLAYER_GENDER: Vector2i = Vector2i(17, 8)
 const PLAYER_BAR: Vector2i = Vector2i(10, 9)
 const PLAYER_HP: Vector2i = Vector2i(11, 10)
 const PLAYER_EXP: Vector2i = Vector2i(10, 11)
@@ -42,8 +44,7 @@ const GEN1_ENEMY_LEVEL: Vector2i = Vector2i(4, 1)
 
 var font: Gen2Font = null
 var tiles: Gen2BattleTiles = null
-## Generation 1 has no exp bar and no caught ball, and it centres a short name
-## where Crystal prints every one from the same column.
+## Generation 1 has no exp bar, caught ball or gender sign, and centres a short name.
 var gen1: bool = false
 
 
@@ -97,7 +98,8 @@ static func bar_pixels(current: int, maximum: int, length: int) -> int:
 ## panel that is not black on white, which keeps the palette choice where the
 ## colour is.
 func draw_enemy(
-	into: PackedByteArray, width: int, name: String, level: int, caught: bool = false
+	into: PackedByteArray, width: int, name: String, level: int, caught: bool = false,
+	status: int = Gen2Status.NONE, gender: StringName = &""
 ) -> void:
 	font.draw_text(
 		name, into, width, name_column(ENEMY_NAME.x, name, gen1) * TILE,
@@ -108,7 +110,10 @@ func draw_enemy(
 			Gen2BattleTiles.CAUGHT_BALL, into, width,
 			ENEMY_CAUGHT.x * TILE, ENEMY_CAUGHT.y * TILE
 		)
-	draw_level(into, width, GEN1_ENEMY_LEVEL if gen1 else ENEMY_LEVEL, level)
+	draw_level_line(
+		into, width, GEN1_ENEMY_LEVEL if gen1 else ENEMY_LEVEL, ENEMY_GENDER,
+		level, status, gender
+	)
 	draw_bar_frame(into, width, ENEMY_BAR, tiles.hp_bar_end)
 
 	# The edge, which starts beside the bar and turns under it.
@@ -126,13 +131,14 @@ func draw_enemy(
 ## The player's panel, likewise without its two bars: it carries HP as numbers
 ## as well, and an exp bar sunk into its bottom edge.
 func draw_player(
-	into: PackedByteArray, width: int, name: String, level: int, hp: int, max_hp: int
+	into: PackedByteArray, width: int, name: String, level: int, hp: int, max_hp: int,
+	status: int = Gen2Status.NONE, gender: StringName = &""
 ) -> void:
 	font.draw_text(
 		name, into, width, name_column(PLAYER_NAME.x, name, gen1) * TILE,
 		PLAYER_NAME.y * TILE
 	)
-	draw_level(into, width, PLAYER_LEVEL, level)
+	draw_level_line(into, width, PLAYER_LEVEL, PLAYER_GENDER, level, status, gender)
 	draw_bar_frame(into, width, PLAYER_BAR, tiles.hp_bar_end + 1)
 
 	# Right-aligned in a fixed field, as the games print any number in a panel:
@@ -194,6 +200,26 @@ func draw_exp_bar(
 			number = Gen2BattleTiles.EXP_BAR_FIRST_PARTIAL + remaining - 1
 			remaining = 0
 		tiles.draw(number, into, width, (right - tile) * TILE, top)
+
+
+## `GetGender`'s sign, and `PlaceNonFaintStatus` over the level, which a genderless
+## species prints a column left. Generation 1's status sits a column right.
+func draw_level_line(
+	into: PackedByteArray, width: int, at: Vector2i, gender_at: Vector2i,
+	level: int, status: int, gender: StringName
+) -> void:
+	var sexed: bool = not gen1 and gender != &""
+	if sexed:
+		font.draw_text(
+			Gen2BattleMon.gender_glyph(gender), into, width,
+			gender_at.x * TILE, gender_at.y * TILE
+		)
+	var shown: String = Gen2Status.abbreviation(status)
+	if not shown.is_empty():
+		font.draw_text(shown, into, width, (at.x + int(gen1)) * TILE, at.y * TILE)
+		return
+	var genderless: bool = sexed and gender == Gen2BattleMon.GENDER_NONE
+	draw_level(into, width, at - Vector2i(int(genderless), 0), level)
 
 
 ## The level symbol and the number after it, which is how a level is written

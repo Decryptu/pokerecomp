@@ -611,8 +611,6 @@ func gender() -> StringName:
 	return gender_for(data, persistent_species(), persistent_dvs())
 
 
-## The same answer for a Pokémon that is not in a battle, so the Hall of Fame's
-## induction panel reads the rule from here rather than restating it.
 static func gender_for(data_source: GameData, species_number: int, mon_dvs: int) -> StringName:
 	var ratio: int = int(
 		data_source.species(species_number).get("gender_ratio", GENDER_UNKNOWN)
@@ -626,6 +624,15 @@ static func gender_for(data_source: GameData, species_number: int, mon_dvs: int)
 
 	var combined: int = (Gen2Stats.attack_dv(mon_dvs) << 4) | Gen2Stats.speed_dv(mon_dvs)
 	return GENDER_MALE if combined > ratio else GENDER_FEMALE
+
+
+## `GetGender`'s answer as printed, a space for a genderless species.
+static func gender_glyph(answer: StringName) -> String:
+	if answer == GENDER_MALE:
+		return "♂"
+	if answer == GENDER_FEMALE:
+		return "♀"
+	return " "
 
 
 ## The two type numbers, which are the same number twice for a single-type

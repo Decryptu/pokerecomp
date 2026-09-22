@@ -751,21 +751,13 @@ func _mon_state(mon: Gen2SaveMon) -> Dictionary:
 		return {}
 	return {
 		"level": mon.level,
-		"gender": _gender_glyph(Gen2BattleMon.gender_for(_data, mon.species, mon.dvs)),
+		"gender": Gen2BattleMon.gender_glyph(Gen2BattleMon.gender_for(_data, mon.species, mon.dvs)),
 		"species_name": String(_data.species(mon.species).get("name", "")),
 		"item": mon.item,
 		## `ItemIsMail`, which picks the mail icon `$5c` over the item icon `$5d`
 		## and is what `wBillsPC_MonHasMail` records for the blackout guard.
 		"mail": Gen2HeldItem.is_mail(mon.item),
 	}
-
-
-func _gender_glyph(gender: StringName) -> String:
-	if gender == Gen2BattleMon.GENDER_MALE:
-		return "♂"
-	if gender == Gen2BattleMon.GENDER_FEMALE:
-		return "♀"
-	return " "
 
 
 func _refresh_pic(mon: Gen2SaveMon) -> void:

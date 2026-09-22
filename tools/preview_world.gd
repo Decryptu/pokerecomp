@@ -16,7 +16,7 @@ const KIND_HELP: Dictionary = {
 	&"gym_gates": "gate mask: Cinnabar Gym after its map-entry redraw (`red 0 166 ... gym_gates@17,6 0 0`)",
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
 	&"battle_transition": "frames, index: DoBattleTransition over the map. 1 is the trainer branch; a Generation 1 cartridge reads BattleTransitions' own index, 0 the double circle, 2 the circle, 4 the horizontal stripes, 6 the vertical",
-	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it, 2 plays the POKé FLUTE from it, 3 loses it, which on a Generation 1 cartridge is PlayerBlackedOutText2 under PAL_BLACK, and 4 is the RESTLESS_SOUL with a SILPH SCOPE, that many frames into MarowakAnim (`red 0 144 ... battle 90 4`)",
+	&"battle": "frames, 0: the wild fight preview_battle_request starts, settled past its transition. 1 opens the bag over it, 2 plays the POKé FLUTE from it, 3 loses it, which on a Generation 1 cartridge is PlayerBlackedOutText2 under PAL_BLACK, 4 is the RESTLESS_SOUL with a SILPH SCOPE, that many frames into MarowakAnim (`red 0 144 ... battle 90 4`), and 5 is the battle menu with the lead poisoned and the wild asleep",
 	&"battle_caught": "frames: the same fight against a species the dex already holds",
 	&"safari": "frames, 0: the Safari game's own battle menu over a Safari Zone map. 1 draws PrintSafariZoneSteps' window on the START menu instead",
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in. A Generation 1 cartridge throws the old man's ball, or Prof. Oak's with a second number of 1",
@@ -668,8 +668,20 @@ func _stage_battle() -> void:
 		_screen.advance_frames(frames)
 	if _cell.y == 3:
 		_lose_battle(frames)
+	elif _cell.y == 5:
+		_open_battle_bag(frames, false, false)
+		_afflict_battlers(frames)
 	elif _cell.y >= 1:
 		_open_battle_bag(frames, flute)
+
+
+func _afflict_battlers(frames: int) -> void:
+	var host: Gen2BattleScreen = _screen.get("_battle_host")
+	host._battle.player.status = Gen2Status.POISON
+	host._battle.enemy.status = Gen2Status.MAX_SLEEP
+	host._sync_hud_status()
+	host._push_view()
+	_screen.advance_frames(frames)
 
 
 ## Pressed up to `MarowakAnim` and that many frames into it.
@@ -738,13 +750,15 @@ func _stage_safari() -> void:
 ## each owe a press, so A is spent until there is a cursor, and only then is it
 ## moved one row down and used. [param flute] walks the list to the Poke Flute,
 ## granted before the fight so the row is there to reach, and uses it.
-func _open_battle_bag(frames: int, flute: bool) -> void:
+func _open_battle_bag(frames: int, flute: bool, open: bool = true) -> void:
 	var host: Gen2BattleScreen = _screen.get("_battle_host")
 	for _press: int in BATTLE_MENU_WAIT:
 		if host == null or StringName(host.get("_menu_stage")) == &"main":
 			break
 		_screen.press_button(PokeButton.A)
 		_screen.advance_frames(frames)
+	if not open:
+		return
 	_screen.press_button(PokeButton.DOWN)
 	_screen.advance_frame()
 	_screen.press_button(PokeButton.A)

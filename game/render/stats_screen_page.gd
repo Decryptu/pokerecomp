@@ -100,9 +100,6 @@ const LEVEL_UP_STRING: String = "LEVEL UP"
 const TO_STRING: String = "TO"
 const POKERUS_STRING: String = "#RUS"
 
-## `PlaceNonFaintStatus`' own strings and the FNT `PlaceStatusString` reaches
-## before it ever reads the byte, which is [Gen2PartyMenuPage]'s set as well.
-const STATUS_STRINGS: Dictionary = Gen2PartyMenuPage.STATUS_STRINGS
 const FAINTED_STRING: String = Gen2PartyMenuPage.FAINTED_STRING
 
 ## `LoadGreenPage`.
@@ -705,14 +702,13 @@ func _id_label(into: PackedByteArray, width: int, at: Vector2i) -> void:
 	_code(into, width, CODE_DOT, at + Vector2i(2, 0))
 
 
-## `PlaceStatusString`: the health is tested before the byte, so a fainted mon
-## reads FNT whatever else it carries, and anything with no status at all is the
-## page's own `OK `.
+## `PlaceStatusString`, which tests the health before the byte; a clean byte is
+## the page's own `OK `.
 func _status_string(page: Dictionary) -> String:
 	if bool(page.get("fainted", false)):
 		return FAINTED_STRING
-	var name: StringName = Gen2Status.name_of(int(page.get("status", 0)))
-	return String(STATUS_STRINGS.get(name, OK_STRING))
+	var status: String = Gen2Status.abbreviation(int(page.get("status", 0)))
+	return status if not status.is_empty() else OK_STRING
 
 
 ## `PrintLevel`: the `<LV>` tile and then the number left-aligned beside it.

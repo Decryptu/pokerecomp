@@ -800,7 +800,10 @@ func test_haze_clears_both_sides_stages_and_nothing_else() -> void:
 	assert_eq(battle.player.stage("attack"), 0)
 	assert_eq(battle.enemy.stage("speed"), 0)
 	assert_eq(battle.enemy.status, Gen2Status.BURN, "not a status cure")
-	assert_eq(_first(turn.events, Gen2Battle.STAGES_CLEARED), {"type": Gen2Battle.STAGES_CLEARED, "side": Gen2Battle.PLAYER})
+	assert_eq(_first(turn.events, Gen2Battle.STAGES_CLEARED), {
+		"type": Gen2Battle.STAGES_CLEARED, "side": Gen2Battle.PLAYER,
+		"statuses": [Gen2Status.NONE, Gen2Status.BURN],
+	})
 
 
 func test_belly_drum_maxes_attack_for_half_the_users_health() -> void:

@@ -278,6 +278,8 @@ func test_a_save_with_no_world_refuses_every_world_edit() -> void:
 	assert_false(_editor.set_event_flag(3, true)["ok"])
 	assert_false(_editor.set_engine_flag(3, true)["ok"])
 	assert_false(_editor.set_seen_species(Fixture.PIKACHU, true)["ok"])
+	assert_false(_editor.set_caught_species(Fixture.PIKACHU)["ok"])
+	assert_false(_editor.register_owned()["ok"])
 	assert_false(_editor.set_clock(1, 2, 3)["ok"])
 	assert_null(_editor.inventory())
 
@@ -339,6 +341,27 @@ func test_seen_species_is_recorded_and_cleared() -> void:
 		state.seen_species().has(Fixture.PIKACHU),
 		"clearing drops the entry rather than storing false",
 	)
+
+
+## `SetSeenAndCaughtMon` runs on every arrival, and clearing a species takes
+## both flags so no caught count is left behind a dex that lists nothing.
+func test_an_added_pokemon_is_caught_in_the_dex() -> void:
+	var editor: Gen2SaveEditor = _with_world()
+	var state: Gen2WorldState = editor.save.world.world_state
+	assert_true(editor.add_party_member(Fixture.GEODUDE, 10)["ok"])
+	assert_true(editor.add_box_member(0, Fixture.CHARMANDER, 10)["ok"])
+	assert_true(state.has_caught_species(Fixture.GEODUDE))
+	assert_true(state.has_seen_species(Fixture.CHARMANDER))
+	assert_true(state.has_caught_species(Fixture.CHARMANDER))
+
+	assert_false(state.has_caught_species(Fixture.PIKACHU), "the party it opened with")
+	assert_true(editor.register_owned()["ok"])
+	assert_true(state.has_caught_species(Fixture.PIKACHU))
+
+	assert_true(editor.set_seen_species(Fixture.GEODUDE, false)["ok"])
+	assert_false(state.has_caught_species(Fixture.GEODUDE))
+	assert_true(editor.set_caught_species(Fixture.GEODUDE)["ok"])
+	assert_true(state.has_seen_species(Fixture.GEODUDE))
 
 
 func test_an_unknown_species_cannot_be_marked_seen() -> void:

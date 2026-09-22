@@ -233,6 +233,57 @@ func test_a_caught_species_marks_the_enemy_panel_with_a_ball() -> void:
 	)
 
 
+## `DrawEnemyHUD` and `PrintPlayerHUD`: `GetGender`'s sign three columns right of
+## the level, `PlaceNonFaintStatus` over the level itself, and a genderless
+## species' level a column left.
+func test_the_level_line_carries_gender_and_status() -> void:
+	_write_cache()
+	var hud: Gen2BattleHud = Gen2BattleHud.from_data(_data())
+	var enemy: Vector2i = Gen2BattleHud.ENEMY_LEVEL
+	var player: Vector2i = Gen2BattleHud.PLAYER_LEVEL
+
+	var male: PackedByteArray = _panels(hud, Gen2Status.NONE, Gen2BattleMon.GENDER_MALE)
+	assert_ne(_cell(male, Gen2BattleHud.ENEMY_GENDER), 0, "the enemy's sign")
+	assert_ne(_cell(male, Gen2BattleHud.PLAYER_GENDER), 0, "the player's sign")
+	assert_eq(_cell(male, enemy - Vector2i(1, 0)), 0, "the level where it always was")
+	assert_eq(_cell(male, enemy + Vector2i(2, 0)), 0, "two cells of level at 5")
+
+	var genderless: PackedByteArray = _panels(hud, Gen2Status.NONE, Gen2BattleMon.GENDER_NONE)
+	assert_eq(_cell(genderless, Gen2BattleHud.ENEMY_GENDER), 0, "no sign")
+	assert_ne(_cell(genderless, enemy - Vector2i(1, 0)), 0, "the level a column left")
+	assert_ne(_cell(genderless, player - Vector2i(1, 0)), 0)
+
+	var poisoned: PackedByteArray = _panels(hud, Gen2Status.POISON, Gen2BattleMon.GENDER_NONE)
+	for column: int in 3:
+		assert_eq(_cell(poisoned, enemy + Vector2i(column, 0)), FONT_INK, "PSN over the level")
+		assert_eq(_cell(poisoned, player + Vector2i(column, 0)), FONT_INK)
+	assert_eq(_cell(poisoned, enemy - Vector2i(1, 0)), 0, "a status never moves left")
+
+	## Generation 1 prints no sign, and `PrintStatusAilment` a column right of
+	## where `PrintLevel` starts.
+	hud.gen1 = true
+	var gen1: PackedByteArray = _panels(hud, Gen2Status.SLEEP_MASK, Gen2BattleMon.GENDER_MALE)
+	assert_eq(_cell(gen1, Gen2BattleHud.ENEMY_GENDER), 0)
+	assert_eq(_cell(gen1, Gen2BattleHud.GEN1_ENEMY_LEVEL), 0)
+	assert_eq(_cell(gen1, Gen2BattleHud.GEN1_ENEMY_LEVEL + Vector2i(1, 0)), FONT_INK)
+	assert_eq(_cell(gen1, player + Vector2i(1, 0)), FONT_INK)
+
+
+const FONT_INK: int = 3
+
+
+func _panels(hud: Gen2BattleHud, status: int, gender: StringName) -> PackedByteArray:
+	var screen: PackedByteArray = PackedByteArray()
+	screen.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	hud.draw_enemy(screen, Gen2Screen.WIDTH, "PIDGEY", 5, false, status, gender)
+	hud.draw_player(screen, Gen2Screen.WIDTH, "CYNDAQUIL", 5, 18, 18, status, gender)
+	return screen
+
+
+func _cell(screen: PackedByteArray, cell: Vector2i) -> int:
+	return screen[cell.y * Gen2Font.TILE * Gen2Screen.WIDTH + cell.x * Gen2Font.TILE]
+
+
 func test_the_hp_bar_fill_is_drawn_apart_from_the_panel() -> void:
 	# The fill is the only part of a panel that is not black on white, so it is
 	# a layer of its own and the panel must not draw it.

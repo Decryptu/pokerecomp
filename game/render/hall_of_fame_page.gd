@@ -258,7 +258,7 @@ func _draw_mon(page: Dictionary, indices: PackedByteArray) -> void:
 	## PRINTNUM_LEADINGZEROS, so a two-digit dex number keeps its column.
 	_text(indices, width, "%0*d" % [DEX_DIGITS, int(page.get("dex_number", 0))], DEX_NUMBER)
 	_text(indices, width, String(page.get("species_name", "")), SPECIES_NAME)
-	_text(indices, width, _gender_glyph(StringName(page.get("gender", &""))), GENDER)
+	_text(indices, width, Gen2BattleMon.gender_glyph(StringName(page.get("gender", &""))), GENDER)
 
 	_code(indices, width, CODE_SLASH, NICKNAME_SLASH)
 	_text(indices, width, String(page.get("nickname", "")), NICKNAME_SLASH + Vector2i(1, 0))
@@ -316,16 +316,6 @@ func _draw_saving(page: Dictionary, indices: PackedByteArray) -> void:
 			indices, COLUMNS * TILE, String(lines[index]),
 			SAVING_AT + Vector2i(0, index * TEXT_LINE_SPACING)
 		)
-
-
-## GetGender answers one of three, and the source prints a space for a
-## genderless Pokémon rather than a symbol.
-func _gender_glyph(gender: StringName) -> String:
-	if gender == Gen2BattleMon.GENDER_MALE:
-		return "♂"
-	if gender == Gen2BattleMon.GENDER_FEMALE:
-		return "♀"
-	return " "
 
 
 func _box(indices: PackedByteArray, width: int, box: Rect2i) -> void:

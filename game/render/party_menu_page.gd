@@ -107,13 +107,7 @@ const GEN1_ICON_AT: Vector2i = Vector2i(0x10, 0x10)
 ## yellow and red bar. Crystal's row is added to a duration; this one is it.
 const GEN1_ICON_SPEEDS: Array[int] = [5, 16, 32]
 
-## `PlaceStatusString`'s three-letter strings, in the order
-## `PlaceNonFaintStatus` tests them. FNT comes first because
 ## `PlaceStatusString` checks the health before it ever looks at the byte.
-const STATUS_STRINGS: Dictionary = {
-	&"poison": "PSN", &"burn": "BRN", &"freeze": "FRZ",
-	&"paralysis": "PAR", &"sleep": "SLP",
-}
 const FAINTED_STRING: String = "FNT"
 
 var font: Gen2Font = null
@@ -529,13 +523,11 @@ func _blend_bar(pixels: PackedInt32Array, index: int, row: Dictionary) -> void:
 			pixels[to + x] = table[value]
 
 
-## `PlaceStatusString`: FNT for no health left, otherwise the first flag on the
-## byte, or nothing at all for a Pokémon with none.
+## `PlaceStatusString`: FNT for no health left, otherwise the first flag.
 func _status_string(row: Dictionary) -> String:
 	if bool(row.get("fainted", false)):
 		return FAINTED_STRING
-	var name: StringName = Gen2Status.name_of(int(row.get("status", 0)))
-	return String(STATUS_STRINGS.get(name, ""))
+	return Gen2Status.abbreviation(int(row.get("status", 0)))
 
 
 func _draw_cursor(page: PackedByteArray, width: int, cursor: int) -> void:
