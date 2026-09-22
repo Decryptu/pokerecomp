@@ -14,20 +14,11 @@ here was called that and deserved it. Rewrite from the line that is exactly
 this note and takes its closing marker with it, which is how 0.1.17 published
 an empty body. -->
 
-## Added
-
-- A new game on Red, Blue and Yellow is now played through by a check on the real screens before every release: from the copyright screen to the save, then the bedroom, Prof. Oak, the starter, the rival, the parcel, the Pokedex, Viridian Forest and Brock, every button pressed the way a player presses it and the sound driver running. Every fix below came out of its first run.
-
-## Changed
-
-- Every check that drives a screen by hand now runs the sound driver with it, so a text box waiting on a sound that never ends fails in a check rather than on a phone.
-- Pressing A, START or SELECT on Red, Blue and Yellow is read on the overworld's own pass behind the map's script, as a direction already was. Talking to Prof. Oak again the moment his parcel text closes no longer lands in front of your rival's entrance.
-
 ## Fixed
 
-- Pressing A during Prof. Oak's PIKACHU catch on Yellow, or the old man's catch in Viridian City, no longer takes over the battle. A press that reached the menu fought the demo with the demonstrator's own two Pokemon, and those two were then written into your party as if they were yours.
-- Yellow no longer sends you home to your bedroom after Prof. Oak's catch when your party is still empty.
-- Flying and using an Escape Rope on Red, Blue and Yellow hold the frames the cartridge spends fading the music out and waiting for the last sound, which the check that pins them had not been counting.
+- The Pokegear's MAP card now moves on to the PHONE and RADIO cards on Gold, Silver and Crystal. Pressing left or right on it did nothing, so once you were on the map the only way out was B. Switching cards plays the same click the cartridge does.
+- The "Will you change POKéMON?" question in a trainer battle with the SHIFT setting shows its YES/NO box again. The box was never drawn, so the press meant to read the question was taken as YES and you landed in the party list. The same fault hid the "Use next POKéMON?" box, the "delete a move?" box and the Bug-Catching Contest's keep-or-swap box; all four appear the moment their question finishes printing.
+- That question now stands on its own page, the way the cartridge prints it.
 
 ## Which file
 
