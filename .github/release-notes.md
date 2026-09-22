@@ -16,15 +16,13 @@ an empty body. -->
 
 ## Added
 
-- The launcher plays Red, Blue and Yellow's own title screen behind the cartridge on the shelf, the way it already did for Gold, Silver and Crystal. The lettering is taken off so the launcher's own text stays readable, and the cartridge's title music plays under the interface.
-- A handheld with a second display, like the Ayn Thor, gets the lower screen on Red, Blue and Yellow too: the Pokedex, the party, the ITEM list, the TOWN MAP and the trainer info screen, with a tab for each.
-- The map is its own tab on those three, since Generation I has no Pokegear. It appears once the TOWN MAP is in your bag and sits where the Pokegear tab sits on Gold, Silver and Crystal.
-- Hard mode now changes what a Generation I trainer does. Every class scores its moves with all three of the game's own layers instead of the one or two its class carries, on top of the higher levels, perfect DVs and full stat experience it already brought.
+- The save editor's Pokedex tab has a Caught button beside Seen and Clear, and a button that registers every Pokemon in your party and boxes. Use it once on a save you edited before this release.
 
 ## Fixed
 
-- A Nuzlocke on Red, Blue or Yellow was counting one catch per map instead of one per area, so Mt. Moon gave you three encounters and Pokemon Tower five. A whole cave or tower is one area now, which is what the rule says: 36 encounters across the game rather than 57.
-- The party icon beside a Pokemon's name on the lower screen was drawn with half of it missing on Red, Blue and Yellow.
+- The battle panels on Gold, Silver and Crystal now show the Pokemon's gender, ♂ or ♀, beside its level, the way the cartridge does.
+- A poisoned, burned, frozen, paralysed or sleeping Pokemon now shows PSN, BRN, FRZ, PAR or SLP in place of its level in battle, on all six games. It changes on the line that announces it.
+- A Pokemon added in the save editor, to the party or a box, is now registered in the Pokedex as caught. An Unown added to the party goes into the Unown dex too. Clearing a species also clears its caught flag, so the caught count matches the list.
 
 ## Which file
 
