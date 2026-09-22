@@ -99,7 +99,8 @@ func _verify_errand() -> void:
 			if not bool(command.get("ok", false)):
 				break
 			var opcode: int = int(command["opcode"])
-			if opcode == Gen2WorldScript.GIVEPOKEMAIL 				or opcode == Gen2WorldScript.CHECKPOKEMAIL:
+			if opcode == Gen2WorldScript.GIVEPOKEMAIL \
+				or opcode == Gen2WorldScript.CHECKPOKEMAIL:
 				var payload: PackedByteArray = _r.data.world_script_at(
 					bank, int(command["address"])
 				)

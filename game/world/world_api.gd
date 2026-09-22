@@ -505,10 +505,11 @@ func landmark() -> int:
 ## `Pokedex_GetLandmark` and the `TownMap_*` routines share: a map with no
 ## landmark borrows [member backup_warp]'s, POKECENTER_2F on every visit.
 func landmark_backup() -> int:
-	## `LoadTownMapEntry` takes `wCurMap` itself, so a Generation 1 map is its own
-	## landmark and the four routines below need no backup to reach one.
+	## `LoadTownMapEntry` takes `wCurMap` itself, so a Generation 1 map reaches a
+	## landmark with no backup, and [method GameData.area_landmark] folds a
+	## dungeon's floors onto the one entry they draw.
 	if data != null and data.generation == RomRegistry.GEN1:
-		return current_map.number if current_map != null else 0
+		return data.area_landmark(current_map.number) if current_map != null else 0
 	var here: int = landmark()
 	if here != Gen2WorldRadio.LANDMARK_SPECIAL or backup_warp.is_empty() or data == null:
 		return here

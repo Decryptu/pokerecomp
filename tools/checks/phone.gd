@@ -128,7 +128,8 @@ func _mom_row(
 	var actual: Dictionary = data.mom_item(set_number, index)
 	var kind: int = int(actual.get("kind", 0))
 	var item: int = int(actual.get("item", 0))
-	var name: String = Gen2WorldDecoration.decoration_name(data, item) 		if kind == Gen2WorldMomPhone.KIND_DOLL else data.item_name(item)
+	var name: String = Gen2WorldDecoration.decoration_name(data, item) \
+		if kind == Gen2WorldMomPhone.KIND_DOLL else data.item_name(item)
 	_r.check(
 		int(actual.get("trigger", -1)) == int(expected[0])
 			and int(actual.get("cost", -1)) == int(expected[1])

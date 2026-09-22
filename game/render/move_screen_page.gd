@@ -129,7 +129,7 @@ func render(page: Dictionary, data: GameData) -> Image:
 	var height: int = ROWS * TILE
 	if data == null or _frame < 0:
 		return Gen2PicImage.canvas_image(pixels, width, height)
-	var colors: PackedColorArray = data.party_menu_icon_palette()
+	var colors: PackedColorArray = Gen2PartyMenuPage.icon_palette(data)
 	var strip: PackedByteArray = data.species_icon_indices(int(page.get("species", 0)))
 	if strip.is_empty() or colors.size() != PokePalette.COLORS_PER_PIC:
 		return Gen2PicImage.canvas_image(pixels, width, height)

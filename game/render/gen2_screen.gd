@@ -611,7 +611,8 @@ func _cover_close_frames() -> Array[PackedByteArray]:
 
 
 func _can_animate_cover() -> bool:
-	return is_inside_tree() and not Engine.is_editor_hint() 		and DisplayServer.get_name() != "headless"
+	return is_inside_tree() and not Engine.is_editor_hint() \
+		and DisplayServer.get_name() != "headless"
 
 
 ## The transition's twenty by eighteen cells over the whole control, letterbox
@@ -626,7 +627,8 @@ func _draw_cover() -> void:
 	)
 	for row: int in Gen2BattleTransition.ROWS:
 		for column: int in Gen2BattleTransition.COLUMNS:
-			if _cover_cells[row * Gen2BattleTransition.COLUMNS + column] 				== Gen2BattleTransition.CELL_NONE:
+			if _cover_cells[row * Gen2BattleTransition.COLUMNS + column] \
+				== Gen2BattleTransition.CELL_NONE:
 				continue
 			_cover.draw_rect(
 				Rect2(

@@ -3,7 +3,8 @@ extends RefCounted
 
 ## `engine/battle/trainer_ai.asm` and `SelectEnemyMove`: how a Generation 1
 ## opponent picks its move and what a class does in front of it. [Gen2BattleAI]
-## is Crystal's, and no [Gen2Rules] flag reshapes this one.
+## is Crystal's. No [Gen2Rules] FLAG reshapes this one; the Hard challenge does,
+## through [method Gen2Rules.gen1_ai_layers].
 
 ## `wBuffer`'s starting score, the disabled slot's, and layer 1's nudge.
 const BASE_SCORE: int = 10
@@ -118,7 +119,9 @@ static func _existing_slots(enemy: Gen2BattleMon) -> Array:
 ## `AIEnemyTrainerChooseMoves`: the slots the layers leave at the lowest score.
 static func enabled_slots(battle: Gen2Battle) -> Array:
 	var enemy: Gen2BattleMon = battle.mon(Gen2Battle.ENEMY)
-	var layers: Array = _attributes(battle).get("ai_layers", [])
+	var layers: Array = _rules(battle).gen1_ai_layers(
+		_attributes(battle).get("ai_layers", [])
+	)
 	if layers.is_empty():
 		return _existing_slots(enemy)
 	var scores: Array = score_slots(battle, layers)
@@ -154,6 +157,11 @@ static func _move_count(enemy: Gen2BattleMon) -> int:
 		if int(enemy.moves[slot]) == 0:
 			return slot
 	return enemy.moves.size()
+
+
+## The run's rules, which a battle carries once it has some.
+static func _rules(battle: Gen2Battle) -> Gen2Rules:
+	return battle.rules if battle.rules != null else Gen2Rules.active()
 
 
 static func _attributes(battle: Gen2Battle) -> Dictionary:

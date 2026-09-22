@@ -12,6 +12,12 @@ func _tabs(party: int, pokedex: bool, pokegear: bool) -> Gen2SecondScreenTabs:
 	return Gen2SecondScreenTabs.build(party, pokedex, pokegear, PLAYER)
 
 
+func _gen1_tabs(party: int, pokedex: bool, town_map: bool) -> Gen2SecondScreenTabs:
+	return Gen2SecondScreenTabs.build(
+		party, pokedex, false, PLAYER, RomRegistry.GEN1, town_map
+	)
+
+
 func _kinds(tabs: Gen2SecondScreenTabs) -> Array:
 	var out: Array = []
 	for entry: Dictionary in tabs.items():
@@ -56,6 +62,42 @@ func test_every_tab_is_a_start_menu_row_in_source_order() -> void:
 		if Gen2SecondScreenTabs.VIEWABLE.has(kind):
 			expected.append(kind)
 	assert_eq(_kinds(_tabs(3, true, true)), expected)
+
+
+## Generation 1's own START menu: `DrawStartMenu` has no Pokegear row, so the
+## map is the bag's TOWN MAP and stands where Crystal's Pokegear does.
+func test_the_generation_1_rows_replace_the_pokegear_with_the_town_map() -> void:
+	assert_eq(
+		_kinds(_gen1_tabs(1, true, true)),
+		[
+			Gen2WorldStartMenu.ITEM_POKEDEX, Gen2WorldStartMenu.ITEM_POKEMON,
+			Gen2WorldStartMenu.ITEM_PACK, Gen2WorldStartMenu.ITEM_TOWN_MAP,
+			Gen2WorldStartMenu.ITEM_PLAYER,
+		]
+	)
+
+
+func test_the_map_tab_waits_for_the_town_map() -> void:
+	assert_false(_gen1_tabs(1, true, false).has_kind(Gen2WorldStartMenu.ITEM_TOWN_MAP))
+	assert_true(_gen1_tabs(1, true, true).has_kind(Gen2WorldStartMenu.ITEM_TOWN_MAP))
+
+
+## The Pokegear's own card carries the region on Crystal, so a caller that asks
+## for a map tab there is answered with the rows the START menu has.
+func test_crystal_never_gets_a_map_tab_of_its_own() -> void:
+	assert_false(
+		Gen2SecondScreenTabs.build(
+			1, true, true, PLAYER, RomRegistry.GEN2, true
+		).has_kind(Gen2WorldStartMenu.ITEM_TOWN_MAP)
+	)
+
+
+## Generation 1's party list is drawn whatever `wPartyCount` says, and the dex
+## row is the one thing `DrawStartMenu` gates.
+func test_the_generation_1_team_row_is_not_gated() -> void:
+	var kinds: Array = _kinds(_gen1_tabs(0, false, false))
+	assert_true(kinds.has(Gen2WorldStartMenu.ITEM_POKEMON))
+	assert_false(kinds.has(Gen2WorldStartMenu.ITEM_POKEDEX))
 
 
 func test_save_option_and_exit_never_reach_a_tab() -> void:

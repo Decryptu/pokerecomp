@@ -177,7 +177,8 @@ static func move_mon(
 		_write_loaded_list(candidate, from_loaded, reordered)
 	else:
 		var destination: Array = _loaded_list(candidate, to_loaded)
-		var capacity: int = Gen2SaveData.MAX_PARTY 			if to_loaded == Gen2BoxScreen.LOADED_PARTY else Gen2SaveBox.CAPACITY
+		var capacity: int = Gen2SaveData.MAX_PARTY \
+			if to_loaded == Gen2BoxScreen.LOADED_PARTY else Gen2SaveBox.CAPACITY
 		if destination.size() >= capacity:
 			return _failure(&"no_room_in_destination")
 		if from_loaded == Gen2BoxScreen.LOADED_PARTY and source.size() <= 1:
@@ -200,7 +201,8 @@ static func move_mon(
 static func _loaded_list(save: Gen2SaveData, loaded: int) -> Array:
 	if loaded == Gen2BoxScreen.LOADED_PARTY:
 		return save.party
-	var box: Gen2SaveBox = save.boxes[loaded - 1] 		if loaded - 1 >= 0 and loaded - 1 < save.boxes.size() else null
+	var box: Gen2SaveBox = save.boxes[loaded - 1] \
+		if loaded - 1 >= 0 and loaded - 1 < save.boxes.size() else null
 	if box == null:
 		return []
 	var out: Array = []
@@ -214,7 +216,8 @@ static func _write_loaded_list(save: Gen2SaveData, loaded: int, members: Array) 
 	if loaded == Gen2BoxScreen.LOADED_PARTY:
 		save.party = members.duplicate()
 		return
-	var box: Gen2SaveBox = save.boxes[loaded - 1] 		if loaded - 1 >= 0 and loaded - 1 < save.boxes.size() else null
+	var box: Gen2SaveBox = save.boxes[loaded - 1] \
+		if loaded - 1 >= 0 and loaded - 1 < save.boxes.size() else null
 	if box == null:
 		return
 	box.slots.fill(null)

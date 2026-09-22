@@ -225,8 +225,12 @@ var _blink_timer: int = 0
 var _reset_counter: int = 0
 
 
-## Null on a cache with no opening section.
-static func create(data: GameData, rng: RandomNumberGenerator = null) -> Gen1Opening:
+## Null on a cache with no opening section. [param title_only] starts at
+## `DisplayTitleScreen` with neither movie in front of it, which is the loop the
+## launcher's backdrop plays and which nothing else asks for.
+static func create(
+	data: GameData, rng: RandomNumberGenerator = null, title_only: bool = false
+) -> Gen1Opening:
 	if data == null or data.generation != RomRegistry.GEN1 or data.opening().is_empty():
 		return null
 	var out := Gen1Opening.new()
@@ -234,8 +238,8 @@ static func create(data: GameData, rng: RandomNumberGenerator = null) -> Gen1Ope
 	out._opening = data.opening()
 	out.lcd.cgb = Gen1Layout.on_cgb(data.id)
 	out._rng = rng if rng != null else RandomNumberGenerator.new()
-	out._phase = PHASE_COPYRIGHT
-	out._build()
+	out._phase = PHASE_TITLE if title_only else PHASE_COPYRIGHT
+	out._build(title_only)
 	return out
 
 
@@ -315,13 +319,14 @@ func _read_pressed() -> int:
 	return pressed
 
 
-func _build() -> void:
+func _build(title_only: bool = false) -> void:
 	_steps = []
-	_steps.append_array(_splash_steps())
-	if _profile == RomRegistry.YELLOW:
-		_steps.append_array(_yellow_intro_steps())
-	else:
-		_steps.append_array(_intro_steps())
+	if not title_only:
+		_steps.append_array(_splash_steps())
+		if _profile == RomRegistry.YELLOW:
+			_steps.append_array(_yellow_intro_steps())
+		else:
+			_steps.append_array(_intro_steps())
 	_steps.append_array(_init_tail_steps())
 	if _profile == RomRegistry.YELLOW:
 		_steps.append_array(_yellow_title_steps())

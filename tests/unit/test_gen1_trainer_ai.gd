@@ -116,6 +116,35 @@ func test_layer_three_reads_the_first_chart_row_and_a_better_move() -> void:
 	assert_eq(_data.first_matchup(Fixture.DARK, [Fixture.NORMAL, Fixture.NORMAL]), -1)
 
 
+## The Hard challenge's half of `AIEnemyTrainerChooseMoves`: every class scores
+## with all three layers instead of the subset its own row carries.
+func test_hard_scores_with_every_layer_the_class_was_never_given() -> void:
+	var battle: Gen2Battle = _battle([_mon(Fixture.GEODUDE, [
+		Fixture.TACKLE, Fixture.THUNDER_WAVE, Fixture.SLEEP_POWDER,
+	])], Fixture.GEN1_LEADER)
+	battle.mon(Gen2Battle.PLAYER).status = Gen2Status.PARALYSIS
+	battle.rules = Gen2Rules.new()
+	var vanilla: Array = Gen1TrainerAI.enabled_slots(battle)
+	battle.rules.challenge = Gen2Rules.CHALLENGE_HARD
+	assert_eq(
+		Gen1TrainerAI.enabled_slots(battle),
+		_slots_at_the_lowest(Gen1TrainerAI.score_slots(battle, Gen2Rules.GEN1_AI_LAYERS)),
+		"every layer runs"
+	)
+	battle.rules.challenge = Gen2Rules.CHALLENGE_VANILLA
+	assert_eq(Gen1TrainerAI.enabled_slots(battle), vanilla, "and vanilla is unmoved")
+
+
+## The slots `AIEnemyTrainerChooseMoves` leaves for the roll, over the three
+## scored ones this party has.
+func _slots_at_the_lowest(scores: Array) -> Array:
+	var lowest: int = mini(mini(int(scores[0]), int(scores[1])), int(scores[2]))
+	return [
+		int(scores[0]) == lowest, int(scores[1]) == lowest,
+		int(scores[2]) == lowest, false,
+	]
+
+
 func test_a_resisted_move_with_nothing_better_is_left_alone() -> void:
 	var battle: Gen2Battle = _battle(
 		[_mon(Fixture.PIKACHU, [Fixture.TACKLE, Fixture.GROWL])],

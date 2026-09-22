@@ -115,7 +115,8 @@ func _gen1_region() -> void:
 		return
 	var outside: int = 0
 	for cell: int in cells:
-		if cell < Gen1Layout.WORLD_MAP_FIRST_CODE 			or cell >= Gen1Layout.WORLD_MAP_FIRST_CODE + Gen1Layout.WORLD_MAP_TILES:
+		if cell < Gen1Layout.WORLD_MAP_FIRST_CODE \
+			or cell >= Gen1Layout.WORLD_MAP_FIRST_CODE + Gen1Layout.WORLD_MAP_TILES:
 			outside += 1
 	_r.check(outside == 0, "%d cells name a tile the sheet has not." % outside)
 	_r.check(
