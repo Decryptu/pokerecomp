@@ -114,6 +114,33 @@ func test_hard_rewrites_a_trainer_classes_own_ai_layers() -> void:
 	)
 
 
+## The same rewrite on Generation 1, whose classes score with a list of
+## `AIMoveChoiceModification` numbers rather than with a mask.
+func test_hard_gives_a_generation_1_class_every_layer() -> void:
+	var rules := Gen2Rules.new()
+	assert_eq(rules.gen1_ai_layers([1]), [1], "vanilla is the cartridge's own")
+
+	rules.challenge = Gen2Rules.CHALLENGE_HARD
+	assert_eq(rules.gen1_ai_layers([1]), Gen2Rules.GEN1_AI_LAYERS)
+	assert_eq(rules.gen1_ai_layers([]), Gen2Rules.GEN1_AI_LAYERS, "a class with none too")
+
+
+## What the launcher says Hard does is the generation's own count of layers, and
+## only Crystal's switching is a mask this rewrites.
+func test_the_hard_line_names_each_generations_own_layers() -> void:
+	assert_true(Gen2Rules.challenge_detail(
+		Gen2Rules.CHALLENGE_HARD, RomRegistry.GEN1
+	).contains("all three"))
+	assert_true(Gen2Rules.challenge_detail(
+		Gen2Rules.CHALLENGE_HARD, RomRegistry.GEN2
+	).contains("all ten"))
+	assert_eq(
+		Gen2Rules.challenge_detail(Gen2Rules.CHALLENGE_NUZLOCKE, RomRegistry.GEN1),
+		Gen2Rules.challenge_detail(Gen2Rules.CHALLENGE_NUZLOCKE),
+		"the other two read the same on both"
+	)
+
+
 ## The same rewrite on the word that decides when a class switches out and
 ## reaches into its bag. Hard moves every class onto SWITCH_OFTEN and leaves the
 ## item bits where the cartridge put them.

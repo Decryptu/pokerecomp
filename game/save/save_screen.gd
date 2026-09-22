@@ -565,14 +565,15 @@ func _build_challenge_field(body: VBoxContainer) -> void:
 	for challenge: StringName in Gen2Rules.CHALLENGES:
 		titles.append(Gen2Rules.challenge_title(challenge))
 	var detail: Label = Gen2LauncherUI.muted(_palette, "")
+	var generation: int = _data.generation if _data != null else RomRegistry.GEN2
 	body.add_child(Gen2LauncherUI.choice(
 		_palette, &"sparkle", "Mode", titles,
 		maxi(Gen2Rules.CHALLENGES.find(_new_game_challenge), 0),
 		func(index: int) -> void:
 			_new_game_challenge = Gen2Rules.CHALLENGES[index]
-			detail.text = Gen2Rules.challenge_detail(_new_game_challenge)
+			detail.text = Gen2Rules.challenge_detail(_new_game_challenge, generation)
 	))
-	detail.text = Gen2Rules.challenge_detail(_new_game_challenge)
+	detail.text = Gen2Rules.challenge_detail(_new_game_challenge, generation)
 	body.add_child(detail)
 	body.add_child(Gen2LauncherUI.muted(
 		_palette, "This is fixed once the game starts and cannot be changed later."

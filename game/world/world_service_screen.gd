@@ -3290,7 +3290,8 @@ func _confirm_mail_to_pack(accepted: bool) -> void:
 
 
 func _open_mail_reader() -> void:
-	var mail: Gen2SaveMail = _save.mailbox[_mail_index] 		if _mail_index >= 0 and _mail_index < _save.mailbox.size() else null
+	var mail: Gen2SaveMail = _save.mailbox[_mail_index] \
+		if _mail_index >= 0 and _mail_index < _save.mailbox.size() else null
 	var host := Gen2MailScreen.new()
 	host.set_context(_data, mail)
 	_mail_reader = host
@@ -3347,7 +3348,8 @@ func _on_mail_attach_selected(party_index: int) -> void:
 		_world, _save, _mail_index, party_index, _persist
 	)
 	_open_mailbox()
-	_status = Gen2WorldPC.MAILBOX_MOVED if bool(applied.get("ok", false)) 		else "Refused: %s" % String(applied.get("reason", ""))
+	_status = Gen2WorldPC.MAILBOX_MOVED if bool(applied.get("ok", false)) \
+		else "Refused: %s" % String(applied.get("reason", ""))
 
 
 func _close_mail_attach() -> void:

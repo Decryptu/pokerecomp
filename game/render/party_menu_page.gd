@@ -381,15 +381,49 @@ func _blend_icons(pixels: PackedInt32Array, count: int) -> void:
 			)
 
 
+## One species' menu icon as its own picture: the four tiles [method _blend_icons]
+## composes, Generation 1 reading tiles 0 and 2 and mirroring each
+## (`WriteSymmetricMonPartySpriteOAM`).
+static func icon_image(source: GameData, species: int, egg: bool = false) -> Image:
+	if source == null:
+		return null
+	var strip: PackedByteArray = source.species_icon_indices(species, egg)
+	var colors: PackedColorArray = icon_palette(source)
+	if strip.is_empty() or colors.size() != PokePalette.COLORS_PER_PIC:
+		return null
+	var side: int = ICON_TILE * 2
+	var icon: int = source.mon_menu_icon(species, egg) - 1
+	var pixels: PackedInt32Array = Gen2PicImage.canvas(side, side)
+	var lookup: PackedInt32Array = Gen2PicImage.lookup(colors)
+	@warning_ignore("integer_division")
+	var tiles: int = strip.size() / PokeTiles.TILE_PIXELS
+	for quadrant: int in ICON_FRAME_TILES:
+		var read: Array = Gen1Layout.mon_icon_quadrant(icon, quadrant) \
+			if source.generation == RomRegistry.GEN1 else [quadrant, false]
+		Gen2PicImage.blit_tile(
+			pixels, side, side, strip, tiles, int(read[0]),
+			(quadrant & 1) * ICON_TILE, (quadrant >> 1) * ICON_TILE,
+			lookup, bool(read[1]), false, 0
+		)
+	return Gen2PicImage.canvas_image(pixels, side, side)
+
+
 ## `PartyMenuOBPals` on Crystal. Generation 1 has no object palette table: the
 ## icons stand in the two columns `BlkPacket_PartyMenu` gives PAL_MEWMON, read
-## through `GBPalNormal`'s own `rOBP0`.
-func _icon_palette() -> PackedColorArray:
-	if not gen1:
-		return data.party_menu_icon_palette()
+## through `GBPalNormal`'s own `rOBP0`. Static because every screen drawing a
+## menu icon reads it and a second answer would disagree with the party list.
+static func icon_palette(source: GameData) -> PackedColorArray:
+	if source == null:
+		return PackedColorArray()
+	if source.generation != RomRegistry.GEN1:
+		return source.party_menu_icon_palette()
 	return Gen2WorldPalette.gen1_object_colors(
-		data.world_palette(Gen1Layout.PAL_MEWMON)
+		source.world_palette(Gen1Layout.PAL_MEWMON)
 	)
+
+
+func _icon_palette() -> PackedColorArray:
+	return icon_palette(data)
 
 
 ## The block's top-left on screen. Generation 1's OAM coordinates are the

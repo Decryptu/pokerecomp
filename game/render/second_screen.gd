@@ -4,35 +4,29 @@ extends Control
 ## The lower display: one of the START menu's own pages, built as the overworld
 ## builds it and never handed a button, with a row of tabs under it that is the
 ## one thing taking a touch. Drawn inside a [SubViewport] of [member canvas_size]
-## hardware pixels, because a second panel is reached by a bitmap copied sixty
-## times a second.
+## hardware pixels, a second panel being reached by a bitmap copied per frame.
 
 ## The page, which is the cartridge's own screen and never another size.
 const PAGE_SIZE := Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
-## The underline that says which tab is open: two rows at the foot of the tab
-## row's interior, inset so two neighbouring tabs never touch. Drawn in the
-## frame's own ink, because the interior is the same white every menu box has.
+## The underline that says which tab is open: two rows at the foot of the row's
+## interior, inset so two neighbours never touch, in the frame's own ink.
 const UNDERLINE_HEIGHT: int = 2
 const UNDERLINE_INSET: int = 4
 ## The shortest tab row that still fits a border, the tallest icon and that
-## underline. A host with a taller panel gets a taller row and the icons centre
-## in it. Two tiles of border, because a menu box has one at each end.
+## underline. A taller panel gets a taller row and the icons centre in it.
 const MIN_TAB_HEIGHT: int = Gen2Font.TILE * 2 + Gen2SecondScreenTabs.ICON_MAX
 const CANVAS_MIN := Vector2i(PAGE_SIZE.x, PAGE_SIZE.y + MIN_TAB_HEIGHT)
 
-## The two colours every text box in the game is drawn with, and the two the tab
-## row is drawn with for the same reason: it is a menu box, so it is white with
-## the frame the player chose around it.
+## The two colours every text box is drawn with, and the tab row's for the same
+## reason: it is a menu box, white with the frame the player chose around it.
 const INK: int = 3
 const PAPER: int = 0
 const FIELD_COLOR := Color(0.0, 0.0, 0.0, 1.0)
 
-## What the panel shows with no world on it, drawn in the launcher's own
-## language rather than the cartridge's: an empty cartridge silhouette, the
-## project's name and a line saying nothing is running.
-## The launcher measures in points, so the design is written in these units and
-## drawn at whatever whole multiple of them the panel is; a launcher unit is
-## about a point at [constant IDLE_UNITS] on a handheld's lower display.
+## What the panel shows with no world on it, in the launcher's own language: an
+## empty cartridge silhouette, the project's name and a line saying so. Written
+## in launcher units and drawn at whatever whole multiple of them the panel is;
+## a unit is about a point at [constant IDLE_UNITS] on a handheld's display.
 const IDLE_UNITS: int = 540
 ## The silhouette's height in launcher units, and the panel this screen assumes
 ## before a host has said what it really is.
@@ -41,19 +35,16 @@ const IDLE_PANEL := Vector2i(1240, 1080)
 ## The line under the name, which is the whole of what this page says.
 const IDLE_LINE: String = "No game running"
 
-## Emitted after the shown page changes, so a host knows a still picture is worth
-## sending again even when nothing is animating.
+## Emitted after the shown page changes: a still picture is worth sending again.
 signal page_changed(kind: StringName)
-## Emitted after the drawn surface has been rebuilt. A host that only copies a
-## still picture when it changes listens to this; one copying an animating page
-## every tick does not need it.
+## Emitted after the drawn surface has been rebuilt, for a host that copies a
+## still picture only when it changes.
 signal redrawn()
 
-## The whole drawn surface, in hardware pixels. Never smaller than
-## [constant CANVAS_MIN]: the page is a fixed 160x144 and the tab row has to
-## hold an icon. The display this is shown on, in its own pixels. Only the idle
-## screen is drawn at this size: it is launcher UI rather than hardware pixels,
-## and type laid out in a 206-pixel canvas and blown up six times is unreadable.
+## The whole drawn surface, in hardware pixels, never smaller than
+## [constant CANVAS_MIN]: the page is a fixed 160x144 and the tab row has to hold
+## an icon. Only the idle screen is drawn at the panel's own size instead, being
+## launcher UI: type laid out in 206 pixels and blown up six times is unreadable.
 var panel_size: Vector2i = IDLE_PANEL:
 	set(value):
 		var clamped := Vector2i(maxi(value.x, 64), maxi(value.y, 64))
@@ -83,14 +74,13 @@ var _tabs := Gen2SecondScreenTabs.new()
 var _viewport: SubViewport = null
 var _screen: Gen2Screen = null
 var _strip: Control = null
-## The row's own box: the cartridge's frame around the white every menu box has,
-## redrawn when the row changes rather than every frame.
+## The row's own box, redrawn when the row changes rather than every frame.
 var _strip_art: TextureRect = null
 ## The launcher's own page, kept so a panel resized after it was built is filled
 ## by it.
 var _idle: Control = null
-## The page on screen, whichever of the cartridge's screens it is, and which tab
-## built it. Kept so a rebuild is skipped when the answer would be the same node.
+## The page on screen and the tab that built it, so a rebuild that would answer
+## the same node is skipped.
 var _page: Node = null
 var _page_kind: StringName = &""
 var _icons: Array[TextureRect] = []
@@ -102,9 +92,8 @@ var _glyphs: Gen2Font = null
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build()
-	## A caller may hand over the world before this is in the tree, which is what
-	## a tool building the screen in `_initialize` does. The world is kept either
-	## way and read here once there is something to draw it into.
+	## A caller may hand over the world before this is in the tree, which a tool
+	## building the screen in `_initialize` does; it is read here instead.
 	refresh()
 
 
@@ -116,19 +105,16 @@ func set_world(data: GameData, world: Gen2WorldAPI, save: Gen2SaveData) -> void:
 	_data = data
 	_world = world
 	_save = save
-	## A world handed over, or taken away, is not something the gate string can
-	## express on its own: an absent world answers the same empty string as the
-	## last absent one did.
+	## A world handed over or taken away is not something the gate string says:
+	## an absent world answers the same empty string the last absent one did.
 	_gate_read = "<unread>"
 	refresh()
 
 
 ## Re-reads the world: which tabs are open, and whether the page on screen is
-## still the one the cursor names.
-## Called every hardware frame and does nothing on almost all of them: the gates
-## are three numbers and the row's one live picture is the party's lead, so the
-## whole question is a short string. Rebuilding the START menu here instead would
-## allocate one per frame for an answer that changes about six times a game.
+## still the one the cursor names. Called every hardware frame and does nothing
+## on almost all of them, the whole question being a short string. Rebuilding the
+## START menu here would allocate one a frame for an answer that moves six times.
 func refresh() -> void:
 	if _viewport == null:
 		return
@@ -152,19 +138,19 @@ func refresh() -> void:
 func _gate() -> String:
 	if _world == null or _world.state == null:
 		return ""
-	return "%d|%d|%d|%d|%d" % [
+	return "%d|%d|%d|%d|%d|%d" % [
 		int(_world.party_summary().get("count", 0)),
 		int(_world.state.is_engine_flag_active(Gen2WorldStartMenu.ENGINE_POKEDEX)),
 		int(_world.state.is_engine_flag_active(Gen2WorldStartMenu.ENGINE_POKEGEAR)),
+		int(Gen2SecondScreenTabs.town_map_owned(_world)),
 		_lead_species(),
 		int(_lead_is_egg()),
 	]
 
 
 ## Which tab a tap at [param at] landed on, counting from zero, or -1 for a tap
-## that missed the row.
-## Static and pure, so where a touch lands is asserted without a display: the row
-## is the only part of this screen that takes one.
+## that missed the row. Static and pure, so where a touch lands is asserted
+## without a display.
 static func tab_index_at(at: Vector2, canvas: Vector2i, count: int) -> int:
 	if count <= 0 or canvas.x <= 0:
 		return -1
@@ -175,7 +161,7 @@ static func tab_index_at(at: Vector2, canvas: Vector2i, count: int) -> int:
 	## The inverse of [method tab_cell]'s own division rather than a second one:
 	## a cell starts at `index * width / count`, so the tab a pixel is in is the
 	## largest index whose start is not past it. Dividing the pixel by the count
-	## instead disagrees with the cells wherever the width does not divide evenly.
+	## disagrees with the cells wherever the width does not divide evenly.
 	return ((int(at.x) + 1) * count - 1) / canvas.x
 
 
@@ -190,9 +176,8 @@ static func tab_cell(index: int, canvas: Vector2i, count: int) -> Rect2i:
 
 
 ## The tab the tap at [param at] landed on, in canvas pixels, or the empty name
-## for a tap that missed the row.
-## Public because a host on a real panel converts its own touch to these pixels
-## and a test drives it without one.
+## for a tap that missed the row. Public because a host on a real panel converts
+## its own touch to these pixels and a test drives it without one.
 func tab_at(at: Vector2) -> StringName:
 	var index: int = tab_index_at(at, canvas_size, _tabs.size())
 	if index < 0:
@@ -200,9 +185,8 @@ func tab_at(at: Vector2) -> StringName:
 	return StringName((_tabs.items()[index] as Dictionary).get("kind", &""))
 
 
-## A touch on the tab row, in canvas pixels. Answers whether it opened a page.
-## The only input this screen accepts, and the reason it stays read only: there
-## is no path from here into a page.
+## A touch on the tab row, in canvas pixels. Answers whether it opened a page,
+## and is the only input this screen takes: there is no path into a page.
 func touch(at: Vector2) -> bool:
 	var kind: StringName = tab_at(at)
 	if kind.is_empty() or kind == _tabs.selected_kind():
@@ -214,7 +198,7 @@ func touch(at: Vector2) -> bool:
 
 
 ## Opens [param kind], answering whether that tab exists. For a preview or a
-## check driving the panel without a touch; a player reaches it through
+## check driving the panel without a touch, which a player does through
 ## [method touch].
 func select_tab(kind: StringName) -> bool:
 	if not _tabs.select(kind):
@@ -243,9 +227,8 @@ func viewport() -> SubViewport:
 
 func _build() -> void:
 	Gen2Screen.drop_children(self)
-	## A [SubViewportContainer] is not used: it would size the viewport to
-	## whatever the control is, and the canvas is a fixed count of hardware
-	## pixels that the display scales rather than a resolution the window picks.
+	## A [SubViewportContainer] would size the viewport to whatever the control
+	## is, and the canvas is a fixed count of hardware pixels the display scales.
 	_viewport = SubViewport.new()
 	_viewport.name = "Viewport"
 	_viewport.transparent_bg = false
@@ -273,8 +256,8 @@ func _build() -> void:
 	if _screen != null:
 		_screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		## The packed scene anchors to its parent's whole rectangle, which inside
-		## a viewport is the whole canvas. The page is a fixed 160x144 placed in
-		## it, so the anchors are cleared before [method _relayout] positions it.
+		## a viewport is the whole canvas; the page is a fixed 160x144 in it, so
+		## the anchors are cleared before [method _relayout] positions it.
 		_screen.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 		## The packed scene also grows in both directions, which would move the
 		## page's own corner every time its size was set.
@@ -297,15 +280,14 @@ func _build() -> void:
 
 
 ## Whether the panel is showing the launcher's own page rather than one of the
-## cartridge's. The two are drawn at different resolutions, so this decides the
-## viewport's size as well as what is in it.
+## cartridge's. The two are drawn at different resolutions, so this settles the
+## viewport's size too.
 func idle() -> bool:
 	return _tabs.is_empty()
 
 
 ## Whether what is drawn changes by itself. Every page the cartridge owns has
-## something moving on it -- the party's icons bob, the card's colon blinks, the
-## region map's player walks -- and the launcher's own page has nothing.
+## something moving on it, and the launcher's own page has nothing.
 func animated() -> bool:
 	return not idle()
 
@@ -326,9 +308,8 @@ func _relayout() -> void:
 	if field != null:
 		field.size = Vector2(canvas_size)
 	if _screen != null:
-		## The page is the hardware's own rectangle, centred across a canvas that
-		## may be wider. It is given exactly its own size, so the screen inside
-		## it draws at one whole pixel per hardware pixel.
+		## The hardware's own rectangle, centred across a canvas that may be
+		## wider, at exactly its own size: one whole pixel per hardware pixel.
 		_screen.size = Vector2(PAGE_SIZE)
 		_screen.position = Vector2(float((canvas_size.x - PAGE_SIZE.x) / 2), 0.0)
 	if _strip != null:
@@ -339,8 +320,7 @@ func _relayout() -> void:
 	_place_idle()
 
 
-## The party's lead, whose menu icon is the #MON tab's. Zero for an empty party,
-## which is also when that tab is absent.
+## The party's lead, whose menu icon is the #MON tab's. Zero for an empty party.
 func _lead_species() -> int:
 	if _world == null:
 		return 0
@@ -377,14 +357,15 @@ func _build_row() -> void:
 		var picture: Image = Gen2SecondScreenTabs.icon(
 			_data, kind, _lead_species(), female, _lead_is_egg()
 		)
+		if picture == null:
+			picture = _label_icon(String(entry.get("label", "")))
 		var rect := TextureRect.new()
 		rect.name = String(kind)
 		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		## Each icon is the size of the picture the cartridge draws rather than a
-		## common cell, so a bag is a bag rather than a crop of one. A cache that
-		## cannot supply one leaves the cell empty and still counted, so the row
-		## keeps its shape.
+		## common cell, so a bag is a bag rather than a crop of one. A cell with
+		## neither picture nor label is still counted, so the row keeps its shape.
 		rect.size = Vector2(
 			Gen2SecondScreenTabs.ICON_SIZE, Gen2SecondScreenTabs.ICON_SIZE
 		)
@@ -396,11 +377,29 @@ func _build_row() -> void:
 	_place_icons()
 
 
+## The row's own word where the page it opens has no picture to cut one from,
+## which is Generation 1's ITEM. In the cartridge's font on the row's own paper.
+func _label_icon(label: String) -> Image:
+	var glyphs: Gen2Font = _font()
+	if glyphs == null or label.is_empty():
+		return null
+	var cells: int = glyphs.encode(label).size()
+	if cells <= 0:
+		return null
+	var width: int = cells * Gen2Font.TILE
+	var pixels := PackedByteArray()
+	pixels.resize(width * Gen2Font.TILE)
+	glyphs.draw_text(label, pixels, width, 0, 0)
+	return Gen2PicImage.from_indices(
+		pixels, width, Gen2Font.TILE,
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	)
+
+
 func _place_icons() -> void:
 	if _strip == null or _icons.is_empty():
 		return
-	## The interior, which is the row less the border tile at each end. The
-	## underline sits in the bottom of it, so the icons centre above that.
+	## The row less a border tile at each end, the underline in the bottom of it.
 	var top: float = float(Gen2Font.TILE)
 	var room: float = _strip.size.y - Gen2Font.TILE * 2 - UNDERLINE_HEIGHT
 	for index: int in _icons.size():
@@ -412,9 +411,8 @@ func _place_icons() -> void:
 		)
 
 
-## The launcher's page fills the panel, and the panel's size is settled by the
-## host after this screen is already in the tree, so the size is applied here
-## rather than where the page is built.
+## The launcher's page fills the panel, whose size the host settles after this
+## screen is in the tree, so it is applied here rather than at the build.
 func _place_idle() -> void:
 	if _idle == null:
 		return
@@ -430,10 +428,9 @@ func _cell(index: int) -> Rect2:
 
 
 ## The row as the cartridge would have drawn it: the player's own text-box frame
-## around white paper, with the open tab underlined in the frame's ink.
-## Redrawn when the tab set or the chosen tab changes, not per frame. Nothing
-## here is invented: the six frame tiles are `LoadFrame`'s own, chosen by the
-## same FRAME option the boxes on the top screen wear.
+## around white paper, with the open tab underlined in the frame's ink. Redrawn
+## when the tab set or the chosen tab changes. The six frame tiles are
+## `LoadFrame`'s own, chosen by the FRAME option the top screen's boxes wear.
 func _redraw_strip() -> void:
 	if _strip == null or _strip_art == null:
 		return
@@ -445,8 +442,7 @@ func _redraw_strip() -> void:
 	_strip_art.size = Vector2(float(width), float(height))
 	var paper := PackedByteArray()
 	paper.resize(width * height)
-	## A row with no tabs on it is not an empty menu box, it is no menu box: the
-	## panel is showing the launcher's own picture and there is nothing to pick.
+	## A row with no tabs is no menu box: the launcher's page has nothing to pick.
 	paper.fill(INK if _icons.is_empty() else PAPER)
 	var glyphs: Gen2Font = _font()
 	if not _icons.is_empty() and glyphs != null:
@@ -458,12 +454,10 @@ func _redraw_strip() -> void:
 	))
 
 
-## The six frame tiles around the row.
-## Placed by hand rather than through [method Gen2Font.draw_box], because that
-## one takes whole tiles in both directions and this row is a whole number of
-## tiles in neither: the border tiles are laid at the four edges and the runs
-## between them overlap rather than stopping short, which a uniform edge tile
-## does not show.
+## The six frame tiles around the row, placed by hand rather than through
+## [method Gen2Font.draw_box]: that takes whole tiles both ways and this row is a
+## whole number of tiles in neither, so the runs between the four edge tiles
+## overlap rather than stopping short.
 func _draw_box(glyphs: Gen2Font, into: PackedByteArray, width: int, height: int) -> void:
 	var style: int = Gen2OptionsStore.current().textbox_frame
 	var tile: int = Gen2Font.TILE
@@ -516,8 +510,7 @@ func _font() -> Gen2Font:
 
 ## Replaces the page with the one the cursor names. Every branch builds the
 ## overworld's own screen the way the overworld builds it, less the signal
-## connections: nothing here listens for a page closing, because nothing here
-## can close one.
+## connections: nothing here can close a page.
 func _build_page() -> void:
 	if _screen == null:
 		return
@@ -541,6 +534,8 @@ func _build_page() -> void:
 			_page = _build_pack()
 		Gen2WorldStartMenu.ITEM_POKEGEAR:
 			_page = _build_pokegear()
+		Gen2WorldStartMenu.ITEM_TOWN_MAP:
+			_page = _build_town_map()
 		Gen2WorldStartMenu.ITEM_PLAYER:
 			_page = _build_trainer_card()
 	_relayout()
@@ -549,11 +544,9 @@ func _build_page() -> void:
 
 
 ## What the panel shows with no world on it: the launcher is up, or a game has
-## just been closed. Drawn in the launcher's own language rather than the
-## cartridge's, because at this point there may be no cartridge: the shelf is a
-## list of bays and one of them is empty. Laid out in the panel's own pixels at a
-## whole multiple of the launcher's units, so the type is rasterised at the size
-## it is shown rather than blown up from a 206-pixel canvas.
+## just been closed. In the launcher's own language, because there may be no
+## cartridge at all; laid out in the panel's own pixels at a whole multiple of
+## the launcher's units, so the type is rasterised at the size it is shown.
 func _build_idle() -> Node:
 	var skin: Gen2LauncherTheme = Gen2LauncherTheme.active()
 	var units: int = idle_scale(panel_size)
@@ -578,11 +571,9 @@ func _build_idle() -> Node:
 	var column: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD * units)
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	var holder := CenterContainer.new()
-	## Any id: the silhouette is the same shape for all three and its prompt, which
-	## is the only part that names one, is off.
+	## Any id: the silhouette is one shape and its prompt, which names one, is off.
 	var slot: Gen2Cartridge = Gen2Cartridge.create(skin, RomRegistry.ORDER[0])
-	## The shape, not the invitation: an empty bay on the shelf asks for a dump
-	## to be dropped on it, and nothing can be dropped on a panel.
+	## An empty bay asks for a dump; nothing can be dropped on a panel.
 	slot.set_bay_prompt(false)
 	var tall: float = IDLE_CARTRIDGE * float(units)
 	slot.custom_minimum_size = Vector2(tall * Gen2Cartridge.ASPECT, tall)
@@ -603,9 +594,8 @@ func _build_idle() -> Node:
 	return page
 
 
-## The whole multiple of the launcher's own units this panel is. One on anything
-## smaller than [constant IDLE_UNITS] tall, which is a desktop window rather than
-## a handheld's lower display.
+## The whole multiple of the launcher's units this panel is. One below
+## [constant IDLE_UNITS] tall, which is a desktop window rather than a panel.
 static func idle_scale(panel: Vector2i) -> int:
 	return maxi(int(round(float(panel.y) / float(IDLE_UNITS))), 1)
 
@@ -649,12 +639,13 @@ func _build_party() -> Node:
 
 
 ## The pack has no screen of its own: the START menu owns it as a mode, and that
-## mode is a cursor this display does not have. The listing is therefore built
-## straight off [Gen2WorldPack] and [Gen2PackPage], which is what the START menu
-## draws too, with the cursor left on the first row.
+## mode is a cursor this display does not have. Built straight off
+## [Gen2WorldPack] and [Gen2PackPage], which is what that menu draws too.
 func _build_pack() -> Node:
 	if _data == null or _world == null or _world.state == null:
 		return null
+	if _data.generation == RomRegistry.GEN1:
+		return _build_gen1_pack()
 	var page: Gen2PackPage = Gen2PackPage.from_data(_data)
 	if page == null or not page.ready():
 		return null
@@ -663,8 +654,7 @@ func _build_pack() -> Node:
 		return null
 	var pocket: Dictionary = pockets[0]
 	var items: Array = pocket.get("items", [])
-	## No CANCEL row and no cursor: both are furniture for a press this display
-	## cannot take.
+	## No CANCEL row and no cursor: both wait on a press this display cannot take.
 	var rows: Array = Gen2WorldPack.list_rows(
 		_data, int(pocket.get("pocket", 0)), items, 0, false
 	)
@@ -679,10 +669,54 @@ func _build_pack() -> Node:
 		0,
 		_is_female(),
 	)
+	return _shown_page("Pack", picture)
+
+
+## `StartMenu_Item`: `DisplayListMenuID` in the box the shop is drawn in.
+func _build_gen1_pack() -> Node:
+	var page: Gen2MartPage = Gen2MartPage.from_data(_data)
+	if page == null:
+		return null
+	var pockets: Array = Gen2WorldPack.build(_data, _world.state)
+	if pockets.is_empty():
+		return null
+	var pocket: Dictionary = pockets[0]
+	return _shown_page("Pack", page.render_gen1_pack({
+		"rows": Gen2WorldPack.list_rows(
+			_data, int(pocket.get("pocket", 0)), pocket.get("items", []), 0, false,
+			Gen2MartPage.GEN1_LIST_HEIGHT
+		),
+		"cursor": -1, "held": -1, "quantity": -1,
+	}))
+
+
+## `ItemUseTownMap`, the screen Crystal's MAP card opens, reached from the bag.
+func _build_town_map() -> Node:
+	if _data == null or _world == null or _world.state == null:
+		return null
+	var map := Gen2TownMapScreen.new()
+	map.set_screen(_screen)
+	_viewport.add_child(map)
+	if not map.open(
+		_data,
+		_world.landmark_backup(),
+		_world.state.hall_of_fame(),
+		Gen2TownMap.SCREEN_TOWN_MAP,
+		[],
+		_is_female(),
+		_world.map_time_of_day(),
+	):
+		Gen2Screen.drop(map)
+		return null
+	return map
+
+
+## What a page with no screen object of its own answers with.
+func _shown_page(node_name: String, picture: Image) -> Node:
 	if picture == null:
 		return null
 	var rect := TextureRect.new()
-	rect.name = "Pack"
+	rect.name = node_name
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	rect.size = Vector2(PAGE_SIZE)
@@ -691,9 +725,8 @@ func _build_pack() -> Node:
 	return rect
 
 
-## The MAP card where the player owns it, and the CLOCK card where they do not.
-## Both are cards the Pokegear itself opens on, so this tab shows whatever the
-## cartridge would have shown a player who pressed it.
+## The MAP card where the player owns it, and the CLOCK card where they do not:
+## both are cards the Pokegear itself opens on.
 func _build_pokegear() -> Node:
 	if _data == null or _world == null or _world.state == null:
 		return null
@@ -742,8 +775,7 @@ func _build_trainer_card() -> Node:
 	if not host.open(_data, _world, _save):
 		host.free()
 		return null
-	## The card sizes itself in the 160x144 space, so it goes on the screen's own
-	## interface layer rather than beside it.
+	## The card sizes itself in the 160x144 space, so it goes on that layer.
 	_screen.display(host)
 	return host
 
@@ -758,8 +790,7 @@ func _gui_input(event: InputEvent) -> void:
 		pressed = clicked.position
 	if pressed == Vector2.INF or size.x <= 0.0 or size.y <= 0.0:
 		return
-	## The control may be shown at any size; a tap is reported in canvas pixels
-	## because that is the only space the tab row is laid out in.
+	## The control may be shown at any size; the row is laid out in canvas pixels.
 	touch(Vector2(
 		pressed.x * float(canvas_size.x) / size.x,
 		pressed.y * float(canvas_size.y) / size.y

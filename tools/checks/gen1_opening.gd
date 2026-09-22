@@ -48,8 +48,41 @@ func _run_one() -> void:
 	_check_tables(data, game_id)
 	_check_untouched(data, game_id, page)
 	_check_presses(data, game_id)
+	_check_backdrop(data, game_id, page)
 	if game_id == RomRegistry.YELLOW:
 		_check_yellow_reset(data)
+
+
+## The launcher's backdrop, which is the title program alone: it reaches
+## `PlayMusic MUSIC_TITLE_SCREEN` inside the cap the shelf settles it with.
+func _check_backdrop(data: GameData, game_id: StringName, page: Gen1OpeningPage) -> void:
+	var title: Gen1Opening = Gen1Opening.create(data, null, true)
+	if not _r.check(title != null, "the title-only program refused to build."):
+		return
+	var settled: int = -1
+	for frame: int in Gen2LauncherTitleBackdrop.MAX_SETTLE_FRAMES:
+		for event: Dictionary in title.advance_frame():
+			if StringName(event.get("type", &"")) == &"play_music":
+				settled = frame
+				break
+		if settled >= 0:
+			break
+	_r.check(
+		settled >= 0 and title.phase() == Gen1Opening.PHASE_TITLE,
+		"the backdrop settles on the title (frame %d, phase %s)" % [settled, title.phase()]
+	)
+	_r.check(
+		not data.gen1_sound(
+			Gen1Movie.AUDIO_BANK, Gen1Opening.MUSIC_TITLE_SCREEN
+		).is_empty(),
+		"MUSIC_TITLE_SCREEN is in the cache."
+	)
+	var frame: Image = page.draw(title)
+	_r.check(
+		frame != null and frame.get_size() == Vector2i(Gen1Lcd.WIDTH, Gen1Lcd.HEIGHT),
+		"the settled title draws a frame."
+	)
+	_r.note("%s backdrop settles at frame %d." % [game_id, settled])
 
 
 ## Every `TitleMons` species has a load and a pic; every packet paints two palettes.

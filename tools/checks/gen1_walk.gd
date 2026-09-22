@@ -2679,7 +2679,8 @@ func _check_the_day_care_hands_it_back(save: Gen2SaveData) -> void:
 			),
 			"the gentleman did not say how much it had grown."
 		)
-		var asked: Dictionary = world.pending_script_input() 			if not world.run_event_queue(true).is_empty() else {}
+		var asked: Dictionary = world.pending_script_input() \
+			if not world.run_event_queue(true).is_empty() else {}
 		if not _r.check(
 			String(asked.get("text", "")) == _day_care_text(
 				"owe_money", "", str(DAYCARE_PRICE)
@@ -4927,7 +4928,8 @@ func _check_leaving_early() -> void:
 		return
 	_safari_answer(world, 0)
 	var passes: int = 0
-	while (world.gen1_player_movement_running() or world.player_step_in_progress()) 		and passes < SCRIPTED_WALK_PASSES:
+	while (world.gen1_player_movement_running() or world.player_step_in_progress()) \
+		and passes < SCRIPTED_WALK_PASSES:
 		world.advance_player_step_pass()
 		world.dispatch_sight_events()
 		passes += 1

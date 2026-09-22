@@ -141,8 +141,10 @@ godot --headless --path . --quit-after 30
 ```
 
 The launcher is a shelf of six cartridges. An unimported bay is drawn in the
-cartridge's own outline: drop a dump on it, or click to browse. Mods, settings
-and about are in the dock underneath. Light and dark, and the same layout works
+cartridge's own outline: drop a dump on it, or click to browse. Behind the
+seated cartridge its own title screen plays, with the lettering taken off and
+its music under the interface. Mods, settings and about are in the dock
+underneath. Light and dark, and the same layout works
 on a phone. The clock and the charge across the top are the machine's own; a
 device whose charge cannot be read shows none rather than a full cell.
 
@@ -167,7 +169,7 @@ one. Every save made before this update is a Vanilla run.
 | Mode | What changes |
 |---|---|
 | **Vanilla** | Nothing. The cartridge's own game. |
-| **Hard** | Every trainer scores with all ten of the game's own AI layers instead of the handful its class carries, switches out often, and brings a party 15% higher with perfect DVs and full stat experience. One global rule each, so the teams are still the ones the cartridge wrote. |
+| **Hard** | Every trainer scores with all of the game's own AI layers instead of the handful its class carries -- ten in Generation II, three in Generation I -- switches out often where the cartridge keeps that in a mask, and brings a party 15% higher with perfect DVs and full stat experience. One global rule each, so the teams are still the ones the cartridge wrote. |
 | **Nuzlocke** | The [challenge](https://bulbapedia.bulbagarden.net/wiki/Nuzlocke_Challenge)'s rules, enforced by the game. |
 
 The game enforces the Nuzlocke rules itself:
@@ -176,8 +178,8 @@ The game enforces the Nuzlocke rules itself:
   or in a town is the only one you may throw a ball at there. It is spent
   whether you catch it, beat it or run, and the ball menu then says so. The area
   is the met location the Pokemon's own summary shows, so a whole cave is one
-  encounter. Roamers and the Bug Catching Contest belong to no area and spend
-  nothing.
+  encounter: Mt. Moon's three floors, and Pokemon Tower's five. Roamers and the
+  Bug Catching Contest belong to no area and spend nothing.
 - **A faint is death:** a Pokemon that faints is released on the way out of the
   battle and never comes back. It is written to disk the moment it happens, so
   quitting and reopening the slot cannot undo it.
@@ -215,6 +217,12 @@ A handheld with two displays -- the AYN Thor and its kind -- puts five of those
 entries on the lower one: the Pokedex, the party, the pack, the Pokegear's map
 and the trainer card. Under them is a menu box in the frame the player chose,
 with a tab for each, drawn with the cartridge's own art.
+
+Generation I has the same five with its own START menu behind them: POKéDEX,
+POKéMON, the ITEM list, the TOWN MAP and the trainer info screen. It has no
+Pokegear, so the map tab arrives with the TOWN MAP in the bag, and the ITEM list
+is a text box with no picture to cut an icon from, so that tab wears its own
+word.
 
 It is a view. The only thing on it that takes a touch is the tab row; no page on
 it reads input at all, and none of them is a copy, so what is on the lower screen

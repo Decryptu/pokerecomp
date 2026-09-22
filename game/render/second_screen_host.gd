@@ -5,22 +5,19 @@ extends Node
 ## `panel` is a handheld's secondary Android display through the platform
 ## plugin, one bitmap per drawn frame; `window` is a second [Window] on a
 ## desktop. The panel copies pixels, which is why [Gen2SecondScreen] draws in
-## hardware pixels: 148 KB a frame against the panel's 5.4 MB. Sharing a
-## context would need a Vulkan swapchain per display, and this project renders
-## through the compatibility backend.
+## hardware pixels: 148 KB a frame against the panel's 5.4 MB. Sharing a context
+## would need a Vulkan swapchain per display and this renders through GL.
 
 ## The Android plugin singleton. Its contract is four calls and three signals:
 ## `open() -> bool`, `close()`, `panel_size() -> PackedInt32Array` of two,
 ## `present(pixels, width, height)`, and `panel_connected(width, height)`,
-## `panel_disconnected()` and `panel_touched(x, y)` in the presented picture's own
-## pixels. Not the screen's own class name: a plugin singleton is a global
-## identifier in GDScript, and one that collided would shadow [Gen2SecondScreen]
-## on Android and nowhere else.
+## `panel_disconnected()` and `panel_touched(x, y)` in the presented picture's
+## own pixels. Not the screen's class name: a plugin singleton is a global
+## identifier and one that collided would shadow it on Android alone.
 const PLUGIN: String = "Gen2SecondScreenPanel"
 
-## The panel a `window` backend pretends to be, so what is looked at on a desktop
-## is the canvas a real lower display would ask for rather than the smallest one
-## this screen can draw. An AYN Thor's is 1240x1080; a handheld with another one
+## The panel a `window` backend pretends to be, so a desktop shows the canvas a
+## real lower display would ask for. An AYN Thor's is 1240x1080; another handheld
 ## is a whole scale away and the layout does not change.
 const WINDOW_PANEL := Vector2i(1240, 1080)
 ## Four whole pixels per hardware pixel, which fits the window on an ordinary
@@ -30,9 +27,9 @@ const WINDOW_SCALE: int = 4
 ## An animating page is copied at half the host's rate; a still one only for a
 ## few frames after a redraw, since a full-resolution page is 5.4 MB.
 const PANEL_HZ: float = 30.0
-## How many frames a still page is sent for after it changes. More than one,
-## because the viewport draws what it was given on the frame after it was given
-## it: sending once and stopping put a blank panel up and left it there.
+## How many frames a still page is sent for after it changes. More than one: the
+## viewport draws what it was given on the frame after, so sending once and
+## stopping put a blank panel up and left it there.
 const PANEL_SETTLE_FRAMES: int = 4
 
 const BACKEND_NONE: StringName = &"none"
@@ -49,10 +46,9 @@ var _settle: int = PANEL_SETTLE_FRAMES
 
 
 ## Attaches [param view] to whatever second display this build can reach, or
-## answers null when there is none.
-## [param mode] is [member Gen2Options.second_screen]. The view is not built
-## here: the world owns it, because it mirrors the world, and this only decides
-## where it is drawn.
+## answers null when there is none. [param mode] is
+## [member Gen2Options.second_screen]. The world owns the view, because it
+## mirrors the world; this only decides where it is drawn.
 static func attach(view: Gen2SecondScreen, mode: StringName = &"auto") -> Gen2SecondScreenHost:
 	if view == null or mode == &"off":
 		return null
@@ -82,10 +78,9 @@ static func _singleton() -> Object:
 
 
 ## The plugin answers a pair of integers rather than a [Vector2i]: an Android
-## plugin marshals primitives and arrays, and no engine vector type among them.
-## A plugin singleton is asked rather than interrogated: `has_method` answers
-## false on a [JNISingleton] whose calls all work, so a guard written that way
-## turns every device with a panel into a device without one.
+## plugin marshals primitives and arrays and no engine vector type. It is asked
+## rather than interrogated, `has_method` answering false on a [JNISingleton]
+## whose calls all work.
 static func _plugin_panel_size(plugin: Object) -> Vector2i:
 	if plugin == null:
 		return Vector2i.ZERO
@@ -184,10 +179,10 @@ func _attach_window() -> bool:
 	return true
 
 
-## The largest hardware-pixel canvas that fills [param panel] at a whole scale.
-## Whole numbers only, for the reason [Gen2Screen] gives: a hardware pixel drawn
-## as 6.43 screen pixels crawls. The leftover is a bar the far side fills with
-## the field colour, and it is never more than one scale factor wide.
+## The largest hardware-pixel canvas that fills [param panel] at a whole scale,
+## for the reason [Gen2Screen] gives: a hardware pixel drawn as 6.43 screen
+## pixels crawls. The leftover is a bar of the field colour, never wider than
+## one scale factor.
 static func canvas_for(panel: Vector2i) -> Vector2i:
 	var minimum: Vector2i = Gen2SecondScreen.CANVAS_MIN
 	if panel.x < minimum.x or panel.y < minimum.y:

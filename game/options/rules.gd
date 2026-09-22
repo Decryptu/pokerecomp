@@ -110,6 +110,20 @@ const HARD_LEVEL_BONUS_PERCENT: int = 15
 ## a fully trained Pokemon carries. The cartridge gives a trainer's Pokemon none.
 const HARD_STAT_EXP: int = Gen2Stats.MAX_STAT_EXP
 
+## `AIMoveChoiceModification1` to `3`, of which
+## `TrainerClassMoveChoiceModifications` hands each class a subset.
+const GEN1_AI_LAYERS: Array[int] = [1, 2, 3]
+
+## What [constant CHALLENGE_HARD] does to a trainer's scoring, per generation.
+## Only Crystal keeps its switching in a mask: Generation 1's is inside the
+## class's own `TrainerAIPointers` routine, so nothing there is rewritten.
+const HARD_AI_TEXT: Dictionary = {
+	RomRegistry.GEN1: "Every trainer scores with all three of the game's own AI"
+		+ " layers and brings",
+	RomRegistry.GEN2: "Every trainer scores with all ten of the game's own AI"
+		+ " layers, switches out often, and brings",
+}
+
 ## The rules the engine is playing under right now.
 ##
 ## Statics reach the run through here: [Gen2Experience], [Gen2Damage] and
@@ -209,6 +223,12 @@ func ai_move_weights(imported: int) -> int:
 	return imported & Gen2Layout.AI_MOVE_WEIGHTS_MASK
 
 
+## The layers a Generation 1 class scores with: its imported list, or all three
+## under [constant CHALLENGE_HARD]. [method ai_move_weights] is Crystal's half.
+func gen1_ai_layers(imported: Array) -> Array:
+	return GEN1_AI_LAYERS.duplicate() if challenge == CHALLENGE_HARD else imported
+
+
 ## When a trainer class reaches into its bag and how readily it switches out.
 ## [constant CHALLENGE_HARD] moves every class onto
 ## [constant Gen2Layout.SWITCH_OFTEN] and leaves the item bits alone: a class with
@@ -260,12 +280,15 @@ static func challenge_title(challenge_name: StringName) -> String:
 
 ## What [param challenge_name] actually does, said once here because the launcher is
 ## the only thing that says it and a second copy there would go stale.
-static func challenge_detail(challenge_name: StringName) -> String:
+static func challenge_detail(
+	challenge_name: StringName, generation: int = RomRegistry.GEN2
+) -> String:
 	match challenge_name:
 		CHALLENGE_HARD:
-			return ("Every trainer scores with all ten of the game's own AI layers,"
-				+ " switches out often, and brings a party %d%% higher with perfect"
-				+ " DVs and full stat experience.") % HARD_LEVEL_BONUS_PERCENT
+			return "%s a party %d%% higher with perfect DVs and full stat experience." % [
+				HARD_AI_TEXT.get(generation, HARD_AI_TEXT[RomRegistry.GEN2]),
+				HARD_LEVEL_BONUS_PERCENT,
+			]
 		CHALLENGE_NUZLOCKE:
 			return ("One catch per area, a faint is permanent, every Pokemon is"
 				+ " nicknamed, and losing the party ends the run for good.")

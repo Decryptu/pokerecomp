@@ -1466,7 +1466,8 @@ func _open_mail_composer(item: int, party_index: int, swap: bool) -> void:
 ## `ComposeMailMessage`'s tail: the stored entry, the player's own name and ID,
 ## the species that is about to hold it and the item itself.
 func _on_mail_composed(_name: String) -> void:
-	var entry: PackedByteArray = _naming.model().stored_entry() if _naming != null 		else Gen2SaveMail.blank_message()
+	var entry: PackedByteArray = _naming.model().stored_entry() if _naming != null \
+		else Gen2SaveMail.blank_message()
 	if _naming != null:
 		Gen2Screen.drop(_naming)
 		_naming = null

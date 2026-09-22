@@ -129,6 +129,8 @@ var _overworld_sprites: Array = []
 var _overworld_effects: Array = []
 var _overworld_sprite_palettes: Array = []
 var _party_menu_icon_palette_rows: Array = []
+## [method area_landmark]'s answer, built once: each area's key, then each map.
+var _areas: Dictionary = {}
 var _world_menus: Dictionary = {}
 var _world_marts: Dictionary = {}
 ## Built on first ask and kept, since the walk behind it is the whole script
@@ -2984,6 +2986,22 @@ func landmark(index: int) -> Dictionary:
 		## and only `DisplayWildLocations`' Cerulean Cave test reads.
 		"packed": int(row.get("packed", -1)),
 	}
+
+
+## The landmark standing for [param index]'s AREA: the lowest map id drawing the
+## same `LoadTownMapEntry` cell under the same name, which is what a dungeon's
+## floors share. Generation 2 has that in `wCurLandmark`, so it answers itself.
+func area_landmark(index: int) -> int:
+	if generation != RomRegistry.GEN1:
+		return index
+	if _areas.is_empty():
+		for map: int in landmark_count():
+			var entry: Dictionary = landmark(map)
+			var key: String = "%d|%s" % [int(entry.get("packed", -1)), landmark_name(map)]
+			if not _areas.has(key):
+				_areas[key] = map
+			_areas[map] = int(_areas[key])
+	return int(_areas.get(index, index))
 
 
 ## A landmark's name as text. `<BSP>` reads as the space it is everywhere but the
