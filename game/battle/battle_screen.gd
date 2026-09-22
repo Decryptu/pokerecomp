@@ -520,6 +520,9 @@ var _enemy_shiny: bool = false
 var _player_shiny: bool = false
 var _enemy_level: int = 5
 var _player_level: int = 5
+## What each panel prints beside the level, by side.
+var _hud_status: Array = [Gen2Status.NONE, Gen2Status.NONE]
+var _hud_gender: Array = [&"", &""]
 var _enemy_hp: int = 0
 var _enemy_max_hp: int = 0
 var _player_hp: int = 0
@@ -1518,6 +1521,8 @@ func _init_battle_display() -> void:
 	_player_unown_form = Gen2Battle.unown_form_of(_battle.player)
 	_enemy_shiny = Gen2Stats.is_shiny(_battle.enemy.dvs)
 	_player_shiny = Gen2Stats.is_shiny(_battle.player.dvs)
+	_sync_hud_status()
+	_hud_gender = [_battle.player.gender(), _battle.enemy.gender()]
 	_close_switch()
 	_clear_level_up_box()
 	_reseed_bg_map()
@@ -1547,6 +1552,10 @@ func _init_battle_display() -> void:
 	_enemy_trainer_pic = _link_opponent_pic()
 	_player_backpic = player_backpic_kind()
 	_push_view()
+
+
+func _sync_hud_status() -> void:
+	_hud_status = [_battle.player.status, _battle.enemy.status]
 
 
 func _link_opponent_pic() -> int:
@@ -3311,6 +3320,8 @@ func _use_pack_item(item: int, target: int, move_slot: int = -1) -> Dictionary:
 	_pack_item = 0
 	_close_pack_move()
 	var used: Dictionary = _battle.use_bag_item(item, target, move_slot)
+	## `UseStatusHealer` and the flute both redraw the panels before their line.
+	_sync_hud_status()
 	if not bool(used.get("ok", false)):
 		## `.Field`'s battle twin: every refused effect is one line and the pack
 		## again, so nothing is spent and the turn is still the player's.
@@ -5954,6 +5965,11 @@ func _set_minimize_pic_event(event: Dictionary) -> void:
 
 
 func _apply_event_state(event: Dictionary) -> void:
+	if event.has("statuses") and event["statuses"] != _hud_status:
+		_hud_status = (event["statuses"] as Array).duplicate()
+		_push_view()
+	if event.has("gender"):
+		_hud_gender[int(event["side"])] = StringName(event["gender"])
 	if EVENT_STATE_HANDLERS.has(event["type"]):
 		call(EVENT_STATE_HANDLERS[event["type"]], event)
 		return
@@ -7006,6 +7022,10 @@ func _push_view() -> void:
 		"enemy_special_pic": GHOST_PIC if _enemy_ghosted else "",
 		"enemy_pic_dmg": int(_unveil.get("dmg", -1)),
 		"enemy_level": _enemy_level, "player_level": _player_level,
+		"enemy_status": int(_hud_status[Gen2Battle.ENEMY]),
+		"player_status": int(_hud_status[Gen2Battle.PLAYER]),
+		"enemy_gender": StringName(_hud_gender[Gen2Battle.ENEMY]),
+		"player_gender": StringName(_hud_gender[Gen2Battle.PLAYER]),
 		## Who the fight is against, which the values above do not say. A wild
 		## battle carries class 0 and an empty name, the way `wOtherTrainerClass`
 		## is zero there; a class is what `GameData.trainer_pic()` and

@@ -972,9 +972,16 @@ func test_a_status_move_puts_its_status_on() -> void:
 		_mon(Fixture.PIKACHU, 50, [Fixture.SLEEP_POWDER]),
 		_mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE])
 	)
-	var inflicted: Dictionary = _first(battle.take_turn(0, 0), Gen2Battle.STATUS_INFLICTED)
+	var events: Array = battle.take_turn(0, 0)
+	var inflicted: Dictionary = _first(events, Gen2Battle.STATUS_INFLICTED)
 	assert_eq(inflicted["name"], &"sleep")
 	assert_true(Gen2Status.is_asleep(battle.enemy.status))
+	## The panels print what the line's own event carries, and only a line that
+	## `UpdateBattleHuds` runs behind carries it: the animation before it does not.
+	assert_true(Gen2Status.is_asleep(int(inflicted["statuses"][Gen2Battle.ENEMY])))
+	assert_eq(int(inflicted["statuses"][Gen2Battle.PLAYER]), Gen2Status.NONE)
+	for event: Dictionary in events.slice(0, events.find(inflicted)):
+		assert_false(event.has("statuses") and event["type"] != Gen2Battle.SENT_OUT, str(event))
 
 
 func test_one_status_at_a_time() -> void:

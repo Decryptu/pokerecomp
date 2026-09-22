@@ -400,8 +400,14 @@ func _build_dex_tab() -> Control:
 	row.add_child(_action("Seen", func() -> void:
 		_apply(_editor.set_seen_species(int(_dex_field.value), true))
 	))
+	row.add_child(_action("Caught", func() -> void:
+		_apply(_editor.set_caught_species(int(_dex_field.value)))
+	))
 	row.add_child(_action("Clear", func() -> void:
 		_apply(_editor.set_seen_species(int(_dex_field.value), false))
+	))
+	row.add_child(_action("Register party and boxes", func() -> void:
+		_apply(_editor.register_owned())
 	))
 	_dex_list = ItemList.new()
 	_dex_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -553,11 +559,14 @@ func _refresh_dex() -> void:
 	if not _editor.has_world():
 		_dex_list.add_item("This save has no world state.")
 		return
-	var seen: Dictionary = _editor.save.world.world_state.seen_species()
-	var numbers: Array = seen.keys()
+	var state: Gen2WorldState = _editor.save.world.world_state
+	var numbers: Array = state.seen_species().keys()
 	numbers.sort()
 	for species: Variant in numbers:
-		_dex_list.add_item("%d %s" % [int(species), _species_name(int(species))])
+		_dex_list.add_item("%d %s  %s" % [
+			int(species), _species_name(int(species)),
+			"caught" if state.has_caught_species(int(species)) else "seen",
+		])
 
 
 func _set_badge(index: int, pressed: bool) -> void:

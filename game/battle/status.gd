@@ -124,6 +124,19 @@ static func toxic_damage(max_hp: int, counter: int) -> int:
 	return maxi(max_hp * counter / TOXIC_RESIDUAL_DIVISOR, 1)
 
 
+## `PlaceNonFaintStatus`' and `PrintStatusAilment`'s own order.
+const ABBREVIATIONS: Array = [
+	[POISON, "PSN"], [BURN, "BRN"], [FREEZE, "FRZ"], [PARALYSIS, "PAR"], [SLEEP_MASK, "SLP"],
+]
+
+
+static func abbreviation(status: int) -> String:
+	for row: Array in ABBREVIATIONS:
+		if has(status, int(row[0])):
+			return String(row[1])
+	return ""
+
+
 ## The byte as a name a message can be built from, empty for nothing. Sleep
 ## first, because a byte carrying a counter carries nothing else.
 static func name_of(status: int) -> StringName:

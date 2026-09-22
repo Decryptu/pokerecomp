@@ -77,6 +77,7 @@ func add_party_member(species: int, level: int) -> Dictionary:
 	if mon == null:
 		return _refuse("species %d is not in this cartridge cache" % species)
 	save.party.append(mon)
+	_register(mon, true)
 	return _changed()
 
 
@@ -109,6 +110,7 @@ func set_species(mon: Gen2SaveMon, species: int) -> Dictionary:
 		return _refuse("species %d is not in this cartridge cache" % species)
 	mon.species = species
 	_resync_level(mon, mon.level)
+	_register(mon, save.party.has(mon))
 	return _changed()
 
 
@@ -258,6 +260,7 @@ func add_box_member(box_index: int, species: int, level: int) -> Dictionary:
 	var placed: Dictionary = target.put(mon)
 	if not bool(placed.get("ok", false)):
 		return _refuse("box %d is full" % (box_index + 1))
+	_register(mon, false)
 	return _changed()
 
 
@@ -351,12 +354,36 @@ func badge_flags() -> Array[int]:
 	return out
 
 
+## Clearing takes the caught flag too, which the dex would count but not list.
 func set_seen_species(species: int, seen: bool) -> Dictionary:
 	if not has_world():
 		return _refuse("this save has no world state to edit")
 	if data.species(species).is_empty():
 		return _refuse("species %d is not in this cartridge cache" % species)
 	save.world.world_state.set_species_seen(species, seen)
+	if not seen:
+		save.world.world_state.set_species_caught(species, false)
+	return _changed()
+
+
+func set_caught_species(species: int) -> Dictionary:
+	if not has_world():
+		return _refuse("this save has no world state to edit")
+	if data.species(species).is_empty():
+		return _refuse("species %d is not in this cartridge cache" % species)
+	save.world.world_state.set_species_caught(species)
+	return _changed()
+
+
+## [method _register] over a save whose Pokemon arrived some other way.
+func register_owned() -> Dictionary:
+	if not has_world():
+		return _refuse("this save has no world state to edit")
+	for mon: Gen2SaveMon in save.party:
+		_register(mon, true)
+	for stored: Gen2SaveBox in save.boxes:
+		for mon: Gen2SaveMon in stored.slots:
+			_register(mon, false)
 	return _changed()
 
 
@@ -407,6 +434,15 @@ func _create_mon(species: int, level: int) -> Gen2SaveMon:
 	if battle_mon == null:
 		return null
 	return Gen2SaveBattleAdapter.from_battle_mon(battle_mon)
+
+
+## `SetSeenAndCaughtMon`, and `UpdateUnownDex` for a party member.
+func _register(mon: Gen2SaveMon, in_party: bool) -> void:
+	if mon == null or mon.is_egg or not has_world():
+		return
+	save.world.world_state.set_species_caught(mon.species)
+	if in_party and mon.species == Gen2Layout.UNOWN_SPECIES:
+		save.world.world_state.update_unown_dex(Gen2Stats.unown_letter(mon.dvs))
 
 
 ## Pulls later moves forward so no gap sits before a filled slot, which the

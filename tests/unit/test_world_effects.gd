@@ -175,7 +175,7 @@ func _sine_bytes() -> PackedByteArray:
 const ActorFixture := preload("res://tests/integration/world_trainer_fixture.gd")
 
 
-class TestActor extends RefCounted:
+class FakeActor extends RefCounted:
 	var world: Gen2WorldAPI = null
 	var frames: int = 0
 	var reads: int = 0
@@ -201,7 +201,7 @@ func _actor_world() -> Gen2WorldAPI:
 
 func test_an_actors_entry_is_resolved_to_the_sprite_the_map_objects_use() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	actor.out = [{
 		"icon": 1, "facing": Gen2WorldSprite.FACING_LEFT,
 		"position_cells": Vector2(4, 5.5),
@@ -227,7 +227,7 @@ func test_an_actors_entry_is_resolved_to_the_sprite_the_map_objects_use() -> voi
 ## still for a frame and jumps a whole pixel on the next beside a sliding player.
 func test_an_actor_pose_is_taken_again_on_a_drawn_frame() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	actor.out = [{"icon": 1, "position_cells": Vector2(0, 0)}]
 	var actors := Gen2WorldActors.new()
 	actors.set_actors([actor])
@@ -248,7 +248,7 @@ func test_an_actor_pose_is_taken_again_on_a_drawn_frame() -> void:
 ## that is not one is dropped rather than drawn at a cell nothing asked for.
 func test_an_actor_entry_carries_a_span_and_a_broken_one_is_dropped() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	actor.out = [{
 		"icon": 1, "position_cells": Vector2(4, 4.5),
 		"span": {"from": Vector2i(4, 5), "to": Vector2i(4, 4), "progress": 0.5},
@@ -278,7 +278,7 @@ func test_an_actor_entry_carries_a_span_and_a_broken_one_is_dropped() -> void:
 ## down the face in 3D, because nothing answered a height for it.
 func test_an_actor_on_a_jump_span_is_lifted_by_the_source_table() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	var actors := Gen2WorldActors.new()
 	actors.set_actors([actor])
 	actors.set_world(world)
@@ -325,7 +325,7 @@ func test_an_actor_on_a_jump_span_is_lifted_by_the_source_table() -> void:
 ## `.Frameset_PartyMon`: two sets of eight, nine passes each.
 func test_an_icon_actor_steps_the_strips_two_frames_at_the_framesets_rate() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	actor.out = [{"icon": 1, "position_cells": Vector2.ZERO}]
 	var actors := Gen2WorldActors.new()
 	actors.set_actors([actor])
@@ -356,7 +356,7 @@ func test_a_map_objects_icon_reaches_the_second_frame_only_by_facing_up() -> voi
 
 func test_actor_sprites_are_sorted_by_row_and_read_once_a_frame() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	actor.out = [
 		{"icon": 1, "position_cells": Vector2(0, 6)},
 		{"icon": 2, "position_cells": Vector2(0, 2)},
@@ -377,7 +377,7 @@ func test_actor_sprites_are_sorted_by_row_and_read_once_a_frame() -> void:
 ## and an entry naming neither an icon nor a sprite is not an entry.
 func test_an_actor_naming_art_that_is_not_there_draws_nothing() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	actor.out = [
 		{"icon": 0, "position_cells": Vector2.ZERO},
 		{"icon": Gen2Layout.MON_ICON_COUNT + 1, "position_cells": Vector2.ZERO},
@@ -395,7 +395,7 @@ func test_an_actor_naming_art_that_is_not_there_draws_nothing() -> void:
 ## icon's own animation.
 func test_an_actor_that_has_not_moved_reports_no_redraw() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	actor.out = [{"icon": 1, "position_cells": Vector2(3, 3)}]
 	var actors := Gen2WorldActors.new()
 	actors.set_actors([actor])
@@ -494,7 +494,7 @@ func test_the_heal_machine_draws_nothing_for_an_empty_party() -> void:
 
 ## The optional half of an actor's contract: an actor that defines neither is
 ## offered neither, which is what keeps every actor already written working.
-class TestPetActor extends TestActor:
+class FakePetActor extends FakeActor:
 	var pressed: Array = []
 	var answer: bool = true
 	var outbox: Array = []
@@ -512,7 +512,7 @@ class TestPetActor extends TestActor:
 func test_an_actor_without_the_optional_methods_is_offered_neither() -> void:
 	var world: Gen2WorldAPI = _actor_world()
 	var actors := Gen2WorldActors.new()
-	actors.set_actors([TestActor.new()])
+	actors.set_actors([FakeActor.new()])
 	actors.set_world(world)
 	assert_false(actors.interact(Vector2i(4, 3), Gen2WorldSprite.FACING_UP))
 	assert_eq(actors.take_requests(), [])
@@ -521,10 +521,10 @@ func test_an_actor_without_the_optional_methods_is_offered_neither() -> void:
 
 func test_the_first_actor_answering_a_press_consumes_it() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var first := TestPetActor.new()
+	var first := FakePetActor.new()
 	first.answer = false
-	var second := TestPetActor.new()
-	var third := TestPetActor.new()
+	var second := FakePetActor.new()
+	var third := FakePetActor.new()
 	var actors := Gen2WorldActors.new()
 	actors.set_actors([first, second, third])
 	actors.set_world(world)
@@ -540,7 +540,7 @@ func test_the_first_actor_answering_a_press_consumes_it() -> void:
 ## than waiting for the next advance.
 func test_a_consumed_press_recollects_the_sprites() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestPetActor.new()
+	var actor := FakePetActor.new()
 	actor.out = [{"icon": 1, "position_cells": Vector2(4, 4)}]
 	var actors := Gen2WorldActors.new()
 	actors.set_actors([actor])
@@ -558,7 +558,7 @@ func test_a_consumed_press_recollects_the_sprites() -> void:
 ## sheet, the way art the cache does not carry is dropped.
 func test_an_out_of_range_emote_is_no_emote() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	actor.out = [{"icon": 1, "position_cells": Vector2.ZERO, "emote": Gen2Layout.EMOTE_COUNT}]
 	var actors := Gen2WorldActors.new()
 	actors.set_actors([actor])
@@ -570,7 +570,7 @@ func test_an_out_of_range_emote_is_no_emote() -> void:
 ## An emote is state, so putting one up is a change the screen redraws for.
 func test_raising_an_emote_is_a_change_the_frame_reports() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestActor.new()
+	var actor := FakeActor.new()
 	actor.out = [{"icon": 2, "position_cells": Vector2.ZERO}]
 	var actors := Gen2WorldActors.new()
 	actors.set_actors([actor])
@@ -585,7 +585,7 @@ func test_raising_an_emote_is_a_change_the_frame_reports() -> void:
 
 func test_the_outbox_passes_a_cry_and_drops_everything_else() -> void:
 	var world: Gen2WorldAPI = _actor_world()
-	var actor := TestPetActor.new()
+	var actor := FakePetActor.new()
 	actor.outbox = [
 		{"kind": &"cry", "species": 155},
 		{"kind": &"cry", "species": 0},

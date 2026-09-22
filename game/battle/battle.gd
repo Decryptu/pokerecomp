@@ -870,6 +870,20 @@ func mon(side: int) -> Gen2BattleMon:
 	return party(side).active_mon()
 
 
+## The events whose routine runs `UpdateBattleHuds` before its line. Each carries
+## both status bytes, which the panels print the way a bar reads `hp`.
+const HUD_STATUS_EVENTS: Array[StringName] = [
+	SENT_OUT, STATUS_INFLICTED, WOKE_UP, THAWED, CANNOT_MOVE, RESTED, WENT_TO_SLEEP,
+	STAGES_CLEARED, RECOVERED_USING_ITEM, TRAINER_USED_ITEM,
+]
+
+
+func stamp_statuses(event: Dictionary) -> Dictionary:
+	if HUD_STATUS_EVENTS.has(event["type"]):
+		event["statuses"] = [mon(PLAYER).status, mon(ENEMY).status]
+	return event
+
+
 func opponent_of(side: int) -> int:
 	return ENEMY if side == PLAYER else PLAYER
 
@@ -1513,7 +1527,7 @@ func send_out(
 		events.append({
 			"type": WITHDREW, "side": side, "index": leaving, "species": leaving_species,
 		})
-	events.append({
+	events.append(stamp_statuses({
 		"type": SENT_OUT, "side": side, "index": index,
 		"species": current.active_mon().species, "level": current.active_mon().level,
 		"hp": current.active_mon().hp, "max_hp": current.active_mon().max_hp(),
@@ -1521,8 +1535,9 @@ func send_out(
 		## `BattleCheckPlayerShininess`/`BattleCheckEnemyShininess`, the reading
 		## `CGB_BattleColors` and [method entrance_events] share.
 		"shiny": Gen2Stats.is_shiny(current.active_mon().dvs),
+		"gender": current.active_mon().gender(),
 		"line": send_out_line(side),
-	})
+	}))
 	(_participants[side] as Dictionary)[index] = true
 	# `SendOutPlayerMon` and `ShowSetEnemyMonAndSendOutAnimation` both run their
 	# animation after the line that announced them, and `ForceEnemySwitch` runs
@@ -2319,7 +2334,7 @@ func _tick_defrost(events: Array) -> void:
 		# `xor a / ld [wBattleMonStatus], a` clears the byte rather than the bit,
 		# which is the same thing: a freeze is never on it with anything else.
 		current.status = Gen2Status.NONE
-		events.append({"type": THAWED, "side": side})
+		events.append(stamp_statuses({"type": THAWED, "side": side}))
 
 
 ## `HandleSafeguard`: a turn off each side's count and the line when it runs out.
@@ -2438,7 +2453,7 @@ func use_status_berry(side: int, events: Array) -> bool:
 	holder.substatus &= ~Gen2Substatus.NIGHTMARE
 	var used: int = holder.item
 	holder.item = 0
-	events.append({"type": RECOVERED_USING_ITEM, "side": side, "item": used})
+	events.append(stamp_statuses({"type": RECOVERED_USING_ITEM, "side": side, "item": used}))
 	return true
 
 
@@ -2647,11 +2662,11 @@ func _use_trainer_item(side: int, item: int, events: Array) -> void:
 	var user: Gen2BattleMon = mon(side)
 	var effect: Dictionary = Gen1TrainerAI.apply_item(self, user, item) if is_gen1() \
 		else Gen2AIItems.apply(user, item)
-	events.append({
+	events.append(stamp_statuses({
 		"type": TRAINER_USED_ITEM, "side": side, "item": item,
 		"species": user.species, "effect": effect,
 		"hp": user.hp, "max_hp": user.max_hp(),
-	})
+	}))
 
 
 func allows_bag_items() -> bool:

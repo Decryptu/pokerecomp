@@ -170,7 +170,7 @@ func effective_move() -> Dictionary:
 func emit(type: StringName, extra: Dictionary = {}) -> void:
 	var event: Dictionary = {"type": type, "side": side}
 	event.merge(extra, true)
-	events.append(event)
+	events.append(battle.stamp_statuses(event))
 
 
 ## Stops the move: the commands after this one are not run.
