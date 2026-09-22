@@ -39,6 +39,9 @@ func _open(battle: Gen2Battle, actions: Array) -> void:
 	var packed: PackedScene = load("res://game/battle/battle_screen.tscn")
 	_screen = packed.instantiate() as Gen2BattleScreen
 	_screen.set_data(_data)
+	## The way the world hosts a fight: every frame is spent through
+	## `advance_hardware_frame`, and nothing runs off real time between them.
+	_screen.set_driven(true)
 	add_child(_screen)
 	await get_tree().process_frame
 	_screen.show_matchup(BattleFixture.GEODUDE, BattleFixture.PIKACHU, 20, 20)
@@ -99,14 +102,17 @@ func _advance_to(stage: String, limit: int = 40) -> void:
 
 
 ## Reads the question to its last page without advancing off it, which is what a
-## player does before a yes/no box is up to answer.
+## player does before a yes/no box is up to answer: the pump prints each page
+## and a press turns it. The box is placed by the pump, never by a press, which
+## is what a hand-driven redraw here used to hide.
 func _read_question() -> void:
 	var box: Gen2TextBox = _screen.get("_box")
 	while box != null and (box.is_revealing() or box.has_pages_left()):
-		box.finish()
-		if box.has_pages_left():
-			box.advance()
-	_screen._refresh_menu_layer()
+		if box.is_revealing():
+			_screen.advance_hardware_frame()
+		else:
+			_screen._handle_button(PokeButton.A)
+	_screen.advance_hardware_frame()
 	await get_tree().process_frame
 
 
@@ -823,12 +829,7 @@ func test_a_second_contest_catch_is_asked_over_the_comparison() -> void:
 
 	## The page is one image on the menu layer, the way the party page is: the
 	## two boxes and `PlaceYesNoBox`' own go into one tilemap on the cartridge.
-	var box: Gen2TextBox = _screen.get("_box")
-	while box != null and (box.is_revealing() or box.has_pages_left()):
-		box.finish()
-		if box.has_pages_left():
-			box.advance()
-	_screen.call("_refresh_menu_layer")
+	await _read_question()
 	var layer: TextureRect = _screen.get("_menu_layer")
 	assert_true(layer.visible, "the comparison is drawn")
 	assert_eq(layer.position, Vector2.ZERO, "over the field rather than beside it")

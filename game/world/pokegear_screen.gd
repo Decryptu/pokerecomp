@@ -46,7 +46,7 @@ const CARDS: Array[Dictionary] = [
 const ARROW_TILE: int = 0x00
 const ARROW_AT: Vector2i = Vector2i(0, 12)
 const ARROW_CARD_STRIDE: int = 0x10
-const ARROW_CARDS: Array[StringName] = [CARD_CLOCK, &"map", CARD_PHONE, CARD_RADIO]
+const ARROW_CARDS: Array[StringName] = [CARD_CLOCK, CARD_MAP, CARD_PHONE, CARD_RADIO]
 
 ## `PokegearRadio_Init`'s `depixel 4, 10, 4, 4` with `SPRITEANIMSTRUCT_TILE_ID`
 ## $08, read the same way: three tiles stacked, sliding right with

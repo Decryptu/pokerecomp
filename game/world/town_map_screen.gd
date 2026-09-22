@@ -8,6 +8,8 @@ extends Control
 ## held. A stored landmark is the centre of its 16x16 icon.
 
 signal closed()
+## `PokegearMap_ContinueMap`'s `.left` and `.right`; the host resolves the card.
+signal switched(direction: int)
 
 ## The region map is drawn in hardware pixels, and the Pokegear's card list it is
 ## opened from is ordinary UI at window resolution, so the screen carries a
@@ -256,9 +258,14 @@ func cursor_name() -> String:
 ## other button is swallowed, which is what the loop does with them.
 ## The dex area's loop leaves on A as well as B, walks regions rather than
 ## landmarks, and reads SELECT as a held state; see [method release_button].
+## The Pokegear card reads left and right as `Pokegear_SwitchPage` first.
 func handle_button(button: int) -> bool:
 	if not _open or _map == null:
 		return false
+	if _map.screen == Gen2TownMap.SCREEN_POKEGEAR_CARD \
+		and button in [PokeButton.LEFT, PokeButton.RIGHT]:
+		switched.emit(-1 if button == PokeButton.LEFT else 1)
+		return true
 	if button == PokeButton.A and _map.screen == Gen2TownMap.SCREEN_FLY:
 		# `.pressedA` reads the flypoint's own spawn out of `Flypoints + 1`,
 		# where Generation 1 writes the map id the list itself holds.

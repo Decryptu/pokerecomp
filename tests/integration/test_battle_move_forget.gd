@@ -42,6 +42,9 @@ func _open_with_full_moveset(third_move: int = BattleFixture.THUNDERBOLT) -> voi
 	var packed: PackedScene = load("res://game/battle/battle_screen.tscn")
 	_screen = packed.instantiate() as Gen2BattleScreen
 	_screen.set_data(_data)
+	## The way the world hosts a fight: every frame is spent through
+	## `advance_hardware_frame`, and nothing runs off real time between them.
+	_screen.set_driven(true)
 	add_child(_screen)
 	await get_tree().process_frame
 	_screen.show_matchup(BattleFixture.MAGCARGO, BattleFixture.GEODUDE, 33, 5)
@@ -221,6 +224,28 @@ func test_a_confirm_pages_the_prompt_before_answering_it() -> void:
 	_screen._answer_forget(PokeButton.A)
 	await get_tree().process_frame
 	assert_eq(_stage(), "ask", "the press turned a page rather than answering")
+
+
+## `AskForgetMoveText` ends in `done` and `YesNoBox` is placed behind it, so
+## the box comes up on the frame the last letter lands and not on a press: a
+## press there is the answer. The pump is what places it, the way the world's
+## does; it used to wait for a press, which was then read as YES.
+func test_the_yes_no_box_is_placed_by_the_frame_the_prompt_finishes_on() -> void:
+	await _open_with_full_moveset()
+	await _advance_to_offer()
+	assert_eq(_stage(), "ask")
+	var box: Gen2TextBox = _screen.get("_box")
+	var layer: TextureRect = _screen.get("_menu_layer")
+	assert_false(layer.visible, "not while the prompt is printing")
+	while box.is_revealing() or box.has_pages_left():
+		if box.is_revealing():
+			_screen.advance_hardware_frame()
+		else:
+			_screen._answer_forget(PokeButton.A)
+	_screen.advance_hardware_frame()
+	await get_tree().process_frame
+	assert_eq(_stage(), "ask", "nothing has been answered")
+	assert_true(layer.visible, "and the box is up with no press spent on it")
 
 
 ## B in the list is ForgetMove's own .cancel, the same carry the ask's no sets.
