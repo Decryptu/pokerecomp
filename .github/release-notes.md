@@ -14,11 +14,17 @@ here was called that and deserved it. Rewrite from the line that is exactly
 this note and takes its closing marker with it, which is how 0.1.17 published
 an empty body. -->
 
+## Added
+
+- The launcher plays Red, Blue and Yellow's own title screen behind the cartridge on the shelf, the way it already did for Gold, Silver and Crystal. The lettering is taken off so the launcher's own text stays readable, and the cartridge's title music plays under the interface.
+- A handheld with a second display, like the Ayn Thor, gets the lower screen on Red, Blue and Yellow too: the Pokedex, the party, the ITEM list, the TOWN MAP and the trainer info screen, with a tab for each.
+- The map is its own tab on those three, since Generation I has no Pokegear. It appears once the TOWN MAP is in your bag and sits where the Pokegear tab sits on Gold, Silver and Crystal.
+- Hard mode now changes what a Generation I trainer does. Every class scores its moves with all three of the game's own layers instead of the one or two its class carries, on top of the higher levels, perfect DVs and full stat experience it already brought.
+
 ## Fixed
 
-- The Pokegear's MAP card now moves on to the PHONE and RADIO cards on Gold, Silver and Crystal. Pressing left or right on it did nothing, so once you were on the map the only way out was B. Switching cards plays the same click the cartridge does.
-- The "Will you change POKéMON?" question in a trainer battle with the SHIFT setting shows its YES/NO box again. The box was never drawn, so the press meant to read the question was taken as YES and you landed in the party list. The same fault hid the "Use next POKéMON?" box, the "delete a move?" box and the Bug-Catching Contest's keep-or-swap box; all four appear the moment their question finishes printing.
-- That question now stands on its own page, the way the cartridge prints it.
+- A Nuzlocke on Red, Blue or Yellow was counting one catch per map instead of one per area, so Mt. Moon gave you three encounters and Pokemon Tower five. A whole cave or tower is one area now, which is what the rule says: 36 encounters across the game rather than 57.
+- The party icon beside a Pokemon's name on the lower screen was drawn with half of it missing on Red, Blue and Yellow.
 
 ## Which file
 
