@@ -973,6 +973,73 @@ func test_the_radio_card_is_what_owes_the_map_its_music_back() -> void:
 	assert_ne(host.radio_music_playing(), Gen2WorldServiceScreen.RADIO_MUSIC_SILENT)
 
 
+## `PokegearMap_ContinueMap`'s `.right` and `.left`: the MAP card is the region
+## map's own screen, and it reads left and right as `Pokegear_SwitchPage` the
+## way every other card does, so the phone and the radio are reachable past it.
+## It used to swallow both, which left the Pokegear stuck on the map.
+func test_the_map_card_switches_to_the_cards_either_side_of_it() -> void:
+	await _open_world()
+	for flag: int in [
+		Gen2WorldState.ENGINE_MAP_CARD, Gen2WorldState.ENGINE_PHONE_CARD,
+		Gen2WorldState.ENGINE_RADIO_CARD,
+	]:
+		_world_screen._world.state.set_engine_flag(flag, true)
+	_world_screen._open_pokegear()
+	await get_tree().process_frame
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(host)
+	assert_eq(host._pokegear.card(), Gen2PokegearScreen.CARD_CLOCK)
+
+	assert_true(host.handle_button(PokeButton.RIGHT))
+	await get_tree().process_frame
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.TOWN_MAP)
+	assert_not_null(host._town_map, "the MAP card is the region map's screen")
+	assert_null(host._pokegear)
+
+	assert_true(host.handle_button(PokeButton.RIGHT))
+	await get_tree().process_frame
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.CARD)
+	assert_null(host._town_map)
+	assert_eq(host._pokegear.card(), Gen2PokegearScreen.CARD_PHONE)
+
+	assert_true(host.handle_button(PokeButton.RIGHT))
+	await get_tree().process_frame
+	assert_eq(host._pokegear.card(), Gen2PokegearScreen.CARD_RADIO)
+	assert_true(host.handle_button(PokeButton.RIGHT), "no wrap at the end")
+	await get_tree().process_frame
+	assert_eq(host._pokegear.card(), Gen2PokegearScreen.CARD_RADIO)
+
+	for _press: int in 2:
+		assert_true(host.handle_button(PokeButton.LEFT))
+		await get_tree().process_frame
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.TOWN_MAP)
+	assert_not_null(host._town_map)
+	assert_true(host.handle_button(PokeButton.LEFT))
+	await get_tree().process_frame
+	assert_eq(host._pokegear.card(), Gen2PokegearScreen.CARD_CLOCK)
+	assert_not_null(_world_screen._service_host, "and the Pokegear is still open")
+
+
+## `.right` with neither the phone nor the radio card: `ret z` on both bits,
+## so the press does nothing; `.cancel` on B leaves the Pokegear.
+func test_the_map_card_stays_when_nothing_is_owned_past_it() -> void:
+	await _open_world()
+	_world_screen._world.state.set_engine_flag(Gen2WorldState.ENGINE_MAP_CARD, true)
+	_world_screen._open_pokegear()
+	await get_tree().process_frame
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_true(host.handle_button(PokeButton.RIGHT))
+	await get_tree().process_frame
+	assert_not_null(host._town_map)
+	assert_true(host.handle_button(PokeButton.RIGHT))
+	await get_tree().process_frame
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.TOWN_MAP)
+	assert_not_null(host._town_map)
+	assert_true(host.handle_button(PokeButton.B))
+	await get_tree().process_frame
+	assert_null(_world_screen._service_host)
+
+
 ## A run of a card's tilemap read back as text, which is what the page printed.
 func _row_text(map: PackedInt32Array, at: Vector2i, length: int) -> String:
 	var out: String = ""

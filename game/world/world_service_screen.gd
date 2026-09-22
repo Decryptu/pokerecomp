@@ -3520,18 +3520,25 @@ func _on_card_switched(direction: int) -> void:
 	var order: Array = []
 	for entry: Dictionary in _pokegear_cards:
 		order.append(StringName(entry.get("card", &"")))
-	var at: int = order.find(_pokegear.card()) + direction
+	var at: int = order.find(_open_card_id()) + direction
 	if at < 0 or at >= order.size():
 		return
+	sfx_requested.emit(Gen2BattleSwitchMenu.SFX_READ_TEXT_2, false)
 	var card: StringName = order[at]
-	if card == &"map":
-		# The MAP card is the region map's own screen, and B on it is the same
-		# `.cancel` every other card has: it leaves the Pokegear.
-		_close_card()
+	_close_card()
+	_close_map_card()
+	if card == Gen2PokegearScreen.CARD_MAP:
 		_open_town_map(false)
 		return
-	_close_card()
 	_open_card(card)
+
+
+func _open_card_id() -> StringName:
+	if _pokegear != null:
+		return _pokegear.card()
+	if _town_map != null:
+		return Gen2PokegearScreen.CARD_MAP
+	return &""
 
 
 ## `wPokegearRadioMusicPlaying`, for the host that owns the driver:
@@ -3599,6 +3606,13 @@ func _close_card() -> void:
 		return
 	Gen2Screen.drop(_pokegear)
 	_pokegear = null
+
+
+func _close_map_card() -> void:
+	if _town_map == null:
+		return
+	Gen2Screen.drop(_town_map)
+	_town_map = null
 
 
 ## `ItemUseTownMap`, the poster read out of the bag: the same screen with no
@@ -3672,6 +3686,7 @@ func _open_town_map(from_request: bool) -> void:
 	_town_map.set_screen(_service_hardware)
 	add_child(_town_map)
 	_town_map.closed.connect(_on_town_map_closed)
+	_town_map.switched.connect(_on_card_switched)
 	# The Pokegear's own MAP card when the Pokegear opened it, `_TownMap`'s
 	# corner box when `OverworldTownMap` did.
 	var owned: Array = Gen2PokegearScreen.owned_card_ids(_world.state)
@@ -3694,9 +3709,7 @@ func _open_town_map(from_request: bool) -> void:
 
 func _on_town_map_closed() -> void:
 	var chosen: int = _town_map.chosen_spawn() if _town_map != null else -1
-	if _town_map != null:
-		Gen2Screen.drop(_town_map)
-		_town_map = null
+	_close_map_card()
 	_set_overlay_open(false)
 	if _fly_map:
 		_fly_map = false

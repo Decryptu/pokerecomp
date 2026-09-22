@@ -585,11 +585,9 @@ func _process(delta: float) -> void:
 	## twice the source's rate. Same rule as [member Gen2TextBox.driven].
 	if _driven:
 		return
-	## The yes/no box appears when the question above it has finished printing,
-	## and the box prints on its own clock rather than on a press.
 	if _switch_stage != &"":
 		_advance_party_icons(delta)
-		_refresh_menu_layer()
+	_refresh_question_layer()
 	## The box keeps counting hardware frames while nothing else does, printing,
 	## scrolling and blinking whether or not a bar or an animation is running.
 	## [method frames_running] deliberately does not answer for it: a box waiting
@@ -1089,10 +1087,17 @@ func advance_hardware_frame() -> bool:
 		return true
 	if _switch_stage in [&"pick", &"refused"]:
 		moved = advance_party_icons()
-		_refresh_menu_layer()
+	_refresh_question_layer()
 	if not frames_running():
 		return moved
 	return advance_frame() or moved
+
+
+## `YesNoBox` is placed once the question over it has finished printing, which
+## the box does on this clock rather than on a press.
+func _refresh_question_layer() -> void:
+	if _switch_stage != &"" or _forget_stage != &"":
+		_refresh_menu_layer()
 
 
 ## Null rather than the first imported cache: a battle opened without a runtime

@@ -129,4 +129,6 @@ static func use_next_text() -> String:
 ## `BattleText_EnemyIsAboutToUseWillPlayerChangeMon`, asked before the trainer's
 ## Pokémon is out. [param trainer] is `Battle_GetTrainerName`'s.
 static func offer_text(trainer: String, mon: String, player: String) -> String:
-	return "%s is about to use %s. Will %s change PKMN?" % [trainer, mon, player]
+	return "%s is about to use %s.%sWill %s change PKMN?" % [
+		trainer, mon, Gen2TextStream.PAGE_BREAK, player
+	]
