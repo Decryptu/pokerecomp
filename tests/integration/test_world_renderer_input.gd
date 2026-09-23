@@ -119,9 +119,6 @@ func test_a_controller_opens_and_walks_the_start_menu() -> void:
 	assert_ne(host.cursor(), second, "a held direction keeps moving it")
 
 
-## The reported defect, end to end. A repeat used to be sent as an action press,
-## which latched the direction in `Input`: the key came up, the pause menu went
-## on scrolling and the player went on walking with nothing able to stop them.
 func test_a_held_direction_stops_the_menu_the_moment_the_key_comes_up() -> void:
 	await _open_world_with_renderer()
 	var runtime: Gen2InputRuntime = Gen2InputRuntime.instance()

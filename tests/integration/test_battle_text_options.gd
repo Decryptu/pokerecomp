@@ -1,8 +1,5 @@
 extends GutTest
 
-## A battle's own text box is the player's text box: `PrintLetterDelay` reads
-## TEXT SPEED and `wTextboxFrame` reads FRAME, and neither knows it is in a
-## battle. The box used to take the frame and leave the speed behind.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 

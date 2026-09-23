@@ -1,18 +1,5 @@
-<!-- The top section is rewritten for each release; everything below it is the
-standing text and only takes {VERSION}. One line per paragraph, per bullet and
-per table row: GitHub reflows a release body to the reader's window, and a line
-break put in by hand only makes it ragged.
-
-It is a changelog, not an essay. `## Added`, `## Changed`, `## Fixed`, one
-bullet per change, and no opening sentence summarising the release: a reader
-scanning for their own bug does not want a paragraph about the shape of the
-work. No `**Bold label.**` in front of a bullet, no contrast frame on every
-line ("X rather than Y", "not X, Y"), and no em-dash. Vary the sentence length:
-a body of uniform 15 to 25 word sentences reads as machine-written, and one
-here was called that and deserved it. Rewrite from the line that is exactly
-`## Added`: an edit that searches for the first one in the file lands inside
-this note and takes its closing marker with it, which is how 0.1.17 published
-an empty body. -->
+<!-- Rewrite from the exact `## Added` heading for each release. The text below
+the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 

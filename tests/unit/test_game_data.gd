@@ -221,10 +221,6 @@ func test_a_missing_cache_does_not_open() -> void:
 	assert_null(GameData.open_directory("user://nothing_here"))
 
 
-## One opener for a tool whose command line carries one string and cannot say
-## which of the two forms it is: a probe handed a cache path used to have it
-## taken as a game id, which opened somebody else's cartridge and read as a
-## failed run rather than a wrong argument.
 func test_one_opener_takes_a_cache_path_or_a_registry_id() -> void:
 	_write_cache()
 	var by_path: GameData = GameData.open_argument(_directory)
@@ -598,24 +594,22 @@ func test_index_buffers_are_read_once_and_kept() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	var first: PackedByteArray = data.atlas_indices("front")
 	assert_eq(first.size(), 16)
+	assert_eq(DirAccess.remove_absolute(RomCache.pic_path(_directory, "front")), OK)
 	assert_eq(data.atlas_indices("front"), first)
 
 
 func test_a_tile_sheet_is_read_back_coerced_and_kept() -> void:
-	# The font and the borders are not pics, so they have their own accessor and
-	# their own directory in the cache; only the reading-once part is shared.
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
 	var sheet: Dictionary = data.tile_sheet("font")
 	assert_eq(sheet["first_code"], 0x80)
 	assert_true(sheet["tiles"] is int)
-	assert_eq(data.tile_indices("font").size(), 4)
-	assert_eq(data.tile_indices("font"), data.tile_indices("font"))
+	assert_eq(data.tile_indices("font"), PackedByteArray([0, 3, 3, 0]))
+	assert_eq(DirAccess.remove_absolute(RomCache.tile_path(_directory, "font")), OK)
+	assert_eq(data.tile_indices("font"), PackedByteArray([0, 3, 3, 0]))
 
 
 func test_a_tile_sheet_that_was_never_written_reads_as_empty() -> void:
-	# An import that stopped before the font, or a cache from before there was
-	# one. The renderer asks and gets nothing rather than a wrong answer.
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
 	assert_true(data.tile_sheet("frames").is_empty())

@@ -2,14 +2,6 @@ extends GutTest
 
 const GEN1_ROM_SIZE: int = RomRegistry.SIZES[RomRegistry.GEN1]
 
-## The Generation 1 offset tables cannot be checked for correctness without a
-## cartridge; that is what [method Gen1Importer.verify_layout] does at import
-## time, and `tools/checks/gen1_tables.gd` sweeps the decoded result. What can be
-## checked here is that the tables are complete and internally consistent, and
-## that the addressing arithmetic around them is right.
-
-## Every key both profiles have to carry, since a missing one is a crash at
-## import rather than a refusal.
 const REQUIRED_KEYS: Array[String] = [
 	"species_names", "base_stats", "mew_base_stats", "pic_mew_bank", "dex_order",
 	"dex_entries", "dex_entries_bank", "moves", "move_names", "type_names",
@@ -32,18 +24,24 @@ func test_a_gen2_game_has_none() -> void:
 
 
 func test_red_and_blue_share_every_table_but_the_shifted_ones() -> void:
-	# The two are one source built twice, so every table sits at the same offset
-	# in both unless `BLUE_SHIFT` names it. A shift for a key Red does not carry
-	# reads as a missing offset and hands Blue a table at zero.
 	var red: Dictionary = Gen1Layout.for_id(RomRegistry.RED)
 	var blue: Dictionary = Gen1Layout.for_id(RomRegistry.BLUE)
+	var blue_offsets: Dictionary = {
+		"default_names_rival": 0x06AC0,
+		"vending_text": 0x74F9A,
+		"hidden_items": 0x76689,
+		"hidden_coins": 0x7679A,
+		"hidden_item_coords": 0x766B9,
+		"hidden_coin_coords": 0x76823,
+		"hof_pc_text": 0x76684,
+		"credits_the_end": 0x7473F,
+	}
 	assert_eq(red.size(), blue.size())
-	for key: String in Gen1Layout.BLUE_SHIFT:
-		assert_true(red.has(key), "%s is shifted but Red has no offset for it" % key)
-		assert_between(int(Gen1Layout.BLUE_SHIFT[key]), 1, 4, "%s shift" % key)
+	for key: String in blue_offsets:
+		assert_eq(blue[key], blue_offsets[key], key)
 	for key: String in red:
-		var shift: int = int(Gen1Layout.BLUE_SHIFT.get(key, 0))
-		assert_eq(int(blue[key]), int(red[key]) + shift, key)
+		if not blue_offsets.has(key):
+			assert_eq(blue[key], red[key], key)
 
 
 func test_every_layout_is_complete_and_inside_the_cartridge() -> void:
@@ -78,20 +76,15 @@ func test_base_stats_rows_are_one_record_apart() -> void:
 	var layout: Dictionary = Gen1Layout.for_id(RomRegistry.RED)
 	assert_eq(
 		Gen1Layout.base_stats_offset(layout, 2) - Gen1Layout.base_stats_offset(layout, 1),
-		Gen1Layout.BASE_STATS_SIZE
+		28
 	)
 
 
 func test_red_keeps_mew_out_of_the_table_and_yellow_does_not() -> void:
 	var red: Dictionary = Gen1Layout.for_id(RomRegistry.RED)
 	var yellow: Dictionary = Gen1Layout.for_id(RomRegistry.YELLOW)
-	assert_eq(Gen1Layout.base_stats_offset(red, Gen1Layout.SPECIES_COUNT),
-		int(red["mew_base_stats"]), "Red sends Mew to its own row")
-	assert_eq(
-		Gen1Layout.base_stats_offset(yellow, Gen1Layout.SPECIES_COUNT),
-		int(yellow["base_stats"]) + (Gen1Layout.SPECIES_COUNT - 1) * Gen1Layout.BASE_STATS_SIZE,
-		"Yellow keeps Mew in the table"
-	)
+	assert_eq(Gen1Layout.base_stats_offset(red, 151), 0x0425B)
+	assert_eq(Gen1Layout.base_stats_offset(yellow, 151), 0x39446)
 
 
 func test_the_pic_bank_follows_the_index_thresholds() -> void:
@@ -229,12 +222,12 @@ func test_the_text_box_carries_its_own_border_and_space() -> void:
 
 
 func test_the_map_and_tileset_counts_split_by_profile() -> void:
-	assert_eq(Gen1Layout.map_count(RomRegistry.RED), Gen1Layout.MAP_COUNT_RED_BLUE)
-	assert_eq(Gen1Layout.map_count(RomRegistry.BLUE), Gen1Layout.MAP_COUNT_RED_BLUE)
-	# Yellow's Summer Beach House is the extra map, and its Beach House the
-	# extra tileset.
-	assert_eq(Gen1Layout.map_count(RomRegistry.YELLOW), Gen1Layout.MAP_COUNT_RED_BLUE + 1)
-	assert_eq(Gen1Layout.tileset_count(RomRegistry.YELLOW), Gen1Layout.TILESET_COUNT_RED_BLUE + 1)
+	assert_eq(Gen1Layout.map_count(RomRegistry.RED), 248)
+	assert_eq(Gen1Layout.map_count(RomRegistry.BLUE), 248)
+	assert_eq(Gen1Layout.map_count(RomRegistry.YELLOW), 249)
+	assert_eq(Gen1Layout.tileset_count(RomRegistry.RED), 24)
+	assert_eq(Gen1Layout.tileset_count(RomRegistry.BLUE), 24)
+	assert_eq(Gen1Layout.tileset_count(RomRegistry.YELLOW), 25)
 	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN1):
 		assert_eq(
 			Gen1Layout.tileset_blocks(id).size(), Gen1Layout.tileset_count(id),
@@ -450,7 +443,7 @@ func test_a_facility_text_offset_is_its_run_plus_its_own_delta() -> void:
 ## switched in, and everything above it belongs to the bank it was read from.
 func test_a_bankless_pointer_below_the_window_is_home() -> void:
 	assert_eq(Gen1Layout.banked(0x1D, 0x2A55), 0x2A55)
-	assert_eq(Gen1Layout.banked(0x1D, 0x4000), 0x1D * RomFile.BANK_SIZE)
+	assert_eq(Gen1Layout.banked(0x1D, 0x4000), 0x74000)
 	assert_eq(Gen1Layout.banked(0x00, 0x7FFF), 0x3FFF)
 
 

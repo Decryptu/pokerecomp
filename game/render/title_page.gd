@@ -190,9 +190,6 @@ var _taken: PackedByteArray = PackedByteArray()
 ## `OAM_PRIO` reads.
 var _map: PackedInt32Array = PackedInt32Array()
 var _map_indices: PackedByteArray = PackedByteArray()
-## The same map without whatever moves on it, built once: the logo, the version
-## line and Gold and Silver's whole tilemap never change, and rebuilding 140
-## tiles of them sixty times a second is the frame this screen used to spend.
 var _base: PackedInt32Array = PackedInt32Array()
 var _base_indices: PackedByteArray = PackedByteArray()
 

@@ -64,10 +64,7 @@ var zoom_step: int = 0:
 
 var _zoom_step: int = 0
 
-## Whether the buffer is drawn at a whole multiple of its own resolution, so a
-## view in it can place itself on a screen pixel rather than a hardware one.
-## Everything keeps hardware-pixel coordinates: the canvas transform does the
-## magnification the container used to and the picture is the same one.
+## The canvas transform scales hardware-pixel coordinates.
 var subpixel: bool = false:
 	set(value):
 		if subpixel == value:
@@ -173,9 +170,7 @@ func _ready() -> void:
 	_interface.name = "Interface"
 	_interface.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_interface.size = Vector2(WIDTH, HEIGHT)
-	# The viewport used to be exactly the Game Boy screen and clipped anything
-	# drawn past it, which is a slide-in's own edge. An expanded buffer no longer
-	# does, so the rectangle it was clipped against does it instead.
+	# Slide-ins must clip at the interface edge inside an expanded viewport.
 	_interface.clip_contents = true
 	_viewport.add_child(_interface)
 	## Outside the viewport, because it covers a native renderer as well: the

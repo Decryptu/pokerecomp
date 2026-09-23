@@ -407,9 +407,6 @@ func sprites() -> Array:
 """
 
 
-## SMOOTH SCROLL reaches a mod actor. Its pose used to be taken once a hardware
-## frame, so a follower stood still for a drawn frame and moved a whole hardware
-## pixel on the next while the player beside it slid a sixth of one.
 func test_a_mod_actors_pose_moves_on_every_drawn_frame() -> void:
 	var script := GDScript.new()
 	script.source_code = SLIDING_ACTOR_SOURCE
@@ -424,8 +421,6 @@ func test_a_mod_actors_pose_moves_on_every_drawn_frame() -> void:
 	_settle_on_a_pass()
 	_world_screen._world.move_result(Vector2i.RIGHT)
 
-	## Half a hardware frame each, so most of these spend none at all: those are
-	## the drawn frames the pose used to be held through.
 	var drawn: Array[Vector2] = []
 	for _frame: int in 8:
 		_world_screen._process(FRAME * 0.5)

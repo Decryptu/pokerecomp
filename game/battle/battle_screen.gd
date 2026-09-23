@@ -6026,10 +6026,7 @@ func _apply_event_state(event: Dictionary) -> void:
 		Gen2Battle.CRY:
 			_play_entrance_cry(int(event["side"]), int(event["species"]), int(event.get("pikachu_clip", -1)))
 		Gen2Battle.SENT_OUT:
-			# The pic and the panel both change, and both come out of the event
-			# rather than out of the party, for the same reason every other number
-			# here does. The level is part of that: a trainer's own party is not
-			# all one level the way the invented one used to be.
+			# Sent-out events carry each opponent's actual species, appearance and level.
 			if int(event["side"]) == Gen2Battle.ENEMY:
 				if not _battle.in_battle_tower and not _battle.is_link_battle:
 					enemy_seen.emit(int(event["species"]), int(event.get("unown_form", 0)))

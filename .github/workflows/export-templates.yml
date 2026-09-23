@@ -1,16 +1,5 @@
 name: export templates
 
-# Builds the engine every published download is wrapped around.
-#
-# Stock export templates carry every renderer and every importable format,
-# unstripped, and they are around nine tenths of a download's weight.
-# `tools/build_export_templates.sh` builds the same pin without the parts
-# nothing here can execute, and says which and why.
-#
-# `release.yml` calls this. It also runs on its own, because building the engine
-# is the slow half of a release and a tag is a bad place to find out that a
-# toolchain moved: dispatch it first, watch it go green, and the release that
-# follows takes the cache.
 
 on:
   workflow_call:
@@ -19,15 +8,11 @@ on:
         description: "Commit, branch or tag to build from"
         required: true
         type: string
-  # The engine is rebuilt when the flag set moves, which is the one change that
-  # can break a release without touching a line of the game.
   pull_request:
     paths:
       - tools/build_export_templates.sh
       - .github/workflows/export-templates.yml
-  # A cache nothing reads for seven days is deleted, and a release would then
-  # pay the whole build again without anything having changed. Restoring it is
-  # what keeps it, so this runs weekly and finishes in seconds.
+  # Scheduled reads keep the costly template cache alive.
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
@@ -39,12 +24,9 @@ on:
 
 env:
   GODOT_VERSION: 4.8-dev4
-  # A development snapshot is tagged nowhere in the engine repository, so the
-  # pin is the commit the stock templates name themselves after:
-  # `4.8.dev4.official.b56a91878`. The build checks that it still agrees.
+  # This commit matches the stock 4.8.dev4 template build.
   GODOT_COMMIT: b56a91878e7c94977e4af978968e41d0670c0a8b
-  # Nintendo ships no Godot platform and upstream carries none, so the Switch
-  # template is built from a fork of the same pin that adds `platform/nx`.
+  # Switch needs a same-series Godot fork with `platform/nx`.
   GODOT_NX_REMOTE: https://github.com/Decryptu/godot.git
   GODOT_NX_COMMIT: e25f31c1248c0955994e865a80d94d32520a53b9
 
@@ -61,8 +43,6 @@ jobs:
           - host: linux-x86_64
             runs-on: ubuntu-latest
             targets: linux-x86_64
-          # A public repository gets Arm runners, so this is a native build
-          # rather than a cross toolchain nobody can test.
           - host: linux-arm64
             runs-on: ubuntu-24.04-arm
             targets: linux-arm64
@@ -78,8 +58,6 @@ jobs:
           - host: android
             runs-on: ubuntu-latest
             targets: android
-          # devkitA64 and switch-mesa come from devkitPro's own image, which is
-          # the only place they are packaged for CI.
           - host: switch
             runs-on: ubuntu-latest
             container: devkitpro/devkita64:latest
@@ -92,11 +70,7 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Building the engine costs the better part of an hour and the result only
-      # changes when the pin or the flag set does, so the key carries both.
-      # v6, matching ci.yml: v4 runs on Node 20, which GitHub is removing from
-      # its runners. v5 and v6 are runtime and packaging changes only, so the
-      # caches v4 wrote still restore.
+      # Cache by engine pin and build flags.
       - id: cache
         uses: actions/cache@v6
         with:
@@ -114,15 +88,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.host }}" = "switch" ]; then
-            # The devkitPro image ships devkitA64 and the whole switch portlibs
-            # set already, and it is root without sudo. Only SCons is missing.
             apt-get update
             apt-get install -y --no-install-recommends scons
-            # The image tag moves, so the libraries the build links are checked
-            # here: a base that has dropped one fails in seconds with its name
-            # rather than at the link step three quarters of an hour later.
-            # switch-mesa answers the first four; the rest are what detect.py
-            # links wherever the matching builtin_* is off.
             missing=""
             for lib in libEGL libGLESv2 libglapi libdrm_nouveau \
                        libz libpng16 libfreetype libbz2 libwebp \
@@ -139,16 +106,11 @@ jobs:
           case "${{ runner.os }}" in
             Linux)
               sudo apt-get update
-              # What a linuxbsd build links against. The Android target needs
-              # none of it, but the package set is cheap next to the build.
               sudo apt-get install -y scons \
                 libx11-dev libxcursor-dev libxinerama-dev libxi-dev \
                 libxrandr-dev libwayland-dev libxkbcommon-dev libudev-dev \
                 libasound2-dev libpulse-dev libgl1-mesa-dev
               ;;
-            # The runner image ships an untrusted aws/tap, and Homebrew warns
-            # about it on every install whatever is being installed. Dropping
-            # the tap is the fix Homebrew itself names; nothing here wants it.
             macOS)
               brew untap aws/tap 2>/dev/null || true
               brew install scons
@@ -171,10 +133,7 @@ jobs:
           git -C godot-src fetch -q --depth 1 origin "$commit"
           git -C godot-src checkout -q FETCH_HEAD
 
-          # A pin that has drifted from the version the release installs stock
-          # templates for would mix two engines in one download. Only the
-          # series can be checked: a snapshot number is stamped by the engine's
-          # own release process and is nowhere in the source.
+          # Stock and custom templates must share a Godot series.
           pin=$(python3 -c "import runpy; v = runpy.run_path('godot-src/version.py'); print('%s.%s' % (v['major'], v['minor']))")
           if [ "$pin" != "${GODOT_VERSION%%-*}" ]; then
             echo "::error::the pinned commit is Godot $pin, the release installs stock $GODOT_VERSION templates"

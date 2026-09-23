@@ -1,12 +1,5 @@
 name: release
 
-# Builds every published target from a tag and attaches them to a GitHub
-# release. CI has no cartridge, so a build ships the importer and no game data;
-# the player brings their own ROM the way a source checkout does.
-#
-# The version is not stamped here. `PokeAppVersion.VERSION` is the one place it
-# is written and `tests/unit/test_update_check.gd` holds the export presets to
-# it, so this workflow only refuses a tag that disagrees.
 
 on:
   push:
@@ -28,9 +21,7 @@ permissions:
 env:
   GODOT_VERSION: 4.8-dev4
   GODOT_TEMPLATE_DIR: 4.8.dev4
-  # The engine the iOS plugin compiles against. It must be the commit
-  # `export-templates.yml` builds the templates from, since the plugin is linked
-  # into them and the two have to agree about what a header declares.
+  # Plugin headers must match the template engine commit.
   GODOT_COMMIT: b56a91878e7c94977e4af978968e41d0670c0a8b
 
 jobs:
@@ -45,8 +36,7 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      # A tag that disagrees with the source would publish builds the launcher's
-      # update check then calls newer or older than themselves.
+      # The tag must match the version used by the update check.
       - id: read
         run: |
           set -euo pipefail
@@ -60,9 +50,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # Here rather than only in `publish`, which is seven builds and a quarter
-      # of an hour later. A body that renders to nothing is a one-line edit to
-      # fix and there is no reason to pay for the templates first.
+      # Reject empty release notes before building assets.
       - name: The release notes render to a body
         run: |
           set -euo pipefail
@@ -101,13 +89,10 @@ jobs:
           echo "GODOT=/usr/local/bin/godot" >> "$GITHUB_ENV"
           curl -fsSL "$base/Godot_v${GODOT_VERSION}_export_templates.tpz" -o /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d /tmp/tpz
-          # The directory is named by version.txt inside the archive, never by
-          # the release tag: 4.8.dev4 rather than 4.8-dev4.
+          # Template directory uses `version.txt` spelling: 4.8.dev4.
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}/"
 
-      # Only the names built here are replaced, so nothing can lose a target:
-      # a stock template stays until something takes its place.
       - uses: actions/download-artifact@v8
         with:
           pattern: templates-{linux-x86_64,linux-arm64,windows,android}
@@ -127,8 +112,7 @@ jobs:
           GODOT_CAP=900 tools/ci_godot.sh "$GODOT" --headless --editor --path . --quit
           [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
 
-      # The Android preset builds through gradle, and Godot reads the SDK and
-      # JDK locations from editor settings rather than from the environment.
+      # Godot reads Gradle SDK paths from editor settings.
       - name: Point Godot at the Android SDK
         run: |
           set -euo pipefail
@@ -142,33 +126,20 @@ jobs:
           export/android/java_sdk_path = "$JAVA_HOME"
           EOF
 
-      # 4.8.dev4 refuses the export before gradle runs if any package in its own
-      # list is absent, and a runner image carries whichever NDK it was built
-      # with rather than this one. `sdkmanager` is a no-op for what is already
-      # there, so the whole list is asked for rather than the one that moved.
+      # Export requires Godot 4.8.dev4's exact Android SDK package list.
       - name: Install the SDK packages the exporter insists on
         run: |
           set -euo pipefail
-          # The image names the directory by the tools' own version, not always
-          # `latest`, so the binary is found rather than assumed.
           sdkmanager=$(find "$ANDROID_SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -1)
           [ -n "$sdkmanager" ] || { echo "::error::no sdkmanager in the image"; exit 1; }
-          # Not `yes |`: it never ends, so it is still writing when sdkmanager
-          # stops reading, dies of SIGPIPE and returns 1, which `pipefail`
-          # reports as this whole step failing. Whether that happens is a race
-          # against how much the reader consumes, and it decided a release. A
-          # bounded run of the same answer fits inside the pipe buffer, so the
-          # writer is finished before the reader has to be asked anything.
+          # Bounded input avoids SIGPIPE under `pipefail`.
           printf 'y\n%.0s' {1..100} | "$sdkmanager" --licenses > /dev/null
           "$sdkmanager" "platform-tools" "build-tools;36.1.0" "platforms;android-36" \
             "ndk;29.0.14206865" "cmake;3.22.1"
           [ -d "$ANDROID_SDK_ROOT/ndk/29.0.14206865" ] || {
             echo "::error::the NDK the exporter checks for is still missing"; exit 1; }
 
-      # `addons/android_native/bin/` is gitignored, so a checkout has no AAR and
-      # the Android exporter answers a plugin with no binary the way the iOS one
-      # does: it drops it and the build succeeds anyway. 0.1.0 shipped that way
-      # and no handheld with a lower panel got one. Checked for after the export.
+      # The exporter silently skips an absent AAR; build and audit the ignored binary.
       - name: Build the Android plugins
         run: |
           set -euo pipefail
@@ -207,8 +178,6 @@ jobs:
           export_one "Linux ARM64"           "dist/pokerecomp-${v}-linux-arm64"
           export_one "Windows Desktop"       "dist/pokerecomp-${v}-windows-x86_64.exe"
           export_one "Windows Desktop ARM64" "dist/pokerecomp-${v}-windows-arm64.exe"
-          # --install-android-build-template unpacks the gradle project the
-          # preset builds through; it only acts alongside an export.
           mkdir -p dist
           GODOT_CAP=1800 tools/ci_godot.sh "$GODOT" --headless --path . \
             --install-android-build-template \
@@ -223,7 +192,7 @@ jobs:
           v="${{ needs.version.outputs.version }}"
           apk="dist/pokerecomp-${v}-android.apk"
           dex=$(unzip -Z1 "$apk" '*.dex')
-          # Counted rather than `grep -qa`, for the SIGPIPE reason above.
+          # Count matches to avoid early pipe closure under `pipefail`.
           for class in SecondScreen PlatformPower; do
             found=$(unzip -p "$apk" $dex | grep -ca "$class" || true)
             if [ "$found" -eq 0 ]; then
@@ -254,9 +223,7 @@ jobs:
           base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
           curl -fsSL "$base/Godot_v${GODOT_VERSION}_macos.universal.zip" -o /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot
-          # The executable is signed as part of Godot.app. Copying it out of the
-          # bundle invalidates that signature and Gatekeeper answers with
-          # SIGKILL, so the bundle is kept whole and called through.
+          # Keep the signed Godot.app bundle intact or Gatekeeper kills the executable.
           sudo rm -rf /Applications/Godot.app
           sudo cp -R "/tmp/godot/Godot.app" /Applications/Godot.app
           sudo xattr -dr com.apple.quarantine /Applications/Godot.app
@@ -266,10 +233,7 @@ jobs:
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}/"
 
-      # macOS is a whole template; iOS is one static library inside the stock
-      # archive, because that template is an Xcode project around several
-      # xcframeworks and the export only ever reaches for the release device
-      # slice.
+      # iOS replaces one static library inside the stock template archive.
       - uses: actions/download-artifact@v8
         with:
           pattern: templates-{macos,ios}
@@ -284,34 +248,23 @@ jobs:
           slice=libgodot.ios.release.xcframework/ios-arm64
           mkdir -p "/tmp/ios/$slice"
           cp /tmp/templates/libgodot.ios.release.a "/tmp/ios/$slice/libgodot.a"
-          # `zip` replaces a member that is already there.
           ( cd /tmp/ios && zip -q "$dir/ios.zip" "$slice/libgodot.a" )
           echo "template directory: ${before} kB -> $(du -sk "$dir" | cut -f1) kB"
 
-      # iOS has no system file picker at this engine pin, so `ios/plugins` ships
-      # one and every import on that platform goes through it. Its libraries are
-      # gitignored, a checkout therefore has none, and the exporter answers a
-      # plugin whose binary is missing by quietly dropping it: the build still
-      # succeeds and ships the engine's own browser, which on iOS can only list
-      # the app's own data. That is a release nobody can import a cartridge
-      # with, so the plugin is built here and checked for after the export.
+      # iOS has no system picker at this pin; the exporter silently skips absent plugin libraries.
       - name: Build the iOS file picker plugin
         run: |
           set -euo pipefail
-          # See export-templates.yml: the image's untrusted aws/tap makes
-          # Homebrew warn on every install until it is dropped.
           brew untap aws/tap 2>/dev/null || true
           brew install scons
-          # The plugin is linked into the templates `export-templates.yml`
-          # builds, so a pin that has drifted from that one is two engines.
+          # The plugin and templates must use the same engine commit.
           grep -q "GODOT_COMMIT: $GODOT_COMMIT" .github/workflows/export-templates.yml \
             || { echo "::error::the plugin pin disagrees with the template pin"; exit 1; }
           git init -q .references/godot
           git -C .references/godot remote add origin https://github.com/godotengine/godot.git
           git -C .references/godot fetch -q --depth 1 origin "$GODOT_COMMIT"
           git -C .references/godot checkout -q FETCH_HEAD
-          # Three headers the engine's own build generates and a plain checkout
-          # does not have. Nothing else of the engine is built.
+          # A plain engine checkout lacks these generated headers.
           ( cd .references/godot && scons platform=ios target=template_debug arch=arm64 \
               core/extension/gdextension_interface.gen.h \
               core/extension/ext_wrappers.gen.h \
@@ -325,9 +278,7 @@ jobs:
           GODOT_CAP=900 tools/ci_godot.sh "$GODOT" --headless --editor --path . --quit
           [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
 
-      # Ad-hoc signed, not notarized: no Apple account is involved and none can
-      # be, because the certificate would name one. Gatekeeper asks the player
-      # to confirm the first launch; the release notes say so.
+      # Ad-hoc signing requires no Apple account; Gatekeeper prompts on first launch.
       - name: Export macOS
         run: |
           set -euo pipefail
@@ -337,11 +288,7 @@ jobs:
             --export-release "macOS" "dist/pokerecomp-${v}-macos.zip"
           [ -s "dist/pokerecomp-${v}-macos.zip" ] || { echo "::error::no macOS zip"; exit 1; }
 
-      # The published IPA is unsigned on purpose: AltStore and SideStore re-sign
-      # it with the player's own Apple ID, and a signed one would carry a
-      # provisioning profile naming the maintainer's developer account. Godot's
-      # exporter refuses an empty team id even project-only, so a placeholder
-      # goes in and nothing ever uses it.
+      # Sideloaders sign the IPA for each player; published IPAs must contain no maintainer identity.
       - name: Export iOS unsigned
         run: |
           set -euo pipefail
@@ -358,9 +305,7 @@ jobs:
 
           app="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/pokerecomp.app"
           [ -d "$app" ] || { echo "::error::no built .app"; exit 1; }
-          # The exporter writes these three whether or not the preset gives them
-          # a sentence, and an empty purpose string is what a store shows a
-          # player as a permission this app wants. It wants none of them.
+          # Remove unused permission descriptions from the generated Info.plist.
           for key in NSCameraUsageDescription NSMicrophoneUsageDescription \
               NSPhotoLibraryUsageDescription; do
             /usr/libexec/PlistBuddy -c "Delete :$key" "$app/Info.plist" 2>/dev/null || true
@@ -370,9 +315,7 @@ jobs:
           cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
           (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/dist/pokerecomp-${v}-ios.ipa" Payload)
 
-      # 0.1.0 shipped without it and every player's only picker was a browser
-      # of the app's own empty data. Nothing else can notice: the exporter drops
-      # an invalid plugin silently, and the preset still says it is on.
+      # The preset can claim a plugin whose binary the exporter dropped.
       - name: Refuse an IPA with either iOS plugin missing
         run: |
           set -euo pipefail
@@ -380,10 +323,7 @@ jobs:
           rm -rf "$RUNNER_TEMP/audit" && mkdir -p "$RUNNER_TEMP/audit"
           unzip -q "dist/pokerecomp-${v}-ios.ipa" -d "$RUNNER_TEMP/audit"
           binary="$RUNNER_TEMP/audit/Payload/pokerecomp.app/pokerecomp"
-          # `grep -q` stops at the first match and the writer upstream then dies
-          # of SIGPIPE, which `pipefail` reports as the whole pipeline failing.
-          # A gate written that way refuses every build, including the ones that
-          # are right. Count instead: `grep -c` reads to the end.
+          # Avoid `grep -q` on a pipe: early closure triggers SIGPIPE under `pipefail`.
           for symbol in NativeFilePicker NativePower; do
             found=$(strings -a "$binary" | grep -c "$symbol" || true)
             if [ "$found" -eq 0 ]; then
@@ -393,8 +333,7 @@ jobs:
             echo "$symbol ✓ ($found)"
           done
 
-      # A signed IPA would be a private leak in a public download, so the gate
-      # is here rather than in the release notes.
+      # Refuse signing data in a public IPA.
       - name: Refuse an IPA that carries an identity
         run: |
           set -euo pipefail
@@ -445,10 +384,7 @@ jobs:
           GODOT_CAP=900 tools/ci_godot.sh "$GODOT" --headless --editor --path . --quit
           [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
 
-      # A stock editor knows no NX platform, so `export_presets.cfg` carries no
-      # Switch preset and this exports the pack alone. Every preset here ships
-      # the same file set, and a pack holds each feature-tagged setting rather
-      # than one platform's answer, so the Linux preset's pack is the game.
+      # Stock Godot has no NX export preset; wrap the common pack with the NX template.
       - name: Export the pack
         run: |
           set -euo pipefail
@@ -457,20 +393,12 @@ jobs:
             --export-pack "Linux" "$PWD/romfs/game.pck"
           [ -s romfs/game.pck ] || { echo "::error::the pack is empty"; exit 1; }
 
-      # nacptool writes the title, author and version hbmenu shows; elf2nro
-      # wraps the template around the pack as a RomFS image. Both are devkitPro
-      # tools and the image is where they are packaged.
       - name: Wrap the template into an NRO
         run: |
           set -euo pipefail
           v="${{ needs.version.outputs.version }}"
           cp /tmp/switch/switch_release.elf switch_release.elf
-          # An NRO icon is a 256x256 JPEG and nothing else; the repository's is
-          # a PNG, so it is converted here rather than committed twice. Godot
-          # does it because Godot is already installed in this job and is the
-          # project's own tool: this step used to reach for whichever of
-          # `magick` and `convert` the runner image carried, and the 0.1.6 build
-          # failed when it carried neither.
+          # NRO requires a 256x256 JPEG; the source icon is PNG.
           GODOT_CAP=300 tools/ci_godot.sh "$GODOT" --headless --path . \
             -s res://tools/make_nro_icon.gd -- "$PWD/app_icon.jpg"
           [ -s app_icon.jpg ] || { echo "::error::the NRO icon is empty"; exit 1; }
@@ -482,8 +410,6 @@ jobs:
           "
           [ -s pokerecomp.nro ] || { echo "::error::elf2nro produced nothing"; exit 1; }
 
-      # The zip extracts at the root of a microSD: hbmenu lists what is in
-      # `switch/`, and Ryujinx and the yuzu forks read the same tree.
       - name: Stage the SD tree
         run: |
           set -euo pipefail
@@ -525,13 +451,10 @@ jobs:
           cat sha256sums.txt
           cd ..
 
-          # The editing note at the top of the file belongs to the file. It is
-          # invisible on GitHub, so five published bodies carried it before
-          # anyone noticed; dropped here rather than trusted to be remembered.
+          # Keep the template's HTML editing note out of the published body.
           notes="$(sed '/^<!--/,/-->$/d' .github/release-notes.md \
             | sed "s/{VERSION}/${v}/g" | sed '/./,$!d')"
-          # An unclosed editing note swallows the whole file, which is how
-          # 0.1.17 shipped with no body at all and the job still said success.
+          # Catch an unclosed editing note or an empty release body.
           grep -q '^## ' <<<"$notes" \
             || { echo "::error::release notes rendered no sections"; exit 1; }
           gh release create "${{ needs.version.outputs.tag }}" \
@@ -550,11 +473,7 @@ jobs:
             --data "$(jq -cn --arg content "$release_url" '{content: $content}')" \
             "$DISCORD_RELEASE_WEBHOOK"
 
-      # The feed AltStore and SideStore poll. Rebuilt from the releases rather
-      # than edited, and landed on `main` through a pull request: the raw file
-      # on that branch is the URL players add, and the `Protect main` ruleset
-      # takes nothing else. After the announcement, so a refusal here costs the
-      # feed one release rather than costing everyone the post.
+      # Publish the generated AltStore feed through a PR to `main`.
       - name: Refresh the AltStore source
         env:
           GH_TOKEN: ${{ github.token }}
@@ -566,8 +485,6 @@ jobs:
           git checkout -B "$branch" FETCH_HEAD
           tools/altstore_source.sh "${{ github.repository }}"
           git add .github/altstore/source.json
-          # A re-run of a tag that is already listed has nothing to commit, and
-          # an empty commit fails the step rather than the release.
           git diff --cached --quiet && { echo "already listed"; exit 0; }
           git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
@@ -576,8 +493,6 @@ jobs:
           gh pr create --base main --head "$branch" \
             --title "List $v in the AltStore source" \
             --body "\`tools/altstore_source.sh\` output for the $v release."
-          # The branch is a second old before the merge is asked for, and GitHub
-          # answers "not mergeable" until it has worked the base out.
           for _ in 1 2 3 4 5 6; do
             gh pr merge "$branch" --merge --delete-branch && exit 0
             sleep 10

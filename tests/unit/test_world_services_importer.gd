@@ -390,12 +390,7 @@ func test_the_spawn_and_flypoint_tables_read_in_source_order() -> void:
 	var flypoints: Array = (result["data"] as Dictionary)["flypoints"]
 	assert_eq(spawns.size(), Gen2Layout.SPAWN_COUNT)
 	assert_eq(flypoints.size(), Gen2Layout.FLYPOINT_COUNT)
-	# `SPAWN_HOME` is the bedroom and carries the table's first coordinates.
 	assert_eq(int(spawns[Gen2Layout.SPAWN_HOME]["x"]), 3)
 	assert_eq(int(spawns[Gen2Layout.SPAWN_HOME]["y"]), 3)
-	# Johto first: flypoint 0 is New Bark and the Kanto half starts at 12.
-	assert_eq(int(flypoints[0]["spawn"]), int(Gen2Layout.FLYPOINT_SPAWNS[0]))
-	assert_eq(
-		int(flypoints[Gen2Layout.KANTO_FLYPOINT]["spawn"]),
-		int(Gen2Layout.FLYPOINT_SPAWNS[Gen2Layout.KANTO_FLYPOINT])
-	)
+	assert_eq(int(flypoints[0]["spawn"]), 14)
+	assert_eq(int(flypoints[12]["spawn"]), 2)

@@ -196,10 +196,7 @@ const MART_TERMINATOR: int = 0xFF
 ## item byte per tree, indexed by the `fruittree` command's operand less one, and
 ## both pins ship the same thirty rows.
 const FRUIT_TREE_COUNT: int = 30
-## The seven apricorn items, ascending, and where their run starts in the table.
-## Rows 17 to 23 are `FRUITTREE_ROUTE_37_1` through `FRUITTREE_ROUTE_42_3`, and
-## no other row bears one; both pins agree. Used to identify the table by
-## content, since it has no header and no terminator.
+## Rows 17 to 23 identify the headerless `FruitTreeItems` table by content.
 const FRUIT_TREE_APRICORNS: Array[int] = [0x55, 0x59, 0x5C, 0x5D, 0x61, 0x63, 0x65]
 const FRUIT_TREE_FIRST_APRICORN: int = 16
 

@@ -1,21 +1,10 @@
 name: ci
 
-# The ROM-free test run. CI has no cartridge and never will: no ROM bytes and
-# nothing derived from them is committed. The suite runs against the fixtures in
-# tests/, so it needs no ROM, no display and no imported cache.
-
 on:
   push:
     branches: [main]
   pull_request:
-    # The AltStore feed pull request is opened by `github-actions[bot]`, and a
-    # `pull_request` run from a bot author is held for manual approval and
-    # expires unapproved: five of the last nine releases left a red `ci` run
-    # nobody could have read, and one was approved by hand. A pull request whose
-    # only changed file is listed here creates no run at all. Nothing is lost.
-    # `test_export_presets.gd` compares `source.json` against the iOS preset, so
-    # any change that would make the feed disagree with the preset is already
-    # red on the ordinary pull request that makes it.
+    # Bot-authored AltStore feed PRs cannot start this run; export-preset tests cover the feed.
     paths-ignore: [".github/altstore/source.json"]
 
 concurrency:
@@ -32,16 +21,12 @@ jobs:
   tests:
     name: editor scan and GUT
     runs-on: ubuntu-latest
-    # The whole job is about four minutes. This is the backstop behind
-    # `tools/ci_godot.sh`, which caps each Godot run itself: nothing should ever
-    # reach this number, and a job that does is stuck somewhere else.
+    # Job cap covers hangs outside `tools/ci_godot.sh`.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
-      # A workflow that names an action version which does not exist fails at
-      # "Set up job", and release.yml only runs on a tag, so without this the
-      # first place anyone learns of it is a release that never built.
+      # Tag-triggered release workflows need action-version validation here.
       - name: Every action version resolves
         env:
           GH_TOKEN: ${{ github.token }}
@@ -84,12 +69,7 @@ jobs:
           tools/ci_godot.sh ~/godot/godot --headless --editor --path . --quit
           [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
 
-      # The one step whose verdict is in its own output. Godot's teardown races
-      # with the threads a run leaves behind and has not always returned from it
-      # on a Linux runner, twenty minutes after the suite said it passed; that
-      # is now a warning with every thread's stack under it rather than a red
-      # build, and a suite that fails or hangs before printing this line is
-      # still red.
+      # Linux audio teardown can hang after GUT prints its verdict.
       - name: GUT
         env:
           GODOT_CAP: 900

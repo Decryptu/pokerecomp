@@ -324,8 +324,6 @@ func test_a_sheet_takes_the_ring_and_gives_it_back() -> void:
 	assert_same(_focus_owner(), before)
 
 
-## The cancel used to be read in _gui_input, which only ever reaches the focused
-## control, and the sheet itself never holds focus.
 func test_cancel_closes_a_sheet_from_a_button_inside_it() -> void:
 	var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(Gen2LauncherTheme.active(), "Sheet")
 	sheet.open(_launcher)

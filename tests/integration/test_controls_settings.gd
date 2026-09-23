@@ -121,9 +121,6 @@ func test_a_binding_already_on_another_button_is_reported_not_refused() -> void:
 	assert_string_contains(sheet.get("_prompt").text, PokeButton.label(PokeButton.A))
 
 
-## A player on a pad alone used to have no way out of a capture: every button
-## they pressed became the binding, and only a mouse or a finger could close the
-## sheet. Holding one past the threshold closes it and binds nothing.
 func test_holding_a_button_cancels_the_capture_instead_of_binding_it() -> void:
 	var sheet: Gen2BindingSheet = await _open(PokeButton.B)
 	var before: Array = (_options.controls[PokeButton.B] as Array).duplicate(true)
@@ -314,9 +311,6 @@ func test_arrows_stay_inside_an_open_sheet() -> void:
 	await get_tree().process_frame
 
 
-## A [CenterContainer] grants a card whatever minimum size it asks for, so a
-## sheet with more rows than the window is tall used to hang its actions off the
-## bottom edge with no way to reach them. The rows are what gives now.
 func test_a_sheet_taller_than_the_window_keeps_its_actions_on_screen() -> void:
 	_host.size = Vector2(900, 420)
 	var page: Gen2SettingsPage = Gen2SettingsPage.create(_theme, _host)

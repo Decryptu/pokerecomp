@@ -334,7 +334,7 @@ The host runs that method's own predicate and then the whole of
 `EvolveAfterBattle`'s tail, so the adapter, the HP delta, a consumed held item and
 the new moves stay in one place. `EVOLVE_TRADE` and `EVOLVE_ITEM` are the two
 methods available; an optional `"parameter"` is the stone `EVOLVE_ITEM` looks for,
-defaulting to the item's own number. An item with no `evolution` behaves as before.
+defaulting to the item's own number. An item without `evolution` keeps its normal behavior.
 
 ### Art
 
@@ -1754,8 +1754,8 @@ The host owns everything else:
 | Whether the tile allows it | The staged request the party submenu reaches |
 | What the move then does | The same commit, animation and script |
 
-The party is asked first, so a game with no provider resolves every field move
-exactly as before, and a Pokemon that knows the move keeps its submenu row. Only
+The party is asked first. With no provider, the host resolves field moves through
+the cartridge rules, and a Pokemon that knows the move keeps its submenu row. Only
 the seven HM moves have an alternate source: CUT, FLY, SURF, STRENGTH, FLASH,
 WHIRLPOOL and WATERFALL. Rock Smash is a TM. On Red, Blue and Yellow the HM is
 Kanto's ($C4 to $C8) and the badge test is each `Check*Badge`'s.

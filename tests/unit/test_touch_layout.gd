@@ -30,9 +30,6 @@ func test_orientation_follows_the_area() -> void:
 	)
 
 
-## Including the arrangement the rectangle would not have named itself: a default
-## anchor was measured against the whole screen and meets a strip for the first
-## time here, which is where half a face button used to end up off the glass.
 func test_every_group_is_inside_the_area_in_both_orientations() -> void:
 	var layout: PokeTouchLayout = _layout()
 	var cases: Array = [

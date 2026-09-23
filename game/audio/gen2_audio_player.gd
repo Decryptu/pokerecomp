@@ -640,10 +640,7 @@ func _service_timeline(delta: float = 0.0) -> void:
 	if _player == null or _driven:
 		return
 	if not _player.playing:
-		# A stopped output under a driver whose channels are still on is silence
-		# over live music, which is what a host that stopped its stream and then
-		# asked for the same piece again used to leave behind. The output
-		# follows the driver rather than the other way round.
+		# Active driver channels need a running output stream.
 		if not _any_channel_active():
 			_starved_seconds = 0.0
 			return

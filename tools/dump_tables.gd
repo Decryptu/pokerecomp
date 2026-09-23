@@ -67,8 +67,6 @@ const AI_MOVE_FLAG_NAMES: Dictionary = {
 	Gen2Layout.AI_RISKY: "risky",
 }
 
-## How a class's item/switch word decides what its trainers do with a held item
-## and when they switch out.
 const AI_SWITCH_FLAG_NAMES: Dictionary = {
 	Gen2Layout.SWITCH_OFTEN: "switch often",
 	Gen2Layout.SWITCH_RARELY: "switch rarely",
@@ -78,9 +76,7 @@ const AI_SWITCH_FLAG_NAMES: Dictionary = {
 	Gen2Layout.CONTEXT_USE: "context use",
 }
 
-## How a multiplier is drawn in the matchup grid. Symbols rather than numbers so
-## that a column stays narrow enough for all seventeen types to fit on a line,
-## and so that a wrong chart looks wrong at a glance instead of having to be read.
+## Single-character symbols keep all seventeen types on one line.
 const MATCHUP_SYMBOLS: Dictionary = {
 	Gen2Layout.MATCHUP_NO_EFFECT: "0",
 	Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE: "-",

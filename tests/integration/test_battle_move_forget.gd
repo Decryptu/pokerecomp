@@ -115,8 +115,6 @@ func _step(button: int) -> void:
 	await get_tree().process_frame
 
 
-## The offer used to be declined automatically because no menu existed. It now
-## stops and asks, and the battle does not go on behind it.
 func test_a_full_moveset_opens_the_ask_instead_of_declining() -> void:
 	await _open_with_full_moveset()
 	var battle: Gen2Battle = _screen.get("_battle")
@@ -226,10 +224,6 @@ func test_a_confirm_pages_the_prompt_before_answering_it() -> void:
 	assert_eq(_stage(), "ask", "the press turned a page rather than answering")
 
 
-## `AskForgetMoveText` ends in `done` and `YesNoBox` is placed behind it, so
-## the box comes up on the frame the last letter lands and not on a press: a
-## press there is the answer. The pump is what places it, the way the world's
-## does; it used to wait for a press, which was then read as YES.
 func test_the_yes_no_box_is_placed_by_the_frame_the_prompt_finishes_on() -> void:
 	await _open_with_full_moveset()
 	await _advance_to_offer()

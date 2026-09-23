@@ -465,8 +465,6 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 
 
 func test_every_refusal_reason_the_mod_layer_produces_has_player_wording() -> void:
-	# The launcher and the index dialog share one table now; a reason worded in
-	# neither used to show as a raw StringName through whichever screen met it.
 	for reason: StringName in [
 		&"not_a_zip", &"unsafe_archive_entry", &"unsupported_api_version",
 		&"mod_is_too_old",

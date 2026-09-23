@@ -272,11 +272,6 @@ func test_a_warp_into_another_landmark_raises_the_map_name_sign() -> void:
 	assert_eq(_screen.map_name_sign_passes(), 0, "and gone on the sixtieth")
 
 
-## `PlayerEvents` zeroes `wLandmarkSignTimer` behind `DoPlayerEvent`, so only a
-## dispatched player event takes the sign down. A map's own callbacks are
-## `RunMapCallback`'s work inside map setup and reach `PlayerEvents` never: one
-## sitting on the queue used to take down the sign that same map load raised,
-## which is every connection crossing into a map that has one.
 func test_a_queued_map_callback_does_not_take_the_sign_down() -> void:
 	_screen = await _walk_onto_the_door()
 	for _frame: int in WALK_FRAME_CAP:
@@ -297,11 +292,6 @@ func test_a_queued_map_callback_does_not_take_the_sign_down() -> void:
 	)
 
 
-## And a callback that has actually run does not take it down either, which is
-## the other half: `RunMapCallback` is map setup, and `RunSceneScript` answers
-## `PlayerEvents` with carry only when its scene script set RUN_DEFERRED_SCRIPT.
-## Route 29's two scene scripts are bare `end`s, so crossing New Bark's west edge
-## used to lose the sign seven frames in.
 func test_only_a_player_event_result_takes_the_sign_down() -> void:
 	_screen = await _walk_onto_the_door()
 	for _frame: int in WALK_FRAME_CAP:

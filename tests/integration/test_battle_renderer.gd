@@ -436,9 +436,6 @@ func test_a_hit_drains_the_bar_before_it_says_what_the_hit_was() -> void:
 	assert_eq(_battle_screen.battle_snapshot()["message"], "It's super effective!")
 
 
-## `AnimateHPBar` blocks, so the picture does not start sinking until the bar it
-## belongs to has emptied. A hit with no line of its own used to pop the faint in
-## the same pass, and the opponent left the field over a bar still draining.
 func test_a_hit_that_says_nothing_still_empties_the_bar_before_the_faint() -> void:
 	await _open_battle()
 	_battle_screen.show_matchup(16, 155, 7, 9)
@@ -469,9 +466,6 @@ func test_a_hit_that_says_nothing_still_empties_the_bar_before_the_faint() -> vo
 	assert_true(_battle_screen.fainting(), "the faint follows the bar it waited for")
 
 
-## `anim_keepsprites` skips `BattleAnim_ClearOAM`, so what the last script left is
-## still drawn after it has returned: the ball at rest under "Gotcha!". The view
-## used to read the running player alone and the ball vanished with the script.
 func test_what_a_script_kept_is_still_drawn_once_the_script_has_ended() -> void:
 	await _open_battle()
 	_battle_screen._kept_sprites = [{"tile": 3, "attributes": 0, "x": 8, "y": 16}]

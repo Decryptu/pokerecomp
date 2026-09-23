@@ -1023,11 +1023,6 @@ func test_a_trainer_battle_fights_and_writes_back_with_an_egg_in_the_party() -> 
 	assert_eq((written.party[1] as Gen2SaveMon).nickname, "EGG")
 
 
-## Regression: `Gen2SaveBattleAdapter.from_battle_party` returns a clone, and
-## `_save_battle_result` used to write that clone to disk without copying it
-## back over `_source_save`, the live save the world screen and the next
-## battle both read. A won battle's HP, experience and PP reverted the moment
-## a second battle started.
 func test_hp_experience_and_pp_survive_into_the_next_wild_battle() -> void:
 	await _open_world(true)
 	var save: Gen2SaveData = _world_screen._injected_save
@@ -1080,10 +1075,6 @@ func test_hp_experience_and_pp_survive_into_the_next_wild_battle() -> void:
 	)
 
 
-## `wPartyMon` is the fighting copy, so a run keeps the damage taken and the PP
-## spent exactly as a win does. Tower battles restore the original party.
-## `_save_battle_result` used to refuse every battle the player did not win, so
-## a wild encounter walked away from cost nothing.
 func test_running_away_keeps_the_damage_taken_and_the_pp_spent() -> void:
 	await _open_world(true)
 	var save: Gen2SaveData = _world_screen._injected_save
@@ -1565,13 +1556,6 @@ func test_a_battle_runs_its_transition_before_the_overlay_exists() -> void:
 	assert_not_null(_battle_child(), "and the battle behind it once it lands")
 
 
-## `DoBattleTransition` owns every frame between the encounter and the overlay
-## with the joypad unread. A press landing in one of them used to reach
-## `script_input_waiting()` below it and cancel the request `startbattle` waits
-## on, so the script died with `invalid_battle_outcome`: the fight still ran, and
-## everything the trainer's script does after it -- its beaten flag, its text and
-## a gym leader's badge -- never arrived. A player holding A through the approach
-## is what does it.
 func test_a_press_during_the_battle_transition_leaves_the_script_running() -> void:
 	await _open_world()
 	await _walk_one(Vector2i.RIGHT)

@@ -1,40 +1,20 @@
 extends GutTest
 
-## The source budget: how much branching and how much prose the tree is allowed.
-
 const ROOTS: Array[String] = ["autoload", "game", "mods", "tests", "tools"]
-## Where the comment total is counted. The tests and the shipped example mods are
-## left out: one is scaffolding and the other is written to be read.
 const COUNTED_ROOTS: Array[String] = ["autoload", "game", "tools"]
-## The project on disk. `res://` is the wrong door here: a test that has mounted
-## a resource pack leaves entries under it whose backing zip is closed, and
-## walking those raises `Parameter "zfile" is null` from inside the tier.
+## A mounted resource pack can leave closed zip entries under `res://`.
 static var PROJECT: String = ProjectSettings.globalize_path("res://")
 
 const MAX_COMPLEXITY: int = 20
 const MAX_COMMENT_BLOCK: int = 8
-## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
-## it whenever a pass leaves room. It moves up only while a generation the tree
-## did not carry is being brought in, and then by what that generation's own
-## files cost: `game/gen1`, its neighbours, the 157 of the sound driver and the
-## 23 of its check are 1847 lines of it, and Generation 1 has added 2493 more to
-## the shared code, the largest of them 152 the region map, 150 the battle
-## animation engine, 140 the transition, 131 the field moves, 130 the Pokedex,
-## 108 the three PCs, 90 the Safari Zone, 52 the menus a row draws.
-const MAX_COMMENT_LINES: int = 41597
+const MAX_COMMENT_LINES: int = 41427
 
-## What no comment block ever ends on. A pass that meets the ceiling above trims
-## the second line of a two-line block and leaves the first mid-sentence, which
-## is worse than no comment at all: three of those shipped in one commit.
 const DANGLING_WORDS: Array[String] = [
 	"so", "and", "the", "which", "that", "of", "to", "with", "for", "but", "since",
 	"where", "when", "while", "than", "from", "into", "onto", "because", "their",
 	"its", "this", "these", "those",
 ]
 
-## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
-## and it stays empty: a function over the ceiling fails the test rather than
-## joining a list.
 const OVER_COMPLEXITY: Array[String] = []
 
 
@@ -104,16 +84,12 @@ func test_the_comment_total_is_under_the_recorded_ceiling() -> void:
 		gut.p("Comment lines: %d. Lower MAX_COMMENT_LINES to it." % total)
 
 
-## Fails with [param message] and prints every offender, since an assertion
-## message is truncated long before a list like this ends.
 func _report(message: String, offenders: Array[String]) -> void:
 	for entry: String in offenders:
 		gut.p("  %s" % entry)
 	assert_eq(offenders.size(), 0, message)
 
 
-## Every entry of [param wanted] that [param known] does not carry. Both are
-## sorted, so this is the difference either way round.
 func _missing_from(wanted: Array[String], known: Array[String]) -> Array[String]:
 	var out: Array[String] = []
 	for entry: String in wanted:
@@ -133,8 +109,6 @@ func _lines(path: String) -> PackedStringArray:
 	return FileAccess.get_file_as_string(PROJECT.path_join(path)).split("\n")
 
 
-## Every project script, by its path from the project root, in a stable order.
-## `addons/` is third-party.
 func _scripts() -> PackedStringArray:
 	var out := PackedStringArray()
 	for root: String in ROOTS:
@@ -152,14 +126,7 @@ func _collect(directory: String, out: PackedStringArray) -> void:
 		_collect(directory.path_join(child), out)
 
 
-## Every function in [param source] with its cyclomatic complexity, counted the
-## way a linter counts it: one for the function, one per `if`, `elif`, `while`,
-## `for`, `and`, `or` and inline `if`, and one per `match` arm, whether the arm
-## opens a block or carries its body on the same line.
-##
-## An inner class's methods are functions too. Counting only the ones at column
-## zero charged every one of them to whichever top-level function came last,
-## which put `Gen2LauncherUI.level` at 33 for code in the class below it.
+## Match arms and inner-class methods count toward their own function's complexity.
 func _functions(source: PackedStringArray) -> Array[Dictionary]:
 	var branches := RegEx.create_from_string(
 		"(?<![A-Za-z0-9_.])(if|elif|while|for|and|or)(?![A-Za-z0-9_])"
@@ -169,9 +136,6 @@ func _functions(source: PackedStringArray) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var current: Dictionary = {}
 	var scope: String = ""
-	## One entry per open `match`: the indent the statement sits at, so an arm is
-	## a line one deeper. An arm ends in a colon or carries its whole body after
-	## one, and both are a branch: a one-line arm hid 89 of them here once.
 	var matches: Array[int] = []
 	var arm := RegEx.create_from_string("^[^:]*:")
 	for raw: String in source:

@@ -289,10 +289,6 @@ func test_a_roamer_returns_on_the_hp_its_struct_carries() -> void:
 	assert_eq(full.hp, full.max_hp())
 
 
-## `LoadEnemyMon`'s `.GenerateDVs`: a wild that carries none is rolled two bytes
-## off the BATTLE's own generator rather than handed 15/15/15/15, which is what
-## every encounter source but the visible-encounter provider used to get. Off
-## that generator and no other, so the same seed meets the same Pokemon.
 func test_a_wild_with_no_dvs_is_rolled_off_the_battles_own_generator() -> void:
 	var words: Array[int] = []
 	for _attempt: int in 2:

@@ -1,21 +1,12 @@
-# Godot 4+ specific ignores
 .godot/
 /android/
 
-# Build/export output. export_presets.cfg is tracked; Godot keeps keystore and
-# signing passwords in export_credentials.cfg, which is not.
 /builds/
 /export/
 export_credentials.cfg
 
-# macOS
 .DS_Store
 
-# ---------------------------------------------------------------------------
-# Bring-your-own-ROM. Nothing derived from a commercial cartridge may ever be
-# committed: not the ROM, not a save, not the extracted asset cache. The
-# pre-commit hook in .githooks/ enforces this too; see docs/CONTRIBUTING.md.
-# ---------------------------------------------------------------------------
 *.gb
 *.gbc
 *.gba
@@ -26,28 +17,18 @@ export_credentials.cfg
 *.bps
 *.ups
 
-# The local ROM drop. Only the folder's docs and its .gdignore are tracked;
-# every cartridge inside it stays on your machine.
 /roms/*
 !/roms/README.md
 !/roms/.gdignore
 
-# Import cache produced from a user's ROM at runtime
 /user_cache/
 /rom_cache/
 
-# Local visual verification output
 /artifacts/
 
-# Local checkouts of the authoritative source repositories. These are fetched
-# for comparison only and must never become project content.
 /.references/
 
-# Built iOS plugin libraries. The sources beside them are tracked; the binaries
-# are produced by tools/build_ios_plugin.sh against the engine checkout.
 /ios/plugins/*/*.a
 
-# The same for the Android plugin: the Kotlin beside it is tracked, the library
-# is produced by tools/build_android_plugin.sh.
 /addons/android_native/bin/
 *.keystore

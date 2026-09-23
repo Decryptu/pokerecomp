@@ -113,8 +113,6 @@ func test_a_toss_without_a_save_still_changes_the_world() -> void:
 	assert_eq(_world.state.item_quantity(POTION), 4)
 
 
-## `Gen2WorldTransaction.run` puts the live world back when the candidate save
-## refuses, so a refused toss leaves the stack where it was.
 func test_a_refused_candidate_save_rolls_the_world_back() -> void:
 	_save.party.clear()
 	_save.player_name = ""

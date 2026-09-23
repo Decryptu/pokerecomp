@@ -219,9 +219,6 @@ func test_the_reset_question_is_asked_once_and_answered_either_way() -> void:
 	)
 
 
-## The chord a shiny hunter actually presses is the one inside a battle, and the
-## screen there has no room for the question. It used to be swallowed with
-## nothing said, so the first four buttons of a hunt did nothing at all.
 func test_a_chord_with_no_room_for_the_question_is_left_to_the_runtime() -> void:
 	Gen2OptionsStore.use_test_path()
 	var options: Gen2Options = Gen2OptionsStore.current()
@@ -753,7 +750,6 @@ func test_the_evolving_line_names_what_the_mon_was_not_what_it_became() -> void:
 	var before: String = String(_data.species(155).get("name", ""))
 	var after: String = String(_data.species(EVOLVED_SPECIES).get("name", ""))
 	assert_ne(before, after, "the two species are named differently")
-	## No nickname at all, which is the row `_party_targets` used to answer for.
 	save.party[0].nickname = ""
 	var host: Gen2StartMenuScreen = await _open_stone_pack()
 	await _use_stone_on_first_member(host)

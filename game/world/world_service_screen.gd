@@ -4355,9 +4355,7 @@ func _pc_item_list_box() -> Gen2MenuBox:
 	)
 
 
-## `_PlayerDecorationMenu.ScrollingMenuHeader`'s `menu_coords 1, 1, SCREEN_WIDTH
-## - 2, SCREEN_HEIGHT - 2`. The category list above it is a `VerticalMenu` with
-## its own coords, and this list used to be drawn in the PC's top-menu box.
+## `_PlayerDecorationMenu.ScrollingMenuHeader` uses the full menu area.
 func _deco_list_box() -> Gen2MenuBox:
 	return _scrolling_box(
 		Gen2MenuBox.from_coords(1, 1, 18, 16, Gen2MenuBox.STATICMENU_CURSOR)

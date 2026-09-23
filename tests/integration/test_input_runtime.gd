@@ -265,10 +265,6 @@ func test_the_back_notification_is_reported_as_a_signal() -> void:
 	)
 
 
-## The chord is the console's, so it belongs to the process rather than to the
-## overworld. It used to be connected in the world screen alone, which left the
-## opening, the launcher and every menu over the map with no answer to it at
-## all, and a battle, where a shiny hunter presses it, swallowing the first one.
 func test_the_chord_is_owned_by_the_runtime_for_every_screen() -> void:
 	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
 	assert_eq(

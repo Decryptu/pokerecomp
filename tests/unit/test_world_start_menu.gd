@@ -273,9 +273,6 @@ func test_the_labels_are_the_source_strings_with_the_player_name_filled_in() -> 
 	assert_eq(String(Gen2WorldStartMenu.build(0, false, false).items()[1]["label"]), "PLAYER")
 
 
-## `AutomaticGetMenuBottomCoord` grows the box downward by two rows an entry and
-## its own border, so `.MenuHeader`'s bottom coordinate is never read;
-## `.ContestMenuHeader` is the same box two rows down.
 func test_the_box_grows_downward_by_two_rows_an_entry() -> void:
 	var five: Gen2MenuBox = Gen2StartMenuPage.list_box(5)
 	assert_eq(five.border_position(), Vector2i(10, 0))
@@ -284,15 +281,12 @@ func test_the_box_grows_downward_by_two_rows_an_entry() -> void:
 	assert_eq(Gen2StartMenuPage.list_box(5, true).border_position(), Vector2i(10, 2))
 
 
-## Eight rows reach the last row of the screen exactly, which is what a fully
-## unlocked save already has, so a `MENU_START` entry a mod registers has to be
-## scrolled to rather than drawn at row 18. The box stops at the screen.
 func test_the_box_stops_at_the_screen_however_many_rows_the_list_has() -> void:
 	assert_eq(Gen2StartMenuPage.visible_rows(), 8)
 	assert_eq(Gen2StartMenuPage.visible_rows(true), 7)
 	assert_eq(Gen2StartMenuPage.list_box(12).border_size(), Vector2i(10, 18))
-	assert_eq(Gen2StartMenuPage.list_box(12).bottom, Gen2StartMenuPage.ROWS - 1)
-	assert_eq(Gen2StartMenuPage.list_box(12, true).bottom, Gen2StartMenuPage.ROWS - 1)
+	assert_eq(Gen2StartMenuPage.list_box(12).bottom, 17)
+	assert_eq(Gen2StartMenuPage.list_box(12, true).bottom, 17)
 
 
 func _save_state(pokedex: bool, cursor: int) -> Dictionary:
