@@ -16,13 +16,23 @@ an empty body. -->
 
 ## Added
 
-- The save editor's Pokedex tab has a Caught button beside Seen and Clear, and a button that registers every Pokemon in your party and boxes. Use it once on a save you edited before this release.
+- PP UP works on all six games. Pick the move from the pack and its PP goes up by a fifth, up to three times. Saves imported from a cartridge keep the PP Ups they had, and exported ones carry them back.
+- Status animations in battle: the sleep, confusion and love animations on every turn a Pokemon is asleep, confused or in love, and the poison, burn, Leech Seed, Nightmare and Curse animations with their damage.
+- Gold, Silver and Crystal print "X is in love with Y!" every turn an infatuated Pokemon tries to move.
+- Red, Blue and Yellow show both parties' Poke Ball rows when a battle starts. On all six games, a trainer's row comes back, with the fainted one crossed out, before their next Pokemon comes out.
+- Mods can rewrite any wild table while the game runs: grass, surf, fishing, Headbutt, Rock Smash, swarms, the Bug-Catching Contest and roamers. A switch in a mod's settings can put its changes in or take them back without a restart. A Pokemon added by another mod can be met in the wild.
 
 ## Fixed
 
-- The battle panels on Gold, Silver and Crystal now show the Pokemon's gender, ♂ or ♀, beside its level, the way the cartridge does.
-- A poisoned, burned, frozen, paralysed or sleeping Pokemon now shows PSN, BRN, FRZ, PAR or SLP in place of its level in battle, on all six games. It changes on the line that announces it.
-- A Pokemon added in the save editor, to the party or a box, is now registered in the Pokedex as caught. An Unown added to the party goes into the Unown dex too. Clearing a species also clears its caught flag, so the caught count matches the list.
+- A nicknamed Pokemon is called by its nickname in battle. The HUD, "Go! X!", the EXP line, level-ups and move learning all showed the species name.
+- The status lines on Gold, Silver and Crystal read as on the cartridge: "X's fully paralyzed!", "X's paralyzed! Maybe it can't attack!", "X's badly poisoned!", "X is hurt by poison!", "X's hurt by its burn!" and "X's infatuation kept it from attacking!".
+- Learning a new move in battle asks the question once, with no extra line in front. Red, Blue and Yellow asked it twice. Forgetting a move says "1, 2 and... Poof!" again.
+- Red, Blue and Yellow say "New POKéDEX data will be added for X!" after a catch.
+- A Pokedex entry on Gold, Silver or Crystal no longer shows the description of a Pokemon you have only seen.
+- The trainer card on Gold, Silver and Crystal shows ¥ before your money.
+- The stats page on Red, Blue and Yellow shows a dash for each empty move slot.
+- On Red, Blue and Yellow, a Pokemon fainting from poison in the field is announced before the screen flashes.
+- A mod's grass table with fewer slots than the game rolls is refused, instead of turning up no Pokemon at all on those slots.
 
 ## Which file
 
