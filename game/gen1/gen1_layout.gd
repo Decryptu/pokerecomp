@@ -335,6 +335,10 @@ const ANIM_ID_BLOCKBALL: int = 0xC4
 const ANIM_ID_GREATTOSS: int = 0xC5
 const ANIM_ID_ULTRATOSS: int = 0xC6
 const ANIM_ID_SHAKE_SCREEN: int = 0xC7
+## `BURN_PSN_ANIM`, then the player's and the enemy's `SLP_ANIM` and `CONF_ANIM`.
+const ANIM_ID_BURN_PSN: int = 0xBA
+const ANIM_ID_SLP: Array[int] = [0xBC, 0xBD]
+const ANIM_ID_CONF: Array[int] = [0xBE, 0xBF]
 const ANIM_ID_HIDEPIC: int = 0xC8
 ## `TRADE_BALL_DROP_ANIM` to `TRADE_BALL_POOF_ANIM`, `Trade_ShowAnimation`'s four.
 const ANIM_ID_TRADE_DROP: int = 0xAA

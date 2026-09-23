@@ -271,9 +271,7 @@ static func move_rows(mon: Gen2BattleMon, data: GameData) -> Array:
 			"name": String(record.get("name", "")),
 			"type": int(record.get("type", 0)),
 			"pp": mon.pp_left(slot),
-			## `GetMaxPPOfMove` reads the party struct's PP Up bits, which no
-			## Pokemon in this battle model carries, so the base is the maximum.
-			"max_pp": int(record.get("pp", 0)),
+			"max_pp": mon.max_pp(slot),
 			"disabled": slot == mon.disabled_slot,
 		})
 	return out

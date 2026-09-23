@@ -270,9 +270,7 @@ func _moves(mon: Gen2SaveMon) -> Array:
 		out.append({
 			"name": String(record.get("name", "")),
 			"pp": int(mon.pp[slot]) if slot < mon.pp.size() else 0,
-			## `GetMaxPPOfMove` adds the PP Up bits, which this save model masks
-			## off when it reads a party struct, so the base is the maximum.
-			"max_pp": int(record.get("pp", 0)),
+			"max_pp": mon.max_pp(_data, slot),
 		})
 	return out
 

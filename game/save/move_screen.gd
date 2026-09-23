@@ -162,12 +162,7 @@ func _swap(from: int, to: int) -> void:
 	var mon: Gen2SaveMon = current()
 	if mon == null or from == to:
 		return
-	var move: int = int(mon.moves[from])
-	mon.moves[from] = mon.moves[to]
-	mon.moves[to] = move
-	var pp: int = int(mon.pp[from])
-	mon.pp[from] = mon.pp[to]
-	mon.pp[to] = pp
+	mon.swap_move_slots(from, to)
 	## `.swap_moves` plays the same effect twice, waiting for each.
 	## `SwitchPartyMons` is `WaitPlaySFX`, twice over.
 	sfx_requested.emit(SFX_SWITCH_POKEMON, true)
@@ -188,7 +183,7 @@ func snapshot() -> Dictionary:
 		moves.append({
 			"name": String(record.get("name", "")),
 			"pp": int(mon.pp[slot]) if slot < mon.pp.size() else 0,
-			"max_pp": int(record.get("pp", 0)),
+			"max_pp": mon.max_pp(_data, slot),
 			"power": int(record.get("power", 0)),
 			"type_name": _data.type_name(int(record.get("type", 0))),
 			"description": String(record.get("description", "")),

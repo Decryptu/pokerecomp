@@ -50,7 +50,6 @@ const ID_LABEL_TILES: Array[int] = [0x27, 0x28]
 const ID_NUMBER_AT: Vector2i = Vector2i(5, 4)
 const ID_DIGITS: int = 5
 const MONEY_AT: Vector2i = Vector2i(7, 6)
-const MONEY_DIGITS: int = 6
 const DIVIDER_AT: Vector2i = Vector2i(1, 3)
 ## `.HorizontalDivider`'s twelve $25 pieces and the $26 that ends it.
 const DIVIDER_TILE: int = 0x25
@@ -261,8 +260,7 @@ func _draw_top_half(map: PackedInt32Array, page: Dictionary) -> void:
 	_text(map, String(page.get("player_name", "")), PLAYER_NAME_AT)
 	## PRINTNUM_LEADINGZEROS over five digits, so the ID keeps its columns.
 	_text(map, "%0*d" % [ID_DIGITS, int(page.get("player_id", 0))], ID_NUMBER_AT)
-	## PRINTNUM_MONEY over six digits, which pads with spaces rather than zeros.
-	_text(map, "%*d" % [MONEY_DIGITS, int(page.get("money", 0))], MONEY_AT)
+	_text(map, Gen2MartPage.money_string(int(page.get("money", 0))), MONEY_AT)
 	for index: int in DIVIDER_LENGTH:
 		_put(map, DIVIDER_AT + Vector2i(index, 0), DIVIDER_TILE)
 	_put(map, DIVIDER_AT + Vector2i(DIVIDER_LENGTH, 0), DIVIDER_END_TILE)

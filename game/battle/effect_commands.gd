@@ -1862,11 +1862,35 @@ static func _cant_move(mon: Gen2BattleMon) -> void:
 	mon.bide_move = 0
 
 
+## `FarPlayBattleAnimation`, or Generation 1's row for whose turn it is.
+static func _play_status_anim(turn: Gen2Turn, index: int, gen1_rows: Array[int]) -> void:
+	if turn.battle.is_gen1():
+		if gen1_rows.is_empty():
+			return
+		index = gen1_rows[1 if turn.side == Gen2Battle.ENEMY else 0]
+	_play_fx_anim(turn, index, Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
+
+
+## `InLoveWithText` and `ANIM_IN_LOVE` every turn, then the half that stops it.
+static func _stopped_by_attract(turn: Gen2Turn, mon: Gen2BattleMon) -> bool:
+	if not Gen2Substatus.has(mon.substatus, Gen2Substatus.ATTRACTED):
+		return false
+	turn.emit(Gen2Battle.IN_LOVE_WITH, {"target": turn.target})
+	_play_status_anim(turn, Gen2BattleAnimPlayer.ANIM_IN_LOVE, [])
+	if not Gen2Substatus.rolls_attract_immobile(turn.rng()):
+		return false
+	_cant_move(mon)
+	turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"attract"})
+	turn.end()
+	return true
+
+
 static func _check_sleep(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 	if Gen2Status.is_asleep(mon.status):
 		mon.status = Gen2Status.tick_sleep(mon.status)
 		if Gen2Status.is_asleep(mon.status):
+			_play_status_anim(turn, Gen2BattleAnimPlayer.ANIM_SLP, Gen1Layout.ANIM_ID_SLP)
 			turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"sleep"})
 			# `.fast_asleep` prints its line and only then looks at the move:
 			# Snore and Sleep Talk are used through a sleep, so the text stands
@@ -1949,6 +1973,7 @@ static func _check_status(turn: Gen2Turn) -> void:
 			turn.emit(Gen2Battle.SNAPPED_OUT)
 		else:
 			turn.emit(Gen2Battle.CONFUSED)
+			_play_status_anim(turn, Gen2BattleAnimPlayer.ANIM_CONFUSED, Gen1Layout.ANIM_ID_CONF)
 			if Gen2Substatus.rolls_confusion_hit(turn.rng()):
 				mon.substatus &= ~Gen2Substatus.IN_LOOP
 				_hurt_self(turn)
@@ -1956,11 +1981,7 @@ static func _check_status(turn: Gen2Turn) -> void:
 				turn.end()
 				return
 
-	if Gen2Substatus.has(mon.substatus, Gen2Substatus.ATTRACTED) \
-		and Gen2Substatus.rolls_attract_immobile(turn.rng()):
-		_cant_move(mon)
-		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"attract"})
-		turn.end()
+	if _stopped_by_attract(turn, mon):
 		return
 
 	# Last line of defence against a disabled move, by number rather than slot:
@@ -3501,7 +3522,7 @@ static func _beat_up(turn: Gen2Turn) -> void:
 	# ever set `wBeatUpHitAtLeastOnce`, so the hit lands and "But it failed!" is
 	# printed behind it anyway.
 	if turn.side == Gen2Battle.ENEMY and not battle.is_trainer_battle:
-		turn.emit(Gen2Battle.BEAT_UP_ATTACK, {"index": -1, "species": mon.species})
+		turn.emit(Gen2Battle.BEAT_UP_ATTACK, {"index": -1, "species": mon.species, "name": mon.display_name()})
 		_damage_stats(turn)
 		return
 
@@ -3526,7 +3547,7 @@ static func _beat_up(turn: Gen2Turn) -> void:
 		return
 
 	turn.beat_up_hit = true
-	turn.emit(Gen2Battle.BEAT_UP_ATTACK, {"index": index, "species": member.species})
+	turn.emit(Gen2Battle.BEAT_UP_ATTACK, {"index": index, "species": member.species, "name": member.display_name()})
 	turn.attack_stat = _base_stat(turn, member.species, "attack")
 	turn.defense_stat = _base_stat(turn, turn.defender().species, "defense")
 	turn.level_override = member.level

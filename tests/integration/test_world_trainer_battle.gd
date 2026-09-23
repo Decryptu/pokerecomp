@@ -272,6 +272,26 @@ func test_a_trainer_battle_opens_with_the_source_entrance() -> void:
 	assert_eq(host.battle_snapshot()["message"], "")
 
 
+## `wBattleMonNick`: a nicknamed lead is sent out and drawn under its nickname.
+func test_a_nicknamed_lead_is_named_in_the_battle() -> void:
+	await _open_world(true)
+	_world_screen.active_save().party[0].nickname = "SPARKY"
+	await _trigger_trainer()
+	var host: Gen2BattleScreen = _battle_opening()
+	var seen: bool = false
+	var guard: int = 4000
+	while (host.frames_running() or host.entrance_running()) and guard > 0:
+		guard -= 1
+		host.advance_frame()
+		seen = seen or host.battle_snapshot()["message"] == "Go! SPARKY!"
+		if host.frames_running() or not host.entrance_running():
+			continue
+		host.finish()
+		host.advance()
+	assert_true(seen, "SendOutMonText names the nickname")
+	assert_eq(host.call(&"_battler_name", Gen2Battle.PLAYER), "SPARKY")
+
+
 ## While the trainer object is mid-step, its presentation offset eases toward
 ## zero instead of snapping.
 func test_trainer_approach_step_interpolates_the_objects_position() -> void:

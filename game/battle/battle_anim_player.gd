@@ -67,15 +67,16 @@ const GEN1_HVFLIP_FLAGS: Dictionary = {
 	Gen2BattleAnimObject.OAM_YFLIP: Gen2BattleAnimObject.OAM_XFLIP,
 }
 
-## The status animations `PlayOpponentBattleAnim` plays on the target, past
-## `wFXAnimID`'s low byte and so reached by `BattleAnimRunScript`'s `.not_move`.
-## Only these five of the block are named, the rest having no caller: `ANIM_SLP`
-## and `ANIM_SAP` sit among them and nothing in either pin asks for one.
+## The status animations, which `BattleAnimRunScript` reaches through `.not_move`.
 const ANIM_CONFUSED: int = 0x103
+const ANIM_SLP: int = 0x104
 const ANIM_BRN: int = 0x105
 const ANIM_PSN: int = 0x106
+const ANIM_SAP: int = 0x107
 const ANIM_FRZ: int = 0x108
 const ANIM_PAR: int = 0x109
+const ANIM_IN_LOVE: int = 0x10A
+const ANIM_IN_NIGHTMARE: int = 0x10C
 
 var _data: Gen2BattleAnimData = null
 var _script: Gen2BattleAnimScript = null

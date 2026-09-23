@@ -113,12 +113,14 @@ const LAUNCHER_ASK_LINES: Array[String] = [
 const RESET_ASK_LINES: Array[String] = [
 	"You pressed the", "RESET buttons.", "Reset the game?",
 ]
-## `RestoreThePPOfWhichMoveText` and `PPRestoredText`, `text_far` stubs no script
-## reaches, so they are this screen's the way the questions above are. The third
-## is this port's own words: the save model carries no PP UP ceiling.
+## `RestorePPEffect`'s `text_far` stubs, this screen's as the questions above are.
 const RESTORE_PP_WHICH_MOVE: String = "Restore the PP of\nwhich move?"
+const RAISE_PP_WHICH_MOVE: String = "Raise the PP of\nwhich move?"
+const GEN1_RESTORE_PP_WHICH_MOVE: String = "Restore PP of\nwhich technique?"
+const GEN1_RAISE_PP_WHICH_MOVE: String = "Raise PP of which\ntechnique?"
 const PP_RESTORED: String = "PP was restored."
-const PP_UP_UNSUPPORTED: String = "PP UP has no effect\nin this port yet."
+const PP_INCREASED: String = "%s's PP\nincreased."
+const PP_MAXED_OUT: String = "%s's PP\nis maxed out."
 ## `_RepelUsedEarlierIsStillInEffectText`, printed instead of spending the item.
 const REPEL_STILL_IN_EFFECT: String = "The REPEL used\nearlier is still\nin effect."
 ## `ItemUseText00`, `PrintItemUseTextAndRemoveItem`'s line.
@@ -2000,6 +2002,13 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 		if StringName(result.get("reason", &"")) == &"starter_refuses":
 			_refuse_stone(party_index)
 			return
+		## `PPIsMaxedOutText`, then `.loop2`: the same question over the same list.
+		if StringName(result.get("reason", &"")) == &"pp_maxed_out":
+			_show_pack_result(
+				PP_MAXED_OUT % String(_data.move(int(result.get("move", 0))).get("name", "")),
+				_open_pp_move_list.bind(number, party_index)
+			)
+			return
 		## `NoEffectMessage` is `PrintText` over the party list.
 		_show_pack_result(
 			_use_refusal(StringName(result.get("reason", &"")), number), Callable(),
@@ -2106,6 +2115,8 @@ func _party_result_text(
 		return line % target
 	if int(result.get("restored", 0)) > 0:
 		return PP_RESTORED
+	if StringName(result.get("effect", &"")) == &"pp_up":
+		return PP_INCREASED % String(_data.move(int(result.get("move", 0))).get("name", ""))
 	var stat: String = String(result.get("stat", ""))
 	if not stat.is_empty():
 		return STAT_ROSE % [target, String(VITAMIN_STAT_NAMES.get(stat, stat.to_upper()))]
@@ -2274,8 +2285,6 @@ func _use_refusal(reason: StringName, item: int) -> String:
 				else "It won't have any effect."
 		&"insufficient_item_quantity":
 			return "You have none of those."
-		&"pp_up_unsupported":
-			return PP_UP_UNSUPPORTED
 		&"repel_still_in_effect":
 			return REPEL_STILL_IN_EFFECT
 	return "Can't use that here: %s" % String(reason)
@@ -2297,6 +2306,13 @@ func _open_pp_move_list(item: int, party_index: int) -> void:
 	_forget_cursor = 0
 	_forget_refusal = ""
 	_render_hardware()
+
+
+func _pp_which_move_text() -> String:
+	var raise: bool = _pp_item == int(Gen2WorldPartyHost.item_effects(_data)["pp_up"])
+	if _gen1_pack():
+		return GEN1_RAISE_PP_WHICH_MOVE if raise else GEN1_RESTORE_PP_WHICH_MOVE
+	return RAISE_PP_WHICH_MOVE if raise else RESTORE_PP_WHICH_MOVE
 
 
 func _confirm_pp_move() -> void:
@@ -2804,7 +2820,7 @@ func box_text() -> String:
 			return _forget_refusal if not _forget_refusal.is_empty() \
 				else Gen2MoveForget.which_text(_data.generation)
 		Mode.PACK_PP_MOVE:
-			return RESTORE_PP_WHICH_MOVE
+			return _pp_which_move_text()
 		Mode.PACK_RESULT:
 			return _pack_result_text()
 	return ""

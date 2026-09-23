@@ -44,6 +44,20 @@ func test_the_page_is_the_hardware_screen() -> void:
 	assert_eq(indices.size(), Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
 
 
+## `PRINTNUM_MONEY`'s `.PrintYen`: seven cells, `¥` against the first digit.
+func test_the_money_carries_its_yen_sign() -> void:
+	var drawn: PackedByteArray = _page.draw(_card())
+	var blank: PackedByteArray = _page.draw(_card().merged({"money": 0}, true))
+	var ink: Callable = func(indices: PackedByteArray, column: int) -> PackedByteArray:
+		var out: PackedByteArray = []
+		for row: int in 8:
+			var at: int = (Gen2TrainerCardPage.MONEY_AT.y * 8 + row) * Gen2Screen.WIDTH + column * 8
+			out.append_array(indices.slice(at, at + 8))
+		return out
+	assert_ne(ink.call(drawn, 8), ink.call(blank, 8), "the yen before 12345")
+	assert_eq(ink.call(drawn, 8), ink.call(blank, 12), "the same yen before 0")
+
+
 ## `_CGB_TrainerCard`: the card takes the opposite gender's palette and the pic
 ## area the player's own, the leader boxes take one palette each, Clair's box is
 ## filled for Kris alone, and the corner keeps the border's.

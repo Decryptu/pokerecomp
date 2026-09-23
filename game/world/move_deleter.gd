@@ -42,6 +42,7 @@ static func delete_move(mon: Gen2SaveMon, slot: int) -> bool:
 		return false
 	_shift(mon.moves, slot)
 	_shift(mon.pp, slot)
+	_shift(mon.pp_ups, slot)
 	return true
 
 

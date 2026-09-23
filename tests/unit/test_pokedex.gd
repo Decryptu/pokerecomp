@@ -639,6 +639,8 @@ func test_the_entry_screen_prints_its_measurements_only_once_caught() -> void:
 	assert_eq(_cell(uncaught, 15, 7), Gen2Text.encode("?")[0], "the template's own")
 	assert_eq(_cell(caught, 1, 10), Gen2PokedexPage.PAGE_MARKER)
 	assert_eq(_cell(caught, 2, 10), Gen2PokedexPage.PAGE_ONE)
+	assert_ne(_cell(uncaught, 1, 10), Gen2PokedexPage.PAGE_MARKER, "no page and no entry")
+	assert_eq(_cell(uncaught, 2, 11), _cell(page.entry_map(211, "", {}, false, Gen2Pokedex.PAGE_1, 0), 2, 11))
 	assert_eq(
 		_cell(page.entry_map(211, "MON211", entry, true, Gen2Pokedex.PAGE_2, 0), 2, 10),
 		Gen2PokedexPage.PAGE_TWO,

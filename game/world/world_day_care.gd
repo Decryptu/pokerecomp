@@ -501,7 +501,11 @@ static func retrieve(
 	}
 
 
+## `FillMoves` shifts whole PP bytes and `RestoreAllPP` fills them, PP Ups kept.
 static func _retrieve_gen2_rows(data: GameData, mon: Gen2SaveMon, previous_level: int) -> void:
+	var ups: Dictionary = {}
+	for index: int in Gen2SaveMon.MAX_MOVES:
+		ups[int(mon.moves[index])] = int(mon.pp_ups[index])
 	Gen2Learnset.fill_moves(
 		data.learnset(mon.species), mon.moves, mon.level, previous_level
 	)
@@ -511,7 +515,8 @@ static func _retrieve_gen2_rows(data: GameData, mon: Gen2SaveMon, previous_level
 	mon.status = Gen2Status.NONE
 	for index: int in Gen2SaveMon.MAX_MOVES:
 		var move: int = int(mon.moves[index])
-		mon.pp[index] = int(data.move(move).get("pp", 0)) if move > 0 else 0
+		mon.pp_ups[index] = int(ups.get(move, 0)) if move > 0 else 0
+		mon.pp[index] = mon.max_pp(data, index)
 
 
 ## `IncrementDayCareMonExp`, in front of `ApplyOutOfBattlePoisonDamage`'s own
@@ -560,11 +565,9 @@ static func gen1_fill_moves(data: GameData, mon: Gen2SaveMon, above: int) -> voi
 		var slot: int = mon.moves.find(0)
 		if slot < 0:
 			for index: int in Gen2SaveMon.MAX_MOVES - 1:
-				mon.moves[index] = mon.moves[index + 1]
-				mon.pp[index] = mon.pp[index + 1]
+				mon.swap_move_slots(index, index + 1)
 			slot = Gen2SaveMon.MAX_MOVES - 1
-		mon.moves[slot] = move
-		mon.pp[slot] = int(data.move(move).get("pp", 0))
+		mon.set_move(data, slot, move)
 
 
 ## `DayCare_GiveEgg`. The egg the pair built when the counter started is the one

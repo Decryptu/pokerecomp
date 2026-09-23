@@ -18,6 +18,8 @@ var species: int = 0
 var item: int = 0
 var moves: Array = [0, 0, 0, 0]
 var pp: Array = [0, 0, 0, 0]
+## `PP_UP_MASK`, the top two bits of each `MON_PP` byte.
+var pp_ups: Array = [0, 0, 0, 0]
 var ot_id: int = 0
 @warning_ignore("shadowed_global_identifier")
 var exp: int = 0
@@ -66,6 +68,7 @@ func to_dict() -> Dictionary:
 		"item": item,
 		"moves": moves.duplicate(),
 		"pp": pp.duplicate(),
+		"pp_ups": pp_ups.duplicate(),
 		"ot_id": ot_id,
 		"exp": exp,
 		"stat_exp": saved_stat_exp,
@@ -97,6 +100,7 @@ static func from_dict(raw: Variant) -> Gen2SaveMon:
 	out.item = int(source.get("item", 0))
 	out.moves = _fixed_int_array(source.get("moves", []), MAX_MOVES)
 	out.pp = _fixed_int_array(source.get("pp", []), MAX_MOVES)
+	out.pp_ups = _fixed_int_array(source.get("pp_ups", []), MAX_MOVES)
 	out.ot_id = int(source.get("ot_id", 0))
 	out.exp = int(source.get("exp", 0))
 	var raw_stat_exp: Variant = source.get("stat_exp", {})
@@ -122,6 +126,26 @@ static func from_dict(raw: Variant) -> Gen2SaveMon:
 	if stored_mail is Dictionary and not (stored_mail as Dictionary).is_empty():
 		out.mail = Gen2SaveMail.from_dict(stored_mail)
 	return out
+
+
+func max_pp(data: GameData, slot: int) -> int:
+	if data == null or slot < 0 or slot >= MAX_MOVES:
+		return 0
+	return data.move_max_pp(int(moves[slot]), int(pp_ups[slot]))
+
+
+## `LearnMove` and `FillPP`: base PP, which clears the PP Ups. Zero empties it.
+func set_move(data: GameData, slot: int, move: int) -> void:
+	moves[slot] = move
+	pp[slot] = data.move_max_pp(move, 0) if move > 0 and data != null else 0
+	pp_ups[slot] = 0
+
+
+func swap_move_slots(first: int, second: int) -> void:
+	for column: Array in [moves, pp, pp_ups]:
+		var held: Variant = column[first]
+		column[first] = column[second]
+		column[second] = held
 
 
 static func _fixed_int_array(value: Variant, size: int) -> Array:

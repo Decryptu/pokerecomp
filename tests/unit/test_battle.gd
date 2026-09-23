@@ -1472,6 +1472,7 @@ func test_a_wild_faint_awards_experience_to_the_winner() -> void:
 	assert_eq(gained["side"], Gen2Battle.PLAYER)
 	assert_eq(gained["index"], 0)
 	assert_eq(gained["amount"], 45)
+	assert_eq(gained["name"], battle.player.display_name(), "`GetNickname` names the learner")
 
 	var stats: Dictionary = _first(events, Gen2Battle.STAT_EXP_GAINED)
 	# One participant, so nothing is divided: Bulbasaur's own base stats,

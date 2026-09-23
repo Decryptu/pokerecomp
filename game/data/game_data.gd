@@ -820,6 +820,8 @@ func world_encounter_region_rows(method: StringName, region: String) -> Array:
 
 ## `ItemUseOldRod`'s pair and `GoodRodMons`' two, as fishing groups above every
 ## `SuperRodData` row so a mod patches them the way it patches a Super Rod group.
+const PP_UPS_MAX: int = 3
+const PP_UP_STEP_MAX: int = 7
 const GEN1_OLD_ROD_GROUP: int = 0x100
 const GEN1_GOOD_ROD_GROUP: int = 0x101
 const GEN1_ROD_GROUPS: Dictionary = {
@@ -1633,6 +1635,12 @@ func move_count() -> int:
 
 func move(number: int) -> Dictionary:
 	return _content(Gen2ContentOverlay.KIND_MOVE, _moves, number)
+
+
+## `ComputeMaxPP` and `AddBonusPP`: each PP Up adds a fifth of the base, at most 7.
+func move_max_pp(number: int, pp_ups: int) -> int:
+	var base: int = int(move(number).get("pp", 0))
+	return base + clampi(pp_ups, 0, PP_UPS_MAX) * mini(base / 5, PP_UP_STEP_MAX)
 
 
 ## Every TM/HM/tutor move in TMNUM order, so index n-1 is TM/HM number n.

@@ -61,7 +61,7 @@ const SHINY_LEVEL: int = 30
 ## The two stages that go through `start_world_battle` rather than a staged
 ## `_battle`, because the palette is chosen in `_init_battle_display` and only
 ## the world path runs it.
-const WORLD_STAGES: Array[String] = ["shiny", "normal", "prize", "contest_replace"]
+const WORLD_STAGES: Array[String] = ["shiny", "normal", "prize", "fainted_offer", "contest_replace"]
 
 ## The `prize` stage's held item, AMULET_COIN (constants/item_constants.asm).
 ## `CheckAmuletCoin` doubles the reward off it, so the figure in the picture is
@@ -213,7 +213,7 @@ func _open() -> void:
 	if _stage.begins_with("tower_"):
 		_open_tower_stage()
 		return
-	if _stage == "prize":
+	if _stage in ["prize", "fainted_offer"]:
 		_open_prize()
 		return
 	if _stage == "contest_replace":
@@ -230,7 +230,8 @@ func _open_prize() -> void:
 	## `.give_money` prints it behind `PrintWinLossText`, and the reward is
 	## `ComputeTrainerReward`'s off the party the request built.
 	_screen.start_world_battle({"values": {
-		"kind": &"trainer", "trainer_group": TRAINER_CLASS, "trainer_id": 0,
+		"kind": &"trainer", "trainer_id": 0, "trainer_group":
+			GEN1_TRAINER_CLASS if _screen.get("_data").generation == RomRegistry.GEN1 else TRAINER_CLASS,
 	}})
 	var fight: Gen2Battle = _screen.get("_battle")
 	fight.player.item = AMULET_COIN
@@ -250,6 +251,8 @@ func _open_prize() -> void:
 			return
 		if String(snapshot["switch_stage"]) != "":
 			_read_question()
+			if _stage == "fainted_offer":
+				return
 			_screen._handle_button(PokeButton.B)
 			continue
 		if String(snapshot["menu_stage"]) == "main" and not fight.is_over():

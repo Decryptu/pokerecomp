@@ -39,6 +39,7 @@ const THAWED: StringName = &"thawed"
 ## A status put on a Pokémon, and a slice taken off by one it already had.
 const STATUS_INFLICTED: StringName = &"status_inflicted"
 const HURT_BY_STATUS: StringName = &"hurt_by_status"
+const IN_LOVE_WITH: StringName = &"in_love_with"
 ## Confusion put on a target. Not [constant STATUS_INFLICTED]: confusion lives
 ## on [Gen2Substatus] rather than the status byte, and a Pokémon can carry both
 ## at once.
@@ -1457,7 +1458,7 @@ func learn_move(side: int, forget_slot: int) -> Array:
 
 	return [{
 		"type": MOVE_FORGOTTEN, "side": side, "index": int(offer["index"]),
-		"species": learner.species, "forgot": forgot, "learned": int(offer["move"]), "slot": forget_slot,
+		"species": learner.species, "name": learner.display_name(), "forgot": forgot, "learned": int(offer["move"]), "slot": forget_slot,
 	}]
 
 
@@ -1470,7 +1471,7 @@ func decline_move(side: int) -> Array:
 	var offer: Dictionary = (_move_learn_queue[side] as Array).pop_front()
 	return [{
 		"type": MOVE_DECLINED, "side": side, "index": int(offer["index"]),
-		"species": int(offer["species"]), "move": int(offer["move"]),
+		"species": int(offer["species"]), "name": String(offer.get("name", "")), "move": int(offer["move"]),
 	}]
 
 
@@ -1488,6 +1489,7 @@ func send_out(
 	var current: Gen2Party = party(side)
 	var leaving: int = current.active
 	var leaving_species: int = current.active_mon().species
+	var leaving_name: String = current.active_mon().display_name()
 	var withdrawing: bool = not current.active_mon().is_fainted()
 	if side == PLAYER and current.active_mon() != null:
 		current.active_mon().clear_badge_boosts()
@@ -1526,10 +1528,12 @@ func send_out(
 	if withdrawing:
 		events.append({
 			"type": WITHDREW, "side": side, "index": leaving, "species": leaving_species,
+			"name": leaving_name,
 		})
 	events.append(stamp_statuses({
 		"type": SENT_OUT, "side": side, "index": index,
 		"species": current.active_mon().species, "level": current.active_mon().level,
+		"name": current.active_mon().display_name(),
 		"hp": current.active_mon().hp, "max_hp": current.active_mon().max_hp(),
 		"unown_form": unown_form_of(current.active_mon()),
 		## `BattleCheckPlayerShininess`/`BattleCheckEnemyShininess`, the reading
@@ -1748,6 +1752,7 @@ func take_actions(player_action: Dictionary, enemy_action: Dictionary) -> Array:
 		events.append({
 			"type": SWITCH_BLOCKED, "side": PLAYER,
 			"index": party(PLAYER).active, "species": mon(PLAYER).species,
+			"name": mon(PLAYER).display_name(),
 		})
 		return events
 
@@ -1811,6 +1816,7 @@ func _switch_offered(side: int, action: Dictionary, actions: Dictionary, events:
 			"type": SWITCH_OFFERED, "side": PLAYER,
 			"index": _pending_switch_offer,
 			"species": party(ENEMY).at(_pending_switch_offer).species,
+			"name": party(ENEMY).at(_pending_switch_offer).display_name(),
 		})
 		return true
 	events.append_array(send_out(side, int(action.get("index", -1))))
@@ -2030,8 +2036,10 @@ func _gen1_residual(side: int, events: Array) -> void:
 			"name": Gen2Status.name_of(current.status), "amount": taken,
 			"hp": current.hp, "max_hp": current.max_hp(),
 		})
+		events.append(status_animation_event(side, Gen1Layout.ANIM_ID_BURN_PSN))
 	if Gen2Substatus.has(current.substatus, Gen2Substatus.LEECH_SEED):
 		var sapper: Gen2BattleMon = mon(opponent_of(side))
+		events.append(status_animation_event(opponent_of(side), Gen2MoveEffect.ABSORB_MOVE))
 		# `bc` is the whole amount whatever the seeded side had left.
 		var amount: int = _gen1_residual_amount(current)
 		var taken: int = current.take_damage(amount)
@@ -2091,6 +2099,8 @@ func _residual_status(side: int, events: Array) -> void:
 		amount = Gen2Status.residual_damage(current.max_hp())
 
 	var taken: int = current.take_damage(amount)
+	var anim: int = Gen2BattleAnimPlayer.ANIM_BRN if Gen2Status.has(current.status, Gen2Status.BURN) \
+		else Gen2BattleAnimPlayer.ANIM_PSN
 	events.append({
 		"type": HURT_BY_STATUS,
 		"side": side,
@@ -2100,8 +2110,23 @@ func _residual_status(side: int, events: Array) -> void:
 		"hp": current.hp,
 		"max_hp": current.max_hp(),
 	})
+	_status_animation(side, anim, side, events)
 	if current.is_fainted():
 		note_faint(side, events)
+
+
+## `Call_PlayBattleAnim_OnlyIfVisible`, which [param hidden_side] in the air skips.
+func _status_animation(side: int, index: int, hidden_side: int, events: Array) -> void:
+	if mon(hidden_side).substatus & (Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND) == 0:
+		events.append(status_animation_event(side, index))
+
+
+func status_animation_event(side: int, index: int) -> Dictionary:
+	return {
+		"type": ANIMATION, "index": index, "param": battle_anim_param,
+		"after_anim": Gen2BattleAnimPlayer.AFTER_ANIM_NONE, "enemy_turn": side == ENEMY,
+		"effectiveness": Gen2Layout.MATCHUP_EFFECTIVE, "restore_user_pic": false,
+	}
 
 
 ## An eighth off the seeded Pokémon and onto the one opposite, capped by
@@ -2114,6 +2139,7 @@ func _residual_leech_seed(side: int, events: Array) -> void:
 		return
 
 	var sapper: Gen2BattleMon = mon(opponent_of(side))
+	_status_animation(opponent_of(side), Gen2BattleAnimPlayer.ANIM_SAP, side, events)
 	var taken: int = current.take_damage(Gen2Substatus.leech_seed_damage(current.max_hp()))
 	var healed: int = 0 if sapper.is_fainted() else sapper.heal(taken)
 	events.append({
@@ -2139,6 +2165,7 @@ func _residual_nightmare(side: int, events: Array) -> void:
 	if not Gen2Substatus.has(current.substatus, Gen2Substatus.NIGHTMARE):
 		return
 
+	_status_animation(side, Gen2BattleAnimPlayer.ANIM_IN_NIGHTMARE, side, events)
 	var taken: int = current.take_damage(Gen2Substatus.quarter_damage(current.max_hp()))
 	events.append({
 		"type": HURT_BY_NIGHTMARE, "side": side, "amount": taken,
@@ -2153,6 +2180,7 @@ func _residual_curse(side: int, events: Array) -> void:
 	if not Gen2Substatus.has(current.substatus, Gen2Substatus.CURSE):
 		return
 
+	_status_animation(side, Gen2BattleAnimPlayer.ANIM_IN_NIGHTMARE, side, events)
 	var taken: int = current.take_damage(Gen2Substatus.quarter_damage(current.max_hp()))
 	events.append({
 		"type": HURT_BY_CURSE, "side": side, "amount": taken,
@@ -2304,15 +2332,7 @@ func _handle_berserk_gene(events: Array) -> void:
 		})
 		if was_confused:
 			continue
-		events.append({
-			"type": ANIMATION,
-			"index": Gen2BattleAnimPlayer.ANIM_CONFUSED,
-			"param": battle_anim_param,
-			"after_anim": Gen2BattleAnimPlayer.AFTER_ANIM_NONE,
-			"enemy_turn": side == ENEMY,
-			"effectiveness": Gen2Layout.MATCHUP_EFFECTIVE,
-			"restore_user_pic": false,
-		})
+		events.append(status_animation_event(side, Gen2BattleAnimPlayer.ANIM_CONFUSED))
 		events.append({"type": CONFUSE_INFLICTED, "target": side})
 
 
@@ -2664,7 +2684,7 @@ func _use_trainer_item(side: int, item: int, events: Array) -> void:
 		else Gen2AIItems.apply(user, item)
 	events.append(stamp_statuses({
 		"type": TRAINER_USED_ITEM, "side": side, "item": item,
-		"species": user.species, "effect": effect,
+		"species": user.species, "name": user.display_name(), "effect": effect,
 		"hp": user.hp, "max_hp": user.max_hp(),
 	}))
 
@@ -2875,7 +2895,7 @@ func _restore_pp(target: Gen2BattleMon, item: int, move_slot: int) -> Dictionary
 	for slot: int in slots:
 		if int(target.moves[slot]) <= 0:
 			continue
-		var full: int = int(data.move(int(target.moves[slot])).get("pp", 0))
+		var full: int = target.max_pp(slot)
 		var target_pp: int = full if amount <= 0 else mini(full, target.pp_left(slot) + amount)
 		restored += maxi(0, target_pp - target.pp_left(slot))
 		target.pp[slot] = target_pp
@@ -2910,7 +2930,7 @@ func _give_experience_to(
 	learner.gain_exp(award)
 	events.append({
 		"type": EXP_GAINED, "side": PLAYER, "index": index,
-		"species": learner.species, "amount": award, "exp": learner.exp,
+		"species": learner.species, "name": learner.display_name(), "amount": award, "exp": learner.exp,
 		# Which pass this came from: a Pokémon in both passes is paid twice.
 		"exp_share": by_exp_share,
 		# Neither pass: a BYSTANDER SHARE paid a Pokemon that never fought.
@@ -2937,6 +2957,7 @@ func _give_experience_to(
 			learner.level_up()
 		events.append({
 			"type": GREW_LEVEL, "side": PLAYER, "index": index, "species": learner.species,
+			"name": learner.display_name(),
 			"old_level": old_level, "new_level": learner.level,
 			"old_stats": old_stats, "new_stats": learner.stats.duplicate(),
 		})
@@ -2971,15 +2992,17 @@ func _offer_moves_learned_at(learner: Gen2BattleMon, index: int, level: int, eve
 			(party_log["learned"] as Array).append({"index": index, "move": move})
 			events.append({
 				"type": MOVE_LEARNED, "side": PLAYER, "index": index,
-				"species": learner.species, "move": move, "slot": learner.moves.size() - 1,
+				"species": learner.species, "name": learner.display_name(), "move": move,
+				"slot": learner.moves.size() - 1,
 			})
 		else:
 			(_move_learn_queue[PLAYER] as Array).append({
 				"index": index, "move": move, "level": level, "species": learner.species,
+				"name": learner.display_name(),
 			})
 			events.append({
 				"type": MOVE_OFFERED, "side": PLAYER, "index": index,
-				"species": learner.species, "move": move, "level": level,
+				"species": learner.species, "name": learner.display_name(), "move": move, "level": level,
 			})
 
 

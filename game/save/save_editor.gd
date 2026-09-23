@@ -131,8 +131,7 @@ func set_move(mon: Gen2SaveMon, slot: int, move_number: int) -> Dictionary:
 	if slot < 0 or slot >= Gen2SaveMon.MAX_MOVES:
 		return _refuse("there is no move slot %d" % (slot + 1))
 	if move_number == NO_MOVE:
-		mon.moves[slot] = NO_MOVE
-		mon.pp[slot] = 0
+		mon.set_move(data, slot, NO_MOVE)
 		_compact_moves(mon)
 		return _changed()
 	var move: Dictionary = data.move(move_number)
@@ -140,8 +139,7 @@ func set_move(mon: Gen2SaveMon, slot: int, move_number: int) -> Dictionary:
 		return _refuse("move %d is not in this cartridge cache" % move_number)
 	if slot > 0 and int(mon.moves[slot - 1]) == NO_MOVE:
 		return _refuse("fill move slot %d first" % slot)
-	mon.moves[slot] = move_number
-	mon.pp[slot] = int(move.get("pp", 0))
+	mon.set_move(data, slot, move_number)
 	return _changed()
 
 
@@ -152,8 +150,7 @@ func set_pp(mon: Gen2SaveMon, slot: int, pp: int) -> Dictionary:
 		return _refuse("there is no move slot %d" % (slot + 1))
 	if int(mon.moves[slot]) == NO_MOVE:
 		return _refuse("that move slot is empty")
-	var maximum: int = int(data.move(int(mon.moves[slot])).get("pp", 0))
-	mon.pp[slot] = clampi(pp, 0, maximum)
+	mon.pp[slot] = clampi(pp, 0, mon.max_pp(data, slot))
 	return _changed()
 
 
@@ -448,17 +445,13 @@ func _register(mon: Gen2SaveMon, in_party: bool) -> void:
 ## Pulls later moves forward so no gap sits before a filled slot, which the
 ## validator refuses.
 func _compact_moves(mon: Gen2SaveMon) -> void:
-	var moves: Array = []
-	var pp: Array = []
+	var filled: int = 0
 	for slot: int in Gen2SaveMon.MAX_MOVES:
-		if int(mon.moves[slot]) != NO_MOVE:
-			moves.append(mon.moves[slot])
-			pp.append(mon.pp[slot])
-	while moves.size() < Gen2SaveMon.MAX_MOVES:
-		moves.append(NO_MOVE)
-		pp.append(0)
-	mon.moves = moves
-	mon.pp = pp
+		if int(mon.moves[slot]) == NO_MOVE:
+			continue
+		if slot != filled:
+			mon.swap_move_slots(slot, filled)
+		filled += 1
 
 
 func _party_index_valid(index: int) -> bool:
