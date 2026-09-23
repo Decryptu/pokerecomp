@@ -246,8 +246,6 @@ func test_the_hall_of_fame_row_walks_the_stored_records() -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
 
 
-## `PokemonCenterPC`'s top menu, whose BILL'S PC row is the box screen the
-## bedroom's PC used to open.
 func test_pokemon_center_pc_opens_the_top_menu_and_bills_pc_behind_it() -> void:
 	await _open_pokemon_center_pc()
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
@@ -903,10 +901,6 @@ func test_pokegear_clock_card_renders_source_time_and_returns_to_cards() -> void
 	assert_null(_world_screen._service_host)
 
 
-## The window-resolution panel this host used to keep beside its hardware layer
-## is gone, and the layer that is left is shown from one rule rather than set by
-## hand at each entrance, which is what left the old one standing behind the
-## mode's own boxes. An overlay owns all 160x144, so nothing is drawn under it.
 func test_only_one_service_layer_is_ever_on_screen() -> void:
 	_write_pc_request()
 	await _open_world()
@@ -973,10 +967,6 @@ func test_the_radio_card_is_what_owes_the_map_its_music_back() -> void:
 	assert_ne(host.radio_music_playing(), Gen2WorldServiceScreen.RADIO_MUSIC_SILENT)
 
 
-## `PokegearMap_ContinueMap`'s `.right` and `.left`: the MAP card is the region
-## map's own screen, and it reads left and right as `Pokegear_SwitchPage` the
-## way every other card does, so the phone and the radio are reachable past it.
-## It used to swallow both, which left the Pokegear stuck on the map.
 func test_the_map_card_switches_to_the_cards_either_side_of_it() -> void:
 	await _open_world()
 	for flag: int in [

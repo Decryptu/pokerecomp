@@ -1,12 +1,5 @@
 extends GutTest
 
-## Scene integration for the two questions a battle asks about switching:
-## `OfferSwitch`'s yes/no, which SHIFT is the whole point of, and the forced
-## party list Baton Pass opens (`engine/battle/core.asm`).
-##
-## The cache is synthetic; the battle screen, its text box, the two menus and
-## [Gen2Battle] are the production paths. Both used to be answered by the screen
-## because there was nothing to answer them with.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 const BattleFixture := preload("res://tests/unit/battle_fixture.gd")
@@ -101,10 +94,6 @@ func _advance_to(stage: String, limit: int = 40) -> void:
 		await get_tree().process_frame
 
 
-## Reads the question to its last page without advancing off it, which is what a
-## player does before a yes/no box is up to answer: the pump prints each page
-## and a press turns it. The box is placed by the pump, never by a press, which
-## is what a hand-driven redraw here used to hide.
 func _read_question() -> void:
 	var box: Gen2TextBox = _screen.get("_box")
 	while box != null and (box.is_revealing() or box.has_pages_left()):
@@ -431,9 +420,6 @@ func test_shift_offers_a_switch_when_the_trainer_replaces_its_own_faint() -> voi
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 0, "and the player stayed")
 
 
-## `BattleMenu` and the `MoveSelectionScreen` behind FIGHT: what the player is
-## asked on their own turn, which the screen used to answer itself with a random
-## slot.
 func _menu_stage() -> String:
 	return String(_screen.battle_snapshot()["menu_stage"])
 

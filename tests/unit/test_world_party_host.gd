@@ -261,9 +261,6 @@ func test_the_contest_catch_comes_home_and_is_named() -> void:
 	assert_true(_world.state.contest_mon().is_empty(), "wContestMon is cleared")
 
 
-## `.TryAddToBox` with room: the answer is BUGCONTEST_BOXED_MON, which is what
-## makes the script print `ContestResults_PartyFullText`. The port used to answer
-## BUGCONTEST_CAUGHT_MON here, because it read a full party and a full box.
 func test_a_full_party_boxes_the_contest_catch_and_says_so() -> void:
 	while _save.party.size() < Gen2SaveData.MAX_PARTY:
 		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))

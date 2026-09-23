@@ -1,14 +1,5 @@
 #!/bin/sh
-# Refuses a push that CI would refuse, in under a second.
-#
-# Both of the last release's failures were of this shape: a comment line over
-# the recorded ceiling, and an editing note whose closing marker an edit had
-# taken with it. Each cost a full CI run to learn, and the second cost seven
-# builds. `tools/release.sh --gates` is the same set of checks the release
-# itself runs, so there is one definition of them.
-#
-# Enabled per-clone (hooks are not cloned) with:
-#   git config core.hooksPath .githooks
+# Run the release's local gates before pushing.
 
 set -e
 
@@ -22,8 +13,7 @@ if [ -x "$root/tools/release.sh" ]; then
 	}
 fi
 
-# `CLAUDE.md` forbids naming a tool, an assistant or a company anywhere in the
-# history. A commit that does cannot be edited once it is on a protected branch.
+# Keep local-only tool attribution out of public commit history.
 range=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo "origin/main")
 found=$(git log --format='%an <%ae>%n%B' "$range..HEAD" 2>/dev/null \
 	| grep -niE 'generated with|co-authored' || true)

@@ -2,13 +2,7 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the Battle Tower against freshly imported real caches, on all three
-## games. Expected values come from the pinned pokecrystal source: the 70 class
-## rows, the ten level groups, the two per-class tables and the menu strings. The
-## pins are counted off the asm rather than read from [Gen2BattleTower]'s own
-## tables, so a mistranscribed row is a failure instead of an agreement. Gold and
-## Silver ship no tower at all, which is checked as an absence rather than as an
-## empty table: a cache that claims otherwise is a wrong pin.
+## Expected rows are transcribed from the pinned source, independently of the runtime tables.
 
 ## `BattleTowerTrainers`' four corners: the run's own ends and the two rows
 ## either side of `assert_table_length BATTLETOWER_NUM_UNIQUE_MON`, which is

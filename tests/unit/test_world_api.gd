@@ -1070,9 +1070,6 @@ func test_collision_codes_keep_the_cartridge_permission_categories() -> void:
 	assert_eq(Gen2WorldCollision.permission_for(-1), Gen2WorldCollision.WALL_TILE)
 	assert_eq(Gen2WorldCollision.permission_for(0x100), Gen2WorldCollision.WALL_TILE)
 
-	# The waterfall, current and buoy families. Every one of these was ordinary
-	# ground before the table was carried whole, so a player walked out to sea
-	# and surf refused to enter it.
 	for code: int in range(0x30, 0x40):
 		assert_eq(
 			Gen2WorldCollision.permission_for(code), Gen2WorldCollision.WATER_TILE,

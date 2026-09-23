@@ -2,13 +2,7 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies `wVariableSprites` against freshly imported real caches for both
-## command profiles: every object either wears a row the source wrote or is drawn
-## as the player, and the table survives a save the way `wPlayerData` does. Two
-## findings carry the topic. `wVariableSprites` sits inside `wPlayerData`, which
-## `SaveData` copies whole, so a row assigned in one session is still there in the
-## next; keeping it on the loaded world drew nine slots of people as the player on
-## every reload. And a slot with no row is `.NoBreedmon`'s `WALKING_SPRITE`.
+## `wVariableSprites` belongs to saved `wPlayerData`; missing rows use `WALKING_SPRITE`.
 
 ## constants/sprite_constants.asm, the same numbers on all three cartridges.
 const SPRITE_CHRIS: int = 0x01

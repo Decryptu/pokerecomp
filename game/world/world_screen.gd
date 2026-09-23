@@ -1589,9 +1589,7 @@ func _advance_pressed_action() -> void:
 	_press_action(button)
 
 
-## `DoBattleTransition` owns every frame to the battle screen with the joypad
-## unread: a press there used to cancel `startbattle`'s request and the gym
-## leader's badge never arrived.
+## `DoBattleTransition` ignores input until the battle screen opens.
 func _input_locked() -> bool:
 	return not _map_fade.is_empty() or not _trainer_approach.is_empty() \
 		or _battle_transition != null or _world.phone_ring_active()
@@ -9322,9 +9320,7 @@ func _advance_map_name_sign_pass() -> void:
 		_map_name_sign.visible = true
 
 
-## `PlayerEvents`' `xor a / ld [wLandmarkSignTimer], a`, skipped for
-## PLAYEREVENT_CONNECTION and PLAYEREVENT_JOYCHANGEFACING alone. Keyed on a
-## dispatched event, not a busy script: a map callback used to take the sign down.
+## Only dispatched player events clear `wLandmarkSignTimer`.
 func _zero_map_name_sign_timer() -> void:
 	_hide_map_name_sign()
 

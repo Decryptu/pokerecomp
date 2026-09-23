@@ -3939,9 +3939,7 @@ func _coerce_service_value(value: Variant, blob: PackedByteArray) -> Variant:
 	if value is Dictionary:
 		var dictionary: Dictionary = {}
 		for key: Variant in value:
-			# A payload span is handed back under the name the record used to
-			# carry inline, so nothing downstream of here has to know that the
-			# bytes now live in a blob.
+			# Downstream readers receive blob payloads through the same `bytes` field.
 			if String(key) == RomCache.PAYLOAD_KEY:
 				dictionary[RomCache.BYTES_KEY] = _span_bytes(value[key], blob)
 				continue

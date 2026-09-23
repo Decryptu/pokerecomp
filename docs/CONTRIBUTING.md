@@ -248,12 +248,10 @@ and wraps it with `nacptool` and `elf2nro`, which is what the fork's own export
 plugin does when the editor is built from it. The published zip extracts at the
 root of a microSD and puts one file at `switch/pokerecomp.nro`.
 
-Two things a Switch build changes for every platform, both fixed at the seam
-rather than behind a platform name:
+Two shared platform rules also serve the Switch:
 
-- Godot's `ui_accept` carries three keys and no pad button, so a machine with no
-  keyboard could move every focus ring and choose nothing under it.
-  `PokeInputActions.UI_PAD_BUTTONS` gives it one.
+- `PokeInputActions.UI_PAD_BUTTONS` gives `ui_accept` a pad button on devices
+  without a keyboard.
 - The launcher draws in device-independent points, and a platform that cannot
   open a second window is one whose window is the whole screen and whose sizes
   are physical pixels. `Gen2LauncherUI.draws_in_screen_pixels` asks the display

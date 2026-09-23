@@ -1,13 +1,10 @@
 class_name PokeAppVersion
 extends RefCounted
 
-## Host application version. Keep this numeric value aligned with export metadata.
+## Release metadata and export versions must agree.
 const VERSION: String = "0.1.46"
 const CHANNEL: String = "alpha"
 
-## Where the project lives, stated once: the release check derives its pages
-## from [constant REPOSITORY], and the about page points a bug report at the
-## tracker or at the chat.
 const REPOSITORY: String = "https://github.com/Decryptu/pokerecomp"
 const ISSUES: String = "https://github.com/Decryptu/pokerecomp/issues/new"
 const DISCORD: String = "https://discord.gg/twkrHkHprk"

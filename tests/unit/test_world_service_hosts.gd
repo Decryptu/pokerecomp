@@ -1,8 +1,5 @@
 extends GutTest
 
-## Service hosts use the imported cache and the production world transaction
-## boundaries. The fixture remains synthetic so no cartridge data enters tests.
-
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 
 const APRICORN_RED: int = 0x55
@@ -30,12 +27,6 @@ func after_each() -> void:
 	RomCache.clear(Fixture.directory())
 
 
-## Every runtime request the runner can stage has to reach something that draws
-## it, and the four tables below are the whole set of answers there are. Without
-## this, `special NameRival` staged a request nothing opened, so the policeman
-## asked the question and [Gen2WorldHost]'s default answered SILVER for the
-## player. A kind that genuinely has nothing to draw belongs in
-## [constant Gen2WorldHost.UNATTENDED_REQUESTS] with the reason beside it.
 func test_every_runtime_request_kind_reaches_a_screen_or_is_named_unattended() -> void:
 	var answered: Dictionary = {}
 	for kind: StringName in Gen2WorldScreen.REQUEST_HANDLERS:

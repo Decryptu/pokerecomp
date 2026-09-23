@@ -10143,9 +10143,7 @@ func connection_target(cell: Vector2i, direction: Vector2i) -> Dictionary:
 		or target_cell.x >= target_map.collision_width \
 		or target_cell.y >= target_map.collision_height:
 		return {"ok": false, "reason": &"invalid_target_cell", "direction": direction_name}
-	## The connection strip shares the current map's block buffer, so
-	## `.CheckLandPerms` refuses a wall across an edge as inside one: Route 6's
-	## northwest corner used to walk into Saffron's (10,35).
+	## `.CheckLandPerms` checks walls across connections through the shared block buffer.
 	if not _connection_step_allows(target_map, target_cell, direction):
 		return {"ok": false, "reason": &"blocked_target_cell", "direction": direction_name}
 	return {

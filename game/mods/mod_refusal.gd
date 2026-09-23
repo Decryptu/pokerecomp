@@ -1,16 +1,7 @@
 class_name PokeModRefusal
 extends RefCounted
 
-## Why a mod was refused, said to a player rather than to a log: one table for
-## the installer's reasons, the index feed's, the manifest reader's and the
-## host's registrations alike. The launcher and the index dialog each used to keep
-## their own, covering different halves of the same set, so a mod refused through
-## the wrong screen showed a raw StringName. Anything unworded falls back to the
-## reason itself, which is a poor line but an honest one.
-
-## Reasons that read the same wherever they come from. A [code]%s[/code] is
-## filled with the result's own [code]detail[/code]; a reason wanting anything
-## else is a branch in [method text].
+## `%s` receives the refusal detail; other substitutions belong in [method text].
 const WORDING: Dictionary = {
 	&"not_a_zip": "%s is not a .zip archive.",
 	&"archive_not_found": "%s could not be read.",

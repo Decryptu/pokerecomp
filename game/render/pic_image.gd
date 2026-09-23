@@ -530,13 +530,7 @@ static func field_color(image: Image, stride: int = FIELD_STRIDE) -> Color:
 	return Color.hex(best)
 
 
-## The texture [param texture] becomes once it holds [param image]. A screen
-## redrawn every frame used to answer `ImageTexture.create_from_image` each time,
-## which allocates a texture and frees the last one on every frame it draws;
-## `update` writes into the one already on the GPU. The size and format have to
-## match for that, so a first frame and a resize still create. Not headless: the
-## dummy driver hands `ImageTexture.get_image` back the picture the texture was
-## created with rather than the one it was last updated with.
+## Reuse a GPU texture when its size and format match; the dummy driver cannot read updates back.
 static func refreshed_texture(texture: ImageTexture, image: Image) -> ImageTexture:
 	if image == null:
 		return texture

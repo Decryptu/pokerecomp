@@ -1351,9 +1351,6 @@ func test_the_rivals_starter_picks_the_party() -> void:
 		"else": [{"op": "trainer_battle", "class": 0x2A, "number": 9}]}])
 
 
-## `Route11Gate2FLeftBinocularsText` hands a facing its own `jp nz` has already
-## refused to `GateUpstairsScript_PrintIfFacingUp`, which tests the same byte
-## again: the second match is unreachable rather than unread.
 func test_a_facing_the_walk_excluded_cannot_match_again() -> void:
 	var script: Array = _decode(
 		_load_a(int(LAYOUT["facing_direction"]))

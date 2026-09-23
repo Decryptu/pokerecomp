@@ -1,8 +1,5 @@
 extends GutTest
 
-## 2bpp decoding and pic layout, on hand-built tiles.
-
-
 func _solid_tile(index: int) -> PackedByteArray:
 	var low: int = 0xFF if index & 1 else 0x00
 	var high: int = 0xFF if index & 2 else 0x00
@@ -14,7 +11,7 @@ func _solid_tile(index: int) -> PackedByteArray:
 
 
 func test_a_tile_is_sixty_four_pixels() -> void:
-	assert_eq(PokeTiles.decode_tile(_solid_tile(0), 0).size(), PokeTiles.TILE_PIXELS)
+	assert_eq(PokeTiles.decode_tile(_solid_tile(0), 0).size(), 64)
 
 
 func test_each_index_round_trips() -> void:
@@ -44,13 +41,11 @@ func test_bit_seven_is_the_leftmost_pixel() -> void:
 
 func test_out_of_range_offset_yields_a_blank_tile() -> void:
 	var pixels: PackedByteArray = PokeTiles.decode_tile(PackedByteArray([0x01]), 0)
-	assert_eq(pixels.size(), PokeTiles.TILE_PIXELS)
-	assert_eq(pixels.count(0), PokeTiles.TILE_PIXELS)
+	assert_eq(pixels.size(), 64)
+	assert_eq(pixels.count(0), 64)
 
 
 func test_pic_tiles_are_stored_column_major() -> void:
-	# Two columns of two tiles. Storage order is top-left, bottom-left,
-	# top-right, bottom-right, down the columns and not across the rows.
 	var data: PackedByteArray = PackedByteArray()
 	for index: int in [1, 2, 3, 1]:
 		data.append_array(_solid_tile(index))
@@ -69,8 +64,8 @@ func test_pic_ignores_trailing_data() -> void:
 	var data: PackedByteArray = _solid_tile(2)
 	data.append_array(_solid_tile(3))
 	var pixels: PackedByteArray = PokeTiles.decode_pic(data, 1, 1)
-	assert_eq(pixels.size(), PokeTiles.TILE_PIXELS)
-	assert_eq(pixels.count(2), PokeTiles.TILE_PIXELS)
+	assert_eq(pixels.size(), 64)
+	assert_eq(pixels.count(2), 64)
 
 
 func test_pic_with_too_little_data_is_blank_rather_than_partial() -> void:
@@ -83,7 +78,7 @@ func test_a_1bpp_strip_is_one_tile_tall_and_as_wide_as_it_needs() -> void:
 	var data: PackedByteArray = PackedByteArray()
 	data.resize(3 * PokeTiles.TILE_1BPP_BYTES)
 	var strip: PackedByteArray = PokeTiles.decode_1bpp_strip(data, 0, 3)
-	assert_eq(strip.size(), 3 * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)
+	assert_eq(strip.size(), 192)
 
 
 func test_a_set_1bpp_bit_decodes_to_ink_and_the_rest_to_the_background() -> void:
@@ -91,10 +86,10 @@ func test_a_set_1bpp_bit_decodes_to_ink_and_the_rest_to_the_background() -> void
 	# pixel is index 3 and there are no middle colours to be had.
 	var data: PackedByteArray = PackedByteArray([0b1000_0001, 0, 0, 0, 0, 0, 0, 0])
 	var strip: PackedByteArray = PokeTiles.decode_1bpp_strip(data, 0, 1)
-	assert_eq(strip[0], PokeTiles.INK, "bit 7 is the leftmost pixel")
-	assert_eq(strip[7], PokeTiles.INK, "bit 0 is the rightmost")
+	assert_eq(strip[0], 3, "bit 7 is the leftmost pixel")
+	assert_eq(strip[7], 3, "bit 0 is the rightmost")
 	assert_eq(strip[1], 0)
-	assert_eq(strip[PokeTiles.TILE_WIDTH], 0, "the second row is untouched")
+	assert_eq(strip[8], 0, "the second row is untouched")
 
 
 func test_1bpp_tiles_sit_side_by_side_in_code_order() -> void:
@@ -104,14 +99,14 @@ func test_1bpp_tiles_sit_side_by_side_in_code_order() -> void:
 			data.append(byte)
 
 	var strip: PackedByteArray = PokeTiles.decode_1bpp_strip(data, 0, 2)
-	assert_eq(strip[0], PokeTiles.INK, "the first tile is solid")
-	assert_eq(strip[PokeTiles.TILE_WIDTH], 0, "the second starts eight pixels along")
+	assert_eq(strip[0], 3, "the first tile is solid")
+	assert_eq(strip[8], 0, "the second starts eight pixels along")
 
 
 func test_a_1bpp_strip_that_runs_out_of_data_keeps_its_size() -> void:
 	# A hole is visible on screen; a short buffer is a crash somewhere later.
 	var strip: PackedByteArray = PokeTiles.decode_1bpp_strip(PackedByteArray([0xFF]), 0, 2)
-	assert_eq(strip.size(), 2 * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)
+	assert_eq(strip.size(), 128)
 	assert_eq(strip.count(0), strip.size())
 
 
@@ -123,7 +118,7 @@ func test_a_2bpp_strip_keeps_all_four_colours_where_a_1bpp_one_has_two() -> void
 	data[0] = 0xF0
 	data[1] = 0xCC
 	var strip: PackedByteArray = PokeTiles.decode_2bpp_strip(data, 0, 1)
-	assert_eq(strip.size(), PokeTiles.TILE_PIXELS)
+	assert_eq(strip.size(), 64)
 	assert_eq(strip[0], 3, "both planes set")
 	assert_eq(strip[2], 1, "low plane only")
 	assert_eq(strip[4], 2, "high plane only")
@@ -132,7 +127,7 @@ func test_a_2bpp_strip_keeps_all_four_colours_where_a_1bpp_one_has_two() -> void
 
 func test_a_2bpp_strip_that_runs_out_of_data_keeps_its_size() -> void:
 	var strip: PackedByteArray = PokeTiles.decode_2bpp_strip(PackedByteArray(), 0, 4)
-	assert_eq(strip.size(), 4 * PokeTiles.TILE_PIXELS)
+	assert_eq(strip.size(), 256)
 
 
 func test_blit_places_a_small_pic_inside_a_cell() -> void:

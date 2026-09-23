@@ -164,7 +164,7 @@ the gender question and Oak's speech. Continue enters the overworld. See
 Three modes, built in. No mod to install, nothing to remember to do yourself:
 the game keeps the rules. The mode is chosen when a save is created and is fixed
 for that run, because a challenge that can be switched off after a death is not
-one. Every save made before this update is a Vanilla run.
+one. Saves without a recorded mode load as Vanilla.
 
 | Mode | What changes |
 |---|---|

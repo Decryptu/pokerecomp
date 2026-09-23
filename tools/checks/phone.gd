@@ -69,12 +69,7 @@ func _contacts(game_id: StringName, data: GameData) -> void:
 	)
 
 
-## `MomTriesToBuySomething`'s whole block against `data/items/mom_phone.asm`.
-## The two tables are pinned here rather than read off the cache, so a wrong
-## address fails on content: the ladder's ten triggers and costs, the five she
-## picks between, and which of each is a doll. Both scripts have to reach Mom's
-## own four lines through the `text_far` each `writetext` names, which is the
-## seam a stub collected without its target used to leave blank.
+## Independent values from `data/items/mom_phone.asm` catch wrong cache offsets.
 const EXPECTED_LADDER: Array[Array] = [
 	[900, 600, 1, "SUPER POTION"],
 	[4000, 270, 1, "REPEL"],

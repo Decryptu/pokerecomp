@@ -1,12 +1,5 @@
 #!/bin/sh
-# Refuses any commit that would put cartridge-derived data in the repo.
-#
-# .gitignore already covers the obvious extensions, but `git add -f` bypasses
-# it and a renamed ROM has no extension to match on. This checks what is
-# actually staged: known extensions, and any blob big enough to be a cartridge.
-#
-# Enabled per-clone (hooks are not cloned) with:
-#   git config core.hooksPath .githooks
+# Staged blobs need checking because `git add -f` bypasses .gitignore.
 
 set -e
 
@@ -25,8 +18,7 @@ blocked=$(printf '%s\n' "$staged" | grep -Ei '\.(gb|gbc|gba|sav|srm|rom|ips|bps|
 [ -n "$blocked" ] && fail "  blocked by extension:
 $(printf '%s\n' "$blocked" | sed 's/^/    /')"
 
-# A trimmed or renamed dump still weighs what a cartridge weighs. 512 KiB is
-# below the smallest Game Boy game and far above anything source-shaped.
+# 512 KiB is below the smallest Game Boy ROM.
 LIMIT=524288
 large=""
 IFS='
