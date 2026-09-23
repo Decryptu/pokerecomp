@@ -43,8 +43,10 @@ func run(r: RefCounted) -> void:
 		_verify_rolled_dvs()
 		_verify_magikarp_filter()
 		_verify_roaming_walk()
+		_verify_table_rewrites()
 	)
 	_r.each_game_of(RomRegistry.GEN1, _verify_gen1_tables)
+	_r.each_game_of(RomRegistry.GEN1, _verify_table_rewrites)
 
 
 ## `UpdateRoamMons` passes per starting map, enough to measure the graph.
@@ -1196,6 +1198,54 @@ func _verify_wild_patch_indices() -> void:
 	])
 	## The shared overlay is untouched, since a check is not a mod.
 	_r.check(host.content_overlay().is_empty(), "the check leaked into the shared overlay.")
+
+
+const TABLE_REWRITE_SPECIES: int = 25
+const TABLE_REWRITE_CENSUS: Dictionary = {
+	&"gold": 158, &"silver": 158, &"crystal": 155, &"red": 58, &"blue": 58, &"yellow": 63,
+}
+
+
+## Every table fits a patch's shape, and rewriting every slot is what a forced roll meets.
+func _verify_table_rewrites() -> void:
+	var data: GameData = GameData.open(_r.game_id)
+	if data == null:
+		return
+	var overlay := Gen2ContentOverlay.new()
+	data.set_content_overlay(overlay)
+	var rng := RandomNumberGenerator.new()
+	var tables: int = 0
+	for map: Gen2WorldMap in data.world_maps():
+		for method: StringName in Gen2ContentOverlay.ENCOUNTER_METHODS:
+			var row: Dictionary = data.world_encounter(method, map.group, map.number)
+			if row.is_empty():
+				continue
+			tables += 1
+			var shape: String = Gen2WorldEncounter.patch_error(row, method, data.generation)
+			var slots: Array = _as_species(row["slots"], TABLE_REWRITE_SPECIES)
+			overlay.patch(Gen2ContentOverlay.KIND_ENCOUNTER, &"check",
+				Gen2ContentOverlay.encounter_number(method, map.group, map.number), {"slots": slots})
+			var rolled: StringName = Gen2WorldEncounter.METHOD_SURF \
+				if method in [&"surf", &"swarm_water"] else Gen2WorldEncounter.METHOD_GRASS
+			var met: Dictionary = Gen2WorldEncounter.resolve(
+				data.world_encounter(method, map.group, map.number), rolled,
+				Gen2WorldPalette.TIME_DAY, rng, true, {"generation": data.generation}
+			)
+			_r.check(shape.is_empty() and int(met.get("pokemon", 0)) == TABLE_REWRITE_SPECIES,
+				"%s %d:%d: shape '%s', met %s." % [method, map.group, map.number, shape, met.get("pokemon")])
+	_r.check(tables == int(TABLE_REWRITE_CENSUS.get(_r.game_id, -1)),
+		"%d tables, pinned %d." % [tables, TABLE_REWRITE_CENSUS.get(_r.game_id, -1)])
+	_r.note("table rewrites: %d tables" % tables)
+
+
+static func _as_species(slots: Array, species: int) -> Array:
+	var out: Array = []
+	for slot: Variant in slots:
+		if slot is Array:
+			out.append(_as_species(slot, species))
+		else:
+			out.append({"species": species, "level": int((slot as Dictionary)["level"])})
+	return out
 
 
 func _census() -> void:

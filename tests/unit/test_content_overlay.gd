@@ -289,24 +289,83 @@ func test_an_encounter_row_is_patched_where_the_cartridge_table_is_read() -> voi
 	# GameData's own chokepoint so nothing downstream learns a mod exists.
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(host.patch_encounter(MOD, &"grass", 3, 2, {
-		"rate": 20, "slots": [[{"level": 50, "species": 1}], [], []],
+		"rates": [20, 20, 20], "slots": _grass_slots({"level": 50, "species": 1}),
 	}).get("ok", false)))
 
 	var data: GameData = _data()
 	var row: Dictionary = data.world_encounter(&"grass", 3, 2)
-	assert_eq(int(row["rate"]), 20)
+	assert_eq(row["rates"], [20, 20, 20])
 	assert_eq(int(row["slots"][0][0]["species"]), 1, "an array field replaces whole")
-	assert_eq(row["rates"], [4.0, 4.0, 4.0], "an unnamed field is untouched")
+	assert_eq(int(row["rate"]), 4, "an unnamed field is untouched")
 	# FindNest walks the region table rather than one map, and reads the same
 	# patched row.
 	var rows: Array = data.world_encounter_region_rows(&"grass", "johto")
-	assert_eq(int(rows[0]["rate"]), 20)
+	assert_eq(rows[0]["rates"], [20, 20, 20])
 	# A map this cartridge lacks, and a method that is not one, change nothing.
 	assert_true(data.world_encounter(&"grass", 9, 9).is_empty())
 	assert_eq(
 		StringName(host.patch_encounter(MOD, &"headbutt", 3, 2, {"rate": 1})["reason"]),
 		&"unknown_encounter_method"
 	)
+
+
+func _grass_slots(slot: Dictionary) -> Array:
+	var day: Array = []
+	for _index: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
+		day.append(slot.duplicate())
+	return [day, day.duplicate(true), day.duplicate(true)]
+
+
+## A short list would turn every roll past its end into no encounter, so a patch
+## keeps the importer's slot count. With no cartridge chosen either
+## generation's shape is taken; with one, only its own.
+func test_an_encounter_patch_keeps_the_cartridges_slot_count() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var mon: Dictionary = {"level": 5, "species": 25}
+	var kanto: Array = []
+	for _index: int in Gen1Layout.WILD_SLOT_COUNT:
+		kanto.append(mon)
+	var refused: Array = [
+		[&"grass", {"slots": [[mon], [], []]}],
+		[&"grass", {"slots": _grass_slots({"level": 0, "species": 25})}],
+		[&"grass", {"slots": _grass_slots({"level": 5, "species": 0})}],
+		[&"grass", {"rates": [4, 4]}],
+		[&"surf", {"rate": 300}],
+		[&"surf", {"slots": [mon]}],
+	]
+	for case: Array in refused:
+		var result: Dictionary = host.patch_encounter(MOD, case[0], 3, 2, case[1])
+		assert_eq(StringName(result.get("reason", &"")), &"invalid_encounter_patch", str(case[1]))
+	assert_true(bool(host.patch_encounter(MOD, &"surf", 3, 2, {"slots": [mon, mon, mon]})["ok"]))
+	assert_true(bool(host.patch_encounter(MOD, &"grass", 3, 2, {"slots": kanto})["ok"]))
+	host.set_target_game(&"gold")
+	assert_false(bool(host.patch_encounter(MOD, &"grass", 3, 2, {"slots": kanto})["ok"]))
+	host.set_target_game(&"red")
+	assert_true(bool(host.patch_encounter(MOD, &"grass", 3, 2, {"slots": kanto})["ok"]))
+	assert_eq(StringName(host.patch_content(
+		Gen2ContentOverlay.KIND_ENCOUNTER, MOD,
+		Gen2ContentOverlay.encounter_number(&"surf", 3, 2), {"slots": [mon]}
+	)["reason"]), &"invalid_encounter_patch", "the numbered path is checked too")
+
+
+## A mod switching its table edits off mid-run: one kind, then every patch, and
+## never what it defined. The revision is what a cached table is keyed on.
+func test_clearing_patches_keeps_definitions_and_moves_the_revision() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var overlay: Gen2ContentOverlay = Gen2ContentOverlay.shared()
+	host.register_content(Gen2ContentOverlay.KIND_SPECIES, MOD, NEW_SPECIES, {"name": "VOLTLING"})
+	host.patch_content(Gen2ContentOverlay.KIND_SPECIES, MOD, 1, {"name": "SEEDLING"})
+	host.patch_encounter(MOD, &"grass", 3, 2, {"slots": _grass_slots({"level": 5, "species": 1})})
+	var before: int = overlay.revision
+	host.clear_patches(MOD, Gen2ContentOverlay.KIND_ENCOUNTER)
+	assert_gt(overlay.revision, before)
+	var data: GameData = _data()
+	assert_eq(int(data.world_encounter(&"grass", 3, 2)["slots"][0][0]["species"]), 16)
+	assert_eq(String(data.species(1)["name"]), "SEEDLING", "another kind is left")
+	host.clear_patches(MOD)
+	assert_eq(String(data.species(1)["name"]), "BULBASAUR")
+	assert_true(overlay.defines(Gen2ContentOverlay.KIND_SPECIES, NEW_SPECIES))
+	assert_eq(overlay.owner_of(Gen2ContentOverlay.KIND_SPECIES, 1), &"")
 
 
 func test_a_fishing_group_is_patched_by_its_own_group_number() -> void:

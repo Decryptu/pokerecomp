@@ -854,6 +854,13 @@ func world_fishing_group(group: int) -> Dictionary:
 	)
 
 
+## [method world_fishing_group]'s groups from 1, without [constant GEN1_ROD_GROUPS].
+func world_fishing_group_count() -> int:
+	var fishing: Variant = _encounters().get("fishing", {})
+	var groups: Variant = (fishing as Dictionary).get("groups", []) if fishing is Dictionary else []
+	return (groups as Array).size() if groups is Array else 0
+
+
 ## Generation 1's `SuperRodData` index: the one-based fishing group a map is
 ## named by, or zero for a map no row names, which is `ReadSuperRodData`'s own
 ## "no fish on this map". [method world_fishing_group] reads the group itself.
@@ -3012,6 +3019,14 @@ func area_landmark(index: int) -> int:
 	return int(_areas.get(index, index))
 
 
+## The landmark naming [param map]'s area: `wCurLandmark` on Generation 2 and the
+## shared `LoadTownMapEntry` cell on Generation 1, whose headers carry none.
+func map_landmark(map: Gen2WorldMap) -> int:
+	if map == null:
+		return 0
+	return area_landmark(map.number) if generation == RomRegistry.GEN1 else map.location
+
+
 ## A landmark's name as text. `<BSP>` reads as the space it is everywhere but the
 ## region map, where [Gen2TownMapPage] breaks the line on it instead.
 func landmark_name(index: int) -> String:
@@ -3888,6 +3903,10 @@ func has_content_overlay() -> bool:
 ## needs content of its own without touching the shared overlay.
 func set_content_overlay(overlay: Gen2ContentOverlay) -> void:
 	_overlay = overlay
+
+
+func content_revision() -> int:
+	return _overlay.revision if _overlay != null else 0
 
 
 func _service_row(

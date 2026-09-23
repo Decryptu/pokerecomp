@@ -460,6 +460,8 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	})
 	assert_eq(StringName(dressed["status"]), &"waiting")
 	assert_eq(String((dressed["event"] as Dictionary)["text"]), "VOLTLING!")
+	# 41: a switch that rewrites every wild table, off until the player sets it.
+	assert_eq(host.option(&"new_content", &"pikachu_in_the_wild"), false)
 
 
 func test_every_refusal_reason_the_mod_layer_produces_has_player_wording() -> void:

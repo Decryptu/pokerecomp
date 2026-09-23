@@ -157,6 +157,8 @@ var _defined: Dictionary = {}
 var _patched: Dictionary = {}
 ## kind to number to the mod id that claimed it, so a conflict can name both.
 var _owners: Dictionary = {}
+## Moves on every define, patch and clear, for a reader caching a resolved row.
+var revision: int = 0
 
 
 ## Shared rather than per-cache: mods load before any cache is opened and apply
@@ -199,13 +201,13 @@ func define(kind: StringName, id: StringName, number: int, row: Dictionary) -> D
 	var defined: Dictionary = _defined.get(kind, {})
 	defined[number] = _normalized(kind, number, row)
 	_defined[kind] = defined
+	revision += 1
 	return {"ok": true, "kind": kind, "number": number}
 
 
 ## Replaces named fields of a cartridge row. A Dictionary field merges, so
-## [code]{"stats": {"speed": 120}}[/code] leaves the other five alone; an Array
-## replaces whole, which is what a randomizer rewriting an encounter row's
-## [code]slots[/code] wants. Refused for a number [method define] would take.
+## [code]{"stats": {"speed": 120}}[/code] leaves the other five alone, and an
+## Array replaces whole. Refused for a number [method define] would take.
 func patch(kind: StringName, id: StringName, number: int, fields: Dictionary) -> Dictionary:
 	if not KINDS.has(kind):
 		return {"ok": false, "reason": &"unknown_content_kind", "detail": String(kind)}
@@ -236,6 +238,7 @@ func patch(kind: StringName, id: StringName, number: int, fields: Dictionary) ->
 	var patched: Dictionary = _patched.get(kind, {})
 	patched[number] = fields.duplicate(true)
 	_patched[kind] = patched
+	revision += 1
 	return {"ok": true, "kind": kind, "number": number}
 
 
@@ -263,6 +266,10 @@ func defined_numbers(kind: StringName) -> Array[int]:
 		out.append(number)
 	out.sort()
 	return out
+
+
+func defines(kind: StringName, number: int) -> bool:
+	return (_defined.get(kind, {}) as Dictionary).has(number)
 
 
 ## One map's table under one method, or -1 for a coordinate that cannot exist.
@@ -301,21 +308,31 @@ func owner_of(kind: StringName, number: int) -> StringName:
 	return StringName((_owners.get(kind, {}) as Dictionary).get(number, &""))
 
 
-## Drops everything [param id] claimed, definitions and patches both, and
-## releases the numbers so it or another mod may claim them again.
-##
-## What a save switch needs: a run's patches belong to the save that created
-## them, and the next save has to start from the cartridge rather than from the
-## last one's shuffle. See [method Gen2ModHost.activate_save].
+## Frees everything [param id] claimed for any mod to claim again, which is what
+## a save switch spends; see [method Gen2ModHost.activate_save].
 func clear_owner(id: StringName) -> void:
 	for kind: Variant in _owners:
-		var owners: Dictionary = _owners[kind]
-		for number: Variant in owners.keys():
-			if StringName(owners[number]) != id:
-				continue
-			owners.erase(number)
-			(_defined.get(kind, {}) as Dictionary).erase(number)
-			(_patched.get(kind, {}) as Dictionary).erase(number)
+		_release(id, kind, false)
+	revision += 1
+
+
+## Keeps what [param id] defined, since a party may still carry a defined species.
+func clear_patches(id: StringName, kind: StringName = &"") -> void:
+	for owned: Variant in _owners:
+		if kind == &"" or owned == kind:
+			_release(id, owned, true)
+	revision += 1
+
+
+func _release(id: StringName, kind: Variant, patches_only: bool) -> void:
+	var owners: Dictionary = _owners[kind]
+	var patched: Dictionary = _patched.get(kind, {})
+	for number: Variant in owners.keys():
+		if StringName(owners[number]) != id or (patches_only and not patched.has(number)):
+			continue
+		owners.erase(number)
+		(_defined.get(kind, {}) as Dictionary).erase(number)
+		patched.erase(number)
 
 
 ## One number, one mod: a collision is named rather than settled by load order.

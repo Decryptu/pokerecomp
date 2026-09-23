@@ -8149,6 +8149,25 @@ func test_active_encounter_tables_follow_the_clock_and_the_swarm() -> void:
 	assert_eq(int((swarmed["slots"] as Array)[0]["species"]), 19)
 
 
+## A mod patch landing while the map is up moves the key, so the visible
+## population's cached tables are rebuilt from the patched row.
+func test_a_mod_patch_mid_run_moves_the_encounter_tables_key() -> void:
+	Gen2ModHost.reset()
+	var world := _world()
+	world.set_object_time(12, Gen2WorldPalette.TIME_DAY)
+	var key: Array = world.encounter_tables_key()
+	var day: Array = []
+	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
+		day.append({"level": 5, "species": 25})
+	assert_true(bool(Gen2ModHost.instance().patch_encounter(&"testmod", &"grass", 1, 1, {
+		"slots": [day, day, day],
+	})["ok"]))
+	assert_ne(world.encounter_tables_key(), key)
+	var grass: Dictionary = world.active_encounter_tables()[Gen2WorldEncounter.METHOD_GRASS]
+	assert_eq(int((grass["slots"] as Array)[0]["species"]), 25)
+	Gen2ModHost.reset()
+
+
 ## The contest replaces the map's own grass table wholesale, and its rows are a
 ## level RANGE where a cartridge table's slot is one level.
 func test_active_encounter_tables_take_the_contest_table_while_it_runs() -> void:
