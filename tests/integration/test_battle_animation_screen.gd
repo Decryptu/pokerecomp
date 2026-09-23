@@ -385,6 +385,30 @@ func test_a_trainer_battle_opens_with_both_trainers_on_the_field() -> void:
 	assert_true(bool(entrance["awaits_press"]), "WantsToBattleText ends in prompt")
 
 
+## `EnemySwitch_TrainerHud`: a trainer's next Pokemon is announced under the
+## enemy's own ball row, the fallen one crossed out, and the send-out animation
+## takes the balls away.
+func test_a_trainer_switch_redraws_the_enemy_balls() -> void:
+	var packed: PackedScene = load("res://game/battle/battle_screen.tscn")
+	_screen = packed.instantiate() as Gen2BattleScreen
+	_screen.set_data(_data)
+	add_child(_screen)
+	await get_tree().process_frame
+	_screen.show_trainer(Fixture.TRAINER_CLASS, 0)
+	var party: Gen2Party = _screen._battle.party(Gen2Battle.ENEMY)
+	party.mons.append(Gen2BattleMon.create(_data, party.active_mon().species, 5))
+	party.active_mon().hp = 0
+	_screen._enemy_switch_trainer_hud()
+	var balls: Array = _screen._hud_balls
+	assert_eq(balls.size(), Gen2Party.MAX_SIZE, "the enemy's row alone")
+	assert_eq(int(balls[0]["tile"]), Gen2BattleScreen.HUD_BALL_FAINTED)
+	assert_eq(int(balls[1]["tile"]), Gen2BattleScreen.HUD_BALL_NORMAL)
+	assert_eq(int(balls[Gen2Party.MAX_SIZE - 1]["tile"]), Gen2BattleScreen.HUD_BALL_EMPTY)
+	assert_false(_screen._hud_border.is_empty(), "DrawEnemyHUDBorder")
+	_screen._begin_animation({"index": Gen2Battle.ANIM_SEND_OUT_MON, "called": true})
+	assert_true(_screen._hud_balls.is_empty(), "the animation owns every object")
+
+
 ## The order the two sides arrive in, which is `EnemySwitch` inside `DoBattle`
 ## and then the player's own send-out forty frames later.
 func test_the_trainer_sends_out_first_and_the_player_second() -> void:

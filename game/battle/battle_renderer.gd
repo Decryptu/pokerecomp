@@ -639,9 +639,7 @@ func _draw_trainer_hud_border(into: PackedByteArray, border: Array) -> void:
 		)
 
 
-## `LoadTrainerHudOAM`: six sprites a side, one of `LoadBallIconGFX`'s four tiles
-## each, all on `PAL_BATTLE_OB_YELLOW`. Objects, so they take no scroll, and they
-## are what `ClearSprites` takes away when the opening line is pressed past.
+## `LoadTrainerHudOAM`: objects on `PAL_BATTLE_OB_YELLOW`, taking no scroll.
 func _draw_hud_balls() -> void:
 	var balls: Array = _view.get("trainer_hud_balls", []) as Array
 	if balls.is_empty():
@@ -650,8 +648,9 @@ func _draw_hud_balls() -> void:
 		return
 	if not _layer_changed(&"hud_balls", [balls]):
 		return
-	var sheet: PackedByteArray = _data.tile_indices("ball_icons")
-	var width: int = int(_data.tile_sheet("ball_icons").get("width", 0))
+	var sheet_name: String = "battle_balls" if _hud.gen1 else "ball_icons"
+	var sheet: PackedByteArray = _data.tile_indices(sheet_name)
+	var width: int = int(_data.tile_sheet(sheet_name).get("width", sheet.size() / TILE))
 	var buffer: PackedByteArray = _new_buffer()
 	for entry: Variant in balls:
 		if not entry is Dictionary or width <= 0:

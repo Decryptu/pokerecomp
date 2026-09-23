@@ -82,9 +82,8 @@ static func _deposited(data: GameData, mon: Gen2SaveMon) -> void:
 	if data.generation == RomRegistry.GEN1:
 		return
 	for slot: int in Gen2SaveMon.MAX_MOVES:
-		var move: int = int(mon.moves[slot])
-		if move > 0:
-			mon.pp[slot] = int(data.move(move).get("pp", 0))
+		if int(mon.moves[slot]) > 0:
+			mon.pp[slot] = mon.max_pp(data, slot)
 
 
 ## Its PC_WITHDRAW tail: `CalcMonStats`, no status and MON_MAXHP into MON_HP,

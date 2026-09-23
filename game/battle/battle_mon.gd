@@ -53,6 +53,10 @@ var exp: int = 0
 ## Move numbers and the PP left in each, one to one.
 var moves: Array = []
 var pp: Array = []
+var pp_ups: Array = []
+
+## `wBattleMonNick`: the party's nickname, or empty for the species name.
+var nickname: String = ""
 
 var hp: int = 0
 var stats: Dictionary = {}
@@ -162,6 +166,7 @@ var last_counter_move: int = 0
 var mimicked_slot: int = -1
 var mimic_original_move: int = 0
 var mimic_original_pp: int = 0
+var mimic_original_pp_ups: int = 0
 
 ## Conversion and Conversion2 write both type bytes in the active battle
 ## struct. Empty means the species row still supplies them. A switch clears the
@@ -542,7 +547,7 @@ func transform_into(target: Gen2BattleMon) -> bool:
 	if transform_original.is_empty():
 		transform_original = {
 			"species": species, "dvs": dvs, "moves": moves.duplicate(),
-			"pp": pp.duplicate(), "stats": stats.duplicate(),
+			"pp": pp.duplicate(), "pp_ups": pp_ups.duplicate(), "stats": stats.duplicate(),
 			"stages": stages.duplicate(), "battle_types": battle_types.duplicate(),
 			"gen1_stats": gen1_stats.duplicate(),
 		}
@@ -550,9 +555,10 @@ func transform_into(target: Gen2BattleMon) -> bool:
 	dvs = target.dvs
 	moves = target.moves.duplicate()
 	pp = []
+	pp_ups = []
 	for move_number: int in moves:
 		# `.pp_loop`: an empty slot stays empty, Sketch takes one, the rest five.
-		pp.append(0 if move_number == 0 else (1 if move_number == 166 else 5))
+		pp.append(0 if move_number == 0 else (1 if move_number == Gen2MoveEffect.SKETCH_MOVE else 5))
 	for key: String in ["attack", "defense", "speed", "sp_attack", "sp_defense"]:
 		stats[key] = int(target.stats.get(key, stats.get(key, 1)))
 	stages = target.stages.duplicate()
@@ -575,6 +581,7 @@ func restore_transform() -> void:
 	dvs = int(transform_original["dvs"])
 	moves = (transform_original["moves"] as Array).duplicate()
 	pp = (transform_original["pp"] as Array).duplicate()
+	pp_ups = (transform_original["pp_ups"] as Array).duplicate()
 	stats = (transform_original["stats"] as Dictionary).duplicate()
 	stages = (transform_original["stages"] as Dictionary).duplicate()
 	gen1_stats = (transform_original["gen1_stats"] as Dictionary).duplicate()
@@ -737,6 +744,29 @@ func restore_health() -> void:
 	restore_pp()
 
 
+## The name every battle line prints. Transform leaves it alone.
+func display_name() -> String:
+	if not nickname.is_empty() or data == null:
+		return nickname
+	return String(data.species(persistent_species()).get("name", ""))
+
+
+func max_pp(slot: int) -> int:
+	if slot < 0 or slot >= moves.size() or data == null:
+		return 0
+	return data.move_max_pp(int(moves[slot]), pp_ups_of(slot))
+
+
+func pp_ups_of(slot: int) -> int:
+	return int(pp_ups[slot]) if slot >= 0 and slot < pp_ups.size() else 0
+
+
+func _set_pp_ups(slot: int, count: int) -> void:
+	while pp_ups.size() <= slot:
+		pp_ups.append(0)
+	pp_ups[slot] = count
+
+
 ## PP for a move slot, or zero for a slot that holds nothing.
 func pp_left(slot: int) -> int:
 	return int(pp[slot]) if slot >= 0 and slot < pp.size() else 0
@@ -773,6 +803,7 @@ func learn_move(move: int) -> bool:
 		return false
 	moves.append(move)
 	pp.append(int(data.move(move).get("pp", 0)))
+	_set_pp_ups(moves.size() - 1, 0)
 	return true
 
 
@@ -782,6 +813,7 @@ func replace_move(slot: int, move: int) -> bool:
 		return false
 	moves[slot] = move
 	pp[slot] = int(data.move(move).get("pp", 0))
+	_set_pp_ups(slot, 0)
 	# `BattleCommand_Sketch` writes the party struct with no transform test.
 	if not transform_original.is_empty():
 		var backup_moves: Array = transform_original["moves"]
@@ -799,8 +831,10 @@ func mimic_move(slot: int, move: int) -> bool:
 	mimicked_slot = slot
 	mimic_original_move = int(moves[slot])
 	mimic_original_pp = pp_left(slot)
+	mimic_original_pp_ups = pp_ups_of(slot)
 	moves[slot] = move
 	pp[slot] = 5
+	_set_pp_ups(slot, 0)
 	return true
 
 
@@ -834,6 +868,15 @@ func persistent_pp(slot: int) -> int:
 	return pp_left(slot)
 
 
+func persistent_pp_ups(slot: int) -> int:
+	if not transform_original.is_empty():
+		var original: Array = transform_original.get("pp_ups", [])
+		return int(original[slot]) if slot >= 0 and slot < original.size() else 0
+	if slot == mimicked_slot and not is_gen1():
+		return mimic_original_pp_ups
+	return pp_ups_of(slot)
+
+
 func restore_mimic() -> void:
 	if mimicked_slot >= 0 and mimicked_slot < moves.size():
 		moves[mimicked_slot] = mimic_original_move
@@ -841,12 +884,14 @@ func restore_mimic() -> void:
 		# the copy spent stays spent.
 		if not is_gen1():
 			pp[mimicked_slot] = mimic_original_pp
+			_set_pp_ups(mimicked_slot, mimic_original_pp_ups)
 	mimicked_slot = -1
 	mimic_original_move = 0
 	mimic_original_pp = 0
+	mimic_original_pp_ups = 0
 
 
 func restore_pp() -> void:
 	pp = []
-	for move: int in moves:
-		pp.append(int(data.move(int(move)).get("pp", 0)))
+	for slot: int in moves.size():
+		pp.append(max_pp(slot))

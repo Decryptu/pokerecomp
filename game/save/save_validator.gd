@@ -178,9 +178,12 @@ static func _validate_mon_moves(
 	for move_slot: int in Gen2SaveMon.MAX_MOVES:
 		var move_number: int = int(mon.moves[move_slot])
 		var pp: int = int(mon.pp[move_slot])
+		var ups: int = int(mon.pp_ups[move_slot]) if move_slot < mon.pp_ups.size() else -1
+		if ups < 0 or ups > GameData.PP_UPS_MAX:
+			return _failure("%s has invalid PP Ups in slot %d" % [subject, move_slot + 1])
 		if move_number == 0:
 			empty_seen = true
-			if pp != 0:
+			if pp != 0 or ups != 0:
 				return _failure("%s has PP for an empty move" % subject)
 			continue
 		if empty_seen:
@@ -188,7 +191,7 @@ static func _validate_mon_moves(
 		var move: Dictionary = data.move(move_number)
 		if move.is_empty():
 			return _failure("%s has unknown move %d" % [subject, move_number])
-		if pp < 0 or pp > int(move.get("pp", 0)):
+		if pp < 0 or pp > data.move_max_pp(move_number, ups):
 			return _failure("%s has invalid PP for move %d" % [subject, move_number])
 	return {"ok": true, "message": ""}
 

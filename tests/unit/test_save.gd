@@ -73,11 +73,15 @@ func test_a_battle_party_round_trips_into_persistent_fields() -> void:
 func test_a_saved_pokemon_restores_stats_hp_status_exp_and_pp() -> void:
 	var save: Gen2SaveData = _save()
 	save.party[0].ot_id = 1234
+	save.party[0].nickname = "SPARKY"
 	var restored: Gen2Party = Gen2SaveBattleAdapter.to_battle_party(_data, save)
 	assert_not_null(restored)
 	var original: Gen2BattleMon = _party().at(0)
 	var mon: Gen2BattleMon = restored.at(0)
 	assert_eq(mon.ot_id, 1234)
+	assert_eq(mon.display_name(), "SPARKY", "wBattleMonNick is the party's nickname")
+	restored.at(1).nickname = ""
+	assert_eq(restored.at(1).display_name(), String(_data.species(restored.at(1).species)["name"]))
 	assert_eq(Gen2SaveBattleAdapter.from_battle_mon(mon).ot_id, 1234)
 	assert_eq(mon.species, original.species)
 	assert_eq(mon.level, original.level)
@@ -750,6 +754,27 @@ func test_sram_game_time_round_trips_both_profile_layouts() -> void:
 		assert_true(round_trip["ok"], round_trip["message"])
 		var restored_time: PokeGameTime = round_trip["save"].game_time
 		assert_eq(restored_time.to_dict(), save.game_time.to_dict(), String(game_id))
+
+
+## `MON_PP`'s top two bits are the PP Ups, so a raised move goes to the cartridge
+## and comes back with its count and its PP left apart.
+func test_sram_pp_ups_round_trip_beside_the_pp_left() -> void:
+	var data: GameData = _adapter_data(RomRegistry.GOLD)
+	var raw: PackedByteArray = _raw_cartridge(RomRegistry.GOLD, data)
+	var save: Gen2SaveData = Gen2SramAdapter.import_bytes(
+		RomRegistry.GOLD, data.sha1, 0, raw, data
+	)["save"]
+	var mon: Gen2SaveMon = save.party[0]
+	mon.pp_ups[0] = 2
+	mon.pp[0] = 3
+	var exported: Dictionary = Gen2SramAdapter.export_bytes(save, raw, data)
+	assert_true(exported["ok"], exported["message"])
+	var back: Gen2SaveMon = Gen2SramAdapter.import_bytes(
+		RomRegistry.GOLD, data.sha1, 0, exported["raw"], data
+	)["save"].party[0]
+	assert_eq(int(back.pp_ups[0]), 2)
+	assert_eq(int(back.pp[0]), 3)
+	assert_eq(Gen2SaveMon.from_dict(back.to_dict()).pp_ups, back.pp_ups, "the slot file keeps them")
 
 
 ## `sCrystalData` is its own SRAM section outside both save copies, so the byte

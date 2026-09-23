@@ -1959,7 +1959,10 @@ func _spend_poison_steps() -> bool:
 	if save == null:
 		return false
 	var pass_result: Dictionary = Gen2WorldPartyHost.apply_poison_step(_data, save)
-	if bool(pass_result.get("sfx", false)):
+	var texts: PackedStringArray = pass_result.get("texts", PackedStringArray())
+	## Generation 1 prints each faint inside the damage loop, ahead of the flash.
+	var flash_first: bool = _data.generation != RomRegistry.GEN1 or texts.is_empty()
+	if flash_first and bool(pass_result.get("sfx", false)):
 		_play_sfx(SFX_POISON)
 		_start_poison_flash()
 	## `.curMonNotPlayerPikachu`'s PIKAHAPPY_PSNFNT, once per member that fell,
@@ -1970,7 +1973,6 @@ func _spend_poison_steps() -> bool:
 		starter_fell = starter_fell or _world.gen1_starter_slot() == slot
 	var after: Callable = _play_pikachu_clip.bind(Gen2Battle.PIKACHU_CLIP_FAINTED) \
 		if starter_fell else Callable()
-	var texts: PackedStringArray = pass_result.get("texts", PackedStringArray())
 	if texts.is_empty():
 		if not PackedInt32Array(pass_result.get("damaged", PackedInt32Array())).is_empty():
 			_refresh_labels()
@@ -1982,7 +1984,11 @@ func _spend_poison_steps() -> bool:
 	## the player sees: the row is taken off the party behind it.
 	for lost: Dictionary in _reap_nuzlocke_faints(save, Gen2Nuzlocke.CAUSE_POISON):
 		lines.append(Gen2Nuzlocke.death_text(Gen2Nuzlocke.grave_name(_data, lost)))
-	if bool(pass_result.get("whiteout", false)):
+	if not flash_first:
+		_show_player_event(lines, _then(after, _gen1_poison_tail.bind(
+			save, bool(pass_result.get("sfx", false)), bool(pass_result.get("whiteout", false))
+		)))
+	elif bool(pass_result.get("whiteout", false)):
 		lines.append_array(_whiteout_texts())
 		_world.gen1_map_blackout()
 		_hold_poison_flash(_show_player_event.bind(lines, _then(after, _finish_whiteout)))
@@ -1990,6 +1996,18 @@ func _spend_poison_steps() -> bool:
 		_persist_after_poison_step(save)
 		_hold_poison_flash(_show_player_event.bind(lines, after))
 	return true
+
+
+## `.applyDamageLoopDone`: the flash if anyone is still poisoned, then a blackout.
+func _gen1_poison_tail(save: Gen2SaveData, sfx: bool, whiteout: bool) -> void:
+	if sfx:
+		_play_sfx(SFX_POISON)
+		_start_poison_flash()
+	if not whiteout:
+		_persist_after_poison_step(save)
+		return
+	_world.gen1_map_blackout()
+	_hold_poison_flash(_show_player_event.bind(_whiteout_texts(), _finish_whiteout))
 
 
 ## Both callables in order, either of which may be unset.
@@ -4183,12 +4201,8 @@ func _preview_field_move(move: int) -> void:
 		_refresh_labels()
 		return
 	var teacher: Gen2SaveMon = save.party[0]
-	teacher.moves[0] = move
-	## The slot's PP with it. `Gen2SaveValidator` refuses a row carrying more PP
-	## than its move has, so a Tackle at 35 replaced by a Surf at 15 left a save
-	## every world transaction after it would refuse: the field move worked and
-	## the next catch, purchase or party change reported nothing but failure.
-	teacher.pp[0] = int(_data.move(move).get("pp", 0))
+	## `Gen2SaveValidator` refuses more PP than the new move has.
+	teacher.set_move(_data, 0, move)
 	_injected_save = save
 	_world.state.set_engine_flag(_field_move_badge_flag(move))
 	_open_embedded_party()

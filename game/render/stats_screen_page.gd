@@ -906,7 +906,8 @@ func _draw_gen1_moves(page: Dictionary, into: PackedByteArray) -> void:
 	for slot: int in MAX_MOVES:
 		var step := Vector2i(0, slot * GEN1_ROW_STEP)
 		if slot >= moves.size():
-			## `StatusScreen_PrintPP`'s second run fills the rest with dashes.
+			## `FormatMovesString`'s dash and `StatusScreen_PrintPP`'s two.
+			_text(into, width, "-", GEN1_MOVES_AT + step)
 			_text(into, width, GEN1_PP_DASH, GEN1_PP_LABEL_AT + step)
 			continue
 		var move: Dictionary = moves[slot]

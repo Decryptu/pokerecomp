@@ -438,13 +438,13 @@ func entry_map(
 		_put(map, 14, 7, HEIGHT_FEET)
 		_number(map, 15, 7, height % 100, 2, true)
 		_number(map, 11, 9, int(entry.get("weight", 0)), 5, false, 1)
-	_put(map, 1, 9, PAGE_MARKER_TOP)
-	_put(map, 2, 9, PAGE_MARKER_TOP)
-	_put(map, 1, 10, PAGE_MARKER)
-	_put(map, 2, 10, PAGE_ONE if page == Gen2Pokedex.PAGE_1 else PAGE_TWO)
-	var pages: Array = entry.get("pages", []) as Array
-	var body: String = String(pages[page]) if page < pages.size() else ""
-	_paragraph(map, 2, 11, body)
+		## `DisplayDexEntry` returns behind the number for a species not caught.
+		_put(map, 1, 9, PAGE_MARKER_TOP)
+		_put(map, 2, 9, PAGE_MARKER_TOP)
+		_put(map, 1, 10, PAGE_MARKER)
+		_put(map, 2, 10, PAGE_ONE if page == Gen2Pokedex.PAGE_1 else PAGE_TWO)
+		var pages: Array = entry.get("pages", []) as Array
+		_paragraph(map, 2, 11, String(pages[page]) if page < pages.size() else "")
 	_place_footprint_cells(map)
 	if menu_row and cursor >= 0 and cursor < Gen2PokedexScreen.ENTRY_BUTTONS.size():
 		_put(map, ENTRY_CURSOR_COLUMNS[cursor], 17, CURSOR_CODE)

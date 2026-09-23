@@ -47,7 +47,7 @@ const GROUPS: Dictionary = {
 	&"gen1": [
 		&"gen1_tables", &"gen1_pics", &"gen1_maps", &"gen1_walk", &"gen1_battle",
 		&"gen1_battle_anims", &"gen1_catch", &"gen1_trainers", &"gen1_audio",
-		&"gen1_opening", &"gen1_surfing", &"gen1_played", &"pokedex", &"slots", &"evolutions",
+		&"gen1_opening", &"gen1_surfing", &"played", &"pokedex", &"slots", &"evolutions",
 		&"link", &"nuzlocke", &"second_screen",
 	],
 }

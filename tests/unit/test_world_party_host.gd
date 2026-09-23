@@ -5,6 +5,7 @@ extends GutTest
 ## content is needed to test the atomic host boundary.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
+const TACKLE: int = preload("res://tests/unit/battle_fixture.gd").TACKLE
 
 var _data: GameData = null
 var _world: Gen2WorldAPI = null
@@ -689,16 +690,50 @@ func test_a_status_healer_is_refused_on_a_fainted_member() -> void:
 	assert_eq(_world.state.item_quantity(0x09), 1)
 
 
-## PP UP raises `PP_UP_MASK`, which [Gen2SaveMon] does not carry: the pack says
-## so rather than pretending the item did nothing.
-func test_pp_up_names_the_save_field_it_needs() -> void:
-	_world.state.apply_changes({}, {}, {"items": {Gen2WorldPartyHost.ITEM_PP_UP: 1}})
-	var result: Dictionary = Gen2WorldPartyHost.use_item(
+## `RestorePPEffect`'s `PP_UP` branch: the move list first, then a fifth of the
+## base on the ceiling and on the PP left, three times, then `PPIsMaxedOutText`
+## with the item kept. The count is the byte's top two bits, so it survives
+## the battle model and the cartridge's own party struct.
+func test_pp_up_raises_a_move_three_times_and_then_refuses() -> void:
+	_world.state.apply_changes({}, {}, {"items": {Gen2WorldPartyHost.ITEM_PP_UP: 4}})
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.set_move(_data, 0, TACKLE)
+	var base: int = int(_data.move(TACKLE).get("pp", 0))
+	var step: int = mini(base / 5, GameData.PP_UP_STEP_MAX)
+	mon.pp[0] = base - 1
+	var asked: Dictionary = Gen2WorldPartyHost.use_item(
 		_world, _save, Gen2WorldPartyHost.ITEM_PP_UP, 0, false
 	)
-	assert_false(bool(result["ok"]))
-	assert_eq(StringName(result["reason"]), &"pp_up_unsupported")
+	assert_eq(StringName(asked["reason"]), &"move_slot_required")
+	for times: int in GameData.PP_UPS_MAX:
+		var raised: Dictionary = Gen2WorldPartyHost.use_item(
+			_world, _save, Gen2WorldPartyHost.ITEM_PP_UP, 0, false, 0
+		)
+		assert_true(bool(raised["ok"]), JSON.stringify(raised))
+		assert_eq(StringName(raised["effect"]), &"pp_up")
+		assert_eq(int(raised["move"]), TACKLE, "the line names the move")
+	mon = _save.party[0]
+	assert_eq(int(mon.pp_ups[0]), GameData.PP_UPS_MAX)
+	assert_eq(mon.max_pp(_data, 0), base + GameData.PP_UPS_MAX * step)
+	assert_eq(int(mon.pp[0]), base - 1 + GameData.PP_UPS_MAX * step)
+	var refused: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_PP_UP, 0, false, 0
+	)
+	assert_eq(StringName(refused["reason"]), &"pp_maxed_out")
 	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_PP_UP), 1)
+	var fighting: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(_data, mon)
+	fighting.restore_pp()
+	assert_eq(fighting.pp_left(0), mon.max_pp(_data, 0), "the battle's ceiling is the save's")
+	assert_eq(Gen2SaveBattleAdapter.from_battle_mon(fighting).pp_ups[0], GameData.PP_UPS_MAX)
+
+
+## `ComputeMaxPP`'s cap: a fifth of 40 is 8, held to 7, so three raise it to 61.
+func test_a_pp_up_step_is_capped_at_seven() -> void:
+	for number: int in range(1, 252):
+		if int(_data.move(number).get("pp", 0)) == 40:
+			assert_eq(_data.move_max_pp(number, 3), 61)
+			return
+	fail_test("the fixture carries no 40 PP move")
 
 
 ## `VitaminEffect`: ten added to the high byte of one stat experience word,

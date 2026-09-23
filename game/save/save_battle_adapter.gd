@@ -27,6 +27,7 @@ static func from_battle_mon(mon: Gen2BattleMon) -> Gen2SaveMon:
 		# party move too, so it needs no exception here.
 		out.moves[slot] = mon.persistent_move(slot)
 		out.pp[slot] = mon.persistent_pp(slot)
+		out.pp_ups[slot] = mon.persistent_pp_ups(slot)
 	return out
 
 
@@ -35,12 +36,14 @@ static func to_battle_mon(data: GameData, saved: Gen2SaveMon) -> Gen2BattleMon:
 		return null
 	var known_moves: Array = []
 	var saved_pp: Array = []
+	var saved_ups: Array = []
 	for slot: int in Gen2SaveMon.MAX_MOVES:
 		var move_number: int = int(saved.moves[slot])
 		if move_number == 0:
 			continue
 		known_moves.append(move_number)
 		saved_pp.append(int(saved.pp[slot]))
+		saved_ups.append(int(saved.pp_ups[slot]))
 	var out: Gen2BattleMon = Gen2BattleMon.create(
 		data, saved.species, saved.level, known_moves, saved.dvs, saved.stat_exp, saved.item
 	)
@@ -50,8 +53,10 @@ static func to_battle_mon(data: GameData, saved: Gen2SaveMon) -> Gen2BattleMon:
 	out.ot_id = saved.ot_id
 	out.status = saved.status
 	out.happiness = saved.happiness
+	out.nickname = saved.nickname
 	out.caught_location = saved.caught_location & Gen2BattleMon.CAUGHT_LOCATION_MASK
 	out.pp = saved_pp
+	out.pp_ups = saved_ups
 	out.hp = clampi(saved.hp, 0, out.max_hp())
 	return out
 

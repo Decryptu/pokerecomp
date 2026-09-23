@@ -133,9 +133,12 @@ func _build(data: GameData) -> Control:
 
 ## The start menu over a world holding one of each pack row the submenu splits
 ## on: a POTION (USE/GIVE/TOSS), a REPEL (which also reaches SEL) and the
-## BICYCLE, whose key-item row offers neither GIVE nor TOSS.
+## BICYCLE, whose key-item row offers neither GIVE nor TOSS, and PP UP.
 func _build_pack(data: GameData, save: Gen2SaveData) -> Control:
-	var state := Gen2WorldState.new({}, {}, {ITEM_POTION: 3, ITEM_REPEL: 2, ITEM_BICYCLE: 1})
+	var state := Gen2WorldState.new({}, {}, {
+		ITEM_POTION: 3, ITEM_REPEL: 2, ITEM_BICYCLE: 1,
+		int(Gen2WorldPartyHost.item_effects(data)["pp_up"]): 2,
+	})
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(
 		data, Gen2WorldSpawn.NEW_BARK_GROUP, Gen2WorldSpawn.PLAYERS_HOUSE_2F,
 		Gen2WorldSpawn.HOME_CELL, state

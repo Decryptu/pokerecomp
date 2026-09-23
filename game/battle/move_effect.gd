@@ -61,6 +61,7 @@ const METRONOME_MOVE: int = 118
 const MIRROR_MOVE_MOVE: int = 119
 const CONVERSION_MOVE: int = 160
 const MIMIC_MOVE: int = 102
+const ABSORB_MOVE: int = 71
 const SKETCH_MOVE: int = 166
 const CONVERSION_2_MOVE: int = 176
 const SLEEP_TALK_MOVE: int = 214

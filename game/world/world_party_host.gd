@@ -111,9 +111,7 @@ const HAPPINESS_PROBABILITIES: Dictionary = {
 const STRING_BUFFER_1: Dictionary = {true: 0xD073, false: 0xCF6B}
 const HAPPINESS_TABLE_OVERRUN_OPCODE: int = 0x21
 
-## `RareCandyEffect` and `RestorePPEffect`'s own six. PP UP is the seventh and
-## has no branch: `ApplyPPUp` raises a ceiling the save model does not carry, so
-## the pack refuses it and says why (see `use_item`).
+## `RareCandyEffect`'s item and `RestorePPEffect`'s seven.
 const ITEM_RARE_CANDY: int = 0x20
 const ITEM_PP_UP: int = 0x3E
 const ITEM_ETHER: int = 0x3F
@@ -789,6 +787,7 @@ static func use_item(
 		"stat": String(effect.get("stat", "")),
 		"level": int(effect.get("level", 0)),
 		"restored": int(effect.get("restored", 0)),
+		"move": int(effect.get("move", 0)),
 	}
 
 
@@ -828,10 +827,9 @@ static func teach_tm_hm(
 		return _failure(StringName(opened["reason"]), opened.get("details", {}))
 	var candidate: Gen2SaveData = opened["candidate"]
 	var learner: Gen2SaveMon = candidate.party[party_index] as Gen2SaveMon
-	learner.moves[slot] = move
 	# LearnMove writes the move, then its PP from Moves + MOVE_PP: a freshly
 	# learned move always arrives at full PP.
-	learner.pp[slot] = int(world.data.move(move).get("pp", 0))
+	learner.set_move(world.data, slot, move)
 
 	var before: Gen2WorldSnapshot = world.snapshot()
 	## `IsHM` returns before both the happiness change and `ConsumeTM`, so an HM
@@ -955,8 +953,7 @@ static func learn_move(
 		return _failure(StringName(opened["reason"]), opened.get("details", {}))
 	var candidate: Gen2SaveData = opened["candidate"]
 	var learner: Gen2SaveMon = candidate.party[party_index] as Gen2SaveMon
-	learner.moves[slot] = move
-	learner.pp[slot] = int(world.data.move(move).get("pp", 0))
+	learner.set_move(world.data, slot, move)
 	## `.learned` is what `CheckCanLearnMoveTutorMove` tests before its
 	## `ChangeHappiness`, so a cancelled forget charges nothing: the refusals
 	## above have already answered by here.
@@ -2058,11 +2055,7 @@ static func _apply_item_effect(
 	if (effects["pp_restore"] as Dictionary).has(item):
 		return _apply_pp_restore(data, mon, item, move_slot, effects)
 	if item == int(effects["pp_up"]):
-		## `ApplyPPUp` raises `PP_UP_MASK`, the top two bits of a move's own PP
-		## byte, which [Gen2SaveMon] does not keep: its `pp` is the current value
-		## alone and every `max_pp` in the game is the move's base. Building this
-		## is a save-format addition.
-		return {"ok": false, "reason": &"pp_up_unsupported", "item": item}
+		return _apply_pp_up(data, mon, item, move_slot)
 	var evolution_row: Dictionary = _item_evolution_row(data, mon, item)
 	if not evolution_row.is_empty():
 		## Yellow's `ItemUseEvoStone` asks `IsThisPartyMonStarterPikachu` once the
@@ -2225,8 +2218,7 @@ static func _apply_rare_candy(
 		if empty < 0:
 			move_offers.append(move)
 			continue
-		mon.moves[empty] = move
-		mon.pp[empty] = int(data.move(move).get("pp", 0))
+		mon.set_move(data, empty, move)
 		moves_learned.append(move)
 	var levelled: Dictionary = {
 		"ok": true, "effect": &"rare_candy", "level": mon.level,
@@ -2294,7 +2286,7 @@ static func _apply_pp_restore(
 		var move: int = int(mon.moves[slot])
 		if move <= 0:
 			continue
-		var maximum: int = int(data.move(move).get("pp", 0))
+		var maximum: int = mon.max_pp(data, slot)
 		var current: int = int(mon.pp[slot])
 		if current >= maximum:
 			continue
@@ -2305,6 +2297,20 @@ static func _apply_pp_restore(
 	if restored <= 0:
 		return {"ok": false, "reason": &"item_has_no_effect"}
 	return {"ok": true, "effect": &"restore_pp", "restored": restored}
+
+
+## `RestorePPEffect`'s `PP_UP`: `wUsePPUp` is `wTempPP`, so the PP left gains a step.
+static func _apply_pp_up(data: GameData, mon: Gen2SaveMon, item: int, move_slot: int) -> Dictionary:
+	if move_slot < 0 or move_slot >= Gen2SaveMon.MAX_MOVES or int(mon.moves[move_slot]) <= 0:
+		return {"ok": false, "reason": &"move_slot_required", "item": item}
+	var move: int = int(mon.moves[move_slot])
+	var ups: int = int(mon.pp_ups[move_slot])
+	if ups >= GameData.PP_UPS_MAX or (move == Gen2MoveEffect.SKETCH_MOVE and data.generation != RomRegistry.GEN1):
+		return {"ok": false, "reason": &"pp_maxed_out", "move": move, "item": item}
+	var before: int = mon.max_pp(data, move_slot)
+	mon.pp_ups[move_slot] = ups + 1
+	mon.pp[move_slot] = int(mon.pp[move_slot]) + mon.max_pp(data, move_slot) - before
+	return {"ok": true, "effect": &"pp_up", "move": move}
 
 
 ## `VitaminEffect`. The cap is a refusal rather than a clamp.
@@ -2365,8 +2371,7 @@ static func _apply_sacred_ash(data: GameData, save: Gen2SaveData) -> Dictionary:
 		mon.hp = max_hp
 		mon.status = Gen2Status.NONE
 		for slot: int in Gen2SaveMon.MAX_MOVES:
-			var move_number: int = int(mon.moves[slot])
-			mon.pp[slot] = int(data.move(move_number).get("pp", 0)) if move_number > 0 else 0
+			mon.pp[slot] = mon.max_pp(data, slot)
 	return {"ok": true, "effect": &"sacred_ash", "healed": healed}
 
 
@@ -2445,9 +2450,11 @@ static func apply_evolution(data: GameData, mon: Gen2SaveMon, row: Dictionary) -
 		battle_mon.item = 0
 	mon.moves = [0, 0, 0, 0]
 	mon.pp = [0, 0, 0, 0]
+	mon.pp_ups = [0, 0, 0, 0]
 	for slot: int in mini(battle_mon.moves.size(), Gen2SaveMon.MAX_MOVES):
 		mon.moves[slot] = int(battle_mon.moves[slot])
 		mon.pp[slot] = int(battle_mon.pp[slot])
+		mon.pp_ups[slot] = battle_mon.pp_ups_of(slot)
 	mon.exp = battle_mon.exp
 	mon.hp = battle_mon.hp
 	mon.status = battle_mon.status
@@ -3369,8 +3376,7 @@ static func _apply_dratini_moveset(
 	var taught: Array = []
 	for move_slot: int in DRATINI_MOVESETS[moveset].size():
 		var move: int = int(DRATINI_MOVESETS[moveset][move_slot])
-		mon.moves[move_slot] = move
-		mon.pp[move_slot] = int(world.data.move(move).get("pp", 0))
+		mon.set_move(world.data, move_slot, move)
 		taught.append(move)
 	return {
 		"ok": true, "accepted": true, "script_value": 0,

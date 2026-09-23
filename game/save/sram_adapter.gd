@@ -19,6 +19,7 @@ const MON_NAME_LENGTH: int = 11
 const NICKNAMED_MON_SIZE: int = PARTYMON_SIZE + MON_NAME_LENGTH
 const PP_MASK: int = 0x3F
 const PP_UP_MASK: int = 0xC0
+const PP_UP_SHIFT: int = 6
 
 ## `wPlayerGender` is the first byte of `wCrystalData`, and bit 0 is the whole of
 ## it: 0 male, 1 female. The other six bytes of the run are the mobile profile's
@@ -371,6 +372,7 @@ static func read_party_mon(raw: PackedByteArray, start: int) -> Gen2SaveMon:
 	mon.item = int(raw[start + 1])
 	mon.moves = []
 	mon.pp = []
+	mon.pp_ups = []
 	for index: int in Gen2SaveMon.MAX_MOVES:
 		mon.moves.append(int(raw[start + 2 + index]))
 	mon.ot_id = _read_u16_be(raw, start + 6)
@@ -381,6 +383,7 @@ static func read_party_mon(raw: PackedByteArray, start: int) -> Gen2SaveMon:
 	mon.dvs = _read_u16_be(raw, start + 21)
 	for index: int in Gen2SaveMon.MAX_MOVES:
 		mon.pp.append(int(raw[start + 23 + index]) & PP_MASK)
+		mon.pp_ups.append(int(raw[start + 23 + index]) >> PP_UP_SHIFT)
 	mon.happiness = int(raw[start + 27])
 	mon.pokerus = int(raw[start + 28])
 	var caught_time_level: int = int(raw[start + 29])
@@ -488,9 +491,6 @@ static func _write_gender(raw: PackedByteArray, layout: Dictionary, gender: int)
 
 
 static func _write_mon(raw: PackedByteArray, start: int, mon: Gen2SaveMon, data: GameData) -> void:
-	var old_pp: Array = []
-	for index: int in Gen2SaveMon.MAX_MOVES:
-		old_pp.append(int(raw[start + 23 + index]) & PP_UP_MASK)
 	raw[start] = mon.species
 	raw[start + 1] = mon.item
 	for index: int in Gen2SaveMon.MAX_MOVES:
@@ -501,7 +501,8 @@ static func _write_mon(raw: PackedByteArray, start: int, mon: Gen2SaveMon, data:
 		_write_u16_be(raw, start + 11 + index * 2, int(mon.stat_exp.get(Gen2SaveMon.STAT_EXP_KEYS[index], 0)))
 	_write_u16_be(raw, start + 21, mon.dvs)
 	for index: int in Gen2SaveMon.MAX_MOVES:
-		raw[start + 23 + index] = old_pp[index] | (int(mon.pp[index]) & PP_MASK)
+		raw[start + 23 + index] = ((int(mon.pp_ups[index]) << PP_UP_SHIFT) & PP_UP_MASK) \
+			| (int(mon.pp[index]) & PP_MASK)
 	raw[start + 27] = mon.happiness
 	raw[start + 28] = mon.pokerus
 	raw[start + 29] = (clampi(mon.caught_time, 0, 3) << 6) | clampi(mon.caught_level, 0, 63)
