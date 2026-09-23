@@ -1730,7 +1730,22 @@ func register_content(
 func patch_content(
 	kind: StringName, id: StringName, number: int, fields: Dictionary
 ) -> Dictionary:
+	if kind == Gen2ContentOverlay.KIND_ENCOUNTER and number >= 0:
+		var method: StringName = Gen2ContentOverlay.ENCOUNTER_METHODS[
+			mini(number >> 16, Gen2ContentOverlay.ENCOUNTER_METHODS.size() - 1)
+		]
+		var field: String = Gen2WorldEncounter.patch_error(fields, method, generation())
+		if not field.is_empty():
+			return {
+				"ok": false, "reason": &"invalid_encounter_patch",
+				"detail": "%s %d:%d %s" % [method, (number >> 8) & 0xFF, number & 0xFF, field],
+			}
 	return Gen2ContentOverlay.shared().patch(kind, id, number, fields)
+
+
+## Drops [param id]'s patches of [param kind], or all of them, keeping its definitions.
+func clear_patches(id: StringName, kind: StringName = &"") -> void:
+	Gen2ContentOverlay.shared().clear_patches(id, kind)
 
 
 ## Rewrites one named box, by the pair [method GameData.text] reads it under.
@@ -1762,12 +1777,9 @@ func patch_type_matchup(
 	)
 
 
-## Changes one map's wild encounter record: the rates and the per-time-of-day
-## slots [method GameData.world_encounter] answers with, which is what a
-## randomizer rewrites. [param method] is one of
-## [constant Gen2ContentOverlay.ENCOUNTER_METHODS].
-## `slots` and `rates` are arrays and replace whole. Patching a map this
-## cartridge does not carry changes nothing, exactly as a species patch does.
+## One map's [method GameData.world_encounter] row under one of
+## [constant Gen2ContentOverlay.ENCOUNTER_METHODS]. `slots` and `rates` replace
+## whole at the cartridge's own count; a map this cartridge lacks changes nothing.
 func patch_encounter(
 	id: StringName, method: StringName, group: int, number: int, fields: Dictionary
 ) -> Dictionary:
@@ -1777,7 +1789,7 @@ func patch_encounter(
 			"ok": false, "reason": &"unknown_encounter_method",
 			"detail": "%s %d:%d" % [method, group, number],
 		}
-	return Gen2ContentOverlay.shared().patch(Gen2ContentOverlay.KIND_ENCOUNTER, id, at, fields)
+	return patch_content(Gen2ContentOverlay.KIND_ENCOUNTER, id, at, fields)
 
 
 func patch_fishing_group(id: StringName, group: int, fields: Dictionary) -> Dictionary:

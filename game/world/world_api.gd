@@ -505,11 +505,9 @@ func landmark() -> int:
 ## `Pokedex_GetLandmark` and the `TownMap_*` routines share: a map with no
 ## landmark borrows [member backup_warp]'s, POKECENTER_2F on every visit.
 func landmark_backup() -> int:
-	## `LoadTownMapEntry` takes `wCurMap` itself, so a Generation 1 map reaches a
-	## landmark with no backup, and [method GameData.area_landmark] folds a
-	## dungeon's floors onto the one entry they draw.
+	## `LoadTownMapEntry` takes `wCurMap` itself, so a Generation 1 map needs no backup.
 	if data != null and data.generation == RomRegistry.GEN1:
-		return data.area_landmark(current_map.number) if current_map != null else 0
+		return data.map_landmark(current_map)
 	var here: int = landmark()
 	if here != Gen2WorldRadio.LANDMARK_SPECIAL or backup_warp.is_empty() or data == null:
 		return here
@@ -2553,9 +2551,8 @@ func wild_encounters_off() -> bool:
 	return state.wild_encounters_off()
 
 
-## What [method active_encounter_tables] resolves against and nothing else: the
-## hour the objects are drawn at, the Bug Contest and a swarm on this map. Three
-## reads rather than two table builds, so a caller may ask every frame.
+## What [method active_encounter_tables] resolves against: the hour, the Bug
+## Contest, a swarm here and the mod overlay. Cheap enough to ask every frame.
 func encounter_tables_key() -> Array:
 	if current_map == null or data == null:
 		return []
@@ -2563,6 +2560,7 @@ func encounter_tables_key() -> Array:
 		object_time_of_day,
 		bug_contest_active(),
 		state.swarm_active_on(current_map.group, current_map.number),
+		data.content_revision(),
 	]
 
 

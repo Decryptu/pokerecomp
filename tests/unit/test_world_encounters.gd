@@ -25,6 +25,27 @@ func test_grass_uses_the_selected_time_of_day_slots() -> void:
 	assert_eq(result["values"]["kind"], &"wild")
 
 
+## A slot may name a species a mod defined, and a wild is built from it the way
+## a gift or a trainer's party is. A number nothing defined finds nothing.
+func test_a_slot_naming_a_mod_species_is_met_in_the_wild() -> void:
+	Gen2ModHost.reset()
+	var voltling: int = Gen2ContentOverlay.FIRST_MOD_NUMBER
+	var water: Array = [{"level": 9, "species": voltling}, {"level": 9, "species": voltling},
+		{"level": 9, "species": voltling}]
+	var record: Dictionary = {"rate": 255, "slots": water}
+	var surf: StringName = Gen2WorldEncounter.METHOD_SURF
+	var rng := RandomNumberGenerator.new()
+	assert_true(Gen2WorldEncounter.resolve(record, surf, 0, rng, true).is_empty())
+	Gen2ModHost.instance().register_content(
+		Gen2ContentOverlay.KIND_SPECIES, &"testmod", voltling, {"name": "VOLTLING"}
+	)
+	assert_eq(int(Gen2WorldEncounter.resolve(record, surf, 0, rng, true)["pokemon"]), voltling)
+	assert_true(Gen2WorldEncounter.valid_mon(151, 5, true))
+	assert_false(Gen2WorldEncounter.valid_mon(152, 5, true), "past Mew on Red, Blue and Yellow")
+	assert_false(Gen2WorldEncounter.valid_mon(25, 101))
+	Gen2ModHost.reset()
+
+
 ## `slot_chance` is the gap between two cumulative entries, in the roll's own
 ## units, and every slot `active_slots` answers carries it.
 func test_a_slot_carries_its_chance_in_the_rolls_own_units() -> void:

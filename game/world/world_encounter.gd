@@ -11,9 +11,8 @@ const METHOD_SURF: StringName = &"surf"
 const METHOD_OLD_ROD: StringName = &"old_rod"
 const METHOD_GOOD_ROD: StringName = &"good_rod"
 const METHOD_SUPER_ROD: StringName = &"super_rod"
-## TreeMonEncounter's own method. Unlike the five above it reads no rate, no
-## slot table and no repel step, so nothing in resolve() handles it: it is a
-## name for the request a headbutt produces.
+## TreeMonEncounter's own method, which reads no rate, slot table or repel step,
+## so resolve() never sees it.
 const METHOD_HEADBUTT: StringName = &"headbutt"
 ## RockMonEncounter's own method, which reads no rate and no slot table either.
 const METHOD_ROCK_SMASH: StringName = &"rock_smash"
@@ -113,8 +112,7 @@ static func _wild_mon(
 		return {}
 	var species: int = int((selected as Dictionary).get("species", 0))
 	var level: int = int((selected as Dictionary).get("level", 0))
-	var highest: int = Gen1Layout.INDEX_COUNT if gen1 else Gen2Layout.SPECIES_COUNT
-	if species < 1 or species > highest or level < 1 or level > Gen2Layout.MAX_LEVEL:
+	if not valid_mon(species, level, gen1):
 		return {}
 	## The last test, after `ValidateTempWildMonSpecies` and on the drawn slot
 	## rather than the table: a wild UNOWN is refused outright while
@@ -128,6 +126,68 @@ static func _wild_mon(
 		level_roll = generator.randi_range(0, 255)
 		level = mini(level + _surf_level_bonus(level_roll), Gen2Layout.MAX_LEVEL)
 	return {"slot": slot, "species": species, "level": level, "level_roll": level_roll}
+
+
+## A cartridge or mod-defined species at a legal level; both generations store dex numbers.
+static func valid_mon(species: int, level: int, gen1: bool = false) -> bool:
+	if level < 1 or level > Gen2Layout.MAX_LEVEL:
+		return false
+	var highest: int = Gen1Layout.SPECIES_COUNT if gen1 else Gen2Layout.SPECIES_COUNT
+	return (species >= 1 and species <= highest) \
+		or Gen2ContentOverlay.shared().defines(Gen2ContentOverlay.KIND_SPECIES, species)
+
+
+## The patch field off the importer's shape, or empty: a short `slots` makes every
+## roll past its end find nothing. [param generation] 0 takes either one's shape.
+static func patch_error(fields: Dictionary, method: StringName, generation: int) -> String:
+	if fields.has("slots") and not _slot_shapes(method, generation).any(
+		func(shape: Vector2i) -> bool: return _fits(fields["slots"], shape)
+	):
+		return "slots"
+	if fields.has("rates") and not _fits_bytes(fields["rates"], Gen2Layout.WILD_TIME_COUNT):
+		return "rates"
+	if fields.has("rate") and not _fits_bytes([fields["rate"]], 1):
+		return "rate"
+	return ""
+
+
+## `_read_record`'s 3 lists of 7 on grass and 3 flat on water; 10 flat on Generation 1.
+static func _slot_shapes(method: StringName, generation: int) -> Array[Vector2i]:
+	var gen1 := Vector2i(Gen1Layout.WILD_SLOT_COUNT, 0)
+	var gen2 := Vector2i(Gen2Layout.WILD_WATER_SLOT_COUNT, 0)
+	if method in [METHOD_GRASS, &"swarm_grass"]:
+		gen2 = Vector2i(Gen2Layout.WILD_TIME_COUNT, Gen2Layout.WILD_GRASS_SLOT_COUNT)
+	if generation == RomRegistry.GEN1:
+		return [gen1]
+	if generation == RomRegistry.GEN2:
+		return [gen2]
+	return [gen1, gen2]
+
+
+static func _fits(slots: Variant, shape: Vector2i) -> bool:
+	if not slots is Array or (slots as Array).size() != shape.x:
+		return false
+	for entry: Variant in slots as Array:
+		if shape.y > 0 and not _fits(entry, Vector2i(shape.y, 0)):
+			return false
+		if shape.y == 0 and not (entry is Dictionary and _slot_in_range(entry)):
+			return false
+	return true
+
+
+## Only the floor: a mod species may be defined after its patch lands.
+static func _slot_in_range(entry: Dictionary) -> bool:
+	var level: int = int(entry.get("level", 0))
+	return int(entry.get("species", 0)) >= 1 and level >= 1 and level <= Gen2Layout.MAX_LEVEL
+
+
+static func _fits_bytes(values: Variant, count: int) -> bool:
+	if not values is Array or (values as Array).size() != count:
+		return false
+	for value: Variant in values as Array:
+		if not (value is int or value is float) or int(value) < 0 or int(value) > 0xFF:
+			return false
+	return true
 
 
 static func _fishing_slot(entries: Array, slot_roll: int) -> Dictionary:
@@ -206,7 +266,7 @@ static func resolve_fishing(
 	var time_group: int = int(mon["time_group"])
 	var species: int = int(mon["species"])
 	var level: int = int(mon["level"])
-	if species < 1 or species > Gen2Layout.SPECIES_COUNT or level < 1 or level > Gen2Layout.MAX_LEVEL:
+	if not valid_mon(species, level):
 		return {}
 	return {
 		"kind": &"wild_encounter_requested",
@@ -373,10 +433,8 @@ static func _slots(
 	return (value as Array)[index] if index < (value as Array).size() and (value as Array)[index] is Array else []
 
 
-## The slots [method resolve] would draw from, as
-## `{species, min_level, max_level}`. A cartridge table names one level per slot,
-## so the bounds are equal; the shape is the Bug Contest's, whose rows are a
-## range. See [method Gen2WorldAPI.active_encounter_tables].
+## [method resolve]'s slots in the Bug Contest's `{species, min_level, max_level}`
+## shape; a cartridge slot names one level, so its two bounds are equal.
 static func active_slots(
 	record: Dictionary, method: StringName, time_of_day: int, gen1: bool = false
 ) -> Array:
@@ -498,7 +556,7 @@ static func resolve_gen1_fishing(
 	var slot: Dictionary = slots[picked]
 	var species: int = int(slot.get("species", 0))
 	var level: int = int(slot.get("level", 0))
-	if species < 1 or level < 1:
+	if not valid_mon(species, level, true):
 		return {}
 	return {
 		"kind": &"wild_encounter_requested",
