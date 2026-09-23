@@ -100,7 +100,7 @@ func _gen1() -> bool:
 
 ## The area one map belongs to: `wCurLandmark`, or its shared town map entry.
 func _area_of(map: Gen2WorldMap) -> int:
-	return _r.data.area_landmark(map.number) if _gen1() else map.location
+	return _r.data.map_landmark(map)
 
 
 ## Whether a wild can be met on this map at all. Grass and water are the two

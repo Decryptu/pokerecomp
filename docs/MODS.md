@@ -89,7 +89,7 @@ Two example mods are in `mods/examples/`. Copy either into `user://mods/`.
 | Mod | Shows |
 |---|---|
 | `voxel_preview/` | A world renderer. Switch it on from its launcher page, from the start menu's MODS entry, or with `V` in the overworld. It extrudes geometry from the same collision, block and palette data the 2D view reads, on the native layer, with a translucent text box and one registered setting |
-| `new_content/` | Every non-renderer surface in one file: a type and two matchups, a species with its own art, a move, a move effect, an item with its pocket and mart shelf, a named control axis, a visible-encounter population, two rebalancing patches, both event channels and a presentation mutator |
+| `new_content/` | Every non-renderer surface in one file: a type and two matchups, a species with its own art, a move, a move effect, an item with its pocket and mart shelf, a named control axis, a visible-encounter population, two rebalancing patches, a setting that rewrites every wild table and puts it back, both event channels and a presentation mutator |
 
 The examples are excluded from every export preset. A distributed build ships the
 loader and no mod.
@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 41 | `clear_patches()`, an encounter patch refused off the cartridge's slot count, a mod species met in the wild, `GameData.map_landmark()` and `world_fishing_group_count()`, and `Gen2WorldAPI.encounter_tables_key()` moving when a patch lands |
 | 40 | `Gen2WorldTileset.name`, the `TILESET_*` constant's name on every cartridge, `GameData.world_tileset_named()`, and `Gen2Layout.tileset_name()` and `tileset_number()` between Crystal's numbering and Gold and Silver's |
 | 39 | A Generation 1 map draws block 0 as block 0, through `Gen2WorldAPI.drawn_block_of`; `Gen2BattleColors`, the colours a battle is drawn in on either generation, for any renderer; `Gen2BattleRenderer.back_pixels`; `Gen2WorldPalette.overworld_sprite_colors`, `Gen2WorldMap.is_outside()` and `Gen2WorldCollision.gen1_ledge_direction` |
 | 38 | `chance` on every slot `active_encounter_tables()` answers; a shiny pulse announced with `SFX_SHINE` on Red, Blue and Yellow; Yellow's Pikachu in `occupied` |
@@ -386,21 +387,44 @@ since a mod can add neither a map nor a map header. Use the helpers rather than
 counting table coordinates:
 
 ```gdscript
-host.patch_encounter(manifest.id, &"grass", 3, 2, {
-	"rate": 20,
-	"slots": [[{"level": 50, "species": 1}], [], []],
-})
+var row: Dictionary = data.world_encounter(&"grass", 3, 2)
+for day: Array in row["slots"]:
+	for slot: Dictionary in day:
+		slot["species"] = 1
+host.patch_encounter(manifest.id, &"grass", 3, 2, {"rates": [20, 20, 20], "slots": row["slots"]})
 host.patch_fishing_group(manifest.id, 1, {"rods": [...]})
 ```
 
-On Red, Blue and Yellow a group is `SuperRodData`'s one-based row and holds
+The method is one of `grass`, `surf`, `swarm_grass` and `swarm_water`. `slots`
+and `rates` replace whole, and the patched row is what every reader gets,
+including the region walk `FindNest` uses. `slots` keeps the cartridge's slot
+count, because each slot is a fixed share of the roll and a short list would
+make the rest of the roll find nothing. A patch off that shape is refused as
+`invalid_encounter_patch`:
+
+| Table | `slots` | Rate the roll reads |
+|---|---|---|
+| Gold, Silver, Crystal grass and `swarm_grass` | 3 lists (morning, day, night) of 7 | `rates`, 3 bytes |
+| Gold, Silver, Crystal `surf` and `swarm_water` | 3 | `rate`, 1 byte |
+| Red, Blue, Yellow grass and `surf` | 10 | `rate`, 1 byte |
+
+A slot is `{species, level}` with a level from 1 to 100. The species is a dex
+number on every cartridge, or a species a mod defined.
+
+Every table is reached by walking `data.world_maps()` with the four methods, and
+`data.landmark_name(data.map_landmark(map))` names the map for a menu on either
+generation. Fishing groups run from 1 to `data.world_fishing_group_count()`. On
+Red, Blue and Yellow a group is `SuperRodData`'s one-based row and holds
 `slots`, `{level, species}` rows (Yellow's with a `threshold`), replaced whole.
 The Old and Good Rod read no map, so their slots are the two groups
 `GameData.GEN1_OLD_ROD_GROUP` and `GEN1_GOOD_ROD_GROUP`, patched the same way.
 
-The method is one of `grass`, `surf`, `swarm_grass` and `swarm_water`. `slots`
-and `rates` replace whole. The patched row is what every reader gets, including
-the region walk `FindNest` uses.
+`clear_patches(id, kind)` drops the mod's own patches of one kind, or of every
+kind with no `kind`, and keeps what it defined. A patch or a clear lands at
+once: the next step rolls against it and a visible population is handed the new
+table. A table editor can apply its edits from `option_changed` and take them
+back when its switch goes off; `mods/examples/new_content/` does that with
+every table.
 
 The four wild sources beside the map tables are patched by index:
 

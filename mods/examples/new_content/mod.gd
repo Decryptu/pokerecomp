@@ -33,9 +33,13 @@ const CURIOS_POCKET: int = Gen2ModHost.FIRST_MOD_POCKET
 const PIKACHU: int = 25
 const THUNDERBOLT: int = 85
 
+const WILD_KEY: StringName = &"pikachu_in_the_wild"
+
 ## This mod's own id, kept because a subscriber is called back long after
 ## `register` returned and a request the host records names whose it was.
 var _id: StringName = &""
+## The cache the wild tables are read from, opened once and only when needed.
+var _data: GameData = null
 
 
 func register(host: Gen2ModHost, manifest: PokeModManifest) -> void:
@@ -49,6 +53,7 @@ func register(host: Gen2ModHost, manifest: PokeModManifest) -> void:
 	_walk_something_behind_the_player(host, manifest.id)
 	_add_a_stats_page(host, manifest.id)
 	_rebalance(host, manifest.id)
+	_fill_the_wild(host, manifest.id)
 	_play_differently(host, manifest)
 	_watch(host, manifest.id)
 
@@ -747,6 +752,53 @@ func _rebalance(host: Gen2ModHost, id: StringName) -> void:
 		"stats": {"speed": 110},
 	})
 	host.patch_content(Gen2ContentOverlay.KIND_MOVE, id, THUNDERBOLT, {"power": 90})
+
+
+## Every wild table rewritten while a setting is on and put back when it goes
+## off, mid-run (`api_version` 41). A slot keeps its level and its place in the
+## roll, so only the species moves. `clear_patches` named with a kind drops only
+## this mod's patches of that kind, so `_rebalance` and the matchups stay.
+func _fill_the_wild(host: Gen2ModHost, id: StringName) -> void:
+	host.register_option(id, {
+		"key": WILD_KEY, "label": "PIKACHU in every wild table",
+		"values": [false, true], "labels": ["OFF", "ON"],
+	})
+	host.option_changed.connect(
+		func(mod: StringName, key: StringName, _value: Variant) -> void:
+			if mod == id and key == WILD_KEY:
+				_apply_the_wild(host, id)
+	)
+	if bool(host.option(id, WILD_KEY)):
+		_apply_the_wild(host, id)
+
+
+func _apply_the_wild(host: Gen2ModHost, id: StringName) -> void:
+	host.clear_patches(id, Gen2ContentOverlay.KIND_ENCOUNTER)
+	if not bool(host.option(id, WILD_KEY)):
+		return
+	if _data == null:
+		_data = GameData.open(host.target_game())
+	if _data == null:
+		return
+	for map: Gen2WorldMap in _data.world_maps():
+		for method: StringName in Gen2ContentOverlay.ENCOUNTER_METHODS:
+			var row: Dictionary = _data.world_encounter(method, map.group, map.number)
+			if not row.is_empty():
+				host.patch_encounter(id, method, map.group, map.number, {
+					"slots": _as_pikachu(row["slots"]),
+				})
+
+
+## Grass on Gold, Silver and Crystal is a list per time of day; everything else
+## is one flat list.
+func _as_pikachu(slots: Array) -> Array:
+	var out: Array = []
+	for slot: Variant in slots:
+		if slot is Array:
+			out.append(_as_pikachu(slot))
+		else:
+			out.append({"species": PIKACHU, "level": int((slot as Dictionary)["level"])})
+	return out
 
 
 ## Watching the game without changing it. Both channels carry the typed
