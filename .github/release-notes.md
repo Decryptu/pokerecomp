@@ -3,35 +3,17 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Gold, Silver and Crystal open the full pack screen for SELL at the mart, DEPOSIT ITEM at the PC and PACK in battle, with its pockets, the sell dial, the money box and the USE/QUIT menu.
-- The PC item list has CANCEL, a quantity dial and a toss question.
-- The battle party list opens SWITCH, STATS and CANCEL, and STATS shows the stats screen in battle.
-- Mods get API 43: one call draws a battle square and both status panels, one list holds everything the overworld draws, and the playthrough check can run with mods at their default settings.
+- Mods get API 44: one call draws a trainer's party balls, everything the overworld draws carries its height and map position, people on connected maps are listed out to a renderer's reach, and `reachable_checks()` lets an item shuffle place key items so the game can always be finished.
+- Oak's aides in Red, Blue and Yellow are item checks a mod can change, each with the Pokedex count it asks for.
 
 ## Changed
 
-- Every YES/NO box works the same way: the answer stays on screen a moment before it is used, the cursor stops at the ends, and B means NO. A question longer than one box is read page by page before the choice appears.
-- The pack reopens on the last pocket and row you used.
-- A mod's item shuffle is refused when it hides a story item behind the gate it opens, such as OAK'S PARCEL or the SQUIRTBOTTLE.
+- A mod's item shuffle no longer puts a key item on a check that needs a Pokemon it cannot prove you have, such as Elm's EVERSTONE, which waits for the Togepi from the MYSTERY EGG.
 
 ## Fixed
 
-- FLY takes you to the town you pick with A, and the TOWN MAP closes on A in Red, Blue and Yellow.
-- A trainer's Pokemon comes out of its ball before it moves and cries. "sent out" and other long lines scroll up instead of starting a new box.
-- The Team Rocket Hideout grunts walk up to you at the security cameras, and Lance leaves the Electrode room without walking through walls.
-- A wild battle where both Pokemon faint, or where you say NO to "Use next" and run, no longer brings the party list back forever.
-- The first Pokemon that can fight leads the battle; a fainted lead is no longer sent out.
-- The Day-Care egg can be collected, and Mom starts saving money.
-- Warps work on dark maps in Red, Blue and Yellow, such as Rock Tunnel without FLASH.
-- Oak's aides give their item and say how many Pokemon they asked for and how many you have.
-- The PC in Red, Blue and Yellow acts on the entry you picked, and BILL's PC opens on its own menu.
-- The Goldenrod Pokemon Center in Crystal no longer gives the GS BALL, and the Battle Tower desk no longer reports a deleted record.
-- Medicine in battle fills the HP bar and says what it did.
-- B advances text, START closes the menu, GIVE and TAKE go back to the party list, Repel says it was used, and the radio plays its station.
-- Nicknames, eggs, gender and status show correctly in the party, PC, trade and naming screens.
-- Red, Blue and Yellow draw a Pokemon that used Minimize and the Substitute doll, and a Pokemon comes back on screen after Quick Attack, Low Kick, Submission and Counter.
-- The Day-Care egg and the move tutor's refusal play the right sound.
-- A mod's gift egg stays an egg, and a mod that changes the wild tables shows its new Pokemon on the map straight away.
+- A caught Pokemon joins the party when a mod gives experience for catching. The Pokedex counted it, but it appeared neither in the party nor in the PC (#703).
+- After FLY, DIG, ESCAPE ROPE or TELEPORT in Gold, Silver and Crystal, you can walk straight away without pressing A (#705).
 
 ## Which file
 
