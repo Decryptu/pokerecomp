@@ -228,7 +228,7 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 	&"gift": BOX_REVEAL_FRAMES,
 	&"nurse": BOX_REVEAL_FRAMES, &"vending": BOX_REVEAL_FRAMES,
 	&"prizes": BOX_REVEAL_FRAMES, &"trade": BOX_REVEAL_FRAMES,
-	&"elevator": BOX_REVEAL_FRAMES,
+	&"elevator": BOX_REVEAL_FRAMES, &"phone_call_use": BOX_REVEAL_FRAMES,
 	&"coins": BOX_REVEAL_FRAMES, &"deal": BOX_REVEAL_FRAMES,
 	&"ticket": BOX_REVEAL_FRAMES, &"day_care": BOX_REVEAL_FRAMES,
 	&"name_rater": BOX_REVEAL_FRAMES,

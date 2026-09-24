@@ -102,10 +102,8 @@ static func build(data: GameData, state: Gen2WorldState) -> Array:
 	var owned: Dictionary = state.items()
 	for pocket_type: int in pocket_order(data):
 		var pocket_items: Array = []
-		## The order the map holds, which is the order the items were received:
-		## a cartridge pocket is a packed array `ReceiveItem` appends to, and
-		## `SwitchItemsInBag` is the only thing that ever reorders one. Sorting
-		## here would make SELECT unobservable.
+		## Receipt order: the other pockets are packed arrays `ReceiveItem` appends
+		## to, and only `SwitchItemsInBag` reorders one.
 		for raw_item: Variant in owned.keys():
 			var item: int = int(raw_item)
 			var quantity: int = int(owned[raw_item])
@@ -120,6 +118,10 @@ static func build(data: GameData, state: Gen2WorldState) -> Array:
 				"quantity": quantity,
 				"field_menu": int(definition.get("field_menu", 0)),
 			})
+		## `wTMsHMs` is a count per TM/HM number, so that pocket is in number order.
+		if pocket_type == TYPE_TM_HM:
+			pocket_items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+				return int(a["item"]) < int(b["item"]))
 		pockets.append({
 			"pocket": pocket_type,
 			"name": pocket_name(pocket_type),

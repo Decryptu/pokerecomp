@@ -1133,4 +1133,6 @@ func test_fainting_hides_each_panel_until_its_replacement_enters() -> void:
 			"type": Gen2Battle.SENT_OUT, "side": side, "species": 16,
 			"level": 7, "hp": 30, "max_hp": 30,
 		})
+		assert_false(bool(_battle_screen._renderer._view[key]), "the line and the ball come first")
+		_battle_screen._apply_event_state({"type": Gen2Battle.HUD_DRAWN, "side": side})
 		assert_true(bool(_battle_screen._renderer._view[key]))

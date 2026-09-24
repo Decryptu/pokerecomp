@@ -186,6 +186,35 @@ func set_dvs(mon: Gen2SaveMon, attack: int, defense: int, speed: int, special: i
 	return _changed()
 
 
+func gender_of(mon: Gen2SaveMon) -> StringName:
+	if mon == null or data.generation == RomRegistry.GEN1:
+		return Gen2BattleMon.GENDER_NONE
+	return Gen2BattleMon.gender_for(data, mon.species, mon.dvs)
+
+
+## Moves the Attack DV by the least that crosses the species' gender ratio.
+func set_gender(mon: Gen2SaveMon, gender: StringName) -> Dictionary:
+	if mon == null:
+		return _refuse("no Pokemon is selected")
+	if gender_of(mon) == gender:
+		return _changed()
+	var attack: int = Gen2Stats.attack_dv(mon.dvs)
+	for distance: int in range(1, Gen2Stats.MAX_DV + 1):
+		for candidate: int in [attack - distance, attack + distance]:
+			if candidate < 0 or candidate > Gen2Stats.MAX_DV:
+				continue
+			var dvs: int = Gen2Stats.pack_dvs(
+				candidate, Gen2Stats.defense_dv(mon.dvs), Gen2Stats.speed_dv(mon.dvs),
+				Gen2Stats.special_dv(mon.dvs),
+			)
+			if Gen2BattleMon.gender_for(data, mon.species, dvs) == gender:
+				return set_dvs(
+					mon, candidate, Gen2Stats.defense_dv(mon.dvs),
+					Gen2Stats.speed_dv(mon.dvs), Gen2Stats.special_dv(mon.dvs),
+				)
+	return _refuse("this species cannot be %s" % String(gender))
+
+
 func set_stat_exp(mon: Gen2SaveMon, key: String, value: int) -> Dictionary:
 	if mon == null:
 		return _refuse("no Pokemon is selected")
@@ -292,6 +321,16 @@ func set_item_quantity(item: int, quantity: int) -> Dictionary:
 	var result: Dictionary = bag.set_item_quantity(item, quantity)
 	if not bool(result.get("ok", false)):
 		return _refuse(String(result.get("reason", "that item quantity was refused")))
+	return _changed()
+
+
+## Any bag row, one this cache has no item for included.
+func remove_item(item: int) -> Dictionary:
+	if not has_world():
+		return _refuse("this save has no world state to edit")
+	var result: Dictionary = save.world.world_state.apply_changes({}, {}, {"items": {item: 0}})
+	if not bool(result.get("ok", false)):
+		return _refuse(String(result.get("reason", "that item was not removed")))
 	return _changed()
 
 

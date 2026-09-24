@@ -64,6 +64,7 @@ var _frame: int = 0
 ## them can be told from the ones that do not.
 ## See [method Gen2WorldAPI.encounter_tables_key].
 var _tables_key: Array = []
+var _tables_revision: int = 0
 ## Whether `wildoff` was on when the eligible sweep in the context was taken. A
 ## script may run it in the middle of a walk, and it empties the sweep.
 var _encounters_off: bool = false
@@ -261,6 +262,8 @@ func _reset() -> void:
 	_pulse_id = &""
 	_frame_commands = []
 	_tables_key = _world.encounter_tables_key() if _world != null else []
+	_tables_revision = _world.data.content_revision() \
+		if _world != null and _world.data != null else 0
 	_encounters_off = _world.wild_encounters_off() if _world != null else false
 	_context = _build_context()
 	for provider: Object in _providers:
@@ -344,6 +347,11 @@ func _push_context_changes() -> void:
 		changed = true
 	var key: Array = _world.encounter_tables_key()
 	if key != _tables_key:
+		## A mod's patch rechecks the standing wilds; an hour does not.
+		var revision: int = _world.data.content_revision() if _world.data != null else 0
+		if revision != _tables_revision:
+			_tables_revision = revision
+			_admitted = {}
 		_tables_key = key
 		_context["tables"] = _world.active_encounter_tables()
 		changed = true

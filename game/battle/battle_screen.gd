@@ -1677,8 +1677,7 @@ func _build_entrance() -> void:
 		# `ShowSetEnemyMonAndSendOutAnimation` inside `EnemySwitch`.
 		_entrance_stages.append({"slide": Gen2Battle.ENEMY})
 		_entrance_stages.append({
-			"message": ("%s sent\nout %s!" if _generation() == RomRegistry.GEN1 else "%s\nsent out\n%s!")
-				% [_enemy_battler_label(), _battle.mon(Gen2Battle.ENEMY).display_name()],
+			"message": _enemy_sent_out_line(_battle.mon(Gen2Battle.ENEMY).display_name()),
 		})
 		_entrance_stages.append(
 			_with_frontpic(
@@ -1898,6 +1897,12 @@ func _enemy_battler_label() -> String:
 	return "%s %s" % [
 		_data.trainer_name(_enemy_trainer_class), _enemy_trainer_name(),
 	]
+
+
+## `BattleText_EnemySentOut`, or Generation 1's `_TrainerSentOutText`.
+func _enemy_sent_out_line(mon_name: String) -> String:
+	return ("%s sent\nout %s!" if _generation() == RomRegistry.GEN1 else "%s\nsent out\n%s!") \
+		% [_enemy_battler_label(), mon_name]
 
 
 func _rival_class() -> bool:
@@ -2813,9 +2818,21 @@ func _audio_assets() -> Dictionary:
 	return {} if _data == null else _data.audio_assets()
 
 
-## The two pictures put back where a battle draws them, which every send-out and
-## every fresh battle does. `ClearBattleAnims` never touches the map, so a Fly
-## that took a picture off it leaves it off until something stamps it back.
+## The entering square emptied for the ball; the other stays as it stands.
+func _clear_entering_square(side: int) -> void:
+	var player_side: bool = side == Gen2Battle.PLAYER
+	var before: PackedByteArray = _bg_map
+	_reseed_bg_map()
+	Gen2BattleScreenMap.copy_battler(_bg_map, before, not player_side, _generation())
+	Gen2BattleScreenMap.clear_battler(_bg_map, player_side, _generation())
+	_battler_visible[side] = false
+	_battler_scale[side] = 1.0
+	_battler_shift[side] = Vector2.ZERO
+
+
+## The two pictures put back where a battle draws them, which every fresh battle
+## does. `ClearBattleAnims` never touches the map, so a Fly that took a picture
+## off it leaves it off until something stamps it back.
 func _reseed_bg_map() -> void:
 	_bg_map = Gen2BattleScreenMap.seeded(_generation())
 	_faints.clear()
@@ -5967,7 +5984,49 @@ const EVENT_STATE_HANDLERS: Dictionary = {
 	Gen2Battle.MOVE_FORGOTTEN: &"_play_move_forgotten",
 	Gen2Battle.SUBSTITUTE_PIC: &"_set_substitute_pic_event",
 	Gen2Battle.MINIMIZED: &"_set_minimize_pic_event",
+	Gen2Battle.SENT_OUT: &"_apply_sent_out",
+	Gen2Battle.HUD_DRAWN: &"_apply_hud_drawn",
 }
+
+
+## `ClearEnemyMonBox` and `BattleMonEntrance` clear the panel and square before
+## the line; Generation 1's `SendOutMon` draws the player's panel after it.
+func _apply_sent_out(event: Dictionary) -> void:
+	var side: int = int(event["side"])
+	if side == Gen2Battle.ENEMY:
+		if not _battle.in_battle_tower and not _battle.is_link_battle:
+			enemy_seen.emit(int(event["species"]), int(event.get("unown_form", 0)))
+		_enemy = int(event["species"])
+		_enemy_nick = String(event.get("name", ""))
+		_enemy_unown_form = int(event.get("unown_form", 0))
+		_enemy_shiny = bool(event.get("shiny", false))
+		_enemy_hud_visible = false
+		_hud_balls = []
+		_hud_border = []
+		_enemy_level = int(event["level"])
+		set_hp(int(event["hp"]), int(event["max_hp"]), _player_hp, _player_max_hp)
+	else:
+		_player = int(event["species"])
+		_player_nick = String(event.get("name", ""))
+		_player_unown_form = int(event.get("unown_form", 0))
+		_player_shiny = bool(event.get("shiny", false))
+		_player_hud_visible = _generation() == RomRegistry.GEN1
+		_player_level = int(event["level"])
+		set_hp(_enemy_hp, _enemy_max_hp, int(event["hp"]), int(event["max_hp"]))
+	# A send-out zeroes `wPlayerMinimized` and draws a fresh picture, never the
+	# Substitute doll the last one left.
+	_set_substitute_pic(side, false)
+	_set_minimize_pic(side, false)
+	_clear_entering_square(side)
+	_refresh_exp_bar()
+
+
+func _apply_hud_drawn(event: Dictionary) -> void:
+	if int(event["side"]) == Gen2Battle.ENEMY:
+		_enemy_hud_visible = true
+	else:
+		_player_hud_visible = true
+	_push_view()
 
 
 func _begin_faint_event(event: Dictionary) -> void:
@@ -6025,42 +6084,9 @@ func _apply_event_state(event: Dictionary) -> void:
 			_push_view()
 		Gen2Battle.CRY:
 			_play_entrance_cry(int(event["side"]), int(event["species"]), int(event.get("pikachu_clip", -1)))
-		Gen2Battle.SENT_OUT:
-			# Sent-out events carry each opponent's actual species, appearance and level.
-			if int(event["side"]) == Gen2Battle.ENEMY:
-				if not _battle.in_battle_tower and not _battle.is_link_battle:
-					enemy_seen.emit(int(event["species"]), int(event.get("unown_form", 0)))
-				_enemy = int(event["species"])
-				_enemy_nick = String(event.get("name", ""))
-				_enemy_unown_form = int(event.get("unown_form", 0))
-				_enemy_shiny = bool(event.get("shiny", false))
-				_enemy_hud_visible = true
-				## `ClearEnemyMonBox`, in front of `ShowBattleTextEnemySentOut`.
-				_hud_border = []
-				_enemy_level = int(event["level"])
-				set_hp(int(event["hp"]), int(event["max_hp"]), _player_hp, _player_max_hp)
-			else:
-				_player = int(event["species"])
-				_player_nick = String(event.get("name", ""))
-				_player_unown_form = int(event.get("unown_form", 0))
-				_player_shiny = bool(event.get("shiny", false))
-				_player_hud_visible = true
-				_player_level = int(event["level"])
-				set_hp(_enemy_hp, _enemy_max_hp, int(event["hp"]), int(event["max_hp"]))
-			# A send-out draws a picture through `GetBattleMonBackpic` or
-			# `GetEnemyMonFrontpic`, and the doll it would answer with belongs to
-			# a Substitute that switching has already taken away.
-			_set_substitute_pic(int(event["side"]), false)
-			# `wPlayerMinimized` is one of the bytes a send-out zeroes, so the
-			# fresh picture is the Pokemon's own however the last one left.
-			_set_minimize_pic(int(event["side"]), false)
-			_reseed_bg_map()
-			_refresh_exp_bar()
 		Gen2Battle.EXP_GAINED:
-			# Never [constant Gen2Battle.ENEMY]: see the event's own doc comment.
-			# [method _refresh_exp_bar] always reads whoever is active right now,
-			# which answers correctly on its own even when the index that gained
-			# it is a benched participant rather than the one on screen.
+			# Never the enemy. [method _refresh_exp_bar] reads whoever is active,
+			# which holds for a benched gainer too.
 			_refresh_exp_bar()
 		Gen2Battle.GREW_LEVEL:
 			# The level number in the panel belongs to whoever is on screen, so
@@ -6547,13 +6573,11 @@ func _gen1_trainer_ai_text(key: String, values: Array) -> String:
 	return text
 
 
-## `_TrainerSentOutText` names `wTrainerName`; a wild has no line of its own.
 func _sent_out_text(event: Dictionary) -> String:
 	var gen1: bool = _generation() == RomRegistry.GEN1
 	var species: String = _event_name(event)
 	if int(event.get("side", Gen2Battle.PLAYER)) == Gen2Battle.ENEMY:
-		return "%s sent\nout %s!" % [_enemy_battler_label(), species] if gen1 \
-			else "Enemy sent out %s!" % species
+		return _enemy_sent_out_line(species)
 	var lines: Array[String] = GEN1_SEND_OUT_LINES if gen1 else SEND_OUT_LINES
 	return lines[clampi(int(event.get("line", Gen2Battle.SEND_OUT_GO)), 0, lines.size() - 1)] % species
 

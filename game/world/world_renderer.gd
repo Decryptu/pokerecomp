@@ -962,8 +962,8 @@ func _draw_player(background: Vector2) -> Vector2:
 		_world.player_sprite(), _world.player_palette(), _world.player_drawn_facing(),
 		_world.player_walk_frame()
 	)
-	if not _world.player_visible():
-		## `disappear PLAYER` takes object zero out of OAM.
+	if not _world.player_visible() or _world.player_skyfall_hidden():
+		## `disappear PLAYER` takes object zero out of OAM; so does a skyfall.
 		return player
 	if player_texture != null:
 		if not (_world.fishing_busy() and _draw_fishing_body(player_texture, player + jump)):

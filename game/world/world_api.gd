@@ -238,6 +238,8 @@ var _map_entry_scene_pending: bool = false
 ## cartridge runs one on `MAPSETUP_ENTER` and not again until the next one, so a
 ## host that dispatches an entry twice must not get two.
 var _map_entry_scene_ran: bool = false
+## `Script_warpcheck`'s copied warp, which the next pass takes.
+var _warp_check_armed: bool = false
 var _object_visibility_overrides: Dictionary = {}
 var _transient_object_visibility_overrides: Dictionary = {}
 ## Live cells and facings written by moveobject, turnobject, followers and the
@@ -880,9 +882,27 @@ const JUMP_OFFSETS: Array[int] = [
 ]
 
 
+## `StepFunction_Skyfall`: 16 hidden passes, then 16 at `$60 * sin(n * pi / 32) - $60`.
+const SKYFALL_HIDDEN_PASSES: int = 16
+const SKYFALL_FALL_PASSES: int = 16
+const SKYFALL_HEIGHT: int = 0x60
+const STEP_KIND_SKYFALL: StringName = &"skyfall"
+
+
+func player_skyfall_hidden() -> bool:
+	return _player_step_kind == STEP_KIND_SKYFALL and _player_step_passes_remaining > 0 \
+		and _player_step_passes_total - _player_step_passes_remaining < SKYFALL_HIDDEN_PASSES
+
+
 ## [method player_height_offset_pixels] in the renderer's own downward-positive
 ## draw space.
 func player_jump_offset() -> int:
+	if _player_step_kind == STEP_KIND_SKYFALL and _player_step_passes_remaining > 0:
+		var fallen: int = _player_step_passes_total - _player_step_passes_remaining \
+			- SKYFALL_HIDDEN_PASSES + 1
+		if fallen <= 0:
+			return 0
+		return floori(SKYFALL_HEIGHT * sin(float(fallen) * PI / 32.0)) - SKYFALL_HEIGHT
 	if not _player_jumping or _player_step_passes_total <= 0:
 		return 0
 	var spent: int = _player_step_passes_total - _player_step_passes_remaining
@@ -2799,6 +2819,8 @@ const MAP_ENTRY_SUBMENU: int = 0xFA
 const MAP_ENTRY_BADWARP: int = 0xFB
 const MAP_ENTRY_FLY: int = 0xFC
 
+const MAPCALLBACK_TILES: int = 1
+
 const ROAM_NONE: int = 0
 const ROAM_UPDATE: int = 1
 const ROAM_JUMP: int = 2
@@ -3186,8 +3208,7 @@ func registered_phone_contacts() -> Array:
 	return Gen2WorldPhoneHost.registered_contact_summaries(data, state)
 
 
-## Queues the selected outgoing caller script. Pokegear presentation can use
-## this boundary without duplicating phone eligibility rules in a scene.
+## `MakePhoneCallFromPokegear`: the callee script, with no ring.
 func request_outgoing_phone_call(contact_id: int) -> Array:
 	if phone_ring_active():
 		return [{"ok": true, "status": &"phone_ring", "event": pending_phone_ring()}]
@@ -3205,7 +3226,8 @@ func request_outgoing_phone_call(contact_id: int) -> Array:
 		"phone": resolved["phone"],
 		"contact": resolved["contact"],
 	}
-	return _start_phone_ring(request)
+	_enqueue_script(request)
+	return run_event_queue(false)
 
 
 func _start_phone_ring(request: Dictionary, lead_frames: int = 0) -> Array:
@@ -8964,11 +8986,14 @@ func _script_address_for_event(event: Dictionary) -> int:
 
 
 func _enqueue_script(request: Dictionary) -> void:
-	## The two requests with no address of their own, synthesized like an item
-	## ball's: a field-move prompt and a mod's item gift.
+	## The synthesized requests carry no address of their own.
 	if int(request.get("script", 0)) <= 0 \
-		and StringName(request.get("kind", &"")) not in [&"field_move_prompt", &"item_gift"]:
+		and StringName(request.get("kind", &"")) not in [&"field_move_prompt", &"item_gift", &"pitfall"]:
 		return
+	_script_queue.append(_completed_request(request))
+
+
+func _completed_request(request: Dictionary) -> Dictionary:
 	if not request.has("collision"):
 		var cell_value: Variant = request.get("cell", player_cell)
 		var cell: Vector2i = cell_value if cell_value is Vector2i else player_cell
@@ -8977,7 +9002,7 @@ func _enqueue_script(request: Dictionary) -> void:
 	for key: String in defaults:
 		if not request.has(key):
 			request[key] = defaults[key]
-	_script_queue.append(request)
+	return request
 
 
 ## What every script request carries unless it came with its own. `player_cell`
@@ -9032,18 +9057,35 @@ func _queue_map_callbacks(callback_type: int) -> void:
 		## step, its boxes wait for one, and `CheckAndResetEvent` answers only once.
 		_gen1_entry_steps = _spend_gen1_nodes(_gen1_map_script_nodes(Gen1Layout.MAP_LOAD_BOTH))
 		return
-	var bank: int = int(current_map.scripts.get("bank", 0))
 	for callback: Dictionary in current_map.scripts.get("callbacks", []):
 		if callback_type >= 0 and int(callback.get("type", -1)) != callback_type:
 			continue
-		_enqueue_script({
-			"kind": &"callback",
-			"callback_type": int(callback.get("type", -1)),
-			"map_group": current_map.group,
-			"map_number": current_map.number,
-			"bank": bank,
-			"script": int(callback.get("script", 0)),
-		})
+		_enqueue_script(_map_callback_request(callback))
+
+
+func _map_callback_request(callback: Dictionary) -> Dictionary:
+	return {
+		"kind": &"callback",
+		"callback_type": int(callback.get("type", -1)),
+		"map_group": current_map.group,
+		"map_number": current_map.number,
+		"bank": int(current_map.scripts.get("bank", 0)),
+		"script": int(callback.get("script", 0)),
+	}
+
+
+## `RunMapCallback`: the first callback of [param callback_type], run nested
+## inside whatever script asked for the load.
+func _run_map_callback_now(callback_type: int) -> void:
+	if current_map == null or _gen1:
+		return
+	for callback: Dictionary in current_map.scripts.get("callbacks", []):
+		if int(callback.get("type", -1)) != callback_type:
+			continue
+		_finish_script_result(
+			_begin_script(_completed_request(_map_callback_request(callback))).advance(false, -1)
+		)
+		return
 
 
 ## The map's script with [param mask] standing in `wCurrentMapScriptFlags`.
@@ -9132,6 +9174,7 @@ func _coord_event_condition_active(event: Dictionary) -> bool:
 ## answering the events it generated.
 const SCRIPT_EVENT_HANDLERS: Dictionary = {
 	&"warp_check_requested": &"_script_warp_check",
+	&"map_entry_method_requested": &"_script_new_load_map",
 	&"player_facing_requested": &"_script_player_facing",
 	&"player_movement_requested": &"_apply_player_movement",
 	&"object_movement_requested": &"_apply_object_movement",
@@ -9201,17 +9244,51 @@ func _apply_script_object_events(raw_events: Variant) -> Array:
 	return generated
 
 
-## Script_warpcheck asks whether the player is standing on a warp and takes it if
-## so, which is how the Burned Tower rival scene drops the player through the
-## hole it just opened. A cell with no warp answers nothing, exactly as
-## WarpCheck's carry does.
+## Script_warpcheck copies the warp the player stands on for the next pass's
+## `CheckTileEvent`, or for a `newloadmap`.
 func _script_warp_check(_event: Dictionary) -> Array:
-	var checked: Dictionary = try_warp()
-	return [{
-		"type": &"warp_check",
-		"taken": bool(checked.get("ok", false)),
-		"transition": checked.duplicate(true),
-	}]
+	_warp_check_armed = not warp_at(player_cell).is_empty() and _warp_tile_allows(player_cell)
+	return [{"type": &"warp_check", "taken": _warp_check_armed}]
+
+
+## `Script_newloadmap` loads a copied warp on the spot: the magnet train's
+## `MAPSETUP_TRAIN`.
+func _script_new_load_map(event: Dictionary) -> Array:
+	if not _warp_check_armed:
+		return []
+	_warp_check_armed = false
+	var transition: Dictionary = try_warp(player_cell, int(event.get("method", MAP_ENTRY_DOOR)))
+	if not bool(transition.get("ok", false)):
+		return []
+	return [{"type": &"warp", "transition": transition}]
+
+
+## The copied warp, spent: `&"fall"` on a pit, `&"warp"` otherwise.
+func take_warp_check() -> StringName:
+	if not _warp_check_armed:
+		return &""
+	_warp_check_armed = false
+	if warp_at(player_cell).is_empty():
+		return &""
+	return &"fall" if standing_on_pit() else &"warp"
+
+
+## `CheckPitTile`: `PLAYEREVENT_FALL` rather than `PLAYEREVENT_WARP`.
+func standing_on_pit() -> bool:
+	return not _gen1 and Gen2WorldCollision.is_pit_tile(gen2_code_at(player_cell))
+
+
+## `FallIntoMapScript` behind its `newloadmap`, queued after the load's callbacks.
+func run_pitfall_landing() -> Array:
+	if current_map == null:
+		return []
+	_enqueue_script({
+		"kind": &"pitfall",
+		"map_group": current_map.group,
+		"map_number": current_map.number,
+		"bank": int(current_map.events.get("bank", 0)),
+	})
+	return run_event_queue(false)
 
 
 ## Script_warpfacing writes the player's facing before the warp and the map load
@@ -9660,6 +9737,12 @@ func _apply_player_movement(event: Dictionary) -> Array:
 			continue
 		if kind in [&"step_end", &"step_stop"]:
 			break
+		if kind == STEP_KIND_SKYFALL:
+			_queue_player_step(
+				Vector2i.ZERO, SKYFALL_HIDDEN_PASSES + SKYFALL_FALL_PASSES,
+				false, Vector2i.ZERO, kind
+			)
+			continue
 		if kind == &"step_shake":
 			generated.append({
 				"type": &"screen_shake_requested",
@@ -10000,7 +10083,7 @@ func _gen1_extra_warp_check(cell: Vector2i, facing: Vector2i = Vector2i.ZERO) ->
 	return Gen2WorldCollision.gen1_is_warp_carpet(direction, _gen1_tile_drawn_at(ahead))
 
 
-func try_warp(cell: Vector2i = player_cell) -> Dictionary:
+func try_warp(cell: Vector2i = player_cell, entry: int = MAP_ENTRY_DOOR) -> Dictionary:
 	var source_warp: Dictionary = warp_at(cell)
 	if source_warp.is_empty():
 		return {}
@@ -10043,9 +10126,8 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 			backup_warp = {
 				"warp": walked, "map_group": from_map.x, "map_number": from_map.y,
 			}
-	# `wPrevWarp` is the warp walked through, which is what a Dig or an Escape
-	# Rope comes back out of. `WarpToNewMapScript`, the pitfall and the magnet
-	# train name DOOR, FALL and TRAIN, which are one setup-script body.
+	# `wPrevWarp` is the warp walked through, which a Dig or an Escape Rope
+	# comes back out of.
 	var landing: Vector2i = _warp_landing_cell(target_map, target_warp, cell)
 	_gen1_warped_from = {"warp": maxi(warp_index_at(cell) - 1, 0), "map": from_map.y}
 	_gen1_standing_on_door = _gen1
@@ -10055,7 +10137,7 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 			int(source_warp.get("map_number", -1)) == Gen1Layout.WARP_TO_LAST_MAP,
 			target_number, current_map.number, gen1_player_facing(),
 		)
-	_apply_map(target_map, target_tileset, landing, false, warp_index_at(cell), MAP_ENTRY_DOOR)
+	_apply_map(target_map, target_tileset, landing, false, warp_index_at(cell), entry)
 	_gen1_destination_warp = destination_index
 	return {
 		"ok": true,
@@ -12495,11 +12577,11 @@ func reload_current_map() -> Dictionary:
 	if not _gen1:
 		state.reset_map_reload_flags()
 	_arm_wild_encounter_cooldown(true)
-	# `EnterMap`'s one entry-method branch: `hMapEntryMethod` is
-	# MAPSETUP_RELOADMAP here and nowhere else, and that method alone zeroes
-	# `wPoisonStepCount`. So a battle, a `reloadmap` and the catch tutorial each
-	# start the four-step poison phase again, and a warp or a door does not.
+	# MAPSETUP_RELOADMAP alone zeroes `wPoisonStepCount`, so a battle, a
+	# `reloadmap` and the catch tutorial restart the four-step poison phase.
 	state.clear_poison_step_count()
+	## `MapSetupScript_ReloadMap`'s `LoadBlockData` ends in the tiles callback.
+	_run_map_callback_now(MAPCALLBACK_TILES)
 	_load_objects()
 	return {"ok": true, "kind": &"reload_map", "map": map_id(), "cell": player_cell}
 

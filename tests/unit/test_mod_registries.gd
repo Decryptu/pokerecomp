@@ -430,7 +430,7 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	assert_eq(rows.size(), 2)
 	assert_eq(
 		StringName((rows[0] as Dictionary)["action"]),
-		Gen2ModHost.START_ACTION_OPEN_BILLS_PC
+		Gen2ModHost.START_ACTION_OPEN_PC
 	)
 	## The example's own page, and the eight rows it lists with no badges won.
 	assert_eq(host.page_ids(), [&"new_content"])

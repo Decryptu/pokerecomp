@@ -6,6 +6,8 @@ extends Control
 ## hosts and API.
 
 signal completed(results: Array)
+## A Pokegear call placed; the world answers with [method finish_call].
+signal call_placed(results: Array)
 ## The sound this screen asks for, played by the world screen's own driver.
 ## [param waited] is `WaitPlaySFX`; the wait itself is not spent.
 signal sfx_requested(index: int, waited: bool)
@@ -93,6 +95,8 @@ const SFX_WRONG: int = 0x19  ## `BillsPC_PlaceEmptyBoxString_SFX`'s own `SFX_WRO
 ## `Phone_NoSignal` answers a map with no service with.
 const SFX_CALL: int = 0x6A
 const SFX_NO_SIGNAL: int = 0x6C
+## `PokegearPhone_MakePhoneCall`'s `ld c, 10` behind the call.
+const CALL_END_DELAY_FRAMES: int = 10
 
 ## `BillsPC_ChangeBoxSubmenu.MenuData`'s four rows, inline in `bills_pc.asm` and
 ## reached by no script, so they are this screen's the way the top menu is.
@@ -169,6 +173,10 @@ var _pokegear: Gen2PokegearScreen = null
 ## `wPokegearRadioMusicPlaying`. Only the radio card writes it, so an overlay
 ## that never opened one leaves the map's own music where it stands.
 var _radio_music: int = RADIO_MUSIC_SILENT
+## `delay`, `wait` or `hang_up` between a call's script and the card's question.
+var _call_end_stage: StringName = &""
+var _call_end_frames: int = 0
+var _hang_up_phase: StringName = &""
 ## Whether the region map on screen is the fly map, which answers a spawn rather
 ## than closing the overlay.
 var _fly_map: bool = false
@@ -459,6 +467,9 @@ const OVERLAY_MEMBERS: Array[StringName] = [
 func handle_button(button: int) -> bool:
 	if not is_active():
 		return false
+	if _call_end_stage != &"":
+		_press_call_end(button)
+		return true
 	if MODE_PRESS_HANDLERS.has(_mode):
 		call(MODE_PRESS_HANDLERS[_mode], button)
 		return true
@@ -721,6 +732,8 @@ func _press_elevator(button: int) -> void:
 
 ## The page under a YES/NO whose question paged.
 var question_page: String = ""
+var box_palette: PackedColorArray = PackedColorArray()
+var _no_request: bool = false
 
 
 func _open_menu(input: Dictionary) -> void:
@@ -1964,7 +1977,7 @@ func open_bills_pc(
 
 
 ## `special PokemonCenterPC` and `special PlayersHousePC` with no script in front
-## of them, for the screenshot drivers: no preview map carries either cell.
+## of them: a mod's start-menu row and the screenshot drivers.
 func open_pc_machine(
 	world: Gen2WorldAPI,
 	data: GameData,
@@ -1976,6 +1989,7 @@ func open_pc_machine(
 	_data = data
 	_save = save
 	_persist = persist
+	_no_request = true
 	if _world == null or _data == null:
 		_show_error("The PC has no world or cartridge cache.")
 		return false
@@ -3554,6 +3568,9 @@ func radio_music_playing() -> int:
 ## One hardware frame of whichever card is open. Only the radio card spends any:
 ## `PlayRadioShow` is the one thing the Pokegear runs per frame.
 func advance_frame() -> void:
+	if _call_end_stage != &"":
+		_advance_call_end()
+		return
 	if _mode == MODE.SCRIPT_MENU and _script_menu_hold > 0:
 		_advance_script_menu_hold()
 		return
@@ -3577,11 +3594,54 @@ func _on_card_called(contact: int) -> void:
 		return
 	sfx_requested.emit(SFX_CALL, false)
 	_pokegear.say(_data.pokegear_text("ellipse"))
-	var results: Array = _world.request_outgoing_phone_call(contact)
-	_close_card()
-	_mode = -1
-	_set_overlay_open(false)
-	completed.emit(results)
+	call_placed.emit(_world.request_outgoing_phone_call(contact))
+
+
+func call_box_palette() -> PackedColorArray:
+	return _pokegear.box_palette() if _pokegear != null else PackedColorArray()
+
+
+## The call's last page stays up through the delay and the wait for A or B.
+func finish_call(last_page: String) -> void:
+	if _pokegear == null:
+		return
+	_pokegear.show_call_line(last_page)
+	_call_end_stage = &"delay"
+	_call_end_frames = CALL_END_DELAY_FRAMES
+
+
+func _advance_call_end() -> void:
+	if _call_end_stage == &"delay":
+		_call_end_frames -= 1
+		if _call_end_frames <= 0:
+			_call_end_stage = &"wait"
+	elif _call_end_stage == &"hang_up":
+		_call_end_frames += 1
+		if _call_end_frames >= Gen2WorldPhoneRing.HANG_UP_FRAMES:
+			_call_end_stage = &""
+			if _pokegear != null:
+				_pokegear.end_call()
+			return
+		_show_hang_up_phase()
+
+
+func _press_call_end(button: int) -> void:
+	if _call_end_stage != &"wait" or button not in [PokeButton.A, PokeButton.B]:
+		return
+	_call_end_stage = &"hang_up"
+	_call_end_frames = 0
+	_hang_up_phase = &""
+	_show_hang_up_phase()
+
+
+func _show_hang_up_phase() -> void:
+	var phase: StringName = Gen2WorldPhoneRing.hang_up_phase(_call_end_frames)
+	if phase == _hang_up_phase or _pokegear == null:
+		return
+	_hang_up_phase = phase
+	if phase == &"click":
+		sfx_requested.emit(Gen2WorldPhoneRing.SFX_HANG_UP, false)
+	_pokegear.show_call_line(Gen2WorldPhoneRing.hang_up_line(_data.world_phone_metadata(), phase))
 
 
 ## `PokegearPhone_DeletePhoneNumber`, which clears the slot and closes the gap
@@ -3928,6 +3988,10 @@ func _finish_input_cancelled() -> void:
 
 
 func _finish_runtime(result: Dictionary) -> void:
+	if _no_request:
+		_no_request = false
+		_finish([])
+		return
 	var host_result: Dictionary = Gen2WorldHost.complete_runtime_request(
 		_world, result, _save, _persist
 	)
@@ -4055,6 +4119,7 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		_service_drawn = false
 		_apply_layer_visibility()
 		return
+	_service_page.palette = box_palette
 	var page_rows: Array = [] if _mode in [MODE.PHONE, MODE.PC_TEXT] else values
 	var labels: Array = []
 	for value: Variant in page_rows:

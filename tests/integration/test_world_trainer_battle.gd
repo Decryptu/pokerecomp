@@ -226,6 +226,25 @@ func test_trainer_sight_reaches_the_real_battle_overlay() -> void:
 	assert_eq(snapshot["world_battle_active"], true)
 
 
+## `PlayerEvents` runs `CheckTrainerEvent` on every pass, not only when a step
+## lands: a trainer who turns to face a player already standing in his line, or
+## the second of a facing pair once the first fight is over, fires with no
+## input at all.
+func test_a_trainer_turning_to_face_a_standing_player_fires_on_the_next_pass() -> void:
+	await _open_world()
+	await _walk_one(Vector2i.RIGHT)
+	var trainer: Gen2WorldObject = _world_screen._world.objects[0]
+	trainer.facing = Gen2WorldSprite.FACING_LEFT
+	for _frame: int in 40:
+		_world_screen.advance_frame()
+	assert_false(_world_screen._world.player_step_in_progress())
+	assert_false(_world_screen._world.script_busy(), "nobody is facing the player yet")
+	trainer.facing = Gen2WorldSprite.FACING_DOWN
+	for _frame: int in 4:
+		_world_screen.advance_frame()
+	assert_true(_world_screen._world.script_busy(), "the turn alone is seen")
+
+
 ## `BattleStartMessage` and `DoBattle`'s opening, in the order they run: the
 ## shine, the line the trainer wants to fight on, the enemy's own send-out and
 ## the player's, each ball being `ANIM_SEND_OUT_MON`.

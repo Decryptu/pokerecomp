@@ -82,8 +82,9 @@ static func available_incoming_contacts(
 	for index: int in data.world_phone_contact_count():
 		if not state.has_phone_contact(index):
 			continue
+		## `GetAvailableCallers` reads `PHONE_CONTACT_SCRIPT2_TIME`.
 		var contact: Dictionary = data.world_phone_contact(index)
-		if contact.is_empty() or not time_mask_matches(int(contact.get("callee_time", 0)), hour):
+		if contact.is_empty() or not time_mask_matches(int(contact.get("caller_time", 0)), hour):
 			continue
 		if int(contact.get("map_group", -1)) == map.group \
 			and int(contact.get("map_number", -1)) == map.number:
@@ -122,7 +123,7 @@ static func resolve_incoming(
 		"contact": selected.duplicate(true),
 		"contact_id": int(selected.get("index", -1)),
 		"role": &"callee",
-		"script": (selected.get("callee_script", {}) as Dictionary).duplicate(true),
+		"script": (selected.get("caller_script", {}) as Dictionary).duplicate(true),
 		"phone": {
 			"contact_id": int(selected.get("index", -1)),
 			"caller_id": int(selected.get("index", -1)),
@@ -141,12 +142,11 @@ static func resolve_outgoing(
 	var contact: Dictionary = data.world_phone_contact(contact_id)
 	if contact.is_empty():
 		return _phone_unavailable(&"phone_contact_missing")
-	# `MakePhoneCallFromPokegear`'s own `.OutOfArea`, which the cartridge cannot
-	# reach from the Pokegear either: `PokegearPhone_MakePhoneCall` refuses in
-	# front of it and says so on the card.
+	# `.OutOfArea`, which the Pokegear's own `.no_service` refusal comes before.
 	if not map_has_phone_service(map):
 		return _out_of_area_result(data, contact, contact_id, &"phone_service_unavailable")
-	if not time_mask_matches(int(contact.get("caller_time", 0)), hour):
+	## A call the player places reads `PHONE_CONTACT_SCRIPT1_TIME`.
+	if not time_mask_matches(int(contact.get("callee_time", 0)), hour):
 		return _out_of_area_result(data, contact, contact_id, &"caller_unavailable_at_this_time")
 	if int(contact.get("map_group", -1)) == map.group \
 		and int(contact.get("map_number", -1)) == map.number:
@@ -171,7 +171,7 @@ static func resolve_outgoing(
 		"contact": contact.duplicate(true),
 		"contact_id": contact_id,
 		"role": &"caller",
-		"script": (contact.get("caller_script", {}) as Dictionary).duplicate(true),
+		"script": (contact.get("callee_script", {}) as Dictionary).duplicate(true),
 		"phone": {
 			"contact_id": contact_id,
 			"caller_id": contact_id,

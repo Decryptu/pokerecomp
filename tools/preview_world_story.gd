@@ -8279,7 +8279,8 @@ func _drain_story(
 		if world.phone_ring_active():
 			input_type = &"phone_ring"
 		_trace(state, String(input_type))
-		if _absorb_results(world, _answer_input(world, input_type, state), state):
+		if _absorb_results(world, _answer_input(world, input_type, state), state) \
+			and not _take_warp_check(world, state):
 			break
 	return {
 		"statuses": state["statuses"],
@@ -8301,6 +8302,15 @@ func _drain_story(
 		"reason": state["reason"],
 		"details": state["details"],
 	}
+
+
+## The next pass's `CheckTileEvent`, taking a warp the script's `warpcheck` copied.
+func _take_warp_check(world: Gen2WorldAPI, state: Dictionary) -> bool:
+	var armed: StringName = world.take_warp_check() if not world.script_busy() else &""
+	var entry: int = Gen2WorldAPI.MAP_ENTRY_FALL if armed == &"fall" else Gen2WorldAPI.MAP_ENTRY_DOOR
+	if armed == &"" or not bool(world.try_warp(world.player_cell, entry).get("ok", false)):
+		return false
+	return armed == &"fall" and not _absorb_results(world, world.run_pitfall_landing(), state)
 
 
 ## What the walk answers the input the script waits on with. An empty answer
