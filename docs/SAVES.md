@@ -86,7 +86,8 @@ party host creates the first save Pokemon only after the player confirms.
 After battle messages finish, `Gen2SaveBattleAdapter` writes player name,
 Pokémon identity, held item, happiness, Pokerus, caught data, nickname, OT, HP,
 status, experience, DVs, stat experience, moves and PP. Volatile state is
-discarded.
+discarded. Party rows the battle never held, eggs and a Pokémon caught during
+the fight, keep their slots.
 
 Overworld writeback is transactional. A confirmed win saves after result
 messages finish; a loss never overwrites the slot, and the host validates and

@@ -1231,6 +1231,26 @@ func test_no_keeps_the_caught_species_name() -> void:
 	await get_tree().process_frame
 
 
+## A catch-experience policy syncs the fought party back after the catch was
+## filed; the caught row stays in the party behind it.
+func test_a_party_sync_behind_a_catch_keeps_the_caught_pokemon() -> void:
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	var before: int = save.party.size()
+	assert_true(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	)["ok"])
+	var host: Gen2BattleScreen = await _catch_the_wild()
+	assert_eq(save.party.size(), before + 1)
+	assert_true(host.sync_live_party())
+	_refuse_capture_nickname(host)
+	await get_tree().process_frame
+	assert_null(_battle_host())
+	assert_eq(save.party.size(), before + 1)
+	assert_eq((save.party[before] as Gen2SaveMon).nickname, _wild_name())
+	await get_tree().process_frame
+
+
 ## `.SendToPC` prints `BallSentToPCText` behind the naming, and it reads
 ## `wMonOrItemNameBuffer`, which `.SkipBoxMonNickname`'s own copy has just filled
 ## from `sBoxMonNicknames`: the line names the row, not the species.
