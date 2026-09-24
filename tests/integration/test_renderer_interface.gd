@@ -1409,8 +1409,16 @@ func test_the_draw_list_carries_what_the_view_draws() -> void:
 	assert_eq(int(big["big_shape"]), Gen2WorldSprite.BIG_SHAPE_SYMMETRIC, "a 32x32 big object")
 	assert_eq(big["anchor"], Gen2WorldDrawList.ANCHOR_WORLD)
 	assert_eq(big["position_cells"], Vector2(object.cell))
+	assert_eq(
+		big["ground"], Vector2(object.cell * 16) + Vector2(8, 12),
+		"an object meets the ground at its picture's feet, four pixels up its cell"
+	)
 	var emote: Dictionary = _draw_row(rows, &"emote", Gen2WorldDrawList.OWNER_PLAYER)
 	assert_eq(emote["anchor"], Gen2WorldDrawList.ANCHOR_VIEW, "the player's own emote")
+	assert_eq(
+		emote["ground"], Vector2(world.player_view_pixel()) + Vector2(8, 12),
+		"the player's ground, which the emote over him shares"
+	)
 	assert_eq((emote["tiles"] as Array).size(), 4)
 	assert_false(
 		_draw_row(rows, Gen2WorldEffects.SPRITE_CUT_TREE, Gen2WorldDrawList.OWNER_NONE).is_empty()
@@ -1422,10 +1430,20 @@ func test_the_draw_list_carries_what_the_view_draws() -> void:
 		rows, Gen2WorldEffects.SPRITE_HEADBUTT_TREE, Gen2WorldDrawList.OWNER_NONE
 	)
 	assert_eq(tree["position_cells"], Vector2(world.player_cell + Vector2i(1, 0)))
+	assert_eq(
+		tree["ground"], Vector2((world.player_cell + Vector2i(1, 0)) * 16) + Vector2(8, 16),
+		"a cell effect takes no lift, so it meets the ground at its cell's bottom"
+	)
 	var machine: Dictionary = _draw_row(
 		rows, Gen2WorldEffects.SPRITE_HEAL_MACHINE, Gen2WorldDrawList.OWNER_NONE
 	)
 	assert_eq(machine["anchor"], Gen2WorldDrawList.ANCHOR_SCREEN)
+	_assert_stands_where_drawn(machine, world)
+	world.view_pixels = Gen2WorldAPI.VIEW_PIXELS + Vector2i(64, 32)
+	_assert_stands_where_drawn(_draw_row(
+		list.sprites(), Gen2WorldEffects.SPRITE_HEAL_MACHINE, Gen2WorldDrawList.OWNER_NONE
+	), world)
+	world.view_pixels = Gen2WorldAPI.VIEW_PIXELS
 	assert_eq(frame["hidden_tree_cells"], [world.player_cell + Vector2i(1, 0)])
 	assert_eq(frame["background_offset"], effects.offset())
 	assert_ne(frame["background_offset"], Vector2.ZERO, "the earthquake's hSCY")
@@ -1445,6 +1463,107 @@ func test_the_draw_list_carries_what_the_view_draws() -> void:
 		).is_empty(),
 		"the sprites from `wShadowOAMSprite36` up stay"
 	)
+
+
+## `HealMachineAnim`'s balls are screen OAM, and the screen is framed with the
+## player's cell at (64, 64) of it, so the balls' middle lands on the map cell
+## that many cells from his. The row stands on that cell's bottom, in screen pixels.
+func _assert_stands_where_drawn(row: Dictionary, world: Gen2WorldAPI) -> void:
+	var box := Rect2()
+	for tile: Dictionary in row["tiles"]:
+		var piece := Rect2(Vector2(tile["offset"] as Vector2i), Vector2(8, 8))
+		box = piece if not box.has_area() else box.merge(piece)
+	var screen_at := Vector2(world.player_cell * 16) - Vector2(64, 64)
+	var cell: Vector2 = ((screen_at + box.get_center()) / 16.0).floor()
+	assert_eq(row["position_cells"], cell, "the map cell the balls are drawn over")
+	assert_eq(row["ground"], cell * 16.0 + Vector2(8, 16) - screen_at, "its bottom")
+
+
+## A body's jump is its `offset` and never its `ground`, so a view standing
+## `ground` on `position_cells` lifts it once. An actor meets the ground as an
+## object does, and the shiny pulse on its cell's bottom, eight pixels under the
+## battler centre its OAM is laid around.
+func test_a_row_stands_its_ground_and_carries_its_jump_once() -> void:
+	await _open_built_in_world()
+	_world_screen.set_process(false)
+	var list: Gen2WorldDrawList = _world_screen._draw_list
+	var world: Gen2WorldAPI = _world_screen._world
+	var object: Gen2WorldObject = world.visible_objects()[0]
+	object.step_direction = Vector2i(0, 1)
+	object.step_jumping = true
+	object.step_passes_total = 16
+	object.step_passes_remaining = 8
+	var height: float = object.height_offset_pixels()
+	assert_gt(height, 0.0, "mid-hop")
+	var body: Dictionary = _draw_row(list.sprites(), &"object", object.index)
+	assert_eq(body["offset"], Vector2(0, -height), "the arc is the body's offset")
+	assert_eq(
+		body["ground"],
+		Vector2(object.cell * 16) + Vector2(object.step_offset(16, world.pass_fraction))
+			+ Vector2(8, 12),
+		"and not its ground"
+	)
+
+	var actors: Object = _script(FAKE_ACTORS_SOURCE).new()
+	actors.set("rows", [{
+		"sprite": world.player_sprite(), "facing": 0, "frame": 0,
+		"position_cells": Vector2(3, 4), "height_offset_pixels": 6.0,
+	}])
+	list._actors = actors
+	list._encounters = _script(FAKE_PULSE_SOURCE).new()
+	var rows: Array = list.sprites()
+	var actor: Dictionary = _draw_row(rows, &"actor", Gen2WorldDrawList.OWNER_ACTOR)
+	assert_eq(actor["offset"], Vector2(0, -6))
+	assert_eq(actor["ground"], Vector2(3 * 16 + 8, 4 * 16 + 12), "the feet, off the ground")
+	var pulse: Dictionary = _draw_row(rows, &"pulse", Gen2WorldDrawList.OWNER_ACTOR)
+	assert_eq(pulse["ground"], Vector2(5 * 16 + 8, 10 * 16 + 16))
+	assert_eq(
+		(pulse["origin"] as Vector2) + Gen2WorldDrawList.BATTLER_CENTRE,
+		(pulse["ground"] as Vector2) - Vector2(0, 8)
+	)
+
+
+const FAKE_ACTORS_SOURCE: String = """extends Gen2WorldActors
+
+var rows: Array = []
+
+func sprites() -> Array:
+	return rows
+"""
+
+
+## One tile of `ANIM_SEND_OUT_MON` over the wild at (5, 10).
+const FAKE_PULSE_SOURCE: String = """extends Gen2WorldEncounters
+
+func pulse_anchor() -> Variant:
+	return Vector2(5, 10) * 16.0
+
+func pulse_tiles() -> Array:
+	return [{"gfx": 1, "tile": 0}]
+
+func pulse_sprites() -> Array:
+	return [{"tile": Gen2BattleAnimObject.BASE_TILE, "x": 88, "y": 80, "attributes": 0}]
+
+func pulse_battler_pair() -> Array:
+	return []
+"""
+
+
+## `draw_reach_pixels` is read with `set_draw_list`, and a renderer that does not
+## answer it, the built-in one included, leaves the list at the drawn surface.
+func test_the_draw_list_takes_the_reach_a_renderer_declares() -> void:
+	await _open_world(HARDWARE_SOURCE + DECLARING_SOURCE + REACHING_SOURCE)
+	assert_eq(_world_screen._draw_list.reach_pixels, 96)
+	after_each()
+	before_each()
+	await _open_built_in_world()
+	assert_eq(_world_screen._draw_list.reach_pixels, 0)
+
+
+const REACHING_SOURCE: String = """
+func draw_reach_pixels() -> int:
+	return 96
+"""
 
 
 ## `LoadFishingGFX`'s body and rod, and Generation 1's player animation, which

@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 44 | `Gen2BattleHud.draw_party_balls()`; `ground` on every draw-list row, a screen row's `position_cells` and `ground` in map terms, and a renderer's `draw_reach_pixels()` listing connected rows out to its reach; `reachable_checks()`, what a placement reaches with items and badges held from the start; `Gen2WorldCatalog.progression_items()`; a patched `{"item": 0}` or `{"badge": -1}` as a site that hands nothing; `validate_placement` asking a site that waits on an engine flag other than a badge's again once a script sets that flag |
 | 43 | `Gen2BattleRenderer.square_pixels()`, `square_key()`, `square_side()`, `battler_pic()` and `substitute_sprite()`; `Gen2BattleHud.draw_panels()`, `panels_key()` and `draw_border_cells()`; the status and gender arguments of `draw_enemy()` and `draw_player()`; the battle view's `enemy_status`, `player_status`, `enemy_gender`, `player_gender`, `enemy_caught`, `enemy_minimized`, `player_minimized`, `enemy_special_pic`, `enemy_pic_dmg`, `gen1_black` and `anim_obp0`; Generation 1's "minimize" tile, and its doll drawn from pokered's own `SPRITE_MONSTER`; a move row's `effectiveness` as its effect applies it; a table patch bumping the encounter context's `generation`; a patched `giveegg` staying an egg; a headless `--mods` or `--mods=a,b` run at mod defaults, apart from the player's mod settings; `Gen2WorldDrawList` through the optional `set_draw_list`: every sprite, effect and background edit the built-in view draws, resolved once for any renderer, with `sprites_hidden` on it rather than set on the renderer; `validate_placement` proving the story's gates, `Gen2WorldCatalog.story()`, a row's `cell`, and `requires` holding what every path to a site tested |
 | 42 | `START_ACTION_OPEN_PC`, and a table patch rechecking the visible wilds already standing |
 | 41 | `clear_patches()`, an encounter patch refused off the cartridge's slot count, a mod species met in the wild, `GameData.map_landmark()` and `world_fishing_group_count()`, and `Gen2WorldAPI.encounter_tables_key()` moving when a patch lands |
@@ -584,6 +585,41 @@ never blocks, and a script path is judged by what it tested rather than by every
 branch it took. A site with no attributed map is taken as standing where the
 player already is.
 
+### Building a placement that finishes
+
+Retrying random shuffles until one validates rarely converges, since a rejected
+shuffle usually has several key items out of place. An assumed fill is
+finishable by construction, and `host.reachable_checks(data, patches, held)`
+answers its one question: which checks `patches` reaches with `held`'s items and
+badges in hand from the start.
+
+```gdscript
+var held := {"items": [hm_surf, hm_strength], "badges": [3]}
+var reached: Array = host.reachable_checks(data, patches, held)["reached"]
+```
+
+`reached` is every reachable check id, ascending. A held item is in the bag and a
+held badge is earned, so its field moves work and it counts toward a badge
+total. `badges` uses the catalog's badge numbers, the `badge` a badge row
+carries. Patch an empty site `{"item": 0}`, or every site of an empty badge
+`{"badge": -1}`: either hands nothing.
+
+`catalog.progression_items()` lists every item a site's `requires` or the story
+reads, and every TM or HM that teaches a field move, in ascending order.
+Anything else is filler. To fill:
+
+1. Patch every item site `{"item": 0}` and every badge site `{"badge": -1}`.
+2. Shuffle the badges and the progression rewards. For each one, hold
+   everything still waiting, ask `reachable_checks`, and place it on an empty
+   site in `reached`. Every site a badge is given at must be reached.
+3. Deal the filler to the sites still empty, and pass the result to
+   `validate_placement` as the final check.
+
+A fill can run out of sites of the right kind, for example when only Kanto gyms
+are left for the badge that opens Kanto. Start the fill again with the next seed.
+`reachable_checks` reuses the cartridge's scratch catalog and map graphs that
+`validate_placement` builds, so each call after the first costs milliseconds.
+
 ## Adding a move effect
 
 A move's effect byte is a number until something answers for it. `Gen2MoveEffect`
@@ -706,6 +742,12 @@ a renderer reading it draws the map objects, the player, the actors and every
 effect sprite the 2D view does, in the same order. `set_effects`, `set_actors` and
 `set_encounters` are its sources and are still offered.
 
+`draw_reach_pixels() -> int` is optional and read with `set_draw_list`: how many
+hardware pixels past the drawn surface the renderer draws. The list then carries
+the connected maps' people out that far at any view size, the hardware's
+included. A renderer that does not answer it gets them only over a view wider
+than the hardware's, and the cartridge draws none.
+
 `frame()` answers one dictionary. Ask once per drawn frame; each key also has a
 method or property of the same name.
 
@@ -726,17 +768,22 @@ Every row says where it is:
 | Key | Value |
 |---|---|
 | `kind` | `KIND_SPRITE`, `KIND_TILES`, `KIND_GRASS` or `KIND_PULSE` |
-| `role` | `object`, `connected` (a connected map's person, listed while `Gen2WorldAPI.view_pixels` is wider than the hardware's), `actor`, `player`, `bird`, `fishing_body`, `fishing_rod`, `emote`, `shadow`, `grass`, `pulse`, or the effect's sheet (`cut_tree`, `cut_grass`, `boulder_dust`, `grass_rustle`, `headbutt_tree`, `heal_machine`, `smoke`, `fly_mon`, `gen1_cut_tree`, `gen1_cut_grass`) |
+| `role` | `object`, `connected` (a connected map's person over the drawn surface or within `draw_reach_pixels()` of it), `actor`, `player`, `bird`, `fishing_body`, `fishing_rod`, `emote`, `shadow`, `grass`, `pulse`, or the effect's sheet (`cut_tree`, `cut_grass`, `boulder_dust`, `grass_rustle`, `headbutt_tree`, `heal_machine`, `smoke`, `fly_mon`, `gen1_cut_tree`, `gen1_cut_grass`) |
 | `owner` | The map object's index, `OWNER_PLAYER`, `OWNER_ACTOR` (a mod actor, a visible wild or Yellow's Pikachu) or `OWNER_NONE` |
 | `anchor` | `ANCHOR_WORLD` (world pixels), `ANCHOR_VIEW` (pixels of the drawn surface, where the player is placed) or `ANCHOR_SCREEN` (pixels of the 160x144 screen, `set_screen_rect`'s rectangle) |
 | `origin` | The owner's top-left in that space, the four-pixel sprite lift included and the jump not |
 | `offset` | This row from `origin` in pixels. A body's jump arc is in it |
-| `position_cells`, `span`, `height_offset_pixels` | The owner's ground in walk cells, its step span and its jump, as `Gen2WorldActors.sprites()` carries them. Zero and empty on a screen row |
+| `ground` | The point in the row's own space that meets the ground at `position_cells`, the jump not in it: the bottom centre of the 16x16 picture at `origin` for a map object, an actor or the player, the bottom centre of the cell for a cell effect, and eight pixels under `origin + BATTLER_CENTRE` for the shiny pulse, which is its cell's bottom centre |
+| `position_cells`, `span`, `height_offset_pixels` | The owner's ground in walk cells, its step span and its jump, as `Gen2WorldActors.sprites()` carries them. A screen row has the map cell under its picture's centre and no span or jump |
 
 A flat view draws a row at `origin + offset`, less its camera on a world row and
-plus the screen's corner on a screen row. A 3D view stands it on `position_cells`
-and `span`, raised by `height_offset_pixels`, and reads `offset` as its place on
-the owner's card.
+plus the screen's corner on a screen row. A 3D view stands `ground` on
+`position_cells` and `span`, and places the row's picture `origin + offset -
+ground` from that point on the owner's card. A body's `offset` already carries the
+jump, so the card is not raised by `height_offset_pixels` again. A screen row
+stands the same way: its `ground` is its cell's bottom centre in screen pixels,
+measured where the host frames the screen over the map, so the row lands where the
+flat view draws it.
 
 | Kind | Keys |
 |---|---|
@@ -1134,6 +1181,10 @@ them:
   each panel only while its `*_hud_visible` is true. `panels_key(view)` is its
   key. The bar fills stay separate, since each has its own palette:
   `draw_hp_bar()` and `draw_exp_bar()`.
+- `Gen2BattleHud.draw_party_balls(into, width, balls)` draws the view's
+  `trainer_hud_balls` out of the cartridge's own ball sheet (`battle_balls` on
+  Generation 1, `ball_icons` on Generation 2). They are objects: draw them in
+  `object_palette(Gen2BattleAnimBackground.PAL_OB_YELLOW)`, with no background scroll.
 
 `Gen2BattleHud.from_data(data)` builds the HUD. The square wears
 `Gen2BattleColors.pic_palette(player_side)` and the panels `panel_palette()`:

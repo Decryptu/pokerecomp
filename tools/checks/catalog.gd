@@ -40,8 +40,7 @@ const GEN2_SELF_LOCKS: Array = [
 	[0x45, Vector2i(10, 5)], [0xAF, Vector2i(4, 9)], [0x43, Vector2i(12, 2)], [0x44, Vector2i(12, 3)],
 ]
 
-## Per game: total rows, and the count under each kind in
-## [constant Gen2WorldCatalog.KINDS]' own order.
+## Per game: total rows, then the count of each of [constant Gen2WorldCatalog.KINDS].
 const EXPECTED_CENSUS: Dictionary = {
 	&"gold": [449, 3, 9, 15, 8, 9, 352, 16, 37],
 	&"silver": [449, 3, 9, 15, 8, 9, 352, 16, 37],
@@ -117,11 +116,10 @@ func _one_game() -> void:
 	_verify_sidecar(_catalog)
 
 
-## The sidecar is what a player actually reads: the scan costs thirteen seconds
-## and runs at import, and every check above this one ran against whatever
-## [method GameData.catalog] handed back. So this asks the other question, that
-## a restored catalog and a freshly scanned one are the same catalog, every row,
-## every link and every kind's order.
+## The sidecar is what a player reads: the scan costs thirteen seconds at import,
+## and every check above ran against whatever [method GameData.catalog] handed back.
+## So this asks whether a restored catalog and a fresh scan are the same catalog,
+## every row, every link and every kind's order.
 func _verify_sidecar(_catalog: Gen2WorldCatalog) -> void:
 	var written: Variant = RomCache.read_json(
 		RomCache.world_catalog_path(_r.data.directory)
@@ -136,8 +134,7 @@ func _verify_sidecar(_catalog: Gen2WorldCatalog) -> void:
 		restored.to_dict() == scanned.to_dict(),
 		"the sidecar and a fresh scan disagree."
 	)
-	## And the one thing `to_dict` cannot say: that what the runtime asks for
-	## comes back the same, patches folded in and all.
+	## What `to_dict` cannot say: the runtime's reads come back the same, patches folded in.
 	for kind: StringName in Gen2WorldCatalog.KINDS:
 		_r.check(
 			restored.ids(kind) == scanned.ids(kind),
@@ -161,10 +158,9 @@ func _verify_census(_catalog: Gen2WorldCatalog) -> void:
 	)
 
 
-## The one shape only Elm's three balls take: a `pokepic` of the species a
-## `givepoke` in the same script hands over; on Red and Blue, a `wPlayerStarter`
-## store on the way to the give. If either stops being unique, this is where it
-## shows.
+## The one shape only Elm's three balls take: a `pokepic` of the species a `givepoke`
+## in the same script hands over; on Red and Blue, a `wPlayerStarter` store on the
+## way to the give. If either stops being unique, this is where it shows.
 func _verify_starters(_catalog: Gen2WorldCatalog) -> void:
 	var found: Array[int] = _catalog.possible_starters()
 	found.sort()
@@ -214,10 +210,9 @@ func _verify_prizes(_catalog: Gen2WorldCatalog) -> void:
 	)
 
 
-## Sixteen badges exist and each is granted somewhere; Kanto's eight sit from
-## `KANTO_BADGE_FIRST` on a Generation 1 cartridge. Gold and Silver set two of
-## them from a second script as well, which is why the row count is not the badge
-## count and why the test is over the SET rather than the list.
+## Sixteen badges, each granted somewhere; Kanto's eight sit from `KANTO_BADGE_FIRST`
+## on Generation 1. Gold and Silver set two from a second script as well, so the row
+## count is not the badge count and the test is over the SET rather than the list.
 func _verify_badges(_catalog: Gen2WorldCatalog) -> void:
 	var seen: Dictionary = {}
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_BADGE):
@@ -236,8 +231,7 @@ func _verify_badges(_catalog: Gen2WorldCatalog) -> void:
 	)
 
 
-## An id has to name one site and be recomputable from the site's own address,
-## since that is what a runtime reader does. Both directions, over every row.
+## An id names one site and recomputes from its address, as a runtime reader does it.
 func _verify_ids(_catalog: Gen2WorldCatalog) -> void:
 	var seen: Dictionary = {}
 	for row: Dictionary in _catalog.rows():
@@ -356,6 +350,125 @@ func _verify_progression(_catalog: Gen2WorldCatalog) -> void:
 		"a rejected placement was left installed."
 	)
 	_verify_self_locks(data, _catalog, GEN2_SELF_LOCKS)
+	_verify_reachable(data, _catalog, vanilla)
+
+
+## Nothing held reaches what validation does. With every site emptied, holding every
+## progression item and badge reaches that and every critical site; holding none does not.
+func _verify_reachable(data: GameData, _catalog: Gen2WorldCatalog, vanilla: Dictionary) -> void:
+	var bare: Array = Gen2WorldProgression.reachable(data)["reached"]
+	_r.check(bare.size() == int(vanilla["reached"]), "nothing held reaches %d checks, validation %d." % [
+		bare.size(), int(vanilla["reached"]),
+	])
+	var emptied: Dictionary = {}
+	var held: Dictionary = {"items": _catalog.progression_items(), "badges": []}
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+		emptied[int(row["id"])] = {"item": 0}
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_BADGE):
+		emptied[int(row["id"])] = {"badge": -1}
+		if not (held["badges"] as Array).has(int(row["badge"])):
+			(held["badges"] as Array).append(int(row["badge"]))
+	var reached: Array = Gen2WorldProgression.reachable(data, emptied, held)["reached"]
+	var missed: Array = _catalog.rows().filter(func(row: Dictionary) -> bool:
+		return _catalog.is_progression(row) and not reached.has(int(row["id"])))
+	_r.check(missed.is_empty(), "%d critical sites out of reach with everything held." % missed.size())
+	var lost: Array = bare.filter(func(id: int) -> bool: return not reached.has(id))
+	_r.check(lost.is_empty(), "sites %s reached with nothing held are lost with everything held." % str(lost))
+	var none: Array = Gen2WorldProgression.reachable(data, emptied)["reached"]
+	_r.check(none.size() < reached.size(), "emptied sites still handed something over.")
+	_r.note("reachable: %d checks with nothing held, %d emptied and everything held, %d emptied." % [
+		bare.size(), reached.size(), none.size(),
+	])
+	_verify_assumed_fill(data, _catalog)
+
+
+## An assumed fill validates on its first try; a fill left with no site tries a seed on.
+func _verify_assumed_fill(data: GameData, _catalog: Gen2WorldCatalog) -> void:
+	var progression: Array[int] = _catalog.progression_items()
+	var sites: Array = _catalog.ids(Gen2WorldCatalog.KIND_ITEM)
+	var rewards: Array = sites.map(func(id: int) -> Dictionary:
+		return {"item": int(_catalog.check(id)["item"]), "quantity": int(_catalog.check(id).get("quantity", 1))})
+	var groups: Dictionary = {}
+	for id: int in _catalog.ids(Gen2WorldCatalog.KIND_BADGE):
+		var badge: int = int(_catalog.check(id)["badge"])
+		groups[badge] = (groups.get(badge, []) as Array) + [id]
+	for seed_value: int in 4:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		var placed: Dictionary = _fill(data, rng, sites, rewards, groups, progression)
+		if placed.is_empty():
+			continue
+		var result: Dictionary = Gen2WorldProgression.validate(data, placed)
+		_r.check(bool(result["ok"]), "an assumed fill did not validate: %s." % str(result.get("missing", {})))
+		_r.note("assumed fill on seed %d validated." % seed_value)
+		return
+	_r.check(false, "no assumed fill found a site for every progression item.")
+
+
+func _fill(
+	data: GameData, rng: RandomNumberGenerator, sites: Array, rewards: Array,
+	groups: Dictionary, progression: Array[int]
+) -> Dictionary:
+	var patches: Dictionary = {}
+	for id: int in sites:
+		patches[id] = {"item": 0}
+	for badge: int in groups:
+		for id: int in groups[badge]:
+			patches[id] = {"badge": -1}
+	var queue: Array = _shuffled(rng, groups.keys()).map(func(badge: int) -> Dictionary:
+		return {"badge": badge})
+	var filler: Array = rewards.filter(func(reward: Dictionary) -> bool:
+		return not progression.has(int(reward["item"])))
+	queue.append_array(_shuffled(rng, rewards.filter(func(reward: Dictionary) -> bool:
+		return progression.has(int(reward["item"])))))
+	for index: int in queue.size():
+		if not _place(data, rng, patches, queue, index, groups):
+			return {}
+	var left: Array = sites.filter(func(id: int) -> bool: return int(patches[id].get("item", 1)) == 0)
+	filler = _shuffled(rng, filler)
+	for index: int in left.size():
+		patches[left[index]] = filler[index]
+	return patches
+
+
+## Places queue[index] where the fill so far reaches with everything after it held.
+func _place(
+	data: GameData, rng: RandomNumberGenerator, patches: Dictionary, queue: Array,
+	index: int, groups: Dictionary
+) -> bool:
+	var held: Dictionary = {"items": [], "badges": []}
+	for later: Dictionary in queue.slice(index + 1):
+		if later.has("badge"):
+			(held["badges"] as Array).append(int(later["badge"]))
+		else:
+			(held["items"] as Array).append(int(later["item"]))
+	var reached: Array = Gen2WorldProgression.reachable(data, patches, held)["reached"]
+	var thing: Dictionary = queue[index]
+	var open: Array = []
+	if thing.has("badge"):
+		open = groups.keys().filter(func(badge: int) -> bool:
+			return (groups[badge] as Array).all(func(id: int) -> bool:
+				return reached.has(id) and int(patches[id]["badge"]) < 0))
+	else:
+		open = reached.filter(func(id: int) -> bool:
+			return patches.has(id) and patches[id] == {"item": 0})
+	if open.is_empty():
+		return false
+	var pick: int = open[rng.randi_range(0, open.size() - 1)]
+	var at: Array = groups[pick] if thing.has("badge") else [pick]
+	for id: int in at:
+		patches[id] = thing
+	return true
+
+
+static func _shuffled(rng: RandomNumberGenerator, list: Array) -> Array:
+	var out: Array = list.duplicate()
+	for index: int in range(out.size() - 1, 0, -1):
+		var other: int = rng.randi_range(0, index)
+		var swap: Variant = out[index]
+		out[index] = out[other]
+		out[other] = swap
+	return out
 
 
 ## Each key item swapped with a ball behind the gate it opens is refused.
@@ -416,10 +529,9 @@ func _verify_patching(_catalog: Gen2WorldCatalog) -> void:
 	)
 
 
-## Oak's three balls are one `AddPartyMon` at one address, so they are three
-## rows at it, and the `wPlayerStarter` store beside it answers for each by the
-## species that reaches it. The Magikarp salesman's two money commands link the
-## same way a prize's coin commands do.
+## Oak's three balls are one `AddPartyMon` at one address, so three rows at it, and
+## the `wPlayerStarter` store beside it answers for each by the species reaching it.
+## The Magikarp salesman's two money commands link the way a prize's coin commands do.
 func _verify_gen1_links(_catalog: Gen2WorldCatalog) -> void:
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_STARTER):
 		if not _r.check(row.has("starter_address"), "a starter has no linked wPlayerStarter store."):
@@ -498,3 +610,4 @@ func _verify_gen1_progression(_catalog: Gen2WorldCatalog) -> void:
 		"a rejected placement was left installed."
 	)
 	_verify_self_locks(data, _catalog, GEN1_SELF_LOCKS)
+	_verify_reachable(data, _catalog, vanilla)

@@ -766,13 +766,9 @@ func view_pixels() -> Vector2i:
 	return _world.view_pixels if _world != null else Gen2WorldAPI.VIEW_PIXELS
 
 
-## Where the cartridge's own 160x144 screen sits inside the drawn surface. Zero
-## unless the view is larger, and always a whole tile, since everything the
-## hardware laid out on the screen -- the transition's twenty by eighteen cells
-## first -- is laid out in tiles.
+## Where the cartridge's own 160x144 screen sits inside the drawn surface.
 func screen_offset() -> Vector2:
-	return ((Vector2(view_pixels() - Gen2WorldAPI.VIEW_PIXELS) * 0.5)
-		/ float(PokeTiles.TILE_WIDTH)).floor() * float(PokeTiles.TILE_WIDTH)
+	return Vector2(Gen2Screen.hardware_corner(view_pixels()))
 
 
 func _draw() -> void:
@@ -898,9 +894,8 @@ func _draw_grass_over(pixel: Vector2, background: Vector2) -> void:
 		pixel + Vector2(0, PokeTiles.TILE_HEIGHT),
 		Vector2(Gen2WorldAPI.CELL_PIXELS, PokeTiles.TILE_HEIGHT),
 	)
-	## The tuft is sixteen by eight pixels, so it covers at most three tiles by
-	## two. Walking the whole page for it cost the view's every tile once per
-	## sprite standing in grass, which a window-filling view cannot afford.
+	## The tuft covers at most three tiles by two; walking the whole page once per
+	## sprite in grass is more than a window-filling view can afford.
 	var first := Vector2i(
 		floori((over.position.x + background.x) / float(PokeTiles.TILE_WIDTH)),
 		floori((over.position.y + background.y) / float(PokeTiles.TILE_HEIGHT)),
@@ -930,9 +925,8 @@ func _draw_grass_over(pixel: Vector2, background: Vector2) -> void:
 						piece.size,
 					),
 				)
-	## The transition has already overwritten the map under the sprite, so what
-	## wins the priority test where it wrote is its own tile rather than the
-	## grass. The pieces above left those cells to it.
+	## Where the transition wrote over the map, its own tile wins the priority
+	## test rather than the grass, and the pieces above left those cells to it.
 	if not _transition_cells.is_empty():
 		_draw_transition(background, over, true)
 

@@ -8893,19 +8893,101 @@ func test_a_catalogued_giveegg_stays_an_egg_under_a_patch() -> void:
 ## until event 100, an NPC setting it for item 5, and a badge beyond: the proof
 ## opens the gate only once the item is in hand, and refuses the item behind it.
 func test_a_key_item_behind_the_gate_it_opens_is_refused() -> void:
+	var start: Vector2i = _write_gate_fixture()
+	var data: GameData = GameData.open_directory(_directory)
+	var catalog: Gen2WorldCatalog = data.catalog()
+
+	var gates: Array = catalog.story().gates.filter(func(gate: Dictionary) -> bool:
+		return gate["cells"] == [[10, 5]])
+	assert_eq(gates.size(), 1, JSON.stringify(catalog.story().gates))
+	assert_eq(gates[0]["closing"], [["s:%d:%d=0" % [start.x, start.y], "!e:100"]])
+	var setters: Array = catalog.story().setters.filter(func(setter: Dictionary) -> bool:
+		return setter["sets"] == ["e:100"])
+	assert_eq(setters.size(), 1)
+	assert_true((setters[0]["requires"] as Array).has("i:5"), "the NPC sets the event on the item")
+
+	var balls: Dictionary = {}
+	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+		balls[int(row["item"])] = int(row["id"])
+	assert_true(bool(Gen2WorldProgression.validate(data, {})["ok"]), "the fixture's own placement")
+	var locked: Dictionary = Gen2WorldProgression.validate(data, {
+		balls[5]: {"item": 6}, balls[6]: {"item": 5},
+	})
+	assert_false(bool(locked["ok"]), "the item behind the gate it opens")
+	assert_eq(StringName(locked["missing"]["kind"]), Gen2WorldCatalog.KIND_BADGE)
+	assert_true(bool(Gen2WorldProgression.validate(data, {})["ok"]), "nothing was left installed")
+	Gen2WorldProgression.reset()
+
+
+## The same gate asked an assumed fill's question: item 5 held from the start
+## opens it, an emptied site hands nothing, and only what a gate reads is listed.
+func test_a_held_item_opens_its_gate_and_an_emptied_site_hands_nothing() -> void:
+	_write_gate_fixture()
+	var data: GameData = GameData.open_directory(_directory)
+	var catalog: Gen2WorldCatalog = data.catalog()
+	var ids: Dictionary = {}
+	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+		ids[int(row["item"])] = int(row["id"])
+	var badge: int = int(catalog.rows(Gen2WorldCatalog.KIND_BADGE)[0]["id"])
+	assert_true(catalog.progression_items().has(5), "the item the NPC checks")
+	assert_false(catalog.progression_items().has(6), "an item nothing reads")
+	var emptied: Dictionary = {ids[5]: {"item": 0}}
+	assert_true(bool(Gen2ContentOverlay.new().patch(
+		Gen2ContentOverlay.KIND_CHECK, &"test", ids[5], emptied[ids[5]])["ok"]), "an empty site patches")
+	var whole: Array = Gen2WorldProgression.reachable(data)["reached"]
+	assert_true(whole.has(ids[6]) and whole.has(badge), "the item on its own site opens the gate")
+	var bare: Array = Gen2WorldProgression.reachable(data, emptied)["reached"]
+	assert_eq(bare, [ids[5]], "the emptied site is reached and opens nothing")
+	var held: Dictionary = Gen2ModHost.new().reachable_checks(data, emptied, {"items": [5], "badges": []})
+	var expected: Array = [ids[5], ids[6], badge]
+	expected.sort()
+	assert_eq(held, {"reached": expected}, "item 5 held opens the gate")
+	Gen2WorldProgression.reset()
+
+
+## A badge held counts as earned: the NPC asks for the first badge instead.
+func test_a_held_badge_opens_a_gate_its_flag_closes() -> void:
+	_write_gate_fixture(&"badge")
+	var data: GameData = GameData.open_directory(_directory)
+	var badge: Dictionary = data.catalog().rows(Gen2WorldCatalog.KIND_BADGE)[0]
+	var none: Dictionary = {"items": [], "badges": []}
+	assert_false(Gen2WorldProgression.reachable(data, {}, none)["reached"].has(int(badge["id"])))
+	var held: Dictionary = {"items": [], "badges": [int(badge["badge"])]}
+	assert_true(Gen2WorldProgression.reachable(data, {}, held)["reached"].has(int(badge["id"])))
+	assert_false(bool(Gen2WorldProgression.validate(data)["ok"]), "the badge behind the gate it opens")
+	Gen2WorldProgression.reset()
+
+
+## A plain engine flag another NPC sets opens the gate with no badge earned first.
+func test_a_task_waiting_on_a_plain_engine_flag_runs_once_it_is_set() -> void:
+	_write_gate_fixture(&"flag")
+	var data: GameData = GameData.open_directory(_directory)
+	assert_true(bool(Gen2WorldProgression.validate(data)["ok"]), "the flag setter opens the gate")
+	Gen2WorldProgression.reset()
+
+
+## Two maps split by a wall with one cell through it, a coord event there walking
+## the player back until event 100, an NPC setting it for item 5 (or the first
+## badge, or a flag a second NPC sets), a ball of item 5 on the near side, and
+## item 6 and a badge beyond.
+func _write_gate_fixture(gate: StringName = &"item") -> Vector2i:
 	var probe: GameData = GameData.open_directory(_directory)
 	var crystal: bool = Gen2WorldState.is_crystal_profile(probe)
 	var end: int = Gen2WorldScript.END if crystal else Gen2WorldScript.GOLD_END
 	var flags: Array[int] = Gen2WorldState.BADGE_ENGINE_FLAGS if crystal \
 		else Gen2WorldState.BADGE_ENGINE_FLAGS_GOLD_SILVER
+	var plain: int = flags[-1] + 8
+	var flag: int = flags[0] if gate == &"badge" else plain
 	RomCache.write_json(RomCache.world_scripts_path(_directory), {
 		## checkevent 100 / iftrue .ok / applymovement PLAYER / end / .ok: end
 		"48:6100": [0x31, 100, 0, 0x09, 0x0B, 0x61,
 			Gen2WorldScript.raw_opcode(0x68, crystal), 0, 0x00, 0x70, end, end],
-		## checkitem 5 / iffalse .no / setevent 100 / end / .no: end
-		"48:6110": [0x21, 5, 0x08, 0x19, 0x61, 0x33, 100, 0, end, end],
-		## setflag of the first badge / end
+		## checkitem 5 (or checkflag) / iffalse .no / setevent 100 / end / .no: end
+		"48:6110": [0x21, 5, 0x08, 0x19, 0x61, 0x33, 100, 0, end, end] if gate == &"item"
+			else [0x34, flag & 0xFF, flag >> 8, 0x08, 0x1A, 0x61, 0x33, 100, 0, end, end],
+		## setflag of the first badge / end, and of the plain flag
 		"48:6120": [0x36, flags[0] & 0xFF, flags[0] >> 8, end],
+		"48:6140": [0x36, plain & 0xFF, plain >> 8, end],
 		"48:6130": [5, 1],
 		"48:6134": [6, 1],
 	})
@@ -8932,6 +9014,7 @@ func test_a_key_item_behind_the_gate_it_opens_is_refused() -> void:
 		"objects": [
 			{"sprite": 1, "x": 3, "y": 3, "script": 0x6110, "object_type": 0, "movement": 2},
 			{"sprite": 1, "x": 4, "y": 8, "script": 0x6130, "object_type": 1, "event_flag": 200},
+			{"sprite": 1, "x": 6, "y": 8, "script": 0x6140, "object_type": 0, "movement": 2},
 		]}
 	east["events"] = {"bank": 48, "objects": [
 		{"sprite": 1, "x": 8, "y": 8, "script": 0x6120, "object_type": 0, "movement": 2},
@@ -8939,29 +9022,7 @@ func test_a_key_item_behind_the_gate_it_opens_is_refused() -> void:
 	]}
 	RomCache.write_json(RomCache.world_maps_path(_directory), [west, east])
 	Gen2WorldProgression.reset()
-	var data: GameData = GameData.open_directory(_directory)
-	var catalog: Gen2WorldCatalog = data.catalog()
-
-	var gates: Array = catalog.story().gates.filter(func(gate: Dictionary) -> bool:
-		return gate["cells"] == [[10, 5]])
-	assert_eq(gates.size(), 1, JSON.stringify(catalog.story().gates))
-	assert_eq(gates[0]["closing"], [["s:%d:%d=0" % [start.x, start.y], "!e:100"]])
-	var setters: Array = catalog.story().setters.filter(func(setter: Dictionary) -> bool:
-		return setter["sets"] == ["e:100"])
-	assert_eq(setters.size(), 1)
-	assert_true((setters[0]["requires"] as Array).has("i:5"), "the NPC sets the event on the item")
-
-	var balls: Dictionary = {}
-	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_ITEM):
-		balls[int(row["item"])] = int(row["id"])
-	assert_true(bool(Gen2WorldProgression.validate(data, {})["ok"]), "the fixture's own placement")
-	var locked: Dictionary = Gen2WorldProgression.validate(data, {
-		balls[5]: {"item": 6}, balls[6]: {"item": 5},
-	})
-	assert_false(bool(locked["ok"]), "the item behind the gate it opens")
-	assert_eq(StringName(locked["missing"]["kind"]), Gen2WorldCatalog.KIND_BADGE)
-	assert_true(bool(Gen2WorldProgression.validate(data, {})["ok"]), "nothing was left installed")
-	Gen2WorldProgression.reset()
+	return start
 
 
 ## The site still runs the cartridge's own script: only the number it hands over
@@ -9432,6 +9493,36 @@ func test_connected_map_objects_are_drawn_but_not_in_the_object_table() -> void:
 		world.object_at(object.cell + (entry["offset"] as Vector2i)),
 		"and standing on nothing this map can walk into",
 	)
+
+
+## The draw list carries those people over a view wider than the hardware's, and
+## at the hardware's own only out to the reach a renderer declared past it.
+func test_connected_rows_reach_as_far_as_the_renderer_draws() -> void:
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 2).events["objects"] = [{
+		"sprite": Gen2WorldAPI.SPRITE_CHRIS, "x": 5, "y": 4, "movement": 0,
+		"x_radius": 0, "y_radius": 0, "hour_1": -1, "hour_2": -1, "palette": 0,
+		"object_type": 0, "sight_range": 0, "script": 0, "event_flag": 0,
+	}]
+	var world := Gen2WorldAPI.open(data, 1, 1, Vector2i(8, 6))
+	var list := Gen2WorldDrawList.new(world)
+	var connected: Callable = func() -> Array:
+		return list.sprites().filter(
+			func(row: Dictionary) -> bool: return row["role"] == &"connected"
+		)
+	assert_eq(connected.call().size(), 0, "the cartridge draws no neighbour's people")
+	# The screen ends at x 224 and the person stands at 336: 112 pixels past it,
+	# and the list's own slack of two cells is for a picture reaching back in.
+	list.reach_pixels = 64
+	assert_eq(connected.call().size(), 0, "not that far")
+	list.reach_pixels = 96
+	var rows: Array = connected.call()
+	assert_eq(rows.size(), 1, "within reach")
+	assert_eq(rows[0]["position_cells"], Vector2(21, 4), "in this map's cells")
+	assert_eq(rows[0]["ground"], Vector2(21 * 16 + 8, 4 * 16 + 12))
+	list.reach_pixels = 0
+	world.view_pixels = Gen2WorldAPI.VIEW_PIXELS + Vector2i(256, 0)
+	assert_eq(connected.call().size(), 1, "a wider view draws it itself")
 
 
 ## `HoOhChamber` reads `wPartySpecies`' first byte and nothing else, and
