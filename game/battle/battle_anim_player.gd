@@ -851,10 +851,12 @@ func _gen1_side(flipped: bool) -> bool:
 ## `AnimationHideMonPic` and `AnimationShowMonPic`, which are `ClearScreenArea`
 ## and `CopyPicTiles` over the box the picture was last drawn in. The report
 ## beside it is what a renderer with no background plane reads.
+## `AnimationShowMonPic` and its siblings copy the picture to its own square.
 func _gen1_draw_battler(player_side: bool, visible: bool) -> void:
 	_gen1_clear_battler(player_side)
 	_background.report_battler(player_side, visible)
 	if visible:
+		_background.battler_shift[player_side] = Vector2.ZERO
 		Gen2BattleScreenMap.stamp(
 			_background.bg_map, player_side, RomRegistry.GEN1,
 			_gen1_shift_tiles(player_side)
@@ -978,8 +980,6 @@ const GEN1_TRADE_JUMP_FRAMES: int = 5
 const GEN1_TRADE_JUMP_SCX: int = -8
 const GEN1_TRADE_JUMP_SOUND_MOVE: int = 12
 const GEN1_TRADE_BALL_SPRITES: int = 4
-const GEN1_SFX_TRADE_MACHINE: int = 152
-const GEN1_SFX_SWAP: int = 174
 
 ## `%00011011`, `AnimationFlashScreen`'s inverted palette, and the white it
 ## follows it with. Two frames each, then the palette that was there.
@@ -1209,19 +1209,20 @@ func _gen1_effect_steps(id: int) -> Array:
 	return _gen1_mon_effect_steps(effect, flipped)
 
 
-## The routines that only move, hide or show one square's picture.
-## `SE_FLASH_MON_PIC` and `SE_TRANSFORM_MON` are `ChangeMonPic` with a species
-## the square already shows by then, so both redraw rather than being a gap.
+## The routines that only move, hide or show one square's picture. The redraws
+## end in `AnimationShowMonPic`, which writes the square's own cells and so puts
+## back a picture a slide took off; `SE_FLASH_MON_PIC` and `SE_TRANSFORM_MON` are
+## `ChangeMonPic` with a species the square already shows by then.
 func _gen1_mon_effect_steps(effect: int, flipped: bool) -> Array:
+	var home: Dictionary = {&"shift": [flipped, Vector2.ZERO], &"visible": [flipped, true]}
 	match effect:
 		GEN1_SE_HIDE_MON_PIC:
 			return [{&"visible": [flipped, false]}]
-		GEN1_SE_SHOW_MON_PIC, GEN1_SE_FLASH_MON_PIC, GEN1_SE_TRANSFORM_MON:
-			return [{&"visible": [flipped, true]}]
+		GEN1_SE_SHOW_MON_PIC, GEN1_SE_FLASH_MON_PIC, GEN1_SE_TRANSFORM_MON, \
+				GEN1_SE_RESET_MON_POSITION:
+			return [home]
 		GEN1_SE_BOUNCE_UP_AND_DOWN:
 			return _gen1_bounce_steps(flipped)
-		GEN1_SE_RESET_MON_POSITION:
-			return [{&"visible": [flipped, true], &"shift": [flipped, Vector2.ZERO]}]
 		GEN1_SE_MOVE_MON_HORIZONTALLY:
 			return [{
 				&"frames": GEN1_MOVE_FRAMES,
@@ -1234,9 +1235,9 @@ func _gen1_mon_effect_steps(effect: int, flipped: bool) -> Array:
 		GEN1_SE_SQUISH_MON_PIC:
 			return _gen1_squish_steps(flipped)
 		GEN1_SE_MINIMIZE_MON:
-			return [{&"minimize": true}]
+			return [{&"minimize": true}.merged(home)]
 		GEN1_SE_SUBSTITUTE_MON:
-			return [{&"substitute": true}]
+			return [{&"substitute": true}.merged(home)]
 	return []
 
 
@@ -1580,7 +1581,7 @@ func _gen1_trade_shake_steps() -> Array:
 	for distance: int in GEN1_TRADE_SHAKE_MOVES:
 		out.append({&"frames": GEN1_DELAY3_FRAMES, &"sprites": _gen1_ball_moved(out, distance)})
 	out.append({&"frames": 1})
-	out.append({&"sprites": [], &"sfx": GEN1_SFX_TRADE_MACHINE})
+	out.append({&"sprites": [], &"sfx": Gen1Sfx.SFX_TRADE_MACHINE})
 	return out
 
 
@@ -1597,7 +1598,7 @@ func _gen1_trade_jump_steps() -> Array:
 		var next: int = GEN1_TRADE_JUMP_MOVES[index + 1] \
 			if index + 1 < GEN1_TRADE_JUMP_MOVES.size() else GEN1_TRADE_JUMP_SOUND_MOVE
 		if next == GEN1_TRADE_JUMP_SOUND_MOVE:
-			step[&"sfx"] = GEN1_SFX_SWAP
+			step[&"sfx"] = Gen1Sfx.SFX_SWAP
 		out.append(step)
 		scx = (scx + GEN1_TRADE_JUMP_SCX) & 0xFF
 		out.append({&"scx": scx})

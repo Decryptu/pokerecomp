@@ -384,6 +384,22 @@ func test_no_runs_and_getting_away_ends_the_battle() -> void:
 	assert_eq(_first(events, Gen2Battle.FLED)["how"], &"speed")
 	assert_eq(_first(events, Gen2Battle.OVER)["winner"], null, "running is a draw")
 	assert_true(battle.has_fled())
+	assert_false(battle.must_replace(Gen2Battle.PLAYER), "nobody is owed after getting away")
+	assert_false(battle.awaiting_replacement())
+
+
+## Both sides down in a wild battle is `HandleEnemyMonFaint`'s `wBattleEnded`:
+## the battle is over, so the fallen player owes no replacement and no question.
+func test_a_wild_battle_with_both_sides_down_owes_no_replacement() -> void:
+	var battle: Gen2Battle = _replacement_battle(
+		[_mon(Fixture.PIKACHU, 20, [Fixture.TACKLE]), _mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])],
+		[_mon(Fixture.CHARMANDER, 20, [Fixture.TACKLE])], false
+	)
+	_faint(battle.player)
+	_faint(battle.mon(Gen2Battle.ENEMY))
+	assert_true(battle.is_over())
+	assert_false(battle.must_replace(Gen2Battle.PLAYER))
+	assert_false(battle.asking_use_next())
 
 
 ## `ld hl, wPartyMon1Speed`: the first party slot's, not the Pokémon that
@@ -5000,3 +5016,19 @@ func test_a_locked_in_player_opens_no_menu_and_bide_no_move_list() -> void:
 	battle.player.substatus = Gen2Substatus.NONE
 	battle.player.status = 3
 	assert_false(battle.player_move_menu_skipped())
+
+
+## `DoBattle.loop2`'s `CheckIfCurPartyMonIsFitToFight` and Generation 1's
+## `.findFirstAliveMonLoop`: a fainted lead stays in its slot and the first
+## member still standing is the one sent out.
+func test_the_first_member_fit_to_fight_leads_the_battle() -> void:
+	var fainted: Gen2BattleMon = _mon(Fixture.PIKACHU, 20, [Fixture.TACKLE])
+	fainted.hp = 0
+	var standing: Gen2BattleMon = _mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data, Gen2Party.create([fainted, standing]),
+		Gen2Party.of(_mon(Fixture.GEODUDE, 5, [Fixture.TACKLE])), _rng
+	)
+	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1)
+	assert_eq(battle.mon(Gen2Battle.PLAYER), standing)
+	assert_false(battle.must_replace(Gen2Battle.PLAYER), "nothing is owed a replacement")

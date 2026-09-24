@@ -263,7 +263,7 @@ func _gen1_visible_pulse(world: Gen2WorldAPI, cell: Vector2i, generator: RandomN
 		"the shiny entry was not admitted: %s" % [driver.entries()]):
 		return
 	var commands: Array = driver.frame_commands()
-	_r.check(commands.size() == 1 and int((commands[0]["operands"] as Array)[1]) == Gen2BattleScreen.SFX_SHINE,
+	_r.check(commands.size() == 1 and int((commands[0]["operands"] as Array)[1]) == Gen2Sfx.SFX_SHINE,
 		"the pulse answered %s, not SFX_SHINE." % [commands])
 	_r.check(driver.pulse_sprites().is_empty(), "a Generation 1 pulse put sprites in OAM.")
 	var again: int = 0

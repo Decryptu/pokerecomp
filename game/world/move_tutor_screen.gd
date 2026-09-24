@@ -39,7 +39,6 @@ var _move: int = 0
 var _move_name: String = ""
 
 var _phase: int = Phase.DONE
-var _yes: bool = true
 var _party_index: int = -1
 var _forget_moves: Array = []
 var _forget_cursor: int = 0
@@ -50,6 +49,7 @@ var _refusal_text: String = ""
 var _text_box: Gen2TextBox = null
 var _menu_page: Gen2MenuPage = null
 var _menu: TextureRect = null
+var _yes_no: Gen2YesNoBox = null
 var _party: Gen2PartyScreen = null
 
 
@@ -80,7 +80,7 @@ func phase() -> int:
 
 
 func question_cursor() -> int:
-	return (0 if _yes else 1) if _phase in [Phase.FORGET_ASK, Phase.STOP_ASK] else -1
+	return _yes_no.cursor() if _yes_no != null else -1
 
 
 func forget_cursor() -> int:
@@ -122,32 +122,31 @@ func handle_button(button: int) -> bool:
 		return _party.handle_button(button)
 	if _phase == Phase.FORGET_LIST:
 		return _handle_forget_list(button)
-	if _phase in [Phase.FORGET_ASK, Phase.STOP_ASK]:
-		match button:
-			PokeButton.UP, PokeButton.DOWN:
-				_yes = not _yes
-				_draw_yes_no()
-				return true
-			PokeButton.A:
-				_answer(_yes)
-				return true
-			PokeButton.B:
-				_answer(false)
-				return true
-		return false
-	if _phase != Phase.REFUSAL or button != PokeButton.A or _text_box == null:
+	if _yes_no != null and _yes_no.is_open():
+		return _yes_no.handle_button(button)
+	if button != PokeButton.A or _text_box == null:
 		return false
 	if _text_box.is_revealing() or _text_box.has_pages_left():
 		_text_box.advance()
 		return true
+	if _phase != Phase.REFUSAL:
+		return false
 	## `.didnt_learn` is `and a / ret`, which `.loop` reads as "go round again".
 	_open_party()
 	return true
 
 
 func advance_frame() -> void:
+	if _yes_no != null and _yes_no.is_open():
+		_yes_no.advance_frame()
+		return
 	if _text_box != null and _text_box.visible:
 		_text_box.advance_frame()
+		if _text_box.is_revealing() or _text_box.has_pages_left():
+			return
+	## `LearnMove` prints each question and only then calls `YesNoBox`.
+	if _phase in [Phase.FORGET_ASK, Phase.STOP_ASK] and _yes_no != null:
+		_yes_no.open()
 
 
 func _handle_forget_list(button: int) -> bool:
@@ -155,12 +154,8 @@ func _handle_forget_list(button: int) -> bool:
 		PokeButton.UP, PokeButton.DOWN:
 			if _forget_moves.is_empty():
 				return true
-			## No `STATICMENU_WRAP`: `w2DMenuFlags1` is `$20` and the list stops
-			## at either end.
-			_forget_cursor = clampi(
-				_forget_cursor + (1 if button == PokeButton.DOWN else -1),
-				0, _forget_moves.size() - 1
-			)
+			_forget_cursor = Gen2MoveForget.step_cursor(_forget_cursor,
+				1 if button == PokeButton.DOWN else -1, _forget_moves.size(), RomRegistry.GEN2)
 			_forget_refusal = ""
 			_draw_forget_list()
 			return true
@@ -180,6 +175,9 @@ func _build() -> void:
 	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_menu.visible = false
 	add_child(_menu)
+	_yes_no = Gen2YesNoBox.new(_page())
+	_yes_no.answered.connect(_answer)
+	add_child(_yes_no)
 
 	_text_box = Gen2TextBox.new()
 	_text_box.driven = true
@@ -206,7 +204,9 @@ func _open_party() -> void:
 	host.mouse_filter = Control.MOUSE_FILTER_STOP
 	host.selection_made.connect(_on_member_selected)
 	add_child(host)
-	host.open_selection(Gen2PartyScreen.PROMPT_TEACH_WHICH)
+	host.open_selection(
+		Gen2PartyScreen.PROMPT_TEACH_WHICH, Gen2PartyScreen.ACTION_TEACH_TMHM, _move
+	)
 	_party = host
 	if _text_box != null:
 		_text_box.visible = false
@@ -240,7 +240,7 @@ func _teach(forget_slot: int) -> void:
 				Gen2MoveForget.forgot_text(_mon_name(), _forgotten_name(forget_slot)),
 				learned,
 			]
-			sfx_requested.emit(Gen2MoveForget.SFX_SWITCH_POKEMON, false)
+			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, false)
 		_end(Gen2MoveTutor.SCRIPT_VALUE_LEARNED, learned)
 		return
 	var reason: StringName = StringName(result.get("reason", &""))
@@ -261,14 +261,14 @@ func _teach(forget_slot: int) -> void:
 func _show_refusal(reason: StringName) -> void:
 	match reason:
 		&"not_compatible":
-			sfx_requested.emit(Gen2MoveTutor.SFX_WRONG, false)
+			sfx_requested.emit(Gen2Sfx.SFX_WRONG, false)
 			_refusal_text = Gen2WorldTMHM.not_compatible_text(_mon_name(), _move_name)
 		&"already_knows_move":
 			_refusal_text = Gen2WorldTMHM.knows_move_text(_mon_name(), _move_name)
 		&"invalid_party_index":
 			## `ChooseMonToLearnTMHM` refuses an egg with SFX_WRONG and reopens
 			## the list without a box, which is what an empty text is here.
-			sfx_requested.emit(Gen2MoveTutor.SFX_WRONG, false)
+			sfx_requested.emit(Gen2Sfx.SFX_WRONG, false)
 			_open_party()
 			return
 		_:
@@ -279,9 +279,7 @@ func _show_refusal(reason: StringName) -> void:
 
 func _open_forget_ask() -> void:
 	_phase = Phase.FORGET_ASK
-	_yes = true
 	_show_text(box_text())
-	_draw_yes_no()
 
 
 func _answer(yes: bool) -> void:
@@ -321,9 +319,7 @@ func _confirm_forget() -> void:
 
 func _open_stop_ask() -> void:
 	_phase = Phase.STOP_ASK
-	_yes = true
 	_show_text(box_text())
-	_draw_yes_no()
 
 
 ## `LearnMove` returns `b = 0`, which `CheckCanLearnMoveTutorMove` reads as
@@ -381,16 +377,6 @@ func _page() -> Gen2MenuPage:
 	if _menu_page == null:
 		_menu_page = Gen2MenuPage.from_data(_data)
 	return _menu_page
-
-
-func _draw_yes_no() -> void:
-	if _page() == null or _menu == null:
-		return
-	var box: Gen2MenuBox = Gen2MenuBox.yes_no()
-	var image: Image = _page().render(box, ["YES", "NO"], 0 if _yes else 1)
-	Gen2PicImage.show(_menu, image)
-	_menu.position = Vector2(box.border_position() * TILE)
-	_menu.visible = true
 
 
 func _draw_forget_list() -> void:

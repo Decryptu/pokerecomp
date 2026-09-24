@@ -71,19 +71,6 @@ const RATE_QUARTER: int = 1
 ## `Slots_GetPayout.PayoutTable`, in `SLOTS_*` order.
 const PAYOUTS: Array[int] = [300, 50, 6, 8, 10, 15]
 
-## The sound effects `Slots_PlaySFX` and its callers name.
-const SFX_GOT_SAFARI_BALLS: int = 0x0C
-const SFX_JUMP_OVER_LEDGE: int = 0x16
-const SFX_PLACE_PUZZLE_PIECE_DOWN: int = 0x1E
-const SFX_THROW_BALL: int = 0x28
-const SFX_SLOT_MACHINE_START: int = 0x2C
-const SFX_GET_COIN_FROM_SLOTS: int = 0x67
-const SFX_PAY_DAY: int = 0x68
-const SFX_PRESENT: int = 0x8E
-const SFX_3RD_PLACE: int = 0x94
-const SFX_2ND_PLACE: int = 0x98
-const SFX_QUIT_SLOTS: int = 0x9D
-const SFX_STOP_SLOT: int = 0xBA
 ## `MUSIC_GAME_CORNER`, which `.InitGFX` starts and nothing here stops.
 const MUSIC_GAME_CORNER: int = 0x12
 
@@ -473,7 +460,7 @@ func _run_action() -> void:
 			_resume = &"ask_play_again"
 		SLOTS_QUIT:
 			_index |= 1 << SLOTS_END_LOOP_F
-			_wait_then([{"kind": &"sound", "index": SFX_QUIT_SLOTS}])
+			_wait_then([{"kind": &"sound", "index": Gen2Sfx.SFX_QUIT_SLOTS}])
 			_script.append({"kind": &"wait"})
 		_:
 			pass
@@ -496,7 +483,7 @@ func _take_bet() -> void:
 	## `.Start` waits the last game's own fanfare out before the transaction,
 	## and `.proceed` waits that out before the reels start.
 	_wait_then([
-		{"kind": &"sound", "index": SFX_PAY_DAY},
+		{"kind": &"sound", "index": Gen2Sfx.SFX_PAY_DAY},
 		{"kind": &"text", "name": &"start"},
 	])
 	_index += 1
@@ -505,7 +492,7 @@ func _take_bet() -> void:
 	for reel: Reel in _reels:
 		reel.action = REEL_ACTION_NORMAL_RATE
 		reel.manip_counter = MANIP_COUNTER
-	_wait_then([{"kind": &"sound", "index": SFX_SLOT_MACHINE_START}])
+	_wait_then([{"kind": &"sound", "index": Gen2Sfx.SFX_SLOT_MACHINE_START}])
 
 
 ## `Slots_InitBias`. A bias already on SLOTS_SEVEN is kept, which is the whole
@@ -539,7 +526,7 @@ func _wait_reel(reel: int) -> void:
 func _wait_stop_reel(reel: int) -> void:
 	if _reels[reel].action != REEL_ACTION_DO_NOTHING:
 		return
-	_play(SFX_STOP_SLOT)
+	_play(Gen2Sfx.SFX_STOP_SLOT)
 	_stopped[reel] = _reels[reel].window()
 	_index += 1
 	_pressed_a = false
@@ -617,12 +604,12 @@ func _payout_text() -> void:
 		return
 	match _matched:
 		SLOTS_SEVEN:
-			_play(SFX_2ND_PLACE)
+			_play(Gen2Sfx.SFX_2ND_PLACE)
 			_roll_seven_streak()
 		SLOTS_POKEBALL:
-			_play(SFX_3RD_PLACE)
+			_play(Gen2Sfx.SFX_3RD_PLACE)
 		_:
-			_play(SFX_PRESENT)
+			_play(Gen2Sfx.SFX_PRESENT)
 	## Each of the three `.LinedUp*` routines ends in `WaitSFX`, and the box is
 	## printed behind it rather than over it.
 	_wait_then([{"kind": &"text", "name": &"lined_up"}])
@@ -651,7 +638,7 @@ func _payout_anim() -> void:
 		_coins += 1
 	if (_delay & 0x7) == 0:
 		return
-	_play(SFX_GET_COIN_FROM_SLOTS)
+	_play(Gen2Sfx.SFX_GET_COIN_FROM_SLOTS)
 
 
 ## `Slots_AskPlayAgain`. No coins left is the one exit that asks nothing.
@@ -822,7 +809,7 @@ func _action_set_up_skip(reel: Reel) -> void:
 	if _check_first_two(reel) and _first_two_sevens:
 		_stop_reel(reel)
 		return
-	_play(SFX_STOP_SLOT)
+	_play(Gen2Sfx.SFX_STOP_SLOT)
 	reel.action = REEL_ACTION_WAIT_REEL2_SKIP_TO_7
 	reel.manip_delay = 32
 	reel.spin_rate = 0
@@ -832,7 +819,7 @@ func _action_wait_skip(reel: Reel) -> void:
 	if reel.manip_delay > 0:
 		reel.manip_delay -= 1
 		return
-	_play(SFX_THROW_BALL)
+	_play(Gen2Sfx.SFX_THROW_BALL)
 	reel.action = REEL_ACTION_FAST_SPIN_REEL2_UNTIL_LINED_UP_7S
 	reel.spin_rate = RATE_DOUBLE
 
@@ -842,7 +829,7 @@ func _action_wait_skip(reel: Reel) -> void:
 func _action_start_slow_advance(reel: Reel) -> void:
 	if _check_all_three(reel):
 		return
-	_play(SFX_STOP_SLOT)
+	_play(Gen2Sfx.SFX_STOP_SLOT)
 	_stall = WAIT_SFX_FRAMES
 	reel.spin_rate = RATE_QUARTER
 	reel.action = REEL_ACTION_WAIT_SLOW_ADVANCE_REEL3
@@ -852,7 +839,7 @@ func _action_start_slow_advance(reel: Reel) -> void:
 func _action_wait_slow_advance(reel: Reel) -> void:
 	if reel.manip_delay > 0:
 		reel.manip_delay -= 1
-		_play(SFX_GOT_SAFARI_BALLS)
+		_play(Gen2Sfx.SFX_GOT_SAFARI_BALLS)
 		return
 	if _bias == SLOTS_SEVEN:
 		## Seven is the one bias this mode can satisfy: it advances until the
@@ -861,12 +848,12 @@ func _action_wait_slow_advance(reel: Reel) -> void:
 			_stop_reel(reel)
 			_waiting_sfx = true
 			return
-		_play(SFX_GOT_SAFARI_BALLS)
+		_play(Gen2Sfx.SFX_GOT_SAFARI_BALLS)
 		return
 	## Every other bias, SLOTS_NO_BIAS included, advances until nothing is
 	## lined up at all.
 	if _check_all_three(reel):
-		_play(SFX_GOT_SAFARI_BALLS)
+		_play(Gen2Sfx.SFX_GOT_SAFARI_BALLS)
 		return
 	_stop_reel(reel)
 	_waiting_sfx = true
@@ -877,7 +864,7 @@ func _action_wait_slow_advance(reel: Reel) -> void:
 func _action_init_golem(reel: Reel) -> void:
 	if _check_all_three(reel):
 		return
-	_play(SFX_STOP_SLOT)
+	_play(Gen2Sfx.SFX_STOP_SLOT)
 	_stall = WAIT_SFX_FRAMES
 	reel.action = REEL_ACTION_WAIT_GOLEM
 	reel.spin_rate = 0
@@ -901,7 +888,7 @@ func _action_wait_golem(reel: Reel) -> void:
 func _action_init_chansey(reel: Reel) -> void:
 	if _check_all_three(reel):
 		return
-	_play(SFX_STOP_SLOT)
+	_play(Gen2Sfx.SFX_STOP_SLOT)
 	_stall = WAIT_SFX_FRAMES
 	reel.action = REEL_ACTION_WAIT_CHANSEY
 	reel.spin_rate = 0
@@ -1078,7 +1065,7 @@ func _animate_golem_fall() -> void:
 	_golem["jumptable"] = 2
 	_golem["var2"] = 2
 	_delay = 1
-	_play(SFX_PLACE_PUZZLE_PIECE_DOWN)
+	_play(Gen2Sfx.SFX_PLACE_PUZZLE_PIECE_DOWN)
 
 
 ## `.roll`: two pixels a frame across nine tiles, and `hSCY` shaken by the sign
@@ -1127,7 +1114,7 @@ func _animate_chansey_walk() -> void:
 		_animate_chansey_wait()
 		return
 	if (x & 0xF) == 0:
-		_play(SFX_JUMP_OVER_LEDGE)
+		_play(Gen2Sfx.SFX_JUMP_OVER_LEDGE)
 
 
 ## `.one`: `wSlotsDelay` of 2 opens the egg's own countdown and 5 takes Chansey
@@ -1167,7 +1154,7 @@ func _animate_egg() -> void:
 		if x >= 15 * 8:
 			_egg = {}
 			_delay = 4
-			_play(SFX_PLACE_PUZZLE_PIECE_DOWN)
+			_play(Gen2Sfx.SFX_PLACE_PUZZLE_PIECE_DOWN)
 			return
 		_egg["x"] = x + 1
 	_egg["offset"] = _sine(counter, 32)

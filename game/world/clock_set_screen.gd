@@ -39,10 +39,8 @@ const NITE_HOUR: int = 18
 const NOON_HOUR: int = 12
 
 ## `.loop` and `.HourIsSet` end on `ld c, 10 / call DelayFrames` before their
-## input loop and `InterpretTwoOptionMenu` holds `ld c, $f` after an answer, so
-## neither a dial nor a YES/NO reads a button on the frame it is drawn.
+## input loop, so a dial reads no button on the frame it is drawn.
 const DIAL_DELAY_FRAMES: int = 10
-const YES_NO_DELAY_FRAMES: int = 15
 
 var _page: Gen2ClockSetPage = null
 var _view: TextureRect = null
@@ -173,14 +171,14 @@ func value() -> Dictionary:
 ## closed, so the answer is not acted on until those frames have gone.
 func _handle_confirm(button: int) -> bool:
 	if button in [PokeButton.UP, PokeButton.DOWN]:
-		_confirm_cursor = 1 - _confirm_cursor
+		_confirm_cursor = 0 if button == PokeButton.UP else 1
 		_render()
 		return true
 	if button != PokeButton.A and button != PokeButton.B:
 		return false
 	var yes: bool = button == PokeButton.A and _confirm_cursor == 0
 	_presentation.clear()
-	_presentation.push_delay(YES_NO_DELAY_FRAMES)
+	_presentation.push_delay(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 	_queue(_accept_confirm.bind(yes))
 	return true
 

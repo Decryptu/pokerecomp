@@ -185,8 +185,9 @@ func draw(page: Dictionary) -> PackedByteArray:
 
 	var name: String = String(page.get("nickname", ""))
 	_text(indices, width, name, NICKNAME)
+	## `PlaceString` leaves bc on the cell after the name, where `PrintLevel` starts.
 	stats.draw_level(
-		indices, width, NICKNAME + Vector2i(name.length() + 1, 0),
+		indices, width, NICKNAME + Vector2i(Gen2Text.encoded_length(name), 0),
 		int(page.get("level", 0))
 	)
 	if bool(page.get("previous", false)):

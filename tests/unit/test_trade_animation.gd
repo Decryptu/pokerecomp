@@ -19,8 +19,6 @@ const GOLD_SILVER_FRAMES: Array[int] = [2480, 2480]
 ## twenty-six clicks the two tube bulges and the two balls between them ask for.
 const SFX_TOTAL: int = 32
 ## `SFX_GIVE_TRADEMON` and `SFX_GET_TRADEMON`, one each per half.
-const SFX_GIVE_TRADEMON: int = Gen2TradeAnimation.SFX_GIVE_TRADEMON
-const SFX_GET_TRADEMON: int = Gen2TradeAnimation.SFX_GET_TRADEMON
 
 const GIVEN: int = 152
 const RECEIVED: int = 25
@@ -80,8 +78,8 @@ func test_each_half_asks_for_the_same_sounds_in_its_own_order() -> void:
 			if StringName(event["type"]) == &"play_sfx":
 				sfx.append(int(event["sfx"]))
 		assert_eq(sfx.size(), SFX_TOTAL, "half %d" % half)
-		var sent: int = sfx.find(SFX_GIVE_TRADEMON)
-		var received: int = sfx.find(SFX_GET_TRADEMON)
+		var sent: int = sfx.find(Gen2Sfx.SFX_GIVE_TRADEMON)
+		var received: int = sfx.find(Gen2Sfx.SFX_GET_TRADEMON)
 		assert_true(
 			sent >= 0 and received >= 0, "half %d is missing a trade sound" % half
 		)

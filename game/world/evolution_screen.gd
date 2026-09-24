@@ -22,10 +22,6 @@ signal map_music_requested()  ## `RestartMapMusic` or `PlayDefaultMusic` once a 
 ## constants/music_constants.asm.
 const MUSIC_NONE: int = 0
 const MUSIC_EVOLUTION: int = 0x22
-## constants/sfx_constants.asm.
-const SFX_EVOLVED: int = 0xA4
-const SFX_CAUGHT_MON: int = 0x02
-
 const TILE: int = Gen2Font.TILE
 ## `hlcoord 7, 2`, the 7x7 block both pics are placed in.
 const PIC_AT: Vector2i = Vector2i(7, 2)
@@ -360,7 +356,7 @@ func _settle() -> void:
 
 
 func _begin_balls() -> void:
-	sfx_requested.emit(SFX_EVOLVED)
+	sfx_requested.emit(Gen2Sfx.SFX_EVOLVED)
 	_enter(Phase.BALLS, BALLS_FRAMES)
 
 
@@ -431,7 +427,7 @@ func _open_congratulations() -> void:
 		String(_data.species(int(plan.get("new_species", 0))).get("name", ""))
 	))
 	music_requested.emit(MUSIC_NONE)
-	sfx_requested.emit(SFX_CAUGHT_MON)
+	sfx_requested.emit(Gen2Sfx.SFX_CAUGHT_MON)
 	_frames = CAUGHT_FRAMES
 
 
@@ -556,7 +552,7 @@ func _open_gen1_animation() -> void:
 	_backdrop.visible = true
 	_pic.visible = false
 	music_requested.emit(MUSIC_NONE)
-	sfx_requested.emit(Gen1Layout.SFX_TINK)
+	sfx_requested.emit(Gen1Sfx.SFX_TINK)
 	_enter(Phase.TINK, GEN1_DELAY3)
 
 
@@ -661,7 +657,7 @@ func _advance_gen1_jingle() -> void:
 		return
 	if not _jingle_started:
 		_jingle_started = true
-		sfx_requested.emit(Gen1Layout.SFX_GET_ITEM_2)
+		sfx_requested.emit(Gen1Sfx.SFX_GET_ITEM_2)
 		_begin_wait()
 		return
 	_enter(Phase.CONGRATULATIONS, GEN1_JINGLE_FRAMES)

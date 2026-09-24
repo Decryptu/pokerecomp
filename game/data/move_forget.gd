@@ -9,10 +9,6 @@ extends RefCounted
 ## How many moves a Pokémon can know at once, NUM_MOVES.
 const MOVE_SLOTS: int = 4
 
-## `Text_1_2_and_Poof`'s own `PlaySFX`; `OneTwoAndText` plays SFX_SWAP by `PlaySound` id.
-const SFX_SWITCH_POKEMON: int = 0x20
-const GEN1_SFX_SWAP: int = 174
-
 ## home/hm_moves.asm's `IsHMMove.HMMoves`, in source order: forgetting is gated
 ## on every HM, not on the four the overworld acts on. `data/moves/hm_moves.asm`
 ## is the first five, Generation 1's WATERFALL being an ordinary move.
@@ -47,6 +43,16 @@ const GEN1_TEXTS: Dictionary = {
 	&"learned": "%s learned\n%s!",
 	&"cant_forget_hm": "HM techniques\ncan't be deleted!",
 }
+
+
+## The list's cursor after UP or DOWN: `ForgetMove` wraps (`_2DMENU_WRAP_UP_DOWN`)
+## and Generation 1's `TryingToLearn` stops at either end.
+static func step_cursor(cursor: int, step: int, count: int, generation: int) -> int:
+	if count <= 0:
+		return 0
+	if generation == RomRegistry.GEN1:
+		return clampi(cursor + signi(step), 0, count - 1)
+	return wrapi(cursor + signi(step), 0, count)
 
 
 ## `IsHMMove`: an HM's move, which `ForgetMove` refuses to give up.

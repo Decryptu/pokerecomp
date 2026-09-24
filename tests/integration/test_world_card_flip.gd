@@ -122,6 +122,9 @@ func test_the_round_is_taken_out_of_the_coin_case() -> void:
 		_host().prompt(), Gen2CardFlip.Prompt.YES_NO, "the table opens on its question"
 	)
 	_world_screen.press_button(PokeButton.A)
+	assert_eq(_host().game().coins(), COINS, "the answered box holds first")
+	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
+		_host().advance_frame()
 	assert_eq(_host().game().coins(), COINS - 3, "the table takes three coins")
 
 

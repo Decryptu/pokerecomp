@@ -22,7 +22,9 @@ static func shared() -> Gen2TextOverlay:
 
 
 static func reset() -> void:
-	_shared = null
+	if _shared != null:
+		_shared._texts = {}
+		_shared._owners = {}
 
 
 func is_empty() -> bool:

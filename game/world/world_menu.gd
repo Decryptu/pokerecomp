@@ -26,6 +26,9 @@ const YES_NO_OPTIONS: Array = ["YES", "NO"]
 const YES_NO_FLAGS: int = (
 	Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
 )
+## `InterpretTwoOptionMenu`'s and `DisplayTwoOptionMenu`'s 15 frames: an answered
+## YES/NO stays up, reading no button, before the caller hears it.
+const ANSWER_HOLD_FRAMES: int = 15
 
 var kind: StringName = &"vertical"
 var options: Array = []
@@ -46,6 +49,52 @@ var _spacing: int = 0
 ## every `ScrollingMenu` in the game is opened by a routine rather than by a
 ## script, and Buena's prize list is the one this runner stages itself.
 var scrolling_arrows: bool = false
+var _hold: int = 0
+var _answered_yes: bool = false
+
+
+## `YesNoMenuHeader`: YES over NO, opening on YES and wrapping neither way.
+static func yes_no() -> Gen2WorldMenu:
+	var menu := Gen2WorldMenu.new()
+	menu.options = YES_NO_OPTIONS.duplicate()
+	menu.flags = YES_NO_FLAGS
+	menu.rows = YES_NO_OPTIONS.size()
+	return menu
+
+
+func is_yes_no() -> bool:
+	return options == YES_NO_OPTIONS
+
+
+## One button on a YES/NO, true when it moved or answered: B is NO, and nothing
+## is read while the hold runs.
+func press_yes_no(button: int) -> bool:
+	if _hold > 0:
+		return false
+	match button:
+		PokeButton.UP, PokeButton.DOWN:
+			return move(Vector2i(0, 1 if button == PokeButton.DOWN else -1))
+		PokeButton.A, PokeButton.B:
+			_answered_yes = button == PokeButton.A and cursor == 0
+			_hold = ANSWER_HOLD_FRAMES
+			return true
+	return false
+
+
+func holding() -> bool:
+	return _hold > 0
+
+
+## Spends one frame of the hold, answering true on the frame it ends.
+func advance_hold() -> bool:
+	if _hold <= 0:
+		return false
+	_hold -= 1
+	return _hold == 0
+
+
+func answered_yes() -> bool:
+	return _answered_yes
 
 
 static func from_input(input: Dictionary) -> Gen2WorldMenu:

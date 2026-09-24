@@ -46,16 +46,6 @@ const REPEAT_RATE_FRAMES: int = 5
 ## set and cleared off the screen on the rest.
 const BLINK_MASK: int = 0x10
 
-## The six sounds, as constants/sfx_constants.asm's own indices. The comments
-## there are hexadecimal and the run has no gaps, so each is its position in the
-## enum. `SFX_PLACE_PUZZLE_PIECE_DOWN` is shared with `OWCutAnimation`.
-const SFX_MOVE_CURSOR: int = 0x31
-const SFX_MOVE_HELD_PIECE: int = 0x32
-const SFX_LIFT_PIECE: int = 0x3E
-const SFX_PLACE_PIECE: int = 0x1E
-const SFX_REFUSED: int = 0x19
-const SFX_SOLVED: int = 0x99
-
 var _pieces: PackedByteArray = PackedByteArray()
 var _cursor: int = 0
 var _holding: bool = false
@@ -169,7 +159,7 @@ func advance(pressed: Array = [], held: Array = []) -> Dictionary:
 		var step: int = _step_for(pressed + held)
 		if step != _cursor:
 			_cursor = step
-			sounds.append(SFX_MOVE_HELD_PIECE if _holding else SFX_MOVE_CURSOR)
+			sounds.append(Gen2Sfx.SFX_MOVE_PUZZLE_PIECE if _holding else Gen2Sfx.SFX_POUND)
 	return {"sounds": sounds, "solved": false, "wait_sfx": false}
 
 
@@ -198,18 +188,18 @@ func _press_a() -> Dictionary:
 	var occupant: int = int(_pieces[_cursor])
 	if not _holding:
 		if occupant == 0:
-			sounds.append(SFX_REFUSED)
+			sounds.append(Gen2Sfx.SFX_WRONG)
 			return {"sounds": sounds, "solved": false, "wait_sfx": true}
-		sounds.append(SFX_LIFT_PIECE)
+		sounds.append(Gen2Sfx.SFX_MEGA_KICK)
 		_pieces[_cursor] = 0
 		_held = occupant
 		_holding = true
 		return {"sounds": sounds, "solved": false, "wait_sfx": true}
 
 	if occupant != 0:
-		sounds.append(SFX_REFUSED)
+		sounds.append(Gen2Sfx.SFX_WRONG)
 		return {"sounds": sounds, "solved": false, "wait_sfx": true}
-	sounds.append(SFX_PLACE_PIECE)
+	sounds.append(Gen2Sfx.SFX_PLACE_PUZZLE_PIECE_DOWN)
 	_pieces[_cursor] = _held
 	_held = 0
 	_holding = false
@@ -218,7 +208,7 @@ func _press_a() -> Dictionary:
 
 	## The solved tail: the box loses its START>CANCEL row, the cursor goes off
 	## the screen and the fanfare is waited out before the one press that leaves.
-	sounds.append(SFX_SOLVED)
+	sounds.append(Gen2Sfx.SFX_1ST_PLACE)
 	_awaiting_solved_press = true
 	return {"sounds": sounds, "solved": true, "wait_sfx": true}
 

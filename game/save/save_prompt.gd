@@ -64,7 +64,6 @@ const WRITE_FRAMES: int = 32
 const DONE_FRAMES: int = 30
 const LEAVE_ON_FRAMES: int = 20
 const INSERT_SAVED_FRAMES: int = 24
-const SFX_SAVE: int = 0x25
 ## Per kind: the frames the info box stands with no question, the frame
 ## `SaveGameData` lands on, the frame the saved line goes up, the frame
 ## `SFX_SAVE` plays and when SAVED ends. `PrintSaveScreenText`'s `ld c, 30` and
@@ -94,6 +93,8 @@ var line: int = 0
 var cursor: int = -1
 var frames: int = 0
 var result: Dictionary = {}
+var _answer_hold: int = 0
+var _held_yes: bool = false
 
 var _kind: Kind = Kind.MENU
 var _player_name: String = ""
@@ -115,7 +116,8 @@ static func open(kind: Kind, player_name: String, write: Callable) -> Gen2SavePr
 
 
 func reads_joypad() -> bool:
-	return step in [Step.ASK, Step.OVERWRITE, Step.FAILED] and not holding_info()
+	return step in [Step.ASK, Step.OVERWRITE, Step.FAILED] and not holding_info() \
+		and _answer_hold == 0
 
 
 func holding_info() -> bool:
@@ -142,12 +144,20 @@ func refused() -> bool:
 ## A on the box. A three-line text is prompted past once before its last line,
 ## which is `_ContText`'s own `PromptButton`, and [param yes] is ignored there.
 func confirm(yes: bool) -> void:
-	if holding_info():
+	if not reads_joypad():
 		return
 	if cursor < 0 and step in [Step.ASK, Step.OVERWRITE]:
 		line = 1
 		cursor = 0
 		return
+	if step in [Step.ASK, Step.OVERWRITE]:
+		_held_yes = yes
+		_answer_hold = Gen2WorldMenu.ANSWER_HOLD_FRAMES
+		return
+	_answer(yes)
+
+
+func _answer(yes: bool) -> void:
 	match step:
 		## `CheckPreviousSaveFile` asks `OlderFileWillBeErasedText` of another
 		## player's file alone, which a slot never holds here.
@@ -171,6 +181,11 @@ func cancel() -> void:
 
 
 func frame() -> void:
+	if _answer_hold > 0:
+		_answer_hold -= 1
+		if _answer_hold == 0:
+			_answer(_held_yes)
+		return
 	if reads_joypad() or finished():
 		return
 	frames += 1

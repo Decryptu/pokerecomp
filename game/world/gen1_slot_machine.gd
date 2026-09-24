@@ -63,13 +63,6 @@ const WHITE_OUT_FRAMES: int = 3
 const PALETTE_NORMAL: int = 0xE4
 const CURSOR_BLINK_FRAMES: int = Gen2TextBox.CURSOR_BLINK_FRAMES
 
-const SFX_SLOTS_STOP_WHEEL: int = 190
-const SFX_SLOTS_REWARD: int = 191
-const SFX_SLOTS_NEW_SPIN: int = 192
-const SFX_GET_KEY_ITEM: int = 148
-const SFX_GET_ITEM_2: int = 137
-const SFX_PRESS_AB: int = 144
-
 ## Where `LoadSlotMachineTiles` puts each sheet, as [Gen1Lcd] tiles.
 const OBJECT_TILES: int = 0
 const BACKGROUND_TILES_1: int = Gen1Lcd.SIGNED_BASE
@@ -272,7 +265,7 @@ func answer_bet(option: int) -> void:
 		return
 	_prompt = Prompt.NONE
 	_prompt_name = &""
-	_play(SFX_PRESS_AB)
+	_play(Gen1Sfx.SFX_PRESS_AB)
 	_restore_bet_line()
 	if option < 1 or option > BET_ROWS.size():
 		_close()
@@ -292,7 +285,7 @@ func dismiss_text() -> void:
 	_prompt = Prompt.NONE
 	_prompt_name = &""
 	_hide_arrow()
-	_play(SFX_PRESS_AB)
+	_play(Gen1Sfx.SFX_PRESS_AB)
 	match _state:
 		State.NOT_ENOUGH:
 			_open_bet_menu()
@@ -312,7 +305,7 @@ func answer_play_again(yes: bool) -> void:
 		return
 	_prompt = Prompt.NONE
 	_prompt_name = &""
-	_play(SFX_PRESS_AB)
+	_play(Gen1Sfx.SFX_PRESS_AB)
 	if not yes:
 		_close()
 		return
@@ -415,7 +408,7 @@ func _take_bet() -> void:
 
 
 func _start_spin() -> void:
-	_play(SFX_SLOTS_NEW_SPIN)
+	_play(Gen1Sfx.SFX_SLOTS_NEW_SPIN)
 	_print(&"start")
 	_passes = 0
 	_state = State.FREE_SPIN
@@ -471,7 +464,7 @@ func _handle_stop_press() -> void:
 	if _stopping >= 1 and _stopping <= 2 and _wheels[_stopping - 1].slip != 0:
 		return
 	_stopping += 1
-	_play(SFX_SLOTS_STOP_WHEEL)
+	_play(Gen1Sfx.SFX_SLOTS_STOP_WHEEL)
 
 
 ## `SlotMachine_StopOrAnimWheel1` to `3`. Answers whether wheel 3 has stopped.
@@ -589,7 +582,7 @@ func _accept_match(symbol: int) -> void:
 			_state = State.YEAH
 			return
 		REWARD_100:
-			_play(SFX_GET_KEY_ITEM)
+			_play(Gen1Sfx.SFX_GET_KEY_ITEM)
 			_flags = 0
 		_:
 			if _allow_matches != 0:
@@ -601,7 +594,7 @@ func _accept_match(symbol: int) -> void:
 ## `SlotReward300Func` behind `YeahText`'s press: half the time the flags are
 ## cleared, and the allow-matches counter always is.
 func _reward_300() -> void:
-	_play(SFX_GET_ITEM_2)
+	_play(Gen1Sfx.SFX_GET_ITEM_2)
 	if _random() >= REWARD_300_KEEP_FLAGS_BELOW:
 		_flags = 0
 	_allow_matches = 0
@@ -642,7 +635,7 @@ func _pay_pass() -> void:
 	_coins = mini(_coins + 1, MAX_COINS)
 	_print_credit()
 	_print_payout()
-	_play(SFX_SLOTS_REWARD)
+	_play(Gen1Sfx.SFX_SLOTS_REWARD)
 	_anim_counter -= 1
 	if _anim_counter == 0:
 		lcd.obp0 ^= PALETTE_FLASH

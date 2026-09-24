@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Captures the pack against a real imported cache.
 ##   Godot --headless --path . -s res://tools/preview_pack.gd -- \
-##       crystal /tmp/pack.png [items|balls|key|tmhm|use|give] [presses] [female]
+##       crystal /tmp/pack.png [items|balls|key|tmhm|use|give|sell|deposit] [presses] [female]
 ## The world behind it is a new game holding enough of each pocket to scroll, with a
 ## development party so `use` and `give` reach `.Party`'s own list. [presses] is a
 ## `u,d,l,r,a,b,s` list driven into the real screen before the shot.
@@ -108,15 +108,10 @@ func _capture() -> void:
 	# The pack is opened by walking the start menu's own list to its PACK row and
 	# pressing A, rather than by naming the mode: a preview that sets its own
 	# state photographs a screen no player can reach.
-	var menu: Gen2WorldStartMenu = host.get("_menu")
-	var rows: Array = menu.items()
-	for index: int in rows.size():
-		if StringName((rows[index] as Dictionary).get("kind", &"")) \
-			== Gen2WorldStartMenu.ITEM_PACK:
-			for _step: int in index - menu.cursor:
-				host.handle_button(PokeButton.DOWN)
-			break
-	host.handle_button(PokeButton.A)
+	if pocket in [Gen2DepositSellPack.SELL, Gen2DepositSellPack.DEPOSIT]:
+		host.open_deposit_sell(Gen2DepositSellPack.open(StringName(pocket), world, save, false))
+	else:
+		_open_pack_row(host)
 	for token: String in tokens.split(",", false):
 		var key: String = token.strip_edges().to_lower()
 		if BUTTONS.has(key):
@@ -139,3 +134,15 @@ func _capture() -> void:
 		int(host.get("_pack_cursor")), int(host.get("_mode")),
 	])
 	quit(0)
+
+
+func _open_pack_row(host: Gen2StartMenuScreen) -> void:
+	var menu: Gen2WorldStartMenu = host.get("_menu")
+	var rows: Array = menu.items()
+	for index: int in rows.size():
+		if StringName((rows[index] as Dictionary).get("kind", &"")) \
+			== Gen2WorldStartMenu.ITEM_PACK:
+			for _step: int in index - menu.cursor:
+				host.handle_button(PokeButton.DOWN)
+			break
+	host.handle_button(PokeButton.A)

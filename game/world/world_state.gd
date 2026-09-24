@@ -59,6 +59,12 @@ const ENGINE_HALL_OF_FAME: int = ENGINE_CREDITS_SKIP
 const ENGINE_POKEDEX: int = 11
 ## Generation 1 keeps it in EVENT_GOT_POKEDEX, which `DrawStartMenu` checks.
 const GEN1_ENGINE_EVENTS: Dictionary = {ENGINE_POKEDEX: 37}
+## `EngineFlags`' bits of bytes this state keeps whole (`wDayCareMan`,
+## `wDayCareLady`, `wMomSavingMoney`): flag to [member, bit].
+const BYTE_ENGINE_FLAGS: Dictionary = {
+	5: ["_day_care_man", 6], 6: ["_day_care_man", 0], 7: ["_day_care_lady", 0],
+	8: ["_mom_savings_flags", 0], 9: ["_mom_savings_flags", 7],
+}
 ## The next bit of the same `wStatusFlags` byte, `STATUSFLAGS_UNOWN_DEX_F`, which
 ## `Pokedex_CheckUnlockedUnownMode` reads and only the Ruins of Alph research
 ## centre's scientist sets. Ahead of ENGINE_MOBILE_SYSTEM, so it is one index on
@@ -657,6 +663,12 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	)
 	_restore_day_care(restored, source)
 	_restore_deferred(restored, source)
+	## A state saved before [constant BYTE_ENGINE_FLAGS] kept those apart.
+	for flag: int in BYTE_ENGINE_FLAGS:
+		if restored._engine_flags.has(flag):
+			var row: Array = BYTE_ENGINE_FLAGS[flag]
+			restored.set(row[0], int(restored.get(row[0])) | (1 << int(row[1])))
+			restored._engine_flags.erase(flag)
 	restored._battle_tower = Gen2BattleTower.from_dict(source.get("battle_tower", {}))
 	var sprites: Dictionary = _map(source, "variable_sprites")
 	for raw_slot: Variant in sprites:
@@ -910,6 +922,9 @@ func event_flags() -> Dictionary:
 func is_engine_flag_active(flag: int) -> bool:
 	if gen1 and GEN1_ENGINE_EVENTS.has(flag):
 		return is_event_flag_active(int(GEN1_ENGINE_EVENTS[flag]))
+	if not gen1 and BYTE_ENGINE_FLAGS.has(flag):
+		var row: Array = BYTE_ENGINE_FLAGS[flag]
+		return (int(get(row[0])) >> int(row[1])) & 1 == 1
 	return flag >= 0 and bool(_engine_flags.get(flag, false))
 
 
@@ -922,7 +937,10 @@ func set_engine_flag(flag: int, active: bool = true) -> void:
 	var was_active: bool = is_engine_flag_active(flag)
 	if was_active == active:
 		return
-	if active:
+	if not gen1 and BYTE_ENGINE_FLAGS.has(flag):
+		var row: Array = BYTE_ENGINE_FLAGS[flag]
+		set(row[0], int(get(row[0])) ^ (1 << int(row[1])))
+	elif active:
 		_engine_flags[flag] = true
 	else:
 		_engine_flags.erase(flag)
@@ -2568,10 +2586,25 @@ func _stage_changes(
 		next[row[1]] = value
 	next["_just_battled"] = bool(runtime_changes.get("just_battled", _just_battled))
 
+	_stage_byte_engine_flags(runtime_changes.get("engine_flags", {}), next)
 	var swarm_reason: StringName = _stage_swarm(runtime_changes, next)
 	if swarm_reason != &"":
 		return swarm_reason
 	return _stage_magikarp(runtime_changes, next)
+
+
+## A staged [constant BYTE_ENGINE_FLAGS] entry moves onto its byte.
+func _stage_byte_engine_flags(changes: Dictionary, next: Dictionary) -> void:
+	if gen1:
+		return
+	for raw_flag: Variant in changes:
+		var row: Array = BYTE_ENGINE_FLAGS.get(int(raw_flag), [])
+		if row.is_empty():
+			continue
+		var byte: int = int(next.get(row[0], get(row[0])))
+		var bit: int = 1 << int(row[1])
+		next[row[0]] = byte | bit if bool(changes[raw_flag]) else byte & ~bit
+		(next["_engine_flags"] as Dictionary).erase(int(raw_flag))
 
 
 ## `SwitchItemsInBag`'s whole effect: the same items in another order. A quantity

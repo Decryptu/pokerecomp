@@ -13,10 +13,6 @@ const ENDING_ONLY_ONE_MOVE: StringName = &"knows_one"
 const ENDING_DECLINED: StringName = &"come_again"
 const ENDING_FORGOT: StringName = &"forgot"
 
-## `constants/sfx_constants.asm`'s SFX_MOVE_DELETED, played between two
-## `WaitSFX`es once the slot has been cleared.
-const SFX_MOVE_DELETED: int = 0x97
-
 
 ## Which ending [param mon] reaches once it has been chosen, or `&""` for the
 ## one member the routine carries on with.

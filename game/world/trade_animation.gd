@@ -8,13 +8,6 @@ extends RefCounted
 ## the tilemap of character codes.
 
 const MUSIC_EVOLUTION: int = 0x22
-const SFX_POKEBALLS_PLACED_ON_TABLE: int = 0x03
-const SFX_POTION: int = 0x04
-const SFX_GOT_SAFARI_BALLS: int = 0x0C
-const SFX_SWITCH_POKEMON: int = 0x20
-const SFX_BALL_POOF: int = 0x29
-const SFX_GIVE_TRADEMON: int = 0xB7
-const SFX_GET_TRADEMON: int = 0xB8
 
 const COLUMNS: int = 20
 const ROWS: int = 18
@@ -503,7 +496,7 @@ func _cmd_enter_link_tube_1() -> void:
 	_tube_palette = true
 	_bgp = 0xE4
 	_obp0 = 0xE4
-	_emit(&"play_sfx", {"sfx": SFX_POTION})
+	_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_POTION})
 	_increment()
 	## `call DelayFrame` between the scroll register and the tilemap write.
 	_delay += 1
@@ -615,12 +608,12 @@ func _cmd_wait_anim() -> void:
 
 func _cmd_give_trademon_sfx() -> void:
 	_cmd_advance()
-	_emit(&"play_sfx", {"sfx": SFX_GIVE_TRADEMON})
+	_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_GIVE_TRADEMON})
 
 
 func _cmd_get_trademon_sfx() -> void:
 	_cmd_advance()
-	_emit(&"play_sfx", {"sfx": SFX_GET_TRADEMON})
+	_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_GET_TRADEMON})
 
 
 func _cmd_rocking_ball() -> void:
@@ -646,7 +639,7 @@ func _cmd_poof() -> void:
 	_spawn(&"poof", Vector2i(88, 84))
 	_cmd_advance()
 	_counter = 16
-	_emit(&"play_sfx", {"sfx": SFX_BALL_POOF})
+	_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_BALL_POOF})
 
 
 func _cmd_bulge_through_tube() -> void:
@@ -1162,7 +1155,7 @@ func _sprite_ball_settle(actor: Dictionary) -> bool:
 func _sprite_ball_rise(actor: Dictionary) -> bool:
 	var angle: int = int(actor["var1"])
 	if angle < 48:
-		_emit(&"play_sfx", {"sfx": SFX_GOT_SAFARI_BALLS})
+		_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_GOT_SAFARI_BALLS})
 		return false
 	## `dec [hl]` leaves `a` holding the angle the sine is read at.
 	actor["var1"] = angle - 1
@@ -1181,7 +1174,7 @@ func _sprite_ball_bounce(actor: Dictionary) -> bool:
 		return true
 	actor["var1"] = 0x20
 	actor["var2"] = (int(actor["var2"]) - 0x0C) & 0xFF
-	_emit(&"play_sfx", {"sfx": SFX_SWITCH_POKEMON})
+	_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_SWITCH_POKEMON})
 	return true
 
 
@@ -1194,7 +1187,7 @@ func _sprite_bulge(actor: Dictionary) -> bool:
 		return false
 	if x & 0x3 != 0:
 		return true
-	_emit(&"play_sfx", {"sfx": SFX_POKEBALLS_PLACED_ON_TABLE})
+	_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_POKEBALLS_PLACED_ON_TABLE})
 	return true
 
 

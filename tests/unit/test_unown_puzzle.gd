@@ -122,7 +122,7 @@ func test_lifting_an_empty_cell_is_refused_with_a_sound() -> void:
 	var puzzle: Gen2UnownPuzzle = Gen2UnownPuzzle.create(null)
 	_walk_to(puzzle, 7)
 	var result: Dictionary = _press(puzzle, A)
-	assert_eq(result["sounds"], [Gen2UnownPuzzle.SFX_REFUSED] as Array[int])
+	assert_eq(result["sounds"], [Gen2Sfx.SFX_WRONG] as Array[int])
 	assert_true(bool(result["wait_sfx"]), "the refusal spends its own frame")
 	assert_false(puzzle.holding())
 
@@ -132,7 +132,7 @@ func test_a_piece_is_lifted_and_put_down_on_an_empty_cell() -> void:
 	var piece: int = puzzle.piece_at(0)
 	assert_gt(piece, 0, "cell 0 is a start cell")
 	var lifted: Dictionary = _press(puzzle, A)
-	assert_eq(lifted["sounds"], [Gen2UnownPuzzle.SFX_LIFT_PIECE] as Array[int])
+	assert_eq(lifted["sounds"], [Gen2Sfx.SFX_MEGA_KICK] as Array[int])
 	assert_true(puzzle.holding())
 	assert_eq(puzzle.held_piece(), piece)
 	assert_eq(puzzle.piece_at(0), 0, "the cell the piece came off is empty")
@@ -140,9 +140,9 @@ func test_a_piece_is_lifted_and_put_down_on_an_empty_cell() -> void:
 	## A held piece moves with the cursor and answers a different sound doing it.
 	_press(puzzle, DOWN)
 	var moved: Dictionary = _press(puzzle, RIGHT)
-	assert_eq(moved["sounds"], [Gen2UnownPuzzle.SFX_MOVE_HELD_PIECE] as Array[int])
+	assert_eq(moved["sounds"], [Gen2Sfx.SFX_MOVE_PUZZLE_PIECE] as Array[int])
 	var placed: Dictionary = _press(puzzle, A)
-	assert_eq(placed["sounds"], [Gen2UnownPuzzle.SFX_PLACE_PIECE] as Array[int])
+	assert_eq(placed["sounds"], [Gen2Sfx.SFX_PLACE_PUZZLE_PIECE_DOWN] as Array[int])
 	assert_false(puzzle.holding())
 	assert_eq(puzzle.piece_at(7), piece)
 
@@ -153,7 +153,7 @@ func test_placing_onto_an_occupied_cell_is_refused_and_keeps_the_piece() -> void
 	_press(puzzle, A)
 	_press(puzzle, RIGHT)
 	var refused: Dictionary = _press(puzzle, A)
-	assert_eq(refused["sounds"], [Gen2UnownPuzzle.SFX_REFUSED] as Array[int])
+	assert_eq(refused["sounds"], [Gen2Sfx.SFX_WRONG] as Array[int])
 	assert_true(puzzle.holding(), "the refusal must not drop the piece")
 	assert_eq(puzzle.held_piece(), piece)
 
@@ -172,7 +172,7 @@ func test_solving_the_board_takes_one_more_press_before_it_leaves() -> void:
 	var solved_sounds: Array = _solve(puzzle)
 	assert_eq(
 		solved_sounds,
-		[Gen2UnownPuzzle.SFX_PLACE_PIECE, Gen2UnownPuzzle.SFX_SOLVED] as Array[int]
+		[Gen2Sfx.SFX_PLACE_PUZZLE_PIECE_DOWN, Gen2Sfx.SFX_1ST_PLACE] as Array[int]
 	)
 	assert_false(puzzle.finished(), "the solved board waits for a press")
 	assert_false(

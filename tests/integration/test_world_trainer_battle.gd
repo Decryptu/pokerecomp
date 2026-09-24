@@ -282,7 +282,7 @@ func test_a_trainer_battle_opens_with_the_source_entrance() -> void:
 
 	assert_eq(lines, [
 		"LEADER RIVAL\nwants to battle!",
-		"LEADER RIVAL\nsent out\n%s!" % _wild_name(),
+		"LEADER RIVAL\nsent out" + Gen2TextStream.SCROLL_BREAK + "%s!" % _wild_name(),
 		"Go! %s!" % _wild_name(),
 	])
 	assert_eq(balls, [Gen2Battle.ENEMY, Gen2Battle.PLAYER],
@@ -937,7 +937,7 @@ func test_nurse_script_heals_the_party_after_accepting_and_shows_the_heal_machin
 		[
 			{
 				"frame": 0, "kind": &"sound",
-				"index": Gen2WorldScriptRunner.SFX_SECOND_PART_OF_ITEMFINDER,
+				"index": Gen2Sfx.SFX_SECOND_PART_OF_ITEMFINDER,
 			},
 			{
 				"frame": Gen2WorldScriptRunner.HEAL_MACHINE_BALL_FRAMES,
@@ -1193,6 +1193,8 @@ func test_a_caught_pokemon_is_named_over_the_battle() -> void:
 	assert_eq(prompt.nickname_cursor(), 0, "YesNoBox opens on YES")
 
 	host.press_button(PokeButton.A)
+	assert_eq(prompt.phase(), Gen2NicknamePromptScreen.Phase.ASK, "the answer is held first")
+	_spend_battle_answer_hold(host)
 	assert_eq(prompt.phase(), Gen2NicknamePromptScreen.Phase.NAMING)
 	var model: Gen2NamingScreen = prompt.naming_screen().model()
 	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
@@ -1244,6 +1246,7 @@ func test_a_boxed_catch_prints_bills_pc_with_the_name_the_keyboard_stored() -> v
 	var prompt: Gen2NicknamePromptScreen = host.get("_capture_nickname_host")
 	_settle_capture_nickname_text(host, prompt)
 	host.press_button(PokeButton.A)
+	_spend_battle_answer_hold(host)
 	var model: Gen2NamingScreen = prompt.naming_screen().model()
 	model.press_a()
 	model.column = Gen2NamingScreen.LAST_COLUMN
@@ -1316,6 +1319,18 @@ func _refuse_capture_nickname(host: Gen2BattleScreen) -> void:
 			host.press_button(PokeButton.A)
 		host.advance_hardware_frame()
 	host.press_button(PokeButton.B)
+	_spend_battle_answer_hold(host)
+
+
+## `InterpretTwoOptionMenu` keeps an answered `YesNoBox` up for its own
+## `DelayFrames` before the caller reads the answer.
+func _spend_battle_answer_hold(host: Gen2BattleScreen) -> void:
+	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
+		host.advance_hardware_frame()
+
+
+func _spend_answer_hold() -> void:
+	_world_screen.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 
 
 func _event_value(events: Array, event_type: StringName, key: String) -> Variant:
@@ -1780,14 +1795,15 @@ func test_yes_opens_the_naming_screen_and_its_entry_becomes_the_nickname() -> vo
 		_world_screen.advance_frame()
 		if screen.awaiting_press():
 			_world_screen.press_button(PokeButton.A)
-	assert_eq(screen.nickname_cursor(), 0, "YesNoBox opens on YES")
 	## `YesNoBox` stands behind `PrintText` returning, so the menu is not up
 	## while the question is still printing and A spends the text instead.
 	for _frame: int in 600:
-		if screen._menu.visible:
+		if screen.nickname_cursor() >= 0:
 			break
 		_world_screen.advance_frame()
+	assert_eq(screen.nickname_cursor(), 0, "YesNoBox opens on YES")
 	_world_screen.press_button(PokeButton.A)
+	_spend_answer_hold()
 	assert_eq(screen.phase(), Gen2EggHatchScreen.Phase.NAMING)
 	var model: Gen2NamingScreen = screen.naming_screen().model()
 	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
@@ -1860,6 +1876,8 @@ func test_a_gift_asks_for_a_nickname_and_no_keeps_the_species_name() -> void:
 	]))
 	assert_eq(host.nickname_cursor(), 0, "YesNoBox opens on YES")
 	_world_screen.press_button(PokeButton.B)
+	assert_eq(save.party.size(), before, "nothing is written while the answer is held")
+	_spend_answer_hold()
 	assert_null(_world_screen.get("_nickname_host"), "and B closes it as NO")
 	assert_eq(save.party.size(), before + 1, "the row is written behind the prompt")
 	assert_eq(save.party[before].nickname, species_name)
@@ -1878,6 +1896,7 @@ func test_a_gift_takes_the_name_the_keyboard_stored() -> void:
 	var host: Gen2NicknamePromptScreen = _run_givepoke()
 	_settle_nickname_text()
 	_world_screen.press_button(PokeButton.A)
+	_spend_answer_hold()
 	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.NAMING)
 	var model: Gen2NamingScreen = host.naming_screen().model()
 	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
@@ -1904,6 +1923,7 @@ func test_a_boxed_gift_prints_bills_pc_and_keeps_the_species_name() -> void:
 	var host: Gen2NicknamePromptScreen = _run_givepoke()
 	_settle_nickname_text()
 	_world_screen.press_button(PokeButton.B)
+	_spend_answer_hold()
 	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.AFTER_TEXT)
 	_settle_nickname_text()
 	var species_name: String = String(
@@ -1933,6 +1953,7 @@ func test_a_boxed_gift_names_the_typed_nickname_and_stores_the_species() -> void
 	var host: Gen2NicknamePromptScreen = _run_givepoke()
 	_settle_nickname_text()
 	_world_screen.press_button(PokeButton.A)
+	_spend_answer_hold()
 	var model: Gen2NamingScreen = host.naming_screen().model()
 	model.press_a()
 	model.column = Gen2NamingScreen.LAST_COLUMN
@@ -2332,8 +2353,12 @@ func test_a_ball_thrown_at_a_trainer_is_blocked_drawn_and_spent() -> void:
 		[Gen2WorldPartyHost.ITEM_POKE_BALL], {Gen2WorldPartyHost.ITEM_POKE_BALL: 2}
 	)
 	assert_true(bool(host.open_battle_pack().get("ok", false)))
-	var thrown: Dictionary = host.use_selected_pack_item()
-	assert_eq(StringName(thrown.get("status", &"")), &"blocked", JSON.stringify(thrown))
+	var pack: Gen2StartMenuScreen = host.get("_pack_host")
+	while int(pack._current_pocket().get("pocket", 0)) != Gen2WorldPack.TYPE_BALL:
+		host._handle_button(PokeButton.RIGHT)
+	host._handle_button(PokeButton.A)
+	host._handle_button(PokeButton.A)
+	assert_null(host.get("_pack_host"), "USE leaves the pack for the throw")
 	assert_true(host.animation_running(), "the throw is drawn before it is refused")
 	assert_eq(
 		int(host._anim_event["param"]), Gen2BattleScreen.ANIM_PARAM_NO_ITEM,

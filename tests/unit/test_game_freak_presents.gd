@@ -97,9 +97,9 @@ func test_the_ditto_bounces_twice_and_then_pops_up() -> void:
 			if not sounds.has(sfx):
 				sounds[sfx] = []
 			(sounds[sfx] as Array).append(int(event["frame"]))
-	assert_eq(sounds.get(Presents.SFX_DITTO_BOUNCE, []), [18, 50])
-	assert_eq(sounds.get(Presents.SFX_DITTO_POP_UP, []), [51])
-	assert_eq(sounds.get(Presents.SFX_DITTO_TRANSFORM, []), [84])
+	assert_eq(sounds.get(Gen2Sfx.SFX_DITTO_BOUNCE, []), [18, 50])
+	assert_eq(sounds.get(Gen2Sfx.SFX_DITTO_POP_UP, []), [51])
+	assert_eq(sounds.get(Gen2Sfx.SFX_DITTO_TRANSFORM, []), [84])
 
 
 ## The offset `BattleAnim_Sine_e` writes is a byte and stays one: the first jump

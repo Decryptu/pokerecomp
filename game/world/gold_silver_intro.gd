@@ -39,12 +39,10 @@ const LY_SINE_AMPLITUDE: int = 4
 ## the operand as an offset gives.
 const WAVE_ROW: int = 15
 
-## The sounds and songs the movie asks for.
+## The songs the movie asks for.
 const MUSIC_NONE: int = 0x00
 const MUSIC_GS_OPENING: int = 0x52
 const MUSIC_GS_OPENING_2: int = 0x53
-const SFX_GS_INTRO_CHARIZARD_FIREBALL: int = 0xA7
-const SFX_GS_INTRO_POKEMON_APPEARS: int = 0xA8
 
 ## `%11100100`, the identity order every scene opens on.
 const DMG_IDENTITY: int = 0xE4
@@ -699,7 +697,7 @@ func _scene_breathing_fire() -> bool:
 	_delay = CHARIZARD_DELAY
 	_counter1 = 64
 	_counter2 = 0
-	_emit(&"play_sfx", {"sfx": SFX_GS_INTRO_CHARIZARD_FIREBALL})
+	_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_GS_INTRO_CHARIZARD_FIREBALL})
 	return true
 
 
@@ -956,7 +954,7 @@ func _spawn_starter(name: StringName, at: Vector2i) -> void:
 	# `wSpriteAnimDict` pair this movie writes, so `GetSpriteAnimVTile` falls out
 	# of its loop with `xor a`. Each starter's vtile is its OAM set's own
 	# `spriteanimoam $10`/`$29`/`$42`, which is [Gen2GoldSilverIntroPage]'s.
-	_emit(&"play_sfx", {"sfx": SFX_GS_INTRO_POKEMON_APPEARS})
+	_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_GS_INTRO_POKEMON_APPEARS})
 	_spawn(name, at)
 
 

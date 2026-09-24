@@ -114,8 +114,13 @@ func run(r: RefCounted) -> void:
 		_play_every_animation(game_id, data)
 		_verify_tackle_frames(game_id, data)
 		_verify_the_entrance(game_id, data)
+		_verify_the_send_out_order(game_id, data)
 		_verify_the_thrown_ball(game_id, data)
 		_verify_the_transition(game_id, data)
+	_r.each_game_of(RomRegistry.GEN1, func() -> void:
+		_verify_substitute_pic(_r.game_id, _r.data)
+		_verify_minimize_pic(_r.game_id, _r.data)
+	)
 
 
 ## The two bodies `BattleAnim_SendOutMon`'s parameter picks between, by the bg
@@ -279,10 +284,8 @@ func _verify_the_entrance(game_id: StringName, data: GameData) -> void:
 					game_id, param,
 				]
 			)
-			## Which body ran, not just that one did. `BattleAnim_SendOutMon` is
-			## a fan of `anim_if_param_equal`, and a parameter that does not
-			## reach the interpreter falls through to the beta branch, which is
-			## four times as long and deforms the other battler.
+			## Which body ran: a parameter that misses `BattleAnim_SendOutMon`'s
+			## `anim_if_param_equal` fan falls through to the long beta branch.
 			_r.check(
 				effects == SEND_OUT_EFFECTS[param],
 				"%s: param %d ran bg effects %s, not the pinned %s." % [
@@ -302,10 +305,42 @@ func _verify_the_entrance(game_id: StringName, data: GameData) -> void:
 				]
 			)
 	_r.check(
-		not data.world_audio(&"sfx", Gen2BattleScreen.SFX_SHINE).is_empty(),
+		not data.world_audio(&"sfx", Gen2Sfx.SFX_SHINE).is_empty(),
 		"%s: SFX_SHINE is not in the audio index, so a trainer battle opens silently." % game_id
 	)
 	print("%s: the entrance runs both send-out branches on both sides." % game_id)
+
+
+## A trainer's ball runs before Crystal's `AnimateFrontpic` moves the Pokemon.
+func _verify_the_send_out_order(game_id: StringName, data: GameData) -> void:
+	if not Gen2WorldState.is_crystal_profile(data):
+		return
+	var screen: Gen2BattleScreen = (load("res://game/battle/battle_screen.tscn") as PackedScene) \
+		.instantiate() as Gen2BattleScreen
+	screen.set_data(data)
+	(Engine.get_main_loop() as SceneTree).root.add_child(screen)
+	screen.set_process(false)
+	screen.start_world_battle({"values": {"kind": &"trainer", "trainer_id": 0, "trainer_group": 1}})
+	var ball: int = -1
+	var moved: int = -1
+	for frame: int in 3000:
+		if not (screen.frames_running() or screen.entrance_running()) or moved >= 0:
+			break
+		screen.advance_frame()
+		var animation: Dictionary = screen.animation_snapshot()
+		if ball < 0 and bool(animation["running"]) and bool(animation["enemy_turn"]) \
+				and int(animation["index"]) == Gen2Battle.ANIM_SEND_OUT_MON:
+			ball = frame
+		if screen.animating_frontpic():
+			moved = frame
+		if not screen.frames_running() and screen.entrance_running():
+			screen.finish()
+			screen.advance()
+	(Engine.get_main_loop() as SceneTree).root.remove_child(screen)
+	screen.free()
+	_r.check(ball >= 0 and moved > ball, "%s: the enemy's ball ran at frame %d and its pic moved at %d." % [
+		game_id, ball, moved,
+	])
 
 
 ## `DoBattleTransition` on a real cache: the two tiles it wipes with, the palette
@@ -440,14 +475,11 @@ func _verify_the_sliding_intro(game_id: StringName, data: GameData) -> void:
 	])
 
 
-## `GetSubstitutePic`, on both sides and all three cartridges: the doll is four
-## tiles of `MonsterSpriteGFX` in an otherwise empty box, at the one place the
-## routine copies them to. Nothing else in the box may carry ink, since the
-## routine zeroes it first and the battler's own picture is gone while it is up.
-## `GetMinimizePic`, the same shape one tile smaller: `MinimizePic` alone in an
-## otherwise empty box, a column right of where the doll sits. The tile's own
-## content is pinned by `RomImporter.verify_layout`; what this sweeps is where it
-## lands on each side of each cartridge.
+## The doll and the dot on both sides of all six cartridges: four tiles of the
+## monster sprite, or the one "minimize" tile, in an otherwise empty box at the
+## one place `GetSubstitutePic`, `GetMinimizePic` or pokered's `AnimationSubstitute`
+## and `AnimationMinimizeMon` copy them to. The dot's own rows are pinned by each
+## importer's `verify_layout`; what this sweeps is where it lands.
 func _verify_minimize_pic(game_id: StringName, data: GameData) -> void:
 	var tile: PackedByteArray = data.tile_indices("minimize")
 	if not _r.check(
@@ -458,16 +490,17 @@ func _verify_minimize_pic(game_id: StringName, data: GameData) -> void:
 	):
 		return
 	for player_side: bool in [false, true]:
-		var side: int = Gen2BattleScreenMap.PLAYER_SIDE if player_side \
-			else Gen2BattleScreenMap.ENEMY_SIDE
+		var side: int = Gen2BattleRenderer.square_side(data.generation, player_side)
 		var box: int = side * Gen2Font.TILE
-		var pixels: PackedByteArray = Gen2BattleRenderer.minimize_pixels(tile, player_side)
+		var pixels: PackedByteArray = Gen2BattleRenderer.minimize_pixels(
+			tile, player_side, data.generation
+		)
 		if not _r.check(
 			pixels.size() == box * box,
 			"%s: the dot's box is %d pixels, not %d." % [game_id, pixels.size(), box * box]
 		):
 			continue
-		var at: Vector2i = Gen2BattleRenderer.MINIMIZE_AT[player_side]
+		var at: Vector2i = Gen2BattleRenderer.MINIMIZE_AT[data.generation][player_side]
 		var dot := Rect2i(at * Gen2Font.TILE, Vector2i(Gen2Font.TILE, Gen2Font.TILE))
 		var inside: int = 0
 		var outside: int = 0
@@ -491,7 +524,7 @@ func _verify_minimize_pic(game_id: StringName, data: GameData) -> void:
 
 func _verify_substitute_pic(game_id: StringName, data: GameData) -> void:
 	var strip: PackedByteArray = data.overworld_sprite_indices(
-		Gen2BattleRenderer.SUBSTITUTE_SPRITE
+		Gen2BattleRenderer.substitute_sprite(data.generation)
 	)
 	if not _r.check(
 		not strip.is_empty(),
@@ -499,16 +532,17 @@ func _verify_substitute_pic(game_id: StringName, data: GameData) -> void:
 	):
 		return
 	for player_side: bool in [false, true]:
-		var side: int = Gen2BattleScreenMap.PLAYER_SIDE if player_side \
-			else Gen2BattleScreenMap.ENEMY_SIDE
+		var side: int = Gen2BattleRenderer.square_side(data.generation, player_side)
 		var box: int = side * Gen2Font.TILE
-		var pixels: PackedByteArray = Gen2BattleRenderer.substitute_pixels(strip, player_side)
+		var pixels: PackedByteArray = Gen2BattleRenderer.substitute_pixels(
+			strip, player_side, data.generation
+		)
 		if not _r.check(
 			pixels.size() == box * box,
 			"%s: the doll's box is %d pixels, not %d." % [game_id, pixels.size(), box * box]
 		):
 			continue
-		var at: Vector2i = Gen2BattleRenderer.SUBSTITUTE_AT[player_side]
+		var at: Vector2i = Gen2BattleRenderer.SUBSTITUTE_AT[data.generation][player_side]
 		var doll := Rect2i(at * Gen2Font.TILE, Vector2i(16, 16))
 		var inside: int = 0
 		var outside: int = 0

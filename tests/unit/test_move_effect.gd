@@ -5179,3 +5179,20 @@ func test_lethal_damage_is_recorded_before_it_is_clamped_for_recoil() -> void:
 		assert_eq(int(battle.last_damage_taken(turn.target).damage), 50)
 		Gen2EffectCommands.run(Gen2EffectCommands.RECOIL, turn)
 		assert_eq(int(_first(turn.events, Gen2Battle.RECOIL).amount), 1)
+
+
+## A move row reports the matchup its effect applies: the chart for a damaging
+## `stab`, immunity only for a check, and neutral where nothing reads the chart.
+func test_applied_effectiveness_follows_what_the_effect_reads() -> void:
+	var gen2: int = RomRegistry.GEN2
+	var hit: Dictionary = {"effect": 0, "power": 40}
+	var leer: Dictionary = {"effect": 19, "power": 0}
+	var wave: Dictionary = {"effect": Gen2MoveEffect.PARALYZE, "power": 0}
+	var toss: Dictionary = {"effect": Gen2MoveEffect.STATIC_DAMAGE, "power": 1}
+	assert_eq(Gen2MoveEffect.applied_effectiveness(5, hit, gen2), 5)
+	assert_eq(Gen2MoveEffect.applied_effectiveness(5, leer, gen2), Gen2Layout.MATCHUP_EFFECTIVE)
+	assert_eq(Gen2MoveEffect.applied_effectiveness(0, leer, gen2), Gen2Layout.MATCHUP_EFFECTIVE)
+	assert_eq(Gen2MoveEffect.applied_effectiveness(0, wave, gen2), 0)
+	assert_eq(Gen2MoveEffect.applied_effectiveness(20, wave, gen2), Gen2Layout.MATCHUP_EFFECTIVE)
+	assert_eq(Gen2MoveEffect.applied_effectiveness(20, toss, gen2), Gen2Layout.MATCHUP_EFFECTIVE)
+	assert_eq(Gen2MoveEffect.applied_effectiveness(0, toss, gen2), 0)

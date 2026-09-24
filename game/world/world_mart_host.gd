@@ -12,6 +12,9 @@ const MARTTYPE_BITTER: int = 1
 const MARTTYPE_BARGAIN: int = 2
 const MARTTYPE_PHARMACY: int = 3
 const MARTTYPE_ROOFTOP: int = 4
+## `hMoneyTemp` is HRAM and `wItemQuantityChange` is not, which is how a
+## `text_decimal` marker says which of the two numbers it wants.
+const HRAM_FIRST: int = 0xFF00
 
 
 ## Resolves the source pokemart dialog before the UI is opened. Standard,
@@ -312,3 +315,27 @@ static func sell(
 
 static func _failure(reason: StringName, details: Dictionary) -> Dictionary:
 	return Gen2WorldTransaction.failure(reason, details)
+
+
+## `PartyMonItemName` and the two `text_decimal`s a mart box carries. The number
+## markers are told apart by their address rather than by their order, since the
+## bargain shop names the item first and the price second.
+static func fill_text(text: String, filled: Dictionary) -> String:
+	var out: String = Gen2TextStream.fill_marker(
+		text, Gen2TextStream.RAM_MARKER, String(filled.get("name", ""))
+	)
+	while true:
+		var at: int = out.find(Gen2TextStream.NUMBER_MARKER)
+		if at < 0:
+			break
+		var end: int = out.find(">", at)
+		if end < 0:
+			break
+		var address: int = out.substr(
+			at + Gen2TextStream.NUMBER_MARKER.length(),
+			end - at - Gen2TextStream.NUMBER_MARKER.length()
+		).hex_to_int()
+		out = out.substr(0, at) + String.num_int64(int(filled.get(
+			"total" if address >= HRAM_FIRST else "quantity", 0
+		))) + out.substr(end + 1)
+	return out

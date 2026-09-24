@@ -13,14 +13,6 @@ const PHASE_PRESENTS: StringName = &"presents"
 const PHASE_INTRO_MOVIE: StringName = &"intro_movie"
 const PHASE_TITLE: StringName = &"title"
 
-## `SFX_Headers_3`'s ids, all in bank $1F, `Init`'s `wAudioROMBank`.
-const SFX_INTRO_LUNGE: int = 184
-const SFX_INTRO_HIP: int = 185
-const SFX_INTRO_HOP: int = 186
-const SFX_INTRO_RAISE: int = 187
-const SFX_INTRO_CRASH: int = 188
-const SFX_INTRO_WHOOSH: int = 189
-const SFX_SHOOTING_STAR: int = 194
 const MUSIC_TITLE_SCREEN: int = 195
 const MUSIC_INTRO_BATTLE: int = 220
 const MUSIC_YELLOW_INTRO: int = 220
@@ -437,7 +429,7 @@ func _shooting_star_steps() -> Array:
 		var star: Array = _opening.get("shooting_star_oam", [])
 		for slot: int in star.size():
 			_set_sprite_row(slot, star[slot])
-		_play_sfx(SFX_SHOOTING_STAR)))
+		_play_sfx(Gen1Sfx.SFX_SHOOTING_STAR)))
 	# `.bigStarLoop` runs until slot 0's Y reaches $a0, four pixels a frame.
 	var star_rows: Array = _opening.get("shooting_star_oam", [])
 	var start_y: int = int(star_rows[0][0]) if not star_rows.is_empty() else 0
@@ -531,32 +523,32 @@ func _intro_steps() -> Array:
 			_init_nidorino_oam()),
 	]
 	steps.append_array(_move_mon_steps(NIDORINO_WALK, 1, true))
-	steps.append_array(_hop_steps(SFX_INTRO_HIP, 0, anims, 0))
-	steps.append_array(_hop_steps(SFX_INTRO_HOP, 0, anims, 1))
+	steps.append_array(_hop_steps(Gen1Sfx.SFX_INTRO_HIP, 0, anims, 0))
+	steps.append_array(_hop_steps(Gen1Sfx.SFX_INTRO_HOP, 0, anims, 1))
 	steps.append(check_step(10, &"intro_end"))
-	steps.append_array(_hop_steps(SFX_INTRO_HIP, 0, anims, 0))
-	steps.append_array(_hop_steps(SFX_INTRO_HOP, 0, anims, 1))
+	steps.append_array(_hop_steps(Gen1Sfx.SFX_INTRO_HIP, 0, anims, 0))
+	steps.append_array(_hop_steps(Gen1Sfx.SFX_INTRO_HOP, 0, anims, 1))
 	steps.append(check_step(30, &"intro_end"))
 	steps.append(do_step(func() -> void:
 		_copy_gengar_tiles(1)
-		_play_sfx(SFX_INTRO_RAISE)))
+		_play_sfx(Gen1Sfx.SFX_INTRO_RAISE)))
 	steps.append_array(_move_mon_steps(GENGAR_RAISE, 1, false))
 	steps.append(check_step(30, &"intro_end"))
 	steps.append(do_step(func() -> void:
 		_copy_gengar_tiles(2)
-		_play_sfx(SFX_INTRO_CRASH)))
+		_play_sfx(Gen1Sfx.SFX_INTRO_CRASH)))
 	steps.append_array(_move_mon_steps(GENGAR_SLASH, -1, false))
-	steps.append_array(_hop_steps(SFX_INTRO_HIP, POSE_TILES, anims, 2))
+	steps.append_array(_hop_steps(Gen1Sfx.SFX_INTRO_HIP, POSE_TILES, anims, 2))
 	steps.append(check_step(30, &"intro_end"))
 	steps.append_array(_move_mon_steps(GENGAR_RAISE, 1, false))
 	steps.append(do_step(func() -> void: _copy_gengar_tiles(0)))
 	steps.append(check_step(60, &"intro_end"))
-	steps.append_array(_hop_steps(SFX_INTRO_HIP, 0, anims, 3))
-	steps.append_array(_hop_steps(SFX_INTRO_HOP, 0, anims, 4))
+	steps.append_array(_hop_steps(Gen1Sfx.SFX_INTRO_HIP, 0, anims, 3))
+	steps.append_array(_hop_steps(Gen1Sfx.SFX_INTRO_HOP, 0, anims, 4))
 	steps.append(check_step(20, &"intro_end"))
 	steps.append_array(_hop_steps(-1, POSE_TILES, anims, 5))
 	steps.append(check_step(30, &"intro_end"))
-	steps.append_array(_hop_steps(SFX_INTRO_LUNGE, 2 * POSE_TILES, anims, 6))
+	steps.append_array(_hop_steps(Gen1Sfx.SFX_INTRO_LUNGE, 2 * POSE_TILES, anims, 6))
 	steps.append(label_step(&"intro_end"))
 	for row: int in FADE_TO_WHITE:
 		steps.append(do_step(func() -> void: _fade_palette(row)))
@@ -702,7 +694,7 @@ func _title_steps() -> Array:
 		do_step(func() -> void: _tilemap = _buffer1.duplicate()),
 		delay_step(TITLE_SETTLE_FRAMES),
 		do_step(func() -> void:
-			_play_sfx(SFX_INTRO_WHOOSH)
+			_play_sfx(Gen1Sfx.SFX_INTRO_WHOOSH)
 			_place_version()
 			_hwy = Gen1Lcd.HEIGHT),
 	])
@@ -812,7 +804,7 @@ func _bounce_steps() -> Array:
 	var steps: Array = []
 	for scroll: Vector2i in TITLE_BOUNCE:
 		if scroll.x == TITLE_BOUNCE_CRASH:
-			steps.append(do_step(func() -> void: _play_sfx(SFX_INTRO_CRASH)))
+			steps.append(do_step(func() -> void: _play_sfx(Gen1Sfx.SFX_INTRO_CRASH)))
 		for _time: int in scroll.y:
 			steps.append(delay_step(1))
 			steps.append(do_step(func() -> void: _hscy = (_hscy + scroll.x) & 0xFF))
@@ -1000,7 +992,7 @@ func _yellow_title_steps() -> Array:
 		do_step(func() -> void: _tilemap = _buffer1.duplicate()),
 		delay_step(TITLE_SETTLE_FRAMES),
 		do_step(func() -> void:
-			_play_sfx(SFX_INTRO_WHOOSH)
+			_play_sfx(Gen1Sfx.SFX_INTRO_WHOOSH)
 			_place_yellow_bubble()
 			_hwy = Gen1Lcd.HEIGHT),
 		delay_step(YELLOW_BUBBLE_DELAY),

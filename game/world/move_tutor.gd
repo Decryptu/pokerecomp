@@ -20,10 +20,6 @@ const VALUE_ICE_BEAM: int = 3
 const SCRIPT_VALUE_LEARNED: int = 0
 const SCRIPT_VALUE_CANCELLED: int = 0xFF
 
-## `constants/sfx_constants.asm`'s SFX_WRONG, which `.can_learn`'s else branch
-## plays in front of `TMHMNotCompatibleText`.
-const SFX_WRONG: int = 0x2E
-
 
 ## `.GetMoveTutorMove`. MT01_MOVE through MT03_MOVE are TMHMMoves entries
 ## `NUM_TMS + NUM_HMS + 1` and up, so the move comes off the imported table

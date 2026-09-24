@@ -88,7 +88,7 @@ Two example mods are in `mods/examples/`. Copy either into `user://mods/`.
 
 | Mod | Shows |
 |---|---|
-| `voxel_preview/` | A world renderer. Switch it on from its launcher page, from the start menu's MODS entry, or with `V` in the overworld. It extrudes geometry from the same collision, block and palette data the 2D view reads, on the native layer, with a translucent text box and one registered setting |
+| `voxel_preview/` | A world renderer. Switch it on from its launcher page, from the start menu's MODS entry, or with `V` in the overworld. It extrudes geometry from the same collision, block and palette data the 2D view reads, stands a box on every sprite row of the draw list, on the native layer, with a translucent text box and one registered setting |
 | `new_content/` | Every non-renderer surface in one file: a type and two matchups, a species with its own art, a move, a move effect, an item with its pocket and mart shelf, a named control axis, a visible-encounter population, two rebalancing patches, a setting that rewrites every wild table and puts it back, both event channels and a presentation mutator |
 
 The examples are excluded from every export preset. A distributed build ships the
@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 43 | `Gen2BattleRenderer.square_pixels()`, `square_key()`, `square_side()`, `battler_pic()` and `substitute_sprite()`; `Gen2BattleHud.draw_panels()`, `panels_key()` and `draw_border_cells()`; the status and gender arguments of `draw_enemy()` and `draw_player()`; the battle view's `enemy_status`, `player_status`, `enemy_gender`, `player_gender`, `enemy_caught`, `enemy_minimized`, `player_minimized`, `enemy_special_pic`, `enemy_pic_dmg`, `gen1_black` and `anim_obp0`; Generation 1's "minimize" tile, and its doll drawn from pokered's own `SPRITE_MONSTER`; a move row's `effectiveness` as its effect applies it; a table patch bumping the encounter context's `generation`; a patched `giveegg` staying an egg; a headless `--mods` or `--mods=a,b` run at mod defaults, apart from the player's mod settings; `Gen2WorldDrawList` through the optional `set_draw_list`: every sprite, effect and background edit the built-in view draws, resolved once for any renderer, with `sprites_hidden` on it rather than set on the renderer; `validate_placement` proving the story's gates, `Gen2WorldCatalog.story()`, a row's `cell`, and `requires` holding what every path to a site tested |
 | 42 | `START_ACTION_OPEN_PC`, and a table patch rechecking the visible wilds already standing |
 | 41 | `clear_patches()`, an encounter patch refused off the cartridge's slot count, a mod species met in the wild, `GameData.map_landmark()` and `world_fishing_group_count()`, and `Gen2WorldAPI.encounter_tables_key()` moving when a patch lands |
 | 40 | `Gen2WorldTileset.name`, the `TILESET_*` constant's name on every cartridge, `GameData.world_tileset_named()`, and `Gen2Layout.tileset_name()` and `tileset_number()` between Crystal's numbering and Gold and Silver's |
@@ -188,6 +189,15 @@ discovers mods. Pass `--mods` for a run that is about a mod:
 
 ```bash
 godot --headless --path . --quit-after 30 --mods
+```
+
+Such a run plays every installed mod at its defaults and never reads or writes
+the player's mod settings (`mods_disabled.json`, `mod_options.json`).
+`--mods=a,b` runs only the mods with those ids. The playthrough check with mods
+loaded is the check that finds a mod blocking the story:
+
+```bash
+godot --headless --path . -s res://tools/validate.gd -- played --mods
 ```
 
 `--clock=HH:MM` pins the world clock for the run, over the export defaults and
@@ -498,9 +508,12 @@ for row in catalog.rows(Gen2WorldCatalog.KIND_STATIC):
 | `KIND_SHOP` | `mart`, `dialog`, `items` | A `pokemart` command. `items` is the resolved shelf, `{item, price}` per row | A `TX_SCRIPT_MART` row, with `text` its clerk's text id and `items` its shelf |
 
 Every row also carries `id`, `kind`, its `bank` and `address` (or `map` and
-`event_index`), the `map` it stands on where one could be attributed, and
-`requires`: the events, engine flags and items the script tested before reaching
-the site.
+`event_index`), the `map` it stands on where one could be attributed, the `cell`
+of the event that reaches it where only one does, and `requires`: what holds on
+every path the scripts take to the site. An entry is `{item}`, `{engine_flag}`,
+`{event}`, `{toggle}` (a Red, Blue or Yellow object shown) or `{badges}` (at
+least that many), each with `clear: true` when negated, or `{scene: [group,
+number, value]}`, a map's scene or map script state.
 
 `patch_check(id, fields)` changes a field of a row. It cannot replace the script:
 the site still sets its own flag, prints its own dialogue, takes its own money and
@@ -535,22 +548,41 @@ if not result["ok"]:
 is `{ok, reached, critical, missing}`, deterministic, and it installs nothing, so
 a generator retries against `missing`.
 
-`missing.requirement` is `{map}`, `{item}` or `{badge}`: the first thing that
-never became satisfiable. Behind it:
+`missing.requirement` is `{map}`, `{badge}` or a `requires` entry: the first
+thing about the first critical check (a badge or a field HM) that never became
+satisfiable. Behind it:
 
-- `Gen2WorldReachability` floods each map's collision grid from the cells a player
-  arrives on, asking the same tile questions the overworld does. Red, Blue and
-  Yellow start from `NewGameWarp`, and a door back to the last map leads to every
-  map whose door reaches it.
-- An HM is a way past something only once its badge is in hand
-  (`catalog.badge_for_move`).
+- `catalog.story()` is what the cartridge's scripts set and close
+  (`Gen2WorldStory`): each `setevent`, `clearevent`, `setflag`, `setscene`,
+  `setmapscene`, `disappear`, `appear` and `changeblock` with what every path to
+  it tested, the same for Red, Blue and Yellow's flags, toggles and map script
+  states, and each script `warp`. Oak hands over the Pokedex only after the
+  parcel, Elm ends the Route 30 battle only for the Mystery Egg, Sudowoodo leaves
+  only for the Squirtbottle.
+- A gate closes cells until a condition it reads flips: a coord event that walks
+  the player back (the Viridian old man, the New Bark teacher, the Route 32
+  cooltrainer, the Saffron guards, the Victory Road badge check), a person who
+  stays until a flag hides them (Sudowoodo, Snorlax), a block a script rewrites.
+  A site on a person shown later waits for that: Jasmine's gym after the
+  SecretPotion. `ItemUsePokeFlute` wakes Snorlax from the engine, so its
+  flag is set on the POKE FLUTE.
+- `Gen2WorldReachability` splits each map into the regions its collision leaves,
+  with ledges and side walls one way, boulders and rocks walls until Strength and
+  Rock Smash, and a gate a node that links its neighbours once open. A check or a
+  setter counts once the region of its event is reached. Red, Blue and Yellow
+  start from `NewGameWarp`, and a door back to the last map leads to every map
+  whose door reaches it.
+- An event, flag or scene is satisfied once a reached script sets it, and one no
+  script sets (the engine's own) always is. An item is satisfied once a reached
+  check hands it over, and one no check carries always is. An HM is a way past
+  something only once its badge is in hand (`catalog.badge_for_move`).
 - `catalog.possible_starters()`, `catalog.field_hm_items()` and
   `catalog.is_progression(row)` are the same facts for a mod planning its own.
 
-It does not model everything. It is map-granular rather than cell-exact, and story
-`checkevent` guards are treated as satisfiable because a placement does not move
-the scripts that set them. Both err toward passing a seed. A site with no
-attributed map is taken as standing where the player already is.
+It errs toward passing a seed: facts are never unset, a person who appears later
+never blocks, and a script path is judged by what it tested rather than by every
+branch it took. A site with no attributed map is taken as standing where the
+player already is.
 
 ## Adding a move effect
 
@@ -664,6 +696,66 @@ event first.
 
 Implement this rather than Godot's `_input` or `_unhandled_input`, which would
 race the gameplay keys instead of taking what is left of them.
+
+### What the view draws
+
+`set_draw_list(list: Gen2WorldDrawList)` is optional and called when the
+renderer is built. The list is everything the built-in view draws over the map,
+resolved once by the host, and the built-in renderer draws from the same object:
+a renderer reading it draws the map objects, the player, the actors and every
+effect sprite the 2D view does, in the same order. `set_effects`, `set_actors` and
+`set_encounters` are its sources and are still offered.
+
+`frame()` answers one dictionary. Ask once per drawn frame; each key also has a
+method or property of the same name.
+
+| Key | Value |
+|---|---|
+| `sprites` | The rows below, in draw order |
+| `background_offset` | `Vector2` in hardware pixels, positive down: the earthquake's and the Generation 1 elevator's hSCY. The background moves and no sprite does |
+| `hidden_tree_cells`, `hidden_tree_tile` | Walk cells whose four tiles are drawn as that atlas tile while the Headbutt tree's own sprite plays |
+| `tile_overrides` | Tile coordinate to atlas tile, written straight into the background map: `Gen2WorldAPI.screen_tile_overrides()` |
+| `band_scroll` | `{top, bottom, offset}`: screen lines `top` to `bottom` scrolled `offset` pixels left while the S.S. Anne leaves, or empty |
+| `fade_order`, `white_fill` | The fade step `set_fade` was last offered |
+| `poison_flash` | The background is flooded with `Gen2WorldPalette.poison_flash_palette()`; sprites keep their colours |
+| `sprites_hidden` | `HideSprites`: no map object, player or actor row is in `sprites` |
+| `time_of_day` | The palette row the rows' colours are resolved on |
+
+Every row says where it is:
+
+| Key | Value |
+|---|---|
+| `kind` | `KIND_SPRITE`, `KIND_TILES`, `KIND_GRASS` or `KIND_PULSE` |
+| `role` | `object`, `connected` (a connected map's person, listed while `Gen2WorldAPI.view_pixels` is wider than the hardware's), `actor`, `player`, `bird`, `fishing_body`, `fishing_rod`, `emote`, `shadow`, `grass`, `pulse`, or the effect's sheet (`cut_tree`, `cut_grass`, `boulder_dust`, `grass_rustle`, `headbutt_tree`, `heal_machine`, `smoke`, `fly_mon`, `gen1_cut_tree`, `gen1_cut_grass`) |
+| `owner` | The map object's index, `OWNER_PLAYER`, `OWNER_ACTOR` (a mod actor, a visible wild or Yellow's Pikachu) or `OWNER_NONE` |
+| `anchor` | `ANCHOR_WORLD` (world pixels), `ANCHOR_VIEW` (pixels of the drawn surface, where the player is placed) or `ANCHOR_SCREEN` (pixels of the 160x144 screen, `set_screen_rect`'s rectangle) |
+| `origin` | The owner's top-left in that space, the four-pixel sprite lift included and the jump not |
+| `offset` | This row from `origin` in pixels. A body's jump arc is in it |
+| `position_cells`, `span`, `height_offset_pixels` | The owner's ground in walk cells, its step span and its jump, as `Gen2WorldActors.sprites()` carries them. Zero and empty on a screen row |
+
+A flat view draws a row at `origin + offset`, less its camera on a world row and
+plus the screen's corner on a screen row. A 3D view stands it on `position_cells`
+and `span`, raised by `height_offset_pixels`, and reads `offset` as its place on
+the owner's card.
+
+| Kind | Keys |
+|---|---|
+| `KIND_SPRITE` | `sprite` (a `Gen2WorldSprite`, null only for a player the cache has no art for), `palette`, `colors`, `facing`, `frame`, `big_shape` (a 32x32 big object), `flip_x`, `region` (the part of the picture drawn, empty for all of it), `clip_to_screen` (Generation 1's warp spin, Fly bird and hole fall stay inside the 160x144 pane) |
+| `KIND_TILES` | `sheet`, `palette`, `colors`, `tiles`: `{tile, offset, flip_x, flip_y}`, each offset from the row's |
+| `KIND_GRASS` | `cell`. The map's own tiles over the lower half of the sprite at this row, colour 0 left out, which is `OAM_PRIO` |
+| `KIND_PULSE` | `gfx`, `tile`, `attributes`, `pair`: one tile of the shiny pulse |
+
+`colors` are the four a row wears before the map fade: the hour, a visible wild's
+species colours, the heal machine's rotation and a trainer transition's flood over
+the tree and rock palettes are in them, and `fade_order` is not. The built-in view
+fades sprite rows. Each picture is one call: `sprite_image(row, colors)`,
+`tile_image(sheet, tile, colors, flip_x, flip_y)` and `pulse_image(row)`;
+`sheet(name)` is the indexed strip a tile row reads, the Generation 1 Cut strips
+included.
+
+The screen owns the list's state and a renderer only reads it. A renderer that
+declares a `sprites_hidden` property is still set with it; one that does not is
+not written to.
 
 ### The tileset atlas
 
@@ -928,15 +1020,25 @@ engine itself:
 
 | Group | Fields |
 |---|---|
-| Who is standing | `enemy_species`, `player_species`, `enemy_name`, `player_name`, `enemy_level`, `player_level`, `enemy_shiny`, `player_shiny`, `enemy_unown_form`, `player_unown_form`, `enemy_substitute`, `player_substitute` |
+| Who is standing | `enemy_species`, `player_species`, `enemy_name`, `player_name`, `enemy_level`, `player_level`, `enemy_shiny`, `player_shiny`, `enemy_unown_form`, `player_unown_form`, `enemy_substitute`, `player_substitute`, `enemy_minimized`, `player_minimized`, `enemy_special_pic` |
 | The fight | `battle_kind` (`wild` or `trainer`), `trainer_class`, `trainer_index`, `trainer_name` |
 | Bars | `enemy_hp`, `enemy_max_hp`, `player_hp`, `player_max_hp`, `exp_pixels` |
-| HUD | `hud_visible`, `enemy_hud_visible`, `player_hud_visible`, `trainer_hud_balls`, `trainer_hud_border` |
+| HUD | `hud_visible`, `enemy_hud_visible`, `player_hud_visible`, `enemy_status`, `player_status`, `enemy_gender`, `player_gender`, `enemy_caught`, `trainer_hud_balls`, `trainer_hud_border` |
 | Entrance | `battlers`, `intro_sprites`, `grayscale`, `enemy_trainer_pic`, `player_backpic`, `player_backpic_palette` |
+| Colour | `enemy_pic_dmg`, `gen1_black`, `anim_obp0` |
 | Hardware | `raster_scx`, `raster_scy`, `bg_map`, `bg_vbank1`, `bg_palette_maps`, `ob_palette_maps`, `anim_sprites`, `anim_tiles` |
 
 Notes on the less obvious ones:
 
+- `enemy_minimized` and `player_minimized` put Minimize's dot on the square
+  until a send-out. A raised substitute stands in front of it.
+- `enemy_special_pic` is `"ghost"` while Generation 1's unidentified GHOST is
+  out, and `""` otherwise; `GameData.gen1_special_pic(name)` is the picture.
+- `enemy_status` and `player_status` are `Gen2Status` bytes; `enemy_gender` and
+  `player_gender` are `Gen2BattleMon` gender names, empty on Generation 1.
+  `enemy_caught` is true in a wild battle against a species the Pokedex has caught.
+- The colour group is read by `Gen2BattleColors` (below): `MarowakAnim`'s
+  palette over the enemy, the black of a lost Generation 1 fight, and `rOBP0`.
 - A wild battle carries class 0, index 0 and an empty name. `trainer_class` is
   what `GameData.trainer_pic()` and `trainer_name()` take; `trainer_name` is the
   trainer's own name from the party record, not the class name.
@@ -1010,8 +1112,47 @@ view["battlers"] = {
   subsamples rather than scales, so a renderer drawing a real scaled picture draws
   it better than the hardware did.
 
-A renderer reading only `kind`, the three picture fields and `offset_pixels` draws
-a correct battle.
+`kind`, the three picture fields and `offset_pixels` place a square. They do not
+say what it shows: a raised doll, Minimize's dot, a GHOST, a link opponent or an
+Unown letter each change the picture without changing `kind`.
+
+### Drawing the square and the panels
+
+Two static helpers answer what the built-in renderer draws, and it draws through
+them:
+
+- `Gen2BattleRenderer.square_pixels(data, view, player_side)` is the picture on
+  one side's square, as an index buffer `square_side(data.generation,
+  player_side) * 8` pixels each way. It decides in the host's order: GHOST or
+  fossil, link opponent, trainer or back pic, doll, dot, species or Unown letter.
+  A back pic is doubled on Generation 1. `square_key(view, player_side)` holds the
+  values that answer depends on, so a renderer can rebuild only when the key
+  changes.
+- `Gen2BattleHud.draw_panels(into, width, view)` draws both status panels into
+  an index buffer `width` pixels wide: names, levels, status, gender signs, the
+  caught ball, HP numbers, the panel edges and the trainer's party-ball frame,
+  each panel only while its `*_hud_visible` is true. `panels_key(view)` is its
+  key. The bar fills stay separate, since each has its own palette:
+  `draw_hp_bar()` and `draw_exp_bar()`.
+
+`Gen2BattleHud.from_data(data)` builds the HUD. The square wears
+`Gen2BattleColors.pic_palette(player_side)` and the panels `panel_palette()`:
+
+```gdscript
+func set_battle_data(data: GameData) -> bool:
+    _data = data
+    _hud = Gen2BattleHud.from_data(data)
+    _colors = Gen2BattleColors.new(data)
+    return _hud != null
+
+func set_view(view: Dictionary) -> void:
+    _colors.set_view(view)
+    var enemy: PackedByteArray = Gen2BattleRenderer.square_pixels(_data, view, false)
+    var enemy_palette: PackedColorArray = _colors.pic_palette(false)
+    var panels := PackedByteArray()
+    panels.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+    _hud.draw_panels(panels, Gen2Screen.WIDTH, view)
+```
 
 ### Where the battle is
 
@@ -1252,8 +1393,12 @@ The snapshot carries what a subscriber of past events cannot know:
 | `move_rows_at`, `move_rows_step`, `move_rows_right` | Where `MoveSelectionScreen` puts its rows |
 | `neutral` | What `effectiveness` compares against |
 
-`effectiveness` is `GameData.type_effectiveness` over the defender's types with
-Foresight applied, so a mod never copies the type chart.
+`effectiveness` is what the move's effect applies of `GameData.type_effectiveness`
+over the defender's types with Foresight applied
+([`Gen2MoveEffect.applied_effectiveness`](../game/battle/move_effect.gd)): the
+chart's product for a damaging move, only the chart's zero for an effect that
+checks immunity (Thunder Wave, Seismic Toss), and neutral for an effect that never
+reads the chart (Leer, Growl). A mod never copies the type chart.
 
 The layer is refreshed after every event, view push and menu change, and hidden
 from the frame a modal takes the interface: the party page, the pack and its
@@ -1413,7 +1558,7 @@ The context is a snapshot, never a live handle:
 | `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read now, with swarm and Bug Contest substitutions and the time of day already applied. A slot is `{species, min_level, max_level, chance}`, `chance` its weight in the roll's own units (of 100 on Generation 2, of 256 on Generation 1, the row's own percent in the Bug Contest). Refreshed while the map is up, whenever the hour, a swarm or the Bug Contest moves what a roll would read |
 | `player` | `{cell, facing}` |
 | `run_seed` | The run's seed, so a population is reproducible |
-| `generation` | Bumped on every map change; an older one means the context is stale |
+| `generation` | Bumped on every map change and every content patch that moves the tables; an older one means the context is stale |
 
 Each entry of `encounters()`:
 
@@ -1455,8 +1600,9 @@ What the host does with a valid population:
   wild is replaced, rather than emptying at six. A new entry is checked against
   the tables in force now, so `generation` never moves for an hour boundary.
   A content patch is the exception: when `patch_encounter` or `clear_patches`
-  moves the tables, every standing entry is checked against the new ones, and an
-  entry they no longer offer is dropped, so a table mod's setting shows on the
+  moves the tables, the host starts a new population as it does on a map change.
+  Every standing entry is discarded, `generation` is bumped, and each provider
+  replans against the new tables, so a table mod's setting shows at once on the
   route it was changed on.
 - Runs the step an entry asked for, over `Gen2WorldEncounters.STEP_PASSES` map
   passes, which is a map object's own walk. While it runs the host owns the
@@ -1485,8 +1631,8 @@ A world renderer that wants to draw the sparkle itself takes the optional
 
 `Gen2WorldEffects.offset()` is `StepFunction_ScreenShake`, in hardware pixels and
 positive downward. It reaches hSCY alone, so it is the *background's* offset and
-moves no sprite. A renderer taking `set_effects` applies it to the camera the map
-is placed at, or ignores it and does not shake.
+moves no sprite. A renderer taking `set_effects` or `set_draw_list` applies it to
+the camera the map is placed at, or ignores it and does not shake.
 
 ## Hidden items
 

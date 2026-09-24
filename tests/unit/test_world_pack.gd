@@ -520,9 +520,9 @@ func test_a_generation_1_field_effect_reads_its_own_item_numbers() -> void:
 	)
 
 
-## `BattlePack` filters on the battle nibble, where `DisplayPlayerBag` hands
-## `wNumBagItems` over whole and lets `ItemUseNotTime` refuse a row.
-func test_a_generation_1_battle_list_keeps_the_rows_the_bag_would_refuse() -> void:
+## `DisplayPlayerBag` hands `wNumBagItems` over whole, and `BattlePack` lists
+## every row too: `ItemSubmenu` is what offers QUIT alone on one it cannot use.
+func test_the_battle_bag_keeps_the_rows_it_cannot_use() -> void:
 	var owned: Dictionary = {ITEM_POTION: 1, ITEM_UNCLASSIFIED: 1}
 	var state := Gen2WorldState.new({}, {}, owned)
 	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
@@ -534,12 +534,11 @@ func test_a_generation_1_battle_list_keeps_the_rows_the_bag_would_refuse() -> vo
 				raw["pocket"] = Gen2WorldPack.TYPE_ITEM
 	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
 	var data: GameData = GameData.open_directory(Fixture.directory())
-	assert_eq(Gen2WorldPack.battle_items(data, state), [ITEM_POTION] as Array[int])
-	data.generation = RomRegistry.GEN1
 	assert_eq(
-		Gen2WorldPack.battle_items(data, state),
-		[ITEM_POTION, ITEM_UNCLASSIFIED] as Array[int]
+		Gen2WorldPack.bag_items(data, state), [ITEM_POTION, ITEM_UNCLASSIFIED] as Array[int]
 	)
+	assert_eq(Gen2WorldPack.battle_submenu(data, ITEM_POTION).size(), 2, "USE and QUIT")
+	assert_eq(Gen2WorldPack.battle_submenu(data, ITEM_UNCLASSIFIED).size(), 1, "QUIT")
 
 
 ## `PrintListMenuEntries` prints four names and `IsKeyItem` decides which of them

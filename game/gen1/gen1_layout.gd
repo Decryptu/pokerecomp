@@ -234,6 +234,10 @@ const BATTLE_FONT_TILES: int = 30
 ## `PTile`, the bold P `StatusScreen2` copies to $72 for "PP".
 const STATS_P_TILES: int = 1
 const STATS_P_CODE: int = 0x72
+## `MinimizedMonSprite`: `AnimationMinimizeMon` writes its rows into both planes
+## from row 2 of a tile (`TILE_SIZE / 4`), which is then Gen 2's `MinimizePic`.
+const MINIMIZED_MON_TOP: int = 2
+const MINIMIZED_MON_ROWS: Array[int] = [0x18, 0x3C, 0x7E, 0x3C, 0x24]
 const BATTLE_FONT_FIRST_CODE: int = 0x62
 const BATTLE_HUD_1_TILES: int = 3
 const BATTLE_HUD_1_FIRST_CODE: int = 0x6D
@@ -594,11 +598,6 @@ const WARP_PAD_HOLE_TILES: Array[Array] = [
 const STANDING_ON_WARP_PAD: int = 1
 const STANDING_ON_HOLE: int = 2
 const SPRITE_BIRD: int = 0x09
-const SFX_TELEPORT_EXIT_1: int = 159
-const SFX_TELEPORT_ENTER_1: int = 160
-const SFX_TELEPORT_EXIT_2: int = 161
-const SFX_TELEPORT_ENTER_2: int = 163
-const SFX_FLY: int = 164
 ## `DoFlyAnimation`'s three (y, x) lists; the last row of the second is inside its eleven.
 const FLY_ENTER_COORDS: Array[Vector2i] = [
 	Vector2i(0x05, 0x98), Vector2i(0x0F, 0x90), Vector2i(0x18, 0x88), Vector2i(0x20, 0x80),
@@ -638,7 +637,6 @@ const SS_ANNE_ERASE_AT: Vector2i = Vector2i(5, 2)
 const SS_ANNE_ERASE_BLOCKS: int = 5
 const SS_ANNE_WATER_BLOCK: int = 0x0D
 const SS_ANNE_WATER_TILE: int = 0x14
-const SFX_SS_ANNE_HORN: int = 169
 ## `LoadSpinnerArrowTiles`: `FacilitySpinnerArrows` and `GymSpinnerArrows` as
 ## the tileset tile each row rewrites and the `SpinnerArrowAnimTiles` tile it
 ## takes on an odd `wSimulatedJoypadStatesIndex`; `SpinnerPlayerFacingDirections`
@@ -649,10 +647,6 @@ const SPINNER_ARROW_TILES: Dictionary = {
 }
 const SPINNER_ANIM_TILES: int = 4
 const SPINNER_NEXT_FACING: Array[int] = [2, 3, 1, 0]
-const SFX_ARROW_TILES: int = 167
-## `TryPushingBoulder`'s own sound and the one `DoBoulderDustAnimation` ends on.
-const SFX_PUSH_BOULDER: int = 168
-const SFX_CUT: int = 172
 ## `wSpritePlayerStateData1YPixels` and `XPixels`: where the player stands.
 const PLAYER_SPRITE_PIXELS: Vector2i = Vector2i(64, 60)
 
@@ -1044,7 +1038,6 @@ const ALPHABET_LOWER: int = 1
 const CHAR_ED: int = 0xF0
 
 const MUSIC_ROUTES2: int = 239
-const SFX_SHRINK: int = 156
 const INTRO_SPECIES_KANTO: int = 33
 const INTRO_CRY_KANTO: int = 30
 const INTRO_SPECIES_YELLOW: int = 25
@@ -2832,6 +2825,7 @@ const RED_BLUE: Dictionary = {
 	"boulder_dust_offsets": 0x0F097,
 	"ball_tiles": 0x3A97E,
 	"stats_p": 0x12ADC,
+	"minimized_mon_sprite": 0x795C4,
 	"shock_emote_gfx": 0x17CBD,
 	"emote_sheets": 3,
 	"wild_data": 0x0CEEB,
@@ -3455,6 +3449,7 @@ const YELLOW: Dictionary = {
 	"boulder_dust_offsets": 0x0EF17,
 	"ball_tiles": 0x3AA28,
 	"stats_p": 0x11682,
+	"minimized_mon_sprite": 0x79693,
 	"shock_emote_gfx": 0x411E5,
 	"emote_sheets": 8,
 	"wild_data": 0x0CB95,
@@ -4358,22 +4353,9 @@ const YELLOW_ENABLE_MASKS: Array[int] = [
 ]
 const YELLOW_SOUND_OPTION_MASK: int = 0x30
 
-## The effects a Generation 1 path names directly. `Music_PokeFluteInBattle`
-## starts the first and overwrites its three channel pointers at once.
-const SFX_CAUGHT_MON: int = 154
-const SFX_GO_INSIDE: int = 173
-## `AnimateHealingMachine`'s own two, one per ball and one behind the flashes.
-const SFX_HEALING_MACHINE: int = 158
+## `AnimateHealingMachine`'s own music behind the flashes.
 const MUSIC_PKMN_HEALED: int = 232
-const SFX_GO_OUTSIDE: int = 181
-const SFX_SAVE: int = 182
-## `EvolveMon`'s tink in front of the old picture and the jingle behind `IntoText`.
-const SFX_TINK: int = 140
-const SFX_GET_ITEM_2: int = 137
-## `FaintEnemyPokemon`'s two, and `PlayBattleVictoryMusic`'s three in bank $08.
-const SFX_DENIED: int = 165
-const SFX_FAINT_THUD: int = 149
-const SFX_FAINT_FALL: int = 158
+## `PlayBattleVictoryMusic`'s three in bank $08.
 const MUSIC_DEFEATED_TRAINER: int = 246
 const MUSIC_DEFEATED_WILD_MON: int = 249
 const MUSIC_DEFEATED_GYM_LEADER: int = 252
@@ -4401,40 +4383,39 @@ static func pic_load_frames(tiles: int, bytes: int) -> int:
 ## Crystal's own number, answered with the Generation 1 sound id that plays it.
 ## An unlisted number belongs to a screen no Generation 1 cartridge opens.
 const SFX_ROLES: Dictionary = {
-	0x00: 134, ## SFX_DEX_FANFARE_50_79 is RareCandyText's sound_get_item_1
-	0x01: 134, ## SFX_ITEM, which is SFX_Get_Item1_1
-	0x02: 154, ## SFX_CAUGHT_MON, the battle bank's own
-	0x04: 141, ## SFX_POTION is SFX_HEAL_HP
-	0x05: 142, ## SFX_FULL_HEAL is SFX_HEAL_AILMENT
-	0x08: 144, ## SFX_READ_TEXT_2 is SFX_PRESS_AB
-	0x0B: 151, ## SFX_POISON is SFX_POISONED
-	0x0D: 153, ## SFX_BOOT_PC is SFX_TURN_ON_PC
-	0x0E: 154, ## SFX_SHUT_DOWN_PC is SFX_TURN_OFF_PC
-	0x0F: 155, ## SFX_CHOOSE_PC_OPTION is SFX_ENTER_PC
-	0x12: SFX_HEALING_MACHINE, ## SFX_SECOND_PART_OF_ITEMFINDER, ItemUseItemfinder's own
-	0x13: 173, ## SFX_WARP_TO is SFX_GO_INSIDE
-	0x15: 144, ## SFX_CHANGE_DEX_MODE is SFX_PRESS_AB
-	0x16: 162, ## SFX_JUMP_OVER_LEDGE is SFX_LEDGE
-	0x18: 164, ## SFX_FLY
-	0x19: SFX_DENIED, ## SFX_WRONG
-	0x1B: 168, ## SFX_STRENGTH is SFX_PUSH_BOULDER, which TryPushingBoulder plays
-	0x1F: 173, ## SFX_ENTER_DOOR is SFX_GO_INSIDE
-	0x20: 157, ## SFX_SWITCH_POKEMON is SFX_SWITCH
-	0x22: 178, ## SFX_TRANSACTION is SFX_PURCHASE
-	0x23: 181, ## SFX_EXIT_BUILDING is SFX_GO_OUTSIDE
-	0x24: 180, ## SFX_BUMP is SFX_COLLISION
-	0x25: 182, ## SFX_SAVE
-	0x28: 145, ## SFX_THROW_BALL is SFX_BALL_TOSS
-	0x29: 147, ## SFX_BALL_POOF
-	0x2E: SFX_DENIED, ## the move tutor's own SFX_WRONG
-	0x5E: 233, ## SFX_SHINE is SFX_TRAINER_APPEARED
-	0x62: 157, ## SFX_SWITCH_POCKETS is SFX_SWITCH
-	0x8C: 140, ## SFX_EXP_BAR is SFX_TINK
-	0xA4: 137, ## SFX_EVOLVED is SFX_GET_ITEM_2
-	0xAB: 167, ## SFX_NOT_VERY_EFFECTIVE
-	0xAC: 166, ## SFX_DAMAGE
-	0xAD: 176, ## SFX_SUPER_EFFECTIVE
-	0xB6: 140, ## SFX_HIT_END_OF_EXP_BAR is SFX_TINK
+	Gen2Sfx.SFX_DEX_FANFARE_50_79: Gen1Sfx.SFX_GET_ITEM_1, ## RareCandyText's sound_get_item_1
+	Gen2Sfx.SFX_ITEM: Gen1Sfx.SFX_GET_ITEM_1,
+	Gen2Sfx.SFX_CAUGHT_MON: Gen1Sfx.SFX_CAUGHT_MON,
+	Gen2Sfx.SFX_POTION: Gen1Sfx.SFX_HEAL_HP,
+	Gen2Sfx.SFX_FULL_HEAL: Gen1Sfx.SFX_HEAL_AILMENT,
+	Gen2Sfx.SFX_READ_TEXT_2: Gen1Sfx.SFX_PRESS_AB,
+	Gen2Sfx.SFX_POISON: Gen1Sfx.SFX_POISONED,
+	Gen2Sfx.SFX_BOOT_PC: Gen1Sfx.SFX_TURN_ON_PC,
+	Gen2Sfx.SFX_SHUT_DOWN_PC: Gen1Sfx.SFX_TURN_OFF_PC,
+	Gen2Sfx.SFX_CHOOSE_PC_OPTION: Gen1Sfx.SFX_ENTER_PC,
+	Gen2Sfx.SFX_SECOND_PART_OF_ITEMFINDER: Gen1Sfx.SFX_HEALING_MACHINE, ## ItemUseItemfinder's own
+	Gen2Sfx.SFX_WARP_TO: Gen1Sfx.SFX_GO_INSIDE,
+	Gen2Sfx.SFX_CHANGE_DEX_MODE: Gen1Sfx.SFX_PRESS_AB,
+	Gen2Sfx.SFX_JUMP_OVER_LEDGE: Gen1Sfx.SFX_LEDGE,
+	Gen2Sfx.SFX_FLY: Gen1Sfx.SFX_FLY,
+	Gen2Sfx.SFX_WRONG: Gen1Sfx.SFX_DENIED,
+	Gen2Sfx.SFX_STRENGTH: Gen1Sfx.SFX_PUSH_BOULDER, ## which TryPushingBoulder plays
+	Gen2Sfx.SFX_ENTER_DOOR: Gen1Sfx.SFX_GO_INSIDE,
+	Gen2Sfx.SFX_SWITCH_POKEMON: Gen1Sfx.SFX_SWITCH,
+	Gen2Sfx.SFX_TRANSACTION: Gen1Sfx.SFX_PURCHASE,
+	Gen2Sfx.SFX_EXIT_BUILDING: Gen1Sfx.SFX_GO_OUTSIDE,
+	Gen2Sfx.SFX_BUMP: Gen1Sfx.SFX_COLLISION,
+	Gen2Sfx.SFX_SAVE: Gen1Sfx.SFX_SAVE,
+	Gen2Sfx.SFX_THROW_BALL: Gen1Sfx.SFX_BALL_TOSS,
+	Gen2Sfx.SFX_BALL_POOF: Gen1Sfx.SFX_BALL_POOF,
+	Gen2Sfx.SFX_SHINE: Gen1Sfx.SFX_TRAINER_APPEARED,
+	Gen2Sfx.SFX_SWITCH_POCKETS: Gen1Sfx.SFX_SWITCH,
+	Gen2Sfx.SFX_EXP_BAR: Gen1Sfx.SFX_TINK,
+	Gen2Sfx.SFX_EVOLVED: Gen1Sfx.SFX_GET_ITEM_2,
+	Gen2Sfx.SFX_NOT_VERY_EFFECTIVE: Gen1Sfx.SFX_NOT_VERY_EFFECTIVE,
+	Gen2Sfx.SFX_DAMAGE: Gen1Sfx.SFX_DAMAGE,
+	Gen2Sfx.SFX_SUPER_EFFECTIVE: Gen1Sfx.SFX_SUPER_EFFECTIVE,
+	Gen2Sfx.SFX_HIT_END_OF_EXP_BAR: Gen1Sfx.SFX_TINK,
 }
 
 ## The other half of the seam: a Crystal track number answered with the bank and

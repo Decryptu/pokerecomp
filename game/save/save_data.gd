@@ -381,7 +381,9 @@ func box_free_space() -> int:
 ## `SendMonIntoBox`'s own `ShiftBoxMon`, which puts a catch at the head of the
 ## box and moves everything already there down one; every other deposit runs
 ## `InsertPokemonIntoBox`, which appends.
-func add_party_or_box(mon: Gen2SaveMon, to_front: bool = false) -> Dictionary:
+func add_party_or_box(
+	mon: Gen2SaveMon, to_front: bool = false, data: GameData = null
+) -> Dictionary:
 	if mon == null:
 		return {"ok": false, "reason": &"missing_pokemon"}
 	if party.size() < MAX_PARTY:
@@ -400,6 +402,7 @@ func add_party_or_box(mon: Gen2SaveMon, to_front: bool = false) -> Dictionary:
 	var placed: Dictionary = box.put(mon, target)
 	if not bool(placed.get("ok", false)):
 		return {"ok": false, "reason": placed.get("reason", &"box_insert_failed")}
+	Gen2SaveStorage.boxed(data, mon)
 	return {
 		"ok": true,
 		"destination": &"box",

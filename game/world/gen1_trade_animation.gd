@@ -152,9 +152,6 @@ const TEXT_BOX_INNER: Vector2i = Vector2i(18, 4)
 const TEXT_AT: Vector2i = Vector2i(1, 14)
 const TEXT_LINE_STEP: int = 2
 
-const SFX_HEAL_HP: int = 141
-const SFX_TINK: int = Gen1Layout.SFX_TINK
-
 const TRADE_TEXT_RUN: String = "trade_anim"
 
 var _player: Dictionary = {}
@@ -299,7 +296,7 @@ func _draw_open_end_steps() -> Array:
 	])
 	steps.append_array(_copy_tilemap_steps())
 	steps.append(do_step(func() -> void:
-		_play_sfx(SFX_HEAL_HP)
+		_play_sfx(Gen1Sfx.SFX_HEAL_HP)
 		_hscx = (_hscx + OPEN_END_STEPS * OPEN_END_STEP) & 0xFF))
 	return steps
 
@@ -315,7 +312,7 @@ func _ball_entering_steps() -> Array:
 		steps.append(do_step(func() -> void: _write_bulge(x)))
 		steps.append(delay_step(DELAY3))
 		if x + BALL_STEP < BALL_END_X:
-			steps.append(do_step(func() -> void: _play_sfx(SFX_TINK)))
+			steps.append(do_step(func() -> void: _play_sfx(Gen1Sfx.SFX_TINK)))
 	steps.append(do_step(func() -> void:
 		_clear_sprites()
 		_transfer_enabled = true))

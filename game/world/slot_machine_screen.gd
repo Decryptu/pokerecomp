@@ -20,7 +20,7 @@ var _data: GameData = null
 var _text: String = ""
 ## `wMenuCursorY` for whichever of the two menus is up.
 var _bet_cursor: int = 1
-var _yes_no_cursor: int = 1
+var _yes_no: Gen2WorldMenu = Gen2WorldMenu.yes_no()
 var _acted: bool = false
 var _open: bool = false
 
@@ -81,6 +81,10 @@ func prompt() -> int:
 func advance_frame() -> void:
 	if not _open or _machine == null:
 		return
+	if _yes_no.holding():
+		_advance_yes_no_hold()
+		_refresh()
+		return
 	if _machine.waiting_for_sfx():
 		if _audio != null and _audio.effect_playing():
 			_refresh()
@@ -136,23 +140,17 @@ func _handle_bet_button(button: int) -> void:
 
 ## `PlaceYesNoBox`, which opens on YES and takes B as NO.
 func _handle_yes_no_button(button: int) -> void:
-	match button:
-		PokeButton.UP:
-			_yes_no_cursor = 1
-		PokeButton.DOWN:
-			_yes_no_cursor = 2
-		PokeButton.A:
-			_text = ""
-			_machine.answer_play_again(_yes_no_cursor == 1)
-			_yes_no_cursor = 1
-			_drain()
-		PokeButton.B:
-			_text = ""
-			_machine.answer_play_again(false)
-			_yes_no_cursor = 1
-			_drain()
-		_:
-			pass
+	_yes_no.press_yes_no(button)
+
+
+func _advance_yes_no_hold() -> void:
+	if not _yes_no.advance_hold():
+		return
+	_text = ""
+	var yes: bool = _yes_no.answered_yes()
+	_yes_no = Gen2WorldMenu.yes_no()
+	_machine.answer_play_again(yes)
+	_drain()
 
 
 func _pass() -> void:
@@ -186,7 +184,7 @@ func overlay_state() -> Dictionary:
 	return {
 		"text": _text,
 		"menu": _bet_cursor if _machine.prompt() == Gen2SlotMachine.Prompt.BET else 0,
-		"yes_no": _yes_no_cursor \
+		"yes_no": _yes_no.cursor + 1 \
 			if _machine.prompt() == Gen2SlotMachine.Prompt.PLAY_AGAIN else 0,
 	}
 
@@ -202,7 +200,7 @@ func close() -> void:
 func _refresh() -> void:
 	if _page == null or _machine == null:
 		return
-	_machine.set_menu_cursor(_bet_cursor, _yes_no_cursor)
+	_machine.set_menu_cursor(_bet_cursor, _yes_no.cursor + 1)
 	if _view == null:
 		_view = TextureRect.new()
 		_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

@@ -80,6 +80,25 @@ func test_base_stats_rows_are_one_record_apart() -> void:
 	)
 
 
+## `AnimationMinimizeMon` writes `MinimizedMonSprite` two rows into its tile, and
+## what lands is Generation 2's `MinimizePic` pixel for pixel.
+func test_the_minimized_sprite_is_imported_as_the_tile_it_is_written_into() -> void:
+	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN1):
+		var layout: Dictionary = Gen1Layout.for_id(id)
+		var bytes: PackedByteArray = PackedByteArray()
+		bytes.resize(GEN1_ROM_SIZE)
+		for row: int in Gen1Layout.MINIMIZED_MON_ROWS.size():
+			bytes[int(layout["minimized_mon_sprite"]) + row] = Gen1Layout.MINIMIZED_MON_ROWS[row]
+		var tile: PackedByteArray = Gen1Importer.minimized_mon_tile(
+			RomFile.from_bytes(bytes, id), layout
+		)
+		assert_eq(tile.size(), PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT, String(id))
+		for row: int in PokeTiles.TILE_HEIGHT:
+			for column: int in PokeTiles.TILE_WIDTH:
+				var lit: bool = (Gen2Layout.MINIMIZE_PIC_ROWS[row] >> (7 - column)) & 1 == 1
+				assert_eq(tile[row * PokeTiles.TILE_WIDTH + column], 3 if lit else 0)
+
+
 func test_red_keeps_mew_out_of_the_table_and_yellow_does_not() -> void:
 	var red: Dictionary = Gen1Layout.for_id(RomRegistry.RED)
 	var yellow: Dictionary = Gen1Layout.for_id(RomRegistry.YELLOW)

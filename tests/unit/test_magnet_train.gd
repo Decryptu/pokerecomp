@@ -43,7 +43,7 @@ func test_the_ride_plays_its_music_and_its_arrival() -> void:
 	var rest: Array = _run(movie)
 	assert_eq(rest.size(), 1)
 	assert_eq(rest[0]["type"], &"play_sfx")
-	assert_eq(int(rest[0]["sfx"]), Gen2MagnetTrain.SFX_ARRIVED)
+	assert_eq(int(rest[0]["sfx"]), Gen2Sfx.SFX_TRAIN_ARRIVED)
 
 
 ## `MagnetTrain_UpdateLYOverrides`' three runs, read a scanline late: 48 lines

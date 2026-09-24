@@ -40,8 +40,7 @@ const WOOPER: int = 194
 ## `constants/music_constants.asm`: MUSIC_ROUTE_30.
 const MUSIC_ROUTE_30: int = 0x2B
 
-## `ShrinkPlayer`: SFX_ESCAPE_ROPE, then `ld a, 32` into wMusicFade on MUSIC_NONE.
-const SHRINK_SFX: int = 0x10
+## `ShrinkPlayer`'s `ld a, 32` into wMusicFade on MUSIC_NONE.
 const SHRINK_FADE_FRAMES: int = 32
 ## Its five `DelayFrames`: the two pictures, the box clear, the sprite, the hold.
 const SHRINK_WAITS: Array[int] = [8, 8, 8, 3, 50]

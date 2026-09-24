@@ -1487,7 +1487,7 @@ static func _store_capture(
 	)
 	## `SendMonIntoBox`'s own `ShiftBoxMon`: a catch that lands in a box goes
 	## to the front of it, which every other deposit does not.
-	var destination: Dictionary = candidate.add_party_or_box(captured, true)
+	var destination: Dictionary = candidate.add_party_or_box(captured, true, world.data)
 	if not bool(destination.get("ok", false)):
 		return _failure(StringName(destination.get("reason", &"storage_full")), {
 			"ball": ball, "outcome": outcome,
@@ -1562,7 +1562,7 @@ static func _apply_contest_mon(
 		mon, int(caught.get("level", 1)), world.object_time_of_day,
 		world.player_female(), LANDMARK_NATIONAL_PARK
 	)
-	var placed: Dictionary = candidate.add_party_or_box(mon)
+	var placed: Dictionary = candidate.add_party_or_box(mon, false, world.data)
 	if not bool(placed.get("ok", false)):
 		return {"ok": false, "reason": StringName(placed.get("reason", &"storage_full"))}
 	world.state.set_contest_mon({})
@@ -1718,7 +1718,8 @@ static func _apply_pokemon_request(
 	if held_item < 0 or (held_item > 0 and world.data.item(held_item).is_empty()):
 		return {"ok": false, "reason": &"unknown_item", "item": held_item}
 	var mon: Gen2SaveMon = _new_mon(
-		world.data, candidate, species, level, held_item, random, is_egg
+		world.data, candidate, species, level, held_item, random, is_egg,
+		int(result.get("dvs", -1))
 	)
 	if mon == null:
 		return {"ok": false, "reason": &"could_not_create_pokemon"}
@@ -1741,7 +1742,7 @@ static func _apply_pokemon_request(
 					"species": species, "level": level,
 				},
 			}
-		return _append_mon(candidate, mon, 2, {
+		return _append_mon(world.data, candidate, mon, 2, {
 			"kind": &"egg", "species": species, "level": level, "item": held_item,
 		})
 	var source: Dictionary = request.get("source", {})
@@ -1771,7 +1772,7 @@ static func _apply_pokemon_request(
 		if not chosen.is_empty():
 			mon.nickname = chosen
 	## `_GivePokemon`'s box branch is `SendNewMonToBox`, the front of the box.
-	var appended: Dictionary = _append_mon(candidate, mon, 0, {
+	var appended: Dictionary = _append_mon(world.data, candidate, mon, 0, {
 		"kind": &"gift", "species": species, "level": level, "item": held_item,
 	}, world.data.generation == RomRegistry.GEN1)
 	if not bool(appended.get("ok", false)):
@@ -1899,10 +1900,10 @@ static func _gen1_npc_trade_evolution(data: GameData, received: Gen2SaveMon, ind
 ## checks `cp EGG` first and jumps past `SetSeenAndCaughtMon`, so a Pokemon is
 ## unknown to the dex until it hatches.
 static func _append_mon(
-	candidate: Gen2SaveData, mon: Gen2SaveMon,
+	data: GameData, candidate: Gen2SaveData, mon: Gen2SaveMon,
 	script_value: int, summary: Dictionary, to_front: bool = false
 ) -> Dictionary:
-	var destination: Dictionary = candidate.add_party_or_box(mon, to_front)
+	var destination: Dictionary = candidate.add_party_or_box(mon, to_front, data)
 	if not bool(destination.get("ok", false)):
 		return {
 			"ok": false,
@@ -2967,7 +2968,7 @@ static func hatch_egg(
 			world.state.set_event_flag(EVENT_TOGEPI_HATCHED)
 	return {
 		"kind": &"hatch", "party_index": index, "species": mon.species,
-		"level": mon.level, "nickname": mon.nickname,
+		"level": mon.level, "nickname": mon.nickname, "dvs": mon.dvs,
 		## `HatchEggs` asks for `SCGB_EVOLUTION`, which reaches
 		## `GetMonNormalOrShinyPalettePointer`: what comes out of the egg is
 		## drawn in its own colours, and a bred shiny is first seen here.
@@ -3276,7 +3277,7 @@ static func _apply_give_shuckle(
 	mon.ot_id = MANIA_OT_ID
 	mon.original_trainer = MANIA_OT_NAME
 	mon.nickname = SHUCKIE_NICKNAME
-	var appended: Dictionary = _append_mon(candidate, mon, 1, {
+	var appended: Dictionary = _append_mon(world.data, candidate, mon, 1, {
 		"kind": &"shuckie", "species": SHUCKLE, "level": SHUCKIE_LEVEL,
 		"item": ITEM_BERRY,
 	})
@@ -3335,7 +3336,7 @@ static func _apply_give_odd_egg(
 			"ok": true, "accepted": false, "reason": &"party_full",
 			"summary": {"kind": &"odd_egg", "accepted": false, "species": mon.species},
 		}
-	var appended: Dictionary = _append_mon(candidate, mon, 0, {
+	var appended: Dictionary = _append_mon(world.data, candidate, mon, 0, {
 		"kind": &"odd_egg", "species": mon.species, "level": mon.level,
 		"row": index, "item": mon.item,
 	})

@@ -173,3 +173,18 @@ func test_generation_one_says_its_own_lines() -> void:
 	assert_true(Gen2MoveForget.is_hm_move(0x7F))
 	assert_false(Gen2MoveForget.is_hm_move(0x7F, gen1))
 	assert_true(Gen2MoveForget.is_hm_move(0x94, gen1))
+
+
+## `ForgetMove`'s `w2DMenuFlags1` of `$20` is `_2DMENU_WRAP_UP_DOWN`, so the
+## list wraps through both ends; Generation 1's `TryingToLearn` calls
+## `HandleMenuInput` with `wMenuWrappingEnabled` clear, so its list stops.
+func test_the_list_cursor_wraps_in_generation_two_and_stops_in_generation_one() -> void:
+	var gen1: int = RomRegistry.GEN1
+	var gen2: int = RomRegistry.GEN2
+	assert_eq(Gen2MoveForget.step_cursor(0, -1, 4, gen2), 3, "up from the top reaches the bottom")
+	assert_eq(Gen2MoveForget.step_cursor(3, 1, 4, gen2), 0, "down from the bottom reaches the top")
+	assert_eq(Gen2MoveForget.step_cursor(1, 1, 4, gen2), 2)
+	assert_eq(Gen2MoveForget.step_cursor(0, -1, 4, gen1), 0, "the top stops")
+	assert_eq(Gen2MoveForget.step_cursor(3, 1, 4, gen1), 3, "and so does the bottom")
+	assert_eq(Gen2MoveForget.step_cursor(2, -1, 4, gen1), 1)
+	assert_eq(Gen2MoveForget.step_cursor(0, 1, 0, gen2), 0, "an empty list has one place")

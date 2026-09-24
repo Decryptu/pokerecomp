@@ -67,7 +67,7 @@ func _verify_the_victory_pieces() -> void:
 			Gen1Layout.MUSIC_DEFEATED_GYM_LEADER]:
 		_r.check(not _r.data.gen1_sound(Gen1Layout.VICTORY_MUSIC_BANK, id).is_empty(),
 			"victory piece %d is not in bank $%02X." % [id, Gen1Layout.VICTORY_MUSIC_BANK])
-	for id: int in [Gen1Layout.SFX_FAINT_FALL, Gen1Layout.SFX_FAINT_THUD, Gen1Layout.SFX_DENIED]:
+	for id: int in [Gen1Sfx.SFX_FAINT_FALL, Gen1Sfx.SFX_FAINT_THUD, Gen1Sfx.SFX_DENIED]:
 		_r.check(not _r.data.gen1_sound(-1, id).is_empty(), "effect %d is not in the cache." % id)
 
 
@@ -88,7 +88,7 @@ func _verify_the_pikachu_clips() -> void:
 	if clips == 0:
 		return
 	var clip: PackedByteArray = _r.data.gen1_pikachu_cry(0)
-	_engine.play_sound(Gen1Layout.SFX_DENIED)
+	_engine.play_sound(Gen1Sfx.SFX_DENIED)
 	_engine.begin_pikachu_clip(clip)
 	var frames: int = 0
 	var loud: int = 0

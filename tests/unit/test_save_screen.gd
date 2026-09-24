@@ -274,6 +274,31 @@ func test_party_screen_exposes_saved_hp_status_and_empty_positions() -> void:
 	assert_true((members[1] as Dictionary)["empty"])
 
 
+## `PartyMenuQualityPointers`' `.TMHM`, which `ChooseMonToLearnTMHM` reaches:
+## `PlacePartyMonTMHMCompatibility` asks `CanLearnTMHMMove` of every member and
+## prints ABLE or NOT ABLE where the bar would be.
+func test_the_teach_list_marks_each_member_able_or_not_able() -> void:
+	var species: Array = RomCache.read_json(RomCache.species_path(_directory))
+	for raw: Dictionary in species:
+		if int(raw.get("number", 0)) == Fixture.GEODUDE:
+			raw["tmhm"] = [0, 0, 0, 0, 0, 0, 0, 0]
+	RomCache.write_json(RomCache.species_path(_directory), species)
+	_data = GameData.open_directory(_directory)
+	await _open_party_screen(_save_with_two())
+	_party_screen.open_selection(Gen2PartyScreen.PROMPT_CHOOSE)
+	assert_false(_party_screen._quality_column(), "a plain choice keeps the bar")
+
+	_party_screen.open_selection(
+		Gen2PartyScreen.PROMPT_TEACH_WHICH, Gen2PartyScreen.ACTION_TEACH_TMHM,
+		Fixture.TM01_MOVE
+	)
+	assert_true(_party_screen._quality_column())
+	var qualities: Array = []
+	for row: Dictionary in _party_screen._rows():
+		qualities.append(String(row["quality"]))
+	assert_eq(qualities, [Gen2PartyMenuPage.ABLE, Gen2PartyMenuPage.NOT_ABLE])
+
+
 func test_box_screen_exposes_all_fourteen_fixed_boxes_and_slots() -> void:
 	var save: Gen2SaveData = _save()
 	await _open_box_screen(save)
@@ -396,9 +421,13 @@ func test_the_save_sequence_asks_twice_and_then_spends_its_frames() -> void:
 	prompt.confirm(true)
 	assert_eq(prompt.cursor, 0)
 	prompt.confirm(true)
+	assert_eq(prompt.lines, Gen2SavePrompt.CHANGE_BOX_LINES, "the answer is held first")
+	assert_false(prompt.reads_joypad(), "and no press is read meanwhile")
+	_spend_answer_hold(prompt)
 	assert_eq(prompt.lines, Gen2SavePrompt.OVERWRITE_LINES)
 	prompt.confirm(true)
 	prompt.confirm(true)
+	_spend_answer_hold(prompt)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
 
 	prompt.frames_elapsed(Gen2SavePrompt.SAVING_FRAMES - 1)
@@ -423,6 +452,7 @@ func test_a_no_refuses_and_the_link_save_opens_on_the_overwrite_question() -> vo
 	)
 	refused.confirm(true)
 	refused.cancel()
+	_spend_answer_hold(refused)
 	assert_true(refused.finished())
 	assert_true(refused.refused())
 
@@ -433,6 +463,7 @@ func test_a_no_refuses_and_the_link_save_opens_on_the_overwrite_question() -> vo
 	assert_eq(quick.step, Gen2SavePrompt.Step.OVERWRITE)
 	quick.confirm(true)
 	quick.confirm(true)
+	_spend_answer_hold(quick)
 	quick.frames_elapsed(Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES)
 	## A write that failed is this port's own step, and it ends as a NO does.
 	assert_eq(quick.step, Gen2SavePrompt.Step.FAILED)
@@ -463,6 +494,7 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 	assert_eq(prompt.cursor, 0)
 
 	prompt.confirm(true)
+	_spend_answer_hold(prompt)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
 	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_SAVING_LINES)
 	assert_eq(written.size(), 1, "SaveGameData ran before the string went up")
@@ -481,6 +513,7 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 	)
 	refused.frames_elapsed(30)
 	refused.cancel()
+	_spend_answer_hold(refused)
 	assert_true(refused.refused())
 
 	## Yellow: `ld c, 10` after the box, `SavingText` for 128 and 10 before
@@ -493,6 +526,7 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 	yellow.frames_elapsed(1)
 	assert_eq(yellow.lines, Gen2SavePrompt.GEN1_ASK_LINES)
 	yellow.confirm(true)
+	_spend_answer_hold(yellow)
 	assert_eq(yellow.lines, Gen2SavePrompt.YELLOW_SAVING_LINES)
 	yellow.frames_elapsed(128)
 	assert_eq(yellow.step, Gen2SavePrompt.Step.SAVED)
@@ -501,6 +535,11 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 	assert_true(yellow.sfx_owed())
 	yellow.frames_elapsed(30)
 	assert_true(yellow.finished())
+
+
+## `InterpretTwoOptionMenu`'s own `DelayFrames` behind an answered YES/NO.
+func _spend_answer_hold(prompt: Gen2SavePrompt) -> void:
+	prompt.frames_elapsed(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 
 
 func _spend_insert_frames() -> void:
@@ -619,12 +658,76 @@ func test_release_asks_before_it_removes_a_stored_pokemon() -> void:
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_RELEASE)
 
 	_box_screen.handle_button(PokeButton.B)
+	_box_screen.advance_saving_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 	assert_not_null(save.boxes[0].slots[0], "NO leaves it where it is")
 
 	_box_screen.handle_button(PokeButton.A)
 	_box_screen.handle_button(PokeButton.A)
+	_box_screen.advance_saving_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES - 1)
+	assert_not_null(save.boxes[0].slots[0], "the answer stands for the whole hold")
+	_box_screen.advance_saving_frames(1)
 	assert_null(save.boxes[0].slots[0])
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Bye, GEODUDE!")
+
+
+## `BillsPC_IsMonAnEgg` stands in front of `PlaceYesNoBox` in both release
+## routines, so an egg is refused with `PCString_NoReleasingEGGS` and never asked.
+func test_an_egg_is_refused_release_without_a_question() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 1, 0, -1, false)["ok"])
+	(save.boxes[0].slots[0] as Gen2SaveMon).is_egg = true
+	await _open_box_screen(save, Gen2BoxScreen.MODE_WITHDRAW)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.A)
+	assert_eq(int(_box_screen.box_snapshot()["release"]), -1)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_NO_EGGS)
+	assert_not_null(save.boxes[0].slots[0])
+
+
+## `PCMonInfo` hands the list's EGG species to `GetMonFrontpic`, which draws the
+## egg's own picture in its own palette rather than the species it carries.
+func test_an_egg_in_the_box_shows_the_egg_picture() -> void:
+	_write_egg_pic()
+	var save: Gen2SaveData = _save_with_two()
+	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 1, 0, -1, false)["ok"])
+	(save.boxes[0].slots[0] as Gen2SaveMon).is_egg = true
+	await _open_box_screen(save, Gen2BoxScreen.MODE_WITHDRAW)
+	## This cache carries no PC page to draw the list with, so the picture is
+	## asked for directly with the row the cursor stands on.
+	_box_screen._refresh_pic(save.boxes[0].slots[0])
+	var shown: TextureRect = _box_screen.get("_pic")
+	assert_not_null(shown.texture, "the selection has a picture")
+	var expected: Image = Gen2PicImage.from_atlas(
+		_data.atlas_indices("egg_front"), _data.atlas("egg_front"), _data.egg_pic(),
+		_data.egg_palette()
+	)
+	var image: Image = shown.texture.get_image()
+	assert_eq(image.get_size(), Vector2i(EGG_PIC_SIDE, EGG_PIC_SIDE))
+	assert_eq(image.get_data(), expected.get_data())
+
+
+## `EggPic`'s five-tile square, filled with an index the species atlas never
+## uses so the two pictures cannot be taken for each other.
+const EGG_PIC_SIDE: int = 5 * PokeTiles.TILE_WIDTH
+
+
+func _write_egg_pic() -> void:
+	var indices: PackedByteArray = PackedByteArray()
+	indices.resize(EGG_PIC_SIDE * EGG_PIC_SIDE)
+	indices.fill(2)
+	RomCache.write_indices(RomCache.pic_path(_directory, "egg_front"), indices)
+	var manifest: Dictionary = RomCache.read_json(RomCache.manifest_path(_directory))
+	var atlases: Dictionary = manifest.get("atlases", {})
+	atlases["egg_front"] = {
+		"width": EGG_PIC_SIDE, "height": EGG_PIC_SIDE, "cell": EGG_PIC_SIDE,
+		"columns": 1, "rows": 1,
+	}
+	manifest["atlases"] = atlases
+	manifest["egg_pic"] = {"tiles": 5, "palette": {"normal": [0x001F, 0x7C00]}}
+	RomCache.write_json(RomCache.manifest_path(_directory), manifest)
+	_data = GameData.open_directory(_directory)
 
 
 func test_pc_storage_refuses_depositing_the_last_party_member() -> void:
@@ -645,8 +748,10 @@ func test_a_deposit_restores_pp_and_a_withdrawal_heals() -> void:
 	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 0, 0, -1, false)["ok"])
 	var stored: Gen2SaveMon = save.boxes[0].slots[0]
 	assert_eq(int(stored.pp[0]), int(_data.move(Fixture.TACKLE)["pp"]), "PP back on the way in")
-	assert_eq(stored.hp, 5, "health waits for the way out")
-	assert_eq(stored.status, Gen2Status.POISON)
+	## A `box_struct` has no HP or status: stored, it is what `CalcBufferMonStats`
+	## would rebuild.
+	assert_eq(stored.hp, Gen2SaveBattleAdapter.to_battle_mon(_data, stored).max_hp())
+	assert_eq(stored.status, Gen2Status.NONE)
 	assert_true(Gen2SaveStorage.withdraw_box_to_party(save, _data, 0, 0, false)["ok"])
 	var out: Gen2SaveMon = save.party[1]
 	assert_eq(out.status, Gen2Status.NONE)
@@ -666,6 +771,49 @@ func test_a_generation_1_box_keeps_health_status_and_pp() -> void:
 	assert_eq(int(out.pp[0]), 3)
 	assert_eq(out.hp, 5)
 	assert_eq(out.status, Gen2Status.POISON)
+
+
+## Generation 2's `box_struct` stops at the level byte, so a boxed row is what
+## `CalcBufferMonStats` rebuilds: full health, no status, and an egg's zero.
+## Generation 1's `box_struct` carries both, and keeps them.
+func test_a_boxed_pokemon_reads_healed_only_in_generation_2() -> void:
+	var hurt: Gen2SaveMon = _save().party[0]
+	hurt.hp = 5
+	Gen2SaveStorage.boxed(_data, hurt)
+	assert_eq(hurt.hp, Gen2SaveBattleAdapter.to_battle_mon(_data, hurt).max_hp())
+	assert_eq(hurt.status, Gen2Status.NONE)
+
+	var egg: Gen2SaveMon = _save().party[0]
+	egg.is_egg = true
+	Gen2SaveStorage.boxed(_data, egg)
+	assert_eq(egg.hp, 0, "an egg has no health to restore")
+	assert_eq(egg.status, Gen2Status.NONE)
+
+	var untouched: Gen2SaveMon = _save().party[0]
+	untouched.hp = 5
+	Gen2SaveStorage.boxed(null, untouched)
+	assert_eq(untouched.hp, 5, "no data, no stats to rebuild")
+
+	_data.generation = RomRegistry.GEN1
+	var gen1: Gen2SaveMon = _save().party[0]
+	gen1.hp = 5
+	Gen2SaveStorage.boxed(_data, gen1)
+	assert_eq(gen1.hp, 5)
+	assert_eq(gen1.status, Gen2Status.POISON)
+
+
+## `SendNewMonToBox` writes a `box_struct` too, so a gift or a catch that lands
+## in the box is stored the way a deposit is.
+func test_a_pokemon_sent_to_a_full_partys_box_is_stored_healed() -> void:
+	var save: Gen2SaveData = _save()
+	while save.party.size() < Gen2SaveData.MAX_PARTY:
+		save.party.append(Gen2SaveMon.from_dict(save.party[0].to_dict()))
+	var sent: Gen2SaveMon = Gen2SaveMon.from_dict(save.party[0].to_dict())
+	sent.hp = 5
+	var placed: Dictionary = save.add_party_or_box(sent, false, _data)
+	assert_eq(StringName(placed.get("destination", &"")), &"box")
+	assert_eq(sent.hp, Gen2SaveBattleAdapter.to_battle_mon(_data, sent).max_hp())
+	assert_eq(sent.status, Gen2Status.NONE)
 
 
 func test_pc_storage_can_commit_in_memory_without_writing_slot() -> void:
@@ -1168,7 +1316,7 @@ func test_a_full_box_refuses_under_the_submenu_which_does_not_wrap() -> void:
 	assert_eq(String(snapshot["prompt"]), Gen2BoxScreen.PROMPT_BOX_FULL)
 	assert_eq(snapshot["submenu"], Gen2BoxScreen.SUBMENU_ROWS)
 	assert_signal_emitted_with_parameters(
-		_box_screen, "sfx_requested", [Gen2BoxScreen.SFX_WRONG, true]
+		_box_screen, "sfx_requested", [Gen2Sfx.SFX_WRONG, true]
 	)
 
 

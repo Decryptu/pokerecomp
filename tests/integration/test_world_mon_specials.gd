@@ -105,10 +105,17 @@ func _press(button: int) -> void:
 	_world_screen.press_button(button)
 
 
+## `InterpretTwoOptionMenu` keeps an answered `YesNoBox` up for its own
+## `DelayFrames` before the routine reads the answer.
+func _spend_answer_hold() -> void:
+	_world_screen.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
+
+
 ## Walks to the party list: hello, YES, which_mon, the press `prompt` waits for.
 func _reach_party() -> void:
 	_run_script()
 	_press(PokeButton.A)
+	_spend_answer_hold()
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.WHICH_MON)
 	_press(PokeButton.A)
 
@@ -132,6 +139,9 @@ func test_no_on_the_introduction_ends_on_come_again() -> void:
 	_settle()
 	_world_screen.press_button(PokeButton.DOWN)
 	_world_screen.press_button(PokeButton.A)
+	_world_screen.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES - 1)
+	assert_not_null(_host(), "the answer stands for the whole hold")
+	_world_screen.advance_frame()
 	assert_null(_host())
 	assert_true(_world_screen._text_box.visible)
 	assert_eq(
@@ -147,6 +157,7 @@ func test_the_ending_text_waits_on_the_scripts_own_waitbutton() -> void:
 	_run_script()
 	_settle()
 	_world_screen.press_button(PokeButton.B)
+	_spend_answer_hold()
 	assert_eq(
 		StringName(_world_screen._world.pending_script_input().get("type", &"")), &"button"
 	)
@@ -211,6 +222,7 @@ func test_a_new_name_is_written_to_the_party_row() -> void:
 	_settle()
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.BETTER_ASK)
 	_world_screen.press_button(PokeButton.A)
+	_spend_answer_hold()
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.WHAT_NAME)
 	_press(PokeButton.A)
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.NAMING)
@@ -236,6 +248,7 @@ func test_an_empty_entry_leaves_the_row_alone() -> void:
 	_host().party_screen().handle_button(PokeButton.A)
 	_settle()
 	_world_screen.press_button(PokeButton.A)
+	_spend_answer_hold()
 	_press(PokeButton.A)
 	_host().naming_screen().closed.emit("")
 	_press(PokeButton.A)
@@ -280,6 +293,7 @@ func _reach_move_list() -> void:
 	_run_script()
 	_settle_deleter()
 	_world_screen.press_button(PokeButton.A)
+	_spend_answer_hold()
 	_settle_deleter()
 	_world_screen.press_button(PokeButton.A)
 	_deleter().party_screen().handle_button(PokeButton.A)
@@ -304,6 +318,7 @@ func test_a_member_with_one_move_is_refused_before_the_list() -> void:
 	_run_script()
 	_settle_deleter()
 	_world_screen.press_button(PokeButton.A)
+	_spend_answer_hold()
 	_settle_deleter()
 	_world_screen.press_button(PokeButton.A)
 	_deleter().party_screen().handle_button(PokeButton.A)
@@ -336,6 +351,7 @@ func test_a_deleted_move_takes_its_pp_with_it() -> void:
 	assert_eq(_deleter().phase(), Gen2MoveDeleterScreen.Phase.DELETE_ASK)
 	_settle_deleter()
 	_world_screen.press_button(PokeButton.A)
+	_spend_answer_hold()
 	assert_null(_deleter())
 	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
 	assert_eq(mon.moves, [1, 0, 0, 0])
@@ -353,6 +369,7 @@ func test_no_on_the_confirmation_leaves_the_moves_alone() -> void:
 	_deleter().move_screen().handle_button(PokeButton.A)
 	_settle_deleter()
 	_world_screen.press_button(PokeButton.B)
+	_spend_answer_hold()
 	assert_null(_deleter())
 	assert_eq(_world_screen.active_save().party[0].moves, [1, 2, 0, 0])
 	assert_eq(
@@ -429,6 +446,22 @@ func test_the_tutor_special_opens_the_party_list_first() -> void:
 	assert_false(_world_screen.move_player(Vector2i.RIGHT))
 
 
+## `ChooseMonToLearnTMHM` writes PARTYMENUACTION_TEACH_TMHM, so the list the
+## tutor opens prints `.TMHM`'s ABLE or NOT ABLE where each bar would be.
+func test_the_tutor_list_marks_whether_each_member_can_learn_the_move() -> void:
+	for learnable: bool in [true, false]:
+		if is_instance_valid(_world_screen):
+			_world_screen.free()
+		await _open_tutor_world(Gen2MoveTutor.VALUE_FLAMETHROWER, learnable)
+		_run_script()
+		var party: Gen2PartyScreen = _tutor().party_screen()
+		assert_true(party._quality_column())
+		assert_eq(
+			String((party._rows()[0] as Dictionary)["quality"]),
+			Gen2PartyMenuPage.ABLE if learnable else Gen2PartyMenuPage.NOT_ABLE
+		)
+
+
 ## `.quit`'s `xor a`: a learned move answers FALSE, which is the branch the map
 ## script takes to `takecoins`.
 func test_a_learned_move_answers_false_and_costs_happiness() -> void:
@@ -485,8 +518,9 @@ func test_a_full_moveset_asks_and_refuses_an_hm_without_closing_the_list() -> vo
 	_run_script()
 	_tutor().party_screen().handle_button(PokeButton.A)
 	assert_eq(_tutor().phase(), Gen2MoveTutorScreen.Phase.FORGET_ASK)
-	_settle_tutor()
+	_page_to_tutor_question()
 	_world_screen.press_button(PokeButton.A)
+	_spend_answer_hold()
 	assert_eq(_tutor().phase(), Gen2MoveTutorScreen.Phase.FORGET_LIST)
 	_world_screen.press_button(PokeButton.A)
 	assert_eq(_tutor().phase(), Gen2MoveTutorScreen.Phase.FORGET_LIST, "the list stays open")
@@ -508,6 +542,16 @@ func _settle_tutor() -> void:
 		_world_screen.advance_frame()
 		guard -= 1
 	_world_screen.advance_frame()
+
+
+## `LearnMove` prints its whole question, pages and all, before `YesNoBox`.
+func _page_to_tutor_question() -> void:
+	var guard: int = 8
+	while guard > 0 and _tutor().question_cursor() < 0:
+		_settle_tutor()
+		if _tutor().question_cursor() < 0:
+			_world_screen.press_button(PokeButton.A)
+		guard -= 1
 
 
 ## `engine/events/haircut.asm`'s four routines are the same `SelectMonFromParty`

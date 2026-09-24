@@ -16,7 +16,7 @@ var _view: TextureRect = null
 var _audio: Gen2AudioPlayer = null
 var _data: GameData = null
 var _text: String = ""  ## The box under the table, which is `PrintTextboxText`'s own.
-var _yes_no_cursor: int = 1  ## `wMenuCursorY` for whichever `YesNoBox` is up.
+var _yes_no: Gen2WorldMenu = Gen2WorldMenu.yes_no()
 ## Whether this frame's pass has already run, which a press does.
 var _acted: bool = false
 var _open: bool = false
@@ -75,6 +75,10 @@ func prompt() -> int:
 func advance_frame() -> void:
 	if not _open or _game == null:
 		return
+	if _yes_no.holding():
+		_advance_yes_no_hold()
+		_refresh()
+		return
 	if _game.waiting_for_sfx():
 		if _audio != null and _audio.effect_playing():
 			_refresh()
@@ -117,24 +121,17 @@ func handle_button(button: int) -> bool:
 
 ## `PlaceYesNoBox`, which opens on YES and takes B as NO.
 func _handle_yes_no_button(button: int) -> void:
-	match button:
-		PokeButton.UP:
-			_yes_no_cursor = 1
-		PokeButton.DOWN:
-			_yes_no_cursor = 2
-		PokeButton.A:
-			_text = ""
-			var yes: bool = _yes_no_cursor == 1
-			_yes_no_cursor = 1
-			_game.answer_yes_no(yes)
-			_drain()
-		PokeButton.B:
-			_text = ""
-			_yes_no_cursor = 1
-			_game.answer_yes_no(false)
-			_drain()
-		_:
-			pass
+	_yes_no.press_yes_no(button)
+
+
+func _advance_yes_no_hold() -> void:
+	if not _yes_no.advance_hold():
+		return
+	_text = ""
+	var yes: bool = _yes_no.answered_yes()
+	_yes_no = Gen2WorldMenu.yes_no()
+	_game.answer_yes_no(yes)
+	_drain()
 
 
 func _pass() -> void:
@@ -168,7 +165,7 @@ func overlay_state() -> Dictionary:
 	return {
 		"text": _text,
 		"blink": _frames if waiting else -1,
-		"yes_no": _yes_no_cursor \
+		"yes_no": _yes_no.cursor + 1 \
 			if _game.prompt() == Gen2CardFlip.Prompt.YES_NO else 0,
 	}
 

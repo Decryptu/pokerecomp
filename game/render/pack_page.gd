@@ -274,9 +274,11 @@ func draw_menu(
 		_put(map, box.cursor_position(cursor), CURSOR_CODE)
 
 
-## `BuySellToss_UpdateQuantityDisplay`: the frame, then `'×'` and
-## `PRINTNUM_LEADINGZEROS | 1, 2` one cell in from its own corner.
-func draw_quantity(map: PackedInt32Array, box: Gen2MenuBox, quantity: int) -> void:
+## `BuySellToss_UpdateQuantityDisplay`: the frame, `'×'` and two digits a cell
+## in, and `BuySell_DisplaySubtotal` past them unless [param subtotal] is -1.
+func draw_quantity(
+	map: PackedInt32Array, box: Gen2MenuBox, quantity: int, subtotal: int = -1
+) -> void:
 	draw_frame(map, box.border_position(), box.border_size())
 	var at: Vector2i = box.border_position() + Vector2i.ONE
 	_put(map, at, TIMES_CODE)
@@ -284,6 +286,14 @@ func draw_quantity(map: PackedInt32Array, box: Gen2MenuBox, quantity: int) -> vo
 		map, at + Vector2i(1, 0),
 		String.num_int64(maxi(quantity, 0)).lpad(QUANTITY_DIGITS, "0")
 	)
+	if subtotal >= 0:
+		_string(map, at + Vector2i(2 + QUANTITY_DIGITS, 0), Gen2MartPage.money_string(subtotal))
+
+
+## `PlaceMoneyTextbox`.
+func draw_money(map: PackedInt32Array, box: Rect2i, money: int) -> void:
+	draw_frame(map, box.position, box.size + Vector2i.ONE)
+	_string(map, box.position + Vector2i.ONE, Gen2MartPage.money_string(money))
 
 
 ## `ForgetMove`'s own list: a `Textbox` at `hlcoord 5, 2` holding `NUM_MOVES * 2`

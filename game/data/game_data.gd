@@ -601,7 +601,7 @@ func gen1_poke_flute() -> Dictionary:
 	var channels: Variant = _audio().get("poke_flute", [])
 	if not channels is Array or (channels as Array).size() < 3:
 		return {}
-	var record: Dictionary = gen1_sound(-1, Gen1Layout.SFX_CAUGHT_MON)
+	var record: Dictionary = gen1_sound(-1, Gen1Sfx.SFX_CAUGHT_MON)
 	if record.is_empty():
 		return {}
 	record["channels"] = (channels as Array).duplicate()

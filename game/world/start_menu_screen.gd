@@ -32,6 +32,8 @@ signal field_move_chosen(action: Dictionary)
 ## The reset chord's question was answered YES. Only the screen hosting this one
 ## can restart the game, the same way it is the one that opens the launcher.
 signal soft_reset_confirmed
+## `BattlePack`'s USE, or [code]0[/code] for whatever ended `TutorialPack`.
+signal battle_item_chosen(item: int)
 
 enum Mode {
 	LIST, PACK, PACK_ITEM, PACK_TEACH, PACK_TARGET,
@@ -123,7 +125,8 @@ const PP_INCREASED: String = "%s's PP\nincreased."
 const PP_MAXED_OUT: String = "%s's PP\nis maxed out."
 ## `_RepelUsedEarlierIsStillInEffectText`, printed instead of spending the item.
 const REPEL_STILL_IN_EFFECT: String = "The REPEL used\nearlier is still\nin effect."
-## `ItemUseText00`, `PrintItemUseTextAndRemoveItem`'s line.
+## `_ItemUsedText` and Generation 1's `ItemUseText00`.
+const USED_ITEM: String = "<PLAYER> used the\n%s."
 const GEN1_USED_ITEM: String = "<PLAYER> used\n%s!"
 ## `ItemStatRoseText` and `VitaminStatRoseText` over `StatStrings`' names.
 const STAT_ROSE: String = "%s's\n%s rose."
@@ -132,57 +135,10 @@ const VITAMIN_STAT_NAMES: Dictionary = {
 	"special": "SPECIAL",
 }
 
-## `PrintPartyMenuActionText`'s `.MenuActionTexts` and `PartyMenuItemUseMessagePointers`.
-const PARTY_ACTION_HEAL: StringName = &"heal"
-const PARTY_ACTION_REVIVE: StringName = &"revive"
-const PARTY_ACTION_LEVEL: StringName = &"level"
-## `GetItemHealingAction` names the line by the item's mask: a FULL HEAL says health returned.
-const STATUS_ACTIONS: Dictionary = {
-	Gen2Status.POISON: &"poison", Gen2Status.BURN: &"burn", Gen2Status.FREEZE: &"freeze",
-	Gen2Status.SLEEP_MASK: &"sleep", Gen2Status.PARALYSIS: &"paralysis",
-	Gen2Status.ANY: &"all",
-}
-const PARTY_ACTION_TEXTS: Dictionary = {
-	PARTY_ACTION_HEAL: "%s\nrecovered %dHP!",
-	PARTY_ACTION_REVIVE: "%s\nis revitalized.",
-	PARTY_ACTION_LEVEL: "%s grew to\nlevel %d!",
-	&"poison": "%s's\ncured of poison.",
-	&"burn": "%s's\nburn was healed.",
-	&"freeze": "%s\nwas defrosted.",
-	&"sleep": "%s\nwoke up.",
-	&"paralysis": "%s's\nrid of paralysis.",
-	&"all": "%s's\nhealth returned.",
-}
-const GEN1_PARTY_ACTION_TEXTS: Dictionary = {
-	PARTY_ACTION_HEAL: "%s\nrecovered by %d!",
-	PARTY_ACTION_REVIVE: "%s\nis revitalized!",
-	PARTY_ACTION_LEVEL: "%s grew\nto level %d!",
-	&"poison": "%s was\ncured of poison!",
-	&"burn": "%s's\nburn was healed!",
-	&"freeze": "%s was\ndefrosted!",
-	&"sleep": "%s\nwoke up!",
-	&"paralysis": "%s's\nrid of paralysis!",
-	&"all": "%s's\nhealth returned!",
-}
-## `ItemActionTextWaitButton`'s `DelayFrames 50`, and `.showHealingItemMessage`'s.
-const PARTY_RESULT_HOLD_FRAMES: int = 50
-## `HealHP_SFX_GFX`'s and `Play_SFX_FULL_HEAL`'s, roles Generation 1 answers too.
-const SFX_POTION: int = 0x04
-const SFX_FULL_HEAL: int = 0x05
-## `_GrewToLevelText`'s own `sound_dex_fanfare_50_79`, a waited text sound.
-const SFX_DEX_FANFARE_50_79: int = 0x00
 
 const SAVE_SAVING_FRAMES: int = Gen2SavePrompt.SAVING_FRAMES
 const SAVE_WRITE_FRAMES: int = Gen2SavePrompt.WRITE_FRAMES
 const SAVE_DONE_FRAMES: int = Gen2SavePrompt.DONE_FRAMES
-
-## `SwitchItemsInBag`' own two, both hexadecimal the way the constants file
-## counts: `.place_insert` asks for SFX_SWITCH_POKEMON twice through
-## `WaitPlaySFX`, and a pocket cycle asks for SFX_SWITCH_POCKETS.
-const SFX_SWITCH_POKEMON: int = 0x20
-const SFX_SWITCH_POCKETS: int = 0x62
-## `TeachTMHM`'s `PlaySFX` and `ItemUseTMHM`'s SFX_DENIED under the incompatible line.
-const SFX_WRONG: int = 0x19
 
 ## The pack's five imported texts, by the key `GameData.menu_text` holds each
 ## under: `UseItem`'s two refusals and `TossMenu`'s three. "(S)" is three literal
@@ -226,7 +182,7 @@ const GEN1_PACK_TEXTS: Dictionary = {
 ## What each reads on a cache imported before the texts were, which is the only
 ## way any of these is ever seen. Verbatim from data/text/common_2.asm.
 const TEXT_FALLBACKS: Dictionary = {
-	TEXT_OAK: "OAK: <PLAYER>!\nThis isn't the\ntime to use that!",
+	TEXT_OAK: "OAK: <PLAYER>!\nThis isn't the" + Gen2TextStream.SCROLL_BREAK + "time to use that!",
 	TEXT_NO_MON: "You don't have a\nPOKéMON!",
 	TEXT_TOSS_ASK: "Throw away how\nmany?",
 	TEXT_TOSS_ASK_QUANTITY: "Throw away <NUM_>\n<RAM_>(S)?",
@@ -315,6 +271,14 @@ var _toss_confirm_cursor: int = 0
 ## where the Pokemon is already chosen and the pack list is `DepositSellPack`.
 var _giving: bool = false
 var _give_target: int = -1
+## `DepositSellPack`'s caller, and whether the line up is a sale's.
+var _deposit_sell: Gen2DepositSellPack = null
+var _sold: bool = false
+## `BattlePack` and `TutorialPack`, and a battle's own pockets when no world
+## stands behind it.
+var _battling: bool = false
+var _tutorial: bool = false
+var _battle_pockets: Array = []
 ## `PokemonAskSwapItemText`'s yes/no, who it is about and the question itself,
 ## which stands in the pack's own text box while the box is up.
 var _swap_cursor: int = 0
@@ -451,6 +415,33 @@ func open_give(party_index: int) -> void:
 	_open_pack_mode()
 
 
+## `SellMenu` and `PlayerDepositItemMenu`: A hands a stack to [param action].
+func open_deposit_sell(action: Gen2DepositSellPack) -> void:
+	_deposit_sell = action
+	if _defer_entry(open_deposit_sell.bind(action)):
+		return
+	_open_pack_mode()
+
+
+## `BattlePack` over [param world]'s bag or [param pockets]; [param tutorial] is
+## `TutorialPack`, where any press ends the pack.
+func open_battle_pack(
+	data: GameData, world: Gen2WorldAPI, pockets: Array = [], tutorial: bool = false
+) -> void:
+	_data = data
+	_world = world
+	_battle_pockets = pockets
+	_battling = true
+	_tutorial = tutorial
+	if _defer_entry(open_battle_pack.bind(data, world, pockets, tutorial)):
+		return
+	_open_pack_mode()
+
+
+func say(message: String) -> void:
+	_show_pack_result(message)
+
+
 ## `SelectMenu`. `CheckRegisteredItem`'s `.NotRegistered` carry is
 ## `MayRegisterItemText`; otherwise `UseRegisteredItem` runs `CheckItemMenu`'s
 ## jumptable over the registered item, the same one the pack's USE reads.
@@ -503,6 +494,14 @@ func handle_button(button: int) -> bool:
 	## own does over the box screen.
 	if _naming != null:
 		return _naming.handle_button(button)
+	if _yes_no_hold > 0 or (_save_prompt != null and not _save_prompt.reads_joypad()
+			and not _save_prompt.finished()):
+		return true
+	if _reading_question():
+		if button == PokeButton.A or button == PokeButton.B:
+			_question_page += 1
+			_render_hardware()
+		return true
 	## `BuySellToss_InterpretJoypad` reads the joypad itself and answers with a
 	## carry, so the dial takes the whole button rather than a direction and an
 	## A/B split, the way [Gen2WorldApricorn] feeds it.
@@ -529,13 +528,20 @@ func handle_button(button: int) -> bool:
 			_press_pack_select()
 			_render_hardware()
 			return true
+		## `.MenuData`'s STATICMENU_ENABLE_START, which `ContinueGettingMenuJoypad`
+		## answers as B; Generation 1's `RedisplayStartMenu` tests `PAD_B | PAD_START`.
+		PokeButton.START:
+			if _mode != Mode.LIST:
+				return false
+			_cancel()
+			return true
 	return false
 
 
 ## `Pack_InterpretJoypad`'s `.select` and `.switching_item`'s own SELECT: the
 ## first marks a row and the second places the held item on the cursor's.
 func _press_pack_select() -> void:
-	if _give_target >= 0:
+	if _depositing_or_selling() or _tutorial or _world == null:
 		## `DepositSellPack` runs its own joypad handler with no `.select` in it.
 		return
 	_apply_switch_press()
@@ -554,8 +560,8 @@ func _apply_switch_press() -> void:
 		_open_pack_mode(false)
 		## `.place_insert` asks for the same effect twice through `WaitPlaySFX`.
 		if not gen1:
-			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
-			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
 	_pack_switch = int(answer["held"])
 
 
@@ -620,21 +626,42 @@ func _target_rows() -> int:
 func _move_forget_list(step: int) -> void:
 	if step == 0 or _forget_moves.is_empty():
 		return
-	_forget_cursor = wrapi(_forget_cursor + signi(step), 0, _forget_moves.size())
+	_forget_cursor = Gen2MoveForget.step_cursor(_forget_cursor, step, _forget_moves.size(), _data.generation)
 	_forget_refusal = ""
 	_render_forget_list()
 
 
-## `VerticalMenu` over a two-row box, where every direction toggles the cursor.
-## The save family parks its own at -1 while a box is timed rather than asked,
-## and reads no joypad then.
+## `YesNoBox`'s `VerticalMenu`, wrapping neither way. A save box parked at -1
+## is timed and reads no joypad.
 func _toggle_two_row(direction: Vector2i) -> void:
 	var row: Array = TOGGLE_MODES[_mode]
 	var at: int = int(get(row[0]))
-	if at < 0 or direction == Vector2i.ZERO:
+	var next: int = 0 if direction.y < 0 else 1
+	if at < 0 or direction.y == 0 or next == at:
 		return
-	set(row[0], 1 - at)
+	set(row[0], next)
 	call(row[1])
+
+
+## A YES/NO's answer hold; the save questions hold inside [Gen2SavePrompt].
+var _yes_no_hold: int = 0
+var _yes_no_held: Callable = Callable()
+
+
+func _hold_yes_no(answer: Callable) -> bool:
+	if not TOGGLE_MODES.has(_mode) or _mode in [Mode.SAVE_ASK, Mode.SAVE_OVERWRITE] \
+		or int(get(TOGGLE_MODES[_mode][0])) < 0:
+		return false
+	_yes_no_hold = Gen2WorldMenu.ANSWER_HOLD_FRAMES
+	_yes_no_held = answer
+	return true
+
+
+func _advance_yes_no_hold() -> void:
+	_yes_no_hold -= 1
+	if _yes_no_hold == 0:
+		_yes_no_held.call()
+		_render_hardware()
 
 
 func _move_options(direction: Vector2i) -> void:
@@ -668,28 +695,19 @@ func _move_mod_options(direction: Vector2i) -> void:
 		_adjust_mod_option(rows, direction.x)
 
 func _confirm() -> void:
+	if _hold_yes_no(_confirm_now):
+		return
+	_confirm_now()
+
+
+func _confirm_now() -> void:
 	var handler: StringName = CONFIRM_HANDLERS.get(_mode, &"")
 	if handler != &"":
 		call(handler)
 		return
 	match _mode:
 		Mode.PACK:
-			## `.switching_item` reads A before anything else, so the A that
-			## would open an item's submenu places the held item instead.
-			if _pack_switch >= 0:
-				_apply_switch_press()
-				return
-			## `ScrollingMenuJoyAction`'s `.a_button` answers `-1` on the CANCEL
-			## row and falls into `.b_button`, so choosing it leaves the pack.
-			if _pack_cursor_on_cancel():
-				_cancel()
-				return
-			## `DepositSellPack` acts on the item it is given rather than
-			## opening a submenu over it, which is the pack `.GiveItem` opens.
-			if _give_target >= 0:
-				_give_selected_item(_give_target)
-			else:
-				_open_item_mode()
+			_confirm_pack()
 		Mode.PACK_TARGET:
 			## `PartyMenuSelect` returns carry on CANCEL, which the caller answers
 			## the same way it answers B.
@@ -733,7 +751,29 @@ func _leave_pack_result() -> void:
 	else:
 		_open_pack_mode(false)
 
+func _confirm_pack() -> void:
+	## `.switching_item` reads A first, placing the held item.
+	if _pack_switch >= 0:
+		_apply_switch_press()
+	## `.a_button` on CANCEL falls into `.b_button`.
+	elif _pack_cursor_on_cancel() or _tutorial:
+		_cancel()
+	## `DepositSellPack`, which `.GiveItem` opens too, has no submenu.
+	elif _give_target >= 0:
+		_give_selected_item(_give_target)
+	elif _deposit_sell != null:
+		_choose_deposit_sell()
+	else:
+		_open_item_mode()
+
+
 func _cancel() -> void:
+	if _hold_yes_no(_cancel_now):
+		return
+	_cancel_now()
+
+
+func _cancel_now() -> void:
 	match _mode:
 		Mode.LIST:
 			closed.emit()
@@ -742,7 +782,9 @@ func _cancel() -> void:
 			if _pack_switch >= 0:
 				_pack_switch = -1
 				return
-			if _give_target >= 0:
+			if _tutorial:
+				battle_item_chosen.emit(0)
+			elif _depositing_or_selling() or _battling:
 				closed.emit()
 			else:
 				_open_list_mode()
@@ -1054,17 +1096,16 @@ func _adjust_mod_option(rows: Array, delta: int) -> void:
 func _open_pack_mode(reset: bool = true) -> void:
 	_mode = Mode.PACK
 	_giving = false
+	_sold = false
 	_teaching = false
 	_using_registered = false
 	_evolution_offers.clear()
 	_learning_move = 0
 	_forget_move_name = ""
-	_pack_pockets = Gen2WorldPack.build(_data, _world.state) if _world != null else []
+	_pack_pockets = Gen2WorldPack.build(_data, _world.state) if _world != null \
+		else _battle_pockets
 	if reset:
-		_pack_pocket_index = 0
-		_pack_cursor = 0
-		_pack_cursors.fill(0)
-		_pack_scroll.fill(0)
+		_recall_pack()
 	## `Pack_Jumptable`'s entry clears `wSwitchItem`, so a pack reopened after a
 	## submenu holds nothing.
 	_pack_switch = -1
@@ -1072,7 +1113,34 @@ func _open_pack_mode(reset: bool = true) -> void:
 	## The CANCEL row is always there, so an emptied pocket puts the cursor on it
 	## rather than on an item that is gone.
 	_pack_cursor = clampi(_pack_cursor, 0, _current_pocket_items().size())
+	_clamp_pack_scroll()
 	_render_pack()
+
+
+## `InitPackBuffers` opens on `wLastPocket` and each pocket on its own saved row;
+## `DepositSellInitPackBuffers` always opens on the ITEM pocket.
+func _recall_pack() -> void:
+	var memory: Dictionary = _world.pack_memory if _world != null else {}
+	_pack_cursors.assign(memory.get("cursors", [0, 0, 0, 0]))
+	_pack_scroll.assign(memory.get("scroll", [0, 0, 0, 0]))
+	_pack_pocket_index = int(memory.get("pocket", 0)) if _reads_last_pocket() else 0
+	_pack_cursor = _pack_cursors[clampi(_pack_pocket_index, 0, _pack_cursors.size() - 1)]
+
+
+func _reads_last_pocket() -> bool:
+	return _deposit_sell == null and not _tutorial
+
+
+## The pocket and rows a move left; `DepositSellPack` never writes `wLastPocket`.
+func _remember_pack() -> void:
+	if _world == null:
+		return
+	_pack_cursors[_pack_pocket_index] = _pack_cursor
+	_world.pack_memory = {
+		"pocket": _pack_pocket_index if _reads_last_pocket() \
+			else int(_world.pack_memory.get("pocket", 0)),
+		"cursors": _pack_cursors.duplicate(), "scroll": _pack_scroll.duplicate(),
+	}
 
 
 ## `DisplayListMenuID`'s one list rather than `engine/items/pack.asm`'s pockets.
@@ -1114,10 +1182,11 @@ func _cycle_pocket(delta: int) -> void:
 	_pack_cursors[_pack_pocket_index] = _pack_cursor
 	_pack_pocket_index = wrapi(_pack_pocket_index + signi(delta), 0, _pack_pockets.size())
 	## `.d_left` and `.d_right` each play it before they leave.
-	sfx_requested.emit(SFX_SWITCH_POCKETS, false)
+	sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POCKETS, false)
 	_pack_cursor = clampi(
 		_pack_cursors[_pack_pocket_index], 0, _current_pocket_items().size()
 	)
+	_remember_pack()
 	_render_pack()
 
 
@@ -1126,19 +1195,22 @@ func _cycle_pocket(delta: int) -> void:
 ## past the last item, which is what makes the walk wrap over `size + 1`.
 func _move_pack_cursor(delta: int) -> void:
 	var rows: int = _current_pocket_items().size() + 1
-	var height: int = _pack_cursor_rows()
 	var next: int = _pack_cursor + signi(delta)
 	## `DisplayListMenuID` sets `wMenuWatchMovingOutOfBounds`, so a move past
 	## either end scrolls `wListScrollOffset` and leaves the cursor where it was.
 	_pack_cursor = clampi(next, 0, rows - 1) if _gen1_pack() else wrapi(next, 0, rows)
+	_clamp_pack_scroll()
+	_remember_pack()
+	_render_pack()
+
+
+func _clamp_pack_scroll() -> void:
+	var rows: int = _current_pocket_items().size() + 1
+	var height: int = _pack_cursor_rows()
 	_pack_scroll[_pack_pocket_index] = clampi(
-		clampi(
-			_pack_scroll[_pack_pocket_index],
-			_pack_cursor - (height - 1), _pack_cursor
-		),
+		clampi(_pack_scroll[_pack_pocket_index], _pack_cursor - (height - 1), _pack_cursor),
 		0, maxi(rows - height, 0)
 	)
-	_render_pack()
 
 
 ## Whether the cursor is on `ScrollingMenu_UpdateDisplay`'s CANCEL row, which is
@@ -1197,7 +1269,8 @@ func _gen1_pack_image(actions: Array = [], quantity: int = -1) -> Image:
 	if image == null:
 		return null
 	var over: Image = _service_page.render(
-		"", "", actions, _item_cursor, box_text(),
+		"", "", actions, _item_cursor,
+		_question_shown() if _mode in PACK_QUESTIONS else box_text(),
 		Gen2MenuBox.from_coords(
 			GEN1_ITEM_MENU_AT.x, GEN1_ITEM_MENU_AT.y,
 			GEN1_ITEM_MENU_TO.x, GEN1_ITEM_MENU_TO.y, SUBMENU_FLAGS
@@ -1242,6 +1315,8 @@ func _pack_overlay(text: String, draw_page: Callable) -> Image:
 	if _pack_page == null:
 		return null
 	var map: PackedInt32Array = _pack_map(text)
+	if _money_shown():
+		_pack_page.draw_money(map, Gen2DepositSellPack.MONEY_BOX, _deposit_sell.money())
 	if draw_page.is_valid():
 		draw_page.call(map)
 	return _pack_page.image(_data, map, _pack_pocket_index, _player_is_female())
@@ -1249,13 +1324,16 @@ func _pack_overlay(text: String, draw_page: Callable) -> Image:
 
 ## `YesNoBox` over one of the pack's printed questions, which is what every one
 ## of its confirmations is.
-func _pack_yes_no(text: String, cursor_index: int) -> Image:
+func _pack_yes_no(cursor_index: int) -> Image:
+	var asking: bool = not _reading_question()
 	if _gen1_pack():
 		var image: Image = _gen1_pack_image()
-		if image != null:
+		if image != null and asking:
 			_blend_gen1_yes_no(image, cursor_index)
 		return image
-	return _pack_overlay(_last_page(text), func(map: PackedInt32Array) -> void:
+	return _pack_overlay(_question_shown(), func(map: PackedInt32Array) -> void:
+		if not asking:
+			return
 		_pack_page.draw_menu(
 			map,
 			Gen2MenuBox.from_coords(
@@ -1277,15 +1355,34 @@ func _item_menu_box(count: int) -> Gen2MenuBox:
 	)
 
 
-## `YesNoBox` opens over the last page of the last `PrintText`, so a question
-## longer than two rows shows its tail; `AskTeachTMHM`'s pair reaches past a page.
-func _last_page(text: String) -> String:
-	var pages: Array = Gen2TextLayout.lay_out(
+## The pack's questions: `PrintText` waits at each page break before `YesNoBox`.
+const PACK_QUESTIONS: Array[Mode] = [
+	Mode.PACK_TEACH, Mode.PACK_FORGET_ASK, Mode.PACK_STOP_LEARNING,
+	Mode.PACK_TOSS_CONFIRM, Mode.PACK_GIVE_SWAP,
+]
+var _question_text: String = ""
+var _question_page: int = 0
+
+
+func _question_pages() -> Array:
+	var text: String = box_text() if _mode in PACK_QUESTIONS else ""
+	if text != _question_text:
+		_question_text = text
+		_question_page = 0
+	return Gen2TextLayout.lay_out(
 		text, Gen2PackPage.TEXTBOX_COLUMNS - 2, Gen2PackPage.TEXTBOX_ROWS_OF_TEXT
 	)
+
+
+func _reading_question() -> bool:
+	return _mode in PACK_QUESTIONS and _question_page + 1 < _question_pages().size()
+
+
+func _question_shown() -> String:
+	var pages: Array = _question_pages()
 	if pages.is_empty():
 		return ""
-	return "\n".join(pages[pages.size() - 1] as PackedStringArray)
+	return "\n".join(pages[mini(_question_page, pages.size() - 1)] as PackedStringArray)
 
 
 func _pack_result_text() -> String:
@@ -1342,7 +1439,8 @@ func _open_item_mode() -> void:
 	## itself from the next item's own `.Party` list.
 	_teaching = false
 	_giving = false
-	_item_actions = Gen2WorldPack.item_submenu(_data, int(item.get("item", 0)))
+	_item_actions = Gen2WorldPack.battle_submenu(_data, int(item.get("item", 0))) \
+		if _battling else Gen2WorldPack.item_submenu(_data, int(item.get("item", 0)))
 	_item_cursor = 0
 	_render_item_menu()
 
@@ -1367,7 +1465,10 @@ func _confirm_item_action() -> void:
 		Gen2WorldPack.ACTION_SELECT:
 			_register_selected_item()
 		_:
-			_confirm_use()
+			if _battling:
+				battle_item_chosen.emit(int(_selected_item().get("item", 0)))
+			else:
+				_confirm_use()
 
 
 ## `GiveItem`'s own party list, which `.NoPokemon` answers when there is none.
@@ -1824,7 +1925,7 @@ func _teach_selected_item(party_index: int) -> void:
 				_open_forget_ask()
 				return
 		if reason == &"not_compatible":
-			sfx_requested.emit(SFX_WRONG, false)
+			sfx_requested.emit(Gen2Sfx.SFX_WRONG, false)
 		## `ItemUseTMHM`'s refusals `jr .chooseMon`; `TeachTMHM`'s `.nope` returns to the pack.
 		var again: Callable = Callable()
 		if _gen1_pack() and (reason == &"not_compatible" or reason == &"already_knows_move"):
@@ -1902,9 +2003,9 @@ func _confirm_forget() -> void:
 		return
 	var target_name: String = _target_name(_forget_party_index)
 	if _gen1_pack():
-		gen1_sfx_requested.emit(Gen2MoveForget.GEN1_SFX_SWAP)
+		gen1_sfx_requested.emit(Gen1Sfx.SFX_SWAP)
 	else:
-		sfx_requested.emit(Gen2MoveForget.SFX_SWITCH_POKEMON, false)
+		sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, false)
 	_show_pack_result("%s%s%s" % [
 		Gen2MoveForget.forgot_text(target_name, String(entry.get("name", "")), _data.generation),
 		Gen2TextStream.PAGE_BREAK,
@@ -2045,17 +2146,14 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 	if party_index >= 0:
 		_show_party_result(item, result, party_index, rows)
 		return
-	## `UseRepel` prints nothing; `PrintItemUseTextAndRemoveItem` says `ItemUseText00`.
-	if not _gen1_pack():
-		if _using_registered:
-			closed.emit()
-		else:
-			_open_pack_mode(false)
-		return
-	sfx_requested.emit(SFX_FULL_HEAL, false)
-	_show_pack_result((GEN1_USED_ITEM % String(item.get("name", ""))).replace(
-		Gen2WorldPC.PLAYER_MARKER, _pack_save.player_name
-	))
+	## `UseRepel`'s `UseItemText` and `ItemUseText00`, behind `SFX_FULL_HEAL`. A
+	## SELECT use closes on the press.
+	sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, false)
+	_show_pack_result(
+		((GEN1_USED_ITEM if _gen1_pack() else USED_ITEM) % String(item.get("name", ""))).replace(
+			Gen2WorldPC.PLAYER_MARKER, _pack_save.player_name
+		), closed.emit if _using_registered else Callable()
+	)
 
 
 ## `ItemActionTextWaitButton` and `.showHealingItemMessage`, `HealHP_SFX_GFX`'s
@@ -2064,41 +2162,27 @@ func _show_party_result(
 	item: Dictionary, result: Dictionary, party_index: int, rows: Array,
 	next: Callable = Callable()
 ) -> void:
-	var kind: StringName = _party_action_kind(item, result)
+	var kind: StringName = Gen2ItemActionText.kind(_data, int(item.get("item", 0)), result)
 	var party: Dictionary = {"rows": rows, "cursor": -1 if kind != &"" else party_index}
-	if kind == PARTY_ACTION_HEAL or kind == PARTY_ACTION_REVIVE:
+	if kind == Gen2ItemActionText.HEAL or kind == Gen2ItemActionText.REVIVE:
 		var row: Dictionary = rows[party_index]
-		sfx_requested.emit(SFX_POTION, true)
+		sfx_requested.emit(Gen2Sfx.SFX_POTION, true)
 		party["row"] = party_index
 		party["anim"] = Gen2HpBarAnimation.create(
 			int(row.get("hp", 0)), int(row.get("hp", 0)) + int(result.get("healed", 0)),
 			int(row.get("max_hp", 0))
 		)
 		party["prompt"] = _target_prompt()
-	elif kind == PARTY_ACTION_LEVEL:
+	elif kind == Gen2ItemActionText.LEVEL:
 		## Both texts end in `text_promptbutton`, and `PrintTempMonStats`' box is
 		## drawn behind that press with no `DelayFrames` in front.
-		sfx_requested.emit(SFX_DEX_FANFARE_50_79, true)
+		sfx_requested.emit(Gen2Sfx.SFX_DEX_FANFARE_50_79, true)
 		party["stats_after_press"] = _party_stats(party_index)
 	else:
-		sfx_requested.emit(SFX_FULL_HEAL, false)
-	if kind != &"" and not party.has("anim") and kind != PARTY_ACTION_LEVEL:
-		party["hold"] = PARTY_RESULT_HOLD_FRAMES
+		sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, false)
+	if kind != &"" and not party.has("anim") and kind != Gen2ItemActionText.LEVEL:
+		party["hold"] = Gen2ItemActionText.HOLD_FRAMES
 	_show_pack_result(_party_result_text(item, result, party_index, kind), next, party)
-
-
-## The `.MenuActionTexts` row a use earned, or nothing for a plain `PrintText`.
-func _party_action_kind(item: Dictionary, result: Dictionary) -> StringName:
-	if int(result.get("level", 0)) > 0:
-		return PARTY_ACTION_LEVEL
-	if StringName(result.get("effect", &"")) == &"revive":
-		return PARTY_ACTION_REVIVE
-	if int(result.get("healed", 0)) > 0:
-		return PARTY_ACTION_HEAL
-	if int(result.get("status_cleared", 0)) == 0:
-		return &""
-	var mask: int = int(_data.item(int(item.get("item", 0))).get("status_mask", 0))
-	return STATUS_ACTIONS.get(mask, &"all")
 
 
 func _party_result_text(
@@ -2106,13 +2190,7 @@ func _party_result_text(
 ) -> String:
 	var target: String = _target_name(party_index)
 	if kind != &"":
-		var texts: Dictionary = GEN1_PARTY_ACTION_TEXTS if _gen1_pack() else PARTY_ACTION_TEXTS
-		var line: String = String(texts[kind])
-		if kind == PARTY_ACTION_LEVEL:
-			return line % [target, int(result.get("level", 0))]
-		if kind == PARTY_ACTION_HEAL:
-			return line % [target, int(result.get("healed", 0))]
-		return line % target
+		return Gen2ItemActionText.text(kind, target, result, _gen1_pack())
 	if int(result.get("restored", 0)) > 0:
 		return PP_RESTORED
 	if StringName(result.get("effect", &"")) == &"pp_up":
@@ -2143,7 +2221,7 @@ func advance_party_result() -> void:
 			((_party_result["rows"] as Array)[int(_party_result["row"])] as Dictionary)["hp"] = anim.hp()
 			_party_result.erase("anim")
 			_party_result.erase("prompt")
-			_party_result["hold"] = PARTY_RESULT_HOLD_FRAMES
+			_party_result["hold"] = Gen2ItemActionText.HOLD_FRAMES
 		_render_hardware()
 		return
 	if int(_party_result.get("hold", 0)) > 0:
@@ -2351,6 +2429,9 @@ func _render_toss_quantity() -> void:
 func _open_toss_confirm() -> void:
 	if _toss_prompt == null or _selected_item().is_empty():
 		return
+	if _deposit_sell != null and not _deposit_sell.asks_price():
+		_show_deposit_sell_result(_deposit_sell.apply(_toss_prompt.value))
+		return
 	_mode = Mode.PACK_TOSS_CONFIRM
 	_toss_confirm_cursor = 0
 	_render_toss_confirm()
@@ -2365,6 +2446,9 @@ func _render_toss_confirm() -> void:
 func _confirm_toss() -> void:
 	if _toss_confirm_cursor != 0:
 		_open_pack_mode(false)
+		return
+	if _deposit_sell != null and _toss_prompt != null:
+		_show_deposit_sell_result(_deposit_sell.apply(_toss_prompt.value))
 		return
 	var item: Dictionary = _selected_item()
 	if _world == null or item.is_empty() or _toss_prompt == null:
@@ -2383,6 +2467,42 @@ func _confirm_toss() -> void:
 	_show_pack_result(
 		_fill_item_text(_pack_text(TEXT_TOSS_THREW), String(result.get("name", "")))
 	)
+
+
+func _depositing_or_selling() -> bool:
+	return _give_target >= 0 or _deposit_sell != null
+
+
+## `.TryToSellItem` and `.TryDepositItem` over the stack A picked.
+func _choose_deposit_sell() -> void:
+	var item: Dictionary = _selected_item()
+	if item.is_empty():
+		return
+	var answer: Dictionary = _deposit_sell.choose(
+		int(item.get("item", 0)), String(item.get("name", ""))
+	)
+	if answer.has("refusal"):
+		_show_pack_result(String(answer["refusal"]))
+	elif answer.has("applied"):
+		_show_deposit_sell_result(answer["applied"])
+	else:
+		_mode = Mode.PACK_TOSS_QUANTITY
+		_toss_prompt = Gen2WorldQuantityPrompt.open(int(item.get("quantity", 1)))
+		_render_toss_quantity()
+
+
+func _show_deposit_sell_result(applied: Dictionary) -> void:
+	_sold = applied.has("sfx")
+	if _sold:
+		sfx_requested.emit(int(applied["sfx"]), true)
+	_show_pack_result(String(applied.get("text", "")))
+
+
+func _money_shown() -> bool:
+	if _deposit_sell == null or not _deposit_sell.shows_money():
+		return false
+	return _sold if _mode == Mode.PACK_RESULT \
+		else _mode in [Mode.PACK_TOSS_QUANTITY, Mode.PACK_TOSS_CONFIRM]
 
 
 ## The dial's own joypad read. Its cancel is `cp -1 / scf`, the same carry
@@ -2573,7 +2693,7 @@ func _sync_save_prompt() -> void:
 	if _save_prompt.sfx_owed():
 		## `SavedTheGame` reaches it through `WaitPlaySFX`; the wait behind it is
 		## not spent, for the reason the intro cry's is not.
-		sfx_requested.emit(Gen2SavePrompt.SFX_SAVE, true)
+		sfx_requested.emit(Gen2Sfx.SFX_SAVE, true)
 	_mode = SAVE_PROMPT_MODES[_save_prompt.step]
 	_save_lines = _save_prompt.lines.duplicate()
 	_save_line = _save_prompt.line
@@ -2672,9 +2792,11 @@ func ask_soft_reset() -> void:
 	_enter_save_mode(Mode.RESET_ASK, RESET_ASK_LINES, -1)
 
 
-## One hardware frame of the two timed modes. Public so a test or a preview owns
-## its own frames rather than sampling a screen mid-flight.
+## One frame of a held YES/NO answer or the save's timed modes.
 func advance_save_frame() -> void:
+	if _yes_no_hold > 0:
+		_advance_yes_no_hold()
+		return
 	if _save_prompt == null:
 		return
 	_save_prompt.frame()
@@ -2696,7 +2818,8 @@ func _process(delta: float) -> void:
 			advance_party_result()
 		return
 	_target_clock.reset()
-	if _save_prompt == null or _save_prompt.reads_joypad() or _save_prompt.finished():
+	if _yes_no_hold == 0 and (_save_prompt == null or _save_prompt.reads_joypad()
+			or _save_prompt.finished()):
 		_save_clock.reset()
 		return
 	for _frame: int in _save_clock.tick(delta):
@@ -2804,6 +2927,8 @@ func box_text() -> String:
 		Mode.PACK_STOP_LEARNING:
 			return Gen2MoveForget.stop_text(_forget_move_name, _data.generation)
 		Mode.PACK_TOSS_CONFIRM:
+			if _deposit_sell != null:
+				return _deposit_sell.price_text(_toss_prompt.value if _toss_prompt != null else 1)
 			## `IsItOKToTossItemText` names the item and no count, where
 			## `AskQuantityThrowAwayText` prints both.
 			return _fill_item_text(
@@ -2815,7 +2940,8 @@ func box_text() -> String:
 		Mode.PACK_GIVE_SWAP:
 			return _swap_question
 		Mode.PACK_TOSS_QUANTITY:
-			return _pack_text(TEXT_TOSS_ASK)
+			return _deposit_sell.how_many_text() if _deposit_sell != null \
+				else _pack_text(TEXT_TOSS_ASK)
 		Mode.PACK_FORGET:
 			return _forget_refusal if not _forget_refusal.is_empty() \
 				else Gen2MoveForget.which_text(_data.generation)
@@ -2856,7 +2982,7 @@ func _hardware_image() -> Image:
 			return _item_menu_image()
 		Mode.PACK_TEACH, Mode.PACK_FORGET_ASK, Mode.PACK_STOP_LEARNING, \
 		Mode.PACK_TOSS_CONFIRM, Mode.PACK_GIVE_SWAP:
-			return _pack_yes_no(box_text(), int(get(TOGGLE_MODES[_mode][0])))
+			return _pack_yes_no(int(get(TOGGLE_MODES[_mode][0])))
 		Mode.PACK_TOSS_QUANTITY:
 			return _toss_quantity_image()
 		Mode.PACK_FORGET, Mode.PACK_PP_MOVE:
@@ -2903,14 +3029,13 @@ func _item_menu_image() -> Image:
 func _toss_quantity_image() -> Image:
 	if _gen1_pack():
 		return _gen1_pack_image([], _toss_prompt.value if _toss_prompt != null else 1)
+	var dial: Rect2i = _deposit_sell.dial_box() if _deposit_sell != null \
+		else Rect2i(TOSS_QUANTITY_AT, TOSS_QUANTITY_TO - TOSS_QUANTITY_AT)
+	var value: int = _toss_prompt.value if _toss_prompt != null else 1
 	return _pack_overlay(box_text(), func(map: PackedInt32Array) -> void:
 		_pack_page.draw_quantity(
-			map,
-			Gen2MenuBox.from_coords(
-				TOSS_QUANTITY_AT.x, TOSS_QUANTITY_AT.y,
-				TOSS_QUANTITY_TO.x, TOSS_QUANTITY_TO.y, 0
-			),
-			_toss_prompt.value if _toss_prompt != null else 1
+			map, Gen2MenuBox.from_coords(dial.position.x, dial.position.y, dial.end.x, dial.end.y, 0),
+			value, _deposit_sell.subtotal(value) if _deposit_sell != null else -1
 		)
 	)
 

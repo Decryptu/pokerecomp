@@ -142,7 +142,7 @@ func test_the_star_falls_forty_frames_and_the_logo_flashes_three_times() -> void
 	# `DelayFrames 64`, the three `CopyVideoData` frames, and the first move.
 	var star: Array[Dictionary] = _advance_to(opening, presents + Gen1Opening.SHOOTING_STAR_DELAY + 3)
 	assert_true(star.any(func(event: Dictionary) -> bool:
-		return event["type"] == &"play_sfx" and int(event["sfx"]) == Gen1Opening.SFX_SHOOTING_STAR))
+		return event["type"] == &"play_sfx" and int(event["sfx"]) == Gen1Sfx.SFX_SHOOTING_STAR))
 	assert_eq(int(opening.shadow_oam()[0]["y"]), 4, "four pixels down on its first frame")
 	assert_eq(int(opening.shadow_oam()[0]["x"]), 156)
 	_advance(opening, 40)

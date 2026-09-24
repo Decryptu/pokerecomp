@@ -820,9 +820,11 @@ func trade_state() -> Dictionary:
 
 
 ## `PlaceTradePartnerNamesAndParty` prints the species name and not the
-## nickname, which is the one place either list does.
+## nickname, which is the one place either list does. `GetPokemonName` runs
+## over the party species list, whose egg entry is EGG's own name.
 func _party_names(rows: Array) -> Array:
 	var out: Array = []
 	for row: Dictionary in rows:
-		out.append(_species_name(int(row.get("species", 0))))
+		out.append(Gen2StatsScreenPage.EGG_STRING if bool(row.get("is_egg", false))
+			else _species_name(int(row.get("species", 0))))
 	return out

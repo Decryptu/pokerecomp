@@ -365,7 +365,11 @@ func test_a_registered_world_actor_is_driven_by_the_screen_and_drawn_by_the_view
 	assert_eq(drawn.size(), 1)
 	assert_eq((drawn[0]["sprite"] as Gen2WorldSprite).icon_number, 1)
 	assert_eq(drawn[0]["position_cells"], Vector2(3, 4))
-	assert_eq(_world_screen._renderer._actors, _world_screen._actors)
+	assert_eq(_world_screen._renderer._draw_list, _world_screen._draw_list)
+	var actors: Array = _world_screen._draw_list.sprites().filter(
+		func(row: Dictionary) -> bool: return row["role"] == &"actor"
+	)
+	assert_eq(actors.size(), 1, "and the view draws it from the draw list")
 
 
 ## A mod's visible-encounter provider: the context it is handed, one advance per
@@ -622,11 +626,11 @@ func test_the_transition_flash_is_the_background_s_order_and_not_the_sprites() -
 
 
 func _player_sprite_bytes(renderer: Gen2WorldRenderer) -> PackedByteArray:
-	var texture: Texture2D = renderer._actor_texture(
-		_world_screen._world.player_sprite(), _world_screen._world.player_palette(),
-		_world_screen._world.player_facing, 0
-	)
-	return PackedByteArray() if texture == null else texture.get_image().get_data()
+	for row: Dictionary in _world_screen._draw_list.sprites():
+		if row["role"] == &"player":
+			var texture: Texture2D = renderer._sprite_texture(row)
+			return PackedByteArray() if texture == null else texture.get_image().get_data()
+	return PackedByteArray()
 
 
 ## A cell `DoBattleTransition` has written is the background under a sprite
@@ -783,7 +787,7 @@ func test_a_mods_hidden_item_request_runs_the_maps_own_script_when_the_world_is_
 	assert_true(world.script_busy(), "The map's own script is running, in the world's own box.")
 	assert_true(_world_screen._text_box.visible)
 	assert_true(
-		("Found" in _world_screen._text_box.text_lines()[0]),
+		("found" in _world_screen._text_box.text_lines()[0]),
 		"`verbosegiveitem`'s own FOUND text, in the world's own box."
 	)
 	## What the script does from there is the world's, and is covered where the
@@ -1236,9 +1240,10 @@ func test_annotations_are_hidden_the_frame_a_modal_takes_the_interface() -> void
 	## list under `It won't have any effect.`.
 	_battle_screen._open_battle_menu()
 	assert_true(layer.visible, "the main menu is a box, not a modal")
-	_battle_screen._pack_selecting = true
-	assert_false(layer.visible, "pack selection, the frame it opens")
-	_battle_screen._pack_selecting = false
+	_battle_screen.open_battle_pack()
+	assert_false(layer.visible, "the pack, the screen it opens")
+	_battle_screen._handle_button(PokeButton.B)
+	assert_null(_battle_screen._pack_host)
 	assert_true(layer.visible, "and back when B closes it")
 
 	for opened: Callable in [
@@ -1374,3 +1379,132 @@ func _finish_entrance() -> void:
 		_battle_screen.finish()
 		_battle_screen.advance()
 	assert_gt(guard, 0, "the entrance finished")
+
+
+
+## Every row [Gen2WorldDrawList] resolves is one the built-in view draws, so a
+## scene staged through the effects and the world reaches the list whole: a
+## renderer reading it has the emote, the Cut halves, the big object, the
+## headbutt tree's hidden cell, the earthquake and the fade's white fill.
+func test_the_draw_list_carries_what_the_view_draws() -> void:
+	var renderer: Gen2WorldRenderer = await _open_built_in_world()
+	_world_screen.set_process(false)
+	var list: Gen2WorldDrawList = _world_screen._draw_list
+	assert_eq(renderer._draw_list, list, "the built-in view draws the list it is handed")
+	var world: Gen2WorldAPI = _world_screen._world
+	var effects: Gen2WorldEffects = _world_screen._effects
+	var object: Gen2WorldObject = world.visible_objects()[0]
+	object.movement = Gen2WorldObject.MOVEMENT_BIGDOLLSYM
+	world.set_player_emote(Gen2WorldActors.EMOTE_SHOCK, true)
+	effects.start_cut(world.facing_cell(), 0, world.facing_direction(), world.player_cell)
+	effects.start_cut(world.facing_cell(), 1, world.facing_direction(), world.player_cell)
+	effects.start_headbutt_tree(world.player_cell + Vector2i(1, 0))
+	effects.start_screen_shake(0x48)
+	effects.start_heal_machine(Gen2WorldEffects.HEAL_MACHINE_ELMS_LAB, 2)
+	_world_screen._push_fade(Gen2WorldPalette.FADE_OUT_ORDERS[1], true)
+
+	var frame: Dictionary = list.frame()
+	var rows: Array = frame["sprites"]
+	var big: Dictionary = _draw_row(rows, &"object", object.index)
+	assert_eq(int(big["big_shape"]), Gen2WorldSprite.BIG_SHAPE_SYMMETRIC, "a 32x32 big object")
+	assert_eq(big["anchor"], Gen2WorldDrawList.ANCHOR_WORLD)
+	assert_eq(big["position_cells"], Vector2(object.cell))
+	var emote: Dictionary = _draw_row(rows, &"emote", Gen2WorldDrawList.OWNER_PLAYER)
+	assert_eq(emote["anchor"], Gen2WorldDrawList.ANCHOR_VIEW, "the player's own emote")
+	assert_eq((emote["tiles"] as Array).size(), 4)
+	assert_false(
+		_draw_row(rows, Gen2WorldEffects.SPRITE_CUT_TREE, Gen2WorldDrawList.OWNER_NONE).is_empty()
+	)
+	assert_false(
+		_draw_row(rows, Gen2WorldEffects.SPRITE_CUT_LEAF, Gen2WorldDrawList.OWNER_PLAYER).is_empty()
+	)
+	var tree: Dictionary = _draw_row(
+		rows, Gen2WorldEffects.SPRITE_HEADBUTT_TREE, Gen2WorldDrawList.OWNER_NONE
+	)
+	assert_eq(tree["position_cells"], Vector2(world.player_cell + Vector2i(1, 0)))
+	var machine: Dictionary = _draw_row(
+		rows, Gen2WorldEffects.SPRITE_HEAL_MACHINE, Gen2WorldDrawList.OWNER_NONE
+	)
+	assert_eq(machine["anchor"], Gen2WorldDrawList.ANCHOR_SCREEN)
+	assert_eq(frame["hidden_tree_cells"], [world.player_cell + Vector2i(1, 0)])
+	assert_eq(frame["background_offset"], effects.offset())
+	assert_ne(frame["background_offset"], Vector2.ZERO, "the earthquake's hSCY")
+	assert_true(bool(frame["white_fill"]), "`FillWhiteBGColor` on the way out")
+	assert_eq(int(frame["fade_order"]), Gen2WorldPalette.FADE_OUT_ORDERS[1])
+	assert_true(renderer._fade_white_fill, "and the view took the same step")
+
+	list.sprites_hidden = true
+	var hidden: Array = list.sprites()
+	assert_true(
+		_draw_row(hidden, &"player", Gen2WorldDrawList.OWNER_PLAYER).is_empty(), "HideSprites"
+	)
+	assert_true(_draw_row(hidden, &"object", object.index).is_empty())
+	assert_false(
+		_draw_row(
+			hidden, Gen2WorldEffects.SPRITE_HEAL_MACHINE, Gen2WorldDrawList.OWNER_NONE
+		).is_empty(),
+		"the sprites from `wShadowOAMSprite36` up stay"
+	)
+
+
+## `LoadFishingGFX`'s body and rod, and Generation 1's player animation, which
+## is clipped to the pane and on a hole fall moves its top half a row down.
+func test_the_draw_list_carries_the_fishing_player_and_the_warp_spin() -> void:
+	await _open_built_in_world()
+	_world_screen.set_process(false)
+	var list: Gen2WorldDrawList = _world_screen._draw_list
+	## The fixture carries no art, and without the sheet the body stands whole.
+	var strip := PackedByteArray()
+	strip.resize(8 * PokeTiles.TILE_PIXELS)
+	list._sheets[Gen2WorldEffects.FISHING_SHEETS[0]] = {
+		"name": Gen2WorldEffects.FISHING_SHEETS[0], "tiles": 8, "indices": strip,
+	}
+	_world_screen.preview_fishing()
+	assert_true(_world_screen._world.fishing_busy())
+	var rows: Array = list.sprites()
+	var body: Dictionary = _draw_row(rows, &"player", Gen2WorldDrawList.OWNER_PLAYER)
+	assert_eq(body["region"], Rect2(0, 0, 16, 8), "the standing picture to the waist")
+	assert_false(_draw_row(rows, &"fishing_body", Gen2WorldDrawList.OWNER_PLAYER).is_empty())
+	assert_false(_draw_row(rows, &"fishing_rod", Gen2WorldDrawList.OWNER_PLAYER).is_empty())
+
+	_world_screen._effects.apply_player_anim({"image": 4, "x": 0x40, "y": 0x3C, "half": true})
+	var spin: Dictionary = _draw_row(list.sprites(), &"player", Gen2WorldDrawList.OWNER_PLAYER)
+	assert_true(bool(spin["clip_to_screen"]))
+	assert_eq(int(spin["facing"]), Gen2WorldSprite.FACING_UP)
+	assert_eq(spin["region"], Rect2(0, 0, 16, 8))
+
+
+## The screen used to write `sprites_hidden` on whatever renderer it held. It is
+## the list's now: a renderer without the property is left alone, and one that
+## declares it is still told.
+func test_hiding_the_sprites_reaches_a_renderer_only_through_what_it_declares() -> void:
+	await _open_world(HARDWARE_SOURCE)
+	_world_screen.set_process(false)
+	_world_screen._start_fly(0)
+	assert_true(_world_screen._draw_list.sprites_hidden, "callasm HideSprites")
+	_world_screen._finish_fly()
+	assert_false(_world_screen._draw_list.sprites_hidden)
+
+	after_each()
+	before_each()
+	var renderer: Node = await _open_world(HARDWARE_SOURCE + DECLARING_SOURCE)
+	_world_screen.set_process(false)
+	assert_eq(renderer.get("draw_list"), _world_screen._draw_list)
+	_world_screen._start_fly(0)
+	assert_true(bool(renderer.get("sprites_hidden")))
+
+
+const DECLARING_SOURCE: String = """
+var sprites_hidden: bool = false
+var draw_list = null
+
+func set_draw_list(list) -> void:
+	draw_list = list
+"""
+
+
+func _draw_row(rows: Array, role: StringName, index: int) -> Dictionary:
+	for row: Dictionary in rows:
+		if row["role"] == role and int(row["owner"]) == index:
+			return row
+	return {}

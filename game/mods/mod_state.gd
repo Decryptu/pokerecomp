@@ -1,12 +1,10 @@
 class_name Gen2ModState
 extends RefCounted
 
-## The installation's own choices about installed mods: which are switched off,
-## and which one's view the game is drawn with. Disabled ids are stored rather
-## than enabled ones, so a mod just installed runs without needing an entry, and a
-## file lost or damaged means every mod runs rather than none. A disabled mod is
-## still discovered and still listed; only [method Gen2ModHost.load_discovered]
-## skips it, so the launcher can switch it back on without reinstalling.
+## The installation's choices about installed mods: which are switched off, and
+## whose view draws the game. Disabled ids are stored, so a new mod runs without an
+## entry and a lost file runs every mod. A disabled mod is still listed; only
+## [method Gen2ModHost.load_discovered] skips it.
 
 ## Named for the list it was written for; it now also carries the selected view.
 const PATH: String = "user://mods_disabled.json"
@@ -18,6 +16,8 @@ static var _disabled: Dictionary = {}
 ## a surface builds a renderer rather than once at load.
 static var _view: StringName = Gen2ModHost.BUILT_IN_RENDERER
 static var _loaded: bool = false
+## [method Gen2GameRuntime.check_mods]: a check reads and writes no file.
+static var _check: Variant = null
 
 
 ## The selected view's id. See [method Gen2ModHost.select_view].
@@ -41,6 +41,8 @@ static func set_selected_view(id: StringName) -> bool:
 
 static func is_enabled(id: StringName) -> bool:
 	_ensure_loaded()
+	if _check != null and not (_check as PackedStringArray).is_empty():
+		return (_check as PackedStringArray).has(String(id)) and not _disabled.has(id)
 	return not _disabled.has(id)
 
 
@@ -97,19 +99,16 @@ static func forget(id: StringName) -> bool:
 
 
 static func reload() -> void:
-	_loaded = false
-	_disabled = {}
-	_view = Gen2ModHost.BUILT_IN_RENDERER
-	_ensure_loaded()
+	reload_for(Gen2GameRuntime.check_mods())
 
 
-static func _ensure_loaded() -> void:
-	if _loaded:
-		return
+## Reads the state again under a [method Gen2GameRuntime.check_mods] answer.
+static func reload_for(check: Variant) -> void:
 	_loaded = true
 	_disabled = {}
 	_view = Gen2ModHost.BUILT_IN_RENDERER
-	if not FileAccess.file_exists(PATH):
+	_check = check
+	if _check != null or not FileAccess.file_exists(PATH):
 		return
 	var file: FileAccess = FileAccess.open(PATH, FileAccess.READ)
 	if file == null:
@@ -133,7 +132,14 @@ static func _ensure_loaded() -> void:
 			_disabled[name] = true
 
 
+static func _ensure_loaded() -> void:
+	if not _loaded:
+		reload()
+
+
 static func _write() -> bool:
+	if _check != null:
+		return true
 	var ids: Array[String] = []
 	for id: StringName in _disabled:
 		ids.append(String(id))

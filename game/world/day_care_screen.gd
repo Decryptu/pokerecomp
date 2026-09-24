@@ -16,13 +16,9 @@ signal closed()
 signal cry_requested(species: int)
 signal sfx_requested(sfx: int)
 
-const TILE: int = Gen2Font.TILE
-
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 
-## `SFX_GET_EGG`, the one sound `DayCareManOutside` plays, and the 120 frames of
-## `ld c, 120 / call DelayFrames` behind it.
-const SFX_GET_EGG: int = 0xAC
+## `DayCareManOutside`'s `ld c, 120 / call DelayFrames` behind SFX_GET_EGG.
 const EGG_SOUND_FRAMES: int = 120
 
 ## Every box the five routines print that ends in `prompt` rather than `done`,
@@ -57,7 +53,6 @@ var _texts: Dictionary = {}
 
 var _phase: int = Phase.DONE
 var _queue: Array = []
-var _yes: bool = true
 var _question: StringName = &""
 var _wait_frames: int = 0
 ## Whether the box now up is one the routine waits on, and the text it is
@@ -73,8 +68,7 @@ var _price: int = 0
 var _growth: int = 0
 
 var _text_box: Gen2TextBox = null
-var _menu_page: Gen2MenuPage = null
-var _menu: TextureRect = null
+var _yes_no: Gen2YesNoBox = null
 var _party: Gen2PartyScreen = null
 
 
@@ -128,7 +122,7 @@ func phase() -> int:
 ## The YES/NO cursor, so a driver can read it without a redraw. -1 when no box is
 ## up.
 func question_cursor() -> int:
-	return (0 if _yes else 1) if _phase == Phase.ASK else -1
+	return _yes_no.cursor() if _yes_no != null else -1
 
 
 func text_lines() -> PackedStringArray:
@@ -144,20 +138,9 @@ func party_screen() -> Gen2PartyScreen:
 func handle_button(button: int) -> bool:
 	if _phase == Phase.PARTY and _party != null:
 		return _party.handle_button(button)
-	if _phase == Phase.ASK:
-		match button:
-			PokeButton.UP, PokeButton.DOWN:
-				_yes = not _yes
-				_draw_yes_no()
-				return true
-			PokeButton.A:
-				_answer(_yes)
-				return true
-			PokeButton.B:
-				## `YesNoBox` answers B with the carry each caller takes as NO.
-				_answer(false)
-				return true
-		return false
+	## `YesNoBox` answers B with the carry each caller takes as NO.
+	if _yes_no != null and _yes_no.is_open():
+		return _yes_no.handle_button(button)
 	if _phase != Phase.TEXT or button != PokeButton.A \
 		or _text_box == null or not _text_box.visible:
 		return false
@@ -169,6 +152,9 @@ func handle_button(button: int) -> bool:
 
 
 func advance_frame() -> void:
+	if _yes_no != null and _yes_no.is_open():
+		_yes_no.advance_frame()
+		return
 	if _phase == Phase.WAIT:
 		_wait_frames -= 1
 		if _wait_frames <= 0:
@@ -261,8 +247,8 @@ func _open_sign(slot: int) -> void:
 
 
 func _answer(yes: bool) -> void:
-	if _menu != null:
-		_menu.visible = false
+	if _yes_no != null:
+		_yes_no.close()
 	var question: StringName = _question
 	_question = &""
 	match question:
@@ -360,7 +346,7 @@ func _give_egg() -> void:
 	)
 	_script_value = 0
 	_queue.append({"text": "received_egg"})
-	_queue.append({"sfx": SFX_GET_EGG, "frames": EGG_SOUND_FRAMES})
+	_queue.append({"sfx": Gen2Sfx.SFX_GET_EGG, "frames": EGG_SOUND_FRAMES})
 	_queue.append({"text": "take_good_care"})
 
 
@@ -376,8 +362,7 @@ func _step() -> void:
 	if action.has("ask"):
 		_phase = Phase.ASK
 		_question = StringName(action["ask"])
-		_yes = true
-		_draw_yes_no()
+		_yes_no.open()
 		return
 	if action.has("party"):
 		_open_party()
@@ -425,8 +410,8 @@ func _show_text(action: Dictionary) -> void:
 			text, Gen2TextStream.NUMBER_MARKER, "%4d" % _price
 		)
 	text = Gen2TextStream.fill_all_markers(text, "<PLAYER", _player_name)
-	if _menu != null:
-		_menu.visible = false
+	if _yes_no != null:
+		_yes_no.close()
 	if _text_box == null:
 		return
 	_text_waits = key in PROMPT_TEXTS
@@ -486,8 +471,8 @@ func _on_selected(party_index: int) -> void:
 
 func _finish() -> void:
 	_phase = Phase.DONE
-	if _menu != null:
-		_menu.visible = false
+	if _yes_no != null:
+		_yes_no.close()
 	## The two signs press their own last box; the three routines a script
 	## follows with `waitbutton` hand theirs over instead.
 	if _role not in [&"mon1", &"mon2"] and _text_box != null and _text_box.visible:
@@ -511,11 +496,9 @@ func _nickname(mon: Gen2SaveMon) -> String:
 
 
 func _build() -> void:
-	_menu = TextureRect.new()
-	_menu.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_menu.visible = false
-	add_child(_menu)
+	_yes_no = Gen2YesNoBox.new(Gen2MenuPage.from_data(_data))
+	_yes_no.answered.connect(_answer)
+	add_child(_yes_no)
 
 	_text_box = Gen2TextBox.new()
 	_text_box.driven = true
@@ -526,15 +509,3 @@ func _build() -> void:
 	_text_box.place_at_bottom()
 	_text_box.visible = false
 	add_child(_text_box)
-
-
-func _draw_yes_no() -> void:
-	if _menu_page == null:
-		_menu_page = Gen2MenuPage.from_data(_data)
-	if _menu_page == null:
-		return
-	var box: Gen2MenuBox = Gen2MenuBox.yes_no()
-	var image: Image = _menu_page.render(box, ["YES", "NO"], 0 if _yes else 1)
-	Gen2PicImage.show(_menu, image)
-	_menu.position = Vector2(box.border_position() * TILE)
-	_menu.visible = true

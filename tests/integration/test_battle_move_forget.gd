@@ -108,10 +108,15 @@ func _drain_box() -> void:
 			return
 
 
+## A press, and `InterpretTwoOptionMenu`'s hold behind it when it answered a
+## YES/NO.
 func _step(button: int) -> void:
 	_settle_bars()
 	_drain_box()
 	_screen._answer_forget(button)
+	var confirm: Gen2WorldMenu = _screen.get("_forget_confirm")
+	while confirm.holding():
+		_screen.advance_hardware_frame()
 	await get_tree().process_frame
 
 
@@ -183,7 +188,7 @@ func test_refusing_reaches_stop_learning_and_declines_the_move() -> void:
 	await _advance_to_offer()
 	var before: Array = battle.player.moves.duplicate()
 
-	await _step(PokeButton.RIGHT)
+	await _step(PokeButton.DOWN)
 	await _step(PokeButton.A)
 	assert_eq(_stage(), "stop")
 
@@ -199,15 +204,34 @@ func test_declining_to_stop_returns_to_the_ask() -> void:
 	var battle: Gen2Battle = _screen.get("_battle")
 	await _advance_to_offer()
 
-	await _step(PokeButton.RIGHT)
+	await _step(PokeButton.DOWN)
 	await _step(PokeButton.A)
 	assert_eq(_stage(), "stop")
 
-	await _step(PokeButton.RIGHT)
+	await _step(PokeButton.DOWN)
 	await _step(PokeButton.A)
 	assert_eq(_stage(), "ask")
 	assert_true(battle.must_learn_move(Gen2Battle.PLAYER))
-	assert_eq(_screen.get("_forget_confirm_cursor"), 0, "YesNoBox reopens on YES")
+	assert_eq((_screen.get("_forget_confirm") as Gen2WorldMenu).cursor, 0,
+		"YesNoBox reopens on YES")
+
+
+## B on either question is `YesNoBox`'s NO, and the answered box stays up for
+## the hold before LearnMove acts on it.
+func test_b_answers_no_after_the_hold() -> void:
+	await _open_with_full_moveset()
+	await _advance_to_offer()
+	_settle_bars()
+	_drain_box()
+	_screen._answer_forget(PokeButton.B)
+	assert_eq(_stage(), "ask", "the hold has not been spent")
+	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES - 1:
+		_screen.advance_hardware_frame()
+	assert_eq(_stage(), "ask", "one frame of the hold is still owed")
+	_screen._answer_forget(PokeButton.A)
+	assert_eq(_stage(), "ask", "and a press inside it is not a second answer")
+	_screen.advance_hardware_frame()
+	assert_eq(_stage(), "stop", "B was NO")
 
 
 ## A confirm reveals and pages before it answers, so the three paragraphs of
@@ -251,3 +275,37 @@ func test_backing_out_of_the_list_reaches_stop_learning() -> void:
 
 	await _step(PokeButton.B)
 	assert_eq(_stage(), "stop")
+
+
+## `StaticMenuJoypad` moves the cursor inside the box `YesNoBox` placed under the
+## question; nothing prints the question again.
+func test_moving_the_yes_no_cursor_leaves_the_question_standing() -> void:
+	await _open_with_full_moveset()
+	await _advance_to_offer()
+	_settle_bars()
+	_drain_box()
+	var box: Gen2TextBox = _screen.get("_box")
+	var question: String = String(_screen.battle_snapshot()["message"])
+	_screen._answer_forget(PokeButton.DOWN)
+	assert_eq((_screen.get("_forget_confirm") as Gen2WorldMenu).cursor, 1, "the cursor is on NO")
+	assert_false(box.is_revealing(), "the question is not printed again")
+	assert_false(box.has_pages_left())
+	assert_eq(String(_screen.battle_snapshot()["message"]), question)
+	_screen._answer_forget(PokeButton.UP)
+	assert_eq((_screen.get("_forget_confirm") as Gen2WorldMenu).cursor, 0)
+	assert_false(box.is_revealing())
+
+
+## `ForgetMove`'s `w2DMenuFlags1` is `_2DMENU_WRAP_UP_DOWN`: UP from the first
+## move reaches the fourth and DOWN from the fourth comes back.
+func test_the_forget_list_wraps_through_both_ends() -> void:
+	await _open_with_full_moveset()
+	await _advance_to_offer()
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "list")
+	assert_eq(int(_screen.get("_forget_cursor")), 0)
+
+	await _step(PokeButton.UP)
+	assert_eq(int(_screen.get("_forget_cursor")), 3, "up from the top is the last move")
+	await _step(PokeButton.DOWN)
+	assert_eq(int(_screen.get("_forget_cursor")), 0, "down from the bottom is the first")

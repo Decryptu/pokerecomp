@@ -49,22 +49,39 @@ var _exp_bar: TextureRect = null
 var _hud_balls: TextureRect = null
 var _sprites: TextureRect = null
 
-## `SPRITE_MONSTER` (constants/sprite_constants.asm), the same number in both
-## pins. `GetSubstitutePic` builds the doll out of `MonsterSpriteGFX`, which is
-## that overworld sprite's own strip, so the battle draws a walking sprite.
+## `SPRITE_MONSTER`, whose strip `GetSubstitutePic` and `AnimationSubstitute`
+## build the doll from: $4C in both Generation 2 pins, $05 in pokered.
 const SUBSTITUTE_SPRITE: int = 0x4C
+const GEN1_SUBSTITUTE_SPRITE: int = 0x05
 
-## Where `GetSubstitutePic` copies the four tiles: the enemy takes the sprite's
-## down-facing frame at columns 2 and 3, rows 5 and 6 of its 7x7 box, the player
-## the up-facing one a row higher in a 6x6 box. A tile index into either box is
-## `column * side + row`, which is what `sScratch + (2 * 7 + 5) tiles` says.
-const SUBSTITUTE_AT: Dictionary = {false: Vector2i(2, 5), true: Vector2i(2, 4)}
+## The doll's top-left tile by generation and side, a box index being
+## `column * side + row`: `GetSubstitutePic`'s `sScratch + (2 * 7 + 5) tiles` and
+## `(2 * 6 + 4)`, `AnimationSubstitute`'s `PIC_HEIGHT * 2 + 4` and `* 3 + 4`. The
+## enemy takes the sprite's down-facing frame and the player the up-facing one.
+const SUBSTITUTE_AT: Dictionary = {
+	RomRegistry.GEN2: {false: Vector2i(2, 5), true: Vector2i(2, 4)},
+	RomRegistry.GEN1: {false: Vector2i(2, 4), true: Vector2i(3, 4)},
+}
 const SUBSTITUTE_FIRST_TILE: Dictionary = {false: 0, true: 4}
 
-## `GetMinimizePic` reads the same way, and drops its one tile a column right of
-## the doll's own: `sScratch + (3 * 7 + 5) tiles` on the enemy's box and
-## `sScratch + (3 * 6 + 4) tiles` on the player's.
-const MINIMIZE_AT: Dictionary = {false: Vector2i(3, 5), true: Vector2i(3, 4)}
+## The dot's tile: `GetMinimizePic`'s `(3 * 7 + 5)` and `(3 * 6 + 4)`, and
+## `AnimationMinimizeMon`'s `PIC_WIDTH * 3 + 4` on either side.
+const MINIMIZE_AT: Dictionary = {
+	RomRegistry.GEN2: {false: Vector2i(3, 5), true: Vector2i(3, 4)},
+	RomRegistry.GEN1: {false: Vector2i(3, 4), true: Vector2i(3, 4)},
+}
+
+## The view keys [method square_pixels] reads, in [method square_key]'s order.
+const SQUARE_KEYS: Dictionary = {
+	false: [
+		"enemy_species", "enemy_substitute", "enemy_unown_form", "enemy_trainer_pic",
+		"enemy_minimized", "enemy_special_pic",
+	],
+	true: [
+		"player_species", "player_substitute", "player_unown_form", "player_backpic",
+		"player_minimized",
+	],
+}
 
 ## One 56x56 and one 48x48 index buffer, the two pics padded out to their own
 ## boxes, rebuilt only when the picture drawn changes.
@@ -267,58 +284,76 @@ static func claims_tile(
 	return tile >= 0 and tile < (banked if bank1 else square)
 
 
-## The two pics as index buffers padded out to their own boxes, so a tile id
-## indexes a fixed grid whatever size the species' own pic is. A side whose doll
-## is up is holding the substitute's picture instead, which is the same box with
-## a different four tiles in it.
+## Both pics padded to their boxes, so a tile id indexes a fixed grid.
 func _ensure_pixels() -> void:
-	var enemy_key: Array = [
-		int(_view.get("enemy_species", 0)), bool(_view.get("enemy_substitute", false)),
-		int(_view.get("enemy_unown_form", 0)), int(_view.get("enemy_trainer_pic", 0)),
-		bool(_view.get("enemy_minimized", false)), String(_view.get("enemy_special_pic", "")),
-	]
+	var enemy_key: Array = square_key(_view, false)
 	if enemy_key != _enemy_pixels_key:
-		if not String(enemy_key[5]).is_empty():
-			## `GhostPic` and the two fossils, outside the species run.
-			_enemy_pixels = padded_pic(_data,
-				_data.gen1_special_pic(String(enemy_key[5])), Gen2BattleScreenMap.ENEMY_SIDE, true
-			)
-		elif int(enemy_key[3]) == Gen2BattleScreen.LINK_OPPONENT_PIC:
-			_enemy_pixels = padded_pic(_data, _data.player_frontpic(), Gen2BattleScreenMap.ENEMY_SIDE)
-		elif int(enemy_key[3]) > 0:
-			_enemy_pixels = padded_pic(_data,
-				_data.trainer_pic(int(enemy_key[3])), Gen2BattleScreenMap.ENEMY_SIDE
-			)
-		elif bool(enemy_key[1]):
-			_enemy_pixels = _substitute_pic(false)
-		elif bool(enemy_key[4]):
-			_enemy_pixels = _minimize_pic(false)
-		else:
-			# `GetAnimatedFrontpic` is what the enemy's square is loaded with,
-			# so its frames stand behind the picture in the same run.
-			_enemy_pixels = padded_pic(_data,
-				_battler_pic(int(enemy_key[0]), int(enemy_key[2]), false),
-				Gen2BattleScreenMap.ENEMY_SIDE, true,
-				_data.species_pic_animation(int(enemy_key[0]), int(enemy_key[2]))
-			)
+		_enemy_pixels = square_pixels(_data, _view, false, true)
 		_enemy_pixels_key = enemy_key
-	var player_key: Array = [
-		int(_view.get("player_species", 0)), bool(_view.get("player_substitute", false)),
-		int(_view.get("player_unown_form", 0)), String(_view.get("player_backpic", "")),
-		bool(_view.get("player_minimized", false)),
-	]
+	var player_key: Array = square_key(_view, true)
 	if player_key != _player_pixels_key:
-		if not String(player_key[3]).is_empty():
-			_player_pixels = back_pixels(_data, _data.player_backpic(String(player_key[3])))
-		elif bool(player_key[1]):
-			_player_pixels = _substitute_pic(true)
-		elif bool(player_key[4]):
-			_player_pixels = _minimize_pic(true)
-		else:
-			_player_pixels = back_pixels(_data,
-				_battler_pic(int(player_key[0]), int(player_key[2]), true)
-			)
+		_player_pixels = square_pixels(_data, _view, true)
 		_player_pixels_key = player_key
+
+
+## What [method square_pixels] answers from: it changes only when this does.
+static func square_key(view: Dictionary, player_side: bool) -> Array:
+	var out: Array = []
+	for key: String in SQUARE_KEYS[player_side]:
+		out.append(view.get(key))
+	return out
+
+
+## What stands on one side's square, as an index buffer of its box: the GHOST or
+## a fossil, a link opponent, a trainer or the back pic, the doll, the dot, then
+## the species or its Unown letter. [param frames] appends `GetAnimatedFrontpic`'s
+## frames past the enemy's box, which [method pic_stride] then measures.
+static func square_pixels(
+	data: GameData, view: Dictionary, player_side: bool, frames: bool = false
+) -> PackedByteArray:
+	if player_side:
+		var backpic: String = String(view.get("player_backpic", ""))
+		if not backpic.is_empty():
+			return back_pixels(data, data.player_backpic(backpic))
+		var marked: PackedByteArray = _marked_square(data, view, true)
+		if not marked.is_empty():
+			return marked
+		return back_pixels(data, battler_pic(
+			data, int(view.get("player_species", 0)), int(view.get("player_unown_form", 0)), true
+		))
+	var side: int = Gen2BattleScreenMap.ENEMY_SIDE
+	var special: String = String(view.get("enemy_special_pic", ""))
+	var trainer: int = int(view.get("enemy_trainer_pic", 0))
+	if not special.is_empty():
+		return padded_pic(data, data.gen1_special_pic(special), side, true)
+	if trainer == Gen2BattleScreen.LINK_OPPONENT_PIC:
+		return padded_pic(data, data.player_frontpic(), side)
+	if trainer > 0:
+		return padded_pic(data, data.trainer_pic(trainer), side)
+	var dot: PackedByteArray = _marked_square(data, view, false)
+	if not dot.is_empty():
+		return dot
+	var species: int = int(view.get("enemy_species", 0))
+	var form: int = int(view.get("enemy_unown_form", 0))
+	return padded_pic(
+		data, battler_pic(data, species, form, false), side, true,
+		data.species_pic_animation(species, form) if frames else {}
+	)
+
+
+## `GetBattleMonBackpic`'s order: a doll stands in front of the dot.
+static func _marked_square(
+	data: GameData, view: Dictionary, player_side: bool
+) -> PackedByteArray:
+	var prefix: String = "player_" if player_side else "enemy_"
+	if bool(view.get(prefix + "substitute", false)):
+		return substitute_pixels(
+			data.overworld_sprite_indices(substitute_sprite(data.generation)), player_side,
+			data.generation
+		)
+	if bool(view.get(prefix + "minimized", false)):
+		return minimize_pixels(data.tile_indices("minimize"), player_side, data.generation)
+	return PackedByteArray()
 
 
 ## The back pic in its own box, which Generation 1 doubles on the way in.
@@ -364,36 +399,30 @@ static func doubled_pic(data: GameData, pic: Dictionary, side: int) -> PackedByt
 ## `_GetFrontpic`'s own branch: Unown is drawn out of `UnownPicPointers` by
 ## letter, and everything else out of the species table. The atlas is indexed
 ## from zero and a letter counts from one, which is the subtraction here.
-func _battler_pic(species: int, unown_form: int, back: bool) -> Dictionary:
+static func battler_pic(data: GameData, species: int, unown_form: int, back: bool) -> Dictionary:
 	if species == Gen2Layout.UNOWN_SPECIES and unown_form > 0:
-		return _data.unown_pic(unown_form - 1, back)
-	return _data.species_pic(species, back)
+		return data.unown_pic(unown_form - 1, back)
+	return data.species_pic(species, back)
 
 
-func _substitute_pic(player_side: bool) -> PackedByteArray:
-	return substitute_pixels(
-		_data.overworld_sprite_indices(SUBSTITUTE_SPRITE), player_side, _data.generation
-	)
+## One square's side in tiles, which is 7 but for Generation 2's player.
+static func square_side(generation: int, player_side: bool) -> int:
+	return Gen2BattleScreenMap.player_box_side(generation) if player_side \
+		else Gen2BattleScreenMap.ENEMY_SIDE
 
 
-func _minimize_pic(player_side: bool) -> PackedByteArray:
-	return minimize_pixels(_data.tile_indices("minimize"), player_side, _data.generation)
-
-
-## `GetMinimizePic`: a blank box with `MinimizePic`'s single tile copied into it.
-## Static for the same reason [method substitute_pixels] is.
+## `GetMinimizePic` and `AnimationMinimizeMon`: a blank box with the one
+## "minimize" tile copied into it. Static like [method substitute_pixels].
 static func minimize_pixels(
 	tile: PackedByteArray, player_side: bool, generation: int = RomRegistry.GEN2
 ) -> PackedByteArray:
-	var side: int = Gen2BattleScreenMap.player_box_side(generation) if player_side \
-		else Gen2BattleScreenMap.ENEMY_SIDE
-	var box: int = side * TILE
+	var box: int = square_side(generation, player_side) * TILE
 	var out: PackedByteArray = PackedByteArray()
 	out.resize(box * box)
 	if tile.size() < TILE * TILE:
 		return out
 
-	var at: Vector2i = MINIMIZE_AT[player_side]
+	var at: Vector2i = MINIMIZE_AT[generation][player_side]
 	for row: int in TILE:
 		var to: int = (at.y * TILE + row) * box + at.x * TILE
 		for column: int in TILE:
@@ -401,17 +430,18 @@ static func minimize_pixels(
 	return out
 
 
+static func substitute_sprite(generation: int) -> int:
+	return GEN1_SUBSTITUTE_SPRITE if generation == RomRegistry.GEN1 else SUBSTITUTE_SPRITE
+
+
 ## `GetSubstitutePic`: a blank box with four tiles of [param strip], the monster
 ## overworld sprite, copied into it. The doll wears whichever battler palette its
-## box sits in, since nothing writes one for it.
-## Static because it is the whole of the picture and takes no screen: a check
-## sweeping three caches builds it the same way the renderer does.
+## box sits in, since nothing writes one for it. Static because it takes no
+## screen: a check sweeping every cache builds it the way the renderer does.
 static func substitute_pixels(
 	strip: PackedByteArray, player_side: bool, generation: int = RomRegistry.GEN2
 ) -> PackedByteArray:
-	var side: int = Gen2BattleScreenMap.player_box_side(generation) if player_side \
-		else Gen2BattleScreenMap.ENEMY_SIDE
-	var box: int = side * TILE
+	var box: int = square_side(generation, player_side) * TILE
 	var out: PackedByteArray = PackedByteArray()
 	out.resize(box * box)
 
@@ -422,7 +452,7 @@ static func substitute_pixels(
 	if width < (first + 4) * TILE:
 		return out
 
-	var at: Vector2i = SUBSTITUTE_AT[player_side]
+	var at: Vector2i = SUBSTITUTE_AT[generation][player_side]
 	for tile: int in 4:
 		var left: int = (at.x + (tile & 1)) * TILE
 		var top: int = (at.y + (tile >> 1)) * TILE
@@ -552,49 +582,16 @@ func _draw_panels() -> void:
 	var enemy_max_hp: int = int(_view.get("enemy_max_hp", 0))
 	var player_hp: int = int(_view.get("player_hp", 0))
 	var player_max_hp: int = int(_view.get("player_max_hp", 0))
-	var enemy_name: String = String(_view.get("enemy_name", ""))
-	var enemy_level: int = int(_view.get("enemy_level", 0))
-	var player_name: String = String(_view.get("player_name", ""))
-	var player_level: int = int(_view.get("player_level", 0))
 	var exp_pixels: int = int(_view.get("exp_pixels", 0))
-	# Each panel goes up when its own side has something on the field.
-	# `InitBattleDisplay` clears the player's box, and its caller only reaches
-	# `UpdateEnemyHUD` for a wild battle, so an opening battle spends several
-	# seconds with neither of them drawn.
 	var enemy_hud: bool = bool(_view.get("enemy_hud_visible", true))
 	var player_hud: bool = bool(_view.get("player_hud_visible", true))
-	var border: Array = _view.get("trainer_hud_border", []) as Array
-	var enemy_caught: bool = bool(_view.get("enemy_caught", false))
-	var enemy_status: int = int(_view.get("enemy_status", Gen2Status.NONE))
-	var player_status: int = int(_view.get("player_status", Gen2Status.NONE))
-	var enemy_gender: StringName = StringName(_view.get("enemy_gender", &""))
-	var player_gender: StringName = StringName(_view.get("player_gender", &""))
 
-	# The player's panel prints its own HP numbers, so it moves with the bar; the
-	# enemy's does not, which is why both sit in one layer keyed on all of it.
-	if _layer_changed(&"panels", [
-		enemy_name, enemy_level, player_name, player_level, player_hp, player_max_hp,
-		enemy_hud, player_hud, border, enemy_caught, raster,
-		enemy_status, player_status, enemy_gender, player_gender,
-	]):
+	if _layer_changed(&"panels", Gen2BattleHud.panels_key(_view) + raster):
 		var panels: PackedByteArray = _new_buffer()
-		if enemy_hud:
-			_hud.draw_enemy(
-				panels, Gen2Screen.WIDTH, enemy_name, enemy_level, enemy_caught,
-				enemy_status, enemy_gender
-			)
-		if player_hud:
-			_hud.draw_player(
-				panels, Gen2Screen.WIDTH, player_name, player_level, player_hp, player_max_hp,
-				player_status, player_gender
-			)
-		_draw_trainer_hud_border(panels, border)
+		_hud.draw_panels(panels, Gen2Screen.WIDTH, _view)
 		## Blocks 3 and 2 name palettes 0 and 1 for the two panels; both are
 		## 1bpp, so one layer serves.
-		_show_layer(
-			_panels, panels,
-			_colors.panel_palette()
-		)
+		_show_layer(_panels, panels, _colors.panel_palette())
 
 	var gray: PackedColorArray = _colors.grayscale()
 	if _layer_changed(&"enemy_bar", [enemy_hp, enemy_max_hp, enemy_hud, raster, gray]):
@@ -622,21 +619,6 @@ func _draw_panels() -> void:
 		_show_layer(_exp_bar, gained, _data.bar_palette(GameData.EXP_BAR_PALETTE))
 
 	_draw_hud_balls()
-
-
-## `DrawPlayerPartyIconHUDBorder` and `DrawEnemyHUDBorder`: the frame the party
-## balls hang in, a side, two corners and eight of a bottom edge out of the
-## battle's own tile page. Cells rather than pixels, the way the source writes
-## them into `wTilemap`.
-func _draw_trainer_hud_border(into: PackedByteArray, border: Array) -> void:
-	for entry: Variant in border:
-		if not entry is Dictionary:
-			continue
-		var cell: Dictionary = entry as Dictionary
-		_hud.tiles.draw(
-			int(cell.get("tile", 0)), into, Gen2Screen.WIDTH,
-			int(cell.get("x", 0)) * TILE, int(cell.get("y", 0)) * TILE
-		)
 
 
 ## `LoadTrainerHudOAM`: objects on `PAL_BATTLE_OB_YELLOW`, taking no scroll.

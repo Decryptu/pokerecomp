@@ -21,13 +21,6 @@ const SPRITE_SPARKLE: StringName = &"sparkle"
 const SPRITE_AT := Vector2i(88, 84)
 const SPARKLE_AT := Vector2i(88, 88)
 
-## `SFX_GAME_FREAK_LOGO_GS`, and Crystal's four.
-const SFX_LOGO_GS: int = 0xAA
-const SFX_DITTO_POP_UP: int = 0xC1
-const SFX_DITTO_TRANSFORM: int = 0xC2
-const SFX_DITTO_BOUNCE: int = 0xC7
-const SFX_GAME_FREAK_PRESENTS: int = 0xC9
-
 ## `GameFreakPresentsEnd` on Crystal and `.finish` on Gold: the same
 ## `ld c, 16 / call DelayFrames` after the tilemap and the sprites are cleared.
 const CLEANUP_FRAMES: int = 16
@@ -305,7 +298,7 @@ func _advance_crystal_scene() -> void:
 			_timer = 0
 			_words = 1
 			_scene += 1
-			_emit(&"play_sfx", {"sfx": SFX_GAME_FREAK_PRESENTS})
+			_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_GAME_FREAK_PRESENTS})
 		2:
 			if _timer < 64:
 				_timer += 1
@@ -328,7 +321,7 @@ func _advance_gold_scene() -> void:
 		0:
 			_star_done = false
 			_spawn(_new_actor(SPRITE_STAR, SPRITE_AT, {"var1": 0x80, "angle": 0}))
-			_emit(&"play_sfx", {"sfx": SFX_LOGO_GS})
+			_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_GAME_FREAK_LOGO_GS})
 			_scene += 1
 		1:
 			if not _star_done:
@@ -450,7 +443,7 @@ func _advance_ditto(actor: Dictionary) -> void:
 				return
 			actor["scene"] = 3
 			actor["var2"] = 0
-			_emit(&"play_sfx", {"sfx": SFX_DITTO_TRANSFORM})
+			_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_DITTO_TRANSFORM})
 		3:
 			_advance_ditto_transform(actor)
 		4:
@@ -466,7 +459,7 @@ func _advance_ditto_bounce(actor: Dictionary) -> void:
 	if height == 0:
 		actor["scene"] = 2
 		actor["var2"] = 0
-		_emit(&"play_sfx", {"sfx": SFX_DITTO_POP_UP})
+		_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_DITTO_POP_UP})
 		return
 	var offset: int = int(actor["var2"]) & 0x3F
 	if offset < 0x20:
@@ -477,7 +470,7 @@ func _advance_ditto_bounce(actor: Dictionary) -> void:
 	if before & 0x1F:
 		return
 	actor["var1"] = (height - 48) & 0xFF
-	_emit(&"play_sfx", {"sfx": SFX_DITTO_BOUNCE})
+	_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_DITTO_BOUNCE})
 
 
 ## `GameFreakLogo_Transform`: sixty-four frames, one `GameFreakDittoPaletteFade`

@@ -148,6 +148,19 @@ func test_a_patch_changes_named_fields_and_leaves_the_rest() -> void:
 	assert_eq(int(data.move(1)["power"]), 250)
 
 
+## A mod reload empties the overlay a [GameData] already holds, so data opened
+## before the reload reads the mods loaded after it.
+func test_data_opened_before_a_reload_reads_the_reloaded_mods() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.patch_content(Gen2ContentOverlay.KIND_MOVE, MOD, 1, {"power": 250})
+	var data: GameData = _data()
+	assert_eq(int(data.move(1)["power"]), 250)
+	Gen2ModHost.reset()
+	assert_false(data.has_content_overlay(), "the reload cleared it")
+	Gen2ModHost.instance().patch_content(Gen2ContentOverlay.KIND_MOVE, MOD, 1, {"power": 90})
+	assert_eq(int(data.move(1)["power"]), 90, "the new mods' patch")
+
+
 func test_a_patch_does_not_invent_a_row_this_cartridge_lacks() -> void:
 	# Crystal has a trainer class Gold does not. A mod patching it must change
 	# nothing on the game that never had it, rather than conjure one.

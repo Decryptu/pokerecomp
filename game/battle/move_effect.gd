@@ -2133,6 +2133,17 @@ static func sequence_for(effect: int, generation: int = RomRegistry.GEN2) -> Arr
 	return _table().get(effect, NORMAL_HIT)
 
 
+## What a move's effect applies of [param chart]: all of it for a damaging `stab`,
+## only its zero for an immunity check, nothing where no command reads it.
+static func applied_effectiveness(chart: int, move: Dictionary, generation: int) -> int:
+	var sequence: Array = sequence_for(int(move.get("effect", -1)), generation)
+	var reads: bool = sequence.has(Gen2EffectCommands.STAB)
+	if sequence.has(Gen2EffectCommands.RESET_TYPE_MATCHUP) \
+			or (reads and int(move.get("power", 0)) <= 0):
+		return chart if chart == Gen2Layout.MATCHUP_NO_EFFECT else Gen2Layout.MATCHUP_EFFECTIVE
+	return chart if reads else Gen2Layout.MATCHUP_EFFECTIVE
+
+
 ## Whether an effect has a list of its own yet, which is what separates a move
 ## that is fully implemented from one that is standing in as an ordinary attack.
 static func is_written(effect: int) -> bool:

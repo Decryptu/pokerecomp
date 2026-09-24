@@ -31,6 +31,14 @@ const MOLTRES: int = 146
 const MEWTWO: int = 150
 const GOLD_TEETH: int = 0x40
 const HM04: int = 199
+## `[item, map]`: a key item behind the gate it opens. The parcel and the flute
+## into the Safari Zone, past the old man and Snorlax.
+const GEN1_SELF_LOCKS: Array = [[0x46, Vector2i(0, 0xDB)], [0x49, Vector2i(0, 0xDB)]]
+## The egg past the Route 30 battle, the Squirtbottle past Sudowoodo, the
+## SecretPotion and the S.S. Ticket into Kanto past the Mineral Badge.
+const GEN2_SELF_LOCKS: Array = [
+	[0x45, Vector2i(10, 5)], [0xAF, Vector2i(4, 9)], [0x43, Vector2i(12, 2)], [0x44, Vector2i(12, 3)],
+]
 
 ## Per game: total rows, and the count under each kind in
 ## [constant Gen2WorldCatalog.KINDS]' own order.
@@ -307,8 +315,13 @@ func _verify_progression(_catalog: Gen2WorldCatalog) -> void:
 	for item: int in _catalog.field_hm_items():
 		if _catalog.move_for_hm_item(item) == Gen2WorldFieldMove.MOVE_SURF:
 			surf_item = item
-	var walk: Gen2WorldReachability = Gen2WorldReachability.build(data)
-	var dry: Dictionary = walk.reachable(Gen2WorldProgression.start_map(data), {})
+	## Every other move and every gate open, so only Surf stands in the way.
+	var walk: Gen2WorldReachability = Gen2WorldReachability.build(data, _catalog.story())
+	var moves: Dictionary = {}
+	for move: int in Gen2WorldReachability.GATE_MOVES:
+		if move != Gen2WorldFieldMove.MOVE_SURF:
+			moves[move] = true
+	var dry: Dictionary = walk.reachable(Gen2WorldProgression.start_map(data), moves)
 	var behind: int = -1
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
 		if not row.has("map"):
@@ -342,6 +355,26 @@ func _verify_progression(_catalog: Gen2WorldCatalog) -> void:
 		bool(Gen2WorldProgression.validate(data, {})["ok"]),
 		"a rejected placement was left installed."
 	)
+	_verify_self_locks(data, _catalog, GEN2_SELF_LOCKS)
+
+
+## Each key item swapped with a ball behind the gate it opens is refused.
+func _verify_self_locks(data: GameData, _catalog: Gen2WorldCatalog, locks: Array) -> void:
+	for lock: Array in locks:
+		var source: Dictionary = {}
+		var behind: Dictionary = {}
+		for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+			if int(row["item"]) == int(lock[0]) and source.is_empty():
+				source = row
+			elif row.get("map", Vector2i(-1, -1)) == lock[1] and behind.is_empty():
+				behind = row
+		if not _r.check(not source.is_empty() and not behind.is_empty(), "no site for self-lock %s." % str(lock)):
+			continue
+		var result: Dictionary = Gen2WorldProgression.validate(data, {
+			int(source["id"]): {"item": int(behind["item"])}, int(behind["id"]): {"item": int(lock[0])},
+		})
+		_r.check(not bool(result["ok"]), "item %X behind its own gate on %s validated." % [lock[0], lock[1]])
+		_r.note("item %X on %s refused: %s" % [lock[0], lock[1], str(result.get("missing", {}))])
 
 
 ## The whole point of the catalog: a patch has to reach the row a runtime reader
@@ -464,3 +497,4 @@ func _verify_gen1_progression(_catalog: Gen2WorldCatalog) -> void:
 		bool(Gen2WorldProgression.validate(data, {})["ok"]),
 		"a rejected placement was left installed."
 	)
+	_verify_self_locks(data, _catalog, GEN1_SELF_LOCKS)

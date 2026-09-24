@@ -73,9 +73,6 @@ const SUBMENU_CANCEL: int = 3
 const SUBMENU_ROWS: Array[String] = ["DEPOSIT", "STATS", "RELEASE", "CANCEL"]
 const SUBMENU_ROWS_WITHDRAW: Array[String] = ["WITHDRAW", "STATS", "RELEASE", "CANCEL"]
 
-## Every refusal the screen prints is followed by `WaitPlaySFX SFX_WRONG`.
-const SFX_WRONG: int = 0x19
-
 ## `BillsPC_CheckMail_PreventBlackout`'s own `cp $3` against
 ## `wBillsPC_NumMonsInBox`, which `CopyBoxmonSpecies` leaves one over the party
 ## count because the CANCEL row is in it.
@@ -112,8 +109,7 @@ var _move_from_index: int = -1
 var _move_backup: Array = []
 var _submenu_open: bool = false
 var _submenu_cursor: int = 0
-var _release_open: bool = false
-var _release_cursor: int = 0
+var _release: Gen2WorldMenu = null
 var _stats: Gen2MonStatsScreen = null
 var _stats_page: Gen2StatsScreenPage = null
 var _menu_page: Gen2MenuPage = null
@@ -190,7 +186,7 @@ func box_snapshot() -> Dictionary:
 		"mode": _mode,
 		"submenu": _submenu_labels() if _submenu_open else [],
 		"submenu_cursor": _submenu_cursor if _submenu_open else -1,
-		"release": _release_cursor if _release_open else -1,
+		"release": _release.cursor if _release != null else -1,
 		"stats": _stats != null,
 		"boxes": boxes,
 	}
@@ -317,8 +313,13 @@ func handle_button(button: int) -> bool:
 		return true
 	if _stats != null:
 		return _stats.handle_button(button)
-	if _release_open:
-		return _handle_release_button(button)
+	if _release != null:
+		if _release.press_yes_no(button):
+			if _release.holding():
+				set_process(true)
+			else:
+				_refresh()
+		return true
 	if _submenu_open:
 		return _handle_submenu_button(button)
 	match button:
@@ -363,31 +364,15 @@ func _handle_submenu_button(button: int) -> bool:
 	return true
 
 
-## `PlaceYesNoBox`, whose B is its NO.
-func _handle_release_button(button: int) -> bool:
-	match button:
-		PokeButton.UP:
-			_release_cursor = maxi(_release_cursor - 1, 0)
-		PokeButton.DOWN:
-			_release_cursor = mini(_release_cursor + 1, RELEASE_OPTIONS.size() - 1)
-		PokeButton.A:
-			_release_open = false
-			if _release_cursor == 0:
-				_close_submenu(false)
-				release_selected()
-			else:
-				_prompt = PROMPT_WHATS_UP
-				_refresh()
-			return true
-		PokeButton.B:
-			_release_open = false
-			_prompt = PROMPT_WHATS_UP
-			_refresh()
-			return true
-		_:
-			return false
+## `PlaceYesNoBox`, once its hold is spent: B is its NO.
+func _answer_release(yes: bool) -> void:
+	_release = null
+	if yes:
+		_close_submenu(false)
+		release_selected()
+		return
+	_prompt = PROMPT_WHATS_UP
 	_refresh()
-	return true
 
 
 ## The submenu's own four rows, whose first is named for the list that is loaded.
@@ -408,7 +393,7 @@ func _open_submenu() -> void:
 
 func _close_submenu(redraw: bool = true) -> void:
 	_submenu_open = false
-	_release_open = false
+	_release = null
 	_prompt = PROMPT_CHOOSE
 	if redraw:
 		_refresh()
@@ -466,7 +451,7 @@ func _cry_for(mon: Gen2SaveMon) -> void:
 ## `BillsPC_PlaceString` and the `WaitPlaySFX` every refusal ends on.
 func _refuse(line: String) -> void:
 	_prompt = line
-	sfx_requested.emit(SFX_WRONG, true)
+	sfx_requested.emit(Gen2Sfx.SFX_WRONG, true)
 	_refresh()
 
 
@@ -479,8 +464,7 @@ func _ask_release() -> void:
 	if mon != null and mon.is_egg:
 		_refuse(PROMPT_NO_EGGS)
 		return
-	_release_open = true
-	_release_cursor = 0
+	_release = Gen2WorldMenu.yes_no()
 	_prompt = PROMPT_RELEASE
 	_refresh()
 
@@ -656,7 +640,7 @@ func _draw_menus(indices: PackedByteArray) -> void:
 		),
 		_submenu_labels(), _submenu_cursor, indices, width
 	)
-	if not _release_open:
+	if _release == null:
 		return
 	_menu_page.draw(
 		Gen2MenuBox.from_coords(
@@ -664,7 +648,7 @@ func _draw_menus(indices: PackedByteArray) -> void:
 			RELEASE_AT.x + RELEASE_SPAN.x, RELEASE_AT.y + RELEASE_SPAN.y,
 			SUBMENU_FLAGS | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
 		),
-		RELEASE_OPTIONS, _release_cursor, indices, width
+		RELEASE_OPTIONS, _release.cursor, indices, width
 	)
 
 
@@ -766,14 +750,16 @@ func _refresh_pic(mon: Gen2SaveMon) -> void:
 	_pic.texture = null
 	if mon == null or _data == null:
 		return
-	var pic: Dictionary = _data.species_pic(mon.species)
+	## `PCMonInfo` hands EGG to `GetMonFrontpic`.
+	var pic: Dictionary = _data.egg_pic() if mon.is_egg else _data.species_pic(mon.species)
 	if pic.is_empty():
 		return
 	var image: Image = Gen2PicImage.from_atlas(
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
 		## `_CGB_BillsPC` reaches `GetMonNormalOrShinyPalettePointer`, so the
 		## selection is drawn shiny here the way it is on its own stats page.
-		_data.palette(mon.species, Gen2Stats.is_shiny(mon.dvs))
+		_data.egg_palette() if mon.is_egg
+			else _data.palette(mon.species, Gen2Stats.is_shiny(mon.dvs))
 	)
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
@@ -932,14 +918,17 @@ func _insert_moved_mon() -> void:
 ## `MoveMonWOMail_InsertMon_SaveGame`'s `SFX_SAVE` and twenty-four frames, with
 ## the box still up: the save runs behind it.
 func _saved_moved_mon() -> void:
-	sfx_requested.emit(Gen2SavePrompt.SFX_SAVE, true)
+	sfx_requested.emit(Gen2Sfx.SFX_SAVE, true)
 	_saving_frames = Gen2SavePrompt.INSERT_SAVED_FRAMES
 	_saving_saved = true
 
 
-## The two waits, one hardware frame at a time. Public so a test owns its own.
 func advance_saving_frames(count: int) -> void:
 	for _step: int in count:
+		if _release != null:
+			if _release.advance_hold():
+				_answer_release(_release.answered_yes())
+			continue
 		if _saving_frames <= 0:
 			return
 		_saving_frames -= 1
@@ -963,7 +952,7 @@ func _process(delta: float) -> void:
 			_stats.advance_animation()
 		_refresh_stats_pic(_stats.snapshot())
 		return
-	if _saving_frames <= 0:
+	if _saving_frames <= 0 and (_release == null or not _release.holding()):
 		set_process(false)
 		return
 	advance_saving_frames(frames)

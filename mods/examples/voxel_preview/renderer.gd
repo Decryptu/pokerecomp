@@ -44,6 +44,7 @@ var _light: DirectionalLight3D = null
 var _terrain: MeshInstance3D = null
 var _player: MeshInstance3D = null
 var _objects: Node3D = null
+var _draw_list: Gen2WorldDrawList = null
 var _time_of_day: int = 0
 var _camera_pitch: float = CAMERA_PITCH_DEGREES
 var _text_box_rect := Rect2i()
@@ -225,6 +226,11 @@ func set_native_size(size_pixels: Vector2i) -> void:
 	_place_surround()
 
 
+## The optional `set_draw_list`: every sprite the host draws, resolved.
+func set_draw_list(draw_list: Gen2WorldDrawList) -> void:
+	_draw_list = draw_list
+
+
 func set_world(world: Gen2WorldAPI, _animation: Gen2WorldAnimation = null) -> void:
 	_world = world
 	_rebuild_terrain()
@@ -391,37 +397,37 @@ func _add_quad(
 	surface.add_vertex(d)
 
 
-## The map's live objects, rebuilt on each refresh because an object can be
-## hidden, moved or deleted by a script between one step and the next.
+## Every sprite the host resolved for this frame, rebuilt on each refresh
+## because an object can be hidden, moved or deleted by a script between one
+## step and the next. The draw list is what the built-in view draws, so a mod's
+## actors, a visible wild and a connected map's people get a box here too.
 func _rebuild_objects() -> void:
-	if _objects == null:
+	if _objects == null or _draw_list == null:
 		return
 	for child: Node in _objects.get_children():
 		child.queue_free()
-	for object: Gen2WorldObject in _world.visible_objects():
+	for row: Dictionary in _draw_list.sprites():
+		if row["kind"] != Gen2WorldDrawList.KIND_SPRITE \
+			or int(row["owner"]) == Gen2WorldDrawList.OWNER_PLAYER:
+			continue
 		var marker := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
 		mesh.size = Vector3(0.6, 1.0, 0.6)
 		marker.mesh = mesh
-		marker.material_override = _material(_object_color(object))
-		# The same fractional offset the player box reads, from the object's
-		# own in-flight step, so a wandering NPC eases between cells here
-		# without this renderer knowing anything about hardware pixels.
-		var offset: Vector2 = object.step_offset_cells()
-		marker.position = _cell_center(object.cell) \
-			+ Vector3(offset.x, 0.0, offset.y) * CELL_SIZE \
-			+ Vector3(0.0, 0.5, 0.0)
+		marker.material_override = _material(_row_color(row))
+		# `position_cells` already carries the in-flight step, so a wandering
+		# NPC eases between cells without this view knowing hardware pixels.
+		var cells: Vector2 = row["position_cells"]
+		marker.position = Vector3(cells.x, 0.0, cells.y) * CELL_SIZE \
+			+ Vector3(0.0, 0.5 + float(row["height_offset_pixels"]) \
+				/ float(Gen2WorldAPI.CELL_PIXELS), 0.0)
 		_objects.add_child(marker)
 
 
-## The colours the 2D view draws an object in, on either generation: one of
-## Crystal's eight object palettes, or on Red the map's own four through
-## `rOBP0`. Colour 2 is the sprite's main body colour on every sheet.
-func _object_color(object: Gen2WorldObject) -> Color:
-	var colors: PackedColorArray = Gen2WorldPalette.overworld_sprite_colors(
-		_world.data, _world.current_map, object.palette, _time_of_day,
-		_world.gen1_last_map(), _world.gen1_map_pal_offset
-	)
+## Colour 2 of the four the row wears, which is the body colour on every sheet:
+## one of Crystal's eight object palettes, or on Red the map's own through `rOBP0`.
+func _row_color(row: Dictionary) -> Color:
+	var colors: PackedColorArray = row["colors"]
 	if colors.size() < 3:
 		return Color("#f3c969")
 	# A route or a town is lit by the day; indoors the marker keeps its own.
