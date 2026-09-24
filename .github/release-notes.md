@@ -3,19 +3,35 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods can put a PC row on the start menu that opens the whole Pokemon Center PC: BILL'S PC, your own PC, PROF.OAK'S PC and the Hall of Fame. On Gold, Silver and Crystal it needs a Pokemon in the party, like the real PC.
-- The save editor shows each party Pokemon's gender and can switch it. It lists all 20 slots of a box and every item in the bag, picks items by name, and removes the selected item.
+- Gold, Silver and Crystal open the full pack screen for SELL at the mart, DEPOSIT ITEM at the PC and PACK in battle, with its pockets, the sell dial, the money box and the USE/QUIT menu.
+- The PC item list has CANCEL, a quantity dial and a toss question.
+- The battle party list opens SWITCH, STATS and CANCEL, and STATS shows the stats screen in battle.
+- Mods get API 43: one call draws a battle square and both status panels, one list holds everything the overworld draws, and the playthrough check can run with mods at their default settings.
+
+## Changed
+
+- Every YES/NO box works the same way: the answer stays on screen a moment before it is used, the cursor stops at the ends, and B means NO. A question longer than one box is read page by page before the choice appears.
+- The pack reopens on the last pocket and row you used.
+- A mod's item shuffle is refused when it hides a story item behind the gate it opens, such as OAK'S PARCEL or the SQUIRTBOTTLE.
 
 ## Fixed
 
-- When a trainer sends out the next Pokemon, the ball opens before the Pokemon appears, and its HP bar comes back after the cry. The Poke Ball row goes away as the line starts. The line names the trainer ("LEADER FALKNER sent out ...").
-- A trainer turning to face you, or the second of two trainers facing each other, now notices you while you stand still. In Cianwood Gym the second Black Belt walks over after the first battle.
-- The TM/HM pocket is always in number order.
-- Mom and Elm answer the phone. Calling from the Pokegear stays on the phone screen, plays the dial tone twice, and hangs up on the card. Trainers who call you use their own lines.
-- The hole in Burned Tower stays hidden until after the rival battle. Any map that changes its own tiles keeps them after a battle, including the Elite Four doors and the Radio Tower shutter.
-- Falling through the hole in Burned Tower draws the basement correctly, and plays the fall and the landing shake. The Ruins of Alph chambers and the Magnet Train take their warps the same way.
-- The save editor keeps the map and position you type in when you press Save.
-- When a mod changes the wild tables, the wild Pokemon already walking on the map follow the new tables.
+- FLY takes you to the town you pick with A, and the TOWN MAP closes on A in Red, Blue and Yellow.
+- A trainer's Pokemon comes out of its ball before it moves and cries. "sent out" and other long lines scroll up instead of starting a new box.
+- The Team Rocket Hideout grunts walk up to you at the security cameras, and Lance leaves the Electrode room without walking through walls.
+- A wild battle where both Pokemon faint, or where you say NO to "Use next" and run, no longer brings the party list back forever.
+- The first Pokemon that can fight leads the battle; a fainted lead is no longer sent out.
+- The Day-Care egg can be collected, and Mom starts saving money.
+- Warps work on dark maps in Red, Blue and Yellow, such as Rock Tunnel without FLASH.
+- Oak's aides give their item and say how many Pokemon they asked for and how many you have.
+- The PC in Red, Blue and Yellow acts on the entry you picked, and BILL's PC opens on its own menu.
+- The Goldenrod Pokemon Center in Crystal no longer gives the GS BALL, and the Battle Tower desk no longer reports a deleted record.
+- Medicine in battle fills the HP bar and says what it did.
+- B advances text, START closes the menu, GIVE and TAKE go back to the party list, Repel says it was used, and the radio plays its station.
+- Nicknames, eggs, gender and status show correctly in the party, PC, trade and naming screens.
+- Red, Blue and Yellow draw a Pokemon that used Minimize and the Substitute doll, and a Pokemon comes back on screen after Quick Attack, Low Kick, Submission and Counter.
+- The Day-Care egg and the move tutor's refusal play the right sound.
+- A mod's gift egg stays an egg, and a mod that changes the wild tables shows its new Pokemon on the map straight away.
 
 ## Which file
 
