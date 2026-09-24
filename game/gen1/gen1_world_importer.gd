@@ -2091,7 +2091,7 @@ static func _walk_script_in(
 		if next == SCRIPT_UNREAD:
 			return _script_refused(ctx, pc)
 		if next == SCRIPT_AIDE:
-			return _script_aide_branch(ctx, pc + Gen1Layout.SCRIPT_LONG_SIZE, state, depth, out)
+			return _script_aide_branch(ctx, pc, state, depth, out)
 		pc = next
 	return null
 
@@ -3874,13 +3874,14 @@ static func _script_song(ctx: Dictionary, out: Array) -> int:
 
 ## `OaksAideScript` answers in `hOaksAideResult`, and a Game Boy Printer routine
 ## in `hCanceledPrinting`, which is the same byte, so the rest of the row is
-## walked once each way.
+## walked once each way. The aide's gift is a catalog site `at` its call.
 static func _script_aide_branch(
-	ctx: Dictionary, next: int, state: Dictionary, depth: int, out: Array
+	ctx: Dictionary, pc: int, state: Dictionary, depth: int, out: Array
 ) -> Variant:
+	var next: int = pc + Gen1Layout.SCRIPT_LONG_SIZE
 	var node: Dictionary = {
 		"op": "oaks_aide", "requirement": int(state.get("aide_requirement", 0)),
-		"item": int(state.get("aide_item", 0)),
+		"item": int(state.get("aide_item", 0)), "at": Gen1Layout.banked(int(ctx["bank"]), pc),
 	}
 	var arms: Array = [["got", Gen1Layout.OAKS_AIDE_GOT_ITEM], ["other", 0]]
 	if state.has("printer_page"):

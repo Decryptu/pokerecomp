@@ -45,6 +45,11 @@ const CARD_TEXTS: Dictionary = {
 	"out_of_service": "You're out of the\nservice area.",
 }
 
+## Both fly animations with a pass to spare, and what closes the Teleport line.
+const FLY_FRAMES: int = Gen2WorldEffects.FLY_FROM_FRAMES + Gen2WorldEffects.FLY_TO_FRAMES + 4
+const TELEPORT_PRESSES: int = 8
+const TELEPORT_PRESS_FRAMES: int = 90
+
 ## `wShadowOAMEnd - wShadowOAM` in sprites, which is what `.nestloop` would run
 ## past if a species were found at more landmarks than the hardware has objects.
 const SHADOW_OAM_SPRITES: int = 40
@@ -87,6 +92,7 @@ func run(r: RefCounted) -> void:
 		_verify_nests(game_id, _data, crystal)
 		_verify_flypoints(game_id, _data)
 		_verify_cards(game_id, _data)
+	_r.each_game_of(RomRegistry.GEN2, _verify_fly_landings)
 	_r.each_game_of(RomRegistry.GEN1, _one_gen1_game)
 
 
@@ -334,6 +340,51 @@ func _verify_fly_walk(game_id: StringName, _data: GameData) -> void:
 				game_id, "Kanto" if in_kanto else "Johto",
 			]
 		)
+
+
+## `.FlyScript` onto every flypoint, then `.TeleportScript` home: each landing
+## runs the callbacks its `newloadmap` queued, leaving the next step free.
+func _verify_fly_landings() -> void:
+	var home: Dictionary = _r.data.spawn_point(int(_r.data.flypoint(0)["spawn"]))
+	var home_map := Vector2i(int(home["map_group"]), int(home["map_number"]))
+	var screen: Gen2WorldScreen = _r.open_screen(
+		home_map.x, home_map.y, Vector2i(int(home["x"]), int(home["y"]))
+	)
+	var world: Gen2WorldAPI = screen.world()
+	var landed: int = 0
+	for index: int in _r.data.flypoint_count():
+		screen._start_fly(int(_r.data.flypoint(index)["spawn"]))
+		screen.advance_frames(FLY_FRAMES)
+		if _landing_is_free(screen, "flypoint %d" % index):
+			landed += 1
+	var save: Gen2SaveData = screen.active_save()
+	(save.party[0] as Gen2SaveMon).moves[0] = Gen2WorldFieldMove.MOVE_TELEPORT
+	screen._refresh_party_summary()
+	world.last_spawn_map = home_map
+	screen._run_field_move({"move": Gen2WorldFieldMove.MOVE_TELEPORT, "slot": 0, "name": "X"})
+	for _press: int in TELEPORT_PRESSES:
+		if not screen._field_move_text:
+			break
+		screen.advance_frames(TELEPORT_PRESS_FRAMES)
+		screen.press_button(PokeButton.A)
+	var teleported: bool = _r.check(
+		world.map_id() == home_map, "Teleport landed on %s." % world.map_id()
+	) and _landing_is_free(screen, "Teleport")
+	_r.close_screen(screen)
+	print("%s: %d of %d flights landed with the map free, Teleport %s." % [
+		_r.game_id, landed, _r.data.flypoint_count(), "too" if teleported else "not",
+	])
+
+
+func _landing_is_free(screen: Gen2WorldScreen, label: String) -> bool:
+	var world: Gen2WorldAPI = screen.world()
+	return _r.check(
+		screen._pending_fly.is_empty() and not world.script_busy()
+			and screen._objects_may_move(),
+		"%s left %s: %d scripts queued in front of the player." % [
+			label, world.map_id(), world._script_queue.size(),
+		]
+	)
 
 
 func _verify_flypoints(game_id: StringName, _data: GameData) -> void:

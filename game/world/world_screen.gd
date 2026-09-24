@@ -7912,7 +7912,7 @@ func _acknowledge_field_move_text() -> void:
 		if _world.is_gen1():
 			_start_gen1_map_anim(&"escape")
 			return
-		_commit_field_move(_world.complete_escape(), "Escape")
+		_commit_escape()
 		return
 	if not _world.pending_headbutt().is_empty():
 		_commit_field_move(_world.complete_headbutt(_encounter_random), "Headbutt")
@@ -7925,9 +7925,20 @@ func _acknowledge_field_move_text() -> void:
 	_refresh_labels()
 
 
-## Each commit reports its own audio. Strength plays nothing: SFX_STRENGTH
-## belongs to the boulder that moves later, not to the flag being set. All redraw
-## anyway, since the party overlay closed over the map.
+## `.UsedDigOrEscapeRopeScript`'s sound in front of its warp, which lands like a door's.
+func _commit_escape() -> void:
+	var applied: Dictionary = _world.complete_escape()
+	var landed: bool = bool(applied.get("ok", false))
+	if landed:
+		_play_sfx(Gen2Sfx.SFX_WARP_TO)
+		_refresh_after_escape()
+	_commit_field_move(applied, "Escape")
+	if landed:
+		_after_map_settled(false)
+
+
+## Each commit reports its own audio; Strength's SFX_STRENGTH belongs to the
+## boulder that moves later. All redraw, since the party overlay closed over the map.
 func _commit_field_move(applied: Dictionary, label: String) -> void:
 	if bool(applied.get("ok", false)):
 		match StringName(applied.get("kind", &"")):
@@ -7938,11 +7949,6 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 				_play_sfx(Gen2Sfx.SFX_SURF)
 			&"strength_applied":
 				pass
-			## `.UsedDigOrEscapeRopeScript`'s sound, in front of its own warp.
-			&"escape_applied":
-				_play_sfx(Gen2Sfx.SFX_WARP_TO)
-				_refresh_after_escape()
-				_world.gen1_pikachu_landed()
 			&"waterfall_applied":
 				_play_sfx(Gen2Sfx.SFX_BUBBLEBEAM)
 			&"flash_used":
@@ -8182,8 +8188,8 @@ func _apply_fly_choice(results: Array) -> bool:
 	return false
 
 
-## `.FlyScript`: `callasm HideSprites`, `FlyFromAnim`, the warp, `FlyToAnim`,
-## then `.ReturnFromFly`'s `RespawnPlayer` and `UpdatePlayerSprite`.
+## `.FlyScript`: `HideSprites`, `FlyFromAnim`, the warp, `FlyToAnim` and
+## `.ReturnFromFly`, which lands into `EnterMap`'s tail like a door warp.
 func _start_fly(spawn: int) -> void:
 	if _world.is_gen1():
 		_start_gen1_map_anim(&"fly", {"spawn": spawn})
@@ -8225,6 +8231,7 @@ func _advance_fly() -> void:
 		return
 	if bool(_pending_fly["arriving"]):
 		_finish_fly()
+		_after_map_settled(false)
 		return
 	var spawn: int = int(_pending_fly["spawn"])
 	## `newloadmap MAPSETUP_FLY`, whose setup script opens on `JumpRoamMons`: a

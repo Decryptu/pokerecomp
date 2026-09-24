@@ -5615,7 +5615,11 @@ func _gen1_node_pikachu_text(node: Dictionary, steps: Array, run: Dictionary) ->
 	return _gen1_node_text({"op": "text", "text": String(chosen["text"])}, steps, run)
 
 
-func _gen1_node_oaks_aide(node: Dictionary, steps: Array, run: Dictionary) -> bool:
+func _gen1_node_oaks_aide(raw: Dictionary, steps: Array, run: Dictionary) -> bool:
+	var node: Dictionary = raw.duplicate()
+	node["item"] = int(_gen1_site(
+		[Gen2WorldCatalog.KIND_ITEM], raw, {"item": int(raw["item"]), "quantity": 1}
+	)["item"])
 	var other: Array = [_gen1_aide_box("come_back", node)]
 	if not _gen1_resolve_script(node["other"] as Array, other, _gen1_run_copy(run)):
 		return false

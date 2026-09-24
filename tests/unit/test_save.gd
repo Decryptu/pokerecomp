@@ -177,6 +177,27 @@ func test_a_battle_writeback_puts_the_egg_back_in_its_own_slot() -> void:
 	assert_false((written.party[2] as Gen2SaveMon).is_egg)
 
 
+## A catch files its Pokemon behind the fought party while the battle still
+## holds only the Pokemon it opened with, so the writeback keeps that row.
+func test_a_battle_writeback_keeps_a_row_caught_behind_the_fought_party() -> void:
+	for source: Gen2SaveData in [_save(), _save_with_egg_between()]:
+		var party: Gen2Party = Gen2SaveBattleAdapter.to_battle_party(_data, source)
+		var caught: Gen2SaveMon = Gen2SaveMon.from_dict(source.party[0].to_dict())
+		caught.species = Fixture.CHARMANDER
+		caught.nickname = "CAUGHT"
+		source.party.append(caught)
+		party.at(0).take_damage(1)
+		var written: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
+			_data.id, _data.sha1, source.slot, party, "", source
+		)
+		assert_not_null(written)
+		assert_eq(written.party.size(), source.party.size())
+		var last: Gen2SaveMon = written.party[written.party.size() - 1]
+		assert_eq(last.species, Fixture.CHARMANDER)
+		assert_eq(last.nickname, "CAUGHT")
+		assert_eq((written.party[0] as Gen2SaveMon).hp, party.at(0).hp)
+
+
 func test_a_party_of_nothing_but_eggs_has_no_fit_mon() -> void:
 	var source: Gen2SaveData = _save()
 	for mon: Gen2SaveMon in source.party:

@@ -40,7 +40,7 @@ const MAX_SCRIPT_COMMANDS: int = 4096
 const MAX_ROUTINES: int = 16
 
 ## The sidecar's shape: a bump rebuilds every sidecar, not the cache.
-const FORMAT_VERSION: int = 4
+const FORMAT_VERSION: int = 5
 
 ## A Generation 1 site's id is its node's linear ROM address `at`; table rows
 ## are map events whose group byte names the table.
@@ -1014,6 +1014,13 @@ func _record_gen1_site(
 					"species": int(record.get("offered_species", 0)),
 					"requested_species": int(record.get("requested_species", 0)),
 				}, where)
+		"oaks_aide":
+			if at >= 0:
+				var owned: Dictionary = where.duplicate(true)
+				(owned["requires"] as Array).append({"owned": int(node["requirement"])})
+				_add_gen1(KIND_ITEM, map, at, {
+					"item": int(node["item"]), "quantity": 1, "price": 0, "hidden": false,
+				}, owned)
 		"flag":
 			var badge: int = _badge_for_flag(int(node.get("flag", -1)))
 			if at >= 0 and badge >= 0 and bool(node.get("engine", false)) and bool(node.get("set", false)):

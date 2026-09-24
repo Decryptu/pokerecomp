@@ -61,13 +61,11 @@ static func to_battle_mon(data: GameData, saved: Gen2SaveMon) -> Gen2BattleMon:
 	return out
 
 
-## Writes a fought party back over [param source_save]. Eggs never entered the
-## battle party, so they keep their own slots and the battle Pokemon fill the rest
-## in order; the write fails rather than dropping an egg or shifting a slot when
-## the two no longer line up. The candidate starts as a complete clone of
-## [param source_save], so fields the battle model does not carry cannot disappear
-## as the save schema grows. Happiness is not restored from that clone: Return and
-## Frustration read it, so it round-trips with the fought party.
+## Writes a fought party back over a clone of [param source_save], so fields the
+## battle model does not carry survive. Eggs and rows behind the fought ones, where
+## a catch files its Pokemon mid-battle, keep their slots; the battle Pokemon fill
+## the rest in order, and the write fails rather than shift a slot past an egg.
+## Happiness round-trips with the party, since Return and Frustration read it.
 static func from_battle_party(
 	game_id: StringName, rom_sha1: String, slot: int, party: Gen2Party, player_name: String = "",
 	source_save: Gen2SaveData = null
@@ -87,13 +85,10 @@ static func from_battle_party(
 	out.player_name = source_save.player_name if source_save != null else player_name
 	out.party.clear()
 	var fought: int = 0
-	var slot_count: int = source_save.party.size() if egg_count > 0 else party.mons.size()
-	for index: int in slot_count:
-		var previous: Gen2SaveMon = (
-			source_save.party[index]
-			if source_save != null and index < source_save.party.size() else null
-		)
-		if previous != null and previous.is_egg:
+	var saved_rows: int = source_save.party.size() if source_save != null else 0
+	for index: int in maxi(saved_rows, party.mons.size()):
+		var previous: Gen2SaveMon = source_save.party[index] if index < saved_rows else null
+		if previous != null and (previous.is_egg or fought >= party.mons.size()):
 			out.party.append(Gen2SaveMon.from_dict(previous.to_dict()))
 			continue
 		var saved_mon: Gen2SaveMon = from_battle_mon(party.mons[fought])
@@ -146,7 +141,7 @@ static func egg_slots(party: Gen2Party, source_save: Gen2SaveData) -> int:
 	for member: Gen2SaveMon in source_save.party:
 		if member != null and member.is_egg:
 			egg_count += 1
-	if egg_count > 0 and source_save.party.size() - egg_count != party.mons.size():
+	if egg_count > 0 and source_save.party.size() - egg_count < party.mons.size():
 		return -1
 	if source_save.party.size() > Gen2Party.MAX_SIZE:
 		return -1
