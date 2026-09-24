@@ -133,7 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
-| 44 | `Gen2BattleHud.draw_party_balls()`; `ground` on every draw-list row, a screen row's `position_cells` and `ground` in map terms, and a renderer's `draw_reach_pixels()` listing connected rows out to its reach; `reachable_checks()`, what a placement reaches with items and badges held from the start; `Gen2WorldCatalog.progression_items()`; a patched `{"item": 0}` or `{"badge": -1}` as a site that hands nothing; `validate_placement` asking a site that waits on an engine flag other than a badge's again once a script sets that flag |
+| 44 | `Gen2BattleHud.draw_party_balls()`; `ground` on every draw-list row, a screen row's `position_cells` and `ground` in map terms, and a renderer's `draw_reach_pixels()` listing connected rows out to its reach; `reachable_checks()`, what a placement reaches with items and badges held from the start; `Gen2WorldCatalog.progression_items()`; a patched `{"item": 0}` or `{"badge": -1}` as a site that hands nothing; `validate_placement` asking a site that waits on an engine flag other than a badge's again once a script sets that flag; Oak's aides as item sites; `{owned}` and `{special}` in `requires` |
 | 43 | `Gen2BattleRenderer.square_pixels()`, `square_key()`, `square_side()`, `battler_pic()` and `substitute_sprite()`; `Gen2BattleHud.draw_panels()`, `panels_key()` and `draw_border_cells()`; the status and gender arguments of `draw_enemy()` and `draw_player()`; the battle view's `enemy_status`, `player_status`, `enemy_gender`, `player_gender`, `enemy_caught`, `enemy_minimized`, `player_minimized`, `enemy_special_pic`, `enemy_pic_dmg`, `gen1_black` and `anim_obp0`; Generation 1's "minimize" tile, and its doll drawn from pokered's own `SPRITE_MONSTER`; a move row's `effectiveness` as its effect applies it; a table patch bumping the encounter context's `generation`; a patched `giveegg` staying an egg; a headless `--mods` or `--mods=a,b` run at mod defaults, apart from the player's mod settings; `Gen2WorldDrawList` through the optional `set_draw_list`: every sprite, effect and background edit the built-in view draws, resolved once for any renderer, with `sprites_hidden` on it rather than set on the renderer; `validate_placement` proving the story's gates, `Gen2WorldCatalog.story()`, a row's `cell`, and `requires` holding what every path to a site tested |
 | 42 | `START_ACTION_OPEN_PC`, and a table patch rechecking the visible wilds already standing |
 | 41 | `clear_patches()`, an encounter patch refused off the cartridge's slot count, a mod species met in the wild, `GameData.map_landmark()` and `world_fishing_group_count()`, and `Gen2WorldAPI.encounter_tables_key()` moving when a patch lands |
@@ -504,7 +504,7 @@ for row in catalog.rows(Gen2WorldCatalog.KIND_STATIC):
 | `KIND_PRIZE` | `species` or `item`, `level`, `price` | A give site that spends `takecoins`, priced by the branch's own take | `PrizeMenus`' rows, priced in coins, and the Magikarp salesman's give, priced in the money it spends |
 | `KIND_STATIC` | `species`, `level` | A `loadwildmon` with the `startbattle` that makes it one | A script's wild battle, or an object standing as a wild Pokemon; `battle_type` rides along where the script sets one |
 | `KIND_TRADE` | `trade`, `species`, `requested_species` | A `trade` command and the record it names | `DoInGameTradeDialogue` and the record it names |
-| `KIND_ITEM` | `item`, `quantity`, `hidden` | `giveitem`, `verbosegiveitem`, an `itemball` object, a `hiddenitem` bg event | `GiveItem`, an object with an item, a `HiddenItems` row |
+| `KIND_ITEM` | `item`, `quantity`, `hidden` | `giveitem`, `verbosegiveitem`, an `itemball` object, a `hiddenitem` bg event | `GiveItem`, an object with an item, a `HiddenItems` row, and each of Oak's aides, whose `requires` holds its Pokedex count as `{owned}` |
 | `KIND_BADGE` | `badge`, `engine_flag` | A `setflag` of a badge's engine flag | A store setting one bit of `wObtainedBadges`; `badge` counts from `Gen2WorldState.KANTO_BADGE_FIRST` |
 | `KIND_SHOP` | `mart`, `dialog`, `items` | A `pokemart` command. `items` is the resolved shelf, `{item, price}` per row | A `TX_SCRIPT_MART` row, with `text` its clerk's text id and `items` its shelf |
 
@@ -512,9 +512,13 @@ Every row also carries `id`, `kind`, its `bank` and `address` (or `map` and
 `event_index`), the `map` it stands on where one could be attributed, the `cell`
 of the event that reaches it where only one does, and `requires`: what holds on
 every path the scripts take to the site. An entry is `{item}`, `{engine_flag}`,
-`{event}`, `{toggle}` (a Red, Blue or Yellow object shown) or `{badges}` (at
-least that many), each with `clear: true` when negated, or `{scene: [group,
-number, value]}`, a map's scene or map script state.
+`{event}`, `{toggle}` (a Red, Blue or Yellow object shown), `{badges}` (at
+least that many), `{owned}` (at least that many species caught) or `{special}`
+(that special answered true, such as `FindPartyMonThatSpeciesYourTrainerID`
+finding Togepi), each with `clear: true` when negated, or `{scene: [group,
+number, value]}`, a map's scene or map script state. Where one path reaches a
+site through a fact that only another path's test can set, the site keeps that
+test: Elm's EVERSTONE after `EVENT_SHOWED_TOGEPI_TO_ELM` still waits on Togepi.
 
 `patch_check(id, fields)` changes a field of a row. It cannot replace the script:
 the site still sets its own flag, prints its own dialogue, takes its own money and
@@ -576,7 +580,9 @@ satisfiable. Behind it:
 - An event, flag or scene is satisfied once a reached script sets it, and one no
   script sets (the engine's own) always is. An item is satisfied once a reached
   check hands it over, and one no check carries always is. An HM is a way past
-  something only once its badge is in hand (`catalog.badge_for_move`).
+  something only once its badge is in hand (`catalog.badge_for_move`). An owned
+  count is the species in the grass and cave tables of the maps reached, and a
+  `special`'s answer is never granted, so a site behind one is never reached.
 - `catalog.possible_starters()`, `catalog.field_hm_items()` and
   `catalog.is_progression(row)` are the same facts for a mod planning its own.
 

@@ -33,17 +33,30 @@ var _queued: Dictionary = {}
 var _std: Dictionary = {}
 ## `[sets, requires, at]` per trainer, whose flag the battle sets.
 var _beaten: Array = []
+var _implied: Dictionary = {}
 
 
-static func build(data: GameData) -> Gen2WorldScriptFlow:
+static func build(data: GameData, start: Vector2i = Gen2WorldProgression.START_MAP) -> Gen2WorldScriptFlow:
 	var out := Gen2WorldScriptFlow.new()
 	out._data = data
 	out._crystal = Gen2WorldState.is_crystal_profile(data)
-	for map: Gen2WorldMap in data.world_maps():
-		out._enter_map(map)
-	out._enter_phone()
-	out._run()
-	return out
+	out._walk_all()
+	var implied: Dictionary = out._implications(start)
+	if implied.is_empty():
+		return out
+	var closed := Gen2WorldScriptFlow.new()
+	closed._data = data
+	closed._crystal = out._crystal
+	closed._implied = implied
+	closed._walk_all()
+	return closed
+
+
+func _walk_all() -> void:
+	for map: Gen2WorldMap in _data.world_maps():
+		_enter_map(map)
+	_enter_phone()
+	_run()
 
 
 static func key_of(bank: int, address: int) -> int:
@@ -156,7 +169,7 @@ func _merge(key: int, incoming: Dictionary) -> void:
 	var held: Dictionary = _state[key]
 	var collapsed: bool = held.has(ANYWHERE) and held.size() == 1
 	for name: String in incoming:
-		changed = _meet(held, ANYWHERE if collapsed else name, incoming[name]) or changed
+		changed = _meet(held, ANYWHERE if collapsed else name, _closed(incoming[name])) or changed
 	if not collapsed and (held.size() > MAX_ORIGINS or (held.has(ANYWHERE) and held.size() > 1)):
 		var all: Dictionary = _meet_all(held)
 		held.clear()
@@ -165,6 +178,74 @@ func _merge(key: int, incoming: Dictionary) -> void:
 	if changed and not _queued.has(key):
 		_queued[key] = true
 		_queue.append(key)
+
+
+func _closed(conds: Dictionary) -> Dictionary:
+	if _implied.is_empty():
+		return conds
+	var out: Dictionary = conds.duplicate()
+	for condition: String in conds:
+		for implied: String in _implied.get(condition, []):
+			if not out.has(Gen2WorldStory.negate(implied)):
+				out[implied] = true
+	return out
+
+
+## Each positive fact written to what every write of it held, which a path holding
+## the fact keeps; a new game's facts and a scene's resting 0 imply nothing.
+func _implications(start: Vector2i) -> Dictionary:
+	var met: Dictionary = {}
+	var free: Dictionary = {}
+	for row: Array in _beaten:
+		for fact: String in row[0]:
+			_narrow(met, fact, row[1])
+	for key: int in _state:
+		var command: Dictionary = _decode(key)
+		if command.is_empty():
+			continue
+		for name: String in _state[key]:
+			var place: Array = _places_by_name.get(name, [])
+			for fact: String in _facts(command, [place] if not place.is_empty() else []):
+				if place.size() == 3 and int(place[0]) == start.x and int(place[1]) == start.y:
+					free[fact] = true
+				_narrow(met, fact, (_state[key][name] as Dictionary).keys())
+	var out: Dictionary = {}
+	for fact: String in met:
+		if not free.has(fact) and not fact.begins_with("!") and not fact.ends_with("=0") \
+			and not (met[fact] as Dictionary).is_empty():
+			out[fact] = met[fact]
+	for _pass: int in out.size():
+		if not _widen(out):
+			break
+	var lists: Dictionary = {}
+	for fact: String in out:
+		lists[fact] = (out[fact] as Dictionary).keys()
+	return lists
+
+
+static func _narrow(met: Dictionary, fact: String, conds: Array) -> void:
+	var positive: Dictionary = {}
+	for condition: String in conds:
+		if not condition.begins_with("!") and condition != fact:
+			positive[condition] = true
+	if not met.has(fact):
+		met[fact] = positive
+		return
+	for condition: String in (met[fact] as Dictionary).keys():
+		if not positive.has(condition):
+			(met[fact] as Dictionary).erase(condition)
+
+
+static func _widen(implied: Dictionary) -> bool:
+	var grew: bool = false
+	for fact: String in implied:
+		var held: Dictionary = implied[fact]
+		for condition: String in held.keys():
+			for further: String in (implied.get(condition, {}) as Dictionary):
+				if further != fact and not held.has(further):
+					held[further] = true
+					grew = true
+	return grew
 
 
 static func _meet(held: Dictionary, name: String, conds: Dictionary) -> bool:
@@ -256,7 +337,8 @@ func _edges(key: int, command: Dictionary) -> Array:
 	var code: Array = _code[key]
 	var width: int = int(command["width"])
 	var name: StringName = command["name"]
-	if TESTS.has(name) or (name == &"readvar" and int(command.get("value", -1)) == VAR_BADGES):
+	if TESTS.has(name) or name == &"special" \
+		or (name == &"readvar" and int(command.get("value", -1)) == VAR_BADGES):
 		var branch: Array = _branch(bank, address, code, command)
 		if not branch.is_empty():
 			return branch
@@ -275,38 +357,46 @@ func _edges(key: int, command: Dictionary) -> Array:
 func _branch(bank: int, address: int, code: Array, command: Dictionary) -> Array:
 	var at: int = int(code[1]) + int(command["width"])
 	var jump: Dictionary = Gen2WorldScript.command_at(code[0], at, _crystal)
-	var taken: String = _taken(command, jump)
-	if taken.is_empty():
+	var answers: Array = _answers(command, jump)
+	if answers.is_empty():
 		return []
 	var after: int = address + int(command["width"]) + int(jump["width"])
 	var out: Array = [
-		[_locate(bank, int(jump["address"]), key_of(bank, address)), taken.trim_prefix("~")],
-		[_follow(bank, after, code[0], at + int(jump["width"])),
-			"" if taken.begins_with("~") else Gen2WorldStory.negate(taken)],
+		[_locate(bank, int(jump["address"]), key_of(bank, address)), answers[0]],
+		[_follow(bank, after, code[0], at + int(jump["width"])), answers[1]],
 	]
 	return out.filter(func(edge: Array) -> bool: return int(edge[0]) >= 0)
 
 
-## What holds where [param jump] jumps after [param command]'s test, or empty.
-## `readvar VAR_BADGES` becomes `b:N`; `~` says the other side learns nothing.
-static func _taken(command: Dictionary, jump: Dictionary) -> String:
+## What each side of [param command]'s test learns: `b:N` off `readvar VAR_BADGES`,
+## `x:N` a `special`'s true answer, which the proof never grants.
+static func _answers(command: Dictionary, jump: Dictionary) -> Array:
 	if not bool(jump.get("ok", false)):
-		return ""
+		return []
 	var name: StringName = jump["name"]
+	if StringName(command["name"]) == &"special":
+		var answered: String = "x:%d" % int(command.get("value", 0))
+		match name:
+			&"iftrue":
+				return [answered, ""]
+			&"iffalse":
+				return ["", answered]
+		return []
 	if TESTS.has(command["name"]):
 		if not name in [&"iftrue", &"iffalse"] or _temporary(command):
-			return ""
+			return []
 		var test: String = "%s:%d" % [TESTS[command["name"]], int(command.get("flag", command.get("value", 0)))]
-		return test if name == &"iftrue" else Gen2WorldStory.negate(test)
+		var taken: String = test if name == &"iftrue" else Gen2WorldStory.negate(test)
+		return [taken, Gen2WorldStory.negate(taken)]
 	var value: int = int(jump.get("value", 0))
 	match name:
 		&"ifgreater":
-			return "b:%d" % (value + 1)
+			return ["b:%d" % (value + 1), "!b:%d" % (value + 1)]
 		&"ifless":
-			return "!b:%d" % value
+			return ["!b:%d" % value, "b:%d" % value]
 		&"ifequal":
-			return "~b:%d" % value
-	return ""
+			return ["b:%d" % value, ""]
+	return []
 
 
 func _follow(bank: int, address: int, bytes: PackedByteArray, offset: int) -> int:

@@ -4708,26 +4708,39 @@ const ROUTE_2_GATE: int = 49
 const ROUTE_2_GATE_AIDE_FRONT := Vector2i(1, 5)
 const AIDE_REQUIREMENT: int = 10
 const HM05_ITEM: int = 200
+const NUGGET_ITEM: int = 0x31
 
 
-## `OaksAideScript` at the Route 2 gate: filled boxes, and the gift once qualified.
+## `OaksAideScript` at the Route 2 gate, then with its catalog row patched.
 func _check_oaks_aide() -> void:
 	for caught: int in [AIDE_REQUIREMENT - 1, AIDE_REQUIREMENT]:
-		var world: Gen2WorldAPI = _r.open_world(0, ROUTE_2_GATE, ROUTE_2_GATE_AIDE_FRONT)
-		if world == null:
-			return
-		world.player_facing = Gen2WorldSprite.FACING_UP
-		for species: int in range(1, caught + 1):
-			world.state.set_species_caught(species)
-		var event: Dictionary = world._gen1_event_at(world.object_facing_cell(), &"objects")
-		var steps: Array = world._gen1_script_steps(world.gen1_text_at(int(event.get("text", 0))), event)
-		var said: String = JSON.stringify(steps)
-		_r.check(not steps.is_empty() and not said.contains("<NUM_") and not said.contains("<RAM_")
-			and said.contains("HM05"), "the aide with %d caught said %s." % [caught, said])
-		var gives: bool = said.contains("\"%d\":1" % HM05_ITEM)
-		_r.check(gives == (caught >= AIDE_REQUIREMENT),
-			"the aide with %d caught gave %s." % [caught, gives])
-	_r.note("gen1 walk OAKS_AIDE counts, names and hands over HM05")
+		_check_aide_gift(caught, HM05_ITEM)
+	var overlay := Gen2ContentOverlay.new()
+	for row: Dictionary in _r.data.catalog().rows(Gen2WorldCatalog.KIND_ITEM):
+		if int(row["item"]) == HM05_ITEM and row.get("map", Vector2i.ZERO) == Vector2i(0, ROUTE_2_GATE):
+			overlay.patch(Gen2ContentOverlay.KIND_CHECK, &"check", int(row["id"]), {"item": NUGGET_ITEM})
+	_r.check(not overlay.is_empty(), "no catalog row for the Route 2 aide.")
+	_r.data.set_content_overlay(overlay)
+	_check_aide_gift(AIDE_REQUIREMENT, NUGGET_ITEM)
+	_r.data.set_content_overlay(Gen2ContentOverlay.shared())
+	_r.note("gen1 walk OAKS_AIDE counts, names and hands over HM05, or its patch")
+
+
+func _check_aide_gift(caught: int, item: int) -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, ROUTE_2_GATE, ROUTE_2_GATE_AIDE_FRONT)
+	if world == null:
+		return
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	for species: int in range(1, caught + 1):
+		world.state.set_species_caught(species)
+	var event: Dictionary = world._gen1_event_at(world.object_facing_cell(), &"objects")
+	var steps: Array = world._gen1_script_steps(world.gen1_text_at(int(event.get("text", 0))), event)
+	var said: String = JSON.stringify(steps)
+	_r.check(not steps.is_empty() and not said.contains("<NUM_") and not said.contains("<RAM_")
+		and said.contains(_r.data.item_name(item)), "the aide with %d caught said %s." % [caught, said])
+	var gives: bool = said.contains("\"%d\":1" % item)
+	_r.check(gives == (caught >= AIDE_REQUIREMENT),
+		"the aide with %d caught gave %s." % [caught, gives])
 
 
 const SILPH_CO_7F: int = 212

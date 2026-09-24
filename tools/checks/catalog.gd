@@ -31,6 +31,11 @@ const MOLTRES: int = 146
 const MEWTWO: int = 150
 const GOLD_TEETH: int = 0x40
 const HM04: int = 199
+const HM05: int = 200
+const GEN1_AIDES: Dictionary = {HM05: 10, 0x47: 30, 0x4B: 50}
+const ELMS_LAB := Vector2i(24, 5)
+const MYSTERY_EGG: int = 0x45
+const EVERSTONE: int = 0x70
 ## `[item, map]`: a key item behind the gate it opens. The parcel and the flute
 ## into the Safari Zone, past the old man and Snorlax.
 const GEN1_SELF_LOCKS: Array = [[0x46, Vector2i(0, 0xDB)], [0x49, Vector2i(0, 0xDB)]]
@@ -45,9 +50,9 @@ const EXPECTED_CENSUS: Dictionary = {
 	&"gold": [449, 3, 9, 15, 8, 9, 352, 16, 37],
 	&"silver": [449, 3, 9, 15, 8, 9, 352, 16, 37],
 	&"crystal": [516, 3, 11, 14, 9, 6, 419, 16, 38],
-	&"red": [270, 3, 4, 16, 9, 10, 206, 8, 14],
-	&"blue": [270, 3, 4, 16, 9, 10, 206, 8, 14],
-	&"yellow": [276, 1, 7, 18, 7, 10, 211, 8, 14],
+	&"red": [273, 3, 4, 16, 9, 10, 209, 8, 14],
+	&"blue": [273, 3, 4, 16, 9, 10, 209, 8, 14],
+	&"yellow": [279, 1, 7, 18, 7, 10, 214, 8, 14],
 }
 
 ## Oak's three balls, and Yellow's one Pikachu.
@@ -116,10 +121,8 @@ func _one_game() -> void:
 	_verify_sidecar(_catalog)
 
 
-## The sidecar is what a player reads: the scan costs thirteen seconds at import,
-## and every check above ran against whatever [method GameData.catalog] handed back.
-## So this asks whether a restored catalog and a fresh scan are the same catalog,
-## every row, every link and every kind's order.
+## The sidecar is what a player reads, so a restored catalog and a fresh scan have
+## to agree on every row, every link and every kind's order.
 func _verify_sidecar(_catalog: Gen2WorldCatalog) -> void:
 	var written: Variant = RomCache.read_json(
 		RomCache.world_catalog_path(_r.data.directory)
@@ -196,8 +199,7 @@ func _verify_statics(_catalog: Gen2WorldCatalog) -> void:
 		)
 
 
-## A prize is a give site with a `takecoins` behind it, and the price has to be
-## the one for THAT branch rather than the first one in the vendor's script.
+## A prize is a give site priced by its own branch's `takecoins`.
 func _verify_prizes(_catalog: Gen2WorldCatalog) -> void:
 	var prices: Array = []
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_PRIZE):
@@ -210,9 +212,8 @@ func _verify_prizes(_catalog: Gen2WorldCatalog) -> void:
 	)
 
 
-## Sixteen badges, each granted somewhere; Kanto's eight sit from `KANTO_BADGE_FIRST`
-## on Generation 1. Gold and Silver set two from a second script as well, so the row
-## count is not the badge count and the test is over the SET rather than the list.
+## Sixteen badges, each granted somewhere, Kanto's from `KANTO_BADGE_FIRST` on
+## Generation 1. Gold and Silver set two twice, so the test is over the set.
 func _verify_badges(_catalog: Gen2WorldCatalog) -> void:
 	var seen: Dictionary = {}
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_BADGE):
@@ -251,9 +252,8 @@ func _verify_ids(_catalog: Gen2WorldCatalog) -> void:
 	_r.note("%d ids, each naming one site." % seen.size())
 
 
-## The four fields whose effect is not at the command the site is: a starter's
-## picture, and a prize's two coin commands. A patch that reached the `givepoke`
-## alone would show one Pokemon and hand over another.
+## A starter's picture and a prize's two coin commands follow a patch of the site,
+## or the `givepoke` alone would show one Pokemon and hand over another.
 func _verify_links(_catalog: Gen2WorldCatalog) -> void:
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_STARTER):
 		_r.check(
@@ -350,7 +350,34 @@ func _verify_progression(_catalog: Gen2WorldCatalog) -> void:
 		"a rejected placement was left installed."
 	)
 	_verify_self_locks(data, _catalog, GEN2_SELF_LOCKS)
+	_verify_special_gate(data, _catalog)
 	_verify_reachable(data, _catalog, vanilla)
+
+
+## Elm's EVERSTONE waits on the Togepi a `special` finds, on either path, so the
+## MYSTERY EGG that Togepi hatches from cannot be placed there.
+func _verify_special_gate(data: GameData, _catalog: Gen2WorldCatalog) -> void:
+	var egg: int = -1
+	var everstone: int = -1
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+		if int(row["item"]) == MYSTERY_EGG and egg < 0:
+			egg = int(row["id"])
+		if int(row["item"]) == EVERSTONE and row.get("map", Vector2i(-1, -1)) == ELMS_LAB:
+			everstone = int(row["id"])
+			_r.check(
+				(row["requires"] as Array).any(func(entry: Dictionary) -> bool: return entry.has("special")),
+				"Elm's EVERSTONE requires %s, no Togepi." % str(row["requires"])
+			)
+	if not _r.check(egg >= 0 and everstone >= 0, "no MYSTERY EGG gift or no EVERSTONE in Elm's lab."):
+		return
+	var result: Dictionary = Gen2WorldProgression.validate(data, {
+		egg: {"item": EVERSTONE}, everstone: {"item": MYSTERY_EGG},
+	})
+	_r.check(not bool(result["ok"]), "the MYSTERY EGG on the EVERSTONE its Togepi opens validated.")
+	_r.check(
+		not (Gen2WorldProgression.reachable(data)["reached"] as Array).has(everstone),
+		"Elm's EVERSTONE is reachable with nothing held."
+	)
 
 
 ## Nothing held reaches what validation does. With every site emptied, holding every
@@ -490,8 +517,7 @@ func _verify_self_locks(data: GameData, _catalog: Gen2WorldCatalog, locks: Array
 		_r.note("item %X on %s refused: %s" % [lock[0], lock[1], str(result.get("missing", {}))])
 
 
-## The whole point of the catalog: a patch has to reach the row a runtime reader
-## gets. Done on an overlay of this check's own, so the shared one is untouched.
+## A patch reaches the row a runtime reader gets, on an overlay of this check's own.
 func _verify_patching(_catalog: Gen2WorldCatalog) -> void:
 	var overlay := Gen2ContentOverlay.new()
 	var data: GameData = GameData.open(_r.game_id)
@@ -529,9 +555,8 @@ func _verify_patching(_catalog: Gen2WorldCatalog) -> void:
 	)
 
 
-## Oak's three balls are one `AddPartyMon` at one address, so three rows at it, and
-## the `wPlayerStarter` store beside it answers for each by the species reaching it.
-## The Magikarp salesman's two money commands link the way a prize's coin commands do.
+## Oak's three balls are three rows at one `AddPartyMon`, each linked to the
+## `wPlayerStarter` store by species; the Magikarp salesman's money links like coins.
 func _verify_gen1_links(_catalog: Gen2WorldCatalog) -> void:
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_STARTER):
 		if not _r.check(row.has("starter_address"), "a starter has no linked wPlayerStarter store."):
@@ -610,4 +635,19 @@ func _verify_gen1_progression(_catalog: Gen2WorldCatalog) -> void:
 		"a rejected placement was left installed."
 	)
 	_verify_self_locks(data, _catalog, GEN1_SELF_LOCKS)
+	_verify_aides(_catalog)
 	_verify_reachable(data, _catalog, vanilla)
+
+
+## Oak's aides wait on their Pokedex counts; only HM05's is critical.
+func _verify_aides(_catalog: Gen2WorldCatalog) -> void:
+	var found: Dictionary = {}
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+		for entry: Dictionary in row["requires"]:
+			if entry.has("owned"):
+				found[int(row["item"])] = int(entry["owned"])
+				_r.check(
+					not _catalog.is_progression(row) or int(row["item"]) == HM05,
+					"the aide handing %X is critical." % int(row["item"])
+				)
+	_r.check(found == GEN1_AIDES, "the aides hand %s, not %s." % [found, GEN1_AIDES])

@@ -5,7 +5,8 @@ extends RefCounted
 ## [Gen2WorldCatalog] sidecar. Conditions and facts share one spelling: `e:N` an
 ## event set (`!e:N` clear), `f:N` an engine flag, `i:N` an item held, `t:N` a
 ## Generation 1 toggle shown, `s:G:N=V` map G:N's scene or map script state,
-## `c:G:N:X:Y` a block rewritten, `b:N` at least N badges.
+## `c:G:N:X:Y` a block rewritten, `b:N` at least N badges, `o:N` species owned,
+## `x:N` special N answered true.
 
 ## `{sets, requires, at}`, places `[group, number(, x, y)]`; no place is anywhere.
 var setters: Array = []
@@ -46,11 +47,12 @@ static func condition_of(requirement: Dictionary) -> String:
 
 const REQUIREMENT_KINDS: Dictionary = {
 	"item": "i", "engine_flag": "f", "event": "e", "toggle": "t", "badges": "b",
+	"owned": "o", "special": "x",
 }
 
 
-## The public `requires` shape: `{item}`, `{engine_flag}`, `{event}`, `{toggle}`
-## or `{badges}`, with `clear` when negated, or `{scene: [g, n, v]}`.
+## A `requires` entry: one of [constant REQUIREMENT_KINDS]' keys, `clear` when
+## negated, or `{scene: [g, n, v]}`.
 static func requirement_of(condition: String) -> Dictionary:
 	var clear: bool = condition.begins_with("!")
 	var body: String = condition.substr(1) if clear else condition

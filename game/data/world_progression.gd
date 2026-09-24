@@ -14,6 +14,7 @@ const REASON_NO_CATALOG: StringName = &"missing_catalog"
 const MAX_ROUNDS: int = 512
 ## The change every badge raises, which flags, counts and HM badges wait on.
 const BADGE_KEY: String = "#badge"
+const OWNED_KEY: String = "#owned"
 
 ## `Gen2WorldSpawn`'s new-game map; Generation 1's is `NewGameWarp`'s row.
 const START_MAP := Vector2i(Gen2WorldSpawn.NEW_BARK_GROUP, Gen2WorldSpawn.PLAYERS_HOUSE_2F)
@@ -73,10 +74,12 @@ static func _prepared(data: GameData, patches: Dictionary) -> Dictionary:
 		var fresh := Gen2ContentOverlay.new()
 		opened.set_content_overlay(fresh)
 		var catalog: Gen2WorldCatalog = opened.catalog()
+		var plan: Dictionary = _plan(catalog)
+		plan["wild"] = _wild_places(opened)
 		_scratch[data.directory] = {
 			"overlay": fresh, "catalog": catalog, "start": start_place(opened),
 			"walk": Gen2WorldReachability.build(opened, catalog.story()),
-			"plan": _plan(catalog),
+			"plan": plan,
 		}
 	var scratch: Dictionary = _scratch[data.directory]
 	var overlay: Gen2ContentOverlay = scratch["overlay"]
@@ -128,6 +131,37 @@ static func _plan(catalog: Gen2WorldCatalog) -> Dictionary:
 		"gates": story.gates, "items": catalog.item_sources(), "links": story.links,
 		"gate_index": gate_index, "badge_of": {}, "moves_of": {}, "transient": story.transient,
 	}
+
+
+## Each map's grass and cave species, catchable with nothing in hand.
+static func _wild_places(data: GameData) -> Array:
+	var out: Array = []
+	for map: Gen2WorldMap in data.world_maps():
+		var species: Dictionary = {}
+		_note_species(data.world_encounter(&"grass", map.group, map.number).get("slots", []), species)
+		if not species.is_empty():
+			out.append([Gen2WorldStory.place(Vector2i(map.group, map.number)), species.keys()])
+	return out
+
+
+static func _note_species(slots: Variant, species: Dictionary) -> void:
+	for slot: Variant in slots if slots is Array else []:
+		if slot is Array:
+			_note_species(slot, species)
+		elif slot is Dictionary and int((slot as Dictionary).get("species", 0)) > 0:
+			species[int((slot as Dictionary)["species"])] = true
+
+
+static func _owned_count(state: Dictionary) -> int:
+	var left: Array = []
+	for task: Dictionary in state["wild"]:
+		if not _placed(state, task):
+			left.append(task)
+			continue
+		for species: int in task["species"]:
+			state["owned"][species] = true
+	state["wild"] = left
+	return (state["owned"] as Dictionary).size()
 
 
 ## The change that can flip [param condition]: its negation, or any scene.
@@ -192,6 +226,8 @@ static func _run(scratch: Dictionary, held: Dictionary = {}) -> Dictionary:
 		"walk": scratch["walk"], "start": scratch["start"], "moves": {}, "open": {}, "graph_id": 0,
 		"changed": {}, "blocked": {}, "waiting": _tasks(plan, rows), "reached_rows": {},
 		"rows": rows, "fresh": [], "by_node": {}, "new_items": [], "teaching": [], "usable": {},
+		"owned": {}, "wild": (plan["wild"] as Array).map(func(pair: Array) -> Dictionary:
+			return {"place": pair[0], "key": str(pair[0]), "species": pair[1]}),
 	}
 	for item: Variant in held.get("items", []):
 		state["items"][int(item)] = true
@@ -213,6 +249,8 @@ static func _run(scratch: Dictionary, held: Dictionary = {}) -> Dictionary:
 			_unblock(state, changed)
 		var grew: bool = not (state["fresh"] as Array).is_empty()
 		_place_fresh(state)
+		if grew and (state["blocked"] as Dictionary).has(OWNED_KEY):
+			state["changed"][OWNED_KEY] = true
 		changed = state["changed"]
 		state["changed"] = {}
 		if not (changed as Dictionary).is_empty() or grew:
@@ -376,6 +414,10 @@ static func _holds(state: Dictionary, condition: String) -> bool:
 		return true
 	if condition.begins_with("b:"):
 		return (state["badges"] as Dictionary).size() >= condition.substr(2).to_int()
+	if condition.begins_with("o:"):
+		return _owned_count(state) >= condition.substr(2).to_int()
+	if condition.begins_with("x:"):
+		return false
 	if condition.begins_with("f:") and _badge_of_flag(state, condition) >= 0:
 		return (state["badges"] as Dictionary).has(_badge_of_flag(state, condition))
 	if (state["facts"] as Dictionary).has(condition) or not (plan["settable"] as Dictionary).has(condition):
@@ -398,6 +440,8 @@ static func _first_unmet(state: Dictionary, conds: Array) -> String:
 	var catalog: Gen2WorldCatalog = state["catalog"]
 	for condition: String in conds:
 		if not _holds(state, condition):
+			if condition.begins_with("o:"):
+				return OWNED_KEY
 			var counted: bool = condition.begins_with("b:") \
 				or (condition.begins_with("f:") and _badge_of_flag(state, condition) >= 0)
 			return BADGE_KEY if counted else condition
