@@ -53,6 +53,8 @@ var font: Gen2Font = null
 var tiles: Gen2BattleTiles = null
 ## Generation 1 has no exp bar, caught ball or gender sign, and centres a short name.
 var gen1: bool = false
+var ball_sheet: PackedByteArray = PackedByteArray()
+var ball_sheet_width: int = 0
 
 
 ## Reads what it draws with out of a cache, or null if any of it is missing.
@@ -66,7 +68,33 @@ static func from_data(data: GameData) -> Gen2BattleHud:
 	out.font = glyphs
 	out.tiles = page
 	out.gen1 = data.generation == RomRegistry.GEN1
+	var sheet_name: String = "battle_balls" if out.gen1 else "ball_icons"  # party balls
+	out.ball_sheet = data.tile_indices(sheet_name)
+	@warning_ignore("integer_division")
+	out.ball_sheet_width = int(data.tile_sheet(sheet_name).get("width", out.ball_sheet.size() / TILE))
 	return out
+
+
+## The view's `trainer_hud_balls`, each `{tile, x, y}`, out of the ball sheet.
+func draw_party_balls(into: PackedByteArray, width: int, balls: Array) -> void:
+	if ball_sheet_width <= 0:
+		return
+	@warning_ignore("integer_division")
+	var height: int = into.size() / width
+	for entry: Variant in balls:
+		if not entry is Dictionary:
+			continue
+		var ball: Dictionary = entry as Dictionary
+		var left: int = int(ball.get("x", 0))
+		var top: int = int(ball.get("y", 0))
+		for row: int in TILE:
+			var from: int = row * ball_sheet_width + int(ball.get("tile", 0)) * TILE
+			if top + row < 0 or top + row >= height:
+				continue
+			for column: int in TILE:
+				var x: int = left + column
+				if x >= 0 and x < width and from + column < ball_sheet.size():
+					into[(top + row) * width + x] = ball_sheet[from + column]
 
 
 ## `CenterMonName`: a name of one or two letters is printed two columns right of

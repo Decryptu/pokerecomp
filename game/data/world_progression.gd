@@ -46,13 +46,30 @@ static func reset() -> void:
 ## installing them: rows resolve through an overlay of this call's own. Answers
 ## `{ok, reached, critical, missing: {check, requirement, kind}}`, deterministic.
 static func validate(data: GameData, patches: Dictionary = {}) -> Dictionary:
-	if data == null:
+	var scratch: Dictionary = _prepared(data, patches)
+	if scratch.is_empty():
 		return {"ok": false, "reason": REASON_NO_CATALOG, "reached": 0, "critical": 0}
-	## Built once per cartridge: only the overlay changes between seeds.
+	return _answer(_run(scratch))
+
+
+## The check ids, ascending, [param patches] reaches with [param held] (`{items, badges}`)
+## in hand from the start; `{"item": 0}` and `{"badge": -1}` sites hand nothing.
+static func reachable(data: GameData, patches: Dictionary = {}, held: Dictionary = {}) -> Dictionary:
+	var scratch: Dictionary = _prepared(data, patches)
+	if scratch.is_empty():
+		return {"reached": []}
+	var reached: Array = (_run(scratch, held)["reached_rows"] as Dictionary).keys()
+	reached.sort()
+	return {"reached": reached}
+
+
+static func _prepared(data: GameData, patches: Dictionary) -> Dictionary:
+	if data == null:
+		return {}
 	if not _scratch.has(data.directory):
 		var opened: GameData = GameData.open_directory(data.directory)
 		if opened == null:
-			return {"ok": false, "reason": REASON_NO_CATALOG, "reached": 0, "critical": 0}
+			return {}
 		var fresh := Gen2ContentOverlay.new()
 		opened.set_content_overlay(fresh)
 		var catalog: Gen2WorldCatalog = opened.catalog()
@@ -61,8 +78,8 @@ static func validate(data: GameData, patches: Dictionary = {}) -> Dictionary:
 			"walk": Gen2WorldReachability.build(opened, catalog.story()),
 			"plan": _plan(catalog),
 		}
-	var held: Dictionary = _scratch[data.directory]
-	var overlay: Gen2ContentOverlay = held["overlay"]
+	var scratch: Dictionary = _scratch[data.directory]
+	var overlay: Gen2ContentOverlay = scratch["overlay"]
 	overlay.clear_owner(&"progression")
 	var ids: Array = patches.keys()
 	ids.sort()
@@ -70,7 +87,7 @@ static func validate(data: GameData, patches: Dictionary = {}) -> Dictionary:
 		overlay.patch(
 			Gen2ContentOverlay.KIND_CHECK, &"progression", int(id), patches[id]
 		)
-	return _answer(_run(held["catalog"], held["walk"], held["plan"], held["start"]))
+	return scratch
 
 
 ## What no placement changes: rows' places and conditions, the setters read,
@@ -162,9 +179,9 @@ static func _read_any(sets: Array, read: Dictionary) -> bool:
 
 ## The closure, answering with its final state. A task, a row or a setter,
 ## waits for its place, then on its first condition that does not hold.
-static func _run(
-	catalog: Gen2WorldCatalog, walk: Gen2WorldReachability, plan: Dictionary, start: Array
-) -> Dictionary:
+static func _run(scratch: Dictionary, held: Dictionary = {}) -> Dictionary:
+	var catalog: Gen2WorldCatalog = scratch["catalog"]
+	var plan: Dictionary = scratch["plan"]
 	var rows: Array = catalog.rows()
 	rows.sort_custom(func(first: Dictionary, second: Dictionary) -> bool:
 		return int(first["id"]) < int(second["id"])
@@ -172,10 +189,17 @@ static func _run(
 	var state: Dictionary = {
 		"catalog": catalog, "plan": plan, "items": {}, "badges": {},
 		"facts": (plan["initial"] as Dictionary).duplicate(), "scenes": {},
-		"walk": walk, "start": start, "moves": {}, "open": {}, "graph_id": 0,
+		"walk": scratch["walk"], "start": scratch["start"], "moves": {}, "open": {}, "graph_id": 0,
 		"changed": {}, "blocked": {}, "waiting": _tasks(plan, rows), "reached_rows": {},
 		"rows": rows, "fresh": [], "by_node": {}, "new_items": [], "teaching": [], "usable": {},
 	}
+	for item: Variant in held.get("items", []):
+		state["items"][int(item)] = true
+		(state["new_items"] as Array).append(int(item))
+	for badge: Variant in held.get("badges", []):
+		state["badges"][int(badge)] = true
+	_refresh_moves(state)
+	state["moves"] = state["usable"]
 	_reflood(state)
 	var closed: Dictionary = _closed_at_start(state)
 	var links: Array = range((plan["links"] as Array).size())
@@ -250,8 +274,7 @@ static func _reflood(state: Dictionary) -> void:
 	state["replace"] = true
 
 
-## The gates closed at a new game, with their lists holding then; a list that
-## does not hold then stays open.
+## The gates closed at a new game, with the lists holding then; others stay open.
 static func _closed_at_start(state: Dictionary) -> Dictionary:
 	var closed: Dictionary = {}
 	var gates: Array = state["plan"]["gates"]
@@ -285,8 +308,7 @@ static func _holds_at_start(state: Dictionary, condition: String) -> bool:
 	return initial.has(condition)
 
 
-## Opens each closed gate [param changed] can reach (all at first) whose every
-## list flipped.
+## Opens each closed gate [param changed] reaches (all at first) whose lists all flipped.
 static func _open_gates(state: Dictionary, closed: Dictionary, changed: Variant) -> void:
 	var candidates: Array = closed.keys()
 	if changed != null:
@@ -376,7 +398,9 @@ static func _first_unmet(state: Dictionary, conds: Array) -> String:
 	var catalog: Gen2WorldCatalog = state["catalog"]
 	for condition: String in conds:
 		if not _holds(state, condition):
-			return BADGE_KEY if condition.begins_with("b:") or condition.begins_with("f:") else condition
+			var counted: bool = condition.begins_with("b:") \
+				or (condition.begins_with("f:") and _badge_of_flag(state, condition) >= 0)
+			return BADGE_KEY if counted else condition
 		if condition.begins_with("i:"):
 			var badge: int = catalog.badge_for_hm_item(condition.substr(2).to_int())
 			if badge >= 0 and not (state["badges"] as Dictionary).has(badge):
@@ -465,7 +489,7 @@ static func _take_row(state: Dictionary, row: Dictionary) -> void:
 		state["items"][int(row["item"])] = true
 		state["changed"]["i:%d" % int(row["item"])] = true
 		(state["new_items"] as Array).append(int(row["item"]))
-	if StringName(row["kind"]) == Gen2WorldCatalog.KIND_BADGE:
+	if StringName(row["kind"]) == Gen2WorldCatalog.KIND_BADGE and int(row["badge"]) >= 0:
 		state["badges"][int(row["badge"])] = true
 		state["changed"][BADGE_KEY] = true
 

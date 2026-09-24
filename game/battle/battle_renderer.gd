@@ -630,29 +630,9 @@ func _draw_hud_balls() -> void:
 		return
 	if not _layer_changed(&"hud_balls", [balls]):
 		return
-	var sheet_name: String = "battle_balls" if _hud.gen1 else "ball_icons"
-	var sheet: PackedByteArray = _data.tile_indices(sheet_name)
-	var width: int = int(_data.tile_sheet(sheet_name).get("width", sheet.size() / TILE))
 	var buffer: PackedByteArray = _new_buffer()
-	for entry: Variant in balls:
-		if not entry is Dictionary or width <= 0:
-			continue
-		var ball: Dictionary = entry as Dictionary
-		var tile: int = int(ball.get("tile", 0))
-		var left: int = int(ball.get("x", 0))
-		var top: int = int(ball.get("y", 0))
-		for row: int in TILE:
-			if top + row < 0 or top + row >= Gen2Screen.HEIGHT:
-				continue
-			var from: int = row * width + tile * TILE
-			var to: int = (top + row) * Gen2Screen.WIDTH + left
-			for column: int in TILE:
-				var x: int = left + column
-				if x < 0 or x >= Gen2Screen.WIDTH or from + column >= sheet.size():
-					continue
-				buffer[to + column] = sheet[from + column]
-	# Not through `_show_image`: an object is not part of the background plane
-	# and does not take the scroll the background layers do.
+	_hud.draw_party_balls(buffer, Gen2Screen.WIDTH, balls)
+	# Not through `_show_image`: an object takes no background scroll.
 	var image: Image = Gen2PicImage.from_indices(
 		buffer, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
 		_colors.object_palette(Gen2BattleAnimBackground.PAL_OB_YELLOW), true

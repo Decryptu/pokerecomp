@@ -13,6 +13,7 @@ const INTRO_FRAMES: int = 12000
 const STALL_FRAMES: int = 600
 const LEG_FRAMES: int = 12000
 const LEG_BUDGETS: Dictionary = {
+	"parcel": 60000, "parcel_to_lab": 36000, "mystery_egg": 60000, "egg_to_lab": 36000,
 	"forest_to_north_gate": 36000, "mr_pokemon": 24000, "brock": 24000, "route_31_to_gate": 24000, "falkner": 24000,
 	"route_32_to_union_cave": 36000, "union_cave_to_route_33": 36000, "rockets": 36000,
 	"bugsy": 36000, "pewter_to_route_3": 36000, "route_3_to_route_4": 60000, "route_4_to_mt_moon": 36000,
@@ -29,7 +30,6 @@ const OAKS_LAB := Vector2i(0, 40)
 const ROUTE_1 := Vector2i(0, 12)
 const VIRIDIAN_CITY := Vector2i(0, 1)
 const VIRIDIAN_POKECENTER := Vector2i(0, 41)
-const VIRIDIAN_MART := Vector2i(0, 42)
 const ROUTE_2 := Vector2i(0, 13)
 const VIRIDIAN_FOREST_SOUTH_GATE := Vector2i(0, 50)
 const VIRIDIAN_FOREST := Vector2i(0, 51)
@@ -43,7 +43,6 @@ const MT_MOON_1F := Vector2i(0, 59)
 const MT_MOON_B1F := Vector2i(0, 60)
 const MT_MOON_B2F := Vector2i(0, 61)
 const CERULEAN_GYM := Vector2i(0, 65)
-## The ladders a Mt. Moon walk takes, and the Super Nerd's trigger cell.
 const MT_MOON_1F_LADDER := Vector2i(5, 5)
 const MT_MOON_NERD_CELL := Vector2i(13, 8)
 const MT_MOON_BELOW_DOME := Vector2i(12, 7)
@@ -81,8 +80,7 @@ const LAB_STARTER_BALLS: Dictionary = {
 	&"red": Vector2i(6, 4), &"blue": Vector2i(6, 4), &"yellow": Vector2i(7, 4),
 }
 const LAB_BELOW_OAK := Vector2i(5, 3)
-## The nurse stands on (3,1) behind her counter, faced from two cells below;
-## Mom stands on (5,4) of the ground floor.
+## Below the nurse's (3,1) behind her counter and Mom's (5,4).
 const BELOW_NURSE := Vector2i(3, 3)
 const BELOW_MOM := Vector2i(5, 5)
 const BELOW_BROCK := Vector2i(4, 2)
@@ -102,12 +100,10 @@ const SCENE_ELMSLAB_NOOP: int = 2
 const EVENT_GOT_STARTER: int = 34
 const EVENT_BATTLED_RIVAL_IN_OAKS_LAB: int = 35
 const EVENT_GOT_POKEDEX: int = 37
-const EVENT_GOT_OAKS_PARCEL: int = 57
 const EVENT_GOT_TM34: int = 118
 const EVENT_BEAT_BROCK: int = 119
 const OAKS_PARCEL: int = 0x46
-const BIT_BOULDERBADGE: int = 0
-const BIT_CASCADEBADGE: int = 1
+const MYSTERY_EGG: int = 0x45
 ## Yellow's Mt. Moon run puts it right behind the 1F trainers.
 const EVENT_GOT_DOME_FOSSIL: Dictionary = {
 	&"red": 0x570 + 14, &"blue": 0x570 + 14, &"yellow": 0x570 + 8,
@@ -118,10 +114,8 @@ const EVENT_GAVE_MYSTERY_EGG_TO_ELM: int = 31
 const EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE: int = 45
 const EVENT_AZALEA_TOWN_SLOWPOKETAIL_ROCKET: int = 1786
 const ENGINE_POKEGEAR: int = 4
-## The levels a player grinds to on Route 1, before Viridian Forest and before
-## Brock, and the Route 22 catch every starter needs against him: a MANKEY with
-## LOW KICK, and an ODDISH for Misty; Johto's are before Route 29, Falkner and
-## the well. The save editor writes them, so the engine decides every fight.
+## Grind levels, with the MANKEY (LOW KICK) Brock needs and the ODDISH for Misty;
+## the save editor writes them, so the engine decides every fight.
 const ROUTE_1_LEVEL: int = 8
 const FOREST_LEVEL: int = 12
 const BROCK_LEVEL: int = 20
@@ -134,6 +128,9 @@ const FALKNER_LEVEL: int = 16
 const BUGSY_LEVEL: int = 22
 ## The run's own seed, so every wild roll and every fight replays the same.
 const RUN_SEED: int = 7
+const RETRIES: int = 3
+const RETRY_LEVELS: int = 4
+const UNREACHED: int = 1 << 30
 const GIRL_LAST_LEG: String = "rival"
 
 var _r: CheckRun
@@ -147,6 +144,15 @@ var _nickname_refused: bool = false
 var _held_direction: int = PokeButton.NONE
 var _let_go: int = 0
 var _gender: int = Gen2SaveData.GENDER_MALE
+var _grind_level: int = 0
+var _bonus: int = 0
+var _fight: Array = []
+var _lost: bool = false
+var _sites: Dictionary = {}
+var _walks: Gen2WorldReachability = null
+var _graph: Dictionary = {}
+var _reverse: Array = []
+var _distances_to: Dictionary = {}
 
 
 func run(r: CheckRun) -> void:
@@ -181,7 +187,9 @@ func _gen2_legs() -> Array:
 		["route_30_to_cherrygrove", _cross(Vector2i.DOWN, CHERRYGROVE_CITY), _on_map(CHERRYGROVE_CITY)],
 		["rival", _cross(Vector2i.RIGHT, ROUTE_29), _on_map(ROUTE_29)],
 		["route_29_to_new_bark", _cross(Vector2i.RIGHT, NEW_BARK_TOWN), _on_map(NEW_BARK_TOWN)],
-		["new_bark_to_lab_again", _warp_to(ELMS_LAB), _on_map(ELMS_LAB)],
+		_site_check(MYSTERY_EGG),
+		["mystery_egg", _fetch(MYSTERY_EGG), _holds(MYSTERY_EGG)],
+		["egg_to_lab", _route(ELMS_LAB), _on_map(ELMS_LAB)],
 		["officer", _walk(OFFICER_TRIGGER), _scene(ELMS_LAB, SCENE_ELMSLAB_NOOP)],
 		["elm", _talk(BELOW_ELM, up), _flag(EVENT_GAVE_MYSTERY_EGG_TO_ELM)],
 		["lab_out_again", _warp_to(NEW_BARK_TOWN), _on_map(NEW_BARK_TOWN)],
@@ -197,7 +205,7 @@ func _gen2_legs() -> Array:
 		["nurse", _talk(BELOW_NURSE, up), _healed()],
 		["center_out", _warp_to(VIOLET_CITY), _on_map(VIOLET_CITY)],
 		["violet_gym", _warp_to(VIOLET_GYM), _on_map(VIOLET_GYM)],
-		["falkner", _talk(BELOW_FALKNER, up), _badge(0)],
+		["falkner", _talk(BELOW_FALKNER, up), _engine(_badge_at(VIOLET_GYM))],
 		["gym_out", _warp_to(VIOLET_CITY), _on_map(VIOLET_CITY)],
 		["violet_center_again", _warp_to(VIOLET_POKECENTER), _on_map(VIOLET_POKECENTER)],
 		["togepi_egg", _talk(BELOW_AIDE, up), _flag(EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE)],
@@ -214,7 +222,7 @@ func _gen2_legs() -> Array:
 		["rockets", _walk(BELOW_WELL_ROCKET), _on_map(KURTS_HOUSE)],
 		["kurt_out_again", _warp_to(AZALEA_TOWN), _on_map(AZALEA_TOWN)],
 		["azalea_gym", _warp_to(AZALEA_GYM), _on_map(AZALEA_GYM)],
-		["bugsy", _talk(BELOW_BUGSY, up), _badge(1)],
+		["bugsy", _talk(BELOW_BUGSY, up), _engine(_badge_at(AZALEA_GYM))],
 		["bugsy_gym_out", _warp_to(AZALEA_TOWN), _on_map(AZALEA_TOWN)],
 	]
 
@@ -232,13 +240,9 @@ func _gen1_legs() -> Array:
 		["mom", _talk(BELOW_MOM, up), _healed()],
 		["home_out", _warp_to(PALLET_TOWN), _on_map(PALLET_TOWN)],
 		_grind.bind(ROUTE_1_LEVEL, 0),
-		["pallet_to_route_1", _cross(Vector2i.UP, ROUTE_1), _on_map(ROUTE_1)],
-		["route_1_to_viridian", _cross(Vector2i.UP, VIRIDIAN_CITY), _on_map(VIRIDIAN_CITY)],
-		["viridian_mart", _warp_to(VIRIDIAN_MART), _flag(EVENT_GOT_OAKS_PARCEL)],
-		["mart_out", _warp_to(VIRIDIAN_CITY), _on_map(VIRIDIAN_CITY)],
-		["viridian_to_route_1", _cross(Vector2i.DOWN, ROUTE_1), _on_map(ROUTE_1)],
-		["route_1_to_pallet", _cross(Vector2i.DOWN, PALLET_TOWN), _on_map(PALLET_TOWN)],
-		["pallet_to_lab", _warp_to(OAKS_LAB), _on_map(OAKS_LAB)],
+		_site_check(OAKS_PARCEL),
+		["parcel", _fetch(OAKS_PARCEL), _holds(OAKS_PARCEL)],
+		["parcel_to_lab", _route(OAKS_LAB), _on_map(OAKS_LAB)],
 		["pokedex", _talk(LAB_BELOW_OAK, up), _flag(EVENT_GOT_POKEDEX)],
 		["lab_out", _warp_to(PALLET_TOWN), _on_map(PALLET_TOWN)],
 		["pallet_to_home_again", _warp_to(REDS_HOUSE_1F), _on_map(REDS_HOUSE_1F)],
@@ -275,7 +279,7 @@ func _gen1_legs() -> Array:
 		["route_4_to_cerulean", _cross(Vector2i.RIGHT, CERULEAN_CITY), _on_map(CERULEAN_CITY)],
 		_grind.bind(MISTY_LEVEL, ODDISH_DEX),
 		["cerulean_gym", _warp_to(CERULEAN_GYM), _on_map(CERULEAN_GYM)],
-		["misty", _talk_to(MISTY), _engine(Gen2WorldState.gen1_badge_flag(BIT_CASCADEBADGE))],
+		["misty", _talk_to(MISTY), _engine(_badge_at(CERULEAN_GYM))],
 		["cerulean_gym_out", _warp_to(CERULEAN_CITY), _on_map(CERULEAN_CITY)],
 	]
 
@@ -288,6 +292,8 @@ func _play() -> void:
 	if Gen2GameRuntime.mods_are_allowed():
 		GameRuntime.select_game(_r.game_id)
 		_r.note("played: mods %s" % [Gen2ModHost.instance().loaded_mods()])
+	_walks = null
+	_distances_to.clear()
 	_play_as(Gen2SaveData.GENDER_MALE)
 	if _r.crystal:
 		_play_as(Gen2SaveData.GENDER_FEMALE)
@@ -301,6 +307,8 @@ func _play_as(gender: int) -> void:
 	_nickname_refused = false
 	_held_direction = PokeButton.NONE
 	_let_go = 0
+	_bonus = 0
+	_sites.clear()
 	var save: Gen2SaveData = _play_intro()
 	if save == null or not _r.check(save.gender == gender, "the intro wrote gender %d." % save.gender):
 		return
@@ -311,17 +319,55 @@ func _play_as(gender: int) -> void:
 	_editor = Gen2SaveEditor.new()
 	_editor.data = _r.data
 	_editor.save = save
-	var ok: bool = true
-	for row: Variant in _legs():
-		ok = row.call() if row is Callable else _leg(String(row[0]), row[1], row[2])
-		if not ok or (gender == Gen2SaveData.GENDER_FEMALE and row is Array and row[0] == GIRL_LAST_LEG):
-			break
-	if ok:
+	if _walk_legs(gender):
 		_r.note("played: %s in %d frames, %d battles" % [
 			"the last badge" if gender == Gen2SaveData.GENDER_MALE else GIRL_LAST_LEG,
 			_frames, _screen.battles_fought()])
 	_r.close_screen(_screen)
 	_screen = null
+
+
+## A whiteout trains the party and walks again from the last leg that set out
+## where it woke up; only legs run twice.
+func _walk_legs(gender: int) -> bool:
+	var legs: Array = _legs()
+	var starts: Dictionary = {}
+	var losses: Dictionary = {}
+	var replay_to: int = -1
+	var index: int = 0
+	while index < legs.size():
+		var row: Variant = legs[index]
+		if row is Callable:
+			if index >= replay_to and not row.call():
+				return false
+		else:
+			starts[index] = _screen.world().map_id()
+			if not _leg(String(row[0]), row[1], row[2]):
+				var back: int = _retry(legs, index, starts, losses) if _lost else -1
+				if back < 0:
+					return false
+				replay_to = maxi(replay_to, index)
+				index = back
+				continue
+			if gender == Gen2SaveData.GENDER_FEMALE and row[0] == GIRL_LAST_LEG:
+				break
+		index += 1
+	return true
+
+
+func _retry(legs: Array, index: int, starts: Dictionary, losses: Dictionary) -> int:
+	var label: String = String(legs[index][0])
+	losses[label] = int(losses.get(label, 0)) + 1
+	if not _r.check(int(losses[label]) <= RETRIES, "lost to %s %d times, party %s." % [
+		label.to_upper(), losses[label], _party()]):
+		return -1
+	var map: Vector2i = _screen.world().map_id()
+	for back: int in range(index, -1, -1):
+		if legs[back] is Array and starts.get(back) == map:
+			_bonus += RETRY_LEVELS
+			return back if _grind(_grind_level, 0) else -1
+	_r.fail("%s whited out to map %s, where no leg sets out." % [label, map])
+	return -1
 
 
 func _flag_check(flag: int, message: String) -> Callable:
@@ -336,15 +382,13 @@ func _engine_check(flag: int, message: String) -> Callable:
 
 func _badge_check() -> bool:
 	var state: Gen2WorldState = _screen.world().state
-	return _r.check(state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(BIT_BOULDERBADGE)),
-			"Brock gave no badge.") \
+	return _r.check(state.is_engine_flag_active(_badge_at(PEWTER_GYM)), "Brock gave no badge.") \
 		and _r.check(int(state.items().get(OAKS_PARCEL, 0)) == 0
 			and _screen.world().event_flag_active(EVENT_GOT_TM34), "the bag holds %s." % [state.items()])
 
 
-## `NewGame` from the copyright screen through `OakSpeech` to the save it
-## writes: A pressed and let go whenever the intro owes no frame, the preset
-## name row taken at the keyboard.
+## `NewGame` through `OakSpeech` to its save: A pressed and let go whenever the
+## intro owes no frame, the preset name row taken at the keyboard.
 func _play_intro() -> Gen2SaveData:
 	var intro := Gen2IntroScreen.new()
 	var written: Array = []
@@ -417,13 +461,18 @@ func _open_screen(save: Gen2SaveData) -> Gen2WorldScreen:
 	return screen
 
 
-## Goals: the next button on an idle map, or NONE when there. A door mat is
-## left by walking into the edge behind it, or its carpet's own direction.
+## Goals: the next button on an idle map, or NONE when there. A mat is left
+## into the edge behind it, or its carpet's own direction.
 func _walk(cell: Vector2i) -> Callable:
 	return func(world: Gen2WorldAPI) -> int:
 		if world.player_cell != cell:
-			return _step_toward(world, cell, Vector2i.ZERO)
+			return _step_toward(world, _is(cell))
 		return _warp_press(world, cell)
+
+
+func _is(cell: Vector2i) -> Callable:
+	return func(at: Vector2i) -> bool:
+		return at == cell
 
 
 func _warp_press(world: Gen2WorldAPI, cell: Vector2i) -> int:
@@ -441,7 +490,7 @@ func _warp_press(world: Gen2WorldAPI, cell: Vector2i) -> int:
 func _talk(cell: Vector2i, facing: int) -> Callable:
 	return func(world: Gen2WorldAPI) -> int:
 		if world.player_cell != cell:
-			return _step_toward(world, cell, Vector2i.ZERO)
+			return _step_toward(world, _is(cell))
 		if world.player_facing != facing:
 			return _direction_button(Gen2WorldAPI.SIGHT_STEPS[facing])
 		return PokeButton.A
@@ -450,22 +499,157 @@ func _talk(cell: Vector2i, facing: int) -> Callable:
 ## [param target] faced from the first side a walk reaches.
 func _talk_to(target: Vector2i) -> Callable:
 	return func(world: Gen2WorldAPI) -> int:
-		for side: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
-			if world.player_cell == target + side:
-				var facing: int = int(Gen2WorldAPI.SIGHT_STEPS.find_key(-side))
-				return _direction_button(-side) if world.player_facing != facing else PokeButton.A
-		for side: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
-			var button: int = _step_toward(world, target + side, Vector2i.ZERO)
-			if button != PokeButton.NONE:
-				return button
-		return PokeButton.NONE
+		return _talk_button(world, target)
+
+
+func _talk_button(world: Gen2WorldAPI, target: Vector2i) -> int:
+	for side: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		if world.player_cell == target + side:
+			var facing: int = int(Gen2WorldAPI.SIGHT_STEPS.find_key(-side))
+			return _direction_button(-side) if world.player_facing != facing else PokeButton.A
+	for side: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		var button: int = _step_toward(world, _is(target + side))
+		if button != PokeButton.NONE:
+			return button
+	return PokeButton.NONE
 
 
 func _cross(direction: Vector2i, map: Vector2i) -> Callable:
 	return func(world: Gen2WorldAPI) -> int:
 		if _crosses(world, world.player_cell, direction, map):
 			return _direction_button(direction)
-		return _step_toward(world, Vector2i(-1, -1), direction, map)
+		return _step_toward(world, func(at: Vector2i) -> bool: return _crosses(world, at, direction, map))
+
+
+## The nearest exit landing closer to [param map] in the region graph, gates open.
+func _route(map: Vector2i) -> Callable:
+	return func(world: Gen2WorldAPI) -> int:
+		return _route_button(world, Gen2WorldStory.place(map))
+
+
+func _route_button(world: Gen2WorldAPI, place: Array) -> int:
+	var distances: PackedInt32Array = _distances(place)
+	var here: int = _place_distance(distances, Gen2WorldStory.place(world.map_id(), world.player_cell))
+	var closer: Callable = func(at: Vector2i) -> bool: return _exit_at(world, distances, at).x < here
+	if closer.call(world.player_cell):
+		return _exit_at(world, distances, world.player_cell).y
+	return _step_toward(world, closer)
+
+
+func _exit_at(world: Gen2WorldAPI, distances: PackedInt32Array, at: Vector2i) -> Vector2i:
+	var best := Vector2i(UNREACHED, PokeButton.NONE)
+	var warp: Dictionary = world.warp_at(at)
+	if not warp.is_empty():
+		best = Vector2i(_place_distance(distances, _warp_landing(world, warp)), _warp_press(world, at))
+	for direction: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		var target: Dictionary = world.connection_target(at, direction)
+		if not bool(target.get("ok", false)):
+			continue
+		var map := Vector2i(int(target["map_group"]), int(target["map_number"]))
+		var distance: int = _place_distance(distances, Gen2WorldStory.place(map, target["cell"]))
+		if distance < best.x:
+			best = Vector2i(distance, _direction_button(direction))
+	return best
+
+
+## The place a warp lands on: Generation 1's destinations count from zero.
+func _warp_landing(world: Gen2WorldAPI, warp: Dictionary) -> Array:
+	var target: Vector2i = _warp_target(world, warp)
+	var index: int = int(warp.get("destination", 0))
+	if _r.data.generation != RomRegistry.GEN1:
+		index -= 1
+	var map: Gen2WorldMap = _r.data.world_map(target.x, target.y)
+	var warps: Array = map.events.get("warps", []) if map != null else []
+	if index < 0 or index >= warps.size():
+		return Gen2WorldStory.place(target)
+	return Gen2WorldStory.place(target, Vector2i(int(warps[index]["x"]), int(warps[index]["y"])))
+
+
+func _warp_target(world: Gen2WorldAPI, warp: Dictionary) -> Vector2i:
+	var target := Vector2i(int(warp.get("map_group", 0)), int(warp.get("map_number", -1)))
+	if _r.data.generation == RomRegistry.GEN1 and target.y == Gen1Layout.WARP_TO_LAST_MAP:
+		target.y = world.gen1_last_map()
+	return target
+
+
+func _place_distance(distances: PackedInt32Array, place: Array) -> int:
+	var best: int = UNREACHED
+	for node: int in _walks.place_nodes(_graph, place):
+		best = mini(best, distances[node])
+	return best
+
+
+func _distances(place: Array) -> PackedInt32Array:
+	if _walks == null:
+		_walks = Gen2WorldReachability.build(_r.data, _r.data.catalog().story())
+		_graph = _walks.graph({})
+		_reverse = _reversed(_graph)
+	var key: String = str(place)
+	if _distances_to.has(key):
+		return _distances_to[key]
+	var out := PackedInt32Array()
+	out.resize(_reverse.size())
+	out.fill(UNREACHED)
+	var frontier: Array = Array(_walks.place_nodes(_graph, place))
+	for node: int in frontier:
+		out[node] = 0
+	while not frontier.is_empty():
+		var node: int = frontier.pop_front()
+		for from: int in _reverse[node]:
+			if out[from] == UNREACHED:
+				out[from] = out[node] + 1
+				frontier.append(from)
+	_distances_to[key] = out
+	return out
+
+
+static func _reversed(built: Dictionary) -> Array:
+	var out: Array = []
+	for _node: int in int(built["count"]):
+		out.append([])
+	for node: int in int(built["count"]):
+		for target: int in built["edges"][node]:
+			(out[target] as Array).append(node)
+		for gate: int in (built["into_gate"] as Dictionary).get(node, []):
+			(out[int(built["gates"][gate]["portal"])] as Array).append(node)
+	return out
+
+
+## The key item's site as patched, routed to and talked to, a walker followed.
+func _fetch(item: int) -> Callable:
+	return func(world: Gen2WorldAPI) -> int:
+		var site: Dictionary = _site_of(item)
+		var cell: Vector2i = site.get("cell", Vector2i(-1, -1))
+		if world.map_id() == site.get("map") and cell.x >= 0:
+			var button: int = _talk_button(world, _live_cell(world, cell))
+			if button != PokeButton.NONE:
+				return button
+		return _route_button(world, Gen2WorldStory.place(site.get("map", Vector2i(-1, -1)), cell))
+
+
+func _site_of(item: int) -> Dictionary:
+	if not _sites.has(item):
+		_sites[item] = {}
+		for row: Dictionary in _r.data.catalog().rows(Gen2WorldCatalog.KIND_ITEM):
+			if int(row.get("item", 0)) == item and row.has("map"):
+				_sites[item] = row
+				break
+	return _sites[item]
+
+
+func _site_check(item: int) -> Callable:
+	return func() -> bool:
+		var site: Dictionary = _site_of(item)
+		_r.note("played: %s is handed out on map %s at %s" % [
+			_r.data.item(item).get("name", item), site.get("map"), site.get("cell")])
+		return _r.check(not site.is_empty(), "no site hands out item %d." % item)
+
+
+func _live_cell(world: Gen2WorldAPI, cell: Vector2i) -> Vector2i:
+	for object: Gen2WorldObject in world.active_objects():
+		if object.initial_cell == cell:
+			return object.cell
+	return cell
 
 
 ## The first warp onto [param map] a walk reaches: a gate's door has a wall
@@ -473,10 +657,7 @@ func _cross(direction: Vector2i, map: Vector2i) -> Callable:
 func _warp_to(map: Vector2i) -> Callable:
 	return func(world: Gen2WorldAPI) -> int:
 		for warp: Dictionary in world.current_map.events.get("warps", []):
-			var target := Vector2i(int(warp.get("map_group", 0)), int(warp.get("map_number", -1)))
-			if _r.data.generation == RomRegistry.GEN1 and target.y == Gen1Layout.WARP_TO_LAST_MAP:
-				target.y = world.gen1_last_map()
-			if target != map:
+			if _warp_target(world, warp) != map:
 				continue
 			var button: int = _walk(Vector2i(int(warp["x"]), int(warp["y"]))).call(world)
 			if button != PokeButton.NONE:
@@ -510,8 +691,19 @@ func _engine(flag: int) -> Callable:
 		return world.state.is_engine_flag_active(flag)
 
 
-func _badge(badge: int) -> Callable:
-	return _engine(Gen2WorldState.badge_flag(badge, _r.crystal))
+## The engine flag of the badge the gym on [param map] hands out, as patched.
+func _badge_at(map: Vector2i) -> int:
+	for row: Dictionary in _r.data.catalog().rows(Gen2WorldCatalog.KIND_BADGE):
+		if row.get("map") == map:
+			## `gen1_badge_flag` reads Crystal's table too.
+			var crystal_table: bool = _r.crystal or _r.data.generation == RomRegistry.GEN1
+			return Gen2WorldState.badge_flag(int(row.get("badge", -1)), crystal_table)
+	return -1
+
+
+func _holds(item: int) -> Callable:
+	return func(world: Gen2WorldAPI) -> bool:
+		return world.state.item_quantity(item) > 0
 
 
 func _healed() -> Callable:
@@ -544,11 +736,21 @@ func _leg(label: String, goal: Callable, done: Callable) -> bool:
 	var spent: int = 0
 	var budget: int = int(LEG_BUDGETS.get(label, LEG_FRAMES))
 	_still = 0
+	_lost = false
+	_fight = []
 	while spent < budget:
-		if done.call(world) and _idle():
+		var idle: bool = _idle()
+		if idle and done.call(world):
 			_r.note("played: %-28s %5d frames, on map %s at %s, party %s, bag %s" % [
 				label, spent, world.map_id(), world.player_cell, _party(), world.state.items()])
 			return true
+		if idle and _whited_out(world):
+			_lost = true
+			_r.note("played: %-28s %5d frames, lost and whited out to map %s at %s" % [
+				label, spent, world.map_id(), world.player_cell])
+			return false
+		if _screen.battle_active():
+			_fight = [world.map_id(), _screen.battles_fought()]
 		var button: int = _button_for(goal)
 		if OS.get_environment("PLAYED_TRACE").ends_with(label) and spent % 4 == 0:
 			print("  f%d btn=%d %s" % [spent, button, _where()])
@@ -563,6 +765,16 @@ func _leg(label: String, goal: Callable, done: Callable) -> bool:
 			return false
 	_r.fail("%s did not finish in %d frames: %s" % [label, budget, _where()])
 	return false
+
+
+## Whether the last fight was lost and left the player elsewhere, asked once.
+func _whited_out(world: Gen2WorldAPI) -> bool:
+	if _fight.is_empty():
+		return false
+	var lost: bool = _screen.last_battle_outcome() == Gen2WorldBattleAdapter.OUTCOME_LOST \
+		and _screen.battles_fought() == int(_fight[1]) and world.map_id() != _fight[0]
+	_fight = []
+	return lost
 
 
 func _idle() -> bool:
@@ -608,9 +820,8 @@ func _paced(button: int) -> int:
 	return button if _frames - _pressed_at >= PRESS_EVERY else PokeButton.NONE
 
 
-## `wCheckFor180DegreeTurn` is armed by a poll with nothing held, so a thumb
-## moving from one direction to another leaves the pad for a pass between,
-## or the new direction is a bump with the old facing kept.
+## `wCheckFor180DegreeTurn` is armed by a poll with nothing held, so a new
+## direction leaves the pad for a pass first, or it is a bump.
 func _let_go_between(button: int) -> int:
 	if not PokeButton.is_direction(button):
 		_held_direction = PokeButton.NONE
@@ -623,8 +834,7 @@ func _let_go_between(button: int) -> int:
 	return button
 
 
-## FIGHT, the move that hurts most, A on every box, and the first standing
-## member when one has to come out.
+## FIGHT, the move that hurts most, A on every box, the first member standing.
 func _battle_button() -> int:
 	var host: Gen2BattleScreen = _screen.get("_battle_host")
 	var snapshot: Dictionary = host.battle_snapshot()
@@ -676,21 +886,20 @@ func _choice_button() -> int:
 	return _paced(PokeButton.A)
 
 
-## The next step of the shortest walk to [param cell], or to any cell a step
-## [param edge] from crosses onto map [param map]; NONE when there or unreachable.
-func _step_toward(world: Gen2WorldAPI, cell: Vector2i, edge: Vector2i, map := Vector2i(-1, -1)) -> int:
-	if world.player_cell == cell:
+## The next step to the nearest cell [param goal] accepts; NONE on one or none.
+func _step_toward(world: Gen2WorldAPI, goal: Callable) -> int:
+	if goal.call(world.player_cell):
 		return PokeButton.NONE
 	var frontier: Array[Vector2i] = [world.player_cell]
 	var previous: Dictionary = {world.player_cell: Vector2i.ZERO}
 	var found: Vector2i = Vector2i(-1, -1)
 	while not frontier.is_empty():
 		var at: Vector2i = frontier.pop_front()
-		if at == cell or (edge != Vector2i.ZERO and _crosses(world, at, edge, map)):
+		if goal.call(at):
 			found = at
 			break
 		for direction: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
-			var next: Vector2i = _neighbour(world, at, direction, cell)
+			var next: Vector2i = _neighbour(world, at, direction, goal)
 			if next.x < 0 or previous.has(next):
 				continue
 			previous[next] = next - at
@@ -707,13 +916,14 @@ func _step_toward(world: Gen2WorldAPI, cell: Vector2i, edge: Vector2i, map := Ve
 
 ## The cell a press toward [param direction] reaches from [param at]: a step, a
 ## ledge hop two cells on, or (-1, -1). A warp or a hole is only ever a goal.
-func _neighbour(world: Gen2WorldAPI, at: Vector2i, direction: Vector2i, goal: Vector2i) -> Vector2i:
+func _neighbour(world: Gen2WorldAPI, at: Vector2i, direction: Vector2i, goal: Callable) -> Vector2i:
 	var next: Vector2i = at + direction
 	if world.step_blocked_from(at, direction) or not world.can_walk_to(next):
 		next = at + direction * 2
 		if not world.allows_hop_at(at, direction) or not world.can_walk_to(next):
 			return Vector2i(-1, -1)
-	if next != goal and (world.warp_pending(next, direction) or not world.gen1_dungeon_hole_at(next).is_empty()):
+	if (world.warp_pending(next, direction) or not world.gen1_dungeon_hole_at(next).is_empty()) \
+		and not goal.call(next):
 		return Vector2i(-1, -1)
 	return next
 
@@ -786,8 +996,10 @@ func _where() -> String:
 	})
 
 
-## The grind a player does in the grass, and the catch that leads, in one go.
-func _grind(level: int, caught: int) -> bool:
+## The grind and the catch that leads, each whiteout adding [constant RETRY_LEVELS].
+func _grind(target: int, caught: int) -> bool:
+	_grind_level = target
+	var level: int = target + _bonus
 	var save: Gen2SaveData = _screen.active_save()
 	if not _r.check(not save.party.is_empty(), "no party to grind."):
 		return false

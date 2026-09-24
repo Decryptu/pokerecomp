@@ -1,11 +1,10 @@
 class_name Gen2WorldDrawList
 extends RefCounted
 
-## Everything the overworld draws over its map this frame, resolved once: the
-## map objects, the player, the mod actors and every effect sprite as rows in
-## draw order, and the frame-wide edits to the background under them. The
-## built-in renderer draws from it and `set_draw_list` hands a renderer the same
-## one, so no two views resolve a sprite apart. The screen writes the state.
+## Everything the overworld draws over its map this frame, resolved once: every
+## sprite as rows in draw order and the frame-wide background edits under them.
+## The built-in renderer and `set_draw_list` read the same one, so no two views
+## resolve a sprite apart. The screen writes the state.
 
 const KIND_SPRITE: StringName = &"sprite"
 const KIND_TILES: StringName = &"tiles"
@@ -24,14 +23,15 @@ const CELL: int = Gen2WorldAPI.CELL_PIXELS
 ## `.InitSprite`'s `add OAM_Y_OFS - 4`: every map object and tracking sprite
 ## stands four pixels above its cell; a sprite anim and the grass take none.
 const SPRITE_LIFT := Vector2(0, -4)
+## Where a cell-sized picture meets the ground: its bottom centre.
+const GROUND := Vector2(CELL * 0.5, CELL)
 ## The enemy battler's box: the shiny pulse's OAM is laid out around its centre,
 ## which is put on the walk cell's.
 const BATTLER_CENTRE := Vector2(
 	(Gen2BattleScreenMap.ENEMY_AT.x + 0.5 * Gen2BattleScreenMap.ENEMY_SIDE) * PokeTiles.TILE_WIDTH,
 	(Gen2BattleScreenMap.ENEMY_AT.y + 0.5 * Gen2BattleScreenMap.ENEMY_SIDE) * PokeTiles.TILE_HEIGHT
 )
-## `LoadPikachuShadowOAMData`: the ledge shadow's tile and its mirror, twelve
-## pixels under the sprite's ground position.
+## `LoadPikachuShadowOAMData`: the ledge shadow's tile and its mirror.
 const SHADOW_TILES: Array = [
 	{"tile": 0, "offset": Vector2i(0, 12), "flip_x": false, "flip_y": false},
 	{"tile": 0, "offset": Vector2i(8, 12), "flip_x": true, "flip_y": false},
@@ -45,6 +45,8 @@ var fade_white_fill: bool = false
 ## `LoadPoisonBGPals`, which floods the background alone.
 var poison_flash: bool = false
 var time_of_day: int = Gen2WorldPalette.TIME_MORNING
+## [constant Gen2ModHost.RENDERER_DRAW_REACH_METHOD]'s answer.
+var reach_pixels: int = 0
 
 var _world: Gen2WorldAPI = null
 var _effects: Gen2WorldEffects = null
@@ -228,7 +230,7 @@ func pulse_image(row: Dictionary) -> Image:
 
 
 ## The object pass's rows: the map's objects, a mod's actors, Yellow's slot
-## fifteen and, in a view wider than the screen, the connected maps' people.
+## fifteen and the connected maps' people.
 func _row_entries(battlers_only: bool) -> Array:
 	var objects: Array = _world.visible_objects()
 	objects.sort_custom(_sort_objects)
@@ -245,17 +247,27 @@ func _row_entries(battlers_only: bool) -> Array:
 	var follower: Dictionary = _world.gen1_pikachu_sprite()
 	if not follower.is_empty():
 		drawn.append({"actor": follower, "row": (follower["position_cells"] as Vector2).y})
-	if _world.view_pixels != Gen2WorldAPI.VIEW_PIXELS:
-		for entry: Dictionary in _world.connected_map_objects():
-			var neighbour: Gen2WorldObject = entry["object"]
-			if neighbour.active and neighbour.sprite != null:
-				var offset: Vector2i = entry["offset"]
-				drawn.append({
-					"object": neighbour, "offset": offset,
-					"row": float(offset.y + neighbour.cell.y),
-				})
+	_add_connected(drawn)
 	drawn.sort_custom(_sort_drawn)
 	return drawn
+
+
+## The connected maps' people within [member reach_pixels] and two cells of the
+## surface. The cartridge's `ReadObjectEvents` reads the loaded map alone.
+func _add_connected(drawn: Array) -> void:
+	if _world.view_pixels == Gen2WorldAPI.VIEW_PIXELS and reach_pixels <= 0:
+		return
+	var reach := Rect2(_world.view_origin_subpixel(), Vector2(_world.view_pixels)) \
+		.grow(float(reach_pixels + 2 * CELL))
+	for entry: Dictionary in _world.connected_map_objects():
+		var neighbour: Gen2WorldObject = entry["object"]
+		var offset: Vector2i = entry["offset"]
+		if neighbour.active and neighbour.sprite != null \
+			and reach.has_point(Vector2((neighbour.cell + offset) * CELL)):
+			drawn.append({
+				"object": neighbour, "offset": offset,
+				"row": float(offset.y + neighbour.cell.y),
+			})
 
 
 ## A mod's actors sort into the objects' rows, after the map's own on a tie.
@@ -341,8 +353,7 @@ func _player_owner() -> Dictionary:
 	)
 
 
-## `disappear PLAYER` and a skyfall's start take object zero out of OAM; the
-## jump arc is a sprite offset, so the grass under a hop stays on the ground.
+## `disappear PLAYER` and a skyfall's start take object zero out of OAM.
 func _add_player(out: Array, owner: Dictionary) -> void:
 	var anim: Dictionary = _effects.player_anim() if _effects != null else {}
 	if not anim.is_empty():
@@ -375,8 +386,7 @@ func _add_player(out: Array, owner: Dictionary) -> void:
 	_add_emote(out, owner, _world.player_emote(), jump)
 
 
-## `LoadFishingGFX` replaces the player's lower half: the standing picture to
-## the waist and the sheet's pair under it, in the player's own palette.
+## `LoadFishingGFX`: the standing picture to the waist and the sheet's pair under it.
 func _add_fishing_body(
 	out: Array, owner: Dictionary, body: Dictionary, fishing: String, jump: Vector2
 ) -> void:
@@ -445,12 +455,37 @@ func _add_free(out: Array, effects: Array, player: Dictionary) -> void:
 	)
 	for sprite: Dictionary in effects:
 		if bool(sprite.get("screen", false)):
+			var first: int = out.size()
 			_add_effect(out, screen, sprite)
+			for row: Dictionary in out.slice(first):
+				_stand_on_map(row)
 	_add_pulse(out)
 
 
-## The dust, the rustle and the shadow are tracking objects anchored where the
-## object that spawned them is drawn.
+## A screen row stands as a cell effect on the map cell under its picture's centre.
+func _stand_on_map(row: Dictionary) -> void:
+	var corner: Vector2 = _world.view_origin_subpixel() \
+		+ Vector2(Gen2Screen.hardware_corner(_world.view_pixels))
+	var cell := Vector2i(((corner + _picture(row).get_center()) / float(CELL)).floor())
+	row["position_cells"] = Vector2(cell)
+	row["ground"] = Vector2(cell * CELL) + GROUND - corner
+
+
+func _picture(row: Dictionary) -> Rect2:
+	var at: Vector2 = row["origin"] + row["offset"]
+	if row["kind"] != KIND_TILES:
+		return Rect2(at, Vector2(CELL, CELL))
+	var box := Rect2()
+	for tile: Dictionary in row["tiles"]:
+		var piece := Rect2(
+			at + Vector2(tile["offset"] as Vector2i),
+			Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT)
+		)
+		box = piece if not box.has_area() else box.merge(piece)
+	return box
+
+
+## The dust, the rustle and the shadow track the object that spawned them.
 func _add_carried(out: Array, owner: Dictionary, effects: Array, index: int) -> void:
 	for sprite: Dictionary in effects:
 		if not bool(sprite.get("screen", false)) and int(sprite["object_index"]) == index:
@@ -502,6 +537,7 @@ func _add_pulse(out: Array) -> void:
 		OWNER_ACTOR, ANCHOR_WORLD, at + Vector2(CELL, CELL) * 0.5 - BATTLER_CENTRE,
 		at / float(CELL), {}, 0.0
 	)
+	owner["ground"] = at + GROUND
 	var window: Array = _encounters.pulse_tiles()
 	var pair: Array = _encounters.pulse_battler_pair()
 	for entry: Variant in _encounters.pulse_sprites():
@@ -586,7 +622,7 @@ func _owner(
 ) -> Dictionary:
 	return {
 		"owner": index, "anchor": anchor, "origin": origin, "position_cells": cells,
-		"span": span, "height_offset_pixels": height,
+		"span": span, "height_offset_pixels": height, "ground": origin + GROUND,
 	}
 
 

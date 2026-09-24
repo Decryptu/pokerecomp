@@ -686,8 +686,7 @@ func _build_renderer() -> void:
 		_renderer.call(Gen2ModHost.RENDERER_ACTORS_METHOD, _actors)
 	if _renderer.has_method(Gen2ModHost.RENDERER_ENCOUNTERS_METHOD):
 		_renderer.call(Gen2ModHost.RENDERER_ENCOUNTERS_METHOD, _encounters)
-	if _renderer.has_method(Gen2ModHost.RENDERER_DRAW_LIST_METHOD):
-		_renderer.call(Gen2ModHost.RENDERER_DRAW_LIST_METHOD, _draw_list)
+	Gen2ModHost.renderer_set_draw_list(_renderer, _draw_list)
 	_set_sprites_hidden(_draw_list != null and _draw_list.sprites_hidden)
 	## SMOOTH SCROLL again: a pass drawn a pixel at a time still steps a whole
 	## hardware pixel, twelve screen ones on a laptop panel. A native view is

@@ -367,6 +367,37 @@ func is_progression(row: Dictionary) -> bool:
 	return field_hm_items().has(int(row.get("item", 0)))
 
 
+## Every item a row's `requires` or the story reads, and every field-move TM or HM.
+func progression_items() -> Array[int]:
+	var found: Dictionary = {}
+	for row: Dictionary in _rows.values():
+		for requirement: Dictionary in row.get("requires", []):
+			_note_item(found, Gen2WorldStory.condition_of(requirement))
+	for setter: Dictionary in _story.setters:
+		for condition: String in setter["requires"]:
+			_note_item(found, condition)
+	for link: Dictionary in _story.links:
+		for condition: String in link["requires"]:
+			_note_item(found, condition)
+	for gate: Dictionary in _story.gates:
+		for list: Array in gate["closing"]:
+			for condition: String in list:
+				_note_item(found, Gen2WorldStory.negate(condition))
+	for number: int in (_data.tmhm_moves().size() if _data != null else 0):
+		var item: int = Gen2WorldTMHM.item_for_number(_data, number + 1)
+		if field_move_for_item(item) > 0:
+			found[item] = true
+	var out: Array[int] = []
+	out.assign(found.keys())
+	out.sort()
+	return out
+
+
+static func _note_item(found: Dictionary, condition: String) -> void:
+	if condition.begins_with("i:"):
+		found[condition.substr(2).to_int()] = true
+
+
 ## Each script site's `requires`, map and cell from [Gen2WorldScriptFlow], and
 ## the story beside them; a site no event reaches keeps its straight read.
 func _read_flow() -> void:

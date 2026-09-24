@@ -30,6 +30,9 @@ var _graphs: Dictionary = {}
 var _worlds: Dictionary = {}
 ## Map key to the map keys whose warps lead into it.
 var _inbound: Dictionary = {}
+## A map's regions and steps under the moves it tests, shared across move sets.
+var _locals: Dictionary = {}
+var _tested: Dictionary = {}
 
 
 ## Without [param story] the graph is the bare collision.
@@ -44,8 +47,7 @@ static func map_key(group: int, number: int) -> int:
 	return (group & 0xFF) << 8 | (number & 0xFF)
 
 
-## Every map reachable from [param start] with [param moves] and every gate open,
-## as a set of [method map_key]s.
+## Every [method map_key] reachable from [param start] with [param moves] and every gate open.
 func reachable(start: Vector2i, moves: Dictionary) -> Dictionary:
 	var built: Dictionary = graph(moves)
 	var open: Dictionary = {}
@@ -185,6 +187,45 @@ func _label(built: Dictionary, map: Gen2WorldMap, moves: Dictionary, gates: Dict
 	var world: Gen2WorldAPI = _world(map)
 	if world == null:
 		return
+	var key: int = map_key(map.group, map.number)
+	var local_key: int = key << 8 | (_moves_key(moves) & _tested_moves(world, map))
+	if not _locals.has(local_key):
+		_locals[local_key] = _local(world, map, moves, gates)
+	var local: Dictionary = _locals[local_key]
+	var base: int = int(built["count"])
+	(built["labels"] as Dictionary)[key] = {
+		"of": local["of"], "count": local["count"], "base": base, "gates": local["gates"],
+		"map": map, "steps": local["steps"],
+	}
+	for _comp: int in int(local["count"]):
+		(built["edges"] as Array).append(PackedInt32Array())
+		(built["map_of"] as Array).append(key)
+	built["count"] = base + int(local["count"])
+
+
+## The [method _moves_key] bits a map's cells or objects test.
+func _tested_moves(world: Gen2WorldAPI, map: Gen2WorldMap) -> int:
+	var key: int = map_key(map.group, map.number)
+	if _tested.has(key):
+		return _tested[key]
+	var mask: int = 0
+	for object: Dictionary in map.events.get("objects", []) as Array:
+		mask |= _moves_key({int(OBJECT_MOVES.get(int(object.get("movement", 0)), 0)): true})
+	var codes: Dictionary = {}
+	for y: int in map.collision_height:
+		for x: int in map.collision_width:
+			codes[world.collision_code_at(Vector2i(x, y))] = true
+	for code: int in codes:
+		var bare: bool = _standable(world, map, code, {})
+		for move: int in GATE_MOVES:
+			if _standable(world, map, code, {move: true}) != bare:
+				mask |= _moves_key({move: true})
+	_tested[key] = mask
+	return mask
+
+
+## One map's regions from 0, its closing cells, and the hops and steps between regions.
+func _local(world: Gen2WorldAPI, map: Gen2WorldMap, moves: Dictionary, gates: Dictionary) -> Dictionary:
 	var walls: Dictionary = _walls_of(map)
 	for object: Dictionary in map.events.get("objects", []) as Array:
 		var move: int = int(OBJECT_MOVES.get(int(object.get("movement", 0)), 0))
@@ -193,7 +234,6 @@ func _label(built: Dictionary, map: Gen2WorldMap, moves: Dictionary, gates: Dict
 	gates = _closing_cells(world, map, moves, gates)
 	var of: Dictionary = {}
 	var count: int = 0
-	var base: int = int(built["count"])
 	for y: int in map.collision_height:
 		for x: int in map.collision_width:
 			var cell_key: int = _cell_key(x, y)
@@ -203,14 +243,26 @@ func _label(built: Dictionary, map: Gen2WorldMap, moves: Dictionary, gates: Dict
 				continue
 			_fill(world, map, moves, walls, gates, of, Vector2i(x, y), count)
 			count += 1
-	var key: int = map_key(map.group, map.number)
-	(built["labels"] as Dictionary)[key] = {
-		"of": of, "count": count, "base": base, "gates": gates, "map": map,
-	}
-	for _comp: int in count:
-		(built["edges"] as Array).append(PackedInt32Array())
-		(built["map_of"] as Array).append(key)
-	built["count"] = base + count
+	return {"of": of, "count": count, "gates": gates, "steps": _steps(world, of)}
+
+
+func _steps(world: Gen2WorldAPI, of: Dictionary) -> PackedInt32Array:
+	var pairs: Dictionary = {}
+	for cell_key: int in of:
+		var cell := Vector2i(cell_key >> 8, cell_key & 0xFF)
+		var from: int = int(of[cell_key])
+		for step: Vector2i in STEPS:
+			var landing: int = _cell_key(cell.x + step.x * 2, cell.y + step.y * 2)
+			if of.has(landing) and from != int(of[landing]) and world.allows_hop_at(cell, step):
+				pairs[from << 32 | int(of[landing])] = true
+			var next: int = _cell_key(cell.x + step.x, cell.y + step.y)
+			if of.has(next) and from != int(of[next]) and not _side_blocked(world, cell, step):
+				pairs[from << 32 | int(of[next])] = true
+	var out := PackedInt32Array()
+	for pair: int in pairs:
+		out.append(pair >> 32)
+		out.append(pair & 0xFFFFFFFF)
+	return out
 
 
 ## A rewritten block closes only the cells a player cannot stand on already.
@@ -320,7 +372,6 @@ func _link(built: Dictionary, map: Gen2WorldMap) -> void:
 	var label: Dictionary = (built["labels"] as Dictionary).get(key, {})
 	if label.is_empty():
 		return
-	var of: Dictionary = label["of"]
 	var warps: Array = map.events.get("warps", [])
 	for index: int in warps.size():
 		var warp: Dictionary = warps[index]
@@ -329,23 +380,10 @@ func _link(built: Dictionary, map: Gen2WorldMap) -> void:
 			_join(built, from, _land(built, landing, false))
 	for connection: Dictionary in map.connections:
 		_link_connection(built, map, label, connection)
-	var world: Gen2WorldAPI = _world(map)
-	for cell_key: int in of:
-		var cell := Vector2i(cell_key >> 8, cell_key & 0xFF)
-		for step: Vector2i in STEPS:
-			var landing: Vector2i = cell + step * 2
-			if of.has(_cell_key(landing.x, landing.y)) and world.allows_hop_at(cell, step):
-				_join_cells(built, label, cell, landing)
-			var next: Vector2i = cell + step
-			if of.has(_cell_key(next.x, next.y)) and not _side_blocked(world, cell, step):
-				_join_cells(built, label, cell, next)
-
-
-static func _join_cells(built: Dictionary, label: Dictionary, from: Vector2i, to: Vector2i) -> void:
-	var of: Dictionary = label["of"]
 	var base: int = int(label["base"])
-	_join(built, PackedInt32Array([base + int(of[_cell_key(from.x, from.y)])]),
-		PackedInt32Array([base + int(of[_cell_key(to.x, to.y)])]))
+	var steps: PackedInt32Array = label["steps"]
+	for index: int in range(0, steps.size(), 2):
+		_join(built, PackedInt32Array([base + steps[index]]), PackedInt32Array([base + steps[index + 1]]))
 
 
 ## `GetMovementPermissions`' side walls, which can pass a step one way only.
@@ -460,8 +498,7 @@ static func _join(built: Dictionary, from: PackedInt32Array, to: PackedInt32Arra
 		edges[node] = out
 
 
-## The regions at [param cell], else its neighbours' (a gate cell's only with
-## [param gate_cells]).
+## The regions at [param cell], else its neighbours' (a gate cell's with [param gate_cells]).
 static func _nodes_at(label: Dictionary, cell: Vector2i, gate_cells: bool) -> PackedInt32Array:
 	var of: Dictionary = label["of"]
 	var base: int = int(label["base"])

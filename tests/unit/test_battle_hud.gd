@@ -31,6 +31,7 @@ func _write_cache(with_sheets: bool = true) -> void:
 			"player_hud": [Gen2Layout.PLAYER_HUD_TILES, 3],
 			"font": [Gen2Layout.FONT_TILES, 3],
 			"frames": [Gen2Layout.FRAME_COUNT * Gen2Layout.FRAME_TILES, 3],
+			"ball_icons": [4, 1],
 		}
 		for row_name: String in written:
 			var tiles: int = written[row_name][0]
@@ -467,3 +468,20 @@ func test_a_short_generation_one_name_is_centred() -> void:
 			"%s is centred" % pair[0]
 		)
 		assert_eq(Gen2BattleHud.name_column(1, String(pair[0]), false), 1)
+
+
+## `trainer_hud_balls` out of the cartridge's ball sheet, clipped at the edges.
+func test_the_party_balls_land_where_the_view_puts_them() -> void:
+	_write_cache()
+	var hud: Gen2BattleHud = Gen2BattleHud.from_data(_data())
+	var into: PackedByteArray = PackedByteArray()
+	into.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	hud.draw_party_balls(into, Gen2Screen.WIDTH, [
+		{"tile": 1, "x": 16, "y": 24}, {"tile": 0, "x": Gen2Screen.WIDTH - 4, "y": 0},
+	])
+	assert_eq(into[24 * Gen2Screen.WIDTH + 16], 1)
+	assert_eq(into[31 * Gen2Screen.WIDTH + 23], 1)
+	assert_eq(into[24 * Gen2Screen.WIDTH + 24], 0, "one tile wide")
+	assert_eq(into[Gen2Screen.WIDTH - 1], 1, "the ball at the edge is clipped, not wrapped")
+	assert_eq(into[2 * Gen2Screen.WIDTH - 1], 1)
+	assert_eq(into[Gen2Screen.WIDTH], 0, "nothing wrapped onto the next row")

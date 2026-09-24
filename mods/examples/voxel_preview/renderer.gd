@@ -31,6 +31,8 @@ const CAMERA_PITCH_DEGREES: float = 50.19
 ## allowed to.
 const CAMERA_PITCH_STEP: float = 5.0
 const CAMERA_PITCH_LIMITS := Vector2(10.0, 88.0)
+## Walk cells past the screen's edge the camera can see at its flattest pitch.
+const DRAW_REACH_CELLS: int = 12
 ## Light colour per time of day, in the order Gen2WorldPalette names them.
 const DAY_LIGHT: Array[Color] = [
 	Color(1.0, 0.94, 0.86), Color(1.0, 1.0, 0.98),
@@ -231,6 +233,12 @@ func set_draw_list(draw_list: Gen2WorldDrawList) -> void:
 	_draw_list = draw_list
 
 
+## The optional `draw_reach_pixels`: the camera sees past the 160x144 screen, so
+## the list carries the connected maps' people this far past it.
+func draw_reach_pixels() -> int:
+	return DRAW_REACH_CELLS * Gen2WorldAPI.CELL_PIXELS
+
+
 func set_world(world: Gen2WorldAPI, _animation: Gen2WorldAnimation = null) -> void:
 	_world = world
 	_rebuild_terrain()
@@ -415,12 +423,16 @@ func _rebuild_objects() -> void:
 		mesh.size = Vector3(0.6, 1.0, 0.6)
 		marker.mesh = mesh
 		marker.material_override = _material(_row_color(row))
-		# `position_cells` already carries the in-flight step, so a wandering
-		# NPC eases between cells without this view knowing hardware pixels.
+		# `ground` stands on `position_cells`, which carries the in-flight step;
+		# the picture's bottom above `ground` is the jump, raised once. A screen
+		# row, Fly's icon, stands on the map cell it is drawn over.
 		var cells: Vector2 = row["position_cells"]
+		var bottom: Vector2 = (row["origin"] as Vector2) + (row["offset"] as Vector2) \
+			+ Vector2(0.0, Gen2WorldAPI.CELL_PIXELS)
+		var lift: float = ((row["ground"] as Vector2).y - bottom.y) \
+			/ float(Gen2WorldAPI.CELL_PIXELS)
 		marker.position = Vector3(cells.x, 0.0, cells.y) * CELL_SIZE \
-			+ Vector3(0.0, 0.5 + float(row["height_offset_pixels"]) \
-				/ float(Gen2WorldAPI.CELL_PIXELS), 0.0)
+			+ Vector3(0.0, 0.5 + lift, 0.0)
 		_objects.add_child(marker)
 
 

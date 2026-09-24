@@ -247,6 +247,13 @@ func screen_rect() -> Rect2i:
 	return Rect2i(Vector2i(at.round()), Vector2i(drawn.round()))
 
 
+## Where the hardware's 160x144 sits in a larger [param view]: centred and floored
+## to a whole tile, since everything on the screen is laid out in tiles.
+static func hardware_corner(view: Vector2i) -> Vector2i:
+	return Vector2i(((Vector2(view - Vector2i(WIDTH, HEIGHT)) * 0.5)
+		/ float(PokeTiles.TILE_WIDTH)).floor() * float(PokeTiles.TILE_WIDTH))
+
+
 ## The largest whole number of window pixels per hardware pixel that fits.
 ## Public because [Gen2GameFrame] sizes the on-screen controller off it.
 static func fit_factor(area: Vector2) -> int:
@@ -741,8 +748,7 @@ func _fit() -> void:
 		_mask.size = Vector2(view)
 		_mask.queue_redraw()
 	if _interface != null:
-		_interface.position = ((Vector2(view - Vector2i(WIDTH, HEIGHT)) * 0.5)
-			/ float(PokeTiles.TILE_WIDTH)).floor() * float(PokeTiles.TILE_WIDTH)
+		_interface.position = Vector2(hardware_corner(view))
 		_interface.size = Vector2(WIDTH, HEIGHT)
 		_content.position = _interface.position
 		_content.size = _interface.size

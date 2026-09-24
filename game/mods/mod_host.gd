@@ -53,6 +53,9 @@ const RENDERER_ENCOUNTERS_METHOD: String = "set_encounters"
 ## when the renderer is built: every sprite the built-in view draws, resolved,
 ## and the background edits under them. The three above are its sources.
 const RENDERER_DRAW_LIST_METHOD: String = "set_draw_list"
+## Optional, world renderers only. Read with [constant RENDERER_DRAW_LIST_METHOD]:
+## the hardware pixels past the drawn surface the list carries connected rows to.
+const RENDERER_DRAW_REACH_METHOD: String = "draw_reach_pixels"
 ## Optional, world renderers only. Called with one step of a map fade: the
 ## palette order `DmgToCgbTimePals` applies to every palette on screen, and
 ## `FillWhiteBGColor` beside it on the way out. The host spends the fade's own
@@ -1866,6 +1869,14 @@ func validate_placement(data: GameData, patches: Dictionary) -> Dictionary:
 	return Gen2WorldProgression.validate(data, patches)
 
 
+## The check ids [param patches] reaches with [param held]'s items and badges in hand
+## from the start, for an assumed fill. See [method Gen2WorldProgression.reachable].
+func reachable_checks(
+	data: GameData, patches: Dictionary, held: Dictionary = {"items": [], "badges": []}
+) -> Dictionary:
+	return Gen2WorldProgression.reachable(data, patches, held)
+
+
 ## The overlay every opened [GameData] reads through, for a launcher listing what
 ## a mod changed before the player starts.
 func content_overlay() -> Gen2ContentOverlay:
@@ -2034,6 +2045,17 @@ static func renderer_uses_hardware_viewport(renderer: Node) -> bool:
 	if renderer == null or not renderer.has_method(RENDERER_SURFACE_METHOD):
 		return true
 	return bool(renderer.call(RENDERER_SURFACE_METHOD))
+
+
+## [constant RENDERER_DRAW_LIST_METHOD] and [constant RENDERER_DRAW_REACH_METHOD].
+static func renderer_set_draw_list(renderer: Node, list: Gen2WorldDrawList) -> void:
+	if renderer == null or list == null:
+		return
+	if renderer.has_method(RENDERER_DRAW_LIST_METHOD):
+		renderer.call(RENDERER_DRAW_LIST_METHOD, list)
+	var reach: Variant = renderer.call(RENDERER_DRAW_REACH_METHOD) \
+		if renderer.has_method(RENDERER_DRAW_REACH_METHOD) else 0
+	list.reach_pixels = maxi(0, int(reach)) if reach is int or reach is float else 0
 
 
 ## Offers [param event] to a world [param renderer], returning whether it was
