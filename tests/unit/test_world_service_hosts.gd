@@ -336,21 +336,24 @@ func test_phone_time_masks_and_map_rules_match_the_cartridge() -> void:
 	map.environment = 0
 	map.phone_flag = 0
 	var state := Gen2WorldState.new({}, {}, {}, {}, 0, {0: true})
+	## The fixture's contact is callee MORN and caller DAY: a ring reads the
+	## caller half (`PHONE_CONTACT_SCRIPT2_TIME`), a Pokegear call the callee.
+	assert_false(Gen2WorldPhoneHost.resolve_incoming(_data, state, map, 6, true, true, 0)["ok"])
 	var incoming: Dictionary = Gen2WorldPhoneHost.resolve_incoming(
-		_data, state, map, 6, true, true, 0
+		_data, state, map, 12, true, true, 0
 	)
 	assert_true(incoming["ok"])
 	assert_eq(incoming["contact_id"], 0)
 
 	map.group = Fixture.MAP_GROUP
 	var same_map: Dictionary = Gen2WorldPhoneHost.resolve_incoming(
-		_data, state, map, 6, true, true, 0
+		_data, state, map, 12, true, true, 0
 	)
 	assert_false(same_map["ok"])
 	assert_eq(same_map["reason"], &"no_available_caller")
 	map.phone_flag = 1
 	var no_service: Dictionary = Gen2WorldPhoneHost.resolve_incoming(
-		_data, state, map, 6, true, true, 0
+		_data, state, map, 12, true, true, 0
 	)
 	assert_false(no_service["ok"])
 	assert_eq(no_service["reason"], &"phone_service_unavailable")
@@ -367,14 +370,14 @@ func test_outgoing_phone_uses_imported_same_map_and_out_of_area_scripts() -> voi
 	_data = GameData.open_directory(Fixture.directory())
 	var state := Gen2WorldState.new({}, {}, {}, {}, 0, {0: true})
 	var same_map: Dictionary = Gen2WorldPhoneHost.resolve_outgoing(
-		_data, state, _world.current_map, 0, 12
+		_data, state, _world.current_map, 0, 6
 	)
 	assert_true(same_map["ok"])
 	assert_true(same_map["phone"]["same_map"])
 	assert_eq(same_map["script"]["address"], 0x6610)
 	_world.current_map.phone_flag = 1
 	var out_of_area: Dictionary = Gen2WorldPhoneHost.resolve_outgoing(
-		_data, state, _world.current_map, 0, 12
+		_data, state, _world.current_map, 0, 6
 	)
 	assert_true(out_of_area["ok"])
 	assert_true(out_of_area["out_of_area"])

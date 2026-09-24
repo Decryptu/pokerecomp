@@ -178,6 +178,19 @@ static func clear_battler(
 			_write(map, at + Vector2i(column, row), BLANK_TILE)
 
 
+static func copy_battler(
+	map: PackedByteArray, from: PackedByteArray, player_side: bool, generation: int
+) -> void:
+	if map.size() != COLUMNS * ROWS or from.size() != COLUMNS * ROWS:
+		return
+	var at: Vector2i = player_box_at(generation) if player_side else ENEMY_AT
+	var side: int = player_box_side(generation) if player_side else ENEMY_SIDE
+	for column: int in side:
+		for row: int in side:
+			var cell: Vector2i = at + Vector2i(column, row)
+			_write(map, cell, _cell(from, cell))
+
+
 ## `_AnimationSquishMonPic`: three tiles of each of the box's rows pulled a
 ## column inwards, the cell they leave blanked. `AnimCopyRowLeft` runs from four
 ## columns into the box and `..._Right` from two.

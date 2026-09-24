@@ -783,7 +783,10 @@ func test_phone_list_shows_registered_numbers_and_can_close() -> void:
 	assert_null(_world_screen._service_host)
 
 
-func test_phone_list_starts_the_source_timed_outgoing_ring() -> void:
+## `PokegearPhone_MakePhoneCall`: no ring, the callee script run over the card
+## that placed it, and `PokegearPhone_FinishPhoneCall` behind it, whose A or B
+## runs `HangUp` in the card's own box and asks who to call again.
+func test_a_call_from_the_phone_card_runs_over_the_card_and_hangs_up() -> void:
 	_write_phone_request()
 	_data = GameData.open_directory(Fixture.directory())
 	await _open_world()
@@ -800,20 +803,29 @@ func test_phone_list_starts_the_source_timed_outgoing_ring() -> void:
 	assert_true(host.handle_button(PokeButton.A))
 	assert_true(host.handle_button(PokeButton.A))
 	await get_tree().process_frame
+	assert_false(_world_screen._world.phone_ring_active())
 	assert_null(_world_screen._service_host)
-	assert_true(_world_screen._world.phone_ring_active())
-	assert_true(_world_screen._caption.text.contains("PHONE RING"))
-	## The screen's own pump is what spends the two rings and shows what
-	## finishing them produced.
-	_world_screen.advance_frames(4 * Gen2WorldPhoneRing.TOTAL_FRAMES)
-	await get_tree().process_frame
-	assert_true(_world_screen._world.script_input_waiting())
+	assert_eq(_world_screen._pokegear_call_host, host)
+	assert_eq(host._pokegear.card(), Gen2PokegearScreen.CARD_PHONE, "the card stays up")
+	_world_screen.advance_frames(120)
 	## `writetext` prints and returns: the `waitbutton` behind it is what the
 	## script is holding on, and the words are on the box either way.
 	assert_eq(
 		StringName(_world_screen._world.pending_script_input().get("type", &"")), &"button"
 	)
 	assert_eq(" ".join(_world_screen._text_box.text_lines()), "PHONE SCRIPT")
+
+	_world_screen.press_button(PokeButton.A)
+	_world_screen.advance_frames(2)
+	assert_eq(_world_screen._service_host, host, "the card has the joypad back")
+	assert_null(_world_screen._pokegear_call_host)
+	assert_eq(String(host._pokegear.get("_message")), "PHONE SCRIPT")
+	_world_screen.advance_frames(Gen2WorldServiceScreen.CALL_END_DELAY_FRAMES)
+	_world_screen.press_button(PokeButton.A)
+	assert_eq(StringName(host.get("_call_end_stage")), &"hang_up")
+	_world_screen.advance_frames(Gen2WorldPhoneRing.HANG_UP_FRAMES)
+	assert_eq(StringName(host.get("_call_end_stage")), &"")
+	assert_false(bool(host._pokegear.get("_calling")), "PokegearAskWhoCallText is back")
 
 
 ## `PokegearPhone_MakePhoneCall.no_service`: a map the phone cannot reach refuses

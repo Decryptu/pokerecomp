@@ -1,16 +1,10 @@
 extends Control
 
-## The save editor. Presentation only: every rule lives in [Gen2SaveEditor],
-## which is what keeps an edit from producing a slot that will not load.
-##
-## Stock controls, dressed in the launcher's own appearance: the palette's
-## [method Gen2LauncherTheme.control_theme] styles Button, Label, SpinBox and the
-## rest, so the editor matches the pages it is opened from without a widget of
-## its own. Every row of controls is a wrapping row, because this screen opens at
-## whatever size the window is, a phone held upright included.
+## The save editor. Presentation only: every rule lives in [Gen2SaveEditor].
+## Stock controls in [method Gen2LauncherTheme.control_theme], each row wrapping,
+## since the screen opens at whatever size the window is.
 
-## Kept in the order the tabs are drawn in, so a snapshot names a tab rather
-## than an index a reader has to count.
+## In drawing order, so a snapshot names a tab rather than an index.
 const TABS: Array[StringName] = [&"party", &"boxes", &"items", &"events", &"map", &"dex"]
 
 var _editor: Gen2SaveEditor = null
@@ -22,6 +16,9 @@ var _party_form: VBoxContainer = null
 var _box_picker: OptionButton = null
 var _box_list: ItemList = null
 var _item_list: ItemList = null
+var _item_rows: Array[int] = []
+var _item_picker: OptionButton = null
+var _quantity_field: SpinBox = null
 var _money_field: SpinBox = null
 var _coins_field: SpinBox = null
 var _flag_field: SpinBox = null
@@ -103,6 +100,9 @@ func select_tab(tab: StringName) -> bool:
 
 func save_now() -> bool:
 	if _editor == null:
+		return false
+	_commit_typing()
+	if not _apply_pending_map():
 		return false
 	var result: Dictionary = _editor.commit()
 	_set_status(String(result["message"]) if not result["ok"] else "Saved.")
@@ -278,9 +278,7 @@ func _build_boxes_tab() -> Control:
 			if not _box_list.get_selected_items().is_empty() else -1))
 	))
 
-	_box_list = ItemList.new()
-	_box_list.custom_minimum_size = Vector2(0, 320)
-	_box_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_box_list = _page_list()
 	page.add_child(_box_list)
 	return page
 
@@ -308,22 +306,44 @@ func _build_items_tab() -> Control:
 
 	var item_row: HFlowContainer = Gen2LauncherUI.actions()
 	page.add_child(item_row)
-	var item_field := SpinBox.new()
-	item_field.max_value = 255
-	item_field.value = 1
-	item_row.add_child(item_field)
-	var quantity_field := SpinBox.new()
-	quantity_field.max_value = 99
-	quantity_field.value = 1
-	item_row.add_child(quantity_field)
+	_item_picker = OptionButton.new()
+	item_row.add_child(_item_picker)
+	_quantity_field = SpinBox.new()
+	_quantity_field.max_value = Gen2WorldPack.MAX_ITEM_STACK
+	_quantity_field.value = 1
+	item_row.add_child(_quantity_field)
 	item_row.add_child(_action("Set", func() -> void:
-		_apply(_editor.set_item_quantity(int(item_field.value), int(quantity_field.value)))
+		_apply(_editor.set_item_quantity(
+			_item_picker.get_selected_id(), int(_quantity_field.value)
+		))
+	))
+	item_row.add_child(_action("Remove", func() -> void:
+		var picked: PackedInt32Array = _item_list.get_selected_items()
+		if not picked.is_empty() and picked[0] < _item_rows.size():
+			_apply(_editor.remove_item(_item_rows[picked[0]]))
 	))
 
-	_item_list = ItemList.new()
-	_item_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_item_list = _page_list()
+	_item_list.item_selected.connect(_pick_bag_row)
 	page.add_child(_item_list)
 	return page
+
+
+## As tall as its rows, since the tab itself scrolls.
+func _page_list() -> ItemList:
+	var list := ItemList.new()
+	list.auto_height = true
+	return list
+
+
+func _pick_bag_row(index: int) -> void:
+	if index >= _item_rows.size():
+		return
+	var item: int = _item_rows[index]
+	var at: int = _item_picker.get_item_index(item)
+	if at >= 0:
+		_item_picker.select(at)
+	_quantity_field.set_value_no_signal(_editor.save.world.world_state.item_quantity(item))
 
 
 func _build_events_tab() -> Control:
@@ -409,8 +429,7 @@ func _build_dex_tab() -> Control:
 	row.add_child(_action("Register party and boxes", func() -> void:
 		_apply(_editor.register_owned())
 	))
-	_dex_list = ItemList.new()
-	_dex_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_dex_list = _page_list()
 	page.add_child(_dex_list)
 	return page
 
@@ -463,6 +482,16 @@ func _refresh_party_form() -> void:
 	_party_form.add_child(_field("HP", mon.hp, 0, _editor.max_hp_for(mon),
 		func(value: int) -> void: _apply(_editor.set_hp(mon, value))
 	))
+	var gender: StringName = _editor.gender_of(mon)
+	if gender != Gen2BattleMon.GENDER_NONE:
+		var gender_row: HFlowContainer = Gen2LauncherUI.actions()
+		gender_row.add_child(_label("Gender %s" % Gen2BattleMon.gender_glyph(gender)))
+		var other: StringName = Gen2BattleMon.GENDER_FEMALE if gender == Gen2BattleMon.GENDER_MALE \
+			else Gen2BattleMon.GENDER_MALE
+		gender_row.add_child(_action("Make %s" % Gen2BattleMon.gender_glyph(other), func() -> void:
+			_apply(_editor.set_gender(mon, other))
+		))
+		_party_form.add_child(gender_row)
 	_party_form.add_child(_field("Happiness", mon.happiness, 0, 255,
 		func(value: int) -> void: _apply(_editor.set_happiness(mon, value))
 	))
@@ -522,7 +551,13 @@ func _refresh_items() -> void:
 		return
 	_money_field.set_value_no_signal(state.money(0))
 	_coins_field.set_value_no_signal(state.coins())
+	if _item_picker.item_count == 0:
+		for item: int in range(1, 256):
+			if not _editor.data.item(item).is_empty():
+				_item_picker.add_item(_item_name(item), item)
+	_item_rows = []
 	for item: Variant in state.items():
+		_item_rows.append(int(item))
 		_item_list.add_item("%s x%d" % [
 			_item_name(int(item)), state.item_quantity(int(item)),
 		])
@@ -577,10 +612,42 @@ func _set_badge(index: int, pressed: bool) -> void:
 
 
 func _apply_position() -> void:
-	_apply(_editor.set_player_position(
-		Vector2i(int(_map_fields["group"].value), int(_map_fields["number"].value)),
-		Vector2i(int(_map_fields["x"].value), int(_map_fields["y"].value)),
-	))
+	_apply(_editor.set_player_position(_typed_map(), _typed_cell()))
+
+
+func _typed_map() -> Vector2i:
+	return Vector2i(int(_map_fields["group"].value), int(_map_fields["number"].value))
+
+
+func _typed_cell() -> Vector2i:
+	return Vector2i(int(_map_fields["x"].value), int(_map_fields["y"].value))
+
+
+## Save takes the Map tab as typed; false when that is refused.
+func _apply_pending_map() -> bool:
+	if not _editor.has_world() or _map_fields.is_empty():
+		return true
+	var world: Gen2WorldSnapshot = _editor.save.world
+	var results: Array[Dictionary] = []
+	if _typed_map() != world.map_id or _typed_cell() != world.player_cell:
+		results.append(_editor.set_player_position(_typed_map(), _typed_cell()))
+	var clock := Vector3i(
+		int(_map_fields["day"].value), int(_map_fields["hour"].value),
+		int(_map_fields["minute"].value),
+	)
+	if clock != Vector3i(world.world_day, world.world_hour, world.world_minute):
+		results.append(_editor.set_clock(clock.x, clock.y, clock.z))
+	for result: Dictionary in results:
+		if not bool(result["ok"]):
+			_apply(result)
+			return false
+	return true
+
+
+## A touch on a button leaves a SpinBox's typed text uncommitted until focus goes.
+func _commit_typing() -> void:
+	if is_inside_tree():
+		get_viewport().gui_release_focus()
 
 
 ## A refused edit reports why and leaves the controls showing what is actually
@@ -623,7 +690,10 @@ func _label(text: String) -> Label:
 func _action(text: String, handler: Callable) -> Button:
 	var button := Button.new()
 	button.text = text
-	button.pressed.connect(handler)
+	button.pressed.connect(func() -> void:
+		_commit_typing()
+		handler.call()
+	)
 	return button
 
 

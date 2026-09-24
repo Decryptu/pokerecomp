@@ -731,18 +731,19 @@ func test_phone_ring_runs_before_the_imported_incoming_script() -> void:
 	assert_eq(world.pending_script_input()["type"], &"text")
 
 
-func test_phone_ring_runs_before_the_imported_outgoing_script() -> void:
+## `PokegearPhone_MakePhoneCall` rings nothing: its two `……` are the card's, and
+## `MakePhoneCallFromPokegear` runs the callee script, `PHONE_CONTACT_SCRIPT1`.
+func test_an_outgoing_call_runs_the_callee_script_with_no_ring() -> void:
 	_write_service_cache()
 	var data: GameData = GameData.open_directory(_directory)
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(
 		data, 1, 1, Vector2i(7, 6), Gen2WorldState.new({}, {}, {}, {}, 0, {0: true})
 	)
 	var started: Array = world.request_outgoing_phone_call(0)
-	assert_eq(started[0]["status"], &"phone_ring")
-	assert_eq(started[0]["event"]["kind"], &"phone_outgoing")
-	var resumed: Array = _spend_phone_ring(world, 4 * Gen2WorldPhoneRing.TOTAL_FRAMES)
-	assert_eq(resumed[0]["status"], &"waiting", JSON.stringify(resumed))
+	assert_false(world.phone_ring_active())
+	assert_eq(started[0]["status"], &"waiting", JSON.stringify(started))
 	assert_eq(world.pending_script_input()["type"], &"text")
+	assert_eq(int(started[0]["source"]["script"]), 0x5678, "the callee half")
 
 
 func test_phone_number_commands_stage_add_check_and_delete_atomically() -> void:
@@ -2148,9 +2149,10 @@ func test_addval_wraps_in_the_script_variable_like_the_source_byte_add() -> void
 
 
 ## Burned Tower's rival scene opens the hole under the player and then relies on
-## warpcheck to drop them through it, so the command has to resolve the warp at
-## the standing cell rather than one the script names.
-func test_warpcheck_takes_the_warp_the_player_is_standing_on() -> void:
+## warpcheck to drop them through it, so the command resolves the warp at the
+## standing cell rather than one the script names. It only copies it:
+## `CheckTileEvent` takes it on the next pass, through the screen's own warp.
+func test_warpcheck_copies_the_warp_the_player_is_standing_on() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	scripts["48:6D00"] = [0x8E, Gen2WorldScript.END] # warpcheck, raw
 	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
@@ -2165,7 +2167,91 @@ func test_warpcheck_takes_the_warp_the_player_is_standing_on() -> void:
 	assert_true(results[0]["events"].any(func(event: Dictionary) -> bool:
 		return event.get("type", &"") == &"warp_check" and bool(event.get("taken", false))
 	), JSON.stringify(results[0]["events"]))
+	assert_eq(world.map_id(), before, "the script ends on the map it ran on")
+	assert_eq(world.take_warp_check(), &"fall", "the fixture's warp cell is COLL_PIT")
+	assert_eq(world.take_warp_check(), &"", "one copy, spent once")
+
+
+## `FallIntoMapScript` behind the fall's map load: `SFX_KINESIS`, the skyfall,
+## `SFX_STRENGTH` and `LandAfterPitfallScript`'s `earthquake 16`.
+func test_a_pitfall_lands_on_its_sounds_skyfall_and_earthquake() -> void:
+	var world: Gen2WorldAPI = _world(Vector2i(6, 6))
+	var results: Array = world.run_pitfall_landing()
+	var sounds: Array = []
+	var waits: int = 0
+	for _step: int in 8:
+		var request: Dictionary = world.pending_runtime_request()
+		if StringName(request.get("kind", &"")) == &"audio_requested":
+			sounds.append(int((request["values"] as Dictionary)["address"]))
+			results = world.complete_runtime_request({"ok": true})
+			continue
+		if not world.pending_script_wait().is_empty():
+			if waits == 0:
+				assert_true(world.player_skyfall_hidden(), "the fall opens off the screen")
+			waits += 1
+			results = _run_script(world, results)
+			continue
+		break
+	assert_eq(sounds, [Gen2WorldScriptRunner.SFX_KINESIS, Gen2WorldScriptRunner.SFX_STRENGTH])
+	assert_eq(waits, 2, "the skyfall and the earthquake each hold the script")
+	assert_false(world.player_skyfall_hidden())
+	assert_eq(world.player_jump_offset(), 0, "landed")
+	assert_false(world.script_busy())
+
+
+## `StepFunction_Skyfall`'s `.Fall`: 96 pixels up on its first pass and on the
+## ground by its sixteenth.
+func test_the_skyfall_drops_from_ninety_six_pixels_up() -> void:
+	var world: Gen2WorldAPI = _world(Vector2i(6, 6))
+	world.call("_queue_player_step", Vector2i.ZERO, 32, false, Vector2i.ZERO, &"skyfall")
+	var offsets: Array[int] = []
+	var hidden: int = 0
+	for _frame: int in 32:
+		if world.player_skyfall_hidden():
+			hidden += 1
+		offsets.append(world.player_jump_offset())
+		world.advance_player_step_pass()
+	assert_eq(hidden, 16)
+	assert_eq(offsets[16], floori(96 * sin(PI / 32.0)) - 96)
+	assert_eq(offsets[31], 0)
+
+
+## The magnet train's `warpcheck` and `newloadmap MAPSETUP_TRAIN`: the setup
+## script loads the copied warp on the spot, and the commands behind it run on
+## the station it lands in.
+func test_newloadmap_takes_the_warp_a_warpcheck_copied() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6D00"] = [0x8E, 0x8A, Gen2WorldAPI.MAP_ENTRY_TRAIN, Gen2WorldScript.END]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var world: Gen2WorldAPI = _world(Vector2i(6, 6))
+	world.current_map.events["coord_events"] = [{
+		"scene": 0, "x": 6, "y": 6, "script": 0x6D00,
+	}]
+	var before: Vector2i = world.map_id()
+
+	var results: Array = world.dispatch_script_events(Vector2i(6, 6))
 	assert_ne(world.map_id(), before, "the standing warp was taken")
+	assert_true(results[0]["events"].any(func(event: Dictionary) -> bool:
+		return event.get("type", &"") == &"warp"
+	), JSON.stringify(results[0]["events"]))
+	assert_eq(world.take_warp_check(), &"", "the load spent the copy")
+
+
+## `MapSetupScript_ReloadMap`'s `LoadBlockData` ends in the tiles callback, so
+## the block a `changeblock` there keeps survives every battle on the map.
+func test_a_map_reload_runs_the_tiles_callback_again() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6D10"] = [0x7A, 0, 0, 1, Gen2WorldScript.ENDCALLBACK] # changeblock 0, 0, 1
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).scripts["callbacks"] = [{
+		"type": Gen2WorldAPI.MAPCALLBACK_TILES, "script": 0x6D10,
+	}]
+	var world := Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6), Gen2WorldState.new())
+	world.dispatch_map_entry()
+	assert_eq(world.block_at(0, 0), 1)
+	world.reload_current_map()
+	assert_eq(world.block_at(0, 0), 1, "the reload put the callback's block back")
 
 
 ## CheckWarpCollision gates every warp on the tile's own code, so a warp_event
@@ -8162,6 +8248,43 @@ func test_a_mod_patch_mid_run_moves_the_encounter_tables_key() -> void:
 	assert_ne(world.encounter_tables_key(), key)
 	var grass: Dictionary = world.active_encounter_tables()[Gen2WorldEncounter.METHOD_GRASS]
 	assert_eq(int((grass["slots"] as Array)[0]["species"]), 25)
+	Gen2ModHost.reset()
+
+
+## A standing wild outlives the hour turning over, but not a mod's patch: the
+## table a mod's setting writes is checked on the route it was changed on.
+func test_a_mod_patch_rechecks_the_standing_wilds_and_the_hour_does_not() -> void:
+	Gen2ModHost.reset()
+	var world := _world()
+	world.set_object_time(12, Gen2WorldPalette.TIME_DAY)
+	var driver := Gen2WorldEncounters.new()
+	driver.set_providers([_pulse_provider()])
+	driver.set_world(world)
+	driver.advance_frame()
+	assert_eq(driver.entries().size(), 1)
+	var night: Array = []
+	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
+		night.append({"level": 5, "species": 25})
+	var row: Dictionary = world.data.world_encounter(&"grass", 1, 1)
+	var slots: Array = (row["slots"] as Array).duplicate(true)
+	slots[2] = night
+	assert_true(bool(Gen2ModHost.instance().patch_encounter(&"testmod", &"grass", 1, 1, {
+		"slots": slots,
+	})["ok"]))
+	driver.advance_frame()
+	assert_eq(driver.entries().size(), 1, "the day table still offers it")
+	world.set_object_time(20, Gen2WorldPalette.TIME_NIGHT)
+	driver.advance_frame()
+	assert_eq(driver.entries().size(), 1, "kept across the hour")
+
+	var day: Array = []
+	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
+		day.append({"level": 5, "species": 25})
+	assert_true(bool(Gen2ModHost.instance().patch_encounter(&"testmod", &"grass", 1, 1, {
+		"slots": [day, day, day],
+	})["ok"]))
+	driver.advance_frame()
+	assert_eq(driver.entries().size(), 0, "the patched table no longer offers it")
 	Gen2ModHost.reset()
 
 

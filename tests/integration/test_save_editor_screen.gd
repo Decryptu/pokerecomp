@@ -117,3 +117,15 @@ func test_a_save_without_world_state_still_opens() -> void:
 	assert_false(_screen.editor_snapshot()["has_world"])
 	assert_true(_screen.select_tab(&"items"))
 	assert_true(_screen.editor_snapshot()["valid"])
+
+
+## Save takes the Map tab as typed: a position left without its own button is
+## checked and written, here refused because the fixture cache has no maps.
+func test_saving_takes_the_position_typed_on_the_map_tab() -> void:
+	var save: Gen2SaveData = _save()
+	save.world = Gen2WorldSnapshot.new()
+	await _open(save)
+	assert_true(_screen.select_tab(&"map"))
+	(_screen.get("_map_fields")["group"] as SpinBox).set_value_no_signal(5)
+	assert_false(_screen.save_now())
+	assert_true(String(_screen.get("_status").text).contains("not in this cartridge cache"))

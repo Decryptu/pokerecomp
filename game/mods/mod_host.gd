@@ -117,11 +117,12 @@ const MENU_IDS: Array[StringName] = [MENU_START, MENU_PACK_POCKET, MENU_MART]
 ## own. A mod never receives a screen, so a row that has to open one names the
 ## opening rather than performing it, and the host applies its own gate on top.
 const START_ACTION_OPEN_BILLS_PC: StringName = &"OPEN_BILLS_PC"
+const START_ACTION_OPEN_PC: StringName = &"OPEN_PC"
 ## Opens the registering mod's own [method register_page], which is the one
 ## screen a mod may put behind a start-menu row.
 const START_ACTION_OPEN_MOD_PAGE: StringName = &"OPEN_MOD_PAGE"
 const START_ACTIONS: Array[StringName] = [
-	START_ACTION_OPEN_BILLS_PC, START_ACTION_OPEN_MOD_PAGE,
+	START_ACTION_OPEN_BILLS_PC, START_ACTION_OPEN_PC, START_ACTION_OPEN_MOD_PAGE,
 ]
 
 ## The event channels a mod may watch. Both carry the typed dictionaries the
@@ -1272,6 +1273,9 @@ func _start_action_allowed(entry: Dictionary, context: Dictionary) -> bool:
 	var action: StringName = StringName(entry.get("action", &""))
 	if action == START_ACTION_OPEN_BILLS_PC:
 		return int(context.get("party_count", 0)) > 0
+	## `PC_CheckPartyForPokemon`; Generation 1's machine refuses nothing.
+	if action == START_ACTION_OPEN_PC:
+		return generation() == RomRegistry.GEN1 or int(context.get("party_count", 0)) > 0
 	if action == START_ACTION_OPEN_MOD_PAGE:
 		return _pages.has(StringName(entry.get("page", entry.get("kind", &""))))
 	return true

@@ -513,8 +513,8 @@ func test_a_switch_between_turns_calls_one_back_and_sends_one_out() -> void:
 		[_mon(Fixture.CHARMANDER, 20, [Fixture.TACKLE])]
 	)
 	var events: Array = battle.send_out(Gen2Battle.PLAYER, 1)
-	# The two lines, then `SendOutPlayerMon`'s own ball animation and cry.
-	assert_eq(events.size(), 4)
+	# The two lines, then `SendOutPlayerMon`'s own ball animation, cry and panel.
+	assert_eq(events.size(), 5)
 	assert_eq(events[0]["type"], Gen2Battle.WITHDREW)
 	assert_eq(int(events[0]["index"]), 0)
 	assert_eq(events[1]["type"], Gen2Battle.SENT_OUT)
@@ -522,6 +522,7 @@ func test_a_switch_between_turns_calls_one_back_and_sends_one_out() -> void:
 	assert_eq(int(events[2]["index"]), Gen2Battle.ANIM_SEND_OUT_MON)
 	assert_eq(int(events[2]["param"]), Gen2Battle.SEND_OUT_ANIM_NORMAL)
 	assert_eq(events[3]["type"], Gen2Battle.CRY)
+	assert_eq(events[4]["type"], Gen2Battle.HUD_DRAWN)
 
 
 ## `SendOutPlayerMon`, `ShowSetEnemyMonAndSendOutAnimation` and the cry gate

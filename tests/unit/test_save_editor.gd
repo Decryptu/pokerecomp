@@ -298,6 +298,30 @@ func test_an_unknown_bag_item_is_refused() -> void:
 	assert_false(_with_world().set_item_quantity(9999, 3)["ok"])
 
 
+## A row this cache has no item for can still be taken out of the bag.
+func test_any_bag_row_can_be_removed() -> void:
+	var editor: Gen2SaveEditor = _with_world()
+	editor.save.world.world_state.apply_changes({}, {}, {"items": {200: 4}})
+	assert_true(editor.remove_item(200)["ok"])
+	assert_eq(editor.save.world.world_state.item_quantity(200), 0)
+	assert_false(editor.save.world.world_state.items().has(200))
+
+
+## Gender is the Attack DV against the ratio: a switch crosses it by the least
+## change and leaves the other three DVs alone.
+func test_switching_gender_moves_only_the_attack_dv() -> void:
+	var mon: Gen2SaveMon = _first()
+	var before: int = mon.dvs
+	var other: StringName = Gen2BattleMon.GENDER_FEMALE \
+		if _editor.gender_of(mon) == Gen2BattleMon.GENDER_MALE else Gen2BattleMon.GENDER_MALE
+	assert_true(_editor.set_gender(mon, other)["ok"])
+	assert_eq(_editor.gender_of(mon), other)
+	assert_eq(Gen2Stats.defense_dv(mon.dvs), Gen2Stats.defense_dv(before))
+	assert_eq(Gen2Stats.speed_dv(mon.dvs), Gen2Stats.speed_dv(before))
+	assert_eq(Gen2Stats.special_dv(mon.dvs), Gen2Stats.special_dv(before))
+	assert_true(_editor.validate()["ok"], _editor.validate()["message"])
+
+
 func test_event_and_engine_flags_are_set_and_cleared() -> void:
 	var editor: Gen2SaveEditor = _with_world()
 	var state: Gen2WorldState = editor.save.world.world_state

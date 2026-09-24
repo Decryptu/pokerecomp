@@ -491,6 +491,12 @@ const FIELD_MOVE_PROMPT_FRAME: int = RomFile.BANK_SIZE
 ## A mod's item gift has no source address either, and for a stronger reason: no
 ## script anywhere gives that item. Shares the base for the reason above.
 const ITEM_GIFT_FRAME: int = RomFile.BANK_SIZE
+## `FallIntoMapScript` and its `.SkyfallMovement`, engine code with no map data.
+const PITFALL_FRAME: int = RomFile.BANK_SIZE
+const PITFALL_MOVEMENT: int = RomFile.BANK_SIZE
+const SKYFALL_MOVEMENT: Array[int] = [0x4E, Gen2WorldMovement.STEP_END]
+const SFX_KINESIS: int = 0x2F
+const PITFALL_EARTHQUAKE: int = 16
 ## data/text/common_2.asm's _FoundItemText, less its <PLAYER>; see
 ## _stage_item_ball(). The source line break sits before the item name.
 const FOUND_ITEM_TEXT: String = "Found\n%s!"
@@ -753,6 +759,8 @@ static func begin(
 		)
 		if started:
 			runner._stage_field_move_prompt()
+	elif StringName(request.get("kind", &"")) == &"pitfall":
+		started = runner._push_frame(bank, PITFALL_FRAME, runner._pitfall_script())
 	elif StringName(request.get("kind", &"")) == &"item_gift":
 		## A mod's ask through [method Gen2ModHost.request_item_gift]. There is
 		## no script behind it at all, not even two bytes of data, so the frame
@@ -3297,13 +3305,8 @@ func _command_sdefer(_source_opcode: int, command: Dictionary, bank: int) -> Dic
 	return {"ok": true}
 
 
-## Script_newloadmap sets hMapEntryMethod and re-enters the current map. It yields
-## rather than ending: StopScript only clears SCRIPT_RUNNING in wScriptFlags, so the
-## commands after it run, as FallIntoMapScript's pitfall animation shows
-## (engine/overworld/events.asm). The re-entry itself is already queued here, because
-## the `warpcheck` before it took a warp and every map change queues its own
-## callbacks, so what is left to carry is the entry method the transition is drawn
-## with.
+## Script_newloadmap loads the map and yields: StopScript only clears
+## SCRIPT_RUNNING, so the commands after it run on the map it loaded.
 func _command_newloadmap(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	_emit_runtime_event(&"map_entry_method_requested", {
 		"method": int(command.get("value", 0)),
@@ -3311,9 +3314,8 @@ func _command_newloadmap(_source_opcode: int, command: Dictionary, _bank: int) -
 	return {"ok": true}
 
 
-## Script_warpcheck runs WarpCheck against the cell the player is standing on, so the
-## destination is the world's to resolve, not the script's. Burned Tower's rival scene
-## opens the hole under the player and then relies on this to drop them through it.
+## Script_warpcheck runs WarpCheck against the cell the player is standing on; the
+## world resolves the warp and keeps it for the next pass or a `newloadmap`.
 func _command_warpcheck(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
 	_emit_runtime_event(&"warp_check_requested", {})
 	return {"ok": true}
@@ -3612,6 +3614,8 @@ func _apply_movement(object_index: int, address: int) -> Dictionary:
 	var values: Dictionary = {
 		"bank": int(_request.get("bank", 0)), "address": address,
 	}
+	if StringName(_request.get("kind", &"")) == &"pitfall" and address == PITFALL_MOVEMENT:
+		values["movement"] = SKYFALL_MOVEMENT
 	if not walks_player:
 		values["object_index"] = object_index
 	_emit_object_event(
@@ -7636,6 +7640,19 @@ func _trainer_intro_script(trainer: Dictionary) -> PackedByteArray:
 		raw.call(Gen2WorldScript.GOLD_END),
 	]
 	return PackedByteArray(bytes)
+
+
+func _pitfall_script() -> PackedByteArray:
+	var crystal: bool = _crystal_commands()
+	var playsound: int = Gen2WorldScript.raw_opcode(0x84, crystal)
+	return PackedByteArray([
+		playsound, SFX_KINESIS, 0,
+		Gen2WorldScript.raw_opcode(0x68, crystal), PLAYER_OBJECT_ID,
+		PITFALL_MOVEMENT & 0xFF, PITFALL_MOVEMENT >> 8,
+		playsound, SFX_STRENGTH, 0,
+		Gen2WorldScript.raw_opcode(0x77, crystal), PITFALL_EARTHQUAKE,
+		Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, crystal),
+	])
 
 
 func _battle_request_values() -> Dictionary:

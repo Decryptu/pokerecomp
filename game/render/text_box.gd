@@ -242,6 +242,12 @@ func text_lines() -> PackedStringArray:
 	return out
 
 
+func page_lines() -> PackedStringArray:
+	if _page < 0 or _page >= _pages.size():
+		return PackedStringArray()
+	return _pages[_page]["lines"]
+
+
 ## Whether a page after this one is still waiting, which is what the blinking
 ## arrow means. A screen putting a menu over the box waits for both this and
 ## [method is_revealing] to be false: the cartridge prints the whole text first.

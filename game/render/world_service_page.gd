@@ -13,6 +13,8 @@ var menu: Gen2MenuPage = null
 ## `DisplayChangeBoxMenu` puts beside a box that is not empty. Null on a cache
 ## with no such sheet, which is every Generation 2 one.
 var ball: Image = null
+## Four box colours, black on white when empty: a Pokegear call's are the card's.
+var palette: PackedColorArray = PackedColorArray()
 
 
 static func from_data(data: GameData) -> Gen2WorldServicePage:
@@ -68,15 +70,12 @@ func render(title: String, prompt: String, rows: Array, cursor: int,
 		for row: int in mini(text_rows, lines.size()):
 			font.draw_text(lines[row], indices, Gen2Screen.WIDTH, TILE, (2 + row * 2) * TILE)
 		var part: Image = Gen2PicImage.from_indices(
-			indices, Gen2Screen.WIDTH, message_box.size.y * TILE,
-			PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+			indices, Gen2Screen.WIDTH, message_box.size.y * TILE, _colors()
 		)
 		image.blit_rect(
 			part, Rect2i(Vector2i.ZERO, part.get_size()), message_box.position * TILE
 		)
-	## Behind the speech box on the cartridge is above it here: `BillsPCMenu`
-	## draws `WhatText` and then puts its BOX No. panel over the box's own right
-	## half, and no other note here touches one.
+	## `BillsPCMenu` puts its BOX No. panel over the speech box's right half.
 	if over:
 		_draw_menu(image, rows, cursor, box, marks)
 	if not note.is_empty():
@@ -88,7 +87,7 @@ func _draw_menu(
 	image: Image, rows: Array, cursor: int, box: Gen2MenuBox, marks: Array
 ) -> void:
 	if not rows.is_empty() and box != null:
-		_blit(image, menu.render(box, rows, cursor), box.border_position())
+		_blit(image, menu.render(box, rows, cursor, "", 0, [], palette), box.border_position())
 	for at: Vector2i in marks:
 		_blit(image, ball, at)
 
@@ -105,11 +104,13 @@ func _draw_note(image: Image, note: Dictionary) -> void:
 	for line: Dictionary in note.get("lines", []) as Array:
 		var at: Vector2i = line.get("at", Vector2i.ZERO)
 		font.draw_text(String(line.get("text", "")), indices, width, at.x * TILE, at.y * TILE)
-	var part: Image = Gen2PicImage.from_indices(
-		indices, width, rect.size.y * TILE,
-		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
-	)
+	var part: Image = Gen2PicImage.from_indices(indices, width, rect.size.y * TILE, _colors())
 	image.blit_rect(part, Rect2i(Vector2i.ZERO, part.get_size()), rect.position * TILE)
+
+
+func _colors() -> PackedColorArray:
+	return palette if palette.size() >= 4 \
+		else PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
 
 func _blit(into: Image, part: Image, at: Vector2i) -> void:

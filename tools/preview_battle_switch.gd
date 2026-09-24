@@ -61,7 +61,9 @@ const SHINY_LEVEL: int = 30
 ## The two stages that go through `start_world_battle` rather than a staged
 ## `_battle`, because the palette is chosen in `_init_battle_display` and only
 ## the world path runs it.
-const WORLD_STAGES: Array[String] = ["shiny", "normal", "prize", "fainted_offer", "contest_replace"]
+const WORLD_STAGES: Array[String] = [
+	"shiny", "normal", "prize", "fainted_offer", "enemy_sent_out", "contest_replace",
+]
 
 ## The `prize` stage's held item, AMULET_COIN (constants/item_constants.asm).
 ## `CheckAmuletCoin` doubles the reward off it, so the figure in the picture is
@@ -213,7 +215,7 @@ func _open() -> void:
 	if _stage.begins_with("tower_"):
 		_open_tower_stage()
 		return
-	if _stage in ["prize", "fainted_offer"]:
+	if _stage in ["prize", "fainted_offer", "enemy_sent_out"]:
 		_open_prize()
 		return
 	if _stage == "contest_replace":
@@ -243,6 +245,10 @@ func _open_prize() -> void:
 	for _step: int in 400:
 		_settle()
 		var snapshot: Dictionary = _screen.battle_snapshot()
+		if _stage == "enemy_sent_out" and "sent out" in String(snapshot["message"]):
+			_screen.finish()
+			_settle()
+			return
 		if "for winning" in String(snapshot["message"]):
 			## The box is still revealing on the frame it is spotted, and
 			## the figure is the whole point of the picture.

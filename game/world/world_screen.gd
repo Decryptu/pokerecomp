@@ -94,8 +94,6 @@ const GEN1_FIELD_MOVE_REFUSAL_DEFAULT: Array = ["item_use", "not_time"]
 ## plays (engine/events/field_moves.asm). SFX_HEADBUTT is a battle-move effect
 ## and is referenced by nothing in either pin's overworld code.
 const SFX_HEADBUTT_TREE: int = 0x6D
-## `HangUp_Beep`, the click every phone call ends on.
-const SFX_HANG_UP: int = 0x6B
 ## `.PlayPoisonSFX`, the sound the overworld poison pass plays whether or not
 ## anything fainted to it.
 const SFX_POISON: int = 0x0B
@@ -218,6 +216,13 @@ var _pokedex_host: Gen2PokedexScreen = null
 ## menu cursor below survives its own screen.
 var _pokedex_prev_entry: int = 0
 var _service_host: Gen2WorldServiceScreen = null
+## The Pokegear card standing behind a call's script.
+var _pokegear_call_host: Gen2WorldServiceScreen = null
+var _pokegear_call_page: String = ""
+## `PokegearPhone_MakePhoneCall`'s two `SFX_CALL`s, each behind a `WaitSFX`.
+var _pokegear_call_tones: int = 0
+var _pokegear_call_results: Array = []
+var _pokegear_call_watch: Dictionary = {}
 var _start_menu_host: Gen2StartMenuScreen = null
 var _party_host: Gen2PartyScreen = null
 var _hall_of_fame_host: Gen2HallOfFameScreen = null
@@ -933,6 +938,8 @@ const FRAME_HOSTS: Array[Array] = [
 ## [member Gen2WorldAPI.frame_number]. `HandleMap`'s pass is one frame in two.
 func advance_frame() -> void:
 	_spending_frame = true
+	_advance_pokegear_call_tones()
+	_end_pokegear_call_if_done()
 	## A screen whose frames a tool, a check or a replay spends owns the driver's
 	## frame too: nothing else turns it, and a wait on a sound is then real.
 	if not is_processing() and _audio_player != null:
@@ -1016,7 +1023,7 @@ func _advance_presentation(map_pass: bool) -> void:
 ## covers its first two pixels on the pass the press landed on.
 func _advance_movement(map_pass: bool) -> void:
 	if map_pass:
-		_run_gen1_map_script_pass()
+		_run_player_events_pass()
 		_advance_pressed_action()
 		_advance_forced_movement()
 		_advance_held_direction()
@@ -1139,12 +1146,17 @@ func _apply_gen1_spinner() -> void:
 		_renderer.refresh_animation()
 
 
-## `JoypadOverworld` runs `RunMapScript` on every pass the walk counter is
-## zero, in front of the direction it then reads.
-func _run_gen1_map_script_pass() -> void:
-	if _world == null or not _world.is_gen1() or _world.player_step_in_progress() \
+## `JoypadOverworld`'s `RunMapScript`, or Generation 2's `PlayerEvents`, on every
+## pass with no step or script under way.
+func _run_player_events_pass() -> void:
+	if _world == null or _world.player_step_in_progress() \
 		or not _objects_may_move() or _world.script_busy() \
 		or _world.scripted_movement_in_progress():
+		return
+	var armed: StringName = _world.take_warp_check()
+	if armed != &"":
+		_zero_map_name_sign_timer()
+		_start_map_fade(armed == &"fall")
 		return
 	var results: Array = _world.dispatch_sight_events()
 	if not results.is_empty():
@@ -1517,6 +1529,7 @@ func _swallows_button(button: int) -> bool:
 
 
 func _handle_button(button: int) -> bool:
+	_end_pokegear_call_if_done()
 	## A battle owns every button through this funnel, so a press is recorded
 	## once and a replay reaches the fight; an overlay the fight opened takes it
 	## first, or `NewPokedexEntry`'s page never sees its B.
@@ -1592,7 +1605,8 @@ func _advance_pressed_action() -> void:
 ## `DoBattleTransition` ignores input until the battle screen opens.
 func _input_locked() -> bool:
 	return not _map_fade.is_empty() or not _trainer_approach.is_empty() \
-		or _battle_transition != null or _world.phone_ring_active()
+		or _battle_transition != null or _world.phone_ring_active() \
+		or _pokegear_call_tones > 0
 
 
 func _handle_prompt_button(button: int) -> bool:
@@ -1894,7 +1908,7 @@ func _complete_player_step(movement: Dictionary) -> bool:
 		## swaps when that fade lands, and everything a step still owes waits
 		## for `FadeInFromWhite` behind it.
 		_zero_map_name_sign_timer()
-		_start_map_fade()
+		_start_map_fade(_world.standing_on_pit())
 		return true
 	## `RunMapScript` sets the dungeon warp bit and `OverworldLoop` reads it
 	## behind `CheckWarpsNoCollision`, so a cell that is both takes the warp.
@@ -3208,7 +3222,7 @@ func script_fade() -> Dictionary:
 ## `WarpToNewMapScript`. `GetWarpSFX` reads the tile the step landed on, and
 ## `MapSetupScript_Door`'s `FadeOutToWhite` is the first thing the setup script
 ## spends: four palette orders, two frames each, before anything is loaded.
-func _start_map_fade() -> void:
+func _start_map_fade(fall: bool = false) -> void:
 	if _world.is_gen1():
 		var kind: StringName = _gen1_map_anim_kind()
 		if kind != &"":
@@ -3218,8 +3232,12 @@ func _start_map_fade() -> void:
 		_map_fade = {"stage": &"out", "step": 0, "gen1": 0}
 		_apply_gen1_warp_frame()
 		return
-	_play_sfx(_warp_sfx())
-	_map_fade = {"stage": &"out", "step": 0, "frames": Gen2WorldPalette.FADE_STEP_FRAMES}
+	if not fall:
+		_play_sfx(_warp_sfx())
+	_map_fade = {
+		"stage": &"out", "step": 0, "frames": Gen2WorldPalette.FADE_STEP_FRAMES,
+		"fall": fall,
+	}
 	_apply_map_fade_step()
 
 
@@ -3450,13 +3468,20 @@ func _advance_map_fade() -> void:
 		_map_fade["frames"] = Gen2WorldPalette.FADE_STEP_FRAMES
 		_apply_map_fade_step()
 		return
+	var fall: bool = bool(_map_fade.get("fall", false))
 	if out:
-		_swap_warped_map()
-		_map_fade = {"stage": &"in", "step": 0, "frames": Gen2WorldPalette.FADE_STEP_FRAMES}
+		_swap_warped_map(Gen2WorldAPI.MAP_ENTRY_FALL if fall else Gen2WorldAPI.MAP_ENTRY_DOOR)
+		_map_fade = {
+			"stage": &"in", "step": 0, "frames": Gen2WorldPalette.FADE_STEP_FRAMES,
+			"fall": fall,
+		}
 		_apply_map_fade_step()
 		return
 	_map_fade = {}
 	_apply_map_fade_step()
+	if fall:
+		_show_script_results(_world.run_pitfall_landing())
+		return
 	## `EnterMap` runs the map's own scripts once the setup script has finished,
 	## which is the frame the fade lands on.
 	_after_map_settled(false)
@@ -3540,8 +3565,8 @@ func _clear_script_fade() -> void:
 ## The middle of `MapSetupScript_Door`: the map the warp names is loaded with the
 ## screen at its whitest, and `FadeToMapMusic` is the eight-step fade the new
 ## map's track arrives behind rather than a restart.
-func _swap_warped_map() -> void:
-	if not bool(_world.try_warp().get("ok", false)):
+func _swap_warped_map(entry: int = Gen2WorldAPI.MAP_ENTRY_DOOR) -> void:
+	if not bool(_world.try_warp(_world.player_cell, entry).get("ok", false)):
 		return
 	_clear_script_fade()
 	_animation.configure(_world, _render_time_of_day())
@@ -5152,6 +5177,26 @@ func preview_pokegear() -> void:
 		_start_menu_host.handle_button(PokeButton.A)
 
 
+const PREVIEW_CONTACT_ELM: int = 4
+
+
+## Screenshot driver for a call to Mom from the PHONE card, one step per call.
+func preview_phone_call_use() -> void:
+	if _world == null or _data == null:
+		return
+	if _service_host == null and _pokegear_call_host == null:
+		_injected_save = _embedded_party_save()
+		_world.state.apply_changes({}, {}, {
+			"engine_flags": {Gen2WorldState.ENGINE_PHONE_CARD: true},
+			"phone_contacts": {Gen2WorldMomPhone.CONTACT_MOM: true, PREVIEW_CONTACT_ELM: true},
+		})
+		_open_phone_list()
+		return
+	if _service_host != null:
+		_service_host.handle_button(PokeButton.A)
+		_service_host.handle_button(PokeButton.A)
+
+
 ## Screenshot drivers for `SaveMenu`'s three boxes; an injected save keeps
 ## the write in memory as [method preview_pack_toss] keeps its stack.
 func preview_save_menu() -> void:
@@ -6611,6 +6656,8 @@ func _open_service_host() -> void:
 	var persist: bool = save != null and _injected_save == null
 	host.question_page = _choice_last_page
 	_choice_last_page = ""
+	if _text_box != null:
+		host.box_palette = _text_box.palette
 	if not host.open_pending(_world, _data, save, persist):
 		Gen2Screen.drop(host)
 		_script_prompt = "Service request unavailable"
@@ -6994,12 +7041,14 @@ func _on_start_menu_action(kind: StringName, id: StringName = &"") -> void:
 		Gen2WorldStartMenu.ITEM_POKEMON, Gen2WorldStartMenu.ITEM_POKEGEAR,
 		Gen2WorldStartMenu.ITEM_PLAYER, Gen2WorldStartMenu.ITEM_POKEDEX,
 		Gen2WorldStartMenu.ITEM_TOWN_MAP,
-		Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+		Gen2ModHost.START_ACTION_OPEN_BILLS_PC, Gen2ModHost.START_ACTION_OPEN_PC,
 		Gen2ModHost.START_ACTION_OPEN_MOD_PAGE,
 	]
 	match kind:
 		Gen2ModHost.START_ACTION_OPEN_BILLS_PC:
 			_open_bills_pc()
+		Gen2ModHost.START_ACTION_OPEN_PC:
+			_open_service_overlay(&"pc")
 		Gen2ModHost.START_ACTION_OPEN_MOD_PAGE:
 			_open_mod_page(id)
 		Gen2WorldStartMenu.ITEM_POKEMON:
@@ -7030,7 +7079,7 @@ func _on_start_menu_action(kind: StringName, id: StringName = &"") -> void:
 ## `.Reopen`, which every `StartMenu_*` handler that returns 0 lands on. The
 ## cursor is `wBattleMenuCursorPosition` and was kept when the menu closed.
 func _reopen_start_menu_if_due() -> void:
-	if not _reopen_start_menu:
+	if not _reopen_start_menu or _pokegear_call_host != null:
 		return
 	_reopen_start_menu = false
 	_open_start_menu()
@@ -8037,7 +8086,7 @@ func _open_service_overlay(kind: StringName) -> void:
 	if _service_host != null or _world == null or _data == null:
 		return
 	var label: String = {
-		&"pokegear": "Pokegear", &"bills_pc": "Storage",
+		&"pokegear": "Pokegear", &"bills_pc": "Storage", &"pc": "PC",
 	}.get(kind, "Phone list")
 	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
 	if host == null:
@@ -8050,22 +8099,29 @@ func _open_service_overlay(kind: StringName) -> void:
 	add_child(host)
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	var persist: bool = save != null and _injected_save == null
-	var opened: bool = (
-		host.open_pokegear(_world, _data, save, persist) if kind == &"pokegear"
-		else host.open_bills_pc(_world, _data, save, persist) if kind == &"bills_pc"
-		else host.open_phone_list(_world, _data, save, persist)
-	)
-	if not opened:
-		Gen2Screen.drop(host)
-		_script_prompt = "%s unavailable" % label
-		_refresh_labels()
-		return
+	## Connected first: a PC boots with a sound and may answer before returning.
 	host.save_action = persist_world_snapshot
 	host.completed.connect(_on_service_completed)
+	host.call_placed.connect(_on_pokegear_call_placed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
 	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host
+	var opened: bool = (
+		host.open_pokegear(_world, _data, save, persist) if kind == &"pokegear"
+		else host.open_bills_pc(_world, _data, save, persist) if kind == &"bills_pc"
+		else host.open_pc_machine(_world, _data, save, persist, &"gen1_pokemon_center" \
+			if _data.generation == RomRegistry.GEN1 else &"pokemon_center") if kind == &"pc"
+		else host.open_phone_list(_world, _data, save, persist)
+	)
+	if _service_host != host:
+		return
+	if not opened:
+		_service_host = null
+		Gen2Screen.drop(host)
+		_script_prompt = "%s unavailable" % label
+		_refresh_labels()
+		return
 	_script_prompt = "%s open" % label
 	_refresh_labels()
 
@@ -8251,6 +8307,53 @@ func _on_service_completed(results: Array) -> void:
 		_play_current_map_music()
 	_show_script_results(results)
 	_reopen_start_menu_if_due()
+
+
+## `MakePhoneCallFromPokegear` runs inside the Pokegear, its box over the card.
+func _on_pokegear_call_placed(results: Array) -> void:
+	_pokegear_call_host = _service_host
+	_service_host = null
+	_pokegear_call_page = ""
+	_pokegear_call_results = results
+	_pokegear_call_tones = 2
+	_pokegear_call_watch = {}
+	if _text_box != null:
+		_text_box.show_text("", false)
+		_text_box.z_index = 1
+		if _pokegear_call_host != null:
+			_text_box.palette = _pokegear_call_host.call_box_palette()
+
+
+func _advance_pokegear_call_tones() -> void:
+	if _pokegear_call_tones <= 0:
+		return
+	if _audio_player != null and _audio_player.still_waiting(_pokegear_call_watch):
+		return
+	_pokegear_call_tones -= 1
+	_pokegear_call_watch = {}
+	if _pokegear_call_tones > 0:
+		_play_sfx(Gen2WorldServiceScreen.SFX_CALL)
+		return
+	var results: Array = _pokegear_call_results
+	_pokegear_call_results = []
+	_show_script_results(results)
+
+
+## `PokegearPhone_FinishPhoneCall` once the call's script is done.
+func _end_pokegear_call_if_done() -> void:
+	if _pokegear_call_host == null or _text_box == null or _pokegear_call_tones > 0:
+		return
+	if not _world_idle_for_mod_request():
+		if _text_box.visible and not _text_box.page_lines().is_empty():
+			_pokegear_call_page = "\n".join(_text_box.page_lines())
+		return
+	var host: Gen2WorldServiceScreen = _pokegear_call_host
+	_pokegear_call_host = null
+	_service_host = host
+	_text_box.visible = false
+	_text_box.z_index = 0
+	_text_box.palette = PackedColorArray()
+	host.finish_call(_pokegear_call_page)
 
 
 ## Script event to the method that spends it. `soft_reset_requested` ends the
@@ -10037,10 +10140,8 @@ func _refresh_labels() -> void:
 		_hint.text += "    " + _script_prompt
 
 
-## `HangUp`'s own three writes, driven off the counted wait `hangup` staged: the
-## click, the `……` and the empty box `HangUp_BoopOff` redraws, twenty frames
-## each. Nothing here waits for a button, so the box is written rather than
-## opened as a page.
+## `HangUp`'s writes, driven off the counted wait `hangup` staged; the box is
+## written rather than opened as a page, since no button is read.
 func _draw_hang_up() -> void:
 	var wait: Dictionary = _world.pending_script_wait()
 	if not bool(wait.get("hang_up", false)) or _data == null \
@@ -10053,13 +10154,9 @@ func _draw_hang_up() -> void:
 	if phase == _hang_up_phase:
 		return
 	_hang_up_phase = phase
-	var metadata: Dictionary = _data.world_phone_metadata()
-	var line: String = ""
 	if phase == &"click":
-		line = String(metadata.get("hang_up_click", ""))
-		_play_sfx(SFX_HANG_UP)
-	elif phase == &"ellipse":
-		line = String(metadata.get("hang_up_ellipse", ""))
+		_play_sfx(Gen2WorldPhoneRing.SFX_HANG_UP)
+	var line: String = Gen2WorldPhoneRing.hang_up_line(_data.world_phone_metadata(), phase)
 	_text_box.visible = true
 	_text_box.show_text(line, false)
 

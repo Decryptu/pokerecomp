@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 42 | `START_ACTION_OPEN_PC`, and a table patch rechecking the visible wilds already standing |
 | 41 | `clear_patches()`, an encounter patch refused off the cartridge's slot count, a mod species met in the wild, `GameData.map_landmark()` and `world_fishing_group_count()`, and `Gen2WorldAPI.encounter_tables_key()` moving when a patch lands |
 | 40 | `Gen2WorldTileset.name`, the `TILESET_*` constant's name on every cartridge, `GameData.world_tileset_named()`, and `Gen2Layout.tileset_name()` and `tileset_number()` between Crystal's numbering and Gold and Silver's |
 | 39 | A Generation 1 map draws block 0 as block 0, through `Gen2WorldAPI.drawn_block_of`; `Gen2BattleColors`, the colours a battle is drawn in on either generation, for any renderer; `Gen2BattleRenderer.back_pixels`; `Gen2WorldPalette.overworld_sprite_colors`, `Gen2WorldMap.is_outside()` and `Gen2WorldCollision.gen1_ledge_direction` |
@@ -1453,6 +1454,10 @@ What the host does with a valid population:
   route entered in daylight therefore turns over to its night species as each
   wild is replaced, rather than emptying at six. A new entry is checked against
   the tables in force now, so `generation` never moves for an hour boundary.
+  A content patch is the exception: when `patch_encounter` or `clear_patches`
+  moves the tables, every standing entry is checked against the new ones, and an
+  entry they no longer offer is dropped, so a table mod's setting shows on the
+  route it was changed on.
 - Runs the step an entry asked for, over `Gen2WorldEncounters.STEP_PASSES` map
   passes, which is a map object's own walk. While it runs the host owns the
   entry's cell: `cell` is the cell it left, `facing` is the way it walks, the
@@ -1908,11 +1913,14 @@ host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
 
 `Gen2ModHost.START_ACTIONS` is the allow list. `OPEN_BILLS_PC` opens BILL'S PC at
 the same top menu the Pokemon Center's machine reaches, `BillsPC_`'s on Red, Blue
-and Yellow. An optional
+and Yellow. `OPEN_PC` opens that whole machine: BILL'S PC, the player's own PC,
+PROF.OAK'S PC and the Hall of Fame, and `TextScript_PokemonCenterPC`'s menu on Red,
+Blue and Yellow; TURN OFF or LOG OFF returns to the start menu. An optional
 `visible(context)` predicate is asked with a copy of
 `{party_count, pokedex, pokegear}` and leaves the row *absent* rather than present
 and refused. The host applies its own gate after the predicate, so a row cannot be
-shown where the game would refuse it: `OPEN_BILLS_PC` needs a party.
+shown where the game would refuse it: `OPEN_BILLS_PC` needs a party, and so
+does `OPEN_PC` on Gold, Silver and Crystal, as `PC_CheckPartyForPokemon` does.
 
 The start menu shows eight rows at once and scrolls past that. A fully unlocked
 save already fills those eight, so the MODS row and every registered row are

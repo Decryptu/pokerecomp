@@ -520,9 +520,10 @@ func _play_differently(host: Gen2ModHost, manifest: PokeModManifest) -> void:
 	## A start-menu row that opens one of the HOST's screens: a mod never
 	## receives one, so it names the opening and says when the row should be
 	## there at all. The host applies its own party gate after the predicate.
+	## `OPEN_PC` is the whole Pokemon Center machine (`api_version` 42).
 	host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
 		"label": "PC",
-		"action": Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+		"action": Gen2ModHost.START_ACTION_OPEN_PC,
 		"visible": func(_context: Dictionary) -> bool: return true,
 	})
 	_watch_the_run(host, manifest)

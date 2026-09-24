@@ -2233,6 +2233,51 @@ func test_a_registered_pc_row_opens_the_generation_1_machine() -> void:
 	Gen2ModHost.reset()
 
 
+## `OPEN_PC` is the whole Pokemon Center machine, and TURN OFF leaves it for the
+## start menu with no script to answer.
+func test_a_registered_whole_pc_row_opens_the_machine_and_turns_off() -> void:
+	_register_whole_pc_row()
+	await _open_world()
+	await _open_and_turn_off_the_pc()
+
+
+## The same row on Red, Blue and Yellow, whose LOG OFF is the way out.
+func test_a_registered_whole_pc_row_opens_the_generation_1_machine() -> void:
+	_register_whole_pc_row()
+	await _open_gen1_world()
+	await _open_and_turn_off_the_pc()
+
+
+func _register_whole_pc_row() -> void:
+	Gen2ModHost.reset()
+	Gen2ModHost.instance().register_menu_entry(
+		Gen2ModHost.MENU_START, &"qol", {
+			"label": "PC", "action": Gen2ModHost.START_ACTION_OPEN_PC,
+		}
+	)
+
+
+func _open_and_turn_off_the_pc() -> void:
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	assert_true(_world_screen._walk_start_menu_to(&"qol"))
+	_world_screen._start_menu_host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	var service: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(service)
+	assert_eq(service.get("_mode"), Gen2WorldServiceScreen.MODE.PC, "the machine's own top menu")
+	for _row: int in (service.get("_pc_rows") as Array).size() - 1:
+		service.handle_button(PokeButton.DOWN)
+	for _press: int in 4:
+		if _world_screen._service_host == null:
+			break
+		service.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	assert_null(_world_screen._service_host, "turned off")
+	assert_not_null(_world_screen._start_menu_host)
+	Gen2ModHost.reset()
+
+
 ## A registered Repel renewal: the step that runs an active Repel out asks
 ## before the encounter roll, and YES spends exactly one item through the pack's
 ## own transaction.

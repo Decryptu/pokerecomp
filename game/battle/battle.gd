@@ -75,6 +75,8 @@ const SEND_OUT_FOES_WEAK: int = 3
 ## the entering side's own tracks. Silent on its own, so nothing is printed for
 ## it.
 const CRY: StringName = &"cry"
+## `UpdatePlayerHUD` or `UpdateEnemyHUD` closing an entrance.
+const HUD_DRAWN: StringName = &"hud_drawn"
 ## The player got away, `how` naming the branch: [code]&"battle_type"[/code] for
 ## the two that always escape, [code]&"item"[/code] for the Smoke Ball,
 ## [code]&"speed"[/code], [code]&"odds"[/code] and [code]&"roll"[/code].
@@ -1547,6 +1549,7 @@ func send_out(
 	# animation after the line that announced them, and `ForceEnemySwitch` runs
 	# it before `DraggedOutText`.
 	events.append_array(entrance_events(side))
+	events.append({"type": HUD_DRAWN, "side": side})
 	if dragged_by >= 0:
 		events.append({"type": DRAGGED_OUT, "side": dragged_by, "target": side})
 	_spikes_damage(side, events)

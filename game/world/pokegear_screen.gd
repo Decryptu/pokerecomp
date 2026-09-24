@@ -98,6 +98,8 @@ var _service: bool = true
 ## `PokegearPhone_MakePhoneCall`'s own `PrintText`: whatever the card has said
 ## over its opening question, empty when it is asking that question again.
 var _message: String = ""
+## A call holds the box, blank included.
+var _calling: bool = false
 var _submenu: Array = []
 var _submenu_cursor: int = 0
 var _asking_delete: bool = false
@@ -170,6 +172,7 @@ func open(
 	_cursor = 0
 	_close_submenu()
 	_message = ""
+	_calling = false
 	_open = true
 	visible = true
 	if is_inside_tree() and _background != null:
@@ -210,6 +213,26 @@ func set_contacts(contacts: Array, service: bool) -> void:
 ## `……` a placed call opens on. The card keeps its list under the line.
 func say(text: String) -> void:
 	_message = text
+	_refresh()
+
+
+## A call's line in the box until [method end_call].
+func show_call_line(text: String) -> void:
+	_calling = true
+	_message = text
+	_refresh()
+
+
+## `TownMapPals`' slot for the box's frame and font.
+func box_palette() -> PackedColorArray:
+	if _data == null:
+		return PackedColorArray()
+	return _data.town_map_palette(_data.town_map_palette_of(Gen2Layout.FRAME_FIRST_CODE))
+
+
+func end_call() -> void:
+	_calling = false
+	_message = ""
 	_refresh()
 
 
@@ -448,7 +471,7 @@ func _tilemap() -> PackedInt32Array:
 	var box: String = _text
 	if _asking_delete:
 		box = _delete_text
-	elif not _message.is_empty():
+	elif _calling or not _message.is_empty():
 		box = _message
 	var map: PackedInt32Array = _page.phone_tilemap(
 		_owned, _phone_rows(), _cursor, _service, box
