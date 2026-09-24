@@ -12,8 +12,6 @@ extends Control
 signal finished(party_index: int, nickname: String, ending_text: String)
 signal closed()
 
-const TILE: int = Gen2Font.TILE
-
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 
 enum Phase {
@@ -37,7 +35,6 @@ var _player_id: int = 0
 var _texts: Dictionary = {}
 
 var _phase: int = Phase.DONE
-var _yes: bool = true
 ## Which member `PartyMenuSelect` answered with, and the nickname the routine
 ## settled on for it.
 var _party_index: int = -1
@@ -45,8 +42,7 @@ var _nickname: String = ""
 var _ending: StringName = Gen2NameRater.ENDING_CANCEL
 
 var _text_box: Gen2TextBox = null
-var _menu_page: Gen2MenuPage = null
-var _menu: TextureRect = null
+var _yes_no: Gen2YesNoBox = null
 var _party: Gen2PartyScreen = null
 var _naming: Gen2NamingScreenScreen = null
 
@@ -88,7 +84,7 @@ func phase() -> int:
 ## The YES/NO cursor, so a driver can read it without a redraw. -1 when no box
 ## is up.
 func question_cursor() -> int:
-	return (0 if _yes else 1) if _phase in [Phase.HELLO_ASK, Phase.BETTER_ASK] else -1
+	return _yes_no.cursor() if _yes_no != null else -1
 
 
 func text_lines() -> PackedStringArray:
@@ -110,20 +106,9 @@ func handle_button(button: int) -> bool:
 		return _party.handle_button(button)
 	if _phase == Phase.NAMING and _naming != null:
 		return _naming.handle_button(button)
-	if _phase in [Phase.HELLO_ASK, Phase.BETTER_ASK]:
-		match button:
-			PokeButton.UP, PokeButton.DOWN:
-				_yes = not _yes
-				_draw_yes_no()
-				return true
-			PokeButton.A:
-				_answer(_yes)
-				return true
-			PokeButton.B:
-				## `YesNoBox` answers B with the carry `jp c, .cancel` takes.
-				_answer(false)
-				return true
-		return false
+	## `YesNoBox` answers B with the carry `jp c, .cancel` takes.
+	if _yes_no != null and _yes_no.is_open():
+		return _yes_no.handle_button(button)
 	if button != PokeButton.A or _text_box == null or not _text_box.visible:
 		return false
 	if _text_box.is_revealing() or _text_box.has_pages_left():
@@ -144,6 +129,9 @@ func handle_button(button: int) -> bool:
 
 
 func advance_frame() -> void:
+	if _yes_no != null and _yes_no.is_open():
+		_yes_no.advance_frame()
+		return
 	if _text_box != null and _text_box.visible:
 		_text_box.advance_frame()
 		if _text_box.is_revealing() or _text_box.has_pages_left():
@@ -170,11 +158,9 @@ func _filled(key: String, nickname: String) -> String:
 
 
 func _build() -> void:
-	_menu = TextureRect.new()
-	_menu.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_menu.visible = false
-	add_child(_menu)
+	_yes_no = Gen2YesNoBox.new(Gen2MenuPage.from_data(_data))
+	_yes_no.answered.connect(_answer)
+	add_child(_yes_no)
 
 	_text_box = Gen2TextBox.new()
 	_text_box.driven = true
@@ -190,19 +176,17 @@ func _build() -> void:
 func _show_text(text: String, prompt: bool = false) -> void:
 	if _text_box == null:
 		return
-	_menu.visible = false
+	_yes_no.close()
 	_text_box.visible = true
 	_text_box.show_text(text, prompt)
 
 
 func _open_question(next_phase: int) -> void:
 	_phase = next_phase
-	_yes = true
-	_draw_yes_no()
+	_yes_no.open()
 
 
 func _answer(yes: bool) -> void:
-	_menu.visible = false
 	if not yes:
 		_end(Gen2NameRater.ENDING_CANCEL)
 		return
@@ -299,21 +283,9 @@ func _end(ending: StringName) -> void:
 	_phase = Phase.DONE
 	if _text_box != null:
 		_text_box.visible = false
-	if _menu != null:
-		_menu.visible = false
+	if _yes_no != null:
+		_yes_no.close()
 	finished.emit(
 		_party_index, _nickname, _filled(String(ending), _nickname)
 	)
 	closed.emit()
-
-
-func _draw_yes_no() -> void:
-	if _menu_page == null:
-		_menu_page = Gen2MenuPage.from_data(_data)
-	if _menu_page == null:
-		return
-	var box: Gen2MenuBox = Gen2MenuBox.yes_no()
-	var image: Image = _menu_page.render(box, ["YES", "NO"], 0 if _yes else 1)
-	Gen2PicImage.show(_menu, image)
-	_menu.position = Vector2(box.border_position() * TILE)
-	_menu.visible = true

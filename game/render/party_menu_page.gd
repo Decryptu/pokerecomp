@@ -273,11 +273,6 @@ func reset(rows: Array) -> void:
 			int(member.get("hp", 0)), int(member.get("max_hp", 0)),
 			Gen2BattleHud.HP_BAR_TILES * TILE
 		), data.generation == RomRegistry.GEN1)
-		## `PlacePartyMenuHPBar` never runs for an egg, so the speed byte behind
-		## its icon is whatever the last party left in `wHPPals`. Zero here, the
-		## green one, rather than a stale byte no save can reproduce.
-		if bool(member.get("egg", false)):
-			speed = 0
 		var icon: int = data.mon_menu_icon(
 			int(member.get("species", 0)), bool(member.get("egg", false))
 		) if data != null else 0

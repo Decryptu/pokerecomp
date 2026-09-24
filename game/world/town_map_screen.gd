@@ -256,8 +256,8 @@ func cursor_name() -> String:
 
 ## `.loop`'s own joypad read: B leaves and the d-pad walks the window. Every
 ## other button is swallowed, which is what the loop does with them.
-## The dex area's loop leaves on A as well as B, walks regions rather than
-## landmarks, and reads SELECT as a held state; see [method release_button].
+## The dex area's and Generation 1's TOWN MAP loops leave on A as well as B; the
+## dex area walks regions and holds SELECT (see [method release_button]).
 ## The Pokegear card reads left and right as `Pokegear_SwitchPage` first.
 func handle_button(button: int) -> bool:
 	if not _open or _map == null:
@@ -274,8 +274,10 @@ func handle_button(button: int) -> bool:
 			else (int(row.get("spawn", -1)) if not row.is_empty() else -1)
 		close()
 		return true
-	if button == PokeButton.B \
-		or (button == PokeButton.A and _map.screen == Gen2TownMap.SCREEN_DEX_AREA):
+	## Generation 1's TOWN MAP item leaves `DisplayTownMap`'s loop on A as well.
+	if button == PokeButton.B or (button == PokeButton.A and (
+		_map.screen == Gen2TownMap.SCREEN_DEX_AREA
+		or (_gen1 and _map.screen == Gen2TownMap.SCREEN_TOWN_MAP))):
 		close()
 		return true
 	if button == PokeButton.SELECT and not _gen1 \

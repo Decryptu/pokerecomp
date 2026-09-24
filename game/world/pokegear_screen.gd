@@ -102,8 +102,8 @@ var _message: String = ""
 var _calling: bool = false
 var _submenu: Array = []
 var _submenu_cursor: int = 0
-var _asking_delete: bool = false
-var _yes_no_cursor: int = 0
+## `DeletePhoneNumber`'s `YesNoBox`, or null.
+var _delete_ask: Gen2WorldMenu = null
 
 var _screen: Gen2Screen = null
 var _field: Control = null
@@ -262,8 +262,8 @@ func handle_button(button: int) -> bool:
 			_message = ""
 			_refresh()
 		return true
-	if _asking_delete:
-		_press_yes_no(button)
+	if _delete_ask != null:
+		_press_delete_ask(button)
 		return true
 	if not _submenu.is_empty():
 		_press_submenu(button)
@@ -340,39 +340,31 @@ func _press_submenu(button: int) -> void:
 					called.emit(contact)
 					return
 				SUBMENU_DELETE:
-					_asking_delete = true
-					## `YesNoMenuHeader`'s own `db 1`, which is YES.
-					_yes_no_cursor = 0
+					_delete_ask = Gen2WorldMenu.yes_no()
 				_:
 					_close_submenu()
 					return
 	_refresh()
 
 
-## `YesNoBox`, whose B is the same answer NO is.
-func _press_yes_no(button: int) -> void:
-	match button:
-		PokeButton.UP:
-			_yes_no_cursor = 0
-		PokeButton.DOWN:
-			_yes_no_cursor = 1
-		PokeButton.B:
-			## `InterpretTwoOptionMenu` answers a B the way NO answers.
-			_close_submenu()
-			return
-		PokeButton.A:
-			var contact: int = selected_contact()
-			var yes: bool = _yes_no_cursor == 0
-			_close_submenu()
-			if yes:
-				deleted.emit(contact)
-			return
-	_refresh()
+func _press_delete_ask(button: int) -> void:
+	if _delete_ask.press_yes_no(button) and not _delete_ask.holding():
+		_refresh()
+
+
+func advance_frame() -> void:
+	if _delete_ask == null or not _delete_ask.advance_hold():
+		return
+	var contact: int = selected_contact()
+	var yes: bool = _delete_ask.answered_yes()
+	_close_submenu()
+	if yes:
+		deleted.emit(contact)
 
 
 func _close_submenu() -> void:
 	_submenu = []
-	_asking_delete = false
+	_delete_ask = null
 	_refresh()
 
 
@@ -469,7 +461,7 @@ func _tilemap() -> PackedInt32Array:
 	if _card != CARD_PHONE:
 		return _page.clock_tilemap(_owned, _weekday, _hour, _minute, _text)
 	var box: String = _text
-	if _asking_delete:
+	if _delete_ask != null:
 		box = _delete_text
 	elif _calling or not _message.is_empty():
 		box = _message
@@ -480,8 +472,8 @@ func _tilemap() -> PackedInt32Array:
 		# The yes/no box is a window over the submenu rather than a replacement,
 		# so the row it was chosen from keeps its arrow.
 		_page.draw_phone_submenu(map, _submenu, _submenu_cursor)
-	if _asking_delete:
-		_page.draw_yes_no(map, _yes_no_cursor)
+	if _delete_ask != null:
+		_page.draw_yes_no(map, _delete_ask.cursor)
 	return map
 
 

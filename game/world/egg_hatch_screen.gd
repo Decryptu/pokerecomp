@@ -20,11 +20,6 @@ signal music_requested(index: int)
 ## constants/music_constants.asm.
 const MUSIC_NONE: int = 0
 const MUSIC_EVOLUTION: int = 0x22
-## constants/sfx_constants.asm.
-const SFX_CAUGHT_MON: int = 0x02
-const SFX_EGG_CRACK: int = 0x9E
-const SFX_EGG_HATCH: int = 0xA6
-
 const TILE: int = Gen2Font.TILE
 const BOX: int = Gen2PicImage.FRONTPIC_TILES
 ## `hlcoord 7, 4` for the egg and `hlcoord 6, 3` for the hatchling. The egg is
@@ -72,7 +67,6 @@ var _shift: int = 0
 ## Which block the picture is standing in, so the wobble can move it without
 ## knowing whether it is drawing the egg or the hatchling.
 var _pic_origin: Vector2i = EGG_AT
-var _nickname_yes: bool = true
 var _nickname_forced: bool = false
 var _animation: Gen2PicAnimation = null
 var _animation_pixels: PackedByteArray = PackedByteArray()
@@ -80,8 +74,7 @@ var _animation_pixels: PackedByteArray = PackedByteArray()
 var _backdrop: Gen2Screen.Field = null
 var _pic: TextureRect = null
 var _text_box: Gen2TextBox = null
-var _menu_page: Gen2MenuPage = null
-var _menu: TextureRect = null
+var _yes_no: Gen2YesNoBox = null
 var _naming: Gen2NamingScreenScreen = null
 
 
@@ -148,7 +141,7 @@ func text_lines() -> PackedStringArray:
 ## The YES/NO cursor, so a driver can read it without a redraw. -1 when the box
 ## is not up.
 func nickname_cursor() -> int:
-	return (0 if _nickname_yes else 1) if _phase == Phase.ASK_NICKNAME else -1
+	return _yes_no.cursor() if _yes_no != null else -1
 
 
 func naming_screen() -> Gen2NamingScreenScreen:
@@ -158,26 +151,9 @@ func naming_screen() -> Gen2NamingScreenScreen:
 func handle_button(button: int) -> bool:
 	if _phase == Phase.NAMING and _naming != null:
 		return _naming.handle_button(button)
-	if _phase == Phase.ASK_NICKNAME:
-		if _menu == null or not _menu.visible:
-			if button == PokeButton.A and _text_box != null \
-				and (_text_box.is_revealing() or _text_box.has_pages_left()):
-				_text_box.advance()
-				return true
-			return false
-		match button:
-			PokeButton.UP, PokeButton.DOWN:
-				_nickname_yes = not _nickname_yes
-				_draw_yes_no()
-				return true
-			PokeButton.A:
-				_answer_nickname(_nickname_yes)
-				return true
-			PokeButton.B:
-				## `YesNoBox` answers B as NO, which is `.nonickname`.
-				_answer_nickname(false)
-				return true
-		return false
+	## `YesNoBox` answers B as NO, which is `.nonickname`.
+	if _yes_no != null and _yes_no.is_open():
+		return _yes_no.handle_button(button)
 	if button == PokeButton.A and _text_box != null and _text_box.visible \
 		and (_text_box.is_revealing() or _text_box.has_pages_left()):
 		_text_box.advance()
@@ -199,11 +175,9 @@ func _build() -> void:
 	_pic.visible = false
 	add_child(_pic)
 
-	_menu = TextureRect.new()
-	_menu.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_menu.visible = false
-	add_child(_menu)
+	_yes_no = Gen2YesNoBox.new(Gen2MenuPage.from_data(_data))
+	_yes_no.answered.connect(_answer_nickname)
+	add_child(_yes_no)
 
 	_text_box = Gen2TextBox.new()
 	_text_box.driven = true
@@ -224,7 +198,7 @@ func _begin_hatch() -> void:
 		return
 	_backdrop.visible = false
 	_pic.visible = false
-	_menu.visible = false
+	_yes_no.close()
 	_phase = Phase.HUH
 	_show_text(Gen2WorldPartyHost.HUH_TEXT)
 
@@ -241,16 +215,16 @@ func advance_frame() -> void:
 		return
 	if _phase == Phase.NAMING:
 		return
+	if _yes_no.is_open():
+		_yes_no.advance_frame()
+		return
 	if _text_box != null and _text_box.visible:
 		_text_box.advance_frame()
 		if _text_box.is_revealing() or _text_box.has_pages_left():
-			## `YesNoBox` opens behind `PrintText` returning, so the menu is not
-			## up while the question is still printing.
-			if _phase == Phase.ASK_NICKNAME and _menu != null:
-				_menu.visible = false
 			return
-	if _phase == Phase.ASK_NICKNAME and _menu != null and not _menu.visible:
-		_draw_yes_no()
+	## `YesNoBox` opens once `PrintText` returns.
+	if _phase == Phase.ASK_NICKNAME:
+		_yes_no.open()
 		return
 	match _phase:
 		Phase.HUH:
@@ -336,14 +310,14 @@ func _crack_shell() -> void:
 	var step: int = (_counter - 1) & 0x7
 	if step == 0x7 or (step & 1) == 0:
 		return
-	sfx_requested.emit(SFX_EGG_CRACK)
+	sfx_requested.emit(Gen2Sfx.SFX_EGG_CRACK)
 
 
 ## `.done`: the scroll is put back, the shell fragments are thrown and the
 ## hatchling takes the block the egg was standing in.
 func _finish_wobble() -> void:
 	_shift = 0
-	sfx_requested.emit(SFX_EGG_HATCH)
+	sfx_requested.emit(Gen2Sfx.SFX_EGG_HATCH)
 	_draw_species(int(current_hatch().get("species", 0)))
 	_phase = Phase.FRAGMENTS
 	_frames = FRAGMENT_FRAMES
@@ -388,12 +362,11 @@ func _open_hatched_text() -> void:
 	_show_text(
 		Gen2WorldPartyHost.hatch_text(String(current_hatch().get("nickname", ""))), true
 	)
-	sfx_requested.emit(SFX_CAUGHT_MON)
+	sfx_requested.emit(Gen2Sfx.SFX_CAUGHT_MON)
 
 
 func _open_nickname_question() -> void:
 	_phase = Phase.ASK_NICKNAME
-	_nickname_yes = true
 	if _nickname_forced:
 		_answer_nickname(true)
 		return
@@ -405,7 +378,6 @@ func _open_nickname_question() -> void:
 ## `.nonickname` keeps `wStringBuffer1`, which is the species name the row was
 ## already given; YES opens `NamingScreen` under NAME_MON.
 func _answer_nickname(yes: bool) -> void:
-	_menu.visible = false
 	if not yes:
 		_finish_hatch(String(current_hatch().get("nickname", "")))
 		return
@@ -419,6 +391,11 @@ func _answer_nickname(yes: bool) -> void:
 		_naming = null
 		_finish_hatch(String(current_hatch().get("nickname", "")))
 		return
+	## `NamingScreen`'s `.Pokemon` draws the icon and `GetGender`'s sign.
+	var species: int = int(current_hatch().get("species", 0))
+	_naming.set_species_icon(_data, species, Gen2NamingScreenScreen.gender_sign(
+		_data, species, int(current_hatch().get("dvs", -1))
+	))
 	_text_box.visible = false
 	_backdrop.visible = false
 	_pic.visible = false
@@ -450,18 +427,6 @@ func _finish_hatch(nickname: String) -> void:
 		closed.emit()
 		return
 	_begin_hatch()
-
-
-func _draw_yes_no() -> void:
-	if _menu_page == null:
-		_menu_page = Gen2MenuPage.from_data(_data)
-	if _menu_page == null:
-		return
-	var box: Gen2MenuBox = Gen2MenuBox.yes_no()
-	var image: Image = _menu_page.render(box, ["YES", "NO"], 0 if _nickname_yes else 1)
-	Gen2PicImage.show(_menu, image)
-	_menu.position = Vector2(box.border_position() * TILE)
-	_menu.visible = true
 
 
 ## `GetEggFrontpic`, which is the egg's own picture and its own palette entry

@@ -24,7 +24,7 @@ const SHINY_ANIM: int = 0x101
 const SHINY_ANIM_PARAM: int = 1
 ## Generation 1 has no sparkle: its send-out marks a shiny with `SFX_SHINE` alone.
 const GEN1_PULSE_COMMANDS: Array = [
-	{"name": Gen2BattleAnimScript.SOUND, "operands": [0, Gen2BattleScreen.SFX_SHINE]},
+	{"name": Gen2BattleAnimScript.SOUND, "operands": [0, Gen2Sfx.SFX_SHINE]},
 ]
 
 ## A pulse for an id that pulsed fewer frames ago than this is dropped, so a
@@ -347,11 +347,12 @@ func _push_context_changes() -> void:
 		changed = true
 	var key: Array = _world.encounter_tables_key()
 	if key != _tables_key:
-		## A mod's patch rechecks the standing wilds; an hour does not.
+		## A patch is a new population, as a map change is; an hour is not.
 		var revision: int = _world.data.content_revision() if _world.data != null else 0
 		if revision != _tables_revision:
-			_tables_revision = revision
-			_admitted = {}
+			_generation += 1
+			_reset()
+			return
 		_tables_key = key
 		_context["tables"] = _world.active_encounter_tables()
 		changed = true

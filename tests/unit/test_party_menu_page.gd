@@ -401,6 +401,24 @@ func test_an_egg_takes_the_egg_icon_rather_than_its_species_own() -> void:
 	assert_eq(data.mon_menu_icon(FIXTURE_SPECIES, true), Gen2Layout.ICON_EGG)
 
 
+## `SetPartyMonIconAnimSpeed` calls `PlacePartymonHPBar` and `GetHPPal` itself
+## rather than reading `wHPPals`, so an egg's icon runs at the speed its own
+## health names, the same as any member's.
+func test_an_egg_icon_takes_the_speed_its_own_health_names() -> void:
+	var rows: Array = _rows(2)
+	rows[0]["hp"] = 0
+	rows[0]["max_hp"] = 0
+	rows[1]["hp"] = 0
+	rows[1]["max_hp"] = 0
+	rows[1]["egg"] = true
+	rows[1]["name"] = "EGG"
+	var page: Gen2PartyMenuPage = _page()
+	page.reset(rows)
+	var icons: Array = page.get("_icons")
+	assert_eq(int(icons[1]["speed"]), int(icons[0]["speed"]))
+	assert_eq(int(icons[1]["speed"]), GameData.hp_bar_palette_index(0), "the empty bar's red")
+
+
 ## `StatsScreen_LoadFont`'s page, which the stats and move screens share: the
 ## same tiles as a battle's plus `LoadStatsScreenPageTilesGFX`' seventeen at $31,
 ## and the player HUD's border scattered rather than copied whole, which leaves
@@ -669,3 +687,42 @@ func test_the_move_screen_marks_the_row_it_is_holding() -> void:
 		_ink_in_tile(holding, Gen2MoveScreenPage.WHERE_AT.x, Gen2MoveScreenPage.WHERE_AT.y),
 		0, "with the prompt in its place"
 	)
+
+
+
+## `PlaceString` leaves bc on the cell after the name's last tile and
+## `PrintLevel` writes `<LV>` there, so the level follows the name with no gap
+## and counts a ligature such as `'d` as the one tile it is.
+func test_the_move_screen_level_follows_the_nicknames_last_tile() -> void:
+	## Frames in their own index, so a cell the name and level leave alone reads
+	## as the box border it is rather than as ink.
+	var frames: PackedByteArray = PackedByteArray()
+	frames.resize(Gen2Layout.FRAME_COUNT * Gen2Layout.FRAME_TILES * PokeTiles.TILE_PIXELS)
+	frames.fill(1)
+	RomCache.write_indices(RomCache.tile_path(_directory, "frames"), frames)
+	var page: Gen2MoveScreenPage = Gen2MoveScreenPage.from_data(
+		GameData.open_directory(_directory)
+	)
+	for nickname: String in ["SPARKY", "MA'dA"]:
+		var indices: PackedByteArray = page.draw({
+			"species": FIXTURE_SPECIES, "nickname": nickname, "level": 20,
+			"moves": [], "cursor": 0, "held": -1,
+		})
+		var level_at: int = Gen2MoveScreenPage.NICKNAME.x + Gen2Text.encoded_length(nickname)
+		var row: int = Gen2MoveScreenPage.NICKNAME.y
+		assert_eq(_cell_index(indices, level_at - 1, row), 3, "%s ends on a letter" % nickname)
+		assert_eq(_cell_index(indices, level_at, row), 2, "the <LV> glyph straight after")
+		assert_eq(_cell_index(indices, level_at + 2, row), 3, "then the two digits")
+		assert_eq(_cell_index(indices, level_at + 3, row), 1, "and the border again")
+
+
+## The one index a solid fixture tile at ([param column], [param row]) is drawn
+## in, or -1 when the cell mixes several.
+func _cell_index(indices: PackedByteArray, column: int, row: int) -> int:
+	var width: int = Gen2MoveScreenPage.COLUMNS * Gen2Font.TILE
+	var first: int = indices[row * Gen2Font.TILE * width + column * Gen2Font.TILE]
+	for y: int in Gen2Font.TILE:
+		for x: int in Gen2Font.TILE:
+			if indices[(row * Gen2Font.TILE + y) * width + column * Gen2Font.TILE + x] != first:
+				return -1
+	return first

@@ -16,7 +16,6 @@ const HANG_UP_PHASES: Array[StringName] = [
 	&"click", &"ellipse", &"clear", &"ellipse", &"clear", &"ellipse", &"clear",
 ]
 const HANG_UP_PHASE_COUNT: int = 7
-const SFX_HANG_UP: int = 0x6B
 const HANG_UP_FRAMES: int = HANG_UP_PHASE_COUNT * WAIT_FRAMES
 
 

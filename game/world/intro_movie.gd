@@ -25,15 +25,6 @@ const MAP_COLUMNS: int = Gen2Layout.INTRO_MAP_COLUMNS
 const MAP_ROWS: int = Gen2Layout.INTRO_MAP_ROWS
 const SCREEN_HEIGHT_PX: int = 144
 
-## The sound effects the movie asks for, as their `SFX_*` numbers.
-const SFX_INTRO_UNOWN_1: int = 0xBE
-const SFX_INTRO_UNOWN_2: int = 0xBF
-const SFX_INTRO_UNOWN_3: int = 0xC0
-const SFX_INTRO_SUICUNE_2: int = 0xC5
-const SFX_INTRO_SUICUNE_3: int = 0xC6
-const SFX_INTRO_SUICUNE_4: int = 0xC8
-const SFX_INTRO_WHOOSH: int = 0xCB
-const SFX_INTRO_PICHU: int = 0xC4
 ## `MUSIC_CRYSTAL_OPENING`, started by `IntroScene13` rather than at the top.
 const MUSIC_CRYSTAL_OPENING: int = 0x62
 
@@ -129,9 +120,9 @@ const UNOWN_BURST: Array[Array] = [
 
 ## `IntroScene12`'s `.UnownSounds`, as (frame counter, sfx).
 const UNOWN_SOUNDS: Array[Array] = [
-	[0x00, SFX_INTRO_UNOWN_3], [0x20, SFX_INTRO_UNOWN_2], [0x40, SFX_INTRO_UNOWN_1],
-	[0x60, SFX_INTRO_UNOWN_2], [0x80, SFX_INTRO_UNOWN_3], [0x90, SFX_INTRO_UNOWN_2],
-	[0xA0, SFX_INTRO_UNOWN_1], [0xB0, SFX_INTRO_UNOWN_2],
+	[0x00, Gen2Sfx.SFX_INTRO_UNOWN_3], [0x20, Gen2Sfx.SFX_INTRO_UNOWN_2], [0x40, Gen2Sfx.SFX_INTRO_UNOWN_1],
+	[0x60, Gen2Sfx.SFX_INTRO_UNOWN_2], [0x80, Gen2Sfx.SFX_INTRO_UNOWN_3], [0x90, Gen2Sfx.SFX_INTRO_UNOWN_2],
+	[0xA0, Gen2Sfx.SFX_INTRO_UNOWN_1], [0xB0, Gen2Sfx.SFX_INTRO_UNOWN_2],
 ]
 
 ## What each setup scene loads, keyed by its scene index. `bg` is the sheet BG
@@ -713,7 +704,7 @@ func _scene_unown_a() -> void:
 		return
 	if value == 0x60:
 		_init_unown_burst(Vector2i(11 * 8, 11 * 8))
-		_emit(&"play_sfx", {"sfx": SFX_INTRO_UNOWN_1})
+		_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_INTRO_UNOWN_1})
 	_timer = value
 	_unown_fade(0)
 
@@ -727,7 +718,7 @@ func _scene_unown_hi() -> void:
 		return
 	if value == 0x60:
 		_init_unown_burst(Vector2i(6 * 8, 14 * 8))
-		_emit(&"play_sfx", {"sfx": SFX_INTRO_UNOWN_1})
+		_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_INTRO_UNOWN_1})
 		_timer = value
 		_unown_fade(1)
 		return
@@ -737,7 +728,7 @@ func _scene_unown_hi() -> void:
 		return
 	if value == 0x20:
 		_init_unown_burst(Vector2i(15 * 8, 7 * 8))
-		_emit(&"play_sfx", {"sfx": SFX_INTRO_UNOWN_2})
+		_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_INTRO_UNOWN_2})
 	_timer = value
 	_unown_fade(0)
 
@@ -760,9 +751,9 @@ func _scene_suicune_runs_in() -> void:
 		_perspective_scroll(value + 1 < 0x40)
 		return
 	if value == 0x40:
-		_emit(&"play_sfx", {"sfx": SFX_INTRO_SUICUNE_3})
+		_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_INTRO_SUICUNE_3})
 	if _global_x_offset == 0:
-		_emit(&"play_sfx", {"sfx": SFX_INTRO_SUICUNE_2})
+		_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_INTRO_SUICUNE_2})
 		_actors.clear()
 		_next_scene()
 		return
@@ -803,10 +794,10 @@ func _scene_pichu_and_wooper() -> void:
 			_next_scene()
 		0x20:
 			_spawn(OBJ_INTRO_WOOPER, Vector2i(6 * 8, 22 * 8))
-			_emit(&"play_sfx", {"sfx": SFX_INTRO_PICHU})
+			_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_INTRO_PICHU})
 		0x40:
 			_spawn(OBJ_INTRO_PICHU, Vector2i(16 * 8, 21 * 8 + 1))
-			_emit(&"play_sfx", {"sfx": SFX_INTRO_PICHU})
+			_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_INTRO_PICHU})
 
 
 ## `IntroScene12`: the whole screen of Unown, fading twice as fast over the
@@ -843,7 +834,7 @@ func _scene_suicune_jumps() -> void:
 		_next_scene()
 		return
 	if value == 0x60:
-		_emit(&"play_sfx", {"sfx": SFX_INTRO_SUICUNE_4})
+		_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_INTRO_SUICUNE_4})
 	if value >= 0x60:
 		_timer = 1
 		if _global_x_offset < 0x88:
@@ -973,7 +964,7 @@ func _scene_end() -> void:
 		_hold = CLEAR_BG_PALETTES_FRAMES
 		return
 	if value == 0x08:
-		_emit(&"play_sfx", {"sfx": SFX_INTRO_WHOOSH})
+		_emit(&"play_sfx", {"sfx": Gen2Sfx.SFX_INTRO_WHOOSH})
 
 
 ## `Intro_PerspectiveScrollBG`: the trees scroll one pixel every other frame and

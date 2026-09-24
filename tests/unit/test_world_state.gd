@@ -93,6 +93,27 @@ func test_engine_flags_round_trip_and_daily_reset_preserves_hall_of_fame() -> vo
 	assert_false(restored.reset_daily_flags())
 
 
+## `EngineFlags` puts ENGINE_DAY_CARE_* on `wDayCareMan`/`wDayCareLady` and
+## ENGINE_MOM_* on `wMomSavingMoney`: `Route34EggCheckCallback` reads the flag the
+## day-care code wrote as a bit, and Mom's phone answer writes the byte her bank reads.
+func test_day_care_and_mom_engine_flags_are_bits_of_their_bytes() -> void:
+	var state := Gen2WorldState.new()
+	state.set_day_care_man_flags(1 << 6)
+	assert_true(state.is_engine_flag_active(5), "HAS_EGG is bit 6 of wDayCareMan")
+	assert_false(state.is_engine_flag_active(6))
+	state.set_engine_flag(6)
+	assert_eq(state.day_care_man_flags(), (1 << 6) | 1)
+	assert_true(state.apply_changes({}, {}, {"engine_flags": {8: true, 9: true, 7: true}})["ok"])
+	assert_eq(state.mom_savings_flags(), 0x81)
+	assert_eq(state.day_care_lady_flags(), 1)
+	assert_true(state.apply_changes({}, {}, {"engine_flags": {8: false}})["ok"])
+	assert_eq(state.mom_savings_flags(), 0x80, "a cleared flag clears its bit")
+	assert_false(state.engine_flags().has(9), "nothing is kept beside the byte")
+	var legacy: Dictionary = Gen2WorldState.new().to_dict()
+	legacy["engine_flags"] = {9: true}
+	assert_eq(Gen2WorldState.from_dict(legacy).mom_savings_flags(), 0x80)
+
+
 ## `DrawStartMenu` and `DisplayPCMainMenu` `CheckEvent EVENT_GOT_POKEDEX`, which
 ## is what Oak's Lab sets, so on a Generation 1 world the engine flag every
 ## reader asks for is that event, both ways, and a saved event survives alone.

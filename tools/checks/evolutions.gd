@@ -31,7 +31,7 @@ const EXPECTED_TRADES: Dictionary = {
 ## wait frames and 72 picture changes of `Delay3` each, the `Delay3` behind the
 ## last change, two frames for the jingle and the `ld c, 40`. The new cry's frame
 ## opens a box and counts with the reveals. Measured on Red: 288 frames of flicker.
-const GEN1_SFX: Array[int] = [Gen1Layout.SFX_TINK, Gen1Layout.SFX_GET_ITEM_2]
+const GEN1_SFX: Array[int] = [Gen1Sfx.SFX_TINK, Gen1Sfx.SFX_GET_ITEM_2]
 const GEN1_MUSIC: Array[int] = [
 	Gen2EvolutionScreen.MUSIC_NONE, Gen2EvolutionScreen.MUSIC_EVOLUTION,
 	Gen2EvolutionScreen.MUSIC_NONE,

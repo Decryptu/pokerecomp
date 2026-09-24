@@ -44,16 +44,6 @@ enum Prompt {
 	PRESS,
 }
 
-## The sound effects the routine names.
-const SFX_WRONG: int = 0x19
-const SFX_TRANSACTION: int = 0x22
-const SFX_SLOT_MACHINE_START: int = 0x2C
-const SFX_KINESIS: int = 0x2F
-const SFX_POKEBALLS_PLACED_ON_TABLE: int = 0x03
-const SFX_PAY_DAY: int = 0x68
-const SFX_2ND_PLACE: int = 0x98
-const SFX_CHOOSE_A_CARD: int = 0x9A
-const SFX_QUIT_SLOTS: int = 0x9D
 ## `MUSIC_NONE` and the `MUSIC_GAME_CORNER` `_CardFlip` starts once its screen
 ## is up, which is the same track the map was already playing.
 const MUSIC_NONE: int = 0x00
@@ -375,7 +365,7 @@ func press_a() -> void:
 	match _prompt:
 		Prompt.CHOOSE:
 			_prompt = Prompt.NONE
-			_sound(SFX_SLOT_MACHINE_START)
+			_sound(Gen2Sfx.SFX_SLOT_MACHINE_START)
 			_step = 4
 			_flash_left = FLASHES * 2 - 1
 			_delay = TOGGLE_FRAMES
@@ -396,7 +386,7 @@ func _enter_deduct() -> void:
 		_prompt = Prompt.PRESS
 		return
 	_coins -= COST
-	_sound(SFX_TRANSACTION)
+	_sound(Gen2Sfx.SFX_TRANSACTION)
 	_waiting_for_sfx = true
 	_enter_choose_a_card()
 
@@ -440,7 +430,7 @@ func _choose_a_card_pass() -> void:
 ## `.loop`: the border is drawn on the lit card and four frames pass. A is read
 ## on every one of them, which is `Prompt.CHOOSE`.
 func _toggle_pass() -> void:
-	_sound(SFX_KINESIS)
+	_sound(Gen2Sfx.SFX_KINESIS)
 	_border_at = _which_card
 	_delay = TOGGLE_FRAMES
 	_step = 3
@@ -486,7 +476,7 @@ func move_cursor(direction: int) -> void:
 		_:
 			return
 	if moved:
-		_sound(SFX_POKEBALLS_PLACED_ON_TABLE)
+		_sound(Gen2Sfx.SFX_POKEBALLS_PLACED_ON_TABLE)
 
 
 ## `.d_left`. The two Pokemon rows step out of their own columns and land on
@@ -575,7 +565,7 @@ func _to_mon_group() -> bool:
 func _enter_check_the_card() -> void:
 	_state = State.CHECK_THE_CARD
 	_cursor_visible = true
-	_sound(SFX_CHOOSE_A_CARD)
+	_sound(Gen2Sfx.SFX_CHOOSE_A_CARD)
 	_waiting_for_sfx = true
 
 
@@ -595,13 +585,13 @@ func _enter_tabulate() -> void:
 	_state = State.TABULATE_THE_RESULT
 	var won: int = payout_for(_cursor, _face_up_card)
 	if won <= 0:
-		_sound(SFX_WRONG)
+		_sound(Gen2Sfx.SFX_WRONG)
 		_text("darn")
 		_waiting_for_sfx = true
 		_prompt = Prompt.PRESS
 		return
 	_text("yeah")
-	_sound(SFX_2ND_PLACE)
+	_sound(Gen2Sfx.SFX_2ND_PLACE)
 	_waiting_for_sfx = true
 	_payout_left = won
 	## `.loop` adds the coin and *then* spends its `ld c, 2`, so the first is
@@ -617,7 +607,7 @@ func _payout_pass() -> void:
 	_payout_left -= 1
 	if _coins < MAX_COINS:
 		_coins += 1
-		_sound(SFX_PAY_DAY)
+		_sound(Gen2Sfx.SFX_PAY_DAY)
 	if _payout_left > 0:
 		_delay = PAYOUT_FRAMES
 		return
@@ -653,7 +643,7 @@ func _enter_quit() -> void:
 	_cursor_visible = false
 	_border_at = -1
 	_step = 0
-	_sound(SFX_QUIT_SLOTS)
+	_sound(Gen2Sfx.SFX_QUIT_SLOTS)
 	_waiting_for_sfx = true
 
 

@@ -32,10 +32,11 @@ static func open(
 	return prompt
 
 
-## The same dial for a caller that keeps the number itself: the mart's box and
-## the item PC's row are `Toss_Sell_Loop` over their own headers.
-static func stepped(shown: int, button: int, available: int) -> int:
-	var prompt: Gen2WorldQuantityPrompt = open(available)
+## The same dial for a caller that keeps the number itself: the mart's box.
+static func stepped(
+	shown: int, button: int, available: int, generation: int = RomRegistry.GEN2
+) -> int:
+	var prompt: Gen2WorldQuantityPrompt = open(available, generation)
 	prompt.value = clampi(shown, 1, prompt.maximum)
 	prompt.press(button)
 	return prompt.value

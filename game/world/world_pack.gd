@@ -326,6 +326,15 @@ static func item_submenu(data: GameData, item: int) -> Array:
 	return _submenu_entries(actions)
 
 
+## `BattlePack`'s `ItemSubmenu`: `CheckItemContext` offers USE; `TMHMSubmenu` never.
+static func battle_submenu(data: GameData, item: int) -> Array:
+	var definition: Dictionary = data.item(item) if data != null else {}
+	if int(definition.get("battle_menu", 0)) == ITEMMENU_NOUSE \
+		or int(definition.get("pocket", 0)) == TYPE_TM_HM:
+		return _submenu_entries([ACTION_QUIT] as Array[StringName])
+	return _submenu_entries(SUBMENU_USE_QUIT)
+
+
 static func _submenu_entries(actions: Array[StringName]) -> Array:
 	var entries: Array = []
 	for action: StringName in actions:
@@ -439,21 +448,14 @@ const GEN1_FIELD_EFFECTS: Dictionary = {
 }
 
 
-## The bag rows `BattlePack` can offer, in the pack's own pocket order: every
-## owned item whose battle nibble is not ITEMMENU_NOUSE. The balls are in it,
-## because the pack is where a throw is chosen from too. `DisplayPlayerBag` hands
-## `wNumBagItems` over whole instead, and `ItemUseNotTime` refuses a row there.
-static func battle_items(data: GameData, state: Gen2WorldState) -> Array[int]:
+## Every owned item in pocket order, which `DisplayPlayerBag` lists whole.
+static func bag_items(data: GameData, state: Gen2WorldState) -> Array[int]:
 	var out: Array[int] = []
 	if data == null or state == null:
 		return out
-	var whole: bool = data.generation == RomRegistry.GEN1
 	for pocket: Dictionary in build(data, state):
-		var numbers: Array = pocket.get("items", [])
-		for row: Dictionary in numbers:
-			var item: int = int(row.get("item", 0))
-			if whole or int(data.item(item).get("battle_menu", 0)) != ITEMMENU_NOUSE:
-				out.append(item)
+		for row: Dictionary in pocket.get("items", []):
+			out.append(int(row.get("item", 0)))
 	return out
 
 

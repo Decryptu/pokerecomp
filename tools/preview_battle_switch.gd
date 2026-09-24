@@ -499,13 +499,13 @@ func _open_menu_stage(battle: Gen2Battle) -> void:
 	_drain_to_menu()
 	if _stage in ["move", "info"]:
 		_screen._handle_button(PokeButton.A)
-	## `BattlePack`'s own list, over the bag the world hands the battle. The
+	## `BattlePack`'s own screen, over the bag the world hands the battle. The
 	## rows are a real cache's items, so the picture reads as the pack.
 	if _stage in ["pack", "info_pack"]:
 		_screen.set_battle_pack(PACK_ITEMS, PACK_QUANTITIES)
 		_screen._handle_button(PokeButton.DOWN)
 		_screen._handle_button(PokeButton.A)
-	## The BALL pocket of the same list. Every row of
+	## The BALL pocket of the same pack. Every row of
 	## `BallMultiplierFunctionTable` is reachable, so the picture is the
 	## whole of what a player can throw.
 	if _stage == "balls":
@@ -514,6 +514,7 @@ func _open_menu_stage(battle: Gen2Battle) -> void:
 		)
 		_screen._handle_button(PokeButton.DOWN)
 		_screen._handle_button(PokeButton.A)
+		_screen._handle_button(PokeButton.RIGHT)
 	## `BattleMenu_PKMN`'s party page, the other modal that covers the same
 	## cells: RIGHT from FIGHT is PKMN.
 	if _stage == "info_pkmn":

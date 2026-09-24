@@ -530,7 +530,7 @@ func _write_alarm_tone(length: int, envelope: int, frequency: int) -> void:
 ## `Music_PokeFluteInBattle`: the caught-mon effect is started and its three
 ## channel pointers are overwritten at once with the flute's own.
 func play_poke_flute_in_battle(pointers: Array) -> void:
-	play_sound(Gen1Layout.SFX_CAUGHT_MON)
+	play_sound(Gen1Sfx.SFX_CAUGHT_MON)
 	for index: int in mini(pointers.size(), 3):
 		_pointers[CMD_POINTERS + CHAN5 + index] = int(pointers[index]) & 0xFFFF
 

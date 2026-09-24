@@ -210,6 +210,8 @@ var player_sprite_number: int = Gen2WorldSprite.SPRITE_PLAYER
 ## both turn back into a spawn. `(-1, -1)` is a game that has entered none, and
 ## `GetWhiteoutSpawn`'s own answer for that is `SPAWN_HOME`.
 var last_spawn_map: Vector2i = Vector2i(-1, -1)
+## `wLastPocket` and the pockets' rows: WRAM outside the save a reopened pack reads.
+var pack_memory: Dictionary = {}
 ## `wDigWarpNumber`, `wDigMapGroup` and `wDigMapNumber`: the warp and outdoor map
 ## the player last came into a cave through, which is where Dig and an Escape
 ## Rope put them back. Empty until one is walked.
@@ -4479,7 +4481,7 @@ func _gen1_card_key_steps() -> Array:
 	## the door on the next frame, so leaving and returning keeps it open.
 	return [_gen1_card_key_box("card_key_success"), door,
 		{"type": &"map_load", "bit": Gen1Layout.MAP_LOADED_1_BIT},
-		_gen1_sound_step("sound", {"index": Gen1Layout.SFX_GO_INSIDE})]
+		_gen1_sound_step("sound", {"index": Gen1Sfx.SFX_GO_INSIDE})]
 
 
 func _gen1_card_key_box(name: String) -> Dictionary:
@@ -4824,8 +4826,8 @@ func _gen1_node_ss_anne_leaves(_node: Dictionary, steps: Array, _run: Dictionary
 	steps.append(_gen1_wait_step(
 		&"ss_anne_leaves", drifted + Gen1Layout.SS_ANNE_TAIL_FRAMES, {"sounds": [
 			{"frame": 0, "kind": &"music", "index": Gen2WorldFieldMove.MUSIC_SURF},
-			{"frame": horn_at, "gen1": true, "index": Gen1Layout.SFX_SS_ANNE_HORN},
-			{"frame": drifted, "gen1": true, "index": Gen1Layout.SFX_SS_ANNE_HORN},
+			{"frame": horn_at, "gen1": true, "index": Gen1Sfx.SFX_SS_ANNE_HORN},
+			{"frame": drifted, "gen1": true, "index": Gen1Sfx.SFX_SS_ANNE_HORN},
 		]}
 	))
 	steps.append({
@@ -5614,35 +5616,53 @@ func _gen1_node_pikachu_text(node: Dictionary, steps: Array, run: Dictionary) ->
 
 
 func _gen1_node_oaks_aide(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var other: Array = [_gen1_aide_box("come_back")]
+	var other: Array = [_gen1_aide_box("come_back", node)]
 	if not _gen1_resolve_script(node["other"] as Array, other, _gen1_run_copy(run)):
 		return false
 	var yes: Array = []
 	if state != null and state.caught_count() >= int(node["requirement"]):
-		var got: Array = [_gen1_aide_box("got_item")]
-		var full: Array = [_gen1_aide_box("no_room")]
-		if not _gen1_resolve_script(node["got"] as Array, got, _gen1_run_copy(run)) \
-			or not _gen1_resolve_script(node["other"] as Array, full, _gen1_run_copy(run)):
-			return false
-		yes.append(_gen1_aide_box("here_you_go"))
+		## `OaksAideScript`: HereYouGo, `GiveItem`, then GotItem or NoRoom.
+		yes.append(_gen1_aide_box("here_you_go", node))
+		var gift_run: Dictionary = _gen1_run_copy(run)
+		var before: int = yes.size()
 		if not _gen1_resolve_gift(
-			{"op": "give_item", "item": int(node["item"]), "count": 1, "ok": got, "full": full},
-			yes, _gen1_run_copy(run)
+			{"op": "give_item", "item": int(node["item"]), "count": 1}, yes, gift_run
 		):
 			return false
+		var taken: bool = yes.size() > before
+		yes.append(_gen1_aide_box("got_item" if taken else "no_room", node))
+		if not _gen1_resolve_script(node["got" if taken else "other"] as Array, yes, gift_run):
+			return false
 	else:
-		yes.append(_gen1_aide_box("uh_oh"))
+		yes.append(_gen1_aide_box("uh_oh", node))
 		if not _gen1_resolve_script(node["other"] as Array, yes, _gen1_run_copy(run)):
 			return false
 	steps.append({
-		"type": &"choice", "text": String(_gen1_aide_box("hi")["text"]), "yes": yes, "no": other,
+		"type": &"choice", "text": String(_gen1_aide_box("hi", node)["text"]), "yes": yes, "no": other,
 	})
 	return true
 
 
-func _gen1_aide_box(name: String) -> Dictionary:
-	return {"type": &"text", "text": gen1_filled_text(
+## `hOaksAideRequirement` and `hOaksAideNumMonsOwned`, three-digit fields.
+const GEN1_AIDE_REQUIREMENT: int = 0xFFDB
+const GEN1_AIDE_OWNED: int = 0xFFDD
+
+
+func _gen1_aide_box(name: String, node: Dictionary) -> Dictionary:
+	var text: String = gen1_filled_text(
 		data.special_text(GEN1_OAKS_AIDE_RUN, name) if data != null else ""
+	)
+	var numbers: Dictionary = {
+		GEN1_AIDE_REQUIREMENT: int(node["requirement"]),
+		GEN1_AIDE_OWNED: state.caught_count() if state != null else 0,
+	}
+	for address: int in numbers:
+		text = Gen2TextStream.fill_all_markers(
+			text, "%s%04X>" % [Gen2TextStream.NUMBER_MARKER, address],
+			str(numbers[address]).lpad(3)
+		)
+	return {"type": &"text", "text": Gen2TextStream.fill_all_markers(
+		text, Gen2TextStream.RAM_MARKER, data.item_name(int(node["item"])) if data != null else ""
 	)}
 
 
@@ -6689,7 +6709,7 @@ func _gen1_cable_club_save_steps() -> Array:
 	return [
 		{"type": &"request", "values": {"kind": &"quick_save_requested", "values": {}}},
 		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PAUSE_FRAMES, {
-			"sounds": [{"frame": 0, "gen1": true, "index": Gen1Layout.SFX_SAVE}],
+			"sounds": [{"frame": 0, "gen1": true, "index": Gen1Sfx.SFX_SAVE}],
 		}),
 		please_wait,
 		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PAUSE_FRAMES),
@@ -7028,7 +7048,7 @@ func _gen1_heal_machine_step() -> Dictionary:
 	for ball: int in balls:
 		sounds.append({
 			"frame": ball * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES,
-			"gen1": true, "index": Gen1Layout.SFX_HEALING_MACHINE,
+			"gen1": true, "index": Gen1Sfx.SFX_HEALING_MACHINE,
 		})
 	sounds.append({
 		"frame": flashes_at, "gen1": true, "index": Gen1Layout.MUSIC_PKMN_HEALED,
@@ -7346,7 +7366,7 @@ func _gen1_boulder_dust() -> Array:
 	var frames: int = Gen1Layout.BOULDER_DUST_STEPS * Gen1Layout.BOULDER_DUST_STEP_FRAMES
 	_gen1_steps = [_gen1_wait_step(&"gen1_boulder_dust", frames, {
 		"facing": facing,
-		"sounds": [{"frame": frames, "gen1": true, "index": Gen1Layout.SFX_CUT}],
+		"sounds": [{"frame": frames, "gen1": true, "index": Gen1Sfx.SFX_CUT}],
 	})]
 	return _gen1_result()
 
@@ -7360,7 +7380,7 @@ func gen1_cut_animation(applied: Dictionary) -> Array:
 	_gen1_steps = [_gen1_redraw_step(), _gen1_wait_step(&"gen1_cut", frames, {
 		"facing": player_facing,
 		"grass": grass,
-		"sounds": [{"frame": frames, "gen1": true, "index": Gen1Layout.SFX_CUT}],
+		"sounds": [{"frame": frames, "gen1": true, "index": Gen1Sfx.SFX_CUT}],
 	}), _gen1_redraw_step()]
 	return _gen1_result()
 
@@ -9496,6 +9516,9 @@ func _apply_object_override(type: StringName, event: Dictionary) -> bool:
 			if not cell is Vector2i:
 				return false
 			_object_position_overrides[key] = cell
+			## Live at once, so an `applymovement` later in the run walks from it.
+			if names_loaded:
+				(objects[index] as Gen2WorldObject).cell = cell
 		&"object_facing":
 			_object_facing_overrides[key] = clampi(
 				int(event.get("facing", Gen2WorldSprite.FACING_DOWN)),
@@ -10203,24 +10226,7 @@ func connection_target(cell: Vector2i, direction: Vector2i) -> Dictionary:
 	if data.world_tileset(target_map.tileset) == null:
 		return {"ok": false, "reason": &"missing_tileset", "direction": direction_name}
 
-	var target_cell: Vector2i
-	match direction_name:
-		"north":
-			target_cell = Vector2i(
-				cell.x + int(source_connection.get("x_offset", 0)),
-				target_map.collision_height - 1,
-			)
-		"south":
-			target_cell = Vector2i(cell.x + int(source_connection.get("x_offset", 0)), 0)
-		"west":
-			target_cell = Vector2i(
-				target_map.collision_width - 1,
-				cell.y + int(source_connection.get("y_offset", 0)),
-			)
-		"east":
-			target_cell = Vector2i(0, cell.y + int(source_connection.get("y_offset", 0)))
-		_:
-			return {}
+	var target_cell: Vector2i = connection_landing(target_map, source_connection, cell)
 	if target_cell.x < 0 or target_cell.y < 0 \
 		or target_cell.x >= target_map.collision_width \
 		or target_cell.y >= target_map.collision_height:
@@ -10236,6 +10242,24 @@ func connection_target(cell: Vector2i, direction: Vector2i) -> Dictionary:
 		"cell": target_cell,
 		"source": source_connection,
 	}
+
+
+## Where a step off [param cell] lands, by the macro's signed cell offsets.
+static func connection_landing(
+	target_map: Gen2WorldMap, connection: Dictionary, cell: Vector2i
+) -> Vector2i:
+	var x_offset: int = int(connection.get("x_offset", 0))
+	var y_offset: int = int(connection.get("y_offset", 0))
+	match String(connection.get("direction", "")):
+		"north":
+			return Vector2i(cell.x + x_offset, target_map.collision_height - 1)
+		"south":
+			return Vector2i(cell.x + x_offset, 0)
+		"west":
+			return Vector2i(target_map.collision_width - 1, cell.y + y_offset)
+		"east":
+			return Vector2i(0, cell.y + y_offset)
+	return Vector2i(-1, -1)
 
 
 func try_connection(direction: Vector2i) -> Dictionary:

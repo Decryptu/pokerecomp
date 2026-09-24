@@ -160,3 +160,50 @@ func test_the_room_menu_box_wears_the_arrows_rather_than_a_cursor() -> void:
 		box.item_position(0), Vector2i(13, 9),
 		"`hlcoord 13, 9`, which is the box's own text start with top spacing"
 	)
+
+
+## `YesNoMenuHeader` has no STATICMENU_WRAP and no left/right: UP is YES and
+## DOWN is NO, and neither end wraps.
+func test_a_yes_no_moves_by_up_and_down_and_wraps_neither_way() -> void:
+	var menu: Gen2WorldMenu = Gen2WorldMenu.yes_no()
+	assert_eq(menu.cursor, 0)
+	assert_false(menu.press_yes_no(PokeButton.UP))
+	assert_false(menu.press_yes_no(PokeButton.LEFT))
+	assert_false(menu.press_yes_no(PokeButton.RIGHT))
+	assert_eq(menu.cursor, 0)
+	assert_true(menu.press_yes_no(PokeButton.DOWN))
+	assert_false(menu.press_yes_no(PokeButton.DOWN))
+	assert_eq(menu.cursor, 1)
+	assert_false(menu.holding(), "moving answers nothing")
+
+
+## B is `YesNoBox`'s carry wherever the cursor stands, and A takes the row.
+func test_b_answers_no_from_either_row_and_a_takes_the_cursor() -> void:
+	var refused: Gen2WorldMenu = Gen2WorldMenu.yes_no()
+	assert_true(refused.press_yes_no(PokeButton.B))
+	assert_false(refused.answered_yes())
+	var accepted: Gen2WorldMenu = Gen2WorldMenu.yes_no()
+	assert_true(accepted.press_yes_no(PokeButton.A))
+	assert_true(accepted.answered_yes())
+	var declined: Gen2WorldMenu = Gen2WorldMenu.yes_no()
+	declined.press_yes_no(PokeButton.DOWN)
+	declined.press_yes_no(PokeButton.A)
+	assert_false(declined.answered_yes())
+
+
+## `InterpretTwoOptionMenu`'s `ld c, $f / call DelayFrames` reads no joypad, and
+## the answer is heard on its last frame and on no other.
+func test_the_answer_is_held_fifteen_frames_and_reads_nothing_meanwhile() -> void:
+	var menu: Gen2WorldMenu = Gen2WorldMenu.yes_no()
+	assert_false(menu.advance_hold(), "nothing is held before an answer")
+	menu.press_yes_no(PokeButton.A)
+	assert_true(menu.holding())
+	for frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES - 1:
+		assert_false(menu.press_yes_no(PokeButton.DOWN), "frame %d" % frame)
+		assert_false(menu.press_yes_no(PokeButton.B), "frame %d" % frame)
+		assert_false(menu.advance_hold(), "frame %d" % frame)
+	assert_eq(menu.cursor, 0)
+	assert_true(menu.answered_yes(), "the B pressed during the hold was dropped")
+	assert_true(menu.advance_hold())
+	assert_false(menu.holding())
+	assert_false(menu.advance_hold())

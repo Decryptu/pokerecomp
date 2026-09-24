@@ -25,31 +25,6 @@ const PREVIEW_ARC_TOP_PROGRESS: float = 0.4
 ## part way down the scatter, where the wipe is readable and the screen is not
 ## yet black.
 const PREVIEW_COVER_FRAMES: int = 10
-## constants/sfx_constants.asm's SFX_JUMP_OVER_LEDGE (comments there are hex,
-## confirmed against neighbouring $0a/$0f/$1a), played by .TryJump as the hop
-## starts. Played directly rather than through _handle_audio_request(), which
-## expects a runtime request to acknowledge; a hop is movement, not a script.
-const SFX_JUMP_OVER_LEDGE: int = 0x16
-## constants/sfx_constants.asm's SFX_BUMP, which `.NotMoving` plays for a poll
-## that pressed a direction and committed nothing.
-const SFX_BUMP: int = 0x24
-## constants/sfx_constants.asm's SFX_PLACE_PUZZLE_PIECE_DOWN, played by
-## OWCutAnimation before its sprite animation. The animation itself is not
-## rendered here; the sound is. Not SFX_CUT, which is $38 and is the battle
-## move's own effect: the field animation shares the Unown puzzle's sound.
-const SFX_CUT: int = Gen2UnownPuzzle.SFX_PLACE_PIECE
-## constants/sfx_constants.asm's SFX_SURF, which is what PlayWhirlpoolSound plays
-## (engine/events/field_moves.asm); there is no whirlpool-specific effect.
-const SFX_WHIRLPOOL: int = 0x53
-## constants/sfx_constants.asm's SFX_STRENGTH, played by MovementFunction_Strength
-## as a pushed boulder starts moving, not by the menu that sets the flag.
-const SFX_STRENGTH: int = 0x1B
-## constants/sfx_constants.asm's SFX_BUBBLEBEAM, which Script_UsedWaterfall plays
-## after its text and before the first climbing step.
-const SFX_WATERFALL: int = 0x51
-## constants/sfx_constants.asm's SFX_FLASH, played by `UseFlashTextScript`'s own
-## `text_asm` rather than by `BlindingFlash`, which fades in silence.
-const SFX_FLASH: int = 0xA9
 const FIELD_MOVE_TEXT_RUNS_ON: Array[int] = [
 	Gen2WorldFieldMove.MOVE_STRENGTH, Gen2WorldFieldMove.MOVE_FLASH,
 	Gen2WorldFieldMove.MOVE_TELEPORT,
@@ -90,28 +65,15 @@ const GEN1_FIELD_MOVE_REFUSALS: Dictionary = {
 	&"not_enough_health": ["field_move", "not_healthy_enough"],
 }
 const GEN1_FIELD_MOVE_REFUSAL_DEFAULT: Array = ["item_use", "not_time"]
-## constants/sfx_constants.asm's SFX_SANDSTORM, which is what ShakeHeadbuttTree
-## plays (engine/events/field_moves.asm). SFX_HEADBUTT is a battle-move effect
-## and is referenced by nothing in either pin's overworld code.
-const SFX_HEADBUTT_TREE: int = 0x6D
-## `.PlayPoisonSFX`, the sound the overworld poison pass plays whether or not
-## anything fainted to it.
-const SFX_POISON: int = 0x0B
 ## constants/music_constants.asm, which AnimateHallOfFame plays over the whole
 ## induction.
 const MUSIC_HALL_OF_FAME: int = 20
 ## `HoFFadeOutScreenAndMusic`'s `wAudioFadeOutCounterReloadValue`.
 const HALL_OF_FAME_MUSIC_FADE_FRAMES: int = 10
 
-## `GetWarpSFX`: the door, the warp panel, and everything else, which is a step
-## out of a building. Read off the tile the step landed on, the way
-## `wPlayerTileCollision` is.
-const SFX_ENTER_DOOR: int = 0x1F
-const SFX_WARP_TO: int = 0x13
-## `FlyFunction_FrameTimer`'s own sound, and what the fly preview flies on.
-const SFX_FLY: int = 0x18
+## What the fly preview flies on.
 const PREVIEW_FLY_SPECIES: int = 155
-const SFX_EXIT_BUILDING: int = 0x23
+## `GetWarpSFX`'s door and warp panel, off `wPlayerTileCollision`.
 const COLL_DOOR: int = 0x71
 const COLL_WARP_PANEL: int = 0x7C
 ## `FadeToMapMusic`'s own `ld a, 8` into `wMusicFade`, which is what the new
@@ -143,6 +105,9 @@ var _effects: Gen2WorldEffects = null
 ## and drawn by the renderer with the map's own objects.
 var _actors: Gen2WorldActors = null
 var _encounters: Gen2WorldEncounters = null
+## What the renderer draws, resolved once from the four above and the screen's
+## own presentation state. See [Gen2WorldDrawList].
+var _draw_list: Gen2WorldDrawList = null
 ## The id of the visible encounter the running battle belongs to, so its provider
 ## is told how the fight ended and nothing else is.
 var _battle_encounter_id: StringName = &""
@@ -646,6 +611,7 @@ func _build_world() -> void:
 	Gen2ModHost.instance().set_progress_source(_mod_progress)
 	_encounters.set_world(_world, anim_data)
 	_actors.set_encounters(_encounters)
+	_draw_list = Gen2WorldDrawList.new(_world, _effects, _actors, _encounters)
 	var rods: Array[StringName] = _world.available_fishing_rods()
 	if not rods.is_empty() and not rods.has(_selected_rod):
 		_selected_rod = rods[0]
@@ -720,13 +686,16 @@ func _build_renderer() -> void:
 		_renderer.call(Gen2ModHost.RENDERER_ACTORS_METHOD, _actors)
 	if _renderer.has_method(Gen2ModHost.RENDERER_ENCOUNTERS_METHOD):
 		_renderer.call(Gen2ModHost.RENDERER_ENCOUNTERS_METHOD, _encounters)
+	if _renderer.has_method(Gen2ModHost.RENDERER_DRAW_LIST_METHOD):
+		_renderer.call(Gen2ModHost.RENDERER_DRAW_LIST_METHOD, _draw_list)
+	_set_sprites_hidden(_draw_list != null and _draw_list.sprites_hidden)
 	## SMOOTH SCROLL again: a pass drawn a pixel at a time still steps a whole
 	## hardware pixel, twelve screen ones on a laptop panel. A native view is
 	## already at the window's resolution. See [member Gen2Screen.subpixel].
 	_screen.subpixel = Gen2OptionsStore.current().smooth_scroll \
 		and Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
 	_set_renderer_world()
-	_renderer.set_time_of_day(_render_time_of_day())
+	_apply_render_time_of_day()
 	_apply_renderer_interface_style()
 
 
@@ -1550,12 +1519,13 @@ func _handle_button(button: int) -> bool:
 		var host: Object = get(host_name)
 		if host != null:
 			return bool(host.call(&"handle_button", button))
+	## Every box waiting here is `WaitButton` or `PromptButton`, which read A or B.
 	if _world.fishing_busy():
-		if button == PokeButton.A:
+		if button in [PokeButton.A, PokeButton.B]:
 			_handle_fishing_result(_world.advance_fishing())
 		return true
 	if _world.script_input_waiting():
-		if button == PokeButton.A:
+		if button in [PokeButton.A, PokeButton.B]:
 			_advance_script_pause()
 		return true
 	## The d-pad first, because `DoPlayerMovement` runs in front of
@@ -1611,7 +1581,7 @@ func _input_locked() -> bool:
 
 func _handle_prompt_button(button: int) -> bool:
 	if _field_move_text:
-		if button == PokeButton.A:
+		if button in [PokeButton.A, PokeButton.B]:
 			_acknowledge_field_move_text()
 		return true
 	if not _oak_pc_pages.is_empty():
@@ -1807,7 +1777,7 @@ func move_player(direction: Vector2i) -> bool:
 ## here, not the menu that set the flag. True for a warp behind the step.
 func _after_blocked_move(movement: Dictionary) -> bool:
 	if movement.has("boulder_pushed"):
-		_play_sfx(SFX_STRENGTH)
+		_play_sfx(Gen2Sfx.SFX_STRENGTH)
 		var pushed: Dictionary = movement["boulder_pushed"]
 		## `SpawnStrengthBoulderDust` runs where the slide starts and tracks the
 		## boulder from there; Generation 1's dust is `DoBoulderDustAnimation`'s.
@@ -1838,7 +1808,7 @@ func _play_bump_sfx(movement: Dictionary) -> void:
 		return
 	if _audio_player == null or _audio_player.effect_playing():
 		return
-	_play_sfx(SFX_BUMP)
+	_play_sfx(Gen2Sfx.SFX_BUMP)
 
 
 ## What a step owes the rest of the screen on the frame it starts: the sounds
@@ -1975,7 +1945,7 @@ func _spend_poison_steps() -> bool:
 	## Generation 1 prints each faint inside the damage loop, ahead of the flash.
 	var flash_first: bool = _data.generation != RomRegistry.GEN1 or texts.is_empty()
 	if flash_first and bool(pass_result.get("sfx", false)):
-		_play_sfx(SFX_POISON)
+		_play_sfx(Gen2Sfx.SFX_POISON)
 		_start_poison_flash()
 	## `.curMonNotPlayerPikachu`'s PIKAHAPPY_PSNFNT, once per member that fell,
 	## and `PikachuCry4` behind the starter's own box.
@@ -2013,7 +1983,7 @@ func _spend_poison_steps() -> bool:
 ## `.applyDamageLoopDone`: the flash if anyone is still poisoned, then a blackout.
 func _gen1_poison_tail(save: Gen2SaveData, sfx: bool, whiteout: bool) -> void:
 	if sfx:
-		_play_sfx(SFX_POISON)
+		_play_sfx(Gen2Sfx.SFX_POISON)
 		_start_poison_flash()
 	if not whiteout:
 		_persist_after_poison_step(save)
@@ -2036,8 +2006,7 @@ static func _then(first: Callable, second: Callable) -> Callable:
 ## `.PlayPoisonSFX` floods the background and spends four frames of its own.
 func _start_poison_flash() -> void:
 	_poison_flash_frames = Gen2WorldPalette.POISON_FLASH_FRAMES
-	if _renderer != null and _renderer.has_method("set_poison_flash"):
-		_renderer.set_poison_flash(true)
+	_push_poison_flash(true)
 
 
 func _hold_poison_flash(after: Callable) -> void:
@@ -2053,8 +2022,7 @@ func _advance_poison_flash() -> void:
 	_poison_flash_frames -= 1
 	if _poison_flash_frames > 0:
 		return
-	if _renderer != null and _renderer.has_method("set_poison_flash"):
-		_renderer.set_poison_flash(false)
+	_push_poison_flash(false)
 	var after: Callable = _poison_flash_after
 	_poison_flash_after = Callable()
 	if after.is_valid():
@@ -2367,6 +2335,9 @@ func _on_hatch_named(party_index: int, nickname: String) -> void:
 	_script_prompt = "%s hatched" % nickname
 
 
+var _gift_dvs: int = -1
+
+
 ## `GivePoke`'s `GiveANickname_YesNo` for the thirteen sites naming no OT, the
 ## request pending while it is up. False for an egg, a named OT or `.FailedToGiveMon`.
 func _open_gift_nickname(request: Dictionary) -> bool:
@@ -2397,7 +2368,9 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 			Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if destination == &"box" else "",
 			"", _nuzlocke_names_everything()
 		)
-	host.set_species(species)
+	## `GivePoke` adds the Pokemon before `InitNickname`'s `GetGender` reads it.
+	_gift_dvs = Gen2BattleMon.random_dvs(_encounter_random) if _encounter_random != null else -1
+	host.set_species(species, _gift_dvs)
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
@@ -2433,7 +2406,7 @@ func _set_gen1_gift_context(
 		return
 	host.set_before_text(
 		Gen2WorldPartyHost.gen1_got_mon_text(_player_display_name(), species_name),
-		Gen2WorldScriptRunner.SFX_ITEM
+		Gen2Sfx.SFX_ITEM
 	)
 	host.set_audio_player(_audio_player)
 	host.sfx_requested.connect(_play_sfx)
@@ -2496,8 +2469,9 @@ func _on_gift_nickname_closed() -> void:
 		_refresh_labels()
 		return
 	var settled: Dictionary = _complete_pending_request({
-		"ok": true, "nickname": _nickname_answer,
+		"ok": true, "nickname": _nickname_answer, "dvs": _gift_dvs,
 	})
+	_gift_dvs = -1
 	if not bool(settled.get("ok", false)):
 		_script_prompt = "Host unavailable: %s" % String(settled.get("reason", "unknown"))
 		_refresh_labels()
@@ -2599,7 +2573,7 @@ func _open_diploma(request: Dictionary) -> bool:
 		_script_prompt = "Diploma unavailable: diploma_art_unavailable"
 		return false
 	host.closed.connect(_on_diploma_closed)
-	host.music_requested.connect(_play_music_track)
+	host.music_requested.connect(_play_music)
 	_diploma_host = host
 	## Here as well as on the next frame: a screen opened by a driver that spends
 	## no frame would otherwise stand with the map around it.
@@ -2634,7 +2608,7 @@ func _open_unown_printer(request: Dictionary) -> bool:
 		_script_prompt = "Unown printer unavailable: no Unown caught"
 		return false
 	host.closed.connect(_on_unown_printer_closed)
-	host.music_requested.connect(_play_music_track)
+	host.music_requested.connect(_play_music)
 	host.map_music_requested.connect(_play_current_map_music)
 	_unown_printer_host = host
 	_apply_interface_mask()
@@ -3257,7 +3231,8 @@ const GEN1_WARP_LIVE_AFTER_LCD: int = 13
 func _advance_gen1_warp() -> void:
 	var frame: int = int(_map_fade["gen1"]) + 1
 	var fade_frames: int = GEN1_WARP_FADE_ORDERS.size() * GEN1_WARP_FADE_STEP_FRAMES
-	if _world.gen1_map_pal_offset != 0:
+	## `PlayMapChangeSound` skips `GBFadeOutToBlack` once, on a map already dark.
+	if frame == 1 and _world.gen1_map_pal_offset != 0:
 		frame += fade_frames
 	_map_fade["gen1"] = frame
 	if frame <= fade_frames:
@@ -3283,15 +3258,13 @@ func _advance_gen1_warp() -> void:
 
 
 func _apply_gen1_warp_frame() -> void:
-	if _renderer == null or not _renderer.has_method(Gen2ModHost.RENDERER_FADE_METHOD):
-		return
 	var frame: int = int(_map_fade["gen1"])
 	var order: int = GEN1_WARP_FADE_ORDERS[-1]
 	if frame < GEN1_WARP_FADE_ORDERS.size() * GEN1_WARP_FADE_STEP_FRAMES:
 		order = GEN1_WARP_FADE_ORDERS[int(_map_fade["step"])]
 	elif frame >= int(_map_fade.get("lcd_on", GEN1_WARP_LCD_ON_FRAME)):
 		order = Gen2WorldPalette.FADE_IDENTITY
-	_renderer.call(Gen2ModHost.RENDERER_FADE_METHOD, order, false)
+	_push_fade(order, false)
 
 
 ## `HandleFlyWarpOrDungeonWarp` off a hole and `WarpFound2.indoorMaps` off a pad.
@@ -3371,8 +3344,7 @@ func _apply_gen1_map_anim_step(anim: Dictionary, step: Dictionary) -> void:
 		trace.append("%d sfx %d" % [frame, int(step["sfx"])])
 	if step.has("fade"):
 		trace.append("%d fade $%02X" % [frame, int(step["fade"])])
-		if _renderer != null and _renderer.has_method(Gen2ModHost.RENDERER_FADE_METHOD):
-			_renderer.call(Gen2ModHost.RENDERER_FADE_METHOD, int(step["fade"]), false)
+		_push_fade(int(step["fade"]), false)
 	if step.has("stop_music"):
 		trace.append("%d stop_music %d" % [frame, int(step["stop_music"])])
 		if _audio_player != null:
@@ -3436,13 +3408,13 @@ func _finish_gen1_map_anim(anim: Dictionary) -> void:
 ## `PlayMapChangeSound` reads one tile.
 func _warp_sfx() -> int:
 	if _data != null and _data.generation == RomRegistry.GEN1:
-		return SFX_ENTER_DOOR if _world.gen1_entered_a_door() else SFX_EXIT_BUILDING
+		return Gen2Sfx.SFX_ENTER_DOOR if _world.gen1_entered_a_door() else Gen2Sfx.SFX_EXIT_BUILDING
 	match _world.collision_code_at(_world.player_cell):
 		COLL_DOOR:
-			return SFX_ENTER_DOOR
+			return Gen2Sfx.SFX_ENTER_DOOR
 		COLL_WARP_PANEL:
-			return SFX_WARP_TO
-	return SFX_EXIT_BUILDING
+			return Gen2Sfx.SFX_WARP_TO
+	return Gen2Sfx.SFX_EXIT_BUILDING
 
 
 ## One frame of the fade the warp is inside, spent from [method advance_frame]
@@ -3491,21 +3463,15 @@ func _advance_map_fade() -> void:
 ## fade out's alone, so the way back in flattens onto whatever the new map's own
 ## palette 0 holds.
 func _apply_map_fade_step() -> void:
-	if _renderer == null or not _renderer.has_method(Gen2ModHost.RENDERER_FADE_METHOD):
-		return
 	if _map_fade.is_empty():
 		## The warp's fade is over; whatever a script fade left standing is what
 		## the screen is drawn with, which is the identity unless one is held.
-		_renderer.call(
-			Gen2ModHost.RENDERER_FADE_METHOD, _script_fade_order, _script_fade_white
-		)
+		_push_fade(_script_fade_order, _script_fade_white)
 		return
 	var out: bool = StringName(_map_fade["stage"]) == &"out"
 	var orders: Array[int] = Gen2WorldPalette.FADE_OUT_ORDERS if out \
 		else Gen2WorldPalette.FADE_IN_ORDERS
-	_renderer.call(
-		Gen2ModHost.RENDERER_FADE_METHOD, orders[int(_map_fade["step"])], out
-	)
+	_push_fade(orders[int(_map_fade["step"])], out)
 
 
 ## `FadeOutToWhite` and its four siblings, opened by the special and stepped from
@@ -3791,8 +3757,40 @@ func _update_time_of_day() -> void:
 	_world.set_object_time(_clock.hour, time_of_day)
 	if _animation != null:
 		_animation.configure(_world, _render_time_of_day())
+	_apply_render_time_of_day()
+
+
+## The palette row the view is drawn with, told to the draw list and the renderer.
+func _apply_render_time_of_day() -> void:
+	if _draw_list != null:
+		_draw_list.time_of_day = _render_time_of_day()
 	if _renderer != null:
 		_renderer.set_time_of_day(_render_time_of_day())
+
+
+## `HideSprites` and `ShowSprites`. A renderer declaring the property the list
+## replaced is still told.
+func _set_sprites_hidden(value: bool) -> void:
+	if _draw_list != null:
+		_draw_list.sprites_hidden = value
+	if _renderer != null and &"sprites_hidden" in _renderer:
+		_renderer.set(&"sprites_hidden", value)
+
+
+## One step of a map or script fade, on the list and offered to the renderer.
+func _push_fade(order: int, white_fill: bool) -> void:
+	if _draw_list != null:
+		_draw_list.fade_order = order
+		_draw_list.fade_white_fill = white_fill
+	if _renderer != null and _renderer.has_method(Gen2ModHost.RENDERER_FADE_METHOD):
+		_renderer.call(Gen2ModHost.RENDERER_FADE_METHOD, order, white_fill)
+
+
+func _push_poison_flash(on: bool) -> void:
+	if _draw_list != null:
+		_draw_list.poison_flash = on
+	if _renderer != null and _renderer.has_method("set_poison_flash"):
+		_renderer.call("set_poison_flash", on)
 
 
 ## Screenshot driver for the effect sprites: `effects` is the emote, the dust,
@@ -3821,7 +3819,7 @@ func preview_effect_sprites(kind: StringName = &"effects") -> void:
 	if kind == &"fly":
 		## `FlyFromAnim` past its hold, with leaves still crossing the screen.
 		_effects.start_fly(_world.data.mon_menu_icon(PREVIEW_FLY_SPECIES), false)
-		_renderer.sprites_hidden = true
+		_set_sprites_hidden(true)
 		for _frame: int in 80:
 			_effects.advance_frame()
 		_script_prompt = "Debug fly animation preview"
@@ -4467,49 +4465,26 @@ func _preview_pc(mode: StringName) -> void:
 		_refresh_labels()
 		return
 	_injected_save = save
-	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
 		return
-	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	host.z_index = 20
-	host.set_screen(_screen)
-	add_child(host)
 	if not host.open_pc_machine(_world, _data, save, false, mode):
 		Gen2Screen.drop(host)
 		return
-	host.save_action = persist_world_snapshot
-	host.completed.connect(_on_service_completed)
-	host.sfx_requested.connect(_play_sfx)
-	host.cry_requested.connect(_play_species_cry)
-	host.pikachu_clip_requested.connect(_play_pikachu_clip)
-	_service_host = host
-	_script_prompt = "PC open"
-	_refresh_labels()
+	_adopt_service_overlay(host, "PC open")
 
 
 ## Public screenshot driver for `Mom_WithdrawDepositMenuJoypad`, whose box no
 ## fixture cell reaches: her house is not one of the preview maps and the dial
 ## stands three questions into her own routine.
 func preview_mom_bank(mode: StringName, saved: int, held: int) -> void:
-	if _world == null or _data == null or _service_host != null:
-		return
-	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
 		return
-	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	host.z_index = 20
-	host.set_screen(_screen)
-	add_child(host)
 	if not host.open_mom_bank(_world, _data, mode, saved, held):
 		Gen2Screen.drop(host)
 		return
-	host.save_action = persist_world_snapshot
-	host.completed.connect(_on_service_completed)
-	host.sfx_requested.connect(_play_sfx)
-	host.cry_requested.connect(_play_species_cry)
-	host.pikachu_clip_requested.connect(_play_pikachu_clip)
-	_service_host = host
-	_refresh_labels()
+	_adopt_service_overlay(host, _script_prompt)
 
 
 ## Public screenshot driver for the Day-Care's five specials, which no cell of
@@ -5787,6 +5762,8 @@ func _advance_battle_transition() -> void:
 	var request: Dictionary = _battle_transition_request
 	_battle_transition = null
 	_battle_transition_request = {}
+	if _draw_list != null:
+		_draw_list.clear_transition()
 	if _renderer != null and _renderer.has_method("clear_transition"):
 		_renderer.clear_transition()
 	_open_battle_host(request)
@@ -5796,20 +5773,22 @@ func _advance_battle_transition() -> void:
 ## map. A renderer of a mod's own that does not take it draws the map as it was,
 ## which is the same contract the map fade has.
 func _apply_battle_transition() -> void:
-	if _renderer == null or _battle_transition == null:
+	if _battle_transition == null:
 		return
-	if not _renderer.has_method("set_transition"):
+	var palette: PackedColorArray = _data.battle_transition_palette(
+		_render_time_of_day() == Gen2WorldPalette.TIME_DARK
+	) if _battle_transition.ball_drawn() and _data != null else PackedColorArray()
+	## `hLastTalked`, which `RespawnPlayerAndOpponent` keeps beside the player.
+	## A wild encounter has none and leaves the player alone.
+	var opponent: int = int(_battle_transition_request.get("values", {}).get("object_index", -1))
+	if _draw_list != null:
+		_draw_list.set_transition(_battle_transition.sprites(), opponent, palette)
+	if _renderer == null or not _renderer.has_method("set_transition"):
 		return
 	_renderer.set_transition(
 		_battle_transition.cells(),
 		_data.tile_indices("battle_transition") if _data != null else PackedByteArray(),
-		_data.battle_transition_palette(
-			_render_time_of_day() == Gen2WorldPalette.TIME_DARK
-		) if _battle_transition.ball_drawn() and _data != null else PackedColorArray(),
-		_battle_transition.sprites(),
-		## `hLastTalked`, which `RespawnPlayerAndOpponent` keeps beside the
-		## player. A wild encounter has none and leaves the player alone.
-		int(_battle_transition_request.get("values", {}).get("object_index", -1)),
+		palette, _battle_transition.sprites(), opponent,
 		## `StartTrainerBattle_Flash` writes `wBGP` and calls `DmgToCgbBGPals`
 		## alone, so this is the background's order and not the map fade's:
 		## the sprites standing over the wedges keep their own colours.
@@ -5932,8 +5911,9 @@ func _open_battle_host(request: Dictionary) -> void:
 				Gen2WorldPartyHost.owned_capture_balls(_world), _world.state.items()
 			)
 			host.set_battle_pack(
-				Gen2WorldPack.battle_items(_data, _world.state), _world.state.items()
+				Gen2WorldPack.bag_items(_data, _world.state), _world.state.items()
 			)
+			host.set_pack_world(_world)
 	## Its frames come from this screen's own pump from here on, so it must not
 	## also spend real-time ones of its own.
 	host.set_process(false)
@@ -6055,7 +6035,7 @@ func _on_battle_item_used(item: int, _target: int) -> void:
 	_world.inventory.change_item_quantity(item, -1)
 	if _battle_host != null:
 		_battle_host.set_battle_pack(
-			Gen2WorldPack.battle_items(_data, _world.state), _world.state.items()
+			Gen2WorldPack.bag_items(_data, _world.state), _world.state.items()
 		)
 		_battle_host.set_capture_balls(
 			Gen2WorldPartyHost.owned_capture_balls(_world), _world.state.items()
@@ -6641,18 +6621,10 @@ func _finish_trainer_approach(ok: bool, reason: StringName, details: Dictionary)
 
 
 func _open_service_host() -> void:
-	if _service_host != null or _world == null or _data == null:
-		return
-	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
-		_script_prompt = "Service scene unavailable"
-		_refresh_labels()
 		return
-	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	host.z_index = 20
-	host.set_screen(_screen)
-	add_child(host)
-	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
+	var save: Gen2SaveData = _overlay_save()
 	var persist: bool = save != null and _injected_save == null
 	host.question_page = _choice_last_page
 	_choice_last_page = ""
@@ -6663,14 +6635,7 @@ func _open_service_host() -> void:
 		_script_prompt = "Service request unavailable"
 		_refresh_labels()
 		return
-	host.save_action = persist_world_snapshot
-	host.completed.connect(_on_service_completed)
-	host.sfx_requested.connect(_play_sfx)
-	host.cry_requested.connect(_play_species_cry)
-	host.pikachu_clip_requested.connect(_play_pikachu_clip)
-	_service_host = host
-	_script_prompt = "Service host open"
-	_refresh_labels()
+	_adopt_service_overlay(host, "Service host open")
 
 
 ## The induction `halloffame` asks for, on the active save's party; public for
@@ -7078,6 +7043,21 @@ func _on_start_menu_action(kind: StringName, id: StringName = &"") -> void:
 
 ## `.Reopen`, which every `StartMenu_*` handler that returns 0 lands on. The
 ## cursor is `wBattleMenuCursorPosition` and was kept when the menu closed.
+var _reopen_party_member: int = -1
+
+
+## The party list back on the member whose ITEM, MAIL or heal just finished.
+func _reopen_party_if_due() -> bool:
+	if _reopen_party_member < 0 or _party_host != null:
+		return false
+	var member: int = _reopen_party_member
+	_reopen_party_member = -1
+	_open_embedded_party()
+	if _party_host != null:
+		_party_host.focus_member(member)
+	return true
+
+
 func _reopen_start_menu_if_due() -> void:
 	if not _reopen_start_menu or _pokegear_call_host != null:
 		return
@@ -7262,6 +7242,7 @@ func _on_start_menu_closed() -> void:
 		_start_menu_cursor = host.cursor()
 		Gen2Screen.drop(host)
 	_script_prompt = "Start menu closed"
+	_reopen_party_if_due()
 	_refresh_labels()
 
 
@@ -7473,8 +7454,11 @@ func _on_start_menu_field_move(action: Dictionary) -> void:
 ## move used from its own HM, which changes the name and the Surf sprite only.
 func _run_party_action(action: Dictionary) -> void:
 	# `PokemonActionSubmenu`'s `.quit` reaches `ExitAllMenus`, so a field move
-	# leaves the overworld rather than reopening the menu behind it.
-	_reopen_start_menu = false
+	# leaves the overworld rather than reopening the menu behind it. Every other
+	# action answers 0, 1 or 3, which `StartMenu_Pokemon` takes back to the list.
+	var field_move: bool = StringName(action.get("kind", &"")) == &"field_move"
+	_reopen_start_menu = not field_move and action.has("slot")
+	_reopen_party_member = -1 if field_move else int(action.get("slot", -1))
 	if _world == null:
 		_refresh_labels()
 		return
@@ -7774,15 +7758,13 @@ func _open_mail_reader(mail: Gen2SaveMail) -> void:
 	_refresh_labels()
 
 
-## `.read` answers 0, which `.choosemenu` takes back to the party list. Here the
-## list has already closed, because [method _on_party_action] drops it before it
-## dispatches: every party action in this project is answered over the map, and
-## this one is not the place to make an exception.
+## `.read` answers 0, which `.choosemenu` takes back to the party list.
 func _on_mail_reader_closed() -> void:
 	if _mail_host != null:
 		Gen2Screen.drop(_mail_host)
 		_mail_host = null
 	_apply_interface_mask()
+	_reopen_party_if_due()
 	_refresh_labels()
 
 
@@ -7812,6 +7794,7 @@ func _answer_mail_take(accepted: bool) -> void:
 		)
 		return
 	if not accepted:
+		_reopen_party_if_due()
 		return
 	var taken: Dictionary = Gen2WorldBagHost.take_from_party(
 		_world, save, slot, _injected_save == null
@@ -7939,6 +7922,7 @@ func _acknowledge_field_move_text() -> void:
 		_commit_field_move(_world.complete_rock_smash(_encounter_random), "Rock Smash")
 		return
 	_script_prompt = ""
+	_reopen_party_if_due()
 	_refresh_labels()
 
 
@@ -7951,36 +7935,38 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 			&"surf_applied":
 				_play_current_map_music()
 			&"whirlpool_applied":
-				_play_sfx(SFX_WHIRLPOOL)
+				## `PlayWhirlpoolSound`; there is no whirlpool effect of its own.
+				_play_sfx(Gen2Sfx.SFX_SURF)
 			&"strength_applied":
 				pass
 			## `.UsedDigOrEscapeRopeScript`'s sound, in front of its own warp.
 			&"escape_applied":
-				_play_sfx(SFX_WARP_TO)
+				_play_sfx(Gen2Sfx.SFX_WARP_TO)
 				_refresh_after_escape()
 				_world.gen1_pikachu_landed()
 			&"waterfall_applied":
-				_play_sfx(SFX_WATERFALL)
+				_play_sfx(Gen2Sfx.SFX_BUBBLEBEAM)
 			&"flash_used":
 				# The palette is the whole of what BlindingFlash changed, so the
 				# renderer is told the new row rather than asked to redraw.
-				_play_sfx(SFX_FLASH)
+				_play_sfx(Gen2Sfx.SFX_FLASH)
 				if _renderer != null:
 					_renderer.set_time_of_day(_render_time_of_day())
 				if _animation != null:
 					_animation.configure(_world, _render_time_of_day())
 			&"headbutt_applied":
-				_play_sfx(SFX_HEADBUTT_TREE)
+				## `ShakeHeadbuttTree`'s; SFX_HEADBUTT is the battle move's.
+				_play_sfx(Gen2Sfx.SFX_SANDSTORM)
 				if _effects != null:
 					_effects.start_headbutt_tree(applied.get("cell", Vector2i.ZERO))
 			&"rock_smash_applied":
-				_play_sfx(SFX_STRENGTH)
+				_play_sfx(Gen2Sfx.SFX_STRENGTH)
 			&"cut_applied":
 				if _data != null and _data.generation == RomRegistry.GEN1:
 					_show_script_results(_world.gen1_cut_animation(applied))
 				else:
-					## `OWCutAnimation` plays it as the animation starts.
-					_play_sfx(SFX_CUT)
+					## `OWCutAnimation`'s, as it starts; SFX_CUT is the battle move's.
+					_play_sfx(Gen2Sfx.SFX_PLACE_PUZZLE_PIECE_DOWN)
 					if _effects != null:
 						_effects.start_cut(
 							applied.get("cell", Vector2i.ZERO),
@@ -8057,56 +8043,27 @@ func _open_bills_pc() -> void:
 ## overlay a scripted one goes through, answered back in
 ## [method _on_service_completed].
 func _open_host_prompt(text: String) -> bool:
-	if _service_host != null or _world == null or _data == null:
-		return false
-	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
 		return false
-	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	host.z_index = 20
-	host.set_screen(_screen)
-	add_child(host)
-	var save: Gen2SaveData = _injected_save if _injected_save != null \
-		else _selected_runtime_save()
-	if not host.open_prompt(_world, _data, save, _injected_save == null, text):
+	if not host.open_prompt(_world, _data, _overlay_save(), _injected_save == null, text):
 		Gen2Screen.drop(host)
 		return false
-	host.save_action = persist_world_snapshot
-	host.completed.connect(_on_service_completed)
-	host.sfx_requested.connect(_play_sfx)
-	host.cry_requested.connect(_play_species_cry)
-	host.pikachu_clip_requested.connect(_play_pikachu_clip)
-	_service_host = host
-	_script_prompt = "A: answer"
-	_refresh_labels()
+	_adopt_service_overlay(host, "A: answer")
 	return true
 
 
 func _open_service_overlay(kind: StringName) -> void:
-	if _service_host != null or _world == null or _data == null:
-		return
 	var label: String = {
 		&"pokegear": "Pokegear", &"bills_pc": "Storage", &"pc": "PC",
 	}.get(kind, "Phone list")
-	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
-		_script_prompt = "%s scene unavailable" % label
-		_refresh_labels()
 		return
-	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	host.z_index = 20
-	host.set_screen(_screen)
-	add_child(host)
-	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
+	var save: Gen2SaveData = _overlay_save()
 	var persist: bool = save != null and _injected_save == null
 	## Connected first: a PC boots with a sound and may answer before returning.
-	host.save_action = persist_world_snapshot
-	host.completed.connect(_on_service_completed)
-	host.call_placed.connect(_on_pokegear_call_placed)
-	host.sfx_requested.connect(_play_sfx)
-	host.cry_requested.connect(_play_species_cry)
-	host.pikachu_clip_requested.connect(_play_pikachu_clip)
-	_service_host = host
+	_adopt_service_overlay(host, _script_prompt)
 	var opened: bool = (
 		host.open_pokegear(_world, _data, save, persist) if kind == &"pokegear"
 		else host.open_bills_pc(_world, _data, save, persist) if kind == &"bills_pc"
@@ -8156,14 +8113,13 @@ func _open_fly_map(request: Dictionary) -> void:
 	_adopt_service_overlay(host, "Fly: choose a town")
 
 
-## The service host the two region-map overlays are drawn in, added and sized but
-## not yet opened. Null when one is already up or the scene will not load.
+## A service host added but not yet opened, or null when one is already up.
 func _service_overlay() -> Gen2WorldServiceScreen:
 	if _service_host != null or _world == null or _data == null:
 		return null
 	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
 	if host == null:
-		_script_prompt = "Region map scene unavailable"
+		_script_prompt = "Service scene unavailable"
 		_refresh_labels()
 		return null
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -8180,6 +8136,9 @@ func _overlay_save() -> Gen2SaveData:
 func _adopt_service_overlay(host: Gen2WorldServiceScreen, prompt: String) -> void:
 	host.save_action = persist_world_snapshot
 	host.completed.connect(_on_service_completed)
+	host.call_placed.connect(_on_pokegear_call_placed)
+	host.music_requested.connect(_play_music)
+	host.map_music_requested.connect(_play_current_map_music)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
 	host.pikachu_clip_requested.connect(_play_pikachu_clip)
@@ -8231,8 +8190,7 @@ func _start_fly(spawn: int) -> void:
 		_start_gen1_map_anim(&"fly", {"spawn": spawn})
 		return
 	_begin_fly_animation(false, {"spawn": spawn})
-	if _renderer != null:
-		_renderer.sprites_hidden = true
+	_set_sprites_hidden(true)
 	_refresh_labels()
 
 
@@ -8262,7 +8220,7 @@ func _advance_fly() -> void:
 		return
 	var frame: int = int(_pending_fly["frame"])
 	if (_pending_fly["sfx"] as Array).has(frame):
-		_play_sfx(SFX_FLY)
+		_play_sfx(Gen2Sfx.SFX_FLY)
 	_pending_fly["frame"] = frame + 1
 	if _effects != null and _effects.sprites_active():
 		return
@@ -8284,8 +8242,8 @@ func _finish_fly() -> void:
 	_pending_fly = {}
 	if _world != null:
 		_world.gen1_pikachu_landed()
+	_set_sprites_hidden(false)
 	if _renderer != null:
-		_renderer.sprites_hidden = false
 		_renderer.refresh()
 	_refresh_labels()
 
@@ -8332,7 +8290,7 @@ func _advance_pokegear_call_tones() -> void:
 	_pokegear_call_tones -= 1
 	_pokegear_call_watch = {}
 	if _pokegear_call_tones > 0:
-		_play_sfx(Gen2WorldServiceScreen.SFX_CALL)
+		_play_sfx(Gen2Sfx.SFX_CALL)
 		return
 	var results: Array = _pokegear_call_results
 	_pokegear_call_results = []
@@ -8813,26 +8771,14 @@ func _request_quick_save(_request: Dictionary) -> StringName:
 
 
 func _open_quick_save_screen() -> bool:
-	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
 		return false
-	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	host.z_index = 20
-	host.set_screen(_screen)
-	add_child(host)
-	var save: Gen2SaveData = _injected_save if _injected_save != null \
-		else _selected_runtime_save()
 	host.save_action = persist_world_snapshot
-	if not host.open_quick_save(_world, _data, save, _injected_save == null):
+	if not host.open_quick_save(_world, _data, _overlay_save(), _injected_save == null):
 		Gen2Screen.drop(host)
 		return false
-	host.completed.connect(_on_service_completed)
-	host.sfx_requested.connect(_play_sfx)
-	host.cry_requested.connect(_play_species_cry)
-	host.pikachu_clip_requested.connect(_play_pikachu_clip)
-	_service_host = host
-	_script_prompt = "Saving"
-	_refresh_labels()
+	_adopt_service_overlay(host, "Saving")
 	return true
 
 
@@ -9320,8 +9266,8 @@ func _advance_pikapic() -> void:
 	if not _pikapic.box_shown():
 		_hide_pikapic_box()
 		return
-	if _renderer != null and not _renderer.sprites_hidden:
-		_renderer.sprites_hidden = true
+	if _draw_list != null and not _draw_list.sprites_hidden and _renderer != null:
+		_set_sprites_hidden(true)
 		_renderer.refresh()
 	var image: Image = _pikapic.render()
 	if _pikapic_rect == null:
@@ -9343,8 +9289,8 @@ func _hide_pikapic_box() -> void:
 func _hide_pikapic() -> void:
 	_pikapic = null
 	_hide_pikapic_box()
-	if _renderer != null and _renderer.sprites_hidden:
-		_renderer.sprites_hidden = false
+	if _draw_list != null and _draw_list.sprites_hidden and _renderer != null:
+		_set_sprites_hidden(false)
 		_renderer.refresh()
 
 
@@ -9477,7 +9423,7 @@ func _close_unown_wall() -> void:
 		return
 	Gen2Screen.drop(_unown_wall_box)
 	_unown_wall_box = null
-	_play_sfx(Gen2BattleSwitchMenu.SFX_READ_TEXT_2)
+	_play_sfx(Gen2Sfx.SFX_READ_TEXT_2)
 	## The wait behind the box is the staged text the special left, so the script
 	## resumes on the same press the source's `CloseWindow` returns on.
 	_show_script_results(_world.run_event_queue(true))
@@ -9566,17 +9512,6 @@ func _fade_to_map_music() -> void:
 	_audio_player.fade_to(
 		_world.map_music_record(), WARP_MUSIC_FADE_FRAMES, _audio_assets(),
 	)
-
-
-## One music track by its own index, for a screen that starts its own: the
-## printer's is the first, and [method _play_current_map_music] puts the map's back.
-func _play_music_track(index: int) -> void:
-	if _audio_player == null or _data == null:
-		return
-	var record: Dictionary = _data.world_audio(&"music", index)
-	if record.is_empty():
-		return
-	_audio_player.play_record(record, &"map_music", _audio_assets())
 
 
 ## Plays whatever `wMapMusic` holds, which `Gen2WorldAPI` writes on map entry
@@ -9727,8 +9662,9 @@ func _play_species_cry(species: int) -> void:
 	_audio_player.play_record(record, &"cry", _audio_assets())
 
 
+## `.TryJump`'s, played directly: a hop is movement, not a script request.
 func _play_ledge_hop_sfx() -> void:
-	_play_sfx(SFX_JUMP_OVER_LEDGE)
+	_play_sfx(Gen2Sfx.SFX_JUMP_OVER_LEDGE)
 
 
 ## `BattleAnimCmd_Sound` from a shiny pulse, panned to the enemy's side; the
@@ -10155,7 +10091,7 @@ func _draw_hang_up() -> void:
 		return
 	_hang_up_phase = phase
 	if phase == &"click":
-		_play_sfx(Gen2WorldPhoneRing.SFX_HANG_UP)
+		_play_sfx(Gen2Sfx.SFX_HANG_UP)
 	var line: String = Gen2WorldPhoneRing.hang_up_line(_data.world_phone_metadata(), phase)
 	_text_box.visible = true
 	_text_box.show_text(line, false)

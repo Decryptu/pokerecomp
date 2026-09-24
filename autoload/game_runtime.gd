@@ -256,15 +256,28 @@ func load_mods(game_id: StringName = &"") -> Array:
 	return _loaded_mods
 
 
-## Whether this process runs the mods it finds. A headless or `-s` run is a
-## check, a tier or a screenshot, and a mod that swaps the renderer changes what
-## those measure without saying so: it discovers mods and loads none unless
-## `--mods` is passed. A player's launch runs what the launcher switched on.
+## Whether this process runs the mods it finds: a player's launch runs what the
+## launcher switched on, and a headless or `-s` run loads none without `--mods`,
+## since a mod swapping the renderer changes what a check measures.
 static func mods_are_allowed() -> bool:
-	var args: PackedStringArray = OS.get_cmdline_args()
-	if args.has("--mods") or OS.get_cmdline_user_args().has("--mods"):
-		return true
-	return is_player_launch()
+	return check_mods() != null or is_player_launch()
+
+
+## A check's `--mods` (every installed mod) or `--mods=a,b`, run at their defaults
+## without the player's mod settings; null for a player or a run without either.
+static func check_mods() -> Variant:
+	if is_player_launch():
+		return null
+	return check_mods_in(OS.get_cmdline_args() + OS.get_cmdline_user_args())
+
+
+static func check_mods_in(args: PackedStringArray) -> Variant:
+	for arg: String in args:
+		if arg == "--mods":
+			return PackedStringArray()
+		if arg.begins_with("--mods="):
+			return arg.trim_prefix("--mods=").split(",", false)
+	return null
 
 
 ## Whether this process is a player running the game rather than a check, a test

@@ -84,16 +84,23 @@ static func _deposited(data: GameData, mon: Gen2SaveMon) -> void:
 	for slot: int in Gen2SaveMon.MAX_MOVES:
 		if int(mon.moves[slot]) > 0:
 			mon.pp[slot] = mon.max_pp(data, slot)
+	boxed(data, mon)
 
 
-## Its PC_WITHDRAW tail: `CalcMonStats`, no status and MON_MAXHP into MON_HP,
-## or an egg's zero. Generation 1 keeps the health and status it was stored with.
+## Its PC_WITHDRAW tail, `CalcMonStats`: no status and MON_MAXHP into MON_HP, or
+## an egg's zero.
 static func _withdrawn(data: GameData, mon: Gen2SaveMon) -> void:
-	if data.generation == RomRegistry.GEN1:
+	boxed(data, mon)
+
+
+## A Generation 2 `box_struct` has no HP or status: `CalcBufferMonStats` makes it
+## healthy. Generation 1's box row keeps both.
+static func boxed(data: GameData, mon: Gen2SaveMon) -> void:
+	if data == null or mon == null or data.generation == RomRegistry.GEN1:
 		return
 	mon.status = Gen2Status.NONE
 	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, mon)
-	mon.hp = battle_mon.max_hp() if battle_mon != null else 0
+	mon.hp = battle_mon.max_hp() if battle_mon != null and not mon.is_egg else 0
 
 
 ## `RemoveMonFromPartyOrBox` behind both `.release`s: the same atomic write the

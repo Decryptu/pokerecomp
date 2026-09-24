@@ -111,7 +111,20 @@ func _step(button: int) -> void:
 	# what a player waits through.
 	_screen.finish()
 	_screen._handle_button(button)
+	_spend_yes_no_hold()
 	await get_tree().process_frame
+
+
+## `InterpretTwoOptionMenu`'s hold behind an answered question, and a
+## medicine's bar and `ItemActionTextWaitButton` hold before its press is read.
+func _spend_yes_no_hold() -> void:
+	var offer: Gen2WorldMenu = _screen.get("_switch_offer")
+	while offer != null and offer.holding():
+		_screen.advance_hardware_frame()
+	var result: Dictionary = _screen.get("_item_result")
+	while result.has("anim") or int(result.get("hold", 0)) > 0:
+		_screen.advance_hardware_frame()
+		result = _screen.get("_item_result")
 
 
 ## `OfferSwitch` prints the question and only then places the box, so the two
@@ -123,7 +136,7 @@ func test_shift_puts_the_question_up_before_its_yes_no_box() -> void:
 
 	assert_eq(_stage(), "offer")
 	assert_true(
-		String(_screen.battle_snapshot()["message"]).contains("change PKMN"),
+		String(_screen.battle_snapshot()["message"]).contains("change #MON?"),
 		String(_screen.battle_snapshot()["message"])
 	)
 	assert_false(_layer().visible, "the box is not up while the question is printing")
@@ -391,7 +404,7 @@ func test_the_fainted_row_is_refused_and_the_list_comes_back() -> void:
 	await _step(PokeButton.A)
 	assert_eq(_stage(), "refused")
 	assert_true(
-		String(_screen.battle_snapshot()["message"]).contains("no will to battle"),
+		String(_screen.battle_snapshot()["message"]).contains("no will to\nbattle!"),
 		String(_screen.battle_snapshot()["message"])
 	)
 	assert_true(battle.must_replace(Gen2Battle.PLAYER), "and nothing was answered")
@@ -465,10 +478,9 @@ func test_the_end_of_a_turn_opens_the_battle_menu() -> void:
 	assert_false(_screen._renderer_input_free(), "the menu owns the joypad")
 
 
-## PACK opened a list whose whole presentation was a line of key bindings in the
-## text box. It is a drawn list like every other one the battle puts up, and the
-## box under it is `UpdateItemDescription`'s.
-func test_the_pack_is_a_drawn_list_with_the_row_description_under_it() -> void:
+## `BattlePack` is the pack's own screen over the fight: the pockets, the rows
+## and `UpdateItemDescription`'s box, with `ItemSubmenu` behind A.
+func test_the_pack_is_the_pack_screen_with_the_row_description_under_it() -> void:
 	var battle: Gen2Battle = _menu_battle()
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to_menu()
@@ -480,20 +492,21 @@ func test_the_pack_is_a_drawn_list_with_the_row_description_under_it() -> void:
 	await _step(PokeButton.DOWN)
 	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.PACK)
 	await _step(PokeButton.A)
-	assert_true(bool(_screen.get("_pack_selecting")))
-	assert_true(_menu_layer().visible, "the rows are drawn, not spelled out")
-	var message: String = String(_screen.battle_snapshot()["message"])
-	assert_eq(message, Gen2WorldPack.row_description(_data, BattleFixture.POTION))
-	assert_false(message.contains("Left and right"), "a key binding is not a screen")
+	var pack: Gen2StartMenuScreen = _screen.get("_pack_host")
+	assert_not_null(pack, "the pack's own screen")
+	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK)
+	assert_eq(int(pack._selected_item()["item"]), BattleFixture.POTION)
+	assert_eq(pack._pack_description(), Gen2WorldPack.row_description(_data, BattleFixture.POTION))
 
 	await _step(PokeButton.DOWN)
-	assert_eq(
-		_screen.selected_pack_item(), BattleFixture.FULL_HEAL, "a list walks downwards"
-	)
-	assert_eq(
-		String(_screen.battle_snapshot()["message"]),
-		Gen2WorldPack.row_description(_data, BattleFixture.FULL_HEAL)
-	)
+	assert_eq(int(pack._selected_item()["item"]), BattleFixture.FULL_HEAL, "a list walks downwards")
+	await _step(PokeButton.A)
+	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK_ITEM, "ItemSubmenu is up")
+	assert_eq(pack._item_actions.size(), 2, "USE and QUIT")
+	await _step(PokeButton.B)
+	await _step(PokeButton.B)
+	assert_null(_screen.get("_pack_host"))
+	assert_eq(_menu_stage(), "main", "`.didnt_use_item` is `jp BattleMenu`")
 
 
 ## The throw is a message and no message redraws a menu, so the ball list stood
@@ -514,16 +527,18 @@ func test_throwing_a_ball_takes_the_list_off_the_screen() -> void:
 
 	await _step(PokeButton.DOWN)
 	await _step(PokeButton.A)
-	await _step(PokeButton.DOWN)
+	await _step(PokeButton.RIGHT)
 	await _step(PokeButton.A)
-	assert_eq(_screen.get("_pack_action_stage"), &"pack", "ItemSubmenu is up")
-	assert_true(_menu_layer().visible)
+	var pack: Gen2StartMenuScreen = _screen.get("_pack_host")
+	assert_eq(int(pack._selected_item()["item"]), BattleFixture.POKE_BALL, "the BALL pocket")
+	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK_ITEM, "ItemSubmenu is up")
 
 	## `.BattleOnly` runs the effect on USE; the row was already chosen in the
 	## pack, so nothing asks which ball a second time.
 	await _step(PokeButton.A)
 	assert_true(bool(_screen.get("_capture_waiting")), "the ball is in the air")
-	assert_false(_menu_layer().visible, "and nothing is drawn over the fight")
+	assert_null(_screen.get("_pack_host"), "and nothing is drawn over the fight")
+	assert_false(_menu_layer().visible)
 
 
 ## `_2DMenuInterpretJoypad` with neither wrap flag: a press off the grid is
@@ -642,6 +657,8 @@ func test_pkmn_opens_a_party_list_that_can_be_cancelled_back_to_the_menu() -> vo
 	await _step(PokeButton.A)
 	await _step(PokeButton.DOWN)
 	await _step(PokeButton.A)
+	assert_eq(_stage(), "action", "SWITCH/STATS/CANCEL is asked of the member first")
+	await _step(PokeButton.A)
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1, "the bench member came in")
 
 
@@ -678,8 +695,9 @@ func test_the_pack_uses_an_item_on_the_chosen_member_and_spends_the_turn() -> vo
 	await _step(PokeButton.DOWN)
 	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.PACK)
 	await _step(PokeButton.A)
-	assert_true(bool(_screen.get("_pack_selecting")), "the pack list is up")
-	assert_eq(_screen.selected_pack_item(), BattleFixture.POTION)
+	var pack: Gen2StartMenuScreen = _screen.get("_pack_host")
+	assert_not_null(pack, "the pack is up")
+	assert_eq(int(pack._selected_item()["item"]), BattleFixture.POTION)
 
 	# `ItemSubmenu`'s USE, and then the party list `UseItem_SelectMon` opens
 	# with the bench member on it.
@@ -691,7 +709,38 @@ func test_the_pack_uses_an_item_on_the_chosen_member_and_spends_the_turn() -> vo
 
 	assert_eq(bench.hp, 21, "the potion landed on the bench member")
 	assert_eq(spent, [[BattleFixture.POTION, 1]], "and the world was told to spend it")
-	assert_false(bool(_screen.get("_pack_selecting")))
+	assert_null(_screen.get("_pack_host"))
+
+
+## `ItemRestoreHP` on a full member is `StatusHealer_NoEffect`: the line prints
+## over the party list the member was chosen on, and `.BattleField` then
+## redraws the pack with the potion still in it and the turn still the player's.
+func test_a_potion_that_would_do_nothing_says_so_over_the_list_then_the_pack() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	await _advance_to_menu()
+	_screen.set_battle_pack([BattleFixture.POTION], {BattleFixture.POTION: 1})
+	var user: Gen2BattleMon = battle.mon(Gen2Battle.PLAYER)
+	user.hp = user.max_hp()
+	var spent: Array = []
+	_screen.item_used.connect(func(item: int, target: int) -> void: spent.append([item, target]))
+
+	await _step(PokeButton.DOWN)
+	await _step(PokeButton.A)
+	await _step(PokeButton.A)
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "pick")
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "refused", "the line stands over the party list")
+	assert_true(
+		String(_screen.battle_snapshot()["message"]).contains("won't have any effect"),
+		String(_screen.battle_snapshot()["message"])
+	)
+	assert_null(_screen.get("_pack_host"))
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "")
+	assert_not_null(_screen.get("_pack_host"), "and the pack is back")
+	assert_eq(spent, [], "nothing was spent")
 
 
 ## `UseItem_SelectMon` makes none of the switch list's own checks: the Pokemon
@@ -711,10 +760,12 @@ func test_the_item_target_list_takes_the_one_out_and_backs_out_to_the_pack() -> 
 	assert_eq(_stage(), "pick")
 	await _step(PokeButton.B)
 	assert_eq(_stage(), "", "the list is gone")
-	assert_true(bool(_screen.get("_pack_selecting")), "and the pack is back")
+	assert_not_null(_screen.get("_pack_host"), "and the pack is back")
 
 	await _step(PokeButton.A)
 	await _step(PokeButton.A)
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "item_result", "the bar fills on the list it was chosen from")
 	await _step(PokeButton.A)
 	## Healed to 21 and then hit, because the item spends the turn and the enemy
 	## still moves in it.
@@ -834,3 +885,215 @@ func test_the_contest_question_uses_its_own_corner() -> void:
 	assert_eq(Gen2BattleScreen.CONTEST_YES_NO_LEFT, 14)
 	assert_eq(Gen2BattleScreen.CONTEST_YES_NO_TOP, 7)
 	assert_ne(Gen2BattleScreen.CONTEST_YES_NO_LEFT, Gen2BattleScreen.YES_NO_LEFT)
+
+
+## PKMN, then a bench member, which is where `BattleMonMenu` is asked.
+func _open_member_menu(battle: Gen2Battle, row: int = 1) -> void:
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	await _advance_to_menu()
+	await _step(PokeButton.RIGHT)
+	await _step(PokeButton.A)
+	for _row: int in row:
+		await _step(PokeButton.DOWN)
+	await _step(PokeButton.A)
+
+
+## `BattleMenuPKMN_Loop`'s `.Stats` is `Battle_StatsScreen` and then
+## `BattleMenuPKMN_ReturnFromStats`, which is the list again with no turn spent.
+func test_stats_opens_the_stats_screen_and_b_returns_to_the_list() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open_member_menu(battle)
+	assert_eq(_stage(), "action")
+
+	await _step(PokeButton.DOWN)
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "stats")
+	var stats: Gen2MonStatsScreen = _screen.get("_battle_stats")
+	assert_not_null(stats, "the stats screen is up")
+	assert_eq(stats.cursor(), 1, "on the member the row was chosen for")
+
+	await _step(PokeButton.B)
+	assert_eq(_stage(), "pick", "back on the party list")
+	assert_null(_screen.get("_battle_stats"))
+	assert_eq(_cursor(), 1, "on the same row")
+	assert_eq(battle.party(Gen2Battle.PLAYER).active, 0, "and nobody switched")
+	assert_true(_screen.get("_pending").is_empty(), "no turn was spent")
+
+
+## `BattleMonMenu` sets carry on B, which is `.PressedB` and `BattleMenuPKMN_Loop`:
+## the list. The CANCEL row is `.Cancel`, whose `jp BattleMenu` leaves the list.
+func test_b_in_the_member_menu_is_the_list_and_cancel_is_the_battle_menu() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open_member_menu(battle)
+
+	await _step(PokeButton.B)
+	assert_eq(_stage(), "pick", "B goes back to the list")
+	assert_eq(_cursor(), 1)
+
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "action")
+	## `_InitVerticalMenuCursor` sets `_2DMENU_WRAP_UP_DOWN` only for
+	## `STATICMENU_WRAP`, which `BattleMonMenu.MenuData` does not carry.
+	await _step(PokeButton.UP)
+	assert_eq(int((_screen.get("_switch_action") as Gen2WorldMenu).cursor), 0, "UP stops at SWITCH")
+	for _press: int in 3:
+		await _step(PokeButton.DOWN)
+	assert_eq(int((_screen.get("_switch_action") as Gen2WorldMenu).cursor), 2, "DOWN stops at CANCEL")
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "")
+	assert_eq(_menu_stage(), "main", "CANCEL is a jp BattleMenu")
+	assert_eq(battle.party(Gen2Battle.PLAYER).active, 0)
+
+
+## `TryPlayerSwitch` on the one already out prints `BattleText_MonIsAlreadyOut`
+## and is `jp BattleMenuPKMN_Loop`, so SWITCH is refused rather than spent.
+func test_switch_on_the_one_already_out_is_refused_over_the_list() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open_member_menu(battle, 0)
+	assert_eq(_stage(), "action")
+
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "refused")
+	assert_true(
+		String(_screen.battle_snapshot()["message"]).contains("is already out."),
+		String(_screen.battle_snapshot()["message"])
+	)
+	await _step(PokeButton.A)
+	assert_eq(_stage(), "pick")
+	assert_true(_screen.get("_pending").is_empty(), "the turn is still the player's")
+
+
+## Explosion from the faster side downs both: `HandleEnemyMonFaint` sets
+## `wBattleEnded` in a wild battle, so nothing asks "Use next" and no party list
+## opens for the fallen player, however many presses follow.
+func test_a_wild_double_faint_ends_the_battle_without_a_party_list() -> void:
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([
+			_mon(BattleFixture.PIKACHU, [BattleFixture.EXPLOSION]),
+			_mon(BattleFixture.BULBASAUR, [BattleFixture.TACKLE]),
+		]),
+		Gen2Party.of(_mon(BattleFixture.GEODUDE, [BattleFixture.TACKLE])),
+		_rng, false
+	)
+	battle.enemy.hp = 1
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	assert_true(battle.player.is_fainted(), "the user fell to its own Explosion")
+	assert_true(battle.is_over())
+
+	var stages: Array = []
+	for _press: int in 40:
+		_settle_bars()
+		if _stage() != "" and not stages.has(_stage()):
+			stages.append(_stage())
+		_screen.finish()
+		_screen.advance()
+		await get_tree().process_frame
+	assert_eq(stages, [], "no question and no list was opened")
+	assert_false(battle.must_replace(Gen2Battle.PLAYER))
+	assert_true(bool(_screen.battle_snapshot()["battle_over"]))
+
+
+## `HealHP_SFX_GFX` fills the bar on the party menu the member was chosen from,
+## then `ItemActionTextWaitButton` prints `.MenuActionTexts`' line and spends
+## `DelayFrames 50` before a press is read; only then does the enemy move.
+func test_a_potion_fills_the_bar_then_holds_its_line_before_the_turn() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	await _advance_to_menu()
+	_screen.set_battle_pack([BattleFixture.POTION], {BattleFixture.POTION: 1})
+	var bench: Gen2BattleMon = battle.party(Gen2Battle.PLAYER).at(1)
+	bench.hp = 1
+	for button: int in [PokeButton.DOWN, PokeButton.A, PokeButton.A, PokeButton.A, PokeButton.DOWN]:
+		await _step(button)
+	_settle_bars()
+	_screen._handle_button(PokeButton.A)
+
+	assert_eq(_stage(), "item_result")
+	assert_eq(bench.hp, 21)
+	var result: Dictionary = _screen.get("_item_result")
+	assert_true(result.has("anim"), "the bar is still filling")
+	assert_eq(String(result["text"]), "BULBASAUR\nrecovered 20HP!")
+	_screen._handle_button(PokeButton.A)
+	assert_eq(_stage(), "item_result", "a press does not cut the bar short")
+
+	var guard: int = 400
+	while (_screen.get("_item_result") as Dictionary).has("anim") and guard > 0:
+		_screen.advance_hardware_frame()
+		guard -= 1
+	assert_eq(int((_screen.get("_item_result") as Dictionary)["hold"]), Gen2ItemActionText.HOLD_FRAMES)
+	for _frame: int in Gen2ItemActionText.HOLD_FRAMES - 1:
+		_screen.advance_hardware_frame()
+	_screen._handle_button(PokeButton.A)
+	assert_eq(_stage(), "item_result", "one frame of the hold is still owed")
+	assert_true(_screen.get("_pending").is_empty(), "and the turn is not taken")
+
+	_screen.advance_hardware_frame()
+	_screen._handle_button(PokeButton.A)
+	assert_eq(_stage(), "", "the press is read once the hold is spent")
+	assert_false(_screen.get("_pending").is_empty(), "and the enemy's turn follows")
+
+
+## A status healer has no bar to fill: `GetItemHealingAction` names its line by
+## the item's mask, which for FULL HEAL is `ANY` and "health returned".
+func test_a_status_healer_prints_its_status_line() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	await _advance_to_menu()
+	_screen.set_battle_pack([BattleFixture.FULL_HEAL], {BattleFixture.FULL_HEAL: 1})
+	var bench: Gen2BattleMon = battle.party(Gen2Battle.PLAYER).at(1)
+	bench.status = Gen2Status.POISON
+	for button: int in [PokeButton.DOWN, PokeButton.A, PokeButton.A, PokeButton.A, PokeButton.DOWN]:
+		await _step(button)
+	_settle_bars()
+	_screen._handle_button(PokeButton.A)
+
+	assert_eq(_stage(), "item_result")
+	var result: Dictionary = _screen.get("_item_result")
+	assert_false(result.has("anim"), "nothing to fill")
+	assert_eq(String(result["text"]), "BULBASAUR's\nhealth returned.")
+	assert_eq(bench.status, 0)
+
+
+## Generation 1's `DisplayBagMenu`: the bag's rows and CANCEL, a cursor that stops
+## at both ends, and A that is `UseBagItem` with no USE box in front of it: a
+## POTION goes straight to `ItemUseMedicine`'s party menu.
+func test_the_generation_one_bag_stops_at_both_ends_and_uses_on_a() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	await _advance_to_menu()
+	_data.generation = RomRegistry.GEN1
+	_screen.set_battle_pack(
+		[BattleFixture.POTION, BattleFixture.FULL_HEAL],
+		{BattleFixture.POTION: 1, BattleFixture.FULL_HEAL: 1}
+	)
+	await _step(PokeButton.DOWN)
+	await _step(PokeButton.A)
+	assert_true(bool(_screen.get("_pack_selecting")), "the bag list is up")
+	assert_null(_screen.get("_pack_host"), "and not Generation 2's pack screen")
+
+	await _step(PokeButton.UP)
+	assert_eq(_screen.selected_pack_item(), BattleFixture.POTION, "the top stops")
+	for _press: int in 3:
+		await _step(PokeButton.DOWN)
+	assert_eq(int(_screen.get("_pack_index")), 2, "the bottom is CANCEL and stops there")
+	assert_eq(_screen.selected_pack_item(), 0)
+
+	await _step(PokeButton.A)
+	assert_false(bool(_screen.get("_pack_selecting")), "CANCEL closes the bag")
+	assert_eq(_menu_stage(), "main")
+
+	battle.mon(Gen2Battle.PLAYER).hp = 1
+	await _step(PokeButton.A)
+	while _screen.selected_pack_item() != BattleFixture.POTION:
+		await _step(PokeButton.UP)
+	await _step(PokeButton.A)
+	assert_eq(String(_screen.get("_pack_action_stage")), "", "no USE box")
+	assert_eq(_stage(), "pick", "the party menu the potion asks for")
+	_settle_bars()
+	_screen._handle_button(PokeButton.A)
+	assert_eq(_stage(), "item_result")
+	assert_eq(
+		String((_screen.get("_item_result") as Dictionary)["text"]), "PIKACHU\nrecovered by 20!",
+		"`_PotionText`'s own wording"
+	)

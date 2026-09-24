@@ -1419,7 +1419,7 @@ func test_the_fly_script_spends_its_animation_before_the_warp() -> void:
 	var world: Gen2WorldAPI = _world_screen._world
 	var was: Vector2i = world.player_cell
 	_world_screen._start_fly(0)
-	assert_true(_world_screen._renderer.sprites_hidden, "callasm HideSprites")
+	assert_true(_world_screen._draw_list.sprites_hidden, "callasm HideSprites")
 	assert_true(_world_screen._effects.sprites_active())
 
 	for _frame: int in Gen2WorldEffects.FLY_FROM_FRAMES - 1:
@@ -1429,4 +1429,4 @@ func test_the_fly_script_spends_its_animation_before_the_warp() -> void:
 
 	_world_screen.advance_frame()
 	assert_true(_world_screen._pending_fly.is_empty())
-	assert_false(_world_screen._renderer.sprites_hidden, "RespawnPlayer")
+	assert_false(_world_screen._draw_list.sprites_hidden, "RespawnPlayer")

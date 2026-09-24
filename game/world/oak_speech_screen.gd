@@ -718,8 +718,8 @@ func _play_shrink_sfx() -> void:
 	if _audio == null or _data == null:
 		return
 	_audio.play_record(
-		_data.world_audio(&"sfx", Gen1Layout.SFX_SHRINK if _gen1 \
-			else Gen2OakSpeech.SHRINK_SFX), &"sfx", _audio_assets()
+		_data.world_audio(&"sfx", Gen1Sfx.SFX_SHRINK if _gen1 \
+			else Gen2Sfx.SFX_ESCAPE_ROPE), &"sfx", _audio_assets()
 	)
 
 

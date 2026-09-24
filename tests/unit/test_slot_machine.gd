@@ -445,7 +445,7 @@ func test_gen1_the_payout_is_walked_over_one_coin_at_a_time() -> void:
 		machine.advance()
 		frames += 1
 		for event: Variant in _gen1_events(machine):
-			if int((event as Dictionary).get("index", -1)) == Gen1SlotMachine.SFX_SLOTS_REWARD:
+			if int((event as Dictionary).get("index", -1)) == Gen1Sfx.SFX_SLOTS_REWARD:
 				rewards += 1
 	assert_eq(rewards, 8)
 	assert_eq(machine.coins(), 107)

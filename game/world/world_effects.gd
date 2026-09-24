@@ -413,7 +413,7 @@ static func gen1_leave_steps(kind: StringName, id: StringName, image: int) -> Ar
 	var steps: Array = [_standing(image)]
 	match kind:
 		&"pad":
-			steps.append({"sfx": Gen1Layout.SFX_TELEPORT_EXIT_1})
+			steps.append({"sfx": Gen1Sfx.SFX_TELEPORT_EXIT_1})
 			steps.append_array(_spin_moving(-PLAYER_ANIM_STEP_Y, PLAYER_ANIM_OFF_SCREEN_Y))
 		&"hole":
 			steps.append({"hold": PLAYER_ANIM_SETUP_FRAMES})
@@ -423,9 +423,9 @@ static func gen1_leave_steps(kind: StringName, id: StringName, image: int) -> Ar
 			steps.append({"hold": PLAYER_ANIM_SETUP_FRAMES})
 			steps.append({"stop_music": PLAYER_ANIM_STOP_MUSIC_FADE, "wait": &"music"})
 			steps.append_array(_spin_in_place(
-				PLAYER_ANIM_EXIT_SPIN_DELAY, -1, 0, Gen1Layout.SFX_TELEPORT_EXIT_2, 0
+				PLAYER_ANIM_EXIT_SPIN_DELAY, -1, 0, Gen1Sfx.SFX_TELEPORT_EXIT_2, 0
 			))
-			steps.append({"sfx": Gen1Layout.SFX_TELEPORT_EXIT_1})
+			steps.append({"sfx": Gen1Sfx.SFX_TELEPORT_EXIT_1})
 			steps.append_array(_spin_moving(-PLAYER_ANIM_STEP_Y, PLAYER_ANIM_OFF_SCREEN_Y))
 			steps.append({"hold": PLAYER_ANIM_NOT_ON_PAD_FRAMES})
 		&"fly":
@@ -433,7 +433,7 @@ static func gen1_leave_steps(kind: StringName, id: StringName, image: int) -> Ar
 			steps.append({"stop_music": PLAYER_ANIM_STOP_MUSIC_FADE, "wait": &"music"})
 			steps.append({"hold": PLAYER_ANIM_BIRD_LOAD_FRAMES})
 			steps.append_array(_fly_flaps(PLAYER_ANIM_FLY_OUT_IMAGE, PLAYER_ANIM_FLAPS_IN_PLACE, []))
-			steps.append({"sfx": Gen1Layout.SFX_FLY})
+			steps.append({"sfx": Gen1Sfx.SFX_FLY})
 			steps.append_array(_fly_flaps(
 				PLAYER_ANIM_FLY_OUT_IMAGE, Gen1Layout.FLY_EXIT_COORDS_1.size(),
 				Gen1Layout.FLY_EXIT_COORDS_1
@@ -461,7 +461,7 @@ static func gen1_enter_steps(kind: StringName, id: StringName, image: int, on_pa
 	steps.append_array(_fade_steps(PLAYER_ANIM_FADE_IN_ROWS, id))
 	if kind == &"fly":
 		steps.append({"hold": int(PLAYER_ANIM_BIRD_ENTER_LOAD_FRAMES[id])})
-		steps.append({"sfx": Gen1Layout.SFX_FLY})
+		steps.append({"sfx": Gen1Sfx.SFX_FLY})
 		steps.append_array(_fly_flaps(
 			PLAYER_ANIM_FLY_BACK_IMAGE, Gen1Layout.FLY_ENTER_COORDS.size(),
 			Gen1Layout.FLY_ENTER_COORDS
@@ -470,12 +470,12 @@ static func gen1_enter_steps(kind: StringName, id: StringName, image: int, on_pa
 		steps.append({"wait": &"sfx"})
 		steps.append({"music": true})
 	else:
-		steps.append({"sfx": Gen1Layout.SFX_TELEPORT_ENTER_1})
+		steps.append({"sfx": Gen1Sfx.SFX_TELEPORT_ENTER_1})
 		if kind == &"hole":
 			steps.append({"hold": PLAYER_ANIM_HOLE_WAIT_FRAMES})
 		steps.append_array(_spin_moving(PLAYER_ANIM_STEP_Y, Gen1Layout.PLAYER_SPRITE_PIXELS.y))
 		if kind != &"hole":
-			steps.append({"sfx": Gen1Layout.SFX_TELEPORT_ENTER_2})
+			steps.append({"sfx": Gen1Sfx.SFX_TELEPORT_ENTER_2})
 		if kind != &"hole" and not on_pad:
 			## `ld hl, wFacingDirectionList` after the fall's five rotations.
 			steps.append_array(_spin_in_place(

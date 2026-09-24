@@ -67,6 +67,11 @@ const MAILBOXITEM_CANCEL: int = 3
 const MAILBOX_ROWS: Array[String] = [
 	"READ MAIL", "PUT IN PACK", "ATTACH MAIL", "CANCEL",
 ]
+## `TossItemFromPC`'s four boxes in data/text/common_2.asm, which no importer reads.
+const ITEMS_TOSS_HOW_MANY: String = "Toss out how many\n<RAM_>(S)?"
+const ITEMS_THROW_AWAY: String = "Throw away <NUM_>\n<RAM_>(S)?"
+const ITEMS_DISCARDED: String = "Discarded\n<RAM_>(S)."
+const ITEMS_TOO_IMPORTANT: String = "That's too impor-\ntant to toss out!"
 const MAILBOX_EMPTY: String = "There's no MAIL\nhere."
 const MAILBOX_MESSAGE_LOST: String = "The MAIL's message\nwill be lost. OK?"
 const MAILBOX_PACK_FULL: String = "The PACK is full."

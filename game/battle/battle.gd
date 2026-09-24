@@ -703,6 +703,8 @@ static func create_parties(
 	if player_party.is_wiped() or enemy_party.is_wiped():
 		return null
 
+	## `DoBattle.loop2` and `.findFirstAliveMonLoop`: the first fit member leads.
+	player_party.active = player_party.first_healthy()
 	var out := Gen2Battle.new()
 	out.data = game_data
 	out.parties = {PLAYER: player_party, ENEMY: enemy_party}
@@ -1138,7 +1140,10 @@ func evolvable_indices() -> Array[int]:
 ## Whether a side is waiting for somebody to be sent out: the Pokémon that was
 ## out has fainted and there is still a party behind it. Nothing else can happen
 ## on either side until it is answered, which is the cartridge's order too.
+## A battle already over owes nobody: `wBattleEnded` after a double faint or a run.
 func must_replace(side: int) -> bool:
+	if is_over():
+		return false
 	var current: Gen2Party = party(side)
 	return current.active_mon().is_fainted() and not current.is_wiped()
 

@@ -541,6 +541,8 @@ func _one_game() -> void:
 	_check_the_cycling_road_gate_walk()
 	_check_the_viridian_gym_door()
 	_check_the_tower_warp()
+	_check_a_dark_map_warp()
+	_check_oaks_aide()
 	if _r.game_id != RomRegistry.YELLOW:
 		_check_the_tower_rocket_leaves()
 	_check_the_champion()
@@ -617,7 +619,7 @@ func _check_the_nurse_heals() -> void:
 	for ball: int in NURSE_PARTY:
 		wanted.append([
 			ball * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES,
-			Gen1Layout.SFX_HEALING_MACHINE,
+			Gen1Sfx.SFX_HEALING_MACHINE,
 		])
 	wanted.append([
 		NURSE_PARTY * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES,
@@ -844,7 +846,7 @@ func _check_a_card_key_door() -> void:
 	var redrawn: Dictionary = _spend_redraw(world)
 	var sounds: Array = _first_event(redrawn["results"], &"presentation_special_applied").get("sounds", [])
 	_r.check(int(redrawn["frames"]) == Gen1Layout.REDRAW_MAP_VIEW_FRAMES and sounds.size() == 1
-		and int((sounds[0] as Dictionary).get("index", 0)) == Gen1Layout.SFX_GO_INSIDE,
+		and int((sounds[0] as Dictionary).get("index", 0)) == Gen1Sfx.SFX_GO_INSIDE,
 		"the door redrew over %d frames and sounded %s." % [int(redrawn["frames"]), sounds])
 	_r.check(world.state.card_key_door() == SILPH_DOOR,
 		"the door opened at %s was remembered as %s." % [
@@ -1677,7 +1679,9 @@ func _check_the_mart_counter_flow() -> void:
 	_press_the_counter(host, [PokeButton.A, PokeButton.A])
 	_r.check(host._mart_stage == Gen2WorldServiceScreen.MART_SELL_CONFIRM,
 		"the sale asked on %s." % host._mart_stage)
+	_read_the_counter(host)
 	host.handle_button(PokeButton.A)
+	_spend_counter_answer(host)
 	_r.check(host._mart_stage == Gen2WorldServiceScreen.MART_SELL,
 		"a sale left the shop on %s." % host._mart_stage)
 	_r.check(world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT) == POTION_SELL_PRICE
@@ -1688,6 +1692,11 @@ func _check_the_mart_counter_flow() -> void:
 		])
 	_r.close_screen(screen)
 	_r.note("gen1 walk the mart's two refusals, a SELECT swap and a sale on the screen")
+
+
+func _spend_counter_answer(host: Gen2WorldServiceScreen) -> void:
+	while host._mart_yes_no != null and host._mart_yes_no.holding():
+		host.advance_frame()
 
 
 func _open_the_counter(screen: Gen2WorldScreen) -> Gen2WorldServiceScreen:
@@ -1706,14 +1715,20 @@ func _open_the_counter(screen: Gen2WorldScreen) -> Gen2WorldServiceScreen:
 
 func _press_the_counter(host: Gen2WorldServiceScreen, presses: Array) -> void:
 	for button: int in presses:
-		for _page: int in MART_FLOW_PRESSES:
-			if host._mart_stage != Gen2WorldServiceScreen.MART_MESSAGE:
-				break
-			host.handle_button(PokeButton.A)
+		_read_the_counter(host)
 		host.handle_button(button)
+		_spend_counter_answer(host)
+	_read_the_counter(host)
+
+
+## A box's pages, and a price question's `cont` before its `YesNoBox`.
+func _read_the_counter(host: Gen2WorldServiceScreen) -> void:
 	for _page: int in MART_FLOW_PRESSES:
-		if host._mart_stage != Gen2WorldServiceScreen.MART_MESSAGE:
-			break
+		var asking: bool = host._mart_stage in [
+			Gen2WorldServiceScreen.MART_CONFIRM, Gen2WorldServiceScreen.MART_SELL_CONFIRM,
+		] and not host._mart_confirm_open()
+		if host._mart_stage != Gen2WorldServiceScreen.MART_MESSAGE and not asking:
+			return
 		host.handle_button(PokeButton.A)
 
 
@@ -3514,7 +3529,7 @@ func _check_a_map_script_runs() -> void:
 		## `Route22GateGuardNoBoulderbadgeText`'s own `text_asm` plays SFX_DENIED.
 		var sounds: Array = _first_event(results, &"presentation_special_applied").get("sounds", [])
 		_r.check(
-			sounds == ([{"frame": 0, "gen1": true, "index": Gen1Layout.SFX_DENIED, "wait": true}]
+			sounds == ([{"frame": 0, "gen1": true, "index": Gen1Sfx.SFX_DENIED, "wait": true}]
 				if not badge else []),
 			"the gate sounded %s with the badge %s." % [sounds, badge]
 		)
@@ -4667,6 +4682,54 @@ func _check_the_tower_warp() -> void:
 	_r.note("gen1 walk POKEMON_TOWER_7F warped to MR_FUJIS_HOUSE")
 
 
+const ROCK_TUNNEL_1F: int = 82
+const ROCK_TUNNEL_1F_LADDER := Vector2i(17, 12)
+const DARK_PAL_OFFSET: int = 6
+
+
+## `PlayMapChangeSound` skips the fade once on a dark map; the warp still lands.
+func _check_a_dark_map_warp() -> void:
+	var screen: Gen2WorldScreen = _r.open_screen(0, ROCK_TUNNEL_1F, ROCK_TUNNEL_1F_LADDER + Vector2i.DOWN)
+	var world: Gen2WorldAPI = screen.world()
+	world.gen1_map_pal_offset = DARK_PAL_OFFSET
+	world.state.set_wild_encounters_off(true)
+	for frame: int in 400:
+		if world.map_id() != Vector2i(0, ROCK_TUNNEL_1F):
+			break
+		if frame < 60:
+			screen.press_button(PokeButton.UP)
+		screen.advance_frame()
+	_r.check(world.map_id() != Vector2i(0, ROCK_TUNNEL_1F),
+		"the dark Rock Tunnel ladder never warped: %s at %s." % [world.map_id(), world.player_cell])
+	_r.close_screen(screen)
+
+
+const ROUTE_2_GATE: int = 49
+const ROUTE_2_GATE_AIDE_FRONT := Vector2i(1, 5)
+const AIDE_REQUIREMENT: int = 10
+const HM05_ITEM: int = 200
+
+
+## `OaksAideScript` at the Route 2 gate: filled boxes, and the gift once qualified.
+func _check_oaks_aide() -> void:
+	for caught: int in [AIDE_REQUIREMENT - 1, AIDE_REQUIREMENT]:
+		var world: Gen2WorldAPI = _r.open_world(0, ROUTE_2_GATE, ROUTE_2_GATE_AIDE_FRONT)
+		if world == null:
+			return
+		world.player_facing = Gen2WorldSprite.FACING_UP
+		for species: int in range(1, caught + 1):
+			world.state.set_species_caught(species)
+		var event: Dictionary = world._gen1_event_at(world.object_facing_cell(), &"objects")
+		var steps: Array = world._gen1_script_steps(world.gen1_text_at(int(event.get("text", 0))), event)
+		var said: String = JSON.stringify(steps)
+		_r.check(not steps.is_empty() and not said.contains("<NUM_") and not said.contains("<RAM_")
+			and said.contains("HM05"), "the aide with %d caught said %s." % [caught, said])
+		var gives: bool = said.contains("\"%d\":1" % HM05_ITEM)
+		_r.check(gives == (caught >= AIDE_REQUIREMENT),
+			"the aide with %d caught gave %s." % [caught, gives])
+	_r.note("gen1 walk OAKS_AIDE counts, names and hands over HM05")
+
+
 const SILPH_CO_7F: int = 212
 const SILPH_CO_7F_BYTE: int = 0x58
 const SILPH_RIVAL_START: int = 3
@@ -5393,7 +5456,7 @@ func _horn_frames(opened: Array) -> Array:
 			if StringName(event.get("kind", &"")) != &"ss_anne_leaves":
 				continue
 			for sound: Dictionary in event.get("sounds", []):
-				if int(sound.get("index", 0)) == Gen1Layout.SFX_SS_ANNE_HORN:
+				if int(sound.get("index", 0)) == Gen1Sfx.SFX_SS_ANNE_HORN:
 					horns.append(int(sound["frame"]))
 	return horns
 

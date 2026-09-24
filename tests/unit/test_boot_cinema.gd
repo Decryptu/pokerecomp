@@ -103,10 +103,10 @@ func test_the_gamefreak_sounds_reach_the_host() -> void:
 			sounds.append(int(event["sfx"]))
 			frames.append(int(event["frame"]))
 	assert_eq(sounds, [
-		Gen2GameFreakPresents.SFX_DITTO_BOUNCE,
-		Gen2GameFreakPresents.SFX_DITTO_BOUNCE,
-		Gen2GameFreakPresents.SFX_DITTO_POP_UP,
-		Gen2GameFreakPresents.SFX_DITTO_TRANSFORM,
+		Gen2Sfx.SFX_DITTO_BOUNCE,
+		Gen2Sfx.SFX_DITTO_BOUNCE,
+		Gen2Sfx.SFX_DITTO_POP_UP,
+		Gen2Sfx.SFX_DITTO_TRANSFORM,
 	])
 	var offset: int = Boot.COPYRIGHT_PRELUDE_FRAMES + Boot.COPYRIGHT_HOLD_FRAMES
 	assert_eq(frames, [offset + 18, offset + 50, offset + 51, offset + 84])

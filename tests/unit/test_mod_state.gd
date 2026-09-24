@@ -137,3 +137,19 @@ func test_an_empty_view_id_is_refused_rather_than_stored() -> void:
 	assert_true(Gen2ModState.set_selected_view(&"voxel3d"))
 	assert_false(Gen2ModState.set_selected_view(&""))
 	assert_eq(Gen2ModState.selected_view(), &"voxel3d")
+
+
+## A check's `--mods` runs every installed mod, `--mods=a,b` only those named,
+## and neither touches the player's file.
+func test_a_check_names_its_mods_and_keeps_off_the_players_file() -> void:
+	assert_null(Gen2GameRuntime.check_mods_in(PackedStringArray(["--headless"])))
+	assert_eq(Gen2GameRuntime.check_mods_in(PackedStringArray(["--mods"])), PackedStringArray())
+	var named: Variant = Gen2GameRuntime.check_mods_in(PackedStringArray(["--mods=voxel,qol"]))
+	assert_eq(named, PackedStringArray(["voxel", "qol"]))
+	Gen2ModState.reload_for(named)
+	assert_true(Gen2ModState.is_enabled(&"voxel"))
+	assert_false(Gen2ModState.is_enabled(&"randomizer"), "not named")
+	assert_true(Gen2ModState.set_enabled(&"qol", false))
+	assert_false(FileAccess.file_exists(Gen2ModState.PATH), "nothing written")
+	Gen2ModState.reload()
+	assert_true(Gen2ModState.is_enabled(&"randomizer"), "the plain run is unsealed")

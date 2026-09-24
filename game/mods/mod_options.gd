@@ -1,13 +1,10 @@
 class_name PokeModOptions
 extends RefCounted
 
-## What the player chose for each mod's registered settings. The file under
-## user:// is the installation's own values and is what a NEW run is created from;
-## per-mod save data is a separate thing. A run bound with [method bind_run] takes
-## over while it is played, because a draw distance that changed under a loaded
-## slot would make that slot's recorded walk unreproducible. Only values are kept:
-## what a setting is and what it falls back to is the mod's own registration, so a
-## leftover row costs nothing and a changed ladder sees its stored value refused.
+## What the player chose for each mod's registered settings: the installation's
+## values, which a NEW run is created from. A run bound with [method bind_run]
+## takes over while played, so a loaded slot's recorded walk stays reproducible.
+## Only values are kept; a setting's shape and default are the mod's registration.
 
 const PATH: String = "user://mod_options.json"
 
@@ -126,7 +123,7 @@ static func _ensure_loaded() -> void:
 		return
 	_loaded = true
 	_values = {}
-	if not FileAccess.file_exists(PATH):
+	if Gen2GameRuntime.check_mods() != null or not FileAccess.file_exists(PATH):
 		return
 	var file: FileAccess = FileAccess.open(PATH, FileAccess.READ)
 	if file == null:
@@ -151,6 +148,8 @@ static func _ensure_loaded() -> void:
 
 
 static func _write() -> bool:
+	if Gen2GameRuntime.check_mods() != null:
+		return true
 	var out: Dictionary = {}
 	var ids: Array[String] = []
 	for id: StringName in _values:

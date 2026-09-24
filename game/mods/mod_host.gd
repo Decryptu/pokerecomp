@@ -49,6 +49,10 @@ const RENDERER_ACTORS_METHOD: String = "set_actors"
 ## [constant RENDERER_ACTORS_METHOD]; what is only here is the shiny pulse, which
 ## is battle-animation OAM over the map and which a renderer may ignore.
 const RENDERER_ENCOUNTERS_METHOD: String = "set_encounters"
+## Optional, world renderers only. Called with the screen's [Gen2WorldDrawList]
+## when the renderer is built: every sprite the built-in view draws, resolved,
+## and the background edits under them. The three above are its sources.
+const RENDERER_DRAW_LIST_METHOD: String = "set_draw_list"
 ## Optional, world renderers only. Called with one step of a map fade: the
 ## palette order `DmgToCgbTimePals` applies to every palette on screen, and
 ## `FillWhiteBGColor` beside it on the way out. The host spends the fade's own

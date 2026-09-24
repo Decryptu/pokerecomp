@@ -65,15 +65,15 @@ func test_every_scene_asks_for_its_own_sounds() -> void:
 			if event["type"] == &"play_sfx":
 				sfx.append(int(event["sfx"]))
 	assert_eq(sfx, [
-		Gen2IntroMovie.SFX_INTRO_UNOWN_1,
-		Gen2IntroMovie.SFX_INTRO_UNOWN_2, Gen2IntroMovie.SFX_INTRO_UNOWN_1,
-		Gen2IntroMovie.SFX_INTRO_SUICUNE_3, Gen2IntroMovie.SFX_INTRO_SUICUNE_2,
-		Gen2IntroMovie.SFX_INTRO_PICHU, Gen2IntroMovie.SFX_INTRO_PICHU,
-		Gen2IntroMovie.SFX_INTRO_UNOWN_3, Gen2IntroMovie.SFX_INTRO_UNOWN_2,
-		Gen2IntroMovie.SFX_INTRO_UNOWN_1, Gen2IntroMovie.SFX_INTRO_UNOWN_2,
-		Gen2IntroMovie.SFX_INTRO_UNOWN_3, Gen2IntroMovie.SFX_INTRO_UNOWN_2,
-		Gen2IntroMovie.SFX_INTRO_UNOWN_1, Gen2IntroMovie.SFX_INTRO_UNOWN_2,
-		Gen2IntroMovie.SFX_INTRO_SUICUNE_4, Gen2IntroMovie.SFX_INTRO_WHOOSH,
+		Gen2Sfx.SFX_INTRO_UNOWN_1,
+		Gen2Sfx.SFX_INTRO_UNOWN_2, Gen2Sfx.SFX_INTRO_UNOWN_1,
+		Gen2Sfx.SFX_INTRO_SUICUNE_3, Gen2Sfx.SFX_INTRO_SUICUNE_2,
+		Gen2Sfx.SFX_INTRO_PICHU, Gen2Sfx.SFX_INTRO_PICHU,
+		Gen2Sfx.SFX_INTRO_UNOWN_3, Gen2Sfx.SFX_INTRO_UNOWN_2,
+		Gen2Sfx.SFX_INTRO_UNOWN_1, Gen2Sfx.SFX_INTRO_UNOWN_2,
+		Gen2Sfx.SFX_INTRO_UNOWN_3, Gen2Sfx.SFX_INTRO_UNOWN_2,
+		Gen2Sfx.SFX_INTRO_UNOWN_1, Gen2Sfx.SFX_INTRO_UNOWN_2,
+		Gen2Sfx.SFX_INTRO_SUICUNE_4, Gen2Sfx.SFX_INTRO_WHOOSH,
 	])
 
 

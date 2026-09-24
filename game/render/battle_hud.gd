@@ -42,6 +42,13 @@ const HP_DIGITS: int = 3
 ## Two columns left of where Crystal prints the same number.
 const GEN1_ENEMY_LEVEL: Vector2i = Vector2i(4, 1)
 
+## The view keys [method draw_panels] reads, in [method panels_key]'s order.
+const PANEL_KEYS: Array[String] = [
+	"enemy_hud_visible", "enemy_name", "enemy_level", "enemy_caught", "enemy_status",
+	"enemy_gender", "player_hud_visible", "player_name", "player_level", "player_hp",
+	"player_max_hp", "player_status", "player_gender", "trainer_hud_border",
+]
+
 var font: Gen2Font = null
 var tiles: Gen2BattleTiles = null
 ## Generation 1 has no exp bar, caught ball or gender sign, and centres a short name.
@@ -89,6 +96,48 @@ static func bar_pixels(current: int, maximum: int, length: int) -> int:
 	@warning_ignore("integer_division")
 	var lit: int = product / divisor
 	return maxi(lit, 1)
+
+
+## What [method draw_panels] draws from: it changes only when this does.
+static func panels_key(view: Dictionary) -> Array:
+	var out: Array = []
+	for key: String in PANEL_KEYS:
+		out.append(view.get(key))
+	return out
+
+
+## Both panels as a battle view describes them, each while its own side's
+## `*_hud_visible` holds, and the trainer's party-ball frame. `InitBattleDisplay`
+## clears the player's box and only a wild battle reaches `UpdateEnemyHUD`, so an
+## opening battle spends seconds with neither drawn. The bars are not included.
+func draw_panels(into: PackedByteArray, width: int, view: Dictionary) -> void:
+	if bool(view.get("enemy_hud_visible", true)):
+		draw_enemy(
+			into, width, String(view.get("enemy_name", "")), int(view.get("enemy_level", 0)),
+			bool(view.get("enemy_caught", false)),
+			int(view.get("enemy_status", Gen2Status.NONE)),
+			StringName(view.get("enemy_gender", &""))
+		)
+	if bool(view.get("player_hud_visible", true)):
+		draw_player(
+			into, width, String(view.get("player_name", "")), int(view.get("player_level", 0)),
+			int(view.get("player_hp", 0)), int(view.get("player_max_hp", 0)),
+			int(view.get("player_status", Gen2Status.NONE)),
+			StringName(view.get("player_gender", &""))
+		)
+	draw_border_cells(into, width, view.get("trainer_hud_border", []) as Array)
+
+
+## `DrawPlayerPartyIconHUDBorder` and `DrawEnemyHUDBorder`: `{tile, x, y}` cells
+## of the battle's own tile page, the way the source writes them into `wTilemap`.
+func draw_border_cells(into: PackedByteArray, width: int, border: Array) -> void:
+	for entry: Variant in border:
+		if entry is Dictionary:
+			var cell: Dictionary = entry
+			tiles.draw(
+				int(cell.get("tile", 0)), into, width,
+				int(cell.get("x", 0)) * TILE, int(cell.get("y", 0)) * TILE
+			)
 
 
 ## The enemy's panel except for the bar's fill: the name, the level, the "HP:"

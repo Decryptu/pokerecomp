@@ -155,6 +155,9 @@ func settle_prompt(
 	for _frame: int in frames:
 		if prompt.phase() == Gen2NicknamePromptScreen.Phase.ASK and prompt.question_ready():
 			break
+		if prompt.answering():
+			screen.advance_frame()
+			continue
 		var box: Gen2TextBox = prompt.get("_text_box")
 		if box != null and not box.is_revealing():
 			if not box.has_pages_left():

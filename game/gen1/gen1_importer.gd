@@ -586,6 +586,10 @@ static func _verify_battle_tiles(rom: RomFile, layout: Dictionary) -> Dictionary
 		!= Gen1Layout.HUD_BOTTOM_ROWS:
 		return _fail("BattleHudTiles3: $%02X is not the panel's edge." % \
 			Gen1Layout.HUD_BOTTOM_CODE)
+	var dot: int = int(layout["minimized_mon_sprite"])
+	for row: int in Gen1Layout.MINIMIZED_MON_ROWS.size():
+		if rom.u8(dot + row) != Gen1Layout.MINIMIZED_MON_ROWS[row]:
+			return _fail("MinimizedMonSprite: row %d is $%02X." % [row, rom.u8(dot + row)])
 	return _ok()
 
 
@@ -2980,7 +2984,26 @@ func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"first_code": int(sheet["first_code"]),
 			"bits": int(sheet["bits"]),
 		}
+	if not RomCache.write_indices(
+		RomCache.tile_path(directory, "minimize"), minimized_mon_tile(rom, layout)
+	):
+		return {}
+	out["minimize"] = {
+		"width": PokeTiles.TILE_WIDTH, "height": PokeTiles.TILE_HEIGHT, "tiles": 1,
+		"first_code": 0, "bits": 1,
+	}
 	return out if _import_pikapic_gfx(rom, layout, directory, out) else {}
+
+
+## `MinimizedMonSprite` in the tile `AnimationMinimizeMon` writes it into.
+static func minimized_mon_tile(rom: RomFile, layout: Dictionary) -> PackedByteArray:
+	var rows: PackedByteArray = PackedByteArray()
+	rows.resize(PokeTiles.TILE_1BPP_BYTES)
+	for row: int in Gen1Layout.MINIMIZED_MON_ROWS.size():
+		rows[Gen1Layout.MINIMIZED_MON_TOP + row] = rom.u8(
+			int(layout["minimized_mon_sprite"]) + row
+		)
+	return PokeTiles.decode_1bpp_strip(rows, 0, 1)
 
 
 ## `PikaPicAnimGFXHeaders`' graphics as one strip each, in the tile order

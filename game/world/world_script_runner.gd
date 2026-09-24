@@ -189,15 +189,8 @@ const HEAL_MACHINE_HALL_OF_FAME: int = Gen2WorldEffects.HEAL_MACHINE_HALL_OF_FAM
 const HEAL_MACHINE_BALL_FRAMES: int = Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES
 const HEAL_MACHINE_FLASH_FRAMES: int = Gen2WorldEffects.HEAL_MACHINE_FLASHES \
 	* Gen2WorldEffects.HEAL_MACHINE_FLASH_INTERVAL
-## constants/sfx_constants.asm. The first is played once a ball by
-## `.LoadBallsOntoMachine`; the other two are `.HOF_PlaySFX`'s pair.
-const SFX_SECOND_PART_OF_ITEMFINDER: int = 0x12
-## `ItemFinder.ItemfinderSound`'s other half, and `PlayTransactionSound`'s.
-const SFX_TRANSACTION: int = 0x22
 ## `.ItemfinderSound`'s own `ld c, 4`.
 const ITEMFINDER_SFX_PASSES: int = 4
-const SFX_GAME_FREAK_LOGO_GS: int = 0xAA
-const SFX_BOOT_PC: int = 0x0D
 ## constants/music_constants.asm's MUSIC_HEAL, which `.PlayHealMusic` starts
 ## under the flashes rather than after them.
 const MUSIC_HEAL: int = 0x0D
@@ -440,9 +433,6 @@ const ROCK_SMASH_ASK_TEXT: String = \
 const ROCK_SMASH_MAY_SMASH_TEXT: String = "Maybe a #MON\ncan break this."
 const ROCK_SMASH_EARTHQUAKE: int = 84
 static var ROCK_SMASH_MOVEMENT: PackedByteArray = PackedByteArray([0x57, 10, 0x47])
-## constants/sfx_constants.asm, whose comment column is hex. RockSmashScript
-## plays the boulder's own sound rather than one of its own.
-const SFX_STRENGTH: int = 0x1B
 
 ## `TradeTexts`' five rows.
 const TRADE_DIALOG_INTRO: int = 0
@@ -495,27 +485,17 @@ const ITEM_GIFT_FRAME: int = RomFile.BANK_SIZE
 const PITFALL_FRAME: int = RomFile.BANK_SIZE
 const PITFALL_MOVEMENT: int = RomFile.BANK_SIZE
 const SKYFALL_MOVEMENT: Array[int] = [0x4E, Gen2WorldMovement.STEP_END]
-const SFX_KINESIS: int = 0x2F
 const PITFALL_EARTHQUAKE: int = 16
-## data/text/common_2.asm's _FoundItemText, less its <PLAYER>; see
-## _stage_item_ball(). The source line break sits before the item name.
-const FOUND_ITEM_TEXT: String = "Found\n%s!"
-## Two source boxes, so four lines and no blank between them: the box is two
-## rows, and a blank line would spend a third page drawing nothing.
-const NO_SPACE_ITEM_TEXT: String = "Found\n%s!\nBut you have\nno space left."
-## data/text/common_2.asm's `_ReceivedItemText`, `_PutItemInPocketText` and
-## `_PocketIsFullText`, each less its `<PLAYER>` for the reason FOUND_ITEM_TEXT
-## drops it: nothing writes `wPlayerName` yet. `GiveItemScript` prints the first
-## two around every `verbosegiveitem`, and `itemnotify` the second on its own.
-const RECEIVED_ITEM_TEXT: String = "Received\n%s."
+## `_FoundItemText`, its line break before the item name; see _stage_item_ball().
+const FOUND_ITEM_TEXT: String = "<PLAYER> found\n%s!"
+## `_FoundItemText` and `_ButNoSpaceText`, four lines in the two-row box.
+const NO_SPACE_ITEM_TEXT: String = "<PLAYER> found\n%s!\nBut <PLAYER> has\nno space left…"
+## `_ReceivedItemText`, `_PutItemInPocketText` and `_PocketIsFullText`.
+const RECEIVED_ITEM_TEXT: String = "<PLAYER> received\n%s."
 ## The pocket line's own `cont` is a scroll rather than a page, so the item it
 ## names is still on screen above it.
-const PUT_ITEM_TEXT: String = "Put the\n%s in" + Gen2TextStream.SCROLL_BREAK + "the %s."
+const PUT_ITEM_TEXT: String = "<PLAYER> put the\n%s in" + Gen2TextStream.SCROLL_BREAK + "the %s."
 const POCKET_FULL_TEXT: String = "The %s\nis full…"
-## constants/sfx_constants.asm. `FindItemInBallScript` plays SFX_ITEM by name
-## rather than through `specialsound`, so a TM lying in a ball gets the ordinary
-## item jingle and the same TM handed over by an NPC gets SFX_GET_TM.
-const SFX_ITEM: int = 0x01
 ## data/text/common_1.asm's four fruit tree texts, paired the same way.
 ## `_HeyItsFruitText` and `_ObtainedFruitText` are one staged text because the
 ## source's `giveitem` sits between them and has nothing to show; they still
@@ -1295,7 +1275,7 @@ func _resume_rock_smash_choice(choice: int) -> Dictionary:
 func _resume_rock_smash_used(_choice: int) -> Dictionary:
 	_pending = {}
 	_rock_smash_after_sound = true
-	_stage_audio_request(&"sound", {"address": SFX_STRENGTH})
+	_stage_audio_request(&"sound", {"address": Gen2Sfx.SFX_STRENGTH})
 	return _waiting_result()
 
 
@@ -2749,13 +2729,11 @@ func _catalogued(command: Dictionary, frame: Dictionary) -> Dictionary:
 			out["level"] = int(row["level"])
 		Gen2WorldCatalog.KIND_SHOP:
 			out["address"] = int(row["mart"])
-			## The inventory this site sells, carried to the mart host so a
-			## patched shelf reaches the shop rather than a different mart id.
+			## The site's own shelf, so a patch reaches this shop alone.
 			out["mart_items"] = row.get("items", [])
 		Gen2WorldCatalog.KIND_TRADE:
 			out["value"] = int(row["trade"])
-			## Both halves, carried beside the record rather than written into
-			## it: one cartridge trade row can be named by two sites.
+			## Beside the record, not in it: two sites can name one trade row.
 			out["offered_species"] = int(row["species"])
 			out["requested_species"] = int(row["requested_species"])
 		Gen2WorldCatalog.KIND_BADGE:
@@ -2773,12 +2751,14 @@ func _catalogued(command: Dictionary, frame: Dictionary) -> Dictionary:
 			out["quantity"] = maxi(1, int(row["quantity"]))
 			out["value_2"] = maxi(1, int(row["quantity"]))
 		_:
-			## Every giving kind: a starter, a gift and a prize are one command.
-			out["pokemon"] = int(row["species"])
+			## Every giving kind is one command. A `giveegg` keeps to its own
+			## operands: a `pokemon` key makes the party host hatch it.
 			out["value"] = int(row["species"])
-			out["level"] = int(row["level"])
 			out["value_2"] = int(row["level"])
-			out["item"] = int(row.get("item", command.get("item", 0)))
+			if StringName(command["name"]) != &"giveegg":
+				out["pokemon"] = int(row["species"])
+				out["level"] = int(row["level"])
+				out["item"] = int(row.get("item", command.get("item", 0)))
 	return out
 
 
@@ -2799,10 +2779,8 @@ func _linked_command(command: Dictionary, linked: Dictionary) -> Dictionary:
 	return out
 
 
-## Which catalog kinds a command name can be a site for. `givepoke` is three at
-## once, and which one it is was decided when the catalog walked the script, so
-## the id is tried under each until one answers. A site the catalog never
-## recorded answers empty under all of them and the command runs untouched.
+## Which catalog kinds a command name can be a site for. A `givepoke` id is tried
+## under each until one answers; an unrecorded site runs untouched.
 const CATALOG_KINDS: Dictionary = {
 	&"loadwildmon": [Gen2WorldCatalog.KIND_STATIC],
 	&"trade": [Gen2WorldCatalog.KIND_TRADE],
@@ -4227,16 +4205,16 @@ static func heal_machine_sounds(machine_type: int, balls: int) -> Array:
 	for ball: int in balls:
 		schedule.append({
 			"frame": ball * HEAL_MACHINE_BALL_FRAMES,
-			"kind": &"sound", "index": SFX_SECOND_PART_OF_ITEMFINDER,
+			"kind": &"sound", "index": Gen2Sfx.SFX_SECOND_PART_OF_ITEMFINDER,
 		})
 	var flashes_at: int = balls * HEAL_MACHINE_BALL_FRAMES
 	if machine_type == HEAL_MACHINE_HALL_OF_FAME:
 		schedule.append({
-			"frame": flashes_at, "kind": &"sound", "index": SFX_GAME_FREAK_LOGO_GS,
+			"frame": flashes_at, "kind": &"sound", "index": Gen2Sfx.SFX_GAME_FREAK_LOGO_GS,
 		})
 		schedule.append({
 			"frame": flashes_at + HEAL_MACHINE_FLASH_FRAMES,
-			"kind": &"sound", "index": SFX_BOOT_PC,
+			"kind": &"sound", "index": Gen2Sfx.SFX_BOOT_PC,
 		})
 	else:
 		schedule.append({"frame": flashes_at, "kind": &"music", "index": MUSIC_HEAL})
@@ -4252,9 +4230,9 @@ static func itemfinder_sounds() -> Array:
 	var schedule: Array = []
 	for _pass: int in ITEMFINDER_SFX_PASSES:
 		schedule.append({
-			"kind": &"sound", "wait": true, "index": SFX_SECOND_PART_OF_ITEMFINDER,
+			"kind": &"sound", "wait": true, "index": Gen2Sfx.SFX_SECOND_PART_OF_ITEMFINDER,
 		})
-		schedule.append({"kind": &"sound", "wait": true, "index": SFX_TRANSACTION})
+		schedule.append({"kind": &"sound", "wait": true, "index": Gen2Sfx.SFX_TRANSACTION})
 	return schedule
 
 
@@ -5709,7 +5687,7 @@ func _finish_mom_bank_dial(mode: StringName, amount: int) -> Dictionary:
 	_move_mom_money(from_account, to_account, amount)
 	_bank_of_mom_after_sound = MOM_EXIT
 	_mom_receipt_box = "stored_money" if deposit else "taken_money"
-	return _stage_audio_request(&"sound", {"address": SFX_TRANSACTION})
+	return _stage_audio_request(&"sound", {"address": Gen2Sfx.SFX_TRANSACTION})
 
 
 ## The `TakeMoney`/`GiveMoney` pair the transaction is, without the wScriptVar
@@ -6814,8 +6792,9 @@ func _stage_item_ball() -> Dictionary:
 	var item_name: String = data.item_name(item) if data != null else ""
 	if item_name.is_empty():
 		item_name = "ITEM"
+	# `FindItemInBallScript` names SFX_ITEM, so a TM in a ball never gets SFX_GET_TM.
 	return _stage_internal_text(FOUND_ITEM_TEXT % item_name, false, {
-		"special": &"item_received", "item": item, "sfx": SFX_ITEM, "finish": true,
+		"special": &"item_received", "item": item, "sfx": Gen2Sfx.SFX_ITEM, "finish": true,
 	})
 
 
@@ -7215,6 +7194,8 @@ func _stage_receipt_tail(item: int, sfx: int, finish_after: bool) -> Dictionary:
 func _stage_internal_text(
 	text: String, finish_after: bool, values: Dictionary = {}
 ) -> Dictionary:
+	if not player_name.is_empty():
+		text = Gen2TextStream.fill_all_markers(text, "<PLAYER", player_name)
 	var pending: Dictionary = {
 		"type": &"text",
 		"text": text,
@@ -7646,10 +7627,10 @@ func _pitfall_script() -> PackedByteArray:
 	var crystal: bool = _crystal_commands()
 	var playsound: int = Gen2WorldScript.raw_opcode(0x84, crystal)
 	return PackedByteArray([
-		playsound, SFX_KINESIS, 0,
+		playsound, Gen2Sfx.SFX_KINESIS, 0,
 		Gen2WorldScript.raw_opcode(0x68, crystal), PLAYER_OBJECT_ID,
 		PITFALL_MOVEMENT & 0xFF, PITFALL_MOVEMENT >> 8,
-		playsound, SFX_STRENGTH, 0,
+		playsound, Gen2Sfx.SFX_STRENGTH, 0,
 		Gen2WorldScript.raw_opcode(0x77, crystal), PITFALL_EARTHQUAKE,
 		Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, crystal),
 	])

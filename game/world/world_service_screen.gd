@@ -6,6 +6,10 @@ extends Control
 ## hosts and API.
 
 signal completed(results: Array)
+## A piece for the world's driver: a radio station's, or 0 for `NoRadioMusic`.
+signal music_requested(track: int)
+## `ExitPokegearRadio_HandleMusic` as another card opens: the map's own piece.
+signal map_music_requested()
 ## A Pokegear call placed; the world answers with [method finish_call].
 signal call_placed(results: Array)
 ## The sound this screen asks for, played by the world screen's own driver.
@@ -43,6 +47,7 @@ const BOX_SCENE := preload("res://game/save/box_screen.tscn")
 const OAK_PC: String = "PROF.OAK'S PC"
 ## `.AttachMail`'s `PartyMenuSelect`, the list the day care also opens.
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
+const START_MENU_SCENE: PackedScene = preload("res://game/world/start_menu_screen.tscn")
 
 ## `wPokegearRadioMusicPlaying`, which `ExitPokegearRadio_HandleMusic` branches
 ## on: zero until the radio card has touched the music, then one of its two.
@@ -81,20 +86,6 @@ const MART_TEXT_PREFIX: Dictionary = {
 	&"standard": "", &"bitter": "bitter_", &"bargain": "bargain_",
 	&"pharmacy": "pharmacy_", &"rooftop_mart_1": "", &"rooftop_mart_2": "",
 }
-const SFX_TRANSACTION: int = 0x22  ## `PlayTransactionSound`, once the money has been taken.
-
-## `PC_PlaySwapItemsSound`, which asks for the same effect twice through
-## `WaitPlaySFX`. Hexadecimal, the way `constants/sfx_constants.asm` counts.
-const SFX_SWITCH_POKEMON: int = 0x20
-## `PC_PlayBootSound`, `PC_PlayShutdownSound` and `PC_PlayChoosePCSound`.
-const SFX_BOOT_PC: int = 0x0D
-const SFX_SHUT_DOWN_PC: int = 0x0E
-const SFX_CHOOSE_PC_OPTION: int = 0x0F
-const SFX_WRONG: int = 0x19  ## `BillsPC_PlaceEmptyBoxString_SFX`'s own `SFX_WRONG`.
-## `PokegearPhone_MakePhoneCall`'s own `SFX_CALL`, and the `SFX_NO_SIGNAL`
-## `Phone_NoSignal` answers a map with no service with.
-const SFX_CALL: int = 0x6A
-const SFX_NO_SIGNAL: int = 0x6C
 ## `PokegearPhone_MakePhoneCall`'s `ld c, 10` behind the call.
 const CALL_END_DELAY_FRAMES: int = 10
 
@@ -112,9 +103,6 @@ const BOX_EMPTY_TEXT: String = "There's no #MON."
 ## `Textbox`'s interior, which is what a mart box's words are wrapped to.
 const MART_TEXT_COLUMNS: int = 18
 const MART_TEXT_ROWS: int = 2
-## `hMoneyTemp` is HRAM and `wItemQuantityChange` is not, which is how a
-## `text_decimal` marker says which of the two numbers it wants.
-const HRAM_FIRST: int = 0xFF00
 
 ## The one writer, handed over by whoever opened this screen: the same
 ## `SaveGameData` the START menu's SAVE row reaches.
@@ -151,7 +139,7 @@ var _mart_after: StringName = MART_LIST
 ## its greeting and restores it under every list, so the last box it printed
 ## stays up while the player is choosing.
 var _mart_message: PackedStringArray = PackedStringArray()
-var _mart_confirm: int = 0
+var _mart_yes_no: Gen2WorldMenu = Gen2WorldMenu.yes_no()
 ## `SellMenu`'s own list, which is the pack rather than the shop's stock.
 var _mart_sell_entries: Array = []
 var _mart_over_map: bool = false
@@ -173,6 +161,7 @@ var _pokegear: Gen2PokegearScreen = null
 ## `wPokegearRadioMusicPlaying`. Only the radio card writes it, so an overlay
 ## that never opened one leaves the map's own music where it stands.
 var _radio_music: int = RADIO_MUSIC_SILENT
+var _radio_track: int = -1
 ## `delay`, `wait` or `hang_up` between a call's script and the card's question.
 var _call_end_stage: StringName = &""
 var _call_end_frames: int = 0
@@ -207,6 +196,10 @@ var _deco_changed: bool = false
 ## map's own callbacks are: they belong at the end of the same result list.
 var _extra_results: Array = []
 var _boxes: Gen2BoxScreen = null
+var _pack: Gen2StartMenuScreen = null
+var _pack_closed: Callable = Callable()
+var _pc_items_row: int = 0
+var _pc_list_row: int = 0
 ## `_HallOfFamePC`: the records the machine is walking and which one is up.
 ## `LoadHOFTeam`'s carry is what a record with nothing in it answers, so an
 ## empty team ends the walk rather than drawing a blank panel.
@@ -248,8 +241,9 @@ const SCROLLING_ROWS: Dictionary = {
 const NO_WRAP_MODES: Array = [
 	MODE.PC_BOXES, MODE.PC_BOX_LIST, MODE.PC_BOX_SUBMENU, MODE.PC_ITEM_LIST,
 	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK,
-	MODE.PC_DECO_SIDE, MODE.PC_MON_LIST,
+	MODE.PC_DECO_SIDE, MODE.PC_MON_LIST, MODE.PC_ASK,
 ]
+const PC_YES_NO_MODES: Array = [MODE.PC_ASK, MODE.PC_OAK_ASK, MODE.PC_MAIL_CONFIRM]
 var _pc_scroll: int = 0
 ## `wCurBox`, which CHANGE BOX writes and both lists read. The save's, so the box
 ## a deposit lands in outlives the machine being switched off.
@@ -276,7 +270,7 @@ var _gen1_ask: StringName = &""
 var _gen1_ask_over: int = -1
 ## `wParentMenuItem` for the item PC, which reopens on the row it was left on.
 var _gen1_items_cursor: int = 0
-var _gen1_quantity: Gen2WorldQuantityPrompt = null
+var _quantity_prompt: Gen2WorldQuantityPrompt = null
 ## `StatsScreenInit` from `.viewStats`, the page BILL'S PC opens over the map.
 var _stats: Gen2MonStatsScreen = null
 var _stats_page: Gen2StatsScreenPage = null
@@ -453,7 +447,7 @@ const MODE_PRESS_HANDLERS: Dictionary = {
 	MODE.PRIZE: &"_press_prize",
 	MODE.MART: &"_press_mart",
 	MODE.MOM_BANK: &"_press_mom_bank",
-	MODE.PC_ITEM_QUANTITY: &"_press_gen1_quantity",
+	MODE.PC_ITEM_QUANTITY: &"_press_quantity_prompt",
 	MODE.SCRIPT_MENU: &"_press_script_menu",
 	MODE.SCRIPT_LIST: &"_press_script_list",
 }
@@ -467,14 +461,14 @@ const OVERLAY_MEMBERS: Array[StringName] = [
 func handle_button(button: int) -> bool:
 	if not is_active():
 		return false
-	if _call_end_stage != &"":
-		_press_call_end(button)
-		return true
-	if MODE_PRESS_HANDLERS.has(_mode):
-		call(MODE_PRESS_HANDLERS[_mode], button)
+	if _pack != null:
+		return _pack.handle_button(button)
+	if _press_prompt(button):
 		return true
 	if _mode == MODE.CARD and _pokegear != null:
 		return _pokegear.handle_button(button)
+	if _mode == MODE.TOWN_MAP and _town_map != null:
+		return _town_map.handle_button(button)
 	if _stats != null:
 		_stats.handle_button(button)
 		if _stats != null:
@@ -499,13 +493,28 @@ func handle_button(button: int) -> bool:
 	return false
 
 
+func _press_prompt(button: int) -> bool:
+	if _call_end_stage != &"":
+		_press_call_end(button)
+	elif _pc_yes_no_hold > 0:
+		pass
+	elif _asking_through_pages():
+		_turn_question_page(button)
+	elif MODE_PRESS_HANDLERS.has(_mode):
+		call(MODE_PRESS_HANDLERS[_mode], button)
+	elif _mode == MODE.PC_ITEM_LIST and _pc_item_stage != &"":
+		_press_pc_item_stage(button)
+	elif _mode == MODE.MENU and _menu != null and _menu.is_yes_no():
+		_press_yes_no_menu(button)
+	else:
+		return false
+	return true
+
+
 ## `PCItemsJoypad`'s `.select_1` and `.a_select_2`, one press of
-## `SwitchItemsInBag` over `wPCItems`; a deposit is `DepositSellPack`.
+## `SwitchItemsInBag` over `wPCItems`, and every `ITEMLISTMENU`'s own.
 func _press_pc_item_select() -> bool:
 	if _mode != MODE.PC_ITEM_LIST:
-		return false
-	## `DepositSellPack` has no SELECT; every `ITEMLISTMENU` has one.
-	if not _gen1_pc and _pc_action == Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM:
 		return false
 	_apply_pc_switch_press()
 	return true
@@ -523,8 +532,8 @@ func _apply_pc_switch_press() -> void:
 		_refresh_pc_entries()
 		## `PC_PlaySwapItemsSound`, which is the pack's own pair of effects.
 		if not _gen1_pc:
-			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
-			sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
 	_pc_switch = int(answer["held"])
 	_render_rows()
 
@@ -1003,7 +1012,7 @@ var _prize_rows: Array = []
 var _prize_tms: bool = false
 var _prize_said: String = ""
 var _prize_asking: bool = false
-var _prize_confirm: int = 0
+var _prize_yes_no: Gen2WorldMenu = Gen2WorldMenu.yes_no()
 
 
 func _open_prizes(values: Dictionary) -> void:
@@ -1012,7 +1021,7 @@ func _open_prizes(values: Dictionary) -> void:
 	_prize_tms = bool(values.get("tms", false))
 	_prize_said = ""
 	_prize_asking = false
-	_prize_confirm = 0
+	_prize_yes_no = Gen2WorldMenu.yes_no()
 	_cursor = 0
 	_set_overlay_open(true)
 	_open_map_overlay_view()
@@ -1043,30 +1052,25 @@ func _press_prize(button: int) -> void:
 	if button != PokeButton.A:
 		return
 	_prize_asking = true
-	_prize_confirm = 0
+	_prize_yes_no = Gen2WorldMenu.yes_no()
 	_render_prizes()
 
 
-## `SoYouWantPrizeText`'s `YesNoChoice`. NO is `.printOhFineThen`.
 func _press_prize_confirm(button: int) -> void:
-	match button:
-		PokeButton.UP, PokeButton.DOWN:
-			_prize_confirm = 1 - _prize_confirm
-		PokeButton.B:
-			_prize_asking = false
-			_prize_said = _prize_text("oh_fine_then", GEN1_PRIZE_RUN_2)
-		PokeButton.A:
-			_prize_asking = false
-			if _prize_confirm == 1:
-				_prize_said = _prize_text("oh_fine_then", GEN1_PRIZE_RUN_2)
-			else:
-				_prize_said = _buy_prize(_prize_rows[_cursor])
-				## `HandlePrizeChoice` falls into `.noChoice` and the routine
-				## returns, so a prize that was handed over says nothing at all.
-				if _prize_said.is_empty():
-					_finish_runtime({"ok": true, "script_value": 0})
-					return
-		_:
+	if _prize_yes_no.press_yes_no(button) and not _prize_yes_no.holding():
+		_render_prizes()
+
+
+## `SoYouWantPrizeText`'s `YesNoChoice`. NO is `.printOhFineThen`.
+func _answer_prize_confirm(yes: bool) -> void:
+	_prize_asking = false
+	if not yes:
+		_prize_said = _prize_text("oh_fine_then", GEN1_PRIZE_RUN_2)
+	else:
+		_prize_said = _buy_prize(_prize_rows[_cursor])
+		## `HandlePrizeChoice` says nothing after a prize.
+		if _prize_said.is_empty():
+			_finish_runtime({"ok": true, "script_value": 0})
 			return
 	_render_prizes()
 
@@ -1116,7 +1120,7 @@ func _render_prizes() -> void:
 		image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
 	## `YesNoChoice` opens over the list rather than under it.
 	if _prize_asking and image != null:
-		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _prize_confirm)
+		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _prize_yes_no.cursor)
 	Gen2PicImage.show(_mart_view, image)
 
 
@@ -1189,31 +1193,7 @@ func _mart_text(slot: String, filled: Dictionary = {}) -> String:
 	var text: String = _data.mart_text(slot_name)
 	if text.is_empty():
 		return ""
-	return _fill_mart_markers(text, filled)
-
-
-## `PartyMonItemName` and the two `text_decimal`s a mart box carries. The number
-## markers are told apart by their address rather than by their order, since the
-## bargain shop names the item first and the price second.
-func _fill_mart_markers(text: String, filled: Dictionary) -> String:
-	var out: String = Gen2TextStream.fill_marker(
-		text, Gen2TextStream.RAM_MARKER, String(filled.get("name", ""))
-	)
-	while true:
-		var at: int = out.find(Gen2TextStream.NUMBER_MARKER)
-		if at < 0:
-			break
-		var end: int = out.find(">", at)
-		if end < 0:
-			break
-		var address: int = out.substr(
-			at + Gen2TextStream.NUMBER_MARKER.length(),
-			end - at - Gen2TextStream.NUMBER_MARKER.length()
-		).hex_to_int()
-		out = out.substr(0, at) + String.num_int64(int(filled.get(
-			"total" if address >= HRAM_FIRST else "quantity", 0
-		))) + out.substr(end + 1)
-	return out
+	return Gen2WorldMartHost.fill_text(text, filled)
 
 
 ## A box the shop is holding on, laid out into the pages `JoyWaitAorB` steps
@@ -1320,14 +1300,12 @@ func _press_mart(button: int) -> void:
 			_press_mart_list(button)
 		MART_QUANTITY:
 			_press_mart_quantity(button)
-		MART_CONFIRM:
+		MART_CONFIRM, MART_SELL_CONFIRM:
 			_press_mart_confirm(button)
 		MART_SELL:
 			_press_mart_sell_list(button)
 		MART_SELL_QUANTITY:
 			_press_mart_sell_quantity(button)
-		MART_SELL_CONFIRM:
-			_press_mart_sell_confirm(button)
 
 
 func _press_mart_list(button: int) -> void:
@@ -1377,15 +1355,14 @@ func _move_mart_cursor(delta: int) -> void:
 	_render_mart()
 
 
-## `BuySellToss_InterpretJoypad`: one on up and down, ten on left and right,
-## against `wItemQuantity`, which `StandardMartAskPurchaseQuantity` sets to the
-## whole stack rather than to what the money or the pack allows.
+## `BuySellToss_InterpretJoypad` against `wItemQuantity`, the whole stack rather
+## than what the money or the pack allows; Generation 1's reads no left or right.
 func _press_mart_quantity(button: int) -> void:
 	var maximum: int = Gen2WorldPack.MAX_ITEM_STACK
 	match button:
 		PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT:
 			_mart_quantity = Gen2WorldQuantityPrompt.stepped(
-				_mart_quantity, button, maximum
+				_mart_quantity, button, maximum, _data.generation
 			)
 		PokeButton.B:
 			_mart_stage = MART_LIST
@@ -1398,7 +1375,7 @@ func _press_mart_quantity(button: int) -> void:
 ## `MartConfirmPurchase`: the price box and the yes/no over it.
 func _ask_mart_confirm() -> void:
 	var entry: Dictionary = _mart_selection()
-	_mart_confirm = 0
+	_mart_yes_no = Gen2WorldMenu.yes_no()
 	_mart_stage = MART_CONFIRM
 	_mart_pages = Gen2TextLayout.lay_out(
 		_mart_text("final_price", {
@@ -1411,17 +1388,27 @@ func _ask_mart_confirm() -> void:
 	_render_mart()
 
 
+## The price text's pages come before `YesNoBox`.
 func _press_mart_confirm(button: int) -> void:
-	match button:
-		PokeButton.UP, PokeButton.DOWN:
-			_mart_confirm = 1 - _mart_confirm
-		PokeButton.B:
-			_mart_stage = MART_LIST
-		PokeButton.A:
-			if _mart_confirm == 0:
-				_buy_mart_selection()
-				return
-			_mart_stage = MART_LIST
+	if _mart_pages.size() > 1:
+		if button in [PokeButton.A, PokeButton.B]:
+			_mart_pages.remove_at(0)
+			_render_mart()
+		return
+	if _mart_yes_no.press_yes_no(button) and not _mart_yes_no.holding():
+		_render_mart()
+
+
+## `MartConfirmPurchase`'s and `SellMenu`'s `YesNoBox`, once its hold is spent.
+func _answer_mart_confirm(yes: bool) -> void:
+	var buying: bool = _mart_stage == MART_CONFIRM
+	if yes:
+		if buying:
+			_buy_mart_selection()
+		else:
+			_sell_mart_selection()
+		return
+	_mart_stage = MART_LIST if buying else MART_SELL
 	_render_mart()
 
 
@@ -1447,7 +1434,7 @@ func _buy_mart_selection() -> void:
 		return
 	_mart_purchased = true
 	## `PlayTransactionSound` is a `WaitSFX` and then the sound.
-	sfx_requested.emit(SFX_TRANSACTION, true)
+	sfx_requested.emit(Gen2Sfx.SFX_TRANSACTION, true)
 	_refresh_mart_entries()
 	_show_mart_text(_mart_text("thanks", {
 		"name": purchase.get("name", ""), "quantity": _mart_quantity,
@@ -1495,22 +1482,22 @@ func _press_mart_top(button: int) -> void:
 	_render_mart()
 
 
-## `.Sell`: `DepositSellPack` over the whole pack. A pack with nothing sellable
-## answers `wPackUsedItem` zero at once, which is `SellMenu.quit`.
+## `.Sell`: `DepositSellPack`, left for `.AnythingElse`, or Generation 1's list.
 func _open_mart_sell() -> void:
+	if not _gen1_mart():
+		_open_deposit_sell_pack(Gen2DepositSellPack.SELL, _leave_mart)
+		return
 	_refresh_mart_sell_entries()
 	_mart_scroll = 0
 	_mart_quantity = 1
 	_mart_sell_switch = -1
 	if _mart_sell_entries.is_empty():
-		## `PokemartItemBagEmptyText`, which Generation 2's `SellMenu` has no box for.
 		_show_mart_text(_mart_text("bag_empty"), MART_TOP, true)
 		return
 	_show_mart_text(_mart_text("sell_intro"), MART_SELL, true)
 
 
-## The pack as rows at `GetMartPrice`'s halved price per unit; a key item is on
-## offer, since `SellMenu.TryToSellItem` refuses it after it is chosen.
+## Generation 1's bag at the halved price; a key item is refused once chosen.
 func _refresh_mart_sell_entries() -> void:
 	_mart_sell_entries = []
 	for pocket: Dictionary in Gen2WorldPack.build(_data, _world.state):
@@ -1540,7 +1527,7 @@ func _press_mart_sell_list(button: int) -> void:
 				_leave_mart()
 				return
 			if not Gen2WorldMartHost.can_sell(_data, int(entry.get("item", 0))):
-				## `.try_sell`'s `_CheckTossableItem` refusal, which leaves the list up.
+				## `.unsellableItem`, which leaves the list up.
 				_show_mart_text(_mart_text("cant_buy"), _gen1_refusal_after(MART_SELL))
 				return
 			_mart_quantity = 1
@@ -1555,8 +1542,6 @@ func _press_mart_sell_list(button: int) -> void:
 
 ## `.sellMenuLoop` is an `ITEMLISTMENU`, so `HandleItemListSwapping` runs on it.
 func _press_mart_sell_select() -> void:
-	if not _gen1_mart():
-		return
 	var order: Array = []
 	for entry: Dictionary in _mart_sell_entries:
 		order.append(int(entry.get("item", 0)))
@@ -1571,18 +1556,18 @@ func _press_mart_sell_select() -> void:
 	_render_mart()
 
 
-## `Toss_Sell_Loop` is the purchase's dial, bounded by the stack the player owns.
+## `DisplayChooseQuantityMenu`, bounded by the stack the player owns.
 func _press_mart_sell_quantity(button: int) -> void:
 	var maximum: int = maxi(1, int(_mart_selection().get("quantity", 1)))
 	match button:
 		PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT:
 			_mart_quantity = Gen2WorldQuantityPrompt.stepped(
-				_mart_quantity, button, maximum
+				_mart_quantity, button, maximum, _data.generation
 			)
 		PokeButton.B:
 			_mart_stage = MART_SELL
 		PokeButton.A:
-			_mart_confirm = 0
+			_mart_yes_no = Gen2WorldMenu.yes_no()
 			_mart_stage = MART_SELL_CONFIRM
 			_mart_pages = Gen2TextLayout.lay_out(
 				_mart_text("sell_price", {
@@ -1596,21 +1581,7 @@ func _press_mart_sell_quantity(button: int) -> void:
 	_render_mart()
 
 
-func _press_mart_sell_confirm(button: int) -> void:
-	match button:
-		PokeButton.UP, PokeButton.DOWN:
-			_mart_confirm = 1 - _mart_confirm
-		PokeButton.B:
-			_mart_stage = MART_SELL
-		PokeButton.A:
-			if _mart_confirm == 0:
-				_sell_mart_selection()
-				return
-			_mart_stage = MART_SELL
-	_render_mart()
-
-
-## The sale itself, and `MartBoughtText` behind it.
+## Generation 1's sale, which prints nothing behind it.
 func _sell_mart_selection() -> void:
 	var entry: Dictionary = _mart_selection()
 	var sold: Dictionary = Gen2WorldMartHost.sell(
@@ -1625,23 +1596,14 @@ func _sell_mart_selection() -> void:
 		_mart_stage = MART_SELL
 		_render_mart()
 		return
-	sfx_requested.emit(SFX_TRANSACTION, true)
+	sfx_requested.emit(Gen2Sfx.SFX_TRANSACTION, true)
 	_refresh_mart_sell_entries()
 	_mart_scroll = mini(_mart_scroll, maxi(0, _mart_sell_entries.size() - 1))
 	_cursor = mini(_cursor, maxi(0, _mart_sell_entries.size() - _mart_scroll - 1))
 	## `DisplayPokemartDialogue_` jumps to `.sellMenuLoop` behind a sale, no box.
-	if _gen1_mart():
-		_mart_stage = MART_SELL
-		_mart_over_map = false
-		_render_mart()
-		return
-	_show_mart_text(
-		_mart_text("bought", {
-			"name": sold.get("name", ""), "quantity": _mart_quantity,
-			"total": int(sold.get("total", 0)),
-		}),
-		MART_SELL if not _mart_sell_entries.is_empty() else MART_TOP
-	)
+	_mart_stage = MART_SELL
+	_mart_over_map = false
+	_render_mart()
 
 
 ## The view every counter standing over the map draws into, after the panel's own.
@@ -1694,8 +1656,8 @@ func _render_mart() -> void:
 	})
 	if image == null:
 		return
-	if _mart_stage == MART_CONFIRM or _mart_stage == MART_SELL_CONFIRM:
-		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _mart_confirm)
+	if _mart_confirm_open():
+		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _mart_yes_no.cursor)
 	Gen2PicImage.show(_mart_view, image)
 
 
@@ -1733,9 +1695,13 @@ func _render_gen1_mart() -> void:
 	})
 	if overlay != null:
 		image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
-	if _mart_stage == MART_CONFIRM or _mart_stage == MART_SELL_CONFIRM:
-		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _mart_confirm)
+	if _mart_confirm_open():
+		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _mart_yes_no.cursor)
 	Gen2PicImage.show(_mart_view, image)
+
+
+func _mart_confirm_open() -> bool:
+	return _mart_stage in [MART_CONFIRM, MART_SELL_CONFIRM] and _mart_pages.size() <= 1
 
 
 ## `DisplaySellingPrice` halves the multiplied total, not each unit's price, so
@@ -2002,11 +1968,11 @@ func open_pc_machine(
 	## `PC_CheckPartyForPokemon`, which answers with its own sound and shuts down
 	## again. `_PlayersHousePC` never asks it: the bedroom's PC is items and mail.
 	if mode != &"players_house" and not Gen2WorldPC.can_open(_save):
-		sfx_requested.emit(SFX_CHOOSE_PC_OPTION, false)
+		sfx_requested.emit(Gen2Sfx.SFX_CHOOSE_PC_OPTION, false)
 		_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
 		return true
 	## `PC_PlayBootSound`, once per machine rather than per return to its menu.
-	sfx_requested.emit(SFX_BOOT_PC, true)
+	sfx_requested.emit(Gen2Sfx.SFX_BOOT_PC, true)
 	_open_pc(mode)
 	return true
 
@@ -2032,7 +1998,7 @@ func _open_pc(mode: StringName) -> void:
 		_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
 		return
 	if _pc_house:
-		_open_pc_items()
+		_open_pc_items(true)
 		return
 	_mode = MODE.PC
 	_cursor = 0
@@ -2046,10 +2012,13 @@ func _open_pc(mode: StringName) -> void:
 
 
 ## The item PC's own menu. The Pokemon Center's list ends in LOG OFF because the
-## top menu is still open behind it; the bedroom's ends in TURN OFF.
-func _open_pc_items() -> void:
+## top menu is still open behind it; the bedroom's ends in TURN OFF. A submenu's
+## `ExitMenu` restores the row that opened it.
+func _open_pc_items(fresh: bool = false) -> void:
 	_mode = MODE.PC_ITEMS
-	_cursor = 0
+	_cursor = 0 if fresh else _pc_items_row
+	if fresh:
+		_pc_list_row = 0
 	_pc_action = -1
 	_deco_changed = false
 	_pc_rows = Gen2WorldPC.players_pc_menu(_data, _pc_house)
@@ -2059,57 +2028,74 @@ func _open_pc_items() -> void:
 		else "PLAYER"
 	)
 	_summary = _data.pokecenter_pc_text("ask_what_do")
-	_refresh_pc_counts()
+	_status = ""
 	_render_rows()
+
+
+## `DepositSellPack`, handed to [param after] once B leaves it.
+func _open_deposit_sell_pack(action: StringName, after: Callable) -> void:
+	var host: Gen2StartMenuScreen = START_MENU_SCENE.instantiate() as Gen2StartMenuScreen
+	host.set_party_context(_save, _persist)
+	if not host.open(_world, _data, Callable()):
+		Gen2Screen.drop(host)
+		return
+	_pack = host
+	_pack_closed = after
+	_set_overlay_open(true)
+	host.z_index = 5
+	add_child(host)
+	host.set_screen(_service_hardware)
+	host.sfx_requested.connect(sfx_requested.emit)
+	host.closed.connect(_on_deposit_sell_closed)
+	host.open_deposit_sell(Gen2DepositSellPack.open(action, _world, _save, _persist))
+
+
+func _on_deposit_sell_closed() -> void:
+	if _pack != null:
+		Gen2Screen.drop(_pack)
+		_pack = null
+	_set_overlay_open(false)
+	var after: Callable = _pack_closed
+	_pack_closed = Callable()
+	after.call()
 
 
 ## Whichever of the bag and the PC the chosen action reads.
 func _open_pc_item_list(action: int) -> void:
 	_pc_action = action
-	## `PCItemsJoypad` clears `wSwitchItem` before its loop.
+	## `PCItemsJoypad` clears `wSwitchItem` and restores `wPCItemsCursor`.
 	_pc_switch = -1
-	_cursor = 0
+	_cursor = _pc_list_row
 	_pc_quantity = 1
+	var depositing: bool = action == Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM
 	_refresh_pc_entries()
-	if _pc_entries.is_empty():
+	if (Gen2WorldPC.bag_entries(_data, _world.state) if depositing else _pc_entries).is_empty():
 		## `.CheckItemsInBag`'s `.PlayersPCNoItemsText`, which the source prints
 		## for a deposit. The other two would open a list that can only be
 		## cancelled, so they take the same box rather than being drawn empty.
 		_status = _data.pokecenter_pc_text("no_items")
 		_render_rows()
 		return
+	if depositing:
+		_open_deposit_sell_pack(Gen2DepositSellPack.DEPOSIT, _open_pc_items)
+		return
 	_mode = MODE.PC_ITEM_LIST
 	## `SelectQuantityToToss` is asked before the move, so the box that names it
 	## is the list's own prompt here.
-	_summary = {
-		Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM: "how_many_withdraw",
-		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM: "how_many_deposit",
-	}.get(action, "")
-	_summary = _data.pokecenter_pc_text(_summary) if not _summary.is_empty() \
-		else _data.menu_text("toss_ask")
+	_summary = _data.pokecenter_pc_text("how_many_withdraw") \
+		if action == Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM else _data.menu_text("toss_ask")
 	_render_rows()
 
 
 func _pc_list_is_bag() -> bool:
-	return _pc_action == (Gen2WorldPC.GEN1_PLAYERS_PC_DEPOSIT if _gen1_pc \
-		else Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM)
+	return _gen1_pc and _pc_action == Gen2WorldPC.GEN1_PLAYERS_PC_DEPOSIT
 
 
 func _refresh_pc_entries() -> void:
 	_pc_entries = Gen2WorldPC.bag_entries(_data, _world.state) if _pc_list_is_bag() \
 		else Gen2WorldPC.pc_entries(_data, _world.state)
-	## `.printCancelMenuItem` is a row of Generation 1's list and not Crystal's.
-	_cursor = mini(_cursor, maxi(0, _pc_entries.size() - (0 if _gen1_pc else 1)))
-	_refresh_pc_counts()
-
-
-func _refresh_pc_counts() -> void:
-	if _gen1_pc:
-		## `PlayerPCMenu` prints its question and no count.
-		return
-	_status = "PC %d/%d stacks" % [
-		_world.state.pc_items().size(), Gen2WorldPack.MAX_PC_ITEMS,
-	]
+	## Both lists end on CANCEL: `.printCancelMenuItem` and `ScrollingMenu`'s own.
+	_cursor = mini(_cursor, _pc_entries.size())
 
 
 func _confirm_pc_row() -> void:
@@ -2199,14 +2185,14 @@ func _confirm_mail_row(row: int) -> void:
 func _confirm_pc_menu_row(row: int) -> void:
 	## `PC_PlayChoosePCSound`, which every row but TURN OFF opens on.
 	if row != Gen2WorldPC.PCPCITEM_TURN_OFF:
-		sfx_requested.emit(SFX_CHOOSE_PC_OPTION, true)
+		sfx_requested.emit(Gen2Sfx.SFX_CHOOSE_PC_OPTION, true)
 	match row:
 		Gen2WorldPC.PCPCITEM_BILLS_PC:
 			## `BillsPC` reaches `_BillsPC` afresh, on its own first row.
 			_bills_pc_cursor = 0
 			_open_bills_pc_menu()
 		Gen2WorldPC.PCPCITEM_PLAYERS_PC:
-			_open_pc_items()
+			_open_pc_items(true)
 		Gen2WorldPC.PCPCITEM_OAKS_PC:
 			_open_pc_oak()
 		Gen2WorldPC.PCPCITEM_HALL_OF_FAME:
@@ -2217,6 +2203,7 @@ func _confirm_pc_menu_row(row: int) -> void:
 
 
 func _confirm_player_pc_row(row: int) -> void:
+	_pc_items_row = _cursor
 	match row:
 		Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM, \
 		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM, \
@@ -2234,43 +2221,101 @@ func _confirm_player_pc_row(row: int) -> void:
 			_finish_runtime({"ok": true, "script_value": 0})
 
 
+## `PlayerWithdrawItemMenu.Submenu` and `TossItemFromPC`: a key item moves one
+## at a time and refuses a toss.
 func _confirm_pc_item() -> void:
+	_pc_list_row = _cursor
 	if _cursor < 0 or _cursor >= _pc_entries.size():
-		_open_pc_items()
+		_cancel_pc_item_list()
 		return
+	var entry: Dictionary = _pc_entries[_cursor]
+	_pc_quantity = 1
+	if not Gen2WorldPack.can_toss(_data, int(entry.get("item", 0))):
+		if _pc_action == Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM:
+			_status = Gen2WorldPC.ITEMS_TOO_IMPORTANT
+			_render_rows()
+			return
+		_apply_pc_item()
+		return
+	_quantity_prompt = Gen2WorldQuantityPrompt.open(int(entry.get("quantity", 1)), RomRegistry.GEN2)
+	_pc_item_stage = &"quantity"
+	_status = ""
+	_summary = _pc_item_text(Gen2WorldPC.ITEMS_TOSS_HOW_MANY) \
+		if _pc_action == Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM \
+		else _data.pokecenter_pc_text("how_many_withdraw")
+	_render_rows()
+
+
+## `SelectQuantityToToss` over the list and `TossItemFromPC`'s `YesNoBox`.
+var _pc_item_stage: StringName = &""
+var _pc_toss_ask: Gen2WorldMenu = null
+
+
+func _press_pc_item_stage(button: int) -> void:
+	if _pc_item_stage == &"toss_ask":
+		if _pc_toss_ask.press_yes_no(button) and not _pc_toss_ask.holding():
+			_render_rows()
+		return
+	match _quantity_prompt.press(button):
+		Gen2WorldQuantityPrompt.CONFIRMED:
+			_pc_quantity = _quantity_prompt.value
+			if _pc_action != Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM:
+				_pc_item_stage = &""
+				_apply_pc_item()
+				return
+			_pc_item_stage = &"toss_ask"
+			_pc_toss_ask = Gen2WorldMenu.yes_no()
+			_summary = _pc_item_text(Gen2WorldPC.ITEMS_THROW_AWAY)
+		Gen2WorldQuantityPrompt.CANCELLED:
+			_reopen_pc_item_list()
+			return
+	_render_rows()
+
+
+func _answer_pc_toss(yes: bool) -> void:
+	_pc_item_stage = &""
+	if yes:
+		_apply_pc_item()
+	else:
+		_reopen_pc_item_list()
+
+
+func _reopen_pc_item_list() -> void:
+	_pc_item_stage = &""
+	_pc_quantity = 1
+	_open_pc_item_list(_pc_action)
+
+
+func _pc_item_text(text: String) -> String:
+	return _filled(text, {
+		"quantity": _pc_quantity, "name": _pc_entries[_cursor].get("name", ""),
+	})
+
+
+func _apply_pc_item() -> void:
 	var entry: Dictionary = _pc_entries[_cursor]
 	var item: int = int(entry.get("item", 0))
 	var applied: Dictionary = {}
-	match _pc_action:
-		Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM:
-			applied = Gen2WorldPC.withdraw(_world, _save, item, _pc_quantity, _persist)
-		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM:
-			applied = Gen2WorldPC.deposit(_world, _save, item, _pc_quantity, _persist)
-		_:
-			applied = Gen2WorldPC.toss(_world, _save, item, _pc_quantity, _persist)
+	var withdrawing: bool = _pc_action == Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM
+	if withdrawing:
+		applied = Gen2WorldPC.withdraw(_world, _save, item, _pc_quantity, _persist)
+	else:
+		applied = Gen2WorldPC.toss(_world, _save, item, _pc_quantity, _persist)
 	if not bool(applied.get("ok", false)):
-		## `.PackFull` and `.NoRoomInPC` are the two the source has a box for.
 		var reason: StringName = StringName(applied.get("reason", &""))
-		_status = {
-			&"pc_full": "no_room_deposit", &"pack_full": "no_room_withdraw",
-			&"item_stack_full": "no_room_withdraw", &"pocket_full": "no_room_withdraw",
-		}.get(reason, "")
+		_status = "no_room_withdraw" if withdrawing and reason in [
+			&"pack_full", &"item_stack_full", &"pocket_full",
+		] else ""
 		_status = _data.pokecenter_pc_text(_status) if not _status.is_empty() \
 			else "Refused: %s" % String(reason)
 		return
 	_pc_quantity = 1
 	_refresh_pc_entries()
-	## `.PlayersPCWithdrewItemsText` and `.PlayersPCDepositItemsText`, whose two
-	## markers `PartyMonItemName` and the quantity fill.
 	_status = _filled(
-		_data.pokecenter_pc_text(
-			"withdrew" if _pc_action == Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM
-			else "deposited"
-		),
+		_data.pokecenter_pc_text("withdrew") if withdrawing else Gen2WorldPC.ITEMS_DISCARDED,
 		applied
-	) if _pc_action != Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM else _filled(
-		_data.menu_text("toss_threw"), applied
 	)
+	_summary = ""
 	_render_rows()
 
 
@@ -2284,17 +2329,6 @@ func _filled(text: String, applied: Dictionary) -> String:
 	)
 
 
-## `SelectQuantityToToss`' dial: one either way, and zero wraps to the stack.
-func _change_pc_quantity(step: int) -> void:
-	if _cursor < 0 or _cursor >= _pc_entries.size():
-		return
-	var owned: int = int(_pc_entries[_cursor].get("quantity", 1))
-	_pc_quantity = Gen2WorldQuantityPrompt.stepped(
-		_pc_quantity, PokeButton.UP if step > 0 else PokeButton.DOWN, owned
-	)
-	_render_rows()
-
-
 ## `OaksPC`, which prints `ProfOaksPC`'s rating into the PC's own box and
 ## returns to the loop. A cache with no rating table has nothing to print, which
 ## is what an empty boot says.
@@ -2306,7 +2340,7 @@ func _open_pc_oak() -> void:
 	_cursor = 0
 	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
 	_title = OAK_PC
-	_summary = _data.oak_pc_text("ask")
+	_ask_pages(_data.oak_pc_text("ask"))
 	_status = ""
 	_render_rows()
 
@@ -2480,7 +2514,7 @@ func _advance_save_prompt() -> void:
 		if _save != null:
 			_save.current_box = _box_index
 	if _save_prompt.sfx_owed():
-		sfx_requested.emit(Gen2SavePrompt.SFX_SAVE, true)
+		sfx_requested.emit(Gen2Sfx.SFX_SAVE, true)
 	if not _save_prompt.finished():
 		_render_save_prompt()
 		return
@@ -2658,12 +2692,19 @@ func _confirm_gen1_items_row(row: int) -> void:
 	if not GEN1_ITEM_ACTIONS.has(row):
 		_cancel_gen1_machine()
 		return
-	_pc_action = row
-	_pc_switch = -1
 	_cursor = 0
 	_pc_scroll = 0
+	_enter_gen1_item_list(row)
+
+
+## Each routine's entry zeroes `wCurrentMenuItem` and `wListScrollOffset`, and
+## its `jp .loop` keeps both.
+func _enter_gen1_item_list(row: int) -> void:
+	_pc_action = row
+	_pc_switch = -1
 	_pc_quantity = 1
 	_refresh_pc_entries()
+	_pc_scroll = mini(_pc_scroll, _cursor)
 	var names: Array = GEN1_ITEM_ACTIONS[row]
 	if _pc_entries.is_empty():
 		_open_gen1_box_text("players_pc", String(names[1]), &"gen1_items")
@@ -2676,7 +2717,7 @@ func _confirm_gen1_items_row(row: int) -> void:
 
 ## `jp .loop`, back onto the list a transaction's box was printed over.
 func _reopen_gen1_item_list() -> void:
-	_confirm_gen1_items_row(_pc_action)
+	_enter_gen1_item_list(_pc_action)
 
 
 ## `IsKeyItem_`, an HM included: a stack asks how many and a toss refuses one.
@@ -2692,7 +2733,7 @@ func _confirm_gen1_item() -> void:
 			return
 		_apply_gen1_item()
 		return
-	_gen1_quantity = Gen2WorldQuantityPrompt.open(
+	_quantity_prompt = Gen2WorldQuantityPrompt.open(
 		int((_pc_entries[_cursor] as Dictionary).get("quantity", 1)), RomRegistry.GEN1
 	)
 	_mode = MODE.PC_ITEM_QUANTITY
@@ -2708,12 +2749,12 @@ const GEN1_QUANTITY_BOXES: Dictionary = {
 }
 
 
-func _press_gen1_quantity(button: int) -> void:
-	if _gen1_quantity == null:
+func _press_quantity_prompt(button: int) -> void:
+	if _quantity_prompt == null:
 		return
-	match _gen1_quantity.press(button):
+	match _quantity_prompt.press(button):
 		Gen2WorldQuantityPrompt.CONFIRMED:
-			_pc_quantity = _gen1_quantity.value
+			_pc_quantity = _quantity_prompt.value
 			if _pc_action == Gen2WorldPC.GEN1_PLAYERS_PC_TOSS:
 				## `TossItem_` asks `IsItOKToTossItemText` over the list first.
 				_open_gen1_ask(&"toss", Gen2TextStream.fill_marker(
@@ -2867,8 +2908,9 @@ func _confirm_gen1_mon_action(row: int) -> void:
 			_apply_gen1_mon_move()
 		Gen2WorldPC.GEN1_MON_ACTION_STATS:
 			_open_gen1_mon_stats()
+		## `DisplayDepositWithdrawMenu`'s carry is `jp nc, BillsPCMenu`.
 		_:
-			_reopen_gen1_mon_list()
+			_open_gen1_bills()
 
 
 ## `PikachuCry28`, `PikachuCry35` and `PikachuCry40`.
@@ -2908,7 +2950,7 @@ func _apply_gen1_mon_move() -> void:
 		cry_requested.emit(mon.species if mon != null else 0)
 	_open_gen1_text([_gen1_mon_text(
 		"bills_pc", "mon_was_stored" if deposit else "mon_is_taken_out", mon
-	)], &"gen1_mon_list")
+	)], &"gen1_bills")
 
 
 ## `.viewStats`' two `StatusScreen` predefs, the party list's own pages.
@@ -2965,19 +3007,25 @@ const GEN1_ASK_NO: Dictionary = {
 
 
 ## `BillsPCRelease`'s `YesNoChoice`, `ChangeBox`'s and `TossItem_`'s.
+## `wPartyAndBillsPCSavedMenuItem`, kept across the question.
+var _gen1_ask_row: int = 0
+
+
 func _open_gen1_ask(kind: StringName, question: String) -> void:
 	_gen1_ask = kind
 	_gen1_ask_over = _mode
+	_gen1_ask_row = _cursor
 	_mode = MODE.PC_ASK
 	_cursor = 0
 	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
 	_gen1_quiet()
-	_summary = question
+	_ask_pages(question)
 	_render_rows()
 
 
 func _confirm_gen1_ask(row: int) -> void:
 	var landings: Dictionary = GEN1_ASK_YES if row == 0 else GEN1_ASK_NO
+	_cursor = _gen1_ask_row
 	call(landings.get(_gen1_ask, &"_open_gen1_bills"))
 
 
@@ -2998,7 +3046,7 @@ func _apply_gen1_release() -> void:
 		return
 	cry_requested.emit(mon.species if mon != null else 0)
 	_open_gen1_text(
-		[_gen1_mon_text("bills_pc_2", "mon_was_released", mon)], &"gen1_mon_list"
+		[_gen1_mon_text("bills_pc_2", "mon_was_released", mon)], &"gen1_bills"
 	)
 
 
@@ -3211,7 +3259,7 @@ func _print_box() -> void:
 	var box: Gen2SaveBox = _save.boxes[_box_submenu_index] if _save != null \
 		and _box_submenu_index < _save.boxes.size() else null
 	if box == null or box.occupied_count() <= 0:
-		sfx_requested.emit(SFX_WRONG, true)
+		sfx_requested.emit(Gen2Sfx.SFX_WRONG, true)
 		_status = BOX_EMPTY_TEXT
 		_render_rows()
 		return
@@ -3282,7 +3330,7 @@ func _open_mail_confirm() -> void:
 	_mode = MODE.PC_MAIL_CONFIRM
 	_cursor = 0
 	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
-	_summary = Gen2WorldPC.MAILBOX_MESSAGE_LOST
+	_ask_pages(Gen2WorldPC.MAILBOX_MESSAGE_LOST)
 	_status = ""
 	_render_rows()
 
@@ -3517,6 +3565,11 @@ func _refresh_card() -> void:
 			# makes the exit restart it.
 			_radio_music = RADIO_MUSIC_RESTART_MAP if bool(tuned.get("ok", false)) \
 				else RADIO_MUSIC_ENTER_MAP
+			## `RadioMusicRestartDE`.
+			var track: int = _world.state.map_music() if bool(tuned.get("ok", false)) else 0
+			if track != _radio_track:
+				_radio_track = track
+				music_requested.emit(track)
 			var radio_show: Gen2RadioShow = _world.radio_show()
 			_pokegear.set_radio(
 				_world.state.radio_knob(),
@@ -3539,8 +3592,11 @@ func _on_card_switched(direction: int) -> void:
 	var at: int = order.find(_open_card_id()) + direction
 	if at < 0 or at >= order.size():
 		return
-	sfx_requested.emit(Gen2BattleSwitchMenu.SFX_READ_TEXT_2, false)
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 	var card: StringName = order[at]
+	if _radio_music != RADIO_MUSIC_SILENT:
+		_radio_music = RADIO_MUSIC_SILENT
+		map_music_requested.emit()
 	_close_card()
 	_close_map_card()
 	if card == Gen2PokegearScreen.CARD_MAP:
@@ -3574,9 +3630,29 @@ func advance_frame() -> void:
 	if _mode == MODE.SCRIPT_MENU and _script_menu_hold > 0:
 		_advance_script_menu_hold()
 		return
-	if _pokegear == null or _pokegear.card() != Gen2PokegearScreen.CARD_RADIO:
+	if _mode == MODE.MENU and _menu != null and _menu.advance_hold():
+		_answer_yes_no_menu()
 		return
-	if _world.advance_radio_frame():
+	if _pc_yes_no_hold > 0:
+		_pc_yes_no_hold -= 1
+		if _pc_yes_no_hold == 0:
+			_pc_yes_no_held.call()
+		return
+	if _pc_item_stage == &"toss_ask" and _pc_toss_ask.advance_hold():
+		_answer_pc_toss(_pc_toss_ask.answered_yes())
+		return
+	if _mode == MODE.MART and _mart_yes_no.advance_hold():
+		_answer_mart_confirm(_mart_yes_no.answered_yes())
+		return
+	if _mode == MODE.PRIZE and _prize_yes_no.advance_hold():
+		_answer_prize_confirm(_prize_yes_no.answered_yes())
+		return
+	if _pokegear == null:
+		return
+	_pokegear.advance_frame()
+	if _pokegear != null and _pokegear.card() != Gen2PokegearScreen.CARD_RADIO:
+		return
+	if _pokegear != null and _world.advance_radio_frame():
 		_refresh_card()
 
 
@@ -3589,10 +3665,10 @@ func _on_card_called(contact: int) -> void:
 	# `.no_service` refuses in front of `MakePhoneCallFromPokegear`, so a map
 	# without service says so on the card and never reaches a phone script.
 	if not Gen2WorldPhoneHost.map_has_phone_service(_world.current_map):
-		sfx_requested.emit(SFX_NO_SIGNAL, false)
+		sfx_requested.emit(Gen2Sfx.SFX_NO_SIGNAL, false)
 		_pokegear.say(_data.pokegear_text("out_of_service"))
 		return
-	sfx_requested.emit(SFX_CALL, false)
+	sfx_requested.emit(Gen2Sfx.SFX_CALL, false)
 	_pokegear.say(_data.pokegear_text("ellipse"))
 	call_placed.emit(_world.request_outgoing_phone_call(contact))
 
@@ -3640,7 +3716,7 @@ func _show_hang_up_phase() -> void:
 		return
 	_hang_up_phase = phase
 	if phase == &"click":
-		sfx_requested.emit(Gen2WorldPhoneRing.SFX_HANG_UP, false)
+		sfx_requested.emit(Gen2Sfx.SFX_HANG_UP, false)
 	_pokegear.show_call_line(Gen2WorldPhoneRing.hang_up_line(_data.world_phone_metadata(), phase))
 
 
@@ -3664,6 +3740,7 @@ func _on_card_closed() -> void:
 
 
 func _close_card() -> void:
+	_radio_track = -1
 	if _pokegear == null:
 		return
 	Gen2Screen.drop(_pokegear)
@@ -3827,16 +3904,10 @@ func _scrolling_rows() -> int:
 
 
 func _move_direction(direction: Vector2i) -> void:
-	if _mode == MODE.TOWN_MAP and _town_map != null:
-		_town_map.handle_button(PokeButton.from_vector(direction))
-		return
 	if _mode == MODE.MENU and _menu != null:
 		if _menu.move(direction):
 			_cursor = _menu.selected_index()
 			_render_rows()
-		return
-	if _mode == MODE.PC_ITEM_LIST and direction.x != 0 and not _gen1_pc:
-		_change_pc_quantity(direction.x)
 		return
 	if direction.x != 0:
 		_move_cursor(direction.x)
@@ -3845,6 +3916,12 @@ func _move_direction(direction: Vector2i) -> void:
 
 
 func _confirm() -> void:
+	if _hold_pc_yes_no(_confirm_now):
+		return
+	_confirm_now()
+
+
+func _confirm_now() -> void:
 	if _mode == MODE.PC_SAVE:
 		_press_save_prompt(true)
 		return
@@ -3897,12 +3974,11 @@ const CANCEL_HANDLERS: Dictionary = {
 	MODE.PC_SAVE: &"_refuse_save_prompt",
 	MODE.PC_TEXT: &"_advance_pc_text",
 	MODE.PC_MON_LIST: &"_open_gen1_bills",
-	MODE.PC_MON_ACTION: &"_reopen_gen1_mon_list",
+	MODE.PC_MON_ACTION: &"_open_gen1_bills",
 	MODE.PC_ITEM_QUANTITY: &"_reopen_gen1_item_list",
 	MODE.PC_ASK: &"_refuse_gen1_ask",
 	MODE.MENU: &"_finish_input_cancelled",
 	MODE.PHONE: &"_cancel_phone",
-	MODE.TOWN_MAP: &"_cancel_town_map",
 }
 
 
@@ -3919,6 +3995,43 @@ const GEN1_CANCEL_HANDLERS: Dictionary = {
 
 
 func _cancel() -> void:
+	if _hold_pc_yes_no(_cancel_now):
+		return
+	_cancel_now()
+
+
+var _pc_yes_no_hold: int = 0
+var _pc_yes_no_held: Callable = Callable()
+## A PC question's pages come before `YesNoBox`.
+var _question_pages: Array = []
+
+
+func _ask_pages(question: String) -> void:
+	_question_pages = _paged([question])
+	_summary = String(_question_pages[0]) if not _question_pages.is_empty() else question
+
+
+func _asking_through_pages() -> bool:
+	return PC_YES_NO_MODES.has(_mode) and _question_pages.size() > 1
+
+
+func _turn_question_page(button: int) -> void:
+	if button not in [PokeButton.A, PokeButton.B]:
+		return
+	_question_pages.remove_at(0)
+	_summary = String(_question_pages[0])
+	_render_rows()
+
+
+func _hold_pc_yes_no(answer: Callable) -> bool:
+	if not PC_YES_NO_MODES.has(_mode) or _pc_rows.size() != 2:
+		return false
+	_pc_yes_no_hold = Gen2WorldMenu.ANSWER_HOLD_FRAMES
+	_pc_yes_no_held = answer
+	return true
+
+
+func _cancel_now() -> void:
 	if _gen1_pc and GEN1_CANCEL_HANDLERS.has(_mode):
 		call(GEN1_CANCEL_HANDLERS[_mode])
 		return
@@ -3927,13 +4040,13 @@ func _cancel() -> void:
 
 
 func _shut_down_pc() -> void:
-	sfx_requested.emit(SFX_SHUT_DOWN_PC, true)
+	sfx_requested.emit(Gen2Sfx.SFX_SHUT_DOWN_PC, true)
 	_finish_runtime({"ok": true, "script_value": 0})
 
 
 func _cancel_pc_items() -> void:
 	if _pc_house:
-		sfx_requested.emit(SFX_SHUT_DOWN_PC, true)
+		sfx_requested.emit(Gen2Sfx.SFX_SHUT_DOWN_PC, true)
 		_finish_runtime({"ok": true, "script_value": 0})
 	else:
 		_open_pc(&"pokemon_center")
@@ -3945,6 +4058,7 @@ func _cancel_pc_item_list() -> void:
 		_pc_switch = -1
 		_render_rows()
 		return
+	_pc_list_row = _cursor
 	_open_pc_items()
 
 
@@ -3964,9 +4078,22 @@ func _cancel_phone() -> void:
 	_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
 
 
-func _cancel_town_map() -> void:
-	if _town_map != null:
-		_town_map.close()
+var _yes_no_cancelled: bool = false
+
+
+func _press_yes_no_menu(button: int) -> void:
+	if not _menu.press_yes_no(button):
+		return
+	_yes_no_cancelled = button == PokeButton.B
+	_cursor = _menu.selected_index()
+	_render_rows()
+
+
+func _answer_yes_no_menu() -> void:
+	if _yes_no_cancelled:
+		_finish_input_cancelled()
+	else:
+		_finish_input(0 if _menu.answered_yes() else 1)
 
 
 func _finish_input(choice: int) -> void:
@@ -4008,7 +4135,7 @@ func _finish(results: Array) -> void:
 		_extra_results = []
 	_mode = -1
 	_gen1_pc = false
-	_gen1_quantity = null
+	_quantity_prompt = null
 	_close_mart()
 	completed.emit(results)
 
@@ -4023,10 +4150,10 @@ func _render_rows(override: Array = []) -> void:
 		## One value at a time, the way the dial and the room menu each show it.
 		override = [_choices[clampi(_cursor, 0, _choices.size() - 1)]] if not _choices.is_empty() \
 			else []
-	var values: Array = override if not override.is_empty() else (
+	var values: Array = override if not override.is_empty() else [] if _asking_through_pages() else (
 		_choices if _mode == MODE.MENU \
 		else _pc_rows if PC_ROW_MODES.has(_mode) \
-		else _pc_entries if _mode == MODE.PC_ITEM_LIST \
+		else _pc_entries + [{"name": "CANCEL"}] if _mode == MODE.PC_ITEM_LIST \
 		else ["Continue"]
 	)
 	var rows: int = _scrolling_rows()
@@ -4068,12 +4195,16 @@ func _render_gen1_list() -> void:
 	var image: Image = _mart_page.render_gen1_pack({
 		"rows": _gen1_list_rows(),
 		"cursor": -1 if asking else _cursor - _pc_scroll,
-		"quantity": _gen1_quantity.value \
-			if _mode == MODE.PC_ITEM_QUANTITY and _gen1_quantity != null else -1,
+		"quantity": _quantity_prompt.value \
+			if _mode == MODE.PC_ITEM_QUANTITY and _quantity_prompt != null else -1,
 	})
+	var labels: Array = []
+	if asking and not _asking_through_pages():
+		for row: Dictionary in _pc_rows:
+			labels.append(String(row.get("name", "")))
 	var over: Image = _service_page.render(
-		"", "", _pc_rows if asking else [], _cursor, _summary,
-		_service_box() if asking else null
+		"", "", labels, _cursor, _summary,
+		_service_box() if asking and not _asking_through_pages() else null
 	)
 	if image != null and over != null:
 		image.blend_rect(over, Rect2i(Vector2i.ZERO, over.get_size()), Vector2i.ZERO)
@@ -4126,7 +4257,7 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		if value is Dictionary:
 			var row: Dictionary = value
 			var label: String = String(row.get("name", row.get("caller_label", "")))
-			if _mode == MODE.PC_ITEM_LIST:
+			if _mode == MODE.PC_ITEM_LIST and row.has("quantity"):
 				label += " x%d" % int(row.get("quantity", 0))
 			labels.append(label)
 		else:
@@ -4142,9 +4273,21 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		_service_box(), _service_note(), _message_box(), _gen1_box_marks()
 	)
 	if image != null:
+		_blend_pc_item_stage(image)
 		Gen2PicImage.show(_service_view, image)
 	_service_drawn = image != null
 	_apply_layer_visibility()
+
+
+## `TossItem_MenuHeader`'s dial at (15, 9) and the `YesNoBox` over the list.
+func _blend_pc_item_stage(image: Image) -> void:
+	if _mode != MODE.PC_ITEM_LIST or _pc_item_stage == &"":
+		return
+	if _pc_item_stage == &"toss_ask":
+		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _pc_toss_ask.cursor)
+		return
+	_blend_mart_menu(image, Gen2MenuBox.from_coords(15, 9, 19, 11, 0),
+		["×%02d" % _quantity_prompt.value], -1)
 
 
 ## `BillsPC_PlaceChangeBoxString`'s `hlcoord 0, 14`, under the list's fourth row.
@@ -4359,7 +4502,7 @@ func _mail_submenu_box() -> Gen2MenuBox:
 ## `YesNoBox`, which `.PutInPack`, `ProfOaksPC` and both of Generation 1's
 ## questions open over their own.
 func _yes_no_box() -> Gen2MenuBox:
-	return Gen2MenuBox.yes_no()
+	return null if _asking_through_pages() else Gen2MenuBox.yes_no()
 
 
 ## The same `YesNoBox`, and nothing at all on the timed steps: they are a box
@@ -4461,7 +4604,7 @@ func _option_count() -> int:
 		## `.printCancelMenuItem`, the row every `DisplayListMenuID` ends on.
 		return _gen1_mon_entries.size() + 1
 	if _mode == MODE.PC_ITEM_LIST:
-		return _pc_entries.size() + 1 if _gen1_pc else maxi(1, _pc_entries.size())
+		return _pc_entries.size() + 1
 	return 1
 
 

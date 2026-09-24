@@ -19,10 +19,6 @@ signal sfx_requested(index: int, waited: bool)
 ## -1 for the carry `.b_button` sets.
 signal selection_made(move_index: int)
 
-## `constants/sfx_constants.asm`.
-const SFX_READ_TEXT_2: int = 0x08
-const SFX_SWITCH_POKEMON: int = Gen2PartyScreen.SFX_SWITCH_POKEMON
-
 var _data: GameData = null
 var _party: Array = []
 var _cursor: int = 0
@@ -71,7 +67,7 @@ func handle_button(button: int) -> bool:
 			if _deleting:
 				selection_made.emit(-1)
 				return true
-			sfx_requested.emit(SFX_READ_TEXT_2, false)
+			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 			## `.b_button`: a held move is put back where it came from and the
 			## screen stays up; nothing held is the way out.
 			if _held >= 0:
@@ -84,7 +80,7 @@ func handle_button(button: int) -> bool:
 			if _deleting:
 				selection_made.emit(_row)
 				return true
-			sfx_requested.emit(SFX_READ_TEXT_2, false)
+			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 			if _held < 0:
 				_held = _row
 				return true
@@ -165,8 +161,8 @@ func _swap(from: int, to: int) -> void:
 	mon.swap_move_slots(from, to)
 	## `.swap_moves` plays the same effect twice, waiting for each.
 	## `SwitchPartyMons` is `WaitPlaySFX`, twice over.
-	sfx_requested.emit(SFX_SWITCH_POKEMON, true)
-	sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+	sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+	sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
 
 
 ## Everything [Gen2MoveScreenPage] draws.

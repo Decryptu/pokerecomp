@@ -764,10 +764,10 @@ func _screen_state() -> StringName:
 	## would call every one of them text and answer them with A.
 	if bool(shot.get("capture_selecting", false)):
 		return &"capture"
-	if bool(battle.get("_pack_selecting")):
+	if bool(battle.get("_pack_selecting")) or battle.get("_pack_host") != null:
 		return &"pack"
 	## `OfferSwitch`'s question is two paragraphs and
-	## `_answer_switch_offer_button` reads them before it answers anything, so a
+	## `_answer_switch_yes_no` reads them before it answers anything, so a
 	## NO pressed while a page is still owed is thrown away. The box itself is
 	## what says which half of that it is in; `awaits_press` stays true across
 	## both, and reading the state off it answered the question with YES.

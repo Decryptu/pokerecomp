@@ -68,6 +68,7 @@ const MAX_SUBMENU_ITEMS: int = 8
 ## `SelectMonFromParty`'s own zero, which every service writes, and the GIVE_MON
 ## both `SelectTradeOrDayCareMon` callers write.
 const ACTION_CHOOSE_POKEMON: int = 0
+const ACTION_TEACH_TMHM: int = 3
 const ACTION_GIVE_MON: int = 6
 
 const PROMPT_CHOOSE: String = "Choose a #MON."
@@ -83,9 +84,6 @@ const PROMPT_TEACH_WHICH: String = "Teach which PKMN?"
 
 ## `SwitchPartyMons`' own `PARTYMENUACTION_MOVE` string, `MoveToWhereString`.
 const PROMPT_MOVE_TO_WHERE: String = "Move to where?"
-
-## `constants/sfx_constants.asm`'s SFX_SWITCH_POKEMON.
-const SFX_SWITCH_POKEMON: int = 0x20
 
 ## `_PokemonNotEnoughHPText` and `_ItemCantUseOnMonText`, the two refusals the
 ## heal transfer prints. Both are a `MenuTextbox` over the menu on the cartridge
@@ -154,6 +152,8 @@ var _selecting: bool = false
 var _select_prompt: String = PROMPT_CHOOSE
 ## `wPartyMenuActionText`, which decides the column beside the nicknames.
 var _select_action: int = ACTION_CHOOSE_POKEMON
+## The move `PlacePartyMonTMHMCompatibility` checks each row against.
+var _teach_move: int = 0
 
 ## The hardware screen the embedded view is drawn in, and the two pages drawn
 ## into it. Handed over by the opener or found around this node; never a second
@@ -218,10 +218,11 @@ func set_context(data: GameData, save: Gen2SaveData, embedded: bool = false) -> 
 ## PARTYMENUACTION_CHOOSE_POKEMON `SelectMonFromParty` writes with its own
 ## `xor a`.
 func open_selection(
-	prompt: String = PROMPT_CHOOSE, action: int = ACTION_CHOOSE_POKEMON
+	prompt: String = PROMPT_CHOOSE, action: int = ACTION_CHOOSE_POKEMON, teach_move: int = 0
 ) -> void:
 	_selecting = true
 	_select_action = action
+	_teach_move = teach_move
 	_select_prompt = prompt
 	_member_cursor = 0
 	_submenu_open = false
@@ -231,6 +232,13 @@ func open_selection(
 	_heal_user = -1
 	_heal_move = 0
 	_message = ""
+	if is_inside_tree():
+		_refresh()
+
+
+## The member `StartMenu_Pokemon`'s `.menu` reopens on.
+func focus_member(index: int) -> void:
+	_member_cursor = clampi(index, 0, maxi(_row_count() - 1, 0))
 	if is_inside_tree():
 		_refresh()
 
@@ -649,8 +657,8 @@ func _finish_switch() -> void:
 		_save.party[_member_cursor] = held
 		## `.ClearSprite` runs once per row and ends on `WaitPlaySFX`, so the
 		## effect is asked for twice and the second waits the first out.
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
-		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+		sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+		sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
 	_member_cursor = clampi(_member_cursor, 0, _row_count() - 1)
 	## The icons are respawned rather than stepped: `LoadPartyMenuGFX` and
 	## `InitPartyMenuGFX` run again behind the reopened list.
@@ -811,12 +819,18 @@ func _moves_page_advance() -> void:
 
 ## `WritePartyMenuTilemap`'s rows, in [Gen2BattleSwitchMenu]'s own shape plus the
 ## `egg` [Gen2PartyMenuPage] needs, which a battle party never carries.
-## `PartyMenuQualityPointers`' `.Gender`, both `SelectTradeOrDayCareMon` callers.
+## `PartyMenuQualityPointers`' `.Gender` and `.TMHM`.
 ## Generation 1 has no gender byte and `PartyMenuInit` no quality column, so
 ## `InGameTrade_DoTrade`'s own list still draws the bar every other menu draws.
-func _gender_column() -> bool:
-	return _selecting and _select_action == ACTION_GIVE_MON \
+func _quality_column() -> bool:
+	return _selecting and _select_action in [ACTION_GIVE_MON, ACTION_TEACH_TMHM] \
 		and _data != null and _data.generation != RomRegistry.GEN1
+
+
+func _row_quality(mon: Gen2SaveMon) -> String:
+	if _select_action == ACTION_TEACH_TMHM:
+		return Gen2PartyMenuPage.able_quality(Gen2WorldTMHM.can_learn(_data, mon.species, _teach_move))
+	return Gen2PartyMenuPage.gender_quality(Gen2BattleMon.gender_for(_data, mon.species, mon.dvs))
 
 
 func _rows() -> Array:
@@ -838,9 +852,7 @@ func _rows() -> Array:
 			"status": mon.status,
 			"fainted": not mon.is_egg and mon.hp <= 0,
 			"egg": mon.is_egg,
-			"quality": Gen2PartyMenuPage.gender_quality(
-				Gen2BattleMon.gender_for(_data, mon.species, mon.dvs)
-			),
+			"quality": _row_quality(mon),
 		})
 	return out
 
@@ -889,7 +901,7 @@ func _render_hardware() -> void:
 		"" if _read_only else _prompt(),
 		_switch_from < 0 and not _read_only,
 		_switch_from,
-		_gender_column(),
+		_quality_column(),
 	)
 	if image == null:
 		return

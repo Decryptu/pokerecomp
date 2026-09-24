@@ -30,10 +30,6 @@ const EXPECTED_TEXT_OPENINGS: Dictionary = {
 	"bought": "Got ",
 }
 
-## The three values a mart box leaves a marker for. `hMoneyTemp` is HRAM and
-## `wItemQuantityChange` is not, which is how the two numbers are told apart.
-const HRAM_FIRST: int = 0xFF00
-
 ## Which boxes carry which markers, as the count of each. Read off the source's
 ## own `text_ram` and `text_decimal` lines.
 const EXPECTED_MARKERS: Dictionary = {
@@ -122,7 +118,7 @@ func _markers(text: String) -> Dictionary:
 			at + Gen2TextStream.NUMBER_MARKER.length(),
 			end - at - Gen2TextStream.NUMBER_MARKER.length()
 		).hex_to_int()
-		out["total" if address >= HRAM_FIRST else "quantity"] += 1
+		out["total" if address >= Gen2WorldMartHost.HRAM_FIRST else "quantity"] += 1
 		at = end + 1
 	at = 0
 	while true:

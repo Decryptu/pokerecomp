@@ -72,7 +72,7 @@ static func from_battle_party(
 	game_id: StringName, rom_sha1: String, slot: int, party: Gen2Party, player_name: String = "",
 	source_save: Gen2SaveData = null
 ) -> Gen2SaveData:
-	var egg_count: int = _egg_slots(party, source_save)
+	var egg_count: int = egg_slots(party, source_save)
 	if egg_count < 0:
 		return null
 	var out: Gen2SaveData = (
@@ -136,7 +136,8 @@ static func from_world_battle(
 	)
 
 
-static func _egg_slots(party: Gen2Party, source_save: Gen2SaveData) -> int:
+## The eggs [param source_save] keeps beside [param party], or -1 on a mismatch.
+static func egg_slots(party: Gen2Party, source_save: Gen2SaveData) -> int:
 	if party == null or party.mons.is_empty() or party.mons.size() > Gen2Party.MAX_SIZE:
 		return -1
 	if source_save == null:

@@ -518,6 +518,25 @@ func test_the_blink_after_anim_takes_the_other_sides_picture() -> void:
 	)
 
 
+## `AnimationShowMonPic` writes the square's own cells, so the doll, the dot and a
+## plain show after `SE_SLIDE_MON_OFF` all stand the picture back on its square.
+func test_a_generation_1_show_puts_a_slid_picture_back_home() -> void:
+	for effect: int in [
+		Gen2BattleAnimPlayer.GEN1_SE_SHOW_MON_PIC, Gen2BattleAnimPlayer.GEN1_SE_SUBSTITUTE_MON,
+		Gen2BattleAnimPlayer.GEN1_SE_MINIMIZE_MON,
+	]:
+		var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(_gen1_data(0), 0)
+		var steps: Array = player._gen1_effect_steps(0xF4)
+		steps.append_array(player._gen1_effect_steps(effect))
+		for step: Dictionary in steps:
+			for key: StringName in Gen2BattleAnimPlayer.GEN1_EFFECT_KEYS:
+				if step.has(key):
+					player._gen1_apply(key, step[key])
+		var background: Gen2BattleAnimBackground = player.background()
+		assert_true(bool(background.battler_visible[true]), "effect $%02X" % effect)
+		assert_eq(background.battler_shift[true], Vector2.ZERO, "effect $%02X" % effect)
+
+
 ## An animation the cache does not carry answers null on either engine.
 func test_a_generation_1_animation_outside_the_table_answers_null() -> void:
 	assert_null(Gen2BattleAnimPlayer.create_gen1(_gen1_data(0), 1))

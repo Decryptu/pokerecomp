@@ -113,7 +113,7 @@ func run(r: RefCounted) -> void:
 
 
 ## A POTION, an ANTIDOTE and a REPEL through the real pack: `PrintPartyMenuActionText`
-## and `RedrawPartyMenu` under the list, and `UseRepel`'s silence against `ItemUseText00`.
+## and `RedrawPartyMenu` under the list, and `UseRepel`'s `UseItemText` and `ItemUseText00`.
 const PARTY_RESULT_ITEMS: Dictionary = {
 	RomRegistry.GEN2: {"potion": 0x12, "antidote": 0x09, "repel": 0x14},
 	RomRegistry.GEN1: {"potion": 0x14, "antidote": 0x0B, "repel": 0x1E},
@@ -127,7 +127,7 @@ const PARTY_RESULT_MAP: Dictionary = {
 	RomRegistry.GEN1: [Vector2i(0, 38), Vector2i(3, 6)],
 }
 const PARTY_RESULT_LINES: Dictionary = {
-	RomRegistry.GEN2: ["<MON>\nrecovered <N>HP!", "<MON>'s\ncured of poison.", ""],
+	RomRegistry.GEN2: ["<MON>\nrecovered <N>HP!", "<MON>'s\ncured of poison.", "<PLAYER> used the\nREPEL."],
 	RomRegistry.GEN1: ["<MON>\nrecovered by <N>!", "<MON> was\ncured of poison!", "<PLAYER> used\nREPEL!"],
 }
 const POTION_HEAL: int = 20
@@ -165,10 +165,6 @@ func _verify_party_results() -> void:
 			host.handle_button(PokeButton.A)
 		var want: String = String(lines[step]).replace("<MON>", lead_name).replace(
 			"<N>", str(healed)).replace("<PLAYER>", save.player_name)
-		if want.is_empty():
-			_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK,
-				"%s: the REPEL printed %s." % [_r.game_id, host.get("_pack_result")])
-			continue
 		var party: Dictionary = host.get("_party_result")
 		_r.check(String(host.get("_pack_result")) == want,
 			"%s: %s printed %s rather than %s." % [
@@ -219,15 +215,20 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 	host.sfx_requested.connect(func(sfx: int, _waited: bool) -> void: sounds.append(sfx))
 	if not _r.check(host.call("_select_pack_item", machine), "%s: no TM %d in the pack." % [_r.game_id, machine]):
 		return
-	for _press: int in 4:
+	host.handle_button(PokeButton.A)
+	host.handle_button(PokeButton.A)
+	while host._reading_question():
 		host.handle_button(PokeButton.A)
+	host.handle_button(PokeButton.A)
+	host.advance_save_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
+	host.handle_button(PokeButton.A)
 	var gen1: bool = _r.data.generation == RomRegistry.GEN1
 	var want: String = Gen2WorldTMHM.not_compatible_text(
 		lead_name, String(_r.data.move(Gen2WorldTMHM.move_for_item(_r.data, machine)).get("name", "")),
 		_r.data.generation
 	)
 	_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK_RESULT
-		and String(host.get("_pack_result")) == want and sounds == [Gen2StartMenuScreen.SFX_WRONG],
+		and String(host.get("_pack_result")) == want and sounds == [Gen2Sfx.SFX_WRONG],
 		"%s: the refused TM printed %s in mode %d under %s." % [
 			_r.game_id, host.get("_pack_result"), host.get("_mode"), sounds])
 	## `PrintText` pages the two sentences, so the box owes a press a page.
@@ -257,7 +258,7 @@ func _verify_rare_candy(
 		and party.has("stats_after_press") and not host.party_result_holding(),
 		"%s: the RARE CANDY printed %s over %s with no press owed." % [
 			_r.game_id, host.get("_pack_result"), party.keys()])
-	_r.check(sounds == [[Gen2StartMenuScreen.SFX_DEX_FANFARE_50_79, true]],
+	_r.check(sounds == [[Gen2Sfx.SFX_DEX_FANFARE_50_79, true]],
 		"%s: the RARE CANDY's line sounded %s." % [_r.game_id, sounds])
 	host.handle_button(PokeButton.A)
 	_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK_RESULT

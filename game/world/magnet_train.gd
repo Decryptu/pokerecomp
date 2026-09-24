@@ -9,7 +9,6 @@ const HEIGHT: int = 144
 const TILE: int = 8
 
 const MUSIC: int = 0x05
-const SFX_ARRIVED: int = 0xB9
 
 ## `MagnetTrain`'s two `lb` pairs: direction, init, hold, final, player x.
 const RIDES: Array[Array] = [
@@ -126,7 +125,7 @@ func _step_jumptable() -> void:
 			_move_train(_final, 2, -1)
 		_:
 			_index = EXIT
-			_events.append({"type": &"play_sfx", "sfx": SFX_ARRIVED})
+			_events.append({"type": &"play_sfx", "sfx": Gen2Sfx.SFX_TRAIN_ARRIVED})
 
 
 func _wait_scene() -> void:

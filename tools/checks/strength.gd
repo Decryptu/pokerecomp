@@ -281,7 +281,7 @@ func _gen1_push() -> void:
 				_r.check(int(event.get("facing", -1)) == Gen2WorldSprite.FACING_UP, "the dust faces %s." % [event])
 				cut = event.get("sounds", [])
 	_r.check(
-		cut.size() == 1 and int(cut[0].get("index", 0)) == Gen1Layout.SFX_CUT
+		cut.size() == 1 and int(cut[0].get("index", 0)) == Gen1Sfx.SFX_CUT
 			and int(cut[0].get("frame", 0)) == 24,
 		"the dust ends on %s." % [cut]
 	)

@@ -38,7 +38,6 @@ const CURSOR_BLINK_FRAMES: int = 8
 ## `Pokedex_DisplayChangingModesMessage`'s two `ld c, 64` / `call DelayFrames`,
 ## with `SFX_CHANGE_DEX_MODE` played between them.
 const CHANGING_MODES_FRAMES: int = 64
-const SFX_CHANGE_DEX_MODE: int = 0x15  ## constants/sfx_constants.asm.
 
 ## `AnimateDexSearchSlowpoke`: twenty-five steps of seven frames each, then
 ## thirty-two more with the Slowpoke back on its first frame. The whole run is
@@ -842,7 +841,7 @@ func advance_frame() -> void:
 	if _changing_modes_frames > 0:
 		_changing_modes_frames -= 1
 		if _changing_modes_frames == CHANGING_MODES_FRAMES:
-			sfx_requested.emit(SFX_CHANGE_DEX_MODE)
+			sfx_requested.emit(Gen2Sfx.SFX_CHANGE_DEX_MODE)
 		elif _changing_modes_frames == 0:
 			_open_list_mode()
 		return

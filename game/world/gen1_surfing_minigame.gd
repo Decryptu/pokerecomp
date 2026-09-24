@@ -162,12 +162,6 @@ const POINTS_TILES: Array[int] = [0x21, 0x25, 0x26]
 
 const AUDIO_BANK_SURFING: int = 0x20
 const MUSIC_SURFING_PIKACHU: int = 153
-const SFX_SURFING_JUMP: int = 145
-const SFX_SURFING_FLIP: int = 146
-const SFX_SURFING_CRASH: int = 147
-const SFX_SURFING_LAND: int = 149
-const SFX_GET_ITEM2_4_2: int = 150
-const SFX_PRESS_AB: int = 144
 const CLIP_NO_HIGH_SCORE: int = 27
 const CLIP_HIGH_SCORE: int = 33
 const TEMPO_DEFAULT: int = 117
@@ -918,7 +912,7 @@ func _drain_hp() -> bool:
 			return true
 		_hp = _bcd_deduct_word(_hp)
 		_total = _bcd_add_word(_total, 1)
-	_play_sfx(SFX_PRESS_AB)
+	_play_sfx(Gen1Sfx.SFX_PRESS_AB)
 	_print_number(LINE_AT[2].y, _total)
 	return false
 
@@ -930,7 +924,7 @@ func _drain_radness() -> bool:
 			return true
 		_radness = _bcd_deduct_word(_radness)
 		_total = _bcd_add_word(_total, 1)
-	_play_sfx(SFX_PRESS_AB)
+	_play_sfx(Gen1Sfx.SFX_PRESS_AB)
 	_print_number(LINE_AT[2].y, _total)
 	return false
 
@@ -945,7 +939,7 @@ func _high_score_steps() -> Array:
 		steps.append_array(pikachu_clip_steps(CLIP_HIGH_SCORE if _hi_score_beaten else CLIP_NO_HIGH_SCORE))
 	if _hi_score_beaten:
 		steps.append(do_step(func() -> void:
-			_play_sfx(SFX_GET_ITEM2_4_2)
+			_play_sfx(Gen1Sfx.SFX_GET_ITEM2_4_2)
 			var text: Array = (_tables.get("texts", {}) as Dictionary).get("hi_score", [])
 			_write_tilemap(HI_SCORE_AT, text.size(), 1, text)
 			_pikachu_state = PikachuState.RESULTS))
@@ -1056,7 +1050,7 @@ func _riding(struct: PackedByteArray) -> void:
 		struct[Gen1AnimatedObjects.STRUCT_VAR4] = 0
 		_radness_meter = 0
 		_trick_flags = 0
-		_play_sfx(SFX_SURFING_JUMP)
+		_play_sfx(Gen1Sfx.SFX_SURFING_JUMP)
 		return
 	_update_surfing_frame(struct)
 	if _speed >> 8 < SPEED_CAP_HIGH:
@@ -1073,13 +1067,13 @@ func _jumping(struct: PackedByteArray) -> void:
 		_pikachu_state = PikachuState.CRASHED
 		_crash_timer = CRASH_FRAMES
 		Gen1AnimatedObjects.set_frameset(struct, FRAMESET_CRASH)
-		_play_sfx(SFX_SURFING_CRASH)
+		_play_sfx(Gen1Sfx.SFX_SURFING_CRASH)
 		return
 	if landing == LANDING_HARD:
 		_reduce_speed(SPEED_HARD_LOSS)
 	elif landing == LANDING_ROUGH:
 		_reduce_speed(SPEED_ROUGH_LOSS)
-	_play_sfx(SFX_SURFING_LAND)
+	_play_sfx(Gen1Sfx.SFX_SURFING_LAND)
 	_add_stunt_radness(struct)
 	struct[Gen1AnimatedObjects.STRUCT_VAR2] = 0
 	_pikachu_state = PikachuState.LANDING
@@ -1125,7 +1119,7 @@ func _start_trick(struct: PackedByteArray) -> void:
 	_radness_meter = mini(_radness_meter + 1, RADNESS_CAP)
 	struct[Gen1AnimatedObjects.STRUCT_VAR3] = 0
 	struct[Gen1AnimatedObjects.STRUCT_VAR4] = 0
-	_play_sfx(SFX_SURFING_FLIP)
+	_play_sfx(Gen1Sfx.SFX_SURFING_FLIP)
 
 
 func _tile_interaction(frameset: int) -> int:

@@ -33,11 +33,13 @@ const ACTION_SET_EXPLANATION_READ: int = 1
 const ACTION_GET_CHALLENGE_STATE: int = 2
 const ACTION_SAVE_AND_QUIT: int = 3
 const ACTION_CHALLENGE_CANCELED: int = 4
+const ACTION_MOBILE_RECORD_CHECK: int = 5
 const ACTION_MOBILE_RECORD_CLEAR: int = 6
 const ACTION_SAVE_LEVEL_GROUP: int = 7
 const ACTION_LOAD_LEVEL_GROUP: int = 8
 const ACTION_CHECK_SAVE_FILE_IS_YOURS: int = 9
 const ACTION_MAX_VOLUME: int = 10
+const ACTION_GS_BALL: int = 11
 const ACTION_MOBILE_CLEAR_ROOM_FLAG: int = 17
 const ACTION_LEVEL_CHECK: int = 24
 const ACTION_UBERS_CHECK: int = 25
@@ -467,6 +469,9 @@ func action(index: int, context: Dictionary = {}) -> int:
 	if PARTY_CHECK_ACTIONS.has(index):
 		return _party_check(index, context.get("party", {}) as Dictionary)
 	match index:
+		## `s5_be46` and `sGSBallFlag`, which only mobile and Virtual Console write.
+		ACTION_MOBILE_RECORD_CHECK, ACTION_GS_BALL:
+			return 0
 		ACTION_CHECK_EXPLANATION_READ:
 			if not bool(context.get("save_is_yours", true)):
 				return 0

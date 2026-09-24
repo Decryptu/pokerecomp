@@ -723,39 +723,124 @@ func test_the_text_box_is_scrolled_with_the_rest_of_the_background() -> void:
 	assert_true(box.raster_scx.is_empty())
 
 
-## `GetSubstitutePic`: the doll is four tiles of the monster overworld sprite in
-## an otherwise empty box, at columns 2 and 3 of both boxes and one row higher in
-## the player's. What it draws from a real cache is swept by
-## `tools/checks/battle_anims.gd`; the placement is arithmetic and is pinned
-## here, against a strip whose every pixel says which tile it came from.
+## `GetSubstitutePic` and pokered's `AnimationSubstitute`: the doll is four tiles
+## of the monster overworld sprite in an otherwise empty box. Generation 2 puts it
+## at columns 2 and 3, a row higher in the player's 6x6 box; Generation 1 at rows
+## 4 and 5, a column right in the player's 7x7 one. What it draws from a real
+## cache is swept by `tools/checks/battle_anims.gd`; the placement is pinned here
+## against a strip whose every pixel says which tile it came from.
 func test_the_doll_takes_four_tiles_of_the_monster_sprite_into_a_blank_box() -> void:
 	var strip: PackedByteArray = PackedByteArray()
 	strip.resize(12 * Gen2Font.TILE * Gen2Font.TILE)
 	for index: int in strip.size():
 		strip[index] = 1 + (index % (12 * Gen2Font.TILE)) / Gen2Font.TILE
 
-	for player_side: bool in [false, true]:
-		var side: int = Gen2BattleScreenMap.PLAYER_SIDE if player_side \
-			else Gen2BattleScreenMap.ENEMY_SIDE
-		var box: int = side * Gen2Font.TILE
-		var pixels: PackedByteArray = Gen2BattleRenderer.substitute_pixels(strip, player_side)
-		assert_eq(pixels.size(), box * box)
+	var expected: Dictionary = {
+		RomRegistry.GEN2: {false: Vector2i(2, 5), true: Vector2i(2, 4)},
+		RomRegistry.GEN1: {false: Vector2i(2, 4), true: Vector2i(3, 4)},
+	}
+	for generation: int in expected:
+		for player_side: bool in [false, true]:
+			_assert_doll(strip, generation, player_side, expected[generation][player_side])
 
-		# The down-facing frame for the enemy's front picture, the up-facing one
-		# for the player's back picture, laid out in reading order.
-		var first: int = int(Gen2BattleRenderer.SUBSTITUTE_FIRST_TILE[player_side])
-		var at: Vector2i = Gen2BattleRenderer.SUBSTITUTE_AT[player_side]
-		var lit: int = 0
-		for y: int in box:
-			for x: int in box:
-				var value: int = int(pixels[y * box + x])
-				var cell: Vector2i = Vector2i(x, y) / Gen2Font.TILE - at
-				if cell.x < 0 or cell.x > 1 or cell.y < 0 or cell.y > 1:
-					assert_eq(value, 0, "outside the doll at %d,%d" % [x, y])
-					continue
-				lit += 1
-				assert_eq(value, 1 + first + cell.y * 2 + cell.x, "tile at %d,%d" % [x, y])
-		assert_eq(lit, 16 * 16)
+
+func _assert_doll(
+	strip: PackedByteArray, generation: int, player_side: bool, at: Vector2i
+) -> void:
+	var box: int = Gen2BattleRenderer.square_side(generation, player_side) * Gen2Font.TILE
+	var pixels: PackedByteArray = Gen2BattleRenderer.substitute_pixels(
+		strip, player_side, generation
+	)
+	assert_eq(pixels.size(), box * box)
+	# The down-facing frame for the enemy's front picture, the up-facing one for
+	# the player's back picture, laid out in reading order.
+	var first: int = int(Gen2BattleRenderer.SUBSTITUTE_FIRST_TILE[player_side])
+	var lit: int = 0
+	for y: int in box:
+		for x: int in box:
+			var value: int = int(pixels[y * box + x])
+			var cell: Vector2i = Vector2i(x, y) / Gen2Font.TILE - at
+			if cell.x < 0 or cell.x > 1 or cell.y < 0 or cell.y > 1:
+				assert_eq(value, 0, "outside the doll at %d,%d" % [x, y])
+				continue
+			lit += 1
+			assert_eq(value, 1 + first + cell.y * 2 + cell.x, "tile at %d,%d" % [x, y])
+	assert_eq(lit, 16 * 16)
+
+
+## `GetMinimizePic` drops its tile a column right of the doll; pokered's
+## `AnimationMinimizeMon` writes `PIC_WIDTH * 3 + 4` tiles in on either side.
+func test_the_dot_lands_where_each_generation_copies_it() -> void:
+	var tile: PackedByteArray = PackedByteArray()
+	tile.resize(Gen2Font.TILE * Gen2Font.TILE)
+	tile.fill(3)
+	var expected: Dictionary = {
+		RomRegistry.GEN2: {false: Vector2i(3, 5), true: Vector2i(3, 4)},
+		RomRegistry.GEN1: {false: Vector2i(3, 4), true: Vector2i(3, 4)},
+	}
+	for generation: int in expected:
+		for player_side: bool in [false, true]:
+			var box: int = Gen2BattleRenderer.square_side(generation, player_side) \
+				* Gen2Font.TILE
+			var pixels: PackedByteArray = Gen2BattleRenderer.minimize_pixels(
+				tile, player_side, generation
+			)
+			var at: Vector2i = expected[generation][player_side] * Gen2Font.TILE
+			assert_eq(pixels.size(), box * box)
+			assert_eq(pixels.count(3), Gen2Font.TILE * Gen2Font.TILE)
+			assert_eq(pixels[at.y * box + at.x], 3, "gen %d side %s" % [generation, player_side])
+			assert_eq(
+				pixels[(at.y + Gen2Font.TILE - 1) * box + at.x + Gen2Font.TILE - 1], 3
+			)
+
+
+## One seam answers what stands on a square: the built-in renderer's buffers are
+## `square_pixels` of its own view through the slide, a dot and a doll, and the
+## answer without frames is the same square cropped to its box.
+func test_the_built_in_squares_are_what_square_pixels_answers() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 7, 9)
+	var renderer: Gen2BattleRenderer = _battle_screen._renderer
+	_assert_squares(renderer)
+	_settle_intro()
+	_assert_squares(renderer)
+	_battle_screen._apply_event({"type": Gen2Battle.MINIMIZED, "side": Gen2Battle.ENEMY})
+	_assert_squares(renderer)
+	_battle_screen._apply_event({
+		"type": Gen2Battle.SUBSTITUTE_PIC, "side": Gen2Battle.PLAYER, "raised": true,
+	})
+	_assert_squares(renderer)
+
+
+func _assert_squares(renderer: Gen2BattleRenderer) -> void:
+	var view: Dictionary = renderer._view
+	assert_eq(renderer._enemy_pixels, Gen2BattleRenderer.square_pixels(_data, view, false, true))
+	assert_eq(renderer._player_pixels, Gen2BattleRenderer.square_pixels(_data, view, true))
+	var side: int = Gen2BattleScreenMap.ENEMY_SIDE
+	var box: int = side * Gen2Font.TILE
+	var stride: int = Gen2BattleRenderer.pic_stride(renderer._enemy_pixels, side)
+	var cropped: PackedByteArray = PackedByteArray()
+	for y: int in box:
+		cropped.append_array(renderer._enemy_pixels.slice(y * stride, y * stride + box))
+	assert_eq(Gen2BattleRenderer.square_pixels(_data, view, false), cropped)
+
+
+## Every key a battle view carries is named in `docs/MODS.md`'s `view` table.
+func test_every_view_key_is_in_the_documented_table() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 7, 9)
+	var documented: PackedStringArray = []
+	var table: bool = false
+	for line: String in FileAccess.get_file_as_string("res://docs/MODS.md").split("\n"):
+		if line.begins_with("| Group | Fields |"):
+			table = true
+		elif table and not line.begins_with("|"):
+			break
+		elif table:
+			for part: String in line.split("`"):
+				documented.append(part)
+	for key: String in _battle_screen._renderer._view:
+		assert_true(documented.has(key), "%s is not in the view table" % key)
 
 
 func test_the_doll_is_what_a_substituted_side_draws() -> void:

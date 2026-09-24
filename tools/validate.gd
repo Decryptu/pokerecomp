@@ -120,6 +120,8 @@ func _requested(topics: PackedStringArray) -> PackedStringArray:
 
 	var out: PackedStringArray = []
 	for name: String in args:
+		if name.begins_with("--"):
+			continue
 		if name == "all":
 			return topics
 		if GROUPS.has(StringName(name)):

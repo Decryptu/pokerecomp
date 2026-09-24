@@ -2192,7 +2192,7 @@ func test_a_pitfall_lands_on_its_sounds_skyfall_and_earthquake() -> void:
 			results = _run_script(world, results)
 			continue
 		break
-	assert_eq(sounds, [Gen2WorldScriptRunner.SFX_KINESIS, Gen2WorldScriptRunner.SFX_STRENGTH])
+	assert_eq(sounds, [Gen2Sfx.SFX_KINESIS, Gen2Sfx.SFX_STRENGTH])
 	assert_eq(waits, 2, "the skyfall and the earthquake each hold the script")
 	assert_false(world.player_skyfall_hidden())
 	assert_eq(world.player_jump_offset(), 0, "landed")
@@ -4116,7 +4116,7 @@ func test_heal_machine_sounds_follow_the_sequence_the_machine_type_selects() -> 
 		assert_eq(int(centre[ball]["frame"]), ball * 30)
 		assert_eq(
 			int(centre[ball]["index"]),
-			Gen2WorldScriptRunner.SFX_SECOND_PART_OF_ITEMFINDER,
+			Gen2Sfx.SFX_SECOND_PART_OF_ITEMFINDER,
 		)
 	assert_eq(StringName(centre[3]["kind"]), &"music")
 	assert_eq(int(centre[3]["frame"]), 90)
@@ -4126,12 +4126,12 @@ func test_heal_machine_sounds_follow_the_sequence_the_machine_type_selects() -> 
 	)
 	assert_eq(
 		[int(hall[1]["frame"]), int(hall[1]["index"])],
-		[30, Gen2WorldScriptRunner.SFX_GAME_FREAK_LOGO_GS],
+		[30, Gen2Sfx.SFX_GAME_FREAK_LOGO_GS],
 	)
 	## `WaitSFX` between the two is not spent, like the world's other two.
 	assert_eq(
 		[int(hall[2]["frame"]), int(hall[2]["index"])],
-		[110, Gen2WorldScriptRunner.SFX_BOOT_PC],
+		[110, Gen2Sfx.SFX_BOOT_PC],
 	)
 
 
@@ -4147,8 +4147,8 @@ func test_the_itemfinder_sounds_are_eight_waited_effects_in_pairs() -> void:
 		assert_false(entry.has("frame"), "and none is due on a count")
 		assert_eq(
 			int(entry["index"]),
-			Gen2WorldScriptRunner.SFX_TRANSACTION if index % 2 == 1 \
-				else Gen2WorldScriptRunner.SFX_SECOND_PART_OF_ITEMFINDER,
+			Gen2Sfx.SFX_TRANSACTION if index % 2 == 1 \
+				else Gen2Sfx.SFX_SECOND_PART_OF_ITEMFINDER,
 		)
 
 
@@ -4844,6 +4844,21 @@ func test_script_applymovement_executes_imported_object_and_player_streams() -> 
 	assert_eq(_final_status(_run_script(world, dispatched)), &"complete")
 	assert_eq((world.objects[0] as Gen2WorldObject).cell, Vector2i(6, 6))
 	assert_eq(world.player_cell, Vector2i(7, 5))
+
+
+## Team Rocket's security camera: `moveobject` then `applymovement` in one run.
+## The walk starts from the moved cell, not from where the object stood before.
+func test_a_moveobject_lands_before_the_applymovement_behind_it() -> void:
+	RomCache.write_json(RomCache.world_movements_path(_directory), {"48:6100": [0x0F, 0x47]})
+	## moveobject 2, 3, 3 / applymovement 2, step right / end
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6070": [0x72, 2, 3, 3, 0x69, 2, 0x00, 0x61, 0x91],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6070
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	assert_eq(_final_status(_run_script(world, world.dispatch_script_events())), &"complete")
+	assert_eq((world.objects[0] as Gen2WorldObject).cell, Vector2i(4, 3))
 
 
 func test_script_movement_publishes_source_shake_effects() -> void:
@@ -7414,13 +7429,13 @@ func test_an_item_ball_is_dispatched_from_its_two_data_bytes() -> void:
 	# FindItemInBallScript receives before it shows anything, and the text names
 	# the item off the imported table, whose lookup is one-based like the source's.
 	assert_eq(results[0]["status"], &"waiting", JSON.stringify(results[0]))
-	assert_eq(results[0]["event"]["text"], "Found\n%s!" % _item_name(3))
+	assert_eq(results[0]["event"]["text"], "<PLAYER> found\n%s!" % _item_name(3))
 
 	# `playsound SFX_ITEM` by name, not `specialsound`, and then `itemnotify`.
 	var notified: Array = _receipt_sound(world, &"sound")
 	assert_eq(
 		int(notified[0]["event"]["request"]["values"]["address"]),
-		Gen2WorldScriptRunner.SFX_ITEM
+		Gen2Sfx.SFX_ITEM
 	)
 	var finished: Array = _receipt_notify(world, 3)
 	assert_eq(finished[0]["status"], &"complete", JSON.stringify(finished[0]))
@@ -7498,7 +7513,7 @@ func test_a_hidden_item_is_dispatched_from_its_three_data_bytes() -> void:
 	assert_eq(results[0]["source"]["flag"], 20)
 	assert_eq(results[0]["status"], &"waiting", JSON.stringify(results[0]))
 	# _PlayerFoundItemText is _FoundItemText's wording, so both share one string.
-	assert_eq(results[0]["event"]["text"], "Found\n%s!" % _item_name(3))
+	assert_eq(results[0]["event"]["text"], "<PLAYER> found\n%s!" % _item_name(3))
 
 	# HiddenItemScript's own `specialsound` and `itemnotify`, which name the
 	# pocket the item landed in.
@@ -7524,7 +7539,7 @@ func test_an_item_gift_runs_verbosegiveitem_with_no_script_behind_it() -> void:
 	assert_eq(results[0]["status"], &"waiting", JSON.stringify(results[0]))
 	## GiveItemScript's own `_ReceivedItemText`, whose STRING_BUFFER_4 the
 	## staging filled: without the fill the name never resolves.
-	assert_eq(results[0]["event"]["text"], "Received\n%s." % _item_name(3))
+	assert_eq(results[0]["event"]["text"], "<PLAYER> received\n%s." % _item_name(3))
 
 	_receipt_sound(world, &"special_sound")
 	var finished: Array = _receipt_notify(world, 3)
@@ -7740,7 +7755,7 @@ func test_a_verbose_give_prints_the_line_the_pocket_and_the_full_branch() -> voi
 	var request: Dictionary = {"kind": &"script", "bank": 48, "script": 0x6420}
 
 	var runner := Gen2WorldScriptRunner.begin(data, Gen2WorldState.from_dict({}), request)
-	assert_eq(runner.advance()["event"]["text"], "Received\n%s." % data.item_name(1))
+	assert_eq(runner.advance()["event"]["text"], "<PLAYER> received\n%s." % data.item_name(1))
 	var sound: Dictionary = runner.advance(true)
 	assert_eq(
 		StringName(sound["event"]["request"]["values"]["kind"]), &"special_sound",
@@ -7750,7 +7765,7 @@ func test_a_verbose_give_prints_the_line_the_pocket_and_the_full_branch() -> voi
 	## `cont`, so the box scrolls one line and the item name stays under it.
 	assert_eq(
 		notified["event"]["text"],
-		"Put the\n%s in%sthe ITEM POCKET." % [
+		"<PLAYER> put the\n%s in%sthe ITEM POCKET." % [
 			data.item_name(1), Gen2TextStream.SCROLL_BREAK,
 		]
 	)
@@ -7763,7 +7778,7 @@ func test_a_verbose_give_prints_the_line_the_pocket_and_the_full_branch() -> voi
 		owned[number] = 1
 	var full := Gen2WorldState.new({}, {}, owned)
 	var refused := Gen2WorldScriptRunner.begin(data, full, request)
-	assert_eq(refused.advance()["event"]["text"], "Received\n%s." % data.item_name(1))
+	assert_eq(refused.advance()["event"]["text"], "<PLAYER> received\n%s." % data.item_name(1))
 	var pocket: Dictionary = refused.advance(true)
 	assert_eq(pocket["event"]["text"], "The ITEM POCKET\nis full…", JSON.stringify(pocket))
 	assert_eq(refused.advance(true)["status"], &"complete")
@@ -8251,17 +8266,19 @@ func test_a_mod_patch_mid_run_moves_the_encounter_tables_key() -> void:
 	Gen2ModHost.reset()
 
 
-## A standing wild outlives the hour turning over, but not a mod's patch: the
-## table a mod's setting writes is checked on the route it was changed on.
+## A standing wild outlives the hour turning over, but not a mod's patch: a patch
+## is a new population, as a map change is, so providers replan at once.
 func test_a_mod_patch_rechecks_the_standing_wilds_and_the_hour_does_not() -> void:
 	Gen2ModHost.reset()
 	var world := _world()
 	world.set_object_time(12, Gen2WorldPalette.TIME_DAY)
 	var driver := Gen2WorldEncounters.new()
-	driver.set_providers([_pulse_provider()])
+	var provider: Object = _pulse_provider()
+	driver.set_providers([provider])
 	driver.set_world(world)
 	driver.advance_frame()
 	assert_eq(driver.entries().size(), 1)
+	var generation: int = int(provider.get("context")["generation"])
 	var night: Array = []
 	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
 		night.append({"level": 5, "species": 25})
@@ -8273,9 +8290,12 @@ func test_a_mod_patch_rechecks_the_standing_wilds_and_the_hour_does_not() -> voi
 	})["ok"]))
 	driver.advance_frame()
 	assert_eq(driver.entries().size(), 1, "the day table still offers it")
+	generation += 1
+	assert_eq(int(provider.get("context")["generation"]), generation, "a new population")
 	world.set_object_time(20, Gen2WorldPalette.TIME_NIGHT)
 	driver.advance_frame()
 	assert_eq(driver.entries().size(), 1, "kept across the hour")
+	assert_eq(int(provider.get("context")["generation"]), generation, "the same population")
 
 	var day: Array = []
 	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
@@ -8711,9 +8731,10 @@ func _pulse_provider() -> Object:
 
 var dvs: int = 0
 var overrides: Dictionary = {}
+var context: Dictionary = {}
 
-func set_context(_context) -> void:
-	pass
+func set_context(given) -> void:
+	context = given
 
 func advance_frame() -> void:
 	pass
@@ -8840,6 +8861,107 @@ func test_a_catalogued_site_hands_over_what_a_mod_patched() -> void:
 			changed = event
 	assert_eq(int(changed.get("item", 0)), 1, "the patched item")
 	assert_eq(int(changed.get("quantity", 0)), 4, "in the patched quantity")
+
+
+## A patched `giveegg` hands over an egg of the patched species, never a hatched
+## Pokemon: the party host reads a `pokemon` key as a `givepoke`.
+func test_a_catalogued_giveegg_stays_an_egg_under_a_patch() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6E00"] = [Gen2WorldScript.GIVEEGG, 175, 5, Gen2WorldScript.END]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var overlay := Gen2ContentOverlay.new()
+	var data: GameData = GameData.open_directory(_directory)
+	data.set_content_overlay(overlay)
+	var gifts: Array = data.catalog().rows(Gen2WorldCatalog.KIND_GIFT)
+	assert_eq(gifts.size(), 1, JSON.stringify(gifts))
+	overlay.patch(Gen2ContentOverlay.KIND_CHECK, &"mod", int(gifts[0]["id"]), {
+		"species": 25, "level": 7,
+	})
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(8, 6))
+	world.current_map.events["coord_events"] = [{
+		"scene": 0, "x": 8, "y": 6, "script": 0x6E00,
+	}]
+	var waiting: Array = world.dispatch_script_events(Vector2i(8, 6))
+	assert_eq(waiting[0]["status"], &"waiting", JSON.stringify(waiting))
+	var values: Dictionary = waiting[0]["event"]["request"]["values"]
+	assert_false(values.has("pokemon"), "an egg request: %s" % JSON.stringify(values))
+	assert_eq(int(values["value"]), 25, "the patched species")
+	assert_eq(int(values["value_2"]), 7, "at the patched level")
+
+
+## A wall with one cell through it, a coord event there walking the player back
+## until event 100, an NPC setting it for item 5, and a badge beyond: the proof
+## opens the gate only once the item is in hand, and refuses the item behind it.
+func test_a_key_item_behind_the_gate_it_opens_is_refused() -> void:
+	var probe: GameData = GameData.open_directory(_directory)
+	var crystal: bool = Gen2WorldState.is_crystal_profile(probe)
+	var end: int = Gen2WorldScript.END if crystal else Gen2WorldScript.GOLD_END
+	var flags: Array[int] = Gen2WorldState.BADGE_ENGINE_FLAGS if crystal \
+		else Gen2WorldState.BADGE_ENGINE_FLAGS_GOLD_SILVER
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		## checkevent 100 / iftrue .ok / applymovement PLAYER / end / .ok: end
+		"48:6100": [0x31, 100, 0, 0x09, 0x0B, 0x61,
+			Gen2WorldScript.raw_opcode(0x68, crystal), 0, 0x00, 0x70, end, end],
+		## checkitem 5 / iffalse .no / setevent 100 / end / .no: end
+		"48:6110": [0x21, 5, 0x08, 0x19, 0x61, 0x33, 100, 0, end, end],
+		## setflag of the first badge / end
+		"48:6120": [0x36, flags[0] & 0xFF, flags[0] >> 8, end],
+		"48:6130": [5, 1],
+		"48:6134": [6, 1],
+	})
+	var maps: Array = RomCache.read_json(RomCache.world_maps_path(_directory))
+	var west: Dictionary = maps[0]
+	var east: Dictionary = maps[1]
+	var start: Vector2i = Gen2WorldProgression.START_MAP
+	west["group"] = start.x
+	west["number"] = start.y
+	east["group"] = start.x
+	east["number"] = start.y + 1
+	var collision: Array = []
+	for index: int in 16 * 12:
+		collision.append(0x07 if index % 16 == 10 and index / 16 != 5 else 0)
+	west["collision"] = collision
+	east["collision"] = collision.map(func(_code: int) -> int: return 0)
+	west["connections"] = [{"direction": "east", "map_group": start.x, "map_number": start.y + 1,
+		"length": 6, "target_width_blocks": 8, "x_offset": 0, "y_offset": 0}]
+	east["connections"] = [{"direction": "west", "map_group": start.x, "map_number": start.y,
+		"length": 6, "target_width_blocks": 8, "x_offset": 0, "y_offset": 0}]
+	west["scripts"] = {"bank": 48}
+	east["scripts"] = {"bank": 48}
+	west["events"] = {"bank": 48, "coord_events": [{"scene": 0, "x": 10, "y": 5, "script": 0x6100}],
+		"objects": [
+			{"sprite": 1, "x": 3, "y": 3, "script": 0x6110, "object_type": 0, "movement": 2},
+			{"sprite": 1, "x": 4, "y": 8, "script": 0x6130, "object_type": 1, "event_flag": 200},
+		]}
+	east["events"] = {"bank": 48, "objects": [
+		{"sprite": 1, "x": 8, "y": 8, "script": 0x6120, "object_type": 0, "movement": 2},
+		{"sprite": 1, "x": 3, "y": 3, "script": 0x6134, "object_type": 1, "event_flag": 201},
+	]}
+	RomCache.write_json(RomCache.world_maps_path(_directory), [west, east])
+	Gen2WorldProgression.reset()
+	var data: GameData = GameData.open_directory(_directory)
+	var catalog: Gen2WorldCatalog = data.catalog()
+
+	var gates: Array = catalog.story().gates.filter(func(gate: Dictionary) -> bool:
+		return gate["cells"] == [[10, 5]])
+	assert_eq(gates.size(), 1, JSON.stringify(catalog.story().gates))
+	assert_eq(gates[0]["closing"], [["s:%d:%d=0" % [start.x, start.y], "!e:100"]])
+	var setters: Array = catalog.story().setters.filter(func(setter: Dictionary) -> bool:
+		return setter["sets"] == ["e:100"])
+	assert_eq(setters.size(), 1)
+	assert_true((setters[0]["requires"] as Array).has("i:5"), "the NPC sets the event on the item")
+
+	var balls: Dictionary = {}
+	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+		balls[int(row["item"])] = int(row["id"])
+	assert_true(bool(Gen2WorldProgression.validate(data, {})["ok"]), "the fixture's own placement")
+	var locked: Dictionary = Gen2WorldProgression.validate(data, {
+		balls[5]: {"item": 6}, balls[6]: {"item": 5},
+	})
+	assert_false(bool(locked["ok"]), "the item behind the gate it opens")
+	assert_eq(StringName(locked["missing"]["kind"]), Gen2WorldCatalog.KIND_BADGE)
+	assert_true(bool(Gen2WorldProgression.validate(data, {})["ok"]), "nothing was left installed")
+	Gen2WorldProgression.reset()
 
 
 ## The site still runs the cartridge's own script: only the number it hands over
@@ -9149,7 +9271,7 @@ func test_take_hidden_item_runs_the_maps_own_script_from_a_named_cell() -> void:
 	var results: Array = world.take_hidden_item(Vector2i(2, 5))
 	assert_eq(results.size(), 1, JSON.stringify(results))
 	assert_eq(results[0]["source"]["kind"], &"hidden_item")
-	assert_eq(results[0]["event"]["text"], "Found\n%s!" % _item_name(3))
+	assert_eq(results[0]["event"]["text"], "<PLAYER> found\n%s!" % _item_name(3))
 	_receipt_sound(world, &"special_sound")
 	assert_eq(_receipt_notify(world, 3)[0]["status"], &"complete")
 	assert_eq(world.state.items().get(3, 0), 1)
@@ -9515,7 +9637,7 @@ func test_a_deposit_moves_the_money_and_reports_it_behind_the_sound() -> void:
 		"ok": true, "amount": 1200,
 	})[0]["event"]["request"]
 	assert_eq(sound["kind"], &"audio_requested")
-	assert_eq(int(sound["values"]["address"]), Gen2WorldScriptRunner.SFX_TRANSACTION)
+	assert_eq(int(sound["values"]["address"]), Gen2Sfx.SFX_TRANSACTION)
 	assert_eq(
 		world.complete_runtime_request({"ok": true})[0]["event"]["text"], "Saved it."
 	)
@@ -9820,6 +9942,23 @@ func test_the_battle_tower_action_reads_and_writes_the_sram_section() -> void:
 	assert_eq(_final_status(_run_special(reset)), &"complete")
 	assert_eq(state.battle_tower().beaten, 0)
 	assert_eq(state.battle_tower().trainers[0], Gen2BattleTower.NO_TRAINER)
+
+
+## `BattleTowerAction_GSBall` and `BattleTowerAction_05` read SRAM bytes only the
+## Virtual Console hook and the mobile adapter write, so each leaves zero in
+## wScriptVar rather than the `setval` in front of it: the Goldenrod receptionist
+## has no GS BALL, and the tower's registration deletes no record.
+func test_the_gs_ball_and_mobile_record_actions_answer_zero() -> void:
+	for action: int in [Gen2BattleTower.ACTION_GS_BALL, Gen2BattleTower.ACTION_MOBILE_RECORD_CHECK]:
+		_write_special_script([
+			Gen2WorldScript.SETVAL, action,
+			Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BATTLE_TOWER_ACTION, 0,
+			Gen2WorldScript.WRITEMEM, 0xA0, 0xD1,
+			Gen2WorldScript.END,
+		])
+		var state := Gen2WorldState.new()
+		assert_eq(_final_status(_run_special(_special_world(state))), &"complete")
+		assert_eq(state.script_memory(0xD1A0), 0, "action %d" % action)
 
 
 ## `SaveBattleTowerLevelGroup` and `LoadBattleTowerLevelGroup` are the two halves

@@ -10,15 +10,10 @@ extends Node2D
 const PLAYER_COLOR: Color = Color("#d34a5a")
 const FALLBACK_BACKGROUND: Color = Color("#f5f1d8")
 
-## `.InitSprite`'s `add OAM_Y_OFS - 4`: every map object and tracking sprite
-## stands four pixels above its cell; the grass tuft is background and takes none.
-const SPRITE_LIFT := Vector2(0, -4)
-
 var _world: Gen2WorldAPI = null
 var _animation: Gen2WorldAnimation = null
-var _effects: Gen2WorldEffects = null
-var _actors: Gen2WorldActors = null
-var _encounters: Gen2WorldEncounters = null
+## Every sprite and background edit this view draws. See [Gen2WorldDrawList].
+var _draw_list: Gen2WorldDrawList = null
 var _anim_textures: Dictionary = {}
 var _time_of_day: int = Gen2WorldPalette.TIME_MORNING
 var _atlas: ImageTexture = null
@@ -40,9 +35,6 @@ var _background_color: Color = FALLBACK_BACKGROUND
 var _actor_textures: Dictionary = {}
 var _priority_atlas: ImageTexture = null
 var _priority_indices: PackedByteArray = PackedByteArray()
-## `HideSprites`: no map object and no player reaches OAM.
-var sprites_hidden: bool = false
-var _effect_sheets: Dictionary = {}
 var _effect_textures: Dictionary = {}
 ## The palette order the map fades are one step of, and `FillWhiteBGColor`
 ## beside it. The identity order is every other frame of the game.
@@ -71,10 +63,6 @@ var _transition_cells: PackedByteArray = PackedByteArray()
 var _transition_sources: PackedInt32Array = PackedInt32Array()
 var _transition_tiles: PackedByteArray = PackedByteArray()
 var _transition_palette: PackedColorArray = PackedColorArray()
-## Which map objects the transition has left in OAM, and which of them is the
-## opponent `RespawnPlayerAndOpponent` keeps beside the player.
-var _transition_sprites: int = Gen2BattleTransition.SPRITES_ALL
-var _transition_opponent: int = -1
 ## `StartTrainerBattle_Flash` writes `wBGP` and calls `DmgToCgbBGPals` alone, so
 ## the three flash passes are a background order and the sprites over them keep
 ## their own colours. The map fade is the other shape and goes through
@@ -87,28 +75,9 @@ var _poison_flash: bool = false
 var _transition_textures: Dictionary = {}
 
 
-## Gen2ModHost.RENDERER_EFFECTS_METHOD: the emote bubbles, boulder dust, grass
-## rustle and headbutt tree this view draws over the map. Presentation only, so a
-## renderer may be handed null and draw none of them.
-func set_effects(effects: Gen2WorldEffects) -> void:
-	_effects = effects
-	queue_redraw()
-
-
-## Gen2ModHost.RENDERER_ACTORS_METHOD: the sprites registered mods put in the
-## world. Presentation only, drawn with the map's own objects and taking part in
-## nothing else, so a renderer may be handed null and draw none of them.
-func set_actors(actors: Gen2WorldActors) -> void:
-	_actors = actors
-	queue_redraw()
-
-
-## Gen2ModHost.RENDERER_ENCOUNTERS_METHOD: the host's visible-encounter layer.
-## Its population is drawn through [method set_actors] with everything else; what
-## is read here is the shiny pulse alone, which is the cartridge's own battle
-## animation objects over the map and has no other layer to ride.
-func set_encounters(encounters: Gen2WorldEncounters) -> void:
-	_encounters = encounters
+## Gen2ModHost.RENDERER_DRAW_LIST_METHOD. Without one the map is drawn bare.
+func set_draw_list(draw_list: Gen2WorldDrawList) -> void:
+	_draw_list = draw_list
 	queue_redraw()
 
 
@@ -398,10 +367,11 @@ func _palette_tables(palettes: Array) -> Array:
 
 ## `DoBattleTransition` over the map: [param tiles] are `LoadBattleTransitionGFX`'s
 ## two, [param palette] the trainer flood (empty on a wild, whose black is the
-## cell's own colour 3) and [param order] the flash's `wBGP`.
+## cell's own colour 3) and [param order] the flash's `wBGP`. Which sprites it
+## leaves is the draw list's.
 func set_transition(
 	cells: PackedByteArray, tiles: PackedByteArray, palette: PackedColorArray,
-	sprites: int = Gen2BattleTransition.SPRITES_ALL, opponent: int = -1,
+	_sprites: int = Gen2BattleTransition.SPRITES_ALL, _opponent: int = -1,
 	order: int = Gen2BattleTransition.IDENTITY,
 	sources: PackedInt32Array = PackedInt32Array()
 ) -> void:
@@ -411,8 +381,6 @@ func set_transition(
 	_transition_cells = cells
 	_transition_tiles = tiles
 	_transition_palette = palette
-	_transition_sprites = sprites
-	_transition_opponent = opponent
 	_transition_order = order
 	if palette != was or order != was_order:
 		_transition_textures.clear()
@@ -431,8 +399,6 @@ func clear_transition() -> void:
 	_transition_sources = PackedInt32Array()
 	_transition_tiles = PackedByteArray()
 	_transition_palette = PackedColorArray()
-	_transition_sprites = Gen2BattleTransition.SPRITES_ALL
-	_transition_opponent = -1
 	_transition_textures.clear()
 	if _transition_order != Gen2BattleTransition.IDENTITY:
 		_transition_order = Gen2BattleTransition.IDENTITY
@@ -518,21 +484,20 @@ func _draw_transition(
 ## nineteenth, two a column pass, rather than anything the map holds there. A
 ## view wider than the screen scrolls its whole width the same way.
 func _draw_ss_anne_band(background: Vector2) -> void:
-	if _effects == null or _atlas == null or not _effects.ss_anne_active():
+	var scroll: Dictionary = _draw_list.band_scroll() if _draw_list != null else {}
+	if _atlas == null or scroll.is_empty():
 		return
-	var offset: int = _effects.ss_anne_band_offset()
-	if offset <= 0:
-		return
+	var offset: int = int(scroll["offset"])
 	var screen: Vector2 = screen_offset()
 	var first_x: int = floori((background.x + screen.x) / PokeTiles.TILE_WIDTH)
 	var first_y: int = floori((background.y + screen.y) / PokeTiles.TILE_HEIGHT)
 	var shift: int = posmod(offset, PokeTiles.TILE_WIDTH)
-	var top: int = Gen1Layout.SS_ANNE_BAND_TOP / PokeTiles.TILE_HEIGHT
-	var bottom: int = Gen1Layout.SS_ANNE_BAND_BOTTOM / PokeTiles.TILE_HEIGHT
+	var top: int = int(scroll["top"]) / PokeTiles.TILE_HEIGHT
+	var bottom: int = int(scroll["bottom"]) / PokeTiles.TILE_HEIGHT
 	var columns: int = Gen2WorldAPI.VIEW_PIXELS.x / PokeTiles.TILE_WIDTH
 	var band := Rect2(
-		Vector2(0, screen.y + Gen1Layout.SS_ANNE_BAND_TOP),
-		Vector2(view_pixels().x, Gen1Layout.SS_ANNE_BAND_BOTTOM - Gen1Layout.SS_ANNE_BAND_TOP)
+		Vector2(0, screen.y + int(scroll["top"])),
+		Vector2(view_pixels().x, int(scroll["bottom"]) - int(scroll["top"]))
 	)
 	var size := Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT)
 	var left: int = -int(screen.x) / PokeTiles.TILE_WIDTH
@@ -625,7 +590,7 @@ func refresh() -> void:
 ## on it rather than moving the picture.
 func _background_camera() -> Vector2:
 	var camera: Vector2 = _camera_pixels()
-	return camera if _effects == null else camera + _effects.offset()
+	return camera if _draw_list == null else camera + _draw_list.background_offset()
 
 
 ## The camera, snapped to the finest step this surface can draw: at six screen
@@ -817,377 +782,109 @@ func _draw() -> void:
 
 	var camera_pixels: Vector2 = _camera_pixels()
 	var background: Vector2 = _background_camera()
-	_draw_hidden_trees(background)
-	_draw_tile_overrides(background)
+	if _draw_list == null:
+		return
+	_draw_hidden_trees(background, _draw_list.hidden_tree_cells())
+	_draw_tile_overrides(background, _draw_list.tile_overrides())
 	_draw_ss_anne_band(background)
 	if not _transition_cells.is_empty():
 		_draw_transition(background)
-	if _transition_sprites == Gen2BattleTransition.SPRITES_NONE:
-		return
-
-	## `RespawnPlayerAndOpponent` at each outro's setup: from there the only map
-	## objects left in OAM are the player and, in a scripted battle, whoever
-	## `hLastTalked` names.
-	var battlers_only: bool = _transition_sprites == Gen2BattleTransition.SPRITES_BATTLERS
-	var player: Vector2 = Vector2(_world.player_view_pixel()) + SPRITE_LIFT
-	if not sprites_hidden:
-		var drawn: Array = _row_entries(battlers_only)
-		_draw_row_entries(drawn, camera_pixels, background, battlers_only)
-		player = _draw_player(background)
-	if battlers_only:
-		return
-	_draw_free_sprites(camera_pixels, player)
+	for row: Dictionary in _draw_list.sprites():
+		_draw_row(row, camera_pixels, background)
 
 
 ## [method Gen2WorldAPI.screen_tile_overrides]: a tile written straight into
 ## the background map, painted over the quad that still draws the block's own.
-func _draw_tile_overrides(background: Vector2) -> void:
-	for cell: Vector2i in _world.screen_tile_overrides():
-		var tile: int = int(_world.screen_tile_overrides()[cell])
-		draw_texture_rect_region(
-			_atlas,
-			Rect2(
-				Vector2(cell * PokeTiles.TILE_WIDTH) - background,
-				Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT),
-			),
-			Rect2(
-				Vector2(tile * PokeTiles.TILE_WIDTH, 0),
-				Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT),
-			),
-		)
+func _draw_tile_overrides(background: Vector2, overrides: Dictionary) -> void:
+	for cell: Vector2i in overrides:
+		_draw_atlas_tile(int(overrides[cell]), Vector2(cell * PokeTiles.TILE_WIDTH) - background)
 
 
-func _draw_hidden_trees(background: Vector2) -> void:
-	## `Cut_Headbutt_GetPixelFacing`'s tree goes away while its own sprite
-	## animation plays, which the map quad knows nothing about: the four tiles of
-	## the cell are painted over with the tileset's own blank one.
-	for cell: Vector2i in (_effects.hidden_tree_cells() if _effects != null else []):
+## `Cut_Headbutt_GetPixelFacing`'s tree goes away while its own sprite anim
+## plays, which the map quad knows nothing about: the four tiles of the cell are
+## painted over with the tileset's own blank one.
+func _draw_hidden_trees(background: Vector2, cells: Array) -> void:
+	for cell: Vector2i in cells:
 		var at: Vector2 = Vector2(cell * Gen2WorldAPI.CELL_PIXELS) - background
 		for row: int in Gen2Layout.MAP_BLOCK_CELL_WIDTH:
 			for column: int in Gen2Layout.MAP_BLOCK_CELL_WIDTH:
-				draw_texture_rect_region(
-					_atlas,
-					Rect2(
-						at + Vector2(column * PokeTiles.TILE_WIDTH, row * PokeTiles.TILE_HEIGHT),
-						Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT),
-					),
-					Rect2(
-						Vector2(
-							Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE * PokeTiles.TILE_WIDTH, 0
-						),
-						Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT),
-					),
+				_draw_atlas_tile(
+					Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE,
+					at + Vector2(column * PokeTiles.TILE_WIDTH, row * PokeTiles.TILE_HEIGHT)
 				)
 
 
-func _row_entries(battlers_only: bool) -> Array:
-	var objects: Array = _world.visible_objects()
-	objects.sort_custom(_sort_objects)
-	## A mod's actors are sorted into the same rows, carry no effect sprite, and
-	## are map objects here, so the respawn takes them with the rest.
-	var drawn: Array = []
-	for object: Gen2WorldObject in objects:
-		if battlers_only and object.index != _transition_opponent:
-			continue
-		drawn.append({"object": object, "row": float(object.cell.y)})
-	if _actors != null and not battlers_only:
-		for sprite: Dictionary in _actors.sprites():
-			drawn.append({"actor": sprite, "row": (sprite["position_cells"] as Vector2).y})
-	## Slot fifteen, drawn the way an actor is: its position is its own pixels.
-	var follower: Dictionary = _world.gen1_pikachu_sprite() if not battlers_only else {}
-	if not follower.is_empty():
-		drawn.append({"actor": follower, "row": (follower["position_cells"] as Vector2).y})
-	## The people on the maps around this one, sorted into the same rows: a view
-	## wide enough to see the next town is wide enough to see somebody standing
-	## in it. They are the world API's read-only copies and take no part in
-	## anything: see [method Gen2WorldAPI.connected_map_objects].
-	if not battlers_only and view_pixels() != Gen2WorldAPI.VIEW_PIXELS:
-		for entry: Dictionary in _world.connected_map_objects():
-			var neighbour: Gen2WorldObject = entry["object"]
-			if not neighbour.active or neighbour.sprite == null:
-				continue
-			var offset: Vector2i = entry["offset"]
-			drawn.append({
-				"object": neighbour,
-				"offset": offset,
-				"row": float(offset.y + neighbour.cell.y),
-			})
-	drawn.sort_custom(_sort_drawn)
-	return drawn
-
-
-func _draw_row_entries(
-	drawn: Array, camera_pixels: Vector2, background: Vector2, battlers_only: bool
-) -> void:
-	for entry: Dictionary in drawn:
-		if entry.has("actor"):
-			_draw_actor(entry["actor"], camera_pixels)
-			continue
-		var object: Gen2WorldObject = entry["object"]
-		var offset: Vector2i = entry.get("offset", Vector2i.ZERO)
-		var pixel: Vector2 = Vector2((object.cell + offset) * Gen2WorldAPI.CELL_PIXELS) \
-			+ Vector2(object.step_offset(Gen2WorldAPI.CELL_PIXELS, _world.pass_fraction)) \
-			- camera_pixels \
-			+ SPRITE_LIFT
-		var texture: Texture2D = _actor_texture(
-			object.sprite, object.palette, object.drawn_facing(), object.frame,
-			object.big_object_shape()
-		)
-		# The same sprite offset the player's hop takes, so a `jump_step` in a
-		# movement stream arcs rather than sliding.
-		var object_jump := Vector2(0, -object.height_offset_pixels())
-		if texture != null:
-			draw_texture(texture, pixel + object_jump)
-		if offset != Vector2i.ZERO:
-			continue
-		if _in_grass(object.cell):
-			_draw_grass_over(pixel, background)
-		if object.emote_visible:
-			_draw_emote(object.emote_id, pixel)
-		if not battlers_only:
-			_draw_effect_sprites(object.index, pixel)
-
-
-
-func _draw_player(background: Vector2) -> Vector2:
-	var player: Vector2 = Vector2(_world.player_view_pixel()) + SPRITE_LIFT
-	var anim: Dictionary = _effects.player_anim() if _effects != null else {}
-	if not anim.is_empty():
-		_draw_player_anim(anim, player)
-		return player
-	## The jump arc is a sprite offset, not a position: the shadow and the grass
-	## the hop leaves behind stay on the ground.
-	var jump: Vector2 = Vector2(0, _world.player_jump_offset())
-	var player_texture: Texture2D = _actor_texture(
-		_world.player_sprite(), _world.player_palette(), _world.player_drawn_facing(),
-		_world.player_walk_frame()
-	)
-	if not _world.player_visible() or _world.player_skyfall_hidden():
-		## `disappear PLAYER` takes object zero out of OAM; so does a skyfall.
-		return player
-	if player_texture != null:
-		if not (_world.fishing_busy() and _draw_fishing_body(player_texture, player + jump)):
-			draw_texture(player_texture, player + jump)
-		if _in_grass(_world.player_cell):
-			_draw_grass_over(player + jump, background)
-		if _world.fishing_busy():
-			_draw_fishing_rod(player + jump)
-		if _world.player_emote() != Gen2WorldActors.EMOTE_NONE:
-			_draw_emote(_world.player_emote(), player + jump)
-	else:
-		var marker := Rect2(Vector2(player.x, player.y), Vector2(16, 16))
-		draw_rect(marker, PLAYER_COLOR, false, 1.0)
-		draw_line(marker.position, marker.end, PLAYER_COLOR, 1.0)
-		draw_line(Vector2(marker.end.x, marker.position.y), Vector2(marker.position.x, marker.end.y), PLAYER_COLOR, 1.0)
-	return player
-
-
-## `PrepareOAMData`'s player under `_LeaveMapAnim` and `EnterMapAnim`, clipped
-## to the 160x144 pane; `LeaveMapThroughHoleAnim` moves the top half a row down.
-func _draw_player_anim(anim: Dictionary, player: Vector2) -> void:
-	if bool(anim.get("hidden", false)):
-		return
-	var sprite: Gen2WorldSprite = _world.data.overworld_sprite(Gen1Layout.SPRITE_BIRD) \
-		if bool(anim.get("bird", false)) else _world.player_sprite()
-	var image: int = int(anim.get("image", 0))
-	var texture: Texture2D = _actor_texture(
-		sprite, _world.player_palette(), image >> 2, image & 3
-	)
-	if texture == null:
-		return
-	var at: Vector2 = player + Vector2(
-		int(anim.get("x", Gen1Layout.PLAYER_SPRITE_PIXELS.x)) - Gen1Layout.PLAYER_SPRITE_PIXELS.x,
-		int(anim.get("y", Gen1Layout.PLAYER_SPRITE_PIXELS.y)) - Gen1Layout.PLAYER_SPRITE_PIXELS.y
-	)
-	var region := Rect2(Vector2.ZERO, texture.get_size())
-	if bool(anim.get("half", false)):
-		region.size.y *= 0.5
-		at.y += region.size.y
-	var shown: Rect2 = Rect2(at, region.size).intersection(
-		Rect2(screen_offset(), Vector2(Gen2WorldAPI.VIEW_PIXELS))
-	)
-	if shown.size.x <= 0.0 or shown.size.y <= 0.0:
-		return
+func _draw_atlas_tile(tile: int, at: Vector2) -> void:
+	var size := Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT)
 	draw_texture_rect_region(
-		texture, shown, Rect2(region.position + shown.position - at, shown.size)
+		_atlas, Rect2(at, size), Rect2(Vector2(tile * PokeTiles.TILE_WIDTH, 0), size)
 	)
 
 
-## The sprites the source draws from `wShadowOAMSprite36` up.
-func _draw_free_sprites(camera_pixels: Vector2, player: Vector2) -> void:
-	_draw_effect_sprites(-1, player)
-	## The tree sprite stands over its own cell rather than over an object, and
-	## the source draws every one of these from `wShadowOAMSprite36` up, which is
-	## past every map object. `Cut_Headbutt_GetPixelFacing` is a sprite anim
-	## rather than a map object, so it takes no lift.
-	for sprite: Dictionary in _effect_sprites():
-		if int(sprite["object_index"]) != -2:
-			continue
-		_draw_effect_sprite(
-			sprite,
-			Vector2((sprite["cell"] as Vector2i) * Gen2WorldAPI.CELL_PIXELS) - camera_pixels,
-		)
-	## `HealMachineAnim` writes OAM at fixed screen pixels rather than over an
-	## object or a cell, so the camera does not move it. [method screen_offset]
-	## and not the buffer's own corner: a hardware pixel is measured from the
-	## 160x144 rectangle, which SCREEN FILL puts in the middle of something
-	## wider, and the same offset is what `_draw_transition` reads its cells at.
-	var screen: Vector2 = screen_offset()
-	for sprite: Dictionary in _effect_sprites():
-		if bool(sprite.get("screen", false)):
-			_draw_effect_sprite(sprite, screen)
-	_draw_encounter_pulse(camera_pixels)
-
-## `StartTrainerBattle_LoadPokeBallGraphics.copypals` writes the trainer palette
-## over `wOBPals1/2 palette PAL_OW_TREE` and `PAL_OW_ROCK` as well as
-## `PAL_BG_TEXT`, so a boulder or a fruit tree standing on the map turns with the
-## background it is standing on.
-func _sprite_palette(palette: int) -> PackedColorArray:
-	if not _transition_palette.is_empty() \
-		and palette in [Gen2WorldEffects.PAL_OW_TREE, Gen2WorldEffects.PAL_OW_ROCK]:
-		return _transition_palette
-	return _overworld_sprite_colors(palette)
+## One row of [method Gen2WorldDrawList.sprites], at the surface pixel its
+## anchor puts it on.
+func _draw_row(row: Dictionary, camera_pixels: Vector2, background: Vector2) -> void:
+	var origin: Vector2 = row["origin"]
+	var at: Vector2 = origin + row["offset"]
+	match StringName(row["anchor"]):
+		Gen2WorldDrawList.ANCHOR_WORLD:
+			at = origin - camera_pixels + row["offset"]
+		Gen2WorldDrawList.ANCHOR_SCREEN:
+			at = screen_offset() + origin + row["offset"]
+	match StringName(row["kind"]):
+		Gen2WorldDrawList.KIND_SPRITE:
+			_draw_sprite_row(row, at)
+		Gen2WorldDrawList.KIND_TILES:
+			for tile: Dictionary in row["tiles"]:
+				var texture: Texture2D = _tile_texture(row, tile)
+				if texture != null:
+					draw_texture(texture, at + Vector2(tile["offset"] as Vector2i))
+		Gen2WorldDrawList.KIND_GRASS:
+			_draw_grass_over(at, background)
+		Gen2WorldDrawList.KIND_PULSE:
+			var pulse: Texture2D = _pulse_texture(row)
+			if pulse != null:
+				draw_texture(pulse, at)
 
 
-func _overworld_sprite_colors(palette: int) -> PackedColorArray:
-	return Gen2WorldPalette.overworld_sprite_colors(
-		_world.data, _world.current_map, palette, _time_of_day,
-		_world.gen1_last_map(), _world.gen1_map_pal_offset
-	)
-
-
-func _gen1_map_colors() -> PackedColorArray:
-	return Gen2WorldPalette.gen1_map_colors(
-		_world.data, _world.current_map, _world.gen1_last_map()
-	)
-
-
-func _actor_texture(
-	sprite: Gen2WorldSprite,
-	palette_override: int,
-	facing: int,
-	frame: int,
-	big_shape: int = Gen2WorldSprite.BIG_SHAPE_NONE,
-	color_override: PackedColorArray = PackedColorArray(),
-) -> Texture2D:
-	if sprite == null or _world == null or _world.data == null:
-		return null
-	var palette: int = palette_override if palette_override != 0 else sprite.default_palette
-	## Packed rather than formatted: every sprite on screen asks for one of these
-	## on every drawn frame, and the override is empty for all but a visible
-	## encounter. Twelve bits for the sprite number leaves every field room for
-	## more than the cartridge has, and the hash sits above all of them.
-	var key: int = sprite.sprite_type | (sprite.number << 3) | (palette << 15) \
-		| (facing << 19) | (frame << 22) | (big_shape << 25) | (_time_of_day << 28) \
-		| (hash(color_override) << 30)
-	if _actor_textures.has(key):
-		return _actor_textures[key]
-	var indices: PackedByteArray = _world.data.overworld_icon_indices(sprite.icon_number) \
-		if sprite.sprite_type == Gen2WorldSprite.TYPE_MON_ICON \
-		else _world.data.overworld_sprite_indices(sprite.number)
-	## A visible encounter names the species' own four colours; everything else
-	## wears one of the map's sprite palettes.
-	## `DmgToCgbObjPals` takes the fade's own order too, and `FillWhiteBGColor`
-	## is background only, so a sprite flattens onto its own colour 0.
-	var colors: PackedColorArray = Gen2WorldPalette.fade_palette(
-		color_override if not color_override.is_empty() \
-			else _sprite_palette(palette),
-		_fade_order,
-	)
-	var image: Image = Gen2WorldSprite.big_image_for(sprite, indices, colors, big_shape) \
-		if big_shape != Gen2WorldSprite.BIG_SHAPE_NONE \
-		else Gen2WorldSprite.image_for(sprite, indices, colors, facing, frame)
-	var texture: Texture2D = ImageTexture.create_from_image(image)
-	_actor_textures[key] = texture
-	return texture
-
-
-## One mod actor, drawn from the [Gen2WorldSprite] the actor layer resolved for
-## it. Its position is in walk cells, the unit `player_position_cells()` is in,
-## so a follower halfway through a step is drawn halfway.
-func _draw_actor(sprite: Dictionary, camera_pixels: Vector2) -> void:
-	var cell_position: Vector2 = sprite["position_cells"]
-	var pixel: Vector2 = cell_position * float(Gen2WorldAPI.CELL_PIXELS) - camera_pixels \
-		+ SPRITE_LIFT
-	var texture: Texture2D = _actor_texture(
-		sprite["sprite"], 0, int(sprite["facing"]), int(sprite["frame"]),
-		Gen2WorldSprite.BIG_SHAPE_NONE, sprite.get("colors", PackedColorArray())
-	)
+## A sprite row: the whole picture, a `region` of it, mirrored, or clipped to
+## the 160x144 pane; the player with no picture is a crossed box.
+func _draw_sprite_row(row: Dictionary, at: Vector2) -> void:
+	var texture: Texture2D = _sprite_texture(row)
 	if texture == null:
+		if row["role"] == &"player":
+			_draw_player_marker(at)
 		return
-	# The same sprite offset an object's `jump_step` takes, so an actor on a
-	# ledge arcs over it rather than sliding through it.
-	var jump := Vector2(0, -float(sprite.get("height_offset_pixels", 0.0)))
-	if bool(sprite.get("shadow", false)):
-		_draw_actor_shadow(pixel)
-	if not bool(sprite.get("hidden", false)):
-		draw_texture(texture, pixel + jump)
-		var grass_cell: Vector2i = sprite.get(
-			"grass_cell", Vector2i(roundi(cell_position.x), roundi(cell_position.y))
+	var region: Rect2 = row["region"]
+	if region.has_area() and not bool(row["clip_to_screen"]):
+		draw_texture_rect_region(texture, Rect2(at, region.size), region)
+		return
+	if not region.has_area():
+		region = Rect2(Vector2.ZERO, texture.get_size())
+	if bool(row["clip_to_screen"]):
+		var shown: Rect2 = Rect2(at, region.size).intersection(
+			Rect2(screen_offset(), Vector2(Gen2WorldAPI.VIEW_PIXELS))
 		)
-		if _in_grass(grass_cell):
-			_draw_grass_over(pixel + jump, _background_camera())
-	## The same bubble a map object's `showemote` puts up, over an actor that
-	## asked for one. Drawn after the grass, as an object's is: `SpawnEmote` is
-	## its own OAM and stands over the tuft rather than behind it.
-	var emote: int = int(sprite.get("emote", Gen2WorldActors.EMOTE_NONE))
-	if emote != Gen2WorldActors.EMOTE_NONE:
-		_draw_emote(emote, pixel)
-
-
-## `LoadPikachuShadowOAMData`: the ledge shadow's tile and its mirror, twelve
-## pixels under the sprite's ground position.
-func _draw_actor_shadow(pixel: Vector2) -> void:
-	var sheet: Dictionary = _effect_sheet(String(Gen2WorldEffects.SPRITE_SHADOW))
-	if sheet.is_empty():
+		if shown.size.x > 0.0 and shown.size.y > 0.0:
+			draw_texture_rect_region(
+				texture, shown, Rect2(region.position + shown.position - at, shown.size)
+			)
 		return
-	for tile: int in 2:
-		_draw_effect_tile(
-			sheet, 0, Gen2WorldEffects.PAL_OW_EMOTE, tile == 1,
-			pixel + Vector2(8.0 * tile, 12.0), 0
-		)
-
-
-## The object pass's own order, with a mod's actors sorted into it: the row a
-## thing stands on, then the map's objects before any actor on that row.
-func _sort_drawn(first: Dictionary, second: Dictionary) -> bool:
-	if is_equal_approx(float(first["row"]), float(second["row"])):
-		if first.has("object") and second.has("object"):
-			return _sort_objects(first["object"], second["object"])
-		return first.has("object")
-	return float(first["row"]) < float(second["row"])
-
-
-func _sort_objects(first: Gen2WorldObject, second: Gen2WorldObject) -> bool:
-	if first.cell.y == second.cell.y:
-		return first.index < second.index
-	return first.cell.y < second.cell.y
-
-
-## `SpawnEmote`: four tiles of the emote's own sheet, two rows above the object
-## the source's `MovementFunction_Emote` writes `-2 * TILE_WIDTH` for.
-func _draw_emote(emote_id: int, pixel: Vector2) -> void:
-	if emote_id < 0 or emote_id >= Gen2Layout.EMOTE_NAMES.size():
+	if bool(row["flip_x"]):
+		var size: Vector2 = texture.get_size()
+		draw_texture_rect(texture, Rect2(at + Vector2(size.x, 0.0), Vector2(-size.x, size.y)), false)
 		return
-	var sheet: Dictionary = _effect_sheet(Gen2Layout.EMOTE_NAMES[emote_id])
-	if sheet.is_empty():
-		return
-	for index: int in 4:
-		_draw_effect_tile(
-			sheet,
-			index,
-			Gen2WorldEffects.PAL_OW_EMOTE,
-			false,
-			pixel + Vector2((index & 1) * 8, (index >> 1) * 8 - 16),
-		)
+	draw_texture(texture, at)
 
 
-## `SetTallGrassFlags` sets IN_GRASS_F on an object standing in either kind of
-## grass, and `.InitSprite` turns that into OAM_PRIO on the two tiles carrying
-## RELATIVE_ATTRIBUTES, which are the bottom half of every facing: the grass in
-## front of the object covers its legs.
-func _in_grass(cell: Vector2i) -> bool:
-	return _world != null and _world.in_grass(cell)
+func _draw_player_marker(at: Vector2) -> void:
+	var marker := Rect2(at, Vector2(16, 16))
+	draw_rect(marker, PLAYER_COLOR, false, 1.0)
+	draw_line(marker.position, marker.end, PLAYER_COLOR, 1.0)
+	draw_line(
+		Vector2(marker.end.x, marker.position.y), Vector2(marker.position.x, marker.end.y),
+		PLAYER_COLOR, 1.0
+	)
 
 
 ## Redraws the map over the bottom half of a sprite drawn at [param pixel], with
@@ -1311,284 +1008,50 @@ func _build_priority_atlas() -> void:
 	)
 
 
-func _fishing_sheet() -> Dictionary:
-	var sheet: Dictionary = _effect_sheet(
-		Gen2WorldEffects.FISHING_SHEETS[1 if _world.player_female() else 0]
-	)
-	return sheet if not sheet.is_empty() \
-		else _effect_sheet(Gen2WorldEffects.FISHING_SHEETS[0])
-
-
-## `LoadFishingGFX` replaces the player's own lower half, so the standing picture
-## is drawn to the waist and the sheet's pair finishes it.
-func _draw_fishing_body(player_texture: Texture2D, pixel: Vector2) -> bool:
-	var sheet: Dictionary = _fishing_sheet()
-	if sheet.is_empty():
-		return false
-	var size: Vector2 = player_texture.get_size()
-	var half: float = size.y * 0.5
-	draw_texture_rect_region(
-		player_texture, Rect2(pixel, Vector2(size.x, half)),
-		Rect2(Vector2.ZERO, Vector2(size.x, half))
-	)
-	var facing: int = clampi(
-		_world.player_facing, 0, Gen2WorldEffects.FISHING_BODY_TILES.size() - 1
-	)
-	var pair: Array = Gen2WorldEffects.FISHING_BODY_TILES[facing]
-	for cell: int in pair.size():
-		var tile: Dictionary = pair[cell]
-		_draw_effect_tile(
-			sheet, int(tile["tile"]), _world.player_palette(), bool(tile["flip_x"]),
-			pixel + Vector2(cell * PokeTiles.TILE_WIDTH, half)
-		)
-	return true
-
-
-## `FacingFishDown` and its three siblings: one more tile of the same sheet, put
-## up by `Script_FishCastRod`. Part of the facing, so it wears the player's palette.
-func _draw_fishing_rod(pixel: Vector2) -> void:
-	var sheet: Dictionary = _fishing_sheet()
-	if sheet.is_empty():
-		return
-	var facing: int = clampi(_world.player_facing, 0, Gen2WorldEffects.FISHING_ROD_TILES.size() - 1)
-	var tile: Dictionary = Gen2WorldEffects.FISHING_ROD_TILES[facing]
-	_draw_effect_tile(
-		sheet, int(tile["tile"]), _world.player_palette(), bool(tile["flip_x"]),
-		pixel + Vector2(tile["offset"] as Vector2i),
-	)
-
-
-## The enemy battler's own box on the battle screen, in pixels: `wShadowOAM` from
-## an animation aimed at it is written around this, so translating its centre
-## onto a walk cell's is what puts the sparkle over the Pokemon out here.
-const BATTLER_CENTRE := Vector2(
-	(Gen2BattleScreenMap.ENEMY_AT.x + 0.5 * Gen2BattleScreenMap.ENEMY_SIDE) * PokeTiles.TILE_WIDTH,
-	(Gen2BattleScreenMap.ENEMY_AT.y + 0.5 * Gen2BattleScreenMap.ENEMY_SIDE) * PokeTiles.TILE_HEIGHT
-)
-
-
-## The shiny pulse: the cartridge's own `ANIM_SEND_OUT_MON` objects, drawn where
-## the Pokemon stands instead of where a battler would. The field and background
-## layer the animation shares the screen with in a battle is simply not run, so
-## what lands here is the sparkle and nothing behind it.
-func _draw_encounter_pulse(camera_pixels: Vector2) -> void:
-	if _encounters == null or _world == null or _world.data == null:
-		return
-	var anchor: Variant = _encounters.pulse_anchor()
-	if not anchor is Vector2:
-		return
-	var origin: Vector2 = (anchor as Vector2) - camera_pixels \
-		+ Vector2(Gen2WorldAPI.CELL_PIXELS, Gen2WorldAPI.CELL_PIXELS) * 0.5 - BATTLER_CENTRE
-	var window: Array = _encounters.pulse_tiles()
-	var pair: Array = _encounters.pulse_battler_pair()
-	for entry: Variant in _encounters.pulse_sprites():
-		if entry is Dictionary:
-			_draw_pulse_sprite(entry as Dictionary, window, pair, origin)
-
-
-func _draw_pulse_sprite(
-	sprite: Dictionary, window: Array, pair: Array, origin: Vector2
-) -> void:
-	var at: int = int(sprite.get("tile", 0)) - Gen2BattleAnimObject.BASE_TILE
-	if at < 0 or at >= window.size() or not window[at] is Dictionary:
-		return
-	var slot: Dictionary = window[at]
-	# `anim_battlergfx_*` moves a battler as objects and has no picture out here.
-	if not slot.has("gfx"):
-		return
-	var attributes: int = int(sprite.get("attributes", 0))
-	var texture: Texture2D = _pulse_texture(
-		int(slot["gfx"]), int(slot["tile"]), attributes, pair
-	)
-	if texture == null:
-		return
-	draw_texture(texture, origin + Vector2(
-		float(int(sprite.get("x", 0)) - 8), float(int(sprite.get("y", 0)) - 16)
-	))
-
-
-func _pulse_texture(
-	gfx: int, tile: int, attributes: int, pair: Array
-) -> Texture2D:
-	var key: String = "%d:%d:%d:%s" % [
-		gfx, tile, attributes & (Gen2BattleAnimObject.OAM_SHARED_FLAGS
-			| Gen2BattleAnimObject.OAM_PALETTE), str(pair),
-	]
-	if _anim_textures.has(key):
-		return _anim_textures[key]
-	var strip: PackedByteArray = _world.data.battle_anim_gfx_indices(gfx)
-	@warning_ignore("integer_division")
-	var width: int = strip.size() / PokeTiles.TILE_HEIGHT
-	if width <= 0 or (tile + 1) * PokeTiles.TILE_WIDTH > width:
+## A sprite row's picture. `DmgToCgbObjPals` takes the fade's own order too, and
+## `FillWhiteBGColor` is background only, so a sprite flattens onto its colour 0.
+## Keyed on the colours, since those are what the palette and the hour chose.
+func _sprite_texture(row: Dictionary) -> Texture2D:
+	var sprite: Gen2WorldSprite = row["sprite"]
+	if sprite == null or _draw_list == null:
 		return null
-	var pixels := PackedByteArray()
-	pixels.resize(PokeTiles.TILE_PIXELS)
-	for row: int in PokeTiles.TILE_HEIGHT:
-		var from: int = row * width + tile * PokeTiles.TILE_WIDTH
-		for column: int in PokeTiles.TILE_WIDTH:
-			pixels[row * PokeTiles.TILE_WIDTH + column] = strip[from + column]
-	var image: Image = Gen2PicImage.from_indices(
-		pixels, PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT,
-		_world.data.battle_object_palette(
-			attributes & Gen2BattleAnimObject.OAM_PALETTE, pair
-		),
-		true
+	var colors: PackedColorArray = row["colors"]
+	var key: int = sprite.sprite_type | (sprite.number << 3) | (int(row["facing"]) << 19) \
+		| (int(row["frame"]) << 22) | (int(row["big_shape"]) << 25) | (hash(colors) << 30)
+	if _actor_textures.has(key):
+		return _actor_textures[key]
+	var image: Image = _draw_list.sprite_image(
+		row, Gen2WorldPalette.fade_palette(colors, _fade_order)
 	)
-	if (attributes & Gen2BattleAnimObject.OAM_XFLIP) != 0:
-		image.flip_x()
-	if (attributes & Gen2BattleAnimObject.OAM_YFLIP) != 0:
-		image.flip_y()
-	var texture: Texture2D = ImageTexture.create_from_image(image)
-	_anim_textures[key] = texture
+	var texture: Texture2D = ImageTexture.create_from_image(image) if image != null else null
+	_actor_textures[key] = texture
 	return texture
 
 
-func _effect_sprites() -> Array:
-	return _effects.sprites() if _effects != null else []
-
-
-## Whatever [param object_index] is carrying this frame, drawn over it: the dust
-## and the grass rustle are STEP_TYPE_TRACKING_OBJECT and follow the object that
-## spawned them, so their anchor is where that object is drawn. -1 is the player.
-func _draw_effect_sprites(object_index: int, pixel: Vector2) -> void:
-	for sprite: Dictionary in _effect_sprites():
-		if bool(sprite.get("screen", false)):
-			continue
-		if int(sprite["object_index"]) == object_index:
-			_draw_effect_sprite(sprite, pixel)
-
-
-func _draw_effect_sprite(sprite: Dictionary, anchor: Vector2) -> void:
-	if sprite.has("icon"):
-		_draw_fly_mon(sprite, anchor)
-		return
-	var sheet: Dictionary = _effect_sheet(String(sprite["kind"]))
-	if sheet.is_empty():
-		return
-	for tile: Dictionary in sprite["tiles"]:
-		_draw_effect_tile(
-			sheet,
-			int(tile["tile"]),
-			int(sprite["palette"]),
-			bool(tile["flip_x"]),
-			anchor + Vector2(tile["offset"] as Vector2i),
-			int(sprite.get("rotation", 0)),
-			bool(tile.get("flip_y", false)),
-		)
-
-
-## `.OAMData_RedWalk` names PAL_OW_RED, so the icon wears the player's own
-## overworld palette.
-func _draw_fly_mon(sprite: Dictionary, anchor: Vector2) -> void:
-	var tiles: Array = sprite["tiles"]
-	if tiles.is_empty() or _world == null or _world.data == null:
-		return
-	var icon: Gen2WorldSprite = _world.data.overworld_icon(int(sprite["icon"]))
-	var tile: Dictionary = tiles[0]
-	var facing: int = Gen2WorldSprite.FACING_UP if int(tile["tile"]) == 1 \
-		else Gen2WorldSprite.FACING_DOWN
-	var texture: Texture2D = _actor_texture(
-		icon, 0, facing, 0, Gen2WorldSprite.BIG_SHAPE_NONE,
-		_sprite_palette(int(sprite["palette"]))
-	) if icon != null else null
-	if texture == null:
-		return
-	var at: Vector2 = anchor + Vector2(tile["offset"] as Vector2i)
-	var size := Vector2(texture.get_width(), texture.get_height())
-	if bool(tile["flip_x"]):
-		draw_texture_rect(
-			texture, Rect2(at + Vector2(size.x, 0.0), Vector2(-size.x, size.y)), false
-		)
-		return
-	draw_texture(texture, at)
-
-
-## A sheet with a `colors` of its own is the heal machine, whose palette
-## `.LoadPalettes` writes over PAL_OW_TREE and `.FlashPalettes` then rotates
-## left. Everything else wears the overworld palette its spawn named, at the
-## time of day the map is on.
-func _effect_palette(sheet: Dictionary, palette_index: int, rotation_step: int) -> PackedColorArray:
-	var own: PackedColorArray = sheet.get("colors", PackedColorArray())
-	if own.is_empty():
-		## Generation 1's machine wears `rOBP1`, which `FlashSprite8Times` xors
-		## $28 into, and the smoke wears the byte its record carries: the map's
-		## own four through a DMG order, where Crystal's four rotate.
-		if palette_index == Gen2WorldEffects.OBP_PALETTE:
-			return Gen2WorldPalette.fade_palette(_gen1_map_colors(), rotation_step)
-		if palette_index == Gen2WorldEffects.HEAL_MACHINE_PALETTE \
-			and _world.data.generation == RomRegistry.GEN1:
-			var flashed: int = Gen1Layout.HEAL_MACHINE_OBP1_FLASH if rotation_step & 1 else 0
-			return Gen2WorldPalette.fade_palette(
-				_gen1_map_colors(), Gen1Layout.HEAL_MACHINE_OBP1 ^ flashed
-			)
-		return _overworld_sprite_colors(palette_index)
-	var rotated := PackedColorArray()
-	for slot: int in own.size():
-		rotated.append(own[(slot + rotation_step) % own.size()])
-	return rotated
-
-
-func _effect_sheet(sheet_name: String) -> Dictionary:
-	if _world == null or _world.data == null:
-		return {}
-	if _effect_sheets.has(sheet_name):
-		return _effect_sheets[sheet_name]
-	var sheet: Dictionary = _gen1_cut_sheet(sheet_name)
-	if sheet.is_empty():
-		sheet = _world.data.overworld_effect(sheet_name)
-	_effect_sheets[sheet_name] = sheet
-	return sheet
-
-
-## `InitCutAnimOAM` copies its tiles out of `Overworld_GFX` for a tree and
-## `MoveAnimationTiles1` for grass, so the cut records index those strips whole.
-func _gen1_cut_sheet(sheet_name: String) -> Dictionary:
-	var strip: PackedByteArray = PackedByteArray()
-	if sheet_name == Gen2WorldEffects.SPRITE_GEN1_CUT_TREE:
-		strip = _world.data.world_tileset_indices(Gen1Layout.TILESET_OVERWORLD)
-	elif sheet_name == Gen2WorldEffects.SPRITE_GEN1_CUT_GRASS:
-		strip = _world.data.battle_anim_gfx_indices(0)
-	if strip.is_empty():
-		return {}
-	@warning_ignore("integer_division")
-	var tiles: int = strip.size() / PokeTiles.TILE_PIXELS
-	return {"name": sheet_name, "tiles": tiles, "vtile": 0, "colors": PackedColorArray(), "indices": strip}
-
-
-## One 8x8 tile of an effect sheet. Index 0 is the transparent colour here, as it
-## is for every object: these are sprites, not background.
-## [param rotation_step] is `.FlashPalettes`' rotate-left count, which only a sheet
-## carrying its own palette can be asked for.
-func _draw_effect_tile(
-	sheet: Dictionary, tile: int, palette_index: int, flip_x: bool, at: Vector2,
-	rotation_step: int = 0, flip_y: bool = false
-) -> void:
-	var key: String = "%s:%d:%d:%d:%d:%d:%d" % [
-		sheet["name"], tile, palette_index, int(flip_x), _time_of_day, rotation_step, int(flip_y),
+func _tile_texture(row: Dictionary, tile: Dictionary) -> Texture2D:
+	var colors: PackedColorArray = row["colors"]
+	var key: String = "%s:%d:%d:%d:%d" % [
+		row["sheet"], int(tile["tile"]), int(tile["flip_x"]), int(tile["flip_y"]), hash(colors),
 	]
-	var texture: Texture2D = _effect_textures.get(key, null)
-	if texture == null:
-		var indices: PackedByteArray = sheet["indices"]
-		var tiles: int = int(sheet["tiles"])
-		if tile < 0 or tile >= tiles or indices.size() < tiles * PokeTiles.TILE_PIXELS:
-			return
-		var palette: PackedColorArray = _effect_palette(sheet, palette_index, rotation_step)
-		var image := Image.create(
-			PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT, false, Image.FORMAT_RGBA8
-		)
-		var width: int = tiles * PokeTiles.TILE_WIDTH
-		for y: int in PokeTiles.TILE_HEIGHT:
-			for x: int in PokeTiles.TILE_WIDTH:
-				var color_index: int = int(indices[y * width + tile * PokeTiles.TILE_WIDTH + x])
-				var color: Color = palette[color_index] if color_index < palette.size() \
-					else Color.MAGENTA
-				if color_index == 0:
-					color.a = 0.0
-				image.set_pixel(x, y, color)
-		if flip_x:
-			image.flip_x()
-		if flip_y:
-			image.flip_y()
-		texture = ImageTexture.create_from_image(image)
-		_effect_textures[key] = texture
-	draw_texture(texture, at)
+	if _effect_textures.has(key):
+		return _effect_textures[key]
+	var image: Image = _draw_list.tile_image(
+		row["sheet"], int(tile["tile"]), colors, bool(tile["flip_x"]), bool(tile["flip_y"])
+	)
+	var texture: Texture2D = ImageTexture.create_from_image(image) if image != null else null
+	_effect_textures[key] = texture
+	return texture
+
+
+func _pulse_texture(row: Dictionary) -> Texture2D:
+	var attributes: int = int(row["attributes"]) & (Gen2BattleAnimObject.OAM_SHARED_FLAGS
+		| Gen2BattleAnimObject.OAM_PALETTE)
+	var key: String = "%d:%d:%d:%s" % [
+		int(row["gfx"]), int(row["tile"]), attributes, str(row["pair"]),
+	]
+	if _anim_textures.has(key):
+		return _anim_textures[key]
+	var image: Image = _draw_list.pulse_image(row)
+	var texture: Texture2D = ImageTexture.create_from_image(image) if image != null else null
+	_anim_textures[key] = texture
+	return texture

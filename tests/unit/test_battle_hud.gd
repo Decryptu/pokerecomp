@@ -272,12 +272,50 @@ func test_the_level_line_carries_gender_and_status() -> void:
 const FONT_INK: int = 3
 
 
-func _panels(hud: Gen2BattleHud, status: int, gender: StringName) -> PackedByteArray:
+## Through [method Gen2BattleHud.draw_panels], the one path every renderer takes.
+func _panels(
+	hud: Gen2BattleHud, status: int, gender: StringName, extra: Dictionary = {}
+) -> PackedByteArray:
 	var screen: PackedByteArray = PackedByteArray()
 	screen.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
-	hud.draw_enemy(screen, Gen2Screen.WIDTH, "PIDGEY", 5, false, status, gender)
-	hud.draw_player(screen, Gen2Screen.WIDTH, "CYNDAQUIL", 5, 18, 18, status, gender)
+	var view: Dictionary = {
+		"enemy_name": "PIDGEY", "enemy_level": 5, "enemy_status": status,
+		"enemy_gender": gender, "player_name": "CYNDAQUIL", "player_level": 5,
+		"player_hp": 18, "player_max_hp": 18, "player_status": status,
+		"player_gender": gender,
+	}
+	view.merge(extra, true)
+	hud.draw_panels(screen, Gen2Screen.WIDTH, view)
 	return screen
+
+
+## Each panel answers its own side's `*_hud_visible`, the caught ball rides the
+## view, and the party-ball frame is drawn from its cells whichever panel is up.
+func test_the_panels_are_drawn_from_the_view_alone() -> void:
+	_write_cache()
+	var hud: Gen2BattleHud = Gen2BattleHud.from_data(_data())
+	var both: PackedByteArray = _panels(hud, Gen2Status.NONE, &"")
+	var direct: PackedByteArray = PackedByteArray()
+	direct.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	hud.draw_enemy(direct, Gen2Screen.WIDTH, "PIDGEY", 5)
+	hud.draw_player(direct, Gen2Screen.WIDTH, "CYNDAQUIL", 5, 18, 18)
+	assert_eq(both, direct, "the same panels the two calls draw")
+
+	var no_enemy: PackedByteArray = _panels(
+		hud, Gen2Status.NONE, &"", {"enemy_hud_visible": false}
+	)
+	assert_eq(_ink_in_row(no_enemy, Gen2BattleHud.ENEMY_NAME.y), 0)
+	assert_ne(_ink_in_row(no_enemy, Gen2BattleHud.PLAYER_BAR.y), 0)
+	var caught: PackedByteArray = _panels(hud, Gen2Status.NONE, &"", {"enemy_caught": true})
+	assert_eq(_cell(both, Gen2BattleHud.ENEMY_CAUGHT), 0)
+	assert_ne(_cell(caught, Gen2BattleHud.ENEMY_CAUGHT), 0, "the ball")
+
+	var framed: PackedByteArray = _panels(hud, Gen2Status.NONE, &"", {
+		"enemy_hud_visible": false, "player_hud_visible": false,
+		"trainer_hud_border": [{"tile": Gen2BattleTiles.HUD_BOTTOM, "x": 12, "y": 4}],
+	})
+	assert_ne(_cell(framed, Vector2i(12, 4)), 0, "the frame's one cell")
+	assert_eq(Gen2BattleHud.panels_key({}).size(), Gen2BattleHud.PANEL_KEYS.size())
 
 
 func _cell(screen: PackedByteArray, cell: Vector2i) -> int:
