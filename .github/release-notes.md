@@ -3,23 +3,19 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- PP UP works on all six games. Pick the move from the pack and its PP goes up by a fifth, up to three times. Saves imported from a cartridge keep the PP Ups they had, and exported ones carry them back.
-- Status animations in battle: the sleep, confusion and love animations on every turn a Pokemon is asleep, confused or in love, and the poison, burn, Leech Seed, Nightmare and Curse animations with their damage.
-- Gold, Silver and Crystal print "X is in love with Y!" every turn an infatuated Pokemon tries to move.
-- Red, Blue and Yellow show both parties' Poke Ball rows when a battle starts. On all six games, a trainer's row comes back, with the fainted one crossed out, before their next Pokemon comes out.
-- Mods can rewrite any wild table while the game runs: grass, surf, fishing, Headbutt, Rock Smash, swarms, the Bug-Catching Contest and roamers. A switch in a mod's settings can put its changes in or take them back without a restart. A Pokemon added by another mod can be met in the wild.
+- Mods can put a PC row on the start menu that opens the whole Pokemon Center PC: BILL'S PC, your own PC, PROF.OAK'S PC and the Hall of Fame. On Gold, Silver and Crystal it needs a Pokemon in the party, like the real PC.
+- The save editor shows each party Pokemon's gender and can switch it. It lists all 20 slots of a box and every item in the bag, picks items by name, and removes the selected item.
 
 ## Fixed
 
-- A nicknamed Pokemon is called by its nickname in battle. The HUD, "Go! X!", the EXP line, level-ups and move learning all showed the species name.
-- The status lines on Gold, Silver and Crystal read as on the cartridge: "X's fully paralyzed!", "X's paralyzed! Maybe it can't attack!", "X's badly poisoned!", "X is hurt by poison!", "X's hurt by its burn!" and "X's infatuation kept it from attacking!".
-- Learning a new move in battle asks the question once, with no extra line in front. Red, Blue and Yellow asked it twice. Forgetting a move says "1, 2 and... Poof!" again.
-- Red, Blue and Yellow say "New POKéDEX data will be added for X!" after a catch.
-- A Pokedex entry on Gold, Silver or Crystal no longer shows the description of a Pokemon you have only seen.
-- The trainer card on Gold, Silver and Crystal shows ¥ before your money.
-- The stats page on Red, Blue and Yellow shows a dash for each empty move slot.
-- On Red, Blue and Yellow, a Pokemon fainting from poison in the field is announced before the screen flashes.
-- A mod's grass table with fewer slots than the game rolls is refused, instead of turning up no Pokemon at all on those slots.
+- When a trainer sends out the next Pokemon, the ball opens before the Pokemon appears, and its HP bar comes back after the cry. The Poke Ball row goes away as the line starts. The line names the trainer ("LEADER FALKNER sent out ...").
+- A trainer turning to face you, or the second of two trainers facing each other, now notices you while you stand still. In Cianwood Gym the second Black Belt walks over after the first battle.
+- The TM/HM pocket is always in number order.
+- Mom and Elm answer the phone. Calling from the Pokegear stays on the phone screen, plays the dial tone twice, and hangs up on the card. Trainers who call you use their own lines.
+- The hole in Burned Tower stays hidden until after the rival battle. Any map that changes its own tiles keeps them after a battle, including the Elite Four doors and the Radio Tower shutter.
+- Falling through the hole in Burned Tower draws the basement correctly, and plays the fall and the landing shake. The Ruins of Alph chambers and the Magnet Train take their warps the same way.
+- The save editor keeps the map and position you type in when you press Save.
+- When a mod changes the wild tables, the wild Pokemon already walking on the map follow the new tables.
 
 ## Which file
 
