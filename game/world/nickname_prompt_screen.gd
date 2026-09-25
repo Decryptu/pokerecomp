@@ -27,9 +27,10 @@ var _species_name: String = ""
 var _species: int = 0
 var _gender_sign: int = 0
 ## `_WasSentToBillsPCText`/`_BallSentToPCText` when the Pokemon landed in the
-## box, empty otherwise. A format, because both read the name buffer the naming
-## screen has just written rather than the species name the question asked with.
+## box, empty otherwise. A format: `_BallSentToPCText` reads the buffer the naming
+## screen wrote, and `_WasSentToBillsPCText` `wStringBuffer1`, which [member _after_name] names.
 var _after_text_format: String = ""
+var _after_name: String = ""
 ## `_CaughtAskNicknameText` unless the caller names `PokeBallEffect`'s own
 ## `_AskGiveNicknameText` instead.
 var _question: String = ""
@@ -58,11 +59,13 @@ func set_context(
 	species_name: String,
 	after_text_format: String = "",
 	question: String = "",
-	forced: bool = false
+	forced: bool = false,
+	after_name: String = "",
 ) -> void:
 	_data = data
 	_species_name = species_name
 	_after_text_format = after_text_format
+	_after_name = after_name
 	_forced = forced
 	_question = question if not question.is_empty() \
 		else Gen2WorldPartyHost.caught_nickname_question(species_name)
@@ -254,7 +257,7 @@ func _after_question() -> void:
 		return
 	_phase = Phase.AFTER_TEXT
 	_text_box.visible = true
-	_text_box.show_text(_after_text_format % _answer)
+	_text_box.show_text(_after_text_format % (_after_name if not _after_name.is_empty() else _answer))
 
 
 func _finish() -> void:

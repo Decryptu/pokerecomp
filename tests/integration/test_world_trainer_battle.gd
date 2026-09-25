@@ -1987,9 +1987,8 @@ func test_a_gift_takes_the_name_the_keyboard_stored() -> void:
 	await get_tree().process_frame
 
 
-## `.failed`'s box branch: `WasSentToBillsPCText` is printed behind the nickname,
-## and `.skip_nickname`'s own copy puts the species name back over whatever the
-## keyboard stored.
+## `.failed`'s box branch: `WasSentToBillsPCText` is printed behind the question,
+## and a declined name leaves the species in the row.
 func test_a_boxed_gift_prints_bills_pc_and_keeps_the_species_name() -> void:
 	_write_givepoke_script()
 	await _open_world(true)
@@ -2016,11 +2015,10 @@ func test_a_boxed_gift_prints_bills_pc_and_keeps_the_species_name() -> void:
 	await get_tree().process_frame
 
 
-## `.skip_nickname`'s tail runs `PrintText` before its own `CopyBytes`, so
-## `_WasSentToBillsPCText` reads the `wStringBuffer1` `InitName` just filled with
-## the typed name while the row it names is overwritten with the species. The
-## line and the row disagree on the cartridge, and they disagree here.
-func test_a_boxed_gift_names_the_typed_nickname_and_stores_the_species() -> void:
+## `InitNickname` writes the keyboard's entry into `wMonOrItemNameBuffer`, which
+## `.skip_nickname` copies into the box row, while `_WasSentToBillsPCText` prints
+## `wStringBuffer1`, still the species. The line and the row disagree.
+func test_a_boxed_gift_names_the_species_and_stores_the_typed_nickname() -> void:
 	_write_givepoke_script()
 	await _open_world(true)
 	var save: Gen2SaveData = _world_screen._injected_save
@@ -2037,16 +2035,16 @@ func test_a_boxed_gift_names_the_typed_nickname_and_stores_the_species() -> void
 	_world_screen.press_button(PokeButton.A)
 	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.AFTER_TEXT)
 	_settle_nickname_text()
-	var named: String = " ".join(host.text_lines()).split(" was")[0]
-	assert_eq(named.length(), 1, "the line names what the keyboard stored")
-	_world_screen.press_button(PokeButton.A)
-	assert_null(_world_screen.get("_nickname_host"))
 	var species_name: String = String(
 		_data.species(Fixture.TRAINER_SPECIES).get("name", "")
 	)
+	var named: String = " ".join(host.text_lines()).split(" was")[0]
+	assert_eq(named, species_name, "the line names the species")
+	_world_screen.press_button(PokeButton.A)
+	assert_null(_world_screen.get("_nickname_host"))
 	assert_eq(
-		save.boxes[0].slots[0].nickname, species_name,
-		"and the row behind it keeps the species, which is the cartridge's own bug"
+		save.boxes[0].slots[0].nickname.length(), 1,
+		"and the row keeps what the keyboard stored"
 	)
 	await get_tree().process_frame
 

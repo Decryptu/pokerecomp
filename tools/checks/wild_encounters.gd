@@ -865,6 +865,7 @@ func _verify_gate_errand() -> void:
 	world.set_world_clock(
 		CONTEST_WEEKDAY, 12, Gen2WorldBugContest.MINUTES
 	)
+	world.world_second = 1
 	## Something caught, so the judging has a score to rank.
 	world.state.set_contest_mon({
 		"species": 10, "level": 15, "max_hp": 40, "hp": 40, "attack": 20,

@@ -341,9 +341,10 @@ func test_reset_bike_flags_clears_the_whole_byte_on_both_profiles() -> void:
 			)
 
 
-## Crystal's _SwarmWildmonCheck reads wSwarmFlags before either map, so the same
-## reset ends a swarm. pokegold's reads the map alone and its swarm has no end.
-func test_reset_daily_flags_ends_a_crystal_swarm_only() -> void:
+## Crystal's _SwarmWildmonCheck reads wSwarmFlags before either map, and
+## pokegold's CheckSwarmFlag clears the map and wFishingSwarmFlag once
+## DAILYFLAGS1_SWARM_F has gone, so the same reset ends a swarm on both.
+func test_reset_daily_flags_ends_a_swarm_on_both_profiles() -> void:
 	var crystal_state := Gen2WorldState.new()
 	crystal_state.set_swarm_map(Vector2i(1, 2))
 	crystal_state.set_swarm_map(Vector2i(3, 4), true, 0, Gen2WorldState.SWARM_YANMA)
@@ -352,9 +353,10 @@ func test_reset_daily_flags_ends_a_crystal_swarm_only() -> void:
 	assert_false(crystal_state.swarm_active_on(3, 4))
 
 	var gold_state := Gen2WorldState.new()
-	gold_state.set_swarm_map(Vector2i(1, 2))
-	assert_false(gold_state.reset_daily_flags(false))
-	assert_true(gold_state.swarm_active_on(1, 2))
+	gold_state.set_swarm_map(Vector2i(1, 2), true, 0xD3)
+	assert_true(gold_state.reset_daily_flags(false))
+	assert_false(gold_state.swarm_active_on(1, 2))
+	assert_eq(gold_state.fishing_swarm_species(), 0)
 
 
 func test_the_saved_kurt_quantity_survives_a_snapshot_round_trip() -> void:

@@ -596,6 +596,8 @@ const SPECIAL_RETURN_SHUCKIE: int = 76
 const SPECIAL_CHECK_FOR_LUCKY_NUMBER_WINNERS: int = 82
 const SPECIAL_CHECK_LUCKY_NUMBER_SHOW_FLAG: int = 83
 const SPECIAL_RESET_LUCKY_NUMBER_SHOW_FLAG: int = 84
+const ENGINE_LUCKY_NUMBER_SHOW: int = 78
+const ITEM_FROM_MEM: int = 0xFF
 const SPECIAL_PRINT_TODAYS_LUCKY_NUMBER: int = 85
 const SPECIAL_TRAINER_HOUSE: int = 103
 const SPECIAL_PHOTO_STUDIO: int = 104
@@ -2131,7 +2133,7 @@ func _execute_early_command(opcode: int, command: Dictionary, bank: int) -> Dict
 		)
 		if not bool(quantity_result.get("ok", false)):
 			return quantity_result
-		var variable_item: int = int(command.get("item", 0))
+		var variable_item: int = _given_item(int(command.get("item", 0)))
 		var variable_name: String = data.item_name(variable_item) if data != null else ""
 		_set_text_buffer(
 			Gen2Layout.STRING_BUFFER_4, variable_name, &"item_name",
@@ -2437,7 +2439,12 @@ func _command_random(_opcode: int, command: Dictionary, _bank: int) -> Dictionar
 
 
 func _command_giveitem(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
-	return _stage_item_delta(int(command["value"]), int(command["value_2"]))
+	return _stage_item_delta(_given_item(int(command["value"])), int(command["value_2"]))
+
+
+## `Script_giveitem`'s `cp ITEM_FROM_MEM`, which the Battle Tower's reward uses.
+func _given_item(item: int) -> int:
+	return _script_value if item == ITEM_FROM_MEM else item
 
 
 func _command_takeitem(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
@@ -3538,7 +3545,7 @@ func _command_checkphonecall(_source_opcode: int, _command: Dictionary, _bank: i
 ## _ReceivedItemText then prints as `text_ram wStringBuffer4`. Staging the item
 ## without filling the buffer leaves that text unresolved.
 func _command_verbosegiveitem(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
-	var verbose_item: int = int(command.get("item", 0))
+	var verbose_item: int = _given_item(int(command.get("item", 0)))
 	var verbose_name: String = data.item_name(verbose_item) if data != null else ""
 	_set_text_buffer(
 		Gen2Layout.STRING_BUFFER_4, verbose_name, &"item_name",
@@ -3847,7 +3854,7 @@ func _stage_phone_contact(contact: int, add: bool = true) -> Dictionary:
 			})
 			return {"ok": true, "added": false, "result": _script_value}
 		var candidate: Dictionary = _phone_contact_candidate()
-		if candidate.size() >= Gen2WorldState.PHONE_CONTACT_CAPACITY:
+		if candidate.size() >= Gen2WorldPhoneHost.phone_list_room(candidate, contact):
 			_script_value = PHONE_CONTACTS_FULL
 			_emit_runtime_event(&"phone_contact_changed", {
 				"contact": contact, "added": false, "result": _script_value,
@@ -4412,7 +4419,7 @@ func _special_pokemon_center_pc(special: int) -> Dictionary:
 func _special_battle_tower_action(_special: int) -> Dictionary:
 	var answered: int = _battle_tower().action(_script_value, {
 		"party": _battle_tower_party(),
-		"pack": _pack_items(),
+		"pack": _item_pocket(),
 		"save_is_yours": true,
 		"random": _battle_tower_random(0),
 	})
@@ -5178,13 +5185,14 @@ func _special_check_lucky_number_show_flag(_special: int) -> Dictionary:
 	return {"ok": true}
 
 
-## `RestartLuckyNumberCountdown`, then the GAME_OVER bit off the show flag, then
-## `LoadOrRegenerateLuckyIDNumber`. The bit is the radio segment's own and this
-## project's radio reads the timer instead, so what is left is the countdown and the
-## number.
+## `RestartLuckyNumberCountdown`, then the GAME_OVER bit off the show flag, which
+## Radio Tower 1F sets behind a prize, then `LoadOrRegenerateLuckyIDNumber`.
 func _special_reset_lucky_number_show_flag(_special: int) -> Dictionary:
 	_staged_lucky_number_days_left = _lucky_number_days_until_friday()
 	_has_staged_lucky_number_days_left = true
+	_staged_engine_flags[Gen2WorldState.engine_flag(
+		ENGINE_LUCKY_NUMBER_SHOW, _crystal_commands()
+	)] = false
 	_refresh_lucky_id_number()
 	return {"ok": true}
 
@@ -5192,7 +5200,6 @@ func _special_reset_lucky_number_show_flag(_special: int) -> Dictionary:
 ## `PrintNum` with PRINTNUM_LEADINGZEROS over five digits into wStringBuffer3, which
 ## the radio tower's own text prints.
 func _special_print_todays_lucky_number(special: int) -> Dictionary:
-	_refresh_lucky_id_number()
 	_set_text_buffer(
 		Gen2Layout.STRING_BUFFER_3, "%05d" % _lucky_id_number(), &"lucky_number",
 		{"special": special}
@@ -5206,7 +5213,6 @@ func _special_check_for_lucky_number_winners(special: int) -> Dictionary:
 	var lucky_party: Dictionary = _request.get("party", {})
 	if lucky_party.is_empty():
 		return {"ok": false, "reason": &"missing_party_summary", "special": special}
-	_refresh_lucky_id_number()
 	var winner: Dictionary = Gen2WorldPartyHost.lucky_number_match(
 		_lucky_id_number(),
 		lucky_party.get("id_numbers", []),
@@ -5810,6 +5816,16 @@ func _battle_tower_random(offset: int) -> RandomNumberGenerator:
 ## The item pocket as `BattleTower_GiveReward` walks it, staged rows over the
 ## saved ones. A row staged to zero is one the script has just spent and is not
 ## in the pack any more.
+## `wNumItems`' own pocket, which `BattleTower_GiveReward` counts.
+func _item_pocket() -> Dictionary:
+	var pocket: Dictionary = {}
+	var pack: Dictionary = _pack_items()
+	for item: Variant in pack:
+		if Gen2WorldPack.pocket_for(data, int(item)) == Gen2WorldPack.TYPE_ITEM:
+			pocket[item] = pack[item]
+	return pocket
+
+
 func _pack_items() -> Dictionary:
 	var pack: Dictionary = state.items() if state != null else {}
 	for item: Variant in _staged_items:
@@ -6080,7 +6096,7 @@ func _lucky_number_days_until_friday() -> int:
 func _refresh_lucky_id_number() -> void:
 	if _has_staged_lucky_id_number:
 		return
-	var stamp: int = (_clock_day() + 1) & 0xFF
+	var stamp: int = (int((_request.get("clock", {}) as Dictionary).get("cur_day", 0)) + 1) & 0xFF
 	if state != null and state.lucky_number_day() == stamp:
 		return
 	var low: int = _random.randi() & 0xFF
@@ -7540,12 +7556,16 @@ func _complete_result() -> Dictionary:
 		"commands": _command_count,
 		"deferred": _ran_deferred,
 	}
+	## `SetDayOfWeek` moves `wStartDay` and leaves `wCurDay`, so no day passes.
 	if _staged_day_of_week >= 0:
 		result["clock"] = {
 			"day": _staged_day_of_week,
 			"hour": _clock_hour(),
 			"minute": _clock_minute(),
 		}
+		var request_clock: Dictionary = _request.get("clock", {})
+		if request_clock.has("cur_day"):
+			result["clock"]["cur_day"] = int(request_clock["cur_day"])
 	if _has_staged_dst:
 		result["dst_enabled"] = _staged_dst_enabled
 	return result

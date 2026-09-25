@@ -1109,7 +1109,7 @@ const DAILY_ENGINE_FLAG_RUNS: Array[Vector2i] = [
 
 
 func reset_daily_flags(
-	crystal: bool = true, random: RandomNumberGenerator = null
+	crystal: bool = true, random: RandomNumberGenerator = null, days: int = 1
 ) -> bool:
 	var did_change: bool = false
 	for run: Vector2i in DAILY_ENGINE_FLAG_RUNS:
@@ -1119,19 +1119,21 @@ func reset_daily_flags(
 				continue
 			_engine_flags.erase(flag)
 			did_change = true
-	## Crystal's `_SwarmWildmonCheck` reads `wSwarmFlags` before either map, so
-	## the byte going is what ends a swarm; pokegold's reads the map alone.
-	if crystal:
-		for kind: int in _swarm_maps.size():
-			if _swarm_maps[kind] == Vector2i(-1, -1):
-				continue
-			_swarm_maps[kind] = Vector2i(-1, -1)
-			did_change = true
-	## The same branch steps `wKenjiBreakTimer` and resamples it when it runs
-	## out, and every day-counted timer this project keeps is stepped here too:
-	## a weekday alone cannot say how many days have passed.
+	## Crystal's `_SwarmWildmonCheck` reads `wSwarmFlags` before either map;
+	## pokegold's `CheckSwarmFlag` clears the map and `wFishingSwarmFlag` once
+	## `DAILYFLAGS1_SWARM_F` has gone. Either way the swarm ends with the day.
+	for kind: int in _swarm_maps.size():
+		if _swarm_maps[kind] == Vector2i(-1, -1):
+			continue
+		_swarm_maps[kind] = Vector2i(-1, -1)
+		did_change = true
+	if not crystal and _fishing_swarm_species != 0:
+		_fishing_swarm_species = 0
+		did_change = true
+	## The same branch steps `wKenjiBreakTimer` once; the lucky number's own
+	## `CheckDayDependentEventHL` takes every day that has passed.
 	if _lucky_number_days_left > 0:
-		_lucky_number_days_left -= 1
+		_lucky_number_days_left = maxi(0, _lucky_number_days_left - days)
 		did_change = true
 	if random != null:
 		var next_timer: int = _kenji_break_timer
@@ -1199,17 +1201,14 @@ func refresh_lucky_id_number(day: int, random: RandomNumberGenerator) -> bool:
 
 ## `_CheckLuckyNumberShowFlag`: `CheckDayDependentEventHL` on
 ## `wLuckyNumberDayTimer`, which answers carry once the days it was started with
-## have passed. The days remaining are stepped by the day rollover rather than
-## derived from a stored start day, because this project's clock is a weekday
-## and an hour: a seven-day countdown started on a Friday ends on the same
-## weekday, which no difference of two weekdays can tell from no time passing.
+## have passed.
 func lucky_number_show_ready() -> bool:
 	return _lucky_number_days_left <= 0
 
 
 ## `RestartLuckyNumberCountdown`: `InitNDaysCountdown` with the days until the
-## next Friday, which is seven when today is Friday or Saturday, so the show
-## never comes round again on the day it ran.
+## next Friday, seven on a Friday, so the show never comes round again the day
+## it ran.
 func restart_lucky_number_countdown(day: int) -> void:
 	var until: int = Gen2WorldClock.FRIDAY - posmod(day, Gen2WorldClock.DAYS_PER_WEEK)
 	if until <= 0:
@@ -1642,6 +1641,7 @@ static func _clock_dict(clock: Dictionary) -> Dictionary:
 		"day": int(clock.get("day", 0)),
 		"hour": int(clock.get("hour", 0)),
 		"minute": int(clock.get("minute", 0)),
+		"second": int(clock.get("second", 0)),
 	}
 
 
@@ -1869,13 +1869,10 @@ func npc_trade_done(trade_id: int) -> bool:
 	return bool(_npc_trades.get(trade_id, false))
 
 
-## `CountStep`: the two step counters, the Repel countdown, and `StepHappiness`
-## on the pass `wStepCount` wraps, once per step the player finishes wherever it
-## was taken. `DoRepelStep` stands in front of the counters and the step a Repel
-## runs out on reaches `.doscript` with carry, so that step counts for neither
-## poison, happiness, an egg nor the Day-Care. Generation 1 counts the Repel
-## down inside `TryDoWildEncounter` ([param spend_repel] false). Answers whether
-## it was counted.
+## `CountStep`'s counters. `DoRepelStep` stands in front of them, so the step a
+## Repel runs out on counts for nothing else; Generation 1 counts its Repel down
+## inside `TryDoWildEncounter` ([param spend_repel] false). Answers whether the
+## step was counted; the screen decides which steps reach here.
 func count_step(spend_repel: bool = true) -> bool:
 	if spend_repel and spend_repel_step():
 		return false
@@ -1887,9 +1884,7 @@ func count_step(spend_repel: bool = true) -> bool:
 			_pending_step_happiness += 1
 	if _step_count == EGG_STEP_PHASE:
 		_pending_egg_steps += 1
-	## `farcall DayCareStep` sits after the egg branch and runs on every other
-	## step; a step that hatches jumps over it, which the spender settles because
-	## only it knows whether an egg came out.
+	## `DayCareStep`, which a hatching step jumps over; the screen's spender knows.
 	_pending_day_care_steps += 1
 	changed.emit()
 	return true

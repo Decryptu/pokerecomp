@@ -234,24 +234,27 @@ static func _insert(placings: Array, entry: Dictionary) -> void:
 			return
 
 
-## `CheckBugContestTimer`, in the minutes the world clock keeps: the contest
-## runs [constant MINUTES] from the minute it started and the counter is what
-## `VAR_BUGCONTEST_MINS_REMAINING` reads. The source also counts the seconds
-## down inside the minute; nothing here has seconds, and no script reads them.
-static func minutes_remaining(started: Dictionary, now: Dictionary) -> int:
+## `CheckBugContestTimer`: twenty minutes and no seconds counted down from the
+## second the contest started, over only once the minutes borrow, so the last
+## minute reads zero and the contest runs a second past twenty. Below zero is over.
+static func seconds_remaining(started: Dictionary, now: Dictionary) -> int:
 	if started.is_empty():
-		return 0
-	var elapsed: int = _minute_of_week(now) - _minute_of_week(started)
-	if elapsed < 0:
-		elapsed += Gen2WorldClock.DAYS_PER_WEEK \
-			* Gen2WorldClock.HOURS_PER_DAY * Gen2WorldClock.MINUTES_PER_HOUR
-	return maxi(0, MINUTES - elapsed)
+		return -1
+	var week: int = Gen2WorldClock.DAYS_PER_WEEK * Gen2WorldClock.HOURS_PER_DAY \
+		* Gen2WorldClock.MINUTES_PER_HOUR * 60
+	return MINUTES * 60 - posmod(_second_of_week(now) - _second_of_week(started), week)
 
 
-static func _minute_of_week(clock: Dictionary) -> int:
-	return ((int(clock.get("day", 0)) * Gen2WorldClock.HOURS_PER_DAY
+## What `VAR_BUGCONTEST_MINS_REMAINING` reads.
+static func minutes_remaining(started: Dictionary, now: Dictionary) -> int:
+	@warning_ignore("integer_division")
+	return maxi(0, seconds_remaining(started, now)) / 60
+
+
+static func _second_of_week(clock: Dictionary) -> int:
+	return (((int(clock.get("day", 0)) * Gen2WorldClock.HOURS_PER_DAY
 		+ int(clock.get("hour", 0))) * Gen2WorldClock.MINUTES_PER_HOUR
-		+ int(clock.get("minute", 0)))
+		+ int(clock.get("minute", 0))) * 60 + int(clock.get("second", 0)))
 
 
 ## `SelectRandomBugContestContestants`: five of the ten flags set, chosen by a

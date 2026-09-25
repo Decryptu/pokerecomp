@@ -61,21 +61,22 @@ func test_a_saved_clock_catches_up_to_the_time_that_passed_while_it_was_closed()
 	var stamp: float = 1_000_000.0
 	assert_eq(
 		Gen2WorldClock.catch_up(0, 10, 15, stamp, stamp + 60.0 * 90.0),
-		{"day": 0, "hour": 11, "minute": 45},
+		{"day": 0, "hour": 11, "minute": 45, "cur_day": 0},
 	)
 	# Two and a half days on, which carries the weekday with it.
 	assert_eq(
 		Gen2WorldClock.catch_up(5, 23, 30, stamp, stamp + 60.0 * 60.0 * 60.0),
-		{"day": 1, "hour": 11, "minute": 30},
+		{"day": 1, "hour": 11, "minute": 30, "cur_day": 3},
 	)
 	# A snapshot written before the stamp was kept, and a host clock put back:
 	# neither runs the world's own clock backwards.
 	assert_eq(
-		Gen2WorldClock.catch_up(3, 8, 5, 0.0, stamp), {"day": 3, "hour": 8, "minute": 5}
+		Gen2WorldClock.catch_up(3, 8, 5, 0.0, stamp),
+		{"day": 3, "hour": 8, "minute": 5, "cur_day": 0},
 	)
 	assert_eq(
 		Gen2WorldClock.catch_up(3, 8, 5, stamp, stamp - 3600.0),
-		{"day": 3, "hour": 8, "minute": 5},
+		{"day": 3, "hour": 8, "minute": 5, "cur_day": 0},
 	)
 
 
@@ -96,6 +97,6 @@ func test_a_snapshot_stamps_the_host_second_its_clock_was_written_at() -> void:
 			restored.world_day, restored.world_hour, restored.world_minute,
 			restored.world_clock_stamp
 		),
-		{"day": 6, "hour": 23, "minute": 26},
+		{"day": 6, "hour": 23, "minute": 26, "cur_day": 11},
 	)
 	Gen2WorldClock.host_seconds_override = -1.0

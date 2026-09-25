@@ -810,7 +810,7 @@ func test_a_pokemon_sent_to_a_full_partys_box_is_stored_healed() -> void:
 		save.party.append(Gen2SaveMon.from_dict(save.party[0].to_dict()))
 	var sent: Gen2SaveMon = Gen2SaveMon.from_dict(save.party[0].to_dict())
 	sent.hp = 5
-	var placed: Dictionary = save.add_party_or_box(sent, false, _data)
+	var placed: Dictionary = save.add_party_or_box(sent, _data)
 	assert_eq(StringName(placed.get("destination", &"")), &"box")
 	assert_eq(sent.hp, Gen2SaveBattleAdapter.to_battle_mon(_data, sent).max_hp())
 	assert_eq(sent.status, Gen2Status.NONE)

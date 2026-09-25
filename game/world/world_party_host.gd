@@ -148,6 +148,12 @@ const HAPPINESS_THRESHOLD_2: int = 200
 ## literals, and `ReturnShuckie` tests all three before it takes the Pokemon
 ## back, so a SHUCKLE the player caught themselves is refused.
 const MANIA_OT_ID: int = 518
+## `RANDY_OT_ID`, the ID a party `givepoke` that names an OT carries.
+const RANDY_OT_ID: int = 1001
+## `GivePoke`'s box branch is `LoadEnemyMon` outside a battle, taking the trainer
+## branch: `GetTrainerDVs` with `wOtherTrainerClass` zero reads entry 255, 510
+## bytes past `TrainerClassDVs`, off each dump. The item there is stale WRAM.
+const BOXED_GIFT_DVS: Dictionary = {&"crystal": 0x3378, &"gold_silver": 0xE379}
 const MANIA_OT_NAME: String = "MANIA"
 const SHUCKIE_NICKNAME: String = "SHUCKIE"
 const SHUCKIE_LEVEL: int = 15
@@ -1482,12 +1488,10 @@ static func _store_capture(
 		return _failure(&"could_not_create_captured_pokemon", outcome)
 	## `SetCaughtData` runs on the caught Pokemon itself.
 	set_caught_data(
-		captured, wild.level, world.object_time_of_day, world.player_female(),
+		world.data, captured, wild.level, world.object_time_of_day, world.player_female(),
 		catch_landmark
 	)
-	## `SendMonIntoBox`'s own `ShiftBoxMon`: a catch that lands in a box goes
-	## to the front of it, which every other deposit does not.
-	var destination: Dictionary = candidate.add_party_or_box(captured, true, world.data)
+	var destination: Dictionary = candidate.add_party_or_box(captured, world.data)
 	if not bool(destination.get("ok", false)):
 		return _failure(StringName(destination.get("reason", &"storage_full")), {
 			"ball": ball, "outcome": outcome,
@@ -1559,10 +1563,10 @@ static func _apply_contest_mon(
 		if not chosen.is_empty():
 			mon.nickname = chosen
 	set_caught_data(
-		mon, int(caught.get("level", 1)), world.object_time_of_day,
+		world.data, mon, int(caught.get("level", 1)), world.object_time_of_day,
 		world.player_female(), LANDMARK_NATIONAL_PARK
 	)
-	var placed: Dictionary = candidate.add_party_or_box(mon, false, world.data)
+	var placed: Dictionary = candidate.add_party_or_box(mon, world.data)
 	if not bool(placed.get("ok", false)):
 		return {"ok": false, "reason": StringName(placed.get("reason", &"storage_full"))}
 	world.state.set_contest_mon({})
@@ -1717,34 +1721,19 @@ static func _apply_pokemon_request(
 		return {"ok": false, "reason": &"invalid_level", "level": level}
 	if held_item < 0 or (held_item > 0 and world.data.item(held_item).is_empty()):
 		return {"ok": false, "reason": &"unknown_item", "item": held_item}
+	if is_egg:
+		return _give_egg(world.data, candidate, species, level, held_item, random)
 	var mon: Gen2SaveMon = _new_mon(
-		world.data, candidate, species, level, held_item, random, is_egg,
-		int(result.get("dvs", -1))
+		world.data, candidate, species, level, held_item, random, false,
+		_gift_dvs(world.data, candidate, result)
 	)
 	if mon == null:
 		return {"ok": false, "reason": &"could_not_create_pokemon"}
-	## `AddPartyMon`'s three caught-data branches. An egg's is overwritten by
-	## `SetEggMonCaughtData` when it hatches; a plain `givepoke` takes
-	## `SetCaughtData`, the map the player is standing on.
+	## `SetCaughtData` or `SetBoxMonCaughtData`: the map the player stands on.
 	set_caught_data(
-		mon, level, world.object_time_of_day, world.player_female(), world.landmark_backup()
+		world.data, mon, level, world.object_time_of_day, world.player_female(),
+		world.landmark_backup()
 	)
-	if is_egg:
-		## `GiveEgg` is `TryAddMonToParty` and nothing else, so a full party
-		## boxes no egg and leaves `Script_giveegg`'s own `xor a` in
-		## wScriptVar; only the `ret nc` past it writes 2.
-		if candidate.party.size() >= Gen2SaveData.MAX_PARTY:
-			return {
-				"ok": true, "accepted": false, "script_value": 0,
-				"reason": &"party_full",
-				"summary": {
-					"kind": &"egg", "accepted": false,
-					"species": species, "level": level,
-				},
-			}
-		return _append_mon(world.data, candidate, mon, 2, {
-			"kind": &"egg", "species": species, "level": level, "item": held_item,
-		})
 	var source: Dictionary = request.get("source", {})
 	var bank: int = int(source.get("bank", -1))
 	var nickname: String = _world_name(
@@ -1762,7 +1751,7 @@ static func _apply_pokemon_request(
 		## landmark is LANDMARK_GIFT rather than this map. The gender bit is
 		## `.otnameloop`'s `b`, the byte behind the OT name, which is
 		## `Route35GoldenrodGate.asm`'s `db 0 ; unused` on the one site with one.
-		set_caught_data(mon, 0, -1, false, LANDMARK_GIFT)
+		set_caught_data(world.data, mon, 0, -1, false, LANDMARK_GIFT)
 	elif result.has("nickname"):
 		## `GiveANickname_YesNo` and `InitNickname`: the `.wildmon` branch,
 		## which is the thirteen `givepoke` sites that name no OT. The screen
@@ -1771,10 +1760,9 @@ static func _apply_pokemon_request(
 		var chosen: String = String(result["nickname"]).strip_edges()
 		if not chosen.is_empty():
 			mon.nickname = chosen
-	## `_GivePokemon`'s box branch is `SendNewMonToBox`, the front of the box.
 	var appended: Dictionary = _append_mon(world.data, candidate, mon, 0, {
 		"kind": &"gift", "species": species, "level": level, "item": held_item,
-	}, world.data.generation == RomRegistry.GEN1)
+	})
 	if not bool(appended.get("ok", false)):
 		## `.FailedToGiveMon`'s `ld b, $2`: neither the party nor the box had
 		## room, so nothing is written and the script reads 2 and runs on.
@@ -1791,13 +1779,59 @@ static func _apply_pokemon_request(
 	var destination: StringName = StringName(
 		(appended["summary"]["destination"] as Dictionary).get("destination", &"party")
 	)
+	if not ot_name.is_empty():
+		mon.ot_id = _gift_ot_id(destination, random)
 	if destination == &"box":
-		## `.skip_nickname`'s tail copies `wMonOrItemNameBuffer` over
-		## `sBoxMonNicknames` after `InitNickname` has written the player's
-		## entry, so a boxed gift always ends up with the species name.
-		mon.nickname = String(world.data.species(species).get("name", ""))
 		appended["script_value"] = 1
 	return appended
+
+
+static func _gift_dvs(data: GameData, candidate: Gen2SaveData, result: Dictionary) -> int:
+	if candidate.party.size() >= Gen2SaveData.MAX_PARTY and boxed_gift_dvs(data) >= 0:
+		return boxed_gift_dvs(data)
+	return int(result.get("dvs", -1))
+
+
+## `.otnameloop` writes `RANDY_OT_ID`; `.send_to_box` two `Random` bytes.
+static func _gift_ot_id(destination: StringName, random: RandomNumberGenerator) -> int:
+	if destination == &"party":
+		return RANDY_OT_ID
+	return ((random.randi() & 0xFF) << 8) | (random.randi() & 0xFF)
+
+
+## -1, a roll, on Generation 1, whose `LoadEnemyMonData` rolls outside a battle.
+static func boxed_gift_dvs(data: GameData) -> int:
+	if data != null and data.generation == RomRegistry.GEN1:
+		return -1
+	return int(BOXED_GIFT_DVS[&"crystal" if Gen2WorldState.is_crystal_profile(data) else &"gold_silver"])
+
+
+## `GiveEgg`: two `GetPreEvolution` calls pick what `TryAddMonToParty` builds,
+## and the named species is written back over the struct. Its carry is never
+## read, so a full party's last member becomes the egg, and `Script_giveegg`
+## answers its own `xor a` either way. No caught data until the hatch.
+static func _give_egg(
+	data: GameData, candidate: Gen2SaveData, species: int, level: int, held_item: int,
+	random: RandomNumberGenerator,
+) -> Dictionary:
+	var base: int = Gen2WorldDayCare.pre_evolution(data, Gen2WorldDayCare.pre_evolution(data, species))
+	var summary: Dictionary = {"kind": &"egg", "species": species, "level": level, "item": held_item}
+	var mon: Gen2SaveMon = _new_mon(data, candidate, base, level, held_item, random, true)
+	if mon == null:
+		return {"ok": false, "reason": &"could_not_create_pokemon"}
+	if candidate.party.size() < Gen2SaveData.MAX_PARTY:
+		mon.species = species
+		return _append_mon(data, candidate, mon, 0, summary)
+	var last: Gen2SaveMon = candidate.party[-1]
+	last.species = species
+	last.is_egg = true
+	last.nickname = mon.nickname
+	last.happiness = mon.happiness
+	last.hp = 0
+	return {
+		"ok": true, "accepted": true, "script_value": 0,
+		"summary": summary.merged({"accepted": true, "overwrote": candidate.party.size() - 1}),
+	}
 
 
 ## `Script_trade`, whose row is `world_trade`'s.
@@ -1845,7 +1879,7 @@ static func _apply_trade_request(
 	## `SetGiftPartyMonCaughtData` with `b` from the dialog set: `rrc b` puts bit
 	## 0 in CAUGHT_GENDER_MASK, so only a GIRL trader is recorded as female.
 	set_caught_data(
-		received, 0, -1,
+		world.data, received, 0, -1,
 		int(trade.get("dialog", 0)) >= Gen2Layout.TRADE_DIALOGSET_GIRL, LANDMARK_GIFT
 	)
 	## `RemoveMonFromPartyOrBox` closes the gap and `TryAddMonToParty` writes at
@@ -1901,9 +1935,9 @@ static func _gen1_npc_trade_evolution(data: GameData, received: Gen2SaveMon, ind
 ## unknown to the dex until it hatches.
 static func _append_mon(
 	data: GameData, candidate: Gen2SaveData, mon: Gen2SaveMon,
-	script_value: int, summary: Dictionary, to_front: bool = false
+	script_value: int, summary: Dictionary
 ) -> Dictionary:
-	var destination: Dictionary = candidate.add_party_or_box(mon, to_front, data)
+	var destination: Dictionary = candidate.add_party_or_box(mon, data)
 	if not bool(destination.get("ok", false)):
 		return {
 			"ok": false,
@@ -1931,14 +1965,12 @@ static func _register_caught(world: Gen2WorldAPI, species: int) -> void:
 	world.state.set_species_caught(species)
 
 
-## `GeneratePartyMonStats`' `.registerunowndex`. The form is read off the DVs
-## rather than stored, and only a Pokemon that reached the party registers: the
-## routine runs under `wMonType` PARTYMON alone, so an Unown caught with a full
-## party is caught without entering the Unown dex.
+## `GeneratePartyMonStats`' `.registerunowndex`, and `SendMonIntoBox`'s own
+## `UpdateUnownDex` for one that lands in a box. The form is read off the DVs.
 static func _unown_form(species: int, dvs: int, destination: Dictionary) -> int:
 	if species != Gen2Layout.UNOWN_SPECIES:
 		return 0
-	if StringName(destination.get("destination", &"")) != &"party":
+	if not StringName(destination.get("destination", &"")) in [&"party", &"box"]:
 		return 0
 	return Gen2Stats.unown_letter(dvs)
 
@@ -2900,9 +2932,12 @@ static func _captured_mon(
 ## gender bit is `wPlayerGender` and not the caught mon's, which is what the
 ## "caught by" line reads back, and the level is CAUGHT_EGG_LEVEL for a hatch.
 static func set_caught_data(
-	mon: Gen2SaveMon, level: int, time_of_day: int, player_female: bool, landmark: int
+	data: GameData, mon: Gen2SaveMon, level: int, time_of_day: int, player_female: bool,
+	landmark: int,
 ) -> void:
-	if mon == null:
+	## pokegold zeroes both bytes (`Unused1`, `Unused2`); Generation 1 has neither.
+	if mon == null or not Gen2WorldState.is_crystal_profile(data) \
+		or (data != null and data.generation == RomRegistry.GEN1):
 		return
 	mon.caught_level = clampi(level, 0, 63)
 	# `ld a, [wTimeOfDay] / inc a`: the field holds MORN as 1, so the -1 a gift
@@ -2948,7 +2983,7 @@ static func hatch_egg(
 	if mon == null or not mon.is_egg or mon.happiness != 0:
 		return {}
 	set_caught_data(
-		mon, CAUGHT_EGG_LEVEL, world.object_time_of_day,
+		world.data, mon, CAUGHT_EGG_LEVEL, world.object_time_of_day,
 		world.player_female(), world.landmark_backup()
 	)
 	mon.is_egg = false
@@ -3273,7 +3308,8 @@ static func _apply_give_shuckle(
 	)
 	if mon == null:
 		return {"ok": false, "reason": &"could_not_create_pokemon"}
-	set_caught_data(mon, 0, -1, world.player_female(), LANDMARK_GIFT)
+	## `GiveShuckle`'s `ld b, CAUGHT_BY_UNKNOWN`, whoever is playing.
+	set_caught_data(world.data, mon, 0, -1, false, LANDMARK_GIFT)
 	mon.ot_id = MANIA_OT_ID
 	mon.original_trainer = MANIA_OT_NAME
 	mon.nickname = SHUCKIE_NICKNAME

@@ -80,7 +80,7 @@ static func save(save_data: Gen2SaveData, data: GameData) -> Dictionary:
 	## up to what has passed since (`Gen2WorldClock.catch_up`).
 	if save_data.world != null:
 		save_data.world.world_clock_stamp = Gen2WorldClock.host_seconds()
-	var document: String = _wrap(JSON.stringify(save_data.to_dict(), "\t"))
+	var document: String = _document(save_data.to_dict())
 	var primary: Dictionary = _write_file(path, document)
 	if not primary["ok"]:
 		return primary
@@ -395,7 +395,7 @@ static func bump_reset_count(game_id: StringName, rom_sha1: String, slot: int) -
 	var body: Dictionary = document["data"]
 	var counted: int = maxi(int(body.get("reset_count", 0)), 0) + 1
 	body["reset_count"] = counted
-	var text: String = _wrap(JSON.stringify(body, "\t"))
+	var text: String = _document(body)
 	if not bool(_write_file(primary, text).get("ok", false)):
 		return -1
 	_write_file(backup, text)
@@ -464,7 +464,9 @@ static func _load_copy(path: String, slot: int, data: GameData) -> Dictionary:
 	}
 
 
-static func _wrap(payload: String) -> String:
+## Unsorted: the bag's pockets and the phone list keep their order as keys.
+static func _document(body: Dictionary) -> String:
+	var payload: String = JSON.stringify(body, "\t", false)
 	return "%s %d %d\n%s" % [CONTAINER_PREFIX, CONTAINER_VERSION, _checksum(payload), payload]
 
 

@@ -591,17 +591,20 @@ func test_five_contestants_are_withdrawn_and_no_index_twice() -> void:
 			assert_between(int(index), 0, Gen2WorldBugContest.NUM_CONTESTANTS - 1)
 
 
-## `CheckBugContestTimer` in the minutes the world clock keeps, including the
-## midnight the source's own day counter would have caught.
-func test_the_contest_timer_counts_the_minutes_down_across_midnight() -> void:
-	var started: Dictionary = {"day": 0, "hour": 23, "minute": 55}
+## `CheckBugContestTimer` across the midnight the source's own day counter
+## would have caught, and over only when the minutes borrow: twenty minutes on,
+## the counter reads zero and the contest runs on for one more second.
+func test_the_contest_timer_counts_down_across_midnight_to_the_borrow() -> void:
+	var started: Dictionary = {"day": 0, "hour": 23, "minute": 55, "second": 30}
 	assert_eq(Gen2WorldBugContest.minutes_remaining(started, started), 20)
 	assert_eq(Gen2WorldBugContest.minutes_remaining(
-		started, {"day": 1, "hour": 0, "minute": 5}
-	), 10)
-	assert_eq(Gen2WorldBugContest.minutes_remaining(
-		started, {"day": 1, "hour": 0, "minute": 15}
-	), 0)
+		started, {"day": 1, "hour": 0, "minute": 5, "second": 31}
+	), 9)
+	var last: Dictionary = {"day": 1, "hour": 0, "minute": 15, "second": 30}
+	assert_eq(Gen2WorldBugContest.minutes_remaining(started, last), 0)
+	assert_eq(Gen2WorldBugContest.seconds_remaining(started, last), 0)
+	last["second"] = 31
+	assert_lt(Gen2WorldBugContest.seconds_remaining(started, last), 0)
 	assert_eq(Gen2WorldBugContest.minutes_remaining({}, started), 0)
 
 

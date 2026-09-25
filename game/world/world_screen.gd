@@ -501,6 +501,7 @@ func _build_world() -> void:
 	var initial_day: int = day
 	var initial_hour: int = hour
 	var initial_minute: int = minute
+	var initial_cur_day: int = -1
 	## A world opened for a save plays that save's rules: a test injecting one
 	## through [method set_save] bypasses `Gen2GameRuntime._activate_rules`.
 	var save_rules: Gen2Rules = selected_save.run_rules if selected_save != null else null
@@ -517,8 +518,10 @@ func _build_world() -> void:
 		## was written at plus the real seconds since (`Gen2WorldClock.catch_up`).
 		var saved_clock: Dictionary = Gen2WorldClock.catch_up(
 			selected_save.world.world_day, selected_save.world.world_hour,
-			selected_save.world.world_minute, selected_save.world.world_clock_stamp
+			selected_save.world.world_minute, selected_save.world.world_clock_stamp,
+			-1.0, selected_save.world.world_cur_day,
 		)
+		initial_cur_day = int(saved_clock["cur_day"])
 		initial_day = int(saved_clock.get("day", initial_day))
 		initial_hour = int(saved_clock.get("hour", initial_hour))
 		initial_minute = int(saved_clock.get("minute", initial_minute))
@@ -586,6 +589,7 @@ func _build_world() -> void:
 	var pinned_clock: Dictionary = Gen2WorldClock.pin()
 	if not pinned_clock.is_empty():
 		initial_day = int(pinned_clock["day"])
+		initial_cur_day = -1
 		initial_hour = int(pinned_clock["hour"])
 		initial_minute = int(pinned_clock["minute"])
 	_clock = Gen2WorldClock.new(initial_hour, initial_minute, initial_day)
@@ -599,7 +603,9 @@ func _build_world() -> void:
 	## than a table this could derive.
 	var anim_data: Gen2BattleAnimData = Gen2BattleAnimData.from_game_data(_data)
 	_effects.set_sine_table(anim_data)
-	_world.set_world_clock(initial_day, initial_hour, initial_minute)
+	_world.set_world_clock(initial_day, initial_hour, initial_minute, initial_cur_day)
+	_clock.cur_day = _world.world_cur_day
+	_apply_pokerus_days()
 	_world.set_object_time(initial_hour, time_of_day)
 	## After the clock, since the tables a provider is handed are the ones this
 	## time of day resolves to.
@@ -1136,10 +1142,8 @@ func _run_player_events_pass() -> void:
 		_zero_map_name_sign_timer()
 		_start_map_fade(armed == &"fall")
 		return
-	var results: Array = _world.dispatch_sight_events()
-	if not results.is_empty():
-		_zero_map_name_sign_for(results)
-		_show_script_results(results)
+	if not _show_sight_events():
+		_run_time_events()
 
 
 ## `RunMapScript` runs on every frame `JoypadOverworld` reads: a state opening
@@ -1249,17 +1253,11 @@ func _advance_day_cycle(delta: float) -> void:
 	if _clock == null or _world == null:
 		return
 	var ticks: Array = _clock.advance(delta, _world)
-	_world.set_world_clock(_clock.day, _clock.hour, _clock.minute)
-	_apply_pokerus_days(ticks)
+	_apply_pokerus_days()
 	if ticks.is_empty():
 		return
 	_update_time_of_day()
 	_world.state.advance_phone_receive_timer(ticks.size())
-	if not _overlay_open() and not _world.script_input_waiting():
-		var phone_schedule: Dictionary = _world.try_receive_phone_call(_encounter_random)
-		var phone_results: Array = phone_schedule.get("results", [])
-		if bool(phone_schedule.get("attempted", false)) and not phone_results.is_empty():
-			_show_script_results(phone_results)
 	_refresh_labels()
 
 
@@ -1865,9 +1863,8 @@ func _complete_player_step(movement: Dictionary) -> bool:
 	## the step back onto land both reach one. `edge_warp` is
 	## `DoPlayerMovement.CheckWarp`'s own answer, which has already made the
 	## check `CheckWarpTile` refuses for a carpet.
-	_spend_step_happiness()
-	_spend_egg_steps()
-	_spend_day_care_steps()
+	if _world.is_gen1():
+		_spend_day_care_steps()
 	## `StepCountCheck` and `ApplyOutOfBattlePoisonDamage`'s Pikachu lines, both
 	## in `.moveAhead2`'s tail in front of `CheckWarpsNoCollision`: a turn's pass
 	## never reaches them, and neither runs on an empty party.
@@ -1879,6 +1876,9 @@ func _complete_player_step(movement: Dictionary) -> bool:
 		_zero_map_name_sign_timer()
 		return _after_map_settled()
 	var kind: StringName = StringName(movement.get("kind", &""))
+	## `CheckTrainerEvent` stands in front of `CheckTileEvent`'s warp.
+	if not _world.is_gen1() and _show_sight_events():
+		return true
 	if kind == &"edge_warp" or (kind in [
 		&"move", &"ledge_hop", &"water_move", &"exit_water", &"forced_move",
 	] and _world.warp_pending()):
@@ -1916,26 +1916,28 @@ func _spend_step_happiness() -> void:
 
 
 ## `DoEggStep` and its `PLAYEREVENT_HATCH`, spent here as
-## [method _spend_step_happiness] spends `StepHappiness`; `HatchEggs` walks the whole party.
-func _spend_egg_steps() -> void:
+## [method _spend_step_happiness] spends `StepHappiness`; `HatchEggs` walks the
+## whole party. Answers whether an egg hatched, which takes the rest of the step.
+func _spend_egg_steps() -> bool:
 	if _world == null or _world.state == null or _hatch_host != null:
-		return
+		return false
 	var owed: int = _world.state.take_pending_egg_steps()
 	if owed <= 0:
-		return
+		return false
 	var save: Gen2SaveData = active_save()
 	if save == null:
-		return
+		return false
 	if Gen2WorldPartyHost.apply_egg_steps(save, owed) < 0:
-		return
+		return false
 	var hatches: Array = []
 	for index: int in save.party.size():
 		var summary: Dictionary = Gen2WorldPartyHost.hatch_egg(_world, save, index)
 		if not summary.is_empty():
 			hatches.append(summary)
 	if hatches.is_empty():
-		return
+		return false
 	_open_hatch(hatches, save)
+	return true
 
 
 ## `DoPoisonStep` on the pass `wPoisonStepCount` carries to 4, resetting it
@@ -2385,10 +2387,11 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 		host.set_context(
 			_data, species_name,
 			Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if destination == &"box" else "",
-			"", _nuzlocke_names_everything()
+			"", _nuzlocke_names_everything(), species_name
 		)
 	## `GivePoke` adds the Pokemon before `InitNickname`'s `GetGender` reads it.
-	_gift_dvs = Gen2BattleMon.random_dvs(_encounter_random) if _encounter_random != null else -1
+	_gift_dvs = Gen2WorldPartyHost.boxed_gift_dvs(_data) if destination == &"box" and not gen1 \
+		else Gen2BattleMon.random_dvs(_encounter_random) if _encounter_random != null else -1
 	host.set_species(species, _gift_dvs)
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
@@ -3077,10 +3080,8 @@ func preview_move_deleter() -> void:
 	_open_move_deleter()
 
 
-## `EnterMap`'s own tail, which a warp reaches once its setup script has run and
-## an ordinary step reaches on the frame it finished: the sight lines, the map's
-## scripts, the two phone paths, the contest timer, and the wild roll behind all
-## of them.
+## `PlayerEvents` on a landing pass: a warp's once its setup script has run, a
+## step's on the frame it finished.
 func _after_map_settled(stepped: bool = true) -> bool:
 	_refresh_labels()
 	## `RunNPCMovementScript`'s first pass after a warp: the player on a door
@@ -3089,70 +3090,91 @@ func _after_map_settled(stepped: bool = true) -> bool:
 	if _world.gen1_step_out_of_door():
 		_renderer.refresh()
 		return true
-	var sight_results: Array = _world.dispatch_sight_events()
-	if sight_results.is_empty():
-		sight_results = _world.dispatch_script_events()
-	if not sight_results.is_empty():
-		_zero_map_name_sign_for(sight_results)
-		_show_script_results(sight_results)
+	## `CheckTrainerEvent`, then `CheckTileEvent`: a Generation 2 warp's landing
+	## reaches no coord event, `CountStep` or wild (`EnterMap`'s `DisableEvents`).
+	var gen1: bool = _world.is_gen1()
+	if _show_sight_events():
 		return true
-	## `CheckTileEvent`'s order: warps and coord events, `CountStep`, then
-	## `RandomEncounter`; a poison pass reaching a script answers with carry and
-	## rolls no wild. `CheckSpecialPhoneCall` stands in front of the counters, so
-	## the step a call rings on is charged nothing.
+	var coord_results: Array = _world.dispatch_script_events(_world.player_cell, stepped or gen1)
+	if not coord_results.is_empty():
+		_zero_map_name_sign_for(coord_results)
+		_show_script_results(coord_results)
+		return true
+	if gen1:
+		if _spend_poison_steps():
+			return true
+	elif stepped and _count_step():
+		return true
+	if stepped and (_offer_repel_renewal() or _roll_step_encounter()):
+		return true
+	if _run_time_events():
+		return true
+	_show_script_results([])
+	## `TryDoWildEncounter`'s `.lastRepelStep`.
+	if stepped and gen1:
+		_offer_repel_renewal()
+	return true
+
+
+func _show_sight_events() -> bool:
+	var results: Array = _world.dispatch_sight_events()
+	if results.is_empty():
+		return false
+	_zero_map_name_sign_for(results)
+	_show_script_results(results)
+	return true
+
+
+## `CountStep`: the special call and a Repel running out take the pass uncounted,
+## and a hatch or a poison script takes the rest of it, wild roll included.
+func _count_step() -> bool:
 	var special_attempt: Dictionary = _world.try_special_phone_call()
 	var special_results: Array = special_attempt.get("results", [])
 	if bool(special_attempt.get("attempted", false)) and not special_results.is_empty():
 		_zero_map_name_sign_timer()
 		_show_script_results(special_results)
 		return true
-	if _spend_poison_steps():
+	if not _world.count_step():
+		_offer_repel_renewal()
 		return true
-	## `CountStep`'s last line, which the poison branch above jumps over when it
-	## reaches a script of its own.
+	_spend_step_happiness()
+	var hatched: bool = _spend_egg_steps()
+	## A hatch jumps over `DayCareStep`; the spender drops that step's count.
+	_spend_day_care_steps()
+	if hatched or _spend_poison_steps():
+		return true
 	_world.do_bike_step()
-	var phone_attempt: Dictionary = _world.try_receive_phone_call(_encounter_random)
-	var phone_results: Array = phone_attempt.get("results", [])
-	if bool(phone_attempt.get("attempted", false)) and not phone_results.is_empty():
-		_zero_map_name_sign_timer()
-		_show_script_results(phone_results)
-		return true
-	## `CheckTimeEvents`' contest branch, which is read a step at a time and
-	## takes the whole turn when it runs out: no encounter is rolled on the step
-	## the contest ends.
-	var contest_over: Array = _world.check_bug_contest_timer()
-	if not contest_over.is_empty():
-		_zero_map_name_sign_timer()
-		_show_script_results(contest_over)
-		return true
-	_show_script_results([])
-	## `EnterMap` runs `DisableEvents` behind every entry but a connection, so a
-	## warp's landing pass reaches neither `CountStep` nor `RandomEncounter`.
-	if not stepped:
-		return true
-	## `CountStep`'s Repel countdown reaching zero, offered before
-	## `RandomEncounter` and taking the step's own player event, so nothing is met
-	## underneath the question.
+	return false
+
+
+## `RandomEncounter`, or with a provider active the wild walked into; a rod,
+## Headbutt, Rock Smash, Sweet Scent and the contest keep their own paths.
+func _roll_step_encounter() -> bool:
+	if _encounters == null or not _encounters.active():
+		return _start_random_encounter()
+	## Generation 1 counts its Repel down inside the roll this step skips.
+	_world.count_gen1_repel_step()
 	if _offer_repel_renewal():
 		return true
-	## While a provider is active the step takes no roll of its own: a wild is
-	## met by walking into one. Everything else that reaches a wild, a script, a
-	## rod, Headbutt, Rock Smash, Sweet Scent and the contest, keeps its own path.
-	if _encounters != null and _encounters.active():
-		## Generation 1 counts its Repel down inside the roll this step skips.
-		_world.count_gen1_repel_step()
-		if _offer_repel_renewal():
-			return true
-		var request: Dictionary = _encounters.battle_request_at(_world.player_cell)
-		if not request.is_empty():
-			_battle_encounter_id = StringName(request["visible_encounter"])
-			_zero_map_name_sign_timer()
-			_start_battle_request(request)
-		return true
-	if _start_random_encounter():
-		return true
-	## `TryDoWildEncounter`'s `.lastRepelStep`; a Generation 2 step offered it above.
-	_offer_repel_renewal()
+	var request: Dictionary = _encounters.battle_request_at(_world.player_cell)
+	if not request.is_empty():
+		_battle_encounter_id = StringName(request["visible_encounter"])
+		_zero_map_name_sign_timer()
+		_start_battle_request(request)
+	return true
+
+
+## `CheckTimeEvents`: the contest's timer while one runs, else `CheckPhoneCall`.
+func _run_time_events() -> bool:
+	if _world.is_gen1():
+		return false
+	var results: Array = _world.check_bug_contest_timer()
+	if results.is_empty():
+		results = _world.try_receive_phone_call(_encounter_random).get("results", [])
+	if results.is_empty():
+		return false
+	_zero_map_name_sign_timer()
+	_show_script_results(results)
 	return true
 
 
@@ -3631,6 +3653,8 @@ func interact() -> bool:
 		or _world.scripted_movement_in_progress():
 		return false
 	var results: Array = _world.interact()
+	if _world.take_talk_click():
+		_play_sfx(Gen2Sfx.SFX_READ_TEXT_2)
 	if results.is_empty():
 		## Only here, after every cartridge branch `PlayerEvents` tries answered
 		## nothing: an actor can never shadow an object, a background event or a
@@ -3750,22 +3774,17 @@ func advance_world_time(seconds: float) -> Array:
 	if _clock == null or _world == null:
 		return []
 	var ticks: Array = _clock.advance(seconds, _world)
-	_world.set_world_clock(_clock.day, _clock.hour, _clock.minute)
-	_apply_pokerus_days(ticks)
+	_apply_pokerus_days()
 	if not ticks.is_empty():
 		_update_time_of_day()
 		_refresh_labels()
 	return ticks
 
 
-## `CheckPokerusTick`, which `UpdateTime` reaches with the days elapsed since the
-## timer's start day. The clock here runs a minute at a time rather than being
-## read off a hardware RTC, so the count is the midnights the ticks crossed.
-func _apply_pokerus_days(ticks: Array) -> void:
-	var days: int = 0
-	for tick: Dictionary in ticks:
-		if int(tick.get("hour", -1)) == 0 and int(tick.get("minute", -1)) == 0:
-			days += 1
+## `CheckPokerusTick`, with the days `wCurDay` has moved since it last ran,
+## however they passed: walking past midnight or with the game closed.
+func _apply_pokerus_days() -> void:
+	var days: int = _world.take_pokerus_days()
 	if days <= 0:
 		return
 	Gen2WorldPartyHost.apply_pokerus_tick(
@@ -9495,6 +9514,7 @@ func _sync_host_clock() -> void:
 	_clock.day = int(clock.get("day", _clock.day))
 	_clock.hour = int(clock.get("hour", _clock.hour))
 	_clock.minute = int(clock.get("minute", _clock.minute))
+	_clock.cur_day = int(clock.get("cur_day", _clock.cur_day))
 
 
 func _handle_audio_request(request: Dictionary) -> Array:

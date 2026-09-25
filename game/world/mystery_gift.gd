@@ -372,7 +372,7 @@ static func day_has_passed(section: Dictionary, day: int) -> bool:
 	var timer: int = int(section.get("timer", 0)) & 0xFFFF
 	var remaining: int = (timer >> 8) & 0xFF
 	var started: int = timer & 0xFF
-	var elapsed: int = posmod(day - started, Gen2WorldClock.DAYS_PER_WEEK)
+	var elapsed: int = posmod(day - started, Gen2WorldClock.CUR_DAY_WRAP)
 	return elapsed >= remaining
 
 
