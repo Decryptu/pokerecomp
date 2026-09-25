@@ -3,18 +3,17 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods get API 47. Every map has its name from the disassembly, such as `GOLDENROD_DEPT_STORE_2F`, and a mod can find a map by that name on any cartridge. Gold and Silver number some maps differently from Crystal, so a map named by group and number could land on the wrong one.
+- Mods get API 48. A mod can change how often Raikou, Entei and Suicune appear on the route they are roaming, read the roaming slots, and make a Pokémon roam in an empty slot, such as Suicune in Crystal. It can also read whether the beasts have left the Burned Tower, whether Crystal's Suicune battle at Tin Tower happened, and which species are caught.
 
 ## Fixed
 
-- Turning on the spot in tall grass can start a wild battle in Gold, Silver and Crystal, as it does on the cartridge.
-- Characters who hop or get pushed back in a cutscene keep facing the same way: Elm's surprised jumps, the rival shoving you out of Elm's lab, Clair in the Dragon's Den and the Rattata on Route 30.
-- Pokémon standing on the map, like Kurt's Slowpoke, no longer turn to face you when you talk to them.
-- Objects that slide in a cutscene, like the legendary beasts in the Burned Tower, no longer play their walking animation.
-- After loading a save, the first phone call waits the full 20 minutes again.
-- Time spent in menus and battles now counts toward the next phone call.
-- No phone call comes in during the Bug-Catching Contest.
-- Incoming callers are picked with the cartridge's odds.
+- Repel keeps away the wild Pokémon a mod shows on the map, as it does with random encounters. On Red, Blue and Yellow, Repel now also wears off while such a mod is on.
+- TMs and HMs in a shop show the move's description. They showed "?".
+- The PC's item list describes the item under the cursor.
+- Fly and Dig take the user off the screen on the first turn, and it comes back when the move lands, misses or is interrupted. Every two-turn move now plays its first-turn animation.
+- When a Pokémon forgets a move for a TM or HM, the TM party menu stays behind the text, and CANCEL and the last Pokémon's HP bar no longer show through the text box.
+- The move lists for forgetting a move and for PP Up or Ether use the same boxes as the cartridge, in the bag and in battle.
+- Raikou and Entei only start roaming after the Burned Tower, and the Pokédex no longer shows where they are before that. Saves where they got loose early are fixed when loaded.
 
 ## Which file
 
