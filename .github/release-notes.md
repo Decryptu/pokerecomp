@@ -1,19 +1,14 @@
-<!-- Rewrite from the exact `## Added` heading for each release. The text below
+<!-- Rewrite from the first release heading, `## Added`, `## Changed` or `## Fixed`, for each release. The text below
 the release changes is standing guidance with a {VERSION} placeholder. -->
 
-## Added
+## Changed
 
-- Mods get API 48. A mod can change how often Raikou, Entei and Suicune appear on the route they are roaming, read the roaming slots, and make a Pokémon roam in an empty slot, such as Suicune in Crystal. It can also read whether the beasts have left the Burned Tower, whether Crystal's Suicune battle at Tin Tower happened, and which species are caught.
+- For mods, the cells offered to visible wild Pokémon only include places the player can reach. The list is refreshed when a script opens a door or Cut clears grass.
 
 ## Fixed
 
-- Repel keeps away the wild Pokémon a mod shows on the map, as it does with random encounters. On Red, Blue and Yellow, Repel now also wears off while such a mod is on.
-- TMs and HMs in a shop show the move's description. They showed "?".
-- The PC's item list describes the item under the cursor.
-- Fly and Dig take the user off the screen on the first turn, and it comes back when the move lands, misses or is interrupted. Every two-turn move now plays its first-turn animation.
-- When a Pokémon forgets a move for a TM or HM, the TM party menu stays behind the text, and CANCEL and the last Pokémon's HP bar no longer show through the text box.
-- The move lists for forgetting a move and for PP Up or Ether use the same boxes as the cartridge, in the bag and in battle.
-- Raikou and Entei only start roaming after the Burned Tower, and the Pokédex no longer shows where they are before that. Saves where they got loose early are fixed when loaded.
+- Wild Pokémon shown on the map by a mod no longer appear where the player can never go, like the floor outside the walls of Ice Path and other caves.
+- On Gold, Silver and Crystal, you can no longer walk, open the menu or press A while the Fly, Cut or Headbutt animation plays.
 
 ## Which file
 
