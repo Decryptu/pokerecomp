@@ -115,6 +115,7 @@ var _world_maps: Array = []
 ## identity, and walking 388 records to answer costs more than the lookup it is
 ## part of.
 var _world_map_index: Dictionary = {}
+var _world_map_names: Dictionary = {}
 var _world_scripts: Dictionary = {}
 var _world_standard_scripts: Dictionary = {}
 var _world_text: Dictionary = {}
@@ -334,6 +335,13 @@ func world_map(group: int, number: int) -> Gen2WorldMap:
 	var maps: Array = _maps()
 	var at: int = int(_world_map_index.get(Vector2i(group, number), -1))
 	return maps[at] if at >= 0 and at < maps.size() else null
+
+
+## The map a `map_const` names on this cartridge, or null where it has none.
+func world_map_named(name: StringName) -> Gen2WorldMap:
+	_maps()
+	var at: int = int(_world_map_names.get(name, -1))
+	return _world_maps[at] if at >= 0 and name != &"" else null
 
 
 func world_maps() -> Array:
@@ -3672,11 +3680,15 @@ func _maps() -> Array:
 		for value: Dictionary in _read_section(RomCache.world_maps_path(directory), true):
 			var map: Gen2WorldMap = Gen2WorldMap.from_cache(value)
 			map.generation = generation
+			map.name = Gen1Layout.map_name(id, map.number) \
+				if generation == RomRegistry.GEN1 \
+				else Gen2Layout.map_name(Gen2WorldState.is_crystal_game_id(id), map.group, map.number)
 			# The first record of a duplicated identity wins, matching the scan
 			# this replaced.
 			var key := Vector2i(map.group, map.number)
 			if not _world_map_index.has(key):
 				_world_map_index[key] = _world_maps.size()
+				_world_map_names[map.name] = _world_map_index[key]
 			_world_maps.append(map)
 	return _world_maps
 

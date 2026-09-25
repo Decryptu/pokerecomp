@@ -18,7 +18,7 @@ const GROUPS: Dictionary = {
 		&"rock_smash", &"field_move_prompts", &"unown_walls",
 	],
 	&"terrain": [
-		&"ledge_hops", &"ice_slides", &"side_walls", &"drawn_blocks", &"story_map_ids",
+		&"ledge_hops", &"ice_slides", &"side_walls", &"drawn_blocks",
 		&"map_data",
 		&"backup_warp",
 	],

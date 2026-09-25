@@ -229,13 +229,14 @@ func _drain(world: Gen2WorldAPI, initial: Array, tracked_object: int) -> Diction
 	return {"ok": false, "reason": "script did not terminate in 512 transitions"}
 
 
-## Every object whose script opens on `faceplayer`, from each side it is
-## reachable from and in a world of its own, since a second press would resume
-## the standing conversation. Nothing else asks whether the turn survives a
-## paused or refused command; the party is there because `readvar VAR_BOXSPACE`,
-## `trade` and `GetFirstPokemonHappiness` read one.
+## Every object whose script opens on `faceplayer`, from each side and in a world
+## of its own, since a second press would resume the conversation: whether the turn
+## survives a paused or refused command, or, where `ApplyObjectFacing` refuses it, the
+## old facing does. `readvar VAR_BOXSPACE`, `trade` and `GetFirstPokemonHappiness`
+## read the party.
 func _check_face_player(game_id: StringName, data: GameData) -> void:
 	var talked: int = 0
+	var refused: int = 0
 	var missed: int = 0
 	var wrong: Array[String] = []
 	for map: Gen2WorldMap in data.world_maps():
@@ -250,11 +251,15 @@ func _check_face_player(game_id: StringName, data: GameData) -> void:
 					data, map.group, map.number, Vector2i.ZERO
 				)
 				var object: Gen2WorldObject = world.objects[candidate.index]
+				var before: int = object.facing
 				if not _talk_from(world, object, facing):
 					continue
 				talked += 1
 				var turned: int = (world.objects[object.index] as Gen2WorldObject).facing
 				var wanted: int = int((NEIGHBOURS[facing] as Array)[1])
+				if not candidate.takes_facing():
+					refused += 1
+					wanted = before
 				if turned == wanted:
 					continue
 				missed += 1
@@ -265,7 +270,9 @@ func _check_face_player(game_id: StringName, data: GameData) -> void:
 	for line: String in wrong:
 		_r.check(false, "%s: faceplayer left %s" % [game_id, line])
 	_r.check(missed == 0, "%s: faceplayer missed %d of %d talks." % [game_id, missed, talked])
-	print("%s: faceplayer turned %d of %d talks" % [game_id, talked - missed, talked])
+	print("%s: faceplayer answered %d of %d talks, %d of them refusals" % [
+		game_id, talked - missed, talked, refused,
+	])
 
 
 func _opens_on_face_player(

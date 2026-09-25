@@ -85,11 +85,17 @@ static func reading(hour_value: int, minute_value: int) -> String:
 
 
 func time_of_day() -> int:
-	if hour < MORN_START:
+	return time_of_day_at(hour)
+
+
+## `GetTimeOfDay`'s `TimesOfDay`, the one reading of an hour as `wTimeOfDay`.
+static func time_of_day_at(hour_value: int) -> int:
+	var normalized: int = posmod(hour_value, HOURS_PER_DAY)
+	if normalized < MORN_START:
 		return Gen2WorldPalette.TIME_NIGHT
-	if hour < DAY_START:
+	if normalized < DAY_START:
 		return Gen2WorldPalette.TIME_MORNING
-	if hour < NITE_START:
+	if normalized < NITE_START:
 		return Gen2WorldPalette.TIME_DAY
 	return Gen2WorldPalette.TIME_NIGHT
 

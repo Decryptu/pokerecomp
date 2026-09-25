@@ -751,15 +751,6 @@ const EVENT_TELEPORT_GUY: int = 1916
 const EVENT_RIVAL_SPROUT_TOWER: int = 1732
 const EVENT_RED_IN_MT_SILVER: int = 1890
 
-## Maps this walk names by id, where the two profiles disagree: group 3 runs
-## eight lower from `UNION_CAVE_1F` on pokegold and group 11 shifts around
-## `GOLDENROD_POKECENTER_1F`.
-const MAP_IDS: Dictionary = {
-	&"ILEX_FOREST": {&"crystal": Vector2i(3, 52), &"gold": Vector2i(3, 44)},
-	&"MAHOGANY_MART_1F": {&"crystal": Vector2i(3, 48), &"gold": Vector2i(3, 40)},
-	&"TEAM_ROCKET_BASE_B2F": {&"crystal": Vector2i(3, 50), &"gold": Vector2i(3, 42)},
-	&"TEAM_ROCKET_BASE_B3F": {&"crystal": Vector2i(3, 51), &"gold": Vector2i(3, 43)},
-}
 
 
 func _initialize() -> void:
@@ -9042,10 +9033,10 @@ func _engine_flag_set(world: Gen2WorldAPI, data: GameData, crystal_index: int) -
 	))
 
 
-## The [constant MAP_IDS] row for [param name] on this cartridge's profile.
+## Where the profiles number a map apart, this walk names it.
 func _map_id(data: GameData, name: StringName) -> Vector2i:
-	var row: Dictionary = MAP_IDS[name]
-	return row[&"crystal"] if Gen2WorldState.is_crystal_profile(data) else row[&"gold"]
+	var map: Gen2WorldMap = data.world_map_named(name)
+	return Vector2i(map.group, map.number) if map != null else Vector2i(-1, -1)
 
 
 func _warp_to(map: Gen2WorldMap, group: int, number: int) -> Dictionary:

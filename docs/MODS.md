@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 47 | `Gen2WorldMap.name`, the `map_const` constant's name on every cartridge, and `GameData.world_map_named()` |
 | 46 | `box_full` on a `caught` event, and `box_free_space` in `progress()`; a hidden Headbutt tree left out of `drawn_tile_at()` and `drawn_revision()` |
 | 45 | `Gen2WorldDrawList.drawn_tile_at()`, `band()` and `drawn_revision()`, with `band` and `drawn_revision` on `frame()`; `changed_blocks` and `written_tiles` on `Gen2BattleWorldContext`; `Gen2WorldScreen.preview_ss_anne_leaves()` and `preview_poison_step()` |
 | 44 | `Gen2BattleHud.draw_party_balls()`; `ground` on every draw-list row, a screen row's `position_cells` and `ground` in map terms, and a renderer's `draw_reach_pixels()` listing connected rows out to its reach; `reachable_checks()`, what a placement reaches with items and badges held from the start; `Gen2WorldCatalog.progression_items()`; a patched `{"item": 0}` or `{"badge": -1}` as a site that hands nothing; `validate_placement` asking a site that waits on an engine flag other than a badge's again once a script sets that flag; Oak's aides as item sites; `{owned}` and `{special}` in `requires` |
@@ -1269,6 +1270,14 @@ there. `Gen2WorldTileset.name` is the `TILESET_*` constant's own name on every
 cartridge (`&"POKECENTER"`, Yellow's `&"BEACH_HOUSE"` last), `GameData.world_tileset_named(name)`
 finds the tileset under it, and `Gen2Layout.tileset_number(crystal, name)` is
 the number it has on a profile.
+
+Maps move the same way: pokegold ships 20 fewer and orders groups 4 and 11 its
+own way, so Crystal's 11,12 is `GOLDENROD_DEPT_STORE_2F` and Gold's is the 1F.
+`Gen2WorldMap.name` is the map's `map_const` name from that cartridge's own
+`constants/map_constants.asm`, and `GameData.world_map_named(name)` finds it, or
+answers null where the cartridge has no such map. Names match across cartridges
+except for one house: Yellow calls Red's and Blue's `CERULEAN_TRADE_HOUSE`
+`CERULEAN_MELANIES_HOUSE`.
 
 A world renderer has the same two on its side: an overworld sprite's colours on
 either generation are `Gen2WorldPalette.overworld_sprite_colors(data, map,

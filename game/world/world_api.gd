@@ -81,6 +81,9 @@ const SCRIPTED_STEP_PASSES: Dictionary = {
 	&"turn_waterfall": STEP_PASSES_FAST,
 }
 const STEP_KIND_WALK: StringName = &"step"
+const OBJECT_FACING_EVENTS: Array[StringName] = [
+	&"object_facing", &"object_face_player", &"object_face_object",
+]
 const STEP_KIND_HOP: StringName = &"jump_step"
 const STEP_KIND_TURN: StringName = &"turn"
 
@@ -358,6 +361,9 @@ var _player_scripted_steps: bool = false
 ## The player's own OBJECT_STEP_FRAME. See Gen2WorldObject.step_frame.
 var _player_step_frame: int = 0
 var _player_step_kind: StringName = &""
+var _player_fixed_facing: bool = false
+var _player_sliding: bool = false
+var _player_step_sliding: bool = false
 ## OBJECT_STEP_FRAME's spin use. See [method Gen2WorldMovement.spin_advance].
 var _player_spin_frame: int = 0
 var _player_step_tail: Callable = Callable()  ## What runs when the player's queued run drains.
@@ -411,6 +417,8 @@ static func open_snapshot(
 		game_data, map, tileset, world_snapshot.player_cell, world_snapshot.world_state,
 		world_rules
 	)
+	## `StartMap`'s `InitCallReceiveDelay`: a Continue waits the first delay again.
+	out.state.reset_phone_receive_delay()
 	out.player_facing = world_snapshot.player_facing
 	out.movement_mode = world_snapshot.movement_mode
 	out.player_sprite_number = world_snapshot.player_sprite_number
@@ -1076,7 +1084,7 @@ func player_walk_frame() -> int:
 	if _player_step_passes_remaining <= 0 or _player_step_direction == Vector2i.ZERO \
 		or _gen1_spinning:
 		return 0
-	if _player_step_kind in Gen2WorldMovement.SLIDING_KINDS:
+	if _player_step_sliding:
 		return 0
 	return (_player_step_frame >> 2) & 3
 
@@ -1100,7 +1108,7 @@ func _queue_player_step(
 		_player_scripted_steps = true
 		_player_queued_steps.append({
 			"direction": direction, "frames": maxi(0, frames), "jumping": jumping,
-			"facing": facing, "kind": kind,
+			"facing": facing, "kind": kind, "sliding": _player_sliding,
 		})
 		return
 	_face_player_toward(facing)
@@ -1109,7 +1117,7 @@ func _queue_player_step(
 	if frames <= 0 and direction == Vector2i.ZERO:
 		return
 	_player_scripted_steps = true
-	_begin_player_step(direction, frames, jumping, kind)
+	_begin_player_step(direction, frames, jumping, kind, _player_sliding)
 
 
 func _face_player_toward(direction: Vector2i) -> void:
@@ -1126,7 +1134,7 @@ func _start_next_player_step() -> void:
 		if int(next["frames"]) > 0 or next["direction"] != Vector2i.ZERO:
 			_begin_player_step(
 				next["direction"], int(next["frames"]), bool(next.get("jumping", false)),
-				StringName(next.get("kind", STEP_KIND_WALK))
+				StringName(next.get("kind", STEP_KIND_WALK)), bool(next.get("sliding", false))
 			)
 			return
 	_player_scripted_steps = false
@@ -1163,9 +1171,10 @@ func _run_player_step_tail() -> void:
 
 func _begin_player_step(
 	direction: Vector2i, frames: int, jumping: bool = false,
-	kind: StringName = STEP_KIND_WALK
+	kind: StringName = STEP_KIND_WALK, sliding: bool = false
 ) -> void:
 	_player_step_kind = kind
+	_player_step_sliding = sliding or kind in Gen2WorldMovement.SLIDING_KINDS
 	## `StepFunction_PlayerJump` and `StepFunction_NPCJump` are the only step
 	## types that run `UpdateJumpPosition`, and every other step type replaces
 	## them, so the arc belongs to the hop that set it and to nothing begun after
@@ -1187,6 +1196,7 @@ func _clear_player_step() -> void:
 	## nothing; running it against the cell being left would.
 	_player_step_tail = Callable()
 	_player_step_kind = &""
+	_player_step_sliding = false
 	_player_spin_frame = 0
 	_player_step_began = false
 	_player_jumping = false
@@ -1214,7 +1224,7 @@ func advance_player_step_pass() -> bool:
 		return false
 	if _player_step_kind in Gen2WorldMovement.SPINNING_KINDS:
 		_player_spin_frame = Gen2WorldMovement.spin_advance(_player_spin_frame)
-	if not _player_step_kind in Gen2WorldMovement.SLIDING_KINDS:
+	if not _player_step_sliding:
 		_player_step_frame = (_player_step_frame + 1) & 0x0F
 	## `HandleLedges`' second simulated step starts a step of its own too, and
 	## the first one, which loads the hop's shadow as well, runs two frames over.
@@ -3155,14 +3165,10 @@ func try_special_phone_call() -> Dictionary:
 	}
 
 
-## Advances the receive timer by completed game minutes. The source checks the
-## entrance before it checks the timer, so a due call waits until the player is
-## standing on a door, staircase or cave tile.
-func advance_phone_schedule(
-	minutes: int = 1,
-	random: RandomNumberGenerator = null,
-	selection_byte: int = -1,
-	force: bool = false
+## `CheckTimeEvents`' `CheckPhoneCall`, which a contest timer replaces. The entrance
+## is checked before the timer, so a due call waits for a door, stair or cave tile.
+func try_receive_phone_call(
+	random: RandomNumberGenerator = null, selection_byte: int = -1, force: bool = false
 ) -> Dictionary:
 	if state == null:
 		return {"ok": false, "reason": &"missing_world_state", "timer_ready": false}
@@ -3173,14 +3179,13 @@ func advance_phone_schedule(
 			"ringing": true,
 			"results": [{"ok": true, "status": &"phone_ring", "event": pending_phone_ring()}],
 		}
-	var crossed: bool = state.advance_phone_receive_timer(minutes)
 	var attempt: Dictionary = {
 		"ok": true,
 		"timer_ready": state.phone_receive_ready(),
-		"timer_crossed": crossed,
 		"results": [],
 	}
-	if not state.phone_receive_ready() or not standing_on_phone_entrance():
+	if bug_contest_active() or not state.phone_receive_ready() \
+		or not standing_on_phone_entrance():
 		return attempt
 	var random_byte: int = random.randi_range(0, 255) if random != null else 0
 	var chosen: int = selection_byte
@@ -3192,14 +3197,6 @@ func advance_phone_schedule(
 		true, true, random_byte, force, chosen
 	)
 	return attempt
-
-
-## Checks a due receive timer after movement or map setup. This covers the
-## source path where elapsed time made the timer ready away from an entrance.
-func try_receive_phone_call(
-	random: RandomNumberGenerator = null, selection_byte: int = -1, force: bool = false
-) -> Dictionary:
-	return advance_phone_schedule(0, random, selection_byte, force)
 
 
 func standing_on_phone_entrance(cell: Vector2i = player_cell) -> bool:
@@ -3439,7 +3436,7 @@ func advance_trainer_approach_step(object_index: int, direction: Vector2i) -> Di
 		return {"ok": false, "reason": &"invalid_trainer_object"}
 	var object: Gen2WorldObject = objects[object_index]
 	var destination: Vector2i = object.cell + direction
-	object.apply_direction(direction)
+	object.apply_direction(object.init_step_facing(direction))
 	if not _cell_in_bounds(destination):
 		return {
 			"ok": false, "reason": &"movement_blocked",
@@ -3464,7 +3461,8 @@ func finish_trainer_approach(object_index: int) -> Dictionary:
 		return {"ok": false, "reason": &"invalid_trainer_object"}
 	var object: Gen2WorldObject = objects[object_index]
 	object.set_emote(TRAINER_SHOCK_EMOTE, false)
-	object.facing = _facing_toward(object.cell, player_cell)
+	if object.takes_facing():
+		object.facing = _facing_toward(object.cell, player_cell)
 	var key: String = _object_key(current_map.group, current_map.number, object_index)
 	_object_position_overrides[key] = object.cell
 	_object_facing_overrides[key] = object.facing
@@ -9530,6 +9528,9 @@ func _apply_object_override(type: StringName, event: Dictionary) -> bool:
 		return false
 	var key: String = _object_key(map_group, map_number, index)
 	var names_loaded: bool = _event_names_loaded_object(event, index)
+	if type in OBJECT_FACING_EVENTS and names_loaded \
+		and not (objects[index] as Gen2WorldObject).takes_facing():
+		return true
 	match type:
 		&"object_visibility":
 			_object_visibility_overrides[key] = bool(event.get("active", false))
@@ -9641,7 +9642,9 @@ func _apply_object_movement(event: Dictionary) -> Array:
 			var jumping: bool = kind in JUMP_STEP_KINDS
 			var cells: int = 2 if jumping else 1
 			var destination: Vector2i = object.cell + direction * cells
-			final_facing = facing_for_direction(direction)
+			var shown: Vector2i = object.init_step_facing(direction)
+			if shown != Vector2i.ZERO:
+				final_facing = facing_for_direction(shown)
 			if _cell_in_bounds(destination):
 				var vacated: Vector2i = object.cell
 				object.cell = destination
@@ -9651,13 +9654,13 @@ func _apply_object_movement(event: Dictionary) -> Array:
 				# advance_scripted_steps_pass().
 				object.queue_step(
 					direction * cells, int(SCRIPTED_STEP_PASSES[kind]) * cells, jumping,
-					direction, kind,
+					shown, kind,
 				)
 				_advance_followers(object_index, vacated)
 			else:
 				## `NormalStep` writes the facing before `GetNextTile` refuses,
 				## so a step off the map turns the object where it stands.
-				object.queue_step(Vector2i.ZERO, 0, false, direction)
+				object.queue_step(Vector2i.ZERO, 0, false, shown)
 				generated.append({
 					"type": &"movement_blocked", "object_index": object_index,
 					"cell": destination,
@@ -9718,8 +9721,10 @@ func _movement_effect(
 				"object_index": object_index,
 				"cell": object.cell,
 			})
-		&"set_sliding", &"remove_sliding", &"fix_facing", &"remove_fixed_facing":
-			pass
+		&"set_sliding", &"remove_sliding":
+			object.sliding = kind == &"set_sliding"
+		&"fix_facing", &"remove_fixed_facing":
+			object.fixed_facing = kind == &"fix_facing"
 		_:
 			generated.append({
 				"type": &"movement_command_requested", "object_index": object_index,
@@ -9769,18 +9774,19 @@ func _apply_player_movement(event: Dictionary) -> Array:
 			var jumping: bool = kind in JUMP_STEP_KINDS
 			var cells: int = 2 if jumping else 1
 			var destination: Vector2i = player_cell + direction * cells
+			var shown: Vector2i = Vector2i.ZERO if _player_fixed_facing else direction
 			if _cell_in_bounds(destination):
 				var vacated: Vector2i = player_cell
 				player_cell = destination
 				_queue_player_step(
 					direction * cells, int(SCRIPTED_STEP_PASSES[kind]) * cells, jumping,
-					direction, kind,
+					shown, kind,
 				)
 				_advance_followers(-1, vacated)
 			else:
 				## `NormalStep` writes the facing before the refusal, so a step
 				## off the map turns the player where they stand.
-				_queue_player_step(Vector2i.ZERO, 0, false, direction, kind)
+				_queue_player_step(Vector2i.ZERO, 0, false, shown, kind)
 				generated.append({
 					"type": &"movement_blocked", "player": true, "cell": destination,
 				})
@@ -9808,10 +9814,13 @@ func _apply_player_movement(event: Dictionary) -> Array:
 				false, Vector2i.ZERO, kind
 			)
 			continue
-		if kind in [
-			&"step_wait_end", &"set_sliding", &"remove_sliding",
-			&"fix_facing", &"remove_fixed_facing",
-		]:
+		if kind in [&"set_sliding", &"remove_sliding"]:
+			_player_sliding = kind == &"set_sliding"
+			continue
+		if kind in [&"fix_facing", &"remove_fixed_facing"]:
+			_player_fixed_facing = kind == &"fix_facing"
+			continue
+		if kind == &"step_wait_end":
 			continue
 		generated.append({
 			"type": &"movement_command_requested", "player": true,
@@ -10485,7 +10494,7 @@ func _decide_object_movement(object: Gen2WorldObject, random: RandomNumberGenera
 	if direction == Vector2i.ZERO:
 		return false
 	# InitStep writes the facing before CanObjectMoveInDirection is asked.
-	object.apply_direction(direction)
+	object.apply_direction(object.init_step_facing(direction))
 	var destination: Vector2i = object.cell + direction
 	if not _object_may_leave(object, destination, direction) \
 		or not _object_stays_on_screen(object.cell, direction) \
@@ -10944,12 +10953,13 @@ func _step_follower(
 		_queue_player_step(direction, passes, false, direction)
 		return
 	follower.cell = destination
-	follower.queue_step(direction, passes, false, direction)
+	follower.queue_step(direction, passes, false, follower.init_step_facing(direction))
 	var override_key: String = _object_key(
 		current_map.group, current_map.number, follower_index
 	)
 	_object_position_overrides[override_key] = follower.cell
-	_object_facing_overrides[override_key] = facing_for_direction(direction)
+	if not follower.fixed_facing:
+		_object_facing_overrides[override_key] = facing_for_direction(direction)
 
 
 ## Moves one cell or crosses a connection. Below, `DoPlayerMovement`, what a
@@ -11609,6 +11619,9 @@ func _apply_map(
 		state.reset_bike_flags(Gen2WorldState.is_crystal_profile(data))
 	state.clear_flash_if_outdoors(target_map.environment)
 	_command_queue_slots = _empty_command_queue_slots()
+	## A new struct from SPRITEMOVEDATA_PLAYER, whose flags1 carries neither flag.
+	_player_fixed_facing = false
+	_player_sliding = false
 	current_map = target_map
 	_gen1_mark_town_visited()
 	_map_placements = {}
@@ -12396,15 +12409,6 @@ func hidden_item_nearby() -> bool:
 	return false
 
 
-## The three maps `engine/events/card_key.asm`, `basement_key.asm` and
-## `squirtbottle.asm` name by constant before they do anything else. Each row is
-## the Crystal id and the Gold and Silver one; group 3 runs eight lower on
-## pokegold from `UNION_CAVE_1F`, which is what moves the underground.
-const KEY_ITEM_MAPS: Dictionary = {
-	&"RADIO_TOWER_3F": {&"crystal": Vector2i(3, 19), &"gold": Vector2i(3, 19)},
-	&"GOLDENROD_UNDERGROUND": {&"crystal": Vector2i(3, 53), &"gold": Vector2i(3, 45)},
-	&"ROUTE_36": {&"crystal": Vector2i(10, 3), &"gold": Vector2i(10, 3)},
-}
 
 ## The two tiles `GetFacingTileCoord`'s results are compared against. The source
 ## writes them in the object coordinate space, which is four cells ahead of the
@@ -12414,13 +12418,10 @@ const CARD_KEY_SLOT_CELL: Vector2i = Vector2i(14, 2)
 const BASEMENT_DOOR_CELL: Vector2i = Vector2i(18, 6)
 
 
+## `engine/events/card_key.asm`, `basement_key.asm` and `squirtbottle.asm` each
+## name their map by constant before they do anything else.
 func _is_on_key_item_map(name: StringName) -> bool:
-	if current_map == null:
-		return false
-	var row: Dictionary = KEY_ITEM_MAPS[name]
-	var id: Vector2i = row[&"crystal"] if Gen2WorldState.is_crystal_profile(data) \
-		else row[&"gold"]
-	return map_id() == id
+	return current_map != null and current_map.name == name
 
 
 ## `_CardKey`: the map, `wPlayerDirection` against `OW_UP`, the faced tile,

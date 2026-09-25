@@ -157,7 +157,7 @@ func _verify_shows(_data: GameData, game_id: StringName, crystal: bool) -> void:
 		for seed_index: int in SHOW_SEEDS:
 			var random := RandomNumberGenerator.new()
 			random.seed = seed_index
-			# Both sides of NITE_HOUR, so Buena's off-air arm is walked too.
+			# Both sides of NITE_START, so Buena's off-air arm is walked too.
 			var hour: int = 20 if seed_index % 2 == 0 else 9
 			var show: Gen2RadioShow = Gen2RadioShow.start(_data, channel, {
 				"crystal": crystal, "weekday": seed_index % 7, "hour": hour,
@@ -204,7 +204,7 @@ func _walk_show(
 		# Midnight arrives halfway through, which is the only way
 		# Buena's ten shutdown lines are ever reached.
 		if frame == SHOW_FRAMES / 2:
-			show.set_hour(0 if hour >= Gen2RadioShow.NITE_HOUR else 20)
+			show.set_hour(0 if hour >= Gen2WorldClock.NITE_START else 20)
 		visited[show.segment()] = true
 		show.advance_frame()
 		if not show.ran_segment.is_empty():

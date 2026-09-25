@@ -29,13 +29,8 @@ const DAY_QUESTION: String = "What day is it?"
 ## tiles, so each of the first two lines is twelve.
 const WOKE_UP_TEXT: String = "%s\n%s%sZzz… Hm? Wha…?\nYou woke me up!%sWill you check the\nclock for me?"
 
-## `constants/misc_constants.asm`. `GetTimeOfDayString` tests MORN_HOUR, DAY_HOUR
-## and NITE_HOUR in that order and falls through to NITE, so 18 and up is NITE
-## again; `OakText_ResponseToSetTime` tests `DAY_HOUR + 1` instead, which is why
-## its three answers do not split the day where the MORN/DAY/NITE word does.
-const MORN_HOUR: int = 4
-const DAY_HOUR: int = 10
-const NITE_HOUR: int = 18
+## `GetTimeOfDayString`'s words, one per `wTimeOfDay`.
+const TIME_OF_DAY_WORDS: Array[String] = ["MORN", "DAY", "NITE"]
 const NOON_HOUR: int = 12
 
 ## `.loop` and `.HourIsSet` end on `ld c, 10 / call DelayFrames` before their
@@ -267,9 +262,10 @@ func _begin_response() -> void:
 
 
 func _response_line() -> String:
-	if _hour < MORN_HOUR or _hour >= NITE_HOUR:
+	## `OakText_ResponseToSetTime` tests `DAY_HOUR + 1`: ten o'clock is DAY but overslept.
+	if Gen2WorldClock.time_of_day_at(_hour) == Gen2WorldPalette.TIME_NIGHT:
 		return "!\nNo wonder it's so%sdark!" % Gen2TextStream.SCROLL_BREAK
-	if _hour <= DAY_HOUR:
+	if _hour <= Gen2WorldClock.DAY_START:
 		return "!\nI overslept!"
 	return "!\nYikes! I over-%sslept!" % Gen2TextStream.SCROLL_BREAK
 
@@ -348,9 +344,4 @@ func _hour_text() -> String:
 	var shown: int = _hour % NOON_HOUR
 	if shown == 0:
 		shown = NOON_HOUR
-	var word: String = "NITE"
-	if _hour >= MORN_HOUR and _hour < DAY_HOUR:
-		word = "MORN"
-	elif _hour >= DAY_HOUR and _hour < NITE_HOUR:
-		word = "DAY"
-	return "%s %d" % [word, shown]
+	return "%s %d" % [TIME_OF_DAY_WORDS[Gen2WorldClock.time_of_day_at(_hour)], shown]

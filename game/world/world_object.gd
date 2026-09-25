@@ -1,9 +1,7 @@
 class_name Gen2WorldObject
 extends RefCounted
 
-## Scene-free state for one map-object event. Script pointers and event flags
-## remain data here; scripted movement and follower state are driven by the
-## world event runtime.
+## Scene-free state for one map-object event, driven by the world event runtime.
 
 const MOVEMENT_STILL: int = 1
 const MOVEMENT_WANDER: int = 2
@@ -49,14 +47,19 @@ const SPIN_NEXT_FACING: Dictionary = {
 		Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_DOWN,
 	],
 }
-## The three rows data/sprites/map_objects.asm gives BIG_OBJECT. Two objects in
-## either game use one, the bedroom doll and Vermilion's Snorlax; no map names
-## BIGDOLLASYM.
+## data/sprites/map_objects.asm's three BIG_OBJECT rows: the bedroom doll and
+## Vermilion's Snorlax use one each, and no map names BIGDOLLASYM.
 const MOVEMENT_BIGDOLLSYM: int = 0x15
 const MOVEMENT_BIGDOLLASYM: int = 0x20
 const MOVEMENT_BIGDOLL: int = 0x21
-## WillObjectIntersectBigObject's own two, commented "big doll width" and
-## "big doll height".
+## `SpriteMovementData` rows whose flags1 carry FIXED_FACING and SLIDING, which
+## `CopySpriteMovementData` loads; the literals are SHADOW, EMOTE, BOULDERDUST, GRASS.
+const FIXED_FACING_MOVEMENTS: Array[int] = [
+	MOVEMENT_STILL, MOVEMENT_BIGDOLLSYM, MOVEMENT_POKEMON, MOVEMENT_SUDOWOODO,
+	MOVEMENT_SMASHABLE_ROCK, MOVEMENT_STRENGTH_BOULDER, 0x1B, 0x1C,
+	MOVEMENT_BIGDOLLASYM, MOVEMENT_BIGDOLL, 0x22, 0x23,
+]
+## WillObjectIntersectBigObject's "big doll width" and "big doll height".
 const BIG_OBJECT_SIZE: int = 2
 
 ## What an object index names. Object zero is the player, which every object
@@ -119,8 +122,7 @@ var step_jumping: bool = false
 ## Set on the frame a step starts and cleared by whoever reads it, which is the
 ## grass rustle `NormalStep` spawns there.
 var step_began: bool = false
-## OBJECT_ACTION_WEIRD_TREE, while the sleep a `tree_shake` queued runs. See
-## queue_tree_shake().
+## OBJECT_ACTION_WEIRD_TREE while a `tree_shake` sleep runs.
 var weird_tree: bool = false
 ## The rest of a scripted movement stream, still to be drawn: an applymovement
 ## commits every cell of its path at once. One `{direction, frames}` an entry.
@@ -133,6 +135,11 @@ var scripted_steps: bool = false
 ## for a frozen object, so it neither steps, nor waits, nor decides.
 ## `FreezeAllOtherObjects` sets it and `ApplyMovement` is its only caller.
 var frozen: bool = false
+## OBJECT_FLAGS1's FIXED_FACING_F (`InitStep` keeps the direction) and SLIDING_F
+## (`SetFacingStepAction` stands); `step_sliding` is what the step began under.
+var fixed_facing: bool = false
+var sliding: bool = false
+var step_sliding: bool = false
 ## Passes this object waits before its movement template decides again:
 ## OBJECT_STEP_DURATION under `StepFunction_Sleep`.
 var idle_passes_remaining: int = 0
@@ -148,6 +155,8 @@ static func from_event(
 	out.cell = Vector2i(int(value.get("x", 0)), int(value.get("y", 0)))
 	out.initial_cell = out.cell
 	out.movement = int(value.get("movement", MOVEMENT_STILL))
+	out.fixed_facing = out.movement in FIXED_FACING_MOVEMENTS
+	out.sliding = out.fixed_facing
 	out.x_radius = int(value.get("x_radius", 0))
 	out.y_radius = int(value.get("y_radius", 0))
 	out.hour_1 = int(value.get("hour_1", -1))
@@ -182,6 +191,9 @@ func carry_presentation_from(previous: Gen2WorldObject) -> void:
 	step_passes_total = previous.step_passes_total
 	step_passes_remaining = previous.step_passes_remaining
 	step_jumping = previous.step_jumping
+	step_sliding = previous.step_sliding
+	fixed_facing = previous.fixed_facing
+	sliding = previous.sliding
 	queued_steps = previous.queued_steps.duplicate(true)
 	scripted_steps = previous.scripted_steps
 	step_frame = previous.step_frame
@@ -383,6 +395,17 @@ func next_direction(random: RandomNumberGenerator) -> Vector2i:
 			return Vector2i.ZERO
 
 
+## `InitStep`: the facing a step starts with, none under FIXED_FACING_F.
+func init_step_facing(direction: Vector2i) -> Vector2i:
+	return Vector2i.ZERO if fixed_facing else direction
+
+
+## `ApplyObjectFacing`: refused under FIXED_FACING_F and for a STILL_SPRITE.
+func takes_facing() -> bool:
+	return not fixed_facing \
+		and (sprite == null or sprite.sprite_type != Gen2WorldSprite.TYPE_STILL)
+
+
 func apply_direction(direction: Vector2i) -> void:
 	if direction == Vector2i.UP:
 		facing = Gen2WorldSprite.FACING_UP
@@ -416,7 +439,7 @@ func tick_emote() -> bool:
 func start_step(direction: Vector2i, frames: int) -> void:
 	queued_steps.clear()
 	scripted_steps = false
-	_begin_step(direction, frames)
+	_begin_step(direction, frames, false, &"", sliding)
 
 
 ## Adds one step of a scripted stream to the trail. The first starts at once and
@@ -424,7 +447,7 @@ func start_step(direction: Vector2i, frames: int) -> void:
 ## as one arrival. [param new_facing] is the direction it is drawn looking, not the
 ## step's vector for a `jump_step` and the whole of a queued `turn_head`:
 ## `NormalStep` writes it as the step starts, so a stream still turns a step at a
-## time.
+## time. The entry keeps the SLIDING_F the stream had set when it was read.
 func queue_step(
 	direction: Vector2i, frames: int, jumping: bool = false,
 	new_facing: Vector2i = Vector2i.ZERO, kind: StringName = &""
@@ -433,7 +456,7 @@ func queue_step(
 		scripted_steps = true
 		queued_steps.append({
 			"direction": direction, "frames": maxi(0, frames), "jumping": jumping,
-			"facing": new_facing, "kind": kind,
+			"facing": new_facing, "kind": kind, "sliding": sliding,
 		})
 		return
 	apply_direction(new_facing)
@@ -442,7 +465,7 @@ func queue_step(
 	if frames <= 0 and direction == Vector2i.ZERO:
 		return
 	scripted_steps = true
-	_begin_step(direction, frames, jumping, kind)
+	_begin_step(direction, frames, jumping, kind, sliding)
 
 
 ## `Movement_tree_shake`: 24 frames of STEP_TYPE_SLEEP with
@@ -468,9 +491,11 @@ static func sleep_frames(length: int) -> int:
 
 
 func _begin_step(
-	direction: Vector2i, frames: int, jumping: bool = false, kind: StringName = &""
+	direction: Vector2i, frames: int, jumping: bool = false, kind: StringName = &"",
+	sliding_flag: bool = false
 ) -> void:
 	step_kind = kind
+	step_sliding = sliding_flag or kind in Gen2WorldMovement.SLIDING_KINDS
 	# `StepFunction_NPCJump` is the only step type running `UpdateJumpPosition`,
 	# and every step begun after it replaces the type, so the arc ends here.
 	step_jumping = jumping
@@ -490,10 +515,11 @@ func tick_step() -> bool:
 		return false
 	if step_kind in Gen2WorldMovement.SPINNING_KINDS:
 		spin_frame = Gen2WorldMovement.spin_advance(spin_frame)
-	if step_kind in Gen2WorldMovement.SLIDING_KINDS:
-		frame = 0
-	elif step_direction != Vector2i.ZERO or weird_tree:
+	## `SetFacingWeirdTree` is not one of the three actions SLIDING_F stands still.
+	if weird_tree or (step_direction != Vector2i.ZERO and not step_sliding):
 		advance_walk_frame()
+	elif step_sliding:
+		frame = 0
 	step_passes_remaining -= 1
 	if step_passes_remaining <= 0:
 		if weird_tree:
@@ -516,7 +542,7 @@ func _start_next_queued_step() -> void:
 		if int(next["frames"]) > 0 or next["direction"] != Vector2i.ZERO:
 			_begin_step(
 				next["direction"], int(next["frames"]), bool(next.get("jumping", false)),
-				StringName(next.get("kind", &""))
+				StringName(next.get("kind", &"")), bool(next.get("sliding", false))
 			)
 			return
 	scripted_steps = false

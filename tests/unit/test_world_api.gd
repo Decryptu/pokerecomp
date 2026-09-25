@@ -186,7 +186,11 @@ func _write_cache(game_id: String = "testworld") -> void:
 		],
 		"coord_events": [{"scene": 0, "x": 7, "y": 6, "script": 0x6000}],
 		"bg_events": [{"x": 8, "y": 6, "type": 0, "script": 0x6015}],
-		"objects": [{"sprite": 1, "x": 5, "y": 6, "script": 0x6030, "event_flag": 7}],
+		## SPRITEMOVEDATA_STANDING_DOWN: an NPC that turns, where STILL would not.
+		"objects": [{
+			"sprite": 1, "x": 5, "y": 6, "script": 0x6030, "event_flag": 7,
+			"movement": Gen2WorldObject.MOVEMENT_FIXED_DOWN,
+		}],
 	}
 
 	var target_collision: Array = []
@@ -341,7 +345,7 @@ func _write_cache(game_id: String = "testworld") -> void:
 
 	RomCache.write_json(RomCache.overworld_sprites_path(_directory), [{
 		"number": 1, "address": 0x4000, "bank": 0x30, "bytes": 64,
-		"tiles": 4, "type": Gen2WorldSprite.TYPE_STILL, "palette": 0,
+		"tiles": 4, "type": Gen2WorldSprite.TYPE_STANDING, "palette": 0,
 	}])
 	var sprite_palettes: Array = []
 	for _group: int in Gen2Layout.OVERWORLD_SPRITE_PALETTE_GROUP_COUNT:
@@ -729,6 +733,47 @@ func test_phone_ring_runs_before_the_imported_incoming_script() -> void:
 	assert_false(world.phone_ring_active())
 	assert_eq(resumed[0]["status"], &"waiting", JSON.stringify(resumed))
 	assert_eq(world.pending_script_input()["type"], &"text")
+
+
+## `ChooseRandomCaller` reduces `swap(hRandomAdd) & $1f`, not the whole byte:
+## $10 is caller 1 of two, where the byte's own remainder would be caller 0.
+func test_the_incoming_caller_is_chosen_from_the_swapped_random_byte() -> void:
+	_write_service_cache()
+	var world: Gen2WorldAPI = _world(
+		Vector2i(8, 6), Gen2WorldState.new({}, {}, {}, {}, 0, {0: true, 1: true})
+	)
+	world.request_incoming_phone_call(true, true, 0, false, 0x10)
+	assert_eq(int(world.pending_phone_ring()["contact"]["index"]), 1)
+
+
+## `CheckTimeEvents` runs `CheckBugContestTimer` in place of `CheckPhoneCall`, so
+## a call due on a door waits out the contest with its delay still spent.
+func test_no_call_rings_on_a_door_while_the_contest_timer_runs() -> void:
+	_write_service_cache()
+	var world: Gen2WorldAPI = _world(
+		Vector2i(12, 5), Gen2WorldState.new({}, {}, {}, {}, 0, {0: true})
+	)
+	world.state.advance_phone_receive_timer(Gen2WorldState.PHONE_RECEIVE_DELAYS[0])
+	var contest: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_BUG_CONTEST_TIMER, Gen2WorldState.is_crystal_profile(world.data)
+	)
+	world.state.set_engine_flag(contest)
+	assert_false(world.try_receive_phone_call(null, 0, true).get("attempted", false))
+	assert_true(world.state.phone_receive_ready())
+	world.state.clear_engine_flag(contest)
+	assert_true(world.try_receive_phone_call(null, 0, true).get("attempted", false))
+
+
+## `StartMap`'s `InitCallReceiveDelay`: a Continue waits the first delay again,
+## however far through a later one the save was written.
+func test_a_continue_restarts_the_incoming_call_delay() -> void:
+	var world: Gen2WorldAPI = _world()
+	world.state.advance_phone_receive_timer(Gen2WorldState.PHONE_RECEIVE_DELAYS[0])
+	world.state.consume_phone_receive_timer()
+	world.state.advance_phone_receive_timer(Gen2WorldState.PHONE_RECEIVE_DELAYS[1] - 1)
+	var continued: Gen2WorldAPI = Gen2WorldAPI.open_snapshot(world.data, world.snapshot())
+	assert_eq(continued.state.phone_receive_cycle(), 0)
+	assert_eq(continued.state.phone_receive_minutes(), Gen2WorldState.PHONE_RECEIVE_DELAYS[0])
 
 
 ## `PokegearPhone_MakePhoneCall` rings nothing: its two `……` are the card's, and
@@ -3612,6 +3657,21 @@ func test_jumptextfaceplayer_turns_the_object_and_jumptext_does_not() -> void:
 		assert_eq((world.objects[0] as Gen2WorldObject).facing, int(row[1]))
 
 
+## `ApplyObjectFacing` refuses an object whose flags1 carries FIXED_FACING, which
+## SPRITEMOVEDATA_STILL's row does: talked to, it keeps facing where it stood.
+func test_faceplayer_leaves_a_still_object_facing_where_it_stood() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:61A0"] = [Gen2WorldScript.JUMPTEXTFACEPLAYER, 0x00, 0x70]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["objects"][0]["movement"] = Gen2WorldObject.MOVEMENT_STILL
+	data.world_map(1, 1).events["objects"][0]["script"] = 0x61A0
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(6, 6))
+	world.player_facing = Gen2WorldSprite.FACING_LEFT
+	world.interact()
+	assert_eq((world.objects[0] as Gen2WorldObject).facing, Gen2WorldSprite.FACING_DOWN)
+
+
 func test_background_events_honor_source_direction_and_conditional_pointer_records() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	scripts["48:6170"] = [Gen2WorldScript.SETEVENT, 11, 0, Gen2WorldScript.END]
@@ -4882,6 +4942,53 @@ func test_the_turning_movement_commands_step_or_turn_as_their_source_does() -> v
 		world.advance_player_step_pass()
 	assert_eq(world.player_step_offset_cells(), Vector2.ZERO)
 	assert_eq(_final_status(_run_script(world, dispatched)), &"complete")
+
+
+## `InitStep` skips the direction under FIXED_FACING_F, and the flag is the
+## struct's: Dragon's Den's Clair hops back in one stream and steps on in the
+## next, `remove_fixed_facing` last, facing the player throughout.
+func test_fix_facing_holds_the_facing_across_streams_until_removed() -> void:
+	RomCache.write_json(RomCache.world_movements_path(_directory), {
+		"48:6100": [0x3B, 0x12, 0x47],  # fix_facing, big_step LEFT
+		"48:6110": [0x0A, 0x3A, 0x47],  # slow_step LEFT, remove_fixed_facing
+		"48:6120": [0x0A, 0x47],  # slow_step LEFT
+	})
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6070": [0x69, 2, 0x00, 0x61, 0x69, 2, 0x10, 0x61, 0x91],
+		"48:6080": [0x69, 2, 0x20, 0x61, 0x91],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6070
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var object: Gen2WorldObject = world.objects[0]
+	var before: int = object.facing
+	assert_ne(before, Gen2WorldSprite.FACING_LEFT)
+	assert_eq(_final_status(_run_script(world, world.dispatch_script_events())), &"complete")
+	assert_eq(object.facing, before)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6080
+	assert_eq(_final_status(_run_script(world, world.dispatch_script_events())), &"complete")
+	assert_eq(object.facing, Gen2WorldSprite.FACING_LEFT, "removed, a step turns again")
+
+
+## SLIDING_F sends `SetFacingStepAction` to `SetFacingCurrent`, so a step taken
+## under `set_sliding` is drawn standing, as Burned Tower's beasts leap.
+func test_a_step_under_set_sliding_is_drawn_standing() -> void:
+	RomCache.write_json(RomCache.world_movements_path(_directory), {
+		"48:6100": [0x39, 0x0E, 0x38, 0x47],  # set_sliding, step LEFT, remove_sliding
+	})
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6070": [0x69, 2, 0x00, 0x61, 0x91],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6070
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	world.dispatch_script_events()
+	var object: Gen2WorldObject = world.objects[0]
+	var drawn: Dictionary = {}
+	for _frame: int in Gen2WorldAPI.STEP_PASSES_WALK:
+		world.advance_scripted_steps_pass()
+		drawn[object.frame] = true
+	assert_eq(drawn.keys(), [0])
 
 
 ## `JumpStep` sets STEP_TYPE_NPC_JUMP, whose jumptable is `.Jump` then `.Land`

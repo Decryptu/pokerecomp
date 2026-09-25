@@ -196,11 +196,20 @@ func _add_an_item_and_its_shelf(host: Gen2ModHost, id: StringName) -> void:
 		# A standard counter, and never the one on map group 0 number 0: the
 		# mart says where it was opened (`api_version` 32), a Generation 1
 		# counter by `map_number` and `text_id` since every one has `mart_id` 0.
+		# Nor the Goldenrod Dept Store's 2F, found by its `map_const` name
+		# (`api_version` 47) because Gold and Silver number it apart from Crystal.
 		"available": func(mart: Dictionary) -> bool:
-			return int(mart.get("variant", 0)) == 0 \
-				and Vector2i(int(mart.get("map_group", -1)), int(mart.get("map_number", -1))) \
-					!= Vector2i.ZERO,
+			var at := Vector2i(int(mart.get("map_group", -1)), int(mart.get("map_number", -1)))
+			return int(mart.get("variant", 0)) == 0 and at != Vector2i.ZERO \
+				and not _is_map(host, at, &"GOLDENROD_DEPT_STORE_2F"),
 	})
+
+
+func _is_map(host: Gen2ModHost, at: Vector2i, name: StringName) -> bool:
+	if _data == null:
+		_data = GameData.open(host.target_game())
+	var map: Gen2WorldMap = _data.world_map_named(name) if _data != null else null
+	return map != null and at == Vector2i(map.group, map.number)
 
 
 ## A control of the mod's own, as the two halves of one named axis

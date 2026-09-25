@@ -584,6 +584,20 @@ func test_production_world_entry_and_facing_object_story_persist_separate_flags(
 	assert_eq(restored.visible_objects().size(), 0)
 
 
+## `ChangeDirectionScript` runs `EnableWildEncounters` behind a turn on the spot,
+## so the pass the turn lands on rolls `RandomEncounter` with no step taken.
+func test_a_turn_on_the_spot_in_grass_rolls_a_wild_encounter() -> void:
+	await _open_world(true)
+	var world: Gen2WorldAPI = _world_screen._world
+	world.current_map.collision[5 * world.current_map.collision_width + 4] = \
+		Gen2WorldCollision.COLL_LONG_GRASS
+	world.state.set_wild_encounter_cooldown(0)
+	assert_true(_world_screen.move_player(Vector2i.LEFT))
+	_world_screen.advance_frames(Gen2WorldAPI.STEP_PASSES_TURN * 2)
+	assert_eq(world.player_cell, Vector2i(4, 5), "a turn, not a step")
+	assert_not_null(_battle_child())
+
+
 func test_resolved_wild_encounter_reaches_the_real_battle_overlay() -> void:
 	await _open_world()
 	_world_screen.preview_wild_encounter()

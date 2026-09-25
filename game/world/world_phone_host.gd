@@ -1,9 +1,7 @@
 class_name Gen2WorldPhoneHost
 extends RefCounted
 
-## Source-faithful phone policy and presentation data. The host does not mutate
-## world state. It selects a cartridge script, and the script runner commits any
-## resulting flags or phone registrations at its normal transaction boundary.
+## Phone policy: it picks a cartridge script, and the script runner commits its writes.
 
 const TIME_MORNING: int = 1
 const TIME_DAY: int = 2
@@ -16,15 +14,9 @@ const CONDITION_OUTSIDE: StringName = &"outside"
 const CONDITION_ANYWHERE: StringName = &"anywhere"
 
 
+## `CheckTime`'s `.TimeOfDayTable`: `wTimeOfDay` as one bit of MORN, DAY and NITE.
 static func time_mask_for_hour(hour: int) -> int:
-	var normalized: int = posmod(hour, 24)
-	if normalized < 4:
-		return TIME_NIGHT
-	if normalized < 10:
-		return TIME_MORNING
-	if normalized < 18:
-		return TIME_DAY
-	return TIME_NIGHT
+	return 1 << Gen2WorldClock.time_of_day_at(hour)
 
 
 static func time_mask_matches(mask: int, hour: int) -> bool:
@@ -110,14 +102,15 @@ static func resolve_incoming(
 		return _phone_unavailable(&"not_on_entrance")
 	if not timer_ready:
 		return _phone_unavailable(&"receive_timer_not_ready")
-	## CheckPhoneCall accepts only a random byte with its high bit clear, which
-	## is the source's 50 percent test after masking the comparison value.
+	## `CheckPhoneCall`'s 50 percent: a random byte with its high bit clear.
 	if not force and (random_byte & 0x80) != 0:
 		return _phone_unavailable(&"incoming_roll_failed")
 	var available: Array = available_incoming_contacts(data, state, map, hour)
 	if available.is_empty():
 		return _phone_unavailable(&"no_available_caller")
-	var selected: Dictionary = available[posmod(selection_byte, available.size())]
+	## `ChooseRandomCaller`: `swap(hRandomAdd) & $1f` modulo the caller count.
+	var swapped: int = ((selection_byte >> 4) | (selection_byte << 4)) & 0x1F
+	var selected: Dictionary = available[swapped % available.size()]
 	return {
 		"ok": true,
 		"contact": selected.duplicate(true),
@@ -225,8 +218,7 @@ static func resolve_caller(data: GameData, contact_id: int) -> Dictionary:
 static func resolve_special(
 	data: GameData, map: Gen2WorldMap, call_id: int, _hour: int
 ) -> Dictionary:
-	## SPECIALCALL_NONE clears the pending special-call variable and does not
-	## ring or run another phone script.
+	## SPECIALCALL_NONE clears the pending call and rings nothing.
 	if call_id == 0:
 		return {"ok": true, "clear": true, "call_id": 0}
 	if data == null:
