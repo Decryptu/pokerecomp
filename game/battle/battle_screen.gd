@@ -2107,6 +2107,11 @@ const ANIM_RESTORE_HUD: StringName = &"restore_hud"
 const ANIM_WAIT_SFX: StringName = &"wait_sfx"
 const ANIM_HIT_SOUND: StringName = &"hit_sound"
 const ANIM_APPEAR_USER: StringName = &"appear_user"
+const ANIM_DISAPPEAR_USER: StringName = &"disappear_user"
+const USER_PICTURE_STEPS: Dictionary = {
+	Gen2Battle.APPEAR_USER: ANIM_APPEAR_USER,
+	Gen2Battle.DISAPPEAR_USER: ANIM_DISAPPEAR_USER,
+}
 ## `PlayApplyingAttackAnimation`, `AnimateSendingOutMon` and
 ## `AnimateRetreatingPlayerMon`, Generation 1's routines with no row behind them.
 const ANIM_APPLYING: StringName = &"applying"
@@ -2423,17 +2428,27 @@ func _run_next_anim_step() -> void:
 				if _anim_delay > 0:
 					return
 			ANIM_APPEAR_USER:
-				# `AppearUserLowerSub`, which Fly and Dig reach after the
-				# animation: `LowerSubNoAnim` writes the user's own picture and
-				# `AppearUser` stamps it back into the map it was taken out of.
-				var enemy_turn: bool = bool(_anim_event.get("enemy_turn", false))
-				_set_substitute_pic(
-					Gen2Battle.ENEMY if enemy_turn else Gen2Battle.PLAYER, false
-				)
-				_restamp_battler(not enemy_turn)
-				_push_view()
+				_appear_user(bool(step.get("raised", false)))
+			ANIM_DISAPPEAR_USER:
+				_disappear_user()
 	_anim = null
 	_anim_event = {}
+	_push_view()
+
+
+## `AppearUserLowerSub`, or `AppearUserRaiseSub` when [param raised].
+func _appear_user(raised: bool) -> void:
+	var player_side: bool = _anim_actor() == Gen2Battle.PLAYER
+	_set_substitute_pic(_anim_actor(), raised)
+	_restamp_battler(player_side)
+	_push_view()
+
+
+## `DisappearUser`'s `ClearBox`, which stands until a picture is stamped back.
+func _disappear_user() -> void:
+	var side: int = _anim_actor()
+	Gen2BattleScreenMap.clear_battler(_bg_map, side == Gen2Battle.PLAYER, _generation())
+	_battler_visible[side] = false
 	_push_view()
 
 
@@ -2591,6 +2606,9 @@ func _begin_anim_player(player: Gen2BattleAnimPlayer) -> bool:
 	_anim = player
 	# `wCurItem`, which colours a thrown ball and flashes a Master or Ultra one.
 	_anim.cur_item = int(_anim_event.get("cur_item", 0))
+	var off_field: Array = _anim_event.get("off_field", [false, false])
+	_anim.player_off_field = bool(off_field[0])
+	_anim.enemy_off_field = bool(off_field[1])
 	_anim.background().set_bg_map(_bg_map)
 	_after_anim_frame()
 	return true
@@ -6207,15 +6225,13 @@ func _show_next_event() -> void:
 			if animation_running():
 				return
 			continue
-		if StringName(event["type"]) == Gen2Battle.APPEAR_USER:
-			## `AppearUser` alone: no script and no frames, just the picture back
-			## in the map. It goes through the plan anyway, since that is where
-			## the step knows which side it is putting back.
+		if USER_PICTURE_STEPS.has(event["type"]):
+			## `AppearUser` or `DisappearUser` alone: no script and no frames.
 			_anim_plan = []
 			_anim_event = {
 				"enemy_turn": int(event.get("side", Gen2Battle.PLAYER)) == Gen2Battle.ENEMY,
 			}
-			_step(ANIM_APPEAR_USER, {})
+			_step(USER_PICTURE_STEPS[event["type"]], {"raised": bool(event.get("raised", false))})
 			_run_next_anim_step()
 			if animation_running():
 				return

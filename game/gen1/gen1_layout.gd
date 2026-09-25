@@ -344,6 +344,10 @@ const ANIM_ID_BURN_PSN: int = 0xBA
 const ANIM_ID_SLP: Array[int] = [0xBC, 0xBD]
 const ANIM_ID_CONF: Array[int] = [0xBE, 0xBF]
 const ANIM_ID_HIDEPIC: int = 0xC8
+## `ChargeEffect`'s three, and `STATUS_AFFECTED_ANIM`, which shows its user again.
+const ANIM_ID_STATUS_AFFECTED: int = 0xA7
+const ANIM_ID_XSTATITEM: Array[int] = [0xAE, 0xAF]
+const ANIM_ID_SLIDE_DOWN: int = 0xC0
 ## `TRADE_BALL_DROP_ANIM` to `TRADE_BALL_POOF_ANIM`, `Trade_ShowAnimation`'s four.
 const ANIM_ID_TRADE_DROP: int = 0xAA
 const ANIM_ID_TRADE_SHAKE: int = 0xAB
