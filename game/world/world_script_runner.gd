@@ -4039,7 +4039,7 @@ func _runtime_variable_readers() -> Dictionary:
 	var day: int = int(clock.get("day", 0))
 	return {
 		0x01: _var_party_count, # VAR_PARTYCOUNT
-		0x04: func() -> Variant: return Gen2WorldClock.new(hour, 0, day).time_of_day(), # VAR_TIMEOFDAY
+		0x04: func() -> Variant: return Gen2WorldClock.time_of_day_at(hour), # VAR_TIMEOFDAY
 		0x05: func() -> Variant: return state.caught_count() if state != null else 0, # VAR_DEXCAUGHT
 		0x06: func() -> Variant: return state.seen_count() if state != null else 0, # VAR_DEXSEEN
 		0x07: func() -> Variant: return _staged_badge_count(), # VAR_BADGES
@@ -6191,7 +6191,7 @@ func _phone_grass_rows() -> Array:
 	if not slots is Array:
 		return []
 	var hour: int = int((_request.get("clock", {}) as Dictionary).get("hour", 0))
-	var time_of_day: int = Gen2WorldClock.new(hour).time_of_day()
+	var time_of_day: int = Gen2WorldClock.time_of_day_at(hour)
 	if time_of_day < 0 or time_of_day >= (slots as Array).size():
 		return []
 	var rows: Array = [(slots as Array)[0], (slots as Array)[time_of_day]]

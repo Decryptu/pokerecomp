@@ -236,10 +236,6 @@ const BUENA_PASSWORDS: Array[Dictionary] = [
 	{"kind": BUENA_ITEM, "values": [64, 65, 66]},
 	{"kind": BUENA_STRING, "values": ["#MON Talk", "#MON Music", "Lucky Channel"]},
 ]
-## `NITE_HOUR`. `BuenasPasswordCheckTime` is a bare `cp NITE_HOUR` on the hour,
-## so Buena is on the air from six in the evening until midnight and off it for
-## the other eighteen hours.
-const NITE_HOUR: int = 18
 const BUENAS_PASSWORD_CHANNEL_NAME: String = "BUENA'S PASSWORD"
 
 ## `OaksPKMNTalk11` to `OaksPKMNTalk13` place strings at screen columns rather
@@ -817,9 +813,10 @@ func _march_day() -> bool:
 	return int(_context.get("weekday", 0)) % 2 == 0
 
 
-## `BuenasPasswordCheckTime`'s carry: the hour is before six in the evening.
+## `BuenasPasswordCheckTime`'s carry, a bare `cp NITE_HOUR` on the hour: Buena is
+## on the air from six in the evening until midnight and off it after, at NITE too.
 func _off_air() -> bool:
-	return int(_context.get("hour", 12)) < NITE_HOUR
+	return int(_context.get("hour", 12)) < Gen2WorldClock.NITE_START
 
 
 ## `OaksPKMNTalk4`: a random route, then a random time-of-day column, then one

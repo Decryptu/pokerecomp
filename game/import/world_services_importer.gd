@@ -377,9 +377,6 @@ static func _read_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"non_trainer_names": non_trainer_names,
 			"special_calls": special_calls,
 			"metadata": {
-				"max_contacts": 10,
-				"permanent_contacts": [1, 4],
-				"receive_call_delays": [20, 10, 5, 3],
 				"out_of_area_script": out_of_area,
 				"just_talk_script": just_talk,
 				"hang_up_click": String(hang_up["click"]),

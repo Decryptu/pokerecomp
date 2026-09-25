@@ -14,7 +14,8 @@ const STALL_FRAMES: int = 600
 const LEG_FRAMES: int = 12000
 const LEG_BUDGETS: Dictionary = {
 	"parcel": 60000, "parcel_to_lab": 36000, "mystery_egg": 60000, "egg_to_lab": 36000,
-	"forest_to_north_gate": 36000, "mr_pokemon": 24000, "brock": 24000, "route_31_to_gate": 24000, "falkner": 24000,
+	"forest_to_north_gate": 36000, "mr_pokemon": 24000, "brock": 24000, "route_30_to_route_31": 24000,
+	"route_31_to_gate": 24000, "falkner": 24000,
 	"route_32_to_union_cave": 36000, "union_cave_to_route_33": 36000, "rockets": 36000,
 	"bugsy": 36000, "pewter_to_route_3": 36000, "route_3_to_route_4": 60000, "route_4_to_mt_moon": 36000,
 	"mt_moon_1f_to_b1f": 24000, "super_nerd": 36000, "mt_moon_b1f_to_route_4": 24000, "misty": 36000,

@@ -842,6 +842,18 @@ func test_phone_list_shows_registered_numbers_and_can_close() -> void:
 	assert_null(_world_screen._service_host)
 
 
+## `CheckReceiveCallDelay` counts RTC minutes since the delay began, so a minute
+## spent on the Pokegear runs the delay down like one spent walking.
+func test_the_incoming_call_delay_runs_while_the_pokegear_is_open() -> void:
+	await _open_world()
+	_world_screen._open_phone_list()
+	await get_tree().process_frame
+	assert_not_null(_world_screen._service_host)
+	var before: int = _world_screen._world.state.phone_receive_minutes()
+	_world_screen._advance_day_cycle(Gen2WorldClock.SECONDS_PER_MINUTE)
+	assert_eq(_world_screen._world.state.phone_receive_minutes(), before - 1)
+
+
 ## `PokegearPhone_MakePhoneCall`: no ring, the callee script run over the card
 ## that placed it, and `PokegearPhone_FinishPhoneCall` behind it, whose A or B
 ## runs `HangUp` in the card's own box and asks who to call again.

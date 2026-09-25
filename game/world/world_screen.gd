@@ -119,6 +119,8 @@ var _pending_fly: Dictionary = {}
 ## `CheckPlayerState` reads `PLAYERSTEP_STOP_F`, so the warp, the coord events
 ## and the wild roll all belong to the frame the step lands on.
 var _pending_step_events: Dictionary = {}
+## `ChangeDirectionScript`'s one wild roll, owed by a Generation 2 turn.
+var _turn_rolls_wild: bool = false
 ## `MapSetupScript_Door` while it is running: `{ stage, step, frames, cell }`,
 ## empty on every other frame. The map swaps between the two stages, which is
 ## where the setup script's own list sits.
@@ -1013,6 +1015,9 @@ func _advance_movement(map_pass: bool) -> void:
 			var landed: Dictionary = _pending_step_events
 			_pending_step_events = {}
 			_complete_player_step(landed)
+		if _turn_rolls_wild and _world != null and not _world.player_step_in_progress():
+			_turn_rolls_wild = false
+			_roll_turn_encounter()
 		## Polled again on the landing pass, or a held direction started a pass
 		## late; Generation 1 reads the joypad on the pass after and is not.
 		if stepped and _world != null and not _world.player_step_in_progress() \
@@ -1245,10 +1250,9 @@ func _advance_day_cycle(delta: float) -> void:
 	if ticks.is_empty():
 		return
 	_update_time_of_day()
+	_world.state.advance_phone_receive_timer(ticks.size())
 	if not _overlay_open() and not _world.script_input_waiting():
-		var phone_schedule: Dictionary = _world.advance_phone_schedule(
-			ticks.size(), _encounter_random
-		)
+		var phone_schedule: Dictionary = _world.try_receive_phone_call(_encounter_random)
 		var phone_results: Array = phone_schedule.get("results", [])
 		if bool(phone_schedule.get("attempted", false)) and not phone_results.is_empty():
 			_show_script_results(phone_results)
@@ -1762,9 +1766,9 @@ func move_player(direction: Vector2i) -> bool:
 	var movement: Dictionary = _world.player_input_move(direction)
 	if not bool(movement.get("ok", false)):
 		return _after_blocked_move(movement)
-	## A turn on the spot costs a facing and four frames and nothing else, so it
-	## owes none of what a completed step owes.
+	## A turn owes nothing a step owes but `PLAYEREVENT_JOYCHANGEFACING`'s roll.
 	if movement.get("kind", &"") in [&"turn", &"forced_turn"]:
+		_turn_rolls_wild = movement.get("kind", &"") == &"turn" and not _world.is_gen1()
 		if _renderer != null:
 			_renderer.refresh()
 		_refresh_labels()
@@ -3136,22 +3140,36 @@ func _after_map_settled(stepped: bool = true) -> bool:
 			_zero_map_name_sign_timer()
 			_start_battle_request(request)
 		return true
-	var encounter: Dictionary = _world.encounter_request(
-		_encounter_random, false, &"auto", _repel_lead_level(), _party_holds_cleanse_tag()
-	)
-	if not encounter.is_empty():
-		## `RandomEncounter` answers `CheckTileEvent` with carry, so a wild met
-		## on a step is a player event like any other.
-		_zero_map_name_sign_timer()
-		_start_battle_request({
-			"kind": &"battle_requested",
-			"values": encounter["values"],
-			"encounter": encounter.duplicate(true),
-		})
+	if _start_random_encounter():
 		return true
 	## `TryDoWildEncounter`'s `.lastRepelStep`; a Generation 2 step offered it above.
 	_offer_repel_renewal()
 	return true
+
+
+## `RandomEncounter`, whose carry makes a wild a player event like any other.
+func _start_random_encounter() -> bool:
+	var encounter: Dictionary = _world.encounter_request(
+		_encounter_random, false, &"auto", _repel_lead_level(), _party_holds_cleanse_tag()
+	)
+	if encounter.is_empty():
+		return false
+	_zero_map_name_sign_timer()
+	_start_battle_request({
+		"kind": &"battle_requested",
+		"values": encounter["values"],
+		"encounter": encounter.duplicate(true),
+	})
+	return true
+
+
+## `CheckTileEvent` after `ChangeDirectionScript`: `RandomEncounter` alone. A
+## provider's wilds are met by walking into them, which a turn does not.
+func _roll_turn_encounter() -> void:
+	if not _objects_may_move() or _world.script_busy() \
+		or (_encounters != null and _encounters.active()):
+		return
+	_start_random_encounter()
 
 
 ## `RepelWoreOffScript`'s line, held until a step nothing else owns can print

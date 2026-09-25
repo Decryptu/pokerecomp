@@ -25,6 +25,7 @@ const EGG_STEP_PHASE: int = 0x80
 ## `CountStep`'s own `cp 4` on `wPoisonStepCount`: the pass that reaches
 ## `DoPoisonStep`, counted in steps rather than in frames.
 const POISON_STEP_PHASE: int = 4
+## `NextCallReceiveDelay`'s `.ReceiveCallDelays`, in minutes.
 const PHONE_RECEIVE_DELAYS: Array[int] = [20, 10, 5, 3]
 ## `SPECIALCALL_BIKESHOP` (`constants/phone_constants.asm`), the same index on
 ## both pins.

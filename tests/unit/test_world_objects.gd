@@ -148,7 +148,7 @@ func test_an_ordinary_step_replaces_a_queued_stream() -> void:
 ## the drawing is its two high bits, so it changes every four frames and frames
 ## 1 and 3 are the two walking pictures.
 func test_the_walk_frame_changes_every_four_frames_of_a_step() -> void:
-	var object: Gen2WorldObject = _object()
+	var object: Gen2WorldObject = _object(Gen2WorldObject.MOVEMENT_WANDER)
 	assert_eq(object.walk_frame(), 0)
 	object.start_step(Vector2i.RIGHT, 16)
 

@@ -47,8 +47,6 @@ func test_marts_phone_audio_and_referenced_menu_are_imported() -> void:
 	assert_eq(phone["special_calls"][1]["condition_kind"], &"anywhere")
 	assert_eq(phone["metadata"]["hang_up_click"], "Click!")
 	assert_eq(phone["metadata"]["hang_up_ellipse"], "...")
-	assert_eq(phone["metadata"]["max_contacts"], 10)
-	assert_eq(phone["metadata"]["receive_call_delays"], [20, 10, 5, 3])
 	assert_eq(phone["metadata"]["just_talk_script"], {
 		"bank": int(_layout["phone_just_talk_bank"]),
 		"address": int(_layout["phone_just_talk_address"]),
