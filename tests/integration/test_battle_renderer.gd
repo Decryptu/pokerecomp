@@ -277,7 +277,7 @@ func test_a_capture_publishes_and_a_mod_line_lands_behind_it() -> void:
 	_battle_screen._capture_waiting = true
 	_battle_screen.complete_capture({
 		"ok": true, "caught": true, "wobbles": 1, "ball": 0, "species": 16,
-		"destination": {"ok": true, "destination": &"box"},
+		"destination": {"ok": true, "destination": &"box"}, "box_full": true,
 	})
 
 	## `Text_GotchaMonWasCaught` is the whole of what a caught throw says: the
@@ -288,6 +288,7 @@ func test_a_capture_publishes_and_a_mod_line_lands_behind_it() -> void:
 	assert_eq(_caught.size(), 1)
 	assert_eq(int(_caught[0]["species"]), 16)
 	assert_eq(StringName(_caught[0]["destination"]), &"box")
+	assert_true(bool(_caught[0]["box_full"]), "the catch took the box's last slot")
 	assert_false(bool(_caught[0]["tutorial"]))
 	assert_false(bool(_caught[0]["contest"]))
 

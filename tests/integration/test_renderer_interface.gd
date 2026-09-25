@@ -1445,6 +1445,11 @@ func test_the_draw_list_carries_what_the_view_draws() -> void:
 	), world)
 	world.view_pixels = Gen2WorldAPI.VIEW_PIXELS
 	assert_eq(frame["hidden_tree_cells"], [world.player_cell + Vector2i(1, 0)])
+	var tree_tile: Vector2i = (world.player_cell + Vector2i(1, 0)) * 2 + Vector2i.ONE
+	assert_eq(
+		renderer._drawn_tile_at(tree_tile.x, tree_tile.y), Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE,
+		"the built-in view draws the hidden tree over the standing background"
+	)
 	assert_eq(frame["background_offset"], effects.offset())
 	assert_ne(frame["background_offset"], Vector2.ZERO, "the earthquake's hSCY")
 	assert_true(bool(frame["white_fill"]), "`FillWhiteBGColor` on the way out")

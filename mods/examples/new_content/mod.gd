@@ -824,6 +824,10 @@ func _on_battle_event(event: Dictionary) -> void:
 		Gen2ModHost.instance().request_battle_message(
 			_id, "A shiny one!" if bool(event.get("shiny", false)) else "One for the DEX!"
 		)
+		## The catch that took the open box's last slot. Red, Blue and Yellow
+		## refuse the next ball without saying why.
+		if bool(event.get("box_full", false)):
+			Gen2ModHost.instance().request_battle_message(_id, "The BOX is full!")
 
 
 func _on_world_event(event: Dictionary) -> void:

@@ -110,8 +110,9 @@ func background_offset() -> Vector2:
 	return _effects.offset() if _effects != null else Vector2.ZERO
 
 
-## The cells whose four tiles `HideHeadbuttTree` has replaced with
-## `hidden_tree_tile` while the tree's own sprite anim plays.
+## The cells whose four tiles `HideHeadbuttTree` replaces with `hidden_tree_tile`
+## for the tree's 32-frame anim, faster than a view rebuilds: an overlay drawn
+## each frame over [method drawn_tile_at], the way the band's offset is.
 func hidden_tree_cells() -> Array:
 	return _effects.hidden_tree_cells() if _effects != null else []
 
@@ -149,8 +150,8 @@ func band() -> Dictionary:
 	}
 
 
-## The tile the background shows at map tile [param tile] this frame: the band's
-## `ScheduleEastColumnRedraw` copies, a screen write, a hidden tree, or the block.
+## The tile the background stands on at map tile [param tile]: the band's
+## `ScheduleEastColumnRedraw` copies, a screen write, or the block.
 func drawn_tile_at(tile: Vector2i) -> int:
 	if _world == null or _world.current_tileset == null:
 		return -1
@@ -158,8 +159,6 @@ func drawn_tile_at(tile: Vector2i) -> int:
 	var written: Dictionary = _world.screen_tile_overrides()
 	if written.has(source):
 		return int(written[source])
-	if hidden_tree_cells().has(Vector2i(floori(source.x / 2.0), floori(source.y / 2.0))):
-		return Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE
 	var width: int = Gen2Layout.MAP_BLOCK_TILE_WIDTH
 	var block: int = _world.expanded_block_at(
 		floori(float(source.x) / width), floori(float(source.y) / width)
@@ -188,7 +187,7 @@ func drawn_revision() -> int:
 	var found: Dictionary = band()
 	var key: Array = [
 		_world.block_revision, _world.map_id(), _world.screen_tile_overrides().size(),
-		hidden_tree_cells(), found.get("rows", Vector2i.ZERO), found.get("first_column", 0),
+		found.get("rows", Vector2i.ZERO), found.get("first_column", 0),
 	]
 	if key != _drawn_key:
 		_drawn_key = key

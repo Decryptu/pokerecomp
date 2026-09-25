@@ -779,9 +779,8 @@ func _draw_tile_overrides(background: Vector2, overrides: Dictionary) -> void:
 		_draw_atlas_tile(_drawn_tile_at(cell.x, cell.y), Vector2(cell * PokeTiles.TILE_WIDTH) - background)
 
 
-## `Cut_Headbutt_GetPixelFacing`'s tree goes away while its own sprite anim
-## plays, which the map quad knows nothing about: the four tiles of the cell are
-## painted over with the tileset's own blank one.
+## `HideHeadbuttTree`'s four tiles, painted over a map quad that knows nothing
+## of them while the tree's own sprite anim plays.
 func _draw_hidden_trees(background: Vector2, cells: Array) -> void:
 	for cell: Vector2i in cells:
 		var at: Vector2 = Vector2(cell * Gen2WorldAPI.CELL_PIXELS) - background
@@ -914,9 +913,15 @@ func _draw_grass_over(pixel: Vector2, background: Vector2) -> void:
 		_draw_transition(background, over, true)
 
 
-## [method Gen2WorldDrawList.drawn_tile_at], which every renderer reads.
+## [method Gen2WorldDrawList.drawn_tile_at] with this frame's hidden trees over it.
 func _drawn_tile_at(tile_x: int, tile_y: int) -> int:
-	return _draw_list.drawn_tile_at(Vector2i(tile_x, tile_y)) if _draw_list != null else -1
+	if _draw_list == null:
+		return -1
+	var tile := Vector2i(tile_x, tile_y)
+	if _draw_list.hidden_tree_cells().has(Vector2i(floori(tile_x / 2.0), floori(tile_y / 2.0))) \
+		and not _draw_list.tile_overrides().has(tile):
+		return Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE
+	return _draw_list.drawn_tile_at(tile)
 
 
 ## The parts of [param rect] the map still owns, split on the screen's own
