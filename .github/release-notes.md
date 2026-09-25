@@ -3,24 +3,11 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods get API 45: `drawn_tile_at()` gives the tile the overworld background shows at any map tile, with the S.S. Anne scene's scrolling band in map terms and a revision number for rebuilding, the battle's map context carries cut trees and other changed blocks, and two new screenshot hooks start the S.S. Anne departure and the poison flash.
-- Your Pokemon now shrinks back into its ball when you switch it out, in all six games.
+- Mods get API 46. A catch that fills the open PC box is now marked on the catch event, so a mod can warn you before the next ball is refused. Mods can also read how much room is left in the open box.
 
 ## Changed
 
-- Gold, Silver and Crystal now read every battle message from your cartridge, so the wording and line breaks match the original. Import your cartridges again after updating.
-- "X used MOVE!", "Go! X!", "X, come back!" and the other lines the game shows without an arrow no longer wait for a button press.
-- Switching out says "that's enough!", "OK!" or "good!" depending on how much damage your Pokemon did, as in the original games.
-- The pauses around Protect, Roar, Thunder Wave, Beat Up, Baton Pass, switching and fainting now match the original timing.
-
-## Fixed
-
-- A trainer switching Pokemon in the middle of a turn no longer asks whether you want to switch too.
-- Baton Pass and Roar no longer print "come back!" and "Go!" lines the originals never showed.
-- Pursuit now hits after your "come back!" line.
-- Ancientpower shows one message for each stat that rose, and Dream Eater says the dream was eaten.
-- A Pokemon with no usable moves says so before using Struggle.
-- In Red, Blue and Yellow, a Pokemon caught in Wrap can be switched out, Thrash says "thrashing about!" on later turns, and Roar against a trainer says the target is unaffected.
+- For mods, a hidden Headbutt tree is no longer counted as a change to the map background. 3D views no longer rebuild the map twice on every Headbutt.
 
 ## Which file
 
