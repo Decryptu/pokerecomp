@@ -354,6 +354,8 @@ var _page: Gen2StartMenuPage = null
 ## `LoadPartyMenuGFX`: the target list is the party menu, so it is drawn by the
 ## page that draws the party menu everywhere else.
 var _target_page: Gen2PartyMenuPage = null
+## The party menu `LearnMove` and `RestorePPEffect` print over, as [method _over_party].
+var _learn_over: Dictionary = {}
 var _menu_page: Gen2MenuPage = null
 ## The target list's icon clock.
 var _target_clock := Gen2WorldAnimation.FrameClock.new()
@@ -1293,10 +1295,10 @@ func _pack_map(text: String) -> PackedInt32Array:
 	)
 
 
-## The pack's screen with one of its `MENU_BACKUP_TILES` boxes over it:
-## [param draw_page] writes tiles into the map the pack just built, so the box
-## wears the attrmap `_CGB_PackPals` left. `TossItem_`'s box is at `hlcoord 14, 7`.
-func _blend_gen1_yes_no(image: Image, cursor_index: int) -> void:
+## `YesNoBox`, or `TossItem_`'s box, at `hlcoord 14, 7` over [param image].
+func _blend_yes_no(image: Image, cursor_index: int) -> void:
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
 	if _service_page == null:
 		return
 	var box: Image = _service_page.render(
@@ -1310,6 +1312,9 @@ func _blend_gen1_yes_no(image: Image, cursor_index: int) -> void:
 		image.blend_rect(box, Rect2i(Vector2i.ZERO, box.get_size()), Vector2i.ZERO)
 
 
+## The pack's screen with one of its `MENU_BACKUP_TILES` boxes over it:
+## [param draw_page] writes tiles into the map the pack just built, so the box
+## wears the attrmap `_CGB_PackPals` left.
 func _pack_overlay(text: String, draw_page: Callable) -> Image:
 	if _pack_page == null:
 		_pack_page = Gen2PackPage.from_data(_data)
@@ -1330,7 +1335,7 @@ func _pack_yes_no(cursor_index: int) -> Image:
 	if _gen1_pack():
 		var image: Image = _gen1_pack_image()
 		if image != null and asking:
-			_blend_gen1_yes_no(image, cursor_index)
+			_blend_yes_no(image, cursor_index)
 		return image
 	return _pack_overlay(_question_shown(), func(map: PackedInt32Array) -> void:
 		if not asking:
@@ -1910,6 +1915,7 @@ func _teach_selected_item(party_index: int) -> void:
 	var item: int = int(_teach_prompt.get("item", 0))
 	_learning_move = 0
 	_forget_move_name = String(_teach_prompt.get("move_name", ""))
+	_learn_over = _over_party(party_index)
 	var result: Dictionary = Gen2WorldPartyHost.teach_tm_hm(
 		_world, _pack_save, item, party_index, -1, _pack_persist
 	)
@@ -1931,16 +1937,17 @@ func _teach_selected_item(party_index: int) -> void:
 		var again: Callable = Callable()
 		if _gen1_pack() and (reason == &"not_compatible" or reason == &"already_knows_move"):
 			again = _confirm_teach
-		_show_pack_result(_teach_refusal(reason, party_index), again, _over_party(party_index))
+		_show_pack_result(_teach_refusal(reason, party_index), again, _learn_over)
 		return
 	_show_pack_result(Gen2MoveForget.learned_text(
 		_target_name(party_index), String(_teach_prompt.get("move_name", "")), _data.generation
-	), Callable(), _over_party(party_index))
+	), Callable(), _learn_over)
 
 
-## `LearnMove` prints over the party list `ChooseMonToLearnTMHM` left up.
+## `LearnMove` prints over the party list `ChooseMonToLearnTMHM` left up, its
+## layout kept and `PartyMenuSelect`'s hollow cursor on the chosen row.
 func _over_party(party_index: int) -> Dictionary:
-	return {"rows": _party_targets(), "cursor": party_index}
+	return {"rows": _party_targets(), "held": party_index, "quality": _target_quality() != &""}
 
 
 ## ForgetMove's own AskForgetMoveText yes/no, which it prints before the list.
@@ -1999,7 +2006,7 @@ func _confirm_forget() -> void:
 		_show_pack_result(
 			_teach_refusal(StringName(result.get("reason", &"")), _forget_party_index),
 			_offer_next_evolution_move if _learning_move > 0 else Callable(),
-			_over_party(_forget_party_index)
+			_learn_over
 		)
 		return
 	var target_name: String = _target_name(_forget_party_index)
@@ -2012,7 +2019,7 @@ func _confirm_forget() -> void:
 		Gen2TextStream.PAGE_BREAK,
 		Gen2MoveForget.learned_text(target_name, _forget_move_name, _data.generation),
 	], _offer_next_evolution_move if _learning_move > 0 else Callable(),
-		_over_party(_forget_party_index))
+		_learn_over)
 
 
 ## LearnMove.cancel, reached from the ask's no and from B in the list alike.
@@ -2035,7 +2042,7 @@ func _confirm_stop_learning() -> void:
 	_show_pack_result(Gen2MoveForget.did_not_learn_text(
 		_target_name(_forget_party_index), _forget_move_name, _data.generation
 	), _offer_next_evolution_move if _learning_move > 0 else Callable(),
-		_over_party(_forget_party_index))
+		_learn_over)
 
 
 func _target_name(party_index: int) -> String:
@@ -2249,8 +2256,8 @@ func _party_result_image() -> Image:
 	## `ErasePartyMenuCursors` runs with the redraw that prints the line.
 	var image: Image = _target_page.render(
 		rows, int(_party_result["row"]) if anim != null else int(_party_result.get("cursor", -1)),
-		String(_party_result.get("prompt", box_text())), true, -1, false,
-		not _party_result.has("prompt")
+		String(_party_result.get("prompt", box_text())), true, int(_party_result.get("held", -1)),
+		bool(_party_result.get("quality", false)), not _party_result.has("prompt")
 	)
 	var stats: Dictionary = _party_result.get("stats", {})
 	if image == null or stats.is_empty():
@@ -2283,6 +2290,7 @@ func _offer_next_evolution_move() -> void:
 		return
 	var move: int = _evolution_offers.pop_front()
 	_learning_move = move
+	_learn_over = _over_party(_forget_party_index)
 	_forget_move_name = String(_data.move(move).get("name", "")) if _data != null else ""
 	var result: Dictionary = Gen2WorldPartyHost.learn_move(
 		_world, _pack_save, _forget_party_index, move, -1, _pack_persist
@@ -2290,7 +2298,7 @@ func _offer_next_evolution_move() -> void:
 	if bool(result.get("ok", false)):
 		_show_pack_result(Gen2MoveForget.learned_text(
 			_target_name(_forget_party_index), _forget_move_name, _data.generation
-		), _offer_next_evolution_move, _over_party(_forget_party_index))
+		), _offer_next_evolution_move, _learn_over)
 		return
 	if StringName(result.get("reason", &"")) == &"moveset_full":
 		var details: Dictionary = result.get("details", {})
@@ -2382,6 +2390,7 @@ func _open_pp_move_list(item: int, party_index: int) -> void:
 	_mode = Mode.PACK_PP_MOVE
 	_pp_item = item
 	_pp_party_index = party_index
+	_learn_over = _over_party(party_index)
 	_forget_cursor = 0
 	_forget_refusal = ""
 	_render_hardware()
@@ -2987,9 +2996,10 @@ func _hardware_image() -> Image:
 			return _pack_image()
 		Mode.PACK_ITEM:
 			return _item_menu_image()
-		Mode.PACK_TEACH, Mode.PACK_FORGET_ASK, Mode.PACK_STOP_LEARNING, \
-		Mode.PACK_TOSS_CONFIRM, Mode.PACK_GIVE_SWAP:
+		Mode.PACK_TEACH, Mode.PACK_TOSS_CONFIRM, Mode.PACK_GIVE_SWAP:
 			return _pack_yes_no(int(get(TOGGLE_MODES[_mode][0])))
+		Mode.PACK_FORGET_ASK, Mode.PACK_STOP_LEARNING:
+			return _learn_yes_no(_forget_confirm_cursor)
 		Mode.PACK_TOSS_QUANTITY:
 			return _toss_quantity_image()
 		Mode.PACK_FORGET, Mode.PACK_PP_MOVE:
@@ -3047,14 +3057,37 @@ func _toss_quantity_image() -> Image:
 	)
 
 
+func _learn_backdrop(text: String) -> Image:
+	if _party_menu_page() == null:
+		return null
+	return _target_page.render(
+		_learn_over.get("rows", _party_targets()), -1, text, true,
+		int(_learn_over.get("held", -1)), bool(_learn_over.get("quality", false)), true
+	)
+
+
+func _learn_yes_no(cursor_index: int) -> Image:
+	var image: Image = _learn_backdrop(_question_shown())
+	if image != null and not _reading_question():
+		_blend_yes_no(image, cursor_index)
+	return image
+
+
+## `ForgetMove`'s list, or `MoveSelectionScreen`'s relearn box for a PP item.
 func _move_list_image() -> Image:
+	var image: Image = _learn_backdrop(box_text())
+	if _menu_page == null:
+		_menu_page = Gen2MenuPage.from_data(_data)
+	if image == null or _menu_page == null:
+		return image
 	var moves: Array = []
 	for entry: Dictionary in _forget_moves:
 		moves.append(String(entry.get("name", "")))
-	return _pack_overlay(
-		box_text(), func(map: PackedInt32Array) -> void:
-			_pack_page.draw_move_list(map, moves, _forget_cursor)
-	)
+	var box: Gen2MenuBox = Gen2BattleMenu.move_box(true) if _mode == Mode.PACK_PP_MOVE \
+		else Gen2BattleMenu.forget_box(_gen1_pack())
+	var over: Image = _menu_page.render(box, moves, _forget_cursor)
+	image.blend_rect(over, Rect2i(Vector2i.ZERO, over.get_size()), box.border_position() * Gen2Font.TILE)
+	return image
 
 
 func _target_image() -> Image:

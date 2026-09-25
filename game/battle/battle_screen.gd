@@ -6074,7 +6074,7 @@ func _draw_forget_stage() -> void:
 	var labels: Array = []
 	for entry: Dictionary in _forget_moves:
 		labels.append(String(entry.get("name", "")))
-	var box: Gen2MenuBox = Gen2BattleMenu.forget_box()
+	var box: Gen2MenuBox = Gen2BattleMenu.forget_box(_generation() == RomRegistry.GEN1)
 	_show_layer_image(
 		_battle_menu_layer, _menu_page.render(box, labels, _forget_cursor),
 		box.border_position() * Gen2Font.TILE

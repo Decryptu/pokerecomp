@@ -17,11 +17,6 @@ const TILE: int = Gen2Font.TILE
 
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 
-## `ForgetMove`'s own `hlcoord 5, 2 / ld b, NUM_MOVES * 2 / ld c, MOVE_NAME_LENGTH`
-## and the `w2DMenuCursorOffsets` of `$20` under it, which is [Gen2MenuBox]'s
-## default two-row step.
-const FORGET_BOX: Array[int] = [5, 2, 19, 11]
-
 enum Phase {
 	SELECT_MON,
 	REFUSAL,
@@ -376,10 +371,7 @@ func _page() -> Gen2MenuPage:
 func _draw_forget_list() -> void:
 	if _page() == null or _menu == null:
 		return
-	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
-		FORGET_BOX[0], FORGET_BOX[1], FORGET_BOX[2], FORGET_BOX[3],
-		Gen2MenuBox.STATICMENU_CURSOR
-	)
+	var box: Gen2MenuBox = Gen2BattleMenu.forget_box()
 	var names: Array = []
 	for entry: Dictionary in _forget_moves:
 		names.append(String(entry.get("name", "")))

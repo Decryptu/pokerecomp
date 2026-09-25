@@ -368,6 +368,25 @@ func test_the_prompt_box_covers_the_bottom_four_rows() -> void:
 	assert_eq(_ink_in_tile(image, 0, Gen2PartyMenuPage.TEXTBOX.y - 1), 0, "nothing above it")
 
 
+## `LearnMove`'s `PrintText` over a full party: `TextboxBorder` blanks rows 13 to
+## 16, where CANCEL is, and its top border is drawn over the sixth member's bar.
+func test_a_speech_box_covers_cancel_and_the_sixth_bar() -> void:
+	var rows: Array = _rows(6)
+	var line: String = "1, 2 and... Poof!"
+	var shown: Image = _page().render(rows, -1, line, true, 0, false, true)
+	assert_true(
+		shown.get_data() == _page().render(rows, -1, line, false, 0, false, true).get_data(),
+		"CANCEL is under the box"
+	)
+	var box_top: int = Gen2PartyMenuPage.GEN1_TEXTBOX.y * Gen2Font.TILE
+	var above: Rect2i = Rect2i(0, box_top, shown.get_width(), Gen2Font.TILE)
+	var ruled: Image = _page().render(rows, -1, line, true, 0, true, true)
+	assert_true(
+		shown.get_region(above).get_data() == ruled.get_region(above).get_data(),
+		"the border row carries no bar"
+	)
+
+
 ## `PartyMenuCheckEgg` opens every quality's loop below the nicknames, so an egg
 ## is a name and nothing else. Reachable from the overworld menu alone.
 func test_an_egg_row_draws_its_nickname_and_no_other_quality() -> void:

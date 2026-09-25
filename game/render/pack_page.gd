@@ -46,14 +46,6 @@ const TEXT_AT: Vector2i = Vector2i(1, 14)
 const TEXT_SPACING: int = 2
 const TEXTBOX_ROWS_OF_TEXT: int = 2
 
-## `ForgetMove`'s `hlcoord 5, 2 / ld b, NUM_MOVES * 2 / ld c, MOVE_NAME_LENGTH`,
-## whose border runs from that corner to (19, 11).
-const FORGET_AT: Vector2i = Vector2i(5, 2)
-const FORGET_SIZE: Vector2i = Vector2i(15, 10)
-const FORGET_NAME_COLUMN: int = 7
-const FORGET_CURSOR_COLUMN: int = 6
-const FORGET_FIRST_ROW: int = 4
-
 ## `ItemsPocketMenuHeader`: `menu_coords 7, 1, 19, 11` with five rows of eight
 ## columns. `ScrollingMenu_UpdateDisplay` starts one cell in from that corner and
 ## steps two rows, `w2DMenuCursorInitX` is the border column itself, and
@@ -294,22 +286,6 @@ func draw_quantity(
 func draw_money(map: PackedInt32Array, box: Rect2i, money: int) -> void:
 	draw_frame(map, box.position, box.size + Vector2i.ONE)
 	_string(map, box.position + Vector2i.ONE, Gen2MartPage.money_string(money))
-
-
-## `ForgetMove`'s own list: a `Textbox` at `hlcoord 5, 2` holding `NUM_MOVES * 2`
-## rows of `MOVE_NAME_LENGTH`, `ListMoves` two cells in from that corner with
-## `wListMovesLineSpacing` of two rows, and `w2DMenuCursorInitX` one cell left.
-func draw_move_list(map: PackedInt32Array, names: Array, cursor: int) -> void:
-	draw_frame(map, FORGET_AT, FORGET_SIZE)
-	for index: int in names.size():
-		var row: int = FORGET_FIRST_ROW + index * ROW_SPACING
-		_string(map, Vector2i(FORGET_NAME_COLUMN, row), String(names[index]))
-	if cursor >= 0 and cursor < names.size():
-		_put(
-			map,
-			Vector2i(FORGET_CURSOR_COLUMN, FORGET_FIRST_ROW + cursor * ROW_SPACING),
-			CURSOR_CODE
-		)
 
 
 ## `_CGB_PackPals`' attrmap, as one palette index per cell.
