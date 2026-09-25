@@ -868,3 +868,19 @@ func test_the_progress_reading_answers_a_save_and_reports_what_moved() -> void:
 
 	host.set_progress_source(Callable())
 	assert_eq(host.progress(), {}, "the world closed")
+
+
+## `box_free_space` is the open box's room alone, so whatever filled it, a catch
+## or a gift, reads 0 there and a full box behind it does not.
+func test_the_progress_reading_answers_the_open_boxs_free_space() -> void:
+	var save := Gen2SaveData.new()
+	save.current_box = 1
+	var mon := Gen2SaveMon.new()
+	mon.species = 25
+	(save.boxes[0] as Gen2SaveBox).slots.fill(mon)
+	assert_eq(
+		int(Gen2ModProgress.of_save(save)[&"box_free_space"]), Gen2SaveBox.CAPACITY,
+		"box 1 is full and is not the open one",
+	)
+	(save.boxes[1] as Gen2SaveBox).slots.fill(mon)
+	assert_eq(int(Gen2ModProgress.of_save(save)[&"box_free_space"]), 0)

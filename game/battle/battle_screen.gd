@@ -3833,6 +3833,7 @@ func _caught_event(result: Dictionary) -> Dictionary:
 		"map_number": int(request.get("map_number", -1)),
 		"battle_type": _battle.battle_type if _battle != null else 0,
 		"destination": StringName(destination.get("destination", &"party")),
+		"box_full": bool(result.get("box_full", false)),
 		"tutorial": _world_battle_tutorial,
 		"contest": bool(result.get("contest", false)),
 	}

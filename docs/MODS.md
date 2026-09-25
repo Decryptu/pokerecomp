@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 46 | `box_full` on a `caught` event, and `box_free_space` in `progress()` |
 | 45 | `Gen2WorldDrawList.drawn_tile_at()`, `band()` and `drawn_revision()`, with `band` and `drawn_revision` on `frame()`; `changed_blocks` and `written_tiles` on `Gen2BattleWorldContext`; `Gen2WorldScreen.preview_ss_anne_leaves()` and `preview_poison_step()` |
 | 44 | `Gen2BattleHud.draw_party_balls()`; `ground` on every draw-list row, a screen row's `position_cells` and `ground` in map terms, and a renderer's `draw_reach_pixels()` listing connected rows out to its reach; `reachable_checks()`, what a placement reaches with items and badges held from the start; `Gen2WorldCatalog.progression_items()`; a patched `{"item": 0}` or `{"badge": -1}` as a site that hands nothing; `validate_placement` asking a site that waits on an engine flag other than a badge's again once a script sets that flag; Oak's aides as item sites; `{owned}` and `{special}` in `requires` |
 | 43 | `Gen2BattleRenderer.square_pixels()`, `square_key()`, `square_side()`, `battler_pic()` and `substitute_sprite()`; `Gen2BattleHud.draw_panels()`, `panels_key()` and `draw_border_cells()`; the status and gender arguments of `draw_enemy()` and `draw_player()`; the battle view's `enemy_status`, `player_status`, `enemy_gender`, `player_gender`, `enemy_caught`, `enemy_minimized`, `player_minimized`, `enemy_special_pic`, `enemy_pic_dmg`, `gen1_black` and `anim_obp0`; Generation 1's "minimize" tile, and its doll drawn from pokered's own `SPRITE_MONSTER`; a move row's `effectiveness` as its effect applies it; a table patch bumping the encounter context's `generation`; a patched `giveegg` staying an egg; a headless `--mods` or `--mods=a,b` run at mod defaults, apart from the player's mod settings; `Gen2WorldDrawList` through the optional `set_draw_list`: every sprite, effect and background edit the built-in view draws, resolved once for any renderer, with `sprites_hidden` on it rather than set on the renderer; `validate_placement` proving the story's gates, `Gen2WorldCatalog.story()`, a row's `cell`, and `requires` holding what every path to a site tested |
@@ -668,9 +669,21 @@ engine directly fires none.
 A capture is on the battle channel too, published with its `Gotcha!` line and so
 before the nickname prompt. `Gen2Battle.CAUGHT` (`caught`) carries `species`,
 `level`, `dvs`, `shiny`, `ball`, `method`, `map_group`, `map_number`,
-`battle_type`, `destination` (`party` or `box`), `tutorial` and `contest`. The
-last two are the catching tutorial and a Bug Contest catch: neither is a Pokemon
-kept, which is why catch experience excludes both.
+`battle_type`, `destination` (`party` or `box`), `box_full`, `tutorial` and
+`contest`. `box_full` is true for the catch that took the last free slot of the
+open box: `.SendToPC`'s own `cp MONS_PER_BOX`, the result Gold, Silver and Crystal
+answer with Bill's phone call. Red, Blue and Yellow say nothing and refuse the
+next ball, so a mod may warn there itself:
+
+```gdscript
+host.subscribe(Gen2ModHost.CHANNEL_BATTLE, manifest.id, func(event: Dictionary) -> void:
+	if event["type"] == Gen2Battle.CAUGHT and event["box_full"]:
+		host.request_battle_message(manifest.id, "The BOX is full!")
+)
+```
+
+The last two are the catching tutorial and a Bug Contest catch: neither is a
+Pokemon kept, which is why catch experience excludes both.
 
 `register_event_mutator(channel, id, handler)` is the other half. The turn or the
 script has already committed its state by then, so the handler may rewrite what is
@@ -1807,6 +1820,7 @@ readable and the second is gone.
 | `seen_count`, `caught_count` | The dex counters |
 | `unown_caught` | How many Unown forms have been caught |
 | `party_count`, `kept_count` | The party, and the party plus the boxes |
+| `box_free_space` | The open box's free slots, `_GetVarAction`'s `.BoxFreeSpace`. A catch or a gift that fills it moves it to 0 |
 | `highest_level` | The highest level anywhere in either |
 | `shiny_count` | How many of those are shiny |
 | `money`, `coins` | The wallet and the Game Corner |

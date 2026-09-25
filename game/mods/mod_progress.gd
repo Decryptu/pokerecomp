@@ -95,6 +95,7 @@ static func _read_save(out: Dictionary, save: Gen2SaveData) -> void:
 		if Gen2Stats.is_shiny(mon.dvs):
 			shiny += 1
 	out[&"party_count"] = kept
+	out[&"box_free_space"] = save.box_free_space()
 	for raw: Variant in save.boxes:
 		var box: Gen2SaveBox = raw as Gen2SaveBox
 		if box == null:
