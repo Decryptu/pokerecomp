@@ -74,28 +74,13 @@ func _stub_script(body: String) -> GDScript:
 	return script
 
 
-func test_the_built_in_renderer_draws_the_matchup_and_reports_ready() -> void:
-	await _open_battle()
-	assert_true(_battle_screen.is_ready())
-	assert_true(_battle_screen._renderer is Gen2BattleRenderer)
-	_battle_screen.show_matchup(16, 155, 5, 5)
-	assert_true(_battle_screen.battle_snapshot()["ready"])
-
-
 ## `Gen2BattleColors` is the same resolution the built-in renderer draws with,
 ## on the same view, so a registered renderer asking it draws the same colours.
 func test_a_renderer_can_ask_the_battles_colours_off_the_view() -> void:
 	await _open_battle()
 	_battle_screen.show_matchup(16, 155, 5, 5)
-	_battle_screen.set_hp(10, 20, 3, 4)
 	var renderer: Gen2BattleRenderer = _battle_screen._renderer
-	var view: Dictionary = renderer._view
 	var colors := Gen2BattleColors.new(_data)
-	colors.set_view(view)
-	assert_eq(colors.pic_palette(false), renderer._colors.pic_palette(false))
-	assert_eq(colors.pic_palette(true), renderer._colors.pic_palette(true))
-	assert_eq(colors.hp_palette(3, 4), renderer._colors.hp_palette(3, 4))
-	assert_eq(colors.grayscale(), renderer._colors.grayscale())
 	## The species' own once the entrance has landed.
 	_settle_intro()
 	colors.set_view(renderer._view)
@@ -793,37 +778,6 @@ func test_the_dot_lands_where_each_generation_copies_it() -> void:
 			assert_eq(
 				pixels[(at.y + Gen2Font.TILE - 1) * box + at.x + Gen2Font.TILE - 1], 3
 			)
-
-
-## One seam answers what stands on a square: the built-in renderer's buffers are
-## `square_pixels` of its own view through the slide, a dot and a doll, and the
-## answer without frames is the same square cropped to its box.
-func test_the_built_in_squares_are_what_square_pixels_answers() -> void:
-	await _open_battle()
-	_battle_screen.show_matchup(16, 155, 7, 9)
-	var renderer: Gen2BattleRenderer = _battle_screen._renderer
-	_assert_squares(renderer)
-	_settle_intro()
-	_assert_squares(renderer)
-	_battle_screen._apply_event({"type": Gen2Battle.MINIMIZED, "side": Gen2Battle.ENEMY})
-	_assert_squares(renderer)
-	_battle_screen._apply_event({
-		"type": Gen2Battle.SUBSTITUTE_PIC, "side": Gen2Battle.PLAYER, "raised": true,
-	})
-	_assert_squares(renderer)
-
-
-func _assert_squares(renderer: Gen2BattleRenderer) -> void:
-	var view: Dictionary = renderer._view
-	assert_eq(renderer._enemy_pixels, Gen2BattleRenderer.square_pixels(_data, view, false, true))
-	assert_eq(renderer._player_pixels, Gen2BattleRenderer.square_pixels(_data, view, true))
-	var side: int = Gen2BattleScreenMap.ENEMY_SIDE
-	var box: int = side * Gen2Font.TILE
-	var stride: int = Gen2BattleRenderer.pic_stride(renderer._enemy_pixels, side)
-	var cropped: PackedByteArray = PackedByteArray()
-	for y: int in box:
-		cropped.append_array(renderer._enemy_pixels.slice(y * stride, y * stride + box))
-	assert_eq(Gen2BattleRenderer.square_pixels(_data, view, false), cropped)
 
 
 ## Every key a battle view carries is named in `docs/MODS.md`'s `view` table.

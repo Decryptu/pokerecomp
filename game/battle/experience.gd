@@ -115,12 +115,6 @@ static func _boost(value: int) -> int:
 	return value + (value / 2)
 
 
-## Keyed like [Gen2BattleMon.stat_exp]. The cartridge divides per stat, not once
-## combined, so each share truncates on its own.
-static func stat_exp_gain(defeated_stats: Dictionary, participants: int) -> Dictionary:
-	return shared_block(defeated_stats, 0, false, participants)["stats"]
-
-
 ## The seven-byte block `wEnemyMonBaseStats` to `wEnemyMonEnd`, shared out. The
 ## five base stats and the base experience go through one loop, which is why this
 ## answers for both; the seventh byte is the catch rate, which nothing reads

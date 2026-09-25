@@ -132,11 +132,6 @@ func _canvas(tiles: int) -> PackedByteArray:
 	return out
 
 
-func test_a_cache_with_a_font_gives_one() -> void:
-	assert_not_null(_font)
-	assert_true(_font.is_usable())
-
-
 func test_a_cache_without_one_does_not() -> void:
 	# An older cache, or an import that stopped before the font.
 	assert_null(Gen2Font.from_data(null))

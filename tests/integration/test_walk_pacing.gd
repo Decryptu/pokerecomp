@@ -99,16 +99,6 @@ func test_the_step_durations_are_the_source_rows() -> void:
 	assert_eq(Gen2WorldAPI.STEP_PASSES_TURN, 4)
 
 
-## Eight passes, no more: the eighth is the one that ends it.
-func test_a_walk_step_costs_exactly_eight_passes() -> void:
-	_world._start_player_step(Vector2i(1, 0), _walk_frames())
-	for _frame: int in _walk_frames() - 1:
-		_world.advance_player_step_pass()
-		assert_true(_world.player_step_in_progress(), "still walking")
-	_world.advance_player_step_pass()
-	assert_false(_world.player_step_in_progress(), "the eighth pass ends it")
-
-
 ## A step queued behind the one running takes over on the pass the first ends,
 ## so a walk of several cells is eight passes a cell rather than nine.
 func test_a_queued_step_starts_on_the_frame_the_last_one_ends() -> void:

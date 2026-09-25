@@ -250,18 +250,9 @@ func test_nothing_is_written_while_the_intro_runs() -> void:
 		Gen2SaveStore.exists(_data.id, _data.sha1, SLOT),
 		"still nothing on disk at the naming screen"
 	)
-
-
-## Backing out of the intro leaves no half-written slot, because there is
-## nothing half-written to leave.
-func test_abandoning_the_intro_leaves_no_slot() -> void:
-	_begin()
-	_screen.handle_button(PokeButton.A)
-	_accept_clock()
-	_press_a_until(_at_naming)
 	_screen.free()
 	_screen = null
-	assert_false(Gen2SaveStore.exists(_data.id, _data.sha1, SLOT))
+	assert_false(Gen2SaveStore.exists(_data.id, _data.sha1, SLOT), "nor once it is abandoned")
 
 
 func test_the_saved_name_is_the_one_typed_on_the_naming_screen() -> void:

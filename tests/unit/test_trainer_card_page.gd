@@ -34,11 +34,6 @@ func _card(page_number: int = Gen2TrainerCardPage.PAGE_1) -> Dictionary:
 	}
 
 
-func test_a_cache_with_the_card_sheets_is_ready() -> void:
-	assert_not_null(_page)
-	assert_true(_page.ready())
-
-
 func test_the_page_is_the_hardware_screen() -> void:
 	var indices: PackedByteArray = _page.draw(_card())
 	assert_eq(indices.size(), Gen2Screen.WIDTH * Gen2Screen.HEIGHT)

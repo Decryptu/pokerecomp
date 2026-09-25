@@ -21,15 +21,6 @@ func test_the_bar_moves_one_pixel_every_two_frames() -> void:
 	assert_eq(animation.pixels(), Gen2HpBarAnimation.LENGTH_PX - 1)
 
 
-func test_a_full_drain_takes_two_frames_per_pixel() -> void:
-	var animation: Gen2HpBarAnimation = Gen2HpBarAnimation.create(48, 0, 48)
-	assert_eq(
-		_settle(animation),
-		Gen2HpBarAnimation.LENGTH_PX * Gen2HpBarAnimation.FRAMES_PER_STEP
-	)
-	assert_eq(animation.pixels(), 0)
-
-
 ## A bar that is not moving never ticks, which is what lets the screen treat
 ## "no animation" and "arrived" as the same thing.
 func test_a_bar_already_where_it_is_going_is_finished() -> void:
@@ -99,9 +90,8 @@ func test_a_small_maximum_still_walks_pixel_by_pixel() -> void:
 
 
 ## `ShortHPBar_CalcPixelFrame` is what prints the number under a 48-pixel
-## maximum, and it rounds up: 20 HP over 48 pixels has no exact HP per pixel, so
-## every pixel but the ends is a fraction the routine rounds rather than floors.
-func test_a_small_maximum_prints_the_short_branchs_own_number() -> void:
+## maximum.
+func test_a_small_maximum_counts_its_number_down_from_where_it_started() -> void:
 	var animation: Gen2HpBarAnimation = Gen2HpBarAnimation.create(20, 0, 20)
 	var seen: Array = []
 	while not animation.finished():

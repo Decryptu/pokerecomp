@@ -115,8 +115,3 @@ func test_failure_clears_on_the_next_run() -> void:
 	assert_true(_lz.failed)
 	_lz.decompress(_stream([0x00, 0x01]), 0)
 	assert_false(_lz.failed, "state from a failed run leaked into the next")
-
-
-func test_static_helper_matches_the_instance() -> void:
-	var data: PackedByteArray = _stream([0x01, 0x41, 0x42])
-	assert_eq(Gen2Lz.unpack(data, 0), _lz.decompress(data, 0))

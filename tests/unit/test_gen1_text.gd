@@ -57,7 +57,7 @@ func test_a_sequence_walks_terminator_to_terminator() -> void:
 	assert_eq(Gen1Text.decode_sequence(data, 0, 2, 20), PackedStringArray(["CUT", "FLY"]))
 
 
-func test_encoding_is_the_inverse_over_the_printable_range() -> void:
+func test_letters_digits_and_punctuation_round_trip() -> void:
 	var text: String = "PIKACHU 25!"
 	assert_eq(Gen1Text.decode(Gen1Text.encode(text), 0, text.length()), text)
 

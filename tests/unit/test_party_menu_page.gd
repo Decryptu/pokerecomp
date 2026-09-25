@@ -168,11 +168,6 @@ func test_the_page_needs_a_cache_it_can_draw_from() -> void:
 	assert_null(Gen2PartyMenuPage.from_data(GameData.open_directory(_directory)))
 
 
-func test_the_page_is_the_whole_screen() -> void:
-	var image: Image = _render(_rows())
-	assert_eq(image.get_size(), Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT))
-
-
 ## `hlcoord 3, 1` for the nicknames, stepping `2 * SCREEN_WIDTH` a member, with
 ## columns 0 to 2 left for the icons, which are sprites rather than tilemap.
 func test_each_member_prints_two_rows_below_the_last() -> void:
@@ -361,13 +356,6 @@ func test_the_bar_is_drawn_in_the_colour_its_fill_earns() -> void:
 	)
 
 
-## `Place2DMenuCursor`'s column, on the member's own row.
-func test_the_cursor_sits_left_of_the_row_it_is_on() -> void:
-	var image: Image = _render(_rows(), 1)
-	assert_eq(_ink_in_tile(image, Gen2PartyMenuPage.CURSOR_COLUMN, 1), 0)
-	assert_ne(_ink_in_tile(image, Gen2PartyMenuPage.CURSOR_COLUMN, 3), 0)
-
-
 ## `hlcoord 0, 14` with `lb bc, 2, 18`, and the string at `hlcoord 1, 16`.
 func test_the_prompt_box_covers_the_bottom_four_rows() -> void:
 	var image: Image = _render(_rows())
@@ -494,7 +482,8 @@ func test_the_stats_upper_half_is_the_same_on_every_page() -> void:
 ## filled with one index, so only where they land is readable here.
 func test_every_page_indicator_is_a_two_by_two_block() -> void:
 	var image: Image = _stats_image(_stats_snapshot(Gen2StatsScreenPage.PINK_PAGE))
-	for at: Vector2i in Gen2StatsScreenPage.PAGE_INDICATORS:
+	var indicators: Array[Vector2i] = Gen2StatsScreenPage.page_indicators(Gen2StatsScreenPage.NUM_PAGES)
+	for at: Vector2i in indicators:
 		for quadrant: int in 4:
 			@warning_ignore("integer_division")
 			assert_ne(
@@ -502,7 +491,7 @@ func test_every_page_indicator_is_a_two_by_two_block() -> void:
 				"the block at %s" % at
 			)
 	assert_eq(
-		_ink_in_tile(image, Gen2StatsScreenPage.PAGE_INDICATORS[0].x - 1, 5), 0,
+		_ink_in_tile(image, indicators[0].x - 1, 5), 0,
 		"and nothing beside the first of them"
 	)
 
@@ -522,7 +511,8 @@ func test_a_fourth_page_grows_the_indicator_run_leftward_and_moves_the_arrow() -
 	assert_eq(Gen2StatsScreenPage.page_left_arrow(4), Vector2i(10, 6))
 	assert_eq(
 		Gen2StatsScreenPage.page_indicators(Gen2StatsScreenPage.NUM_PAGES),
-		Gen2StatsScreenPage.PAGE_INDICATORS, "and three is where the source put them"
+		[Vector2i(13, 5), Vector2i(15, 5), Vector2i(17, 5)] as Array[Vector2i],
+		"and three is where the source put them"
 	)
 	var image: Image = _stats_image(_stats_snapshot(Gen2StatsScreenPage.PINK_PAGE))
 	for quadrant: int in 4:

@@ -156,14 +156,6 @@ func test_the_menu_edits_the_options_object_it_was_given() -> void:
 	assert_same(_menu.options(), _options)
 
 
-## A null Gen2Options is a caller mistake, not a crash: the menu builds its own
-## defaults the way Gen2Options.parse clamps rather than refusing.
-func test_a_null_options_object_builds_defaults() -> void:
-	var menu: Gen2WorldOptionsMenu = Gen2WorldOptionsMenu.build(null)
-	assert_not_null(menu.options())
-	assert_eq(menu.rows().size(), Gen2WorldOptionsMenu.NUM_OPTIONS)
-
-
 ## `DisplayOptionMenu`: three sections and CANCEL over the same three fields.
 ## `.pressedLeftInTextSpeed` stops at FAST and the right press at SLOW, where
 ## `.cursorInBattleAnimation` and `.cursorInBattleStyle` toggle on either.

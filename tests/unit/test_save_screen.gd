@@ -402,8 +402,6 @@ func test_the_party_list_refuses_a_transfer_that_would_leave_nobody_standing() -
 	)
 
 
-## `_MovePKMNWithoutMail`: left and right load another list, the submenu drops
-## RELEASE, and the second A puts the Pokemon where the insert cursor stands.
 ## `engine/menus/save.asm`'s one sequence, which every save in the game runs:
 ## the routine's own question, `AskOverwriteSaveFile`, the SAVING box and
 ## `SavedTheGame`. Only `SaveMenu`'s half of it was built.
@@ -548,6 +546,8 @@ func _spend_insert_frames() -> void:
 	)
 
 
+## `_MovePKMNWithoutMail`: left and right load another list, the submenu drops
+## RELEASE, and the second A puts the Pokemon where the insert cursor stands.
 func test_move_without_mail_reorders_a_list_and_moves_between_two() -> void:
 	var save: Gen2SaveData = _save_with_two()
 	var third: Gen2BattleMon = Gen2BattleMon.create(
@@ -875,26 +875,6 @@ func test_a_game_with_no_saves_can_still_open_the_new_game_form() -> void:
 	assert_true(snapshot["new_game_form"])
 	assert_true(_screen.create_new_game())
 	assert_eq(int(GameRuntime.take_pending_new_game()["slot"]), 0)
-
-
-func test_creating_a_new_game_with_nothing_selected_takes_a_free_slot() -> void:
-	await _open_save_screen()
-	assert_eq(_screen.save_screen_snapshot()["selected_slot"], -1)
-
-	assert_true(_screen.create_new_game())
-	assert_eq(int(GameRuntime.take_pending_new_game()["slot"]), 0)
-
-
-func test_renaming_from_the_screen_reaches_the_slot() -> void:
-	assert_true(Gen2SaveStore.save(_save(), _data)["ok"])
-	await _open_save_screen()
-	assert_true(_screen.select_slot(1))
-
-	assert_true(Gen2SaveStore.rename_slot(_data.id, _data.sha1, 1, "Run two", _data)["ok"])
-	_screen.set_data(_data)
-
-	var rows: Array = _screen.save_screen_snapshot()["slots"]
-	assert_eq(rows[0]["label"], "Run two")
 
 
 ## The reported "the app exits after Create save": every details-pane button

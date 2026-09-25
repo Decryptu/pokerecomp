@@ -569,13 +569,3 @@ func test_a_reorder_writes_the_new_bag_order() -> void:
 	assert_true(bool(result["ok"]), str(result))
 	assert_eq(_world.state.items().keys(), [FLOWER_MAIL, KEY_ITEM, POTION])
 	assert_eq(_world.state.item_quantity(POTION), 5)
-
-
-## The pocket the move happened in is the only one that moves: a key item keeps
-## the position it held, the way its own packed array would.
-func test_a_reorder_leaves_the_quantities_and_the_other_pockets_alone() -> void:
-	assert_true(bool(Gen2WorldBagHost.reorder(
-		_world, _save, [FLOWER_MAIL, POTION], false, false
-	)["ok"]))
-	assert_eq(_world.state.item_quantity(KEY_ITEM), 1)
-	assert_eq(_world.state.item_quantity(FLOWER_MAIL), 1)

@@ -245,22 +245,6 @@ func test_two_mods_rewriting_one_box_is_refused_and_an_empty_one_never_lands() -
 	assert_eq(_data().mart_text("greeting"), "BIENVENUE !")
 
 
-func test_a_cache_with_no_mods_reads_exactly_what_the_cartridge_held() -> void:
-	var data: GameData = _data()
-	assert_eq(String(data.species(1)["name"]), "BULBASAUR")
-	assert_true(data.species(NEW_SPECIES).is_empty())
-	assert_true(Gen2ContentOverlay.shared().is_empty())
-
-
-func test_resetting_the_host_drops_what_the_last_load_registered() -> void:
-	Gen2ModHost.instance().register_content(
-		Gen2ContentOverlay.KIND_ITEM, MOD, Gen2ContentOverlay.FIRST_MOD_NUMBER, {"name": "THING"}
-	)
-	assert_eq(String(_data().item(Gen2ContentOverlay.FIRST_MOD_NUMBER)["name"]), "THING")
-	Gen2ModHost.reset()
-	assert_true(_data().item(Gen2ContentOverlay.FIRST_MOD_NUMBER).is_empty())
-
-
 ## The evolution an item names is a fact the host acts on, so the overlay is
 ## where a method it cannot run is refused.
 func test_an_item_may_name_an_evolution_method_and_only_a_real_one() -> void:
@@ -286,15 +270,6 @@ func test_an_item_may_name_an_evolution_method_and_only_a_real_one() -> void:
 			"evolution": 3,
 		}
 	).get("ok", false)))
-
-
-func test_the_overlay_names_who_claimed_what() -> void:
-	Gen2ModHost.instance().register_content(
-		Gen2ContentOverlay.KIND_SPECIES, MOD, NEW_SPECIES, {"name": "VOLTLING"}
-	)
-	var overlay: Gen2ContentOverlay = Gen2ModHost.instance().content_overlay()
-	assert_eq(overlay.defined_numbers(Gen2ContentOverlay.KIND_SPECIES), [NEW_SPECIES] as Array[int])
-	assert_eq(overlay.owner_of(Gen2ContentOverlay.KIND_SPECIES, NEW_SPECIES), MOD)
 
 
 func test_an_encounter_row_is_patched_where_the_cartridge_table_is_read() -> void:

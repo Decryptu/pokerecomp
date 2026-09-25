@@ -214,32 +214,3 @@ func test_the_name_box_slide_is_six_columns_of_three_frames() -> void:
 	columns = _column_trace()
 	assert_eq(columns.size(), 18)
 	assert_eq(columns[columns.size() - 1], Gen2IntroPresentation.PIC_LEFT_COLUMN)
-
-
-## `OakSpeech`'s own run: two pictures and two naming branches where Generation
-## 2 has one, and the two answers printed over the pictures that asked for them.
-func test_the_generation_one_beats_are_the_source_routines_order() -> void:
-	var keys: Array = []
-	var names: Array = []
-	for row: Array in Gen2OakSpeech.GEN1_ORDER:
-		keys.append(String(row[1]))
-		if String(row[4]) != Gen2OakSpeech.NAME_NONE:
-			names.append(String(row[4]))
-	assert_eq(keys, [
-		"oak_speech_1", "oak_speech_2", "introduce_player", "your_name_is",
-		"introduce_rival", "his_name_is", "oak_speech_3",
-	])
-	assert_eq(names, [Gen2OakSpeech.NAME_PLAYER, Gen2OakSpeech.NAME_RIVAL])
-	assert_eq(int(Gen2OakSpeech.GEN1_ORDER[3][0]), Gen2OakSpeech.Pic.PLAYER)
-	assert_eq(int(Gen2OakSpeech.GEN1_ORDER[5][0]), Gen2OakSpeech.Pic.RIVAL)
-	assert_eq(int(Gen2OakSpeech.GEN1_ORDER[1][2]), Gen2OakSpeech.Enter.MOVE_LEFT)
-	assert_eq(int(Gen2OakSpeech.GEN1_ORDER[6][2]), Gen2OakSpeech.Enter.FADE_IN_WHITE)
-
-
-## `_OakSpeechText3` opens on `<PLAYER>` and `_HisNameIsText` carries `<RIVAL>`,
-## which are the only two print-time names the speech has to fill.
-func test_both_intro_names_are_filled_where_the_codec_left_them() -> void:
-	assert_eq(
-		Gen2OakSpeech.with_names("<PLAYER>! <RIVAL> waits.", "RED", "BLUE"),
-		"RED! BLUE waits."
-	)

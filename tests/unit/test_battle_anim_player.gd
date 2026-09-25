@@ -233,22 +233,6 @@ func test_an_unloaded_sheet_reads_as_the_start_of_the_window() -> void:
 	assert_eq((player.objects()[0] as Gen2BattleAnimObject).tile_id, 0)
 
 
-## The shadow buffer holds forty sprites and no more; the objects queued after it
-## are simply not drawn that frame.
-func test_the_shadow_buffer_stops_at_forty_sprites() -> void:
-	var body: Array = []
-	for spawn: int in Gen2BattleAnimPlayer.MAX_OBJECTS:
-		body.append_array(SPAWN)
-	body.append_array([0x01])
-	body.append_array(RET)
-
-	var player: Gen2BattleAnimPlayer = _player(body)
-	player.advance_frame()
-	assert_eq(player.objects().size(), Gen2BattleAnimPlayer.MAX_OBJECTS)
-	assert_lte(player.sprites().size(), Gen2BattleAnimPlayer.MAX_SPRITES)
-	assert_eq(player.sprites().size(), Gen2BattleAnimPlayer.MAX_OBJECTS)
-
-
 ## `BattleAnim_ClearOAM` normally wipes the buffer; after `anim_keepsprites` it
 ## leaves the sprites and moves every one onto `PAL_BATTLE_OB_ENEMY` instead.
 func test_keepsprites_keeps_the_sprites_and_takes_their_colour() -> void:

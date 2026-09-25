@@ -49,7 +49,6 @@ var _gen1: Gen1Opening = null  ## A Generation 1 cache's opening, one program fo
 ## The `BattleAnimSineWave` the presents phase reads its motion out of, handed
 ## in by the host that has a cache open.
 var _sine: Gen2BattleAnimData = null
-var _waiting_sound: StringName = &""
 var _events: Array[Dictionary] = []
 var _available: Array[StringName] = []  ## The phases the host can draw, empty for all of them.
 
@@ -77,7 +76,6 @@ func start(
 		_phase = _gen1.phase()
 		_frame = 0
 		_phase_frame = 0
-		_waiting_sound = &""
 		_events.clear()
 		_emit(&"play_music", {"music": MUSIC_NONE, "restart": true})
 		_emit(&"show_image", {"id": GEN1_IMAGE_IDS[_phase]})
@@ -86,14 +84,12 @@ func start(
 		_phase = PHASE_COPYRIGHT
 		_frame = 0
 		_phase_frame = 0
-		_waiting_sound = &""
 		_events.clear()
 		_enter_after(PHASE_COPYRIGHT)
 		return
 	_phase = PHASE_COPYRIGHT
 	_frame = 0
 	_phase_frame = 0
-	_waiting_sound = &""
 	_events.clear()
 	_emit(&"play_music", {"music": MUSIC_NONE, "restart": true})
 	_emit(&"hide_image", {"id": &"boot"})
@@ -133,21 +129,15 @@ func gs_movie() -> Gen2GoldSilverIntro:
 	return _gs_movie
 
 
-func waiting_sound() -> StringName:
-	return _waiting_sound
-
-
 func drain_events() -> Array[Dictionary]:
 	var out: Array[Dictionary] = _events.duplicate(true)
 	_events.clear()
 	return out
 
 
-## Advances exactly one 59.7275 Hz source frame. A sound wait is released only
-## through complete_sound(), so a slow or failed device cannot be mistaken for
-## a fixed presentation delay.
+## Advances exactly one 59.7275 Hz source frame.
 func advance_frame(held: Array = []) -> Array[Dictionary]:
-	if _phase.is_empty() or _phase == PHASE_FINISHED or not _waiting_sound.is_empty():
+	if _phase.is_empty() or _phase == PHASE_FINISHED:
 		return drain_events()
 	_frame += 1
 	_phase_frame += 1
@@ -240,19 +230,6 @@ func _advance_gen1() -> void:
 				start(_profile, _data, _available, _sine)
 				_emit(&"restart_opening", {"profile": _profile})
 				return
-
-
-func wait_sound(token: StringName) -> void:
-	_waiting_sound = token
-	_emit(&"wait_sound", {"token": token})
-
-
-func complete_sound(token: StringName) -> bool:
-	if _waiting_sound != token:
-		return false
-	_waiting_sound = &""
-	_emit(&"sound_completed", {"token": token})
-	return true
 
 
 func select_title(option: StringName) -> bool:

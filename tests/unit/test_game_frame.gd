@@ -171,7 +171,7 @@ func test_a_screen_takes_the_window_without_being_told() -> void:
 ## And it fills the room it took. A screen laid out in 160x144 has nothing of its
 ## own out there, so the default is that the screen paints it rather than leaving
 ## a bar; only a view that draws the whole buffer turns this off.
-func test_the_surround_is_filled_unless_a_view_owns_the_buffer() -> void:
+func test_a_screen_fills_its_surround_by_default() -> void:
 	assert_true(_built(true).interface_masked)
 
 

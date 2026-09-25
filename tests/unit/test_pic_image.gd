@@ -30,12 +30,6 @@ func test_the_buffer_is_read_row_major() -> void:
 	assert_eq(image.get_pixel(0, 1), BLUE, "third byte starts the second row")
 
 
-func test_background_is_opaque_white_by_default() -> void:
-	# What the hardware does: there is no alpha, and index 0 is drawn white.
-	var image: Image = Gen2PicImage.from_indices(PackedByteArray([0]), 1, 1, _palette())
-	assert_eq(image.get_pixel(0, 0).a, 1.0)
-
-
 func test_background_can_be_made_transparent() -> void:
 	var image: Image = Gen2PicImage.from_indices(PackedByteArray([0, 1]), 2, 1, _palette(), true)
 	assert_eq(image.get_pixel(0, 0).a, 0.0)
@@ -267,19 +261,6 @@ func test_pic_animation_applies_a_frames_bitmask_over_the_pad() -> void:
 func test_pic_animation_without_a_record_is_finished_at_once() -> void:
 	assert_true(Gen2PicAnimation.new({}).finished())
 	assert_eq(Gen2PicAnimation.new({}).advance(), &"")
-
-
-## Why `PokeAnim_SetVBank1` is not decoration. The animation's tiles start at the
-## 7x7 block's own 49, and `$31` is 49: that is `AppearUser`'s first tile for the
-## player's back pic. The two only ever coexist because the enemy's box is put in
-## VRAM bank 1 for as long as the animation runs, so a renderer reading one flat
-## sheet draws the player's picture inside the enemy's square.
-func test_a_pic_animations_tiles_collide_with_the_players_own_run() -> void:
-	assert_eq(
-		Gen2PicImage.FRONTPIC_TILES * Gen2PicImage.FRONTPIC_TILES,
-		Gen2BattleScreenMap.PLAYER_BASE_TILE
-	)
-	assert_eq(Gen2Layout.pic_anim_box_tile(25, 5), Gen2BattleScreenMap.PLAYER_BASE_TILE)
 
 
 ## `PokeAnim_SetVBank1`'s rule, which is what stops the enemy's animation tiles

@@ -206,7 +206,6 @@ const SKULL_BASH: int = 254
 const TOXIC: int = 255
 const HAZE: int = 256
 const BELLY_DRUM: int = 257
-const PSYCH_UP: int = 258
 
 ## Multi-hit, in the two counting shapes: a random 2-5 and a fixed 2, plus the
 ## fixed 2 with a poison chance behind both hits, the way Twineedle does it.
@@ -286,7 +285,6 @@ const SWAGGER: int = 207
 ## whole of what its own command hands the formula.
 const TELEPORT: int = 100
 const THIEF: int = 168
-const MIND_READER: int = 170
 const SPITE: int = 180
 const FORESIGHT: int = 193
 const LOCK_ON: int = 199
@@ -670,7 +668,6 @@ static func _moves() -> Array:
 		TOXIC: ["TOXIC", 0, POISON, 255, 10, Gen2MoveEffect.TOXIC, 0],
 		HAZE: ["HAZE", 0, NORMAL, 255, 30, Gen2MoveEffect.HAZE, 0],
 		BELLY_DRUM: ["BELLY DRUM", 0, NORMAL, 255, 10, Gen2MoveEffect.BELLY_DRUM, 0],
-		PSYCH_UP: ["PSYCH UP", 0, NORMAL, 255, 10, Gen2MoveEffect.PSYCH_UP, 0],
 		MULTI_HIT_MOVE: ["COMET PUNCH", 18, NORMAL, 255, 15, Gen2MoveEffect.MULTI_HIT, 0],
 		DOUBLE_HIT_MOVE: ["DOUBLE KICK", 30, NORMAL, 255, 30, Gen2MoveEffect.DOUBLE_HIT, 0],
 		# A chance of 256 never fails, which is how a test gets Twineedle's poison
@@ -788,9 +785,6 @@ static func _moves() -> Array:
 		# `effectchance` cannot fail.
 		TELEPORT: ["TELEPORT", 0, PSYCHIC_TYPE, 255, 20, Gen2MoveEffect.TELEPORT, 0],
 		THIEF: ["THIEF", 40, DARK, 255, 10, Gen2MoveEffect.THIEF, 256],
-		MIND_READER: [
-			"MIND READER", 0, NORMAL, 255, 5, Gen2MoveEffect.LOCK_ON, 0,
-		],
 		SPITE: ["SPITE", 0, GHOST, 255, 10, Gen2MoveEffect.SPITE, 0],
 		FORESIGHT: ["FORESIGHT", 0, NORMAL, 255, 40, Gen2MoveEffect.FORESIGHT, 0],
 		LOCK_ON: ["LOCK-ON", 0, NORMAL, 255, 5, Gen2MoveEffect.LOCK_ON, 0],

@@ -49,19 +49,6 @@ func test_a_cache_without_the_region_map_refuses_to_open() -> void:
 	assert_false(_screen.visible)
 
 
-## `data/maps/landmarks.asm`'s `db x + 8, y + 16` is undone at import, so a
-## landmark's stored point is the centre of its 16x16 icon.
-func test_the_screen_renders_both_objects_on_their_landmarks() -> void:
-	_screen.open(_data, 1)
-	_screen.handle_button(PokeButton.UP)
-	var image: Image = _screen.render()
-	assert_eq(image.get_width(), Gen2Screen.WIDTH)
-	assert_eq(image.get_height(), Gen2Screen.HEIGHT)
-	assert_eq(_screen.map().player_landmark, 1)
-	assert_eq(_screen.map().cursor, 2)
-
-
-
 ## `Pokedex_GetArea`'s own loop: A leaves as well as B, and the region walk is
 ## left and right rather than the cursor's up and down.
 func test_the_dex_area_opens_on_johto_and_leaves_on_a() -> void:

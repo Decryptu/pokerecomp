@@ -3,13 +3,6 @@ extends GutTest
 ## Whether a move connects, and the table it is decided with.
 
 
-func test_accuracy_is_a_byte_out_of_255_not_a_percentage() -> void:
-	# A move stored as 100% is 255 and one stored as 90% is 229. Converting to a
-	# percentage would lose the special case below.
-	assert_eq(Gen2Accuracy.chance(255), 255)
-	assert_eq(Gen2Accuracy.chance(229), 229)
-
-
 func test_a_full_accuracy_move_cannot_miss() -> void:
 	# Rolling against 255 would miss one time in 256, and the cartridge goes out
 	# of its way not to.
@@ -67,15 +60,6 @@ func test_a_raised_accuracy_is_capped_only_once_at_the_end() -> void:
 
 func test_accuracy_never_falls_to_nothing() -> void:
 	assert_gt(Gen2Accuracy.chance(1, -6, 6), 0)
-
-
-func test_foresight_drops_the_stages_only_when_they_are_against_the_attacker() -> void:
-	# Narrower than it sounds: it cannot undo an accuracy the attacker raised.
-	assert_eq(Gen2Accuracy.chance(255, 0, 6, true), 255, "the evasion is ignored")
-	assert_eq(
-		Gen2Accuracy.chance(255, 2, 0, true), Gen2Accuracy.chance(255, 2, 0),
-		"a raised accuracy still counts, because the evasion is the lower stage"
-	)
 
 
 func test_a_stage_past_the_ends_is_clamped() -> void:

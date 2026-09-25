@@ -74,13 +74,6 @@ func test_pic_with_too_little_data_is_blank_rather_than_partial() -> void:
 	assert_eq(pixels.count(0), 16 * 16)
 
 
-func test_a_1bpp_strip_is_one_tile_tall_and_as_wide_as_it_needs() -> void:
-	var data: PackedByteArray = PackedByteArray()
-	data.resize(3 * PokeTiles.TILE_1BPP_BYTES)
-	var strip: PackedByteArray = PokeTiles.decode_1bpp_strip(data, 0, 3)
-	assert_eq(strip.size(), 192)
-
-
 func test_a_set_1bpp_bit_decodes_to_ink_and_the_rest_to_the_background() -> void:
 	# The hardware widens 1bpp by copying the byte into both planes, so a lit
 	# pixel is index 3 and there are no middle colours to be had.

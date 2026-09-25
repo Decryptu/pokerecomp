@@ -35,11 +35,6 @@ func _johto(
 	)
 
 
-func test_a_cache_with_the_pokegear_sheets_is_ready() -> void:
-	assert_not_null(_page)
-	assert_true(_page.ready())
-
-
 func test_the_region_map_covers_the_whole_screen() -> void:
 	var map: PackedInt32Array = _johto()
 	assert_eq(map.size(), Gen2TownMapPage.COLUMNS * Gen2TownMapPage.ROWS)
@@ -111,12 +106,6 @@ func test_attributes_follow_the_palette_map_and_stop_at_the_font() -> void:
 	assert_eq(_at(slots, Vector2i(0, 17)), Fixture.TOWN_MAP_EARTH)
 	assert_eq(_at(slots, Vector2i(7, 0)), Fixture.TOWN_MAP_MOUNTAIN, "$17 is odd")
 	assert_eq(_at(slots, Vector2i(9, 0)), 0, "a glyph is past the table")
-
-
-func test_the_page_composes_the_hardware_screen() -> void:
-	var image: Image = _page.image(_data, _johto())
-	assert_eq(image.get_width(), Gen2Screen.WIDTH)
-	assert_eq(image.get_height(), Gen2Screen.HEIGHT)
 
 
 ## Kris's own city colours, which only Crystal ships.

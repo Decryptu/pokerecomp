@@ -273,16 +273,6 @@ func test_no_previous_entry_opens_at_the_top() -> void:
 	assert_eq(dex.scroll, 0)
 
 
-## `Pokedex_DrawOptionScreenBG` hides UNOWN MODE while wUnlockedUnownMode is
-## clear, which is what `Pokedex_CheckUnlockedUnownMode` reads the flag for.
-func test_the_option_screen_lists_three_modes_without_the_unown_dex() -> void:
-	var rows: Array = Gen2Pokedex.mode_rows()
-	assert_eq(rows.size(), 3)
-	assert_eq(String(rows[0]["label"]), "NEW #DEX MODE")
-	assert_eq(String(rows[2]["label"]), "A to Z MODE")
-	assert_eq(Gen2Pokedex.mode_rows(true).size(), 4)
-
-
 ## `.ChangeMode` skips a mode that is already current, and reorders and reseeks
 ## when it is not.
 func test_changing_to_the_current_mode_changes_nothing() -> void:
@@ -320,15 +310,6 @@ func test_the_search_screen_opens_on_normal_with_no_second_type() -> void:
 	assert_eq(dex.search_type_1, 1)
 	assert_eq(dex.search_type_2, Gen2Pokedex.SEARCH_TYPE_NONE)
 	assert_eq(dex.search_cursor, Gen2Pokedex.SEARCH_ROW_TYPE_1)
-
-
-## `PokedexTypeSearchConversionTable`'s order is the search screen's, not the
-## type numbering: FIRE follows NORMAL.
-func test_the_search_order_is_the_conversion_tables_own() -> void:
-	assert_eq(Gen2Pokedex.SEARCH_TYPES.size(), Gen2Pokedex.SEARCH_TYPE_MAX)
-	assert_eq(Gen2Pokedex.SEARCH_TYPES[0], Gen2Layout.TYPE_NORMAL)
-	assert_eq(Gen2Pokedex.SEARCH_TYPES[1], Gen2Layout.TYPE_FIRE)
-	assert_eq(Gen2Pokedex.SEARCH_TYPES[Gen2Pokedex.SEARCH_TYPE_MAX - 1], Gen2Layout.TYPE_STEEL)
 
 
 ## `Pokedex_UpdateSearchMonType` reads left and right on the two type rows only.

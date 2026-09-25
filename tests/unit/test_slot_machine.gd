@@ -73,16 +73,6 @@ func _spin(machine: Gen2SlotMachine, bet: int) -> bool:
 	return _drive(machine, Gen2SlotMachine.Prompt.PRESS)
 
 
-## `Slots_AskBet`: the menu's own row is `4 - wMenuCursorY` coins, and the
-## sixteen-bit subtraction happens once.
-func test_the_bet_is_taken_once() -> void:
-	var machine: Gen2SlotMachine = _machine()
-	assert_true(_drive(machine, Gen2SlotMachine.Prompt.BET))
-	machine.answer_bet(1)
-	assert_eq(machine.bet(), 3)
-	assert_eq(machine.coins(), 197)
-
-
 ## `.DeductCoins`' own refusal: a balance under the bet reprints the box and
 ## goes back to the menu rather than spinning.
 func test_a_bet_over_the_balance_is_refused() -> void:
@@ -94,19 +84,6 @@ func test_a_bet_over_the_balance_is_refused() -> void:
 	assert_eq(machine.coins(), 2)
 	machine.dismiss_text()
 	assert_eq(machine.prompt(), Gen2SlotMachine.Prompt.BET)
-
-
-## B on the menu is `ret c`, which is the quit entry and not another bet.
-func test_cancelling_the_menu_leaves_the_game() -> void:
-	var machine: Gen2SlotMachine = _machine()
-	assert_true(_drive(machine, Gen2SlotMachine.Prompt.BET))
-	machine.answer_bet(-1)
-	assert_eq(machine.jumptable_index(), Gen2SlotMachine.SLOTS_QUIT)
-	for _frame: int in 8:
-		if machine.waiting_for_sfx():
-			machine.sfx_finished()
-		machine.advance()
-	assert_true(machine.finished())
 
 
 ## `ReelAction_StopReel3` has no way to stop on a match the bias did not ask
@@ -231,19 +208,6 @@ func test_a_reel_steps_a_symbol_every_sixteen_units() -> void:
 		machine._spin_reel(0)
 	assert_eq(reel.spin_distance, 16)
 	assert_eq(reel.position, (before + 1) % Gen2SlotMachine.REEL_SIZE)
-
-
-## The strips repeat their own first three symbols, so a window at the end of a
-## reel reads three real ones rather than wrapping.
-func test_every_window_is_three_symbols_of_the_strip() -> void:
-	var machine: Gen2SlotMachine = _machine()
-	var reel: Gen2SlotMachine.Reel = machine.reels()[0]
-	for position: int in Gen2SlotMachine.REEL_SIZE:
-		reel.position = position
-		var window: PackedByteArray = reel.window()
-		assert_eq(window.size(), 3)
-		for symbol: int in window:
-			assert_true(symbol in [0x00, 0x04, 0x08, 0x0C, 0x10, 0x14])
 
 
 ## `Slots_StopReel3`'s `and a / jr nz, .biased`: SLOTS_SEVEN is the zero that

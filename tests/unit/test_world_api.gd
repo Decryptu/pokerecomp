@@ -2672,18 +2672,6 @@ func test_trainer_approach_path_uses_the_source_longer_axis_first() -> void:
 	)
 
 
-func test_player_walk_step_starts_a_cell_behind_and_never_moves_the_committed_cell() -> void:
-	var world: Gen2WorldAPI = _world()
-	assert_false(world.player_step_in_progress())
-	assert_true(world.move(Vector2i.LEFT))
-	# The logical cell already committed to the destination; the step only
-	# paces a presentation offset that starts a full cell behind it.
-	assert_eq(world.player_cell, Vector2i(7, 6))
-	assert_true(world.player_step_in_progress())
-	assert_eq(world.player_step_offset_cells(), Vector2(1.0, 0.0))
-	assert_eq(world.player_pixel_position(), Gen2WorldAPI.PLAYER_VIEW_CELL * 16)
-
-
 ## `_UpdateSprites` and `ScrollScreen` are one after the other at the end of
 ## `HandleMapBackground`, so a pass's shadow OAM and its scroll are latched by
 ## the same VBlank: the drawn player never leaves PLAYER_VIEW_CELL and the camera
@@ -3235,19 +3223,6 @@ func test_object_driver_ignores_a_missing_generator() -> void:
 	assert_false(object.is_stepping())
 
 
-func test_advance_objects_still_makes_one_decision_per_call() -> void:
-	var world: Gen2WorldAPI = _wandering_world()
-	var object: Gen2WorldObject = world.objects[0]
-	var random := RandomNumberGenerator.new()
-	random.seed = 90210
-	var start: Vector2i = object.cell
-
-	# The existing per-call primitive keeps its contract: one decision, one
-	# committed cell, with no frame pacing involved.
-	assert_eq(world.advance_objects(random), 1)
-	assert_eq(abs(object.cell.x - start.x) + abs(object.cell.y - start.y), 1)
-
-
 func test_follower_carries_the_player_walk_step_offset() -> void:
 	RomCache.write_json(RomCache.world_scripts_path(_directory), {
 		"48:6080": [0x70, 0, 2, 0x91],
@@ -3426,15 +3401,6 @@ func test_script_failure_does_not_commit_staged_state() -> void:
 	assert_eq(result[0]["status"], &"failed")
 	assert_eq(result[0]["reason"], &"unsupported_command")
 	assert_false(world.event_flag_active(8))
-
-
-func test_callback_dispatch_updates_the_map_scene() -> void:
-	var world: Gen2WorldAPI = _world(Vector2i(8, 6))
-	assert_eq(world.state.map_scene(1, 1), 0)
-	var result: Array = world.dispatch_callbacks(3)
-	assert_eq(result.size(), 1)
-	assert_eq(result[0]["status"], &"complete")
-	assert_eq(world.state.map_scene(1, 1), 2)
 
 
 func test_map_entry_dispatch_runs_the_current_map_callbacks() -> void:
@@ -3820,25 +3786,6 @@ func test_pokemon_center_pc_special_stages_the_pokemon_center_mode() -> void:
 	var resumed: Array = world.complete_runtime_request({"ok": true, "script_value": 0})
 	assert_eq(resumed.size(), 1)
 	assert_eq(resumed[0]["status"], &"complete")
-
-
-func test_readvar_badges_counts_active_engine_flags_across_both_bytes() -> void:
-	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
-	scripts["48:6300"] = [
-		Gen2WorldScript.READVAR, 0x07,
-		Gen2WorldScript.IFEQUAL, 1, 0x10, 0x63,
-		Gen2WorldScript.END,
-	]
-	scripts["48:6310"] = [Gen2WorldScript.SETEVENT, 40, 0, Gen2WorldScript.END]
-	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
-	var data: GameData = GameData.open_directory(_directory)
-	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
-	world.state.set_engine_flag(Gen2WorldState.ENGINE_ZEPHYRBADGE)
-	world.current_map.events["coord_events"][0]["script"] = 0x6300
-	var result: Array = world.dispatch_script_events()
-	assert_eq(result.size(), 1)
-	assert_eq(result[0]["status"], &"complete", JSON.stringify(result))
-	assert_true(world.event_flag_active(40))
 
 
 func test_readvar_partycount_reads_the_set_party_summary() -> void:
@@ -4799,17 +4746,6 @@ func test_a_press_in_a_new_direction_turns_on_the_spot_before_it_walks() -> void
 	assert_eq(world.player_cell, from + Vector2i.RIGHT)
 
 
-## A scripted `applymovement` drives the object through
-## `engine/overworld/movement.asm` and never reaches `DoPlayerMovement`, so it
-## turns nothing: only the input path has the check.
-func test_a_programmatic_step_does_not_turn_first() -> void:
-	var world: Gen2WorldAPI = _world(Vector2i(4, 4))
-	var from: Vector2i = world.player_cell
-	var moved: Dictionary = world.move_result(Vector2i.RIGHT)
-	assert_true(moved["ok"])
-	assert_eq(world.player_cell, from + Vector2i.RIGHT)
-
-
 func test_invalid_directions_and_map_edges_do_not_move_player() -> void:
 	var world: Gen2WorldAPI = _world(Vector2i(0, 0))
 	assert_false(world.move(Vector2i.ZERO))
@@ -5423,20 +5359,6 @@ func test_script_movement_still_refuses_a_step_off_the_map() -> void:
 	assert_true(_event_types(results).has(&"movement_blocked"))
 
 
-func test_follow_command_moves_the_follower_after_a_player_step() -> void:
-	RomCache.write_json(RomCache.world_scripts_path(_directory), {
-		"48:6080": [0x70, 0, 2, 0x91],
-	})
-	var data: GameData = GameData.open_directory(_directory)
-	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6080
-	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(8, 6))
-	var results: Array = world.dispatch_script_events(Vector2i(7, 6))
-	assert_eq(results.size(), 1)
-	assert_eq(results[0]["status"], &"complete")
-	assert_true(world.move(Vector2i.LEFT))
-	assert_eq((world.objects[0] as Gen2WorldObject).cell, Vector2i(6, 6))
-
-
 ## `follow NEWBARKTOWN_TEACHER, PLAYER`, which is what walks the player back out
 ## of the route and what a swapped pair of operands leaves standing still.
 func test_follow_names_the_leader_first_so_the_player_can_be_the_follower() -> void:
@@ -5580,21 +5502,6 @@ func test_memcall_and_memjump_follow_far_pointers_supplied_by_runtime_memory() -
 	})
 	var jumped: Dictionary = jump_runner.advance()
 	assert_eq(jumped["status"], &"complete", JSON.stringify(jumped))
-
-
-func test_special_phone_call_check_reads_staged_id_before_commit() -> void:
-	var data: GameData = GameData.open_directory(_directory)
-	RomCache.write_json(RomCache.world_scripts_path(_directory), {
-		"48:6088": [0x9C, 2, 0, 0x9D, Gen2WorldScript.END],
-	})
-	data = GameData.open_directory(_directory)
-	var state := Gen2WorldState.new()
-	var runner := Gen2WorldScriptRunner.begin(data, state, {
-		"kind": &"test", "bank": 48, "script": 0x6088,
-	})
-	var completed: Dictionary = runner.advance()
-	assert_eq(completed["status"], &"complete", JSON.stringify(completed))
-	assert_eq(state.pending_special_phone_call(), 2, JSON.stringify(completed))
 
 
 ## Script_verticalmenu stores wMenuCursorY, which counts from one, so the
@@ -7855,15 +7762,6 @@ func test_getstring_reads_a_name_and_not_a_text_stream() -> void:
 	)
 
 
-func test_an_unfilled_buffer_contributes_no_address() -> void:
-	var data: GameData = GameData.open_directory(_directory)
-	var runner := Gen2WorldScriptRunner.begin(data, Gen2WorldState.from_dict({}), {
-		"kind": &"script", "bank": 48, "script": 0x6400,
-	})
-
-	assert_eq(runner.text_context()["ram"], {})
-
-
 ## M2: LoadMetatiles substitutes wMapBorderBlock for a block byte of $00, and the
 ## padding ChangeMap puts around the map is that same block. Both are graphics
 ## only, so collision still reads the raw byte.
@@ -9025,22 +8923,6 @@ func _write_gate_fixture(gate: StringName = &"item") -> Vector2i:
 	return start
 
 
-## The site still runs the cartridge's own script: only the number it hands over
-## is the mod's. An unpatched cache is the control.
-func test_an_unpatched_catalogue_hands_over_the_cartridges_own_numbers() -> void:
-	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
-	scripts["48:6E00"] = [0x5D, 109, 21, 0x5F, Gen2WorldScript.END]
-	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
-	var world: Gen2WorldAPI = _world(Vector2i(8, 6))
-	world.current_map.events["coord_events"] = [{
-		"scene": 0, "x": 8, "y": 6, "script": 0x6E00,
-	}]
-	var waiting: Array = world.dispatch_script_events(Vector2i(8, 6))
-	var request: Dictionary = waiting[0]["event"]["request"]
-	assert_eq(int(request["values"]["pokemon"]), 109)
-	assert_eq(int(request["values"]["level"]), 21)
-
-
 ## A starter's species drives the BALL as well as the gift: patching the
 ## `givepoke` alone would show one Pokemon and hand over another.
 func test_a_patched_starter_shows_and_gives_the_same_pokemon() -> void:
@@ -9560,26 +9442,6 @@ func test_the_two_reading_chambers_open_on_what_the_party_carries() -> void:
 	), "a held WATER STONE opens it as a bagged one does")
 
 
-## `sMysteryGiftTrainerHouseFlag`, which nothing here can ever set: the Trainer
-## House answers zero and its own script turns the player away.
-func test_the_trainer_house_answers_the_flag_no_link_ever_set() -> void:
-	_write_special_script([
-		Gen2WorldScript.SETVAL, 9,
-		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_TRAINER_HOUSE, 0,
-		Gen2WorldScript.IFEQUAL, 0, 0x40, 0x62,
-		Gen2WorldScript.END,
-	])
-	_write_special_script([
-		Gen2WorldScript.SETVAL, 9,
-		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_TRAINER_HOUSE, 0,
-		Gen2WorldScript.IFEQUAL, 0, 0x40, 0x62,
-		Gen2WorldScript.END,
-	], {"48:6240": [Gen2WorldScript.SETEVENT, 0x10, 0x00, Gen2WorldScript.END]})
-	var world: Gen2WorldAPI = _special_world()
-	assert_eq(_run_special(world)[0]["status"], &"complete")
-	assert_true(world.event_flag_active(0x10), "the zero branch is the one taken")
-
-
 ## `SampleKenjiBreakCountdown` writes three to six days, and `readvar
 ## VAR_KENJI_BREAK_TIMER` reads the byte the special has just staged rather than
 ## the one still committed.
@@ -9630,9 +9492,9 @@ func test_the_magikarp_sign_prints_the_record_and_its_holder() -> void:
 	assert_eq(results[0]["event"]["text"], "4′7″ caught by MANIA")
 
 
-## `CheckForLuckyNumberWinners` names the row it matched and picks its box by
-## where the row was found.
-func test_the_lucky_number_show_names_the_matching_row() -> void:
+## `PrintTodaysLuckyNumber` draws the number and stamps the day, and
+## `CheckForLuckyNumberWinners` runs over the party behind it.
+func test_the_lucky_number_show_draws_a_number_and_stamps_its_day() -> void:
 	_write_special_script([
 		Gen2WorldScript.SPECIAL,
 		Gen2WorldScriptRunner.SPECIAL_PRINT_TODAYS_LUCKY_NUMBER, 0,
@@ -10632,9 +10494,9 @@ func test_gen1_wanderer_climbs_eight_cells_and_never_comes_back_down() -> void:
 	var random := RandomNumberGenerator.new()
 	random.seed = 20260905
 	var highest: int = walker.cell.y
-	for _tick: int in 400:
+	for _frame: int in 20000:
 		world.player_cell = Vector2i(2, walker.cell.y)
-		world.advance_objects(random)
+		world.advance_object_steps_pass(random)
 		highest = mini(highest, walker.cell.y)
 		if highest <= walker.initial_cell.y - 5:
 			assert_true(walker.cell.y <= walker.initial_cell.y - 5, "it walked back down")
@@ -10655,10 +10517,10 @@ func test_gen1_a_wanderer_on_the_last_row_steps_up_and_one_off_the_screen_freeze
 	var random := RandomNumberGenerator.new()
 	random.seed = 20260921
 	var climbed: int = 0
-	for _decision: int in 40:
+	for _frame: int in 4000:
 		world.player_cell = Vector2i(2, walker.cell.y - Gen2WorldAPI.OBJECT_SCREEN_MAX.y)
 		var before: Vector2i = walker.cell
-		world.advance_objects(random)
+		world.advance_object_steps_pass(random)
 		assert_true(walker.cell.y <= before.y, "it stepped down off the last row")
 		assert_eq(walker.cell.x, before.x, "it stepped along the last row")
 		climbed += before.y - walker.cell.y

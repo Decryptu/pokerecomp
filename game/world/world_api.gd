@@ -10475,18 +10475,6 @@ func _object_landing_cells(
 	return cells
 
 
-## One movement decision per eligible object per call; the source's pacing is
-## advance_object_steps_pass().
-func advance_objects(random: RandomNumberGenerator) -> int:
-	var moved: int = 0
-	for object: Gen2WorldObject in objects:
-		if not object.active or not object.movement_supported():
-			continue
-		if _decide_object_movement(object, random):
-			moved += 1
-	return moved
-
-
 ## One object's turn at StepFunction_FromMovement: the movement template picks
 ## a facing or a direction, then records how long the resulting step or wait
 ## lasts. Returns true when the object committed to a new cell.

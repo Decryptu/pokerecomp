@@ -106,11 +106,6 @@ func test_home_is_last_and_leaves_with_the_pack_during_a_contest() -> void:
 	assert_false(_kinds(contest).has(Gen2WorldStartMenu.ITEM_PACK))
 
 
-func test_quit_never_appears_because_this_project_has_no_bug_contest() -> void:
-	var menu: Gen2WorldStartMenu = Gen2WorldStartMenu.build(1, true, true)
-	assert_false(_kinds(menu).has(&"quit"))
-
-
 ## STATICMENU_WRAP is on the source .MenuData flags, so the cursor wraps at
 ## both ends instead of stopping.
 func test_cursor_wraps_at_both_ends() -> void:

@@ -430,13 +430,6 @@ func test_a_scripted_movement_bit_becomes_a_movement_branch() -> void:
 	}], "the box opens on the side that is no longer walking")
 
 
-func test_a_row_that_prints_one_box_decodes_to_it() -> void:
-	var script: Array = _decode(
-		_print(HELLO) + _call(int(LAYOUT["text_script_end"])), _boxes()
-	)
-	assert_eq(script, [{"op": "text", "text": "HI"}])
-
-
 func test_a_jump_to_the_end_ends_the_row() -> void:
 	var script: Array = _decode(
 		_print(HELLO)

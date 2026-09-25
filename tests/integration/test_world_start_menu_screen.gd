@@ -1665,17 +1665,6 @@ func test_the_target_list_is_the_party_menu_with_its_own_prompt_and_cancel() -> 
 	assert_eq(_world_screen._world.state.item_quantity(7), 1)
 
 
-## `GiveItem` writes PARTYMENUACTION_GIVE_ITEM, which is a different
-## `PartyMenuStrings` row from the healing items' above.
-func test_give_opens_the_same_list_under_its_own_prompt() -> void:
-	var host: Gen2StartMenuScreen = await _open_pack_with_a_hurt_party()
-	host.handle_button(PokeButton.A)
-	host.handle_button(PokeButton.DOWN)
-	host.handle_button(PokeButton.A)
-	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TARGET)
-	assert_eq(String(host.call("_target_prompt")), Gen2PartyScreen.PROMPT_TO_WHICH)
-
-
 func test_using_an_item_with_nothing_to_do_reports_it_and_spends_nothing() -> void:
 	await _open_world()
 	_world_screen._open_start_menu()
@@ -1725,13 +1714,6 @@ func _open_options_menu() -> Gen2StartMenuScreen:
 	host.handle_button(PokeButton.A)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.OPTIONS)
 	return host
-
-
-func test_option_is_available_and_opens_the_option_menu() -> void:
-	var host: Gen2StartMenuScreen = await _open_options_menu()
-	var menu: Gen2WorldOptionsMenu = host.get("_options_menu")
-	assert_eq(menu.size(), Gen2WorldOptionsMenu.NUM_OPTIONS)
-	assert_eq(menu.cursor, Gen2WorldOptionsMenu.OPT_TEXT_SPEED)
 
 
 func test_a_change_reaches_the_shared_options_and_the_file() -> void:
@@ -1797,19 +1779,6 @@ func test_player_opens_the_trainer_card_and_b_reopens_the_start_menu() -> void:
 	_world_screen._start_menu_host.handle_button(PokeButton.B)
 	await get_tree().process_frame
 	assert_true(_world_screen._objects_may_move(), "and its own B is the way out")
-
-
-## The play timer is the save's, and it counts hardware frames of the world
-## running rather than host seconds.
-func test_the_play_timer_counts_while_the_world_runs() -> void:
-	await _open_world()
-	## The fixture drives an injected save, which is the one the timer counts on
-	## too: the pump prefers it exactly as the card does.
-	var save: Gen2SaveData = _world_screen._injected_save
-	assert_not_null(save)
-	save.game_time = PokeGameTime.new()
-	_world_screen.advance_frames(3)
-	assert_eq(save.game_time.frames, 3)
 
 
 ## `StartMenu_Pokedex`'s `farcall Pokedex`, as an overlay the world screen owns

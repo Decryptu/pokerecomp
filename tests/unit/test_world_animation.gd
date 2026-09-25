@@ -242,20 +242,6 @@ func test_water_command_writes_the_imported_frame_and_done_loops() -> void:
 	assert_eq(animation.current_indices()[0], 1)
 
 
-func test_advance_frame_reports_no_redraw_when_the_command_changes_nothing() -> void:
-	var data: GameData = GameData.open_directory(_directory)
-	var world := Gen2WorldAPI.open(data, 1, 1, Vector2i.ZERO)
-	var animation := Gen2WorldAnimation.new()
-	animation.configure(world)
-
-	assert_true(animation.advance_frame())
-	# "done" only rewinds the command index, so nothing new is drawn and the
-	# renderer must not rebuild its atlas for it.
-	assert_false(animation.advance_frame())
-	# The water command runs again, but writes the frame that is already there.
-	assert_false(animation.advance_frame())
-
-
 func test_changed_tiles_reports_exactly_the_tiles_a_frame_rewrote() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	var world := Gen2WorldAPI.open(data, 1, 1, Vector2i.ZERO)

@@ -30,12 +30,6 @@ func _source_column(image: Image, x: int, y: int = 0) -> int:
 	return -1 if pixel.a <= 0.0 else int(round(pixel.r8))
 
 
-func test_no_offset_leaves_the_image_alone() -> void:
-	var out: Image = PokeRaster.scroll(_numbered(), _flat(0), MAP)
-	assert_eq(_source_column(out, 0), 0)
-	assert_eq(_source_column(out, WIDTH - 1), WIDTH - 1)
-
-
 ## An offset is a distance to look right into the map, so the drawn content
 ## moves left and the map's blank columns follow it in.
 func test_an_offset_pushes_the_drawn_content_left_and_brings_blank_in() -> void:

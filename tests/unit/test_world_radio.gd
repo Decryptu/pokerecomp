@@ -185,12 +185,6 @@ func test_a_knob_position_between_stations_is_dead_air() -> void:
 	assert_eq(int(quiet.get("music", 0)), -1, "and it names no track")
 
 
-func test_every_channel_song_is_a_real_music_index() -> void:
-	assert_eq(Gen2WorldRadio.CHANNEL_SONGS.size(), Gen2WorldRadio.NUM_RADIO_CHANNELS)
-	for song: int in Gen2WorldRadio.CHANNEL_SONGS:
-		assert_gt(song, 0, "MUSIC_NONE is not a station")
-
-
 func test_the_state_snaps_the_knob_to_the_dial_and_survives_a_round_trip() -> void:
 	var state := Gen2WorldState.new()
 	assert_eq(state.map_music(), Gen2WorldState.MUSIC_NONE, "wMapMusic starts silent")

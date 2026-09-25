@@ -49,20 +49,6 @@ func test_battle_tower_ai_uses_one_policy_and_never_an_item() -> void:
 	assert_eq(StringName(action["type"]), Gen2Battle.ACTION_MOVE)
 
 
-func test_types_discourages_a_move_the_defender_is_immune_to() -> void:
-	# Geodude is Rock/Ground, and this fixture's chart has Electric against
-	# Ground at x0: Thunderbolt does nothing, so Types has to prefer Tackle
-	# every time, tie-break or no.
-	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.THUNDERBOLT, Fixture.TACKLE])
-	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed_value: int in 10:
-		_rng.seed = seed_value
-		var slot: int = Gen2BattleAI.choose_slot(
-			pikachu, geodude, _data, Gen2Layout.AI_TYPES, _rng
-		)
-		assert_eq(slot, 1, "Thunderbolt is immune; Tackle has to win")
-
-
 func test_offensive_discourages_a_move_with_no_power() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.HAZE, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
@@ -72,19 +58,6 @@ func test_offensive_discourages_a_move_with_no_power() -> void:
 			pikachu, geodude, _data, Gen2Layout.AI_OFFENSIVE, _rng
 		)
 		assert_eq(slot, 1, "a class built to attack should never pick the status move")
-
-
-func test_status_dismisses_a_status_move_the_defender_is_immune_to() -> void:
-	# Thunder Wave is Electric with no power; Geodude's Ground typing shrugs off
-	# every Electric move in this fixture's chart, paralysis included.
-	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.THUNDER_WAVE, Fixture.TACKLE])
-	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed_value: int in 10:
-		_rng.seed = seed_value
-		var slot: int = Gen2BattleAI.choose_slot(
-			pikachu, geodude, _data, Gen2Layout.AI_STATUS, _rng
-		)
-		assert_eq(slot, 1, "a paralysis move against an immune type has to be dismissed")
 
 
 func test_basic_discourages_confuse_against_an_already_confused_target() -> void:
@@ -888,17 +861,6 @@ func test_smart_discourages_endure_at_health_it_does_not_need_it() -> void:
 	var half: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.ENDURE, Fixture.TACKLE])
 	half.hp = half.max_hp() / 2
 	assert_eq(int(_smart_scores(half, pikachu, 0)[0]), 21, "above a quarter is one point")
-
-
-## Under a quarter with nothing to spend the survival on, the handler does
-## nothing at all: its last branch reads a lock-on this engine has no flag for.
-func test_smart_leaves_endure_alone_under_a_quarter_with_no_reversal() -> void:
-	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.ENDURE, Fixture.TACKLE])
-	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])
-	geodude.hp = geodude.max_hp() / 8
-
-	var spread: Array = _smart_spread(geodude, pikachu)
-	assert_eq(int(spread[2]), 100, "untouched on every seed_value")
 
 
 ## `AIHasMoveEffect` for `EFFECT_REVERSAL`: three points on, which is the

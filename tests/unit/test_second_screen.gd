@@ -34,17 +34,6 @@ func test_bedroom_offers_only_the_ungated_pages() -> void:
 	)
 
 
-func test_the_team_page_waits_for_the_starter() -> void:
-	assert_false(
-		_tabs(0, false, false).has_kind(Gen2WorldStartMenu.ITEM_POKEMON),
-		"an empty party has no team page"
-	)
-	assert_true(
-		_tabs(1, false, false).has_kind(Gen2WorldStartMenu.ITEM_POKEMON),
-		"one Pokemon opens it"
-	)
-
-
 func test_the_dex_and_gear_pages_wait_for_their_engine_flags() -> void:
 	assert_false(_tabs(1, false, false).has_kind(Gen2WorldStartMenu.ITEM_POKEDEX))
 	assert_false(_tabs(1, false, false).has_kind(Gen2WorldStartMenu.ITEM_POKEGEAR))

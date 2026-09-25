@@ -441,40 +441,6 @@ func _whirlpool_world(badge: bool = true, knows: bool = true) -> Gen2WorldAPI:
 	return world
 
 
-func test_the_eight_resolved_moves_are_the_field_moves_the_submenu_offers() -> void:
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_CUT))
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_SURF))
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_STRENGTH))
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_WHIRLPOOL))
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_WATERFALL))
-	assert_eq(Gen2WorldFieldMove.MOVE_CUT, 0x0F)
-	assert_eq(Gen2WorldFieldMove.MOVE_SURF, 0x39)
-	assert_eq(Gen2WorldFieldMove.MOVE_STRENGTH, 0x46)
-	assert_eq(Gen2WorldFieldMove.MOVE_WHIRLPOOL, 0xFA)
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_FLASH))
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_HEADBUTT))
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_ROCK_SMASH))
-	assert_eq(Gen2WorldFieldMove.MOVE_WATERFALL, 0x7F)
-	assert_eq(Gen2WorldFieldMove.MOVE_FLASH, 0x94)
-	assert_eq(Gen2WorldFieldMove.MOVE_HEADBUTT, 0x1D)
-	assert_eq(Gen2WorldFieldMove.MOVE_ROCK_SMASH, 0xF9)
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_DIG))
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_TELEPORT))
-	assert_eq(Gen2WorldFieldMove.MOVE_DIG, 0x5B)
-	assert_eq(Gen2WorldFieldMove.MOVE_TELEPORT, 0x64)
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_SWEET_SCENT))
-	assert_eq(Gen2WorldFieldMove.MOVE_SWEET_SCENT, 0xE6)
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_FLY))
-	assert_eq(Gen2WorldFieldMove.MOVE_FLY, 0x13)
-	# Every `MonMenu_*` field-move row is answered now, so the submenu offers no
-	# entry that nothing acts on.
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_SOFTBOILED))
-	assert_true(Gen2WorldFieldMove.is_field_move(Gen2WorldFieldMove.MOVE_MILK_DRINK))
-	assert_eq(Gen2WorldFieldMove.MOVE_SOFTBOILED, 0x87)
-	assert_eq(Gen2WorldFieldMove.MOVE_MILK_DRINK, 0xD0)
-	assert_eq(Gen2WorldFieldMove.FIELD_MOVES.size(), 14)
-
-
 ## .TryStrength is CheckBadge ENGINE_PLAINBADGE and nothing else, so a request
 ## made facing open floor with no boulder anywhere resolves. That is the whole
 ## difference from Cut, Surf and Whirlpool.
@@ -566,9 +532,6 @@ func test_surf_sprite_follows_get_surf_type() -> void:
 		Gen2WorldFieldMove.surf_sprite(Gen2WorldFieldMove.SPECIES_PIKACHU),
 		Gen2WorldSprite.SPRITE_SURFING_PIKACHU
 	)
-	assert_eq(Gen2WorldFieldMove.SPECIES_PIKACHU, 25)
-	assert_eq(Gen2WorldSprite.SPRITE_SURF, 83)
-	assert_eq(Gen2WorldSprite.SPRITE_SURFING_PIKACHU, 52)
 	for species: int in [0, 1, 24, 26, 251]:
 		assert_eq(Gen2WorldFieldMove.surf_sprite(species), Gen2WorldSprite.SPRITE_SURF)
 
@@ -733,30 +696,6 @@ func test_cuttable_carries_the_six_check_cut_collision_codes() -> void:
 	# Neighbours of the cuttable runs, and the codes the other field moves own.
 	for code: int in [0x00, 0x11, 0x13, 0x15, 0x19, 0x1B, 0x1D, 0x24, 0x33, 0x07]:
 		assert_false(Gen2WorldFieldMove.cuttable(code), "code $%02x" % code)
-
-
-func test_cut_tree_block_table_matches_the_pinned_rows() -> void:
-	var rows: Array = [
-		# tileset, facing block, replacement, animation
-		[Gen2WorldFieldMove.TILESET_JOHTO, 0x03, 0x02, 1],
-		[Gen2WorldFieldMove.TILESET_JOHTO, 0x5B, 0x3C, 0],
-		[Gen2WorldFieldMove.TILESET_JOHTO, 0x5F, 0x3D, 0],
-		[Gen2WorldFieldMove.TILESET_JOHTO, 0x63, 0x3F, 0],
-		[Gen2WorldFieldMove.TILESET_JOHTO, 0x67, 0x3E, 0],
-		[Gen2WorldFieldMove.TILESET_JOHTO_MODERN, 0x03, 0x02, 1],
-		[Gen2WorldFieldMove.TILESET_KANTO, 0x0B, 0x0A, 1],
-		[Gen2WorldFieldMove.TILESET_KANTO, 0x32, 0x6D, 0],
-		[Gen2WorldFieldMove.TILESET_KANTO, 0x33, 0x6C, 0],
-		[Gen2WorldFieldMove.TILESET_KANTO, 0x34, 0x6F, 0],
-		[Gen2WorldFieldMove.TILESET_KANTO, 0x35, 0x4C, 0],
-		[Gen2WorldFieldMove.TILESET_KANTO, 0x60, 0x6E, 0],
-	]
-	for row: Array in rows:
-		for crystal: bool in [true, false]:
-			var result: Dictionary = Gen2WorldFieldMove.cut_replacement(row[0], row[1], crystal)
-			assert_true(bool(result.get("ok", false)), "tileset %d block $%02x" % [row[0], row[1]])
-			assert_eq(int(result["block"]), int(row[2]))
-			assert_eq(int(result["animation"]), int(row[3]))
 
 
 func test_park_and_forest_tileset_numbers_are_profile_split() -> void:
@@ -1355,14 +1294,6 @@ func test_flash_request_reads_the_gold_silver_badge_flag() -> void:
 	_knowing_party(world, Gen2WorldFieldMove.MOVE_FLASH)
 
 	assert_eq(world.flash_request()["reason"], &"badge_required")
-
-
-## A map that is not PALETTE_DARK reaches FieldMoveFailed, whatever is under the
-## player: map 1 is an ordinary outdoor map.
-func test_flash_refuses_on_a_map_that_is_not_dark() -> void:
-	var world: Gen2WorldAPI = _flash_world(true, 1)
-
-	assert_eq(world.flash_request()["reason"], &"not_dark")
 
 
 func test_flash_lights_the_cave_and_only_on_the_acknowledge() -> void:

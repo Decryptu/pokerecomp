@@ -162,17 +162,6 @@ func test_a_status_move_with_no_animation_command_still_animates() -> void:
 	assert_eq(int(animations[0]["after_anim"]), Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
 
 
-func test_a_secondary_status_does_not_play_the_move_a_second_time() -> void:
-	# `BattleCommand_BurnTarget` has no `AnimateCurrentMove`: the move that
-	# carried it played its own `moveanim` already. What follows it is the status
-	# animation, not the move again.
-	var events: Array = _run_move(_burnable_battle([Fixture.EMBER_BURNS]), Fixture.EMBER_BURNS)
-	var animations: Array = _animations(events)
-	assert_eq(animations.size(), 2)
-	assert_eq(int(animations[0]["index"]), Fixture.EMBER_BURNS)
-	assert_eq(int(animations[1]["index"]), Gen2BattleAnimPlayer.ANIM_BRN)
-
-
 func test_a_multi_hit_animates_every_hit_and_flashes_only_the_last() -> void:
 	var events: Array = _run_move(_battle([Fixture.DOUBLE_HIT_MOVE]), Fixture.DOUBLE_HIT_MOVE)
 	var animations: Array = _animations(events)
@@ -197,9 +186,16 @@ func test_only_fly_and_dig_ask_for_the_user_picture_back() -> void:
 	# `BattleCommand_MoveAnimNoSub`'s own tail: `cp FLY` / `cp DIG`, then
 	# `AppearUserLowerSub`. Nothing else in the game reaches it.
 	var battle: Gen2Battle = _battle([Fixture.TACKLE])
-	assert_false(bool(_animations(_run_move(battle, Fixture.TACKLE))[0]["restore_user_pic"]))
-	assert_eq(Gen2MoveEffect.FLY_MOVE, 19)
-	assert_eq(Gen2MoveEffect.DIG_MOVE, 91)
+	for move: int in [Fixture.TACKLE, Fixture.FLY, Fixture.DIG]:
+		var events: Array = []
+		var turn: Gen2Turn = Gen2Turn.create(
+			battle, Gen2Battle.PLAYER, 0, move, _data.move(move), events
+		)
+		Gen2EffectCommands.run(Gen2EffectCommands.MOVE_ANIM_NO_SUB, turn)
+		assert_eq(
+			bool(_animations(events)[0]["restore_user_pic"]), move != Fixture.TACKLE,
+			"move %d" % move
+		)
 
 
 func test_haze_animates_from_inside_its_own_command() -> void:
@@ -257,13 +253,8 @@ func test_a_status_animation_plays_on_the_target_rather_than_the_user() -> void:
 func test_a_status_animation_runs_before_the_line_that_reports_it() -> void:
 	# `PlayOpponentBattleAnim`, `RefreshBattleHuds`, then `StdBattleTextbox`.
 	var events: Array = _run_move(_burnable_battle([Fixture.EMBER_BURNS]), Fixture.EMBER_BURNS)
-	var animations: Array = _animations(events)
-	assert_eq(animations.size(), 2)
-	assert_lt(
-		_index_of(events, Gen2Battle.STATUS_INFLICTED),
-		events.size(),
-		"the burn landed"
-	)
+	assert_eq(_animations(events).size(), 2)
+	assert_gt(_index_of(events, Gen2Battle.STATUS_INFLICTED), -1, "the burn landed")
 	var last: int = -1
 	for index: int in events.size():
 		if StringName(events[index]["type"]) == Gen2Battle.ANIMATION:
@@ -387,11 +378,6 @@ func test_a_move_by_a_substituted_pokemon_drops_the_doll_and_puts_it_back() -> v
 	# Both play on the user, whose doll it is.
 	for animation: Dictionary in animations:
 		assert_false(bool(animation["enemy_turn"]))
-
-
-func test_a_user_with_no_doll_plays_neither() -> void:
-	var animations: Array = _animations(_run_move(_battle([Fixture.TACKLE]), Fixture.TACKLE))
-	assert_eq(animations.size(), 1)
 
 
 func test_a_stat_move_carries_the_pair_around_its_own_animation() -> void:

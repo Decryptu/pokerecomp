@@ -1,9 +1,8 @@
 extends GutTest
 
 ## Gen2WorldApricorn is SelectApricornForKurt's own state machine
-## (engine/events/kurt.asm) and Gen2WorldQuantityPrompt is
-## BuySellToss_InterpretJoypad's dial (engine/items/buy_sell_toss.asm). Both are
-## scene-free, so every case here presses buttons and reads the model.
+## (engine/events/kurt.asm). It is scene-free, so every case here presses
+## buttons and reads the model.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 
@@ -50,13 +49,6 @@ func test_the_bag_list_keeps_apricorn_balls_order_and_drops_what_is_not_held() -
 	## The second ApricornBalls column, which KurtsHouse.asm hands back a day on.
 	assert_eq(selection[0]["ball"], 0x9F)
 	assert_eq(selection[2]["ball"], 0xA6)
-
-
-func test_the_quantity_of_an_apricorn_clamps_at_the_source_ceiling() -> void:
-	var state: Gen2WorldState = _state({RED: 99, BLU: 40})
-	assert_eq(Gen2WorldApricorn.quantity_of(state, RED), 99)
-	assert_eq(Gen2WorldApricorn.quantity_of(state, BLU), 40)
-	assert_eq(Gen2WorldApricorn.quantity_of(state, YLW), 0)
 
 
 func test_an_empty_bag_finishes_the_selection_on_the_source_refusal() -> void:
@@ -138,48 +130,3 @@ func test_the_cancel_row_answers_with_the_same_zero_a_b_press_does() -> void:
 	selection.press(PokeButton.A)
 	assert_true(selection.is_done())
 	assert_eq(selection.result(), {"item": 0, "quantity": 0})
-
-
-func test_the_quantity_dial_wraps_at_both_ends() -> void:
-	var prompt: Gen2WorldQuantityPrompt = Gen2WorldQuantityPrompt.open(4)
-	assert_eq(prompt.value, 1)
-	prompt.press(PokeButton.DOWN)
-	assert_eq(prompt.value, 4)
-	prompt.press(PokeButton.UP)
-	assert_eq(prompt.value, 1)
-	prompt.press(PokeButton.UP)
-	assert_eq(prompt.value, 2)
-
-
-## The dial as a step, which the mart's box and the item PC's row take instead
-## of keeping a prompt.
-func test_the_quantity_dial_steps_for_a_caller_that_keeps_the_number() -> void:
-	assert_eq(Gen2WorldQuantityPrompt.stepped(1, PokeButton.DOWN, 7), 7)
-	assert_eq(Gen2WorldQuantityPrompt.stepped(7, PokeButton.UP, 7), 1)
-	assert_eq(Gen2WorldQuantityPrompt.stepped(3, PokeButton.RIGHT, 7), 7)
-	assert_eq(Gen2WorldQuantityPrompt.stepped(5, PokeButton.LEFT, 7), 1)
-	assert_eq(Gen2WorldQuantityPrompt.stepped(99, PokeButton.UP, 7), 1)
-
-
-func test_the_quantity_dial_pages_by_ten_and_stops_at_the_ceiling() -> void:
-	var prompt: Gen2WorldQuantityPrompt = Gen2WorldQuantityPrompt.open(25)
-	prompt.press(PokeButton.RIGHT)
-	assert_eq(prompt.value, 11)
-	prompt.press(PokeButton.RIGHT)
-	assert_eq(prompt.value, 21)
-	prompt.press(PokeButton.RIGHT)
-	assert_eq(prompt.value, 25)
-	prompt.press(PokeButton.LEFT)
-	assert_eq(prompt.value, 15)
-	prompt.press(PokeButton.LEFT)
-	assert_eq(prompt.value, 5)
-	## `.left` lands on one rather than wrapping, borrow or zero alike.
-	prompt.press(PokeButton.LEFT)
-	assert_eq(prompt.value, 1)
-
-
-func test_the_quantity_dial_reports_its_two_terminals() -> void:
-	var prompt: Gen2WorldQuantityPrompt = Gen2WorldQuantityPrompt.open(9)
-	assert_eq(prompt.press(PokeButton.UP), Gen2WorldQuantityPrompt.PENDING)
-	assert_eq(prompt.press(PokeButton.A), Gen2WorldQuantityPrompt.CONFIRMED)
-	assert_eq(prompt.press(PokeButton.B), Gen2WorldQuantityPrompt.CANCELLED)

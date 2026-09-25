@@ -511,7 +511,7 @@ func test_phone_contact_transaction_enforces_the_cartridge_capacity() -> void:
 	assert_eq(state.phone_contact_count(), Gen2WorldState.PHONE_CONTACT_CAPACITY)
 
 
-func test_seen_species_changes_round_trip_and_commit_atomically() -> void:
+func test_seen_species_changes_apply_and_round_trip() -> void:
 	var state := Gen2WorldState.new()
 	var changed: Dictionary = state.apply_changes({}, {}, {"seen_species": {25: true}})
 	assert_true(changed["ok"])

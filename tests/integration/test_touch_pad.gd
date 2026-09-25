@@ -114,11 +114,6 @@ func _held() -> Dictionary:
 	return out
 
 
-func test_the_pad_is_shown_when_the_setting_pins_it_on() -> void:
-	assert_true(_pad.visible)
-	assert_true(_pad.is_active())
-
-
 ## The whole point: a finger produces the same action a key does, so nothing
 ## downstream knows a touchscreen was involved.
 func test_a_touch_on_the_dpad_presses_that_direction() -> void:

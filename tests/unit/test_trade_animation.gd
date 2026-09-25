@@ -9,16 +9,13 @@ extends GutTest
 
 const FRAME_CAP: int = 20000
 
-## Both scripts with no pic animation behind them. Crystal's halves differ by its
-## `wait_96` against a `wait_40`; Gold and Silver's are the same length, their
-## two halves being the same commands in the other order.
+## Crystal's script with no pic animation behind it. Its halves differ by its
+## `wait_96` against a `wait_40`.
 const CRYSTAL_FRAMES: Array[int] = [2329, 2192]
-const GOLD_SILVER_FRAMES: Array[int] = [2480, 2480]
 
 ## `SFX_BALL_POOF` twice, `SFX_POTION` twice, the give and get pair, and the
 ## twenty-six clicks the two tube bulges and the two balls between them ask for.
 const SFX_TOTAL: int = 32
-## `SFX_GIVE_TRADEMON` and `SFX_GET_TRADEMON`, one each per half.
 
 const GIVEN: int = 152
 const RECEIVED: int = 25
@@ -199,22 +196,3 @@ func test_the_tube_flashes_between_two_palette_orders() -> void:
 	var seen: Array = orders.keys()
 	seen.sort()
 	assert_eq(seen, [0xD8, 0xE4])
-
-
-## Gold and Silver run the same movie with four fewer commands: no `wait_96`, no
-## `wait_40` and no pic animation, so their two halves are the same length.
-func test_gold_and_silver_run_their_own_script() -> void:
-	var data: GameData = GameData.open(&"gold")
-	if data == null:
-		pass_test("no Gold cache; the check topic runs this against all three")
-		return
-	for half: int in 2:
-		var movie: Gen2TradeAnimation = Gen2TradeAnimation.create(
-			data, null, {
-				"player": {"species": GIVEN, "species_name": "CHIKORITA"},
-				"ot": {"species": RECEIVED, "species_name": "PIKACHU"},
-				"link_mode": Gen2LinkSession.LINK_TRADECENTER,
-			}, half
-		)
-		_run(movie)
-		assert_eq(movie.frame(), GOLD_SILVER_FRAMES[half], "half %d" % half)

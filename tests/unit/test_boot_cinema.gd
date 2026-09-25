@@ -74,19 +74,6 @@ func test_boot_runs_the_whole_movie_and_opens_the_title_behind_it() -> void:
 	))
 
 
-func test_boot_sound_wait_is_explicit_and_does_not_consume_frames() -> void:
-	var boot := Boot.new()
-	boot.start()
-	boot.drain_events()
-	boot.wait_sound(&"intro_sfx")
-	var before: int = boot.frame()
-	boot.advance_frame()
-	assert_eq(boot.frame(), before)
-	assert_false(boot.complete_sound(&"other"))
-	assert_true(boot.complete_sound(&"intro_sfx"))
-	assert_eq(boot.waiting_sound(), &"")
-
-
 ## `PlaySFX` is inside the GameFreak animation, so the coordinator has to carry
 ## its requests out to whatever owns a device. The sequence's own frame numbers
 ## do not cross over: the coordinator's are the ones a caller reads.

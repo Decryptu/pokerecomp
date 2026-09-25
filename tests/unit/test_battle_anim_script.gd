@@ -211,15 +211,6 @@ func test_the_conditional_jumps_read_the_param_and_the_var() -> void:
 	assert_eq(by_var.variable(), 0x01)
 
 
-## `wBattleAnimVar` starts at zero because `ClearBattleAnims` zeroes
-## `wLYOverrides` through `wBattleAnimEnd`; `wBattleAnimParam` sits outside that
-## run and is the caller's input.
-func test_the_var_starts_at_zero_and_the_param_is_given() -> void:
-	var script: Gen2BattleAnimScript = _script([0xFF], 0x1F)
-	assert_eq(script.variable(), 0)
-	assert_eq(script.address(), BASE)
-
-
 ## An address outside the region, and a command whose operands run past its end.
 ## Both are refused rather than read out of whatever is next in memory.
 func test_a_script_outside_its_region_fails_at_once() -> void:

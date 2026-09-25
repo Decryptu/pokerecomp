@@ -7,8 +7,6 @@ extends GutTest
 const ORIGIN: int = Gen1SoundEngine.HEADER_TABLE_ADDRESS
 const BANK: int = 0x02
 const MAX_SFX_ID: int = 100
-const NR11: int = 0xFF11
-const NR12: int = 0xFF12
 const NR13: int = 0xFF13
 const NR14: int = 0xFF14
 const NR50: int = 0xFF24

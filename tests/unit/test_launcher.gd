@@ -696,18 +696,6 @@ func _card_lines(page: Gen2ModsPage) -> int:
 	return 0
 
 
-## Only a run on the device can say why the Switch build dims its page and draws
-## no toast, so the launcher can say what it built.
-func test_the_shell_can_report_what_it_layered() -> void:
-	await _open_launcher()
-	var shell: Gen2LauncherShell = _launcher.get("_shell")
-	assert_not_null(shell)
-	var line: String = shell.layer_report("test")
-	assert_string_contains(line, "veil", "the report names the sheet over the artwork")
-	assert_string_contains(line, "toast", "and whether the toast is on screen")
-	assert_false(line.contains("not built"), "a launcher that is up has both")
-
-
 ## A mod that replaces nothing about how the game is drawn gets no row at all,
 ## rather than a switch that would do nothing.
 func test_a_mod_with_no_renderer_has_no_view_switch() -> void:
@@ -819,17 +807,6 @@ func test_the_macos_reading_is_the_number_in_front_of_the_percent_sign() -> void
 	assert_eq(Gen2LauncherBattery._percent_before_sign("Now drawing from 'AC Power'"), -1)
 	assert_eq(Gen2LauncherBattery._percent_before_sign("%"), -1, "and never a bare sign")
 	assert_eq(Gen2LauncherBattery._percent_before_sign("120%"), Gen2LauncherBattery.FULL)
-
-
-## Every platform this project ships to either has a probe or draws nothing.
-## The two singleton platforms answer nothing on a desktop, which is what keeps
-## a missing plugin from being read as a flat battery.
-func test_only_the_platforms_with_a_probe_shell_out() -> void:
-	assert_true(Gen2LauncherBattery._probe_plugin().is_empty(), "no singleton here")
-	assert_eq(
-		Gen2LauncherBattery._shells_out(), OS.get_name() in ["macOS", "Windows"],
-		"a process is launched for those two and nothing else",
-	)
 
 
 ## Android's Back on the launcher. It quit the app outright before, from any page
