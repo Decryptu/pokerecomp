@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 48 | `register_roam_encounter_chance()`, `roamers()` and `request_roamer()`; `beasts_released`, `fought_suicune` and `caught_species` in `progress()`; a visible population keeping away what a Repel would |
 | 47 | `Gen2WorldMap.name`, the `map_const` constant's name on every cartridge, and `GameData.world_map_named()` |
 | 46 | `box_full` on a `caught` event, and `box_free_space` in `progress()`; a hidden Headbutt tree left out of `drawn_tile_at()` and `drawn_revision()` |
 | 45 | `Gen2WorldDrawList.drawn_tile_at()`, `band()` and `drawn_revision()`, with `band` and `drawn_revision` on `frame()`; `changed_blocks` and `written_tiles` on `Gen2BattleWorldContext`; `Gen2WorldScreen.preview_ss_anne_leaves()` and `preview_poison_step()` |
@@ -451,9 +452,10 @@ The four wild sources beside the map tables are patched by index:
 | `patch_fishing_time_group(id, index, fields)` | One day/night fishing substitution |
 
 Name only what changes. A contest row's `percent` is both the choice weight and
-part of the judging. A rod entry's `threshold` is the bite. A roaming mon's
-`map_group`/`map_number` are where it is now, written by the roamer's own
-movement, so a patch naming `species` and `level` leaves them alone.
+part of the judging. A rod entry's `threshold` is the bite. A roaming row is what
+`InitRoamMons` writes when the beasts are released, starting map included; a
+beast already loose belongs to the run, and [Roaming Pokemon](#roaming-pokemon)
+reads and adds those.
 
 ## Rewriting what a box says
 
@@ -1841,6 +1843,9 @@ readable and the second is gone.
 | `money`, `coins` | The wallet and the Game Corner |
 | `step_count`, `phone_contacts` | The step counter and the registered numbers |
 | `play_hours`, `play_minutes` | The play timer the trainer card prints |
+| `caught_species` | Every species the dex marks caught, ascending |
+| `beasts_released` | Gold, Silver and Crystal: `EVENT_RELEASED_THE_BEASTS`, set in Burned Tower beside `InitRoamMons` |
+| `fought_suicune` | Crystal: `EVENT_FOUGHT_SUICUNE`, set by Tin Tower's battle whether Suicune was caught or knocked out. `caught_species` tells the two apart |
 
 **An absent field stays absent rather than becoming a zero**, so a mod written
 against a later host reads a missing answer as nothing achieved rather than as an
@@ -1983,6 +1988,51 @@ frames.
 A provider answers the total it would give alone, so one provider on its own is
 unchanged and a mod written against an older host still reads right. Two mods
 worth 3 and 12 rolls give 14, not 12.
+
+## Roaming Pokemon
+
+Gold, Silver and Crystal carry three roam slots, `wRoamMon1` to `wRoamMon3`.
+New Game empties them and Burned Tower's `InitRoamMons` fills them: Raikou,
+Entei and Suicune on Gold and Silver, Raikou and Entei on Crystal, whose third
+slot stays empty but is still walked and rolled. Red, Blue and Yellow have none.
+
+`Gen2ModHost.roamers()` answers the three slots as copies, `{species, level,
+map_group, map_number, hp, dvs}`, an empty slot with species 0 and map -1, and `[]`
+with no world open. A caught or knocked-out roamer empties its slot, as
+`BattleEnd_HandleRoamMons` does.
+
+`request_roamer(id, slot, species, level)` asks the world to loose a Pokemon in an
+empty slot. It is a request: the world places it when it is idle, on a map
+`JumpRoamMon` would pick and never the player's own, with HP 0 so the first
+meeting rolls its stats. From there it is an ordinary roamer: it walks with the
+others, is met through `CheckEncounterRoamMon`, and leaves its slot when caught or
+knocked out. A slot out of range, species 0 or a level off 1 to 100 is refused at
+once. A slot already holding a roamer, or a run whose beasts are not released yet,
+is refused when the request is spent, into `failures()` as `roam_slot_taken` or
+`beasts_not_released`. `FindNest` reads only the first two slots, so a third
+roamer has no Pokedex area, as Gold and Silver's Suicune has none.
+
+`register_roam_encounter_chance(id, provider)` changes how often a roamer
+replaces a wild. The provider is asked each time a step meets a wild on a map
+where a roamer stands:
+
+```gdscript
+class Chance:
+	func roam_encounter_chance(context: Dictionary) -> int:
+		return 256 if Gen2ModHost.instance().progress().get(&"beasts_released", false) else 100
+```
+
+The answer replaces `CheckEncounterRoamMon`'s `cp 100`, out of 256, and is
+clamped to 0 to 256. The draw behind it stays the cartridge's: the low two bits
+pick slot 1, 2 or 3 and a zero meets no roamer, so one roamer meets at most a
+quarter of the wilds on its map. `context` holds `map_group`, `map_number` and
+`roamers`, the slots standing there, each with its `index`. The highest answer
+of every provider wins, and a run with none reads 100. The draws are the same at
+any answer, so a replay stays a replay when the setting is the same.
+
+A mod that makes Crystal's Suicune roam once it was knocked out at Tin Tower
+reads `fought_suicune`, checks that 245 is not in `caught_species` and is not in
+`roamers()`, and asks for slot 2.
 
 ## An alternate field-move source
 

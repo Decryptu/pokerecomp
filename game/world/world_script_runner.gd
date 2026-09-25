@@ -4811,13 +4811,10 @@ func _special_mon_check(special: int) -> Dictionary:
 	return {"ok": true}
 
 
-## InitRoamMons seeds the roam structs with Raikou and Entei at level 40 on their
-## starting maps. Gen2WorldAPI.open() already seeds the same imported records, and
-## ensure_roaming_mons() keeps positions a player has already moved, so this reports
-## rather than resetting a beast that is already loose.
+## InitRoamMons writes the imported beasts over the roam structs.
 func _special_init_roam_mons(special: int) -> Dictionary:
 	if state != null and data != null:
-		state.ensure_roaming_mons(data.world_roaming_mons())
+		state.init_roaming_mons(data.world_roaming_mons())
 	_emit_runtime_event(&"roaming_mons_initialized", {
 		"special": special,
 		"count": state.roaming_mons().size() if state != null else 0,

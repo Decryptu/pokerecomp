@@ -543,18 +543,42 @@ func test_script_memory_round_trips_and_rejects_out_of_range_bytes() -> void:
 	assert_eq(state.script_memory(0xD1D6), 0, "a refused transaction mutates nothing")
 
 
-## InitRoamMons seeds the roam structs, and Gen2WorldAPI.open() seeds the same
-## imported records, so re-seeding must not teleport a beast already loose.
-func test_seeding_roaming_mons_keeps_a_record_that_already_moved() -> void:
-	var initial: Array = [{"species": 243, "level": 40, "map_group": 1, "map_number": 1}]
-	var state := Gen2WorldState.new()
-	state.ensure_roaming_mons(initial)
-	assert_eq(state.roaming_mons(), initial)
+## New Game empties the three `wRoamMon` structs and only `InitRoamMons`, behind
+## EVENT_RELEASED_THE_BEASTS, fills them: a save that loosed the beasts before
+## that event is put back, and one after it keeps where they walked.
+func test_the_beasts_roam_only_once_released() -> void:
+	var loose: Array = [{"species": 243, "level": 40, "map_group": 5, "map_number": 9}]
+	var early: Gen2WorldState = Gen2WorldState.from_dict({"roaming_mons": loose})
+	early.settle_roaming_mons()
+	assert_eq(early.roaming_mons().size(), Gen2WorldState.ROAM_SLOTS)
+	assert_true(early.roaming_mons_on(5, 9).is_empty(), "not released yet")
 
-	var moved: Array = [{"species": 243, "level": 40, "map_group": 5, "map_number": 9}]
-	var loose: Gen2WorldState = Gen2WorldState.from_dict({"roaming_mons": moved})
-	loose.ensure_roaming_mons(initial)
-	assert_eq(loose.roaming_mons(), moved)
+	var released: Gen2WorldState = Gen2WorldState.from_dict({"roaming_mons": loose})
+	released.set_event_flag(Gen2WorldState.EVENT_RELEASED_THE_BEASTS)
+	released.settle_roaming_mons()
+	assert_eq(released.roaming_mons_on(5, 9).size(), 1, "still where it walked")
+	assert_eq(released.roaming_mons().size(), Gen2WorldState.ROAM_SLOTS, "and a third slot")
+
+
+## `request_roamer`'s placement: the Burned Tower event owns the structs, a slot
+## holds one roamer, and the jump never lands on the player's own map.
+func test_a_placed_roamer_waits_for_the_release_and_an_empty_slot() -> void:
+	var rows: Array = [
+		{"map_group": 1, "map_number": 1, "connections": []},
+		{"map_group": 1, "map_number": 2, "connections": []},
+	]
+	var random := RandomNumberGenerator.new()
+	random.seed = 7
+	var state := Gen2WorldState.new()
+	state.settle_roaming_mons()
+	assert_eq(state.place_roamer(2, 245, 40, rows, random, Vector2i(1, 1)), &"beasts_not_released")
+	state.set_event_flag(Gen2WorldState.EVENT_RELEASED_THE_BEASTS)
+	for _placement: int in 8:
+		state.settle_roaming_mons()
+		assert_eq(state.place_roamer(2, 245, 40, rows, random, Vector2i(1, 1)), &"")
+		assert_eq(state.roaming_mons_on(1, 2).size(), 1, "never on the player's map")
+		assert_eq(state.place_roamer(2, 245, 40, rows, random, Vector2i(1, 1)), &"roam_slot_taken")
+		state.note_roam_battle_end(245, true, 0, 0)
 
 
 ## A missing schedule stream must be a no-op, because creating and randomizing
@@ -562,7 +586,7 @@ func test_seeding_roaming_mons_keeps_a_record_that_already_moved() -> void:
 func test_roaming_does_not_roll_without_an_injected_generator() -> void:
 	var state := Gen2WorldState.new()
 	var initial: Array = [{"species": 243, "level": 40, "map_group": 1, "map_number": 1}]
-	state.ensure_roaming_mons(initial)
+	state.init_roaming_mons(initial)
 	var rows: Array = [{
 		"map_group": 1,
 		"map_number": 1,
@@ -570,7 +594,7 @@ func test_roaming_does_not_roll_without_an_injected_generator() -> void:
 	}]
 
 	assert_eq(state.advance_roaming(rows), [])
-	assert_eq(state.roaming_mons(), initial)
+	assert_eq(state.roaming_mons_on(1, 1).size(), 1, "nothing moved")
 
 
 ## `wLastDexMode` sits in the saved player data, so it survives a snapshot the
@@ -892,7 +916,7 @@ func test_the_reward_is_a_stat_booster_and_never_the_lucky_punch() -> void:
 ## `CheckEncounterRoamMon` can never select the slot again.
 func test_a_roamer_keeps_its_hp_and_dvs_between_encounters() -> void:
 	var state := Gen2WorldState.new()
-	state.ensure_roaming_mons(
+	state.init_roaming_mons(
 		[{"species": 243, "level": 40, "map_group": 1, "map_number": 1}]
 	)
 	assert_true(state.note_roam_battle_end(243, false, 37, 0xABCD))
@@ -916,7 +940,7 @@ func test_a_roamer_keeps_its_hp_and_dvs_between_encounters() -> void:
 ## roamer is never walked back onto the map.
 func test_a_beaten_roamer_is_not_walked() -> void:
 	var state := Gen2WorldState.new()
-	state.ensure_roaming_mons(
+	state.init_roaming_mons(
 		[{"species": 243, "level": 40, "map_group": 1, "map_number": 1}]
 	)
 	state.note_roam_battle_end(243, true, 0, 0)
@@ -980,7 +1004,7 @@ func test_a_roamer_off_the_roaming_graph_spends_no_draw() -> void:
 		]},
 	]
 	var state := Gen2WorldState.new()
-	state.ensure_roaming_mons(
+	state.init_roaming_mons(
 		[{"species": 243, "level": 40, "map_group": 4, "map_number": 9}]
 	)
 	var generator := RandomNumberGenerator.new()
@@ -1002,7 +1026,7 @@ func test_a_roaming_jump_refuses_the_player_map_alone() -> void:
 		{"map_group": 1, "map_number": 2, "connections": []},
 	]
 	var state := Gen2WorldState.new()
-	state.ensure_roaming_mons(
+	state.init_roaming_mons(
 		[{"species": 243, "level": 40, "map_group": 1, "map_number": 1}]
 	)
 	var generator := RandomNumberGenerator.new()

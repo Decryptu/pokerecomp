@@ -3844,9 +3844,7 @@ static func _move_anim(turn: Gen2Turn) -> void:
 	_play_fx_anim(turn, turn.move_number, _damage_after_anim(turn), reappears)
 
 
-## `BattleCommand_LowerSub`: the user's doll dropped out of the way. Nothing
-## drops on a charge turn, `CheckUserIsCharging` being [member Gen2Turn.locked]
-## or [member Gen2Turn.called] here.
+## `BattleCommand_LowerSub`: the user's doll dropped out of the way.
 static func _lower_sub(turn: Gen2Turn) -> void:
 	if not Gen2Substatus.has(turn.attacker().substatus, Gen2Substatus.SUBSTITUTE):
 		return

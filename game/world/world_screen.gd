@@ -612,6 +612,7 @@ func _build_world() -> void:
 	Gen2ModHost.instance().set_inventory_source(_mod_inventory)
 	Gen2ModHost.instance().set_hidden_items_source(_mod_hidden_items)
 	Gen2ModHost.instance().set_progress_source(_mod_progress)
+	Gen2ModHost.instance().set_roamers_source(_mod_roamers)
 	_encounters.set_world(_world, anim_data)
 	_actors.set_encounters(_encounters)
 	_draw_list = Gen2WorldDrawList.new(_world, _effects, _actors, _encounters)
@@ -659,6 +660,7 @@ func _hand_over_second_screen() -> void:
 
 func _exit_tree() -> void:
 	Gen2ModHost.instance().set_progress_source(Callable())
+	Gen2ModHost.instance().set_roamers_source(Callable())
 	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
 	if runtime != null:
 		runtime.set_second_screen_world(null, null, null)
@@ -1049,6 +1051,7 @@ func _advance_population(map_pass: bool) -> void:
 	_spend_actor_requests()
 	_spend_hidden_item_requests()
 	_spend_item_gift_requests()
+	_spend_roamer_requests()
 	_spend_notice_requests()
 	if not map_pass:
 		return
@@ -3594,10 +3597,7 @@ func _bug_contest_placings_text(judged: Dictionary) -> String:
 	return "Bug Contest: %s" % ", ".join(parts)
 
 
-## `CheckRepelEffect`'s own lead: the first party member that is not fainted, or
-## -1 when there is no party to read, which is what a repel compares a wild
-## level against. The party lives in the save rather than in the world API, so
-## the screen is the one place that can answer it.
+## `CheckRepelEffect`'s lead: the first party member not fainted, -1 with none.
 func _repel_lead_level() -> int:
 	var save: Gen2SaveData = _active_party_save()
 	if save == null or save.party.is_empty():
@@ -9592,6 +9592,10 @@ func _mod_inventory() -> Dictionary:
 	return _world.state.items() if _world != null else {}
 
 
+func _mod_roamers() -> Array:
+	return _world.roaming_mons() if _world != null else []
+
+
 ## What [method Gen2ModHost.progress] reads while this world is open. The save is
 ## in it because the party, the boxes and the play timer are the save's, and the
 ## world screen is the one place that holds both.
@@ -9621,6 +9625,19 @@ func _spend_item_gift_requests() -> void:
 		_show_script_results(results)
 		Gen2ModHost.instance().requeue_item_gifts(gifts.slice(index + 1))
 		return
+
+
+## A mod's roamer asks, placed through `JumpRoamMon`'s draw on the world's stream.
+func _spend_roamer_requests() -> void:
+	if _world == null or not _world_idle_for_mod_request():
+		return
+	for request: Dictionary in Gen2ModHost.instance().take_roamer_requests():
+		var refused: StringName = _world.place_roamer(
+			int(request["slot"]), int(request["species"]), int(request["level"]),
+			_encounter_random
+		)
+		if not refused.is_empty():
+			Gen2ModHost.instance().refuse_roamer(request, refused)
 
 
 ## A mod's hidden-item asks, spent the same way and on the same gate: the mod

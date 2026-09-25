@@ -617,7 +617,7 @@ func test_resolved_wild_encounter_reaches_the_real_battle_overlay() -> void:
 func test_a_finished_roaming_battle_writes_the_struct_back() -> void:
 	await _open_world()
 	var state: Gen2WorldState = _world_screen._world.state
-	state.ensure_roaming_mons(
+	state.init_roaming_mons(
 		[{"species": Fixture.TRAINER_SPECIES, "level": 40, "map_group": 1, "map_number": 1}]
 	)
 	var finished: Dictionary = {
