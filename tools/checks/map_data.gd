@@ -12,6 +12,7 @@ var _r: RefCounted = null
 
 const PINS: Dictionary = {
 	&"gold": "pokegold", &"silver": "pokegold", &"crystal": "pokecrystal",
+	&"red": "pokered", &"blue": "pokered", &"yellow": "pokeyellow",
 }
 
 ## `constants/tileset_constants.asm`'s `PAL_BG_*` order.
@@ -61,6 +62,7 @@ func run(r: RefCounted) -> void:
 	_r = r
 	_root = _reference_root()
 	_r.each_game(_check_game)
+	_r.each_game_of(RomRegistry.GEN1, _check_gen1_game)
 	if _failures > 0:
 		_r.fail("%d layers disagreed with the pinned sources." % _failures)
 
@@ -70,11 +72,31 @@ func _check_game() -> void:
 	if not DirAccess.dir_exists_absolute(pin):
 		_r.note("%s is not checked out, so nothing was compared." % pin.get_file())
 		return
+	_check_names(pin, 0)
 	_check_blocks(pin)
 	_check_tilesets(pin)
 	_check_roofs(pin)
 	_check_special_palettes(pin)
 	_check_object_movement(pin)
+
+
+func _check_gen1_game() -> void:
+	var pin: String = _root.path_join(String(PINS[_r.game_id]))
+	if DirAccess.dir_exists_absolute(pin):
+		_check_names(pin, -1)
+
+
+## Every map the cache holds answers to its own `map_const` name, and that name
+## finds it again. Generation 1 numbers its one group from 0, so [param shift] is -1.
+func _check_names(pin: String, shift: int) -> void:
+	for entry: Dictionary in _map_ids(pin):
+		var map: Gen2WorldMap = _r.data.world_map(entry["group"], int(entry["number"]) + shift)
+		if map == null:
+			continue
+		if map.name != StringName(entry["id"]) or _r.data.world_map_named(map.name) != map:
+			_report("map %d/%d is named %s, the pin says %s." % [
+				map.group, map.number, map.name, entry["id"],
+			])
 
 
 func _check_blocks(pin: String) -> void:

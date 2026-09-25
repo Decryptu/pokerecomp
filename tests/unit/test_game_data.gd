@@ -235,6 +235,26 @@ func test_one_opener_takes_a_cache_path_or_a_registry_id() -> void:
 ## A cache written by an older importer is discarded rather than migrated, which
 ## is what a format bump is for. Written against the version rather than a
 ## number so the next bump does not have to edit this.
+## pokegold drops maps Crystal ships and orders group 11 its own way, so one
+## group and number is Crystal's GOLDENROD_DEPT_STORE_2F and Gold's 1F. A map is
+## named for its own profile, and the name finds it again.
+func test_a_map_is_named_by_its_own_profiles_map_constant() -> void:
+	_write_cache()
+	RomCache.write_json(RomCache.world_maps_path(_directory), [{
+		"group": 11, "number": 12, "tileset": 0, "width_blocks": 1, "height_blocks": 1,
+		"blocks": [0], "collision": [0, 0, 0, 0], "collision_width": 2, "collision_height": 2,
+	}])
+	var manifest: Dictionary = RomCache.read_manifest(_directory)
+	for row: Array in [[&"crystal", &"GOLDENROD_DEPT_STORE_2F"], [&"gold", &"GOLDENROD_DEPT_STORE_1F"]]:
+		manifest["game_id"] = String(row[0])
+		RomCache.write_json(RomCache.manifest_path(_directory), manifest)
+		var data: GameData = GameData.open_directory(_directory)
+		var map: Gen2WorldMap = data.world_map(11, 12)
+		assert_eq(map.name, row[1])
+		assert_eq(data.world_map_named(row[1]), map)
+		assert_null(data.world_map_named(&"GOLDENROD_DEPT_STORE_ROOF"))
+
+
 func test_a_cache_from_an_older_format_does_not_open() -> void:
 	_write_cache()
 	var manifest: Dictionary = RomCache.read_manifest(_directory)

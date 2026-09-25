@@ -69,9 +69,6 @@ const KURTS_HOUSE := Vector2i(8, 4)
 const AZALEA_GYM := Vector2i(8, 5)
 const ROUTE_33 := Vector2i(8, 6)
 const AZALEA_TOWN := Vector2i(8, 7)
-## Crystal's dungeon group carries eight maps Gold's and Silver's does not.
-const UNION_CAVE_1F: Dictionary = {true: Vector2i(3, 37), false: Vector2i(3, 29)}
-const SLOWPOKE_WELL_B1F: Dictionary = {true: Vector2i(3, 40), false: Vector2i(3, 32)}
 
 ## `PalletTownDefaultScript` stops the player at `wYCoord == 1`, Yellow's at 0.
 const PALLET_NORTH_PATH: Dictionary = {
@@ -170,6 +167,13 @@ func _legs() -> Array:
 
 
 ## Mom, Elm's walk-up, his aide and the Cherrygrove rival are all met on the way.
+## Crystal's dungeon group carries maps Gold's and Silver's does not, so these
+## two are found by name.
+func _named(name: StringName) -> Vector2i:
+	var map: Gen2WorldMap = _r.data.world_map_named(name)
+	return Vector2i(map.group, map.number) if map != null else Vector2i(-1, -1)
+
+
 func _gen2_legs() -> Array:
 	var up: int = Gen2WorldSprite.FACING_UP
 	return [
@@ -212,14 +216,14 @@ func _gen2_legs() -> Array:
 		["togepi_egg", _talk(BELOW_AIDE, up), _flag(EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE)],
 		["center_out_again", _warp_to(VIOLET_CITY), _on_map(VIOLET_CITY)],
 		["violet_to_route_32", _cross(Vector2i.DOWN, ROUTE_32), _on_map(ROUTE_32)],
-		["route_32_to_union_cave", _warp_to(UNION_CAVE_1F[_r.crystal]), _on_map(UNION_CAVE_1F[_r.crystal])],
+		["route_32_to_union_cave", _warp_to(_named(&"UNION_CAVE_1F")), _on_map(_named(&"UNION_CAVE_1F"))],
 		["union_cave_to_route_33", _warp_to(ROUTE_33), _on_map(ROUTE_33)],
 		["route_33_to_azalea", _cross(Vector2i.LEFT, AZALEA_TOWN), _on_map(AZALEA_TOWN)],
 		["azalea_to_kurt", _warp_to(KURTS_HOUSE), _on_map(KURTS_HOUSE)],
 		["kurt", _talk(BELOW_KURT, up), _flag(EVENT_AZALEA_TOWN_SLOWPOKETAIL_ROCKET)],
 		["kurt_out", _warp_to(AZALEA_TOWN), _on_map(AZALEA_TOWN)],
 		_grind.bind(BUGSY_LEVEL, 0),
-		["azalea_to_well", _warp_to(SLOWPOKE_WELL_B1F[_r.crystal]), _on_map(SLOWPOKE_WELL_B1F[_r.crystal])],
+		["azalea_to_well", _warp_to(_named(&"SLOWPOKE_WELL_B1F")), _on_map(_named(&"SLOWPOKE_WELL_B1F"))],
 		["rockets", _walk(BELOW_WELL_ROCKET), _on_map(KURTS_HOUSE)],
 		["kurt_out_again", _warp_to(AZALEA_TOWN), _on_map(AZALEA_TOWN)],
 		["azalea_gym", _warp_to(AZALEA_GYM), _on_map(AZALEA_GYM)],

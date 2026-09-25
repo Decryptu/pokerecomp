@@ -12409,15 +12409,6 @@ func hidden_item_nearby() -> bool:
 	return false
 
 
-## The three maps `engine/events/card_key.asm`, `basement_key.asm` and
-## `squirtbottle.asm` name by constant before they do anything else. Each row is
-## the Crystal id and the Gold and Silver one; group 3 runs eight lower on
-## pokegold from `UNION_CAVE_1F`, which is what moves the underground.
-const KEY_ITEM_MAPS: Dictionary = {
-	&"RADIO_TOWER_3F": {&"crystal": Vector2i(3, 19), &"gold": Vector2i(3, 19)},
-	&"GOLDENROD_UNDERGROUND": {&"crystal": Vector2i(3, 53), &"gold": Vector2i(3, 45)},
-	&"ROUTE_36": {&"crystal": Vector2i(10, 3), &"gold": Vector2i(10, 3)},
-}
 
 ## The two tiles `GetFacingTileCoord`'s results are compared against. The source
 ## writes them in the object coordinate space, which is four cells ahead of the
@@ -12427,13 +12418,10 @@ const CARD_KEY_SLOT_CELL: Vector2i = Vector2i(14, 2)
 const BASEMENT_DOOR_CELL: Vector2i = Vector2i(18, 6)
 
 
+## `engine/events/card_key.asm`, `basement_key.asm` and `squirtbottle.asm` each
+## name their map by constant before they do anything else.
 func _is_on_key_item_map(name: StringName) -> bool:
-	if current_map == null:
-		return false
-	var row: Dictionary = KEY_ITEM_MAPS[name]
-	var id: Vector2i = row[&"crystal"] if Gen2WorldState.is_crystal_profile(data) \
-		else row[&"gold"]
-	return map_id() == id
+	return current_map != null and current_map.name == name
 
 
 ## `_CardKey`: the map, `wPlayerDirection` against `OW_UP`, the faced tile,

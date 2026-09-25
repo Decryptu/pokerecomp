@@ -10,6 +10,9 @@ extends RefCounted
 
 var group: int = 0
 var number: int = 0
+## The `map_const` name on this cartridge, so a map is found the same way on every
+## profile. See [method GameData.world_map_named].
+var name: StringName = &""
 var generation: int = RomRegistry.GEN2
 var tileset: int = 0
 var environment: int = 0
