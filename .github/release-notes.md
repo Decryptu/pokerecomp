@@ -3,11 +3,18 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods get API 46. A catch that fills the open PC box is now marked on the catch event, so a mod can warn you before the next ball is refused. Mods can also read how much room is left in the open box.
+- Mods get API 47. Every map has its name from the disassembly, such as `GOLDENROD_DEPT_STORE_2F`, and a mod can find a map by that name on any cartridge. Gold and Silver number some maps differently from Crystal, so a map named by group and number could land on the wrong one.
 
-## Changed
+## Fixed
 
-- For mods, a hidden Headbutt tree is no longer counted as a change to the map background. 3D views no longer rebuild the map twice on every Headbutt.
+- Turning on the spot in tall grass can start a wild battle in Gold, Silver and Crystal, as it does on the cartridge.
+- Characters who hop or get pushed back in a cutscene keep facing the same way: Elm's surprised jumps, the rival shoving you out of Elm's lab, Clair in the Dragon's Den and the Rattata on Route 30.
+- Pokémon standing on the map, like Kurt's Slowpoke, no longer turn to face you when you talk to them.
+- Objects that slide in a cutscene, like the legendary beasts in the Burned Tower, no longer play their walking animation.
+- After loading a save, the first phone call waits the full 20 minutes again.
+- Time spent in menus and battles now counts toward the next phone call.
+- No phone call comes in during the Bug-Catching Contest.
+- Incoming callers are picked with the cartridge's odds.
 
 ## Which file
 
