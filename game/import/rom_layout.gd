@@ -1564,6 +1564,90 @@ const NAME_RATER_TEXT_ORDER: Array[String] = [
 	"come_again", "perfect_name", "egg", "same_name", "named",
 ]
 
+## `data/text/battle.asm`'s labels in file order, which is cartridge order. The
+## empty name is Crystal's stray `text_end` behind `GrewToLevel`.
+const BATTLE_TEXT_ORDER: Array[String] = [
+	"BattleText_PlayerPickedUpPayDayMoney", "WildPokemonAppearedText",
+	"HookedPokemonAttackedText", "PokemonFellFromTreeText", "WildCelebiAppearedText",
+	"WantsToBattleText", "BattleText_WildFled", "BattleText_EnemyFled",
+	"HurtByPoisonText", "HurtByBurnText", "LeechSeedSapsText", "HasANightmareText",
+	"HurtByCurseText", "SandstormHitsText", "PerishCountText",
+	"BattleText_TargetRecoveredWithItem", "BattleText_UserRecoveredPPUsing",
+	"BattleText_TargetWasHitByFutureSight", "BattleText_SafeguardFaded",
+	"BattleText_MonsLightScreenFell", "BattleText_MonsReflectFaded",
+	"BattleText_RainContinuesToFall", "BattleText_TheSunlightIsStrong",
+	"BattleText_TheSandstormRages", "BattleText_TheRainStopped",
+	"BattleText_TheSunlightFaded", "BattleText_TheSandstormSubsided",
+	"BattleText_EnemyMonFainted", "GotMoneyForWinningText", "BattleText_EnemyWasDefeated",
+	"TiedAgainstText", "SentSomeToMomText", "SentHalfToMomText", "SentAllToMomText",
+	"UnusedRivalLossText", "BattleText_MonFainted",
+	"BattleText_UseNextMon", "UnusedRivalWinText", "LostAgainstText",
+	"BattleText_EnemyIsAboutToUseWillPlayerChangeMon", "BattleText_EnemySentOut",
+	"BattleText_TheresNoWillToBattle", "BattleText_AnEGGCantBattle",
+	"BattleText_CantEscape2", "BattleText_TheresNoEscapeFromTrainerBattle",
+	"BattleText_GotAwaySafely", "BattleText_UserFledUsingAStringBuffer1",
+	"BattleText_CantEscape", "BattleText_UserHurtBySpikes", "RecoveredUsingText",
+	"BattleText_UsersStringBuffer1Activated", "BattleText_ItemsCantBeUsedHere",
+	"BattleText_MonIsAlreadyOut", "BattleText_MonCantBeRecalled",
+	"BattleText_TheresNoPPLeftForThisMove", "BattleText_TheMoveIsDisabled",
+	"BattleText_MonHasNoMovesLeft", "BattleText_TargetsEncoreEnded",
+	"BattleText_StringBuffer1GrewToLevel", "", "BattleText_WildMonIsEating",
+	"BattleText_WildMonIsAngry", "FastAsleepText", "WokeUpText", "FrozenSolidText",
+	"FlinchedText", "MustRechargeText", "DisabledNoMoreText", "IsConfusedText",
+	"HurtItselfText", "ConfusedNoMoreText", "BecameConfusedText",
+	"BattleText_ItemHealedConfusion", "AlreadyConfusedText",
+	"BattleText_UsersHurtByStringBuffer1", "BattleText_UserWasReleasedFromStringBuffer1",
+	"UsedBindText", "WhirlpoolTrapText", "FireSpinTrapText", "WrappedByText",
+	"ClampedByText", "StoringEnergyText", "UnleashedEnergyText", "HungOnText",
+	"EnduredText", "InLoveWithText", "InfatuationText", "DisabledMoveText",
+	"LoafingAroundText", "BeganToNapText", "WontObeyText", "TurnedAwayText",
+	"IgnoredOrdersText", "IgnoredSleepingText", "NoPPLeftText", "HasNoPPLeftText",
+	"WentToSleepText", "RestedText", "RegainedHealthText", "AttackMissedText",
+	"AttackMissed2Text", "CrashedText", "UnaffectedText", "DoesntAffectText",
+	"CriticalHitText", "OneHitKOText", "SuperEffectiveText", "NotVeryEffectiveText",
+	"TookDownWithItText", "RageBuildingText", "GotAnEncoreText", "SharedPainText",
+	"TookAimText", "SketchedText", "DestinyBondEffectText", "SpiteEffectText",
+	"BellChimedText", "FellAsleepText", "AlreadyAsleepText", "WasPoisonedText",
+	"BadlyPoisonedText", "AlreadyPoisonedText", "SuckedHealthText", "DreamEatenText",
+	"WasBurnedText", "DefrostedOpponentText", "WasFrozenText", "WontRiseAnymoreText",
+	"WontDropAnymoreText", "FledFromBattleText", "FledInFearText", "BlownAwayText",
+	"PlayerHitTimesText", "EnemyHitTimesText", "MistText", "ProtectedByMistText",
+	"GettingPumpedText", "RecoilText", "MadeSubstituteText", "HasSubstituteText",
+	"TooWeakSubText", "SubTookDamageText", "SubFadedText", "MimicLearnedMoveText",
+	"WasSeededText", "EvadedText", "WasDisabledText", "CoinsScatteredText",
+	"TransformedTypeText", "EliminatedStatsText", "TransformedText",
+	"LightScreenEffectText", "ReflectEffectText", "NothingHappenedText",
+	"ButItFailedText", "ItFailedText", "DidntAffect1Text", "DidntAffect2Text",
+	"HPIsFullText", "DraggedOutText", "ParalyzedText", "FullyParalyzedText",
+	"AlreadyParalyzedText", "ProtectedByText", "MirrorMoveFailedText", "StoleText",
+	"CantEscapeNowText", "StartedNightmareText", "WasDefrostedText", "PutACurseText",
+	"ProtectedItselfText", "ProtectingItselfText", "SpikesText", "IdentifiedText",
+	"StartPerishText", "SandstormBrewedText", "BracedItselfText", "FellInLoveText",
+	"CoveredByVeilText", "SafeguardProtectText", "MagnitudeText", "ReleasedByText",
+	"ShedLeechSeedText", "BlewSpikesText", "DownpourText", "SunGotBrightText",
+	"BellyDrumText", "CopiedStatsText", "ForesawAttackText", "BeatUpAttackText",
+	"PresentFailedText", "IgnoredOrders2Text", "BattleText_LinkErrorBattleCanceled",
+	"BattleText_NoTimeLeftToday"
+]
+
+## Gold and Silver's file against Crystal's: each row replaced by the list it names.
+const BATTLE_TEXT_GOLD_SILVER: Dictionary = {
+	"WildCelebiAppearedText": [], "": [], "WhirlpoolTrapText": ["WasTrappedText"],
+	"FireSpinTrapText": [], "BattleText_LinkErrorBattleCanceled": [],
+	"BattleText_NoTimeLeftToday": [],
+}
+
+
+static func battle_text_order(layout: Dictionary) -> Array[String]:
+	var gold_silver: bool = bool((layout.get("battle_text", {}) as Dictionary).get("gold_silver", false))
+	var out: Array[String] = []
+	for name: String in BATTLE_TEXT_ORDER:
+		if gold_silver and BATTLE_TEXT_GOLD_SILVER.has(name):
+			out.append_array(BATTLE_TEXT_GOLD_SILVER[name] as Array)
+		else:
+			out.append(name)
+	return out
+
 ## The `text_far` stub runs behind `tools/checks/specials.gd`'s deferred list,
 ## by run name, then the layout key and the stub names in file order; a run
 ## whose offset is zero is not on the cartridge. `poke_seer`, `seer_advice` and
@@ -2654,6 +2738,8 @@ const GOLD_SILVER: Dictionary = {
 	"day_care_egg_text": 0x16BE9,
 	"day_care_left_with_text": 0x177E6,
 	"day_care_compatibility_text": 0x17820,
+	## `BattleText`, $40:$510C in both dumps, to the end of `IgnoredOrders2Text`.
+	"battle_text": {"start": 0x10110C, "end": 0x10221D, "gold_silver": true},
 	## `NameRaterHelloText`, bank $3e:$7919 in both dumps.
 	"name_rater_text": 0xFB919,
 	## `MoveDeletion.MoveKnowsOneText`, bank $0b:$43dc in both dumps.
@@ -3230,6 +3316,8 @@ const CRYSTAL: Dictionary = {
 	"day_care_egg_text": 0x16993,
 	"day_care_left_with_text": 0x17462,
 	"day_care_compatibility_text": 0x1749C,
+	## `BattleText`, $20:$4730, to `DebugColorPicker` at $20:$58AC.
+	"battle_text": {"start": 0x80730, "end": 0x818AC},
 	## `NameRaterHelloText`, bank $3e:$780f.
 	"name_rater_text": 0xFB80F,
 	## `MoveDeletion.MoveKnowsOneText`, bank $0b:$45d1.

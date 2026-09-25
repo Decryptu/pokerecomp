@@ -754,6 +754,13 @@ static func _used_move_text(turn: Gen2Turn) -> void:
 	# nothing remembers nothing.
 	turn.battle.record_used_move(turn.side, turn.move_number)
 	turn.announced = true
+	# Generation 1's `.ThrashingAboutCheck` and `.MultiturnMoveCheck` print their
+	# own line in place of this one.
+	if turn.battle.is_gen1() and turn.battle.gen1_trapping_move(turn.side) != 0:
+		return
+	if turn.battle.is_gen1() and turn.rampage_continued:
+		turn.emit(Gen2Battle.THRASHING_ABOUT)
+		return
 	turn.emit(Gen2Battle.USED_MOVE, {"move": turn.move_number, "instead": turn.disobeyed})
 
 
@@ -1510,7 +1517,9 @@ static func _check_hit(turn: Gen2Turn) -> void:
 	# without any of them knowing about it. Ahead of `.LockOn`, so a Protect
 	# turns a locked-on move away *and* leaves the flag standing for the next one.
 	if Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.PROTECT):
+		_delay(turn, PROTECT_DELAY_FRAMES)
 		turn.emit(Gen2Battle.PROTECTING_ITSELF, {"target": turn.target})
+		_delay(turn, PROTECT_DELAY_FRAMES)
 		_miss(turn)
 		return
 
@@ -1772,6 +1781,8 @@ static func _gen1_counter(turn: Gen2Turn) -> void:
 ## Destiny Bond (`BATTLE_VARS_SUBSTATUS5_OPP`), which is what stops an explosion
 ## being answered by one.
 static func _selfdestruct(turn: Gen2Turn) -> void:
+	if not turn.battle.is_gen1():
+		_delay(turn, SELFDESTRUCT_DELAY_FRAMES)
 	var attacker: Gen2BattleMon = turn.attacker()
 	attacker.status = Gen2Status.NONE
 	attacker.substatus &= ~(Gen2Substatus.CHARGING | Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND)
@@ -2070,6 +2081,9 @@ static func _primary_status(turn: Gen2Turn, flag: int) -> void:
 	if refusal != &"":
 		turn.emit(refusal, {"target": turn.target, "status": flag, "missed": turn.missed})
 		return
+	# `.dont_sample_failure`'s thirty frames, Crystal's paralysis alone.
+	if flag == Gen2Status.PARALYSIS and not turn.battle.is_gen1():
+		_delay(turn, PARALYZE_DELAY_FRAMES)
 	_animate_current_move(turn)
 	_inflict_status(turn, flag)
 
@@ -2351,6 +2365,7 @@ static func _drain_target(turn: Gen2Turn) -> void:
 		# "from" rather than "target": the healing lands on the attacker, whose
 		# hp and max_hp these are, but the message names who it was sucked from.
 		"from": turn.target, "amount": healed, "hp": attacker.hp, "max_hp": attacker.max_hp(),
+		"dream": turn.effect() == Gen2MoveEffect.DREAM_EATER,
 	})
 
 
@@ -2580,6 +2595,7 @@ static func _check_rampage(turn: Gen2Turn) -> void:
 	# `.continue_rampage` is reached whichever way this goes, and it skips past
 	# `rampage`: the lock and its count are set on the first turn only.
 	turn.skip_to = RAMPAGE
+	turn.rampage_continued = true
 	mon.rampage_turns -= 1
 	if mon.rampage_turns > 0:
 		return
@@ -2702,23 +2718,24 @@ static func _gen1_conversion(turn: Gen2Turn) -> void:
 ## routine. Against a trainer all three say so and nothing switches; against a
 ## wild the battle ends on the same level roll Crystal kept in two commands.
 static func _gen1_force_switch(turn: Gen2Turn) -> void:
+	var teleporting: bool = turn.move_number == Gen2MoveEffect.TELEPORT_MOVE
 	if turn.battle.is_trainer_battle:
-		turn.emit(Gen2Battle.MOVE_FAILED)
+		_gen1_force_switch_refused(turn, Gen2Battle.UNAFFECTED)
 		return
 	var user_level: int = turn.attacker().level
 	var other_level: int = turn.defender().level
 	if user_level < other_level:
 		var span: int = user_level + other_level + 1
 		if turn.rng().randi_range(0, span - 1) < other_level >> 2:
-			turn.emit(Gen2Battle.MOVE_FAILED)
+			_gen1_force_switch_refused(turn, Gen2Battle.STATUS_DIDNT_AFFECT)
 			return
 
 	## `.playAnimAndPrintText` reads the move number back for its line: Teleport
 	## takes the user out of the fight and the other two blow the target out.
-	var teleporting: bool = turn.move_number == Gen2MoveEffect.TELEPORT_MOVE
 	turn.battle.force_out(turn.side if teleporting else turn.target)
 	turn.battle.battle_anim_param = FORCE_SWITCH_ANIM_PARAM
 	_animate_current_move(turn)
+	_delay(turn, FORCE_SWITCH_DELAY_FRAMES)
 	if teleporting:
 		turn.emit(Gen2Battle.FLED_FROM_BATTLE)
 		return
@@ -2727,6 +2744,19 @@ static func _gen1_force_switch(turn: Gen2Turn) -> void:
 		else Gen2Battle.BLOWN_AWAY,
 		{"target": turn.target}
 	)
+
+
+## Fifty frames, then "But, it failed!" for Teleport or [param line] naming
+## the target for Roar and Whirlwind.
+static func _gen1_force_switch_refused(turn: Gen2Turn, line: StringName) -> void:
+	_delay(turn, GEN1_FORCE_SWITCH_REFUSED_FRAMES)
+	if turn.move_number == Gen2MoveEffect.TELEPORT_MOVE:
+		turn.emit(Gen2Battle.MOVE_FAILED)
+		return
+	turn.emit(line, {"target": turn.target})
+
+
+const GEN1_FORCE_SWITCH_REFUSED_FRAMES: int = 50
 
 
 ## Belly Drum. Fails and costs nothing unless the user has more than half its
@@ -3287,13 +3317,28 @@ static func _force_switch_trainer(turn: Gen2Turn) -> void:
 
 	turn.battle.battle_anim_param = FORCE_SWITCH_ANIM_PARAM
 	_animate_current_move(turn)
+	_delay(turn, FORCE_SWITCH_DELAY_FRAMES * 2)
 	var picked: int = _roll_dragged_index(turn, party)
-	turn.events.append_array(turn.battle.send_out(turn.target, picked, turn.side))
+	turn.events.append_array(
+		turn.battle.send_out(turn.target, picked, Gen2Battle.ENTRANCE_DRAGGED)
+	)
 
 
 ## `ld a, $1 / ld [wBattleAnimParam], a`, which both endings set in front of
 ## their own `AnimateCurrentMove`.
 const FORCE_SWITCH_ANIM_PARAM: int = 1
+
+## The `ld c, n / call DelayFrames` each command spends; `ForceSwitch` spends
+## two twenties around its `ClearBox`.
+const PROTECT_DELAY_FRAMES: int = 40
+const PARALYZE_DELAY_FRAMES: int = 30
+const FORCE_SWITCH_DELAY_FRAMES: int = 20
+const BEAT_UP_DELAY_FRAMES: int = 20
+const SELFDESTRUCT_DELAY_FRAMES: int = 3
+
+
+static func _delay(turn: Gen2Turn, frames: int) -> void:
+	turn.emit(Gen2Battle.DELAY, {"frames": frames})
 
 
 ## `.random_loop_trainer`, a rejection sample rather than a range: three bits of a
@@ -3339,6 +3384,7 @@ static func _force_switch_wild(turn: Gen2Turn) -> void:
 	turn.battle.force_out(turn.target)
 	turn.battle.battle_anim_param = FORCE_SWITCH_ANIM_PARAM
 	_animate_current_move(turn)
+	_delay(turn, FORCE_SWITCH_DELAY_FRAMES)
 	# `.succeed` reads the move's animation byte back and compares it against
 	# ROAR, and every move here animates as itself.
 	var line: StringName = Gen2Battle.FLED_IN_FEAR if turn.move_number == Gen2MoveEffect.ROAR_MOVE \
@@ -3367,6 +3413,7 @@ static func _baton_pass(turn: Gen2Turn) -> void:
 	_animate_current_move(turn)
 
 	if side == Gen2Battle.PLAYER:
+		_delay(turn, Gen2Battle.SWITCH_DELAY_FRAMES)
 		battle.request_baton_pass(side)
 		return
 	turn.events.append_array(
@@ -3397,6 +3444,7 @@ static func _teleport(turn: Gen2Turn) -> void:
 	turn.battle.force_out(turn.side)
 	turn.battle.battle_anim_param = FORCE_SWITCH_ANIM_PARAM
 	_animate_current_move(turn)
+	_delay(turn, FORCE_SWITCH_DELAY_FRAMES)
 	turn.emit(Gen2Battle.FLED_FROM_BATTLE)
 
 
@@ -3532,6 +3580,8 @@ static func _beat_up(turn: Gen2Turn) -> void:
 	var index: int = 0
 	if Gen2Substatus.has(mon.substatus, Gen2Substatus.IN_LOOP):
 		index = party.size() - mon.rollout_count
+	elif turn.side == Gen2Battle.PLAYER:
+		_delay(turn, BEAT_UP_DELAY_FRAMES)
 	if index < 0 or index >= party.size():
 		turn.skip_to = BUILD_OPPONENT_RAGE
 		return
@@ -3967,21 +4017,15 @@ const SUBSTITUTE_ANIM_RAISE: int = 2
 const CURSE_FAILED_STAT: String = "ability"
 
 
-## Ancientpower's roll: the user's five real stats at once, reported as one event.
-## Accuracy and evasion are not among them, the command looping over the stats a
-## stage multiplies a real number for.
+## `BattleCommand_AllStatsUp`: five stat ups, each with its own message.
 static func _all_stats_up(turn: Gen2Turn) -> void:
 	if turn.failed_chance:
 		return
 
 	var mon: Gen2BattleMon = turn.attacker()
-	var moved: bool = false
 	for key: String in ALL_STATS_KEYS:
 		if mon.change_stage(key, 1):
-			moved = true
-
-	if moved:
-		turn.emit(Gen2Battle.STAT_CHANGED, {"target": turn.side, "stat": "all", "by": 1})
+			turn.emit(Gen2Battle.STAT_CHANGED, {"target": turn.side, "stat": key, "by": 1})
 
 
 ## Says a stat moved, or says nothing: a secondary effect's list has no fail-text

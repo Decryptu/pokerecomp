@@ -166,6 +166,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	verify_move_deleter_text,
 	verify_day_care_text,
 	verify_special_text,
+	verify_battle_text,
 	verify_map_entry_sign,
 	verify_pack,
 	verify_pc,
@@ -1269,6 +1270,40 @@ const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
 	"npc_trade": ["cable", "OK, connect the"],
 	"npc_trade_newbie": ["complete_4", "Uh? What happened?"],
 }
+
+
+## `data/text/battle.asm` walked from its pinned start, each text where the last
+## ended; landing on the pinned end proves the start and the order. Empty when not.
+static func read_battle_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = layout.get("battle_text", {})
+	var at: int = int(entry.get("start", -1))
+	if at < 0:
+		return {}
+	var data: PackedByteArray = rom.bytes()
+	var texts: Dictionary = {}
+	for label: String in Gen2Layout.battle_text_order(layout):
+		if label.is_empty():
+			if at >= data.size() or data[at] != Gen2TextStream.TX_END:
+				return {}
+			at += 1
+			continue
+		var decoded: Dictionary = Gen2TextStream.decode(data, at)
+		if not bool(decoded.get("ok", false)):
+			return {}
+		texts[label] = String(decoded["text"])
+		at = int(decoded["bytes"])
+	if at != int(entry.get("end", -1)):
+		return {}
+	return texts
+
+
+static func verify_battle_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var read: Dictionary = read_battle_text(rom, layout)
+	if read.is_empty():
+		return {"ok": false, "message": "The battle texts did not walk onto their section's end."}
+	if String(read.get("CriticalHitText", "")) != "A critical hit!":
+		return {"ok": false, "message": "The battle texts are not the ones the order names."}
+	return {"ok": true, "message": "The battle texts verified."}
 
 
 static func verify_special_text(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -4849,6 +4884,7 @@ func import_rom(
 		"move_deleter_text": _import_move_deleter_text(rom, layout),
 		"day_care_text": _import_day_care_text(rom, layout),
 		"special_text": _import_special_text(rom, layout),
+		"battle_text": read_battle_text(rom, layout),
 		"special_text_ram": (layout.get("special_text_ram", {}) as Dictionary).duplicate(),
 		"other_player_link_mode": int(layout.get("other_player_link_mode", -1)),
 		"copyright_string": _import_copyright_string(rom, layout),

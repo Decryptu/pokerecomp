@@ -104,6 +104,7 @@ var _move_deleter_text: Dictionary = {}
 var _day_care_text: Dictionary = {}
 var _special_text: Dictionary = {}
 var _special_text_ram: Dictionary = {}
+var _battle_text: Dictionary = {}
 var _vending: Array = []
 var _prizes: Array = []
 var _battle_object_palettes: Dictionary = {}
@@ -173,7 +174,7 @@ static func open_argument(argument: String) -> GameData:
 
 ## The runs every cartridge carries; the rest are its own special runs.
 const TEXT_RUNS: Array[StringName] = [
-	&"intro", &"menu", &"mart", &"name_rater", &"move_deleter", &"day_care",
+	&"intro", &"menu", &"mart", &"name_rater", &"move_deleter", &"day_care", &"battle",
 ]
 
 ## Manifest sections copied into a member as they stand, key to member. A section
@@ -224,6 +225,7 @@ const MANIFEST_DICTIONARIES: Dictionary = {
 	"day_care_text": "_day_care_text",
 	"special_text": "_special_text",
 	"special_text_ram": "_special_text_ram",
+	"battle_text": "_battle_text",
 }
 
 ## The same for the sections that are lists.
@@ -2096,7 +2098,7 @@ func _text_store(run: StringName) -> Dictionary:
 		_text_stores = {
 			&"intro": _intro_text, &"menu": _menu_text, &"mart": _mart_text,
 			&"name_rater": _name_rater_text, &"move_deleter": _move_deleter_text,
-			&"day_care": _day_care_text,
+			&"day_care": _day_care_text, &"battle": _battle_text,
 		}
 	var store: Variant = _text_stores.get(run, _special_text.get(run, {}))
 	return store as Dictionary if store is Dictionary else {}
@@ -2132,6 +2134,10 @@ func move_deleter_text(name: String) -> String:
 func day_care_text(name: String) -> String:
 	return text(&"day_care", name)
 
+
+## `data/text/battle.asm`'s texts, by label; empty outside Generation 2.
+func battle_text(label: String) -> String:
+	return text(&"battle", label)
 
 ## One box of one `Gen2Layout.SPECIAL_TEXT_RUNS` run.
 func special_text(run: String, name: String) -> String:

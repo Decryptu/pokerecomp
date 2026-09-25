@@ -1,8 +1,9 @@
 extends GutTest
 
 ## `CheckWhetherToAskSwitch` and `OfferSwitch` (`engine/battle/core.asm`), which
-## is what the OPTION screen's SET/SHIFT row decides. On SHIFT a trainer's own
-## switch offers the player one; on SET it does not, and neither does a wild.
+## is what the OPTION screen's SET/SHIFT row decides. On SHIFT a trainer
+## replacing a fainted Pokémon offers the player a switch; on SET it does not,
+## and neither does a wild.
 
 const Fixture := preload("res://tests/unit/battle_fixture.gd")
 
@@ -44,13 +45,16 @@ func _battle(trainer: bool, set_style: bool) -> Gen2Battle:
 	return battle
 
 
+## `HandleEnemyMonFaint`'s `EnemySwitch`, the one caller that reaches
+## `CheckWhetherToAskSwitch` with `wBattleHasJustStarted` clear.
 func _switch_turn(battle: Gen2Battle) -> Array:
-	return battle.take_actions(Gen2Battle.use_move(0), Gen2Battle.switch_to(1))
+	battle.mon(Gen2Battle.ENEMY).take_damage(battle.enemy.max_hp())
+	return battle.replace_fallen()
 
 
 ## SHIFT: the question comes up before the incoming Pokémon is on the field,
 ## which is why `OfferSwitch` runs in front of `ShowSetEnemyMonAndSendOutAnimation`.
-func test_shift_offers_the_player_a_switch_when_the_trainer_takes_one() -> void:
+func test_shift_offers_the_player_a_switch_when_the_trainer_replaces() -> void:
 	var battle: Gen2Battle = _battle(true, false)
 	var events: Array = _switch_turn(battle)
 	assert_eq(battle.awaiting_switch_offer(), 1)
@@ -61,14 +65,24 @@ func test_shift_offers_the_player_a_switch_when_the_trainer_takes_one() -> void:
 	assert_eq(offer["species"], Fixture.PIKACHU)
 
 
-func test_answering_no_sends_the_trainer_out_and_finishes_the_turn() -> void:
+func test_answering_no_sends_the_trainer_out() -> void:
 	var battle: Gen2Battle = _battle(true, false)
 	_switch_turn(battle)
 	var after: Array = battle.answer_switch_offer(-1)
 	assert_eq(battle.awaiting_switch_offer(), -1)
 	assert_eq(battle.party(Gen2Battle.ENEMY).active, 1)
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 0, "the player stayed")
-	assert_false(after.is_empty(), "the rest of the turn ran")
+	assert_eq(_first(after, Gen2Battle.SENT_OUT)["side"], Gen2Battle.ENEMY)
+
+
+## `AI_Switch` raises `wBattleHasJustStarted` before `EnemySwitch`, so a trainer
+## switching of its own accord mid-turn asks nothing even on SHIFT.
+func test_a_trainers_switch_between_moves_asks_nothing() -> void:
+	var battle: Gen2Battle = _battle(true, false)
+	var events: Array = battle.take_actions(Gen2Battle.use_move(0), Gen2Battle.switch_to(1))
+	assert_eq(battle.awaiting_switch_offer(), -1)
+	assert_true(_first(events, Gen2Battle.SWITCH_OFFERED).is_empty())
+	assert_eq(battle.party(Gen2Battle.ENEMY).active, 1, "it just switched")
 
 
 func test_answering_yes_switches_the_player_as_well() -> void:

@@ -114,6 +114,7 @@ static func build(game_id: StringName = GAME_ID) -> GameData:
 	_write_battle_graphics(cache_directory, manifest)
 	_write_splash_graphics(cache_directory, manifest, game_id == RomRegistry.CRYSTAL)
 	_write_menu_text(manifest)
+	_write_battle_text(manifest)
 	_write_name_rater_text(manifest)
 	_write_move_deleter_text(manifest)
 	_write_day_care_text(manifest)
@@ -589,6 +590,35 @@ static func _write_menu_text(manifest: Dictionary) -> void:
 		"toss_threw": "Threw away\n<RAM_CF7E>(S).",
 		"blue_card": "You now have\n<NUM_DC4B> points.",
 		"sent_trophy_home": "There was a trophy\ninside!\ue000<RAM_D47D> sent the\ntrophy home.",
+	}
+
+
+## The `data/text/battle.asm` texts these tests read, as the importer leaves
+## them: markers for the names and buffers, and the source's own breaks.
+static func _write_battle_text(manifest: Dictionary) -> void:
+	var scroll: String = Gen2TextStream.SCROLL_BREAK
+	manifest["battle_text"] = {
+		"AttackMissedText": "<USER>'s\nattack missed!",
+		"CriticalHitText": "A critical hit!",
+		"SuperEffectiveText": "It's super-\neffective!",
+		"NotVeryEffectiveText": "It's not very\neffective…",
+		"RecoilText": "<USER>'s\nhit with recoil!",
+		"ButItFailedText": "But it failed!",
+		"BattleText_MonFainted": "<RAM_D073>\nfainted!",
+		"BattleText_MonHasNoMovesLeft": "<RAM_C621>\nhas no moves left!",
+		"BattleText_TheresNoPPLeftForThisMove": "There's no PP left\nfor this move!",
+		"BattleText_TheMoveIsDisabled": "The move is\nDISABLED!",
+		"BattleText_EnemyMonFainted": "Enemy <RAM_C616>\nfainted!",
+		"BattleText_StringBuffer1GrewToLevel": "<RAM_D073> grew to\nlevel <NUM_D143>!",
+		"BattleText_GotAwaySafely": "Got away safely!",
+		"BattleText_UserFledUsingAStringBuffer1": "<USER>\nfled using a" + scroll + "<RAM_D073>!",
+		"BattleText_TheresNoEscapeFromTrainerBattle":
+			"No! There's no\nrunning from a" + scroll + "trainer battle!",
+		"BattleText_CantEscape": "Can't escape!",
+		"BattleText_CantEscape2": "Can't escape!",
+		"BattleText_WildFled": "Wild <RAM_C616>\nfled!",
+		"BattleText_EnemyWasDefeated": "<ENEMY>\nwas defeated!",
+		"BattleText_EnemySentOut": "<ENEMY>\nsent out" + scroll + "<RAM_C616>!",
 	}
 
 

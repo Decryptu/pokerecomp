@@ -1188,7 +1188,7 @@ func _conversion_copies_the_target() -> void:
 
 ## `SwitchAndTeleportEffect`: one routine for three moves. A wild battle ends
 ## whenever the user is at least the target's level, and a trainer battle refuses
-## all three outright.
+## all three outright, Roar with `IsUnaffectedText` and Teleport failing.
 func _teleport_ends_the_battle() -> void:
 	for move: int in [TELEPORT_MOVE, ROAR_MOVE]:
 		var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [move], SWEEP_SEED, [SPLASH_MOVE])
@@ -1201,9 +1201,11 @@ func _teleport_ends_the_battle() -> void:
 		trainer.is_trainer_battle = true
 		var events: Array = trainer.take_turn(0, 0)
 		_r.check(not trainer.is_over(), "move %d ended a trainer battle" % move)
+		var said: StringName = Gen2Battle.MOVE_FAILED if move == TELEPORT_MOVE \
+			else Gen2Battle.UNAFFECTED
 		var failed: bool = false
 		for event: Dictionary in events:
-			failed = failed or StringName(event.get("type", &"")) == Gen2Battle.MOVE_FAILED
+			failed = failed or StringName(event.get("type", &"")) == said
 		_r.check(failed, "move %d said nothing against a trainer" % move)
 
 

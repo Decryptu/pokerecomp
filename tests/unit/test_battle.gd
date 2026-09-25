@@ -529,16 +529,57 @@ func test_a_switch_between_turns_calls_one_back_and_sends_one_out() -> void:
 		[_mon(Fixture.CHARMANDER, 20, [Fixture.TACKLE])]
 	)
 	var events: Array = battle.send_out(Gen2Battle.PLAYER, 1)
-	# The two lines, then `SendOutPlayerMon`'s own ball animation, cry and panel.
-	assert_eq(events.size(), 5)
-	assert_eq(events[0]["type"], Gen2Battle.WITHDREW)
+	# `BattleMonEntrance`: the line, fifty frames, `RecallPlayerMon`, then
+	# `SendOutMonText` and `SendOutPlayerMon`'s ball, cry and panel.
+	var types: Array = events.map(func(event: Dictionary) -> StringName: return event["type"])
+	assert_eq(types, [
+		Gen2Battle.WITHDREW, Gen2Battle.DELAY, Gen2Battle.ANIMATION, Gen2Battle.SENT_OUT,
+		Gen2Battle.ANIMATION, Gen2Battle.CRY, Gen2Battle.HUD_DRAWN,
+	])
 	assert_eq(int(events[0]["index"]), 0)
-	assert_eq(events[1]["type"], Gen2Battle.SENT_OUT)
-	assert_eq(events[2]["type"], Gen2Battle.ANIMATION)
-	assert_eq(int(events[2]["index"]), Gen2Battle.ANIM_SEND_OUT_MON)
-	assert_eq(int(events[2]["param"]), Gen2Battle.SEND_OUT_ANIM_NORMAL)
-	assert_eq(events[3]["type"], Gen2Battle.CRY)
-	assert_eq(events[4]["type"], Gen2Battle.HUD_DRAWN)
+	assert_eq(int(events[1]["frames"]), Gen2Battle.SWITCH_DELAY_FRAMES)
+	assert_eq(int(events[2]["index"]), Gen2Battle.ANIM_RETURN_MON)
+	assert_eq(int(events[4]["index"]), Gen2Battle.ANIM_SEND_OUT_MON)
+	assert_eq(int(events[4]["param"]), Gen2Battle.SEND_OUT_ANIM_NORMAL)
+
+
+## `WithdrawMonText`: the HP the opponent lost since it came in, times 25 over a
+## quarter of its maximum. Healing wraps the subtraction.
+func test_the_withdraw_line_follows_the_damage_done_since_the_switch() -> void:
+	var battle: Gen2Battle = _party_battle(
+		[_mon(Fixture.PIKACHU, 20, [Fixture.TACKLE]), _mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])],
+		[_mon(Fixture.CHARMANDER, 20, [Fixture.TACKLE])]
+	)
+	var foe: Gen2BattleMon = battle.enemy
+	var full: int = foe.max_hp()
+	assert_eq(battle.enemy_hp_at_switch, full, "the opponent came in whole")
+	var cases: Array = [
+		[full, Gen2Battle.WITHDRAW_ENOUGH], [full - 1, Gen2Battle.WITHDRAW_COME_BACK],
+		[full / 2, Gen2Battle.WITHDRAW_OK], [1, Gen2Battle.WITHDRAW_GOOD],
+	]
+	for case: Array in cases:
+		foe.hp = int(case[0])
+		assert_eq(battle.withdraw_line(), int(case[1]), "at %d of %d" % [foe.hp, full])
+	var sent: Array = battle.send_out(Gen2Battle.PLAYER, 1)
+	assert_eq(int(_first(sent, Gen2Battle.WITHDREW)["line"]), Gen2Battle.WITHDRAW_GOOD)
+	assert_eq(battle.enemy_hp_at_switch, 1, "`SendOutMonText` wrote the HP it read")
+
+
+func test_a_pass_and_a_drag_say_nothing_on_the_players_side() -> void:
+	var battle: Gen2Battle = _party_battle(
+		[_mon(Fixture.PIKACHU, 20, [Fixture.TACKLE]), _mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])],
+		[_mon(Fixture.CHARMANDER, 20, [Fixture.TACKLE])]
+	)
+	battle.enemy.hp = 1
+	var passed: Array = battle.send_out(Gen2Battle.PLAYER, 1, Gen2Battle.ENTRANCE_BATON_PASS)
+	assert_true(bool(_first(passed, Gen2Battle.WITHDREW)["quiet"]))
+	assert_true(bool(_first(passed, Gen2Battle.SENT_OUT)["quiet"]))
+	assert_eq(_of_type(passed, Gen2Battle.DELAY).size(), 1, "`PassedBattleMonEntrance`'s fifty")
+	assert_eq(battle.enemy_hp_at_switch, battle.enemy.max_hp(), "no `SendOutMonText` ran")
+	var dragged: Array = battle.send_out(Gen2Battle.PLAYER, 0, Gen2Battle.ENTRANCE_DRAGGED)
+	assert_true(bool(_first(dragged, Gen2Battle.SENT_OUT)["quiet"]))
+	assert_eq(_of_type(dragged, Gen2Battle.ANIMATION).size(), 1, "the ball and no recall")
+	assert_eq(int(_first(dragged, Gen2Battle.DRAGGED_OUT)["side"]), Gen2Battle.ENEMY)
 
 
 ## `SendOutPlayerMon`, `ShowSetEnemyMonAndSendOutAnimation` and the cry gate
@@ -654,7 +695,10 @@ func test_a_switch_goes_before_a_move_however_slow_the_switcher_is() -> void:
 	)
 	var events: Array = battle.take_actions(Gen2Battle.switch_to(1), Gen2Battle.use_move(0))
 	assert_eq(events[0]["type"], Gen2Battle.WITHDREW)
-	assert_eq(events[1]["type"], Gen2Battle.SENT_OUT)
+	assert_lt(
+		events.find(_first(events, Gen2Battle.SENT_OUT)),
+		events.find(_first(events, Gen2Battle.USED_MOVE))
+	)
 	assert_eq(_first(events, Gen2Battle.USED_MOVE)["side"], Gen2Battle.ENEMY)
 	assert_eq(_first(events, Gen2Battle.HIT)["target"], Gen2Battle.PLAYER)
 
@@ -1172,17 +1216,6 @@ func test_a_stat_drop_actually_bends_the_stat_the_damage_formula_reads() -> void
 	var before: int = battle.player.stat("attack")
 	battle.take_turn(0, 0)
 	assert_lt(battle.player.stat("attack"), before)
-
-
-func test_ancientpower_raises_the_users_stats_as_one_event() -> void:
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.ANCIENTPOWER]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	)
-	var events: Array = battle.take_turn(0, 0)
-	assert_eq(battle.player.stage("attack"), 1)
-	assert_eq(battle.player.stage("speed"), 1)
-	assert_eq(_of_type(events, Gen2Battle.STAT_CHANGED).size(), 1, "one event for all five")
 
 
 func test_a_secondary_stat_drop_that_never_rolls_still_deals_its_damage() -> void:
@@ -2532,6 +2565,35 @@ func test_a_trapped_pokemon_cannot_be_recalled() -> void:
 		assert_eq(_of_type(events, Gen2Battle.USED_MOVE).size(), 0, "the enemy moved anyway")
 		assert_eq(battle.party(Gen2Battle.PLAYER).active, 0)
 		assert_eq(battle.mon(Gen2Battle.PLAYER).hp, before)
+
+
+## `.ThrashingAboutCheck` and `.MultiturnMoveCheck` print their own line in
+## place of `UsedMoveText` on every turn after the first.
+func test_generation_one_continuations_say_their_own_line() -> void:
+	_data.generation = RomRegistry.GEN1
+	var said: Dictionary = {Fixture.THRASH: Gen2Battle.THRASHING_ABOUT, Fixture.WRAP: Gen2Battle.ATTACK_CONTINUES}
+	for move: int in said:
+		var battle: Gen2Battle = _battle(
+			_mon(Fixture.PIKACHU, 50, [move]), _mon(Fixture.GEODUDE, 60, [Fixture.TACKLE])
+		)
+		battle.rng.seed = 3
+		battle.take_actions(Gen2Battle.use_move(0), Gen2Battle.use_move(0))
+		var events: Array = battle.take_actions(Gen2Battle.use_move(0), Gen2Battle.use_move(0))
+		var players: Array = events.filter(func(event: Dictionary) -> bool:
+			return int(event.get("side", -1)) == Gen2Battle.PLAYER)
+		assert_eq(_of_type(players, Gen2Battle.USED_MOVE).size(), 0, str(move))
+		assert_eq(_of_type(players, said[move]).size(), 1, str(move))
+
+
+func test_a_wrapped_generation_one_pokemon_can_still_be_recalled() -> void:
+	_data.generation = RomRegistry.GEN1
+	var battle: Gen2Battle = _party_battle(
+		[_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]), _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])],
+		[_mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE])]
+	)
+	_hold(battle, &"wrap")
+	battle.take_actions(Gen2Battle.switch_to(1), Gen2Battle.use_move(0))
+	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1)
 
 
 ## `AI_Switch` makes neither check, so the asymmetry is the cartridge's: only the
@@ -4670,14 +4732,37 @@ func test_pursuit_hits_the_pokemon_on_its_way_out() -> void:
 
 	var types: Array = events.map(func(event: Dictionary) -> StringName: return event["type"])
 	assert_true(types.has(Gen2Battle.HIT), "the pursuer landed a hit")
-	assert_lt(
-		types.find(Gen2Battle.HIT), types.find(Gen2Battle.WITHDREW),
-		"in front of the recall, which is where `PursuitSwitch` sits"
-	)
+	# `BattleMonEntrance` prints `WithdrawMonText` first, then `PursuitSwitch`,
+	# then `RecallPlayerMon`.
+	assert_lt(types.find(Gen2Battle.WITHDREW), types.find(Gen2Battle.HIT))
+	var recall: int = events.find_custom(func(event: Dictionary) -> bool:
+		return int(event.get("index", -1)) == Gen2Battle.ANIM_RETURN_MON)
+	assert_lt(types.find(Gen2Battle.HIT), recall, "the recall is behind the hit")
 	assert_lt(leaving.hp, leaving.max_hp(), "the Pokemon that left took it")
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1, "the switch still happened")
 	# `ld a, CANNOT_MOVE`: the pursuer has nothing left to spend this turn.
 	assert_eq(_of_type(events, Gen2Battle.USED_MOVE).size(), 1)
+
+
+## `PursuitSwitch`'s carry: a Pokémon Pursuit fells is not recalled, but the
+## line `BattleMonEntrance` printed first stands.
+func test_a_pokemon_pursuit_fells_is_not_recalled() -> void:
+	var battle: Gen2Battle = _party_battle(
+		[
+			_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE]),
+			_mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE]),
+		],
+		[_mon(Fixture.PIKACHU, 50, [Fixture.PURSUIT])]
+	)
+	battle.party(Gen2Battle.PLAYER).at(0).hp = 1
+	var events: Array = battle.take_actions(
+		Gen2Battle.switch_to(1), Gen2Battle.use_move(0)
+	)
+	assert_false(_first(events, Gen2Battle.WITHDREW).is_empty())
+	assert_false(_first(events, Gen2Battle.FAINTED).is_empty())
+	assert_false(events.any(func(event: Dictionary) -> bool:
+		return int(event.get("index", -1)) == Gen2Battle.ANIM_RETURN_MON))
+	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1)
 
 
 ## `wPlayerIsSwitching` is what `pursuit` reads, so the doubling only happens on

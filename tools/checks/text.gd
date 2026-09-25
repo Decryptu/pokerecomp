@@ -9,9 +9,9 @@ var _r: RefCounted = null
 
 ## Per game: named boxes, map dialogues, and the empty `text`/`done` ones.
 const EXPECTED_CENSUS: Dictionary = {
-	&"gold": [166, 3004, 0],
-	&"silver": [166, 3004, 0],
-	&"crystal": [198, 3946, 1],
+	&"gold": [355, 3004, 0],
+	&"silver": [355, 3004, 0],
+	&"crystal": [391, 3946, 1],
 }
 
 ## A world line names the player, so a replacement has to be able to.

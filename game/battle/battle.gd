@@ -2,10 +2,8 @@ class_name Gen2Battle
 extends RefCounted
 
 ## A battle: two parties, a turn at a time, scene-free with randomness injected.
-## A turn answers with events carrying numbers, never a string. A turn ending
-## with somebody down says so through [method must_replace] and stands still
-## until [method replace_fallen], the only entry point besides
-## [method take_actions] that moves a battle on.
+## A turn answers with events carrying numbers, never a string; one ending with
+## somebody down stands still until [method replace_fallen].
 
 ## Plain numbers rather than an enum: they are dictionary keys and event payloads
 ## throughout, and everything reading one compares it against these two.
@@ -56,13 +54,13 @@ const STAGES_CLEARED: StringName = &"stages_cleared"
 ## Psych Up: the target's stages, now the user's too.
 const STAGES_COPIED: StringName = &"stages_copied"
 ## A stat moved a stage, or tried to and could not. [code]stat[/code] is the key
-## [Gen2BattleMon] keeps it under, or [code]"all"[/code] for the five Ancientpower
-## moves at once; [code]by[/code] is how many stages, signed.
+## [Gen2BattleMon] keeps it under; [code]by[/code] is how many stages, signed.
 const STAT_CHANGED: StringName = &"stat_changed"
 const STAT_CHANGE_FAILED: StringName = &"stat_change_failed"
 ## A Pokémon called back, and a Pokémon put out. They are two events rather than
 ## one because a replacement after a faint is only the second half: there is
 ## nobody to call back, and the screen has one sentence to say rather than two.
+## Either carries [code]quiet[/code] when the entrance prints no line of its own.
 const WITHDREW: StringName = &"withdrew"
 const SENT_OUT: StringName = &"sent_out"
 ## `SendOutMonText`'s four lines, chosen off the opponent's remaining HP: the
@@ -71,6 +69,24 @@ const SEND_OUT_GO: int = 0
 const SEND_OUT_DO_IT: int = 1
 const SEND_OUT_GO_FOR_IT: int = 2
 const SEND_OUT_FOES_WEAK: int = 3
+## `WithdrawMonText`'s four lines: the `line` of a player [constant WITHDREW].
+const WITHDRAW_ENOUGH: int = 0
+const WITHDRAW_COME_BACK: int = 1
+const WITHDRAW_OK: int = 2
+const WITHDRAW_GOOD: int = 3
+## How a Pokémon comes in; a replacement is a switch with nobody to call back.
+const ENTRANCE_SWITCH: int = 0
+const ENTRANCE_BATON_PASS: int = 1
+const ENTRANCE_DRAGGED: int = 2
+## `ld c, n / call DelayFrames`: [code]frames[/code] with nothing drawn or read.
+const DELAY: StringName = &"delay"
+## `ANIM_RETURN_MON`, which `RecallPlayerMon` plays after `PursuitSwitch`.
+const ANIM_RETURN_MON: int = 0x102
+## The `ld c, 50` of `BattleMonEntrance` and `PassedBattleMonEntrance`.
+const SWITCH_DELAY_FRAMES: int = 50
+## `ResidualDamage.fainted`'s and `HandleEnemyMonFaint`'s own holds.
+const RESIDUAL_FAINT_FRAMES: int = 20
+const ENEMY_FAINT_FRAMES: int = 60
 ## `PlayStereoCry` behind an entrance: the cry `CheckFaintedFrzSlp` allows, on
 ## the entering side's own tracks. Silent on its own, so nothing is printed for
 ## it.
@@ -207,6 +223,8 @@ const BLOWN_AWAY: StringName = &"blown_away"
 ## `FledFromBattleText`: Teleport, which takes its own user out rather than the
 ## other side. Named for `<USER>`, so [code]side[/code] is who left.
 const FLED_FROM_BATTLE: StringName = &"fled_from_battle"
+## Generation 1's `IsUnaffectedText`, Roar or Whirlwind against a trainer.
+const UNAFFECTED: StringName = &"unaffected"
 
 const WILD_FLED: StringName = &"wild_fled"
 
@@ -299,6 +317,7 @@ const RELEASED_FROM_TRAP: StringName = &"released_from_trap"
 ## `AttackContinuesText`, which only Generation 1's trapping moves print: the
 ## user repeats the move and the target spends the turn held in place.
 const ATTACK_CONTINUES: StringName = &"attack_continues"
+const THRASHING_ABOUT: StringName = &"thrashing_about"
 
 ## Mean Look and Spider Web landed. Set on the user, cleared by any send-out;
 ## a second one from the same user is [constant MOVE_FAILED].
@@ -611,6 +630,10 @@ var _use_next_answered: bool = false
 ## ends the turn on it, so the action it would have taken is spent.
 var _pursuit_spent: int = -1
 
+## `wEnemyHPAtTimeOfPlayerSwitch`: the opponent's HP when it last came in or
+## the player's `SendOutMonText` last ran.
+var enemy_hp_at_switch: int = 0
+
 var parties: Dictionary = {}  ## The two sides, keyed by [constant PLAYER] and [constant ENEMY].
 
 ## Which party indices have fought since the current opponent came in, a
@@ -731,6 +754,7 @@ static func create_parties(
 	out._apply_player_badges()
 	if out.is_gen1():
 		out.mon(ENEMY).gen1_load_stats(0)
+	out.enemy_hp_at_switch = out.mon(ENEMY).hp
 	return out
 
 
@@ -785,12 +809,9 @@ static func use_item(item: int) -> Dictionary:
 	return {"type": ACTION_ITEM, "item": item}
 
 
-## `InitEnemyTrainer`: the class's own `TRNATTR_ITEM1` and `TRNATTR_ITEM2` into
-## the two working slots, and then `IsGymLeader`'s own party walk. `NO_ITEM` is
-## zero and is not carried.
-## [param rewarded] is false for the two opponents `ReadTrainerParty` returns in
-## front of, the Battle Tower's and a link partner's: neither reaches
-## `ComputeTrainerReward`, and neither win branch pays money either.
+## `InitEnemyTrainer`: the class's `TRNATTR_ITEM1` and `TRNATTR_ITEM2`, then
+## `IsGymLeader`'s party walk. [param rewarded] is false for the Battle Tower and
+## a link partner, which reach no `ComputeTrainerReward`.
 func init_enemy_trainer(trainer_class: int, rewarded: bool = true) -> void:
 	enemy_items = []
 	enemy_trainer_class = maxi(trainer_class, 0)
@@ -1278,9 +1299,9 @@ func _enemy_entrance(events: Array, offer: bool) -> void:
 	})
 
 
-## `CheckWhetherToAskSwitch`: in SHIFT mode a trainer's switch offers the player
-## one, given a started battle, somebody else to send, SET off and the player's
-## own Pokémon standing. A wild has no trainer to switch.
+## `CheckWhetherToAskSwitch`: in SHIFT mode a trainer replacing a fainted
+## Pokémon offers the player a switch, given somebody else to send, SET off and
+## the player's own Pokémon standing. A wild has no trainer to switch.
 func should_offer_switch() -> bool:
 	return is_trainer_battle and not battle_style_set and not in_battle_tower \
 		and not is_link_battle \
@@ -1294,8 +1315,8 @@ func awaiting_switch_offer() -> int:
 	return _pending_switch_offer
 
 
-## `OfferSwitch`'s yes/no. [param index] below zero is the source's carry, ending
-## the turn's first half; anything else is the player switching too, which
+## `OfferSwitch`'s yes/no. [param index] below zero is the source's carry, the
+## player staying; anything else is the player switching too, which
 ## `EnemySwitch` reaches by falling into `PlayerSwitch`. A slot the party would
 ## refuse leaves the question standing.
 func answer_switch_offer(index: int = -1) -> Array:
@@ -1305,15 +1326,11 @@ func answer_switch_offer(index: int = -1) -> Array:
 		return []
 	var enemy_index: int = _pending_switch_offer
 	_pending_switch_offer = -1
-	var events: Array = []
-	events.append_array(send_out(ENEMY, enemy_index))
+	# Only [method replace_fallen] raises one, so no turn stands behind it.
+	var events: Array = send_out(ENEMY, enemy_index)
 	if index >= 0:
 		events.append_array(send_out(PLAYER, index))
-	# An offer raised by [method replace_fallen] has no turn behind it:
-	# `HandleEnemyMonFaint` returns as soon as both entrances are done.
-	if _pending_turn.is_empty():
-		return events
-	return _run_turn(events)
+	return events
 
 
 ## Which side owes a Baton Pass target, or -1: [method must_replace]'s shape,
@@ -1391,7 +1408,7 @@ func baton_pass_target(side: int) -> int:
 ## The Pokémon walking back to its ball still loses everything.
 func baton_pass_send_out(side: int, index: int) -> Array:
 	var passed: Dictionary = mon(side).capture_passed_state()
-	var events: Array = send_out(side, index, -1, true)
+	var events: Array = send_out(side, index, ENTRANCE_BATON_PASS)
 	if events.is_empty():
 		return events
 	mon(side).apply_passed_state(passed)
@@ -1492,21 +1509,20 @@ func decline_move(side: int) -> Array:
 
 
 ## Sends a side's [param index] out, as a replacement or between turns, with one
-## event or none: an impossible switch is refused. [param dragged_by] is the side
-## that used Whirlwind or Roar, -1 otherwise, because `DraggedOutText` is printed
-## between `ForceEnemySwitch` and `SpikesDamage`.
-func send_out(
-	side: int, index: int, dragged_by: int = -1, preserve_counter_moves: bool = false
-) -> Array:
+## event or none: an impossible switch is refused. [param entrance] is how it
+## comes in; a drag prints `DraggedOutText` between `ForceEnemySwitch` and
+## `SpikesDamage`, and a Baton Pass keeps the counter-move words.
+func send_out(side: int, index: int, entrance: int = ENTRANCE_SWITCH) -> Array:
 	var events: Array = []
 	if is_over():
 		return events
 
 	var current: Gen2Party = party(side)
-	var leaving: int = current.active
-	var leaving_species: int = current.active_mon().species
-	var leaving_name: String = current.active_mon().display_name()
+	if not current.can_send_out(index):
+		return events
 	var withdrawing: bool = not current.active_mon().is_fainted()
+	if withdrawing:
+		_recall(side, entrance, events)
 	if side == PLAYER and current.active_mon() != null:
 		current.active_mon().clear_badge_boosts()
 	if not current.send_out(index):
@@ -1524,7 +1540,7 @@ func send_out(
 		if not withdrawing:
 			gen1_enemy_moves = 0
 	_clear_trapping()
-	if not preserve_counter_moves:
+	if entrance != ENTRANCE_BATON_PASS:
 		# NewBattleMonStatus/NewEnemyMonStatus clear both counter-move words.
 		mon(PLAYER).last_counter_move = 0
 		mon(ENEMY).last_counter_move = 0
@@ -1539,13 +1555,11 @@ func send_out(
 		# The next faint is a fresh `AskUseNextPokemon`.
 		_use_next_answered = false
 
-	# Nothing is called back after a faint, so the first half of the pair is only
-	# there when there was somebody to call back.
-	if withdrawing:
-		events.append({
-			"type": WITHDREW, "side": side, "index": leaving, "species": leaving_species,
-			"name": leaving_name,
-		})
+	if side == ENEMY:
+		enemy_hp_at_switch = current.active_mon().hp
+	# The enemy's pass still reaches `ShowBattleTextEnemySentOut`.
+	var quiet: bool = entrance == ENTRANCE_DRAGGED \
+		or (side == PLAYER and entrance == ENTRANCE_BATON_PASS)
 	events.append(stamp_statuses({
 		"type": SENT_OUT, "side": side, "index": index,
 		"species": current.active_mon().species, "level": current.active_mon().level,
@@ -1556,7 +1570,8 @@ func send_out(
 		## `CGB_BattleColors` and [method entrance_events] share.
 		"shiny": Gen2Stats.is_shiny(current.active_mon().dvs),
 		"gender": current.active_mon().gender(),
-		"line": send_out_line(side),
+		"quiet": quiet,
+		"line": SEND_OUT_GO if quiet else send_out_line(side),
 	}))
 	(_participants[side] as Dictionary)[index] = true
 	# `SendOutPlayerMon` and `ShowSetEnemyMonAndSendOutAnimation` both run their
@@ -1564,8 +1579,8 @@ func send_out(
 	# it before `DraggedOutText`.
 	events.append_array(entrance_events(side))
 	events.append({"type": HUD_DRAWN, "side": side})
-	if dragged_by >= 0:
-		events.append({"type": DRAGGED_OUT, "side": dragged_by, "target": side})
+	if entrance == ENTRANCE_DRAGGED:
+		events.append({"type": DRAGGED_OUT, "side": opponent_of(side), "target": side})
 	_spikes_damage(side, events)
 	return events
 
@@ -1688,10 +1703,8 @@ func send_out_line(side: int) -> int:
 	var foe: Gen2BattleMon = mon(opponent_of(side))
 	if foe == null or foe.hp <= 0:
 		return SEND_OUT_GO
-	var divisor: int = (foe.max_hp() >> 2) & 0xFF
-	if divisor == 0:
-		return SEND_OUT_GO
-	var percent: int = ((foe.hp * 25) / divisor) & 0xFF
+	enemy_hp_at_switch = foe.hp
+	var percent: int = _quarter_percent(foe.hp, foe)
 	if percent >= 70:
 		return SEND_OUT_GO
 	if percent >= 40:
@@ -1699,6 +1712,63 @@ func send_out_line(side: int) -> int:
 	if percent >= 10:
 		return SEND_OUT_GO_FOR_IT
 	return SEND_OUT_FOES_WEAK
+
+
+## `WithdrawMonText`: the HP lost since [member enemy_hp_at_switch], a
+## sixteen-bit `sub`/`sbc` that wraps when the opponent healed.
+func withdraw_line() -> int:
+	var foe: Gen2BattleMon = mon(ENEMY)
+	if foe == null:
+		return WITHDRAW_ENOUGH
+	var percent: int = _quarter_percent((enemy_hp_at_switch - foe.hp) & 0xFFFF, foe)
+	if percent == 0:
+		return WITHDRAW_ENOUGH
+	if percent < 30:
+		return WITHDRAW_COME_BACK
+	if percent < 70:
+		return WITHDRAW_OK
+	return WITHDRAW_GOOD
+
+
+## `hQuotient + 3` of [param amount] times 25 over a one-byte quarter max HP.
+static func _quarter_percent(amount: int, foe: Gen2BattleMon) -> int:
+	var divisor: int = (foe.max_hp() >> 2) & 0xFF
+	if divisor == 0:
+		return 0
+	return ((amount * 25) / divisor) & 0xFF
+
+
+## `BattleMonEntrance`: the line, fifty frames, `PursuitSwitch`, then
+## `RecallPlayerMon` unless Pursuit felled it. `AI_Switch`: Pursuit, then
+## `EnemyWithdrewText` for a survivor. A pass or a drag says nothing.
+func _recall(side: int, entrance: int, events: Array) -> void:
+	var leaving: Gen2BattleMon = mon(side)
+	var withdrew: Dictionary = {
+		"type": WITHDREW, "side": side, "index": party(side).active,
+		"species": leaving.species, "name": leaving.display_name(),
+		"quiet": entrance != ENTRANCE_SWITCH, "line": WITHDRAW_ENOUGH,
+	}
+	if entrance == ENTRANCE_BATON_PASS and side == PLAYER:
+		events.append({"type": DELAY, "frames": SWITCH_DELAY_FRAMES})
+	if entrance != ENTRANCE_SWITCH:
+		events.append(withdrew)
+		return
+	if side == PLAYER:
+		withdrew["line"] = withdraw_line()
+		events.append(withdrew)
+		events.append({"type": DELAY, "frames": SWITCH_DELAY_FRAMES})
+	if not _pending_turn.is_empty():
+		_pursuit_before_switch(side, _pending_turn["actions"], events)
+	if leaving.is_fainted():
+		return
+	if side == ENEMY:
+		events.append(withdrew)
+		return
+	events.append({
+		"type": ANIMATION, "index": ANIM_RETURN_MON, "param": 0, "after_anim": 0,
+		"enemy_turn": false, "effectiveness": 0, "restore_user_pic": false,
+		"called": true,
+	})
 
 
 ## `SpikesDamage`, behind each entrance's own `SetPlayerTurn`/`SetEnemyTurn`, so
@@ -1742,10 +1812,11 @@ func _clear_trapping() -> void:
 
 
 ## Whether `TryPlayerSwitch` would refuse the recall: bound, or held by Mean Look
-## or Spider Web. Player-only, `AI_Switch` making no such check.
+## or Spider Web. Player-only, `AI_Switch` making no such check. Generation 1's
+## `MainInBattleLoop` opens `DisplayBattleMenu` in front of its trap test.
 func switch_blocked() -> bool:
-	return mon(PLAYER).trapped_turns > 0 or gen1_trapping_move(ENEMY) != 0 \
-		or Gen2Substatus.has(mon(ENEMY).substatus, Gen2Substatus.CANT_RUN)
+	return not is_gen1() and (mon(PLAYER).trapped_turns > 0 \
+		or Gen2Substatus.has(mon(ENEMY).substatus, Gen2Substatus.CANT_RUN))
 
 
 ## Both sides act and the turn plays out. [method order] reads each side's move
@@ -1822,22 +1893,6 @@ func _gen1_ai_action(side: int, actions: Dictionary) -> Dictionary:
 	return chosen
 
 
-## `EnemySwitch`: on SHIFT the player is asked whether to change before that
-## Pokémon is out, and the turn stops there. `SwitchEnemyMon` raises
-## `wFirstMonsNotOutYet`, so a Generation 1 class's switch asks nobody.
-func _switch_offered(side: int, action: Dictionary, actions: Dictionary, events: Array) -> bool:
-	_pursuit_before_switch(side, actions, events)
-	if side == ENEMY and not bool(action.get("trainer_ai", false)) and should_offer_switch():
-		_pending_switch_offer = int(action.get("index", -1))
-		events.append({
-			"type": SWITCH_OFFERED, "side": PLAYER,
-			"index": _pending_switch_offer,
-			"species": party(ENEMY).at(_pending_switch_offer).species,
-			"name": party(ENEMY).at(_pending_switch_offer).display_name(),
-		})
-		return true
-	events.append_array(send_out(side, int(action.get("index", -1))))
-	return false
 
 
 ## The per-side loop and the end-of-turn tail, from wherever the turn last
@@ -1860,7 +1915,7 @@ func _run_turn(events: Array) -> Array:
 				return events
 			_open_turn_bracket(side, _gen1_ai_action(side, actions))
 			_pending_turn["acted"] = true
-			if _run_action(side, actions[side], actions, events):
+			if _run_action(side, actions[side], events):
 				return events
 		_pending_turn["acted"] = false
 		_close_turn_bracket(side, actions[side])
@@ -1914,7 +1969,7 @@ func _enemy_flees(side: int, action: Dictionary, events: Array) -> bool:
 
 
 ## One side's action; true when the turn cannot go on until somebody answers.
-func _run_action(side: int, action: Dictionary, actions: Dictionary, events: Array) -> bool:
+func _run_action(side: int, action: Dictionary, events: Array) -> bool:
 	var action_event_start: int = events.size()
 	var moving: bool = not (_is_run(action) or _is_switch(action) or _is_item(action))
 	if not moving and not bool(action.get("trainer_ai", false)):
@@ -1922,8 +1977,9 @@ func _run_action(side: int, action: Dictionary, actions: Dictionary, events: Arr
 		# run, both falling into `.locked_in`'s zeroing. -1 is no effect.
 		_reset_action_counters(side, -1)
 	if _is_switch(action):
-		if _switch_offered(side, action, actions, events):
-			return true
+		# `AI_Switch` raises `wBattleHasJustStarted`, so `CheckWhetherToAskSwitch`
+		# offers nothing mid-turn.
+		events.append_array(send_out(side, int(action.get("index", -1))))
 	elif _is_item(action):
 		## `BattleMenu_Pack` spends the player's item before the turn
 		## resolves; only the enemy reaches into its bag inside one.
@@ -2040,11 +2096,8 @@ func _brackets_turn(side: int, action: Dictionary) -> bool:
 
 
 ## `ParsePlayerAction` and `ParseEnemyAction`: the two counters a chain keeps only
-## while it is the move being used, Protect and Endure sharing one. The source's
-## second reset behind `CheckPlayerLockedIn` cannot disagree, none of the three
-## setting a recharge, charge, rampage or Rollout flag. [param effect] is the
-## move's own byte, not [method Gen2Turn.effect], which a broken Substitute
-## overwrites part way.
+## while it is the move being used, Protect and Endure sharing one. [param effect]
+## is the move's own byte, which a broken Substitute cannot overwrite.
 func _reset_action_counters(side: int, effect: int) -> void:
 	var actor: Gen2BattleMon = mon(side)
 	if effect != Gen2MoveEffect.FURY_CUTTER:
@@ -2121,8 +2174,15 @@ func _residual_damage(side: int, events: Array) -> void:
 		_residual_status, _residual_leech_seed, _residual_nightmare, _residual_curse,
 	]:
 		if mon(side).is_fainted():
-			return
+			break
 		step.call(side, events)
+	if not mon(side).is_fainted():
+		return
+	# `.fainted`'s twenty frames, in front of the faint `HandlePlayerMonFaint` shows.
+	for index: int in range(events.size() - 1, -1, -1):
+		if events[index]["type"] == FAINTED and int(events[index]["side"]) == side:
+			events.insert(index, {"type": DELAY, "frames": RESIDUAL_FAINT_FRAMES})
+			return
 
 
 ## A running [member Gen2BattleMon.toxic_counter] means Toxic, which ramps rather
@@ -2565,6 +2625,8 @@ func _award_experience(events: Array) -> void:
 		(_participants[side] as Dictionary).erase(party(side).active)
 		if side == ENEMY:
 			_give_experience_for(mon(ENEMY), events)
+			if not is_gen1():
+				events.append({"type": DELAY, "frames": ENEMY_FAINT_FRAMES})
 
 
 ## Splits what [param defeated] is worth, then resets the participant set. With
@@ -2852,11 +2914,9 @@ func gen1_stat_moved(side: int, stat: String, user: int) -> void:
 	mon(opponent_of(user)).gen1_apply_penalties()
 
 
-## The ITEMMENU_PARTY half, whose target `UseItem_SelectMon` has chosen, in the
-## source's own refusal order: a fainted target takes only a revive, a revive only
-## a fainted one, and anything else that would change nothing is
-## `WontHaveAnyEffect_NotUsedMessage`. [param active] decides the two a benched
-## member cannot have, `IsItemUsedOnConfusedMon`'s cure and Full Restore's.
+## The ITEMMENU_PARTY half in the source's refusal order: a fainted target takes
+## only a revive and a revive only a fainted one. [param active] decides the two a
+## benched member cannot have, the confusion cure and Full Restore's.
 func _apply_party_item(
 	target: Gen2BattleMon, item: int, definition: Dictionary,
 	move_slot: int, active: bool

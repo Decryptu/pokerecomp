@@ -64,6 +64,7 @@ var disobeyed: bool = false
 var called_move_number: int = 0
 
 var bide_release: bool = false  ## `StoreEnergy`'s Bide release, which skips `UsedMoveText`.
+var rampage_continued: bool = false  ## A Thrash past its first turn.
 
 ## The accuracy byte rolled against, -1 for the move's own. Only
 ## [method Gen2EffectCommands._thunder_accuracy] sets it.

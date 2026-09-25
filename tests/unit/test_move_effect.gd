@@ -309,15 +309,20 @@ func test_a_hit_based_stat_drop_that_fails_says_nothing() -> void:
 	assert_eq(turn.events.size(), 0)
 
 
-func test_ancientpower_raises_all_five_real_stats_as_one_event() -> void:
+## `BattleCommand_AllStatsUp` says each stat that rose, in turn, and nothing for
+## one already at its limit.
+func test_ancientpower_raises_all_five_real_stats_one_line_each() -> void:
 	var turn: Gen2Turn = _turn(_battle())
+	turn.attacker().change_stage("speed", Gen2Stats.MAX_STAGE)
 	Gen2EffectCommands.run(Gen2EffectCommands.ALL_STATS_UP, turn)
 
-	for key: String in ["attack", "defense", "speed", "sp_attack", "sp_defense"]:
+	for key: String in ["attack", "defense", "sp_attack", "sp_defense"]:
 		assert_eq(turn.attacker().stage(key), 1, key)
 	assert_eq(turn.attacker().stage("accuracy"), 0, "not among the five it raises")
-	assert_eq(turn.events.size(), 1)
-	assert_eq(String(turn.events[0]["stat"]), "all")
+	assert_eq(
+		turn.events.map(func(event: Dictionary) -> String: return String(event["stat"])),
+		["attack", "defense", "sp_attack", "sp_defense"]
+	)
 
 
 func test_ancientpower_does_nothing_behind_a_failed_roll() -> void:
