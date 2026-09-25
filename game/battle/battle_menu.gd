@@ -76,10 +76,10 @@ const GEN1_LEVEL_UP_STATS_AT := Vector2i(11, 3)
 const GEN1_LEVEL_UP_STAT_NAMES: Array[String] = ["ATTACK", "DEFENSE", "SPEED", "SPECIAL"]
 const GEN1_LEVEL_UP_STAT_KEYS: Array[String] = ["attack", "defense", "speed", "sp_attack"]
 
-## `BattleText_TheresNoPPLeftForThisMove` and `BattleText_TheMoveIsDisabled`,
-## which `.use_move` prints over the list and then reopens it behind.
-const NO_PP_TEXT: String = "There's no PP left for this move!"
-const DISABLED_TEXT: String = "The move is disabled!"
+## `.use_move`'s two refusals, which it prints over the list and then reopens
+## it behind: `BattleText_TheresNoPPLeftForThisMove` and `..._TheMoveIsDisabled`.
+const NO_PP: StringName = &"BattleText_TheresNoPPLeftForThisMove"
+const DISABLED: StringName = &"BattleText_TheMoveIsDisabled"
 
 
 ## `ContestBattleMenuHeader`: the same two-by-two four columns further left, with
@@ -290,11 +290,11 @@ static func move_cursor_moved(cursor: int, button: int, rows: int) -> int:
 	return clampi(cursor, 0, rows - 1)
 
 
-## `.use_move`'s two refusals, in its order: no PP first, then the disabled
-## slot. An empty string is a row that may be chosen.
-static func refusal_for(row: Dictionary) -> String:
+## `.use_move`'s refusals in its order, no PP first; empty for a row that may
+## be chosen.
+static func refusal_for(row: Dictionary) -> StringName:
 	if int(row.get("pp", 0)) <= 0:
-		return NO_PP_TEXT
+		return NO_PP
 	if bool(row.get("disabled", false)):
-		return DISABLED_TEXT
-	return ""
+		return DISABLED
+	return &""

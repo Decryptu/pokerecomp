@@ -37,37 +37,39 @@ const DEFAULT_LEVEL: int = 5
 ## matchup. A validated save supplies the player's real party instead.
 const PARTY_SIZE: int = 2
 
-## What a status says when it stops a Pokémon moving, and when it lands on one.
-## Keyed by the names [Gen2Status] answers with, so a status the engine grows
-## later shows up here as a missing key rather than as a wrong sentence.
+## [constant BATTLE_TEXT] rows by the names [Gen2Status] answers with.
 const STOPPED_BY: Dictionary = {
-	&"ignored_sleeping": "ignored orders…sleeping!",
-	&"began_to_nap": "began to nap!",
-	&"loafing": "is loafing around!",
-	&"wont_obey": "won't obey!",
-	&"turned_away": "turned away!",
-	&"ignored_orders": "ignored orders!",
-	&"sleep": "is fast asleep!",
-	&"freeze": "is frozen solid!",
-	&"paralysis": "'s fully paralyzed!",
-	&"flinch": "flinched!",
-	&"recharge": "must recharge!",
-	&"disabled": "is disabled!",
-	&"attract": "'s infatuation kept it from attacking!",
-	## `_CantMoveText`, Generation 1's alone: the target of a trapping move
-	## spends every turn of it held in place.
-	&"held_in_place": "can't move!",
+	&"ignored_sleeping": ["IgnoredSleepingText", &"name:side"],
+	&"began_to_nap": ["BeganToNapText", &"name:side"],
+	&"loafing": ["LoafingAroundText", &"name:side"],
+	&"wont_obey": ["WontObeyText", &"name:side"],
+	&"turned_away": ["TurnedAwayText", &"name:side"],
+	&"ignored_orders": ["IgnoredOrdersText", &"name:side"],
+	&"sleep": ["FastAsleepText"],
+	&"freeze": ["FrozenSolidText"],
+	&"paralysis": ["FullyParalyzedText"],
+	&"flinch": ["FlinchedText"],
+	&"recharge": ["MustRechargeText"],
+	&"disabled": ["DisabledMoveText", &"move:move"],
+	&"attract": ["InfatuationText"],
 }
-
 const INFLICTED: Dictionary = {
-	&"sleep": "fell asleep!",
-	&"poison": "was poisoned!",
-	&"toxic": "'s badly poisoned!",
-	&"burn": "was burned!",
-	&"freeze": "was frozen solid!",
-	&"paralysis": "'s paralyzed! Maybe it can't attack!",
+	&"sleep": "FellAsleepText", &"poison": "WasPoisonedText", &"toxic": "BadlyPoisonedText",
+	&"burn": "WasBurnedText", &"freeze": "WasFrozenText", &"paralysis": "ParalyzedText",
 }
-const HURT_BY: Dictionary = {&"poison": " is hurt by poison!", &"burn": "'s hurt by its burn!"}
+const ALREADY: Dictionary = {
+	Gen2Status.SLEEP_MASK: "AlreadyAsleepText", Gen2Status.POISON: "AlreadyPoisonedText",
+	Gen2Status.PARALYSIS: "AlreadyParalyzedText", Gen2EffectCommands.CONFUSE_KEY: "AlreadyConfusedText",
+}
+const HURT_BY: Dictionary = {&"poison": "HurtByPoisonText", &"burn": "HurtByBurnText"}
+const GEN1_MOVE_REFUSALS: Dictionary = {
+	Gen2BattleMenu.NO_PP: "No PP left for\nthis move!",
+	Gen2BattleMenu.DISABLED: "The move is\ndisabled!",
+}
+const GEN1_HIT_TEXT: Dictionary = {
+	"CriticalHitText": "Critical hit!", "SuperEffectiveText": "It's super\neffective!",
+	"NotVeryEffectiveText": "It's not very\neffective...",
+}
 
 ## `data/text/text_1.asm`'s wording with its own `line` and `cont` breaks.
 const GEN1_STOPPED_BY: Dictionary = {
@@ -76,6 +78,7 @@ const GEN1_STOPPED_BY: Dictionary = {
 	&"ignored_orders": "\nignored orders!", &"sleep": "\nis fast asleep!",
 	&"freeze": "\nis frozen solid!", &"paralysis": "'s\nfully paralyzed!",
 	&"flinch": "\nflinched!", &"recharge": "\nmust recharge!",
+	## `_CantMoveText`: a trapping move's target is held in place.
 	&"disabled": "'s\n%s is" + SCROLL + "disabled!", &"held_in_place": "\ncan't move!",
 	&"scared": " is too\nscared to move!",
 }
@@ -131,53 +134,51 @@ const STAT_NAMES: Dictionary = {
 	"attack": "ATTACK",
 	"defense": "DEFENSE",
 	"speed": "SPEED",
-	"sp_attack": "SP.ATK",
-	"sp_defense": "SP.DEF",
+	"sp_attack": "SPCL.ATK",
+	"sp_defense": "SPCL.DEF",
 	"accuracy": "ACCURACY",
-	"evasion": "EVASIVENESS",
+	"evasion": "EVASION",
 	# `StatNames`' eighth row, which no stat uses: `BattleCommand_Curse` names it
 	# when neither Attack nor Defense can rise.
 	"ability": "ABILITY",
 }
 
-## The three trapping moves whose landing line spells the move out, since
-## `BattleCommand_TrapTarget`'s `.Traps` table writes them into the text rather
-## than reading a name buffer. Fire Spin and Whirlpool share the line that names
-## nothing, so neither needs a number here.
-const BIND: int = 20
-const WRAP: int = 35
-const CLAMP: int = 128
+## `BattleCommand_TrapTarget`'s `.Traps`: Bind, Wrap, Clamp, Fire Spin, else Whirlpool.
+const TRAP_TEXT: Dictionary = {
+	20: "UsedBindText", 35: "WrappedByText", 128: "ClampedByText", 83: "FireSpinTrapText",
+}
 
 ## The three lines each weather has, which are the cartridge's own and are keyed
 ## by the weather rather than by the move: `HandleWeather`'s `.WeatherMessages`
 ## and `.WeatherEndedMessages`, plus each setter's own.
 const WEATHER_STARTED_TEXT: Dictionary = {
-	Gen2Weather.RAIN: "A downpour started!",
-	Gen2Weather.SUN: "The sunlight got bright!",
-	Gen2Weather.SANDSTORM: "A SANDSTORM brewed!",
+	Gen2Weather.RAIN: "DownpourText",
+	Gen2Weather.SUN: "SunGotBrightText",
+	Gen2Weather.SANDSTORM: "SandstormBrewedText",
 }
 const WEATHER_CONTINUES_TEXT: Dictionary = {
-	Gen2Weather.RAIN: "Rain continues to fall.",
-	Gen2Weather.SUN: "The sunlight is strong.",
-	Gen2Weather.SANDSTORM: "The SANDSTORM rages.",
+	Gen2Weather.RAIN: "BattleText_RainContinuesToFall",
+	Gen2Weather.SUN: "BattleText_TheSunlightIsStrong",
+	Gen2Weather.SANDSTORM: "BattleText_TheSandstormRages",
 }
 const WEATHER_ENDED_TEXT: Dictionary = {
-	Gen2Weather.RAIN: "The rain stopped.",
-	Gen2Weather.SUN: "The sunlight faded.",
-	Gen2Weather.SANDSTORM: "The SANDSTORM subsided.",
+	Gen2Weather.RAIN: "BattleText_TheRainStopped",
+	Gen2Weather.SUN: "BattleText_TheSunlightFaded",
+	Gen2Weather.SANDSTORM: "BattleText_TheSandstormSubsided",
 }
 
 ## `BattleCommand_Screen`'s and `BattleCommand_Safeguard`'s set lines, and
 ## `HandleScreens`' faded ones, which name the side: `.Copy` fills
 ## `wStringBuffer1` with "Your" or "Enemy". `HandleSafeguard`'s is a plain `<USER>`.
 const SCREEN_SET_TEXT: Dictionary = {
-	Gen2Screens.LIGHT_SCREEN: "%s's SPCL.DEF rose!",
-	Gen2Screens.REFLECT: "%s's DEFENSE rose!",
-	Gen2Screens.SAFEGUARD: "%s's covered by a veil!",
+	Gen2Screens.LIGHT_SCREEN: "LightScreenEffectText",
+	Gen2Screens.REFLECT: "ReflectEffectText",
+	Gen2Screens.SAFEGUARD: "CoveredByVeilText",
 }
 const SCREEN_FADED_TEXT: Dictionary = {
-	Gen2Screens.LIGHT_SCREEN: "%s's LIGHT SCREEN fell!",
-	Gen2Screens.REFLECT: "%s's REFLECT faded!",
+	Gen2Screens.LIGHT_SCREEN: "BattleText_MonsLightScreenFell",
+	Gen2Screens.REFLECT: "BattleText_MonsReflectFaded",
+	Gen2Screens.SAFEGUARD: "BattleText_SafeguardFaded",
 }
 
 const DUDE_NAME: String = "DUDE"
@@ -303,17 +304,12 @@ const LINK_OPPONENT_PIC: int = -1
 var _hud_balls: Array = []
 var _hud_border: Array = []
 var _slides: Array[Dictionary] = []  ## `SlideBattlePicOut`, one entry per square still sliding off.
-## How far each square's picture has walked off it, in pixels along x, signed the
-## way the walk goes: the player leaves to the left and the opponent to the
-## right. Kept after the walk ends rather than dropped with the slide's entry,
-## because the picture stays off the square until the ball puts a Pokemon there;
-## that stretch is the `none` [method battler_side] reports.
+## How far each square's picture has walked off it along x, signed the way it
+## walks. Kept until the ball puts a Pokemon there: [method battler_side]'s `none`.
 var _slid_pixels: Dictionary = {Gen2Battle.PLAYER: 0.0, Gen2Battle.ENEMY: 0.0}
-## What the tilemap effects last did to each battler's picture, carried past the
-## animation that did it: `BattleBGEffect_HideMon` leaves a Fly or Dig user off
-## the field for a turn, and `..._RemoveMon` leaves a recalled Pokemon off the
-## square until the next send-out. The anim background reports both while it runs
-## and this is where they outlive it; see [method battler_side].
+## What the tilemap effects last did to each battler's picture, past the
+## animation: `BattleBGEffect_HideMon` leaves a Fly or Dig user off the field for
+## a turn, and `..._RemoveMon` a recalled Pokemon until the next send-out.
 var _battler_visible: Dictionary = {Gen2Battle.PLAYER: true, Gen2Battle.ENEMY: true}
 var _battler_scale: Dictionary = {Gen2Battle.PLAYER: 1.0, Gen2Battle.ENEMY: 1.0}
 var _battler_shift: Dictionary = {
@@ -330,6 +326,11 @@ var _bg_vbank1: PackedByteArray = PackedByteArray()
 ## prints it after the bar arrives, since `applydamage` runs before
 ## `criticaltext` and `supereffectivetext`.
 var _held_message: String = ""
+var _held_prompt: bool = true
+## A line that ended in `done`: the pump runs on with no press once it prints.
+var _run_on_text: bool = false
+var _struggle_forced: bool = false
+const NO_MOVES_LEFT_FRAMES: int = 60
 ## Whether the box is holding a line nobody has pressed past yet. Only a box
 ## waits for a button in `DoMove`'s loop, so this is what tells the frame pump
 ## that the run of frames it just finished owes a press rather than the next
@@ -619,6 +620,7 @@ func _process(delta: float) -> void:
 			advance_frame()
 		elif _box != null:
 			_box.advance_frame()
+			_resume_after_frames(false)
 		else:
 			break
 
@@ -630,6 +632,19 @@ func frames_running() -> bool:
 	var bars: bool = not _bars.is_empty() or (_exp_bar != null and not _exp_bar.paused())
 	return bars or _intro != null or animation_running() or fainting() or sliding() \
 		or animating_frontpic() or not _sound_queue.is_empty() or not _unveil.is_empty()
+
+
+func _text_printing() -> bool:
+	return _run_on_text and _box != null and _box.is_revealing()
+
+
+## A `done` line with a `cont` in it stops on that `cont` for a press.
+func _text_waits_on_cont() -> bool:
+	return _run_on_text and _box != null and not _box.is_revealing() and _box.has_pages_left()
+
+
+func _text_run_out() -> bool:
+	return _run_on_text and not _text_printing() and not _text_waits_on_cont()
 
 
 ## One hardware frame of everything that counts them. Public through
@@ -659,6 +674,8 @@ func advance_frame() -> bool:
 ## nothing in `DoMove`'s loop reads a button between them. The real waits are
 ## all a box, which [method _continue_after_messages] owns.
 func _resume_after_frames(was_running: bool) -> void:
+	if _text_run_out():
+		was_running = true
 	if not was_running or frames_running():
 		return
 	_continue_after_messages()
@@ -1113,6 +1130,7 @@ func advance_hardware_frame() -> bool:
 	_advance_yes_no_holds()
 	_refresh_question_layer()
 	if not frames_running():
+		_resume_after_frames(false)
 		return moved
 	return advance_frame() or moved
 
@@ -1698,6 +1716,7 @@ func _build_entrance() -> void:
 		_entrance_stages.append({"slide": Gen2Battle.ENEMY})
 		_entrance_stages.append({
 			"message": _enemy_sent_out_line(_battle.mon(Gen2Battle.ENEMY).display_name()),
+			"prompt": false,
 		})
 		_entrance_stages.append(
 			_with_frontpic(
@@ -1845,13 +1864,10 @@ func _advance_entrance() -> bool:
 			return true
 		var message: String = String(stage.get("message", ""))
 		if not message.is_empty():
-			## `SendOutMonText` ends in `done`, printed with the ball in the air;
-			## every other line here waits on a `prompt` or a `cont`.
-			var prompt: bool = bool(stage.get("prompt", true))
+			## A `done` line: the ball is thrown once it has printed.
 			stage["message"] = ""
-			show_message(message, prompt)
-			if prompt:
-				return true
+			show_message(message, bool(stage.get("prompt", true)))
+			return true
 		## `ShowSetEnemyMonAndSendOutAnimation`: the ball, then `AnimateFrontpic`.
 		var events: Array = stage.get("events", []) as Array
 		if not events.is_empty() and stage.has("frontpic"):
@@ -1941,7 +1957,7 @@ func entrance_snapshot() -> Dictionary:
 	return {
 		"stages": _entrance_stages.size(),
 		"message": _last_message,
-		"awaits_press": _message_awaits_press,
+		"awaits_press": _message_awaits_press or _text_waits_on_cont(),
 		"enemy_hud": _enemy_hud_visible and _anim_hud_hidden != Gen2Battle.ENEMY,
 		"player_hud": _player_hud_visible and _anim_hud_hidden != Gen2Battle.PLAYER,
 		"enemy_trainer_pic": _enemy_trainer_pic,
@@ -2091,10 +2107,11 @@ const ANIM_RESTORE_HUD: StringName = &"restore_hud"
 const ANIM_WAIT_SFX: StringName = &"wait_sfx"
 const ANIM_HIT_SOUND: StringName = &"hit_sound"
 const ANIM_APPEAR_USER: StringName = &"appear_user"
-## `PlayApplyingAttackAnimation` and `AnimateSendingOutMon`, Generation 1's two
-## routines with no row behind them.
+## `PlayApplyingAttackAnimation`, `AnimateSendingOutMon` and
+## `AnimateRetreatingPlayerMon`, Generation 1's routines with no row behind them.
 const ANIM_APPLYING: StringName = &"applying"
 const ANIM_SEND_OUT: StringName = &"send_out"
+const ANIM_RETREAT: StringName = &"retreat"
 ## `PlaySFX` on its own, which only the entrance uses: an animation's own sounds
 ## come out of its script.
 const ANIM_SFX: StringName = &"sfx"
@@ -2110,11 +2127,9 @@ var _substitute_pic: Dictionary = {Gen2Battle.PLAYER: false, Gen2Battle.ENEMY: f
 ## off. Written by [constant Gen2Battle.MINIMIZED] and cleared by a send-out.
 var _minimize_pic: Dictionary = {Gen2Battle.PLAYER: false, Gen2Battle.ENEMY: false}
 
-## `BattleAnimCmd_Minimize` writes `vTiles0`, which is off screen, and
-## `..._UpdateActorPic` copies it onto the square 48 frames later. The dot is
-## already on by then, `BattleCommand_StatUp` having set the byte two commands
-## before, so this only keeps the source's own pair together.
-## `BattleAnim_Transform` is the pair's other user and no list here reaches it.
+## `BattleAnimCmd_Minimize` writes off-screen `vTiles0` and `..._UpdateActorPic`
+## copies it onto the square 48 frames later, after `BattleCommand_StatUp` has
+## already set the byte, so this only keeps the source's own pair together.
 var _staged_minimize_pic: bool = false
 
 ## `wFXAnimID` is a word: an id past this is not a move and skips the whole
@@ -2245,7 +2260,16 @@ func _begin_animation(event: Dictionary) -> void:
 	var index: int = int(event.get("index", 0))
 	var after: int = int(event.get("after_anim", 0))
 	var is_move: bool = index < ANIM_MOVE_LIMIT
-	var gen1: bool = _anim_data != null and _anim_data.gen1()
+	var gen1: bool = _generation() == RomRegistry.GEN1
+	if gen1 and index == Gen2Battle.ANIM_RETURN_MON:
+		# `AnimateRetreatingPlayerMon` is a plain call, with no lead and no sound.
+		for tiles: int in Gen2BattleScreenMap.RETREAT_SIZES:
+			_step(ANIM_RETREAT, {
+				"size": tiles, "frames": int(Gen2BattleScreenMap.RETREAT_FRAMES[tiles]),
+			})
+		_run_next_anim_step()
+		return
+	gen1 = _anim_data != null and _anim_data.gen1()
 
 	# `PlayFXAnimID`'s own `ld c, 3 / call DelayFrames`, then `_PlayBattleAnim`'s
 	# six, `BattleAnimAssignPals`/`..._RequestPals` and one more. The two pal
@@ -2282,6 +2306,7 @@ func _begin_animation(event: Dictionary) -> void:
 		_step(ANIM_HIT_SOUND, {})
 		if gen1 and index == Gen2Battle.ANIM_SEND_OUT_MON:
 			_gen1_send_out_steps(bool(event.get("enemy_turn", false)), int(event.get("param", 0)))
+
 		elif gen1 and index == ANIM_THROW_POKE_BALL:
 			_gen1_toss_ball_steps(event)
 		else:
@@ -2384,6 +2409,19 @@ func _run_next_anim_step() -> void:
 				_anim_delay = int(step["frames"])
 				_push_view()
 				return
+			ANIM_RETREAT:
+				var tiles: int = int(step["size"])
+				Gen2BattleScreenMap.retreat_step(_bg_map, _generation(), tiles)
+				_battler_visible[Gen2Battle.PLAYER] = tiles > 0
+				_battler_scale[Gen2Battle.PLAYER] = float(maxi(tiles, 1)) \
+					/ float(Gen2BattleScreenMap.player_box_side(_generation()))
+				_battler_shift[Gen2Battle.PLAYER] = Vector2(
+					Gen2BattleScreenMap.RETREAT_AT.get(tiles, Vector2i.ZERO) as Vector2i
+				) * PokeTiles.TILE_WIDTH
+				_anim_delay = int(step["frames"])
+				_push_view()
+				if _anim_delay > 0:
+					return
 			ANIM_APPEAR_USER:
 				# `AppearUserLowerSub`, which Fly and Dig reach after the
 				# animation: `LowerSubNoAnim` writes the user's own picture and
@@ -2429,11 +2467,9 @@ const GEN1_TOSS_ANIMS: Dictionary = {
 }
 
 
-## `wAnimationID` less one, which is what `AttackAnimationPointers` is indexed
-## by. Crystal's own table is indexed by the id itself, so this is the identity
-## there. -1 is an id this cartridge has no row for: `ANIM_SEND_OUT_MON`, the
-## thrown ball and the four after-anims are each their own routine in Generation
-## 1 rather than an entry in the table.
+## `wAnimationID` less one, `AttackAnimationPointers`' index; Crystal's is the id.
+## -1 is an id with no row: Generation 1's send-out, thrown ball and four
+## after-anims are routines of their own.
 func _anim_row(index: int, enemy_turn: bool) -> int:
 	if _anim_data == null:
 		return -1
@@ -2525,11 +2561,9 @@ func _send_out_step(tiles: int) -> void:
 	) * PokeTiles.TILE_WIDTH
 
 
-## `RunBattleAnimScript`, which is `ClearBattleAnims` and then a frame loop. The
-## tilemap the battle is showing is what the effects edit, so it goes in here
-## and comes back out at the end. A cache carrying no animation layer answers
-## with no player, and the step is skipped rather than the whole framing: the
-## delays and the hud belong to the screen, not to the data.
+## `RunBattleAnimScript`: `ClearBattleAnims`, then a frame loop over the tilemap
+## the battle shows. A cache with no animation layer skips the step alone: the
+## delays and the hud are the screen's.
 func _start_script(index: int, enemy_turn: bool, shakes: int = 0) -> bool:
 	var row: int = _anim_row(index, enemy_turn)
 	if _anim_data == null or row < 0:
@@ -2975,6 +3009,7 @@ func show_message(text: String, prompt: bool = true) -> void:
 	## `StdBattleTextbox` blocks on a press for a line it printed; an empty box
 	## is the one a menu is drawn over and owes nothing.
 	_message_awaits_press = prompt and not text.is_empty()
+	_run_on_text = not prompt and not text.is_empty()
 	## `PromptText` draws no `▼` in a Generation 1 link battle.
 	_link_text_frames = Gen1Layout.LINK_BATTLE_TEXT_FRAMES if _gen1_link_battle() else 0
 	if _box != null:
@@ -3018,7 +3053,7 @@ func battle_snapshot() -> Dictionary:
 		"completion_sent": _world_battle_completion_sent,
 		"entrance_running": entrance_running(),
 		## Whether the line on screen is one `<PROMPT>` or `<CONT>` blocks on.
-		"awaits_press": _message_awaits_press,
+		"awaits_press": _message_awaits_press or _text_waits_on_cont(),
 		"switch_stage": _switch_stage,
 		"switch_cursor": (
 			_switch_offer.selected_index() if _switch_offer != null
@@ -3039,11 +3074,9 @@ func battle_snapshot() -> Dictionary:
 	}
 
 
-## The plain reading a registered battle-information provider annotates from:
-## both sides' live stat stages, the weather and what is left of it, who is
-## standing, what is on screen, whether this opponent had been seen, and each
-## move's effectiveness as [method Gen2MoveEffect.applied_effectiveness] over
-## [method Gen2BattleMon.types], which carries Foresight's identified state.
+## What a registered battle-information provider annotates from: stages,
+## weather, who stands, what is on screen, whether this opponent was seen, and
+## each move's [method Gen2MoveEffect.applied_effectiveness].
 func info_snapshot() -> Dictionary:
 	var player: Gen2BattleMon = _battle.mon(Gen2Battle.PLAYER) if _battle != null else null
 	var enemy: Gen2BattleMon = _battle.mon(Gen2Battle.ENEMY) if _battle != null else null
@@ -3202,11 +3235,8 @@ func set_time_of_day(value: int) -> void:
 	_time_of_day = value
 
 
-## Supplies where the battle is being fought, for a renderer that stages it on
-## the map. Set before the scene enters the tree, the way the data source is:
-## the renderer is built in _ready() and is handed this straight after
-## [method Gen2BattleRenderer.set_battle_data]. Nothing in the battle itself
-## reads it.
+## Where the battle is fought, for a renderer that stages it on the map. Set
+## before the scene enters the tree; nothing in the battle itself reads it.
 func set_world_context(context: Gen2BattleWorldContext) -> void:
 	_world_context = context
 	_push_world_context()
@@ -3538,11 +3568,9 @@ func set_capture_refusal(message: String) -> void:
 	_capture_refusal = message
 
 
-## `SetSeenMon`, `CheckCaughtMon` and `CheckReceivedDex`, off the world's live
-## state rather than off the save's own snapshot: that snapshot is only as fresh
-## as the last write to disk, so a species seen or caught since then reads as
-## new. Called by the host that owns the world, before the entrance runs and
-## therefore before anything registers this sight.
+## `SetSeenMon`, `CheckCaughtMon` and `CheckReceivedDex` off the world's live
+## state, since the save's snapshot is only as fresh as its last write. Called
+## before the entrance registers this sight.
 func set_dex_context(seen: bool, caught: bool, received: bool) -> void:
 	_enemy_seen_before = seen
 	_enemy_caught_before = caught
@@ -4391,8 +4419,10 @@ func _queue_wild_fled_sfx(_event: Dictionary) -> void:
 	_sfx_after_press = Gen2Sfx.SFX_RUN
 
 
-func _wild_fled_text(_event: Dictionary) -> String:
-	return "Wild %s\nfled!" % _enemy_mon_name()
+func _wild_fled_text(event: Dictionary) -> String:
+	if _generation() == RomRegistry.GEN1:
+		return "Wild %s\nfled!" % _enemy_mon_name()
+	return _battle_text("BattleText_WildFled", event, [_enemy_mon_name()])
 
 
 ## `.can_escape`: a Smoke Ball's line, then SFX_RUN waited out before
@@ -4444,6 +4474,10 @@ func advance() -> void:
 		## releases, the same as the first one.
 		_play_sfx(Gen2Sfx.SFX_EXP_BAR, true)
 		return
+	## `PrintLetterDelay` takes a held button.
+	if _text_printing():
+		_box.advance()
+		return
 	## `BattleIntroSlidingPics`, `SlideBattlePicOut` and every other run of frames
 	## this screen counts is delays with nothing reading a button.
 	if frames_running():
@@ -4462,12 +4496,12 @@ func advance() -> void:
 	_continue_after_messages()
 
 
-## What the source runs on to once nothing is left to say. `DoTurn` falls
-## straight out of the last command into `HandleBetweenTurnEffects` and then
-## into `BattleMenu`, and nothing between them reads a button, so this is
-## reached both by the press that dismissed the last box and by
-## [method _show_next_event] finding no line left to print.
+## What the source runs on to once nothing is left to say: `DoTurn` falls into
+## `HandleBetweenTurnEffects` and `BattleMenu` reading no button, so both a press
+## and [method _show_next_event] running dry arrive here.
 func _continue_after_messages() -> void:
+	if _text_run_out():
+		_run_on_text = false
 	if _messages_held():
 		return
 	## Nothing is left to print, so the line the box stood beside is gone even
@@ -4542,9 +4576,9 @@ func _messages_held() -> bool:
 	if not _held_message.is_empty():
 		var held: String = _held_message
 		_held_message = ""
-		show_message(held)
+		show_message(held, _held_prompt)
 		return true
-	if _message_awaits_press:
+	if _message_awaits_press or _run_on_text:
 		return true
 	## `BattleStartMessage` and `DoBattle`'s opening: each step is either frames
 	## or a line, so the pump and the press both arrive back here for the next.
@@ -4814,7 +4848,7 @@ func _show_prize_money_text() -> bool:
 	]
 	match StringName(earned["prize_line"]):
 		Gen2Battle.PRIZE_SENT_SOME_TO_MOM:
-			show_message("%s\nSent some to MOM!" % got)
+			show_message(got + SCROLL + "Sent some to MOM!")
 		Gen2Battle.PRIZE_SENT_HALF_TO_MOM:
 			show_message("Sent half to MOM!")
 		Gen2Battle.PRIZE_SENT_ALL_TO_MOM:
@@ -5003,6 +5037,10 @@ func _answer_mimic_menu(button: int) -> void:
 func _open_battle_menu() -> void:
 	if _battle == null or _battle.is_over() or not _pending.is_empty():
 		return
+	if _struggle_forced:
+		_struggle_forced = false
+		_take_turn_with_slot(0)
+		return
 	if _battle.awaiting_move_learn() or _battle.must_replace(Gen2Battle.PLAYER):
 		return
 	if _battle.player_menu_skipped():
@@ -5027,7 +5065,14 @@ func _open_move_menu() -> void:
 	_move_rows = Gen2BattleMenu.move_rows(mon, _data)
 	if _move_rows.is_empty() or mon.is_out_of_pp():
 		_close_battle_menu()
-		_take_turn_with_slot(0)
+		if _battle.is_over():
+			return
+		# `.force_struggle`: the line, `ld c, 60`, then Struggle.
+		_struggle_forced = true
+		var nick: String = _battler_name(Gen2Battle.PLAYER)
+		show_message("%s has no\nmoves left!" % nick if _generation() == RomRegistry.GEN1 \
+			else _battle_text("BattleText_MonHasNoMovesLeft", {}, [nick]), false)
+		_pending = [{"type": Gen2Battle.DELAY, "frames": NO_MOVES_LEFT_FRAMES}]
 		return
 	if _battle.player_move_menu_skipped():
 		_close_battle_menu()
@@ -5169,10 +5214,11 @@ func _answer_move_menu(button: int) -> void:
 			_reopen_menu_layer()
 		PokeButton.A:
 			var row: Dictionary = _move_rows[_move_cursor]
-			var refusal: String = Gen2BattleMenu.refusal_for(row)
-			if not refusal.is_empty():
+			var refusal: StringName = Gen2BattleMenu.refusal_for(row)
+			if refusal != &"":
 				_menu_stage = &"refused"
-				show_message(refusal)
+				show_message(String(GEN1_MOVE_REFUSALS[refusal]) if _generation() == RomRegistry.GEN1 \
+					else _battle_text(refusal, {}))
 				_reopen_menu_layer()
 				return
 			_close_battle_menu()
@@ -6153,6 +6199,13 @@ func _show_next_event() -> void:
 			if animation_running():
 				return
 			continue
+		if StringName(event["type"]) == Gen2Battle.DELAY:
+			_anim_plan = []
+			_step(ANIM_DELAY, {"frames": int(event["frames"])})
+			_run_next_anim_step()
+			if animation_running():
+				return
+			continue
 		if StringName(event["type"]) == Gen2Battle.APPEAR_USER:
 			## `AppearUser` alone: no script and no frames, just the picture back
 			## in the map. It goes through the plan anyway, since that is where
@@ -6182,8 +6235,9 @@ func _show_next_event() -> void:
 			## it rather than racing it.
 			if not _bars.is_empty() or fainting():
 				_held_message = text
+				_held_prompt = not _line_runs_on(event)
 			else:
-				show_message(text)
+				show_message(text, not _line_runs_on(event))
 			return
 		## `AnimateHPBar` and `MonFaintedAnimation` both block: the source does
 		## not reach the next command until the bar has emptied and the picture
@@ -6364,183 +6418,125 @@ func _apply_event_state(event: Dictionary) -> void:
 			_refresh_level_up_box()
 
 
-## Every event that reads as one sentence, as the sentence and the arguments it
-## takes. An argument is `kind:field`, which [method _line_argument] resolves off
-## the event: a battler's name, a move, an item, a species, a type or a number.
+## Generation 2's lines, `data/text/battle.asm` by label: [label, values...].
+## `<USER>` is the event's `side` and `<TARGET>` its `target` or the other side,
+## unless `user:` or `target:` names another field; each other value fills the
+## next `text_ram` or `text_decimal` marker.
+const BATTLE_TEXT: Dictionary = {
+	Gen2Battle.MISSED: ["AttackMissedText"],
+	Gen2Battle.NO_EFFECT: ["DoesntAffectText"],
+	Gen2Battle.RECOIL: ["RecoilText"],
+	Gen2Battle.OHKO: ["OneHitKOText"],
+	Gen2Battle.WOKE_UP: ["WokeUpText"],
+	Gen2Battle.THAWED: ["WasDefrostedText"],
+	Gen2Battle.CONFUSE_INFLICTED: ["BecameConfusedText"],
+	Gen2Battle.CONFUSED: ["IsConfusedText"],
+	Gen2Battle.IN_LOVE_WITH: ["InLoveWithText"],
+	Gen2Battle.SNAPPED_OUT: ["ConfusedNoMoreText"],
+	Gen2Battle.HURT_ITSELF: ["HurtItselfText"],
+	Gen2Battle.STAGES_CLEARED: ["EliminatedStatsText"],
+	Gen2Battle.STAGES_COPIED: ["CopiedStatsText"],
+	Gen2Battle.GREW_LEVEL: ["BattleText_StringBuffer1GrewToLevel", &"species:species", &"int:new_level"],
+	Gen2Battle.MOVE_FAILED: ["ButItFailedText"],
+	Gen2Battle.BIDE_STORING: ["StoringEnergyText"],
+	Gen2Battle.BIDE_UNLEASHED: ["UnleashedEnergyText"],
+	# `BattleCommand_BuildOpponentRage` switches turns first: the raging target.
+	Gen2Battle.RAGE_BUILDING: ["RageBuildingText", &"user:target"],
+	Gen2Battle.FUTURE_SIGHT_SET: ["ForesawAttackText"],
+	Gen2Battle.FUTURE_SIGHT_HIT: ["BattleText_TargetWasHitByFutureSight"],
+	Gen2Battle.MIMIC_LEARNED: ["MimicLearnedMoveText", &"move:move"],
+	Gen2Battle.SKETCHED_MOVE: ["SketchedText", &"move:move"],
+	Gen2Battle.TYPE_CHANGED: ["TransformedTypeText", &"type:type_number"],
+	Gen2Battle.DISABLE_INFLICTED: ["WasDisabledText", &"move:move"],
+	Gen2Battle.DISABLE_ENDED: ["DisabledNoMoreText"],
+	Gen2Battle.ATTRACT_INFLICTED: ["FellInLoveText"],
+	Gen2Battle.ENCORE_INFLICTED: ["GotAnEncoreText"],
+	Gen2Battle.ENCORE_ENDED: ["BattleText_TargetsEncoreEnded", &"target:side"],
+	Gen2Battle.HP_RESTORED: ["RegainedHealthText"],
+	Gen2Battle.HP_ALREADY_FULL: ["HPIsFullText"],
+	Gen2Battle.WENT_TO_SLEEP: ["WentToSleepText"],
+	Gen2Battle.RESTED: ["RestedText"],
+	Gen2Battle.BELL_CHIMED: ["BellChimedText"],
+	Gen2Battle.NOTHING_HAPPENED: ["NothingHappenedText"],
+	Gen2Battle.MAGNITUDE: ["MagnitudeText", &"int:magnitude"],
+	Gen2Battle.PRESENT_REFUSED: ["PresentFailedText"],
+	Gen2Battle.CRASHED: ["CrashedText"],
+	Gen2Battle.HURT_BY_SANDSTORM: ["SandstormHitsText"],
+	# The item routines run on the other side's turn: the user is `<TARGET>`.
+	Gen2Battle.RECOVERED_WITH_ITEM: ["BattleText_TargetRecoveredWithItem", &"target:side", &"item:item"],
+	Gen2Battle.RECOVERED_USING_ITEM: ["RecoveredUsingText", &"target:side", &"item:item"],
+	Gen2Battle.RESTORED_PP: ["BattleText_UserRecoveredPPUsing", &"item:item"],
+	Gen2Battle.ITEM_HEALED_CONFUSION: ["BattleText_ItemHealedConfusion", &"target:side", &"item:item"],
+	Gen2Battle.ITEM_ACTIVATED: ["BattleText_UsersStringBuffer1Activated", &"item:item"],
+	Gen2Battle.ENDURED: ["HungOnText", &"item:item"],
+	Gen2Battle.PROTECTED_ITSELF: ["ProtectedItselfText"],
+	Gen2Battle.PROTECTING_ITSELF: ["ProtectingItselfText"],
+	Gen2Battle.BRACED_ITSELF: ["BracedItselfText"],
+	Gen2Battle.ENDURED_HIT: ["EnduredText"],
+	Gen2Battle.DESTINY_BOND_SET: ["DestinyBondEffectText"],
+	Gen2Battle.TOOK_DOWN_WITH_IT: ["TookDownWithItText"],
+	# `DraggedOutText` is `<USER>`, so it names the Pokemon that used the move rather
+	# than the one dragged out. Mirrored, not corrected.
+	Gen2Battle.DRAGGED_OUT: ["DraggedOutText"],
+	Gen2Battle.FLED_IN_FEAR: ["FledInFearText"],
+	Gen2Battle.BLOWN_AWAY: ["BlownAwayText"],
+	Gen2Battle.FLED_FROM_BATTLE: ["FledFromBattleText"],
+	Gen2Battle.IDENTIFIED_SET: ["IdentifiedText"],
+	Gen2Battle.TOOK_AIM: ["TookAimText"],
+	Gen2Battle.PP_REDUCED: ["SpiteEffectText", &"move:move", &"int:amount"],
+	Gen2Battle.SHARED_PAIN: ["SharedPainText"],
+	Gen2Battle.STOLE_ITEM: ["StoleText", &"item:item"],
+	Gen2Battle.BEAT_UP_ATTACK: ["BeatUpAttackText", &"species:species"],
+	Gen2Battle.HURT_BY_TRAP: ["BattleText_UsersHurtByStringBuffer1", &"move:move"],
+	Gen2Battle.RELEASED_FROM_TRAP: ["BattleText_UserWasReleasedFromStringBuffer1", &"move:move"],
+	Gen2Battle.CANT_ESCAPE_SET: ["CantEscapeNowText"],
+	Gen2Battle.SWITCH_BLOCKED: ["BattleText_MonCantBeRecalled", &"name:side"],
+	Gen2Battle.SAFEGUARD_PROTECTED: ["SafeguardProtectText"],
+	Gen2Battle.PERISH_SONG_STARTED: ["StartPerishText"],
+	Gen2Battle.PERISH_COUNT: ["PerishCountText", &"int:count"],
+	Gen2Battle.SUBSTITUTE_MADE: ["MadeSubstituteText"],
+	Gen2Battle.SUBSTITUTE_ALREADY: ["HasSubstituteText"],
+	Gen2Battle.SUBSTITUTE_TOO_WEAK: ["TooWeakSubText"],
+	Gen2Battle.SUBSTITUTE_TOOK_DAMAGE: ["SubTookDamageText"],
+	Gen2Battle.SUBSTITUTE_FADED: ["SubFadedText"],
+	Gen2Battle.WAS_SEEDED: ["WasSeededText"],
+	Gen2Battle.LEECH_SEED_SAPPED: ["LeechSeedSapsText"],
+	Gen2Battle.EVADED: ["EvadedText"],
+	Gen2Battle.STATUS_DIDNT_AFFECT: ["DidntAffect1Text"],
+	Gen2Battle.NIGHTMARE_STARTED: ["StartedNightmareText"],
+	Gen2Battle.HURT_BY_NIGHTMARE: ["HasANightmareText"],
+	Gen2Battle.CURSE_SET: ["PutACurseText"],
+	Gen2Battle.HURT_BY_CURSE: ["HurtByCurseText"],
+	Gen2Battle.SPIKES_SET: ["SpikesText"],
+	Gen2Battle.HURT_BY_SPIKES: ["BattleText_UserHurtBySpikes"],
+	Gen2Battle.SHED_LEECH_SEED: ["ShedLeechSeedText"],
+	Gen2Battle.BLEW_SPIKES: ["BlewSpikesText"],
+	Gen2Battle.RELEASED_BY: ["ReleasedByText"],
+	Gen2Battle.MIST_SET: ["MistText"],
+	Gen2Battle.FOCUS_ENERGY_SET: ["GettingPumpedText"],
+	Gen2Battle.MIST_PROTECTED: ["ProtectedByMistText"],
+	Gen2Battle.RUN_FAILED: ["BattleText_CantEscape"],
+	Gen2Battle.COINS_SCATTERED: ["CoinsScatteredText"],
+	Gen2Battle.TRANSFORMED: ["TransformedText", &"species:species"],
+}
+
+## What Generation 2 prints silently; the rest is [constant BATTLE_TEXT].
 const LINES: Dictionary = {
-	Gen2Battle.MISSED: ["%s's attack missed!", &"name:side"],
-	Gen2Battle.NO_EFFECT: ["It doesn't affect %s!", &"name:target"],
-	Gen2Battle.RECOIL: ["%s is hit with recoil!", &"name:side"],
-	Gen2Battle.DRAINED: ["%s sucked health from %s!", &"name:side", &"name:from"],
-	Gen2Battle.OHKO: ["It's a one-hit KO!"],
-	Gen2Battle.WOKE_UP: ["%s woke up!", &"name:side"],
-	# `WasDefrostedText` and `DefrostedOpponentText` are the same line under two
-	# names, differing only in whether it is the user or the target that is named.
-	Gen2Battle.THAWED: ["%s was defrosted!", &"name:side"],
-	Gen2Battle.CONFUSE_INFLICTED: ["%s became confused!", &"name:target"],
-	Gen2Battle.CONFUSED: ["%s is confused!", &"name:side"],
-	Gen2Battle.IN_LOVE_WITH: ["%s is in love with %s!", &"name:side", &"name:target"],
-	Gen2Battle.SNAPPED_OUT: ["%s snapped out of confusion!", &"name:side"],
-	Gen2Battle.HURT_ITSELF: ["It hurt itself in its confusion!"],
-	Gen2Battle.STAGES_CLEARED: ["All stat changes were eliminated!"],
-	Gen2Battle.STAGES_COPIED: ["%s copied the target's stat changes!", &"name:side"],
 	# `PlayStereoCry` prints nothing.
 	Gen2Battle.CRY: [""],
 	# The cartridge never prints a line of its own for this: it happens silently
 	# behind the EXP. Points message above it.
 	Gen2Battle.STAT_EXP_GAINED: [""],
-	Gen2Battle.GREW_LEVEL: [
-		"%s grew to level %d!",
-		&"species:species",
-		&"int:new_level",
-	],
-	Gen2Battle.MOVE_LEARNED: ["%s learned %s!", &"species:species", &"move:move"],
 	Gen2Battle.MOVE_OFFERED: [""],
-	Gen2Battle.MOVE_DECLINED: [
-		"%s did not learn %s.",
-		&"species:species",
-		&"move:move",
-	],
-	Gen2Battle.MOVE_FAILED: ["But it failed!"],
-	Gen2Battle.BIDE_STORING: ["%s is storing energy!", &"name:side"],
-	Gen2Battle.BIDE_UNLEASHED: ["%s unleashed energy!", &"name:side"],
-	Gen2Battle.RAGE_BUILDING: ["%s's RAGE is building!", &"name:target"],
-	Gen2Battle.FUTURE_SIGHT_SET: ["%s foresaw an attack!", &"name:side"],
-	Gen2Battle.FUTURE_SIGHT_HIT: ["%s was hit by FUTURE SIGHT!", &"name:target"],
-	Gen2Battle.MIMIC_LEARNED: ["%s learned %s!", &"name:side", &"move:move"],
-	Gen2Battle.SKETCHED_MOVE: ["%s SKETCHED %s!", &"name:side", &"move:move"],
-	Gen2Battle.TYPE_CHANGED: [
-		"%s transformed into the %s-type!",
-		&"name:side",
-		&"type:type_number",
-	],
-	Gen2Battle.TYPE_COPIED: ["Converted type to %s's!", &"name:target"],
-	Gen2Battle.DISABLE_INFLICTED: [
-		"%s's %s was disabled!",
-		&"name:target",
-		&"move:move",
-	],
-	Gen2Battle.DISABLE_ENDED: ["%s is disabled no more!", &"name:side"],
-	Gen2Battle.ATTRACT_INFLICTED: ["%s fell in love!", &"name:target"],
-	Gen2Battle.ENCORE_INFLICTED: ["%s got an encore!", &"name:target"],
-	Gen2Battle.ENCORE_ENDED: ["%s's encore ended!", &"name:side"],
-	Gen2Battle.HP_RESTORED: ["%s regained health!", &"name:side"],
-	Gen2Battle.HP_ALREADY_FULL: ["%s's HP is full!", &"name:side"],
-	Gen2Battle.WENT_TO_SLEEP: ["%s went to sleep!", &"name:side"],
-	Gen2Battle.RESTED: ["%s fell asleep and became healthy!", &"name:side"],
-	# `BellChimedText` names nobody, since the bell was heard by a party rather than
-	# by a Pokémon.
-	Gen2Battle.BELL_CHIMED: ["A bell chimed!"],
-	Gen2Battle.NOTHING_HAPPENED: ["But nothing happened."],
-	Gen2Battle.MAGNITUDE: ["Magnitude %d!", &"int:magnitude"],
-	Gen2Battle.PRESENT_REFUSED: ["%s refused the gift!", &"name:target"],
-	Gen2Battle.CRASHED: ["%s kept going and crashed!", &"name:side"],
-	Gen2Battle.HURT_BY_SANDSTORM: ["The SANDSTORM hits %s!", &"name:side"],
-	Gen2Battle.RECOVERED_WITH_ITEM: [
-		"%s recovered with %s.",
-		&"name:side",
-		&"item:item",
-	],
-	Gen2Battle.RECOVERED_USING_ITEM: [
-		"%s recovered using a %s!",
-		&"name:side",
-		&"item:item",
-	],
-	Gen2Battle.RESTORED_PP: ["%s recovered PP using %s.", &"name:side", &"item:item"],
-	Gen2Battle.ITEM_HEALED_CONFUSION: [
-		"A %s rid %s of its confusion.",
-		&"item:item",
-		&"name:side",
-	],
-	Gen2Battle.ITEM_ACTIVATED: ["%s's %s activated!", &"name:side", &"item:item"],
-	Gen2Battle.ENDURED: ["%s hung on with %s!", &"name:target", &"item:item"],
-	Gen2Battle.PROTECTED_ITSELF: ["%s PROTECTED itself!", &"name:side"],
-	Gen2Battle.PROTECTING_ITSELF: ["%s's PROTECTING itself!", &"name:target"],
-	Gen2Battle.BRACED_ITSELF: ["%s braced itself!", &"name:side"],
-	Gen2Battle.ENDURED_HIT: ["%s ENDURED the hit!", &"name:target"],
-	Gen2Battle.DESTINY_BOND_SET: [
-		"%s's trying to take its opponent with it!",
-		&"name:side",
-	],
-	Gen2Battle.TOOK_DOWN_WITH_IT: [
-		"%s took down with it, %s!",
-		&"name:target",
-		&"name:side",
-	],
-	# `DraggedOutText` is `<USER>`, so it names the Pokemon that used the move rather
-	# than the one dragged out. Mirrored, not corrected.
-	Gen2Battle.DRAGGED_OUT: ["%s was dragged out!", &"name:side"],
-	Gen2Battle.FLED_IN_FEAR: ["%s fled in fear!", &"name:target"],
-	Gen2Battle.BLOWN_AWAY: ["%s was blown away!", &"name:target"],
-	Gen2Battle.FLED_FROM_BATTLE: ["%s fled from battle!", &"name:side"],
-	Gen2Battle.IDENTIFIED_SET: ["%s identified %s!", &"name:side", &"name:target"],
-	Gen2Battle.TOOK_AIM: ["%s took aim!", &"name:side"],
-	Gen2Battle.PP_REDUCED: [
-		"%s's %s was reduced by %d!",
-		&"name:target",
-		&"move:move",
-		&"int:amount",
-	],
-	# SharedPainText names neither Pokemon, since both were levelled.
-	Gen2Battle.SHARED_PAIN: ["The battlers shared pain!"],
-	Gen2Battle.STOLE_ITEM: ["%s stole %s from its foe!", &"name:side", &"item:item"],
-	# BeatUpAttackText names the party member that is swinging, which is only
-	# sometimes the Pokemon on the field.
-	Gen2Battle.BEAT_UP_ATTACK: ["%s's attack!", &"species:species"],
-	Gen2Battle.HURT_BY_TRAP: ["%s's hurt by %s!", &"name:side", &"move:move"],
-	Gen2Battle.RELEASED_FROM_TRAP: [
-		"%s was released from %s!",
-		&"name:side",
-		&"move:move",
-	],
-	Gen2Battle.CANT_ESCAPE_SET: ["%s can't escape now!", &"name:target"],
-	Gen2Battle.SWITCH_BLOCKED: ["%s can't be recalled!", &"name:side"],
-	Gen2Battle.SAFEGUARD_PROTECTED: ["%s is protected by SAFEGUARD!", &"name:target"],
-	# StartPerishText names neither Pokémon, since the song caught both.
-	Gen2Battle.PERISH_SONG_STARTED: ["Both #MON will faint in 3 turns!"],
-	Gen2Battle.PERISH_COUNT: ["%s's PERISH count is %d!", &"name:side", &"int:count"],
-	Gen2Battle.SUBSTITUTE_MADE: ["%s made a SUBSTITUTE!", &"name:side"],
-	Gen2Battle.SUBSTITUTE_ALREADY: ["%s has a SUBSTITUTE!", &"name:side"],
-	# TooWeakSubText names nobody at all.
-	Gen2Battle.SUBSTITUTE_TOO_WEAK: ["Too weak to make a SUBSTITUTE!"],
-	Gen2Battle.SUBSTITUTE_TOOK_DAMAGE: [
-		"The SUBSTITUTE took damage for %s!",
-		&"name:target",
-	],
-	Gen2Battle.SUBSTITUTE_FADED: ["%s's SUBSTITUTE faded!", &"name:target"],
-	Gen2Battle.WAS_SEEDED: ["%s was seeded!", &"name:target"],
-	Gen2Battle.LEECH_SEED_SAPPED: ["LEECH SEED saps %s!", &"name:side"],
-	Gen2Battle.EVADED: ["%s evaded the attack!", &"name:target"],
-	Gen2Battle.STATUS_DIDNT_AFFECT: ["It didn't affect %s!", &"name:target"],
-	Gen2Battle.NIGHTMARE_STARTED: ["%s started to have a NIGHTMARE!", &"name:target"],
-	Gen2Battle.HURT_BY_NIGHTMARE: ["%s has a NIGHTMARE!", &"name:side"],
-	# PutACurseText is one text with a paragraph break in it, so the two halves are
-	# one line here rather than two events.
-	Gen2Battle.CURSE_SET: [
-		"%s cut its own HP and put a CURSE on %s!",
-		&"name:side",
-		&"name:target",
-	],
-	Gen2Battle.HURT_BY_CURSE: ["%s's hurt by the CURSE!", &"name:side"],
-	Gen2Battle.SPIKES_SET: ["SPIKES scattered all around %s!", &"name:target"],
-	Gen2Battle.HURT_BY_SPIKES: ["%s's hurt by SPIKES!", &"name:side"],
-	Gen2Battle.SHED_LEECH_SEED: ["%s shed LEECH SEED!", &"name:side"],
-	Gen2Battle.BLEW_SPIKES: ["%s blew away SPIKES!", &"name:side"],
-	Gen2Battle.RELEASED_BY: ["%s was released by %s!", &"name:side", &"name:target"],
-	Gen2Battle.MIST_SET: ["%s is shrouded in mist!", &"name:side"],
-	Gen2Battle.FOCUS_ENERGY_SET: ["%s is getting pumped!", &"name:side"],
-	Gen2Battle.MIST_PROTECTED: ["%s's stat drop was blocked by mist!", &"name:target"],
-	Gen2Battle.RUN_FAILED: ["Can't escape!"],
-	Gen2Battle.COINS_SCATTERED: ["Coins scattered everywhere!"],
-	Gen2Battle.TRANSFORMED: ["%s transformed into %s!", &"name:side", &"name:target"],
 }
 
-## [constant LINES]' Generation 1 rows; a row missing here reads Crystal's.
+## Generation 1's lines in `data/text/text_*.asm`'s words and breaks.
 const GEN1_LINES: Dictionary = {
+	Gen2Battle.RUN_FAILED: ["Can't escape!"],
+	Gen2Battle.THRASHING_ABOUT: ["%s's\nthrashing about!", &"name:side"],
 	Gen2Battle.MISSED: ["%s's\nattack missed!", &"name:side"],
 	Gen2Battle.NO_EFFECT: ["It doesn't affect\n%s!", &"name:target"],
 	Gen2Battle.RECOIL: ["%s's\nhit with recoil!", &"name:side"],
-	Gen2Battle.DRAINED: ["Sucked health from\n%s!", &"name:from"],
 	Gen2Battle.OHKO: ["One-hit KO!"],
 	Gen2Battle.WOKE_UP: ["%s\nwoke up!", &"name:side"],
 	Gen2Battle.THAWED: ["Fire defrosted\n%s!", &"name:side"],
@@ -6550,9 +6546,7 @@ const GEN1_LINES: Dictionary = {
 	Gen2Battle.HURT_ITSELF: ["It hurt itself in\nits confusion!"],
 	Gen2Battle.STAGES_CLEARED: ["All STATUS changes\nare eliminated!"],
 	Gen2Battle.GREW_LEVEL: ["%s grew\nto level %d!", &"species:species", &"int:new_level"],
-	Gen2Battle.MOVE_LEARNED: ["%s learned\n%s!", &"species:species", &"move:move"],
 	Gen2Battle.MOVE_OFFERED: [""],
-	Gen2Battle.MOVE_DECLINED: ["%s\ndid not learn" + SCROLL + "%s!", &"species:species", &"move:move"],
 	Gen2Battle.MOVE_FAILED: ["But, it failed!"],
 	Gen2Battle.BIDE_STORING: ["%s\nis saving energy!", &"name:side"],
 	Gen2Battle.BIDE_UNLEASHED: ["%s\nunleashed energy!", &"name:side"],
@@ -6578,6 +6572,7 @@ const GEN1_LINES: Dictionary = {
 	Gen2Battle.LEECH_SEED_SAPPED: ["LEECH SEED saps\n%s!", &"name:side"],
 	Gen2Battle.EVADED: ["%s\nevaded attack!", &"name:target"],
 	Gen2Battle.STATUS_DIDNT_AFFECT: ["It didn't affect\n%s!", &"name:target"],
+	Gen2Battle.UNAFFECTED: ["%s\nis unaffected!", &"name:target"],
 	Gen2Battle.MIST_SET: ["%s's\nshrouded in mist!", &"name:side"],
 	Gen2Battle.FOCUS_ENERGY_SET: ["%s's\ngetting pumped!", &"name:side"],
 	Gen2Battle.MIST_PROTECTED: ["But, it failed!"],
@@ -6620,6 +6615,9 @@ const LINE_HANDLERS: Dictionary = {
 	Gen2Battle.EXP_GAINED: &"_exp_gained_text",
 	Gen2Battle.USED_MOVE: &"_used_move_text",
 	Gen2Battle.MOVE_FORGOTTEN: &"_move_forgotten_text",
+	Gen2Battle.DRAINED: &"_drained_text",
+	Gen2Battle.MOVE_LEARNED: &"_move_learned_text",
+	Gen2Battle.MOVE_DECLINED: &"_move_declined_text",
 }
 
 ## Which of the three weather tables an event reads.
@@ -6640,9 +6638,48 @@ func _describe(event: Dictionary) -> String:
 		return _line(GEN1_LINES[kind], event)
 	if LINE_HANDLERS.has(kind):
 		return String(call(LINE_HANDLERS[kind], event))
+	if not gen1 and BATTLE_TEXT.has(kind):
+		return _battle_line(BATTLE_TEXT[kind], event)
 	if not LINES.has(kind):
 		return ""
 	return _line(LINES[kind], event)
+
+
+## One [constant BATTLE_TEXT] row filled from [param event].
+func _battle_line(row: Array, event: Dictionary) -> String:
+	var text: String = _data.battle_text(String(row[0])) if _data != null else ""
+	var user: int = int(event.get("side", Gen2Battle.PLAYER))
+	var target: int = int(event.get("target", 1 - user))
+	for code: StringName in row.slice(1):
+		var parts: PackedStringArray = String(code).split(":")
+		match parts[0]:
+			"user":
+				user = int(event.get(parts[1], user))
+			"target":
+				target = int(event.get(parts[1], target))
+			"int":
+				text = Gen2TextStream.fill_marker(
+					text, Gen2TextStream.NUMBER_MARKER, str(_line_argument(code, event))
+				)
+			_:
+				text = Gen2TextStream.fill_marker(
+					text, Gen2TextStream.RAM_MARKER, str(_line_argument(code, event))
+				)
+	return Gen2TextStream.fill_names(text, {
+		"user": _battler_name(user), "target": _battler_name(target),
+		"enemy": _enemy_battler_label(), "player": _player_label(),
+	})
+
+
+## [method _battle_line] for a label a handler picks, [param values] in order.
+func _battle_text(label: String, event: Dictionary, values: Array = []) -> String:
+	var row: Array = [label]
+	var filled: Dictionary = event.duplicate()
+	for index: int in values.size():
+		var value: Variant = values[index]
+		filled["_value%d" % index] = value
+		row.append(StringName(("int:_value%d" if value is int else "text:_value%d") % index))
+	return _battle_line(row, filled)
 
 
 func _line(row: Array, event: Dictionary) -> String:
@@ -6654,8 +6691,8 @@ func _line(row: Array, event: Dictionary) -> String:
 	return String(row[0]) % values
 
 
-## One [constant LINES] argument. Every event carries a side except the one that
-## ends the battle, which is about both of them, so a missing side is the player.
+## One `kind:field` argument: a battler's name, a species, a move, an item, a type,
+## a string or a number. A missing side is the player.
 func _line_argument(code: StringName, event: Dictionary) -> Variant:
 	var parts: PackedStringArray = String(code).split(":")
 	var field: String = parts[1]
@@ -6670,7 +6707,29 @@ func _line_argument(code: StringName, event: Dictionary) -> Variant:
 			return _data.item_name(int(event[field]))
 		"type":
 			return _data.type_name(int(event[field]))
+		"text":
+			return String(event[field])
 	return int(event[field])
+
+
+## `SuckedHealthText`, or `DreamEatenText` behind Dream Eater in both generations.
+func _drained_text(event: Dictionary) -> String:
+	var from: String = _battler_name(int(event.get("from", Gen2Battle.ENEMY)))
+	if bool(event.get("dream", false)):
+		return "%s's\ndream was eaten!" % from
+	return "Sucked health from\n%s!" % from
+
+
+func _move_learned_text(event: Dictionary) -> String:
+	return Gen2MoveForget.learned_text(
+		_event_name(event), String(_data.move(int(event["move"])).get("name", "")), _generation()
+	)
+
+
+func _move_declined_text(event: Dictionary) -> String:
+	return Gen2MoveForget.did_not_learn_text(
+		_event_name(event), String(_data.move(int(event["move"])).get("name", "")), _generation()
+	)
 
 
 ## `Text_1_2_and_Poof` and `LearnedMoveText`, the overworld's own lines.
@@ -6688,20 +6747,20 @@ func _used_move_text(event: Dictionary) -> String:
 	var who: String = _battler_name(int(event.get("side", Gen2Battle.PLAYER)))
 	var move: String = String(_data.move(int(event["move"])).get("name", ""))
 	var instead: bool = bool(event.get("instead", false))
-	if _generation() == RomRegistry.GEN1:
-		return "%s\nused %s%s!" % [who, "instead," + SCROLL if instead else "", move]
-	return "%s used %s%s!" % [who, "instead, " if instead else "", move]
+	return "%s\nused %s%s!" % [who, "instead," + SCROLL if instead else "", move]
 
 
 func _hit_text(event: Dictionary) -> String:
-	var gen1: bool = _generation() == RomRegistry.GEN1
+	var label: String = ""
 	if bool(event["critical"]):
-		return "Critical hit!" if gen1 else "A critical hit!"
-	if int(event["effectiveness"]) > Gen2Layout.MATCHUP_EFFECTIVE:
-		return "It's super\neffective!" if gen1 else "It's super effective!"
-	if int(event["effectiveness"]) < Gen2Layout.MATCHUP_EFFECTIVE:
-		return "It's not very\neffective..." if gen1 else "It's not very effective..."
-	return ""
+		label = "CriticalHitText"
+	elif int(event["effectiveness"]) > Gen2Layout.MATCHUP_EFFECTIVE:
+		label = "SuperEffectiveText"
+	elif int(event["effectiveness"]) < Gen2Layout.MATCHUP_EFFECTIVE:
+		label = "NotVeryEffectiveText"
+	if label.is_empty() or _generation() != RomRegistry.GEN1:
+		return _battle_text(label, event) if not label.is_empty() else ""
+	return String(GEN1_HIT_TEXT[label])
 
 
 ## `GainedText` with `WithExpAllText` on the `wBoostExpByExpAll` pass and
@@ -6709,10 +6768,6 @@ func _hit_text(event: Dictionary) -> String:
 func _exp_gained_text(event: Dictionary) -> String:
 	var learner: String = _event_name(event)
 	var boosted: bool = bool(event.get("boosted", false))
-	if _generation() != RomRegistry.GEN1:
-		return "%s gained %s%d EXP. Points!" % [
-			learner, "a boosted " if boosted else "", int(event["amount"])
-		]
 	if bool(event.get("exp_share", false)):
 		return "%s gained\nwith EXP.ALL,%s%d EXP. Points!" % [learner, SCROLL, int(event["amount"])]
 	if boosted:
@@ -6726,7 +6781,10 @@ func _hit_times_text(event: Dictionary) -> String:
 	if _generation() == RomRegistry.GEN1:
 		return ("Hit the enemy\n%d times!" if int(event.get("target", 0)) == Gen2Battle.ENEMY \
 			else "Hit %d times!") % times
-	return "Hit %d time%s!" % [times, "" if times == 1 else "s"]
+	return _battle_text(
+		"PlayerHitTimesText" if int(event.get("side", 0)) == Gen2Battle.PLAYER else "EnemyHitTimesText",
+		event, [times]
+	)
 
 
 ## A Nuzlocke faint is a death, and it is said here rather than on the map: this
@@ -6734,8 +6792,12 @@ func _hit_times_text(event: Dictionary) -> String:
 ## the way out of the fight.
 func _fainted_text(event: Dictionary) -> String:
 	var side: int = int(event.get("side", Gen2Battle.PLAYER))
-	var line: String = ("%s\nfainted!" if _generation() == RomRegistry.GEN1 else "%s fainted!") \
-		% _battler_name(side)
+	var line: String = "%s\nfainted!" % _battler_name(side)
+	if _generation() != RomRegistry.GEN1:
+		line = _battle_text(
+			"BattleText_EnemyMonFainted" if side == Gen2Battle.ENEMY else "BattleText_MonFainted",
+			event, [_enemy_mon_name() if side == Gen2Battle.ENEMY else _battler_name(side)]
+		)
 	if side == Gen2Battle.PLAYER and _rules().is_nuzlocke():
 		line += Gen2TextStream.PAGE_BREAK + Gen2Nuzlocke.death_text(_battler_name(side))
 	return line
@@ -6744,16 +6806,12 @@ func _fainted_text(event: Dictionary) -> String:
 func _cannot_move_text(event: Dictionary) -> String:
 	if event["reason"] == &"get_out":
 		return GHOST_GET_OUT_TEXT
+	if _generation() != RomRegistry.GEN1:
+		return _battle_line(STOPPED_BY.get(event["reason"], [""]) as Array, event)
 	var who: String = _battler_name(int(event.get("side", Gen2Battle.PLAYER)))
-	if _generation() == RomRegistry.GEN1 and GEN1_STOPPED_BY.has(event["reason"]):
-		var line: String = who + String(GEN1_STOPPED_BY[event["reason"]])
-		return line % String(_data.move(int(event.get("move", 0))).get("name", "")) \
-			if line.contains("%s") else line
-	return _joined(who, String(STOPPED_BY.get(event["reason"], "cannot move!")))
-
-
-static func _joined(who: String, line: String) -> String:
-	return who + (line if line.begins_with("'") else " " + line)
+	var line: String = who + String(GEN1_STOPPED_BY.get(event["reason"], "\ncan't move!"))
+	return line % String(_data.move(int(event.get("move", 0))).get("name", "")) \
+		if line.contains("%s") else line
 
 
 ## `_AttackContinuesText`, printed by `.MultiturnMoveCheck` in front of the hit.
@@ -6762,61 +6820,85 @@ func _attack_continues_text(event: Dictionary) -> String:
 
 
 func _status_inflicted_text(event: Dictionary) -> String:
-	var who: String = _battler_name(int(event["target"]))
-	if _generation() == RomRegistry.GEN1 and GEN1_INFLICTED.has(event["name"]):
-		return who + String(GEN1_INFLICTED[event["name"]])
-	return _joined(who, String(INFLICTED.get(event["name"], "was hurt!")))
+	if _generation() != RomRegistry.GEN1:
+		return _battle_text(String(INFLICTED.get(event["name"], "")), event)
+	return _battler_name(int(event["target"])) + String(GEN1_INFLICTED.get(event["name"], ""))
 
 
-## `AlreadyAsleepText` and its two siblings; Generation 1 reaches only the first.
-const ALREADY_TEXT: Dictionary = {
-	Gen2Status.SLEEP_MASK: "asleep", Gen2Status.POISON: "poisoned", Gen2Status.PARALYSIS: "paralyzed",
-	Gen2EffectCommands.CONFUSE_KEY: "confused",
-}
-
-
+## `AlreadyAsleepText` and its siblings; Generation 1 reaches only the first.
 func _status_already_text(event: Dictionary) -> String:
-	return ("%s's\nalready %s!" if _generation() == RomRegistry.GEN1 else "%s's already %s!") % [
-		_battler_name(int(event["target"])), ALREADY_TEXT[int(event["status"])],
-	]
+	if _generation() != RomRegistry.GEN1:
+		return _battle_text(String(ALREADY.get(int(event["status"]), "")), event)
+	return "%s's\nalready asleep!" % _battler_name(int(event["target"]))
 
 
 func _hurt_by_status_text(event: Dictionary) -> String:
-	var who: String = _battler_name(int(event.get("side", Gen2Battle.PLAYER)))
-	if _generation() == RomRegistry.GEN1 and GEN1_HURT_BY.has(event["name"]):
-		return who + String(GEN1_HURT_BY[event["name"]])
-	return who + String(HURT_BY.get(StringName(event["name"]), " is hurt by its %s!" % event["name"]))
+	if _generation() != RomRegistry.GEN1:
+		return _battle_text(String(HURT_BY.get(StringName(event["name"]), "")), event)
+	return _battler_name(int(event.get("side", Gen2Battle.PLAYER))) \
+		+ String(GEN1_HURT_BY.get(event["name"], ""))
 
 
 func _charging_up_text(event: Dictionary) -> String:
-	return ("%s\n%s" if _generation() == RomRegistry.GEN1 else "%s %s") % [
+	return "%s\n%s" % [
 		_battler_name(int(event.get("side", Gen2Battle.PLAYER))),
 		CHARGE_TEXT.get(int(event.get("move", 0)), CHARGE_DUG),
 	]
 
 
+## `WithdrawMonText`'s four endings, and `PlayerMon2Text`'s in Generation 1.
+const WITHDRAW_LINES: Array[String] = [
+	"%s, that's\nenough! Come back!", "%s, come\nback!", "%s, OK!\nCome back!",
+	"%s, good!\nCome back!",
+]
+const GEN1_WITHDRAW_LINES: Array[String] = [
+	"%s enough!\nCome back!", "%s\nCome back!", "%s OK!\nCome back!",
+	"%s good!\nCome back!",
+]
+
+
 ## Named out of the event, because by the time this is read the one on the field
 ## is already the one that came in.
 func _withdrew_text(event: Dictionary) -> String:
+	if bool(event.get("quiet", false)):
+		return ""
 	if int(event.get("side", Gen2Battle.PLAYER)) == Gen2Battle.ENEMY:
 		if _generation() == RomRegistry.GEN1:
 			return _gen1_trainer_ai_text("withdraw", [
 				_enemy_battler_label(), _event_name(event),
 			])
-		return "Enemy withdrew %s!" % _event_name(event)
-	return ("%s\nCome back!" if _generation() == RomRegistry.GEN1 else "%s, come back!") \
+		return ("%s\nwithdrew" + SCROLL + "%s!") % [_enemy_battler_label(), _event_name(event)]
+	var lines: Array[String] = GEN1_WITHDRAW_LINES if _generation() == RomRegistry.GEN1 \
+		else WITHDRAW_LINES
+	return lines[clampi(int(event.get("line", Gen2Battle.WITHDRAW_COME_BACK)), 0, lines.size() - 1)] \
 		% _event_name(event)
+
+
+## The lines ending in `done` or `text_end` rather than `prompt`, which
+## `PrintText` returns from with the line still up. The player's withdraw is one.
+const RUN_ON_LINES: Array[StringName] = [
+	Gen2Battle.USED_MOVE, Gen2Battle.SENT_OUT, Gen2Battle.WENT_TO_SLEEP,
+	Gen2Battle.RESTED, Gen2Battle.PROTECTING_ITSELF, Gen2Battle.BEAT_UP_ATTACK,
+	Gen2Battle.ATTACK_CONTINUES, Gen2Battle.THRASHING_ABOUT,
+]
+
+
+func _line_runs_on(event: Dictionary) -> bool:
+	var kind: StringName = StringName(event["type"])
+	if kind == Gen2Battle.WITHDREW:
+		return int(event.get("side", Gen2Battle.PLAYER)) == Gen2Battle.PLAYER
+	return RUN_ON_LINES.has(kind)
 
 
 ## `EnemyUsedOnText`, one line for all thirteen, or `AIBattleUseItemText`.
 func _trainer_used_item_text(event: Dictionary) -> String:
 	var item: String = _data.item_name(int(event["item"]))
-	var battler: String = _battler_name(int(event.get("side", Gen2Battle.ENEMY)))
+	var battler: String = _enemy_mon_name()
 	if _generation() == RomRegistry.GEN1:
 		return _gen1_trainer_ai_text("use_item", [
 			_enemy_battler_label(), item, _event_name(event),
 		])
-	return "Enemy used %s on %s!" % [item, battler]
+	return ("%s\nused %s" + SCROLL + "on %s!") % [_enemy_battler_label(), item, battler]
 
 
 ## One of `trainer_ai.asm`'s two boxes, its `text_ram` markers filled in order.
@@ -6828,6 +6910,8 @@ func _gen1_trainer_ai_text(key: String, values: Array) -> String:
 
 
 func _sent_out_text(event: Dictionary) -> String:
+	if bool(event.get("quiet", false)):
+		return ""
 	var gen1: bool = _generation() == RomRegistry.GEN1
 	var species: String = _event_name(event)
 	if int(event.get("side", Gen2Battle.PLAYER)) == Gen2Battle.ENEMY:
@@ -6837,44 +6921,50 @@ func _sent_out_text(event: Dictionary) -> String:
 
 
 func _weather_text(event: Dictionary) -> String:
-	return String((WEATHER_TEXT_OF[event["type"]] as Dictionary).get(
+	var label: String = String((WEATHER_TEXT_OF[event["type"]] as Dictionary).get(
 		int(event["weather"]), ""
 	))
+	return _battle_text(label, event) if not label.is_empty() else ""
 
 
 func _screen_set_text(event: Dictionary) -> String:
-	var table: Dictionary = GEN1_SCREEN_SET_TEXT if _generation() == RomRegistry.GEN1 \
-		else SCREEN_SET_TEXT
-	return table.get(int(event["screen"]), "") % _battler_name(
-		int(event.get("side", Gen2Battle.PLAYER))
-	)
+	if _generation() == RomRegistry.GEN1:
+		return GEN1_SCREEN_SET_TEXT.get(int(event["screen"]), "") % _battler_name(
+			int(event.get("side", Gen2Battle.PLAYER))
+		)
+	return _battle_text(String(SCREEN_SET_TEXT.get(int(event["screen"]), "")), event)
 
 
+## `HandleScreens` copies "Your" or "Enemy" into `wStringBuffer1`.
 func _screen_faded_text(event: Dictionary) -> String:
 	var side: int = int(event.get("side", Gen2Battle.PLAYER))
-	var faded: int = int(event["screen"])
-	if faded == Gen2Screens.SAFEGUARD:
-		return "%s's SAFEGUARD faded!" % _battler_name(side)
-	return SCREEN_FADED_TEXT.get(faded, "") % (
-		"Enemy #MON" if side == Gen2Battle.ENEMY else "Your #MON"
+	return _battle_text(
+		String(SCREEN_FADED_TEXT.get(int(event["screen"]), "")), event,
+		["Enemy" if side == Gen2Battle.ENEMY else "Your"]
 	)
 
 
 ## BattleText_UserFledUsingAStringBuffer1 is the Smoke Ball's own line, printed
 ## in front of the BattleText_GotAwaySafely every branch reaches.
 func _fled_text(event: Dictionary) -> String:
+	var gen1: bool = _generation() == RomRegistry.GEN1
 	if StringName(event.get("how", &"")) == &"item" and not bool(event.get("item_said", false)):
-		return ("%s\nfled using a" + SCROLL + "%s!") % [
-			_battler_name(Gen2Battle.PLAYER), _data.item_name(int(event.get("item", 0))),
-		]
-	return "Got away safely!"
+		var item: String = _data.item_name(int(event.get("item", 0)))
+		if not gen1:
+			return _battle_text("BattleText_UserFledUsingAStringBuffer1", event, [item])
+		return ("%s\nfled using a" + SCROLL + "%s!") % [_battler_name(Gen2Battle.PLAYER), item]
+	return "Got away safely!" if gen1 else _battle_text("BattleText_GotAwaySafely", event)
 
 
 func _run_blocked_text(event: Dictionary) -> String:
-	if StringName(event.get("reason", &"")) == &"trainer":
-		return "No! There's no\nrunning from a" + SCROLL + "trainer battle!" \
-			if _generation() == RomRegistry.GEN1 else "No! There's no running from a trainer battle!"
-	return "Can't escape!"
+	var trainer: bool = StringName(event.get("reason", &"")) == &"trainer"
+	if _generation() != RomRegistry.GEN1:
+		return _battle_text(
+			"BattleText_TheresNoEscapeFromTrainerBattle" if trainer else "BattleText_CantEscape2",
+			event
+		)
+	return "No! There's no\nrunning from a" + SCROLL + "trainer battle!" if trainer \
+		else "Can't escape!"
 
 
 ## `BattleText_EnemyWasDefeated`, or `TrainerDefeatedText` off the request.
@@ -6884,53 +6974,34 @@ func _over_text(event: Dictionary) -> String:
 	var gen1: bool = _data.generation == RomRegistry.GEN1
 	## `.LostLinkBattle`'s `TiedAgainstText` and `LostAgainstText`.
 	if _battle.is_link_battle and not gen1 and event["winner"] != Gen2Battle.PLAYER:
-		return ("Tied against\n%s!" if _battle.is_draw() else "Lost against\n%s!") \
-			% _enemy_battler_label()
+		return _battle_text("TiedAgainstText" if _battle.is_draw() else "LostAgainstText", event)
 	if event["winner"] != Gen2Battle.PLAYER or (gen1 and _battle.is_link_battle):
 		return ""
 	if gen1:
 		return String(_world_battle_request.get("defeated_text", ""))
-	return "%s\nwas defeated!" % _enemy_battler_label()
+	return _battle_text("BattleText_EnemyWasDefeated", event)
 
 
-## The sentence a trapping move lands with, which is a per-move line rather than
-## one sentence with the move's name in it: `BattleCommand_TrapTarget`'s `.Traps`
-## table names five texts, three of which spell the move out and two of which do
-## not name it at all. A move number the table does not know cannot happen, since
-## those five are the whole of `EFFECT_TRAP_TARGET`.
 func _trapped_text(event: Dictionary) -> String:
-	var who: String = _battler_name(int(event["target"]))
-	var user: String = _battler_name(int(event["side"]))
-	match int(event["move"]):
-		BIND:
-			return "%s used BIND on %s!" % [user, who]
-		WRAP:
-			return "%s was WRAPPED by %s!" % [who, user]
-		CLAMP:
-			return "%s was CLAMPED by %s!" % [who, user]
-	return "%s was trapped!" % who
+	var label: String = String(TRAP_TEXT.get(int(event["move"]), "WhirlpoolTrapText"))
+	var line: String = _battle_text(label, event)
+	# Gold and Silver carry one `WasTrappedText` where Crystal splits it in two.
+	return line if not line.is_empty() else _battle_text("WasTrappedText", event)
 
 
-## The sentence for a stat that actually moved. Ancientpower's [code]"all"[/code]
-## reads as one sentence about the Pokémon rather than five about its stats,
-## because that is the one thing the event says that a single stat's does not.
+## `Text_BattleEffectActivate` and its three siblings; `_MonsStatsRoseText`.
 func _stat_changed_text(event: Dictionary) -> String:
 	var who: String = _battler_name(int(event["target"]))
-	if String(event["stat"]) == "all":
-		return "%s's stats rose!" % who
-
 	var stat_name: String = STAT_NAMES.get(event["stat"], String(event["stat"]).to_upper())
 	var by: int = int(event["by"])
+	var scroll: String = Gen2TextStream.SCROLL_NOWAIT_BREAK
 	if _generation() == RomRegistry.GEN1:
-		## `_MonsStatsRoseText`: `<SCROLL>greatly` in front of ` rose!` on two stages.
 		stat_name = GEN1_STAT_NAMES.get(event["stat"], stat_name)
 		var verb: String = " rose!" if by > 0 else " fell!"
-		return "%s's\n%s%s" % [who, stat_name, (SCROLL + "greatly" + verb) if absi(by) >= 2 else verb]
+		return "%s's\n%s%s" % [who, stat_name, (scroll + "greatly" + verb) if absi(by) >= 2 else verb]
 	if by > 0:
-		return "%s's %s went way up!" % [who, stat_name] if by >= 2 \
-			else "%s's %s went up!" % [who, stat_name]
-	return "%s's %s sharply fell!" % [who, stat_name] if by <= -2 \
-		else "%s's %s fell!" % [who, stat_name]
+		return "%s's\n%s%s" % [who, stat_name, scroll + "went way up!" if by >= 2 else " went up!"]
+	return "%s's\n%s%s" % [who, stat_name, scroll + "sharply fell!" if by <= -2 else " fell!"]
 
 
 ## The sentence for a stat that was already at the end of the line. Whether it
@@ -6939,11 +7010,13 @@ func _stat_changed_text(event: Dictionary) -> String:
 func _stat_failed_text(event: Dictionary) -> String:
 	if _generation() == RomRegistry.GEN1:
 		return "Nothing happened!"
-	var who: String = _battler_name(int(event["target"]))
 	var stat_name: String = STAT_NAMES.get(event["stat"], String(event["stat"]).to_upper())
-	if int(event["by"]) > 0:
-		return "%s's %s won't rise anymore!" % [who, stat_name]
-	return "%s's %s won't drop anymore!" % [who, stat_name]
+	var rise: bool = int(event["by"]) > 0
+	var named: Dictionary = event.duplicate()
+	named["side" if rise else "target"] = int(event["target"])
+	return _battle_text(
+		"WontRiseAnymoreText" if rise else "WontDropAnymoreText", named, [stat_name]
+	)
 
 
 ## How a battle refers to one of the two, which is by side and not by species:
@@ -7008,11 +7081,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		accept_event()
 
 
-## Whether the battle itself is idle enough to pass an event on. The modal input
-## states are the ones that mean something by themselves: the forget-move prompt,
-## a switch's yes/no or list, and ball selection. A draining bar, the opening
-## slide and a move animation read no input and are deliberately not on that list;
-## what they do swallow is swallowed in [method _handle_button], which runs first.
+## Whether the battle is idle enough to pass an event on: no forget-move prompt,
+## switch question or list, or ball selection. What a bar, slide or animation
+## swallows is swallowed in [method _handle_button], which runs first.
 func _renderer_input_free() -> bool:
 	return is_ready() and _forget_stage == &"" and _switch_stage == &"" \
 		and _menu_stage == &"" and not _capture_selecting and not _pack_selecting \

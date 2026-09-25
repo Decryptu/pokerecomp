@@ -1,11 +1,9 @@
 class_name Gen2WorldRenderer
 extends Node2D
 
-## Draws the visible map page in hardware pixels. The surface is the cartridge's
-## 160x144 unless the world has been given a larger
-## [member Gen2WorldAPI.view_pixels], in which case the connected maps the graph
-## places around this one are drawn too, on [Gen2WorldMapLayer] quads under the
-## sprites, and the border block fills whatever no map covers.
+## Draws the visible map page in hardware pixels: the cartridge's 160x144, or a
+## larger [member Gen2WorldAPI.view_pixels] with the connected maps on
+## [Gen2WorldMapLayer] quads and the border block filling the rest.
 
 const PLAYER_COLOR: Color = Color("#d34a5a")
 const FALLBACK_BACKGROUND: Color = Color("#f5f1d8")
@@ -93,10 +91,8 @@ func set_time_of_day(time_of_day: int) -> void:
 
 
 ## Gen2ModHost.RENDERER_FADE_METHOD: one step of `FadeOutToWhite` or
-## `FadeInFromWhite`, which is a palette order applied to every palette on
-## screen and, on the way out, `FillWhiteBGColor` under it. The identity order
-## is a screen that is not fading. Presentation only: the host spends the frames
-## whether or not the view it is drawing with takes this.
+## `FadeInFromWhite`, a palette order over every palette and `FillWhiteBGColor`
+## on the way out. The host spends the frames whether or not a view takes this.
 func set_fade(order: int, white_fill: bool = false) -> void:
 	if order == _fade_order and white_fill == _fade_white_fill:
 		return
@@ -109,11 +105,8 @@ func set_fade(order: int, white_fill: bool = false) -> void:
 	queue_redraw()
 
 
-## Repaints the tiles the last animation frame rewrote. The sequence touches one
-## or two of a tileset's tiles per frame, so recolouring the whole strip was
-## almost all of the frame's cost. A palette command recolours every tile drawn
-## with that row and is still a repaint rather than a rebuild: the graphics, the
-## roof and the quads are unchanged, and only the colours are not.
+## Repaints the tiles the last animation frame rewrote, one or two a frame; a
+## palette command recolours every tile of its row and is still a repaint.
 func refresh_animation() -> void:
 	if _animation == null or _atlas == null:
 		_rebuild_atlas()
@@ -208,11 +201,8 @@ func _rebuild_atlas() -> void:
 	_sync_map_layers()
 
 
-## The coloured tile strip a map draws with, cached on the two things that
-## choose its colours: the tileset the tiles come from and the environment
-## `GetMapPalette` reads the eight background slots out of. A connected map
-## sharing both shares the strip rather than colouring a second copy of it, and
-## the animation repaints every cached strip that came from its own tileset.
+## The coloured tile strip a map draws with, cached on its tileset and the
+## environment `GetMapPalette` reads, so a connected map sharing both shares it.
 func _atlas_for(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Dictionary:
 	if map == null or tileset == null or _world == null or _world.data == null:
 		return {}
@@ -345,11 +335,8 @@ func _paint_tile(
 			words[row + x] = table[color_index] if color_index < colors else background
 
 
-## One [method Gen2PicImage.lookup] per tile, built once for a repaint rather
-## than once inside it. A tileset's couple of hundred tiles share the eight or
-## nine rows `GetMapPalette` resolved, so each row is converted once. Trimmed to
-## the row's own length, so a colour it does not hold still falls through to the
-## background the way it did before the table existed.
+## One [method Gen2PicImage.lookup] per palette row, built once for a repaint
+## and trimmed to the row's length so a colour it lacks falls through.
 func _palette_tables(palettes: Array) -> Array:
 	var seen: Dictionary = {}
 	var out: Array = []
@@ -479,22 +466,20 @@ func _draw_transition(
 
 
 ## `VermilionDock_SyncScrollWithLY`: lines $50 to $7F scroll by the drifts
-## done, the rest sit still. The columns the scroll brings in past the screen's
-## twentieth are `ScheduleEastColumnRedraw`'s copies of its eighteenth and
-## nineteenth, two a column pass, rather than anything the map holds there. A
-## view wider than the screen scrolls its whole width the same way.
-func _draw_ss_anne_band(background: Vector2) -> void:
+## done, over the view's whole width, and [method Gen2WorldDrawList.drawn_tile_at]
+## answers the columns brought in past the screen's twentieth.
+func _draw_ss_anne_band(_background: Vector2) -> void:
 	var scroll: Dictionary = _draw_list.band_scroll() if _draw_list != null else {}
-	if _atlas == null or scroll.is_empty():
+	var found: Dictionary = _draw_list.band() if _draw_list != null else {}
+	if _atlas == null or scroll.is_empty() or found.is_empty():
 		return
 	var offset: int = int(scroll["offset"])
 	var screen: Vector2 = screen_offset()
-	var first_x: int = floori((background.x + screen.x) / PokeTiles.TILE_WIDTH)
-	var first_y: int = floori((background.y + screen.y) / PokeTiles.TILE_HEIGHT)
+	var first_x: int = int(found["first_column"])
+	var first_y: int = (found["rows"] as Vector2i).x - int(scroll["top"]) / PokeTiles.TILE_HEIGHT
 	var shift: int = posmod(offset, PokeTiles.TILE_WIDTH)
 	var top: int = int(scroll["top"]) / PokeTiles.TILE_HEIGHT
 	var bottom: int = int(scroll["bottom"]) / PokeTiles.TILE_HEIGHT
-	var columns: int = Gen2WorldAPI.VIEW_PIXELS.x / PokeTiles.TILE_WIDTH
 	var band := Rect2(
 		Vector2(0, screen.y + int(scroll["top"])),
 		Vector2(view_pixels().x, int(scroll["bottom"]) - int(scroll["top"]))
@@ -505,8 +490,6 @@ func _draw_ss_anne_band(background: Vector2) -> void:
 	for row: int in range(top, bottom):
 		for column: int in range(left, right):
 			var source: int = column + offset / PokeTiles.TILE_WIDTH
-			if source >= columns:
-				source = columns - 2 + (source & 1)
 			var tile: int = _drawn_tile_at(first_x + source, first_y + row)
 			if tile < 0:
 				continue
@@ -793,7 +776,7 @@ func _draw() -> void:
 ## the background map, painted over the quad that still draws the block's own.
 func _draw_tile_overrides(background: Vector2, overrides: Dictionary) -> void:
 	for cell: Vector2i in overrides:
-		_draw_atlas_tile(int(overrides[cell]), Vector2(cell * PokeTiles.TILE_WIDTH) - background)
+		_draw_atlas_tile(_drawn_tile_at(cell.x, cell.y), Vector2(cell * PokeTiles.TILE_WIDTH) - background)
 
 
 ## `Cut_Headbutt_GetPixelFacing`'s tree goes away while its own sprite anim
@@ -805,7 +788,7 @@ func _draw_hidden_trees(background: Vector2, cells: Array) -> void:
 		for row: int in Gen2Layout.MAP_BLOCK_CELL_WIDTH:
 			for column: int in Gen2Layout.MAP_BLOCK_CELL_WIDTH:
 				_draw_atlas_tile(
-					Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE,
+					_drawn_tile_at(cell.x * 2 + column, cell.y * 2 + row),
 					at + Vector2(column * PokeTiles.TILE_WIDTH, row * PokeTiles.TILE_HEIGHT)
 				)
 
@@ -931,18 +914,9 @@ func _draw_grass_over(pixel: Vector2, background: Vector2) -> void:
 		_draw_transition(background, over, true)
 
 
-## The graphics tile drawn at a map-space tile coordinate, through the same
-## block fold the map quad's shader runs.
+## [method Gen2WorldDrawList.drawn_tile_at], which every renderer reads.
 func _drawn_tile_at(tile_x: int, tile_y: int) -> int:
-	if _world == null or _world.current_tileset == null:
-		return -1
-	var width: int = Gen2Layout.MAP_BLOCK_TILE_WIDTH
-	var block: int = _world.expanded_block_at(
-		floori(float(tile_x) / float(width)), floori(float(tile_y) / float(width))
-	)
-	return _world.current_tileset.tile_index(
-		block, posmod(tile_y, width) * width + posmod(tile_x, width)
-	)
+	return _draw_list.drawn_tile_at(Vector2i(tile_x, tile_y)) if _draw_list != null else -1
 
 
 ## The parts of [param rect] the map still owns, split on the screen's own

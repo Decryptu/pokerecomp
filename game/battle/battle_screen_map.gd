@@ -255,7 +255,32 @@ static func send_out_step(
 	if size >= side:
 		stamp(map, player_side, generation)
 		return
-	var base: int = PLAYER_BASE_TILE if player_side else ENEMY_BASE_TILE
+	_downscaled(map, at, size, side, PLAYER_BASE_TILE if player_side else ENEMY_BASE_TILE)
+
+
+## `AnimateRetreatingPlayerMon`: each block a column right of the send-out's,
+## and the ball tile cleared the frame it is written.
+const RETREAT_AT: Dictionary = {5: Vector2i(2, 2), 3: Vector2i(3, 4)}
+const RETREAT_SIZES: Array[int] = [5, 3, 0]
+const RETREAT_FRAMES: Dictionary = {5: 4, 3: 3, 0: 0}
+
+
+static func retreat_step(map: PackedByteArray, generation: int, size: int) -> void:
+	if map.size() != COLUMNS * ROWS:
+		return
+	clear_battler(map, true, generation)
+	if not RETREAT_AT.has(size):
+		return
+	_downscaled(
+		map, player_box_at(generation) + (RETREAT_AT[size] as Vector2i), size,
+		player_box_side(generation), PLAYER_BASE_TILE
+	)
+
+
+## `CopyDownscaledMonTiles`: rows and columns picked out of the picture.
+static func _downscaled(
+	map: PackedByteArray, at: Vector2i, size: int, side: int, base: int
+) -> void:
 	var picked: Array = SEND_OUT_ROWS[size]
 	for column: int in size:
 		for row: int in size:

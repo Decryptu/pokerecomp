@@ -5458,6 +5458,13 @@ func _check_the_ship_leaves() -> void:
 		return
 	_r.check(not dock.warp_at(DOCK_GANGWAY).is_empty(),
 		"the gangway is gone from a dock loaded fresh.")
+	## `Gen2WorldScreen.preview_ss_anne_leaves`' queue is the script node's own.
+	var shown: Array = dock.gen1_ss_anne_leaves()
+	_r.check(
+		_horn_frames(shown) == SHIP_HORN_FRAMES
+			and int(dock.pending_script_wait().get("frames", 0)) == SHIP_LEAVES_FRAMES,
+		"the previewed departure is not the script's: %s." % [dock.pending_script_wait()]
+	)
 	_r.note("gen1 walk the S.S. ANNE left, and the dock walked the player out past the sailor")
 
 

@@ -419,7 +419,7 @@ func test_a_hit_drains_the_bar_before_it_says_what_the_hit_was() -> void:
 
 	assert_true(_battle_screen.bars_animating(), "the bar is still on its way down")
 	assert_ne(
-		_battle_screen.battle_snapshot()["message"], "It's super effective!",
+		_battle_screen.battle_snapshot()["message"], "It's super-\neffective!",
 		"and the line has not been printed yet"
 	)
 	assert_eq(int(_battle_screen.get("_enemy_hp")), 24, "the committed HP is already there")
@@ -433,7 +433,7 @@ func test_a_hit_drains_the_bar_before_it_says_what_the_hit_was() -> void:
 	while _battle_screen.bars_animating() and guard > 0:
 		_battle_screen.advance_frame()
 		guard -= 1
-	assert_eq(_battle_screen.battle_snapshot()["message"], "It's super effective!")
+	assert_eq(_battle_screen.battle_snapshot()["message"], "It's super-\neffective!")
 
 
 func test_a_hit_that_says_nothing_still_empties_the_bar_before_the_faint() -> void:
@@ -551,7 +551,7 @@ func test_experience_says_its_line_first_and_the_level_line_after_the_bar() -> v
 		"and it is sitting there full"
 	)
 	assert_string_contains(
-		String(_battle_screen.battle_snapshot()["message"]), "grew to level",
+		String(_battle_screen.battle_snapshot()["message"]), "grew to\nlevel",
 		"the level line waited for the bar to reach the end"
 	)
 
@@ -963,7 +963,8 @@ func test_the_entrance_says_who_is_on_each_square_and_how_far_off_it() -> void:
 			lows[who] = minf(float(lows[who]), at)
 			highs[who] = maxf(float(highs[who]), at)
 		_battle_screen.advance_frame()
-		if _battle_screen.frames_running() or not _battle_screen.entrance_running():
+		if _battle_screen.frames_running() or not _battle_screen.entrance_running() \
+				or not bool(_battle_screen.battle_snapshot()["awaits_press"]):
 			continue
 		_battle_screen.finish()
 		_battle_screen.advance()
@@ -974,16 +975,16 @@ func test_the_entrance_says_who_is_on_each_square_and_how_far_off_it() -> void:
 		"a person, then the square they left, then a Pokemon"
 	)
 	assert_eq(
-		kinds["player"], [&"trainer", &"mon"],
-		"the player's own empty square has no frame of its own"
+		kinds["player"], [&"trainer", &"none", &"mon"],
+		"`SendOutMonText` prints over the empty square before the ball"
 	)
 	# `SlideBattlePicOut` walks the player's square nine tiles to the left and
 	# the opponent's eight to the right, and the opening slide brings each in
 	# from the side it later leaves towards.
 	var step: int = PokeTiles.TILE_WIDTH
 	assert_eq(
-		lows["player"], -float((int(Gen2BattleScreenMap.SLIDE_STEPS[true]) - 1) * step),
-		"the player walks off to the left, all but the step it is replaced on"
+		lows["player"], -float(int(Gen2BattleScreenMap.SLIDE_STEPS[true]) * step),
+		"the player walks the whole way off, to the left"
 	)
 	assert_gt(float(highs["player"]), 0.0, "and slid in from the right")
 	assert_eq(

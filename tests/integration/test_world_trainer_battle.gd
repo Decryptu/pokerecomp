@@ -1522,7 +1522,7 @@ func test_a_trainer_battle_refuses_the_run_and_the_overlay_stays_open() -> void:
 	assert_false(host._battle.is_over())
 	assert_eq(
 		host.battle_snapshot()["message"],
-		"No! There's no running from a trainer battle!"
+		"No! There's no\nrunning from a" + Gen2TextStream.SCROLL_BREAK + "trainer battle!"
 	)
 	assert_eq(host._battle.mon(Gen2Battle.ENEMY).hp, enemy_before)
 	assert_eq(host._battle.mon(Gen2Battle.PLAYER).hp, player_before, "the turn was spent")

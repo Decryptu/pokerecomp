@@ -43,21 +43,11 @@ func _open(battle: Gen2Battle, actions: Array) -> void:
 	await get_tree().process_frame
 
 
-## A trainer battle with a bench on both sides, which is what
-## `CheckWhetherToAskSwitch` needs before it asks anything.
+## A trainer battle with a bench on both sides, whose lead falls to the first
+## SWIFT: `HandleEnemyMonFaint`'s `EnemySwitch` is the one caller that reaches
+## `CheckWhetherToAskSwitch` with `wBattleHasJustStarted` clear.
 func _trainer_battle(shift: bool) -> Gen2Battle:
-	var battle: Gen2Battle = Gen2Battle.create_parties(
-		_data,
-		Gen2Party.create([
-			_mon(BattleFixture.PIKACHU, [BattleFixture.TACKLE]),
-			_mon(BattleFixture.BULBASAUR, [BattleFixture.TACKLE]),
-		]),
-		Gen2Party.create([
-			_mon(BattleFixture.GEODUDE, [BattleFixture.TACKLE]),
-			_mon(BattleFixture.CHARMANDER, [BattleFixture.TACKLE]),
-		]),
-		_rng, true
-	)
+	var battle: Gen2Battle = _faint_battle(true, false)
 	battle.battle_style_set = not shift
 	return battle
 
@@ -131,7 +121,7 @@ func _spend_yes_no_hold() -> void:
 ## paragraphs cannot be answered before they have been read.
 func test_shift_puts_the_question_up_before_its_yes_no_box() -> void:
 	var battle: Gen2Battle = _trainer_battle(true)
-	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to("offer")
 
 	assert_eq(_stage(), "offer")
@@ -150,7 +140,7 @@ func test_shift_puts_the_question_up_before_its_yes_no_box() -> void:
 ## which is what SET would have done without asking.
 func test_no_sends_the_trainer_out_and_leaves_the_player_standing() -> void:
 	var battle: Gen2Battle = _trainer_battle(true)
-	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to("offer")
 	await _read_question()
 
@@ -168,7 +158,7 @@ func test_no_sends_the_trainer_out_and_leaves_the_player_standing() -> void:
 ## `InterpretTwoOptionMenu` returns carry on B, which `OfferSwitch` reads as no.
 func test_b_is_the_same_answer_as_no() -> void:
 	var battle: Gen2Battle = _trainer_battle(true)
-	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to("offer")
 	await _read_question()
 
@@ -181,7 +171,7 @@ func test_b_is_the_same_answer_as_no() -> void:
 ## the row chosen there is the switch.
 func test_yes_opens_the_party_list_and_the_chosen_row_switches() -> void:
 	var battle: Gen2Battle = _trainer_battle(true)
-	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to("offer")
 	await _read_question()
 
@@ -205,7 +195,7 @@ func test_yes_opens_the_party_list_and_the_chosen_row_switches() -> void:
 ## the list comes back rather than the question being answered.
 func test_the_one_already_out_is_refused_and_the_list_comes_back() -> void:
 	var battle: Gen2Battle = _trainer_battle(true)
-	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to("offer")
 	await _read_question()
 	await _step(PokeButton.A)
@@ -228,7 +218,7 @@ func test_the_one_already_out_is_refused_and_the_list_comes_back() -> void:
 ## CANCEL is `OfferSwitch.canceled_switch`, which falls into `.said_no`.
 func test_cancelling_the_list_is_the_same_answer_as_no() -> void:
 	var battle: Gen2Battle = _trainer_battle(true)
-	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to("offer")
 	await _read_question()
 	await _step(PokeButton.A)
@@ -243,7 +233,7 @@ func test_cancelling_the_list_is_the_same_answer_as_no() -> void:
 ## ever opened and the turn runs on.
 func test_set_never_opens_a_menu() -> void:
 	var battle: Gen2Battle = _trainer_battle(false)
-	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to("offer", 20)
 	assert_eq(_stage(), "")
 	assert_eq(battle.party(Gen2Battle.ENEMY).active, 1)
@@ -412,25 +402,6 @@ func test_the_fainted_row_is_refused_and_the_list_comes_back() -> void:
 	await _step(PokeButton.A)
 	assert_eq(_stage(), "pick", "the list is redrawn")
 	assert_true(bool(_screen.battle_snapshot()["switch_forced"]), "still with no way out")
-
-
-## A trainer replacing its own faint reaches `EnemySwitch`, so SHIFT asks about a
-## switch here as well, before that Pokémon is on the field.
-func test_shift_offers_a_switch_when_the_trainer_replaces_its_own_faint() -> void:
-	var battle: Gen2Battle = _faint_battle(true, false)
-	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
-	await _advance_to("offer")
-
-	assert_eq(_stage(), "offer")
-	assert_eq(battle.awaiting_switch_offer(), 1)
-	assert_eq(battle.party(Gen2Battle.ENEMY).active, 0, "nobody is out yet")
-
-	await _read_question()
-	await _step(PokeButton.DOWN)
-	await _step(PokeButton.A)
-	assert_eq(_stage(), "")
-	assert_eq(battle.party(Gen2Battle.ENEMY).active, 1)
-	assert_eq(battle.party(Gen2Battle.PLAYER).active, 0, "and the player stayed")
 
 
 func _menu_stage() -> String:
@@ -623,6 +594,29 @@ func test_a_move_with_no_pp_is_refused_and_the_list_comes_back() -> void:
 	assert_eq(_menu_stage(), "move", "and the list is back")
 
 
+## `CheckPlayerHasUsableMoves`' `.force_struggle`: no list, a line that asks
+## no press, sixty frames, and the turn goes to Struggle.
+func test_a_pokemon_with_no_usable_move_says_so_and_struggles() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	await _advance_to_menu()
+	battle.mon(Gen2Battle.PLAYER).pp[0] = 0
+	battle.mon(Gen2Battle.PLAYER).pp[1] = 0
+
+	await _step(PokeButton.A)
+	assert_eq(_menu_stage(), "")
+	assert_eq(
+		String(_screen.battle_snapshot()["message"]), "PIKACHU\nhas no moves left!"
+	)
+	assert_false(bool(_screen.battle_snapshot()["awaits_press"]))
+	var guard: int = 400
+	while _screen.battle_snapshot()["message"] == "PIKACHU\nhas no moves left!" and guard > 0:
+		_screen.advance_hardware_frame()
+		guard -= 1
+	assert_gt(guard, 0, "the turn ran on without a press")
+	assert_string_contains(String(_screen.battle_snapshot()["message"]), "STRUGGLE")
+
+
 ## RUN is `BattleMenu_Run`, which settles before the turn does.
 func test_run_leaves_the_wild_battle() -> void:
 	var battle: Gen2Battle = _menu_battle()
@@ -666,7 +660,7 @@ func test_pkmn_opens_a_party_list_that_can_be_cancelled_back_to_the_menu() -> vo
 ## a question of its own, the way it is for the forget prompt and ball selection.
 func test_a_renderer_is_not_offered_input_while_a_menu_is_up() -> void:
 	var battle: Gen2Battle = _trainer_battle(true)
-	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	assert_true(_screen._renderer_input_free())
 	await _advance_to("offer")
 	assert_false(_screen._renderer_input_free())

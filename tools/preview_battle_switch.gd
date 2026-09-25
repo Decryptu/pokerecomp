@@ -260,6 +260,10 @@ func _open_prize() -> void:
 			if _stage == "fainted_offer":
 				return
 			_screen._handle_button(PokeButton.B)
+			## `InterpretTwoOptionMenu`'s hold behind the answer.
+			var offer: Gen2WorldMenu = _screen.get("_switch_offer")
+			while offer != null and offer.holding():
+				_screen.advance_hardware_frame()
 			continue
 		if String(snapshot["menu_stage"]) == "main" and not fight.is_over():
 			fight.enemy.hp = 1
