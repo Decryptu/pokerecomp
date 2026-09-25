@@ -239,12 +239,6 @@ func test_a_generation_one_slot_gains_experience_at_the_level_cap() -> void:
 	assert_eq(state.day_care_mon(Gen2WorldDayCare.SLOT_MAN).exp, before + 1)
 
 
-func test_an_empty_generation_one_slot_counts_nothing() -> void:
-	var state: Gen2WorldState = _state()
-	Gen2WorldDayCare.gen1_step(state)
-	assert_null(state.day_care_mon(Gen2WorldDayCare.SLOT_MAN))
-
-
 ## `.daycareInUse` reads the level off the experience and prices the difference.
 func test_a_generation_one_visit_reads_the_growth_and_the_price() -> void:
 	var state: Gen2WorldState = _state()

@@ -40,20 +40,6 @@ func test_a_pad_lands_on_something_it_can_press() -> void:
 	assert_eq(focused.focus_mode, Control.FOCUS_ALL)
 
 
-func test_switching_pages_hands_the_ring_to_the_new_one() -> void:
-	_use(InputEventJoypadButton.new())
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	_launcher.select_page(&"settings")
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	var focused: Control = _focus_owner()
-	assert_not_null(focused)
-	assert_true(focused.is_visible_in_tree(), "focus never lands on a hidden page")
-
-
 func test_up_from_the_cartridge_reaches_the_tab_strip() -> void:
 	_use(InputEventJoypadButton.new())
 	await get_tree().process_frame
@@ -151,6 +137,7 @@ func test_the_ring_never_lands_on_a_pane_that_holds_controls() -> void:
 		assert_not_null(focused, String(page))
 		assert_false(focused is ScrollContainer, "%s stranded the ring on its pane" % page)
 		assert_true(focused is BaseButton, String(page))
+		assert_true(focused.is_visible_in_tree(), "%s: focus never lands on a hidden page" % page)
 
 
 ## The settings page is a rail beside its rows: right leaves the rail for them,

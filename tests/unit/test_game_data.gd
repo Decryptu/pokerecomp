@@ -492,14 +492,6 @@ func test_back_pics_always_fill_their_cell() -> void:
 	assert_eq(data.species_pic(1, true)["width"], 2)
 
 
-func test_unown_forms_come_from_their_own_atlas() -> void:
-	_write_cache()
-	var data: GameData = GameData.open_directory(_directory)
-	# There is no Unown in this two-species cache, so the answer is empty
-	# rather than a lie about slot 0 of an atlas that was never written.
-	assert_true(data.unown_pic(0).is_empty())
-
-
 func test_trainer_classes_are_numbered_from_the_first_class_not_the_player() -> void:
 	# The cartridge's palette table opens with the player, who has no pic. The
 	# cache does not carry that entry, so class 1 is the first row here.

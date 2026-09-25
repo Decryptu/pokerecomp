@@ -12,7 +12,6 @@ const SHA1: String = "0123456789abcdef"
 ## `PlayShootingStar` from `hWY` to `rBGP`: `ClearScreen`'s three frames, the
 ## text box sheet's five `CopyVideoData` frames and the copyright's four.
 const COPYRIGHT_SHOWN: int = 12
-## The intro's own `Delay3` behind the stars and the fade's three steps.
 const NIDORINO_ANIMS: Array = [
 	[[0, 0], [-2, 2], [-1, 2], [1, 2], [2, 2]],
 	[[0, 0], [-2, -2], [-1, -2], [1, -2], [2, -2]],

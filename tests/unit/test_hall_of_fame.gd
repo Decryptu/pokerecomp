@@ -179,16 +179,6 @@ func test_the_player_panel_prints_the_trainer_id_and_the_play_timer() -> void:
 	assert_eq(Gen2Text.character(Gen2HallOfFamePage.CODE_COLON), ":")
 
 
-## `.DisplayNewHallOfFamer`'s `ld c, 60` and pokegold's `ld c, 180`: an induction
-## panel holds for frames rather than for a press.
-func test_the_panel_hold_is_profile_split() -> void:
-	assert_eq(
-		Gen2HallOfFame.panel_frames(_data),
-		Gen2HallOfFame.PANEL_FRAMES_CRYSTAL if Gen2WorldState.is_crystal_profile(_data)
-		else Gen2HallOfFame.PANEL_FRAMES_GOLD_SILVER
-	)
-
-
 ## Any non-zero palette index inside a tile rectangle. Index 0 is the page's
 ## own background, so ink means something was drawn there.
 func _has_ink(indices: PackedByteArray, box: Rect2i) -> bool:
@@ -199,30 +189,6 @@ func _has_ink(indices: PackedByteArray, box: Rect2i) -> bool:
 			if at < indices.size() and indices[at] != 0:
 				return true
 	return false
-
-
-## The panel's columns are DisplayHOFMon's own. They were one tile right of it
-## while plain words stood in for the glyphs the battle-extra strip carries, so
-## the positions are pinned rather than left to the next reader to notice.
-func test_the_panel_sits_on_the_source_columns() -> void:
-	assert_eq(Gen2HallOfFamePage.DEX_LABEL, Vector2i(1, 13), "hlcoord 1, 13")
-	assert_eq(Gen2HallOfFamePage.DEX_NUMBER, Vector2i(3, 13), "hlcoord 3, 13")
-	assert_eq(Gen2HallOfFamePage.SPECIES_NAME, Vector2i(7, 13), "hlcoord 7, 13")
-	assert_eq(Gen2HallOfFamePage.GENDER, Vector2i(18, 13), "hlcoord 18, 13")
-	assert_eq(Gen2HallOfFamePage.NICKNAME_SLASH, Vector2i(8, 14), "hlcoord 8, 14")
-	assert_eq(Gen2HallOfFamePage.LEVEL, Vector2i(1, 16), "hlcoord 1, 16")
-	assert_eq(Gen2HallOfFamePage.OT_LABEL, Vector2i(7, 16), "hlcoord 7, 16")
-	assert_eq(Gen2HallOfFamePage.OT_NUMBER, Vector2i(10, 16), "hlcoord 10, 16")
-	# And the glyphs it places are the charmap's, read under the strip
-	# halloffame.asm loads before printing any of this.
-	assert_eq(Gen2HallOfFamePage.FONT, Gen2Text.FONT_BATTLE_EXTRA)
-	assert_eq(
-		Gen2Text.character(Gen2HallOfFamePage.CODE_NUMERO, Gen2HallOfFamePage.FONT), "№"
-	)
-	assert_eq(Gen2Text.character(Gen2HallOfFamePage.CODE_ID, Gen2HallOfFamePage.FONT), "<ID>")
-	assert_eq(Gen2Text.character(Gen2HallOfFamePage.CODE_LEVEL, Gen2HallOfFamePage.FONT), "<LV>")
-	assert_eq(Gen2Text.character(Gen2HallOfFamePage.CODE_DOT), ".")
-	assert_eq(Gen2Text.character(Gen2HallOfFamePage.CODE_SLASH), "/")
 
 
 ## The three glyphs stood in as words before, so the columns they occupy are

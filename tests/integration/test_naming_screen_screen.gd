@@ -113,12 +113,3 @@ func test_the_letter_bracket_is_a_nine_by_nine_ring_around_one_tile() -> void:
 	assert_ne(moved[63 * WIDTH + 15], indices[63 * WIDTH + 15], "top-left corner moved")
 	assert_ne(moved[71 * WIDTH + 23], indices[71 * WIDTH + 23], "bottom-right corner moved")
 	assert_ne(moved[63 * WIDTH + 31], 0, "the ring is one cell to the right")
-
-
-## The cursor is a bracket around the cell it is on, so moving it changes the
-## page even when nothing has been typed.
-func test_moving_the_cursor_redraws_the_page() -> void:
-	var page := Gen2NamingScreenPage.from_data(GameData.open_directory(Fixture.directory()))
-	var before: PackedByteArray = page.draw(_model(), "YOUR NAME?")
-	_screen.handle_button(PokeButton.RIGHT)
-	assert_ne(page.draw(_model(), "YOUR NAME?"), before)

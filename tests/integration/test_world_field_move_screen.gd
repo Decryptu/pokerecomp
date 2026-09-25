@@ -424,16 +424,6 @@ func test_the_surf_driver_leaves_a_save_a_transaction_will_accept() -> void:
 	)
 
 
-func test_submenu_lists_surf_for_a_mon_that_knows_it() -> void:
-	await _open_surf_world()
-	var party: Gen2PartyScreen = await _open_party()
-	party.handle_button(PokeButton.A)
-	assert_eq(
-		_labels(party.submenu_snapshot()["items"]),
-		["SURF", "STATS", "SWITCH", "MOVE", "ITEM", "CANCEL"]
-	)
-
-
 func test_choosing_surf_shows_the_message_and_defers_entering_the_water() -> void:
 	await _open_surf_world()
 	var world: Gen2WorldAPI = _world_screen._world
@@ -546,16 +536,6 @@ func _open_strength_world(badge: bool = true) -> void:
 	)
 
 
-func test_submenu_lists_strength_for_a_mon_that_knows_it() -> void:
-	await _open_strength_world()
-	var party: Gen2PartyScreen = await _open_party()
-	party.handle_button(PokeButton.A)
-	assert_eq(
-		_labels(party.submenu_snapshot()["items"]),
-		["STRENGTH", "STATS", "SWITCH", "MOVE", "ITEM", "CANCEL"]
-	)
-
-
 ## .TryStrength checks the badge and stops, so the entry resolves facing open
 ## floor with no boulder in sight. `Script_UsedStrength` is two boxes, and the
 ## flag waits for the second one's acknowledge the way Cut's block change does.
@@ -595,16 +575,6 @@ func test_strength_without_the_badge_reports_the_badge_and_changes_nothing() -> 
 	assert_eq(_shown_text(), "Sorry! A new BADGE is required.")
 	_world_screen._acknowledge_field_move_text()
 	assert_false(world.strength_active())
-
-
-func test_submenu_lists_whirlpool_for_a_mon_that_knows_it() -> void:
-	await _open_whirlpool_world()
-	var party: Gen2PartyScreen = await _open_party()
-	party.handle_button(PokeButton.A)
-	assert_eq(
-		_labels(party.submenu_snapshot()["items"]),
-		["WHIRLPOOL", "STATS", "SWITCH", "MOVE", "ITEM", "CANCEL"]
-	)
 
 
 func test_choosing_whirlpool_shows_the_message_and_defers_the_block_change() -> void:
@@ -654,17 +624,6 @@ func test_whirlpool_facing_nothing_reports_the_generic_refusal() -> void:
 	await get_tree().process_frame
 
 	assert_eq(_shown_text(), "Can't use that here.")
-
-
-func test_submenu_lists_headbutt_for_a_mon_that_knows_it() -> void:
-	await _open_headbutt_world()
-	var party: Gen2PartyScreen = await _open_party()
-	party.handle_button(PokeButton.A)
-	await get_tree().process_frame
-	assert_eq(
-		_labels(party.submenu_snapshot()["items"]),
-		["HEADBUTT", "STATS", "SWITCH", "MOVE", "ITEM", "CANCEL"]
-	)
 
 
 ## HeadbuttScript reaches TreeMonEncounter only after UseHeadbuttText, so the
@@ -776,17 +735,6 @@ func _open_headbutt_world(badge: bool = true) -> void:
 	await _open_world(
 		badge, Gen2WorldFieldMove.MOVE_HEADBUTT, Gen2WorldFieldMove.BADGE_HIVE,
 		HEADBUTT_STAND_CELL
-	)
-
-
-func test_submenu_lists_rock_smash_for_a_mon_that_knows_it() -> void:
-	await _open_rock_smash_world()
-	var party: Gen2PartyScreen = await _open_party()
-	party.handle_button(PokeButton.A)
-	await get_tree().process_frame
-	assert_eq(
-		_labels(party.submenu_snapshot()["items"]),
-		["ROCK SMASH", "STATS", "SWITCH", "MOVE", "ITEM", "CANCEL"]
 	)
 
 

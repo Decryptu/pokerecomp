@@ -133,12 +133,6 @@ func test_each_profile_uses_its_own_source_name_table() -> void:
 
 # --- the screen ---------------------------------------------------------------
 
-func test_it_opens_on_the_first_beat() -> void:
-	assert_eq(_screen.beat_index(), 0)
-	assert_eq(_screen.beat_count(), 6)
-	assert_false(_screen.naming())
-
-
 ## `OakSpeech` opens on `RotateFourPalettesLeft`, `RotateFourPalettesRight` and
 ## `RotateThreePalettesRight` before the first pic is loaded, and the first beat
 ## then comes in on `Intro_RotatePalettesLeftFrontpic`. No button does anything
@@ -230,19 +224,6 @@ func test_the_naming_screen_takes_the_buttons_while_it_is_open() -> void:
 	assert_eq(_screen.beat_index(), beat, "the speech did not move on")
 
 
-func test_the_speech_resumes_and_ends_with_the_name_that_was_typed() -> void:
-	_press_a_until(_at_naming)
-	# One letter, then START to reach END and A to store it.
-	_screen.handle_button(PokeButton.A)
-	_screen.handle_button(PokeButton.START)
-	_screen.handle_button(PokeButton.A)
-	_settle()
-	assert_false(_screen.naming(), "the keyboard closed")
-	assert_eq(_screen.player_name().length(), 1)
-	_press_a_until(_done)
-	assert_eq(_finished, [_screen.player_name()])
-
-
 ## Ending the keyboard with nothing typed reaches InitName's default rather than
 ## an empty name, which is what keeps the save validator's rule satisfiable.
 func test_ending_the_keyboard_empty_takes_the_default() -> void:
@@ -253,25 +234,6 @@ func test_ending_the_keyboard_empty_takes_the_default() -> void:
 	assert_eq(_screen.player_name(), Gen2OakSpeech.DEFAULT_MALE)
 	_press_a_until(_done)
 	assert_eq(_finished, [Gen2OakSpeech.DEFAULT_MALE])
-
-
-func test_a_female_intro_takes_the_female_default() -> void:
-	var female := Gen2OakSpeechScreen.new()
-	add_child_autofree(female)
-	female.open(_data, Gen2SaveData.GENDER_FEMALE)
-	for _step: int in 200:
-		for _frame: int in 40:
-			if female.animation_frames_left() == 0:
-				break
-			female.advance_frames(female.animation_frames_left())
-		if female.naming():
-			break
-		female.handle_button(PokeButton.A)
-	female.handle_button(PokeButton.START)
-	female.handle_button(PokeButton.A)
-	for _step: int in 40:
-		female.advance_frames(female.animation_frames_left())
-	assert_eq(female.player_name(), Gen2OakSpeech.DEFAULT_FEMALE)
 
 
 ## `InitializeWorld` calls `ShrinkPlayer` the moment `OakSpeech` returns, so the

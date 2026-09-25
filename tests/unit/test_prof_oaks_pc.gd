@@ -37,12 +37,6 @@ func test_every_band_answers_its_own_row() -> void:
 		previous = threshold
 
 
-func test_the_last_row_answers_a_full_dex() -> void:
-	var rating: Dictionary = Gen2ProfOaksPC.rating_for(_data, 251)
-	assert_eq(int(rating["threshold"]), Gen2Layout.OAK_RATING_LAST_THRESHOLD)
-	assert_eq(String(rating["text"]), "RATING19")
-
-
 ## `ProfOaksPCBoot` prints the level line, then `Rate`'s counts, then the rating,
 ## and plays the sound that row carries.
 func test_the_boot_is_three_pages_and_the_row_s_own_sound() -> void:

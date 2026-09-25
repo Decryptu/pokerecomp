@@ -44,21 +44,6 @@ func _choose(kind: StringName) -> void:
 	_screen._on_start_menu_action(kind)
 
 
-func test_the_trainer_card_returns_to_the_menu() -> void:
-	_choose(Gen2WorldStartMenu.ITEM_PLAYER)
-	assert_null(_screen._start_menu_host, "the menu closed behind the card")
-	assert_not_null(_screen._trainer_card_host)
-	_screen._on_trainer_card_closed()
-	assert_not_null(_screen._start_menu_host, ".Reopen drew it again")
-
-
-func test_the_party_returns_to_the_menu() -> void:
-	_choose(Gen2WorldStartMenu.ITEM_POKEMON)
-	assert_null(_screen._start_menu_host)
-	_screen._on_party_closed({})
-	assert_not_null(_screen._start_menu_host)
-
-
 func test_the_pokegear_returns_to_the_menu() -> void:
 	_choose(Gen2WorldStartMenu.ITEM_POKEGEAR)
 	assert_null(_screen._start_menu_host)

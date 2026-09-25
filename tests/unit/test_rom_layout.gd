@@ -123,22 +123,6 @@ func test_the_intro_predef_palettes_are_one_run() -> void:
 	)
 
 
-## The section's own shape: eleven entries, the four uncompressed ones sized in
-## bytes and the seven compressed ones in tiles, in `GoldSilverIntro`'s INCBIN
-## order. The walk depends on that order, so a reordering is a broken import.
-func test_the_gold_silver_intro_section_is_the_incbin_order() -> void:
-	var names: Array[String] = []
-	for row: Array in Gen2Layout.GS_INTRO_SECTION:
-		names.append(String(row[0]))
-		assert_true(String(row[1]) in ["lz", "raw_bytes"], String(row[0]))
-		assert_gt(int(row[2]), 0, String(row[0]))
-	assert_eq(names, [
-		"water1", "water_tilemap", "water_meta", "water2",
-		"grass1", "grass_tilemap", "grass_meta", "grass2",
-		"fire1", "fire2", "fire3",
-	] as Array[String])
-
-
 ## Every metatile map is a whole number of sixteen-wide rows, and the water
 ## scene's own starting row is inside its map.
 func test_the_metatile_maps_are_sixteen_wide() -> void:
@@ -152,10 +136,6 @@ func test_the_metatile_maps_are_sixteen_wide() -> void:
 	assert_lt(
 		Gen2Layout.GS_INTRO_WATER_FIRST_ROW, water / Gen2Layout.GS_INTRO_META_COLUMNS
 	)
-
-
-func test_crystal_has_its_own() -> void:
-	assert_ne(Gen2Layout.for_id(RomRegistry.CRYSTAL), Gen2Layout.for_id(RomRegistry.GOLD))
 
 
 func test_layouts_carry_the_same_keys() -> void:
@@ -258,11 +238,6 @@ func test_the_trainer_tables_are_one_entry_out_of_step() -> void:
 			int(layout["trainer_palettes"]) + PokePalette.PAIR_BYTES,
 			"%s palettes start at the player" % id
 		)
-
-
-func test_a_trainer_palette_is_one_pair_and_a_species_is_two() -> void:
-	# Only a Pokémon can be shiny, so a class stores half of what a species does.
-	assert_eq(PokePalette.ENTRY_BYTES, PokePalette.PAIR_BYTES * 2)
 
 
 func test_crystal_has_one_trainer_class_more_than_gold() -> void:

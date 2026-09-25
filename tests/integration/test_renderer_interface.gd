@@ -176,14 +176,7 @@ func test_a_hardware_viewport_renderer_cannot_ask_for_one() -> void:
 
 
 func test_the_built_in_renderer_leaves_the_box_solid() -> void:
-	var packed: PackedScene = load("res://game/world/world_screen.tscn")
-	_world_screen = packed.instantiate() as Gen2WorldScreen
-	_world_screen.map_group = Fixture.MAP_GROUP
-	_world_screen.map_number = Fixture.MAP_NUMBER
-	_world_screen.start_cell = Vector2i(7, 6)
-	_world_screen.set_data(_data)
-	add_child(_world_screen)
-	await get_tree().process_frame
+	await _open_built_in_world()
 	assert_eq(_world_screen._text_box.field_opacity, 1.0)
 	var image: Image = _world_screen._text_box.texture.get_image()
 	assert_eq(image.get_pixel(80, 24), Color.WHITE)

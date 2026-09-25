@@ -9,18 +9,9 @@ const COLUMNS: int = 18
 const ROWS: int = 2
 
 
-func test_a_short_line_is_left_alone() -> void:
-	assert_eq(Gen2TextLayout.wrap_lines("HELLO", COLUMNS), PackedStringArray(["HELLO"]))
-
-
 func test_a_line_breaks_at_a_space() -> void:
 	var lines: PackedStringArray = Gen2TextLayout.wrap_lines("BULBASAUR used TACKLE", COLUMNS)
 	assert_eq(lines, PackedStringArray(["BULBASAUR used", "TACKLE"]))
-
-
-func test_a_line_is_filled_to_the_last_column() -> void:
-	var lines: PackedStringArray = Gen2TextLayout.wrap_lines("aaa bbb ccc ddd eee", 11)
-	assert_eq(lines[0], "aaa bbb ccc")
 
 
 func test_wrapping_counts_tiles_not_characters() -> void:
@@ -41,12 +32,6 @@ func test_a_word_longer_than_a_line_is_cut_rather_than_overflowing() -> void:
 	# cartridge's, and text running off the edge of the screen is worse.
 	var lines: PackedStringArray = Gen2TextLayout.wrap_lines("abcdefghij", 4)
 	assert_eq(lines, PackedStringArray(["abcd", "efgh", "ij"]))
-
-
-func test_no_line_is_wider_than_the_box() -> void:
-	var text: String = "There's a time and place for everything, but not now."
-	for line: String in Gen2TextLayout.wrap_lines(text, COLUMNS):
-		assert_lte(Gen2Text.encoded_length(line), COLUMNS, "'%s' is too wide" % line)
 
 
 func test_zero_columns_lays_nothing_out_rather_than_looping() -> void:

@@ -72,19 +72,6 @@ func test_sha1_of_unreadable_file_is_empty() -> void:
 	assert_eq(RomVerifier.sha1_of_file("user://nope.bin"), "")
 
 
-func test_registry_holds_every_supported_cartridge() -> void:
-	assert_eq(RomRegistry.BY_SHA1.size(), RomRegistry.ORDER.size())
-	assert_eq(RomRegistry.ids_of_generation(RomRegistry.GEN1).size(), 3)
-	assert_eq(RomRegistry.ids_of_generation(RomRegistry.GEN2).size(), 3)
-
-
-func test_every_row_carries_a_generation_with_a_dump_size() -> void:
-	for id: StringName in RomRegistry.ORDER:
-		var generation: int = RomRegistry.generation_for(id)
-		assert_true(RomRegistry.SIZES.has(generation), "%s has no size" % id)
-		assert_eq(RomRegistry.size_for(id), int(RomRegistry.SIZES[generation]))
-
-
 func test_a_gen1_sized_file_passes_the_prefilter() -> void:
 	# The prefilter refused everything but 2 MiB before Gen 1 was listed, which
 	# would have rejected Red on its length rather than on its hash.
@@ -93,6 +80,7 @@ func test_a_gen1_sized_file_passes_the_prefilter() -> void:
 
 
 func test_every_registry_id_round_trips() -> void:
+	assert_eq(RomRegistry.BY_SHA1.size(), RomRegistry.ORDER.size())
 	for id: StringName in RomRegistry.ORDER:
 		var sha1: String = RomRegistry.sha1_for(id)
 		assert_eq(sha1.length(), 40, "%s should have a 40-char sha1" % id)

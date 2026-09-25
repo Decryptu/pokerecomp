@@ -222,9 +222,9 @@ func test_a_shake_reverses_on_its_parameters_own_beat() -> void:
 	assert_eq(effect.param, 0x32)
 
 
-## `BattleBGEffect_Rollout` shakes the screen vertically and moves the first
-## animation object the other way, so what it draws stays where it was.
-func test_rollout_moves_the_first_object_against_the_screen() -> void:
+## `BattleBGEffect_Rollout` shakes the screen vertically, and writes the first
+## animation object's struct rather than spawning one.
+func test_rollout_shakes_the_screen_up_and_spawns_nothing() -> void:
 	var effect: Gen2BattleAnimBgEffect = _effect(ROLLOUT, 0x10, 0x04, 0x30)
 	_run(effect)
 	assert_eq(_background().scy, 0x00, "a negative shake is dropped")

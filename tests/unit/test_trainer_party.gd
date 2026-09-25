@@ -140,11 +140,6 @@ func test_a_stored_moves_trainers_pokemon_knows_exactly_what_is_stored() -> void
 	assert_eq(mon.item, 5)
 
 
-func test_a_normal_trainers_pokemon_holds_nothing() -> void:
-	var party: Gen2Party = Gen2TrainerParty.build(_data, 1, 0)
-	assert_eq(party.at(0).item, 0)
-
-
 ## Hard is one global rule per number rather than 800 rewritten teams, and this
 ## is the one place a trainer's party is built out of the cartridge's tables, so
 ## all three land here. The party stays the class's own species in its own order.

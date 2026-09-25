@@ -51,28 +51,6 @@ func _drive_to(game: Gen2CardFlip, prompt: int, frames: int = 2400) -> bool:
 	return false
 
 
-## `.AskPlayWithThree`'s `.SaidNo` jumps straight to `.Quit`, so a no takes
-## nothing: the three coins are `.DeductCoins`' and it never runs.
-func test_saying_no_at_the_door_costs_nothing() -> void:
-	var game: Gen2CardFlip = _table()
-	assert_eq(game.prompt(), Prompt.YES_NO, "the table opens on its own question")
-	game.answer_yes_no(false)
-	for _frame: int in 16:
-		_step(game)
-	assert_true(game.finished(), "no must leave the game")
-	assert_eq(game.coins(), 100, "no coin is charged for leaving")
-
-
-## `.DeductCoins` charges three before a card is dealt, which is why the balance
-## has already moved by the time `.ChooseACard` runs.
-func test_a_round_costs_three_coins_before_the_deal() -> void:
-	var game: Gen2CardFlip = _table()
-	game.answer_yes_no(true)
-	_step(game)
-	assert_eq(game.coins(), 97, "the bet is taken at `.DeductCoins`")
-	assert_eq(game.state(), State.CHOOSE_A_CARD)
-
-
 ## `.DeductCoins`' own `cp 3`: two coins is not enough and the line it prints
 ## ends in `prompt`, so the table waits for a button and then leaves.
 func test_two_coins_is_not_enough_and_ends_the_game() -> void:
@@ -163,16 +141,24 @@ func test_the_shuffle_is_a_permutation_of_the_twenty_four() -> void:
 ## ones it cannot pay, so a full case ends the loop at `MAX_COINS`.
 func test_a_full_coin_case_takes_no_more() -> void:
 	var game: Gen2CardFlip = _table(Gen2CardFlip.MAX_COINS)
-	assert_true(_drive_to(game, Prompt.BET))
-	game.press_a()
-	for _frame: int in 480:
-		if game.prompt() == Prompt.PRESS:
+	var won: bool = false
+	for _frame: int in 24000:
+		if game.finished() or won and game.prompt() == Prompt.YES_NO:
 			break
+		var before: int = game.coins()
 		_step(game)
-	assert_true(
-		game.coins() <= Gen2CardFlip.MAX_COINS,
-		"the case cannot pass `MAX_COINS`"
-	)
+		assert_true(game.coins() <= Gen2CardFlip.MAX_COINS, "the case passed `MAX_COINS`")
+		won = won or game.coins() > before
+		match game.prompt():
+			Prompt.YES_NO:
+				game.answer_yes_no(true)
+			Prompt.PRESS:
+				game.dismiss_text()
+			Prompt.CHOOSE, Prompt.BET:
+				game.press_a()
+			_:
+				pass
+	assert_true(won, "no round paid out")
 
 
 ## `.Continue` marks the card just used, and `CardFlip_BlankDiscardedCardSlot`

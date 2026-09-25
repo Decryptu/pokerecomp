@@ -319,6 +319,32 @@ subject. Before creating any file, name the existing one it cannot go in.
 
 When something changes, replace the old text. Never append a correction.
 
+## What a test must earn
+
+A test costs a maintenance edit on every refactor, so it has to catch a bug
+nothing else catches. Prefer driving a real screen or model through its input,
+as `tests/integration/` does, and asserting what the player sees or the save
+holds. Before adding one, name:
+
+1. the observable behaviour, cartridge quirk or format it protects;
+2. the plausible change that would make it fail;
+3. why the existing tests would miss that change.
+
+Without all three, do not add it. A bug fix gets one regression test at the
+layer that owns the bug, and that test must fail before the fix. Do not add:
+
+- a test that restates the code: an expected value produced by the function
+  under test, a constant table copied back from its source, or a mock that
+  implements the asserted behaviour;
+- a test that only checks that something loads, instantiates or does not crash
+  when another test already exercises it;
+- a test of a private helper whose result a public caller already asserts;
+- a near-copy of an existing case that takes the same branch;
+- a production hook, flag or export that only a test calls.
+
+When testing a unit alone is the only practical way to reach a behaviour, list
+its failure modes first and write one case per mode.
+
 ## The budget
 
 `tests/unit/test_source_budget.gd` caps how much branching and how much prose the

@@ -208,13 +208,6 @@ func test_the_banner_steps_once_per_graphics_request() -> void:
 	assert_ne(blocks[0], blocks[1], "and it is a different frame each cycle")
 
 
-## Crystal requests graphics twice a cycle and Gold and Silver once, so the same
-## number of cycles walks the banner twice as far on Crystal.
-func test_crystal_steps_the_banner_twice_a_cycle() -> void:
-	assert_eq(Gen2Credits.GFX_STEPS.size(), 2)
-	assert_eq(Gen2Credits.GFX_STEPS_GOLD_SILVER.size(), 1)
-
-
 ## `Credits_LYOverride`'s `dec a / dec a`, which Gold and Silver replace with
 ## `inc a / inc a`. It is a byte, so Crystal's first step wraps.
 func test_the_border_scroll_walks_two_pixels_a_cycle_each_way() -> void:

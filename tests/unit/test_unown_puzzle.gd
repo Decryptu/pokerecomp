@@ -14,7 +14,6 @@ const DOWN: int = PokeButton.DOWN
 const LEFT: int = PokeButton.LEFT
 const RIGHT: int = PokeButton.RIGHT
 const A: int = PokeButton.A
-const START: int = PokeButton.START
 
 
 func _press(puzzle: Gen2UnownPuzzle, button: int) -> Dictionary:
@@ -156,13 +155,6 @@ func test_placing_onto_an_occupied_cell_is_refused_and_keeps_the_piece() -> void
 	assert_eq(refused["sounds"], [Gen2Sfx.SFX_WRONG] as Array[int])
 	assert_true(puzzle.holding(), "the refusal must not drop the piece")
 	assert_eq(puzzle.held_piece(), piece)
-
-
-func test_start_leaves_the_board_unsolved() -> void:
-	var puzzle: Gen2UnownPuzzle = Gen2UnownPuzzle.create(null)
-	_press(puzzle, START)
-	assert_true(puzzle.finished())
-	assert_false(puzzle.solved())
 
 
 func test_solving_the_board_takes_one_more_press_before_it_leaves() -> void:

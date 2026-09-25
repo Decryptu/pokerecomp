@@ -423,28 +423,6 @@ func test_the_stage_holds_one_cartridge_per_supported_game() -> void:
 		assert_not_null(Gen2Cartridge.ART[game_id], "every cartridge has art")
 
 
-func test_the_selected_cartridge_stands_biggest_and_the_row_stays_centred() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
-	add_child_autofree(page)
-	page.size = Vector2(1000, 640)
-	await get_tree().process_frame
-	var stage: Gen2CartridgeStage = page.stage()
-	await get_tree().process_frame
-
-	for index: int in RomRegistry.ORDER.size():
-		stage.select(index, false)
-		await get_tree().process_frame
-		var hero: Gen2Cartridge = stage.selected_cartridge()
-		for other: Gen2Cartridge in _cartridges_of(stage):
-			if other == hero:
-				continue
-			assert_lt(other.size.x, hero.size.x, "only the selection is at full size")
-		# Whichever end of the row is chosen, the cartridge being looked at stays
-		# on the stage rather than being pushed off to balance the rest.
-		assert_gte(hero.position.x, 0.0, "the hero starts on the stage")
-		assert_lte(hero.position.x + hero.size.x, stage.size.x, "and ends on it")
-
-
 func test_every_cartridge_beside_the_selection_is_the_same_size_and_centred_on_it() -> void:
 	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
 	add_child_autofree(page)
@@ -695,21 +673,6 @@ func _finger_drag(from: Vector2, by: Vector2) -> InputEventScreenDrag:
 	drag.position = from + by
 	drag.relative = by
 	return drag
-
-
-func test_arrow_keys_move_the_selection_and_wrap() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
-	add_child_autofree(page)
-	page.size = Vector2(1000, 640)
-	await get_tree().process_frame
-	var stage: Gen2CartridgeStage = page.stage()
-
-	stage.step(1)
-	assert_eq(stage.selected, 1)
-	stage.step(-1)
-	assert_eq(stage.selected, 0)
-	stage.step(-1)
-	assert_eq(stage.selected, RomRegistry.ORDER.size() - 1, "the row wraps")
 
 
 func test_a_seated_cartridge_ends_its_animation_back_at_rest() -> void:
@@ -1022,10 +985,4 @@ func test_a_screen_in_launcher_units_carries_its_own_density_guard() -> void:
 	page.get_parent().remove_child(page)
 	assert_eq(window.content_scale_factor, 1.0, "and the game is not")
 	window.content_scale_factor = before
-	Gen2LauncherUI.preview_density = 0.0
-
-
-func test_the_preview_density_still_overrides_the_display_server() -> void:
-	Gen2LauncherUI.preview_density = 2.5
-	assert_eq(Gen2LauncherUI.display_density(), 2.5)
 	Gen2LauncherUI.preview_density = 0.0

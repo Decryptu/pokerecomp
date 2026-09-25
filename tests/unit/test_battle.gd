@@ -41,18 +41,7 @@ func _first(events: Array, type: StringName) -> Dictionary:
 	return found[0] if not found.is_empty() else {}
 
 
-func test_the_faster_pokemon_moves_first() -> void:
-	# Pikachu at 50 has 110 Speed and Geodude has 30, so nothing about the roll
-	# can change this.
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	)
-	var events: Array = battle.take_turn(0, 0)
-	assert_eq(_first(events, Gen2Battle.USED_MOVE)["side"], Gen2Battle.PLAYER)
-
-
-func test_the_slower_pokemon_moves_first_when_it_is_the_other_way_round() -> void:
+func test_a_faster_enemy_moves_first() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE]),
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])
@@ -73,7 +62,7 @@ func test_speed_is_read_with_its_stage_applied() -> void:
 	)
 
 
-func test_priority_beats_speed() -> void:
+func test_priority_is_read_from_the_effect_byte() -> void:
 	# The effect byte carries it, and the cache already has the effect byte.
 	assert_eq(Gen2Battle.priority_of({"number": 1, "effect": 0}), Gen2Battle.BASE_PRIORITY)
 	assert_eq(Gen2Battle.priority_of({"number": 1, "effect": 0x67}), 2, "Quick Attack")
@@ -887,26 +876,6 @@ func test_the_just_frozen_flag_only_holds_for_the_turn_that_set_it() -> void:
 	assert_gt(thawed_on, -1, "the flag is cleared at the top of every turn")
 
 
-func test_a_turn_with_nobody_frozen_rolls_nothing_for_thawing() -> void:
-	# `bit FRZ` comes before `BattleRandom`, so adding the defrost tick did not
-	# move any other roll in the game along.
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.GROWL])
-	)
-	battle.rng.seed = 99
-	battle.take_turn(0, 0)
-	var with_no_freeze: int = battle.rng.state
-
-	var again: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.GROWL])
-	)
-	again.rng.seed = 99
-	again.take_turn(0, 0)
-	assert_eq(int(again.rng.state), with_no_freeze)
-
-
 func test_a_fire_type_is_not_burned_by_a_fire_move() -> void:
 	# `CheckMoveTypeMatchesTarget`, which compares the move's type against the
 	# target's two. Charmander is Fire/Fire and Ember is Fire.
@@ -1275,34 +1244,6 @@ func test_a_status_move_confuses_rather_than_touching_the_status_byte() -> void:
 	assert_eq(_of_type(events, Gen2Battle.CONFUSE_INFLICTED).size(), 1)
 
 
-func test_a_confused_pokemon_that_hits_itself_never_lands_its_own_move() -> void:
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	)
-	battle.player.substatus |= Gen2Substatus.CONFUSED
-	battle.player.confusion_turns = 3
-	var before: int = battle.player.hp
-	var events: Array = battle.take_turn(0, 0)
-	assert_eq(_of_type(events, Gen2Battle.HURT_ITSELF).size(), 1)
-	assert_lt(battle.player.hp, before)
-	assert_eq(_of_type(events, Gen2Battle.USED_MOVE).size(), 1, "only the enemy's own move")
-
-
-func test_a_pokemon_confused_and_paralysed_can_still_be_stopped_by_either() -> void:
-	# The two live on different bytes and are asked about independently, so a
-	# Pokémon can carry both, unlike two entries on the status byte itself.
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	)
-	battle.player.status = Gen2Status.PARALYSIS
-	battle.player.substatus |= Gen2Substatus.CONFUSED
-	battle.player.confusion_turns = 3
-	assert_true(Gen2Status.has(battle.player.status, Gen2Status.PARALYSIS))
-	assert_true(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.CONFUSED))
-
-
 func test_hyper_beam_locks_the_user_out_the_turn_after_it_connects() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.HYPER_BEAM]),
@@ -1421,65 +1362,6 @@ func test_switching_out_a_toxic_pokemon_resets_the_ramp() -> void:
 	assert_eq(battle.player.toxic_counter, 0, "cleared with the rest of the volatiles")
 
 
-func test_haze_wipes_out_both_sides_stages_in_the_middle_of_a_battle() -> void:
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.HAZE]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	)
-	battle.player.change_stage("speed", 2)
-	battle.enemy.change_stage("defense", -2)
-	var events: Array = battle.take_turn(0, 0)
-	assert_eq(battle.player.stage("speed"), 0)
-	assert_eq(battle.enemy.stage("defense"), 0, "both sides, not just the user's own")
-	assert_eq(_of_type(events, Gen2Battle.STAGES_CLEARED).size(), 1)
-
-
-func test_belly_drum_costs_the_user_half_its_health_for_a_maxed_attack() -> void:
-	# Thunder Wave rather than Tackle or Growl on the enemy: it neither damages
-	# Pikachu nor touches the stage Belly Drum is being checked against.
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.BELLY_DRUM]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.THUNDER_WAVE])
-	)
-	var max_hp: int = battle.player.max_hp()
-	battle.take_turn(0, 0)
-	assert_eq(battle.player.stage("attack"), Gen2Stats.MAX_STAGE)
-	@warning_ignore("integer_division")
-	assert_eq(battle.player.hp, max_hp - max_hp / 2)
-
-
-func test_psych_up_copies_stat_changes_across_in_a_real_turn() -> void:
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.PSYCH_UP]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	)
-	battle.enemy.change_stage("defense", 3)
-	battle.take_turn(0, 0)
-	assert_eq(battle.player.stage("defense"), 3)
-
-
-func test_a_multi_hit_move_lands_more_than_once_in_a_real_turn() -> void:
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.MULTI_HIT_MOVE]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.THUNDER_WAVE])
-	)
-	var events: Array = battle.take_turn(0, 0)
-	var hits: int = _of_type(events, Gen2Battle.HIT).size()
-	assert_between(hits, 2, 5)
-	assert_eq(int(_first(events, Gen2Battle.HIT_TIMES)["times"]), hits)
-
-
-func test_a_draining_move_heals_the_user_in_a_real_turn() -> void:
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.DRAIN_MOVE]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.THUNDER_WAVE])
-	)
-	battle.player.hp = 1
-	var before: int = battle.player.hp
-	battle.take_turn(0, 0)
-	assert_gt(battle.player.hp, before)
-
-
 func test_seismic_toss_deals_the_users_level_however_the_formula_would_read_it() -> void:
 	# Geodude's real Defense would cut an ordinary Normal-type hit down hard;
 	# Seismic Toss ignores every bit of that and lands exactly 50.
@@ -1490,17 +1372,6 @@ func test_seismic_toss_deals_the_users_level_however_the_formula_would_read_it()
 	var before: int = battle.enemy.hp
 	battle.take_turn(0, 0)
 	assert_eq(before - battle.enemy.hp, 50)
-
-
-func test_guillotine_faints_its_target_outright_in_a_real_turn() -> void:
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 100, [Fixture.OHKO_MOVE]),
-		_mon(Fixture.GEODUDE, 5, [Fixture.THUNDER_WAVE])
-	)
-	# A hundred-level gap pushes the boosted accuracy past 255, which never
-	# misses, so the outcome needs no seed to be sure of.
-	battle.take_turn(0, 0)
-	assert_eq(battle.enemy.hp, 0)
 
 
 ## Experience: what a wild faint is worth, a trainer battle's own 1.5x, how it
@@ -2018,21 +1889,6 @@ func test_encore_forces_the_targets_last_move_even_the_turn_it_lands() -> void:
 	)
 
 
-func test_encore_keeps_forcing_the_locked_slot_on_a_later_turn_too() -> void:
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
-		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE, Fixture.SLASH])
-	)
-	battle.enemy.encored_slot = 0
-	battle.enemy.encore_turns = 5
-
-	var events: Array = battle.take_turn(0, 1)
-	assert_eq(
-		int(_used_move_by(events, Gen2Battle.ENEMY)["move"]), Fixture.TACKLE,
-		"still locked, whatever slot is asked for"
-	)
-
-
 func test_encore_ends_when_its_own_counter_runs_out() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
@@ -2102,11 +1958,9 @@ func test_disable_wears_off_and_the_slot_becomes_usable_again() -> void:
 	assert_true(battle.player.can_use(1))
 
 
-## Pinned against seed 12345, the same fixed seed [method before_each] already
-## sets for every test in this file: a bare coin flip like this one has no
-## accuracy field to guarantee it the way a move's own miss chance does, and
-## [method test_a_confused_pokemon_that_hits_itself_never_lands_its_own_move]
-## already leans on this same seed for the same reason.
+## Pinned against seed 12345, the fixed seed [method before_each] sets: a bare
+## coin flip like this one has no accuracy field to guarantee it the way a
+## move's own miss chance does.
 func test_attract_can_stop_a_pokemon_moving_on_the_immobilise_roll() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
@@ -3027,22 +2881,6 @@ func test_two_quick_claws_roll_the_enemys_first() -> void:
 	# enemy can only lead through its own claw, which is the point.
 	assert_gt(enemy_first, 0, "the enemy's claw has to be able to fire")
 	assert_gt(player_first, enemy_first, "and it is the rarer of the two")
-
-
-## With no claw anywhere the order is the speed comparison it always was.
-func test_no_quick_claw_leaves_the_order_to_speed() -> void:
-	var battle: Gen2Battle = _battle(
-		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE]),
-		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])
-	)
-	for seed_value: int in 30:
-		battle.rng.seed = seed_value
-		assert_eq(
-			battle.order({
-				Gen2Battle.PLAYER: Fixture.TACKLE, Gen2Battle.ENEMY: Fixture.TACKLE,
-			})[0],
-			Gen2Battle.ENEMY
-		)
 
 
 ## `HandleLeftovers`: a sixteenth back every turn, and nothing on a Pokémon

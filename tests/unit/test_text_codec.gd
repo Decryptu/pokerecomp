@@ -142,12 +142,6 @@ func test_an_empty_entry_is_kept_rather_than_skipped() -> void:
 	assert_eq(Gen2Text.decode_sequence(data, 0, 2, 8), PackedStringArray(["", "A"]))
 
 
-func test_a_real_species_name_round_trips() -> void:
-	# The bytes of "MEWTWO@" as they sit in the cartridge.
-	var data: PackedByteArray = PackedByteArray([0x8C, 0x84, 0x96, 0x93, 0x96, 0x8E, 0x50])
-	assert_eq(Gen2Text.decode(data, 0, 10), "MEWTWO")
-
-
 func test_encoding_is_the_inverse_of_decoding_over_the_printable_range() -> void:
 	for code: int in range(Gen2Text.FIRST_PRINTABLE, 0x100):
 		var text: String = Gen2Text.character(code)
@@ -170,11 +164,6 @@ func test_only_the_lowercase_ligatures_exist() -> void:
 	# The font has "'s" as one tile and no "'S", so a name in capitals costs a
 	# tile more than the same name in lower case.
 	assert_eq(Gen2Text.encoded_length("IT'S"), 4)
-
-
-func test_a_ligature_wins_over_the_characters_it_is_made_of() -> void:
-	# Longest match first, or "'s" encodes as an apostrophe and a lowercase s.
-	assert_eq(Gen2Text.encoded_length("It's not"), 7)
 
 
 func test_the_full_stop_beats_the_decimal_point() -> void:

@@ -63,19 +63,6 @@ func test_json_round_trips() -> void:
 	assert_eq(RomCache.read_json(RomCache.species_path(_directory)), value)
 
 
-func test_numbers_come_back_from_json_as_floats() -> void:
-	# JSON has one number type, so every stat, index and byte read back out of
-	# the cache is a float. Callers must coerce; asserting it here so nobody
-	# rediscovers it by comparing a species number against an int and losing.
-	RomCache.prepare(_directory)
-	var path: String = RomCache.species_path(_directory)
-	RomCache.write_json(path, {"number": 1})
-
-	var read: Dictionary = RomCache.read_json(path)
-	assert_true(read["number"] is float)
-	assert_eq(int(read["number"]), 1)
-
-
 func test_reading_a_missing_file_returns_null() -> void:
 	assert_null(RomCache.read_json("%s/nothing.json" % _directory))
 

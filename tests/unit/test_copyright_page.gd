@@ -23,11 +23,6 @@ func _index(indices: PackedByteArray, at: Vector2i) -> int:
 	return indices[at.y * Gen2Screen.WIDTH + at.x]
 
 
-func test_the_page_is_the_hardware_screen() -> void:
-	assert_not_null(_page)
-	assert_eq(_page.draw().size(), Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
-
-
 ## `hlcoord 2, 7`, and `NextLineChar`'s own `ld bc, SCREEN_WIDTH * 2`: three rows
 ## in the same column, two rows apart.
 func test_the_three_rows_start_in_one_column_two_rows_apart() -> void:

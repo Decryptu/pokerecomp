@@ -51,12 +51,9 @@ const DIVIDER_ROW: int = 7
 const PAGE_RIGHT_ARROW: Vector2i = Vector2i(19, 6)
 const PAGE_ARROW_ROW: int = 6
 
-## `StatsScreen_LoadPageIndicators`: three 2x2 blocks, one per page, the last
-## ending against the right arrow. See [method page_indicators], which is where
-## a fourth or fifth goes.
-const PAGE_INDICATORS: Array[Vector2i] = [
-	Vector2i(13, 5), Vector2i(15, 5), Vector2i(17, 5),
-]
+## `StatsScreen_LoadPageIndicators`: three 2x2 blocks at (13,5), (15,5) and
+## (17,5), one per page, the last ending against the right arrow. See
+## [method page_indicators], which is where a fourth or fifth goes.
 const PAGE_INDICATOR_ROW: int = 5
 const PAGE_INDICATOR_STEP: int = 2
 ## The rightmost block's column, which the source's third indicator sits on and

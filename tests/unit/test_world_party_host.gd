@@ -302,6 +302,8 @@ func test_a_boxed_gift_keeps_the_species_name_over_the_answer() -> void:
 		_world, {"nickname": "SPARKY"}, _save, false, _random
 	)
 	assert_true(result["ok"])
+	assert_eq(result["transaction"]["destination"]["destination"], &"box")
+	assert_eq(_save.boxes[0].slots[0].species, 25)
 	assert_eq(_save.boxes[0].slots[0].nickname, String(_data.species(25)["name"]))
 	assert_eq(int(result["results"][0]["events"][0]["result"]["script_value"]), 1)
 
@@ -439,22 +441,6 @@ func test_explicit_trade_slot_still_checks_the_record_gender() -> void:
 	assert_false(result["ok"])
 	assert_eq(result["reason"], &"trade_candidate_gender_mismatch")
 	assert_eq(_save.to_dict(), before)
-
-
-func test_full_party_stores_a_gift_in_the_first_pc_box_slot() -> void:
-	while _save.party.size() < Gen2SaveData.MAX_PARTY:
-		var copy: Gen2SaveMon = Gen2SaveMon.from_dict(_save.party[0].to_dict())
-		_save.party.append(copy)
-	_set_script(0x6200)
-	_world.dispatch_script_events(Vector2i(2, 2))
-	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
-		_world, {}, _save, false, _random
-	)
-	assert_true(result["ok"])
-	assert_true(result["transaction"]["accepted"])
-	assert_eq(_save.party.size(), Gen2SaveData.MAX_PARTY)
-	assert_eq(_save.boxes[0].slots[0].species, 25)
-	assert_eq(result["transaction"]["destination"]["destination"], &"box")
 
 
 ## `.FailedToGiveMon`'s `ld b, $2`: nothing is written and the script reads 2
@@ -1642,22 +1628,6 @@ func test_a_second_contest_catch_is_offered_and_names_the_one_already_held() -> 
 	)
 
 
-func test_a_full_party_capture_uses_the_first_pc_box_slot() -> void:
-	while _save.party.size() < Gen2SaveData.MAX_PARTY:
-		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
-	var wild: Gen2BattleMon = Gen2BattleMon.create(
-		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
-	)
-	var result: Dictionary = Gen2WorldPartyHost.capture_wild(
-		_world, _save, wild, 0x01, _random, 42, false
-	)
-	assert_true(result["ok"])
-	assert_true(result["caught"])
-	assert_eq(_save.party.size(), Gen2SaveData.MAX_PARTY)
-	assert_eq(_save.boxes[0].slots[0].species, 25)
-	assert_eq(result["destination"]["destination"], &"box")
-
-
 ## `.SendToPC`'s own `cp MONS_PER_BOX`, which raises BATTLERESULT_BOX_FULL for
 ## `Script_reloadmapafterbattle` to answer with Bill on the phone. Only the
 ## catch that fills the box raises it; the one before it does not, and a catch
@@ -1720,24 +1690,6 @@ func test_an_unown_caught_into_a_box_does_not_enter_the_unown_dex() -> void:
 	assert_eq(result["destination"]["destination"], &"box")
 	assert_true(_world.state.has_caught_species(Gen2Layout.UNOWN_SPECIES))
 	assert_true(_world.state.unown_dex().is_empty())
-
-
-func test_full_storage_refuses_a_capture_before_consuming_the_ball() -> void:
-	while _save.party.size() < Gen2SaveData.MAX_PARTY:
-		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
-	for box: Gen2SaveBox in _save.boxes:
-		for slot: int in Gen2SaveBox.CAPACITY:
-			box.slots[slot] = Gen2SaveMon.from_dict(_save.party[0].to_dict())
-	var before_quantity: int = _world.state.item_quantity(0x01)
-	var wild: Gen2BattleMon = Gen2BattleMon.create(
-		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
-	)
-	var result: Dictionary = Gen2WorldPartyHost.capture_wild(
-		_world, _save, wild, 0x01, _random, 42, false
-	)
-	assert_false(result["ok"])
-	assert_eq(result["reason"], &"storage_full")
-	assert_eq(_world.state.item_quantity(0x01), before_quantity)
 
 
 func test_failed_poke_ball_still_consumes_the_ball_without_adding_a_mon() -> void:

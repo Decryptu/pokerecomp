@@ -120,17 +120,6 @@ func test_generation_1_teaches_the_first_move_at_a_level_alone() -> void:
 	assert_eq(Gen2Learnset.moves_learned_at(_golbat(), 13, true), [])
 
 
-func test_the_same_move_is_offered_once_at_a_level() -> void:
-	assert_eq(Gen2Learnset.moves_learned_at(_golbat(), 1), [SCREECH, LEECH_LIFE, SUPERSONIC])
-	assert_eq(Gen2Learnset.moves_learned_at(_muk(), 1), [POISON_GAS, POUND, HARDEN])
-
-
-func test_four_slots_is_what_a_battler_carries() -> void:
-	# The two constants are the same number seen from either side of the line, and
-	# a Pokémon that knew five would be trimmed silently on its way into a battle.
-	assert_eq(Gen2Learnset.MOVE_SLOTS, Gen2BattleMon.MAX_MOVES)
-
-
 func test_the_skip_branch_teaches_only_the_levels_between_the_two() -> void:
 	# `wSkipMovesBeforeLevelUp`, which is what a Day-Care retrieval fills with:
 	# a Golbat deposited at 12 and taken back at 19 is offered Confuse Ray and

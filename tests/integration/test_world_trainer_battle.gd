@@ -660,10 +660,8 @@ func test_the_dude_plays_the_catching_tutorial_and_keeps_nothing() -> void:
 		host.advance_hardware_frame()
 	assert_gt(refused, 0, "the menu refused a real press while the Dude was choosing")
 	assert_lt(frames, DUDE_FRAME_GUARD, "the tutorial answers itself: %s" % JSON.stringify(messages))
-	print("dude: ball thrown on frame %d, tutorial over on %d" % [throw_frame, frames])
 	assert_between(throw_frame, 1, DUDE_TUTORIAL_FRAMES,
 		"the Dude reached the ball on frame %d" % throw_frame)
-	assert_lt(frames, DUDE_FRAME_GUARD, "the tutorial ran %d frames" % frames)
 	await get_tree().process_frame
 	await get_tree().process_frame
 
@@ -1527,21 +1525,6 @@ func test_a_trainer_battle_refuses_the_run_and_the_overlay_stays_open() -> void:
 	assert_eq(host._battle.mon(Gen2Battle.ENEMY).hp, enemy_before)
 	assert_eq(host._battle.mon(Gen2Battle.PLAYER).hp, player_before, "the turn was spent")
 	assert_not_null(_battle_host())
-
-
-## `PlayBattleMusic` runs inside `FindFirstAliveMonAndStartBattle`, so the track
-## is chosen where the fight starts rather than by whatever opened it. The
-## fixture's trainer is class 1, FALKNER, on a Johto landmark.
-func test_a_trainer_battle_opens_on_the_track_its_class_names() -> void:
-	await _open_world()
-	await _trigger_trainer()
-	var host: Gen2BattleScreen = _battle_host()
-	assert_not_null(host)
-	assert_eq(host.battle_music(), Gen2Battle.MUSIC_JOHTO_GYM_LEADER_BATTLE)
-	assert_false(
-		Gen2Battle.region_is_kanto(_world_screen._world.landmark()),
-		"the fixture map is in Johto"
-	)
 
 
 ## `PlayBattleMusic` runs on frame 791 of the cartridge trace and

@@ -128,11 +128,4 @@ func test_start_closes_the_board_and_answers_the_script_zero() -> void:
 		_world_screen._world.state.is_event_flag_active(SOLVED_EVENT),
 		"an unsolved board must not take the `iftrue`"
 	)
-
-
-## The world takes its own presses back once the board has gone.
-func test_the_world_moves_again_once_the_board_closes() -> void:
-	await _open_world()
-	_run_script()
-	_world_screen.press_button(PokeButton.START)
-	assert_true(_world_screen.move_player(Vector2i.RIGHT))
+	assert_true(_world_screen.move_player(Vector2i.RIGHT), "the map is the player's again")

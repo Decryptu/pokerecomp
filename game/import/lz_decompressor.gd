@@ -134,11 +134,6 @@ func _back_reference(
 	return {"pos": pos, "bytes": bytes}
 
 
-## Convenience for callers that only care whether it worked.
-static func unpack(data: PackedByteArray, offset: int) -> PackedByteArray:
-	return Gen2Lz.new().decompress(data, offset)
-
-
 func _fail() -> PackedByteArray:
 	failed = true
 	consumed = 0

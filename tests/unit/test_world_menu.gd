@@ -58,19 +58,6 @@ func test_two_dimensional_menu_does_not_select_a_missing_cell() -> void:
 	assert_eq(menu.selected_index(), 2)
 
 
-## `Script_yesorno` loads no `LoadMenuHeader`, so a `choice` header is empty and
-## the box falls back to `YesNoBox`'s own `lb bc, SCREEN_WIDTH - 6, 7`.
-func test_choice_with_no_header_falls_back_to_the_yes_no_box() -> void:
-	var menu: Gen2WorldMenu = Gen2WorldMenu.from_input({
-		"menu_kind": &"vertical", "header": {}, "choices": [&"yes", &"no"],
-	})
-	var box: Gen2MenuBox = menu.box()
-	assert_eq(box.left, 14)
-	assert_eq(box.top, 7)
-	assert_eq(box.right, 19)
-	assert_eq(box.bottom, 11)
-
-
 ## `LoadMenuHeader`'s own `menu_coords`, carried through the importer's
 ## top/left/bottom/right and into the box a scripted `verticalmenu` draws.
 func test_vertical_menu_carries_its_own_menu_coords() -> void:

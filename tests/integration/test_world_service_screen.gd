@@ -749,7 +749,7 @@ func test_mart_overlay_sells_a_stack_at_half_price() -> void:
 	assert_null(_world_screen._service_host)
 
 
-func test_menu_overlay_cancel_resumes_with_false_script_value() -> void:
+func test_b_on_a_scripted_menu_closes_it_and_resumes_the_script() -> void:
 	_write_menu_request()
 	_data = GameData.open_directory(Fixture.directory())
 	await _open_world()

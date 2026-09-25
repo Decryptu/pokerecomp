@@ -61,16 +61,11 @@ func _tap(sheet: Gen2BindingSheet, code: int) -> void:
 func test_a_binding_reads_as_keys_then_pad() -> void:
 	var text: String = Gen2ControlsSection.describe(_options.controls[PokeButton.START])
 	assert_string_contains(text, "Pad: Start")
-	assert_lt(text.find("Pad:"), text.length())
 	assert_gt(text.find("Pad:"), 0, "the keys come first")
 
 
 func test_a_button_with_nothing_bound_says_so() -> void:
 	assert_eq(Gen2ControlsSection.describe([]), "Unbound")
-
-
-func test_the_editor_opens_on_the_launcher_rather_than_inside_the_card() -> void:
-	assert_not_null(await _open(PokeButton.A), "a sheet has to cover the dock as well")
 
 
 ## The whole point of the card: press something, and that is what the button is.

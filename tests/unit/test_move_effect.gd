@@ -116,32 +116,6 @@ func test_an_effect_nobody_has_written_is_an_ordinary_attack() -> void:
 	assert_false(Gen2MoveEffect.is_written(0xFF))
 
 
-func test_recoil_is_the_ordinary_list_with_a_step_in_it() -> void:
-	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.RECOIL_HIT)
-	assert_true(Gen2MoveEffect.is_written(Gen2MoveEffect.RECOIL_HIT))
-	assert_true(sequence.has(Gen2EffectCommands.RECOIL))
-	assert_eq(sequence.size(), Gen2MoveEffect.NORMAL_HIT.size() + 1)
-	# Before the faint check, so an attacker that goes down to its own recoil is
-	# reported in the same breath as the defender.
-	assert_lt(
-		sequence.find(Gen2EffectCommands.RECOIL),
-		sequence.find(Gen2EffectCommands.CHECK_FAINT)
-	)
-
-
-func test_counter_mirror_coat_and_selfdestruct_have_their_cartridge_sequences() -> void:
-	var counter: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.COUNTER)
-	var mirror: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.MIRROR_COAT)
-	var selfdestruct: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.SELFDESTRUCT)
-	assert_true(counter.has(Gen2EffectCommands.COUNTER))
-	assert_true(mirror.has(Gen2EffectCommands.MIRROR_COAT))
-	assert_true(selfdestruct.has(Gen2EffectCommands.SELFDESTRUCT))
-	assert_lt(
-		selfdestruct.find(Gen2EffectCommands.SELFDESTRUCT),
-		selfdestruct.find(Gen2EffectCommands.APPLY_DAMAGE)
-	)
-
-
 func test_counter_only_reflects_a_physical_move_that_hit_this_action_pair() -> void:
 	var battle: Gen2Battle = Gen2Battle.create(
 		_data,
@@ -244,34 +218,6 @@ func test_dig_uses_underground_and_earthquake_can_hit_it() -> void:
 	).size(), 1)
 
 
-func test_the_stat_runs_land_on_the_right_stat() -> void:
-	# Effect 20 is the down-by-one run's third stop (18 + 2) and String Shot is
-	# published as lowering Speed; effect 72 is the down-on-hit run's fifth stop
-	# (68 + 4) and Psychic is published as lowering Sp.Defense. Both are the
-	# numbers most likely to be off by one, and neither shows up in a passing
-	# battle unless the wrong stat actually moves.
-	assert_true(Gen2MoveEffect.sequence_for(20).has(Gen2EffectCommands.SPEED_DOWN))
-	assert_true(
-		Gen2MoveEffect.sequence_for(72).has(Gen2EffectCommands.SP_DEFENSE_DOWN)
-	)
-
-
-func test_a_stat_that_only_rises_cannot_miss() -> void:
-	# Swords Dance's own effect byte, 50, is the first stop of the up-by-two run.
-	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.STAT_UP_2_BASE)
-	assert_false(sequence.has(Gen2EffectCommands.CHECK_HIT))
-	assert_true(sequence.has(Gen2EffectCommands.ATTACK_UP_2))
-
-
-func test_a_stat_that_can_be_lowered_can_also_be_missed() -> void:
-	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.STAT_DOWN_BASE)
-	assert_true(sequence.has(Gen2EffectCommands.CHECK_HIT))
-	assert_lt(
-		sequence.find(Gen2EffectCommands.CHECK_HIT),
-		sequence.find(Gen2EffectCommands.ATTACK_DOWN)
-	)
-
-
 func test_a_stage_already_at_the_top_reports_failure_not_a_rise() -> void:
 	var turn: Gen2Turn = _turn(_battle())
 	turn.attacker().change_stage("attack", Gen2Stats.MAX_STAGE)
@@ -334,22 +280,6 @@ func test_ancientpower_does_nothing_behind_a_failed_roll() -> void:
 	assert_eq(turn.events.size(), 0)
 
 
-func test_a_turn_knows_who_is_on_the_other_side_of_it() -> void:
-	var battle: Gen2Battle = _battle()
-	var turn: Gen2Turn = _turn(battle)
-	assert_eq(turn.target, Gen2Battle.ENEMY)
-	assert_eq(turn.attacker(), battle.player)
-	assert_eq(turn.defender(), battle.enemy)
-
-
-func test_every_event_carries_the_side_that_caused_it() -> void:
-	var turn: Gen2Turn = _turn(_battle())
-	turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-	assert_eq(turn.events.size(), 1)
-	assert_eq(int(turn.events[0]["side"]), Gen2Battle.PLAYER)
-	assert_eq(int(turn.events[0]["target"]), Gen2Battle.ENEMY)
-
-
 func test_the_damage_step_writes_down_what_the_step_after_it_reads() -> void:
 	var turn: Gen2Turn = _turn(_battle())
 	_run_damage_steps(turn)
@@ -373,23 +303,6 @@ func test_what_is_dealt_is_what_was_there_to_take() -> void:
 	assert_eq(battle.enemy.hp, 0)
 
 
-func test_a_command_that_ends_the_move_says_so() -> void:
-	var turn: Gen2Turn = _turn(_battle())
-	turn.immune = true
-	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_IMMUNE, turn)
-	assert_true(turn.ended)
-	assert_eq(turn.events[0]["type"], Gen2Battle.NO_EFFECT)
-
-
-func test_an_immunity_is_not_a_miss() -> void:
-	# They read differently on screen and they are different questions: one is
-	# about the type chart and the other about a roll.
-	var turn: Gen2Turn = _turn(_battle())
-	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_IMMUNE, turn)
-	assert_false(turn.ended)
-	assert_eq(turn.events.size(), 0)
-
-
 func test_struggle_spends_nothing() -> void:
 	var battle: Gen2Battle = _battle()
 	var turn: Gen2Turn = Gen2Turn.create(
@@ -398,13 +311,6 @@ func test_struggle_spends_nothing() -> void:
 	var before: int = int(battle.player.pp[0])
 	Gen2EffectCommands.run(Gen2EffectCommands.DO_TURN, turn)
 	assert_eq(int(battle.player.pp[0]), before)
-
-
-func test_an_ordinary_move_spends_its_slot() -> void:
-	var battle: Gen2Battle = _battle()
-	var before: int = int(battle.player.pp[0])
-	Gen2EffectCommands.run(Gen2EffectCommands.DO_TURN, _turn(battle))
-	assert_eq(int(battle.player.pp[0]), before - 1)
 
 
 func test_recoil_reads_the_damage_word_and_takes_at_least_one() -> void:
@@ -422,53 +328,11 @@ func test_recoil_reads_the_damage_word_and_takes_at_least_one() -> void:
 	assert_eq(int(_first(second.events, Gen2Battle.RECOIL)["amount"]), 1)
 
 
-func test_recoil_takes_one_even_after_a_substitute_clears_damage() -> void:
-	var turn: Gen2Turn = _turn(_battle())
-	Gen2EffectCommands.run(Gen2EffectCommands.RECOIL, turn)
-	assert_eq(int(_first(turn.events, Gen2Battle.RECOIL)["amount"]), 1)
-
-
-func test_flinch_hit_is_the_secondary_shape_with_flinch_target_in_it() -> void:
-	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.FLINCH_HIT)
-	assert_true(Gen2MoveEffect.is_written(Gen2MoveEffect.FLINCH_HIT))
-	assert_true(sequence.has(Gen2EffectCommands.FLINCH_TARGET))
-	assert_true(sequence.has(Gen2EffectCommands.EFFECT_CHANCE))
-	assert_true(sequence.has(Gen2EffectCommands.APPLY_DAMAGE), "the damage happens either way")
-
-
-func test_flinch_target_sets_the_substatus_flag() -> void:
-	var turn: Gen2Turn = _turn(_battle())
-	Gen2EffectCommands.run(Gen2EffectCommands.FLINCH_TARGET, turn)
-	assert_true(Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.FLINCHED))
-
-
 func test_flinch_target_does_nothing_behind_a_failed_roll() -> void:
 	var turn: Gen2Turn = _turn(_battle())
 	turn.failed_chance = true
 	Gen2EffectCommands.run(Gen2EffectCommands.FLINCH_TARGET, turn)
 	assert_false(Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.FLINCHED))
-
-
-func test_a_flinched_pokemon_cannot_move_and_the_flag_clears_either_way() -> void:
-	var battle: Gen2Battle = _battle()
-	battle.enemy.substatus |= Gen2Substatus.FLINCHED
-	var turn: Gen2Turn = Gen2Turn.create(
-		battle, Gen2Battle.ENEMY, 0, Fixture.TACKLE, _data.move(Fixture.TACKLE), []
-	)
-	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
-	assert_true(turn.ended)
-	assert_eq(_first(turn.events, Gen2Battle.CANNOT_MOVE)["reason"], &"flinch")
-	assert_false(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.FLINCHED))
-
-
-func test_confuse_hit_is_the_secondary_shape_and_confuse_is_the_status_shape() -> void:
-	var hit: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.CONFUSE_HIT)
-	assert_true(hit.has(Gen2EffectCommands.CONFUSE_TARGET))
-	assert_true(hit.has(Gen2EffectCommands.APPLY_DAMAGE))
-
-	var status_move: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.CONFUSE)
-	assert_true(status_move.has(Gen2EffectCommands.CONFUSE_TARGET))
-	assert_false(status_move.has(Gen2EffectCommands.STAB), "no power, so no matchup step")
 
 
 func test_confuse_target_sets_the_flag_and_rolls_a_duration() -> void:
@@ -528,36 +392,6 @@ func test_confusion_running_out_lets_the_move_through_the_same_turn() -> void:
 	assert_eq(_first(turn.events, Gen2Battle.SNAPPED_OUT)["side"], Gen2Battle.PLAYER)
 
 
-func test_recharge_hit_locks_the_user_out_after_it_connects() -> void:
-	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.RECHARGE_HIT)
-	assert_lt(
-		sequence.find(Gen2EffectCommands.CHECK_HIT), sequence.find(Gen2EffectCommands.RECHARGE),
-		"a miss ends the move before recharge is ever reached"
-	)
-
-	var turn: Gen2Turn = _turn(_battle())
-	Gen2EffectCommands.run(Gen2EffectCommands.RECHARGE, turn)
-	assert_true(Gen2Substatus.has(turn.attacker().substatus, Gen2Substatus.RECHARGING))
-
-
-func test_a_recharging_pokemon_cannot_move_and_the_flag_clears() -> void:
-	var battle: Gen2Battle = _battle()
-	battle.player.substatus |= Gen2Substatus.RECHARGING
-	var turn: Gen2Turn = _turn(battle)
-	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
-	assert_true(turn.ended)
-	assert_eq(_first(turn.events, Gen2Battle.CANNOT_MOVE)["reason"], &"recharge")
-	assert_false(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.RECHARGING))
-
-
-func test_a_charge_move_ends_the_turn_before_the_damage_step() -> void:
-	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.SOLARBEAM)
-	assert_lt(
-		sequence.find(Gen2EffectCommands.CHARGE_MOVE),
-		sequence.find(Gen2EffectCommands.DAMAGE_CALC)
-	)
-
-
 func test_charge_move_locks_the_user_in_and_says_so() -> void:
 	var turn: Gen2Turn = _turn(_battle(), Fixture.SOLARBEAM)
 	Gen2EffectCommands.run(Gen2EffectCommands.CHARGE, turn)
@@ -582,26 +416,6 @@ func test_charge_move_releases_on_the_second_call_and_lets_the_rest_run() -> voi
 	assert_false(Gen2Substatus.has(mon.substatus, Gen2Substatus.CHARGING))
 	assert_eq(mon.charged_move, 0)
 	assert_eq(turn.skip_to, Gen2EffectCommands.CHARGE, "the release turn skips the charge")
-
-
-func test_rollout_rampage_and_defense_curl_use_their_effect_sequences() -> void:
-	var rollout: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.ROLLOUT)
-	var rampage: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.RAMPAGE)
-	var curl: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.DEFENSE_CURL)
-	assert_true(Gen2MoveEffect.is_written(Gen2MoveEffect.ROLLOUT))
-	assert_true(Gen2MoveEffect.is_written(Gen2MoveEffect.RAMPAGE))
-	assert_true(Gen2MoveEffect.is_written(Gen2MoveEffect.DEFENSE_CURL))
-	assert_lt(
-		rollout.find(Gen2EffectCommands.CHECK_HIT),
-		rollout.find(Gen2EffectCommands.ROLLOUT_POWER)
-	)
-	assert_lt(
-		rampage.find(Gen2EffectCommands.RAMPAGE),
-		rampage.find(Gen2EffectCommands.DAMAGE_CALC)
-	)
-	assert_lt(
-		curl.find(Gen2EffectCommands.DEFENSE_UP), curl.find(Gen2EffectCommands.CURL)
-	)
 
 
 func test_defense_curl_raises_defense_and_leaves_the_rollout_flag() -> void:
@@ -755,23 +569,6 @@ func test_rampage_miss_keeps_the_chain_but_status_interrupt_cancels_it() -> void
 	assert_false(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.CONFUSED))
 
 
-func test_rampage_can_force_each_of_its_three_move_numbers() -> void:
-	var battle: Gen2Battle = _battle()
-	for move_number: int in [Fixture.THRASH, Fixture.PETAL_DANCE, Fixture.OUTRAGE]:
-		battle.player.substatus = Gen2Substatus.RAMPAGING
-		battle.player.rampage_move = move_number
-		assert_eq(battle.move_for(Gen2Battle.PLAYER, 1), move_number)
-		battle.player.substatus = Gen2Substatus.NONE
-
-
-func test_skull_bash_raises_defense_after_the_hit_lands() -> void:
-	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.SKULL_BASH)
-	assert_lt(
-		sequence.find(Gen2EffectCommands.CHECK_FAINT),
-		sequence.find(Gen2EffectCommands.DEFENSE_UP)
-	)
-
-
 func test_toxic_starts_its_own_ramping_counter_rather_than_a_flat_poison() -> void:
 	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.TOXIC)
 	assert_true(sequence.has(Gen2EffectCommands.TOXIC_TARGET))
@@ -900,16 +697,6 @@ func test_psych_up_fails_when_the_target_has_nothing_to_copy() -> void:
 	assert_eq(turn.events.size(), 0)
 
 
-func test_multi_hit_and_double_hit_share_one_list() -> void:
-	var multi: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.MULTI_HIT)
-	var double_hit: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.DOUBLE_HIT)
-	assert_eq(multi, double_hit)
-	assert_lt(
-		multi.find(Gen2EffectCommands.CHECK_HIT), multi.find(Gen2EffectCommands.CRITICAL),
-		"the accuracy roll is outside the loop `endloop` rewinds to `critical`"
-	)
-
-
 func test_double_hit_always_hits_exactly_twice() -> void:
 	var battle: Gen2Battle = _battle()
 	var turn: Gen2Turn = _run_move(battle, Fixture.DOUBLE_HIT_MOVE)
@@ -949,29 +736,6 @@ func test_twineedle_hits_twice_then_rolls_poison_once_for_both() -> void:
 	assert_eq(_of_type(turn.events, Gen2Battle.STATUS_INFLICTED).size(), 1, "once, not per hit")
 
 
-## The two lists differ in exactly one step: `LeechHit` ends on `kingsrock` and
-## `DreamEater` does not, which is the only thing separating them in
-## `data/moves/effects.asm`. Everything else about Dream Eater, including the
-## sleep gate, is [constant Gen2EffectCommands.CHECK_HIT]'s.
-func test_the_two_drain_lists_differ_only_in_the_kings_rock_step() -> void:
-	var leech: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.LEECH_HIT)
-	var dream_eater: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.DREAM_EATER)
-	assert_true(leech.has(Gen2EffectCommands.KINGS_ROCK))
-	assert_false(dream_eater.has(Gen2EffectCommands.KINGS_ROCK))
-	assert_eq(
-		leech.filter(func(c: StringName) -> bool: return c != Gen2EffectCommands.KINGS_ROCK),
-		dream_eater
-	)
-	assert_true(leech.has(Gen2EffectCommands.DRAIN_TARGET))
-	assert_lt(
-		leech.find(Gen2EffectCommands.APPLY_DAMAGE), leech.find(Gen2EffectCommands.DRAIN_TARGET),
-		"drained before checked for a faint, the same slot recoil takes"
-	)
-	assert_lt(
-		leech.find(Gen2EffectCommands.DRAIN_TARGET), leech.find(Gen2EffectCommands.CHECK_FAINT)
-	)
-
-
 func test_drain_heals_half_the_hp_taken_after_the_damage_word_is_clamped() -> void:
 	var battle: Gen2Battle = _battle()
 	battle.enemy.hp = 3
@@ -1009,23 +773,6 @@ func test_dream_eater_connects_against_a_sleeping_target() -> void:
 	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_HIT, turn)
 	assert_false(turn.ended)
 	assert_eq(turn.events.size(), 0, "an ordinary hit, nothing to say about the check itself")
-
-
-func test_the_four_fixed_damage_effects_share_one_list() -> void:
-	var sequences: Array = [
-		Gen2MoveEffect.sequence_for(Gen2MoveEffect.SUPER_FANG),
-		Gen2MoveEffect.sequence_for(Gen2MoveEffect.STATIC_DAMAGE),
-		Gen2MoveEffect.sequence_for(Gen2MoveEffect.LEVEL_DAMAGE),
-		Gen2MoveEffect.sequence_for(Gen2MoveEffect.PSYWAVE),
-	]
-	for sequence: Array in sequences:
-		assert_eq(sequence, sequences[0])
-	assert_true(sequences[0].has(Gen2EffectCommands.FIXED_DAMAGE))
-	assert_lt(
-		sequences[0].find(Gen2EffectCommands.CHECK_IMMUNE),
-		sequences[0].find(Gen2EffectCommands.FIXED_DAMAGE),
-		"the matchup STAB worked out is only kept for whether it is immune"
-	)
 
 
 func test_level_damage_deals_exactly_the_users_level() -> void:
@@ -1074,17 +821,6 @@ func test_psywave_stays_inside_its_own_range() -> void:
 		assert_between(turn.damage, 1, upper - 1, "seed_value %d" % seed_value)
 
 
-func test_ohko_rolls_its_own_accuracy_and_leaves_the_damage_to_applydamage() -> void:
-	# `OHKOHit` carries no `checkhit`: the command calls it itself, so the three
-	# moves pass the same gates as every other hit.
-	# It carries no `damagestats` or `damagecalc` either, the damage being $FFFF.
-	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.OHKO)
-	assert_true(sequence.has(Gen2EffectCommands.OHKO))
-	assert_false(sequence.has(Gen2EffectCommands.CHECK_HIT))
-	assert_false(sequence.has(Gen2EffectCommands.DAMAGE_CALC))
-	assert_true(sequence.has(Gen2EffectCommands.APPLY_DAMAGE))
-
-
 func test_ohko_fails_outright_against_a_higher_level_target() -> void:
 	var battle: Gen2Battle = _battle()
 	battle.player.level = 10
@@ -1116,14 +852,6 @@ func test_ohko_faints_the_target_outright_when_it_connects() -> void:
 	assert_eq(battle.enemy.hp, 0)
 	assert_eq(int(_first(turn.events, Gen2Battle.OHKO)["amount"]), battle.enemy.max_hp())
 	assert_eq(_first(turn.events, Gen2Battle.FAINTED)["side"], Gen2Battle.ENEMY)
-
-
-func test_disable_attract_encore_mist_and_focus_energy_have_their_own_sequences() -> void:
-	for effect: int in [
-		Gen2MoveEffect.DISABLE, Gen2MoveEffect.ATTRACT, Gen2MoveEffect.ENCORE,
-		Gen2MoveEffect.MIST, Gen2MoveEffect.FOCUS_ENERGY,
-	]:
-		assert_true(Gen2MoveEffect.is_written(effect))
 
 
 func test_disable_locks_the_targets_own_last_move() -> void:
@@ -1171,15 +899,6 @@ func test_disable_fails_against_a_move_already_out_of_pp() -> void:
 	var turn: Gen2Turn = _turn(battle, Fixture.DISABLE_MOVE)
 	Gen2EffectCommands.run(Gen2EffectCommands.DISABLE, turn)
 	assert_eq(battle.enemy.disabled_slot, -1)
-
-
-func test_a_disabled_slot_cannot_be_used() -> void:
-	var mon: Gen2BattleMon = Gen2BattleMon.create(
-		_data, Fixture.PIKACHU, 50, [Fixture.TACKLE, Fixture.THUNDERBOLT]
-	)
-	mon.disabled_slot = 0
-	assert_false(mon.can_use(0))
-	assert_true(mon.can_use(1))
 
 
 func test_encore_locks_the_targets_own_last_move() -> void:
@@ -1333,29 +1052,6 @@ func test_mist_protected_gets_its_own_message_not_the_generic_fail() -> void:
 	assert_true(_first(turn.events, Gen2Battle.STAT_CHANGE_FAILED).is_empty())
 
 
-## `TrapTarget` is `NormalHit` with `traptarget` where `kingsrock` sits, behind
-## the faint check; `MeanLook` is four commands with no `checkhit` at all, so
-## neither Mean Look nor Spider Web can miss despite the 100% both carry.
-func test_the_two_trapping_effects_have_their_cartridge_sequences() -> void:
-	var trap: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.TRAP_TARGET)
-	assert_true(Gen2MoveEffect.is_written(Gen2MoveEffect.TRAP_TARGET))
-	assert_eq(trap.size(), Gen2MoveEffect.NORMAL_HIT.size(), "one step swapped, none added")
-	assert_false(trap.has(Gen2EffectCommands.KINGS_ROCK))
-	assert_lt(
-		trap.find(Gen2EffectCommands.CHECK_FAINT),
-		trap.find(Gen2EffectCommands.TRAP_TARGET)
-	)
-
-	var mean_look: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.MEAN_LOOK)
-	assert_true(Gen2MoveEffect.is_written(Gen2MoveEffect.MEAN_LOOK))
-	assert_eq(mean_look, [
-		Gen2EffectCommands.USED_MOVE_TEXT,
-		Gen2EffectCommands.DO_TURN,
-		Gen2EffectCommands.ARENA_TRAP,
-		Gen2EffectCommands.END_MOVE,
-	])
-
-
 func test_a_trapping_move_binds_its_target_for_three_to_six_turns() -> void:
 	var battle: Gen2Battle = _battle()
 	var turn: Gen2Turn = _turn(battle, Fixture.WRAP)
@@ -1442,18 +1138,6 @@ func test_a_knocked_out_target_is_never_bound() -> void:
 	assert_true(battle.enemy.is_fainted())
 	assert_eq(battle.enemy.trapped_turns, 0)
 	assert_true(_first(turn.events, Gen2Battle.TRAPPED).is_empty())
-
-
-## The three weather moves are three commands and a terminator each, with no
-## accuracy step: Rain Dance and Sunny Day carry 90% and neither ever rolls it.
-func test_the_weather_moves_have_their_cartridge_sequences() -> void:
-	for effect: int in [
-		Gen2MoveEffect.RAIN_DANCE, Gen2MoveEffect.SUNNY_DAY, Gen2MoveEffect.SANDSTORM
-	]:
-		var sequence: Array = Gen2MoveEffect.sequence_for(effect)
-		assert_true(Gen2MoveEffect.is_written(effect), "effect %d" % effect)
-		assert_eq(sequence.size(), 4, "effect %d" % effect)
-		assert_false(sequence.has(Gen2EffectCommands.CHECK_HIT), "effect %d rolls" % effect)
 
 
 func test_each_weather_move_sets_its_own_weather_for_five_turns() -> void:
@@ -1666,41 +1350,6 @@ func test_kings_rock_flinches_out_of_its_own_parameter() -> void:
 	battle.enemy.substatus = Gen2Substatus.NONE
 	Gen2EffectCommands.run(Gen2EffectCommands.KINGS_ROCK, _turn(battle, Fixture.TACKLE))
 	assert_false(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.FLINCHED))
-
-
-## `kingsrock` sits at the tail of every ordinary attack and on none of the moves
-## that carry a flinch of their own, which is the whole of the difference between
-## `NormalHit` and `FlinchHit`.
-func test_only_the_lists_the_cartridge_gives_kings_rock_have_it() -> void:
-	for effect: int in [
-		Gen2MoveEffect.LEECH_HIT, Gen2MoveEffect.SELFDESTRUCT, Gen2MoveEffect.RECOIL_HIT,
-		Gen2MoveEffect.MULTI_HIT, Gen2MoveEffect.TWINEEDLE, Gen2MoveEffect.SUPER_FANG,
-		Gen2MoveEffect.ROLLOUT, Gen2MoveEffect.SKULL_BASH, Gen2MoveEffect.SOLARBEAM,
-		Gen2MoveEffect.COUNTER, Gen2MoveEffect.MIRROR_COAT, Gen2MoveEffect.RAMPAGE,
-		Gen2MoveEffect.SKY_ATTACK, Gen2MoveEffect.RAZOR_WIND, Gen2MoveEffect.FLY_OR_DIG,
-	]:
-		assert_true(
-			Gen2MoveEffect.sequence_for(effect).has(Gen2EffectCommands.KINGS_ROCK),
-			"effect %d should carry it" % effect
-		)
-
-	for effect: int in [
-		Gen2MoveEffect.DREAM_EATER, Gen2MoveEffect.OHKO, Gen2MoveEffect.TRAP_TARGET,
-		Gen2MoveEffect.RECHARGE_HIT, Gen2MoveEffect.THUNDER, Gen2MoveEffect.DEFENSE_CURL,
-		Gen2MoveEffect.FLINCH_HIT, Gen2MoveEffect.BURN_HIT, Gen2MoveEffect.MEAN_LOOK,
-		Gen2MoveEffect.RAIN_DANCE,
-	]:
-		assert_false(
-			Gen2MoveEffect.sequence_for(effect).has(Gen2EffectCommands.KINGS_ROCK),
-			"effect %d should not" % effect
-		)
-
-	# PoisonMultiHit puts it ahead of its own poison, not behind it.
-	var twineedle: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.TWINEEDLE)
-	assert_lt(
-		twineedle.find(Gen2EffectCommands.KINGS_ROCK),
-		twineedle.find(Gen2EffectCommands.POISON_TARGET)
-	)
 
 
 ## `BattleCommand_ApplyDamage`'s Focus Band branch calls `BattleCommand_FalseSwipe`,
@@ -1944,39 +1593,6 @@ func test_a_timed_heal_at_full_health_fails() -> void:
 
 	assert_eq(battle.player.hp, battle.player.max_hp())
 	assert_false(_first(turn.events, Gen2Battle.HP_ALREADY_FULL).is_empty())
-
-
-func test_the_heal_family_has_its_cartridge_sequences() -> void:
-	for effect: int in [
-		Gen2MoveEffect.HEAL, Gen2MoveEffect.MORNING_SUN,
-		Gen2MoveEffect.SYNTHESIS, Gen2MoveEffect.MOONLIGHT,
-	]:
-		assert_true(Gen2MoveEffect.is_written(effect), str(effect))
-		# Announce, spend, heal, end: no accuracy roll, and no obedience check,
-		# which this engine does not model on any list.
-		assert_eq(Gen2MoveEffect.sequence_for(effect).size(), 4, str(effect))
-
-
-## `BattleCommand_Charge.UsedText` names six moves by number, and Fly and Dig do
-## not share a sentence although they share an effect byte.
-func test_each_two_turn_move_has_its_own_charge_line() -> void:
-	var text: Dictionary = Gen2BattleScreen.CHARGE_TEXT
-	assert_eq(text[Gen2MoveEffect.RAZOR_WIND_MOVE], "made a whirlwind!")
-	assert_eq(text[Gen2MoveEffect.SOLARBEAM_MOVE], "took in sunlight!")
-	assert_eq(text[Gen2MoveEffect.SKULL_BASH_MOVE], "lowered its head!")
-	assert_eq(text[Gen2MoveEffect.SKY_ATTACK_MOVE], "is glowing!")
-	assert_eq(text[Gen2MoveEffect.FLY_MOVE], "flew up high!")
-	assert_eq(text[Gen2MoveEffect.DIG_MOVE], "dug a hole!")
-	assert_ne(
-		text[Gen2MoveEffect.FLY_MOVE], text[Gen2MoveEffect.DIG_MOVE],
-		"one effect byte, two sentences"
-	)
-
-
-## `.UsedText`'s Dig branch is the only one of the six with no `jr z` behind it,
-## so it is what a move reaching that dispatch without matching prints.
-func test_the_charge_line_falls_through_to_dig() -> void:
-	assert_eq(Gen2BattleScreen.CHARGE_DUG, Gen2BattleScreen.CHARGE_TEXT[Gen2MoveEffect.DIG_MOVE])
 
 
 ## The effects whose whole job is a number the move table does not hold. Every
@@ -2606,27 +2222,6 @@ func test_gust_and_earthquake_double_against_a_target_out_of_sight() -> void:
 	assert_gt(against_flier.damage, against_ground.damage)
 
 
-func test_neither_gust_nor_earthquake_carries_a_kings_rock() -> void:
-	# The two lists really do leave `kingsrock` out, which is the only thing
-	# separating them from `NormalHit` besides the doubling.
-	for effect: int in [Gen2MoveEffect.GUST, Gen2MoveEffect.EARTHQUAKE]:
-		var sequence: Array = Gen2MoveEffect.sequence_for(effect)
-		assert_false(sequence.has(Gen2EffectCommands.KINGS_ROCK), str(effect))
-		assert_true(sequence.has(Gen2EffectCommands.DOUBLE_DAMAGE))
-
-
-func test_the_doubling_lands_behind_the_spread_rather_than_in_front_of_it() -> void:
-	for effect: int in [
-		Gen2MoveEffect.GUST, Gen2MoveEffect.EARTHQUAKE, Gen2MoveEffect.TWISTER,
-		Gen2MoveEffect.STOMP,
-	]:
-		var sequence: Array = Gen2MoveEffect.sequence_for(effect)
-		assert_lt(
-			sequence.find(Gen2EffectCommands.DAMAGE_VARIATION),
-			sequence.find(Gen2EffectCommands.DOUBLE_DAMAGE), str(effect)
-		)
-
-
 func test_minimize_is_what_makes_a_stomp_hurt_twice_as_much() -> void:
 	var battle: Gen2Battle = _battle()
 	assert_false(battle.enemy.minimized)
@@ -2660,36 +2255,6 @@ func test_swagger_raises_the_targets_attack_and_confuses_it() -> void:
 	assert_eq(battle.player.stage("attack"), 0)
 	assert_true(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.CONFUSED))
 	assert_eq(turn.side, Gen2Battle.PLAYER, "and the turn was put back")
-
-
-func test_switch_turn_is_its_own_inverse() -> void:
-	var battle: Gen2Battle = _battle()
-	var turn: Gen2Turn = _turn(battle)
-	Gen2EffectCommands.run(Gen2EffectCommands.SWITCH_TURN, turn)
-	assert_eq(turn.side, Gen2Battle.ENEMY)
-	assert_eq(turn.target, Gen2Battle.PLAYER)
-	Gen2EffectCommands.run(Gen2EffectCommands.SWITCH_TURN, turn)
-	assert_eq(turn.side, Gen2Battle.PLAYER)
-	assert_eq(turn.target, Gen2Battle.ENEMY)
-
-
-func test_every_effect_this_tranche_wrote_has_a_list_of_its_own() -> void:
-	for effect: int in [
-		Gen2MoveEffect.ALWAYS_HIT, Gen2MoveEffect.TRI_ATTACK,
-		Gen2MoveEffect.JUMP_KICK, Gen2MoveEffect.SPLASH, Gen2MoveEffect.SNORE,
-		Gen2MoveEffect.REVERSAL, Gen2MoveEffect.FALSE_SWIPE,
-		Gen2MoveEffect.HEAL_BELL, Gen2MoveEffect.TRIPLE_KICK,
-		Gen2MoveEffect.FLAME_WHEEL, Gen2MoveEffect.SACRED_FIRE,
-		Gen2MoveEffect.SWAGGER, Gen2MoveEffect.FURY_CUTTER,
-		Gen2MoveEffect.RETURN, Gen2MoveEffect.PRESENT,
-		Gen2MoveEffect.FRUSTRATION, Gen2MoveEffect.MAGNITUDE,
-		Gen2MoveEffect.HIDDEN_POWER, Gen2MoveEffect.DEFENSE_UP_HIT,
-		Gen2MoveEffect.TWISTER, Gen2MoveEffect.STOMP, Gen2MoveEffect.GUST,
-		Gen2MoveEffect.EARTHQUAKE, Gen2MoveEffect.SUBSTITUTE,
-		Gen2MoveEffect.LEECH_SEED, Gen2MoveEffect.NIGHTMARE,
-		Gen2MoveEffect.CURSE, Gen2MoveEffect.SPIKES, Gen2MoveEffect.RAPID_SPIN,
-	]:
-		assert_true(Gen2MoveEffect.is_written(effect), "effect %d" % effect)
 
 
 ## A Gastly, which is the only Ghost-type this fixture has and so the only user
@@ -3187,20 +2752,8 @@ func test_rapid_spin_clears_even_when_the_hit_was_lethal() -> void:
 	assert_eq(_of_type(turn.events, Gen2Battle.SHED_LEECH_SEED).size(), 1)
 
 
-## `DefenseDownHit` is the one row of the seven that rolls twice, which is what
-## lets its drop land on a Pokémon whose doll the same hit broke.
-func test_only_the_defense_drop_on_hit_carries_two_rolls() -> void:
-	for offset: int in Gen2MoveEffect.STAT_RUN_LENGTH:
-		var effect: int = Gen2MoveEffect.STAT_DOWN_HIT_BASE + offset
-		var rolls: int = Gen2MoveEffect.sequence_for(effect).count(
-			Gen2EffectCommands.EFFECT_CHANCE
-		)
-		assert_eq(rolls, 2 if effect == Gen2MoveEffect.DEFENSE_DOWN_HIT else 1,
-			"effect %d" % effect)
-
-
-## And the second roll is what clears the first one's failure, since
-## `BattleCommand_EffectChance` opens by zeroing `wEffectFailed`.
+## `DefenseDownHit` rolls twice, and the second roll clears the first one's
+## failure, since `BattleCommand_EffectChance` opens by zeroing `wEffectFailed`.
 func test_a_second_effect_chance_clears_the_first_ones_failure() -> void:
 	var battle: Gen2Battle = _battle()
 	var turn: Gen2Turn = _turn(battle, Fixture.NEVER_BURNS)
@@ -3278,21 +2831,6 @@ func test_protect_and_detect_share_one_effect_and_one_count() -> void:
 	assert_eq(battle.player.protect_count, 1)
 	_run_move(battle, Fixture.DETECT)
 	assert_eq(battle.player.protect_count, 2, "Detect counts against Protect's own ladder")
-
-
-## A count of zero cannot fail: `ld b, $ff` against a draw of 1..255 leaves no
-## value that loses.
-func test_the_first_protect_of_a_chain_always_lands() -> void:
-	for seed_value: int in range(0, 40):
-		var battle: Gen2Battle = _battle()
-		battle.rng.seed = seed_value
-		var turn: Gen2Turn = _run_move(battle, Fixture.PROTECT)
-		assert_true(
-			Gen2Substatus.has(battle.player.substatus, Gen2Substatus.PROTECT),
-			"seed_value %d" % seed_value
-		)
-		assert_eq(_of_type(turn.events, Gen2Battle.PROTECTED_ITSELF).size(), 1)
-		assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 0)
 
 
 ## The ladder halves once per consecutive use and runs out at eight, which is the
@@ -3722,64 +3260,6 @@ func test_the_four_scripted_battle_types_refuse_a_force_switch() -> void:
 		assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1)
 
 
-## The last row of `data/moves/effects.asm`, which is where the count of unwritten
-## effect bytes stood before these landed.
-func test_the_last_row_of_the_effects_table_is_written() -> void:
-	for effect: int in [
-		Gen2MoveEffect.PAIN_SPLIT, Gen2MoveEffect.LOCK_ON, Gen2MoveEffect.SPITE,
-		Gen2MoveEffect.THIEF, Gen2MoveEffect.FORESIGHT, Gen2MoveEffect.PURSUIT,
-		Gen2MoveEffect.TELEPORT, Gen2MoveEffect.BEAT_UP,
-	]:
-		assert_true(Gen2MoveEffect.is_written(effect), "effect %d" % effect)
-		assert_ne(Gen2MoveEffect.sequence_for(effect), Gen2MoveEffect.NORMAL_HIT,
-			"effect %d has a list of its own" % effect)
-
-
-## Thief inserts two steps into the ordinary list and Pursuit one, each where the
-## cartridge puts it.
-func test_thief_and_pursuit_are_the_ordinary_list_with_steps_in_it() -> void:
-	var thief: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.THIEF)
-	assert_eq(thief.size(), Gen2MoveEffect.NORMAL_HIT.size() + 2)
-	# The steal is behind the damage and in front of the faint check, so a Pokémon
-	# knocked out by Thief still loses its item.
-	assert_lt(
-		thief.find(Gen2EffectCommands.APPLY_DAMAGE),
-		thief.find(Gen2EffectCommands.THIEF)
-	)
-	assert_lt(
-		thief.find(Gen2EffectCommands.THIEF),
-		thief.find(Gen2EffectCommands.CHECK_FAINT)
-	)
-
-	var pursuit: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.PURSUIT)
-	assert_eq(pursuit.size(), Gen2MoveEffect.NORMAL_HIT.size() + 1)
-	# Between the spread and the roll, which is the last point the finished figure
-	# can still be multiplied.
-	assert_lt(
-		pursuit.find(Gen2EffectCommands.DAMAGE_VARIATION),
-		pursuit.find(Gen2EffectCommands.PURSUIT)
-	)
-	assert_lt(
-		pursuit.find(Gen2EffectCommands.PURSUIT),
-		pursuit.find(Gen2EffectCommands.CHECK_HIT)
-	)
-
-
-## Beat Up carries no `damagestats` and no `stab`, which is what makes it hit for
-## base stats and never for a matchup.
-func test_beat_up_carries_neither_damage_stats_nor_stab() -> void:
-	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.BEAT_UP)
-	assert_false(sequence.has(Gen2EffectCommands.DAMAGE_STATS))
-	assert_false(sequence.has(Gen2EffectCommands.STAB))
-	assert_false(sequence.has(Gen2EffectCommands.CHECK_IMMUNE))
-	# One accuracy roll for the whole move: `endloop` jumps back to `critical`, so
-	# `checkhit` sits outside the loop.
-	assert_lt(
-		sequence.find(Gen2EffectCommands.CHECK_HIT),
-		sequence.find(Gen2EffectCommands.BEAT_UP)
-	)
-
-
 func test_foresight_identifies_the_target_and_refuses_a_second() -> void:
 	var battle: Gen2Battle = _battle()
 	var turn: Gen2Turn = _run_move(battle, Fixture.FORESIGHT)
@@ -3864,17 +3344,6 @@ func test_lock_on_marks_the_target_and_the_next_hit_check_spends_it() -> void:
 	# spends it.
 	_run_move(battle, Fixture.TACKLE)
 	assert_false(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.LOCK_ON))
-
-
-## Mind Reader is the same effect byte and the same command.
-func test_mind_reader_is_lock_on() -> void:
-	assert_eq(
-		int(_data.move(Fixture.MIND_READER)["effect"]),
-		int(_data.move(Fixture.LOCK_ON)["effect"])
-	)
-	var battle: Gen2Battle = _battle()
-	_run_move(battle, Fixture.MIND_READER)
-	assert_true(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.LOCK_ON))
 
 
 func test_lock_on_is_refused_by_a_substitute() -> void:
@@ -4180,20 +3649,6 @@ func test_a_wild_pokemon_always_teleports_and_still_draws_the_roll() -> void:
 		assert_ne(battle.rng.state, before, "the roll is drawn and thrown away")
 
 
-## `pursuit` reads the other side's switching flag and doubles nothing without it.
-## The flag itself is [method Gen2Battle.is_switching], which only a turn in
-## flight can raise; test_battle.gd owns the switch-time half.
-func test_pursuit_doubles_nothing_outside_a_switch() -> void:
-	var battle: Gen2Battle = _battle()
-	assert_false(battle.is_switching(Gen2Battle.ENEMY),
-		"nothing is switching between turns")
-
-	var turn: Gen2Turn = _turn(battle, Fixture.PURSUIT)
-	turn.damage = 100
-	Gen2EffectCommands.run(Gen2EffectCommands.PURSUIT, turn)
-	assert_eq(turn.damage, 100)
-
-
 ## One swing per party member, in party order, each named.
 func test_beat_up_swings_once_per_party_member() -> void:
 	var battle: Gen2Battle = _beat_up_battle()
@@ -4376,22 +3831,6 @@ func test_beat_up_with_one_party_member_ends_before_kings_rock() -> void:
 	# A party of three falls out of the loop instead and reaches the item.
 	var party: Array = _commands_run(_beat_up_battle(), Fixture.BEAT_UP)
 	assert_true(party.has(Gen2EffectCommands.KINGS_ROCK))
-
-
-func test_the_called_and_copy_move_effects_have_their_source_wrappers() -> void:
-	var rows: Dictionary = {
-		Gen2MoveEffect.MIRROR_MOVE: Gen2EffectCommands.MIRROR_MOVE,
-		Gen2MoveEffect.CONVERSION: Gen2EffectCommands.CONVERSION,
-		Gen2MoveEffect.MIMIC: Gen2EffectCommands.MIMIC,
-		Gen2MoveEffect.METRONOME: Gen2EffectCommands.METRONOME,
-		Gen2MoveEffect.CONVERSION_2: Gen2EffectCommands.CONVERSION_2,
-		Gen2MoveEffect.SKETCH: Gen2EffectCommands.SKETCH,
-		Gen2MoveEffect.SLEEP_TALK: Gen2EffectCommands.SLEEP_TALK,
-	}
-	for effect: int in rows:
-		var sequence: Array = Gen2MoveEffect.sequence_for(effect)
-		assert_true(Gen2MoveEffect.is_written(effect), "effect %d" % effect)
-		assert_eq(sequence[sequence.size() - 2], rows[effect], "effect %d" % effect)
 
 
 func test_metronome_calls_an_allowed_move_without_spending_its_pp() -> void:

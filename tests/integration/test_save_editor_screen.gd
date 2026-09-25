@@ -50,6 +50,7 @@ func test_the_screen_opens_a_save_and_reports_it_valid() -> void:
 	assert_false(snapshot["dirty"])
 	assert_eq(snapshot["player_name"], "RED")
 	assert_eq((snapshot["party"] as Array).size(), 1)
+	assert_false(snapshot["has_world"])
 
 
 func test_a_screen_with_no_save_reports_closed() -> void:
@@ -108,15 +109,6 @@ func test_reloading_drops_uncommitted_edits() -> void:
 	assert_true(_screen.reload_now())
 	assert_eq(_screen.editor_snapshot()["player_name"], "RED")
 	assert_false(_screen.editor_snapshot()["dirty"])
-
-
-## The fixture cache has no maps, so a world snapshot on it is exactly the case
-## the map tab must refuse rather than write.
-func test_a_save_without_world_state_still_opens() -> void:
-	await _open()
-	assert_false(_screen.editor_snapshot()["has_world"])
-	assert_true(_screen.select_tab(&"items"))
-	assert_true(_screen.editor_snapshot()["valid"])
 
 
 ## Save takes the Map tab as typed: a position left without its own button is

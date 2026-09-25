@@ -377,16 +377,6 @@ func test_grass_kind_matches_set_tall_grass_flags_over_every_byte() -> void:
 	assert_eq(tall, [0x10, 0x18, 0x20, 0x28] as Array[int])
 
 
-func test_the_named_grass_codes_are_the_kind_the_source_calls_them() -> void:
-	assert_eq(Gen2WorldCollision.grass_kind(0x18), Gen2WorldCollision.GRASS_TALL, "COLL_TALL_GRASS")
-	assert_eq(Gen2WorldCollision.grass_kind(0x10), Gen2WorldCollision.GRASS_TALL, "COLL_TALL_GRASS_10")
-	assert_eq(Gen2WorldCollision.grass_kind(0x14), Gen2WorldCollision.GRASS_LONG, "COLL_LONG_GRASS")
-	assert_eq(Gen2WorldCollision.grass_kind(0x1C), Gen2WorldCollision.GRASS_LONG, "COLL_LONG_GRASS_1C")
-	assert_true(Gen2WorldCollision.is_long_grass(0x14))
-	assert_false(Gen2WorldCollision.is_long_grass(0x18))
-	assert_true(Gen2WorldCollision.is_grass(0x18))
-
-
 ## The grass codes a renderer draws tufts on are not the encounter gate, which is
 ## CheckGrassCollision and includes COLL_WATER so one routine can gate a surf
 ## roll too. Water is not grass here.
@@ -476,12 +466,3 @@ func test_gen1_warp_door_and_carpet_tables_answer_by_their_own_key() -> void:
 	assert_false(Gen2WorldCollision.gen1_is_warp_carpet(Vector2i.UP, 0x12))
 	assert_true(Gen2WorldCollision.gen1_is_warp_carpet(Vector2i.LEFT, 0x4B))
 	assert_true(Gen2WorldCollision.gen1_is_warp_carpet(Vector2i.RIGHT, 0x4E))
-
-
-## `DungeonTilesets`, the list `LoadTilesetHeader` walks before it compares the
-## new tileset with the one already loaded.
-func test_gen1_dungeon_tilesets_are_the_source_list() -> void:
-	for number: int in [3, 7, 10, 12, 13, 15, 17, 18, 19, 20, 22]:
-		assert_true(Gen2WorldCollision.gen1_is_dungeon_tileset(number), "tileset %d" % number)
-	for number: int in [0, 1, 2, 14, 21, 23, 24]:
-		assert_false(Gen2WorldCollision.gen1_is_dungeon_tileset(number), "tileset %d" % number)

@@ -142,7 +142,6 @@ func test_a_pokemon_that_is_alive_never_shows_an_empty_bar() -> void:
 ## 35 exactly and 36 the way the routine divides it.
 func test_a_maximum_over_a_byte_is_divided_the_way_the_routine_divides_it() -> void:
 	assert_eq(Gen2BattleHud.bar_pixels(300, 401, 48), 36)
-	assert_eq(300 * 48 / 401, 35, "and not the exact fraction")
 	assert_eq(Gen2BattleHud.bar_pixels(400, 401, 48), 48, "a nearly full bar still fills")
 	assert_eq(Gen2BattleHud.bar_pixels(128, 256, 48), 24, "an exact half is unchanged")
 

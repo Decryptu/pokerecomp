@@ -67,21 +67,8 @@ func test_a_partial_frame_of_real_time_spends_no_hardware_frame() -> void:
 	assert_eq(_world_screen._world.frame_number, before + 1)
 
 
-## One stall must not hand the world a minute of frames at once, which is what
-## every one of the accumulators this replaced capped separately.
-func test_a_stall_drops_frames_instead_of_running_the_backlog() -> void:
-	_world_screen = await _open_world()
-	var before: int = _world_screen._world.frame_number
-	_world_screen._process(10.0)
-	assert_eq(
-		_world_screen._world.frame_number - before,
-		Gen2WorldAnimation.MAX_CATCHUP_FRAMES
-	)
-
-
-## The play timer, the tile animation, the walk step and the emote counters are
-## all spent from the same call, so one world frame is one of each.
-func test_one_world_frame_is_one_frame_of_everything_that_counts_them() -> void:
+## The play timer is spent from the same call as the world's own frame.
+func test_one_world_frame_is_one_frame_of_the_play_timer() -> void:
 	_world_screen = await _open_world()
 	var save := Gen2SaveData.new()
 	_world_screen.set_save(save)
@@ -155,8 +142,8 @@ func test_game_speed_scales_real_time_into_hardware_frames() -> void:
 	options.game_speed = chosen
 
 
-## The cap is the clock's, so a stall drops frames at every speed rather than
-## handing a screen a backlog four times the size at double.
+## One stall must not hand the world a minute of frames at once, and the cap is
+## the clock's, so it holds at double speed rather than doubling the backlog.
 func test_the_catch_up_cap_holds_at_every_speed() -> void:
 	_world_screen = await _open_world()
 	var options: Gen2Options = Gen2OptionsStore.current()

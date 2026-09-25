@@ -305,14 +305,6 @@ func test_the_stored_name_stops_where_the_typing_did() -> void:
 	assert_eq(screen.stored_codes().size(), 3)
 
 
-func test_the_case_switch_reaches_the_other_keyboards_letters() -> void:
-	var screen: Gen2NamingScreen = _screen()
-	_type(screen, [Vector2i(0, 0)])
-	screen.press_select()
-	_type(screen, [Vector2i(1, 0), Vector2i(2, 0)])
-	assert_eq(screen.stored_name(), "Abc")
-
-
 ## `.a`'s `ret nc` after TryAddCharacter's own: the tenth character fills the
 ## entry, and the carry falls straight into `.start`, which puts the cursor on
 ## END rather than leaving it on a letter.
@@ -372,6 +364,12 @@ func test_a_screen_without_keyboards_reads_no_character() -> void:
 	assert_eq(screen.last_character(), 0)
 	assert_eq(screen.press_a(), Gen2NamingScreen.RESULT_LETTER)
 	assert_eq(screen.length, 0, "nothing is added when there is nothing to read")
+
+
+## Every screen asks for all six keyboards, so a table the cache lacks reads empty.
+func test_a_table_outside_the_cache_reads_empty() -> void:
+	assert_eq(_data.name_input_chars(Gen2NamingScreen.Keyboard.size()), [])
+	assert_eq(_data.name_input_chars(-1), [])
 
 
 ## `_ComposeMailMessage`'s own keyboard: six rows, ten columns and the command

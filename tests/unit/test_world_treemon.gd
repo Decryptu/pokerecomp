@@ -50,13 +50,6 @@ func test_coord_score_uses_the_bordered_coordinates() -> void:
 	assert_ne(Gen2WorldTreemon.coord_score(Vector2i(0, 0)), 0)
 
 
-func test_otid_score_is_the_trainer_id_mod_ten() -> void:
-	assert_eq(Gen2WorldTreemon.otid_score(0), 0)
-	assert_eq(Gen2WorldTreemon.otid_score(7), 7)
-	assert_eq(Gen2WorldTreemon.otid_score(0x1A2B), 0x1A2B % 10)
-	assert_eq(Gen2WorldTreemon.otid_score(65535), 5)
-
-
 ## GetTreeScore answers RARE on a true equality, before the wrap; a negative
 ## difference gains ten and can only land in 1..9, so it never reads as RARE.
 func test_score_tiers_follow_the_difference_and_its_wrap() -> void:
@@ -115,22 +108,20 @@ func test_each_tier_has_its_own_encounter_threshold() -> void:
 
 
 ## Only the RARE branch walks past the common table's terminator, which is
-## visible here as the species that comes back.
-func test_a_rare_score_reads_the_rare_table_and_the_others_the_common_one() -> void:
-	# (1,1) scores 7, so an ID of 7 is RARE, 6 is GOOD and 2 is BAD.
-	var rare: Dictionary = _resolve_with_rolls(SET, 7, 0, 0)
-	assert_eq(int(rare["species"]), 214, "RARE reads the rare table")
-	assert_eq(int(rare["score"]), Gen2WorldTreemon.SCORE_RARE)
-	var good: Dictionary = _resolve_with_rolls(SET, 6, 0, 0)
-	assert_eq(int(good["species"]), 21, "GOOD reads the common table")
-	assert_eq(int(good["score"]), Gen2WorldTreemon.SCORE_GOOD)
-	var bad: Dictionary = _resolve_with_rolls(SET, 2, 0, 0)
-	assert_eq(int(bad["species"]), 21, "BAD reads the common table")
-	assert_eq(int(bad["score"]), Gen2WorldTreemon.SCORE_BAD)
-	# The rolls each answer carries are the ones that produced it, so a caller
-	# reporting a headbutt can say why it went the way it did.
-	assert_eq(int(rare["encounter_roll"]), 0)
-	assert_eq(int(rare["slot_roll"]), 0)
+## visible here as the species that comes back. (1,1) scores 7, so an ID of 7
+## is RARE.
+func test_a_rare_score_reads_the_rare_table() -> void:
+	var found: int = 0
+	for seed_value: int in 40:
+		var generator := RandomNumberGenerator.new()
+		generator.seed = seed_value
+		var result: Dictionary = Gen2WorldTreemon.resolve(SET, Vector2i(1, 1), 7, generator)
+		if result.is_empty():
+			continue
+		assert_eq(int(result["species"]), 214, "RARE reads the rare table")
+		assert_eq(int(result["score"]), Gen2WorldTreemon.SCORE_RARE)
+		found += 1
+	assert_gt(found, 0, "forty seeds produce at least one encounter")
 
 
 ## A set with no rare table is TreeMonSet_Rock's shape. Only the RARE branch
@@ -138,8 +129,10 @@ func test_a_rare_score_reads_the_rare_table_and_the_others_the_common_one() -> v
 ## score against such a set must still answer nothing rather than fault.
 func test_a_set_without_a_rare_table_answers_nothing_on_a_rare_score() -> void:
 	var rock: Dictionary = {"common": COMMON, "rare": []}
-	assert_true(_resolve_with_rolls(rock, 7, 0, 0).is_empty())
-	assert_false(_resolve_with_rolls(rock, 6, 0, 0).is_empty())
+	for seed_value: int in 40:
+		var generator := RandomNumberGenerator.new()
+		generator.seed = seed_value
+		assert_true(Gen2WorldTreemon.resolve(rock, Vector2i(1, 1), 7, generator).is_empty())
 
 
 ## Nothing here rolls on an uninjected generator, unlike advance_roaming().
@@ -165,43 +158,14 @@ func test_starts_asleep_is_membership_and_an_empty_list_never_sleeps() -> void:
 	assert_false(Gen2WorldTreemon.starts_asleep(10, []))
 
 
-func test_sleep_turns_is_the_source_constant() -> void:
-	assert_eq(Gen2WorldTreemon.SLEEP_TURNS, 7)
-	assert_eq(Gen2WorldTreemon.SLEEP_TURNS & Gen2Status.SLEEP_MASK, 7,
-		"TREEMON_SLEEP_TURNS still fits the status byte's low three bits")
-
-
-## resolve() with both of its rolls pinned. RandomNumberGenerator's methods
-## cannot be overridden from GDScript, so the two halves it draws are asserted
-## through encounter_allowed() and select_at() and reassembled here.
-func _resolve_with_rolls(
-	set_record: Dictionary, player_id: int, encounter_roll: int, slot_roll: int
-) -> Dictionary:
-	var tier: int = Gen2WorldTreemon.score(Vector2i(1, 1), player_id)
-	if not Gen2WorldTreemon.encounter_allowed(tier, encounter_roll):
-		return {}
-	var table: Variant = set_record.get(
-		"rare" if tier == Gen2WorldTreemon.SCORE_RARE else "common", []
-	)
-	if not table is Array or (table as Array).is_empty():
-		return {}
-	var selected: Dictionary = Gen2WorldTreemon.select_at(table as Array, slot_roll)
-	if selected.is_empty():
-		return {}
-	selected["score"] = tier
-	selected["encounter_roll"] = encounter_roll
-	return selected
-
-
 func _seeded() -> RandomNumberGenerator:
 	var generator := RandomNumberGenerator.new()
 	generator.seed = 7
 	return generator
 
 
-## The whole of resolve() against a real generator, which is the only thing the
-## split helper above cannot check: that it draws its two rolls in the source's
-## order and answers within their bounds.
+## resolve() draws its two rolls in the source's order and answers within
+## their bounds.
 func test_resolve_draws_both_rolls_and_stays_inside_the_table() -> void:
 	var found: Dictionary = {}
 	for seed_value: int in 40:

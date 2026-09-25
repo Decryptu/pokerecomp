@@ -83,13 +83,6 @@ func test_the_same_byte_is_a_buffer_command_and_the_player_inside_a_literal() ->
 	assert_eq(command["text"], "TM24")
 
 
-func test_a_string_buffer_is_read_by_number() -> void:
-	var decoded: Dictionary = Gen2TextStream.decode(
-		PackedByteArray([0x14, 0x03, 0x50]), 0, {"buffers": {3: "TM24"}}
-	)
-	assert_eq(decoded["text"], "TM24")
-
-
 func test_text_far_runs_the_target_as_a_text_of_its_own() -> void:
 	var far: Callable = func(bank: int, address: int) -> PackedByteArray:
 		if bank == 0x21 and address == 0x4321:
@@ -134,18 +127,6 @@ func test_an_unknown_command_byte_is_refused_rather_than_drawn() -> void:
 	var decoded: Dictionary = Gen2TextStream.decode(PackedByteArray([0x30, 0x50]))
 	assert_false(decoded["ok"])
 	assert_eq(decoded["reason"], &"unknown_text_command")
-
-
-## `Paragraph` clears the box; `_ContText` scrolls, so the line above survives.
-func test_the_layout_carries_a_line_over_a_scroll_but_not_a_paragraph() -> void:
-	var scrolled: Array = Gen2TextLayout.lay_out("one\ntwo" + SCROLL + "three", 20, 2)
-	assert_eq(scrolled.size(), 2)
-	assert_eq(Array(scrolled[0]), ["one", "two"])
-	assert_eq(Array(scrolled[1]), ["two", "three"])
-
-	var paged: Array = Gen2TextLayout.lay_out("one\ntwo" + PARA + "three", 20, 2)
-	assert_eq(paged.size(), 2)
-	assert_eq(Array(paged[1]), ["three"])
 
 
 ## `<SCROLL>` and `TextCommand_SCROLL` both reach `_ContTextNoPause`, which is

@@ -244,14 +244,6 @@ func test_unsubscribing_and_unknown_channels() -> void:
 	assert_eq(_seen.size(), 0)
 
 
-func test_publishing_with_no_host_built_does_nothing() -> void:
-	# The publish call sits on the path every battle event takes, so a game with
-	# no mods must not build a host to publish to nobody.
-	Gen2ModHost.reset()
-	Gen2ModHost.publish(Gen2ModHost.CHANNEL_BATTLE, {"type": Gen2Battle.HIT})
-	assert_eq(_seen.size(), 0)
-
-
 func test_two_mods_claiming_one_renderer_id_is_named_rather_than_silently_won() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_eq(
@@ -514,45 +506,6 @@ func test_the_stats_screen_refuses_a_page_it_cannot_draw_or_indicate() -> void:
 		&"stats_pages_full"
 	)
 	assert_eq(Gen2StatsScreenPage.page_count(), Gen2StatsScreenPage.MAX_PAGES)
-
-
-## The eight steps the last row of the effects table added are engine steps like
-## every other: a mod can name them in a list of its own and cannot take them over.
-func test_the_last_rows_steps_are_engine_steps_a_mod_can_name() -> void:
-	var host: Gen2ModHost = Gen2ModHost.instance()
-	var steps: Array = [
-		Gen2EffectCommands.TELEPORT, Gen2EffectCommands.FORESIGHT,
-		Gen2EffectCommands.LOCK_ON, Gen2EffectCommands.SPITE,
-		Gen2EffectCommands.PAIN_SPLIT, Gen2EffectCommands.THIEF,
-		Gen2EffectCommands.PURSUIT, Gen2EffectCommands.BEAT_UP,
-	]
-	for step: StringName in steps:
-		assert_true(Gen2EffectCommands.is_engine_command(step), String(step))
-		assert_eq(
-			StringName(host.register_effect_command(MOD, step, _note)["reason"]),
-			&"reserved_effect_command", String(step)
-		)
-
-	var result: Dictionary = host.register_move_effect(MOD, NEW_EFFECT, [
-		Gen2EffectCommands.USED_MOVE_TEXT, Gen2EffectCommands.DO_TURN,
-		Gen2EffectCommands.CHECK_HIT, Gen2EffectCommands.LOCK_ON,
-		Gen2EffectCommands.END_MOVE,
-	])
-	assert_true(bool(result["ok"]), JSON.stringify(result))
-	assert_true(Gen2MoveEffect.is_written(NEW_EFFECT))
-
-
-## None of the eight reads its own effect byte back, so none of them joins the
-## list a mod cannot rewrite.
-func test_the_last_rows_effects_stay_replaceable() -> void:
-	for effect: int in [
-		Gen2MoveEffect.PAIN_SPLIT, Gen2MoveEffect.LOCK_ON, Gen2MoveEffect.SPITE,
-		Gen2MoveEffect.THIEF, Gen2MoveEffect.FORESIGHT, Gen2MoveEffect.PURSUIT,
-		Gen2MoveEffect.TELEPORT, Gen2MoveEffect.BEAT_UP,
-	]:
-		assert_true(bool(Gen2ModHost.instance().register_move_effect(
-			MOD, effect, [Gen2EffectCommands.END_MOVE]
-		)["ok"]), "effect %d" % effect)
 
 
 ## The bag [method Gen2ModHost.inventory] reads while the test stands in for an

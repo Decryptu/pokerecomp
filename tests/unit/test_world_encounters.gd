@@ -272,26 +272,6 @@ func _first_roaming_encounter(record: Dictionary, mons: Array) -> Dictionary:
 	return {}
 
 
-func test_layout_exposes_swarm_fishing_and_roaming_tables() -> void:
-	var gold: Dictionary = Gen2Layout.for_id(RomRegistry.GOLD)
-	var crystal: Dictionary = Gen2Layout.for_id(RomRegistry.CRYSTAL)
-	assert_eq(gold["wild_encounters"]["swarm_grass_count"], 4)
-	assert_eq(gold["wild_encounters"]["swarm_water_count"], 1)
-	assert_eq(gold["wild_encounters"]["fish_groups"], 0x929F7)
-	assert_eq(crystal["wild_encounters"]["swarm_grass"], 0x2B8D0)
-	assert_eq(crystal["wild_encounters"]["swarm_water_count"], 0)
-	assert_eq(crystal["wild_encounters"]["roam_maps"], 0x2A40F)
-
-
-func test_layout_exposes_verified_normal_encounter_tables() -> void:
-	var gold: Dictionary = Gen2Layout.for_id(RomRegistry.GOLD)
-	var crystal: Dictionary = Gen2Layout.for_id(RomRegistry.CRYSTAL)
-	assert_eq(gold["wild_encounters"]["grass_johto"], 0x2AB35)
-	assert_eq(gold["wild_encounters"]["water_kanto_count"], 24)
-	assert_eq(crystal["wild_encounters"]["grass_johto"], 0x2A5E9)
-	assert_eq(crystal["wild_encounters"]["water_kanto"], 0x2B7F7)
-
-
 ## The treemon tables (data/wild/treemon_maps.asm, treemons.asm), read through
 ## a synthetic cartridge carrying the real Crystal anchor rows at the real
 ## offsets. The whole-cartridge fixture read_world_encounters() would need is
@@ -300,22 +280,6 @@ func test_layout_exposes_verified_normal_encounter_tables() -> void:
 const TREEMON_SET_CANYON: int = 1
 const TREEMON_SET_FOREST: int = 6
 const TREEMON_SET_ROCK: int = 7
-
-
-func test_layout_exposes_verified_treemon_tables() -> void:
-	var gold: Dictionary = Gen2Layout.for_id(RomRegistry.GOLD)
-	var crystal: Dictionary = Gen2Layout.for_id(RomRegistry.CRYSTAL)
-	assert_eq(crystal["wild_encounters"]["tree_maps"], 0xB825E)
-	assert_eq(crystal["wild_encounters"]["rock_maps"], 0xB82C5)
-	assert_eq(crystal["wild_encounters"]["treemon_sets"], 0xB82E8)
-	assert_eq(crystal["wild_encounters"]["treemon_set_count"], 9)
-	assert_eq(gold["wild_encounters"]["tree_maps"], 0xBA3E6)
-	assert_eq(gold["wild_encounters"]["rock_maps"], 0xBA44D)
-	assert_eq(gold["wild_encounters"]["treemon_sets"], 0xBA470)
-	assert_eq(gold["wild_encounters"]["treemon_set_count"], 6)
-	# CheckSleepingTreeMon is Crystal only, so Gold and Silver name no lists.
-	assert_true((gold["wild_encounters"]["asleep_treemons"] as Dictionary).is_empty())
-	assert_eq(crystal["wild_encounters"]["asleep_treemons"]["nite"], 0x3EB5D)
 
 
 func test_treemon_tables_parse_maps_sets_and_the_asleep_lists() -> void:

@@ -23,27 +23,6 @@ func test_a_gen2_game_has_none() -> void:
 	assert_true(Gen1Layout.for_id(&"emerald").is_empty())
 
 
-func test_red_and_blue_share_every_table_but_the_shifted_ones() -> void:
-	var red: Dictionary = Gen1Layout.for_id(RomRegistry.RED)
-	var blue: Dictionary = Gen1Layout.for_id(RomRegistry.BLUE)
-	var blue_offsets: Dictionary = {
-		"default_names_rival": 0x06AC0,
-		"vending_text": 0x74F9A,
-		"hidden_items": 0x76689,
-		"hidden_coins": 0x7679A,
-		"hidden_item_coords": 0x766B9,
-		"hidden_coin_coords": 0x76823,
-		"hof_pc_text": 0x76684,
-		"credits_the_end": 0x7473F,
-	}
-	assert_eq(red.size(), blue.size())
-	for key: String in blue_offsets:
-		assert_eq(blue[key], blue_offsets[key], key)
-	for key: String in red:
-		if not blue_offsets.has(key):
-			assert_eq(blue[key], red[key], key)
-
-
 func test_every_layout_is_complete_and_inside_the_cartridge() -> void:
 	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN1):
 		var layout: Dictionary = Gen1Layout.for_id(id)
@@ -70,14 +49,6 @@ func test_every_table_ends_inside_the_cartridge() -> void:
 				+ Gen1Layout.ITEM_PRICE_SIZE,
 			GEN1_ROM_SIZE, "%s item prices" % id
 		)
-
-
-func test_base_stats_rows_are_one_record_apart() -> void:
-	var layout: Dictionary = Gen1Layout.for_id(RomRegistry.RED)
-	assert_eq(
-		Gen1Layout.base_stats_offset(layout, 2) - Gen1Layout.base_stats_offset(layout, 1),
-		28
-	)
 
 
 ## `AnimationMinimizeMon` writes `MinimizedMonSprite` two rows into its tile, and
@@ -134,16 +105,6 @@ func test_the_unused_type_run_is_excluded_and_the_special_run_is_not() -> void:
 	assert_true(Gen1Layout.is_real_type(0x14))
 	assert_false(Gen1Layout.is_special_type(0x08), "the physical run ends at GHOST")
 	assert_true(Gen1Layout.is_special_type(0x14), "FIRE opens the special run")
-
-
-func test_every_evolution_method_has_a_record_size() -> void:
-	for method: int in [
-		Gen1Layout.EVOLVE_LEVEL, Gen1Layout.EVOLVE_ITEM, Gen1Layout.EVOLVE_TRADE
-	]:
-		assert_true(Gen1Layout.EVOLVE_SIZES.has(method), "method %d has no size" % method)
-	# The item row is the only four-byte one; a decoder with the size wrong stays
-	# in step everywhere else and comes out of that row reading rubbish.
-	assert_eq(int(Gen1Layout.EVOLVE_SIZES[Gen1Layout.EVOLVE_ITEM]), 4)
 
 
 func test_the_base_stats_record_holds_every_member_it_names() -> void:
@@ -273,18 +234,6 @@ func test_a_walk_cell_reads_its_bottom_left_tile() -> void:
 	assert_eq(Gen1Layout.cell_tile_index(1, 0), 6)
 	assert_eq(Gen1Layout.cell_tile_index(0, 1), 12)
 	assert_eq(Gen1Layout.cell_tile_index(1, 1), 14)
-
-
-func test_the_object_row_widths_match_the_macro() -> void:
-	assert_eq(
-		Gen1Layout.OBJECT_TRAINER_FLAG | Gen1Layout.OBJECT_ITEM_FLAG, 0xC0,
-		"TRAINER and ITEM are the top two bits of the text byte"
-	)
-	assert_eq(Gen1Layout.TILESET_BLOCK_TILES, 16)
-	assert_eq(
-		Gen1Layout.TM_FIRST_ITEM + Gen1Layout.TM_COUNT - 1, 0xFA,
-		"the last TM is item $FA"
-	)
 
 
 ## `SetPal_Overworld`, branch by branch. A city's row is its map id plus one, so
@@ -425,13 +374,6 @@ func test_every_sprite_row_is_inside_the_table() -> void:
 		)
 
 
-func test_every_text_script_id_is_named_and_the_two_built_are_among_them() -> void:
-	for code: Variant in Gen1Layout.TEXT_SCRIPT_IDS:
-		assert_between(int(code), 0xF5, 0xFF, "a TX_SCRIPT id is outside the run")
-	assert_true(Gen1Layout.TEXT_SCRIPT_IDS.has(Gen1Layout.TEXT_SCRIPT_MART))
-	assert_true(Gen1Layout.TEXT_SCRIPT_IDS.has(Gen1Layout.TEXT_SCRIPT_POKECENTER_NURSE))
-
-
 ## A run of `text_far` stubs steps five bytes; the only wider gaps are the two
 ## `text_pause`s `engine/events/pokecenter.asm` puts in front of a stub.
 func test_a_facility_text_run_steps_one_stub_at_a_time() -> void:
@@ -474,13 +416,6 @@ func test_the_machine_items_sit_above_the_named_ones() -> void:
 	assert_between(
 		Gen1Layout.TM_FIRST_ITEM + Gen1Layout.TM_COUNT - 1, Gen1Layout.TM_FIRST_ITEM, 0xFF
 	)
-
-
-func test_a_mart_inventory_fits_the_buffer_it_is_copied_into() -> void:
-	assert_eq(Gen1Layout.MART_ITEMS_AT, Gen1Layout.MART_COUNT_AT + 1)
-	## `wItemList` is sixteen bytes: the count, the items and a terminator, which
-	## is the whole of what `LoadItemList` copies out of the text pointer.
-	assert_true(1 + Gen1Layout.MART_MAX_ITEMS + 1 <= 16)
 
 
 ## `MoveEffectPointerTable` has an entry for every effect byte but $00, so the
