@@ -90,7 +90,7 @@ func test_capture_carries_the_changed_blocks_and_written_tiles() -> void:
 
 ## `Gen2WorldDrawList.drawn_tile_at`: a written tile over the block, the band's
 ## repeated columns past the screen's twentieth while it scrolls, and a revision
-## that moves with each edit and not with the band's offset.
+## that moves with each edit and not with the band's offset or a hidden tree.
 func test_the_draw_list_answers_the_tile_the_background_shows() -> void:
 	var world: Gen2WorldAPI = _world()
 	var effects := Gen2WorldEffects.new()
@@ -120,3 +120,11 @@ func test_the_draw_list_answers_the_tile_the_background_shows() -> void:
 	effects.advance_frame()
 	effects.advance_frame()
 	assert_eq(list.drawn_revision(), revision, "the offset alone moves nothing")
+
+	## A hidden Headbutt tree is a 32-frame overlay beside the background.
+	var below: Vector2i = origin + Vector2i(0, 2)
+	var standing: int = list.drawn_tile_at(below)
+	effects.start_headbutt_tree(Vector2i(floori(below.x / 2.0), floori(below.y / 2.0)))
+	assert_eq(list.hidden_tree_cells().size(), 1)
+	assert_eq(list.drawn_tile_at(below), standing, "the tree is not the background")
+	assert_eq(list.drawn_revision(), revision, "and moves nothing")

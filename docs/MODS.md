@@ -133,7 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
-| 46 | `box_full` on a `caught` event, and `box_free_space` in `progress()` |
+| 46 | `box_full` on a `caught` event, and `box_free_space` in `progress()`; a hidden Headbutt tree left out of `drawn_tile_at()` and `drawn_revision()` |
 | 45 | `Gen2WorldDrawList.drawn_tile_at()`, `band()` and `drawn_revision()`, with `band` and `drawn_revision` on `frame()`; `changed_blocks` and `written_tiles` on `Gen2BattleWorldContext`; `Gen2WorldScreen.preview_ss_anne_leaves()` and `preview_poison_step()` |
 | 44 | `Gen2BattleHud.draw_party_balls()`; `ground` on every draw-list row, a screen row's `position_cells` and `ground` in map terms, and a renderer's `draw_reach_pixels()` listing connected rows out to its reach; `reachable_checks()`, what a placement reaches with items and badges held from the start; `Gen2WorldCatalog.progression_items()`; a patched `{"item": 0}` or `{"badge": -1}` as a site that hands nothing; `validate_placement` asking a site that waits on an engine flag other than a badge's again once a script sets that flag; Oak's aides as item sites; `{owned}` and `{special}` in `requires` |
 | 43 | `Gen2BattleRenderer.square_pixels()`, `square_key()`, `square_side()`, `battler_pic()` and `substitute_sprite()`; `Gen2BattleHud.draw_panels()`, `panels_key()` and `draw_border_cells()`; the status and gender arguments of `draw_enemy()` and `draw_player()`; the battle view's `enemy_status`, `player_status`, `enemy_gender`, `player_gender`, `enemy_caught`, `enemy_minimized`, `player_minimized`, `enemy_special_pic`, `enemy_pic_dmg`, `gen1_black` and `anim_obp0`; Generation 1's "minimize" tile, and its doll drawn from pokered's own `SPRITE_MONSTER`; a move row's `effectiveness` as its effect applies it; a table patch bumping the encounter context's `generation`; a patched `giveegg` staying an egg; a headless `--mods` or `--mods=a,b` run at mod defaults, apart from the player's mod settings; `Gen2WorldDrawList` through the optional `set_draw_list`: every sprite, effect and background edit the built-in view draws, resolved once for any renderer, with `sprites_hidden` on it rather than set on the renderer; `validate_placement` proving the story's gates, `Gen2WorldCatalog.story()`, a row's `cell`, and `requires` holding what every path to a site tested |
@@ -775,7 +775,7 @@ method or property of the same name.
 |---|---|
 | `sprites` | The rows below, in draw order |
 | `background_offset` | `Vector2` in hardware pixels, positive down: the earthquake's and the Generation 1 elevator's hSCY. The background moves and no sprite does |
-| `hidden_tree_cells`, `hidden_tree_tile` | Walk cells whose four tiles are drawn as that atlas tile while the Headbutt tree's own sprite plays |
+| `hidden_tree_cells`, `hidden_tree_tile` | Walk cells whose four tiles are drawn as that atlas tile while the Headbutt tree's own sprite plays. An overlay over `drawn_tile_at` for 32 frames, outside `drawn_revision` |
 | `tile_overrides` | Tile coordinate to atlas tile, written straight into the background map: `Gen2WorldAPI.screen_tile_overrides()` |
 | `band_scroll` | `{top, bottom, offset}`: screen lines `top` to `bottom` scrolled `offset` pixels left while the S.S. Anne leaves, or empty |
 | `band` | The same band in map terms: tile `rows` (a `Vector2i`, first and past the last), the screen's `first_column`, this frame's `offset` in pixels and `reach`, the most it scrolls in this run. Empty while it stands still |
@@ -814,13 +814,14 @@ flat view draws it.
 | `KIND_GRASS` | `cell`. The map's own tiles over the lower half of the sprite at this row, colour 0 left out, which is `OAM_PRIO` |
 | `KIND_PULSE` | `gfx`, `tile`, `attributes`, `pair`: one tile of the shiny pulse |
 
-`drawn_tile_at(tile: Vector2i) -> int` is the atlas tile the background shows at
-a map tile coordinate this frame: a tile a screen write put there, a hidden
-Headbutt tree's blank, and inside the band past the screen's twentieth column the
-nineteenth or twentieth `ScheduleEastColumnRedraw` repeats, over the block the map
-draws. The built-in renderer draws its overrides, hidden trees and band from it,
-so a view building geometry reads the same answer and rebuilds when
-`drawn_revision` moves.
+`drawn_tile_at(tile: Vector2i) -> int` is the atlas tile the background stands on
+at a map tile coordinate: a tile a screen write put there, and inside the band
+past the screen's twentieth column the nineteenth or twentieth
+`ScheduleEastColumnRedraw` repeats, over the block the map draws. The built-in
+renderer draws its overrides and band from it, so a view building geometry reads
+the same answer and rebuilds when `drawn_revision` moves. A hidden Headbutt tree
+and the band's offset are per-frame overlays beside it: the built-in renderer
+draws `hidden_tree_tile` over `hidden_tree_cells` where no screen write stands.
 
 `colors` are the four a row wears before the map fade: the hour, a visible wild's
 species colours, the heal machine's rotation and a trainer transition's flood over
