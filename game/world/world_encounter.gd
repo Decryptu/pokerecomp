@@ -21,6 +21,9 @@ const METHOD_ROCK_SMASH: StringName = &"rock_smash"
 ## and Silver's third roamer has no nest.
 const ROAM_NEST_MONS: int = 2
 
+## `CheckEncounterRoamMon`'s `cp 100`, out of the 256 a `Random` byte spans.
+const ROAM_CHANCE: int = 100
+
 const SOURCE_NORMAL: StringName = &"normal"
 const SOURCE_SWARM: StringName = &"swarm"
 const SOURCE_ROAMING: StringName = &"roaming"
@@ -62,13 +65,13 @@ static func resolve(
 		var roaming: Dictionary = _resolve_roaming(
 			options.get("roaming_mons", []),
 			int(options.get("map_group", -1)), int(options.get("map_number", -1)),
-			generator
+			generator, int(options.get("roam_chance", ROAM_CHANCE))
 		)
 		roaming_roll = int(roaming.get("roll", -1))
 		roaming_index = int(roaming.get("index", -1))
 		if roaming.has("species") and roaming.has("level"):
 			var roaming_level: int = int(roaming["level"])
-			if _blocked_by_repel(roaming_level, options):
+			if blocked_by_repel(roaming_level, options):
 				return {}
 			var roamer: Dictionary = _wild_result(
 				method, SOURCE_ROAMING, -1, int(roaming["species"]), roaming_level,
@@ -89,7 +92,7 @@ static func resolve(
 	if mon.is_empty():
 		return {}
 	var level: int = int(mon["level"])
-	if _blocked_by_repel(level, options):
+	if blocked_by_repel(level, options):
 		return {}
 	var source: StringName = StringName(options.get("source", SOURCE_NORMAL))
 	return _wild_result(
@@ -493,11 +496,12 @@ static func _choose_slot(
 
 
 static func _resolve_roaming(
-	mons: Variant, map_group: int, map_number: int, random: RandomNumberGenerator
+	mons: Variant, map_group: int, map_number: int, random: RandomNumberGenerator,
+	chance: int = ROAM_CHANCE
 ) -> Dictionary:
 	var roll: int = random.randi_range(0, 255)
 	var result: Dictionary = {"roll": roll}
-	if roll >= 100:
+	if roll >= chance:
 		return result
 	var selected_index: int = roll & 0x03
 	if selected_index == 0:
@@ -524,7 +528,8 @@ static func _resolve_roaming(
 	return result
 
 
-static func _blocked_by_repel(level: int, options: Dictionary) -> bool:
+## `CheckRepelEffect`, and Generation 1's compare in `TryDoWildEncounter`.
+static func blocked_by_repel(level: int, options: Dictionary) -> bool:
 	var steps: int = int(options.get("repel_steps", 0))
 	var lead_level: int = int(options.get("lead_level", -1))
 	return steps > 0 and lead_level > 0 and level < lead_level

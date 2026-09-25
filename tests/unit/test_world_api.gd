@@ -4634,8 +4634,18 @@ func test_roaming_records_are_integers_rather_than_json_floats() -> void:
 		assert_eq(typeof(mon[field]), TYPE_INT, "%s must be an int" % field)
 
 
+## The fixture's own beasts, loosed the way Burned Tower looses them.
+func _released_state(roaming: Array = []) -> Gen2WorldState:
+	var state := Gen2WorldState.new()
+	state.set_event_flag(Gen2WorldState.EVENT_RELEASED_THE_BEASTS)
+	state.init_roaming_mons(
+		roaming if not roaming.is_empty() else GameData.open_directory(_directory).world_roaming_mons()
+	)
+	return state
+
+
 func test_roaming_mons_move_on_map_setup_and_not_on_elapsed_time() -> void:
-	var world: Gen2WorldAPI = _world(Vector2i(6, 6))
+	var world: Gen2WorldAPI = _world(Vector2i(6, 6), _released_state())
 	var random := RandomNumberGenerator.new()
 	random.seed = 2
 	world.schedule_random = random
@@ -4676,11 +4686,9 @@ func test_which_map_entry_methods_move_a_roamer() -> void:
 		## Standing the roamer on the player's own map settles both routines on
 		## the same answer: 1:1's one connection is 1:2, and a jump may not land
 		## on the map the player is on, so either way it ends at 1:2.
-		var world: Gen2WorldAPI = _world(Vector2i(6, 6), Gen2WorldState.from_dict({
-			"roaming_mons": [
-				{"species": 0xF3, "level": 40, "map_group": 1, "map_number": 1},
-			],
-		}))
+		var world: Gen2WorldAPI = _world(Vector2i(6, 6), _released_state([
+			{"species": 0xF3, "level": 40, "map_group": 1, "map_number": 1},
+		]))
 		var random := RandomNumberGenerator.new()
 		random.seed = 2
 		var schedule: Dictionary = world.advance_schedule(random, int(row[0]))
@@ -6267,7 +6275,8 @@ func test_schedule_refuses_active_roaming_without_a_random_stream() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	var state := Gen2WorldState.new()
 	var initial: Array = [{"species": 243, "level": 40, "map_group": 1, "map_number": 1}]
-	state.ensure_roaming_mons(initial)
+	state.set_event_flag(Gen2WorldState.EVENT_RELEASED_THE_BEASTS)
+	state.init_roaming_mons(initial)
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(8, 6), state)
 
 	var result: Dictionary = world.advance_schedule()
@@ -6275,7 +6284,7 @@ func test_schedule_refuses_active_roaming_without_a_random_stream() -> void:
 	assert_eq(result["kind"], &"world_schedule_failed")
 	assert_eq(result["reason"], &"missing_schedule_random")
 	assert_eq(result["roaming"], [])
-	assert_eq(state.roaming_mons(), initial)
+	assert_eq(state.roaming_mons_on(1, 1).size(), 1, "nothing moved")
 
 
 func test_world_clock_day_change_clears_daily_engine_flags() -> void:
@@ -7125,6 +7134,32 @@ func test_active_swarm_replaces_the_normal_map_record() -> void:
 	)
 	assert_eq(encounter["source"], Gen2WorldEncounter.SOURCE_SWARM)
 	assert_eq(encounter["values"]["pokemon"], 19)
+
+
+## `CheckEncounterRoamMon`'s `cp 100` is what a roam-chance provider answers:
+## none at 0, more at 256 than the cartridge's own, on the same draws.
+func test_a_roam_chance_provider_answers_the_roamers_share_of_the_roll() -> void:
+	var world := _world(Vector2i(8, 6), _released_state([
+		{"species": 0xF3, "level": 40, "map_group": 1, "map_number": 1},
+	]))
+	var met: Dictionary = {}
+	for chance: int in [-1, 0, 256]:
+		Gen2ModHost.reset()
+		if chance >= 0:
+			Gen2ModHost.instance().register_roam_encounter_chance(&"test", RoamChance.new(chance))
+		met[chance] = 0
+		for seed_value: int in 200:
+			var random := RandomNumberGenerator.new()
+			random.seed = seed_value
+			var encounter: Dictionary = world.encounter_request(
+				random, true, Gen2WorldEncounter.METHOD_GRASS
+			)
+			if encounter.get("source", &"") == Gen2WorldEncounter.SOURCE_ROAMING:
+				met[chance] += 1
+	Gen2ModHost.reset()
+	assert_eq(met[0], 0)
+	assert_gt(met[-1], 0, "the cartridge's own share")
+	assert_gt(met[256], met[-1])
 
 
 func test_repel_blocks_lower_level_candidates_and_counts_down_on_steps() -> void:
@@ -10864,3 +10899,13 @@ func test_gen1_a_rows_battle_stands_behind_the_rest_of_the_row() -> void:
 	assert_true(world.gen1_tutorial_ball_lands())
 	assert_eq(StringName((results[0] as Dictionary).get("status", &"")), &"waiting")
 	RomCache.clear(_gen1_directory())
+
+
+class RoamChance:
+	var chance: int = 0
+
+	func _init(value: int) -> void:
+		chance = value
+
+	func roam_encounter_chance(_context: Dictionary) -> int:
+		return chance

@@ -202,6 +202,50 @@ func test_a_blanked_picture_stays_blank_until_something_stamps_it_back() -> void
 	)
 
 
+## `DisappearUser` on Fly's charge turn and `AppearUserLowerSub` on its release,
+## from the engine's own events. No animation script resolves in this cache, so
+## the square is cleared by the event itself, as with the battle scene off.
+func test_a_fly_user_leaves_the_field_until_its_release() -> void:
+	await _open_battle()
+	var battle: Gen2Battle = Gen2Battle.create(
+		_data,
+		Gen2BattleMon.create(_data, Fixture.BattleFixture.PIKACHU, 50, [Fixture.BattleFixture.FLY]),
+		Gen2BattleMon.create(_data, Fixture.BattleFixture.GEODUDE, 50, [Fixture.BattleFixture.TACKLE]),
+		RandomNumberGenerator.new()
+	)
+	var square: int = Gen2BattleScreenMap.PLAYER_AT.y * Gen2BattleScreenMap.COLUMNS \
+		+ Gen2BattleScreenMap.PLAYER_AT.x
+	_play_events(_fly_turn(battle).events)
+	assert_false(bool(_screen._battler_visible[Gen2Battle.PLAYER]), "gone on the charge turn")
+	assert_eq(int(_screen._bg_map[square]), Gen2BattleScreenMap.BLANK_TILE)
+	_play_events(_fly_turn(battle).events)
+	assert_true(bool(_screen._battler_visible[Gen2Battle.PLAYER]), "back on the release")
+	assert_eq(int(_screen._bg_map[square]), Gen2BattleScreenMap.PLAYER_BASE_TILE)
+
+
+func _fly_turn(battle: Gen2Battle) -> Gen2Turn:
+	var fly: int = Fixture.BattleFixture.FLY
+	var turn: Gen2Turn = Gen2Turn.create(battle, Gen2Battle.PLAYER, 0, fly, _data.move(fly), [])
+	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
+	battle.run_move_effect(turn)
+	return turn
+
+
+## A turn's events through the screen's own pump, every line pressed past.
+func _play_events(events: Array) -> void:
+	_screen._pending = events.duplicate(true)
+	_screen._show_next_event()
+	var guard: int = 20000
+	while guard > 0 and (not _screen._pending.is_empty() or _screen.frames_running()
+		or _screen._message_awaits_press):
+		guard -= 1
+		if _screen.frames_running() or _screen._box.is_revealing():
+			_screen.advance_frame()
+		else:
+			_screen.advance()
+	_screen._close_battle_menu()
+
+
 func test_the_view_carries_the_tilemap_and_the_palette_maps() -> void:
 	await _open_battle()
 	var view: Dictionary = (_screen._renderer as Gen2BattleRenderer)._view

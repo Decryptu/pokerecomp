@@ -140,12 +140,13 @@ const CHANNEL_BATTLE: StringName = &"battle"
 const CHANNELS: Array[StringName] = [CHANNEL_WORLD, CHANNEL_BATTLE]
 ## The methods each object registration is checked for. A renderer's are above;
 ## an actor's and a visible-encounter provider's live on the class that drives
-## them. These four have no driver class of their own.
+## them. These have no driver class of their own.
 const FIELD_MOVE_SOURCE_METHODS: Array[String] = ["allows_field_move"]
 const REPEL_PROVIDER_METHODS: Array[String] = ["repel_to_use"]
 const CATCH_EXPERIENCE_METHODS: Array[String] = ["awards_catch_experience"]
 const BATTLE_INFO_METHODS: Array[String] = ["annotate_battle"]
 const SHINY_ROLLS_METHODS: Array[String] = ["shiny_rolls"]
+const ROAM_CHANCE_METHODS: Array[String] = ["roam_encounter_chance"]
 const RUN_BUTTON_METHODS: Array[String] = ["runs_while_held"]
 const EXPERIENCE_SCALE_METHODS: Array[String] = ["experience_scale"]
 const EXPERIENCE_BYSTANDER_METHODS: Array[String] = ["experience_bystander_share"]
@@ -259,6 +260,9 @@ var _repel_renewals: Dictionary = {}
 var _catch_experience: Dictionary = {}
 var _battle_info: Dictionary = {}
 var _shiny_rolls: Dictionary = {}
+var _roam_chances: Dictionary = {}
+var _roamer_requests: Array[Dictionary] = []
+var _roamers_source: Callable = Callable()
 var _run_buttons: Dictionary = {}
 var _experience_scales: Dictionary = {}
 ## The one BYSTANDER SHARE policy, exclusive for [member _event_mutators]' reason.
@@ -765,6 +769,60 @@ static func shiny_roll_count(context: Dictionary) -> int:
 	for provider: Object in _instance._shiny_rolls.values():
 		rolls += maxi(0, int(provider.call("shiny_rolls", context.duplicate(true))) - 1)
 	return clampi(rolls, 1, MAX_SHINY_ROLLS)
+
+
+## `roam_encounter_chance(context)` answers `CheckEncounterRoamMon`'s `cp 100`.
+func register_roam_encounter_chance(id: StringName, provider: Object) -> Dictionary:
+	return _register_provider(_roam_chances, ROAM_CHANCE_METHODS, id, provider)
+
+
+func roam_encounter_chance_ids() -> Array:
+	return _roam_chances.keys()
+
+
+## Static and null-safe for the reason [method shiny_roll_count] is.
+static func roam_encounter_chance(context: Dictionary, cartridge: int) -> int:
+	if _instance == null or _instance._roam_chances.is_empty():
+		return cartridge
+	var best: int = 0
+	for provider: Object in _instance._roam_chances.values():
+		best = maxi(best, int(provider.call("roam_encounter_chance", context.duplicate(true))))
+	return clampi(best, 0, 256)
+
+
+## Set by [Gen2WorldScreen] the way [method set_inventory_source] is.
+func set_roamers_source(source: Callable) -> void:
+	_roamers_source = source
+
+
+## The live `wRoamMon` slots as copies, `[]` with no world open.
+func roamers() -> Array:
+	if not _roamers_source.is_valid():
+		return []
+	var slots: Variant = _roamers_source.call()
+	return (slots as Array).duplicate(true) if slots is Array else []
+
+
+## A REQUEST for an empty roam slot, spent when the world is idle.
+func request_roamer(id: StringName, slot: int, species: int, level: int) -> Dictionary:
+	if slot < 0 or slot >= Gen2WorldState.ROAM_SLOTS or species <= 0 \
+		or level < 1 or level > Gen2Layout.MAX_LEVEL:
+		return {"ok": false, "reason": &"invalid_roamer", "detail": String(id)}
+	_roamer_requests.append({"id": id, "slot": slot, "species": species, "level": level})
+	return {"ok": true}
+
+
+func take_roamer_requests() -> Array[Dictionary]:
+	var out: Array[Dictionary] = _roamer_requests
+	_roamer_requests = []
+	return out
+
+
+func refuse_roamer(request: Dictionary, reason: StringName) -> void:
+	_failures.append({
+		"ok": false, "reason": reason, "detail": str(request.get("slot", -1)),
+		"id": request.get("id", &""),
+	})
 
 
 ## Registers a CATCH EXPERIENCE policy for [param manifest]'s own run: whether a

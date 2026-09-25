@@ -1458,6 +1458,9 @@ static func _miss(turn: Gen2Turn, event: StringName = Gen2Battle.MISSED) -> void
 		turn.defender().trapping_move = 0
 	if SAYS_ITS_OWN_MISS.has(turn.effect()) or Gen2MoveEffect.is_stat_down(turn.effect()):
 		return
+	if turn.battle.is_gen1() and turn.effect() in CHARGE_EFFECTS:
+		_delay(turn, GEN1_FLY_OR_CHARGE_DELAY_FRAMES)
+		_appear_user(turn, turn.side)
 	turn.emit(_miss_line(turn.effect()) if event == Gen2Battle.MISSED else event, {
 		"target": turn.target, "missed": true,
 	})
@@ -1585,11 +1588,11 @@ static func _check_hit(turn: Gen2Turn) -> void:
 ## cleared both bits: a missed Fly or Dig owes the picture back.
 static func _failure_text(turn: Gen2Turn) -> void:
 	_jump_kick_crash(turn)
-	if turn.move_number in [Gen2MoveEffect.FLY_MOVE, Gen2MoveEffect.DIG_MOVE]:
+	if turn.move_number in [Gen2MoveEffect.FLY_MOVE, Gen2MoveEffect.DIG_MOVE] \
+		and not turn.battle.is_gen1():
 		var user: Gen2BattleMon = turn.attacker()
 		user.substatus &= ~(Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND)
-		turn.emit(Gen2Battle.APPEAR_USER)
-		_raise_sub(turn)
+		_appear_user(turn, turn.side)
 		turn.end()
 		return
 	if MULTI_HIT_RAISES_SUB.has(turn.effect()):
@@ -1858,11 +1861,38 @@ static func _destiny_bond_takes_user(turn: Gen2Turn) -> void:
 	user.take_damage(user.hp)
 
 
+## `AppearUserRaiseSub`. Generation 1 shows a charging user with
+## `STATUS_AFFECTED_ANIM` instead.
+static func _appear_user(turn: Gen2Turn, side: int) -> void:
+	var mon: Gen2BattleMon = turn.battle.mon(side)
+	if not turn.battle.is_gen1():
+		turn.emit(Gen2Battle.APPEAR_USER, {
+			"side": side,
+			"raised": Gen2Substatus.has(mon.substatus, Gen2Substatus.SUBSTITUTE),
+		})
+		return
+	if side == turn.side and turn.effect() in CHARGE_EFFECTS:
+		_play_fx_anim(turn, Gen1Layout.ANIM_ID_STATUS_AFFECTED, Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
+
+
+## `.MonHurtItselfOrFullyParalysed`, Generation 1's one cancel that shows the user.
+static func _hurt_or_paralysed(turn: Gen2Turn, mon: Gen2BattleMon) -> void:
+	_cant_move(turn, mon)
+	if turn.battle.is_gen1():
+		_appear_user(turn, turn.side)
+
+
 ## `CantMove` cancels Bide, a two-turn move, Rollout or rampage, and makes a Fly
-## or Dig user visible again, so a flinch cannot leave it untouchable.
-static func _cant_move(mon: Gen2BattleMon) -> void:
+## or Dig user visible again. Generation 1 clears `CHARGING_UP` alone, so its
+## `INVULNERABLE` glitch stands until a release or a switch.
+static func _cant_move(turn: Gen2Turn, mon: Gen2BattleMon) -> void:
+	mon.substatus &= ~Gen2Substatus.CHARGING
+	if not turn.battle.is_gen1():
+		var move: int = turn.move_number if mon == turn.attacker() else mon.charged_move
+		mon.substatus &= ~(Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND)
+		if move in [Gen2MoveEffect.FLY_MOVE, Gen2MoveEffect.DIG_MOVE]:
+			_appear_user(turn, turn.side if mon == turn.attacker() else turn.target)
 	mon.fury_cutter_count = 0
-	mon.substatus &= ~(Gen2Substatus.CHARGING | Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND)
 	mon.charged_move = 0
 	mon.substatus &= ~(Gen2Substatus.ROLLOUT | Gen2Substatus.RAMPAGING)
 	mon.rampage_move = 0
@@ -1890,8 +1920,8 @@ static func _stopped_by_attract(turn: Gen2Turn, mon: Gen2BattleMon) -> bool:
 	_play_status_anim(turn, Gen2BattleAnimPlayer.ANIM_IN_LOVE, [])
 	if not Gen2Substatus.rolls_attract_immobile(turn.rng()):
 		return false
-	_cant_move(mon)
 	turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"attract"})
+	_cant_move(turn, mon)
 	turn.end()
 	return true
 
@@ -1907,13 +1937,13 @@ static func _check_sleep(turn: Gen2Turn) -> void:
 			# Snore and Sleep Talk are used through a sleep, so the text stands
 			# and `CantMove` is what they skip.
 			if not SLEEPING_MOVES.has(turn.move_number):
-				_cant_move(mon)
+				_cant_move(turn, mon)
 				turn.end()
 				return
 		else:
 			# `.woke_up` clears `SUBSTATUS_NIGHTMARE`, which has no gate of its
 			# own: left standing it costs an awake Pokemon a quarter a turn.
-			_cant_move(mon)
+			_cant_move(turn, mon)
 			turn.locked = false
 			mon.substatus &= ~Gen2Substatus.NIGHTMARE
 			turn.emit(Gen2Battle.WOKE_UP)
@@ -1928,9 +1958,9 @@ static func _check_status(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 
 	if Gen2Substatus.has(mon.substatus, Gen2Substatus.RECHARGING):
-		_cant_move(mon)
 		mon.substatus &= ~Gen2Substatus.RECHARGING
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"recharge"})
+		_cant_move(turn, mon)
 		turn.end()
 		return
 
@@ -1943,29 +1973,29 @@ static func _check_status(turn: Gen2Turn) -> void:
 		# `CheckPlayerTurn` clears no bit, so the thaw is the `defrost` step in
 		# their own list, behind `applydamage`: a miss leaves the user frozen.
 		if not THAWING_MOVES.has(turn.move_number):
-			_cant_move(mon)
 			turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"freeze"})
+			_cant_move(turn, mon)
 			turn.end()
 			return
 
 	## `.HeldInPlaceCheck` and `HazeEffect_`'s `$ff`, both between the freeze
 	## check and the flinch one, and both Generation 1's alone.
 	if turn.battle.gen1_trapping_move(turn.target) != 0:
-		_cant_move(mon)
+		_cant_move(turn, mon)
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"held_in_place"})
 		turn.end()
 		return
 
 	if Gen2Substatus.has(mon.substatus, Gen2Substatus.GEN1_LOST_TURN):
-		_cant_move(mon)
+		_cant_move(turn, mon)
 		mon.substatus &= ~Gen2Substatus.GEN1_LOST_TURN
 		turn.end()
 		return
 
 	if Gen2Substatus.has(mon.substatus, Gen2Substatus.FLINCHED):
-		_cant_move(mon)
 		mon.substatus &= ~Gen2Substatus.FLINCHED
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"flinch"})
+		_cant_move(turn, mon)
 		turn.end()
 		return
 
@@ -1988,7 +2018,7 @@ static func _check_status(turn: Gen2Turn) -> void:
 			if Gen2Substatus.rolls_confusion_hit(turn.rng()):
 				mon.substatus &= ~Gen2Substatus.IN_LOOP
 				_hurt_self(turn)
-				_cant_move(mon)
+				_hurt_or_paralysed(turn, mon)
 				turn.end()
 				return
 
@@ -2000,15 +2030,15 @@ static func _check_status(turn: Gen2Turn) -> void:
 	# still names the slot asked for, so comparing slots would refuse it too.
 	if mon.disabled_slot >= 0 and mon.disabled_slot < mon.moves.size() \
 		and turn.move_number == int(mon.moves[mon.disabled_slot]):
-		_cant_move(mon)
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"disabled", "move": turn.move_number})
+		_cant_move(turn, mon)
 		turn.end()
 		return
 
 	if Gen2Status.has(mon.status, Gen2Status.PARALYSIS) \
 		and Gen2Status.rolls_full_paralysis(turn.rng()):
-		_cant_move(mon)
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"paralysis"})
+		_hurt_or_paralysed(turn, mon)
 		turn.end()
 
 
@@ -2231,11 +2261,11 @@ static func _status_interrupts(turn: Gen2Turn, flag: int) -> void:
 	# never sets the flag, so it stops no thaw.
 	if flag == Gen2Status.FREEZE \
 		and Gen2Status.has(defender.status, Gen2Status.FREEZE):
-		_cant_move(defender)
+		_cant_move(turn, defender)
 		defender.substatus &= ~Gen2Substatus.RECHARGING
 		turn.battle.mark_just_got_frozen(turn.target)
 	if flag == Gen2Status.SLEEP_MASK and Gen2Status.is_asleep(defender.status):
-		_cant_move(defender)
+		_cant_move(turn, defender)
 
 
 ## Poison asks `CheckIfTargetIsPoisonType` against the target's types, burn and
@@ -2464,6 +2494,7 @@ static func _charge(turn: Gen2Turn) -> void:
 
 	mon.substatus |= Gen2Substatus.CHARGING
 	mon.charged_move = turn.move_number
+	_charge_anim(turn)
 	if turn.move_number == Gen2MoveEffect.FLY_MOVE:
 		mon.substatus |= Gen2Substatus.FLYING
 	elif turn.move_number == Gen2MoveEffect.DIG_MOVE:
@@ -2475,6 +2506,27 @@ static func _charge(turn: Gen2Turn) -> void:
 		turn.skip_to = END_TURN
 		return
 	turn.end()
+
+
+## `BattleCommand_Charge`'s `LoadMoveAnim` at param 1, or `ChargeEffect`'s
+## Teleport, `SLIDE_DOWN_ANIM` or X-item flash on Generation 1.
+static func _charge_anim(turn: Gen2Turn) -> void:
+	var hides: bool = turn.move_number in [Gen2MoveEffect.FLY_MOVE, Gen2MoveEffect.DIG_MOVE]
+	if turn.battle.is_gen1():
+		var index: int = Gen1Layout.ANIM_ID_XSTATITEM[1 if turn.side == Gen2Battle.ENEMY else 0]
+		if turn.move_number == Gen2MoveEffect.FLY_MOVE:
+			index = Gen2MoveEffect.TELEPORT_MOVE
+		elif turn.move_number == Gen2MoveEffect.DIG_MOVE:
+			index = Gen1Layout.ANIM_ID_SLIDE_DOWN
+		_play_fx_anim(turn, index, Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
+		return
+	_lower_sub(turn)
+	turn.battle.battle_anim_param = 1
+	_play_fx_anim(turn, turn.move_number, Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
+	if hides:
+		turn.emit(Gen2Battle.DISAPPEAR_USER)
+	else:
+		_raise_sub(turn)
 
 
 ## `BattleCommand_EndLoop`. Its first pass decides how many times the commands
@@ -3335,6 +3387,8 @@ const PARALYZE_DELAY_FRAMES: int = 30
 const FORCE_SWITCH_DELAY_FRAMES: int = 20
 const BEAT_UP_DELAY_FRAMES: int = 20
 const SELFDESTRUCT_DELAY_FRAMES: int = 3
+## `PlayerCheckIfFlyOrChargeEffect`'s wait in front of a missed move's text.
+const GEN1_FLY_OR_CHARGE_DELAY_FRAMES: int = 30
 
 
 static func _delay(turn: Gen2Turn, frames: int) -> void:
@@ -3751,6 +3805,7 @@ static func _play_fx_anim(
 		"enemy_turn": enemy_turn != on_opponent,
 		"effectiveness": turn.effectiveness,
 		"restore_user_pic": restore_user_pic,
+		"off_field": turn.battle.off_field(),
 	})
 
 
@@ -3789,9 +3844,7 @@ static func _move_anim(turn: Gen2Turn) -> void:
 	_play_fx_anim(turn, turn.move_number, _damage_after_anim(turn), reappears)
 
 
-## `BattleCommand_LowerSub`: the user's doll dropped out of the way. Nothing
-## drops on a charge turn, `CheckUserIsCharging` being [member Gen2Turn.locked]
-## or [member Gen2Turn.called] here.
+## `BattleCommand_LowerSub`: the user's doll dropped out of the way.
 static func _lower_sub(turn: Gen2Turn) -> void:
 	if not Gen2Substatus.has(turn.attacker().substatus, Gen2Substatus.SUBSTITUTE):
 		return

@@ -1752,7 +1752,7 @@ func _mart_description() -> String:
 	var entry: Dictionary = _mart_selection()
 	if entry.is_empty():
 		return ""
-	return String(_data.item(int(entry.get("item", 0))).get("description", ""))
+	return Gen2WorldPack.row_description(_data, int(entry.get("item", 0)))
 
 
 ## `SelectApricornForKurt`'s two boxes. The model owns both cursors and the loop
@@ -2083,10 +2083,7 @@ func _open_pc_item_list(action: int) -> void:
 		_open_deposit_sell_pack(Gen2DepositSellPack.DEPOSIT, _open_pc_items)
 		return
 	_mode = MODE.PC_ITEM_LIST
-	## `SelectQuantityToToss` is asked before the move, so the box that names it
-	## is the list's own prompt here.
-	_summary = _data.pokecenter_pc_text("how_many_withdraw") \
-		if action == Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM else _data.menu_text("toss_ask")
+	_summary = ""
 	_render_rows()
 
 
@@ -4280,7 +4277,7 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 	var quiet: bool = _mode == MODE.PC_DECO_LIST
 	var image: Image = _mom_bank_image() if _mode == MODE.MOM_BANK \
 		else _dial_image() if _is_dial() else _service_page.render(
-		"" if quiet else _title, "" if quiet else _summary, labels,
+		"" if quiet else _title, "" if quiet else _render_summary(), labels,
 		_cursor if cursor < 0 else cursor, "" if quiet else _status,
 		_service_box(), _service_note(), _message_box(), _gen1_box_marks()
 	)
@@ -4289,6 +4286,15 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		Gen2PicImage.show(_service_view, image)
 	_service_drawn = image != null
 	_apply_layer_visibility()
+
+
+## `.PCItemsMenuData`'s `UpdateItemDescription` under a list being browsed.
+func _render_summary() -> String:
+	if _mode != MODE.PC_ITEM_LIST or _gen1_pc or _pc_item_stage != &"":
+		return _summary
+	if _cursor < 0 or _cursor >= _pc_entries.size():
+		return ""
+	return Gen2WorldPack.row_description(_data, int(_pc_entries[_cursor].get("item", 0)))
 
 
 ## `TossItem_MenuHeader`'s dial at (15, 9) and the `YesNoBox` over the list.

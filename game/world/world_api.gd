@@ -486,7 +486,7 @@ func _init(
 	state.gen1 = _gen1
 	state.changed.connect(_on_world_state_changed)
 	inventory = Gen2WorldInventory.new(data, state)
-	state.ensure_roaming_mons(data.world_roaming_mons())
+	state.settle_roaming_mons()
 	if data.id == RomRegistry.YELLOW:
 		pikachu = Gen1Pikachu.new()
 		pikachu.set_grass_reader(_gen1_grass_under)
@@ -2560,6 +2560,12 @@ func _encounter_step_refused() -> bool:
 	return not can_encounter_wild_mon()
 
 
+## `TryDoWildEncounter`'s countdown alone, for a step a provider owns.
+func count_gen1_repel_step() -> void:
+	if _gen1 and _gen1_encounter_step_open(player_cell):
+		state.spend_repel_step()
+
+
 ## The table a step on [param cell] rolls on, empty for a cell that stands on
 ## neither. `.gotWildEncounterType` reads the bottom left tile of the quarter
 ## block in Generation 1; Generation 2 reads the standing permission itself.
@@ -2677,6 +2683,7 @@ func encounter_request(
 			## `.RoamMon1` is Generation 2's; nothing roams Kanto in Generation 1,
 			## and an empty list would still spend the draw the walk reads.
 			"roaming_mons": [] if _gen1 else state.roaming_mons(),
+			"roam_chance": _roam_chance(),
 			"map_group": current_map.group,
 			"map_number": current_map.number,
 			"repel_steps": state.repel_steps(),
@@ -2797,6 +2804,21 @@ func set_swarm_map(
 
 func roaming_mons() -> Array:
 	return state.roaming_mons()
+
+
+## A mod's [method Gen2ModHost.request_roamer], placed as `JumpRoamMon` places one.
+func place_roamer(slot: int, species: int, level: int, random: RandomNumberGenerator) -> StringName:
+	return state.place_roamer(slot, species, level, data.world_roaming_maps(), random, map_id())
+
+
+## `CheckEncounterRoamMon`'s `cp 100`, answered by a mod where a roamer stands.
+func _roam_chance() -> int:
+	var here: Array = state.roaming_mons_on(current_map.group, current_map.number)
+	if _gen1 or here.is_empty():
+		return Gen2WorldEncounter.ROAM_CHANCE
+	return Gen2ModHost.roam_encounter_chance({
+		"map_group": current_map.group, "map_number": current_map.number, "roamers": here,
+	}, Gen2WorldEncounter.ROAM_CHANCE)
 
 
 func advance_roaming(

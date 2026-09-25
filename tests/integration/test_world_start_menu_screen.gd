@@ -1212,6 +1212,11 @@ func test_a_full_moveset_opens_forget_move_and_a_choice_replaces_that_slot() -> 
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
 	assert_eq(_world_screen._injected_save.party[0].moves, [1, 0x39, HM_MOVE, 4])
 	assert_true(String(host.get("_pack_result")).contains("forgot"), String(host.get("_pack_result")))
+	## `LearnMove` prints over the TM/HM party menu `PartyMenuSelect` left: its
+	## ABLE column and hollow cursor, not the HP layout a plain result redraws.
+	var party: Dictionary = host.get("_party_result")
+	assert_true(bool(party.get("quality", false)), "the TM/HM layout")
+	assert_eq(int(party.get("held", -1)), 0, "the hollow cursor on the chosen row")
 
 
 ## .hmmove prints MoveCantForgetHMText and is `jr .loop`, so the list stays open

@@ -406,11 +406,11 @@ const SEND_OUT_ANIM_SHINY: int = 1
 ## `restore_user_pic`, the `AppearUserLowerSub` after Fly and Dig.
 const ANIMATION: StringName = &"animation"
 
-## `AppearUser` on its own, with no animation behind it: the user's picture is
-## stamped back into the map it was taken out of. `BattleCommand_FailureText`'s
-## `.fly_dig` is the one route in, a missed or unaffecting Fly or Dig, which is
-## why it is an event of its own rather than an [constant ANIMATION] flag.
+## `AppearUserRaiseSub` with no animation: the picture, or the doll when
+## `raised`, stamped back after a missed or cancelled Fly or Dig.
 const APPEAR_USER: StringName = &"appear_user"
+## `DisappearUser`: Fly's or Dig's charge clears the square, scene on or off.
+const DISAPPEAR_USER: StringName = &"disappear_user"
 
 ## What a side does with its turn. Switching is settled before priority is looked
 ## at, which is why it is an action rather than a very fast move.
@@ -2218,8 +2218,9 @@ func _residual_status(side: int, events: Array) -> void:
 
 
 ## `Call_PlayBattleAnim_OnlyIfVisible`, which [param hidden_side] in the air skips.
+## Generation 1's `HandlePoisonBurnLeechSeed` plays its animations regardless.
 func _status_animation(side: int, index: int, hidden_side: int, events: Array) -> void:
-	if mon(hidden_side).substatus & (Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND) == 0:
+	if is_gen1() or mon(hidden_side).substatus & (Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND) == 0:
 		events.append(status_animation_event(side, index))
 
 
@@ -2228,7 +2229,16 @@ func status_animation_event(side: int, index: int) -> Dictionary:
 		"type": ANIMATION, "index": index, "param": battle_anim_param,
 		"after_anim": Gen2BattleAnimPlayer.AFTER_ANIM_NONE, "enemy_turn": side == ENEMY,
 		"effectiveness": Gen2Layout.MATCHUP_EFFECTIVE, "restore_user_pic": false,
+		"off_field": off_field(),
 	}
+
+
+## `BGEffect_CheckFlyDigStatus` per side, as it stood when the animation was emitted.
+func off_field() -> Array:
+	return [
+		mon(PLAYER).substatus & (Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND) != 0,
+		mon(ENEMY).substatus & (Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND) != 0,
+	]
 
 
 ## An eighth off the seeded Pokémon and onto the one opposite, capped by

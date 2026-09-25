@@ -207,7 +207,11 @@ const RELEARN_RISE: int = 5
 const LIST_TEXT_WIDTH: int = LIST_RIGHT - LIST_LEFT - 2
 
 
-static func forget_box() -> Gen2MenuBox:
+## Generation 1's `LearnMove` frames its list at `hlcoord 4, 7`, single-spaced,
+## which is `.relearnmenu`'s box.
+static func forget_box(gen1: bool = false) -> Gen2MenuBox:
+	if gen1:
+		return move_box(true)
 	return Gen2MenuBox.from_coords(
 		FORGET_LEFT, FORGET_TOP, FORGET_RIGHT, FORGET_BOTTOM, FORGET_FLAGS
 	)

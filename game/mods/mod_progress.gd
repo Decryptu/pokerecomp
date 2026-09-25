@@ -18,6 +18,7 @@ static func of(world: Gen2WorldAPI, save: Gen2SaveData) -> Dictionary:
 	var out: Dictionary = {}
 	if world != null and world.state != null:
 		_read_state(out, world.state, Gen2WorldState.is_crystal_profile(world.data))
+		_read_story(out, world.state, world.data.id)
 		out[&"beat_red"] = world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
 	_read_save(out, save)
 	return out
@@ -34,9 +35,9 @@ static func of_save(save: Gen2SaveData, data: GameData = null) -> Dictionary:
 		## so every badge in the mask is the wrong badge. A mod calling this from
 		## `save_activated` has no [GameData] and should not have to open one to
 		## be answered correctly.
-		_read_state(out, save.world.world_state, Gen2WorldState.is_crystal_game_id(
-			data.id if data != null else save.game_id
-		))
+		var game: StringName = data.id if data != null else save.game_id
+		_read_state(out, save.world.world_state, Gen2WorldState.is_crystal_game_id(game))
+		_read_story(out, save.world.world_state, game)
 		out[&"beat_red"] = \
 			save.world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
 	_read_save(out, save)
@@ -66,6 +67,21 @@ static func _read_state(out: Dictionary, state: Gen2WorldState, crystal: bool) -
 	out[&"coins"] = state.coins()
 	out[&"step_count"] = state.step_count()
 	out[&"phone_contacts"] = state.phone_contact_count()
+
+
+## Story flags, each on the cartridges that number it.
+static func _read_story(out: Dictionary, state: Gen2WorldState, game: StringName) -> void:
+	var caught: Array = []
+	for species: Variant in state.caught_species():
+		caught.append(int(species))
+	caught.sort()
+	out[&"caught_species"] = caught
+	if RomRegistry.generation_for(game) != RomRegistry.GEN2:
+		return
+	out[&"beasts_released"] = state.is_event_flag_active(Gen2WorldState.EVENT_RELEASED_THE_BEASTS)
+	if Gen2WorldState.is_crystal_game_id(game):
+		out[&"fought_suicune"] = \
+			state.is_event_flag_active(Gen2WorldState.EVENT_FOUGHT_SUICUNE_CRYSTAL)
 
 
 ## The party, the boxes and the play timer, which are the save's on both paths:

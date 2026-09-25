@@ -823,6 +823,31 @@ func test_the_progress_reading_answers_a_save_and_reports_what_moved() -> void:
 	assert_eq(host.progress(), {}, "the world closed")
 
 
+## The story a roaming-beast mod waits on: `EVENT_RELEASED_THE_BEASTS` on the
+## three Generation 2 cartridges, Crystal's `EVENT_FOUGHT_SUICUNE`, and the dex
+## that tells a Suicune caught from one knocked out. A flag a cartridge does not
+## number is absent rather than false.
+func test_the_progress_reading_carries_the_beasts_story() -> void:
+	var save := Gen2SaveData.new()
+	save.game_id = &"crystal"
+	save.world = Gen2WorldSnapshot.new()
+	var state: Gen2WorldState = save.world.world_state
+	state.set_event_flag(Gen2WorldState.EVENT_RELEASED_THE_BEASTS)
+	state.set_event_flag(Gen2WorldState.EVENT_FOUGHT_SUICUNE_CRYSTAL)
+	state.set_species_caught(245)
+	var crystal: Dictionary = Gen2ModProgress.of_save(save)
+	assert_true(bool(crystal[&"beasts_released"]))
+	assert_true(bool(crystal[&"fought_suicune"]))
+	assert_eq(crystal[&"caught_species"], [245])
+
+	save.game_id = &"gold"
+	var gold: Dictionary = Gen2ModProgress.of_save(save)
+	assert_true(bool(gold[&"beasts_released"]))
+	assert_false(gold.has(&"fought_suicune"), "Suicune roams in Gold")
+	save.game_id = &"red"
+	assert_false(Gen2ModProgress.of_save(save).has(&"beasts_released"))
+
+
 ## `box_free_space` is the open box's room alone, so whatever filled it, a catch
 ## or a gift, reads 0 there and a full box behind it does not.
 func test_the_progress_reading_answers_the_open_boxs_free_space() -> void:

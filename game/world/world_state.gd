@@ -42,6 +42,11 @@ const ENGINE_BIKE_SHOP_CALL_GOLD_SILVER: int = 19
 ## `GROUP_N_A`/`MAP_N_A`, which `BattleEnd_HandleRoamMons` writes over a
 ## roamer's map bytes once it has been caught or defeated.
 const ROAM_MAP_N_A: int = -1
+## `wRoamMon1` to `wRoamMon3`; Crystal's `InitRoamMons` leaves the third empty.
+const ROAM_SLOTS: int = 3
+## Beside `InitRoamMons`, and Crystal's Tin Tower battle however it ends.
+const EVENT_RELEASED_THE_BEASTS: int = 123
+const EVENT_FOUGHT_SUICUNE_CRYSTAL: int = 821
 ## Both source reroll loops are unbounded; the cap stops a mod's dead-end graph.
 const ROAM_ROLL_ATTEMPTS: int = 128
 ## `StoreSwarmMapIndices`' own two arguments, `constants/script_constants.asm`.
@@ -2087,11 +2092,58 @@ func fishing_swarm_species() -> int:
 	return _fishing_swarm_species
 
 
-func ensure_roaming_mons(source: Array) -> void:
-	if not _roaming_mons.is_empty() or source.is_empty():
-		return
-	_roaming_mons = _copy_roaming_mons(source)
+## `InitRoamMons`: HP zero, so a first meeting rolls new stats.
+func init_roaming_mons(source: Array) -> void:
+	var rows: Array = _copy_roaming_mons(source)
+	_roaming_mons = []
+	for index: int in ROAM_SLOTS:
+		var mon: Dictionary = rows[index] if index < rows.size() else _empty_roamer()
+		mon["hp"] = 0
+		mon["dvs"] = 0
+		_roaming_mons.append(mon)
 	changed.emit()
+
+
+## New Game's `wRoamMon` clear stands until the beasts are released.
+func settle_roaming_mons() -> void:
+	if gen1:
+		_roaming_mons = []
+		return
+	if not is_event_flag_active(EVENT_RELEASED_THE_BEASTS):
+		_roaming_mons = []
+	while _roaming_mons.size() < ROAM_SLOTS:
+		_roaming_mons.append(_empty_roamer())
+
+
+static func _empty_roamer() -> Dictionary:
+	return {
+		"species": 0, "level": 0, "map_group": ROAM_MAP_N_A,
+		"map_number": ROAM_MAP_N_A, "hp": 0, "dvs": 0,
+	}
+
+
+## A mod's roamer in an empty slot, where `JumpRoamMon` would put it.
+func place_roamer(
+	slot: int, species: int, level: int, map_rows: Array, random: RandomNumberGenerator,
+	player_map: Vector2i
+) -> StringName:
+	if gen1 or slot < 0 or slot >= _roaming_mons.size():
+		return &"no_such_roam_slot"
+	if not is_event_flag_active(EVENT_RELEASED_THE_BEASTS):
+		return &"beasts_not_released"
+	if int((_roaming_mons[slot] as Dictionary).get("species", 0)) > 0:
+		return &"roam_slot_taken"
+	var target: Vector2i = _roam_jump(map_rows, player_map, random).get(
+		"to", Vector2i(ROAM_MAP_N_A, ROAM_MAP_N_A)
+	)
+	if target.x == ROAM_MAP_N_A:
+		return &"no_roam_map"
+	_roaming_mons[slot] = {
+		"species": species, "level": level, "map_group": target.x,
+		"map_number": target.y, "hp": 0, "dvs": 0,
+	}
+	changed.emit()
+	return &""
 
 
 func roaming_mons() -> Array:
@@ -2281,11 +2333,8 @@ func map_scenes() -> Dictionary:
 	return _map_scenes.duplicate()
 
 
-## Every entry point for a roaming record funnels through here: the constructor,
-## ensure_roaming_mons(), restore() and roaming_mons(). The importer writes these
-## four fields as integers, but a cache or snapshot round-trips through JSON,
-## where they come back as floats, so they are normalized once on the way in
-## rather than at each read.
+## Every roaming record enters through here, where a JSON round trip's floats
+## become integers once.
 func _copy_roaming_mons(source: Array) -> Array:
 	var out: Array = []
 	for raw: Variant in source:

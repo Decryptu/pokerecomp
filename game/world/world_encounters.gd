@@ -78,6 +78,9 @@ var _steps: Dictionary = {}
 var _landed: Dictionary = {}
 var _pulse: Gen2BattleAnimPlayer = null
 var _pulse_id: StringName = &""
+## `CheckRepelEffect`'s lead level, and the entries it keeps off the map.
+var _repel_lead: Callable = Callable()
+var _repelled: Array = []
 ## What the running pulse's commands asked for this frame: the screen owns the
 ## audio device, as the battle screen does.
 var _frame_commands: Array = []
@@ -92,6 +95,10 @@ func set_providers(providers: Array) -> void:
 
 func active() -> bool:
 	return not _providers.is_empty()
+
+
+func set_repel_lead_source(source: Callable) -> void:
+	_repel_lead = source
 
 
 ## The map changed, or the view was created. Every entry, every sprite and any
@@ -141,9 +148,7 @@ func _tick_steps() -> bool:
 	return true
 
 
-## The validated population, each entry `{id, cell, facing, species, level, dvs,
-## shiny, pulse}` and an optional `glow` and `step_span`. `shiny` is the host's
-## own answer from the DVs; a provider that sends one is refused.
+## The validated population; `shiny` is the host's own answer from the DVs.
 func entries() -> Array:
 	return _entries
 
@@ -261,6 +266,7 @@ func _reset() -> void:
 	_pulse = null
 	_pulse_id = &""
 	_frame_commands = []
+	_repelled = []
 	_tables_key = _world.encounter_tables_key() if _world != null else []
 	_tables_revision = _world.data.content_revision() \
 		if _world != null and _world.data != null else 0
@@ -270,9 +276,7 @@ func _reset() -> void:
 		provider.call("set_context", _context.duplicate(true))
 
 
-## The snapshot a provider plans against: where a wild may stand, what each
-## method resolves to right now, and enough of the run to be deterministic. Every
-## question in it is answered by [Gen2WorldAPI], never by the mod.
+## The snapshot a provider plans against, answered by [Gen2WorldAPI].
 func _build_context() -> Dictionary:
 	if _world == null:
 		return {}
@@ -287,14 +291,8 @@ func _build_context() -> Dictionary:
 	}
 
 
-## The walk cells the map's own objects hold this frame, which is live state and
-## deliberately NOT folded into `eligible`: which cells a wild MAY stand on is
-## `CanEncounterWildMon`'s rule and does not change while the map is up, and
-## [method _validate] drops an entry standing outside `eligible`, so folding the
-## two together would delete a wild an NPC walks over. An object mid-step is DRAWN
-## between two cells, so both are held, and a big object holds all four of the
-## cells `occupies` answers for. The player is not in it; `player` is where that
-## cell is.
+## The cells the map's own objects hold this frame, kept out of `eligible` so an
+## NPC walking over a wild does not delete it. See `docs/MODS.md`.
 func _occupied_cells() -> PackedVector2Array:
 	var out := PackedVector2Array()
 	if _world == null:
@@ -364,6 +362,7 @@ func _push_context_changes() -> void:
 
 func _collect() -> void:
 	_entries = []
+	_repelled = []
 	if _world == null or _world.data == null:
 		_admitted = {}
 		return
@@ -371,6 +370,10 @@ func _collect() -> void:
 	## checked against the tables again if it ever comes back.
 	var admitted: Dictionary = {}
 	var seen: Dictionary = {}
+	var repel: Dictionary = {
+		"repel_steps": _world.repel_steps(),
+		"lead_level": int(_repel_lead.call()) if _repel_lead.is_valid() else -1,
+	}
 	for provider: Object in _providers:
 		var answer: Variant = provider.call("encounters")
 		if not answer is Array:
@@ -385,6 +388,9 @@ func _collect() -> void:
 			admitted[entry["id"]] = entry["admission"]
 			entry.erase("admission")
 			_owners[entry["id"]] = provider
+			if Gen2WorldEncounter.blocked_by_repel(int(entry["level"]), repel):
+				_repelled.append(entry)
+				continue
 			_step_entry(entry, raw as Dictionary)
 			_entries.append(entry)
 			if bool(entry["pulse"]):
@@ -480,7 +486,7 @@ func _step_allowed(entry: Dictionary, direction: Vector2i) -> bool:
 
 
 func _cell_taken(cell: Vector2i, id: StringName) -> bool:
-	for other: Dictionary in _entries:
+	for other: Dictionary in _entries + _repelled:
 		if StringName(other["id"]) != id and Vector2i(other["cell"]) == cell:
 			return true
 	for other_id: Variant in _steps:
@@ -504,10 +510,7 @@ static func step_offset(entry: Dictionary) -> Vector2:
 	return Vector2(Vector2i(row["to"]) - Vector2i(row["from"])) * float(row["progress"])
 
 
-## One entry against the context it was given. An id, a cell inside the eligible
-## set, and a species and level the active table for that cell's own method
-## offers: anything else is dropped rather than drawn, because a population the
-## host cannot vouch for is a wild encounter a mod invented.
+## An entry the active table for its cell's own method offers, or nothing.
 func _validate(raw: Variant) -> Dictionary:
 	if not raw is Dictionary:
 		return {}

@@ -536,6 +536,22 @@ func test_a_visible_encounter_provider_is_driven_validated_drawn_and_fought() ->
 	_world_screen._after_player_move({"kind": &"step"})
 	assert_null(_world_screen._battle_host, "no roll while a provider is active")
 
+	## `CheckRepelEffect`: under a Repel, a wild below the lead's level is one
+	## the replaced roll could never produce, so it is neither drawn nor met.
+	var save := Gen2SaveStore.create_development_save(_data, 0)
+	save.party[0].level = 6
+	_world_screen.set_save(save)
+	_world_screen._world.set_repel_steps(50)
+	_world_screen.advance_frames(1)
+	assert_eq(_world_screen._encounters.entries().size(), 0, "repelled")
+	assert_eq(_world_screen._actors.sprites().size(), 0, "and not drawn")
+	_world_screen._world.player_cell = cell
+	_world_screen._after_player_move({"kind": &"step"})
+	assert_null(_world_screen._battle_host, "a repelled wild is not met")
+	_world_screen._world.set_repel_steps(0)
+	_world_screen.set_save(null)
+	_world_screen.advance_frames(1)
+
 	## Walking onto it starts the battle with those exact DVs.
 	_world_screen._world.player_cell = cell
 	_world_screen._after_player_move({"kind": &"step"})
