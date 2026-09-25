@@ -8254,6 +8254,28 @@ func test_visible_encounter_cells_group_by_terrain_and_refuse_ice() -> void:
 	assert_false(cave.has(Vector2(6, 10)), "ice in a cave")
 
 
+## `COLL_WALL`.
+const WALL_CODE: int = 0x07
+
+
+## A cave rolls on every floor cell, including floor its walls shut off. A
+## wild stood there is one the player sees and can never walk up to (#728).
+func test_visible_encounter_cells_leave_out_floor_no_one_can_reach() -> void:
+	var world := _world()
+	world.current_map.environment = Gen2WorldAPI.ENVIRONMENT_CAVE
+	var pocket := Vector2i(5, 9)
+	for y: int in range(pocket.y - 1, pocket.y + 2):
+		for x: int in range(pocket.x - 1, pocket.x + 2):
+			if Vector2i(x, y) != pocket:
+				world.current_map.collision[y * world.current_map.collision_width + x] = WALL_CODE
+	var cave: PackedVector2Array = world.visible_encounter_cells()[
+		Gen2WorldEncounter.METHOD_GRASS
+	]
+	assert_true(world.can_encounter_wild_mon_at(pocket), "the roll still accepts it")
+	assert_false(cave.has(Vector2(pocket)), "walled in")
+	assert_true(cave.has(Vector2(world.player_cell)), "where the player stands")
+
+
 ## `wildoff` empties the sweep, so a mod cannot stand a Pokemon on a map a script
 ## has switched encounters off for.
 func test_visible_encounter_cells_are_empty_while_wild_encounters_are_off() -> void:

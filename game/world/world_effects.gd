@@ -26,6 +26,11 @@ const SPRITE_CUT_LEAF: StringName = &"cut_grass"
 const SPRITE_SHADOW: StringName = &"shadow"
 const SPRITE_HEAL_MACHINE: StringName = &"heal_machine"
 const SPRITE_FLY_MON: StringName = &"fly_mon"
+## `FlyFromAnim`, `FlyToAnim`, `OWCutAnimation` and `ShakeHeadbuttTree` loop
+## inside the field move's script, joypad unread; the rest play over a live map.
+const MAP_HOLDING_SPRITES: Array[StringName] = [
+	SPRITE_FLY_MON, SPRITE_CUT_TREE, SPRITE_CUT_LEAF, SPRITE_HEADBUTT_TREE,
+]
 
 ## `HealMachineAnim`'s OAM tables as (screen pixel, tile, flip), the `dbsprite`
 ## (y + 16, x + 8) taken off. `.PC_ElmsLab_OAM` opens with the machine's two
@@ -595,6 +600,13 @@ func active() -> bool:
 
 func sprites_active() -> bool:
 	return not _sprites.is_empty() or ss_anne_active()
+
+
+func holds_map() -> bool:
+	for sprite: Dictionary in _sprites:
+		if MAP_HOLDING_SPRITES.has(StringName(sprite["kind"])):
+			return true
+	return false
 
 
 ## `StepFunction_ScreenShake.Run` reaches hSCY and nothing else: one vertical

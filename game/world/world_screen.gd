@@ -1358,10 +1358,11 @@ func _any_host_open(host_names: Array[StringName]) -> bool:
 ## Whether any embedded screen is up. The six callers below each need a different
 ## set of the other pauses, but they all need this one.
 func _overlay_open() -> bool:
-	## A map fade is not an overlay, but nothing may move or be pressed inside
-	## one either: `RunMapSetupScript` runs with the joypad unread.
+	## Nor is a map fade or a field move's animation, but nothing may move or be
+	## pressed in one: `RunMapSetupScript` and `FlyFunction` leave the joypad unread.
 	return not _map_fade.is_empty() or _battle_transition != null \
-		or _start_menu_host != null or _any_host_open(FULLSCREEN_HOSTS)
+		or _start_menu_host != null or _any_host_open(FULLSCREEN_HOSTS) \
+		or (_effects != null and _effects.holds_map())
 
 
 ## Wandering objects stand while a trainer approach or an overlay owns the world.
@@ -1584,7 +1585,7 @@ func _advance_pressed_action() -> void:
 func _input_locked() -> bool:
 	return not _map_fade.is_empty() or not _trainer_approach.is_empty() \
 		or _battle_transition != null or _world.phone_ring_active() \
-		or _pokegear_call_tones > 0
+		or _pokegear_call_tones > 0 or (_effects != null and _effects.holds_map())
 
 
 func _handle_prompt_button(button: int) -> bool:

@@ -65,9 +65,9 @@ var _frame: int = 0
 ## See [method Gen2WorldAPI.encounter_tables_key].
 var _tables_key: Array = []
 var _tables_revision: int = 0
-## Whether `wildoff` was on when the eligible sweep in the context was taken. A
-## script may run it in the middle of a walk, and it empties the sweep.
-var _encounters_off: bool = false
+## `wildoff` and the block revision the eligible sweep was taken at: a script
+## may empty the sweep mid-walk, or `changeblock` a door open onto more of it.
+var _sweep_key: Array = []
 ## Entry id to the `[method, species, level]` it was admitted under, rebuilt from
 ## the population every frame. What keeps a wild standing when the tables move
 ## out from under it.
@@ -270,7 +270,7 @@ func _reset() -> void:
 	_tables_key = _world.encounter_tables_key() if _world != null else []
 	_tables_revision = _world.data.content_revision() \
 		if _world != null and _world.data != null else 0
-	_encounters_off = _world.wild_encounters_off() if _world != null else false
+	_sweep_key = _eligible_key()
 	_context = _build_context()
 	for provider: Object in _providers:
 		provider.call("set_context", _context.duplicate(true))
@@ -289,6 +289,12 @@ func _build_context() -> Dictionary:
 		"run_seed": _world.random_seed,
 		"generation": _generation,
 	}
+
+
+func _eligible_key() -> Array:
+	if _world == null:
+		return []
+	return [_world.wild_encounters_off(), _world.block_revision]
 
 
 ## The cells the map's own objects hold this frame, kept out of `eligible` so an
@@ -320,12 +326,10 @@ func _occupied_cells() -> PackedVector2Array:
 
 
 ## What moves while one map is up: the player's pose, the cells the map's own
-## objects hold, the tables, and `wildoff`. The eligible sweep is the whole map and
-## is taken only when `wildoff` is toggled, which is the one thing that moves it,
-## and an entry standing on a cell it just emptied is dropped rather than
-## grandfathered. The tables move without the map: six o'clock, a swarm arriving
-## and the Bug Contest each change what a roll would read, so a provider minting an
-## entry later plans it against whatever it was handed. `generation` is deliberately
+## objects hold, the tables, and the eligible sweep, taken again only when
+## [method _eligible_key] moves; an entry on a cell it just emptied is dropped.
+## Six o'clock, a swarm and the Bug Contest move the tables without the map, so a
+## provider plans a later entry against whatever it was handed. `generation` is
 ## not bumped: an hour boundary is not a map change. Pushed once per frame.
 func _push_context_changes() -> void:
 	if _world == null or _context.is_empty():
@@ -338,9 +342,9 @@ func _push_context_changes() -> void:
 		_context["player"] = pose
 		_context["occupied"] = occupied
 		changed = true
-	var off: bool = _world.wild_encounters_off()
-	if off != _encounters_off:
-		_encounters_off = off
+	var sweep: Array = _eligible_key()
+	if sweep != _sweep_key:
+		_sweep_key = sweep
 		_context["eligible"] = _world.visible_encounter_cells()
 		changed = true
 	var key: Array = _world.encounter_tables_key()

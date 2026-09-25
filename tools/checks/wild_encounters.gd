@@ -6,16 +6,16 @@ var _r: RefCounted = null
 ## caches on all three cartridges, plus the roaming graph the three beasts walk.
 ## The shape comes from RandomEncounter, CanEncounterWildMon,
 ## CheckWildEncounterCooldown, CheckGrassCollision and CheckIceTile, and
-## `visible_encounter_cells` has to name exactly the cells the step roll accepts.
+## `visible_encounter_cells` has to name the reachable cells the step roll accepts.
 ## The census is the point: an encounter cell is a small minority of a map's
 ## walkable cells, and the defect this exists to catch was every land cell.
 
 ## Census of the real caches, pinned so a cache or a rule change is loud.
-## Per game: encounter cells, maps holding one, and cells refused for ice.
+## Per game: encounter cells, maps holding one, ice refusals and unreachable cells.
 const EXPECTED_CENSUS: Dictionary = {
-	&"gold": [39058, 138, 775],
-	&"silver": [39058, 138, 775],
-	&"crystal": [40156, 146, 779],
+	&"gold": [39058, 138, 775, 10762],
+	&"silver": [39058, 138, 775, 10762],
+	&"crystal": [40156, 146, 779, 10893],
 }
 
 ## Route 29, the first grass a new game walks into, and the same map number in
@@ -28,6 +28,7 @@ const ROUTE_29_NUMBER: int = 3
 const UNION_CAVE_GROUP: int = 3
 const UNION_CAVE_NUMBER_CRYSTAL: int = 37
 const UNION_CAVE_NUMBER_GOLD_SILVER: int = 29
+const ICE_PATH_GROUP: int = 3
 
 
 func run(r: RefCounted) -> void:
@@ -35,6 +36,7 @@ func run(r: RefCounted) -> void:
 	_r.each_game(func() -> void:
 		_verify_route_29()
 		_verify_union_cave()
+		_verify_enclosed_floor()
 		_verify_bug_contest()
 		_verify_gate_errand()
 		_census()
@@ -61,13 +63,12 @@ const GEN1_CENSUS: Dictionary = {
 	&"yellow": {"grass": 55, "water": 8, "fishing_maps": 31, "fishing_groups": 31},
 }
 
-## What `TryDoWildEncounter`'s gate offers across the corpus: encounter cells,
-## how many of them read the water table, the maps holding one, and the left
-## shores among them.
+## The corpus's reachable encounter cells, how many read the water table, the maps
+## holding one, and the left shores `TryDoWildEncounter`'s gate accepts.
 const GEN1_CELL_CENSUS: Dictionary = {
-	&"red": [17909, 3624, 57, 34],
-	&"blue": [17909, 3624, 57, 34],
-	&"yellow": [19355, 5172, 57, 38],
+	&"red": [15280, 3449, 57, 34],
+	&"blue": [15280, 3449, 57, 34],
+	&"yellow": [16530, 4845, 57, 38],
 }
 
 ## Viridian Forest's FOREST tileset is the one indoor map that does not roll off
@@ -146,6 +147,7 @@ func _gen1_cells() -> void:
 		var world: Gen2WorldAPI = _r.open_world(0, map.number, Vector2i.ZERO)
 		if world == null:
 			continue
+		_stand_on_first_warp(world)
 		var found: Dictionary = world.visible_encounter_cells()
 		var here: int = found[Gen2WorldEncounter.METHOD_GRASS].size() \
 			+ found[Gen2WorldEncounter.METHOD_SURF].size()
@@ -1140,6 +1142,31 @@ func _verify_union_cave() -> void:
 	_r.note("Union Cave 1F: %d cells, all of them CAVE." % int(counts["encounter"]))
 
 
+## Ice Path 1F's floor runs on outside its rock, where the cave rolls and no one
+## walks; the corridor in from Route 44 keeps its wilds.
+const ICE_PATH_1F_NUMBER_CRYSTAL: int = 61
+const ICE_PATH_1F_NUMBER_GOLD_SILVER: int = 53
+const ICE_PATH_OUTSIDE_CELL: Vector2i = Vector2i(2, 20)
+const ICE_PATH_CORRIDOR_CELL: Vector2i = Vector2i(4, 18)
+
+
+func _verify_enclosed_floor() -> void:
+	var number: int = ICE_PATH_1F_NUMBER_CRYSTAL if _r.crystal \
+		else ICE_PATH_1F_NUMBER_GOLD_SILVER
+	var world: Gen2WorldAPI = _r.open_world(ICE_PATH_GROUP, number, Vector2i.ZERO)
+	if world == null:
+		return
+	_stand_on_first_warp(world)
+	var cave: PackedVector2Array = world.visible_encounter_cells()[
+		Gen2WorldEncounter.METHOD_GRASS
+	]
+	_r.check(world.can_encounter_wild_mon_at(ICE_PATH_OUTSIDE_CELL)
+		and not cave.has(Vector2(ICE_PATH_OUTSIDE_CELL)),
+		"Ice Path 1F offers the floor outside its walls.")
+	_r.check(cave.has(Vector2(ICE_PATH_CORRIDOR_CELL)),
+		"Ice Path 1F refuses the corridor in from Route 44.")
+
+
 ## Every map in the cache, so a rule change is one number rather than one map.
 ## Every index of the four wild sources beside the map tables is patchable and
 ## reads back through `GameData` on a real cache, so an off-by-one either way, or
@@ -1252,6 +1279,7 @@ func _census() -> void:
 	var cells: int = 0
 	var maps: Dictionary = {}
 	var iced: int = 0
+	var unreached: int = 0
 	for map: Gen2WorldMap in _r.data.world_maps():
 		var tileset: Gen2WorldTileset = _r.data.world_tileset(map.tileset)
 		if tileset == null:
@@ -1269,11 +1297,12 @@ func _census() -> void:
 			return
 		cells += int(counts["encounter"])
 		iced += int(counts["ice"])
+		unreached += int(visible["unreached"])
 		if int(counts["encounter"]) > 0:
 			maps[map.group * 256 + map.number] = true
-	var found: Array = [cells, maps.size(), iced]
-	_r.note("encounter cells %d over %d maps, %d refused for ice." % [
-		cells, maps.size(), iced,
+	var found: Array = [cells, maps.size(), iced, unreached]
+	_r.note("encounter cells %d over %d maps, %d refused for ice, %d out of reach." % [
+		cells, maps.size(), iced, unreached,
 	])
 	var expected: Array = EXPECTED_CENSUS[_r.game_id]
 	_r.check(
@@ -1305,11 +1334,11 @@ func _map_counts(world: Gen2WorldAPI) -> Dictionary:
 	return {"walkable": walkable, "encounter": encounter, "ice": ice}
 
 
-## The sweep a visible-encounter provider is handed has to be exactly the set of
-## cells the step roll accepts, cell for cell, or a mod stands a Pokemon where
-## the cartridge would never have produced one. Answered per map and grouped by
-## the method the terrain resolves to, so the two counts also have to add up.
+## The sweep a provider is handed sits inside the cells the step roll accepts,
+## grouped by the terrain's method, less those out of reach from the first warp,
+## which are counted and pinned with the census.
 func _visible_cells_match(world: Gen2WorldAPI) -> Dictionary:
+	_stand_on_first_warp(world)
 	var sweep: Dictionary = world.visible_encounter_cells()
 	var listed: Dictionary = {}
 	for method: Variant in sweep:
@@ -1323,16 +1352,25 @@ func _visible_cells_match(world: Gen2WorldAPI) -> Dictionary:
 				return {"ok": false, "cell": at, "reason": "wrong method or listed twice"}
 			listed[at] = true
 	var map: Gen2WorldMap = world.current_map
+	var unreached: int = 0
 	for y: int in map.collision_height:
 		for x: int in map.collision_width:
 			var cell := Vector2i(x, y)
 			world.player_cell = cell
-			## The sweep's one narrowing on the roll: a cell nothing can stand
-			## on. A cave's walls pass `CanEncounterWildMon`, since that branch
+			## A cave's walls pass `CanEncounterWildMon`, since that branch
 			## skips the grass test, and a Pokemon cannot be put in one.
 			var permission: int = world.collision_permission_at(cell)
 			var standable: bool = permission == Gen2WorldCollision.LAND_TILE \
 				or permission == Gen2WorldCollision.WATER_TILE
-			if (world.can_encounter_wild_mon() and standable) != listed.has(cell):
-				return {"ok": false, "cell": cell, "reason": "the roll and the sweep disagree"}
-	return {"ok": true, "cells": listed.size()}
+			var rolls: bool = world.can_encounter_wild_mon() and standable
+			if listed.has(cell) and not rolls:
+				return {"ok": false, "cell": cell, "reason": "the sweep lists a cell the roll refuses"}
+			if rolls and not listed.has(cell):
+				unreached += 1
+	return {"ok": true, "cells": listed.size(), "unreached": unreached}
+
+
+func _stand_on_first_warp(world: Gen2WorldAPI) -> void:
+	var warps: Array = world.current_map.events.get("warps", [])
+	if not warps.is_empty():
+		world.player_cell = Vector2i(int(warps[0]["x"]), int(warps[0]["y"]))

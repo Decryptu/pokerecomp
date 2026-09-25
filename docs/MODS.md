@@ -1649,7 +1649,7 @@ The context is a snapshot, never a live handle:
 | Key | Meaning |
 |---|---|
 | `map` | `Vector2i(group, number)` |
-| `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on. `CanEncounterWildMon` per cell. Taken again, and pushed, if a script runs `wildoff` or `wildon` while the map is up |
+| `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on: `CanEncounterWildMon` per cell, limited to the cells the player can reach from a warp, a connection or where they stand by walking, surfing, hopping a ledge or cutting a tree. Floor a cave's walls enclose is left out. Taken again, and pushed, if a script runs `wildoff` or `wildon` or changes a block while the map is up |
 | `occupied` | The walk cells the map's own objects hold this frame: NPCs, item balls, all four cells of a big object, both cells of one mid-step, and Yellow's Pikachu while it follows. Refreshed with `player`, not with `map`. An entry outside `eligible` is dropped, so the two are deliberately separate. Refusing an occupied cell is the provider's choice. The player's cell is not in it |
 | `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read now, with swarm and Bug Contest substitutions and the time of day already applied. A slot is `{species, min_level, max_level, chance}`, `chance` its weight in the roll's own units (of 100 on Generation 2, of 256 on Generation 1, the row's own percent in the Bug Contest). Refreshed while the map is up, whenever the hour, a swarm or the Bug Contest moves what a roll would read |
 | `player` | `{cell, facing}` |
