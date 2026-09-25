@@ -2506,15 +2506,13 @@ func judge_bug_contest(random: RandomNumberGenerator) -> Dictionary:
 
 
 ## `CanEncounterWildMon`: the whole condition on the tile the player stands on,
-## before the rate is read. Without it every step on open ground rolls, which is
-## an encounter outside the grass and several times the cartridge's rate.
+## before the rate is read.
 func can_encounter_wild_mon() -> bool:
 	return can_encounter_wild_mon_at(player_cell)
 
 
-## `CanEncounterWildMon` asked of a cell the player is not standing on, which is
-## what a visible encounter needs before it may put one there. The engine flag is
-## the map's, the rest is the cell's.
+## `CanEncounterWildMon` asked of any cell, as a visible encounter needs. The
+## engine flag is the map's, the rest is the cell's.
 func can_encounter_wild_mon_at(cell: Vector2i) -> bool:
 	if state.wild_encounters_off():
 		return false
@@ -2529,7 +2527,7 @@ func can_encounter_wild_mon_at(cell: Vector2i) -> bool:
 
 
 ## Every cell a wild could be met on, grouped as [method encounter_request]
-## resolves the terrain, less the cells nothing can stand on. Collision only.
+## resolves the terrain, less the cells nothing can stand on or reach.
 func visible_encounter_cells() -> Dictionary:
 	var out: Dictionary = {
 		Gen2WorldEncounter.METHOD_GRASS: PackedVector2Array(),
@@ -2537,16 +2535,96 @@ func visible_encounter_cells() -> Dictionary:
 	}
 	if current_map == null or state.wild_encounters_off():
 		return out
+	var reachable: Dictionary = _reachable_cells()
 	var size: Vector2i = map_size_cells()
 	for y: int in size.y:
 		for x: int in size.x:
 			var cell := Vector2i(x, y)
-			if not can_encounter_wild_mon_at(cell):
+			if not reachable.has(cell) or not can_encounter_wild_mon_at(cell):
 				continue
 			var terrain: StringName = _terrain_method(cell)
 			if out.has(terrain):
 				out[terrain].append(Vector2(cell))
 	return out
+
+
+## Where the player gets to from where they stand, a warp or a connection, by
+## walking, surfing, hopping a ledge or cutting a tree; objects move and block
+## nothing. A cave rolls on floor its walls enclose, which no one walks on.
+func _reachable_cells() -> Dictionary:
+	var reached: Dictionary = {}
+	var queue: Array[Vector2i] = []
+	for start: Vector2i in _reach_starts():
+		if not reached.has(start) and _reach_standable(start):
+			reached[start] = true
+			queue.append(start)
+	while not queue.is_empty():
+		for next: Vector2i in _reach_steps(queue.pop_back()):
+			if not reached.has(next):
+				reached[next] = true
+				queue.append(next)
+	return reached
+
+
+func _reach_starts() -> Array[Vector2i]:
+	var out: Array[Vector2i] = [player_cell]
+	for warp: Dictionary in current_map.events.get("warps", []):
+		out.append(Vector2i(int(warp.get("x", -1)), int(warp.get("y", -1))))
+	var size: Vector2i = map_size_cells()
+	for connection: Dictionary in current_map.connections:
+		var target: Gen2WorldMap = data.world_map(
+			int(connection.get("map_group", -1)), int(connection.get("map_number", -1))
+		) if data != null else null
+		for x: int in size.x:
+			for y: int in size.y:
+				if _connection_lands(target, connection, Vector2i(x, y)):
+					out.append(Vector2i(x, y))
+	return out
+
+
+func _connection_lands(target: Gen2WorldMap, connection: Dictionary, cell: Vector2i) -> bool:
+	if target == null or not _cell_at_connection_edge(cell, String(connection["direction"])):
+		return false
+	var landing: Vector2i = connection_landing(target, connection, cell)
+	if landing.x < 0 or landing.y < 0 \
+		or landing.x >= target.collision_width or landing.y >= target.collision_height:
+		return false
+	var permission: int = permission_for_code(
+		target.collision_at(landing.x, landing.y), data.world_tileset(target.tileset)
+	)
+	return permission == Gen2WorldCollision.LAND_TILE or permission == Gen2WorldCollision.WATER_TILE
+
+
+func _reach_steps(cell: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for direction: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		var next: Vector2i = cell + direction
+		if _reach_standable(next) and not _reach_edge_blocked(cell, next, direction):
+			out.append(next)
+		elif allows_hop_at(cell, direction) and _reach_standable(cell + direction * 2):
+			out.append(cell + direction * 2)
+	return out
+
+
+func _reach_standable(cell: Vector2i) -> bool:
+	var size: Vector2i = map_size_cells()
+	if cell.x < 0 or cell.y < 0 or cell.x >= size.x or cell.y >= size.y:
+		return false
+	var permission: int = collision_permission_at(cell)
+	if permission == Gen2WorldCollision.LAND_TILE or permission == Gen2WorldCollision.WATER_TILE:
+		return true
+	if _gen1:
+		return Gen1Layout.cut_tile(current_map.tileset, collision_code_at(cell)) >= 0
+	return Gen2WorldFieldMove.cut_tree_tile(collision_code_at(cell))
+
+
+func _reach_edge_blocked(from: Vector2i, to: Vector2i, direction: Vector2i) -> bool:
+	if not _gen1:
+		return _edge_step_blocked(from, collision_code_at(to), direction)
+	return Gen2WorldCollision.gen1_pair_blocked(
+		current_map.tileset, collision_code_at(from), collision_code_at(to),
+		collision_permission_at(from) == Gen2WorldCollision.WATER_TILE
+	)
 
 
 ## `RandomEncounter`'s gates in its order: the cooldown a map entry set, then

@@ -358,6 +358,10 @@ func test_choosing_cut_shows_the_message_and_defers_the_block_change() -> void:
 	assert_false(_world_screen._field_move_text)
 	assert_eq(world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE_CUT)
 	assert_true(world.can_walk_to(TREE_CELL))
+	## `OWCutAnimation` runs its own loop inside `Script_Cut`, joypad unread.
+	assert_false(_world_screen.move_player(Vector2i.DOWN), "the tree is still falling")
+	while _world_screen._effects.sprites_active():
+		_world_screen.advance_frame()
 	## `.CheckTurning` turns on the spot first when the pressed direction is not
 	## the one faced, so the walk is the press after it.
 	_world_screen.move_player(Vector2i.DOWN)
@@ -1370,11 +1374,29 @@ func test_the_fly_script_spends_its_animation_before_the_warp() -> void:
 	assert_true(_world_screen._draw_list.sprites_hidden, "callasm HideSprites")
 	assert_true(_world_screen._effects.sprites_active())
 
-	for _frame: int in Gen2WorldEffects.FLY_FROM_FRAMES - 1:
+	## `FlyFunction`'s loop reads no joypad: a held direction walks nowhere and
+	## START opens nothing until the script is done (#729).
+	var open: int = _walkable_direction(world)
+	assert_ne(open, PokeButton.NONE)
+	for frame: int in Gen2WorldEffects.FLY_FROM_FRAMES - 1:
+		_world_screen.press_button(
+			open if frame < Gen2WorldEffects.FLY_FROM_FRAMES / 2 else PokeButton.START
+		)
 		_world_screen.advance_frame()
 	assert_false(_world_screen._pending_fly.is_empty(), "still leaving")
-	assert_eq(world.player_cell, was, "the warp is behind the animation")
+	assert_eq(world.player_cell, was, "neither a walk nor the warp")
+	assert_false(world.player_step_in_progress())
+	assert_null(_world_screen._start_menu_host)
 
 	_world_screen.advance_frame()
 	assert_true(_world_screen._pending_fly.is_empty())
 	assert_false(_world_screen._draw_list.sprites_hidden, "RespawnPlayer")
+
+
+## A direction the player could step in from where they stand, as a button.
+func _walkable_direction(world: Gen2WorldAPI) -> int:
+	for button: int in [PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT]:
+		var step: Vector2i = PokeButton.vector(button)
+		if world.can_walk_to(world.player_cell + step, step):
+			return button
+	return PokeButton.NONE
