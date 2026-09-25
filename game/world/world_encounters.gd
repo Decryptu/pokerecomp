@@ -78,6 +78,11 @@ var _steps: Dictionary = {}
 var _landed: Dictionary = {}
 var _pulse: Gen2BattleAnimPlayer = null
 var _pulse_id: StringName = &""
+## Answers `CheckRepelEffect`'s lead level, which lives in the save. Entries a
+## Repel keeps away this frame are held here: neither drawn nor met, and still
+## standing where another wild may not walk.
+var _repel_lead: Callable = Callable()
+var _repelled: Array = []
 ## What the running pulse's commands asked for this frame: the screen owns the
 ## audio device, as the battle screen does.
 var _frame_commands: Array = []
@@ -92,6 +97,10 @@ func set_providers(providers: Array) -> void:
 
 func active() -> bool:
 	return not _providers.is_empty()
+
+
+func set_repel_lead_source(source: Callable) -> void:
+	_repel_lead = source
 
 
 ## The map changed, or the view was created. Every entry, every sprite and any
@@ -261,6 +270,7 @@ func _reset() -> void:
 	_pulse = null
 	_pulse_id = &""
 	_frame_commands = []
+	_repelled = []
 	_tables_key = _world.encounter_tables_key() if _world != null else []
 	_tables_revision = _world.data.content_revision() \
 		if _world != null and _world.data != null else 0
@@ -364,6 +374,7 @@ func _push_context_changes() -> void:
 
 func _collect() -> void:
 	_entries = []
+	_repelled = []
 	if _world == null or _world.data == null:
 		_admitted = {}
 		return
@@ -371,6 +382,10 @@ func _collect() -> void:
 	## checked against the tables again if it ever comes back.
 	var admitted: Dictionary = {}
 	var seen: Dictionary = {}
+	var repel: Dictionary = {
+		"repel_steps": _world.repel_steps(),
+		"lead_level": int(_repel_lead.call()) if _repel_lead.is_valid() else -1,
+	}
 	for provider: Object in _providers:
 		var answer: Variant = provider.call("encounters")
 		if not answer is Array:
@@ -385,6 +400,10 @@ func _collect() -> void:
 			admitted[entry["id"]] = entry["admission"]
 			entry.erase("admission")
 			_owners[entry["id"]] = provider
+			## The roll a population replaces would never have produced it.
+			if Gen2WorldEncounter.blocked_by_repel(int(entry["level"]), repel):
+				_repelled.append(entry)
+				continue
 			_step_entry(entry, raw as Dictionary)
 			_entries.append(entry)
 			if bool(entry["pulse"]):
@@ -480,7 +499,7 @@ func _step_allowed(entry: Dictionary, direction: Vector2i) -> bool:
 
 
 func _cell_taken(cell: Vector2i, id: StringName) -> bool:
-	for other: Dictionary in _entries:
+	for other: Dictionary in _entries + _repelled:
 		if StringName(other["id"]) != id and Vector2i(other["cell"]) == cell:
 			return true
 	for other_id: Variant in _steps:

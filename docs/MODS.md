@@ -1685,6 +1685,11 @@ What the host does with a valid population:
 - Turns the ordinary post-step roll off while any provider is registered.
   Scripted, fishing, Headbutt, Rock Smash, Sweet Scent and Bug Contest encounters
   keep their own paths.
+- Keeps away what a Repel would: while one lasts, an entry below the first
+  healthy party member's level (the first member's on Red, Blue and Yellow) is
+  neither drawn nor met, and still holds its cell against other entries. It
+  comes back when the Repel wears off, so a provider never tracks the Repel. The
+  step still counts the Repel down on every cartridge.
 - Starts the normal wild battle when the player steps onto an entry, with that
   entry's exact species, level and DVs, then calls `battle_finished`. Whether the
   entry survives is the provider's rule to document.

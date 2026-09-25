@@ -68,7 +68,7 @@ static func resolve(
 		roaming_index = int(roaming.get("index", -1))
 		if roaming.has("species") and roaming.has("level"):
 			var roaming_level: int = int(roaming["level"])
-			if _blocked_by_repel(roaming_level, options):
+			if blocked_by_repel(roaming_level, options):
 				return {}
 			var roamer: Dictionary = _wild_result(
 				method, SOURCE_ROAMING, -1, int(roaming["species"]), roaming_level,
@@ -89,7 +89,7 @@ static func resolve(
 	if mon.is_empty():
 		return {}
 	var level: int = int(mon["level"])
-	if _blocked_by_repel(level, options):
+	if blocked_by_repel(level, options):
 		return {}
 	var source: StringName = StringName(options.get("source", SOURCE_NORMAL))
 	return _wild_result(
@@ -524,7 +524,10 @@ static func _resolve_roaming(
 	return result
 
 
-static func _blocked_by_repel(level: int, options: Dictionary) -> bool:
+## `CheckRepelEffect`, and `TryDoWildEncounter`'s compare on Generation 1: a
+## wild below the lead's level is not met while a Repel lasts. [param options]
+## carries `repel_steps` and `lead_level`.
+static func blocked_by_repel(level: int, options: Dictionary) -> bool:
 	var steps: int = int(options.get("repel_steps", 0))
 	var lead_level: int = int(options.get("lead_level", -1))
 	return steps > 0 and lead_level > 0 and level < lead_level

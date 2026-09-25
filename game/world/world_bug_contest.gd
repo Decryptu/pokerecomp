@@ -75,8 +75,7 @@ static func resolve(
 		return {}
 
 	var level: int = _level(chosen, random)
-	if int(options.get("repel_steps", 0)) > 0 and int(options.get("lead_level", -1)) > 0 \
-		and level < int(options["lead_level"]):
+	if Gen2WorldEncounter.blocked_by_repel(level, options):
 		return {}
 	return {
 		"kind": &"wild_encounter_requested",

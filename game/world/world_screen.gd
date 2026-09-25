@@ -605,6 +605,7 @@ func _build_world() -> void:
 	## time of day resolves to.
 	_encounters = Gen2WorldEncounters.new()
 	_encounters.set_providers(Gen2ModHost.instance().visible_encounter_providers())
+	_encounters.set_repel_lead_source(_repel_lead_level)
 	## What [method Gen2ModHost.inventory] reads while this world is open. Bound
 	## here rather than handed the world, so a mod is given the copy and never a
 	## way to write the bag.
@@ -3134,6 +3135,10 @@ func _after_map_settled(stepped: bool = true) -> bool:
 	## met by walking into one. Everything else that reaches a wild, a script, a
 	## rod, Headbutt, Rock Smash, Sweet Scent and the contest, keeps its own path.
 	if _encounters != null and _encounters.active():
+		## Generation 1 counts its Repel down inside the roll this step skips.
+		_world.count_gen1_repel_step()
+		if _offer_repel_renewal():
+			return true
 		var request: Dictionary = _encounters.battle_request_at(_world.player_cell)
 		if not request.is_empty():
 			_battle_encounter_id = StringName(request["visible_encounter"])

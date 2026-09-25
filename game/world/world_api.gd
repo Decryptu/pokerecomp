@@ -2560,6 +2560,13 @@ func _encounter_step_refused() -> bool:
 	return not can_encounter_wild_mon()
 
 
+## `TryDoWildEncounter`'s countdown alone, for a step a visible-encounter provider
+## takes in place of the roll: behind the same door and edge tests.
+func count_gen1_repel_step() -> void:
+	if _gen1 and _gen1_encounter_step_open(player_cell):
+		state.spend_repel_step()
+
+
 ## The table a step on [param cell] rolls on, empty for a cell that stands on
 ## neither. `.gotWildEncounterType` reads the bottom left tile of the quarter
 ## block in Generation 1; Generation 2 reads the standing permission itself.
