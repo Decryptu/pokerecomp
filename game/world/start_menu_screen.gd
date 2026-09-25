@@ -499,6 +499,7 @@ func handle_button(button: int) -> bool:
 		return true
 	if _reading_question():
 		if button == PokeButton.A or button == PokeButton.B:
+			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 			_question_page += 1
 			_render_hardware()
 		return true
@@ -2643,6 +2644,7 @@ func _pack_result_continued() -> bool:
 func _pack_result_advanced() -> bool:
 	if _pack_result_page + 1 >= _pack_result_pages.size():
 		return false
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 	_pack_result_page += 1
 	_render_pack_result()
 	return true
@@ -2739,6 +2741,7 @@ func _confirm_save() -> void:
 			## `_ContText`'s own `PromptButton` before the third line, the way
 			## the overwrite question reads its own.
 			if _save_cursor < 0:
+				sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 				_save_line = 1
 				_save_cursor = 0
 				_render_save()
@@ -2753,8 +2756,13 @@ func _confirm_save() -> void:
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
 		Mode.SAVE_FAILED:
 			if _save_prompt != null:
-				_save_prompt.confirm(_save_cursor == 0)
-				_sync_save_prompt()
+				_press_save_prompt(_save_cursor == 0)
+
+
+func _press_save_prompt(yes: bool) -> void:
+	if _save_prompt.confirm(yes):
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+	_sync_save_prompt()
 
 
 ## B is `YesNoBox`'s no wherever a question is up, and `PromptButton`'s other
@@ -2762,8 +2770,7 @@ func _confirm_save() -> void:
 ## joypad at all.
 func _cancel_save() -> void:
 	if _save_prompt != null:
-		_save_prompt.cancel()
-		_sync_save_prompt()
+		_press_save_prompt(false)
 	elif _save_cursor < 0 and _mode == Mode.RESET_ASK:
 		_confirm_save()
 	elif _mode == Mode.RESET_ASK:

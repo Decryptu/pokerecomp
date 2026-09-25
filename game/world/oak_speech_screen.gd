@@ -113,6 +113,7 @@ func _ready() -> void:
 	# `ClearTilemap` runs before the first pic is even loaded, so the speech
 	# opens on a blank screen and not on an empty box.
 	_text_box.visible = false
+	_text_box.prompt_answered.connect(_play_sfx)
 	add_child(_text_box)
 
 	if not _beats.is_empty():
@@ -714,12 +715,18 @@ func _fade_music() -> void:
 			else Gen2OakSpeech.SHRINK_FADE_FRAMES)
 
 
+func _play_sfx(sfx: int) -> void:
+	if _audio != null and _data != null:
+		_audio.play_record(_data.world_audio(&"sfx", sfx), &"sound", _audio_assets())
+
+
+## `SFX_SHRINK` is `PlaySound`'s own id, which no Crystal role names.
 func _play_shrink_sfx() -> void:
 	if _audio == null or _data == null:
 		return
 	_audio.play_record(
-		_data.world_audio(&"sfx", Gen1Sfx.SFX_SHRINK if _gen1 \
-			else Gen2Sfx.SFX_ESCAPE_ROPE), &"sfx", _audio_assets()
+		_data.gen1_sound(-1, Gen1Sfx.SFX_SHRINK) if _gen1 \
+			else _data.world_audio(&"sfx", Gen2Sfx.SFX_ESCAPE_ROPE), &"sfx", _audio_assets()
 	)
 
 

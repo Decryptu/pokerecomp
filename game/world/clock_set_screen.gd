@@ -43,6 +43,8 @@ const NOON_HOUR: int = 12
 const DIAL_DELAY_FRAMES: int = 10
 
 var _page: Gen2ClockSetPage = null
+var _data: GameData = null
+var _audio: Gen2AudioPlayer = null
 var _view: TextureRect = null
 var _text_box: Gen2TextBox = null
 var _presentation := Gen2IntroPresentation.new()
@@ -65,6 +67,7 @@ func open(data: GameData) -> bool:
 	_page = Gen2ClockSetPage.from_data(data)
 	if _page == null:
 		return false
+	_data = data
 	_text_box = Gen2TextBox.new()
 	_text_box.driven = true
 	_text_box.font = _page.font
@@ -81,7 +84,10 @@ func _ready() -> void:
 	_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_view.size = size
 	add_child(_view)
+	_audio = Gen2AudioPlayer.new()
+	add_child(_audio)
 	if _text_box != null:
+		_text_box.prompt_answered.connect(_play_sfx)
 		add_child(_text_box)
 		# `RotateFourPalettesRight` comes back on a screen `ClearTilemap` and
 		# `.ClearScreen` left empty; the first `PrintText` is what puts a box on it.
@@ -100,6 +106,8 @@ func _process(delta: float) -> void:
 ## `DelayFrames` without a clock; [method _process] is the only other caller.
 func advance_frames(count: int) -> void:
 	for _frame: int in count:
+		if not is_processing() and _audio != null:
+			_audio.advance_driver_frame()
 		if _text_box != null:
 			_text_box.advance_frame()
 		if not _waiting:
@@ -122,6 +130,11 @@ func animation_frames_left() -> int:
 	if _waiting:
 		return _presentation.remaining_frames()
 	return _text_box.frames_left() if _text_box != null else 0
+
+
+func _play_sfx(sfx: int) -> void:
+	if _audio != null and _data != null:
+		_audio.play_record(_data.world_audio(&"sfx", sfx), &"sound", _data.audio_assets())
 
 
 func handle_button(button: int) -> bool:

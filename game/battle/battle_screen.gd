@@ -879,6 +879,7 @@ func _ready() -> void:
 	_box.reveal_speed = options.text_reveal_speed()
 	_box.item_rect_changed.connect(_push_text_box_rect)
 	_box.visibility_changed.connect(_push_text_box_rect)
+	_box.prompt_answered.connect(_on_box_prompt_answered)
 	_screen.display(_box)
 	_box.place_at_bottom()
 	## Over the text box, unlike the two above: `LoadBattleMenu` draws its box
@@ -3979,6 +3980,7 @@ func _open_capture_nickname() -> bool:
 	)
 	host.named.connect(_on_capture_named)
 	host.closed.connect(_on_capture_nickname_closed)
+	host.sfx_requested.connect(_play_sfx)
 	host.z_index = 30
 	_capture_nickname_host = host
 	_screen.display(host)
@@ -4373,6 +4375,45 @@ func _confirm_forget_slot() -> void:
 var _link_text_frames: int = 0
 
 
+## A link battle's `PromptButton` is `DelayFrames`, which plays nothing.
+func _on_box_prompt_answered(sfx: int) -> void:
+	if _battle == null or not _battle.is_link_battle:
+		_play_sfx(sfx)
+
+
+## A `PlaySFX` behind the answered box's click, under its `wCurSFX` gate.
+var _sfx_after_press: int = 0
+
+
+## pret's "`SFX_RUN` does not play correctly when a wild Pokemon flees": the
+## prompt's `SFX_READ_TEXT_2` outranks it.
+func _queue_wild_fled_sfx(_event: Dictionary) -> void:
+	_sfx_after_press = Gen2Sfx.SFX_RUN
+
+
+func _wild_fled_text(_event: Dictionary) -> String:
+	return "Wild %s\nfled!" % _enemy_mon_name()
+
+
+## `.can_escape`: a Smoke Ball's line, then SFX_RUN waited out before
+## `BattleText_GotAwaySafely`. Generation 1 prints `GotAwayText` over the sound.
+func _stage_run_escape(event: Dictionary) -> void:
+	var staged: Dictionary = event.duplicate()
+	if StringName(event.get("how", &"")) == &"item" and not bool(event.get("item_said", false)):
+		staged["item_said"] = true
+		_pending.push_front(staged)
+		show_message(_fled_text(event))
+		return
+	staged["sfx_spent"] = true
+	_pending.push_front(staged)
+	_play_sfx(Gen2Sfx.SFX_RUN, true)
+	if _generation() == RomRegistry.GEN1:
+		return
+	_anim_plan = []
+	_step(ANIM_WAIT_SFX, {})
+	_run_next_anim_step()
+
+
 func _gen1_link_battle() -> bool:
 	return _battle != null and _battle.is_link_battle and _generation() == RomRegistry.GEN1
 
@@ -4410,6 +4451,9 @@ func advance() -> void:
 	if _box.advance():
 		return
 	_message_awaits_press = false
+	if _sfx_after_press > 0:
+		_play_sfx(_sfx_after_press)
+		_sfx_after_press = 0
 	## The battle menu is answered with A, which is what this call is: the source
 	## reads one joypad for the box and for the menu over it.
 	if _menu_stage != &"":
@@ -4580,9 +4624,9 @@ func _continue_capture_turn() -> bool:
 ## `.HandleEndOfBattle`, outside the battle loop.
 func _finish_battle() -> void:
 	_play_victory_music({"winner": _battle.winner(), "fled": _battle.has_fled()})
-	if _world_battle_active and not _battle.has_fled():
-		# A run shows neither a win nor a loss text and blacks nobody out:
-		# `wBattleResult` is DRAW and the party is still standing.
+	if _world_battle_active and not _battle.is_draw():
+		# A DRAW shows neither a win nor a loss text and blacks nobody out: the
+		# party is still standing.
 		if _show_world_battle_result_picture():
 			return
 		if _show_world_battle_terminal_text():
@@ -4665,7 +4709,7 @@ func _finish_world_battle() -> void:
 	var winner: Variant = _battle.winner()
 	var outcome: StringName = (
 		Gen2WorldBattleAdapter.OUTCOME_RAN
-		if _battle.has_fled()
+		if _battle.is_draw()
 		else (
 			Gen2WorldBattleAdapter.OUTCOME_WON
 			if winner == Gen2Battle.PLAYER
@@ -4681,6 +4725,7 @@ func _finish_world_battle() -> void:
 		"winner": winner,
 		"request": _world_battle_request.duplicate(true),
 		"save_written": _save_written,
+		"roamers_move": _battle.roamers_move_on(false),
 	}
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_WON:
 		## `.give_money` and `CheckPayDay` as one credit per account, so the
@@ -4720,7 +4765,9 @@ func _enemy_battler_record() -> Dictionary:
 	var enemy: Gen2BattleMon = _battle.party(Gen2Battle.ENEMY).active_mon()
 	if enemy == null:
 		return {}
-	return {"species": enemy.species, "hp": enemy.hp, "dvs": enemy.dvs, "level": enemy.level}
+	return {
+		"species": enemy.base_species(), "hp": enemy.hp, "dvs": enemy.dvs, "level": enemy.level,
+	}
 
 
 func _finish_world_capture(capture: Dictionary) -> void:
@@ -4733,6 +4780,7 @@ func _finish_world_capture(capture: Dictionary) -> void:
 		"request": _world_battle_request.duplicate(true),
 		"capture": capture.duplicate(true),
 		"enemy": _enemy_battler_record(),
+		"roamers_move": _battle != null and _battle.roamers_move_on(true),
 	})
 
 
@@ -4849,7 +4897,7 @@ func _show_world_battle_terminal_text() -> bool:
 
 func _gen1_lost() -> bool:
 	return _data != null and _data.generation == RomRegistry.GEN1 \
-		and _battle != null and _battle.winner() != Gen2Battle.PLAYER
+		and _battle != null and not _battle.is_draw() and _battle.winner() != Gen2Battle.PLAYER
 
 
 func _gen1_rival1_loss() -> bool:
@@ -6087,6 +6135,11 @@ func _show_next_event() -> void:
 		## The box lasts exactly as long as the line it was drawn beside, and
 		## this is the press that took that line away.
 		_clear_level_up_box()
+		if StringName(event["type"]) == Gen2Battle.FLED and not bool(event.get("sfx_spent", false)):
+			_stage_run_escape(event)
+			if animation_running() or _message_awaits_press:
+				return
+			continue
 		event = Gen2ModHost.publish(Gen2ModHost.CHANNEL_BATTLE, event)
 		if StringName(event["type"]) == Gen2Battle.CRY:
 			## `PlayStereoCry` is `_PlayMonCry` and then `WaitSFX`, so an
@@ -6185,6 +6238,7 @@ const EVENT_STATE_HANDLERS: Dictionary = {
 	Gen2Battle.MINIMIZED: &"_set_minimize_pic_event",
 	Gen2Battle.SENT_OUT: &"_apply_sent_out",
 	Gen2Battle.HUD_DRAWN: &"_apply_hud_drawn",
+	Gen2Battle.WILD_FLED: &"_queue_wild_fled_sfx",
 }
 
 
@@ -6560,6 +6614,7 @@ const LINE_HANDLERS: Dictionary = {
 	Gen2Battle.SCREEN_SET: &"_screen_set_text",
 	Gen2Battle.SCREEN_FADED: &"_screen_faded_text",
 	Gen2Battle.FLED: &"_fled_text",
+	Gen2Battle.WILD_FLED: &"_wild_fled_text",
 	Gen2Battle.RUN_BLOCKED: &"_run_blocked_text",
 	Gen2Battle.OVER: &"_over_text",
 	Gen2Battle.EXP_GAINED: &"_exp_gained_text",
@@ -6805,11 +6860,11 @@ func _screen_faded_text(event: Dictionary) -> String:
 	)
 
 
-## BattleText_UserFledUsingAStringBuffer1 is the Smoke Ball's own line; every
-## other branch reaches BattleText_GotAwaySafely.
+## BattleText_UserFledUsingAStringBuffer1 is the Smoke Ball's own line, printed
+## in front of the BattleText_GotAwaySafely every branch reaches.
 func _fled_text(event: Dictionary) -> String:
-	if StringName(event.get("how", &"")) == &"item":
-		return "%s fled using a %s!" % [
+	if StringName(event.get("how", &"")) == &"item" and not bool(event.get("item_said", false)):
+		return ("%s\nfled using a" + SCROLL + "%s!") % [
 			_battler_name(Gen2Battle.PLAYER), _data.item_name(int(event.get("item", 0))),
 		]
 	return "Got away safely!"
@@ -6824,10 +6879,16 @@ func _run_blocked_text(event: Dictionary) -> String:
 
 ## `BattleText_EnemyWasDefeated`, or `TrainerDefeatedText` off the request.
 func _over_text(event: Dictionary) -> String:
-	if bool(event.get("fled", false)) or event["winner"] != Gen2Battle.PLAYER \
-		or _battle == null or not _battle.is_trainer_battle or _battle.is_link_battle:
+	if bool(event.get("fled", false)) or _battle == null or not _battle.is_trainer_battle:
 		return ""
-	if _data.generation == RomRegistry.GEN1:
+	var gen1: bool = _data.generation == RomRegistry.GEN1
+	## `.LostLinkBattle`'s `TiedAgainstText` and `LostAgainstText`.
+	if _battle.is_link_battle and not gen1 and event["winner"] != Gen2Battle.PLAYER:
+		return ("Tied against\n%s!" if _battle.is_draw() else "Lost against\n%s!") \
+			% _enemy_battler_label()
+	if event["winner"] != Gen2Battle.PLAYER or (gen1 and _battle.is_link_battle):
+		return ""
+	if gen1:
 		return String(_world_battle_request.get("defeated_text", ""))
 	return "%s\nwas defeated!" % _enemy_battler_label()
 

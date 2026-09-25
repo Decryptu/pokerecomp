@@ -450,8 +450,8 @@ func test_a_no_refuses_and_the_link_save_opens_on_the_overwrite_question() -> vo
 	var refused: Gen2SavePrompt = Gen2SavePrompt.open(
 		Gen2SavePrompt.Kind.MOVE_MON, "RED", Callable()
 	)
-	refused.confirm(true)
-	refused.cancel()
+	assert_true(refused.confirm(true), "the first A is the _ContText prompt")
+	assert_false(refused.confirm(false))
 	_spend_answer_hold(refused)
 	assert_true(refused.finished())
 	assert_true(refused.refused())
@@ -512,7 +512,7 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 		Gen2SavePrompt.Kind.GEN1_MENU, "RED", Callable()
 	)
 	refused.frames_elapsed(30)
-	refused.cancel()
+	refused.confirm(false)
 	_spend_answer_hold(refused)
 	assert_true(refused.refused())
 

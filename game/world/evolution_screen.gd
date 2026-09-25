@@ -181,18 +181,11 @@ func _build() -> void:
 	_pic.visible = false
 	add_child(_pic)
 
-	_text_box = Gen2TextBox.new()
-	## The overworld owns the frame here too, so the reveal is spent from
-	## [method advance_frame] rather than from real time.
-	_text_box.driven = true
-	_text_box.font = Gen2Font.from_data(_data)
-	## The OPTION menu's own TEXT SPEED and frame, the way every other box in the
-	## overworld is drawn: this one is `PrintText` like the rest.
-	var options: Gen2Options = Gen2OptionsStore.current()
-	_text_box.set_frame_style(options.textbox_frame)
-	_text_box.reveal_speed = options.text_reveal_speed()
-	_text_box.place_at_bottom()
-	_text_box.visible = false
+	_text_box = Gen2TextBox.for_screen(_data)
+	## This screen's Generation 1 sounds are `PlaySound`'s own ids.
+	_text_box.prompt_answered.connect(func(sfx: int) -> void:
+		sfx_requested.emit(Gen1Layout.sfx_role(sfx) if _gen1 else sfx)
+	)
 	add_child(_text_box)
 
 

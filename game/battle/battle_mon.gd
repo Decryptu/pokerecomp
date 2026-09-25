@@ -574,6 +574,11 @@ func transform_into(target: Gen2BattleMon) -> bool:
 	return true
 
 
+## `wTempEnemyMonSpecies`, which Transform's copy does not reach.
+func base_species() -> int:
+	return int(transform_original.get("species", species))
+
+
 func restore_transform() -> void:
 	if transform_original.is_empty():
 		return

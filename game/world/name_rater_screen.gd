@@ -11,6 +11,7 @@ extends Control
 ## [param party_index] is -1 for every ending that renames nothing.
 signal finished(party_index: int, nickname: String, ending_text: String)
 signal closed()
+signal sfx_requested(index: int)
 
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 
@@ -162,14 +163,8 @@ func _build() -> void:
 	_yes_no.answered.connect(_answer)
 	add_child(_yes_no)
 
-	_text_box = Gen2TextBox.new()
-	_text_box.driven = true
-	_text_box.font = Gen2Font.from_data(_data)
-	var options: Gen2Options = Gen2OptionsStore.current()
-	_text_box.set_frame_style(options.textbox_frame)
-	_text_box.reveal_speed = options.text_reveal_speed()
-	_text_box.place_at_bottom()
-	_text_box.visible = false
+	_text_box = Gen2TextBox.for_screen(_data)
+	_text_box.prompt_answered.connect(sfx_requested.emit)
 	add_child(_text_box)
 
 

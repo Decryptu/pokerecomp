@@ -1446,6 +1446,65 @@ func test_running_from_a_wild_encounter_returns_to_the_world_without_a_loss() ->
 	assert_eq(world["map"], Vector2i(Fixture.MAP_GROUP, Fixture.MAP_NUMBER))
 
 
+## `.can_escape` behind a Smoke Ball: the item's own line, then SFX_RUN, then the
+## `BattleText_GotAwaySafely` every escape prints.
+func test_a_smoke_ball_escape_says_both_lines() -> void:
+	await _open_world()
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	host._battle.player.item = BattleFixture.SMOKE_BALL
+
+	## `BattleMenu_Run`, which closes the menu before it tries.
+	host._close_battle_menu()
+	host.run_from_battle()
+
+	assert_string_contains(host.battle_snapshot()["message"], "fled using a")
+	## Its `cont` scrolls on one press and the line ends on the next; SFX_RUN
+	## is then waited out on the screen's own frames.
+	for _press: int in 2:
+		host.finish()
+		host.advance()
+	for _frame: int in 600:
+		if host.battle_snapshot()["message"] == "Got away safely!":
+			break
+		host.advance_hardware_frame()
+	assert_eq(host.battle_snapshot()["message"], "Got away safely!")
+
+
+## Whirlwind, Roar, Teleport and a wild Pokemon's own flight all end the fight
+## on `SetBattleDraw`'s DRAW, which `reloadmapafterbattle` does not black out on.
+func test_a_wild_that_leaves_the_battle_returns_to_the_world_without_a_loss() -> void:
+	await _open_world()
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	var finished: Array = []
+	host.battle_finished.connect(func(result: Dictionary) -> void: finished.append(result))
+
+	host._battle.force_out(Gen2Battle.ENEMY)
+	host._pending = [
+		{"type": Gen2Battle.WILD_FLED, "side": Gen2Battle.ENEMY, "species": host._enemy},
+		{"type": Gen2Battle.OVER, "winner": host._battle.winner()},
+	]
+	host._show_next_event()
+	assert_eq(host.battle_snapshot()["message"], "Wild %s\nfled!" % host._enemy_mon_name())
+	for _press: int in 4:
+		host.finish()
+		host.advance()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	assert_eq(finished.size(), 1)
+	assert_eq(StringName(finished[0].get("outcome", &"")), Gen2WorldBattleAdapter.OUTCOME_RAN)
+	assert_null(_battle_host(), "the overlay stayed open after the flight")
+	assert_eq(_world_screen.world_snapshot()["map"], Vector2i(Fixture.MAP_GROUP, Fixture.MAP_NUMBER))
+
+
 ## A trainer battle answers the same request with its own refusal, and the
 ## overlay stays open with both sides where they were: `BattleMenu_Run` reopens
 ## the menu rather than spending the turn.

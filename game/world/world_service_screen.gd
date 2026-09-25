@@ -183,6 +183,7 @@ var _pc_quantity: int = 1
 ## The PC's own text boxes and what happens once the last is acknowledged:
 ## `PROF.OAK'S PC` returns to the top menu and `TURN OFF` shuts the machine down.
 var _pc_pages: Array = []
+var _pc_page_breaks: Array[bool] = []
 var _pc_sfx: int = -1
 var _pc_after: StringName = &"top"
 var _pc_label: String = ""
@@ -1244,7 +1245,6 @@ func _advance_mart_text() -> void:
 	_finish_runtime({"ok": true, "script_value": 1 if _mart_purchased else 0})
 
 
-## Whether this shop is a Generation 1 counter.
 func _gen1_mart() -> bool:
 	return _data != null and _data.generation == RomRegistry.GEN1
 
@@ -1293,6 +1293,8 @@ func _press_mart(button: int) -> void:
 	match _mart_stage:
 		MART_MESSAGE:
 			if button in [PokeButton.A, PokeButton.B]:
+				if _mart_pages.size() > 1:
+					_prompt_click()
 				_advance_mart_text()
 		MART_TOP:
 			_press_mart_top(button)
@@ -1392,6 +1394,7 @@ func _ask_mart_confirm() -> void:
 func _press_mart_confirm(button: int) -> void:
 	if _mart_pages.size() > 1:
 		if button in [PokeButton.A, PokeButton.B]:
+			_prompt_click()
 			_mart_pages.remove_at(0)
 			_render_mart()
 		return
@@ -2483,10 +2486,8 @@ func advance_save_frames(count: int) -> void:
 func _press_save_prompt(accepted: bool) -> void:
 	if _save_prompt == null:
 		return
-	if accepted:
-		_save_prompt.confirm(_cursor == 0)
-	else:
-		_save_prompt.cancel()
+	if _save_prompt.confirm(accepted and _cursor == 0):
+		_prompt_click()
 	_advance_save_prompt()
 
 
@@ -2537,10 +2538,16 @@ func _advance_save_prompt() -> void:
 	_open_boxes(Gen2BoxScreen.MODE_MOVE)
 
 
+## A page turned inside one text is a `<PARA>` or `<CONT>`'s `PromptButton`.
+func _prompt_click() -> void:
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+
+
 ## A run of the PC's own boxes, acknowledged one at a time.
 func _open_pc_text(pages: Array, after: StringName, label: String) -> void:
 	_mode = MODE.PC_TEXT
-	_pc_pages = _paged(pages)
+	_pc_page_breaks = []
+	_pc_pages = _paged(pages, _pc_page_breaks)
 	_pc_after = after
 	_cursor = 0
 	_pc_label = label
@@ -2548,8 +2555,8 @@ func _open_pc_text(pages: Array, after: StringName, label: String) -> void:
 
 
 ## `PrintText` holds a `<PARA>` and a `<CONT>` for their own press, so a box
-## carrying either is that many pages here.
-func _paged(pages: Array) -> Array:
+## carrying either is that many pages here, and [param breaks] marks them.
+func _paged(pages: Array, breaks: Array[bool]) -> Array:
 	var box: Rect2i = Gen2WorldServicePage.MESSAGE_BOX
 	@warning_ignore("integer_division")
 	var rows: int = (box.size.y - 2) / 2
@@ -2558,11 +2565,12 @@ func _paged(pages: Array) -> Array:
 		var text: String = String(page)
 		if text.is_empty():
 			out.append(text)
+			breaks.append(false)
 			continue
-		for lines: PackedStringArray in Gen2TextLayout.lay_out(
-			text, box.size.x - 2, rows
-		):
-			out.append("\n".join(lines))
+		var laid: Array = Gen2TextLayout.lay_out(text, box.size.x - 2, rows)
+		for index: int in laid.size():
+			out.append("\n".join(laid[index] as PackedStringArray))
+			breaks.append(index + 1 < laid.size())
 	return out
 
 
@@ -2575,6 +2583,8 @@ func _show_pc_page() -> void:
 ## `ProfOaksPCBoot` plays the sound `Rate` chose once the rating is printed, so
 ## the last page is where it lands.
 func _advance_pc_text() -> void:
+	if not _pc_page_breaks.is_empty() and bool(_pc_page_breaks.pop_front()):
+		_prompt_click()
 	if not _pc_pages.is_empty():
 		_pc_pages.remove_at(0)
 	if not _pc_pages.is_empty():
@@ -4007,7 +4017,8 @@ var _question_pages: Array = []
 
 
 func _ask_pages(question: String) -> void:
-	_question_pages = _paged([question])
+	var breaks: Array[bool] = []
+	_question_pages = _paged([question], breaks)
 	_summary = String(_question_pages[0]) if not _question_pages.is_empty() else question
 
 
@@ -4018,6 +4029,7 @@ func _asking_through_pages() -> bool:
 func _turn_question_page(button: int) -> void:
 	if button not in [PokeButton.A, PokeButton.B]:
 		return
+	_prompt_click()
 	_question_pages.remove_at(0)
 	_summary = String(_question_pages[0])
 	_render_rows()

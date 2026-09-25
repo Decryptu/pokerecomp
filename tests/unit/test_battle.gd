@@ -1831,7 +1831,7 @@ func test_a_full_moveset_is_offered_a_new_move_rather_than_taught_it() -> void:
 	# own Slash finds every slot full.
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.GEODUDE, 5, [Fixture.TACKLE, Fixture.EMBER, Fixture.THUNDERBOLT]),
-		_mon(Fixture.MAGCARGO, 33, [Fixture.TACKLE])
+		_mon(Fixture.MAGCARGO, 33, [Fixture.GROWL])
 	)
 	battle.enemy.hp = 1
 	battle.take_turn(0, 0)
@@ -2359,6 +2359,157 @@ func test_the_smoke_ball_does_not_carry_a_trapped_runner_out() -> void:
 
 	assert_eq(attempt["outcome"], &"blocked", JSON.stringify(attempt))
 	assert_eq(attempt["reason"], &"trapped")
+
+
+## A seed whose first byte [param wanted] accepts, so a test can name the one
+## roll it is about without leaning on whatever a fixed seed happens to give.
+func _seed_whose_first_byte(wanted: Callable) -> int:
+	var probe := RandomNumberGenerator.new()
+	for candidate: int in 4096:
+		probe.seed = candidate
+		if wanted.call(probe.randi_range(0, 255)):
+			return candidate
+	return -1
+
+
+## `TryEnemyFlee` in front of `Battle_EnemyFirst`'s move: an `OftenFleeMons`
+## species leaves on a roll below `50 percent + 1`, before anyone acts, and the
+## battle is the DRAW a run is.
+func test_an_often_fleeing_wild_leaves_before_it_moves() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE]),
+		_mon(Fixture.CUBONE, 50, [Fixture.TACKLE])
+	)
+	battle.rng.seed = _seed_whose_first_byte(func(byte: int) -> bool: return byte < 128)
+
+	var events: Array = battle.take_turn(0, 0)
+
+	var types: Array = events.map(func(event: Dictionary) -> StringName: return event["type"])
+	assert_eq(types, [Gen2Battle.WILD_FLED, Gen2Battle.OVER])
+	assert_true(battle.is_draw())
+	assert_null(battle.winner())
+	assert_false(battle.has_fled(), "the player did not run")
+
+
+func test_an_often_fleeing_wild_stays_on_a_high_roll() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE]),
+		_mon(Fixture.CUBONE, 50, [Fixture.TACKLE])
+	)
+	battle.rng.seed = _seed_whose_first_byte(func(byte: int) -> bool: return byte >= 128)
+	var events: Array = battle.take_turn(0, 0)
+	assert_eq(_of_type(events, Gen2Battle.WILD_FLED).size(), 0)
+	assert_eq(_first(events, Gen2Battle.USED_MOVE)["side"], Gen2Battle.ENEMY)
+
+
+## `Battle_PlayerFirst` asks behind the player's move and residual damage, so a
+## faster player still gets its hit in.
+func test_a_wild_that_moves_second_flees_behind_the_players_move() -> void:
+	var flees: bool = false
+	var events: Array = []
+	for attempt: int in 64:
+		var battle: Gen2Battle = _battle(
+			_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]),
+			_mon(Fixture.CUBONE, 50, [Fixture.TACKLE])
+		)
+		battle.player.status = Gen2Status.POISON
+		battle.rng.seed = attempt
+		events = battle.take_turn(0, 0)
+		flees = not _first(events, Gen2Battle.WILD_FLED).is_empty()
+		if flees:
+			break
+	assert_true(flees, "no seed of 64 let CUBONE go")
+	var types: Array = events.map(func(event: Dictionary) -> StringName: return event["type"])
+	assert_lt(types.find(Gen2Battle.USED_MOVE), types.find(Gen2Battle.HURT_BY_STATUS))
+	assert_lt(types.find(Gen2Battle.HURT_BY_STATUS), types.find(Gen2Battle.WILD_FLED))
+	assert_eq(_of_type(events, Gen2Battle.USED_MOVE).size(), 1, "the wild never moved")
+
+
+## Mean Look on the player's side, the wild's own binding, and sleep or a freeze
+## each keep it on the field; a trainer's Pokemon is never asked.
+func test_nothing_flees_that_the_source_holds() -> void:
+	var holds: Dictionary = {
+		&"mean_look": func(battle: Gen2Battle) -> void:
+			battle.player.substatus |= Gen2Substatus.CANT_RUN,
+		&"bound": func(battle: Gen2Battle) -> void:
+			battle.enemy.trapped_turns = 3,
+		&"asleep": func(battle: Gen2Battle) -> void:
+			battle.enemy.status = 3,
+		&"frozen": func(battle: Gen2Battle) -> void:
+			battle.enemy.status = Gen2Status.FREEZE,
+		&"trainer": func(battle: Gen2Battle) -> void:
+			battle.is_trainer_battle = true,
+	}
+	for hold: StringName in holds:
+		var battle: Gen2Battle = _battle(
+			_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE]),
+			_mon(Fixture.CUBONE, 50, [Fixture.TACKLE])
+		)
+		(holds[hold] as Callable).call(battle)
+		battle.rng.seed = _seed_whose_first_byte(func(byte: int) -> bool: return byte < 128)
+		var events: Array = battle.take_turn(0, 0)
+		assert_eq(_of_type(events, Gen2Battle.WILD_FLED).size(), 0, String(hold))
+		assert_false(battle.is_draw(), String(hold))
+
+
+## `ResidualDamage` stands between the two moves: the side that went first pays
+## its poison before the other acts, and one that goes down to it leaves the
+## other nothing to do.
+func test_the_first_movers_poison_lands_before_the_second_move() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]),
+		_mon(Fixture.GEODUDE, 50, [Fixture.GROWL])
+	)
+	battle.player.status = Gen2Status.POISON
+	var events: Array = battle.take_turn(0, 0)
+	var types: Array = events.map(func(event: Dictionary) -> StringName: return event["type"])
+	var enemy_move: int = events.find(_of_type(events, Gen2Battle.USED_MOVE)[1])
+	assert_lt(types.find(Gen2Battle.HURT_BY_STATUS), enemy_move)
+
+	battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]),
+		_mon(Fixture.GEODUDE, 50, [Fixture.GROWL])
+	)
+	battle.player.status = Gen2Status.POISON
+	battle.player.hp = 1
+	events = battle.take_turn(0, 0)
+	assert_true(battle.player.is_fainted())
+	assert_eq(_of_type(events, Gen2Battle.USED_MOVE).size(), 1, "the enemy never moved")
+
+
+## A first mover that knocks the other out pays nothing: `HasEnemyFainted` jumps
+## to `HandleEnemyMonFaint` in front of its `ResidualDamage`.
+func test_a_knockout_skips_the_attackers_own_residual() -> void:
+	var battle: Gen2Battle = _party_battle(
+		[_mon(Fixture.MAGCARGO, 50, [Fixture.SLASH])],
+		[_mon(Fixture.PIKACHU, 5, [Fixture.TACKLE]), _mon(Fixture.GEODUDE, 5, [Fixture.TACKLE])]
+	)
+	battle.player.status = Gen2Status.BURN
+	var events: Array = battle.take_turn(0, 0)
+	assert_true(battle.enemy.is_fainted())
+	assert_eq(_of_type(events, Gen2Battle.HURT_BY_STATUS).size(), 0)
+
+
+## `BattleEnd_HandleRoamMons`: a roamer not caught or beaten moves on with no
+## roll, a beaten one moves nobody, and any other battle moves them one time in
+## sixteen.
+func test_the_roamers_move_after_a_battle_as_the_source_rolls_it() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
+		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	)
+	battle.battle_type = Gen2Battle.BATTLETYPE_ROAMING
+	battle.force_out(Gen2Battle.ENEMY)
+	var state: int = battle.rng.state
+	assert_true(battle.roamers_move_on(false))
+	assert_eq(battle.rng.state, state, "a roamer that got away spends no roll")
+	assert_false(battle.roamers_move_on(true), "a caught roamer moves nobody")
+
+	battle.battle_type = Gen2Battle.BATTLETYPE_NORMAL
+	battle.rng.seed = _seed_whose_first_byte(func(byte: int) -> bool: return byte & 0x0F == 0)
+	assert_true(battle.roamers_move_on(false))
+	battle.rng.seed = _seed_whose_first_byte(func(byte: int) -> bool: return byte & 0x0F != 0)
+	assert_false(battle.roamers_move_on(false))
 
 
 ## `TryPlayerSwitch` refuses at menu time and jumps back to
@@ -4168,19 +4319,23 @@ func test_a_switch_clears_the_three_flags_and_the_protect_count() -> void:
 
 ## `ParsePlayerAction`'s `cp EFFECT_FURY_CUTTER`: the chain is kept only while
 ## Fury Cutter is the move being used, so any other move in between breaks it.
+## A miss breaks it too, so every turn is locked on.
 func test_another_move_breaks_the_fury_cutter_chain() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.FURY_CUTTER, Fixture.TACKLE]),
 		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	)
-	battle.take_turn(0, 0)
+	var locked_turn: Callable = func(slot: int) -> void:
+		battle.enemy.substatus |= Gen2Substatus.LOCK_ON
+		battle.take_turn(slot, 0)
+	locked_turn.call(0)
 	assert_eq(battle.player.fury_cutter_count, 1)
-	battle.take_turn(0, 0)
+	locked_turn.call(0)
 	assert_eq(battle.player.fury_cutter_count, 2, "two in a row keeps counting")
 
-	battle.take_turn(1, 0)
+	locked_turn.call(1)
 	assert_eq(battle.player.fury_cutter_count, 0, "a Tackle in between resets it")
-	battle.take_turn(0, 0)
+	locked_turn.call(0)
 	assert_eq(battle.player.fury_cutter_count, 1, "so the next one starts over")
 
 
@@ -4538,7 +4693,8 @@ func test_pursuit_doubles_only_against_a_side_that_is_leaving() -> void:
 
 
 ## One Pursuit against a side that either switches or stands and fights, with the
-## same seed so only the doubling can differ.
+## same seed so only the doubling can differ. A trainer's, so no `TryEnemyFlee`
+## roll stands in front of one of the two.
 func _pursuit_damage(switching: bool) -> int:
 	var battle: Gen2Battle = _party_battle(
 		[
@@ -4547,6 +4703,7 @@ func _pursuit_damage(switching: bool) -> int:
 		],
 		[_mon(Fixture.PIKACHU, 50, [Fixture.PURSUIT])]
 	)
+	battle.is_trainer_battle = true
 	battle.rng.seed = 4242
 	var target: Gen2BattleMon = battle.party(Gen2Battle.PLAYER).at(0)
 	var before: int = target.hp

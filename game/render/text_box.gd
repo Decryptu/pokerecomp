@@ -10,6 +10,9 @@ extends TextureRect
 
 ## Emitted when the last page has been shown and advanced past.
 signal finished
+## A press answering `Paragraph`, `_ContText` or `PromptText`: `PromptButton`
+## plays [param sfx], `SFX_READ_TEXT_2`. A caller's `JoyWaitAorB` plays nothing.
+signal prompt_answered(sfx: int)
 
 ## The standard box: twenty tiles across, six down, at the foot of the screen.
 const STANDARD_COLUMNS: int = 20
@@ -50,6 +53,8 @@ const TILE: int = Gen2Font.TILE
 
 ## Whether the last page loads the arrow; see [method show_text].
 var _blink_cursor: bool = true
+## Whether the text ended on `prompt`; [method set_blink_cursor] is a caller's.
+var _prompted: bool = true
 ## Whether A or B is being HELD, which is the whole of what a button does to a
 ## printing text. `PrintLetterDelay` reads `hJoyDown` and answers a held A or B
 ## with a single `DelayFrame`, whatever the speed setting says
@@ -123,6 +128,19 @@ var _scroll_page: int = -1
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 
+## A screen's own `PrintText` box, driven by that screen, in the OPTION settings.
+static func for_screen(data: GameData) -> Gen2TextBox:
+	var box := Gen2TextBox.new()
+	box.driven = true
+	box.font = Gen2Font.from_data(data)
+	var options: Gen2Options = Gen2OptionsStore.current()
+	box.set_frame_style(options.textbox_frame)
+	box.reveal_speed = options.text_reveal_speed()
+	box.place_at_bottom()
+	box.visible = false
+	return box
+
+
 func _ready() -> void:
 	# Nearest, or the integer-scaled viewport is undone on the last hop.
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -168,8 +186,6 @@ func _advance() -> void:
 		_redraw()
 
 
-## Puts the box where the games put it: flush to the left, six rows up from the
-## bottom of the screen.
 func place_at_bottom() -> void:
 	position = Vector2(0, STANDARD_TOP * TILE)
 
@@ -188,6 +204,7 @@ func show_text(text: String, blink_cursor: bool = true) -> void:
 		font.font_generation() if font != null else RomRegistry.GEN2
 	)
 	_blink_cursor = blink_cursor
+	_prompted = blink_cursor
 	_page = 0
 	_scroll_page = -1
 	_scroll_lines = []
@@ -255,7 +272,6 @@ func has_pages_left() -> bool:
 	return _page + 1 < _pages.size()
 
 
-## Reveals the rest of the current page at once.
 func finish() -> void:
 	if _scroll_page >= 0:
 		_end_scroll()
@@ -273,6 +289,8 @@ func advance() -> bool:
 		return false
 	if is_revealing():
 		return true
+	if (_enter_of(_page + 1) != &"scroll_nowait") if has_pages_left() else _prompted:
+		prompt_answered.emit(Gen2Sfx.SFX_READ_TEXT_2)
 
 	if _enter_of(_page + 1) == &"scroll":
 		_begin_scroll(_page + 1)
@@ -289,8 +307,6 @@ func advance() -> bool:
 	return true
 
 
-## Redraws with a different border. All eight are in the cache; the games let
-## the player pick.
 func set_frame_style(style: int) -> void:
 	var count: int = font.frame_count() if font != null else Gen2Layout.FRAME_COUNT
 	frame_style = wrapi(style, 0, maxi(count, 1))
