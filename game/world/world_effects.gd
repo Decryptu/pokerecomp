@@ -746,6 +746,11 @@ func ss_anne_band_offset() -> int:
 	return frame / Gen1Layout.SS_ANNE_DRIFT_FRAMES
 
 
+## The most [method ss_anne_band_offset] reaches: one pixel a drift.
+static func ss_anne_band_reach() -> int:
+	return Gen1Layout.SS_ANNE_COLUMNS * Gen1Layout.SS_ANNE_DRIFTS - 1
+
+
 func _advance_ss_anne() -> void:
 	if _ss_anne.is_empty():
 		return

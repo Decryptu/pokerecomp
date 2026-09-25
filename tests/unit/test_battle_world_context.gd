@@ -68,3 +68,55 @@ func test_capture_copies_the_maps_landmark() -> void:
 	var context: Gen2BattleWorldContext = Gen2BattleWorldContext.capture(world)
 	assert_eq(context.landmark, world.landmark())
 	assert_eq(int(context.to_dictionary()["landmark"]), world.landmark())
+
+
+## The map as it stood, so a renderer staging the fight on it draws the cut tree
+## gone and the dock after the ship: a copy, like the rest.
+func test_capture_carries_the_changed_blocks_and_written_tiles() -> void:
+	var world: Gen2WorldAPI = _world()
+	## The fixture's tileset has one block, so the override is seeded as
+	## `change_block` stores it.
+	var block: int = 5
+	world._block_overrides["1:1:1:1"] = block
+	world._block_overrides["1:2:1:1"] = block
+	world.erase_screen_rows(0, 1, 7)
+	var context: Gen2BattleWorldContext = Gen2BattleWorldContext.capture(world)
+	assert_eq(context.changed_blocks, {Vector2i(1, 1): block})
+	assert_eq(context.written_tiles.size(), Gen1Lcd.MAP_SIDE)
+	assert_eq(int(context.written_tiles[world.screen_origin_tile()]), 7)
+	world.erase_screen_rows(1, 1, 8)
+	assert_eq(context.written_tiles.size(), Gen1Lcd.MAP_SIDE, "a copy")
+
+
+## `Gen2WorldDrawList.drawn_tile_at`: a written tile over the block, the band's
+## repeated columns past the screen's twentieth while it scrolls, and a revision
+## that moves with each edit and not with the band's offset.
+func test_the_draw_list_answers_the_tile_the_background_shows() -> void:
+	var world: Gen2WorldAPI = _world()
+	var effects := Gen2WorldEffects.new()
+	var list := Gen2WorldDrawList.new(world, effects)
+	var origin: Vector2i = world.screen_origin_tile()
+	var plain: int = list.drawn_tile_at(origin)
+	var revision: int = list.drawn_revision()
+	world.erase_screen_rows(0, 1, plain + 1)
+	assert_eq(list.drawn_tile_at(origin), plain + 1)
+	assert_gt(list.drawn_revision(), revision)
+
+	effects.start_gen1_ss_anne()
+	while effects.ss_anne_band_offset() == 0:
+		effects.advance_frame()
+	var band: Dictionary = list.band()
+	var row: int = (band["rows"] as Vector2i).x
+	assert_eq(int(band["first_column"]), origin.x)
+	assert_eq(int(band["reach"]), 127)
+	var columns: int = Gen2WorldAPI.VIEW_PIXELS.x / PokeTiles.TILE_WIDTH
+	for past: int in 4:
+		assert_eq(
+			list.drawn_tile_at(Vector2i(origin.x + columns + past, row)),
+			list.drawn_tile_at(Vector2i(origin.x + columns - 2 + (past & 1), row)),
+			"ScheduleEastColumnRedraw's copy"
+		)
+	revision = list.drawn_revision()
+	effects.advance_frame()
+	effects.advance_frame()
+	assert_eq(list.drawn_revision(), revision, "the offset alone moves nothing")

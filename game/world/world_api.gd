@@ -3548,9 +3548,7 @@ func object_at(cell: Vector2i, visible_only: bool = true) -> Gen2WorldObject:
 ## across its thirty-two columns from the view's own: the tiles keep the value
 ## until the next map load, wherever the view scrolls to.
 func erase_screen_rows(first_row: int, rows: int, tile: int) -> void:
-	var origin: Vector2i = Vector2i(
-		(visible_origin_cells() * float(CELL_PIXELS)).floor()
-	) / PokeTiles.TILE_WIDTH
+	var origin: Vector2i = screen_origin_tile()
 	for row: int in rows:
 		for column: int in Gen1Lcd.MAP_SIDE:
 			_screen_tile_overrides[origin + Vector2i(column, first_row + row)] = tile
@@ -3559,6 +3557,24 @@ func erase_screen_rows(first_row: int, rows: int, tile: int) -> void:
 
 func screen_tile_overrides() -> Dictionary:
 	return _screen_tile_overrides
+
+
+## The map tile under the hardware screen's top-left corner.
+func screen_origin_tile() -> Vector2i:
+	return Vector2i((visible_origin_cells() * float(CELL_PIXELS)).floor()) / PokeTiles.TILE_WIDTH
+
+
+## The current map's blocks a `changeblock` moved, by block coordinate.
+func changed_blocks() -> Dictionary:
+	var out: Dictionary = {}
+	if current_map == null:
+		return out
+	var prefix: String = "%d:%d:" % [current_map.group, current_map.number]
+	for key: String in _block_overrides:
+		if key.begins_with(prefix):
+			var at: PackedStringArray = key.substr(prefix.length()).split(":")
+			out[Vector2i(int(at[0]), int(at[1]))] = int(_block_overrides[key])
+	return out
 
 
 func block_at(block_x: int, block_y: int) -> int:
@@ -4812,6 +4828,13 @@ func _gen1_node_printer(node: Dictionary, steps: Array, run: Dictionary) -> bool
 ## on, counted from zero.
 func _gen1_node_destination_warp(node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	return _gen1_resolve_side(node, _gen1_destination_warp == int(node["warp"]), steps, run)
+
+
+## `VermilionDockSSAnneLeavesScript` on demand, through the ordinary step runner.
+func gen1_ss_anne_leaves() -> Array:
+	_gen1_steps = []
+	_gen1_node_ss_anne_leaves({}, _gen1_steps, {})
+	return _gen1_result()
 
 
 ## `VermilionDockSSAnneLeavesScript`: MUSIC_SURFING, the horn behind the lead,

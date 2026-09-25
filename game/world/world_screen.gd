@@ -1945,8 +1945,7 @@ func _spend_poison_steps() -> bool:
 	## Generation 1 prints each faint inside the damage loop, ahead of the flash.
 	var flash_first: bool = _data.generation != RomRegistry.GEN1 or texts.is_empty()
 	if flash_first and bool(pass_result.get("sfx", false)):
-		_play_sfx(Gen2Sfx.SFX_POISON)
-		_start_poison_flash()
+		preview_poison_step()
 	## `.curMonNotPlayerPikachu`'s PIKAHAPPY_PSNFNT, once per member that fell,
 	## and `PikachuCry4` behind the starter's own box.
 	var starter_fell: bool = false
@@ -1983,8 +1982,7 @@ func _spend_poison_steps() -> bool:
 ## `.applyDamageLoopDone`: the flash if anyone is still poisoned, then a blackout.
 func _gen1_poison_tail(save: Gen2SaveData, sfx: bool, whiteout: bool) -> void:
 	if sfx:
-		_play_sfx(Gen2Sfx.SFX_POISON)
-		_start_poison_flash()
+		preview_poison_step()
 	if not whiteout:
 		_persist_after_poison_step(save)
 		return
@@ -2001,6 +1999,18 @@ static func _then(first: Callable, second: Callable) -> Callable:
 	return func() -> void:
 		first.call()
 		second.call()
+
+
+## `.PlayPoisonSFX`: the sound and the flash every poison step plays.
+func preview_poison_step() -> void:
+	_play_sfx(Gen2Sfx.SFX_POISON)
+	_start_poison_flash()
+
+
+## The ship's departure on Vermilion Dock, queued as the map script queues it.
+func preview_ss_anne_leaves() -> void:
+	if _world != null:
+		_show_script_results(_world.gen1_ss_anne_leaves())
 
 
 ## `.PlayPoisonSFX` floods the background and spends four frames of its own.

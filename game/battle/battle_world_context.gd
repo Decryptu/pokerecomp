@@ -18,6 +18,9 @@ var time_of_day: int = Gen2WorldPalette.TIME_DAY
 ## `GetWorldMapLocation`'s answer for this map, which is what `RegionCheck`
 ## reads and so what `PlayBattleMusic` picks a wild track off.
 var landmark: int = Gen2WorldRadio.LANDMARK_SPECIAL
+## The map as it stands: changed blocks and written tiles, by coordinate.
+var changed_blocks: Dictionary = {}
+var written_tiles: Dictionary = {}
 var exp_all: bool = false
 var met_bill: bool = false
 
@@ -36,6 +39,8 @@ static func capture(
 	out.player_cell = world.player_cell
 	out.player_facing = world.player_facing
 	out.landmark = world.landmark_backup()
+	out.changed_blocks = world.changed_blocks()
+	out.written_tiles = world.screen_tile_overrides().duplicate()
 	var gen1: bool = world.data != null and world.data.generation == RomRegistry.GEN1
 	out.exp_all = gen1 and int(world.state.items().get(Gen1Layout.ITEM_EXP_ALL, 0)) > 0
 	out.met_bill = gen1 and world.state.is_event_flag_active(Gen1Layout.EVENT_MET_BILL)
@@ -61,6 +66,8 @@ func to_dictionary() -> Dictionary:
 		"player_facing": player_facing,
 		"time_of_day": time_of_day,
 		"landmark": landmark,
+		"changed_blocks": changed_blocks.duplicate(),
+		"written_tiles": written_tiles.duplicate(),
 		"exp_all": exp_all,
 		"met_bill": met_bill,
 	}

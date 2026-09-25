@@ -56,6 +56,8 @@ var _transition_sprites: int = Gen2BattleTransition.SPRITES_ALL
 var _transition_opponent: int = -1
 var _transition_palette := PackedColorArray()
 var _sheets: Dictionary = {}
+var _drawn_key: Array = []
+var _drawn_revision: int = 0
 ## One resolve's colours per palette row, converted once however many read it.
 var _colors: Dictionary = {}
 
@@ -92,6 +94,8 @@ func frame() -> Dictionary:
 		"hidden_tree_tile": Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE,
 		"tile_overrides": tile_overrides(),
 		"band_scroll": band_scroll(),
+		"band": band(),
+		"drawn_revision": drawn_revision(),
 		"fade_order": fade_order,
 		"white_fill": fade_white_fill,
 		"poison_flash": poison_flash,
@@ -126,6 +130,70 @@ func band_scroll() -> Dictionary:
 		"top": Gen1Layout.SS_ANNE_BAND_TOP, "bottom": Gen1Layout.SS_ANNE_BAND_BOTTOM,
 		"offset": _effects.ss_anne_band_offset(),
 	}
+
+
+## The band in map terms while it scrolls: tile `rows`, the screen's
+## `first_column`, this frame's `offset` and `reach`, its most. Empty otherwise.
+func band() -> Dictionary:
+	var scroll: Dictionary = band_scroll()
+	if scroll.is_empty() or _world == null:
+		return {}
+	var origin: Vector2i = _world.screen_origin_tile()
+	return {
+		"rows": Vector2i(
+			origin.y + int(scroll["top"]) / PokeTiles.TILE_HEIGHT,
+			origin.y + int(scroll["bottom"]) / PokeTiles.TILE_HEIGHT
+		),
+		"first_column": origin.x, "offset": int(scroll["offset"]),
+		"reach": Gen2WorldEffects.ss_anne_band_reach(),
+	}
+
+
+## The tile the background shows at map tile [param tile] this frame: the band's
+## `ScheduleEastColumnRedraw` copies, a screen write, a hidden tree, or the block.
+func drawn_tile_at(tile: Vector2i) -> int:
+	if _world == null or _world.current_tileset == null:
+		return -1
+	var source: Vector2i = _band_source(tile)
+	var written: Dictionary = _world.screen_tile_overrides()
+	if written.has(source):
+		return int(written[source])
+	if hidden_tree_cells().has(Vector2i(floori(source.x / 2.0), floori(source.y / 2.0))):
+		return Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE
+	var width: int = Gen2Layout.MAP_BLOCK_TILE_WIDTH
+	var block: int = _world.expanded_block_at(
+		floori(float(source.x) / width), floori(float(source.y) / width)
+	)
+	return _world.current_tileset.tile_index(
+		block, posmod(source.y, width) * width + posmod(source.x, width)
+	)
+
+
+func _band_source(tile: Vector2i) -> Vector2i:
+	var found: Dictionary = band()
+	if found.is_empty():
+		return tile
+	var rows: Vector2i = found["rows"]
+	var column: int = tile.x - int(found["first_column"])
+	var columns: int = Gen2WorldAPI.VIEW_PIXELS.x / PokeTiles.TILE_WIDTH
+	if tile.y < rows.x or tile.y >= rows.y or column < columns:
+		return tile
+	return Vector2i(int(found["first_column"]) + columns - 2 + (column & 1), tile.y)
+
+
+## Moves whenever [method drawn_tile_at] would answer differently.
+func drawn_revision() -> int:
+	if _world == null:
+		return _drawn_revision
+	var found: Dictionary = band()
+	var key: Array = [
+		_world.block_revision, _world.map_id(), _world.screen_tile_overrides().size(),
+		hidden_tree_cells(), found.get("rows", Vector2i.ZERO), found.get("first_column", 0),
+	]
+	if key != _drawn_key:
+		_drawn_key = key
+		_drawn_revision += 1
+	return _drawn_revision
 
 
 ## The rows, in the order the cartridge's OAM puts them on screen.
