@@ -147,14 +147,8 @@ func _build() -> void:
 	_yes_no.answered.connect(_answer)
 	add_child(_yes_no)
 
-	_text_box = Gen2TextBox.new()
-	_text_box.driven = true
-	_text_box.font = Gen2Font.from_data(_data)
-	var options: Gen2Options = Gen2OptionsStore.current()
-	_text_box.set_frame_style(options.textbox_frame)
-	_text_box.reveal_speed = options.text_reveal_speed()
-	_text_box.place_at_bottom()
-	_text_box.visible = false
+	_text_box = Gen2TextBox.for_screen(_data)
+	_text_box.prompt_answered.connect(sfx_requested.emit.bind(false))
 	add_child(_text_box)
 
 

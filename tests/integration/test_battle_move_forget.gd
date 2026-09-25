@@ -53,8 +53,9 @@ func _open_with_full_moveset(third_move: int = BattleFixture.THUNDERBOLT) -> voi
 		_data, BattleFixture.GEODUDE, 5,
 		[BattleFixture.TACKLE, BattleFixture.EMBER, third_move]
 	)
+	## Growl, so nothing about the roll can knock the Geodude out first.
 	var enemy: Gen2BattleMon = Gen2BattleMon.create(
-		_data, BattleFixture.MAGCARGO, 33, [BattleFixture.TACKLE]
+		_data, BattleFixture.MAGCARGO, 33, [BattleFixture.GROWL]
 	)
 	var battle: Gen2Battle = Gen2Battle.create(_data, player, enemy, _rng)
 	battle.enemy.hp = 1

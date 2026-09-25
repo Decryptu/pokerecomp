@@ -208,6 +208,13 @@ func _incompatible_machine(species: int) -> int:
 	return 0
 
 
+static func _clicks(count: int) -> Array:
+	var out: Array = []
+	for _page: int in count:
+		out.append(Gen2Sfx.SFX_READ_TEXT_2)
+	return out
+
+
 ## `TeachTMHM`'s SFX_WRONG and its `.nope` back to the pack; `ItemUseTMHM`'s
 ## SFX_DENIED and its `jr .chooseMon` back to the party list.
 func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machine: int) -> void:
@@ -217,8 +224,10 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 		return
 	host.handle_button(PokeButton.A)
 	host.handle_button(PokeButton.A)
+	var pages_turned: int = 0
 	while host._reading_question():
 		host.handle_button(PokeButton.A)
+		pages_turned += 1
 	host.handle_button(PokeButton.A)
 	host.advance_save_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 	host.handle_button(PokeButton.A)
@@ -228,7 +237,8 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 		_r.data.generation
 	)
 	_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK_RESULT
-		and String(host.get("_pack_result")) == want and sounds == [Gen2Sfx.SFX_WRONG],
+		and String(host.get("_pack_result")) == want
+		and sounds == _clicks(pages_turned) + [Gen2Sfx.SFX_WRONG],
 		"%s: the refused TM printed %s in mode %d under %s." % [
 			_r.game_id, host.get("_pack_result"), host.get("_mode"), sounds])
 	## `PrintText` pages the two sentences, so the box owes a press a page.

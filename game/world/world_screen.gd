@@ -636,6 +636,7 @@ func _build_world() -> void:
 	_text_box.visible = false
 	_text_box.item_rect_changed.connect(_push_text_box_rect)
 	_text_box.visibility_changed.connect(_push_text_box_rect)
+	_text_box.prompt_answered.connect(_play_sfx)
 	_screen.display(_text_box)
 	_apply_renderer_interface_style()
 	var entry_results: Array = _world.dispatch_map_entry()
@@ -2373,6 +2374,7 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
+	host.sfx_requested.connect(_play_sfx)
 	host.z_index = 30
 	_nickname_host = host
 	_screen.display(host)
@@ -2408,7 +2410,6 @@ func _set_gen1_gift_context(
 		Gen2Sfx.SFX_ITEM
 	)
 	host.set_audio_player(_audio_player)
-	host.sfx_requested.connect(_play_sfx)
 
 
 ## `CheckPartyFullAfterContest`'s `GiveANickname_YesNo`, the gift path's own
@@ -2433,6 +2434,7 @@ func _open_contest_nickname(_request: Dictionary = {}) -> bool:
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
+	host.sfx_requested.connect(_play_sfx)
 	host.z_index = 30
 	_nickname_host = host
 	_screen.display(host)
@@ -2507,6 +2509,7 @@ func _open_name_rater(_request: Dictionary = {}) -> bool:
 	host.set_context(_data, save, texts, _world.player_name(), _world.player_id())
 	host.finished.connect(_on_name_rater_finished)
 	host.closed.connect(_on_name_rater_closed)
+	host.sfx_requested.connect(_play_sfx)
 	host.z_index = 30
 	_name_rater_save = save
 	_name_rater_host = host
@@ -4835,6 +4838,7 @@ func preview_gift_nickname(species: int = 0, boxed: bool = false) -> void:
 	_nickname_preview = true
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
+	host.sfx_requested.connect(_play_sfx)
 	host.z_index = 30
 	_nickname_host = host
 	_screen.display(host)
@@ -6121,6 +6125,14 @@ func _open_gen1_versus_result(result: Dictionary, fought_save: Gen2SaveData) -> 
 func _record_roam_battle(result: Dictionary) -> void:
 	if _world == null or _world.state == null:
 		return
+	_write_roam_battle(result)
+	if bool(result.get("roamers_move", false)):
+		_world.state.advance_roaming(
+			_data.world_roaming_maps(), _world.schedule_random, _world.map_id()
+		)
+
+
+func _write_roam_battle(result: Dictionary) -> void:
 	## `prepare()` answers the values dictionary itself under `request`, which is
 	## the same shape `win_text` and `loss_text` are read out of.
 	var values: Variant = result.get("request", {})
@@ -6737,6 +6749,7 @@ func _open_link_screen(screen_mode: int) -> bool:
 	host.traded.connect(_on_link_traded)
 	host.cry_requested.connect(_play_species_cry)
 	host.music_requested.connect(_play_evolution_music)
+	host.sfx_requested.connect(_play_sfx)
 	_link_host = host
 	_screen.display(host)
 	if _link_host == null:

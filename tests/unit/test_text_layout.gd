@@ -160,6 +160,32 @@ func test_holding_a_button_prints_one_letter_a_frame() -> void:
 	assert_eq(held.frames_left(), 0)
 
 
+## `Paragraph`, `_ContText` and `PromptText` each wait in `PromptButton`, whose
+## press plays the click; a text ending in `done` is waited on by its caller's
+## `JoyWaitAorB`, which plays nothing, and a caller's own arrow does not change
+## that.
+func test_only_a_prompt_buttons_press_is_answered_with_the_click() -> void:
+	var clicks: Array = []
+	var box: Gen2TextBox = _box()
+	box.prompt_answered.connect(func(sfx: int) -> void: clicks.append(sfx))
+	box.show_text("a" + Gen2TextStream.PAGE_BREAK + "b" + Gen2TextStream.SCROLL_BREAK + "c")
+	assert_true(box.advance())
+	assert_eq(clicks.size(), 1, "the paragraph")
+	for _frame: int in Gen2TextBox.SCROLL_STEP_FRAMES * Gen2TextBox.SCROLL_STEPS:
+		box._process(FRAME)
+	assert_true(box.advance())
+	assert_eq(clicks.size(), 2, "the continuation")
+	for _frame: int in Gen2TextBox.SCROLL_STEP_FRAMES * Gen2TextBox.SCROLL_STEPS:
+		box._process(FRAME)
+	assert_false(box.advance())
+	assert_eq(clicks, [Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_READ_TEXT_2])
+
+	box.show_text("done", false)
+	box.set_blink_cursor(true)
+	assert_false(box.advance())
+	assert_eq(clicks.size(), 3, "a caller's wait is not a prompt")
+
+
 ## `_ContText` is `PromptButton` and then `TextScroll` twice, five frames each,
 ## so a continuation costs one press and ten frames rather than a page turn.
 func test_a_continuation_scrolls_for_ten_frames_after_its_press() -> void:

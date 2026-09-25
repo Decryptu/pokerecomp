@@ -474,6 +474,7 @@ func _handle_gen1_entry(button: int) -> bool:
 	if button != PokeButton.A and button != PokeButton.B:
 		return false
 	if _gen1_entry_pages() > 1 and _dex.page == Gen2Pokedex.PAGE_1:
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2)
 		_dex.toggle_page()
 		_refresh()
 		return true

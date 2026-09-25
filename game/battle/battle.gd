@@ -208,6 +208,8 @@ const BLOWN_AWAY: StringName = &"blown_away"
 ## other side. Named for `<USER>`, so [code]side[/code] is who left.
 const FLED_FROM_BATTLE: StringName = &"fled_from_battle"
 
+const WILD_FLED: StringName = &"wild_fled"
+
 ## Foresight and Lock On, whose flags sit on [code]target[/code] rather than on
 ## the Pokémon that used the move. `TookAimText` names only the aimer, which is
 ## why [constant TOOK_AIM] carries nothing beyond the side.
@@ -447,6 +449,16 @@ const FLEE_ENEMY_SPEED_SHIFT: int = 2
 const FLEE_ATTEMPT_BONUS: int = 30
 const FLEE_ODDS_RANGE: int = 256
 
+## `data/wild/flee_mons.asm` (pokegold adds SUICUNE), rolled below `50 percent + 1` and `10 percent + 1`.
+const ALWAYS_FLEE_MONS: Array[int] = [243, 244]
+const GOLD_SILVER_ALWAYS_FLEE_MONS: Array[int] = [243, 244, 245]
+const OFTEN_FLEE_MONS: Array[int] = [104, 144, 145, 146, 195, 225, 231, 216]
+const SOMETIMES_FLEE_MONS: Array[int] = [
+	81, 88, 114, 122, 133, 137, 147, 148, 176, 197, 201, 209, 214,
+]
+const OFTEN_FLEE_BOUND: int = 128
+const SOMETIMES_FLEE_BOUND: int = 26
+
 ## Priority runs 0 to 3 with most moves at 1, so a move can go below the ordinary
 ## as well as above it. Keyed by effect byte, which the cache carries.
 const BASE_PRIORITY: int = 1
@@ -570,8 +582,8 @@ var _fled: bool = false
 var _forced_out: bool = false
 var _forced_out_side: int = -1  ## Which side was blown out, for a screen that has to say who left.
 
-## The half-run turn a Baton Pass stopped, as [code]{"acting": Array, "actions":
-## Dictionary, "index": int}[/code], which [method pass_to] lets finish.
+## The half-run turn a question stopped, as [code]{"acting": Array, "actions":
+## Dictionary, "index": int, "acted": bool}[/code], which its answer finishes.
 var _pending_turn: Dictionary = {}
 
 ## The side owing a Baton Pass target, or -1. `ForcePickSwitchMonInBattle` cannot
@@ -967,9 +979,8 @@ func is_over() -> bool:
 	return _fled or _forced_out or party(PLAYER).is_wiped() or party(ENEMY).is_wiped()
 
 
-## `wForcedSwitch` and `SetBattleDraw`: Whirlwind or Roar blowing [param side] out
-## of a wild battle. Nothing is switched and nobody faints, so both parties stand
-## as they are and [method winner] answers null, the way a run leaves it.
+## `wForcedSwitch` and `SetBattleDraw`: a move, `TryEnemyFlee` or the Safari Zone
+## taking [param side] out of a wild battle, the DRAW a run is.
 func force_out(side: int) -> void:
 	if is_over():
 		return
@@ -977,22 +988,37 @@ func force_out(side: int) -> void:
 	_forced_out_side = side
 
 
-## Which side Whirlwind or Roar blew out, or -1 if neither did.
+## Which side [method force_out] took out, or -1.
 func forced_out_side() -> int:
 	return _forced_out_side
 
 
-## Whether Whirlwind or Roar ended this battle by blowing a side out of it.
-## Separate from [method has_fled] because the two print different lines and only
-## one of them was the player's own decision, though both are the same DRAW.
+## Whether [method force_out] ended this battle: the same DRAW as a run, with a
+## line of its own rather than `BattleText_GotAwaySafely`.
 func was_forced_out() -> bool:
 	return _forced_out
 
 
-## Whether the player has run from this battle. The parties are both still
-## standing, so [method is_over] alone does not say which ending it was.
+## Whether the player ran, one of the endings [method is_draw] answers.
 func has_fled() -> bool:
 	return _fled
+
+
+## `wBattleResult`'s DRAW, which `reloadmapafterbattle` does not white out on.
+## Generation 2's `.LostLinkBattle` writes it for two parties out at once.
+func is_draw() -> bool:
+	return _fled or _forced_out or (is_link_battle and not is_gen1() \
+		and party(PLAYER).is_wiped() and party(ENEMY).is_wiped())
+
+
+## `BattleEnd_HandleRoamMons`: a roamer not caught or beaten moves on, and any
+## other battle moves them when `BattleRandom`'s low nibble is zero. Ask once.
+func roamers_move_on(caught: bool) -> bool:
+	if is_gen1():
+		return false
+	if battle_type == BATTLETYPE_ROAMING:
+		return not caught and winner() != PLAYER
+	return rng.randi_range(0, 255) & 0x0F == 0
 
 
 ## `TryToRunAwayFromBattle`, resolved without spending anything: `fled`,
@@ -1115,17 +1141,10 @@ func _held_effect(battler: Gen2BattleMon) -> int:
 	return Gen2HeldItem.effect_of(data, battler.item)
 
 
-## Whoever is still standing, or null if the battle is not over. Both sides can
-## go down in one turn, through recoil; the cartridge gives it to whoever is left
-## and there is nobody, so this answers null for that too.
+## Who won, or null for a DRAW or a battle not over. Both faint handlers reach
+## `LostBattle` once the player's party is out, whoever else went down with it.
 func winner() -> Variant:
-	if not is_over():
-		return null
-	# Running is a DRAW: both parties are still standing and nobody beat anybody.
-	# `SetBattleDraw` makes Whirlwind and Roar the same answer for the same reason.
-	if _fled or _forced_out:
-		return null
-	if party(PLAYER).is_wiped() and party(ENEMY).is_wiped():
+	if not is_over() or is_draw():
 		return null
 	return ENEMY if party(PLAYER).is_wiped() else PLAYER
 
@@ -1294,9 +1313,6 @@ func answer_switch_offer(index: int = -1) -> Array:
 	# `HandleEnemyMonFaint` returns as soon as both entrances are done.
 	if _pending_turn.is_empty():
 		return events
-	var actions: Dictionary = _pending_turn.get("actions", {})
-	_close_turn_bracket(ENEMY, actions.get(ENEMY, {}))
-	_pending_turn["index"] = int(_pending_turn["index"]) + 1
 	return _run_turn(events)
 
 
@@ -1317,8 +1333,6 @@ func pass_to(index: int) -> Array:
 	var events: Array = []
 	_pending_baton_pass = -1
 	events.append_array(baton_pass_send_out(side, index))
-	_close_turn_bracket(side, (_pending_turn["actions"] as Dictionary)[side])
-	_pending_turn["index"] = int(_pending_turn["index"]) + 1
 	return _run_turn(events)
 
 
@@ -1328,7 +1342,6 @@ func request_baton_pass(side: int) -> void:
 	_pending_baton_pass = side
 
 
-## Stops the turn while the player picks the target's move to copy.
 func request_mimic(side: int, slot: int) -> void:
 	_pending_mimic = {"side": side, "slot": slot}
 
@@ -1361,10 +1374,6 @@ func answer_mimic(choice: int) -> Array:
 		self, side, slot, Gen2MoveEffect.MIMIC_MOVE, data.move(Gen2MoveEffect.MIMIC_MOVE), events
 	)
 	Gen2EffectCommands.gen1_mimic_learn(turn, slot, int(copied[choice]))
-	_close_turn_bracket(side, (_pending_turn["actions"] as Dictionary)[side])
-	if is_gen1():
-		_gen1_residual(side, events)
-	_pending_turn["index"] = int(_pending_turn["index"]) + 1
 	return _run_turn(events)
 
 
@@ -1832,38 +1841,39 @@ func _switch_offered(side: int, action: Dictionary, actions: Dictionary, events:
 
 
 ## The per-side loop and the end-of-turn tail, from wherever the turn last
-## stopped. Baton Pass is the one thing that stops it part way: `DoPlayerTurn`
-## opens a switch menu and waits, so the rest sits in [member _pending_turn].
+## stopped. A question stops it part way, and [code]acted[/code] resumes on the
+## tail behind the action it was asked inside.
 func _run_turn(events: Array) -> Array:
 	var acting: Array = _pending_turn["acting"]
 	var actions: Dictionary = _pending_turn["actions"]
 
 	while int(_pending_turn["index"]) < acting.size():
 		var side: int = int(acting[int(_pending_turn["index"])])
-		# `HasPlayerFainted`/`HasEnemyFainted` between the halves of the turn,
-		# gating the whole second half rather than its move, which is why it is
-		# asked before the bracket opens.
-		if mon(side).is_fainted() or mon(opponent_of(side)).is_fainted():
-			break
-		var action: Dictionary = _gen1_ai_action(side, actions)
-		_open_turn_bracket(side, action)
-		if _run_action(side, action, actions, events):
-			return events
-		_close_turn_bracket(side, action)
-		if is_gen1():
-			_gen1_residual(side, events)
-		# `ld a, [wForcedSwitch] / and a / ret nz`, asked twice by each of
-		# `Battle_PlayerFirst` and `Battle_EnemyFirst`. Blown or teleported out of
-		# a wild battle ends the turn where it stands, tail included.
+		if not bool(_pending_turn.get("acted", false)):
+			# `HasPlayerFainted`/`HasEnemyFainted` gate the whole second half
+			# of the turn, so they are asked before the bracket opens.
+			if mon(side).is_fainted() or mon(opponent_of(side)).is_fainted():
+				break
+			if _enemy_flees(side, actions[side], events):
+				_pending_turn = {}
+				events.append({"type": OVER, "winner": winner()})
+				return events
+			_open_turn_bracket(side, _gen1_ai_action(side, actions))
+			_pending_turn["acted"] = true
+			if _run_action(side, actions[side], actions, events):
+				return events
+		_pending_turn["acted"] = false
+		_close_turn_bracket(side, actions[side])
+		# `ld a, [wForcedSwitch] / and a / ret nz` in both orderings: a side
+		# taken out of a wild battle ends the turn, tail included.
 		if was_forced_out():
 			_pending_turn = {}
 			events.append({"type": OVER, "winner": winner()})
 			return events
+		_side_residual(side, events)
 		_pending_turn["index"] = int(_pending_turn["index"]) + 1
 
 	_pending_turn = {}
-	if not is_gen1():
-		_residual_damage(acting, events)
 	_tick_future_sight(events)
 	_tick_weather(events)
 	_tick_wrap(events)
@@ -1875,6 +1885,32 @@ func _run_turn(events: Array) -> Array:
 	if is_over():
 		events.append({"type": OVER, "winner": winner()})
 	return events
+
+
+## `TryEnemyFlee`, in front of the enemy's move in both `Battle_EnemyFirst` and
+## `Battle_PlayerFirst`. `AlwaysFleeMons` leave without a roll.
+func _enemy_flees(side: int, action: Dictionary, events: Array) -> bool:
+	if side != ENEMY or is_gen1() or is_trainer_battle or is_link_battle \
+			or _is_switch(action) or _is_item(action):
+		return false
+	var wild: Gen2BattleMon = mon(ENEMY)
+	if Gen2Substatus.has(mon(PLAYER).substatus, Gen2Substatus.CANT_RUN) \
+			or wild.trapped_turns > 0 \
+			or Gen2Status.has(wild.status, Gen2Status.FREEZE) or Gen2Status.is_asleep(wild.status):
+		return false
+	var species: int = wild.base_species()
+	var always: Array[int] = ALWAYS_FLEE_MONS if Gen2WorldState.is_crystal_profile(data) \
+		else GOLD_SILVER_ALWAYS_FLEE_MONS
+	if not species in always:
+		var roll: int = rng.randi_range(0, 255)
+		if roll >= OFTEN_FLEE_BOUND:
+			return false
+		if not species in OFTEN_FLEE_MONS \
+				and (roll >= SOMETIMES_FLEE_BOUND or not species in SOMETIMES_FLEE_MONS):
+			return false
+	force_out(ENEMY)
+	events.append({"type": WILD_FLED, "side": ENEMY, "species": species})
+	return true
 
 
 ## One side's action; true when the turn cannot go on until somebody answers.
@@ -2025,7 +2061,6 @@ func _reset_action_counters(side: int, effect: int) -> void:
 		actor.rage_count = 0
 
 
-## Both sides use a move slot, which is the common case.
 func take_turn(player_slot: int, enemy_slot: int) -> Array:
 	return take_actions(use_move(player_slot), use_move(enemy_slot))
 
@@ -2071,24 +2106,23 @@ func _gen1_residual_amount(current: Gen2BattleMon) -> int:
 	return amount
 
 
-## `ResidualDamage`: burn, poison, Leech Seed, Nightmare and Curse, in that order
-## and in the order the sides acted, after both moves and skipping whoever is
-## down. `HasUserFainted` sits between the steps, so one that goes down to its
-## poison pays neither the seed nor the nightmare.
-func _residual_damage(acting: Array, events: Array) -> void:
-	for side: int in acting:
+## `ResidualDamage` behind each side's own action, once both faint checks pass.
+func _side_residual(side: int, events: Array) -> void:
+	if is_gen1():
+		_gen1_residual(side, events)
+	elif not mon(side).is_fainted() and not mon(opponent_of(side)).is_fainted():
+		_residual_damage(side, events)
+
+
+## `ResidualDamage`: burn or poison, Leech Seed, Nightmare, Curse, with
+## `HasUserFainted` between each, so a faint to poison pays none of the rest.
+func _residual_damage(side: int, events: Array) -> void:
+	for step: Callable in [
+		_residual_status, _residual_leech_seed, _residual_nightmare, _residual_curse,
+	]:
 		if mon(side).is_fainted():
-			continue
-		_residual_status(side, events)
-		if mon(side).is_fainted():
-			continue
-		_residual_leech_seed(side, events)
-		if mon(side).is_fainted():
-			continue
-		_residual_nightmare(side, events)
-		if mon(side).is_fainted():
-			continue
-		_residual_curse(side, events)
+			return
+		step.call(side, events)
 
 
 ## A running [member Gen2BattleMon.toxic_counter] means Toxic, which ramps rather

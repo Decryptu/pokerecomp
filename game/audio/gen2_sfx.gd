@@ -33,6 +33,7 @@ const SFX_BUMP: int = 0x24
 const SFX_SAVE: int = 0x25
 const SFX_THROW_BALL: int = 0x28
 const SFX_BALL_POOF: int = 0x29
+const SFX_RUN: int = 0x2B
 const SFX_SLOT_MACHINE_START: int = 0x2C
 const SFX_KINESIS: int = 0x2F
 const SFX_POUND: int = 0x31

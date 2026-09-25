@@ -142,19 +142,20 @@ func refused() -> bool:
 
 
 ## A on the box. A three-line text is prompted past once before its last line,
-## which is `_ContText`'s own `PromptButton`, and [param yes] is ignored there.
-func confirm(yes: bool) -> void:
+## `_ContText`'s own `PromptButton`, answered true and ignoring [param yes].
+func confirm(yes: bool) -> bool:
 	if not reads_joypad():
-		return
+		return false
 	if cursor < 0 and step in [Step.ASK, Step.OVERWRITE]:
 		line = 1
 		cursor = 0
-		return
+		return true
 	if step in [Step.ASK, Step.OVERWRITE]:
 		_held_yes = yes
 		_answer_hold = Gen2WorldMenu.ANSWER_HOLD_FRAMES
-		return
+		return false
 	_answer(yes)
+	return false
 
 
 func _answer(yes: bool) -> void:
@@ -173,11 +174,6 @@ func _answer(yes: bool) -> void:
 			_enter(Step.REFUSED)
 		_:
 			pass
-
-
-## B, which is `YesNoBox`'s NO and `PromptButton`'s other button.
-func cancel() -> void:
-	confirm(false)
 
 
 func frame() -> void:

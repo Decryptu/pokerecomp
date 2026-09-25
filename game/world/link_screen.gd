@@ -14,6 +14,7 @@ signal cry_requested(species: int)
 signal traded(result: Dictionary)
 ## `.doTrade`'s `MUSIC_SAFARI_ZONE`, by the role `EvolveMon` names it under.
 signal music_requested(music: int)
+signal sfx_requested(index: int)
 
 const MODE_TRADE: int = 0
 const MODE_RECORD: int = 1
@@ -547,6 +548,8 @@ func _gen1_open_ask() -> void:
 func _gen1_press_ask(button: int) -> bool:
 	if button not in [PokeButton.A, PokeButton.B]:
 		return true
+	if _gen1_page + 1 < _gen1_pages.size():
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2)
 	_gen1_page += 1
 	if _gen1_page < _gen1_pages.size():
 		_message = Array(_gen1_pages[_gen1_page])
