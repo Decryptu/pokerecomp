@@ -3,17 +3,24 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods get API 44: one call draws a trainer's party balls, everything the overworld draws carries its height and map position, people on connected maps are listed out to a renderer's reach, and `reachable_checks()` lets an item shuffle place key items so the game can always be finished.
-- Oak's aides in Red, Blue and Yellow are item checks a mod can change, each with the Pokedex count it asks for.
+- Mods get API 45: `drawn_tile_at()` gives the tile the overworld background shows at any map tile, with the S.S. Anne scene's scrolling band in map terms and a revision number for rebuilding, the battle's map context carries cut trees and other changed blocks, and two new screenshot hooks start the S.S. Anne departure and the poison flash.
+- Your Pokemon now shrinks back into its ball when you switch it out, in all six games.
 
 ## Changed
 
-- A mod's item shuffle no longer puts a key item on a check that needs a Pokemon it cannot prove you have, such as Elm's EVERSTONE, which waits for the Togepi from the MYSTERY EGG.
+- Gold, Silver and Crystal now read every battle message from your cartridge, so the wording and line breaks match the original. Import your cartridges again after updating.
+- "X used MOVE!", "Go! X!", "X, come back!" and the other lines the game shows without an arrow no longer wait for a button press.
+- Switching out says "that's enough!", "OK!" or "good!" depending on how much damage your Pokemon did, as in the original games.
+- The pauses around Protect, Roar, Thunder Wave, Beat Up, Baton Pass, switching and fainting now match the original timing.
 
 ## Fixed
 
-- A caught Pokemon joins the party when a mod gives experience for catching. The Pokedex counted it, but it appeared neither in the party nor in the PC (#703).
-- After FLY, DIG, ESCAPE ROPE or TELEPORT in Gold, Silver and Crystal, you can walk straight away without pressing A (#705).
+- A trainer switching Pokemon in the middle of a turn no longer asks whether you want to switch too.
+- Baton Pass and Roar no longer print "come back!" and "Go!" lines the originals never showed.
+- Pursuit now hits after your "come back!" line.
+- Ancientpower shows one message for each stat that rose, and Dream Eater says the dream was eaten.
+- A Pokemon with no usable moves says so before using Struggle.
+- In Red, Blue and Yellow, a Pokemon caught in Wrap can be switched out, Thrash says "thrashing about!" on later turns, and Roar against a trainer says the target is unaffected.
 
 ## Which file
 
