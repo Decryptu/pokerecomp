@@ -39,6 +39,7 @@ func _write_cache() -> void:
 		match int(raw.get("number", 0)):
 			STACK:
 				raw["name"] = "ITEM7"
+				raw["description"] = "Item seven."
 			KEY_ITEM:
 				raw["name"] = "KEYITEM"
 				raw["permissions"] = Gen2WorldPack.CANT_TOSS
@@ -99,14 +100,19 @@ func _state() -> Gen2WorldState:
 
 
 ## `ScrollingMenu` draws CANCEL past `wPCItems`' terminator, and taking it is
-## `PCItemsJoypad`'s `.b_1`: back to the item PC's menu with nothing moved.
+## `PCItemsJoypad`'s `.b_1`: back to the item PC's menu with nothing moved. The
+## box under the list describes the row the cursor is on.
 func test_the_list_ends_in_cancel_which_leaves_it() -> void:
 	var host: Gen2WorldServiceScreen = await _open_item_pc()
 	_open_list(host, 0)
 	assert_eq(host._option_count(), host._pc_entries.size() + 1)
+	## `.PCItemsMenuData`'s `UpdateItemDescription` follows the cursor.
+	_walk_to(host, STACK)
+	assert_eq(host._render_summary(), "Item seven.")
 	for _step: int in host._pc_entries.size():
 		host.handle_button(PokeButton.DOWN)
 	assert_eq(host._cursor, host._pc_entries.size(), "the last row is CANCEL")
+	assert_eq(host._render_summary(), "", "which has no description")
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
 	assert_eq(_state().pc_item_quantity(STACK), 5)

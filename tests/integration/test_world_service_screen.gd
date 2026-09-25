@@ -576,6 +576,34 @@ func test_mart_overlay_uses_production_input_and_returns_to_script() -> void:
 	assert_false(_world_screen._world.script_input_waiting())
 
 
+## `PrintItemDescription` describes a TM by its move. `ItemDescriptions` runs past
+## the item count into "?" placeholders, which is what a TM's own row holds.
+func test_a_mart_describes_a_tm_by_the_move_it_teaches() -> void:
+	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
+	while items.size() < Gen2Layout.ITEM_TM01:
+		items.append({"number": items.size() + 1, "name": "ITEM%d" % (items.size() + 1)})
+	items[Gen2Layout.ITEM_TM01 - 1].merge({
+		"name": "TM01", "price": 3000, "description": "?",
+		"pocket": Gen2WorldPack.TYPE_TM_HM,
+	}, true)
+	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
+	var moves: Array = RomCache.read_json(RomCache.moves_path(Fixture.directory()))
+	moves[Fixture.BattleFixture.TM01_MOVE - 1]["description"] = "The TM's move."
+	RomCache.write_json(RomCache.moves_path(Fixture.directory()), moves)
+	RomCache.write_json(RomCache.world_marts_path(Fixture.directory()), {
+		"marts": [{"index": 0, "bank": Fixture.BANK, "address": 0x4000,
+			"items": [Gen2Layout.ITEM_TM01]}],
+		"default": {"items": [Gen2Layout.ITEM_TM01]}, "special": {},
+	})
+	_data = GameData.open_directory(Fixture.directory())
+	await _open_world()
+	await _queue_service()
+
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	_enter_mart_buy(host)
+	assert_eq(host._mart_description(), "The TM's move.")
+
+
 func test_a_registered_mart_row_is_bought_through_the_regular_transaction() -> void:
 	assert_true(Gen2ModHost.instance().register_menu_entry(Gen2ModHost.MENU_MART, &"second", {
 		"label": "Second item", "item": 8, "price": 25,
