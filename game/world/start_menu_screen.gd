@@ -2194,18 +2194,16 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 		_evolution_offers.assign(result.get("move_offers", []))
 		## `EvoStoneEffect` reaches `EvolvePokemon` with `wForceEvolution` set, so
 		## the after-battle pass's `EvolutionAnimation` runs with B doing nothing,
-		## and this path prints no box of its own.
-		evolution_animation_requested.emit({
-			"index": party_index,
+		## and this path prints no box of its own. The row is already written.
+		var shown: Dictionary = Gen2Evolution.plan(
+			_data, _pack_save.party[party_index], party_index, {}, false
+		)
+		shown.merge({
 			"old_species": int(result.get("old_species", 0)),
 			"new_species": int(result.get("new_species", 0)),
 			"evolving_name": String(result.get("evolving_name", "")),
-			"statused": Gen2Evolution.is_statused(_pack_save.party[party_index]),
-			## The stone does not touch the DV word either, so the plan carries
-			## the same answer the level path's does. See `Gen2Evolution.plans`.
-			"shiny": Gen2Stats.is_shiny(_pack_save.party[party_index].dvs),
-			"can_cancel": false,
-		}, _offer_next_evolution_move)
+		}, true)
+		evolution_animation_requested.emit(shown, _offer_next_evolution_move)
 		return
 	if party_index >= 0:
 		_show_party_result(item, result, party_index, rows)
@@ -2382,18 +2380,9 @@ func _offer_next_evolution_move() -> void:
 func _candy_evolution_plan(party_index: int, row: Dictionary) -> Dictionary:
 	if row.is_empty() or _pack_save == null or party_index >= _pack_save.party.size():
 		return {}
-	var mon: Gen2SaveMon = _pack_save.party[party_index]
-	return {
-		"index": party_index,
-		"old_species": mon.species,
-		"new_species": int(row.get("target", 0)),
-		"evolving_name": _target_name(party_index),
-		"statused": Gen2Evolution.is_statused(mon),
-		"shiny": Gen2Stats.is_shiny(mon.dvs),
-		"can_cancel": true,
-		"row": row.duplicate(true),
-		"apply": true,
-	}
+	var plan: Dictionary = Gen2Evolution.plan(_data, _pack_save.party[party_index], party_index, row, true)
+	plan["apply"] = true
+	return plan
 
 
 ## The offers `EvolvePokemon`'s own `LearnLevelMoves` left, handed back by the

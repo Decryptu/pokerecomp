@@ -97,6 +97,11 @@ func test_a_trade_evolution_honours_its_held_item_parameter() -> void:
 	assert_eq(int(row.get("target", 0)), TRADE_TARGET)
 	assert_eq(int(row.get("consumes_held_item", 0)), TRADE_HELD_ITEM)
 
+	## `cp LINK_TIMECAPSULE` sits behind the `$FF` test, so only the held row goes.
+	var capsule: int = Gen2LinkTransport.LINK_TIMECAPSULE
+	assert_true(Gen2Evolution.trade_evolution(data, held, capsule).is_empty())
+	assert_eq(int(Gen2Evolution.trade_evolution(data, plain, capsule).get("target", 0)), TRADE_TARGET)
+
 
 ## `EvolveAfterBattle_MasterLoop`: the walk is over `wEvolvableFlags`, which is
 ## per party member and not per level gained, and it evolves nobody it was not

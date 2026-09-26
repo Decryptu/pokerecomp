@@ -1844,6 +1844,84 @@ func test_forgetting_another_move_leaves_the_disable_alone() -> void:
 	assert_eq(battle.player.disable_turns, 4)
 
 
+## `LearnMove` tests `wDisabledMove`, the Pokemon out's, whoever learned: a benched
+## holder forgetting EMBER frees the fighter's disabled EMBER.
+func test_a_benched_learner_forgetting_the_disabled_move_frees_the_fighter() -> void:
+	# Magcargo's 154 halved is 77, and floor(77*66/7) = 726 each way: Geodude
+	# goes from 135 to 861, level 11, where SLASH finds four slots taken.
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([
+			_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE, Fixture.EMBER]),
+			_mon(Fixture.GEODUDE, 5, [Fixture.TACKLE, Fixture.EMBER, Fixture.THUNDERBOLT, Fixture.GROWL]),
+		]),
+		Gen2Party.of(_mon(Fixture.MAGCARGO, 66, [Fixture.TACKLE])), _rng
+	)
+	battle.party(Gen2Battle.PLAYER).at(1).item = Fixture.EXP_SHARE
+	battle.player.disabled_slot = 1
+	battle.player.disable_turns = 4
+	battle.award_win_experience()
+	assert_eq(int(battle.pending_learn(Gen2Battle.PLAYER).get("index", -1)), 1)
+
+	battle.learn_move(Gen2Battle.PLAYER, 1)
+
+	assert_eq(battle.player.disabled_slot, -1)
+	assert_eq(battle.player.disable_turns, 0)
+
+
+## `ForgetMove` lists the party struct, where a Mimic copy is still MIMIC, so a
+## copied HM is not refused and what goes is MIMIC.
+func test_forgetting_a_mimic_slot_forgets_mimic_not_the_copy() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.GEODUDE, 5, [Fixture.TACKLE, Fixture.EMBER, Fixture.MIMIC, Fixture.GROWL]),
+		_mon(Fixture.MAGCARGO, 33, [Fixture.TACKLE])
+	)
+	battle.player.mimic_move(2, 0x39)
+	battle.enemy.hp = 1
+	battle.take_turn(0, 0)
+
+	var events: Array = battle.learn_move(Gen2Battle.PLAYER, 2)
+
+	assert_eq(events.size(), 1, "SURF is the copy, not the slot")
+	assert_eq(events[0]["forgot"], Fixture.MIMIC)
+	assert_eq(battle.player.moves[2], Fixture.SLASH)
+
+
+## A move into an empty slot still ends in `LearnMove`'s copy of the party
+## struct over `wBattleMonMoves`, so the Pokemon out loses its Mimic copy.
+func test_learning_into_an_empty_slot_ends_the_mimic_copy() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.GEODUDE, 5, [Fixture.TACKLE, Fixture.EMBER, Fixture.MIMIC]),
+		_mon(Fixture.MAGCARGO, 33, [Fixture.TACKLE])
+	)
+	battle.player.mimic_move(2, Fixture.THUNDERBOLT)
+	battle.enemy.hp = 1
+	battle.take_turn(0, 0)
+
+	assert_eq(battle.player.moves[3], Fixture.GROWL, "level 6 filled the empty slot")
+	assert_eq(battle.player.moves[2], Fixture.MIMIC)
+	assert_eq(battle.player.mimicked_slot, -1)
+
+
+## Generation 1's `LearnMove` copies the party moves over `wBattleMonMoves` with
+## no `TRANSFORMED` test, so a transformed learner fights on with its own four.
+func test_a_generation_1_transformed_learner_gets_its_own_moves_back() -> void:
+	_data.generation = RomRegistry.GEN1
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.GEODUDE, 5, [Fixture.TACKLE, Fixture.EMBER, Fixture.THUNDERBOLT]),
+		_mon(Fixture.MAGCARGO, 33, [Fixture.TACKLE])
+	)
+	battle.player.transform_into(battle.enemy)
+	battle.player.hp = battle.player.max_hp() * 10
+	battle.enemy.hp = 1
+	battle.take_turn(0, 0)
+
+	assert_eq(battle.player.moves, [
+		Fixture.TACKLE, Fixture.EMBER, Fixture.THUNDERBOLT, Fixture.SLASH,
+	])
+	assert_eq(battle.player.species, Fixture.MAGCARGO, "still transformed")
+
+
 func test_declining_the_offered_move_keeps_the_four_already_known() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.GEODUDE, 5, [Fixture.TACKLE, Fixture.EMBER, Fixture.THUNDERBOLT]),

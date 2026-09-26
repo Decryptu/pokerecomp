@@ -683,8 +683,27 @@ func restore_transform() -> void:
 	transform_original = {}
 
 
-func own_moves() -> Array:
-	return transform_original.get("moves", moves)
+## The party struct's moves, which `ForgetMove` lists and `LearnMove` checks.
+func persistent_moves() -> Array:
+	var out: Array = []
+	for slot: int in (transform_original.get("moves", moves) as Array).size():
+		out.append(persistent_move(slot))
+	return out
+
+
+## `LearnMove`'s copy of the party struct over `wBattleMonMoves` and `wBattleMonPP`,
+## which ends a Mimic copy and, on Generation 1, a Transform's moves.
+func adopt_persistent_moves() -> void:
+	var own: Array = persistent_moves()
+	var own_pp: Array = []
+	var own_ups: Array = []
+	for slot: int in own.size():
+		own_pp.append(persistent_pp(slot))
+		own_ups.append(persistent_pp_ups(slot))
+	_end_mimic()
+	moves = own
+	pp = own_pp
+	pp_ups = own_ups
 
 
 func persistent_species() -> int:
@@ -924,6 +943,8 @@ func replace_move(slot: int, move: int) -> bool:
 	moves[slot] = move
 	pp[slot] = int(data.move(move).get("pp", 0))
 	_set_pp_ups(slot, 0)
+	if slot == mimicked_slot:
+		_end_mimic()
 	# `BattleCommand_Sketch` writes the party struct with no transform test.
 	if not transform_original.is_empty():
 		var backup_moves: Array = transform_original["moves"]
@@ -1026,6 +1047,10 @@ func restore_mimic() -> void:
 		if not is_gen1():
 			pp[mimicked_slot] = mimic_original_pp
 			_set_pp_ups(mimicked_slot, mimic_original_pp_ups)
+	_end_mimic()
+
+
+func _end_mimic() -> void:
 	mimicked_slot = -1
 	mimic_original_move = 0
 	mimic_original_pp = 0

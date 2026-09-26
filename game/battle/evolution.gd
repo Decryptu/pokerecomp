@@ -1,9 +1,8 @@
 class_name Gen2Evolution
 extends RefCounted
 
-## The predicates used by `EvolveAfterBattle` in engine/pokemon/evolve.asm.
-## Item and trade evolutions are intentionally exposed as predicates too, so
-## field and link hosts can share the same source ordering later.
+## `EvolveAfterBattle`'s branches in engine/pokemon/evolve.asm, one predicate
+## per caller: the battle's level pass, the pack's stone and the link's trade.
 
 const HAPPINESS_TO_EVOLVE: int = 220
 const EVERSTONE: int = 70
@@ -46,10 +45,13 @@ static func item_evolution(data: GameData, mon: Gen2BattleMon, item: int) -> Dic
 
 
 ## `.trade`: EVERSTONE refuses, a `$FF` parameter asks for nothing, and any other
-## value is an item the Pokemon must be HOLDING. The cartridge zeroes
-## `wTempMonItem` on the way through, so a held requirement is CONSUMED; that is
-## the caller's to write, and [code]consumes_held_item[/code] says when.
-static func trade_evolution(data: GameData, mon: Gen2BattleMon) -> Dictionary:
+## value is an item the Pokemon must be HOLDING, which the Time Capsule's
+## `cp LINK_TIMECAPSULE` refuses outright. The cartridge zeroes `wTempMonItem`
+## on the way through, so a held requirement is CONSUMED; that is the caller's
+## to write, and [code]consumes_held_item[/code] says when.
+static func trade_evolution(
+	data: GameData, mon: Gen2BattleMon, link_mode: int = Gen2LinkTransport.LINK_TRADECENTER
+) -> Dictionary:
 	if data == null or mon == null or mon.item == EVERSTONE:
 		return {}
 	for row: Dictionary in data.evolutions(mon.species):
@@ -58,7 +60,7 @@ static func trade_evolution(data: GameData, mon: Gen2BattleMon) -> Dictionary:
 		var parameter: int = int(row.get("parameter", TRADE_NO_ITEM))
 		if parameter == TRADE_NO_ITEM:
 			return row.duplicate(true)
-		if mon.item != parameter:
+		if mon.item != parameter or link_mode == Gen2LinkTransport.LINK_TIMECAPSULE:
 			continue
 		var out: Dictionary = row.duplicate(true)
 		out["consumes_held_item"] = parameter
@@ -147,7 +149,7 @@ static func stopped_evolving_text(mon_name: String) -> String:
 
 ## `EvolveAfterBattle`'s master loop as a list of plans: nothing here writes a
 ## party row, so a caller can apply only the ones not cancelled. [param evolvable]
-## is `wEvolvableFlags`; `.trade` demands a `wLinkMode` this project has none of.
+## is `wEvolvableFlags`; `.trade` and `.item` never pass after a battle.
 ## [param active_species] is what Generation 1's loop reads ([method red_blue_stone_row]).
 static func after_battle(
 	data: GameData, save: Gen2SaveData, evolvable: Array, time_of_day: int,
@@ -178,29 +180,32 @@ static func after_battle(
 		var target: int = int(row.get("target", 0))
 		if target <= 0 or target == mon.species or data.species(target).is_empty():
 			continue
-		plans.append({
-			"index": index,
-			"old_species": mon.species,
-			"new_species": target,
-			"level": mon.level,
-			# `GetNickname` / `CopyName1` fill wStringBuffer2 before the species is
-			# replaced, and all four boxes read it, so every line of the sequence
-			# names what the Pokemon was called on the way in.
-			"evolving_name": mon.nickname if not mon.nickname.is_empty() \
-				else String(data.species(mon.species).get("name", "")),
-			# `.check_statused`'s `CheckFaintedFrzSlp`, which costs the cry and the
-			# closing `AnimateFrontpic` both.
-			"statused": is_statused(mon),
-			# `SCGB_EVOLUTION` reaches `GetMonNormalOrShinyPalettePointer`, and
-			# an evolution changes the species rather than the DV word, so both
-			# pictures the sequence draws are the same answer.
-			"shiny": Gen2Stats.is_shiny(mon.dvs),
-			# `.pressed_b` reads `wForceEvolution`: a level evolution is not
-			# forced, so B cancels it, and an item's is and B does nothing.
-			"can_cancel": true,
-			"row": row.duplicate(true),
-		})
+		plans.append(plan(data, mon, index, row, true))
 	return plans
+
+
+## One pass of the master loop as the evolution screen plays it.
+## [param can_cancel] is `.pressed_b`'s `wForceEvolution` test.
+static func plan(
+	data: GameData, mon: Gen2SaveMon, index: int, row: Dictionary, can_cancel: bool
+) -> Dictionary:
+	return {
+		"index": index,
+		"old_species": mon.species,
+		"new_species": int(row.get("target", 0)),
+		"level": mon.level,
+		# `GetNickname` / `CopyName1` fill wStringBuffer2 before the species is
+		# replaced, and every box of the sequence reads it.
+		"evolving_name": Gen2SaveMon.display_name(mon, data),
+		# `.check_statused`'s `CheckFaintedFrzSlp`, which costs the cry and the
+		# closing `AnimateFrontpic` both.
+		"statused": is_statused(mon),
+		# `SCGB_EVOLUTION` reaches `GetMonNormalOrShinyPalettePointer`, and an
+		# evolution changes the species rather than the DV word.
+		"shiny": Gen2Stats.is_shiny(mon.dvs),
+		"can_cancel": can_cancel,
+		"row": row.duplicate(true),
+	}
 
 
 ## Red and Blue's `.checkItemEvo` compares a stone row against `wCurItem`, which
