@@ -62,6 +62,11 @@ static func yes_no() -> Gen2WorldMenu:
 	return menu
 
 
+## `_InitVerticalMenuCursor` filters B out under STATICMENU_DISABLE_B.
+func takes_b() -> bool:
+	return (flags & Gen2MenuBox.STATICMENU_DISABLE_B) == 0
+
+
 func is_yes_no() -> bool:
 	return options == YES_NO_OPTIONS
 
@@ -83,6 +88,11 @@ func press_yes_no(button: int) -> bool:
 
 func holding() -> bool:
 	return _hold > 0
+
+
+## True on the answering press, which `MenuClickSound` clicks for.
+func just_answered() -> bool:
+	return _hold == ANSWER_HOLD_FRAMES
 
 
 ## Spends one frame of the hold, answering true on the frame it ends.

@@ -145,6 +145,7 @@ func _build() -> void:
 
 	_yes_no = Gen2YesNoBox.new(Gen2MenuPage.from_data(_data))
 	_yes_no.answered.connect(_answer)
+	_yes_no.clicked.connect(sfx_requested.emit.bind(false))
 	add_child(_yes_no)
 
 	_text_box = Gen2TextBox.for_screen(_data)
@@ -186,6 +187,7 @@ func _open_party() -> void:
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.mouse_filter = Control.MOUSE_FILTER_STOP
 	host.selection_made.connect(_on_member_selected)
+	host.sfx_requested.connect(sfx_requested.emit)
 	add_child(host)
 	host.open_selection()
 	_party = host

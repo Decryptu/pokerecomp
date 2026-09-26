@@ -126,7 +126,7 @@ func test_counter_only_reflects_a_physical_move_that_hit_this_action_pair() -> v
 	var events: Array = battle.take_turn(0, 0)
 	var hits: Array = _of_type(events, Gen2Battle.HIT)
 	assert_eq(hits.size(), 1, "the special-category check rejects Counter")
-	assert_eq(_of_type(events, Gen2Battle.MOVE_FAILED).size(), 1)
+	assert_eq(_of_type(events, Gen2Battle.MISSED).size(), 1)
 
 
 func test_mirror_coat_only_reflects_a_special_move_that_hit_this_action_pair() -> void:
@@ -197,7 +197,7 @@ func test_a_status_that_stops_fly_on_release_makes_the_user_visible_again() -> v
 		_rng
 	)
 	battle.take_turn(0, 0)
-	battle.player.substatus |= Gen2Substatus.FLINCHED
+	battle.player.status = 3
 	var events: Array = battle.take_turn(0, 0)
 	assert_eq(_of_type(events, Gen2Battle.CANNOT_MOVE).size(), 1)
 	assert_false(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.FLYING))
@@ -618,7 +618,7 @@ func test_belly_drum_maxes_attack_for_half_the_users_health() -> void:
 	assert_eq(mon.stage("attack"), Gen2Stats.MAX_STAGE)
 	@warning_ignore("integer_division")
 	assert_eq(mon.hp, max_hp - max_hp / 2)
-	assert_eq(_first(turn.events, Gen2Battle.STAT_CHANGED)["by"], 6)
+	assert_eq(_of_type(turn.events, Gen2Battle.ATTACK_MAXIMIZED).size(), 1, "BellyDrumText")
 
 
 func test_belly_drum_fails_without_cost_under_half_health() -> void:
@@ -630,7 +630,7 @@ func test_belly_drum_fails_without_cost_under_half_health() -> void:
 
 	assert_eq(mon.stage("attack"), 0)
 	assert_eq(mon.hp, 1, "nothing spent on a failed attempt")
-	assert_eq(_first(turn.events, Gen2Battle.STAT_CHANGE_FAILED)["by"], 6)
+	assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1, "PrintButItFailed")
 
 
 ## `BattleCommand_BellyDrum` calls `BattleCommand_AttackUp2` BEFORE the HP check
@@ -648,8 +648,8 @@ func test_the_belly_drum_bug_pays_two_stages_before_it_fails() -> void:
 
 	assert_eq(mon.stage("attack"), Gen2EffectCommands.ATTACK_UP_2_STAGES)
 	assert_eq(mon.hp, 1, "and still no HP spent, the subtraction being past the branch")
-	assert_eq(_first(turn.events, Gen2Battle.STAT_CHANGED)["by"], 2)
-	assert_eq(_first(turn.events, Gen2Battle.STAT_CHANGE_FAILED)["by"], 6)
+	assert_eq(_of_type(turn.events, Gen2Battle.STAT_CHANGED).size(), 0, "the raise says nothing")
+	assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1)
 
 	# The raise is capped by the room left, so it cannot walk past the top, and a
 	# Pokemon already there is the ordinary failure with nothing paid.
@@ -676,7 +676,7 @@ func test_belly_drum_fails_once_attack_is_already_at_the_top() -> void:
 	Gen2EffectCommands.run(Gen2EffectCommands.BELLY_DRUM, turn)
 
 	assert_eq(mon.hp, before)
-	assert_eq(_of_type(turn.events, Gen2Battle.STAT_CHANGE_FAILED).size(), 1)
+	assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1)
 
 
 func test_psych_up_copies_the_targets_stages_onto_the_user() -> void:
@@ -694,7 +694,8 @@ func test_psych_up_copies_the_targets_stages_onto_the_user() -> void:
 func test_psych_up_fails_when_the_target_has_nothing_to_copy() -> void:
 	var turn: Gen2Turn = _turn(_battle())
 	Gen2EffectCommands.run(Gen2EffectCommands.PSYCH_UP, turn)
-	assert_eq(turn.events.size(), 0)
+	assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1, "PrintButItFailed")
+	assert_eq(_of_type(turn.events, Gen2Battle.STAGES_COPIED).size(), 0)
 
 
 func test_double_hit_always_hits_exactly_twice() -> void:
@@ -828,7 +829,7 @@ func test_ohko_fails_outright_against_a_higher_level_target() -> void:
 	var turn: Gen2Turn = _turn(battle, Fixture.OHKO_MOVE)
 	Gen2EffectCommands.run(Gen2EffectCommands.OHKO, turn)
 	assert_true(turn.ended)
-	assert_eq(_first(turn.events, Gen2Battle.NO_EFFECT)["target"], turn.target)
+	assert_eq(_first(turn.events, Gen2Battle.UNAFFECTED)["target"], turn.target, "UnaffectedText")
 	assert_eq(battle.enemy.hp, battle.enemy.max_hp(), "untouched, not even rolled for")
 
 
@@ -2011,13 +2012,15 @@ func test_heal_bell_needs_no_stat_recalculation() -> void:
 	assert_eq(battle.player.stat("attack"), healthy, "and the bell gives it back")
 
 
-func test_heal_bell_clears_the_toxic_ramp_with_the_poison() -> void:
+## `BattleCommand_HealBell` clears the status bytes and never `SUBSTATUS_TOXIC`,
+## so a poison or a burn caught later picks the ramp up where it stopped.
+func test_heal_bell_leaves_the_toxic_ramp_running() -> void:
 	var battle: Gen2Battle = _party_battle()
 	battle.player.status = Gen2Status.POISON
 	battle.player.toxic_counter = 4
 	_run_move(battle, Fixture.HEAL_BELL)
 	assert_eq(battle.player.status, Gen2Status.NONE)
-	assert_eq(battle.player.toxic_counter, 0)
+	assert_eq(battle.player.toxic_counter, 4)
 
 
 ## `res SUBSTATUS_NIGHTMARE, [hl]` opens the routine, on the ringer's own
@@ -2852,6 +2855,7 @@ func test_the_protect_ladder_halves_and_runs_out_at_eight() -> void:
 		for seed_value: int in PROTECT_LADDER_SAMPLES:
 			battle.rng.seed = seed_value
 			battle.player.protect_count = count
+			battle.player.pp[0] = battle.player.max_pp(0)
 			battle.player.substatus &= ~Gen2Substatus.PROTECT
 			_run_move(battle, Fixture.PROTECT)
 			if Gen2Substatus.has(battle.player.substatus, Gen2Substatus.PROTECT):
@@ -3887,7 +3891,7 @@ func test_mirror_move_refuses_a_move_the_user_already_knows() -> void:
 	Gen2EffectCommands.run(Gen2EffectCommands.MIRROR_MOVE, turn)
 	assert_true(turn.ended)
 	assert_eq(turn.called_move_number, 0)
-	assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1)
+	assert_eq(_of_type(turn.events, Gen2Battle.MIRROR_MOVE_FAILED).size(), 1)
 
 
 func test_sleep_talk_calls_an_empty_pp_move_while_still_asleep() -> void:
@@ -4640,3 +4644,45 @@ func test_applied_effectiveness_follows_what_the_effect_reads() -> void:
 	assert_eq(Gen2MoveEffect.applied_effectiveness(20, wave, gen2), Gen2Layout.MATCHUP_EFFECTIVE)
 	assert_eq(Gen2MoveEffect.applied_effectiveness(20, toss, gen2), Gen2Layout.MATCHUP_EFFECTIVE)
 	assert_eq(Gen2MoveEffect.applied_effectiveness(0, toss, gen2), 0)
+
+
+## `supereffectivelooptext` says nothing once `endloop` has set
+## `SUBSTATUS_IN_LOOP`: a multi-hit move names the matchup on its first hit alone.
+func test_a_multi_hit_names_the_matchup_once() -> void:
+	var turn: Gen2Turn = _run_move(_battle(), Fixture.DOUBLE_HIT_MOVE)
+	assert_eq(_of_type(turn.events, Gen2Battle.HIT).size(), 2)
+	assert_eq(_of_type(turn.events, Gen2Battle.EFFECTIVENESS).size(), 1)
+
+
+## `BattleCommand_DoubleFlyingDamage` asks only whether the target flies: Gust
+## doubles nothing against a Pokemon that used Minimize.
+func test_gust_does_not_double_against_a_minimized_target() -> void:
+	var damage: Array = []
+	for minimized: bool in [false, true]:
+		var battle: Gen2Battle = _battle()
+		battle.enemy.minimized = minimized
+		battle.rng.seed = 7
+		damage.append(int(_first(_run_move(battle, Fixture.GUST).events, Gen2Battle.HIT)["amount"]))
+	assert_eq(damage[0], damage[1])
+
+
+## `BattleCommand_TriStatusChance` calls `BattleCommand_EffectChance` first, so
+## a failed chance inflicts nothing.
+func test_tri_attack_rolls_its_effect_chance() -> void:
+	var turn: Gen2Turn = _run_move(_battle(), Fixture.TRI_ATTACK, false, {"effect_chance": 0})
+	assert_eq(_of_type(turn.events, Gen2Battle.STATUS_INFLICTED).size(), 0)
+
+
+## `BattleCommand_CheckHit` never reads `wTypeModifier`: a Protect still turns an
+## immune move away aloud, and `failuretext` then says it does not affect.
+func test_an_immune_protecting_target_is_protected_and_then_unaffected() -> void:
+	var battle: Gen2Battle = Gen2Battle.create(
+		_data,
+		Gen2BattleMon.create(_data, Fixture.PIKACHU, 50, [Fixture.TACKLE]),
+		Gen2BattleMon.create(_data, Fixture.GASTLY, 50, [Fixture.TACKLE]),
+		_rng
+	)
+	battle.enemy.substatus |= Gen2Substatus.PROTECT
+	var turn: Gen2Turn = _run_move(battle, Fixture.TACKLE)
+	assert_eq(_of_type(turn.events, Gen2Battle.PROTECTING_ITSELF).size(), 1)
+	assert_eq(_of_type(turn.events, Gen2Battle.NO_EFFECT).size(), 1)

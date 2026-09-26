@@ -53,6 +53,7 @@ static func to_battle_mon(data: GameData, saved: Gen2SaveMon) -> Gen2BattleMon:
 	out.ot_id = saved.ot_id
 	out.status = saved.status
 	out.happiness = saved.happiness
+	out.pokerus = saved.pokerus
 	out.nickname = saved.nickname
 	out.caught_location = saved.caught_location & Gen2BattleMon.CAUGHT_LOCATION_MASK
 	out.pp = saved_pp
@@ -166,6 +167,19 @@ static func to_battle_party(data: GameData, save: Gen2SaveData) -> Gen2Party:
 		mon.starter_pikachu = data.id == RomRegistry.YELLOW and Gen1Pikachu.is_starter_of(save, saved)
 		members.append(mon)
 	return Gen2Party.create(members)
+
+
+## `AskUseNextPokemon`'s `wPartyMon1Speed` for an egg in the first slot, or -1.
+static func first_slot_speed(data: GameData, save: Gen2SaveData) -> int:
+	if data == null or save == null or save.party.is_empty():
+		return -1
+	var first: Gen2SaveMon = save.party[0]
+	if first == null or not first.is_egg:
+		return -1
+	var egg: Gen2BattleMon = Gen2BattleMon.create(
+		data, first.species, first.level, [], first.dvs, first.stat_exp
+	)
+	return int(egg.stats.get("speed", 0)) if egg != null else -1
 
 
 ## Where battle-party slot [param battle_index] sits in [param save]'s party.

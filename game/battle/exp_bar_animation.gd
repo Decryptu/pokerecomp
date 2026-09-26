@@ -38,22 +38,20 @@ var _pending_reset: bool = false
 var _paused: bool = false
 
 
-## `CalcExpBar`: 64 minus the exp still owed, scaled over the span between the
-## two levels. Scaling the exp already earned instead floors the other way and
-## answers a pixel high wherever the division is inexact, which is most values.
+## `CalcExpBar`: 64 less the owed exp over the span, both shifted until the
+## span's low word fits a byte; level 100 scales against 101 and is empty.
 static func pixels_for(growth_rate: int, level: int, exp_points: int) -> int:
-	if level >= Gen2Experience.MAX_LEVEL:
+	var next_exp: int = Gen2Experience.total_exp_at(growth_rate, level + 1, true)
+	var divisor: int = (next_exp - Gen2Experience.total_exp_at(growth_rate, level)) & 0xFFFF
+	var owed: int = ((next_exp - exp_points) & 0xFFFFFF) * LENGTH_PX
+	while divisor > 0xFF:
+		divisor >>= 1
+		owed >>= 1
+	if divisor == 0:
 		return LENGTH_PX
-
-	var floor_exp: int = Gen2Experience.total_exp_at(growth_rate, level)
-	var span: int = Gen2Experience.total_exp_at(growth_rate, level + 1) - floor_exp
-	if span <= 0:
-		return LENGTH_PX
-
-	var remaining: int = clampi(floor_exp + span - exp_points, 0, span)
 	@warning_ignore("integer_division")
-	var owed: int = LENGTH_PX * remaining / span
-	return clampi(LENGTH_PX - owed, 0, LENGTH_PX)
+	var quotient: int = (owed / divisor) & 0xFF
+	return clampi((LENGTH_PX - quotient) & 0xFF, 0, LENGTH_PX)
 
 
 ## A segment covering no distance is not skipped: `.LoopBarAnimation` draws and

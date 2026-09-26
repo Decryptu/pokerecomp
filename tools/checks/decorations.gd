@@ -207,8 +207,7 @@ func _verify_categories(data: GameData) -> void:
 	_verify_menu_trim(data)
 
 
-## `PopulateDecoCategoryMenu`'s `cp 8`, counted on the list with PUT IT AWAY and
-## CANCEL already on it: six owned rows make eight and lose the last.
+## `PopulateDecoCategoryMenu`'s `cp 8` counts PUT IT AWAY and CANCEL: six rows scroll.
 func _verify_menu_trim(data: GameData) -> void:
 	var ornaments: Array = EXPECTED_CATEGORIES[Gen2WorldDecoration.SLOT_LEFT_ORNAMENT]
 	for owned: int in range(1, ornaments.size() + 1):
@@ -218,12 +217,11 @@ func _verify_menu_trim(data: GameData) -> void:
 		var rows: Array = Gen2WorldDecoration.category_rows(
 			data, state, Gen2WorldDecoration.SLOT_LEFT_ORNAMENT
 		)
-		var cancels: bool = owned + 2 < Gen2WorldDecoration.CATEGORY_MENU_HEIGHT
 		_r.check(
-			rows.size() == owned + (2 if cancels else 1),
+			rows.size() == owned + 2 and int(rows[rows.size() - 1]["deco"]) == 0,
 			"%d owned ornaments gave %d rows" % [owned, rows.size()]
 		)
 		_r.check(
-			(int(rows[rows.size() - 1]["deco"]) == 0) == cancels,
-			"%d owned ornaments got CANCEL wrong" % owned
+			Gen2WorldDecoration.category_scrolls(rows) == (owned >= 6),
+			"%d owned ornaments scrolled wrong" % owned
 		)

@@ -118,10 +118,11 @@ static func residual_damage(max_hp: int) -> int:
 
 
 ## [param counter] starts at 1 the turn Toxic is inflicted, so the first hit is a
-## sixteenth and not nothing.
+## sixteenth and not nothing. `ResidualDamage` adds `GetSixteenthMaxHP`, already
+## floored to one, counter times.
 static func toxic_damage(max_hp: int, counter: int) -> int:
 	@warning_ignore("integer_division")
-	return maxi(max_hp * counter / TOXIC_RESIDUAL_DIVISOR, 1)
+	return maxi(max_hp / TOXIC_RESIDUAL_DIVISOR, 1) * counter
 
 
 ## `PlaceNonFaintStatus`' and `PrintStatusAilment`'s own order.

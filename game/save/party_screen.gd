@@ -378,12 +378,20 @@ func handle_button(button: int) -> bool:
 			_move_cursor(1)
 			return true
 		PokeButton.A:
+			_click()
 			_confirm()
 			return true
 		PokeButton.B:
+			_click()
 			_cancel()
 			return true
 	return false
+
+
+## `PartyMenuSelect`'s click, waited on Gen 2; `MonMenuLoop`'s and Gen 1's are not.
+func _click() -> void:
+	var gen1: bool = _data != null and _data.generation == RomRegistry.GEN1
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, not gen1 and not _submenu_open)
 
 
 func _move_cursor(delta: int) -> void:

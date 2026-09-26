@@ -68,16 +68,57 @@ static func decide(battle: Gen2Battle, flags: int, rng: RandomNumberGenerator) -
 	return {"switch": true, "index": int(choice["index"])}
 
 
-## `FindMonInOTPartyToSwitchIntoBattle`: the pick alone, for Baton Pass, where
-## [method decide] answers whether to switch as well. Nobody standing is -1; a
-## shortlist that resists nothing falls back to `.not_2`'s lowest index up.
+## `FindMonInOTPartyToSwitchIntoBattle` and `ScoreMonTypeMatchups`: the first
+## with a super-effective move the player's types do not threaten, else the
+## first not threatened (such a move clearing it), else a `BattleRandom` roll.
+## Generation 1 takes the first standing. Nobody standing is -1.
 static func pick_target(battle: Gen2Battle) -> int:
 	var alive: Array = _alive_others(battle)
 	if alive.is_empty():
 		return -1
-	var best: Dictionary = _best_answer(battle, alive)
-	var index: int = int(best["index"])
-	return index if index >= 0 else int(alive[0])
+	if battle.is_gen1():
+		return int(alive[0])
+	var safe: Array = []
+	for index: int in alive:
+		var member: Gen2BattleMon = battle.party(Gen2Battle.ENEMY).at(index)
+		var answers: bool = _moves_hit_player(battle, member)
+		var threatened: bool = _player_types_hit(battle, member)
+		if answers and not threatened:
+			return index
+		if answers or not threatened:
+			safe.append(index)
+	if not safe.is_empty():
+		return int(safe[0])
+	## `.loop5`: under `wOTPartyCount`, or `PARTY_LENGTH` on Gold and Silver.
+	var bound: int = battle.party(Gen2Battle.ENEMY).size() \
+		if Gen2WorldState.is_crystal_profile(battle.data) else Gen2Party.MAX_SIZE
+	while true:
+		var roll: int = battle.rng.randi_range(0, 255) & 7
+		if roll < bound and alive.has(roll):
+			return roll
+	return -1
+
+
+## `LookUpTheEffectivenessOfEveryMove`, which asks no power of a move.
+static func _moves_hit_player(battle: Gen2Battle, member: Gen2BattleMon) -> bool:
+	var player: Gen2BattleMon = battle.mon(Gen2Battle.PLAYER)
+	var identified: bool = Gen2Substatus.has(player.substatus, Gen2Substatus.IDENTIFIED)
+	for move_number: int in member.moves:
+		var type: int = int(battle.data.move(int(move_number)).get("type", 0))
+		if battle.data.type_effectiveness(type, player.types(), identified) >= SUPER_EFFECTIVE:
+			return true
+	return false
+
+
+## `IsThePlayerMonTypesEffectiveAgainstOTMon`.
+static func _player_types_hit(battle: Gen2Battle, member: Gen2BattleMon) -> bool:
+	var identified: bool = Gen2Substatus.has(
+		battle.mon(Gen2Battle.ENEMY).substatus, Gen2Substatus.IDENTIFIED
+	)
+	for type: int in battle.mon(Gen2Battle.PLAYER).types():
+		if battle.data.type_effectiveness(type, member.types(), identified) >= SUPER_EFFECTIVE:
+			return true
+	return false
 
 
 ## `CheckAbleToSwitch`: how badly the AI wants out and who it would rather have

@@ -45,8 +45,13 @@ enum STEP {
 	PLEASE_WAIT, SELECT, FOOTER, OFFERING, CONFIRM, RESULT, LEAVING, DONE,
 	GEN1_ASK_DELAY, GEN1_ASK, GEN1_WAITING, GEN1_TRADING, GEN1_MOVIE,
 	GEN1_COMPLETED_LEAD, GEN1_COMPLETED, GEN1_EXCHANGE, GEN1_CANCELED_DELAY,
-	GEN1_VERSUS_LEAD, GEN1_VERSUS, GEN1_TRANSITION,
+	VERSUS_LEAD, VERSUS, GEN1_TRANSITION, VERDICT, RECORD,
 }
+
+## `ShowLinkBattleParticipants`' and `ShowLinkBattleParticipantsAfterEnd`'s
+## `ld c, 150`, and `DisplayLinkBattleResult`'s `ld c, 200`.
+const VERSUS_FRAMES: int = 150
+const VERDICT_FRAMES: int = 200
 
 var mode: int = MODE_TRADE
 ## Whether the trade is written to disk. A driver that only wants the screen
@@ -84,6 +89,7 @@ var _gen1_pages: Array = []
 var _gen1_page: int = 0
 var _gen1_evolution: Dictionary = {}
 var _versus: Dictionary = {}
+var _verdict: String = ""
 ## `BattleTransition`'s row 0, `.linkBattle`'s.
 var _transition: Gen2BattleTransition = null
 
@@ -122,8 +128,8 @@ func _ready() -> void:
 	if mode == MODE_RECORD:
 		_step = STEP.DONE
 	elif mode == MODE_VERSUS_RESULT:
-		_step = STEP.GEN1_VERSUS
-		_frames = Gen1Layout.VERSUS_RESULT_FRAMES
+		_step = STEP.VERSUS
+		_frames = Gen1Layout.VERSUS_RESULT_FRAMES if _gen1 else VERSUS_FRAMES
 	elif _gen1:
 		_step = STEP.PLEASE_WAIT
 		_frames = Gen1Layout.CABLE_CLUB_EXCHANGE_FRAMES
@@ -163,6 +169,20 @@ func advance_frame() -> void:
 				closed.emit()
 				return
 			_step = STEP.SELECT
+			if mode == MODE_BATTLE_WAIT:
+				_step = STEP.VERSUS
+				_frames = VERSUS_FRAMES
+				set_versus(_player_rows(), _partner.get("party", []), "")
+		STEP.VERSUS:
+			if mode == MODE_BATTLE_WAIT:
+				closed.emit()
+				return
+			_step = STEP.VERDICT
+			_frames = VERDICT_FRAMES
+			_versus["result"] = _verdict
+		## `ReadAndPrintLinkBattleRecord`, then `WaitPressAorB_BlinkCursor`.
+		STEP.VERDICT:
+			_step = STEP.RECORD
 		STEP.OFFERING:
 			_step = STEP.CONFIRM
 		STEP.RESULT:
@@ -191,7 +211,7 @@ func handle_button(button: int) -> bool:
 		if _stats != null:
 			_refresh()
 		return true
-	if mode == MODE_RECORD:
+	if mode == MODE_RECORD or _step == STEP.RECORD:
 		if button in [PokeButton.A, PokeButton.B]:
 			closed.emit()
 		return true
@@ -452,16 +472,16 @@ func _gen1_advance() -> void:
 	match _step:
 		STEP.PLEASE_WAIT:
 			if mode == MODE_BATTLE_WAIT:
-				_step = STEP.GEN1_VERSUS_LEAD
+				_step = STEP.VERSUS_LEAD
 				_frames = Gen1Layout.CABLE_CLUB_CLOSE_FRAMES
 			else:
 				_step = STEP.SELECT
-		STEP.GEN1_VERSUS_LEAD:
-			_step = STEP.GEN1_VERSUS
+		STEP.VERSUS_LEAD:
+			_step = STEP.VERSUS
 			_frames = Gen1Layout.VERSUS_FRAMES
 			if _versus.is_empty():
 				set_versus(_player_rows(), _partner.get("party", []), "")
-		STEP.GEN1_VERSUS:
+		STEP.VERSUS:
 			if mode != MODE_BATTLE_WAIT:
 				closed.emit()
 				return
@@ -603,12 +623,14 @@ func animation_closed() -> void:
 	_refresh()
 
 
-## `SetupPlayerAndEnemyPokeballs`' two rows and `EndOfBattle`'s verdict.
+## `SetupPlayerAndEnemyPokeballs`' two rows and `EndOfBattle`'s verdict, which
+## Generation 2 holds back until `DisplayLinkBattleResult`.
 func set_versus(player_rows: Array, enemy_rows: Array, result: String) -> void:
+	_verdict = result
 	_versus = {
 		"player": {"name": _save.player_name if _save != null else "", "balls": _versus_balls(player_rows)},
 		"enemy": {"name": String(_partner.get("name", "")), "balls": _versus_balls(enemy_rows)},
-		"result": result,
+		"result": result if _gen1 else "",
 	}
 	_refresh()
 
@@ -768,7 +790,7 @@ func _refresh() -> void:
 			_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 		return
 	var indices: PackedByteArray
-	if mode == MODE_RECORD:
+	if mode == MODE_RECORD or _step == STEP.RECORD:
 		indices = _page.draw_record(
 			_save.link_record if _save != null else {},
 			_save.player_name if _save != null else "",
@@ -776,10 +798,10 @@ func _refresh() -> void:
 		)
 	elif _step == STEP.PLEASE_WAIT:
 		indices = _page.draw_please_wait()
-	elif _step == STEP.GEN1_VERSUS_LEAD:
+	elif _step == STEP.VERSUS_LEAD:
 		indices = _page.draw_gen1_trade({"blank": true})
-	elif _step == STEP.GEN1_VERSUS:
-		indices = _page.draw_gen1_versus(_versus)
+	elif _step == STEP.VERSUS or _step == STEP.VERDICT:
+		indices = _page.draw_versus(_versus)
 	elif _step == STEP.GEN1_TRANSITION:
 		indices = _page.draw_gen1_transition(_transition, _data.tile_indices("battle_transition"))
 	elif _gen1:

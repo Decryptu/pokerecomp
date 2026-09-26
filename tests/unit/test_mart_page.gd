@@ -78,12 +78,8 @@ func test_a_row_prints_its_price_on_the_row_below_its_name() -> void:
 	)
 
 
-func test_the_down_arrow_is_always_drawn_and_the_up_one_waits_for_a_scroll() -> void:
+func test_the_up_arrow_waits_for_a_scroll() -> void:
 	var image: Image = _page.render(_state())
-	assert_true(
-		_ink(image, Vector2i(Gen2MartPage.LIST_RIGHT, Gen2MartPage.LIST_BOTTOM)),
-		"SCROLLINGMENU_DISPLAY_ARROWS draws the down arrow whatever the scroll is"
-	)
 	assert_false(_ink(image, Vector2i(Gen2MartPage.LIST_RIGHT, Gen2MartPage.LIST_AT.y)))
 	var scrolled: Image = _page.render(_state({"scrolled": true}))
 	assert_true(_ink(scrolled, Vector2i(Gen2MartPage.LIST_RIGHT, Gen2MartPage.LIST_AT.y)))

@@ -56,8 +56,8 @@ const LUCKY_EGG_ITEM: int = 0x7E
 ## underflows there, and `docs/bugs_and_glitches.md` calls it a bug rather than a
 ## rule. Under `medium_slow_level_one_underflow` the formula runs at level 1 the
 ## way `CalcExpAtLevel` does, and its three bytes wrap.
-static func total_exp_at(growth_rate: int, level: int) -> int:
-	var n: int = clampi(level, 1, MAX_LEVEL)
+static func total_exp_at(growth_rate: int, level: int, past_max: bool = false) -> int:
+	var n: int = clampi(level, 1, MAX_LEVEL + 1 if past_max else MAX_LEVEL)
 	if n <= 1 and not Gen2Rules.hardware(&"medium_slow_level_one_underflow"):
 		return 0
 

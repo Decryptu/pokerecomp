@@ -444,11 +444,10 @@ func test_gold_profile_victory_commits_beaten_flag_and_reloads_objects() -> void
 	assert_true(world["just_battled"])
 
 
-## `LostBattle`'s `.not_canlose` prints nothing of its own: the loss text is the
-## trainer's, and `_WhitedOutText` belongs to `Script_Whiteout` on the map that
-## `Script_reloadmapafterbattle` jumps to. So the battle ends on the imported
-## line and the overworld opens the whiteout's own box.
-func test_defeat_displays_imported_loss_text_and_then_whites_the_player_out() -> void:
+## `LostBattle`'s `.not_canlose` only greys the screen: `PrintWinLossText` is
+## `BATTLETYPE_CANLOSE`'s, and `_WhitedOutText` belongs to `Script_Whiteout` on
+## the map `Script_reloadmapafterbattle` jumps to.
+func test_defeat_prints_no_loss_text_and_then_whites_the_player_out() -> void:
 	await _open_world(true)
 	await _trigger_trainer()
 	var host: Gen2BattleScreen = _battle_child()
@@ -459,7 +458,7 @@ func test_defeat_displays_imported_loss_text_and_then_whites_the_player_out() ->
 	for member: Gen2BattleMon in host._battle.party(Gen2Battle.PLAYER).mons:
 		member.hp = 0
 	host = _battle_host()
-	assert_eq(host.battle_snapshot()["message"], "YOU LOST.")
+	assert_ne(host.battle_snapshot()["message"], "YOU LOST.")
 
 	host.finish()
 	host.advance()

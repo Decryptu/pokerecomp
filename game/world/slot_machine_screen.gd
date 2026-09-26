@@ -140,7 +140,8 @@ func _handle_bet_button(button: int) -> void:
 
 ## `PlaceYesNoBox`, which opens on YES and takes B as NO.
 func _handle_yes_no_button(button: int) -> void:
-	_yes_no.press_yes_no(button)
+	if _yes_no.press_yes_no(button) and _yes_no.just_answered():
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 
 
 func _advance_yes_no_hold() -> void:

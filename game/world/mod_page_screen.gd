@@ -120,8 +120,8 @@ func _refresh() -> void:
 	var box: Gen2MenuBox = Gen2MenuBox.from_coords(0, 0, COLUMNS - 1, ROWS - 1, BOX_FLAGS)
 	## `ScrollingMenu_UpdateDisplay`'s own arrows, which is how every scrolled
 	## list in the game says there is more below and above.
-	box.scrolling_arrows = _rows.size() > VISIBLE_ROWS
-	box.scroll = _scroll
+	if _rows.size() > VISIBLE_ROWS:
+		box.show_scroll(_scroll, _rows.size() - 1, VISIBLE_ROWS)
 	var extras: Array = []
 	for index: int in visible_rows().size():
 		var row: Dictionary = visible_rows()[index]

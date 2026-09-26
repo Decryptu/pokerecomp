@@ -25,45 +25,30 @@ func _delays(animation: Gen2ExpBarAnimation, count: int) -> Array[int]:
 
 
 ## `CalcExpBar` scales the exp still *owed* to the next level and subtracts it
-## from 64, which is not the same as scaling the exp already earned: the two
-## floor on opposite sides and disagree by a pixel wherever the division is
-## inexact.
-func test_pixels_are_calc_exp_bar_rather_than_the_ratio_earned() -> void:
+## from 64, after shifting the owed figure and the span right together until
+## the span fits a byte. Medium Fast level 30 spans 2791 points; 1395 owed is
+## 89280 over 64, and four shifts make that 5580 over 174, a quotient of 32.
+## An exact division would owe 31 and draw 33.
+func test_pixels_are_calc_exp_bar_rather_than_an_exact_ratio() -> void:
 	var rate: int = Gen2Experience.GROWTH_MEDIUM_FAST
-	var floor_exp: int = Gen2Experience.total_exp_at(rate, 20)
-	var next_exp: int = Gen2Experience.total_exp_at(rate, 21)
-	var span: int = next_exp - floor_exp
-
-	assert_eq(Gen2ExpBarAnimation.pixels_for(rate, 20, floor_exp), 0)
-	assert_eq(Gen2ExpBarAnimation.pixels_for(rate, 20, next_exp), Gen2ExpBarAnimation.LENGTH_PX)
-	# The scaling is a truncating divide, so anything owing less than a pixel's
-	# worth of the span reads as the whole bar: the cartridge shows a full exp
-	# bar for the last few points before a level.
+	assert_eq(Gen2ExpBarAnimation.pixels_for(rate, 20, Gen2Experience.total_exp_at(rate, 20)), 0)
 	assert_eq(
-		Gen2ExpBarAnimation.pixels_for(rate, 20, next_exp - 1), Gen2ExpBarAnimation.LENGTH_PX
-	)
-	@warning_ignore("integer_division")
-	var pixel_worth: int = span / Gen2ExpBarAnimation.LENGTH_PX
-	assert_eq(
-		Gen2ExpBarAnimation.pixels_for(rate, 20, next_exp - pixel_worth - 1),
-		Gen2ExpBarAnimation.LENGTH_PX - 1,
-		"a pixel's worth of the span short of the level is a pixel short of the bar"
-	)
-
-	var half: int = floor_exp + span / 2
-	@warning_ignore("integer_division")
-	var owed: int = Gen2ExpBarAnimation.LENGTH_PX * (next_exp - half) / span
-	assert_eq(
-		Gen2ExpBarAnimation.pixels_for(rate, 20, half), Gen2ExpBarAnimation.LENGTH_PX - owed
-	)
-
-
-## `cp MAX_LEVEL` returns before the bar is touched, and a level 100 Pokémon has
-## no next level to scale against.
-func test_the_bar_is_full_at_the_maximum_level() -> void:
-	assert_eq(
-		Gen2ExpBarAnimation.pixels_for(Gen2Experience.GROWTH_MEDIUM_FAST, Gen2Experience.MAX_LEVEL, 0),
+		Gen2ExpBarAnimation.pixels_for(rate, 20, Gen2Experience.total_exp_at(rate, 21)),
 		Gen2ExpBarAnimation.LENGTH_PX
+	)
+	assert_eq(Gen2ExpBarAnimation.pixels_for(rate, 30, 27000 + 1396), 32)
+
+
+## No `MAX_LEVEL` test stands in front of `CalcExpBar`: level 100 scales
+## against `CalcExpAtLevel` 101, owes the whole span and draws nothing.
+func test_the_bar_is_empty_at_the_maximum_level() -> void:
+	var rate: int = Gen2Experience.GROWTH_MEDIUM_FAST
+	assert_eq(
+		Gen2ExpBarAnimation.pixels_for(
+			rate, Gen2Experience.MAX_LEVEL,
+			Gen2Experience.total_exp_at(rate, Gen2Experience.MAX_LEVEL)
+		),
+		0
 	)
 
 

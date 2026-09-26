@@ -213,6 +213,7 @@ func handle_button(button: int) -> bool:
 func _build() -> void:
 	_yes_no = Gen2YesNoBox.new(Gen2MenuPage.from_data(_data))
 	_yes_no.answered.connect(_answer_question)
+	_yes_no.clicked.connect(sfx_requested.emit.bind(false))
 	add_child(_yes_no)
 
 	_text_box = Gen2TextBox.for_screen(_data)

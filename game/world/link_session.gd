@@ -255,7 +255,8 @@ static func any_other_alive_mons_for_trade(
 
 
 ## `AddLastLinkBattleToLinkRecord`: the totals, then the opponent's row, a new
-## one taking the last of the five; both stop at [constant MAX_LINK_RECORD].
+## one taking the first empty row or else the last; both stop at
+## [constant MAX_LINK_RECORD].
 static func add_battle_to_record(
 	record: Dictionary, opponent: Dictionary, result: StringName
 ) -> Dictionary:
@@ -273,22 +274,32 @@ static func add_battle_to_record(
 			break
 	if found < 0:
 		found = rows.size() - 1
+		for index: int in rows.size():
+			if String((rows[index] as Dictionary).get("name", "")).is_empty():
+				found = index
+				break
 		rows[found] = {
 			"name": opponent_name, "id": id, "wins": 0, "losses": 0, "draws": 0,
 		}
 	rows[found][key] = _raise_count(int((rows[found] as Dictionary).get(key, 0)))
-	rows.sort_custom(_more_successful)
+	_swap_first_outranked(rows)
 	updated["records"] = rows
 	return updated
 
 
-## `.loop4`, which is a bubble sort of the five rows on the three counters in
-## the order they are stored.
-static func _more_successful(a: Dictionary, b: Dictionary) -> bool:
-	for key: String in ["wins", "losses", "draws"]:
-		if int(a.get(key, 0)) != int(b.get(key, 0)):
-			return int(a.get(key, 0)) > int(b.get(key, 0))
-	return false
+## `.loop4`: one swap, of the first pair whose later row has more battles.
+static func _swap_first_outranked(rows: Array) -> void:
+	for first: int in rows.size() - 1:
+		for later: int in range(first + 1, rows.size()):
+			if _battles(rows[later]) > _battles(rows[first]):
+				var held: Variant = rows[first]
+				rows[first] = rows[later]
+				rows[later] = held
+				return
+
+
+static func _battles(row: Dictionary) -> int:
+	return int(row.get("wins", 0)) + int(row.get("losses", 0)) + int(row.get("draws", 0))
 
 
 ## `.CheckOverflow`, which stops a counter at the cap instead of carrying past

@@ -43,6 +43,8 @@ var _repeat_clock: Dictionary = {}
 ## The direction a repeat has just been sent for, cleared by the event arriving.
 ## Without it the gate would swallow the very press it emitted.
 var _repeat_open: Dictionary = {}
+## `hInMenu`, under which alone `JoyTextDelay` repeats; unset always repeats.
+var repeat_gate: Callable = Callable()
 ## Whether all four reset buttons were down last frame, so the chord fires once
 ## per press rather than once per frame it is held.
 var _reset_chord_down: bool = false
@@ -297,6 +299,8 @@ func _advance_direction_repeat(delta: float) -> void:
 			_repeat_clock[button] = left
 			continue
 		_repeat_clock[button] = FRAME_SECONDS * float(REPEAT_INTERVAL_FRAMES)
+		if repeat_gate.is_valid() and not bool(repeat_gate.call()):
+			continue
 		_repeat_open[button] = true
 		_emit_repeat(button)
 

@@ -141,12 +141,17 @@ const VERSUS_BALL_STATUSED: int = 1
 const VERSUS_BALL_FAINTED: int = 2
 const VERSUS_BALL_EMPTY: int = 3
 const VERSUS_VS: String = "<BOLD_V><BOLD_S>"
+## `_ShowLinkBattleParticipants`' `Textbox` at `hlcoord 2, 3`, border included.
+const VERSUS_BOX: Rect2i = Rect2i(2, 3, 16, 11)
+## `DisplayLinkBattleResult`'s three strings.
+const VERSUS_RESULTS: Dictionary = {&"win": "YOU WIN", &"lose": "YOU LOSE", &"draw": "  DRAW"}
 
 var font: Gen2Font = null
 var palette: PackedColorArray = PackedColorArray()
 var strings: Dictionary = {}
 var gen1: bool = false
 var _balls: PackedByteArray = PackedByteArray()
+var frame_style: int = 0
 
 var _tiles: PackedByteArray = PackedByteArray()
 var _tile_count: int = 0
@@ -178,6 +183,8 @@ static func from_data(data: GameData) -> Gen2LinkPage:
 		else Gen2Layout.LINK_BORDER_TILES_GOLD_SILVER
 	page._box_tiles = CRYSTAL_BOX_TILES if not page._screen.is_empty() \
 		else GOLD_SILVER_BOX_TILES
+	page._balls = data.tile_indices("ball_icons")
+	page.frame_style = Gen2OptionsStore.current().textbox_frame
 	return page
 
 
@@ -320,6 +327,23 @@ func draw_gen1_trade(state: Dictionary) -> PackedByteArray:
 	return indices
 
 
+## `_ShowLinkBattleParticipants`: Generation 1's box one tile further in, and
+## `DisplayLinkBattleResult`'s verdict over the VS.
+func draw_versus(state: Dictionary) -> PackedByteArray:
+	if gen1:
+		return draw_gen1_versus(state)
+	var indices := PackedByteArray()
+	indices.resize(WIDTH * HEIGHT)
+	if font == null:
+		return indices
+	font.draw_box(
+		frame_style, indices, WIDTH, VERSUS_BOX.position.x * TILE, VERSUS_BOX.position.y * TILE,
+		VERSUS_BOX.size.x, VERSUS_BOX.size.y
+	)
+	_versus_contents(indices, state)
+	return indices
+
+
 ## `DisplayLinkBattleVersusTextBox`, with `EndOfBattle`'s `result` over the VS.
 func draw_gen1_versus(state: Dictionary) -> PackedByteArray:
 	var indices := PackedByteArray()
@@ -327,6 +351,13 @@ func draw_gen1_versus(state: Dictionary) -> PackedByteArray:
 	if font == null:
 		return indices
 	_box(indices, Gen1Layout.VERSUS_BOX)
+	_versus_contents(indices, state)
+	return indices
+
+
+## The two names, the VS or the verdict, and `LinkBattle_TrainerHuds`' balls,
+## which both generations place alike.
+func _versus_contents(indices: PackedByteArray, state: Dictionary) -> void:
 	var player: Dictionary = state.get("player", {})
 	var enemy: Dictionary = state.get("enemy", {})
 	_text(indices, String(player.get("name", "")), Gen1Layout.VERSUS_PLAYER_AT)
@@ -342,7 +373,6 @@ func draw_gen1_versus(state: Dictionary) -> PackedByteArray:
 			_ball(indices, int(balls[slot]),
 				Gen1Layout.VERSUS_BALL_X + slot * Gen1Layout.VERSUS_BALL_STEP - Gen1Lcd.OAM_X_OFFSET,
 				Gen1Layout.VERSUS_BALL_Y[side] - Gen1Lcd.OAM_Y_OFFSET)
-	return indices
 
 
 ## `BattleTransition` over the cleared screen, under `rBGP`'s order.

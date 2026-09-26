@@ -614,11 +614,11 @@ func test_species_items_read_the_persistent_species_through_transform() -> void:
 		var user: Gen2BattleMon = _mon(pair[0])
 		var target: Gen2BattleMon = _mon(Fixture.GEODUDE)
 		user.item = pair[1]
-		assert_true(user.transform_into(target))
-		user.stats.attack = 100
-		user.stats.sp_attack = 100
+		target.stats.attack = 100
+		target.stats.sp_attack = 100
 		target.stats.defense = 100
 		target.stats.sp_defense = 100
+		assert_true(user.transform_into(target))
 		assert_eq(Gen2Damage.damage_stats(user, target, pair[2], false), [200, 100])
 	var ditto: Gen2BattleMon = _mon(Fixture.DITTO)
 	ditto.item = Fixture.METAL_POWDER

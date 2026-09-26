@@ -88,7 +88,7 @@ func test_counter_does_not_keep_damage_from_a_previous_action_pair() -> void:
 	)
 	battle.take_actions(Gen2Battle.use_move(0), Gen2Battle.use_move(0))
 	var events: Array = battle.take_actions(Gen2Battle.use_move(1), Gen2Battle.use_move(1))
-	assert_eq(_of_type(events, Gen2Battle.MOVE_FAILED).size(), 1)
+	assert_eq(_of_type(events, Gen2Battle.MISSED).size(), 1, "failuretext's AttackMissedText")
 	assert_eq(_of_type(events, Gen2Battle.HIT).size(), 0)
 
 
@@ -3014,10 +3014,9 @@ func test_a_status_berry_only_answers_for_its_own_status() -> void:
 	assert_eq(holder.item, 0)
 
 
-## `UseConfusionHealingItem` takes Bitter Berry and Miracleberry alike, and the
-## Miracleberry is spent by whichever of the two came first: the status byte is
-## read before the confusion, so a Pokémon carrying both keeps the confusion.
-func test_a_miracleberry_answers_only_one_of_a_status_and_a_confusion() -> void:
+## `UseHeldStatusHealingItem` reads the status byte first, and its `ALL_STATUS`
+## row clears the confusion with it, so one Miracleberry answers both.
+func test_a_miracleberry_answers_a_status_and_a_confusion_at_once() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]),
 		_mon(Fixture.GEODUDE, 50, [Fixture.GROWL])
@@ -3031,7 +3030,7 @@ func test_a_miracleberry_answers_only_one_of_a_status_and_a_confusion() -> void:
 	battle.take_actions(Gen2Battle.use_move(0), Gen2Battle.use_move(0))
 
 	assert_eq(holder.status, Gen2Status.NONE, "the status went first")
-	assert_true(Gen2Substatus.has(holder.substatus, Gen2Substatus.CONFUSED))
+	assert_false(Gen2Substatus.has(holder.substatus, Gen2Substatus.CONFUSED))
 	assert_eq(holder.item, 0)
 
 
@@ -5112,3 +5111,157 @@ func test_the_first_member_fit_to_fight_leads_the_battle() -> void:
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1)
 	assert_eq(battle.mon(Gen2Battle.PLAYER), standing)
 	assert_false(battle.must_replace(Gen2Battle.PLAYER), "nothing is owed a replacement")
+
+
+## `BattleTurn` quits on `wBattleEnded` before `HandleBetweenTurnEffects`, so a
+## wild knocked out in the rain hears nothing about the weather behind it.
+func test_a_decided_battle_runs_no_between_turn_effects() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 100, [Fixture.TACKLE]), _mon(Fixture.GEODUDE, 2, [Fixture.GROWL])
+	)
+	battle.weather = Gen2Weather.RAIN
+	battle.weather_turns = 3
+	var events: Array = battle.take_turn(0, 0)
+	assert_true(battle.is_over())
+	assert_eq(_of_type(events, Gen2Battle.WEATHER_CONTINUES).size(), 0)
+
+
+## `CheckPlayerLockedIn` clears both flinch bits at the top of every turn, so a
+## King's Rock flinch landing after its target moved is gone by the next one.
+func test_a_flinch_left_standing_is_cleared_before_the_next_turn() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]), _mon(Fixture.GEODUDE, 50, [Fixture.GROWL])
+	)
+	battle.enemy.substatus |= Gen2Substatus.FLINCHED
+	var events: Array = battle.take_turn(0, 0)
+	assert_eq(_of_type(events, Gen2Battle.CANNOT_MOVE).size(), 0)
+
+
+## `HandleWrap.do_it` returns for a Substitute before the count is touched.
+func test_a_bound_pokemon_behind_its_doll_takes_nothing_and_stays_bound() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]), _mon(Fixture.GEODUDE, 50, [Fixture.GROWL])
+	)
+	battle.player.trapped_turns = 3
+	battle.player.trapping_move = Fixture.WRAP
+	battle.player.substatus |= Gen2Substatus.SUBSTITUTE
+	battle.player.substitute_hp = 20
+	var events: Array = battle.take_turn(0, 0)
+	assert_eq(_of_type(events, Gen2Battle.HURT_BY_TRAP).size(), 0)
+	assert_eq(battle.player.trapped_turns, 3)
+
+
+## `ParsePlayerAction` ends Rage when another move is chosen, before either side
+## moves, so a slower Pokemon that used Rage last turn builds none this turn.
+func test_rage_ends_when_the_next_move_is_chosen() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.GEODUDE, 50, [Fixture.RAGE, Fixture.GROWL]),
+		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])
+	)
+	battle.player.substatus |= Gen2Substatus.RAGE
+	var events: Array = battle.take_turn(1, 0)
+	assert_eq(_of_type(events, Gen2Battle.RAGE_BUILDING).size(), 0)
+
+
+## `HandleBerserkGene` raises through `BattleCommand_AttackUp2` and
+## `StatUpMessage`, which says nothing once `RaiseStat` has failed at +6.
+func test_a_berserk_gene_at_the_attack_ceiling_says_nothing_of_it() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]), _mon(Fixture.GEODUDE, 50, [Fixture.GROWL])
+	)
+	battle.player.item = Gen2HeldItem.BERSERK_GENE_ITEM
+	battle.player.stages["attack"] = Gen2Stats.MAX_STAGE
+	var events: Array = battle.take_turn(0, 0)
+	assert_eq(_of_type(events, Gen2Battle.ITEM_ACTIVATED).size(), 1)
+	assert_eq(_of_type(events, Gen2Battle.STAT_CHANGE_FAILED).size(), 0)
+	assert_eq(_of_type(events, Gen2Battle.STAT_CHANGED).size(), 0)
+
+
+## `wCurEnemyMove` is settled when the actions are chosen: a Disable landing
+## first leaves `CheckEnemyTurn` to refuse it, not a Struggle.
+func test_a_move_disabled_before_its_turn_is_refused_rather_than_struggled() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.DISABLE_MOVE]),
+		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	)
+	battle.player.substatus |= Gen2Substatus.X_ACCURACY
+	battle.enemy.last_counter_move = Fixture.TACKLE
+	var events: Array = battle.take_turn(0, 0)
+	assert_eq(_first(events, Gen2Battle.CANNOT_MOVE).get("reason", &""), &"disabled")
+	for used: Dictionary in _of_type(events, Gen2Battle.USED_MOVE):
+		assert_ne(int(used["move"]), Fixture.STRUGGLE)
+
+
+## `UpdateFaintedPlayerMon` zeroes `wBattleMonStatus`, so a Pokemon revived
+## later comes back healthy.
+func test_a_pokemon_that_faints_loses_its_status() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 5, [Fixture.GROWL]), _mon(Fixture.GEODUDE, 100, [Fixture.TACKLE])
+	)
+	battle.player.status = Gen2Status.POISON
+	battle.take_turn(0, 0)
+	assert_true(battle.player.is_fainted())
+	assert_eq(battle.player.status, Gen2Status.NONE)
+
+
+## `ResetBattleParticipants` behind every enemy entrance: whoever faces the new
+## Pokemon earns it alone, whoever faced the last one included or not.
+func test_an_enemy_entrance_hands_the_experience_to_whoever_faces_it() -> void:
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([
+			_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]), _mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
+		]),
+		Gen2Party.create([
+			_mon(Fixture.GEODUDE, 5, [Fixture.GROWL]), _mon(Fixture.GEODUDE, 5, [Fixture.GROWL]),
+		]),
+		_rng, true
+	)
+	battle.take_actions(Gen2Battle.switch_to(1), Gen2Battle.use_move(0))
+	battle.send_out(Gen2Battle.ENEMY, 1)
+	battle.enemy.hp = 1
+	var events: Array = battle.take_turn(0, 0)
+	var gainers: Array = []
+	for gained: Dictionary in _of_type(events, Gen2Battle.EXP_GAINED):
+		gainers.append(int(gained["index"]))
+	assert_eq(gainers, [1])
+
+
+## `GiveExperiencePoints` adds each stat's base a second time for a Pokemon
+## whose `MON_POKERUS` byte is set, cured strains included.
+func test_pokerus_pays_stat_experience_twice() -> void:
+	var plain: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]), _mon(Fixture.GEODUDE, 5, [Fixture.GROWL])
+	)
+	var infected: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]), _mon(Fixture.GEODUDE, 5, [Fixture.GROWL])
+	)
+	infected.player.pokerus = 0x10
+	for battle: Gen2Battle in [plain, infected]:
+		battle.enemy.hp = 1
+		battle.take_turn(0, 0)
+	for key: String in ["hp", "attack", "defense", "speed", "special"]:
+		assert_eq(
+			int(infected.player.stat_exp.get(key, 0)), 2 * int(plain.player.stat_exp.get(key, 0)), key
+		)
+
+
+## A benched gainer's levels are one `.skip_exp_bar_animation` line, the last
+## level alone, where the Pokemon out says each level on its bar.
+func test_a_benched_gainer_says_one_level_for_several() -> void:
+	var holder: Gen2BattleMon = _mon(Fixture.PIKACHU, 5, [Fixture.TACKLE])
+	holder.item = Fixture.EXP_SHARE
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([_mon(Fixture.PIKACHU, 100, [Fixture.TACKLE]), holder]),
+		Gen2Party.of(_mon(Fixture.GEODUDE, 100, [Fixture.GROWL])),
+		_rng
+	)
+	battle.enemy.hp = 1
+	var events: Array = battle.take_turn(0, 0)
+	var lines: Array = _of_type(events, Gen2Battle.GREW_LEVEL).filter(
+		func(event: Dictionary) -> bool: return int(event["index"]) == 1
+	)
+	assert_gt(holder.level, 6, "the share crossed several levels")
+	assert_eq(lines.size(), 1)
+	assert_eq(int(lines[0]["new_level"]), holder.level)

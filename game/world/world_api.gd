@@ -222,6 +222,8 @@ var player_sprite_number: int = Gen2WorldSprite.SPRITE_PLAYER
 var last_spawn_map: Vector2i = Vector2i(-1, -1)
 ## `wLastPocket` and the pockets' rows: WRAM outside the save a reopened pack reads.
 var pack_memory: Dictionary = {}
+## The pockets `CleanUpBattleRAM` zeroes: Items, Balls and Key Items, not TM/HM.
+const POCKETS_RESET_BY_BATTLE: int = 3
 ## `wDigWarpNumber`, `wDigMapGroup` and `wDigMapNumber`: the warp and outdoor map
 ## the player last came into a cave through, which is where Dig and an Escape
 ## Rope put them back. Empty until one is walked.
@@ -471,6 +473,19 @@ static func _snapshot_in_range(world_snapshot: Gen2WorldSnapshot, map: Gen2World
 		and world_snapshot.world_hour >= 0 and world_snapshot.world_hour < Gen2WorldClock.HOURS_PER_DAY \
 		and world_snapshot.world_minute >= 0 \
 		and world_snapshot.world_minute < Gen2WorldClock.MINUTES_PER_HOUR
+
+
+## `CleanUpBattleRAM`'s pocket and rows.
+func forget_pack_after_battle() -> void:
+	if pack_memory.is_empty():
+		return
+	var cursors: Array = (pack_memory.get("cursors", []) as Array).duplicate()
+	var scroll: Array = (pack_memory.get("scroll", []) as Array).duplicate()
+	for pocket: int in mini(POCKETS_RESET_BY_BATTLE, cursors.size()):
+		cursors[pocket] = 0
+	for pocket: int in mini(POCKETS_RESET_BY_BATTLE, scroll.size()):
+		scroll[pocket] = 0
+	pack_memory = {"pocket": 0, "cursors": cursors, "scroll": scroll}
 
 
 func _init(
@@ -2143,6 +2158,10 @@ func _stamp_encounter(request: Dictionary) -> Dictionary:
 	if not values is Dictionary:
 		return request
 	var stamped: Dictionary = values as Dictionary
+	if data.generation == RomRegistry.GEN2 and not Gen2WorldState.is_crystal_profile(data):
+		stamped["asleep"] = Gen2WorldTreemon.gold_silver_asleep(
+			int(stamped.get("pokemon", 0)), object_time_of_day
+		)
 	stamped["map_group"] = current_map.group if current_map != null else -1
 	stamped["map_number"] = current_map.number if current_map != null else -1
 	stamped["player_id"] = _player_id

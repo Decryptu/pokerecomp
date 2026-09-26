@@ -77,6 +77,8 @@ func test_toxic_ramps_a_sixteenth_at_a_time_and_never_nothing() -> void:
 	assert_eq(Gen2Status.toxic_damage(160, 2), 20, "twice the counter, twice the damage")
 	assert_eq(Gen2Status.toxic_damage(160, 3), 30)
 	assert_eq(Gen2Status.toxic_damage(4, 1), 1, "a small Pokémon still loses one")
+	assert_eq(Gen2Status.toxic_damage(60, 2), 6, "the sixteenth is floored before it is multiplied")
+	assert_eq(Gen2Status.toxic_damage(4, 3), 3, "and a floored one is still counted every turn")
 
 
 func test_full_paralysis_is_about_a_quarter_of_the_time() -> void:

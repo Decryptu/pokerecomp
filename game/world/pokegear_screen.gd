@@ -17,6 +17,8 @@ signal switched(direction: int)
 signal tuned(knob: int)
 ## The phone submenu's CALL row: the contact under the cursor, as its own index.
 signal called(contact: int)
+## `MenuClickSound` on the delete question's answer.
+signal sfx_requested(sfx: int, waited: bool)
 ## Its DELETE row, once the yes/no box has been answered.
 signal deleted(contact: int)
 
@@ -348,8 +350,11 @@ func _press_submenu(button: int) -> void:
 
 
 func _press_delete_ask(button: int) -> void:
-	if _delete_ask.press_yes_no(button) and not _delete_ask.holding():
-		_refresh()
+	if _delete_ask.press_yes_no(button):
+		if _delete_ask.just_answered():
+			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+		if not _delete_ask.holding():
+			_refresh()
 
 
 func advance_frame() -> void:

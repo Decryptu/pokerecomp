@@ -313,7 +313,7 @@ var _oak_pc_pages: Array = []
 var _oak_pc_sfx: int = -1
 ## `DisplayUnownWords`' box, up until the `JoyWaitAorB` behind it is answered.
 var _unown_wall_box: TextureRect = null
-## Mirrors the source's wBattleMenuCursorPosition surviving a reopen.
+## wBattleMenuCursorPosition, which a battle shares.
 var _start_menu_cursor: int = 0
 ## `.MenuReturns`' first entry, `.Reopen`: Pokedex, Pokemon, Pokegear and the
 ## trainer card all return 0 from their `StartMenu_*` handler, so the menu is
@@ -408,6 +408,8 @@ func _ready() -> void:
 	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
 	if input != null and not input.back_requested.is_connected(_on_back_requested):
 		input.back_requested.connect(_on_back_requested)
+	if input != null:
+		input.repeat_gate = _menu_repeats
 
 
 ## Why the overworld could not be built, on the two labels the debug readout
@@ -665,6 +667,9 @@ func _hand_over_second_screen() -> void:
 
 
 func _exit_tree() -> void:
+	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
+	if input != null and input.repeat_gate == Callable(self, &"_menu_repeats"):
+		input.repeat_gate = Callable()
 	Gen2ModHost.instance().set_progress_source(Callable())
 	Gen2ModHost.instance().set_roamers_source(Callable())
 	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
@@ -6102,6 +6107,7 @@ func _on_battle_finished(result: Dictionary) -> void:
 	var host: Gen2BattleScreen = _battle_host
 	_battle_host = null
 	if host != null:
+		_start_menu_cursor = host.start_menu_cursor_after()
 		Gen2Screen.drop(host)
 	if not String(_battle_encounter_id).is_empty():
 		var fought: StringName = _battle_encounter_id
@@ -6110,6 +6116,8 @@ func _on_battle_finished(result: Dictionary) -> void:
 			_encounters.battle_finished(fought, result.duplicate(true))
 	if _world == null:
 		return
+	if _data != null and _data.generation != RomRegistry.GEN1:
+		_world.forget_pack_after_battle()
 	_last_battle_outcome = StringName(result.get("outcome", &""))
 	_world.gen1_pikachu_battle_log(result.get("party_log", {}))
 	## `wEnemyMon` outlives the fight; the next transition reads its level.
@@ -6123,8 +6131,7 @@ func _on_battle_finished(result: Dictionary) -> void:
 	## battle screen and handed over per account: this is the live state, and the
 	## snapshot that screen wrote already carries the same credit.
 	var awarded: Variant = result.get("money_awarded", {})
-	if awarded is Dictionary \
-			and StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_WON:
+	if awarded is Dictionary and _won_or_caught(result):
 		Gen2WorldBattleAdapter.credit_earnings(_world.state, awarded as Dictionary)
 	## `ExitBattle`'s own tail, in its order: `CheckPayDay`, then
 	## `EvolveAfterBattle`, then `GivePokerusAndConvertBerries`, and only then
@@ -6137,16 +6144,16 @@ func _on_battle_finished(result: Dictionary) -> void:
 			_finish_battle_exit(result, fought_save)
 		)
 		return
-	if _open_gen1_versus_result(result, fought_save):
+	if _open_versus_result(result, fought_save):
 		return
 	_finish_battle_exit(result, fought_save)
 
 
-## `EndOfBattle`'s link half: the versus box with its verdict for `ld c, 200`.
-func _open_gen1_versus_result(result: Dictionary, fought_save: Gen2SaveData) -> bool:
+## `EndOfBattle`'s link half, and `ExitBattle`'s: the versus box with its
+## verdict, then Generation 2's record page.
+func _open_versus_result(result: Dictionary, fought_save: Gen2SaveData) -> bool:
 	var request: Dictionary = result.get("request", {})
-	if _data == null or _data.generation != RomRegistry.GEN1 \
-		or StringName(request.get("kind", &"")) != &"link_battle":
+	if _data == null or StringName(request.get("kind", &"")) != &"link_battle":
 		return false
 	if not _open_link_screen(Gen2LinkScreen.MODE_VERSUS_RESULT):
 		return false
@@ -6161,7 +6168,8 @@ func _open_gen1_versus_result(result: Dictionary, fought_save: Gen2SaveData) -> 
 		Gen2WorldBattleAdapter.OUTCOME_LOST:
 			verdict = "lose"
 	_link_host.set_versus(rows, result.get("enemy_party", []),
-		_data.special_text("cable_club_strings", verdict))
+		_data.special_text("cable_club_strings", verdict) if _data.generation == RomRegistry.GEN1
+			else String(Gen2LinkPage.VERSUS_RESULTS[StringName(verdict)]))
 	_link_host.closed.disconnect(_on_link_screen_closed)
 	_link_host.closed.connect(func() -> void:
 		var host: Gen2LinkScreen = _link_host
@@ -6228,16 +6236,42 @@ func _record_link_battle(result: Dictionary) -> void:
 	)
 
 
+## `ExitBattle`'s `and $f / ret nz`: a catch leaves `wBattleResult` at WIN.
+static func _won_or_caught(result: Dictionary) -> bool:
+	return StringName(result.get("outcome", &"")) in [
+		Gen2WorldBattleAdapter.OUTCOME_WON, Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
+	]
+
+
 ## `EvolveAfterBattle`'s `wEvolvableFlags`, read only on a battle that was won.
 func _after_battle_evolution_plans(result: Dictionary, save: Gen2SaveData) -> Array:
 	if _data == null or save == null or _world == null:
 		return []
-	if StringName(result.get("outcome", &"")) != Gen2WorldBattleAdapter.OUTCOME_WON:
+	if not _won_or_caught(result):
 		return []
 	return Gen2Evolution.after_battle(
 		_data, save, result.get("evolvable", []), _world.object_time_of_day,
 		int(result.get("player_active", 0))
 	)
+
+
+## `JoyTextDelay` repeats only under `hInMenu`; Generation 1 everywhere.
+func _menu_repeats() -> bool:
+	if _data == null or _data.generation == RomRegistry.GEN1:
+		return true
+	for host: Node in [
+		_pokedex_host, _rival_name_host, _nickname_host, _name_rater_host,
+		_unown_puzzle_host, _mail_host, _mod_page_host,
+	]:
+		if host != null:
+			return true
+	if _battle_host != null:
+		return _battle_host.menu_repeats()
+	if _service_host != null:
+		return _service_host.menu_repeats()
+	if _start_menu_host != null:
+		return _start_menu_host.menu_repeats()
+	return _party_host == null
 
 
 ## Everything `ExitBattle` does once `EvolveAfterBattle` has returned.
@@ -6254,7 +6288,7 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 	_reap_nuzlocke_faints(fought_save, Gen2Nuzlocke.CAUSE_BATTLE)
 	## The encounter this fight claimed is over, whatever it came to.
 	_world.nuzlocke_area_open = -1
-	if StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_WON \
+	if _won_or_caught(result) \
 		and StringName((result.get("request", {}) as Dictionary).get("kind", &"")) \
 			not in [&"battle_tower", &"link_battle"]:
 		Gen2WorldPartyHost.give_pokerus_and_convert_berries(
@@ -6746,11 +6780,9 @@ func _open_link_room(request: Dictionary) -> bool:
 	var values: Dictionary = request.get("values", {})
 	if int(values.get("link_mode", 0)) != Gen2LinkSession.LINK_COLOSSEUM:
 		return _open_link_screen(Gen2LinkScreen.MODE_TRADE)
-	## `CableClub_DoBattleOrTrade`'s PLEASE WAIT! and versus box come first.
-	if bool(values.get("gen1", false)):
-		_link_battle_request = request.duplicate(true)
-		return _open_link_screen(Gen2LinkScreen.MODE_BATTLE_WAIT)
-	return _start_link_battle(request)
+	## `LinkCommunications`' PLEASE WAIT! and the versus box come first.
+	_link_battle_request = request.duplicate(true)
+	return _open_link_screen(Gen2LinkScreen.MODE_BATTLE_WAIT)
 
 
 var _link_battle_request: Dictionary = {}

@@ -339,7 +339,7 @@ static func roll_variation(rng: RandomNumberGenerator) -> int:
 ## effect intact. It never calls DamageVariation or consumes a random byte.
 static func confusion_damage(
 	mon: Gen2BattleMon, screens: int = Gen2Screens.NONE,
-	link_battle: bool = false, move: Dictionary = {}
+	link_battle: bool = false, move: Dictionary = {}, critical: bool = false
 ) -> int:
 	var defense: int = mon.stat("defense")
 	if Gen2Screens.has(screens, Gen2Screens.REFLECT):
@@ -352,7 +352,7 @@ static func confusion_damage(
 	return damage_calc(
 		mon, CONFUSION_POWER, int(truncated[0]), int(truncated[1]),
 		int(move.get("effect", -1)) == Gen2MoveEffect.SELFDESTRUCT,
-		int(move.get("type", Gen2Layout.TYPE_NORMAL))
+		int(move.get("type", Gen2Layout.TYPE_NORMAL)), critical
 	)
 
 
