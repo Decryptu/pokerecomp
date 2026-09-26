@@ -150,13 +150,15 @@ func _verify_mons() -> void:
 
 func _verify_stored_stats() -> void:
 	var different: int = 0
-	var keys: Array[String] = ["hp", "attack", "defense", "speed", "sp_attack", "sp_defense"]
+	var keys: Array = Gen2BattleMon.STAT_KEYS
 	for group: int in 10:
 		for index: int in 21:
 			var raw: PackedByteArray = _r.data.battle_tower_mon(group, index)
 			var record: Dictionary = Gen2BattleTower.mon_record(_r.data, group, index)
-			var plain: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(
-				_r.data, Gen2SaveMon.from_dict(record)
+			var saved: Gen2SaveMon = Gen2SaveMon.from_dict(record)
+			var plain: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(_r.data, saved)
+			var recalculated: Dictionary = Gen2Stats.all_stats(
+				_r.data.species(saved.species).get("stats", {}), saved.dvs, saved.stat_exp, saved.level
 			)
 			var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(_r.data, {"values": {
 				"kind": &"battle_tower", "enemy_party": [record],
@@ -170,7 +172,7 @@ func _verify_stored_stats() -> void:
 				var expected: int = (int(raw[offset]) << 8) | int(raw[offset + 1])
 				_r.check(int(enemy.stats[keys[stat]]) == expected,
 					"Tower %d/%d %s differs from its stored stat" % [group, index, keys[stat]])
-				changed = changed or int(plain.stats[keys[stat]]) != expected
+				changed = changed or int(recalculated[keys[stat]]) != expected
 			different += int(changed)
 			_r.check(String(record["nickname"]) == String(_r.data.species(enemy.species)["name"]),
 				"Tower nickname was not replaced by GetPokemonName")

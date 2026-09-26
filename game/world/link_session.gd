@@ -248,14 +248,24 @@ static func validate_ot_trademon(
 
 
 ## `.ConvertToGen2` on a partner row: the item back through the catch-rate byte,
-## `BASE_HAPPINESS`, and Pokerus and both caught-data bytes zeroed.
-static func time_capsule_arrival(mon: Dictionary) -> Dictionary:
+## `BASE_HAPPINESS`, and Pokerus and both caught-data bytes zeroed. MON_MAXHP to
+## MON_SPD are the partner's stored stats copied across; the two specials are
+## `CalcMonStatC` over this cartridge's base data.
+static func time_capsule_arrival(mon: Dictionary, data: GameData = null) -> Dictionary:
 	var out: Dictionary = mon.duplicate(true)
 	var item: int = int(out.get("item", 0))
 	out["item"] = int(TIME_CAPSULE_CATCH_RATE_ITEMS.get(item, item))
 	out["happiness"] = Gen2BattleMon.BASE_HAPPINESS
 	for key: String in ["pokerus", "caught_time", "caught_gender", "caught_level", "caught_location"]:
 		out[key] = 0
+	var stats: Variant = out.get("stats", {})
+	if data != null and stats is Dictionary and (stats as Dictionary).has("speed"):
+		var base: Dictionary = data.species(int(out.get("species", 0))).get("stats", {})
+		var dv: int = Gen2Stats.special_dv(int(out.get("dvs", 0)))
+		var trained: int = int((out.get("stat_exp", {}) as Dictionary).get("special", 0))
+		var level: int = int(out.get("level", 1))
+		for key: String in ["sp_attack", "sp_defense"]:
+			(stats as Dictionary)[key] = Gen2Stats.calculate(int(base.get(key, 0)), dv, trained, level)
 	return out
 
 

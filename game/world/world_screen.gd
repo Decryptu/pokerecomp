@@ -2250,7 +2250,11 @@ func _spend_day_care_steps() -> void:
 ## sequence and the nickname alone.
 func _open_hatch(hatches: Array, save: Gen2SaveData) -> void:
 	var host := Gen2EggHatchScreen.new()
-	host.set_context(_data, hatches, _nuzlocke_names_everything())
+	host.set_context(
+		_data, hatches, _nuzlocke_names_everything(),
+		_data.overworld_sprite_palette(0, _render_time_of_day())
+	)
+	host.set_audio_player(_audio_player)
 	_hatch_save = save
 	host.named.connect(_on_hatch_named)
 	host.closed.connect(_on_hatch_closed)
@@ -2377,13 +2381,15 @@ func _on_hatch_named(party_index: int, nickname: String) -> void:
 var _gift_dvs: int = -1
 
 
-## `GivePoke`'s `GiveANickname_YesNo` for the thirteen sites naming no OT, the
-## request pending while it is up. False for an egg, a named OT or `.FailedToGiveMon`.
+## `GivePoke`'s `GiveANickname_YesNo` for every site naming no OT, the request
+## pending while it is up; a named OT's gift asks nothing, and `.skip_nickname`
+## still prints `WasSentToBillsPCText` when it was boxed. False for an egg, a
+## named OT kept in the party, or `.FailedToGiveMon`.
 func _open_gift_nickname(request: Dictionary) -> bool:
 	if _nickname_host != null or _world == null or _data == null:
 		return false
 	var values: Dictionary = request.get("values", {})
-	if not values.has("pokemon") or int(values.get("trainer", 0)) != 0:
+	if not values.has("pokemon"):
 		return false
 	var species: int = int(values.get("pokemon", 0))
 	var species_name: String = String(_data.species(species).get("name", ""))
@@ -2393,10 +2399,14 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 		else _selected_runtime_save()
 	var destination: StringName = Gen2WorldPartyHost.gift_destination(save)
 	var gen1: bool = _data.generation == RomRegistry.GEN1
-	if destination == &"full" and not gen1:
+	var named_ot: bool = int(values.get("trainer", 0)) != 0
+	if (destination == &"full" and not gen1) or (named_ot and destination != &"box"):
 		return false
 	var host := Gen2NicknamePromptScreen.new()
-	if gen1:
+	if named_ot:
+		host.set_context(_data, species_name)
+		host.set_before_text(Gen2WorldPartyHost.SENT_TO_BOX_FORMAT % species_name, -1, true)
+	elif gen1:
 		_set_gen1_gift_context(
 			host, species_name, destination, save,
 			StringName(values.get("routine", &"")) == &"add_party_mon"
@@ -2520,12 +2530,15 @@ func _on_gift_nickname_closed() -> void:
 	_show_script_results(settled.get("results", []))
 
 
+## `OverworldHatchEgg`'s `ExitAllMenus` and `RestartMapMusic` over the last
+## hatch's `MUSIC_EVOLUTION`.
 func _on_hatch_closed() -> void:
 	var host: Gen2EggHatchScreen = _hatch_host
 	_hatch_host = null
 	_hatch_save = null
 	if host != null:
 		Gen2Screen.drop(host)
+	_play_current_map_music()
 	if _renderer != null:
 		_renderer.refresh()
 	_refresh_labels()
@@ -8887,7 +8900,7 @@ func _on_gen1_nickname_entered(entered: String) -> void:
 	var save: Gen2SaveData = _gen1_nickname.get("save", null) as Gen2SaveData
 	var index: int = int(_gen1_nickname.get("party_index", -1))
 	_gen1_nickname = {}
-	var nickname: String = entered.strip_edges()
+	var nickname: String = Gen2NamingScreen.init_name(entered, "", true)
 	if not nickname.is_empty() and save != null:
 		Gen2WorldPartyHost.rename_party_mon(save, index, nickname)
 	if _renderer != null:

@@ -156,7 +156,7 @@ func test_only_a_prompt_buttons_press_is_answered_with_the_click() -> void:
 	box.show_text("a" + Gen2TextStream.PAGE_BREAK + "b" + Gen2TextStream.SCROLL_BREAK + "c")
 	assert_true(box.advance())
 	assert_eq(clicks.size(), 1, "the paragraph")
-	for _frame: int in Gen2TextBox.SCROLL_STEP_FRAMES * Gen2TextBox.SCROLL_STEPS:
+	for _frame: int in box.frames_left():
 		box._process(FRAME)
 	assert_true(box.advance())
 	assert_eq(clicks.size(), 2, "the continuation")
@@ -169,6 +169,22 @@ func test_only_a_prompt_buttons_press_is_answered_with_the_click() -> void:
 	box.set_blink_cursor(true)
 	assert_false(box.advance())
 	assert_eq(clicks.size(), 3, "a caller's wait is not a prompt")
+
+
+## `Paragraph` clears the box and spends `DelayFrames 20` before the next page
+## prints, and a press in those frames is spent the way one on a printing page is.
+func test_a_paragraph_holds_the_box_cleared_before_the_next_page() -> void:
+	var box: Gen2TextBox = _box()
+	box.show_text("a" + Gen2TextStream.PAGE_BREAK + "b")
+	assert_true(box.advance())
+	assert_eq(box.frames_left(), Gen2TextBox.PARAGRAPH_FRAMES)
+	for _frame: int in Gen2TextBox.PARAGRAPH_FRAMES - 1:
+		box._process(FRAME)
+	assert_true(box.is_revealing(), "one frame of the wait is left")
+	assert_true(box.advance(), "the press is spent, not answered")
+	box._process(FRAME)
+	assert_false(box.is_revealing())
+	assert_false(box.advance(), "the second page was the last")
 
 
 ## `_ContText` is `PromptButton` and then `TextScroll` twice, five frames each,

@@ -1722,9 +1722,8 @@ func _complete_rival_name(
 	var default_name: String = String(
 		(request.get("values", {}) as Dictionary).get("default_name", "SILVER")
 	)
-	_rival_name = String(result.get("name", default_name)).strip_edges()
-	if _rival_name.is_empty():
-		_rival_name = default_name
+	## `NameRival`'s `InitName` over `.DefaultName`.
+	_rival_name = Gen2NamingScreen.init_name(String(result.get("name", default_name)), default_name)
 	_script_value = 1
 	_events.append({"type": &"rival_name_changed", "name": _rival_name})
 	_pending = {}

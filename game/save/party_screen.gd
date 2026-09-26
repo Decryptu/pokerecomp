@@ -649,8 +649,7 @@ func _choose_heal_target() -> void:
 	if _member_cursor == _heal_user and _gen1():
 		return
 	var target: Gen2SaveMon = _save.party[_member_cursor]
-	var target_max: int = Gen2SaveBattleAdapter.to_battle_mon(_data, target).max_hp() \
-		if not target.is_egg else 0
+	var target_max: int = _max_hp(target)
 	if _member_cursor == _heal_user or target.is_egg or target.hp <= 0 or target.hp >= target_max:
 		_say(MESSAGE_CANT_USE_ON_MON if not _gen1() else _data.special_text("item_use", "no_effect"))
 		return
@@ -1252,8 +1251,7 @@ func _member_snapshot(index: int, mon: Gen2SaveMon) -> Dictionary:
 
 
 func _max_hp(mon: Gen2SaveMon) -> int:
-	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(_data, mon)
-	return battle_mon.max_hp() if battle_mon != null else 0
+	return mon.max_hp(_data) if _data != null and not mon.is_egg else 0
 
 
 func _species_name(species: int) -> String:

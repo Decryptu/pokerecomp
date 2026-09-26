@@ -432,7 +432,6 @@ static func commit_link_trade(
 	var given_species: int = given.species
 	candidate.party.remove_at(offered_slot)
 	candidate.party.append(received)
-	## `AddTempmonToParty` registers the species that arrived, `EvolvePokemon` the new one.
 	var arrived: int = received.species
 	var evolution: Dictionary = {}
 	var plan: Dictionary = {}
@@ -447,10 +446,7 @@ static func commit_link_trade(
 				evolution = apply_evolution(world.data, received, row)
 
 	var before: Gen2WorldSnapshot = world.snapshot()
-	_register_caught(world, arrived)
-	_register_unown(world, _unown_form(
-		received.species, received.dvs, {"destination": &"party"}
-	))
+	_link_arrival(world, received, arrived)
 	var committed: Dictionary = Gen2WorldTransaction.commit(
 		world, save, candidate, before, persist
 	)
@@ -684,7 +680,7 @@ static func transfer_health(
 		return _failure(&"not_enough_health", {"party_index": from_index})
 	if target.is_egg or target.hp <= 0:
 		return _failure(&"fainted_member", {"party_index": to_index})
-	var target_max: int = _max_hp(world.data, target)
+	var target_max: int = target.max_hp(world.data)
 	if target.hp >= target_max:
 		return _failure(&"already_full", {"party_index": to_index})
 
@@ -712,7 +708,7 @@ static func one_fifth_max_hp(data: GameData, mon: Gen2SaveMon) -> int:
 	if data == null or mon == null or mon.is_egg:
 		return 0
 	@warning_ignore("integer_division")
-	return _max_hp(data, mon) / 5
+	return mon.max_hp(data) / 5
 
 
 static func _party_member(save: Gen2SaveData, index: int) -> Gen2SaveMon:
@@ -1100,11 +1096,10 @@ static func capture_nickname_question(
 	return "Give a nickname to\n%s?" % species_name
 
 
-## `_WasSentToBillsPCText` and `_BallSentToPCText`, which are the same words in
-## the same shape: the gift path reads `wStringBuffer1` and the capture path
-## `wMonOrItemNameBuffer`, and both hold the name the row ended up with rather
-## than the species. Kept as a format so the screen that owns the naming can
-## fill it in with its own answer.
+## `_WasSentToBillsPCText` and `_BallSentToPCText`, the same words in the same
+## shape. The gift path's `wStringBuffer1` is the species name whatever the row
+## was called; the capture path's `wMonOrItemNameBuffer` is the name it ended up
+## with. A format, so each screen fills in its own.
 const SENT_TO_BOX_FORMAT: String = "%s was\nsent to BILL's PC."
 
 
@@ -1376,9 +1371,9 @@ static func capture_wild(
 	## After the snapshot the rollback below restores, so a refused candidate
 	## save takes the dex flag back with the ball.
 	if bool(outcome.get("caught", false)):
-		_register_caught(world, wild.persistent_species())
+		_register_caught(world, _caught_species(wild))
 		_register_unown(world, _unown_form(
-			wild.persistent_species(), wild.persistent_dvs(), destination
+			_caught_species(wild), wild.persistent_dvs(), destination
 		))
 	## `.safariZone`'s `dec [hl]`: the bag has no row for a Safari Ball.
 	var next_quantity: int = world.state.safari_balls() - 1 if safari \
@@ -1418,7 +1413,7 @@ static func capture_wild(
 		"catch_rate": int(outcome.get("catch_rate", 0)),
 		"wobbles": int(outcome.get("wobbles", 0)),
 		"dodged": bool(outcome.get("dodged", false)),
-		"species": wild.persistent_species(),
+		"species": _caught_species(wild),
 		"destination": destination.duplicate(true),
 		"box_full": box_full,
 	}
@@ -1497,10 +1492,7 @@ static func _store_capture(
 
 
 ## `.SendToPC`'s `ld a, [sBoxCount] / cp MONS_PER_BOX`, read after the deposit:
-## the box the catch landed in has no room left. The save model keeps no
-## current-box pointer, so the box asked about is the one the deposit picked,
-## which is what [method Gen2SaveData.box_free_space] already answers scripts
-## with.
+## the box the catch landed in, which is always the current one, has no room left.
 static func _fills_its_box(save: Gen2SaveData, destination: Dictionary) -> bool:
 	if save == null or StringName(destination.get("destination", &"")) != &"box":
 		return false
@@ -1511,8 +1503,9 @@ static func _fills_its_box(save: Gen2SaveData, destination: Dictionary) -> bool:
 ## `CheckPartyFullAfterContest`, which takes home what the Bug Catching Contest
 ## caught: a party copy or an `InsertPokemonIntoBox`, each behind its own
 ## `GiveANickname_YesNo`, with `SetCaughtData` overwritten to LANDMARK_NATIONAL_PARK.
-## `.BoxFull` writes nothing and still answers BUGCONTEST_BOXED_MON, losing the
-## catch; the box branch prints no "sent to BILL's PC" and alone keeps `wContestMon`.
+## The box branch falls into `.BoxFull`, which writes that caught data over
+## `sBoxMon1` whether or not anything was inserted: a full box loses the catch,
+## answers BUGCONTEST_BOXED_MON all the same and restamps its own first row.
 static func _apply_contest_mon(
 	world: Gen2WorldAPI,
 	candidate: Gen2SaveData,
@@ -1529,8 +1522,15 @@ static func _apply_contest_mon(
 		}
 	var boxed: bool = candidate.party.size() >= Gen2SaveData.MAX_PARTY
 	if boxed and not bool(candidate.deposit_box_slot().get("ok", false)):
-		## `.BoxFull`: nothing is written and the catch is gone, which is the
-		## cartridge's own answer rather than a refusal of this port's.
+		## `.BoxFull`: the catch is gone, which is the cartridge's own answer
+		## rather than a refusal of this port's.
+		var front: Gen2SaveMon = (
+			candidate.boxes[candidate.current_box] as Gen2SaveBox
+		).slots[0] as Gen2SaveMon
+		set_caught_data(
+			world.data, front, front.level, world.object_time_of_day,
+			world.player_female(), LANDMARK_NATIONAL_PARK
+		)
 		world.state.set_contest_mon({})
 		return {
 			"ok": true, "accepted": false, "script_value": BUGCONTEST_BOXED_MON,
@@ -1543,13 +1543,19 @@ static func _apply_contest_mon(
 	)
 	if mon == null:
 		return {"ok": false, "reason": &"could_not_create_pokemon"}
-	## The health it was standing there with, which is what `ContestScore` read
-	## and what the struct kept.
+	## The health, status, moves and PP it was standing there with, which is
+	## what `ContestScore` read and what the struct kept.
 	mon.hp = clampi(int(caught.get("hp", mon.hp)), 0, mon.hp)
+	mon.status = int(caught.get("status", Gen2Status.NONE))
+	var moves: Array = caught.get("moves", []) as Array
+	var pp: Array = caught.get("pp", []) as Array
+	if moves.size() == Gen2SaveMon.MAX_MOVES and pp.size() == Gen2SaveMon.MAX_MOVES:
+		for slot: int in Gen2SaveMon.MAX_MOVES:
+			mon.moves[slot] = int(moves[slot])
+			mon.pp[slot] = int(pp[slot])
+			mon.pp_ups[slot] = 0
 	if result.has("nickname"):
-		var chosen: String = String(result["nickname"]).strip_edges()
-		if not chosen.is_empty():
-			mon.nickname = chosen
+		mon.nickname = Gen2NamingScreen.init_name(String(result["nickname"]), mon.nickname)
 	set_caught_data(
 		world.data, mon, int(caught.get("level", 1)), world.object_time_of_day,
 		world.player_female(), LANDMARK_NATIONAL_PARK
@@ -1585,7 +1591,7 @@ static func name_captured_mon(
 	nickname: String,
 	persist: bool = true
 ) -> Dictionary:
-	if world == null or save == null or nickname.strip_edges().is_empty():
+	if world == null or save == null or nickname.is_empty():
 		return _failure(&"missing_nickname_context", {})
 	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
 	if not bool(opened.get("ok", false)):
@@ -1742,12 +1748,9 @@ static func _apply_pokemon_request(
 		set_caught_data(world.data, mon, 0, -1, false, LANDMARK_GIFT)
 	elif result.has("nickname"):
 		## `GiveANickname_YesNo` and `InitNickname`: the `.wildmon` branch,
-		## which is the thirteen `givepoke` sites that name no OT. The screen
-		## drew the question and the naming keyboard, and NO answers with the
-		## species name `.done` already left in the row.
-		var chosen: String = String(result["nickname"]).strip_edges()
-		if not chosen.is_empty():
-			mon.nickname = chosen
+		## every `givepoke` that names no OT. The screen drew the question and
+		## the naming keyboard, and NO keeps the species name `.done` left.
+		mon.nickname = Gen2NamingScreen.init_name(String(result["nickname"]), mon.nickname)
 	var appended: Dictionary = _append_mon(world.data, candidate, mon, 0, {
 		"kind": &"gift", "species": species, "level": level, "item": held_item,
 	})
@@ -1904,6 +1907,22 @@ static func _apply_trade_request(
 
 
 ## `TryEvolvingMon` under LINK_STATE_TRADING, written here as a link trade's is.
+## `AddTempmonToParty` behind `cp EGG`: the species that arrived is registered,
+## its happiness goes back to `BASE_HAPPINESS` and an Unown is filed, with the
+## `wFirstUnownSeen` write `.registerunowndex` lacks. An egg does none of it;
+## `EvolvePokemon` registers an evolution's new species on its own.
+static func _link_arrival(world: Gen2WorldAPI, received: Gen2SaveMon, arrived: int) -> void:
+	if received.is_egg:
+		return
+	if world.data.generation != RomRegistry.GEN1:
+		received.happiness = Gen2BattleMon.BASE_HAPPINESS
+	_register_caught(world, arrived)
+	var form: int = _unown_form(received.species, received.dvs, {"destination": &"party"})
+	_register_unown(world, form)
+	if form > 0:
+		world.state.note_first_unown_seen(form)
+
+
 static func _gen1_npc_trade_evolution(data: GameData, received: Gen2SaveMon, index: int) -> Dictionary:
 	if data.generation != RomRegistry.GEN1 or not Gen1Layout.trade_evolves(
 		data.id, received.species, String(data.species(received.species).get("name", ""))
@@ -1918,8 +1937,8 @@ static func _gen1_npc_trade_evolution(data: GameData, received: Gen2SaveMon, ind
 	var plan: Dictionary = _trade_evolution_plan(data, received, index, row)
 	return plan if not apply_evolution(data, received, row).is_empty() else {}
 
-## `AddPartyMon`'s `.registerpokedex`, which an egg never reaches: the source
-## checks `cp EGG` first and jumps past `SetSeenAndCaughtMon`, so a Pokemon is
+## `TryAddMonToParty` or `SendMonIntoBox`, and the dex writes behind them. An egg
+## writes none: `GiveEgg` undoes `.registerpokedex`'s flags, so a Pokemon is
 ## unknown to the dex until it hatches.
 static func _append_mon(
 	data: GameData, candidate: Gen2SaveData, mon: Gen2SaveMon,
@@ -1934,8 +1953,6 @@ static func _append_mon(
 		}
 	return {
 		"ok": true, "accepted": true, "script_value": script_value,
-		## `AddPartyMon` registers what it added, and an egg registers nothing:
-		## `SetSeenAndCaughtMon` sits behind the species byte, which is EGG.
 		"register_caught": 0 if mon.is_egg else mon.species,
 		"register_unown": 0 if mon.is_egg else _unown_form(mon.species, mon.dvs, destination),
 		"summary": summary.merged({
@@ -2172,7 +2189,7 @@ static func _apply_revive(
 ) -> Dictionary:
 	if mon.hp > 0:
 		return {"ok": false, "reason": &"item_has_no_effect"}
-	var max_hp: int = _max_hp(data, mon)
+	var max_hp: int = mon.max_hp(data)
 	mon.hp = maxi(max_hp / 2, 1) if half else max_hp
 	return _with_bitterness(
 		data, mon, item, {"ok": true, "effect": &"revive", "healed": mon.hp}
@@ -2187,7 +2204,7 @@ static func _apply_heal(
 	## ANTIDOTE is refused on a fainted PSN row rather than curing it.
 	if mon.hp <= 0:
 		return {"ok": false, "reason": &"item_has_no_effect"}
-	var max_hp: int = _max_hp(data, mon)
+	var max_hp: int = mon.max_hp(data)
 	var status_mask: int = int(definition.get("status_mask", 0))
 	var heal_amount: int = int(definition.get("heal_amount", 0))
 	var cleared: int = mon.status & status_mask
@@ -2218,14 +2235,15 @@ static func _apply_rare_candy(
 ) -> Dictionary:
 	if mon.level >= Gen2Experience.MAX_LEVEL:
 		return {"ok": false, "reason": &"item_has_no_effect"}
-	var before_max_hp: int = _max_hp(data, mon)
+	var before_max_hp: int = mon.max_hp(data)
 	mon.level += 1
 	mon.exp = Gen2Experience.total_exp_at(
 		int(data.species(mon.species).get(
 			"growth_rate", Gen2Experience.GROWTH_MEDIUM_FAST
 		)), mon.level
 	)
-	mon.hp += maxi(0, _max_hp(data, mon) - before_max_hp)
+	mon.calc_stats(data)
+	mon.hp += maxi(0, mon.max_hp(data) - before_max_hp)
 	mon.happiness = change_happiness(
 		data, mon.happiness, Gen2Battle.level_up_happiness(data, mon.caught_location, landmark)
 	)
@@ -2345,6 +2363,8 @@ static func _apply_vitamin(
 	if raised >= VITAMIN_CAP:
 		return {"ok": false, "reason": &"item_has_no_effect"}
 	mon.stat_exp[stat] = raised + VITAMIN_STEP
+	## `UpdateStatsAfterItem`: the stored stats move, the current HP does not.
+	mon.calc_stats(data)
 	mon.happiness = change_happiness(data, mon.happiness, Gen2Battle.HAPPINESS_USEDITEM)
 	return {
 		"ok": true, "effect": &"vitamin", "stat": stat,
@@ -2381,7 +2401,7 @@ static func _apply_sacred_ash(data: GameData, save: Gen2SaveData) -> Dictionary:
 	for mon: Gen2SaveMon in save.party:
 		if mon == null or mon.is_egg:
 			continue
-		var max_hp: int = _max_hp(data, mon)
+		var max_hp: int = mon.max_hp(data)
 		if max_hp <= 0:
 			return {"ok": false, "reason": &"invalid_party_member"}
 		healed += max_hp - mon.hp
@@ -2468,6 +2488,7 @@ static func apply_evolution(
 		mon.pp_ups[slot] = battle_mon.pp_ups_of(slot)
 	mon.exp = battle_mon.exp
 	mon.hp = battle_mon.hp
+	mon.stats = battle_mon.persistent_stats()
 	mon.status = battle_mon.status
 	mon.happiness = battle_mon.happiness
 	return {
@@ -2527,11 +2548,16 @@ static func capture_contest(
 	return result
 
 
-## `.generatestats`: the caught Pokemon as `ContestScore` reads it. The stats
-## and DVs are the ones the wild was standing there with, which is what
-## `GeneratePartyMonStats` builds for a `WILDMON`.
+## `.generatestats`: the caught Pokemon as `ContestScore` reads it. Under
+## `wBattleMode` WILD, `GeneratePartyMonStats` copies the wild's DVs, moves, PP,
+## status, HP and stats, which `.caught` has already put back the way
+## [method _caught_record] reads them.
 static func contest_mon_from(wild: Gen2BattleMon) -> Dictionary:
+	var record: Gen2SaveMon = _caught_record(wild)
 	return {
+		"moves": record.moves.duplicate(),
+		"pp": record.pp.duplicate(),
+		"status": wild.status,
 		"species": wild.species,
 		"level": wild.level,
 		"hp": wild.hp,
@@ -2873,18 +2899,37 @@ static func _failed_wobbles(catch_rate: int, random: RandomNumberGenerator) -> i
 	return 3
 
 
-## `GeneratePartyMonStats`' wild branch, which `TryAddMonToParty` and
-## `SendMonIntoBox` both build the caught row out of. It keeps the health and
-## status it stood there with, `PokeBallEffect` pushing both around
-## `LoadEnemyMon`; its PP is full after `FillPP`, its stat experience zero, its
-## experience the level's minimum and its trainer ID `wPlayerID`.
+## `.caught`'s restore: `wWildMonMoves` and `wWildMonPP` back over the wild's
+## own. A transformed wild is taken for a Ditto on both generations, whatever it
+## was, and `LoadEnemyMon` rebuilds it as one: Ditto's moves at the level, full.
+static func _caught_record(wild: Gen2BattleMon) -> Gen2SaveMon:
+	var out: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(wild)
+	if out == null or not Gen2Substatus.has(wild.substatus, Gen2Substatus.TRANSFORMED):
+		return out
+	out.species = _caught_species(wild)
+	var moves: Array = wild.data.moves_at_level(out.species, out.level)
+	for slot: int in Gen2SaveMon.MAX_MOVES:
+		out.set_move(wild.data, slot, int(moves[slot]) if slot < moves.size() else 0)
+	out.calc_stats(wild.data)
+	return out
+
+
+static func _caught_species(wild: Gen2BattleMon) -> int:
+	if Gen2Substatus.has(wild.substatus, Gen2Substatus.TRANSFORMED):
+		return Gen2WorldDayCare.SPECIES_DITTO
+	return wild.persistent_species()
+
+
+## The caught row: `.caught`'s record under `GeneratePartyMonStats`' wild branch
+## or `SendMonIntoBox`'s own copy of `wEnemyMon`, with its stat experience zero,
+## its experience the level's minimum and its trainer ID `wPlayerID`.
 static func _captured_mon(
 	data: GameData,
 	save: Gen2SaveData,
 	wild: Gen2BattleMon,
 	ball: int
 ) -> Gen2SaveMon:
-	var out: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(wild)
+	var out: Gen2SaveMon = _caught_record(wild)
 	if out == null:
 		return null
 	out.nickname = String(data.species(out.species).get("name", ""))
@@ -2895,10 +2940,6 @@ static func _captured_mon(
 	)
 	for key: Variant in Gen2SaveMon.STAT_EXP_KEYS:
 		out.stat_exp[key] = 0
-	## `.caught` keeps `wWildMonPP`, except that a Transform reloads full PP.
-	if Gen2Substatus.has(wild.substatus, Gen2Substatus.TRANSFORMED):
-		for slot: int in Gen2SaveMon.MAX_MOVES:
-			out.pp[slot] = out.max_pp(data, slot) if int(out.moves[slot]) > 0 else 0
 	## `.SkipPartyMonFriendBall` and `.SkipBoxMonFriendBall`, which write the same
 	## byte on either side of the deposit.
 	out.happiness = FRIEND_BALL_HAPPINESS if ball == ITEM_FRIEND_BALL else BASE_HAPPINESS
@@ -2918,10 +2959,12 @@ static func set_caught_data(
 	if mon == null or not Gen2WorldState.is_crystal_profile(data) \
 		or (data != null and data.generation == RomRegistry.GEN1):
 		return
-	mon.caught_level = clampi(level, 0, 63)
-	# `ld a, [wTimeOfDay] / inc a`: the field holds MORN as 1, so the -1 a gift
-	# passes is the cartridge's own `xor a` over both halves of the byte.
-	mon.caught_time = clampi(time_of_day + 1, 0, 3)
+	# `ld a, [wTimeOfDay] / inc a / rrca / rrca`, then `or` the level into the same
+	# byte: MORN is stored as 1, the -1 a gift passes is `xor a`, and a level of
+	# 64 or more spills its top bits into the time.
+	var byte: int = (((time_of_day + 1) & 3) << 6) | (level & 0xFF)
+	mon.caught_level = byte & 0x3F
+	mon.caught_time = (byte >> 6) & 3
 	mon.caught_gender = 1 if player_female else 0
 	mon.caught_location = clampi(landmark, 0, 127)
 
@@ -2970,7 +3013,8 @@ static func hatch_egg(
 	# base happiness, which is why the write happens before anything reads it.
 	mon.happiness = HATCHED_HAPPINESS
 	mon.status = Gen2Status.NONE
-	mon.hp = _max_hp(world.data, mon)
+	mon.calc_stats(world.data)
+	mon.hp = mon.max_hp(world.data)
 	mon.ot_id = save.player_id
 	mon.original_trainer = save.player_name
 	mon.nickname = String(world.data.species(mon.species).get("name", ""))
@@ -2988,15 +3032,6 @@ static func hatch_egg(
 		## drawn in its own colours, and a bred shiny is first seen here.
 		"shiny": Gen2Stats.is_shiny(mon.dvs),
 	}
-
-
-static func _max_hp(data: GameData, mon: Gen2SaveMon) -> int:
-	var species: Dictionary = data.species(mon.species)
-	var base: Dictionary = species.get("stats", {})
-	return Gen2Stats.calculate(
-		int(base.get("hp", 0)), Gen2Stats.hp_dv(mon.dvs), int(mon.stat_exp.get("hp", 0)),
-		mon.level, true
-	)
 
 
 static func _world_name(data: GameData, bank: int, address: int) -> String:

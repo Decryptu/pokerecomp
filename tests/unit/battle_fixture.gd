@@ -466,9 +466,10 @@ static func _species() -> Array:
 	# Growth rate and base exp after the type pair are published values too:
 	# Pikachu and Magcargo medium fast, Bulbasaur, Charmander and Geodude medium
 	# slow, which is why those are the only two curves the tests fixture.
-	# The two learnsets serve test_battle.gd's experience tests: Charmander's
-	# single entry is the "empty slot needs no question" case, Geodude's two are
-	# a level-up jump crossing a free slot and then must_learn_move's offer.
+	# Charmander's and Geodude's learnsets serve test_battle.gd's experience
+	# tests: Charmander's single entry is the "empty slot needs no question"
+	# case, Geodude's two a level-up jump crossing a free slot and then
+	# must_learn_move's offer. Ditto's is its own one row.
 	var known: Dictionary = {
 		BULBASAUR: [
 			"BULBASAUR", [45, 49, 49, 45, 65, 65], [GRASS, POISON],
@@ -502,7 +503,8 @@ static func _species() -> Array:
 		],
 		DITTO: [
 			"DITTO", [48, 48, 48, 48, 48, 48], [NORMAL, NORMAL],
-			Gen2Experience.GROWTH_MEDIUM_FAST, 61, [], GENDER_UNKNOWN,
+			Gen2Experience.GROWTH_MEDIUM_FAST, 61, [{"level": 1, "move": TRANSFORM}],
+			GENDER_UNKNOWN,
 		],
 		GASTLY: [
 			"GASTLY", [30, 35, 30, 80, 100, 35], [GHOST, POISON],

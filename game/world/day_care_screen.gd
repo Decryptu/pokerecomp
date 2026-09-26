@@ -182,21 +182,22 @@ func _open_counter() -> void:
 	_queue.append({"ask": &"deposit"})
 
 
-## `DayCareManIntroText` sets the man's ACTIVE bit and always prints his short
-## line; `DayCareLadyIntroText` prints the *egg* variant on the visit that sets
-## hers, which is why only the lady ever explains what an egg is.
+## Gold and Silver's `DayCareIntroText` prints the *egg* variant on the visit
+## that sets `DAYCARE_INTRO_SEEN_F`, for either counter. Crystal keeps that for
+## `DayCareLadyIntroText`; its `DayCareManIntroText` sets the bit and always
+## prints the short line, so only Crystal's lady explains what an egg is.
 func _intro_key() -> String:
-	if _slot == Gen2WorldDayCare.SLOT_MAN:
-		_state.set_day_care_man_flags(
-			_state.day_care_man_flags() | Gen2WorldDayCare.MAN_ACTIVE
-		)
-		return Gen2WorldDayCare.TEXT_MAN_INTRO
-	if _state.day_care_lady_flags() & Gen2WorldDayCare.LADY_ACTIVE != 0:
-		return Gen2WorldDayCare.TEXT_LADY_INTRO
-	_state.set_day_care_lady_flags(
-		_state.day_care_lady_flags() | Gen2WorldDayCare.LADY_ACTIVE
-	)
-	return Gen2WorldDayCare.TEXT_LADY_INTRO_EGG
+	var man: bool = _slot == Gen2WorldDayCare.SLOT_MAN
+	var flags: int = _state.day_care_man_flags() if man else _state.day_care_lady_flags()
+	var bit: int = Gen2WorldDayCare.MAN_ACTIVE if man else Gen2WorldDayCare.LADY_ACTIVE
+	var seen: bool = flags & bit != 0
+	if man:
+		_state.set_day_care_man_flags(flags | bit)
+	else:
+		_state.set_day_care_lady_flags(flags | bit)
+	if seen or (man and Gen2WorldState.is_crystal_profile(_data)):
+		return Gen2WorldDayCare.TEXT_MAN_INTRO if man else Gen2WorldDayCare.TEXT_LADY_INTRO
+	return Gen2WorldDayCare.TEXT_MAN_INTRO_EGG if man else Gen2WorldDayCare.TEXT_LADY_INTRO_EGG
 
 
 ## `.AskWithdrawMon`: the level growth and the price are read before the first

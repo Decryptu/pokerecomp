@@ -4024,6 +4024,22 @@ static func verify_battle_graphics(rom: RomFile, layout: Dictionary) -> Dictiona
 					],
 				}
 
+	## `EggHatchGFX`, against [constant Gen2Layout.EGG_HATCH_ROWS].
+	var egg_hatch: PackedByteArray = PokeTiles.decode_2bpp_strip(
+		data, int(layout["egg_hatch"]), Gen2Layout.EGG_HATCH_TILES
+	)
+	var egg_strip: int = Gen2Layout.EGG_HATCH_TILES * PokeTiles.TILE_WIDTH
+	for index: int in Gen2Layout.EGG_HATCH_ROWS.size():
+		var tile: int = index / PokeTiles.TILE_HEIGHT
+		var row: int = index % PokeTiles.TILE_HEIGHT
+		for column: int in PokeTiles.TILE_WIDTH:
+			var want: int = int(Gen2Layout.EGG_HATCH_ROWS[index][column])
+			if egg_hatch[row * egg_strip + tile * PokeTiles.TILE_WIDTH + column] != want:
+				return {
+					"ok": false,
+					"message": "Egg hatch tile %d: row %d column %d." % [tile, row, column],
+				}
+
 	## `StatsScreenPageTilesGFX` carries no progression to sweep, so it is
 	## checked on the two tiles the source names by shape: tile 0 is the
 	## vertical divider, two lit columns on every row, and tile 14 is the `'⁂'`
@@ -7162,6 +7178,13 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		"minimize": {
 			"offset": int(layout["minimize_pic"]),
 			"tiles": Gen2Layout.MINIMIZE_TILES,
+			"first_code": 0,
+			"bits": 2,
+		},
+		## `EggHatchGFX`: the crack and the shell fragment of the hatch.
+		"egg_hatch": {
+			"offset": int(layout["egg_hatch"]),
+			"tiles": Gen2Layout.EGG_HATCH_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},

@@ -1,12 +1,8 @@
 class_name Gen2SaveBox
 extends RefCounted
 
-## One persistent Generation 2 PC box.
-##
-## A box is only a fixed ordered set of save Pokémon. Its name and which box is
-## current are [Gen2SaveData]'s, the way `sBoxNames` and `wCurBox` are their own
-## bytes on the cartridge rather than part of a box; SRAM placement remains
-## outside this project model.
+## One PC box: a packed list, `sBoxCount` rows from the top with the unused tail
+## of [member slots] null. Its name and whether it is current are [Gen2SaveData]'s.
 
 const CAPACITY: int = 20
 
@@ -25,16 +21,16 @@ static func from_dict(raw: Variant) -> Gen2SaveBox:
 	var source: Array = raw as Array
 	var out := Gen2SaveBox.new()
 	out.shape_valid = source.size() == CAPACITY
-	for index: int in CAPACITY:
-		if index >= source.size():
-			continue
+	var count: int = 0
+	for index: int in mini(source.size(), CAPACITY):
 		var raw_mon: Variant = source[index]
 		if raw_mon == null:
 			continue
 		if not raw_mon is Dictionary:
 			out.shape_valid = false
 			continue
-		out.slots[index] = Gen2SaveMon.from_dict(raw_mon)
+		out.slots[count] = Gen2SaveMon.from_dict(raw_mon)
+		count += 1
 	return out
 
 
@@ -49,25 +45,35 @@ func to_dict() -> Array:
 	return out
 
 
+## `sBoxCount`, or -1 when the box is full.
 func first_empty_slot() -> int:
-	for index: int in CAPACITY:
-		if index >= slots.size() or slots[index] == null:
-			return index
-	return -1
+	var count: int = occupied_count()
+	return count if count < CAPACITY else -1
 
 
+## `InsertPokemonIntoBox` at [param slot]; -1 or past the last row appends.
 func put(mon: Gen2SaveMon, slot: int = -1) -> Dictionary:
 	if mon == null:
 		return {"ok": false, "reason": &"missing_pokemon"}
-	var target: int = slot if slot >= 0 else first_empty_slot()
-	if target < 0 or target >= CAPACITY:
-		return {"ok": false, "reason": &"box_full"}
-	if target >= slots.size():
+	if slots.size() != CAPACITY:
 		return {"ok": false, "reason": &"invalid_box_shape"}
-	if slots[target] != null:
-		return {"ok": false, "reason": &"box_slot_occupied", "slot": target}
-	slots[target] = mon
+	var count: int = occupied_count()
+	if count >= CAPACITY:
+		return {"ok": false, "reason": &"box_full"}
+	var target: int = count if slot < 0 else mini(slot, count)
+	slots.insert(target, mon)
+	slots.resize(CAPACITY)
 	return {"ok": true, "slot": target}
+
+
+## `RemoveMonFromPartyOrBox`'s REMOVE_BOX: the rows behind move up one.
+func take(slot: int) -> Gen2SaveMon:
+	if slot < 0 or slot >= slots.size() or slots[slot] == null:
+		return null
+	var mon: Gen2SaveMon = slots[slot]
+	slots.remove_at(slot)
+	slots.append(null)
+	return mon
 
 
 func occupied_count() -> int:

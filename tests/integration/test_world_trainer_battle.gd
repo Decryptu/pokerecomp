@@ -1868,7 +1868,11 @@ func test_an_egg_hatches_into_the_species_it_was_carrying() -> void:
 	assert_true(save.party[0].hp > 0)
 	assert_eq(" ".join(screen.text_lines()).strip_edges(), "Huh?",
 		"`Text_BreedHuh` is printed over the map before anything is cleared")
-	assert_true(screen.awaiting_press(), "its `para` waits for a press")
+	for _frame: int in 60:
+		if screen.awaiting_press():
+			break
+		_world_screen.advance_frame()
+	assert_true(screen.awaiting_press(), "its `para` waits for a press once printed")
 	var species_name: String = String(
 		_data.species(save.party[0].species).get("name", "")
 	)
@@ -1891,6 +1895,26 @@ func test_an_egg_hatches_into_the_species_it_was_carrying() -> void:
 		"NO keeps the species name"
 	)
 	assert_true(_world_screen._world.state.has_caught_species(save.party[0].species))
+
+
+## Each wobble's first half writes `hSCX` 2, which moves the background, egg and
+## all, two pixels left; the second half writes -2.
+func test_the_egg_wobbles_left_first() -> void:
+	await _open_world(true)
+	_world_screen.preview_egg_hatch()
+	var screen: Gen2EggHatchScreen = _world_screen.get("_hatch_host")
+	for _frame: int in 600:
+		if screen.phase() == Gen2EggHatchScreen.Phase.WOBBLE:
+			break
+		_world_screen.advance_frame()
+		if screen.awaiting_press():
+			_world_screen.press_button(PokeButton.A)
+	assert_eq(screen.phase(), Gen2EggHatchScreen.Phase.WOBBLE)
+	var pic: TextureRect = screen.get("_pic")
+	var first_half: float = pic.position.x
+	for _frame: int in Gen2EggHatchScreen.WOBBLE_HALF_FRAMES:
+		_world_screen.advance_frame()
+	assert_eq(pic.position.x, first_half + 2 * Gen2EggHatchScreen.WOBBLE_SHIFT)
 
 
 ## YES reaches `NamingScreen` under NAME_MON, and what it stores is the row's

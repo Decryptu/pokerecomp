@@ -356,9 +356,7 @@ static func mon_record(data: GameData, group: int, index: int) -> Dictionary:
 	if saved == null:
 		return {}
 	saved.nickname = String(data.species(saved.species).get("name", ""))
-	var record: Dictionary = saved.to_dict()
-	record["battle_stats"] = Gen2SramAdapter.read_party_stats(raw, 0)
-	return record
+	return saved.to_dict()
 
 
 ## `BattleTowerText`: a male class draws from 25 lines and a female from 15, and

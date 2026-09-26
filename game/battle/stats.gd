@@ -77,6 +77,20 @@ static func calculate(
 	return mini(out, MAX_STAT_VALUE)
 
 
+## `CalcMonStats`: the six stored stats, `MON_MAXHP` to `MON_SDEF`, in that order.
+## Both specials read the Special DV and the one Special stat experience.
+static func all_stats(base: Dictionary, dvs: int, stat_exp: Dictionary, level: int) -> Dictionary:
+	var special: int = int(stat_exp.get("special", 0))
+	return {
+		"hp": calculate(int(base.get("hp", 0)), hp_dv(dvs), int(stat_exp.get("hp", 0)), level, true),
+		"attack": calculate(int(base.get("attack", 0)), attack_dv(dvs), int(stat_exp.get("attack", 0)), level),
+		"defense": calculate(int(base.get("defense", 0)), defense_dv(dvs), int(stat_exp.get("defense", 0)), level),
+		"speed": calculate(int(base.get("speed", 0)), speed_dv(dvs), int(stat_exp.get("speed", 0)), level),
+		"sp_attack": calculate(int(base.get("sp_attack", 0)), special_dv(dvs), special, level),
+		"sp_defense": calculate(int(base.get("sp_defense", 0)), special_dv(dvs), special, level),
+	}
+
+
 ## HP's DV is not stored: it is the low bit of each of the other four, in the
 ## order attack, defense, speed, special, which is what shininess reads too.
 static func hp_dv(dvs: int) -> int:

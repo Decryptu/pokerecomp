@@ -812,6 +812,49 @@ func test_a_deposit_restores_pp_and_a_withdrawal_heals() -> void:
 	assert_eq(out.hp, Gen2SaveBattleAdapter.to_battle_mon(_data, out).max_hp())
 
 
+## `RemoveMonFromPartyOrBox` shifts every later row up and a deposit lands at
+## `sBoxCount`, so the next Pokemon in goes to the end, not into the gap.
+func test_a_box_closes_the_gap_a_withdrawal_leaves() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	for nickname: String in ["A", "B", "C"]:
+		var boxed: Gen2SaveMon = Gen2SaveMon.from_dict(save.party[1].to_dict())
+		boxed.nickname = nickname
+		save.boxes[0].put(boxed)
+	(save.party[0] as Gen2SaveMon).nickname = "D"
+	assert_true(Gen2SaveStorage.withdraw_box_to_party(save, _data, 0, 1, false)["ok"])
+	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 0, 0, -1, false)["ok"])
+	var order: Array[String] = []
+	for mon: Variant in save.boxes[0].slots:
+		if mon != null:
+			order.append((mon as Gen2SaveMon).nickname)
+	assert_eq(order, ["A", "C", "D"])
+	assert_null(save.boxes[0].slots[3])
+
+
+## MOVE PKMN W/O MAIL converts on the way across: `InsertPokemonIntoBox` ends in
+## `RestorePPOfDepositedPokemon`, and `CalcBufferMonStats` brings a row out with
+## fresh stats, full HP and no status.
+func test_moving_without_mail_restores_what_a_box_struct_cannot_hold() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	var mon: Gen2SaveMon = save.party[0]
+	mon.pp[0] = 3
+	mon.hp = 5
+	mon.status = Gen2Status.POISON
+	assert_true(Gen2SaveStorage.move_mon(
+		save, _data, Gen2BoxScreen.LOADED_PARTY, 0, 1, 0, false
+	)["ok"])
+	var stored: Gen2SaveMon = save.boxes[0].slots[0]
+	assert_eq(int(stored.pp[0]), int(_data.move(Fixture.TACKLE)["pp"]))
+	assert_eq(stored.status, Gen2Status.NONE)
+	assert_true(stored.stats.is_empty(), "a box row keeps no stats")
+	assert_true(Gen2SaveStorage.move_mon(
+		save, _data, 1, 0, Gen2BoxScreen.LOADED_PARTY, 0, false
+	)["ok"])
+	var out: Gen2SaveMon = save.party[0]
+	assert_false(out.stats.is_empty())
+	assert_eq(out.hp, int(out.stats["hp"]))
+
+
 ## Generation 1's `_MoveMon` copies BOXMON_STRUCT_LENGTH bytes each way, HP and
 ## status inside them, and restores nothing.
 func test_a_generation_1_box_keeps_health_status_and_pp() -> void:

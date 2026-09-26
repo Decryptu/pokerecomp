@@ -44,6 +44,9 @@ const FRAME_SECONDS: float = Gen2WorldAnimation.FRAME_SECONDS
 ## lines sit two rows apart.
 const SCROLL_STEPS: int = 2
 const SCROLL_STEP_FRAMES: int = 5
+## `Paragraph`'s cleared box and `DelayFrames 20` before the next page, both
+## generations.
+const PARAGRAPH_FRAMES: int = 20
 
 const TILE: int = Gen2Font.TILE
 
@@ -113,6 +116,7 @@ var font: Gen2Font = null
 
 var _pages: Array = []
 var _page: int = 0
+var _paragraph_frames: int = 0
 var _lines: Array = []
 var _tiles_on_page: int = 0
 var _shown: float = 0.0
@@ -165,6 +169,9 @@ func _process(delta: float) -> void:
 func _advance() -> void:
 	if _scroll_page >= 0:
 		advance_scroll_frames(1.0)
+		return
+	if _paragraph_frames > 0:
+		_paragraph_frames -= 1
 		return
 	if _shown < float(_tiles_on_page):
 		var rate: float = maxf(reveal_speed, ACCELERATED_SPEED) if accelerated else reveal_speed
@@ -229,6 +236,10 @@ func set_blink_cursor(blink: bool) -> void:
 ## screen that owns the frame has no other way to know a printing text is not
 ## finished, and a press cannot shorten it.
 func frames_left() -> int:
+	return _paragraph_frames + _printing_frames_left()
+
+
+func _printing_frames_left() -> int:
 	if _scroll_page >= 0:
 		var steps: int = SCROLL_STEPS - _scroll_rows + 1
 		return int(ceil(float(steps) * float(SCROLL_STEP_FRAMES) - _scroll_elapsed))
@@ -244,10 +255,11 @@ func frames_left() -> int:
 	return whole + 1 if is_equal_approx(float(whole), frames) else whole
 
 
-## True while a page still has tiles left to reveal, or while the box is in the
-## middle of a scroll: neither has reached its `PromptButton` yet.
+## True while a page still has tiles left to reveal, while `Paragraph` holds the
+## box cleared, or while the box is in the middle of a scroll: none of the three
+## has reached its `PromptButton` yet.
 func is_revealing() -> bool:
-	return _scroll_page >= 0 or _shown < float(_tiles_on_page)
+	return _scroll_page >= 0 or _paragraph_frames > 0 or _shown < float(_tiles_on_page)
 
 
 ## Every line the box is holding, its pages in order. What is on screen is read
@@ -275,6 +287,7 @@ func has_pages_left() -> bool:
 func finish() -> void:
 	if _scroll_page >= 0:
 		_end_scroll()
+	_paragraph_frames = 0
 	_shown = float(_tiles_on_page)
 	set_process(false)
 	_redraw()
@@ -421,7 +434,8 @@ func _start_page() -> void:
 
 	_shown = float(already)
 	_blink = 0.0
-	set_process(_tiles_on_page > 0 and not driven)
+	_paragraph_frames = PARAGRAPH_FRAMES if _page > 0 and _enter_of(_page) == &"page" else 0
+	set_process((_tiles_on_page > 0 or _paragraph_frames > 0) and not driven)
 	if reveal_speed <= 0.0:
 		_shown = float(_tiles_on_page)
 	_redraw()

@@ -259,8 +259,8 @@ var _seen_species: Dictionary = {}
 ## seen array rather than derived from the party, because the cartridge's own
 ## flag survives releasing, trading away or boxing the Pokemon that set it.
 var _caught_species: Dictionary = {}
-## `wUnownDex`: the Unown forms caught, in catching order rather than by letter,
-## and only the ones that reached the party. Twenty-six slots on the cartridge,
+## `wUnownDex`: the Unown forms caught, in catching order rather than by letter.
+## Twenty-six slots on the cartridge,
 ## where an empty one is a zero; here the list is as long as it is full, so its
 ## size is `.count_unown`'s own answer.
 var _unown_dex: Array[int] = []
@@ -638,12 +638,12 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	restored.set_last_dex_mode(int(source.get("last_dex_mode", Gen2Layout.DEXMODE_NEW)))
 	restored.set_kurt_apricorn_quantity(int(source.get("kurt_apricorn_quantity", 0)))
 	## Absent in a state written before the Unown dex, which reads as an empty
-	## one under a mode the engine flag unlocks on its own. Read before the
-	## forms below, because [method update_unown_dex] writes this byte too: a
-	## state without one falls back to the first form caught.
+	## one under a mode the engine flag unlocks on its own; a state without the
+	## letter falls back to the first form caught.
 	restored.note_first_unown_seen(int(source.get("first_unown_seen", 0)))
 	for raw_form: Variant in _list(source, "unown_dex"):
 		restored.update_unown_dex(int(raw_form))
+		restored.note_first_unown_seen(int(raw_form))
 	restored.set_registered_item(int(source.get("registered_item", 0)))
 	restored.set_wild_encounter_cooldown(int(source.get("wild_encounter_cooldown", 0)))
 	restored._step_count = int(source.get("step_count", 0)) & 0xFF
@@ -2180,15 +2180,11 @@ func set_species_caught(species: int, caught: bool = true) -> void:
 
 ## `UpdateUnownDex`: appends the form unless it is already listed. The walk stops
 ## at the first empty slot, so a form only reaches the end of the list and a full
-## twenty-six writes nothing. Its caller is the limit rather than the routine:
-## `GeneratePartyMonStats` runs it only for a PARTYMON, so an Unown sent straight
-## to the PC is caught without entering the dex.
+## twenty-six writes nothing. `GeneratePartyMonStats` and `SendMonIntoBox` both
+## run it, so a caught Unown enters the dex in the party or the PC alike.
 func update_unown_dex(form: int) -> void:
 	if form < 1 or form > Gen2Layout.UNOWN_FORMS:
 		return
-	## `.registerunowndex`'s own tail: the `wFirstUnownSeen` write sits behind the
-	## `UpdateUnownDex` call and runs whether or not the form was new.
-	note_first_unown_seen(form)
 	if form in _unown_dex or _unown_dex.size() >= Gen2Layout.UNOWN_FORMS:
 		return
 	_unown_dex.append(form)

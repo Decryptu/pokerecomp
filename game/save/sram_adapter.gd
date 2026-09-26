@@ -172,7 +172,7 @@ static func import_bytes(
 
 ## Patches the mapped canonical fields into an existing valid cartridge image,
 ## then rewrites both cartridge copies and their checksums. The selected cache is
-## required because party records include derived stats that must be regenerated.
+## required for a party row that carries no stored stats yet.
 static func export_bytes(
 	save: Gen2SaveData,
 	raw: PackedByteArray,
@@ -395,6 +395,7 @@ static func read_party_mon(raw: PackedByteArray, start: int) -> Gen2SaveMon:
 	mon.level = int(raw[start + 31])
 	mon.status = int(raw[start + 32])
 	mon.hp = _read_u16_be(raw, start + 34)
+	mon.stats = read_party_stats(raw, start)
 	return mon
 
 
@@ -402,9 +403,8 @@ static func read_party_stats(raw: PackedByteArray, start: int) -> Dictionary:
 	if start < 0 or start + PARTYMON_SIZE > raw.size():
 		return {}
 	var stats: Dictionary = {}
-	var keys: Array[String] = ["hp", "attack", "defense", "speed", "sp_attack", "sp_defense"]
-	for index: int in keys.size():
-		stats[keys[index]] = _read_u16_be(raw, start + 36 + index * 2)
+	for index: int in Gen2BattleMon.STAT_KEYS.size():
+		stats[Gen2BattleMon.STAT_KEYS[index]] = _read_u16_be(raw, start + 36 + index * 2)
 	return stats
 
 
@@ -511,23 +511,11 @@ static func _write_mon(raw: PackedByteArray, start: int, mon: Gen2SaveMon, data:
 	raw[start + 32] = mon.status
 	raw[start + 33] = 0
 	_write_u16_be(raw, start + 34, mon.hp)
-	var base: Dictionary = data.species(mon.species).get("stats", {})
-	var hp: int = Gen2Stats.calculate(
-		int(base.get("hp", 0)), Gen2Stats.hp_dv(mon.dvs), int(mon.stat_exp.get("hp", 0)), mon.level, true
-	)
-	_write_u16_be(raw, start + 36, hp)
-	var stat_keys: Array = ["attack", "defense", "speed", "sp_attack", "sp_defense"]
-	var dv_keys: Array = [
-		Gen2Stats.attack_dv(mon.dvs), Gen2Stats.defense_dv(mon.dvs),
-		Gen2Stats.speed_dv(mon.dvs), Gen2Stats.special_dv(mon.dvs), Gen2Stats.special_dv(mon.dvs),
-	]
-	var exp_keys: Array = ["attack", "defense", "speed", "special", "special"]
-	for index: int in stat_keys.size():
-		var value: int = Gen2Stats.calculate(
-			int(base.get(stat_keys[index], 0)), dv_keys[index],
-			int(mon.stat_exp.get(exp_keys[index], 0)), mon.level
-		)
-		_write_u16_be(raw, start + 38 + index * 2, value)
+	var stats: Dictionary = mon.stats
+	if stats.size() != Gen2BattleMon.STAT_KEYS.size():
+		stats = Gen2Stats.all_stats(data.species(mon.species).get("stats", {}), mon.dvs, mon.stat_exp, mon.level)
+	for index: int in Gen2BattleMon.STAT_KEYS.size():
+		_write_u16_be(raw, start + 36 + index * 2, int(stats[Gen2BattleMon.STAT_KEYS[index]]))
 
 
 static func _write_fixed_text(

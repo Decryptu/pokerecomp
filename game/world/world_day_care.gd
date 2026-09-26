@@ -247,11 +247,12 @@ static func load_egg_move(data: GameData, moves: Array, pp: Array, move: int) ->
 
 ## `GetBreedMon1LevelGrowth`: how many levels the slot's experience has bought
 ## since it was deposited. `CalcLevel` reads the experience and the stored level
-## is what it is compared against, so a slot at MAX_LEVEL still reports zero.
+## is what it is compared against, so a slot at MAX_LEVEL still reports zero. The
+## `sub b` is a byte, so a row whose experience sits below its level wraps.
 static func level_growth(data: GameData, mon: Gen2SaveMon) -> int:
 	if data == null or mon == null:
 		return 0
-	return maxi(0, grown_level(data, mon) - mon.level)
+	return (grown_level(data, mon) - mon.level) & 0xFF
 
 
 ## `CalcLevel`'s own answer for a slot, which is the level it will come out at.
@@ -264,7 +265,7 @@ static func grown_level(data: GameData, mon: Gen2SaveMon) -> int:
 
 
 static func price_to_retrieve(growth: int) -> int:
-	return RETRIEVE_BASE_PRICE + RETRIEVE_PRICE_PER_LEVEL * maxi(0, growth)
+	return RETRIEVE_BASE_PRICE + RETRIEVE_PRICE_PER_LEVEL * (growth & 0xFF)
 
 
 ## `DayCareStep`, the whole of it: a point of experience for each occupied slot
@@ -448,9 +449,9 @@ static func deposit_refusal(save: Gen2SaveData, party_index: int) -> String:
 	return ""
 
 
-## `DepositMonWithDayCareMan` and `RemoveMonFromPartyOrBox` behind it. The member
-## leaves the party whole: the slot holds what the party held, so nothing is
-## recomputed until it comes back out.
+## `DepositMonWithDayCareMan` and `RemoveMonFromPartyOrBox` behind it. The slot
+## is a box struct, so the stored stats stay behind; HP and status ride along
+## unread, since the way out rewrites both.
 static func deposit(
 	state: Gen2WorldState, save: Gen2SaveData, slot: int, party_index: int
 ) -> bool:
@@ -460,6 +461,7 @@ static func deposit(
 	var mon: Gen2SaveMon = save.party[party_index] as Gen2SaveMon
 	if mon == null:
 		return false
+	mon.stats = {}
 	state.set_day_care_mon(slot, mon)
 	save.party.remove_at(party_index)
 	state.set_day_care_has_mon(slot, true)
@@ -467,11 +469,11 @@ static func deposit(
 
 
 ## `RetrieveBreedmon`, and `MoveMon DAYCARE_TO_PARTY` with `.enoughMoney` behind
-## it on Generation 1. The level comes from the experience and HP is filled from
-## the new maximum on both; only Crystal's clears the status byte, refills every
-## PP and writes the experience *back* to the bottom of the level just reached,
-## which is `docs/bugs_and_glitches.md`'s "Pokemon deposited in the Day-Care
-## might lose experience" and is reproduced rather than corrected.
+## it on Generation 1. The level comes from the experience, `CalcMonStats` runs
+## and HP is filled from the new maximum on both; only Generation 2 clears the
+## status byte, refills every PP and writes the experience *back* to the bottom
+## of the level just reached, which is `docs/bugs_and_glitches.md`'s "Pokemon
+## deposited in the Day-Care might lose experience" and is reproduced.
 static func retrieve(
 	state: Gen2WorldState, save: Gen2SaveData, data: GameData, slot: int
 ) -> Dictionary:
@@ -481,15 +483,13 @@ static func retrieve(
 	if mon == null or save.party.size() >= Gen2SaveData.MAX_PARTY:
 		return {}
 	var previous_level: int = mon.level
-	mon.level = clampi(grown_level(data, mon), previous_level, MAX_LEVEL)
+	mon.level = grown_level(data, mon)
 	if data.generation == RomRegistry.GEN1:
 		gen1_fill_moves(data, mon, previous_level)
 	else:
 		_retrieve_gen2_rows(data, mon, previous_level)
-	mon.hp = Gen2Stats.calculate(
-		int((data.species(mon.species).get("stats", {}) as Dictionary).get("hp", 0)),
-		Gen2Stats.hp_dv(mon.dvs), int(mon.stat_exp.get("hp", 0)), mon.level, true
-	)
+	mon.calc_stats(data)
+	mon.hp = mon.max_hp(data)
 	save.party.append(mon)
 	state.set_day_care_mon(slot, null)
 	state.set_day_care_has_mon(slot, false)

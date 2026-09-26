@@ -377,12 +377,10 @@ func box_free_space() -> int:
 	return Gen2SaveBox.CAPACITY - box.occupied_count()
 
 
-## `TryAddMonToParty` and then the box behind it. [param to_front] is
-## `SendMonIntoBox`'s own `ShiftBoxMon`, which puts a catch at the head of the
-## box and moves everything already there down one; every other deposit runs
-## `InsertPokemonIntoBox`, which appends.
-## A new Pokemon the party has no room for goes to the front of the box:
-## `SendMonIntoBox`, `InsertPokemonIntoBox` at slot 0 and `SendNewMonToBox` alike.
+## `TryAddMonToParty` and then the box behind it. A new Pokemon the party has no
+## room for goes to the front of the box and moves every row down one:
+## `SendMonIntoBox`'s `ShiftBoxMon`, `InsertPokemonIntoBox` at slot 0 and
+## `SendNewMonToBox` alike.
 func add_party_or_box(mon: Gen2SaveMon, data: GameData = null) -> Dictionary:
 	if mon == null:
 		return {"ok": false, "reason": &"missing_pokemon"}
@@ -393,20 +391,11 @@ func add_party_or_box(mon: Gen2SaveMon, data: GameData = null) -> Dictionary:
 	if not bool(destination.get("ok", false)):
 		return destination
 	var box: Gen2SaveBox = boxes[int(destination["box"])]
-	for index: int in range(int(destination["slot"]), 0, -1):
-		box.slots[index] = box.slots[index - 1]
-	box.slots[0] = null
-	var target: int = 0
-	var placed: Dictionary = box.put(mon, target)
+	var placed: Dictionary = box.put(mon, 0)
 	if not bool(placed.get("ok", false)):
 		return {"ok": false, "reason": placed.get("reason", &"box_insert_failed")}
 	Gen2SaveStorage.deposited(data, mon)
-	return {
-		"ok": true,
-		"destination": &"box",
-		"box": int(destination["box"]),
-		"slot": target,
-	}
+	return {"ok": true, "destination": &"box", "box": int(destination["box"]), "slot": 0}
 
 
 ## Replaces this shared runtime save with a validated candidate while keeping

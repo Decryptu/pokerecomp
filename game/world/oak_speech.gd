@@ -155,9 +155,9 @@ static func is_gen1(data: GameData) -> bool:
 
 ## `InitName`, which makes the naming screen's END reachable with nothing typed.
 static func resolve_name(entered: String, gender: int) -> String:
-	if entered.strip_edges() != "":
-		return entered
-	return DEFAULT_FEMALE if gender == Gen2SaveData.GENDER_FEMALE else DEFAULT_MALE
+	return Gen2NamingScreen.init_name(
+		entered, DEFAULT_FEMALE if gender == Gen2SaveData.GENDER_FEMALE else DEFAULT_MALE
+	)
 
 
 static func with_names(text: String, player_name: String, rival_name: String) -> String:

@@ -19,6 +19,7 @@ static func from_battle_mon(mon: Gen2BattleMon) -> Gen2SaveMon:
 	for key: String in Gen2SaveMon.STAT_EXP_KEYS:
 		out.stat_exp[key] = int(mon.stat_exp.get(key, 0))
 	out.hp = mon.hp
+	out.stats = mon.persistent_stats()
 	out.status = mon.status
 	out.happiness = mon.happiness
 	out.caught_location = mon.caught_location
@@ -49,6 +50,10 @@ static func to_battle_mon(data: GameData, saved: Gen2SaveMon) -> Gen2BattleMon:
 	)
 	if out == null:
 		return null
+	## The stored stats, not ones rebuilt from today's stat experience: a battle
+	## copies `MON_MAXHP` onward out of the party struct.
+	if saved.stats.size() == Gen2BattleMon.STAT_KEYS.size():
+		out.stats = saved.stats.duplicate()
 	out.exp = saved.exp
 	out.ot_id = saved.ot_id
 	out.status = saved.status

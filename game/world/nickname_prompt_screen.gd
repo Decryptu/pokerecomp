@@ -20,7 +20,7 @@ enum Phase {
 }
 
 var _data: GameData = null
-## `wStringBuffer1`, which is the species name until the player replaces it.
+## `wStringBuffer1`, the species name `GetPokemonName` left there.
 var _species_name: String = ""
 ## `wCurPartySpecies` and `GetGender`'s answer for the row `.Pokemon` draws
 ## from; a caller naming by species name alone has no icon.
@@ -244,11 +244,11 @@ func _answer_question(yes: bool) -> void:
 
 ## `InitName`, which keeps the species name when the entry came back empty.
 func _on_named(entered: String) -> void:
-	var chosen: String = entered.strip_edges()
 	Gen2Screen.drop(_naming)
 	_naming = null
-	if not chosen.is_empty():
-		_answer = chosen
+	_answer = Gen2NamingScreen.init_name(
+		entered, _answer, _data != null and _data.generation == RomRegistry.GEN1
+	)
 	_after_question()
 
 
