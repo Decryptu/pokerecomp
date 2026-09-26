@@ -6521,8 +6521,6 @@ func _on_evolution_resolved(plan: Dictionary, canceled: bool) -> void:
 	if form > 0:
 		_world.state.update_unown_dex(form)
 	_learn_level_moves(index, applied.get("move_offers", []))
-	## `LearnLevelMoves` past [method Gen2WorldPartyHost.apply_evolution]: a
-	## move needing `ForgetMove` is declined, one of the cartridge's two answers.
 	_script_prompt = "%s evolved" % String(plan.get("evolving_name", ""))
 
 

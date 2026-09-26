@@ -40,6 +40,12 @@ const MAX_LEVEL: int = 100
 ## than type-checks: Electric became Electric/Steel between the generations.
 const TIME_CAPSULE_RETYPED_SPECIES: Array[int] = [81, 82]
 
+## `TimeCapsule_CatchRateItems`; any other catch-rate byte is its own item.
+const TIME_CAPSULE_CATCH_RATE_ITEMS: Dictionary = {
+	0x19: 0x92, 0x2D: 0x53, 0x32: 0xAE, 0x5A: 0xAD, 0x64: 0xAD, 0x78: 0xAD,
+	0x87: 0xAD, 0xBE: 0xAD, 0xC3: 0xAD, 0xDC: 0xAD, 0xFA: 0xAD, 0xFF: 0xAD,
+}
+
 ## `NUM_LINK_BATTLE_RECORDS` and `MAX_LINK_RECORD`.
 const NUM_LINK_BATTLE_RECORDS: int = 5
 const MAX_LINK_RECORD: int = 9999
@@ -239,6 +245,18 @@ static func validate_ot_trademon(
 		return true
 	return int(reported[0]) == int(base_types[0]) \
 		and int(reported[1]) == int(base_types[1])
+
+
+## `.ConvertToGen2` on a partner row: the item back through the catch-rate byte,
+## `BASE_HAPPINESS`, and Pokerus and both caught-data bytes zeroed.
+static func time_capsule_arrival(mon: Dictionary) -> Dictionary:
+	var out: Dictionary = mon.duplicate(true)
+	var item: int = int(out.get("item", 0))
+	out["item"] = int(TIME_CAPSULE_CATCH_RATE_ITEMS.get(item, item))
+	out["happiness"] = Gen2BattleMon.BASE_HAPPINESS
+	for key: String in ["pokerus", "caught_time", "caught_gender", "caught_level", "caught_location"]:
+		out[key] = 0
+	return out
 
 
 ## `CheckAnyOtherAliveMonsForTrade`, answered the other way up: TRUE lets the

@@ -113,6 +113,10 @@ func set_context(
 	_page = Gen2LinkPage.from_data(data)
 	_gen1 = data != null and data.generation == RomRegistry.GEN1
 	_partner = _transport.peer.duplicate(true)
+	if not _gen1 and _link_mode() == Gen2LinkSession.LINK_TIMECAPSULE:
+		_partner["party"] = (_partner.get("party", []) as Array).map(
+			Gen2LinkSession.time_capsule_arrival
+		)
 
 
 func _ready() -> void:

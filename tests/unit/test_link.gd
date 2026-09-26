@@ -289,6 +289,33 @@ func test_a_link_trade_refuses_to_leave_the_party_unable_to_fight() -> void:
 	assert_eq(StringName(result.get("reason", &"")), &"trade_would_leave_no_battler")
 
 
+## `.ConvertToGen2` runs over the partner's party as the Time Capsule receives
+## it, and the Trade Center takes the same row as it was sent.
+func test_the_time_capsule_receives_the_partners_party_converted() -> void:
+	var sent: Gen2SaveMon = _mon(SPECIES_TWO)
+	sent.item = 0xFF
+	sent.happiness = 200
+	sent.pokerus = 0x13
+	sent.caught_level = 9
+	sent.caught_location = 4
+	var received: Array = []
+	for mode: int in [Gen2LinkSession.LINK_TIMECAPSULE, Gen2LinkSession.LINK_TRADECENTER]:
+		var transport: Gen2LinkTransport = _peer()
+		transport.peer["party"] = [sent.to_dict()]
+		_world().state.link_session().open_room(mode)
+		var screen := Gen2LinkScreen.new()
+		screen.set_context(_data, _world(), _save(), transport)
+		received.append((screen.get("_partner")["party"] as Array)[0])
+		screen.free()
+
+	var arrived: Dictionary = received[0]
+	assert_eq(int(arrived["item"]), 0xAD, "`db -1, BERRY`")
+	assert_eq(int(arrived["happiness"]), Gen2BattleMon.BASE_HAPPINESS)
+	for key: String in ["pokerus", "caught_level", "caught_location"]:
+		assert_eq(int(arrived[key]), 0, key)
+	assert_eq(received[1], sent.to_dict())
+
+
 func test_a_link_battle_writes_the_record_it_produced() -> void:
 	var world: Gen2WorldAPI = _world()
 	var save: Gen2SaveData = _save()

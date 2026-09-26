@@ -1505,34 +1505,50 @@ func learn_move(side: int, forget_slot: int) -> Array:
 		return []
 
 	var offer: Dictionary = (_move_learn_queue[side] as Array)[0]
-	var learner: Gen2BattleMon = party(side).at(int(offer["index"]))
-	if learner == null or forget_slot < 0 or forget_slot >= learner.own_moves().size():
+	var index: int = int(offer["index"])
+	var learner: Gen2BattleMon = party(side).at(index)
+	if learner == null or forget_slot < 0 or forget_slot >= learner.persistent_moves().size():
 		return []
 
-	var forgot: int = int(learner.own_moves()[forget_slot])
+	var forgot: int = learner.persistent_move(forget_slot)
 	if Gen2MoveForget.is_hm_move(forgot, data.generation if data != null else RomRegistry.GEN2):
 		return []
+	if not is_gen1():
+		_clear_disable_naming(party(side).active_mon(), forgot)
 	var replaced: Array = [false]
 	learner.with_own_record(func() -> void:
 		replaced[0] = learner.replace_move(forget_slot, int(offer["move"]))
 	)
 	if not bool(replaced[0]):
 		return []
+	_copy_learned_moves(side, learner, index)
 	(_move_learn_queue[side] as Array).pop_front()
 	if side == PLAYER:
-		(party_log["learned"] as Array).append({"index": int(offer["index"]), "move": int(offer["move"])})
-
-	# LearnMove clears a Disable naming the move that went, in battle only. The
-	# cartridge compares numbers against wDisabledMove; Disable is a slot here and
-	# the new move takes the forgotten one's, so slot equality is that test.
-	if learner.disabled_slot == forget_slot:
-		learner.disabled_slot = -1
-		learner.disable_turns = 0
+		(party_log["learned"] as Array).append({"index": index, "move": int(offer["move"])})
 
 	return [{
-		"type": MOVE_FORGOTTEN, "side": side, "index": int(offer["index"]),
+		"type": MOVE_FORGOTTEN, "side": side, "index": index,
 		"species": learner.species, "name": learner.display_name(), "forgot": forgot, "learned": int(offer["move"]), "slot": forget_slot,
 	}]
+
+
+## `LearnMove`'s `wDisabledMove` test, which names the Pokemon out whichever
+## party member forgot: a move number, so a benched learner can free it too.
+static func _clear_disable_naming(out: Gen2BattleMon, forgot: int) -> void:
+	if out == null or out.disabled_slot < 0 or out.disabled_slot >= out.moves.size():
+		return
+	if int(out.moves[out.disabled_slot]) == forgot:
+		out.disabled_slot = -1
+		out.disable_turns = 0
+
+
+## `LearnMove`'s copy into the Pokemon out, skipped under Generation 2's Transform.
+func _copy_learned_moves(side: int, learner: Gen2BattleMon, index: int) -> void:
+	if index != party(side).active:
+		return
+	if not is_gen1() and Gen2Substatus.has(learner.substatus, Gen2Substatus.TRANSFORMED):
+		return
+	learner.adopt_persistent_moves()
 
 
 ## Answers a pending offer by refusing it: the Pokémon keeps its four moves and
@@ -3220,7 +3236,10 @@ func _give_experience_to(
 	})
 
 	var grew: bool = learner.level < learner.level_for_exp()
+	var learned_before: int = (party_log["learned"] as Array).size()
 	learner.with_own_record(_raise_levels.bind(learner, index, events))
+	if (party_log["learned"] as Array).size() > learned_before:
+		_copy_learned_moves(PLAYER, learner, index)
 	if grew and index == party(PLAYER).active:
 		learner.hold_stats(Gen2BattleMon.HELD_LEVEL_UP)
 
@@ -3277,7 +3296,7 @@ static func level_up_happiness(game: GameData, caught_location: int, here: int) 
 ## unasked, or queued for [method learn_move] when every slot is full.
 func _offer_moves_learned_at(learner: Gen2BattleMon, index: int, level: int, events: Array) -> void:
 	for move: int in data.moves_learned_at(learner.species, level):
-		if learner.moves.has(move):
+		if learner.persistent_moves().has(move):
 			continue
 		if learner.learn_move(move):
 			(party_log["learned"] as Array).append({"index": index, "move": move})

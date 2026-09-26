@@ -4376,7 +4376,7 @@ func _open_move_learn() -> bool:
 		var learner: Gen2BattleMon = _battle.party(Gen2Battle.PLAYER).at(int(offer["index"]))
 		if learner == null:
 			return false
-		_forget_moves = Gen2MoveForget.options(_data, learner.own_moves())
+		_forget_moves = Gen2MoveForget.options(_data, learner.persistent_moves())
 		if _forget_moves.is_empty():
 			return false
 		_forget_cursor = 0

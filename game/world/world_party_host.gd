@@ -410,12 +410,12 @@ static func commit_link_trade(
 	var received: Gen2SaveMon = Gen2SaveMon.from_dict(incoming)
 	if received == null or received.species <= 0:
 		return _failure(&"invalid_trade_partner_mon", {})
+	var link_mode: int = int(peer.get("link_mode", Gen2LinkSession.LINK_TRADECENTER))
 	## `ValidateOTTrademon` and `CheckAnyOtherAliveMonsForTrade`, both of which
 	## the trade screen has already run: they are run again here because this is
 	## the boundary that writes, and a caller that skipped them must not.
 	if not Gen2LinkSession.validate_ot_trademon(
-		incoming, received.species, received.is_egg,
-		int(peer.get("link_mode", Gen2LinkSession.LINK_TRADECENTER))
+		incoming, received.species, received.is_egg, link_mode
 	):
 		return _failure(&"abnormal_trade_partner_mon", {})
 	var party_rows: Array = []
@@ -441,7 +441,7 @@ static func commit_link_trade(
 			world.data, received
 		)
 		if battle_mon != null:
-			var row: Dictionary = Gen2Evolution.trade_evolution(world.data, battle_mon)
+			var row: Dictionary = Gen2Evolution.trade_evolution(world.data, battle_mon, link_mode)
 			if not row.is_empty():
 				plan = _trade_evolution_plan(world.data, received, candidate.party.size() - 1, row)
 				evolution = apply_evolution(world.data, received, row)
@@ -471,7 +471,7 @@ static func commit_link_trade(
 		"animation": trade_animation_context(
 			world.data, given, received, save.player_name,
 			String(peer.get("name", "")),
-			int(peer.get("link_mode", Gen2LinkSession.LINK_TRADECENTER))
+			link_mode
 		),
 	}
 
@@ -481,19 +481,9 @@ static func commit_link_trade(
 static func _trade_evolution_plan(
 	data: GameData, mon: Gen2SaveMon, index: int, row: Dictionary
 ) -> Dictionary:
-	return {
-		"index": index,
-		"old_species": mon.species,
-		"new_species": int(row.get("target", 0)),
-		"level": mon.level,
-		"evolving_name": mon.nickname if not mon.nickname.is_empty() \
-			else String(data.species(mon.species).get("name", "")),
-		"statused": Gen2Evolution.is_statused(mon),
-		"shiny": Gen2Stats.is_shiny(mon.dvs),
-		"can_cancel": false,
-		"row": row.duplicate(true),
-		"apply": false,
-	}
+	var out: Dictionary = Gen2Evolution.plan(data, mon, index, row, false)
+	out["apply"] = false
+	return out
 
 
 ## What `TradeAnimation` is handed: `wPlayerTrademon*` for the Pokemon leaving
@@ -2459,12 +2449,7 @@ static func apply_evolution(
 		else:
 			move_offers.append(move)
 	var evolved_from: int = mon.species
-	# `GetNickname` / `CopyName1` fill wStringBuffer2 BEFORE the species is
-	# replaced, and both `EvolvingText` and `CongratulationsYourPokemonText` read
-	# it, so the two boxes name what the Pokemon was called on the way in. Held
-	# because the rename below is what the name would otherwise be read through.
-	var evolving_name: String = mon.nickname if not mon.nickname.is_empty() \
-		else String(data.species(evolved_from).get("name", ""))
+	var evolving_name: String = Gen2SaveMon.display_name(mon, data)
 	mon.species = battle_mon.species
 	mon.nickname = Gen2Evolution.nickname_after_evolution(
 		data, mon.nickname, evolved_from, mon.species

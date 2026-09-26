@@ -213,12 +213,12 @@ func _first_gen1_plan(data: GameData) -> Dictionary:
 		for row: Dictionary in data.evolutions(species):
 			if int(row.get("method", 0)) != Gen2Layout.EVOLVE_LEVEL:
 				continue
-			return {
-				"index": 0, "old_species": species, "new_species": int(row["target"]),
-				"level": int(row["parameter"]),
-				"evolving_name": String(data.species(species).get("name", "")),
-				"statused": false, "shiny": false, "can_cancel": true, "row": row,
-			}
+			var mon := Gen2SaveMon.new()
+			mon.species = species
+			mon.level = int(row["parameter"])
+			mon.hp = 1
+			mon.dvs = 0
+			return Gen2Evolution.plan(data, mon, 0, row, true)
 	return {}
 
 
