@@ -4374,16 +4374,26 @@ func collision_code_at(cell: Vector2i) -> int:
 	var block: int = block_at(block_x, block_y)
 	if block == current_map.block_at(block_x, block_y):
 		return current_map.collision_at(cell.x, cell.y)
-	if _gen1:
-		return current_tileset.tile_index(block, Gen1Layout.cell_tile_index(
-			cell.x & (Gen2Layout.MAP_BLOCK_CELL_WIDTH - 1),
-			cell.y & (Gen2Layout.MAP_BLOCK_CELL_WIDTH - 1),
-		))
-	return current_tileset.collision_index(
-		block,
+	return Gen2WorldCollision.cell_code(
+		data, current_tileset, block,
 		cell.x & (Gen2Layout.MAP_BLOCK_CELL_WIDTH - 1),
 		cell.y & (Gen2Layout.MAP_BLOCK_CELL_WIDTH - 1),
 	)
+
+
+## [method Gen2WorldMap.permission_at] and its neighbours, `changeblock` included.
+func permission_at(cell: Vector2i) -> int:
+	return current_map.permission_at(data, cell, changed_blocks()) \
+		if current_map != null else Gen2WorldCollision.WALL_TILE
+
+
+func is_door_at(cell: Vector2i) -> bool:
+	return current_map != null and current_map.is_door_at(data, cell, changed_blocks())
+
+
+func ledge_hops_at(cell: Vector2i) -> Array[Vector2i]:
+	return current_map.ledge_hops_at(data, cell, changed_blocks()) \
+		if current_map != null else [] as Array[Vector2i]
 
 
 ## `wLastMap`, which a Generation 1 indoor map's four colours are chosen by when

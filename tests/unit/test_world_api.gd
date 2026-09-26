@@ -10432,6 +10432,29 @@ func _gen1_wander_map() -> Dictionary:
 	return map
 
 
+## One set of terms for a cell on either generation: Generation 2 reads the
+## collision code, Generation 1 the tile at the cell's foot and `HandleLedges`'
+## pair of tiles.
+func test_a_cell_answers_the_same_questions_on_either_generation() -> void:
+	var gen2: Gen2WorldAPI = _world()
+	assert_true(gen2.is_door_at(Vector2i(12, 5)))
+	assert_false(gen2.is_door_at(Vector2i(8, 6)))
+	assert_eq(gen2.permission_at(Vector2i(8, 6)), Gen2WorldCollision.LAND_TILE)
+	assert_eq(gen2.permission_at(Vector2i(11, 11)), Gen2WorldCollision.WATER_TILE)
+	assert_eq(gen2.permission_at(Vector2i(2, 2)), Gen2WorldCollision.WALL_TILE)
+	assert_eq(gen2.ledge_hops_at(Vector2i(3, 2)), [Vector2i.DOWN] as Array[Vector2i])
+	var gen1: Gen2WorldAPI = _gen1_world(0, Vector2i(0, 1))
+	assert_true(gen1.is_door_at(Vector2i(1, 1)))
+	assert_eq(gen1.permission_at(Vector2i(0, 1)), Gen2WorldCollision.LAND_TILE)
+	assert_eq(gen1.permission_at(Vector2i(0, 0)), Gen2WorldCollision.WALL_TILE)
+	assert_eq(gen1.ledge_hops_at(Vector2i(1, 3)), [Vector2i.DOWN] as Array[Vector2i])
+	assert_eq(gen1.ledge_hops_at(Vector2i(0, 3)), [] as Array[Vector2i], "not the stood-on tile")
+	assert_eq(
+		gen1.current_map.permission_at(gen1.data, Vector2i(0, 1)), Gen2WorldCollision.LAND_TILE,
+		"the records answer as the world does"
+	)
+
+
 func _gen1_world(number: int, start: Vector2i) -> Gen2WorldAPI:
 	_write_gen1_cache()
 	return Gen2WorldAPI.open(

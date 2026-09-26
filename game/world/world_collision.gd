@@ -613,3 +613,42 @@ static func gen1_is_warp_carpet(direction: Vector2i, tile: int) -> bool:
 
 static func gen1_is_dungeon_tileset(tileset_number: int) -> bool:
 	return GEN1_DUNGEON_TILESETS.has(tileset_number)
+
+
+## A cell's answers on either generation. [param code] is [method cell_code]'s:
+## Generation 2's collision byte, or Generation 1's tile at the cell's foot.
+static func cell_code(
+	data: GameData, tileset: Gen2WorldTileset, block: int, cell_x: int, cell_y: int
+) -> int:
+	if tileset == null:
+		return -1
+	if _is_gen1(data):
+		return tileset.tile_index(block, Gen1Layout.cell_tile_index(cell_x, cell_y))
+	return tileset.collision_index(block, cell_x, cell_y)
+
+
+## [constant LAND_TILE], [constant WATER_TILE] or [constant WALL_TILE].
+static func cell_permission(data: GameData, tileset: Gen2WorldTileset, code: int) -> int:
+	if _is_gen1(data):
+		return gen1_permission(tileset, code)
+	return permission_for(code)
+
+
+## A doorway a warp stands in; a warp carpet is floor and is not one.
+static func cell_is_door(data: GameData, tileset: Gen2WorldTileset, code: int) -> bool:
+	if _is_gen1(data):
+		return tileset != null and gen1_is_door_tile(tileset.number, code)
+	return code in [COLL_DOOR, COLL_DOOR_79, COLL_CAVE]
+
+
+## `.TryJump` on [param code], or `HandleLedges` on it and [param ahead].
+static func cell_hops(
+	data: GameData, tileset: Gen2WorldTileset, code: int, ahead: int, direction: Vector2i
+) -> bool:
+	if _is_gen1(data):
+		return tileset != null and gen1_allows_hop(tileset.number, code, ahead, direction)
+	return allows_hop(code, direction)
+
+
+static func _is_gen1(data: GameData) -> bool:
+	return data != null and data.generation == RomRegistry.GEN1

@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 49 | `Gen2WorldMap.code_at()`, `permission_at()`, `is_door_at()` and `ledge_hops_at()`, the same three on `Gen2WorldAPI`, and `Gen2WorldCollision.cell_code()`, `cell_permission()`, `cell_is_door()` and `cell_hops()`, answering a cell on either generation |
 | 48 | `register_roam_encounter_chance()`, `roamers()` and `request_roamer()`; `beasts_released`, `fought_suicune` and `caught_species` in `progress()`; a visible population keeping away what a Repel would |
 | 47 | `Gen2WorldMap.name`, the `map_const` constant's name on every cartridge, and `GameData.world_map_named()` |
 | 46 | `box_full` on a `caught` event, and `box_free_space` in `progress()`; a hidden Headbutt tree left out of `drawn_tile_at()` and `drawn_revision()` |
@@ -880,6 +881,26 @@ cartridge's answer is per cell.
 own pair of codes and the Bug Contest doubles its encounter rate. It is
 `IN_GRASS_F`, not the encounter gate; `CheckGrassCollision` is that one and it
 includes water.
+
+The table above reads a Generation 2 code. For a cell on either generation, ask
+the map or the world, which read the byte each cartridge tests there (the
+collision code on Generation 2, the tile at the cell's foot on Generation 1):
+
+| Call | Answers |
+|---|---|
+| `Gen2WorldMap.permission_at(data, cell, changed_blocks)`, `Gen2WorldAPI.permission_at(cell)` | `Gen2WorldCollision.LAND_TILE`, `WATER_TILE` or `WALL_TILE` |
+| `is_door_at(...)` on either | A doorway a warp stands in: a door or cave mouth. A warp carpet is floor |
+| `ledge_hops_at(...)` on either | The directions a hop leaves the cell in, over the ledge in the next |
+| `code_at(...)` on the map | The byte the three above read |
+
+The map's form reads the cartridge's records, a cell past the map from the
+border or a connection as `drawn_block_for` draws it, and a block in
+`changed_blocks`, the shape `Gen2WorldAPI.changed_blocks()` and
+`Gen2BattleWorldContext.changed_blocks` hand over; the world's form reads its
+loaded map with its own edits. With a code of your
+own, `Gen2WorldCollision.cell_code(data, tileset, block, x, y)`,
+`cell_permission(data, tileset, code)`, `cell_is_door(data, tileset, code)` and
+`cell_hops(data, tileset, code, ahead, direction)` give the same answers.
 
 ### Blocks past the loaded map
 
