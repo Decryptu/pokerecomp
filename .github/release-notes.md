@@ -3,10 +3,30 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Fixed
 
-- The stats screen of a Pokémon in a PC box turns its pages with LEFT, RIGHT and A, and shows the Pokémon's picture.
-- You can no longer walk into a boulder while it slides after a Strength push, or into the square a walking NPC is leaving.
-- A boulder pushed into a hole in Ice Path or Blackthorn Gym falls through, and the game no longer freezes.
-- With Overworld Encounters on, the roaming legendary beasts can be met in the grass again.
+- An X item still works at +6: it is used up, costs the turn and says the stat won't rise. X items now say which stat went up and make your Pokémon a little happier.
+- Ethers and Elixers can be used on a fainted Pokémon, and restore a transformed Pokémon's own moves. In battle their move list takes only up and down, and B goes back to the party list.
+- Bitter Berry no longer asks which Pokémon to use it on.
+- A Full Heal or Full Restore on a confused Pokémon with no status says it came to its senses.
+- Heal Powder, Energypowder, Energy Root and Revival Herb say "It looks bitter…", and lower happiness in battle too.
+- Using the Poké Doll in a trainer battle gets Professor Oak's warning.
+- A Revive used on a Pokémon that never fought the current opponent no longer gives it a share of the experience.
+- Choosing an Egg for an item says it can't be used on an Egg.
+- A registered item that can't be used gets Professor Oak's warning.
+- A Ditto that used Transform is caught as a Ditto.
+- A Pokémon caught into your party keeps the PP it used in battle.
+- "Gotcha!" plays the caught jingle and the capture music, and the new Pokédex entry plays its sound.
+- A Pokémon caught in the Bug-Catching Contest is added to the Pokédex straight away.
+- A Rare Candy used where the Pokémon was caught raises happiness more, in Crystal.
+- A move learned from a Rare Candy, an evolution stone or an evolution after a battle shows "learned" and offers to forget a move when all four slots are full.
+- The party menu reopens on the Pokémon you last picked.
+- Softboiled and Milk Drink animate both HP bars and say how much HP was recovered.
+- Refused field moves, TAKE, mail and Softboiled messages appear over the party menu, which then comes back on the same Pokémon.
+- Backing out of GIVE, TAKE or the mail menu returns to the party list.
+- Giving an item that can't be held goes back to the bag. Mail is written after the Pokémon takes it.
+- The MOVE screen no longer wraps from the last move to the first.
+- In Gold and Silver, the MOVE screen says ATTK and the mail menu opens further left.
+- In a Cable Club room, the START menu hides PACK and SAVE, and the party menu hides field moves and ITEM.
+- The music is quieter while a stats screen or a Pokédex entry is open.
 
 ## Which file
 
