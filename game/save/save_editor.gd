@@ -77,7 +77,7 @@ func add_party_member(species: int, level: int) -> Dictionary:
 	if mon == null:
 		return _refuse("species %d is not in this cartridge cache" % species)
 	save.party.append(mon)
-	_register(mon, true)
+	_register(mon)
 	return _changed()
 
 
@@ -110,7 +110,7 @@ func set_species(mon: Gen2SaveMon, species: int) -> Dictionary:
 		return _refuse("species %d is not in this cartridge cache" % species)
 	mon.species = species
 	_resync_level(mon, mon.level)
-	_register(mon, save.party.has(mon))
+	_register(mon)
 	return _changed()
 
 
@@ -181,8 +181,7 @@ func set_dvs(mon: Gen2SaveMon, attack: int, defense: int, speed: int, special: i
 		clampi(speed, 0, Gen2Stats.MAX_DV),
 		clampi(special, 0, Gen2Stats.MAX_DV),
 	)
-	# HP's DV is derived from the other four, so the HP ceiling just moved.
-	mon.hp = mini(mon.hp, max_hp_for(mon))
+	_restat(mon)
 	return _changed()
 
 
@@ -221,8 +220,7 @@ func set_stat_exp(mon: Gen2SaveMon, key: String, value: int) -> Dictionary:
 	if not Gen2SaveMon.STAT_EXP_KEYS.has(key):
 		return _refuse("there is no %s stat experience" % key)
 	mon.stat_exp[key] = clampi(value, 0, Gen2Stats.MAX_STAT_EXP)
-	if key == "hp":
-		mon.hp = mini(mon.hp, max_hp_for(mon))
+	_restat(mon)
 	return _changed()
 
 
@@ -256,18 +254,9 @@ func set_is_egg(mon: Gen2SaveMon, is_egg: bool) -> Dictionary:
 	return _changed()
 
 
-## The HP ceiling this Pokemon's identity and training produce right now.
+## The HP ceiling: a party row's stored MON_MAXHP, or what `CalcMonStats` makes.
 func max_hp_for(mon: Gen2SaveMon) -> int:
-	if mon == null:
-		return 0
-	var base: Dictionary = data.species(mon.species).get("stats", {})
-	return Gen2Stats.calculate(
-		int(base.get("hp", 0)),
-		Gen2Stats.hp_dv(mon.dvs),
-		int(mon.stat_exp.get("hp", 0)),
-		mon.level,
-		true,
-	)
+	return mon.max_hp(data) if mon != null else 0
 
 
 func box(index: int) -> Gen2SaveBox:
@@ -283,10 +272,11 @@ func add_box_member(box_index: int, species: int, level: int) -> Dictionary:
 	var mon: Gen2SaveMon = _create_mon(species, level)
 	if mon == null:
 		return _refuse("species %d is not in this cartridge cache" % species)
+	mon.stats = {}
 	var placed: Dictionary = target.put(mon)
 	if not bool(placed.get("ok", false)):
 		return _refuse("box %d is full" % (box_index + 1))
-	_register(mon, false)
+	_register(mon)
 	return _changed()
 
 
@@ -294,9 +284,8 @@ func remove_box_member(box_index: int, slot: int) -> Dictionary:
 	var target: Gen2SaveBox = box(box_index)
 	if target == null:
 		return _refuse("there is no box %d" % (box_index + 1))
-	if slot < 0 or slot >= target.slots.size() or target.slots[slot] == null:
+	if target.take(slot) == null:
 		return _refuse("that box slot is empty")
-	target.slots[slot] = null
 	return _changed()
 
 
@@ -416,10 +405,10 @@ func register_owned() -> Dictionary:
 	if not has_world():
 		return _refuse("this save has no world state to edit")
 	for mon: Gen2SaveMon in save.party:
-		_register(mon, true)
+		_register(mon)
 	for stored: Gen2SaveBox in save.boxes:
 		for mon: Gen2SaveMon in stored.slots:
-			_register(mon, false)
+			_register(mon)
 	return _changed()
 
 
@@ -457,6 +446,15 @@ func _resync_level(mon: Gen2SaveMon, level: int) -> void:
 	)
 	mon.level = clampi(level, 1, Gen2Experience.MAX_LEVEL)
 	mon.exp = Gen2Experience.total_exp_at(growth, mon.level)
+	_restat(mon)
+
+
+## A party row's stats rebuilt after an edit they are made from; a box row has none.
+func _restat(mon: Gen2SaveMon) -> void:
+	if save.party.has(mon):
+		mon.calc_stats(data)
+	else:
+		mon.stats = {}
 	mon.hp = mini(mon.hp, max_hp_for(mon))
 
 
@@ -472,12 +470,13 @@ func _create_mon(species: int, level: int) -> Gen2SaveMon:
 	return Gen2SaveBattleAdapter.from_battle_mon(battle_mon)
 
 
-## `SetSeenAndCaughtMon`, and `UpdateUnownDex` for a party member.
-func _register(mon: Gen2SaveMon, in_party: bool) -> void:
+## `SetSeenAndCaughtMon` and `UpdateUnownDex`, which `GeneratePartyMonStats` and
+## `SendMonIntoBox` both run.
+func _register(mon: Gen2SaveMon) -> void:
 	if mon == null or mon.is_egg or not has_world():
 		return
 	save.world.world_state.set_species_caught(mon.species)
-	if in_party and mon.species == Gen2Layout.UNOWN_SPECIES:
+	if mon.species == Gen2Layout.UNOWN_SPECIES:
 		save.world.world_state.update_unown_dex(Gen2Stats.unown_letter(mon.dvs))
 
 

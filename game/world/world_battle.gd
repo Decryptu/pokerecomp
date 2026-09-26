@@ -85,7 +85,7 @@ static func prepare(
 				})
 		&"battle_tower", &"link_battle":
 			trainer_class = int(values.get("trainer_class", LINK_TRAINER_CLASS if kind == &"link_battle" else 0))
-			enemy_party = _recorded_party(data, values, kind == &"battle_tower")
+			enemy_party = _recorded_party(data, values)
 		_:
 			return _failure(&"unsupported_battle_kind", {"kind": kind})
 
@@ -134,7 +134,7 @@ static func _tutor_stand_in(data: GameData, values: Dictionary, party: Gen2Party
 	return party
 
 
-static func _recorded_party(data: GameData, values: Dictionary, tower: bool) -> Gen2Party:
+static func _recorded_party(data: GameData, values: Dictionary) -> Gen2Party:
 	var members: Array = []
 	for raw_mon: Variant in values.get("enemy_party", []) as Array:
 		if not raw_mon is Dictionary:
@@ -143,9 +143,6 @@ static func _recorded_party(data: GameData, values: Dictionary, tower: bool) -> 
 		var member: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, saved)
 		if member == null:
 			return null
-		if tower and raw_mon.has("battle_stats"):
-			member.stats = (raw_mon["battle_stats"] as Dictionary).duplicate()
-			member.hp = clampi(saved.hp, 0, member.max_hp())
 		members.append(member)
 	return Gen2Party.create(members)
 

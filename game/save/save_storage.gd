@@ -62,10 +62,9 @@ static func withdraw_box_to_party(
 	var box: Gen2SaveBox = candidate.boxes[box_index]
 	if box == null or box_slot >= box.slots.size():
 		return _failure(&"invalid_box_shape")
-	var mon: Gen2SaveMon = box.slots[box_slot]
+	var mon: Gen2SaveMon = box.take(box_slot)
 	if mon == null:
 		return _failure(&"empty_box_slot")
-	box.slots[box_slot] = null
 	candidate.party.append(mon)
 	_withdrawn(data, mon)
 	return _commit(save, data, candidate, {
@@ -76,9 +75,12 @@ static func withdraw_box_to_party(
 	}, persist)
 
 
-## `RestorePPOfDepositedPokemon` behind a PC deposit and `SendMonIntoBox` alike;
-## Generation 1's `_MoveMon` copies the row whole and touches nothing.
+## A row entering a box keeps no stored stats; Generation 2 then runs
+## `RestorePPOfDepositedPokemon`, where Generation 1's `_MoveMon` stops.
 static func deposited(data: GameData, mon: Gen2SaveMon) -> void:
+	if mon == null:
+		return
+	mon.stats = {}
 	if data == null or data.generation == RomRegistry.GEN1:
 		return
 	for slot: int in Gen2SaveMon.MAX_MOVES:
@@ -87,20 +89,24 @@ static func deposited(data: GameData, mon: Gen2SaveMon) -> void:
 	boxed(data, mon)
 
 
-## Its PC_WITHDRAW tail, `CalcMonStats`: no status and MON_MAXHP into MON_HP, or
-## an egg's zero.
+## PC_WITHDRAW's and `_MoveMon`'s BOX_TO_PARTY `CalcLevel`, then `CalcMonStats`.
 static func _withdrawn(data: GameData, mon: Gen2SaveMon) -> void:
+	if data == null or mon == null:
+		return
+	mon.level = Gen2Experience.level_for_exp(
+		int(data.species(mon.species).get("growth_rate", 0)), mon.exp
+	)
+	mon.calc_stats(data)
 	boxed(data, mon)
 
 
 ## A Generation 2 `box_struct` has no HP or status: `CalcBufferMonStats` makes it
-## healthy. Generation 1's box row keeps both.
+## healthy, an egg's HP zero. Generation 1's box row keeps both.
 static func boxed(data: GameData, mon: Gen2SaveMon) -> void:
 	if data == null or mon == null or data.generation == RomRegistry.GEN1:
 		return
 	mon.status = Gen2Status.NONE
-	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, mon)
-	mon.hp = battle_mon.max_hp() if battle_mon != null and not mon.is_egg else 0
+	mon.hp = 0 if mon.is_egg else mon.max_hp(data)
 
 
 ## `RemoveMonFromPartyOrBox` behind both `.release`s: the same atomic write the
@@ -139,9 +145,8 @@ static func release_box_slot(
 	var box: Gen2SaveBox = candidate.boxes[box_index]
 	if box == null or box_slot >= box.slots.size():
 		return _failure(&"invalid_box_shape")
-	if box.slots[box_slot] == null:
+	if box.take(box_slot) == null:
 		return _failure(&"empty_box_slot")
-	box.slots[box_slot] = null
 	return _commit(save, data, candidate, {
 		"kind": &"release_box", "box": box_index, "slot": box_slot,
 	}, persist)
@@ -193,6 +198,12 @@ static func move_mon(
 		without.remove_at(from_index)
 		destination = destination.duplicate()
 		destination.insert(clampi(to_index, 0, destination.size()), mon)
+		## `CalcBufferMonStats` out, `RestorePPOfDepositedPokemon` in.
+		if to_loaded == Gen2BoxScreen.LOADED_PARTY:
+			mon.calc_stats(data)
+			boxed(data, mon)
+		else:
+			deposited(data, mon)
 		_write_loaded_list(candidate, from_loaded, without)
 		_write_loaded_list(candidate, to_loaded, destination)
 	return _commit(save, data, candidate, {
@@ -257,16 +268,10 @@ static func _box_destination(
 	var box: Gen2SaveBox = save.boxes[box_index]
 	if box == null:
 		return _failure(&"invalid_box_shape")
-	var target_slot: int = box_slot if box_slot >= 0 else box.first_empty_slot()
-	if target_slot < 0:
+	var end: int = box.first_empty_slot()
+	if end < 0:
 		return _failure(&"box_full")
-	if target_slot >= Gen2SaveBox.CAPACITY:
-		return _failure(&"invalid_box_slot")
-	if target_slot >= box.slots.size():
-		return _failure(&"invalid_box_shape")
-	if box.slots[target_slot] != null:
-		return _failure(&"box_slot_occupied")
-	return {"ok": true, "box": box_index, "slot": target_slot}
+	return {"ok": true, "box": box_index, "slot": end if box_slot < 0 else mini(box_slot, end)}
 
 
 static func _commit(

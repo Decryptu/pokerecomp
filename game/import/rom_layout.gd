@@ -1016,6 +1016,15 @@ const MINIMIZE_TILES: int = 1
 ## solid diamond in colour 3 and nothing else. One tile has no neighbour to slide
 ## against, so its own shape is the whole of what pins the address.
 const MINIMIZE_PIC_ROWS: Array[int] = [0x00, 0x00, 0x18, 0x3C, 0x7E, 0x3C, 0x24, 0x00]
+## `EggHatchGFX`'s crack and shell tiles off `gfx/evo/egg_hatch.png`, a colour
+## index a pixel; their shape pins the address.
+const EGG_HATCH_TILES: int = 2
+const EGG_HATCH_ROWS: Array[String] = [
+	"00300000", "00033000", "00000300", "00000030",
+	"00000300", "00033000", "00300000", "03000000",
+	"00003330", "00331113", "03111113", "31111113",
+	"31111133", "33111133", "03333330", "00333300",
+]
 const TRANSITION_PALETTE_NAMES: Array[String] = ["day", "dark"]
 const TRANSITION_PALETTE_COLORS: int = 4
 ## `GetTrainerBackpic`: the player's own 6x6 picture, the one standing on the
@@ -2744,6 +2753,9 @@ const GOLD_SILVER: Dictionary = {
 	# `MinimizePic`, one uncompressed 2bpp tile; its sixteen bytes occur once in
 	# each of the three dumps.
 	"minimize_pic": 0xCC6C8,
+	# `EggHatchGFX`, two uncompressed tiles behind `EggHatch_CrackShell`; its
+	# thirty-two bytes occur once in each of the three dumps.
+	"egg_hatch": 0x17717,
 	# `BattleTransitionTiles` and the two palettes `LoadPokeBallGraphics` floods
 	# every background tile with, the second of which is the darkness palset's.
 	"battle_transition": {
@@ -3354,6 +3366,7 @@ const CRYSTAL: Dictionary = {
 	"exp_bar": 0xF8B10,
 	"ball_icons": 0x2C172,  # See the Gold and Silver block above.
 	"minimize_pic": 0xCC725,
+	"egg_hatch": 0x17393,  # See the Gold and Silver block above.
 	"battle_transition": {
 		"tiles": 0x8C2F4, "palette": 0x8C6A1, "dark_palette": 0x8C6A9,
 	},

@@ -2297,7 +2297,7 @@ func player_id() -> int:
 
 ## Mirrors the selected save's wPlayerName, for the `<PLAYER>` code.
 func set_player_name(name: String) -> Dictionary:
-	_player_name = name.strip_edges()
+	_player_name = name
 	return {"ok": true}
 
 

@@ -705,7 +705,23 @@ func _battle_dump() -> PackedByteArray:
 	_write_stats_screen_palettes(data)
 	_write_stats_tiles(data)
 	_write_minimize_pic(data)
+	_write_egg_hatch(data)
 	return data
+
+
+## `EggHatchGFX`, each pixel's colour index split over the two planes.
+func _write_egg_hatch(data: PackedByteArray) -> void:
+	var tiles: PackedByteArray = PackedByteArray()
+	for line: String in Gen2Layout.EGG_HATCH_ROWS:
+		var low: int = 0
+		var high: int = 0
+		for column: int in PokeTiles.TILE_WIDTH:
+			var index: int = int(line[column])
+			low |= (index & 1) << (7 - column)
+			high |= (index >> 1) << (7 - column)
+		tiles.append(low)
+		tiles.append(high)
+	_write(data, int(_layout["egg_hatch"]), tiles)
 
 
 ## `MinimizePic`, the one tile whose own shape is what pins its address.

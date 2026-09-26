@@ -255,14 +255,17 @@ func test_a_full_party_is_given_no_odd_egg() -> void:
 ## the party, names it, writes LANDMARK_NATIONAL_PARK over the caught location
 ## and clears the stash. BUGCONTEST_CAUGHT_MON is the answer with a party slot.
 func test_the_contest_catch_comes_home_and_is_named() -> void:
-	_world.state.set_contest_mon({"species": 25, "level": 9, "hp": 4, "dvs": 0x9888})
+	_world.state.set_contest_mon({
+		"species": 25, "level": 9, "hp": 4, "dvs": 0x9888, "status": Gen2Status.POISON,
+		"moves": [TACKLE, 0, 0, 0], "pp": [3, 0, 0, 0],
+	})
 	_set_script(0x6230)
 	var waiting: Array = _world.dispatch_script_events(Vector2i(2, 2))
 	assert_eq(waiting[0]["status"], &"waiting")
 	assert_eq(_world.pending_runtime_request()["kind"], &"contest_mon_requested")
 
 	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
-		_world, {"nickname": "BUZZ"}, _save, false, _random
+		_world, {"nickname": "BUZZ "}, _save, false, _random
 	)
 	assert_true(result["ok"])
 	assert_eq(result["script_value"], Gen2WorldPartyHost.BUGCONTEST_CAUGHT_MON)
@@ -270,8 +273,10 @@ func test_the_contest_catch_comes_home_and_is_named() -> void:
 	var caught: Gen2SaveMon = _save.party[2]
 	assert_eq(caught.species, 25)
 	assert_eq(caught.level, 9)
-	assert_eq(caught.nickname, "BUZZ")
+	assert_eq(caught.nickname, "BUZZ ", "`InitName` keeps a name as typed")
 	assert_eq(caught.hp, 4, "the health it was standing there with")
+	assert_eq(caught.status, Gen2Status.POISON, "and the status")
+	assert_eq(int(caught.pp[0]), 3, "and the PP the fight spent")
 	assert_eq(
 		caught.caught_location, Gen2WorldPartyHost.LANDMARK_NATIONAL_PARK,
 		"the map the results are collected on is overwritten"
@@ -293,6 +298,27 @@ func test_a_full_party_boxes_the_contest_catch_and_says_so() -> void:
 	assert_eq(_save.party.size(), Gen2SaveData.MAX_PARTY)
 	assert_eq(_save.boxes[0].slots[0].species, 25)
 	assert_true(_world.state.contest_mon().is_empty())
+
+
+## `.BoxFull` still runs `SetBoxMonCaughtData` over `sBoxMon1`: the catch is lost
+## and the full box's own first row is restamped as met in the National Park.
+func test_a_full_box_loses_the_contest_catch_and_restamps_its_first_row() -> void:
+	while _save.party.size() < Gen2SaveData.MAX_PARTY:
+		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	for _slot: int in Gen2SaveBox.CAPACITY:
+		_save.boxes[_save.current_box].put(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	(_save.boxes[_save.current_box].slots[0] as Gen2SaveMon).caught_location = 1
+	_world.state.set_contest_mon({"species": 25, "level": 9, "hp": 4, "dvs": 0x9888})
+	_set_script(0x6230)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {}, _save, false, _random
+	)
+	assert_eq(result["script_value"], Gen2WorldPartyHost.BUGCONTEST_BOXED_MON)
+	assert_eq(
+		(_save.boxes[_save.current_box].slots[0] as Gen2SaveMon).caught_location,
+		Gen2WorldPartyHost.LANDMARK_NATIONAL_PARK
+	)
 
 
 ## `.DidntCatchAnything`: no `wContestMonSpecies`, BUGCONTEST_NO_CATCH, and
@@ -1394,6 +1420,25 @@ func test_a_transformed_ditto_is_caught_as_itself() -> void:
 	assert_eq(int(caught.pp[0]), caught.max_pp(_data, 0), "LoadEnemyMon's full PP")
 	assert_true(_world.state.has_caught_species(ditto))
 	assert_false(_world.state.has_caught_species(25), "not the species it copied")
+
+
+## `.caught` takes any transformed wild for a Ditto: a Smeargle that sketched
+## Transform and used it comes home a DITTO, dex and all.
+func test_any_transformed_wild_is_caught_as_a_ditto() -> void:
+	var ditto: int = BattleFixture.DITTO
+	var wild: Gen2BattleMon = Gen2BattleMon.create(
+		_data, BattleFixture.GEODUDE, 5, [BattleFixture.TRANSFORM], 0x1234
+	)
+	var target: Gen2BattleMon = Gen2BattleMon.create(_data, 25, 5, _data.moves_at_level(25, 5), 0x4321)
+	assert_true(wild.transform_into(target))
+	wild.substatus |= Gen2Substatus.TRANSFORMED
+	var result: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x01, _random, 42, false
+	)
+	assert_eq(int(result["species"]), ditto)
+	assert_eq((_save.party[2] as Gen2SaveMon).species, ditto)
+	assert_true(_world.state.has_caught_species(ditto))
+	assert_false(_world.state.has_caught_species(BattleFixture.GEODUDE))
 
 
 ## `.SkipPartyMonFriendBall`: the one thing a FRIEND_BALL does, and the one ball

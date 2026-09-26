@@ -554,7 +554,7 @@ func test_tower_preparation_heals_even_a_wiped_party_before_choosing_the_lead() 
 	lead.status = Gen2Status.POISON
 	lead.pp[0] = 0
 	var enemy: Dictionary = Gen2SaveBattleAdapter.from_battle_mon(_player_party().at(0)).to_dict()
-	enemy["battle_stats"] = {
+	enemy["stats"] = {
 		"hp": 40, "attack": 23, "defense": 22, "speed": 21, "sp_attack": 20, "sp_defense": 19,
 	}
 	enemy["hp"] = 40
@@ -565,7 +565,7 @@ func test_tower_preparation_heals_even_a_wiped_party_before_choosing_the_lead() 
 	assert_eq(lead.hp, lead.max_hp())
 	assert_eq(lead.status, Gen2Status.NONE)
 	assert_eq(lead.pp_left(0), 35)
-	assert_eq((prepared["battle"] as Gen2Battle).enemy.stats, enemy["battle_stats"])
+	assert_eq((prepared["battle"] as Gen2Battle).enemy.stats, enemy["stats"])
 	assert_eq((prepared["battle"] as Gen2Battle).enemy.hp, 40)
 	assert_true(prepared["trainer_battle"])
 

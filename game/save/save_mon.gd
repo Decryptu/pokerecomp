@@ -3,10 +3,9 @@ extends RefCounted
 
 ## Persistent Pokémon data kept by a save slot.
 ##
-## The fields mirror the stable part of Generation 2's box and party records:
-## identity, moves, experience, training, DVs, PP, current HP and status. A
-## battle reconstructs derived stats from the identity and training fields, so
-## cached stats and volatile battle state are deliberately not stored here.
+## The fields mirror Generation 2's box and party records: identity, moves,
+## experience, training, DVs, PP, current HP, status and a party row's stored
+## stats. Volatile battle state is not stored here.
 
 const MAX_MOVES: int = Gen2BattleMon.MAX_MOVES
 const MAX_EXP: int = Gen2Experience.MAX_EXP
@@ -43,6 +42,9 @@ var status: int = Gen2Status.NONE
 var nickname: String = ""
 var original_trainer: String = ""
 var is_egg: bool = false
+## `MON_MAXHP` to `MON_SDEF`, which only a `CalcMonStats` site refreshes. Empty
+## for a box row and for a record written before they were kept.
+var stats: Dictionary = {}
 ## `sPartyMail`'s own entry for this member, or null when the held item is not
 ## mail. Kept on the record rather than on the party slot; see [Gen2SaveMail].
 var mail: Gen2SaveMail = null
@@ -85,6 +87,7 @@ func to_dict() -> Dictionary:
 		"nickname": nickname,
 		"original_trainer": original_trainer,
 		"is_egg": is_egg,
+		"stats": stats.duplicate(),
 		"mail": mail.to_dict() if mail != null else {},
 	}
 
@@ -120,12 +123,34 @@ static func from_dict(raw: Variant) -> Gen2SaveMon:
 	out.nickname = String(source.get("nickname", ""))
 	out.original_trainer = String(source.get("original_trainer", ""))
 	out.is_egg = bool(source.get("is_egg", false))
+	var stored_stats: Variant = source.get("stats", {})
+	if stored_stats is Dictionary:
+		for key: Variant in stored_stats:
+			out.stats[String(key)] = int((stored_stats as Dictionary)[key])
 	## An empty object is a record written before mail existed and one written
 	## for a member holding none: both mean no mail, which needs no version.
 	var stored_mail: Variant = source.get("mail", {})
 	if stored_mail is Dictionary and not (stored_mail as Dictionary).is_empty():
 		out.mail = Gen2SaveMail.from_dict(stored_mail)
 	return out
+
+
+## `CalcMonStats` with the stat experience, over this record's own level.
+func calc_stats(data: GameData) -> void:
+	if data != null:
+		stats = Gen2Stats.all_stats(data.species(species).get("stats", {}), dvs, stat_exp, level)
+
+
+## `MON_MAXHP`, or what `CalcMonStats` would store for a row without it.
+func max_hp(data: GameData) -> int:
+	if stats.has("hp"):
+		return int(stats["hp"])
+	if data == null:
+		return 0
+	var base: Dictionary = data.species(species).get("stats", {})
+	return Gen2Stats.calculate(
+		int(base.get("hp", 0)), Gen2Stats.hp_dv(dvs), int(stat_exp.get("hp", 0)), level, true
+	)
 
 
 func max_pp(data: GameData, slot: int) -> int:

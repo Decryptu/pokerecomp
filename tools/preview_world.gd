@@ -50,7 +50,7 @@ const KIND_HELP: Dictionary = {
 	&"card_key_door": "presses: PrintCardKeyText on a Silph Co. door, faced up from the cell below it with the CARD KEY owned. 0 CardKeySuccessText's first page, 1 its second, 2 the door those two presses opened",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"level_evolution": "frames: EvolveAfterBattle's screen that many frames in, each box pressed past as it lands",
-	&"egg_hatch": "frames, slot: OverworldHatchEgg on that party slot, that many frames in",
+	&"egg_hatch": "frames, species: OverworldHatchEgg on the lead carrying that species, that many frames in",
 	&"whiteout": "presses, frames: Script_Whiteout. 0 the faint line, 1 the first page of _WhitedOutText, 3 the map woken on; a second number stops that many frames into .PlayPoisonSFX instead",
 	&"elevator": "DOWN presses: the floor list bg_event 3's elevator opens, read from the cell below the panel. On a Generation 1 car it is DisplayElevatorFloorMenu's own list with WhichFloorText in the box under it",
 	&"trainer_card": "badges, 0: StartMenu_TrainerInfo's card, with that many of wObtainedBadges' eight set",

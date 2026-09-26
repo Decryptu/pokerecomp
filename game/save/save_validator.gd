@@ -146,7 +146,7 @@ static func _validate_mon(
 	return {"ok": true, "message": ""}
 
 
-## DVs, stat experience, HP against the maximum the same formula gives, status.
+## DVs, stat experience, stored stats, HP against the stored maximum, status.
 static func _validate_mon_stats(
 	mon: Gen2SaveMon, data: GameData, subject: String
 ) -> Dictionary:
@@ -156,12 +156,14 @@ static func _validate_mon_stats(
 		var value: int = int(mon.stat_exp.get(key, -1))
 		if value < 0 or value > Gen2Stats.MAX_STAT_EXP:
 			return _failure("%s has invalid %s stat experience" % [subject, key])
-	var base: Dictionary = data.species(mon.species).get("stats", {})
-	var max_hp: int = Gen2Stats.calculate(
-		int(base.get("hp", 0)), Gen2Stats.hp_dv(mon.dvs), int(mon.stat_exp.get("hp", 0)),
-		mon.level, true
-	)
-	if mon.hp < 0 or mon.hp > max_hp:
+	if not mon.stats.is_empty():
+		if mon.stats.size() != Gen2BattleMon.STAT_KEYS.size():
+			return _failure("%s has an incomplete stat block" % subject)
+		for key: String in Gen2BattleMon.STAT_KEYS:
+			var stored: int = int(mon.stats.get(key, -1))
+			if stored < 0 or stored > 0xFFFF:
+				return _failure("%s has invalid stored %s" % [subject, key])
+	if mon.hp < 0 or mon.hp > mon.max_hp(data):
 		return _failure("%s has invalid HP" % subject)
 	if not is_valid_status(mon.status):
 		return _failure("%s has invalid status" % subject)

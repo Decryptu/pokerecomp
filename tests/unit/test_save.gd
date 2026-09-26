@@ -54,6 +54,19 @@ func _save() -> Gen2SaveData:
 	)
 
 
+## A party row's stats are stored, and only a `CalcMonStats` site moves them:
+## stat experience a battle awards without a level is not in them until then.
+func test_a_battle_reads_the_stored_stats_rather_than_rebuilding_them() -> void:
+	var mon: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(
+		Gen2BattleMon.create(_data, Fixture.GEODUDE, 20, [Fixture.GROWL], 0x1234)
+	)
+	var stored: Dictionary = mon.stats.duplicate()
+	mon.stat_exp["attack"] = 60000
+	assert_eq(Gen2SaveBattleAdapter.to_battle_mon(_data, mon).stats, stored)
+	mon.calc_stats(_data)
+	assert_gt(int(mon.stats["attack"]), int(stored["attack"]))
+
+
 func test_a_battle_party_round_trips_into_persistent_fields() -> void:
 	var save: Gen2SaveData = _save()
 	assert_eq(save.game_id, _data.id)
@@ -114,7 +127,7 @@ func test_battle_save_writeback_preserves_player_and_pokemon_identity() -> void:
 	(source.party[0] as Gen2SaveMon).nickname = "SPARKY"
 	(source.party[0] as Gen2SaveMon).original_trainer = "RED"
 	var boxed: Gen2SaveMon = Gen2SaveMon.from_dict(source.party[1].to_dict())
-	source.boxes[2].slots[4] = boxed
+	source.boxes[2].put(boxed)
 	source.world = Gen2WorldSnapshot.new()
 	source.world.map_id = Vector2i(1, 1)
 	var party: Gen2Party = Gen2SaveBattleAdapter.to_battle_party(_data, source)
@@ -133,7 +146,7 @@ func test_battle_save_writeback_preserves_player_and_pokemon_identity() -> void:
 	assert_eq(written.mods, {&"weather_plus": {"fronts": [1, 3, 5]}})
 	assert_eq((written.party[0] as Gen2SaveMon).nickname, "SPARKY")
 	assert_eq((written.party[0] as Gen2SaveMon).original_trainer, "RED")
-	assert_eq(written.boxes[2].slots[4].species, boxed.species)
+	assert_eq(written.boxes[2].slots[0].species, boxed.species)
 	assert_not_null(written.world)
 	assert_eq(written.world.map_id, Vector2i(1, 1))
 
@@ -260,13 +273,13 @@ func test_a_valid_save_is_accepted_against_its_cartridge_cache() -> void:
 func test_boxed_pokemon_round_trips_and_is_validated_against_the_cache() -> void:
 	var save: Gen2SaveData = _save()
 	var boxed: Gen2SaveMon = Gen2SaveMon.from_dict(save.party[0].to_dict())
-	save.boxes[2].slots[4] = boxed
+	save.boxes[2].put(boxed)
 	var validation: Dictionary = Gen2SaveValidator.validate(save, _data)
 	assert_true(validation["ok"], validation["message"])
 	var round_trip: Gen2SaveData = Gen2SaveData.from_dict(save.to_dict())
 	assert_eq(round_trip.boxes.size(), Gen2SaveData.BOX_COUNT)
 	assert_eq(round_trip.boxes[2].occupied_count(), 1)
-	assert_eq(round_trip.boxes[2].slots[4].species, boxed.species)
+	assert_eq(round_trip.boxes[2].slots[0].species, boxed.species)
 
 
 func test_per_mod_save_namespaces_round_trip_without_aliasing() -> void:

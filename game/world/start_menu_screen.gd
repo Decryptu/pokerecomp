@@ -1860,9 +1860,7 @@ func _party_targets() -> Array:
 		var mon: Gen2SaveMon = member as Gen2SaveMon
 		if mon == null:
 			continue
-		# Max HP is derived, not stored, the same way Gen2PartyScreen derives it.
-		var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(_data, mon)
-		var max_hp: int = 0 if battle_mon == null else battle_mon.max_hp()
+		var max_hp: int = mon.max_hp(_data)
 		targets.append({
 			"index": targets.size(),
 			"species": mon.species,

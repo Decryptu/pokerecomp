@@ -493,7 +493,7 @@ func _on_named(entered: String) -> void:
 	if _gen1:
 		Gen2Screen.drop(_naming)
 		_naming = null
-		if entered.strip_edges() == "":
+		if entered.is_empty():
 			_open_naming()
 			return
 		_store_name(entered)

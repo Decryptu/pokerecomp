@@ -265,6 +265,26 @@ func test_a_link_trade_appends_the_received_mon_and_removes_the_offered_one() ->
 		assert_ne(mon.nickname, "GIVEN")
 
 
+## `AddTempmonToParty` behind `cp EGG`: a Pokemon puts its happiness back to
+## `BASE_HAPPINESS` and is registered; an egg keeps its counter and is not.
+func test_a_link_arrival_resets_happiness_and_an_egg_registers_nothing() -> void:
+	var world: Gen2WorldAPI = _world()
+	var save: Gen2SaveData = _save()
+	save.party = [_mon(SPECIES_ONE), _mon(SPECIES_ONE)]
+	var fond: Gen2SaveMon = _mon(SPECIES_TWO)
+	fond.happiness = 255
+	assert_true(Gen2WorldPartyHost.commit_link_trade(world, save, 0, fond.to_dict(), {}, false)["ok"])
+	assert_eq((save.party[1] as Gen2SaveMon).happiness, Gen2BattleMon.BASE_HAPPINESS)
+	var egg: Gen2SaveMon = _mon(BattleFixture.GEODUDE)
+	egg.is_egg = true
+	egg.happiness = 20
+	egg.hp = 0
+	assert_false(world.state.has_caught_species(BattleFixture.GEODUDE), "not caught yet")
+	assert_true(Gen2WorldPartyHost.commit_link_trade(world, save, 0, egg.to_dict(), {}, false)["ok"])
+	assert_eq((save.party[1] as Gen2SaveMon).happiness, 20)
+	assert_false(world.state.has_caught_species(BattleFixture.GEODUDE))
+
+
 func test_a_link_trade_refuses_a_slot_that_is_not_in_the_party() -> void:
 	var world: Gen2WorldAPI = _world()
 	var save: Gen2SaveData = _save()

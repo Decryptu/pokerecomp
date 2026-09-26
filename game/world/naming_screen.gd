@@ -99,6 +99,13 @@ var buffer: Array[int] = []
 var _tables: Array = []
 
 
+## `InitName`: an all-space entry takes [param fallback], any other is kept as
+## typed. Generation 1's callers test `cp '@'`, so only an empty entry falls back.
+static func init_name(entered: String, fallback: String, gen1: bool = false) -> String:
+	var blank: bool = entered.is_empty() if gen1 else entered.replace(" ", "").is_empty()
+	return fallback if blank else entered
+
+
 ## [param data] supplies the four imported keyboards. A cache without them
 ## builds a screen that draws nothing rather than one with invented letters.
 static func for_player(data: GameData) -> Gen2NamingScreen:

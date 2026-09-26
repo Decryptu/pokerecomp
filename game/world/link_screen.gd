@@ -115,7 +115,8 @@ func set_context(
 	_partner = _transport.peer.duplicate(true)
 	if not _gen1 and _link_mode() == Gen2LinkSession.LINK_TIMECAPSULE:
 		_partner["party"] = (_partner.get("party", []) as Array).map(
-			Gen2LinkSession.time_capsule_arrival
+			func(mon: Dictionary) -> Dictionary:
+				return Gen2LinkSession.time_capsule_arrival(mon, data)
 		)
 
 

@@ -1,14 +1,16 @@
 class_name Gen2BattleMon
 extends RefCounted
 
-## One Pokémon as a battle sees it. Stats are worked out at build time, as the
-## cartridge does, and only a level up recalculates them; stages apply on the
-## way out to the unmodified stat every time, hence stored separately.
+## One Pokémon as a battle sees it. Its stats are the party record's stored ones
+## (`MON_MAXHP` onward), and only a level up recalculates them; stages apply on
+## the way out to the unmodified stat every time, hence stored separately.
 
 ## What a Pokémon can carry into a battle, which is the same four slots
 ## [Gen2Learnset] fills.
 const MAX_MOVES: int = Gen2Learnset.MOVE_SLOTS
 
+## The six stored stats, `MON_MAXHP` to `MON_SDEF`.
+const STAT_KEYS: Array = ["hp", "attack", "defense", "speed", "sp_attack", "sp_defense"]
 ## The stats a stage can be applied to, in the order the cartridge keeps them.
 const STAGED_STATS: Array = ["attack", "defense", "speed", "sp_attack", "sp_defense"]
 ## Generation 1 keeps one Special stat and one stage byte for it, so a change
@@ -281,18 +283,7 @@ static func random_dvs(rng: RandomNumberGenerator) -> int:
 ## Called when the Pokémon is built and after a level up, and at no other time:
 ## a stage is not a change to a stat, it is a lens on one.
 func recalculate() -> void:
-	var base: Dictionary = data.species(species).get("stats", {})
-	stats = {
-		"hp": _stat(base, "hp", Gen2Stats.hp_dv(dvs), "hp", true),
-		"attack": _stat(base, "attack", Gen2Stats.attack_dv(dvs), "attack"),
-		"defense": _stat(base, "defense", Gen2Stats.defense_dv(dvs), "defense"),
-		"speed": _stat(base, "speed", Gen2Stats.speed_dv(dvs), "speed"),
-		# Special Attack and Special Defense have base stats of their own but
-		# share a DV and a stat experience total, which is the half of the
-		# special split that Generation 2 did not finish.
-		"sp_attack": _stat(base, "sp_attack", Gen2Stats.special_dv(dvs), "special"),
-		"sp_defense": _stat(base, "sp_defense", Gen2Stats.special_dv(dvs), "special"),
-	}
+	stats = Gen2Stats.all_stats(data.species(species).get("stats", {}), dvs, stat_exp, level)
 	hp = mini(hp, max_hp())
 	# `.recalcStatChanges` behind a level up.
 	if is_gen1() and not gen1_stats.is_empty():
@@ -401,14 +392,6 @@ func _badge_boosted(value: int, key: String) -> int:
 		return value
 	@warning_ignore("integer_division")
 	return mini(value + value / 8, Gen2Stats.MAX_STAT_VALUE)
-
-
-func _stat(
-	base: Dictionary, key: String, dv: int, exp_key: String, is_hp: bool = false
-) -> int:
-	return Gen2Stats.calculate(
-		int(base.get(key, 0)), dv, int(stat_exp.get(exp_key, 0)), level, is_hp
-	)
 
 
 ## A stat as the damage formula sees it, in the cartridge's order: copy, apply
@@ -712,6 +695,11 @@ func persistent_species() -> int:
 
 func persistent_dvs() -> int:
 	return int(transform_original.get("dvs", dvs))
+
+
+## The party record's stored stats, which a Transform's copy does not reach.
+func persistent_stats() -> Dictionary:
+	return (transform_original.get("stats", stats) as Dictionary).duplicate()
 
 
 ## `GetGender`: the Attack DV in a byte's high nibble and the Speed DV in its
