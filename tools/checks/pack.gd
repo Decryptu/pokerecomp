@@ -215,8 +215,8 @@ static func _clicks(count: int) -> Array:
 	return out
 
 
-## `TeachTMHM`'s SFX_WRONG and its `.nope` back to the pack; `ItemUseTMHM`'s
-## SFX_DENIED and its `jr .chooseMon` back to the party list.
+## Menu and page clicks, then `TeachTMHM`'s SFX_WRONG and its `.nope` back to the
+## pack; `ItemUseTMHM`'s SFX_DENIED and its `jr .chooseMon` to the party list.
 func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machine: int) -> void:
 	var sounds: Array = []
 	host.sfx_requested.connect(func(sfx: int, _waited: bool) -> void: sounds.append(sfx))
@@ -238,7 +238,7 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 	)
 	_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK_RESULT
 		and String(host.get("_pack_result")) == want
-		and sounds == _clicks(pages_turned) + [Gen2Sfx.SFX_WRONG],
+		and sounds == _clicks(2) + _clicks(pages_turned) + _clicks(2) + [Gen2Sfx.SFX_WRONG],
 		"%s: the refused TM printed %s in mode %d under %s." % [
 			_r.game_id, host.get("_pack_result"), host.get("_mode"), sounds])
 	## `PrintText` pages the two sentences, so the box owes a press a page.
@@ -249,8 +249,8 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 		"%s: the refusal's press landed in mode %d." % [_r.game_id, mode])
 
 
-## `_GrewToLevelText` and `RareCandyText`: the line under its waited sound, the
-## stats box behind the `text_promptbutton`, a second press before the pocket.
+## `_GrewToLevelText` and `RareCandyText`: three clicks, the line under its waited
+## sound, the stats box behind the `text_promptbutton`, a press before the pocket.
 func _verify_rare_candy(
 	screen: Gen2WorldScreen, host: Gen2StartMenuScreen, lead_name: String, candy: int
 ) -> void:
@@ -268,7 +268,9 @@ func _verify_rare_candy(
 		and party.has("stats_after_press") and not host.party_result_holding(),
 		"%s: the RARE CANDY printed %s over %s with no press owed." % [
 			_r.game_id, host.get("_pack_result"), party.keys()])
-	_r.check(sounds == [[Gen2Sfx.SFX_DEX_FANFARE_50_79, true]],
+	var click: int = Gen2Sfx.SFX_READ_TEXT_2
+	_r.check(sounds == [[click, false], [click, false],
+		[click, _r.data.generation != RomRegistry.GEN1], [Gen2Sfx.SFX_DEX_FANFARE_50_79, true]],
 		"%s: the RARE CANDY's line sounded %s." % [_r.game_id, sounds])
 	host.handle_button(PokeButton.A)
 	_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK_RESULT

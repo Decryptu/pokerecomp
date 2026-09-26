@@ -23,6 +23,12 @@ const SPECIAL_STAGE_TWIN: Dictionary = {
 ## all seven the same way. See [Gen2Accuracy].
 const STAGED_ODDS: Array = ["accuracy", "evasion"]
 
+const HELD_ENTRANCE: int = 0
+const HELD_LEVEL_UP: int = 1
+const HELD_STAGED: int = 2
+## [method hold_stats]'s set, empty while `CalcPlayerStats`' order stands.
+var held_stats: Dictionary = {}
+
 ## Every DV at its maximum. A caller that has not said otherwise gets a Pokémon
 ## that is as good as its species allows, which is the useful default for a test
 ## and for a screen with nothing behind it yet. A wild encounter rolls its own;
@@ -226,6 +232,8 @@ const CAUGHT_LOCATION_MASK: int = 0x7F
 ## Pokémon was caught on. `LevelUpHappinessMod` is the only thing in a battle to
 ## read it, and a mon nobody told (a wild one, a trainer's) has none.
 var caught_location: int = 0
+## `MON_POKERUS`: any strain, cured or not, doubles stat experience.
+var pokerus: int = 0
 
 
 ## Builds a Pokémon at a level, at full health, knowing [param known_moves].
@@ -415,13 +423,51 @@ func stat(key: String) -> int:
 		if gen1_stats.is_empty():
 			gen1_load_stats(0)
 		return int(gen1_stats[gen1_stat_key(key)])
+	if held_stats.has(key):
+		return int(held_stats[key])
+	return _status_penalized(_badge_boosted(_staged(key), key), key)
 
-	var out: int = _badge_boosted(Gen2Stats.apply_stage(value, int(stages.get(key, 0))), key)
+
+func _staged(key: String) -> int:
+	return Gen2Stats.apply_stage(int(stats.get(key, 0)), int(stages.get(key, 0)))
+
+
+## `ApplyBrnEffectOnAttack` and `ApplyPrzEffectOnSpeed` over [param value].
+func _status_penalized(value: int, key: String) -> int:
 	if key == "attack" and Gen2Status.has(status, Gen2Status.BURN):
-		out = Gen2Status.apply_burn(out)
-	elif key == "speed" and Gen2Status.has(status, Gen2Status.PARALYSIS):
-		out = Gen2Status.apply_paralysis(out)
-	return out
+		return Gen2Status.apply_burn(value)
+	if key == "speed" and Gen2Status.has(status, Gen2Status.PARALYSIS):
+		return Gen2Status.apply_paralysis(value)
+	return value
+
+
+## `wBattleMonStats` written in another order than `CalcPlayerStats`, standing
+## until the next recalculation: `InitBattleMon`'s status then badge, a level
+## up's stage, status then badge, or a stage alone after a Baton Pass or
+## `LoadEnemyMon`.
+func hold_stats(order: int) -> void:
+	if is_gen1():
+		return
+	held_stats = {}
+	for key: String in STAGED_STATS:
+		var value: int = _staged(key) if order != HELD_ENTRANCE else int(stats.get(key, 0))
+		if order != HELD_STAGED:
+			value = _badge_boosted(_status_penalized(value, key), key)
+		held_stats[key] = value
+
+
+func release_stats() -> void:
+	held_stats = {}
+
+
+## A burn or paralysis landing on a held set, as `BattleCommand_BurnTarget` does.
+func penalize_held(new_status: int) -> void:
+	if held_stats.is_empty():
+		return
+	if Gen2Status.has(new_status, Gen2Status.BURN):
+		held_stats["attack"] = Gen2Status.apply_burn(int(held_stats["attack"]))
+	if Gen2Status.has(new_status, Gen2Status.PARALYSIS):
+		held_stats["speed"] = Gen2Status.apply_paralysis(int(held_stats["speed"]))
 
 
 ## A stat with no stage applied, which is what a critical hit uses when the
@@ -459,6 +505,9 @@ func change_stage(key: String, by: int) -> bool:
 	if not stage_has_room(key, by):
 		return false
 	var limited: bool = _stat_at_limit(key, by)
+	# `RaiseStat` and `LowerStat` recalculate below `ACCURACY` alone.
+	if STAGED_STATS.has(key):
+		held_stats = {}
 	var after: int = clampi(stage(key) + by, Gen2Stats.MIN_STAGE, Gen2Stats.MAX_STAGE)
 	stages[key] = after - signi(by) if limited else after
 	if SPECIAL_STAGE_TWIN.has(key) and data != null \
@@ -468,6 +517,7 @@ func change_stage(key: String, by: int) -> bool:
 
 
 func reset_stages() -> void:
+	held_stats = {}
 	stages = {}
 	for key: String in STAGED_STATS + STAGED_ODDS:
 		stages[key] = 0
@@ -484,7 +534,6 @@ const PASSED_FIELDS: Array[String] = [
 	"disable_turns", "encored_slot", "encore_turns", "trapped_turns",
 	"trapping_move", "perish_count", "substitute_hp", "turns_taken",
 	"last_move_used", "fury_cutter_count", "protect_count", "minimized",
-	"last_counter_move",
 ]
 
 
@@ -508,6 +557,7 @@ func apply_passed_state(state: Dictionary) -> void:
 func reset_volatile() -> void:
 	restore_transform()
 	restore_mimic()
+	held_stats = {}
 	battle_types = []
 	substatus = Gen2Substatus.NONE
 	confusion_turns = 0
@@ -564,6 +614,11 @@ func transform_into(target: Gen2BattleMon) -> bool:
 	stages = target.stages.duplicate()
 	# `TransformEffect_` copies the stored stats with the unmodified ones.
 	gen1_stats = target.gen1_stats.duplicate()
+	# `BattleCommand_Transform` copies `wEnemyMonStats` as they stand.
+	held_stats = {}
+	if not is_gen1():
+		for key: String in STAGED_STATS:
+			held_stats[key] = target.stat(key)
 	battle_types.clear()
 	for type_number: int in target.types():
 		battle_types.append(type_number)
@@ -577,6 +632,38 @@ func transform_into(target: Gen2BattleMon) -> bool:
 ## `wTempEnemyMonSpecies`, which Transform's copy does not reach.
 func base_species() -> int:
 	return int(transform_original.get("species", species))
+
+
+## Runs [param work] on the party struct under a Transform, which keeps only the
+## new HP, max HP and level, as `GiveExperiencePoints` and `LearnMove` do.
+func with_own_record(work: Callable) -> void:
+	if transform_original.is_empty():
+		work.call()
+		return
+	var copy: Dictionary = {
+		"species": species, "dvs": dvs, "moves": moves, "pp": pp, "pp_ups": pp_ups,
+		"stats": stats, "stages": stages, "battle_types": battle_types.duplicate(),
+		"gen1_stats": gen1_stats,
+	}
+	var backup_stages: Dictionary = transform_original["stages"]
+	restore_transform()
+	work.call()
+	transform_original = {
+		"species": species, "dvs": dvs, "moves": moves, "pp": pp, "pp_ups": pp_ups,
+		"stats": stats, "stages": backup_stages, "battle_types": battle_types.duplicate(),
+		"gen1_stats": gen1_stats,
+	}
+	var own_max_hp: int = max_hp()
+	species = int(copy["species"])
+	dvs = int(copy["dvs"])
+	moves = copy["moves"]
+	pp = copy["pp"]
+	pp_ups = copy["pp_ups"]
+	stats = (copy["stats"] as Dictionary).duplicate()
+	stats["hp"] = own_max_hp
+	stages = copy["stages"]
+	battle_types.assign(copy["battle_types"])
+	gen1_stats = copy["gen1_stats"]
 
 
 func restore_transform() -> void:
@@ -594,6 +681,10 @@ func restore_transform() -> void:
 	for type_number: int in transform_original["battle_types"]:
 		battle_types.append(type_number)
 	transform_original = {}
+
+
+func own_moves() -> Array:
+	return transform_original.get("moves", moves)
 
 
 func persistent_species() -> int:
@@ -667,12 +758,15 @@ func name_text() -> String:
 ## The curve [Gen2Experience] should read this species on, or medium fast for
 ## a species the cache does not have: the same fallback [method recalculate]
 ## already makes for a missing base stats entry.
+## Experience reads the party species, which a Transform does not reach.
 func growth_rate() -> int:
-	return int(data.species(species).get("growth_rate", Gen2Experience.GROWTH_MEDIUM_FAST))
+	return int(data.species(persistent_species()).get(
+		"growth_rate", Gen2Experience.GROWTH_MEDIUM_FAST
+	))
 
 
 func base_exp() -> int:
-	return int(data.species(species).get("base_exp", 0))
+	return int(data.species(persistent_species()).get("base_exp", 0))
 
 
 ## The five base stats [Gen2Experience.shared_block] wants when this Pokémon is
@@ -680,7 +774,7 @@ func base_exp() -> int:
 ## fills the shared [code]"special"[/code] slot, never Special Defense's: see
 ## [constant Gen2Experience.STAT_EXP_KEYS].
 func base_stat_exp_shape() -> Dictionary:
-	var base: Dictionary = data.species(species).get("stats", {})
+	var base: Dictionary = data.species(persistent_species()).get("stats", {})
 	return {
 		"hp": int(base.get("hp", 0)),
 		"attack": int(base.get("attack", 0)),
@@ -800,6 +894,17 @@ func is_out_of_pp() -> bool:
 	return true
 
 
+## `CheckPlayerHasUsableMoves`: with a move disabled the other PP bytes are ORed
+## without `PP_MASK`, so a spent move with a PP Up still opens the list.
+func offers_move_list() -> bool:
+	if disabled_slot < 0:
+		return not is_out_of_pp()
+	for slot: int in moves.size():
+		if slot != disabled_slot and (pp_left(slot) > 0 or pp_ups_of(slot) > 0):
+			return true
+	return false
+
+
 ## Learns a move into an empty slot, with its own full PP. Refuses if every
 ## slot is already taken: [method Gen2Battle.learn_move] is what overwrites one
 ## instead, because which one to give up is not this class's decision.
@@ -880,6 +985,28 @@ func persistent_pp_ups(slot: int) -> int:
 	if slot == mimicked_slot and not is_gen1():
 		return mimic_original_pp_ups
 	return pp_ups_of(slot)
+
+
+## `MoveSelectionScreen.pressed_select`: moves and PP swap, the Disable and a
+## Mimic copy follow; under a Transform only the copy moves.
+func swap_moves(first: int, second: int) -> void:
+	if first == second or first < 0 or second < 0 \
+			or first >= moves.size() or second >= moves.size():
+		return
+	for slot: int in [first, second]:
+		_set_pp_ups(slot, pp_ups_of(slot))
+	for list: Array in [moves, pp, pp_ups]:
+		var held: Variant = list[first]
+		list[first] = list[second]
+		list[second] = held
+	disabled_slot = _swapped_slot(disabled_slot, first, second)
+	mimicked_slot = _swapped_slot(mimicked_slot, first, second)
+
+
+static func _swapped_slot(slot: int, first: int, second: int) -> int:
+	if slot == first:
+		return second
+	return first if slot == second else slot
 
 
 func restore_mimic() -> void:

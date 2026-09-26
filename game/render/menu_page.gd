@@ -113,14 +113,14 @@ func _pick_arrows(box: Gen2MenuBox, indices: PackedByteArray, width: int) -> voi
 
 
 ## `ScrollingMenu_UpdateDisplay`'s two `Coord2Tile` writes, both onto the box's
-## right-hand border. `▼` is written whenever the flag is set, whatever is left
-## below the window; `▲` waits for `wMenuScrollPosition` to leave zero.
+## right-hand border ([method Gen2MenuBox.show_scroll]).
 func _scroll_arrows(box: Gen2MenuBox, indices: PackedByteArray, width: int) -> void:
 	if not box.scrolling_arrows:
 		return
-	font.draw_code(
-		DOWN_ARROW_CODE, indices, width, box.right * TILE, box.bottom * TILE
-	)
+	if box.more_below:
+		font.draw_code(
+			DOWN_ARROW_CODE, indices, width, box.right * TILE, box.bottom * TILE
+		)
 	## A cache imported without the tile leaves the corner empty rather than
 	## drawing a wrong one.
 	if box.scroll <= 0 or _up_arrow.size() < TILE * TILE:

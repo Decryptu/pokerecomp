@@ -655,6 +655,8 @@ func _hold_yes_no(answer: Callable) -> bool:
 	if not TOGGLE_MODES.has(_mode) or _mode in [Mode.SAVE_ASK, Mode.SAVE_OVERWRITE] \
 		or int(get(TOGGLE_MODES[_mode][0])) < 0:
 		return false
+	## `YesNoBox`'s `MenuClickSound`.
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 	_yes_no_hold = Gen2WorldMenu.ANSWER_HOLD_FRAMES
 	_yes_no_held = answer
 	return true
@@ -697,7 +699,24 @@ func _move_mod_options(direction: Vector2i) -> void:
 	elif direction.x != 0:
 		_adjust_mod_option(rows, direction.x)
 
+## `hInMenu`: the pack's `ScrollingMenu` and the OPTION screen set it.
+func menu_repeats() -> bool:
+	return _mode in [Mode.PACK, Mode.OPTIONS, Mode.MODS, Mode.MOD_OPTIONS]
+
+
+## `StartMenu.GetInput`'s click on A, the pack's and `PartyMenuSelect`'s on either.
+func _menu_click(button: int) -> void:
+	if _mode == Mode.PACK_TARGET:
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, not _gen1_pack())
+		return
+	var clicks: bool = _mode in [Mode.PACK, Mode.PACK_ITEM] \
+		or (_mode == Mode.LIST and (button == PokeButton.A or _gen1_pack()))
+	if clicks:
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+
+
 func _confirm() -> void:
+	_menu_click(PokeButton.A)
 	if _hold_yes_no(_confirm_now):
 		return
 	_confirm_now()
@@ -771,6 +790,7 @@ func _confirm_pack() -> void:
 
 
 func _cancel() -> void:
+	_menu_click(PokeButton.B)
 	if _hold_yes_no(_cancel_now):
 		return
 	_cancel_now()
@@ -1195,13 +1215,11 @@ func _cycle_pocket(delta: int) -> void:
 
 ## `ScrollingMenuJoyAction`'s `.d_up` and `.d_down`, which move the cursor
 ## inside the visible five and scroll only at their edges. The CANCEL row is one
-## past the last item, which is what makes the walk wrap over `size + 1`.
+## past the last item. Neither end wraps: the pockets' `STATICMENU_WRAP` is
+## `SCROLLINGMENU_ENABLE_FUNCTION3` to a scrolling menu.
 func _move_pack_cursor(delta: int) -> void:
 	var rows: int = _current_pocket_items().size() + 1
-	var next: int = _pack_cursor + signi(delta)
-	## `DisplayListMenuID` sets `wMenuWatchMovingOutOfBounds`, so a move past
-	## either end scrolls `wListScrollOffset` and leaves the cursor where it was.
-	_pack_cursor = clampi(next, 0, rows - 1) if _gen1_pack() else wrapi(next, 0, rows)
+	_pack_cursor = clampi(_pack_cursor + signi(delta), 0, rows - 1)
 	_clamp_pack_scroll()
 	_remember_pack()
 	_render_pack()

@@ -1658,8 +1658,8 @@ const SNORE_SEQUENCE: Array = [
 ]
 
 ## Tri Attack, which is [constant NORMAL_HIT] with the three-way status roll in
-## `kingsrock`'s place and no `effectchance` step of its own: the command calls
-## it itself, which is `BattleCommand_TriStatusChance`'s own first instruction.
+## `kingsrock`'s place and no `effectchance` step of its own:
+## `BattleCommand_TriStatusChance` calls it first.
 const TRI_ATTACK_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -1777,6 +1777,7 @@ const SWAGGER_SEQUENCE: Array = [
 	Gen2EffectCommands.LOWER_SUB,
 	Gen2EffectCommands.STAT_UP_ANIM,
 	Gen2EffectCommands.RAISE_SUB,
+	Gen2EffectCommands.FAILURE_TEXT,
 	Gen2EffectCommands.SWITCH_TURN,
 	Gen2EffectCommands.STAT_UP_MESSAGE,
 	Gen2EffectCommands.SWITCH_TURN,

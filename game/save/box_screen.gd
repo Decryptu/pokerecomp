@@ -315,6 +315,8 @@ func handle_button(button: int) -> bool:
 		return _stats.handle_button(button)
 	if _release != null:
 		if _release.press_yes_no(button):
+			if _release.just_answered():
+				sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 			if _release.holding():
 				set_process(true)
 			else:

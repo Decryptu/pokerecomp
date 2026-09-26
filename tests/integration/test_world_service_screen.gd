@@ -380,9 +380,13 @@ func test_the_machine_boots_chooses_and_shuts_down_with_its_own_sounds() -> void
 		host, "sfx_requested", [Gen2Sfx.SFX_CHOOSE_PC_OPTION, true]
 	)
 
-	## `.loop` is behind the boot sound, so coming back to it plays nothing.
+	## `.loop` is behind the boot sound, so coming back to it plays only the
+	## B's own `MenuClickSound`.
 	host.handle_button(PokeButton.B)
-	assert_signal_emit_count(host, "sfx_requested", 2)
+	assert_signal_emit_count(host, "sfx_requested", 3)
+	assert_signal_emitted_with_parameters(
+		host, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2, false]
+	)
 	host.handle_button(PokeButton.B)
 	assert_signal_emitted_with_parameters(
 		host, "sfx_requested", [Gen2Sfx.SFX_SHUT_DOWN_PC, true]
@@ -676,7 +680,10 @@ func test_a_purchase_plays_its_sound_through_the_world_driver() -> void:
 	assert_true(host.handle_button(PokeButton.A))
 	assert_true(host.handle_button(PokeButton.A))
 	_spend_answer_hold(host)
-	assert_eq(played, [Gen2Sfx.SFX_TRANSACTION] as Array[int])
+	## The list's and the YES/NO's `MenuClickSound`, then the sale.
+	assert_eq(played, [
+		Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_TRANSACTION,
+	] as Array[int])
 	## The world screen is on the other end of it, which is what stops the
 	## overlay reaching for a driver of its own. The synthetic cache carries no
 	## effect records, so the engine has nothing to start.
@@ -792,6 +799,28 @@ func test_b_on_a_scripted_menu_closes_it_and_resumes_the_script() -> void:
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
 	assert_false(_world_screen._world.script_input_waiting())
+
+
+## `_InitVerticalMenuCursor` leaves B out of `wMenuJoypadFilter` under
+## STATICMENU_DISABLE_B, which Dragon Shrine's quiz carries: the press is not read.
+func test_b_is_not_read_on_a_menu_that_disables_it() -> void:
+	_write_request_script([0x4F, 0x34, 0x12, 0x59, 0x91], 0x6320)
+	RomCache.write_json(RomCache.world_menus_path(Fixture.directory()), {
+		Gen2WorldScript.pointer_key(Fixture.BANK, 0x1234): {
+			"bank": Fixture.BANK, "address": 0x1234, "options": ["ONE", "TWO", "THREE"],
+			"data_flags": Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_DISABLE_B,
+		},
+	})
+	_data = GameData.open_directory(Fixture.directory())
+	await _open_world()
+	await _queue_service()
+
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	host.handle_button(PokeButton.B)
+	_spend_answer_hold(host)
+	await get_tree().process_frame
+	assert_not_null(_world_screen._service_host)
+	assert_true(_world_screen._world.script_input_waiting())
 
 
 func test_two_dimensional_menu_uses_cached_grid_and_default_cursor() -> void:
@@ -1420,7 +1449,7 @@ func test_the_mailbox_lists_its_authors_and_reads_one() -> void:
 		host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_MAILBOX)
-	assert_eq(host._pc_rows.size(), 1)
+	assert_eq(host._pc_rows.size(), 2, "the author and `ScrollingMenu`'s CANCEL")
 	assert_eq(String(host._pc_rows[0]["name"]), "GOLD")
 
 	host.handle_button(PokeButton.A)

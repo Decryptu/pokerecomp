@@ -23,6 +23,9 @@ var critical: bool = false
 var effectiveness: int = Gen2Layout.MATCHUP_EFFECTIVE
 var immune: bool = false
 var missed: bool = false
+## `BattleCommand_OHKO.no_effect`'s `wCriticalHit` of -1: the target out-levels
+## the user, which `GetFailureResultText` words as `UnaffectedText`.
+var ohko_level_failed: bool = false
 var announced: bool = false  ## `UsedMoveText` ran, so the move got past its status checks.
 
 ## The truncated pair `damagestats` leaves for `damagecalc`: two commands rather

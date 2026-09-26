@@ -400,6 +400,9 @@ func test_a_hit_drains_the_bar_before_it_says_what_the_hit_was() -> void:
 		"type": Gen2Battle.HIT, "side": Gen2Battle.PLAYER, "target": Gen2Battle.ENEMY,
 		"hp": 24, "max_hp": 48, "critical": false,
 		"effectiveness": Gen2Layout.MATCHUP_SUPER_EFFECTIVE,
+	}, {
+		"type": Gen2Battle.EFFECTIVENESS, "side": Gen2Battle.PLAYER, "target": Gen2Battle.ENEMY,
+		"effectiveness": Gen2Layout.MATCHUP_SUPER_EFFECTIVE,
 	}]
 	_battle_screen._show_next_event()
 

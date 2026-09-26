@@ -138,13 +138,13 @@ func test_a_stat_drop_picks_its_after_anim_by_whose_turn_it_is() -> void:
 	assert_eq(int(enemy[0]["after_anim"]), Gen2BattleAnimPlayer.AFTER_ANIM_WOBBLE)
 
 
-func test_a_stat_already_at_its_ceiling_still_animates() -> void:
-	# `RaiseStat` sets `wFailedMessage`, not `wAttackMissed`, and only the second
-	# is what `BattleCommand_StatUpAnim` reads.
+func test_a_stat_already_at_its_ceiling_plays_no_animation() -> void:
+	# `RaiseStat.cant_raise_stat` sets `wAttackMissed` beside `wFailedMessage`,
+	# and `BattleCommand_StatUpAnim` reads the first.
 	var battle: Gen2Battle = _battle([Fixture.SWORDS_DANCE])
 	battle.player.stages["attack"] = Gen2Stats.MAX_STAGE
 	var events: Array = _run_move(battle, Fixture.SWORDS_DANCE)
-	assert_eq(_animations(events).size(), 1)
+	assert_eq(_animations(events).size(), 0)
 	assert_true(_index_of(events, Gen2Battle.STAT_CHANGE_FAILED) >= 0)
 
 

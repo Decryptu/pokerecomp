@@ -217,14 +217,14 @@ static func forget_box(gen1: bool = false) -> Gen2MenuBox:
 	)
 
 
-## [param scroll] is `wMenuScrollPosition`, which the up arrow is drawn from, and
-## [param more] whether anything is outside the window at all.
-static func list_box(scroll: int = 0, more: bool = false) -> Gen2MenuBox:
+## [param scroll] is `wMenuScrollPosition` over [param count] rows, none of
+## them a CANCEL row.
+static func list_box(scroll: int = 0, count: int = 0) -> Gen2MenuBox:
 	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
 		LIST_LEFT, LIST_TOP, LIST_RIGHT, LIST_BOTTOM, LIST_FLAGS
 	)
-	box.scrolling_arrows = more
-	box.scroll = scroll
+	if count > LIST_ROWS:
+		box.show_scroll(scroll, count - 1, LIST_ROWS)
 	return box
 
 

@@ -119,41 +119,50 @@ func test_a_controller_opens_and_walks_the_start_menu() -> void:
 	assert_ne(host.cursor(), second, "a held direction keeps moving it")
 
 
-func test_a_held_direction_stops_the_menu_the_moment_the_key_comes_up() -> void:
+## `JoyTextDelay` repeats a held button only under `hInMenu`, which the OPTION
+## screen sets and the START menu does not; letting go stops the repeat.
+func test_a_held_direction_repeats_only_under_h_in_menu_and_stops_with_the_key() -> void:
 	await _open_world_with_renderer()
 	var runtime: Gen2InputRuntime = Gen2InputRuntime.instance()
 	_world_screen._unhandled_input(_pad(JOY_BUTTON_START))
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	assert_not_null(host)
+	assert_eq(await _held_moves(runtime, host.cursor), 0, "the START menu reads single presses")
 
+	host._open_options_mode()
+	var row: Callable = func() -> int: return host._options_menu.cursor
+	assert_gt(await _held_moves(runtime, row), 15, "two seconds of a held key walks the OPTION rows")
+	_assert_repeat_stopped(runtime, row)
+
+
+## Holds DOWN for two seconds of repeats and answers how often the cursor moved
+## after the press itself, then lets go.
+func _held_moves(runtime: Gen2InputRuntime, read: Callable) -> int:
 	Input.parse_input_event(_key(true))
 	runtime._input(_key(true))
 	await get_tree().process_frame
-	var at: int = host.cursor()
+	var at: int = int(read.call())
 	var moved: int = 0
 	for _frame: int in 120:
 		runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
-		if host.cursor() != at:
+		if int(read.call()) != at:
 			moved += 1
-			at = host.cursor()
-	assert_gt(moved, 15, "two seconds of a held key walks the list")
-
+			at = int(read.call())
 	## Two frames: one for the release to reach the input state, one for the
 	## runtime's own poll of it, which is what the walk reads.
 	Input.parse_input_event(_key(false))
 	await get_tree().process_frame
 	await get_tree().process_frame
-	assert_eq(runtime.held_direction(), PokeButton.NONE, "the walk stops with it")
+	return moved
 
-	at = host.cursor()
-	var after: int = 0
+
+func _assert_repeat_stopped(runtime: Gen2InputRuntime, read: Callable) -> void:
+	assert_eq(runtime.held_direction(), PokeButton.NONE, "the walk stops with it")
+	var at: int = int(read.call())
 	for _frame: int in 120:
 		runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
-		if host.cursor() != at:
-			after += 1
-			at = host.cursor()
-	assert_eq(after, 0, "and so does the menu")
+	assert_eq(int(read.call()), at, "and so does the menu")
 
 
 func _key(pressed: bool) -> InputEventKey:

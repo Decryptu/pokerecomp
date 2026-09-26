@@ -167,3 +167,14 @@ static func asleep_list_key(time_of_day: int) -> String:
 ## neither the routine nor the data, so this is false there.
 static func starts_asleep(species: int, asleep_species: Array) -> bool:
 	return asleep_species.has(species)
+
+
+## pokegold's `LoadEnemyMon.TreeMon`, for every wild battle there.
+const GOLD_SILVER_DAY_SLEEPERS: Array[int] = [163, 164]
+const GOLD_SILVER_NIGHT_SLEEPERS: Array[int] = [16, 21]
+
+
+static func gold_silver_asleep(species: int, time_of_day: int) -> bool:
+	if time_of_day == Gen2WorldPalette.TIME_NIGHT:
+		return GOLD_SILVER_NIGHT_SLEEPERS.has(species)
+	return GOLD_SILVER_DAY_SLEEPERS.has(species)

@@ -215,6 +215,18 @@ func test_the_link_record_counts_totals_and_keeps_a_row_per_opponent() -> void:
 	assert_true(names.has("GREEN"))
 
 
+## `.FindOpponentAndAppendRecord` ranks rows by battles in all, not by wins, and
+## swaps once: an opponent beaten once sits behind one who beat the player twice.
+func test_the_link_record_ranks_rows_by_battles_played() -> void:
+	var record: Dictionary = Gen2LinkSession.normalize_record({})
+	record = Gen2LinkSession.add_battle_to_record(record, {"name": "BLUE", "id": 1}, &"wins")
+	record = Gen2LinkSession.add_battle_to_record(record, {"name": "GREEN", "id": 2}, &"losses")
+	record = Gen2LinkSession.add_battle_to_record(record, {"name": "GREEN", "id": 2}, &"losses")
+	var rows: Array = record["records"]
+	assert_eq(String(rows[0].get("name", "")), "GREEN")
+	assert_eq(String(rows[1].get("name", "")), "BLUE")
+
+
 func test_the_link_record_stops_at_its_cap() -> void:
 	var record: Dictionary = Gen2LinkSession.normalize_record({
 		"wins": Gen2LinkSession.MAX_LINK_RECORD,

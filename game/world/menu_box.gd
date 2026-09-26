@@ -38,13 +38,14 @@ var column_spacing: int = 0
 ## from a header and one for `MoveSelectionScreen`'s own hand-built list.
 var row_step: int = ROW_STEP
 ## `SCROLLINGMENU_DISPLAY_ARROWS` and `wMenuScrollPosition`, which
-## `ScrollingMenu_UpdateDisplay` reads together: `▼` at the box's bottom-right
-## whenever the flag is set, and `▲` at its top-right only past the first row.
-## A field of its own rather than a bit in [member flags], because the source's
+## `ScrollingMenu_UpdateDisplay` reads together: `▲` at the box's top-right past
+## the first row, and `▼` at its bottom-right only when [member more_below]. A
+## field of its own rather than a bit in [member flags], because the source's
 ## one flags byte is read as `STATICMENU_*` by `VerticalMenu` and as
 ## `SCROLLINGMENU_*` by `ScrollingMenu`, and the two sets overlap.
 var scrolling_arrows: bool = false
 var scroll: int = 0
+var more_below: bool = false
 ## The frame a caller drew before the menu, `ScrollingMenu` drawing none. Empty
 ## is every other menu, whose frame is its own corners.
 var frame: Rect2i = Rect2i()
@@ -77,6 +78,18 @@ static func from_coords(x1: int, y1: int, x2: int, y2: int, menu_flags: int) -> 
 	box.bottom = y2
 	box.flags = menu_flags
 	return box
+
+
+## [param items] excludes CANCEL: `.cancel` returns before the `▼` write.
+func show_scroll(at: int, items: int, window: int) -> Gen2MenuBox:
+	scrolling_arrows = true
+	scroll = at
+	more_below = window_is_items(at, items, window)
+	return self
+
+
+static func window_is_items(at: int, items: int, window: int) -> bool:
+	return at + window <= items
 
 
 func has_flag(flag: int) -> bool:

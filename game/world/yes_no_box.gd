@@ -4,6 +4,8 @@ extends TextureRect
 ## `YesNoBox` over a screen that owns the question, closed when its hold ends.
 
 signal answered(yes: bool)
+## `MenuClickSound`'s `SFX_READ_TEXT_2`, on the press that answers.
+signal clicked(sfx: int)
 
 var _page: Gen2MenuPage = null
 var _menu: Gen2WorldMenu = null
@@ -46,8 +48,11 @@ func cursor() -> int:
 func handle_button(button: int) -> bool:
 	if _menu == null:
 		return false
-	if _menu.press_yes_no(button) and not _menu.holding():
-		_render()
+	if _menu.press_yes_no(button):
+		if _menu.just_answered():
+			clicked.emit(Gen2Sfx.SFX_READ_TEXT_2)
+		if not _menu.holding():
+			_render()
 	return true
 
 

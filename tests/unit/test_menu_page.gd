@@ -223,14 +223,12 @@ func test_a_row_too_wide_for_its_box_is_cut_at_the_border() -> void:
 
 
 ## `ScrollingMenu_UpdateDisplay`'s two arrows, both written over the box's
-## right-hand border: `▼` whenever `SCROLLINGMENU_DISPLAY_ARROWS` is set, and
-## `▲` only past the first row. The frame is already drawn in both corners, so
-## each is read as a corner that differs from the same box without arrows.
+## right-hand border: `▲` only past the first row, and `▼` only while no CANCEL
+## row is in the window, since `.cancel` returns before that write. The frame is
+## already drawn in both corners, so each is read as a corner that differs from
+## the same box without arrows. Four items in a four-row window.
 func _arrow_box(scroll: int) -> Gen2MenuBox:
-	var box: Gen2MenuBox = _box()
-	box.scrolling_arrows = true
-	box.scroll = scroll
-	return box
+	return _box().show_scroll(scroll, 4, 4)
 
 
 func _tile(indices: PackedByteArray, at: Vector2i) -> PackedByteArray:
@@ -256,16 +254,16 @@ func _arrow_corners(scroll: int) -> Array[bool]:
 	]
 
 
-func test_the_down_arrow_is_drawn_whatever_the_scroll_is() -> void:
+func test_the_down_arrow_stands_while_every_row_is_an_item() -> void:
 	var corners: Array[bool] = _arrow_corners(0)
-	assert_true(corners[1], "the down arrow does not wait for rows below the window")
+	assert_true(corners[1], "CANCEL is below the window, so the down arrow shows")
 	assert_false(corners[0], "wMenuScrollPosition is zero, so the up arrow waits")
 
 
-func test_the_up_arrow_waits_for_the_window_to_leave_the_top() -> void:
+func test_the_cancel_row_in_the_window_takes_the_down_arrow_away() -> void:
 	var corners: Array[bool] = _arrow_corners(1)
 	assert_true(corners[0])
-	assert_true(corners[1])
+	assert_false(corners[1], "CANCEL is the last row shown, so no down arrow")
 
 
 ## `BattleTowerRoomMenu_UpdatePickLevelMenu` writes `String_119d07` at

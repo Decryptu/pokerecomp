@@ -105,7 +105,8 @@ func _compare(pin: String, data: GameData) -> int:
 		var want: PackedStringArray = row["commands"]
 		var have: PackedStringArray = PackedStringArray()
 		for command: StringName in Gen2MoveEffect.sequence_for(effect):
-			if OURS_ONLY.has(String(command)):
+			## A folded name ours runs as a step (Swagger's `failuretext`) folds too.
+			if OURS_ONLY.has(String(command)) or String(FOLDED.get(command, "-")) == "":
 				continue
 			have.append(String(RENAMED.get(command, command)))
 		if want == have:

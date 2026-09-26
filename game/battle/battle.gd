@@ -15,6 +15,8 @@ const ENEMY: int = 1
 const USED_MOVE: StringName = &"used_move"
 const MISSED: StringName = &"missed"
 const NO_EFFECT: StringName = &"no_effect"
+## `GetFailureResultText`'s `ItFailedText`.
+const IT_FAILED: StringName = &"it_failed"
 const HIT: StringName = &"hit"
 const RECOIL: StringName = &"recoil"
 const FAINTED: StringName = &"fainted"
@@ -26,6 +28,10 @@ const DRAINED: StringName = &"drained"  ## A draining move healed the attacker o
 ## cartridge shows neither a critical nor an effectiveness line, the damage
 ## having been multiplied by neither.
 const OHKO: StringName = &"ohko"
+## `criticaltext`: the critical line or ([code]ohko[/code]) the one-hit line.
+const CRITICAL_HIT: StringName = &"critical_hit"
+## `supereffectivetext`: `SuperEffectiveText` or `NotVeryEffectiveText`.
+const EFFECTIVENESS: StringName = &"effectiveness"
 ## A status stopped a Pokémon moving, [code]reason[/code] being which:
 ## [code]&"sleep"[/code], [code]&"freeze"[/code], [code]&"paralysis"[/code],
 ## [code]&"flinch"[/code], [code]&"recharge"[/code].
@@ -117,6 +123,9 @@ const CAUGHT: StringName = &"caught"
 ## Never for [constant ENEMY]: `GiveExperiencePoints` reads the player's party
 ## alone, so a trainer's Pokémon are the reason and never the recipient.
 const EXP_GAINED: StringName = &"exp_gained"
+## A wild win's `PlayVictoryMusic`, ahead of the experience; [code]silent[/code]
+## is its `.lost` branch (no Exp. Share, Pay Day or participant standing).
+const VICTORY_MUSIC: StringName = &"victory_music"
 ## The five stats in [constant Gen2Experience.STAT_EXP_KEYS], out of the block
 ## [constant EXP_GAINED] came from ([method Gen2Experience.shared_block]) and
 ## divided by the same count, but a base stat rather than a level figure.
@@ -139,6 +148,13 @@ const MOVE_DECLINED: StringName = &"move_declined"
 ## rather than missing a roll ([constant MISSED]) or losing to a type
 ## ([constant NO_EFFECT]): the "but it failed!" the cartridge shares.
 const MOVE_FAILED: StringName = &"move_failed"
+const MIRROR_MOVE_FAILED: StringName = &"mirror_move_failed"
+## `BellyDrumText`.
+const ATTACK_MAXIMIZED: StringName = &"attack_maximized"
+## `BattleCommand_Charge`'s `IgnoredOrders2Text`.
+const IGNORED_ORDERS: StringName = &"ignored_orders"
+## `BattleCommand_DoTurn.out_of_pp`; [code]continuous[/code] is `HasNoPPLeftText`.
+const NO_PP_LEFT: StringName = &"no_pp_left"
 const BIDE_STORING: StringName = &"bide_storing"
 const BIDE_UNLEASHED: StringName = &"bide_unleashed"
 const RAGE_BUILDING: StringName = &"rage_building"
@@ -223,7 +239,7 @@ const BLOWN_AWAY: StringName = &"blown_away"
 ## `FledFromBattleText`: Teleport, which takes its own user out rather than the
 ## other side. Named for `<USER>`, so [code]side[/code] is who left.
 const FLED_FROM_BATTLE: StringName = &"fled_from_battle"
-## Generation 1's `IsUnaffectedText`, Roar or Whirlwind against a trainer.
+## `UnaffectedText`, and Generation 1's `IsUnaffectedText` for Roar on a trainer.
 const UNAFFECTED: StringName = &"unaffected"
 
 const WILD_FLED: StringName = &"wild_fled"
@@ -629,6 +645,14 @@ var _use_next_answered: bool = false
 ## `PursuitSwitch` writes `CANNOT_MOVE` over that side's move and `CheckTurn`
 ## ends the turn on it, so the action it would have taken is spent.
 var _pursuit_spent: int = -1
+var _turn_begun: bool = false
+## `wCriticalHit` as the last list left it, which only `criticaltext` and
+## `GetFailureResultText` clear: Present's heal leaves one for the enemy's
+## confusion, whose `CheckEnemyTurn` never zeroes it the way `HitConfusion` does.
+var stale_critical: bool = false
+## [method Gen2SaveBattleAdapter.first_slot_speed], an egg's in the first slot.
+var first_slot_speed: int = -1
+var _pursuing: bool = false
 
 ## `wEnemyHPAtTimeOfPlayerSwitch`: the opponent's HP when it last came in or
 ## the player's `SendOutMonText` last ran.
@@ -873,12 +897,18 @@ func note_faint(side: int, events: Array, extra: Dictionary = {}) -> void:
 	var event: Dictionary = {"type": FAINTED, "side": side}
 	event.merge(extra, true)
 	events.append(event)
+	## `PursuitSwitch` answers its own knockout, clearing only a participant bit.
+	if _pursuing:
+		event["pursuit"] = true
+		event["index"] = party(side).active
+		return
+	## Both `UpdateFaintedPlayerMon` and the enemy's faint end the survivor's loop.
+	mon(opponent_of(side)).substatus &= ~Gen2Substatus.IN_LOOP
 	_charge_faint_happiness(side)
 
 
-## `UpdateFaintedPlayerMon`'s happiness half: HAPPINESS_BEATENBYSTRONGFOE when
-## the enemy stands at the fallen Pokemon's level plus thirty or above, and
-## HAPPINESS_FAINTED under it. The enemy's own faints reach no table.
+## `UpdateFaintedPlayerMon`: the status zeroed, then HAPPINESS_BEATENBYSTRONGFOE
+## against a foe thirty levels up or more and HAPPINESS_FAINTED otherwise.
 func _charge_faint_happiness(side: int) -> void:
 	if side != PLAYER:
 		return
@@ -889,6 +919,7 @@ func _charge_faint_happiness(side: int) -> void:
 	if _faint_charged.has(key):
 		return
 	_faint_charged[key] = true
+	fallen.status = Gen2Status.NONE
 	var foe: Gen2BattleMon = mon(ENEMY)
 	(party_log["faints"] as Array).append({
 		"index": party(PLAYER).active, "level": fallen.level,
@@ -1245,6 +1276,8 @@ func answer_use_next(use_next: bool) -> Array:
 ## `wPartyMon1Speed`: the stored stat, with neither a badge boost nor a stage on
 ## it, since neither is ever written back into the party structure.
 func _first_party_speed() -> int:
+	if first_slot_speed >= 0:
+		return first_slot_speed
 	var first: Gen2BattleMon = party(PLAYER).at(0)
 	return 0 if first == null else int(first.stats.get("speed", 0))
 
@@ -1327,9 +1360,12 @@ func answer_switch_offer(index: int = -1) -> Array:
 	var enemy_index: int = _pending_switch_offer
 	_pending_switch_offer = -1
 	# Only [method replace_fallen] raises one, so no turn stands behind it.
-	var events: Array = send_out(ENEMY, enemy_index)
+	# `EnemySwitch` runs `PlayerSwitch` before the enemy's reset and Spikes.
+	var events: Array = send_out(ENEMY, enemy_index, ENTRANCE_SWITCH, index < 0)
 	if index >= 0:
 		events.append_array(send_out(PLAYER, index))
+		_participants[PLAYER] = {party(PLAYER).active: true}
+		_spikes_damage(ENEMY, events)
 	return events
 
 
@@ -1413,6 +1449,8 @@ func baton_pass_send_out(side: int, index: int) -> Array:
 		return events
 	mon(side).apply_passed_state(passed)
 	_reset_baton_pass_status(side)
+	# Both entrances end on `ApplyStatLevelMultiplierOnAllStats` alone.
+	mon(side).hold_stats(Gen2BattleMon.HELD_STAGED)
 	return events
 
 
@@ -1431,8 +1469,7 @@ func _reset_baton_pass_status(side: int) -> void:
 	mon(PLAYER).substatus &= ~Gen2Substatus.ATTRACTED
 	mon(ENEMY).substatus &= ~Gen2Substatus.ATTRACTED
 
-	# `SUBSTATUS_TRANSFORMED` goes with these two and has nothing to clear yet.
-	arriving.substatus &= ~Gen2Substatus.ENCORED
+	arriving.substatus &= ~(Gen2Substatus.ENCORED | Gen2Substatus.TRANSFORMED)
 	arriving.encored_slot = -1
 	arriving.encore_turns = 0
 
@@ -1470,13 +1507,17 @@ func learn_move(side: int, forget_slot: int) -> Array:
 
 	var offer: Dictionary = (_move_learn_queue[side] as Array)[0]
 	var learner: Gen2BattleMon = party(side).at(int(offer["index"]))
-	if learner == null or forget_slot < 0 or forget_slot >= learner.moves.size():
+	if learner == null or forget_slot < 0 or forget_slot >= learner.own_moves().size():
 		return []
 
-	var forgot: int = int(learner.moves[forget_slot])
+	var forgot: int = int(learner.own_moves()[forget_slot])
 	if Gen2MoveForget.is_hm_move(forgot, data.generation if data != null else RomRegistry.GEN2):
 		return []
-	if not learner.replace_move(forget_slot, int(offer["move"])):
+	var replaced: Array = [false]
+	learner.with_own_record(func() -> void:
+		replaced[0] = learner.replace_move(forget_slot, int(offer["move"]))
+	)
+	if not bool(replaced[0]):
 		return []
 	(_move_learn_queue[side] as Array).pop_front()
 	if side == PLAYER:
@@ -1512,7 +1553,7 @@ func decline_move(side: int) -> Array:
 ## event or none: an impossible switch is refused. [param entrance] is how it
 ## comes in; a drag prints `DraggedOutText` between `ForceEnemySwitch` and
 ## `SpikesDamage`, and a Baton Pass keeps the counter-move words.
-func send_out(side: int, index: int, entrance: int = ENTRANCE_SWITCH) -> Array:
+func send_out(side: int, index: int, entrance: int = ENTRANCE_SWITCH, spikes: bool = true) -> Array:
 	var events: Array = []
 	if is_over():
 		return events
@@ -1539,24 +1580,8 @@ func send_out(side: int, index: int, entrance: int = ENTRANCE_SWITCH) -> Array:
 		gen1_ai_count = Gen1TrainerAI.COUNT_UNLOADED
 		if not withdrawing:
 			gen1_enemy_moves = 0
-	_clear_trapping()
-	if entrance != ENTRANCE_BATON_PASS:
-		# NewBattleMonStatus/NewEnemyMonStatus clear both counter-move words.
-		mon(PLAYER).last_counter_move = 0
-		mon(ENEMY).last_counter_move = 0
-	# `BreakAttraction`, which every entrance calls, clears both sides: whoever
-	# the Pokémon that left loved is not on the field either.
-	mon(PLAYER).substatus &= ~Gen2Substatus.ATTRACTED
-	mon(ENEMY).substatus &= ~Gen2Substatus.ATTRACTED
-	# `NewBattleMonStatus` clears the used-move list with the rest of the volatile
-	# state. The enemy's send-out leaves it alone: it lists what the player showed.
-	if side == PLAYER:
-		player_used_moves = []
-		# The next faint is a fresh `AskUseNextPokemon`.
-		_use_next_answered = false
-
-	if side == ENEMY:
-		enemy_hp_at_switch = current.active_mon().hp
+	_entrance_resets(side, entrance)
+	_hold_entrance_stats(side)
 	# The enemy's pass still reaches `ShowBattleTextEnemySentOut`.
 	var quiet: bool = entrance == ENTRANCE_DRAGGED \
 		or (side == PLAYER and entrance == ENTRANCE_BATON_PASS)
@@ -1574,6 +1599,9 @@ func send_out(side: int, index: int, entrance: int = ENTRANCE_SWITCH) -> Array:
 		"line": SEND_OUT_GO if quiet else send_out_line(side),
 	}))
 	(_participants[side] as Dictionary)[index] = true
+	# `ResetBattleParticipants` behind every enemy entrance.
+	if side == ENEMY:
+		_participants[PLAYER] = {party(PLAYER).active: true}
 	# `SendOutPlayerMon` and `ShowSetEnemyMonAndSendOutAnimation` both run their
 	# animation after the line that announced them, and `ForceEnemySwitch` runs
 	# it before `DraggedOutText`.
@@ -1581,8 +1609,37 @@ func send_out(side: int, index: int, entrance: int = ENTRANCE_SWITCH) -> Array:
 	events.append({"type": HUD_DRAWN, "side": side})
 	if entrance == ENTRANCE_DRAGGED:
 		events.append({"type": DRAGGED_OUT, "side": opponent_of(side), "target": side})
-	_spikes_damage(side, events)
+	if spikes:
+		_spikes_damage(side, events)
 	return events
+
+
+## `InitBattleMon`'s status then badges; `LoadEnemyMon`'s no status at all.
+func _hold_entrance_stats(side: int) -> void:
+	var entering: Gen2BattleMon = mon(side)
+	if side == PLAYER:
+		entering.hold_stats(Gen2BattleMon.HELD_ENTRANCE)
+		return
+	enemy_hp_at_switch = entering.hp
+	if not is_link_battle and not in_battle_tower:
+		entering.hold_stats(Gen2BattleMon.HELD_STAGED)
+
+
+## What every entrance clears on the field around the Pokémon coming in.
+func _entrance_resets(side: int, entrance: int) -> void:
+	var passed: bool = entrance == ENTRANCE_BATON_PASS
+	# A pass reaches no `NewBattleMonStatus`, so the opponent's Mean Look holds.
+	_clear_trapping(opponent_of(side) if passed else -1)
+	# Both counter-move words and `BreakAttraction`'s love, a pass included.
+	for each: int in [PLAYER, ENEMY]:
+		mon(each).last_counter_move = 0
+		mon(each).substatus &= ~Gen2Substatus.ATTRACTED
+	if side != PLAYER:
+		return
+	# `NewBattleMonStatus`'s used-move list, which a pass never reaches.
+	if not passed:
+		player_used_moves = []
+	_use_next_answered = false
 
 
 ## `SendOutPlayerMon` and `ShowSetEnemyMonAndSendOutAnimation`:
@@ -1802,13 +1859,14 @@ func record_used_move(side: int, move_number: int) -> void:
 
 ## Ends the trapping relationship on both sides, as `NewBattleMonStatus` does.
 ## [method Gen2BattleMon.reset_volatile] cannot: half the state is on the Pokémon
-## staying.
-func _clear_trapping() -> void:
+## staying. [param keep_cant_run] names a side whose Mean Look stands.
+func _clear_trapping(keep_cant_run: int = -1) -> void:
 	for side: int in [PLAYER, ENEMY]:
 		var battler: Gen2BattleMon = mon(side)
 		battler.trapped_turns = 0
 		battler.trapping_move = 0
-		battler.substatus &= ~Gen2Substatus.CANT_RUN
+		if side != keep_cant_run:
+			battler.substatus &= ~Gen2Substatus.CANT_RUN
 
 
 ## Whether `TryPlayerSwitch` would refuse the recall: bound, or held by Mean Look
@@ -1831,8 +1889,7 @@ func take_actions(player_action: Dictionary, enemy_action: Dictionary) -> Array:
 	if _pending_baton_pass >= 0 or _pending_switch_offer >= 0 or not _pending_mimic.is_empty():
 		return events
 
-	# In front of `BattleMenu`, so it is paid before the refusal below too.
-	_handle_berserk_gene(events)
+	events.append_array(begin_turn())
 
 	# Settled before anything is spent, because `TryPlayerSwitch` runs at menu
 	# time: the refusal jumps back to `BattleMenuPKMN_Loop` with no turn taken.
@@ -1856,26 +1913,65 @@ func take_actions(player_action: Dictionary, enemy_action: Dictionary) -> Array:
 			# BattleMenu_Run's `jp BattleMenu`: nothing was spent, so no residual
 			# damage and no enemy move either.
 			return events
+	_turn_begun = false
 
-	# BattleMenu_Fight clears wNumFleeAttempts, so the odds a run has built up
-	# survive only a run followed by another run.
 	if StringName(player_action.get("type", ACTION_MOVE)) == ACTION_MOVE:
-		flee_attempts = 0
+		fight_chosen()
 
-	var actions: Dictionary = {PLAYER: player_action, ENEMY: enemy_action}
+	var actions: Dictionary = {PLAYER: player_action, ENEMY: enemy_action.duplicate()}
 	var chosen: Dictionary = {
 		PLAYER: _move_for_action(PLAYER, player_action),
 		ENEMY: _move_for_action(ENEMY, enemy_action),
 	}
 	for side: int in [PLAYER, ENEMY]:
-		if StringName((actions[side] as Dictionary).get("type", ACTION_MOVE)) == ACTION_MOVE:
+		var action: Dictionary = actions[side]
+		if StringName(action.get("type", ACTION_MOVE)) == ACTION_MOVE:
 			gen1_selected_moves[side] = int(chosen[side])
+		## `ParsePlayerAction` and `ParseEnemyAction` settle them before either moves.
+		_reset_action_counters(side, int(data.move(int(chosen[side])).get("effect", -1)) \
+			if _is_move(action) else -1)
 
 	var acting: Array = order(chosen, actions)
 	enemy_goes_first = int(acting[0]) == ENEMY
 	_pursuit_spent = -1
-	_pending_turn = {"acting": acting, "actions": actions, "index": 0}
+	_pending_turn = {"acting": acting, "actions": actions, "index": 0, "chosen": chosen}
 	return _run_turn(events)
+
+
+## `BattleTurn` before `BattleMenu`, once a turn: `HandleBerserkGene`, and
+## `CheckPlayerLockedIn`'s flinch clear unless the player is recharging.
+func begin_turn() -> Array:
+	var events: Array = []
+	if _turn_begun or is_over():
+		return events
+	_turn_begun = true
+	_handle_berserk_gene(events)
+	if is_gen1() or not Gen2Substatus.has(mon(PLAYER).substatus, Gen2Substatus.RECHARGING):
+		for side: int in [PLAYER, ENEMY]:
+			mon(side).substatus &= ~Gen2Substatus.FLINCHED
+	return events
+
+
+func turn_begun() -> bool:
+	return _turn_begun
+
+
+## `AI_SwitchOrTryItem` for an action carrying `ai_item_switch` flags: at the top
+## of `Battle_PlayerFirst`, or in `Battle_EnemyFirst`'s own place.
+func _ask_enemy_ai(actions: Dictionary, events: Array) -> void:
+	var action: Dictionary = actions[ENEMY]
+	if not action.has("ai_item_switch"):
+		return
+	var flags: int = int(action["ai_item_switch"])
+	action.erase("ai_item_switch")
+	var decided: Dictionary = Gen2BattleAI.choose_action(
+		self, flags, int(action.get("slot", 0)), rng
+	)
+	if not (_is_switch(decided) or _is_item(decided)):
+		return
+	decided["spent"] = true
+	actions[ENEMY] = decided
+	_run_action(ENEMY, decided, events)
 
 
 ## `TrainerAI` stands in front of `ExecuteEnemyMove` on both orderings, so an
@@ -1901,6 +1997,8 @@ func _gen1_ai_action(side: int, actions: Dictionary) -> Dictionary:
 func _run_turn(events: Array) -> Array:
 	var acting: Array = _pending_turn["acting"]
 	var actions: Dictionary = _pending_turn["actions"]
+	if int(acting[0]) == PLAYER:
+		_ask_enemy_ai(actions, events)
 
 	while int(_pending_turn["index"]) < acting.size():
 		var side: int = int(acting[int(_pending_turn["index"])])
@@ -1913,6 +2011,8 @@ func _run_turn(events: Array) -> Array:
 				_pending_turn = {}
 				events.append({"type": OVER, "winner": winner()})
 				return events
+			if side == ENEMY:
+				_ask_enemy_ai(actions, events)
 			_open_turn_bracket(side, _gen1_ai_action(side, actions))
 			_pending_turn["acted"] = true
 			if _run_action(side, actions[side], events):
@@ -1929,13 +2029,16 @@ func _run_turn(events: Array) -> Array:
 		_pending_turn["index"] = int(_pending_turn["index"]) + 1
 
 	_pending_turn = {}
-	_tick_future_sight(events)
-	_tick_weather(events)
-	_tick_wrap(events)
-	_tick_perish(events)
-	_tick_held_items(events)
-	_tick_encore(acting, events)
-	_award_experience(events)
+	## Knockouts pay where they land; `CheckFaint_*` stops on `wBattleEnded`.
+	var paid: int = _award_experience(events, 0)
+	for tick: Callable in [_tick_future_sight, _tick_weather, _tick_wrap, _tick_perish]:
+		if is_over():
+			break
+		tick.call(events)
+		paid = _award_experience(events, paid)
+	if not is_over():
+		_tick_held_items(events)
+		_tick_encore(events)
 
 	if is_over():
 		events.append({"type": OVER, "winner": winner()})
@@ -1971,11 +2074,9 @@ func _enemy_flees(side: int, action: Dictionary, events: Array) -> bool:
 ## One side's action; true when the turn cannot go on until somebody answers.
 func _run_action(side: int, action: Dictionary, events: Array) -> bool:
 	var action_event_start: int = events.size()
-	var moving: bool = not (_is_run(action) or _is_switch(action) or _is_item(action))
-	if not moving and not bool(action.get("trainer_ai", false)):
-		# `.reset_rage` for a switch and `.reset_bide` for an item or a failed
-		# run, both falling into `.locked_in`'s zeroing. -1 is no effect.
-		_reset_action_counters(side, -1)
+	var moving: bool = _is_move(action)
+	if bool(action.get("spent", false)):
+		return false
 	if _is_switch(action):
 		# `AI_Switch` raises `wBattleHasJustStarted`, so `CheckWhetherToAskSwitch`
 		# offers nothing mid-turn.
@@ -1989,7 +2090,7 @@ func _run_action(side: int, action: Dictionary, events: Array) -> bool:
 		var slot: int = effective_slot(side, int(action.get("slot", 0)))
 		if side == ENEMY and is_gen1():
 			gen1_enemy_moves += 1
-		_act(side, slot, move_for(side, slot), events)
+		_act(side, slot, _move_to_run(side, slot), events)
 		_report_unannounced_action_faints(events, action_event_start)
 	return _pending_baton_pass >= 0 or not _pending_mimic.is_empty()
 
@@ -2057,7 +2158,9 @@ func _pursuit_before_switch(side: int, actions: Dictionary, events: Array) -> vo
 	if int(data.move(move_number).get("effect", -1)) != Gen2MoveEffect.PURSUIT:
 		return
 
+	_pursuing = true
 	_act(other, slot, move_number, events)
+	_pursuing = false
 	_pursuit_spent = other
 
 
@@ -2152,10 +2255,10 @@ func _gen1_residual(side: int, events: Array) -> void:
 ## `HandlePoisonBurnLeechSeed_DecreaseOwnHP`: a sixteenth, one at least, times
 ## the toxic counter, which every call steps first.
 func _gen1_residual_amount(current: Gen2BattleMon) -> int:
-	var amount: int = maxi(current.max_hp() >> Gen1Layout.RESIDUAL_SHIFT, 1)
-	if current.toxic_counter > 0:
-		amount *= current.toxic_counter
-		current.toxic_counter += 1
+	if current.toxic_counter <= 0:
+		return maxi(current.max_hp() >> Gen1Layout.RESIDUAL_SHIFT, 1)
+	var amount: int = Gen2Status.toxic_damage(current.max_hp(), current.toxic_counter)
+	current.toxic_counter += 1
 	return amount
 
 
@@ -2185,16 +2288,15 @@ func _residual_damage(side: int, events: Array) -> void:
 			return
 
 
-## A running [member Gen2BattleMon.toxic_counter] means Toxic, which ramps rather
-## than taking the flat eighth. It rises here, so the turn it landed is the
-## first.
+## [member Gen2BattleMon.toxic_counter] is `SUBSTATUS_TOXIC`, which ramps a burn
+## as well as a poison; it rises here, so the turn it landed is the first.
 func _residual_status(side: int, events: Array) -> void:
 	var current: Gen2BattleMon = mon(side)
 	if not Gen2Status.has(current.status, Gen2Status.BURN | Gen2Status.POISON):
 		return
 
 	var amount: int
-	if Gen2Status.has(current.status, Gen2Status.POISON) and current.toxic_counter > 0:
+	if current.toxic_counter > 0:
 		amount = Gen2Status.toxic_damage(current.max_hp(), current.toxic_counter)
 		current.toxic_counter += 1
 	else:
@@ -2251,7 +2353,11 @@ func _residual_leech_seed(side: int, events: Array) -> void:
 		return
 
 	var sapper: Gen2BattleMon = mon(opponent_of(side))
-	_status_animation(opponent_of(side), Gen2BattleAnimPlayer.ANIM_SAP, side, events)
+	## The seeded side's Fly or Dig, then the sapper's in `_OnlyIfVisible`.
+	if current.substatus & (Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND) == 0:
+		_status_animation(
+			opponent_of(side), Gen2BattleAnimPlayer.ANIM_SAP, opponent_of(side), events
+		)
 	var taken: int = current.take_damage(Gen2Substatus.leech_seed_damage(current.max_hp()))
 	var healed: int = 0 if sapper.is_fainted() else sapper.heal(taken)
 	events.append({
@@ -2356,7 +2462,9 @@ func _tick_wrap(events: Array) -> void:
 		return
 	for side: int in [PLAYER, ENEMY]:
 		var current: Gen2BattleMon = mon(side)
-		if current.is_fainted() or current.trapped_turns <= 0:
+		## `.do_it` returns for a Substitute before the count is touched.
+		if current.is_fainted() or current.trapped_turns <= 0 \
+				or Gen2Substatus.has(current.substatus, Gen2Substatus.SUBSTITUTE):
 			continue
 
 		var move_number: int = current.trapping_move
@@ -2433,15 +2541,14 @@ func _handle_berserk_gene(events: Array) -> void:
 		holder.substatus |= Gen2Substatus.CONFUSED
 		if holder.confusion_turns <= 0:
 			holder.confusion_turns = BERSERK_GENE_CONFUSION_TURNS
-		var by: int = mini(BERSERK_GENE_STAGES, Gen2Stats.MAX_STAGE - holder.stage("attack"))
-		if by > 0:
-			holder.change_stage("attack", by)
+		## `BattleCommand_AttackUp2` and `StatUpMessage`.
+		var raised: bool = holder.change_stage("attack", BERSERK_GENE_STAGES)
 		events.append({"type": ITEM_ACTIVATED, "side": side, "item": used})
-		events.append({
-			"type": STAT_CHANGED if by > 0 else STAT_CHANGE_FAILED,
-			"target": side, "stat": "attack",
-			"by": by if by > 0 else BERSERK_GENE_STAGES,
-		})
+		if raised:
+			events.append({
+				"type": STAT_CHANGED, "target": side, "stat": "attack",
+				"by": BERSERK_GENE_STAGES,
+			})
 		if was_confused:
 			continue
 		events.append(status_animation_event(side, Gen2BattleAnimPlayer.ANIM_CONFUSED))
@@ -2578,11 +2685,14 @@ func use_status_berry(side: int, events: Array) -> bool:
 	if not Gen2HeldItem.heals_status(_held_effect(holder), holder.status):
 		return false
 
-	# `UseHeldStatusHealingItem` follows the cleared byte with `res
-	# SUBSTATUS_TOXIC` and `res SUBSTATUS_NIGHTMARE`, both of which it was holding.
+	# `UseHeldStatusHealingItem`; an `ALL_STATUS` row clears confusion too.
 	holder.status = Gen2Status.NONE
 	holder.toxic_counter = 0
 	holder.substatus &= ~Gen2Substatus.NIGHTMARE
+	holder.release_stats()
+	if _held_effect(holder) == Gen2HeldItem.HEAL_STATUS:
+		holder.substatus &= ~Gen2Substatus.CONFUSED
+		holder.confusion_turns = 0
 	var used: int = holder.item
 	holder.item = 0
 	events.append(stamp_statuses({"type": RECOVERED_USING_ITEM, "side": side, "item": used}))
@@ -2606,10 +2716,9 @@ func use_confusion_berry(side: int, events: Array) -> bool:
 	return true
 
 
-## Encore's countdown, once a turn rather than once a move. It ends the moment
-## the encored slot runs out of PP, checked every tick rather than at expiry.
-func _tick_encore(acting: Array, events: Array) -> void:
-	for side: int in acting:
+## `HandleEncore`, player then enemy, ending early on an empty slot.
+func _tick_encore(events: Array) -> void:
+	for side: int in [PLAYER, ENEMY]:
 		var current: Gen2BattleMon = mon(side)
 		if current.is_fainted() or current.encored_slot < 0:
 			continue
@@ -2623,20 +2732,36 @@ func _tick_encore(acting: Array, events: Array) -> void:
 		events.append({"type": ENCORE_ENDED, "side": side})
 
 
-## Experience for every enemy Pokémon that fainted this turn; `GiveExperiencePoints`
-## returns on `wLinkMode` and `wInBattleTowerBattle`.
-func _award_experience(events: Array) -> void:
+## Experience for the enemy faints from [param since] on, answering where the
+## next call starts; none in a link or the Battle Tower.
+func _award_experience(events: Array, since: int) -> int:
+	var end: int = events.size()
 	if is_link_battle or in_battle_tower:
-		return
-	for event: Dictionary in events.duplicate():
+		return end
+	for index: int in range(since, end):
+		var event: Dictionary = events[index]
 		if StringName(event.get("type", "")) != FAINTED:
 			continue
 		var side: int = int(event["side"])
+		if bool(event.get("pursuit", false)):
+			(_participants[side] as Dictionary).erase(int(event["index"]))
+			continue
 		(_participants[side] as Dictionary).erase(party(side).active)
 		if side == ENEMY:
+			if not is_trainer_battle and not party(PLAYER).is_wiped():
+				events.append({"type": VICTORY_MUSIC, "silent": not is_gen1() \
+					and _exp_share_holders().is_empty() and pay_day_money <= 0 \
+					and _standing_participants().is_empty()})
 			_give_experience_for(mon(ENEMY), events)
 			if not is_gen1():
 				events.append({"type": DELAY, "frames": ENEMY_FAINT_FRAMES})
+	return events.size()
+
+
+func _standing_participants() -> Array:
+	return (_participants[PLAYER] as Dictionary).keys().filter(
+		func(index: int) -> bool: return not party(PLAYER).at(index).is_fainted()
+	)
 
 
 ## Splits what [param defeated] is worth, then resets the participant set. With
@@ -2958,6 +3083,7 @@ func _apply_party_item(
 	if cured != 0:
 		target.status = Gen2Status.NONE
 		target.toxic_counter = 0
+		target.release_stats()
 		if active: # `HealStatus` runs behind `IsItemUsedOnBattleMon`.
 			target.substatus &= ~Gen2Substatus.NIGHTMARE
 	var unconfused: bool = mask == 0xFF and active \
@@ -3052,28 +3178,16 @@ func _give_experience_to(
 	})
 
 	learner.gain_stat_exp(stat_gains)
+	if learner.pokerus != 0:
+		learner.gain_stat_exp(stat_gains)
 	events.append({
 		"type": STAT_EXP_GAINED, "side": PLAYER, "index": index, "gains": stat_gains,
 	})
 
-	var target_level: int = learner.level_for_exp()
-	var grew: bool = learner.level < target_level
-	while learner.level < target_level:
-		var old_level: int = learner.level
-		var old_stats: Dictionary = learner.stats.duplicate()
-		## `.level_loop` raises one level a pass with `LearnLevelMoves` behind
-		## each; `GainExperience` jumps to `CalcLevelFromExperience`'s answer,
-		## says `GrewLevelText` once and runs `LearnMoveFromLevelUp` there alone.
-		var step_to: int = target_level if is_gen1() else old_level + 1
-		while learner.level < step_to:
-			learner.level_up()
-		events.append({
-			"type": GREW_LEVEL, "side": PLAYER, "index": index, "species": learner.species,
-			"name": learner.display_name(),
-			"old_level": old_level, "new_level": learner.level,
-			"old_stats": old_stats, "new_stats": learner.stats.duplicate(),
-		})
-		_offer_moves_learned_at(learner, index, learner.level, events)
+	var grew: bool = learner.level < learner.level_for_exp()
+	learner.with_own_record(_raise_levels.bind(learner, index, events))
+	if grew and index == party(PLAYER).active:
+		learner.hold_stats(Gen2BattleMon.HELD_LEVEL_UP)
 
 	## `LevelUpHappinessMod` and the `SmallFarFlagAction SET_FLAG` both sit after
 	## `.level_loop`, once an award; `EvolveAfterBattle` runs on the overworld.
@@ -3082,6 +3196,32 @@ func _give_experience_to(
 		_gain_level_happiness(learner)
 		if not _evolvable.has(index):
 			_evolvable.append(index)
+
+
+## The Pokemon out says each level on its bar and a benched one the last;
+## `.level_loop` teaches every level crossed behind them. Generation 1 says
+## and teaches the last alone.
+func _raise_levels(learner: Gen2BattleMon, index: int, events: Array) -> void:
+	var start: int = learner.level
+	var target_level: int = learner.level_for_exp()
+	var says_each: bool = not is_gen1() and index == party(PLAYER).active
+	while learner.level < target_level:
+		var old_level: int = learner.level
+		var old_stats: Dictionary = learner.stats.duplicate()
+		var step_to: int = old_level + 1 if says_each else target_level
+		while learner.level < step_to:
+			learner.level_up()
+		events.append({
+			"type": GREW_LEVEL, "side": PLAYER, "index": index, "species": learner.species,
+			"name": learner.display_name(),
+			"old_level": old_level, "new_level": learner.level,
+			"old_stats": old_stats, "new_stats": learner.stats.duplicate(),
+		})
+	if learner.level == start:
+		return
+	var first_taught: int = learner.level if is_gen1() else start + 1
+	for level: int in range(first_taught, learner.level + 1):
+		_offer_moves_learned_at(learner, index, level, events)
 
 
 ## `LevelUpHappinessMod`: HAPPINESS_GAINLEVELATHOME on the landmark it was
@@ -3130,6 +3270,10 @@ static func _is_item(action: Dictionary) -> bool:
 	return StringName(action.get("type", ACTION_MOVE)) == ACTION_ITEM
 
 
+static func _is_move(action: Dictionary) -> bool:
+	return not (_is_switch(action) or _is_run(action) or _is_item(action))
+
+
 func _run_event(type: StringName, attempt: Dictionary) -> Dictionary:
 	var out: Dictionary = attempt.duplicate(true)
 	out.erase("outcome")
@@ -3147,11 +3291,10 @@ func _move_for_action(side: int, action: Dictionary) -> int:
 
 
 ## The slot PP is spent from, not always the one asked for: Encore forces the
-## slot it locked in, as a release forces its move number, and only while that
-## slot is still usable.
+## slot it locked in, untested, so `CheckTurn` refuses a disabled one.
 func effective_slot(side: int, requested_slot: int) -> int:
 	var attacker: Gen2BattleMon = mon(side)
-	if attacker.encored_slot >= 0 and attacker.can_use(attacker.encored_slot):
+	if attacker.encored_slot >= 0:
 		return attacker.encored_slot
 	return requested_slot
 
@@ -3179,6 +3322,8 @@ func move_for(side: int, slot: int) -> int:
 	if is_gen1() and Gen2Substatus.has(attacker.substatus, Gen2Substatus.RAGE):
 		return Gen2MoveEffect.RAGE_MOVE
 	var chosen_slot: int = effective_slot(side, slot)
+	if attacker.encored_slot >= 0 and chosen_slot < attacker.moves.size():
+		return int(attacker.moves[chosen_slot])
 	return int(attacker.moves[chosen_slot]) if attacker.can_use(chosen_slot) else Gen2Damage.STRUGGLE
 
 
@@ -3200,12 +3345,16 @@ func player_menu_skipped() -> bool:
 	return Gen2Substatus.has(out.substatus, Gen2Substatus.ROLLOUT)
 
 
-## `ParsePlayerAction`'s `.locked_in` behind FIGHT: Bide shows the main menu
-## and no move list. Generation 1 skips the list for a sleeping or frozen
-## Pokemon and for either side's trapping move as well.
+## `BattleMenu_Fight` clears `wNumFleeAttempts` whether or not a move follows.
+func fight_chosen() -> void:
+	flee_attempts = 0
+
+
+## `ParsePlayerAction`'s `.encored` and `.locked_in`: no move list under Encore
+## or Bide, and on Generation 1 asleep, frozen or bound either way.
 func player_move_menu_skipped() -> bool:
 	var out: Gen2BattleMon = mon(PLAYER)
-	if Gen2Substatus.has(out.substatus, Gen2Substatus.BIDE):
+	if Gen2Substatus.has(out.substatus, Gen2Substatus.BIDE) or out.encored_slot >= 0:
 		return true
 	if not is_gen1():
 		return false
@@ -3221,6 +3370,17 @@ func gen1_trapping_move(side: int) -> int:
 	if not is_gen1():
 		return 0
 	return mon(1 - side).trapping_move
+
+
+## `wCurPlayerMove` was settled at choice time: a Disable or Spite since is
+## `CheckTurn`'s and `DoTurn`'s to refuse, not a Struggle.
+func _move_to_run(side: int, slot: int) -> int:
+	var number: int = move_for(side, slot)
+	var chosen: Dictionary = _pending_turn.get("chosen", {})
+	if number != Gen2Damage.STRUGGLE or int(chosen.get(side, Gen2Damage.STRUGGLE)) == Gen2Damage.STRUGGLE:
+		return number
+	var attacker: Gen2BattleMon = mon(side)
+	return int(attacker.moves[slot]) if slot >= 0 and slot < attacker.moves.size() else number
 
 
 ## Who goes first. A switch is settled first at any speed, two switches go to
@@ -3324,8 +3484,6 @@ func _act(side: int, slot: int, move_number: int, events: Array) -> void:
 	var move: Dictionary = data.move(move_number)
 	if move.is_empty():
 		return
-
-	_reset_action_counters(side, int(move.get("effect", -1)))
 
 	var turn: Gen2Turn = Gen2Turn.create(self, side, slot, move_number, move, events)
 	# The release turn of a two-turn move, or any Rollout/rampage continuation:

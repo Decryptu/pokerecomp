@@ -1088,12 +1088,12 @@ func _resume_internal_texts(_choice: int) -> Dictionary:
 
 func _resume_buena_prize_menu(choice: int) -> Dictionary:
 	var prize_special: int = int(_pending.get("prize_special", 0))
-	if choice < 0:
+	if choice < 0 or choice >= BUENA_PRIZES.size():
 		## `Buena_PrizeMenu`'s `.cancel`: B leaves the counter, and both
 		## `CloseWindow`s are behind her own parting box.
 		_pending = {}
 		return _buena_prize_box(prize_special, "come_again", true)
-	var prize_row: int = clampi(choice, 0, BUENA_PRIZES.size() - 1)
+	var prize_row: int = choice
 	_pending = {}
 	_set_text_buffer(
 		Gen2Layout.STRING_BUFFER_1,
@@ -5520,6 +5520,8 @@ func _stage_buena_prize_menu(special: int) -> Dictionary:
 		rows.append("%s %d" % [
 			data.item_name(int(prize[0])) if data != null else "", int(prize[1]),
 		])
+	## `ScrollingMenu`'s CANCEL past `.Prizes`' own `-1`, which A answers as B.
+	rows.append("CANCEL")
 	var asked: String = _special_box("buena_prize", "ask_which_prize")
 	if asked.is_empty():
 		return _fail(&"missing_special_text", {"special": special})
@@ -5529,8 +5531,7 @@ func _stage_buena_prize_menu(special: int) -> Dictionary:
 		"options": rows,
 		## `.MenuHeader`'s `menu_coords 1, 1, 16, 9` and its `db 4, 13`, then
 		## `db 1` for the row the cursor opens on. `ScrollingMenu` always draws
-		## its own cursor and this list is a row longer than its window, which
-		## is what the flags and the row count stand for here.
+		## its own cursor and never wraps, which is what the flags stand for.
 		"header": {
 			"default": 1,
 			"data_flags": Gen2MenuBox.STATICMENU_CURSOR,

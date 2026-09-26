@@ -41,6 +41,8 @@ const FLOOR_NAMES: Array[String] = [
 ]
 ## `Elevator_MenuData`'s `db 4, 0`: four rows of floors are shown at a time.
 const ELEVATOR_ROWS: int = 4
+## `ScrollingMenu_UpdateDisplay.CancelString`, the row past every list's `-1`.
+const CANCEL_ROW: String = "CANCEL"
 
 ## `PokemonCenterPC`'s box storage, added as a child the way MAP adds the map.
 const BOX_SCENE := preload("res://game/save/box_screen.tscn")
@@ -648,9 +650,11 @@ func _render_elevator() -> void:
 	var floors: Array = _elevator_floors()
 	for row: int in ELEVATOR_ROWS:
 		var index: int = _elevator_scroll + row
-		if index >= floors.size():
+		if index > floors.size():
 			break
-		rows.append(_floor_name(int((floors[index] as Dictionary)["floor"])))
+		## `ScrollingMenu` draws CANCEL at the `-1` ending `wCurElevatorFloors`.
+		rows.append(CANCEL_ROW if index == floors.size() \
+			else _floor_name(int((floors[index] as Dictionary)["floor"])))
 	_render_service_page(rows, _cursor - _elevator_scroll)
 
 
@@ -714,12 +718,14 @@ func _press_elevator(button: int) -> void:
 		_press_gen1_elevator(button)
 		return
 	var floors: Array = _elevator_floors()
-	if button == PokeButton.B:
-		## `.cancel`'s `scf`, which `Script_elevator`'s `ret c` leaves as FALSE.
+	if button == PokeButton.A or button == PokeButton.B:
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+	## `.cancel`'s `scf`, FALSE to `Script_elevator`; A on CANCEL is B.
+	if button == PokeButton.B or (button == PokeButton.A and _cursor >= floors.size()):
 		_finish_runtime({"ok": true})
 		return
 	if button == PokeButton.A:
-		if _cursor < 0 or _cursor >= floors.size():
+		if _cursor < 0:
 			return
 		## `Elevator`'s own `cp [hl] / jr z, .quit`: choosing the floor the car
 		## is already on is a cancel, not a ride.
@@ -731,7 +737,7 @@ func _press_elevator(button: int) -> void:
 	if button == PokeButton.UP:
 		_cursor = maxi(0, _cursor - 1)
 	elif button == PokeButton.DOWN:
-		_cursor = mini(floors.size() - 1, _cursor + 1)
+		_cursor = mini(floors.size(), _cursor + 1)
 	else:
 		return
 	_elevator_scroll = clampi(
@@ -1058,8 +1064,10 @@ func _press_prize(button: int) -> void:
 
 
 func _press_prize_confirm(button: int) -> void:
-	if _prize_yes_no.press_yes_no(button) and not _prize_yes_no.holding():
-		_render_prizes()
+	if _prize_yes_no.press_yes_no(button):
+		_click_if_answered(_prize_yes_no)
+		if not _prize_yes_no.holding():
+			_render_prizes()
 
 
 ## `SoYouWantPrizeText`'s `YesNoChoice`. NO is `.printOhFineThen`.
@@ -1311,6 +1319,8 @@ func _press_mart(button: int) -> void:
 
 
 func _press_mart_list(button: int) -> void:
+	if button == PokeButton.A or button == PokeButton.B:
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 	match button:
 		PokeButton.UP:
 			_move_mart_cursor(-1)
@@ -1398,8 +1408,10 @@ func _press_mart_confirm(button: int) -> void:
 			_mart_pages.remove_at(0)
 			_render_mart()
 		return
-	if _mart_yes_no.press_yes_no(button) and not _mart_yes_no.holding():
-		_render_mart()
+	if _mart_yes_no.press_yes_no(button):
+		_click_if_answered(_mart_yes_no)
+		if not _mart_yes_no.holding():
+			_render_mart()
 
 
 ## `MartConfirmPurchase`'s and `SellMenu`'s `YesNoBox`, once its hold is spent.
@@ -1649,6 +1661,9 @@ func _render_mart() -> void:
 		"rows": _mart_rows(),
 		"cursor": _cursor if listing else -1,
 		"scrolled": _mart_scroll > 0,
+		"more_below": Gen2MenuBox.window_is_items(
+			_mart_scroll, _mart_list().size(), Gen2MartPage.LIST_HEIGHT
+		),
 		"text": "\n".join(page) if not listing else _mart_description(),
 		## `StandardMartAskPurchaseQuantity` closes the dial with `ExitMenu`
 		## before `MartConfirmPurchase` prints, so the box is the quantity
@@ -1793,7 +1808,7 @@ func _apricorn_rows() -> Array:
 	for row: int in _apricorns.rows():
 		var index: int = _apricorns.scroll + row
 		if index >= _apricorns.entries.size():
-			rows.append("CANCEL")
+			rows.append(CANCEL_ROW)
 			break
 		var entry: Dictionary = _apricorns.entries[index]
 		rows.append("%-12s x%2d" % [String(entry.get("name", "")), int(entry.get("quantity", 0))])
@@ -1801,8 +1816,13 @@ func _apricorn_rows() -> Array:
 	return rows
 
 
+## The list's click, and `Kurt_SelectQuantity`'s once the dial is answered.
 func _press_apricorns(button: int) -> void:
+	var listing: bool = _apricorns.phase == Gen2WorldApricorn.SELECT_APRICORN
 	_apricorns.press(button)
+	if (listing and button in [PokeButton.A, PokeButton.B]) \
+			or (not listing and _apricorns.phase != Gen2WorldApricorn.SELECT_QUANTITY):
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
 	if _apricorns.is_done():
 		_finish_apricorns()
 		return
@@ -2110,7 +2130,7 @@ func _confirm_pc_row() -> void:
 		MODE.PC_DECO: _confirm_decoration_row,
 		MODE.PC_DECO_LIST: _confirm_decoration_list_row,
 		MODE.PC_DECO_SIDE: _confirm_decoration_side_row,
-		MODE.PC_MAILBOX: _open_mail_submenu,
+		MODE.PC_MAILBOX: _confirm_mailbox_row,
 		MODE.PC_MAIL_SUBMENU: _confirm_mail_submenu,
 		MODE.PC_MAIL_CONFIRM: _confirm_mail_row,
 		MODE.PC_OAK_ASK: _confirm_oak_ask,
@@ -2164,6 +2184,14 @@ func _confirm_decoration_row(_row: int) -> void:
 		_leave_decorations()
 		return
 	_open_decoration_category(slot)
+
+
+## A on `ScrollingMenu`'s CANCEL row answers as B.
+func _confirm_mailbox_row(row: int) -> void:
+	if row < 0:
+		_open_pc_items()
+		return
+	_open_mail_submenu(row)
 
 
 func _confirm_decoration_list_row(_row: int) -> void:
@@ -2253,8 +2281,10 @@ var _pc_toss_ask: Gen2WorldMenu = null
 
 func _press_pc_item_stage(button: int) -> void:
 	if _pc_item_stage == &"toss_ask":
-		if _pc_toss_ask.press_yes_no(button) and not _pc_toss_ask.holding():
-			_render_rows()
+		if _pc_toss_ask.press_yes_no(button):
+			_click_if_answered(_pc_toss_ask)
+			if not _pc_toss_ask.holding():
+				_render_rows()
 		return
 	match _quantity_prompt.press(button):
 		Gen2WorldQuantityPrompt.CONFIRMED:
@@ -2374,8 +2404,7 @@ func _open_decorations() -> void:
 	_render_rows()
 
 
-## `PopulateDecoCategoryMenu`: the owned rows, the category's own PUT IT AWAY and
-## CANCEL, which the ornament list is too long to keep.
+## `PopulateDecoCategoryMenu`: the owned rows, PUT IT AWAY and CANCEL.
 func _open_decoration_category(slot: StringName) -> void:
 	var rows: Array = Gen2WorldDecoration.category_rows(_data, _world.state, slot)
 	if rows.is_empty():
@@ -3300,6 +3329,8 @@ func _open_mailbox() -> void:
 		_render_rows()
 		return
 	_mode = MODE.PC_MAILBOX
+	## `ScrollingMenu`'s own CANCEL, past `wMailboxCount`.
+	_pc_rows.append({"row": -1, "name": CANCEL_ROW})
 	## `MailboxPC` keeps `wCurMessageIndex` across the submenu, so the list
 	## reopens on the message just acted on.
 	_cursor = clampi(_mail_index, 0, _pc_rows.size() - 1)
@@ -3395,6 +3426,7 @@ func _open_mail_attach() -> void:
 	host.set_context(_data, _save, true)
 	add_child(host)
 	host.selection_made.connect(_on_mail_attach_selected)
+	host.sfx_requested.connect(sfx_requested.emit)
 	host.open_selection()
 
 
@@ -3538,6 +3570,7 @@ func _open_card(card: StringName) -> void:
 	_pokegear.tuned.connect(_on_card_tuned)
 	_pokegear.called.connect(_on_card_called)
 	_pokegear.deleted.connect(_on_card_deleted)
+	_pokegear.sfx_requested.connect(sfx_requested.emit)
 	var owned: Array = []
 	for entry: Dictionary in _pokegear_cards:
 		owned.append(StringName(entry.get("card", &"")))
@@ -3874,7 +3907,7 @@ func _move_cursor(delta: int) -> void:
 	var count: int = _option_count()
 	if count <= 0:
 		return
-	_cursor = clampi(_cursor + delta, 0, count - 1) if NO_WRAP_MODES.has(_mode) \
+	_cursor = clampi(_cursor + delta, 0, count - 1) if not _cursor_wraps() \
 		else wrapi(_cursor + delta, 0, count)
 	if _mode == MODE.PC_ITEM_LIST:
 		_pc_quantity = 1
@@ -3891,9 +3924,35 @@ func _move_cursor(delta: int) -> void:
 	_render_rows()
 
 
+## `hInMenu`: every `ScrollingMenu`, Bill's PC, the Pokegear and Mom's dial.
+func menu_repeats() -> bool:
+	if _boxes != null or _pokegear != null or _town_map != null or _mom_dial != null:
+		return true
+	match _mode:
+		MODE.PC_ITEM_LIST, MODE.PC_MAILBOX, MODE.PC_BOX_LIST, MODE.ELEVATOR:
+			return true
+		MODE.PC_DECO_LIST:
+			return Gen2WorldDecoration.category_scrolls(_pc_rows)
+		MODE.MENU:
+			return _menu != null and _menu.scrolling_arrows
+		MODE.MART:
+			return _mart_stage == MART_LIST
+		MODE.APRICORN:
+			return _apricorns != null and _apricorns.phase == Gen2WorldApricorn.SELECT_APRICORN
+	return false
+
+
+func _cursor_wraps() -> bool:
+	if _mode == MODE.PC_DECO_LIST:
+		return not Gen2WorldDecoration.category_scrolls(_pc_rows)
+	return not NO_WRAP_MODES.has(_mode)
+
+
 ## How many rows this mode's list shows at once, or zero for a menu that is not
 ## a `ScrollingMenu` and draws all of its options.
 func _scrolling_rows() -> int:
+	if _mode == MODE.PC_DECO_LIST and not Gen2WorldDecoration.category_scrolls(_pc_rows):
+		return 0
 	if _mode == MODE.MENU:
 		## A scripted `verticalmenu` declares as many rows as it has options, so
 		## only a list longer than its own window is one.
@@ -3922,7 +3981,31 @@ func _move_direction(direction: Vector2i) -> void:
 		_move_cursor(direction.y)
 
 
+## The modes whose A and B reach `MenuClickSound`, not `PokemonCenterPC.TopMenu`.
+const CLICKING_MODES: Array = [
+	MODE.MENU, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST, MODE.PC_BOX_SUBMENU,
+	MODE.PC_ITEM_LIST, MODE.PC_MON_LIST, MODE.PC_MON_ACTION, MODE.PC_ASK,
+	MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_MAILBOX,
+	MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK,
+]
+
+
+func _click_if_answered(menu: Gen2WorldMenu) -> void:
+	if menu.just_answered():
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+
+
+func _menu_click(button: int) -> void:
+	if not CLICKING_MODES.has(_mode) or _pc_yes_no_hold > 0:
+		return
+	if _mode == MODE.MENU and (_menu == null \
+			or (button == PokeButton.B and not _menu.takes_b())):
+		return
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+
+
 func _confirm() -> void:
+	_menu_click(PokeButton.A)
 	if _hold_pc_yes_no(_confirm_now):
 		return
 	_confirm_now()
@@ -4002,6 +4085,7 @@ const GEN1_CANCEL_HANDLERS: Dictionary = {
 
 
 func _cancel() -> void:
+	_menu_click(PokeButton.B)
 	if _hold_pc_yes_no(_cancel_now):
 		return
 	_cancel_now()
@@ -4041,6 +4125,8 @@ func _hold_pc_yes_no(answer: Callable) -> bool:
 
 
 func _cancel_now() -> void:
+	if _mode == MODE.MENU and _menu != null and not _menu.takes_b():
+		return
 	if _gen1_pc and GEN1_CANCEL_HANDLERS.has(_mode):
 		call(GEN1_CANCEL_HANDLERS[_mode])
 		return
@@ -4093,6 +4179,7 @@ var _yes_no_cancelled: bool = false
 func _press_yes_no_menu(button: int) -> void:
 	if not _menu.press_yes_no(button):
 		return
+	_click_if_answered(_menu)
 	_yes_no_cancelled = button == PokeButton.B
 	_cursor = _menu.selected_index()
 	_render_rows()
@@ -4162,7 +4249,7 @@ func _render_rows(override: Array = []) -> void:
 	var values: Array = override if not override.is_empty() else [] if _asking_through_pages() else (
 		_choices if _mode == MODE.MENU \
 		else _pc_rows if PC_ROW_MODES.has(_mode) \
-		else _pc_entries + [{"name": "CANCEL"}] if _mode == MODE.PC_ITEM_LIST \
+		else _pc_entries + [{"name": CANCEL_ROW}] if _mode == MODE.PC_ITEM_LIST \
 		else ["Continue"]
 	)
 	var rows: int = _scrolling_rows()
@@ -4489,6 +4576,9 @@ func _scripted_menu_box() -> Gen2MenuBox:
 		return null
 	var menu_box: Gen2MenuBox = _menu.box()
 	menu_box.scroll = _pc_scroll
+	if menu_box.scrolling_arrows:
+		## Buena's prize list, the one scripted `ScrollingMenu`, ends on CANCEL.
+		menu_box.show_scroll(_pc_scroll, _menu.options.size() - 1, _menu.rows)
 	return menu_box
 
 
@@ -4499,9 +4589,7 @@ func _elevator_box() -> Gen2MenuBox:
 		12, 1, 18, 9,
 		Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
 	)
-	box.scrolling_arrows = true
-	box.scroll = _elevator_scroll
-	return box
+	return box.show_scroll(_elevator_scroll, _elevator_floors().size(), ELEVATOR_ROWS)
 
 
 ## `.TopMenuHeader`'s `menu_coords 8, 1, SCREEN_WIDTH - 2, 10`.
@@ -4581,19 +4669,21 @@ func _pc_item_list_box() -> Gen2MenuBox:
 	)
 
 
-## `_PlayerDecorationMenu.ScrollingMenuHeader` uses the full menu area.
+## `PopulateDecoCategoryMenu`'s scrolling header, or `DoNthMenu`'s for a short list.
 func _deco_list_box() -> Gen2MenuBox:
+	if not Gen2WorldDecoration.category_scrolls(_pc_rows):
+		return Gen2MenuBox.from_coords(
+			0, 0, 19, 17, Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
+		)
 	return _scrolling_box(
 		Gen2MenuBox.from_coords(1, 1, 18, 16, Gen2MenuBox.STATICMENU_CURSOR)
 	)
 
 
 ## `SCROLLINGMENU_DISPLAY_ARROWS` and the window this screen's one
-## `wMenuScrollPosition` stands at.
+## `wMenuScrollPosition` stands at. Every list here ends in its CANCEL row.
 func _scrolling_box(box: Gen2MenuBox) -> Gen2MenuBox:
-	box.scrolling_arrows = true
-	box.scroll = _pc_scroll
-	return box
+	return box.show_scroll(_pc_scroll, _option_count() - 1, _scrolling_rows())
 
 
 ## `Kurt_SelectApricorn.MenuHeader`'s `menu_coords 1, 1, 13, 10`.
@@ -4601,9 +4691,11 @@ func _apricorn_select_box() -> Gen2MenuBox:
 	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
 		1, 1, 13, 10, Gen2MenuBox.STATICMENU_CURSOR
 	)
-	box.scrolling_arrows = true
-	box.scroll = _apricorns.scroll if _apricorns != null else 0
-	return box
+	if _apricorns == null:
+		return box
+	return box.show_scroll(
+		_apricorns.scroll, _apricorns.entries.size(), Gen2WorldApricorn.MENU_HEIGHT
+	)
 
 
 ## `Kurt_SelectQuantity.MenuHeader`'s `menu_coords 6, 9, SCREEN_WIDTH - 1, 12`.

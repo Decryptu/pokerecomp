@@ -79,8 +79,8 @@ const SIDE_ROWS: Array[Dictionary] = [
 	{"side": &"", "name": "CANCEL"},
 ]
 
-## `PopulateDecoCategoryMenu`: eight rows fit the non-scrolling menu, and a
-## ninth turns it into `ScrollingMenu` and costs the list its CANCEL row.
+## `PopulateDecoCategoryMenu`: fewer rows than this are `DoNthMenu`'s, which
+## wraps and has no arrows; this many is `.beyond_eight`'s `ScrollingMenu`.
 const CATEGORY_MENU_HEIGHT: int = 8
 
 ## `ToggleMaptileDecorations`' four `changeblock` coordinates. The carpet is
@@ -242,9 +242,7 @@ static func categories(data: GameData, state: Gen2WorldState) -> Array:
 
 
 ## `FindOwnedDecosInCategory`: the owned rows in id order, then the category's
-## own PUT IT AWAY, then CANCEL. `PopulateDecoCategoryMenu.beyond_eight` drops
-## that last row once the list is longer than the menu, which is what the
-## ornament category reaches.
+## own PUT IT AWAY, then CANCEL, which `.beyond_eight` makes `ScrollingMenu`'s.
 static func category_rows(
 	data: GameData, state: Gen2WorldState, slot: StringName
 ) -> Array:
@@ -257,13 +255,13 @@ static func category_rows(
 	var header: int = _header_of(data, slot)
 	if header >= 0:
 		out.append({"deco": header, "name": decoration_name(data, header)})
-	## `FindOwnedDecosInCategory` appends CANCEL before anything counts the rows
-	## and `.beyond_eight` takes it back off, so six owned rows are eight and
-	## lose it.
 	out.append({"deco": 0, "name": decoration_name(data, 0)})
-	if out.size() >= CATEGORY_MENU_HEIGHT:
-		out.pop_back()
 	return out
+
+
+## `wNumOwnedDecoCategories` counts CANCEL, so six owned rows already scroll.
+static func category_scrolls(rows: Array) -> bool:
+	return rows.size() >= CATEGORY_MENU_HEIGHT
 
 
 static func _owned_in(

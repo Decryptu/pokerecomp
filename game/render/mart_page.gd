@@ -655,7 +655,8 @@ func _draw_list(indices: PackedByteArray, width: int, state: Dictionary) -> void
 		)
 	if bool(state.get("scrolled", false)):
 		_up(indices, width, Vector2i(LIST_RIGHT, LIST_AT.y))
-	_code(indices, width, DOWN_ARROW_CODE, Vector2i(LIST_RIGHT, LIST_BOTTOM))
+	if bool(state.get("more_below", false)):
+		_code(indices, width, DOWN_ARROW_CODE, Vector2i(LIST_RIGHT, LIST_BOTTOM))
 
 
 func _draw_textbox(indices: PackedByteArray, width: int, text: String) -> void:

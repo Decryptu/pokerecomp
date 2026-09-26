@@ -277,7 +277,7 @@ func _verify_gen1_colosseum() -> void:
 		_gen1_close_screen(screen)
 		return
 	var host: Gen2LinkScreen = screen.get("_link_host")
-	var versus: int = _gen1_drive(screen, func() -> bool: return host.step() == Gen2LinkScreen.STEP.GEN1_VERSUS, PokeButton.NONE)
+	var versus: int = _gen1_drive(screen, func() -> bool: return host.step() == Gen2LinkScreen.STEP.VERSUS, PokeButton.NONE)
 	_r.check(versus == Gen1Layout.CABLE_CLUB_EXCHANGE_FRAMES + Gen1Layout.CABLE_CLUB_CLOSE_FRAMES - 1,
 		"the versus box opened after %d frames" % versus)
 	var wiped: int = _gen1_drive(screen, func() -> bool: return host.step() == Gen2LinkScreen.STEP.GEN1_TRANSITION, PokeButton.NONE)

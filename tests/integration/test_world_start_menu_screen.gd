@@ -1033,6 +1033,20 @@ func test_the_teach_question_is_read_page_by_page_before_its_yes_no() -> void:
 	assert_true(host._question_shown().ends_with("#MON?"), host._question_shown())
 
 
+## `ScrollingMenu_InitFlags` sets no wrap, and the pockets' `STATICMENU_WRAP` is
+## bit 5, `SCROLLINGMENU_ENABLE_FUNCTION3` to a scrolling menu: UP at the top and
+## DOWN on CANCEL both stay put.
+func test_the_pack_list_stops_at_both_ends() -> void:
+	await _open_world()
+	var host: Gen2StartMenuScreen = await _open_pack()
+	var last: int = host._current_pocket_items().size()
+	host.handle_button(PokeButton.UP)
+	assert_eq(host._pack_cursor, 0)
+	for _press: int in last + 2:
+		host.handle_button(PokeButton.DOWN)
+	assert_eq(host._pack_cursor, last, "CANCEL is the bottom")
+
+
 ## `InitPackBuffers` reads `wLastPocket` and each pocket's own saved row, which
 ## outlive the menu that was closed; `DepositSellInitPackBuffers` does not read
 ## the pocket.
@@ -2149,8 +2163,10 @@ func test_the_party_submenu_switch_row_moves_a_member() -> void:
 	party.handle_button(PokeButton.A)
 	assert_same(save.party[0], second, "the two traded places")
 	assert_same(save.party[1], first)
-	## `.ClearSprite` runs once per row, so the effect is asked for twice.
+	## The member, SWITCH and destination clicks; `.ClearSprite` runs once per
+	## row, so the effect is asked for twice.
 	assert_eq(played, [
+		Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_READ_TEXT_2,
 		Gen2Sfx.SFX_SWITCH_POKEMON, Gen2Sfx.SFX_SWITCH_POKEMON,
 	] as Array[int])
 	assert_eq(int(party.submenu_snapshot()["switch_from"]), -1)

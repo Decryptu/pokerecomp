@@ -169,9 +169,7 @@ static func _wild_party(
 	)
 	# LoadEnemyMon's .TreeMon branch: a headbutt encounter whose species is in
 	# CheckSleepingTreeMon's list for the current time of day enters asleep for
-	# TREEMON_SLEEP_TURNS. The caller answers the list question, since only it
-	# knows the time of day and the profile; Gold and Silver never say true,
-	# having neither routine nor data.
+	# TREEMON_SLEEP_TURNS, as any of four on Gold and Silver; the caller answers.
 	if wild_mon != null and bool(values.get("asleep", false)):
 		wild_mon.status = Gen2WorldTreemon.SLEEP_TURNS
 	## `LoadEnemyMon`'s second `BATTLETYPE_ROAMING` branch: a roamer whose struct
