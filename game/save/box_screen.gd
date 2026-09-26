@@ -312,7 +312,10 @@ func handle_button(button: int) -> bool:
 		## Two `DelayFrames`, which read no joypad.
 		return true
 	if _stats != null:
-		return _stats.handle_button(button)
+		var used: bool = _stats.handle_button(button)
+		if _stats != null:
+			_refresh()
+		return used
 	if _release != null:
 		if _release.press_yes_no(button):
 			if _release.just_answered():
@@ -654,43 +657,21 @@ func _draw_menus(indices: PackedByteArray) -> void:
 	)
 
 
-## `StatsScreenInit` over this screen, drawn the way the party menu draws it: the
-## front pic has a palette of its own and is composed on top of the page.
+## `StatsScreenInit` over this screen, composed as the party menu composes it: the
+## page is opaque, so the listing's picture node beneath it is emptied.
 func _refresh_stats() -> void:
 	if _stats_page == null:
 		_stats_page = Gen2StatsScreenPage.from_data(_data)
-	if _stats_page == null:
-		return
-	var snapshot: Dictionary = _stats.snapshot()
-	var image: Image = _stats_page.render(snapshot, _data)
+	var image: Image = Gen2StatsScreenPage.compose(_stats_page, _data, _stats)
 	if image == null:
 		return
 	Gen2PicImage.show(_background, image)
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	if _backdrop != null:
 		_backdrop.color = Color.WHITE
-	_refresh_stats_pic(snapshot)
+	if _pic != null:
+		_pic.texture = null
 	_refresh_cursor(0)
-
-
-## `PrepMonFrontpic`'s cell, the same one [method _refresh_pic] places a listing
-## picture in, at the stats screen's own corner.
-func _refresh_stats_pic(snapshot: Dictionary) -> void:
-	if _pic == null:
-		return
-	_pic.texture = null
-	var species: int = int(snapshot.get("species", 0))
-	if species <= 0 or _data == null:
-		return
-	var art: Image = Gen2StatsScreenPage.pic_image(_data, snapshot, _stats)
-	if art == null:
-		return
-	Gen2PicImage.show(_pic, art)
-	_pic.size = Vector2(art.get_size())
-	_pic.position = Vector2(
-		Vector2i(Gen2StatsScreenPage.pic_position())
-		+ Gen2StatsScreenPage.pic_origin(art.get_size(), snapshot)
-	)
 
 
 ## `_CGB_BillsPC`'s background palette, PREDEFPAL_POKEDEX, which the Pokedex
@@ -952,7 +933,7 @@ func _process(delta: float) -> void:
 	if _stats != null:
 		for _pic_frame: int in frames:
 			_stats.advance_animation()
-		_refresh_stats_pic(_stats.snapshot())
+		_refresh_stats()
 		return
 	if _saving_frames <= 0 and (_release == null or not _release.holding()):
 		set_process(false)

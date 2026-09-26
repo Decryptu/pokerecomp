@@ -1485,8 +1485,9 @@ const STONE_SCRIPT: int = 0x6210
 
 
 ## CmdQueue_StoneTable then HandleStoneQueue, all five tests passing at once: a
-## Strength boulder, standing, on a pit, on a warp, named by a written row.
-func test_a_boulder_pushed_onto_a_stone_table_warp_queues_its_fall_script() -> void:
+## Strength boulder, standing, on a pit, on a warp, named by a written row. The
+## push itself queues nothing: the boulder is not STANDING until its slide ends.
+func test_a_boulder_that_comes_to_rest_on_a_stone_table_warp_runs_its_fall_script() -> void:
 	var world: Gen2WorldAPI = _stone_table_world([
 		{"warp": STONE_WARP, "object": STONE_OBJECT, "script": STONE_SCRIPT},
 	])
@@ -1494,12 +1495,19 @@ func test_a_boulder_pushed_onto_a_stone_table_warp_queues_its_fall_script() -> v
 
 	assert_true(result.has("boulder_pushed"), JSON.stringify(result))
 	assert_eq(result["boulder_pushed"]["to_cell"], Vector2i(6, 6))
-	assert_eq(int(result["boulder_pushed"]["fall_script"]), STONE_SCRIPT)
-	## The row's script is queued, not run behind the caller's back.
-	var pumped: Array = world.run_event_queue(false)
-	assert_eq(pumped.size(), 1)
-	assert_eq(pumped[0]["status"], &"complete")
+	assert_false(world.script_busy(), "a queued script would hold the map through the slide")
+	assert_eq(world.run_command_queues(), [])
+	_settle_boulder(world)
+	var fell: Array = world.run_command_queues()
+	assert_eq(fell.size(), 1)
+	assert_eq(fell[0]["status"], &"complete")
 	assert_true(world.event_flag_active(24))
+
+
+func _settle_boulder(world: Gen2WorldAPI) -> void:
+	var random := RandomNumberGenerator.new()
+	for _step: int in Gen2WorldAPI.STEP_PASSES_BOULDER_PUSH:
+		world.advance_object_steps_pass(random)
 
 
 ## The warp id is matched, not merely the fact of a warp: a row naming a
@@ -1508,9 +1516,9 @@ func test_a_stone_table_row_for_another_warp_does_not_fire() -> void:
 	var world: Gen2WorldAPI = _stone_table_world([
 		{"warp": STONE_WARP + 1, "object": STONE_OBJECT, "script": STONE_SCRIPT},
 	])
-	var result: Dictionary = world.move_result(Vector2i.DOWN)
-	assert_true(result.has("boulder_pushed"))
-	assert_false(result["boulder_pushed"].has("fall_script"), JSON.stringify(result))
+	assert_true(world.move_result(Vector2i.DOWN).has("boulder_pushed"))
+	_settle_boulder(world)
+	assert_eq(world.run_command_queues(), [])
 
 
 ## And so is the object id, which is an object_const_def constant and so two
@@ -1519,9 +1527,9 @@ func test_a_stone_table_row_for_another_boulder_does_not_fire() -> void:
 	var world: Gen2WorldAPI = _stone_table_world([
 		{"warp": STONE_WARP, "object": STONE_OBJECT + 1, "script": STONE_SCRIPT},
 	])
-	var result: Dictionary = world.move_result(Vector2i.DOWN)
-	assert_true(result.has("boulder_pushed"))
-	assert_false(result["boulder_pushed"].has("fall_script"), JSON.stringify(result))
+	assert_true(world.move_result(Vector2i.DOWN).has("boulder_pushed"))
+	_settle_boulder(world)
+	assert_eq(world.run_command_queues(), [])
 
 
 ## A boulder pushed onto ordinary floor is not on a warp at all, so the queue
@@ -1530,9 +1538,9 @@ func test_a_boulder_pushed_onto_open_floor_fires_no_stone_table() -> void:
 	var world: Gen2WorldAPI = _stone_table_world([
 		{"warp": STONE_WARP, "object": STONE_OBJECT, "script": STONE_SCRIPT},
 	], BOULDER_CELL)
-	var result: Dictionary = world.move_result(Vector2i.DOWN)
-	assert_true(result.has("boulder_pushed"))
-	assert_false(result["boulder_pushed"].has("fall_script"), JSON.stringify(result))
+	assert_true(world.move_result(Vector2i.DOWN).has("boulder_pushed"))
+	_settle_boulder(world)
+	assert_eq(world.run_command_queues(), [])
 
 
 ## HandleNewMap falls into HandleContinueMap, whose ClearCmdQueue empties the
@@ -1606,9 +1614,9 @@ func test_delcmdqueue_matches_a_type_and_answers_false_when_it_deletes() -> void
 func test_no_stone_table_fires_without_a_written_queue() -> void:
 	var world: Gen2WorldAPI = _boulder_world(Vector2i(6, 4), Vector2i(6, 5))
 	assert_true(world.command_queues().is_empty())
-	var result: Dictionary = world.move_result(Vector2i.DOWN)
-	assert_true(result.has("boulder_pushed"))
-	assert_false(result["boulder_pushed"].has("fall_script"))
+	assert_true(world.move_result(Vector2i.DOWN).has("boulder_pushed"))
+	_settle_boulder(world)
+	assert_eq(world.run_command_queues(), [])
 
 
 ## The one-based index .check_on_warp counts, and zero for a cell with no warp.
@@ -1619,13 +1627,20 @@ func test_warp_index_is_one_based_and_zero_off_a_warp() -> void:
 
 
 ## A boulder already sliding is not STANDING, which is .CheckStrengthBoulder's
-## second test, so a second press does not chain it another cell.
-func test_strength_push_refuses_a_boulder_already_mid_push() -> void:
+## second test, so a second press does not chain it another cell. Nor does it
+## walk the player in behind it: `IsNPCAtCoord` still finds the boulder on the
+## cell it is leaving until the slide ends.
+func test_a_sliding_boulder_is_neither_pushed_again_nor_walked_into() -> void:
 	var world: Gen2WorldAPI = _boulder_world(BOULDER_STAND, BOULDER_CELL)
 	assert_true(world.move_result(Vector2i.DOWN).has("boulder_pushed"))
 	var again: Dictionary = world.move_result(Vector2i.DOWN)
 	assert_false(again.has("boulder_pushed"), JSON.stringify(again))
+	assert_false(bool(again["ok"]), JSON.stringify(again))
+	assert_eq(world.player_cell, BOULDER_STAND)
 	assert_eq(_boulder_at(world, BOULDER_LANDING).cell, BOULDER_LANDING)
+	_settle_boulder(world)
+	assert_true(bool(world.move_result(Vector2i.DOWN)["ok"]))
+	assert_eq(world.player_cell, BOULDER_CELL)
 
 
 ## .TrySurf calls the same .CheckNPC and .CheckStrengthBoulder checks no player
