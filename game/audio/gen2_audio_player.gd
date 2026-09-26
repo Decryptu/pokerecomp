@@ -99,7 +99,26 @@ func _init() -> void:
 	_buffer.resize(PokeApu.SAMPLES_PER_FRAME)
 
 
+## `LowVolume`'s `$33`; Generation 1 writes the same byte to `rAUDVOL` itself.
+const LOW_VOLUME: int = 0x33
+static var _current: Gen2AudioPlayer = null
+
+
+## `LowVolume` or `MaxVolume` on whichever player is up.
+static func hold_low_volume(low: bool) -> void:
+	if _current != null:
+		_current.set_master_volume(LOW_VOLUME if low else Gen2SoundEngine.MAX_VOLUME)
+
+
+func set_master_volume(level: int) -> void:
+	if _generation == RomRegistry.GEN1:
+		_apu.write(Gen1SoundEngine.RAUDVOL, level)
+	else:
+		_engine.volume = level
+
+
 func _ready() -> void:
+	_current = self
 	stereo = Gen2OptionsStore.current().stereo
 	_apply_settings()
 	_start_stream()
@@ -589,6 +608,8 @@ func audio_status() -> Dictionary:
 
 
 func _exit_tree() -> void:
+	if _current == self:
+		_current = null
 	stop_all()
 	# Stopping the player is not enough to let go of its playback: the audio
 	# server holds one per stream, and only taking the stream off the player

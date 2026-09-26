@@ -3423,6 +3423,8 @@ func _open_mail_attach() -> void:
 	host.set_screen(_service_hardware)
 	## Before the tree: a screen told it is embedded afterwards has already put
 	## up the focus ring that swallows the arrows this screen routes.
+	if _world != null:
+		host.share_cursor(_world.party_menu_cursor)
 	host.set_context(_data, _save, true)
 	add_child(host)
 	host.selection_made.connect(_on_mail_attach_selected)

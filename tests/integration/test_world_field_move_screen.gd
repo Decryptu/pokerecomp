@@ -271,7 +271,11 @@ func _open_party() -> Gen2PartyScreen:
 
 ## The text box holds its message as wrapped lines, so the assertions below
 ## rejoin them rather than depending on where the wrap lands.
+## A refused move's `MenuTextboxBackup` stands over the party list it came from.
 func _shown_text() -> String:
+	var party: Gen2PartyScreen = _world_screen._party_host
+	if party != null and not String(party.submenu_snapshot()["message"]).is_empty():
+		return String(party.submenu_snapshot()["message"]).replace("\n", " ")
 	return " ".join(_world_screen._text_box.text_lines())
 
 
@@ -380,7 +384,7 @@ func test_cut_without_the_badge_reports_the_badge_and_changes_nothing() -> void:
 	party.handle_button(PokeButton.A)
 	await get_tree().process_frame
 
-	assert_true(_world_screen._field_move_text)
+	assert_false(_world_screen._field_move_text, "nothing over the map")
 	assert_eq(_shown_text(), "Sorry! A new BADGE is required.")
 	_world_screen._acknowledge_field_move_text()
 	assert_eq(world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE)
@@ -1152,12 +1156,56 @@ func test_a_refusal_holds_the_menu_until_a_or_b() -> void:
 	## `.cant_use`: a member cannot give its own health to itself.
 	party.handle_button(PokeButton.A)
 	var refused: Dictionary = party.submenu_snapshot()
-	assert_eq(String(refused["message"]), Gen2PartyScreen.MESSAGE_NO_EFFECT)
+	assert_eq(String(refused["message"]), Gen2PartyScreen.MESSAGE_CANT_USE_ON_MON)
 	assert_false(party.handle_button(PokeButton.DOWN), "a direction is not one of the two")
 	assert_eq(int(party.submenu_snapshot()["member"]), int(refused["member"]))
 	assert_true(party.handle_button(PokeButton.B))
 	assert_eq(String(party.submenu_snapshot()["message"]), "")
 	assert_not_null(_world_screen._party_host, "and the party menu is still up")
+
+
+## `Softboiled_MilkDrinkFunction` once a recipient is chosen: both bars move over
+## the party list, `_RecoveredSomeHPText` is said there, and `.skip` puts the
+## list back on the user rather than on the recipient or over the map.
+func test_softboiled_moves_health_over_the_party_list() -> void:
+	await _open_world(true, Gen2WorldFieldMove.MOVE_SOFTBOILED)
+	var save: Gen2SaveData = _world_screen._embedded_party_save()
+	(save.party[1] as Gen2SaveMon).hp = 1
+	var party: Gen2PartyScreen = await _open_party()
+	party.handle_button(PokeButton.A)
+	party.handle_button(PokeButton.A)
+	party.handle_button(PokeButton.DOWN)
+	party.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	party = _world_screen._party_host
+	assert_not_null(party, "the list stands")
+	assert_false(_world_screen._field_move_text, "nothing is said over the map")
+	assert_true(await _settle(func() -> bool:
+		return String(party.submenu_snapshot()["message"]) != ""))
+	var restored: int = (save.party[1] as Gen2SaveMon).hp - 1
+	assert_eq(String(party.submenu_snapshot()["message"]), Gen2ItemActionText.text(
+		Gen2ItemActionText.HEAL, Gen2SaveMon.display_name(save.party[1], _data),
+		{"healed": restored}, false
+	))
+	party.handle_button(PokeButton.A)
+	assert_eq(int(party.submenu_snapshot()["member"]), 0, "back on the user")
+
+
+## `wPartyMenuCursor`: the list reopens on the member last answered with A or B,
+## and a press on CANCEL is not stored.
+func test_the_party_list_reopens_on_the_member_last_chosen() -> void:
+	await _open_world()
+	var party: Gen2PartyScreen = await _open_party()
+	party.handle_button(PokeButton.DOWN)
+	party.handle_button(PokeButton.A)
+	party.handle_button(PokeButton.B)
+	while not bool(party.submenu_snapshot()["on_cancel"]):
+		party.handle_button(PokeButton.DOWN)
+	party.handle_button(PokeButton.B)
+	await get_tree().process_frame
+	assert_null(_world_screen._party_host)
+	party = await _open_party()
+	assert_eq(int(party.submenu_snapshot()["member"]), 1)
 
 
 ## A mod's party-member rows land after every cartridge action and before CANCEL,

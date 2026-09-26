@@ -5,7 +5,8 @@ extends GutTest
 ## content is needed to test the atomic host boundary.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
-const TACKLE: int = preload("res://tests/unit/battle_fixture.gd").TACKLE
+const BattleFixture := preload("res://tests/unit/battle_fixture.gd")
+const TACKLE: int = BattleFixture.TACKLE
 
 var _data: GameData = null
 var _world: Gen2WorldAPI = null
@@ -570,6 +571,43 @@ func test_a_rare_candy_adds_one_level_and_the_maximum_it_brought_with_it() -> vo
 		)
 	)
 	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_RARE_CANDY), 0)
+
+
+## `LevelUpHappinessMod` compares the caught landmark with the map the player
+## stands on, so a Crystal candy used where the Pokemon was caught pays the
+## at-home row: 10 below 100 where a level elsewhere pays 5.
+func test_a_rare_candy_used_where_it_was_caught_pays_the_at_home_happiness() -> void:
+	_world.state.apply_changes({}, {}, {"items": {Gen2WorldPartyHost.ITEM_RARE_CANDY: 2}})
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.happiness = 70
+	mon.caught_location = _world.landmark() + 1
+	assert_true(bool(Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_RARE_CANDY, 0, false
+	)["ok"]))
+	assert_eq(_save.party[0].happiness, 75, "a level anywhere else")
+	_save.party[0].caught_location = _world.landmark()
+	assert_true(bool(Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_RARE_CANDY, 0, false
+	)["ok"]))
+	assert_eq(_save.party[0].happiness, 85, "and one at home")
+
+
+## `RareCandyEffect`'s `LearnLevelMoves` runs every move through `LearnMove`,
+## whose own line says an empty slot took it; nothing is written unasked.
+func test_a_rare_candy_hands_the_level_moves_to_learn_move() -> void:
+	_world.state.apply_changes({}, {}, {"items": {Gen2WorldPartyHost.ITEM_RARE_CANDY: 1}})
+	## The fixture's CHARMANDER learns EMBER at 6.
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.species = BattleFixture.CHARMANDER
+	mon.level = 5
+	mon.exp = Gen2Experience.total_exp_at(Gen2Experience.GROWTH_MEDIUM_SLOW, 5)
+	mon.moves = [TACKLE, 0, 0, 0]
+	var result: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_RARE_CANDY, 0, false
+	)
+	assert_true(bool(result["ok"]), JSON.stringify(result))
+	assert_eq(result["move_offers"], [BattleFixture.EMBER], "the level owes a move")
+	assert_eq(_save.party[0].moves, [TACKLE, 0, 0, 0], "and it is not written yet")
 
 
 ## `cp MAX_LEVEL / jp nc, NoEffectMessage`: a refusal, so the candy is kept.
@@ -1307,16 +1345,13 @@ func test_master_ball_captures_a_wild_mon_and_records_catch_metadata() -> void:
 
 ## `PokeBallEffect` pushes `wEnemyMonStatus` and `wEnemyMonHP` in front of
 ## `LoadEnemyMon` and writes them back after it, so a Pokemon caught at three HP
-## and asleep joins the party at three HP and asleep. Everything else about the
-## row is `GeneratePartyMonStats`': the trainer ID is the player's rather than a
-## rolled one, the PP is full because `FillPP` ran over whatever the fight had
-## drained, the stat experience is zero and the experience is the minimum for the
-## level.
+## and asleep joins the party at three HP and asleep. `.caught` copies
+## `wWildMonPP` back too, and `GeneratePartyMonStats`' `.copywildmonDVs` stores
+## it, so the PP the fight drained stays drained. The rest is its own: the
+## player's trainer ID, no stat experience and the level's minimum experience.
 func test_a_caught_pokemon_keeps_its_health_and_its_status() -> void:
 	_save.player_id = 0x1234
-	var wild: Gen2BattleMon = Gen2BattleMon.create(
-		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
-	)
+	var wild: Gen2BattleMon = Gen2BattleMon.create(_data, 25, 5, [TACKLE], 0x1234)
 	wild.hp = 3
 	wild.status = Gen2Status.SLEEP_MASK & 2
 	wild.stat_exp["attack"] = 5000
@@ -1334,13 +1369,31 @@ func test_a_caught_pokemon_keeps_its_health_and_its_status() -> void:
 	assert_eq(caught.exp, Gen2Experience.total_exp_at(
 		int(_data.species(25).get("growth_rate", 0)), 5
 	))
-	for slot: int in Gen2SaveMon.MAX_MOVES:
-		var move: int = int(caught.moves[slot])
-		assert_eq(
-			int(caught.pp[slot]),
-			int(_data.move(move).get("pp", 0)) if move > 0 else 0,
-			"FillPP fills every slot"
-		)
+	assert_eq(int(caught.pp[0]), 0, "the PP the fight spent")
+
+
+## A wild Ditto that has used Transform: the catch rate is `LoadEnemyMon`'s and
+## `.caught` reloads it from its own record, so it is a DITTO that joins, named
+## DITTO, with Transform at full PP rather than the copy it fought with.
+func test_a_transformed_ditto_is_caught_as_itself() -> void:
+	var ditto: int = BattleFixture.DITTO
+	var wild: Gen2BattleMon = Gen2BattleMon.create(_data, ditto, 5, [BattleFixture.TRANSFORM], 0x1234)
+	wild.pp[0] = 1
+	var target: Gen2BattleMon = Gen2BattleMon.create(_data, 25, 5, _data.moves_at_level(25, 5), 0x4321)
+	assert_true(wild.transform_into(target))
+	wild.substatus |= Gen2Substatus.TRANSFORMED
+	var result: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x01, _random, 42, false
+	)
+	assert_true(bool(result["caught"]))
+	assert_eq(int(result["species"]), ditto)
+	var caught: Gen2SaveMon = _save.party[2]
+	assert_eq(caught.species, ditto)
+	assert_eq(caught.nickname, String(_data.species(ditto).get("name", "")))
+	assert_eq(int(caught.moves[0]), BattleFixture.TRANSFORM)
+	assert_eq(int(caught.pp[0]), caught.max_pp(_data, 0), "LoadEnemyMon's full PP")
+	assert_true(_world.state.has_caught_species(ditto))
+	assert_false(_world.state.has_caught_species(25), "not the species it copied")
 
 
 ## `.SkipPartyMonFriendBall`: the one thing a FRIEND_BALL does, and the one ball
@@ -1538,14 +1591,15 @@ func test_a_full_party_catch_goes_to_the_front_of_the_open_box() -> void:
 	_save.current_box = 2
 	var resident: Gen2SaveMon = Gen2SaveMon.from_dict(_save.party[0].to_dict())
 	(_save.boxes[2] as Gen2SaveBox).put(resident)
-	var wild: Gen2BattleMon = Gen2BattleMon.create(
-		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
-	)
+	var wild: Gen2BattleMon = Gen2BattleMon.create(_data, 25, 5, [TACKLE], 0x1234)
+	wild.pp[0] = 0
 	var caught: Dictionary = Gen2WorldPartyHost.capture_wild(
 		_world, _save, wild, 0x01, _random, 42, false
 	)
 	assert_true(bool(caught["caught"]))
 	assert_eq(int(caught["destination"]["box"]), 2, "the box the player has open")
+	var boxed: Gen2SaveMon = (_save.boxes[2] as Gen2SaveBox).slots[0]
+	assert_eq(int(boxed.pp[0]), boxed.max_pp(_data, 0), "`SendMonIntoBox` restores the PP")
 	assert_eq(int(caught["destination"]["slot"]), 0)
 	assert_eq((_save.boxes[2] as Gen2SaveBox).slots[0].species, 25)
 	assert_eq(

@@ -660,9 +660,8 @@ var enemy_hp_at_switch: int = 0
 
 var parties: Dictionary = {}  ## The two sides, keyed by [constant PLAYER] and [constant ENEMY].
 
-## Which party indices have fought since the current opponent came in, a
-## Dictionary used for its keys: seeded at [method create_parties], added to on
-## every [method send_out], reset once experience is awarded.
+## `wBattleParticipantsIncludingFainted` as keys, `...NotFainted` as values: a
+## faint clears only the value.
 var _participants: Dictionary = {PLAYER: {}, ENEMY: {}}
 
 ## Which of the player's Pokemon have been charged `UpdateFaintedPlayerMon`'s
@@ -2744,9 +2743,9 @@ func _award_experience(events: Array, since: int) -> int:
 			continue
 		var side: int = int(event["side"])
 		if bool(event.get("pursuit", false)):
-			(_participants[side] as Dictionary).erase(int(event["index"]))
+			(_participants[side] as Dictionary)[int(event["index"])] = false
 			continue
-		(_participants[side] as Dictionary).erase(party(side).active)
+		(_participants[side] as Dictionary)[party(side).active] = false
 		if side == ENEMY:
 			if not is_trainer_battle and not party(PLAYER).is_wiped():
 				events.append({"type": VICTORY_MUSIC, "silent": not is_gen1() \
@@ -2759,15 +2758,17 @@ func _award_experience(events: Array, since: int) -> int:
 
 
 func _standing_participants() -> Array:
-	return (_participants[PLAYER] as Dictionary).keys().filter(
-		func(index: int) -> bool: return not party(PLAYER).at(index).is_fainted()
+	var fought: Dictionary = _participants[PLAYER]
+	return fought.keys().filter(
+		func(index: int) -> bool: return fought[index] and not party(PLAYER).at(index).is_fainted()
 	)
 
 
 ## Splits what [param defeated] is worth, then resets the participant set. With
 ## an Exp. Share out the block is halved and split twice, a Pokémon in both paid twice.
 func _give_experience_for(defeated: Gen2BattleMon, events: Array) -> void:
-	var participants: Array = (_participants[PLAYER] as Dictionary).keys()
+	var fought: Dictionary = _participants[PLAYER]
+	var participants: Array = fought.keys().filter(func(index: int) -> bool: return fought[index])
 	var holders: Array = _exp_share_holders()
 	var living: Array = _living_party_indices()
 	## Neither later generation halves, so a claimed share suppresses the halving.
@@ -2948,21 +2949,22 @@ func use_bag_item(item: int, target_index: int = -1, move_slot: int = -1) -> Dic
 		return _item_failure(&"item_not_usable_here")
 	var roles: Dictionary = Gen2WorldPartyHost.item_effects(data)
 	if item == int(roles["poke_doll"]):
-		## `PokeDollEffect` and `ItemUsePokeDoll` alike: `wForcedSwitch` and a
-		## DRAW, which is [method force_out] with nobody blown out by a move.
+		## `PokeDollEffect` and `ItemUsePokeDoll`: a DRAW in the wild, `.Oak` otherwise.
 		if is_trainer_battle:
-			return _item_failure(&"item_has_no_effect")
+			return _item_failure(&"item_not_usable_here")
 		force_out(PLAYER)
 		return {"ok": true, "kind": &"fled", "item": item}
 	if item == int(roles["poke_flute"]):
 		return _play_poke_flute(item)
 	if (roles["x_stat"] as Dictionary).has(item) \
 		or (roles["x_substatus"] as Dictionary).has(item):
-		(party_log["x_items"] as Array).append(party(PLAYER).active)
-		var applied: Dictionary = _apply_active_item(mon(PLAYER), item)
-		if not bool(applied.get("ok", false)):
-			return _item_failure(StringName(applied.get("reason", &"item_has_no_effect")))
-		return {"ok": true, "kind": &"active_item", "item": item, "effect": applied}
+		return _use_active_item(item)
+	if item == int(roles["confusion_cure"]):
+		var cured: Dictionary = _cure_confusion()
+		if not bool(cured.get("ok", false)):
+			return _item_failure(&"item_has_no_effect")
+		return {"ok": true, "kind": &"active_item", "item": item, "effect": cured,
+			"events": [stamp_statuses({"type": SNAPPED_OUT, "side": PLAYER})]}
 	var target: Gen2BattleMon = party(PLAYER).at(target_index)
 	if target == null:
 		return _item_failure(&"party_member_required")
@@ -2971,9 +2973,8 @@ func use_bag_item(item: int, target_index: int = -1, move_slot: int = -1) -> Dic
 	)
 	if not bool(result.get("ok", false)):
 		return _item_failure(StringName(result.get("reason", &"item_has_no_effect")))
-	## `RevivePokemon`'s own `wBattleParticipantsNotFainted` write: a revived
-	## Pokemon that had already taken part shares the experience again.
-	if bool(result.get("revived", false)):
+	## `RevivePokemon` restores only a participant that had fought this opponent.
+	if bool(result.get("revived", false)) and (_participants[PLAYER] as Dictionary).has(target_index):
 		(_participants[PLAYER] as Dictionary)[target_index] = true
 	return {
 		"ok": true, "kind": &"party_item", "item": item,
@@ -3006,14 +3007,41 @@ func _wake_up(sleeper: Gen2BattleMon) -> int:
 	return 1
 
 
-## `XItemEffect`, `GuardSpecEffect` and `DireHitEffect`, on whoever is out rather
-## than a party member, each refusing a capped stage or a set flag with
-## `WontHaveAnyEffect_NotUsedMessage`.
-## `AIIncreaseStat` reaches the same routine for the enemy.
+## `XItemEffect`'s `UseItemText` spends the item before `RaiseStat` can fail, and
+## `HAPPINESS_USEDXITEM` is charged either way.
+func _use_active_item(item: int) -> Dictionary:
+	var user: Gen2BattleMon = mon(PLAYER)
+	var applied: Dictionary = _apply_active_item(user, item)
+	if not bool(applied.get("ok", false)):
+		return _item_failure(StringName(applied.get("reason", &"item_has_no_effect")))
+	(party_log["x_items"] as Array).append(party(PLAYER).active)
+	var used: Dictionary = {"ok": true, "kind": &"active_item", "item": item, "effect": applied}
+	if not applied.has("stat"):
+		return used
+	user.happiness = Gen2WorldPartyHost.change_happiness(data, user.happiness, HAPPINESS_USEDXITEM)
+	var moved: bool = bool(applied["moved"])
+	var events: Array = []
+	## `ItemUseXStat` points `wPlayerMoveNum` at XSTATITEM_ANIM for `UpdateStatDone`.
+	if moved and is_gen1():
+		events.append(stamp_statuses({
+			"type": ANIMATION, "side": PLAYER, "index": Gen1Layout.ANIM_ID_XSTATITEM[0],
+			"param": 0, "after_anim": Gen2BattleAnimPlayer.AFTER_ANIM_NONE,
+			"enemy_turn": false, "restore_user_pic": false, "off_field": off_field(),
+		}))
+	events.append(stamp_statuses({
+		"type": STAT_CHANGED if moved else STAT_CHANGE_FAILED, "side": PLAYER,
+		"target": PLAYER, "stat": String(applied["stat"]), "by": 1,
+	}))
+	used["events"] = events
+	return used
+
+
+## `AIIncreaseStat` reaches the same routine for Generation 1's enemy.
 func apply_x_item(user: Gen2BattleMon, item: int) -> Dictionary:
 	return _apply_active_item(user, item)
 
 
+## Generation 1's three flag items set their bit without testing it.
 func _apply_active_item(user: Gen2BattleMon, item: int) -> Dictionary:
 	if user == null or user.is_fainted():
 		return {"ok": false, "reason": &"item_has_no_effect"}
@@ -3021,20 +3049,16 @@ func _apply_active_item(user: Gen2BattleMon, item: int) -> Dictionary:
 	var substatuses: Dictionary = roles["x_substatus"]
 	if substatuses.has(item):
 		var flag: int = int(substatuses[item])
-		if Gen2Substatus.has(user.substatus, flag):
+		if Gen2Substatus.has(user.substatus, flag) and not is_gen1():
 			return {"ok": false, "reason": &"item_has_no_effect"}
 		user.substatus |= flag
 		return {"ok": true, "substatus": flag}
 	var stat: String = String((roles["x_stat"] as Dictionary)[item])
-	if user.stage(stat) >= Gen2Stats.MAX_STAGE:
-		return {"ok": false, "reason": &"item_has_no_effect"}
 	var moved: bool = user.change_stage(stat, 1)
-	# `ItemUseXStat` and `AIIncreaseStat` both run `StatModifierUpEffect` on the
-	# user's own turn, tail included.
 	if moved and is_gen1():
 		var side: int = PLAYER if user == mon(PLAYER) else ENEMY
 		gen1_stat_moved(side, stat, side)
-	return {"ok": true, "stat": stat, "stages": 1}
+	return {"ok": true, "stat": stat, "moved": moved}
 
 
 ## `UpdateStatDone`'s tail for a stage moved outside a move: the stat
@@ -3050,8 +3074,8 @@ func gen1_stat_moved(side: int, stat: String, user: int) -> void:
 
 
 ## The ITEMMENU_PARTY half in the source's refusal order: a fainted target takes
-## only a revive and a revive only a fainted one. [param active] decides the two a
-## benched member cannot have, the confusion cure and Full Restore's.
+## only a revive or a PP item, and a revive only a fainted one. [param active]
+## decides what `IsItemUsedOnBattleMon` gates.
 func _apply_party_item(
 	target: Gen2BattleMon, item: int, definition: Dictionary,
 	move_slot: int, active: bool
@@ -3063,44 +3087,56 @@ func _apply_party_item(
 			return {"ok": false, "reason": &"item_has_no_effect"}
 		target.hp = maxi(target.max_hp() / 2, 1) if bool(revives[item]) else target.max_hp()
 		_faint_charged.erase(target.get_instance_id())
-		return {"ok": true, "revived": true, "healed": target.hp}
-	if item == int(roles["confusion_cure"]):
-		return _cure_confusion()
+		return _with_bitterness(target, item, {"ok": true, "revived": true, "healed": target.hp})
+	if (roles["pp_restore"] as Dictionary).has(item):
+		return _restore_pp(target, item, move_slot, active)
 	if target.is_fainted():
 		return {"ok": false, "reason": &"item_has_no_effect"}
-	if (roles["pp_restore"] as Dictionary).has(item):
-		return _restore_pp(target, item, move_slot)
 	var healed: int = 0
 	var heal_amount: int = int(definition.get("heal_amount", 0))
 	if heal_amount > 0:
 		healed = target.heal(
 			target.max_hp() if heal_amount >= Gen2Stats.MAX_STAT_VALUE else heal_amount
 		)
-	## `UseStatusHealer`: the mask decides, and only a `%11111111` one reaches
-	## `IsItemUsedOnConfusedMon`, which needs the target to be the one out.
 	var mask: int = int(definition.get("status_mask", 0))
 	var cured: int = target.status & mask
+	## `IsItemUsedOnConfusedMon`; Generation 1's Full Heal reads the status byte alone.
+	var unconfused: bool = mask == 0xFF and active and not is_gen1() \
+		and Gen2Substatus.has(target.substatus, Gen2Substatus.CONFUSED)
+	if healed <= 0 and cured == 0 and not unconfused:
+		return {"ok": false, "reason": &"item_has_no_effect"}
 	if cured != 0:
 		target.status = Gen2Status.NONE
 		target.toxic_counter = 0
 		target.release_stats()
-		if active: # `HealStatus` runs behind `IsItemUsedOnBattleMon`.
-			target.substatus &= ~Gen2Substatus.NIGHTMARE
-	var unconfused: bool = mask == 0xFF and active \
-		and Gen2Substatus.has(target.substatus, Gen2Substatus.CONFUSED)
-	if unconfused:
+	if active and mask != 0 and not is_gen1():
+		_heal_status(target, mask)
+	return _with_bitterness(target, item, {
+		"ok": true, "healed": healed, "status_cleared": cured, "unconfused": unconfused,
+	})
+
+
+## `HealStatus`: `CalcPlayerStats` runs whether or not a status was cleared.
+func _heal_status(target: Gen2BattleMon, mask: int) -> void:
+	target.toxic_counter = 0
+	target.substatus &= ~Gen2Substatus.NIGHTMARE
+	if mask == 0xFF:
 		target.substatus &= ~Gen2Substatus.CONFUSED
 		target.confusion_turns = 0
-	if healed <= 0 and cured == 0 and not unconfused:
-		return {"ok": false, "reason": &"item_has_no_effect"}
-	return {
-		"ok": true, "healed": healed, "status_cleared": cured, "unconfused": unconfused,
-	}
+	target.release_stats()
 
 
-## `BitterBerryEffect` reads `wPlayerSubStatus3` rather than the row
-## `UseItem_SelectMon` chose, so whoever is out is unconfused whichever member
-## the list picked.
+## `LooksBitterMessage`'s `ChangeHappiness`, on whichever branch spent the item.
+func _with_bitterness(target: Gen2BattleMon, item: int, effect: Dictionary) -> Dictionary:
+	if Gen2WorldPartyHost.BITTER_ITEMS.has(item):
+		target.happiness = Gen2WorldPartyHost.change_happiness(
+			data, target.happiness, int(Gen2WorldPartyHost.BITTER_ITEMS[item])
+		)
+		effect["bitter"] = true
+	return effect
+
+
+## `BitterBerryEffect` asks for no target: it reads `wPlayerSubStatus3`.
 func _cure_confusion() -> Dictionary:
 	var user: Gen2BattleMon = mon(PLAYER)
 	if user == null or not Gen2Substatus.has(user.substatus, Gen2Substatus.CONFUSED):
@@ -3118,27 +3154,26 @@ static func asks_for_move_slot(item_data: GameData, item: int) -> bool:
 	return rows.has(item) and not bool(rows[item])
 
 
-## `RestorePPEffect`: the Elixers fill every slot and the Ethers one, which is
-## the slot `.loop` asks for. Nothing is spent on a moveset already full.
-func _restore_pp(target: Gen2BattleMon, item: int, move_slot: int) -> Dictionary:
-	var roles: Dictionary = Gen2WorldPartyHost.item_effects(data)
-	var amount: int = int((roles["pp_steps"] as Dictionary).get(item, 0))
-	var slots: Array[int] = []
-	if bool((roles["pp_restore"] as Dictionary)[item]):
-		for slot: int in target.moves.size():
-			slots.append(slot)
-	elif move_slot >= 0 and move_slot < target.moves.size():
-		slots.append(move_slot)
+## `RestorePP` fills the party struct, which `BattleRestorePP` copies only into a
+## matching slot of the one out; Generation 1 copies all four.
+func _restore_pp(target: Gen2BattleMon, item: int, move_slot: int, active: bool) -> Dictionary:
+	var every: bool = bool((Gen2WorldPartyHost.item_effects(data)["pp_restore"] as Dictionary)[item])
 	var restored: int = 0
-	for slot: int in slots:
-		if int(target.moves[slot]) <= 0:
+	for slot: int in target.moves.size():
+		var move: int = target.persistent_move(slot)
+		if move <= 0 or (not every and slot != move_slot):
 			continue
-		var full: int = target.max_pp(slot)
-		var target_pp: int = full if amount <= 0 else mini(full, target.pp_left(slot) + amount)
-		restored += maxi(0, target_pp - target.pp_left(slot))
-		target.pp[slot] = target_pp
+		var next: int = Gen2WorldPartyHost.pp_after_item(
+			data, item, move, target.persistent_pp(slot), target.persistent_pp_ups(slot)
+		)
+		if next >= 0:
+			target.set_persistent_pp(slot, next)
+			restored += 1
 	if restored <= 0:
 		return {"ok": false, "reason": &"item_has_no_effect"}
+	if active and is_gen1():
+		for slot: int in target.moves.size():
+			target.pp[slot] = target.persistent_pp(slot)
 	return {"ok": true, "pp_restored": restored}
 
 
@@ -3224,14 +3259,18 @@ func _raise_levels(learner: Gen2BattleMon, index: int, events: Array) -> void:
 		_offer_moves_learned_at(learner, index, level, events)
 
 
-## `LevelUpHappinessMod`: HAPPINESS_GAINLEVELATHOME on the landmark it was
-## caught on, Crystal alone; Gold and Silver inline HAPPINESS_GAINLEVEL.
 func _gain_level_happiness(learner: Gen2BattleMon) -> void:
-	var kind: int = HAPPINESS_GAINLEVEL
-	if Gen2WorldState.is_crystal_profile(data) and landmark != LANDMARK_NONE \
-			and learner.caught_location == landmark:
-		kind = HAPPINESS_GAINLEVELATHOME
-	learner.happiness = Gen2WorldPartyHost.change_happiness(data, learner.happiness, kind)
+	learner.happiness = Gen2WorldPartyHost.change_happiness(
+		data, learner.happiness, level_up_happiness(data, learner.caught_location, landmark)
+	)
+
+
+## `LevelUpHappinessMod` compares the map the player is on, Crystal alone; Gold
+## and Silver inline HAPPINESS_GAINLEVEL.
+static func level_up_happiness(game: GameData, caught_location: int, here: int) -> int:
+	if Gen2WorldState.is_crystal_profile(game) and here != LANDMARK_NONE and caught_location == here:
+		return HAPPINESS_GAINLEVELATHOME
+	return HAPPINESS_GAINLEVEL
 
 
 ## What [param learner] is taught at exactly [param level]: into an empty slot
@@ -3603,6 +3642,7 @@ const MUSIC_TRAINER_VICTORY: int = 0x11
 const MUSIC_WILD_VICTORY: int = 0x12
 const MUSIC_GYM_VICTORY: int = 0x13
 const MUSIC_JOHTO_WILD_BATTLE_NIGHT: int = 0x4A
+const MUSIC_CAPTURE: int = 0x4C  ## `Text_GotchaMonWasCaught`'s.
 const MUSIC_SUICUNE_BATTLE: int = 0x64
 
 ## constants/trainer_constants.asm. The `trainerclass` indexes agree byte for
@@ -3638,6 +3678,7 @@ const LANDMARK_NONE: int = -1
 ## front of it: their `.skip_active_mon_update` passes HAPPINESS_GAINLEVEL flat.
 const HAPPINESS_GAINLEVEL: int = 0x01
 const HAPPINESS_USEDITEM: int = 0x02
+const HAPPINESS_USEDXITEM: int = 0x03
 const HAPPINESS_GYMBATTLE: int = 0x04
 const HAPPINESS_FAINTED: int = 0x06
 const HAPPINESS_POISONFAINT: int = 0x07

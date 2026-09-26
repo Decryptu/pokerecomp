@@ -405,10 +405,10 @@ var _box_queue: Array[String] = []
 ## before the nickname prompt opens.
 var _capture_caught_event: Dictionary = {}
 var _capture_terminal: bool = false
-## Whether `DisplayAlreadyCaughtText` has been said for this throw. The line
-## comes once, before the switch question, and the question is asked again on
-## every pump until it is answered.
-var _contest_already_caught_said: bool = false
+## `.firstcatch`'s line or `DisplayAlreadyCaughtText`, said once a throw.
+var _contest_line_said: bool = false
+## The Gotcha line, whose `sound_caught_mon` and `MUSIC_CAPTURE` follow its print.
+var _caught_line: String = ""
 var _safari_pending: bool = false
 ## Whether this capture's experience award has already run. See
 ## [method _spend_capture_experience].
@@ -473,6 +473,8 @@ var _switch_stage: StringName = &"":
 ## replace, `BattleMenu_PKMN`'s player or an item's target. Replacements stay up.
 var _switch_reason: StringName = &""
 var _switch_menu: Gen2BattleSwitchMenu = null
+## `wPartyMenuCursor`, one-based, which `ClearBattleRAM` zeroes as a fight opens.
+var _party_menu_cursor: int = 0
 ## The yes/no box's own cursor, which is a two-row `VerticalMenu`.
 var _switch_offer: Gen2WorldMenu = null
 ## `BattleMonMenu` over the list, and the stats screen its STATS row opens.
@@ -732,9 +734,18 @@ func _advance_sound_queue() -> bool:
 		if bool(due.get("wait", false)) and _audio_player != null \
 				and _audio_player.still_waiting(_sound_watch):
 			return true
+		if bool(due.get("after_text", false)) and _box != null and _box.is_revealing():
+			return true
+		if int(due.get("frames", 0)) > 0:
+			due["frames"] = int(due["frames"]) - 1
+			return true
 		_sound_watch = {}
 		_sound_queue.pop_front()
-		if due.has("species"):
+		if due.has("sfx"):
+			_play_sfx(int(due["sfx"]), true)
+		elif due.has("music"):
+			_play_capture_music(int(due["music"]))
+		elif due.has("species"):
 			_play_entrance_cry(int(due["side"]), int(due["species"]), int(due.get("pikachu_clip", -1)))
 		elif due.has("index"):
 			_play_gen1_sound(int(due["index"]))
@@ -2076,6 +2087,7 @@ func advance_bars() -> bool:
 ## Each is a dictionary carrying its own `kind`; the delays are
 ## `BattleAnimDelayFrame` counts and `script` is `RunBattleAnimScript`.
 const ANIM_DELAY: StringName = &"delay"
+const ANIM_WAIT_TEXT: StringName = &"wait_text"
 const ANIM_SCRIPT: StringName = &"script"
 const ANIM_CLEAR_HUD: StringName = &"clear_hud"
 const ANIM_RESTORE_HUD: StringName = &"restore_hud"
@@ -2156,7 +2168,7 @@ const GEN1_BREAK_FREE_TEXT: Array[String] = [
 ## `_ItemUseBallText00`, the ghost's.
 const GEN1_DODGED_TEXT: String = "It dodged the\nthrown BALL!" + PAGE + "This #MON\ncan't be caught!"
 ## `Text_GotchaMonWasCaught` and `_ItemUseBallText05`.
-const CAUGHT_TEXT: String = "Gotcha! %s was caught!"
+const CAUGHT_TEXT: String = "Gotcha! %s\nwas caught!"
 const GEN1_CAUGHT_TEXT: String = "All right!\n%s was%scaught!"
 
 ## `SendOutMonText`'s four texts, in [constant Gen2Battle.SEND_OUT_GO]'s order.
@@ -2254,7 +2266,10 @@ func _begin_animation(event: Dictionary) -> void:
 	# `BattleAnimAssignPals`/`..._RequestPals` and one more; the pal calls write nothing
 	# here, the remapped palettes being read off the background each frame. An entrance
 	# comes through `Call_PlayBattleAnim`, whose `WaitBGMap` is one frame.
-	var lead: int = 1 if bool(event.get("called", false)) else 3
+	## A ball's `predef PlayBattleAnim` names its own lead.
+	var lead: int = int(event.get("lead", 1 if bool(event.get("called", false)) else 3))
+	if bool(event.get("after_text", false)):
+		_step(ANIM_WAIT_TEXT, {})
 	_step(ANIM_DELAY, {"frames": lead + 6 + 1})
 
 	if is_move:
@@ -2341,6 +2356,13 @@ func _step(kind: StringName, values: Dictionary) -> void:
 	_anim_plan.append(entry)
 
 
+## `WaitSFX`, or a line still printing in front of a ball's own lead.
+func _anim_step_waits(step: Dictionary) -> bool:
+	if StringName(step["kind"]) == ANIM_WAIT_TEXT:
+		return _box != null and _box.is_revealing()
+	return _audio_player != null and _audio_player.still_waiting(step)
+
+
 func _run_next_anim_step() -> void:
 	while not _anim_plan.is_empty():
 		var step: Dictionary = _anim_plan.pop_front()
@@ -2362,8 +2384,8 @@ func _run_next_anim_step() -> void:
 				_anim_delay = 4
 				_push_view()
 				return
-			ANIM_WAIT_SFX:
-				if _audio_player != null and _audio_player.still_waiting(step):
+			ANIM_WAIT_SFX, ANIM_WAIT_TEXT:
+				if _anim_step_waits(step):
 					_anim_plan.push_front(step)
 					_anim_delay = 1
 					return
@@ -2728,6 +2750,17 @@ func _crystal_victory_music() -> int:
 	var leader: bool = Gen2Battle.KANTO_GYM_LEADERS.has(_battle.enemy_trainer_class) \
 		or Gen2Battle.JOHTO_GYM_LEADERS.has(_battle.enemy_trainer_class)
 	return Gen2Battle.MUSIC_GYM_VICTORY if leader else Gen2Battle.MUSIC_TRAINER_VICTORY
+
+
+func _play_capture_music(track: int) -> void:
+	if _audio_player == null or _data == null:
+		return
+	if track == Gen2Battle.MUSIC_NONE:
+		_audio_player.stop_all()
+		return
+	var record: Dictionary = _data.world_audio(&"music", track)
+	if not record.is_empty():
+		_audio_player.play_record(record, &"map_music", _audio_assets(), true)
 
 
 ## Which piece [method _play_victory_music] chose, for a check that cannot hear it.
@@ -3366,7 +3399,7 @@ func _use_chosen_item(item: int) -> Dictionary:
 		if not refused.is_empty():
 			return refused
 		return _throw_ball(item, &"pack")
-	if _data != null \
+	if _data != null and item != int(Gen2WorldPartyHost.item_effects(_data)["confusion_cure"]) \
 		and int(_data.item(item).get("battle_menu", 0)) == Gen2WorldPack.ITEMMENU_PARTY:
 		_pack_selecting = false
 		_pack_item = item
@@ -3388,6 +3421,8 @@ func _block_ball_in_trainer_battle(ball: int) -> Dictionary:
 		"index": ANIM_THROW_POKE_BALL,
 		"cur_item": ball,
 		"enemy_turn": false,
+		## `predef PlayBattleAnim` straight away; Generation 1's `Delay3`.
+		"lead": 3 if _generation() == RomRegistry.GEN1 else 0,
 	})
 	item_used.emit(ball, -1)
 	if not _battle.is_over():
@@ -3402,7 +3437,7 @@ func _open_pack_move(item: int, target: int) -> void:
 	_pack_move_slots = []
 	if mon != null:
 		for slot: int in mon.moves.size():
-			if int(mon.moves[slot]) > 0:
+			if mon.persistent_move(slot) > 0:
 				_pack_move_slots.append(slot)
 	if _pack_move_slots.is_empty():
 		_use_pack_item(item, target)
@@ -3415,18 +3450,9 @@ func _open_pack_move(item: int, target: int) -> void:
 
 
 func _show_pack_move_selection() -> void:
-	show_message(String(_selected_pack_move().get("description", "")))
+	show_message(Gen2StartMenuScreen.GEN1_RESTORE_PP_WHICH_MOVE \
+		if _generation() == RomRegistry.GEN1 else Gen2StartMenuScreen.RESTORE_PP_WHICH_MOVE, false)
 	_reopen_menu_layer()
-
-
-func _selected_pack_move() -> Dictionary:
-	if _data == null or _pack_move_slots.is_empty():
-		return {}
-	var mon: Gen2BattleMon = _battle.party(Gen2Battle.PLAYER).at(_pack_move_target)
-	if mon == null:
-		return {}
-	var slot: int = int(_pack_move_slots[posmod(_pack_move_index, _pack_move_slots.size())])
-	return _data.move(int(mon.moves[slot]))
 
 
 func _close_pack_move() -> void:
@@ -3458,20 +3484,44 @@ func _use_pack_item(item: int, target: int, move_slot: int = -1) -> Dictionary:
 	if row != &"":
 		_open_item_result(item, target, effect, row)
 		return used
+	## `BattleRestorePP`'s line over the party list, behind the same sound.
+	if int(effect.get("pp_restored", 0)) > 0:
+		_play_sfx(Gen2Sfx.SFX_FULL_HEAL)
+		_open_item_result(item, target, effect, &"", [Gen2StartMenuScreen.PP_RESTORED])
+		return used
 	if StringName(used.get("kind", &"")) == &"poke_flute":
 		_show_flute_boxes(int(used.get("woken", 0)) > 0)
-	elif int(effect.get("pp_restored", 0)) > 0:
-		show_message(Gen2StartMenuScreen.PP_RESTORED)
 	else:
+		## `UseItemText`, over Crystal's pack with whatever the effect says after it.
+		_play_sfx(Gen2Sfx.SFX_FULL_HEAL)
+		if _generation() != RomRegistry.GEN1:
+			var lines: Array = [_item_used_text(item)]
+			for event: Dictionary in used.get("events", []):
+				lines.append(_describe(event))
+			_say_over_pack(lines, item)
+			return used
 		show_message(_item_used_text(item))
-	_take_item_turn(item)
+	_take_item_turn(item, used.get("events", []))
 	return used
 
 
-## The turn an item spends; a `PokeDollEffect` escape spends none.
-func _take_item_turn(item: int) -> void:
+## `.BattleOnly` quits the pack once the effect has said everything.
+func _say_over_pack(lines: Array, item: int) -> void:
+	if lines.is_empty():
+		_close_pack_host()
+		_take_item_turn(item)
+		_show_next_event()
+		return
+	if _pack_host == null:
+		_open_pack_host()
+	_pack_host.say(String(lines[0]), _say_over_pack.bind(lines.slice(1), item))
+
+
+## The turn an item spends, behind what the item said; a Poke Doll spends none.
+func _take_item_turn(item: int, said: Array = []) -> void:
+	_pending = said.duplicate()
 	if not _battle.is_over():
-		_pending = _battle.take_actions(Gen2Battle.use_item(item), _enemy_action())
+		_pending.append_array(_battle.take_actions(Gen2Battle.use_item(item), _enemy_action()))
 
 
 ## A medicine's screen: `HealHP_SFX_GFX` fills the party menu's bar, then
@@ -3479,7 +3529,10 @@ func _take_item_turn(item: int) -> void:
 var _item_result: Dictionary = {}
 
 
-func _open_item_result(item: int, target: int, effect: Dictionary, row: StringName) -> void:
+## [param lines] are `PrintText` boxes behind [param row]'s line, or instead of it.
+func _open_item_result(
+	item: int, target: int, effect: Dictionary, row: StringName, lines: Array = []
+) -> void:
 	var menu := Gen2BattleSwitchMenu.for_party(_battle.party(Gen2Battle.PLAYER), false, _source_save)
 	var at: int = 0
 	for index: int in menu.rows.size():
@@ -3487,11 +3540,17 @@ func _open_item_result(item: int, target: int, effect: Dictionary, row: StringNa
 			at = index
 	var target_row: Dictionary = menu.rows[at]
 	var healed: int = int(effect.get("healed", 0))
-	_item_result = {
-		"item": item, "rows": menu.rows, "row": at, "hold": Gen2ItemActionText.HOLD_FRAMES,
-		"text": Gen2ItemActionText.text(row, String(target_row.get("name", "")), effect,
-			_generation() == RomRegistry.GEN1),
-	}
+	_item_result = {"item": item, "rows": menu.rows, "row": at, "text": "", "lines": lines.duplicate()}
+	if bool(effect.get("bitter", false)):
+		(_item_result["lines"] as Array).append(Gen2ItemActionText.LOOKS_BITTER)
+	_switch_stage = &"item_result"
+	if row == &"":
+		_show_item_result_line()
+		return
+	_item_result["hold"] = Gen2ItemActionText.HOLD_FRAMES
+	_item_result["text"] = Gen2ItemActionText.text(
+		row, String(target_row.get("name", "")), effect, _generation() == RomRegistry.GEN1
+	)
 	if healed > 0:
 		_play_sfx(Gen2Sfx.SFX_POTION)
 		var to_hp: int = int(target_row.get("hp", 0))
@@ -3501,7 +3560,14 @@ func _open_item_result(item: int, target: int, effect: Dictionary, row: StringNa
 	else:
 		_play_sfx(Gen2Sfx.SFX_FULL_HEAL)
 	set_hp(_enemy_hp, _enemy_max_hp, _battle.player.hp, _battle.player.max_hp())
-	_switch_stage = &"item_result"
+	_reopen_menu_layer()
+
+
+func _show_item_result_line() -> void:
+	if _box != null:
+		_box.visible = true
+	show_message(String((_item_result["lines"] as Array).pop_front()))
+	_item_result["boxed"] = true
 	_reopen_menu_layer()
 
 
@@ -3520,6 +3586,11 @@ func _answer_item_result(button: int) -> void:
 	if button not in [PokeButton.A, PokeButton.B] or _item_result.has("anim") \
 		or int(_item_result.get("hold", 0)) > 0:
 		return
+	if bool(_item_result.get("boxed", false)) and _box != null and _box.advance():
+		return
+	if not (_item_result["lines"] as Array).is_empty():
+		_show_item_result_line()
+		return
 	var item: int = int(_item_result.get("item", 0))
 	_item_result = {}
 	_close_switch()
@@ -3535,10 +3606,10 @@ func _draw_item_result() -> void:
 	if anim != null:
 		(rows[int(_item_result["row"])] as Dictionary)["hp"] = anim.hp()
 	_show_menu_image(_party_page.render(
-		rows, int(_item_result["row"]) if anim != null else -1,
+		rows, -1,
 		Gen2BattleSwitchMenu.prompt_text(_data, &"item") if anim != null
 			else String(_item_result["text"]),
-		true, -1, false, anim == null
+		true, int(_item_result["row"]) if anim != null else -1, false, anim == null
 	), Vector2i.ZERO)
 
 
@@ -3662,9 +3733,12 @@ func _throw_ball(ball: int, origin: StringName = &"capture") -> Dictionary:
 		return _capture_failure(&"capture_selection_not_active")
 	_capture_origin = origin
 	_capture_waiting = true
+	## `PokeBallEffect` reads no button until its own boxes, so no menu stands.
+	_close_battle_menu()
 	_safari_pending = _is_safari_battle()
 	_capture_spent_turn = Gen2Battle.use_item(ball)
-	show_message(_item_used_text(ball))
+	## `ItemUsedText` and Generation 1's `ItemUseText00` both end on `done`.
+	show_message(_item_used_text(ball), false)
 	capture_requested.emit(ball)
 	return {"ok": true, "status": &"waiting", "ball": ball}
 
@@ -3709,16 +3783,9 @@ func complete_capture(result: Dictionary) -> Dictionary:
 	## on a ball that broke out.
 	_capture_terminal = bool(result.get("ends_battle", false))
 	if caught:
-		_box_queue.append(
-			GEN1_CAUGHT_TEXT % [_name_of(_enemy), Gen2TextStream.SCROLL_BREAK]
-			if _generation() == RomRegistry.GEN1 else CAUGHT_TEXT % _name_of(_enemy)
-		)
-		## `.catch_bug_contest_mon` runs after `Text_GotchaMonWasCaught`, and
-		## `BugContest_SetCaughtContestMon`'s `.firstcatch` says a second line. A replacing catch
-		## says `DisplayAlreadyCaughtText` with the switch question instead.
-		if bool(result.get("contest", false)) \
-			and not bool(result.get("replace_offer", false)):
-			_box_queue.append("Caught %s!" % _name_of(_enemy))
+		_caught_line = GEN1_CAUGHT_TEXT % [_name_of(_caught_species()), Gen2TextStream.SCROLL_BREAK] \
+			if _generation() == RomRegistry.GEN1 else CAUGHT_TEXT % _name_of(_caught_species())
+		_box_queue.append(_caught_line)
 		_capture_terminal = true
 		_capture_caught_event = _caught_event(result)
 	elif bool(result.get("dodged", false)):
@@ -3730,6 +3797,11 @@ func complete_capture(result: Dictionary) -> Dictionary:
 		)
 	_begin_capture_animation(result_ball, wobbles, caught, bool(result.get("dodged", false)))
 	return result
+
+
+## `.caught` reloads the wild from its own record: a Transform is not caught.
+func _caught_species() -> int:
+	return _battle.enemy.persistent_species() if _battle != null and _battle.enemy != null else _enemy
 
 
 func _ball_box_full_text() -> String:
@@ -3756,6 +3828,8 @@ func _begin_capture_animation(ball: int, wobbles: int, caught: bool, dodged: boo
 		## which is what the `cp POKE_BALL + 1` in front of it decides.
 		"param": mini(ball, Gen2WorldPartyHost.ITEM_POKE_BALL),
 		"index": ANIM_THROW_POKE_BALL,
+		## `ld c, 20 / call DelayFrames` once the line is printed, in both generations.
+		"after_text": true, "lead": 20,
 		## `GetBallAnimPal` colours the ball off the real number, not the clamp.
 		"cur_item": ball,
 		## `xor a / ldh [hBattleTurn]`: the throw is the player's, so the
@@ -3781,7 +3855,11 @@ func _show_capture_selection() -> void:
 func _show_next_box() -> void:
 	if _box_queue.is_empty():
 		return
-	show_message(_box_queue.pop_front())
+	var line: String = _box_queue.pop_front()
+	show_message(line)
+	if line == _caught_line:
+		_caught_line = ""
+		_queue_caught_sounds()
 	## `Text_GotchaMonWasCaught` is a caught throw's last line, published once it
 	## is up so a subscriber's own line follows it.
 	if _capture_terminal and _box_queue.is_empty() \
@@ -3798,11 +3876,11 @@ func _caught_event(result: Dictionary) -> Dictionary:
 	var values: Variant = _world_battle_request.get("values", _world_battle_request)
 	var request: Dictionary = values as Dictionary if values is Dictionary else {}
 	var wild: Gen2BattleMon = _battle.enemy if _battle != null else null
-	var dvs: int = wild.dvs if wild != null else 0
+	var dvs: int = wild.persistent_dvs() if wild != null else 0
 	var destination: Dictionary = result.get("destination", {})
 	return {
 		"type": Gen2Battle.CAUGHT,
-		"species": wild.species if wild != null else int(result.get("species", 0)),
+		"species": _caught_species(),
 		"level": wild.level if wild != null else 0,
 		"dvs": dvs,
 		"shiny": Gen2Stats.is_shiny(dvs),
@@ -3956,7 +4034,7 @@ func _open_capture_nickname() -> bool:
 	if not bool(_capture_result.get("caught", false)) \
 		or bool(_capture_result.get("contest", false)) or _world_battle_tutorial:
 		return false
-	var species_name: String = _name_of(_enemy)
+	var species_name: String = _name_of(_caught_species())
 	if species_name.is_empty():
 		return false
 	## `AskGiveNicknameText` waits for `Text_GotchaMonWasCaught` to finish, even
@@ -3983,7 +4061,7 @@ func _open_capture_nickname() -> bool:
 	)
 	## `.Pokemon`'s icon and sign, off the DVs the battle already rolled.
 	host.set_species(
-		_enemy, _battle.enemy.dvs if _battle != null else -1
+		_caught_species(), _battle.enemy.persistent_dvs() if _battle != null else -1
 	)
 	host.named.connect(_on_capture_named)
 	host.closed.connect(_on_capture_nickname_closed)
@@ -3999,27 +4077,43 @@ func _open_capture_nickname() -> bool:
 	return true
 
 
+## `Text_GotchaMonWasCaught`: the printed line's `sound_caught_mon`, then a frame of
+## `MUSIC_NONE` and `MUSIC_CAPTURE`. Generation 1's has the sound alone.
+func _queue_caught_sounds() -> void:
+	_sound_queue.append({"after_text": true})
+	_sound_queue.append({"sfx": Gen2Sfx.SFX_CAUGHT_MON})
+	_sound_queue.append({"wait": true})
+	if _generation() == RomRegistry.GEN1:
+		return
+	_sound_queue.append({"music": Gen2Battle.MUSIC_NONE})
+	_sound_queue.append({"frames": 1})
+	_sound_queue.append({"music": Gen2Battle.MUSIC_CAPTURE})
+
+
 ## `NewDexDataText`, then the page. True while either is still owed, so the pump
 ## that called this waits. The world owns the dex and draws the page; this only
 ## says when.
 func _open_new_dex_entry() -> bool:
 	if _capture_dex_stage == &"done" or _world_battle_tutorial \
-		or bool(_capture_result.get("contest", false)) \
 		or not bool(_capture_result.get("caught", false)) \
 		or _enemy_caught_before or not _dex_received:
 		return false
 	match _capture_dex_stage:
 		&"":
 			_capture_dex_stage = &"text"
-			show_message((GEN1_NEW_DEX_DATA_TEXT if _generation() == RomRegistry.GEN1
-				else NEW_DEX_DATA_TEXT) % _name_of(_enemy))
+			var gen1: bool = _generation() == RomRegistry.GEN1
+			show_message((GEN1_NEW_DEX_DATA_TEXT if gen1 else NEW_DEX_DATA_TEXT) % _name_of(_caught_species()))
+			_sound_queue.append({"after_text": true})
+			_sound_queue.append({"index": Gen1Sfx.SFX_DEX_PAGE_ADDED} if gen1
+				else {"sfx": Gen2Sfx.SFX_SLOT_MACHINE_START})
+			_sound_queue.append({"wait": true})
 			return true
 		&"text":
 			## `call ClearSprites` between the line and the page, which is the
 			## same call the catch's own box is followed by.
 			_clear_kept_sprites()
 			_capture_dex_stage = &"page"
-			dex_entry_requested.emit(_enemy)
+			dex_entry_requested.emit(_caught_species())
 			return true
 	return true
 
@@ -4073,7 +4167,7 @@ func _clear_capture_action() -> void:
 	_box_queue.clear()
 	_capture_caught_event = {}
 	_capture_terminal = false
-	_contest_already_caught_said = false
+	_contest_line_said = false
 	_capture_result.clear()
 	_close_capture_nickname()
 	_capture_nickname = ""
@@ -4577,23 +4671,21 @@ func _messages_held() -> bool:
 ## Everything `PokeBallEffect` does between `Text_GotchaMonWasCaught` and handing
 ## the catch back to the world.
 func _continue_capture() -> void:
-	## `BugContest_SetCaughtContestMon` asks before replacing the Pokemon
-	## already caught, over the same `PlaceYesNoBox` a switch offer uses.
-	if bool(_capture_result.get("replace_offer", false)) and _switch_stage == &"":
-		## `DisplayAlreadyCaughtText` before `DisplayCaughtContestMonStats`
-		## and the box: the line about the one already held is prompted past
-		## first, and the question is asked over the comparison.
-		if not _contest_already_caught_said:
-			_contest_already_caught_said = true
-			show_message(CONTEST_ALREADY_CAUGHT_TEXT % _contest_stock_name())
-			return
-		_open_yes_no(&"contest_replace", CONTEST_REPLACE_TEXT)
-		return
-	## `NewDexDataText` and `NewPokedexEntry`, between `Text_GotchaMonWasCaught` and the rest
-	## of a catch: only for a species not yet caught and once the player has the dex, with
-	## `CheckCaughtMon` and `CheckReceivedDex` read before the throw registers the catch.
+	## `NewDexDataText` and `NewPokedexEntry`, ahead of `.skip_pokedex`'s contest
+	## branch, read off `CheckCaughtMon` and `CheckReceivedDex` before the throw.
 	if _open_new_dex_entry():
 		return
+	## `BugContest_SetCaughtContestMon`.
+	if bool(_capture_result.get("contest", false)) and _switch_stage == &"":
+		var replacing: bool = bool(_capture_result.get("replace_offer", false))
+		if not _contest_line_said:
+			_contest_line_said = true
+			show_message(CONTEST_ALREADY_CAUGHT_TEXT % _contest_stock_name() if replacing
+				else "Caught %s!" % _name_of(_caught_species()))
+			return
+		if replacing:
+			_open_yes_no(&"contest_replace", CONTEST_REPLACE_TEXT)
+			return
 	## A registered policy's award and every level up, move offer and
 	## evolution flag behind it, spent between `Text_GotchaMonWasCaught` and
 	## `AskGiveNicknameText` so nothing is filed with a level up still owed.
@@ -5325,12 +5417,14 @@ func _open_switch_pick(reason: StringName) -> void:
 		_battle.party(Gen2Battle.PLAYER), reason not in [&"offer", &"player", &"item"],
 		_source_save
 	)
+	if _party_menu_cursor >= 1 and _party_menu_cursor <= _switch_menu.rows.size():
+		_switch_menu.cursor = _party_menu_cursor - 1
 	_switch_offer = null
 	_switch_stage = &"pick"
 	## `InitPartyMenuGFX` spawns the icons where the list is built, so a reopened
 	## list opens on the first frame of their animation rather than resuming.
 	if _party_page != null:
-		_party_page.reset(_switch_menu.rows)
+		_party_page.reset(_switch_menu.rows, _switch_menu.cursor)
 	_icon_clock.reset()
 	## The party menu is the whole screen rather than a box on it, so the battle's
 	## own box goes with the field it belongs to.
@@ -5477,6 +5571,8 @@ func _offer_still_reading() -> bool:
 func _answer_switch_pick(button: int) -> void:
 	if button == PokeButton.A or button == PokeButton.B:
 		_play_sfx(Gen2Sfx.SFX_READ_TEXT_2, _data.generation != RomRegistry.GEN1)
+		if not _switch_menu.is_cancel(_switch_menu.cursor):
+			_party_menu_cursor = _switch_menu.cursor + 1
 	match button:
 		PokeButton.UP:
 			_switch_menu.move(-1)
@@ -5486,8 +5582,11 @@ func _answer_switch_pick(button: int) -> void:
 			_refresh_menu_layer()
 		PokeButton.A:
 			## `UseItem_SelectMon` skips both `PickPartyMonInBattle` checks: a Revive wants a
-			## fainted member and a potion the one out. The item's own effect refuses.
+			## fainted member and a potion the one out. Only an EGG is refused here.
 			if _switch_reason == &"item" and not _switch_menu.is_cancel(_switch_menu.cursor):
+				if bool(_switch_menu.rows[_switch_menu.cursor].get("egg", false)):
+					_show_switch_refusal(Gen2ItemActionText.CANT_USE_ON_EGG)
+					return
 				_resolve_switch({
 					"result": Gen2BattleSwitchMenu.CHOSEN,
 					"index": int(_switch_menu.rows[_switch_menu.cursor].get("index", -1)),
@@ -6050,32 +6149,20 @@ func _draw_pack_action_menu() -> void:
 	)
 
 
-## `RestorePPEffect`'s question, as the pack's own move list: which slot the
-## Ether goes on, with the PP it stands on.
+## `MoveSelectionScreen`'s type 2: the party moves' names over the party list.
 func _draw_pack_move_menu() -> void:
 	var mon: Gen2BattleMon = _battle.party(Gen2Battle.PLAYER).at(_pack_move_target) \
 		if _battle != null else null
-	if mon == null or _data == null:
+	if mon == null or _data == null or _party_page == null:
 		_menu_layer.visible = false
 		return
-	## `.relearnmenu` prints the names alone, where `BattleMenu_Pack`'s own list
-	## carries the PP pair.
-	var gen1: bool = _generation() == RomRegistry.GEN1
 	var names: Array = []
 	for raw_slot: int in _pack_move_slots:
-		var record: Dictionary = _data.move(int(mon.moves[raw_slot]))
-		names.append(String(record.get("name", "")) if gen1 else _list_row(
-			String(record.get("name", "")),
-			"%2d/%2d" % [mon.pp_left(raw_slot), mon.max_pp(raw_slot)]
-		))
-	if not gen1:
-		_draw_list_menu(
-			&"pack_move",
-			names.map(func(text: String) -> Dictionary: return {"name": text, "tail": ""}),
-			_pack_move_index
-		)
-		return
-	_menu_layer.visible = false
+		names.append(String(_data.move(mon.persistent_move(raw_slot)).get("name", "")))
+	var menu := Gen2BattleSwitchMenu.for_party(_battle.party(Gen2Battle.PLAYER), false, _source_save)
+	var held: int = menu.rows.find_custom(func(row: Dictionary) -> bool:
+		return int(row.get("index", -1)) == _pack_move_target)
+	_show_menu_image(_party_page.render(menu.rows, -1, "", true, held, false, true), Vector2i.ZERO)
 	var box: Gen2MenuBox = Gen2BattleMenu.move_box(true)
 	_show_layer_image(
 		_battle_menu_layer,
@@ -6157,10 +6244,13 @@ func _draw_party_page() -> void:
 	if _party_page == null or _switch_menu == null:
 		_menu_layer.visible = false
 		return
+	## `PlaceHollowCursor` stands under a refusal until the list is redrawn.
+	var refused: bool = _switch_stage == &"refused"
 	_show_menu_image(
 		_party_page.render(
-			_switch_menu.rows, _switch_menu.cursor,
-			Gen2BattleSwitchMenu.prompt_text(_data, _switch_reason)
+			_switch_menu.rows, -1 if refused else _switch_menu.cursor,
+			Gen2BattleSwitchMenu.prompt_text(_data, _switch_reason), true,
+			_switch_menu.cursor if refused else -1
 		),
 		Vector2i.ZERO
 	)
@@ -7203,21 +7293,23 @@ func _keyed_modals() -> Array:
 	]
 
 
+## `PAD_DOWN | PAD_UP | PAD_A | PAD_B`, wrapping; B is `.loop`'s party list again.
 func _button_pack_move(button: int) -> bool:
 	match button:
-		PokeButton.RIGHT, PokeButton.DOWN:
-			_pack_move_index = posmod(_pack_move_index + 1, _pack_move_slots.size())
-			_show_pack_move_selection()
-		PokeButton.LEFT, PokeButton.UP:
-			_pack_move_index = posmod(_pack_move_index - 1, _pack_move_slots.size())
-			_show_pack_move_selection()
+		PokeButton.DOWN, PokeButton.UP:
+			_pack_move_index = posmod(
+				_pack_move_index + (1 if button == PokeButton.DOWN else -1), _pack_move_slots.size()
+			)
+			_reopen_menu_layer()
 		PokeButton.A:
 			_use_pack_item(
 				_pack_item, _pack_move_target, int(_pack_move_slots[_pack_move_index])
 			)
 		PokeButton.B:
 			_close_pack_move()
-			open_battle_pack()
+			_open_switch_pick(&"item")
+		PokeButton.LEFT, PokeButton.RIGHT:
+			pass
 		_:
 			return false
 	return true

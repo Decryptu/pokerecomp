@@ -134,12 +134,12 @@ func _rows(count: int = 2) -> Array:
 	return out
 
 
-## The page after [param passes] passes of `PlaySpriteAnimations`, which is what
-## [Gen2BattleScreen] spends one of a hardware frame.
+## The page after [param passes] passes of `PlaySpriteAnimations`, the first
+## being `InitPartyMenuGFX`'s own.
 func _animated(rows: Array, cursor: int, passes: int) -> Image:
 	var page: Gen2PartyMenuPage = _page()
-	page.reset(rows)
-	for _step: int in passes:
+	page.reset(rows, cursor)
+	for _step: int in passes - 1:
 		page.advance(rows, cursor)
 	return page.render(rows, cursor, Gen2BattleSwitchMenu.prompt_text())
 
@@ -177,14 +177,13 @@ func test_each_member_prints_two_rows_below_the_last() -> void:
 	assert_eq(_ink_in_tile(image, Gen2PartyMenuPage.NICKNAME.x - 1, 1), 0, "the icon column")
 
 
-## `InitPartyMenuGFX` spawns a struct per member and `UpdateAnimFrame` writes
-## shadow OAM on the pass after, so a page that has not been stepped yet has no
-## icons on it at all.
-func test_no_icon_is_drawn_before_the_first_sprite_pass() -> void:
+## `InitPartyMenuGFX` ends on its own `PlaySpriteAnimations`, so the list is
+## never shown with its icons missing.
+func test_the_list_opens_with_every_icon_on() -> void:
 	var page: Gen2PartyMenuPage = _page()
 	page.reset(_rows(1))
 	var image: Image = page.render(_rows(1), -1, "")
-	assert_eq(_ink_in_tile(image, 0, 1), 0, "nothing under the first member")
+	assert_ne(_ink_in_tile(image, 0, 1), 0, "the first member's icon")
 
 
 ## `InitPartyMenuIcon`'s `ld e, $10` less a tile and shadow OAM's own origin,

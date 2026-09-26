@@ -1,14 +1,9 @@
 class_name Gen2PartyScreen
 extends Control
 
-## The party menu, in the two places it is opened from. Embedded in the overworld
-## it is `PartyMenu` itself: `StartMenu_Pokemon` runs `InitPartyMenuWithCancel`
-## and `PokemonActionSubmenu` opens `MonSubmenu`'s box over the bottom of it, so
-## the embedded view is [Gen2PartyMenuPage] and [Gen2MenuPage] at hardware
-## resolution and the model below is what `PartyMenuSelect` answers. The
-## launcher's own party view, which is not a cartridge screen, keeps the
-## window-resolution panel and carries the PC storage and development battle
-## buttons that no cartridge has.
+## The party menu. Embedded in the overworld it is `StartMenu_Pokemon`'s own list
+## and `MonSubmenu`'s box over it, drawn by [Gen2PartyMenuPage]; the launcher's
+## party view is a window-resolution panel with buttons no cartridge has.
 
 ## Emitted only when embedded, mirroring Gen2BoxScreen.closed: the overworld
 ## start menu resumes on this rather than the screen navigating away with
@@ -25,12 +20,8 @@ signal sfx_requested(index: int, waited: bool)
 ## loads. Emitted for the same reason [signal sfx_requested] is.
 signal cry_requested(species: int)
 signal pikachu_clip_requested(index: int)
-## `PartyMenuSelect`'s own answer, when the list was opened as
-## `SelectMonFromParty` rather than as `StartMenu_Pokemon`: the chosen party
-## index, or -1 for the carry a CANCEL row or a B press returns. Every caller of
-## `SelectMonFromParty` (the Name Rater, the move deleter, the seer, the haircut
-## brothers) is one of these, so the selection is the list's answer rather than a
-## per-caller mode.
+## `SelectMonFromParty`'s answer: the chosen party index, or -1 for the carry a
+## CANCEL row or a B press returns.
 signal selection_made(party_index: int)
 
 
@@ -85,12 +76,10 @@ const PROMPT_TEACH_WHICH: String = "Teach which PKMN?"
 ## `SwitchPartyMons`' own `PARTYMENUACTION_MOVE` string, `MoveToWhereString`.
 const PROMPT_MOVE_TO_WHERE: String = "Move to where?"
 
-## `_PokemonNotEnoughHPText` and `_ItemCantUseOnMonText`, the two refusals the
-## heal transfer prints. Both are a `MenuTextbox` over the menu on the cartridge
-## and stand in the menu's own bottom box here. The A or B they wait for is the
-## same.
-const MESSAGE_NOT_ENOUGH_HP: String = "Not enough HP…"
-const MESSAGE_NO_EFFECT: String = "It won't have any effect."
+## `_PokemonNotEnoughHPText` and `_ItemCantUseOnMonText`, the heal transfer's
+## two refusals, in the menu's own bottom box.
+const MESSAGE_NOT_ENOUGH_HP: String = "Not enough HP!"
+const MESSAGE_CANT_USE_ON_MON: String = "That can't be used\non this #MON."
 
 ## `MonSubmenu.MenuHeader`'s `menu_coords 6, 0, SCREEN_WIDTH - 1,
 ## SCREEN_HEIGHT - 1` with `.GetTopCoord`'s own top:
@@ -108,6 +97,7 @@ const ITEM_MENU_BOX: Rect2i = Rect2i(12, 12, 7, 5)
 ## `MonMailAction.MenuHeader`'s `menu_coords 12, 10, SCREEN_WIDTH - 1,
 ## SCREEN_HEIGHT - 1`, one row taller than GIVE/TAKE's.
 const MAIL_MENU_BOX: Rect2i = Rect2i(12, 10, 7, 7)
+const GS_MAIL_MENU_COLUMN: int = 9
 
 var _data: GameData = null
 var _data_override: GameData = null
@@ -165,6 +155,14 @@ var _menu_page: Gen2MenuPage = null
 ## A refusal standing in the menu's own bottom box, which the next A or B
 ## clears. See [constant MESSAGE_NOT_ENOUGH_HP].
 var _message: String = ""
+## `HealHP_SFX_GFX`'s bars still to fill as `[row, Gen2HpBarAnimation]`.
+var _heal_bars: Array = []
+var _heal_hold: int = 0
+var _healed_by: int = -1
+var _heal_line: String = ""
+var _cursor_memory: Dictionary = {"cursor": 0}
+## `wLinkMode`, set by the world while the player stands in a Cable Club room.
+var in_link_room: bool = false
 var _read_only: bool = false
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## `OpenPartyStats`' own screen, standing over the whole party menu while it is
@@ -189,6 +187,22 @@ func _ready() -> void:
 		Gen2FocusGuard.attach(self)
 
 
+## Every party list shares one `wPartyMenuCursor`; call before [method set_context].
+func share_cursor(memory: Dictionary) -> void:
+	_cursor_memory = memory
+
+
+## `InitPartyMenuWithCancel`'s read: a remembered row inside the party, or the first.
+func _remembered_cursor() -> int:
+	var cursor: int = int(_cursor_memory.get("cursor", 0))
+	return cursor - 1 if cursor >= 1 and cursor <= _party_size() else 0
+
+
+func _remember(member: int) -> void:
+	if member >= 0 and member < _party_size():
+		_cursor_memory["cursor"] = member + 1
+
+
 ## Test seam for a synthetic cache and validated save. `embedded` is the
 ## overworld start menu's Pokemon entry: the save-screen navigation actions
 ## (development battle, PC storage by scene change) do not apply while a
@@ -199,7 +213,7 @@ func set_context(data: GameData, save: Gen2SaveData, embedded: bool = false) -> 
 	_embedded = embedded
 	_data = data
 	_save = save
-	_member_cursor = 0
+	_member_cursor = _remembered_cursor()
 	_submenu_open = false
 	_item_menu_open = false
 	_submenu_items = []
@@ -224,7 +238,7 @@ func open_selection(
 	_select_action = action
 	_teach_move = teach_move
 	_select_prompt = prompt
-	_member_cursor = 0
+	_member_cursor = _remembered_cursor()
 	_submenu_open = false
 	_item_menu_open = false
 	_submenu_items = []
@@ -258,15 +272,11 @@ func party_snapshot() -> Dictionary:
 	}
 
 
-## engine/pokemon/mon_submenu.asm's GetMonSubmenuItems for one party member. An
-## egg gets three entries and no moves; otherwise the four move slots are walked
-## in the mon's own slot order, appending every move that appears in
-## MonMenuOptions' field-move rows, and the fixed options follow. Every row is
-## acted on, since the screens STATS and MOVE open are built. [param slot] is
-## one-based and [param in_battle] is whether the list belongs to a turn: both
-## only decide which mod rows are offered.
+## `GetMonSubmenuItems`: an egg's three rows, or the field moves in slot order and
+## the fixed rows, `wLinkMode` dropping the moves and ITEM/MAIL. [param slot] is
+## one-based; it and [param in_battle] only decide which mod rows are offered.
 static func submenu_items_for(
-	data: GameData, mon: Gen2SaveMon, slot: int = 0, in_battle: bool = false
+	data: GameData, mon: Gen2SaveMon, slot: int = 0, in_battle: bool = false, linked: bool = false
 ) -> Array:
 	var items: Array = []
 	if mon == null:
@@ -281,7 +291,7 @@ static func submenu_items_for(
 		items.append(_option_entry(OPTION_CANCEL, "CANCEL"))
 		return items
 	for move: int in mon.moves:
-		if move == 0 or not Gen2WorldFieldMove.is_field_move(move, data):
+		if linked or move == 0 or not Gen2WorldFieldMove.is_field_move(move, data):
 			continue
 		items.append({
 			"kind": &"field_move",
@@ -295,6 +305,7 @@ static func submenu_items_for(
 	## `PokemonMenuEntries` is those two and CANCEL.
 	if data == null or data.generation != RomRegistry.GEN1:
 		items.append(_option_entry(OPTION_MOVE, "MOVE"))
+	if not linked and (data == null or data.generation != RomRegistry.GEN1):
 		## `GetMonSubmenuItems`: `ItemIsMail` decides between the two rows, so a
 		## member holding mail has no ITEM row at all.
 		if Gen2HeldItem.is_mail(mon.item):
@@ -357,11 +368,19 @@ func handle_button(button: int) -> bool:
 		if _moves != null:
 			_refresh()
 		return used_move
+	if not _heal_bars.is_empty() or _heal_hold > 0:
+		return true
 	## `JoyWaitAorB` behind a refusal: the press that clears the box does nothing
 	## else, and a direction is not one of the two it waits for.
 	if not _message.is_empty():
 		if button == PokeButton.A or button == PokeButton.B:
 			_message = ""
+			if _healed_by >= 0:
+				_member_cursor = _healed_by
+				_remember(_healed_by)
+				_healed_by = -1
+				if _page != null:
+					_page.reset(_rows(), _cursor_row())
 			_refresh()
 			return true
 		return false
@@ -379,19 +398,30 @@ func handle_button(button: int) -> bool:
 			return true
 		PokeButton.A:
 			_click()
+			_remember_press()
 			_confirm()
 			return true
 		PokeButton.B:
 			_click()
+			_remember_press()
 			_cancel()
 			return true
 	return false
 
 
+## `PartyMenuSelect` stores the row on A or B, but not on CANCEL.
+func _remember_press() -> void:
+	if not _submenu_open and not _item_menu_open and not _on_cancel_row():
+		_remember(_member_cursor)
+
+
 ## `PartyMenuSelect`'s click, waited on Gen 2; `MonMenuLoop`'s and Gen 1's are not.
 func _click() -> void:
-	var gen1: bool = _data != null and _data.generation == RomRegistry.GEN1
-	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, not gen1 and not _submenu_open)
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, not _gen1() and not _submenu_open)
+
+
+func _gen1() -> bool:
+	return _data != null and _data.generation == RomRegistry.GEN1
 
 
 func _move_cursor(delta: int) -> void:
@@ -471,9 +501,9 @@ func _confirm_submenu(entry: Dictionary) -> void:
 				"name": Gen2SaveMon.display_name(_save.party[_member_cursor], _data),
 			})
 		&"mon_mail":
-			## `.done` answers 3, which `.choosemenu` takes back to the list.
+			## `.done` answers 3, which `.menu` takes back to the plain list.
 			if StringName(entry.get("option", &"")) == OPTION_MAIL_QUIT:
-				_open_submenu()
+				_close_submenu()
 				return
 			action_chosen.emit({
 				"kind": &"mon_mail",
@@ -551,6 +581,7 @@ func _close_moves() -> void:
 	if _moves == null:
 		return
 	_member_cursor = clampi(_moves.cursor(), 0, _row_count() - 1)
+	_remember(_member_cursor)
 	_moves = null
 	_close_submenu()
 
@@ -559,6 +590,7 @@ func _close_stats() -> void:
 	if _stats == null:
 		return
 	_member_cursor = clampi(_stats.cursor(), 0, _row_count() - 1)
+	_remember(_member_cursor)
 	_stats = null
 	_close_submenu()
 
@@ -574,19 +606,16 @@ func _cancel() -> void:
 		_switch_from = -1
 		_close_submenu()
 		return
-	## `.SelectMilkDrinkRecipient`'s own `.set_carry`: a B press over the
-	## recipient list gives up on the move and leaves the party menu standing.
+	## `.SelectMilkDrinkRecipient`'s carry reaches `.skip`, back on the user.
 	if _heal_user >= 0:
+		_member_cursor = _heal_user
+		_remember(_heal_user)
 		_heal_user = -1
 		_heal_move = 0
-		_open_submenu()
+		_close_submenu()
 		return
-	## `GiveTakePartyMonItem`'s own `VerticalMenu` carry is `.cancel`, which
-	## returns to the submenu it opened over rather than closing the party menu.
-	if _item_menu_open:
-		_open_submenu()
-		return
-	if _submenu_open:
+	## GIVE/TAKE's and `MonMailAction`'s carries answer 3, the plain list.
+	if _submenu_open or _item_menu_open:
 		_close_submenu()
 		return
 	close_embedded()
@@ -602,8 +631,9 @@ func _open_heal_target(move: int) -> void:
 	if fifth <= 0 or user.hp <= fifth:
 		## `.NotEnoughHP` prints and then returns 3, which is `.menu`: the
 		## submenu does not survive the refusal.
-		_say(MESSAGE_NOT_ENOUGH_HP)
 		_close_submenu()
+		_say(MESSAGE_NOT_ENOUGH_HP if not _gen1() \
+			else _data.special_text("field_move", "not_healthy_enough"))
 		return
 	_heal_user = _member_cursor
 	_heal_move = move
@@ -613,18 +643,16 @@ func _open_heal_target(move: int) -> void:
 	_refresh()
 
 
-## One press over the recipient list. The three refusals stay on the list the way
-## `.cant_use` loops back to it; anything else is the caller's to apply, since
-## the health it moves belongs to a save the world owns.
+## One press over the recipient list, whose refusals loop the way `.cant_use` does;
+## Generation 1's `ItemUseMedicine` reprompts on the user without a word.
 func _choose_heal_target() -> void:
-	if _member_cursor == _heal_user:
-		_say(MESSAGE_NO_EFFECT)
+	if _member_cursor == _heal_user and _gen1():
 		return
 	var target: Gen2SaveMon = _save.party[_member_cursor]
 	var target_max: int = Gen2SaveBattleAdapter.to_battle_mon(_data, target).max_hp() \
 		if not target.is_egg else 0
-	if target.is_egg or target.hp <= 0 or target.hp >= target_max:
-		_say(MESSAGE_NO_EFFECT)
+	if _member_cursor == _heal_user or target.is_egg or target.hp <= 0 or target.hp >= target_max:
+		_say(MESSAGE_CANT_USE_ON_MON if not _gen1() else _data.special_text("item_use", "no_effect"))
 		return
 	var action: Dictionary = {
 		"kind": &"heal_transfer",
@@ -671,7 +699,7 @@ func _finish_switch() -> void:
 	## The icons are respawned rather than stepped: `LoadPartyMenuGFX` and
 	## `InitPartyMenuGFX` run again behind the reopened list.
 	if _page != null:
-		_page.reset(_rows())
+		_page.reset(_rows(), _cursor_row())
 	_refresh()
 
 
@@ -694,7 +722,7 @@ func _open_mail_menu() -> void:
 func _open_submenu() -> void:
 	if _member_cursor < 0 or _member_cursor >= _party_size():
 		return
-	_submenu_items = submenu_items_for(_data, _save.party[_member_cursor], _member_cursor + 1)
+	_submenu_items = submenu_items_for(_data, _save.party[_member_cursor], _member_cursor + 1, false, in_link_room)
 	_submenu_cursor = 0
 	_submenu_open = not _submenu_items.is_empty()
 	_item_menu_open = false
@@ -750,11 +778,8 @@ func _resolve_save() -> Gen2SaveData:
 	return Gen2GameRuntime.selected_save_or_null() if _data != null else null
 
 
-## `StartMenu_Pokemon`'s screen: the party menu owns all 160x144 of it, so the
-## view is laid out in hardware pixels rather than in the window ones of
-## whatever parent added this one. The screen it goes in is the one already at
-## the window ([method Gen2Screen.host_for]), so the list lands exactly on the
-## rectangle the map behind it is drawn in.
+## `StartMenu_Pokemon`'s whole 160x144, in the screen already at the window
+## ([method Gen2Screen.host_for]) so the list lands on the map's own rectangle.
 func _build_hardware_ui() -> void:
 	_hardware = Gen2Screen.host_for(self, _hardware)
 	if _hardware == null:
@@ -768,10 +793,6 @@ func _build_hardware_ui() -> void:
 
 ## Draws the party as a readout rather than as a menu: no cursor, no CANCEL row
 ## and an empty bottom box.
-##
-## For a display that shows the party without being able to choose from it. The
-## three are one switch rather than three because they are one fact: an arrow, a
-## way out and a question are all furniture for a press that cannot happen here.
 func set_read_only(on: bool) -> void:
 	if _read_only == on:
 		return
@@ -793,14 +814,20 @@ func _exit_tree() -> void:
 		_view = null
 
 
-## One hardware frame of `PlaySpriteAnimations` over the icons. `FreezeMonIcons`
-## is what `MonSubmenu` calls before it draws its box, so a menu that is up
-## stops them where they stand.
+## One hardware frame of `PlaySpriteAnimations`, which only `MonMailAction`'s menu
+## and Generation 1's own stop.
 func _process(delta: float) -> void:
 	if _view == null or _page == null:
 		return
 	var frames: int = _frame_clock.tick(delta)
-	if frames == 0 or _submenu_open or _item_menu_open:
+	if frames == 0:
+		return
+	if not _heal_bars.is_empty() or _heal_hold > 0:
+		for _bar_frame: int in frames:
+			_advance_heal_transfer()
+		_render_hardware()
+		return
+	if _icons_frozen():
 		return
 	## `StatsScreen_WaitAnim` is the stats screen's own loop, and the party
 	## icons behind it are not being stepped while it is up.
@@ -818,6 +845,23 @@ func _process(delta: float) -> void:
 	for _frame: int in frames:
 		_page.advance(rows, _cursor_row())
 	_render_hardware()
+
+
+## The solid arrow's row and `PlaceHollowCursor`'s, which stands until `.menu`.
+func _arrow() -> Vector2i:
+	if not _heal_bars.is_empty():
+		return Vector2i(-1, _member_cursor)
+	if _read_only or _healed_by >= 0:
+		return Vector2i(-1, -1)
+	if not _message.is_empty() or _submenu_open or _item_menu_open:
+		return Vector2i(-1, _member_cursor)
+	return Vector2i(_cursor_row(), _switch_from)
+
+
+func _icons_frozen() -> bool:
+	if _gen1():
+		return _submenu_open or _item_menu_open
+	return _item_menu_open and _fixed_menu_box == MAIL_MENU_BOX
 
 
 func _moves_page_advance() -> void:
@@ -870,6 +914,11 @@ func _rows() -> Array:
 func _prompt() -> String:
 	if not _message.is_empty():
 		return _message
+	if not _heal_bars.is_empty():
+		return prompt_text(_data, &"item_use", PROMPT_USE_ON_WHICH)
+	## `PokemonActionSubmenu`'s own `ClearBox` over the prompt's two rows.
+	if (_submenu_open or _item_menu_open) and not _gen1():
+		return ""
 	if _selecting:
 		return _select_prompt
 	if _switch_from >= 0:
@@ -898,18 +947,19 @@ func _render_hardware() -> void:
 		return
 	if _page == null:
 		_page = Gen2PartyMenuPage.from_data(_data)
+		if _page != null:
+			_page.reset(_rows(), _cursor_row())
 	if _menu_page == null:
 		_menu_page = Gen2MenuPage.from_data(_data)
 	if _page == null:
 		return
 	var rows: Array = _rows()
+	for bar: Array in _heal_bars:
+		(rows[int(bar[0])] as Dictionary)["hp"] = (bar[1] as Gen2HpBarAnimation).hp()
+	var arrow: Vector2i = _arrow()
 	var image: Image = _page.render(
-		rows,
-		-1 if _read_only else _cursor_row(),
-		"" if _read_only else _prompt(),
-		_switch_from < 0 and not _read_only,
-		_switch_from,
-		_quality_column(),
+		rows, arrow.x, "" if _read_only else _prompt(),
+		_switch_from < 0 and not _read_only, arrow.y, _quality_column(),
 	)
 	if image == null:
 		return
@@ -948,9 +998,13 @@ func _render_moves() -> void:
 ## `GiveTakeItemMenuData` and `MonMailAction.MenuHeader` is open over it.
 func _submenu_box() -> Gen2MenuBox:
 	if _item_menu_open:
+		var at: Rect2i = _fixed_menu_box
+		## pokegold's `MonMailAction.MenuHeader` opens at column 9.
+		if at == MAIL_MENU_BOX and not Gen2WorldState.is_crystal_profile(_data):
+			at = Rect2i(GS_MAIL_MENU_COLUMN, at.position.y, at.end.x - GS_MAIL_MENU_COLUMN, at.size.y)
 		return Gen2MenuBox.from_coords(
-			_fixed_menu_box.position.x, _fixed_menu_box.position.y,
-			_fixed_menu_box.end.x, _fixed_menu_box.end.y, Gen2MenuBox.STATICMENU_CURSOR
+			at.position.x, at.position.y,
+			at.end.x, at.end.y, Gen2MenuBox.STATICMENU_CURSOR
 		)
 	if _data != null and _data.generation == RomRegistry.GEN1:
 		return gen1_mon_menu_box(_submenu_items)
@@ -1070,6 +1124,43 @@ func _build_ui() -> void:
 	_status = Gen2LauncherUI.muted(_palette, "")
 	body.add_child(_status)
 	_shell.add_page(&"party", "Party", &"save", page)
+
+
+## `Softboiled_MilkDrinkFunction`: each bar behind SFX_POTION, then [param line],
+## which Generation 1 holds fifty frames.
+func show_heal_transfer(user: int, target: int, amount: int, restored: int, line: String) -> void:
+	var rows: Array = _rows()
+	if user < 0 or target < 0 or user >= rows.size() or target >= rows.size():
+		return
+	var giver: Dictionary = rows[user]
+	var taker: Dictionary = rows[target]
+	_heal_bars = [
+		[user, Gen2HpBarAnimation.create(
+			int(giver["hp"]) + amount, int(giver["hp"]), int(giver["max_hp"]))],
+		[target, Gen2HpBarAnimation.create(
+			int(taker["hp"]) - restored, int(taker["hp"]), int(taker["max_hp"]))],
+	]
+	_heal_line = line
+	_healed_by = user
+	_member_cursor = target
+	sfx_requested.emit(Gen2Sfx.SFX_POTION, true)
+	_refresh()
+
+
+func _advance_heal_transfer() -> void:
+	if _heal_bars.is_empty():
+		_heal_hold = maxi(_heal_hold - 1, 0)
+		return
+	var anim: Gen2HpBarAnimation = _heal_bars[0][1]
+	anim.advance_frame()
+	if not anim.finished():
+		return
+	_heal_bars.pop_front()
+	if not _heal_bars.is_empty():
+		sfx_requested.emit(Gen2Sfx.SFX_POTION, true)
+		return
+	_message = _heal_line
+	_heal_hold = Gen2ItemActionText.HOLD_FRAMES if _gen1() else 0
 
 
 ## A caller's own refusal in this list's box, for a selection the list itself

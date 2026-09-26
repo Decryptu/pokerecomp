@@ -133,9 +133,9 @@ func test_start_closes_an_open_start_menu() -> void:
 	assert_true(_world_screen._objects_may_move())
 
 
-## `MonMenu_Item`'s TAKE answers 0, which `StartMenu_Pokemon` takes back to
-## `.loop` with the member it acted on still chosen. The line it prints closes
-## on B as well as A, which is `PrintText`'s own `WaitButton`.
+## `GiveTakePartyMonItem`'s TAKE answers 3: its line is `MenuTextboxBackup` over
+## the party list, and `.menu` redraws that list on the member it acted on. The
+## line closes on B as well as A.
 func test_take_returns_to_the_party_list_on_the_member_it_acted_on() -> void:
 	await _open_world()
 	var save: Gen2SaveData = _world_screen._injected_save
@@ -156,10 +156,11 @@ func test_take_returns_to_the_party_list_on_the_member_it_acted_on() -> void:
 	party.handle_button(PokeButton.A)
 	await get_tree().process_frame
 	assert_eq((save.party[1] as Gen2SaveMon).item, 0, "TAKE put it in the bag")
-	assert_true(_world_screen._field_move_text, "the took line is up")
-	assert_null(_world_screen._party_host, "over the map")
+	assert_false(_world_screen._field_move_text, "nothing is said over the map")
+	party = _world_screen._party_host
+	assert_not_null(party, "the took line is over the list")
+	assert_ne(String(party.submenu_snapshot()["message"]), "")
 
 	_world_screen.press_button(PokeButton.B)
-	assert_false(_world_screen._field_move_text, "B closed the line")
-	assert_not_null(_world_screen._party_host, "and the list is back")
-	assert_eq(_world_screen._party_host.get("_member_cursor"), 1, "on the same member")
+	assert_eq(String(party.submenu_snapshot()["message"]), "", "B closed the line")
+	assert_eq(party.get("_member_cursor"), 1, "on the same member")

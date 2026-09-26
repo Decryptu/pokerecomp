@@ -33,7 +33,7 @@ static func deposit_party_to_box(
 	if not bool(placed.get("ok", false)):
 		return _failure(StringName(placed.get("reason", &"box_insert_failed")))
 	candidate.party.remove_at(party_index)
-	_deposited(data, mon)
+	deposited(data, mon)
 	return _commit(save, data, candidate, {
 		"kind": &"party_to_box",
 		"party_index": party_index,
@@ -76,10 +76,10 @@ static func withdraw_box_to_party(
 	}, persist)
 
 
-## `SendGetMonIntoFromBox`'s PC_DEPOSIT tail, `RestorePPOfDepositedPokemon`;
+## `RestorePPOfDepositedPokemon` behind a PC deposit and `SendMonIntoBox` alike;
 ## Generation 1's `_MoveMon` copies the row whole and touches nothing.
-static func _deposited(data: GameData, mon: Gen2SaveMon) -> void:
-	if data.generation == RomRegistry.GEN1:
+static func deposited(data: GameData, mon: Gen2SaveMon) -> void:
+	if data == null or data.generation == RomRegistry.GEN1:
 		return
 	for slot: int in Gen2SaveMon.MAX_MOVES:
 		if int(mon.moves[slot]) > 0:

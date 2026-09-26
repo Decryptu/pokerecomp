@@ -311,6 +311,8 @@ var _learning_move: int = 0
 ## The moves a field evolution offered that would not fit, offered one at a time
 ## the way `EvolveAfterBattle` calls `LearnMove` over the new learnset.
 var _evolution_offers: Array[int] = []
+## [method open_level_moves]'s own run, which has no pack behind it.
+var _level_moves_only: bool = false
 ## The evolution a Rare Candy owes once its level box and moves are done.
 var _pending_evolution: Dictionary = {}
 
@@ -417,6 +419,16 @@ func open_give(party_index: int) -> void:
 	_open_pack_mode()
 
 
+## `LearnLevelMoves` behind a world evolution, over `ClearTilemap`'s blank screen.
+func open_level_moves(party_index: int, moves: Array) -> void:
+	_level_moves_only = true
+	if _defer_entry(open_level_moves.bind(party_index, moves)):
+		return
+	_forget_party_index = party_index
+	_evolution_offers.assign(moves)
+	_offer_next_evolution_move()
+
+
 ## `SellMenu` and `PlayerDepositItemMenu`: A hands a stack to [param action].
 func open_deposit_sell(action: Gen2DepositSellPack) -> void:
 	_deposit_sell = action
@@ -440,8 +452,8 @@ func open_battle_pack(
 	_open_pack_mode()
 
 
-func say(message: String) -> void:
-	_show_pack_result(message)
+func say(message: String, then: Callable = Callable()) -> void:
+	_show_pack_result(message, then)
 
 
 ## `SelectMenu`. `CheckRegisteredItem`'s `.NotRegistered` carry is
@@ -731,6 +743,7 @@ func _confirm_now() -> void:
 		Mode.PACK:
 			_confirm_pack()
 		Mode.PACK_TARGET:
+			_remember_target()
 			## `PartyMenuSelect` returns carry on CANCEL, which the caller answers
 			## the same way it answers B.
 			if _target_cursor >= _party_targets().size():
@@ -826,6 +839,7 @@ func _cancel_now() -> void:
 		Mode.PACK_PP_MOVE:
 			_open_target_mode()
 		Mode.PACK_TARGET:
+			_remember_target()
 			_open_item_mode()
 		## B at the yes/no is `YesNoBox`'s no, which is the carry `TossMenu`
 		## returns on. The submenu is already closed by then, so it lands back on
@@ -1539,28 +1553,46 @@ func _give_selected_item(party_index: int, swap: bool = false) -> void:
 		_show_pack_result("No save is loaded.")
 		return
 	var number: int = int(item.get("item", 0))
+	## `.next`: `ItemCantHeldText` and `jr .loop`, the pack again.
 	if not Gen2WorldPack.can_hold(_data, number):
-		_show_pack_result(Gen2WorldPack.cant_hold_text())
+		_show_pack_result(Gen2WorldPack.cant_hold_text(), _open_pack_mode.bind(false))
 		return
-	## `GivePartyItem` writes the item and then runs `ComposeMailMessage`; here
-	## the message is written first, because the transaction is what commits and
-	## a cancelled entry has to leave the bag alone.
+	## `GivePartyItem` says its line before `ComposeMailMessage`; the give commits after.
 	if Gen2HeldItem.is_mail(number) and _pending_mail == null:
-		_open_mail_composer(number, party_index, swap)
+		var refused: Dictionary = Gen2WorldBagHost.give_check(_world, _pack_save, number, party_index, swap)
+		if refused.is_empty():
+			var held: int = (_pack_save.party[party_index] as Gen2SaveMon).item
+			_show_pack_result(
+				_give_line(party_index, _data.item_name(held) if held > 0 else "", String(item.get("name", ""))),
+				_open_mail_composer.bind(number, party_index, swap)
+			)
+			return
+		_answer_give_refusal(refused, party_index)
 		return
+	var composed: bool = _pending_mail != null
 	var result: Dictionary = Gen2WorldBagHost.give_to_party(
 		_world, _pack_save, number, party_index, swap, _pack_persist, _pending_mail
 	)
 	_pending_mail = null
 	if bool(result.get("ok", false)):
-		var target_name: String = _target_name(party_index)
-		var held_name: String = String(result.get("held_name", ""))
-		_show_pack_result(
-			Gen2WorldPack.swap_text(target_name, held_name, String(result.get("name", ""))) \
-				if int(result.get("held", 0)) > 0 \
-				else Gen2WorldPack.hold_text(target_name, String(result.get("name", "")))
-		)
+		if composed:
+			_leave_pack_result()
+			return
+		_show_pack_result(_give_line(
+			party_index, String(result.get("held_name", "")), String(result.get("name", ""))
+		))
 		return
+	_answer_give_refusal(result, party_index)
+
+
+## `PokemonHoldItemText`, or `PokemonSwapItemText` when [param held_name] was held.
+func _give_line(party_index: int, held_name: String, item_name: String) -> String:
+	var target_name: String = _target_name(party_index)
+	return Gen2WorldPack.swap_text(target_name, held_name, item_name) if not held_name.is_empty() \
+		else Gen2WorldPack.hold_text(target_name, item_name)
+
+
+func _answer_give_refusal(result: Dictionary, party_index: int) -> void:
 	var reason: StringName = StringName(result.get("reason", &""))
 	if reason == &"already_holding":
 		_open_give_swap(party_index, String(
@@ -1639,10 +1671,13 @@ func _render_give_swap() -> void:
 
 
 ## The answer to `PokemonAskSwapItemText`. Its no is `.abort`, which leaves both
-## items where they were.
+## items where they were and quits `.GiveItem` to the party list behind it.
 func _confirm_give_swap() -> void:
 	if _swap_cursor != 0:
-		_open_pack_mode(false)
+		if _give_target >= 0:
+			closed.emit()
+		else:
+			_open_pack_mode(false)
 		return
 	_give_selected_item(_swap_target, true)
 
@@ -2091,19 +2126,22 @@ func _teach_refusal(reason: StringName, party_index: int) -> String:
 	return "Can't teach that: %s" % String(reason)
 
 
+## `PartyMenuSelect`'s store into `wPartyMenuCursor`, which CANCEL skips.
+func _remember_target() -> void:
+	if _world != null and _target_cursor < _party_targets().size():
+		_world.party_menu_cursor["cursor"] = _target_cursor + 1
+
+
 func _open_target_mode() -> void:
 	_mode = Mode.PACK_TARGET
-	_target_cursor = clampi(_target_cursor, 0, _target_rows() - 1)
+	var remembered: int = int(_world.party_menu_cursor["cursor"]) if _world != null else 0
+	_target_cursor = remembered - 1 if remembered >= 1 and remembered <= _party_targets().size() else 0
 	## `InitPartyMenuGFX` respawns one icon struct per member every time the list
-	## is opened, which is what puts the icons on the page at all.
+	## is opened.
 	if _party_menu_page() != null:
-		_target_page.reset(_party_targets())
+		_target_page.reset(_party_targets(), _target_cursor)
 	_target_clock.reset()
 	_render_targets()
-	## `InitPartyMenuGFX` opens every struct on frame -1, so the icons are blank
-	## until `DoNextFrameForAllSprites` has run once; the list is drawn after
-	## that first pass rather than before it.
-	advance_target_icons()
 
 
 func _render_targets() -> void:
@@ -2139,7 +2177,7 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 		## `NoEffectMessage` is `PrintText` over the party list.
 		_show_pack_result(
 			_use_refusal(StringName(result.get("reason", &"")), number), Callable(),
-			{"rows": rows, "cursor": party_index} if party_index >= 0 else {}
+			{"rows": rows, "held": party_index} if party_index >= 0 else {}
 		)
 		return
 	if StringName(result.get("effect", &"")) == &"rare_candy":
@@ -2189,7 +2227,7 @@ func _show_party_result(
 	next: Callable = Callable()
 ) -> void:
 	var kind: StringName = Gen2ItemActionText.kind(_data, int(item.get("item", 0)), result)
-	var party: Dictionary = {"rows": rows, "cursor": -1 if kind != &"" else party_index}
+	var party: Dictionary = {"rows": rows, "cursor": -1, "held": -1 if kind != &"" else party_index}
 	if kind == Gen2ItemActionText.HEAL or kind == Gen2ItemActionText.REVIVE:
 		var row: Dictionary = rows[party_index]
 		sfx_requested.emit(Gen2Sfx.SFX_POTION, true)
@@ -2208,7 +2246,14 @@ func _show_party_result(
 		sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, false)
 	if kind != &"" and not party.has("anim") and kind != Gen2ItemActionText.LEVEL:
 		party["hold"] = Gen2ItemActionText.HOLD_FRAMES
+	if bool(result.get("bitter", false)):
+		next = _say_bitter.bind(next)
 	_show_pack_result(_party_result_text(item, result, party_index, kind), next, party)
+
+
+## `LooksBitterMessage`, over the list the action line left behind.
+func _say_bitter(then: Callable) -> void:
+	_show_pack_result(Gen2ItemActionText.LOOKS_BITTER, then, {"rows": _party_targets(), "cursor": -1})
 
 
 func _party_result_text(
@@ -2271,10 +2316,11 @@ func _party_result_image() -> Image:
 	var anim: Gen2HpBarAnimation = _party_result.get("anim", null)
 	if anim != null:
 		(rows[int(_party_result["row"])] as Dictionary)["hp"] = anim.hp()
-	## `ErasePartyMenuCursors` runs with the redraw that prints the line.
+	## `PlaceHollowCursor` through the bar, then `ErasePartyMenuCursors`.
 	var image: Image = _target_page.render(
-		rows, int(_party_result["row"]) if anim != null else int(_party_result.get("cursor", -1)),
-		String(_party_result.get("prompt", box_text())), true, int(_party_result.get("held", -1)),
+		rows, int(_party_result.get("cursor", -1)), String(_party_result.get("prompt", box_text())),
+		not _party_result.has("blank"),
+		int(_party_result["row"]) if anim != null else int(_party_result.get("held", -1)),
 		bool(_party_result.get("quality", false)), not _party_result.has("prompt")
 	)
 	var stats: Dictionary = _party_result.get("stats", {})
@@ -2304,11 +2350,14 @@ func _offer_next_evolution_move() -> void:
 			_pending_evolution = {}
 			evolution_animation_requested.emit(plan, _offer_next_evolution_move)
 			return
+		if _level_moves_only:
+			closed.emit()
+			return
 		_open_pack_mode(false)
 		return
 	var move: int = _evolution_offers.pop_front()
 	_learning_move = move
-	_learn_over = _over_party(_forget_party_index)
+	_learn_over = {"rows": [], "blank": true} if _level_moves_only else _over_party(_forget_party_index)
 	_forget_move_name = String(_data.move(move).get("name", "")) if _data != null else ""
 	var result: Dictionary = Gen2WorldPartyHost.learn_move(
 		_world, _pack_save, _forget_party_index, move, -1, _pack_persist
@@ -2375,8 +2424,9 @@ func _refuse_stone(party_index: int) -> void:
 ## pack's `.Field` falls through to `.Oak` when the effect did nothing, and
 ## SELECT's `.Overworld` reaches `CantUseItem` instead.
 func _use_refusal(reason: StringName, item: int) -> String:
+	## `UseRegisteredItem`'s `._cantuse` is `CantUseItem`, the same Oak line.
 	if _using_registered:
-		return Gen2WorldPack.cant_use_text()
+		return _pack_text(TEXT_OAK)
 	if _gen1_pack() and GEN1_BIKE_REFUSALS.has(reason):
 		return _pack_text(String(GEN1_BIKE_REFUSALS[reason]))
 	## `.Field` reads one byte and says `.Oak` for every way an effect can fail,
@@ -2392,6 +2442,8 @@ func _use_refusal(reason: StringName, item: int) -> String:
 			return "You have none of those."
 		&"repel_still_in_effect":
 			return REPEL_STILL_IN_EFFECT
+		&"used_on_egg":
+			return Gen2ItemActionText.CANT_USE_ON_EGG
 	return "Can't use that here: %s" % String(reason)
 
 
@@ -3079,7 +3131,7 @@ func _learn_backdrop(text: String) -> Image:
 	if _party_menu_page() == null:
 		return null
 	return _target_page.render(
-		_learn_over.get("rows", _party_targets()), -1, text, true,
+		_learn_over.get("rows", _party_targets()), -1, text, not _learn_over.has("blank"),
 		int(_learn_over.get("held", -1)), bool(_learn_over.get("quality", false)), true
 	)
 

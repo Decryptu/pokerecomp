@@ -679,7 +679,7 @@ func test_the_dude_plays_the_catching_tutorial_and_keeps_nothing() -> void:
 	await get_tree().process_frame
 
 	assert_true("DUDE used the\nPOKE BALL." in messages, JSON.stringify(messages))
-	assert_true("Gotcha! %s was caught!" % _wild_name() in messages, JSON.stringify(messages))
+	assert_true(Gen2BattleScreen.CAUGHT_TEXT % _wild_name() in messages, JSON.stringify(messages))
 	assert_eq(
 		_world_screen._world.state.item_quantity(Gen2WorldPartyHost.ITEM_POKE_BALL),
 		balls_before
@@ -731,13 +731,13 @@ func test_master_ball_capture_runs_through_the_real_battle_overlay() -> void:
 	assert_true(host.begin_capture()["ok"])
 	assert_true(host.select_capture_ball(1)["ok"])
 	assert_true(host.throw_capture_ball()["ok"])
-	_settle_frames(host)
 	assert_eq(
 		host.battle_snapshot()["message"],
 		host._item_used_text(Gen2WorldPartyHost.ITEM_MASTER_BALL)
 	)
+	_settle_frames(host)
 
-	var caught: String = "Gotcha! %s was caught!" % _wild_name()
+	var caught: String = Gen2BattleScreen.CAUGHT_TEXT % _wild_name()
 	for _message: int in 8:
 		if host.battle_snapshot()["message"] == caught:
 			break
@@ -774,14 +774,12 @@ func test_the_catch_prompt_waits_for_the_gotcha_line() -> void:
 		host.available_capture_balls().find(Gen2WorldPartyHost.ITEM_MASTER_BALL)
 	)["ok"])
 	assert_true(host.throw_capture_ball()["ok"])
-	_settle_frames(host)
-
-	var caught: String = "Gotcha! %s was caught!" % _wild_name()
-	for _message: int in 10:
-		if String(host.battle_snapshot()["message"]) == caught:
-			break
-		host.finish()
-		host.advance()
+	## `ItemUsedText` is `done`: the throw runs on to the caught line unasked.
+	var caught: String = Gen2BattleScreen.CAUGHT_TEXT % _wild_name()
+	var guard: int = 4000
+	while String(host.battle_snapshot()["message"]) != caught and guard > 0:
+		host.advance_frame()
+		guard -= 1
 	assert_eq(String(host.battle_snapshot()["message"]), caught)
 	var box: Gen2TextBox = host.get("_box")
 	assert_true(box.is_revealing(), "the caught line has only just been put up")
@@ -815,14 +813,10 @@ func test_failed_capture_shows_break_free_and_returns_to_battle() -> void:
 	assert_true(host.begin_capture()["ok"])
 	assert_true(host.throw_capture_ball()["ok"])
 	_settle_frames(host)
-	assert_eq(
-		host.battle_snapshot()["message"],
-		host._item_used_text(Gen2WorldPartyHost.ITEM_POKE_BALL)
-	)
 
 	## One of `.shake_and_break_free`'s four lines and nothing else: which one is
 	## the rock count's to decide, and no line is said for a rock of its own.
-	var saw_break_free: bool = false
+	var saw_break_free: bool = Gen2BattleScreen.BREAK_FREE_TEXT.has(host.battle_snapshot()["message"])
 	for _message: int in 5:
 		host.finish()
 		host.advance()
@@ -1767,6 +1761,48 @@ func test_a_level_evolution_is_presented_after_the_battle_and_then_applied() -> 
 		"SetSeenAndCaughtMon")
 
 
+## `EvolveAfterBattle` runs `LearnLevelMoves` over the cleared screen before the
+## next Pokemon: a move the new species knows at this level is taught with
+## `LearnMove`'s own line, and the evolution screen waits for it.
+func test_an_evolution_after_a_battle_teaches_its_level_move_with_a_line() -> void:
+	_write_level_evolution()
+	var species: Array = RomCache.read_json(RomCache.species_path(Fixture.directory()))
+	for raw: Dictionary in species:
+		if int(raw.get("number", 0)) == EVOLVED_SPECIES:
+			raw["learnset"] = [{"level": EVOLVE_LEVEL, "move": BattleFixture.EMBER}]
+	RomCache.write_json(RomCache.species_path(Fixture.directory()), species)
+	_data = GameData.open_directory(Fixture.directory())
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	save.party[0].species = EVOLVING_SPECIES
+	save.party[0].nickname = "CHIKORITA"
+	save.party[0].level = EVOLVE_LEVEL
+	save.party[0].exp = Gen2Experience.total_exp_at(
+		int(_data.species(EVOLVED_SPECIES).get("growth_rate", 0)), EVOLVE_LEVEL
+	)
+	save.party[0].moves = [BattleFixture.TACKLE, 0, 0, 0]
+
+	_world_screen.preview_level_evolution()
+	var learning: Gen2StartMenuScreen = null
+	for _frame: int in 4000:
+		learning = _world_screen.get("_level_moves_host")
+		var screen: Gen2EvolutionScreen = _world_screen.get("_evolution_host")
+		if learning != null or screen == null:
+			break
+		_world_screen.advance_frame()
+		if screen.awaiting_press():
+			_world_screen.press_button(PokeButton.A)
+	assert_not_null(learning, "LearnMove stands over the held evolution screen")
+	assert_eq(String(learning.get("_pack_result")), Gen2MoveForget.learned_text(
+		"BAYLEEF", String(_data.move(BattleFixture.EMBER).get("name", "")), _data.generation
+	))
+	assert_eq(save.party[0].moves[1], BattleFixture.EMBER)
+	_world_screen.press_button(PokeButton.A)
+	await _settle_evolution()
+	assert_null(_world_screen.get("_level_moves_host"))
+	assert_null(_world_screen.get("_evolution_host"), "and the loop runs on to its end")
+
+
 ## `.WaitFrames_CheckPressedB` sets `wEvolutionCanceled` and `.proceed`'s
 ## `jp c, CancelEvolution` prints `StoppedEvolvingText` instead of writing the
 ## new species. The flash loop is the only place B is read, which is why the
@@ -2219,7 +2255,7 @@ func test_a_registered_policy_pays_a_capture_between_gotcha_and_the_nickname() -
 	assert_true(host.throw_capture_ball()["ok"])
 	_settle_frames(host)
 
-	var caught: String = "Gotcha! %s was caught!" % _wild_name()
+	var caught: String = Gen2BattleScreen.CAUGHT_TEXT % _wild_name()
 	var messages: Array = []
 	## The award moves the EXP bar, and nothing behind a moving bar is shown, so
 	## this spends the screen's own frames the way a player pending does.
@@ -2318,10 +2354,11 @@ func test_a_first_catch_says_its_dex_line_and_asks_for_the_page() -> void:
 		if not asked.is_empty():
 			break
 		host.finish()
+		_settle_frames(host)
 		host.advance()
 	var expected: String = Gen2BattleScreen.NEW_DEX_DATA_TEXT % _wild_name()
 	assert_true(said.has(expected), JSON.stringify(said))
-	assert_gt(said.find(expected), said.find("Gotcha! %s was caught!" % _wild_name()))
+	assert_gt(said.find(expected), said.find(Gen2BattleScreen.CAUGHT_TEXT % _wild_name()))
 	assert_eq(asked.size(), 1, "and the page was asked for once")
 
 

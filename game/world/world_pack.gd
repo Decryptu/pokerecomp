@@ -534,49 +534,43 @@ static func _pocket_entries(data: GameData, owned: Dictionary, pocket: int) -> i
 
 
 ## `GiveTakePartyMonItem`'s own wording (`data/text/common_2.asm`), shared by the
-## pack's GIVE, the party submenu's ITEM and SELECT's registration, none of which
-## can see the others' copy. Each source text is one box; the line breaks are
-## where its box ended, so they are not reproduced here.
+## pack's GIVE, the party submenu's ITEM and SELECT's registration.
 static func hold_text(mon_name: String, item_name: String) -> String:
-	return "Made %s hold %s." % [mon_name, item_name]
+	return "Made %s\nhold %s." % [mon_name, item_name]
 
 
 ## `PokemonAskSwapItemText`, the yes/no in front of the swap.
 static func ask_swap_text(mon_name: String, held_name: String) -> String:
-	return "%s is already holding %s. Switch items?" % [mon_name, held_name]
+	return "%s is\nalready holding%s%s.\nSwitch items?" % [mon_name, Gen2TextStream.PAGE_BREAK, held_name]
 
 
 static func swap_text(mon_name: String, held_name: String, item_name: String) -> String:
-	return "Took %s's %s and made it hold %s." % [mon_name, held_name, item_name]
+	return "Took %s's\n%s and%smade it hold\n%s." % [
+		mon_name, held_name, Gen2TextStream.PAGE_BREAK, item_name,
+	]
 
 
 static func took_text(mon_name: String, item_name: String) -> String:
-	return "Took %s from %s." % [item_name, mon_name]
+	return "Took %s\nfrom %s." % [item_name, mon_name]
 
 
 static func not_holding_text(mon_name: String) -> String:
-	return "%s isn't holding anything." % mon_name
+	return "%s isn't\nholding anything." % mon_name
 
 
 ## `ItemStorageFullText`, which is what a refused `ReceiveItemFromPokemon` says
 ## on either half of the swap.
 static func storage_full_text() -> String:
-	return "Item storage space full."
+	return "Item storage space\nfull."
 
 
 static func egg_cant_hold_text() -> String:
-	return "An EGG can't hold an item."
+	return "An EGG can't hold\nan item."
 
 
 ## `ItemCantHeldText`, `.GiveItem`'s answer for a key item or an untossable one.
 static func cant_hold_text() -> String:
-	return "This item can't be held."
-
-
-## `CantUseItemText`, which is what `UseRegisteredItem` answers with where the
-## pack's own USE would reach `.Oak`.
-static func cant_use_text() -> String:
-	return "Can't use that here."
+	return "This item can't be\nheld."
 
 
 static func registered_text(item_name: String) -> String:

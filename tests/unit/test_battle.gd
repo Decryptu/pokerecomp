@@ -3366,28 +3366,34 @@ func test_a_revive_only_answers_a_fainted_member_and_puts_it_back_on_the_split()
 	assert_eq(bench.hp, maxi(bench.max_hp() / 2, 1))
 
 
-## `XItemEffect` and `GuardSpecEffect` act on whoever is out, and each refuses
-## once there is nothing left to raise or set.
-func test_an_x_item_raises_the_stage_once_and_then_has_no_effect() -> void:
+## `XItemEffect` spends the item in `UseItemText` before `RaiseStat` can fail, so
+## a stage at +6 is a used item, a turn and a line; `GuardSpecEffect` refuses a
+## flag already set. HAPPINESS_USEDXITEM is +1 below 100 either way.
+func test_an_x_item_is_spent_even_at_the_top_stage() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 20, [Fixture.TACKLE]),
 		_mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])
 	)
 	var user: Gen2BattleMon = battle.mon(Gen2Battle.PLAYER)
+	user.happiness = 70
 
-	assert_true(bool(battle.use_bag_item(Fixture.X_ATTACK).get("ok", false)))
+	var raised: Dictionary = battle.use_bag_item(Fixture.X_ATTACK)
 	assert_eq(user.stage("attack"), 1)
+	assert_eq(StringName((raised["events"] as Array)[-1]["type"]), Gen2Battle.STAT_CHANGED)
+	assert_eq(user.happiness, 71)
 
 	assert_true(bool(battle.use_bag_item(Fixture.GUARD_SPEC).get("ok", false)))
-	assert_true(Gen2Substatus.has(user.substatus, Gen2Substatus.MIST))
 	assert_eq(
 		StringName(battle.use_bag_item(Fixture.GUARD_SPEC)["reason"]), &"item_has_no_effect"
 	)
 
 	user.change_stage("attack", Gen2Stats.MAX_STAGE)
+	var capped: Dictionary = battle.use_bag_item(Fixture.X_ATTACK)
+	assert_true(bool(capped.get("ok", false)), "the item is used")
 	assert_eq(
-		StringName(battle.use_bag_item(Fixture.X_ATTACK)["reason"]), &"item_has_no_effect"
+		StringName((capped["events"] as Array)[-1]["type"]), Gen2Battle.STAT_CHANGE_FAILED
 	)
+	assert_eq(user.happiness, 72)
 
 
 ## `BitterBerryEffect` reads `wPlayerSubStatus3`, so the row the party list chose
@@ -3432,7 +3438,7 @@ func test_a_poke_doll_ends_a_wild_battle_and_does_nothing_to_a_trainer() -> void
 		Gen2Party.of(_mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])), _rng, true
 	)
 	assert_eq(
-		StringName(trainer.use_bag_item(Fixture.POKE_DOLL)["reason"]), &"item_has_no_effect"
+		StringName(trainer.use_bag_item(Fixture.POKE_DOLL)["reason"]), &"item_not_usable_here"
 	)
 	assert_false(trainer.is_over())
 
@@ -3456,6 +3462,44 @@ func test_the_pp_items_fill_one_slot_and_all_of_them() -> void:
 
 	assert_true(bool(battle.use_bag_item(Fixture.ELIXER, 0).get("ok", false)))
 	assert_eq(user.pp_left(1), mini(int(_data.move(Fixture.EMBER).get("pp", 0)), 10))
+
+
+## `RestorePP` fills the party struct and `BattleRestorePP` copies nothing onto a
+## transformed battle mon: the Ether restores the Pokemon's own move, and the
+## copy it fights with is left as it stands.
+func test_an_ether_under_transform_restores_the_move_it_owns() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.DITTO, 20, [Fixture.TRANSFORM]), _mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])
+	)
+	var user: Gen2BattleMon = battle.mon(Gen2Battle.PLAYER)
+	user.pp[0] = 0
+	assert_true(user.transform_into(battle.enemy))
+	user.pp[0] = 1
+	assert_true(bool(battle.use_bag_item(Fixture.ETHER, 0, 0).get("ok", false)))
+	assert_eq(user.pp_left(0), 1, "the copied TACKLE is untouched")
+	user.restore_transform()
+	assert_eq(user.pp_left(0), user.max_pp(0), "TRANSFORM itself is full")
+
+
+## `RevivePokemon` sets `wBattleParticipantsNotFainted` only for a Pokemon
+## `wBattleParticipantsIncludingFainted` already holds, so one that fainted
+## before this opponent came in shares none of its experience.
+func test_a_revive_shares_no_experience_with_one_that_never_fought() -> void:
+	var benched: Gen2BattleMon = _mon(Fixture.PIKACHU, 20, [Fixture.TACKLE])
+	benched.hp = 0
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([_mon(Fixture.PIKACHU, 20, [Fixture.TACKLE]), benched]),
+		Gen2Party.of(_mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])),
+		_rng
+	)
+	assert_true(bool(battle.use_bag_item(Fixture.REVIVE, 1).get("ok", false)))
+	battle.enemy.hp = 1
+	var kill: Array = battle.take_turn(0, 0)
+	assert_eq(
+		_of_type(kill, Gen2Battle.EXP_GAINED).map(func(e: Dictionary) -> int: return e["index"]),
+		[0], "only the one that fought"
+	)
 
 
 ## `BATTLEPLAYERACTION_USEITEM`: the item is already spent when the turn runs, so

@@ -30,6 +30,7 @@ enum Phase {
 
 var _data: GameData = null
 var _save: Gen2SaveData = null
+var party_cursor: Dictionary = {"cursor": 0}
 var _player_name: String = ""
 var _player_id: int = 0
 ## Every stub `Gen2Layout.NAME_RATER_TEXT_ORDER` names, by that name.
@@ -201,6 +202,7 @@ func _open_party() -> void:
 	if host == null:
 		_end(Gen2NameRater.ENDING_CANCEL)
 		return
+	host.share_cursor(party_cursor)
 	host.set_context(_data, _save, true)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.mouse_filter = Control.MOUSE_FILTER_STOP
