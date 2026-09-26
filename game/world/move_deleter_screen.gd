@@ -27,6 +27,7 @@ enum Phase {
 
 var _data: GameData = null
 var _save: Gen2SaveData = null
+var party_cursor: Dictionary = {"cursor": 0}
 ## Every stub `Gen2Layout.MOVE_DELETER_TEXT_ORDER` names, by that name.
 var _texts: Dictionary = {}
 
@@ -183,6 +184,7 @@ func _open_party() -> void:
 	if host == null:
 		_end(Gen2MoveDeleter.ENDING_DECLINED)
 		return
+	host.share_cursor(party_cursor)
 	host.set_context(_data, _save, true)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.mouse_filter = Control.MOUSE_FILTER_STOP

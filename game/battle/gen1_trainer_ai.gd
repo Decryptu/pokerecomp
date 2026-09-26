@@ -317,7 +317,7 @@ static func apply_item(battle: Gen2Battle, user: Gen2BattleMon, item: int) -> Di
 		user.substatus |= Gen2Substatus.MIST
 		return {"substatus": Gen2Substatus.MIST}
 	var raised: Dictionary = battle.apply_x_item(user, item)
-	return {"stat": String(raised.get("stat", "")), "raised": bool(raised.get("ok", false))}
+	return {"stat": String(raised.get("stat", "")), "raised": bool(raised.get("moved", false))}
 
 
 ## `AICureStatus`: the status byte and `BADLY_POISONED`.

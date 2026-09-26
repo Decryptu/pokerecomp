@@ -1266,8 +1266,8 @@ func _the_bag_in_a_fight() -> void:
 
 	_r.check(
 		StringName(_bag_battle(true).use_bag_item(BAG_POKE_DOLL).get("reason", &"")) \
-			== &"item_has_no_effect",
-		"a POKE DOLL is not refused in a trainer battle"
+			== &"item_not_usable_here",
+		"a POKE DOLL is not refused with ItemUseNotTime in a trainer battle"
 	)
 	var wild: Gen2Battle = _bag_battle()
 	_bag_check(wild.use_bag_item(BAG_POKE_DOLL), "POKE DOLL")

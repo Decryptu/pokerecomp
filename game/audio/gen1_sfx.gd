@@ -20,6 +20,7 @@ const SFX_FAINT_THUD: int = 149
 const SFX_SURFING_LAND: int = 149
 const SFX_GET_ITEM2_4_2: int = 150
 const SFX_RUN: int = 151
+const SFX_DEX_PAGE_ADDED: int = 152
 const SFX_POISONED: int = 151
 const SFX_TRADE_MACHINE: int = 152
 const SFX_TURN_ON_PC: int = 153

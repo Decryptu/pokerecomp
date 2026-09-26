@@ -36,6 +36,8 @@ var _animation_pixels: PackedByteArray = PackedByteArray()
 static func create(
 	data: GameData, mons: Array, start_cursor: int = 0, save: Gen2SaveData = null
 ) -> Gen2MonStatsScreen:
+	## Every `StatsScreenInit` caller's `LowVolume`, and `StatusScreen`'s own.
+	Gen2AudioPlayer.hold_low_volume(true)
 	var out := Gen2MonStatsScreen.new()
 	out._data = data
 	out._mons = mons
@@ -115,6 +117,11 @@ func cursor() -> int:
 
 
 ## `StatsScreen_JoypadAction`. Returns whether the button was used.
+func _close() -> void:
+	Gen2AudioPlayer.hold_low_volume(false)
+	closed.emit()
+
+
 func handle_button(button: int) -> bool:
 	## `StatusScreen` and `StatusScreen2` each end in
 	## `WaitForTextScrollButtonPress`, which reads A and B and nothing else: one
@@ -123,7 +130,7 @@ func handle_button(button: int) -> bool:
 		if button != PokeButton.A and button != PokeButton.B:
 			return false
 		if _page == _last_page():
-			closed.emit()
+			_close()
 			return true
 		_turn_page(1)
 		return true
@@ -133,11 +140,11 @@ func handle_button(button: int) -> bool:
 	var egg: bool = current() != null and current().is_egg
 	match button:
 		PokeButton.B:
-			closed.emit()
+			_close()
 			return true
 		PokeButton.A:
 			if egg or _page == _last_page():
-				closed.emit()
+				_close()
 				return true
 			_turn_page(1)
 			return true

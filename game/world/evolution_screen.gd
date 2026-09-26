@@ -75,6 +75,7 @@ var _change_frames: int = 0  ## `Evolution_ChangeMonPic`'s `Delay3` still owed.
 var _tried: bool = false  ## `wMonTriedToEvolve`, which is `wEvolutionOccurred`.
 var _plans: Array = []
 var _index: int = 0
+var _held: bool = false
 var _phase: int = Phase.DONE
 var _frames: int = 0
 var _canceled: bool = false
@@ -425,10 +426,31 @@ func _open_congratulations() -> void:
 
 
 ## `.proceed`'s write, or `CancelEvolution`'s `jp EvolveAfterBattle_MasterLoop`.
+## A [signal resolved] handler may [method hold] the loop for `LearnLevelMoves`.
 func _finish_plan() -> void:
 	var plan: Dictionary = current_plan()
 	if not plan.is_empty():
 		resolved.emit(plan.duplicate(true), _canceled)
+	if _held:
+		if _text_box != null:
+			_text_box.visible = false
+		if _pic != null:
+			_pic.texture = null
+		return
+	_next_plan()
+
+
+func hold() -> void:
+	_held = true
+
+
+func resume() -> void:
+	if _held:
+		_held = false
+		_next_plan()
+
+
+func _next_plan() -> void:
 	_index += 1
 	if _text_box != null:
 		_text_box.visible = false

@@ -58,6 +58,9 @@ const CODE_BOX_BOTTOM_LEFT: int = 0x7D
 const TYPE_AT: Vector2i = Vector2i(2, 12)
 const ATTACK_LABEL: Vector2i = Vector2i(12, 12)
 const ATTACK_LABEL_STRING: String = "ATK/"
+## pokegold's `String_MoveAtk` is one letter longer and printed a column left.
+const GS_ATTACK_LABEL: Vector2i = Vector2i(11, 12)
+const GS_ATTACK_LABEL_STRING: String = "ATTK/"
 const POWER_AT: Vector2i = Vector2i(16, 12)
 const POWER_DIGITS: int = 3
 const NO_POWER_STRING: String = "---"
@@ -87,6 +90,7 @@ var stats: Gen2StatsScreenPage = null
 ## `Textbox` draws with wTextboxFrame, so both boxes wear whichever frame the
 ## player chose.
 var frame_style: int = 0
+var crystal: bool = true
 
 ## `GetSpriteAnimFrame`'s own two: FRAME opens at -1 and DURATION at zero, so
 ## the first pass shows the first entry and shadow OAM holds nothing before it.
@@ -105,6 +109,7 @@ static func from_data(data: GameData) -> Gen2MoveScreenPage:
 	out.tiles = page_tiles
 	out.stats = rows
 	out.frame_style = Gen2OptionsStore.current().textbox_frame
+	out.crystal = Gen2WorldState.is_crystal_profile(data)
 	return out
 
 
@@ -196,17 +201,22 @@ func draw(page: Dictionary) -> PackedByteArray:
 		_code(indices, width, Gen2StatsScreenPage.CODE_RIGHT_ARROW, RIGHT_ARROW)
 
 	stats.draw_move_list(indices, width, page.get("moves", []), MOVES_AT, MOVE_PP_AT)
-	var cursor: int = int(page.get("cursor", 0))
-	_code(
-		indices, width, Gen2MenuPage.CURSOR_CODE,
-		Vector2i(CURSOR_COLUMN, CURSOR_FIRST_ROW + cursor * CURSOR_ROW_STEP)
-	)
 	var held: int = int(page.get("held", -1))
 	if held >= 0:
 		_code(
 			indices, width, HOLLOW_CURSOR_CODE,
 			Vector2i(CURSOR_COLUMN, CURSOR_FIRST_ROW + held * CURSOR_ROW_STEP)
 		)
+	## `Place2DMenuCursor` draws over the `▷` it finds on its own row.
+	var cursor: int = int(page.get("cursor", 0))
+	_code(
+		indices, width, Gen2MenuPage.CURSOR_CODE,
+		Vector2i(CURSOR_COLUMN, CURSOR_FIRST_ROW + cursor * CURSOR_ROW_STEP)
+	)
+	if held >= 0:
+		## `.moving_move` blanks TYPE/ and the rows under it, not the frame.
+		if not (page.get("moves", []) as Array).is_empty():
+			_type_box(indices, width, false)
 		_text(indices, width, WHERE_STRING, WHERE_AT)
 		return indices
 	_draw_move_data(page, indices, width)
@@ -223,7 +233,8 @@ func _draw_move_data(page: Dictionary, into: PackedByteArray, width: int) -> voi
 	var move: Dictionary = moves[cursor]
 	_type_box(into, width)
 	_text(into, width, String(move.get("type_name", "")), TYPE_AT)
-	_text(into, width, ATTACK_LABEL_STRING, ATTACK_LABEL)
+	_text(into, width, ATTACK_LABEL_STRING if crystal else GS_ATTACK_LABEL_STRING,
+		ATTACK_LABEL if crystal else GS_ATTACK_LABEL)
 	var power: int = int(move.get("power", 0))
 	_text(
 		into, width,
@@ -241,13 +252,16 @@ func _draw_move_data(page: Dictionary, into: PackedByteArray, width: int) -> voi
 ## The half-open box `String_MoveType_Top` and its sibling draw around TYPE/: a
 ## closed top row and a bottom row that is open to the right, which is what the
 ## `└` at the end of the second string is.
-func _type_box(into: PackedByteArray, width: int) -> void:
+func _type_box(into: PackedByteArray, width: int, label: bool = true) -> void:
 	_frame_tile(into, width, CODE_BOX_TOP_LEFT, TYPE_BOX_TOP)
 	for column: int in range(1, TYPE_BOX_WIDTH - 1):
 		_frame_tile(into, width, CODE_BOX_HORIZONTAL, TYPE_BOX_TOP + Vector2i(column, 0))
 	_frame_tile(into, width, CODE_BOX_TOP_RIGHT, TYPE_BOX_TOP + Vector2i(TYPE_BOX_WIDTH - 1, 0))
 	_frame_tile(into, width, CODE_BOX_VERTICAL, TYPE_BOX_BOTTOM)
-	_text(into, width, TYPE_LABEL_STRING, TYPE_BOX_BOTTOM + Vector2i(1, 0))
+	if label:
+		_text(into, width, TYPE_LABEL_STRING, TYPE_BOX_BOTTOM + Vector2i(1, 0))
+	else:
+		_blank(into, width, TYPE_BOX_BOTTOM + Vector2i(1, 0), TYPE_BOX_WIDTH - 2)
 	_frame_tile(
 		into, width, CODE_BOX_BOTTOM_LEFT,
 		TYPE_BOX_BOTTOM + Vector2i(TYPE_BOX_WIDTH - 1, 0)
@@ -263,6 +277,12 @@ func _box(into: PackedByteArray, width: int, box: Rect2i) -> void:
 		frame_style, into, width,
 		box.position.x * TILE, box.position.y * TILE, box.size.x, box.size.y
 	)
+
+
+func _blank(into: PackedByteArray, width: int, at: Vector2i, cells: int) -> void:
+	for y: int in TILE:
+		for x: int in cells * TILE:
+			into[(at.y * TILE + y) * width + at.x * TILE + x] = 0
 
 
 func _text(into: PackedByteArray, width: int, text: String, at: Vector2i) -> void:

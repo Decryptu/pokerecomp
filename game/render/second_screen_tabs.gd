@@ -85,9 +85,11 @@ static func build(
 	player_name: String = "",
 	generation: int = RomRegistry.GEN2,
 	town_map: bool = false,
+	bug_contest: bool = false,
+	linked: bool = false,
 ) -> Gen2SecondScreenTabs:
 	var menu: Gen2WorldStartMenu = Gen2WorldStartMenu.build(
-		party_count, pokedex, pokegear, 0, player_name, false, false, generation
+		party_count, pokedex, pokegear, 0, player_name, false, bug_contest, generation, false, linked
 	)
 	var out := Gen2SecondScreenTabs.new()
 	for entry: Dictionary in menu.items():
@@ -117,6 +119,8 @@ static func from_world(world: Gen2WorldAPI) -> Gen2SecondScreenTabs:
 		world.player_name(),
 		world.data.generation if world.data != null else RomRegistry.GEN2,
 		town_map_owned(world),
+		world.bug_contest_active(),
+		world.in_link_room(),
 	)
 
 

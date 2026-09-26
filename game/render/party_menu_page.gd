@@ -265,9 +265,9 @@ func _advance_gen1(cursor: int) -> void:
 		chosen["frame"] = 1
 
 
-## `InitPartyMenuGFX`: one struct per member, spawned in party order. FRAME
-## opens at -1 and DURATION at zero, so the first pass shows the first entry.
-func reset(rows: Array) -> void:
+## `InitPartyMenuGFX`: one struct per member at FRAME -1, then its own
+## `PlaySpriteAnimations`, so the list is first shown with every icon on.
+func reset(rows: Array, cursor: int = -1) -> void:
 	_icons = []
 	for row: Variant in rows:
 		var member: Dictionary = row as Dictionary
@@ -297,6 +297,8 @@ func reset(rows: Array) -> void:
 		})
 	_gen1_counter = 0
 	_gen1_cursor = -1
+	if not gen1:
+		advance(rows, cursor)
 
 
 ## What the icons would draw right now, so a host caching its layer knows when

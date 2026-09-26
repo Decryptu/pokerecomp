@@ -2132,7 +2132,8 @@ func test_the_party_submenu_takes_a_held_item_back() -> void:
 	party.handle_button(PokeButton.DOWN)
 	party.handle_button(PokeButton.A)
 	await get_tree().process_frame
-	assert_null(_world_screen._party_host)
+	## `TakePartyItem`'s line stands over the list `.menu` redraws.
+	assert_ne(String(_world_screen._party_host.submenu_snapshot()["message"]), "")
 	assert_eq((save.party[0] as Gen2SaveMon).item, 0)
 	assert_eq(_world_screen._world.state.item_quantity(7), 2)
 
@@ -2555,8 +2556,8 @@ func test_a_list_longer_than_the_screen_is_scrolled_rather_than_drawn_past_it() 
 	Gen2ModHost.reset()
 
 
-## `GivePartyItem`: a mail item opens `_ComposeMailMessage` before anything is
-## written, and the finished entry goes onto the record with the item.
+## `GivePartyItem` says `PokemonHoldItemText` and then opens
+## `_ComposeMailMessage`; the finished entry goes onto the record with the item.
 func test_giving_mail_writes_a_message_before_it_leaves_the_bag() -> void:
 	await _open_world()
 	var mail_item: int = FLOWER_MAIL
@@ -2565,6 +2566,9 @@ func test_giving_mail_writes_a_message_before_it_leaves_the_bag() -> void:
 	_choose_action(host, Gen2WorldPack.ACTION_GIVE)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TARGET)
 
+	host.handle_button(PokeButton.A)
+	assert_eq(String(host.get("_pack_result")), Gen2WorldPack.hold_text(_first_member_name(
+		_world_screen._injected_save), _data.item_name(mail_item)))
 	host.handle_button(PokeButton.A)
 	## Nothing has moved yet: the keyboard is what stands between the choice and
 	## the transaction.

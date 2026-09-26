@@ -978,6 +978,15 @@ func persistent_pp(slot: int) -> int:
 	return pp_left(slot)
 
 
+func set_persistent_pp(slot: int, value: int) -> void:
+	if not transform_original.is_empty():
+		(transform_original["pp"] as Array)[slot] = value
+	elif slot == mimicked_slot and not is_gen1():
+		mimic_original_pp = value
+	else:
+		pp[slot] = value
+
+
 func persistent_pp_ups(slot: int) -> int:
 	if not transform_original.is_empty():
 		var original: Array = transform_original.get("pp_ups", [])

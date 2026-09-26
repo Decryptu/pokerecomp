@@ -400,7 +400,7 @@ func add_party_or_box(mon: Gen2SaveMon, data: GameData = null) -> Dictionary:
 	var placed: Dictionary = box.put(mon, target)
 	if not bool(placed.get("ok", false)):
 		return {"ok": false, "reason": placed.get("reason", &"box_insert_failed")}
-	Gen2SaveStorage.boxed(data, mon)
+	Gen2SaveStorage.deposited(data, mon)
 	return {
 		"ok": true,
 		"destination": &"box",

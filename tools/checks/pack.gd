@@ -277,9 +277,21 @@ func _verify_rare_candy(
 		and (host.get("_party_result") as Dictionary).has("stats"),
 		"%s: the first press did not draw the stats box." % _r.game_id)
 	host.handle_button(PokeButton.A)
+	## `LearnLevelMoves` behind the box: `LearnMove`'s own line for each move the
+	## level owes into an empty slot.
+	var mon: Gen2SaveMon = save.party[0]
+	for move: int in _r.data.moves_learned_at(mon.species, level + 1):
+		if mon.moves.find(0) < 0 and not mon.moves.has(move):
+			break
+		var learned: String = Gen2MoveForget.learned_text(
+			lead_name, String(_r.data.move(move).get("name", "")), _r.data.generation
+		)
+		_r.check(String(host.get("_pack_result")) == learned,
+			"%s: the level's move printed %s." % [_r.game_id, host.get("_pack_result")])
+		host.handle_button(PokeButton.A)
 	_r.check(host.get("_mode") != Gen2StartMenuScreen.Mode.PACK_RESULT
 		and save.party[0].level == level + 1,
-		"%s: the second press left mode %d at level %d." % [
+		"%s: the RARE CANDY left mode %d at level %d." % [
 			_r.game_id, host.get("_mode"), save.party[0].level])
 
 

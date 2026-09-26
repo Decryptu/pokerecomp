@@ -67,7 +67,7 @@ func handle_button(button: int) -> bool:
 			if _deleting:
 				selection_made.emit(-1)
 				return true
-			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, true)
 			## `.b_button`: a held move is put back where it came from and the
 			## screen stays up; nothing held is the way out.
 			if _held >= 0:
@@ -80,7 +80,7 @@ func handle_button(button: int) -> bool:
 			if _deleting:
 				selection_made.emit(_row)
 				return true
-			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, true)
 			if _held < 0:
 				_held = _row
 				return true
@@ -98,13 +98,13 @@ func handle_button(button: int) -> bool:
 	return false
 
 
-## `Load2DMenuData`'s own wrap: the list is a single column of `wNumMoves + 1`
-## rows and the cursor runs round it.
+## Neither `MoveScreen2DMenuData` nor `DeleteMoveScreen2DMenuData` sets
+## `_2DMENU_WRAP_UP_DOWN`, so the cursor stops at either end.
 func _move_row(delta: int) -> bool:
 	var rows: int = _move_count()
 	if rows <= 0:
 		return false
-	_row = wrapi(_row + delta, 0, rows)
+	_row = clampi(_row + delta, 0, rows - 1)
 	return true
 
 
@@ -152,13 +152,13 @@ func _move_count() -> int:
 
 
 ## `.place_move`: the two rows trade their move and their PP together, and the
-## same row twice is a swap with itself, which the source performs and which
-## changes nothing.
+## same row twice is a swap with itself, which changes nothing and still sounds.
 func _swap(from: int, to: int) -> void:
 	var mon: Gen2SaveMon = current()
-	if mon == null or from == to:
+	if mon == null:
 		return
-	mon.swap_move_slots(from, to)
+	if from != to:
+		mon.swap_move_slots(from, to)
 	## `.swap_moves` plays the same effect twice, waiting for each.
 	## `SwitchPartyMons` is `WaitPlaySFX`, twice over.
 	sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)

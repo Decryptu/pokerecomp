@@ -188,6 +188,8 @@ func _open_party() -> void:
 	if host == null:
 		_end(Gen2MoveTutor.SCRIPT_VALUE_CANCELLED, "")
 		return
+	if _world != null:
+		host.share_cursor(_world.party_menu_cursor)
 	host.set_context(_data, _save, true)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.mouse_filter = Control.MOUSE_FILTER_STOP

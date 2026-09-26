@@ -110,6 +110,7 @@ static func build(
 	bug_contest: bool = false,
 	generation: int = RomRegistry.GEN2,
 	link_connected: bool = false,
+	linked: bool = false,
 ) -> Gen2WorldStartMenu:
 	var menu := Gen2WorldStartMenu.new()
 	var passes: Dictionary = {
@@ -149,6 +150,9 @@ static func build(
 			label = player_name if not player_name.is_empty() else "PLAYER"
 		## `.write`: the one slot holds SAVE or QUIT, never both.
 		var kind: StringName = StringName(entry["kind"])
+		## `wLinkMode` drops PACK and SAVE outright.
+		if linked and kind in [ITEM_PACK, ITEM_SAVE]:
+			continue
 		if kind == ITEM_SAVE and bug_contest:
 			kind = ITEM_QUIT
 			label = "QUIT"
@@ -178,6 +182,7 @@ static func from_world(world: Gen2WorldAPI, previous_cursor: int = 0) -> Gen2Wor
 		world.bug_contest_active(),
 		world.data.generation if world.data != null else RomRegistry.GEN2,
 		world.gen1_link_connected(),
+		world.in_link_room(),
 	)
 	menu.load_descriptions(world.data)
 	return menu

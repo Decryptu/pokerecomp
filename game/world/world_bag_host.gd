@@ -83,15 +83,9 @@ static func give_to_party(
 	var held: int = mon.item
 	var changes: Dictionary = {item: owned - 1}
 	if held > 0:
-		## `GiveItemToPokemon` runs before `ReceiveItemFromPokemon`, so the entry
-		## the outgoing item just freed is there for the one coming back.
-		var remaining: Dictionary = world.state.items()
-		remaining[item] = owned - 1
-		if int(remaining[item]) <= 0:
-			remaining.erase(item)
-		var room: Dictionary = Gen2WorldPack.receive_check(world.data, remaining, held, 1)
-		if not bool(room.get("ok", false)):
-			return Gen2WorldTransaction.failure(&"bag_full", room)
+		var remaining: Dictionary = _swap_room(world, item, held)
+		if not bool(remaining.get("ok", true)):
+			return remaining
 		changes[held] = int(remaining.get(held, 0)) + 1
 	mon.item = item
 	mon.mail = mail
@@ -112,6 +106,32 @@ static func give_to_party(
 		"held": held,
 		"held_name": world.data.item_name(held) if held > 0 else "",
 	}
+
+
+## [method give_to_party]'s refusals with nothing written.
+static func give_check(
+	world: Gen2WorldAPI, save: Gen2SaveData, item: int, party_index: int, swap: bool
+) -> Dictionary:
+	var refused: Dictionary = _give_item_refusal(world, item)
+	if not refused.is_empty():
+		return refused
+	var mon: Gen2SaveMon = _party_member(save, party_index)
+	refused = _give_mon_refusal(world, mon, party_index, item, swap, Gen2SaveMail.new())
+	if not refused.is_empty() or mon.item <= 0:
+		return refused
+	var room: Dictionary = _swap_room(world, item, mon.item)
+	return room if not bool(room.get("ok", true)) else {}
+
+
+## `GiveItemToPokemon` runs before `ReceiveItemFromPokemon`, so the freed entry
+## is there for the item coming back.
+static func _swap_room(world: Gen2WorldAPI, item: int, held: int) -> Dictionary:
+	var remaining: Dictionary = world.state.items()
+	remaining[item] = world.state.item_quantity(item) - 1
+	if int(remaining[item]) <= 0:
+		remaining.erase(item)
+	var room: Dictionary = Gen2WorldPack.receive_check(world.data, remaining, held, 1)
+	return remaining if bool(room.get("ok", false)) else Gen2WorldTransaction.failure(&"bag_full", room)
 
 
 static func _give_item_refusal(world: Gen2WorldAPI, item: int) -> Dictionary:

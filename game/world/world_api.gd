@@ -222,6 +222,8 @@ var player_sprite_number: int = Gen2WorldSprite.SPRITE_PLAYER
 var last_spawn_map: Vector2i = Vector2i(-1, -1)
 ## `wLastPocket` and the pockets' rows: WRAM outside the save a reopened pack reads.
 var pack_memory: Dictionary = {}
+## `wPartyMenuCursor`, one-based, handed to every party list.
+var party_menu_cursor: Dictionary = {"cursor": 0}
 ## The pockets `CleanUpBattleRAM` zeroes: Items, Balls and Key Items, not TM/HM.
 const POCKETS_RESET_BY_BATTLE: int = 3
 ## `wDigWarpNumber`, `wDigMapGroup` and `wDigMapNumber`: the warp and outdoor map
@@ -477,6 +479,7 @@ static func _snapshot_in_range(world_snapshot: Gen2WorldSnapshot, map: Gen2World
 
 ## `CleanUpBattleRAM`'s pocket and rows.
 func forget_pack_after_battle() -> void:
+	party_menu_cursor["cursor"] = 0
 	if pack_memory.is_empty():
 		return
 	var cursors: Array = (pack_memory.get("cursors", []) as Array).duplicate()
@@ -7197,6 +7200,10 @@ func gen1_link_state() -> int:
 
 
 ## BIT_LINK_CONNECTED, under which `DrawStartMenu` spells SAVE as RESET.
+func in_link_room() -> bool:
+	return state != null and state.link_session().link_mode != Gen2LinkSession.LINK_NULL
+
+
 func gen1_link_connected() -> bool:
 	return state != null and state.link_session().gen1_link_connected
 

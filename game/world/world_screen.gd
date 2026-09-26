@@ -206,6 +206,7 @@ var _credits_host: Gen2CreditsScreen = null
 ## `EvolveAfterBattle`'s own screen, opened on the overworld after a battle that
 ## was won and by an evolution stone from the pack.
 var _evolution_host: Gen2EvolutionScreen = null
+var _level_moves_host: Gen2StartMenuScreen = null
 ## What the evolution pass has to run when its screen closes: the pack's own
 ## continuation, or nothing for the after-battle pass.
 var _evolution_after: Callable = Callable()
@@ -1464,6 +1465,8 @@ func press_button(button: int) -> bool:
 ## Each runs with the map loop suspended behind it, by `givepoke`, `opentext` or
 ## a `special` of its own, and owns every button until its own exit.
 const OVERLAY_HOSTS: Array[StringName] = [
+	## `LearnLevelMoves` stands over the evolution screen it holds.
+	&"_level_moves_host",
 	## In front of every other overlay: the pack path reaches `EvolveAfterBattle`
 	## with the pack still open behind it, so its B is the animation's cancel
 	## rather than the pack's back.
@@ -2543,6 +2546,7 @@ func _open_name_rater(_request: Dictionary = {}) -> bool:
 		_script_prompt = "The Name Rater needs a validated save"
 		return false
 	var host := Gen2NameRaterScreen.new()
+	host.party_cursor = _world.party_menu_cursor
 	host.set_context(_data, save, texts, _world.player_name(), _world.player_id())
 	host.finished.connect(_on_name_rater_finished)
 	host.closed.connect(_on_name_rater_closed)
@@ -2908,6 +2912,7 @@ func _open_day_care(request: Dictionary) -> bool:
 		_script_prompt = "The Day-Care needs a validated save"
 		return false
 	var host := Gen2DayCareScreen.new()
+	host.party_cursor = _world.party_menu_cursor
 	host.set_context(
 		_data, save, _world.state,
 		StringName((request.get("values", {}) as Dictionary).get("role", &"man")),
@@ -2965,6 +2970,7 @@ func _open_move_deleter(_request: Dictionary = {}) -> bool:
 		_script_prompt = "The move deleter needs a validated save"
 		return false
 	var host := Gen2MoveDeleterScreen.new()
+	host.party_cursor = _world.party_menu_cursor
 	host.set_context(_data, save, texts)
 	host.finished.connect(_on_move_deleter_finished)
 	host.closed.connect(_on_move_deleter_closed)
@@ -6506,7 +6512,7 @@ func _on_evolution_resolved(plan: Dictionary, canceled: bool) -> void:
 		_script_prompt = "%s evolved" % String(plan.get("evolving_name", ""))
 		return
 	var applied: Dictionary = Gen2WorldPartyHost.apply_evolution(
-		_data, _evolution_save.party[index], plan.get("row", {})
+		_data, _evolution_save.party[index], plan.get("row", {}), false
 	)
 	if applied.is_empty() or _world.state == null:
 		return
@@ -6514,11 +6520,38 @@ func _on_evolution_resolved(plan: Dictionary, canceled: bool) -> void:
 	var form: int = int(applied.get("register_unown", 0))
 	if form > 0:
 		_world.state.update_unown_dex(form)
-	for move: int in applied.get("moves_learned", []):
-		_world.gen1_pikachu_learned(move, index)
+	_learn_level_moves(index, applied.get("move_offers", []))
 	## `LearnLevelMoves` past [method Gen2WorldPartyHost.apply_evolution]: a
 	## move needing `ForgetMove` is declined, one of the cartridge's two answers.
 	_script_prompt = "%s evolved" % String(plan.get("evolving_name", ""))
+
+
+## `LearnLevelMoves` inside `EvolveAfterBattle_MasterLoop`: the pack host's own
+## `LearnMove` over the cleared screen, the evolution screen held until it closes.
+func _learn_level_moves(index: int, moves: Array) -> void:
+	if moves.is_empty() or _evolution_host == null:
+		return
+	var host: Gen2StartMenuScreen = START_MENU_SCENE.instantiate() as Gen2StartMenuScreen
+	host.set_party_context(_evolution_save, _injected_save == null)
+	if not host.open(_world, _data, Callable(self, "persist_world_snapshot")):
+		Gen2Screen.drop(host)
+		return
+	host.z_index = 31
+	add_child(host)
+	host.set_screen(_screen)
+	host.sfx_requested.connect(_play_sfx)
+	host.gen1_sfx_requested.connect(_play_gen1_sound)
+	host.closed.connect(_on_level_moves_answered.bind(host))
+	_evolution_host.hold()
+	host.open_level_moves(index, moves)
+	_level_moves_host = host
+
+
+func _on_level_moves_answered(host: Gen2StartMenuScreen) -> void:
+	_level_moves_host = null
+	Gen2Screen.drop(host)
+	if _evolution_host != null:
+		_evolution_host.resume()
 
 
 func _on_evolution_closed() -> void:
@@ -7159,6 +7192,28 @@ func _on_start_menu_action(kind: StringName, id: StringName = &"") -> void:
 ## `.Reopen`, which every `StartMenu_*` handler that returns 0 lands on. The
 ## cursor is `wBattleMenuCursorPosition` and was kept when the menu closed.
 var _reopen_party_member: int = -1
+## The member whose field move is running, which a `.Fail` reopens the list on.
+var _field_move_slot: int = -1
+
+
+## `MenuTextboxBackup` or `PrintText` over the party list a handler answering 3
+## goes back to, which is where every ITEM, MAIL and heal result and every
+## refused field move is read.
+func _say_over_party(text: String) -> void:
+	_reopen_party_if_due()
+	if _party_host == null:
+		_show_field_move_text(text)
+		return
+	_party_host.say(text)
+
+
+## A field move's `.Fail`: the party list comes back on its member, and behind it
+## the START menu it was opened from.
+func _return_to_party(slot: int) -> void:
+	if slot < 0:
+		return
+	_reopen_party_member = slot
+	_reopen_start_menu = true
 
 
 ## The party list back on the member whose ITEM, MAIL or heal just finished.
@@ -7513,6 +7568,8 @@ func _open_embedded_party() -> void:
 		_script_prompt = "Party requires a validated save"
 		_refresh_labels()
 		return
+	host.share_cursor(_world.party_menu_cursor)
+	host.in_link_room = _world.in_link_room()
 	host.set_context(_data, save, true)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20
@@ -7541,9 +7598,8 @@ func _on_party_closed(_result: Dictionary) -> void:
 	_refresh_labels()
 
 
-## MonMenu_Cut and MonMenu_Surf: the party menu closes, then the field move
-## queues its script or its refusal, and nothing changes until the text is
-## acknowledged, as CutDownTreeOrGrass and SurfStartStep follow their lines.
+## The party list is dropped while the world answers; a result it owes is said
+## over the list reopened behind it ([method _say_over_party]).
 func _on_party_action(action: Dictionary) -> void:
 	var host: Gen2PartyScreen = _party_host
 	_party_host = null
@@ -7568,9 +7624,8 @@ func _on_start_menu_field_move(action: Dictionary) -> void:
 ## What a chosen field action does, whichever list chose it. A slot of -1 is a
 ## move used from its own HM, which changes the name and the Surf sprite only.
 func _run_party_action(action: Dictionary) -> void:
-	# `PokemonActionSubmenu`'s `.quit` reaches `ExitAllMenus`, so a field move
-	# leaves the overworld rather than reopening the menu behind it. Every other
-	# action answers 0, 1 or 3, which `StartMenu_Pokemon` takes back to the list.
+	# A field move's `.quit` reaches `ExitAllMenus`; every other action answers 0,
+	# 1 or 3, which `StartMenu_Pokemon` takes back to the list.
 	var field_move: bool = StringName(action.get("kind", &"")) == &"field_move"
 	_reopen_start_menu = not field_move and action.has("slot")
 	_reopen_party_member = -1 if field_move else int(action.get("slot", -1))
@@ -7651,6 +7706,7 @@ func _field_move_rows(slot: int, user: String) -> Dictionary:
 
 func _run_field_move(action: Dictionary) -> void:
 	var slot: int = int(action.get("slot", -1))
+	_field_move_slot = slot
 	var user: String = String(action.get("name", "")) if action.has("name") \
 		else _prompted_field_move_name(slot)
 	var rows: Dictionary = _field_move_rows(slot, user)
@@ -7663,8 +7719,14 @@ func _run_field_move(action: Dictionary) -> void:
 	var gen1: bool = _data != null and _data.generation == RomRegistry.GEN1
 	if not bool(answer.get("ok", false)):
 		var reason: StringName = StringName(answer.get("reason", &""))
-		_show_field_move_text(_gen1_refusal_text(reason, user) if gen1
-			else (row[1] as Callable).call(reason))
+		var refusal: String = _gen1_refusal_text(reason, user) if gen1 \
+			else (row[1] as Callable).call(reason)
+		## Sweet Scent alone answers 2 whatever happened; the rest answer 3.
+		if slot < 0 or move == Gen2WorldFieldMove.MOVE_SWEET_SCENT:
+			_show_field_move_text(refusal)
+			return
+		_return_to_party(slot)
+		_say_over_party(refusal)
 		return
 	var line: String = _gen1_used_line(move, user, answer) if gen1 else String(row[2])
 	if not line.is_empty():
@@ -7808,9 +7870,7 @@ func _strength_refusal(reason: StringName) -> String:
 	return _badge_or_generic(reason)
 
 
-## `GiveTakePartyMonItem`'s two answers. TAKE is a bag transaction and says so in
-## the map's own text box; GIVE needs an item, which is `.GiveItem`'s pack over
-## the Pokemon already chosen.
+## `GiveTakePartyMonItem`: TAKE's line is said over the list, GIVE is `.GiveItem`'s pack.
 func _run_mon_item_action(action: Dictionary) -> void:
 	var slot: int = int(action.get("slot", -1))
 	if StringName(action.get("option", &"")) == Gen2PartyScreen.OPTION_GIVE:
@@ -7824,19 +7884,17 @@ func _run_mon_item_action(action: Dictionary) -> void:
 	)
 	var action_name: String = String(action.get("name", ""))
 	if bool(result.get("ok", false)):
-		_show_field_move_text(Gen2WorldPack.took_text(action_name, String(result.get("name", ""))))
+		_say_over_party(Gen2WorldPack.took_text(action_name, String(result.get("name", ""))))
 		return
 	match StringName(result.get("reason", &"")):
 		&"not_holding":
-			_show_field_move_text(Gen2WorldPack.not_holding_text(action_name))
+			_say_over_party(Gen2WorldPack.not_holding_text(action_name))
 		&"bag_full":
-			_show_field_move_text(Gen2WorldPack.storage_full_text())
+			_say_over_party(Gen2WorldPack.storage_full_text())
 		_:
-			_show_field_move_text(
-				"%s could not hand that over (%s)." % [
-					action_name, String(result.get("reason", "")),
-				]
-			)
+			_say_over_party("%s could not hand that over (%s)." % [
+				action_name, String(result.get("reason", "")),
+			])
 
 
 ## `MonMailAction`'s READ and TAKE, once the party submenu has chosen. READ is
@@ -7904,9 +7962,7 @@ func _answer_mail_take(accepted: bool) -> void:
 		var sent: Dictionary = Gen2WorldPC.mailbox_send(
 			_world, save, slot, _injected_save == null
 		)
-		_show_field_move_text(
-			MAIL_SENT_TO_PC_TEXT if bool(sent.get("ok", false)) else MAILBOX_FULL_TEXT
-		)
+		_say_over_party(MAIL_SENT_TO_PC_TEXT if bool(sent.get("ok", false)) else MAILBOX_FULL_TEXT)
 		return
 	if not accepted:
 		_reopen_party_if_due()
@@ -7915,30 +7971,33 @@ func _answer_mail_take(accepted: bool) -> void:
 		_world, save, slot, _injected_save == null
 	)
 	if not bool(taken.get("ok", false)):
-		_show_field_move_text(MAIL_NO_SPACE_TEXT)
+		_say_over_party(MAIL_NO_SPACE_TEXT)
 		return
-	_show_field_move_text(MAIL_DETACHED_TEXT % _mail_take_name)
+	_say_over_party(MAIL_DETACHED_TEXT % _mail_take_name)
 
 
-## `Softboiled_MilkDrinkFunction`'s two halves, once the party menu has picked
-## who is giving and who is receiving. The health moves through the world's own
-## transaction, since the party it changes is a save the world owns.
+## `Softboiled_MilkDrinkFunction` once the list has picked giver and recipient.
 func _run_heal_transfer(action: Dictionary) -> void:
+	var slot: int = int(action.get("slot", -1))
+	var target: int = int(action.get("target_slot", -1))
 	var result: Dictionary = Gen2WorldPartyHost.transfer_health(
-		_world, _embedded_party_save(), int(action.get("slot", -1)),
-		int(action.get("target_slot", -1)), _injected_save == null
+		_world, _embedded_party_save(), slot, target, _injected_save == null
 	)
+	var gen1: bool = _data != null and _data.generation == RomRegistry.GEN1
 	if not bool(result.get("ok", false)):
-		_show_field_move_text(
-			_gen1_refusal_text(StringName(result.get("reason", &"")), "")
-			if _data != null and _data.generation == RomRegistry.GEN1
-			else "It won't have any effect."
-		)
+		_say_over_party(_gen1_refusal_text(StringName(result.get("reason", &"")), "") if gen1
+			else Gen2PartyScreen.MESSAGE_CANT_USE_ON_MON)
 		return
-	## `PARTYMENUTEXT_HEAL_HP`, behind `ItemActionText`'s own `JoyWaitAorB`,
-	## which waits without an arrow the way `ProfOaksPCBoot`'s pages do.
-	_show_field_move_text(
-		"%s\nrecovered health!" % String(action.get("target_name", "")), false
+	_reopen_party_if_due()
+	var line: String = Gen2ItemActionText.text(
+		Gen2ItemActionText.HEAL, String(action.get("target_name", "")),
+		{"healed": int(result.get("restored", 0))}, gen1
+	)
+	if _party_host == null:
+		_show_field_move_text(line, false)
+		return
+	_party_host.show_heal_transfer(
+		slot, target, int(result.get("amount", 0)), int(result.get("restored", 0)), line
 	)
 
 
@@ -8296,7 +8355,10 @@ func _apply_fly_choice(results: Array) -> bool:
 		if StringName(result.get("kind", &"")) != &"fly_chosen":
 			continue
 		var spawn: int = int(result.get("spawn", -1))
+		## `MonMenu_Fly.Error` answers 0, `.choosemenu`'s party list.
 		if spawn < 0:
+			_return_to_party(_field_move_slot)
+			_reopen_party_if_due()
 			_refresh_labels()
 			return true
 		_start_fly(spawn)
@@ -9220,6 +9282,7 @@ func _open_party_selection(request: Dictionary = {}) -> bool:
 	if host == null:
 		_script_prompt = "Party scene unavailable"
 		return false
+	host.share_cursor(_world.party_menu_cursor)
 	host.set_context(_data, save, true)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20

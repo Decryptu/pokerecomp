@@ -806,7 +806,9 @@ func test_an_ether_asks_which_move_and_fills_that_slot() -> void:
 	await _step(PokeButton.A)
 	assert_true(bool(_screen.get("_pack_move_selecting")), "the move list is up")
 
+	## `PAD_DOWN | PAD_UP | PAD_A | PAD_B`: the sides do not move the cursor.
 	await _step(PokeButton.RIGHT)
+	await _step(PokeButton.DOWN)
 	await _step(PokeButton.A)
 	assert_eq(user.pp_left(0), 0, "the slot it was not used on")
 	assert_gt(user.pp_left(1), 0, "and the one it was")

@@ -752,7 +752,7 @@ static func use_item(
 	var candidate: Gen2SaveData = opened["candidate"]
 	var effect: Dictionary = _apply_item_effect(
 		world.data, candidate, item, party_index, move_slot,
-		world.map_time_of_day(), world.repel_steps()
+		world.map_time_of_day(), world.repel_steps(), world.landmark()
 	)
 	if not bool(effect.get("ok", false)):
 		return _failure(StringName(effect.get("reason", &"item_has_no_effect")), effect)
@@ -774,8 +774,6 @@ static func use_item(
 	_register_caught(world, int(effect.get("register_caught", 0)))
 	_register_unown(world, int(effect.get("register_unown", 0)))
 	_gen1_item_happiness(world, item, party_index, StringName(effect.get("effect", &"")))
-	for move: int in effect.get("moves_learned", []):
-		world.gen1_pikachu_learned(move, party_index)
 	return {
 		"ok": true,
 		"item": item,
@@ -1388,9 +1386,9 @@ static func capture_wild(
 	## After the snapshot the rollback below restores, so a refused candidate
 	## save takes the dex flag back with the ball.
 	if bool(outcome.get("caught", false)):
-		_register_caught(world, wild.species)
+		_register_caught(world, wild.persistent_species())
 		_register_unown(world, _unown_form(
-			wild.species, wild.persistent_dvs(), destination
+			wild.persistent_species(), wild.persistent_dvs(), destination
 		))
 	## `.safariZone`'s `dec [hl]`: the bag has no row for a Safari Ball.
 	var next_quantity: int = world.state.safari_balls() - 1 if safari \
@@ -1430,7 +1428,7 @@ static func capture_wild(
 		"catch_rate": int(outcome.get("catch_rate", 0)),
 		"wobbles": int(outcome.get("wobbles", 0)),
 		"dodged": bool(outcome.get("dodged", false)),
-		"species": wild.species,
+		"species": wild.persistent_species(),
 		"destination": destination.duplicate(true),
 		"box_full": box_full,
 	}
@@ -2062,7 +2060,8 @@ static func trade_gender_matches(
 
 static func _apply_item_effect(
 	data: GameData, save: Gen2SaveData, item: int, party_index: int,
-	move_slot: int = -1, time_of_day: int = -1, repel_steps: int = 0
+	move_slot: int = -1, time_of_day: int = -1, repel_steps: int = 0,
+	landmark: int = Gen2Battle.LANDMARK_NONE
 ) -> Dictionary:
 	var definition: Dictionary = data.item(item)
 	if definition.is_empty():
@@ -2081,10 +2080,13 @@ static func _apply_item_effect(
 	if party_index < 0 or party_index >= save.party.size():
 		return {"ok": false, "reason": &"party_member_required"}
 	var mon: Gen2SaveMon = save.party[party_index]
-	if mon == null or mon.is_egg:
+	if mon == null:
 		return {"ok": false, "reason": &"invalid_party_member"}
+	## `UseItem_SelectMon`'s `CantUseOnEggMessage`.
+	if mon.is_egg:
+		return {"ok": false, "reason": &"used_on_egg"}
 	if item == int(effects["rare_candy"]):
-		return _apply_rare_candy(data, mon, time_of_day)
+		return _apply_rare_candy(data, mon, time_of_day, landmark)
 	if (effects["pp_restore"] as Dictionary).has(item):
 		return _apply_pp_restore(data, mon, item, move_slot, effects)
 	if item == int(effects["pp_up"]):
@@ -2095,7 +2097,7 @@ static func _apply_item_effect(
 		## stone matches a row and prints `RefusingText` instead of evolving.
 		if data.id == RomRegistry.YELLOW and Gen1Pikachu.is_starter_of(save, mon):
 			return {"ok": false, "reason": &"starter_refuses", "party_index": party_index}
-		return apply_evolution(data, mon, evolution_row)
+		return apply_evolution(data, mon, evolution_row, false)
 	var vitamin: Dictionary = _apply_vitamin(data, mon, item, effects["vitamin"])
 	if not vitamin.is_empty():
 		return vitamin
@@ -2221,11 +2223,8 @@ static func _apply_heal(
 ## `UpdateStatsAfterItem`'s max-HP delta added to the current HP,
 ## `LevelUpHappinessMod`, `LearnLevelMoves` and then `EvolvePokemon` with
 ## `wForceEvolution` clear. `MAX_LEVEL` is `NoEffectMessage` rather than a clamp.
-## The happiness row is `HAPPINESS_GAINLEVEL` flat: `LevelUpHappinessMod`'s
-## at-home row compares the caught landmark against the *battle's* landmark, and
-## a field item is not in one.
 static func _apply_rare_candy(
-	data: GameData, mon: Gen2SaveMon, time_of_day: int
+	data: GameData, mon: Gen2SaveMon, time_of_day: int, landmark: int
 ) -> Dictionary:
 	if mon.level >= Gen2Experience.MAX_LEVEL:
 		return {"ok": false, "reason": &"item_has_no_effect"}
@@ -2238,24 +2237,15 @@ static func _apply_rare_candy(
 	)
 	mon.hp += maxi(0, _max_hp(data, mon) - before_max_hp)
 	mon.happiness = change_happiness(
-		data, mon.happiness, Gen2Battle.HAPPINESS_GAINLEVEL
+		data, mon.happiness, Gen2Battle.level_up_happiness(data, mon.caught_location, landmark)
 	)
-	## `LearnLevelMoves`: an empty slot takes the move unasked and a full moveset
-	## is what the caller has to open `ForgetMove` for.
+	## `LearnLevelMoves`, each move through `LearnMove` and its own line.
 	var move_offers: Array[int] = []
-	var moves_learned: Array[int] = []
 	for move: int in data.moves_learned_at(mon.species, mon.level):
-		if mon.moves.has(move):
-			continue
-		var empty: int = mon.moves.find(0)
-		if empty < 0:
+		if not mon.moves.has(move):
 			move_offers.append(move)
-			continue
-		mon.set_move(data, empty, move)
-		moves_learned.append(move)
 	var levelled: Dictionary = {
-		"ok": true, "effect": &"rare_candy", "level": mon.level,
-		"move_offers": move_offers, "moves_learned": moves_learned,
+		"ok": true, "effect": &"rare_candy", "level": mon.level, "move_offers": move_offers,
 	}
 	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, mon)
 	if battle_mon == null or time_of_day < 0:
@@ -2271,7 +2261,7 @@ static func _apply_rare_candy(
 
 ## `.proceed` as its own transaction, for the screen that ran `EvolutionAnimation`
 ## off a Rare Candy: the row is written, the dex marks the new species caught
-## and the moves it learned unasked are reported with the ones still owed.
+## and every move the level owes is handed back to be taught.
 static func evolve_member(
 	world: Gen2WorldAPI, save: Gen2SaveData, party_index: int, row: Dictionary,
 	persist: bool = true
@@ -2285,7 +2275,7 @@ static func evolve_member(
 	var mon: Gen2SaveMon = _party_member(candidate, party_index)
 	if mon == null:
 		return _failure(&"invalid_party_index", {"party_index": party_index})
-	var applied: Dictionary = apply_evolution(world.data, mon, row)
+	var applied: Dictionary = apply_evolution(world.data, mon, row, false)
 	if applied.is_empty():
 		return _failure(&"evolution_failed", {"party_index": party_index})
 	var before: Gen2WorldSnapshot = world.snapshot()
@@ -2296,8 +2286,6 @@ static func evolve_member(
 		return _failure(StringName(committed["reason"]), committed.get("details", {}))
 	_register_caught(world, int(applied.get("register_caught", 0)))
 	_register_unown(world, int(applied.get("register_unown", 0)))
-	for move: int in applied.get("moves_learned", []):
-		world.gen1_pikachu_learned(move, party_index)
 	return applied
 
 
@@ -2311,25 +2299,31 @@ static func _apply_pp_restore(
 	var all_moves: bool = bool((effects["pp_restore"] as Dictionary)[item])
 	if not all_moves and (move_slot < 0 or move_slot >= Gen2SaveMon.MAX_MOVES):
 		return {"ok": false, "reason": &"move_slot_required", "item": item}
-	var full: bool = item in (effects["pp_max"] as Array)
 	var restored: int = 0
 	for slot: int in Gen2SaveMon.MAX_MOVES:
-		if not all_moves and slot != move_slot:
-			continue
 		var move: int = int(mon.moves[slot])
-		if move <= 0:
+		if move <= 0 or (not all_moves and slot != move_slot):
 			continue
-		var maximum: int = mon.max_pp(data, slot)
-		var current: int = int(mon.pp[slot])
-		if current >= maximum:
-			continue
-		var step: int = int((effects["pp_steps"] as Dictionary).get(item, 0))
-		var next: int = maximum if full else mini(maximum, current + step)
-		restored += next - current
-		mon.pp[slot] = next
+		var next: int = pp_after_item(data, item, move, int(mon.pp[slot]), int(mon.pp_ups[slot]))
+		if next >= 0:
+			mon.pp[slot] = next
+			restored += 1
 	if restored <= 0:
 		return {"ok": false, "reason": &"item_has_no_effect"}
 	return {"ok": true, "effect": &"restore_pp", "restored": restored}
+
+
+## `RestorePP`'s new PP, or -1. Generation 1's `.fullyRestorePP` keeps the PP Up
+## bits in its compare, so a Max Ether is spent on a full slot that has any.
+static func pp_after_item(data: GameData, item: int, move: int, current: int, ups: int) -> int:
+	var effects: Dictionary = item_effects(data)
+	var maximum: int = data.move_max_pp(move, ups)
+	var full: bool = item in (effects["pp_max"] as Array)
+	if current >= maximum and not (full and ups > 0 and data.generation == RomRegistry.GEN1):
+		return -1
+	if full:
+		return maximum
+	return mini(maximum, current + int((effects["pp_steps"] as Dictionary).get(item, 0)))
 
 
 ## `RestorePPEffect`'s `PP_UP`: `wUsePPUp` is `wTempPP`, so the PP left gains a step.
@@ -2441,13 +2435,12 @@ static func _item_evolution_row(data: GameData, mon: Gen2SaveMon, item: int) -> 
 	return row
 
 
-## `.proceed` and everything past it: the species is replaced, `CalcMonStats`
-## adds the max-HP delta, `UpdateSpeciesNameIfNotNicknamed` renames an
-## un-nicknamed row and `LearnLevelMoves` offers what the new species knows at
-## the level that triggered it. Shared, because the master loop reaches it from a
-## level evolution and `EvoStoneEffect` from an item, and only the predicate in
-## front of it differs.
-static func apply_evolution(data: GameData, mon: Gen2SaveMon, row: Dictionary) -> Dictionary:
+## `.proceed`: the species, `CalcMonStats`' max-HP delta, the un-nicknamed rename
+## and `LearnLevelMoves`, for a level evolution and `EvoStoneEffect` alike.
+## Without [param teach] every move is an offer for `LearnMove`.
+static func apply_evolution(
+	data: GameData, mon: Gen2SaveMon, row: Dictionary, teach: bool = true
+) -> Dictionary:
 	if data == null or mon == null or row.is_empty():
 		return {}
 	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, mon)
@@ -2461,7 +2454,7 @@ static func apply_evolution(data: GameData, mon: Gen2SaveMon, row: Dictionary) -
 	for move: int in data.moves_learned_at(battle_mon.species, battle_mon.level):
 		if battle_mon.moves.has(move):
 			continue
-		if battle_mon.learn_move(move):
+		if teach and battle_mon.learn_move(move):
 			moves_learned.append(move)
 		else:
 			move_offers.append(move)
@@ -2509,13 +2502,9 @@ static func apply_evolution(data: GameData, mon: Gen2SaveMon, row: Dictionary) -
 	}
 
 
-## A Park Ball thrown inside the Bug Catching Contest, a different transaction
-## from [method capture_wild]: the ball comes out of `wParkBallsRemaining` rather
-## than the bag, and what is caught goes to `wContestMon` rather than to the party
-## or a box, so no save is touched and nothing can be refused for a full party.
-## `BugContest_SetCaughtContestMon` asks before replacing a Pokemon already
-## caught, so a hit while one is held answers `replace_offer` and leaves the state
-## alone until the caller comes back with [method set_contest_mon].
+## A Park Ball in the Bug Catching Contest: the ball is `wParkBallsRemaining`'s and
+## the catch goes to `wContestMon`, so no save is touched. A catch while one is
+## held answers `replace_offer` until [method set_contest_mon].
 static func capture_contest(
 	world: Gen2WorldAPI, wild: Gen2BattleMon, random: RandomNumberGenerator = null
 ) -> Dictionary:
@@ -2539,6 +2528,8 @@ static func capture_contest(
 	}
 	if not bool(outcome["caught"]):
 		return result
+	## `SetSeenAndCaughtMon` runs ahead of `.skip_pokedex`'s contest branch.
+	_register_caught(world, wild.species)
 	result["mon"] = contest_mon_from(wild)
 	result["replace_offer"] = not world.state.contest_mon().is_empty()
 	## `DisplayAlreadyCaughtText` names the one already held, not the new one:
@@ -2593,15 +2584,17 @@ static func _capture_outcome(
 	if _generation(data) == RomRegistry.GEN1:
 		return _gen1_capture_outcome(data, wild, ball, random, safari_catch_rate)
 	var max_hp: int = maxi(wild.max_hp(), 1)
+	## Transform reaches `wEnemyMonSpecies` and DVs alone, which the Heavy Ball reads.
 	var final_rate: int = final_catch_rate(data, ball, {
-		"base_rate": clampi(int(data.species(wild.species).get("catch_rate", 0)), 1, 255),
+		"base_rate": clampi(int(data.species(wild.persistent_species()).get("catch_rate", 0)), 1, 255),
 		"max_hp": max_hp,
 		"current_hp": clampi(wild.hp, 1, max_hp),
 		"status": wild.status,
-		"species": wild.species,
-		"dvs": wild.persistent_dvs(),
+		"species": wild.persistent_species(),
+		"heavy_species": wild.species,
+		"dvs": wild.dvs,
 		"level": wild.level,
-		"thrower_species": thrower.species if thrower != null else 0,
+		"thrower_species": thrower.persistent_species() if thrower != null else 0,
 		"thrower_dvs": thrower.persistent_dvs() if thrower != null else 0,
 		"thrower_level": thrower.level if thrower != null else 0,
 		"battle_type": battle_type,
@@ -2745,7 +2738,7 @@ static func _ball_multiplier(
 		ITEM_GREAT_BALL, ITEM_PARK_BALL:
 			return mini(catch_rate + (catch_rate >> 1), 255)
 		ITEM_HEAVY_BALL:
-			return _heavy_ball(data, int(case["species"]), catch_rate)
+			return _heavy_ball(data, int(case.get("heavy_species", case["species"])), catch_rate)
 		ITEM_LEVEL_BALL:
 			return _level_ball(
 				int(case["level"]), int(case.get("thrower_level", 0)), catch_rate
@@ -2909,17 +2902,18 @@ static func _captured_mon(
 	var out: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(wild)
 	if out == null:
 		return null
-	out.nickname = String(data.species(wild.species).get("name", ""))
+	out.nickname = String(data.species(out.species).get("name", ""))
 	out.original_trainer = save.player_name
 	out.ot_id = save.player_id & 0xFFFF
 	out.exp = Gen2Experience.total_exp_at(
-		int(data.species(wild.species).get("growth_rate", 0)), wild.level
+		int(data.species(out.species).get("growth_rate", 0)), wild.level
 	)
 	for key: Variant in Gen2SaveMon.STAT_EXP_KEYS:
 		out.stat_exp[key] = 0
-	for slot: int in Gen2SaveMon.MAX_MOVES:
-		var known: int = int(out.moves[slot])
-		out.pp[slot] = int(data.move(known).get("pp", 0)) if known > 0 else 0
+	## `.caught` keeps `wWildMonPP`, except that a Transform reloads full PP.
+	if Gen2Substatus.has(wild.substatus, Gen2Substatus.TRANSFORMED):
+		for slot: int in Gen2SaveMon.MAX_MOVES:
+			out.pp[slot] = out.max_pp(data, slot) if int(out.moves[slot]) > 0 else 0
 	## `.SkipPartyMonFriendBall` and `.SkipBoxMonFriendBall`, which write the same
 	## byte on either side of the deposit.
 	out.happiness = FRIEND_BALL_HAPPINESS if ball == ITEM_FRIEND_BALL else BASE_HAPPINESS

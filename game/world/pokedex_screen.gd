@@ -57,7 +57,12 @@ const ENTRY_BUTTON_CRY: int = 2
 var _dex: Gen2Pokedex = null
 var _world: Gen2WorldAPI = null
 var _data: GameData = null
-var _mode: Mode = Mode.LIST
+## `Pokedex_InitDexEntryScreen`'s `LowVolume` holds while the entry page is up.
+var _mode: Mode = Mode.LIST:
+	set(value):
+		if (value == Mode.ENTRY) != (_mode == Mode.ENTRY):
+			Gen2AudioPlayer.hold_low_volume(value == Mode.ENTRY)
+		_mode = value
 ## `ShowPokedexMenu` is a listing, a side menu and an entry page and none of the
 ## other five states, so every branch below reads this rather than the cache.
 var _gen1: bool = false
@@ -895,6 +900,8 @@ func set_screen(screen: Gen2Screen) -> void:
 
 
 func _exit_tree() -> void:
+	## `NewPokedexEntry`'s `MaxVolume` behind its second page.
+	_mode = Mode.LIST
 	if _field != null:
 		Gen2Screen.drop_on_exit(_field)
 		_field = null
