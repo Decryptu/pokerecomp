@@ -191,11 +191,7 @@ static func from_data(data: GameData) -> Gen2StatsScreenPage:
 	return out
 
 
-static func pic_position() -> Vector2i:
-	return PIC_AT * TILE
-
-
-## The same corner for the page that is open: `LoadFlippedFrontSpriteByMonIndex`
+## The picture's corner for the page that is open: `LoadFlippedFrontSpriteByMonIndex`
 ## draws Generation 1's a column right of Crystal's.
 func pic_at() -> Vector2i:
 	return (GEN1_PIC_AT if gen1 else PIC_AT) * TILE

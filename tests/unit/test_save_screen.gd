@@ -631,6 +631,60 @@ func test_the_withdraw_list_opens_on_the_current_box() -> void:
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Got GEODUDE!")
 
 
+## `BillsPC_StatsScreen` hands `StatsScreenInit` the whole screen, joypad and
+## all, so a page the model turns to is a page drawn. A box that left the redraw
+## to its own list kept the first page up while the d-pad turned the rest.
+func test_a_boxed_pokemons_stats_screen_draws_each_page_it_turns_to() -> void:
+	_write_stats_sheets()
+	var save: Gen2SaveData = _save_with_two()
+	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 1, 0, -1, false)["ok"])
+	await _open_box_screen(save, Gen2BoxScreen.MODE_WITHDRAW)
+	for button: int in [PokeButton.A, PokeButton.DOWN, PokeButton.A]:
+		_box_screen.handle_button(button)
+	assert_true(bool(_box_screen.box_snapshot()["stats"]))
+	var shown: TextureRect = _box_screen.get("_background")
+	var pages: Array = [hash(shown.texture.get_image().get_data())]
+	for button: int in [PokeButton.RIGHT, PokeButton.RIGHT, PokeButton.LEFT]:
+		_box_screen.handle_button(button)
+		pages.append(hash(shown.texture.get_image().get_data()))
+	assert_ne(pages[1], pages[0], "RIGHT draws the green page")
+	assert_ne(pages[2], pages[1], "and the blue one")
+	assert_eq(pages[3], pages[1], "LEFT draws the green page again")
+
+
+## The sheets `Gen2PCBoxPage` and `Gen2StatsScreenPage` draw from, each tile one
+## solid index, so a page's layout is what tells two pages apart.
+func _write_stats_sheets() -> void:
+	var sheets: Dictionary = {}
+	for row_name: String in STATS_SHEETS:
+		var tiles: int = STATS_SHEETS[row_name]
+		var indices: PackedByteArray = PackedByteArray()
+		indices.resize(tiles * PokeTiles.TILE_PIXELS)
+		indices.fill(3)
+		RomCache.write_indices(RomCache.tile_path(_directory, row_name), indices)
+		sheets[row_name] = {
+			"width": tiles * PokeTiles.TILE_WIDTH, "height": PokeTiles.TILE_HEIGHT,
+			"tiles": tiles, "bits": 1,
+			"first_code": {"font": Gen2Layout.FONT_FIRST_CODE,
+				"frames": Gen2Layout.FRAME_FIRST_CODE}.get(row_name, 0),
+		}
+	var manifest: Dictionary = RomCache.read_json(RomCache.manifest_path(_directory))
+	manifest["tiles"] = sheets
+	RomCache.write_json(RomCache.manifest_path(_directory), manifest)
+	_data = GameData.open_directory(_directory)
+
+
+const STATS_SHEETS: Dictionary = {
+	"font": Gen2Layout.FONT_TILES,
+	"frames": Gen2Layout.FRAME_COUNT * Gen2Layout.FRAME_TILES,
+	"battle_font": Gen2Layout.BATTLE_FONT_TILES,
+	"exp_bar": Gen2Layout.EXP_BAR_TILES,
+	"enemy_hud": Gen2Layout.ENEMY_HUD_TILES,
+	"player_hud": Gen2Layout.PLAYER_HUD_TILES,
+	"stats_tiles": Gen2Layout.STATS_TILES,
+}
+
+
 ## `BillsPC_CheckMail_PreventBlackout` is asked before the transfer, so the last
 ## party member is refused with `PCString_ItsYourLastPKMN` and no reason symbol
 ## ever reaches the page.

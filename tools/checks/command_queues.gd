@@ -37,23 +37,23 @@ const EXPECTED_WARP_CELLS: Dictionary = {
 	},
 }
 
+## Slide, `pause 30`, the earthquake and the box: generous for all of them.
+const FALL_FRAMES: int = 1200
+
 
 func run(r: RefCounted) -> void:
 	_r = r
-	for game_id: StringName in _r.GAME_IDS:
-		var data: GameData = GameData.open(game_id)
-		if data == null:
-			_r.fail("%s cache is unavailable. Import roms/%s.gbc first." % [game_id, game_id])
-			continue
-		_verify_map(data, game_id, "blackthorn", BLACKTHORN_GYM_2F)
-		_verify_map(data, game_id, "ice_path", ICE_PATH_B1F[game_id])
-		_drive_blackthorn(data, game_id)
+	_r.each_game(func() -> void:
+		_verify_map(_r.data, _r.game_id, "blackthorn", BLACKTHORN_GYM_2F)
+		_verify_map(_r.data, _r.game_id, "ice_path", ICE_PATH_B1F[_r.game_id])
+		_drive_blackthorn(_r.game_id)
+	)
 
 
 func _verify_map(data: GameData, game_id: StringName, name: String, id: Array) -> void:
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, id[0], id[1], Vector2i.ZERO)
 	if world == null:
-		_r.fail("%s: map %d/%d is missing." % [game_id, id[0], id[1]])
+		_r.fail("map %d/%d is missing." % [id[0], id[1]])
 		return
 
 	# The queue is written by a MAPCALLBACK_CMDQUEUE, so running the map's own
@@ -74,7 +74,7 @@ func _verify_map(data: GameData, game_id: StringName, name: String, id: Array) -
 			tables.append(queue)
 	if not _r.check(
 		tables.size() == 1,
-		"%s %s: %d stone tables written, not 1." % [game_id, name, tables.size()]
+		"%s: %d stone tables written, not 1." % [name, tables.size()]
 	):
 		return
 
@@ -82,8 +82,8 @@ func _verify_map(data: GameData, game_id: StringName, name: String, id: Array) -
 	var expected: Array = EXPECTED_ROWS[name]
 	if not _r.check(
 		rows.size() == expected.size(),
-		"%s %s: %d stonetable rows, not the pinned %d." % [
-			game_id, name, rows.size(), expected.size(),
+		"%s: %d stonetable rows, not the pinned %d." % [
+			name, rows.size(), expected.size(),
 		]
 	):
 		return
@@ -92,15 +92,15 @@ func _verify_map(data: GameData, game_id: StringName, name: String, id: Array) -
 		var want: Array = expected[index]
 		_r.check(
 			int(row["warp"]) == int(want[0]) and int(row["object"]) == int(want[1]),
-			"%s %s row %d is warp %d object %d, not the pinned warp %d object %d." % [
-				game_id, name, index,
+			"%s row %d is warp %d object %d, not the pinned warp %d object %d." % [
+				name, index,
 				int(row["warp"]), int(row["object"]), int(want[0]), int(want[1]),
 			]
 		)
 		_r.check(
 			int(row["script"]) >= RomFile.BANK_SIZE,
-			"%s %s row %d has script $%04X, which is not a banked address." % [
-				game_id, name, index, int(row["script"]),
+			"%s row %d has script $%04X, which is not a banked address." % [
+				name, index, int(row["script"]),
 			]
 		)
 
@@ -111,12 +111,12 @@ func _verify_map(data: GameData, game_id: StringName, name: String, id: Array) -
 		var cell: Vector2i = cells[warp]
 		_r.check(
 			world.warp_index_at(cell) == warp,
-			"%s %s: warp %d is not at %s." % [game_id, name, warp, cell]
+			"%s: warp %d is not at %s." % [name, warp, cell]
 		)
 		_r.check(
 			Gen2WorldCollision.is_pit_tile(world.collision_code_at(cell)),
-			"%s %s: warp %d at %s is collision $%02X, not a pit." % [
-				game_id, name, warp, cell, world.collision_code_at(cell),
+			"%s: warp %d at %s is collision $%02X, not a pit." % [
+				name, warp, cell, world.collision_code_at(cell),
 			]
 		)
 
@@ -125,80 +125,61 @@ func _verify_map(data: GameData, game_id: StringName, name: String, id: Array) -
 		var index: int = int(row["object"]) - 2
 		if not _r.check(
 			index >= 0 and index < world.objects.size(),
-			"%s %s: object id %d is outside the map's object list." % [
-				game_id, name, int(row["object"]),
+			"%s: object id %d is outside the map's object list." % [
+				name, int(row["object"]),
 			]
 		):
 			continue
 		var object: Gen2WorldObject = world.objects[index]
 		_r.check(
 			object.is_strength_boulder(),
-			"%s %s: object id %d is not a Strength boulder." % [game_id, name, int(row["object"])]
+			"%s: object id %d is not a Strength boulder." % [name, int(row["object"])]
 		)
 	print("%s %s: %d stonetable rows over %d pit warps verified." % [
 		game_id, name, rows.size(), cells.size(),
 	])
 
 
-## Blackthorn Gym 2F's first row, driven against the real cache: BOULDER1 stands
-## at (8,2) and warp 5 is the pit directly below it, so one push south is the
-## whole puzzle step. The flag it sets is what BlackthornGym1FBouldersCallback
-## reads to changeblock the floor below.
-func _drive_blackthorn(data: GameData, game_id: StringName) -> void:
-	var world: Gen2WorldAPI = Gen2WorldAPI.open(
-		data, BLACKTHORN_GYM_2F[0], BLACKTHORN_GYM_2F[1], Vector2i(8, 1)
+## Blackthorn Gym 2F's first row pressed on the real screen: BOULDER1 at (8,2)
+## pushed south onto warp 5's pit falls once its slide ends, takes its flag and
+## hands the map back.
+func _drive_blackthorn(game_id: StringName) -> void:
+	var screen: Gen2WorldScreen = _r.open_screen(
+		BLACKTHORN_GYM_2F[0], BLACKTHORN_GYM_2F[1], Vector2i(8, 1)
 	)
-	if world == null:
-		_r.fail("%s: Blackthorn Gym 2F is missing." % game_id)
-		return
-	world.state.set_engine_flag(Gen2WorldState.strength_active_flag(
-		Gen2WorldState.is_crystal_profile(data)
-	))
-	var _entry: Array = world.dispatch_map_entry()
-
+	var world: Gen2WorldAPI = screen.world()
+	world.state.set_engine_flag(Gen2WorldState.strength_active_flag(_r.crystal))
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
 	var boulder: Gen2WorldObject = world.object_at(Vector2i(8, 2))
-	if not _r.check(
+	if _r.check(
 		boulder != null and boulder.is_strength_boulder(),
-		"%s: no boulder at (8,2) on Blackthorn Gym 2F." % game_id
+		"no boulder at (8,2) on Blackthorn Gym 2F."
 	):
-		return
-	var flag: int = boulder.event_flag
-	_r.check(
-		not world.state.is_event_flag_active(flag),
-		"%s: boulder flag %d is already set before the push." % [game_id, flag]
-	)
+		_push_into_pit(screen, boulder, game_id)
+	_r.close_screen(screen)
 
-	var pushed: Dictionary = world.move_result(Vector2i.DOWN)
-	if not _r.check(
-		pushed.has("boulder_pushed"),
-		"%s: the boulder at (8,2) did not move: %s" % [game_id, pushed.get("reason", "")]
-	):
-		return
-	if not _r.check(
-		pushed["boulder_pushed"].has("fall_script"),
-		"%s: the boulder reached the pit warp without firing its stone table." % game_id
-	):
-		return
 
-	var results: Array = world.run_event_queue(false)
-	for _step: int in 16:
-		if not world.pending_script_wait().is_empty():
-			results = world.finish_script_waits()
-			continue
-		if world.pending_script_input().is_empty():
+func _push_into_pit(screen: Gen2WorldScreen, boulder: Gen2WorldObject, game_id: StringName) -> void:
+	var world: Gen2WorldAPI = screen.world()
+	screen.press_button(PokeButton.DOWN)
+	screen.advance_frames(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS)
+	if not _r.check(
+		boulder.cell == Vector2i(8, 3),
+		"the boulder at (8,2) was not pushed onto the pit."
+	):
+		return
+	for frame: int in FALL_FRAMES:
+		screen.advance_frame()
+		if world.script_input_waiting() and frame % 8 == 0:
+			screen.press_button(PokeButton.A)
+		if not boulder.active and not world.script_busy():
 			break
-		results = world.run_event_queue(true)
-	var status: StringName = StringName(
-		(results[results.size() - 1] as Dictionary).get("status", &"")
-	) if not results.is_empty() else &""
 	_r.check(
-		status == &"complete",
-		"%s: the fall script ended as %s, not complete." % [game_id, status]
+		not world.script_busy(),
+		"the fall script still holds the map %d frames after the push." % FALL_FRAMES
 	)
 	_r.check(
-		world.state.is_event_flag_active(flag),
-		"%s: the fall script did not set boulder flag %d." % [game_id, flag]
+		world.state.is_event_flag_active(boulder.event_flag) and not boulder.active,
+		"the fall script did not take boulder flag %d." % boulder.event_flag
 	)
-	print("%s blackthorn: the real push fired its stone table and set flag %d." % [
-		game_id, flag,
-	])
+	print("%s blackthorn: the pushed boulder fell through and the map moved on." % game_id)

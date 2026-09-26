@@ -646,8 +646,8 @@ func world_actors() -> Array:
 ## roll a step takes. [param provider] is an object and not a script, for the
 ## reason an actor is; it must be a [RefCounted], never a [Node], and must answer
 ## [constant Gen2WorldEncounters.PROVIDER_METHODS]. The provider owns its
-## population and nothing else, and while at least one is registered the ordinary
-## post-step roll is off.
+## population and nothing else, and while at least one is registered a step's
+## roll meets only a roamer.
 func register_visible_encounters(id: StringName, provider: Object) -> Dictionary:
 	return _register_provider(
 		_visible_encounters, Gen2WorldEncounters.PROVIDER_METHODS, id, provider

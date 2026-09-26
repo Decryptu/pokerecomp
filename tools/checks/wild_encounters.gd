@@ -45,6 +45,7 @@ func run(r: RefCounted) -> void:
 		_verify_rolled_dvs()
 		_verify_magikarp_filter()
 		_verify_roaming_walk()
+		_verify_roamer_under_a_population()
 		_verify_table_rewrites()
 	)
 	_r.each_game_of(RomRegistry.GEN1, _verify_gen1_tables)
@@ -557,6 +558,74 @@ func _verify_roaming_walk() -> void:
 	_r.note("roaming: %d maps reached, %d jumps in %d passes" % [
 		reached.size(), jumps, known.size() * ROAM_WALK_UPDATES,
 	])
+
+
+## An empty visible population on Route 29 leaves the roamer standing there to
+## the step roll, `CheckEncounterRoamMon` coming before the map's tables.
+func _verify_roamer_under_a_population() -> void:
+	var probe: Gen2WorldAPI = _r.open_world(ROUTE_29_GROUP, ROUTE_29_NUMBER, Vector2i.ZERO)
+	var grass: PackedVector2Array = probe.visible_encounter_cells()[Gen2WorldEncounter.METHOD_GRASS]
+	var start: Vector2i = Vector2i(-1, -1)
+	for cell: Vector2 in grass:
+		if grass.has(cell + Vector2.RIGHT):
+			start = Vector2i(cell)
+			break
+	if not _r.check(start.x >= 0, "Route 29 has no two grass cells side by side."):
+		return
+	var screen: Gen2WorldScreen = _r.open_screen(ROUTE_29_GROUP, ROUTE_29_NUMBER, start)
+	var world: Gen2WorldAPI = screen.world()
+	world.state.init_roaming_mons([{
+		"species": RAIKOU, "level": ROAMER_LEVEL,
+		"map_group": ROUTE_29_GROUP, "map_number": ROUTE_29_NUMBER,
+	}])
+	(screen.get("_encounters") as Gen2WorldEncounters).set_providers([_empty_provider()])
+	var met: Dictionary = _walk_until_battle(screen, start)
+	_r.close_screen(screen)
+	var values: Dictionary = met.get("values", {})
+	_r.check(
+		int(values.get("pokemon", 0)) == RAIKOU
+			and int(values.get("battle_type", 0)) == Gen2Battle.BATTLETYPE_ROAMING,
+		"a step under a visible population met %s, not the roaming Raikou." % [values]
+	)
+
+
+const RAIKOU: int = 243
+const ROAMER_LEVEL: int = 40
+const ROAMER_WALK_STEPS: int = 3000
+
+
+func _walk_until_battle(screen: Gen2WorldScreen, start: Vector2i) -> Dictionary:
+	var world: Gen2WorldAPI = screen.world()
+	world.state.set_wild_encounter_cooldown(0)
+	for _step: int in ROAMER_WALK_STEPS:
+		var toward: int = PokeButton.RIGHT if world.player_cell == start else PokeButton.LEFT
+		screen.press_button(toward)
+		for _frame: int in Gen2WorldAPI.STEP_PASSES_WALK * 2 + 2:
+			screen.advance_frame()
+			var request: Dictionary = screen.get("_battle_transition_request")
+			if not request.is_empty():
+				return request
+	return {}
+
+
+func _empty_provider() -> Object:
+	var script := GDScript.new()
+	script.source_code = """extends RefCounted
+
+func set_context(_given) -> void:
+	pass
+
+func advance_frame() -> void:
+	pass
+
+func encounters() -> Array:
+	return []
+
+func battle_finished(_id, _result) -> void:
+	pass
+"""
+	script.reload()
+	return script.new()
 
 
 func _roamer_map(state: Gen2WorldState) -> Vector2i:

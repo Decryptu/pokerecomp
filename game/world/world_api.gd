@@ -3850,6 +3850,30 @@ func stone_queue_script(boulder: Gen2WorldObject) -> Dictionary:
 	return {}
 
 
+## `HandleCmdQueue`, run every pass before `MapEvents`: the first boulder
+## [method stone_queue_script] answers for falls, a pushed one once its slide ends.
+func run_command_queues() -> Array:
+	if _command_queue_slots.is_empty() or script_busy():
+		return []
+	for boulder: Gen2WorldObject in objects:
+		if boulder.deleted or not boulder.active:
+			continue
+		var fall: Dictionary = stone_queue_script(boulder)
+		if fall.is_empty():
+			continue
+		_enqueue_script({
+			"kind": &"stone_table",
+			"map_group": current_map.group,
+			"map_number": current_map.number,
+			"cell": boulder.cell,
+			"bank": int(fall["bank"]),
+			"script": int(fall["script"]),
+			"object_index": boulder.index,
+		})
+		return run_event_queue(false)
+	return []
+
+
 ## `DelCmdQueue`: matched on the type byte, and the first slot carrying it.
 func apply_command_queue_delete(queue_type: int) -> Dictionary:
 	for slot: int in _command_queue_slots.size():
@@ -10558,7 +10582,16 @@ func try_connection(direction: Vector2i) -> Dictionary:
 func can_walk_to(cell: Vector2i, direction: Vector2i = Vector2i.ZERO) -> bool:
 	if not _step_permission_allows(cell, direction):
 		return false
-	return object_at(cell) == null
+	return object_at(cell) == null and (_gen1 or not _object_vacating(cell))
+
+
+## `IsNPCAtCoord`'s `.check_current_coords`: a cell an object is walking out of
+## blocks until its step ends. Generation 1's sprite collision is by pixel distance.
+func _object_vacating(cell: Vector2i) -> bool:
+	for object: Gen2WorldObject in objects:
+		if object.active and not object.deleted and object.vacating_cell() == cell:
+			return true
+	return false
 
 
 ## _step_permission_allows() for a cell on a map that is not loaded yet: the
@@ -11508,11 +11541,6 @@ func _commit_boulder_push(
 	boulder: Gen2WorldObject, landing: Vector2i, direction: Vector2i
 ) -> Dictionary:
 	boulder.cell = landing
-	# The stone queue is asked here, on the call that commits the cell, for the
-	# same reason the push itself is resolved here: the source waits for the
-	# boulder to reach STANDING, and nothing between those frames asks the
-	# boulder anything or moves it again.
-	var fall: Dictionary = stone_queue_script(boulder)
 	# FIXED_FACING is set on the boulder's movement data, so InitStep skips the
 	# OBJECT_DIRECTION write and the sprite keeps facing down while it slides.
 	boulder.start_step(direction, STEP_PASSES_BOULDER_PUSH)
@@ -11527,17 +11555,6 @@ func _commit_boulder_push(
 		"to_cell": landing,
 		"direction": direction,
 	}
-	if not fall.is_empty():
-		pushed["fall_script"] = int(fall["script"])
-		_enqueue_script({
-			"kind": &"stone_table",
-			"map_group": current_map.group,
-			"map_number": current_map.number,
-			"cell": landing,
-			"bank": int(fall["bank"]),
-			"script": int(fall["script"]),
-			"object_index": boulder.index,
-		})
 	return {
 		"ok": false,
 		"kind": &"move",

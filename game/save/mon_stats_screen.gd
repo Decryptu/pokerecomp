@@ -5,10 +5,8 @@ extends RefCounted
 ## and what each page has to say about it. The pages are the cartridge's three plus
 ## whatever mods have registered, and [Gen2StatsScreenPage] draws the answer.
 ## `StatsScreenInit` is opened over whatever screen asked for it and hands control
-## back on the way out, so this owns no nodes. The list is the party in the two
-## places STATS is reached from today; `wMonType` picks a different list on the
-## cartridge, but the shape is the same for any of them, which is why the mons are
-## passed in rather than read out of a save.
+## back on the way out, so this owns no nodes, and the caller redraws after every
+## press. The mons are passed in because `wMonType` picks the party or a box.
 
 ## `StatsScreen_Exit`: B, or A on the last page.
 signal closed

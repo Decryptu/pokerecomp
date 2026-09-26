@@ -6930,7 +6930,7 @@ func _ss_aqua_disembark(
 
 
 ## _push_boulder_at() for a boulder that may land on a `stonetable` pit, whose
-## fall script the push that commits the cell queues.
+## fall script `HandleCmdQueue` starts once the slide has ended.
 func _push_boulder_run(
 	world: Gen2WorldAPI,
 	approach: Vector2i,
@@ -6943,15 +6943,22 @@ func _push_boulder_run(
 	if not bool(pushed.get("ok", false)):
 		return pushed
 	var fall: Dictionary = _drain_story(
-		world, world.run_event_queue(false), save, random, data
+		world, world.run_command_queues(), save, random, data
 	)
 	if not bool(fall.get("terminal", true)):
 		return {"ok": false, "reason": "fall script did not finish: %s" % fall.get("reason", "")}
 	return pushed
 
 
-## Spends hardware frames until no object is mid-step, one at a time: a pushed
-## boulder slides for STEP_PASSES_BOULDER_PUSH of them.
+## Lands every step in flight, as the frames before the next walk would.
+func _land_object_steps(world: Gen2WorldAPI) -> void:
+	for object: Gen2WorldObject in world.objects:
+		for _pass: int in OBJECT_STEP_FRAME_BUDGET:
+			if not object.tick_step():
+				break
+
+
+## Spends hardware frames, one at a time, until no object is mid-step.
 func _settle_object_steps(world: Gen2WorldAPI, random: RandomNumberGenerator) -> void:
 	for _frame: int in OBJECT_STEP_FRAME_BUDGET:
 		var stepping: bool = false
@@ -7297,8 +7304,8 @@ func _storm_badge_leg(
 ## Walks to [param approach] and steps into [param direction], a push rather
 ## than a step because a boulder stands there. DoPlayerMovement.CheckNPC bumps
 ## the player, so the step reports blocked and the boulder moving is the success
-## signal. Every push starts settled: a sliding boulder holds
-## OBJECT_LAST_MAP_X/Y on the cell it is leaving, which the next push may need.
+## signal. Every push starts and ends settled: a sliding boulder holds
+## OBJECT_LAST_MAP_X/Y on the cell it is leaving, which the next walk may need.
 func _push_boulder_at(
 	world: Gen2WorldAPI,
 	approach: Vector2i,
@@ -7320,6 +7327,7 @@ func _push_boulder_at(
 			],
 		}
 	var pushed: Dictionary = result["boulder_pushed"]
+	_settle_object_steps(world, random)
 	return {
 		"ok": true,
 		"from_cell": _cell_value_from_vector(pushed["from_cell"]),
@@ -8646,6 +8654,7 @@ func _walk_to_connection(
 	if connection.is_empty():
 		return {"ok": false, "reason": "missing connection", "direction": direction_name}
 
+	_land_object_steps(world)
 	var frontier: Array[Vector2i] = [world.player_cell]
 	var previous: Dictionary = {world.player_cell: {"cell": Vector2i(-1, -1), "direction": Vector2i.ZERO}}
 	var directions: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
@@ -8784,6 +8793,7 @@ func _walk_to_story_cell(
 			"ok": true,
 			"events": _dispatch_after_step(world, target) if dispatch_target_events else [],
 		}
+	_land_object_steps(world)
 	var plan: Dictionary = _plan_walk(world, target, water_only, avoid)
 	if not bool(plan["found"]):
 		return {

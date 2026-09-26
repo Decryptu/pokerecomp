@@ -1646,7 +1646,7 @@ the frames either way.
 
 ## Visible wild encounters
 
-A mod that wants wild Pokemon standing on the map instead of a roll on every step
+A mod that wants wild Pokemon standing on the map instead of the wild a step rolls
 registers a provider. It owns the population and nothing else; every rule a
 cartridge owns stays in `Gen2WorldAPI`.
 
@@ -1705,9 +1705,12 @@ What the host does with a valid population:
 
 - Draws it through the actor layer with the species' own four colours, shiny or
   not and glowing or not, so a renderer reading `set_actors` gets it for free.
-- Turns the ordinary post-step roll off while any provider is registered.
+- Turns the ordinary post-step wild off while any provider is registered.
   Scripted, fishing, Headbutt, Rock Smash, Sweet Scent and Bug Contest encounters
-  keep their own paths.
+  keep their own paths, and so does a [roaming Pokemon](#roaming-pokemon): the
+  step and turn rolls still run, because `ChooseWildEncounter` asks
+  `CheckEncounterRoamMon` before the map's tables, and only a roamer they pick
+  starts a battle.
 - Keeps away what a Repel would: while one lasts, an entry below the first
   healthy party member's level (the first member's on Red, Blue and Yellow) is
   neither drawn nor met, and still holds its cell against other entries. It

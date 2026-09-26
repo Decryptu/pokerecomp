@@ -1008,6 +1008,7 @@ func _advance_presentation(map_pass: bool) -> void:
 ## covers its first two pixels on the pass the press landed on.
 func _advance_movement(map_pass: bool) -> void:
 	if map_pass:
+		_run_command_queues()
 		_run_player_events_pass()
 		_advance_pressed_action()
 		_advance_forced_movement()
@@ -1133,6 +1134,15 @@ func _apply_gen1_spinner() -> void:
 		moved = _animation.write_tile_indices(int(row[0]), pixels) or moved
 	if moved and _renderer != null:
 		_renderer.refresh_animation()
+
+
+## `HandleCmdQueue`, in front of `MapEvents` on every pass the map runs.
+func _run_command_queues() -> void:
+	if not _objects_may_move():
+		return
+	var results: Array = _world.run_command_queues()
+	if not results.is_empty():
+		_show_script_results(results)
 
 
 ## `JoypadOverworld`'s `RunMapScript`, or Generation 2's `PlayerEvents`, on every
@@ -3152,10 +3162,10 @@ func _count_step() -> bool:
 	return false
 
 
-## `RandomEncounter`, or with a provider active the wild walked into; a rod,
-## Headbutt, Rock Smash, Sweet Scent and the contest keep their own paths.
+## `RandomEncounter`, or with a provider active the wild walked into or a roamer;
+## a rod, Headbutt, Rock Smash, Sweet Scent and the contest keep their own paths.
 func _roll_step_encounter() -> bool:
-	if _encounters == null or not _encounters.active():
+	if not _visible_encounters_active():
 		return _start_random_encounter()
 	## Generation 1 counts its Repel down inside the roll this step skips.
 	_world.count_gen1_repel_step()
@@ -3166,7 +3176,13 @@ func _roll_step_encounter() -> bool:
 		_battle_encounter_id = StringName(request["visible_encounter"])
 		_zero_map_name_sign_timer()
 		_start_battle_request(request)
+		return true
+	_start_random_encounter(true)
 	return true
+
+
+func _visible_encounters_active() -> bool:
+	return _encounters != null and _encounters.active()
 
 
 ## `CheckTimeEvents`: the contest's timer while one runs, else `CheckPhoneCall`.
@@ -3184,11 +3200,14 @@ func _run_time_events() -> bool:
 
 
 ## `RandomEncounter`, whose carry makes a wild a player event like any other.
-func _start_random_encounter() -> bool:
+func _start_random_encounter(roamer_only: bool = false) -> bool:
+	if roamer_only and _world.is_gen1():
+		return false
 	var encounter: Dictionary = _world.encounter_request(
 		_encounter_random, false, &"auto", _repel_lead_level(), _party_holds_cleanse_tag()
 	)
-	if encounter.is_empty():
+	if encounter.is_empty() or (roamer_only
+		and encounter.get("source", &"") != Gen2WorldEncounter.SOURCE_ROAMING):
 		return false
 	_zero_map_name_sign_timer()
 	_start_battle_request({
@@ -3199,13 +3218,12 @@ func _start_random_encounter() -> bool:
 	return true
 
 
-## `CheckTileEvent` after `ChangeDirectionScript`: `RandomEncounter` alone. A
-## provider's wilds are met by walking into them, which a turn does not.
+## `CheckTileEvent` after `ChangeDirectionScript`: `RandomEncounter` alone, which
+## under a provider, whose wilds a turn never walks into, meets only a roamer.
 func _roll_turn_encounter() -> void:
-	if not _objects_may_move() or _world.script_busy() \
-		or (_encounters != null and _encounters.active()):
+	if not _objects_may_move() or _world.script_busy():
 		return
-	_start_random_encounter()
+	_start_random_encounter(_visible_encounters_active())
 
 
 ## `RepelWoreOffScript`'s line, held until a step nothing else owns can print
@@ -5384,7 +5402,7 @@ func preview_battle_request(
 ## Screenshot driver for a provider's wild on [param cell], met as a step meets
 ## it; the entry's id rides the request so the provider hears how it ended.
 func preview_meet_visible_encounter(cell: Vector2i) -> bool:
-	if _encounters == null or not _encounters.active():
+	if not _visible_encounters_active():
 		return false
 	var request: Dictionary = _encounters.battle_request_at(cell)
 	if request.is_empty():
