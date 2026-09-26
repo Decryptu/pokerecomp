@@ -79,14 +79,12 @@ static func lay_out(
 	return out
 
 
-## The same pages with what each of them costs to reach, which is what a box
-## animating a scroll needs. `enter` is `page` for a `Paragraph`, whose box is
-## cleared and which waits for a press first; `scroll` for `_ContText`, which
-## waits and then runs `TextScroll` twice; and `scroll_nowait` for
-## `_ContTextNoPause`, the same two scrolls with nothing waited for. The first
-## page is `start`. `carried` is how many of the page's first lines the scroll
-## moved up rather than printed, since `TextScroll` copies tiles and a carried
-## line is already on screen.
+## The same pages with what each costs to reach. `enter` is `page` for a
+## `Paragraph`: a press, the box cleared and its 20 frames; `text` for the next
+## `PrintText` behind a `prompt`, the same without the frames; `scroll` for
+## `_ContText`, a press and two `TextScroll`s; `scroll_nowait` for
+## `_ContTextNoPause`, the scrolls alone; `start` for the first. `carried` is how
+## many of a page's first lines `TextScroll` moved up, being on screen already.
 static func lay_out_pages(
 	text: String, columns: int, rows: int, generation: int = RomRegistry.GEN2
 ) -> Array:
@@ -101,8 +99,9 @@ static func lay_out_pages(
 		var page_at: int = text.find(Gen2TextStream.PAGE_BREAK, at)
 		var scroll_at: int = text.find(Gen2TextStream.SCROLL_BREAK, at)
 		var nowait_at: int = text.find(Gen2TextStream.SCROLL_NOWAIT_BREAK, at)
+		var prompt_at: int = text.find(Gen2TextStream.PROMPT_BREAK, at)
 		var stop: int = page_at
-		for candidate: int in [scroll_at, nowait_at]:
+		for candidate: int in [scroll_at, nowait_at, prompt_at]:
 			if candidate >= 0 and (stop < 0 or candidate < stop):
 				stop = candidate
 		var segment: String = text.substr(at, -1) if stop < 0 else text.substr(at, stop - at)
@@ -119,7 +118,7 @@ static func lay_out_pages(
 		if not page.is_empty():
 			out.append({"lines": page, "enter": enter, "carried": carried})
 			page = PackedStringArray()
-		enter = &"page"
+		enter = &"text" if stop == prompt_at else &"page"
 		carried = 0
 		if scrolled:
 			enter = &"scroll" if stop == scroll_at else &"scroll_nowait"

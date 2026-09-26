@@ -13,9 +13,9 @@ enum Kind { MENU, CHANGE_BOX, MOVE_MON, LINK, GEN1_MENU, YELLOW_MENU }
 enum Step { ASK, OVERWRITE, SAVING, SAVED, FAILED, REFUSED, DONE }
 
 ## The texts, out of `data/text/common_3.asm` on Crystal and `common_2.asm` on
-## Gold and Silver, authored here verbatim, one entry a line, so a box scrolls
-## where `_ContText` scrolls. `AnotherSaveFileText` is unreachable: a world is
-## always played from the slot it was started in.
+## Gold and Silver, authored here verbatim, one entry a line; a third line is
+## behind `_ContText`. `AnotherSaveFileText` is unreachable: a world is always
+## played from the slot it was started in.
 const ASK_LINES: Array[String] = [
 	"Would you like to", "save the game?",
 ]
@@ -86,12 +86,14 @@ const SAVING_RECORD_LINES: Array[String] = [
 const SAVING_RECORD_FRAMES: int = 100
 
 var step: Step = Step.ASK
-## The box's lines and the one it has scrolled to, and the yes/no's cursor: 0 is
-## YES, 1 is NO, and below zero is a box with no question on it yet.
+## The box's lines and the yes/no's cursor: 0 is YES, 1 is NO, and below zero is
+## a box with no question on it.
 var lines: Array[String] = []
-var line: int = 0
 var cursor: int = -1
 var frames: int = 0
+## Whether the host has yet to print [member lines]; nothing counts until then.
+var text_pending: bool = false
+var _sfx_taken: bool = false
 var result: Dictionary = {}
 var _answer_hold: int = 0
 var _held_yes: bool = false
@@ -117,7 +119,27 @@ static func open(kind: Kind, player_name: String, write: Callable) -> Gen2SavePr
 
 func reads_joypad() -> bool:
 	return step in [Step.ASK, Step.OVERWRITE, Step.FAILED] and not holding_info() \
-		and _answer_hold == 0
+		and _answer_hold == 0 and not text_pending
+
+
+func text() -> String:
+	if lines.size() <= 2:
+		return "\n".join(lines)
+	return "%s\n%s%s%s" % [lines[0], lines[1], Gen2TextStream.SCROLL_BREAK, lines[2]]
+
+
+## `SavingDontTurnOffThePower` and `SavedTheGame` force `TEXT_DELAY_MED`;
+## pokered's `NowSavingString` is a `PlaceString`.
+func letter_speed() -> StringName:
+	if step == Step.FAILED or (step == Step.SAVING and _kind == Kind.GEN1_MENU):
+		return &"instant"
+	if step in [Step.SAVING, Step.SAVED] and not _gen1():
+		return &"medium"
+	return &"option"
+
+
+func text_printed() -> void:
+	text_pending = false
 
 
 func holding_info() -> bool:
@@ -141,21 +163,14 @@ func refused() -> bool:
 	return step == Step.REFUSED
 
 
-## A on the box. A three-line text is prompted past once before its last line,
-## `_ContText`'s own `PromptButton`, answered true and ignoring [param yes].
-func confirm(yes: bool) -> bool:
+func confirm(yes: bool) -> void:
 	if not reads_joypad():
-		return false
-	if cursor < 0 and step in [Step.ASK, Step.OVERWRITE]:
-		line = 1
-		cursor = 0
-		return true
+		return
 	if step in [Step.ASK, Step.OVERWRITE]:
 		_held_yes = yes
 		_answer_hold = Gen2WorldMenu.ANSWER_HOLD_FRAMES
-		return false
+		return
 	_answer(yes)
-	return false
 
 
 func _answer(yes: bool) -> void:
@@ -177,6 +192,8 @@ func _answer(yes: bool) -> void:
 
 
 func frame() -> void:
+	if text_pending:
+		return
 	if _answer_hold > 0:
 		_answer_hold -= 1
 		if _answer_hold == 0:
@@ -211,20 +228,24 @@ func writing_now() -> bool:
 	return step == Step.SAVING and frames == _timing("write")
 
 
-## The frame `SavedTheGame` asks for `SFX_SAVE` through `WaitPlaySFX`.
-func sfx_owed() -> bool:
-	return step == Step.SAVED and frames == _timing("sfx")
+## The frame `SavedTheGame` asks for `SFX_SAVE` through `WaitPlaySFX`, once.
+func take_sfx() -> bool:
+	if step != Step.SAVED or frames != _timing("sfx") or text_pending or _sfx_taken:
+		return false
+	_sfx_taken = true
+	return true
 
 
-func _open_question(text: Array) -> void:
-	lines.assign(text)
-	cursor = -1 if text.size() > 2 else 0
+func _open_question(question: Array) -> void:
+	lines.assign(question)
+	cursor = 0
+	text_pending = true
 
 
 func _enter(next: Step) -> void:
 	step = next
 	frames = 0
-	line = 0
+	_sfx_taken = false
 	match next:
 		Step.ASK:
 			if _timing("hold") > 0:
@@ -251,6 +272,7 @@ func _enter(next: Step) -> void:
 		_:
 			lines.clear()
 			cursor = -1
+	text_pending = not lines.is_empty()
 
 
 func _saving_lines() -> Array[String]:

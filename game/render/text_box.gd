@@ -13,6 +13,7 @@ signal finished
 ## A press answering `Paragraph`, `_ContText` or `PromptText`: `PromptButton`
 ## plays [param sfx], `SFX_READ_TEXT_2`. A caller's `JoyWaitAorB` plays nothing.
 signal prompt_answered(sfx: int)
+signal redrawn
 
 ## The standard box: twenty tiles across, six down, at the foot of the screen.
 const STANDARD_COLUMNS: int = 20
@@ -58,12 +59,9 @@ const TILE: int = Gen2Font.TILE
 var _blink_cursor: bool = true
 ## Whether the text ended on `prompt`; [method set_blink_cursor] is a caller's.
 var _prompted: bool = true
-## Whether A or B is being HELD, which is the whole of what a button does to a
-## printing text. `PrintLetterDelay` reads `hJoyDown` and answers a held A or B
-## with a single `DelayFrame`, whatever the speed setting says
-## (`home/print_text.asm`): one letter a frame, and never the rest of the page.
-## A host sets this per frame; nothing here polls, so a replay and a check drive
-## the same acceleration a player does.
+## A held A or B a check sets; the player's own is read every frame the box
+## spends. `PrintLetterDelay` answers either with a single `DelayFrame` whatever
+## the speed setting says (`home/print_text.asm`): a letter a frame, no more.
 @export var accelerated: bool = false
 ## Whether a host spends this box's hardware frames itself with
 ## [method advance_frame]. The reveal is a frame count on the cartridge, so a
@@ -76,6 +74,10 @@ var driven: bool = false:
 		driven = value
 		if value:
 			set_process(false)
+## Whether a page draws this box into its own picture with [method compose].
+var composed: bool = false
+## `NO_TEXT_SCROLL`, or Generation 1's `BIT_NO_TEXT_DELAY`: a page lands whole.
+var instant: bool = false
 ## `TEXT_DELAY_FAST` is one frame a letter, which is what a held A or B costs and
 ## also the fastest the speed setting goes.
 const ACCELERATED_SPEED: float = 60.0
@@ -145,6 +147,12 @@ static func for_screen(data: GameData) -> Gen2TextBox:
 	return box
 
 
+static func for_page(data: GameData) -> Gen2TextBox:
+	var box: Gen2TextBox = for_screen(data)
+	box.composed = true
+	return box
+
+
 func _ready() -> void:
 	# Nearest, or the integer-scaled viewport is undone on the last hop.
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -174,7 +182,7 @@ func _advance() -> void:
 		_paragraph_frames -= 1
 		return
 	if _shown < float(_tiles_on_page):
-		var rate: float = maxf(reveal_speed, ACCELERATED_SPEED) if accelerated else reveal_speed
+		var rate: float = _reveal_rate()
 		_shown = minf(_shown + FRAME_SECONDS * rate, float(_tiles_on_page))
 		_redraw()
 		return
@@ -243,7 +251,7 @@ func _printing_frames_left() -> int:
 	if _scroll_page >= 0:
 		var steps: int = SCROLL_STEPS - _scroll_rows + 1
 		return int(ceil(float(steps) * float(SCROLL_STEP_FRAMES) - _scroll_elapsed))
-	var rate: float = maxf(reveal_speed, ACCELERATED_SPEED) if accelerated else reveal_speed
+	var rate: float = _reveal_rate()
 	if rate <= 0.0 or _shown >= float(_tiles_on_page):
 		return 0
 	var frames: float = (float(_tiles_on_page) - _shown) / (rate * FRAME_SECONDS)
@@ -255,6 +263,12 @@ func _printing_frames_left() -> int:
 	return whole + 1 if is_equal_approx(float(whole), frames) else whole
 
 
+func _reveal_rate() -> float:
+	if accelerated or PokeButton.text_accelerating():
+		return maxf(reveal_speed, ACCELERATED_SPEED)
+	return reveal_speed
+
+
 ## True while a page still has tiles left to reveal, while `Paragraph` holds the
 ## box cleared, or while the box is in the middle of a scroll: none of the three
 ## has reached its `PromptButton` yet.
@@ -262,8 +276,11 @@ func is_revealing() -> bool:
 	return _scroll_page >= 0 or _paragraph_frames > 0 or _shown < float(_tiles_on_page)
 
 
-## Every line the box is holding, its pages in order. What is on screen is read
-## through this rather than through the pagination behind it.
+func has_text_left() -> bool:
+	return is_revealing() or has_pages_left()
+
+
+## Every line the box is holding, its pages in order.
 func text_lines() -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
 	for page: Dictionary in _pages:
@@ -345,24 +362,18 @@ func text_rows() -> int:
 	return maxi((rows - 1 - TEXT_TOP) / LINE_SPACING + 1, 0)
 
 
-## How the page at [param index] is reached, and `&""` when there is no such
-## page.
 func _enter_of(index: int) -> StringName:
 	if index < 0 or index >= _pages.size():
 		return &""
 	return StringName(_pages[index].get("enter", &"page"))
 
 
-## How many of the page at [param index]'s lines `TextScroll` carried up rather
-## than printed, and so how many of them are already on screen.
 func _carried_of(index: int) -> int:
 	if index < 0 or index >= _pages.size():
 		return 0
 	return int(_pages[index].get("carried", 0))
 
 
-## Starts `TextScroll`'s two steps, with the lines that are on screen moving up
-## through the interior and off the top of it.
 func _begin_scroll(next_page: int) -> void:
 	_scroll_lines = _lines.duplicate()
 	_scroll_rows = 1
@@ -391,8 +402,6 @@ func advance_scroll_frames(frames: float) -> void:
 		_redraw()
 
 
-## Whether `TextScroll`'s two steps are running, which is the one wait that is
-## neither a page turn nor a reveal.
 func is_scrolling() -> bool:
 	return _scroll_page >= 0
 
@@ -436,7 +445,7 @@ func _start_page() -> void:
 	_blink = 0.0
 	_paragraph_frames = PARAGRAPH_FRAMES if _page > 0 and _enter_of(_page) == &"page" else 0
 	set_process((_tiles_on_page > 0 or _paragraph_frames > 0) and not driven)
-	if reveal_speed <= 0.0:
+	if reveal_speed <= 0.0 or instant:
 		_shown = float(_tiles_on_page)
 	_redraw()
 
@@ -447,6 +456,9 @@ func _encode(line: String) -> PackedByteArray:
 
 
 func _redraw() -> void:
+	if composed:
+		redrawn.emit()
+		return
 	if font == null or columns <= 0 or rows <= 0:
 		texture = null
 		return
@@ -455,10 +467,7 @@ func _redraw() -> void:
 	var height: int = rows * TILE
 	var indices: PackedByteArray = PackedByteArray()
 	indices.resize(width * height)
-
-	_draw_border(indices, width)
-	_draw_lines(indices, width)
-	_draw_cursor(indices, width)
+	compose(indices, width, Vector2i.ZERO)
 
 	var image: Image = Gen2PicImage.from_indices(
 		indices, width, height, _colors()
@@ -489,8 +498,21 @@ func _cursor_up() -> bool:
 	return _blink < FRAME_SECONDS * float(CURSOR_BLINK_FRAMES)
 
 
-func _draw_border(indices: PackedByteArray, width: int) -> void:
-	font.draw_box(frame_style, indices, width, 0, 0, columns, rows)
+func compose(indices: PackedByteArray, width: int, at: Vector2i) -> void:
+	if font == null or columns <= 0 or rows <= 0:
+		return
+	font.draw_box(frame_style, indices, width, at.x, at.y, columns, rows)
+	for glyph: Array in glyphs():
+		var cell: Vector2i = glyph[0]
+		font.draw_code(int(glyph[1]), indices, width, at.x + cell.x * TILE, at.y + cell.y * TILE)
+
+
+## What the interior shows, `[cell, code]` from the box's corner, for a tilemap.
+func glyphs() -> Array:
+	var out: Array = _scrolling_glyphs() if _scroll_page >= 0 else _printed_glyphs()
+	if cursor_visible():
+		out.append([Vector2i(CURSOR_COLUMN, rows - 1), CURSOR_CODE])
+	return out
 
 
 ## Whether `LoadBlinkingCursor` has the arrow up right now, which is the whole
@@ -509,41 +531,29 @@ func cursor_visible() -> bool:
 	return CURSOR_COLUMN < columns and rows > 0
 
 
-func _draw_cursor(indices: PackedByteArray, width: int) -> void:
-	if not cursor_visible():
-		return
-	font.draw_code(
-		CURSOR_CODE, indices, width, CURSOR_COLUMN * TILE, (rows - 1) * TILE
-	)
-
-
-func _draw_lines(indices: PackedByteArray, width: int) -> void:
-	if _scroll_page >= 0:
-		_draw_scrolling_lines(indices, width)
-		return
+func _printed_glyphs() -> Array:
+	var out: Array = []
 	var left: int = 0
 	for i: int in _lines.size():
 		var codes: PackedByteArray = _lines[i]
-		var top: int = (TEXT_TOP + i * LINE_SPACING) * TILE
 		for tile: int in codes.size():
 			if left + tile >= int(_shown):
-				return
-			font.draw_code(
-				codes[tile], indices, width, (TEXT_LEFT + tile) * TILE, top
-			)
+				return out
+			out.append([Vector2i(TEXT_LEFT + tile, TEXT_TOP + i * LINE_SPACING), codes[tile]])
 		left += codes.size()
+	return out
 
 
 ## The interior mid-`TextScroll`: every line one tile row higher per step, and
 ## the row that reaches the border gone, which is what the second copy does to
 ## the first line on the cartridge.
-func _draw_scrolling_lines(indices: PackedByteArray, width: int) -> void:
+func _scrolling_glyphs() -> Array:
+	var out: Array = []
 	for i: int in _scroll_lines.size():
 		var codes: PackedByteArray = _scroll_lines[i]
 		var row: int = TEXT_TOP + i * LINE_SPACING - _scroll_rows
 		if row < 1:
 			continue
 		for tile: int in codes.size():
-			font.draw_code(
-				codes[tile], indices, width, (TEXT_LEFT + tile) * TILE, row * TILE
-			)
+			out.append([Vector2i(TEXT_LEFT + tile, row), codes[tile]])
+	return out

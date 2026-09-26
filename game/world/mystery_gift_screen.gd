@@ -30,8 +30,7 @@ var _day: int = 0
 var _step: STEP = STEP.PROMPT
 var _frames: int = 0
 var _result: Dictionary = {}
-var _pages: Array = []
-var _page_index: int = 0
+var _box: Gen2TextBox = null
 var _background: TextureRect = null
 
 
@@ -61,6 +60,9 @@ func _ready() -> void:
 	_background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_background)
+	_box = Gen2TextBox.for_page(_data)
+	_box.redrawn.connect(_refresh)
+	add_child(_box)
 	## `MysteryGift`'s own two calls in front of the screen: `UpdateTime` and
 	## `DoMysteryGiftIfDayHasPassed`, which is what lifts yesterday's limit.
 	Gen2MysteryGift.begin_session(_section(), _day)
@@ -88,10 +90,11 @@ func handle_button(button: int) -> bool:
 				closed.emit()
 		STEP.MESSAGE:
 			if button in [PokeButton.A, PokeButton.B]:
-				if _page_index + 1 < _pages.size():
-					_page_index += 1
-					_refresh()
-				elif bool(_result.get("retry", false)):
+				var printed: bool = not _box.has_text_left()
+				_box.advance()
+				if not printed:
+					return true
+				if bool(_result.get("retry", false)):
 					## `.CommunicationError` is the one box that does not leave:
 					## `jp DoMysteryGift` puts the prompt back up.
 					_step = STEP.PROMPT
@@ -102,6 +105,8 @@ func handle_button(button: int) -> bool:
 
 
 func advance_frame() -> void:
+	if _step == STEP.MESSAGE:
+		_box.advance_frame()
 	if _frames <= 0:
 		return
 	_frames -= 1
@@ -129,13 +134,13 @@ func _exchange() -> void:
 		"decos": _data.mystery_gift_table(true),
 	}, _data)
 	_save.mystery_gift = section
-	_pages = Gen2TextLayout.lay_out(box_text(
+	_step = STEP.MESSAGE
+	## Every box ends in `prompt`.
+	_box.show_text(box_text(
 		_data, StringName(_result.get("outcome", &"")),
 		String(_transport.peer.get("name", "")),
 		_save.player_name, String(_result.get("name", ""))
-	), Gen2MysteryGiftPage.MESSAGE_COLUMNS, Gen2MysteryGiftPage.MESSAGE_ROWS)
-	_page_index = 0
-	_step = STEP.MESSAGE
+	), true)
 	_refresh()
 
 
@@ -180,16 +185,16 @@ static func box_text(
 	return text
 
 
-## What is in the box right now: empty while the prompt is up, and one page of
-## the outcome once it has been printed.
+## The page in the box: empty while the prompt is up.
 func visible_text() -> String:
-	if _step != STEP.MESSAGE or _page_index >= _pages.size():
-		return ""
-	return "\n".join(_pages[_page_index] as PackedStringArray)
+	return "\n".join(_box.page_lines()) if _step == STEP.MESSAGE else ""
 
 
 func _refresh() -> void:
 	if _background == null or _page == null:
 		return
-	Gen2PicImage.show(_background, _page.render(visible_text()))
+	var shown: Variant = ""
+	if _step == STEP.MESSAGE:
+		shown = _box
+	Gen2PicImage.show(_background, _page.render(shown))
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)

@@ -33,10 +33,6 @@ const PROMPT_AT: Vector2i = Vector2i(3, 8)
 const MESSAGE_BOX_AT: Vector2i = Vector2i(0, 12)
 const MESSAGE_BOX_SIZE: Vector2i = Vector2i(20, 6)
 const MESSAGE_AT: Vector2i = Vector2i(1, 14)
-## `TEXTBOX_INNERW` and the two lines under `TEXTBOX_INNERY`, which is what a
-## box shows before it waits to be advanced.
-const MESSAGE_COLUMNS: int = 18
-const MESSAGE_ROWS: int = 2
 
 ## `InitMysteryGiftLayout`, Crystal's: the screen fill, the box it clears in the
 ## middle, and then every write in the routine's order. A later row overwrites
@@ -177,16 +173,16 @@ func attributes() -> PackedByteArray:
 	return attrs
 
 
-## The screen with [param text] in the box `DoMysteryGift` prints into. Empty
-## text is the prompt the screen opens on, which is the routine's own
-## `.String_PressAToLink_BToCancel` and is drawn one column further in.
-func render(text: String = "") -> Image:
+## The screen with [param text], a string or a [Gen2TextBox] printing, in the box
+## `DoMysteryGift` prints into. Empty text is the prompt the screen opens on, the
+## routine's own `.String_PressAToLink_BToCancel`, drawn one column further in.
+func render(text: Variant = "") -> Image:
 	var indices := PackedByteArray()
 	indices.resize(WIDTH * HEIGHT)
 	var map: PackedByteArray = tilemap()
 	for cell: int in map.size():
 		_blit(indices, int(map[cell]), Vector2i(cell % COLUMNS, cell / COLUMNS))
-	if text.is_empty():
+	if not text is Gen2TextBox and String(text).is_empty():
 		var line: int = 0
 		for row: String in prompt.split("\n"):
 			font.draw_text(
@@ -200,19 +196,22 @@ func render(text: String = "") -> Image:
 
 ## `PrintText`: `SpeechTextbox` is `Textbox`, which clears its own interior
 ## before drawing the border, so the frame under it does not show through.
-func _draw_message(indices: PackedByteArray, text: String) -> void:
+func _draw_message(indices: PackedByteArray, text: Variant) -> void:
 	for row: int in MESSAGE_BOX_SIZE.y * TILE:
 		var start: int = (MESSAGE_BOX_AT.y * TILE + row) * WIDTH \
 			+ MESSAGE_BOX_AT.x * TILE
 		for column: int in MESSAGE_BOX_SIZE.x * TILE:
 			indices[start + column] = 0
+	if text is Gen2TextBox:
+		(text as Gen2TextBox).compose(indices, WIDTH, MESSAGE_BOX_AT * TILE)
+		return
 	font.draw_box(
 		Gen2OptionsStore.current().textbox_frame, indices, WIDTH,
 		MESSAGE_BOX_AT.x * TILE, MESSAGE_BOX_AT.y * TILE,
 		MESSAGE_BOX_SIZE.x, MESSAGE_BOX_SIZE.y
 	)
 	var line: int = 0
-	for row: String in text.split("\n"):
+	for row: String in String(text).split("\n"):
 		font.draw_text(
 			row, indices, WIDTH, MESSAGE_AT.x * TILE, (MESSAGE_AT.y + line) * TILE
 		)

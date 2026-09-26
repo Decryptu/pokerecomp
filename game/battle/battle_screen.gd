@@ -596,8 +596,6 @@ var _victory_music_spent: bool = false
 ## overworld: `HPBarAnim_BGMapUpdate`'s two-frame step and `BattleIntroSlidingPics`'
 ## `DelayFrame` are both hardware frame counts.
 func _process(delta: float) -> void:
-	if _box != null:
-		_box.accelerated = PokeButton.text_accelerating()
 	## Driven through [method advance_hardware_frame], real time must not also count: both at
 	## once ran every bar, animation and arrow at double rate. Same as [member Gen2TextBox.driven].
 	if _driven:

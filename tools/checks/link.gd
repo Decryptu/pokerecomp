@@ -243,11 +243,15 @@ func _gen1_trade_one(screen: Gen2WorldScreen, host: Gen2LinkScreen) -> void:
 		"the question took %d frames" % asked)
 	var state: Dictionary = host.trade_state()
 	_r.check(int(state.get("partner_choice", -1)) == 0 and bool(state.get("held", false))
-		and not (state.get("message", []) as Array).is_empty(),
+		and state.get("box") != null,
 		"the question stood over %s" % [state])
-	screen.press_button(PokeButton.A)
-	screen.press_button(PokeButton.A)
-	_r.check(host.step() == Gen2LinkScreen.STEP.CONFIRM, "the question's pages led to %d" % host.step())
+	## A letter a frame, and a press at its `cont` alone: the menu opens on its end.
+	var box: Gen2TextBox = state["box"]
+	var read: int = _gen1_drive(screen, func() -> bool:
+		if box.has_pages_left() and not box.is_revealing():
+			screen.press_button(PokeButton.A)
+		return host.step() == Gen2LinkScreen.STEP.CONFIRM, PokeButton.NONE)
+	_r.check(read > 0, "the question's pages led to %d" % host.step())
 	screen.press_button(PokeButton.A)
 	var movie: int = _gen1_drive(screen, func() -> bool: return screen.get("_trade_anim_host") != null, PokeButton.NONE)
 	_r.check(movie == Gen1Layout.TRADE_WAITING_FRAMES + Gen1Layout.TRADE_CENTER_DELAY_FRAMES,

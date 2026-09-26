@@ -964,7 +964,6 @@ func _refresh_if(moved: bool) -> void:
 ## on from inside a command, plus VBlank's `GameTimer` and `AnimateTileset`.
 func _advance_presentation(map_pass: bool) -> void:
 	if _text_box != null:
-		_text_box.accelerated = PokeButton.text_accelerating()
 		_text_box.advance_frame()
 	if _world != null:
 		_world.advance_frame_counter()
@@ -1100,6 +1099,7 @@ func _advance_waits(map_pass: bool) -> void:
 	## `_ContText`'s scroll ends on a frame rather than on a press, and the page
 	## it lands on may be the text's last, which is where the script runs on.
 	_continue_if_text_settled()
+	_open_choice_if_printed()
 	_continue_if_field_move_text_settled()
 	if not _trainer_approach.is_empty():
 		_advance_trainer_approach(map_pass)
@@ -5291,7 +5291,7 @@ func preview_save_saved() -> void:
 		return
 	var prompt: Gen2SavePrompt = _start_menu_host.get("_save_prompt")
 	while prompt != null and prompt.step == Gen2SavePrompt.Step.SAVING:
-		_start_menu_host.advance_save_frame()
+		_start_menu_host.advance_frame()
 
 
 ## [param answers] is how many A presses to spend past the first question,
@@ -5309,7 +5309,7 @@ func _preview_save_menu(answers: int) -> void:
 		_start_menu_host.handle_button(PokeButton.A)
 		var prompt: Gen2SavePrompt = _start_menu_host.get("_save_prompt")
 		while prompt != null and prompt.holding_info():
-			_start_menu_host.advance_save_frame()
+			_start_menu_host.advance_frame()
 
 
 ## Public screenshot driver for `TossMenu`. Grants a stack on an injected save
@@ -6620,22 +6620,17 @@ func _advance_script_input() -> void:
 	_refresh_labels()
 
 
-## The page a YES/NO stands beside once its question has printed to its last break.
+## The page a menu stands beside once its question has printed to its end.
 var _choice_last_page: String = ""
 
 
-## `YesNoChoice` opens over whatever the box's last `para` or `cont` left, so a
-## question that pages prints to that break first.
+## A question staged with its own words prints to its end first; one behind a
+## `writetext` is `printed` already.
 func _open_choice_host() -> void:
 	var input: Dictionary = _world.pending_script_input()
 	var text: String = String(input.get("text", ""))
-	var cut: int = -1
-	for marker: String in [
-		Gen2TextStream.PAGE_BREAK, Gen2TextStream.SCROLL_BREAK, Gen2TextStream.SCROLL_NOWAIT_BREAK,
-	]:
-		cut = maxi(cut, text.rfind(marker))
-	if cut < 0 or _text_box == null or _text_box.font == null \
-		or StringName(input.get("type", &"")) != &"choice":
+	if text.is_empty() or bool(input.get("printed", false)) \
+		or _text_box == null or _text_box.font == null:
 		_open_service_host()
 		return
 	_choice_last_page = "\n".join(Gen2TextLayout.lay_out(
@@ -6644,10 +6639,16 @@ func _open_choice_host() -> void:
 	).back())
 	_text_awaits_press = true
 	_apply_text_box_options()
-	_text_box.show_text(text.substr(0, cut), true)
+	_text_box.show_text(text, false)
 	_text_box.visible = true
 	_script_prompt = "A: advance text"
 	_refresh_labels()
+
+
+func _open_choice_if_printed() -> void:
+	if _choice_last_page.is_empty() or _text_box == null or _text_box.has_text_left():
+		return
+	_open_service_host()
 
 
 ## `Script_writetext` is `MapTextbox`, returning behind the last letter, so a

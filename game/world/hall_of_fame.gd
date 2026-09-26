@@ -171,7 +171,7 @@ static func _gen1_mon_page(data: GameData, mon: Gen2SaveMon) -> Dictionary:
 
 
 ## `HoFDisplayPlayerStats`: the slide, the two boxes, then the three
-## `HoFPrintTextAndDelay` texts, a `cont` inside one waiting for its press.
+## `HoFPrintTextAndDelay` texts, each held once it has printed.
 static func _gen1_player_pages(
 	data: GameData, save: Gen2SaveData, state: Gen2WorldState
 ) -> Array:
@@ -196,25 +196,16 @@ static func _gen1_player_pages(
 	if not rating.is_empty():
 		texts.append(String((rating["pages"] as Array)[1]))
 	for text: String in texts:
-		var boxes: Array = Gen2TextLayout.lay_out(
-			text, Gen2HallOfFamePage.TEXT_COLUMNS, Gen2HallOfFamePage.TEXT_ROWS,
-			RomRegistry.GEN1
-		)
-		for index: int in boxes.size():
-			out.append(_gen1_with(panel, {
-				"lines": Array(boxes[index] as PackedStringArray),
-				"hold": GEN1_TEXT_FRAMES if index == boxes.size() - 1 else 0,
-			}))
+		out.append(_gen1_with(panel, {"text": text, "hold": GEN1_TEXT_FRAMES}))
 	var fades: Array = _gen1_fade(out[out.size() - 1])
 	fades[0]["fade_music"] = true
 	out.append_array(fades)
 	return out
 
 
-## `HOF_AnimatePlayerPic`'s panel, once per box `ProfOaksPCRating` prints into
-## it: both its texts run past two lines, and `PrintText` waits at each break the
-## way it does anywhere else. The last box carries the sound the rating picked,
-## which is where `PlayMusic MUSIC_NONE` and `PlaySFX` both sit.
+## `HOF_AnimatePlayerPic`'s panel under each text `ProfOaksPCRating` prints,
+## both waited on with `JoyWaitAorB`; the rating carries the sound its row picked,
+## which `PlayMusic MUSIC_NONE` and `PlaySFX` play once it has printed.
 static func _player_pages(
 	data: GameData, save: Gen2SaveData, state: Gen2WorldState
 ) -> Array:
@@ -231,18 +222,12 @@ static func _player_pages(
 	var rating: Dictionary = Gen2ProfOaksPC.rate(data, state)
 	if rating.is_empty():
 		return [panel]
-	var boxes: Array = []
-	for text: Variant in rating["pages"] as Array:
-		boxes.append_array(Gen2TextLayout.lay_out(
-			String(text), Gen2HallOfFamePage.TEXT_COLUMNS, Gen2HallOfFamePage.TEXT_ROWS
-		))
 	var out: Array = []
-	for index: int in boxes.size():
+	for text: Variant in rating["pages"] as Array:
 		var page: Dictionary = panel.duplicate()
-		page["lines"] = Array(boxes[index] as PackedStringArray)
-		if index == boxes.size() - 1:
-			page["sfx"] = int(rating["sfx"])
+		page["text"] = String(text)
 		out.append(page)
+	out[out.size() - 1]["sfx"] = int(rating["sfx"])
 	return out
 
 

@@ -46,6 +46,7 @@ var _pic_rest_x: float = 0.0
 ## How long the page on screen holds before moving on by itself, and its clock.
 var _hold_frames: int = 0
 var _hold_clock := Gen2WorldAnimation.FrameClock.new()
+var _box: Gen2TextBox = null
 
 
 ## [param pages] is [method Gen2HallOfFame.pages]; an empty list closes at once.
@@ -81,10 +82,15 @@ func current_page() -> Dictionary:
 ## is what [member cancelled] says afterwards, and START skips the rest of this
 ## team. `AnimateHallOfFame` reads none of them.
 func handle_button(button: int) -> bool:
+	if _printing():
+		if button in [PokeButton.A, PokeButton.B]:
+			_box.advance()
+		return true
 	if _hold_frames > 0:
 		## Both holds end on `DelayFrames`, which reads no joypad.
 		return true
-	if button == PokeButton.A:
+	## `ProfOaksPCRating`'s `JoyWaitAorB`.
+	if button == PokeButton.A or (button == PokeButton.B and current_page().has("text")):
 		advance()
 		return true
 	if not viewer:
@@ -125,11 +131,19 @@ func _build() -> void:
 		else [_pic, _back_pic, _background]
 	for layer: TextureRect in layers:
 		add_child(layer)
+	_box = Gen2TextBox.for_page(_data)
+	_box.redrawn.connect(_draw_page)
+	add_child(_box)
 
 
-## Hardware frames of whichever page is holding. Public so a test owns its own.
+## Hardware frames of the page printing or holding, public so a test owns them.
 func advance_hold_frames(count: int) -> void:
 	for _step: int in count:
+		if _printing():
+			_box.advance_frame()
+			if not _box.has_text_left():
+				_printed()
+			continue
 		if _hold_frames <= 0:
 			return
 		_hold_frames -= 1
@@ -145,34 +159,59 @@ func _process(delta: float) -> void:
 	advance_hold_frames(_hold_clock.tick(delta))
 
 
+func _printing() -> bool:
+	return _box != null and current_page().has("text") and _box.has_text_left()
+
+
+## `HoFPrintTextAndDelay` holds a text once out, where Crystal's rating sounds.
+func _printed() -> void:
+	var page: Dictionary = current_page()
+	if page.has("sfx"):
+		rating_reached.emit(int(page["sfx"]))
+	_hold_frames = 0 if viewer else int(page.get("hold", 0))
+
+
 func _refresh() -> void:
 	var page: Dictionary = current_page()
 	if page.is_empty() or _background == null:
 		return
-	_hold_frames = _hold_for(page)
-	if _hold_frames > 0:
-		_hold_clock.reset()
-	set_process(_hold_frames > 0)
+	## `GBFadeOutToWhite`'s pages hold the last panel with its text printed.
+	var fresh: bool = page.has("text") and not page.has("bgp")
+	_hold_frames = 0 if fresh else _hold_for(page)
+	_hold_clock.reset()
+	set_process(_hold_frames > 0 or fresh)
 	if StringName(page.get("kind", &"")) == Gen2HallOfFame.PAGE_MON \
 		and bool(page.get("cry", true)):
 		if page.has("pikachu_clip"):
 			pikachu_clip_requested.emit(int(page["pikachu_clip"]))
 		else:
 			cry_requested.emit(int(page.get("species", 0)))
-	if page.has("sfx"):
-		rating_reached.emit(int(page["sfx"]))
 	if bool(page.get("music", false)):
 		music_requested.emit()
 	if bool(page.get("fade_music", false)):
 		music_fade_requested.emit()
+	if fresh:
+		## `AnimateHallOfFame` zeroes `wLetterPrintingDelayFlags`: a letter a frame.
+		_box.reveal_speed = Gen2TextBox.ACCELERATED_SPEED if _page_renderer.gen1 \
+			else Gen2OptionsStore.current().text_reveal_speed()
+		_box.show_text(String(page["text"]), false)
+	_draw_page()
+	_refresh_pic(page)
+
+
+func _draw_page() -> void:
+	var page: Dictionary = current_page()
+	if page.is_empty() or _background == null:
+		return
 	var indices: PackedByteArray = _page_renderer.draw(page)
+	if page.has("text"):
+		_box.compose(indices, Gen2Screen.WIDTH, Gen2HallOfFamePage.MON_BOTTOM_BOX.position * Gen2Font.TILE)
 	var image: Image = Gen2PicImage.from_indices(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
 		Gen2HallOfFame.page_palette(_data, page), not _page_renderer.gen1
 	)
 	Gen2PicImage.show(_background, image)
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
-	_refresh_pic(page)
 
 
 ## A page's own `hold`, else `.SavingRecordText`'s hundred frames or an

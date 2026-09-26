@@ -88,6 +88,15 @@ const MART_TEXT_PREFIX: Dictionary = {
 	&"standard": "", &"bitter": "bitter_", &"bargain": "bargain_",
 	&"pharmacy": "pharmacy_", &"rooftop_mart_1": "", &"rooftop_mart_2": "",
 }
+## How each Generation 1 box ends (`data/text/text_4.asm`); "Thank you!" is under
+## `AfterDisplayingTextID`'s silent arrow. Every Generation 2 box is `done` under
+## `JoyWaitAorB`.
+const GEN1_MART_ENDS: Dictionary = {
+	"thanks": &"prompt", "no_money": &"prompt", "pack_full": &"prompt",
+	"bag_empty": &"prompt", "cant_buy": &"prompt", "come_again": &"arrow",
+	"buy_intro": &"none", "sell_intro": &"none",
+}
+const GEN1_MART_SAVED: Array[String] = ["buy_intro", "sell_intro"]
 ## `PokegearPhone_MakePhoneCall`'s `ld c, 10` behind the call.
 const CALL_END_DELAY_FRAMES: int = 10
 
@@ -102,9 +111,10 @@ const BOX_SUBMENU_ROWS: Array[String] = ["SWITCH", "NAME", "PRINT", "QUIT"]
 ## `CheckPrinterStatus` leaves `wPrinterHandshake` at -1, which is the same
 ## PRINTER_ERROR_2 the diploma and the Unown printer answer with.
 const BOX_EMPTY_TEXT: String = "There's no #MON."
-## `Textbox`'s interior, which is what a mart box's words are wrapped to.
-const MART_TEXT_COLUMNS: int = 18
-const MART_TEXT_ROWS: int = 2
+## `BillsPC_PlaceWhatsUpString`'s, over the submenu.
+const BOX_WHATS_UP_TEXT: String = "What's up?"
+## `BillsPC_PlaceEmptyBoxString_SFX`'s `ld c, 50` behind its `WaitSFX`.
+const BOX_EMPTY_FRAMES: int = 50
 
 ## The one writer, handed over by whoever opened this screen: the same
 ## `SaveGameData` the START menu's SAVE row reaches.
@@ -135,12 +145,22 @@ var _mart_page: Gen2MartPage = null
 var _mart_menu_page: Gen2MenuPage = null
 var _mart_stage: StringName = MART_LIST
 var _mart_scroll: int = 0
-var _mart_pages: Array = []
+var _box: Gen2TextBox = null
+var _box_up: bool = false
+var _box_then: Callable = Callable()
+## A `prompt` a menu opens behind, whose press is still owed, and what follows it.
+var _box_owes_press: bool = false
+var _box_answered: Callable = Callable()
+## A line standing its own `DelayFrames`, read by no button, then what follows.
+var _hold_frames: int = 0
+var _hold_then: Callable = Callable()
 var _mart_after: StringName = MART_LIST
+var _mart_waits: bool = true
 ## `SaveScreenTilesToBuffer1`: a Generation 1 shop photographs the screen behind
-## its greeting and restores it under every list, so the last box it printed
-## stays up while the player is choosing.
-var _mart_message: PackedStringArray = PackedStringArray()
+## its greeting and restores it under every list, so the greeting stays up while
+## the player is choosing whatever the shop has printed since.
+var _mart_message: String = ""
+var _mart_saves_screen: bool = false
 var _mart_yes_no: Gen2WorldMenu = Gen2WorldMenu.yes_no()
 ## `SellMenu`'s own list, which is the pack rather than the shop's stock.
 var _mart_sell_entries: Array = []
@@ -184,9 +204,7 @@ var _mart_sell_switch: int = -1
 var _pc_quantity: int = 1
 ## The PC's own text boxes and what happens once the last is acknowledged:
 ## `PROF.OAK'S PC` returns to the top menu and `TURN OFF` shuts the machine down.
-var _pc_pages: Array = []
-var _pc_page_breaks: Array[bool] = []
-var _pc_sfx: int = -1
+var _pc_texts: Array = []
 var _pc_after: StringName = &"top"
 var _pc_label: String = ""
 ## `_PlayerDecorationMenu`: which category is open, the row waiting on
@@ -292,7 +310,10 @@ var _service_page: Gen2WorldServicePage = null
 var _clock_page: Gen2ClockSetPage = null
 
 var _title: String = ""
-var _summary: String = ""
+var _summary: String = "":
+	set(value):
+		_summary = value
+		_box_up = false
 var _status: String = ""
 
 
@@ -387,7 +408,7 @@ func open_pending(
 			_open_elevator(resolved.get("data", {}).get("elevator", {}))
 			return true
 		&"pc_requested":
-			_open_pc(StringName(resolved.get("data", {}).get("pc", {}).get("mode", &"")))
+			_boot_pc(StringName(resolved.get("data", {}).get("pc", {}).get("mode", &"")))
 			return true
 	_show_error("No scene host for %s." % String(request.get("kind", "request")))
 	return false
@@ -499,10 +520,10 @@ func handle_button(button: int) -> bool:
 func _press_prompt(button: int) -> bool:
 	if _call_end_stage != &"":
 		_press_call_end(button)
-	elif _pc_yes_no_hold > 0:
+	elif _pc_yes_no_hold > 0 or _hold_frames > 0:
 		pass
-	elif _asking_through_pages():
-		_turn_question_page(button)
+	elif _box_printing():
+		_press_box(button)
 	elif MODE_PRESS_HANDLERS.has(_mode):
 		call(MODE_PRESS_HANDLERS[_mode], button)
 	elif _mode == MODE.PC_ITEM_LIST and _pc_item_stage != &"":
@@ -543,6 +564,70 @@ func _apply_pc_switch_press() -> void:
 
 func selected_index() -> int:
 	return _cursor
+
+
+func _ensure_box() -> void:
+	if _box != null or _data == null:
+		return
+	_box = Gen2TextBox.for_page(_data)
+	_box.prompt_answered.connect(sfx_requested.emit.bind(false))
+	_box.redrawn.connect(_on_box_redrawn)
+	add_child(_box)
+
+
+## [param instant] is `NO_TEXT_SCROLL` or `BIT_NO_TEXT_DELAY`.
+func _print(
+	text: String, instant: bool = false, prompt: bool = false, speed: float = 0.0
+) -> void:
+	_ensure_box()
+	_box_then = Callable()
+	_box_owes_press = false
+	_box_answered = Callable()
+	_box.instant = instant
+	_box.reveal_speed = speed if speed > 0.0 else Gen2OptionsStore.current().text_reveal_speed()
+	_box.show_text(text, prompt)
+	_box_up = true
+
+
+func _box_printing() -> bool:
+	return _box_up and (_box.has_text_left() or _box_owes_press)
+
+
+func _press_box(button: int) -> void:
+	if button not in [PokeButton.A, PokeButton.B]:
+		return
+	var printed: bool = not _box.has_text_left()
+	_box.advance()
+	if not printed:
+		return
+	_box_owes_press = false
+	var answered: Callable = _box_answered
+	_box_answered = Callable()
+	if answered.is_valid():
+		answered.call()
+		return
+	_on_box_redrawn()
+
+
+func _on_box_redrawn() -> void:
+	call(BOX_RENDERERS.get(_mode, &"_render_rows"))
+
+
+const BOX_RENDERERS: Dictionary = {
+	MODE.MART: &"_render_mart", MODE.ELEVATOR: &"_render_elevator",
+	MODE.VENDING: &"_render_vending", MODE.PRIZE: &"_render_prizes",
+	MODE.SCRIPT_MENU: &"_render_script_menu", MODE.APRICORN: &"_render_apricorns",
+}
+
+
+func _advance_box_frame() -> void:
+	if not _box_up or _save_prompt != null:
+		return
+	_box.advance_frame()
+	if _box_then.is_valid() and not _box.has_text_left():
+		var then: Callable = _box_then
+		_box_then = Callable()
+		then.call()
 
 
 func _build_ui() -> void:
@@ -608,6 +693,7 @@ func _open_elevator(elevator: Dictionary) -> void:
 		_elevator_scroll = 0
 		_set_overlay_open(true)
 		_open_map_overlay_view()
+		_print(_elevator_prompt())
 		_render_elevator()
 		return
 	if int(_elevator.get("current", -1)) < 0:
@@ -622,7 +708,7 @@ func _open_elevator(elevator: Dictionary) -> void:
 	_cursor = 0
 	_title = ""
 	_status = ""
-	_summary = _elevator_prompt()
+	_print(_elevator_prompt())
 	_render_elevator()
 
 
@@ -682,9 +768,10 @@ func _render_gen1_elevator() -> void:
 	if _service_page == null or _mart_page == null:
 		return
 	var image: Image = _mart_page.render_gen1_pack({
-		"rows": _gen1_elevator_rows(), "cursor": _cursor - _elevator_scroll,
+		"rows": [] if _box_printing() else _gen1_elevator_rows(),
+		"cursor": _cursor - _elevator_scroll,
 	})
-	var over: Image = _service_page.render("", "", [], -1, _elevator_prompt())
+	var over: Image = _service_page.render("", "", [], -1, _box)
 	if image != null and over != null:
 		image.blend_rect(over, Rect2i(Vector2i.ZERO, over.get_size()), Vector2i.ZERO)
 	Gen2PicImage.show(_mart_view, image)
@@ -746,7 +833,6 @@ func _press_elevator(button: int) -> void:
 	_render_elevator()
 
 
-## The page under a YES/NO whose question paged.
 var question_page: String = ""
 var box_palette: PackedColorArray = PackedColorArray()
 var _no_request: bool = false
@@ -766,31 +852,43 @@ func _open_menu(input: Dictionary) -> void:
 	_render_rows()
 
 
-## `VendingMachineMenu`. The greeting stands in its own box while the list is up,
-## and the routine returns after one drink: the box the choice lands in is the
-## last thing the machine says.
+## `VendingMachineMenu`: the greeting's `prompt`, the list, one drink, and
+## `AfterDisplayingTextID`'s silent arrow under the answer.
 const GEN1_VENDING_RUN: String = "vending"
+## `.playDeliverySound`: sixty `SFX_PUSH_BOULDER`s two frames apart.
+const VENDING_DELIVERY_FRAMES: int = 120
+const VENDING_DELIVERY_STEP: int = 2
 
 var _vending_rows: Array = []
-var _vending_said: String = ""
+var _vending_stage: StringName = &""
+var _vending_delivery: int = 0
+var _vending_bought: String = ""
 
 
 func _open_vending(rows: Array) -> void:
 	_mode = MODE.VENDING
 	_vending_rows = rows.duplicate(true)
-	_vending_said = ""
+	_vending_stage = &"greeting"
 	_cursor = 0
 	_set_overlay_open(true)
 	_open_map_overlay_view()
+	_ask(_vending_text("greeting"), false, true, _list_vending)
+	_render_vending()
+
+
+func _list_vending() -> void:
+	_vending_stage = &"list"
 	_render_vending()
 
 
 ## `HandleMenuInput` watches A and B with no wrapping, and B answers the way the
 ## CANCEL row does.
 func _press_vending(button: int) -> void:
-	if not _vending_said.is_empty():
+	if _vending_stage == &"said":
 		if button in [PokeButton.A, PokeButton.B]:
 			_finish_runtime({"ok": true, "script_value": 0})
+		return
+	if _vending_stage != &"list":
 		return
 	if button == PokeButton.UP or button == PokeButton.DOWN:
 		_cursor = clampi(
@@ -801,27 +899,42 @@ func _press_vending(button: int) -> void:
 	if button != PokeButton.A and button != PokeButton.B:
 		return
 	if button == PokeButton.B or _cursor >= _vending_rows.size():
-		_vending_said = _vending_text("not_thirsty")
-		_render_vending()
+		_say_vending(_vending_text("not_thirsty"))
 		return
 	var bought: Dictionary = Gen2WorldMartHost.vend(
 		_world, _save, _vending_rows[_cursor], _persist
 	)
-	_vending_said = _vending_bought_text(bought)
-	_render_vending()
-
-
-## `.enoughMoney`'s three landings: `VendingMachineText5` names the drink,
-## `...Text4` is `HasEnoughMoney`'s refusal and `...Text6` `GiveItem`'s.
-func _vending_bought_text(bought: Dictionary) -> String:
 	if not bool(bought.get("ok", false)):
-		return _vending_text("no_money") \
-			if StringName(bought.get("reason", &"")) == &"insufficient_money" \
-			else _vending_text("bag_full")
-	return Gen2TextStream.fill_marker(
+		_say_vending(_vending_refusal(bought))
+		return
+	_vending_bought = Gen2TextStream.fill_marker(
 		_vending_text("here_you_go"), Gen2TextStream.RAM_MARKER,
 		String(bought.get("name", ""))
 	)
+	_vending_stage = &"delivering"
+	_vending_delivery = VENDING_DELIVERY_FRAMES
+
+
+func _advance_vending_delivery() -> void:
+	_vending_delivery -= 1
+	if _vending_delivery % VENDING_DELIVERY_STEP == 0:
+		sfx_requested.emit(Gen1Sfx.SFX_PUSH_BOULDER, false)
+	if _vending_delivery == 0:
+		_say_vending(_vending_bought)
+
+
+func _say_vending(text: String) -> void:
+	_vending_stage = &"said"
+	_print(text)
+	_box.set_blink_cursor(true)
+	_render_vending()
+
+
+## `VendingMachineText4` is `HasEnoughMoney`'s refusal and `...Text6` `GiveItem`'s.
+func _vending_refusal(bought: Dictionary) -> String:
+	return _vending_text("no_money") \
+		if StringName(bought.get("reason", &"")) == &"insufficient_money" \
+		else _vending_text("bag_full")
 
 
 func _vending_text(slot: String) -> String:
@@ -837,17 +950,15 @@ func _render_vending() -> void:
 		_mart_page = Gen2MartPage.from_data(_data)
 	if _service_page == null or _mart_page == null:
 		return
-	var image: Image = _service_page.render(
-		"", "", [], -1,
-		_vending_said if not _vending_said.is_empty() else _vending_text("greeting")
-	)
-	var overlay: Image = _mart_page.render_gen1_vending({
-		"money": _world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
-		"rows": _vending_named_rows(),
-		"cursor": _cursor,
-	})
-	if image != null and overlay != null:
-		image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
+	var image: Image = _service_page.render("", "", [], -1, _box)
+	if _vending_stage != &"greeting":
+		var overlay: Image = _mart_page.render_gen1_vending({
+			"money": _world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
+			"rows": _vending_named_rows(),
+			"cursor": _cursor,
+		})
+		if image != null and overlay != null:
+			image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
 	Gen2PicImage.show(_mart_view, image)
 
 
@@ -867,6 +978,8 @@ func _vending_named_rows() -> Array:
 var _script_menu: Dictionary = {}
 
 
+## Every question here prints with `BIT_NO_TEXT_DELAY` set but `LinkMenu`'s,
+## which zeroes `wLetterPrintingDelayFlags` and prints a letter a frame.
 func _open_script_menu(values: Dictionary) -> void:
 	_mode = MODE.SCRIPT_MENU
 	_script_menu = values.duplicate(true)
@@ -874,6 +987,9 @@ func _open_script_menu(values: Dictionary) -> void:
 	_script_menu_hold = 0
 	_set_overlay_open(true)
 	_open_map_overlay_view()
+	var fast: bool = bool(_script_menu.get("fast_text", false))
+	_print(String(_script_menu.get("text", "")), not fast, false,
+		Gen2TextBox.ACCELERATED_SPEED if fast else 0.0)
 	_render_script_menu()
 
 
@@ -949,9 +1065,13 @@ func _render_script_menu() -> void:
 	if _script_menu_hold > 0:
 		page["held"] = true
 		page["cursor"] = int(_script_menu.get("held_row", -1))
-	var image: Image = _service_page.render(
-		"", "", [], -1, String(_script_menu.get("text", ""))
-	)
+	var question: Variant = ""
+	if not String(_script_menu.get("text", "")).is_empty():
+		question = _box
+	var image: Image = _service_page.render("", "", [], -1, question)
+	if _box_printing():
+		Gen2PicImage.show(_mart_view, image)
+		return
 	var overlay: Image = _mart_page.render_gen1_script_menu(page)
 	if image != null and overlay != null:
 		image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
@@ -1017,7 +1137,8 @@ const GEN1_PRIZE_RUN_2: String = "prizes_2"
 ## one prize. `.noChoice` says nothing, which is what B and NO THANKS reach.
 var _prize_rows: Array = []
 var _prize_tms: bool = false
-var _prize_said: String = ""
+var _prize_said: bool = false
+var _prize_listed: bool = false
 var _prize_asking: bool = false
 var _prize_yes_no: Gen2WorldMenu = Gen2WorldMenu.yes_no()
 
@@ -1026,21 +1147,39 @@ func _open_prizes(values: Dictionary) -> void:
 	_mode = MODE.PRIZE
 	_prize_rows = (values.get("rows", []) as Array).duplicate(true)
 	_prize_tms = bool(values.get("tms", false))
-	_prize_said = ""
+	_prize_said = false
+	_prize_listed = false
 	_prize_asking = false
 	_prize_yes_no = Gen2WorldMenu.yes_no()
 	_cursor = 0
 	_set_overlay_open(true)
 	_open_map_overlay_view()
-	## `IsItemInBag COIN_CASE`, and the only box a player without one is shown.
+	## `IsItemInBag COIN_CASE`, ahead of `BIT_NO_TEXT_DELAY`.
 	if _world.state.item_quantity(Gen1Layout.ITEM_COIN_CASE) <= 0:
-		_prize_said = _prize_text("require_coin_case")
+		_say_prize(_prize_text("require_coin_case"), false)
+		return
+	## `ExchangeCoinsForPrizesText` ends in `prompt`, answered before the list.
+	_ask(_prize_text("exchange"), true, true, _list_prizes)
+	_render_prizes()
+
+
+func _list_prizes() -> void:
+	_prize_listed = true
+	_print(_prize_text("which_prize"), true)
+	_render_prizes()
+
+
+## `text_waitbutton`, and `HoldTextDisplayOpen` behind the same press.
+func _say_prize(text: String, instant: bool = true) -> void:
+	_prize_said = true
+	_print(text, instant, true)
 	_render_prizes()
 
 
 func _press_prize(button: int) -> void:
-	if not _prize_said.is_empty():
+	if _prize_said:
 		if button in [PokeButton.A, PokeButton.B]:
+			_box.advance()
 			_finish_runtime({"ok": true, "script_value": 0})
 		return
 	if _prize_asking:
@@ -1060,6 +1199,10 @@ func _press_prize(button: int) -> void:
 		return
 	_prize_asking = true
 	_prize_yes_no = Gen2WorldMenu.yes_no()
+	_print(Gen2TextStream.fill_marker(
+		_prize_text("so_you_want", GEN1_PRIZE_RUN_2), Gen2TextStream.RAM_MARKER,
+		_prize_name(_prize_rows[_cursor])
+	), true)
 	_render_prizes()
 
 
@@ -1073,15 +1216,13 @@ func _press_prize_confirm(button: int) -> void:
 ## `SoYouWantPrizeText`'s `YesNoChoice`. NO is `.printOhFineThen`.
 func _answer_prize_confirm(yes: bool) -> void:
 	_prize_asking = false
-	if not yes:
-		_prize_said = _prize_text("oh_fine_then", GEN1_PRIZE_RUN_2)
-	else:
-		_prize_said = _buy_prize(_prize_rows[_cursor])
-		## `HandlePrizeChoice` says nothing after a prize.
-		if _prize_said.is_empty():
-			_finish_runtime({"ok": true, "script_value": 0})
-			return
-	_render_prizes()
+	var said: String = _prize_text("oh_fine_then", GEN1_PRIZE_RUN_2) if not yes \
+		else _buy_prize(_prize_rows[_cursor])
+	## `HandlePrizeChoice` says nothing after a prize.
+	if said.is_empty():
+		_finish_runtime({"ok": true, "script_value": 0})
+		return
+	_say_prize(said)
 
 
 ## `HasEnoughCoins` first, then `GiveItem` or `GivePokemon`; no room leaves the
@@ -1119,31 +1260,19 @@ func _render_prizes() -> void:
 		_mart_page = Gen2MartPage.from_data(_data)
 	if _service_page == null or _mart_page == null:
 		return
-	var image: Image = _service_page.render("", "", [], -1, _prize_box_text())
-	var overlay: Image = _mart_page.render_gen1_prizes({
-		"coins": _world.state.coins(),
-		"rows": _prize_named_rows(),
-		"cursor": _cursor,
-	})
-	if image != null and overlay != null:
-		image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
+	var image: Image = _service_page.render("", "", [], -1, _box)
+	if _prize_listed:
+		var overlay: Image = _mart_page.render_gen1_prizes({
+			"coins": _world.state.coins(),
+			"rows": _prize_named_rows(),
+			"cursor": _cursor,
+		})
+		if image != null and overlay != null:
+			image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
 	## `YesNoChoice` opens over the list rather than under it.
 	if _prize_asking and image != null:
 		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _prize_yes_no.cursor)
 	Gen2PicImage.show(_mart_view, image)
-
-
-## `ExchangeCoinsForPrizesText` is printed with the delay off and `WhichPrizeText`
-## over it in the same frame, so the box standing under the list is the question.
-func _prize_box_text() -> String:
-	if not _prize_said.is_empty():
-		return _prize_said
-	if _prize_asking:
-		return Gen2TextStream.fill_marker(
-			_prize_text("so_you_want", GEN1_PRIZE_RUN_2), Gen2TextStream.RAM_MARKER,
-			_prize_name(_prize_rows[_cursor])
-		)
-	return _prize_text("which_prize")
 
 
 func _prize_named_rows() -> Array:
@@ -1172,17 +1301,19 @@ func _open_mart(mart: Dictionary) -> void:
 	_mart_quantity = 1
 	_mart_purchased = false
 	_mart_scroll = 0
-	_mart_message = PackedStringArray()
+	_mart_message = ""
 	_cursor = 0
 	_set_overlay_open(true)
 	_open_map_overlay_view()
 	_refresh_mart_sell_entries()
+	_ensure_box()
+	_box_up = true
 	## `.HowMayIHelpYou` hands the loop to `.TopMenu`; every other shop type
 	## prints its intro through `MartTextbox`, which waits before `BuyMenu`.
 	if _mart_standard():
 		_show_mart_top(_mart_text("intro"))
 		return
-	_show_mart_text(_mart_text("intro"), MART_LIST, true)
+	_say_mart("intro", MART_LIST, true)
 
 
 ## Whether this shop is `MartDialog`'s, which is the one that runs
@@ -1205,29 +1336,34 @@ func _mart_text(slot: String, filled: Dictionary = {}) -> String:
 	return Gen2WorldMartHost.fill_text(text, filled)
 
 
-## A box the shop is holding on, laid out into the pages `JoyWaitAorB` steps
-## through. An empty text goes straight on, which is what a cache imported
-## before the mart's own words leaves.
-func _show_mart_text(text: String, after: StringName, over_map: bool = false) -> void:
+## An empty text, which a cache without the mart's words leaves, goes straight on.
+func _say_mart(
+	slot: String, after: StringName, over_map: bool = false, filled: Dictionary = {}
+) -> void:
+	var text: String = _mart_text(slot, filled)
+	var ending: StringName = StringName(GEN1_MART_ENDS.get(slot, &"none")) \
+		if _gen1_mart() else &"wait"
 	_mart_after = after
 	_mart_over_map = over_map
-	_mart_pages = [] if text.strip_edges().is_empty() \
-		else Gen2TextLayout.lay_out(text, MART_TEXT_COLUMNS, MART_TEXT_ROWS)
-	if not _mart_pages.is_empty():
-		_mart_message = _mart_pages[0]
-	if _mart_pages.is_empty():
+	_mart_waits = ending != &"none"
+	_mart_saves_screen = _gen1_mart() and slot in GEN1_MART_SAVED
+	if text.strip_edges().is_empty():
+		_box.show_text("", false)
 		_advance_mart_text()
 		return
+	_box.show_text(text, ending == &"prompt")
+	_box.set_blink_cursor(ending in [&"prompt", &"arrow"])
 	_mart_stage = MART_MESSAGE
+	if not _mart_waits and not _box.has_text_left():
+		_advance_mart_text()
+		return
 	_render_mart()
 
 
 ## `.HowMayIHelpYou` and `.AnythingElse`: `PrintText` returns without a press, so
 ## the menu opens over the box, and `CopyMenuHeader` reloads its `db 1` default.
 func _show_mart_top(text: String) -> void:
-	_mart_pages = Gen2TextLayout.lay_out(text, MART_TEXT_COLUMNS, MART_TEXT_ROWS)
-	if not _mart_pages.is_empty():
-		_mart_message = _mart_pages[0]
+	_box.show_text(text, false)
 	_mart_stage = MART_TOP
 	_mart_over_map = true
 	_cursor = MART_TOP_BUY
@@ -1235,11 +1371,10 @@ func _show_mart_top(text: String) -> void:
 
 
 func _advance_mart_text() -> void:
-	if not _mart_pages.is_empty():
-		_mart_pages.remove_at(0)
-	if not _mart_pages.is_empty():
-		_render_mart()
-		return
+	if _mart_saves_screen:
+		_mart_message = "\n".join(_box.page_lines())
+		_mart_saves_screen = false
+	_box.advance()
 	if _mart_after == MART_TOP:
 		_show_mart_top(_mart_text("ask_more"))
 		return
@@ -1298,11 +1433,13 @@ func _mart_selection() -> Dictionary:
 
 
 func _press_mart(button: int) -> void:
+	if _box.has_text_left():
+		if button in [PokeButton.A, PokeButton.B]:
+			_box.advance()
+		return
 	match _mart_stage:
 		MART_MESSAGE:
 			if button in [PokeButton.A, PokeButton.B]:
-				if _mart_pages.size() > 1:
-					_prompt_click()
 				_advance_mart_text()
 		MART_TOP:
 			_press_mart_top(button)
@@ -1336,7 +1473,7 @@ func _press_mart_list(button: int) -> void:
 			if bool(entry.get("sold_out", false)):
 				## `BargainShopAskPurchaseQuantity.SoldOut`, the one refusal that
 				## comes before a price is ever named.
-				_show_mart_text(_mart_text("sold_out", {"name": entry.get("name", "")}), MART_LIST)
+				_say_mart("sold_out", MART_LIST, false, {"name": entry.get("name", "")})
 				return
 			_mart_quantity = 1
 			if StringName(_mart_source().get("variant", &"")) == &"bargain":
@@ -1344,9 +1481,7 @@ func _press_mart_list(button: int) -> void:
 				return
 			## `MARTTEXT_HOW_MANY` is printed before `SelectQuantityToBuy`, and
 			## the box stays up under the dial rather than waiting on a press.
-			_mart_pages = Gen2TextLayout.lay_out(
-				_mart_text("how_many"), MART_TEXT_COLUMNS, MART_TEXT_ROWS
-			)
+			_box.show_text(_mart_text("how_many"), false)
 			_mart_stage = MART_QUANTITY
 			_render_mart()
 
@@ -1389,25 +1524,15 @@ func _ask_mart_confirm() -> void:
 	var entry: Dictionary = _mart_selection()
 	_mart_yes_no = Gen2WorldMenu.yes_no()
 	_mart_stage = MART_CONFIRM
-	_mart_pages = Gen2TextLayout.lay_out(
-		_mart_text("final_price", {
-			"name": entry.get("name", ""),
-			"quantity": _mart_quantity,
-			"total": int(entry.get("price", 0)) * _mart_quantity,
-		}),
-		MART_TEXT_COLUMNS, MART_TEXT_ROWS
-	)
+	_box.show_text(_mart_text("final_price", {
+		"name": entry.get("name", ""),
+		"quantity": _mart_quantity,
+		"total": int(entry.get("price", 0)) * _mart_quantity,
+	}), false)
 	_render_mart()
 
 
-## The price text's pages come before `YesNoBox`.
 func _press_mart_confirm(button: int) -> void:
-	if _mart_pages.size() > 1:
-		if button in [PokeButton.A, PokeButton.B]:
-			_prompt_click()
-			_mart_pages.remove_at(0)
-			_render_mart()
-		return
 	if _mart_yes_no.press_yes_no(button):
 		_click_if_answered(_mart_yes_no)
 		if not _mart_yes_no.holding():
@@ -1445,16 +1570,16 @@ func _buy_mart_selection() -> void:
 			_mart_stage = MART_LIST
 			_render_mart()
 			return
-		_show_mart_text(_mart_text(slot, {"name": entry.get("name", "")}), _gen1_refusal_after(MART_LIST))
+		_say_mart(slot, _gen1_refusal_after(MART_LIST), false, {"name": entry.get("name", "")})
 		return
 	_mart_purchased = true
 	## `PlayTransactionSound` is a `WaitSFX` and then the sound.
 	sfx_requested.emit(Gen2Sfx.SFX_TRANSACTION, true)
 	_refresh_mart_entries()
-	_show_mart_text(_mart_text("thanks", {
+	_say_mart("thanks", MART_LIST, false, {
 		"name": purchase.get("name", ""), "quantity": _mart_quantity,
 		"total": int(purchase.get("total", 0)),
-	}), MART_LIST)
+	})
 
 
 ## B off the buy or sell list: `.Buy` and `.Sell` both fall into `.AnythingElse`;
@@ -1467,7 +1592,7 @@ func _leave_mart() -> void:
 
 
 func _quit_mart() -> void:
-	_show_mart_text(_mart_text("come_again"), &"exit", true)
+	_say_mart("come_again", &"exit", true)
 
 
 ## `.TopMenu`'s three rows. `VerticalMenu` answers carry on B, which `.quit`
@@ -1487,7 +1612,7 @@ func _press_mart_top(button: int) -> void:
 					## `PokemartBuyingGreetingText`; Generation 2's `.Buy` says
 					## nothing, and an empty box goes straight through.
 					_mart_scroll = 0
-					_show_mart_text(_mart_text("buy_intro"), MART_LIST, true)
+					_say_mart("buy_intro", MART_LIST, true)
 				MART_TOP_SELL:
 					_open_mart_sell()
 					return
@@ -1507,9 +1632,9 @@ func _open_mart_sell() -> void:
 	_mart_quantity = 1
 	_mart_sell_switch = -1
 	if _mart_sell_entries.is_empty():
-		_show_mart_text(_mart_text("bag_empty"), MART_TOP, true)
+		_say_mart("bag_empty", MART_TOP, true)
 		return
-	_show_mart_text(_mart_text("sell_intro"), MART_SELL, true)
+	_say_mart("sell_intro", MART_SELL, true)
 
 
 ## Generation 1's bag at the halved price; a key item is refused once chosen.
@@ -1543,14 +1668,12 @@ func _press_mart_sell_list(button: int) -> void:
 				return
 			if not Gen2WorldMartHost.can_sell(_data, int(entry.get("item", 0))):
 				## `.unsellableItem`, which leaves the list up.
-				_show_mart_text(_mart_text("cant_buy"), _gen1_refusal_after(MART_SELL))
+				_say_mart("cant_buy", _gen1_refusal_after(MART_SELL))
 				return
 			_mart_quantity = 1
 			## `DisplayListMenuID` zeroes `wMenuItemToSwap` on A and on entry.
 			_mart_sell_switch = -1
-			_mart_pages = Gen2TextLayout.lay_out(
-				_mart_text("sell_how_many"), MART_TEXT_COLUMNS, MART_TEXT_ROWS
-			)
+			_box.show_text(_mart_text("sell_how_many"), false)
 			_mart_stage = MART_SELL_QUANTITY
 			_render_mart()
 
@@ -1584,15 +1707,12 @@ func _press_mart_sell_quantity(button: int) -> void:
 		PokeButton.A:
 			_mart_yes_no = Gen2WorldMenu.yes_no()
 			_mart_stage = MART_SELL_CONFIRM
-			_mart_pages = Gen2TextLayout.lay_out(
-				_mart_text("sell_price", {
-					"total": Gen2WorldMartHost.sell_price(
-						_data, int(_mart_selection().get("item", 0)), _mart_quantity
-					),
-					"quantity": _mart_quantity,
-				}),
-				MART_TEXT_COLUMNS, MART_TEXT_ROWS
-			)
+			_box.show_text(_mart_text("sell_price", {
+				"total": Gen2WorldMartHost.sell_price(
+					_data, int(_mart_selection().get("item", 0)), _mart_quantity
+				),
+				"quantity": _mart_quantity,
+			}), false)
 	_render_mart()
 
 
@@ -1605,7 +1725,7 @@ func _sell_mart_selection() -> void:
 	if not bool(sold.get("ok", false)):
 		var reason: StringName = StringName(sold.get("reason", &""))
 		if reason == &"item_cannot_be_sold":
-			_show_mart_text(_mart_text("cant_buy"), _gen1_refusal_after(MART_SELL))
+			_say_mart("cant_buy", _gen1_refusal_after(MART_SELL))
 			return
 		_status = "Sale failed: %s" % String(reason)
 		_mart_stage = MART_SELL
@@ -1619,6 +1739,15 @@ func _sell_mart_selection() -> void:
 	_mart_stage = MART_SELL
 	_mart_over_map = false
 	_render_mart()
+
+
+## `PrintLetterDelay`'s frame, then `InterpretTwoOptionMenu`'s hold.
+func _advance_mart_frame() -> void:
+	if _mart_stage == MART_MESSAGE and not _mart_waits and not _box.has_text_left():
+		_advance_mart_text()
+		return
+	if _mart_yes_no.advance_hold():
+		_answer_mart_confirm(_mart_yes_no.answered_yes())
 
 
 ## The view every counter standing over the map draws into, after the panel's own.
@@ -1637,6 +1766,7 @@ func _close_mart() -> void:
 		Gen2Screen.drop(_mart_view)
 		_mart_view = null
 	_mart_over_map = false
+	_box_up = false
 	_set_overlay_open(false)
 
 
@@ -1653,8 +1783,6 @@ func _render_mart() -> void:
 		_mart_page = Gen2MartPage.from_data(_data)
 	if _mart_page == null:
 		return
-	var page: PackedStringArray = _mart_pages[0] if not _mart_pages.is_empty() \
-		else PackedStringArray()
 	var listing: bool = _mart_stage == MART_LIST or _mart_stage == MART_SELL
 	var image: Image = _mart_page.render({
 		"money": _world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
@@ -1664,12 +1792,12 @@ func _render_mart() -> void:
 		"more_below": Gen2MenuBox.window_is_items(
 			_mart_scroll, _mart_list().size(), Gen2MartPage.LIST_HEIGHT
 		),
-		"text": "\n".join(page) if not listing else _mart_description(),
+		"text": _mart_description() if listing else "",
+		"box": null if listing else _box,
 		## `StandardMartAskPurchaseQuantity` closes the dial with `ExitMenu`
 		## before `MartConfirmPurchase` prints, so the box is the quantity
 		## stage's alone.
-		"quantity": _mart_quantity \
-			if _mart_stage == MART_QUANTITY or _mart_stage == MART_SELL_QUANTITY else -1,
+		"quantity": _mart_dial_quantity(),
 		"subtotal": _mart_subtotal(),
 	})
 	if image == null:
@@ -1688,11 +1816,11 @@ func _render_gen1_mart() -> void:
 		_mart_page = Gen2MartPage.from_data(_data)
 	if _service_page == null or _mart_page == null:
 		return
-	var page: PackedStringArray = _mart_pages[0] if not _mart_pages.is_empty() \
-		else _mart_message
+	var message: Variant = _mart_message
+	if _mart_stage in GEN1_MART_BOX_STAGES:
+		message = _box
 	var image: Image = _service_page.render(
-		"", "", MART_TOP_ROWS if _mart_stage == MART_TOP else [], _cursor,
-		"\n".join(page),
+		"", "", _mart_top_rows(), _cursor, message,
 		Gen2MenuBox.from_coords(
 			GEN1_TOP_MENU_BOX.position.x, GEN1_TOP_MENU_BOX.position.y,
 			GEN1_TOP_MENU_BOX.end.x, GEN1_TOP_MENU_BOX.end.y,
@@ -1707,8 +1835,7 @@ func _render_gen1_mart() -> void:
 		"rows": _mart_rows(),
 		"cursor": _cursor if _mart_stage == MART_LIST or _mart_stage == MART_SELL else -1,
 		"listing": listing,
-		"quantity": _mart_quantity \
-			if _mart_stage == MART_QUANTITY or _mart_stage == MART_SELL_QUANTITY else -1,
+		"quantity": _mart_dial_quantity(),
 		"subtotal": _mart_subtotal(),
 	})
 	if overlay != null:
@@ -1718,8 +1845,24 @@ func _render_gen1_mart() -> void:
 	Gen2PicImage.show(_mart_view, image)
 
 
+## A Generation 1 list or dial stands on the screen saved behind the greeting.
+const GEN1_MART_BOX_STAGES: Array[StringName] = [
+	MART_MESSAGE, MART_TOP, MART_CONFIRM, MART_SELL_CONFIRM,
+]
+
+
 func _mart_confirm_open() -> bool:
-	return _mart_stage in [MART_CONFIRM, MART_SELL_CONFIRM] and _mart_pages.size() <= 1
+	return _mart_stage in [MART_CONFIRM, MART_SELL_CONFIRM] and not _box.has_text_left()
+
+
+func _mart_top_rows() -> Array:
+	return MART_TOP_ROWS if _mart_stage == MART_TOP and not _box.has_text_left() else []
+
+
+func _mart_dial_quantity() -> int:
+	if _mart_stage != MART_QUANTITY and _mart_stage != MART_SELL_QUANTITY:
+		return -1
+	return -1 if _box.has_text_left() else _mart_quantity
 
 
 ## `DisplaySellingPrice` halves the multiplied total, not each unit's price, so
@@ -1737,11 +1880,8 @@ func _render_mart_over_map() -> void:
 		_service_page = Gen2WorldServicePage.from_data(_data)
 	if _service_page == null:
 		return
-	var page: PackedStringArray = _mart_pages[0] if not _mart_pages.is_empty() \
-		else PackedStringArray()
 	var image: Image = _service_page.render(
-		"", "", MART_TOP_ROWS if _mart_stage == MART_TOP else [], _cursor,
-		"\n".join(page),
+		"", "", _mart_top_rows(), _cursor, _box,
 		Gen2MenuBox.from_coords(0, 0, 7, 8, Gen2MenuBox.STATICMENU_CURSOR)
 	)
 	if image != null:
@@ -1781,23 +1921,25 @@ func _open_apricorns() -> void:
 		## so this is the guard rather than a branch a player reaches.
 		_finish_apricorns()
 		return
+	_print_apricorn_question()
 	_render_apricorns()
+
+
+## `SelectApricornForKurt.loop` prints its question again on every pass.
+func _print_apricorn_question() -> void:
+	_status = ""
+	_print("How many should I make?" \
+		if _apricorns.phase == Gen2WorldApricorn.SELECT_QUANTITY \
+		else "Which APRICORN should I use?")
 
 
 func _render_apricorns() -> void:
 	if _apricorns.phase == Gen2WorldApricorn.SELECT_QUANTITY:
 		_cursor = 0
 		var chosen: Dictionary = _apricorns.selected_entry()
-		_summary = "How many should I make?"
-		## `PlaceApricornQuantity` draws the name and `×NN` under it; the
-		## ceiling is this host's own, since nothing here draws a bag page.
-		_status = "x%d    of %d" % [
-			_apricorns.prompt.value, _apricorns.prompt.maximum,
-		]
-		_render_rows([String(chosen.get("name", ""))])
+		## `PlaceApricornQuantity`: the name and `×NN` under it.
+		_render_rows(["%s ×%02d" % [String(chosen.get("name", "")), _apricorns.prompt.value]])
 		return
-	_summary = "Which APRICORN should I use?"
-	_status = ""
 	_render_rows(_apricorn_rows())
 
 
@@ -1818,7 +1960,8 @@ func _apricorn_rows() -> Array:
 
 ## The list's click, and `Kurt_SelectQuantity`'s once the dial is answered.
 func _press_apricorns(button: int) -> void:
-	var listing: bool = _apricorns.phase == Gen2WorldApricorn.SELECT_APRICORN
+	var phase: StringName = _apricorns.phase
+	var listing: bool = phase == Gen2WorldApricorn.SELECT_APRICORN
 	_apricorns.press(button)
 	if (listing and button in [PokeButton.A, PokeButton.B]) \
 			or (not listing and _apricorns.phase != Gen2WorldApricorn.SELECT_QUANTITY):
@@ -1826,6 +1969,8 @@ func _press_apricorns(button: int) -> void:
 	if _apricorns.is_done():
 		_finish_apricorns()
 		return
+	if _apricorns.phase != phase:
+		_print_apricorn_question()
 	_render_apricorns()
 
 
@@ -1876,8 +2021,7 @@ func _finish_mom_bank(amount: int) -> void:
 func _process(delta: float) -> void:
 	if _save_prompt != null:
 		for _frame: int in _frame_clock.tick(delta):
-			_save_prompt.frame()
-			_advance_save_prompt()
+			_advance_save_frame()
 			if _save_prompt == null:
 				return
 		return
@@ -1988,16 +2132,42 @@ func open_pc_machine(
 		_bills_pc_cursor = 0
 		_open_gen1_pc(mode)
 		return true
-	## `PC_CheckPartyForPokemon`, which answers with its own sound and shuts down
-	## again. `_PlayersHousePC` never asks it: the bedroom's PC is items and mail.
-	if mode != &"players_house" and not Gen2WorldPC.can_open(_save):
-		sfx_requested.emit(Gen2Sfx.SFX_CHOOSE_PC_OPTION, false)
-		_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
-		return true
-	## `PC_PlayBootSound`, once per machine rather than per return to its menu.
-	sfx_requested.emit(Gen2Sfx.SFX_BOOT_PC, true)
-	_open_pc(mode)
+	_boot_pc(mode)
 	return true
+
+
+## `PokemonCenterPC` and `_PlayersHousePC` from the top: `PC_CheckPartyForPokemon`,
+## which the bedroom's never asks, then `PC_PlayBootSound` and the turn-on box.
+func _boot_pc(mode: StringName) -> void:
+	_pc_house = mode == &"players_house"
+	if not _pc_house and not Gen2WorldPC.can_open(_save):
+		sfx_requested.emit(Gen2Sfx.SFX_CHOOSE_PC_OPTION, false)
+		_open_pc_text([_said(_pc_text("cant_use"))], &"pc_refused", "")
+		return
+	sfx_requested.emit(Gen2Sfx.SFX_BOOT_PC, true)
+	_open_pc_text(
+		[_said(_pc_text("players_turn_on" if _pc_house else "turn_on"))],
+		&"pc_house" if _pc_house else &"pc_top", ""
+	)
+
+
+func _pc_text(slot: String) -> String:
+	return _data.pokecenter_pc_text(slot).replace(
+		Gen2WorldPC.PLAYER_MARKER,
+		_save.player_name if _save != null and not _save.player_name.is_empty() else "PLAYER"
+	)
+
+
+func _open_house_pc() -> void:
+	_open_pc(&"players_house")
+
+
+func _open_pc_top() -> void:
+	_open_pc(&"pokemon_center")
+
+
+func _refuse_pc() -> void:
+	_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
 
 
 ## `BillsPC_SeeYa`, and the `.LogOut` behind it: back to the machine's own top
@@ -2010,16 +2180,13 @@ func _leave_bills_pc() -> void:
 
 
 ## `PokemonCenterPC`'s top menu, or `_PlayersHousePC`'s item PC when the script
-## asked for the bedroom's. `PC_CheckPartyForPokemon` is the one refusal either
-## has before it opens.
+## asked for the bedroom's. "Access whose PC?" is `PC_DisplayTextWaitMenu`'s,
+## printed with `NO_TEXT_SCROLL` set.
 func _open_pc(mode: StringName) -> void:
 	if _gen1_pc or String(mode).begins_with("gen1_"):
 		_open_gen1_pc(mode)
 		return
 	_pc_house = mode == &"players_house"
-	if not _pc_house and not Gen2WorldPC.can_open(_save):
-		_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
-		return
 	if _pc_house:
 		_open_pc_items(true)
 		return
@@ -2029,8 +2196,8 @@ func _open_pc(mode: StringName) -> void:
 		_data, _world.state, _save.player_name if _save != null else ""
 	)
 	_title = "PC"
-	_summary = _data.pokecenter_pc_text("whose")
 	_status = ""
+	_print(_pc_text("whose"), true)
 	_render_rows()
 
 
@@ -2050,8 +2217,8 @@ func _open_pc_items(fresh: bool = false) -> void:
 		_save.player_name if _save != null and not _save.player_name.is_empty()
 		else "PLAYER"
 	)
-	_summary = _data.pokecenter_pc_text("ask_what_do")
 	_status = ""
+	_print(_pc_text("ask_what_do"), true)
 	_render_rows()
 
 
@@ -2092,12 +2259,9 @@ func _open_pc_item_list(action: int) -> void:
 	_pc_quantity = 1
 	var depositing: bool = action == Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM
 	_refresh_pc_entries()
-	if (Gen2WorldPC.bag_entries(_data, _world.state) if depositing else _pc_entries).is_empty():
-		## `.CheckItemsInBag`'s `.PlayersPCNoItemsText`, which the source prints
-		## for a deposit. The other two would open a list that can only be
-		## cancelled, so they take the same box rather than being drawn empty.
-		_status = _data.pokecenter_pc_text("no_items")
-		_render_rows()
+	## `.CheckItemsInBag`, which only a deposit asks: an empty PC opens on CANCEL.
+	if depositing and Gen2WorldPC.bag_entries(_data, _world.state).is_empty():
+		_open_pc_text([_said(_pc_text("no_items"))], &"pc_items", _title)
 		return
 	if depositing:
 		_open_deposit_sell_pack(Gen2DepositSellPack.DEPOSIT, _open_pc_items)
@@ -2165,13 +2329,10 @@ func _confirm_bills_pc_row(row: int) -> void:
 			## `BillsPC_MovePKMNMenu`, whose two halves are the mail refusal
 			## and `StartMoveMonWOMail_SaveGame`.
 			if Gen2WorldPC.any_party_mon_holds_mail(_save):
-				_open_pc_text(
-					[
-						"\n".join(Gen2SavePrompt.MON_HOLDING_MAIL_LINES.slice(0, 2)),
-						"\n".join(Gen2SavePrompt.MON_HOLDING_MAIL_LINES.slice(2, 4)),
-					],
-					&"bills_pc", "BILL's PC"
-				)
+				var lines: Array[String] = Gen2SavePrompt.MON_HOLDING_MAIL_LINES
+				_open_pc_text([_said("%s\n%s%s%s\n%s" % [
+					lines[0], lines[1], Gen2TextStream.PAGE_BREAK, lines[2], lines[3],
+				])], &"bills_pc", "BILL's PC")
 			else:
 				_open_save_prompt(Gen2SavePrompt.Kind.MOVE_MON, &"move_mons")
 		Gen2WorldPC.BILLSPCITEM_SEE_YA:
@@ -2218,16 +2379,16 @@ func _confirm_pc_menu_row(row: int) -> void:
 		Gen2WorldPC.PCPCITEM_BILLS_PC:
 			## `BillsPC` reaches `_BillsPC` afresh, on its own first row.
 			_bills_pc_cursor = 0
-			_open_bills_pc_menu()
+			_open_pc_text([_said(_pc_text("bills_pc"))], &"bills_pc", "")
 		Gen2WorldPC.PCPCITEM_PLAYERS_PC:
-			_open_pc_items(true)
+			_open_pc_text([_said(_pc_text("players_pc"))], &"pc_items_fresh", "")
 		Gen2WorldPC.PCPCITEM_OAKS_PC:
-			_open_pc_oak()
+			_open_pc_text([_said(_pc_text("oaks_pc"))], &"pc_oak", "")
 		Gen2WorldPC.PCPCITEM_HALL_OF_FAME:
 			_open_hall_of_fame(0)
 		Gen2WorldPC.PCPCITEM_TURN_OFF:
-			## `TurnOffPC` prints before `.shutdown` runs.
-			_open_pc_text([_data.pokecenter_pc_text("closed")], &"close", "TURN OFF")
+			## `TurnOffPC` prints and `.shutdown` runs behind it with no press.
+			_open_pc_text([_said(_pc_text("closed"), &"none")], &"pc_shut_down", "")
 
 
 func _confirm_player_pc_row(row: int) -> void:
@@ -2246,7 +2407,11 @@ func _confirm_player_pc_row(row: int) -> void:
 		Gen2WorldPC.PLAYERSPCITEM_LOG_OFF:
 			_open_pc(&"pokemon_center")
 		Gen2WorldPC.PLAYERSPCITEM_TURN_OFF:
-			_finish_runtime({"ok": true, "script_value": 0})
+			_cancel_pc_items()
+
+
+func _open_pc_items_fresh() -> void:
+	_open_pc_items(true)
 
 
 ## `PlayerWithdrawItemMenu.Submenu` and `TossItemFromPC`: a key item moves one
@@ -2260,17 +2425,16 @@ func _confirm_pc_item() -> void:
 	_pc_quantity = 1
 	if not Gen2WorldPack.can_toss(_data, int(entry.get("item", 0))):
 		if _pc_action == Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM:
-			_status = Gen2WorldPC.ITEMS_TOO_IMPORTANT
-			_render_rows()
+			_open_pc_text([_said(Gen2WorldPC.ITEMS_TOO_IMPORTANT)], &"pc_item_list", _title)
 			return
 		_apply_pc_item()
 		return
 	_quantity_prompt = Gen2WorldQuantityPrompt.open(int(entry.get("quantity", 1)), RomRegistry.GEN2)
 	_pc_item_stage = &"quantity"
 	_status = ""
-	_summary = _pc_item_text(Gen2WorldPC.ITEMS_TOSS_HOW_MANY) \
+	_print(_pc_item_text(Gen2WorldPC.ITEMS_TOSS_HOW_MANY) \
 		if _pc_action == Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM \
-		else _data.pokecenter_pc_text("how_many_withdraw")
+		else _pc_text("how_many_withdraw"))
 	_render_rows()
 
 
@@ -2295,7 +2459,7 @@ func _press_pc_item_stage(button: int) -> void:
 				return
 			_pc_item_stage = &"toss_ask"
 			_pc_toss_ask = Gen2WorldMenu.yes_no()
-			_summary = _pc_item_text(Gen2WorldPC.ITEMS_THROW_AWAY)
+			_ask(_pc_item_text(Gen2WorldPC.ITEMS_THROW_AWAY))
 		Gen2WorldQuantityPrompt.CANCELLED:
 			_reopen_pc_item_list()
 			return
@@ -2333,20 +2497,16 @@ func _apply_pc_item() -> void:
 		applied = Gen2WorldPC.toss(_world, _save, item, _pc_quantity, _persist)
 	if not bool(applied.get("ok", false)):
 		var reason: StringName = StringName(applied.get("reason", &""))
-		_status = "no_room_withdraw" if withdrawing and reason in [
-			&"pack_full", &"item_stack_full", &"pocket_full",
-		] else ""
-		_status = _data.pokecenter_pc_text(_status) if not _status.is_empty() \
-			else "Refused: %s" % String(reason)
+		if withdrawing and reason in [&"pack_full", &"item_stack_full", &"pocket_full"]:
+			_open_pc_text([_said(_pc_text("no_room_withdraw"))], &"pc_item_list", _title)
+			return
+		_status = "Refused: %s" % String(reason)
+		_render_rows()
 		return
 	_pc_quantity = 1
-	_refresh_pc_entries()
-	_status = _filled(
-		_data.pokecenter_pc_text("withdrew") if withdrawing else Gen2WorldPC.ITEMS_DISCARDED,
-		applied
-	)
-	_summary = ""
-	_render_rows()
+	_open_pc_text([_said(_filled(
+		_pc_text("withdrew") if withdrawing else Gen2WorldPC.ITEMS_DISCARDED, applied
+	))], &"pc_item_list", _title)
 
 
 ## The item name and the quantity into whichever markers the box left for them.
@@ -2370,24 +2530,28 @@ func _open_pc_oak() -> void:
 	_cursor = 0
 	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
 	_title = OAK_PC
-	_ask_pages(_data.oak_pc_text("ask"))
 	_status = ""
+	_ask(_data.oak_pc_text("ask"))
 	_render_rows()
 
 
-## `ProfOaksPCBoot` behind the YES. A NO is the same `.shutdown` B reaches.
+## `ProfOaksPCBoot` behind the YES: `OakPCText2`'s prompt, then `Rate`'s two
+## `JoyWaitAorB`s, the second behind the rating's sound. A NO is `.shutdown`.
 func _confirm_oak_ask(row: int) -> void:
 	if row != 0:
 		_open_oak_closed()
 		return
 	var boot: Dictionary = Gen2ProfOaksPC.boot(_data, _world.state)
-	_pc_sfx = int(boot["sfx"])
-	_open_pc_text(boot["pages"], &"oak_closed", OAK_PC)
+	var pages: Array = boot["pages"]
+	_open_pc_text([
+		_said(String(pages[0])), _said(String(pages[1]), &"wait"),
+		_said(String(pages[2]), &"wait", false, int(boot["sfx"])),
+	], &"oak_closed", OAK_PC)
 
 
 ## `.shutdown`'s `_OakPCText4`, which both answers pass through.
 func _open_oak_closed() -> void:
-	_open_pc_text([_data.oak_pc_text("closed")], &"top", OAK_PC)
+	_open_pc_text([_said(_data.oak_pc_text("closed"), &"wait")], &"top", OAK_PC)
 
 
 ## `_PlayerDecorationMenu`'s top menu: only a category the player owns something
@@ -2411,7 +2575,7 @@ func _open_decoration_category(slot: StringName) -> void:
 		## `.empty`'s own box. `categories()` drops a category with nothing in
 		## it, so this is only reached by a mod's list emptying under the menu.
 		_open_pc_text(
-			[Gen2WorldDecoration.TEXT_NOTHING_TO_CHOOSE], &"decoration", _title
+			[_said(Gen2WorldDecoration.TEXT_NOTHING_TO_CHOOSE)], &"decoration", _title
 		)
 		return
 	_mode = MODE.PC_DECO_LIST
@@ -2436,10 +2600,10 @@ func _choose_decoration(deco: int) -> void:
 	_cursor = 0
 	_deco_pending = deco
 	_pc_rows = Gen2WorldDecoration.SIDE_ROWS.duplicate()
-	_summary = Gen2WorldDecoration.TEXT_WHICH_SIDE_PUT_AWAY \
-		if Gen2WorldDecoration.is_put_away(_data, deco) \
-		else Gen2WorldDecoration.TEXT_WHICH_SIDE_PUT_ON
 	_status = ""
+	_print(Gen2WorldDecoration.TEXT_WHICH_SIDE_PUT_AWAY \
+		if Gen2WorldDecoration.is_put_away(_data, deco) \
+		else Gen2WorldDecoration.TEXT_WHICH_SIDE_PUT_ON)
 	_render_rows()
 
 
@@ -2458,12 +2622,7 @@ func _apply_decoration(deco: int, side: StringName) -> void:
 	if text.is_empty():
 		_open_decorations()
 		return
-	var pages: Array = []
-	for page: PackedStringArray in Gen2TextLayout.lay_out(
-		text, MART_TEXT_COLUMNS, MART_TEXT_ROWS
-	):
-		pages.append("\n".join(page))
-	_open_pc_text(pages, &"decoration", _title)
+	_open_pc_text([_said(text)], &"decoration", _title)
 
 
 ## The way out of the decoration menu, which is the way out of the machine once
@@ -2486,6 +2645,7 @@ func _open_save_prompt(kind: Gen2SavePrompt.Kind, after: StringName) -> void:
 	_save_prompt = Gen2SavePrompt.open(
 		kind, _save.player_name if _save != null else "", _write_service_save
 	)
+	_save_printed = ""
 	_frame_clock.reset()
 	set_process(true)
 	_render_save_prompt()
@@ -2504,17 +2664,33 @@ func advance_save_frames(count: int) -> void:
 	for _step: int in count:
 		if _save_prompt == null:
 			return
-		_save_prompt.frame()
-		_advance_save_prompt()
+		_advance_save_frame()
+
+
+func _advance_save_frame() -> void:
+	if _save_prompt.text_pending:
+		_box.advance_frame()
+		_note_save_text_printed()
+		return
+	_save_prompt.frame()
+	_advance_save_prompt()
+
+
+func _note_save_text_printed() -> void:
+	if _save_prompt.text_pending and not _box.has_text_left():
+		_save_prompt.text_printed()
+		_render_save_prompt()
 
 
 ## A on the box is YES where the cursor stands on it, and B is `YesNoBox`'s NO.
 func _press_save_prompt(accepted: bool) -> void:
 	if _save_prompt == null:
 		return
-	if _save_prompt.confirm(accepted and _cursor == 0):
-		_prompt_click()
+	_save_prompt.confirm(accepted and _cursor == 0)
 	_advance_save_prompt()
+
+
+var _save_printed: String = ""
 
 
 func _render_save_prompt() -> void:
@@ -2524,9 +2700,21 @@ func _render_save_prompt() -> void:
 	_cursor = maxi(_save_prompt.cursor, 0)
 	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}] \
 		if _save_prompt.cursor >= 0 else []
-	_summary = "\n".join(_save_prompt.lines.slice(_save_prompt.line))
 	_status = ""
+	var key: String = "%d:%s" % [_save_prompt.step, _save_prompt.text()]
+	if key != _save_printed:
+		_save_printed = key
+		var speed: StringName = _save_prompt.letter_speed()
+		_print(_save_prompt.text(), speed == &"instant", false,
+			SAVE_MEDIUM_SPEED if speed == &"medium" else 0.0)
+		_note_save_text_printed()
 	_render_rows()
+
+
+## `TEXT_DELAY_MED`'s three frames a letter, which Crystal's two write lines force.
+const SAVE_MEDIUM_SPEED: float = 1.0 / (Gen2TextBox.FRAME_SECONDS * 3.0)
+## `ChangeBoxSaveGame.refused`'s `SFX_SAVE` and `ld c, 24`.
+const CHANGE_BOX_REFUSED_FRAMES: int = 24
 
 
 ## A, B and a frame all sync the same way: the prompt decides what its step
@@ -2540,7 +2728,7 @@ func _advance_save_prompt() -> void:
 		_box_index = _box_submenu_index
 		if _save != null:
 			_save.current_box = _box_index
-	if _save_prompt.sfx_owed():
+	if _save_prompt.take_sfx():
 		sfx_requested.emit(Gen2Sfx.SFX_SAVE, true)
 	if not _save_prompt.finished():
 		_render_save_prompt()
@@ -2554,6 +2742,13 @@ func _advance_save_prompt() -> void:
 		## TRUE for a save that was written, FALSE for one that was not.
 		_finish_runtime({"ok": true, "script_value": 0 if refused else 1})
 		return
+	if after == &"change_box" and refused:
+		sfx_requested.emit(Gen2Sfx.SFX_SAVE, false)
+		_hold_frames = CHANGE_BOX_REFUSED_FRAMES
+		_hold_then = _open_box_list
+		_summary = ""
+		_render_rows()
+		return
 	if after == &"change_box":
 		_open_box_list()
 		return
@@ -2564,62 +2759,55 @@ func _advance_save_prompt() -> void:
 	_open_boxes(Gen2BoxScreen.MODE_MOVE)
 
 
-## A page turned inside one text is a `<PARA>` or `<CONT>`'s `PromptButton`.
-func _prompt_click() -> void:
-	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
-
-
-## A run of the PC's own boxes, acknowledged one at a time.
-func _open_pc_text(pages: Array, after: StringName, label: String) -> void:
+## A run of the PC's own boxes, each one [method _said] gives, then [param after].
+func _open_pc_text(texts: Array, after: StringName, label: String) -> void:
 	_mode = MODE.PC_TEXT
-	_pc_page_breaks = []
-	_pc_pages = _paged(pages, _pc_page_breaks)
+	_pc_texts = texts.filter(func(said: Dictionary) -> bool:
+		return not String(said["text"]).strip_edges().is_empty())
 	_pc_after = after
 	_cursor = 0
 	_pc_label = label
-	_show_pc_page()
+	if _pc_texts.is_empty():
+		_pc_texts = [_said("")]
+		_advance_pc_text()
+		return
+	_show_pc_text()
 
 
-## `PrintText` holds a `<PARA>` and a `<CONT>` for their own press, so a box
-## carrying either is that many pages here, and [param breaks] marks them.
-func _paged(pages: Array, breaks: Array[bool]) -> Array:
-	var box: Rect2i = Gen2WorldServicePage.MESSAGE_BOX
-	@warning_ignore("integer_division")
-	var rows: int = (box.size.y - 2) / 2
-	var out: Array = []
-	for page: Variant in pages:
-		var text: String = String(page)
-		if text.is_empty():
-			out.append(text)
-			breaks.append(false)
-			continue
-		var laid: Array = Gen2TextLayout.lay_out(text, box.size.x - 2, rows)
-		for index: int in laid.size():
-			out.append("\n".join(laid[index] as PackedStringArray))
-			breaks.append(index + 1 < laid.size())
-	return out
+## A box of the run: its text and how it ends. `prompt` and `arrow` both load
+## the arrow and only `prompt` clicks; `wait` is a caller's `JoyWaitAorB`; `none`
+## runs on once printed. [param sfx] plays as the last letter lands.
+static func _said(
+	text: String, end: StringName = &"prompt", instant: bool = false, sfx: int = -1
+) -> Dictionary:
+	return {"text": text, "end": end, "instant": instant, "sfx": sfx}
 
 
-func _show_pc_page() -> void:
-	_summary = String(_pc_pages[0]) if not _pc_pages.is_empty() else ""
-	_status = ""
+func _show_pc_text() -> void:
+	var said: Dictionary = _pc_texts[0]
+	var end: StringName = said["end"]
+	_print(String(said["text"]), bool(said["instant"]), end == &"prompt")
+	_box.set_blink_cursor(end in [&"prompt", &"arrow"])
+	_box_then = _pc_text_printed
 	_render_rows([_pc_label])
 
 
-## `ProfOaksPCBoot` plays the sound `Rate` chose once the rating is printed, so
-## the last page is where it lands.
+func _pc_text_printed() -> void:
+	var said: Dictionary = _pc_texts[0]
+	if int(said["sfx"]) >= 0:
+		sfx_requested.emit(int(said["sfx"]), false)
+	if said["end"] == &"none":
+		_advance_pc_text()
+
+
 func _advance_pc_text() -> void:
-	if not _pc_page_breaks.is_empty() and bool(_pc_page_breaks.pop_front()):
-		_prompt_click()
-	if not _pc_pages.is_empty():
-		_pc_pages.remove_at(0)
-	if not _pc_pages.is_empty():
-		_show_pc_page()
+	if _box != null:
+		_box.advance()
+	_pc_texts.pop_front()
+	if not _pc_texts.is_empty():
+		_show_pc_text()
 		return
-	if _pc_sfx >= 0:
-		## `ProfOaksPCBoot` waits *behind* its sound, not in front of it.
-		sfx_requested.emit(_pc_sfx, false)
-	_pc_sfx = -1
+	_box_up = false
 	if PC_TEXT_LANDINGS.has(_pc_after):
 		call(PC_TEXT_LANDINGS[_pc_after])
 		return
@@ -2629,11 +2817,22 @@ func _advance_pc_text() -> void:
 ## Where a run of boxes lands. Anything unnamed goes back to the top menu.
 const PC_TEXT_LANDINGS: Dictionary = {
 	&"close": &"_leave_gen1_machine",
+	&"pc_top": &"_open_pc_top",
+	&"pc_house": &"_open_house_pc",
+	&"pc_refused": &"_refuse_pc",
+	&"pc_shut_down": &"_shut_down_pc",
+	&"pc_items": &"_open_pc_items",
+	&"pc_items_fresh": &"_open_pc_items_fresh",
+	&"pc_item_list": &"_reopen_pc_item_list",
+	&"pc_oak": &"_open_pc_oak",
+	&"mailbox": &"_open_mailbox",
 	&"decoration": &"_open_decorations",
 	&"bills_pc": &"_open_bills_pc_menu",
 	&"oak_closed": &"_open_oak_closed",
 	&"gen1_items": &"_open_gen1_items",
 	&"gen1_bills": &"_open_gen1_bills",
+	&"gen1_players_pc": &"_enter_gen1_players_pc",
+	&"gen1_bills_pc": &"_enter_gen1_bills_pc",
 	&"gen1_item_list": &"_reopen_gen1_item_list",
 	&"gen1_mon_list": &"_reopen_gen1_mon_list",
 	&"gen1_oak_ask": &"_open_gen1_oak_ask",
@@ -2647,6 +2846,7 @@ const PC_TEXT_LANDINGS: Dictionary = {
 ## other two, which is `BIT_USING_GENERIC_PC`.
 func _open_gen1_pc(mode: StringName) -> void:
 	_gen1_pc = true
+	_gen1_instant = mode in [&"gen1_players_pc", &"gen1_bills_pc"]
 	## `ReloadMainMenu` returns every row of the top menu to it.
 	_gen1_generic = mode != &"gen1_players_pc" and mode != &"gen1_bills_pc"
 	match mode:
@@ -2658,8 +2858,10 @@ func _open_gen1_pc(mode: StringName) -> void:
 			_open_gen1_top()
 
 
-## `DisplayPCMainMenu`, whose box is as tall as the rows it offers.
+## `DisplayPCMainMenu`, whose box is as tall as the rows it offers. Both
+## machines behind it clear `BIT_NO_TEXT_DELAY` on the way back out.
 func _open_gen1_top() -> void:
+	_gen1_instant = false
 	_mode = MODE.PC
 	_cursor = 0
 	_pc_rows = Gen2WorldPC.gen1_top_menu(
@@ -2676,10 +2878,10 @@ func _confirm_gen1_top_row(row: int) -> void:
 				Gen1Layout.MET_BILL_EVENT
 			)
 			_open_gen1_box_text(
-				"pc", "accessed_bills" if met else "accessed_someones", &"gen1_bills"
+				"pc", "accessed_bills" if met else "accessed_someones", &"gen1_bills_pc"
 			)
 		Gen2WorldPC.GEN1_PC_PLAYERS:
-			_open_gen1_box_text("pc", "accessed_mine", &"gen1_items")
+			_open_gen1_box_text("pc", "accessed_mine", &"gen1_players_pc")
 		Gen2WorldPC.GEN1_PC_OAKS:
 			_open_gen1_box_text("oaks_pc", "accessed", &"gen1_oak_ask")
 		Gen2WorldPC.GEN1_PC_LEAGUE:
@@ -2703,7 +2905,33 @@ func _cancel_gen1_machine() -> void:
 	_leave_gen1_machine()
 
 
+## `PlayerPC` and `BillsPC_` set `BIT_NO_TEXT_DELAY`, and a list clears it on
+## its way out, so a machine's texts are instant until its first list.
+var _gen1_instant: bool = false
+
+
+func _enter_gen1_players_pc() -> void:
+	_gen1_instant = true
+	_open_gen1_items()
+
+
+func _enter_gen1_bills_pc() -> void:
+	_gen1_instant = true
+	_open_gen1_bills()
+
+
+func _leave_gen1_item_list() -> void:
+	_gen1_instant = false
+	_open_gen1_items()
+
+
+func _leave_gen1_mon_list() -> void:
+	_gen1_instant = false
+	_open_gen1_bills()
+
+
 ## `PlayerPCMenu`, which opens on `wParentMenuItem` and leaves on LOG OFF or B.
+## pokeyellow's sets `BIT_NO_TEXT_DELAY` again on every pass.
 func _open_gen1_items() -> void:
 	_mode = MODE.PC_ITEMS
 	_cursor = _gen1_items_cursor
@@ -2711,7 +2939,8 @@ func _open_gen1_items() -> void:
 	_pc_switch = -1
 	_pc_rows = Gen2WorldPC.gen1_players_pc_menu()
 	_gen1_quiet()
-	_summary = _gen1_box("players_pc", "what_do_you_want")
+	_gen1_instant = _gen1_instant or _data.id == RomRegistry.YELLOW
+	_print(_gen1_box("players_pc", "what_do_you_want"), _gen1_instant)
 	_render_rows()
 
 
@@ -2747,7 +2976,7 @@ func _enter_gen1_item_list(row: int) -> void:
 		return
 	_mode = MODE.PC_ITEM_LIST
 	_gen1_quiet()
-	_summary = _gen1_box("players_pc", String(names[0]))
+	_print(_gen1_box("players_pc", String(names[0])), _gen1_instant)
 	_render_rows()
 
 
@@ -2758,6 +2987,7 @@ func _reopen_gen1_item_list() -> void:
 
 ## `IsKeyItem_`, an HM included: a stack asks how many and a toss refuses one.
 func _confirm_gen1_item() -> void:
+	_gen1_instant = false
 	if _cursor >= _pc_entries.size():
 		_open_gen1_items()
 		return
@@ -2773,7 +3003,7 @@ func _confirm_gen1_item() -> void:
 		int((_pc_entries[_cursor] as Dictionary).get("quantity", 1)), RomRegistry.GEN1
 	)
 	_mode = MODE.PC_ITEM_QUANTITY
-	_summary = _gen1_box("players_pc", String(GEN1_QUANTITY_BOXES[_pc_action]))
+	_print(_gen1_box("players_pc", String(GEN1_QUANTITY_BOXES[_pc_action])))
 	_render_rows()
 
 
@@ -2792,11 +3022,11 @@ func _press_quantity_prompt(button: int) -> void:
 		Gen2WorldQuantityPrompt.CONFIRMED:
 			_pc_quantity = _quantity_prompt.value
 			if _pc_action == Gen2WorldPC.GEN1_PLAYERS_PC_TOSS:
-				## `TossItem_` asks `IsItOKToTossItemText` over the list first.
+				## `TossItem_`'s `IsItOKToTossItemText` owes its `prompt` first.
 				_open_gen1_ask(&"toss", Gen2TextStream.fill_marker(
 					_gen1_box("toss", "ok_to_toss"), Gen2TextStream.RAM_MARKER,
 					String(_pc_entries[_cursor].get("name", ""))
-				))
+				), true)
 				return
 			_apply_gen1_item()
 		Gen2WorldQuantityPrompt.CANCELLED:
@@ -2851,7 +3081,7 @@ func _open_gen1_bills() -> void:
 	_cursor = _bills_pc_cursor
 	_pc_rows = Gen2WorldPC.gen1_bills_pc_menu()
 	_gen1_quiet()
-	_summary = _gen1_box("bills_pc", "what")
+	_print(_gen1_box("bills_pc", "what"), _gen1_instant)
 	_render_rows()
 
 
@@ -2906,6 +3136,7 @@ func _gen1_mon_box() -> void:
 
 
 func _confirm_gen1_mon_row() -> void:
+	_gen1_instant = false
 	if _cursor >= _gen1_mon_entries.size():
 		_open_gen1_bills()
 		return
@@ -3047,7 +3278,7 @@ const GEN1_ASK_NO: Dictionary = {
 var _gen1_ask_row: int = 0
 
 
-func _open_gen1_ask(kind: StringName, question: String) -> void:
+func _open_gen1_ask(kind: StringName, question: String, prompt: bool = false) -> void:
 	_gen1_ask = kind
 	_gen1_ask_over = _mode
 	_gen1_ask_row = _cursor
@@ -3055,11 +3286,13 @@ func _open_gen1_ask(kind: StringName, question: String) -> void:
 	_cursor = 0
 	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
 	_gen1_quiet()
-	_ask_pages(question)
+	_ask(question, _gen1_instant, prompt)
 	_render_rows()
 
 
+## The TWO_OPTION_MENU clears `BIT_NO_TEXT_DELAY` behind its answer.
 func _confirm_gen1_ask(row: int) -> void:
+	_gen1_instant = false
 	var landings: Dictionary = GEN1_ASK_YES if row == 0 else GEN1_ASK_NO
 	_cursor = _gen1_ask_row
 	call(landings.get(_gen1_ask, &"_open_gen1_bills"))
@@ -3094,7 +3327,7 @@ func _open_gen1_box_list() -> void:
 	_cursor = _box_index
 	_pc_scroll = 0
 	_gen1_quiet()
-	_summary = _gen1_box("choose_box", "choose")
+	_print(_gen1_box("choose_box", "choose"), _gen1_instant)
 	_render_rows()
 
 
@@ -3112,7 +3345,7 @@ func _open_gen1_oak_ask() -> void:
 	_cursor = 0
 	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
 	_gen1_quiet()
-	_summary = _gen1_box("oaks_pc", "get_rated")
+	_ask(_gen1_box("oaks_pc", "get_rated"))
 	_render_rows()
 
 
@@ -3120,9 +3353,13 @@ func _confirm_gen1_oak(row: int) -> void:
 	if row != 0:
 		_close_gen1_oak()
 		return
-	## `DisplayDexRating`: `DexCompletionText` and the row the count lands on.
-	var rated: Dictionary = Gen2ProfOaksPC.rate(_data, _world.state)
-	_open_gen1_text(rated.get("pages", []) as Array, &"gen1_oak_closed")
+	## `DisplayDexRating`: `DexCompletionText`, and the row the count lands on
+	## behind `WaitForTextScrollButtonPress`'s arrow, which plays nothing.
+	var pages: Array = Gen2ProfOaksPC.rate(_data, _world.state).get("pages", [])
+	if pages.size() < 2:
+		_close_gen1_oak()
+		return
+	_open_pc_text([_said(String(pages[0])), _said(String(pages[1]), &"arrow")], &"gen1_oak_closed", "")
 
 
 func _close_gen1_oak() -> void:
@@ -3174,8 +3411,11 @@ func _open_gen1_box_text(run: String, slot: String, after: StringName) -> void:
 	_open_gen1_text([_gen1_box(run, slot)], after)
 
 
-func _open_gen1_text(pages: Array, after: StringName) -> void:
-	_open_pc_text(pages, after, "")
+func _open_gen1_text(texts: Array, after: StringName) -> void:
+	var said: Array = []
+	for text: Variant in texts:
+		said.append(_said(String(text), &"prompt", _gen1_instant))
+	_open_pc_text(said, after, "")
 
 
 ## `_BillsPC`, the top menu the two lists and the box picker sit behind.
@@ -3185,7 +3425,7 @@ func _open_bills_pc_menu() -> void:
 		## `.CheckCanUsePC` prints and returns to `PokemonCenterPC`'s own loop.
 		## The start-menu action never reaches this: [method open_bills_pc]
 		## refuses the same test before the host is opened at all.
-		_open_pc_text([Gen2WorldPC.BILLS_PC_NEEDS_POKEMON], &"top", "BILL's PC")
+		_open_pc_text([_said(Gen2WorldPC.BILLS_PC_NEEDS_POKEMON)], &"top", "BILL's PC")
 		return
 	_mode = MODE.PC_BOXES
 	_cursor = _bills_pc_cursor
@@ -3194,8 +3434,9 @@ func _open_bills_pc_menu() -> void:
 	)
 	_pc_rows = Gen2WorldPC.bills_pc_menu()
 	_title = _data.pokecenter_pc_row("bills_pc")
-	_summary = Gen2WorldPC.BILLS_PC_WHAT
 	_status = ""
+	## `.LogIn`'s `PrintText` with `NO_TEXT_SCROLL` set.
+	_print(Gen2WorldPC.BILLS_PC_WHAT, true)
 	_render_rows()
 
 
@@ -3229,7 +3470,7 @@ func _open_box_submenu(index: int) -> void:
 	_pc_rows = []
 	for row: int in BOX_SUBMENU_ROWS.size():
 		_pc_rows.append({"row": row, "name": BOX_SUBMENU_ROWS[row]})
-	_summary = Gen2WorldPC.BILLS_PC_WHAT
+	_summary = BOX_WHATS_UP_TEXT
 	_status = ""
 	_render_rows()
 
@@ -3295,8 +3536,13 @@ func _print_box() -> void:
 	var box: Gen2SaveBox = _save.boxes[_box_submenu_index] if _save != null \
 		and _box_submenu_index < _save.boxes.size() else null
 	if box == null or box.occupied_count() <= 0:
+		## `ExitMenu` first, and `_ChangeBox.loop` redraws behind the frames.
 		sfx_requested.emit(Gen2Sfx.SFX_WRONG, true)
-		_status = BOX_EMPTY_TEXT
+		_mode = MODE.PC_BOX_LIST
+		_cursor = _box_submenu_index
+		_summary = BOX_EMPTY_TEXT
+		_hold_frames = BOX_EMPTY_FRAMES
+		_hold_then = _open_box_list
 		_render_rows()
 		return
 	_status = _data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
@@ -3323,10 +3569,7 @@ func _refresh_box_counts() -> void:
 func _open_mailbox() -> void:
 	_pc_rows = Gen2WorldPC.mailbox_entries(_save)
 	if _pc_rows.is_empty():
-		_status = Gen2WorldPC.MAILBOX_EMPTY
-		_mode = MODE.PC_ITEMS
-		_pc_rows = Gen2WorldPC.players_pc_menu(_data, _pc_house)
-		_render_rows()
+		_open_pc_text([_said(Gen2WorldPC.MAILBOX_EMPTY)], &"pc_items", _title)
 		return
 	_mode = MODE.PC_MAILBOX
 	## `ScrollingMenu`'s own CANCEL, past `wMailboxCount`.
@@ -3368,8 +3611,8 @@ func _open_mail_confirm() -> void:
 	_mode = MODE.PC_MAIL_CONFIRM
 	_cursor = 0
 	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
-	_ask_pages(Gen2WorldPC.MAILBOX_MESSAGE_LOST)
 	_status = ""
+	_ask(Gen2WorldPC.MAILBOX_MESSAGE_LOST)
 	_render_rows()
 
 
@@ -3381,12 +3624,9 @@ func _confirm_mail_to_pack(accepted: bool) -> void:
 	var applied: Dictionary = Gen2WorldPC.mailbox_to_pack(
 		_world, _save, _mail_index, _persist
 	)
-	_open_mailbox()
-	if not bool(applied.get("ok", false)):
-		## `ReceiveItem`'s own failure, which is `.MailPackFullText`.
-		_status = Gen2WorldPC.MAILBOX_PACK_FULL
-		return
-	_status = Gen2WorldPC.MAILBOX_CLEARED
+	## `ReceiveItem`'s own failure is `.MailPackFullText`.
+	_open_pc_text([_said(Gen2WorldPC.MAILBOX_CLEARED if bool(applied.get("ok", false)) \
+		else Gen2WorldPC.MAILBOX_PACK_FULL)], &"mailbox", _title)
 
 
 func _open_mail_reader() -> void:
@@ -3450,9 +3690,11 @@ func _on_mail_attach_selected(party_index: int) -> void:
 	var applied: Dictionary = Gen2WorldPC.mailbox_attach(
 		_world, _save, _mail_index, party_index, _persist
 	)
-	_open_mailbox()
-	_status = Gen2WorldPC.MAILBOX_MOVED if bool(applied.get("ok", false)) \
-		else "Refused: %s" % String(applied.get("reason", ""))
+	if not bool(applied.get("ok", false)):
+		_open_mailbox()
+		_status = "Refused: %s" % String(applied.get("reason", ""))
+		return
+	_open_pc_text([_said(Gen2WorldPC.MAILBOX_MOVED)], &"mailbox", _title)
 
 
 func _close_mail_attach() -> void:
@@ -3666,6 +3908,9 @@ func radio_music_playing() -> int:
 ## One hardware frame of whichever card is open. Only the radio card spends any:
 ## `PlayRadioShow` is the one thing the Pokegear runs per frame.
 func advance_frame() -> void:
+	_advance_box_frame()
+	if _advance_frame_hold():
+		return
 	if _call_end_stage != &"":
 		_advance_call_end()
 		return
@@ -3683,8 +3928,8 @@ func advance_frame() -> void:
 	if _pc_item_stage == &"toss_ask" and _pc_toss_ask.advance_hold():
 		_answer_pc_toss(_pc_toss_ask.answered_yes())
 		return
-	if _mode == MODE.MART and _mart_yes_no.advance_hold():
-		_answer_mart_confirm(_mart_yes_no.answered_yes())
+	if _mode == MODE.MART:
+		_advance_mart_frame()
 		return
 	if _mode == MODE.PRIZE and _prize_yes_no.advance_hold():
 		_answer_prize_confirm(_prize_yes_no.answered_yes())
@@ -3696,6 +3941,20 @@ func advance_frame() -> void:
 		return
 	if _pokegear != null and _world.advance_radio_frame():
 		_refresh_card()
+
+
+func _advance_frame_hold() -> bool:
+	if _vending_delivery > 0:
+		_advance_vending_delivery()
+		return true
+	if _hold_frames <= 0:
+		return false
+	_hold_frames -= 1
+	if _hold_frames == 0:
+		var then: Callable = _hold_then
+		_hold_then = Callable()
+		then.call()
+	return true
 
 
 func _on_card_tuned(knob: int) -> void:
@@ -4065,7 +4324,7 @@ const CANCEL_HANDLERS: Dictionary = {
 	MODE.PC_DECO_SIDE: &"_cancel_deco_side",
 	MODE.PC_SAVE: &"_refuse_save_prompt",
 	MODE.PC_TEXT: &"_advance_pc_text",
-	MODE.PC_MON_LIST: &"_open_gen1_bills",
+	MODE.PC_MON_LIST: &"_leave_gen1_mon_list",
 	MODE.PC_MON_ACTION: &"_open_gen1_bills",
 	MODE.PC_ITEM_QUANTITY: &"_reopen_gen1_item_list",
 	MODE.PC_ASK: &"_refuse_gen1_ask",
@@ -4080,7 +4339,7 @@ const GEN1_CANCEL_HANDLERS: Dictionary = {
 	MODE.PC: &"_leave_gen1_machine",
 	MODE.PC_ITEMS: &"_cancel_gen1_machine",
 	MODE.PC_BOXES: &"_cancel_gen1_machine",
-	MODE.PC_ITEM_LIST: &"_open_gen1_items",
+	MODE.PC_ITEM_LIST: &"_leave_gen1_item_list",
 	MODE.PC_BOX_LIST: &"_open_gen1_bills",
 	MODE.PC_OAK_ASK: &"_close_gen1_oak",
 }
@@ -4095,27 +4354,16 @@ func _cancel() -> void:
 
 var _pc_yes_no_hold: int = 0
 var _pc_yes_no_held: Callable = Callable()
-## A PC question's pages come before `YesNoBox`.
-var _question_pages: Array = []
-
-
-func _ask_pages(question: String) -> void:
-	var breaks: Array[bool] = []
-	_question_pages = _paged([question], breaks)
-	_summary = String(_question_pages[0]) if not _question_pages.is_empty() else question
-
-
-func _asking_through_pages() -> bool:
-	return PC_YES_NO_MODES.has(_mode) and _question_pages.size() > 1
-
-
-func _turn_question_page(button: int) -> void:
-	if button not in [PokeButton.A, PokeButton.B]:
-		return
-	_prompt_click()
-	_question_pages.remove_at(0)
-	_summary = String(_question_pages[0])
-	_render_rows()
+## A question ending in `prompt` owes that press before [param then] runs.
+func _ask(
+	question: String, instant: bool = false, prompt: bool = false, then: Callable = Callable()
+) -> void:
+	_print(question, instant, prompt)
+	_box_owes_press = prompt and not question.strip_edges().is_empty()
+	if _box_owes_press:
+		_box_answered = then
+	elif then.is_valid():
+		then.call()
 
 
 func _hold_pc_yes_no(answer: Callable) -> bool:
@@ -4248,7 +4496,7 @@ func _render_rows(override: Array = []) -> void:
 		## One value at a time, the way the dial and the room menu each show it.
 		override = [_choices[clampi(_cursor, 0, _choices.size() - 1)]] if not _choices.is_empty() \
 			else []
-	var values: Array = override if not override.is_empty() else [] if _asking_through_pages() else (
+	var values: Array = override if not override.is_empty() else [] if _box_printing() else (
 		_choices if _mode == MODE.MENU \
 		else _pc_rows if PC_ROW_MODES.has(_mode) \
 		else _pc_entries + [{"name": CANCEL_ROW}] if _mode == MODE.PC_ITEM_LIST \
@@ -4297,12 +4545,15 @@ func _render_gen1_list() -> void:
 			if _mode == MODE.PC_ITEM_QUANTITY and _quantity_prompt != null else -1,
 	})
 	var labels: Array = []
-	if asking and not _asking_through_pages():
+	if asking and not _box_printing():
 		for row: Dictionary in _pc_rows:
 			labels.append(String(row.get("name", "")))
+	var message: Variant = _summary
+	if _box_up:
+		message = _box
 	var over: Image = _service_page.render(
-		"", "", labels, _cursor, _summary,
-		_service_box() if asking and not _asking_through_pages() else null
+		"", "", labels, _cursor, message,
+		_service_box() if asking and not _box_printing() else null
 	)
 	if image != null and over != null:
 		image.blend_rect(over, Rect2i(Vector2i.ZERO, over.get_size()), Vector2i.ZERO)
@@ -4349,32 +4600,43 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		_apply_layer_visibility()
 		return
 	_service_page.palette = box_palette
-	var page_rows: Array = [] if _mode in [MODE.PHONE, MODE.PC_TEXT] else values
-	var labels: Array = []
-	for value: Variant in page_rows:
-		if value is Dictionary:
-			var row: Dictionary = value
-			var label: String = String(row.get("name", row.get("caller_label", "")))
-			if _mode == MODE.PC_ITEM_LIST and row.has("quantity"):
-				label += " x%d" % int(row.get("quantity", 0))
-			labels.append(label)
-		else:
-			labels.append(String(value))
-	## `_PlayerDecorationMenu`'s list reaches row 16 and the routine prints no
-	## box under it, so the category's name is the list's own title row on the
-	## cartridge rather than a speech box the list would be drawn over.
-	var quiet: bool = _mode == MODE.PC_DECO_LIST
+	var labels: Array = [] if _mode in [MODE.PHONE, MODE.PC_TEXT] or _box_printing() \
+		else _row_labels(values)
+	var words: Array = _page_words()
 	var image: Image = _mom_bank_image() if _mode == MODE.MOM_BANK \
 		else _dial_image() if _is_dial() else _service_page.render(
-		"" if quiet else _title, "" if quiet else _render_summary(), labels,
-		_cursor if cursor < 0 else cursor, "" if quiet else _status,
-		_service_box(), _service_note(), _message_box(), _gen1_box_marks()
+		String(words[0]), String(words[1]), labels, _cursor if cursor < 0 else cursor,
+		words[2], _service_box(), _service_note(), _message_box(), _gen1_box_marks()
 	)
 	if image != null:
 		_blend_pc_item_stage(image)
 		Gen2PicImage.show(_service_view, image)
 	_service_drawn = image != null
 	_apply_layer_visibility()
+
+
+func _row_labels(values: Array) -> Array:
+	var labels: Array = []
+	for value: Variant in values:
+		if not value is Dictionary:
+			labels.append(String(value))
+			continue
+		var row: Dictionary = value
+		var label: String = String(row.get("name", row.get("caller_label", "")))
+		if _mode == MODE.PC_ITEM_LIST and row.has("quantity"):
+			label += " x%d" % int(row.get("quantity", 0))
+		labels.append(label)
+	return labels
+
+
+## The page's title, prompt and message: the box, or this host's own lines.
+## `_PlayerDecorationMenu`'s list reaches row 16 and prints no box under it.
+func _page_words() -> Array:
+	if _mode == MODE.PC_DECO_LIST:
+		return ["", "", ""]
+	if _box_up:
+		return ["", "", _box]
+	return [_title, _render_summary(), _status]
 
 
 ## `.PCItemsMenuData`'s `UpdateItemDescription` under a list being browsed.
@@ -4388,7 +4650,7 @@ func _render_summary() -> String:
 
 ## `TossItem_MenuHeader`'s dial at (15, 9) and the `YesNoBox` over the list.
 func _blend_pc_item_stage(image: Image) -> void:
-	if _mode != MODE.PC_ITEM_LIST or _pc_item_stage == &"":
+	if _mode != MODE.PC_ITEM_LIST or _pc_item_stage == &"" or _box_printing():
 		return
 	if _pc_item_stage == &"toss_ask":
 		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _pc_toss_ask.cursor)
@@ -4610,13 +4872,13 @@ func _mail_submenu_box() -> Gen2MenuBox:
 ## `YesNoBox`, which `.PutInPack`, `ProfOaksPC` and both of Generation 1's
 ## questions open over their own.
 func _yes_no_box() -> Gen2MenuBox:
-	return null if _asking_through_pages() else Gen2MenuBox.yes_no()
+	return null if _box_printing() else Gen2MenuBox.yes_no()
 
 
 ## The same `YesNoBox`, and nothing at all on the timed steps: they are a box
 ## with no question on it.
 func _save_prompt_box() -> Gen2MenuBox:
-	return Gen2MenuBox.yes_no() if _pc_rows.size() == 2 else null
+	return Gen2MenuBox.yes_no() if _pc_rows.size() == 2 and not _box_printing() else null
 
 
 ## `.MenuHeader`'s `menu_coords 11, 4, SCREEN_WIDTH - 1, 13`, raised two rows:

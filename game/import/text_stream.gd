@@ -78,6 +78,9 @@ const SCROLL_BREAK: String = "\ue001"
 ## the same two `TextScroll`s with no `PromptButton` in front of them, so the box
 ## rolls on without a press.
 const SCROLL_NOWAIT_BREAK: String = "\ue002"
+## A text ending in `prompt` and the next `PrintText` behind it: the press and a
+## fresh box, with no `Paragraph` frames.
+const PROMPT_BREAK: String = "\ue003"
 
 ## `GetWeekday`'s `.Days`, which `TextCommand_DAY` follows with "DAY".
 const WEEKDAYS: Array[String] = [

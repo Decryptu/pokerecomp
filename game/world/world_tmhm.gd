@@ -110,14 +110,19 @@ static func teach_prompt(data: GameData, item: int) -> Dictionary:
 		return {"ok": false, "reason": &"not_a_tm_hm", "item": item}
 	var move_name: String = String(data.move(move).get("name", "MOVE"))
 	var hm: bool = is_hm(item, data.generation)
-	var booted: String = "Booted up an HM." if hm else "Booted up a TM."
+	## `AskTeachTMHM`'s two `PrintText`s: `_BootedTMText`'s `prompt`, then
+	## `_ContainedMoveText`; pokered's `ItemUseTMHM` ends each sentence in "!".
+	var stop: String = "!" if data.generation == RomRegistry.GEN1 else "."
 	return {
 		"ok": true,
 		"item": item,
 		"move": move,
 		"move_name": move_name,
 		"hm": hm,
-		"text": "%s It contained %s. Teach %s to a #MON?" % [booted, move_name, move_name],
+		"text": "Booted up %s%s%sIt contained\n%s%s%sTeach %s\nto a #MON?" % [
+			"an HM" if hm else "a TM", stop, Gen2TextStream.PROMPT_BREAK,
+			move_name, stop, Gen2TextStream.PAGE_BREAK, move_name,
+		],
 	}
 
 

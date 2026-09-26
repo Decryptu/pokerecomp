@@ -35,6 +35,8 @@ const EXPECTED_PLAYERS_LISTS: Array[Array] = [
 ## The texts, by the opening of each: enough to say which stub decoded without
 ## pinning a whole box.
 const EXPECTED_TEXT_OPENINGS: Dictionary = {
+	"cant_use": "Bzzzzt! You must",
+	"players_turn_on": "<PLAYER> turned on",
 	"ask_what_do": "What do you want",
 	"how_many_withdraw": "How many do you",
 	"withdrew": "Withdrew ",

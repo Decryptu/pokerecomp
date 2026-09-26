@@ -1807,9 +1807,11 @@ const POKECENTER_PC_PLAYERS_LISTS: int = 2
 const POKECENTER_PC_LIST_END: int = 0xFF
 ## Every `text_far` stub the two routines print through, as its own distance
 ## from the row run. The six the top menu uses are one consecutive block; the
-## item PC's eight are scattered through `pokecenter_pc.asm` between the
-## submenus that own them, so each is pinned rather than strided.
+## rest are scattered through `pokecenter_pc.asm` between the routines that own
+## them, so each is pinned rather than strided.
 const POKECENTER_PC_TEXT_AT: Dictionary = {
+	"cant_use": 0x069,
+	"players_turn_on": 0x105,
 	"ask_what_do": 0x1D2,
 	"how_many_withdraw": 0x256,
 	"withdrew": 0x25B,

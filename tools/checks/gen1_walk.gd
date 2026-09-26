@@ -1721,9 +1721,13 @@ func _press_the_counter(host: Gen2WorldServiceScreen, presses: Array) -> void:
 	_read_the_counter(host)
 
 
-## A box's pages, and a price question's `cont` before its `YesNoBox`.
+## A box printed and read, a price question's `cont` included.
 func _read_the_counter(host: Gen2WorldServiceScreen) -> void:
 	for _page: int in MART_FLOW_PRESSES:
+		for _frame: int in MART_FLOW_FRAMES:
+			if not host._box.is_revealing():
+				break
+			host.advance_frame()
 		var asking: bool = host._mart_stage in [
 			Gen2WorldServiceScreen.MART_CONFIRM, Gen2WorldServiceScreen.MART_SELL_CONFIRM,
 		] and not host._mart_confirm_open()

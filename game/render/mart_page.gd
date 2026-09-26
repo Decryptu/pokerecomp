@@ -157,7 +157,8 @@ static func from_data(data: GameData) -> Gen2MartPage:
 ## The whole screen. [param state] is what the host holds: `money`, `rows` of
 ## `{name, price}` or `{cancel}`, `cursor` for the visible row the arrow stands
 ## on, `scrolled` for `wMenuScrollPosition` past zero, `text` for the speech box's
-## lines, `quantity` at -1 while no quantity box is up, and `subtotal`.
+## lines or `box` for a [Gen2TextBox] printing there, `quantity` at -1 while no
+## quantity box is up, and `subtotal`.
 func render(state: Dictionary) -> Image:
 	if font == null:
 		return null
@@ -166,7 +167,11 @@ func render(state: Dictionary) -> Image:
 	indices.resize(width * Gen2Screen.HEIGHT)
 	_draw_money(indices, width, int(state.get("money", 0)))
 	_draw_list(indices, width, state)
-	_draw_textbox(indices, width, String(state.get("text", "")))
+	var box: Gen2TextBox = state.get("box") as Gen2TextBox
+	if box != null:
+		box.compose(indices, width, TEXTBOX_AT * TILE)
+	else:
+		_draw_textbox(indices, width, String(state.get("text", "")))
 	if int(state.get("quantity", -1)) >= 0:
 		_draw_quantity(
 			indices, width, int(state["quantity"]), int(state.get("subtotal", 0))

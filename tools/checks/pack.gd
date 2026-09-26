@@ -186,6 +186,7 @@ func _verify_party_results() -> void:
 				if not host.party_result_holding():
 					break
 				host.advance_party_result()
+		_read_box(host)
 		host.handle_button(PokeButton.A)
 		_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK,
 			"%s: the pocket did not come back behind %s." % [_r.game_id, items.keys()[step]])
@@ -208,6 +209,23 @@ func _incompatible_machine(species: int) -> int:
 	return 0
 
 
+## The menu's box printed out and paged through, answering how many presses.
+func _read_box(host: Gen2StartMenuScreen) -> int:
+	var presses: int = 0
+	for _frame: int in BOX_FRAME_CAP:
+		if not host._box_printing():
+			break
+		if host._box.is_revealing():
+			host.advance_frame()
+		else:
+			host.handle_button(PokeButton.A)
+			presses += 1
+	return presses
+
+
+const BOX_FRAME_CAP: int = 2000
+
+
 static func _clicks(count: int) -> Array:
 	var out: Array = []
 	for _page: int in count:
@@ -224,12 +242,9 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 		return
 	host.handle_button(PokeButton.A)
 	host.handle_button(PokeButton.A)
-	var pages_turned: int = 0
-	while host._reading_question():
-		host.handle_button(PokeButton.A)
-		pages_turned += 1
+	var pages_turned: int = _read_box(host)
 	host.handle_button(PokeButton.A)
-	host.advance_save_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
+	host.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 	host.handle_button(PokeButton.A)
 	var gen1: bool = _r.data.generation == RomRegistry.GEN1
 	var want: String = Gen2WorldTMHM.not_compatible_text(
@@ -241,9 +256,9 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 		and sounds == _clicks(2) + _clicks(pages_turned) + _clicks(2) + [Gen2Sfx.SFX_WRONG],
 		"%s: the refused TM printed %s in mode %d under %s." % [
 			_r.game_id, host.get("_pack_result"), host.get("_mode"), sounds])
-	## `PrintText` pages the two sentences, so the box owes a press a page.
-	for _page: int in (host.get("_pack_result_pages") as Array).size():
-		host.handle_button(PokeButton.A)
+	## `PrintText` pages the two sentences, and the `prompt` owes the last press.
+	_read_box(host)
+	host.handle_button(PokeButton.A)
 	var mode: int = host.get("_mode")
 	_r.check(mode == (Gen2StartMenuScreen.Mode.PACK_TARGET if gen1 else Gen2StartMenuScreen.Mode.PACK),
 		"%s: the refusal's press landed in mode %d." % [_r.game_id, mode])
@@ -261,6 +276,7 @@ func _verify_rare_candy(
 	host.call("_select_pack_item", candy)
 	for _press: int in 3:
 		host.handle_button(PokeButton.A)
+	_read_box(host)
 	var want: String = String(GREW_LINES[_r.data.generation]).replace(
 		"<MON>", lead_name).replace("<L>", str(level + 1))
 	var party: Dictionary = host.get("_party_result")
@@ -288,6 +304,7 @@ func _verify_rare_candy(
 		)
 		_r.check(String(host.get("_pack_result")) == learned,
 			"%s: the level's move printed %s." % [_r.game_id, host.get("_pack_result")])
+		_read_box(host)
 		host.handle_button(PokeButton.A)
 	_r.check(host.get("_mode") != Gen2StartMenuScreen.Mode.PACK_RESULT
 		and save.party[0].level == level + 1,

@@ -42,12 +42,13 @@ static func _ball_tile(data: GameData) -> Image:
 ## `MenuTextbox` over the map: every box here carries `MENU_BACKUP_TILES`, so the
 ## map stays visible around it. Empty [param rows] draws no box at all.
 ##
-## [param note] is the box beside the list, `{rect, lines}` with each line
-## `{text, at}` from its own corner. [param message_box] is
+## [param message] is a string drawn whole or a [Gen2TextBox] printing, which
+## is drawn as it stands. [param note] is the box beside the list, `{rect, lines}`
+## with each line `{text, at}` from its own corner. [param message_box] is
 ## [constant MESSAGE_BOX] everywhere but `_ChangeBox`'s `hlcoord 0, 14`.
 ## [param marks] is a screen cell per pokeball tile drawn over the menu.
 func render(title: String, prompt: String, rows: Array, cursor: int,
-		message: String = "", box: Gen2MenuBox = null,
+		message: Variant = "", box: Gen2MenuBox = null,
 		note: Dictionary = {}, message_box: Rect2i = MESSAGE_BOX,
 		marks: Array = []) -> Image:
 	var image := Image.create_empty(
@@ -56,19 +57,18 @@ func render(title: String, prompt: String, rows: Array, cursor: int,
 	var over: bool = box != null and box.over_textbox
 	if not over:
 		_draw_menu(image, rows, cursor, box, marks)
-	var words: String = message if not message.is_empty() else prompt
-	if words.is_empty():
-		words = title
-	if not words.is_empty():
-		var text_rows: int = (message_box.size.y - 2) / 2
-		var pages: Array = Gen2TextLayout.lay_out(words, message_box.size.x - 2, text_rows)
-		var lines: PackedStringArray = pages[0] if not pages.is_empty() else PackedStringArray()
+	var printing: Gen2TextBox = message as Gen2TextBox if message is Gen2TextBox else null
+	var words: String = "" if printing != null else String(message)
+	for fallback: String in [prompt, title]:
+		if words.is_empty() and printing == null:
+			words = fallback
+	if printing != null or not words.is_empty():
 		var indices := PackedByteArray()
 		indices.resize(Gen2Screen.WIDTH * message_box.size.y * TILE)
-		font.draw_box(Gen2OptionsStore.current().textbox_frame, indices,
-			Gen2Screen.WIDTH, 0, 0, message_box.size.x, message_box.size.y)
-		for row: int in mini(text_rows, lines.size()):
-			font.draw_text(lines[row], indices, Gen2Screen.WIDTH, TILE, (2 + row * 2) * TILE)
+		if printing != null:
+			printing.compose(indices, Gen2Screen.WIDTH, Vector2i.ZERO)
+		else:
+			_draw_message(indices, words, message_box)
 		var part: Image = Gen2PicImage.from_indices(
 			indices, Gen2Screen.WIDTH, message_box.size.y * TILE, _colors()
 		)
@@ -81,6 +81,16 @@ func render(title: String, prompt: String, rows: Array, cursor: int,
 	if not note.is_empty():
 		_draw_note(image, note)
 	return image
+
+
+func _draw_message(indices: PackedByteArray, words: String, message_box: Rect2i) -> void:
+	var text_rows: int = (message_box.size.y - 2) / 2
+	var pages: Array = Gen2TextLayout.lay_out(words, message_box.size.x - 2, text_rows)
+	var lines: PackedStringArray = pages[0] if not pages.is_empty() else PackedStringArray()
+	font.draw_box(Gen2OptionsStore.current().textbox_frame, indices,
+		Gen2Screen.WIDTH, 0, 0, message_box.size.x, message_box.size.y)
+	for row: int in mini(text_rows, lines.size()):
+		font.draw_text(lines[row], indices, Gen2Screen.WIDTH, TILE, (2 + row * 2) * TILE)
 
 
 func _draw_menu(

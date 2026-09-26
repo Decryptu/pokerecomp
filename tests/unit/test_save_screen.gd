@@ -404,7 +404,8 @@ func test_the_party_list_refuses_a_transfer_that_would_leave_nobody_standing() -
 
 ## `engine/menus/save.asm`'s one sequence, which every save in the game runs:
 ## the routine's own question, `AskOverwriteSaveFile`, the SAVING box and
-## `SavedTheGame`. Only `SaveMenu`'s half of it was built.
+## `SavedTheGame`. Each step's box is its host's `PrintText`, and no frame and no
+## press counts until the host says it has printed.
 func test_the_save_sequence_asks_twice_and_then_spends_its_frames() -> void:
 	var written: Array = []
 	var prompt: Gen2SavePrompt = Gen2SavePrompt.open(
@@ -413,21 +414,25 @@ func test_the_save_sequence_asks_twice_and_then_spends_its_frames() -> void:
 			written.append(true)
 			return {"ok": true}
 	)
-	## A three-line question carries no cursor until it has been prompted past.
-	assert_eq(prompt.lines, Gen2SavePrompt.CHANGE_BOX_LINES)
-	assert_eq(prompt.cursor, -1)
-	prompt.confirm(true)
-	assert_eq(prompt.cursor, 0)
+	## A three-line question's third line is behind `_ContText`.
+	assert_eq(prompt.text(), "When you change a\n#MON BOX, data%swill be saved. OK?"
+		% Gen2TextStream.SCROLL_BREAK)
+	assert_false(prompt.reads_joypad(), "the question is read once it has printed")
+	prompt.text_printed()
 	prompt.confirm(true)
 	assert_eq(prompt.lines, Gen2SavePrompt.CHANGE_BOX_LINES, "the answer is held first")
 	assert_false(prompt.reads_joypad(), "and no press is read meanwhile")
 	_spend_answer_hold(prompt)
 	assert_eq(prompt.lines, Gen2SavePrompt.OVERWRITE_LINES)
-	prompt.confirm(true)
+	prompt.text_printed()
 	prompt.confirm(true)
 	_spend_answer_hold(prompt)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
+	assert_eq(prompt.letter_speed(), &"medium", "`SavingDontTurnOffThePower` forces it")
 
+	prompt.frames_elapsed(Gen2SavePrompt.SAVING_FRAMES)
+	assert_eq(written.size(), 0, "nothing counts while the box prints")
+	prompt.text_printed()
 	prompt.frames_elapsed(Gen2SavePrompt.SAVING_FRAMES - 1)
 	assert_eq(written.size(), 0, "the box is up for sixteen frames first")
 	prompt.frames_elapsed(1)
@@ -435,8 +440,11 @@ func test_the_save_sequence_asks_twice_and_then_spends_its_frames() -> void:
 	assert_true(prompt.writing_now())
 	prompt.frames_elapsed(Gen2SavePrompt.WRITE_FRAMES)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVED)
-	assert_true(prompt.sfx_owed())
 	assert_eq(prompt.lines[0], "RED saved")
+	assert_false(prompt.take_sfx(), "`SFX_SAVE` waits for the line")
+	prompt.text_printed()
+	assert_true(prompt.take_sfx())
+	assert_false(prompt.take_sfx(), "once")
 	prompt.frames_elapsed(Gen2SavePrompt.DONE_FRAMES)
 	assert_true(prompt.finished())
 	assert_false(prompt.refused())
@@ -448,8 +456,8 @@ func test_a_no_refuses_and_the_link_save_opens_on_the_overwrite_question() -> vo
 	var refused: Gen2SavePrompt = Gen2SavePrompt.open(
 		Gen2SavePrompt.Kind.MOVE_MON, "RED", Callable()
 	)
-	assert_true(refused.confirm(true), "the first A is the _ContText prompt")
-	assert_false(refused.confirm(false))
+	refused.text_printed()
+	refused.confirm(false)
 	_spend_answer_hold(refused)
 	assert_true(refused.finished())
 	assert_true(refused.refused())
@@ -459,13 +467,16 @@ func test_a_no_refuses_and_the_link_save_opens_on_the_overwrite_question() -> vo
 			return {"ok": false, "reason": &"disk_full"}
 	)
 	assert_eq(quick.step, Gen2SavePrompt.Step.OVERWRITE)
-	quick.confirm(true)
+	quick.text_printed()
 	quick.confirm(true)
 	_spend_answer_hold(quick)
+	quick.text_printed()
 	quick.frames_elapsed(Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES)
 	## A write that failed is this port's own step, and it ends as a NO does.
 	assert_eq(quick.step, Gen2SavePrompt.Step.FAILED)
 	assert_string_contains(quick.lines[1], "disk_full")
+	assert_eq(quick.letter_speed(), &"instant")
+	quick.text_printed()
 	quick.confirm(true)
 	assert_true(quick.refused())
 
@@ -491,18 +502,22 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_ASK_LINES)
 	assert_eq(prompt.cursor, 0)
 
+	prompt.text_printed()
 	prompt.confirm(true)
 	_spend_answer_hold(prompt)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
 	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_SAVING_LINES)
+	assert_eq(prompt.letter_speed(), &"instant", "`NowSavingString` is a `PlaceString`")
 	assert_eq(written.size(), 1, "SaveGameData ran before the string went up")
 	assert_true(prompt.writing_now())
+	prompt.text_printed()
 	prompt.frames_elapsed(119)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
 	prompt.frames_elapsed(1)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVED)
-	assert_true(prompt.sfx_owed())
 	assert_eq(prompt.lines, ["RED saved", "the game!"])
+	prompt.text_printed()
+	assert_true(prompt.take_sfx())
 	prompt.frames_elapsed(Gen2SavePrompt.DONE_FRAMES)
 	assert_true(prompt.finished())
 
@@ -510,6 +525,7 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 		Gen2SavePrompt.Kind.GEN1_MENU, "RED", Callable()
 	)
 	refused.frames_elapsed(30)
+	refused.text_printed()
 	refused.confirm(false)
 	_spend_answer_hold(refused)
 	assert_true(refused.refused())
@@ -523,14 +539,17 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 	assert_true(yellow.holding_info())
 	yellow.frames_elapsed(1)
 	assert_eq(yellow.lines, Gen2SavePrompt.GEN1_ASK_LINES)
+	yellow.text_printed()
 	yellow.confirm(true)
 	_spend_answer_hold(yellow)
 	assert_eq(yellow.lines, Gen2SavePrompt.YELLOW_SAVING_LINES)
+	yellow.text_printed()
 	yellow.frames_elapsed(128)
 	assert_eq(yellow.step, Gen2SavePrompt.Step.SAVED)
-	assert_false(yellow.sfx_owed())
+	yellow.text_printed()
+	assert_false(yellow.take_sfx())
 	yellow.frames_elapsed(10)
-	assert_true(yellow.sfx_owed())
+	assert_true(yellow.take_sfx())
 	yellow.frames_elapsed(30)
 	assert_true(yellow.finished())
 

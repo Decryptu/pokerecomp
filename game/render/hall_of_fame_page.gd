@@ -75,15 +75,9 @@ const PLAY_TIME_HOURS: Vector2i = Vector2i(3, 9)
 const PLAY_TIME_HOUR_DIGITS: int = 3
 const PLAY_TIME_COLON: Vector2i = Vector2i(6, 9)
 const PLAY_TIME_MINUTES: Vector2i = Vector2i(7, 9)
-## `PrintText`'s own first line (`hlcoord 1, 14`) and the interior it prints
-## into, which is every text box's: one tile of margin each side and two lines
-## two rows apart.
-const TEXT_AT: Vector2i = Vector2i(1, 14)
-const TEXT_COLUMNS: int = MON_BOTTOM_BOX.size.x - 2
-const TEXT_ROWS: int = 2
-const TEXT_LINE_SPACING: int = 2
-## `PrintText`'s own `hlcoord 1, 14` again, over a cleared screen.
+## `PrintText`'s own `hlcoord 1, 14`, over a cleared screen, lines two rows apart.
 const SAVING_AT: Vector2i = Vector2i(1, 14)
+const TEXT_LINE_SPACING: int = 2
 
 ## `Textbox` draws with wTextboxFrame, which the in-game OPTION menu's FRAME row
 ## and the launcher's settings both write, so the panel is drawn in whichever
@@ -222,14 +216,8 @@ func _draw_gen1_player(page: Dictionary, indices: PackedByteArray) -> void:
 	_gen1_text(indices, width, String(page.get("minutes", "")), colon_at + Vector2i(1, 0))
 	_gen1_text(indices, width, GEN1_MONEY_LABEL, GEN1_MONEY_LABEL_AT)
 	_gen1_text(indices, width, Gen2MartPage.money_string(int(page.get("money", 0))), GEN1_MONEY_AT)
-	if not page.has("lines"):
-		return
-	_gen1_box(indices, width, MON_BOTTOM_BOX)
-	var lines: Array = page.get("lines", [])
-	for index: int in lines.size():
-		_gen1_text(
-			indices, width, String(lines[index]), TEXT_AT + Vector2i(0, index * TEXT_LINE_SPACING)
-		)
+	if page.has("text"):
+		_gen1_box(indices, width, MON_BOTTOM_BOX)
 
 
 func _gen1_box(indices: PackedByteArray, width: int, box: Rect2i) -> void:
@@ -300,12 +288,6 @@ func _draw_player(page: Dictionary, indices: PackedByteArray) -> void:
 		PLAY_TIME_COLON.x * TILE, PLAY_TIME_COLON.y * TILE, Gen2Text.FONT_MAIN
 	)
 	_text(indices, width, String(page.get("minutes", "")), PLAY_TIME_MINUTES)
-	var lines: Array = page.get("lines", [])
-	for index: int in lines.size():
-		_text(
-			indices, width, String(lines[index]),
-			TEXT_AT + Vector2i(0, index * TEXT_LINE_SPACING)
-		)
 
 
 ## `InitDisplayForHallOfFame`: no box, since it prints into a cleared tilemap.

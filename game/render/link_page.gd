@@ -255,15 +255,7 @@ func draw_trade(state: Dictionary) -> PackedByteArray:
 			FOOTER_CURSOR_ROW
 		))
 
-	var message: Array = state.get("message", [])
-	if not message.is_empty():
-		_box(indices, MESSAGE_BOX)
-		var spacing: int = int(state.get("message_spacing", MESSAGE_PRINTED_SPACING))
-		for line: int in message.size():
-			_text(
-				indices, String(message[line]),
-				MESSAGE_AT + Vector2i(0, line * spacing)
-			)
+	_draw_message(indices, state, MESSAGE_BOX, MESSAGE_AT)
 	var confirm: int = int(state.get("confirm", -1))
 	if confirm >= 0:
 		_box(indices, CONFIRM_BOX)
@@ -307,12 +299,7 @@ func draw_gen1_trade(state: Dictionary) -> PackedByteArray:
 		return indices
 	if not bool(state.get("blank", false)):
 		_draw_gen1_lists(indices, state)
-	var message: Array = state.get("message", [])
-	if not message.is_empty():
-		_box(indices, GEN1_MESSAGE_BOX)
-		var spacing: int = int(state.get("message_spacing", MESSAGE_PRINTED_SPACING))
-		for line: int in message.size():
-			_text(indices, String(message[line]), GEN1_MESSAGE_AT + Vector2i(0, line * spacing))
+	_draw_message(indices, state, GEN1_MESSAGE_BOX, GEN1_MESSAGE_AT)
 	var confirm: int = int(state.get("confirm", -1))
 	if confirm >= 0:
 		_box(indices, GEN1_CONFIRM_BOX)
@@ -544,6 +531,24 @@ func _draw_cursor(indices: PackedByteArray, state: Dictionary) -> void:
 
 ## `_LinkTextbox`, whose [param box] is the interior the source passes in `b`
 ## and `c`: the border is drawn one cell outside it on every side.
+func _draw_message(
+	indices: PackedByteArray, state: Dictionary, frame: Rect2i, first: Vector2i
+) -> void:
+	var printing: Gen2TextBox = state.get("box") as Gen2TextBox
+	var message: Array = state.get("message", [])
+	if printing == null and message.is_empty():
+		return
+	_box(indices, frame)
+	if printing != null:
+		for glyph: Array in printing.glyphs():
+			var cell: Vector2i = frame.position + (glyph[0] as Vector2i)
+			font.draw_code(int(glyph[1]), indices, WIDTH, cell.x * TILE, cell.y * TILE)
+		return
+	var spacing: int = int(state.get("message_spacing", MESSAGE_PRINTED_SPACING))
+	for line: int in message.size():
+		_text(indices, String(message[line]), first + Vector2i(0, line * spacing))
+
+
 func _box(indices: PackedByteArray, box: Rect2i) -> void:
 	var left: int = box.position.x
 	var top: int = box.position.y
