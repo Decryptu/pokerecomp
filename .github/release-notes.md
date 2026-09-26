@@ -1,14 +1,31 @@
 <!-- Rewrite from the first release heading, `## Added`, `## Changed` or `## Fixed`, for each release. The text below
 the release changes is standing guidance with a {VERSION} placeholder. -->
 
+## Added
+
+- For mods, one set of calls answers whether a cell is land, water or wall, whether it is a doorway, and which ways a ledge drops, on all six cartridges. Mod API 49.
+
 ## Changed
 
-- For mods, the cells offered to visible wild Pokémon only include places the player can reach. The list is refreshed when a script opens a door or Cut clears grass.
+- Talking to someone or reading a sign plays the click the games make.
+- On Gold, Silver and Crystal, the phone list keeps the order you registered numbers in, and the random caller is picked from that order.
+- A Pokémon given to you while your party is full goes to the front of the box and keeps the nickname you chose. The message names the species.
 
 ## Fixed
 
-- Wild Pokémon shown on the map by a mod no longer appear where the player can never go, like the floor outside the walls of Ice Path and other caves.
-- On Gold, Silver and Crystal, you can no longer walk, open the menu or press A while the Fly, Cut or Headbutt animation plays.
+- On Gold, Silver and Crystal, incoming phone calls only rang while you stood on a door, stairs or a cave entrance. They now ring anywhere but those tiles.
+- Items rearranged in the bag with SELECT went back to item order after loading a save.
+- Walking through a door, onto a scripted spot or into a trainer's view no longer counts as a step for Repel, poison, eggs, friendship or the Day-Care. Crossing onto the next route now counts.
+- A hatching egg, poison damage or a Repel running out ends that step, so no wild Pokémon appears behind it.
+- Daily events, Pokérus and the lucky number count every day that passes, including a week away and days with the game closed.
+- The Bug-Catching Contest lasts its full 20 minutes and ends even if you stand still.
+- The Lucky Number Show at the Radio Tower opens again after you win a prize, and the radio announces the same number.
+- Swarms on Gold and Silver end with the day.
+- The Battle Tower hands over its reward, and only says the pack is full when the item pocket is.
+- An Unown sent to the PC because your party is full now enters the Unown dex.
+- Pokémon given by other trainers carry their original owner's ID, so they gain traded experience.
+- Mystery Gift's daily limit lifts once a day has passed.
+- Gold and Silver no longer show a trainer gender mark on a Pokémon's summary, which only Crystal has.
 
 ## Which file
 
