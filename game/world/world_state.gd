@@ -416,21 +416,15 @@ const INITIAL_VARIABLE_SPRITES: Dictionary = {
 ## battles. Never null; see [Gen2BattleTower].
 var _battle_tower: Gen2BattleTower = Gen2BattleTower.new()
 
-## `SECTION "Link Battle Data"`'s WRAM half and the cable behind it. Neither is
-## in [method to_dict]: the cartridge keeps none of `wLinkMode`,
-## `wChosenCableClubRoom` or the serial registers across a reset, and a transport
-## is injected by whoever owns the peer rather than saved with the world. A
-## slot loaded from disk therefore starts outside the cable club, which is the
-## truth about it.
+## `SECTION "Link Battle Data"`'s WRAM half and the cable, both left out of
+## [method to_dict]: no `wLinkMode` or serial register survives a reset, so a
+## loaded slot starts outside the cable club. The owner of the peer injects it.
 var _link_session: Gen2LinkSession = Gen2LinkSession.new()
 var _link_transport: Gen2LinkTransport = Gen2LinkTransport.new()
 
-## `sMysteryGiftData`, mirrored here so the three specials can read and write it
-## the way `OpenSRAM` does rather than through a runtime request: a scene script
-## reaches `CheckMysteryGift` on the frame the map loads and has nothing to wait
-## on. It is deliberately outside [method to_dict], because the section is not
-## part of the checksummed save on the cartridge either: [Gen2SaveData] owns it
-## and `RestoreMysteryGift` and `BackupMysteryGift` are what move it in and out
+## `sMysteryGiftData`, mirrored so the specials read it as `OpenSRAM` does: a
+## scene script reaches `CheckMysteryGift` on the frame the map loads. Outside
+## [method to_dict] as it is outside the checksummed save; [Gen2SaveData] owns it
 ## ([method Gen2MysteryGift.restore], [method Gen2MysteryGift.backup]).
 var _mystery_gift: Dictionary = Gen2MysteryGift.default_section()
 
@@ -1004,16 +998,14 @@ func bargain_merchant_closed(crystal: bool = true) -> bool:
 	)
 
 
-## The engine flag one badge occupies on the table [param crystal] selects,
-## indexed in source badge order: 0 is ZEPHYRBADGE and 15 EARTHBADGE. Out of
-## range answers -1, which is_engine_flag_active() reads as inactive. This is
-## what a CheckBadge caller uses, so no caller indexes the two arrays itself.
 ## The Generation 1 badge [param bit] of `wObtainedBadges` as one of the sixteen
 ## rows above, which is the one place Kanto's eight are indexed from.
 static func gen1_badge_flag(bit: int) -> int:
 	return badge_flag(KANTO_BADGE_FIRST + bit)
 
 
+## A badge's engine flag in source order (0 ZEPHYRBADGE, 15 EARTHBADGE) on the
+## table [param crystal] selects, or -1 out of range, which reads as inactive.
 static func badge_flag(badge: int, crystal: bool = true) -> int:
 	var flags: Array[int] = BADGE_ENGINE_FLAGS if crystal else BADGE_ENGINE_FLAGS_GOLD_SILVER
 	return flags[badge] if badge >= 0 and badge < flags.size() else -1
@@ -1296,12 +1288,9 @@ func set_blue_card_balance(points: int) -> void:
 	changed.emit()
 
 
-## True unless [param data] is a verified Gold or Silver cache, matching
-## `Gen2WorldScriptRunner._crystal_commands()`. Both engine flag tables and
-## `_GetVarAction.CountBadges` agree except on this table's offset, so every
-## profile-dependent flag lookup keys off the question the script command-width
-## split already answers. A null cache answers Crystal; a caller holding only an
-## id asks [method is_crystal_game_id], which knows "not told" from "told Gold".
+## True unless [param data] is a Gold or Silver cache, as
+## `Gen2WorldScriptRunner._crystal_commands()` answers; a null cache is Crystal.
+## A caller holding only an id asks [method is_crystal_game_id].
 static func is_crystal_profile(data: GameData) -> bool:
 	return data == null or is_crystal_game_id(data.id)
 
@@ -2342,12 +2331,9 @@ func _copy_roaming_mons(source: Array) -> Array:
 	return out
 
 
-## `BattleEnd_HandleRoamMons`, which every roaming battle ends through. A win,
-## the source's word for caught or defeated alike, empties the struct: HP 0, the
-## map bytes `GROUP_N_A`/`MAP_N_A` and the species byte 0, so
-## `CheckEncounterRoamMon` can never select that slot again. Any other ending
-## stores the HP the fight left. [param dvs] is the word `.Roaming` rolled on the
-## first encounter and read back after, so a roamer keeps the Pokemon it was.
+## `BattleEnd_HandleRoamMons`. A win, caught or defeated, empties the struct (HP,
+## map and species 0), so `CheckEncounterRoamMon` never selects it again; any
+## other ending stores the HP left. [param dvs] is `.Roaming`'s first roll, kept.
 func note_roam_battle_end(species: int, won: bool, hp: int, dvs: int) -> bool:
 	for index: int in _roaming_mons.size():
 		var mon: Dictionary = _roaming_mons[index]

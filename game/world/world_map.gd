@@ -107,6 +107,51 @@ func block_at(block_x: int, block_y: int) -> int:
 	return blocks[at] if at < blocks.size() else 0
 
 
+## [method Gen2WorldCollision.cell_code] at [param cell]: the records, or the block
+## drawn past the map or in [param changed_blocks], `changed_blocks()`'s shape.
+func code_at(data: GameData, cell: Vector2i, changed_blocks: Dictionary = {}) -> int:
+	var width: int = Gen2Layout.MAP_BLOCK_CELL_WIDTH
+	var block := Vector2i(floori(float(cell.x) / width), floori(float(cell.y) / width))
+	if not changed_blocks.has(block) and collision_at(cell.x, cell.y) >= 0:
+		return collision_at(cell.x, cell.y)
+	var drawn: int = Gen2WorldAPI.drawn_block_of(data, self, int(changed_blocks[block])) \
+		if changed_blocks.has(block) else Gen2WorldAPI.drawn_block_for(data, self, block.x, block.y)
+	return Gen2WorldCollision.cell_code(
+		data, _tileset_of(data), drawn,
+		posmod(cell.x, width), posmod(cell.y, width)
+	)
+
+
+## `Gen2WorldCollision.LAND_TILE`, `WATER_TILE` or `WALL_TILE` at [param cell].
+func permission_at(data: GameData, cell: Vector2i, changed_blocks: Dictionary = {}) -> int:
+	return Gen2WorldCollision.cell_permission(
+		data, _tileset_of(data), code_at(data, cell, changed_blocks)
+	)
+
+
+func is_door_at(data: GameData, cell: Vector2i, changed_blocks: Dictionary = {}) -> bool:
+	return Gen2WorldCollision.cell_is_door(
+		data, _tileset_of(data), code_at(data, cell, changed_blocks)
+	)
+
+
+## The directions a ledge hop leaves [param cell] in, over the ledge in the next.
+func ledge_hops_at(
+	data: GameData, cell: Vector2i, changed_blocks: Dictionary = {}
+) -> Array[Vector2i]:
+	var hops: Array[Vector2i] = []
+	var here: int = code_at(data, cell, changed_blocks)
+	for direction: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		var ahead: int = code_at(data, cell + direction, changed_blocks)
+		if Gen2WorldCollision.cell_hops(data, _tileset_of(data), here, ahead, direction):
+			hops.append(direction)
+	return hops
+
+
+func _tileset_of(data: GameData) -> Gen2WorldTileset:
+	return data.world_tileset(tileset) if data != null else null
+
+
 func collision_at(cell_x: int, cell_y: int) -> int:
 	if cell_x < 0 or cell_x >= collision_width or cell_y < 0 or cell_y >= collision_height:
 		return -1
