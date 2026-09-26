@@ -1,31 +1,44 @@
 <!-- Rewrite from the first release heading, `## Added`, `## Changed` or `## Fixed`, for each release. The text below
 the release changes is standing guidance with a {VERSION} placeholder. -->
 
-## Added
-
-- For mods, one set of calls answers whether a cell is land, water or wall, whether it is a doorway, and which ways a ledge drops, on all six cartridges. Mod API 49.
-
 ## Changed
 
-- Talking to someone or reading a sign plays the click the games make.
-- On Gold, Silver and Crystal, the phone list keeps the order you registered numbers in, and the random caller is picked from that order.
-- A Pokémon given to you while your party is full goes to the front of the box and keeps the nickname you chose. The message names the species.
+- Menus click when you press A or B, including every party list, the bag and the battle menus.
+- Holding a direction keeps scrolling only in the menus that do so in the games.
+- The bag list stops at its top and bottom.
+- A scrolling list shows its down arrow only while CANCEL is off screen. The elevator, mailbox, Buena's prizes and long decoration lists end on CANCEL.
+- On Gold, Silver and Crystal, SELECT reorders moves during a battle.
+- The battle menu and move cursors return to the top when a new Pokémon is sent out, and the START menu cursor resets after a battle. The bag opens on its first pocket after a battle.
+- A critical hit and the type matchup are separate messages, and a move that hits several times names the matchup once.
+- Colosseum link battles on Gold, Silver and Crystal show the versus screen first, then the result and your link record.
 
 ## Fixed
 
-- On Gold, Silver and Crystal, incoming phone calls only rang while you stood on a door, stairs or a cave entrance. They now ring anywhere but those tiles.
-- Items rearranged in the bag with SELECT went back to item order after loading a save.
-- Walking through a door, onto a scripted spot or into a trainer's view no longer counts as a step for Repel, poison, eggs, friendship or the Day-Care. Crossing onto the next route now counts.
-- A hatching egg, poison damage or a Repel running out ends that step, so no wild Pokémon appears behind it.
-- Daily events, Pokérus and the lucky number count every day that passes, including a week away and days with the game closed.
-- The Bug-Catching Contest lasts its full 20 minutes and ends even if you stand still.
-- The Lucky Number Show at the Radio Tower opens again after you win a prize, and the radio announces the same number.
-- Swarms on Gold and Silver end with the day.
-- The Battle Tower hands over its reward, and only says the pack is full when the item pocket is.
-- An Unown sent to the PC because your party is full now enters the Unown dex.
-- Pokémon given by other trainers carry their original owner's ID, so they gain traded experience.
-- Mystery Gift's daily limit lifts once a day has passed.
-- Gold and Silver no longer show a trainer gender mark on a Pokémon's summary, which only Crystal has.
+- On Gold, Silver and Crystal, a trainer's switch or item use happens at its proper point in the turn, and Berserk Gene and flinching are handled before you choose a move.
+- A move disabled or drained by Spite after you chose it fails with its own message and no longer turns into Struggle. An Encored move is used even while disabled.
+- Poison, burn and other end-of-turn damage stop once the battle is decided, and experience is paid as each Pokémon faints.
+- Toxic damage grows by the amount the games use, and Heal Bell no longer resets it.
+- Wrap and similar moves no longer hurt a Pokémon behind a Substitute.
+- A fainted Pokémon loses its status condition.
+- Tri Attack causes a burn, freeze or paralysis only on its 20% chance.
+- Gust and Twister double their damage only against Fly, Earthquake and Magnitude only against Dig, and Stomp only against Minimize.
+- King's Rock can no longer make a missed move flinch. MiracleBerry cures confusion.
+- Future Sight, one-hit KO moves against a higher level, Counter, Mirror Coat, Present, Bide, Mirror Move, Psych Up, Belly Drum and Swagger show the games' messages when they fail. A move that cannot affect the target's type says so even when it would have missed.
+- Belly Drum at maximum Attack fails without costing HP. Swagger at maximum Attack misses and does not confuse.
+- Out of Park Balls, a Bug-Catching Contest battle ends.
+- Trainers' loss lines appear only in battles you are allowed to lose and at the Battle Tower.
+- Wild victory music starts when the wild Pokémon faints.
+- Opposing trainers choose their next Pokémon by type matchup, as the games do.
+- Knocking out a switching Pokémon with Pursuit gives no experience.
+- Baton Pass keeps Mean Look and Spider Web on the opponent. While trapped, choosing a Pokémon to switch to says so and keeps you on the party list.
+- A transformed Pokémon gains experience and learns moves as its own species. Pokérus doubles stat experience.
+- A Pokémon on the bench that gains several levels shows one message, and new moves come after all of them.
+- The experience bar fills at the games' rate and is empty at level 100.
+- Catching a Pokémon still pays Pay Day money and lets your Pokémon evolve.
+- The Exp. Share message on Gold, Silver and Crystal no longer says EXP.ALL.
+- The link record orders its trainers as the games do.
+- On Gold and Silver, wild Hoothoot and Noctowl are asleep outside the night, and wild Pidgey and Spearow at night.
+- The Dragon Shrine quiz ignores B.
 
 ## Which file
 
