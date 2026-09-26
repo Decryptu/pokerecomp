@@ -770,11 +770,16 @@ func _mystery_gift_transport(
 	return Gen2MysteryGiftTransport.new()
 
 
-## Which day the countdown behind the daily limit is measured in. A slot carries
-## the world day it was saved on; one with no world yet is day zero, which is
-## where a new game starts.
+## `wCurDay` as the RTC has it now: the slot's own, moved on by the real time
+## since it was written. One with no world yet is day zero, where a game starts.
 func _mystery_gift_day(save: Gen2SaveData) -> int:
-	return save.world.world_day if save.world != null else 0
+	var world: Gen2WorldSnapshot = save.world
+	if world == null:
+		return 0
+	return int(Gen2WorldClock.catch_up(
+		world.world_day, world.world_hour, world.world_minute, world.world_clock_stamp,
+		-1.0, world.world_cur_day,
+	)["cur_day"])
 
 
 ## `CountSetBits` over `wPokedexCaught`, which is what a partner's block carries

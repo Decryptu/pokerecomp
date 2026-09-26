@@ -1445,6 +1445,29 @@ func test_save_writes_a_snapshot_to_the_injected_save_without_touching_disk() ->
 	assert_eq(closed.size(), 1)
 
 
+## A pocket lists items in receipt order, which SELECT rearranges, so the file
+## has to keep the order the bag was in rather than sort it by item number.
+func test_a_pocket_keeps_its_order_through_the_save_file() -> void:
+	var state := Gen2WorldState.new(
+		{}, {}, {Fixture.BattleFixture.FULL_HEAL: 1, Fixture.BattleFixture.POTION: 2}
+	)
+	var world := Gen2WorldAPI.open(
+		_data, Fixture.MAP_GROUP, Fixture.MAP_NUMBER, Vector2i(7, 6), state
+	)
+	var save := Gen2SaveStore.create_development_save(_data, 0)
+	save.world = world.snapshot()
+	assert_true(Gen2SaveStore.save(save, _data)["ok"])
+
+	var loaded: Dictionary = Gen2SaveStore.load_result(_data.id, _data.sha1, 0, _data)
+	assert_true(loaded["ok"], loaded["message"])
+	var items: Array = (Gen2WorldPack.build(
+		_data, (loaded["save"] as Gen2SaveData).world.world_state
+	)[0] as Dictionary)["items"]
+	assert_eq(items.map(func(row: Dictionary) -> int: return int(row["item"])),
+		[Fixture.BattleFixture.FULL_HEAL, Fixture.BattleFixture.POTION])
+	Gen2SaveStore.delete_slot(_data.id, _data.sha1, 0)
+
+
 ## Covers three of _open_start_menu()'s busy-state guards directly; the fourth
 ## (phone_ring_active()) is the identical one-line pattern and is exercised
 ## for the rest of the screen by test_world_service_screen.gd's phone cases.

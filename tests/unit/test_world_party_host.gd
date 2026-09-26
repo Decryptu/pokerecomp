@@ -154,6 +154,21 @@ func test_givepoke_appends_a_real_save_mon_and_resumes_the_script() -> void:
 	assert_eq(_save.party[2].original_trainer, _save.player_name)
 
 
+## `.otnameloop` writes `RANDY_OT_ID` over a party gift that names an OT, so
+## Kenya is traded by the rules the battle's experience and the Seer read.
+func test_a_gift_that_names_an_ot_carries_randys_id() -> void:
+	_set_script(0x6250)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {}, _save, false, _random
+	)
+	assert_true(result["ok"], JSON.stringify(result))
+	var gift: Gen2SaveMon = _save.party[-1]
+	assert_eq(gift.nickname, "KENYA")
+	assert_eq(gift.original_trainer, "RANDY")
+	assert_eq(gift.ot_id, Gen2WorldPartyHost.RANDY_OT_ID)
+
+
 func test_giveegg_records_an_egg_without_pretending_it_can_battle() -> void:
 	_set_script(0x6210)
 	_world.dispatch_script_events(Vector2i(2, 2))
@@ -165,6 +180,8 @@ func test_giveegg_records_an_egg_without_pretending_it_can_battle() -> void:
 	assert_true(_save.party[2].is_egg)
 	assert_eq(_save.party[2].hp, 0)
 	assert_eq(result["transaction"]["kind"], &"egg")
+	## `GiveEgg` ends `and a`, so `Script_giveegg`'s `ret nc` leaves its `xor a`.
+	assert_eq(int(result["results"][0]["events"][0]["result"]["script_value"]), 0)
 
 
 ## `GiveANickname_YesNo` answered YES, then `InitNickname`. The screen owns both
@@ -291,11 +308,14 @@ func test_no_contest_catch_answers_no_catch_and_writes_nothing() -> void:
 	assert_eq(_save.party.size(), before)
 
 
-## `.skip_nickname` copies `wMonOrItemNameBuffer` over `sBoxMonNicknames` behind
-## `InitNickname`, so a boxed gift always ends up with the species name.
-func test_a_boxed_gift_keeps_the_species_name_over_the_answer() -> void:
+## `InitNickname` writes the answer into `wMonOrItemNameBuffer`, which
+## `.skip_nickname` copies to `sBoxMonNicknames`; `SendMonIntoBox` shifts the box
+## to put the gift first, and `LoadEnemyMon` outside a battle gives it the DVs
+## `GetTrainerDVs` reads for class zero.
+func test_a_boxed_gift_keeps_its_name_goes_first_and_takes_the_fixed_dvs() -> void:
 	while _save.party.size() < Gen2SaveData.MAX_PARTY:
 		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	_save.boxes[0].put(Gen2SaveMon.from_dict(_save.party[0].to_dict()), 0)
 	_set_script(0x6200)
 	_world.dispatch_script_events(Vector2i(2, 2))
 	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
@@ -304,25 +324,32 @@ func test_a_boxed_gift_keeps_the_species_name_over_the_answer() -> void:
 	assert_true(result["ok"])
 	assert_eq(result["transaction"]["destination"]["destination"], &"box")
 	assert_eq(_save.boxes[0].slots[0].species, 25)
-	assert_eq(_save.boxes[0].slots[0].nickname, String(_data.species(25)["name"]))
+	assert_eq(_save.boxes[0].slots[0].nickname, "SPARKY")
+	assert_eq(_save.boxes[0].slots[0].dvs, Gen2WorldPartyHost.boxed_gift_dvs(_data))
+	assert_eq(_save.boxes[0].slots[1].species, _save.party[0].species, "shifted behind it")
 	assert_eq(int(result["results"][0]["events"][0]["result"]["script_value"]), 1)
 
 
-## `GiveEgg` is `TryAddMonToParty` and nothing else, so a full party boxes no egg
-## and `Script_giveegg`'s own `xor a` is what the script reads.
-func test_a_full_party_boxes_no_egg_and_answers_zero() -> void:
+## `GiveEgg` never reads `TryAddMonToParty`'s carry and writes the egg over the
+## party's last slot regardless, so a full party loses its sixth member to it
+## and nothing reaches the box.
+func test_a_full_party_turns_its_last_member_into_the_egg() -> void:
 	while _save.party.size() < Gen2SaveData.MAX_PARTY:
 		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
-	var before: Dictionary = _save.to_dict()
 	_set_script(0x6210)
 	_world.dispatch_script_events(Vector2i(2, 2))
 	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
 		_world, {}, _save, false, _random
 	)
 	assert_true(result["ok"])
-	assert_false(result["transaction"]["accepted"])
 	assert_eq(int(result["results"][0]["events"][0]["result"]["script_value"]), 0)
-	assert_eq(_save.to_dict(), before)
+	assert_eq(_save.party.size(), Gen2SaveData.MAX_PARTY)
+	var last: Gen2SaveMon = _save.party[-1]
+	assert_true(last.is_egg)
+	assert_eq(last.species, 25)
+	assert_eq(last.nickname, "EGG")
+	assert_eq(last.hp, 0)
+	assert_null(_save.boxes[0].slots[0])
 
 
 ## `DoNPCTrade` is `RemoveMonFromPartyOrBox` then `TryAddMonToParty`, so the
@@ -1675,9 +1702,9 @@ func test_catching_an_unown_into_the_party_enters_its_letter_in_the_unown_dex() 
 	assert_eq(_world.state.unown_caught_count(), 1, "the same letter twice is one entry")
 
 
-## The routine runs under `wMonType` PARTYMON alone, so an Unown that goes
-## straight to the PC is caught without entering the Unown dex.
-func test_an_unown_caught_into_a_box_does_not_enter_the_unown_dex() -> void:
+## `SendMonIntoBox` runs `UpdateUnownDex` itself, so an Unown that goes straight
+## to the PC enters the Unown dex as one that reaches the party does.
+func test_an_unown_caught_into_a_box_enters_the_unown_dex() -> void:
 	while _save.party.size() < Gen2SaveData.MAX_PARTY:
 		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
 	var wild: Gen2BattleMon = Gen2BattleMon.create(
@@ -1689,7 +1716,7 @@ func test_an_unown_caught_into_a_box_does_not_enter_the_unown_dex() -> void:
 	)
 	assert_eq(result["destination"]["destination"], &"box")
 	assert_true(_world.state.has_caught_species(Gen2Layout.UNOWN_SPECIES))
-	assert_true(_world.state.unown_dex().is_empty())
+	assert_false(_world.state.unown_dex().is_empty())
 
 
 func test_failed_poke_ball_still_consumes_the_ball_without_adding_a_mon() -> void:
@@ -1728,7 +1755,17 @@ func _add_party_scripts() -> void:
 	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6240)] = [
 		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_GIVE_ODD_EGG, 0, 0x91,
 	]
+	## `givepoke` naming its nickname and OT, the shape of Randy's Spearow.
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6250)] = [
+		0x2D, 25, 5, 0, 1, 0x00, 0x63, 0x10, 0x63, 0x91,
+	]
 	RomCache.write_json(RomCache.world_scripts_path(Fixture.directory()), scripts)
+	var texts: Dictionary = RomCache.read_json(RomCache.world_text_path(Fixture.directory()))
+	for named: Array in [[0x6300, "KENYA"], [0x6310, "RANDY"]]:
+		var bytes: Array = Array(Gen2Text.encode(String(named[1])))
+		bytes.append(Gen2WorldScript.TEXT_TERMINATOR)
+		texts[Gen2WorldScript.pointer_key(Fixture.BANK, int(named[0]))] = bytes
+	RomCache.write_json(RomCache.world_text_path(Fixture.directory()), texts)
 
 
 func _add_trade_record() -> void:
@@ -1965,12 +2002,12 @@ func test_hatching_writes_the_row_the_source_writes() -> void:
 ## Pokemon's, and the time of day plus one.
 func test_caught_data_is_the_trainers_rather_than_the_pokemons() -> void:
 	var mon: Gen2SaveMon = _save.party[0]
-	Gen2WorldPartyHost.set_caught_data(mon, 12, Gen2WorldPalette.TIME_NIGHT, true, 9)
+	Gen2WorldPartyHost.set_caught_data(_data, mon, 12, Gen2WorldPalette.TIME_NIGHT, true, 9)
 	assert_eq(mon.caught_level, 12)
 	assert_eq(mon.caught_time, Gen2WorldPalette.TIME_NIGHT + 1)
 	assert_eq(mon.caught_gender, 1)
 	assert_eq(mon.caught_location, 9)
-	Gen2WorldPartyHost.set_caught_data(mon, 0, -1, false, Gen2WorldPartyHost.LANDMARK_GIFT)
+	Gen2WorldPartyHost.set_caught_data(_data, mon, 0, -1, false, Gen2WorldPartyHost.LANDMARK_GIFT)
 	assert_eq(mon.caught_time, 0, "a gift's whole level byte is zeroed")
 	assert_eq(mon.caught_gender, 0)
 	assert_eq(mon.caught_location, Gen2WorldPartyHost.LANDMARK_GIFT)

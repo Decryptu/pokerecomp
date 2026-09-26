@@ -12,14 +12,15 @@ Save format version 6 stores:
   experience, current HP, status, DVs, five Gen II stat-experience values,
   moves and PP;
 - fourteen PC boxes with twenty ordered slots each. Boxed Pokémon use the same
-  persistent model as party Pokémon. Gifts, eggs and catches fill the party
-  first, then the first empty box slot in box order;
+  persistent model as party Pokémon. Gifts and catches fill the party first,
+  then go to the front of the box and move the rest back, as `SendMonIntoBox`
+  does; an egg never reaches a box;
 - an optional validated world snapshot: map ID, player cell, facing, movement
   mode, event flags, map scenes, inventory quantities, money, coins, phone
   contacts, seen species, repel steps, swarm state, roaming positions, source
   engine flags, the script memory bytes `readmem`/`loadmem` address, the
-  day/hour/minute clock, the host second that clock was written at and the
-  daylight-saving flag. The stamp makes the clock real-time across sessions: a
+  day/hour/minute clock with `wCurDay`'s own day count, the host second that
+  clock was written at and the daylight-saving flag. The stamp makes the clock real-time across sessions: a
   world opens at the saved time plus the seconds that have passed since, because
   the cartridge's RTC keeps running while the machine is off
   (`Gen2WorldClock.catch_up`);
@@ -95,8 +96,10 @@ reconstructs the source save party before returning blackout recovery. Continue
 enters the overworld only with a validated snapshot. The start menu's SAVE writes
 map, player, items, currency, events, source engine flags and schedule state
 through `Gen2SaveStore`, with item and currency references checked against the
-selected cache. Daily engine flags reset when the saved world day changes; story
-flags such as Hall of Fame persist. `Gen2WorldAPI.open_snapshot()` restores a
+selected cache. Daily engine flags reset when the day count moves, however many
+days that is; story flags such as Hall of Fame persist. The file keeps every
+map in insertion order, which is the order of the bag's pockets and the phone
+list. `Gen2WorldAPI.open_snapshot()` restores a
 saved position without clamping it.
 
 `box_screen.tscn`, opened from the party screen or from the Players House PC as
@@ -117,9 +120,9 @@ Party-owned overworld transactions modify a candidate `Gen2SaveData` and the
 live world snapshot first. Gifts, eggs, NPC trades, source `HealParty` recovery,
 item effects and catches commit only after validation and optional persistence,
 and a failed write restores live world state. A full party routes a valid
-addition to the first free PC slot; with the party and all 280 box slots
-occupied the transaction refuses before consuming an item or ball, leaving save
-and world state unchanged.
+addition to the front of the current box; with the party and that box full the
+transaction refuses before consuming an item or ball, leaving save and world
+state unchanged.
 
 ## Slot durability
 

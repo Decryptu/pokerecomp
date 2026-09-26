@@ -188,6 +188,13 @@ var object_time_of_day: int = Gen2WorldPalette.TIME_MORNING
 var world_day: int = 0
 var world_hour: int = 6
 var world_minute: int = 0
+## Pushed by the screen's clock between minutes; only the contest reads it.
+var world_second: int = 0
+## `wCurDay`; see [constant Gen2WorldClock.CUR_DAY_WRAP].
+var world_cur_day: int = 0
+## Days `CheckPokerusTick` owes the party, which the screen holds.
+var _pokerus_days: int = 0
+var _talk_click: bool = false
 var dst_enabled: bool = false
 var movement_mode: StringName = MOVEMENT_WALK
 ## Whether the next committed walk takes bike speed. No cartridge state: the
@@ -327,7 +334,6 @@ var _radio_show: Gen2RadioShow = null
 ## kept here rather than persisted.
 var _buenas_password: int = -1
 var _buenas_password_today: bool = false
-var _lucky_number: int = -1
 ## The seed the three generators above were built from, mirrored here so a
 ## snapshot records what a run can be reproduced with. Zero means nothing seeded
 ## them and the run is not reproducible.
@@ -423,6 +429,7 @@ static func open_snapshot(
 	out.movement_mode = world_snapshot.movement_mode
 	out.player_sprite_number = world_snapshot.player_sprite_number
 	out.world_day = world_snapshot.world_day
+	out.world_cur_day = world_snapshot.world_cur_day
 	out.world_hour = world_snapshot.world_hour
 	out.world_minute = world_snapshot.world_minute
 	out.dst_enabled = world_snapshot.dst_enabled
@@ -722,9 +729,6 @@ func _start_radio_show(channel: int) -> void:
 	if radio_random == null:
 		radio_random = RandomNumberGenerator.new()
 		radio_random.randomize()
-	if _lucky_number < 0:
-		# `ResetLuckyNumberShowFlag`'s weekly roll, which has no saved home here.
-		_lucky_number = radio_random.randi_range(0, 99999)
 	_radio_show = Gen2RadioShow.start(data, channel, {
 		"crystal": crystal,
 		"weekday": world_day,
@@ -732,11 +736,23 @@ func _start_radio_show(channel: int) -> void:
 		"caught": state.caught_species().keys(),
 		"hall_of_fame": state.hall_of_fame(),
 		"kanto_badges": (state.badge_mask(crystal) >> 8) & 0xFF,
-		"lucky_number": _lucky_number,
+		"lucky_number": _radio_lucky_number() if channel == Gen2WorldRadio.LUCKY_CHANNEL else 0,
 	}, radio_random)
 	_radio_show.buenas_password = _buenas_password if _buenas_password >= 0 \
 		else state.buenas_password()
 	_radio_show.buenas_password_today = _buenas_password_today
+
+
+## `LuckyNumberShow1`'s `CheckLuckyNumberShowFlag` and, once the countdown has
+## run out, `ResetLuckyNumberShowFlag`; `LuckyNumberShow8` reads the saved number.
+func _radio_lucky_number() -> int:
+	if state.lucky_number_show_ready():
+		state.restart_lucky_number_countdown(world_day)
+		state.clear_engine_flag(Gen2WorldState.engine_flag(
+			Gen2WorldScriptRunner.ENGINE_LUCKY_NUMBER_SHOW, Gen2WorldState.is_crystal_profile(data)
+		))
+		state.refresh_lucky_id_number(world_cur_day, radio_random)
+	return state.lucky_id_number()
 
 
 ## `PlayRadio`, a `special MapRadio`'s show through `_start_radio_show` with
@@ -2410,7 +2426,7 @@ func bug_contest_active() -> bool:
 func start_bug_contest() -> Dictionary:
 	state.set_contest_mon({})
 	state.set_park_balls(Gen2WorldBugContest.BALLS)
-	state.set_bug_contest_started(world_clock())
+	state.set_bug_contest_started(_clock_to_the_second())
 	return {
 		"ok": true,
 		"kind": &"bug_contest_started",
@@ -2427,8 +2443,14 @@ func bug_contest_minutes_remaining() -> int:
 	if not bug_contest_active():
 		return 0
 	return Gen2WorldBugContest.minutes_remaining(
-		state.bug_contest_started(), world_clock()
+		state.bug_contest_started(), _clock_to_the_second()
 	)
+
+
+func _clock_to_the_second() -> Dictionary:
+	var clock: Dictionary = world_clock()
+	clock["second"] = world_second
+	return clock
 
 
 ## `BugContestResultsWarpScript`'s index in `StdScripts`, 22 in both pins the way
@@ -2444,7 +2466,9 @@ func check_bug_contest_timer() -> Array:
 	if not bug_contest_active():
 		return []
 	var over: StringName = &""
-	if bug_contest_minutes_remaining() <= 0:
+	if Gen2WorldBugContest.seconds_remaining(
+		state.bug_contest_started(), _clock_to_the_second()
+	) < 0:
 		over = &"time_up"
 	elif state.park_balls() <= 0:
 		over = &"out_of_balls"
@@ -2978,19 +3002,34 @@ func advance_schedule(
 	}
 
 
-func set_world_clock(day: int, hour: int, minute: int) -> void:
+## A [param cur_day] below zero steps with the weekday, for a caller naming one.
+func set_world_clock(day: int, hour: int, minute: int, cur_day: int = -1) -> void:
 	var next_day: int = posmod(day, Gen2WorldClock.DAYS_PER_WEEK)
-	if next_day != world_day and state != null:
-		state.reset_daily_flags(
-			Gen2WorldState.is_crystal_profile(data), schedule_random
-		)
+	if cur_day < 0:
+		cur_day = world_cur_day + posmod(next_day - world_day, Gen2WorldClock.DAYS_PER_WEEK)
+	var days: int = posmod(cur_day - world_cur_day, Gen2WorldClock.CUR_DAY_WRAP)
+	world_cur_day = posmod(cur_day, Gen2WorldClock.CUR_DAY_WRAP)
 	world_day = next_day
 	world_hour = posmod(hour, Gen2WorldClock.HOURS_PER_DAY)
 	world_minute = posmod(minute, Gen2WorldClock.MINUTES_PER_HOUR)
+	if days > 0 and state != null:
+		## `CheckDailyResetTimer` resets once however many days have gone.
+		state.reset_daily_flags(
+			Gen2WorldState.is_crystal_profile(data), schedule_random, days
+		)
+		_pokerus_days += days
+
+
+func take_pokerus_days() -> int:
+	var days: int = _pokerus_days
+	_pokerus_days = 0
+	return days
 
 
 func world_clock() -> Dictionary:
-	return {"day": world_day, "hour": world_hour, "minute": world_minute}
+	return {
+		"day": world_day, "hour": world_hour, "minute": world_minute, "cur_day": world_cur_day,
+	}
 
 
 func daylight_saving_time_enabled() -> bool:
@@ -3034,7 +3073,7 @@ func advance_phone_ring_frame() -> Array:
 ## Queues a source-style incoming call after checking the entrance, receive
 ## timer, random roll, service map, registration, time and same-map rules.
 func request_incoming_phone_call(
-	standing_on_entrance: bool = true,
+	on_entrance: bool = false,
 	timer_ready: bool = true,
 	random_byte: int = 0,
 	force: bool = false,
@@ -3043,7 +3082,7 @@ func request_incoming_phone_call(
 	if phone_ring_active():
 		return [{"ok": true, "status": &"phone_ring", "event": pending_phone_ring()}]
 	var resolved: Dictionary = Gen2WorldPhoneHost.resolve_incoming(
-		data, state, current_map, world_hour, standing_on_entrance, timer_ready,
+		data, state, current_map, world_hour, on_entrance, timer_ready,
 		random_byte, force, selection_byte
 	)
 	if not bool(resolved.get("ok", false)):
@@ -3220,6 +3259,13 @@ func count_step() -> bool:
 	return state.count_step(not _gen1)
 
 
+## Generation 1 counts a step as it commits; Generation 2's `CountStep` sits
+## behind the warp and the coord events, so its screen counts on landing.
+func _count_committed_step() -> void:
+	if _gen1:
+		count_step()
+
+
 ## `DoBikeStep`, which `CountStep` reaches behind the poison branch: the three
 ## gates in front of the counter, and the flag the queued call is paid for with.
 ## Answers whether the bike shop owner's call was queued.
@@ -3285,7 +3331,7 @@ func try_receive_phone_call(
 		"results": [],
 	}
 	if bug_contest_active() or not state.phone_receive_ready() \
-		or not standing_on_phone_entrance():
+		or standing_on_phone_entrance():
 		return attempt
 	var random_byte: int = random.randi_range(0, 255) if random != null else 0
 	var chosen: int = selection_byte
@@ -3294,7 +3340,7 @@ func try_receive_phone_call(
 	state.consume_phone_receive_timer()
 	attempt["attempted"] = true
 	attempt["results"] = request_incoming_phone_call(
-		true, true, random_byte, force, chosen
+		false, true, random_byte, force, chosen
 	)
 	return attempt
 
@@ -7452,8 +7498,8 @@ func dispatch_events(cell: Vector2i = player_cell, execute_scripts: bool = false
 
 ## The step path, `CheckTileEvent`: coordinate events only. Background events
 ## and objects need `CheckAPressOW` and belong to interact().
-func dispatch_script_events(cell: Vector2i = player_cell) -> Array:
-	if _active_script == null and _script_queue.is_empty():
+func dispatch_script_events(cell: Vector2i = player_cell, coord_events: bool = true) -> Array:
+	if coord_events and _active_script == null and _script_queue.is_empty():
 		var stepped: Array = []
 		for event: Dictionary in _active_events_at(cell):
 			if event.get("kind", &"") == &"coord_events":
@@ -8627,15 +8673,20 @@ func interact() -> Array:
 	var target: Vector2i = facing_cell()
 	var events: Array = []
 	## TryObjectEvent before TryBGEvent, and only the object half looks across
-	## a counter: CheckFacingBGEvent reads the plain GetFacingTileCoord.
+	## a counter. `CheckFacingObject` finds one object and refuses it mid-step,
+	## and its `CallScript` carry ends `CheckAPressOW` before `TryBGEvent`.
 	for event: Dictionary in _active_events_at(object_facing_cell()):
-		if event.get("kind", &"") == &"objects" and event.has("script"):
+		if event.get("kind", &"") == &"objects" and event.has("script") \
+			and not (objects[int(event["object_index"])] as Gen2WorldObject).is_stepping():
 			events.append(event)
-	for event: Dictionary in _active_events_at(target):
+			break
+	for event: Dictionary in _active_events_at(target) if events.is_empty() else []:
 		if event.get("kind", &"") != &"bg_events":
 			continue
 		if _bg_event_interacts(event) and _script_address_for_event(event) > 0:
 			events.append(event)
+	## `PlayTalkObject`, and `TryTileCollisionEvent`'s `PlayClickSFX` below.
+	_talk_click = true
 	if not events.is_empty():
 		_enqueue_script_events(events)
 		return run_event_queue(false)
@@ -8647,9 +8698,16 @@ func interact() -> Array:
 		## the source's own order, each of which is a Try*OW gate and an ask.
 		tile_request = _field_move_prompt_request(target)
 	if tile_request.is_empty():
+		_talk_click = false
 		return []
 	_enqueue_script(tile_request)
 	return run_event_queue(false)
+
+
+func take_talk_click() -> bool:
+	var click: bool = _talk_click
+	_talk_click = false
+	return click
 
 
 ## TryTileCollisionEvent from `.cut` on, in the source's order: cut tree,
@@ -10015,7 +10073,8 @@ func _finish_script_result(result: Dictionary) -> Dictionary:
 		set_world_clock(
 			int(clock.get("day", world_day)),
 			int(clock.get("hour", world_hour)),
-			int(clock.get("minute", world_minute))
+			int(clock.get("minute", world_minute)),
+			int(clock.get("cur_day", -1)),
 		)
 	if result.has("dst_enabled"):
 		set_daylight_saving_time_enabled(bool(result.get("dst_enabled", false)))
@@ -11143,9 +11202,8 @@ func move_result(direction: Vector2i) -> Dictionary:
 		or destination.y >= current_map.collision_height:
 		var transition: Dictionary = try_connection(direction)
 		if not transition.is_empty():
-			## `CheckTileEvent` branches to `.map_connection` before it reaches
-			## `CountStep`, so the step that leaves a map costs no repel step;
-			## try_connection() owns the facing and the step's own frames.
+			## `.map_connection` comes before `CountStep`, which the new map's
+			## first pass reaches instead; try_connection() owns the frames.
 			return transition
 		return _refused_move(direction, &"map_edge")
 	if forced_walk:
@@ -11166,7 +11224,7 @@ func move_result(direction: Vector2i) -> Dictionary:
 		passes = STEP_PASSES_FAST
 	player_cell = destination
 	player_facing = facing_for_direction(direction)
-	count_step()
+	_count_committed_step()
 	_advance_followers(-1, from_cell, passes)
 	_do_step(direction)
 	_start_player_step(direction, passes, false, kind_of_step)
@@ -11353,7 +11411,7 @@ func _forced_step(direction: Vector2i, destination: Vector2i) -> Dictionary:
 	var from_cell: Vector2i = player_cell
 	player_cell = destination
 	player_facing = facing_for_direction(direction)
-	count_step()
+	_count_committed_step()
 	_advance_followers(-1, from_cell)
 	_do_step(direction)
 	_start_player_step(direction, STEP_PASSES_WALK)
@@ -11470,9 +11528,6 @@ func _try_ledge_hop(direction: Vector2i) -> Dictionary:
 	var from_cell: Vector2i = player_cell
 	player_cell = landing
 	player_facing = facing_for_direction(direction)
-	## `.doneStepCounting` skips the counter under `HandleLedges`' simulated presses.
-	if not _gen1:
-		count_step()
 	_advance_followers(-1, from_cell)
 	_do_step(direction)
 	_start_player_step(direction * 2, STEP_PASSES_HOP, true, STEP_KIND_HOP)

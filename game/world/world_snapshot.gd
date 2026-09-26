@@ -22,6 +22,8 @@ var player_sprite_number: int = Gen2WorldSprite.SPRITE_PLAYER
 var world_day: int = 0
 var world_hour: int = 6
 var world_minute: int = 0
+## `wCurDay`, a weekday's own number in a slot written before it was kept.
+var world_cur_day: int = 0
 var dst_enabled: bool = false
 ## The host second [method Gen2SaveStore.save] wrote at, which
 ## `Gen2WorldClock.catch_up` reads; zero resumes where the clock stopped.
@@ -93,6 +95,7 @@ static func from_world(world: Gen2WorldAPI) -> Gen2WorldSnapshot:
 		out.gen1_last_map = int(saved["last_map"])
 	var clock: Dictionary = world.world_clock()
 	out.world_day = int(clock.get("day", 0))
+	out.world_cur_day = int(clock.get("cur_day", out.world_day))
 	out.world_hour = int(clock.get("hour", 6))
 	out.world_minute = int(clock.get("minute", 0))
 	out.dst_enabled = world.daylight_saving_time_enabled()
@@ -119,7 +122,7 @@ func to_dict() -> Dictionary:
 		"player_facing": player_facing,
 		"movement_mode": String(movement_mode),
 		"player_sprite_number": player_sprite_number,
-		"clock": [world_day, world_hour, world_minute],
+		"clock": [world_day, world_hour, world_minute, world_cur_day],
 		"dst_enabled": dst_enabled,
 		"world_clock_stamp": world_clock_stamp,
 		"random_seed": random_seed,
@@ -161,6 +164,9 @@ static func from_dict(raw: Variant) -> Gen2WorldSnapshot:
 		out.world_day = int(clock[0])
 		out.world_hour = int(clock[1])
 		out.world_minute = int(clock[2])
+		out.world_cur_day = posmod(
+			int(clock[3]) if clock.size() > 3 else out.world_day, Gen2WorldClock.CUR_DAY_WRAP
+		)
 	out.dst_enabled = bool(source.get("dst_enabled", false))
 	out.world_clock_stamp = maxf(0.0, float(source.get("world_clock_stamp", 0.0)))
 	out.random_seed = int(source.get("random_seed", 0))

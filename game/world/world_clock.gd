@@ -14,6 +14,9 @@ const FRIDAY: int = 5
 const MORN_START: int = 4
 const DAY_START: int = 10
 const NITE_START: int = 18
+## `wCurDay`, which every day-dependent event is measured against, wraps at 140
+## (`_CalcDaysSince`'s `add 20 * 7`): twenty weeks away reads as no time at all.
+const CUR_DAY_WRAP: int = 140
 
 ## `--clock=HH:MM`, and `--clock=HH:MM:D` to name the day of the week as well.
 ## The prefix, so the switch is written once.
@@ -27,6 +30,7 @@ static var host_seconds_override: float = -1.0
 var day: int = 0
 var hour: int = 0
 var minute: int = 0
+var cur_day: int = 0
 ## Whether this clock is held where it was opened. See [method pin].
 var pinned: bool = false
 var _elapsed_seconds: float = 0.0
@@ -53,22 +57,25 @@ static func host_seconds() -> float:
 ## a host clock that has been put back: neither is a reason to run the world's
 ## own clock backwards.
 static func catch_up(
-	day_value: int, hour_value: int, minute_value: int, stamp: float, now: float = -1.0
+	day_value: int, hour_value: int, minute_value: int, stamp: float, now: float = -1.0,
+	cur_day_value: int = 0,
 ) -> Dictionary:
 	var here: float = now if now >= 0.0 else host_seconds()
 	var elapsed: float = here - stamp
 	if stamp <= 0.0 or elapsed <= 0.0:
-		return {"day": day_value, "hour": hour_value, "minute": minute_value}
-	@warning_ignore("integer_division")
-	var minutes: int = int(elapsed / SECONDS_PER_MINUTE) \
-		+ minute_value + hour_value * MINUTES_PER_HOUR \
-		+ day_value * MINUTES_PER_HOUR * HOURS_PER_DAY
+		return {"day": day_value, "hour": hour_value, "minute": minute_value, "cur_day": cur_day_value}
 	var day_minutes: int = MINUTES_PER_HOUR * HOURS_PER_DAY
 	@warning_ignore("integer_division")
+	var minutes: int = int(elapsed / SECONDS_PER_MINUTE) \
+		+ minute_value + hour_value * MINUTES_PER_HOUR
+	@warning_ignore("integer_division")
+	var days: int = minutes / day_minutes
+	@warning_ignore("integer_division")
 	return {
-		"day": (minutes / day_minutes) % DAYS_PER_WEEK,
+		"day": (day_value + days) % DAYS_PER_WEEK,
 		"hour": (minutes % day_minutes) / MINUTES_PER_HOUR,
 		"minute": minutes % MINUTES_PER_HOUR,
+		"cur_day": (cur_day_value + days) % CUR_DAY_WRAP,
 	}
 
 
@@ -147,7 +154,7 @@ func advance(seconds: float, world: Gen2WorldAPI = null) -> Array:
 		_elapsed_seconds -= SECONDS_PER_MINUTE
 		_advance_minute()
 		if world != null:
-			world.set_world_clock(day, hour, minute)
+			world.set_world_clock(day, hour, minute, cur_day)
 		ticks.append({
 			"kind": &"world_clock_minute",
 			"day": day,
@@ -155,6 +162,8 @@ func advance(seconds: float, world: Gen2WorldAPI = null) -> Array:
 			"minute": minute,
 			"time_of_day": time_of_day(),
 		})
+	if world != null:
+		world.world_second = int(_elapsed_seconds)
 	return ticks
 
 
@@ -163,6 +172,7 @@ func snapshot() -> Dictionary:
 		"day": day,
 		"hour": hour,
 		"minute": minute,
+		"cur_day": cur_day,
 		"elapsed_seconds": _elapsed_seconds,
 		"time_of_day": time_of_day(),
 	}
@@ -178,3 +188,4 @@ func _advance_minute() -> void:
 		return
 	hour = 0
 	day = (day + 1) % DAYS_PER_WEEK
+	cur_day = (cur_day + 1) % CUR_DAY_WRAP

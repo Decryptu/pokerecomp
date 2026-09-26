@@ -71,9 +71,7 @@ static func available_incoming_contacts(
 	if data == null or state == null or not map_has_phone_service(map):
 		return []
 	var available: Array = []
-	for index: int in data.world_phone_contact_count():
-		if not state.has_phone_contact(index):
-			continue
+	for index: int in registered_contacts(data, state):
 		## `GetAvailableCallers` reads `PHONE_CONTACT_SCRIPT2_TIME`.
 		var contact: Dictionary = data.world_phone_contact(index)
 		if contact.is_empty() or not time_mask_matches(int(contact.get("caller_time", 0)), hour):
@@ -90,7 +88,7 @@ static func resolve_incoming(
 	state: Gen2WorldState,
 	map: Gen2WorldMap,
 	hour: int,
-	standing_on_entrance: bool = true,
+	on_entrance: bool = false,
 	timer_ready: bool = true,
 	random_byte: int = 0,
 	force: bool = false,
@@ -98,8 +96,9 @@ static func resolve_incoming(
 ) -> Dictionary:
 	if data == null or state == null or not map_has_phone_service(map):
 		return _phone_unavailable(&"phone_service_unavailable")
-	if not standing_on_entrance:
-		return _phone_unavailable(&"not_on_entrance")
+	## `CheckPhoneCall`'s `jr z, .no_call` behind `CheckStandingOnEntrance`.
+	if on_entrance:
+		return _phone_unavailable(&"on_entrance")
 	if not timer_ready:
 		return _phone_unavailable(&"receive_timer_not_ready")
 	## `CheckPhoneCall`'s 50 percent: a random byte with its high bit clear.
@@ -173,14 +172,37 @@ static func resolve_outgoing(
 	}
 
 
+## `wPhoneList` in slot order, which is registration order: `AddPhoneNumber`
+## fills the first hole, and the Pokegear's delete closes the gap.
 static func registered_contact_summaries(data: GameData, state: Gen2WorldState) -> Array:
 	var summaries: Array = []
 	if data == null or state == null:
 		return summaries
-	for index: int in data.world_phone_contact_count():
-		if state.has_phone_contact(index):
-			summaries.append(contact_summary(data, data.world_phone_contact(index)))
+	for index: int in registered_contacts(data, state):
+		summaries.append(contact_summary(data, data.world_phone_contact(index)))
 	return summaries
+
+
+static func registered_contacts(data: GameData, state: Gen2WorldState) -> Array[int]:
+	var contacts: Array[int] = []
+	for raw_index: Variant in state.phone_contacts():
+		var index: int = int(raw_index)
+		if index >= 0 and index < data.world_phone_contact_count():
+			contacts.append(index)
+	return contacts
+
+
+## `PermanentNumbers`: Mom and Elm. `GetRemainingSpaceInPhoneList` keeps a slot
+## free for each of them not yet registered, [param contact] itself excepted.
+const PERMANENT_CONTACTS: Array[int] = [1, 4]
+
+
+static func phone_list_room(registered: Dictionary, contact: int) -> int:
+	var room: int = Gen2WorldState.PHONE_CONTACT_CAPACITY
+	for permanent: int in PERMANENT_CONTACTS:
+		if permanent != contact and not registered.has(permanent):
+			room -= 1
+	return room
 
 
 ## `PHONE_BILL`, the one contact an event rather than the player or the timer

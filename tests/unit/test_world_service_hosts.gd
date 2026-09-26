@@ -338,25 +338,42 @@ func test_phone_time_masks_and_map_rules_match_the_cartridge() -> void:
 	var state := Gen2WorldState.new({}, {}, {}, {}, 0, {0: true})
 	## The fixture's contact is callee MORN and caller DAY: a ring reads the
 	## caller half (`PHONE_CONTACT_SCRIPT2_TIME`), a Pokegear call the callee.
-	assert_false(Gen2WorldPhoneHost.resolve_incoming(_data, state, map, 6, true, true, 0)["ok"])
+	assert_false(Gen2WorldPhoneHost.resolve_incoming(_data, state, map, 6, false, true, 0)["ok"])
 	var incoming: Dictionary = Gen2WorldPhoneHost.resolve_incoming(
-		_data, state, map, 12, true, true, 0
+		_data, state, map, 12, false, true, 0
 	)
 	assert_true(incoming["ok"])
 	assert_eq(incoming["contact_id"], 0)
 
 	map.group = Fixture.MAP_GROUP
 	var same_map: Dictionary = Gen2WorldPhoneHost.resolve_incoming(
-		_data, state, map, 12, true, true, 0
+		_data, state, map, 12, false, true, 0
 	)
 	assert_false(same_map["ok"])
 	assert_eq(same_map["reason"], &"no_available_caller")
 	map.phone_flag = 1
 	var no_service: Dictionary = Gen2WorldPhoneHost.resolve_incoming(
-		_data, state, map, 12, true, true, 0
+		_data, state, map, 12, false, true, 0
 	)
 	assert_false(no_service["ok"])
 	assert_eq(no_service["reason"], &"phone_service_unavailable")
+
+
+## `wPhoneList` is in the order the numbers were registered, and both the
+## Pokegear's list and `GetAvailableCallers`, whose list `ChooseRandomCaller`
+## indexes, walk it that way rather than by contact number.
+func test_the_phone_list_and_the_caller_roll_keep_registration_order() -> void:
+	var state := Gen2WorldState.new({}, {}, {}, {}, 0, {1: true, 0: true})
+	var listed: Array = Gen2WorldPhoneHost.registered_contact_summaries(_data, state)
+	assert_eq(listed.map(func(row: Dictionary) -> int: return int(row["index"])), [1, 0])
+
+	var map := Gen2WorldMap.new()
+	map.group = Fixture.MAP_GROUP + 1
+	map.number = Fixture.MAP_NUMBER
+	var first: Dictionary = Gen2WorldPhoneHost.resolve_incoming(
+		_data, state, map, 12, false, true, 0, false, 0x00
+	)
+	assert_eq(first["contact_id"], 1)
 
 
 func test_outgoing_phone_uses_imported_same_map_and_out_of_area_scripts() -> void:
@@ -595,6 +612,10 @@ func _write_services_at(directory: String) -> void:
 		"contacts": [{
 			"index": 0, "trainer_class": 1, "trainer_number": 2,
 			"map_group": Fixture.MAP_GROUP, "map_number": Fixture.MAP_NUMBER,
+			"callee_time": 1, "caller_time": 2,
+		}, {
+			"index": 1, "trainer_class": 1, "trainer_number": 1,
+			"map_group": Fixture.MAP_GROUP + 2, "map_number": Fixture.MAP_NUMBER,
 			"callee_time": 1, "caller_time": 2,
 		}],
 		"special_calls": [],

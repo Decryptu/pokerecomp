@@ -191,6 +191,30 @@ func test_a_warp_waits_for_the_step_onto_its_tile_to_land() -> void:
 	assert_false(_screen.map_fade().is_empty(), "and the warp is taken on that frame")
 
 
+## `CheckTileEvent` takes a warp before it reaches `CountStep`, so the step onto
+## a door is never counted, while an ordinary step is counted where it lands.
+func test_a_step_onto_a_door_is_not_counted_and_an_ordinary_one_is() -> void:
+	_screen = await _screen_below_the_door()
+	var state: Gen2WorldState = _screen._world.state
+	var start: int = state.step_count()
+	_land_one_step(_screen.move_left)
+	assert_eq(state.step_count(), start + 1)
+	_land_one_step(_screen.move_right)
+	_land_one_step(_screen.move_up)
+	assert_false(_screen.map_fade().is_empty(), "the door's warp is taken")
+	assert_eq(state.step_count(), start + 2)
+
+
+func _land_one_step(press: Callable) -> void:
+	var cell: Vector2i = _screen._world.player_cell
+	for _frame: int in WALK_FRAME_CAP * 2:
+		if _screen._world.player_cell == cell:
+			press.call()
+		_screen.advance_frame()
+		if _screen._world.player_cell != cell and not _screen._world.player_step_in_progress():
+			return
+
+
 ## `WarpToNewMapScript` is `warpsound` and `newloadmap MAPSETUP_DOOR`, and that
 ## setup script spends frames before the map is loaded and after: four palette
 ## orders of `FadeOutToWhite`, two frames each, then the load, then the four of

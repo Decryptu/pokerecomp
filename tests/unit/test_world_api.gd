@@ -720,7 +720,7 @@ func test_phone_ring_runs_before_the_imported_incoming_script() -> void:
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(
 		data, 1, 1, Vector2i(7, 6), Gen2WorldState.new({}, {}, {}, {}, 0, {0: true})
 	)
-	var started: Array = world.request_incoming_phone_call(true, true, 0, true, 0)
+	var started: Array = world.request_incoming_phone_call(false, true, 0, true, 0)
 	assert_eq(started[0]["status"], &"phone_ring")
 	assert_true(world.phone_ring_active())
 	assert_true(world.pending_runtime_request().is_empty())
@@ -742,16 +742,17 @@ func test_the_incoming_caller_is_chosen_from_the_swapped_random_byte() -> void:
 	var world: Gen2WorldAPI = _world(
 		Vector2i(8, 6), Gen2WorldState.new({}, {}, {}, {}, 0, {0: true, 1: true})
 	)
-	world.request_incoming_phone_call(true, true, 0, false, 0x10)
+	world.request_incoming_phone_call(false, true, 0, false, 0x10)
 	assert_eq(int(world.pending_phone_ring()["contact"]["index"]), 1)
 
 
 ## `CheckTimeEvents` runs `CheckBugContestTimer` in place of `CheckPhoneCall`, so
-## a call due on a door waits out the contest with its delay still spent.
-func test_no_call_rings_on_a_door_while_the_contest_timer_runs() -> void:
+## a call due waits out the contest with its delay still spent, and
+## `CheckPhoneCall` refuses a door, where `CheckStandingOnEntrance` answers z.
+func test_no_call_rings_while_the_contest_timer_runs_or_on_a_door() -> void:
 	_write_service_cache()
 	var world: Gen2WorldAPI = _world(
-		Vector2i(12, 5), Gen2WorldState.new({}, {}, {}, {}, 0, {0: true})
+		Vector2i(8, 6), Gen2WorldState.new({}, {}, {}, {}, 0, {0: true})
 	)
 	world.state.advance_phone_receive_timer(Gen2WorldState.PHONE_RECEIVE_DELAYS[0])
 	var contest: int = Gen2WorldState.engine_flag(
@@ -761,6 +762,9 @@ func test_no_call_rings_on_a_door_while_the_contest_timer_runs() -> void:
 	assert_false(world.try_receive_phone_call(null, 0, true).get("attempted", false))
 	assert_true(world.state.phone_receive_ready())
 	world.state.clear_engine_flag(contest)
+	world.player_cell = Vector2i(12, 5)
+	assert_false(world.try_receive_phone_call(null, 0, true).get("attempted", false))
+	world.player_cell = Vector2i(8, 6)
 	assert_true(world.try_receive_phone_call(null, 0, true).get("attempted", false))
 
 
@@ -1214,7 +1218,6 @@ func test_player_walks_onto_a_ledge_cell_as_ordinary_land() -> void:
 
 func test_ledge_hop_crosses_two_cells_after_an_ordinary_step_is_blocked() -> void:
 	var world: Gen2WorldAPI = _world(Vector2i(3, 2))
-	world.set_repel_steps(2)
 	assert_false(world.can_walk_to(Vector2i(3, 3)))
 	var result: Dictionary = world.move_result(Vector2i.DOWN)
 	assert_true(result["ok"], JSON.stringify(result))
@@ -1223,7 +1226,6 @@ func test_ledge_hop_crosses_two_cells_after_an_ordinary_step_is_blocked() -> voi
 	assert_eq(result["to_cell"], Vector2i(3, 4))
 	assert_eq(world.player_cell, Vector2i(3, 4))
 	assert_eq(world.player_facing, Gen2WorldSprite.FACING_DOWN)
-	assert_eq(world.repel_steps(), 1)
 
 	# The presentation offset starts two cells behind and eases to zero over
 	# STEP_PASSES_HOP frames, the same generic step system a one-cell walk
@@ -2583,6 +2585,32 @@ func test_interact_does_not_reach_an_object_two_cells_away_without_a_counter() -
 	assert_eq(world.collision_code_at(world.facing_cell()), 0)
 	assert_eq(world.object_facing_cell(), Vector2i(11, 9))
 	assert_eq(world.interact(), [])
+
+
+## `CheckFacingObject` finds one object and its `CallScript` carry ends
+## `CheckAPressOW` before `TryBGEvent`, so a Rock Smash rock over a hidden item
+## runs the rock alone; one still mid-step is refused and the event answers.
+## Either way `PlayTalkObject` clicks.
+func test_an_object_shadows_the_background_event_under_it_unless_it_is_walking() -> void:
+	var standing: Array = _object_over_event_world(false).interact()
+	assert_eq(standing.size(), 1, JSON.stringify(standing))
+	assert_eq(standing[0]["source"]["kind"], &"objects")
+	var world: Gen2WorldAPI = _object_over_event_world(true)
+	var walking: Array = world.interact()
+	assert_eq(walking[0]["source"]["kind"], &"bg_events", JSON.stringify(walking))
+	assert_true(world.take_talk_click())
+
+
+func _object_over_event_world(walking: bool) -> Gen2WorldAPI:
+	var world: Gen2WorldAPI = _world(Vector2i(11, 8))
+	world.current_map.events["objects"].append({
+		"sprite": 1, "x": 11, "y": 9, "script": 0x6040, "event_flag": 0xFFFF,
+	})
+	world.current_map.events["bg_events"].append({"x": 11, "y": 9, "type": 0, "script": 0x6015})
+	world.reload_current_map()
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	world.object_at(Vector2i(11, 9)).step_passes_remaining = 4 if walking else 0
+	return world
 
 
 ## $98 ships in CheckCounterTile's pair but no map uses it. Both codes answer.
@@ -6257,7 +6285,7 @@ func test_world_snapshot_round_trips_map_player_and_mutable_state() -> void:
 	assert_eq(restored.player_cell, Vector2i(8, 6))
 	assert_eq(restored.player_facing, Gen2WorldSprite.FACING_LEFT)
 	assert_eq(restored.movement_mode, Gen2WorldAPI.MOVEMENT_SURF)
-	assert_eq(restored.world_clock(), {"day": 2, "hour": 7, "minute": 12})
+	assert_eq(restored.world_clock(), {"day": 2, "hour": 7, "minute": 12, "cur_day": 2})
 	assert_true(restored.daylight_saving_time_enabled())
 	assert_eq(restored.state.map_scene(1, 1), 3)
 	assert_eq(restored.state.repel_steps(), 5)
@@ -6296,6 +6324,13 @@ func test_world_clock_day_change_clears_daily_engine_flags() -> void:
 	world.set_world_clock(1, 0, 0)
 	assert_true(world.state.hall_of_fame())
 	assert_false(world.state.bargain_merchant_closed())
+	## `wCurDay`, not the weekday: a week away lands on the same weekday and is
+	## still seven days to `CheckDailyResetTimer` and `CheckPokerusTick`.
+	world.state.set_engine_flag(Gen2WorldState.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED)
+	world.take_pokerus_days()
+	world.set_world_clock(1, 0, 0, world.world_cur_day + 7)
+	assert_false(world.state.bargain_merchant_closed())
+	assert_eq(world.take_pokerus_days(), 7)
 
 
 func test_battle_request_keeps_trainer_source_and_result_text_pointers() -> void:
@@ -6374,6 +6409,9 @@ func test_real_trainer_metadata_runs_seen_text_battle_and_beaten_flag() -> void:
 	var step: Dictionary = world.advance_trainer_approach_step(0, Vector2i.UP)
 	assert_true(step["ok"])
 	assert_eq(world.objects[0].cell, Vector2i(5, 5))
+	## The screen's own `tick_step` spends the walk before the approach ends.
+	while (world.objects[0] as Gen2WorldObject).tick_step():
+		pass
 	var finished: Dictionary = world.finish_trainer_approach(0)
 	assert_true(finished["ok"])
 	assert_eq(finished["facing"], Gen2WorldSprite.FACING_UP)
@@ -7162,12 +7200,10 @@ func test_a_roam_chance_provider_answers_the_roamers_share_of_the_roll() -> void
 	assert_gt(met[256], met[-1])
 
 
-func test_repel_blocks_lower_level_candidates_and_counts_down_on_steps() -> void:
+func test_repel_blocks_lower_level_candidates() -> void:
 	var world := _world(Vector2i(8, 6))
 	world.set_repel_steps(2)
-	assert_eq(world.repel_steps(), 2)
 	assert_true(world.move(Vector2i.LEFT))
-	assert_eq(world.repel_steps(), 1)
 	var blocked: Dictionary = world.encounter_request(
 		null, true, &"auto", 6
 	)
@@ -7301,13 +7337,6 @@ func test_a_forced_step_off_the_map_edge_takes_the_connection() -> void:
 	var forced: Dictionary = world.move_result(Vector2i.LEFT)
 	assert_true(bool(forced.get("ok", false)), JSON.stringify(forced))
 	assert_eq(world.map_id(), Vector2i(1, 2))
-
-
-func test_a_forced_step_spends_a_repel_step_like_an_ordinary_one() -> void:
-	var world: Gen2WorldAPI = _world(Vector2i(1, 5))
-	world.state.set_repel_steps(5)
-	assert_true(bool(world.move_result(Vector2i.DOWN).get("ok", false)))
-	assert_eq(world.state.repel_steps(), 4)
 
 
 ## advance_forced_movement() is the no-input path, since the source polls
@@ -7856,6 +7885,24 @@ func test_itemnotify_names_the_item_the_give_before_it_wrote() -> void:
 	assert_eq(state.item_quantity(1), 1)
 
 
+## `Script_giveitem`'s `cp ITEM_FROM_MEM`: the Battle Tower hands over the
+## reward `BattleTower_GiveReward` left in wScriptVar, not an item numbered $FF.
+func test_giveitem_from_mem_gives_the_item_in_the_script_variable() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6440"] = [
+		Gen2WorldScript.SETVAL, 1,
+		Gen2WorldScript.GIVEITEM, Gen2WorldScriptRunner.ITEM_FROM_MEM, 5,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var state := Gen2WorldState.new()
+	var runner := Gen2WorldScriptRunner.begin(GameData.open_directory(_directory), state, {
+		"kind": &"script", "bank": 48, "script": 0x6440,
+	})
+	assert_eq(runner.advance()["status"], &"complete")
+	assert_eq(state.item_quantity(1), 5)
+
+
 func test_text_ram_resolves_through_the_cartridges_own_pointer_table() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	# getitemname into STRING_BUFFER_1, which the table puts at $CF6B on Gold.
@@ -8175,6 +8222,7 @@ func test_giving_park_balls_starts_the_timer_and_the_count() -> void:
 	world.set_world_clock(
 		world.world_day, world.world_hour, world.world_minute + Gen2WorldBugContest.MINUTES
 	)
+	world.world_second = 1
 	assert_eq(world.bug_contest_minutes_remaining(), 0)
 	assert_false(world.check_bug_contest_timer().is_empty())
 
@@ -9658,28 +9706,39 @@ func test_the_magikarp_sign_prints_the_record_and_its_holder() -> void:
 
 ## `PrintTodaysLuckyNumber` draws the number and stamps the day, and
 ## `CheckForLuckyNumberWinners` runs over the party behind it.
-func test_the_lucky_number_show_draws_a_number_and_stamps_its_day() -> void:
+## `LoadOrRegenerateLuckyIDNumber` has two callers, a new game and
+## `ResetLuckyNumberShowFlag`, which also takes off the GAME_OVER bit Radio Tower
+## 1F sets behind a prize. Printing the number and checking the party only read it.
+func test_only_the_show_reset_draws_the_lucky_number_and_it_reopens_the_show() -> void:
 	_write_special_script([
 		Gen2WorldScript.SPECIAL,
 		Gen2WorldScriptRunner.SPECIAL_PRINT_TODAYS_LUCKY_NUMBER, 0,
 		Gen2WorldScript.SPECIAL,
 		Gen2WorldScriptRunner.SPECIAL_CHECK_FOR_LUCKY_NUMBER_WINNERS, 0,
+		Gen2WorldScript.SPECIAL,
+		Gen2WorldScriptRunner.SPECIAL_RESET_LUCKY_NUMBER_SHOW_FLAG, 0,
 		Gen2WorldScript.END,
 	])
 	var world: Gen2WorldAPI = _special_world()
+	var game_over: int = Gen2WorldState.engine_flag(
+		Gen2WorldScriptRunner.ENGINE_LUCKY_NUMBER_SHOW,
+		Gen2WorldState.is_crystal_profile(world.data),
+	)
+	world.state.set_engine_flag(game_over)
 	world.script_random = RandomNumberGenerator.new()
 	world.script_random.seed = 3
 	world.set_party_summary(1, false, [1] as Array[int], [], ["KARP"], [false], {
-		"box_free_space": 20, "id_numbers": [0], "stored_id_numbers": [],
+		"box_free_space": 20, "id_numbers": [12345], "stored_id_numbers": [],
 		"stored_species": [],
 	})
 	var results: Array = _run_special(world)
-	## The party's one ID is zero, so the show matches it only when the drawn
-	## number happens to end in the same digits; either way the run completes and
-	## nothing is written but the buffer.
-	assert_true(results[0]["status"] in [&"complete", &"waiting"], JSON.stringify(results))
-	assert_between(world.state.lucky_id_number(), 0, 0xFFFF)
-	assert_ne(world.state.lucky_number_day(), 0, "the draw stamps the day it was made")
+	assert_eq(results[0]["status"], &"complete", JSON.stringify(results))
+	var printed: Array = (results[0].get("events", []) as Array).filter(
+		func(event: Dictionary) -> bool: return event.get("kind", &"") == &"lucky_number"
+	)
+	assert_eq(printed[0]["value"], "00000", "printed before anything was drawn")
+	assert_ne(world.state.lucky_number_day(), 0, "the reset stamps the day it drew on")
+	assert_false(world.state.is_engine_flag_active(game_over))
 
 
 ## `BankOfMom`'s first visit: `.CheckIfBankInitialized` sets MOM_ACTIVE before
