@@ -3,30 +3,22 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Fixed
 
-- An X item still works at +6: it is used up, costs the turn and says the stat won't rise. X items now say which stat went up and make your Pokémon a little happier.
-- Ethers and Elixers can be used on a fainted Pokémon, and restore a transformed Pokémon's own moves. In battle their move list takes only up and down, and B goes back to the party list.
-- Bitter Berry no longer asks which Pokémon to use it on.
-- A Full Heal or Full Restore on a confused Pokémon with no status says it came to its senses.
-- Heal Powder, Energypowder, Energy Root and Revival Herb say "It looks bitter…", and lower happiness in battle too.
-- Using the Poké Doll in a trainer battle gets Professor Oak's warning.
-- A Revive used on a Pokémon that never fought the current opponent no longer gives it a share of the experience.
-- Choosing an Egg for an item says it can't be used on an Egg.
-- A registered item that can't be used gets Professor Oak's warning.
-- A Ditto that used Transform is caught as a Ditto.
-- A Pokémon caught into your party keeps the PP it used in battle.
-- "Gotcha!" plays the caught jingle and the capture music, and the new Pokédex entry plays its sound.
-- A Pokémon caught in the Bug-Catching Contest is added to the Pokédex straight away.
-- A Rare Candy used where the Pokémon was caught raises happiness more, in Crystal.
-- A move learned from a Rare Candy, an evolution stone or an evolution after a battle shows "learned" and offers to forget a move when all four slots are full.
-- The party menu reopens on the Pokémon you last picked.
-- Softboiled and Milk Drink animate both HP bars and say how much HP was recovered.
-- Refused field moves, TAKE, mail and Softboiled messages appear over the party menu, which then comes back on the same Pokémon.
-- Backing out of GIVE, TAKE or the mail menu returns to the party list.
-- Giving an item that can't be held goes back to the bag. Mail is written after the Pokémon takes it.
-- The MOVE screen no longer wraps from the last move to the first.
-- In Gold and Silver, the MOVE screen says ATTK and the mail menu opens further left.
-- In a Cable Club room, the START menu hides PACK and SAVE, and the party menu hides field moves and ITEM.
-- The music is quieter while a stats screen or a Pokédex entry is open.
+- Trainers who spot you or whom you talk to play their encounter music, in all six games.
+- The Dragon Shrine elder walks away after the quiz; he used to slide. Other cutscenes where one character turns while another walks, such as the rival in Azalea Town and Lance in the Rocket base, are fixed too.
+- Whirlpool keeps the whirlpool on screen until its sound has played, and you can't move until then.
+- Flash plays its sound under its message and fades to white before the cave lights up.
+- Rock Smash from the party menu shakes the screen and breaks the rock before any wild Pokémon appears.
+- A rock smashed into a wild battle stays gone after the battle, until you leave the map.
+- A Pokémon keeps the stats it had until something recalculates them: level-up, a Rare Candy, vitamins, evolution, the PC, the Day-Care, hatching or a trade.
+- The PC box list closes gaps: a withdrawal or release moves the rest up, and a deposit goes to the end.
+- Hatching an egg matches the cartridge: the wobble, the cracks and shell pieces, the cry in Gold and Silver, and the map music coming back after.
+- Link trades reset the traded Pokémon's happiness to 70, and a traded egg no longer registers its species in the Pokédex.
+- Time Capsule trades refuse held-item evolutions and convert the partner's items and happiness the way Gold, Silver and Crystal do.
+- A benched Pokémon that forgets the move your active Pokémon has disabled frees it. A copied Mimic move is listed as MIMIC when you forget a move.
+- Mart, PC, pack, save and Hall of Fame messages print letter by letter at your text speed, with the page clear and scroll, and holding A or B speeds them up.
+- Bill's PC messages wait as long as on the cartridge, the Day-Care names your Pokémon, and CHANGE BOX shows the current box and a CANCEL row.
+- A new game's first save no longer asks about overwriting a file.
+- The Day-Care Man in Gold and Silver explains eggs on your first visit.
 
 ## Which file
 
