@@ -3,22 +3,10 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Fixed
 
-- Trainers who spot you or whom you talk to play their encounter music, in all six games.
-- The Dragon Shrine elder walks away after the quiz; he used to slide. Other cutscenes where one character turns while another walks, such as the rival in Azalea Town and Lance in the Rocket base, are fixed too.
-- Whirlpool keeps the whirlpool on screen until its sound has played, and you can't move until then.
-- Flash plays its sound under its message and fades to white before the cave lights up.
-- Rock Smash from the party menu shakes the screen and breaks the rock before any wild Pokémon appears.
-- A rock smashed into a wild battle stays gone after the battle, until you leave the map.
-- A Pokémon keeps the stats it had until something recalculates them: level-up, a Rare Candy, vitamins, evolution, the PC, the Day-Care, hatching or a trade.
-- The PC box list closes gaps: a withdrawal or release moves the rest up, and a deposit goes to the end.
-- Hatching an egg matches the cartridge: the wobble, the cracks and shell pieces, the cry in Gold and Silver, and the map music coming back after.
-- Link trades reset the traded Pokémon's happiness to 70, and a traded egg no longer registers its species in the Pokédex.
-- Time Capsule trades refuse held-item evolutions and convert the partner's items and happiness the way Gold, Silver and Crystal do.
-- A benched Pokémon that forgets the move your active Pokémon has disabled frees it. A copied Mimic move is listed as MIMIC when you forget a move.
-- Mart, PC, pack, save and Hall of Fame messages print letter by letter at your text speed, with the page clear and scroll, and holding A or B speeds them up.
-- Bill's PC messages wait as long as on the cartridge, the Day-Care names your Pokémon, and CHANGE BOX shows the current box and a CANCEL row.
-- A new game's first save no longer asks about overwriting a file.
-- The Day-Care Man in Gold and Silver explains eggs on your first visit.
+- Celebi flies around the Ilex Forest shrine before its battle in Crystal. The shrine used to stay empty for the length of the scene.
+- Gym statues name their city, and the Bug-Catching Contest names your placing and the minutes left. These lines used to print a raw code.
+- The fisher on Route 27 keeps facing you while the "!" is over his head on your first step into Kanto. People on the map no longer turn or walk during a cutscene pause.
+- At the foot of a waterfall the current carries you back down, and pressing A there no longer asks to use Waterfall. A, START and SELECT do nothing on any tile that moves you.
 
 ## Which file
 
