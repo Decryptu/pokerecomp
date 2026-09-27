@@ -16,6 +16,7 @@ var _board: Gen2UnownPuzzle = null
 var _page: Gen2UnownPuzzlePage = null
 var _view: TextureRect = null
 var _audio: Gen2AudioPlayer = null
+var _sfx_watch: Dictionary = {}
 ## `hVBlankCounter`, which the empty cursor blinks off.
 var _frame: int = 0
 var _acted: bool = false
@@ -94,11 +95,11 @@ func advance_frame() -> void:
 		return
 	_frame += 1
 	if _waiting:
-		## `WaitSFX`. Held by the driver rather than by a count, so a screen with
-		## no audio player is never held and a test drives straight through.
-		if _audio != null and _audio.effect_playing():
+		## `WaitSFX`; a screen with no audio player is never held.
+		if _audio != null and _audio.still_waiting(_sfx_watch):
 			_refresh()
 			return
+		_sfx_watch = {}
 		_waiting = false
 	if not _acted:
 		_pass([], _held)

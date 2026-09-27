@@ -10149,9 +10149,8 @@ func _start_sound_schedule(schedule: Array) -> void:
 	_sound_schedule_frame = 0
 
 
-## One frame of that schedule. A `wait` entry is `WaitPlaySFX`, real only while
-## the driver is serviced: with no audio device `effect_playing()` never clears,
-## so the rendered-frame count decides, as the battle's `ANIM_WAIT_SFX` does.
+## One frame of that schedule; a `wait` entry is `WaitPlaySFX`, through
+## [method Gen2AudioPlayer.still_waiting] as the battle's `ANIM_WAIT_SFX` is.
 func _advance_sound_schedule() -> void:
 	while not _sound_schedule.is_empty():
 		var due: Dictionary = _sound_schedule[0]

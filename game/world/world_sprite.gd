@@ -43,6 +43,9 @@ const SPRITE_PIKACHU_FOLLOWER: int = 0x3D
 const SPRITE_KRIS: int = 0x60
 const SPRITE_KRIS_BIKE: int = 0x61
 const SPRITE_POKEMON: int = 0x80
+## `SPRITE_BIG_SNORLAX`, `_LAPRAS` and `_ONIX`; `SetFacingBigDoll` makes two symmetric.
+const BIG_SPRITES: Array[int] = [0x33, 0x47, 0x50]
+const BIG_SYMMETRIC_SPRITES: Array[int] = [0x33, 0x47]
 
 ## SpriteMons maps the 35 special object bytes to reusable IconPointers shapes.
 const MON_ICON_FOR_SPRITE: Array[int] = [
@@ -194,10 +197,8 @@ static func image_for(
 	return image
 
 
-## FacingsBigDollSymmetric and FacingsBigDollAsymmetric use 8x8 tiles at
-## explicit 32x32 offsets, not the ordinary four-tile 16x16 layout. The source
-## rows are in data/sprites/facings.asm; the asymmetric row has two holes and
-## two horizontally flipped tiles.
+## FacingsBigDollSymmetric and FacingsBigDollAsymmetric: 8x8 tiles at explicit
+## 32x32 offsets, rows as data/sprites/facings.asm writes them, `y, x, flip, tile`.
 static func big_image_for(
 	sprite: Gen2WorldSprite,
 	indices: PackedByteArray,
@@ -214,9 +215,15 @@ static func big_image_for(
 	for placement: Array in _big_placements(shape):
 		Gen2PicImage.blit_tile(
 			pixels, 32, 32, indices, tile_width, int(placement[3]),
-			int(placement[0]), int(placement[1]), table, bool(placement[2])
+			int(placement[1]), int(placement[0]), table, bool(placement[2])
 		)
 	return Gen2PicImage.canvas_image(pixels, 32, 32)
+
+
+## `SetFacingBigDoll`'s choice for a variable big doll's resolved sprite.
+static func big_doll_shape(sprite_number: int) -> int:
+	return BIG_SHAPE_SYMMETRIC if sprite_number in BIG_SYMMETRIC_SPRITES \
+		else BIG_SHAPE_ASYMMETRIC
 
 
 static func _big_placements(shape: int) -> Array:

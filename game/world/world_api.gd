@@ -277,6 +277,10 @@ var _connected_objects: Array = []
 ## Bumped whenever a `changeblock` or a map load moves a block byte, so a view
 ## that caches the block buffer knows when to read it again.
 var block_revision: int = 0
+var _camera_walk: Dictionary = {}
+var _camera_reach := PackedByteArray()
+var _camera_reach_key: Array = []
+var _camera_reach_revision: int = 0
 ## The drawn surface in hardware pixels, which is [constant VIEW_PIXELS] unless
 ## a view has asked for more. The extra is spread evenly around the screen the
 ## cartridge would have drawn, so the player keeps the place
@@ -4010,7 +4014,8 @@ func expanded_block_at(block_x: int, block_y: int) -> int:
 	if current_map == null:
 		return 0
 	if in_hardware_buffer(current_map, block_x, block_y):
-		return drawn_block_at(block_x, block_y)
+		return drawn_block_at(block_x, block_y) if camera_reaches(block_x, block_y) \
+			else current_map.border_block
 	for placement: Dictionary in map_placements().values():
 		var map: Gen2WorldMap = placement["map"]
 		var origin: Vector2i = placement["origin"]
@@ -4032,6 +4037,69 @@ static func in_hardware_buffer(map: Gen2WorldMap, block_x: int, block_y: int) ->
 	return block_x >= -BUFFER_BLOCKS and block_y >= -BUFFER_BLOCKS \
 		and block_x < map.width_blocks + BUFFER_BLOCKS \
 		and block_y < map.height_blocks + BUFFER_BLOCKS
+
+
+## Whether a hardware screen framed on a cell the player can walk to shows this
+## buffer block. Indoor maps space their rooms so none shows the next (the Fast
+## Ship's cabins); a wider view must not either.
+func camera_reaches(block_x: int, block_y: int) -> bool:
+	if current_map == null or current_map.is_outside() \
+		or not in_hardware_buffer(current_map, block_x, block_y):
+		return true
+	camera_reach_revision()
+	var width: int = current_map.width_blocks + 2 * BUFFER_BLOCKS
+	return _camera_reach[(block_y + BUFFER_BLOCKS) * width + block_x + BUFFER_BLOCKS] != 0
+
+
+## The cells one step or one ledge hop from [param cell], in either direction.
+func _camera_steps(cell: Vector2i, direction: Vector2i) -> Array[Vector2i]:
+	var next: Vector2i = cell + direction
+	if _reach_standable(next) and not (_reach_edge_blocked(cell, next, direction) \
+		and _reach_edge_blocked(next, cell, -direction)):
+		return [next]
+	var far: Vector2i = cell + direction * 2
+	if _reach_standable(far) \
+		and (allows_hop_at(cell, direction) or allows_hop_at(far, -direction)):
+		return [far]
+	return []
+
+
+## Moves on a map load, a `changeblock`, or the player carried out of the walk.
+func camera_reach_revision() -> int:
+	if current_map == null or current_map.is_outside():
+		return _camera_reach_revision
+	var key: Array = [map_id(), block_revision]
+	if key != _camera_reach_key or not _camera_walk.has(player_cell):
+		_camera_reach_key = key
+		_camera_reach_revision += 1
+		_measure_camera_reach()
+	return _camera_reach_revision
+
+
+## [method _reachable_cells]' steps both ways from [member player_cell] alone,
+## then each reached cell's 10x9-cell page as `wOverworldMapBlocks` blocks.
+func _measure_camera_reach() -> void:
+	_camera_walk = {player_cell: true}
+	var queue: Array[Vector2i] = [player_cell]
+	while not queue.is_empty():
+		var cell: Vector2i = queue.pop_back()
+		for direction: Vector2i in REACH_DIRECTIONS:
+			for next: Vector2i in _camera_steps(cell, direction):
+				if not _camera_walk.has(next):
+					_camera_walk[next] = true
+					queue.append(next)
+	var width: int = current_map.width_blocks + 2 * BUFFER_BLOCKS
+	var cells: float = float(Gen2Layout.MAP_BLOCK_CELL_WIDTH)
+	_camera_reach = PackedByteArray()
+	_camera_reach.resize(width * (current_map.height_blocks + 2 * BUFFER_BLOCKS))
+	for cell: Vector2i in _camera_walk:
+		var page: Vector2i = cell - PLAYER_VIEW_CELL
+		var first := Vector2i((Vector2(page) / cells).floor())
+		var last := Vector2i((Vector2(page + VIEW_CELLS - Vector2i.ONE) / cells).floor())
+		for block_y: int in range(first.y, last.y + 1):
+			for block_x: int in range(first.x, last.x + 1):
+				if in_hardware_buffer(current_map, block_x, block_y):
+					_camera_reach[(block_y + BUFFER_BLOCKS) * width + block_x + BUFFER_BLOCKS] = 1
 
 
 ## Every map the connection graph reaches from the current one, keyed

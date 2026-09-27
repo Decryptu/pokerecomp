@@ -355,6 +355,28 @@ func test_a_sound_wait_lasts_as_long_as_the_effect_on_a_driven_screen() -> void:
 	assert_eq(player.timeline_updates() - rendered, held, "one driver frame a screen frame")
 
 
+## An effect that never ends on a driver that keeps rendering, which a phone's
+## live output is: every trainer's entrance held on it until the app lost focus.
+func test_a_sound_wait_on_an_endless_effect_ends_at_its_cap() -> void:
+	_world_screen = await _open_world()
+	var player: Gen2AudioPlayer = _world_screen._audio_player
+	## One effect channel whose note jumps back to itself.
+	var record: Dictionary = {
+		"index": 1, "bank": 2, "address": 0x4000, "data_address": 0x4000,
+		"bytes": [Gen2SoundEngine.NUM_MUSIC_CHANNELS, 0x03, 0x40,
+			0x3F, 0xF1, 0x00, 0x07, 0xFC, 0x03, 0x40],
+	}
+	assert_true(bool(player.play_record(record, &"sfx")["played"]))
+	_world_screen._audio_waiting = true
+	var held: int = 0
+	while _world_screen._audio_waiting and held < Gen2AudioPlayer.WAIT_CAP_FRAMES * 2:
+		_world_screen.advance_frame()
+		held += 1
+	assert_true(player.effect_playing(), "the effect is still sounding")
+	assert_false(_world_screen._audio_waiting, "yet the script is let go")
+	assert_almost_eq(held, Gen2AudioPlayer.WAIT_CAP_FRAMES, 2)
+
+
 ## `Script_pokepic` puts its box up and `Script_cry` is the next command, so the
 ## picture and the runtime request the cry stages land on the same result. The
 ## request takes the pump out of the result loop, and the events beside it are

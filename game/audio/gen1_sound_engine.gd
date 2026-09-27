@@ -559,12 +559,16 @@ func stop_sfx() -> void:
 		_init_sfx_variables(channel)
 
 
-## `WaitForSoundToFinish` waits on the four effect channels alone.
 func sfx_active() -> bool:
 	for index: int in range(NUM_MUSIC_CHANS, NUM_CHANNELS):
 		if _wram[SOUND_IDS + index] != 0:
 			return true
 	return false
+
+
+## `WaitForSoundToFinish`'s read: channels 5, 6 and 8, stepping over the wave.
+func sound_to_finish() -> bool:
+	return (_wram[SOUND_IDS + CHAN5] | _wram[SOUND_IDS + CHAN5 + 1] | _wram[SOUND_IDS + CHAN8]) != 0
 
 
 func any_channel_active() -> bool:

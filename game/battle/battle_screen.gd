@@ -400,6 +400,9 @@ var _capture_selecting: bool = false:
 		_list_state_changed()
 var _capture_waiting: bool = false
 var _box_queue: Array[String] = []
+## The flute's second box while its tune is owed, and the tune's wait.
+var _flute_line: String = ""
+var _flute: Dictionary = {}
 ## The [constant Gen2Battle.CAUGHT] event built by [method complete_capture] and
 ## published on the box that prints its Gotcha line, so a subscriber has moved
 ## before the nickname prompt opens.
@@ -627,7 +630,8 @@ func _process(delta: float) -> void:
 func frames_running() -> bool:
 	var bars: bool = not _bars.is_empty() or (_exp_bar != null and not _exp_bar.paused())
 	return bars or _intro != null or animation_running() or fainting() or sliding() \
-		or animating_frontpic() or not _sound_queue.is_empty() or not _unveil.is_empty()
+		or animating_frontpic() or not _sound_queue.is_empty() or not _unveil.is_empty() \
+		or not _flute.is_empty()
 
 
 func _text_printing() -> bool:
@@ -658,6 +662,7 @@ func advance_frame() -> bool:
 	moved = advance_bars() or moved
 	moved = advance_faint() or moved
 	moved = _advance_sound_queue() or moved
+	moved = _advance_flute() or moved
 	moved = advance_slide() or moved
 	moved = advance_frontpic() or moved
 	moved = advance_unveil() or moved
@@ -3827,7 +3832,11 @@ func _show_capture_selection() -> void:
 
 
 func _show_next_box() -> void:
-	if _box_queue.is_empty():
+	if _box_queue.is_empty() or not _flute.is_empty():
+		return
+	if not _flute_line.is_empty() and _box_queue[0] == _flute_line:
+		_flute_line = ""
+		_flute = {"played": false}
 		return
 	var line: String = _box_queue.pop_front()
 	show_message(line)
@@ -3916,9 +3925,8 @@ func _gen1_item_text(key: String, fallback: String, run: String = "item_use") ->
 	return fallback if text.is_empty() else text
 
 
-## `ItemUsePokeFlute` reaches neither `PrintItemUseTextAndRemoveItem` nor
-## `UseDisposableItem`, so its own boxes are all a battle says.
-## `Music_PokeFluteInBattle` sits between the two, behind `wLowHealthAlarm`.
+## `ItemUsePokeFlute`'s own boxes are all a battle says; the first one's
+## `text_promptbutton` is pressed before `Music_PokeFluteInBattle` plays.
 func _show_flute_boxes(woke: bool) -> void:
 	_box_queue.clear()
 	if not woke:
@@ -3927,12 +3935,29 @@ func _show_flute_boxes(woke: bool) -> void:
 	show_message(_gen1_item_text(
 		"had_effect", FLUTE_HAD_EFFECT_TEXT, "poke_flute"
 	).replace(Gen2WorldPC.PLAYER_MARKER, _player_label()))
-	_play_poke_flute()
-	_box_queue.append(_gen1_item_text("woke_up", FLUTE_WOKE_UP_TEXT, "poke_flute"))
+	_flute_line = _gen1_item_text("woke_up", FLUTE_WOKE_UP_TEXT, "poke_flute")
+	_box_queue.append(_flute_line)
+
+
+## `WaitForSoundToFinish`, the flute and `.musicWaitLoop`, skipped under `wLowHealthAlarm`.
+func _advance_flute() -> bool:
+	if _flute.is_empty():
+		return false
+	if _audio_player != null and not _audio_player.low_health_alarm():
+		if not bool(_flute.get("played", false)):
+			if _audio_player.still_waiting(_flute):
+				return true
+			_flute = {"played": true}
+			_play_poke_flute()
+		if _audio_player.still_waiting_on_channel(_flute, Gen1SoundEngine.CHAN7):
+			return true
+	_flute = {}
+	_show_next_box()
+	return true
 
 
 func _play_poke_flute() -> void:
-	if _audio_player == null or _data == null or _audio_player.low_health_alarm():
+	if _audio_player == null or _data == null:
 		return
 	var record: Dictionary = _data.gen1_poke_flute()
 	if record.is_empty():
