@@ -219,7 +219,7 @@ func _draw_gen1(
 
 	var indices: PackedByteArray = _compose(map)
 	if font != null:
-		font.draw_box(
+		font.draw_border(
 			0, indices, COLUMNS * TILE, GEN1_BORDER_AT.x * TILE,
 			GEN1_BORDER_AT.y * TILE, GEN1_BORDER_SIZE.x, GEN1_BORDER_SIZE.y
 		)

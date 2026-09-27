@@ -77,7 +77,6 @@ func draw(question: String, cursor: int) -> PackedByteArray:
 	if font == null:
 		return indices
 
-	_blank_interior(indices, width, TEXT_BOX)
 	font.draw_box(
 		frame_style, indices, width,
 		TEXT_BOX.position.x * TILE, TEXT_BOX.position.y * TILE,
@@ -93,13 +92,3 @@ func draw(question: String, cursor: int) -> PackedByteArray:
 
 	_menu.draw(menu_box(), OPTIONS, cursor, indices, width)
 	return indices
-
-
-## `TextboxBorder`'s own `' '` run across the interior rows, which is what keeps
-## the field from showing through a box drawn over it. Elsewhere the buffer is
-## already blank, so only a filled page needs this.
-func _blank_interior(indices: PackedByteArray, width: int, box: Rect2i) -> void:
-	for row: int in range((box.position.y + 1) * TILE, (box.position.y + box.size.y - 1) * TILE):
-		var at: int = row * width + (box.position.x + 1) * TILE
-		for column: int in (box.size.x - 2) * TILE:
-			indices[at + column] = 0

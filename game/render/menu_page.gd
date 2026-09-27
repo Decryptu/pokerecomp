@@ -54,7 +54,6 @@ func draw(
 	var size: Vector2i = box.border_size()
 	var at: Vector2i = box.border_position()
 	font.draw_box(frame_style, indices, width, at.x * TILE, at.y * TILE, size.x, size.y)
-	_fill_interior(box, indices, width)
 
 	if box.has_flag(Gen2MenuBox.STATICMENU_PLACE_TITLE) and title != "":
 		var title_at: Vector2i = box.title_position(title_indent)
@@ -157,18 +156,3 @@ func render(
 	return Gen2PicImage.from_indices(
 		indices, width, Gen2Screen.HEIGHT, colors
 	).get_region(Rect2i(box.border_position() * TILE, box.border_size() * TILE))
-
-
-## `Textbox`'s own `ClearBox`, so a menu over a filled page does not show it
-## through. The source's blank is $7f, below the font, which draws as index 0.
-func _fill_interior(box: Gen2MenuBox, indices: PackedByteArray, width: int) -> void:
-	var corner: Vector2i = box.border_position()
-	var interior: Vector2i = box.border_size() - Vector2i(2, 2)
-	var left: int = (corner.x + 1) * TILE
-	var span: int = interior.x * TILE
-	for row: int in interior.y * TILE:
-		var start: int = ((corner.y + 1) * TILE + row) * width + left
-		if start < 0 or start + span > indices.size():
-			continue
-		for pixel: int in span:
-			indices[start + pixel] = 0

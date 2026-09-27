@@ -544,11 +544,7 @@ func _draw_prompt(page: PackedByteArray, width: int, prompt: Variant, speech: bo
 		return
 	var box_at: Vector2i = GEN1_TEXTBOX if speech else textbox_at
 	var text_at: Vector2i = GEN1_PROMPT if speech else prompt_at
-	## `TextboxBorder` blanks its inside, so CANCEL on row 13 goes under it.
 	var rows: int = GEN1_TEXTBOX_ROWS if speech else textbox_rows
-	for y: int in range(box_at.y * TILE, mini((box_at.y + rows) * TILE, page.size() / width)):
-		for x: int in TEXTBOX_COLUMNS * TILE:
-			page[y * width + box_at.x * TILE + x] = 0
 	font.draw_box(
 		frame_style, page, width, box_at.x * TILE, box_at.y * TILE, TEXTBOX_COLUMNS, rows
 	)

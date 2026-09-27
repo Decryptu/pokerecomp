@@ -218,12 +218,35 @@ func draw_frame_code(
 	blit_slot(_frames, _frame_width, slot, into, into_width, at_x, at_y)
 
 
-## A whole box border, [param columns] by [param rows] tiles with its top-left
-## at [param at_x]/[param at_y] in pixels. The right-hand side reuses the same
-## vertical tile as the left and the bottom edge reuses the top's horizontal: a
-## frame is six tiles, not eight, and the two it does not have are the two the
-## hardware never needed.
+## `TextboxBorder`, [param columns] by [param rows] tiles with its top-left at
+## [param at_x]/[param at_y] in pixels: the border, and spaces over everything
+## inside it, so nothing drawn earlier shows through.
 func draw_box(
+	frame: int,
+	into: PackedByteArray,
+	into_width: int,
+	at_x: int,
+	at_y: int,
+	columns: int,
+	rows: int
+) -> void:
+	if columns < 2 or rows < 2 or into_width <= 0:
+		return
+	@warning_ignore("integer_division")
+	var into_height: int = into.size() / into_width
+	var left: int = maxi(at_x + TILE, 0)
+	var right: int = mini(at_x + (columns - 1) * TILE, into_width)
+	for y: int in range(maxi(at_y + TILE, 0), mini(at_y + (rows - 1) * TILE, into_height)):
+		for x: int in range(left, right):
+			into[y * into_width + x] = 0
+	draw_border(frame, into, into_width, at_x, at_y, columns, rows)
+
+
+## [method draw_box]'s border alone, for a page that lays its interior first. The
+## right-hand side reuses the same vertical tile as the left and the bottom edge
+## reuses the top's horizontal: a frame is six tiles, not eight, and the two it
+## does not have are the two the hardware never needed.
+func draw_border(
 	frame: int,
 	into: PackedByteArray,
 	into_width: int,

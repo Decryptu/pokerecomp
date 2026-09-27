@@ -153,7 +153,7 @@ static func _rotated(pixels: PackedByteArray, width: int, height: int) -> Packed
 
 
 ## `Textbox`: the frame is two cells wider and taller than the interior it is
-## given, and the interior is cleared before it is drawn.
+## given.
 func _box(indices: PackedByteArray, at: Vector2i, interior: Vector2i) -> void:
 	font.draw_box(
 		Gen2OptionsStore.current().textbox_frame, indices, WIDTH,

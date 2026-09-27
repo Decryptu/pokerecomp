@@ -435,7 +435,6 @@ func _draw_code(code: int, into: PackedByteArray, at_x: int, at_y: int) -> void:
 func _draw_boxes(
 	into: PackedByteArray, game: Gen2CardFlip, state: Dictionary
 ) -> void:
-	_fill_interior(into, TEXTBOX_AT, TEXTBOX_SIZE)
 	font.draw_box(
 		frame_style, into, WIDTH, TEXTBOX_AT.x * TILE, TEXTBOX_AT.y * TILE,
 		TEXTBOX_SIZE.x, TEXTBOX_SIZE.y
@@ -446,7 +445,6 @@ func _draw_boxes(
 			row, into, WIDTH, TEXT_AT.x * TILE, (TEXT_AT.y + line * TEXT_SPACING) * TILE
 		)
 		line += 1
-	_fill_interior(into, COIN_BOX_AT, COIN_BOX_SIZE)
 	font.draw_box(
 		frame_style, into, WIDTH, COIN_BOX_AT.x * TILE, COIN_BOX_AT.y * TILE,
 		COIN_BOX_SIZE.x, COIN_BOX_SIZE.y
@@ -468,20 +466,7 @@ func _draw_boxes(
 		_draw_yes_no(into, yes_no)
 
 
-## `Textbox`'s own `ClearBox`: the interior is blanked before anything is
-## written into it, which is what keeps the table from showing through.
-func _fill_interior(into: PackedByteArray, at: Vector2i, box: Vector2i) -> void:
-	for row: int in (box.y - 2) * TILE:
-		var y: int = (at.y + 1) * TILE + row
-		for pixel: int in (box.x - 2) * TILE:
-			var x: int = (at.x + 1) * TILE + pixel
-			if x < 0 or x >= WIDTH or y < 0 or y >= HEIGHT:
-				continue
-			into[y * WIDTH + x] = 0
-
-
 func _draw_yes_no(into: PackedByteArray, cursor: int) -> void:
-	_fill_interior(into, YES_NO_AT, YES_NO_SIZE)
 	font.draw_box(
 		frame_style, into, WIDTH, YES_NO_AT.x * TILE, YES_NO_AT.y * TILE,
 		YES_NO_SIZE.x, YES_NO_SIZE.y
