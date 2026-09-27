@@ -5,6 +5,7 @@ extends GutTest
 ## the production paths.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
+const BattleFixture := preload("res://tests/unit/battle_fixture.gd")
 
 var _data: GameData = null
 var _battle_screen: Gen2BattleScreen = null
@@ -397,13 +398,15 @@ func test_a_hit_drains_the_bar_before_it_says_what_the_hit_was() -> void:
 	_battle_screen.set_hp(48, 48, 40, 40)
 
 	_battle_screen._pending = [{
+		"type": Gen2Battle.HP_BAR, "side": Gen2Battle.ENEMY, "hp": 24, "max_hp": 48,
+	}, {
 		"type": Gen2Battle.HIT, "side": Gen2Battle.PLAYER, "target": Gen2Battle.ENEMY,
-		"hp": 24, "max_hp": 48, "critical": false,
-		"effectiveness": Gen2Layout.MATCHUP_SUPER_EFFECTIVE,
+		"critical": false, "effectiveness": Gen2Layout.MATCHUP_SUPER_EFFECTIVE,
 	}, {
 		"type": Gen2Battle.EFFECTIVENESS, "side": Gen2Battle.PLAYER, "target": Gen2Battle.ENEMY,
 		"effectiveness": Gen2Layout.MATCHUP_SUPER_EFFECTIVE,
 	}]
+	_battle_screen._menu_stage = &""
 	_battle_screen._show_next_event()
 
 	assert_true(_battle_screen.bars_animating(), "the bar is still on its way down")
@@ -432,10 +435,10 @@ func test_a_hit_that_says_nothing_still_empties_the_bar_before_the_faint() -> vo
 	_battle_screen.set_hp(48, 48, 40, 40)
 
 	_battle_screen._pending = [
+		{"type": Gen2Battle.HP_BAR, "side": Gen2Battle.ENEMY, "hp": 0, "max_hp": 48},
 		{
-			"type": Gen2Battle.HIT, "side": Gen2Battle.PLAYER,
-			"target": Gen2Battle.ENEMY, "hp": 0, "max_hp": 48, "critical": false,
-			"effectiveness": Gen2Layout.MATCHUP_EFFECTIVE,
+			"type": Gen2Battle.HIT, "side": Gen2Battle.PLAYER, "target": Gen2Battle.ENEMY,
+			"critical": false, "effectiveness": Gen2Layout.MATCHUP_EFFECTIVE,
 		},
 		{"type": Gen2Battle.FAINTED, "side": Gen2Battle.ENEMY},
 	]
@@ -453,6 +456,104 @@ func test_a_hit_that_says_nothing_still_empties_the_bar_before_the_faint() -> vo
 		guard -= 1
 	assert_eq(int(_battle_screen.get("_enemy_hp")), 0)
 	assert_true(_battle_screen.fainting(), "the faint follows the bar it waited for")
+
+
+## A level 20 Pikachu against a level 20 Bulbasaur, both knowing only Growl.
+func _growl_battle(seed_value: int) -> Gen2Battle:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	return Gen2Battle.create(
+		_data,
+		Gen2BattleMon.create(_data, BattleFixture.PIKACHU, 20, [BattleFixture.GROWL]),
+		Gen2BattleMon.create(_data, BattleFixture.BULBASAUR, 20, [BattleFixture.GROWL]),
+		rng
+	)
+
+
+## A real turn of [param battle] put on the screen the way
+## [method Gen2BattleScreen.take_turn] puts one.
+func _put_turn(battle: Gen2Battle) -> void:
+	_battle_screen.set("_battle", battle)
+	_battle_screen.set_hp(
+		battle.enemy.hp, battle.enemy.max_hp(), battle.player.hp, battle.player.max_hp()
+	)
+	_battle_screen._menu_stage = &""
+	_battle_screen._pending = battle.take_turn(0, 0)
+
+
+## One press's worth: the frames a bar or an animation owes, then the press.
+func _press_through() -> void:
+	var guard: int = 4000
+	while _battle_screen.frames_running() and guard > 0:
+		_battle_screen.advance_frame()
+		guard -= 1
+	_battle_screen.finish()
+	_battle_screen.advance()
+
+
+## Presses until the turn's own events are spent, short of the next menu.
+func _play_out_turn() -> void:
+	for _press: int in 40:
+		if _battle_screen._pending.is_empty() and not _battle_screen.frames_running():
+			return
+		_press_through()
+
+
+## `HitConfusion` prints `HurtItselfText`, plays `ANIM_HIT_CONFUSION` and only
+## then drains the bar through `DoPlayerDamage`, so the number under the line is
+## still the one from before the hit.
+func test_a_confused_pokemon_loses_its_health_after_saying_it_hurt_itself() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(BattleFixture.BULBASAUR, BattleFixture.PIKACHU, 20, 20)
+	_settle_intro()
+	var battle: Gen2Battle = null
+	var before: int = 0
+	for seed_value: int in 64:
+		battle = _growl_battle(seed_value)
+		battle.player.substatus |= Gen2Substatus.CONFUSED
+		battle.player.confusion_turns = 4
+		before = battle.player.hp
+		_put_turn(battle)
+		if battle.player.hp < before:
+			break
+	assert_lt(battle.player.hp, before, "a seed where the Pikachu hits itself")
+
+	_battle_screen._show_next_event()
+	var said: bool = false
+	var lines: Array[String] = []
+	for _press: int in 40:
+		var line: String = String(_battle_screen.battle_snapshot()["message"])
+		lines.append(line)
+		if line.contains("hurt itself"):
+			said = true
+			break
+		_press_through()
+	assert_true(said, "the line is printed: %s" % [lines])
+	assert_false(_battle_screen.bars_animating(), "no bar runs under the line")
+	assert_eq(_battle_screen._drawn_hp(Gen2Battle.PLAYER), before)
+
+	_play_out_turn()
+	assert_eq(_battle_screen._drawn_hp(Gen2Battle.PLAYER), battle.player.hp)
+
+
+## `ResidualDamage` and `HandleWeather` each drain the bar through
+## `SubtractHPFromUser`, so a Curse and a Sandstorm both reach the numbers.
+func test_curse_and_sandstorm_damage_reach_the_bar() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(BattleFixture.BULBASAUR, BattleFixture.PIKACHU, 20, 20)
+	_settle_intro()
+	var battle: Gen2Battle = _growl_battle(0)
+	battle.player.substatus |= Gen2Substatus.CURSE
+	battle.weather = Gen2Weather.SANDSTORM
+	battle.weather_turns = Gen2Weather.TURNS
+	_put_turn(battle)
+	assert_lt(battle.player.hp, battle.player.max_hp())
+	assert_lt(battle.enemy.hp, battle.enemy.max_hp())
+
+	_battle_screen._show_next_event()
+	_play_out_turn()
+	assert_eq(_battle_screen._drawn_hp(Gen2Battle.PLAYER), battle.player.hp)
+	assert_eq(_battle_screen._drawn_hp(Gen2Battle.ENEMY), battle.enemy.hp)
 
 
 func test_what_a_script_kept_is_still_drawn_once_the_script_has_ended() -> void:

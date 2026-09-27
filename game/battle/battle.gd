@@ -18,6 +18,10 @@ const NO_EFFECT: StringName = &"no_effect"
 ## `GetFailureResultText`'s `ItFailedText`.
 const IT_FAILED: StringName = &"it_failed"
 const HIT: StringName = &"hit"
+## `AnimateHPBar` on [code]side[/code]'s bar to [code]hp[/code] of [code]max_hp[/code],
+## or with [code]snap[/code] a `RefreshBattleHuds` redraw: the one event that moves
+## a bar, emitted where the source draws it.
+const HP_BAR: StringName = &"hp_bar"
 const RECOIL: StringName = &"recoil"
 const FAINTED: StringName = &"fainted"
 ## A multi-hit move's summary, once every planned hit has landed. A target that
@@ -86,6 +90,8 @@ const ENTRANCE_BATON_PASS: int = 1
 const ENTRANCE_DRAGGED: int = 2
 ## `ld c, n / call DelayFrames`: [code]frames[/code] with nothing drawn or read.
 const DELAY: StringName = &"delay"
+## Generation 1's `PredefShakeScreenHorizontally` alone, `b` as [code]amplitude[/code].
+const SCREEN_SHAKE: StringName = &"screen_shake"
 ## `ANIM_RETURN_MON`, which `RecallPlayerMon` plays after `PursuitSwitch`.
 const ANIM_RETURN_MON: int = 0x102
 ## The `ld c, 50` of `BattleMonEntrance` and `PassedBattleMonEntrance`.
@@ -94,8 +100,7 @@ const SWITCH_DELAY_FRAMES: int = 50
 const RESIDUAL_FAINT_FRAMES: int = 20
 const ENEMY_FAINT_FRAMES: int = 60
 ## `PlayStereoCry` behind an entrance: the cry `CheckFaintedFrzSlp` allows, on
-## the entering side's own tracks. Silent on its own, so nothing is printed for
-## it.
+## the entering side's own tracks. Silent on its own, so nothing is printed for it.
 const CRY: StringName = &"cry"
 ## `UpdatePlayerHUD` or `UpdateEnemyHUD` closing an entrance.
 const HUD_DRAWN: StringName = &"hud_drawn"
@@ -254,9 +259,7 @@ const TOOK_AIM: StringName = &"took_aim"
 ## the [code]amount[/code] taken, which is the number `SpiteEffectText` prints.
 const PP_REDUCED: StringName = &"pp_reduced"
 
-## Pain Split, which names neither Pokémon. Both sides' health is on the event
-## because both moved: [code]hp[/code] is the user's and [code]target_hp[/code] the
-## other's.
+## Pain Split, which names neither Pokémon; both bars move ahead of it.
 const SHARED_PAIN: StringName = &"shared_pain"
 
 ## Thief, carrying the [code]item[/code] that moved. `StoleText` names the thief
@@ -355,8 +358,7 @@ const FOCUS_ENERGY_SET: StringName = &"focus_energy_set"
 
 ## Substitute. Two refusals, because the cartridge picks between
 ## `HasSubstituteText` and `TooWeakSubText` on which precondition failed. The last
-## two carry no amount: `SubTookDamageText` reports none and the health never
-## moved.
+## two carry no amount: `SubTookDamageText` reports none and the health never moved.
 const SUBSTITUTE_MADE: StringName = &"substitute_made"
 const SUBSTITUTE_ALREADY: StringName = &"substitute_already"
 const SUBSTITUTE_TOO_WEAK: StringName = &"substitute_too_weak"
@@ -374,13 +376,13 @@ const SUBSTITUTE_PIC: StringName = &"substitute_pic"
 const MINIMIZED: StringName = &"minimized"
 
 ## Leech Seed, on the Pokémon that was seeded rather than the one that seeded it.
-## [constant LEECH_SEED_SAPPED] carries the healed side under `to`, `to_amount`,
-## `to_hp` and `to_max_hp`, since one event moves health across the field.
+## [constant LEECH_SEED_SAPPED] carries the healed side under `to` and
+## `to_amount`, since one event moves health across the field.
 const WAS_SEEDED: StringName = &"was_seeded"
 const LEECH_SEED_SAPPED: StringName = &"leech_seed_sapped"
 
 ## Nightmare and Curse, both quarters and both on the sufferer.
-## [constant CURSE_SET] carries the user's own `hp` after the half it cut.
+## [constant CURSE_SET] carries the `amount` the user cut from itself.
 const NIGHTMARE_STARTED: StringName = &"nightmare_started"
 const HURT_BY_NIGHTMARE: StringName = &"hurt_by_nightmare"
 const CURSE_SET: StringName = &"curse_set"
@@ -950,6 +952,13 @@ func stamp_statuses(event: Dictionary) -> Dictionary:
 	if HUD_STATUS_EVENTS.has(event["type"]):
 		event["statuses"] = [mon(PLAYER).status, mon(ENEMY).status]
 	return event
+
+
+func hp_bar_event(side: int, snap: bool = false) -> Dictionary:
+	var current: Gen2BattleMon = mon(side)
+	return {
+		"type": HP_BAR, "side": side, "hp": current.hp, "max_hp": current.max_hp(), "snap": snap,
+	}
 
 
 func opponent_of(side: int) -> int:
@@ -1854,10 +1863,9 @@ func _spikes_damage(side: int, events: Array) -> void:
 		return
 
 	var taken: int = entering.take_damage(Gen2Screens.spikes_damage(entering.max_hp()))
-	events.append({
-		"type": HURT_BY_SPIKES, "side": side, "amount": taken,
-		"hp": entering.hp, "max_hp": entering.max_hp(),
-	})
+	# `BattleText_UserHurtBySpikes` prints before `SubtractHPFromTarget`.
+	events.append({"type": HURT_BY_SPIKES, "side": side, "amount": taken})
+	events.append(hp_bar_event(side))
 	if entering.is_fainted():
 		note_faint(side, events)
 
@@ -2248,9 +2256,9 @@ func _gen1_residual(side: int, events: Array) -> void:
 		events.append({
 			"type": HURT_BY_STATUS, "side": side, "status": current.status,
 			"name": Gen2Status.name_of(current.status), "amount": taken,
-			"hp": current.hp, "max_hp": current.max_hp(),
 		})
 		events.append(status_animation_event(side, Gen1Layout.ANIM_ID_BURN_PSN))
+		events.append(hp_bar_event(side))
 	if Gen2Substatus.has(current.substatus, Gen2Substatus.LEECH_SEED):
 		var sapper: Gen2BattleMon = mon(opponent_of(side))
 		events.append(status_animation_event(opponent_of(side), Gen2MoveEffect.ABSORB_MOVE))
@@ -2258,10 +2266,10 @@ func _gen1_residual(side: int, events: Array) -> void:
 		var amount: int = _gen1_residual_amount(current)
 		var taken: int = current.take_damage(amount)
 		var healed: int = sapper.heal(amount)
+		_sap_bars(side, events)
 		events.append({
 			"type": LEECH_SEED_SAPPED, "side": side, "amount": taken,
-			"hp": current.hp, "max_hp": current.max_hp(), "to": opponent_of(side),
-			"to_amount": healed, "to_hp": sapper.hp, "to_max_hp": sapper.max_hp(),
+			"to": opponent_of(side), "to_amount": healed,
 		})
 	if current.is_fainted():
 		note_faint(side, events)
@@ -2326,10 +2334,9 @@ func _residual_status(side: int, events: Array) -> void:
 		"status": current.status,
 		"name": Gen2Status.name_of(current.status),
 		"amount": taken,
-		"hp": current.hp,
-		"max_hp": current.max_hp(),
 	})
 	_status_animation(side, anim, side, events)
+	events.append(hp_bar_event(side))
 	if current.is_fainted():
 		note_faint(side, events)
 
@@ -2375,19 +2382,22 @@ func _residual_leech_seed(side: int, events: Array) -> void:
 		)
 	var taken: int = current.take_damage(Gen2Substatus.leech_seed_damage(current.max_hp()))
 	var healed: int = 0 if sapper.is_fainted() else sapper.heal(taken)
+	_sap_bars(side, events)
 	events.append({
 		"type": LEECH_SEED_SAPPED,
 		"side": side,
 		"amount": taken,
-		"hp": current.hp,
-		"max_hp": current.max_hp(),
 		"to": opponent_of(side),
 		"to_amount": healed,
-		"to_hp": sapper.hp,
-		"to_max_hp": sapper.max_hp(),
 	})
 	if current.is_fainted():
 		note_faint(side, events)
+
+
+## Both generations drain the seeded side, then fill the other, before the line.
+func _sap_bars(side: int, events: Array) -> void:
+	events.append(hp_bar_event(side))
+	events.append(hp_bar_event(opponent_of(side)))
 
 
 ## Nothing here asks whether the sufferer is still asleep: `.woke_up`,
@@ -2400,10 +2410,8 @@ func _residual_nightmare(side: int, events: Array) -> void:
 
 	_status_animation(side, Gen2BattleAnimPlayer.ANIM_IN_NIGHTMARE, side, events)
 	var taken: int = current.take_damage(Gen2Substatus.quarter_damage(current.max_hp()))
-	events.append({
-		"type": HURT_BY_NIGHTMARE, "side": side, "amount": taken,
-		"hp": current.hp, "max_hp": current.max_hp(),
-	})
+	events.append(hp_bar_event(side))
+	events.append({"type": HURT_BY_NIGHTMARE, "side": side, "amount": taken})
 	if current.is_fainted():
 		note_faint(side, events)
 
@@ -2415,10 +2423,8 @@ func _residual_curse(side: int, events: Array) -> void:
 
 	_status_animation(side, Gen2BattleAnimPlayer.ANIM_IN_NIGHTMARE, side, events)
 	var taken: int = current.take_damage(Gen2Substatus.quarter_damage(current.max_hp()))
-	events.append({
-		"type": HURT_BY_CURSE, "side": side, "amount": taken,
-		"hp": current.hp, "max_hp": current.max_hp(),
-	})
+	events.append(hp_bar_event(side))
+	events.append({"type": HURT_BY_CURSE, "side": side, "amount": taken})
 	if current.is_fainted():
 		note_faint(side, events)
 
@@ -2449,14 +2455,11 @@ func _tick_weather(events: Array) -> void:
 		if not Gen2Weather.hits_in_sandstorm(current.types(), current.substatus):
 			continue
 
+		# `Call_PlayBattleAnim` from the other side, which no Fly or Dig hides.
+		events.append(status_animation_event(opponent_of(side), Gen2BattleAnimPlayer.ANIM_IN_SANDSTORM))
 		var taken: int = current.take_damage(Gen2Weather.sandstorm_damage(current.max_hp()))
-		events.append({
-			"type": HURT_BY_SANDSTORM,
-			"side": side,
-			"amount": taken,
-			"hp": current.hp,
-			"max_hp": current.max_hp(),
-		})
+		events.append(hp_bar_event(side))
+		events.append({"type": HURT_BY_SANDSTORM, "side": side, "amount": taken})
 		if current.is_fainted():
 			note_faint(side, events)
 
@@ -2489,15 +2492,12 @@ func _tick_wrap(events: Array) -> void:
 			events.append({"type": RELEASED_FROM_TRAP, "side": side, "move": move_number})
 			continue
 
+		# The trapping move from the other side, unless the bound one is hidden.
+		if current.substatus & (Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND) == 0:
+			events.append(status_animation_event(opponent_of(side), move_number))
 		var taken: int = current.take_damage(Gen2Substatus.trap_damage(current.max_hp()))
-		events.append({
-			"type": HURT_BY_TRAP,
-			"side": side,
-			"move": move_number,
-			"amount": taken,
-			"hp": current.hp,
-			"max_hp": current.max_hp(),
-		})
+		events.append(hp_bar_event(side))
+		events.append({"type": HURT_BY_TRAP, "side": side, "move": move_number, "amount": taken})
 		if current.is_fainted():
 			note_faint(side, events)
 
@@ -2640,9 +2640,9 @@ func _use_leftovers(side: int, events: Array) -> void:
 		return
 
 	var healed: int = holder.heal(Gen2HeldItem.leftovers_healing(holder.max_hp()))
+	events.append(hp_bar_event(side))
 	events.append({
-		"type": RECOVERED_WITH_ITEM, "side": side, "item": holder.item,
-		"amount": healed, "hp": holder.hp, "max_hp": holder.max_hp(),
+		"type": RECOVERED_WITH_ITEM, "side": side, "item": holder.item, "amount": healed,
 	})
 
 
@@ -2665,6 +2665,7 @@ func _use_pp_berry(side: int, events: Array) -> void:
 		holder.pp[slot] = holder.pp_left(slot) + restored
 		var used: int = holder.item
 		holder.item = 0
+		_item_recovery_anim(side, events)
 		events.append({
 			"type": RESTORED_PP, "side": side, "item": used,
 			"slot": slot, "move": move_number, "amount": restored,
@@ -2681,14 +2682,21 @@ func use_hp_berry(side: int, events: Array) -> bool:
 	if not Gen2HeldItem.wants_hp_berry(holder.hp, holder.max_hp()):
 		return false
 
+	_item_recovery_anim(side, events)
 	var healed: int = holder.heal(Gen2HeldItem.parameter_of(data, holder.item))
 	var used: int = holder.item
 	holder.item = 0
-	events.append({
-		"type": RECOVERED_USING_ITEM, "side": side, "item": used,
-		"amount": healed, "hp": holder.hp, "max_hp": holder.max_hp(),
-	})
+	events.append(hp_bar_event(side))
+	events.append({"type": RECOVERED_USING_ITEM, "side": side, "item": used, "amount": healed})
 	return true
+
+
+## `ItemRecoveryAnim`: RECOVER from the holder's side.
+func _item_recovery_anim(side: int, events: Array) -> void:
+	events.append(status_animation_event(side, RECOVER_MOVE))
+
+
+const RECOVER_MOVE: int = 0x69
 
 
 ## `UseHeldStatusHealingItem`, reached here and the moment a status lands: the
@@ -2710,6 +2718,7 @@ func use_status_berry(side: int, events: Array) -> bool:
 		holder.confusion_turns = 0
 	var used: int = holder.item
 	holder.item = 0
+	_item_recovery_anim(side, events)
 	events.append(stamp_statuses({"type": RECOVERED_USING_ITEM, "side": side, "item": used}))
 	return true
 
@@ -2727,6 +2736,7 @@ func use_confusion_berry(side: int, events: Array) -> bool:
 	holder.confusion_turns = 0
 	var used: int = holder.item
 	holder.item = 0
+	_item_recovery_anim(side, events)
 	events.append({"type": ITEM_HEALED_CONFUSION, "side": side, "item": used})
 	return true
 
@@ -2938,11 +2948,22 @@ func _use_trainer_item(side: int, item: int, events: Array) -> void:
 	var user: Gen2BattleMon = mon(side)
 	var effect: Dictionary = Gen1TrainerAI.apply_item(self, user, item) if is_gen1() \
 		else Gen2AIItems.apply(user, item)
-	events.append(stamp_statuses({
+	var used: Dictionary = {
 		"type": TRAINER_USED_ITEM, "side": side, "item": item,
 		"species": user.species, "name": user.display_name(), "effect": effect,
-		"hp": user.hp, "max_hp": user.max_hp(),
-	}))
+	}
+	if is_gen1() and Gen1TrainerAI.SOUND_BEFORE_LINE.has(item):
+		used["sfx"] = Gen1Sfx.SFX_HEAL_AILMENT
+	elif not is_gen1() and Gen2AIItems.SOUND_BEFORE_LINE.has(item):
+		used["sfx"] = Gen2Sfx.SFX_FULL_HEAL
+	events.append(stamp_statuses(used))
+	if not effect.has("healed"):
+		return
+	# `EnemyPotionFinish` and Generation 1's `AIRecoverHP` print the line first.
+	var bar: Dictionary = hp_bar_event(side)
+	if not is_gen1():
+		bar["sfx"] = Gen2Sfx.SFX_FULL_HEAL
+	events.append(bar)
 
 
 func allows_bag_items() -> bool:

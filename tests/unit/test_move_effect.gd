@@ -2133,6 +2133,26 @@ func test_a_missed_jump_kick_costs_its_user_an_eighth_of_the_miss() -> void:
 	assert_eq(battle.player.hp, before - int(crashed["amount"]))
 
 
+## pokered's `.applyRecoil` prints `KeptGoingAndCrashedText`, shakes the screen
+## four pixels and only then applies the one point, so the shake sits between
+## the line and the bar.
+func test_a_generation_1_crash_shakes_the_screen_before_the_bar() -> void:
+	_data.generation = RomRegistry.GEN1
+	var battle: Gen2Battle = _battle()
+	battle.enemy.change_stage("evasion", 6)
+	battle.player.change_stage("accuracy", -6)
+	var turn: Gen2Turn = _run_move(battle, Fixture.JUMP_KICK)
+	assert_true(turn.missed)
+	var order: Array = turn.events.map(func(event: Dictionary) -> StringName: return event["type"])
+	var crashed: int = order.find(Gen2Battle.CRASHED)
+	assert_ne(crashed, -1, JSON.stringify(turn.events))
+	assert_eq(
+		order.slice(crashed, crashed + 3),
+		[Gen2Battle.CRASHED, Gen2Battle.SCREEN_SHAKE, Gen2Battle.HP_BAR]
+	)
+	assert_eq(int(turn.events[crashed + 1]["amplitude"]), 4)
+
+
 ## `BattleCommand_FailureText`'s `.fly_dig`: the branch is the only thing that
 ## brings the user's picture back when the release turn does not land, and
 ## without it a missed Fly leaves the user off the screen for the rest of the

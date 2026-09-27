@@ -159,8 +159,7 @@ const USEFUL_MOVE_NUMBERS: Array[int] = [
 	38, 47, 53, 56, 57, 58, 59, 63, 79, 85, 87, 89, 92, 94, 95, 105, 126, 135, 162,
 ]
 
-## `.SandstormImmuneTypes`, which is the same three types the damage itself
-## exempts.
+## `.SandstormImmuneTypes`, which is the same three types the damage itself exempts.
 const SANDSTORM_IMMUNE_TYPES: Array = Gen2Weather.SANDSTORM_EXEMPT_TYPES
 
 ## `data/battle/ai/residual_moves.asm`, by move number: what `AI_Cautious`
@@ -179,8 +178,7 @@ static func choose_action(
 		return Gen2Battle.use_move(move_slot)
 
 	# `CheckEnemyLockedIn`, which returns out of the whole routine: a Pokémon
-	# mid-charge, mid-rampage or recharging neither switches nor is handed an
-	# item.
+	# mid-charge, mid-rampage or recharging neither switches nor is handed an item.
 	if _locked_in(battle.mon(Gen2Battle.ENEMY)):
 		return Gen2Battle.use_move(move_slot)
 

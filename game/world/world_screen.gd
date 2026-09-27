@@ -2192,11 +2192,13 @@ func _end_nuzlocke_run(save: Gen2SaveData) -> void:
 
 
 ## `Reset`, the four buttons wired straight to the console. What one costs is
-## [Gen2GameRuntime]'s, which answers the chord for every screen.
-func _soft_reset() -> void:
+## [Gen2GameRuntime]'s; a reset a script runs into is not [param counted].
+func _soft_reset(counted: bool = true) -> void:
 	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
-	if runtime != null:
+	if runtime != null and counted:
 		runtime.soft_reset()
+	elif runtime != null:
+		runtime.restart()
 	elif is_inside_tree():
 		get_tree().change_scene_to_file.call_deferred(Gen2GameRuntime.SAVE_SCENE)
 
@@ -3594,8 +3596,7 @@ func _apply_map_fade_step() -> void:
 
 ## `FadeOutToWhite` and its four siblings, opened by the special and stepped from
 ## here. The script is already holding for the frames the fade costs, since the
-## runner staged that wait; this is the row the renderer draws with on each of
-## them.
+## runner staged that wait; this is the row the renderer draws with on each of them.
 func _start_script_fade(event: Dictionary) -> void:
 	var orders: Array = event.get("orders", [])
 	if orders.is_empty():
@@ -3644,6 +3645,23 @@ func _clear_script_fade() -> void:
 	_script_fade = {}
 	_script_fade_order = Gen2WorldPalette.FADE_IDENTITY
 	_script_fade_white = false
+
+
+## `LoadMapPalettes` and `FadeInFromWhite`, which close every other setup script:
+## a row a script fade left standing is faded back in from white.
+func _load_map_palettes() -> void:
+	var held: bool = _script_fade_order != Gen2WorldPalette.FADE_IDENTITY
+	_clear_script_fade()
+	## A warp's or a Generation 1 animation's own fade owns the screen.
+	if not _map_fade.is_empty():
+		return
+	if held:
+		_start_script_fade({
+			"orders": Gen2WorldPalette.FADE_IN_ORDERS,
+			"step_frames": Gen2WorldPalette.FADE_STEP_FRAMES,
+		})
+		return
+	_apply_map_fade_step()
 
 
 ## The middle of `MapSetupScript_Door`: the map the warp names is loaded with the
@@ -4215,8 +4233,7 @@ func preview_field_move() -> void:
 
 
 ## The rest of that sequence, one step per call: the first chooses the submenu's
-## field-move entry and shows its message, the second acknowledges it and
-## commits.
+## field-move entry and shows its message, the second acknowledges it and commits.
 func preview_field_move_use() -> void:
 	_preview_field_move_use(Gen2WorldFieldMove.MOVE_CUT)
 
@@ -7076,13 +7093,32 @@ func _on_credits_closed() -> void:
 	var music_outlasts: bool = host != null and host.music_outlasts
 	if host != null:
 		Gen2Screen.drop(host)
+	_script_prompt = ""
+	if _return_from_credits():
+		return
 	if not music_outlasts:
 		_play_current_map_music()
 	if _renderer != null:
 		_renderer.refresh()
-	_script_prompt = ""
 	_refresh_labels()
 	_complete_hall_of_fame_request()
+
+
+## `ReturnFromCredits`, then `FinishContinueFunction`: Lance's byte is `jp Reset`
+## and Red's is spent on the warp to Mt. Silver. Generation 1's credits return
+## into the script that asked for them.
+func _return_from_credits() -> bool:
+	if _world == null or _world.is_gen1():
+		return false
+	if _world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_LANCE:
+		_soft_reset(false)
+		return true
+	if _world.spawn_after_champion != Gen2WorldSnapshot.SPAWN_AFTER_RED:
+		return false
+	_world.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_NONE
+	if bool(_world.warp_to_spawn(Gen2WorldSnapshot.SPAWN_MT_SILVER).get("ok", false)):
+		_refresh_after_escape()
+	return true
 
 
 ## `.music`, whose `PlayMusic MUSIC_NONE` and `DelayFrame` in front of the real
@@ -8687,7 +8723,7 @@ func _apply_result_event(event: Dictionary, flags: Dictionary) -> bool:
 		## Battle Tower challenge leaves the battle room. The save has already
 		## been written by the action in front of it.
 		persist_world_snapshot()
-		_soft_reset()
+		_soft_reset(false)
 		return false
 	for flag: StringName in EVENT_FLAGS.get(type, []):
 		flags[flag] = true
@@ -8988,7 +9024,7 @@ func _request_hall_of_fame(_request: Dictionary) -> StringName:
 ## Crystal's `special Reset` is an event.
 func _request_soft_reset(_request: Dictionary) -> StringName:
 	persist_world_snapshot()
-	_soft_reset()
+	_soft_reset(false)
 	return &"break"
 
 
@@ -9057,6 +9093,7 @@ func _settle_after_results(flags: Dictionary) -> void:
 			## reset on a step that never asked for one.
 			if flags.has(&"map_reloaded"):
 				_world.reload_current_map()
+			_load_map_palettes()
 			_animation.configure(_world, _render_time_of_day())
 			_set_renderer_world()
 			_renderer.set_time_of_day(_render_time_of_day())
@@ -9083,6 +9120,7 @@ func _refresh_after_escape(music: bool = true) -> void:
 	## itself cannot run: the masked party members are the save's.
 	if _world.take_contest_abort():
 		Gen2WorldPartyHost.contest_return_mons(_active_party_save())
+	_load_map_palettes()
 	_animation.configure(_world, _render_time_of_day())
 	_set_renderer_world()
 	if _renderer != null:

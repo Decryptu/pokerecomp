@@ -7037,8 +7037,7 @@ func _gen1_cup_answer(cup: int) -> Array:
 		+ _gen1_link_room_steps(Gen1Layout.LINK_MENU_COLOSSEUM)
 
 
-## `PokeCup`, `PikaCup` and `PetitCup` in their own order; empty lets the
-## party in.
+## `PokeCup`, `PikaCup` and `PetitCup` in their own order; empty lets the party in.
 func _gen1_cup_refusal(cup: int, species: Array, levels: Array) -> String:
 	if species.size() != Gen1Layout.CUP_PARTY_SIZE:
 		return _gen1_cup_text("three_mons")

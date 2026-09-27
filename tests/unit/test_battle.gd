@@ -41,6 +41,12 @@ func _first(events: Array, type: StringName) -> Dictionary:
 	return found[0] if not found.is_empty() else {}
 
 
+## The bar the first [param type] event stands behind.
+func _bar_before(events: Array, type: StringName) -> Dictionary:
+	var at: int = events.find(_first(events, type))
+	return events[at - 1] if at > 0 and events[at - 1]["type"] == Gen2Battle.HP_BAR else {}
+
+
 func test_a_faster_enemy_moves_first() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE]),
@@ -124,9 +130,11 @@ func test_struggle_costs_the_attacker_a_quarter_of_what_it_dealt() -> void:
 	var recoil: Dictionary = _first(events, Gen2Battle.RECOIL)
 	assert_false(recoil.is_empty(), "Struggle recoils")
 	assert_eq(int(recoil["amount"]), maxi(int(hit["amount"]) / 4, 1))
-	# Against the health the event carries, not against the Pokémon: Bulbasaur
+	# Against the health the bar carries, not against the Pokémon: Bulbasaur
 	# gets its own turn afterwards and takes more off.
-	assert_eq(int(recoil["hp"]), attacker.max_hp() - int(recoil["amount"]))
+	var bar: Dictionary = _bar_before(events, Gen2Battle.RECOIL)
+	assert_eq(int(bar["side"]), Gen2Battle.PLAYER)
+	assert_eq(int(bar["hp"]), attacker.max_hp() - int(recoil["amount"]))
 
 
 func test_an_immunity_is_reported_rather_than_a_hit_for_nothing() -> void:
@@ -147,13 +155,16 @@ func test_a_hit_carries_the_numbers_the_screen_needs() -> void:
 		_mon(Fixture.PIKACHU, 50, [Fixture.THUNDERBOLT]),
 		_mon(Fixture.BULBASAUR, 50, [Fixture.TACKLE])
 	)
-	var hit: Dictionary = _first(battle.take_turn(0, 0), Gen2Battle.HIT)
+	var events: Array = battle.take_turn(0, 0)
+	var hit: Dictionary = _first(events, Gen2Battle.HIT)
 	assert_eq(hit["side"], Gen2Battle.PLAYER)
 	assert_eq(hit["target"], Gen2Battle.ENEMY)
 	assert_eq(int(hit["effectiveness"]), 5, "Grass resists Electric")
 	assert_between(int(hit["amount"]), 22, 52)
-	assert_eq(int(hit["hp"]), battle.enemy.hp)
-	assert_eq(int(hit["max_hp"]), battle.enemy.max_hp())
+	var bar: Dictionary = _bar_before(events, Gen2Battle.HIT)
+	assert_eq(int(bar["side"]), Gen2Battle.ENEMY)
+	assert_eq(int(bar["hp"]), battle.enemy.hp)
+	assert_eq(int(bar["max_hp"]), battle.enemy.max_hp())
 
 
 func test_a_faint_ends_the_turn_before_the_other_side_answers() -> void:
@@ -3175,13 +3186,14 @@ func test_recover_reaches_the_turn_loop_with_the_numbers_a_screen_needs() -> voi
 	var restored: Dictionary = _first(events, Gen2Battle.HP_RESTORED)
 	assert_false(restored.is_empty(), JSON.stringify(events))
 	assert_eq(int(restored["side"]), Gen2Battle.PLAYER)
-	assert_eq(int(restored["max_hp"]), pikachu.max_hp())
-	# The event carries what the bar read at the moment of the heal, not what is
-	# left at the end of the turn: Pikachu is the faster of the two, so Geodude's
-	# attack lands after this and takes some of it straight back.
+	var bar: Dictionary = _bar_before(events, Gen2Battle.HP_RESTORED)
+	assert_eq(int(bar["max_hp"]), pikachu.max_hp())
+	# The bar carries what it read at the moment of the heal, not what is left at
+	# the end of the turn: Pikachu is the faster of the two, so Geodude's attack
+	# lands after this and takes some of it straight back.
 	@warning_ignore("integer_division")
-	assert_eq(int(restored["hp"]), 1 + pikachu.max_hp() / 2)
-	assert_lt(pikachu.hp, int(restored["hp"]))
+	assert_eq(int(bar["hp"]), 1 + pikachu.max_hp() / 2)
+	assert_lt(pikachu.hp, int(bar["hp"]))
 
 
 ## Exp. Share. `UpdateFaintedPlayerMon` halves the block once, then splits that

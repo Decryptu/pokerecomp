@@ -374,8 +374,7 @@ func scroll() -> Vector2i:
 ## The `hSCX` for one scanline, which is `wLYOverrides` while `hLCDCPointer`
 ## points at rSCX and plain `hSCX` otherwise. `LCD` fires on `STAT_MODE_0` and
 ## writes the entry `rLY` names, so the line after it is the one drawn with it;
-## `VBlank_Cutscene` writes entry zero, which is why the first two lines share
-## it.
+## `VBlank_Cutscene` writes entry zero, which is why the first two lines share it.
 func scroll_x_at(line: int) -> int:
 	if not _ly_active or line < 0 or line >= _ly_shown.size():
 		return _scx
@@ -507,8 +506,7 @@ func advance_frame() -> Array[Dictionary]:
 	return drain_events()
 
 
-## [constant SCENE_OVERRUN]'s entry for the pass a scene is about to run, in
-## frames.
+## [constant SCENE_OVERRUN]'s entry for the pass a scene is about to run, in frames.
 func _overrun(at_scene: int, at_counter: int) -> int:
 	return int((SCENE_OVERRUN.get(at_scene, {}) as Dictionary).get(at_counter, 0))
 

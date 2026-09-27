@@ -1472,8 +1472,8 @@ func _party_from(species: int, level: int) -> Gen2Party:
 	return Gen2Party.create(members)
 
 
-## Both committed HP totals, which [method battle_snapshot] reads. This snaps:
-## `AnimateHPBar` is started by the damage and healing events, not by a write.
+## Both committed HP totals. This snaps: `AnimateHPBar` is started by
+## [constant Gen2Battle.HP_BAR], not by a write.
 func set_hp(enemy: int, enemy_max: int, player: int, player_max: int) -> void:
 	if enemy != _enemy_hp or enemy_max != _enemy_max_hp:
 		_bars.erase(Gen2Battle.ENEMY)
@@ -1486,9 +1486,9 @@ func set_hp(enemy: int, enemy_max: int, player: int, player_max: int) -> void:
 	_push_view()
 
 
-## Starts a bar from [param from_hp] to the HP now committed for [param side], after a
-## damage or heal event has written it. A moved maximum is not a drain: a Pokemon coming
-## out has its bar drawn at once, as `LoadHPBar` does.
+## Starts a bar from [param from_hp] to the HP now committed for [param side]. A moved
+## maximum is not a drain: a Pokemon coming out has its bar drawn at once, as
+## `LoadHPBar` does.
 func _start_bar(side: int, from_hp: int, from_max: int) -> void:
 	var to_hp: int = _enemy_hp if side == Gen2Battle.ENEMY else _player_hp
 	var max_hp: int = _enemy_max_hp if side == Gen2Battle.ENEMY else _player_max_hp
@@ -2097,8 +2097,8 @@ const USER_PICTURE_STEPS: Dictionary = {
 	Gen2Battle.APPEAR_USER: ANIM_APPEAR_USER,
 	Gen2Battle.DISAPPEAR_USER: ANIM_DISAPPEAR_USER,
 }
-## `PlayApplyingAttackAnimation`, `AnimateSendingOutMon` and
-## `AnimateRetreatingPlayerMon`, Generation 1's routines with no row behind them.
+## `PlayApplyingAttackAnimation`, `PredefShakeScreenHorizontally`, `AnimateSendingOutMon`
+## and `AnimateRetreatingPlayerMon`, Generation 1's routines with no row behind them.
 const ANIM_APPLYING: StringName = &"applying"
 const ANIM_SEND_OUT: StringName = &"send_out"
 const ANIM_RETREAT: StringName = &"retreat"
@@ -2399,7 +2399,7 @@ func _run_next_anim_step() -> void:
 				):
 					return
 			ANIM_APPLYING:
-				if _start_applying(int(step["type"])):
+				if _start_applying(step):
 					return
 			ANIM_SEND_OUT:
 				_send_out_step(int(step["size"]))
@@ -2585,9 +2585,13 @@ func _start_script(index: int, enemy_turn: bool, shakes: int = 0) -> bool:
 	)
 
 
-func _start_applying(animation_type: int) -> bool:
+func _start_applying(step: Dictionary) -> bool:
+	if step.has("amplitude"):
+		return _begin_anim_player(
+			Gen2BattleAnimPlayer.create_gen1_screen_shake(_anim_data, int(step["amplitude"]))
+		)
 	return _begin_anim_player(Gen2BattleAnimPlayer.create_gen1_applying(
-		_anim_data, animation_type, bool(_anim_event.get("enemy_turn", false))
+		_anim_data, int(step["type"]), bool(_anim_event.get("enemy_turn", false))
 	))
 
 
@@ -6330,6 +6334,14 @@ func _show_next_event() -> void:
 			if animation_running():
 				return
 			continue
+		if StringName(event["type"]) == Gen2Battle.SCREEN_SHAKE:
+			_anim_plan = []
+			_anim_event = {}
+			_step(ANIM_APPLYING, {"amplitude": int(event["amplitude"])})
+			_run_next_anim_step()
+			if animation_running():
+				return
+			continue
 		if USER_PICTURE_STEPS.has(event["type"]):
 			## `AppearUser` or `DisappearUser` alone: no script and no frames.
 			_anim_plan = []
@@ -6387,15 +6399,6 @@ const HIT_LINE_EVENTS: Array[StringName] = [
 ]
 
 
-## Events where the source drains a bar through `AnimateHPBar` from `DoEnemyDamage`,
-## `DoPlayerDamage` or a heal command. `SENT_OUT` is drawn, not drained.
-const HP_BAR_EVENTS: Array[StringName] = [
-	Gen2Battle.HIT, Gen2Battle.RECOIL, Gen2Battle.DRAINED, Gen2Battle.OHKO,
-	Gen2Battle.HURT_BY_STATUS, Gen2Battle.HURT_ITSELF, Gen2Battle.HP_RESTORED,
-	Gen2Battle.TRAINER_USED_ITEM,
-]
-
-
 func _apply_event(event: Dictionary) -> void:
 	var before_enemy: int = _enemy_hp
 	var before_enemy_max: int = _enemy_max_hp
@@ -6403,6 +6406,11 @@ func _apply_event(event: Dictionary) -> void:
 	var before_player_max: int = _player_max_hp
 	var before_exp: int = _exp
 	_apply_event_state(event)
+	if event.has("sfx"):
+		if _generation() == RomRegistry.GEN1:
+			_play_gen1_sound(int(event["sfx"]))
+		else:
+			_play_sfx(int(event["sfx"]))
 	## Stages, weather, Haze, a Baton Pass and a switch all land here and only
 	## some of them move a bar, so the annotations follow the event rather than
 	## waiting for the next view push.
@@ -6410,7 +6418,8 @@ func _apply_event(event: Dictionary) -> void:
 	if StringName(event["type"]) == Gen2Battle.EXP_GAINED:
 		_start_exp_bar(event, before_exp)
 		return
-	if not HP_BAR_EVENTS.has(StringName(event["type"])):
+	## `SENT_OUT` is drawn, not drained, and so is a snapped bar.
+	if StringName(event["type"]) != Gen2Battle.HP_BAR or bool(event.get("snap", false)):
 		return
 	_start_bar(Gen2Battle.ENEMY, before_enemy, before_enemy_max)
 	_start_bar(Gen2Battle.PLAYER, before_player, before_player_max)
@@ -6511,14 +6520,7 @@ func _apply_event_state(event: Dictionary) -> void:
 		call(EVENT_STATE_HANDLERS[event["type"]], event)
 		return
 	match event["type"]:
-		Gen2Battle.HIT, Gen2Battle.RECOIL, Gen2Battle.DRAINED, Gen2Battle.OHKO:
-			var target: int = int(event.get("target", event["side"]))
-			if target == Gen2Battle.ENEMY:
-				set_hp(int(event["hp"]), int(event["max_hp"]), _player_hp, _player_max_hp)
-			else:
-				set_hp(_enemy_hp, _enemy_max_hp, int(event["hp"]), int(event["max_hp"]))
-		Gen2Battle.HURT_BY_STATUS, Gen2Battle.HURT_ITSELF, Gen2Battle.HP_RESTORED, \
-			Gen2Battle.TRAINER_USED_ITEM:
+		Gen2Battle.HP_BAR:
 			if int(event["side"]) == Gen2Battle.ENEMY:
 				set_hp(int(event["hp"]), int(event["max_hp"]), _player_hp, _player_max_hp)
 			else:

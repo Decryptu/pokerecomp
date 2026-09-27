@@ -605,6 +605,8 @@ static func _write_battle_text(manifest: Dictionary) -> void:
 		"SuperEffectiveText": "It's super-\neffective!",
 		"NotVeryEffectiveText": "It's not very\neffective…",
 		"RecoilText": "<USER>'s\nhit with recoil!",
+		"IsConfusedText": "<USER>\nis confused!",
+		"HurtItselfText": "It hurt itself in\nits confusion!",
 		"ButItFailedText": "But it failed!",
 		"BattleText_MonFainted": "<RAM_D073>\nfainted!",
 		"BattleText_MonHasNoMovesLeft": "<RAM_C621>\nhas no moves left!",

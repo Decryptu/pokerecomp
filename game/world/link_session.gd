@@ -330,8 +330,7 @@ static func _battles(row: Dictionary) -> int:
 	return int(row.get("wins", 0)) + int(row.get("losses", 0)) + int(row.get("draws", 0))
 
 
-## `.CheckOverflow`, which stops a counter at the cap instead of carrying past
-## it.
+## `.CheckOverflow`, which stops a counter at the cap instead of carrying past it.
 static func _raise_count(value: int) -> int:
 	return mini(value + 1, MAX_LINK_RECORD)
 

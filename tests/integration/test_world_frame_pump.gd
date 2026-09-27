@@ -301,6 +301,33 @@ func test_a_party_heal_request_is_settled_where_it_is_staged() -> void:
 	assert_true((save.party[0] as Gen2SaveMon).hp > 1, "the party healed with no press")
 
 
+## `LancesRoom`'s tail: `special FadeOutToWhite`, then `warpfacing` into the
+## Hall of Fame. `MapSetupScript_Warp` closes on `LoadMapPalettes` and
+## `FadeInFromWhite`, so the room behind the warp is drawn, not left white.
+func test_a_warp_fades_back_in_from_the_white_a_script_left() -> void:
+	var directory: String = Fixture.directory()
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(directory))
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, Fixture.TUTORIAL_SCRIPT)] = [
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_FADE_OUT_TO_WHITE, 0,
+		Gen2WorldScript.WARP, Fixture.MAP_GROUP, Fixture.MAP_NUMBER, 2, 2,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(directory), scripts)
+	_data = GameData.open_directory(directory)
+	_world_screen = await _open_world()
+
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(SCRIPT_CELL)
+	)
+	var whitened: bool = false
+	for _frame: int in 120:
+		whitened = whitened or _world_screen._script_fade_order == 0x00
+		_world_screen.advance_frame()
+	assert_true(whitened, "the special fades the map out")
+	assert_eq(_world_screen._world.player_cell, Vector2i(2, 2), "and the warp lands")
+	assert_eq(_world_screen._script_fade_order, Gen2WorldPalette.FADE_IDENTITY)
+
+
 ## `Script_waitsfx` holds the script until the effect channels are free. A
 ## screen spending frames by hand spends the driver's frame with each of them,
 ## so the wait lasts exactly as long as the effect does, past the

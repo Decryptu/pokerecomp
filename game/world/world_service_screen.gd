@@ -2761,8 +2761,7 @@ func _render_save_prompt() -> void:
 const SAVE_MEDIUM_SPEED: float = 1.0 / (Gen2TextBox.FRAME_SECONDS * 3.0)
 
 
-## A, B and a frame all sync the same way: the prompt decides what its step
-## reads.
+## A, B and a frame all sync the same way: the prompt decides what its step reads.
 func _advance_save_prompt() -> void:
 	if _save_prompt == null:
 		return

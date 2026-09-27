@@ -175,8 +175,7 @@ func animation_frames_left() -> int:
 	return _text_box.frames_left() if _text_box != null else 0
 
 
-## The name the intro has settled on so far, empty until the naming screen
-## closes.
+## The name the intro has settled on so far, empty until the naming screen closes.
 func player_name() -> String:
 	return _player_name
 

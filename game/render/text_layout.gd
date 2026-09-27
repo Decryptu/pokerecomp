@@ -160,8 +160,7 @@ static func _take(word: String, columns: int, generation: int) -> String:
 	return word.substr(0, maxi(length, 1))
 
 
-## A `<COLON>` is one tile to Generation 1's codec and seven unknowns to
-## Crystal's.
+## A `<COLON>` is one tile to Generation 1's codec and seven unknowns to Crystal's.
 static func _tiles(text: String, generation: int) -> int:
 	if generation == RomRegistry.GEN1:
 		return Gen1Text.encoded_length(text)

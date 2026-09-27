@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 50 | `hp_bar` on the battle channel, the one event that moves a bar, where the cartridge draws it; `hp`, `max_hp`, `to_hp` and `target_hp` leave the lines around it |
 | 49 | `Gen2WorldMap.code_at()`, `permission_at()`, `is_door_at()` and `ledge_hops_at()`, the same three on `Gen2WorldAPI`, and `Gen2WorldCollision.cell_code()`, `cell_permission()`, `cell_is_door()` and `cell_hops()`, answering a cell on either generation |
 | 48 | `register_roam_encounter_chance()`, `roamers()` and `request_roamer()`; `beasts_released`, `fought_suicune` and `caught_species` in `progress()`; a visible population keeping away what a Repel would |
 | 47 | `Gen2WorldMap.name`, the `map_const` constant's name on every cartridge, and `GameData.world_map_named()` |

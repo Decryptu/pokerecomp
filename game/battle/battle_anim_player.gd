@@ -51,6 +51,8 @@ const AFTER_ANIM_ENEMY_DAMAGE: int = 0x10F - BATTLE_AFTERANIMS
 const AFTER_ANIM_ENEMY_STAT_DOWN: int = 0x110 - BATTLE_AFTERANIMS
 const AFTER_ANIM_PLAYER_DAMAGE: int = 0x112 - BATTLE_AFTERANIMS
 const AFTER_ANIM_WOBBLE: int = 0x113 - BATTLE_AFTERANIMS
+## Past the after-animations, played whole through `PlayFXAnimID` by `HitConfusion`.
+const ANIM_HIT_CONFUSION: int = 0x115
 
 ## A guard on the steps one frame may take: only `FRAMEBLOCKMODE_02` takes none.
 const GEN1_MAX_STEPS: int = 64
@@ -76,6 +78,7 @@ const ANIM_SAP: int = 0x107
 const ANIM_FRZ: int = 0x108
 const ANIM_PAR: int = 0x109
 const ANIM_IN_LOVE: int = 0x10A
+const ANIM_IN_SANDSTORM: int = 0x10B
 const ANIM_IN_NIGHTMARE: int = 0x10C
 
 var _data: Gen2BattleAnimData = null
@@ -191,6 +194,18 @@ static func create_gen1_applying(
 	player._gen1_steps_only = true
 	player._gen1_steps = player._gen1_applying_steps(animation_type)
 	return null if player._gen1_steps.is_empty() else player
+
+
+## `PredefShakeScreenHorizontally` by [param amplitude] on its own.
+static func create_gen1_screen_shake(
+	anim_data: Gen2BattleAnimData, amplitude: int
+) -> Gen2BattleAnimPlayer:
+	if anim_data == null or not anim_data.gen1():
+		return null
+	var player: Gen2BattleAnimPlayer = _seeded_gen1(anim_data, 0, false)
+	player._gen1_steps_only = true
+	player._gen1_steps = player._gen1_predef_shake_steps(amplitude)
+	return player
 
 
 static func _seeded_gen1(

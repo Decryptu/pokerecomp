@@ -100,9 +100,31 @@ func test_the_panels_time_out_and_the_last_page_closes_the_overlay() -> void:
 	assert_not_null(_world_screen._credits_host)
 	assert_false(_world_screen.move_player(Vector2i.DOWN))
 
+	## `ReturnFromCredits` and `FinishContinueFunction`: Lance's byte is
+	## `jp Reset`, which the player did not press, so it is not counted.
+	var runtime: Gen2GameRuntime = _recording_runtime()
+	var was: Gen2GameRuntime = Gen2GameRuntime._instance
+	Gen2GameRuntime._instance = runtime
 	_world_screen._credits_host.close()
+	Gen2GameRuntime._instance = was
 	await get_tree().process_frame
-	assert_true(_world_screen.move_player(Vector2i.DOWN))
+	assert_eq(runtime.get("calls"), [&"restart"])
+	runtime.free()
+
+
+## A runtime that records what it was asked instead of changing the scene.
+func _recording_runtime() -> Gen2GameRuntime:
+	var script := GDScript.new()
+	script.source_code = "\n".join([
+		"extends Gen2GameRuntime",
+		"var calls: Array = []",
+		"func restart() -> void:",
+		"\tcalls.append(&\"restart\")",
+		"func soft_reset() -> void:",
+		"\tcalls.append(&\"soft_reset\")",
+	])
+	script.reload()
+	return script.new() as Gen2GameRuntime
 
 
 ## `HOF_AnimatePlayerPic` slides the player's own front pic in beside the name
