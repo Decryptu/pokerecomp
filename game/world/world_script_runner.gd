@@ -522,6 +522,9 @@ const TEXT_STRING_BUFFER: int = 0x14
 ## both resolve through complete_wait() rather than through advance().
 const WAIT_MOVEMENT: StringName = &"movement"
 const WAIT_FRAMES: StringName = &"frames"
+## SCRIPT_WAIT_MOVEMENT, SCRIPT_WAIT and `StopScript`'s yield run `HandleMap`, so
+## unfrozen objects step; any other wait is `DelayFrames`, a still map (Route 27's fisher).
+const WAIT_RUNS_THE_MAP: String = "runs_the_map"
 ## `Script_pause` delays `DelayFrames 2` per counted unit and `Script_wait`
 ## delays six.
 const PAUSE_FRAMES_PER_UNIT: int = 2
@@ -2933,7 +2936,7 @@ func _command_stopandsjump(_source_opcode: int, command: Dictionary, bank: int) 
 	var jumped: Dictionary = _replace_frame(bank, int(command.get("address", 0)))
 	if not bool(jumped.get("ok", false)):
 		return jumped
-	return _stage_frame_wait(Gen2WorldAPI.passes_in_frames(1))
+	return _stage_frame_wait(Gen2WorldAPI.passes_in_frames(1), {WAIT_RUNS_THE_MAP: true})
 
 
 func _command_reloadend(source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
@@ -3285,7 +3288,7 @@ func _command_pause(source_opcode: int, command: Dictionary, _bank: int) -> Dict
 		"value": delay_operand,
 		"frames": delay_frames,
 	})
-	return _stage_frame_wait(delay_frames)
+	return _stage_frame_wait(delay_frames, {WAIT_RUNS_THE_MAP: source_opcode == 0x8B})
 
 
 func _command_sdefer(_source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
@@ -3908,6 +3911,7 @@ func _stage_movement_wait(values: Dictionary = {}) -> Dictionary:
 	var wait: Dictionary = {
 		"type": &"wait",
 		"wait": WAIT_MOVEMENT,
+		WAIT_RUNS_THE_MAP: true,
 		"source": _request.duplicate(true),
 	}
 	for key: Variant in values:
