@@ -2910,21 +2910,30 @@ func advance_frames(count: int) -> void:
 
 
 func _process(delta: float) -> void:
+	var targets: bool = _mode == Mode.PACK_TARGET \
+		or (_mode == Mode.PACK_RESULT and party_result_holding())
+	if not targets:
+		_target_clock.reset()
+		if not _box_timed():
+			_save_clock.reset()
+			return
+	for _frame: int in (_target_clock if targets else _save_clock).tick(delta):
+		advance_hardware_frame()
+
+
+## One hardware frame of whatever this menu times, by `_process`'s clock or a host's pump.
+func advance_hardware_frame() -> void:
 	if _mode == Mode.PACK_TARGET:
-		for _frame: int in _target_clock.tick(delta):
-			advance_target_icons()
-		return
-	if _mode == Mode.PACK_RESULT and party_result_holding():
-		for _frame: int in _target_clock.tick(delta):
-			advance_party_result()
-		return
-	_target_clock.reset()
-	if not _box_up and _yes_no_hold == 0 and (_save_prompt == null
-			or _save_prompt.reads_joypad() or _save_prompt.finished()):
-		_save_clock.reset()
-		return
-	for _frame: int in _save_clock.tick(delta):
+		advance_target_icons()
+	elif _mode == Mode.PACK_RESULT and party_result_holding():
+		advance_party_result()
+	elif _box_timed():
 		advance_frame()
+
+
+func _box_timed() -> bool:
+	return _box_up or _yes_no_hold > 0 or (_save_prompt != null
+		and not _save_prompt.reads_joypad() and not _save_prompt.finished())
 
 
 ## `DisplaySaveInfoOnSave`'s four rows: the same fields [Gen2TrainerCard]'s

@@ -8567,15 +8567,15 @@ func _gen1_toggle_index(object_index: int) -> int:
 	return (objects[object_index] as Gen2WorldObject).toggle_index
 
 
-## Whether the script holding the world stops the map around it. `ScriptEvents`
-## runs inside `HandleMap`, so a `WaitScript` leaves unfrozen objects stepping;
-## a textbox never reaches it. `UpdateSprites` runs from `OverworldLoop` alone,
-## so a Generation 1 routine's own `DelayFrames` freezes every sprite.
+## See [constant Gen2WorldScriptRunner.WAIT_RUNS_THE_MAP]. Generation 1's
+## `UpdateSprites` runs from `OverworldLoop` alone, so any `DelayFrames` stops it.
 func script_stops_the_map() -> bool:
 	if _gen1_holding():
 		return StringName(pending_script_wait().get("wait", &"")) \
 			!= Gen2WorldScriptRunner.WAIT_MOVEMENT
-	return script_busy() and pending_script_wait().is_empty()
+	return script_busy() and not bool(
+		pending_script_wait().get(Gen2WorldScriptRunner.WAIT_RUNS_THE_MAP, false)
+	)
 
 
 func pending_runtime_request() -> Dictionary:
@@ -11401,6 +11401,13 @@ func standing_on_ice() -> bool:
 	if _player_turning_direction == 0 or current_map == null:
 		return false
 	return Gen2WorldCollision.is_ice(gen2_code_at(player_cell))
+
+
+## `OWPlayerInput`'s `.NoAction`: a slide, or a tile `.CheckTile` forces a step
+## on (a waterfall's foot), leaves `CheckAPressOW` and `CheckMenuOW` unread.
+func player_buttons_refused() -> bool:
+	return standing_on_ice() or StringName(Gen2WorldCollision.forced_action(
+		gen2_code_at(player_cell)).get("kind", &"none")) != &"none"
 
 
 ## `.CheckForced`, then `.GetAction`. `and PAD_BUTTONS` drops the whole d-pad

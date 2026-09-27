@@ -989,6 +989,57 @@ func test_the_celebi_shrine_event_flies_celebi_behind_the_map_objects() -> void:
 		return row["role"] == Gen2WorldEffects.SPRITE_CELEBI), "gone with the loop")
 
 
+## Route 27's fisher, SPINRANDOM_SLOW, is turned to the player and shocked on
+## the step into Kanto. `Script_pause` is `DelayFrames` and never gets back to
+## `HandleMapObjects`, so he holds the facing he was given through the emote.
+func test_a_spinning_object_holds_its_turn_through_its_emote() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(Fixture.directory()))
+	var shock_script: int = 0x6350
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, shock_script)] = [
+		Gen2WorldScript.raw_opcode(0x74), 0, 2, 15,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(Fixture.directory()), scripts)
+	_data = GameData.open_directory(Fixture.directory())
+	await _open_world(true)
+	_world_screen.set_process(false)
+	var fisher: Gen2WorldObject = _world_screen._world.objects[0]
+	fisher.movement = Gen2WorldObject.MOVEMENT_SPINRANDOM_FAST
+	fisher.facing = Gen2WorldSprite.FACING_LEFT
+	fisher.start_idle(0)
+	_world_screen._world.current_map.events["coord_events"] = [{
+		"scene": 0, "x": 4, "y": 5, "script": shock_script,
+	}]
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(Vector2i(4, 5))
+	)
+	for _frame: int in 15 * Gen2WorldScriptRunner.PAUSE_FRAMES_PER_UNIT:
+		_world_screen.advance_frame()
+		assert_eq(fisher.facing, Gen2WorldSprite.FACING_LEFT, "turned during the emote")
+	assert_false(_world_screen._world.script_busy(), "the emote was spent")
+
+
+## The foot of a waterfall is a current `.CheckTile` sweeps down, and
+## `OWPlayerInput` reads A only after `PlayerMovement` has taken no step: A
+## pressed on the pass the player lands there asks nothing and is carried off.
+func test_a_at_the_foot_of_a_waterfall_is_swept_away_unread() -> void:
+	await _open_world(true)
+	_world_screen.set_process(false)
+	var world: Gen2WorldAPI = _world_screen._world
+	world.current_map.events["coord_events"] = []
+	for row: int in [4, 5]:
+		world.current_map.collision[row * Fixture.MAP_WIDTH_CELLS + 4] = \
+			Gen2WorldCollision.COLL_WATERFALL
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	_world_screen.press_button(PokeButton.A)
+	_world_screen.advance_frame()
+	assert_false(world.script_busy(), "A was read on the falls")
+	for _frame: int in Gen2WorldAPI.passes_in_frames(Gen2WorldAPI.STEP_PASSES_WALK):
+		_world_screen.advance_frame()
+	assert_eq(world.player_cell, Vector2i(4, 6), "the current carried the player down")
+	assert_false(world.script_busy(), "A was read on the falls")
+
+
 func test_nurse_script_leaves_the_party_unhealed_on_refusal() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(Fixture.directory()))
 	var nurse_script: int = 0x6330

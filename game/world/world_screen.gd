@@ -905,6 +905,7 @@ const FRAME_HOSTS: Array[Array] = [
 	["_service_host", "advance_frame"],
 	["_battle_host", "advance_hardware_frame"],
 	["_evolution_host", "advance_frame"],
+	["_level_moves_host", "advance_hardware_frame"],
 	["_link_host", "advance_frame"],
 	["_trade_anim_host", "advance_frame"],
 	["_magnet_train_host", "advance_frame"],
@@ -1394,9 +1395,8 @@ func _overlay_open() -> bool:
 		or (_effects != null and _effects.holds_map())
 
 
-## Wandering objects stand while a trainer approach or an overlay owns the world.
-## A script alone does not: `Gen2WorldAPI.script_stops_the_map()`, since a wait's
-## frames are `HandleMap`'s own.
+## Wandering objects stand behind a trainer approach, an overlay, or a script
+## whose wait is not `HandleMap`'s (`Gen2WorldAPI.script_stops_the_map()`).
 func _objects_may_move() -> bool:
 	return _world != null and not _overlay_open() \
 		and not _field_move_text and _oak_pc_pages.is_empty() \
@@ -1574,10 +1574,8 @@ func _handle_button(button: int) -> bool:
 	if PokeButton.is_direction(button):
 		_pressed_direction = button
 		return true
-	## `OWPlayerInput`'s own comment: "Can't perform button actions while sliding
-	## on ice." `CheckStandingOnIce` stands in front of `CheckAPressOW` and
-	## `CheckMenuOW`, so A, START and SELECT are all refused until the run ends.
-	if _world.standing_on_ice():
+	## A, START and SELECT: `Gen2WorldAPI.player_buttons_refused()`.
+	if _world.player_buttons_refused():
 		return true
 	if button not in [PokeButton.A, PokeButton.START, PokeButton.SELECT]:
 		return false
@@ -1607,7 +1605,7 @@ func _advance_pressed_action() -> void:
 	if button == PokeButton.NONE or _battle_host != null or _swallows_button(button) \
 		or _any_host_open(OVERLAY_HOSTS) or _any_host_open(ANSWERING_HOSTS) \
 		or _world.script_input_waiting() or _world.fishing_busy() \
-		or _world.standing_on_ice() or _world.gen1_turned_this_pass():
+		or _world.player_buttons_refused() or _world.gen1_turned_this_pass():
 		return
 	_press_action(button)
 
@@ -6564,8 +6562,8 @@ func _on_evolution_resolved(plan: Dictionary, canceled: bool) -> void:
 	_script_prompt = "%s evolved" % String(plan.get("evolving_name", ""))
 
 
-## `LearnLevelMoves` inside `EvolveAfterBattle_MasterLoop`: the pack host's own
-## `LearnMove` over the cleared screen, the evolution screen held until it closes.
+## `LearnLevelMoves` inside `EvolveAfterBattle_MasterLoop`, over the held evolution
+## screen, its frames spent from [constant FRAME_HOSTS] like the evolution's.
 func _learn_level_moves(index: int, moves: Array) -> void:
 	if moves.is_empty() or _evolution_host == null:
 		return
@@ -6576,6 +6574,7 @@ func _learn_level_moves(index: int, moves: Array) -> void:
 		return
 	host.z_index = 31
 	add_child(host)
+	host.set_process(false)
 	host.set_screen(_screen)
 	host.sfx_requested.connect(_play_sfx)
 	host.gen1_sfx_requested.connect(_play_gen1_sound)
