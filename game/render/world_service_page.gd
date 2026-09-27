@@ -40,8 +40,8 @@ static func _ball_tile(data: GameData) -> Image:
 
 
 ## `MenuTextbox` over the map (`MENU_BACKUP_TILES`), or over the screen
-## [param backdrop] blanks and fills with notes and `{menu, rows, cursor}` menus,
-## arrow hollow. Empty [param rows] draws no box. [param message] is a string or a
+## [param backdrop] blanks and fills with notes and `{menu, rows, cursor, extras}`
+## menus, arrow hollow. Empty [param rows] draws no box. [param message] is a string or a
 ## printing [Gen2TextBox]; [param note] is `{rect, lines}`, each line `{text, at}`
 ## from its own corner; [param message_box] is [constant MESSAGE_BOX] but for
 ## `_ChangeBox`'s `hlcoord 0, 14`; [param marks] are pokeball tiles on the menu.
@@ -58,8 +58,8 @@ func render(title: String, prompt: String, rows: Array, cursor: int,
 		if layer.has("menu"):
 			var under: Gen2MenuBox = layer["menu"]
 			_blit(image, menu.render(
-				under, layer["rows"], int(layer["cursor"]), "", 0, [], palette,
-				bool(layer.get("hollow", true))
+				under, layer["rows"], int(layer["cursor"]), "", 0, layer.get("extras", []),
+				palette, bool(layer.get("hollow", true))
 			), under.border_position())
 		else:
 			_draw_note(image, layer)

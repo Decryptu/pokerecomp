@@ -70,6 +70,14 @@ func draw(
 			Gen2Text.FONT_MAIN, maxi(0, last_column - item.x + 1)
 		)
 
+	for index: int in box.quantities.size():
+		var count: int = int(box.quantities[index])
+		if count >= 0:
+			var count_at: Vector2i = box.quantity_position(index)
+			font.draw_text(
+				box.quantity_format % count, indices, width, count_at.x * TILE, count_at.y * TILE
+			)
+
 	for extra: Dictionary in extras:
 		var extra_at: Vector2i = extra.get("at", Vector2i.ZERO)
 		## Every cartridge string is written to fit where it is placed, so the

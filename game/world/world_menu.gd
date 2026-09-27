@@ -138,7 +138,9 @@ static func from_input(input: Dictionary) -> Gen2WorldMenu:
 ## own column count and spacing carry over for a `2d` menu; every list menu
 ## here is one column with no spacing.
 func box() -> Gen2MenuBox:
-	var out := Gen2MenuBox.from_coords(box_left, box_top, box_right, box_bottom, flags)
+	var out := Gen2MenuBox.scrolling_menu(box_left, box_top, box_right, box_bottom) \
+		if scrolling_arrows \
+		else Gen2MenuBox.from_coords(box_left, box_top, box_right, box_bottom, flags)
 	out.scrolling_arrows = scrolling_arrows
 	out.pick_arrows = kind == &"room"
 	if kind == &"2d":

@@ -8367,6 +8367,7 @@ func _adopt_service_overlay(host: Gen2WorldServiceScreen, prompt: String) -> voi
 	host.music_requested.connect(_play_music)
 	host.map_music_requested.connect(_play_current_map_music)
 	host.sfx_requested.connect(_play_sfx)
+	host.gen1_sfx_requested.connect(_play_gen1_sound)
 	host.cry_requested.connect(_play_species_cry)
 	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host

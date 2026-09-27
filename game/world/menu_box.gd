@@ -14,9 +14,7 @@ const STATICMENU_ENABLE_LEFT_RIGHT: int = 1 << 2
 const STATICMENU_ENABLE_START: int = 1 << 3
 const STATICMENU_PLACE_TITLE: int = 1 << 4
 const STATICMENU_WRAP: int = 1 << 5
-## `ScrollingMenu_UpdateDisplay` reaches its first row with `ld bc, SCREEN_WIDTH
-## + 1` where `_InitVerticalMenuCursor` spends a second row: every scrolling menu
-## carries this flag and no vertical one does.
+## `_InitVerticalMenuCursor` spends no second row; `YesNoMenuHeader` sets it.
 const STATICMENU_NO_TOP_SPACING: int = 1 << 6
 const STATICMENU_CURSOR: int = 1 << 7
 
@@ -59,6 +57,12 @@ var over_textbox: bool = false
 ## 10`; the upper one is the same tile with the attrmap's own $40, which is the
 ## BG map's vertical flip.
 var pick_arrows: bool = false
+## `ScrollingMenu`'s geometry: the arrow on the header's left column, names one in.
+var scrolling: bool = false
+## `PlaceMenuItemQuantity` per row (-1 for none), past the `db rows, columns` width.
+var quantities: Array = []
+var quantity_width: int = 0
+var quantity_format: String = "×%2d"
 
 
 
@@ -80,6 +84,30 @@ static func from_coords(x1: int, y1: int, x2: int, y2: int, menu_flags: int) -> 
 	return box
 
 
+## A `ScrollingMenu` header in `InitScrollingMenu`'s frame, or in [param drawn].
+static func scrolling_menu(
+	x1: int, y1: int, x2: int, y2: int, drawn: Rect2i = Rect2i()
+) -> Gen2MenuBox:
+	var box: Gen2MenuBox = from_coords(
+		x1, y1, x2, y2, STATICMENU_CURSOR | STATICMENU_NO_TOP_SPACING
+	)
+	box.scrolling = true
+	box.frame = drawn if drawn.size.x > 0 \
+		else Rect2i(x1 - 1, y1 - 1, x2 - x1 + 3, y2 - y1 + 3)
+	return box
+
+
+func show_quantities(width: int, counts: Array, format: String = "×%2d") -> Gen2MenuBox:
+	quantity_width = width
+	quantities = counts
+	quantity_format = format
+	return self
+
+
+func quantity_position(index: int) -> Vector2i:
+	return item_position(index) + Vector2i(quantity_width + 1, 1)
+
+
 ## [param items] excludes CANCEL: `.cancel` returns before the `▼` write.
 func show_scroll(at: int, items: int, window: int) -> Gen2MenuBox:
 	scrolling_arrows = true
@@ -90,6 +118,17 @@ func show_scroll(at: int, items: int, window: int) -> Gen2MenuBox:
 
 static func window_is_items(at: int, items: int, window: int) -> bool:
 	return at + window <= items
+
+
+## `InitScrollingMenuCursor` over a saved scroll and row; [param items] counts CANCEL.
+static func reopened_at(at: int, row: int, items: int, window: int) -> Vector2i:
+	if at + window > items:
+		at = maxi(0, items - window)
+	if at + row >= items:
+		return Vector2i.ZERO
+	if row < 0 or row >= mini(window, items):
+		row = 0
+	return Vector2i(at, at + row)
 
 
 func has_flag(flag: int) -> bool:
@@ -121,6 +160,8 @@ func border_position() -> Vector2i:
 ## there is a cursor to leave room for.
 func text_start() -> Vector2i:
 	var at := Vector2i(left + 1, top + 1)
+	if scrolling:
+		return at
 	if not has_flag(STATICMENU_NO_TOP_SPACING):
 		at.y += 1
 	if has_flag(STATICMENU_CURSOR):
@@ -132,7 +173,7 @@ func text_start() -> Vector2i:
 ## source writes `wMenuBorderLeftCoord + 1` outright rather than subtracting, so
 ## a menu without STATICMENU_CURSOR has a position here and never draws one.
 func cursor_start() -> Vector2i:
-	return Vector2i(left + 1, text_start().y)
+	return Vector2i(left if scrolling else left + 1, text_start().y)
 
 
 ## Zero-based. `Place2DMenuItemStrings` walks a row's columns before moving on.

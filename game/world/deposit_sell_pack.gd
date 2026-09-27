@@ -17,6 +17,8 @@ var _save: Gen2SaveData = null
 var _persist: bool = true
 var _item: int = 0
 var _name: String = ""
+## What the money box printed, which a sale redraws only behind its sound.
+var _money_printed: int = 0
 
 
 static func open(
@@ -34,6 +36,7 @@ static func open(
 func choose(item: int, item_name: String) -> Dictionary:
 	_item = item
 	_name = item_name
+	print_money()
 	var tossable: bool = Gen2WorldPack.can_toss(_data(), item)
 	if kind == SELL and not Gen2WorldMartHost.can_sell(_data(), item):
 		return {"refusal": _data().mart_text("cant_buy")}
@@ -61,7 +64,11 @@ func shows_money() -> bool:
 
 
 func money() -> int:
-	return _world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
+	return _money_printed
+
+
+func print_money() -> void:
+	_money_printed = _world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
 
 
 func asks_price() -> bool:

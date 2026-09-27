@@ -271,9 +271,10 @@ var _toss_confirm_cursor: int = 0
 ## where the Pokemon is already chosen and the pack list is `DepositSellPack`.
 var _giving: bool = false
 var _give_target: int = -1
-## `DepositSellPack`'s caller, and whether the line up is a sale's.
+## `DepositSellPack`'s caller, whether the line up is a sale's, and its owed sound.
 var _deposit_sell: Gen2DepositSellPack = null
 var _sold: bool = false
+var _sale_sfx: int = -1
 ## `BattlePack` and `TutorialPack`, and a battle's own pockets when no world
 ## stands behind it.
 var _battling: bool = false
@@ -766,7 +767,7 @@ func _confirm_now() -> void:
 
 ## A pack opened over one Pokemon has no menu to go back to; A and B agree.
 func _leave_pack_result() -> void:
-	if party_result_holding():
+	if party_result_holding() or _sale_sfx >= 0:
 		return
 	if _party_result.has("stats_after_press"):
 		_box.advance()
@@ -1131,6 +1132,7 @@ func _open_pack_mode(reset: bool = true) -> void:
 	_mode = Mode.PACK
 	_giving = false
 	_sold = false
+	_sale_sfx = -1
 	_teaching = false
 	_using_registered = false
 	_evolution_offers.clear()
@@ -2610,9 +2612,18 @@ func _choose_deposit_sell() -> void:
 
 func _show_deposit_sell_result(applied: Dictionary) -> void:
 	_sold = applied.has("sfx")
-	if _sold:
-		sfx_requested.emit(int(applied["sfx"]), true)
+	_sale_sfx = int(applied.get("sfx", -1))
 	_show_pack_result(String(applied.get("text", "")))
+	if _sale_sfx >= 0 and not _box_up:
+		_play_sale_sound()
+
+
+## `SellMenu.okay_to_sell`'s `PlayTransactionSound` and `PlaceMoneyBottomLeft`.
+func _play_sale_sound() -> void:
+	sfx_requested.emit(_sale_sfx, true)
+	_sale_sfx = -1
+	_deposit_sell.print_money()
+	_render_pack_result()
 
 
 func _money_shown() -> bool:
@@ -2891,6 +2902,8 @@ func ask_soft_reset() -> void:
 func advance_frame() -> void:
 	if _box_up:
 		_box.advance_frame()
+		if _sale_sfx >= 0 and not _box.has_text_left():
+			_play_sale_sound()
 		if _save_prompt != null and _save_prompt.text_pending:
 			_note_save_text_printed()
 			_sync_save_prompt()

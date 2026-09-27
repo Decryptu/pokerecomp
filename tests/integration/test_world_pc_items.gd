@@ -236,6 +236,35 @@ func test_the_list_keeps_its_row_across_the_dial_the_question_and_the_menu() -> 
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(host._cursor, row, "NO on the question")
 	host.handle_button(PokeButton.B)
+	## `ExitMenu` reloads the header `_PushWindow` saved, whose `db 1` puts the
+	## menu back on WITHDRAW ITEM: a Crystal dump re-enters `DoNthMenu` with
+	## `wMenuCursorPosition` 1 behind TOSS ITEM.
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
+	assert_eq(host._cursor, 0, "the menu is back on its first row")
 	Fixture.press_through(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(host._cursor, row, "the list opened again off the menu")
+
+
+## `InitScrollingMenuCursor`: a list that shrank pulls its window back to end on
+## CANCEL and keeps the arrow's row on screen, so the whole last stack taken
+## from a list scrolled to its end leaves the arrow on the stack above it.
+func test_a_list_that_shrank_keeps_the_arrows_row_on_screen() -> void:
+	var host: Gen2WorldServiceScreen = await _open_item_pc()
+	_state().apply_changes({}, {}, {"pc_items": {STACK + 2: 1, STACK + 3: 1}})
+	_open_list(host, 0)
+	var last: int = host._pc_entries.size() - 1
+	assert_eq(last, 4, "five stacks, so the four-row window scrolls")
+	for _step: int in last + 1:
+		host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.UP)
+	assert_eq(host._cursor, last)
+	assert_eq(host._pc_scroll, 2, "the window ends on CANCEL")
+	var above: int = int(host._pc_entries[last - 1].get("item", 0))
+	host.handle_button(PokeButton.A)
+	Fixture.print_out(host)
+	host.handle_button(PokeButton.A)
+	Fixture.press_through(host)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
+	assert_eq(host._pc_scroll, 1)
+	assert_eq(int(host._pc_entries[host._cursor].get("item", 0)), above)

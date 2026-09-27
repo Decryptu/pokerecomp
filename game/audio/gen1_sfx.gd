@@ -43,6 +43,7 @@ const SFX_ARROW_TILES: int = 167
 const SFX_NOT_VERY_EFFECTIVE: int = 167
 const SFX_PUSH_BOULDER: int = 168
 const SFX_SS_ANNE_HORN: int = 169
+const SFX_WITHDRAW_DEPOSIT: int = 171
 const SFX_CUT: int = 172
 const SFX_GO_INSIDE: int = 173
 const SFX_SWAP: int = 174

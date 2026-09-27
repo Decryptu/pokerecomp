@@ -143,15 +143,17 @@ func test_players_house_pc_opens_the_item_pc_and_resumes_the_waiting_script() ->
 	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK_RESULT)
 	assert_true(pack.box_text().begins_with("Deposited 1"), pack.box_text())
 
-	## The line, then the pack again, and B is `CloseSubmenu` back onto the row.
+	## The line, then the pack again, and B is `CloseSubmenu`, whose `ExitMenu`
+	## reloads the menu's saved header and with it its `db 1`.
 	_read_pack(pack)
 	host.handle_button(PokeButton.A)
 	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK)
 	host.handle_button(PokeButton.B)
 	assert_null(host._pack)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
-	assert_eq(host._cursor, 1, "DEPOSIT ITEM is still the row under the cursor")
+	assert_eq(host._cursor, 0, "the menu is back on WITHDRAW ITEM")
 	host.handle_button(PokeButton.B)
+	host.advance_frame()
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
 	assert_false(_world_screen._world.script_input_waiting())
@@ -642,15 +644,23 @@ func test_the_shop_opens_over_the_map_and_the_buy_screen_only_after_buy() -> voi
 
 
 ## `CopyMenuHeader` reloads `MenuHeader_BuySell`'s `db 1`, so the cursor is on
-## BUY every time `.TopMenu` runs rather than on the row it was left on.
+## BUY every time `.TopMenu` runs rather than on the row it was left on. The
+## header carries no `STATICMENU_WRAP` and no `MENU_NO_CLICK_SFX`.
 func test_the_top_menu_reopens_on_buy() -> void:
 	await _open_world()
 	await _queue_service()
 
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	watch_signals(host)
+	assert_true(host.handle_button(PokeButton.UP))
+	assert_eq(host._cursor, Gen2WorldServiceScreen.MART_TOP_BUY, "up off BUY stays")
+	assert_signal_not_emitted(host, "sfx_requested")
 	assert_true(host.handle_button(PokeButton.DOWN))
 	assert_eq(host._cursor, Gen2WorldServiceScreen.MART_TOP_SELL)
 	assert_true(host.handle_button(PokeButton.A))
+	assert_signal_emitted_with_parameters(
+		host, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2, false]
+	)
 	assert_not_null(host._pack, "`SellMenu` is `DepositSellPack`")
 	## B off the pack is `SellMenu`'s quit, and `.AnythingElse` asks again.
 	assert_true(host.handle_button(PokeButton.B))
@@ -738,6 +748,9 @@ func test_a_registered_mart_row_is_bought_through_the_regular_transaction() -> v
 	_spend_answer_hold(host)
 	assert_eq(_world_screen._world.state.money(), 475)
 	assert_eq(_world_screen._world.state.item_quantity(8), 1)
+	## `BuyMenuLoop` hands `ScrollingMenu` its own backup of the cursor.
+	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_LIST)
+	assert_eq(host._cursor, 1, "the list comes back on the row just bought")
 
 
 func test_mart_overlay_purchases_the_selected_quantity() -> void:
@@ -791,9 +804,10 @@ func test_a_purchase_plays_its_sound_through_the_world_driver() -> void:
 	assert_true(host.handle_button(PokeButton.A))
 	assert_true(host.handle_button(PokeButton.A))
 	_spend_answer_hold(host)
-	## The list's and the YES/NO's `MenuClickSound`, then the sale.
+	## BUY's, the list's and the YES/NO's `MenuClickSound`, then the sale.
 	assert_eq(played, [
-		Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_TRANSACTION,
+		Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_READ_TEXT_2, Gen2Sfx.SFX_READ_TEXT_2,
+		Gen2Sfx.SFX_TRANSACTION,
 	] as Array[int])
 	## The world screen is on the other end of it, which is what stops the
 	## overlay reaching for a driver of its own. The synthetic cache carries no
@@ -848,6 +862,12 @@ func test_mart_overlay_cancel_row_leaves_the_buy_list() -> void:
 ## `SelectQuantityToSell`'s halved price, the question read to its last page
 ## and `MartBoughtText`.
 func test_mart_overlay_sells_a_stack_at_half_price() -> void:
+	var manifest: Dictionary = RomCache.read_manifest(Fixture.directory())
+	var mart_text: Dictionary = manifest.get("mart_text", {})
+	mart_text["bought"] = "SOLD"
+	manifest["mart_text"] = mart_text
+	RomCache.write_json(RomCache.manifest_path(Fixture.directory()), manifest)
+	_data = GameData.open_directory(Fixture.directory())
 	await _open_world({7: 2})
 	await _queue_service()
 
@@ -876,14 +896,28 @@ func test_mart_overlay_sells_a_stack_at_half_price() -> void:
 	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK_TOSS_CONFIRM)
 	_read_pack(pack)
 	assert_true(host.handle_button(PokeButton.A))
+	watch_signals(pack)
 	pack.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 	assert_eq(_world_screen._world.state.item_quantity(7), 0)
 	assert_eq(_world_screen._world.state.money(), 620)
 	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK_RESULT)
+	## `PrintTextboxText` first; `PlayTransactionSound` and `PlaceMoneyBottomLeft`
+	## only once the line is out, so the box shows the purse it had until then.
+	assert_true(pack._box.has_text_left(), "the line is still printing")
+	assert_signal_not_emitted(pack, "sfx_requested")
+	assert_eq(pack._deposit_sell.money(), 500)
 	assert_eq(pack.box_text(), Gen2WorldMartHost.fill_text(
 		_data.mart_text("bought"), {"name": _data.item_name(7), "quantity": 2, "total": 120}
 	))
+	for _frame: int in Fixture.PRINT_FRAME_CAP:
+		if not pack._box.has_text_left():
+			break
+		pack.advance_frame()
+	assert_signal_emitted_with_parameters(
+		pack, "sfx_requested", [Gen2Sfx.SFX_TRANSACTION, true]
+	)
 	assert_true(pack._money_shown(), "`PlaceMoneyBottomLeft`")
+	assert_eq(pack._deposit_sell.money(), 620)
 
 	## `SellMenu.loop` is back on the pack, and B off it asks again.
 	assert_true(host.handle_button(PokeButton.A))
