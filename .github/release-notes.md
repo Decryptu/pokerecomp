@@ -3,8 +3,15 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Fixed
 
-- Mods that show wild Pokemon on the map no longer place them on floor you can never reach. Victory Road put them above its exit, and Dark Cave, Silver Cave, Dragon's Den and Whirl Island had 1,099 more such cells between them. They also no longer stand on a door, ladder or cave exit.
-- Using an item on a full party no longer leaves CANCEL printed over the message box, as Rare Candy's "grew to level" line did.
+- The HP bar now goes down for Curse, Sandstorm, Leech Seed, Nightmare, Wrap and the other trapping moves, Spikes, Substitute, Pain Split, Belly Drum and Destiny Bond, and goes up for Leftovers and Berries. It used to keep the old number, so a Pokemon hurt by Curse could faint from a full bar.
+- A confused Pokemon that hurts itself shows "It hurt itself in its confusion!" first, then the hit, then the HP loss. Poison and burn damage are in the same order as the cartridge.
+- Sandstorm plays its animation on each Pokemon it hits. Trapping moves, Destiny Bond, a Jump Kick crash and held items play the animations they were missing, and a Jump Kick crash in Red, Blue and Yellow shakes the screen.
+- Trainers' items play their sound.
+- After beating Lance, the Hall of Fame room is drawn in place of a white screen, and the game restarts once the credits end. Continue then starts you in New Bark Town. Beating Red takes you back to Mt. Silver.
+- Scenes that fade to white and then move you, such as Ecruteak Gym, the Fast Ship and the National Park gates, fade the new place back in.
+- The restarts the game does on its own, after the Hall of Fame and in the Battle Tower, no longer add to the Resets count on the save screen.
+- The item PC, mailbox, CHANGE BOX, decorations, elevator, Buena's prizes and Kurt's apricorns draw their lists one column to the left with the item count on the row under its name. The item PC keeps its list on screen under its questions and returns to WITHDRAW ITEM.
+- Mart menus no longer wrap, Gold and Silver draw BUY/SELL/QUIT at its full width, and Gold, Silver and Crystal keep the buy list's cursor after a purchase. The PC's and the marts' sounds finish before the next message, and Red, Blue and Yellow's PC and vending machines play theirs.
 
 ## Which file
 
