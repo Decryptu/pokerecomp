@@ -1,17 +1,24 @@
 <!-- Rewrite from the first release heading, `## Added`, `## Changed` or `## Fixed`, for each release. The text below
 the release changes is standing guidance with a {VERSION} placeholder. -->
 
+## Added
+
+- The save editor edits Pokemon in the PC boxes. Tap one to change its species, level, gender, happiness, held item, moves and DVs, as for a party member.
+- Mods can place a Pokemon on the map that blocks the way and starts a wild battle when you press A on it.
+- Mods can swap their own Pokemon in for the wild you meet in grass or water, so a mod can have any number of roaming Pokemon on all six games.
+- Mods can run a whole battle on their own screen, which a double battle mod needs. The game still pays the prize, saves, evolves and whites out as usual.
+- Mods are told how every battle ended and which Pokemon was left standing.
+- In Crystal, a mod can turn on the GS Ball event from the Virtual Console release. The Goldenrod Pokemon Center hands over the GS Ball, and Kurt and the Ilex Forest shrine follow.
+
+## Changed
+
+- The save editor picks items, species, moves and held items by name from a list you scroll with your finger.
+
 ## Fixed
 
-- The HP bar now goes down for Curse, Sandstorm, Leech Seed, Nightmare, Wrap and the other trapping moves, Spikes, Substitute, Pain Split, Belly Drum and Destiny Bond, and goes up for Leftovers and Berries. It used to keep the old number, so a Pokemon hurt by Curse could faint from a full bar.
-- A confused Pokemon that hurts itself shows "It hurt itself in its confusion!" first, then the hit, then the HP loss. Poison and burn damage are in the same order as the cartridge.
-- Sandstorm plays its animation on each Pokemon it hits. Trapping moves, Destiny Bond, a Jump Kick crash and held items play the animations they were missing, and a Jump Kick crash in Red, Blue and Yellow shakes the screen.
-- Trainers' items play their sound.
-- After beating Lance, the Hall of Fame room is drawn in place of a white screen, and the game restarts once the credits end. Continue then starts you in New Bark Town. Beating Red takes you back to Mt. Silver.
-- Scenes that fade to white and then move you, such as Ecruteak Gym, the Fast Ship and the National Park gates, fade the new place back in.
-- The restarts the game does on its own, after the Hall of Fame and in the Battle Tower, no longer add to the Resets count on the save screen.
-- The item PC, mailbox, CHANGE BOX, decorations, elevator, Buena's prizes and Kurt's apricorns draw their lists one column to the left with the item count on the row under its name. The item PC keeps its list on screen under its questions and returns to WITHDRAW ITEM.
-- Mart menus no longer wrap, Gold and Silver draw BUY/SELL/QUIT at its full width, and Gold, Silver and Crystal keep the buy list's cursor after a purchase. The PC's and the marts' sounds finish before the next message, and Red, Blue and Yellow's PC and vending machines play theirs.
+- The save editor's item list scrolls on a phone, so every item can be added. It no longer lists the unused TERU-SAMA items, and its button says Add for a new item and Set for one already in the bag.
+- Ho-Oh always holds a Sacred Ash and the Vermilion City Snorlax always holds Leftovers, as on the cartridge.
+- Randomizer mods no longer put a key item on the Goldenrod GS Ball, which the game never gives without a mod.
 
 ## Which file
 
