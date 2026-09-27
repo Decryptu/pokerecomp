@@ -109,6 +109,23 @@ const FLY_LEAF_INTERVAL: int = 8
 const FLY_LEAF_SWING: int = 0x40
 const FLY_LEAF_LIMIT: int = 0x100 - 9 * 8
 
+## `CelebiShrineEvent`: a `DelayFrame`, then two frames a pass until the countdown
+## from 160 reads zero, that pass included; `depixel 0, 10, 7, 0` is x 80, y 7.
+const SPRITE_CELEBI: StringName = &"celebi"
+const CELEBI_PASSES: int = 161
+const CELEBI_FRAMES: int = 1 + CELEBI_PASSES * 2
+const CELEBI_START := Vector2i(80, 7)
+const CELEBI_SWING: int = 0x80
+const CELEBI_SWING_FLOOR: int = 0x3A
+const CELEBI_SWING_STEP: int = 3
+const CELEBI_LANDING_Y: int = 10 * 8 + 2
+const CELEBI_CENTRE_X: int = 10 * 8
+const CELEBI_BAND := Vector2i(8 * 8 + 4, 11 * 8 + 4)
+const CELEBI_RIGHT_LIMIT: int = 0x100 - (3 * 8 + 2)
+const CELEBI_TILE_PASSES: int = 3
+const CELEBI_TILE_CYCLE: int = 13
+const PAL_OW_GREEN: int = 2
+
 ## constants/sprite_data_constants.asm. Every emote-object spawn names its
 ## palette: PAL_OW_EMOTE for the dust and the emote bubbles, PAL_OW_TREE for the
 ## grass and for `.OAMData_Tree`.
@@ -336,6 +353,83 @@ func start_fly(icon: int, arriving: bool) -> void:
 		"icon": maxi(icon, 0),
 		"arriving": arriving,
 	})
+
+
+## `CelebiShrineEvent`'s struct, written to OAM from slot 36, behind every object.
+func start_celebi_shrine() -> void:
+	_sprites.append({
+		"kind": SPRITE_CELEBI,
+		"cell": Vector2i.ZERO,
+		"object_index": -1,
+		"screen": true,
+		"under_objects": true,
+		"palette": PAL_OW_GREEN,
+		"frame": 0,
+		"duration": CELEBI_FRAMES,
+		"passes": 0,
+		"at": CELEBI_START,
+		"x_offset": 0,
+		"angle": 0,
+		"swing": CELEBI_SWING,
+		"tile": 0,
+		"flip_x": false,
+	})
+
+
+## One pass on each odd frame: `GetCelebiSpriteTile`, then `UpdateCelebiPosition`.
+func _step_celebi(sprite: Dictionary) -> void:
+	if int(sprite["frame"]) % 2 == 0:
+		return
+	var tile_pass: int = int(sprite["passes"]) % CELEBI_TILE_CYCLE
+	if tile_pass % CELEBI_TILE_PASSES == 0 and tile_pass < CELEBI_TILE_CYCLE - 1:
+		sprite["tile"] = tile_pass / CELEBI_TILE_PASSES * 4
+	sprite["passes"] = int(sprite["passes"]) + 1
+	var at: Vector2i = sprite["at"]
+	var old_offset: int = int(sprite["x_offset"])
+	if at.y >= CELEBI_LANDING_Y:
+		sprite["flip_x"] = false  # .FreezeCelebiPosition
+		return
+	at.y = (at.y + 1) & 0xFF
+	var swing: int = int(sprite["swing"])
+	if swing > CELEBI_SWING_FLOOR:
+		sprite["swing"] = swing - CELEBI_SWING_STEP
+	var new_offset: int = _cosine(int(sprite["angle"]), swing)
+	sprite["angle"] = (int(sprite["angle"]) + 1) & 0xFF
+	sprite["x_offset"] = new_offset
+	var reached: int = (new_offset + at.x) & 0xFF
+	if reached >= CELEBI_BAND.y or reached < CELEBI_BAND.x:
+		at.y = _celebi_float(at, old_offset, new_offset)
+	sprite["at"] = at
+	var was: int = (old_offset + at.x) & 0xFF
+	sprite["flip_x"] = was >= CELEBI_CENTRE_X and was < CELEBI_RIGHT_LIMIT
+
+
+## `.ShiftY`: `.float_up` is a pixel down the screen and `.float_down` two up.
+static func _celebi_float(at: Vector2i, old_offset: int, new_offset: int) -> int:
+	var right: bool = (old_offset + at.x) & 0xFF >= CELEBI_CENTRE_X
+	var float_up: bool = right if old_offset >= new_offset else not right
+	return (at.y + 1) & 0xFF if float_up else (at.y - 2) & 0xFF
+
+
+## `.OAMData_Celebi` at the struct, mirrored by the right frameset.
+static func _celebi_tiles(sprite: Dictionary) -> Array:
+	if int(sprite["passes"]) == 0:
+		return []
+	var at: Vector2i = sprite["at"]
+	var flip: bool = bool(sprite["flip_x"])
+	var tiles: Array = []
+	for index: int in 4:
+		var column: int = (index & 1) * 8 - 8
+		if flip:
+			column = -8 - column
+		var x: int = (at.x + int(sprite["x_offset"]) + column) & 0xFF
+		var y: int = (at.y + (index >> 1) * 8 - 8) & 0xFF
+		tiles.append({
+			"offset": Vector2i(x - OAM_X_ORIGIN, y - OAM_Y_ORIGIN),
+			"tile": int(sprite["tile"]) + index,
+			"flip_x": flip,
+		})
+	return tiles
 
 
 ## Where `FlyFunction_FrameTimer` reaches `ld de, SFX_FLY`.
@@ -572,8 +666,8 @@ func advance_pass() -> bool:
 	return true
 
 
-## One hardware frame: the four sprites whose source routine spins on
-## `DelayFrame` rather than being stepped by `HandleObjectStep`.
+## One hardware frame: the sprites whose source routine spins on `DelayFrame`
+## rather than being stepped by `HandleObjectStep`.
 func advance_frame() -> bool:
 	_advance_ss_anne()
 	return _spend_sprites(false) or ss_anne_active()
@@ -587,6 +681,8 @@ func _spend_sprites(pass_paced: bool) -> bool:
 			running.append(sprite)
 			continue
 		sprite["frame"] = int(sprite["frame"]) + 1
+		if StringName(sprite["kind"]) == SPRITE_CELEBI:
+			_step_celebi(sprite)
 		if int(sprite["frame"]) < int(sprite["duration"]):
 			running.append(sprite)
 		moved = true
@@ -622,10 +718,8 @@ func offset() -> Vector2:
 	return Vector2(0.0, float(_amplitude if pass_index % 2 == 0 else -_amplitude))
 
 
-## What a renderer draws this frame: one record per live sprite, each carrying
-## the sheet, the palette row and the tiles, as pixel offsets from the anchor.
-## That anchor is the cell for the headbutt tree, which stands still, and the
-## tracked object's own drawn position for the other two.
+## What a renderer draws this frame: each live sprite's sheet, palette row and
+## tiles as pixel offsets from its cell, its tracked object, or the screen.
 func sprites() -> Array:
 	var out: Array = _ss_anne_puffs()
 	for sprite: Dictionary in _sprites:
@@ -637,10 +731,12 @@ func sprites() -> Array:
 			"cell": sprite["cell"],
 			"object_index": int(sprite["object_index"]),
 			"screen": bool(sprite.get("screen", false)),
+			"under_objects": bool(sprite.get("under_objects", false)),
 			"palette": int(sprite["palette"]),
 			"rotation": _palette_rotation(sprite),
 			"frame": int(sprite["frame"]),
-			"tiles": _tiles_for(sprite),
+			"tiles": _celebi_tiles(sprite) if StringName(sprite["kind"]) == SPRITE_CELEBI \
+				else _tiles_for(sprite),
 		})
 	return out
 
@@ -817,10 +913,8 @@ static func _smoke_tiles(pixel: Vector2i) -> Array:
 	return out
 
 
-## The cells a live effect takes the map's own tiles away from.
-## `HideHeadbuttTree` writes the tileset's grass tile over the tree's four
-## graphics tiles while the animation runs, which is what stops the tree drawing
-## through it.
+## The cells whose tree `HideHeadbuttTree` covers with the tileset's grass tile
+## while the shake runs, so the tree does not draw through its own sprite.
 func hidden_tree_cells() -> Array:
 	var out: Array = []
 	for sprite: Dictionary in _sprites:
@@ -1087,8 +1181,7 @@ func _palette_rotation(sprite: Dictionary) -> int:
 var _sine_table: Gen2BattleAnimData = null
 
 
-## Hands this the sine table the cut leaves ride on. Called once by the screen
-## that owns the effects; nothing else here needs a cache.
+## The sine table the leaves, Fly and Celebi ride on, from the owning screen.
 func set_sine_table(sine: Gen2BattleAnimData) -> void:
 	_sine_table = sine
 

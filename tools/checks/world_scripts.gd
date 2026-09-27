@@ -105,12 +105,17 @@ func _choice_questions(data: GameData, key: String, crystal: bool) -> PackedStri
 	return out
 
 
+## A buffer holds a name of at most ten tiles, the width of the marker it fills.
+const BUFFER_STAND_IN: String = "MMMMMMMMMM"
+var _markers := RegEx.create_from_string("<(RAM|NUM)_[0-9A-F]+>|<BUFFER_[0-9]+>")
+
+
 func _decoded_text(data: GameData, key: String) -> String:
 	var decoded: Dictionary = Gen2TextStream.decode(_pointer_bytes(data, key, true), 0, {
 		"far": func(bank: int, address: int) -> PackedByteArray:
 			return data.world_text(bank, address),
 	})
-	return String(decoded.get("text", ""))
+	return _markers.sub(String(decoded.get("text", "")), BUFFER_STAND_IN, true)
 
 
 ## Every command byte's name and width against the pin's own

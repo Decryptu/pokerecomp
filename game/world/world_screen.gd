@@ -8571,6 +8571,7 @@ const EVENT_HANDLERS: Dictionary = {
 const PRESENTATION_HANDLERS: Dictionary = {
 	&"prof_oaks_pc_boot": &"_event_prof_oaks_pc",
 	&"heal_machine_anim": &"_start_heal_machine_sounds",
+	&"celebi_shrine": &"_start_celebi_shrine",
 	&"pikapic": &"_start_pikapic",
 	&"jigglypuff": &"_start_jigglypuff",
 	&"gen1_elevator_shake": &"_start_gen1_elevator_shake",
@@ -9936,6 +9937,18 @@ func _play_encounter_sounds() -> void:
 			record, &"stereo_sfx", _audio_assets(), false,
 			Gen2BattleAnimScript.sound_panning(int(operands[0]), true)
 		)
+
+
+func _start_celebi_shrine(_event: Dictionary = {}) -> void:
+	if _effects != null:
+		_effects.start_celebi_shrine()
+	if _renderer != null:
+		_renderer.refresh()
+
+
+## Screenshot driver: the shrine's flight, as many frames in as the driver spends.
+func preview_celebi_shrine() -> void:
+	_start_celebi_shrine()
 
 
 func _start_gen1_elevator_shake(_event: Dictionary) -> void:

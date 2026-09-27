@@ -671,12 +671,6 @@ const SEER_ADVICE: Array = [
 	[89, "mighty"], [100, "impressed"], [255, "more_care"],
 ]
 
-## `CelebiShrineEvent`: `ld a, 160` into wFrameCounter, two frames a pass, and
-## one `DelayFrame` in front. `CelebiEvent_CountDown` reads the counter before
-## it decrements, so the pass that reads zero is spent too.
-const CELEBI_SHRINE_PASSES: int = 160
-const CELEBI_SHRINE_FRAMES_PER_PASS: int = 2
-const CELEBI_SHRINE_ENTRY_FRAMES: int = 1
 const VARIABLE_SPRITE_BASE: int = 0xF0
 
 
@@ -2006,6 +2000,8 @@ const COMMAND_HANDLERS: Dictionary = {
 	Gen2WorldScript.GETCOINS: &"_command_getcoins",
 	Gen2WorldScript.GETITEMNAME: &"_command_getitemname",
 	Gen2WorldScript.GETMONNAME: &"_command_getmonname",
+	Gen2WorldScript.GETNUM: &"_command_getnum",
+	Gen2WorldScript.GETCURLANDMARKNAME: &"_command_getcurlandmarkname",
 	Gen2WorldScript.GETTRAINERNAME: &"_command_gettrainername",
 	Gen2WorldScript.GETSTRING: &"_command_getstring",
 	Gen2WorldScript.CLEAREVENT: &"_command_clearevent",
@@ -2037,14 +2033,6 @@ const COMMAND_HANDLERS: Dictionary = {
 	Gen2WorldScript.CHECKPOKEMAIL: &"_command_checkpokemail",
 }
 
-## The two commands with nothing behind them yet: `getnum` reads a number into
-## a text buffer and `getcurlandmarkname` the landmark the player stands on, and
-## no script in either pin prints what they leave.
-const HANDLED_BASE: Array[int] = [
-	Gen2WorldScript.GETNUM, Gen2WorldScript.GETCURLANDMARKNAME,
-]
-
-
 ## Whether [method _execute] dispatches [param opcode]; the corpus sweeps it.
 static func handles_opcode(opcode: int, crystal_commands: bool = true) -> bool:
 	if opcode == Gen2WorldScript.FARJUMPTEXT \
@@ -2058,7 +2046,7 @@ static func handles_opcode(opcode: int, crystal_commands: bool = true) -> bool:
 		return true
 	var source: int = Gen2WorldScript.source_opcode(opcode, crystal_commands)
 	return source in OBJECT_SOURCE_OPCODES or LATER_HANDLERS.has(source) \
-		or COMMAND_HANDLERS.has(opcode) or opcode in HANDLED_BASE
+		or COMMAND_HANDLERS.has(opcode)
 
 
 const OBJECT_SOURCE_OPCODES: Array[int] = [
@@ -2087,8 +2075,6 @@ func _execute(command: Dictionary, frame: Dictionary) -> Dictionary:
 		return {"ok": true}
 	if COMMAND_HANDLERS.has(opcode):
 		return call(COMMAND_HANDLERS[opcode], opcode, command, bank)
-	if opcode in HANDLED_BASE:
-		return {"ok": true}
 	return {
 		"ok": false,
 		"reason": &"unsupported_runtime_command",
@@ -2511,6 +2497,25 @@ func _command_getitemname(_opcode: int, command: Dictionary, _bank: int) -> Dict
 		{"item": int(command["item"])}
 	)
 	_emit_runtime_event(&"text_buffer_requested", command)
+	return {"ok": true}
+
+
+## `Script_getnum`: wScriptVar as `PRINTNUM_LEFTALIGN` digits, the contest's place.
+func _command_getnum(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_set_text_buffer(int(command["string_buffer"]), str(_script_value & 0xFF), &"number")
+	return {"ok": true}
+
+
+## `Script_getcurlandmarkname`: this map's `GetWorldMapLocation`, every gym statue's city.
+func _command_getcurlandmarkname(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var map: Gen2WorldMap = data.world_map(
+		int(_request.get("map_group", 0)), int(_request.get("map_number", 0))
+	) if data != null else null
+	var landmark: int = map.location if map != null else 0
+	_set_text_buffer(
+		int(command["string_buffer"]), data.landmark_name(landmark) if map != null else "",
+		&"landmark_name", {"landmark": landmark}
+	)
 	return {"ok": true}
 
 
@@ -5156,8 +5161,7 @@ func _special_check_caught_celebi(_special: int) -> Dictionary:
 	return {"ok": true}
 
 
-## A sprite-anim cutscene and a battle type. There is no sprite-anim layer
-## outside the intro, so what it owes a script is the wait and the type.
+## The host flies Celebi (`Gen2WorldEffects.start_celebi_shrine`) while this waits.
 func _special_celebi_shrine_event(special: int) -> Dictionary:
 	_loaded_battle_type = Gen2Battle.BATTLETYPE_CELEBI
 	if not _battle_setup.is_empty():
@@ -5166,9 +5170,7 @@ func _special_celebi_shrine_event(special: int) -> Dictionary:
 		"special": special, "kind": &"celebi_shrine",
 	})
 	return _stage_frame_wait(
-		CELEBI_SHRINE_ENTRY_FRAMES
-			+ (CELEBI_SHRINE_PASSES + 1) * CELEBI_SHRINE_FRAMES_PER_PASS,
-		{"special": special, "kind": &"celebi_shrine"}
+		Gen2WorldEffects.CELEBI_FRAMES, {"special": special, "kind": &"celebi_shrine"}
 	)
 
 

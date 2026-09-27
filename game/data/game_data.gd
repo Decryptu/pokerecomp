@@ -1179,9 +1179,9 @@ func overworld_sprite_indices(number: int) -> PackedByteArray:
 	return data
 
 
-## One of the sprites the engine draws over an object rather than as one, by the
-## name `data/sprites/emotes.asm` gives it plus ShakeHeadbuttTree's own sheet:
-## { tiles, vtile, indices, colors }, empty when the cache does not hold it.
+## One of the sprites the engine draws over the map rather than as an object, by
+## the name `data/sprites/emotes.asm` or `Gen2WorldImporter.FIELD_MOVE_SHEETS`
+## gives it: { tiles, vtile, indices, colors }, empty when the cache lacks it.
 ## `colors` is only on the heal machine, which is the one sheet that brings its
 ## own palette instead of wearing an overworld one.
 func overworld_effect(name: String) -> Dictionary:

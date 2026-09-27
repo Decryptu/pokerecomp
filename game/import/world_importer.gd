@@ -603,20 +603,23 @@ const FIELD_MOVE_SHEETS: Array = [
 	## FIELDMOVE_GRASS, the leaves' own tile.
 	["cut_grass", "cut_grass_gfx", 4, 0x80,
 		[0x00, 0x00, 0x3C, 0x3C, 0x7E, 0x42, 0xE3, 0x9D]],
-	## `HealMachineAnim.LoadGFX`'s two tiles at `vTiles0 tile $7c`: the machine's
-	## own bar and one ball. Both tiles are the signature, since a two-tile sheet
-	## whose first row is blank pins nothing on its own.
 	## `LoadFishingGFX`'s eight tiles: the lower half of standing down, up and
 	## left, which it writes over $02, $06 and $0a, and the rod pair at $fc.
 	["chris_fish", "chris_fish_gfx", 8, 0x02,
 		[0x3F, 0x32, 0x0F, 0x08, 0x17, 0x1F, 0x17, 0x1F]],
 	["kris_fish", "kris_fish_gfx", 8, 0x02,
 		[0x9F, 0xF2, 0x7F, 0x78, 0x1F, 0x1F, 0x17, 0x1F]],
+	## `HealMachineAnim.LoadGFX`'s two tiles at `vTiles0 tile $7c`: the machine's
+	## own bar and one ball. Both tiles are the signature, since a two-tile sheet
+	## whose first row is blank pins nothing on its own.
 	["heal_machine", "heal_machine_gfx", 2, 0x7C,
 		[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7E, 0x00,
 		0x7E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C, 0x12, 0x1E,
 		0x21, 0x3F, 0x33, 0x2D, 0x1E, 0x12, 0x0C, 0x0C]],
+	## `LoadCelebiGFX`'s four 16x16 drawings at `vTiles0 tile $84`, Crystal's alone.
+	["celebi", "celebi_gfx", 16, 0x84,
+		[0x30, 0x30, 0x2E, 0x3E, 0x15, 0x1F, 0x18, 0x1F]],
 ]
 
 ## `HealMachineAnim.LoadPalettes` copies one four-colour palette over
@@ -662,7 +665,7 @@ static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Diction
 		var offset: int = int(layout.get(String(sheet[1]), -1))
 		var sheet_tiles: int = int(sheet[2])
 		var signature: Array = sheet[4]
-		if offset == -1: # Kris's sheet, which only Crystal ships.
+		if offset == -1: # Kris's and Celebi's sheets, which only Crystal ships.
 			continue
 		if not rom.in_bounds(offset, sheet_tiles * PokeTiles.TILE_BYTES):
 			return _error("%s graphics are outside the cartridge." % name)

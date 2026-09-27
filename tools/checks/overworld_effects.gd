@@ -2,13 +2,13 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the sprites the overworld draws over an object rather than as one,
+## Verifies the sprites the overworld draws over the map rather than as objects,
 ## against freshly imported real caches: `data/sprites/emotes.asm`'s twelve sheets
-## and ShakeHeadbuttTree's own. Every expectation comes from the pinned sources: the
-## emote table's tile numbers are `Facings`' own, and all three cartridges ship the
-## art itself byte identical, which is what the cross-cartridge comparison checks. A
-## sheet read at the wrong offset decodes neighbouring code into legal-looking
-## pixels, so shape alone would not catch it.
+## and the ones engine routines load themselves. Every expectation comes from the
+## pinned sources: the emote table's tile numbers are `Facings`' own, and every
+## cartridge ships a shared sheet byte identical, which the cross-cartridge
+## comparison checks. A sheet read at the wrong offset decodes neighbouring code
+## into legal-looking pixels, so shape alone would not catch it.
 
 ## The names Gen2WorldImporter writes, with the tile count and VRAM tile each
 ## record must name.
@@ -20,7 +20,7 @@ const EXPECTED: Array = [
 	["cut_grass", 4, 0x80], ["heal_machine", 2, 0x7C], ["chris_fish", 8, 0x02],
 ]
 
-const CRYSTAL_ONLY: Array = [["kris_fish", 8, 0x02]]
+const CRYSTAL_ONLY: Array = [["kris_fish", 8, 0x02], ["celebi", 16, 0x84]]
 
 ## `gfx/overworld/heal_machine.pal`, the one sheet that carries a palette of its
 ## own instead of wearing an overworld one: `RGB 31, 31, 31`, `RGB 31, 19, 10`,

@@ -214,11 +214,6 @@ func place_at_bottom() -> void:
 ## ending in `done`, which is why `SendOutMonText` runs on, and a caller that
 ## waits with `JoyWaitAorB`, which is every page of `ProfOaksPCBoot`.
 func show_text(text: String, blink_cursor: bool = true) -> void:
-	for marker: String in [Gen2TextStream.RAM_MARKER, Gen2TextStream.NUMBER_MARKER, "<BUFFER_"]:
-		if text.contains(marker):
-			push_error("Gen2TextBox: a text reached the screen with %s unfilled: %s" % [
-				marker, text.c_escape()
-			])
 	_pages = Gen2TextLayout.lay_out_pages(
 		text, text_columns(), text_rows(),
 		font.font_generation() if font != null else RomRegistry.GEN2

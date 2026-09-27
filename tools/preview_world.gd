@@ -23,6 +23,7 @@ const KIND_HELP: Dictionary = {
 	&"catch_dex": "none: NewPokedexEntry's page, over the fight the catch that opened it is still in",
 	&"cut": "cell: OWCutAnimation's two halves and the jump shadow; on a Generation 1 cartridge AnimCut's tree block below the player and its grass block above, two frames in",
 	&"fly": "none: FlyFromAnim 80 frames in, with HideSprites' empty OAM behind it",
+	&"celebi_shrine": "frames: CelebiShrineEvent's Celebi that many frames into its flight (`crystal 3 52 ... celebi_shrine@8,24 60 0`)",
 	&"tile_anim": "frames: the map that many AnimateTileset frames in",
 	&"unown_wall": "cell: DisplayUnownWords' box. Group 3 maps 23 to 26 say HO-OH, ESCAPE, WATER, LIGHT",
 	&"mart_top": "cell in front of the counter: MartWelcomeText and MenuHeader_BuySell over the map",
@@ -1488,7 +1489,7 @@ func _stage_sight() -> void:
 
 ## The whole reveal, or the `x` argument: a box owing no press closes behind it.
 func _staged_frames() -> int:
-	if _kind == &"sign" and _cell.x > 0:
+	if _kind in [&"sign", &"celebi_shrine"] and _cell.x > 0:
 		return _cell.x
 	## `AnimCut`'s tree is eight frames long; the Crystal kind's twelve outlive it.
 	if _kind == &"cut" and _generation() == RomRegistry.GEN1:

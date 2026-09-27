@@ -5375,6 +5375,7 @@ func test_the_crystal_name_commands_fill_their_string_buffers() -> void:
 		Gen2WorldScript.END,
 	]
 	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	_write_landmark(1, "VIOLET CITY")
 	var data: GameData = GameData.open_directory(_directory)
 	var runner := Gen2WorldScriptRunner.begin(data, Gen2WorldState.new(), {
 		"kind": &"test", "bank": 48, "script": 0x6200,
@@ -5382,8 +5383,42 @@ func test_the_crystal_name_commands_fill_their_string_buffers() -> void:
 
 	assert_eq(runner.advance()["status"], &"complete")
 	var buffers: Dictionary = runner.text_context().get("buffers", {})
-	assert_eq(String(buffers.get(Gen2Layout.STRING_BUFFER_4, "")), data.landmark_name(1))
+	assert_eq(String(buffers.get(Gen2Layout.STRING_BUFFER_4, "")), "VIOLET CITY")
 	assert_eq(String(buffers.get(Gen2Layout.STRING_BUFFER_5, "")), data.trainer_name(1))
+
+
+## Every gym statue's `getcurlandmarkname` and the contest's `getnum` fill the
+## buffer their text prints; left empty, the box showed the raw marker.
+func test_getnum_and_getcurlandmarkname_fill_their_string_buffers() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6200"] = [
+		Gen2WorldScript.GETCURLANDMARKNAME, Gen2Layout.STRING_BUFFER_3,
+		Gen2WorldScript.SETVAL, 2,
+		Gen2WorldScript.GETNUM, Gen2Layout.STRING_BUFFER_4,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	_write_landmark(1, "VIOLET CITY")
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).location = 1
+	var runner := Gen2WorldScriptRunner.begin(data, Gen2WorldState.new(), {
+		"kind": &"test", "bank": 48, "script": 0x6200, "map_group": 1, "map_number": 1,
+	})
+
+	assert_eq(runner.advance()["status"], &"complete")
+	var buffers: Dictionary = runner.text_context().get("buffers", {})
+	assert_eq(String(buffers.get(Gen2Layout.STRING_BUFFER_3, "")), "VIOLET CITY")
+	assert_eq(String(buffers.get(Gen2Layout.STRING_BUFFER_4, "")), "2")
+
+
+func _write_landmark(index: int, landmark_name: String) -> void:
+	var manifest: Dictionary = RomCache.read_json(RomCache.manifest_path(_directory))
+	var landmarks: Array = []
+	for _row: int in index + 1:
+		landmarks.append({"x": 0, "y": 0, "codes": []})
+	landmarks[index]["codes"] = Array(Gen2Text.encode(landmark_name))
+	manifest["town_map"] = {"landmarks": landmarks}
+	RomCache.write_json(RomCache.manifest_path(_directory), manifest)
 
 
 ## An event is handed to its caller once. The runner drains its list on every
