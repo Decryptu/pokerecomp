@@ -1,24 +1,17 @@
 <!-- Rewrite from the first release heading, `## Added`, `## Changed` or `## Fixed`, for each release. The text below
 the release changes is standing guidance with a {VERSION} placeholder. -->
 
-## Added
-
-- The save editor edits Pokemon in the PC boxes. Tap one to change its species, level, gender, happiness, held item, moves and DVs, as for a party member.
-- Mods can place a Pokemon on the map that blocks the way and starts a wild battle when you press A on it.
-- Mods can swap their own Pokemon in for the wild you meet in grass or water, so a mod can have any number of roaming Pokemon on all six games.
-- Mods can run a whole battle on their own screen, which a double battle mod needs. The game still pays the prize, saves, evolves and whites out as usual.
-- Mods are told how every battle ended and which Pokemon was left standing.
-- In Crystal, a mod can turn on the GS Ball event from the Virtual Console release. The Goldenrod Pokemon Center hands over the GS Ball, and Kurt and the Ilex Forest shrine follow.
-
 ## Changed
 
-- The save editor picks items, species, moves and held items by name from a list you scroll with your finger.
+- Indoors, the filled screen draws only the room you are in. The other cabins on the S.S. Aqua and the S.S. Anne, and cave or tower areas you can only reach from another floor, stay hidden along with the people in them.
+- Mods: API 52 adds `camera_reaches()`, which says whether a block of an indoor map belongs to the room the player is in.
 
 ## Fixed
 
-- The save editor's item list scrolls on a phone, so every item can be added. It no longer lists the unused TERU-SAMA items, and its button says Add for a new item and Set for one already in the bag.
-- Ho-Oh always holds a Sacred Ash and the Vermilion City Snorlax always holds Leftovers, as on the cartridge.
-- Randomizer mods no longer put a key item on the Goldenrod GS Ball, which the game never gives without a mod.
+- A trainer fight no longer freezes at its start until you leave the app and come back. A sound that never finished held it; every wait on a sound now gives up after about 20 seconds. The card flip game, the slots and the Unown puzzle waited the same way.
+- Vermilion City's Snorlax and the Snorlax, Lapras and Onix dolls in your bedroom are drawn correctly instead of as scrambled tiles.
+- On Red, Blue and Yellow, the POKé FLUTE in battle plays its tune after you press past its first box, and "All sleeping POKéMON woke up." appears when the tune ends.
+- On Red, Blue and Yellow, a wait on a sound effect ignores the wave channel, as on the cartridge.
 
 ## Which file
 
