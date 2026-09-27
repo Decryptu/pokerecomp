@@ -3,10 +3,8 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Fixed
 
-- Celebi flies around the Ilex Forest shrine before its battle in Crystal. The shrine used to stay empty for the length of the scene.
-- Gym statues name their city, and the Bug-Catching Contest names your placing and the minutes left. These lines used to print a raw code.
-- The fisher on Route 27 keeps facing you while the "!" is over his head on your first step into Kanto. People on the map no longer turn or walk during a cutscene pause.
-- At the foot of a waterfall the current carries you back down, and pressing A there no longer asks to use Waterfall. A, START and SELECT do nothing on any tile that moves you.
+- Mods that show wild Pokemon on the map no longer place them on floor you can never reach. Victory Road put them above its exit, and Dark Cave, Silver Cave, Dragon's Den and Whirl Island had 1,099 more such cells between them. They also no longer stand on a door, ladder or cave exit.
+- Using an item on a full party no longer leaves CANCEL printed over the message box, as Rare Candy's "grew to level" line did.
 
 ## Which file
 
