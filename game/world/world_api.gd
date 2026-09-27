@@ -2177,7 +2177,7 @@ static func _headbutt_failure(reason: StringName) -> Dictionary:
 
 ## TryRockSmashFromMenu: `GetFacingObject`'s `MAPOBJECT_MOVEMENT` against
 ## `SPRITEMOVEDATA_SMASHABLE_ROCK` on the doubled cell `interact()` reads, no
-## badge and no tile; the roll belongs to the commit.
+## badge and no tile; the roll belongs to the runner.
 func rock_smash_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _rock_smash_failure(&"missing_map")
@@ -2203,28 +2203,21 @@ func pending_rock_smash() -> Dictionary:
 	return _pending_rock_smash.duplicate(true)
 
 
-## RockSmashScript after its text: `disappear LAST_TALKED` and then
-## `RockMonEncounter`. The rock goes whether or not anything comes out of it,
-## because the disappear is before the roll.
-func complete_rock_smash(random: RandomNumberGenerator) -> Dictionary:
-	if _pending_rock_smash.is_empty():
-		return _rock_smash_failure(&"no_pending_rock_smash")
-	if random == null:
-		return _rock_smash_failure(&"missing_generator")
-	if data == null or current_map == null:
-		return _rock_smash_failure(&"missing_map")
+## RockSmashScript past its text, through the runner the rock's own ask uses.
+func smash_rock_from_menu() -> Array:
+	if _pending_rock_smash.is_empty() or current_map == null:
+		return []
 	var request: Dictionary = _pending_rock_smash
 	_pending_rock_smash = {}
-	var object_index: int = int(request["object_index"])
-	smash_object(object_index)
-	return {
-		"ok": true,
-		"kind": &"rock_smash_applied",
-		"move": int(request["move"]),
+	_enqueue_script({
+		"kind": &"rock_smash_used",
+		"map_group": current_map.group,
+		"map_number": current_map.number,
+		"bank": int(current_map.events.get("bank", 0)),
 		"cell": request["cell"],
-		"object_index": object_index,
-		"encounter": _rock_encounter(random),
-	}
+		"object_index": int(request["object_index"]),
+	})
+	return run_event_queue(false)
 
 
 ## `Script_disappear`: `DeleteObjectStruct` plus
@@ -2243,39 +2236,6 @@ func smash_object(object_index: int) -> Dictionary:
 	if object.event_flag > 0:
 		state.set_event_flag(object.event_flag, true)
 	return {"ok": true, "object_index": object_index, "event_flag": object.event_flag}
-
-
-## RockMonEncounter over the imported RockMonMaps and the ROCK set. No
-## BATTLETYPE_TREE, so nothing out of a rock starts asleep.
-func _rock_encounter(random: RandomNumberGenerator) -> Dictionary:
-	var set_number: int = data.treemon_set_for_map(
-		current_map.group, current_map.number, true
-	)
-	if not Gen2WorldTreemon.set_is_usable(
-		set_number, Gen2WorldState.is_crystal_profile(data)
-	):
-		return {}
-	var resolved: Dictionary = Gen2WorldTreemon.rock_encounter(
-		data.treemon_set(set_number), random
-	)
-	if resolved.is_empty():
-		return {}
-	var species: int = int(resolved["species"])
-	var level: int = int(resolved["level"])
-	return _stamp_encounter({
-		"kind": &"wild_encounter_requested",
-		"method": Gen2WorldEncounter.METHOD_ROCK_SMASH,
-		"source": Gen2WorldEncounter.SOURCE_ROCK,
-		"pokemon": species,
-		"level": level,
-		"map": map_id(),
-		"cell": player_cell,
-		"movement": movement_mode,
-		"treemon_set": set_number,
-		"encounter_roll": int(resolved["encounter_roll"]),
-		"slot_roll": int(resolved["slot_roll"]),
-		"values": {"kind": &"wild", "pokemon": species, "level": level},
-	})
 
 
 static func _rock_smash_failure(reason: StringName) -> Dictionary:
@@ -6102,12 +6062,13 @@ func _gen1_node_trainer_battle_object(
 	if index >= rows.size():
 		return false
 	var trainer: Dictionary = rows[index]
+	if not trainer.has("species") and not trainer.has("trainer_class"):
+		return false
+	_gen1_engage_music(trainer, steps)
 	if trainer.has("species"):
 		steps.append({"type": &"request", "values": {"kind": &"battle_requested",
 			"values": _gen1_battle_values({}, trainer)}})
 		return true
-	if not trainer.has("trainer_class"):
-		return false
 	steps.append(_gen1_trainer_request(
 		int(trainer.get("trainer_class", 0)), int(trainer.get("trainer_number", 1)),
 		node.get("end_texts", {}), index
@@ -7332,10 +7293,9 @@ func _gen1_event_at(cell: Vector2i, kind: StringName) -> Dictionary:
 	return {}
 
 
-## `TalkToTrainer`: the flag first, then the after-battle line or the
-## before-battle one and `StartTrainerBattle`. The same header stands behind the
-## standing wild Pokemon of the Power Plant, Victory Road and the two caves.
-func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
+## `TalkToTrainer`: the flag, the after or before line, `EngageMapTrainer` unless
+## [param seen], and `StartTrainerBattle`. Standing wild Pokemon share the header.
+func _gen1_trainer_steps(row: Dictionary, event: Dictionary, seen: bool = false) -> Array:
 	var raw: Variant = row.get("trainer", {})
 	if not raw is Dictionary or (raw as Dictionary).is_empty():
 		return []
@@ -7347,20 +7307,42 @@ func _gen1_trainer_steps(row: Dictionary, event: Dictionary) -> Array:
 			var steps: Array = []
 			return steps if _gen1_resolve_script(header["after_script"], steps, _gen1_run(event)) else []
 		return [{"type": &"text", "text": gen1_filled_text(String(header["after"]))}]
-	return [
-		{"type": &"text", "text": gen1_filled_text(String(header["before"]))},
-		{
-			"type": &"request",
-			"values": {
-				"kind": &"battle_requested",
-				"values": _gen1_battle_values(header, event),
-			},
-			"trainer_flag": flag,
-			"object_index": int(event.get("object_index", -1)),
-			"standing_wild": not event.has("trainer_class"),
-			"end_script": header.get("end_script", []),
+	var fight: Array = [{"type": &"text", "text": gen1_filled_text(String(header["before"]))}]
+	if not seen:
+		_gen1_engage_music(event, fight)
+	fight.append({
+		"type": &"request",
+		"values": {
+			"kind": &"battle_requested",
+			"values": _gen1_battle_values(header, event),
 		},
-	]
+		"trainer_flag": flag,
+		"object_index": int(event.get("object_index", -1)),
+		"standing_wild": not event.has("trainer_class"),
+		"end_script": header.get("end_script", []),
+	})
+	return fight
+
+
+## `EngageMapTrainer`'s `PlayTrainerMusic`, under a printed box's wait for the press.
+func _gen1_engage_music(event: Dictionary, steps: Array) -> void:
+	if int(_gen1_volatile.get("gym_leader", 0)) != 0:
+		return
+	## A standing Pokemon's species byte is in no list, so it plays Youngster's.
+	var record: Dictionary = data.trainer_encounter_music(
+		int(event.get("trainer_class", Gen1Layout.YOUNGSTER_CLASS))
+	)
+	if record.is_empty():
+		return
+	var music: Dictionary = _gen1_sound_step("music", {
+		"index": int(record["sound_id"]), "bank": int(record["bank"]),
+	})
+	var last: Dictionary = steps.back() if not steps.is_empty() else {}
+	if StringName(last.get("type", &"")) == &"text" and bool(last.get("press", true)):
+		last["press"] = false
+		steps.append({"type": &"button", "arrow": true, "events": [music["event"]]})
+		return
+	steps.append(music)
 
 
 ## `InitBattleEnemyParameters` splits the object's two bytes on `OPP_ID_OFFSET`:
@@ -7639,11 +7621,14 @@ func _gen1_sight() -> Array:
 	var event: Dictionary = request["event"]
 	_gen1_last_sprite_index = int(request["object_index"])
 	var steps: Array = _gen1_trainer_steps(
-		current_map.text_at(int(event.get("text", 0))), event
+		current_map.text_at(int(event.get("text", 0))), event, true
 	)
 	if steps.is_empty():
 		return running
-	_gen1_steps = [{"type": &"request", "values": {
+	## `TrainerEngage` starts the piece before the bubble goes up.
+	var engaged: Array = []
+	_gen1_engage_music(event, engaged)
+	_gen1_steps = engaged + [{"type": &"request", "values": {
 		"kind": &"trainer_approach_requested",
 		"values": {
 			"object_index": int(request["object_index"]),
@@ -7910,10 +7895,12 @@ func _gen1_waiting_result(step: Dictionary) -> Dictionary:
 		}
 	if type == &"choice":
 		return {"ok": true, "status": &"waiting", "event": {"type": &"choice"}}
-	## `WaitForTextScrollButtonPress` over nothing printed.
+	## `WaitForTextScrollButtonPress`; `arrow` is a printed box's blinking one.
 	if type == &"button":
 		return {
-			"ok": true, "status": &"waiting", "event": {"type": &"button", "box": false},
+			"ok": true, "status": &"waiting", "event": {
+				"type": &"button", "box": false, "arrow": bool(step.get("arrow", false)),
+			},
 			"events": (step.get("events", []) as Array).duplicate(true),
 		}
 	## A counted wait and whatever it starts on the frame it opens on.
@@ -9251,7 +9238,9 @@ func _script_address_for_event(event: Dictionary) -> int:
 func _enqueue_script(request: Dictionary) -> void:
 	## The synthesized requests carry no address of their own.
 	if int(request.get("script", 0)) <= 0 \
-		and StringName(request.get("kind", &"")) not in [&"field_move_prompt", &"item_gift", &"pitfall"]:
+		and StringName(request.get("kind", &"")) not in [
+			&"field_move_prompt", &"item_gift", &"pitfall", &"rock_smash_used",
+		]:
 		return
 	_script_queue.append(_completed_request(request))
 
@@ -9746,8 +9735,11 @@ func _apply_object_override(type: StringName, event: Dictionary) -> bool:
 		return false
 	var key: String = _object_key(map_group, map_number, index)
 	var names_loaded: bool = _event_names_loaded_object(event, index)
-	if type in OBJECT_FACING_EVENTS and names_loaded \
-		and not (objects[index] as Gen2WorldObject).takes_facing():
+	if type in OBJECT_FACING_EVENTS:
+		if names_loaded:
+			_apply_object_facing(type, event, key, objects[index] as Gen2WorldObject)
+		elif type == &"object_facing":
+			_object_facing_overrides[key] = _clamped_facing(event)
 		return true
 	match type:
 		&"object_visibility":
@@ -9765,24 +9757,36 @@ func _apply_object_override(type: StringName, event: Dictionary) -> bool:
 			## Live at once, so an `applymovement` later in the run walks from it.
 			if names_loaded:
 				(objects[index] as Gen2WorldObject).cell = cell
+	return true
+
+
+## `ApplyObjectFacing` writes the live struct, which a walking object's reload keeps.
+func _apply_object_facing(
+	type: StringName, event: Dictionary, key: String, object: Gen2WorldObject
+) -> void:
+	if not object.takes_facing():
+		return
+	var facing: int = -1
+	match type:
 		&"object_facing":
-			_object_facing_overrides[key] = clampi(
-				int(event.get("facing", Gen2WorldSprite.FACING_DOWN)),
-				Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT
-			)
+			facing = _clamped_facing(event)
 		&"object_face_player":
-			if names_loaded:
-				_object_facing_overrides[key] = _facing_toward(
-					(objects[index] as Gen2WorldObject).cell, player_cell
-				)
+			facing = _facing_toward(object.cell, player_cell)
 		&"object_face_object":
 			var target: int = int(event.get("target_index", -1))
-			if names_loaded and target >= 0 and target < objects.size():
-				_object_facing_overrides[key] = _facing_toward(
-					(objects[index] as Gen2WorldObject).cell,
-					(objects[target] as Gen2WorldObject).cell
-				)
-	return true
+			if target >= 0 and target < objects.size():
+				facing = _facing_toward(object.cell, (objects[target] as Gen2WorldObject).cell)
+	if facing < 0:
+		return
+	_object_facing_overrides[key] = facing
+	object.facing = facing
+
+
+static func _clamped_facing(event: Dictionary) -> int:
+	return clampi(
+		int(event.get("facing", Gen2WorldSprite.FACING_DOWN)),
+		Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT
+	)
 
 
 ## The same writes against object zero. Nothing is recorded for the next object
@@ -9800,10 +9804,7 @@ func _apply_player_override(type: StringName, event: Dictionary) -> bool:
 				return false
 			player_cell = cell
 		&"object_facing":
-			player_facing = clampi(
-				int(event.get("facing", Gen2WorldSprite.FACING_DOWN)),
-				Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT
-			)
+			player_facing = _clamped_facing(event)
 		&"object_face_object":
 			var target: int = int(event.get("target_index", Gen2WorldObject.NONE_INDEX))
 			if target >= 0 and target < objects.size():
@@ -12803,9 +12804,7 @@ func last_schedule() -> Dictionary:
 	return _last_schedule.duplicate(true)
 
 
-## Reloads the current map's live object records without changing the player
-## cell or queuing a second map transition. This is the host effect of
-## [code]reloadmapafterbattle[/code] when the suspended script resumes.
+## `MAPSETUP_RELOADMAP`: blocks come back from ROM, objects keep their live state.
 func reload_current_map() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return {"ok": false, "reason": &"missing_map"}
@@ -12821,7 +12820,6 @@ func reload_current_map() -> Dictionary:
 	_pending_headbutt.clear()
 	_pending_rock_smash.clear()
 	_pending_flash.clear()
-	_clear_transient_object_visibility_overrides()
 	if not _gen1:
 		state.reset_map_reload_flags()
 	_arm_wild_encounter_cooldown(true)
@@ -12830,7 +12828,11 @@ func reload_current_map() -> Dictionary:
 	state.clear_poison_step_count()
 	## `MapSetupScript_ReloadMap`'s `LoadBlockData` ends in the tiles callback.
 	_run_map_callback_now(MAPCALLBACK_TILES)
-	_load_objects()
+	## Its list has no `LoadMapObjects`, so a smashed rock stays gone. Generation
+	## 1's `LoadMapHeader` keeps the sprites but reloads the toggleable objects.
+	_load_objects(true)
+	if _gen1:
+		load_object_masks()
 	return {"ok": true, "kind": &"reload_map", "map": map_id(), "cell": player_cell}
 
 

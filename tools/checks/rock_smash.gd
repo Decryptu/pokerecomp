@@ -191,11 +191,9 @@ func _verify_cianwood(game_id: StringName, data: GameData, _crystal: bool) -> vo
 
 	var random := RandomNumberGenerator.new()
 	random.seed = 2
-	var applied: Dictionary = world.complete_rock_smash(random)
-	_r.check(
-		bool(applied.get("ok", false)),
-		"%s: the commit failed with %s." % [game_id, applied.get("reason", "")]
-	)
+	world.script_random = random
+	world.smash_rock_from_menu()
+	var battle: Dictionary = _smash_to_battle(world)
 	_r.check(
 		world.object_at(CIANWOOD_ROCK_CELL) == null,
 		"%s: the rock is still there after disappear LAST_TALKED." % game_id
@@ -204,15 +202,23 @@ func _verify_cianwood(game_id: StringName, data: GameData, _crystal: bool) -> vo
 		world.can_walk_to(CIANWOOD_ROCK_CELL),
 		"%s: the smashed rock's cell is still blocked." % game_id
 	)
+	# `MAPSETUP_RELOADMAP` loads no objects, so the battle's reload keeps it gone.
 	# Its event flag is -1, so nothing was written and the next map load brings
 	# it back, which is what the cartridge does with fifteen of the sixteen.
 	world.reload_current_map()
 	_r.check(
-		world.object_at(CIANWOOD_ROCK_CELL) != null,
-		"%s: an unflagged rock did not come back on a map reload." % game_id
+		world.object_at(CIANWOOD_ROCK_CELL) == null,
+		"%s: the reload after a battle brought the rock back." % game_id
+	)
+	var reentered: Gen2WorldAPI = Gen2WorldAPI.open(
+		data, CIANWOOD_GROUP, CIANWOOD_NUMBER, CIANWOOD_STAND_CELL, world.state
+	)
+	_r.check(
+		reentered.object_at(CIANWOOD_ROCK_CELL) != null,
+		"%s: an unflagged rock did not come back on a map load." % game_id
 	)
 
-	var encounter: Dictionary = applied.get("encounter", {})
+	var encounter: Dictionary = battle.get("values", {})
 	if _r.check(
 		not encounter.is_empty(),
 		"%s: seed 2's roll of 0 is under RockMonEncounter's 4 and must resolve." % game_id
@@ -223,12 +229,28 @@ func _verify_cianwood(game_id: StringName, data: GameData, _crystal: bool) -> vo
 				% [game_id, int(encounter["pokemon"])]
 		)
 		_r.check(
-			not encounter["values"].has("battle_type"),
+			not encounter.has("battle_type"),
 			"%s: RockMonEncounter writes no wBattleType, unlike TreeMonEncounter." % game_id
 		)
 		print("%s: Cianwood City %s smashed to species %d at level %d." % [
 			game_id, CIANWOOD_ROCK_CELL, int(encounter["pokemon"]), int(encounter["level"]),
 		])
+
+
+## RockSmashScript from its sound to the `startbattle` a passed roll reaches.
+func _smash_to_battle(world: Gen2WorldAPI) -> Dictionary:
+	for _frame: int in 1024:
+		var request: Dictionary = world.pending_runtime_request()
+		match StringName(request.get("kind", &"")):
+			&"battle_requested":
+				return request
+			&"audio_requested":
+				world.complete_runtime_request({"ok": true})
+				continue
+		if world.pending_script_wait().is_empty():
+			return {}
+		world.advance_script_presentation_frame()
+	return {}
 ## CheckPartyMove gates Rock Smash and nothing else does.
 func _rock_smash_party(world: Gen2WorldAPI) -> void:
 	world.set_party_summary(

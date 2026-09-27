@@ -70,6 +70,10 @@ const TRAINER_ATTR_FIRST_AI_ITEM_SWITCH: int = Gen2Layout.CONTEXT_USE | Gen2Layo
 ## [method Gen2Stats.pack_dvs] packs a DV word.
 const TRAINER_DVS_FIRST: int = 0x9A77
 
+## pret's ten `MUSIC_*_ENCOUNTER` tracks, and Falkner's `MUSIC_YOUNGSTER_ENCOUNTER`.
+const ENCOUNTER_MUSIC_TRACKS: Array[int] = [0x0A, 0x0B, 0x0C, 0x1F, 0x27, 0x37, 0x38, 0x39, 0x3A, 0x3B]
+const ENCOUNTER_MUSIC_FIRST: int = 0x37
+
 ## What the first and last Pokedex entries are known to say, independently of
 ## the cartridge: the published category, height as decimal feet and inches, and
 ## weight in tenths of a pound. All three dumps agree on every one of these;
@@ -126,6 +130,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	verify_trainer_parties,
 	verify_trainer_attributes,
 	verify_trainer_dvs,
+	verify_trainer_encounter_music,
 	Gen2WorldImporter.verify_layout.unbind(1),
 	Gen2WorldEncounterImporter.verify_layout.unbind(1),
 	Gen2WorldServicesImporter.verify_layout.unbind(1),
@@ -4619,6 +4624,25 @@ static func verify_trainer_dvs(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"ok": true, "message": ""}
 
 
+## Every row names an encounter track, and Falkner's anchors the start.
+static func verify_trainer_encounter_music(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var count: int = Gen2Layout.trainer_class_count(layout)
+	if not rom.in_bounds(Gen2Layout.trainer_encounter_music_offset(layout, 0), count + 1):
+		return {"ok": false, "message": "Trainer encounter music table is past the end."}
+	for trainer_class: int in range(count + 1):
+		var track: int = rom.u8(Gen2Layout.trainer_encounter_music_offset(layout, trainer_class))
+		if not ENCOUNTER_MUSIC_TRACKS.has(track):
+			return {
+				"ok": false,
+				"message": "Trainer class %d's encounter music $%02X is no encounter track." % [
+					trainer_class, track,
+				],
+			}
+	if rom.u8(Gen2Layout.trainer_encounter_music_offset(layout, 1)) != ENCOUNTER_MUSIC_FIRST:
+		return {"ok": false, "message": "Trainer class 1's encounter music does not match what is known of it."}
+	return {"ok": true, "message": ""}
+
+
 static func type_name(rom: RomFile, layout: Dictionary, type_number: int) -> String:
 	var table: int = Gen2Layout.type_name_pointer_offset(layout, type_number)
 	var address: int = rom.u16le(table)
@@ -5464,9 +5488,9 @@ func _import_types(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 ## Decodes the trainer classes: a name and the two colours the class is drawn in.
 ## A class has one palette and no shiny counterpart, so the pair is stored flat,
 ## and the pic is found by class number in the trainer atlas. Behind the classes
-## sit the party table, the attributes table and the DVs table, all on one entry
-## rather than in separate cache files, because they are four tables one class
-## number addresses rather than four separate questions.
+## sit the party, attributes, DVs and encounter music tables, all on one entry
+## rather than in separate cache files, because they are five tables one class
+## number addresses rather than five separate questions.
 func _import_trainers(rom: RomFile, layout: Dictionary, on_progress: Callable) -> Array:
 	var count: int = Gen2Layout.trainer_class_count(layout)
 	var names: PackedStringArray = Gen2Text.decode_sequence(
@@ -5485,6 +5509,9 @@ func _import_trainers(rom: RomFile, layout: Dictionary, on_progress: Callable) -
 			"trainers": classes[trainer_class - 1] if trainer_class - 1 < classes.size() else [],
 			"attributes": RomImporter.read_trainer_attributes(rom, layout, trainer_class),
 			"dvs": RomImporter.read_trainer_dvs(rom, layout, trainer_class),
+			"encounter_music": rom.u8(
+				Gen2Layout.trainer_encounter_music_offset(layout, trainer_class)
+			),
 		})
 
 		if on_progress.is_valid():

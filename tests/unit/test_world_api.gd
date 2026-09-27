@@ -4908,6 +4908,32 @@ func test_a_moveobject_lands_before_the_applymovement_behind_it() -> void:
 	assert_eq((world.objects[0] as Gen2WorldObject).cell, Vector2i(4, 3))
 
 
+## The Dragon Shrine elder's walk away: a `turnobject` on another object and the
+## `applymovement` behind it in one run. The turn rebuilds every record, and the
+## walker's first step still faces the way it walks, not where its stream ends,
+## while the other objects stay frozen under `FreezeAllOtherObjects`.
+func test_a_turnobject_leaves_a_walk_behind_it_facing_its_step() -> void:
+	RomCache.write_json(RomCache.world_movements_path(_directory), {"48:6100": [0x0F, 0x00, 0x47]})
+	## turnobject 3, UP / applymovement 2, step right and turn_head down / end
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6070": [0x76, 3, 1, 0x69, 2, 0x00, 0x61, 0x91],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6070
+	data.world_map(1, 1).events["objects"].append({
+		"sprite": 1, "x": 2, "y": 2, "movement": Gen2WorldObject.MOVEMENT_FIXED_DOWN,
+	})
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	world.dispatch_script_events()
+	var walker: Gen2WorldObject = world.objects[0]
+	assert_true(walker.is_stepping())
+	assert_eq(walker.facing, Gen2WorldSprite.FACING_RIGHT)
+	assert_true((world.objects[1] as Gen2WorldObject).frozen)
+	assert_eq((world.objects[1] as Gen2WorldObject).facing, Gen2WorldSprite.FACING_UP)
+	assert_eq(_final_status(_run_script(world, [])), &"complete")
+	assert_eq(walker.facing, Gen2WorldSprite.FACING_DOWN)
+
+
 func test_script_movement_publishes_source_shake_effects() -> void:
 	RomCache.write_json(RomCache.world_movements_path(_directory), {
 		"48:6100": [0x55, 16, 0x47],
@@ -6832,6 +6858,8 @@ func test_disappear_and_appear_update_the_object_event_flag() -> void:
 	assert_eq(world.visible_objects().size(), 1)
 
 
+## `MAPSETUP_RELOADMAP` has no `LoadMapObjects`, so a battle's reload keeps the
+## struct deleted; the next map load rebuilds it from `wMapObjects`.
 func test_flagless_disappear_returns_when_the_map_rebuilds_objects() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	scripts["48:6045"] = [Gen2WorldScript.raw_opcode(0x6D, true), 2, 0x91]
@@ -6845,10 +6873,18 @@ func test_flagless_disappear_returns_when_the_map_rebuilds_objects() -> void:
 	assert_eq(disappeared[0]["status"], &"complete", JSON.stringify(disappeared))
 	assert_eq(world.visible_objects().size(), 0)
 	assert_true(world.reload_current_map()["ok"])
+	assert_eq(world.visible_objects().size(), 0, "a reload keeps it gone")
+	_warp_out_and_back(world)
 	assert_eq(world.visible_objects().size(), 1)
 
 
-func test_movement_remove_object_is_live_until_the_next_map_reload() -> void:
+## Map 1/1's warp to 1/2 and 1/2's back, a map load each way.
+func _warp_out_and_back(world: Gen2WorldAPI) -> void:
+	assert_true(bool(world.try_warp(Vector2i(6, 6)).get("ok", false)), "onto map 1/2")
+	assert_true(bool(world.try_warp(Vector2i(2, 2)).get("ok", false)), "and back")
+
+
+func test_movement_remove_object_is_live_until_the_next_map_load() -> void:
 	RomCache.write_json(RomCache.world_movements_path(_directory), {
 		"48:6120": [0x49, 0x47],
 	})
@@ -6864,6 +6900,8 @@ func test_movement_remove_object_is_live_until_the_next_map_reload() -> void:
 	assert_eq(world.visible_objects().size(), 0)
 
 	world.reload_current_map()
+	assert_eq(world.visible_objects().size(), 0)
+	_warp_out_and_back(world)
 	assert_eq(world.visible_objects().size(), 1)
 
 

@@ -798,6 +798,8 @@ const CABLE_CLUB_WARP_ROWS: Array[String] = [
 ]
 const SPECIAL_WARP_SIZE: int = 8
 const RIVAL1_CLASS: int = 0x19
+## `OPP_YOUNGSTER`, a class neither `PlayTrainerMusic` list names.
+const YOUNGSTER_CLASS: int = 1
 ## `OPP_RIVAL1`: `InitOpponent` fights a link partner as the rival's class.
 const LINK_TRAINER_CLASS: int = RIVAL1_CLASS
 ## `.battleOccurred`'s one map: a loss here is the starter fight and no blackout.
@@ -1953,6 +1955,11 @@ const ALTERNATE_MUSIC_OPCODE_SIZES: Dictionary = {
 const ALTERNATE_MUSIC_STEP_CAP: int = 24
 const EMOTE_FRAMES: int = 60
 const RIVAL_CLASSES: Array[int] = [RIVAL1_CLASS, 0x2A, 0x2B]
+## `BANK(Music_MeetEvilTrainer)`, where the three `meet_*_trainer_music` ids play.
+const MEET_TRAINER_MUSIC_BANK: int = 0x1F
+const MEET_TRAINER_MUSIC_KEYS: Array[String] = [
+	"meet_evil_trainer_music", "meet_female_trainer_music", "meet_male_trainer_music",
+]
 const BADGE_COUNT: int = 8
 const MOVE_DOWN: int = 0
 const MOVE_UP: int = 1
@@ -2591,6 +2598,11 @@ const RED_BLUE: Dictionary = {
 	"mon_palettes": 0x725C8,
 	"super_palettes": 0x72660,
 	"trainer_names": 0x399FF,
+	"female_trainer_list": 0x3434,
+	"evil_trainer_list": 0x3439,
+	"meet_evil_trainer_music": 246,
+	"meet_female_trainer_music": 249,
+	"meet_male_trainer_music": 252,
 	"evos_moves": 0x3B05C,
 	"evos_moves_bank": 0x0E,
 	"cries": 0x39446,
@@ -3173,6 +3185,11 @@ const YELLOW: Dictionary = {
 	"super_palettes": 0x729B9,
 	"cgb_base_palettes": 0x72AF9,
 	"trainer_names": 0x3997E,
+	"female_trainer_list": 0x33C3,
+	"evil_trainer_list": 0x33C8,
+	"meet_evil_trainer_music": 245,
+	"meet_female_trainer_music": 248,
+	"meet_male_trainer_music": 251,
 	"evos_moves": 0x3B1E5,
 	"evos_moves_bank": 0x0E,
 	"cries": 0x39462,

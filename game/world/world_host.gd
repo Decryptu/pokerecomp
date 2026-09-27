@@ -473,11 +473,13 @@ static func audio_for_request(world: Gen2WorldAPI, request: Dictionary) -> Dicti
 			return data.world_audio(&"sfx", item_sfx)
 		&"sound_wait":
 			return {"kind": &"sound_wait"}
-		&"map_music", &"encounter_music":
+		&"map_music":
 			if world.current_map == null:
 				return {}
 			## `GetMapMusic_MaybeSpecial`, never the raw header byte.
 			return world.map_music_record()
+		&"encounter_music":
+			return data.trainer_encounter_music(int(values.get("trainer_class", 0)))
 	return {}
 
 

@@ -356,7 +356,7 @@ func test_trainer_approach_step_interpolates_the_objects_position() -> void:
 	assert_eq(lowest_magnitude, Gen2WorldAPI.CELL_PIXELS / Gen2WorldAPI.STEP_PASSES_WALK)
 
 
-func test_victory_displays_imported_text_reloads_objects_and_keeps_player_cell() -> void:
+func test_victory_displays_imported_text_and_keeps_player_cell() -> void:
 	await _open_world()
 	await _trigger_trainer()
 	var host: Gen2BattleScreen = _battle_child()
@@ -385,7 +385,10 @@ func test_victory_displays_imported_text_reloads_objects_and_keeps_player_cell()
 	var world: Dictionary = _world_screen.world_snapshot()
 	assert_eq(world["map"], Vector2i(Fixture.MAP_GROUP, Fixture.MAP_NUMBER))
 	assert_eq(world["player_cell"], Vector2i(5, 5))
-	assert_eq(world["visible_objects"], 0)
+	## `MAPSETUP_RELOADMAP` re-tests no object flag: the trainer the script's
+	## `setevent` flagged stands until the next map load.
+	assert_eq(world["visible_objects"], 1)
+	assert_true(_world_screen._world.event_flag_active(Fixture.TRAINER_FLAG))
 	assert_true(world["just_battled"])
 
 
@@ -415,7 +418,7 @@ func test_gold_profile_trainer_sight_reaches_the_real_battle_overlay() -> void:
 	assert_eq(snapshot["world_battle_active"], true)
 
 
-func test_gold_profile_victory_commits_beaten_flag_and_reloads_objects() -> void:
+func test_gold_profile_victory_commits_beaten_flag() -> void:
 	_data = Fixture.build(&"gold")
 	await _open_world()
 	await _trigger_trainer()
@@ -440,7 +443,7 @@ func test_gold_profile_victory_commits_beaten_flag_and_reloads_objects() -> void
 	await get_tree().process_frame
 	var world: Dictionary = _world_screen.world_snapshot()
 	assert_eq(world["player_cell"], Vector2i(5, 5))
-	assert_eq(world["visible_objects"], 0)
+	assert_true(_world_screen._world.event_flag_active(Fixture.TRAINER_FLAG))
 	assert_true(world["just_battled"])
 
 
@@ -1688,8 +1691,8 @@ func test_a_press_during_the_battle_transition_leaves_the_script_running() -> vo
 	await get_tree().process_frame
 	var world: Dictionary = _world_screen.world_snapshot()
 	assert_true(world["just_battled"])
-	assert_eq(
-		world["visible_objects"], 0,
+	assert_true(
+		_world_screen._world.event_flag_active(Fixture.TRAINER_FLAG),
 		"the script ran on past the fight and set the trainer's beaten flag"
 	)
 

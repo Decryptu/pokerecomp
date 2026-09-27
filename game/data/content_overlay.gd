@@ -140,6 +140,8 @@ const DEFAULTS: Dictionary = {
 			"ai_move_weights": 0, "ai_item_switch": 0,
 		},
 		"dvs": Gen2BattleMon.PERFECT_DVS,
+		# `GameData.trainer_encounter_music`'s track; -1 plays none.
+		"encounter_music": -1,
 	},
 	KIND_TYPE: {
 		"name": "?",

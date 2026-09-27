@@ -3051,6 +3051,7 @@ const GOLD_SILVER: Dictionary = {
 	"trainer_attributes": 0x39562,
 	"trainer_dvs": 0x27283,
 	"trainer_dvs_last": 0x7EA8, # GRUNTF, class 66, "ROCKET" in-game: atk 7, def 14, spd 10, spc 8.
+	"trainer_encounter_music": 0xE9027,
 	"map_group_pointers": 0x940ED,
 	"map_group_counts": [14, 7, 82, 9, 10, 8, 17, 7, 6, 17, 22, 13, 6, 8, 12, 8, 13, 14, 4, 4, 26, 9, 13, 13, 15, 11],
 	"tilesets": 0x156BE,
@@ -3633,6 +3634,7 @@ const CRYSTAL: Dictionary = {
 	"trainer_attributes": 0x3959C,
 	"trainer_dvs": 0x270D6,
 	"trainer_dvs_last": 0x9888, # MYSTICALMAN, class 67: atk 9, def 8, spd 8, spc 8.
+	"trainer_encounter_music": 0xE9027,
 	"map_group_pointers": 0x94000,
 	"map_group_counts": [14, 7, 91, 9, 10, 8, 17, 7, 6, 17, 24, 13, 6, 8, 12, 8, 13, 14, 4, 6, 26, 16, 13, 13, 15, 11],
 	"tilesets": 0x4D596,
@@ -4194,6 +4196,11 @@ static func trainer_attributes_offset(layout: Dictionary, trainer_class: int) ->
 ## [method trainer_attributes_offset].
 static func trainer_dvs_offset(layout: Dictionary, trainer_class: int) -> int:
 	return int(layout["trainer_dvs"]) + (trainer_class - 1) * TRAINER_DVS_SIZE
+
+
+## `TrainerEncounterMusic`, one track a class, opening on class zero's row.
+static func trainer_encounter_music_offset(layout: Dictionary, trainer_class: int) -> int:
+	return int(layout["trainer_encounter_music"]) + trainer_class
 
 
 ## How many bytes one Pokémon occupies in a trainer's party, past its level and

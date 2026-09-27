@@ -18,6 +18,8 @@ const LAST_FLOOR_NAME: String = "B4F"
 const FIRST_TYPE_NAME: String = "NORMAL"
 const LAST_TYPE_NAME: String = "DRAGON"
 const FIRST_TRAINER_NAME: String = "YOUNGSTER"
+## `OPP_LASS`, the first row of `FemaleTrainerList`.
+const FEMALE_TRAINER_FIRST: int = 3
 
 ## `YoungsterData`'s first party, the Route 3 pair, as levels and dex numbers.
 const FIRST_TRAINER_PARTY: Array = [[11, 19], [11, 23]]
@@ -132,6 +134,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_trainer_names,
 	_verify_trainer_parties,
 	_verify_trainer_ai,
+	_verify_trainer_music,
 	_verify_palettes,
 	_verify_wild_constants,
 	_verify_pic_pointers,
@@ -974,6 +977,26 @@ static func _verify_trainer_parties(rom: RomFile, layout: Dictionary) -> Diction
 		read.append([int(member["level"]), int(member["species"])])
 	if read != FIRST_TRAINER_PARTY:
 		return _fail("Youngster's first party reads %s." % str(read))
+	return _ok()
+
+
+## Both lists end on `-1`, Lass opens one, and each id heads a three-channel piece.
+static func _verify_trainer_music(rom: RomFile, layout: Dictionary) -> Dictionary:
+	for key: String in ["female_trainer_list", "evil_trainer_list"]:
+		var listed: Array[int] = _read_class_list(rom, int(layout[key]))
+		var end: int = int(layout[key]) + listed.size()
+		if listed.is_empty() or not rom.in_bounds(end, 1) or rom.u8(end) != 0xFF:
+			return _fail("%s does not end on -1." % key)
+		for trainer_class: int in listed:
+			if trainer_class < 1 or trainer_class > Gen1Layout.TRAINER_CLASS_COUNT:
+				return _fail("%s names class %d." % [key, trainer_class])
+	if _read_class_list(rom, int(layout["female_trainer_list"]))[0] != FEMALE_TRAINER_FIRST:
+		return _fail("FemaleTrainerList does not open on Lass.")
+	for key: String in Gen1Layout.MEET_TRAINER_MUSIC_KEYS:
+		var id: int = int(layout[key])
+		var header: int = Gen1Layout.banked(Gen1Layout.MEET_TRAINER_MUSIC_BANK, RomFile.BANK_SIZE + id * 3)
+		if rom.u8(header) != 0x80:
+			return _fail("Trainer music %d does not head a three-channel piece." % id)
 	return _ok()
 
 
@@ -2602,6 +2625,7 @@ func _import_trainers(rom: RomFile, layout: Dictionary) -> Array:
 	_attach_special_moves(rom, layout, parties)
 	var layers: Array = read_move_choices(rom, layout)
 	var ai: Array = read_trainer_ai(rom, layout)
+	var encounter_music: Array[int] = read_trainer_music(rom, layout)
 	var out: Array = []
 	for trainer_class: int in range(1, Gen1Layout.TRAINER_CLASS_COUNT + 1):
 		var row: int = int(layout["trainer_pics"]) \
@@ -2621,7 +2645,38 @@ func _import_trainers(rom: RomFile, layout: Dictionary) -> Array:
 				"ai_routine": String(routine["routine"]),
 			},
 			"trainers": parties[trainer_class - 1],
+			"encounter_music": encounter_music[trainer_class - 1],
 		})
+	return out
+
+
+## `PlayTrainerMusic` a class: none for the rival, then the evil, female and
+## male pieces. `wGymLeaderNo` is left to the caller.
+static func read_trainer_music(rom: RomFile, layout: Dictionary) -> Array[int]:
+	var evil: Array[int] = _read_class_list(rom, int(layout["evil_trainer_list"]))
+	var female: Array[int] = _read_class_list(rom, int(layout["female_trainer_list"]))
+	var music: Array = Gen1Layout.MEET_TRAINER_MUSIC_KEYS.map(func(key: String) -> int:
+		return int(layout[key]))
+	var out: Array[int] = []
+	for trainer_class: int in range(1, Gen1Layout.TRAINER_CLASS_COUNT + 1):
+		if Gen1Layout.RIVAL_CLASSES.has(trainer_class):
+			out.append(0)
+		elif evil.has(trainer_class):
+			out.append(int(music[0]))
+		elif female.has(trainer_class):
+			out.append(int(music[1]))
+		else:
+			out.append(int(music[2]))
+	return out
+
+
+## A `db OPP_*` list up to its `-1`, as classes; a byte that is no class ends it.
+static func _read_class_list(rom: RomFile, at: int) -> Array[int]:
+	var out: Array[int] = []
+	while rom.in_bounds(at, 1) and rom.u8(at) != 0xFF \
+		and out.size() <= Gen1Layout.TRAINER_CLASS_COUNT:
+		out.append(rom.u8(at) - Gen1Layout.OPPONENT_ID_OFFSET)
+		at += 1
 	return out
 
 

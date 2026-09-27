@@ -3266,13 +3266,18 @@ func trainer_dvs(number: int) -> int:
 	return int(entry.get("dvs", Gen2BattleMon.PERFECT_DVS))
 
 
-## Where a trainer class sits in the trainer atlas. Every trainer is drawn at the
-## same size, so unlike a species pic this one always fills its cell.
-## `GetTrainerBackpic` below it is the player's own 6x6 picture, which stands on
-## the player's square until a Pokemon is sent out; Gold and Silver ship no Kris
-## and the empty Dictionary says so. `GetPlayerOrMonPalettePointer` is its
-## colours, and the Dude wears the player's, so [param kind] is a gender rather
-## than a picture.
+## `TrainerEncounterMusic`'s or `PlayTrainerMusic`'s piece; empty keeps the map's.
+func trainer_encounter_music(number: int) -> Dictionary:
+	var track: int = int(trainer(number).get("encounter_music", -1))
+	if track <= 0:
+		return {}
+	if generation == RomRegistry.GEN1:
+		return gen1_sound(Gen1Layout.MEET_TRAINER_MUSIC_BANK, track)
+	return world_audio(&"music", track)
+
+
+## `GetPlayerOrMonPalettePointer`: the backpic's colours, which the Dude shares,
+## so [param kind] is a gender rather than a picture.
 func player_palette(kind: String) -> PackedColorArray:
 	var stored: Variant = _player_palettes.get(kind, null)
 	if not stored is Array or (stored as Array).size() < 2:
@@ -3353,8 +3358,9 @@ func battle_transition_palette(dark: bool = false) -> PackedColorArray:
 	return out
 
 
-## The kinds are the generation's own: Chris, Kris and the Dude in Generation 2,
-## the player and the old man in Generation 1.
+## `GetTrainerBackpic`. The kinds are the generation's own: Chris, Kris and the
+## Dude in Generation 2, the player and the old man in Generation 1; Gold and
+## Silver ship no Kris and answer empty.
 func player_backpic(kind: String) -> Dictionary:
 	var kinds: Array[String] = Gen1Layout.PLAYER_BACKPICS if generation == RomRegistry.GEN1 \
 		else Gen2Layout.PLAYER_BACKPICS
@@ -3374,6 +3380,7 @@ func player_frontpic(slot: int = 0) -> Dictionary:
 	return {"atlas": "player_front", "slot": slot, "width": cell, "height": cell}
 
 
+## Where a class sits in the trainer atlas; every trainer fills its cell.
 func trainer_pic(number: int) -> Dictionary:
 	var entry: Dictionary = trainer(number)
 	if entry.is_empty():
