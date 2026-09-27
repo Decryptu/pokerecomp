@@ -955,6 +955,40 @@ func test_nurse_script_heals_the_party_after_accepting_and_shows_the_heal_machin
 	)
 
 
+## `CelebiShrineEvent` flies Celebi in while the script waits out its loop, from
+## OAM slot 36, behind every map object, and the loop's end takes it away.
+func test_the_celebi_shrine_event_flies_celebi_behind_the_map_objects() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(Fixture.directory()))
+	var shrine_script: int = 0x6340
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, shrine_script)] = [
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_CELEBI_SHRINE_EVENT, 0,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(Fixture.directory()), scripts)
+	_data = GameData.open_directory(Fixture.directory())
+	await _open_world(true)
+	_world_screen.set_process(false)
+	_world_screen._world.current_map.events["coord_events"] = [{
+		"scene": 0, "x": 4, "y": 5, "script": shrine_script,
+	}]
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(Vector2i(4, 5))
+	)
+	_world_screen.advance_frame()
+	var rows: Array = _world_screen._draw_list.sprites()
+	var celebi: int = rows.find_custom(func(row: Dictionary) -> bool:
+		return row["role"] == Gen2WorldEffects.SPRITE_CELEBI)
+	var player: int = rows.find_custom(func(row: Dictionary) -> bool:
+		return int(row["owner"]) == Gen2WorldDrawList.OWNER_PLAYER)
+	assert_ne(celebi, -1, "Celebi is drawn once the loop's first pass is in")
+	assert_eq((rows[celebi]["tiles"] as Array).size(), 4)
+	assert_lt(celebi, player, "drawn under the player")
+	for _frame: int in Gen2WorldEffects.CELEBI_FRAMES:
+		_world_screen.advance_frame()
+	assert_false(_world_screen._draw_list.sprites().any(func(row: Dictionary) -> bool:
+		return row["role"] == Gen2WorldEffects.SPRITE_CELEBI), "gone with the loop")
+
+
 func test_nurse_script_leaves_the_party_unhealed_on_refusal() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(Fixture.directory()))
 	var nurse_script: int = 0x6330

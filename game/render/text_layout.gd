@@ -12,10 +12,8 @@ const TEXTBOX_COLUMNS: int = 18
 const TEXTBOX_ROWS: int = 2
 
 
-## Breaks [param text] into lines of at most [param columns] tiles.
-##
-## Explicit newlines are kept: a caller that has already decided where a line
-## ends is obeyed, and only the runs between them are wrapped.
+## Breaks [param text] into lines of at most [param columns] tiles. Explicit
+## newlines are kept; only the runs between them are wrapped.
 static func wrap_lines(
 	text: String, columns: int, generation: int = RomRegistry.GEN2
 ) -> PackedStringArray:
@@ -91,6 +89,7 @@ static func lay_out_pages(
 	var out: Array = []
 	if rows <= 0 or columns <= 0:
 		return out
+	_refuse_unfilled(text)
 	var page: PackedStringArray = PackedStringArray()
 	var enter: StringName = &"start"
 	var carried: int = 0
@@ -131,6 +130,13 @@ static func lay_out_pages(
 	if not page.is_empty():
 		out.append({"lines": page, "enter": enter, "carried": carried})
 	return out
+
+
+## Every screen lays text out here, so a host's unfilled marker fails its checks.
+static func _refuse_unfilled(text: String) -> void:
+	for marker: String in [Gen2TextStream.RAM_MARKER, Gen2TextStream.NUMBER_MARKER, "<BUFFER_"]:
+		if text.contains(marker):
+			push_error("Gen2TextLayout: %s reached the screen unfilled: %s" % [marker, text.c_escape()])
 
 
 ## What a box is left holding once [param text] has been printed to its end.

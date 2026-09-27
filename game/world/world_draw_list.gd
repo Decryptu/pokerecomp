@@ -520,12 +520,16 @@ func _add_free(out: Array, effects: Array, player: Dictionary) -> void:
 	var screen: Dictionary = _owner(
 		OWNER_NONE, ANCHOR_SCREEN, Vector2.ZERO, Vector2.ZERO, {}, 0.0
 	)
+	var under: Array = []
 	for sprite: Dictionary in effects:
 		if bool(sprite.get("screen", false)):
-			var first: int = out.size()
-			_add_effect(out, screen, sprite)
-			for row: Dictionary in out.slice(first):
+			var rows: Array = under if bool(sprite.get("under_objects", false)) else out
+			var first: int = rows.size()
+			_add_effect(rows, screen, sprite)
+			for row: Dictionary in rows.slice(first):
 				_stand_on_map(row)
+	for index: int in under.size():
+		out.insert(index, under[index])
 	_add_pulse(out)
 
 
