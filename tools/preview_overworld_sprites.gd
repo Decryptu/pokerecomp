@@ -5,9 +5,9 @@ extends SceneTree
 ## the right way round. Each sprite is a four-by-four block: the four facings
 ## across and the four `Facings` frames down, so a correct walking sprite reads
 ## as two poses alternating with the right column mirroring the left. A big
-## object draws as a scramble: [method Gen2WorldSprite.image_for] knows only the
-## four-tile layout. Generation 1's sheets read the same way, its
-## `SpriteFacingAndAnimationTable` using the same order and the same $80 offset.
+## object fills its block with the 32x32 picture its bedroom doll draws. Generation
+## 1's sheets read the same way, its `SpriteFacingAndAnimationTable` using the same
+## order and the same $80 offset.
 
 const CELL: int = 16
 const COLUMNS: int = 8
@@ -52,6 +52,13 @@ func _initialize() -> void:
 			((number - 1) % COLUMNS) * TILE_W + 1,
 			((number - 1) / COLUMNS) * TILE_H + 1
 		)
+		if data.generation != RomRegistry.GEN1 and number in Gen2WorldSprite.BIG_SPRITES:
+			var big: Image = Gen2WorldSprite.big_image_for(
+				sprite, indices, palette, Gen2WorldSprite.big_doll_shape(number)
+			)
+			big.resize(CELL * 4, CELL * 4, Image.INTERPOLATE_NEAREST)
+			sheet.blit_rect(big, Rect2i(0, 0, CELL * 4, CELL * 4), at)
+			continue
 		for facing: int in 4:
 			for frame: int in 4:
 				sheet.blit_rect(

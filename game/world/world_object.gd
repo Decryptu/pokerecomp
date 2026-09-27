@@ -263,9 +263,8 @@ func is_big_object() -> bool:
 	return movement in [MOVEMENT_BIGDOLLSYM, MOVEMENT_BIGDOLLASYM, MOVEMENT_BIGDOLL]
 
 
-## SetFacingBigDoll chooses the symmetric row for Snorlax and Lapras and the
-## asymmetric row for every other variable big doll. The two explicit movement
-## rows select their matching facing table directly.
+## The two explicit movement rows select their facing table directly; the
+## variable doll takes [method Gen2WorldSprite.big_doll_shape]'s.
 func big_object_shape() -> int:
 	match movement:
 		MOVEMENT_BIGDOLLSYM:
@@ -273,8 +272,7 @@ func big_object_shape() -> int:
 		MOVEMENT_BIGDOLLASYM:
 			return Gen2WorldSprite.BIG_SHAPE_ASYMMETRIC
 		MOVEMENT_BIGDOLL:
-			return Gen2WorldSprite.BIG_SHAPE_SYMMETRIC if sprite_number in [33, 47] \
-				else Gen2WorldSprite.BIG_SHAPE_ASYMMETRIC
+			return Gen2WorldSprite.big_doll_shape(sprite_number)
 	return Gen2WorldSprite.BIG_SHAPE_NONE
 
 

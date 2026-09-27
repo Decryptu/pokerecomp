@@ -151,6 +151,12 @@ func _verify_cabins(data: GameData, game_id: StringName) -> void:
 			_region(cabin, NE_CABIN_DOOR).has(Vector2i(4, 27)),
 			"%s: the lazy sailor cannot be faced from the NE cabin's own door." % game_id
 		)
+		# The .blk stacks cabins on block rows 0, 6 and 12 with two rows of $0C between.
+		_r.check(
+			cabin.camera_reaches(1, 12) and cabin.camera_reaches(1, 10) \
+				and not cabin.camera_reaches(1, 9),
+			"%s: a filled screen in the NE cabin shows the NNE cabin above it." % game_id
+		)
 
 	var captain: Gen2WorldAPI = _open(data, CAPTAIN_CABIN, Vector2i(2, 33))
 	if captain == null:
@@ -186,6 +192,13 @@ func _verify_cabins(data: GameData, game_id: StringName) -> void:
 	_r.check(
 		captain.warp_index_at(GRANDPA_CABIN_DOOR) == 3,
 		"%s: %s is not the grandpa cabin's own door." % [game_id, GRANDPA_CABIN_DOOR]
+	)
+	var door_block: Vector2i = GRANDPA_CABIN_DOOR / Gen2Layout.MAP_BLOCK_CELL_WIDTH
+	var shown_before: bool = captain.camera_reaches(door_block.x, door_block.y)
+	captain.player_cell = GRANDPA_CABIN_DOOR
+	_r.check(
+		not shown_before and captain.camera_reaches(door_block.x, door_block.y),
+		"%s: a filled screen shows the grandpa cabin before the scene carries the player there, or not after." % game_id
 	)
 	print("%s cabins: the lazy sailor, the granddaughter and her scene's five wall rows check out." % game_id)
 

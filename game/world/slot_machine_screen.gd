@@ -15,6 +15,7 @@ var _machine: Gen2SlotMachine = null
 var _page: Gen2SlotMachinePage = null
 var _view: TextureRect = null
 var _audio: Gen2AudioPlayer = null
+var _sfx_watch: Dictionary = {}
 var _data: GameData = null
 ## The box standing under the machine, which is `PrintText`'s own.
 var _text: String = ""
@@ -86,9 +87,10 @@ func advance_frame() -> void:
 		_refresh()
 		return
 	if _machine.waiting_for_sfx():
-		if _audio != null and _audio.effect_playing():
+		if _audio != null and _audio.still_waiting(_sfx_watch):
 			_refresh()
 			return
+		_sfx_watch = {}
 		_machine.sfx_finished()
 	if not _acted:
 		_pass()

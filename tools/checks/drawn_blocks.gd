@@ -8,8 +8,8 @@ var _r: RefCounted = null
 ## cache over its whole padded rectangle. The count of padded blocks that came from
 ## a neighbour is reported per game, because two implementations that both answer
 ## the border block everywhere would agree and prove nothing. SCREEN FILL is the
-## same fold one step further out: inside `wOverworldMapBlocks` it is
-## `drawn_block_at` byte for byte, and the placed map answers the padding's block.
+## same fold further out: `drawn_block_at` where `camera_reaches`, else the
+## border block, and the placed map past the padding.
 
 ## `FillMapConnections` writes three blocks of padding on each side.
 const PADDING: int = 3
@@ -62,12 +62,13 @@ func _check_game(data: GameData) -> void:
 					or block_x >= map.width_blocks or block_y >= map.height_blocks
 				if outside and recorded != map.border_block:
 					neighbours += 1
-				## Inside the buffer the expansion is the fold itself.
-				if world.expanded_block_at(block_x, block_y) != loaded:
+				var shown: int = loaded if world.camera_reaches(block_x, block_y) \
+					else map.border_block
+				if world.expanded_block_at(block_x, block_y) != shown:
 					_failures += 1
 					printerr("%-8s map %d/%d block (%d,%d): expanded %d, drawn %d" % [
 						data.id, map.group, map.number, block_x, block_y,
-						world.expanded_block_at(block_x, block_y), loaded,
+						world.expanded_block_at(block_x, block_y), shown,
 					])
 					return
 				_buffer_agreed += 1

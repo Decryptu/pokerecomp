@@ -277,7 +277,7 @@ are room the overworld can draw into. Settings > Application > Screen:
 
 | Screen | What it draws |
 |---|---|
-| Fill (default) | The map covers the whole window at any shape, and the maps connected to this one are drawn around it |
+| Fill (default) | The map covers the whole window at any shape, and the maps connected to this one are drawn around it. Indoors, only the room you are in is drawn, so the S.S. Aqua's other cabins stay hidden |
 | Framed | The 160x144 screen at a whole scale, centred, with black bars, as the hardware had |
 
 Everything laid out on the screen (text boxes, menus, the start menu, the

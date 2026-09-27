@@ -82,11 +82,12 @@ var _clip_lead: int = 0
 var _clip_begun: bool = false
 
 
-## How many of the CALLER's frames the driver may go without rendering before a
-## wait on a sound decides nobody is servicing it. Not one: the buffer is filled
-## to a depth, and read as one frame every `waitsfx` ended a frame after it
-## started.
+## The caller's frames the driver may render nothing before a sound wait decides
+## nobody services it; not one, since the buffer is filled to a depth.
 const SERVICE_GAP_FRAMES: int = 12
+## Driver frames a wait may last while rendering; the longest effect ends in 577.
+const WAIT_CAP_FRAMES: int = 1200
+const MUSIC_WAIT_CAP_FRAMES: int = 3600
 
 
 ## The driver exists before the node enters the tree: a host that plays its map
@@ -518,7 +519,7 @@ func _hold_gen1_alarm_for_cry() -> void:
 
 
 func _resume_gen1_alarm_after_cry() -> void:
-	if _gen1_alarm_held < 0 or _gen1.sfx_active():
+	if _gen1_alarm_held < 0 or _gen1.sound_to_finish():
 		return
 	_gen1.low_health_alarm = _gen1_alarm_held
 	_gen1_alarm_held = -1
@@ -551,19 +552,17 @@ func music_playing() -> bool:
 
 ## `_CheckSFX`, which is what `waitsfx` and the battle screen wait on.
 func effect_playing() -> bool:
-	return _gen1.sfx_active() if _generation == RomRegistry.GEN1 else _engine.sfx_active()
+	return _gen1.sound_to_finish() if _generation == RomRegistry.GEN1 else _engine.sfx_active()
 
 
-## Driver frames rendered. A headless run renders none and would leave [method
-## effect_playing] true forever, so a wait on a sound stops once this count has
-## stood still for [constant SERVICE_GAP_FRAMES].
+## Driver frames rendered: [method still_waiting]'s clock, which a headless run stops.
 func timeline_updates() -> int:
 	return _timeline_updates
 
 
 ## `WaitSFX` for one caller's frame: true while the effect, or the music with
-## [param music], plays and the driver rendered within [constant SERVICE_GAP_FRAMES].
-## [param watch] is the caller's own dictionary, carried across its frames.
+## [param music], plays, the driver rendered within [constant SERVICE_GAP_FRAMES]
+## and the wait is inside its cap. [param watch] is the caller's, kept per wait.
 func still_waiting(watch: Dictionary, music: bool = false) -> bool:
 	if not (music_playing() if music else effect_playing()):
 		return false
@@ -571,11 +570,27 @@ func still_waiting(watch: Dictionary, music: bool = false) -> bool:
 	if not music and _generation == RomRegistry.GEN1 \
 		and (_gen1.low_health_alarm & Gen1SoundEngine.BIT_LOW_HEALTH_ALARM) != 0:
 		return false
+	return _serviced(watch, music)
+
+
+## `.musicWaitLoop`'s read of one Generation 1 channel, bounded as [method still_waiting] is.
+func still_waiting_on_channel(watch: Dictionary, channel: int) -> bool:
+	if _generation != RomRegistry.GEN1 or _gen1.channel_sound_id(channel) == 0:
+		return false
+	return _serviced(watch, true)
+
+
+func _serviced(watch: Dictionary, music: bool) -> bool:
 	var rendered: int = timeline_updates()
+	var since: int = int(watch.get("since", rendered))
 	var still: int = 0 if int(watch.get("rendered", -1)) != rendered \
 		else int(watch.get("still", 0)) + 1
+	watch["since"] = since
 	watch["rendered"] = rendered
 	watch["still"] = still
+	if rendered - since > (MUSIC_WAIT_CAP_FRAMES if music else WAIT_CAP_FRAMES):
+		push_warning("A sound wait outlived its cap: %s" % audio_status())
+		return false
 	return still <= SERVICE_GAP_FRAMES
 
 

@@ -14,6 +14,7 @@ var _game: Gen2CardFlip = null
 var _page: Gen2CardFlipPage = null
 var _view: TextureRect = null
 var _audio: Gen2AudioPlayer = null
+var _sfx_watch: Dictionary = {}
 var _data: GameData = null
 var _text: String = ""  ## The box under the table, which is `PrintTextboxText`'s own.
 var _yes_no: Gen2WorldMenu = Gen2WorldMenu.yes_no()
@@ -80,9 +81,10 @@ func advance_frame() -> void:
 		_refresh()
 		return
 	if _game.waiting_for_sfx():
-		if _audio != null and _audio.effect_playing():
+		if _audio != null and _audio.still_waiting(_sfx_watch):
 			_refresh()
 			return
+		_sfx_watch = {}
 		_game.sfx_finished()
 	_frames += 1
 	if not _acted:

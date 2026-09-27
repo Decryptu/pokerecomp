@@ -24,11 +24,8 @@ var _atlases: Dictionary = {}
 var _map_layers: Array[Gen2WorldMapLayer] = []
 var _block_textures: Dictionary = {}
 var _tiles_textures: Dictionary = {}
-## `wOverworldMapBlocks` itself: the map plus the three-block margin
-## `ChangeMap` leaves, resolved through [method Gen2WorldAPI.drawn_block_at] so
-## the connection strips in it are the cartridge's own.
 var _buffer_texture: ImageTexture = null
-var _buffer_revision: int = -1
+var _buffer_revision := Vector2i(-1, -1)
 var _background_color: Color = FALLBACK_BACKGROUND
 var _actor_textures: Dictionary = {}
 var _priority_atlas: ImageTexture = null
@@ -47,7 +44,7 @@ func set_world(world: Gen2WorldAPI, animation: Gen2WorldAnimation = null) -> voi
 	_effect_textures.clear()
 	_block_textures.clear()
 	_buffer_texture = null
-	_buffer_revision = -1
+	_buffer_revision = Vector2i(-1, -1)
 	_rebuild_atlas()
 	refresh()
 
@@ -674,13 +671,12 @@ func _show_map_layers(count: int) -> void:
 		_map_layers[index].visible = index < count
 
 
-## `wOverworldMapBlocks`: the map's own blocks with the three-block margin
-## around them, every byte through [method Gen2WorldAPI.drawn_block_at], so the
-## connection strips and the border fill in it are the cartridge's own.
+## `wOverworldMapBlocks` and its margin, through [method Gen2WorldAPI.expanded_block_at].
 func _map_buffer_texture() -> ImageTexture:
 	if _world == null or _world.current_map == null:
 		return null
-	if _buffer_texture != null and _buffer_revision == _world.block_revision:
+	var revision: Vector2i = Vector2i(_world.block_revision, _world.camera_reach_revision())
+	if _buffer_texture != null and _buffer_revision == revision:
 		return _buffer_texture
 	var map: Gen2WorldMap = _world.current_map
 	var span := Vector2i(
@@ -694,11 +690,11 @@ func _map_buffer_texture() -> ImageTexture:
 	for y: int in span.y:
 		var row: int = y * span.x
 		for x: int in span.x:
-			bytes[row + x] = _world.drawn_block_at(
+			bytes[row + x] = _world.expanded_block_at(
 				x - Gen2WorldAPI.BUFFER_BLOCKS, y - Gen2WorldAPI.BUFFER_BLOCKS
 			) & 0xFF
 	_buffer_texture = Gen2WorldMapLayer.block_texture(bytes, span)
-	_buffer_revision = _world.block_revision
+	_buffer_revision = revision
 	return _buffer_texture
 
 

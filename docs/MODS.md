@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 52 | `Gen2WorldAPI.camera_reaches()` and `camera_reach_revision()`: `expanded_block_at()` and the draw list leave another room of an indoor map out; big objects drawn in `facings.asm`'s own tile order |
 | 51 | `ended` on the battle channel; `register_wild_substitute()`; `register_battle_takeover()`; a `solid` actor entry and an actor's `battle` request; `request_gs_ball()` and `gs_ball_offered` in `progress()` |
 | 50 | `hp_bar` on the battle channel, the one event that moves a bar, where the cartridge draws it; `hp`, `max_hp`, `to_hp` and `target_hp` leave the lines around it |
 | 49 | `Gen2WorldMap.code_at()`, `permission_at()`, `is_door_at()` and `ledge_hops_at()`, the same three on `Gen2WorldAPI`, and `Gen2WorldCollision.cell_code()`, `cell_permission()`, `cell_is_door()` and `cell_hops()`, answering a cell on either generation |
@@ -960,8 +961,10 @@ coordinates.
 | `map_placements() -> Dictionary` | `"group:number"` to `{map, origin}` for every map the graph reaches, nearest first. The loaded map is the origin and is not in it |
 | `placements_around(data, map, hops) -> Dictionary` | The same for a map nobody is standing on |
 | `connection_origin_blocks(source, target, connection) -> Vector2i` | Where one connection puts one map |
-| `expanded_block_at(x, y) -> int` | `drawn_block_at` inside the buffer; past it, whichever placed map covers the coordinate, and the border block where none does |
+| `expanded_block_at(x, y) -> int` | `drawn_block_at` inside the buffer where `camera_reaches` allows it, the border block where it does not; past the buffer, whichever placed map covers the coordinate, and the border block where none does |
 | `in_hardware_buffer(map, x, y) -> bool` | Which of those two a coordinate takes |
+| `camera_reaches(x, y) -> bool` | Whether a 160x144 screen framed on a cell the player can walk to shows this block. False only on an indoor map for another room, such as the S.S. Aqua's other cabins |
+| `camera_reach_revision() -> int` | Moves when `camera_reaches` would answer differently |
 
 `PLACEMENT_HOPS` and `PLACEMENT_LIMIT` bound the walk at three hops and 24 maps.
 

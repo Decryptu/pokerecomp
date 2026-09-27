@@ -208,6 +208,7 @@ func _one_game() -> void:
 	_a_safari_battle()
 	_the_tutor_throws()
 	_a_wild_fight_on_the_screen()
+	_the_flute_plays_between_its_boxes()
 	_a_boxed_catch_asks_its_name()
 	_mimic_on_the_screen()
 	_a_lost_fight_on_the_screen()
@@ -1576,6 +1577,42 @@ func _a_wild_fight_on_the_screen() -> void:
 	_r.check(starter == (_r.game_id == RomRegistry.YELLOW),
 		"the lead PIKACHU is %s the starter." % ["not" if not starter else "read as"])
 	_r.note("gen1 battle the screen's wild fight ended in %d frames on piece %d" % [frames, victory])
+	_close_screen(screen)
+
+
+## `PlayedFluteHadEffectText`'s press, the tune, `.musicWaitLoop`, then the next line.
+func _the_flute_plays_between_its_boxes() -> void:
+	var screen: Gen2WorldScreen = _open_screen(PALLET_TOWN, TUTOR_CELL, true)
+	screen.world().state.apply_changes({}, {}, {"items": {Gen1Layout.ITEM_POKE_FLUTE: 1}})
+	screen.preview_battle_request(SWEEP_ENEMY, FIGHT_LEVELS[1])
+	var audio: Gen2AudioPlayer = screen.get("_audio_player")
+	var stage: int = 0
+	var tune: int = 0
+	for _frame: int in TUTOR_GUARD_FRAMES:
+		screen.advance_frame()
+		var host: Gen2BattleScreen = screen.get("_battle_host")
+		if host == null:
+			continue
+		var snapshot: Dictionary = host.battle_snapshot()
+		var said: String = String(snapshot.get("message", ""))
+		if stage == 0 and StringName(snapshot.get("menu_stage", &"")) != &"":
+			host._battle.player.status = Gen2Status.SLEEP_MASK
+			if bool(host.open_battle_pack().get("ok", false)):
+				host.select_pack_row((host.get("_pack_rows") as Array).find(Gen1Layout.ITEM_POKE_FLUTE))
+				stage = 1
+		elif stage == 1 and said.contains("FLUTE") and bool(snapshot.get("awaits_press", false)):
+			stage = 2
+		elif stage == 2 and audio._gen1.channel_sound_id(Gen1SoundEngine.CHAN7) != 0:
+			tune += 1
+		elif stage == 2 and said.begins_with("All sleeping"):
+			stage = 3
+			break
+		if bool(snapshot.get("awaits_press", false)) \
+			or stage == 1 and StringName(snapshot.get("menu_stage", &"")) != &"":
+			screen.press_button(PokeButton.A)
+	_r.check(stage == 3 and tune > 200,
+		"the flute's second box came at stage %d after %d frames of tune." % [stage, tune])
+	_r.note("gen1 battle the flute played %d frames between its boxes" % tune)
 	_close_screen(screen)
 
 

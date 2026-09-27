@@ -187,6 +187,7 @@ func drawn_revision() -> int:
 	var found: Dictionary = band()
 	var key: Array = [
 		_world.block_revision, _world.map_id(), _world.screen_tile_overrides().size(),
+		_world.camera_reach_revision(),
 		found.get("rows", Vector2i.ZERO), found.get("first_column", 0),
 	]
 	if key != _drawn_key:
@@ -303,20 +304,28 @@ func _row_entries(battlers_only: bool) -> Array:
 	objects.sort_custom(_sort_objects)
 	var drawn: Array = []
 	for object: Gen2WorldObject in objects:
-		if battlers_only and object.index != _transition_opponent:
+		if (battlers_only and object.index != _transition_opponent) \
+			or not _camera_reaches(Vector2(object.cell)):
 			continue
 		drawn.append({"object": object, "row": float(object.cell.y)})
 	if battlers_only:
 		return drawn
 	if _actors != null:
 		for sprite: Dictionary in _actors.sprites():
-			drawn.append({"actor": sprite, "row": (sprite["position_cells"] as Vector2).y})
+			if _camera_reaches(sprite["position_cells"]):
+				drawn.append({"actor": sprite, "row": (sprite["position_cells"] as Vector2).y})
 	var follower: Dictionary = _world.gen1_pikachu_sprite()
 	if not follower.is_empty():
 		drawn.append({"actor": follower, "row": (follower["position_cells"] as Vector2).y})
 	_add_connected(drawn)
 	drawn.sort_custom(_sort_drawn)
 	return drawn
+
+
+## A person in another room of the map is drawn no more than its floor is.
+func _camera_reaches(cells: Vector2) -> bool:
+	var block: Vector2i = Vector2i((cells / float(Gen2Layout.MAP_BLOCK_CELL_WIDTH)).floor())
+	return _world.camera_reaches(block.x, block.y)
 
 
 ## The connected maps' people within [member reach_pixels] and two cells of the
