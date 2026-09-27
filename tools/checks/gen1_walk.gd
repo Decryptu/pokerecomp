@@ -1695,7 +1695,8 @@ func _check_the_mart_counter_flow() -> void:
 
 
 func _spend_counter_answer(host: Gen2WorldServiceScreen) -> void:
-	while host._mart_yes_no != null and host._mart_yes_no.holding():
+	while (host._mart_yes_no != null and host._mart_yes_no.holding()) \
+			or host._hold_then.is_valid():
 		host.advance_frame()
 
 

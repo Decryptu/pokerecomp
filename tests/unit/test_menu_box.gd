@@ -52,6 +52,25 @@ func test_items_and_cursor_step_two_rows_each() -> void:
 	assert_eq(box.cursor_position(1), Vector2i(7, 8))
 
 
+## `PCItemsJoypad`'s `.PCItemsMenuData`, `menu_coords 4, 1, 18, 10` inside its own
+## `Textbox`, as a Crystal dump draws it: the arrow on column 4, the names on 5
+## from row 2, and a POTION's `×NN` on column 14 a row under it. Read the other
+## way, as a vertical menu, the whole list stands a column right with a second
+## frame round it.
+func test_a_scrolling_menu_puts_its_arrow_on_the_header_column() -> void:
+	var box: Gen2MenuBox = Gen2MenuBox.scrolling_menu(4, 1, 18, 10, Rect2i(0, 0, 20, 12)) \
+		.show_quantities(8, [5])
+	assert_eq(box.cursor_position(1), Vector2i(4, 4))
+	assert_eq(box.item_position(1), Vector2i(5, 4))
+	assert_eq(box.quantity_position(0), Vector2i(14, 3))
+	assert_eq(box.border_position(), Vector2i.ZERO)
+	## `InitScrollingMenu` frames `MailboxPC`'s `menu_coords 8, 1, 18, 10` one
+	## tile outside its corners.
+	var mailbox: Gen2MenuBox = Gen2MenuBox.scrolling_menu(8, 1, 18, 10)
+	assert_eq(mailbox.border_position(), Vector2i(7, 0))
+	assert_eq(mailbox.border_size(), Vector2i(13, 12))
+
+
 ## `data/player_names.asm`'s ChrisNameMenuHeader, the other real header:
 ## `menu_coords 0, 0, 10, TEXTBOX_Y - 1` with a title indented two columns.
 func test_title_prints_on_the_box_top_row_at_its_indent() -> void:
