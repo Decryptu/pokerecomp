@@ -274,6 +274,46 @@ func test_change_box_switches_names_and_prints_a_box() -> void:
 	assert_null(host._naming)
 	assert_eq(host._save.box_name(1), "KANTO")
 	assert_eq(String(host._pc_rows[1]["name"]), "KANTO")
+	## `InitString` puts the old name back over an entry of spaces.
+	host._on_box_named("   ")
+	assert_eq(host._save.box_name(1), "KANTO")
+
+	## `ChangeBoxSaveGame.refused` is `pop de / ret`: straight back to the list.
+	host.handle_button(PokeButton.A)
+	host.handle_button(PokeButton.A)
+	watch_signals(host)
+	_read_save(host)
+	host.handle_button(PokeButton.B)
+	_spend_answer_hold(host)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST)
+	for index: int in get_signal_emit_count(host, "sfx_requested"):
+		assert_ne(get_signal_parameters(host, "sfx_requested", index)[0], Gen2Sfx.SFX_SAVE)
+	assert_eq(host._save.current_box, 1)
+
+	## PRINT over a box with something in it holds in `SendScreenToPrinter`
+	## until B, and `.loop` draws the list again.
+	host._save.boxes[0].put(host._save.party[0], 0)
+	host.handle_button(PokeButton.A)
+	for _step: int in 2:
+		host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_true(host._pc_box_print)
+	assert_signal_emitted_with_parameters(
+		host, "music_requested", [Gen2DiplomaScreen.MUSIC_PRINTER]
+	)
+	host.handle_button(PokeButton.A)
+	assert_true(host._pc_box_print, "A cancels nothing")
+	host.handle_button(PokeButton.B)
+	assert_false(host._pc_box_print)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST)
+
+	## `ScrollingMenu`'s CANCEL, after the fourteenth box, answers A as B.
+	for _step: int in Gen2SaveData.BOX_COUNT:
+		host.handle_button(PokeButton.DOWN)
+	assert_eq(String(host._pc_rows[host._cursor]["name"]), Gen2WorldServiceScreen.CANCEL_ROW)
+	assert_eq(host._box_count, -1, "CANCEL's panel is drawn empty")
+	host.handle_button(PokeButton.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
 
 
 ## `_HallOfFamePC.MasterLoop`: one stored team at a time, and B is the way out.
@@ -506,6 +546,30 @@ func test_the_deposit_list_walks_on_real_presses_with_focus_held_elsewhere() -> 
 		get_tree().root.push_input(press)
 		await get_tree().process_frame
 		assert_eq(int(boxes.box_snapshot()["cursor"]), step + 1)
+	boxes.close_embedded()
+	await get_tree().process_frame
+
+
+## A box transfer is written with the world the player is standing in, as every
+## other world-owned change is: a deposit that carried the last save's world
+## beside the new party put a reset back into that world with the Pokemon kept.
+func test_a_deposit_writes_the_live_world_beside_the_party() -> void:
+	await _open_pokemon_center_pc()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	host.handle_button(PokeButton.A)
+	_answer_box(host)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	var boxes: Gen2BoxScreen = host._boxes
+	var save: Gen2SaveData = _world_screen.active_save()
+	var party: int = save.party.size()
+	var frame: int = save.world.frame_number + 1000
+	_world_screen._world.frame_number = frame
+	boxes.handle_button(PokeButton.A)
+	boxes.handle_button(PokeButton.A)
+	assert_eq(save.party.size(), party - 1)
+	assert_eq(save.world.frame_number, frame)
+	boxes.advance_frames(Gen2BoxScreen.LINE_FRAMES)
 	boxes.close_embedded()
 	await get_tree().process_frame
 

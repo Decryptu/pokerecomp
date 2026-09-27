@@ -37,6 +37,15 @@ const GOLD_OAM: Array = [
 	[9, 1, 6, 7, 1, 3, false, false], [10, 8, 6, 7, 1, 4, false, false],
 	[18, 1, 6, 7, 1, 5, false, false],
 ]
+## `BillsPC_UpdateInsertCursor`'s `.OAM` in the same folded form.
+const CRYSTAL_INSERT_OAM: Array = [
+	[10, 1, 4, 0, 7, 6, false, false], [11, 8, 5, 0, 3, 0, false, true],
+	[19, 1, 4, 0, 7, 7, false, false],
+]
+const GOLD_INSERT_OAM: Array = [
+	[10, 1, 4, 0, 7, 6, false, false], [11, 8, 5, 0, 3, 1, false, false],
+	[19, 1, 4, 0, 7, 7, false, false],
+]
 const OAM_X_BIAS: int = 8
 const OAM_Y_BIAS: int = 16
 
@@ -238,6 +247,18 @@ func _verify_cursor(game_id: StringName, page: Gen2PCBoxPage) -> void:
 	_r.check(
 		page.cursor_sprites(0, 0).is_empty(),
 		"%s: a list with nothing in it still draws a cursor." % game_id
+	)
+	var insert: Array = []
+	for sprite: Dictionary in page.insert_cursor_sprites(0):
+		insert.append([
+			Vector2i(sprite["position"]).x, Vector2i(sprite["position"]).y,
+			int(sprite["tile"]), bool(sprite["flip_x"]), bool(sprite["flip_y"]),
+		])
+	_r.check(
+		insert == _expected_oam(
+			CRYSTAL_INSERT_OAM if game_id == RomRegistry.CRYSTAL else GOLD_INSERT_OAM
+		),
+		"%s: the insert cursor is %s, not `dbsprite`'s." % [game_id, insert]
 	)
 
 

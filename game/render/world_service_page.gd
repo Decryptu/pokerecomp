@@ -39,21 +39,30 @@ static func _ball_tile(data: GameData) -> Image:
 	)
 
 
-## `MenuTextbox` over the map: every box here carries `MENU_BACKUP_TILES`, so the
-## map stays visible around it. Empty [param rows] draws no box at all.
-##
-## [param message] is a string drawn whole or a [Gen2TextBox] printing, which
-## is drawn as it stands. [param note] is the box beside the list, `{rect, lines}`
-## with each line `{text, at}` from its own corner. [param message_box] is
-## [constant MESSAGE_BOX] everywhere but `_ChangeBox`'s `hlcoord 0, 14`.
-## [param marks] is a screen cell per pokeball tile drawn over the menu.
+## `MenuTextbox` over the map (`MENU_BACKUP_TILES`), or over the screen
+## [param backdrop] blanks and fills with notes and `{menu, rows, cursor}` menus,
+## arrow hollow. Empty [param rows] draws no box. [param message] is a string or a
+## printing [Gen2TextBox]; [param note] is `{rect, lines}`, each line `{text, at}`
+## from its own corner; [param message_box] is [constant MESSAGE_BOX] but for
+## `_ChangeBox`'s `hlcoord 0, 14`; [param marks] are pokeball tiles on the menu.
 func render(title: String, prompt: String, rows: Array, cursor: int,
 		message: Variant = "", box: Gen2MenuBox = null,
 		note: Dictionary = {}, message_box: Rect2i = MESSAGE_BOX,
-		marks: Array = []) -> Image:
+		marks: Array = [], backdrop: Array = []) -> Image:
 	var image := Image.create_empty(
 		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 	)
+	if not backdrop.is_empty():
+		image.fill(_colors()[0])
+	for layer: Dictionary in backdrop:
+		if layer.has("menu"):
+			var under: Gen2MenuBox = layer["menu"]
+			_blit(image, menu.render(
+				under, layer["rows"], int(layer["cursor"]), "", 0, [], palette,
+				bool(layer.get("hollow", true))
+			), under.border_position())
+		else:
+			_draw_note(image, layer)
 	var over: bool = box != null and box.over_textbox
 	if not over:
 		_draw_menu(image, rows, cursor, box, marks)
@@ -81,6 +90,37 @@ func render(title: String, prompt: String, rows: Array, cursor: int,
 	if not note.is_empty():
 		_draw_note(image, note)
 	return image
+
+
+## `PrintPCBox_Page1` with no printer: `PlacePrinterStatusString`'s box covers
+## rows 5 to 16, leaving the border and `#MON LIST` around it.
+func render_box_print(status: String) -> Image:
+	var width: int = Gen2Screen.WIDTH
+	var indices := PackedByteArray()
+	indices.resize(width * Gen2Screen.HEIGHT)
+	var style: int = Gen2OptionsStore.current().textbox_frame
+	for column: int in Gen2PCBoxPage.COLUMNS:
+		var code: int = Gen2Layout.FRAME_TOP_LEFT if column == 0 \
+			else Gen2Layout.FRAME_TOP_RIGHT if column == Gen2PCBoxPage.COLUMNS - 1 \
+			else Gen2Layout.FRAME_HORIZONTAL
+		font.draw_frame_code(style, Gen2Layout.FRAME_FIRST_CODE + code, indices, width,
+			column * TILE, 0)
+	for row: int in range(1, Gen2PCBoxPage.ROWS):
+		for column: int in [0, Gen2PCBoxPage.COLUMNS - 1]:
+			font.draw_frame_code(style, Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_VERTICAL,
+				indices, width, column * TILE, row * TILE)
+	font.draw_text("#MON LIST", indices, width, 4 * TILE, 3 * TILE)
+	var at: Vector2i = Gen2DiplomaPage.STATUS_BOX_AT
+	font.draw_box(style, indices, width, at.x * TILE, at.y * TILE,
+		Gen2DiplomaPage.STATUS_BOX_SIZE.x, Gen2DiplomaPage.STATUS_BOX_SIZE.y)
+	var line: int = 0
+	for row: String in status.split("\n"):
+		var text_at: Vector2i = Gen2DiplomaPage.STATUS_TEXT_AT + Vector2i(0, line)
+		font.draw_text(row, indices, width, text_at.x * TILE, text_at.y * TILE)
+		line += 1
+	var cancel: Vector2i = Gen2DiplomaPage.CANCEL_AT
+	font.draw_text(Gen2DiplomaPage.CANCEL_STRING, indices, width, cancel.x * TILE, cancel.y * TILE)
+	return Gen2PicImage.from_indices(indices, width, Gen2Screen.HEIGHT, _colors())
 
 
 func _draw_message(indices: PackedByteArray, words: String, message_box: Rect2i) -> void:

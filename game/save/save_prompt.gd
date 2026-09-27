@@ -101,17 +101,22 @@ var _held_yes: bool = false
 var _kind: Kind = Kind.MENU
 var _player_name: String = ""
 var _write: Callable = Callable()
+var _file_exists: bool = true
 
 
 ## [param write] takes no arguments and answers an "ok" key, with a "reason"
 ## behind a false one.
-static func open(kind: Kind, player_name: String, write: Callable) -> Gen2SavePrompt:
+## [param file_exists] is `wSaveFileExists`, which `AskOverwriteSaveFile` reads.
+static func open(
+	kind: Kind, player_name: String, write: Callable, file_exists: bool = true
+) -> Gen2SavePrompt:
 	var prompt := Gen2SavePrompt.new()
 	prompt._kind = kind
 	prompt._player_name = player_name
 	prompt._write = write
+	prompt._file_exists = file_exists
 	if QUESTIONS[int(kind)].is_empty():
-		prompt._enter(Step.OVERWRITE)
+		prompt._enter(Step.OVERWRITE if file_exists else Step.SAVING)
 	else:
 		prompt._enter(Step.ASK)
 	return prompt
@@ -181,7 +186,7 @@ func _answer(yes: bool) -> void:
 			if not yes:
 				_enter(Step.REFUSED)
 			else:
-				_enter(Step.SAVING if _gen1() else Step.OVERWRITE)
+				_enter(Step.SAVING if _gen1() or not _file_exists else Step.OVERWRITE)
 		Step.OVERWRITE:
 			_enter(Step.SAVING if yes else Step.REFUSED)
 		## A write that failed did not happen, so it ends the way a NO does.

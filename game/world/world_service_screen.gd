@@ -119,6 +119,7 @@ const BOX_EMPTY_FRAMES: int = 50
 ## The one writer, handed over by whoever opened this screen: the same
 ## `SaveGameData` the START menu's SAVE row reaches.
 var save_action: Callable = Callable()
+var audio_player: Gen2AudioPlayer = null
 
 var _world: Gen2WorldAPI = null
 var _data: GameData = null
@@ -229,6 +230,7 @@ var _hof: Gen2HallOfFameScreen = null
 ## cursor was on rather than `wCurBox`, and the keyboard its NAME row opens.
 var _box_submenu_index: int = 0
 var _box_count: int = 0
+var _pc_box_print: bool = false
 var _naming: Gen2NamingScreenScreen = null
 var _hof_index: int = 0
 ## `MailboxPC`: `wCurMessageIndex`, the message a submenu is acting on, the
@@ -488,6 +490,10 @@ func handle_button(button: int) -> bool:
 	if _pack != null:
 		return _pack.handle_button(button)
 	if _press_prompt(button):
+		return true
+	if _pc_box_print:
+		if button == PokeButton.B:
+			_cancel_box_print()
 		return true
 	if _mode == MODE.CARD and _pokegear != null:
 		return _pokegear.handle_button(button)
@@ -2312,8 +2318,24 @@ func _confirm_pc_row() -> void:
 	handler.call(int(_pc_rows[_cursor].get("row", -1)))
 
 
+## `ScrollingMenu` answers A on its CANCEL row the way it answers B.
 func _confirm_box_list_row(row: int) -> void:
+	if row < 0:
+		_open_bills_pc_menu()
+		return
 	_open_box_submenu(clampi(row, 0, Gen2SaveData.BOX_COUNT - 1))
+
+
+## `_ChangeBox_MenuHeader.Boxes` and `ScrollingMenu`'s CANCEL.
+func _box_list_rows() -> Array:
+	var out: Array = []
+	for index: int in Gen2SaveData.BOX_COUNT:
+		out.append({
+			"row": index,
+			"name": _save.box_name(index) if _save != null else "BOX%d" % (index + 1),
+		})
+	out.append({"row": -1, "name": CANCEL_ROW})
+	return out
 
 
 func _confirm_bills_pc_row(row: int) -> void:
@@ -2332,7 +2354,7 @@ func _confirm_bills_pc_row(row: int) -> void:
 				var lines: Array[String] = Gen2SavePrompt.MON_HOLDING_MAIL_LINES
 				_open_pc_text([_said("%s\n%s%s%s\n%s" % [
 					lines[0], lines[1], Gen2TextStream.PAGE_BREAK, lines[2], lines[3],
-				])], &"bills_pc", "BILL's PC")
+				])], &"bills_pc_mail", "BILL's PC")
 			else:
 				_open_save_prompt(Gen2SavePrompt.Kind.MOVE_MON, &"move_mons")
 		Gen2WorldPC.BILLSPCITEM_SEE_YA:
@@ -2643,7 +2665,8 @@ func _leave_decorations() -> void:
 func _open_save_prompt(kind: Gen2SavePrompt.Kind, after: StringName) -> void:
 	_save_after = after
 	_save_prompt = Gen2SavePrompt.open(
-		kind, _save.player_name if _save != null else "", _write_service_save
+		kind, _save.player_name if _save != null else "", _write_service_save,
+		_save == null or _save.save_file_exists
 	)
 	_save_printed = ""
 	_frame_clock.reset()
@@ -2713,8 +2736,6 @@ func _render_save_prompt() -> void:
 
 ## `TEXT_DELAY_MED`'s three frames a letter, which Crystal's two write lines force.
 const SAVE_MEDIUM_SPEED: float = 1.0 / (Gen2TextBox.FRAME_SECONDS * 3.0)
-## `ChangeBoxSaveGame.refused`'s `SFX_SAVE` and `ld c, 24`.
-const CHANGE_BOX_REFUSED_FRAMES: int = 24
 
 
 ## A, B and a frame all sync the same way: the prompt decides what its step
@@ -2741,13 +2762,6 @@ func _advance_save_prompt() -> void:
 	if after == &"quick_save":
 		## TRUE for a save that was written, FALSE for one that was not.
 		_finish_runtime({"ok": true, "script_value": 0 if refused else 1})
-		return
-	if after == &"change_box" and refused:
-		sfx_requested.emit(Gen2Sfx.SFX_SAVE, false)
-		_hold_frames = CHANGE_BOX_REFUSED_FRAMES
-		_hold_then = _open_box_list
-		_summary = ""
-		_render_rows()
 		return
 	if after == &"change_box":
 		_open_box_list()
@@ -2828,6 +2842,7 @@ const PC_TEXT_LANDINGS: Dictionary = {
 	&"mailbox": &"_open_mailbox",
 	&"decoration": &"_open_decorations",
 	&"bills_pc": &"_open_bills_pc_menu",
+	&"bills_pc_mail": &"_open_bills_pc_menu",
 	&"oak_closed": &"_open_oak_closed",
 	&"gen1_items": &"_open_gen1_items",
 	&"gen1_bills": &"_open_gen1_bills",
@@ -3198,9 +3213,9 @@ func _apply_gen1_mon_move() -> void:
 	var mon: Gen2SaveMon = entry["mon"]
 	var deposit: bool = _gen1_bills_row == Gen2WorldPC.GEN1_BILLS_PC_DEPOSIT
 	var applied: Dictionary = Gen2SaveStorage.deposit_party_to_box(
-		_save, _data, int(entry["slot"]), _box_index, -1, _persist
+		_save, _data, int(entry["slot"]), _box_index, -1, _persist, _world_snapshot()
 	) if deposit else Gen2SaveStorage.withdraw_box_to_party(
-		_save, _data, _box_index, int(entry["slot"]), _persist
+		_save, _data, _box_index, int(entry["slot"]), _persist, _world_snapshot()
 	)
 	if not bool(applied.get("ok", false)):
 		_open_gen1_box_text(
@@ -3308,7 +3323,8 @@ func _apply_gen1_release() -> void:
 		entry = _gen1_mon_entries[_cursor]
 	var mon: Gen2SaveMon = entry.get("mon", null) as Gen2SaveMon
 	var applied: Dictionary = Gen2SaveStorage.release_box_slot(
-		_save, _data, _box_index, int(entry.get("slot", -1)), _persist
+		_save, _data, _box_index, int(entry.get("slot", -1)), _persist,
+		_world_snapshot()
 	)
 	if not bool(applied.get("ok", false)):
 		_open_gen1_box_text("bills_pc", "no_mon", &"gen1_bills")
@@ -3450,11 +3466,7 @@ func _open_box_list() -> void:
 	_cursor = 0
 	_pc_scroll = 0
 	_pc_rows = []
-	for index: int in Gen2SaveData.BOX_COUNT:
-		_pc_rows.append({
-			"row": index,
-			"name": _save.box_name(index) if _save != null else "BOX%d" % (index + 1),
-		})
+	_pc_rows = _box_list_rows()
 	_title = "CHANGE BOX"
 	_summary = "Choose a BOX."
 	_refresh_box_counts()
@@ -3500,8 +3512,7 @@ func _open_box_naming() -> void:
 		return
 	var host := Gen2NamingScreenScreen.new()
 	if not host.open(
-		_data, _save.box_name(_box_submenu_index),
-		Gen2NamingScreenScreen.KIND_BOX
+		_data, Gen2NamingScreenScreen.PROMPT_BOX, Gen2NamingScreenScreen.KIND_BOX
 	):
 		host.free()
 		_status = "The naming keyboard is not in this cache."
@@ -3516,16 +3527,17 @@ func _open_box_naming() -> void:
 	_service_hardware.display(host)
 
 
-## `.Name`'s tail: whatever `NamingScreen_StoreEntry` left is written straight
-## back over the box's name, and an empty entry is the default name again rather
-## than a blank label.
+## `.Name`'s tail: `InitString` puts the box's own name back over an entry of
+## nothing but spaces, and `CopyName2` writes the buffer over the name.
 func _on_box_named(entered: String) -> void:
 	if _naming != null:
 		Gen2Screen.drop(_naming)
 		_naming = null
 	_set_overlay_open(false)
 	if _save != null:
-		_save.set_box_name(_box_submenu_index, entered)
+		_save.set_box_name(_box_submenu_index, Gen2NamingScreen.init_name(
+			entered, _save.box_name(_box_submenu_index)
+		))
 	_open_box_list()
 
 
@@ -3545,17 +3557,25 @@ func _print_box() -> void:
 		_hold_then = _open_box_list
 		_render_rows()
 		return
-	_status = _data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
+	_pc_box_print = true
+	music_requested.emit(Gen2DiplomaScreen.MUSIC_PRINTER)
 	_render_rows()
+
+
+## `CheckCancelPrint`'s B, `Printer_ExitPrinter` and `_ChangeBox.loop`.
+func _cancel_box_print() -> void:
+	_pc_box_print = false
+	map_music_requested.emit()
+	_open_box_list()
 
 
 ## `GetBoxCount` for the row the cursor stands on. It goes in the box beside the
 ## list, so the words under it stay `.ChangeBoxString`'s.
 func _refresh_box_counts() -> void:
-	var index: int = clampi(_cursor, 0, Gen2SaveData.BOX_COUNT - 1)
+	var index: int = _cursor
 	var box: Gen2SaveBox = _save.boxes[index] if _save != null \
-		and index < _save.boxes.size() else null
-	_box_count = 0
+		and index >= 0 and index < mini(_save.boxes.size(), Gen2SaveData.BOX_COUNT) else null
+	_box_count = -1 if index >= Gen2SaveData.BOX_COUNT else 0
 	if box == null:
 		return
 	for slot: int in Gen2SaveBox.CAPACITY:
@@ -3715,10 +3735,16 @@ func _open_boxes(mode: int) -> void:
 	host.z_index = 5
 	host.set_screen(_service_hardware)
 	host.set_context(_data, _save, _persist, true, mode, _box_index)
+	host.set_world(_world)
+	host.set_audio_player(audio_player)
 	add_child(host)
 	host.cry_requested.connect(_on_boxes_cry)
 	host.sfx_requested.connect(sfx_requested.emit)
 	host.closed.connect(_on_boxes_closed)
+
+
+func _world_snapshot() -> Gen2WorldSnapshot:
+	return _world.snapshot() if _world != null else null
 
 
 ## The box screen's stats page plays a cry, and this screen owns no player: the
@@ -4603,10 +4629,13 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 	var labels: Array = [] if _mode in [MODE.PHONE, MODE.PC_TEXT] or _box_printing() \
 		else _row_labels(values)
 	var words: Array = _page_words()
-	var image: Image = _mom_bank_image() if _mode == MODE.MOM_BANK \
+	var image: Image = _service_page.render_box_print(
+		_data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
+	) if _pc_box_print else _mom_bank_image() if _mode == MODE.MOM_BANK \
 		else _dial_image() if _is_dial() else _service_page.render(
 		String(words[0]), String(words[1]), labels, _cursor if cursor < 0 else cursor,
-		words[2], _service_box(), _service_note(), _message_box(), _gen1_box_marks()
+		words[2], _service_box(), _service_note(), _message_box(), _gen1_box_marks(),
+		_backdrop()
 	)
 	if image != null:
 		_blend_pc_item_stage(image)
@@ -4659,9 +4688,67 @@ func _blend_pc_item_stage(image: Image) -> void:
 		["×%02d" % _quantity_prompt.value], -1)
 
 
+## `ClearPCItemScreen`'s two boxes.
+const PC_ITEM_SCREEN: Array = [
+	{"rect": Rect2i(0, 0, 20, 12), "lines": []}, {"rect": Rect2i(0, 12, 20, 6), "lines": []},
+]
+
+
+## `ClearPCItemScreen` under BILL'S PC and the item PC's lists, and
+## `BillsPC_ClearTilemap` under CHANGE BOX, whose list keeps a hollow arrow.
+func _backdrop() -> Array:
+	if _gen1_pc:
+		return []
+	match _mode:
+		MODE.PC_BOXES, MODE.PC_ITEM_LIST:
+			return PC_ITEM_SCREEN
+		MODE.PC_BOX_LIST:
+			return [_current_box_note()]
+		MODE.PC_BOX_SUBMENU:
+			return [_current_box_note(), _box_list_layer(), _box_count_note()]
+		MODE.PC_SAVE:
+			if _save_after == &"change_box":
+				return [_current_box_note(), _box_list_layer(), _box_count_note()]
+			if _save_after == &"move_mons":
+				return PC_ITEM_SCREEN + [_bills_pc_layer()]
+		MODE.PC_TEXT:
+			if _pc_after == &"bills_pc_mail":
+				return PC_ITEM_SCREEN + [_bills_pc_layer()]
+	return []
+
+
+## `BillsPC_PrintBoxName`: `CURRENT` and `wCurBox`'s name in a two-row box.
+func _current_box_note() -> Dictionary:
+	return {"rect": Rect2i(0, 0, 20, 4), "lines": [
+		{"text": "CURRENT", "at": Vector2i(1, 2)},
+		{"text": _save.box_name(_box_index) if _save != null else "", "at": Vector2i(11, 2)},
+	]}
+
+
+func _box_list_layer() -> Dictionary:
+	var rows: Array = _box_list_rows().map(
+		func(row: Dictionary) -> String: return String(row["name"])
+	)
+	return {
+		"menu": _pc_box_list_box(), "rows": rows.slice(_pc_scroll, _pc_scroll + BOX_LIST_ROWS),
+		"cursor": _box_submenu_index - _pc_scroll,
+	}
+
+
+## `.UseBillsPC`'s menu, whose `DoNthMenu` leaves its arrow solid.
+func _bills_pc_layer() -> Dictionary:
+	var rows: Array = Gen2WorldPC.bills_pc_menu().map(
+		func(row: Dictionary) -> String: return String(row["name"])
+	)
+	return {
+		"menu": Gen2MenuBox.from_coords(0, 0, 19, 11, Gen2MenuBox.STATICMENU_CURSOR),
+		"rows": rows, "cursor": _bills_pc_cursor, "hollow": false,
+	}
+
+
 ## `BillsPC_PlaceChangeBoxString`'s `hlcoord 0, 14`, under the list's fourth row.
 func _message_box() -> Rect2i:
-	if _mode != MODE.PC_BOX_LIST:
+	if _mode not in [MODE.PC_BOX_LIST, MODE.PC_BOX_SUBMENU] or _gen1_pc:
 		return Gen2WorldServicePage.MESSAGE_BOX
 	return Rect2i(0, 14, 20, 4)
 
@@ -4713,9 +4800,11 @@ func _gen1_box_marks() -> Array:
 
 ## `BillsPC_PrintBoxCountAndCapacity`'s `hlcoord 11, 7 / lb bc, 5, 7`.
 func _box_count_note() -> Dictionary:
+	if _box_count < 0:
+		return {"rect": Rect2i(11, 7, 9, 7), "lines": []}
 	return {"rect": Rect2i(11, 7, 9, 7), "lines": [
 		{"text": "#MON", "at": Vector2i(1, 2)},
-		{"text": "%d/%d" % [_box_count, Gen2SaveBox.CAPACITY], "at": Vector2i(2, 4)},
+		{"text": "%2d/%d" % [_box_count, Gen2SaveBox.CAPACITY], "at": Vector2i(2, 4)},
 	]}
 
 
@@ -4878,15 +4967,20 @@ func _yes_no_box() -> Gen2MenuBox:
 ## The same `YesNoBox`, and nothing at all on the timed steps: they are a box
 ## with no question on it.
 func _save_prompt_box() -> Gen2MenuBox:
-	return Gen2MenuBox.yes_no() if _pc_rows.size() == 2 and not _box_printing() else null
+	if _pc_rows.size() != 2 or _box_printing():
+		return null
+	if _save_prompt != null and _save_prompt.step == Gen2SavePrompt.Step.OVERWRITE:
+		var at: Vector2i = Gen2StartMenuPage.SAVE_YES_NO_AT
+		var span: Vector2i = Gen2StartMenuPage.SAVE_YES_NO_SPAN
+		return Gen2MenuBox.from_coords(
+			at.x, at.y, at.x + span.x, at.y + span.y, Gen2StartMenuPage.SAVE_YES_NO_FLAGS
+		)
+	return Gen2MenuBox.yes_no()
 
 
-## `.MenuHeader`'s `menu_coords 11, 4, SCREEN_WIDTH - 1, 13`, raised two rows:
-## the change-box screen it is drawn over on the cartridge has its own words at
-## rows 14 to 17, and this panel's box is at 11, which the source's corner would
-## put QUIT behind.
+## `.MenuHeader`'s `menu_coords 11, 4, SCREEN_WIDTH - 1, 13`, over the list.
 func _box_submenu_box() -> Gen2MenuBox:
-	return Gen2MenuBox.from_coords(11, 2, 19, 11, Gen2MenuBox.STATICMENU_CURSOR)
+	return Gen2MenuBox.from_coords(11, 4, 19, 13, Gen2MenuBox.STATICMENU_CURSOR)
 
 
 func _apricorn_box() -> Gen2MenuBox:
@@ -4895,8 +4989,11 @@ func _apricorn_box() -> Gen2MenuBox:
 		else _apricorn_select_box()
 
 
-## `PokemonCenterPC.TopMenu` and `PlayersPCMenuData` share this `menu_coords`.
+## `PokemonCenterPC.TopMenu` and `PlayersPCMenuData` share this `menu_coords`;
+## BILL'S PC's is the full width with its bottom at 11, and does not wrap.
 func _pc_top_box() -> Gen2MenuBox:
+	if _mode == MODE.PC_BOXES:
+		return Gen2MenuBox.from_coords(0, 0, 19, 11, Gen2MenuBox.STATICMENU_CURSOR)
 	return Gen2MenuBox.from_coords(
 		0, 0, 15, 12, Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
 	)

@@ -86,6 +86,32 @@ const CURSOR_SPRITES_GOLD: Array = [
 	[135, 33, 4, false, false], [143, 33, 5, false, false],
 ]
 
+## `BillsPC_UpdateInsertCursor`'s line, in the same form.
+const INSERT_SPRITES: Array = [
+	[72, 23, 6, false, false],
+	[80, 27, 0, false, true],
+	[88, 27, 0, false, true],
+	[96, 27, 0, false, true],
+	[104, 27, 0, false, true],
+	[112, 27, 0, false, true],
+	[120, 27, 0, false, true],
+	[128, 27, 0, false, true],
+	[136, 27, 0, false, true],
+	[144, 23, 7, false, false],
+]
+const INSERT_SPRITES_GOLD: Array = [
+	[72, 23, 6, false, false],
+	[80, 27, 1, false, false],
+	[88, 27, 1, false, false],
+	[96, 27, 1, false, false],
+	[104, 27, 1, false, false],
+	[112, 27, 1, false, false],
+	[120, 27, 1, false, false],
+	[128, 27, 1, false, false],
+	[136, 27, 1, false, false],
+	[144, 23, 7, false, false],
+]
+
 ## Whichever text box border the player chose, the way every other screen's
 ## boxes are drawn.
 var frame_style: int = 0
@@ -188,10 +214,16 @@ static func pic_size() -> int:
 ## { position, tile, flip_x, flip_y }. Empty for a list with nothing in it,
 ## which is where the source calls `ClearSprites` instead.
 func cursor_sprites(cursor: int, rows: int) -> Array:
-	if rows <= 0 or cursor < 0:
+	if rows <= 0:
+		return []
+	return _sprites_at(cursor_set(), cursor)
+
+
+func _sprites_at(table: Array, cursor: int) -> Array:
+	if cursor < 0:
 		return []
 	var out: Array = []
-	for sprite: Array in cursor_set():
+	for sprite: Array in table:
 		out.append({
 			"position": Vector2i(
 				int(sprite[0]), int(sprite[1]) + (cursor & 0x7) * CURSOR_STEP
@@ -201,6 +233,12 @@ func cursor_sprites(cursor: int, rows: int) -> Array:
 			"flip_y": bool(sprite[4]),
 		})
 	return out
+
+
+func insert_cursor_sprites(cursor: int) -> Array:
+	return _sprites_at(
+		INSERT_SPRITES if _profile == RomRegistry.CRYSTAL else INSERT_SPRITES_GOLD, cursor
+	)
 
 
 ## How many objects a host has to keep around for either profile.

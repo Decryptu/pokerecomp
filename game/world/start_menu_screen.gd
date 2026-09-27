@@ -2762,7 +2762,7 @@ func _open_save_confirm_mode() -> void:
 	_save_prompt = Gen2SavePrompt.open(
 		_save_kind(),
 		_pack_save.player_name if _pack_save != null else "",
-		_save_action
+		_save_action, _pack_save == null or _pack_save.save_file_exists
 	)
 	_sync_save_prompt()
 

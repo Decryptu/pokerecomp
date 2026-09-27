@@ -2933,6 +2933,7 @@ func _open_day_care(request: Dictionary) -> bool:
 	)
 	host.finished.connect(_on_day_care_finished)
 	host.closed.connect(_on_day_care_closed)
+	host.set_audio_player(_audio_player)
 	host.cry_requested.connect(_play_species_cry)
 	host.sfx_requested.connect(_play_sfx)
 	host.z_index = 30
@@ -3788,6 +3789,7 @@ func persist_world_snapshot() -> Dictionary:
 	if save == null:
 		return {"ok": false, "reason": &"missing_save"}
 	save.world = _world.snapshot()
+	save.save_file_exists = true
 	## `BackupMysteryGift`, which every one of `SaveGameData`'s three entrances
 	## runs: the working pair goes to the backup pair, and the backup pair is
 	## what the file carries.
@@ -4605,6 +4607,15 @@ func preview_day_care(role: StringName) -> void:
 		]:
 			state.set_day_care_mon(slot, save.party[slot] as Gen2SaveMon)
 			state.set_day_care_has_mon(slot, true)
+	elif role == &"withdraw":
+		## The man's slot holding the second member, three levels grown.
+		var left: Gen2SaveMon = save.party[1] as Gen2SaveMon
+		left.exp = Gen2Experience.total_exp_at(
+			int(_data.species(left.species).get("growth_rate", 0)), left.level + 3
+		)
+		state.set_day_care_mon(Gen2WorldDayCare.SLOT_MAN, left)
+		state.set_day_care_has_mon(Gen2WorldDayCare.SLOT_MAN, true)
+		role = &"man"
 	elif role == &"outside":
 		state.set_day_care_man_flags(
 			state.day_care_man_flags() | Gen2WorldDayCare.MAN_HAS_EGG
@@ -8327,6 +8338,7 @@ func _overlay_save() -> Gen2SaveData:
 
 func _adopt_service_overlay(host: Gen2WorldServiceScreen, prompt: String) -> void:
 	host.save_action = persist_world_snapshot
+	host.audio_player = _audio_player
 	host.completed.connect(_on_service_completed)
 	host.call_placed.connect(_on_pokegear_call_placed)
 	host.music_requested.connect(_play_music)

@@ -346,6 +346,7 @@ static func create_new_game(
 	while new_save.run_seed == 0:
 		new_save.run_seed = generator.randi()
 	new_save.run_mods = Gen2ModHost.instance().loaded_mods()
+	new_save.save_file_exists = false
 	new_save.world = Gen2WorldSpawn.new_game_snapshot(data)
 	if new_save.world != null:
 		new_save.world.random_seed = new_save.run_seed

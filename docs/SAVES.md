@@ -60,6 +60,7 @@ empty label falls back to the player name.
 | `current_box` | `wCurBox`, written by CHANGE BOX's SWITCH and read by both of BILL'S PC's lists |
 | `box_names` | `sBoxNames`, written by its NAME row. An empty name means `SetDefaultBoxNames`' own "BOX1" spelling rather than a stored string |
 | `hall_of_fame` | `sHallOfFame`, the thirty induction records newest first |
+| `save_file_exists` | `wSaveFileExists`: false from New Game until the first in-game save, which therefore asks no overwrite question; true for older and imported slots |
 
 Cartridge SRAM box placement is intentionally outside this model.
 
