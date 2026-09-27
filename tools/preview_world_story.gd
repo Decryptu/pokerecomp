@@ -7661,10 +7661,9 @@ func _gate_leg(
 	return {"ok": true, "encounters": walked.get("encounters", [])}
 
 
-## Smashes the rock the given cell faces, the way _cut_at() cuts. Unlike a cut
-## tree the rock is an object, so `complete_rock_smash()` deletes it and rolls
-## `RockMonEncounter` in the same call; the walk reports whatever came out
-## rather than fighting it.
+## Smashes the rock the given cell faces, the way _cut_at() cuts: the party
+## menu's `RockSmashFromMenuScript` runs to its end, shake, movement,
+## `disappear` and `RockMonEncounter`, and whatever came out is fought.
 func _rock_smash_at(
 	world: Gen2WorldAPI,
 	approach: Vector2i,
@@ -7680,10 +7679,10 @@ func _rock_smash_at(
 	var request: Dictionary = world.rock_smash_request()
 	if not bool(request.get("ok", false)):
 		return {"ok": false, "reason": "rock smash refused: %s" % request.get("reason", "")}
-	var applied: Dictionary = world.complete_rock_smash(random)
-	if not bool(applied.get("ok", false)):
-		return {"ok": false, "reason": "rock smash failed: %s" % applied.get("reason", "")}
-	return {"ok": true, "encounter": applied.get("encounter", {})}
+	var run: Dictionary = _drain_story(world, world.smash_rock_from_menu(), save, random, data)
+	if not bool(run.get("terminal", false)):
+		return {"ok": false, "reason": "rock smash did not finish: %s" % run.get("reason", "")}
+	return {"ok": true, "encounter": run.get("battles", [])}
 
 
 ## Cuts the tree the given cell faces. Route 35's only way past row 6 is the

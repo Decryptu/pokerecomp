@@ -600,11 +600,31 @@ func test_choosing_whirlpool_shows_the_message_and_defers_the_block_change() -> 
 	assert_eq(world.block_at(WHIRLPOOL_BLOCK.x, WHIRLPOOL_BLOCK.y), BLOCK_WHIRLPOOL)
 	assert_eq(world.collision_code_at(WHIRLPOOL_CELL), 0x24)
 
+	# An effect still on the channels: PlayWhirlpoolSound's first WaitSFX holds
+	# the block, which stays undrawn under hBGMapMode 0 until closetext, and the
+	# player with it.
+	var effect: Dictionary = {
+		"index": 1, "bank": 2, "address": 0x4000, "data_address": 0x4000,
+		"bytes": [Gen2SoundEngine.NUM_MUSIC_CHANNELS, 0x03, 0x40,
+			0x3F, 0xF1, 0x00, 0x07, 0x3F, 0xF1, 0x00, 0x07, 0xFF],
+	}
+	assert_true(bool(_world_screen._audio_player.play_record(effect, &"sfx")["played"]))
 	_world_screen._acknowledge_field_move_text()
 	assert_false(_world_screen._field_move_text)
+	_world_screen.advance_frame()
+	assert_eq(world.block_at(WHIRLPOOL_BLOCK.x, WHIRLPOOL_BLOCK.y), BLOCK_WHIRLPOOL)
+	assert_false(_world_screen.move_player(Vector2i.RIGHT), "the sound holds the player")
+	_spend_field_move_tail()
 	assert_eq(world.block_at(WHIRLPOOL_BLOCK.x, WHIRLPOOL_BLOCK.y), BLOCK_WHIRLPOOL_GONE)
 	assert_ne(world.collision_code_at(WHIRLPOOL_CELL), 0x24)
 	assert_true(world.pending_whirlpool().is_empty())
+
+
+func _spend_field_move_tail() -> void:
+	for _frame: int in 600:
+		if _world_screen._field_move_tail.is_empty():
+			return
+		_world_screen.advance_frame()
 
 
 func test_whirlpool_without_the_badge_reports_the_badge_and_changes_nothing() -> void:
@@ -765,8 +785,10 @@ func test_choosing_rock_smash_shows_the_message_and_defers_the_rock() -> void:
 
 	_world_screen._encounter_random.seed = 4
 	_world_screen._acknowledge_field_move_text()
-	await get_tree().process_frame
 	assert_true(world.pending_rock_smash().is_empty())
+	# RockSmashFromMenuScript's earthquake and the rock's own movement come first.
+	assert_not_null(world.object_at(ROCK_CELL), "the rock shakes before it goes")
+	_spend_rock_smash()
 	assert_null(world.object_at(ROCK_CELL), "disappear LAST_TALKED deleted it")
 	assert_true(world.can_walk_to(ROCK_CELL), "and its cell is walkable")
 
@@ -822,7 +844,17 @@ func _rock_smash_with(seed_value: int) -> void:
 	await get_tree().process_frame
 	_world_screen._encounter_random.seed = seed_value
 	_world_screen._acknowledge_field_move_text()
+	_spend_rock_smash()
 	await get_tree().process_frame
+
+
+## RockSmashScript's shake and movement, spent until it ends or reaches a battle.
+func _spend_rock_smash() -> void:
+	for _frame: int in 600:
+		if not _world_screen._world.script_busy() or _world_screen._battle_transition != null \
+			or _world_screen._battle_host != null:
+			return
+		_world_screen.advance_frame()
 
 
 func _open_rock_smash_world(badge: bool = true) -> void:
@@ -930,13 +962,20 @@ func _has_event(events: Array, type: StringName) -> bool:
 ## load runs ReadObjectEvents and rebuilds every object, so an unflagged rock
 ## comes back and only a flagged one stays smashed. Fifteen of the sixteen real
 ## rocks are unflagged; Mt. Moon Square's is the exception.
-func test_an_unflagged_rock_comes_back_on_a_map_reload() -> void:
+## `MAPSETUP_RELOADMAP` has no `LoadMapObjects`: a rock smashed into a wild
+## battle is still gone once the battle's reload is behind it, and only the next
+## map load brings it back.
+func test_an_unflagged_rock_comes_back_on_a_map_load() -> void:
 	await _open_rock_smash_world()
 	var world: Gen2WorldAPI = _world_screen._world
-	await _rock_smash_with(4)
-	assert_null(world.object_at(ROCK_CELL))
-
+	await _rock_smash_with(2)
+	_world_screen.settle_battle_transition()
+	assert_not_null(_world_screen._battle_host)
 	world.reload_current_map()
+	assert_null(world.object_at(ROCK_CELL), "the reload after the battle keeps it gone")
+
+	assert_true(bool(world.try_warp(Fixture.WARP_CELL).get("ok", false)))
+	assert_true(bool(world.try_warp(Fixture.HOME_WARP_CELL).get("ok", false)))
 	assert_not_null(world.object_at(ROCK_CELL), "the rock is back")
 	assert_false(world.can_walk_to(ROCK_CELL), "and it blocks again")
 
@@ -1080,6 +1119,7 @@ func test_facing_a_whirlpool_asks_before_dispelling_it() -> void:
 	assert_eq(_shown_text(), "TESTMON used WHIRLPOOL!")
 	assert_eq(world.block_at(WHIRLPOOL_BLOCK.x, WHIRLPOOL_BLOCK.y), BLOCK_WHIRLPOOL)
 	_world_screen._acknowledge_field_move_text()
+	_spend_field_move_tail()
 	assert_eq(world.block_at(WHIRLPOOL_BLOCK.x, WHIRLPOOL_BLOCK.y), BLOCK_WHIRLPOOL_GONE)
 
 
@@ -1408,6 +1448,37 @@ func test_the_flash_line_is_the_blinding_flash_text() -> void:
 		String((rows[Gen2WorldFieldMove.MOVE_FLASH] as Array)[2]),
 		"A blinding FLASH\nlights the area!"
 	)
+
+
+## `UseFlashTextScript` waits SFX_FLASH out under its own box, and
+## `BlindingFlash` fades to white before the light changes and back before
+## `closetext`, with the player held throughout.
+func test_flash_lights_the_map_behind_its_white_fade() -> void:
+	await _open_world(true, Gen2WorldFieldMove.MOVE_FLASH, Gen2WorldFieldMove.BADGE_ZEPHYR)
+	var world: Gen2WorldAPI = _world_screen._world
+	world.current_map.palette = Gen2WorldPalette.PALETTE_DARK
+	var party: Gen2PartyScreen = await _open_party()
+	party.handle_button(PokeButton.A)
+	party.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	assert_eq(_shown_text(), "A blinding FLASH lights the area!")
+	for _frame: int in 600:
+		if not _world_screen._field_move_text:
+			break
+		_world_screen.advance_frame()
+	assert_false(world.state.used_flash(), "the light waits for the fade")
+	assert_true(_world_screen._text_box.visible, "under the box")
+	assert_false(_world_screen.move_player(Vector2i.RIGHT))
+	var white_first: bool = false
+	for _frame: int in 600:
+		if _world_screen._field_move_tail.is_empty():
+			break
+		if not world.state.used_flash() and _world_screen._script_fade_order == 0x00:
+			white_first = true
+		_world_screen.advance_frame()
+	assert_true(white_first, "FadeOutToWhite lands before the palettes change")
+	assert_true(world.state.used_flash())
+	assert_false(_world_screen._text_box.visible, "closetext")
 
 
 ## `.FlyScript`: `HideSprites`, `FlyFromAnim`'s 128 frames, the warp, then

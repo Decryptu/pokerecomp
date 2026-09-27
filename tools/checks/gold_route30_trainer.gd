@@ -19,6 +19,8 @@ const OBJECT_EVENT_FLAG: int = 1813
 const TRAINER_EVENT_FLAG: int = 1449
 const TRAINER_GROUP: int = 22
 const TRAINER_ID: int = 1
+## `TrainerEncounterMusic`'s YOUNGSTER row.
+const MUSIC_YOUNGSTER_ENCOUNTER: int = 0x37
 
 
 func run(r: RefCounted) -> void:
@@ -112,6 +114,11 @@ func _verify_runtime_flow(data: GameData, trainer_record: Dictionary) -> void:
 	_r.check(sight_source.get("direction", Vector2i.ZERO) == Vector2i.LEFT, "Joey's sight direction is wrong.")
 	var audio: Dictionary = _runtime_values(sight, &"audio_requested", "encounter music")
 	_r.check(audio.get("kind", &"") == &"encounter_music", "Trainer encounter music was not requested.")
+	var piece: Dictionary = Gen2WorldHost.audio_for_request(world, {"values": audio})
+	_r.check(
+		int(piece.get("index", -1)) == MUSIC_YOUNGSTER_ENCOUNTER,
+		"Joey's encounter music is track %d, not Youngster's." % int(piece.get("index", -1))
+	)
 
 	var approach_results: Array = world.complete_runtime_request({
 		"ok": true, "audio_played": false,
@@ -142,6 +149,8 @@ func _verify_runtime_flow(data: GameData, trainer_record: Dictionary) -> void:
 		TRAINER_OBJECT_INDEX, Vector2i.LEFT
 	)
 	_r.check(bool(step.get("ok", false)), "Joey's approach step failed.")
+	while joey.tick_step():
+		pass
 	_r.check(joey.cell == Vector2i(5, 29), "Joey did not stop before the player.")
 	var faced: Dictionary = world.finish_trainer_approach(TRAINER_OBJECT_INDEX)
 	_r.check(bool(faced.get("ok", false)), "Joey's approach could not finish.")

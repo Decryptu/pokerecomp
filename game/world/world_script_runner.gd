@@ -720,19 +720,13 @@ static func begin(
 		started = runner._push_frame(
 			bank, address, runner._trainer_intro_script(trainer as Dictionary)
 		)
-		## Only SeenByTrainerScript shows the shock emote and walks the trainer
-		## over; TalkToTrainerScript is faceplayer, the flag check and
-		## encountermusic, then the same StartBattleWithMapTrainerScript
-		## (engine/events/trainer_scripts.asm). A sight request is the one that
-		## carries the direction the trainer saw along, so it is the one that
-		## approaches.
+		## Only SeenByTrainerScript shows the emote and walks the trainer over
+		## (engine/events/trainer_scripts.asm), and only a sight carries a direction.
 		runner._trainer_intro_approach_pending = request.get("direction", Vector2i.ZERO) \
 			in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
 	elif StringName(request.get("kind", &"")) == &"field_move_prompt":
-		## TryTileCollisionEvent's five field-move branches each reach an
-		## Ask*Script through CallScript on a link-time address, so there is no
-		## pointer to push and the frame that stands in for one is a bare `end`,
-		## exactly as an item ball's is.
+		## TryTileCollisionEvent's Ask*Scripts are `CallScript`s on link-time
+		## addresses, so a bare `end` stands in for the pointer.
 		started = runner._push_frame(
 			bank, FIELD_MOVE_PROMPT_FRAME, PackedByteArray([
 				Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, runner._crystal_commands())
@@ -752,6 +746,13 @@ static func begin(
 		]))
 		if started:
 			runner._stage_item_gift()
+	elif StringName(request.get("kind", &"")) == &"rock_smash_used":
+		## `RockSmashFromMenuScript` past the menu's text, a bare `end` standing in.
+		started = runner._push_frame(bank, FIELD_MOVE_PROMPT_FRAME, PackedByteArray([
+			Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, runner._crystal_commands())
+		]))
+		if started:
+			runner._resume_rock_smash_used(0)
 	elif StringName(request.get("kind", &"")) in [&"item_ball", &"hidden_item"]:
 		## Neither pointer is code, so the frame that stands in for it is a bare
 		## `end` and the staging call replays FindItemInBallScript or
@@ -3209,8 +3210,11 @@ func _command_playmusic(_source_opcode: int, command: Dictionary, _bank: int) ->
 	})
 
 
+## `wOtherTrainerClass` is what `loadtemptrainer` or `loadtrainer` last wrote.
 func _command_encountermusic(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
-	return _stage_audio_request(&"encounter_music", {})
+	return _stage_audio_request(&"encounter_music", {
+		"trainer_class": int(_battle_setup.get("trainer_group", 0)),
+	})
 
 
 func _command_musicfadeout(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
@@ -7609,12 +7613,8 @@ func _trainer_text_pointer(trainer: Dictionary, key: String, default_bank: int) 
 	return {"bank": default_bank, "address": 0}
 
 
-## Builds the source SeenByTrainerScript/StartBattleWithMapTrainerScript
-## sequence: loadtemptrainer, encountermusic, farwritetext, waitbutton,
-## loadtemptrainer, startbattle, reloadmapafterbattle, trainerflagaction, end.
-## The sequence is identical between profiles at the source-opcode level;
-## only the raw bytes differ, so every command goes through
-## Gen2WorldScript.raw_opcode() rather than hard-coding either profile's byte.
+## SeenByTrainerScript into StartBattleWithMapTrainerScript and the
+## `scripttalkafter` it falls through to, in either profile's opcodes.
 func _trainer_intro_script(trainer: Dictionary) -> PackedByteArray:
 	var seen: Dictionary = _trainer_text_pointer(
 		trainer, "seen_text", int(_request.get("bank", 0))
@@ -7634,12 +7634,8 @@ func _trainer_intro_script(trainer: Dictionary) -> PackedByteArray:
 		raw.call(Gen2WorldScript.GOLD_STARTBATTLE),
 		raw.call(Gen2WorldScript.GOLD_RELOADMAPAFTERBATTLE),
 		raw.call(Gen2WorldScript.GOLD_TRAINERFLAGACTION), 1,
-		# StartBattleWithMapTrainerScript falls through into
-		# AlreadyBeatenTrainerScript's scripttalkafter, with
-		# wRunningTrainerBattleScript already set, so the after-battle script
-		# runs now and its own endifjustbattled is what usually ends it. A
-		# trainer that omits that command keeps going: Slowpoke Well's
-		# TrainerGruntM1 clears the well from there.
+		# The after-battle script runs now, and its endifjustbattled usually ends
+		# it; Slowpoke Well's TrainerGruntM1 has none and clears the well here.
 		raw.call(Gen2WorldScript.GOLD_SCRIPTTALKAFTER),
 		raw.call(Gen2WorldScript.GOLD_END),
 	]

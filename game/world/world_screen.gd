@@ -111,8 +111,9 @@ var _draw_list: Gen2WorldDrawList = null
 ## The id of the visible encounter the running battle belongs to, so its provider
 ## is told how the fight ended and nothing else is.
 var _battle_encounter_id: StringName = &""
-## The headbutt result waiting for ShakeHeadbuttTree's 32 frames to be spent.
-var _pending_headbutt_finish: Dictionary = {}
+## A field move's tail, spent in order with input held: `{"wait": &"sfx"}` is
+## `WaitSFX`, `&"sprites"` an animation, `&"fade"` a fade, and `{"call": ...}` runs.
+var _field_move_tail: Array = []
 ## `.FlyScript` while it runs.
 var _pending_fly: Dictionary = {}
 ## The step in flight whose `PlayerEvents` are still owed, empty while none is.
@@ -1080,11 +1081,7 @@ func _advance_population(map_pass: bool) -> void:
 ## waits for.
 func _advance_waits(map_pass: bool) -> void:
 	_advance_fly()
-	if not _pending_headbutt_finish.is_empty() \
-		and (_effects == null or not _effects.sprites_active()):
-		var headbutt: Dictionary = _pending_headbutt_finish
-		_pending_headbutt_finish = {}
-		_finish_headbutt(headbutt)
+	_advance_field_move_tail()
 	# After the trail, because the frame it finishes drawing is the frame the
 	# script waiting on it resumes.
 	if _world != null and not _world.pending_script_wait().is_empty():
@@ -1180,6 +1177,24 @@ func _run_settled_gen1_map_script() -> void:
 	var results: Array = _world.dispatch_sight_events()
 	if not results.is_empty():
 		_show_script_results(results)
+
+
+func _advance_field_move_tail() -> void:
+	while not _field_move_tail.is_empty():
+		var entry: Dictionary = _field_move_tail[0]
+		match StringName(entry.get("wait", &"")):
+			&"sfx":
+				if _audio_player != null and _audio_player.still_waiting(entry):
+					return
+			&"sprites":
+				if _effects != null and _effects.sprites_active():
+					return
+			&"fade":
+				if not _script_fade.is_empty():
+					return
+		_field_move_tail.pop_front()
+		if entry.has("call"):
+			(entry["call"] as Callable).call()
 
 
 ## The one wait whose condition is the audio device's rather than a counter's,
@@ -1600,6 +1615,7 @@ func _advance_pressed_action() -> void:
 ## `DoBattleTransition` ignores input until the battle screen opens.
 func _input_locked() -> bool:
 	return not _map_fade.is_empty() or not _trainer_approach.is_empty() \
+		or not _field_move_tail.is_empty() \
 		or _battle_transition != null or _world.phone_ring_active() \
 		or _pokegear_call_tones > 0 or (_effects != null and _effects.holds_map())
 
@@ -1779,7 +1795,7 @@ func _renderer_input_free() -> bool:
 
 func move_player(direction: Vector2i) -> bool:
 	if _world == null or _overlay_open() or _world.fishing_busy() \
-		or _field_move_text or not _oak_pc_pages.is_empty() \
+		or _field_move_text or not _field_move_tail.is_empty() or not _oak_pc_pages.is_empty() \
 		or _world.phone_ring_active() \
 		or not _trainer_approach.is_empty() or _world.script_busy() \
 		or _world.player_step_in_progress():
@@ -3691,7 +3707,7 @@ func _party_holds_cleanse_tag() -> bool:
 
 func interact() -> bool:
 	if _world == null or _overlay_open() \
-		or _field_move_text or not _oak_pc_pages.is_empty() \
+		or _field_move_text or not _field_move_tail.is_empty() or not _oak_pc_pages.is_empty() \
 		or _world.phone_ring_active() or _world.fishing_busy() \
 		or _world.scripted_movement_in_progress():
 		return false
@@ -8095,7 +8111,11 @@ func _acknowledge_field_move_text() -> void:
 		_commit_field_move(_world.complete_surf(), "Surf")
 		return
 	if not _world.pending_whirlpool().is_empty():
-		_commit_field_move(_world.complete_whirlpool(), "Whirlpool")
+		## `DisappearWhirlpool`'s block shows at `closetext`, after `PlayWhirlpoolSound`.
+		_field_move_tail = [
+			{"wait": &"sfx"}, {"call": _play_sfx.bind(Gen2Sfx.SFX_SURF)}, {"wait": &"sfx"},
+			{"call": func() -> void: _commit_field_move(_world.complete_whirlpool(), "Whirlpool")},
+		]
 		return
 	if not _world.pending_strength().is_empty():
 		_commit_field_move(_world.complete_strength(), "Strength")
@@ -8104,7 +8124,10 @@ func _acknowledge_field_move_text() -> void:
 		_commit_field_move(_world.complete_waterfall(), "Waterfall")
 		return
 	if not _world.pending_flash().is_empty():
-		_commit_field_move(_world.complete_flash(), "Flash")
+		if _world.is_gen1():
+			_commit_field_move(_world.complete_flash(), "Flash")
+			return
+		_flash_tail()
 		return
 	if not _world.pending_escape().is_empty():
 		if _world.is_gen1():
@@ -8116,7 +8139,7 @@ func _acknowledge_field_move_text() -> void:
 		_commit_field_move(_world.complete_headbutt(_encounter_random), "Headbutt")
 		return
 	if not _world.pending_rock_smash().is_empty():
-		_commit_field_move(_world.complete_rock_smash(_encounter_random), "Rock Smash")
+		_show_script_results(_world.smash_rock_from_menu())
 		return
 	_script_prompt = ""
 	_reopen_party_if_due()
@@ -8142,9 +8165,6 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 		match StringName(applied.get("kind", &"")):
 			&"surf_applied":
 				_play_current_map_music()
-			&"whirlpool_applied":
-				## `PlayWhirlpoolSound`; there is no whirlpool effect of its own.
-				_play_sfx(Gen2Sfx.SFX_SURF)
 			&"strength_applied":
 				pass
 			&"waterfall_applied":
@@ -8152,7 +8172,6 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 			&"flash_used":
 				# The palette is the whole of what BlindingFlash changed, so the
 				# renderer is told the new row rather than asked to redraw.
-				_play_sfx(Gen2Sfx.SFX_FLASH)
 				if _renderer != null:
 					_renderer.set_time_of_day(_render_time_of_day())
 				if _animation != null:
@@ -8162,8 +8181,6 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 				_play_sfx(Gen2Sfx.SFX_SANDSTORM)
 				if _effects != null:
 					_effects.start_headbutt_tree(applied.get("cell", Vector2i.ZERO))
-			&"rock_smash_applied":
-				_play_sfx(Gen2Sfx.SFX_STRENGTH)
 			&"cut_applied":
 				if _data != null and _data.generation == RomRegistry.GEN1:
 					_show_script_results(_world.gen1_cut_animation(applied))
@@ -8181,18 +8198,40 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 			_renderer.refresh()
 		_script_prompt = label
 		if StringName(applied.get("kind", &"")) == &"headbutt_applied":
-			## HeadbuttScript's `callasm ShakeHeadbuttTree` spends its 32 frames
-			## before `callasm TreeMonEncounter`, so the roll's own result waits
-			## for the animation rather than opening a battle over it.
-			_pending_headbutt_finish = applied.duplicate(true)
+			## HeadbuttScript's `ShakeHeadbuttTree` spends 32 frames before `TreeMonEncounter`.
+			_field_move_tail.append_array([
+				{"wait": &"sprites"}, {"call": _finish_headbutt.bind(applied.duplicate(true))},
+			])
 			_refresh_labels()
-			return
-		if StringName(applied.get("kind", &"")) == &"rock_smash_applied":
-			_finish_rock_smash(applied)
 			return
 	else:
 		_script_prompt = "%s failed: %s" % [label, String(applied.get("reason", "unknown"))]
 	_refresh_labels()
+
+
+## `UseFlashTextScript`'s SFX_FLASH under its box, then `BlindingFlash`'s fades.
+func _flash_tail() -> void:
+	if _text_box != null:
+		_text_box.visible = true
+	_field_move_tail = [
+		{"wait": &"sfx"}, {"call": _play_sfx.bind(Gen2Sfx.SFX_FLASH)}, {"wait": &"sfx"},
+		{"call": _start_script_fade.bind({
+			"orders": Gen2WorldPalette.FADE_OUT_ORDERS, "white_fill": true,
+			"step_frames": Gen2WorldPalette.FADE_STEP_FRAMES,
+		})},
+		{"wait": &"fade"},
+		{"call": func() -> void: _commit_field_move(_world.complete_flash(), "Flash")},
+		{"call": _start_script_fade.bind({
+			"orders": Gen2WorldPalette.FADE_IN_ORDERS,
+			"step_frames": Gen2WorldPalette.FADE_STEP_FRAMES,
+		})},
+		{"wait": &"fade"},
+		{"call": func() -> void:
+			_clear_script_fade()
+			_apply_map_fade_step()
+			if _text_box != null:
+				_text_box.visible = false},
+	]
 
 
 ## HeadbuttScript after ShakeHeadbuttTree: TreeMonEncounter either reaches
@@ -8201,21 +8240,6 @@ func _finish_headbutt(applied: Dictionary) -> void:
 	var encounter: Variant = applied.get("encounter", {})
 	if not encounter is Dictionary or (encounter as Dictionary).is_empty():
 		_show_field_move_text(Gen2WorldFieldMove.HEADBUTT_NOTHING_TEXT)
-		return
-	_refresh_labels()
-	_start_battle_request({
-		"kind": &"battle_requested",
-		"values": (encounter as Dictionary)["values"],
-		"encounter": (encounter as Dictionary).duplicate(true),
-	})
-
-
-## RockSmashScript after the rock is gone: RockMonEncounter either reaches
-## startbattle or `.done`, a bare `end` with no nothing-text.
-func _finish_rock_smash(applied: Dictionary) -> void:
-	var encounter: Variant = applied.get("encounter", {})
-	if not encounter is Dictionary or (encounter as Dictionary).is_empty():
-		_refresh_labels()
 		return
 	_refresh_labels()
 	_start_battle_request({
@@ -8767,6 +8791,8 @@ func _apply_result_status(result: Dictionary, flags: Dictionary) -> StringName:
 	if event_type == &"button":
 		if _text_box != null and bool(event.get("box", true)):
 			_text_box.visible = true
+		if _text_box != null and bool(event.get("arrow", false)):
+			_text_box.set_blink_cursor(true)
 		_script_prompt = "A: continue script"
 		return &"none"
 	if event_type == &"wait":

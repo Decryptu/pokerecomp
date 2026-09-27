@@ -27,6 +27,14 @@ const CODED_HEADER_FLAGS: Dictionary = {
 	&"yellow": {"113:after": 2302, "199:end": 1653, "202:end": 1702},
 }
 
+## `PlayTrainerMusic`'s evil, female and male ids, from pret's `music_const`s.
+const MEET_MUSIC: Dictionary = {
+	&"red": [246, 249, 252], &"blue": [246, 249, 252], &"yellow": [245, 248, 251],
+}
+const TALK_MUSIC_CENSUS: Dictionary = {
+	&"red": [65, 59, 198], &"blue": [65, 59, 198], &"yellow": [58, 60, 199],
+}
+
 ## `view_range << 4` is a pixel distance, so the stored range is a nibble.
 const MAX_SIGHT_RANGE: int = 5
 
@@ -343,6 +351,8 @@ func _engaged_at(world: Gen2WorldAPI, cell: Vector2i) -> int:
 	if opened.is_empty() or not world.script_busy():
 		return -1
 	var request: Dictionary = (opened[0].get("event", {}) as Dictionary).get("request", {})
+	_r.check((MEET_MUSIC[_r.game_id] as Array).has(_meet_piece(opened)),
+		"a sighting at %s played piece %d." % [cell, _meet_piece(opened)])
 	world.complete_runtime_request({"ok": true})
 	world.run_event_queue(true)
 	world.complete_runtime_request({})
@@ -470,6 +480,7 @@ func _header_for(map: Gen2WorldMap, object: Dictionary) -> Dictionary:
 func _every_trainer_is_talked_to() -> void:
 	var talked: int = 0
 	var wilds: int = 0
+	var pieces: Array = [0, 0, 0]
 	for map: Gen2WorldMap in _r.data.world_maps():
 		var world: Gen2WorldAPI = null
 		for object: Dictionary in map.events["objects"] as Array:
@@ -480,7 +491,7 @@ func _every_trainer_is_talked_to() -> void:
 				world = _r.open_world(0, map.number, Vector2i.ZERO)
 				if world == null:
 					return
-			if not _talk_to(world, map, object, header):
+			if not _talk_to(world, map, object, header, pieces):
 				continue
 			if object.has("trainer_class"):
 				talked += 1
@@ -489,10 +500,12 @@ func _every_trainer_is_talked_to() -> void:
 	var pinned: Dictionary = HEADER_CENSUS[_r.game_id]
 	_r.check(talked == int(pinned["trainers"]) and wilds == int(pinned["wilds"]),
 		"%d trainers and %d standing wilds answered." % [talked, wilds])
+	_r.check(pieces == TALK_MUSIC_CENSUS[_r.game_id], "talks started %s." % str(pieces))
 
 
 func _talk_to(
-	world: Gen2WorldAPI, map: Gen2WorldMap, object: Dictionary, header: Dictionary
+	world: Gen2WorldAPI, map: Gen2WorldMap, object: Dictionary, header: Dictionary,
+	pieces: Array
 ) -> bool:
 	var opened: Array = _face(world, object)
 	var where: String = "map %d text %d" % [map.number, int(object.get("text", 0))]
@@ -501,9 +514,13 @@ func _talk_to(
 	if not _r.check(_event_text(opened) == world.gen1_filled_text(String(header["before"])),
 		"%s opened with %s." % [where, _event_text(opened)]):
 		return false
-	var request: Dictionary = _request_after(world)
+	var heard: Array = []
+	var request: Dictionary = _request_after(world, heard)
 	if not _r.check(_battle_matches(request, object), "%s asked for %s." % [where, str(request)]):
 		return false
+	var piece: int = (MEET_MUSIC[_r.game_id] as Array).find(_meet_piece(heard))
+	if _r.check(piece >= 0, "%s played piece %d." % [where, _meet_piece(heard)]):
+		pieces[piece] += 1
 	world.complete_runtime_request({"outcome": Gen2WorldBattleAdapter.OUTCOME_WON})
 	if not _r.check(not world.script_busy(), "%s held the world after its fight." % where):
 		return false
@@ -535,9 +552,21 @@ func _face(world: Gen2WorldAPI, object: Dictionary) -> Array:
 
 
 ## What the box is waiting on, once `AfterDisplayingTextID`'s press is spent.
-func _request_after(world: Gen2WorldAPI) -> Dictionary:
-	world.run_event_queue(true)
+func _request_after(world: Gen2WorldAPI, heard: Array = []) -> Dictionary:
+	heard.append_array(world.run_event_queue(true))
+	if world.pending_runtime_request().is_empty() and world.script_busy():
+		heard.append_array(world.run_event_queue(true))
 	return world.pending_runtime_request()
+
+
+## The music id a scheduled `PlaySound` among [param results] starts, or -1.
+func _meet_piece(results: Array) -> int:
+	for result: Variant in results:
+		for event: Variant in (result as Dictionary).get("events", []):
+			for sound: Variant in (event as Dictionary).get("sounds", []):
+				if StringName((sound as Dictionary).get("kind", &"")) == &"music":
+					return int((sound as Dictionary)["index"])
+	return -1
 
 
 func _battle_matches(request: Dictionary, object: Dictionary) -> bool:

@@ -180,10 +180,17 @@ static func from_event(
 ## Carries the live presentation of the object this replaces at the same index.
 ## The cartridge writes into the struct already there rather than rebuilding it,
 ## so without this a `turnobject` between a `showemote` and its `applymovement`
-## empties the trail the script is waiting on.
+## empties the trail the script is waiting on. A trail in flight keeps its facing.
 func carry_presentation_from(previous: Gen2WorldObject) -> void:
 	if previous == null:
 		return
+	if previous.is_stepping() or not previous.queued_steps.is_empty():
+		facing = previous.facing
+	step_kind = previous.step_kind
+	spin_frame = previous.spin_frame
+	step_began = previous.step_began
+	weird_tree = previous.weird_tree
+	frozen = previous.frozen
 	emote_id = previous.emote_id
 	emote_visible = previous.emote_visible
 	emote_remaining = previous.emote_remaining
