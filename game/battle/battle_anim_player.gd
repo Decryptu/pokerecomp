@@ -196,6 +196,18 @@ static func create_gen1_applying(
 	return null if player._gen1_steps.is_empty() else player
 
 
+## `PredefShakeScreenHorizontally` by [param amplitude] on its own.
+static func create_gen1_screen_shake(
+	anim_data: Gen2BattleAnimData, amplitude: int
+) -> Gen2BattleAnimPlayer:
+	if anim_data == null or not anim_data.gen1():
+		return null
+	var player: Gen2BattleAnimPlayer = _seeded_gen1(anim_data, 0, false)
+	player._gen1_steps_only = true
+	player._gen1_steps = player._gen1_predef_shake_steps(amplitude)
+	return player
+
+
 static func _seeded_gen1(
 	anim_data: Gen2BattleAnimData, index: int, on_enemy_turn: bool
 ) -> Gen2BattleAnimPlayer:

@@ -93,8 +93,7 @@ const GEN1_NICKNAME_AT: Vector2i = Vector2i(1, 4)
 const GEN1_LABELS_AT: Vector2i = Vector2i(2, 6)
 const GEN1_LABELS: Array[String] = ["LEVEL/", "TYPE1/", "TYPE2/"]
 const GEN1_ROW_STEP: int = 2
-## `PrintLevelCommon` with LEFT_ALIGN and the `c` `PlaceString` left: digits
-## alone.
+## `PrintLevelCommon` with LEFT_ALIGN and the `c` `PlaceString` left: digits alone.
 const GEN1_LEVEL_AT: Vector2i = Vector2i(8, 7)
 const GEN1_TYPES_AT: Vector2i = Vector2i(3, 9)
 const GEN1_FAMED_BOX: Rect2i = Rect2i(2, 13, 16, 5)

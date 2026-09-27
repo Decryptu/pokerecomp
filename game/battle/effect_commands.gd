@@ -1673,7 +1673,7 @@ static func _jump_kick_crash(turn: Gen2Turn) -> void:
 		return
 	# `PrintMoveFailureText` shifts a `wDamage` the miss zeroed: one point, always.
 	if turn.battle.is_gen1():
-		_self_damage(turn, Gen2Battle.CRASHED, 1, _no_strike)
+		_self_damage(turn, Gen2Battle.CRASHED, 1, _gen1_crash_strike)
 		return
 	if turn.immune:
 		return
@@ -1686,8 +1686,12 @@ static func _crash_strike(turn: Gen2Turn) -> void:
 	_play_fx_anim(turn, turn.move_number, Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
 
 
-static func _no_strike(_turn: Gen2Turn) -> void:
-	pass
+## `KeptGoingAndCrashedText`'s tail: `ld b, $4 / predef PredefShakeScreenHorizontally`.
+static func _gen1_crash_strike(turn: Gen2Turn) -> void:
+	turn.emit(Gen2Battle.SCREEN_SHAKE, {"amplitude": GEN1_CRASH_SHAKE})
+
+
+const GEN1_CRASH_SHAKE: int = 4
 
 
 ## `BattleCommand_ApplyDamage` rolls the defender's Focus Band first, lethal or not and ahead

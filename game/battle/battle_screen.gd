@@ -2097,8 +2097,8 @@ const USER_PICTURE_STEPS: Dictionary = {
 	Gen2Battle.APPEAR_USER: ANIM_APPEAR_USER,
 	Gen2Battle.DISAPPEAR_USER: ANIM_DISAPPEAR_USER,
 }
-## `PlayApplyingAttackAnimation`, `AnimateSendingOutMon` and
-## `AnimateRetreatingPlayerMon`, Generation 1's routines with no row behind them.
+## `PlayApplyingAttackAnimation`, `PredefShakeScreenHorizontally`, `AnimateSendingOutMon`
+## and `AnimateRetreatingPlayerMon`, Generation 1's routines with no row behind them.
 const ANIM_APPLYING: StringName = &"applying"
 const ANIM_SEND_OUT: StringName = &"send_out"
 const ANIM_RETREAT: StringName = &"retreat"
@@ -2399,7 +2399,7 @@ func _run_next_anim_step() -> void:
 				):
 					return
 			ANIM_APPLYING:
-				if _start_applying(int(step["type"])):
+				if _start_applying(step):
 					return
 			ANIM_SEND_OUT:
 				_send_out_step(int(step["size"]))
@@ -2585,9 +2585,13 @@ func _start_script(index: int, enemy_turn: bool, shakes: int = 0) -> bool:
 	)
 
 
-func _start_applying(animation_type: int) -> bool:
+func _start_applying(step: Dictionary) -> bool:
+	if step.has("amplitude"):
+		return _begin_anim_player(
+			Gen2BattleAnimPlayer.create_gen1_screen_shake(_anim_data, int(step["amplitude"]))
+		)
 	return _begin_anim_player(Gen2BattleAnimPlayer.create_gen1_applying(
-		_anim_data, animation_type, bool(_anim_event.get("enemy_turn", false))
+		_anim_data, int(step["type"]), bool(_anim_event.get("enemy_turn", false))
 	))
 
 
@@ -6326,6 +6330,14 @@ func _show_next_event() -> void:
 		if StringName(event["type"]) == Gen2Battle.DELAY:
 			_anim_plan = []
 			_step(ANIM_DELAY, {"frames": int(event["frames"])})
+			_run_next_anim_step()
+			if animation_running():
+				return
+			continue
+		if StringName(event["type"]) == Gen2Battle.SCREEN_SHAKE:
+			_anim_plan = []
+			_anim_event = {}
+			_step(ANIM_APPLYING, {"amplitude": int(event["amplitude"])})
 			_run_next_anim_step()
 			if animation_running():
 				return

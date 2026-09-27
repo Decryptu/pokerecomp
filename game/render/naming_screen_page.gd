@@ -279,8 +279,7 @@ func _mail_icon(indices: PackedByteArray) -> void:
 
 
 ## `.Frameset_RedWalk`'s first entry over the caller's strip. Its three later
-## entries need a frame pump this screen has not got, as the blinking cursor
-## does.
+## entries need a frame pump this screen has not got, as the blinking cursor does.
 func _prompt_icon(indices: PackedByteArray, icon: PackedByteArray) -> void:
 	if icon.size() < MAIL_ICON_TILES * TILE * TILE:
 		return

@@ -90,6 +90,8 @@ const ENTRANCE_BATON_PASS: int = 1
 const ENTRANCE_DRAGGED: int = 2
 ## `ld c, n / call DelayFrames`: [code]frames[/code] with nothing drawn or read.
 const DELAY: StringName = &"delay"
+## Generation 1's `PredefShakeScreenHorizontally` alone, `b` as [code]amplitude[/code].
+const SCREEN_SHAKE: StringName = &"screen_shake"
 ## `ANIM_RETURN_MON`, which `RecallPlayerMon` plays after `PursuitSwitch`.
 const ANIM_RETURN_MON: int = 0x102
 ## The `ld c, 50` of `BattleMonEntrance` and `PassedBattleMonEntrance`.
