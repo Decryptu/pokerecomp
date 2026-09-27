@@ -2766,3 +2766,139 @@ func test_result_portrait_spends_sixty_four_frames_before_the_dialogue() -> void
 	assert_false(host.sliding())
 	assert_false(host._show_world_battle_result_picture())
 	host.free()
+
+
+## A mod's takeover fights the trainer on the parties the battle screen would
+## have, and its answer goes through the battle screen's own exit: the damage it
+## did is in the saved party, the prize is paid, the script's win branch sets the
+## trainer's flag, and the battle channel says how it ended.
+func test_a_takeover_fights_the_trainer_and_the_world_commits_its_answer() -> void:
+	var takeover := Takeover.new()
+	Gen2ModHost.instance().register_battle_takeover(&"doubles", takeover)
+	var ended: Array = []
+	Gen2ModHost.instance().subscribe(Gen2ModHost.CHANNEL_BATTLE, &"watch",
+		func(event: Dictionary) -> void:
+			if event["type"] == Gen2Battle.ENDED:
+				ended.append(event)
+	)
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	var hp_before: int = save.party[0].hp
+	var money_before: int = _world_screen._world.state.money(0)
+	await _walk_one(Vector2i.RIGHT)
+	for _frame: int in 2000:
+		_world_screen.advance_frame()
+		if not ended.is_empty() and not _world_screen.battle_active():
+			break
+		var waiting: Dictionary = _world_screen._world.pending_script_input()
+		if StringName(waiting.get("type", &"")) in [&"text", &"button"]:
+			_world_screen._advance_script_input()
+	assert_eq(takeover.claimed.get("battle_kind", &""), &"trainer")
+	assert_eq((takeover.claimed["enemy_party"] as Array).size(), 1)
+	assert_null(_battle_child(), "the built-in battle never opened")
+	assert_eq(ended.size(), 1)
+	assert_eq(ended[0]["outcome"], Gen2WorldBattleAdapter.OUTCOME_WON)
+	assert_eq(save.party[0].hp, hp_before - Takeover.DAMAGE)
+	assert_gt(_world_screen._world.state.money(0), money_before)
+	assert_true(_world_screen._world.event_flag_active(Fixture.TRAINER_FLAG))
+	await get_tree().process_frame
+
+
+## A mod actor marked solid stands in the player's way, and the A press on it is
+## the actor's to answer: it asks for a wild battle, which the world starts on a
+## free frame and closes with the actor's tag on the `ended` event.
+func test_a_solid_actor_blocks_the_walk_and_starts_the_wild_it_asks_for() -> void:
+	var legend := Legend.new()
+	Gen2ModHost.instance().register_world_actor(&"legend", legend)
+	var ended: Array = []
+	Gen2ModHost.instance().subscribe(Gen2ModHost.CHANNEL_BATTLE, &"watch",
+		func(event: Dictionary) -> void:
+			if event["type"] == Gen2Battle.ENDED:
+				ended.append(event)
+	)
+	await _open_world()
+	_world_screen.advance_frame()
+	assert_false(_world_screen._world.can_walk_to(Legend.CELL))
+	assert_true(_world_screen.move_player(Vector2i.LEFT))
+	_world_screen.advance_frames(Gen2WorldAPI.STEP_PASSES_TURN * 4)
+	_world_screen.move_player(Vector2i.LEFT)
+	_world_screen.advance_frames(40)
+	assert_eq(_world_screen._world.player_cell, Vector2i(4, 5), "the actor's cell is taken")
+
+	assert_true(_world_screen.interact())
+	_world_screen.advance_frame()
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	assert_eq(host.battle_snapshot()["enemy"], Fixture.TRAINER_SPECIES)
+	assert_eq(host._battle.party(Gen2Battle.ENEMY).at(0).level, Legend.LEVEL)
+	host.run_from_battle()
+	for _press: int in 2:
+		host.finish()
+		host.advance()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(ended.size(), 1)
+	assert_eq(ended[0]["tag"], &"legend")
+	assert_eq(ended[0]["species"], Fixture.TRAINER_SPECIES)
+	assert_eq(ended[0]["outcome"], Gen2WorldBattleAdapter.OUTCOME_RAN)
+
+
+class TakeoverFight:
+	extends Node
+	signal finished(result: Dictionary)
+	var _context: Dictionary = {}
+	var _frames: int = 0
+
+	func start(context: Dictionary) -> void:
+		_context = context
+
+	func advance_frame() -> void:
+		_frames += 1
+		if _frames == 3:
+			(_context["player_party"] as Gen2Party).at(0).hp -= Takeover.DAMAGE
+			finished.emit({"outcome": Gen2WorldBattleAdapter.OUTCOME_WON})
+
+	func handle_button(_button: int) -> void:
+		pass
+
+
+class Takeover:
+	const DAMAGE: int = 3
+	var claimed: Dictionary = {}
+
+	func takes_battle(context: Dictionary) -> bool:
+		claimed = context
+		return true
+
+	func create_battle() -> Node:
+		return TakeoverFight.new()
+
+
+class Legend:
+	const CELL := Vector2i(3, 5)
+	## Below the lead, so the run the test ends the fight with gets away.
+	const LEVEL: int = 2
+	var _asked: Array = []
+
+	func set_world(_world: Gen2WorldAPI) -> void:
+		pass
+
+	func advance_frame() -> void:
+		pass
+
+	func sprites() -> Array:
+		return [{"sprite": Fixture.TRAINER_SPRITE, "position_cells": Vector2(CELL), "solid": true}]
+
+	func interact(cell: Vector2i, _facing: int) -> bool:
+		if cell != CELL:
+			return false
+		_asked.append({
+			"kind": &"battle", "species": Fixture.TRAINER_SPECIES, "level": LEVEL,
+			"tag": &"legend",
+		})
+		return true
+
+	func take_requests() -> Array:
+		var out: Array = _asked
+		_asked = []
+		return out

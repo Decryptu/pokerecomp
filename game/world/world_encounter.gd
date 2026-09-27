@@ -30,6 +30,7 @@ const SOURCE_ROAMING: StringName = &"roaming"
 const SOURCE_FISHING: StringName = &"fishing"
 const SOURCE_TREE: StringName = &"tree"
 const SOURCE_ROCK: StringName = &"rock"
+const SOURCE_MOD: StringName = &"mod"
 
 
 static func resolve(
@@ -65,7 +66,7 @@ static func resolve(
 		var roaming: Dictionary = _resolve_roaming(
 			options.get("roaming_mons", []),
 			int(options.get("map_group", -1)), int(options.get("map_number", -1)),
-			generator, int(options.get("roam_chance", ROAM_CHANCE))
+			generator, _roam_chance(options)
 		)
 		roaming_roll = int(roaming.get("roll", -1))
 		roaming_index = int(roaming.get("index", -1))
@@ -493,6 +494,12 @@ static func _choose_slot(
 			if one_based <= probabilities[slot]:
 				return slot
 	return -1
+
+
+## `CheckEncounterRoamMon`'s `cp 100`; a Callable is asked only on a grass wild.
+static func _roam_chance(options: Dictionary) -> int:
+	var chance: Variant = options.get("roam_chance", ROAM_CHANCE)
+	return int((chance as Callable).call()) if chance is Callable else int(chance)
 
 
 static func _resolve_roaming(

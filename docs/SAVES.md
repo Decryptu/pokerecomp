@@ -164,7 +164,8 @@ before mail existed reads as a party holding none and an empty mailbox.
 proper, which is where the cartridge keeps it too, since a challenge can be saved
 and left between battles. `Gen2WorldState.battle_tower()` carries the state, the
 streak of trainers already met, the chosen room, the save-file flags and the
-prize drawn for the run.
+prize drawn for the run. It also holds `sGSBallFlag`, which sits in the same bank
+and which only a mod's `request_gs_ball()` writes.
 
 Original SRAM also contains player, map, checksum, PC box, Hall of Fame and
 Crystal-specific regions. This model imports only party data; the world snapshot

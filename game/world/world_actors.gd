@@ -3,8 +3,9 @@ extends RefCounted
 
 ## The sprites a mod puts in the world: a follower or a marker is an actor
 ## rather than a renderer, driven by one `advance_frame` per world frame and a
-## `sprites()` read per drawn one. Presentation only: it occupies no cell, blocks
-## nothing, is seen by nobody and is in no snapshot. A mod names cartridge art
+## `sprites()` read per drawn one. Presentation but for a `solid` entry, which
+## blocks its cell, and a `battle` request. It is seen by nobody and is in no
+## snapshot. A mod names cartridge art
 ## and never composes pixels; the strip, palette and rate are resolved here.
 
 ## Checked at registration, where the mod's name is still in hand.
@@ -33,10 +34,9 @@ const EMOTE_ROD: int = 9
 const EMOTE_BOULDER_DUST: int = 10
 const EMOTE_GRASS_RUSTLE: int = 11
 
-## The kinds [method take_requests] passes on. Anything else a mod puts in its
-## outbox is dropped here rather than reaching the screen.
 const REQUEST_CRY: StringName = &"cry"
-const REQUEST_KINDS: Array[StringName] = [REQUEST_CRY]
+const REQUEST_BATTLE: StringName = &"battle"
+const REQUEST_KINDS: Array[StringName] = [REQUEST_CRY, REQUEST_BATTLE]
 
 ## `.Frameset_PartyMon`: two OAM sets of eight, nine passes each because
 ## `GetSpriteAnimFrame` returns the entry on the pass that loads the duration
@@ -62,10 +62,8 @@ func set_actors(actors: Array) -> void:
 	_collect()
 
 
-## The host's own visible-encounter layer, whose population is drawn through this
-## one so a wild standing on the map sorts into the same rows and reaches both
-## views. What it IS is not presentation and lives in [Gen2WorldEncounters]; what
-## it looks like is one more sprite here.
+## The visible-encounter population, drawn through this layer so it sorts into
+## the same rows as the actors.
 func set_encounters(encounters: Gen2WorldEncounters) -> void:
 	_encounters = encounters
 	_collect()
@@ -104,30 +102,20 @@ func refresh_pose() -> bool:
 	return _changed(before, _sprites)
 
 
-## A press of A that no cartridge object, background event or tile branch
-## answered, offered to the actors in registration order; the first answering true
-## consumes it. [param cell] is the player's faced cell and [param facing] their
-## own, so an actor tests its own pose and the host invents no occupancy for a
-## sprite that occupies nothing. Offered ONLY after
-## [method Gen2WorldAPI.interact] answered nothing, so nothing is shadowed.
+## A press of A [method Gen2WorldAPI.interact] left unanswered, offered in
+## registration order; the first actor answering true consumes it.
 func interact(cell: Vector2i, facing: int) -> bool:
 	for actor: Object in _actors:
 		if not actor.has_method(ACTOR_INTERACT_METHOD):
 			continue
 		if bool(actor.call(ACTOR_INTERACT_METHOD, cell, facing)):
-			## The press is spent, so what the actor changed about its own pose
-			## is on screen this frame rather than on the next advance.
 			_collect()
 			return true
 	return false
 
 
-## An actor's one-shot outbox, drained once a world frame and emptied by the
-## drain. A pose belongs in [method sprites], which is a read; an edge belongs
-## here, asked for once and spent once.
-##
-## Every entry is validated against [constant REQUEST_KINDS] here, so the screen
-## is handed requests it can spend rather than whatever a mod wrote.
+## Each actor's one-shot outbox, validated against [constant REQUEST_KINDS] so
+## the screen is handed only requests it can spend.
 func take_requests() -> Array:
 	var out: Array = []
 	for actor: Object in _actors:
@@ -150,13 +138,24 @@ func _resolve_request(entry: Variant) -> Dictionary:
 	var kind := StringName(row.get("kind", &""))
 	if not REQUEST_KINDS.has(kind):
 		return {}
+	var species: int = int(row.get("species", 0))
 	if kind == REQUEST_CRY:
-		var species: int = int(row.get("species", 0))
 		# The record lookup is the real gate; this only keeps a zero out of it.
 		if species <= 0:
 			return {}
 		return {"kind": kind, "species": species}
-	return {}
+	var level: int = int(row.get("level", 0))
+	var dvs: int = int(row.get("dvs", 0))
+	if _world == null or _world.data.species(species).is_empty() \
+		or level < 1 or level > Gen2Experience.MAX_LEVEL or dvs < 0 or dvs > 0xFFFF:
+		return {}
+	var values: Dictionary = {
+		"kind": &"wild", "pokemon": species, "level": level,
+		"mod_tag": StringName(row.get("tag", &"")),
+	}
+	if row.has("dvs"):
+		values["dvs"] = dvs
+	return {"kind": kind, "values": values}
 
 
 ## { sprite, facing, frame, position_cells, span, height_offset_pixels, colors,
@@ -176,6 +175,11 @@ func _collect() -> void:
 			var resolved: Dictionary = _resolve(entry, index)
 			if not resolved.is_empty():
 				_sprites.append(resolved)
+	var solid: Array[Vector2i] = []
+	for sprite: Dictionary in _sprites:
+		if sprite["solid"]:
+			solid.append(Vector2i((sprite["position_cells"] as Vector2).round()))
+	_world.set_actor_cells(solid)
 	if _encounters != null:
 		for entry: Variant in _encounters.actor_entries():
 			var resolved: Dictionary = _resolve(entry, _actors.size())
@@ -227,6 +231,7 @@ func _resolve(entry: Variant, order: int) -> Dictionary:
 		# edge: it is up for as long as the entry keeps asking, so the mod owns
 		# the duration and the host owns the pixels.
 		"emote": _resolve_emote(row),
+		"solid": bool(row.get("solid", false)),
 	}
 
 

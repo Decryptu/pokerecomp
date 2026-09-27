@@ -111,6 +111,7 @@ var _draw_list: Gen2WorldDrawList = null
 ## The id of the visible encounter the running battle belongs to, so its provider
 ## is told how the fight ended and nothing else is.
 var _battle_encounter_id: StringName = &""
+var _actor_battles: Array[Dictionary] = []
 ## A field move's tail, spent in order with input held: `{"wait": &"sfx"}` is
 ## `WaitSFX`, `&"sprites"` an animation, `&"fade"` a fade, and `{"call": ...}` runs.
 var _field_move_tail: Array = []
@@ -175,6 +176,9 @@ var _money_window: TextureRect = null
 ## request is waiting on the answer, empty when the list belongs to the menu.
 var _party_selection: Dictionary = {}
 var _battle_host: Gen2BattleScreen = null
+## [method Gen2ModHost.take_battle]'s Node, and the fight it runs on.
+var _takeover_host: Node = null
+var _takeover: Dictionary = {}
 var _trainer_card_host: Gen2TrainerCardScreen = null
 ## `START_ACTION_OPEN_MOD_PAGE`'s screen, which is a mod's own list.
 var _mod_page_host: Gen2ModPageScreen = null
@@ -919,6 +923,7 @@ const FRAME_HOSTS: Array[Array] = [
 	["_slot_machine_host", "advance_frame"],
 	["_surfing_host", "advance_frame"],
 	["_card_flip_host", "advance_frame"],
+	["_takeover_host", "advance_frame"],
 ]
 
 
@@ -1065,7 +1070,7 @@ func _advance_population(map_pass: bool) -> void:
 	_spend_actor_requests()
 	_spend_hidden_item_requests()
 	_spend_item_gift_requests()
-	_spend_roamer_requests()
+	_spend_world_requests()
 	_spend_notice_requests()
 	if not map_pass:
 		return
@@ -1218,7 +1223,7 @@ func _advance_audio_wait() -> void:
 ## [method battles_fought] so a tool driving a run knows which of the two funnels
 ## its presses are going through, and so a replay can compare the count.
 func battle_active() -> bool:
-	return _battle_host != null
+	return _battle_host != null or _takeover_host != null
 
 
 func battles_fought() -> int:
@@ -1375,6 +1380,7 @@ const FULLSCREEN_HOSTS: Array[StringName] = [
 	&"_diploma_host",
 	&"_unown_printer_host",
 	&"_mail_host",
+	&"_takeover_host",
 ]
 
 
@@ -1515,6 +1521,7 @@ const OVERLAY_HOSTS: Array[StringName] = [
 	## comes back to: it owns the screen while it is up.
 	&"_mail_host",
 	&"_party_host",
+	&"_takeover_host",
 ]
 
 ## The overlays that answer for themselves; a press one refuses reaches the map.
@@ -5989,6 +5996,11 @@ func _open_battle_host(request: Dictionary) -> void:
 	_active_battle_persist = save != null and _injected_save == null
 	_active_battle_trainer = StringName(values.get("kind", &"")) == &"trainer"
 	_battles_fought += 1
+	var badges: int = _world.state.badge_mask(Gen2WorldState.is_crystal_profile(_data)) \
+		if _world != null and _world.state != null else 0
+	var battle_seed: int = _encounter_random.randi()
+	if _open_battle_takeover(request, save, badges, battle_seed):
+		return
 	var host: Gen2BattleScreen = BATTLE_SCENE.instantiate() as Gen2BattleScreen
 	host.set_data(_data)
 	host.set_audio_player(_audio_player)
@@ -5997,15 +6009,13 @@ func _open_battle_host(request: Dictionary) -> void:
 	## of the run's seeded chain and a replay reproduces them without recording
 	## anything about the battle. Its frames and its buttons both come through this
 	## screen from here on.
-	host.set_random_seed(_encounter_random.randi())
+	host.set_random_seed(battle_seed)
 	host.set_driven(true)
 	host.set_time_of_day(time_of_day)
 	# The clock's row is what the battle's own heals read; the drawn row is what
 	# a renderer staging the fight on this map has to match, so the context
 	# carries that one.
 	host.set_world_context(Gen2BattleWorldContext.capture(_world, _render_time_of_day()))
-	var badges: int = _world.state.badge_mask(Gen2WorldState.is_crystal_profile(_data)) \
-		if _world != null and _world.state != null else 0
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 10
 	host.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -6195,6 +6205,9 @@ func _on_battle_finished(result: Dictionary) -> void:
 			_encounters.battle_finished(fought, result.duplicate(true))
 	if _world == null:
 		return
+	var ended: Dictionary = Gen2WorldBattleAdapter.ended_event(result, _world.map_id())
+	if not ended.is_empty():
+		Gen2ModHost.publish(Gen2ModHost.CHANNEL_BATTLE, ended)
 	if _data != null and _data.generation != RomRegistry.GEN1:
 		_world.forget_pack_after_battle()
 	_last_battle_outcome = StringName(result.get("outcome", &""))
@@ -6226,6 +6239,90 @@ func _on_battle_finished(result: Dictionary) -> void:
 	if _open_versus_result(result, fought_save):
 		return
 	_finish_battle_exit(result, fought_save)
+
+
+## Prepared as the battle screen prepares a fight, on the same seed; false
+## leaves the fight to the cartridge.
+func _open_battle_takeover(
+	request: Dictionary, save: Gen2SaveData, badges: int, battle_seed: int
+) -> bool:
+	var values: Dictionary = request.get("values", {})
+	if not Gen2ModHost.has_battle_takeovers() \
+		or not StringName(values.get("kind", &"")) in [&"wild", &"trainer"] \
+		or bool(values.get("tutorial", false)) or int(values.get("battle_type", 0)) in [
+			Gen2Battle.BATTLETYPE_CONTEST, Gen2Battle.BATTLETYPE_SAFARI,
+		]:
+		return false
+	var random := RandomNumberGenerator.new()
+	random.seed = battle_seed
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare_world(
+		_data, request, save, random, badges, _world.rules if _world != null else null
+	)
+	if not bool(prepared.get("ok", false)):
+		return false
+	var battle: Gen2Battle = prepared["battle"]
+	var claimed: Dictionary = Gen2ModHost.take_battle(_takeover_summary(prepared))
+	if claimed.is_empty():
+		return false
+	var levels: Array = []
+	for member: Gen2BattleMon in battle.party(Gen2Battle.PLAYER).mons:
+		levels.append(member.level)
+	_takeover = {"battle": battle, "request": prepared.get("request", values), "levels": levels}
+	_takeover_host = claimed["node"]
+	if _takeover_host is Control:
+		(_takeover_host as Control).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		(_takeover_host as Control).z_index = 10
+	add_child(_takeover_host)
+	(_takeover_host as Node).connect("finished", _on_takeover_finished, CONNECT_ONE_SHOT)
+	_play_battle_music(request)
+	_takeover_host.call("start", {
+		"battle": battle, "player_party": battle.party(Gen2Battle.PLAYER),
+		"enemy_party": battle.party(Gen2Battle.ENEMY), "data": _data,
+		"summary": _takeover_summary(prepared),
+	})
+	return true
+
+
+func _takeover_summary(prepared: Dictionary) -> Dictionary:
+	var battle: Gen2Battle = prepared["battle"]
+	var request: Dictionary = prepared.get("request", {})
+	var sides: Dictionary = {}
+	for side: int in [Gen2Battle.PLAYER, Gen2Battle.ENEMY]:
+		var rows: Array = []
+		for member: Gen2BattleMon in battle.party(side).mons:
+			rows.append({"species": member.species, "level": member.level, "hp": member.hp})
+		sides[side] = rows
+	return {
+		"battle_kind": StringName(request.get("kind", &"")),
+		"battle_type": battle.battle_type,
+		"trainer_class": int(prepared.get("trainer_class", 0)),
+		"trainer_index": int(prepared.get("trainer_index", 0)),
+		"player_party": sides[Gen2Battle.PLAYER], "enemy_party": sides[Gen2Battle.ENEMY],
+		"generation": _data.generation,
+		"map_group": _world.map_id().x if _world != null else -1,
+		"map_number": _world.map_id().y if _world != null else -1,
+	}
+
+
+func _on_takeover_finished(answer: Variant) -> void:
+	var node: Node = _takeover_host
+	_takeover_host = null
+	if node != null:
+		Gen2Screen.drop(node)
+	var said: Dictionary = answer if answer is Dictionary else {}
+	var enemies: Gen2Party = (_takeover["battle"] as Gen2Battle).party(Gen2Battle.ENEMY)
+	for index: Variant in [0] + Array(said.get("seen", [])):
+		var member: Gen2BattleMon = enemies.at(int(index)) \
+			if int(index) >= 0 and int(index) < enemies.size() else null
+		if member != null:
+			_on_enemy_seen(member.species, Gen2Battle.unown_form_of(member))
+	var outcome: StringName = StringName(said.get("outcome", &""))
+	var result: Dictionary = Gen2WorldBattleAdapter.takeover_result(
+		_data, _takeover["battle"], _takeover["request"], outcome, _takeover["levels"],
+		_active_battle_save
+	)
+	_takeover = {}
+	_on_battle_finished(result)
 
 
 ## `EndOfBattle`'s link half, and `ExitBattle`'s: the versus box with its
@@ -9800,15 +9897,19 @@ func _play_current_map_music() -> void:
 	_audio_player.play_record(record, &"map_music", _audio_assets())
 
 
-## An actor's one-shot outbox, drained once a world frame. A mod may not play a
-## sound, so it asks for one and the host spends it: the same bargain the shiny
-## pulse already has, with no dedup window needed since the mod asks once.
+## A mod may not play a sound or open a fight, so an actor asks and the host spends it.
 func _spend_actor_requests() -> void:
 	if _actors == null:
 		return
 	for request: Dictionary in _actors.take_requests():
 		if StringName(request["kind"]) == Gen2WorldActors.REQUEST_CRY:
 			_play_species_cry(int(request["species"]))
+		else:
+			_actor_battles.append(request)
+	if not _actor_battles.is_empty() and _world != null and _world_idle_for_mod_request():
+		_start_battle_request({
+			"kind": &"battle_requested", "values": _actor_battles.pop_front()["values"],
+		})
 
 
 func _mod_inventory() -> Dictionary:
@@ -9850,17 +9951,18 @@ func _spend_item_gift_requests() -> void:
 		return
 
 
-## A mod's roamer asks, placed through `JumpRoamMon`'s draw on the world's stream.
-func _spend_roamer_requests() -> void:
+## A roamer placed through `JumpRoamMon`'s draw on the world's stream.
+func _spend_world_requests() -> void:
 	if _world == null or not _world_idle_for_mod_request():
 		return
-	for request: Dictionary in Gen2ModHost.instance().take_roamer_requests():
-		var refused: StringName = _world.place_roamer(
-			int(request["slot"]), int(request["species"]), int(request["level"]),
-			_encounter_random
-		)
+	for request: Dictionary in Gen2ModHost.instance().take_world_requests():
+		var refused: StringName = _world.offer_gs_ball() if request["kind"] == &"gs_ball" \
+			else _world.place_roamer(
+				int(request["slot"]), int(request["species"]), int(request["level"]),
+				_encounter_random
+			)
 		if not refused.is_empty():
-			Gen2ModHost.instance().refuse_roamer(request, refused)
+			Gen2ModHost.instance().refuse_world_request(request, refused)
 
 
 ## A mod's hidden-item asks, spent the same way and on the same gate: the mod

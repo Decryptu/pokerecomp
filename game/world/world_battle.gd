@@ -28,6 +28,45 @@ const WILD_ITEM_NONE_ROLL: int = 192
 const WILD_ITEM_RARE_ROLL: int = 20
 
 
+## [method prepare] off a save, for the battle screen and a mod's takeover alike.
+## [param player_badges] below 0 reads the save's own.
+static func prepare_world(
+	data: GameData, request: Dictionary, save: Gen2SaveData,
+	random: RandomNumberGenerator, player_badges: int, battle_rules: Gen2Rules
+) -> Dictionary:
+	var player_party: Gen2Party = Gen2SaveBattleAdapter.to_battle_party(data, save) \
+		if save != null else fallback_party(data)
+	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
+	var state: Gen2WorldState = save.world.world_state \
+		if save != null and save.world != null else null
+	var stamped: Dictionary = request.duplicate(true)
+	var stamped_values: Variant = stamped.get("values", stamped)
+	if state != null and stamped_values is Dictionary:
+		(stamped_values as Dictionary)["unlocked_unowns"] = state.unlocked_unowns(crystal)
+	var badges: int = player_badges
+	if badges < 0:
+		badges = maxi(state.badge_mask(crystal), 0) if state != null else 0
+	return prepare(
+		data, stamped, player_party, random, badges, battle_rules,
+		save.player_id if save != null else -1
+	)
+
+
+## `.HandleEndOfBattle`'s write, prize and Pay Day included; none without a slot.
+static func commit_battle(
+	data: GameData, battle: Gen2Battle, source_save: Gen2SaveData, money: Dictionary
+) -> Dictionary:
+	if source_save == null or source_save.slot < 0:
+		return {"ok": true}
+	var save: Gen2SaveData = Gen2SaveBattleAdapter.from_world_battle(data, battle, source_save)
+	if save != null and save.world != null:
+		credit_earnings(save.world.world_state, money)
+	var result: Dictionary = Gen2SaveStore.save(save, data)
+	if bool(result["ok"]):
+		Gen2WorldTransaction.copy_into(source_save, save)
+	return result
+
+
 static func prepare(
 	data: GameData,
 	request: Dictionary,
@@ -56,9 +95,7 @@ static func prepare(
 	var enemy_party: Gen2Party = null
 	var trainer_class: int = 0
 	var trainer_index: int = 0
-	# wBattleType, which a `loadvar VAR_BATTLETYPE` before `startbattle` sets.
-	# Read before the party is built, since `LoadEnemyMon` branches a wild's DVs
-	# on it. Four values make Celebi, Suicune and the Rocket traps inescapable.
+	# wBattleType, read before the party is built: `LoadEnemyMon` branches on it.
 	var battle_type: int = int(values.get("battle_type", Gen2Battle.BATTLETYPE_NORMAL))
 	# `BattleRandom`, so a wild's DVs come out of the run's own sequence and a
 	# replay of the same seed meets the same Pokemon.
@@ -169,11 +206,8 @@ static func _wild_party(
 	# TREEMON_SLEEP_TURNS, as any of four on Gold and Silver; the caller answers.
 	if wild_mon != null and bool(values.get("asleep", false)):
 		wild_mon.status = Gen2WorldTreemon.SLEEP_TURNS
-	## `LoadEnemyMon`'s second `BATTLETYPE_ROAMING` branch: a roamer whose struct
-	## has been initialised comes back on the stored HP rather than on a full bar,
-	## which is what makes chipping one down between encounters worth doing. The
-	## uninitialised case carries no `hp` and keeps the stats it was just built
-	## with.
+	## `LoadEnemyMon`'s second `BATTLETYPE_ROAMING` branch, and a mod's wild: a
+	## stored `hp` rather than a full bar.
 	if wild_mon != null and int(values.get("hp", 0)) > 0:
 		wild_mon.hp = clampi(int(values["hp"]), 1, wild_mon.max_hp())
 	return {"ok": true, "party": Gen2Party.of(wild_mon)}
@@ -192,6 +226,75 @@ static func _wild_held_item(
 		return 0
 	var rare: int = int(held[1]) if held.size() > 1 else 0
 	return rare if generator.randi_range(0, 255) < WILD_ITEM_RARE_ROLL else common
+
+
+## A takeover's answer in the battle screen's result shape, committed its way.
+## A member above its [param levels] entry is one `EvolveAfterBattle` walks.
+static func takeover_result(
+	data: GameData, battle: Gen2Battle, request: Dictionary, outcome: StringName,
+	levels: Array, source_save: Gen2SaveData
+) -> Dictionary:
+	if not outcome in [OUTCOME_WON, OUTCOME_LOST]:
+		outcome = OUTCOME_RAN
+	var won: bool = outcome == OUTCOME_WON
+	var state: Gen2WorldState = source_save.world.world_state \
+		if source_save != null and source_save.world != null else null
+	var money: Dictionary = earnings(battle, state, won)["money"]
+	var committed: Dictionary = commit_battle(data, battle, source_save, money)
+	if not bool(committed["ok"]):
+		return {"ok": false, "reason": &"battle_save_failed", "details": committed}
+	var enemy: Gen2BattleMon = battle.party(Gen2Battle.ENEMY).active_mon()
+	var winner: Variant = null
+	if outcome != OUTCOME_RAN:
+		winner = Gen2Battle.PLAYER if won else Gen2Battle.ENEMY
+	var result: Dictionary = {
+		"ok": true, "outcome": outcome, "request": request.duplicate(true),
+		"winner": winner,
+		"save_written": source_save != null and source_save.slot >= 0,
+		"roamers_move": battle.roamers_move_on(false),
+		"enemy": {} if enemy == null else {
+			"species": enemy.base_species(), "hp": enemy.hp, "dvs": enemy.dvs,
+			"level": enemy.level,
+		},
+	}
+	var player: Gen2Party = battle.party(Gen2Battle.PLAYER)
+	if won:
+		result["money_awarded"] = money
+		var grew: Array[int] = []
+		for index: int in mini(levels.size(), player.size()):
+			if player.at(index) != null and player.at(index).level > int(levels[index]):
+				grew.append(index)
+		result["evolvable"] = grew
+		result["player_active"] = player.active_mon().species if player.active_mon() != null else 0
+	elif outcome == OUTCOME_LOST:
+		result["recovery"] = {"ok": true, "source": &"development"} if source_save == null \
+			else {"ok": true, "source": &"save", "slot": source_save.slot}
+	return result
+
+
+## [constant Gen2Battle.ENDED] off a finished battle's result, or `{}`.
+static func ended_event(result: Dictionary, map: Vector2i) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return {}
+	var raw_request: Variant = result.get("request", {})
+	var request: Dictionary = raw_request if raw_request is Dictionary else {}
+	var raw_enemy: Variant = result.get("enemy", {})
+	var enemy: Dictionary = raw_enemy if raw_enemy is Dictionary else {}
+	return {
+		"type": Gen2Battle.ENDED,
+		"outcome": StringName(result.get("outcome", OUTCOME_CANCELLED)),
+		"battle_kind": StringName(request.get("kind", &"")),
+		"battle_type": int(request.get("battle_type", Gen2Battle.BATTLETYPE_NORMAL)),
+		"trainer_class": int(request.get("trainer_group", 0)),
+		"trainer_index": int(request.get("trainer_id", 0)),
+		"species": int(enemy.get("species", 0)),
+		"level": int(enemy.get("level", 0)),
+		"hp": int(enemy.get("hp", 0)),
+		"dvs": int(enemy.get("dvs", 0)),
+		"map_group": map.x,
+		"map_number": map.y,
+		"tag": StringName(request.get("mod_tag", &"")),
+	}
 
 
 static func earnings(battle: Gen2Battle, state: Gen2WorldState, won: bool) -> Dictionary:

@@ -348,6 +348,7 @@ var random_seed: int = 0
 ## a run replayable. Advanced only by [method advance_frame_counter].
 var frame_number: int = 0
 var _last_schedule: Dictionary = {}
+var _actor_cells: Dictionary = {}
 var _phone_ring: Gen2WorldPhoneRing = null
 var _phone_ring_request: Dictionary = {}
 ## Transient presentation offset for the player's own walk step. player_cell
@@ -2791,7 +2792,7 @@ func encounter_request(
 			## `.RoamMon1` is Generation 2's; nothing roams Kanto in Generation 1,
 			## and an empty list would still spend the draw the walk reads.
 			"roaming_mons": [] if _gen1 else state.roaming_mons(),
-			"roam_chance": _roam_chance(),
+			"roam_chance": _roam_chance,
 			"map_group": current_map.group,
 			"map_number": current_map.number,
 			"repel_steps": state.repel_steps(),
@@ -2811,7 +2812,7 @@ func encounter_request(
 			),
 		}
 	)
-	if resolved.is_empty():
+	if resolved.is_empty() or not _substitute_wild(resolved, terrain_method, random, lead_level):
 		return {}
 	resolved["map"] = map_id()
 	_stamp_encounter(resolved)
@@ -2819,6 +2820,59 @@ func encounter_request(
 	resolved["fish_group"] = current_map.fish_group
 	resolved["movement"] = movement_mode
 	return resolved
+
+
+## [method Gen2ModHost.substitute_wild] after the cartridge's roamer had its
+## chance; false when the Repel turns the named wild away. `roll` is drawn only
+## with a provider registered, so a vanilla stream is unchanged.
+func _substitute_wild(
+	resolved: Dictionary, method: StringName, random: RandomNumberGenerator, lead_level: int
+) -> bool:
+	if not Gen2ModHost.has_wild_substitutes() \
+		or resolved.get("source", &"") == Gen2WorldEncounter.SOURCE_ROAMING:
+		return true
+	var answer: Dictionary = Gen2ModHost.substitute_wild({
+		"method": method, "source": resolved.get("source", &""),
+		"map_group": current_map.group, "map_number": current_map.number,
+		"species": int(resolved["pokemon"]), "level": int(resolved["level"]),
+		"generation": data.generation,
+		"roll": random.randi_range(0, 255) if random != null else 0,
+	})
+	if answer.is_empty():
+		return true
+	var refused: StringName = _wild_substitute_refusal(answer)
+	if not refused.is_empty():
+		Gen2ModHost.instance().refuse(answer["id"], refused, str(answer))
+		return true
+	var level: int = int(answer["level"])
+	if Gen2WorldEncounter.blocked_by_repel(
+		level, {"repel_steps": state.repel_steps(), "lead_level": lead_level}
+	):
+		return false
+	var values: Dictionary = resolved["values"]
+	resolved["source"] = Gen2WorldEncounter.SOURCE_MOD
+	resolved["pokemon"] = int(answer["species"])
+	resolved["level"] = level
+	values["pokemon"] = int(answer["species"])
+	values["level"] = level
+	values["mod_tag"] = StringName(answer.get("tag", answer["id"]))
+	for key: String in ["dvs", "hp"]:
+		if answer.has(key):
+			values[key] = int(answer[key])
+	return true
+
+
+func _wild_substitute_refusal(answer: Dictionary) -> StringName:
+	if data.species(int(answer.get("species", 0))).is_empty():
+		return &"unknown_wild_species"
+	var level: int = int(answer.get("level", 0))
+	if level < 1 or level > Gen2Experience.MAX_LEVEL:
+		return &"invalid_wild_level"
+	if answer.has("dvs") and (int(answer["dvs"]) < 0 or int(answer["dvs"]) > 0xFFFF):
+		return &"invalid_wild_dvs"
+	if answer.has("hp") and int(answer["hp"]) < 1:
+		return &"invalid_wild_hp"
+	return &""
 
 
 ## The three rods, which `FishFunction` reaches rather than `RandomEncounter`.
@@ -2917,6 +2971,14 @@ func roaming_mons() -> Array:
 ## A mod's [method Gen2ModHost.request_roamer], placed as `JumpRoamMon` places one.
 func place_roamer(slot: int, species: int, level: int, random: RandomNumberGenerator) -> StringName:
 	return state.place_roamer(slot, species, level, data.world_roaming_maps(), random, map_id())
+
+
+func offer_gs_ball() -> StringName:
+	if _gen1 or not Gen2WorldState.is_crystal_profile(data):
+		return &"no_gs_ball_event"
+	state.battle_tower().gs_ball_flag = Gen2BattleTower.GS_BALL_AVAILABLE
+	state.changed.emit()
+	return &""
 
 
 ## `CheckEncounterRoamMon`'s `cp 100`, answered by a mod where a roamer stands.
@@ -10611,9 +10673,16 @@ func try_connection(direction: Vector2i) -> Dictionary:
 ## wTilePermissions computed at the player's current cell. Vector2i.ZERO skips
 ## that test for callers that only want the destination's plain permission.
 func can_walk_to(cell: Vector2i, direction: Vector2i = Vector2i.ZERO) -> bool:
-	if not _step_permission_allows(cell, direction):
+	if not _step_permission_allows(cell, direction) or _actor_cells.has(cell):
 		return false
 	return object_at(cell) == null and (_gen1 or not _object_vacating(cell))
+
+
+## Pushed by [Gen2WorldActors]: cells that block walking and nothing else.
+func set_actor_cells(cells: Array[Vector2i]) -> void:
+	_actor_cells.clear()
+	for cell: Vector2i in cells:
+		_actor_cells[cell] = true
 
 
 ## `IsNPCAtCoord`'s `.check_current_coords`: a cell an object is walking out of
@@ -10704,10 +10773,9 @@ func _cells_unoccupied(cells: Array[Vector2i], moving: Gen2WorldObject) -> bool:
 	var player_vacating: Vector2i = player_cell - _player_step_direction \
 		if player_step_in_progress() else player_cell
 	for checked: Vector2i in cells:
-		if checked == player_cell or checked == player_vacating:
+		if checked == player_cell or checked == player_vacating or _actor_cells.has(checked):
 			return false
 	return true
-
 
 
 ## `WillObjectRemainOnWater` checks the two cells a big object newly occupies.

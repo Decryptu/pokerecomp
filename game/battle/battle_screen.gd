@@ -1315,15 +1315,8 @@ func start_world_battle(
 	if _data == null or not is_ready():
 		_emit_world_battle_failure(&"missing_battle_data")
 		return false
-	var player_party: Gen2Party = (
-		Gen2SaveBattleAdapter.to_battle_party(_data, save)
-		if save != null else Gen2WorldBattleAdapter.fallback_party(_data)
-	)
-	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
-	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
-		_data, _stamped_request(request, save, crystal), player_party, _rng,
-		_world_badge_mask(save, crystal, player_badges), _injected_rules,
-		save.player_id if save != null else -1
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare_world(
+		_data, request, save, _rng, player_badges, _injected_rules
 	)
 	if not bool(prepared.get("ok", false)):
 		_emit_world_battle_failure(
@@ -1337,27 +1330,6 @@ func start_world_battle(
 	else:
 		_announce()
 	return true
-
-
-func _world_badge_mask(save: Gen2SaveData, crystal: bool, player_badges: int) -> int:
-	if player_badges >= 0:
-		return player_badges
-	if save == null or save.world == null or save.world.world_state == null:
-		return 0
-	return maxi(save.world.world_state.badge_mask(crystal), 0)
-
-
-## [param request] with `wUnlockedUnowns`, which `CheckUnownLetter` gates a wild Unown's
-## letter on. Stamped here, the one path with the save; without it the rolled letter stands.
-func _stamped_request(request: Dictionary, save: Gen2SaveData, crystal: bool) -> Dictionary:
-	var stamped: Dictionary = request.duplicate(true)
-	if save == null or save.world == null or save.world.world_state == null:
-		return stamped
-	var stamped_values: Variant = stamped.get("values", stamped)
-	if stamped_values is Dictionary:
-		(stamped_values as Dictionary)["unlocked_unowns"] = \
-			save.world.world_state.unlocked_unowns(crystal)
-	return stamped
 
 
 func _begin_world_battle(prepared: Dictionary, save: Gen2SaveData) -> void:
@@ -4793,14 +4765,9 @@ func sync_live_party() -> bool:
 func _save_battle_result() -> bool:
 	if _save_slot < 0 or _save_written or _battle == null:
 		return true
-	var save: Gen2SaveData = Gen2SaveBattleAdapter.from_world_battle(_data, _battle, _source_save)
-	# The world host credits its live state from the completion result below; mirror the
-	# award here so neither the prize nor Pay Day money is lost before that callback.
-	if save != null and save.world != null:
-		Gen2WorldBattleAdapter.credit_earnings(
-			save.world.world_state, _earnings()["money"]
-		)
-	var result: Dictionary = Gen2SaveStore.save(save, _data)
+	var result: Dictionary = Gen2WorldBattleAdapter.commit_battle(
+		_data, _battle, _source_save, _earnings()["money"]
+	)
 	if not result["ok"]:
 		push_error("Could not save battle result: %s" % result["message"])
 		if _world_battle_active:
@@ -4808,8 +4775,6 @@ func _save_battle_result() -> bool:
 				"message": result.get("message", ""),
 			})
 		return false
-	# Publish the saved candidate to the live world before its next battle.
-	Gen2WorldTransaction.copy_into(_source_save, save)
 	_save_written = true
 	return true
 

@@ -4151,7 +4151,7 @@ func _load_runtime_variable(variable: int, value: int) -> Dictionary:
 				_loaded_battle_type = value
 			else:
 				_battle_setup["battle_type"] = value
-				_battle_setup["can_lose"] = value == 1
+				_battle_setup["can_lose"] = value == Gen2Battle.BATTLETYPE_CANLOSE
 		0x14: # VAR_SPECIALPHONECALL
 			if not _phone_context.is_empty():
 				_phone_context["special_call_id"] = value
@@ -7599,7 +7599,7 @@ func _new_battle_setup(base: Dictionary) -> Dictionary:
 	var out: Dictionary = base.duplicate(true)
 	if _loaded_battle_type >= 0:
 		out["battle_type"] = _loaded_battle_type
-		out["can_lose"] = _loaded_battle_type == 1
+		out["can_lose"] = _loaded_battle_type == Gen2Battle.BATTLETYPE_CANLOSE
 	for key: String in ["win_text", "loss_text"]:
 		if _battle_setup.has(key):
 			out[key] = (_battle_setup[key] as Dictionary).duplicate(true)

@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 51 | `ended` on the battle channel; `register_wild_substitute()`; `register_battle_takeover()`; a `solid` actor entry and an actor's `battle` request; `request_gs_ball()` and `gs_ball_offered` in `progress()` |
 | 50 | `hp_bar` on the battle channel, the one event that moves a bar, where the cartridge draws it; `hp`, `max_hp`, `to_hp` and `target_hp` leave the lines around it |
 | 49 | `Gen2WorldMap.code_at()`, `permission_at()`, `is_door_at()` and `ledge_hops_at()`, the same three on `Gen2WorldAPI`, and `Gen2WorldCollision.cell_code()`, `cell_permission()`, `cell_is_door()` and `cell_hops()`, answering a cell on either generation |
 | 48 | `register_roam_encounter_chance()`, `roamers()` and `request_roamer()`; `beasts_released`, `fought_suicune` and `caught_species` in `progress()`; a visible population keeping away what a Repel would |
@@ -589,7 +590,8 @@ satisfiable. Behind it:
   check hands it over, and one no check carries always is. An HM is a way past
   something only once its badge is in hand (`catalog.badge_for_move`). An owned
   count is the species in the grass and cave tables of the maps reached, and a
-  `special`'s answer is never granted, so a site behind one is never reached.
+  `special`'s answer is never granted, so a site behind one is never reached:
+  Goldenrod's GS Ball, behind `BattleTowerAction`'s `GS_BALL_AVAILABLE`, is one.
 - `catalog.possible_starters()`, `catalog.field_hm_items()` and
   `catalog.is_progression(row)` are the same facts for a mod planning its own.
 
@@ -689,6 +691,30 @@ host.subscribe(Gen2ModHost.CHANNEL_BATTLE, manifest.id, func(event: Dictionary) 
 
 The last two are the catching tutorial and a Bug Contest catch: neither is a
 Pokemon kept, which is why catch experience excludes both.
+
+`Gen2Battle.ENDED` (`ended`) is the last event of every fight, published once the
+world has it back, on all six cartridges and whoever ran it: a script, a step,
+a visible encounter, an actor or a [takeover](#taking-over-a-battle).
+
+| Key | Meaning |
+|---|---|
+| `outcome` | `won`, `lost`, `caught` or `ran`, the `Gen2WorldBattleAdapter.OUTCOME_*` names. `ran` covers the player fleeing and the wild fleeing or being blown away |
+| `battle_kind`, `battle_type` | `wild` or `trainer`, and `wBattleType` |
+| `trainer_class`, `trainer_index` | The trainer, 0 for a wild |
+| `species`, `level`, `hp`, `dvs` | The enemy standing last: a wild knocked out has `hp` 0 |
+| `map_group`, `map_number` | Where it was fought |
+| `tag` | The tag a mod's wild or actor battle carried, empty otherwise |
+
+A legendary knocked out or fled from is `ended` with `battle_kind` `wild`, its
+species and an `outcome` other than `caught`:
+
+```gdscript
+host.subscribe(Gen2ModHost.CHANNEL_BATTLE, manifest.id, func(event: Dictionary) -> void:
+	if event["type"] == Gen2Battle.ENDED and event["battle_kind"] == &"wild" \
+		and event["species"] in LEGENDS and event["outcome"] != &"caught":
+		_start_roaming(event["species"], event["level"])
+)
+```
 
 `register_event_mutator(channel, id, handler)` is the other half. The turn or the
 script has already committed its state by then, so the handler may rewrite what is
@@ -1522,6 +1548,48 @@ The layer is refreshed after every event, view push and menu change, and hidden
 from the frame a modal takes the interface: the party page, the pack and its
 sub-lists, ball selection, the forget offer, the naming prompt and the entrance.
 
+## Taking over a battle
+
+`register_battle_takeover(id, provider)` lets a mod run a whole fight its own
+way, a double battle for example, while the host keeps everything around it:
+the trigger, the music, the transition, the save, the prize, the script's win
+and loss branches and the whiteout. The provider is a `RefCounted`:
+
+| Method | Called when |
+|---|---|
+| `takes_battle(context) -> bool` | A wild or trainer battle is about to open. True claims it |
+| `create_battle() -> Node` | Right after a claim. The Node runs the fight |
+
+`context` is plain values: `battle_kind` (`wild` or `trainer`), `battle_type`,
+`trainer_class`, `trainer_index`, `player_party` and `enemy_party` as
+`{species, level, hp}` rows, `generation`, `map_group` and `map_number`. The
+catching tutorial, the Bug Contest, the Safari Zone, the Battle Tower and link
+battles are never offered.
+
+The Node carries `start(context)`, `advance_frame()`, `handle_button(button)`
+and a `finished(result)` signal; one missing any of them is refused into
+`failures()` as `invalid_battle_takeover` and the built-in battle runs instead.
+The world adds the Node as a child and hands it every frame and every button,
+the way it drives its own battle, so a replay reaches the mod's fight too.
+`start`'s context holds live objects:
+
+| Key | What it is |
+|---|---|
+| `battle` | The `Gen2Battle` the built-in screen would have fought, prepared from the same seed |
+| `player_party`, `enemy_party` | Its two `Gen2Party`s, the player's fighting members off the save |
+| `data` | The `GameData` |
+| `summary` | The context `takes_battle` was asked with |
+
+The mod fights on those parties and changes them in place: HP, PP, status,
+experience, levels and moves. When it is done it emits
+`finished({"outcome": &"won"})`, `&"lost"` or `&"ran"`, with `seen`, the
+indices of every enemy it sent out past the lead, for the Pokedex. The host then commits
+the player's party exactly as it commits its own battle's, pays a trainer's
+prize from `battle`, walks `EvolveAfterBattle` for every member whose level rose,
+resumes the script with the answer and whites out on a loss. The `ended` event
+follows. The bag and catching are the mod's to leave alone: the host commits the
+party and nothing else.
+
 ## World state and mod pose
 
 The game stays logically grid-based. The player and NPCs occupy walk cells,
@@ -1590,10 +1658,10 @@ Two more are optional and offered only to an actor that defines them:
 mod can never shadow a cartridge interaction. Only the actor's pose changes, so no
 player event is spent.
 
-`take_requests` is where an edge goes; `sprites()` is where a pose goes. The one
-request kind is `{"kind": &"cry", "species": n}`, played through the same player a
-script's `cry` command uses. A mod may not play a sound, so it asks and the host
-spends it. Anything else in the outbox is dropped.
+`take_requests` is where an edge goes; `sprites()` is where a pose goes.
+`{"kind": &"cry", "species": n}` is played through the same player a script's
+`cry` command uses: a mod may not play a sound, so it asks and the host spends
+it. The other kind is a `battle`, below. Anything else in the outbox is dropped.
 
 Each entry of `sprites()` names cartridge art and nothing else:
 
@@ -1626,10 +1694,35 @@ rather than jumping a whole hardware pixel every other frame. `advance_frame()` 
 still the hardware clock's and is where an actor's own state moves; `sprites()` is
 asked again afterwards, so it must stay a read.
 
-An actor's sprite is presentation. It occupies no cell, blocks nothing, nobody
-talks to it, no trainer sees it and it is in no snapshot. Actors are sorted into
-the object pass by the row they stand on, so a follower one cell below an NPC is
-drawn over it.
+An actor's sprite is presentation. Nobody talks to it, no trainer sees it and it
+is in no snapshot. Actors are sorted into the object pass by the row they stand
+on, so a follower one cell below an NPC is drawn over it.
+
+An entry carrying `"solid": true` is the one exception: the walk cell it is drawn
+on, `position_cells` rounded, blocks the player and the map's objects the way an
+NPC does, for as long as the entry keeps it. It is how a Pokemon standing on the
+map is in the way, and a press of A on it reaches the actor's `interact`.
+
+`take_requests()` takes a second kind, `{"kind": &"battle", "species": n,
+"level": n}`, with an optional `dvs` word and an optional `tag`: a wild battle, as
+a script's `loadwildmon` and `startbattle` start one, begun on the next frame
+the world is free. The `ended` event carries the tag back. A species the cache
+does not carry or a level off 1 to 100 is dropped.
+
+```gdscript
+class Mewtwo:
+	func sprites() -> Array:
+		if caught:
+			return []
+		return [{"icon": mewtwo_icon, "position_cells": Vector2(CELL), "solid": true}]
+
+	func interact(cell: Vector2i, _facing: int) -> bool:
+		if caught or cell != CELL:
+			return false
+		_outbox.append({"kind": &"cry", "species": 150})
+		_outbox.append({"kind": &"battle", "species": 150, "level": 70, "tag": &"mewtwo"})
+		return true
+```
 
 A world renderer that wants to draw them takes the optional
 `set_actors(actors: Gen2WorldActors)`, handed the same resolved list.
@@ -1805,6 +1898,33 @@ Use it where the mod can see the moment but the script has no give site:
 request, and the script is `writetext`, `special Diploma`, `setevent` with nothing
 to patch. `patch_check` changes the number an existing site hands out; this is for
 when there is no site.
+
+## The GS Ball
+
+Crystal's GS Ball chain is the cartridge's own and runs as written: Goldenrod's
+Pokemon Center hands the ball over at its doorway, Kurt takes it for a day, and
+the Ilex Forest shrine calls Celebi. It hangs on one save byte, `sGSBallFlag`,
+which only Japan's mobile service and the Virtual Console (after a Hall of Fame
+entry) ever wrote, so a vanilla run never reaches it.
+
+`Gen2ModHost.request_gs_ball(id)` writes that byte as the Virtual Console does,
+on the next free world frame. The next time the player walks into the Goldenrod
+Pokemon Center the receptionist gives the GS Ball, and every script behind it
+runs unchanged. Gold, Silver, Red, Blue and Yellow have no such scene and refuse
+it into `failures()` as `no_gs_ball_event`. `progress()` answers
+`gs_ball_offered` on Crystal once the byte is written, so a mod asks once.
+
+```gdscript
+host.progress_changed.connect(func(progress: Dictionary) -> void:
+	var bag: Dictionary = host.inventory()
+	if not progress.get(&"gs_ball_offered", true) \
+		and bag.get(SILVER_WING, 0) > 0 and bag.get(RAINBOW_WING, 0) > 0:
+		host.request_gs_ball(manifest.id)
+)
+```
+
+To have someone else announce it, rewrite their line with
+[`patch_world_text()`](#rewriting-what-a-box-says).
 
 ## Asking the battle to say a line
 
@@ -2058,6 +2178,50 @@ any answer, so a replay stays a replay when the setting is the same.
 A mod that makes Crystal's Suicune roam once it was knocked out at Tin Tower
 reads `fought_suicune`, checks that 245 is not in `caught_species` and is not in
 `roamers()`, and asks for slot 2.
+
+### Replacing the wild a step meets
+
+Three slots cannot hold Lugia, Ho-Oh and Celebi beside the beasts, and Red, Blue
+and Yellow have none. `register_wild_substitute(id, provider)` is the seam for
+roamers a mod keeps itself, on every cartridge: the provider is asked each time
+a grass or surf step has met a wild, after the cartridge's own roamer had its
+chance, and names the wild met instead.
+
+```gdscript
+class Legends:
+	func substitute_wild(context: Dictionary) -> Dictionary:
+		for legend: Dictionary in roaming:
+			if legend["map"] == Vector2i(context["map_group"], context["map_number"]) \
+				and context["roll"] < 64:
+				return {"species": legend["species"], "level": legend["level"],
+					"dvs": legend["dvs"], "hp": legend["hp"], "tag": &"legend"}
+		return {}
+```
+
+| `context` key | Meaning |
+|---|---|
+| `method` | `grass` or `surf` |
+| `source` | The table the step read: `normal`, `swarm` |
+| `map_group`, `map_number` | Where |
+| `species`, `level` | What the table rolled |
+| `generation` | `RomRegistry.GEN1` or `GEN2` |
+| `roll` | One draw off the encounter stream, 0 to 255, so a provider needs no generator of its own and a replay meets the same wilds |
+
+The answer is `{}` to leave the wild alone, or `species` and `level` with an
+optional `dvs` word, `hp` to come back damaged and a `tag`, which defaults to the
+mod's id. The first provider answering a species is used. The named wild passes
+the Repel the rolled one did, so a Repel still keeps a weaker one away, and a
+species the cache does not carry, a level off 1 to 100, a `dvs` past 16 bits or
+an `hp` below 1 is refused into `failures()` and the rolled wild stands. The
+battle is an ordinary wild one; its `ended` event carries the tag, the HP left
+and the DVs, which is everything the mod keeps for the next meeting.
+
+A mod roamer then needs three things the host already offers: its own list in
+the save ([Holding a run](#holding-a-run-rather-than-an-installation)), `ended`
+to learn whether it was caught, and a map to move it to, for which
+`GameData.world_roaming_maps()` is Gold, Silver and Crystal's own graph and
+`data.world_maps()` walked with `data.world_encounter(&"grass", ...)` is every
+map with grass on any cartridge.
 
 ## An alternate field-move source
 

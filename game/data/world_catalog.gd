@@ -40,7 +40,7 @@ const MAX_SCRIPT_COMMANDS: int = 4096
 const MAX_ROUTINES: int = 16
 
 ## The sidecar's shape: a bump rebuilds every sidecar, not the cache.
-const FORMAT_VERSION: int = 5
+const FORMAT_VERSION: int = 6
 
 ## A Generation 1 site's id is its node's linear ROM address `at`; table rows
 ## are map events whose group byte names the table.

@@ -2,8 +2,9 @@ extends SceneTree
 
 ## Photographs a window-resolution save-section screen for a cached cartridge.
 ##   Godot --path . -s res://tools/preview_saves.gd -- <out.png> [light|dark] [WxH] [page] [game]
-## [page] is `saves`, `new`, `party`, `boxes`, `boxes_move`, `boxes_insert` or
-## `editor`; [game]
+## [page] is `saves`, `new`, `party`, `boxes`, `boxes_move`, `boxes_insert`,
+## `editor`, `editor_boxes` (the first boxed Pokemon's form) or `editor_items`
+## (the item picker open); [game]
 ## picks a cartridge rather than the first cached one. The size is an argument
 ## rather than a constant: a phone portrait and a desktop window are one command
 ## twice, and it is what says whether a page is responsive.
@@ -13,6 +14,7 @@ var _frames: int = 0
 var _screen: Node = null
 var _open_new_game: bool = false
 var _insert: bool = false
+var _editor_page: String = ""
 
 
 func _initialize() -> void:
@@ -58,6 +60,8 @@ func _initialize() -> void:
 		"boxes_move": "res://game/save/box_screen.tscn",
 		"boxes_insert": "res://game/save/box_screen.tscn",
 		"editor": "res://game/save/save_editor_screen.tscn",
+		"editor_boxes": "res://game/save/save_editor_screen.tscn",
+		"editor_items": "res://game/save/save_editor_screen.tscn",
 	}
 	if not scenes.has(page):
 		push_error("Unknown page %s" % page)
@@ -76,6 +80,7 @@ func _initialize() -> void:
 	## press on "New slot" arrives in.
 	_open_new_game = page == "new"
 	_insert = page == "boxes_insert"
+	_editor_page = page.trim_prefix("editor_") if page.begins_with("editor_") else ""
 
 
 func _process(_delta: float) -> bool:
@@ -87,6 +92,14 @@ func _process(_delta: float) -> bool:
 		for button: int in [PokeButton.LEFT, PokeButton.DOWN, PokeButton.A, PokeButton.A,
 				PokeButton.DOWN]:
 			_screen.call("handle_button", button)
+	if _frames == 2 and not _editor_page.is_empty():
+		_screen.call("select_tab", StringName(_editor_page))
+		if _editor_page == "boxes":
+			for slot: int in 20:
+				if _screen.call("select_box_member", slot):
+					break
+		else:
+			(_screen.get("_item_button") as Button).pressed.emit()
 	if _frames < 26:
 		return false
 	var image: Image = PokeToolPath.capture(root)
