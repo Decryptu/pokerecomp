@@ -319,7 +319,6 @@ func _draw_boxes(
 ) -> void:
 	var text: String = String(state.get("text", ""))
 	if not text.is_empty():
-		_fill_interior(into, TEXTBOX_AT, TEXTBOX_SIZE)
 		font.draw_box(
 			frame_style, into, WIDTH, TEXTBOX_AT.x * TILE, TEXTBOX_AT.y * TILE,
 			TEXTBOX_SIZE.x, TEXTBOX_SIZE.y
@@ -357,21 +356,7 @@ func _draw_payout_icon(into: PackedByteArray, matched: int) -> void:
 		)
 
 
-## `Textbox`'s and `MenuBox`'s own `ClearBox`: the interior is blanked before
-## anything is written into it, which is what keeps the machine from showing
-## through the box standing over it. The blank is $7f, which draws as index 0.
-func _fill_interior(into: PackedByteArray, at: Vector2i, box: Vector2i) -> void:
-	for row: int in (box.y - 2) * TILE:
-		var y: int = (at.y + 1) * TILE + row
-		for pixel: int in (box.x - 2) * TILE:
-			var x: int = (at.x + 1) * TILE + pixel
-			if x < 0 or x >= WIDTH or y < 0 or y >= HEIGHT:
-				continue
-			into[y * WIDTH + x] = 0
-
-
 func _draw_bet_menu(into: PackedByteArray, cursor: int) -> void:
-	_fill_interior(into, BET_MENU_AT, BET_MENU_SIZE)
 	font.draw_box(
 		frame_style, into, WIDTH, BET_MENU_AT.x * TILE, BET_MENU_AT.y * TILE,
 		BET_MENU_SIZE.x, BET_MENU_SIZE.y
@@ -386,7 +371,6 @@ func _draw_bet_menu(into: PackedByteArray, cursor: int) -> void:
 
 
 func _draw_yes_no(into: PackedByteArray, cursor: int) -> void:
-	_fill_interior(into, YES_NO_AT, YES_NO_SIZE)
 	font.draw_box(
 		frame_style, into, WIDTH, YES_NO_AT.x * TILE, YES_NO_AT.y * TILE,
 		YES_NO_SIZE.x, YES_NO_SIZE.y

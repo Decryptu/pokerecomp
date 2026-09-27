@@ -386,6 +386,19 @@ func test_a_speech_box_covers_cancel_and_the_sixth_bar() -> void:
 	)
 
 
+## A running box over a full party, as Rare Candy's `_GrewToLevelText` prints
+## one: its `TextboxBorder` blanks CANCEL on row 13 too (#770).
+func test_a_running_box_covers_cancel() -> void:
+	var rows: Array = _rows(6)
+	var box: Gen2TextBox = autofree(Gen2TextBox.for_page(GameData.open_directory(_directory)))
+	box.instant = true
+	box.show_text("PIKACHU grew to\nlevel 21!")
+	assert_true(
+		_page().render(rows, -1, box).get_data() == _page().render(rows, -1, box, false).get_data(),
+		"CANCEL is under the box"
+	)
+
+
 ## `PartyMenuCheckEgg` opens every quality's loop below the nicknames, so an egg
 ## is a name and nothing else. Reachable from the overworld menu alone.
 func test_an_egg_row_draws_its_nickname_and_no_other_quality() -> void:

@@ -194,14 +194,8 @@ func render(text: Variant = "") -> Image:
 	return _compose(indices)
 
 
-## `PrintText`: `SpeechTextbox` is `Textbox`, which clears its own interior
-## before drawing the border, so the frame under it does not show through.
+## `PrintText`'s `SpeechTextbox` over the page's own frame.
 func _draw_message(indices: PackedByteArray, text: Variant) -> void:
-	for row: int in MESSAGE_BOX_SIZE.y * TILE:
-		var start: int = (MESSAGE_BOX_AT.y * TILE + row) * WIDTH \
-			+ MESSAGE_BOX_AT.x * TILE
-		for column: int in MESSAGE_BOX_SIZE.x * TILE:
-			indices[start + column] = 0
 	if text is Gen2TextBox:
 		(text as Gen2TextBox).compose(indices, WIDTH, MESSAGE_BOX_AT * TILE)
 		return

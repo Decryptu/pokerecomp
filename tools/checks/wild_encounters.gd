@@ -13,9 +13,9 @@ var _r: RefCounted = null
 ## Census of the real caches, pinned so a cache or a rule change is loud.
 ## Per game: encounter cells, maps holding one, ice refusals and unreachable cells.
 const EXPECTED_CENSUS: Dictionary = {
-	&"gold": [39058, 138, 775, 10762],
-	&"silver": [39058, 138, 775, 10762],
-	&"crystal": [40156, 146, 779, 10893],
+	&"gold": [39058, 138, 775, 11961],
+	&"silver": [39058, 138, 775, 11961],
+	&"crystal": [40156, 146, 779, 12092],
 }
 
 ## Route 29, the first grass a new game walks into, and the same map number in
@@ -28,7 +28,7 @@ const ROUTE_29_NUMBER: int = 3
 const UNION_CAVE_GROUP: int = 3
 const UNION_CAVE_NUMBER_CRYSTAL: int = 37
 const UNION_CAVE_NUMBER_GOLD_SILVER: int = 29
-const ICE_PATH_GROUP: int = 3
+const DUNGEONS_GROUP: int = 3
 
 
 func run(r: RefCounted) -> void:
@@ -1213,28 +1213,39 @@ func _verify_union_cave() -> void:
 
 
 ## Ice Path 1F's floor runs on outside its rock, where the cave rolls and no one
-## walks; the corridor in from Route 44 keeps its wilds.
+## walks; the corridor in from Route 44 keeps its wilds. Victory Road's floor
+## runs on past its cave mouth, which `.CheckTile` walks every arrival down off.
 const ICE_PATH_1F_NUMBER_CRYSTAL: int = 61
 const ICE_PATH_1F_NUMBER_GOLD_SILVER: int = 53
 const ICE_PATH_OUTSIDE_CELL: Vector2i = Vector2i(2, 20)
 const ICE_PATH_CORRIDOR_CELL: Vector2i = Vector2i(4, 18)
+const VICTORY_ROAD_NUMBER_CRYSTAL: int = 91
+const VICTORY_ROAD_NUMBER_GOLD_SILVER: int = 82
+const VICTORY_ROAD_MOUTH: Vector2i = Vector2i(13, 5)
 
 
 func _verify_enclosed_floor() -> void:
-	var number: int = ICE_PATH_1F_NUMBER_CRYSTAL if _r.crystal \
-		else ICE_PATH_1F_NUMBER_GOLD_SILVER
-	var world: Gen2WorldAPI = _r.open_world(ICE_PATH_GROUP, number, Vector2i.ZERO)
+	_verify_left_out(ICE_PATH_1F_NUMBER_CRYSTAL if _r.crystal else ICE_PATH_1F_NUMBER_GOLD_SILVER,
+		[ICE_PATH_OUTSIDE_CELL], ICE_PATH_CORRIDOR_CELL, "Ice Path 1F")
+	_verify_left_out(VICTORY_ROAD_NUMBER_CRYSTAL if _r.crystal else VICTORY_ROAD_NUMBER_GOLD_SILVER,
+		[VICTORY_ROAD_MOUTH, VICTORY_ROAD_MOUTH + Vector2i.UP],
+		VICTORY_ROAD_MOUTH + Vector2i.DOWN, "Victory Road")
+
+
+## Each of [param outside] is a cell the roll accepts and the sweep leaves out;
+## [param inside] is one the sweep keeps.
+func _verify_left_out(number: int, outside: Array, inside: Vector2i, label: String) -> void:
+	var world: Gen2WorldAPI = _r.open_world(DUNGEONS_GROUP, number, Vector2i.ZERO)
 	if world == null:
 		return
 	_stand_on_first_warp(world)
 	var cave: PackedVector2Array = world.visible_encounter_cells()[
 		Gen2WorldEncounter.METHOD_GRASS
 	]
-	_r.check(world.can_encounter_wild_mon_at(ICE_PATH_OUTSIDE_CELL)
-		and not cave.has(Vector2(ICE_PATH_OUTSIDE_CELL)),
-		"Ice Path 1F offers the floor outside its walls.")
-	_r.check(cave.has(Vector2(ICE_PATH_CORRIDOR_CELL)),
-		"Ice Path 1F refuses the corridor in from Route 44.")
+	for cell: Vector2i in outside:
+		_r.check(world.can_encounter_wild_mon_at(cell) and not cave.has(Vector2(cell)),
+			"%s offers %s, which no one stands on." % [label, str(cell)])
+	_r.check(cave.has(Vector2(inside)), "%s refuses %s." % [label, str(inside)])
 
 
 ## Every map in the cache, so a rule change is one number rather than one map.
@@ -1428,11 +1439,13 @@ func _visible_cells_match(world: Gen2WorldAPI) -> Dictionary:
 			var cell := Vector2i(x, y)
 			world.player_cell = cell
 			## A cave's walls pass `CanEncounterWildMon`, since that branch
-			## skips the grass test, and a Pokemon cannot be put in one.
+			## skips the grass test, and a Pokemon cannot be put in one. A warp
+			## is taken before `RandomEncounter` is reached.
 			var permission: int = world.collision_permission_at(cell)
 			var standable: bool = permission == Gen2WorldCollision.LAND_TILE \
 				or permission == Gen2WorldCollision.WATER_TILE
-			var rolls: bool = world.can_encounter_wild_mon() and standable
+			var rolls: bool = world.can_encounter_wild_mon() and standable \
+				and not world.warp_pending(cell)
 			if listed.has(cell) and not rolls:
 				return {"ok": false, "cell": cell, "reason": "the sweep lists a cell the roll refuses"}
 			if rolls and not listed.has(cell):

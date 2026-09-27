@@ -2533,7 +2533,9 @@ func can_encounter_wild_mon_at(cell: Vector2i) -> bool:
 
 
 ## Every cell a wild could be met on, grouped as [method encounter_request]
-## resolves the terrain, less the cells nothing can stand on or reach.
+## resolves the terrain, less the cells nothing can stand on or reach and the
+## warps `CheckTileEvent` takes ahead of `RandomEncounter`. Generation 1's gate
+## refuses its own warp tiles, and an edge warp there hangs on the facing.
 func visible_encounter_cells() -> Dictionary:
 	var out: Dictionary = {
 		Gen2WorldEncounter.METHOD_GRASS: PackedVector2Array(),
@@ -2546,7 +2548,8 @@ func visible_encounter_cells() -> Dictionary:
 	for y: int in size.y:
 		for x: int in size.x:
 			var cell := Vector2i(x, y)
-			if not reachable.has(cell) or not can_encounter_wild_mon_at(cell):
+			if not reachable.has(cell) or not can_encounter_wild_mon_at(cell) \
+				or (not _gen1 and warp_pending(cell)):
 				continue
 			var terrain: StringName = _terrain_method(cell)
 			if out.has(terrain):
@@ -2603,13 +2606,34 @@ func _connection_lands(target: Gen2WorldMap, connection: Dictionary, cell: Vecto
 
 func _reach_steps(cell: Vector2i) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
-	for direction: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+	for direction: Vector2i in _reach_directions(cell):
 		var next: Vector2i = cell + direction
 		if _reach_standable(next) and not _reach_edge_blocked(cell, next, direction):
 			out.append(next)
 		elif allows_hop_at(cell, direction) and _reach_standable(cell + direction * 2):
 			out.append(cell + direction * 2)
 	return out
+
+
+const REACH_DIRECTIONS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+
+
+## `.CheckTile` walks the player off a door, staircase, cave mouth, current or
+## arrow in its one direction, and `PlayerStepOutFromDoor` walks a Generation 1
+## arrival down off a door, so the floor past a cave mouth is out of reach.
+## Waterfall climbs a falls against its current.
+func _reach_directions(cell: Vector2i) -> Array[Vector2i]:
+	if _gen1:
+		if Gen2WorldCollision.gen1_is_door_tile(current_map.tileset, _gen1_tile_drawn_at(cell)):
+			return [Vector2i.DOWN]
+		return REACH_DIRECTIONS
+	var code: int = collision_code_at(cell)
+	var forced: Dictionary = Gen2WorldCollision.forced_action(code)
+	if StringName(forced["kind"]) != &"walk":
+		return REACH_DIRECTIONS
+	if Gen2WorldFieldMove.waterfall_tile(code):
+		return [forced["direction"] as Vector2i, Vector2i.UP]
+	return [forced["direction"] as Vector2i]
 
 
 func _reach_standable(cell: Vector2i) -> bool:
