@@ -369,7 +369,8 @@ func _branch(bank: int, address: int, code: Array, command: Dictionary) -> Array
 
 
 ## What each side of [param command]'s test learns: `b:N` off `readvar VAR_BADGES`,
-## `x:N` a `special`'s true answer, which the proof never grants.
+## `x:N` a `special`'s true answer, which the proof never grants; so is
+## `BattleTowerAction`'s `GS_BALL_AVAILABLE`, which no script writes.
 static func _answers(command: Dictionary, jump: Dictionary) -> Array:
 	if not bool(jump.get("ok", false)):
 		return []
@@ -381,6 +382,10 @@ static func _answers(command: Dictionary, jump: Dictionary) -> Array:
 				return [answered, ""]
 			&"iffalse":
 				return ["", answered]
+			&"ifequal":
+				if int(command.get("value", 0)) == Gen2WorldScriptRunner.SPECIAL_BATTLE_TOWER_ACTION \
+					and int(jump.get("value", -1)) == Gen2BattleTower.GS_BALL_AVAILABLE:
+					return [answered, ""]
 		return []
 	if TESTS.has(command["name"]):
 		if not name in [&"iftrue", &"iffalse"] or _temporary(command):

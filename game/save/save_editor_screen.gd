@@ -6,6 +6,8 @@ extends Control
 
 ## In drawing order, so a snapshot names a tab rather than an index.
 const TABS: Array[StringName] = [&"party", &"boxes", &"items", &"events", &"map", &"dex"]
+## `ItemNames`' filler for the item numbers no constant names.
+const UNUSED_ITEM_NAME: String = "TERU-SAMA"
 
 var _editor: Gen2SaveEditor = null
 var _tabs: TabContainer = null
@@ -15,19 +17,25 @@ var _party_list: ItemList = null
 var _party_form: VBoxContainer = null
 var _box_picker: OptionButton = null
 var _box_list: ItemList = null
+var _box_form: VBoxContainer = null
 var _item_list: ItemList = null
 var _item_rows: Array[int] = []
-var _item_picker: OptionButton = null
+var _picked_item: int = 1
+var _item_button: Button = null
+var _item_set: Button = null
 var _quantity_field: SpinBox = null
 var _money_field: SpinBox = null
 var _coins_field: SpinBox = null
 var _flag_field: SpinBox = null
 var _badge_boxes: Array[CheckBox] = []
 var _map_fields: Dictionary = {}
-var _dex_field: SpinBox = null
+var _dex_species: int = 1
+## Pickers built before the save opened, named once it has.
+var _relabel: Array[Callable] = []
 var _dex_list: ItemList = null
 var _selected_party: int = -1
 var _selected_box: int = 0
+var _selected_box_slot: int = -1
 var _palette: Gen2LauncherTheme = null
 var _margin: MarginContainer = null
 
@@ -78,6 +86,7 @@ func editor_snapshot() -> Dictionary:
 		"party": party,
 		"selected_party": _selected_party,
 		"selected_box": _selected_box,
+		"selected_box_slot": _selected_box_slot,
 		"has_world": _editor.has_world(),
 	}
 
@@ -87,6 +96,15 @@ func select_party_member(index: int) -> bool:
 		return false
 	_selected_party = index
 	_refresh_party_form()
+	return true
+
+
+func select_box_member(slot: int) -> bool:
+	var box: Gen2SaveBox = _editor.box(_selected_box) if _editor != null else null
+	if box == null or slot < 0 or slot >= box.slots.size() or box.slots[slot] == null:
+		return false
+	_selected_box_slot = slot
+	_refresh_box_form()
 	return true
 
 
@@ -124,6 +142,7 @@ func reload_now() -> bool:
 		return false
 	_editor = Gen2SaveEditor.open(result["save"], _editor.data)
 	_selected_party = -1
+	_selected_box_slot = -1
 	_set_status("Reloaded from disk.")
 	_refresh()
 	return true
@@ -180,9 +199,7 @@ func _build_ui() -> void:
 	root.add_child(_status)
 
 
-## The page's own edges, standing off the notch, the rounded corners and the home
-## indicator the way [Gen2LauncherShell] does, and closer in on a phone than on a
-## desktop.
+## Standing off the notch and the home indicator as [Gen2LauncherShell] does.
 func _apply_margins() -> void:
 	if _margin == null:
 		return
@@ -195,8 +212,6 @@ func _apply_margins() -> void:
 	_margin.add_theme_constant_override("margin_bottom", pad + int(insets["bottom"]))
 
 
-## A tab's contents, scrolled. A tab is whatever size the window leaves it, so a
-## page that does not fit is reachable rather than clipped.
 func _scrolled(page: Control) -> Control:
 	var scroll: Gen2LauncherScroll = Gen2LauncherScroll.create()
 	scroll.name = page.name
@@ -206,8 +221,6 @@ func _scrolled(page: Control) -> Control:
 
 
 func _build_party_tab() -> Control:
-	## The list and the form sit side by side while both fit and stack when they
-	## do not, which is what a flow container is for.
 	var page: HFlowContainer = Gen2LauncherUI.actions(Gen2LauncherUI.GAP_MD)
 	page.name = "Party"
 
@@ -219,67 +232,83 @@ func _build_party_tab() -> Control:
 	_party_list.item_selected.connect(func(index: int) -> void: select_party_member(index))
 	left.add_child(_party_list)
 
-	var add_row: HFlowContainer = Gen2LauncherUI.actions()
-	left.add_child(add_row)
-	var species_field := SpinBox.new()
-	species_field.max_value = 255
-	species_field.value = 1
-	add_row.add_child(species_field)
-	var level_field := SpinBox.new()
-	level_field.min_value = 1
-	level_field.max_value = Gen2Experience.MAX_LEVEL
-	level_field.value = 5
-	add_row.add_child(level_field)
-	add_row.add_child(_action("Add", func() -> void:
-		_apply(_editor.add_party_member(int(species_field.value), int(level_field.value)))
-	))
-	add_row.add_child(_action("Remove", func() -> void:
-		_apply(_editor.remove_party_member(_selected_party))
-		_selected_party = -1
+	left.add_child(_add_row(
+		func(species: int, level: int) -> Dictionary:
+			return _editor.add_party_member(species, level),
+		func() -> void:
+			_apply(_editor.remove_party_member(_selected_party))
+			_selected_party = -1
 	))
 
-	_party_form = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
-	_party_form.custom_minimum_size = Vector2(260, 0)
-	_party_form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_party_form = _form_column()
 	page.add_child(_party_form)
 	return page
 
 
-func _build_boxes_tab() -> Control:
-	var page: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
-	page.name = "Boxes"
+func _add_row(add: Callable, remove: Callable) -> HFlowContainer:
 	var row: HFlowContainer = Gen2LauncherUI.actions()
-	page.add_child(row)
-	_box_picker = OptionButton.new()
-	for index: int in Gen2SaveData.BOX_COUNT:
-		_box_picker.add_item("Box %d" % (index + 1), index)
-	_box_picker.item_selected.connect(func(index: int) -> void:
-		_selected_box = index
-		_refresh_boxes()
+	var species: Array[int] = [1]
+	var species_button: Button = _action("", func() -> void: pass)
+	_relabel.append(func() -> void: species_button.text = _named(&"species", species[0]))
+	species_button.pressed.connect(func() -> void:
+		_pick("Species", &"species", species[0], func(picked: int) -> void:
+			species[0] = picked
+			species_button.text = _named(&"species", picked)
+		)
 	)
-	row.add_child(_box_picker)
-
-	var species_field := SpinBox.new()
-	species_field.max_value = 255
-	species_field.value = 1
-	row.add_child(species_field)
+	row.add_child(species_button)
 	var level_field := SpinBox.new()
 	level_field.min_value = 1
 	level_field.max_value = Gen2Experience.MAX_LEVEL
 	level_field.value = 5
 	row.add_child(level_field)
 	row.add_child(_action("Add", func() -> void:
-		_apply(_editor.add_box_member(
-			_selected_box, int(species_field.value), int(level_field.value)
-		))
+		_apply(add.call(species[0], int(level_field.value)))
 	))
-	row.add_child(_action("Remove", func() -> void:
-		_apply(_editor.remove_box_member(_selected_box, _box_list.get_selected_items()[0] \
-			if not _box_list.get_selected_items().is_empty() else -1))
+	row.add_child(_action("Remove", remove))
+	return row
+
+
+func _form_column() -> VBoxContainer:
+	var form: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
+	form.custom_minimum_size = Vector2(260, 0)
+	form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return form
+
+
+func _build_boxes_tab() -> Control:
+	var page: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
+	page.name = "Boxes"
+	_box_picker = OptionButton.new()
+	for index: int in Gen2SaveData.BOX_COUNT:
+		_box_picker.add_item("Box %d" % (index + 1), index)
+	_box_picker.item_selected.connect(func(index: int) -> void:
+		_selected_box = index
+		_selected_box_slot = -1
+		_refresh_boxes()
+	)
+	page.add_child(_box_picker)
+	page.add_child(_add_row(
+		func(species: int, level: int) -> Dictionary:
+			return _editor.add_box_member(_selected_box, species, level),
+		func() -> void:
+			_apply(_editor.remove_box_member(_selected_box, _selected_box_slot))
+			_selected_box_slot = -1
 	))
 
+	var split: HFlowContainer = Gen2LauncherUI.actions(Gen2LauncherUI.GAP_MD)
+	page.add_child(split)
 	_box_list = _page_list()
-	page.add_child(_box_list)
+	_box_list.custom_minimum_size = Vector2(260, 0)
+	_box_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_box_list.item_selected.connect(func(slot: int) -> void:
+		if not select_box_member(slot):
+			_selected_box_slot = -1
+			_refresh_box_form()
+	)
+	split.add_child(_box_list)
+	_box_form = _form_column()
+	split.add_child(_box_form)
 	return page
 
 
@@ -306,17 +335,18 @@ func _build_items_tab() -> Control:
 
 	var item_row: HFlowContainer = Gen2LauncherUI.actions()
 	page.add_child(item_row)
-	_item_picker = OptionButton.new()
-	item_row.add_child(_item_picker)
+	_item_button = _action("", func() -> void:
+		_pick("Item", &"item", _picked_item, _pick_item)
+	)
+	item_row.add_child(_item_button)
 	_quantity_field = SpinBox.new()
 	_quantity_field.max_value = Gen2WorldPack.MAX_ITEM_STACK
 	_quantity_field.value = 1
 	item_row.add_child(_quantity_field)
-	item_row.add_child(_action("Set", func() -> void:
-		_apply(_editor.set_item_quantity(
-			_item_picker.get_selected_id(), int(_quantity_field.value)
-		))
-	))
+	_item_set = _action("Add", func() -> void:
+		_apply(_editor.set_item_quantity(_picked_item, int(_quantity_field.value)))
+	)
+	item_row.add_child(_item_set)
 	item_row.add_child(_action("Remove", func() -> void:
 		var picked: PackedInt32Array = _item_list.get_selected_items()
 		if not picked.is_empty() and picked[0] < _item_rows.size():
@@ -339,11 +369,15 @@ func _page_list() -> ItemList:
 func _pick_bag_row(index: int) -> void:
 	if index >= _item_rows.size():
 		return
-	var item: int = _item_rows[index]
-	var at: int = _item_picker.get_item_index(item)
-	if at >= 0:
-		_item_picker.select(at)
-	_quantity_field.set_value_no_signal(_editor.save.world.world_state.item_quantity(item))
+	_pick_item(_item_rows[index])
+
+
+func _pick_item(item: int) -> void:
+	_picked_item = item
+	_item_button.text = _named(&"item", item)
+	var held: int = _editor.save.world.world_state.item_quantity(item) if _editor.has_world() else 0
+	_quantity_field.set_value_no_signal(held if held > 0 else 1)
+	_item_set.text = "Set" if held > 0 else "Add"
 
 
 func _build_events_tab() -> Control:
@@ -411,20 +445,23 @@ func _build_dex_tab() -> Control:
 	page.name = "Dex"
 	var row: HFlowContainer = Gen2LauncherUI.actions()
 	page.add_child(row)
-	row.add_child(_label("Species"))
-	_dex_field = SpinBox.new()
-	_dex_field.min_value = 1
-	_dex_field.max_value = 255
-	_dex_field.value = 1
-	row.add_child(_dex_field)
+	var species_button: Button = _action("", func() -> void: pass)
+	_relabel.append(func() -> void: species_button.text = _named(&"species", _dex_species))
+	species_button.pressed.connect(func() -> void:
+		_pick("Species", &"species", _dex_species, func(picked: int) -> void:
+			_dex_species = picked
+			species_button.text = _named(&"species", picked)
+		)
+	)
+	row.add_child(species_button)
 	row.add_child(_action("Seen", func() -> void:
-		_apply(_editor.set_seen_species(int(_dex_field.value), true))
+		_apply(_editor.set_seen_species(_dex_species, true))
 	))
 	row.add_child(_action("Caught", func() -> void:
-		_apply(_editor.set_caught_species(int(_dex_field.value)))
+		_apply(_editor.set_caught_species(_dex_species))
 	))
 	row.add_child(_action("Clear", func() -> void:
-		_apply(_editor.set_seen_species(int(_dex_field.value), false))
+		_apply(_editor.set_seen_species(_dex_species, false))
 	))
 	row.add_child(_action("Register party and boxes", func() -> void:
 		_apply(_editor.register_owned())
@@ -439,6 +476,8 @@ func _refresh() -> void:
 		_set_status("No save is open.")
 		return
 	_refresh_validity()
+	for relabel: Callable in _relabel:
+		relabel.call()
 	_refresh_party()
 	_refresh_party_form()
 	_refresh_boxes()
@@ -463,25 +502,29 @@ func _refresh_party() -> void:
 		_party_list.select(_selected_party)
 
 
-## The per-Pokemon form is rebuilt rather than updated, because every control
-## in it belongs to whichever member is selected and none of them outlive that.
 func _refresh_party_form() -> void:
 	if _party_form == null:
 		return
-	Gen2LauncherUI.clear(_party_form)
-	if _selected_party < 0 or _selected_party >= _editor.save.party.size():
-		return
-	var mon: Gen2SaveMon = _editor.save.party[_selected_party]
+	var in_range: bool = _selected_party >= 0 and _selected_party < _editor.save.party.size()
+	_fill_mon_form(_party_form, _editor.save.party[_selected_party] if in_range else null)
 
-	_party_form.add_child(_field("Species", mon.species, 1, 255, func(value: int) -> void:
+
+## Rebuilt per selection. A Generation II box row stores no HP, so a boxed
+## Pokemon's form has none.
+func _fill_mon_form(form: VBoxContainer, mon: Gen2SaveMon) -> void:
+	Gen2LauncherUI.clear(form)
+	if mon == null:
+		return
+	form.add_child(_named_field("Species", &"species", mon.species, func(value: int) -> void:
 		_apply(_editor.set_species(mon, value))
 	))
-	_party_form.add_child(_field("Level", mon.level, 1, Gen2Experience.MAX_LEVEL,
+	form.add_child(_field("Level", mon.level, 1, Gen2Experience.MAX_LEVEL,
 		func(value: int) -> void: _apply(_editor.set_level(mon, value))
 	))
-	_party_form.add_child(_field("HP", mon.hp, 0, _editor.max_hp_for(mon),
-		func(value: int) -> void: _apply(_editor.set_hp(mon, value))
-	))
+	if _editor.save.party.has(mon) or _editor.data.generation == RomRegistry.GEN1:
+		form.add_child(_field("HP", mon.hp, 0, _editor.max_hp_for(mon),
+			func(value: int) -> void: _apply(_editor.set_hp(mon, value))
+		))
 	var gender: StringName = _editor.gender_of(mon)
 	if gender != Gen2BattleMon.GENDER_NONE:
 		var gender_row: HFlowContainer = Gen2LauncherUI.actions()
@@ -491,18 +534,22 @@ func _refresh_party_form() -> void:
 		gender_row.add_child(_action("Make %s" % Gen2BattleMon.gender_glyph(other), func() -> void:
 			_apply(_editor.set_gender(mon, other))
 		))
-		_party_form.add_child(gender_row)
-	_party_form.add_child(_field("Happiness", mon.happiness, 0, 255,
+		form.add_child(gender_row)
+	form.add_child(_field("Happiness", mon.happiness, 0, 255,
 		func(value: int) -> void: _apply(_editor.set_happiness(mon, value))
 	))
-	_party_form.add_child(_field("Held item", mon.item, 0, 255,
-		func(value: int) -> void: _apply(_editor.set_held_item(mon, value))
+	form.add_child(_named_field("Held item", &"held", mon.item, func(value: int) -> void:
+		_apply(_editor.set_held_item(mon, value))
 	))
 	for slot: int in Gen2SaveMon.MAX_MOVES:
-		_party_form.add_child(_field(
-			"Move %d" % (slot + 1), int(mon.moves[slot]), 0, 255,
+		form.add_child(_named_field(
+			"Move %d" % (slot + 1), &"move", int(mon.moves[slot]),
 			func(value: int) -> void: _apply(_editor.set_move(mon, slot, value))
 		))
+	form.add_child(_dv_row(mon))
+
+
+func _dv_row(mon: Gen2SaveMon) -> HFlowContainer:
 	var dv_row: HFlowContainer = Gen2LauncherUI.actions()
 	dv_row.add_child(_label("DVs"))
 	var dv_fields: Array[SpinBox] = []
@@ -521,7 +568,7 @@ func _refresh_party_form() -> void:
 			int(dv_fields[2].value), int(dv_fields[3].value),
 		))
 	))
-	_party_form.add_child(dv_row)
+	return dv_row
 
 
 func _refresh_boxes() -> void:
@@ -537,6 +584,18 @@ func _refresh_boxes() -> void:
 			slot + 1,
 			"empty" if mon == null else "%s Lv%d" % [_species_name(mon.species), mon.level],
 		])
+	if _selected_box_slot >= 0 and _selected_box_slot < _box_list.item_count:
+		_box_list.select(_selected_box_slot)
+	_refresh_box_form()
+
+
+func _refresh_box_form() -> void:
+	if _box_form == null:
+		return
+	var box: Gen2SaveBox = _editor.box(_selected_box)
+	var in_range: bool = box != null and _selected_box_slot >= 0 \
+		and _selected_box_slot < box.slots.size()
+	_fill_mon_form(_box_form, box.slots[_selected_box_slot] if in_range else null)
 
 
 func _refresh_items() -> void:
@@ -551,10 +610,8 @@ func _refresh_items() -> void:
 		return
 	_money_field.set_value_no_signal(state.money(0))
 	_coins_field.set_value_no_signal(state.coins())
-	if _item_picker.item_count == 0:
-		for item: int in range(1, 256):
-			if not _editor.data.item(item).is_empty():
-				_item_picker.add_item(_item_name(item), item)
+	_item_button.text = _named(&"item", _picked_item)
+	_item_set.text = "Set" if state.item_quantity(_picked_item) > 0 else "Add"
 	_item_rows = []
 	for item: Variant in state.items():
 		_item_rows.append(int(item))
@@ -664,6 +721,75 @@ func _apply(result: Dictionary, refresh: bool = true) -> void:
 
 func _close() -> void:
 	get_tree().change_scene_to_file.call_deferred("res://game/save/save_screen.tscn")
+
+
+## A sheet the finger scrolls: an [OptionButton]'s popup ran off a phone's
+## screen with no way to scroll it.
+func _pick(title: String, kind: StringName, current: int, handler: Callable) -> void:
+	if _editor == null:
+		return
+	var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(_palette, title)
+	var here: Button = null
+	for number: int in _named_numbers(kind):
+		var row: Gen2LauncherButton = Gen2LauncherButton.create(
+			_palette, _named(kind, number), Gen2LauncherButton.Variant.QUIET
+		)
+		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.pressed.connect(func() -> void:
+			sheet.close()
+			handler.call(number)
+		)
+		sheet.body().add_child(row)
+		if number == current:
+			here = row
+	await sheet.open(self)
+	if here != null and is_instance_valid(here):
+		here.grab_focus()
+
+
+func _named_numbers(kind: StringName) -> Array[int]:
+	var out: Array[int] = []
+	var data: GameData = _editor.data
+	match kind:
+		&"species":
+			for species: int in range(1, data.species_count() + 1):
+				out.append(species)
+		&"move":
+			out.append(Gen2SaveEditor.NO_MOVE)
+			for move: int in range(1, data.move_count() + 1):
+				out.append(move)
+		&"item", &"held":
+			if kind == &"held":
+				out.append(0)
+			for item: int in range(1, data.item_count() + 1):
+				var item_name: String = data.item_name(item)
+				if not item_name.is_empty() and item_name != UNUSED_ITEM_NAME:
+					out.append(item)
+	return out
+
+
+func _named(kind: StringName, number: int) -> String:
+	if _editor == null:
+		return str(number)
+	if number == 0 and kind != &"species":
+		return "none"
+	match kind:
+		&"species":
+			return "%d %s" % [number, _species_name(number)]
+		&"move":
+			var row: Dictionary = _editor.data.move(number)
+			return "%d %s" % [number, String(row.get("name", "unknown %d" % number))]
+	return "%d %s" % [number, _item_name(number)]
+
+
+func _named_field(text: String, kind: StringName, value: int, handler: Callable) -> Container:
+	var row: HFlowContainer = Gen2LauncherUI.actions()
+	row.add_child(_label(text))
+	row.add_child(_action(_named(kind, value), func() -> void:
+		_pick(text, kind, value, handler)
+	))
+	return row
 
 
 func _species_name(species: int) -> String:

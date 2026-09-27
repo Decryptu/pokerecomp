@@ -143,6 +143,8 @@ func test_a_wild_rolls_its_species_held_items_before_its_dvs() -> void:
 	assert_eq(seen.size(), 3, "none, common and rare all occur")
 
 
+## Lugia, Ho-Oh and Snorlax load `BATTLETYPE_FORCEITEM`, which is 10: the byte
+## the script's own `loadvar VAR_BATTLETYPE` writes, not a name to trust.
 func test_a_force_item_wild_takes_item_one_without_spending_a_roll() -> void:
 	var expected_rng := RandomNumberGenerator.new()
 	expected_rng.seed = 91
@@ -153,8 +155,7 @@ func test_a_force_item_wild_takes_item_one_without_spending_a_roll() -> void:
 	actual_rng.seed = 91
 	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
 		_data, {"values": {
-			"kind": &"wild", "pokemon": SPECIES_TWO, "level": 5,
-			"battle_type": Gen2Battle.BATTLETYPE_FORCEITEM,
+			"kind": &"wild", "pokemon": SPECIES_TWO, "level": 5, "battle_type": 10,
 		}}, _player_party(), actual_rng
 	)
 	assert_true(prepared["ok"])

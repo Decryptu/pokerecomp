@@ -82,6 +82,8 @@ static func _read_story(out: Dictionary, state: Gen2WorldState, game: StringName
 	if Gen2WorldState.is_crystal_game_id(game):
 		out[&"fought_suicune"] = \
 			state.is_event_flag_active(Gen2WorldState.EVENT_FOUGHT_SUICUNE_CRYSTAL)
+		out[&"gs_ball_offered"] = \
+			state.battle_tower().gs_ball_flag == Gen2BattleTower.GS_BALL_AVAILABLE
 
 
 ## The party, the boxes and the play timer, which are the save's on both paths:

@@ -7282,10 +7282,52 @@ func test_a_roam_chance_provider_answers_the_roamers_share_of_the_roll() -> void
 			)
 			if encounter.get("source", &"") == Gen2WorldEncounter.SOURCE_ROAMING:
 				met[chance] += 1
+	## Asked on the step that met a wild on grass, and never on a surf step,
+	## where `CheckEncounterRoamMon` is not reached.
+	var counting := RoamChance.new(256)
+	Gen2ModHost.reset()
+	Gen2ModHost.instance().register_roam_encounter_chance(&"test", counting)
+	world.encounter_request(RandomNumberGenerator.new(), true, Gen2WorldEncounter.METHOD_SURF)
+	assert_eq(counting.asked, 0)
 	Gen2ModHost.reset()
 	assert_eq(met[0], 0)
 	assert_gt(met[-1], 0, "the cartridge's own share")
 	assert_gt(met[256], met[-1])
+
+
+## A mod's wild takes the met wild's place with the word, the HP and the tag it
+## named, passes the Repel the rolled one would have, and a provider that answers
+## nothing, or names a species the cache lacks, leaves the table's own.
+func test_a_wild_substitute_replaces_the_wild_a_step_met() -> void:
+	var species: Array = []
+	for number: int in range(1, 21):
+		species.append({"number": number, "name": "MON%d" % number})
+	RomCache.write_json(RomCache.species_path(_directory), species)
+	var world := _world(Vector2i(8, 6))
+	var provider := WildSubstitute.new()
+	Gen2ModHost.instance().register_wild_substitute(&"legends", provider)
+	var rolled: int = int(world.encounter_request(null, true, Gen2WorldEncounter.METHOD_GRASS)["pokemon"])
+	assert_eq(provider.asked["species"], rolled)
+
+	provider.answer = {"species": 19, "level": 30, "dvs": 0xABCD, "hp": 7, "tag": &"mewtwo"}
+	var met: Dictionary = world.encounter_request(null, true, Gen2WorldEncounter.METHOD_GRASS)
+	assert_eq(met["source"], Gen2WorldEncounter.SOURCE_MOD)
+	assert_eq(met["values"]["pokemon"], 19)
+	assert_eq(met["values"]["level"], 30)
+	assert_eq(met["values"]["dvs"], 0xABCD)
+	assert_eq(met["values"]["hp"], 7)
+	assert_eq(met["values"]["mod_tag"], &"mewtwo")
+
+	provider.answer = {"species": 19, "level": 2}
+	world.set_repel_steps(5)
+	assert_true(world.encounter_request(null, true, &"auto", 6).is_empty(), "the Repel")
+
+	world.set_repel_steps(0)
+	provider.answer = {"species": 9999, "level": 30}
+	var kept: Dictionary = world.encounter_request(null, true, Gen2WorldEncounter.METHOD_GRASS)
+	assert_eq(int(kept["values"]["pokemon"]), rolled)
+	assert_eq(Gen2ModHost.instance().failures()[-1]["reason"], &"unknown_wild_species")
+	Gen2ModHost.reset()
 
 
 func test_repel_blocks_lower_level_candidates() -> void:
@@ -10225,6 +10267,24 @@ func test_the_gs_ball_and_mobile_record_actions_answer_zero() -> void:
 		assert_eq(state.script_memory(0xD1A0), 0, "action %d" % action)
 
 
+## A mod's GS Ball ask writes `sGSBallFlag` the way the Virtual Console does, so
+## Goldenrod's doorway script reads `GS_BALL_AVAILABLE` and runs its own give, and
+## the flag is the save's: it survives the round trip the slot takes.
+func test_an_offered_gs_ball_is_what_the_doorway_reads_and_the_save_keeps() -> void:
+	_write_special_script([
+		Gen2WorldScript.SETVAL, Gen2BattleTower.ACTION_GS_BALL,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BATTLE_TOWER_ACTION, 0,
+		Gen2WorldScript.WRITEMEM, 0xA0, 0xD1,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world()
+	assert_eq(world.offer_gs_ball(), &"")
+	var kept := Gen2WorldState.from_dict(world.state.to_dict())
+	world = _special_world(kept)
+	assert_eq(_final_status(_run_special(world)), &"complete")
+	assert_eq(kept.script_memory(0xD1A0), Gen2BattleTower.GS_BALL_AVAILABLE)
+
+
 ## `SaveBattleTowerLevelGroup` and `LoadBattleTowerLevelGroup` are the two halves
 ## of one byte: the room menu writes WRAM, only the save at the end of a session
 ## copies it into SRAM, and a resumed challenge reads it back.
@@ -11093,11 +11153,23 @@ func test_gen1_a_rows_battle_stands_behind_the_rest_of_the_row() -> void:
 	RomCache.clear(_gen1_directory())
 
 
+class WildSubstitute:
+	var answer: Dictionary = {}
+	var asked: Dictionary = {}
+
+	func substitute_wild(context: Dictionary) -> Dictionary:
+		asked = context
+		return answer
+
+
 class RoamChance:
 	var chance: int = 0
 
 	func _init(value: int) -> void:
 		chance = value
 
+	var asked: int = 0
+
 	func roam_encounter_chance(_context: Dictionary) -> int:
+		asked += 1
 		return chance

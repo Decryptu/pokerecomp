@@ -66,7 +66,6 @@ const ROUTE_2_OPEN_CELLS: int = 469
 ## `loadwildmon SNORLAX, 50` and `loadvar VAR_BATTLETYPE, BATTLETYPE_FORCEITEM`.
 const SPECIES_SNORLAX: int = 143
 const SNORLAX_LEVEL: int = 50
-const BATTLETYPE_FORCEITEM: int = 10
 
 ## MahoganyMart1F and the Radio Tower's five floors, in either pin.
 const SPECIAL_MUSIC_MAPS: int = 6
@@ -429,7 +428,7 @@ func _verify_wake(_data: GameData, game_id: StringName, crystal: bool) -> void:
 		int(awake.get("battles", 0)) == 1
 			and int(awake.get("species", 0)) == SPECIES_SNORLAX
 			and int(awake.get("level", 0)) == SNORLAX_LEVEL
-			and int(awake.get("battle_type", -1)) == BATTLETYPE_FORCEITEM,
+			and int(awake.get("battle_type", -1)) == Gen2Battle.BATTLETYPE_FORCEITEM,
 		"%s: the awake branch did not run its forced-item battle: %s" % [game_id, awake]
 	)
 	_r.check(

@@ -121,3 +121,26 @@ func test_saving_takes_the_position_typed_on_the_map_tab() -> void:
 	(_screen.get("_map_fields")["group"] as SpinBox).set_value_no_signal(5)
 	assert_false(_screen.save_now())
 	assert_true(String(_screen.get("_status").text).contains("not in this cartridge cache"))
+
+
+## A boxed Pokemon is edited where it is stored: the box tab's form writes the
+## box row, which stays a box row (no stored stats) and still validates.
+func test_the_box_tab_edits_the_selected_boxed_pokemon() -> void:
+	var save: Gen2SaveData = _save()
+	var editor: Gen2SaveEditor = Gen2SaveEditor.open(save, _data)
+	assert_true(editor.add_box_member(0, Fixture.GEODUDE, 10)["ok"])
+	await _open(editor.save)
+	assert_true(_screen.select_tab(&"boxes"))
+	assert_true(_screen.select_box_member(0))
+
+	var form: VBoxContainer = _screen.get("_box_form")
+	var level: SpinBox = form.find_children("", "SpinBox", true, false)[0]
+	level.value = 30
+
+	var held: Gen2SaveEditor = _screen.get("_editor")
+	var boxed: Gen2SaveMon = held.box(0).slots[0]
+	assert_eq(boxed.level, 30)
+	assert_true(boxed.stats.is_empty())
+	assert_eq(held.save.party[0].level, 20)
+	assert_true(_screen.editor_snapshot()["valid"], _screen.editor_snapshot()["message"])
+	await get_tree().process_frame

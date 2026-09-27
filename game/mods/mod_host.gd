@@ -147,6 +147,10 @@ const CATCH_EXPERIENCE_METHODS: Array[String] = ["awards_catch_experience"]
 const BATTLE_INFO_METHODS: Array[String] = ["annotate_battle"]
 const SHINY_ROLLS_METHODS: Array[String] = ["shiny_rolls"]
 const ROAM_CHANCE_METHODS: Array[String] = ["roam_encounter_chance"]
+const WILD_SUBSTITUTE_METHODS: Array[String] = ["substitute_wild"]
+const BATTLE_TAKEOVER_METHODS: Array[String] = ["takes_battle", "create_battle"]
+## Beside a `finished(result)` signal: the world drives it as it drives its own battle.
+const BATTLE_TAKEOVER_NODE_METHODS: Array[String] = ["start", "advance_frame", "handle_button"]
 const RUN_BUTTON_METHODS: Array[String] = ["runs_while_held"]
 const EXPERIENCE_SCALE_METHODS: Array[String] = ["experience_scale"]
 const EXPERIENCE_BYSTANDER_METHODS: Array[String] = ["experience_bystander_share"]
@@ -261,7 +265,10 @@ var _catch_experience: Dictionary = {}
 var _battle_info: Dictionary = {}
 var _shiny_rolls: Dictionary = {}
 var _roam_chances: Dictionary = {}
-var _roamer_requests: Array[Dictionary] = []
+var _wild_substitutes: Dictionary = {}
+var _battle_takeovers: Dictionary = {}
+## Roamer and GS Ball asks, `{id, kind, ...}`, spent on an idle world frame.
+var _world_requests: Array[Dictionary] = []
 var _roamers_source: Callable = Callable()
 var _run_buttons: Dictionary = {}
 var _experience_scales: Dictionary = {}
@@ -503,19 +510,19 @@ func request_notice(id: StringName, notice: Dictionary) -> Dictionary:
 	var title: String = String(notice.get("title", "")).strip_edges()
 	var line: String = String(notice.get("line", "")).strip_edges()
 	if title.is_empty() and line.is_empty():
-		return _refuse_notice(id, &"empty_notice", String(id))
+		return refuse(id, &"empty_notice", String(id))
 	for text: String in [title, line]:
 		if text.contains("\n") \
 			or Gen2Text.encode(text).size() > Gen2MapNameSignPage.NOTICE_COLUMNS:
-			return _refuse_notice(id, &"notice_line_too_long", "%s: %s" % [id, text])
+			return refuse(id, &"notice_line_too_long", "%s: %s" % [id, text])
 	var sound: StringName = StringName(notice.get("sound", NOTICE_SOUND_DEFAULT))
 	if not NOTICE_SOUNDS.has(sound):
-		return _refuse_notice(id, &"unknown_notice_sound", "%s: %s" % [id, sound])
+		return refuse(id, &"unknown_notice_sound", "%s: %s" % [id, sound])
 	var icon: Variant = notice.get("icon", {})
 	if icon is not Dictionary:
-		return _refuse_notice(id, &"invalid_notice_icon", String(id))
+		return refuse(id, &"invalid_notice_icon", String(id))
 	if _notice_requests.size() >= MAX_NOTICES:
-		return _refuse_notice(id, &"notice_queue_full", String(id))
+		return refuse(id, &"notice_queue_full", String(id))
 	_notice_requests.append({
 		"id": id, "title": title, "line": line, "sound": sound,
 		"icon": (icon as Dictionary).duplicate(true),
@@ -523,7 +530,8 @@ func request_notice(id: StringName, notice: Dictionary) -> Dictionary:
 	return {"ok": true}
 
 
-func _refuse_notice(id: StringName, reason: StringName, detail: String) -> Dictionary:
+## Records a refusal in [method failures] under the mod's id and answers it.
+func refuse(id: StringName, reason: StringName, detail: String) -> Dictionary:
 	var refusal: Dictionary = {
 		"ok": false, "reason": reason, "detail": detail, "id": id,
 	}
@@ -790,7 +798,70 @@ static func roam_encounter_chance(context: Dictionary, cartridge: int) -> int:
 	return clampi(best, 0, 256)
 
 
-## Set by [Gen2WorldScreen] the way [method set_inventory_source] is.
+func register_wild_substitute(id: StringName, provider: Object) -> Dictionary:
+	return _register_provider(_wild_substitutes, WILD_SUBSTITUTE_METHODS, id, provider)
+
+
+func wild_substitute_ids() -> Array:
+	return _wild_substitutes.keys()
+
+
+static func has_wild_substitutes() -> bool:
+	return _instance != null and not _instance._wild_substitutes.is_empty()
+
+
+## The first answer naming a species, tagged with its provider's id.
+static func substitute_wild(context: Dictionary) -> Dictionary:
+	if _instance == null:
+		return {}
+	for id: StringName in _instance._wild_substitutes:
+		var answer: Variant = _instance._wild_substitutes[id].call(
+			"substitute_wild", context.duplicate(true)
+		)
+		if answer is Dictionary and (answer as Dictionary).has("species"):
+			var out: Dictionary = (answer as Dictionary).duplicate(true)
+			out["id"] = id
+			return out
+	return {}
+
+
+func register_battle_takeover(id: StringName, provider: Object) -> Dictionary:
+	return _register_provider(_battle_takeovers, BATTLE_TAKEOVER_METHODS, id, provider)
+
+
+func battle_takeover_ids() -> Array:
+	return _battle_takeovers.keys()
+
+
+static func has_battle_takeovers() -> bool:
+	return _instance != null and not _instance._battle_takeovers.is_empty()
+
+
+## The first claim and the Node it built, or `{}`; a Node short of the contract
+## is refused and the fight stays the cartridge's.
+static func take_battle(context: Dictionary) -> Dictionary:
+	if _instance == null:
+		return {}
+	for id: StringName in _instance._battle_takeovers:
+		var provider: Object = _instance._battle_takeovers[id]
+		if not bool(provider.call("takes_battle", context.duplicate(true))):
+			continue
+		var node: Variant = provider.call("create_battle")
+		var missing: Array[String] = []
+		for method: String in BATTLE_TAKEOVER_NODE_METHODS:
+			if not node is Node or not (node as Node).has_method(method):
+				missing.append(method)
+		if node is Node and not (node as Node).has_signal("finished"):
+			missing.append("finished")
+		if missing.is_empty():
+			return {"id": id, "node": node}
+		if node is Node:
+			(node as Node).free()
+		_instance.refuse(id, &"invalid_battle_takeover", ", ".join(missing))
+		return {}
+	return {}
+
+
 func set_roamers_source(source: Callable) -> void:
 	_roamers_source = source
 
@@ -808,21 +879,26 @@ func request_roamer(id: StringName, slot: int, species: int, level: int) -> Dict
 	if slot < 0 or slot >= Gen2WorldState.ROAM_SLOTS or species <= 0 \
 		or level < 1 or level > Gen2Layout.MAX_LEVEL:
 		return {"ok": false, "reason": &"invalid_roamer", "detail": String(id)}
-	_roamer_requests.append({"id": id, "slot": slot, "species": species, "level": level})
+	_world_requests.append({
+		"id": id, "kind": &"roamer", "slot": slot, "species": species, "level": level,
+	})
 	return {"ok": true}
 
 
-func take_roamer_requests() -> Array[Dictionary]:
-	var out: Array[Dictionary] = _roamer_requests
-	_roamer_requests = []
+## The Virtual Console's write of `sGSBallFlag` after a Hall of Fame entry.
+func request_gs_ball(id: StringName) -> Dictionary:
+	_world_requests.append({"id": id, "kind": &"gs_ball"})
+	return {"ok": true}
+
+
+func take_world_requests() -> Array[Dictionary]:
+	var out: Array[Dictionary] = _world_requests
+	_world_requests = []
 	return out
 
 
-func refuse_roamer(request: Dictionary, reason: StringName) -> void:
-	_failures.append({
-		"ok": false, "reason": reason, "detail": str(request.get("slot", -1)),
-		"id": request.get("id", &""),
-	})
+func refuse_world_request(request: Dictionary, reason: StringName) -> void:
+	refuse(request.get("id", &""), reason, str(request.get("slot", request["kind"])))
 
 
 ## Registers a CATCH EXPERIENCE policy for [param manifest]'s own run: whether a

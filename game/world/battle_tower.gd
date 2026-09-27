@@ -54,6 +54,7 @@ const ACTION_SAVE_OPTIONS: int = 31
 ## offers once; bit 0 is the mobile half's own and nothing local reads it.
 const FLAG_MOBILE_READ: int = 1
 const FLAG_EXPLANATION_READ: int = 2
+const GS_BALL_AVAILABLE: int = 0x0B
 
 ## `BATTLETOWER_MIN_REWARD` and `BATTLETOWER_MAX_REWARD`, the stat boosters
 ## `BattleTower_RandomlyChooseReward` rolls between, and the LUCKY_PUNCH sitting
@@ -103,6 +104,8 @@ var chosen_group: int = 0
 ## `sBTTrainers`, seven trainer indices or [constant NO_TRAINER].
 var trainers: Array = []
 var save_file_flags: int = 0
+## `sGSBallFlag`, which only the mobile service, the Virtual Console and a mod set.
+var gs_ball_flag: int = 0
 ## `sBattleTowerReward`, chosen once per challenge by
 ## `BattleTower_RandomlyChooseReward` and handed over only at the end of it.
 var reward: int = 0
@@ -133,6 +136,7 @@ func to_dict() -> Dictionary:
 		"chosen_group": chosen_group,
 		"trainers": trainers.duplicate(),
 		"save_file_flags": save_file_flags,
+		"gs_ball_flag": gs_ball_flag,
 		"reward": reward,
 		"previous_mons": previous_mons.duplicate(),
 		"earlier_mons": earlier_mons.duplicate(),
@@ -152,6 +156,7 @@ static func from_dict(raw: Variant) -> Gen2BattleTower:
 	out.level_group = clampi(int(source.get("level_group", 0)), 0, LEVEL_GROUPS)
 	out.chosen_group = clampi(int(source.get("chosen_group", 0)), 0, LEVEL_GROUPS)
 	out.save_file_flags = int(source.get("save_file_flags", 0)) & 0xFF
+	out.gs_ball_flag = int(source.get("gs_ball_flag", 0)) & 0xFF
 	out.reward = int(source.get("reward", 0)) & 0xFF
 	out.trainers = _bytes_field(source.get("trainers", []), STREAK_LENGTH, NO_TRAINER)
 	out.previous_mons = _bytes_field(source.get("previous_mons", []), PARTY_LENGTH, 0)
@@ -467,9 +472,11 @@ func action(index: int, context: Dictionary = {}) -> int:
 	if PARTY_CHECK_ACTIONS.has(index):
 		return _party_check(index, context.get("party", {}) as Dictionary)
 	match index:
-		## `s5_be46` and `sGSBallFlag`, which only mobile and Virtual Console write.
-		ACTION_MOBILE_RECORD_CHECK, ACTION_GS_BALL:
+		## `s5_be46`, which only the mobile adapter writes.
+		ACTION_MOBILE_RECORD_CHECK:
 			return 0
+		ACTION_GS_BALL:
+			return gs_ball_flag
 		ACTION_CHECK_EXPLANATION_READ:
 			if not bool(context.get("save_is_yours", true)):
 				return 0

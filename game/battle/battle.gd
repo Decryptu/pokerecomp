@@ -124,6 +124,9 @@ const OVER: StringName = &"over"
 ## `destination` (&"party" or &"box"), `tutorial` and `contest`.
 const CAUGHT: StringName = &"caught"
 
+## Published by the world screen; see [method Gen2WorldBattleAdapter.ended_event].
+const ENDED: StringName = &"ended"
+
 ## Experience, once the fainted Pokémon's opponent has somebody to award it to.
 ## Never for [constant ENEMY]: `GiveExperiencePoints` reads the player's party
 ## alone, so a trainer's Pokémon are the reason and never the recipient.
@@ -448,10 +451,9 @@ const ACTION_ITEM: StringName = &"item"
 const BERSERK_GENE_STAGES: int = 2
 const BERSERK_GENE_CONFUSION_TURNS: int = 256
 
-## `wBattleType`. Only the values `TryToRunAwayFromBattle` branches on are named;
-## everything else reaches the ordinary speed check.
+## `wBattleType`, `battle_constants.asm`'s numbering on all three cartridges.
 const BATTLETYPE_NORMAL: int = 0
-const BATTLETYPE_FORCEITEM: int = 1
+const BATTLETYPE_CANLOSE: int = 1
 const BATTLETYPE_DEBUG: int = 2
 ## The Dude's tutorial, which `PokeBallEffect` catches without a roll.
 const BATTLETYPE_TUTORIAL: int = 3
@@ -466,6 +468,8 @@ const BATTLETYPE_ROAMING: int = 5
 ## is the only thing that reads it.
 const BATTLETYPE_TREE: int = 8
 const BATTLETYPE_TRAP: int = 9
+## Lugia, Ho-Oh and Snorlax: `LoadEnemyMon.WildItem` takes `wBaseItem1` unrolled.
+const BATTLETYPE_FORCEITEM: int = 10
 const BATTLETYPE_CELEBI: int = 11
 const BATTLETYPE_SUICUNE: int = 12
 ## Generation 1's `BATTLE_TYPE_SAFARI`, whose own byte is 2 and which Crystal
