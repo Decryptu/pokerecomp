@@ -483,8 +483,7 @@ func _on_selected(party_index: int) -> void:
 	Gen2WorldDayCare.deposit(_state, _save, _slot, party_index)
 	Gen2WorldDayCare.init_breeding(_state, _data, _player_name, _player_id, _random)
 	## `DayCare_DepositPokemonText`, and then the `ret` that leaves
-	## `ComeAgainText` unprinted: a deposit is the one path that does not end on
-	## it.
+	## `ComeAgainText` unprinted: a deposit is the one path that does not end on it.
 	_queue.append({"text": Gen2WorldDayCare.TEXT_DEPOSIT})
 	_queue.append({"cry": species})
 	_queue.append({"text": Gen2WorldDayCare.TEXT_COME_BACK_LATER})

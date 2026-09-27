@@ -677,8 +677,7 @@ func _spawn(view: View) -> void:
 	status = STATUS_DECIDE
 
 
-## `Func_fc7aa`: the oldest command, if the buffer holds more than the one it
-## keeps.
+## `Func_fc7aa`: the oldest command, if the buffer holds more than the one it keeps.
 func _decide(view: View, random: RandomNumberGenerator) -> void:
 	var command: int = _pop_oldest()
 	if command == 0:

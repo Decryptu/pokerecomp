@@ -120,8 +120,7 @@ var _star_done: bool = false
 
 ## `wSpriteAnimationStructs`, ten slots of which an empty Dictionary is a free
 ## one. Fixed rather than compacted: the slot is the z-order, so a sparkle that
-## dies leaves a hole the next one takes, and a spawn with nothing free is
-## dropped.
+## dies leaves a hole the next one takes, and a spawn with nothing free is dropped.
 var _actors: Array[Dictionary] = []
 var _logo_register: int = LOGO_REGISTER_FIRST
 var _logo_palette: int = OBJECT_PALETTE_ORDER
@@ -129,8 +128,7 @@ var _logo_palette: int = OBJECT_PALETTE_ORDER
 
 ## [param sine] carries `BattleAnimSineWave`, which is the table both profiles'
 ## motion is read out of. Without one the sprites sit still and the frame counts
-## are unchanged, so a caller with no animation layer still spends the right
-## frames.
+## are unchanged, so a caller with no animation layer still spends the right frames.
 func start(id: StringName, sine: Gen2BattleAnimData = null) -> void:
 	_profile = id
 	_sine = sine

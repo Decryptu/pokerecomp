@@ -210,8 +210,7 @@ func _open_party() -> void:
 func _on_member_selected(party_index: int) -> void:
 	Gen2Screen.drop(_party)
 	_party = null
-	## `jr c, .cancel`: B on the list is the one way out that is not a learned
-	## move.
+	## `jr c, .cancel`: B on the list is the one way out that is not a learned move.
 	if party_index < 0 or party_index >= _save.party.size():
 		_end(Gen2MoveTutor.SCRIPT_VALUE_CANCELLED, "")
 		return
@@ -315,8 +314,7 @@ func _open_stop_ask() -> void:
 
 
 ## `LearnMove` returns `b = 0`, which `CheckCanLearnMoveTutorMove` reads as
-## `.didnt_learn`, so the routine loops back to the party list rather than
-## ending.
+## `.didnt_learn`, so the routine loops back to the party list rather than ending.
 func _end_did_not_learn() -> void:
 	_refusal_text = Gen2MoveForget.did_not_learn_text(_mon_name(), _move_name)
 	_phase = Phase.REFUSAL

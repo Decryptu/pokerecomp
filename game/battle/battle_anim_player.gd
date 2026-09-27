@@ -51,6 +51,8 @@ const AFTER_ANIM_ENEMY_DAMAGE: int = 0x10F - BATTLE_AFTERANIMS
 const AFTER_ANIM_ENEMY_STAT_DOWN: int = 0x110 - BATTLE_AFTERANIMS
 const AFTER_ANIM_PLAYER_DAMAGE: int = 0x112 - BATTLE_AFTERANIMS
 const AFTER_ANIM_WOBBLE: int = 0x113 - BATTLE_AFTERANIMS
+## Past the after-animations, played whole through `PlayFXAnimID` by `HitConfusion`.
+const ANIM_HIT_CONFUSION: int = 0x115
 
 ## A guard on the steps one frame may take: only `FRAMEBLOCKMODE_02` takes none.
 const GEN1_MAX_STEPS: int = 64
@@ -76,6 +78,7 @@ const ANIM_SAP: int = 0x107
 const ANIM_FRZ: int = 0x108
 const ANIM_PAR: int = 0x109
 const ANIM_IN_LOVE: int = 0x10A
+const ANIM_IN_SANDSTORM: int = 0x10B
 const ANIM_IN_NIGHTMARE: int = 0x10C
 
 var _data: Gen2BattleAnimData = null

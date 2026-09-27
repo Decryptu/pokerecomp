@@ -105,8 +105,7 @@ func confirm() -> Dictionary:
 	return {"result": CHOSEN, "index": int(row.get("index", -1))}
 
 
-## B and the CANCEL row both set carry, which `ForcePickPartyMonInBattle`
-## swallows.
+## B and the CANCEL row both set carry, which `ForcePickPartyMonInBattle` swallows.
 func cancel() -> Dictionary:
 	if forced:
 		return {"result": CANNOT_CANCEL, "sfx": Gen2Sfx.SFX_WRONG}

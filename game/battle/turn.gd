@@ -177,6 +177,10 @@ func emit(type: StringName, extra: Dictionary = {}) -> void:
 	events.append(battle.stamp_statuses(event))
 
 
+func hp_bar(bar_side: int, snap: bool = false) -> void:
+	events.append(battle.hp_bar_event(bar_side, snap))
+
+
 ## Stops the move: the commands after this one are not run.
 func end() -> void:
 	ended = true

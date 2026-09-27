@@ -21,8 +21,7 @@ const STAB: StringName = &"stab"
 const DAMAGE_VARIATION: StringName = &"damagevariation"
 
 ## `doubleflyingdamage`, `doubleundergrounddamage` and `doubleminimizedamage`: one
-## routine under three gates, behind the spread, for a target above, below or
-## small.
+## routine under three gates, behind the spread, for a target above, below or small.
 const DOUBLE_DAMAGE: StringName = &"doubledamage"
 
 ## The four steps that overwrite the move's power, all between [constant DAMAGE_STATS] and
@@ -404,8 +403,7 @@ const TIMED_HEAL: StringName = &"timedheal"
 const THUNDER_ACCURACY: StringName = &"thunderaccuracy"
 
 ## King's Rock, at the tail of every ordinary attack's list: the item's own
-## parameter and not a secondary effect, since no [constant EFFECT_CHANCE] gates
-## it.
+## parameter and not a secondary effect, since no [constant EFFECT_CHANCE] gates it.
 const KINGS_ROCK: StringName = &"kingsrock"
 
 ## Solarbeam in sun: `BattleCommand_SkipSunCharge` skips the charge as
@@ -1093,9 +1091,8 @@ static func _present(turn: Gen2Turn) -> void:
 	_switch_turn(turn)
 	@warning_ignore("integer_division")
 	var restored: int = target.heal(maxi(target.max_hp() / 4, 1))
-	turn.emit(Gen2Battle.HP_RESTORED, {
-		"amount": restored, "hp": target.hp, "max_hp": target.max_hp(),
-	})
+	turn.hp_bar(turn.side)
+	turn.emit(Gen2Battle.HP_RESTORED, {"amount": restored})
 	_switch_turn(turn)
 	turn.end()
 
@@ -1304,8 +1301,7 @@ static func _last_slot_holding(mon: Gen2BattleMon, move_number: int) -> int:
 
 
 ## `BattleCommand_Metronome`: byte rejection over the 251 moves, then the
-## exception table and the user's set. The guard only stops a modded cache
-## spinning.
+## exception table and the user's set. The guard only stops a modded cache spinning.
 static func _metronome(turn: Gen2Turn) -> void:
 	_clear_last_move_for_call(turn)
 	_animate_current_move(turn)
@@ -1677,11 +1673,21 @@ static func _jump_kick_crash(turn: Gen2Turn) -> void:
 		return
 	# `PrintMoveFailureText` shifts a `wDamage` the miss zeroed: one point, always.
 	if turn.battle.is_gen1():
-		_self_damage(turn, Gen2Battle.CRASHED, 1)
+		_self_damage(turn, Gen2Battle.CRASHED, 1, _no_strike)
 		return
 	if turn.immune:
 		return
-	_self_damage(turn, Gen2Battle.CRASHED, maxi(turn.damage >> 3, 1))
+	_self_damage(turn, Gen2Battle.CRASHED, maxi(turn.damage >> 3, 1), _crash_strike)
+
+
+## `CrashedText`'s tail: `LoadMoveAnim` under param 1, the move's crash branch.
+static func _crash_strike(turn: Gen2Turn) -> void:
+	turn.battle.battle_anim_param = 1
+	_play_fx_anim(turn, turn.move_number, Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
+
+
+static func _no_strike(_turn: Gen2Turn) -> void:
+	pass
 
 
 ## `BattleCommand_ApplyDamage` rolls the defender's Focus Band first, lethal or not and ahead
@@ -1731,6 +1737,7 @@ static func _apply_damage(turn: Gen2Turn) -> void:
 	turn.dealt = defender.take_damage(turn.damage)
 	turn.damage = turn.dealt # DoPlayerDamage and DoEnemyDamage replace wCurDamage on underflow.
 	turn.battle.last_damage_dealt = turn.damage
+	turn.hp_bar(turn.target)
 	# `wCriticalHit` at 2 is the one-hit line rather than the critical one, which
 	# is the only thing that tells an OHKO's own hit apart from any other.
 	turn.emit(Gen2Battle.OHKO if turn.one_hit_ko else Gen2Battle.HIT, {
@@ -1738,8 +1745,6 @@ static func _apply_damage(turn: Gen2Turn) -> void:
 		"amount": turn.dealt,
 		"critical": turn.critical,
 		"effectiveness": turn.effectiveness,
-		"hp": defender.hp,
-		"max_hp": defender.max_hp(),
 	})
 	_endured_lines(turn, braced, endured)
 	_hit_lines(turn)
@@ -1882,6 +1887,9 @@ static func _selfdestruct(turn: Gen2Turn) -> void:
 	attacker.substatus &= ~Gen2Substatus.LEECH_SEED
 	turn.defender().substatus &= ~Gen2Substatus.DESTINY_BOND
 	attacker.take_damage(attacker.hp)
+	# `_CheckBattleScene`'s `ret nc`: only a scene turned off redraws the HUDs.
+	if not turn.battle.is_gen1() and not turn.battle.battle_scene_on:
+		turn.hp_bar(turn.side, true)
 
 
 static func _is_hidden(substatus: int) -> bool:
@@ -1920,9 +1928,8 @@ static func _recoil(turn: Gen2Turn) -> void:
 		else RECOIL_DIVISOR
 	@warning_ignore("integer_division")
 	var taken: int = attacker.take_damage(maxi(turn.damage / divisor, 1))
-	turn.emit(Gen2Battle.RECOIL, {
-		"amount": taken, "hp": attacker.hp, "max_hp": attacker.max_hp(),
-	})
+	turn.hp_bar(turn.side)
+	turn.emit(Gen2Battle.RECOIL, {"amount": taken})
 
 
 ## A defender that went down ends the move, `BattleCommand_CheckFaint`
@@ -1959,6 +1966,10 @@ static func _destiny_bond_takes_user(turn: Gen2Turn) -> bool:
 	turn.emit(Gen2Battle.TOOK_DOWN_WITH_IT, {"target": turn.target})
 	var user: Gen2BattleMon = turn.attacker()
 	user.take_damage(user.hp)
+	turn.hp_bar(turn.side)
+	# `LoadAnim` of DESTINY_BOND under param 1, between two `SwitchTurn`s.
+	turn.battle.battle_anim_param = 1
+	_play_fx_anim(turn, DESTINY_BOND_MOVE, Gen2BattleAnimPlayer.AFTER_ANIM_NONE, false, true)
 	return true
 
 
@@ -2498,10 +2509,11 @@ static func _drain_target(turn: Gen2Turn) -> void:
 	if turn.battle.is_gen1():
 		turn.battle.last_damage_dealt = half
 	var healed: int = attacker.heal(half)
+	turn.hp_bar(turn.side)
 	turn.emit(Gen2Battle.DRAINED, {
-		# "from" rather than "target": the healing lands on the attacker, whose
-		# hp and max_hp these are, but the message names who it was sucked from.
-		"from": turn.target, "amount": healed, "hp": attacker.hp, "max_hp": attacker.max_hp(),
+		# "from" rather than "target": the healing lands on the attacker, but the
+		# message names who it was sucked from.
+		"from": turn.target, "amount": healed,
 		"dream": turn.effect() == Gen2MoveEffect.DREAM_EATER,
 	})
 
@@ -2946,6 +2958,7 @@ static func _belly_drum(turn: Gen2Turn) -> void:
 	_animate_current_move(turn)
 	@warning_ignore("integer_division")
 	mon.take_damage(mon.max_hp() / 2)
+	turn.hp_bar(turn.side)
 	# `.max_attack_loop`: five more `AttackUp2`s, each with the 999 roll-back.
 	for _raise: int in BELLY_DRUM_RAISES:
 		mon.change_stage("attack", ATTACK_UP_2_STAGES)
@@ -3245,10 +3258,9 @@ static func _substitute(turn: Gen2Turn) -> void:
 	# raise around it, and param 0 is the branch that makes the doll.
 	turn.battle.battle_anim_param = SUBSTITUTE_ANIM_MADE
 	_play_fx_anim(turn, SUBSTITUTE_MOVE, Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
-	turn.emit(Gen2Battle.SUBSTITUTE_MADE, {
-		"amount": cost, "hp": user.hp, "max_hp": user.max_hp(),
-		"substitute_hp": user.substitute_hp,
-	})
+	turn.emit(Gen2Battle.SUBSTITUTE_MADE, {"amount": cost, "substitute_hp": user.substitute_hp})
+	# `RefreshBattleHuds` and `DrawHUDsAndHPBars` redraw the cost behind the line.
+	turn.hp_bar(turn.side, true)
 
 
 ## `.already_has_sub` and `.too_weak_to_sub`, both answering
@@ -3344,9 +3356,8 @@ static func _curse_ghost(turn: Gen2Turn, user: Gen2BattleMon) -> void:
 	defender.substatus |= Gen2Substatus.CURSE
 	_animate_current_move(turn)
 	var taken: int = user.take_damage(Gen2Substatus.half_damage(user.max_hp()))
-	turn.emit(Gen2Battle.CURSE_SET, {
-		"target": turn.target, "amount": taken, "hp": user.hp, "max_hp": user.max_hp(),
-	})
+	turn.hp_bar(turn.side)
+	turn.emit(Gen2Battle.CURSE_SET, {"target": turn.target, "amount": taken})
 
 	# `Curse:` carries no `checkfaint`: the cartridge's turn loop asks
 	# `HasPlayerFainted` behind every move, and this engine has no such step, so
@@ -3693,11 +3704,10 @@ static func _pain_split(turn: Gen2Turn) -> void:
 	_animate_current_move(turn)
 	attacker.hp = mini(shared, attacker.max_hp())
 	defender.hp = mini(shared, defender.max_hp())
-	turn.emit(Gen2Battle.SHARED_PAIN, {
-		"target": turn.target,
-		"hp": attacker.hp, "max_hp": attacker.max_hp(),
-		"target_hp": defender.hp, "target_max_hp": defender.max_hp(),
-	})
+	# The player's bar first and the enemy's second, whoever used the move.
+	turn.hp_bar(Gen2Battle.PLAYER)
+	turn.hp_bar(Gen2Battle.ENEMY)
+	turn.emit(Gen2Battle.SHARED_PAIN, {"target": turn.target})
 
 
 ## `BattleCommand_Thief`: four silent refusals in order, the chance read last
@@ -3837,9 +3847,8 @@ static func _heal(turn: Gen2Turn) -> void:
 	var amount: int = attacker.max_hp() if is_rest else maxi(attacker.max_hp() / 2, 1)
 	_animate_current_move(turn)
 	attacker.heal(amount)
-	turn.emit(Gen2Battle.HP_RESTORED, {
-		"hp": attacker.hp, "max_hp": attacker.max_hp(),
-	})
+	turn.hp_bar(turn.side)
+	turn.emit(Gen2Battle.HP_RESTORED)
 
 
 ## `BattleCommand_TimeBasedHealContinue`: half by default, one step down outside
@@ -3861,9 +3870,8 @@ static func _timed_heal(turn: Gen2Turn) -> void:
 
 	_animate_current_move(turn)
 	attacker.heal(_heal_fraction(attacker.max_hp(), index))
-	turn.emit(Gen2Battle.HP_RESTORED, {
-		"hp": attacker.hp, "max_hp": attacker.max_hp(),
-	})
+	turn.hp_bar(turn.side)
+	turn.emit(Gen2Battle.HP_RESTORED)
 
 
 ## One row of `.Multipliers`. `GetEighthMaxHP` halves `GetQuarterMaxHP`'s answer
@@ -4182,6 +4190,9 @@ const SUBSTITUTE_ANIM_MADE: int = 0
 const SUBSTITUTE_ANIM_DROP: int = 1
 const SUBSTITUTE_ANIM_RAISE: int = 2
 
+## Destiny Bond's move number, `$c2`, whose animation the takedown replays.
+const DESTINY_BOND_MOVE: int = 0xC2
+
 ## `StatNames`' eighth row, which exists only so `BattleCommand_Curse` has
 ## something to name when neither of the two stats it raises can move.
 const CURSE_FAILED_STAT: String = "ability"
@@ -4404,22 +4415,41 @@ static func _hurt_self(turn: Gen2Turn) -> void:
 		user, turn.battle.screens[screens_side], turn.battle.is_link_battle,
 		{} if gen1 else turn.effective_move(), stale
 	)
-	_self_damage(turn, Gen2Battle.HURT_ITSELF, amount)
+	_self_damage(turn, Gen2Battle.HURT_ITSELF, amount, _confusion_strike)
+	if not gen1:
+		_raise_sub(turn)
 
 
-## The line prints before the figure lands. On Generation 1
-## `ApplyDamageToPlayerPokemon` then tests the user's doll and `AttackSubstitute`
-## spends the opponent's, the turn never flipped; `wDamage` holds the figure.
-static func _self_damage(turn: Gen2Turn, event: StringName, amount: int) -> void:
+## `HitConfusion` lowers the doll and plays `ANIM_HIT_CONFUSION` unless the
+## *opponent* is hidden; Generation 1's `HandleSelfConfusionDamage` plays POUND
+## from the other side.
+static func _confusion_strike(turn: Gen2Turn) -> void:
+	if turn.battle.is_gen1():
+		_play_fx_anim(turn, GEN1_POUND, Gen2BattleAnimPlayer.AFTER_ANIM_NONE, false, true)
+		return
+	_lower_sub(turn)
+	if not _is_hidden(turn.defender().substatus):
+		_play_fx_anim(turn, Gen2BattleAnimPlayer.ANIM_HIT_CONFUSION, Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
+
+
+const GEN1_POUND: int = 1
+
+
+## The line, [param strike], then the bar. On Generation 1 `ApplyDamageToPlayerPokemon`
+## tests the user's doll and `AttackSubstitute` spends the opponent's, the turn
+## never flipped; `wDamage` holds the figure.
+static func _self_damage(turn: Gen2Turn, event: StringName, amount: int, strike: Callable) -> void:
 	var user: Gen2BattleMon = turn.attacker()
 	var gen1: bool = turn.battle.is_gen1()
 	var doll: bool = gen1 and Gen2Substatus.has(user.substatus, Gen2Substatus.SUBSTITUTE)
 	var dealt: int = 0 if doll else mini(amount, user.hp)
-	turn.emit(event, {"amount": dealt, "hp": user.hp - dealt, "max_hp": user.max_hp()})
+	turn.emit(event, {"amount": dealt})
 	if gen1:
 		turn.battle.last_damage_dealt = amount if doll else dealt
+	strike.call(turn)
 	if doll:
 		turn.damage = amount
 		_substitute_damage(turn)
 		return
 	user.take_damage(amount)
+	turn.hp_bar(turn.side)

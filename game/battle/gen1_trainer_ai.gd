@@ -302,6 +302,10 @@ static func switch_target(party: Gen2Party) -> int:
 	return -1
 
 
+## `AIPlayRestoringSFX` ahead of the line; the HP items play nothing.
+const SOUND_BEFORE_LINE: Array[int] = [FULL_HEAL, GUARD_SPEC]
+
+
 ## The `AIUse*` half, in the shape [method Gen2AIItems.apply] answers. Guard
 ## Spec raises Mist whether or not it stands; an X item is
 ## `StatModifierUpEffect` over the enemy.

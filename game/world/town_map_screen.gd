@@ -657,8 +657,7 @@ func _gen1_bird_image() -> Image:
 
 ## One 16x16 object out of a tile strip, as the four tiles from [param first].
 ## [param flip] is `B_OAM_XFLIP`, which the hardware applies to each tile where
-## it stands rather than mirroring the square, so the quadrants keep their
-## corners.
+## it stands rather than mirroring the square, so the quadrants keep their corners.
 func _icon_from(sheet: String, first: int, flip: bool = false) -> Image:
 	var tiles: PackedByteArray = _data.tile_indices(sheet) if _data != null \
 		else PackedByteArray()

@@ -87,8 +87,7 @@ static var trace_commands: bool = false
 var command_trace: Array[Dictionary] = []
 ## `Script_sdefer`'s own `RUN_DEFERRED_SCRIPT`, which is the only thing that
 ## makes `RunSceneScript` answer `PlayerEvents` with carry: a scene script that
-## does not set it has run and raised no player event
-## (engine/overworld/events.asm).
+## does not set it has run and raised no player event (engine/overworld/events.asm).
 var _ran_deferred: bool = false
 var _active: bool = false
 var _completed: bool = false
@@ -4004,8 +4003,7 @@ func _stage_trainer_approach() -> void:
 
 
 ## `Script_faceplayer`, which turns the object the player is standing in front
-## of. Shared with `jumptextfaceplayer`, whose own script runs one before the
-## text.
+## of. Shared with `jumptextfaceplayer`, whose own script runs one before the text.
 func _face_player() -> void:
 	if _last_talked_object_index >= 0:
 		_emit_object_event(&"object_face_player", {
@@ -6508,8 +6506,7 @@ func _finish_deferred_party_selection(
 		&"return_shuckie":
 			## Three tests in order and each has its own answer: the species, then
 			## MANIA's ID, then MANIA's OT name. A row that fails any of them is
-			## SHUCKIE_WRONG_MON, which is the same zero a stranger's SHUCKLE
-			## gets.
+			## SHUCKIE_WRONG_MON, which is the same zero a stranger's SHUCKLE gets.
 			if species != Gen2WorldPartyHost.SHUCKLE \
 				or int(result.get("ot_id", -1)) != Gen2WorldPartyHost.MANIA_OT_ID \
 				or String(result.get("original_trainer", "")) != Gen2WorldPartyHost.MANIA_OT_NAME:

@@ -816,8 +816,7 @@ func battle_tower() -> Gen2BattleTower:
 
 
 ## The live link session, which callers edit in place the way they do the tower's
-## record: every write is one the cartridge would have made to WRAM straight
-## away.
+## record: every write is one the cartridge would have made to WRAM straight away.
 func link_session() -> Gen2LinkSession:
 	return _link_session
 
@@ -2652,8 +2651,7 @@ func _stage_orders(runtime_changes: Dictionary, next: Dictionary) -> StringName:
 
 
 ## The Dunsparce and Yanma swarm maps and the fishing swarm that shares their
-## script. An inactive swarm clears its map rather than carrying one nothing
-## reads.
+## script. An inactive swarm clears its map rather than carrying one nothing reads.
 func _stage_swarm(runtime_changes: Dictionary, next: Dictionary) -> StringName:
 	var maps: Array[Vector2i] = _swarm_maps.duplicate()
 	next["_swarm_maps"] = maps

@@ -30,8 +30,7 @@ func connected() -> bool:
 
 ## `ExchangeMysteryGiftData`'s own return in `hMGStatusFlags`. A window with
 ## nobody in it spends its four seconds and comes back timed out, which
-## `DoMysteryGift` reads as its communication error and loops back to the
-## prompt.
+## `DoMysteryGift` reads as its communication error and loops back to the prompt.
 func status() -> int:
 	return Gen2MysteryGift.MG_OKAY if connected() else Gen2MysteryGift.MG_TIMED_OUT
 
@@ -57,8 +56,7 @@ func peer_block(_payload: Dictionary) -> Dictionary:
 ## second Mystery Gift block that exists on one machine.
 ##
 ## [param dex_caught] and [param random] are what `StageDataForMysteryGift`
-## reads and rolls on that side, so the roll is the slot's rather than this
-## one's.
+## reads and rolls on that side, so the roll is the slot's rather than this one's.
 static func peer_from_save(
 	save: Gen2SaveData, dex_caught: int, random: RandomNumberGenerator
 ) -> Dictionary:

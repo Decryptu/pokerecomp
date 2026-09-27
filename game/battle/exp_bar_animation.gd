@@ -6,8 +6,7 @@ extends RefCounted
 ## partial fill. `Text_MonGainedExpPoint` prints before it and
 ## `BattleText_StringBuffer1GrewToLevel` inside the loop.
 
-## `EXP_BAR_LENGTH * TILE_WIDTH`: `CalcExpBar` returns `$40 - b` over eight
-## tiles.
+## `EXP_BAR_LENGTH * TILE_WIDTH`: `CalcExpBar` returns `$40 - b` over eight tiles.
 const LENGTH_PX: int = Gen2BattleHud.EXP_BAR_TILES * Gen2BattleHud.TILE
 
 ## `.PlayExpBarSound`'s `ld c, 10`, spent before each segment moves. Its own

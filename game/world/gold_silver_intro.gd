@@ -234,8 +234,7 @@ var _bg_map_at: int = 0
 
 ## `wSpriteAnimationStructs`: ten slots, an empty one free. Slot order is
 ## z-order, and `_InitSpriteAnimStruct` takes the first free one, so a struct
-## spawned into the gap a deleted one left draws under everything spawned before
-## it.
+## spawned into the gap a deleted one left draws under everything spawned before it.
 var _actors: Array[Dictionary] = [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}]
 ## `wSpriteAnimCount`, which is `SPRITEANIMSTRUCT_INDEX` and a spawn counter
 ## rather than a slot number. `ClearSpriteAnims` zeroes it with the structs.
@@ -297,8 +296,7 @@ func waiting() -> bool:
 	return _delay > 0
 
 
-## `wIntroSpriteStateFlag`, which is what Jigglypuff waits on and the note stops
-## on.
+## `wIntroSpriteStateFlag`, which is what Jigglypuff waits on and the note stops on.
 func sprite_flag() -> bool:
 	return _sprite_flag
 
@@ -1314,8 +1312,7 @@ func _sprite_pikachu_tail(actor: Dictionary) -> bool:
 
 
 ## `AnimSeq_GSIntroFireball`: left four pixels a frame on a sine and cosine whose
-## angle opens from the struct's own slot and whose amplitude grows eight a
-## frame.
+## angle opens from the struct's own slot and whose amplitude grows eight a frame.
 func _sprite_fireball(actor: Dictionary) -> void:
 	if int(actor["jumptable"]) == 0:
 		actor["jumptable"] = 1

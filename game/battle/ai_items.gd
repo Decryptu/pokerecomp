@@ -98,6 +98,11 @@ static func is_highest_level(party: Gen2Party) -> bool:
 	return true
 
 
+## `AIUsedItemSound` ahead of the line; `EnemyPotionFinish` plays it with the
+## bar, and the X stat items play none.
+const SOUND_BEFORE_LINE: Array[int] = [FULL_HEAL, X_ACCURACY, GUARD_SPEC, DIRE_HIT]
+
+
 ## Spends [param item] on [param user], answering what changed so a screen can
 ## say it. The decision is already made by here: this is the `EnemyUsed*` half.
 static func apply(user: Gen2BattleMon, item: int) -> Dictionary:

@@ -139,6 +139,11 @@ static func claims_soft_reset(scene: Node) -> bool:
 ## there, which is the point of the shortcut. The count is the one exception.
 func soft_reset() -> void:
 	count_soft_reset()
+	restart()
+
+
+## The cartridge's own `jp Reset`, left out of the count.
+func restart() -> void:
 	var loop: SceneTree = Engine.get_main_loop() as SceneTree
 	if loop != null:
 		loop.change_scene_to_file.call_deferred(SAVE_SCENE)

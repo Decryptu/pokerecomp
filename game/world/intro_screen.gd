@@ -51,8 +51,7 @@ var _fading: bool = false
 
 
 ## Runs the intro for [param slot] on [param data]. [param standalone] is false
-## when a driver hosts the screen and wants the signals rather than a scene
-## change.
+## when a driver hosts the screen and wants the signals rather than a scene change.
 func begin(
 	data: GameData, slot: int, label: String = "", standalone: bool = true
 ) -> bool:

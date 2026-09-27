@@ -2977,8 +2977,7 @@ func _render_save() -> void:
 
 
 ## The screen `StartMenu`'s own box is drawn into. The world hands over the one
-## the map is already in, so the box stands over it the way the map name sign
-## does.
+## the map is already in, so the box stands over it the way the map name sign does.
 func set_screen(screen: Gen2Screen) -> void:
 	_screen = screen
 	if _screen == null or _view != null:

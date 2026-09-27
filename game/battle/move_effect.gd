@@ -151,8 +151,7 @@ const REST_MOVE: int = 156
 ## None of the three needs any state this file has not already grown for
 ## something else: [Gen2BattleMon.reset_stages] for Haze,
 ## [method Gen2BattleMon.change_stage] and [method Gen2BattleMon.take_damage]
-## for Belly Drum, and reading one side's stages to write the other's for
-## Psych Up.
+## for Belly Drum, and reading one side's stages to write the other's for Psych Up.
 const HAZE: int = 25
 const BELLY_DRUM: int = 142
 const PSYCH_UP: int = 143
@@ -331,8 +330,7 @@ const FLAME_WHEEL: int = 108
 const SACRED_FIRE: int = 125
 
 ## Steel Wing: the raise-on-hit run's missing seventh, since
-## [constant ATTACK_UP_HIT] and [constant ALL_STATS_UP_HIT] were the only two
-## built.
+## [constant ATTACK_UP_HIT] and [constant ALL_STATS_UP_HIT] were the only two built.
 const DEFENSE_UP_HIT: int = 138
 
 ## The four that double against a target the ordinary hit would have missed or
@@ -862,8 +860,7 @@ const HEAL_SEQUENCE: Array = [
 
 ## Morning Sun, Synthesis and Moonlight share one list as they share one command:
 ## the time of day each wants is read back off the effect byte, the way
-## [constant Gen2EffectCommands.FIXED_DAMAGE] reads which of its four figures it
-## is.
+## [constant Gen2EffectCommands.FIXED_DAMAGE] reads which of its four figures it is.
 const TIME_HEAL_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -897,8 +894,7 @@ const START_SANDSTORM_SEQUENCE: Array = [
 
 ## The three screens, which are the weather moves' shape with a different
 ## command. `LightScreen:` and `Reflect:` are one label with two entries in
-## `data/moves/effects.asm`, so both point here; none of the three rolls
-## accuracy.
+## `data/moves/effects.asm`, so both point here; none of the three rolls accuracy.
 const SCREEN_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -1430,8 +1426,7 @@ const REVERSAL_SEQUENCE: Array = [
 ]
 
 ## Fury Cutter, whose doubling sits between the matchup and the spread, so the
-## spread is taken from the doubled figure and a run of hits is not smoothed by
-## it.
+## spread is taken from the doubled figure and a run of hits is not smoothed by it.
 const FURY_CUTTER_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
