@@ -81,13 +81,14 @@ var _message: Array = []
 var _message_spacing: int = Gen2LinkPage.MESSAGE_PRINTED_SPACING
 var _partner_choice: int = -1
 var _partner: Dictionary = {}
-## Generation 1 alone: what a `Waiting...!` goes on to, the question's pages
-## and `TryEvolvingMon`'s plan.
+## Generation 1 alone: what a `Waiting...!` goes on to and `TryEvolvingMon`'s plan.
 var _gen1: bool = false
 var _gen1_after_waiting: int = STEP.SELECT
-var _gen1_pages: Array = []
-var _gen1_page: int = 0
 var _gen1_evolution: Dictionary = {}
+var _box: Gen2TextBox = null
+var _box_up: bool = false
+## The offered row's partner, checked once `.try_trade`'s hundred frames are out.
+var _incoming: Dictionary = {}
 var _versus: Dictionary = {}
 var _verdict: String = ""
 ## `BattleTransition`'s row 0, `.linkBattle`'s.
@@ -130,6 +131,10 @@ func _ready() -> void:
 	_background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_background)
+	_box = Gen2TextBox.for_page(_data)
+	_box.prompt_answered.connect(sfx_requested.emit)
+	_box.redrawn.connect(_refresh)
+	add_child(_box)
 	if mode == MODE_RECORD:
 		_step = STEP.DONE
 	elif mode == MODE_VERSUS_RESULT:
@@ -159,6 +164,13 @@ func advance_frame() -> void:
 		_stats.advance_animation()
 		_refresh()
 		return
+	if _box_up:
+		_box.advance_frame()
+		## `TradeCenter_Trade`'s text ends `done`: its menu opens on the last letter.
+		if _step == STEP.GEN1_ASK and not _box.has_text_left():
+			_step = STEP.CONFIRM
+			_confirm = 0
+			_refresh()
 	if _frames <= 0:
 		return
 	_frames -= 1
@@ -189,7 +201,7 @@ func advance_frame() -> void:
 		STEP.VERDICT:
 			_step = STEP.RECORD
 		STEP.OFFERING:
-			_step = STEP.CONFIRM
+			_check_offer()
 		STEP.RESULT:
 			_step = STEP.SELECT
 			_message = []
@@ -222,6 +234,9 @@ func handle_button(button: int) -> bool:
 		return true
 	if _frames > 0:
 		return true
+	if _box_up and (_box.has_text_left() or _step == STEP.RESULT):
+		_press_box(button)
+		return true
 	match _step:
 		STEP.SELECT:
 			return _gen1_press_select(button) if _gen1 else _press_select(button)
@@ -229,8 +244,6 @@ func handle_button(button: int) -> bool:
 			return _gen1_press_footer(button) if _gen1 else _press_footer(button)
 		STEP.CONFIRM:
 			return _press_confirm(button)
-		STEP.GEN1_ASK:
-			return _gen1_press_ask(button)
 	return true
 
 
@@ -311,32 +324,56 @@ func _press_footer(button: int) -> bool:
 ## validity tests run before the question is asked.
 func _offer() -> void:
 	_partner_choice = _transport_choice()
-	var incoming: Dictionary = _partner_mon(_partner_choice)
-	if incoming.is_empty() or not Gen2LinkSession.validate_ot_trademon(
-		incoming, int(incoming.get("species", 0)), bool(incoming.get("is_egg", false)),
+	_incoming = _partner_mon(_partner_choice)
+	_step = STEP.OFFERING
+	_frames = OFFER_FRAMES
+	_message = []
+
+
+func _check_offer() -> void:
+	if _incoming.is_empty() or not Gen2LinkSession.validate_ot_trademon(
+		_incoming, int(_incoming.get("species", 0)), bool(_incoming.get("is_egg", false)),
 		_link_mode()
 	):
-		_refuse(_abnormal_message(incoming))
+		_refuse(_abnormal_message(_incoming))
 		return
 	if not Gen2LinkSession.any_other_alive_mons_for_trade(
-		_player_rows(), _index, incoming
+		_player_rows(), _index, _incoming
 	):
 		_refuse(_cant_battle_message())
 		return
-	_step = STEP.OFFERING
-	_frames = OFFER_FRAMES
-	_message = _ask_message(incoming)
+	_step = STEP.CONFIRM
+	_print(_ask_message(_incoming), false)
 
 
 ## `.abnormal` and the `CheckAnyOtherAliveMonsForTrade` branch beside it: both
-## print their box, then `String_TooBadTheTradeWasCanceled`, and go back to the
-## listing.
-func _refuse(lines: Array) -> void:
+## print their box, then `String_TooBadTheTradeWasCanceled` for a hundred
+## frames, and go back to the listing.
+func _refuse(text: String) -> void:
 	_partner_choice = -1
 	_step = STEP.RESULT
-	_frames = OFFER_FRAMES
-	_message = lines
+	_print(text, true)
+
+
+func _print(text: String, prompt: bool, fast: bool = false) -> void:
+	_message = []
+	_box.reveal_speed = Gen2TextBox.ACCELERATED_SPEED if fast \
+		else Gen2OptionsStore.current().text_reveal_speed()
+	_box.show_text(text, prompt)
+	_box_up = true
 	_refresh()
+
+
+func _press_box(button: int) -> void:
+	if button not in [PokeButton.A, PokeButton.B]:
+		return
+	var printed: bool = not _box.has_text_left()
+	_box.advance()
+	if printed and _step == STEP.RESULT:
+		_box_up = false
+		_place_message(Gen2LinkPage.TRADE_CANCELED)
+		_frames = OFFER_FRAMES
+		_refresh()
 
 
 func _press_confirm(button: int) -> bool:
@@ -346,9 +383,11 @@ func _press_confirm(button: int) -> bool:
 		PokeButton.DOWN:
 			_confirm = 1
 		PokeButton.B:
+			_box_up = false
 			_cancel_trade()
 			return true
 		PokeButton.A:
+			_box_up = false
 			if _confirm == 0:
 				if _gen1:
 					_gen1_start_trade()
@@ -564,25 +603,8 @@ func _gen1_open_ask() -> void:
 		text = text.replace(
 			"%s%04X>" % [Gen2TextStream.RAM_MARKER, int(layout[buffer[0]])], String(buffer[1])
 		)
-	_message_spacing = Gen2LinkPage.MESSAGE_PRINTED_SPACING
-	_gen1_pages = Gen2TextLayout.lay_out(text, Gen2LinkPage.GEN1_MESSAGE_BOX.size.x, 2)
-	_gen1_page = 0
-	_message = Array(_gen1_pages[0]) if not _gen1_pages.is_empty() else []
-
-
-func _gen1_press_ask(button: int) -> bool:
-	if button not in [PokeButton.A, PokeButton.B]:
-		return true
-	if _gen1_page + 1 < _gen1_pages.size():
-		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2)
-	_gen1_page += 1
-	if _gen1_page < _gen1_pages.size():
-		_message = Array(_gen1_pages[_gen1_page])
-	else:
-		_step = STEP.CONFIRM
-		_confirm = 0
-	_refresh()
-	return true
+	## `LinkMenu` zeroed `wLetterPrintingDelayFlags`: a letter a frame.
+	_print(text, false, true)
 
 
 ## `.tradeConfirmed`: `$2` under `Waiting...!`, then the music and `ld c, 100`.
@@ -739,7 +761,7 @@ func _species_name(species: int) -> String:
 
 
 ## `_LinkAskTradeForText`, whose two `text_ram` buffers are the two nicknames.
-func _ask_message(incoming: Dictionary) -> Array:
+func _ask_message(incoming: Dictionary) -> String:
 	var mine: String = ""
 	if _save != null and _index < _save.party.size():
 		var mon: Gen2SaveMon = _save.party[_index]
@@ -751,21 +773,20 @@ func _ask_message(incoming: Dictionary) -> Array:
 	return _special_text("ask_trade", {"trademon_nickname": mine, 1: theirs})
 
 
-func _abnormal_message(incoming: Dictionary) -> Array:
+func _abnormal_message(incoming: Dictionary) -> String:
 	return _special_text("abnormal_mon", {
 		1: _species_name(int(incoming.get("species", 0))),
 	})
 
 
-func _cant_battle_message() -> Array:
+func _cant_battle_message() -> String:
 	return _special_text("cant_battle", {})
 
 
-## One of the trade screen's three imported boxes, with its buffers filled and
-## its lines split the way the box would page them.
-func _special_text(box: String, buffers: Dictionary) -> Array:
+## One of the trade screen's three imported boxes, with its buffers filled.
+func _special_text(box: String, buffers: Dictionary) -> String:
 	if _data == null:
-		return []
+		return ""
 	var text: String = _data.special_text("link", box)
 	for name_or_address: Variant in buffers:
 		var address: int = _data.special_text_ram(String(name_or_address)) \
@@ -776,11 +797,7 @@ func _special_text(box: String, buffers: Dictionary) -> Array:
 			"%s%04X>" % [Gen2TextStream.RAM_MARKER, address],
 			String(buffers[name_or_address])
 		)
-	_message_spacing = Gen2LinkPage.MESSAGE_PRINTED_SPACING
-	var pages: Array = Gen2TextLayout.lay_out(
-		text, Gen2LinkPage.MESSAGE_BOX.size.x, 2
-	)
-	return Array(pages[0]) if not pages.is_empty() else []
+	return text
 
 
 func _refresh() -> void:
@@ -835,9 +852,11 @@ func trade_state() -> Dictionary:
 		"cancel_sent": _cancel_sent,
 		"partner_choice": _partner_choice,
 		"footer": _footer if _step == STEP.FOOTER else -1,
-		"confirm": _confirm if _step == STEP.CONFIRM else -1,
+		"confirm": _confirm if _step == STEP.CONFIRM and not (_box_up and _box.has_text_left()) \
+			else -1,
 		"message": _message.duplicate(),
 		"message_spacing": _message_spacing,
+		"box": _box if _box_up else null,
 		"waiting": _step in [STEP.OFFERING, STEP.LEAVING, STEP.GEN1_WAITING,
 			STEP.GEN1_TRADING, STEP.GEN1_CANCELED_DELAY],
 		"held": _step in [STEP.FOOTER, STEP.GEN1_ASK_DELAY, STEP.GEN1_ASK, STEP.CONFIRM,

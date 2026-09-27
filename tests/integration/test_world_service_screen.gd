@@ -82,6 +82,13 @@ func _spend_answer_hold(host: Gen2WorldServiceScreen) -> void:
 		host.advance_save_frames(1)
 
 
+## A PC's `PC_DisplayText` box, printed and answered: the turn-on line, and each
+## top-menu row's "accessed" line.
+func _answer_box(host: Gen2WorldServiceScreen) -> void:
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT, "a box stands first")
+	Fixture.press_through(host)
+
+
 func _write_pc_request() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(Fixture.directory()))
 	scripts["48:6190"] = [Gen2WorldScript.SPECIAL, 29, 0, Gen2WorldScript.END]
@@ -103,6 +110,7 @@ func test_players_house_pc_opens_the_item_pc_and_resumes_the_waiting_script() ->
 
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
+	_answer_box(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
 	assert_true(host._pc_house)
 	var rows: Array = []
@@ -127,6 +135,8 @@ func test_players_house_pc_opens_the_item_pc_and_resumes_the_waiting_script() ->
 	host.handle_button(PokeButton.A)
 	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK_TOSS_QUANTITY)
 	assert_eq(pack.box_text(), _data.pokecenter_pc_text("how_many_deposit"))
+	assert_true(pack._box.is_revealing(), "`DepositSellPack` prints with the delay on")
+	_read_pack(pack)
 	host.handle_button(PokeButton.A)
 	assert_eq(_world_screen._world.state.pc_item_quantity(7), 1)
 	assert_eq(_world_screen._world.state.item_quantity(7), 0)
@@ -134,6 +144,7 @@ func test_players_house_pc_opens_the_item_pc_and_resumes_the_waiting_script() ->
 	assert_true(pack.box_text().begins_with("Deposited 1"), pack.box_text())
 
 	## The line, then the pack again, and B is `CloseSubmenu` back onto the row.
+	_read_pack(pack)
 	host.handle_button(PokeButton.A)
 	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK)
 	host.handle_button(PokeButton.B)
@@ -170,31 +181,42 @@ func test_try_quick_save_asks_before_it_writes_and_answers_the_script() -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_SAVE)
 	_world_screen._injected_save.world = null
 	assert_eq(host._save_prompt.lines, Gen2SavePrompt.OVERWRITE_LINES)
-	host.handle_button(PokeButton.A)
+	_read_save(host)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._save_prompt.step, Gen2SavePrompt.Step.OVERWRITE, "the answer is held first")
 	_spend_answer_hold(host)
 	assert_eq(host._save_prompt.step, Gen2SavePrompt.Step.SAVING)
-	host.advance_save_frames(
-		Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES
-		+ Gen2SavePrompt.DONE_FRAMES
-	)
+	_read_save(host)
+	host.advance_save_frames(Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES)
+	_read_save(host)
+	host.advance_save_frames(Gen2SavePrompt.DONE_FRAMES)
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
 	assert_not_null(_world_screen._injected_save.world, "the write landed")
 
 
-## Both questions taken with YES, and every frame the two boxes behind them own.
-## Each is three lines, so the first A prompts past the text.
+## Both questions taken with YES, and every frame the boxes behind them own.
 func _answer_save_prompt(host: Gen2WorldServiceScreen) -> void:
 	for _question: int in 2:
-		host.handle_button(PokeButton.A)
+		_read_save(host)
 		host.handle_button(PokeButton.A)
 		_spend_answer_hold(host)
-	host.advance_save_frames(
-		Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES
-		+ Gen2SavePrompt.DONE_FRAMES
-	)
+	_read_save(host)
+	host.advance_save_frames(Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES)
+	_read_save(host)
+	host.advance_save_frames(Gen2SavePrompt.DONE_FRAMES)
+
+
+## A save box printed out, pressed past its `_ContText`, until its question or
+## its timed step can run.
+func _read_save(host: Gen2WorldServiceScreen) -> void:
+	for _step: int in Fixture.PRINT_FRAME_CAP:
+		if host._save_prompt == null or not host._save_prompt.text_pending:
+			return
+		if host._box.is_revealing():
+			host.advance_save_frames(1)
+		else:
+			host.handle_button(PokeButton.A)
 
 
 ## `BillsPC_ChangeBoxSubmenu`: SWITCH writes `wCurBox`, NAME opens the keyboard
@@ -204,6 +226,7 @@ func test_change_box_switches_names_and_prints_a_box() -> void:
 	await _open_pokemon_center_pc()
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	host.handle_button(PokeButton.A)
+	_answer_box(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
 	for _step: int in 2:
 		host.handle_button(PokeButton.DOWN)
@@ -225,17 +248,25 @@ func test_change_box_switches_names_and_prints_a_box() -> void:
 	assert_eq(host._cursor, 0)
 	assert_eq(host._pc_scroll, 0)
 
-	## PRINT over an empty box is `.EmptyBox` rather than a send.
+	## PRINT over an empty box is `.EmptyBox` rather than a send: the submenu
+	## goes, the line stands its frames reading no button, and `.loop` redraws.
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	for _step: int in 2:
 		host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
-	assert_eq(host._status, Gen2WorldServiceScreen.BOX_EMPTY_TEXT)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST)
+	assert_eq(host._summary, Gen2WorldServiceScreen.BOX_EMPTY_TEXT)
+	host.handle_button(PokeButton.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST, "no button is read")
+	for _frame: int in Gen2WorldServiceScreen.BOX_EMPTY_FRAMES:
+		host.advance_frame()
+	assert_eq(host._summary, "Choose a BOX.")
 
-	## NAME opens the keyboard, and what it stores is what the list draws. The
-	## submenu is still up with its cursor on PRINT, so one row back reaches it.
-	host.handle_button(PokeButton.UP)
+	## NAME opens the keyboard, and what it stores is what the list draws.
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	assert_not_null(host._naming, host._status)
 	host._on_box_named("KANTO")
@@ -284,6 +315,7 @@ func test_pokemon_center_pc_opens_the_top_menu_and_bills_pc_behind_it() -> void:
 	## `_BillsPC`'s own top menu stands between the machine and the lists, and
 	## its DEPOSIT row is what opens the party one.
 	host.handle_button(PokeButton.A)
+	_answer_box(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
 	assert_eq(int(host._pc_rows[0]["row"]), Gen2WorldPC.BILLSPCITEM_WITHDRAW)
 	host.handle_button(PokeButton.DOWN)
@@ -297,6 +329,7 @@ func test_change_box_asks_and_saves_before_the_box_moves() -> void:
 	await _open_pokemon_center_pc()
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	host.handle_button(PokeButton.A)
+	_answer_box(host)
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
@@ -309,23 +342,24 @@ func test_change_box_asks_and_saves_before_the_box_moves() -> void:
 	## Three lines, so the question is prompted past before the yes/no is on it.
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_SAVE)
 	assert_eq(host._save_prompt.lines, Gen2SavePrompt.CHANGE_BOX_LINES)
-	assert_eq(host._save_prompt.cursor, -1)
-	host.handle_button(PokeButton.A)
-	assert_eq(host._save_prompt.cursor, 0)
+	assert_null(host._save_prompt_box(), "no YES/NO while it prints")
+	_read_save(host)
+	assert_not_null(host._save_prompt_box())
 	host.handle_button(PokeButton.A)
 	_spend_answer_hold(host)
 	assert_eq(host._save_prompt.lines, Gen2SavePrompt.OVERWRITE_LINES)
-	host.handle_button(PokeButton.A)
+	_read_save(host)
 	host.handle_button(PokeButton.A)
 	_spend_answer_hold(host)
 	assert_eq(host._save_prompt.step, Gen2SavePrompt.Step.SAVING)
 	assert_eq(int(host._save.current_box), 0, "not until the write")
 
+	_read_save(host)
 	host.advance_save_frames(Gen2SavePrompt.SAVING_FRAMES)
 	assert_eq(int(host._save.current_box), 1, "`wCurBox` sits between the halves")
-	host.advance_save_frames(
-		Gen2SavePrompt.WRITE_FRAMES + Gen2SavePrompt.DONE_FRAMES
-	)
+	host.advance_save_frames(Gen2SavePrompt.WRITE_FRAMES)
+	_read_save(host)
+	host.advance_save_frames(Gen2SavePrompt.DONE_FRAMES)
 	assert_null(host._save_prompt)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST)
 
@@ -336,14 +370,16 @@ func test_move_without_mail_refuses_a_party_holding_mail_and_saves_otherwise() -
 	await _open_pokemon_center_pc()
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	host.handle_button(PokeButton.A)
+	_answer_box(host)
 	(host._save.party[0] as Gen2SaveMon).item = Gen2HeldItem.MAIL_ITEMS[0]
 	for _step: int in 3:
 		host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT)
-	assert_string_contains(host._summary, "holding MAIL")
-	host.handle_button(PokeButton.A)
-	host.handle_button(PokeButton.A)
+	assert_string_contains(Fixture.box_words(host), "holding MAIL")
+	## `_PCMonHoldingMailText`'s `para`, then its `prompt`.
+	Fixture.press_through(host)
+	Fixture.press_through(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
 
 	## Without the mail the row asks its own question, and a NO is `.refused`'s
@@ -353,7 +389,7 @@ func test_move_without_mail_refuses_a_party_holding_mail_and_saves_otherwise() -
 	assert_eq(host._cursor, Gen2WorldPC.BILLSPCITEM_MOVE_WITHOUT_MAIL)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._save_prompt.lines, Gen2SavePrompt.MOVE_MON_LINES)
-	host.handle_button(PokeButton.A)
+	_read_save(host)
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	_spend_answer_hold(host)
@@ -364,7 +400,8 @@ func test_move_without_mail_refuses_a_party_holding_mail_and_saves_otherwise() -
 
 ## `PC_PlayBootSound`, `PC_PlayChoosePCSound` and `PC_PlayShutdownSound`, the
 ## three the machine spends on its own: one on the way in, one on every row but
-## TURN OFF, and one on `.shutdown`.
+## TURN OFF, and one on `.shutdown`. TURN OFF's own line prints and the machine
+## shuts down behind it without waiting for a press.
 func test_the_machine_boots_chooses_and_shuts_down_with_its_own_sounds() -> void:
 	await _open_pokemon_center_pc()
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
@@ -375,19 +412,19 @@ func test_the_machine_boots_chooses_and_shuts_down_with_its_own_sounds() -> void
 	assert_signal_emitted_with_parameters(
 		host, "sfx_requested", [Gen2Sfx.SFX_BOOT_PC, true]
 	)
+	_answer_box(host)
 	host.handle_button(PokeButton.A)
 	assert_signal_emitted_with_parameters(
 		host, "sfx_requested", [Gen2Sfx.SFX_CHOOSE_PC_OPTION, true]
 	)
+	_answer_box(host)
+	host.handle_button(PokeButton.B)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
 
-	## `.loop` is behind the boot sound, so coming back to it plays only the
-	## B's own `MenuClickSound`.
-	host.handle_button(PokeButton.B)
-	assert_signal_emit_count(host, "sfx_requested", 3)
-	assert_signal_emitted_with_parameters(
-		host, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2, false]
-	)
-	host.handle_button(PokeButton.B)
+	host._cursor = _pc_row_index(host, Gen2WorldPC.PCPCITEM_TURN_OFF)
+	host.handle_button(PokeButton.A)
+	assert_eq("\n".join(host._box.page_lines()), _data.pokecenter_pc_text("closed"))
+	Fixture.print_out(host)
 	assert_signal_emitted_with_parameters(
 		host, "sfx_requested", [Gen2Sfx.SFX_SHUT_DOWN_PC, true]
 	)
@@ -396,8 +433,8 @@ func test_the_machine_boots_chooses_and_shuts_down_with_its_own_sounds() -> void
 
 
 ## `ProfOaksPC`: `_OakPCText1`'s question first, `ProfOaksPCBoot` behind a YES,
-## and `_OakPCText4` on the way out whichever way it was answered. The row used
-## to open on the rating with neither box around it.
+## and `_OakPCText4` on the way out whichever way it was answered. The rating's
+## sound plays as its box finishes printing, in front of `JoyWaitAorB`.
 func test_the_oak_pc_row_asks_first_and_closes_with_its_own_line() -> void:
 	await _open_pokemon_center_pc()
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
@@ -408,8 +445,9 @@ func test_the_oak_pc_row_asks_first_and_closes_with_its_own_line() -> void:
 		rows.append(int(row["row"]))
 	host._cursor = rows.find(Gen2WorldPC.PCPCITEM_OAKS_PC)
 	host.handle_button(PokeButton.A)
+	_answer_box(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_OAK_ASK)
-	assert_eq(host._summary, _data.oak_pc_text("ask"))
+	assert_eq(Fixture.box_words(host), _data.oak_pc_text("ask"))
 
 	## NO is `.shutdown`: the closing line and nothing rated.
 	host.handle_button(PokeButton.DOWN)
@@ -417,20 +455,27 @@ func test_the_oak_pc_row_asks_first_and_closes_with_its_own_line() -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_OAK_ASK, "the answer is held first")
 	_spend_answer_hold(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT)
-	assert_eq(host._summary, _data.oak_pc_text("closed"))
+	assert_eq(Fixture.box_words(host), _data.oak_pc_text("closed"))
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
 
 	## YES rates first, and the same line is still the last box.
 	host._cursor = rows.find(Gen2WorldPC.PCPCITEM_OAKS_PC)
 	host.handle_button(PokeButton.A)
+	_answer_box(host)
+	Fixture.print_out(host)
 	host.handle_button(PokeButton.A)
 	_spend_answer_hold(host)
 	var boot: Dictionary = Gen2ProfOaksPC.boot(_data, host._world.state)
-	assert_eq(host._summary, String((boot["pages"] as Array)[0]))
-	for _page: int in (boot["pages"] as Array).size():
-		host.handle_button(PokeButton.A)
-	assert_eq(host._summary, _data.oak_pc_text("closed"))
+	var pages: Array = boot["pages"]
+	assert_eq(Fixture.box_words(host), String(pages[0]))
+	Fixture.press_through(host)
+	Fixture.press_through(host)
+	watch_signals(host)
+	Fixture.print_out(host)
+	assert_signal_emitted_with_parameters(host, "sfx_requested", [int(boot["sfx"]), false])
+	host.handle_button(PokeButton.A)
+	assert_eq(Fixture.box_words(host), _data.oak_pc_text("closed"))
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
 
@@ -443,6 +488,7 @@ func test_the_deposit_list_walks_on_real_presses_with_focus_held_elsewhere() -> 
 	await _open_pokemon_center_pc()
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	host.handle_button(PokeButton.A)
+	_answer_box(host)
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	var boxes: Gen2BoxScreen = host._boxes
@@ -482,6 +528,7 @@ func _open_pokemon_center_pc() -> void:
 	assert_eq(_world_screen._world.pending_runtime_request()["values"]["mode"], &"pokemon_center")
 	_world_screen._show_script_results(waiting)
 	await get_tree().process_frame
+	_answer_box(_world_screen._service_host)
 
 
 ## The DEPOSIT list `_BillsPC` opened, closed, and then B twice: off the
@@ -751,6 +798,7 @@ func test_mart_overlay_sells_a_stack_at_half_price() -> void:
 	assert_true(host.handle_button(PokeButton.A))
 	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK_TOSS_QUANTITY)
 	assert_eq(pack.box_text(), _data.mart_text("sell_how_many"))
+	_read_pack(pack)
 	assert_true(pack._money_shown(), "`PlaceMoneyAtTopLeftOfTextbox`")
 	## The dial is bounded by the stack, so up off the last one wraps to one.
 	assert_true(host.handle_button(PokeButton.UP))
@@ -762,10 +810,9 @@ func test_mart_overlay_sells_a_stack_at_half_price() -> void:
 
 	assert_true(host.handle_button(PokeButton.A))
 	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK_TOSS_CONFIRM)
-	while pack._reading_question():
-		assert_true(host.handle_button(PokeButton.A))
+	_read_pack(pack)
 	assert_true(host.handle_button(PokeButton.A))
-	pack.advance_save_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
+	pack.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 	assert_eq(_world_screen._world.state.item_quantity(7), 0)
 	assert_eq(_world_screen._world.state.money(), 620)
 	assert_eq(pack._mode, Gen2StartMenuScreen.Mode.PACK_RESULT)
@@ -1051,6 +1098,7 @@ func test_only_one_service_layer_is_ever_on_screen() -> void:
 	await _queue_service()
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
+	_answer_box(host)
 	assert_true(host._service_view.visible, "the hardware layer draws the mode")
 	## DEPOSIT ITEM's pack owns all 160x144, and B hands the one layer back.
 	host.handle_button(PokeButton.DOWN)
@@ -1328,8 +1376,10 @@ func test_apricorn_overlay_gives_kurt_the_chosen_quantity_and_resumes() -> void:
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
 	assert_eq(host._title, "APRICORNS")
+	Fixture.print_out(host)
 	assert_true(host.handle_button(PokeButton.DOWN))
 	assert_true(host.handle_button(PokeButton.A))
+	Fixture.print_out(host)
 	assert_true(host.handle_button(PokeButton.UP))
 	assert_true(host.handle_button(PokeButton.A))
 	await get_tree().process_frame
@@ -1349,6 +1399,7 @@ func test_apricorn_overlay_cancel_takes_nothing_and_resumes() -> void:
 
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
+	Fixture.print_out(host)
 	assert_true(host.handle_button(PokeButton.B))
 	await get_tree().process_frame
 
@@ -1385,6 +1436,7 @@ func test_the_decoration_row_sets_a_decoration_up_and_closes_the_machine() -> vo
 
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
+	_answer_box(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
 
 	## WITHDRAW, DEPOSIT, TOSS, MAIL BOX, then DECORATION.
@@ -1405,7 +1457,7 @@ func test_the_decoration_row_sets_a_decoration_up_and_closes_the_machine() -> vo
 		_world_screen._world.state.maptile_decoration(Gen2WorldDecoration.SLOT_BED),
 		Fixture.DECO_FEATHERY_BED
 	)
-	host.handle_button(PokeButton.A)
+	Fixture.press_through(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_DECO)
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
@@ -1424,11 +1476,13 @@ func test_an_empty_mailbox_prints_its_own_line_and_opens_no_list() -> void:
 
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
+	_answer_box(host)
 	for _step: int in 3:
 		host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
+	assert_eq(Fixture.box_words(host), Gen2WorldPC.MAILBOX_EMPTY)
+	_answer_box(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
-	assert_eq(host._status, Gen2WorldPC.MAILBOX_EMPTY)
 
 
 ## `MailboxPC`: the list prints one author a message, the submenu is
@@ -1445,6 +1499,7 @@ func test_the_mailbox_lists_its_authors_and_reads_one() -> void:
 
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
+	_answer_box(host)
 	for _step: int in 3:
 		host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
@@ -1479,6 +1534,7 @@ func test_putting_a_message_in_the_pack_empties_the_mailbox() -> void:
 	await _queue_service()
 
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	_answer_box(host)
 	for _step: int in 3:
 		host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
@@ -1486,13 +1542,13 @@ func test_putting_a_message_in_the_pack_empties_the_mailbox() -> void:
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_MAIL_CONFIRM)
-	assert_eq(host._summary, Gen2WorldPC.MAILBOX_MESSAGE_LOST)
+	assert_eq(Fixture.box_words(host), Gen2WorldPC.MAILBOX_MESSAGE_LOST)
 
 	host.handle_button(PokeButton.A)
 	_spend_answer_hold(host)
 	assert_eq(save.mailbox.size(), 0)
 	assert_eq(_world_screen._world.state.item_quantity(item), 1)
-	assert_eq(host._status, Gen2WorldPC.MAILBOX_CLEARED)
+	assert_eq(Fixture.box_words(host), Gen2WorldPC.MAILBOX_CLEARED)
 
 
 ## `PCItemsJoypad`'s `.select_1` and `.moving_stuff_around` (`SwitchItemsInBag`).
@@ -1510,6 +1566,7 @@ func test_select_reorders_the_pc_item_list_but_not_the_deposit_list() -> void:
 	)
 	await get_tree().process_frame
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	_answer_box(host)
 
 	## WITHDRAW ITEM, which is the PC's own list.
 	host.handle_button(PokeButton.A)
@@ -1533,11 +1590,50 @@ func test_select_reorders_the_pc_item_list_but_not_the_deposit_list() -> void:
 	assert_eq(host._pack._pack_switch, -1)
 
 
+## The pack's own `PrintText`: its letters, and a press at each page break.
+func _read_pack(pack: Gen2StartMenuScreen) -> void:
+	for _step: int in Fixture.PRINT_FRAME_CAP:
+		if not pack._box_printing():
+			return
+		if pack._box.is_revealing():
+			pack.advance_frame()
+		else:
+			pack.handle_button(PokeButton.A)
+
+
 func _pc_list_items(host: Gen2WorldServiceScreen) -> Array:
 	var out: Array = []
 	for entry: Dictionary in host._pc_entries:
 		out.append(int(entry.get("item", 0)))
 	return out
+
+
+## A menu the runner stages with its own words is `PrintText`'s: `SetDayOfWeek`'s
+## question prints in the map's box, and the dial opens on the frame its last
+## letter lands, with no press in between.
+func test_a_menu_with_its_own_question_opens_once_the_question_has_printed() -> void:
+	_write_request_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_SET_DAY_OF_WEEK, 0,
+		Gen2WorldScript.END,
+	], 0x61A0)
+	_data = GameData.open_directory(Fixture.directory())
+	await _open_world()
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(Vector2i(7, 6))
+	)
+	var box: Gen2TextBox = _world_screen._text_box
+	assert_null(_world_screen._service_host, "the question prints first")
+	assert_true(box.visible and box.is_revealing())
+	assert_eq("\n".join(box.page_lines()), Gen2ClockSetScreen.DAY_QUESTION)
+	var frames: int = 0
+	while _world_screen._service_host == null and frames < Fixture.PRINT_FRAME_CAP:
+		_world_screen.advance_frame()
+		frames += 1
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(host)
+	assert_false(box.is_revealing(), "on the frame the last letter landed")
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.MENU)
+	assert_eq(host._summary, Gen2ClockSetScreen.DAY_QUESTION)
 
 
 ## `Script_yesorno`'s box: `YesNoMenuHeader` wraps neither way, and
@@ -1596,8 +1692,8 @@ func _prompt_answer(presses: Array) -> int:
 
 
 ## `PrintText` presses through a PC question's `<PARA>` and `<CONT>` before
-## `YesNoBox` opens over the last page: A and B turn a page, nothing else does,
-## and the box and its cursor are only live on the last one.
+## `YesNoBox` opens over the last page: A and B turn a printed page, nothing else
+## does, and the box and its cursor are only live once the last one is out.
 func test_a_long_pc_question_pages_before_its_yes_no_opens() -> void:
 	var manifest: Dictionary = RomCache.read_manifest(Fixture.directory())
 	manifest["oak_ratings"]["ask"] = "LINE ONE\nLINE TWO\nLINE THREE\nLINE FOUR\nLINE FIVE"
@@ -1608,21 +1704,22 @@ func test_a_long_pc_question_pages_before_its_yes_no_opens() -> void:
 	host._open_pc(&"pokemon_center")
 	host._cursor = _pc_row_index(host, Gen2WorldPC.PCPCITEM_OAKS_PC)
 	host.handle_button(PokeButton.A)
+	_answer_box(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_OAK_ASK)
-	assert_eq(host._summary, "LINE ONE\nLINE TWO")
-	assert_true(host._asking_through_pages())
+	assert_eq(Fixture.box_words(host), "LINE ONE\nLINE TWO")
+	assert_null(host._yes_no_box())
 	for button: int in [
 		PokeButton.DOWN, PokeButton.UP, PokeButton.LEFT, PokeButton.SELECT, PokeButton.START,
 	]:
 		assert_true(host.handle_button(button))
-	assert_eq(host._summary, "LINE ONE\nLINE TWO", "no other button turns the page")
+	assert_eq(Fixture.box_words(host), "LINE ONE\nLINE TWO", "no other button turns the page")
 	assert_eq(host._cursor, 0)
 
 	host.handle_button(PokeButton.A)
-	assert_eq(host._summary, "LINE THREE\nLINE FOUR")
+	assert_eq(Fixture.box_words(host), "LINE THREE\nLINE FOUR")
 	host.handle_button(PokeButton.B)
-	assert_eq(host._summary, "LINE FIVE")
-	assert_false(host._asking_through_pages(), "the last page carries the box")
+	assert_eq(Fixture.box_words(host), "LINE FIVE")
+	assert_not_null(host._yes_no_box(), "the last page carries the box")
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_OAK_ASK, "B only turned the page")
 
 	## Now B is the box's NO, held like any answer.
@@ -1632,7 +1729,7 @@ func test_a_long_pc_question_pages_before_its_yes_no_opens() -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_OAK_ASK)
 	_spend_answer_hold(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT)
-	assert_eq(host._summary, _data.oak_pc_text("closed"))
+	assert_eq(Fixture.box_words(host), _data.oak_pc_text("closed"))
 
 
 func _pc_row_index(host: Gen2WorldServiceScreen, row: int) -> int:
@@ -1642,9 +1739,10 @@ func _pc_row_index(host: Gen2WorldServiceScreen, row: int) -> int:
 	return -1
 
 
-## `MartConfirmPurchase`'s price box is pressed through the same way: the
-## yes/no is drawn over its last page only.
-func test_a_long_mart_price_question_pages_before_its_yes_no_opens() -> void:
+## `MartConfirmPurchase`'s price box is `PrintText`'s: its letters land a frame
+## at a time, a press before a page has printed is spent, and the yes/no is
+## drawn over its last page only once that page is out.
+func test_a_long_mart_price_question_prints_before_its_yes_no_opens() -> void:
 	var manifest: Dictionary = RomCache.read_manifest(Fixture.directory())
 	var mart_text: Dictionary = manifest.get("mart_text", {})
 	mart_text["final_price"] = "PAGE ONE\nPAGE TWO\nPAGE THREE\nPAGE FOUR\nPAGE FIVE"
@@ -1658,16 +1756,24 @@ func test_a_long_mart_price_question_pages_before_its_yes_no_opens() -> void:
 	host.handle_button(PokeButton.A)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_CONFIRM)
-	assert_eq(host._mart_pages.size(), 3)
+	var box: Gen2TextBox = host._box
+	assert_true(box.is_revealing(), "the first letters are still to come")
+	host.handle_button(PokeButton.A)
+	assert_eq(box.page_lines(), PackedStringArray(["PAGE ONE", "PAGE TWO"]),
+		"a press while the page prints is spent")
+	_print_mart_page(host)
 	assert_false(host._mart_confirm_open())
 	for button: int in [PokeButton.DOWN, PokeButton.UP, PokeButton.SELECT, PokeButton.RIGHT]:
 		host.handle_button(button)
-	assert_eq(host._mart_pages.size(), 3, "no other button turns the page")
+	assert_eq(box.page_lines()[0], "PAGE ONE", "no other button turns the page")
 	assert_eq(host._mart_yes_no.cursor, 0)
 
 	host.handle_button(PokeButton.A)
+	_print_mart_page(host)
 	host.handle_button(PokeButton.B)
-	assert_eq(host._mart_pages.size(), 1)
+	assert_false(host._mart_confirm_open(), "the last page is still printing")
+	_print_mart_page(host)
+	assert_eq(box.page_lines(), PackedStringArray(["PAGE FIVE"]))
 	assert_true(host._mart_confirm_open())
 	assert_eq(_world_screen._world.state.money(), 500, "B turned a page, not the answer")
 	host.handle_button(PokeButton.DOWN)
@@ -1675,6 +1781,16 @@ func test_a_long_mart_price_question_pages_before_its_yes_no_opens() -> void:
 	_spend_answer_hold(host)
 	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_LIST)
 	assert_eq(_world_screen._world.state.money(), 500)
+
+
+## The frames `PrintText` spends on the page in front of it: `Paragraph`'s clear
+## and the letters.
+func _print_mart_page(host: Gen2WorldServiceScreen) -> void:
+	var guard: int = 600
+	while host._box.is_revealing() and guard > 0:
+		host.advance_frame()
+		guard -= 1
+	assert_gt(guard, 0, "the page printed")
 
 
 ## `_FlyMap`'s `.pressedA`: every button is the map's, so A takes the flypoint

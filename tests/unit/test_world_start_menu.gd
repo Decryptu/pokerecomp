@@ -284,11 +284,14 @@ func test_the_box_stops_at_the_screen_however_many_rows_the_list_has() -> void:
 	assert_eq(Gen2StartMenuPage.list_box(12, true).bottom, 17)
 
 
-func _save_state(pokedex: bool, cursor: int) -> Dictionary:
+func _save_state(data: GameData, pokedex: bool, cursor: int) -> Dictionary:
+	var box: Gen2TextBox = Gen2TextBox.for_page(data)
+	add_child_autofree(box)
+	box.show_text("\n".join(Gen2StartMenuScreen.SAVE_ASK_LINES), false)
+	box.finish()
 	return {
 		"player_name": "GOLD", "badges": 3, "pokedex": pokedex, "caught": 42,
-		"hours": 12, "minutes": 7,
-		"lines": Gen2StartMenuScreen.SAVE_ASK_LINES, "line": 0, "cursor": cursor,
+		"hours": 12, "minutes": 7, "box": box, "cursor": cursor,
 	}
 
 
@@ -303,10 +306,9 @@ func _opaque(image: Image, tile: Vector2i) -> bool:
 ## and nothing else: the map is still showing everywhere between them.
 func test_the_save_screen_draws_three_boxes_over_the_map() -> void:
 	Fixture.build()
-	var page: Gen2StartMenuPage = Gen2StartMenuPage.from_data(
-		GameData.open_directory(Fixture.directory())
-	)
-	var asked: Image = page.render_save(_save_state(true, 0))
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	var page: Gen2StartMenuPage = Gen2StartMenuPage.from_data(data)
+	var asked: Image = page.render_save(_save_state(data, true, 0))
 	assert_true(_opaque(asked, Vector2i(4, 0)), "the info box's own corner")
 	assert_true(_opaque(asked, Vector2i(19, 9)), "and its far one")
 	assert_true(_opaque(asked, Vector2i(0, 12)), "the speech box")
@@ -318,7 +320,7 @@ func test_the_save_screen_draws_three_boxes_over_the_map() -> void:
 
 	## `SavingDontTurnOffThePower` prints with no question behind it, so the
 	## yes/no box is not up at all.
-	var saving: Image = page.render_save(_save_state(true, -1))
+	var saving: Image = page.render_save(_save_state(data, true, -1))
 	assert_false(_opaque(saving, Vector2i(0, 7)))
 	RomCache.clear(Fixture.directory())
 
@@ -328,11 +330,10 @@ func test_the_save_screen_draws_three_boxes_over_the_map() -> void:
 ## player without the Pokedex is shown neither the word nor the count.
 func test_the_dex_row_is_blank_without_the_pokedex_flag() -> void:
 	Fixture.build()
-	var page: Gen2StartMenuPage = Gen2StartMenuPage.from_data(
-		GameData.open_directory(Fixture.directory())
-	)
-	var without: Image = page.render_save(_save_state(false, 0))
-	var with_dex: Image = page.render_save(_save_state(true, 0))
+	var data: GameData = GameData.open_directory(Fixture.directory())
+	var page: Gen2StartMenuPage = Gen2StartMenuPage.from_data(data)
+	var without: Image = page.render_save(_save_state(data, false, 0))
+	var with_dex: Image = page.render_save(_save_state(data, true, 0))
 	assert_ne(without.get_data(), with_dex.get_data())
 	## An interior tile the box never writes, which is what a blank row reads as.
 	var blank: Color = without.get_pixel(6 * Gen2Font.TILE, 3 * Gen2Font.TILE)
@@ -358,12 +359,12 @@ func test_the_generation_1_save_screen_stands_over_the_list() -> void:
 	var list: Image = page.render_list(
 		["POKéMON", "ITEM", "PLAYER", "SAVE", "OPTION", "EXIT"], 3, "", false, null, {}, {}, true
 	)
-	var state: Dictionary = _save_state(true, 0)
+	var state: Dictionary = _save_state(data, true, 0)
 	var asked: Image = page.render_save(state, list)
 	assert_true(_opaque(asked, Vector2i(4, 0)), "the info box's own corner")
 	assert_true(_opaque(asked, Vector2i(10, 10)), "the list's border between the boxes")
 	assert_true(_opaque(asked, Vector2i(0, 12)), "the speech box")
-	state["lines"] = []
+	state["box"] = null
 	state["cursor"] = -1
 	var holding: Image = page.render_save(state, list)
 	assert_false(_opaque(holding, Vector2i(0, 12)), "no text box during the hold")

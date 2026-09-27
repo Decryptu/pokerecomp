@@ -1857,8 +1857,7 @@ func _import_card_key_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 ## `DexRatingsTable` with `DexCompletionText` in front of it, in the section
 ## `GameData.oak_ratings` reads. `PlayPokedexRatingSfx` picks its effect off a
-## table of its own rather than off the row, and no Generation 1 audio is
-## imported, so a row carries no `sfx`.
+## table of its own rather than off the row, so a row carries no `sfx`.
 func _import_dex_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var table: int = int(layout["dex_ratings"])
 	var bank: int = RomFile.bank_of(table)

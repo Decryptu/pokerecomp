@@ -75,8 +75,11 @@ func _open_item_pc() -> Gen2WorldServiceScreen:
 	)
 	await get_tree().process_frame
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT, "`PlayersPCTurnOnText` first")
+	Fixture.press_through(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
-	assert_eq(host._summary, _data.pokecenter_pc_text("ask_what_do"), "`_PlayersPC`'s question")
+	assert_eq(Fixture.box_words(host), _data.pokecenter_pc_text("ask_what_do"),
+		"`_PlayersPC`'s question")
 	return host
 
 
@@ -125,20 +128,24 @@ func test_withdraw_asks_how_many_and_moves_that_many() -> void:
 	_open_list(host, 0)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._pc_item_stage, &"quantity")
-	assert_eq(host._summary, _data.pokecenter_pc_text("how_many_withdraw"))
+	assert_eq(Fixture.box_words(host), _data.pokecenter_pc_text("how_many_withdraw"))
 	host.handle_button(PokeButton.B)
 	assert_eq(host._pc_item_stage, &"")
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(_state().pc_item_quantity(STACK), 5, "B withdrew nothing")
 
 	host.handle_button(PokeButton.A)
+	Fixture.print_out(host)
 	host.handle_button(PokeButton.UP)
 	assert_eq(host._quantity_prompt.value, 2)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._pc_item_stage, &"")
 	assert_eq(_state().pc_item_quantity(STACK), 3)
 	assert_eq(_state().item_quantity(STACK), 3)
-	assert_true(host._status.begins_with("Withdrew 2"), host._status)
+	## `.PlayersPCWithdrewItemsText` is a `MenuTextbox` answered back onto the list.
+	assert_true(Fixture.box_words(host).begins_with("Withdrew 2"), Fixture.box_words(host))
+	host.handle_button(PokeButton.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 
 
 ## `.Submenu`'s `_CheckTossableItem`: an item with no quantity is always one,
@@ -161,10 +168,11 @@ func test_toss_asks_how_many_then_yes_no_and_discards_that_many() -> void:
 	_walk_to(host, OTHER_STACK)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._pc_item_stage, &"quantity")
+	Fixture.print_out(host)
 	host.handle_button(PokeButton.UP)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._pc_item_stage, &"toss_ask")
-	assert_true(host._summary.begins_with("Throw away 2"), host._summary)
+	assert_true(Fixture.box_words(host).begins_with("Throw away 2"), Fixture.box_words(host))
 
 	host.handle_button(PokeButton.A)
 	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES - 1:
@@ -173,7 +181,7 @@ func test_toss_asks_how_many_then_yes_no_and_discards_that_many() -> void:
 	host.advance_frame()
 	assert_eq(host._pc_item_stage, &"")
 	assert_eq(_state().pc_item_quantity(OTHER_STACK), 1)
-	assert_true(host._status.begins_with("Discarded"), host._status)
+	assert_true(Fixture.box_words(host).begins_with("Discarded"), Fixture.box_words(host))
 
 
 ## The same question's NO, and B, which `YesNoBox` answers as NO: back to the
@@ -182,9 +190,10 @@ func test_no_or_b_on_the_toss_question_keeps_the_stack() -> void:
 	var host: Gen2WorldServiceScreen = await _open_item_pc()
 	_open_list(host, 2)
 	for refusal: Array in [[PokeButton.DOWN, PokeButton.A], [PokeButton.B]]:
-		host.handle_button(PokeButton.A)
-		host.handle_button(PokeButton.A)
+		Fixture.press_through(host)
+		Fixture.press_through(host)
 		assert_eq(host._pc_item_stage, &"toss_ask")
+		Fixture.print_out(host)
 		for button: int in refusal:
 			host.handle_button(button)
 		for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
@@ -201,7 +210,7 @@ func test_tossing_a_key_item_is_refused() -> void:
 	_walk_to(host, KEY_ITEM)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._pc_item_stage, &"")
-	assert_eq(host._status, Gen2WorldPC.ITEMS_TOO_IMPORTANT)
+	assert_eq(Fixture.box_words(host), Gen2WorldPC.ITEMS_TOO_IMPORTANT)
 	assert_eq(_state().pc_item_quantity(KEY_ITEM), 1)
 
 
@@ -214,17 +223,19 @@ func test_the_list_keeps_its_row_across_the_dial_the_question_and_the_menu() -> 
 	_walk_to(host, OTHER_STACK)
 	var row: int = host._cursor
 	assert_eq(row, 2)
-	host.handle_button(PokeButton.A)
+	Fixture.press_through(host)
+	Fixture.print_out(host)
 	host.handle_button(PokeButton.B)
 	assert_eq(host._cursor, row, "B on the dial")
-	host.handle_button(PokeButton.A)
-	host.handle_button(PokeButton.A)
+	Fixture.press_through(host)
+	Fixture.press_through(host)
+	Fixture.print_out(host)
 	host.handle_button(PokeButton.B)
 	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
 		host.advance_frame()
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(host._cursor, row, "NO on the question")
 	host.handle_button(PokeButton.B)
-	host.handle_button(PokeButton.A)
+	Fixture.press_through(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(host._cursor, row, "the list opened again off the menu")

@@ -146,14 +146,28 @@ func _open_world() -> void:
 ## screen spends on its save clock whether the question is its own or the save
 ## prompt's.
 func _spend_answer_hold(host: Gen2StartMenuScreen) -> void:
-	host.advance_save_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
+	host.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 
 
-## `PrintText`'s page breaks in front of a question, each waiting for A before
-## `YesNoBox` is placed over the last.
+## `PrintText` in front of a question: its letters, and a press at each page
+## break and at a `prompt` the menu waits behind, until `YesNoBox` is placed.
 func _read_question(host: Gen2StartMenuScreen) -> void:
-	while host._reading_question():
+	for _press: int in QUESTION_PRESS_CAP:
+		_print_out(host)
+		if not host._box_printing():
+			return
 		host.handle_button(PokeButton.A)
+
+
+## The frames the menu's box spends printing to where it waits.
+func _print_out(host: Gen2StartMenuScreen) -> void:
+	for _frame: int in Fixture.PRINT_FRAME_CAP:
+		if not host._box_up or not host._box.is_revealing():
+			return
+		host.advance_frame()
+
+
+const QUESTION_PRESS_CAP: int = 12
 
 
 func _spend_service_answer_hold(service: Gen2WorldServiceScreen) -> void:
@@ -200,6 +214,7 @@ func test_home_asks_before_it_gives_the_cartridge_back() -> void:
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LAUNCHER_ASK)
 
 	## NO is the second row, and it goes back to the list rather than out.
+	_read_question(host)
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LAUNCHER_ASK, "the answer is held first")
@@ -602,6 +617,7 @@ func test_a_rod_casts_from_the_pack_and_is_refused_away_from_water() -> void:
 	await get_tree().process_frame
 	assert_not_null(_world_screen._start_menu_host, "no water in front of the player")
 	assert_eq(away.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
+	_read_question(away)
 	away.handle_button(PokeButton.B)
 	await get_tree().process_frame
 	_world_screen._start_menu_host.handle_button(PokeButton.B)
@@ -1020,17 +1036,18 @@ func test_the_teach_question_is_read_page_by_page_before_its_yes_no() -> void:
 	host.handle_button(PokeButton.A)
 	host.handle_button(PokeButton.A)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TEACH)
-	assert_true(host._reading_question())
-	var first: String = host._question_shown()
-	assert_true(first.begins_with("Booted up an HM."), first)
+	assert_true(host._box.is_revealing(), "`AskTeachTMHM` clears `NO_TEXT_SCROLL`")
+	assert_eq(host._box.page_lines(), PackedStringArray(["Booted up an HM."]))
 	host.handle_button(PokeButton.DOWN)
 	assert_eq(host._teach_cursor, 0, "no box is up to move the cursor on")
-	while host._reading_question():
+	for _press: int in QUESTION_PRESS_CAP:
+		_print_out(host)
+		if not host._box_printing():
+			break
 		host.handle_button(PokeButton.A)
 		assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TEACH, "a page, not an answer")
-	assert_ne(host._question_shown(), first)
 	assert_true(host.box_text().ends_with("#MON?"), host.box_text())
-	assert_true(host._question_shown().ends_with("#MON?"), host._question_shown())
+	assert_eq(host._box.page_lines()[1], "to a #MON?")
 
 
 ## `ScrollingMenu_InitFlags` sets no wrap, and the pockets' `STATICMENU_WRAP` is
@@ -1104,7 +1121,9 @@ func test_tmhm_use_asks_before_teaching_and_a_yes_teaches_the_move() -> void:
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TEACH)
 	assert_eq(
 		String(host.get("_teach_prompt")["text"]),
-		"Booted up an HM. It contained STRENGTH. Teach STRENGTH to a #MON?"
+		"Booted up an HM.%sIt contained\nSTRENGTH.%sTeach STRENGTH\nto a #MON?" % [
+			Gen2TextStream.PROMPT_BREAK, Gen2TextStream.PAGE_BREAK,
+		]
 	)
 
 	## Yes is the prompt's default cursor position, matching YesNoBox.
@@ -1430,6 +1449,7 @@ func test_save_writes_a_snapshot_to_the_injected_save_without_touching_disk() ->
 	## Yes is YesNoMenuHeader's own default cursor position. The second question
 	## is AskOverwriteSaveFile's, which every save here reaches: the slot the
 	## world is played from always exists and always carries this player's ID.
+	_read_question(host)
 	host.handle_button(PokeButton.A)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.SAVE_ASK, "the answer is held first")
 	_spend_answer_hold(host)
@@ -1440,14 +1460,15 @@ func test_save_writes_a_snapshot_to_the_injected_save_without_touching_disk() ->
 	host.handle_button(PokeButton.A)
 	_spend_answer_hold(host)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.SAVE_SAVING)
-	## SavingDontTurnOffThePower's sixteen frames and SavedTheGame's thirty-two
-	## are both spent before the words that follow them.
-	host.advance_save_frames(
+	## SavingDontTurnOffThePower's line prints, and its sixteen frames and
+	## SavedTheGame's thirty-two are both spent before the words that follow.
+	_print_out(host)
+	host.advance_frames(
 		Gen2StartMenuScreen.SAVE_SAVING_FRAMES
 		+ Gen2StartMenuScreen.SAVE_WRITE_FRAMES - 1
 	)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.SAVE_SAVING)
-	host.advance_save_frames(1)
+	host.advance_frames(1)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.SAVE_SAVED)
 	assert_eq(save.world.map_id, expected.map_id)
 	assert_eq(save.world.player_cell, expected.player_cell)
@@ -1455,7 +1476,8 @@ func test_save_writes_a_snapshot_to_the_injected_save_without_touching_disk() ->
 	## `StartMenu_Save`'s `ld a, 1`: a save that succeeded leaves the menu.
 	var closed: Array = []
 	host.closed.connect(func() -> void: closed.append(true))
-	host.advance_save_frames(Gen2StartMenuScreen.SAVE_DONE_FRAMES)
+	_print_out(host)
+	host.advance_frames(Gen2StartMenuScreen.SAVE_DONE_FRAMES)
 	assert_eq(closed.size(), 1)
 
 
@@ -2102,8 +2124,8 @@ func test_a_full_hand_asks_before_the_swap_and_no_takes_nothing() -> void:
 	assert_eq(_world_screen._world.state.item_quantity(7), 1)
 
 	_choose_action(host, Gen2WorldPack.ACTION_GIVE)
-	_read_question(host)
 	host.handle_button(PokeButton.A)
+	_read_question(host)
 	host.handle_button(PokeButton.A)
 	_spend_answer_hold(host)
 	assert_eq((save.party[0] as Gen2SaveMon).item, 7)
@@ -2416,13 +2438,17 @@ func _open_and_turn_off_the_pc() -> void:
 	await get_tree().process_frame
 	var service: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(service)
+	## Crystal's `PokemonCenterPC` prints its turn-on line first; `ActivatePC`
+	## has its own ahead of the special.
+	if service._mode == Gen2WorldServiceScreen.MODE.PC_TEXT:
+		Fixture.press_through(service)
 	assert_eq(service.get("_mode"), Gen2WorldServiceScreen.MODE.PC, "the machine's own top menu")
 	for _row: int in (service.get("_pc_rows") as Array).size() - 1:
 		service.handle_button(PokeButton.DOWN)
 	for _press: int in 4:
 		if _world_screen._service_host == null:
 			break
-		service.handle_button(PokeButton.A)
+		Fixture.press_through(service)
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host, "turned off")
 	assert_not_null(_world_screen._start_menu_host)
@@ -2893,7 +2919,7 @@ func test_a_generation_1_save_holds_and_no_closes_the_menu() -> void:
 	assert_true(prompt.holding_info())
 	host.handle_button(PokeButton.B)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.SAVE_ASK, "B during the hold is dropped")
-	host.advance_save_frames(30)
+	host.advance_frames(30)
 	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_ASK_LINES)
 	_read_question(host)
 	host.handle_button(PokeButton.B)

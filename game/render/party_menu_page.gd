@@ -189,7 +189,7 @@ func _use_gen1_layout() -> void:
 ## cancel] is false while [param held] wears `▷`. [param quality] is a
 ## `PartyMenuQualityPointers` row over the bar, [param speech] a `SpeechTextbox`.
 func render(
-	rows: Array, cursor: int, prompt: String, cancel: bool = true, held: int = -1,
+	rows: Array, cursor: int, prompt: Variant, cancel: bool = true, held: int = -1,
 	quality: bool = false, speech: bool = false
 ) -> Image:
 	var width: int = Gen2Screen.WIDTH
@@ -538,7 +538,10 @@ func _draw_cursor(page: PackedByteArray, width: int, cursor: int) -> void:
 	)
 
 
-func _draw_prompt(page: PackedByteArray, width: int, prompt: String, speech: bool) -> void:
+func _draw_prompt(page: PackedByteArray, width: int, prompt: Variant, speech: bool) -> void:
+	if prompt is Gen2TextBox:
+		(prompt as Gen2TextBox).compose(page, width, GEN1_TEXTBOX * TILE)
+		return
 	var box_at: Vector2i = GEN1_TEXTBOX if speech else textbox_at
 	var text_at: Vector2i = GEN1_PROMPT if speech else prompt_at
 	## `TextboxBorder` blanks its inside, so CANCEL on row 13 goes under it.

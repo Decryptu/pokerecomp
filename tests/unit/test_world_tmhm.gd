@@ -190,8 +190,8 @@ func test_knows_move_and_first_empty_slot_match_learn_moves_own_search() -> void
 	)
 
 
-## BootedTMText/BootedHMText then ContainedMoveText, which is the one prompt
-## AskTeachTMHM shows before its yes/no.
+## BootedTMText/BootedHMText's `prompt`, then ContainedMoveText's two
+## paragraphs, which AskTeachTMHM prints before its yes/no.
 func test_teach_prompt_names_the_move_and_distinguishes_a_tm_from_an_hm() -> void:
 	var data: GameData = _data()
 	var hm: Dictionary = Gen2WorldTMHM.teach_prompt(data, 0xF6)
@@ -201,7 +201,9 @@ func test_teach_prompt_names_the_move_and_distinguishes_a_tm_from_an_hm() -> voi
 	assert_eq(String(hm["move_name"]), "STRENGTH")
 	assert_eq(
 		String(hm["text"]),
-		"Booted up an HM. It contained STRENGTH. Teach STRENGTH to a #MON?"
+		"Booted up an HM.%sIt contained\nSTRENGTH.%sTeach STRENGTH\nto a #MON?" % [
+			Gen2TextStream.PROMPT_BREAK, Gen2TextStream.PAGE_BREAK,
+		]
 	)
 
 	var tm: Dictionary = Gen2WorldTMHM.teach_prompt(data, 0xBF)

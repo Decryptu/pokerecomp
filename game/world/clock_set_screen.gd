@@ -91,8 +91,6 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if _text_box != null:
-		_text_box.accelerated = PokeButton.text_accelerating()
 	advance_frames(_frame_clock.tick(delta))
 
 

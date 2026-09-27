@@ -1289,6 +1289,7 @@ func _stage_yes_or_no(tag: StringName, values: Dictionary) -> Dictionary:
 		"command": &"yesorno",
 		"choices": [&"yes", &"no"],
 		"text": _standing_text,
+		"printed": true,
 		"special": tag,
 		"source": _request.duplicate(true),
 	}
@@ -3813,6 +3814,7 @@ func _stage_menu(two_dimensional: bool, command: Dictionary) -> Dictionary:
 		"header": _loaded_menu.duplicate(true),
 		"options": _loaded_menu.get("options", []).duplicate(true),
 		"text": _standing_text,
+		"printed": true,
 		"source": _request.duplicate(true),
 	}
 	return {"ok": true}
@@ -5342,6 +5344,7 @@ func _special_ask_remember_password(_special: int) -> Dictionary:
 		"command": &"yesorno",
 		"choices": [&"yes", &"no"],
 		"text": _standing_text,
+		"printed": true,
 		"special": &"ask_remember_password",
 		"header": ASK_REMEMBER_PASSWORD_BOX.duplicate(),
 		"source": _request.duplicate(true),
@@ -5907,6 +5910,7 @@ func _stage_challenge_menu() -> Dictionary:
 		## `Script_Menu_ChallengeExplanationCancel` writes its question and then
 		## opens the menu over it, so the box already on screen is the prompt.
 		"text": _standing_text,
+		"printed": true,
 		"special": &"battle_tower_challenge_menu",
 		"source": _request.duplicate(true),
 	}
@@ -6132,6 +6136,7 @@ func _stage_buenas_password_menu(password: int) -> void:
 		"header": {"default": 1, "data_flags": 0},
 		"disable_b": true,
 		"text": _standing_text,
+		"printed": true,
 		"special": &"buenas_password",
 		"password": password,
 		"source": _request.duplicate(true),
@@ -6161,6 +6166,7 @@ func _stage_day_of_week_confirmation(day: int) -> void:
 		"command": &"set_day_of_week_confirmation",
 		"choices": [&"yes", &"no"],
 		"text": _standing_text,
+		"printed": true,
 		"special": &"set_day_of_week_confirmation",
 		"day": posmod(day, WEEKDAY_NAMES.size()),
 		"source": _request.duplicate(true),
@@ -7243,6 +7249,7 @@ func _stage_choice(command: Dictionary, choices: Array) -> Dictionary:
 		"command": command.get("name", &"choice"),
 		"choices": choices.duplicate(true),
 		"text": _standing_text,
+		"printed": true,
 		"source": _request.duplicate(true),
 	}
 	return {"ok": true}

@@ -249,10 +249,10 @@ var _service_page: Gen2WorldServicePage = null
 ## the `hold` before a press is read, and a RARE CANDY's `stats`, standing in
 ## `stats_after_press` until the line's own press.
 var _party_result: Dictionary = {}
-## `PrintText` waits per page, so a result longer than the box's two rows is
-## pressed through rather than cut off at the frame.
-var _pack_result_pages: Array = []
-var _pack_result_page: int = 0
+var _box: Gen2TextBox = null
+var _box_printed: String = ""
+var _box_up: bool = false
+var _box_owes_press: bool = false
 ## What runs when the last page of the box is pressed past, instead of the pack
 ## coming back: the next move an evolution has to offer.
 var _pack_result_next: Callable = Callable()
@@ -316,11 +316,9 @@ var _level_moves_only: bool = false
 ## The evolution a Rare Candy owes once its level box and moves are done.
 var _pending_evolution: Dictionary = {}
 
-## `SaveMenu`'s own state: the text standing in the speech box, which of its
-## lines is on the top row, `wMenuCursorY` for the yes/no, and the frames the
-## two timed modes have spent.
+## `SaveMenu`'s own state: the text standing in the speech box, `wMenuCursorY`
+## for the yes/no, and the frames the two timed modes have spent.
 var _save_lines: Array = []
-var _save_line: int = 0
 var _save_cursor: int = -1
 var _save_frames: int = 0
 var _save_clock := Gen2WorldAnimation.FrameClock.new()
@@ -508,14 +506,12 @@ func handle_button(button: int) -> bool:
 	## own does over the box screen.
 	if _naming != null:
 		return _naming.handle_button(button)
+	if _box_printing():
+		if button == PokeButton.A or button == PokeButton.B:
+			_press_box()
+		return true
 	if _yes_no_hold > 0 or (_save_prompt != null and not _save_prompt.reads_joypad()
 			and not _save_prompt.finished()):
-		return true
-	if _reading_question():
-		if button == PokeButton.A or button == PokeButton.B:
-			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
-			_question_page += 1
-			_render_hardware()
 		return true
 	## `BuySellToss_InterpretJoypad` reads the joypad itself and answers with a
 	## carry, so the dial takes the whole button rather than a direction and an
@@ -773,12 +769,13 @@ func _leave_pack_result() -> void:
 	if party_result_holding():
 		return
 	if _party_result.has("stats_after_press"):
+		_box.advance()
 		_party_result["stats"] = _party_result["stats_after_press"]
 		_party_result.erase("stats_after_press")
 		_render_hardware()
 		return
-	if _pack_result_advanced():
-		return
+	if _box_up:
+		_box.advance()
 	if _pack_result_continued():
 		return
 	if _give_target >= 0:
@@ -1304,8 +1301,7 @@ func _gen1_pack_image(actions: Array = [], quantity: int = -1) -> Image:
 	if image == null:
 		return null
 	var over: Image = _service_page.render(
-		"", "", actions, _item_cursor,
-		_question_shown() if _mode in PACK_QUESTIONS else box_text(),
+		"", "", actions, _item_cursor, _box_or_text(),
 		Gen2MenuBox.from_coords(
 			GEN1_ITEM_MENU_AT.x, GEN1_ITEM_MENU_AT.y,
 			GEN1_ITEM_MENU_TO.x, GEN1_ITEM_MENU_TO.y, SUBMENU_FLAGS
@@ -1319,7 +1315,7 @@ func _gen1_pack_image(actions: Array = [], quantity: int = -1) -> Image:
 ## The pocket listing's own tilemap with [param text] in its description box,
 ## which is where every one of the pack's prints lands: `Pack_PrintTextNoScroll`
 ## and `MenuTextbox` both write the same six rows at the foot of the screen.
-func _pack_map(text: String) -> PackedInt32Array:
+func _pack_map(text: Variant) -> PackedInt32Array:
 	var pocket: int = _pack_pocket_index
 	return _pack_page.pocket_map(
 		pocket, _pack_rows(), _pack_cursor - _pack_scroll[pocket], text,
@@ -1347,7 +1343,7 @@ func _blend_yes_no(image: Image, cursor_index: int) -> void:
 ## The pack's screen with one of its `MENU_BACKUP_TILES` boxes over it:
 ## [param draw_page] writes tiles into the map the pack just built, so the box
 ## wears the attrmap `_CGB_PackPals` left.
-func _pack_overlay(text: String, draw_page: Callable) -> Image:
+func _pack_overlay(text: Variant, draw_page: Callable) -> Image:
 	if _pack_page == null:
 		_pack_page = Gen2PackPage.from_data(_data)
 	if _pack_page == null:
@@ -1363,13 +1359,13 @@ func _pack_overlay(text: String, draw_page: Callable) -> Image:
 ## `YesNoBox` over one of the pack's printed questions, which is what every one
 ## of its confirmations is.
 func _pack_yes_no(cursor_index: int) -> Image:
-	var asking: bool = not _reading_question()
+	var asking: bool = not _box_printing()
 	if _gen1_pack():
 		var image: Image = _gen1_pack_image()
 		if image != null and asking:
 			_blend_yes_no(image, cursor_index)
 		return image
-	return _pack_overlay(_question_shown(), func(map: PackedInt32Array) -> void:
+	return _pack_overlay(_box_or_text(), func(map: PackedInt32Array) -> void:
 		if not asking:
 			return
 		_pack_page.draw_menu(
@@ -1393,43 +1389,97 @@ func _item_menu_box(count: int) -> Gen2MenuBox:
 	)
 
 
-## The pack's questions: `PrintText` waits at each page break before `YesNoBox`.
+## The pack's questions: `PrintText` prints to its end before `YesNoBox`.
 const PACK_QUESTIONS: Array[Mode] = [
 	Mode.PACK_TEACH, Mode.PACK_FORGET_ASK, Mode.PACK_STOP_LEARNING,
 	Mode.PACK_TOSS_CONFIRM, Mode.PACK_GIVE_SWAP,
 ]
-var _question_text: String = ""
-var _question_page: int = 0
+const SAVE_MODES: Array[Mode] = [
+	Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, Mode.SAVE_FAILED,
+	Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK,
+]
 
 
-func _question_pages() -> Array:
-	var text: String = box_text() if _mode in PACK_QUESTIONS else ""
-	if text != _question_text:
-		_question_text = text
-		_question_page = 0
-	return Gen2TextLayout.lay_out(
-		text, Gen2PackPage.TEXTBOX_COLUMNS - 2, Gen2PackPage.TEXTBOX_ROWS_OF_TEXT
-	)
+func _box_modes() -> Array[Mode]:
+	var out: Array[Mode] = PACK_QUESTIONS + SAVE_MODES
+	out.append_array([Mode.PACK_RESULT, Mode.PACK_TOSS_QUANTITY])
+	return out
 
 
-func _reading_question() -> bool:
-	return _mode in PACK_QUESTIONS and _question_page + 1 < _question_pages().size()
+func _sync_box() -> void:
+	var words: String = box_text() if _mode in _box_modes() else ""
+	var key: String = "%d:%s" % [_mode, words]
+	if key == _box_printed:
+		return
+	_box_printed = key
+	_box_up = not words.is_empty() and _data != null
+	if not _box_up:
+		return
+	if _box == null:
+		_box = Gen2TextBox.for_page(_data)
+		_box.prompt_answered.connect(sfx_requested.emit.bind(false))
+		_box.redrawn.connect(_render_hardware)
+		add_child(_box)
+	var speed: StringName = _letter_speed()
+	_box.instant = speed == &"instant"
+	_box.reveal_speed = Gen2OptionsStore.current().text_reveal_speed() if speed == &"option" \
+		else 1.0 / (Gen2TextBox.FRAME_SECONDS * float(TEXT_DELAY_MEDIUM_FRAMES))
+	var end: StringName = _box_end()
+	_box.show_text(words, end == &"prompt")
+	_box.set_blink_cursor(end != &"none")
+	## pokered's `TossItem_` asks with a `prompt` in front of its TWO_OPTION_MENU.
+	_box_owes_press = _gen1_pack() and _mode == Mode.PACK_TOSS_CONFIRM and _deposit_sell == null
+	_note_save_text_printed()
 
 
-func _question_shown() -> String:
-	var pages: Array = _question_pages()
-	if pages.is_empty():
-		return ""
-	return "\n".join(pages[mini(_question_page, pages.size() - 1)] as PackedStringArray)
+## `TEXT_DELAY_MED`, which `SavingDontTurnOffThePower` and `SavedTheGame` force.
+const TEXT_DELAY_MEDIUM_FRAMES: int = 3
 
 
-func _pack_result_text() -> String:
-	if _pack_result_pages.is_empty():
-		return ""
-	var page: PackedStringArray = _pack_result_pages[
-		clampi(_pack_result_page, 0, _pack_result_pages.size() - 1)
-	]
-	return "\n".join(page)
+## `Pack` sets `NO_TEXT_SCROLL`, which `AskTeachTMHM` clears; `BattlePack`,
+## `DepositSellPack` and pokered's list menus print with the delay on.
+func _letter_speed() -> StringName:
+	if _save_prompt != null:
+		return _save_prompt.letter_speed()
+	if _mode in SAVE_MODES or _gen1_pack() or _mode == Mode.PACK_TEACH \
+			or _deposit_sell != null or _battling:
+		return &"option"
+	return &"instant"
+
+
+## A pack result is `prompt`, one over the party list `ItemActionTextWaitButton`'s
+## arrow unless it carries a `text_promptbutton`, and a sale `JoyWaitAorB`.
+func _box_end() -> StringName:
+	if _mode != Mode.PACK_RESULT:
+		return &"none"
+	if _sold:
+		return &"wait"
+	if _party_result.is_empty() or _party_result.has("stats_after_press"):
+		return &"prompt"
+	return &"arrow"
+
+
+func _box_printing() -> bool:
+	return _box_up and (_box.has_text_left() or _box_owes_press)
+
+
+func _press_box() -> void:
+	var printed: bool = not _box.has_text_left()
+	_box.advance()
+	if printed:
+		_box_owes_press = false
+	_render_hardware()
+
+
+func _box_or_text() -> Variant:
+	if _box_up:
+		return _box
+	return box_text()
+
+
+func _note_save_text_printed() -> void:
+	if _save_prompt != null and _save_prompt.text_pending and not _box.has_text_left():
+		_save_prompt.text_printed()
 
 
 func _pack_description() -> String:
@@ -1919,7 +1969,7 @@ func _party_menu_page() -> Gen2PartyMenuPage:
 
 
 ## One pass of the target list's icons, which animate on the hardware clock the
-## rest of the party menu's do. Public the way [method advance_save_frame] is, so
+## rest of the party menu's do. Public the way [method advance_frame] is, so
 ## a test or a screenshot driver can step them without waiting on real time.
 func advance_target_icons() -> void:
 	if _target_page == null or _mode != Mode.PACK_TARGET:
@@ -2302,7 +2352,7 @@ func party_result_holding() -> bool:
 func _pack_result_image() -> Image:
 	if not _party_result.is_empty():
 		return _party_result_image()
-	return _gen1_pack_image() if _gen1_pack() else _pack_overlay(box_text(), Callable())
+	return _gen1_pack_image() if _gen1_pack() else _pack_overlay(_box_or_text(), Callable())
 
 
 func _party_result_image() -> Image:
@@ -2314,7 +2364,7 @@ func _party_result_image() -> Image:
 		(rows[int(_party_result["row"])] as Dictionary)["hp"] = anim.hp()
 	## `PlaceHollowCursor` through the bar, then `ErasePartyMenuCursors`.
 	var image: Image = _target_page.render(
-		rows, int(_party_result.get("cursor", -1)), String(_party_result.get("prompt", box_text())),
+		rows, int(_party_result.get("cursor", -1)), _party_result.get("prompt", _box_or_text()),
 		not _party_result.has("blank"),
 		int(_party_result["row"]) if anim != null else int(_party_result.get("held", -1)),
 		bool(_party_result.get("quality", false)), not _party_result.has("prompt")
@@ -2687,10 +2737,6 @@ func _show_pack_result(
 	_pack_result_next = next
 	_pack_result = message
 	_party_result = party
-	_pack_result_pages = Gen2TextLayout.lay_out(
-		message, Gen2PackPage.TEXTBOX_COLUMNS - 2, Gen2PackPage.TEXTBOX_ROWS_OF_TEXT
-	)
-	_pack_result_page = 0
 	_render_pack_result()
 
 
@@ -2702,17 +2748,6 @@ func _pack_result_continued() -> bool:
 	var next: Callable = _pack_result_next
 	_pack_result_next = Callable()
 	next.call()
-	return true
-
-
-## `PrintText`'s own wait: a result that runs past the box's two rows is pressed
-## through page by page before the pack comes back.
-func _pack_result_advanced() -> bool:
-	if _pack_result_page + 1 >= _pack_result_pages.size():
-		return false
-	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
-	_pack_result_page += 1
-	_render_pack_result()
 	return true
 
 
@@ -2758,13 +2793,12 @@ func _sync_save_prompt() -> void:
 		_save_prompt = null
 		closed.emit()
 		return
-	if _save_prompt.sfx_owed():
+	if _save_prompt.take_sfx():
 		## `SavedTheGame` reaches it through `WaitPlaySFX`; the wait behind it is
 		## not spent, for the reason the intro cry's is not.
 		sfx_requested.emit(Gen2Sfx.SFX_SAVE, true)
 	_mode = SAVE_PROMPT_MODES[_save_prompt.step]
 	_save_lines = _save_prompt.lines.duplicate()
-	_save_line = _save_prompt.line
 	_save_cursor = _save_prompt.cursor
 	_save_frames = _save_prompt.frames
 	_render_save()
@@ -2776,7 +2810,6 @@ func _enter_save_mode(mode: Mode, lines: Array, cursor_index: int) -> void:
 	_save_prompt = null
 	_mode = mode
 	_save_lines = lines.duplicate()
-	_save_line = 0
 	_save_cursor = cursor_index
 	_save_frames = 0
 	_render_save()
@@ -2804,14 +2837,6 @@ func _confirm_save() -> void:
 		## close it. Either one is also the acknowledgement: the player now knows
 		## the shortcut is there, and it is never asked again.
 		Mode.RESET_ASK:
-			## `_ContText`'s own `PromptButton` before the third line, the way
-			## the overwrite question reads its own.
-			if _save_cursor < 0:
-				sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
-				_save_line = 1
-				_save_cursor = 0
-				_render_save()
-				return
 			_acknowledge_reset()
 			if _save_cursor == 1:
 				closed.emit()
@@ -2826,8 +2851,7 @@ func _confirm_save() -> void:
 
 
 func _press_save_prompt(yes: bool) -> void:
-	if _save_prompt.confirm(yes):
-		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+	_save_prompt.confirm(yes)
 	_sync_save_prompt()
 
 
@@ -2837,8 +2861,6 @@ func _press_save_prompt(yes: bool) -> void:
 func _cancel_save() -> void:
 	if _save_prompt != null:
 		_press_save_prompt(false)
-	elif _save_cursor < 0 and _mode == Mode.RESET_ASK:
-		_confirm_save()
 	elif _mode == Mode.RESET_ASK:
 		## B is `YesNoBox`'s NO, and the menu was opened for the question alone.
 		_acknowledge_reset()
@@ -2862,11 +2884,17 @@ func _acknowledge_reset() -> void:
 ## world calls it instead of a row being chosen, so the list behind it is never
 ## the thing the player is answering about.
 func ask_soft_reset() -> void:
-	_enter_save_mode(Mode.RESET_ASK, RESET_ASK_LINES, -1)
+	_enter_save_mode(Mode.RESET_ASK, RESET_ASK_LINES, 0)
 
 
-## One frame of a held YES/NO answer or the save's timed modes.
-func advance_save_frame() -> void:
+## One hardware frame of the box, a held YES/NO answer or the save's timed modes.
+func advance_frame() -> void:
+	if _box_up:
+		_box.advance_frame()
+		if _save_prompt != null and _save_prompt.text_pending:
+			_note_save_text_printed()
+			_sync_save_prompt()
+			return
 	if _yes_no_hold > 0:
 		_advance_yes_no_hold()
 		return
@@ -2876,9 +2904,9 @@ func advance_save_frame() -> void:
 	_sync_save_prompt()
 
 
-func advance_save_frames(count: int) -> void:
+func advance_frames(count: int) -> void:
 	for _step: int in count:
-		advance_save_frame()
+		advance_frame()
 
 
 func _process(delta: float) -> void:
@@ -2891,12 +2919,12 @@ func _process(delta: float) -> void:
 			advance_party_result()
 		return
 	_target_clock.reset()
-	if _yes_no_hold == 0 and (_save_prompt == null or _save_prompt.reads_joypad()
-			or _save_prompt.finished()):
+	if not _box_up and _yes_no_hold == 0 and (_save_prompt == null
+			or _save_prompt.reads_joypad() or _save_prompt.finished()):
 		_save_clock.reset()
 		return
 	for _frame: int in _save_clock.tick(delta):
-		advance_save_frame()
+		advance_frame()
 
 
 ## `DisplaySaveInfoOnSave`'s four rows: the same fields [Gen2TrainerCard]'s
@@ -2917,9 +2945,8 @@ func _save_state() -> Dictionary:
 		"caught": state.caught_count() if state != null else 0,
 		"hours": time.hours,
 		"minutes": time.minutes,
-		"lines": _save_lines,
-		"line": _save_line,
-		"cursor": _save_cursor,
+		"box": _box if _box_up else null,
+		"cursor": -1 if _box_printing() else _save_cursor,
 	}
 
 
@@ -2976,6 +3003,7 @@ func _list_image(hollow: bool = false) -> Image:
 ## Whichever of the cartridge's screens this mode is. `_hardware_image()` answers
 ## every one of them, so there is no window-resolution fallback behind it.
 func _render_hardware() -> void:
+	_sync_box()
 	if _view == null:
 		return
 	var image: Image = _hardware_image()
@@ -3021,8 +3049,20 @@ func box_text() -> String:
 		Mode.PACK_PP_MOVE:
 			return _pp_which_move_text()
 		Mode.PACK_RESULT:
-			return _pack_result_text()
+			return _pack_result
+	if _mode in SAVE_MODES:
+		return _save_text()
 	return ""
+
+
+func _save_text() -> String:
+	if _save_prompt != null:
+		return _save_prompt.text()
+	if _save_lines.size() <= 2:
+		return "\n".join(_save_lines)
+	return "%s\n%s%s%s" % [
+		_save_lines[0], _save_lines[1], Gen2TextStream.SCROLL_BREAK, _save_lines[2],
+	]
 
 
 func _hardware_image() -> Image:
@@ -3106,7 +3146,9 @@ func _toss_quantity_image() -> Image:
 	var dial: Rect2i = _deposit_sell.dial_box() if _deposit_sell != null \
 		else Rect2i(TOSS_QUANTITY_AT, TOSS_QUANTITY_TO - TOSS_QUANTITY_AT)
 	var value: int = _toss_prompt.value if _toss_prompt != null else 1
-	return _pack_overlay(box_text(), func(map: PackedInt32Array) -> void:
+	return _pack_overlay(_box_or_text(), func(map: PackedInt32Array) -> void:
+		if _box_printing():
+			return
 		_pack_page.draw_quantity(
 			map, Gen2MenuBox.from_coords(dial.position.x, dial.position.y, dial.end.x, dial.end.y, 0),
 			value, _deposit_sell.subtotal(value) if _deposit_sell != null else -1
@@ -3114,7 +3156,7 @@ func _toss_quantity_image() -> Image:
 	)
 
 
-func _learn_backdrop(text: String) -> Image:
+func _learn_backdrop(text: Variant) -> Image:
 	if _party_menu_page() == null:
 		return null
 	return _target_page.render(
@@ -3124,8 +3166,8 @@ func _learn_backdrop(text: String) -> Image:
 
 
 func _learn_yes_no(cursor_index: int) -> Image:
-	var image: Image = _learn_backdrop(_question_shown())
-	if image != null and not _reading_question():
+	var image: Image = _learn_backdrop(_box_or_text())
+	if image != null and not _box_printing():
 		_blend_yes_no(image, cursor_index)
 	return image
 

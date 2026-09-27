@@ -40,8 +40,7 @@ const TEXTBOX_AT: Vector2i = Vector2i(0, 12)
 const TEXTBOX_COLUMNS: int = 20
 const TEXTBOX_ROWS: int = 6
 ## Where `PrintItemDescription` is handed, and the row spacing every text box on
-## the hardware is written with. `TEXTBOX_INNERH` is two lines, so a longer text
-## is paged rather than drawn through the frame.
+## the hardware is written with: `TEXTBOX_INNERH` is two lines.
 const TEXT_AT: Vector2i = Vector2i(1, 14)
 const TEXT_SPACING: int = 2
 const TEXTBOX_ROWS_OF_TEXT: int = 2
@@ -141,7 +140,7 @@ func _load_sheet(indices: PackedByteArray) -> void:
 ## the three shapes [constant ROW_ITEM] names, and [param cursor] which of them
 ## the arrow stands on, or -1 while `PlaceHollowCursor` has taken it away.
 func pocket_map(
-	_pocket: int, rows: Array, cursor: int, description: String,
+	_pocket: int, rows: Array, cursor: int, description: Variant,
 	pocket_name: PackedByteArray = PackedByteArray()
 ) -> PackedInt32Array:
 	var map := PackedInt32Array()
@@ -219,10 +218,14 @@ func _tm_label(entry: Dictionary) -> String:
 
 ## `Textbox`: the chosen frame around a cleared interior, with the description
 ## printed a tile in and on every second row.
-func _draw_textbox(map: PackedInt32Array, text: String) -> void:
+func _draw_textbox(map: PackedInt32Array, text: Variant) -> void:
 	draw_frame(map, TEXTBOX_AT, Vector2i(TEXTBOX_COLUMNS, TEXTBOX_ROWS))
+	if text is Gen2TextBox:
+		for glyph: Array in (text as Gen2TextBox).glyphs():
+			_put(map, TEXTBOX_AT + (glyph[0] as Vector2i), int(glyph[1]))
+		return
 	var line: int = 0
-	for row_text: String in text.split("\n", false):
+	for row_text: String in String(text).split("\n", false):
 		if line >= TEXTBOX_ROWS_OF_TEXT:
 			break
 		_string(map, TEXT_AT + Vector2i(0, line * TEXT_SPACING), row_text)

@@ -178,7 +178,7 @@ func test_the_halloffame_command_opens_the_overlay() -> void:
 
 
 ## An induction reads no joypad until the player's own panel, so every page in
-## front of that one is spent as frames and the rating boxes as presses.
+## front of that one is spent as frames and the rating texts printed and pressed.
 func _advance_to_the_end() -> void:
 	while _world_screen._hall_of_fame_host != null:
 		match StringName(_host().current_page().get("kind", &"")):
@@ -187,7 +187,10 @@ func _advance_to_the_end() -> void:
 			Gen2HallOfFame.PAGE_MON:
 				_host().advance_hold_frames(Gen2HallOfFame.panel_frames(_data))
 			_:
-				_host().handle_button(PokeButton.A)
+				if _host()._printing():
+					_host().advance_hold_frames(1)
+				else:
+					_host().handle_button(PokeButton.A)
 
 
 ## `HallOfFame_FadeOutMusic`'s `ld c, 100` behind `InitDisplayForHallOfFame`.

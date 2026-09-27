@@ -5,6 +5,8 @@ extends RefCounted
 ## real GameData, world API, script runner and battle overlay boundaries.
 
 const BattleFixture := preload("res://tests/unit/battle_fixture.gd")
+## Longer than any box the fixture prints takes to reach its end.
+const PRINT_FRAME_CAP: int = 2000
 
 const GAME_ID: StringName = &"worldtrainer"
 const SHA1: String = "0123456789abcdef"
@@ -839,6 +841,8 @@ static func _write_pokecenter_pc(manifest: Dictionary) -> void:
 		},
 		"players_lists": [[0, 1, 2, 3, 5], [0, 1, 2, 3, 4, 6]],
 		"texts": {
+			"cant_use": "Bzzzzt! You must\nhave a #MON to\nuse this!",
+			"players_turn_on": "<PLAYER> turned on\nthe PC.",
 			"ask_what_do": "What do you want\nto do?",
 			"how_many_withdraw": "How many do you\nwant to withdraw?",
 			"withdrew": "Withdrew <NUM_D10C>\n<RAM_D086>(S).",
@@ -1245,3 +1249,26 @@ static func _text(text: String) -> Array:
 		out.append(byte)
 	out.append(Gen2WorldScript.TEXT_TERMINATOR)
 	return out
+
+
+## A service host's `PrintText` spent to where it waits: the frames its letters,
+## `Paragraph` and scrolls cost, and no press.
+static func print_out(host: Gen2WorldServiceScreen) -> void:
+	for _frame: int in PRINT_FRAME_CAP:
+		if host._box == null or not host._box_up or not host._box.is_revealing():
+			return
+		host.advance_frame()
+
+
+## The page standing in the host's message box once it has printed.
+static func box_words(host: Gen2WorldServiceScreen) -> String:
+	print_out(host)
+	if host._box == null or not host._box_up:
+		return host._summary
+	return "\n".join(host._box.page_lines())
+
+
+## A box printed out and answered with A.
+static func press_through(host: Gen2WorldServiceScreen) -> void:
+	print_out(host)
+	host.handle_button(PokeButton.A)

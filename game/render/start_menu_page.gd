@@ -109,15 +109,9 @@ const SAVE_BADGE_CELLS: int = 2
 const SAVE_DEX_CELLS: int = 3
 const SAVE_HOUR_CELLS: int = 3
 
-## `SpeechTextbox`: `hlcoord 0, 12` with `TEXTBOX_INNERH`/`TEXTBOX_INNERW`, and
-## `PrintText`'s own two rows inside it.
+## `SpeechTextbox`: `hlcoord 0, 12` with `TEXTBOX_INNERH`/`TEXTBOX_INNERW`.
 const SAVE_TEXTBOX_AT: Vector2i = Vector2i(0, 12)
 const SAVE_TEXTBOX_SIZE: Vector2i = Vector2i(20, 6)
-const SAVE_TEXT_AT: Vector2i = Vector2i(1, 14)
-const SAVE_TEXT_SPACING: int = 2
-## How many of a text's lines the box shows at once, which is what makes
-## `_ContText` a scroll rather than a third row.
-const SAVE_TEXT_ROWS: int = 2
 
 ## `SaveTheGame_yesorno`'s `lb bc, 0, 7` into `_YesNoBox`, which stores the left
 ## coordinate, adds 5 for the right, the top, and adds 4 for the bottom.
@@ -214,8 +208,8 @@ func render_save(state: Dictionary, behind: Image = null) -> Image:
 		_blit(image, behind, Vector2i.ZERO)
 	if bool(state.get("info", true)):
 		_blit(image, _render_save_info(state), Vector2i(SAVE_INFO_LEFT, SAVE_INFO_TOP))
-	if not (state.get("lines", []) as Array).is_empty():
-		_blit(image, _render_save_textbox(state), SAVE_TEXTBOX_AT)
+	if state.get("box") != null:
+		_blit(image, _render_save_textbox(state["box"] as Gen2TextBox), SAVE_TEXTBOX_AT)
 	var cursor: int = int(state.get("cursor", -1))
 	if cursor >= 0:
 		var box: Gen2MenuBox = Gen2MenuBox.from_coords(
@@ -261,27 +255,11 @@ func _render_save_info(state: Dictionary) -> Image:
 	)
 
 
-## The speech box and the two lines of the text standing in it. A text longer
-## than the box is scrolled by [code]state["line"][/code], which is what
-## `_ContText` does to `AlreadyASaveFileText`'s third line.
-func _render_save_textbox(state: Dictionary) -> Image:
+func _render_save_textbox(box: Gen2TextBox) -> Image:
 	var width: int = SAVE_TEXTBOX_SIZE.x * TILE
 	var indices := PackedByteArray()
 	indices.resize(width * SAVE_TEXTBOX_SIZE.y * TILE)
-	font.draw_box(
-		frame_style, indices, width, 0, 0, SAVE_TEXTBOX_SIZE.x, SAVE_TEXTBOX_SIZE.y
-	)
-	var lines: Array = state.get("lines", [])
-	var first: int = maxi(int(state.get("line", 0)), 0)
-	var at: Vector2i = SAVE_TEXT_AT - SAVE_TEXTBOX_AT
-	for row: int in SAVE_TEXT_ROWS:
-		var index: int = first + row
-		if index < 0 or index >= lines.size():
-			continue
-		font.draw_text(
-			String(lines[index]), indices, width,
-			at.x * TILE, (at.y + row * SAVE_TEXT_SPACING) * TILE
-		)
+	box.compose(indices, width, Vector2i.ZERO)
 	return Gen2PicImage.from_indices(
 		indices, width, SAVE_TEXTBOX_SIZE.y * TILE, _palette()
 	)

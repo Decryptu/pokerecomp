@@ -205,10 +205,10 @@ const POKEPIC_SPECIES: int = 152
 ## every `preview_*` on it is reachable from here rather than from nothing.
 const SCREEN_DRIVER: String = "preview_%s"
 
-## `.HowMayIHelpYou` prints without waiting, so `pokemart` opens straight on the
-## BUY/SELL/QUIT menu and one press reaches the list. `DisplayPokemartDialogue`
-## does wait, and prints again behind the row, which is what this bounds.
+## `.HowMayIHelpYou` waits for nothing, so one press reaches the list;
+## `DisplayPokemartDialogue` prints again behind the row, which this bounds.
 const MART_PRESSES: int = 4
+const MART_PRINT_FRAME_CAP: int = 600
 ## Frames spent between two presses of a driven menu, so the box a press opened
 ## owes nothing before the next one lands: nothing shortens a printing text.
 const TEXT_SETTLE_FRAMES: int = 20
@@ -1014,8 +1014,7 @@ func _stage_party_routine() -> void:
 ## three different items, and the development save's party is not one.
 func _stage_battle_tower() -> void:
 	_stage_battle_tower_party()
-	_screen.press_button(PokeButton.UP)
-	_screen.interact()
+	_face_and_interact(PokeButton.UP)
 	for _frame: int in TEXT_SETTLE_FRAMES:
 		_screen.advance_frame()
 	for _press: int in maxi(_cell.x, 0):
@@ -1033,8 +1032,7 @@ func _stage_battle_tower() -> void:
 ## `YesNoMenuHeader.MenuData`'s cursor. `crystal 26 3 ... yes_no 31 6` is
 ## Cherrygrove's guide.
 func _stage_yes_no() -> void:
-	_screen.press_button(PokeButton.RIGHT)
-	_screen.interact()
+	_face_and_interact(PokeButton.RIGHT)
 	for _press: int in WARP_FRAME_CAP:
 		if StringName(_screen._world.pending_script_input().get(
 			"command", &"")) == &"yesorno":
@@ -1047,8 +1045,7 @@ func _stage_yes_no() -> void:
 ## `NPCTrade` from the cell below the trader: TRADE_DIALOG_INTRO with the
 ## `YesNoBox` over it. `crystal 1 3 ... npc_trade 2 4` is Tim's own.
 func _stage_npc_trade() -> void:
-	_screen.press_button(PokeButton.UP)
-	_screen.interact()
+	_face_and_interact(PokeButton.UP)
 	for _press: int in WARP_FRAME_CAP:
 		if StringName(_screen._world.pending_script_input().get(
 			"command", &"")) == &"trade":
@@ -1061,8 +1058,7 @@ func _stage_npc_trade() -> void:
 ## The clerk behind the counter, talked to from the cell in front of him, so the
 ## shop is reached the way a player reaches it.
 func _stage_mart() -> void:
-	_screen.press_button(PokeButton.LEFT)
-	_screen.interact()
+	_face_and_interact(PokeButton.LEFT)
 	_clear_mart_boxes()
 	## `StandardMart`'s BUY/SELL/QUIT loop is what the welcome box hands
 	## the shop to. `mart` takes its BUY row, `mart_sell` the one below.
@@ -1074,13 +1070,34 @@ func _stage_mart() -> void:
 	_clear_mart_boxes()
 
 
-## Presses through whatever boxes the shop is holding on, so a kind lands on the
-## same stage on either generation.
+## A tap from a standstill turns the player on the next pass, which A waits for.
+func _face_and_interact(button: int) -> void:
+	_screen.press_button(button)
+	for _frame: int in TEXT_SETTLE_FRAMES:
+		if _screen.world().player_facing == FACINGS[button]:
+			break
+		_screen.advance_frame()
+	_screen.interact()
+
+
+const FACINGS: Dictionary = {
+	PokeButton.UP: Gen2WorldSprite.FACING_UP, PokeButton.DOWN: Gen2WorldSprite.FACING_DOWN,
+	PokeButton.LEFT: Gen2WorldSprite.FACING_LEFT, PokeButton.RIGHT: Gen2WorldSprite.FACING_RIGHT,
+}
+
+
+## Prints out and presses through whatever boxes the shop is holding on, so a
+## kind lands on the same stage on either generation.
 func _clear_mart_boxes() -> void:
 	for _press: int in MART_PRESSES:
 		var host: Gen2WorldServiceScreen = _screen.get("_service_host")
-		if host == null or StringName(host.get("_mart_stage")) \
-			!= Gen2WorldServiceScreen.MART_MESSAGE:
+		if host == null:
+			return
+		for _frame: int in MART_PRINT_FRAME_CAP:
+			if not host._box_printing():
+				break
+			_screen.advance_frame()
+		if StringName(host.get("_mart_stage")) != Gen2WorldServiceScreen.MART_MESSAGE:
 			return
 		_screen.press_button(PokeButton.A)
 
@@ -1101,8 +1118,7 @@ func _stage_elevator() -> void:
 		"map_group": int(door["map_group"]),
 		"map_number": int(door["map_number"]),
 	}
-	_screen.press_button(PokeButton.UP)
-	_screen.interact()
+	_face_and_interact(PokeButton.UP)
 	for _press: int in maxi(_cell.x, 0):
 		_screen.press_button(PokeButton.DOWN)
 
@@ -1482,8 +1498,7 @@ func _staged_frames() -> int:
 
 ## `DisplayTextID`'s box, read by facing the cell above the `x y` argument.
 func _stage_sign() -> void:
-	_screen.press_button(PokeButton.UP)
-	_screen.interact()
+	_face_and_interact(PokeButton.UP)
 
 
 const SCRIPT_MENU_DOME_FOSSIL: int = 0x29

@@ -13,7 +13,7 @@ const NICKNAMES: Array[String] = ["ALPHA", "BRAVO", "CHARLIE"]
 ## `text_ram` slots stand in for `wStringBuffer` and `wNameBuffer`, which is all
 ## the fill reads; the words are short stand-ins.
 const SPECIAL_TEXT: Dictionary = {
-	"pc": {"accessed_someones": "Accessed SOMEONE's\nPC."},
+	"pc": {"accessed_someones": "Accessed SOMEONE's\nPC.", "accessed_mine": "Accessed my PC."},
 	"bills_pc": {"what": "What?"},
 	"bills_pc_2": {
 		"once_released": "Once released,\n<RAM_CF4B> is\ngone forever. OK?",
@@ -93,7 +93,7 @@ func _take_top_row(host: Gen2WorldServiceScreen, row: int) -> void:
 		host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT)
-	host.handle_button(PokeButton.A)
+	Fixture.press_through(host)
 
 
 ## A row of `BillsPCMenu` onto its mon list, and the list walked to [param row].
@@ -120,9 +120,11 @@ func test_bills_pc_lands_on_its_own_menu() -> void:
 	var host: Gen2WorldServiceScreen = await _open_machine()
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT)
-	assert_eq(host._summary, "Accessed SOMEONE's\nPC.")
+	assert_true(host._box.is_revealing(), "`PCMainMenu` prints with the delay on")
+	assert_eq(Fixture.box_words(host), "Accessed SOMEONE's\nPC.")
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
+	assert_false(host._box.is_revealing(), "`BillsPC_` sets `BIT_NO_TEXT_DELAY`")
 	assert_eq(host._pc_rows, Gen2WorldPC.gen1_bills_pc_menu())
 	assert_eq(host._cursor, 0)
 	host.handle_button(PokeButton.B)
@@ -136,10 +138,10 @@ func test_release_asks_about_and_releases_the_chosen_mon() -> void:
 	_open_mon_list(host, Gen2WorldPC.GEN1_BILLS_PC_RELEASE, 1)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ASK)
-	assert_eq(host._summary, "Once released,\nBRAVO is")
+	assert_eq(Fixture.box_words(host), "Once released,\nBRAVO is")
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
-	assert_eq(host._summary, "gone forever. OK?")
+	assert_eq(Fixture.box_words(host), "gone forever. OK?")
 	assert_eq(host._cursor, 0, "the page's DOWN moved nothing")
 	host.handle_button(PokeButton.A)
 	assert_eq(_box_names(host), NICKNAMES, "the answer is held first")
@@ -147,7 +149,7 @@ func test_release_asks_about_and_releases_the_chosen_mon() -> void:
 		host.advance_frame()
 	assert_eq(_box_names(host), ["ALPHA", "CHARLIE"])
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT)
-	assert_eq(host._summary, "BRAVO was\nreleased.")
+	assert_eq(Fixture.box_words(host), "BRAVO was\nreleased.")
 
 
 ## NO, and B which is NO's own answer: the list comes back on the row it left
@@ -157,7 +159,8 @@ func test_refusing_the_release_reopens_the_list_on_the_same_row() -> void:
 	_open_mon_list(host, Gen2WorldPC.GEN1_BILLS_PC_RELEASE, 2)
 	for refusal: Array in [[PokeButton.DOWN, PokeButton.A], [PokeButton.B]]:
 		host.handle_button(PokeButton.A)
-		host.handle_button(PokeButton.A)
+		Fixture.press_through(host)
+		Fixture.print_out(host)
 		assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ASK)
 		for button: int in refusal:
 			host.handle_button(button)
@@ -197,14 +200,18 @@ func test_toss_asks_about_and_tosses_the_chosen_stack() -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_QUANTITY)
 	host.handle_button(PokeButton.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ASK)
-	assert_eq(host._summary, "Is it OK to toss\nPOTION?")
+	assert_eq(Fixture.box_words(host), "Is it OK to toss\nPOTION?")
+	## `IsItOKToTossItemText` ends in `prompt`: its press comes before the YES/NO.
+	assert_null(host._yes_no_box())
+	host.handle_button(PokeButton.A)
+	assert_not_null(host._yes_no_box())
 	host.handle_button(PokeButton.A)
 	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
 		host.advance_frame()
 	var state: Gen2WorldState = _world_screen._world.state
 	assert_eq(state.pc_item_quantity(POTION), 2)
 	assert_eq(state.pc_item_quantity(STACK), 5)
-	assert_eq(host._summary, "Threw away\nPOTION.")
+	assert_eq(Fixture.box_words(host), "Threw away\nPOTION.")
 
 
 ## `PlayerPCToss`'s `jp .loop` keeps `wCurrentMenuItem`: a dial backed out of

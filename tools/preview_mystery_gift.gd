@@ -50,12 +50,14 @@ func _initialize() -> void:
 	var sheet: Image = Image.create_empty(
 		columns * Gen2Screen.WIDTH, rows * Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 	)
+	var box: Gen2TextBox = Gen2TextBox.for_page(data)
 	for index: int in boxes.size():
-		var tile: Image = page.render(_text(data, boxes[index]))
+		var tile: Image = page.render(_printed(box, data, boxes[index]))
 		@warning_ignore("integer_division")
 		sheet.blit_rect(tile, Rect2i(Vector2i.ZERO, tile.get_size()), Vector2i(
 			(index % columns) * Gen2Screen.WIDTH, (index / columns) * Gen2Screen.HEIGHT
 		))
+	box.free()
 	if sheet.save_png(args[1]) != OK:
 		push_error("Could not write %s" % args[1])
 		quit(1)
@@ -68,12 +70,12 @@ func _initialize() -> void:
 
 
 ## The prompt is the page's own; every other box is one of the eight imported
-## stubs with the two names and the gift filled in.
-func _text(data: GameData, box: String) -> String:
-	if box == "prompt":
+## stubs with the two names and the gift filled in, its first page printed out.
+func _printed(box: Gen2TextBox, data: GameData, outcome: String) -> Variant:
+	if outcome == "prompt":
 		return ""
-	var pages: Array = Gen2TextLayout.lay_out(
-		Gen2MysteryGiftScreen.box_text(data, StringName(box), PARTNER, PLAYER, GIFT),
-		Gen2MysteryGiftPage.MESSAGE_COLUMNS, Gen2MysteryGiftPage.MESSAGE_ROWS
+	box.show_text(
+		Gen2MysteryGiftScreen.box_text(data, StringName(outcome), PARTNER, PLAYER, GIFT), true
 	)
-	return "\n".join(pages[0] as PackedStringArray) if not pages.is_empty() else ""
+	box.finish()
+	return box

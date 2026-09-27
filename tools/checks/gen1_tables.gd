@@ -296,12 +296,12 @@ func _hall_of_fame() -> void:
 	for page: Dictionary in pages:
 		if bool(page.get("slide", false)) and StringName(page["kind"]) == Gen2HallOfFame.PAGE_MON:
 			mons += 1
-		if page.has("lines") and not page.has("bgp"):
+		if page.has("text") and not page.has("bgp"):
 			text_pages += 1
 	_r.check(mons == save.party.size(), "%d of %d party members slide in." % [mons, save.party.size()])
 	_r.check(
 		pages.size() == 1 + mons * HOF_PAGES_PER_MON + 1 + text_pages + HOF_FADE_PAGES,
-		"the induction is %d pages for %d members and %d boxes." % [pages.size(), mons, text_pages]
+		"the induction is %d pages for %d members and %d texts." % [pages.size(), mons, text_pages]
 	)
 	_r.check(bool(pages[0].get("music", false))
 		and bool(pages[pages.size() - HOF_FADE_PAGES].get("fade_music", false)),

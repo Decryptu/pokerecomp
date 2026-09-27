@@ -65,16 +65,15 @@ func test_pages_follow_the_party_and_end_with_the_player() -> void:
 
 
 ## `HOF_AnimatePlayerPic` ends on `farcall ProfOaksPCRating`, so the player's
-## panel is answered once per box its two texts fill, and the sound the rating
-## picked plays on the last of them.
+## panel stands under each of its two texts, and the rating carries its sound.
 func test_the_player_panel_carries_the_oak_rating() -> void:
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1]))
 	var counts: Dictionary = pages[2]
 	var rating: Dictionary = pages[3]
 	assert_eq(StringName(counts["kind"]), Gen2HallOfFame.PAGE_PLAYER)
 	assert_eq(StringName(rating["kind"]), Gen2HallOfFame.PAGE_PLAYER)
-	assert_string_contains(String((counts["lines"] as Array)[0]), "SEEN")
-	assert_eq(String((rating["lines"] as Array)[0]), "RATING01", "nothing caught")
+	assert_string_contains(String(counts["text"]), "SEEN")
+	assert_true(String(rating["text"]).begins_with("RATING01"), "nothing caught")
 	assert_false(counts.has("sfx"), "the sound is on the rating, not the counts")
 	assert_eq(int(rating["sfx"]), Fixture.OAK_FIRST_SFX)
 
@@ -221,12 +220,11 @@ const PokedexFixture := preload("res://tests/unit/pokedex_fixture.gd")
 ## `AnimateHallOfFame`'s own pages on a Generation 1 cache: `ld c, 100` of
 ## white, then per member the slide, the info box with its cry, HallOfFameText's
 ## box and `GBFadeOutToWhite`'s three palettes, then the player's slide and the
-## three `HoFPrintTextAndDelay` boxes, a `cont` inside the rating waiting for
-## its press.
+## three `HoFPrintTextAndDelay` texts, each held once printed.
 func test_generation_1_pages_follow_animate_hall_of_fame() -> void:
 	var data: GameData = PokedexFixture.build_gen1()
 	var pages: Array = Gen2HallOfFame.pages(data, _save([1, 4]))
-	assert_eq(pages.size(), 1 + 2 * 6 + 1 + 2 + 3 + 3)
+	assert_eq(pages.size(), 1 + 2 * 6 + 1 + 3 + 3)
 	assert_eq(StringName(pages[0]["kind"]), Gen2HallOfFame.PAGE_BLANK)
 	assert_eq(int(pages[0]["hold"]), Gen2HallOfFame.GEN1_OPEN_FRAMES)
 	assert_true(bool(pages[0]["music"]), "PlayMusic MUSIC_HALL_OF_FAME after the white")
@@ -245,13 +243,15 @@ func test_generation_1_pages_follow_animate_hall_of_fame() -> void:
 	var player: int = 1 + 2 * 6
 	assert_eq(StringName(pages[player]["kind"]), Gen2HallOfFame.PAGE_PLAYER)
 	assert_true(bool(pages[player]["slide"]))
-	assert_eq(pages[player + 1]["lines"], ["POKéDEX   Seen:  0", "         Owned:  0"])
-	assert_eq(int(pages[player + 1]["hold"]), Gen2HallOfFame.GEN1_TEXT_FRAMES)
-	assert_eq(pages[player + 2]["lines"], ["POKéDEX Rating<COLON>"], "one tile, one line")
-	assert_eq(int(pages[player + 3]["hold"]), 0, "cont waits for the press")
-	assert_eq(int(pages[player + 4]["hold"]), 0, "and the carried line's page does too")
-	assert_eq(int(pages[player + 5]["hold"]), Gen2HallOfFame.GEN1_TEXT_FRAMES)
-	assert_true(bool(pages[player + 6]["fade_music"]), "HoFFadeOutScreenAndMusic")
+	assert_eq(Gen2TextLayout.lay_out(String(pages[player + 1]["text"]), 18, 2, RomRegistry.GEN1),
+		[PackedStringArray(["POKéDEX   Seen:  0", "         Owned:  0"])])
+	assert_eq(Gen2TextLayout.lay_out(String(pages[player + 2]["text"]), 18, 2, RomRegistry.GEN1),
+		[PackedStringArray(["POKéDEX Rating<COLON>"])], "one tile, one line")
+	assert_string_contains(String(pages[player + 3]["text"]), Gen2TextStream.SCROLL_BREAK,
+		"the rating's `cont` waits inside its own text")
+	for text: int in 3:
+		assert_eq(int(pages[player + 1 + text]["hold"]), Gen2HallOfFame.GEN1_TEXT_FRAMES)
+	assert_true(bool(pages[player + 4]["fade_music"]), "HoFFadeOutScreenAndMusic")
 	RomCache.clear(PokedexFixture.gen1_directory())
 
 

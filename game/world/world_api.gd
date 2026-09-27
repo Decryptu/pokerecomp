@@ -6964,7 +6964,7 @@ func _gen1_link_menu_steps() -> Array:
 					"width": box.size.x, "height": box.size.y},
 				"entries_at": {"x": box.position.x + 2, "y": box.position.y + 2},
 				"labels": [], "rows": rows, "text": String(question["text"]),
-				"hold_frames": Gen1Layout.LINK_MENU_HOLD_FRAMES,
+				"hold_frames": Gen1Layout.LINK_MENU_HOLD_FRAMES, "fast_text": true,
 			},
 		}},
 	]
