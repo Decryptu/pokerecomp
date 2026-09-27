@@ -1,13 +1,12 @@
 extends GutTest
 
-## Scene integration for the routines that open `SelectMonFromParty`:
-## `NameRater` and `MoveDeletion`. Each is its own line through the overworld,
-## two `YesNoBox`es, the party list, and an ending text.
+## Scene integration for the specials that act on one party member, from the
+## Name Rater to the Day-Care: each is a line of boxes, questions and the list.
 ##
-## Both maps are `opentext / special / waitbutton / closetext / end`, so the last
-## text either special prints is dismissed by the script's own `waitbutton` and
-## not by the special. That ordering is what this covers; [Gen2NameRater]'s and
-## [Gen2MoveDeleter]'s own branches are unit tested beside the party host.
+## Their maps are `opentext / special / waitbutton / closetext / end`, so the
+## last text a special prints is dismissed by the script's own `waitbutton` and
+## not by the special. That ordering is what this covers; each routine's own
+## branches are unit tested beside the party host.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 
@@ -657,6 +656,29 @@ func test_a_balance_window_stands_over_the_map_until_closetext() -> void:
 const MAIL_ITEM: int = 158
 const MAIL_LINE_1: String = "DARK CAVE leads"
 const MAIL_LINE_2: String = "to another road"
+
+
+## `GetPriceToRetrieveBreedmon` copies the slot's nickname into wStringBuffer1,
+## which both withdrawal questions name before anything is chosen.
+func test_the_day_care_withdrawal_question_names_the_pokemon_left_there() -> void:
+	_write_name_rater_script(Gen2WorldScriptRunner.SPECIAL_DAY_CARE_MAN)
+	await _open_world()
+	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
+	var rate: int = int(_data.species(mon.species).get("growth_rate", 0))
+	mon.exp = Gen2Experience.total_exp_at(rate, mon.level + 3)
+	var state: Gen2WorldState = _world_screen._world.state
+	state.set_day_care_mon(Gen2WorldDayCare.SLOT_MAN, mon)
+	state.set_day_care_has_mon(Gen2WorldDayCare.SLOT_MAN, true)
+	_run_script()
+	var host: Gen2DayCareScreen = _world_screen._day_care_host
+	assert_not_null(host)
+	var guard: int = 600
+	while guard > 0 and host.phase() != Gen2DayCareScreen.Phase.ASK:
+		_world_screen.advance_frame()
+		guard -= 1
+	var shown: String = " ".join(host.text_lines())
+	assert_true(shown.contains("SPARKY"), shown)
+	assert_false(shown.contains(Gen2TextStream.RAM_MARKER), shown)
 
 
 func _mail_message(first: String, second: String) -> PackedByteArray:

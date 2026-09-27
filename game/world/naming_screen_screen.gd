@@ -66,6 +66,7 @@ var palette: PackedColorArray = PackedColorArray():
 ## player and the rival; only the line over it differs, so it is the caller's.
 const PROMPT_PLAYER: String = "YOUR NAME?"
 const PROMPT_RIVAL: String = "RIVAL'S NAME?"
+const PROMPT_BOX: String = "BOX NAME?"
 const GEN1_PROMPT_PLAYER: String = "YOUR NAME?"
 const GEN1_PROMPT_RIVAL: String = "RIVAL's NAME?"
 

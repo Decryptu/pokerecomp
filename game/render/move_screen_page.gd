@@ -74,8 +74,6 @@ const DESCRIPTION_LINE_STEP: int = 2
 const WHERE_AT: Vector2i = Vector2i(1, 12)
 const WHERE_STRING: String = "Where?"
 
-## `PlaceHollowCursor`, the outlined arrow a held row wears.
-const HOLLOW_CURSOR_CODE: int = 0xEC
 
 ## `SPRITE_ANIM_OBJ_PARTY_MON`'s frameset, which still steps here even though
 ## `MoveList_InitAnimatedMonIcon` nulls the sequence: two sets of four tiles,
@@ -204,7 +202,7 @@ func draw(page: Dictionary) -> PackedByteArray:
 	var held: int = int(page.get("held", -1))
 	if held >= 0:
 		_code(
-			indices, width, HOLLOW_CURSOR_CODE,
+			indices, width, Gen2MenuPage.HOLLOW_CURSOR_CODE,
 			Vector2i(CURSOR_COLUMN, CURSOR_FIRST_ROW + held * CURSOR_ROW_STEP)
 		)
 	## `Place2DMenuCursor` draws over the `▷` it finds on its own row.

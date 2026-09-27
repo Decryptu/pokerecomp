@@ -295,12 +295,11 @@ const SPECIAL_MOVE_DELETION: int = 33
 ## `ChooseMonToLearnTMHM` opens and the `.loop` behind it, so the whole routine
 ## is one host request; the map script reads wScriptVar afterwards.
 const SPECIAL_MOVE_TUTOR: int = 131
-## The Day-Care's five, all below the first index the two tables disagree on, so
-## `special_index()` leaves them alone. `DayCareMan` and `DayCareLady` are the
-## deposit and withdrawal counters; `DayCareManOutside` is the man who brings the
-## egg out and the only one of the five that writes wScriptVar, which its map
-## script branches on; `DayCareMon1` and `DayCareMon2` are the two signs inside,
-## each a line, a cry and the pair's compatibility.
+## The Day-Care's five, in Crystal's numbering (`special_index()` moves Gold's
+## two signs). `DayCareMan` and `DayCareLady` are the two counters;
+## `DayCareManOutside` brings the egg out and is the only one that writes
+## wScriptVar; `DayCareMon1` and `DayCareMon2` are the signs inside, each a line,
+## a cry and the pair's compatibility.
 const SPECIAL_DAY_CARE_MAN: int = 30
 const SPECIAL_DAY_CARE_LADY: int = 31
 const SPECIAL_DAY_CARE_MAN_OUTSIDE: int = 32

@@ -314,12 +314,14 @@ func test_pc_storage_moves_party_to_box_and_back_through_atomic_save() -> void:
 	var initial_write: Dictionary = Gen2SaveStore.save(save, _data)
 	assert_true(initial_write["ok"], initial_write["message"])
 	await _open_box_screen(save)
-	assert_true(_box_screen.select_party_member(0))
-	assert_true(_box_screen.deposit_selected_party())
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(save.party.size(), 1)
 	assert_not_null(save.boxes[0].slots[0])
-	assert_true(_box_screen.select_box_slot(0))
-	assert_true(_box_screen.withdraw_selected_box())
+	_box_screen.free()
+	await _open_box_screen(save, Gen2BoxScreen.MODE_WITHDRAW)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(save.party.size(), 2)
 	assert_null(save.boxes[0].slots[0])
 	var loaded: Dictionary = Gen2SaveStore.load_result(_data.id, _data.sha1, save.slot, _data)
@@ -361,6 +363,7 @@ func test_a_row_opens_the_submenu_and_its_first_row_is_the_transfer() -> void:
 	assert_eq(save.party.size(), 1)
 	assert_not_null(save.boxes[0].slots[0])
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Stored GEODUDE!")
+	_box_screen.advance_frames(Gen2BoxScreen.LINE_FRAMES)
 
 	assert_false(_box_screen.handle_button(PokeButton.RIGHT))
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
@@ -369,7 +372,8 @@ func test_a_row_opens_the_submenu_and_its_first_row_is_the_transfer() -> void:
 ## `BillsPC_CheckMail_PreventBlackout`'s three refusals, in its own order.
 ## `CheckCurPartyMonFainted` leaves out `wCurPartyMon`, which is the row under
 ## the cursor, so a party whose only standing Pokemon is the chosen one refuses;
-## and `wBillsPC_MonHasMail` is `ItemIsMail` on that same row.
+## and `wBillsPC_MonHasMail` is `ItemIsMail` on that same row. Each line stands
+## for its fifty frames with no press read, and then `.Init` is the list again.
 func test_the_party_list_refuses_a_transfer_that_would_leave_nobody_standing() -> void:
 	var save: Gen2SaveData = _save_with_two()
 	var third: Gen2BattleMon = Gen2BattleMon.create(
@@ -385,6 +389,12 @@ func test_the_party_list_refuses_a_transfer_that_would_leave_nobody_standing() -
 	_box_screen.handle_button(PokeButton.A)
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_NO_USABLE)
 	assert_eq(save.party.size(), 3, "nothing moved")
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.advance_frames(Gen2BoxScreen.LINE_FRAMES)
+	var landed: Dictionary = _box_screen.box_snapshot()
+	assert_eq(int(landed["cursor"]), 0, "no press was read during the line")
+	assert_eq(String(landed["prompt"]), Gen2BoxScreen.PROMPT_CHOOSE)
+	assert_eq(landed["submenu"], [])
 
 	# A fainted row has two others to fall back on, so only the mail stops it.
 	_box_screen.handle_button(PokeButton.DOWN)
@@ -481,6 +491,26 @@ func test_a_no_refuses_and_the_link_save_opens_on_the_overwrite_question() -> vo
 	assert_true(quick.refused())
 
 
+## `AskOverwriteSaveFile` reads `wSaveFileExists` first, which a New Game leaves
+## clear until its first save: that save and a link's go straight to SAVING.
+func test_a_new_games_first_save_asks_nothing_about_overwriting() -> void:
+	var fresh: Gen2SaveData = Gen2SaveStore.create_new_game(_data, 0, "RED")
+	assert_false(fresh.save_file_exists)
+	assert_false(Gen2SaveData.from_dict(fresh.to_dict()).save_file_exists)
+	var prompt: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.CHANGE_BOX, "RED", func() -> Dictionary: return {"ok": true},
+		fresh.save_file_exists
+	)
+	prompt.text_printed()
+	prompt.confirm(true)
+	_spend_answer_hold(prompt)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
+	var link: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.LINK, "RED", Callable(), false
+	)
+	assert_eq(link.step, Gen2SavePrompt.Step.SAVING)
+
+
 ## pokered's `SaveMenu`: `PrintSaveScreenText`'s 30 frames read no press, the
 ## file's own player is never asked `OlderFileWillBeErasedText`, `SaveGameData`
 ## runs before `NowSavingString`'s 120 frames, and `GameSavedText` owes `SFX_SAVE`.
@@ -560,7 +590,7 @@ func _spend_answer_hold(prompt: Gen2SavePrompt) -> void:
 
 
 func _spend_insert_frames() -> void:
-	_box_screen.advance_saving_frames(
+	_box_screen.advance_frames(
 		Gen2SavePrompt.LEAVE_ON_FRAMES + Gen2SavePrompt.INSERT_SAVED_FRAMES
 	)
 
@@ -600,8 +630,16 @@ func test_move_without_mail_reorders_a_list_and_moves_between_two() -> void:
 		String(_box_screen.box_snapshot()["prompt"]), Gen2SavePrompt.SAVING_LEAVE_ON
 	)
 	assert_true(_box_screen.handle_button(PokeButton.B))
-	_spend_insert_frames()
+	_box_screen.advance_frames(Gen2SavePrompt.LEAVE_ON_FRAMES)
 	assert_eq(String((save.party[0] as Gen2SaveMon).nickname), "THIRD")
+	assert_eq(
+		String(_box_screen.box_snapshot()["listing"][0]), "SPARKY",
+		"the old listing stands until `.Init`"
+	)
+	_box_screen.advance_frames(Gen2SavePrompt.INSERT_SAVED_FRAMES - 1)
+	assert_true(_box_screen.holding())
+	_box_screen.advance_frames(1)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_CHOOSE)
 	assert_eq(save.party.size(), 3)
 
 	## Left and right load another list, which only this mode answers.
@@ -619,6 +657,18 @@ func test_move_without_mail_reorders_a_list_and_moves_between_two() -> void:
 	assert_eq(save.party.size(), 2)
 	assert_not_null(save.boxes[0].slots[0])
 	assert_eq(String((save.boxes[0].slots[0] as Gen2SaveMon).nickname), "THIRD")
+
+	## `.CheckTrivialMove`: SPARKY down past GEODUDE lands one row higher, and
+	## the cursor lands on it rather than on the row it pointed at.
+	_box_screen.handle_button(PokeButton.LEFT)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.A)
+	_spend_insert_frames()
+	assert_eq(String((save.party[1] as Gen2SaveMon).nickname), "SPARKY")
+	assert_eq(int(_box_screen.box_snapshot()["cursor"]), 1)
 
 
 ## `BillsPC_ChangeBoxSubmenu.Name` writes `sBoxNames`, and `SetDefaultBoxNames`
@@ -731,15 +781,19 @@ func test_release_asks_before_it_removes_a_stored_pokemon() -> void:
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_RELEASE)
 
 	_box_screen.handle_button(PokeButton.B)
-	_box_screen.advance_saving_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
+	_box_screen.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
 	assert_not_null(save.boxes[0].slots[0], "NO leaves it where it is")
 
+	## `ReleasePKMN_ByePKMN` names the species, from `GetPokemonName`.
+	(save.boxes[0].slots[0] as Gen2SaveMon).nickname = "ROCKY"
 	_box_screen.handle_button(PokeButton.A)
 	_box_screen.handle_button(PokeButton.A)
-	_box_screen.advance_saving_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES - 1)
+	_box_screen.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES - 1)
 	assert_not_null(save.boxes[0].slots[0], "the answer stands for the whole hold")
-	_box_screen.advance_saving_frames(1)
+	_box_screen.advance_frames(1)
 	assert_null(save.boxes[0].slots[0])
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_RELEASED)
+	_box_screen.advance_frames(Gen2BoxScreen.RELEASED_FRAMES)
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Bye, GEODUDE!")
 
 
@@ -757,6 +811,23 @@ func test_an_egg_is_refused_release_without_a_question() -> void:
 	assert_eq(int(_box_screen.box_snapshot()["release"]), -1)
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_NO_EGGS)
 	assert_not_null(save.boxes[0].slots[0])
+	## `.FailedRelease` puts "What's up?" back over the box's submenu, where the
+	## party's `BillsPCDepositFuncCancel` goes back to the list.
+	_box_screen.advance_frames(Gen2BoxScreen.LINE_FRAMES)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_WHATS_UP)
+	assert_eq(_box_screen.box_snapshot()["submenu"], Gen2BoxScreen.SUBMENU_ROWS_WITHDRAW)
+	_box_screen.free()
+	save.party.append(save.boxes[0].take(0))
+	await _open_box_screen(save)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.A)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_NO_EGGS)
+	_box_screen.advance_frames(Gen2BoxScreen.LINE_FRAMES)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_CHOOSE)
+	assert_eq(_box_screen.box_snapshot()["submenu"], [])
 
 
 ## `PCMonInfo` hands the list's EGG species to `GetMonFrontpic`, which draws the
@@ -1379,6 +1450,7 @@ func test_a_deposit_puts_the_cursor_back_on_the_first_row_and_plays_a_cry() -> v
 
 	assert_eq(save.party.size(), 2)
 	assert_signal_emitted_with_parameters(_box_screen, "cry_requested", [Fixture.GEODUDE])
+	_box_screen.advance_frames(Gen2BoxScreen.LINE_FRAMES)
 	var snapshot: Dictionary = _box_screen.box_snapshot()
 	assert_eq(int(snapshot["cursor"]), 0)
 	assert_eq(int(snapshot["scroll"]), 0)
@@ -1414,6 +1486,9 @@ func test_a_full_box_refuses_under_the_submenu_which_does_not_wrap() -> void:
 	assert_signal_emitted_with_parameters(
 		_box_screen, "sfx_requested", [Gen2Sfx.SFX_WRONG, true]
 	)
+	_box_screen.advance_frames(Gen2BoxScreen.LINE_FRAMES)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_WHATS_UP)
+	assert_eq(int(_box_screen.box_snapshot()["submenu_cursor"]), 0, "on the row it took")
 
 
 ## `.a_button_2` reaches `.Init` without restoring the backup `.b_button_2` puts

@@ -14,6 +14,8 @@ const TILE: int = Gen2Font.TILE
 ## the battle font owns, so it comes off its own imported tile.
 const CURSOR_CODE: int = 0xED
 const DOWN_ARROW_CODE: int = 0xEE
+## `PlaceHollowCursor`'s `"▷"`, which a chosen row keeps under what it opened.
+const HOLLOW_CURSOR_CODE: int = 0xEC
 
 ## `Textbox` draws with wTextboxFrame, so a menu wears the player's chosen frame.
 var frame_style: int = 0
@@ -45,7 +47,7 @@ static func from_data(data: GameData) -> Gen2MenuPage:
 func draw(
 	box: Gen2MenuBox, options: Array, cursor: int,
 	indices: PackedByteArray, width: int, title: String = "", title_indent: int = 0,
-	extras: Array = []
+	extras: Array = [], hollow: bool = false
 ) -> void:
 	if font == null or box == null:
 		return
@@ -82,7 +84,10 @@ func draw(
 
 	if cursor >= 0 and cursor < options.size() and box.has_flag(Gen2MenuBox.STATICMENU_CURSOR):
 		var arrow: Vector2i = box.cursor_position(cursor)
-		font.draw_code(CURSOR_CODE, indices, width, arrow.x * TILE, arrow.y * TILE)
+		font.draw_code(
+			HOLLOW_CURSOR_CODE if hollow else CURSOR_CODE, indices, width,
+			arrow.x * TILE, arrow.y * TILE
+		)
 
 	_scroll_arrows(box, indices, width)
 	_pick_arrows(box, indices, width)
@@ -141,12 +146,12 @@ func _scroll_arrows(box: Gen2MenuBox, indices: PackedByteArray, width: int) -> v
 func render(
 	box: Gen2MenuBox, options: Array, cursor: int,
 	title: String = "", title_indent: int = 0, extras: Array = [],
-	palette: PackedColorArray = PackedColorArray()
+	palette: PackedColorArray = PackedColorArray(), hollow: bool = false
 ) -> Image:
 	var width: int = Gen2Screen.WIDTH
 	var indices: PackedByteArray = PackedByteArray()
 	indices.resize(width * Gen2Screen.HEIGHT)
-	draw(box, options, cursor, indices, width, title, title_indent, extras)
+	draw(box, options, cursor, indices, width, title, title_indent, extras, hollow)
 	var colors: PackedColorArray = palette if palette.size() >= 4 \
 		else PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	return Gen2PicImage.from_indices(

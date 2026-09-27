@@ -39,7 +39,7 @@ const PROMPT_TEXTS: Array[String] = [
 ## `constants/script_constants.asm`'s YOUR_MONEY.
 const ACCOUNT_YOUR_MONEY: int = 0
 
-enum Phase { TEXT, ASK, PARTY, WAIT, DONE }
+enum Phase { TEXT, ASK, PARTY, WAIT, SOUND, DONE }
 
 var _data: GameData = null
 var _save: Gen2SaveData = null
@@ -67,6 +67,9 @@ var _ending_text: String = ""
 var _slot: int = Gen2WorldDayCare.SLOT_MAN
 var _price: int = 0
 var _growth: int = 0
+var _string_buffer_1: String = ""  # wStringBuffer1, named by every counter text
+var _audio: Gen2AudioPlayer = null
+var _sfx_watch: Dictionary = {}
 
 var _text_box: Gen2TextBox = null
 var _yes_no: Gen2YesNoBox = null
@@ -91,6 +94,10 @@ func set_context(
 	_player_name = player_name
 	_player_id = player_id
 	_random = random
+
+
+func set_audio_player(player: Gen2AudioPlayer) -> void:
+	_audio = player
 
 
 func _ready() -> void:
@@ -161,6 +168,10 @@ func advance_frame() -> void:
 		if _wait_frames <= 0:
 			_step()
 		return
+	if _phase == Phase.SOUND:
+		if _audio == null or not _audio.still_waiting(_sfx_watch):
+			_step()
+		return
 	if _text_box == null or not _text_box.visible:
 		return
 	_text_box.advance_frame()
@@ -204,6 +215,7 @@ func _intro_key() -> String:
 ## box, since both of them are printed inside it.
 func _queue_withdraw() -> void:
 	var mon: Gen2SaveMon = _state.day_care_mon(_slot)
+	_string_buffer_1 = _nickname(mon)
 	_growth = Gen2WorldDayCare.level_growth(_data, mon)
 	_price = Gen2WorldDayCare.price_to_retrieve(_growth)
 	if _growth == 0:
@@ -316,8 +328,6 @@ func _queue_pay() -> void:
 	if _save.party.size() >= Gen2SaveData.MAX_PARTY:
 		_queue_refusal(Gen2WorldDayCare.TEXT_PARTY_FULL)
 		return
-	var mon: Gen2SaveMon = _state.day_care_mon(_slot)
-	var nickname: String = _nickname(mon)
 	var retrieved: Dictionary = Gen2WorldDayCare.retrieve(_state, _save, _data, _slot)
 	if retrieved.is_empty():
 		_queue_cancel()
@@ -330,9 +340,10 @@ func _queue_pay() -> void:
 	_state.set_day_care_man_flags(
 		_state.day_care_man_flags() & ~Gen2WorldDayCare.MAN_MONS_COMPATIBLE
 	)
+	_queue.append({"sfx": Gen2Sfx.SFX_TRANSACTION, "wait_sfx": true})  # RetrieveMonFromDayCareMan
 	_queue.append({"text": Gen2WorldDayCare.TEXT_WITHDRAW})
 	_queue.append({"cry": int(retrieved.get("species", 0))})
-	_queue.append({"text": Gen2WorldDayCare.TEXT_GOT_BACK, "ram": nickname})
+	_queue.append({"text": Gen2WorldDayCare.TEXT_GOT_BACK})
 	_queue_cancel()
 
 
@@ -372,7 +383,11 @@ func _step() -> void:
 	if action.has("cry"):
 		if int(action["cry"]) > 0:
 			cry_requested.emit(int(action["cry"]))
-		_step()
+		_hold_for_sound()  # PlayMonCry is PlayMonCry2 and then WaitSFX
+		return
+	if action.has("sfx") and bool(action.get("wait_sfx", false)):
+		sfx_requested.emit(int(action["sfx"]))
+		_hold_for_sound()
 		return
 	if action.has("sfx"):
 		sfx_requested.emit(int(action["sfx"]))
@@ -392,16 +407,19 @@ func _step() -> void:
 	_step()
 
 
-
+func _hold_for_sound() -> void:
+	_sfx_watch = {}
+	_phase = Phase.SOUND
+	if _audio == null or not _audio.still_waiting(_sfx_watch):
+		_step()
 
 
 func _show_text(action: Dictionary) -> void:
 	var key: String = String(action["text"])
 	var text: String = _text(key)
-	if action.has("ram"):
-		text = Gen2TextStream.fill_all_markers(
-			text, Gen2TextStream.RAM_MARKER, String(action["ram"])
-		)
+	text = Gen2TextStream.fill_all_markers(
+		text, Gen2TextStream.RAM_MARKER, String(action.get("ram", _string_buffer_1))
+	)
 	if key == Gen2WorldDayCare.TEXT_ASK_WITHDRAW:
 		## `_YourMonHasGrownText`'s two `text_decimal`s, in the order it prints
 		## them: the levels gained and then the price.
@@ -460,14 +478,14 @@ func _on_selected(party_index: int) -> void:
 		_step()
 		return
 	var mon: Gen2SaveMon = _save.party[party_index] as Gen2SaveMon
-	var nickname: String = _nickname(mon)
+	_string_buffer_1 = _nickname(mon)
 	var species: int = mon.species
 	Gen2WorldDayCare.deposit(_state, _save, _slot, party_index)
 	Gen2WorldDayCare.init_breeding(_state, _data, _player_name, _player_id, _random)
 	## `DayCare_DepositPokemonText`, and then the `ret` that leaves
 	## `ComeAgainText` unprinted: a deposit is the one path that does not end on
 	## it.
-	_queue.append({"text": Gen2WorldDayCare.TEXT_DEPOSIT, "ram": nickname})
+	_queue.append({"text": Gen2WorldDayCare.TEXT_DEPOSIT})
 	_queue.append({"cry": species})
 	_queue.append({"text": Gen2WorldDayCare.TEXT_COME_BACK_LATER})
 	_step()

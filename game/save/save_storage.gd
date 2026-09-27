@@ -13,6 +13,7 @@ static func deposit_party_to_box(
 	box_index: int = -1,
 	box_slot: int = -1,
 	persist: bool = true,
+	world: Gen2WorldSnapshot = null,
 ) -> Dictionary:
 	var candidate_result: Dictionary = _candidate(save, data)
 	if not bool(candidate_result.get("ok", false)):
@@ -39,7 +40,7 @@ static func deposit_party_to_box(
 		"party_index": party_index,
 		"box": int(destination["box"]),
 		"slot": int(destination["slot"]),
-	}, persist)
+	}, persist, world)
 
 
 static func withdraw_box_to_party(
@@ -48,6 +49,7 @@ static func withdraw_box_to_party(
 	box_index: int,
 	box_slot: int,
 	persist: bool = true,
+	world: Gen2WorldSnapshot = null,
 ) -> Dictionary:
 	var candidate_result: Dictionary = _candidate(save, data)
 	if not bool(candidate_result.get("ok", false)):
@@ -72,7 +74,7 @@ static func withdraw_box_to_party(
 		"party_index": candidate.party.size() - 1,
 		"box": box_index,
 		"slot": box_slot,
-	}, persist)
+	}, persist, world)
 
 
 ## A row entering a box keeps no stored stats; Generation 2 then runs
@@ -114,7 +116,8 @@ static func boxed(data: GameData, mon: Gen2SaveMon) -> void:
 ## `BillsPC_CheckMail_PreventBlackout` are the caller's, printed before the
 ## yes/no.
 static func release_party_member(
-	save: Gen2SaveData, data: GameData, party_index: int, persist: bool = true
+	save: Gen2SaveData, data: GameData, party_index: int, persist: bool = true,
+	world: Gen2WorldSnapshot = null,
 ) -> Dictionary:
 	var candidate_result: Dictionary = _candidate(save, data)
 	if not bool(candidate_result.get("ok", false)):
@@ -127,12 +130,12 @@ static func release_party_member(
 	candidate.party.remove_at(party_index)
 	return _commit(save, data, candidate, {
 		"kind": &"release_party", "party_index": party_index,
-	}, persist)
+	}, persist, world)
 
 
 static func release_box_slot(
 	save: Gen2SaveData, data: GameData, box_index: int, box_slot: int,
-	persist: bool = true
+	persist: bool = true, world: Gen2WorldSnapshot = null,
 ) -> Dictionary:
 	var candidate_result: Dictionary = _candidate(save, data)
 	if not bool(candidate_result.get("ok", false)):
@@ -149,7 +152,7 @@ static func release_box_slot(
 		return _failure(&"empty_box_slot")
 	return _commit(save, data, candidate, {
 		"kind": &"release_box", "box": box_index, "slot": box_slot,
-	}, persist)
+	}, persist, world)
 
 
 ## `MovePKMNWithoutMail_InsertMon`'s four branches in one: the mon leaves
@@ -165,6 +168,7 @@ static func move_mon(
 	to_loaded: int,
 	to_index: int,
 	persist: bool = true,
+	world: Gen2WorldSnapshot = null,
 ) -> Dictionary:
 	var candidate_result: Dictionary = _candidate(save, data)
 	if not bool(candidate_result.get("ok", false)):
@@ -210,7 +214,7 @@ static func move_mon(
 		"kind": &"move_mon",
 		"from_loaded": from_loaded, "from_index": from_index,
 		"to_loaded": to_loaded, "to_index": to_index,
-	}, persist)
+	}, persist, world)
 
 
 ## One `wBillsPC_LoadedBox` list as the packed array the source treats it as:
@@ -280,7 +284,11 @@ static func _commit(
 	candidate: Gen2SaveData,
 	transaction: Dictionary,
 	persist: bool = true,
+	world: Gen2WorldSnapshot = null,
 ) -> Dictionary:
+	## `save.world` is the last save's; `Gen2WorldTransaction.commit` writes the same.
+	if world != null:
+		candidate.world = world
 	if persist:
 		var write: Dictionary = Gen2SaveStore.save(candidate, data)
 		if not bool(write.get("ok", false)):

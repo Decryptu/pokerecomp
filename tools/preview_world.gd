@@ -92,7 +92,7 @@ const KIND_HELP: Dictionary = {
 	&"pokemon_center_pc": "rows down, A presses: the Pokemon Center's machine, or ActivatePC on a Generation 1 cartridge",
 	&"mom_bank": "wallet, balance, both in hundreds: Mom_WithdrawDepositMenuJoypad's dial. Add 1000 for the WITHDRAW header",
 	&"move_tutor": "presses: special MoveTutor. 0 is ChooseMonToLearnTMHM's list, not a box",
-	&"day_care": "presses, routine: 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs. On a Generation 1 cartridge, DaycareGentlemanText faced left from 3,3 on DAYCARE, the second number being wDayCareInUse",
+	&"day_care": "presses, routine: 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs, 5 the man with a Pokemon left three levels ago. On a Generation 1 cartridge, DaycareGentlemanText faced left from 3,3 on DAYCARE, the second number being wDayCareInUse",
 	&"slot_machine": "frames, bet: special SlotMachine. Bet is 1 to 3, plus 4 for the lucky machine",
 	&"surfing": "frames, hold: Yellow's SurfingPikachuMinigame that many frames in, RIGHT held from frame 400 for that many frames, `-- yellow 0 248 <out.png> live surfing 600 40`; a negative second number is a routine row reached first, `40 -4` the results screen",
 	&"printer": "page, preview: Yellow's Game Boy Printer pages, 0 PrintDiploma, 1 PrintSurfingMinigameHighScore, 2 PrintFanClubPortrait; a second number of 1 is the high-score page held for a press",
@@ -146,7 +146,7 @@ const WARP_FRAME_CAP: int = 120
 const MON_SPECIAL_FRAME_CAP: int = 600
 ## The Day-Care's five routines, in the order the second number picks them.
 const DAY_CARE_ROLES: Array[StringName] = [
-	&"man", &"lady", &"outside", &"mon1", &"mon2",
+	&"man", &"lady", &"outside", &"mon1", &"mon2", &"withdraw",
 ]
 
 

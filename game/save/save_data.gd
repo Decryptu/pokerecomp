@@ -114,6 +114,8 @@ var nuzlocke: Dictionary = {}
 ## to put. Written by [method Gen2SaveStore.bump_reset_count] alone, never
 ## through this object, which holds the walk the reset throws away.
 var reset_count: int = 0
+## `wSaveFileExists`: false for a New Game until its first `SaveGameData`.
+var save_file_exists: bool = true
 
 
 func _init() -> void:
@@ -159,6 +161,7 @@ func to_dict() -> Dictionary:
 		"mystery_gift": mystery_gift.duplicate(true),
 		"nuzlocke": nuzlocke.duplicate(true),
 		"reset_count": reset_count,
+		"save_file_exists": save_file_exists,
 		"box_names": box_names.duplicate(),
 		"mailbox": _mailbox_dicts(),
 		"world": world.to_dict() if world != null else {},
@@ -209,6 +212,7 @@ static func _read_header(out: Gen2SaveData, source: Dictionary) -> void:
 	out.mystery_gift = Gen2MysteryGift.normalize(source.get("mystery_gift", {}))
 	out.nuzlocke = Gen2Nuzlocke.normalize(source.get("nuzlocke", {}))
 	out.reset_count = maxi(int(source.get("reset_count", 0)), 0)
+	out.save_file_exists = bool(source.get("save_file_exists", true))
 
 
 static func _read_lists(out: Gen2SaveData, source: Dictionary) -> void:
