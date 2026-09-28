@@ -112,6 +112,8 @@ last="$(git describe --tags --abbrev=0 2>/dev/null || true)"
 if [ -n "$last" ] && git diff --quiet "$last" -- .github/release-notes.md; then
 	fail "release-notes.md is unchanged since $last; rewrite its top section first"
 fi
+# Before the bump, so a refused body leaves the tree as clean as it was.
+gate_notes >/dev/null
 
 sed -i.bak "s/^const VERSION: String = \".*\"$/const VERSION: String = \"$version\"/" \
 	game/main/app_version.gd
