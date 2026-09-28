@@ -8036,7 +8036,7 @@ func _gen1_close_money_window(events: Array) -> void:
 	if not _gen1_money_window:
 		return
 	_gen1_money_window = false
-	events.append({"type": &"money_window_closed"})
+	events.append({"type": &"text_closed"})
 
 
 func _gen1_waiting_result(step: Dictionary) -> Dictionary:

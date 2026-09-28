@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 53 | `after_credits` on `register_page()`, and `Gen2ModHost.credits_page_ids()`; the `text_closed` world event every `closetext` publishes, which replaces `money_window_closed` |
 | 52 | `Gen2WorldAPI.camera_reaches()` and `camera_reach_revision()`: `expanded_block_at()` and the draw list leave another room of an indoor map out; big objects drawn in `facings.asm`'s own tile order |
 | 51 | `ended` on the battle channel; `register_wild_substitute()`; `register_battle_takeover()`; a `solid` actor entry and an actor's `battle` request; `request_gs_ball()` and `gs_ball_offered` in `progress()` |
 | 50 | `hp_bar` on the battle channel, the one event that moves a bar, where the cartridge draws it; `hp`, `max_hp`, `to_hp` and `target_hp` leave the lines around it |
@@ -2089,6 +2090,20 @@ A locked row is drawn the way the Pokédex draws an unseen entry.
 - A row with no `label` is dropped, an `icon` that is not a set of fields is no
   icon, and an answer that is not an Array is no rows.
 - The d-pad scrolls the list and B leaves, the way the trainer card is paged.
+
+`"after_credits": true` on the entry also opens the page once THE END has been
+pressed away, over the credits' own music and before they return to the title,
+Mt. Silver or the script that ran them. Pages registered this way open one after
+another in registration order, each left with B. With the mod off, the credits
+end as the cartridge ends them.
+
+```gdscript
+host.register_page(manifest.id, {
+	"title": "THANKS FOR PLAYING",
+	"rows": func() -> Array: return [{"label": "BUILT BY", "detail": "YOUR NAME"}],
+	"after_credits": true,
+})
+```
 
 ## Shiny rolls
 

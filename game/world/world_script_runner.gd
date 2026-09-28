@@ -134,8 +134,6 @@ var _random := RandomNumberGenerator.new()
 ## own operands. `PlayCurMonCry` is the one special that reads it, and all four
 ## of its scripts reach it with a grooming routine's own wScriptVar standing.
 var _cur_party_species: int = 0
-## Which balance window `engine/menus/menu_2.asm` left standing, empty for none.
-var _money_window: StringName = &""
 
 ## What `<RIVAL>` prints before a rival has been named, in either generation.
 const UNNAMED: String = "???"
@@ -2613,16 +2611,13 @@ func _command_warp(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	return _stage_warp(command)
 
 
-## `Script_closetext` takes the box down, so nothing stands behind a later choice;
-## leaving the last question there would print it under an unrelated menu.
+## `Script_closetext` redraws the map behind every window: a no-press text left up
+## through a `pause`, the balance windows, and the last question, which would
+## otherwise print under an unrelated menu.
 func _command_opentext(opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
 	if opcode == Gen2WorldScript.CLOSETEXT:
 		_standing_text = ""
-		## The balance windows are tilemap, so the redraw behind the box
-		## is what takes them away too.
-		if _money_window != &"":
-			_money_window = &""
-			_emit_runtime_event(&"money_window_closed", {})
+		_emit_runtime_event(&"text_closed", {})
 	return {"ok": true}
 
 
@@ -4854,10 +4849,9 @@ func _special_grooming(special: int) -> Dictionary:
 ## redraws it, so a script that spends money between two of them (the haircut
 ## brothers' `takemoney`) draws the second over the first.
 func _special_money_window(special: int) -> Dictionary:
-	_money_window = MONEY_WINDOW_KIND_OF[special]
 	_emit_runtime_event(&"money_window_opened", {
 		"special": special,
-		"kind": _money_window,
+		"kind": MONEY_WINDOW_KIND_OF[special],
 		"money": _money_balance(ACCOUNT_YOUR_MONEY),
 		"coins": _coins_value(),
 	})
