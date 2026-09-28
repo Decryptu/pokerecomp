@@ -128,6 +128,25 @@ func test_export_then_import_round_trips_into_a_free_slot() -> void:
 	assert_eq(save.slot, 1, "the imported copy owns its new slot number")
 
 
+## A picker grants the one file it answered, which Android's has already created
+## empty: nothing beside it can be written, so the export goes to it directly.
+func test_export_writes_into_a_file_whose_directory_is_closed() -> void:
+	_write_slot(0, "ASH")
+	var granted: String = ProjectSettings.globalize_path("user://slot-export-grant")
+	DirAccess.make_dir_recursive_absolute(granted)
+	var target: String = granted.path_join("export.json")
+	FileAccess.open(target, FileAccess.WRITE).close()
+	var closed: int = FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_EXECUTE_OWNER
+	FileAccess.set_unix_permissions(granted, closed)
+	var result: Dictionary = Gen2SaveStore.export_slot(_data.id, _data.sha1, 0, target)
+	FileAccess.set_unix_permissions(granted, closed | FileAccess.UNIX_WRITE_OWNER)
+	var imported: Dictionary = Gen2SaveStore.import_slot(target, _data)
+	DirAccess.remove_absolute(target)
+	DirAccess.remove_absolute(granted)
+	assert_true(result["ok"], result["message"])
+	assert_true(imported["ok"], imported["message"])
+
+
 func test_exporting_an_empty_slot_writes_nothing() -> void:
 	assert_false(Gen2SaveStore.export_slot(_data.id, _data.sha1, 0, EXPORT_PATH)["ok"])
 	assert_false(FileAccess.file_exists(EXPORT_PATH))

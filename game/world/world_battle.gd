@@ -206,11 +206,47 @@ static func _wild_party(
 	# TREEMON_SLEEP_TURNS, as any of four on Gold and Silver; the caller answers.
 	if wild_mon != null and bool(values.get("asleep", false)):
 		wild_mon.status = Gen2WorldTreemon.SLEEP_TURNS
-	## `LoadEnemyMon`'s second `BATTLETYPE_ROAMING` branch, and a mod's wild: a
-	## stored `hp` rather than a full bar.
+	## `LoadEnemyMon`'s roaming branch, and a mod's wild: a stored `hp` and `status`.
 	if wild_mon != null and int(values.get("hp", 0)) > 0:
 		wild_mon.hp = clampi(int(values["hp"]), 1, wild_mon.max_hp())
+	if wild_mon != null and values.has("status"):
+		wild_mon.status = int(values["status"])
 	return {"ok": true, "party": Gen2Party.of(wild_mon)}
+
+
+## A mod's wild, a substitute's answer or an actor's request: `refused`, or `values`.
+static func mod_wild(data: GameData, answer: Dictionary) -> Dictionary:
+	var level: int = int(answer.get("level", 0))
+	var refused: StringName = &""
+	if not _valid_species(data, int(answer.get("species", 0))):
+		refused = &"unknown_wild_species"
+	elif level < 1 or level > Gen2Experience.MAX_LEVEL:
+		refused = &"invalid_wild_level"
+	elif answer.has("dvs") and (int(answer["dvs"]) < 0 or int(answer["dvs"]) > 0xFFFF):
+		refused = &"invalid_wild_dvs"
+	elif answer.has("hp") and int(answer["hp"]) < 1:
+		refused = &"invalid_wild_hp"
+	elif answer.has("status") and not Gen2SaveValidator.is_valid_status(int(answer["status"])):
+		refused = &"invalid_wild_status"
+	if not refused.is_empty():
+		return {"refused": refused}
+	var values: Dictionary = {"pokemon": int(answer["species"]), "level": level}
+	for key: String in ["dvs", "hp", "status"]:
+		if answer.has(key):
+			values[key] = int(answer[key])
+	return {"values": values}
+
+
+## `BattleEnd_HandleRoamMons`' `wEnemyMon` read, plus the level and status a mod keeps.
+static func enemy_record(battle: Gen2Battle) -> Dictionary:
+	var enemy: Gen2BattleMon = battle.party(Gen2Battle.ENEMY).active_mon() \
+		if battle != null else null
+	if enemy == null:
+		return {}
+	return {
+		"species": enemy.base_species(), "hp": enemy.hp, "dvs": enemy.dvs,
+		"level": enemy.level, "status": enemy.status,
+	}
 
 
 ## `LoadEnemyMon.WildItem`: 75% none, 23% common and 2% rare, before the DV
@@ -243,7 +279,6 @@ static func takeover_result(
 	var committed: Dictionary = commit_battle(data, battle, source_save, money)
 	if not bool(committed["ok"]):
 		return {"ok": false, "reason": &"battle_save_failed", "details": committed}
-	var enemy: Gen2BattleMon = battle.party(Gen2Battle.ENEMY).active_mon()
 	var winner: Variant = null
 	if outcome != OUTCOME_RAN:
 		winner = Gen2Battle.PLAYER if won else Gen2Battle.ENEMY
@@ -252,10 +287,7 @@ static func takeover_result(
 		"winner": winner,
 		"save_written": source_save != null and source_save.slot >= 0,
 		"roamers_move": battle.roamers_move_on(false),
-		"enemy": {} if enemy == null else {
-			"species": enemy.base_species(), "hp": enemy.hp, "dvs": enemy.dvs,
-			"level": enemy.level,
-		},
+		"enemy": enemy_record(battle),
 	}
 	var player: Gen2Party = battle.party(Gen2Battle.PLAYER)
 	if won:
@@ -291,6 +323,7 @@ static func ended_event(result: Dictionary, map: Vector2i) -> Dictionary:
 		"level": int(enemy.get("level", 0)),
 		"hp": int(enemy.get("hp", 0)),
 		"dvs": int(enemy.get("dvs", 0)),
+		"status": int(enemy.get("status", 0)),
 		"map_group": map.x,
 		"map_number": map.y,
 		"tag": StringName(request.get("mod_tag", &"")),

@@ -7295,7 +7295,7 @@ func test_a_roam_chance_provider_answers_the_roamers_share_of_the_roll() -> void
 	assert_gt(met[256], met[-1])
 
 
-## A mod's wild takes the met wild's place with the word, the HP and the tag it
+## A mod's wild takes the met wild's place with the word, HP, status and tag it
 ## named, passes the Repel the rolled one would have, and a provider that answers
 ## nothing, or names a species the cache lacks, leaves the table's own.
 func test_a_wild_substitute_replaces_the_wild_a_step_met() -> void:
@@ -7309,13 +7309,17 @@ func test_a_wild_substitute_replaces_the_wild_a_step_met() -> void:
 	var rolled: int = int(world.encounter_request(null, true, Gen2WorldEncounter.METHOD_GRASS)["pokemon"])
 	assert_eq(provider.asked["species"], rolled)
 
-	provider.answer = {"species": 19, "level": 30, "dvs": 0xABCD, "hp": 7, "tag": &"mewtwo"}
+	provider.answer = {
+		"species": 19, "level": 30, "dvs": 0xABCD, "hp": 7, "status": Gen2Status.BURN,
+		"tag": &"mewtwo",
+	}
 	var met: Dictionary = world.encounter_request(null, true, Gen2WorldEncounter.METHOD_GRASS)
 	assert_eq(met["source"], Gen2WorldEncounter.SOURCE_MOD)
 	assert_eq(met["values"]["pokemon"], 19)
 	assert_eq(met["values"]["level"], 30)
 	assert_eq(met["values"]["dvs"], 0xABCD)
 	assert_eq(met["values"]["hp"], 7)
+	assert_eq(met["values"]["status"], Gen2Status.BURN)
 	assert_eq(met["values"]["mod_tag"], &"mewtwo")
 
 	provider.answer = {"species": 19, "level": 2}

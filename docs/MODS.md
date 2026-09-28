@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 54 | `hp` and `status` on an actor's `battle` request, `status` on a wild substitute's answer, and `status` on `ended` |
 | 53 | `after_credits` on `register_page()`, and `Gen2ModHost.credits_page_ids()`; the `text_closed` world event every `closetext` publishes, which replaces `money_window_closed` |
 | 52 | `Gen2WorldAPI.camera_reaches()` and `camera_reach_revision()`: `expanded_block_at()` and the draw list leave another room of an indoor map out; big objects drawn in `facings.asm`'s own tile order |
 | 51 | `ended` on the battle channel; `register_wild_substitute()`; `register_battle_takeover()`; a `solid` actor entry and an actor's `battle` request; `request_gs_ball()` and `gs_ball_offered` in `progress()` |
@@ -703,7 +704,7 @@ a visible encounter, an actor or a [takeover](#taking-over-a-battle).
 | `outcome` | `won`, `lost`, `caught` or `ran`, the `Gen2WorldBattleAdapter.OUTCOME_*` names. `ran` covers the player fleeing and the wild fleeing or being blown away |
 | `battle_kind`, `battle_type` | `wild` or `trainer`, and `wBattleType` |
 | `trainer_class`, `trainer_index` | The trainer, 0 for a wild |
-| `species`, `level`, `hp`, `dvs` | The enemy standing last: a wild knocked out has `hp` 0 |
+| `species`, `level`, `hp`, `dvs`, `status` | The enemy standing last: a wild knocked out has `hp` 0. `status` is the party status byte: sleep turns in bits 0 to 2, then poison, burn, freeze and paralysis in bits 3 to 6 (`Gen2Status`) |
 | `map_group`, `map_number` | Where it was fought |
 | `tag` | The tag a mod's wild or actor battle carried, empty otherwise |
 
@@ -1708,10 +1709,11 @@ NPC does, for as long as the entry keeps it. It is how a Pokemon standing on the
 map is in the way, and a press of A on it reaches the actor's `interact`.
 
 `take_requests()` takes a second kind, `{"kind": &"battle", "species": n,
-"level": n}`, with an optional `dvs` word and an optional `tag`: a wild battle, as
-a script's `loadwildmon` and `startbattle` start one, begun on the next frame
-the world is free. The `ended` event carries the tag back. A species the cache
-does not carry or a level off 1 to 100 is dropped.
+"level": n}`, with the optional `dvs`, `hp`, `status` and `tag` a
+[wild substitute](#replacing-the-wild-a-step-meets) takes: a wild battle, as a
+script's `loadwildmon` and `startbattle` start one, begun on the next frame the
+world is free. The `ended` event carries the tag back with the HP, DVs and status
+left. A request a wild substitute would have refused is dropped.
 
 ```gdscript
 class Mewtwo:
@@ -2226,13 +2228,14 @@ class Legends:
 | `roll` | One draw off the encounter stream, 0 to 255, so a provider needs no generator of its own and a replay meets the same wilds |
 
 The answer is `{}` to leave the wild alone, or `species` and `level` with an
-optional `dvs` word, `hp` to come back damaged and a `tag`, which defaults to the
-mod's id. The first provider answering a species is used. The named wild passes
+optional `dvs` word, `hp` and `status` to come back damaged or afflicted, and a
+`tag`, which defaults to the mod's id. The first provider answering a species is used. The named wild passes
 the Repel the rolled one did, so a Repel still keeps a weaker one away, and a
-species the cache does not carry, a level off 1 to 100, a `dvs` past 16 bits or
-an `hp` below 1 is refused into `failures()` and the rolled wild stands. The
-battle is an ordinary wild one; its `ended` event carries the tag, the HP left
-and the DVs, which is everything the mod keeps for the next meeting.
+species the cache does not carry, a level off 1 to 100, a `dvs` past 16 bits,
+an `hp` below 1 or a `status` no party Pokemon could hold is refused into
+`failures()` and the rolled wild stands. The
+battle is an ordinary wild one; its `ended` event carries the tag, the HP left,
+the DVs and the status, which is everything the mod keeps for the next meeting.
 
 A mod roamer then needs three things the host already offers: its own list in
 the save ([Holding a run](#holding-a-run-rather-than-an-installation)), `ended`
