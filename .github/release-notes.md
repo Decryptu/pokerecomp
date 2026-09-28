@@ -1,17 +1,17 @@
 <!-- Rewrite from the first release heading, `## Added`, `## Changed` or `## Fixed`, for each release. The text below
 the release changes is standing guidance with a {VERSION} placeholder. -->
 
+## Added
+
+- Mods: API 53 lets a mod show its own page after the credits. Pass `"after_credits": true` to `register_page()` and the page opens once THE END is pressed away.
+
 ## Changed
 
-- Indoors, the filled screen draws only the room you are in. The other cabins on the S.S. Aqua and the S.S. Anne, and cave or tower areas you can only reach from another floor, stay hidden along with the people in them.
-- Mods: API 52 adds `camera_reaches()`, which says whether a block of an indoor map belongs to the room the player is in.
+- Mods: every `closetext` now sends a `text_closed` world event. It replaces `money_window_closed`.
 
 ## Fixed
 
-- A trainer fight no longer freezes at its start until you leave the app and come back. A sound that never finished held it; every wait on a sound now gives up after about 20 seconds. The card flip game, the slots and the Unown puzzle waited the same way.
-- Vermilion City's Snorlax and the Snorlax, Lapras and Onix dolls in your bedroom are drawn correctly instead of as scrambled tiles.
-- On Red, Blue and Yellow, the POKé FLUTE in battle plays its tune after you press past its first box, and "All sleeping POKéMON woke up." appears when the tune ends.
-- On Red, Blue and Yellow, a wait on a sound effect ignores the wave channel, as on the cartridge.
+- After you wake Vermilion City's Snorlax, "SNORLAX woke up!" no longer stays on screen through the battle and after it. Any script that closes its text box after a pause now closes it on time.
 
 ## Which file
 
