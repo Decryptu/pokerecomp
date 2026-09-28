@@ -26,6 +26,7 @@ var _world_screen: Gen2WorldScreen = null
 func before_each() -> void:
 	Fixture.build()
 	_data = GameData.open_directory(Fixture.directory())
+	Gen2ModHost.reset()
 
 
 func after_each() -> void:
@@ -33,6 +34,7 @@ func after_each() -> void:
 		_world_screen.free()
 		_world_screen = null
 	RomCache.clear(Fixture.directory())
+	Gen2ModHost.reset()
 
 
 func _open_world() -> void:
@@ -142,6 +144,31 @@ func test_a_leaves_only_once_the_script_has_run_out() -> void:
 	_world_screen.press_button(PokeButton.A)
 	await get_tree().process_frame
 	assert_null(_host())
+	assert_true(_world_screen.move_player(Vector2i.DOWN))
+
+
+## A page registered `after_credits` stands between THE END's press and the map
+## the credits return to, and B hands the map back.
+func test_an_after_credits_page_opens_behind_the_end_and_b_leaves_it() -> void:
+	var rows := func() -> Array:
+		return [{"label": "BUILT BY", "detail": "A PLAYER"}]
+	assert_true(bool(Gen2ModHost.instance().register_page(
+		&"epilogue", {"title": "THANKS", "rows": rows, "after_credits": true}
+	)["ok"]))
+	await _open_world()
+	_world_screen.open_credits()
+	_stop_self_advancing()
+	await get_tree().process_frame
+	_host().advance_frames(WHOLE_SCRIPT_FRAMES)
+	_world_screen.press_button(PokeButton.A)
+
+	assert_null(_host())
+	assert_not_null(_world_screen._mod_page_host)
+	assert_eq(_world_screen._mod_page_host.visible_rows()[0]["detail"], "A PLAYER")
+	assert_false(_world_screen.move_player(Vector2i.DOWN), "the page holds the map")
+
+	_world_screen.press_button(PokeButton.B)
+	assert_null(_world_screen._mod_page_host)
 	assert_true(_world_screen.move_player(Vector2i.DOWN))
 
 

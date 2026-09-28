@@ -208,6 +208,8 @@ var _link_battle_peer: Dictionary = {}
 ## disk, so it is read once per slot rather than on every party refresh.
 var _link_transport_slot: int = -2
 var _credits_host: Gen2CreditsScreen = null
+## `{music_outlasts, pages}` from THE END's press to the credits' return.
+var _credits_tail: Dictionary = {}
 ## `EvolveAfterBattle`'s own screen, opened on the overworld after a battle that
 ## was won and by an evolution stone from the pack.
 var _evolution_host: Gen2EvolutionScreen = null
@@ -7187,9 +7189,23 @@ func open_credits(skippable: bool = true) -> bool:
 func _on_credits_closed() -> void:
 	var host: Gen2CreditsScreen = _credits_host
 	_credits_host = null
-	var music_outlasts: bool = host != null and host.music_outlasts
+	_credits_tail = {
+		"music_outlasts": host != null and host.music_outlasts,
+		"pages": Gen2ModHost.instance().credits_page_ids(),
+	}
 	if host != null:
 		Gen2Screen.drop(host)
+	_finish_credits()
+
+
+## Each `after_credits` mod page in turn, then whatever the credits return to.
+func _finish_credits() -> void:
+	var pages: Array = _credits_tail.get("pages", [])
+	while not pages.is_empty():
+		if _open_mod_page(pages.pop_front()):
+			return
+	var music_outlasts: bool = bool(_credits_tail.get("music_outlasts", false))
+	_credits_tail = {}
 	_script_prompt = ""
 	if _return_from_credits():
 		return
@@ -7539,21 +7555,22 @@ func _open_trainer_card() -> void:
 
 ## `START_ACTION_OPEN_MOD_PAGE`: [param id] is the mod that registered the row,
 ## which is the same id its page is registered under.
-func _open_mod_page(id: StringName) -> void:
+func _open_mod_page(id: StringName) -> bool:
 	if _mod_page_host != null or _data == null:
-		return
+		return false
 	var host := Gen2ModPageScreen.new()
 	if not host.open(_data, id):
 		host.free()
 		_script_prompt = "%s registered no page" % id
 		_refresh_labels()
-		return
+		return false
 	host.z_index = 10
 	_screen.display(host)
 	host.closed.connect(_on_mod_page_closed)
 	_mod_page_host = host
 	_script_prompt = "%s page open" % id
 	_refresh_labels()
+	return true
 
 
 func _on_mod_page_closed() -> void:
@@ -7561,6 +7578,9 @@ func _on_mod_page_closed() -> void:
 	_mod_page_host = null
 	if host != null:
 		Gen2Screen.drop(host)
+	if not _credits_tail.is_empty():
+		_finish_credits()
+		return
 	_script_prompt = "Mod page closed"
 	_reopen_start_menu_if_due()
 	_refresh_labels()
@@ -8693,7 +8713,7 @@ const EVENT_HANDLERS: Dictionary = {
 	&"pokemon_picture_requested": &"_event_show_picture",
 	&"pokemon_picture_closed": &"_event_hide_picture",
 	&"money_window_opened": &"_show_money_window",
-	&"money_window_closed": &"_event_hide_money_window",
+	&"text_closed": &"_event_close_text",
 	&"party_happiness_changed": &"_apply_party_happiness",
 	&"party_member_removed": &"_remove_party_member",
 	&"party_mail_given": &"_give_party_mail",
@@ -8851,8 +8871,10 @@ func _event_hide_picture(_event: Dictionary) -> void:
 	_hide_story_picture()
 
 
-func _event_hide_money_window(_event: Dictionary) -> void:
+func _event_close_text(_event: Dictionary) -> void:
 	_hide_money_window()
+	if _text_box != null:
+		_text_box.visible = false
 
 
 func _event_contest_drop_off(_event: Dictionary) -> void:

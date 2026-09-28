@@ -1320,8 +1320,8 @@ func stats_pages() -> Array:
 ## `{label, detail, icon, locked}`. The host draws it with the screen's own font
 ## and frame, so a mod needs no node, renderer or art of its own, and `icon` is
 ## [method request_notice]'s vocabulary. A `MENU_START` entry registered under the
-## same id naming [constant START_ACTION_OPEN_MOD_PAGE] is what opens it. One page
-## per mod, refused by name for a second.
+## same id naming [constant START_ACTION_OPEN_MOD_PAGE] opens it, `after_credits`
+## opens it behind THE END too. One page per mod, refused by name for a second.
 func register_page(id: StringName, entry: Dictionary) -> Dictionary:
 	if String(id).is_empty():
 		return {"ok": false, "reason": &"invalid_mod_page"}
@@ -1334,12 +1334,18 @@ func register_page(id: StringName, entry: Dictionary) -> Dictionary:
 		"id": id,
 		"title": String(entry.get("title", "")),
 		"rows": rows,
+		"after_credits": bool(entry.get("after_credits", false)),
 	}
 	return {"ok": true, "id": id}
 
 
 func page_ids() -> Array:
 	return _pages.keys()
+
+
+func credits_page_ids() -> Array:
+	return _pages.keys().filter(func(id: StringName) -> bool:
+		return bool((_pages[id] as Dictionary)["after_credits"]))
 
 
 ## [param id]'s page as `{id, title}`, or `{}` where nothing registered one. The

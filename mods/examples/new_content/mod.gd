@@ -548,7 +548,10 @@ func _play_differently(host: Gen2ModHost, manifest: PokeModManifest) -> void:
 func _watch_the_run(host: Gen2ModHost, manifest: PokeModManifest) -> void:
 	## The page. The mod answers rows and nothing else: the host draws them with
 	## the screen's own frame and font, so a page needs no node and no art.
-	host.register_page(manifest.id, {"title": "BADGES", "rows": _badge_rows})
+	## `after_credits` shows the same tally again once THE END is pressed away.
+	host.register_page(manifest.id, {
+		"title": "BADGES", "rows": _badge_rows, "after_credits": true,
+	})
 	## A second start-menu row, naming the page it opens. `page` is what lets a
 	## mod with more than one row point one of them at its page.
 	host.register_menu_entry(Gen2ModHost.MENU_START, &"new_content_badges", {

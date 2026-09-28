@@ -190,14 +190,12 @@ func test_the_day_cycle_stays_on_real_seconds() -> void:
 
 ## A `writetext` whose text breaks at `<CONT>` and ends at `<DONE>`, with the
 ## `waitbutton` the source puts behind every such command.
-func _write_scroll_script() -> void:
+func _write_scroll_script(tail: Array = [Gen2WorldScript.WAITBUTTON]) -> void:
 	var directory: String = Fixture.directory()
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(directory))
 	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, Fixture.TUTORIAL_SCRIPT)] = [
 		Gen2WorldScript.WRITETEXT, SCROLL_TEXT & 0xFF, SCROLL_TEXT >> 8,
-		Gen2WorldScript.WAITBUTTON,
-		Gen2WorldScript.END,
-	]
+	] + tail + [Gen2WorldScript.END]
 	RomCache.write_json(RomCache.world_scripts_path(directory), scripts)
 	var text: Dictionary = RomCache.read_json(RomCache.world_text_path(directory))
 	var encoded: Array = [Gen2WorldScript.TEXT_START]
@@ -274,6 +272,28 @@ func test_a_scroll_landing_on_the_last_page_runs_the_script_on_without_a_press()
 	# The `waitbutton`.
 	_world_screen.press_button(PokeButton.A)
 	assert_true(_world_screen._world.pending_script_input().is_empty())
+	assert_false(_world_screen._text_box.visible)
+
+
+## Vermilion's Snorlax: `writetext`, `pause 15`, `cry`, `closetext`,
+## `startbattle`. The text owes no press, so the box stands through the pause,
+## and `closetext`'s redraw is the only thing that takes it down before the
+## script's next wait; left up, it stood over the map the battle returned to.
+func test_closetext_after_a_pause_takes_down_a_box_no_press_closed() -> void:
+	var pause: int = Gen2WorldScript.raw_opcode(0x8A, true)
+	_write_scroll_script([pause, 1, Gen2WorldScript.CLOSETEXT, pause, 30])
+	_world_screen = await _open_world()
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(SCRIPT_CELL)
+	)
+	_settle_text_box(_world_screen)
+	_world_screen.press_button(PokeButton.A)
+	_settle_text_box(_world_screen)
+	for _frame: int in 8:
+		_world_screen.advance_frame()
+	assert_false(
+		_world_screen._world.pending_script_wait().is_empty(), "the second pause is running"
+	)
 	assert_false(_world_screen._text_box.visible)
 
 
