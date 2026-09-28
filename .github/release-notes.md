@@ -3,15 +3,12 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods: API 53 lets a mod show its own page after the credits. Pass `"after_credits": true` to `register_page()` and the page opens once THE END is pressed away.
-
-## Changed
-
-- Mods: every `closetext` now sends a `text_closed` world event. It replaces `money_window_closed`.
+- Mods: API 54 lets an actor's `battle` request carry `hp` and `status`, so a mod roamer comes back with the damage and condition it left with. A wild substitute's answer takes `status` too, and the battle channel's `ended` event now reports the enemy's `status`.
 
 ## Fixed
 
-- After you wake Vermilion City's Snorlax, "SNORLAX woke up!" no longer stays on screen through the battle and after it. Any script that closes its text box after a pause now closes it on time.
+- A wild Pokemon you knock out or run from is now marked as seen in the Pokedex. The first Pokemon a trainer sends out is marked as seen too. Before this, only a catch or a trainer's later Pokemon counted.
+- Exporting a save slot works on Android. The export used to fail with "the save could not be written" for any location you picked.
 
 ## Which file
 
