@@ -2844,9 +2844,9 @@ func _substitute_wild(
 	})
 	if answer.is_empty():
 		return true
-	var refused: StringName = _wild_substitute_refusal(answer)
-	if not refused.is_empty():
-		Gen2ModHost.instance().refuse(answer["id"], refused, str(answer))
+	var named: Dictionary = Gen2WorldBattleAdapter.mod_wild(data, answer)
+	if named.has("refused"):
+		Gen2ModHost.instance().refuse(answer["id"], named["refused"], str(answer))
 		return true
 	var level: int = int(answer["level"])
 	if Gen2WorldEncounter.blocked_by_repel(
@@ -2857,26 +2857,9 @@ func _substitute_wild(
 	resolved["source"] = Gen2WorldEncounter.SOURCE_MOD
 	resolved["pokemon"] = int(answer["species"])
 	resolved["level"] = level
-	values["pokemon"] = int(answer["species"])
-	values["level"] = level
+	values.merge(named["values"], true)
 	values["mod_tag"] = StringName(answer.get("tag", answer["id"]))
-	for key: String in ["dvs", "hp"]:
-		if answer.has(key):
-			values[key] = int(answer[key])
 	return true
-
-
-func _wild_substitute_refusal(answer: Dictionary) -> StringName:
-	if data.species(int(answer.get("species", 0))).is_empty():
-		return &"unknown_wild_species"
-	var level: int = int(answer.get("level", 0))
-	if level < 1 or level > Gen2Experience.MAX_LEVEL:
-		return &"invalid_wild_level"
-	if answer.has("dvs") and (int(answer["dvs"]) < 0 or int(answer["dvs"]) > 0xFFFF):
-		return &"invalid_wild_dvs"
-	if answer.has("hp") and int(answer["hp"]) < 1:
-		return &"invalid_wild_hp"
-	return &""
 
 
 ## The three rods, which `FishFunction` reaches rather than `RandomEncounter`.

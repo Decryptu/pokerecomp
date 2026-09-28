@@ -613,6 +613,19 @@ func test_resolved_wild_encounter_reaches_the_real_battle_overlay() -> void:
 	assert_eq(host.battle_snapshot()["message"], "Wild %s\nappeared!" % _wild_name())
 
 
+## `LoadEnemyMon` marks the opening enemy seen with no `SENT_OUT` behind it, so
+## a wild fought and not caught is still in the dex afterwards.
+func test_the_opening_enemy_is_marked_seen() -> void:
+	await _open_world(true)
+	var state: Gen2WorldState = _world_screen._world.state
+	assert_false(state.has_seen_species(Fixture.TRAINER_SPECIES))
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_not_null(_battle_host())
+	assert_true(state.has_seen_species(Fixture.TRAINER_SPECIES))
+
+
 ## `BattleEnd_HandleRoamMons` reached through the screen that owns it: the shape
 ## the battle overlay reports a finished fight in is what the write-back reads,
 ## so a roamer run from keeps its HP and one defeated empties its struct.
@@ -2806,7 +2819,8 @@ func test_a_takeover_fights_the_trainer_and_the_world_commits_its_answer() -> vo
 
 ## A mod actor marked solid stands in the player's way, and the A press on it is
 ## the actor's to answer: it asks for a wild battle, which the world starts on a
-## free frame and closes with the actor's tag on the `ended` event.
+## free frame with the HP and status the actor kept, and closes with the actor's
+## tag and that state on the `ended` event.
 func test_a_solid_actor_blocks_the_walk_and_starts_the_wild_it_asks_for() -> void:
 	var legend := Legend.new()
 	Gen2ModHost.instance().register_world_actor(&"legend", legend)
@@ -2830,7 +2844,10 @@ func test_a_solid_actor_blocks_the_walk_and_starts_the_wild_it_asks_for() -> voi
 	var host: Gen2BattleScreen = _battle_host()
 	assert_not_null(host)
 	assert_eq(host.battle_snapshot()["enemy"], Fixture.TRAINER_SPECIES)
-	assert_eq(host._battle.party(Gen2Battle.ENEMY).at(0).level, Legend.LEVEL)
+	var enemy: Gen2BattleMon = host._battle.party(Gen2Battle.ENEMY).at(0)
+	assert_eq(enemy.level, Legend.LEVEL)
+	assert_eq(enemy.hp, Legend.HP)
+	assert_eq(enemy.status, Legend.STATUS)
 	host.run_from_battle()
 	for _press: int in 2:
 		host.finish()
@@ -2841,6 +2858,8 @@ func test_a_solid_actor_blocks_the_walk_and_starts_the_wild_it_asks_for() -> voi
 	assert_eq(ended[0]["tag"], &"legend")
 	assert_eq(ended[0]["species"], Fixture.TRAINER_SPECIES)
 	assert_eq(ended[0]["outcome"], Gen2WorldBattleAdapter.OUTCOME_RAN)
+	assert_eq(ended[0]["hp"], Legend.HP)
+	assert_eq(ended[0]["status"], Legend.STATUS)
 
 
 class TakeoverFight:
@@ -2878,6 +2897,9 @@ class Legend:
 	const CELL := Vector2i(3, 5)
 	## Below the lead, so the run the test ends the fight with gets away.
 	const LEVEL: int = 2
+	## What a mod roamer kept from its last meeting.
+	const HP: int = 3
+	const STATUS: int = Gen2Status.PARALYSIS
 	var _asked: Array = []
 
 	func set_world(_world: Gen2WorldAPI) -> void:
@@ -2894,7 +2916,7 @@ class Legend:
 			return false
 		_asked.append({
 			"kind": &"battle", "species": Fixture.TRAINER_SPECIES, "level": LEVEL,
-			"tag": &"legend",
+			"hp": HP, "status": STATUS, "tag": &"legend",
 		})
 		return true
 

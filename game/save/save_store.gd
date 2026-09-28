@@ -247,8 +247,13 @@ static func export_slot(
 		return _failure("the save could not be read for export")
 	var document: String = reader.get_as_text()
 	reader.close()
-	var written: Dictionary = _write_file(target_path, document)
-	if not written["ok"]:
+	## A picked file is a one-file grant, a `content://` URI on Android: no temporary beside it.
+	var file: FileAccess = FileAccess.open(target_path, FileAccess.WRITE)
+	var written: bool = file != null and file.store_string(document)
+	if file != null:
+		written = written and file.get_error() == OK
+		file.close()
+	if not written:
 		return _failure("the save could not be written to %s" % target_path)
 	return {"ok": true, "message": "", "path": target_path}
 

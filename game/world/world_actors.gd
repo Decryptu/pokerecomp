@@ -144,17 +144,14 @@ func _resolve_request(entry: Variant) -> Dictionary:
 		if species <= 0:
 			return {}
 		return {"kind": kind, "species": species}
-	var level: int = int(row.get("level", 0))
-	var dvs: int = int(row.get("dvs", 0))
-	if _world == null or _world.data.species(species).is_empty() \
-		or level < 1 or level > Gen2Experience.MAX_LEVEL or dvs < 0 or dvs > 0xFFFF:
+	if _world == null:
 		return {}
-	var values: Dictionary = {
-		"kind": &"wild", "pokemon": species, "level": level,
-		"mod_tag": StringName(row.get("tag", &"")),
-	}
-	if row.has("dvs"):
-		values["dvs"] = dvs
+	var named: Dictionary = Gen2WorldBattleAdapter.mod_wild(_world.data, row)
+	if named.has("refused"):
+		return {}
+	var values: Dictionary = named["values"]
+	values["kind"] = &"wild"
+	values["mod_tag"] = StringName(row.get("tag", &""))
 	return {"kind": kind, "values": values}
 
 

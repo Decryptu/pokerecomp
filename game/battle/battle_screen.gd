@@ -9,8 +9,8 @@ signal dex_entry_requested(species: int)
 ## A bag item spent inside the battle, so the world takes one off the pocket.
 ## `target` is the party index an ITEMMENU_PARTY item was used on, or -1.
 signal item_used(item: int, target: int)
-## `LoadEnemyMon`'s own `wPokedexSeen` write (engine/battle/core.asm:6407): every enemy
-## sent out sets it, trainer or wild. The host owns the flag; the engine holds no world state.
+## `LoadEnemyMon`'s own `wPokedexSeen` write (engine/battle/core.asm:6411): every enemy
+## loaded sets it, trainer or wild. The host owns the flag; the engine holds no world state.
 signal enemy_seen(species: int, unown_form: int)
 
 ## Owns the battle, events and text box. A [Gen2Battle] resolves the turn into events, shown
@@ -1380,8 +1380,7 @@ func _begin_world_battle(prepared: Dictionary, save: Gen2SaveData) -> void:
 	_enemy = enemy_party_ready.active_mon().species
 	_enemy_nick = enemy_party_ready.active_mon().display_name()
 	_enemy_level = enemy_party_ready.active_mon().level
-	## Read before anything registers this sight: `SetSeenMon` runs as the
-	## opponent appears, so after the first frame the answer is always yes.
+	## Read before the entrance registers this sight.
 	_enemy_seen_before = save != null and save.world != null \
 		and save.world.world_state != null \
 		and save.world.world_state.has_seen_species(_enemy)
@@ -1649,6 +1648,8 @@ func _build_entrance() -> void:
 		if not text.is_empty():
 			show_message(text)
 		return
+	## `LoadEnemyMon` for the opening enemy, a wild or a trainer's lead, which no `SENT_OUT` carries.
+	_register_enemy_sight(_battle.enemy.species, Gen2Battle.unown_form_of(_battle.enemy))
 
 	var trainer: bool = _battle.is_trainer_battle
 	if trainer:
@@ -3598,9 +3599,8 @@ func set_capture_refusal(message: String) -> void:
 	_capture_refusal = message
 
 
-## `SetSeenMon`, `CheckCaughtMon` and `CheckReceivedDex` off the world's live
-## state, since the save's snapshot is only as fresh as its last write. Called
-## before the entrance registers this sight.
+## The dex's seen and caught bits and `CheckReceivedDex` off live world state, which is
+## fresher than the save's snapshot. Called before the entrance registers this sight.
 func set_dex_context(seen: bool, caught: bool, received: bool) -> void:
 	_enemy_seen_before = seen
 	_enemy_caught_before = caught
@@ -4842,7 +4842,7 @@ func _finish_world_battle() -> void:
 		result["player_active"] = active.species if active != null else 0
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_LOST:
 		result["recovery"] = _world_battle_recovery.duplicate(true)
-	result["enemy"] = _enemy_battler_record()
+	result["enemy"] = Gen2WorldBattleAdapter.enemy_record(_battle)
 	result["party_log"] = _battle.party_log.duplicate(true)
 	result["victory_music"] = _victory_music
 	## `EndOfBattle`'s versus balls read every enemy row, status written back.
@@ -4856,19 +4856,6 @@ func _finish_world_battle() -> void:
 	battle_finished.emit(result)
 
 
-## What `BattleEnd_HandleRoamMons` reads from `wEnemyMon` leaving a wild battle: species, HP
-## and DVs, plus the level `wEnemyMonLevel` keeps. Empty on paths ending before an enemy exists.
-func _enemy_battler_record() -> Dictionary:
-	if _battle == null:
-		return {}
-	var enemy: Gen2BattleMon = _battle.party(Gen2Battle.ENEMY).active_mon()
-	if enemy == null:
-		return {}
-	return {
-		"species": enemy.base_species(), "hp": enemy.hp, "dvs": enemy.dvs, "level": enemy.level,
-	}
-
-
 func _finish_world_capture(capture: Dictionary) -> void:
 	if _world_battle_completion_sent:
 		return
@@ -4880,7 +4867,7 @@ func _finish_world_capture(capture: Dictionary) -> void:
 		"outcome": Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
 		"request": _world_battle_request.duplicate(true),
 		"capture": capture.duplicate(true),
-		"enemy": _enemy_battler_record(),
+		"enemy": Gen2WorldBattleAdapter.enemy_record(_battle),
 		"roamers_move": _battle != null and _battle.roamers_move_on(true),
 		"money_awarded": (_earnings()["money"] as Dictionary).duplicate(),
 		"evolvable": _battle.evolvable_indices() if _battle != null else [],
@@ -6438,13 +6425,18 @@ func start_menu_cursor_after() -> int:
 	return int(GEN1_SAVED_MENU_ITEM.get(_menu_position, 0))
 
 
+## `LoadEnemyMon`'s dex write, which link and Battle Tower fights skip for `InitEnemyMon`.
+func _register_enemy_sight(species: int, unown_form: int) -> void:
+	if not _battle.in_battle_tower and not _battle.is_link_battle:
+		enemy_seen.emit(species, unown_form)
+
+
 ## `ClearEnemyMonBox` and `BattleMonEntrance` clear the panel and square before
 ## the line; Generation 1's `SendOutMon` draws the player's panel after it.
 func _apply_sent_out(event: Dictionary) -> void:
 	var side: int = int(event["side"])
 	if side == Gen2Battle.ENEMY:
-		if not _battle.in_battle_tower and not _battle.is_link_battle:
-			enemy_seen.emit(int(event["species"]), int(event.get("unown_form", 0)))
+		_register_enemy_sight(int(event["species"]), int(event.get("unown_form", 0)))
 		_enemy = int(event["species"])
 		_enemy_nick = String(event.get("name", ""))
 		_enemy_unown_form = int(event.get("unown_form", 0))
