@@ -885,7 +885,19 @@ func request_roamer(id: StringName, slot: int, species: int, level: int) -> Dict
 	return {"ok": true}
 
 
-## The Virtual Console's write of `sGSBallFlag` after a Hall of Fame entry.
+## A gift through the same party/box transaction as a script's `givepoke`.
+func request_pokemon_gift(
+	id: StringName, species: int, level: int, tag: StringName = &""
+) -> Dictionary:
+	if species <= 0 or level < 1 or level > Gen2Layout.MAX_LEVEL:
+		return {"ok": false, "reason": &"invalid_pokemon_gift"}
+	_world_requests.append({
+		"id": id, "kind": &"pokemon_gift", "species": species, "level": level, "tag": tag,
+	})
+	return {"ok": true}
+
+
+## Opt into the GS Ball chain; the requesting mod chooses its prerequisites.
 func request_gs_ball(id: StringName) -> Dictionary:
 	_world_requests.append({"id": id, "kind": &"gs_ball"})
 	return {"ok": true}

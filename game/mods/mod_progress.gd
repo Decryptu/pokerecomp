@@ -19,7 +19,8 @@ static func of(world: Gen2WorldAPI, save: Gen2SaveData) -> Dictionary:
 	if world != null and world.state != null:
 		_read_state(out, world.state, Gen2WorldState.is_crystal_profile(world.data))
 		_read_story(out, world.state, world.data.id)
-		out[&"beat_red"] = world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
+		out[&"beat_red"] = world.state.beat_red != 0 \
+			or world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
 	_read_save(out, save)
 	return out
 
@@ -39,7 +40,8 @@ static func of_save(save: Gen2SaveData, data: GameData = null) -> Dictionary:
 		_read_state(out, save.world.world_state, Gen2WorldState.is_crystal_game_id(game))
 		_read_story(out, save.world.world_state, game)
 		out[&"beat_red"] = \
-			save.world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
+			save.world.world_state.beat_red != 0 \
+			or save.world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
 	_read_save(out, save)
 	return out
 
@@ -76,9 +78,16 @@ static func _read_story(out: Dictionary, state: Gen2WorldState, game: StringName
 		caught.append(int(species))
 	caught.sort()
 	out[&"caught_species"] = caught
+	out[&"starter_species"] = state.starter_species
 	if RomRegistry.generation_for(game) != RomRegistry.GEN2:
 		return
+	for index: int in 3:
+		if state.starter_species == 0 and state.is_event_flag_active(27 + index):
+			out[&"starter_species"] = [155, 158, 152][index]
+			break
 	out[&"beasts_released"] = state.is_event_flag_active(Gen2WorldState.EVENT_RELEASED_THE_BEASTS)
+	out[&"gs_ball_offered"] = state.gs_ball_stage != Gen2WorldState.GS_BALL_DISABLED
+	out[&"gs_ball_stage"] = state.gs_ball_stage
 	if Gen2WorldState.is_crystal_game_id(game):
 		out[&"fought_suicune"] = \
 			state.is_event_flag_active(Gen2WorldState.EVENT_FOUGHT_SUICUNE_CRYSTAL)

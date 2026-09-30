@@ -1,14 +1,9 @@
 class_name Gen2WorldTransaction
 extends RefCounted
 
-## The commit boundary every world-owned transaction here shares. A mart purchase,
-## Kurt's apricorns, a party request, a heal, a field item and the pack's TOSS all
-## do the same four things around whatever they change: validate the save they were
-## handed, build a candidate from it, validate that candidate against the world it
-## now describes and write it, and put the live world back when any of the three
-## refuses. That shape was repeated in three hosts. Scene-free and
-## save-model-free: it validates through [Gen2SaveValidator] and writes through
-## [Gen2SaveStore], and knows nothing about what the caller changed.
+## The shared world transaction: validate, build a candidate and commit it,
+## restoring the live world on refusal. Gameplay commits use SaveStore.update;
+## ordinary runs stay in memory until SAVE, while Nuzlocke commits are durable.
 
 ## Validates [param save] and returns a candidate to work on, which is a full
 ## copy rather than a reference: nothing a caller writes to it reaches the live
@@ -22,8 +17,8 @@ static func begin(world: Gen2WorldAPI, save: Gen2SaveData) -> Dictionary:
 	return {"ok": true, "candidate": Gen2SaveData.from_dict(save.to_dict())}
 
 
-## Snapshots the world into [param candidate], validates it, writes it when
-## [param persist], and copies it back over [param save]. Any refusal restores
+## Snapshots and validates [param candidate], applies the gameplay save policy
+## when [param persist], and copies it over [param save]. Any refusal restores
 ## the world to [param before] and reports which step said no, so a caller never
 ## has to unwind by hand.
 static func commit(
@@ -41,7 +36,7 @@ static func commit(
 		restore(world, before)
 		return failure(&"candidate_save_invalid", validation)
 	if persist:
-		var written: Dictionary = Gen2SaveStore.save(candidate, world.data)
+		var written: Dictionary = Gen2SaveStore.update(candidate, world.data)
 		if not bool(written.get("ok", false)):
 			restore(world, before)
 			return failure(&"save_failed", written)

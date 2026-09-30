@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 55 | Actor `pokemon_gift` requests and `request_completed(result)`; `request_pokemon_gift()`; lasting `starter_species` and `beat_red` progress; opt-in Gold/Silver GS Ball chain and `gs_ball_stage` |
 | 54 | `hp` and `status` on an actor's `battle` request, `status` on a wild substitute's answer, and `status` on `ended` |
 | 53 | `after_credits` on `register_page()`, and `Gen2ModHost.credits_page_ids()`; the `text_closed` world event every `closetext` publishes, which replaces `money_window_closed` |
 | 52 | `Gen2WorldAPI.camera_reaches()` and `camera_reach_revision()`: `expanded_block_at()` and the draw list leave another room of an indoor map out; big objects drawn in `facings.asm`'s own tile order |
@@ -1708,7 +1709,7 @@ on, `position_cells` rounded, blocks the player and the map's objects the way an
 NPC does, for as long as the entry keeps it. It is how a Pokemon standing on the
 map is in the way, and a press of A on it reaches the actor's `interact`.
 
-`take_requests()` takes a second kind, `{"kind": &"battle", "species": n,
+`take_requests()` also takes `{"kind": &"battle", "species": n,
 "level": n}`, with the optional `dvs`, `hp`, `status` and `tag` a
 [wild substitute](#replacing-the-wild-a-step-meets) takes: a wild battle, as a
 script's `loadwildmon` and `startbattle` start one, begun on the next frame the
@@ -1729,6 +1730,20 @@ class Mewtwo:
 		_outbox.append({"kind": &"battle", "species": 150, "level": 70, "tag": &"mewtwo"})
 		return true
 ```
+
+An actor may ask for a gift with
+`{"kind": &"pokemon_gift", "species": 155, "level": 5, "tag": &"starter"}`.
+The host waits for an idle world, creates the Pokemon through the ordinary gift
+transaction and sends it to the party or the current box. Optional
+`request_completed(result: Dictionary)` receives `ok`, `reason` on failure,
+`species`, `level`, and `tag`; an invalid gift or full storage changes nothing.
+Mark a gift claimed only after `ok` is true. The same result is published on the
+world channel as `type: &"pokemon_gift"`.
+
+`host.request_pokemon_gift(manifest.id, species, level, tag)` queues the same
+transaction without an actor. Its immediate `ok` confirms that the request was queued;
+the world-channel result confirms delivery and carries the requesting `id` and
+`tag`. Requests are drained once; mods own their once-only claim state.
 
 A world renderer that wants to draw them takes the optional
 `set_actors(actors: Gen2WorldActors)`, handed the same resolved list.
@@ -1770,7 +1785,7 @@ The context is a snapshot, never a live handle:
 | Key | Meaning |
 |---|---|
 | `map` | `Vector2i(group, number)` |
-| `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on: `CanEncounterWildMon` per cell, limited to the cells the player can reach from a warp, a connection or where they stand by walking, surfing, hopping a ledge, cutting a tree or climbing a waterfall. A door, staircase, cave mouth, current or arrow tile is left only in the direction it walks the player, so the floor past a map's exit is out, as is floor a cave's walls enclose. A Generation 2 warp cell is out too, since the warp is taken before the roll. Taken again, and pushed, if a script runs `wildoff` or `wildon` or changes a block while the map is up |
+| `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on: `CanEncounterWildMon` per cell, limited to the cells the player can reach from where they stand by walking, surfing, hopping a ledge, cutting a tree or climbing a waterfall. A door, staircase, cave mouth, current or arrow tile is left only in the direction it walks the player, so the floor past a map's exit is out, as is floor a cave's walls enclose. A Generation 2 warp cell is out too, since the warp is taken before the roll. Taken again, and pushed, if a script runs `wildoff` or `wildon` or changes a block, or the player changes reachable region through a warp or one-way crossing |
 | `occupied` | The walk cells the map's own objects hold this frame: NPCs, item balls, all four cells of a big object, both cells of one mid-step, and Yellow's Pikachu while it follows. Refreshed with `player`, not with `map`. An entry outside `eligible` is dropped, so the two are deliberately separate. Refusing an occupied cell is the provider's choice. The player's cell is not in it |
 | `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read now, with swarm and Bug Contest substitutions and the time of day already applied. A slot is `{species, min_level, max_level, chance}`, `chance` its weight in the roll's own units (of 100 on Generation 2, of 256 on Generation 1, the row's own percent in the Bug Contest). Refreshed while the map is up, whenever the hour, a swarm or the Bug Contest moves what a roll would read |
 | `player` | `{cell, facing}` |
@@ -1916,9 +1931,19 @@ entry) ever wrote, so a vanilla run never reaches it.
 `Gen2ModHost.request_gs_ball(id)` writes that byte as the Virtual Console does,
 on the next free world frame. The next time the player walks into the Goldenrod
 Pokemon Center the receptionist gives the GS Ball, and every script behind it
-runs unchanged. Gold, Silver, Red, Blue and Yellow have no such scene and refuse
-it into `failures()` as `no_gs_ball_event`. `progress()` answers
-`gs_ball_offered` on Crystal once the byte is written, so a mod asks once.
+runs unchanged. Gold and Silver opt into an equivalent host script: Goldenrod's
+doorway or nurse delivers the ball, Kurt keeps it until the next day, then returns
+it for the Ilex Forest shrine's level-30 Celebi encounter. The otherwise unused
+item $73 becomes a GS BALL key item only in opted-in Gold/Silver runs. Quest stage
+and the remaining wait survive a save; repeated requests never restart the chain,
+and the shrine consumes its once-only token before battle, including a loss or
+escape. Vanilla Gold/Silver runs keep their original item and scripts.
+
+Red, Blue and Yellow refuse the request into `failures()` as `no_gs_ball_event`.
+`progress()` answers `gs_ball_offered` on all three Generation 2 games and
+`gs_ball_stage` on Gold/Silver: 0 disabled, 1 offered, 2 held, 3 with Kurt,
+4 shrine-ready, 5 finished. The mod chooses its prerequisites, including whether
+a Hall of Fame entry is required.
 
 ```gdscript
 host.progress_changed.connect(func(progress: Dictionary) -> void:
@@ -1984,7 +2009,7 @@ readable and the second is gone.
 | `badges` | A sixteen-bit mask, bit `i` being badge `i` in badge order. Crystal's order whichever cartridge is open, so nothing reads the Gold and Silver flag table |
 | `badge_count` | The same mask popcounted, which is `_GetVarAction`'s `.CountBadges` |
 | `hall_of_fame` | `STATUSFLAGS_HALL_OF_FAME_F` |
-| `beat_red` | `wSpawnAfterChampion` is `SPAWN_AFTER_RED` |
+| `beat_red` | Red's credits have been reached; remains true after returning to Mt. Silver |
 | `seen_count`, `caught_count` | The dex counters |
 | `unown_caught` | How many Unown forms have been caught |
 | `party_count`, `kept_count` | The party, and the party plus the boxes |
@@ -1994,6 +2019,7 @@ readable and the second is gone.
 | `money`, `coins` | The wallet and the Game Corner |
 | `step_count`, `phone_contacts` | The step counter and the registered numbers |
 | `play_hours`, `play_minutes` | The play timer the trainer card prints |
+| `starter_species` | Originally received starter, preserved after evolution, trade or release. Zero before choosing; older Generation 2 slots use Elm's choice flags until a stored receipt exists. Patched starters record the received species |
 | `caught_species` | Every species the dex marks caught, ascending |
 | `beasts_released` | Gold, Silver and Crystal: `EVENT_RELEASED_THE_BEASTS`, set in Burned Tower beside `InitRoamMons` |
 | `fought_suicune` | Crystal: `EVENT_FOUGHT_SUICUNE`, set by Tin Tower's battle whether Suicune was caught or knocked out. `caught_species` tells the two apart |

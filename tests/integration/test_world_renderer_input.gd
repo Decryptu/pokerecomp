@@ -32,9 +32,11 @@ func handle_world_input(event) -> bool:
 
 var _data: GameData = null
 var _world_screen: Gen2WorldScreen = null
+var _save_root: String = ""
 
 
 func before_each() -> void:
+	_save_root = Gen2SaveStore.root()
 	_forget_view()
 	_data = Fixture.build()
 	_data = GameData.open_directory(Fixture.directory())
@@ -42,6 +44,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	Gen2SaveStore.use_root(_save_root)
 	if is_instance_valid(_world_screen):
 		_world_screen.free()
 		_world_screen = null
@@ -218,3 +221,73 @@ func test_a_renderer_without_the_hook_leaves_the_screen_unchanged() -> void:
 	# The built-in renderer takes no input, so an unused key stays unused.
 	assert_false(_world_screen._renderer.has_method(Gen2ModHost.RENDERER_INPUT_METHOD))
 	_world_screen._unhandled_input(_press(KEY_Q))
+
+
+func test_actor_pokemon_gifts_report_the_committed_result() -> void:
+	await _open_world_with_renderer()
+	var script := GDScript.new()
+	script.source_code = """extends RefCounted
+var requests: Array = []
+var completed: Array = []
+func set_world(_world): pass
+func advance_frame(): pass
+func sprites(): return []
+func take_requests():
+	var out = requests
+	requests = []
+	return out
+func request_completed(result): completed.append(result)
+"""
+	script.reload()
+	var actor: Object = script.new()
+	assert_true(Gen2ModHost.instance().register_world_actor(&"giver", actor)["ok"])
+	_world_screen._actors.set_actors(Gen2ModHost.instance().world_actors())
+	_world_screen._actors.set_world(_world_screen._world)
+	actor.requests.append({"kind": &"pokemon_gift", "species": 155, "level": 5, "tag": &"starter"})
+	_world_screen._spend_actor_requests()
+	assert_eq(actor.completed.size(), 1)
+	assert_true(actor.completed[0]["ok"])
+	assert_eq(actor.completed[0]["tag"], &"starter")
+	var save: Gen2SaveData = _world_screen.active_save()
+	assert_eq((save.party.back() as Gen2SaveMon).species, 155)
+	assert_true(_world_screen._world.state.has_caught_species(155))
+	var count: int = save.party.size()
+	actor.requests.append({"kind": &"pokemon_gift", "species": 65535, "level": 5})
+	_world_screen._spend_actor_requests()
+	assert_false(actor.completed[1]["ok"])
+	assert_eq(save.party.size(), count)
+
+
+func test_a_model_map_change_rebinds_the_animation_before_redrawing() -> void:
+	await _open_world_with_renderer()
+	var world: Gen2WorldAPI = _world_screen._world
+	var before: Gen2WorldMap = _world_screen._animation.map
+	world.current_map = _data.world_map(Gen2WorldSpawn.NEW_BARK_GROUP, Gen2WorldSpawn.PLAYERS_HOUSE_2F)
+	assert_ne(world.current_map, before)
+	_world_screen._refresh_if(true)
+	assert_eq(_world_screen._animation.map, world.current_map)
+
+
+func test_seen_pokemon_survive_a_battle_in_memory_until_the_player_saves() -> void:
+	await _open_world_with_renderer()
+	Gen2SaveStore.use_root("user://test_unsaved_dex")
+	var save: Gen2SaveData = _world_screen.active_save()
+	var world: Gen2WorldAPI = _world_screen._world
+	assert_true(Gen2SaveStore.save(save, _data)["ok"])
+	world.state.set_species_seen(16)
+	save.world = world.snapshot()
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data, {"kind": &"wild", "pokemon": 16, "level": 5},
+		Gen2SaveBattleAdapter.to_battle_party(_data, save), RandomNumberGenerator.new()
+	)
+	assert_true(prepared["ok"])
+	assert_true(Gen2WorldBattleAdapter.commit_battle(_data, prepared["battle"], save, {})["ok"])
+	assert_true(save.world.world_state.has_seen_species(16))
+	var loaded: Dictionary = Gen2SaveStore.load_result(save.game_id, save.rom_sha1, save.slot, _data)
+	assert_false(loaded["save"].world.world_state.has_seen_species(16))
+	assert_true(Gen2SaveStore.save(save, _data)["ok"])
+	loaded = Gen2SaveStore.load_result(save.game_id, save.rom_sha1, save.slot, _data)
+	assert_true(loaded["save"].world.world_state.has_seen_species(16))
+	for path: String in [Gen2SaveStore.path_for(save.game_id, save.rom_sha1, save.slot),
+		Gen2SaveStore.backup_path_for(save.game_id, save.rom_sha1, save.slot)]:
+		DirAccess.remove_absolute(path)

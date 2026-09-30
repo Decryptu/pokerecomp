@@ -49,7 +49,7 @@ const BILLSPCITEM_CHANGE_BOX: int = 2
 const BILLSPCITEM_MOVE_WITHOUT_MAIL: int = 3
 const BILLSPCITEM_SEE_YA: int = 4
 const BILLS_PC_ROWS: Array[String] = [
-	"WITHDRAW PKMN", "DEPOSIT PKMN", "CHANGE BOX", "MOVE PKMN W/O MAIL", "SEE YA!",
+	"WITHDRAW <PKMN>", "DEPOSIT <PKMN>", "CHANGE BOX", "MOVE <PKMN> W/O MAIL", "SEE YA!",
 ]
 ## `_PCWhatText` and `_PCGottaHavePokemonText`, the two lines `.LogIn` and
 ## `.CheckCanUsePC` print. Both are `text_far` stubs in `data/text/common_2.asm`

@@ -88,6 +88,7 @@ var icon_number: int = 0
 ## never asks: only OBJECT_ACTION_BOUNCE animates one, through the up row. A
 ## mod's actor is not a map object and steps the strip the party menu steps.
 var animate_icon_frames: bool = false
+var icon_generation: int = RomRegistry.GEN2
 
 
 static func from_cache(value: Dictionary) -> Gen2WorldSprite:
@@ -104,10 +105,11 @@ static func from_cache(value: Dictionary) -> Gen2WorldSprite:
 	return out
 
 
-static func from_mon_icon(icon: int) -> Gen2WorldSprite:
+static func from_mon_icon(icon: int, generation: int = RomRegistry.GEN2) -> Gen2WorldSprite:
 	var out := Gen2WorldSprite.new()
 	out.number = icon
 	out.icon_number = icon
+	out.icon_generation = generation
 	out.tiles = 8
 	out.bytes = out.tiles * PokeTiles.TILE_BYTES
 	out.sprite_type = TYPE_MON_ICON
@@ -185,10 +187,13 @@ static func image_for(
 
 	var table: PackedInt32Array = Gen2PicImage.lookup(palette, true)
 	for tile: int in 4:
+		var read: Array = Gen1Layout.mon_icon_quadrant(sprite.icon_number - 1, tile) \
+			if sprite.sprite_type == TYPE_MON_ICON and sprite.icon_generation == RomRegistry.GEN1 \
+			else [tile, false]
 		Gen2PicImage.blit_tile(
-			pixels, 16, 16, indices, sprite.tiles, source_tile + tile,
+			pixels, 16, 16, indices, sprite.tiles, source_tile + int(read[0]),
 			(tile & 1) * PokeTiles.TILE_WIDTH, (tile >> 1) * PokeTiles.TILE_HEIGHT,
-			table
+			table, bool(read[1])
 		)
 
 	var image: Image = Gen2PicImage.canvas_image(pixels, 16, 16)

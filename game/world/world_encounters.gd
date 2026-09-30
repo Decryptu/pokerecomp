@@ -294,7 +294,7 @@ func _build_context() -> Dictionary:
 func _eligible_key() -> Array:
 	if _world == null:
 		return []
-	return [_world.wild_encounters_off(), _world.block_revision]
+	return [_world.wild_encounters_off(), _world.block_revision, _world.encounter_reach_revision()]
 
 
 ## The cells the map's own objects hold this frame, kept out of `eligible` so an
@@ -530,6 +530,10 @@ func _validate(raw: Variant) -> Dictionary:
 		return {}
 	var species: int = int(row.get("species", 0))
 	var level: int = int(row.get("level", 0))
+	if not Gen2WorldEncounter.species_available(species, _world.state.unlocked_unowns(
+		Gen2WorldState.is_crystal_profile(_world.data)
+	)):
+		return {}
 	## A wild admitted legally stays admitted while it keeps standing where it
 	## was. The tables move under a standing population at six o'clock and on a
 	## swarm, and revalidating against the new ones would empty the route on the

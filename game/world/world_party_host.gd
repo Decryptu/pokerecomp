@@ -311,6 +311,8 @@ static func complete_runtime_request(
 	## everything else the request wrote.
 	_register_caught(world, int(transaction.get("register_caught", 0)))
 	_register_unown(world, int(transaction.get("register_unown", 0)))
+	if bool(transaction.get("accepted", false)) and bool(request.get("values", {}).get("starter", false)):
+		world.state.apply_changes({}, {}, {"starter_species": int(request["values"]["pokemon"])})
 	var completion_result: Dictionary = {
 		"ok": true,
 		"accepted": bool(transaction.get("accepted", false)),
@@ -1267,7 +1269,7 @@ static func whiteout(
 	if not bool(warped.get("ok", false)):
 		return _failure(StringName(warped.get("reason", &"missing_spawn")), warped)
 	if persist and save != null:
-		var written: Dictionary = Gen2SaveStore.save(save, world.data)
+		var written: Dictionary = Gen2SaveStore.update(save, world.data)
 		if not bool(written.get("ok", false)):
 			return _failure(&"whiteout_save_failed", {
 				"message": written.get("message", ""),

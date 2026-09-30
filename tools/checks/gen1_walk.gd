@@ -4197,6 +4197,10 @@ func _check_the_opening_walk() -> void:
 		"Oak's Lab stands on state %d after %d passes." % [
 			world.state.gen1_map_script(OAKS_LAB_BYTE), passes,
 		])
+	var outside: Gen2WorldAPI = Gen2WorldAPI.open(
+		world.data, 0, PALLET_TOWN, PALLET_NORTH_EXIT, world.state
+	)
+	_r.check(not _object_active(outside, PALLET_OAK), "Oak is still visible in Pallet after entering the lab.")
 	_r.note("gen1 walk PALLET_TOWN into OAKS_LAB in %d passes" % passes)
 	_check_the_lab_starter(world)
 

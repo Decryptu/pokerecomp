@@ -166,6 +166,18 @@ const BADGE_ENGINE_FLAGS_GOLD_SILVER: Array[int] = [
 	ENGINE_SOULBADGE - 1, ENGINE_MARSHBADGE - 1, ENGINE_VOLCANOBADGE - 1, ENGINE_EARTHBADGE - 1,
 ]
 
+const GS_BALL_ITEM: int = 0x73
+const GS_BALL_DISABLED: int = 0
+const GS_BALL_OFFERED: int = 1
+const GS_BALL_HELD: int = 2
+const GS_BALL_CHECKING: int = 3
+const GS_BALL_READY: int = 4
+const GS_BALL_FINISHED: int = 5
+var beat_red: int = 0
+var starter_species: int = 0
+var gs_ball_stage: int = GS_BALL_DISABLED
+var gs_ball_wait: int = 0
+
 var _event_flags: Dictionary = {}
 var _engine_flags: Dictionary = {}
 var _map_scenes: Dictionary = {}
@@ -506,6 +518,8 @@ static func _seed_counts(
 ## are deliberately absent because they belong to GameData, not a save.
 func to_dict() -> Dictionary:
 	return {
+		"beat_red": beat_red, "starter_species": starter_species,
+		"gs_ball_stage": gs_ball_stage, "gs_ball_wait": gs_ball_wait,
 		"event_flags": _event_flags.duplicate(),
 		"engine_flags": _engine_flags.duplicate(),
 		"map_scenes": _map_scenes.duplicate(),
@@ -645,6 +659,10 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 		restored.update_unown_dex(int(raw_form))
 		restored.note_first_unown_seen(int(raw_form))
 	restored.set_registered_item(int(source.get("registered_item", 0)))
+	restored.beat_red = clampi(int(source.get("beat_red", 0)), 0, 1)
+	restored.starter_species = maxi(0, int(source.get("starter_species", 0)))
+	restored.gs_ball_stage = clampi(int(source.get("gs_ball_stage", 0)), 0, GS_BALL_FINISHED)
+	restored.gs_ball_wait = clampi(int(source.get("gs_ball_wait", 0)), 0, 1)
 	restored.set_wild_encounter_cooldown(int(source.get("wild_encounter_cooldown", 0)))
 	restored._step_count = int(source.get("step_count", 0)) & 0xFF
 	restored._poison_step_count = int(source.get("poison_step_count", 0)) & 0xFF
@@ -805,6 +823,10 @@ func restore_from_dict(raw: Variant) -> void:
 	_blue_card_balance = restored._blue_card_balance
 	_buenas_password = restored._buenas_password
 	_variable_sprites = restored._variable_sprites.duplicate()
+	beat_red = restored.beat_red
+	starter_species = restored.starter_species
+	gs_ball_stage = restored.gs_ball_stage
+	gs_ball_wait = restored.gs_ball_wait
 	_battle_tower = restored._battle_tower
 	changed.emit()
 
@@ -1103,6 +1125,9 @@ func reset_daily_flags(
 	crystal: bool = true, random: RandomNumberGenerator = null, days: int = 1
 ) -> bool:
 	var did_change: bool = false
+	if gs_ball_wait > 0 and days > 0:
+		gs_ball_wait = 0
+		did_change = true
 	for run: Vector2i in DAILY_ENGINE_FLAG_RUNS:
 		for crystal_index: int in range(run.x, run.y + 1):
 			var flag: int = engine_flag(crystal_index, crystal)
@@ -2484,6 +2509,10 @@ const CHANGE_MAPS: Array[Array] = [
 ## Every bounded integer `runtime_changes` may carry: the key, the member, the
 ## largest value and the reason a value outside 0..that answers with.
 static var CHANGE_SCALARS: Array[Array] = [
+	["beat_red", "beat_red", 1, &"invalid_beat_red"],
+	["starter_species", "starter_species", UNBOUNDED, &"invalid_starter_species"],
+	["gs_ball_stage", "gs_ball_stage", GS_BALL_FINISHED, &"invalid_gs_ball_stage"],
+	["gs_ball_wait", "gs_ball_wait", 1, &"invalid_gs_ball_wait"],
 	["coins", "_coins", UNBOUNDED, &"invalid_coins"],
 	["phone_receive_cycle", "_phone_receive_cycle", PHONE_RECEIVE_DELAYS.size() - 1,
 		&"invalid_phone_receive_cycle"],

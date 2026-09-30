@@ -142,3 +142,20 @@ func test_big_doll_shape_follows_the_source_sprite_selection() -> void:
 			"sprite": pair[0], "movement": Gen2WorldObject.MOVEMENT_BIGDOLL,
 		})
 		assert_eq(doll.big_object_shape(), pair[1], "sprite $%02X" % pair[0])
+
+
+func test_gen1_icons_mirror_the_two_populated_tiles_on_both_frames() -> void:
+	var sprite := Gen2WorldSprite.from_mon_icon(1, RomRegistry.GEN1)
+	var strip := PackedByteArray()
+	strip.resize(8 * 64)
+	for frame: int in 2:
+		for y: int in 8:
+			strip[y * 64 + frame * 32] = 1
+			strip[y * 64 + frame * 32 + 16] = 2
+	var colors := PackedColorArray([Color.TRANSPARENT, Color.RED, Color.GREEN, Color.BLUE])
+	for frame: int in 2:
+		var image := Gen2WorldSprite.image_for(sprite, strip, colors, 0, frame)
+		assert_eq(image.get_pixel(0, 0), Color.RED)
+		assert_eq(image.get_pixel(15, 0), Color.RED)
+		assert_eq(image.get_pixel(0, 8), Color.GREEN)
+		assert_eq(image.get_pixel(15, 8), Color.GREEN)

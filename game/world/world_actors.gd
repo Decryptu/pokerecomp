@@ -36,7 +36,9 @@ const EMOTE_GRASS_RUSTLE: int = 11
 
 const REQUEST_CRY: StringName = &"cry"
 const REQUEST_BATTLE: StringName = &"battle"
-const REQUEST_KINDS: Array[StringName] = [REQUEST_CRY, REQUEST_BATTLE]
+const REQUEST_POKEMON_GIFT: StringName = &"pokemon_gift"
+const ACTOR_REQUEST_COMPLETED_METHOD: String = "request_completed"
+const REQUEST_KINDS: Array[StringName] = [REQUEST_CRY, REQUEST_BATTLE, REQUEST_POKEMON_GIFT]
 
 ## `.Frameset_PartyMon`: two OAM sets of eight, nine passes each because
 ## `GetSpriteAnimFrame` returns the entry on the pass that loads the duration
@@ -127,6 +129,7 @@ func take_requests() -> Array:
 		for entry: Variant in answered as Array:
 			var request: Dictionary = _resolve_request(entry)
 			if not request.is_empty():
+				request["actor"] = actor
 				out.append(request)
 	return out
 
@@ -146,6 +149,11 @@ func _resolve_request(entry: Variant) -> Dictionary:
 		return {"kind": kind, "species": species}
 	if _world == null:
 		return {}
+	if kind == REQUEST_POKEMON_GIFT:
+		return {
+			"kind": kind, "species": species, "level": int(row.get("level", 0)),
+			"tag": StringName(row.get("tag", &"")),
+		}
 	var named: Dictionary = Gen2WorldBattleAdapter.mod_wild(_world.data, row)
 	if named.has("refused"):
 		return {}

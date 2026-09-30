@@ -121,7 +121,7 @@ static func _wild_mon(
 	## The last test, after `ValidateTempWildMonSpecies` and on the drawn slot
 	## rather than the table: a wild UNOWN is refused outright while
 	## `wUnlockedUnowns` is zero, so on every save before the first Alph puzzle.
-	if species == Gen2Layout.UNOWN_SPECIES and int(options.get("unlocked_unowns", -1)) == 0:
+	if not species_available(species, int(options.get("unlocked_unowns", -1))):
 		return {}
 	var level_roll: int = -1
 	## `.surfmon`'s variance is Generation 2's: a Generation 1 water slot carries
@@ -437,10 +437,15 @@ static func _slots(
 	return (value as Array)[index] if index < (value as Array).size() and (value as Array)[index] is Array else []
 
 
+static func species_available(species: int, unlocked_unowns: int = -1) -> bool:
+	return species != Gen2Layout.UNOWN_SPECIES or unlocked_unowns != 0
+
+
 ## [method resolve]'s slots in the Bug Contest's `{species, min_level, max_level}`
 ## shape; a cartridge slot names one level, so its two bounds are equal.
 static func active_slots(
-	record: Dictionary, method: StringName, time_of_day: int, gen1: bool = false
+	record: Dictionary, method: StringName, time_of_day: int, gen1: bool = false,
+	unlocked_unowns: int = -1
 ) -> Array:
 	var out: Array = []
 	var slots: Array = _slots(record, method, time_of_day, gen1)
@@ -448,6 +453,8 @@ static func active_slots(
 		if not slots[index] is Dictionary:
 			continue
 		var level: int = int((slots[index] as Dictionary).get("level", 0))
+		if not gen1 and not species_available(int(slots[index].get("species", 0)), unlocked_unowns):
+			continue
 		out.append({
 			"species": int((slots[index] as Dictionary).get("species", 0)),
 			"min_level": level,

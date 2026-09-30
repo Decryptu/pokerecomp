@@ -277,6 +277,10 @@ var _connected_objects: Array = []
 ## Bumped whenever a `changeblock` or a map load moves a block byte, so a view
 ## that caches the block buffer knows when to read it again.
 var block_revision: int = 0
+var _encounter_reach: Dictionary = {}
+var _encounter_reach_key: Array = []
+var _encounter_reach_origin := Vector2i(-1, -1)
+var _encounter_reach_revision: int = 0
 var _camera_walk: Dictionary = {}
 var _camera_reach := PackedByteArray()
 var _camera_reach_key: Array = []
@@ -514,6 +518,8 @@ func _init(
 	Gen2Rules.install(rules)
 	state = world_state if world_state != null else Gen2WorldState.new()
 	state.gen1 = _gen1
+	data.gs_ball_event_enabled = not _gen1 and not Gen2WorldState.is_crystal_profile(data) \
+		and state.gs_ball_stage != Gen2WorldState.GS_BALL_DISABLED
 	state.changed.connect(_on_world_state_changed)
 	inventory = Gen2WorldInventory.new(data, state)
 	state.settle_roaming_mons()
@@ -2562,51 +2568,35 @@ func visible_encounter_cells() -> Dictionary:
 	return out
 
 
-## Where the player gets to from where they stand, a warp or a connection, by
-## walking, surfing, hopping a ledge or cutting a tree; objects move and block
-## nothing. A cave rolls on floor its walls enclose, which no one walks on.
+## Reachable by walking, surfing, hopping or cutting from the player alone;
+## moving objects do not change terrain reachability.
 func _reachable_cells() -> Dictionary:
+	var key: Array = [current_map, block_revision]
+	if key == _encounter_reach_key and (_encounter_reach_origin == player_cell \
+		or (_encounter_reach.has(player_cell) and _reach_steps(player_cell).has(_encounter_reach_origin))):
+		_encounter_reach_origin = player_cell
+		return _encounter_reach
+	_encounter_reach_key = key
+	_encounter_reach_origin = player_cell
+	_encounter_reach_revision += 1
 	var reached: Dictionary = {}
 	var queue: Array[Vector2i] = []
-	for start: Vector2i in _reach_starts():
-		if not reached.has(start) and _reach_standable(start):
-			reached[start] = true
-			queue.append(start)
+	if _reach_standable(player_cell):
+		reached[player_cell] = true
+		queue.append(player_cell)
 	while not queue.is_empty():
 		for next: Vector2i in _reach_steps(queue.pop_back()):
 			if not reached.has(next):
 				reached[next] = true
 				queue.append(next)
+	_encounter_reach = reached
 	return reached
 
 
-func _reach_starts() -> Array[Vector2i]:
-	var out: Array[Vector2i] = [player_cell]
-	for warp: Dictionary in current_map.events.get("warps", []):
-		out.append(Vector2i(int(warp.get("x", -1)), int(warp.get("y", -1))))
-	var size: Vector2i = map_size_cells()
-	for connection: Dictionary in current_map.connections:
-		var target: Gen2WorldMap = data.world_map(
-			int(connection.get("map_group", -1)), int(connection.get("map_number", -1))
-		) if data != null else null
-		for x: int in size.x:
-			for y: int in size.y:
-				if _connection_lands(target, connection, Vector2i(x, y)):
-					out.append(Vector2i(x, y))
-	return out
-
-
-func _connection_lands(target: Gen2WorldMap, connection: Dictionary, cell: Vector2i) -> bool:
-	if target == null or not _cell_at_connection_edge(cell, String(connection["direction"])):
-		return false
-	var landing: Vector2i = connection_landing(target, connection, cell)
-	if landing.x < 0 or landing.y < 0 \
-		or landing.x >= target.collision_width or landing.y >= target.collision_height:
-		return false
-	var permission: int = permission_for_code(
-		target.collision_at(landing.x, landing.y), data.world_tileset(target.tileset)
-	)
-	return permission == Gen2WorldCollision.LAND_TILE or permission == Gen2WorldCollision.WATER_TILE
+## Invalidates a population after a warp, terrain edit or one-way crossing.
+func encounter_reach_revision() -> int:
+	_reachable_cells()
+	return _encounter_reach_revision
 
 
 func _reach_steps(cell: Vector2i) -> Array[Vector2i]:
@@ -2712,6 +2702,7 @@ func encounter_tables_key() -> Array:
 		bug_contest_active(),
 		state.swarm_active_on(current_map.group, current_map.number),
 		data.content_revision(),
+		state.unlocked_unowns(Gen2WorldState.is_crystal_profile(data)),
 	]
 
 
@@ -2746,7 +2737,8 @@ func active_encounter_tables() -> Dictionary:
 		out[method] = {
 			"source": source,
 			"slots": Gen2WorldEncounter.active_slots(
-				record, method, object_time_of_day, _gen1
+				record, method, object_time_of_day, _gen1,
+				state.unlocked_unowns(Gen2WorldState.is_crystal_profile(data))
 			),
 		}
 	return out
@@ -2961,9 +2953,15 @@ func place_roamer(slot: int, species: int, level: int, random: RandomNumberGener
 
 
 func offer_gs_ball() -> StringName:
-	if _gen1 or not Gen2WorldState.is_crystal_profile(data):
+	if _gen1:
 		return &"no_gs_ball_event"
-	state.battle_tower().gs_ball_flag = Gen2BattleTower.GS_BALL_AVAILABLE
+	if Gen2WorldState.is_crystal_profile(data):
+		state.battle_tower().gs_ball_flag = Gen2BattleTower.GS_BALL_AVAILABLE
+	elif state.gs_ball_stage == Gen2WorldState.GS_BALL_DISABLED:
+		data.gs_ball_event_enabled = true
+		return StringName(state.apply_changes({}, {}, {
+			"gs_ball_stage": Gen2WorldState.GS_BALL_OFFERED,
+		}).get("reason", &""))
 	state.changed.emit()
 	return &""
 
@@ -7678,6 +7676,10 @@ func dispatch_events(cell: Vector2i = player_cell, execute_scripts: bool = false
 ## and objects need `CheckAPressOW` and belong to interact().
 func dispatch_script_events(cell: Vector2i = player_cell, coord_events: bool = true) -> Array:
 	if coord_events and _active_script == null and _script_queue.is_empty():
+		var gs_request: Dictionary = _gs_ball_request(cell, true)
+		if not gs_request.is_empty():
+			_enqueue_script(gs_request)
+			return run_event_queue(false)
 		var stepped: Array = []
 		for event: Dictionary in _active_events_at(cell):
 			if event.get("kind", &"") == &"coord_events":
@@ -8120,9 +8122,15 @@ func _gen1_written(step: Dictionary, events: Array, steps: Array) -> bool:
 			state.set_safari_steps(int(step["steps"]))
 			return true
 		&"starter":
-			state.set_gen1_starter(String(step["who"]), int(step["value"]))
+			_gen1_record_starter(step)
 			return true
 	return _gen1_linked(step, events, steps)
+
+
+func _gen1_record_starter(step: Dictionary) -> void:
+	state.set_gen1_starter(String(step["who"]), int(step["value"]))
+	if String(step["who"]) == "player":
+		state.apply_changes({}, {}, {"starter_species": data.gen1_dex_of_index(int(step["value"]))})
 
 
 ## The rest of [method _gen1_written]: what the cable club writes.
@@ -8397,7 +8405,10 @@ var _gen1_saved_object_position: Dictionary = {}
 
 
 func _gen1_start_movement_script(table: int, object: int) -> void:
-	_gen1_movement_script = {"table": table, "object": object, "function": 0, "steps": 0}
+	_gen1_movement_script = {
+		"table": table, "object": object, "function": 0, "steps": 0,
+		"toggle_index": _gen1_toggle_index(object),
+	}
 
 
 func gen1_movement_script_running() -> bool:
@@ -8452,7 +8463,7 @@ func _gen1_pallet_movement(function: int, events: Array) -> void:
 		4:
 			if gen1_player_movement_running():
 				return
-			gen1_toggle_object(_gen1_toggle_index(object), true)
+			gen1_toggle_object(int(_gen1_movement_script["toggle_index"]), true)
 			_gen1_movement_script = {}
 
 
@@ -8854,6 +8865,10 @@ func interact() -> Array:
 	if _gen1:
 		return _gen1_interact()
 	var target: Vector2i = facing_cell()
+	var gs_request: Dictionary = _gs_ball_request(target)
+	if not gs_request.is_empty():
+		_enqueue_script(gs_request)
+		return run_event_queue(false)
 	var events: Array = []
 	## TryObjectEvent before TryBGEvent, and only the object half looks across
 	## a counter. `CheckFacingObject` finds one object and refuses it mid-step,
@@ -8885,6 +8900,31 @@ func interact() -> Array:
 		return []
 	_enqueue_script(tile_request)
 	return run_event_queue(false)
+
+
+func _gs_ball_request(cell: Vector2i, stepped: bool = false) -> Dictionary:
+	if _gen1 or Gen2WorldState.is_crystal_profile(data) or current_map == null \
+		or state.gs_ball_stage in [Gen2WorldState.GS_BALL_DISABLED, Gen2WorldState.GS_BALL_FINISHED]:
+		return {}
+	var action: StringName = _gs_ball_action(cell, stepped)
+	return {} if action.is_empty() else {"kind": &"gs_ball", "action": action, "cell": cell}
+
+
+func _gs_ball_action(cell: Vector2i, stepped: bool) -> StringName:
+	if map_id() == Vector2i(11, 9) and state.gs_ball_stage == Gen2WorldState.GS_BALL_OFFERED:
+		var delivery: bool = cell in [Vector2i(3, 7), Vector2i(4, 7)] if stepped \
+			else object_facing_cell() == Vector2i(3, 1)
+		return &"delivery" if delivery else &""
+	if stepped:
+		return &""
+	if map_id() == Vector2i(8, 4) \
+		and state.gs_ball_stage in [Gen2WorldState.GS_BALL_HELD, Gen2WorldState.GS_BALL_CHECKING]:
+		var object: Gen2WorldObject = object_at(object_facing_cell())
+		return &"kurt" if object != null and object.index in [0, 3] else &""
+	if map_id() == Vector2i(3, 44) and cell == Vector2i(8, 22) \
+		and state.gs_ball_stage == Gen2WorldState.GS_BALL_READY:
+		return &"shrine"
+	return &""
 
 
 func take_talk_click() -> bool:
@@ -9375,7 +9415,7 @@ func _enqueue_script(request: Dictionary) -> void:
 	## The synthesized requests carry no address of their own.
 	if int(request.get("script", 0)) <= 0 \
 		and StringName(request.get("kind", &"")) not in [
-			&"field_move_prompt", &"item_gift", &"pitfall", &"rock_smash_used",
+			&"field_move_prompt", &"item_gift", &"pitfall", &"rock_smash_used", &"gs_ball",
 		]:
 		return
 	_script_queue.append(_completed_request(request))

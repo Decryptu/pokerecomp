@@ -862,3 +862,22 @@ func test_the_progress_reading_answers_the_open_boxs_free_space() -> void:
 	)
 	(save.boxes[1] as Gen2SaveBox).slots.fill(mon)
 	assert_eq(int(Gen2ModProgress.of_save(save)[&"box_free_space"]), 0)
+
+
+func test_starter_progress_survives_party_changes_and_save_round_trip() -> void:
+	var save := Gen2SaveData.new()
+	save.game_id = RomRegistry.GOLD
+	save.world = Gen2WorldSnapshot.new()
+	save.world.world_state = Gen2WorldState.new()
+	save.world.world_state.set_event_flag(28, true)
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_eq(host.progress_for(save)[&"starter_species"], 158)
+	save.world.world_state.apply_changes({}, {}, {"starter_species": 25})
+	save.world.world_state = Gen2WorldState.from_dict(save.world.world_state.to_dict())
+	assert_eq(host.progress_for(save)[&"starter_species"], 25)
+	assert_true(host.request_pokemon_gift(&"gift", 155, 5, &"one")["ok"])
+	assert_false(host.request_pokemon_gift(&"gift", 155, 0)["ok"])
+	var requests: Array[Dictionary] = host.take_world_requests()
+	assert_eq(requests.size(), 1)
+	assert_eq(requests[0]["kind"], &"pokemon_gift")
+	assert_eq(requests[0]["tag"], &"one")
