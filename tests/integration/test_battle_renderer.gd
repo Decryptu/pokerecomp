@@ -1281,3 +1281,28 @@ func test_fainting_hides_each_panel_until_its_replacement_enters() -> void:
 		assert_false(bool(_battle_screen._renderer._view[key]), "the line and the ball come first")
 		_battle_screen._apply_event_state({"type": Gen2Battle.HUD_DRAWN, "side": side})
 		assert_true(bool(_battle_screen._renderer._view[key]))
+
+
+func test_annotations_wait_for_weather_and_stage_events() -> void:
+	await _open_battle()
+	var battle: Gen2Battle = _growl_battle(18)
+	battle.player.moves = [BattleFixture.RAIN_DANCE]
+	battle.player.pp = [5]
+	_battle_screen._battle = battle
+	_battle_screen._init_battle_display()
+	var events: Array = battle.take_turn(0, 0)
+	assert_eq(_battle_screen.info_snapshot()["weather"], Gen2Weather.NONE)
+	assert_eq(_battle_screen.info_snapshot()["player_stages"]["attack"], 0)
+	var rain_seen: bool = false
+	var growl_seen: bool = false
+	for event: Dictionary in events:
+		_battle_screen._apply_event_state(event)
+		if event["type"] == Gen2Battle.WEATHER_STARTED:
+			rain_seen = true
+		if event["type"] == Gen2Battle.STAT_CHANGED:
+			growl_seen = true
+		assert_eq(_battle_screen.info_snapshot()["weather"],
+			Gen2Weather.RAIN if rain_seen else Gen2Weather.NONE)
+		assert_eq(_battle_screen.info_snapshot()["player_stages"]["attack"], -1 if growl_seen else 0)
+	assert_true(rain_seen)
+	assert_true(growl_seen)

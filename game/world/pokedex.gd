@@ -30,17 +30,17 @@ const MODE_ROWS: Array[Dictionary] = [
 	{
 		"mode": Gen2Layout.DEXMODE_NEW,
 		"label": "NEW #DEX MODE",
-		"description": "PKMN are listed by\nevolution type.",
+		"description": "<PKMN> are listed by\nevolution type.",
 	},
 	{
 		"mode": Gen2Layout.DEXMODE_OLD,
 		"label": "OLD #DEX MODE",
-		"description": "PKMN are listed by\nofficial type.",
+		"description": "<PKMN> are listed by\nofficial type.",
 	},
 	{
 		"mode": Gen2Layout.DEXMODE_ABC,
 		"label": "A to Z MODE",
-		"description": "PKMN are listed\nalphabetically.",
+		"description": "<PKMN> are listed\nalphabetically.",
 	},
 	{
 		"mode": Gen2Layout.DEXMODE_UNOWN,

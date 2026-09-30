@@ -605,6 +605,7 @@ func test_haze_clears_both_sides_stages_and_nothing_else() -> void:
 	assert_eq(_first(turn.events, Gen2Battle.STAGES_CLEARED), {
 		"type": Gen2Battle.STAGES_CLEARED, "side": Gen2Battle.PLAYER,
 		"statuses": [Gen2Status.NONE, Gen2Status.BURN],
+		"annotation_state": battle.annotation_state(),
 	})
 
 

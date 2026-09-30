@@ -231,3 +231,37 @@ func test_the_hall_of_fame_ends_on_the_map_when_the_cache_has_no_credits() -> vo
 	await get_tree().process_frame
 	assert_null(_host())
 	assert_eq(_world_screen._script_prompt, "The credits are not in this cache")
+
+
+func test_red_credits_return_runs_the_destination_callbacks_and_releases_input() -> void:
+	var directory: String = Fixture.directory()
+	var maps: Array = RomCache.read_json(RomCache.world_maps_path(directory))
+	var destination: Dictionary = maps[0].duplicate(true)
+	destination["number"] = 2
+	destination["scripts"]["callbacks"] = [{"type": 1, "script": SCRIPT_ADDRESS}]
+	destination["events"]["coord_events"] = []
+	maps.append(destination)
+	RomCache.write_json(RomCache.world_maps_path(directory), maps)
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(directory))
+	scripts["%d:7000" % Fixture.BANK] = [
+		Gen2WorldScript.SETEVENT, 0x34, 0x12, Gen2WorldScript.ENDCALLBACK,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(directory), scripts)
+	var spawns: Array = []
+	spawns.resize(Gen2WorldSnapshot.SPAWN_MT_SILVER + 1)
+	spawns.fill({})
+	spawns[Gen2WorldSnapshot.SPAWN_MT_SILVER] = {
+		"map_group": Fixture.MAP_GROUP, "map_number": 2, "x": 2, "y": 2,
+	}
+	RomCache.write_json(RomCache.world_spawns_path(directory), {"spawns": spawns})
+	_data = GameData.open_directory(directory)
+	await _open_world()
+	_world_screen.open_credits()
+	_stop_self_advancing()
+	_world_screen._world.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_RED
+	_world_screen._on_credits_closed()
+	assert_eq(_world_screen._world.map_id(), Vector2i(Fixture.MAP_GROUP, 2))
+	assert_true(_world_screen._world.state.is_event_flag_active(0x1234))
+	assert_false(_world_screen._world.script_busy())
+	assert_true(Gen2ModProgress.of(_world_screen._world, _world_screen.active_save())[&"beat_red"])
+	assert_eq(_world_screen._animation.map, _world_screen._world.current_map)

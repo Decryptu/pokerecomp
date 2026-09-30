@@ -2,8 +2,8 @@ class_name Gen2WorldScriptRunner
 extends RefCounted
 
 ## Bounded, scene-free execution of the supported overworld script commands.
-## A runner owns one event invocation. It never opens a ROM and it never
-## changes the world state until the invocation reaches END or ENDCALLBACK.
+## A runner owns one invocation, reads imported data and commits ordinary
+## command changes at END or ENDCALLBACK.
 ## Text and explicit warps are returned as structured pauses for the screen or
 ## another caller to acknowledge.
 
@@ -23,6 +23,8 @@ var _staged_day_of_week: int = -1
 var _staged_dst_enabled: bool = false
 var _has_staged_dst: bool = false
 var _staged_items: Dictionary = {}
+var _staged_gs_ball: Dictionary = {}
+var _staged_beat_red: bool = false
 var _staged_money: Dictionary = {}
 var _staged_coins: int = -1
 var _staged_phone_contacts: Dictionary = {}
@@ -730,16 +732,8 @@ static func begin(
 			runner._stage_field_move_prompt()
 	elif StringName(request.get("kind", &"")) == &"pitfall":
 		started = runner._push_frame(bank, PITFALL_FRAME, runner._pitfall_script())
-	elif StringName(request.get("kind", &"")) == &"item_gift":
-		## A mod's ask through [method Gen2ModHost.request_item_gift]. There is
-		## no script behind it at all, not even two bytes of data, so the frame
-		## is the same bare `end` an item ball's is and the staging call is
-		## `verbosegiveitem` with nothing in front of it.
-		started = runner._push_frame(bank, ITEM_GIFT_FRAME, PackedByteArray([
-			Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, runner._crystal_commands())
-		]))
-		if started:
-			runner._stage_item_gift()
+	elif StringName(request.get("kind", &"")) in [&"gs_ball", &"item_gift"]:
+		started = runner._start_gift_request(bank, StringName(request["kind"]))
 	elif StringName(request.get("kind", &"")) == &"rock_smash_used":
 		## `RockSmashFromMenuScript` past the menu's text, a bare `end` standing in.
 		started = runner._push_frame(bank, FIELD_MOVE_PROMPT_FRAME, PackedByteArray([
@@ -806,12 +800,14 @@ const PENDING_RESUMES: Dictionary = {
 	&"text/rock_smash_ask": &"_resume_rock_smash_text",
 	&"choice/rock_smash_ask": &"_resume_rock_smash_choice",
 	&"text/rock_smash_used": &"_resume_rock_smash_used",
+	&"choice/gs_ball": &"_resume_gs_ball",
 	&"choice/npc_trade_intro": &"_resume_trade_intro",
 }
 
 ## The continuations that carry their payload in a `_pending` key rather than a
 ## tag, in the order a pause carrying two of them is resumed.
 const PENDING_CONTINUATIONS: Dictionary = {
+	"gs_ball_choice": &"_ask_gs_ball",
 	"next_internal_texts": &"_resume_internal_texts",
 	"bank_of_mom_after_text": &"_resume_mom_after_text",
 	"bank_of_mom_dial": &"_resume_mom_dial",
@@ -2732,6 +2728,7 @@ func _catalogued(command: Dictionary, frame: Dictionary) -> Dictionary:
 	if row.is_empty():
 		return command
 	var out: Dictionary = command.duplicate(true)
+	out["starter"] = kind == Gen2WorldCatalog.KIND_STARTER
 	match kind:
 		Gen2WorldCatalog.KIND_STATIC:
 			out["pokemon"] = int(row["species"])
@@ -3580,11 +3577,10 @@ func _command_halloffame(_source_opcode: int, _command: Dictionary, _bank: int) 
 	return {"ok": true}
 
 
-## Script_credits farcalls RedCredits and then falls into Script_endall the way
-## Script_halloffame does (engine/overworld/scripting.asm's ReturnFromCredits). No
-## flag and no state: presentation only, and both call sites are followed by the
-## source's own `end`, so this runs on rather than stopping.
+## `Script_credits` reaches RedCredits and Script_endall. Reaching it records
+## lasting completion, while the source's `end` still ends the invocation.
 func _command_credits(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_staged_beat_red = true
 	_events.append({"type": &"credits_requested"})
 	return {"ok": true}
 
@@ -7169,11 +7165,82 @@ func _stage_pocket_is_full(item: int, finish_after: bool) -> Dictionary:
 	)
 
 
-## `Script_verbosegiveitem` with no script around it, which is what a mod's ask
-## through [method Gen2ModHost.request_item_gift] is: the same STRING_BUFFER_4
-## fill, the same bag write and the same GiveItemScript tail the 0x9D command
-## runs, finishing after the last box rather than resuming a caller, since there
-## is no caller.
+func _start_gift_request(bank: int, kind: StringName) -> bool:
+	var script := PackedByteArray()
+	if kind == &"gs_ball":
+		script.append(Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_RELOADMAPAFTERBATTLE, _crystal_commands()))
+	script.append(Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, _crystal_commands()))
+	if not _push_frame(bank, ITEM_GIFT_FRAME, script):
+		return false
+	if kind == &"gs_ball":
+		_stage_gs_ball()
+	else:
+		_stage_item_gift()
+	return true
+
+
+## Opt-in Gold/Silver flow, using the ordinary bag and battle transactions.
+func _stage_gs_ball() -> Dictionary:
+	match StringName(_request.get("action", &"")):
+		&"delivery":
+			return _gs_ball_exchange(1, Gen2WorldState.GS_BALL_HELD, "Please take this\nGS BALL to KURT.")
+		&"kurt":
+			if state.gs_ball_stage == Gen2WorldState.GS_BALL_HELD:
+				_staged_gs_ball["gs_ball_wait"] = 1
+				return _gs_ball_exchange(-1, Gen2WorldState.GS_BALL_CHECKING,
+					"I'll examine this\nGS BALL. Come back\ntomorrow.")
+			if state.gs_ball_stage == Gen2WorldState.GS_BALL_CHECKING:
+				if state.gs_ball_wait > 0:
+					return _stage_internal_text("I'm still checking\nthe GS BALL.", true)
+				return _gs_ball_exchange(1, Gen2WorldState.GS_BALL_READY,
+					"The forest is\nrestless! Take the\nGS BALL to its\nshrine.")
+		&"shrine":
+			return _stage_internal_text("Place the GS BALL\nin the shrine?", false, {
+				"gs_ball_choice": true,
+			})
+	return _stage_internal_text("Take the GS BALL\nto KURT.", true)
+
+
+func _gs_ball_exchange(delta: int, stage: int, text: String) -> Dictionary:
+	var changed: Dictionary = _stage_item_delta(Gen2WorldState.GS_BALL_ITEM, delta)
+	if not bool(changed.get("ok", false)) or _script_value == 0:
+		_staged_gs_ball.clear()
+		return _stage_internal_text("There is no room\nfor the GS BALL." if delta > 0 \
+			else "You don't have the\nGS BALL.", true)
+	_staged_gs_ball["gs_ball_stage"] = stage
+	return _stage_internal_text(text, true)
+
+
+func _ask_gs_ball(_choice: int) -> Dictionary:
+	var question: String = String(_pending.get("text", ""))
+	_set_standing_text(question)
+	_stage_choice({"name": &"gs_ball"}, [&"yes", &"no"])
+	_pending["special"] = &"gs_ball"
+	return _waiting_result()
+
+
+func _resume_gs_ball(choice: int) -> Dictionary:
+	if choice < 0:
+		return _waiting_result()
+	_pending = {}
+	if choice != 0:
+		return _complete()
+	if _item_quantity(Gen2WorldState.GS_BALL_ITEM) <= 0:
+		return _complete()
+	# Consume the once-only token before battle, including a blackout or escape.
+	var applied: Dictionary = state.apply_changes({}, {}, {
+		"items": {Gen2WorldState.GS_BALL_ITEM: _item_quantity(Gen2WorldState.GS_BALL_ITEM) - 1},
+		"gs_ball_stage": Gen2WorldState.GS_BALL_FINISHED,
+	})
+	if not bool(applied.get("ok", false)):
+		return _fail(StringName(applied["reason"]), applied)
+	_loaded_battle_type = Gen2Battle.BATTLETYPE_CELEBI
+	_battle_setup = _new_battle_setup({"kind": &"wild", "pokemon": 251, "level": 30})
+	_stage_runtime_request(&"battle_requested", _battle_request_values())
+	return _waiting_result()
+
+
+## A mod item gift runs `verbosegiveitem` without a calling script.
 func _stage_item_gift() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var item_name: String = data.item_name(item) if data != null else ""
@@ -7517,6 +7584,7 @@ func _complete() -> Dictionary:
 func _staged_runtime_changes() -> Dictionary:
 	var out: Dictionary = {}
 	for row: Array in [
+		["beat_red", _staged_beat_red, 1],
 		["items", not _staged_items.is_empty(), _staged_items.duplicate()],
 		["money", not _staged_money.is_empty(), _staged_money.duplicate()],
 		["coins", _staged_coins >= 0, _staged_coins],
@@ -7550,6 +7618,7 @@ func _staged_runtime_changes() -> Dictionary:
 	]:
 		if bool(row[1]):
 			out[row[0]] = row[2]
+	out.merge(_staged_gs_ball)
 	return out
 
 

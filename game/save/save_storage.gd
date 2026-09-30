@@ -2,8 +2,8 @@ class_name Gen2SaveStorage
 extends RefCounted
 
 ## Atomic party and PC-box transactions for a validated project save. Each edits
-## a deep candidate, validates it, writes it through the save store and only then
-## updates the shared save, so a failed write leaves both copies untouched.
+## a deep candidate, validates it and updates the shared save. Standalone storage
+## edits and Nuzlocke gameplay also write the slot before updating it.
 
 
 static func deposit_party_to_box(
@@ -290,7 +290,8 @@ static func _commit(
 	if world != null:
 		candidate.world = world
 	if persist:
-		var write: Dictionary = Gen2SaveStore.save(candidate, data)
+		var write: Dictionary = Gen2SaveStore.update(candidate, data) \
+			if world != null else Gen2SaveStore.save(candidate, data)
 		if not bool(write.get("ok", false)):
 			return {
 				"ok": false,
@@ -299,7 +300,7 @@ static func _commit(
 			}
 	source.copy_from(candidate)
 	var result: Dictionary = {"ok": true, "message": ""}
-	result["persisted"] = persist
+	result["persisted"] = persist and (world == null or candidate.run_rules.is_nuzlocke())
 	for key: Variant in transaction:
 		result[key] = transaction[key]
 	return result

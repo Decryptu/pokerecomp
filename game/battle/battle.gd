@@ -952,7 +952,20 @@ const HUD_STATUS_EVENTS: Array[StringName] = [
 ]
 
 
+func annotation_state() -> Dictionary:
+	return {
+		"player_stages": player.stages.duplicate(), "enemy_stages": enemy.stages.duplicate(),
+		"enemy_types": enemy.types().duplicate(),
+		"enemy_identified": Gen2Substatus.has(enemy.substatus, Gen2Substatus.IDENTIFIED),
+		"weather": weather, "weather_turns": weather_turns,
+	}
+
+
 func stamp_statuses(event: Dictionary) -> Dictionary:
+	if event["type"] in [STAT_CHANGED, STAGES_CLEARED, STAGES_COPIED, SENT_OUT,
+		TRANSFORMED, TYPE_CHANGED, IDENTIFIED_SET, WEATHER_STARTED, WEATHER_CONTINUES,
+		WEATHER_ENDED]:
+		event["annotation_state"] = annotation_state()
 	if HUD_STATUS_EVENTS.has(event["type"]):
 		event["statuses"] = [mon(PLAYER).status, mon(ENEMY).status]
 	return event
@@ -2445,10 +2458,10 @@ func _tick_weather(events: Array) -> void:
 		var ended: int = weather
 		weather = Gen2Weather.NONE
 		weather_turns = 0
-		events.append({"type": WEATHER_ENDED, "weather": ended})
+		events.append(stamp_statuses({"type": WEATHER_ENDED, "weather": ended}))
 		return
 
-	events.append({"type": WEATHER_CONTINUES, "weather": weather})
+	events.append(stamp_statuses({"type": WEATHER_CONTINUES, "weather": weather}))
 	if weather != Gen2Weather.SANDSTORM:
 		return
 
@@ -2564,10 +2577,10 @@ func _handle_berserk_gene(events: Array) -> void:
 		var raised: bool = holder.change_stage("attack", BERSERK_GENE_STAGES)
 		events.append({"type": ITEM_ACTIVATED, "side": side, "item": used})
 		if raised:
-			events.append({
+			events.append(stamp_statuses({
 				"type": STAT_CHANGED, "target": side, "stat": "attack",
 				"by": BERSERK_GENE_STAGES,
-			})
+			}))
 		if was_confused:
 			continue
 		events.append(status_animation_event(side, Gen2BattleAnimPlayer.ANIM_CONFUSED))

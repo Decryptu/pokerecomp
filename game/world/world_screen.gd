@@ -111,7 +111,7 @@ var _draw_list: Gen2WorldDrawList = null
 ## The id of the visible encounter the running battle belongs to, so its provider
 ## is told how the fight ended and nothing else is.
 var _battle_encounter_id: StringName = &""
-var _actor_battles: Array[Dictionary] = []
+var _actor_requests: Array[Dictionary] = []
 ## A field move's tail, spent in order with input held: `{"wait": &"sfx"}` is
 ## `WaitSFX`, `&"sprites"` an animation, `&"fade"` a fade, and `{"call": ...}` runs.
 var _field_move_tail: Array = []
@@ -963,6 +963,7 @@ func advance_frame() -> void:
 
 ## Redraws when [param moved] says something under the renderer changed.
 func _refresh_if(moved: bool) -> void:
+	_sync_map_presentation()
 	if moved and _renderer != null:
 		_pass_moved = true
 		_renderer.refresh()
@@ -2097,7 +2098,7 @@ func _advance_poison_flash() -> void:
 func _persist_after_poison_step(save: Gen2SaveData) -> void:
 	if save == null or _data == null or _injected_save != null:
 		return
-	var written: Dictionary = Gen2SaveStore.save(save, _data)
+	var written: Dictionary = Gen2SaveStore.update(save, _data)
 	if not bool(written.get("ok", false)):
 		push_error("Could not save the poison step: %s" % String(written.get("message", "")))
 	_refresh_labels()
@@ -4150,7 +4151,7 @@ class PreviewPet extends RefCounted:
 
 	func sprites() -> Array:
 		var entry: Dictionary = {
-			"icon": _world.data.mon_menu_icon(CYNDAQUIL),
+			"icon": _world.data.mon_menu_icon(_species()),
 			"facing": _world.player_facing,
 			"position_cells": Vector2(_cell()),
 		}
@@ -4173,7 +4174,11 @@ class PreviewPet extends RefCounted:
 		if not _petted or _cried:
 			return []
 		_cried = true
-		return [{"kind": Gen2WorldActors.REQUEST_CRY, "species": CYNDAQUIL}]
+		return [{"kind": Gen2WorldActors.REQUEST_CRY, "species": _species()}]
+
+	func _species() -> int:
+		return 25 if _world.is_gen1() else CYNDAQUIL
+
 
 	func _cell() -> Vector2i:
 		return _world.facing_cell()
@@ -6741,7 +6746,7 @@ func _play_evolution_music(music: int) -> void:
 func _persist_after_battle(save: Gen2SaveData) -> void:
 	if save == null or not _active_battle_persist or _data == null:
 		return
-	var written: Dictionary = Gen2SaveStore.save(save, _data)
+	var written: Dictionary = Gen2SaveStore.update(save, _data)
 	if not bool(written.get("ok", false)):
 		push_error("Could not save the battle exit: %s" % String(written.get("message", "")))
 
@@ -7228,9 +7233,11 @@ func _return_from_credits() -> bool:
 		return true
 	if _world.spawn_after_champion != Gen2WorldSnapshot.SPAWN_AFTER_RED:
 		return false
+	_world.state.apply_changes({}, {}, {"beat_red": 1})
 	_world.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_NONE
 	if bool(_world.warp_to_spawn(Gen2WorldSnapshot.SPAWN_MT_SILVER).get("ok", false)):
 		_refresh_after_escape()
+		_show_script_results(_world.run_event_queue(false))
 	return true
 
 
@@ -8813,6 +8820,7 @@ const SERVICE_HOST_REQUESTS: Array[StringName] = [
 
 
 func _show_script_results(results: Array) -> void:
+	_sync_map_presentation()
 	var flags: Dictionary = {}
 	for source_result: Dictionary in results:
 		var result: Dictionary = Gen2ModHost.publish(Gen2ModHost.CHANNEL_WORLD, source_result)
@@ -9227,6 +9235,11 @@ func _settle_after_results(flags: Dictionary) -> void:
 		_start_whiteout()
 		return
 	_refresh_labels()
+
+
+func _sync_map_presentation() -> void:
+	if _world != null and _animation != null and _animation.map != _world.current_map:
+		_refresh_after_escape()
 
 
 ## What a map change owes the screen once the world has applied it: the
@@ -9919,7 +9932,7 @@ func _play_current_map_music() -> void:
 	_audio_player.play_record(record, &"map_music", _audio_assets())
 
 
-## A mod may not play a sound or open a fight, so an actor asks and the host spends it.
+## Actor requests are spent by the host when the world can accept them.
 func _spend_actor_requests() -> void:
 	if _actors == null:
 		return
@@ -9927,11 +9940,31 @@ func _spend_actor_requests() -> void:
 		if StringName(request["kind"]) == Gen2WorldActors.REQUEST_CRY:
 			_play_species_cry(int(request["species"]))
 		else:
-			_actor_battles.append(request)
-	if not _actor_battles.is_empty() and _world != null and _world_idle_for_mod_request():
-		_start_battle_request({
-			"kind": &"battle_requested", "values": _actor_battles.pop_front()["values"],
-		})
+			_actor_requests.append(request)
+	if not _actor_requests.is_empty() and _world != null and _world_idle_for_mod_request():
+		var request: Dictionary = _actor_requests.pop_front()
+		if request["kind"] == Gen2WorldActors.REQUEST_POKEMON_GIFT:
+			_complete_pokemon_gift(request)
+		else:
+			_start_battle_request({"kind": &"battle_requested", "values": request["values"]})
+
+
+func _complete_pokemon_gift(request: Dictionary) -> void:
+	var species: int = int(request.get("species", 0))
+	var level: int = int(request.get("level", 0))
+	var result: Dictionary = {"ok": false, "reason": &"invalid_pokemon_gift"}
+	if not _data.species(species).is_empty() and level >= 1 and level <= Gen2Layout.MAX_LEVEL:
+		result = Gen2WorldPartyHost.give_pokemon(
+			_world, active_save(), species, level, true, _encounter_random
+		)
+	result.merge({
+		"type": &"pokemon_gift", "species": species, "level": level,
+		"tag": request.get("tag", &""), "id": request.get("id", &""),
+	})
+	Gen2ModHost.publish(Gen2ModHost.CHANNEL_WORLD, result)
+	var actor: Object = request.get("actor")
+	if is_instance_valid(actor) and actor.has_method(Gen2WorldActors.ACTOR_REQUEST_COMPLETED_METHOD):
+		actor.call(Gen2WorldActors.ACTOR_REQUEST_COMPLETED_METHOD, result.duplicate(true))
 
 
 func _mod_inventory() -> Dictionary:
@@ -9978,6 +10011,9 @@ func _spend_world_requests() -> void:
 	if _world == null or not _world_idle_for_mod_request():
 		return
 	for request: Dictionary in Gen2ModHost.instance().take_world_requests():
+		if request["kind"] == &"pokemon_gift":
+			_complete_pokemon_gift(request)
+			continue
 		var refused: StringName = _world.offer_gs_ball() if request["kind"] == &"gs_ball" \
 			else _world.place_roamer(
 				int(request["slot"]), int(request["species"]), int(request["level"]),

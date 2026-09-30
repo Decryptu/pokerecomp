@@ -8450,12 +8450,18 @@ func test_visible_encounter_cells_leave_out_floor_no_one_can_reach() -> void:
 		for x: int in range(pocket.x - 1, pocket.x + 2):
 			if Vector2i(x, y) != pocket:
 				world.current_map.collision[y * world.current_map.collision_width + x] = WALL_CODE
+	world.current_map.events["warps"].append({"x": pocket.x, "y": pocket.y})
 	var cave: PackedVector2Array = world.visible_encounter_cells()[
 		Gen2WorldEncounter.METHOD_GRASS
 	]
 	assert_true(world.can_encounter_wild_mon_at(pocket), "the roll still accepts it")
 	assert_false(cave.has(Vector2(pocket)), "walled in")
 	assert_true(cave.has(Vector2(world.player_cell)), "where the player stands")
+	var revision: int = world.encounter_reach_revision()
+	world.player_cell = pocket
+	cave = world.visible_encounter_cells()[Gen2WorldEncounter.METHOD_GRASS]
+	assert_true(cave.has(Vector2(pocket)), "a same-map warp changes the reachable room")
+	assert_gt(world.encounter_reach_revision(), revision)
 
 
 ## `wildoff` empties the sweep, so a mod cannot stand a Pokemon on a map a script
@@ -11177,3 +11183,93 @@ class RoamChance:
 	func roam_encounter_chance(_context: Dictionary) -> int:
 		asked += 1
 		return chance
+
+
+func test_visible_unown_tables_wait_for_a_puzzle_on_both_profiles() -> void:
+	for game: String in ["crystal", "gold"]:
+		_write_cache(game)
+		var rows: Dictionary = RomCache.read_json(RomCache.world_encounters_path(_directory))
+		for row: Dictionary in rows["grass"].values():
+			for slots: Array in row.get("slots", []):
+				for slot: Dictionary in slots:
+					slot["species"] = Gen2Layout.UNOWN_SPECIES
+		RomCache.write_json(RomCache.world_encounters_path(_directory), rows)
+		var world: Gen2WorldAPI = _world()
+		assert_eq(world.active_encounter_tables()[&"grass"]["slots"], [])
+		var key: Array = world.encounter_tables_key()
+		world.state.set_engine_flag(Gen2WorldState.engine_flag(
+			Gen2WorldState.ENGINE_UNLOCKED_UNOWNS_FIRST, game == "crystal"
+		), true)
+		assert_ne(world.encounter_tables_key(), key)
+		assert_false(world.active_encounter_tables()[&"grass"]["slots"].is_empty())
+
+
+func test_gold_gs_ball_delivery_kurt_wait_and_shrine_are_saved_once() -> void:
+	_write_cache("gold")
+	var world: Gen2WorldAPI = _world()
+	assert_eq(world.state.gs_ball_stage, Gen2WorldState.GS_BALL_DISABLED)
+	world.current_map.group = 11
+	world.current_map.number = 9
+	world.player_cell = Vector2i(3, 7)
+	assert_eq(world.dispatch_script_events(), [])
+	assert_eq(world.offer_gs_ball(), &"")
+	var delivery: Array = world.dispatch_script_events()
+	assert_eq(delivery[0]["status"], &"waiting")
+	world.run_event_queue(true)
+	assert_eq(world.state.gs_ball_stage, Gen2WorldState.GS_BALL_HELD)
+	assert_eq(world.state.items().get(Gen2WorldState.GS_BALL_ITEM, 0), 1)
+	assert_eq(world.data.item_name(Gen2WorldState.GS_BALL_ITEM), "GS BALL")
+	world.offer_gs_ball()
+	assert_eq(world.state.gs_ball_stage, Gen2WorldState.GS_BALL_HELD)
+	world.current_map.group = 8
+	world.current_map.number = 4
+	world.player_cell = Vector2i(3, 4)
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var kurt: Gen2WorldObject = world.objects[0]
+	kurt.cell = Vector2i(3, 3)
+	kurt.active = true
+	world.interact()
+	world.run_event_queue(true)
+	assert_eq(world.state.gs_ball_stage, Gen2WorldState.GS_BALL_CHECKING)
+	assert_eq(world.state.items().get(Gen2WorldState.GS_BALL_ITEM, 0), 0)
+	world.state = Gen2WorldState.from_dict(world.state.to_dict())
+	world.interact()
+	world.run_event_queue(true)
+	assert_eq(world.state.gs_ball_stage, Gen2WorldState.GS_BALL_CHECKING)
+	world.state.reset_daily_flags(false)
+	world.interact()
+	world.run_event_queue(true)
+	assert_eq(world.state.gs_ball_stage, Gen2WorldState.GS_BALL_READY)
+	assert_eq(world.state.items().get(Gen2WorldState.GS_BALL_ITEM, 0), 1)
+	world.current_map.group = 3
+	world.current_map.number = 44
+	world.player_cell = Vector2i(8, 23)
+	world.interact()
+	world.run_event_queue(true)
+	world.choose_script_input(1)
+	assert_eq(world.state.gs_ball_stage, Gen2WorldState.GS_BALL_READY)
+	world.interact()
+	world.run_event_queue(true)
+	world.choose_script_input(0)
+	var request: Dictionary = world.pending_runtime_request()
+	assert_eq(request["kind"], &"battle_requested")
+	assert_eq(request["values"]["pokemon"], 251)
+	assert_eq(request["values"]["level"], 30)
+	assert_eq(world.state.gs_ball_stage, Gen2WorldState.GS_BALL_FINISHED)
+	assert_eq(world.state.items().get(Gen2WorldState.GS_BALL_ITEM, 0), 0)
+	world.complete_runtime_request({"ok": true, "outcome": &"won"})
+	world.offer_gs_ball()
+	assert_eq(world.state.gs_ball_stage, Gen2WorldState.GS_BALL_FINISHED)
+	assert_false(world.script_busy())
+
+
+func test_gen1_an_escort_hides_its_original_object_after_a_map_change() -> void:
+	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(1, 8))
+	(world.objects[0] as Gen2WorldObject).toggle_index = 7
+	world._gen1_start_movement_script(Gen1Layout.MOVEMENT_SCRIPT_PALLET, 0)
+	(world.objects[0] as Gen2WorldObject).toggle_index = 9
+	world._gen1_movement_script["function"] = 4
+	world.advance_gen1_movement_script()
+	assert_true(world.state.is_object_toggled(7))
+	assert_false(world.state.is_object_toggled(9))
+	assert_false(world.gen1_movement_script_running())

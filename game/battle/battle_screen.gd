@@ -226,6 +226,7 @@ var _renderer_ready: bool = false:
 ## The battle behind the screen, and the two Pokémon in it. The display state
 ## below is what is currently drawn, which is not always where the battle has
 ## got to: a turn resolves at once and is then shown an event at a time.
+var _annotation_state: Dictionary = {}
 var _battle: Gen2Battle = null
 var _pending: Array = []
 var _rng := RandomNumberGenerator.new()
@@ -1524,6 +1525,7 @@ func entrance_running() -> bool:
 ## it there. Every caller that has just built a battle reaches this, which is the
 ## same order the source uses, `InitBattleDisplay` before `BattleStartMessage`.
 func _init_battle_display() -> void:
+	_annotation_state = _battle.annotation_state()
 	## The engine is scene-free, so `wOptions` is injected here, the one place
 	## every battle passes through.
 	_battle.battle_style_set = _battle.in_battle_tower \
@@ -3080,12 +3082,8 @@ func battle_snapshot() -> Dictionary:
 ## weather, who stands, what is on screen, whether this opponent was seen, and
 ## each move's [method Gen2MoveEffect.applied_effectiveness].
 func info_snapshot() -> Dictionary:
-	var player: Gen2BattleMon = _battle.mon(Gen2Battle.PLAYER) if _battle != null else null
-	var enemy: Gen2BattleMon = _battle.mon(Gen2Battle.ENEMY) if _battle != null else null
-	var defending: Array = enemy.types() if enemy != null else []
-	var identified: bool = enemy != null and Gen2Substatus.has(
-		enemy.substatus, Gen2Substatus.IDENTIFIED
-	)
+	var defending: Array = _annotation_state.get("enemy_types", [])
+	var identified: bool = bool(_annotation_state.get("enemy_identified", false))
 	var rows: Array = []
 	for row: Dictionary in _move_rows:
 		var out: Dictionary = row.duplicate(true)
@@ -3099,13 +3097,13 @@ func info_snapshot() -> Dictionary:
 		"generation": _data.generation if _data != null else RomRegistry.GEN2,
 		"player_species": _player, "enemy_species": _enemy,
 		"player_level": _player_level, "enemy_level": _enemy_level,
-		"player_stages": player.stages.duplicate() if player != null else {},
-		"enemy_stages": enemy.stages.duplicate() if enemy != null else {},
+		"player_stages": (_annotation_state.get("player_stages", {}) as Dictionary).duplicate(),
+		"enemy_stages": (_annotation_state.get("enemy_stages", {}) as Dictionary).duplicate(),
 		"enemy_types": defending.duplicate(),
 		"enemy_identified": identified,
 		"enemy_seen_before": _enemy_seen_before,
-		"weather": _battle.weather if _battle != null else Gen2Weather.NONE,
-		"weather_turns": _battle.weather_turns if _battle != null else 0,
+		"weather": int(_annotation_state.get("weather", Gen2Weather.NONE)),
+		"weather_turns": int(_annotation_state.get("weather_turns", 0)),
 		"hud_visible": _hud_visible(),
 		"enemy_hud_visible": _enemy_hud_visible and _anim_hud_hidden != Gen2Battle.ENEMY,
 		"player_hud_visible": _player_hud_visible and _anim_hud_hidden != Gen2Battle.PLAYER,
@@ -6493,6 +6491,8 @@ func _set_minimize_pic_event(event: Dictionary) -> void:
 
 
 func _apply_event_state(event: Dictionary) -> void:
+	if event.has("annotation_state"):
+		_annotation_state = (event["annotation_state"] as Dictionary).duplicate(true)
 	if event.has("statuses") and event["statuses"] != _hud_status:
 		_hud_status = (event["statuses"] as Array).duplicate()
 		_push_view()

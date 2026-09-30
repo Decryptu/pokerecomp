@@ -13,9 +13,9 @@ var _r: RefCounted = null
 ## Census of the real caches, pinned so a cache or a rule change is loud.
 ## Per game: encounter cells, maps holding one, ice refusals and unreachable cells.
 const EXPECTED_CENSUS: Dictionary = {
-	&"gold": [39058, 138, 775, 11961],
-	&"silver": [39058, 138, 775, 11961],
-	&"crystal": [40156, 146, 779, 12092],
+	&"gold": [39058, 138, 775, 17085],
+	&"silver": [39058, 138, 775, 17085],
+	&"crystal": [40156, 146, 779, 16924],
 }
 
 ## Route 29, the first grass a new game walks into, and the same map number in
@@ -64,12 +64,12 @@ const GEN1_CENSUS: Dictionary = {
 	&"yellow": {"grass": 55, "water": 8, "fishing_maps": 31, "fishing_groups": 31},
 }
 
-## The corpus's reachable encounter cells, how many read the water table, the maps
+## Reachable encounter cells from each map's first entrance, the water cells, maps
 ## holding one, and the left shores `TryDoWildEncounter`'s gate accepts.
 const GEN1_CELL_CENSUS: Dictionary = {
-	&"red": [15280, 3449, 57, 34],
-	&"blue": [15280, 3449, 57, 34],
-	&"yellow": [16530, 4845, 57, 38],
+	&"red": [11113, 2755, 44, 34],
+	&"blue": [11113, 2755, 44, 34],
+	&"yellow": [11258, 3148, 45, 38],
 }
 
 ## Viridian Forest's FOREST tileset is the one indoor map that does not roll off
@@ -179,7 +179,7 @@ func _gen1_left_shores(world: Gen2WorldAPI) -> int:
 ## map's ten, every slot is reachable, and the hit share lands on the rate.
 func _gen1_rolls() -> void:
 	var row: Dictionary = _r.data.world_encounter(&"grass", 0, GEN1_ROUTE_1)
-	var world: Gen2WorldAPI = _r.open_world(0, GEN1_ROUTE_1, Vector2i.ZERO)
+	var world: Gen2WorldAPI = _r.open_world(0, GEN1_ROUTE_1, Vector2i(10, 35))
 	if world == null or row.is_empty():
 		return
 	var grass: PackedVector2Array = world.visible_encounter_cells()[
@@ -563,7 +563,7 @@ func _verify_roaming_walk() -> void:
 ## An empty visible population on Route 29 leaves the roamer standing there to
 ## the step roll, `CheckEncounterRoamMon` coming before the map's tables.
 func _verify_roamer_under_a_population() -> void:
-	var probe: Gen2WorldAPI = _r.open_world(ROUTE_29_GROUP, ROUTE_29_NUMBER, Vector2i.ZERO)
+	var probe: Gen2WorldAPI = _r.open_world(ROUTE_29_GROUP, ROUTE_29_NUMBER, Vector2i(59, 8))
 	var grass: PackedVector2Array = probe.visible_encounter_cells()[Gen2WorldEncounter.METHOD_GRASS]
 	var start: Vector2i = Vector2i(-1, -1)
 	for cell: Vector2 in grass:
@@ -1225,6 +1225,7 @@ const VICTORY_ROAD_MOUTH: Vector2i = Vector2i(13, 5)
 
 
 func _verify_enclosed_floor() -> void:
+	_verify_left_out(14, [Vector2i(0, 0)], Vector2i(10, 10), "Burned Tower B1F")
 	_verify_left_out(ICE_PATH_1F_NUMBER_CRYSTAL if _r.crystal else ICE_PATH_1F_NUMBER_GOLD_SILVER,
 		[ICE_PATH_OUTSIDE_CELL], ICE_PATH_CORRIDOR_CELL, "Ice Path 1F")
 	_verify_left_out(VICTORY_ROAD_NUMBER_CRYSTAL if _r.crystal else VICTORY_ROAD_NUMBER_GOLD_SILVER,
@@ -1235,10 +1236,9 @@ func _verify_enclosed_floor() -> void:
 ## Each of [param outside] is a cell the roll accepts and the sweep leaves out;
 ## [param inside] is one the sweep keeps.
 func _verify_left_out(number: int, outside: Array, inside: Vector2i, label: String) -> void:
-	var world: Gen2WorldAPI = _r.open_world(DUNGEONS_GROUP, number, Vector2i.ZERO)
+	var world: Gen2WorldAPI = _r.open_world(DUNGEONS_GROUP, number, inside)
 	if world == null:
 		return
-	_stand_on_first_warp(world)
 	var cave: PackedVector2Array = world.visible_encounter_cells()[
 		Gen2WorldEncounter.METHOD_GRASS
 	]
@@ -1457,3 +1457,12 @@ func _stand_on_first_warp(world: Gen2WorldAPI) -> void:
 	var warps: Array = world.current_map.events.get("warps", [])
 	if not warps.is_empty():
 		world.player_cell = Vector2i(int(warps[0]["x"]), int(warps[0]["y"]))
+		return
+	for connection: Dictionary in world.current_map.connections:
+		for y: int in world.current_map.collision_height:
+			for x: int in world.current_map.collision_width:
+				var cell := Vector2i(x, y)
+				if world._cell_at_connection_edge(cell, String(connection["direction"])) \
+					and world._reach_standable(cell):
+					world.player_cell = cell
+					return

@@ -23,11 +23,9 @@ const MAIN_ROWS: int = 2
 const MAIN_COLUMNS: int = 2
 const MAIN_SPACING: int = 6
 const MAIN_FLAGS: int = Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_DISABLE_B
-## `.Text`, in its own order. `<PKMN>` is charmap's $4a, one byte the printer
-## expands to those four letters, so the four tiles are what is written here.
-const MAIN_OPTIONS: Array[String] = ["FIGHT", "PKMN", "PACK", "RUN"]
-## `BattleMenuText`, the same box in the same order: the bag is spelled ITEM and
-## `<PK><MN>` is two narrow tiles where Crystal's one byte spells four letters.
+## `.Text`, in its own order. The printer expands `<PKMN>` to two narrow tiles.
+const MAIN_OPTIONS: Array[String] = ["FIGHT", "<PKMN>", "PACK", "RUN"]
+## `BattleMenuText`, the same box and glyphs, with the bag spelled ITEM.
 const GEN1_MAIN_OPTIONS: Array[String] = ["FIGHT", "<PKMN>", "ITEM", "RUN"]
 
 ## `MoveSelectionScreen`'s own `Textbox` rather than a menu header:
@@ -88,7 +86,7 @@ const DISABLED: StringName = &"BattleText_TheMoveIsDisabled"
 ## the row.
 const CONTEST_LEFT: int = 2
 const CONTEST_SPACING: int = 12
-const CONTEST_OPTIONS: Array[String] = ["FIGHT", "PKMN", "PARKBALL×", "RUN"]
+const CONTEST_OPTIONS: Array[String] = ["FIGHT", "<PKMN>", "PARKBALL×", "RUN"]
 const CONTEST_BALLS_AT := Vector2i(13, 16)
 
 ## `text_box_text SAFARI_BATTLE_MENU_TEMPLATE, 0, 12, 19, 17, ..., 2, 14`, with

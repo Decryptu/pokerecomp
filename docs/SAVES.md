@@ -91,9 +91,12 @@ status, experience, DVs, stat experience, moves and PP. Volatile state is
 discarded. Party rows the battle never held, eggs and a Pokémon caught during
 the fight, keep their slots.
 
-Overworld writeback is transactional. A confirmed win saves after result
-messages finish; a loss never overwrites the slot, and the host validates and
-reconstructs the source save party before returning blackout recovery. Continue
+Overworld writeback is transactional. Battles, gifts, healing, item use and PC
+transfers validate and update the live run after their result messages. Ordinary
+gameplay leaves the last explicit save intact, including its Pokédex flags;
+quitting without SAVE discards those changes. Nuzlocke transactions persist
+immediately so deaths and claimed encounters survive reopening. A loss validates
+and reconstructs the source save party before returning blackout recovery. Continue
 enters the overworld only with a validated snapshot. The start menu's SAVE writes
 map, player, items, currency, events, source engine flags and schedule state
 through `Gen2SaveStore`, with item and currency references checked against the
@@ -107,15 +110,14 @@ saved position without clamping it.
 an embedded overworld overlay, presents one numbered box at a time with twenty
 fixed slots and a party selection column. Depositing uses the current box's first
 free slot, withdrawal requires party capacity, and both go through
-`Gen2SaveStorage` to validate and write a candidate save before the shared
+`Gen2SaveStorage` to validate a candidate save before the shared
 runtime object changes. The last party member cannot be boxed.
 
 MOVE PKMN W/O MAIL is the same screen in `Gen2BoxScreen.MODE_MOVE`, where left
 and right load the party or any box and a chosen Pokemon is inserted at a second
 cursor. Closing the overlay resumes the paused source script, which is where a
-changed decoration reloads the room. Selected runtime saves persist transfers;
-scene-test and development saves use the validated in-memory candidate without
-writing a slot.
+changed decoration reloads the room. Embedded gameplay transfers stay in memory
+until SAVE, except in Nuzlocke. Standalone storage editing writes the slot.
 
 Party-owned overworld transactions modify a candidate `Gen2SaveData` and the
 live world snapshot first. Gifts, eggs, NPC trades, source `HealParty` recovery,
@@ -165,7 +167,8 @@ proper, which is where the cartridge keeps it too, since a challenge can be save
 and left between battles. `Gen2WorldState.battle_tower()` carries the state, the
 streak of trainers already met, the chosen room, the save-file flags and the
 prize drawn for the run. It also holds `sGSBallFlag`, which sits in the same bank
-and which only a mod's `request_gs_ball()` writes.
+and which only a mod's `request_gs_ball()` writes. Gold/Silver's optional GS Ball
+quest and the originally received starter are stored in world state.
 
 Original SRAM also contains player, map, checksum, PC box, Hall of Fame and
 Crystal-specific regions. This model imports only party data; the world snapshot

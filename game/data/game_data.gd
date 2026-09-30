@@ -9,6 +9,7 @@ extends RefCounted
 ## buffers and world sections load on first use, because reading them at open()
 ## made listing three games cost more than entering one.
 
+var gs_ball_event_enabled: bool = false
 var id: StringName = &""
 var sha1: String = ""
 var directory: String = ""
@@ -1208,7 +1209,7 @@ func overworld_effect(name: String) -> Dictionary:
 func overworld_icon(icon_number: int) -> Gen2WorldSprite:
 	if icon_number <= 0 or icon_number > Gen2Layout.MON_ICON_COUNT:
 		return null
-	return Gen2WorldSprite.from_mon_icon(icon_number)
+	return Gen2WorldSprite.from_mon_icon(icon_number, generation)
 
 
 func overworld_icon_indices(icon_number: int) -> PackedByteArray:
@@ -1473,10 +1474,6 @@ func world_tileset_indices(number: int) -> PackedByteArray:
 	return data
 
 
-## One species by Pokédex number, or an empty Dictionary if there is no such
-## number. Out of range is a question, not a crash: a mod may well ask.
-## A Generation 1 internal index as the dex number the cache speaks, off the
-## `index` each species row keeps; 0 for a slot no species stands in.
 ## `LoadMonFrontSprite`'s cost for one species, off its own picture; see
 ## [method Gen1Layout.pic_load_frames]. Zero outside Generation 1.
 func gen1_pic_load_frames(number: int) -> int:
@@ -1489,6 +1486,8 @@ func gen1_pic_load_frames(number: int) -> int:
 	)
 
 
+## A Generation 1 internal index as the dex number the cache speaks, off the
+## `index` each species row keeps; 0 for a slot no species stands in.
 func gen1_dex_of_index(index: int) -> int:
 	for number: int in range(1, species_count() + 1):
 		if int(species(number).get("index", -1)) == index:
@@ -1496,6 +1495,8 @@ func gen1_dex_of_index(index: int) -> int:
 	return 0
 
 
+## One species by Pokédex number, or an empty Dictionary if there is no such
+## number. Out of range is a question, not a crash: a mod may well ask.
 func species(number: int) -> Dictionary:
 	return _content(Gen2ContentOverlay.KIND_SPECIES, _species, number)
 
@@ -1749,7 +1750,16 @@ func intro_text(key: String) -> String:
 
 
 func item(number: int) -> Dictionary:
-	return _content(Gen2ContentOverlay.KIND_ITEM, _items, number)
+	var row: Dictionary = _content(Gen2ContentOverlay.KIND_ITEM, _items, number)
+	if gs_ball_event_enabled and number == Gen2WorldState.GS_BALL_ITEM:
+		row = row.duplicate(true)
+		row.merge({
+			"name": "GS BALL", "description": "A mysterious BALL.", "price": 0,
+			"pocket": Gen2WorldPack.TYPE_KEY_ITEM,
+			"permissions": Gen2WorldPack.CANT_TOSS, "effect": 0, "parameter": 0,
+			"field_menu": Gen2WorldPack.ITEMMENU_CLOSE, "battle_menu": Gen2WorldPack.ITEMMENU_NOUSE,
+		}, true)
+	return row
 
 
 func item_name(number: int) -> String:

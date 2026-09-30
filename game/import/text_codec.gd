@@ -73,6 +73,8 @@ const POKE_WORD: String = "POK\u00e9"
 const WORD_TILES: Dictionary = {
 	"<POKE>": [0x70, 0x71],
 	"<PKMN>": [0xE1, 0xE2],
+	"<PK>": [0xE1],
+	"<MN>": [0xE2],
 }
 
 ## The letters to fall back to when the loaded strip has no such tile: only the
@@ -84,7 +86,7 @@ const WORD_FALLBACKS: Dictionary = {
 	"<PKMN>": "PKMN",
 }
 
-## The longest sequence one tile stands for: the apostrophe ligatures and PK/MN
+## The longest sequence one tile stands for: the apostrophe ligatures
 ## are two characters in one glyph. [constant WORD_TILES]' spellings are longer
 ## and are matched ahead of this run rather than through it. The three word codes
 ## themselves sit below FIRST_PRINTABLE and are decode-only; write "#" for $54 as
@@ -306,8 +308,8 @@ static func _characters() -> Dictionary:
 	table[0x5C] = "TM"
 	table[0x5D] = "TRAINER"
 	table[0x5E] = "ROCKET"
-	table[0xE1] = "PK"
-	table[0xE2] = "MN"
+	table[0xE1] = "<PK>"
+	table[0xE2] = "<MN>"
 
 	# Substituted from RAM at print time. $14 belongs here too and is
 	# [constant Gen2TextStream.CHAR_PLAY_G]'s, left to the command layer because

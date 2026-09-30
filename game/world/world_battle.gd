@@ -61,7 +61,7 @@ static func commit_battle(
 	var save: Gen2SaveData = Gen2SaveBattleAdapter.from_world_battle(data, battle, source_save)
 	if save != null and save.world != null:
 		credit_earnings(save.world.world_state, money)
-	var result: Dictionary = Gen2SaveStore.save(save, data)
+	var result: Dictionary = Gen2SaveStore.update(save, data)
 	if bool(result["ok"]):
 		Gen2WorldTransaction.copy_into(source_save, save)
 	return result

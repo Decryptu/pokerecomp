@@ -1141,3 +1141,16 @@ func test_tower_exit_restores_the_original_party_and_heals_it() -> void:
 			assert_eq(restored.status, Gen2Status.NONE)
 			assert_eq(restored.pp[0], int(_data.move(original.moves[0])["pp"]))
 		assert_eq(source.party[0], original, "the candidate does not mutate the live save")
+
+
+func test_gameplay_update_preserves_the_last_explicit_save() -> void:
+	var save: Gen2SaveData = _save()
+	assert_true(Gen2SaveStore.save(save, _data)["ok"])
+	var old_hp: int = (save.party[0] as Gen2SaveMon).hp
+	(save.party[0] as Gen2SaveMon).hp -= 1
+	assert_true(Gen2SaveStore.update(save, _data)["ok"])
+	var loaded: Dictionary = Gen2SaveStore.load_result(save.game_id, save.rom_sha1, save.slot, _data)
+	assert_eq((loaded["save"].party[0] as Gen2SaveMon).hp, old_hp)
+	assert_true(Gen2SaveStore.save(save, _data)["ok"])
+	loaded = Gen2SaveStore.load_result(save.game_id, save.rom_sha1, save.slot, _data)
+	assert_eq((loaded["save"].party[0] as Gen2SaveMon).hp, old_hp - 1)

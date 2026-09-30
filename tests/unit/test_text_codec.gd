@@ -48,7 +48,7 @@ func test_reading_past_the_end_stops_rather_than_faulting() -> void:
 
 func test_word_codes_expand() -> void:
 	assert_eq(Gen2Text.decode(PackedByteArray([0x5D]), 0, 4), "TRAINER")
-	assert_eq(Gen2Text.decode(PackedByteArray([0xE1, 0xE2]), 0, 4), "PKMN")
+	assert_eq(Gen2Text.decode(PackedByteArray([0xE1, 0xE2]), 0, 4), "<PK><MN>")
 
 
 ## constants/charmap.asm maps "#" to $54, which `CheckDict` prints as four
@@ -245,3 +245,11 @@ func test_bracketed_markers_stay_decode_only_under_either_strip() -> void:
 	assert_eq(
 		Gen2Text.encode("<ID>", Gen2Text.FONT_BATTLE_EXTRA).size(), 4, "no ligature for a marker"
 	)
+
+
+func test_letter_pairs_in_names_do_not_become_pokemon_symbols() -> void:
+	for font: StringName in [Gen2Text.FONT_MAIN, Gen2Text.FONT_BATTLE_EXTRA]:
+		assert_eq(Gen2Text.encode("AMNESIA", font), _encode("AMNESIA"))
+		assert_eq(Gen2Text.encode("PKMN", font), _encode("PKMN"))
+		assert_eq(Gen2Text.encode("<PKMN>", font), PackedByteArray([0xE1, 0xE2]))
+		assert_eq(Gen2Text.decode(PackedByteArray([0xE1, 0xE2]), 0, 2), "<PK><MN>")

@@ -63,6 +63,13 @@ static func exists(game_id: StringName, rom_sha1: String, slot: int) -> bool:
 		or FileAccess.file_exists(backup_path_for(game_id, rom_sha1, slot))
 
 
+## Gameplay commits stay in memory until SAVE. Nuzlocke commits remain durable.
+static func update(save_data: Gen2SaveData, data: GameData) -> Dictionary:
+	if save_data != null and save_data.run_rules != null and save_data.run_rules.is_nuzlocke():
+		return save(save_data, data)
+	return Gen2SaveValidator.validate(save_data, data)
+
+
 ## Writes the primary copy, then the backup, in `_SaveGameData`'s
 ## complete-then-copy order. Neither copy relies on rename atomicity, so a crash
 ## during either write leaves the other one readable.

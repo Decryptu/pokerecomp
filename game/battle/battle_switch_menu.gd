@@ -120,7 +120,7 @@ static func prompt_text(data: GameData = null, reason: StringName = &"") -> Stri
 			return Gen2PartyScreen.prompt_text(data, &"normal", Gen2PartyScreen.PROMPT_CHOOSE)
 		&"item":
 			return Gen2PartyScreen.prompt_text(data, &"item_use", Gen2PartyScreen.PROMPT_USE_ON_WHICH)
-	return Gen2PartyScreen.prompt_text(data, &"battle", "Which PKMN?")
+	return Gen2PartyScreen.prompt_text(data, &"battle", "Which <PKMN>?")
 
 
 ## `BattleMonMenu.MenuData` and Generation 1's `SwitchStatsCancelText`.

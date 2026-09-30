@@ -13,13 +13,13 @@ signal cry_requested(species: int)
 signal sfx_requested(index: int, waited: bool)
 
 ## `PCString_*` and `.PartyPKMN`, engine strings inside `bills_pc.asm` that no
-## script points at, so they are the host's the way the contest lines are. "PKMN"
+## script points at, so they are the host's the way the contest lines are. `<PKMN>`
 ## is the two tiles `<PK>` and `<MN>` and "#" is the POKé ligature.
-const PROMPT_CHOOSE: String = "Choose a PKMN."
+const PROMPT_CHOOSE: String = "Choose a <PKMN>."
 const PROMPT_WHATS_UP: String = "What's up?"
-const PROMPT_RELEASE: String = "Release PKMN?"
-const PROMPT_LAST_MON: String = "It's your last PKMN!"
-const PROMPT_NO_USABLE: String = "No more usable PKMN!"
+const PROMPT_RELEASE: String = "Release <PKMN>?"
+const PROMPT_LAST_MON: String = "It's your last <PKMN>!"
+const PROMPT_NO_USABLE: String = "No more usable <PKMN>!"
 ## `PCString_RemoveMail`, the third thing `BillsPC_CheckMail_PreventBlackout`
 ## refuses on.
 const PROMPT_REMOVE_MAIL: String = "Remove MAIL."
@@ -28,13 +28,13 @@ const PROMPT_PARTY_FULL: String = "The party's full!"
 const PROMPT_NO_EGGS: String = "No releasing EGGS!"
 const PROMPT_STORED: String = "Stored %s!"
 const PROMPT_GOT: String = "Got %s!"
-const PROMPT_RELEASED: String = "Released PKMN."
+const PROMPT_RELEASED: String = "Released <PKMN>."
 ## `ReleasePKMN_ByePKMN` names the species, from `GetPokemonName`.
 const PROMPT_BYE: String = "Bye, %s!"
 ## `ld c, 50` behind every line and refusal, `ld c, 80` behind `PCString_ReleasedPKMN`.
 const LINE_FRAMES: int = 50
 const RELEASED_FRAMES: int = 80
-const PARTY_NAME: String = "PARTY PKMN"
+const PARTY_NAME: String = "PARTY <PKMN>"
 
 ## `wBillsPC_LoadedBox`: zero is the party and the boxes follow it.
 const LOADED_PARTY: int = 0
