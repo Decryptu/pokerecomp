@@ -24,8 +24,7 @@ static func time_mask_matches(mask: int, hour: int) -> bool:
 
 
 static func map_has_phone_service(map: Gen2WorldMap) -> bool:
-	## Map macro comment: TRUE prevents phone calls. The importer stores this
-	## field as phone_flag, so zero is the service-enabled state.
+	## The map macro's TRUE prevents calls; zero is service.
 	return map != null and map.phone_flag == 0
 
 
@@ -51,6 +50,27 @@ static func contact_summary(data: GameData, contact: Dictionary) -> Dictionary:
 		"callee_script": (contact.get("callee_script", {}) as Dictionary).duplicate(true),
 		"caller_script": (contact.get("caller_script", {}) as Dictionary).duplicate(true),
 	}
+
+
+## `GetCallerName`'s `ld de, SCREEN_WIDTH + 3`, from a trainer's name to their class.
+const CALLER_CLASS_OFFSET := Vector2i(3, 1)
+
+
+## `GetCallerName` as `[offset, text]`; Buena's `<LF>` returns to the first column.
+static func caller_name_rows(data: GameData, contact: Dictionary) -> Array:
+	var trainer_class: int = int(contact.get("trainer_class", 0))
+	var rows: Array = []
+	if trainer_class <= 0 or data == null:
+		var lines: PackedStringArray = String(contact.get("caller_label", "")).split("\n")
+		for line: int in lines.size():
+			rows.append([Vector2i(0, line), lines[line]])
+		return rows
+	var party: Dictionary = data.trainer_party(
+		trainer_class, int(contact.get("trainer_number", 1)) - 1
+	)
+	rows.append([Vector2i.ZERO, String(party.get("name", "")) + ":"])
+	rows.append([CALLER_CLASS_OFFSET, data.trainer_name(trainer_class)])
+	return rows
 
 
 static func special_call_summary(data: GameData, special_call: Dictionary) -> Dictionary:
@@ -205,15 +225,12 @@ static func phone_list_room(registered: Dictionary, contact: int) -> int:
 	return room
 
 
-## `PHONE_BILL`, the one contact an event rather than the player or the timer
-## can put on the line. Third in `PhoneContacts` on all three cartridges.
+## `PHONE_BILL`, third in `PhoneContacts` on all three cartridges.
 const CONTACT_BILL: int = 3
 
 
-## `LoadCallerScript`: the contact's own *caller* script, which is
-## `PHONE_CONTACT_SCRIPT2` and the one `Script_ReceivePhoneCall`'s `memcall`
-## runs. No entrance, timer, roll, registration or time test stands in front of
-## it: the event that asks for the call has already decided there is one.
+## `LoadCallerScript`: `PHONE_CONTACT_SCRIPT2`, with no test in front of it; the
+## event asking for the call has decided there is one.
 static func resolve_caller(data: GameData, contact_id: int) -> Dictionary:
 	if data == null:
 		return _phone_unavailable(&"phone_data_unavailable")

@@ -10,6 +10,25 @@ const WAIT_FRAMES: int = 20
 const RING_FRAMES: int = WAITS_PER_RING * WAIT_FRAMES
 const TOTAL_FRAMES: int = RING_COUNT * RING_FRAMES
 
+## `Phone_CallerTextbox`, and where `Phone_TextboxWithName` writes '☎' and the name.
+const CALLER_BOX_SIZE := Vector2i(20, 4)
+const CALLER_PHONE_AT := Vector2i(1, 1)
+const CALLER_NAME_AT := Vector2i(3, 1)
+const PHASE_PRE_RING: StringName = &"pre_ring"
+const PHASE_RINGING: StringName = &"ringing"
+const PHASE_CALLER_NAME: StringName = &"caller_name"
+const PHASE_CALLER_BOX: StringName = &"caller_box"
+
+
+static func caller_box_text(data: GameData, contact: Dictionary, phase: StringName) -> Array:
+	if phase != PHASE_CALLER_NAME:
+		return []
+	var placed: Array = [[CALLER_PHONE_AT, "☎"]]
+	for row: Array in Gen2WorldPhoneHost.caller_name_rows(data, contact):
+		placed.append([CALLER_NAME_AT + (row[0] as Vector2i), row[1]])
+	return placed
+
+
 ## `HangUp`: `HangUp_Beep`'s `Click!`, then three turns of `HangUp_BoopOn`'s `……`
 ## and `HangUp_BoopOff`'s blank box, twenty frames each and no button read.
 const HANG_UP_PHASES: Array[StringName] = [
@@ -61,16 +80,16 @@ func total_frames() -> int:
 func snapshot() -> Dictionary:
 	var ringing_frames: int = maxi(0, _elapsed_frames - _lead_frames)
 	var ring_index: int = 0
-	var phase: StringName = &"pre_ring"
+	var phase: StringName = PHASE_PRE_RING
 	if ringing_frames > 0 or _elapsed_frames >= _lead_frames:
 		ring_index = mini(ringing_frames / RING_FRAMES, RING_COUNT - 1)
 		var phase_index: int = (ringing_frames % RING_FRAMES) / WAIT_FRAMES
-		phase = [&"ringing", &"caller_name", &"caller_box"][phase_index % 3]
+		phase = [PHASE_RINGING, PHASE_CALLER_NAME, PHASE_CALLER_BOX][phase_index % 3]
 	if is_finished():
 		ring_index = RING_COUNT - 1
-		phase = &"caller_name"
+		phase = PHASE_CALLER_NAME
 	return {
-		"ring": ring_index + 1 if phase != &"pre_ring" else 0,
+		"ring": ring_index + 1 if phase != PHASE_PRE_RING else 0,
 		"rings": RING_COUNT,
 		"phase": phase,
 		"elapsed_frames": _elapsed_frames,

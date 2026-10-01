@@ -95,7 +95,6 @@ const PHONE_CLEAR_COLUMNS: int = COLUMNS - 2
 const PHONE_FIRST_ROW: int = 4
 const PHONE_ROW_SPACING: int = 2
 const PHONE_NAME_COLUMN: int = 2
-const PHONE_CLASS_COLUMN: int = 5
 const PHONE_CURSOR_COLUMN: int = 1
 const PHONE_CURSOR_CODE: int = 0xED
 
@@ -365,7 +364,7 @@ func radio_tilemap(
 
 
 ## `.Phone` and `PokegearPhone_UpdateDisplayList`. [param rows] is the window of
-## contacts on screen, each `{ name, class }`, [param cursor] the row the arrow
+## contacts on screen as `caller_name_rows` answers them, [param cursor] the row the arrow
 ## is on and [param service] `GetMapPhoneService`'s answer.
 func phone_tilemap(
 	owned: Array, rows: Array, cursor: int, service: bool, text: String
@@ -380,18 +379,10 @@ func phone_tilemap(
 		for column: int in PHONE_CLEAR_COLUMNS:
 			_put(map, PHONE_CLEAR_AT + Vector2i(column, row), BLANK_TILE)
 	for index: int in mini(rows.size(), PHONE_DISPLAY_HEIGHT):
-		var entry: Dictionary = rows[index]
 		var top: int = PHONE_FIRST_ROW + index * PHONE_ROW_SPACING
-		var caller: String = String(entry.get("name", ""))
-		var class_name_text: String = String(entry.get("class", ""))
-		# `GetCallerName`: a trainer's own name carries a colon and their class
-		# goes on the line below; every other caller is one line.
-		_draw_string(
-			map, Vector2i(PHONE_NAME_COLUMN, top),
-			caller + ":" if not class_name_text.is_empty() else caller
-		)
-		if not class_name_text.is_empty():
-			_draw_string(map, Vector2i(PHONE_CLASS_COLUMN, top + 1), class_name_text)
+		for placed: Array in rows[index]:
+			var at: Vector2i = Vector2i(PHONE_NAME_COLUMN, top) + (placed[0] as Vector2i)
+			_draw_string(map, at, String(placed[1]))
 	if cursor >= 0 and cursor < PHONE_DISPLAY_HEIGHT:
 		_put(
 			map,

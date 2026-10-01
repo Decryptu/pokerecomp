@@ -482,27 +482,15 @@ func _tilemap() -> PackedInt32Array:
 	return map
 
 
-## The four rows on screen, as `GetCallerClassAndName` writes them: a trainer's
-## own name over their class, and one line for everyone else. An empty slot is an
-## empty row, which is what `wPhoneList`'s zeroes print.
+## `GetCallerClassAndName` per row; `wPhoneList`'s zeroes print an empty one.
 func _phone_rows() -> Array:
 	var rows: Array = []
 	for row: int in PHONE_DISPLAY_HEIGHT:
 		var index: int = _scroll + row
-		if index >= _contacts.size():
-			rows.append({})
-			continue
-		var contact: Dictionary = _contacts[index]
-		var trainer_class: int = int(contact.get("trainer_class", 0))
-		if trainer_class <= 0:
-			rows.append({"name": String(contact.get("caller_label", ""))})
-			continue
-		rows.append({
-			"name": String(_data.trainer_party(
-				trainer_class, int(contact.get("trainer_number", 1)) - 1
-			).get("name", "")),
-			"class": _data.trainer_name(trainer_class),
-		})
+		rows.append(
+			Gen2WorldPhoneHost.caller_name_rows(_data, _contacts[index])
+			if index < _contacts.size() else []
+		)
 	return rows
 
 

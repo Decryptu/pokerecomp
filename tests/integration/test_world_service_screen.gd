@@ -1004,9 +1004,25 @@ func test_pending_special_call_dispatches_the_imported_script() -> void:
 	_world_screen._show_script_results(attempt["results"])
 	await get_tree().process_frame
 	## The screen's own pump is what spends the two rings and shows what
-	## finishing them produced.
-	_world_screen.advance_frames(4 * Gen2WorldPhoneRing.TOTAL_FRAMES)
+	## finishing them produced. `RingTwice_StartCall`'s box over the map is
+	## written empty, with the caller, and empty again on each ring (#822).
+	var phases: Array[StringName] = []
+	while _world_screen._world.phone_ring_active():
+		_world_screen.advance_frame()
+		var phase: StringName = _world_screen.caller_box_phase()
+		if phases.is_empty() or phases.back() != phase:
+			phases.append(phase)
+	var ring: Array[StringName] = [
+		Gen2WorldPhoneRing.PHASE_RINGING, Gen2WorldPhoneRing.PHASE_CALLER_NAME,
+		Gen2WorldPhoneRing.PHASE_CALLER_BOX,
+	]
+	assert_eq(phases.slice(phases.find(ring[0])), ring + ring + [ring[1]])
+	_world_screen.advance_frames(2 * Gen2WorldPhoneRing.TOTAL_FRAMES)
 	await get_tree().process_frame
+	assert_eq(
+		_world_screen.caller_box_phase(), Gen2WorldPhoneRing.PHASE_CALLER_NAME,
+		"the caller stands over the call"
+	)
 	assert_null(_world_screen._service_host)
 	assert_true(_world_screen._world.script_input_waiting())
 	## `writetext` prints and returns: the `waitbutton` behind it is what the
@@ -1020,7 +1036,19 @@ func test_pending_special_call_dispatches_the_imported_script() -> void:
 	_world_screen._advance_script_input()
 	_world_screen._advance_script_input()
 	await get_tree().process_frame
+	## The caller's script returns into `Script_ReceivePhoneCall`, whose own
+	## `waitbutton`, `HangUp` and `closetext` end every call the phone rang for.
+	assert_true(_world_screen._world.script_input_waiting(), "its waitbutton")
+	_world_screen._advance_script_input()
+	_world_screen.advance_frames(Gen2WorldPhoneRing.HANG_UP_FRAMES / 2)
+	assert_eq(
+		_world_screen.caller_box_phase(), Gen2WorldPhoneRing.PHASE_CALLER_NAME,
+		"up through HangUp"
+	)
+	_world_screen.advance_frames(Gen2WorldPhoneRing.HANG_UP_FRAMES)
+	await get_tree().process_frame
 	assert_false(_world_screen._world.script_input_waiting())
+	assert_eq(_world_screen.caller_box_phase(), &"", "closetext takes it away")
 
 
 func test_phone_list_shows_registered_numbers_and_can_close() -> void:

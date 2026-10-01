@@ -37,8 +37,11 @@ const EMOTE_GRASS_RUSTLE: int = 11
 const REQUEST_CRY: StringName = &"cry"
 const REQUEST_BATTLE: StringName = &"battle"
 const REQUEST_POKEMON_GIFT: StringName = &"pokemon_gift"
+const REQUEST_CATCH_DEMO: StringName = &"catch_demo"
 const ACTOR_REQUEST_COMPLETED_METHOD: String = "request_completed"
-const REQUEST_KINDS: Array[StringName] = [REQUEST_CRY, REQUEST_BATTLE, REQUEST_POKEMON_GIFT]
+const REQUEST_KINDS: Array[StringName] = [
+	REQUEST_CRY, REQUEST_BATTLE, REQUEST_POKEMON_GIFT, REQUEST_CATCH_DEMO,
+]
 
 ## `.Frameset_PartyMon`: two OAM sets of eight, nine passes each because
 ## `GetSpriteAnimFrame` returns the entry on the pass that loads the duration
@@ -160,7 +163,16 @@ func _resolve_request(entry: Variant) -> Dictionary:
 	var values: Dictionary = named["values"]
 	values["kind"] = &"wild"
 	values["mod_tag"] = StringName(row.get("tag", &""))
+	if kind == REQUEST_CATCH_DEMO:
+		values.merge(_catch_demo_values())
 	return {"kind": kind, "values": values}
+
+
+## The Dude's `catchtutorial BATTLETYPE_TUTORIAL`, or Generation 1's old man.
+func _catch_demo_values() -> Dictionary:
+	if _world.data.generation == RomRegistry.GEN1:
+		return Gen1Layout.battle_type_values(Gen1Layout.BATTLE_TYPE_OLD_MAN)
+	return {"battle_type": Gen2Battle.BATTLETYPE_TUTORIAL, "tutorial": true, "can_lose": false}
 
 
 ## { sprite, facing, frame, position_cells, span, height_offset_pixels, colors,

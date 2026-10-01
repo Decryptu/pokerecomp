@@ -484,6 +484,11 @@ const PITFALL_FRAME: int = RomFile.BANK_SIZE
 const PITFALL_MOVEMENT: int = RomFile.BANK_SIZE
 const SKYFALL_MOVEMENT: Array[int] = [0x4E, Gen2WorldMovement.STEP_END]
 const PITFALL_EARTHQUAKE: int = 16
+## `Script_ReceivePhoneCall`: the caller's script is `memcall`ed from this frame.
+const RECEIVED_CALL_FRAME: int = RomFile.BANK_SIZE
+const RECEIVED_CALL_KINDS: Array[StringName] = [&"phone_incoming", &"phone_special"]
+const GOLD_WAITBUTTON: int = 0x53
+const GOLD_HANGUP: int = 0x98
 ## `_FoundItemText`, its line break before the item name; see _stage_item_ball().
 const FOUND_ITEM_TEXT: String = "<PLAYER> found\n%s!"
 ## `_FoundItemText` and `_ButNoSpaceText`, four lines in the two-row box.
@@ -732,6 +737,9 @@ static func begin(
 			runner._stage_field_move_prompt()
 	elif StringName(request.get("kind", &"")) == &"pitfall":
 		started = runner._push_frame(bank, PITFALL_FRAME, runner._pitfall_script())
+	elif StringName(request.get("kind", &"")) in RECEIVED_CALL_KINDS:
+		started = runner._push_frame(bank, RECEIVED_CALL_FRAME, runner._received_call_tail()) \
+			and runner._push_frame(bank, address)
 	elif StringName(request.get("kind", &"")) in [&"gs_ball", &"item_gift"]:
 		started = runner._start_gift_request(bank, StringName(request["kind"]))
 	elif StringName(request.get("kind", &"")) == &"rock_smash_used":
@@ -7586,6 +7594,17 @@ func _trainer_intro_script(trainer: Dictionary) -> PackedByteArray:
 		raw.call(Gen2WorldScript.GOLD_END),
 	]
 	return PackedByteArray(bytes)
+
+
+## Its tail; `InitCallReceiveDelay` is the timer reset [method _complete] stages.
+func _received_call_tail() -> PackedByteArray:
+	var crystal: bool = _crystal_commands()
+	return PackedByteArray([
+		Gen2WorldScript.raw_opcode(GOLD_WAITBUTTON, crystal),
+		Gen2WorldScript.raw_opcode(GOLD_HANGUP, crystal),
+		Gen2WorldScript.CLOSETEXT,
+		Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, crystal),
+	])
 
 
 func _pitfall_script() -> PackedByteArray:

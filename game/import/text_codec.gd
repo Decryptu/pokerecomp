@@ -44,6 +44,8 @@ const BATTLE_EXTRA_CHARACTERS: Dictionary = {
 ## menu draws it and nothing else does, so it is the one code in $60 to $78 that
 ## is a character under the main font as well.
 const UP_ARROW_CODE: int = 0x61
+## `'☎'`, `PokegearPhoneIconGFX` under the same load.
+const PHONE_CODE: int = 0x62
 
 ## `charmap.asm`'s "…", the one code in that run source text writes as itself.
 ## `_LoadFontsExtra1` is what puts a tile under it, which is why the importer
@@ -262,6 +264,7 @@ static func _characters() -> Dictionary:
 	table[0xDF] = "←"
 	table[0xEB] = "→"
 	table[UP_ARROW_CODE] = "▲"
+	table[PHONE_CODE] = "☎"
 	table[0xEC] = "▷"
 	table[0xED] = "▶"
 	table[0xEE] = "▼"
@@ -369,6 +372,7 @@ static func _encodings() -> Dictionary:
 	# quoting that wording has to encode it. $56 is "……" and stays decode-only,
 	# two $75s drawing the same thing.
 	out["…"] = ELLIPSIS_CODE
+	out["☎"] = PHONE_CODE
 
 	_codes = out
 	return _codes

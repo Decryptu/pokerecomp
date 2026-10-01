@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 56 | Actor `catch_demo` requests; `request_completed(result)` answering an actor's `battle` and `catch_demo` as well as its gift |
 | 55 | Actor `pokemon_gift` requests and `request_completed(result)`; `request_pokemon_gift()`; lasting `starter_species` and `beat_red` progress; opt-in Gold/Silver GS Ball chain and `gs_ball_stage` |
 | 54 | `hp` and `status` on an actor's `battle` request, `status` on a wild substitute's answer, and `status` on `ended` |
 | 53 | `after_credits` on `register_page()`, and `Gen2ModHost.credits_page_ids()`; the `text_closed` world event every `closetext` publishes, which replaces `money_window_closed` |
@@ -1667,7 +1668,8 @@ player event is spent.
 `take_requests` is where an edge goes; `sprites()` is where a pose goes.
 `{"kind": &"cry", "species": n}` is played through the same player a script's
 `cry` command uses: a mod may not play a sound, so it asks and the host spends
-it. The other kind is a `battle`, below. Anything else in the outbox is dropped.
+it. The other kinds are `battle`, `pokemon_gift` and `catch_demo`, below. Anything
+else in the outbox is dropped.
 
 Each entry of `sprites()` names cartridge art and nothing else:
 
@@ -1714,7 +1716,9 @@ map is in the way, and a press of A on it reaches the actor's `interact`.
 [wild substitute](#replacing-the-wild-a-step-meets) takes: a wild battle, as a
 script's `loadwildmon` and `startbattle` start one, begun on the next frame the
 world is free. The `ended` event carries the tag back with the HP, DVs and status
-left. A request a wild substitute would have refused is dropped.
+left, and the same event, with `ok` and `kind`, reaches the actor's optional
+`request_completed(result)`. A request a wild substitute would have refused is
+dropped.
 
 ```gdscript
 class Mewtwo:
@@ -1739,6 +1743,17 @@ transaction and sends it to the party or the current box. Optional
 `species`, `level`, and `tag`; an invalid gift or full storage changes nothing.
 Mark a gift claimed only after `ok` is true. The same result is published on the
 world channel as `type: &"pokemon_gift"`.
+
+`{"kind": &"catch_demo", "species": 152, "level": 5, "tag": &"chikorita"}` is the
+catching demonstration a script starts with `loadwildmon` and `catchtutorial
+BATTLETYPE_TUTORIAL`: the Dude's fight on Gold, Silver and Crystal and the old
+man's on Red, Blue and Yellow, under their names and back pictures. The Dude's
+plays itself and the old man's waits on a press per line, as each does on its
+cartridge. It always catches, takes no ball from the bag and adds nothing to the
+party or a box; the Pokedex marks the species seen, as it does for the Dude's.
+`request_completed` receives the fight's `ended` event with `ok`, `kind` and the
+tag, so the actor's own story picks up from there. A request a `battle` would
+have refused is dropped.
 
 `host.request_pokemon_gift(manifest.id, species, level, tag)` queues the same
 transaction without an actor. Its immediate `ok` confirms that the request was queued;

@@ -2743,6 +2743,7 @@ const GOLD_SILVER: Dictionary = {
 	# `FontsExtra_SolidBlackAndUpArrowGFX`' second tile, which is 1bpp here and
 	# a 2bpp sheet of its own on Crystal. Both are unique in their dump.
 	"up_arrow": {"offset": 0xF9306, "bits": 1},
+	"phone_icon": 0xF9016,
 	# No `MapEntryFrameGFX` and no `InitMapNameSign` on these two: the map name
 	# sign is Crystal's own screen.
 	"map_entry_sign": -1,
@@ -3360,6 +3361,7 @@ const CRYSTAL: Dictionary = {
 	"stats_screen_palettes": 0x8F52,
 	"battle_font": 0xF8600,
 	"up_arrow": {"offset": 0xF9424, "bits": 2},  # `FontsExtra2_UpArrowGFX`, its own 2bpp tile here.
+	"phone_icon": 0xF8F24,
 	# `MapEntryFrameGFX`, the map name sign's own fourteen tiles. It is the entry
 	# before `FontsExtra2_UpArrowGFX` in `gfx/font.asm` and ends exactly where
 	# that one starts, which is what checks the address. Gold and Silver ship
