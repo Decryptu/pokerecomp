@@ -470,7 +470,7 @@ func _redraw() -> void:
 	compose(indices, width, Vector2i.ZERO)
 
 	var image: Image = Gen2PicImage.from_indices(
-		indices, width, height, _colors()
+		indices, width, height, ink_colors()
 	)
 	if not raster_scx.is_empty():
 		image = PokeRaster.scroll(image, raster_scx, Gen2BattleIntro.MAP_WIDTH)
@@ -482,7 +482,7 @@ func _redraw() -> void:
 ## colours, so the two between them are never drawn. Written out rather than
 ## taken from PokePalette.pic_palette because only the field carries alpha, and
 ## [member field_opacity] is applied to whichever palette is in force.
-func _colors() -> PackedColorArray:
+func ink_colors() -> PackedColorArray:
 	var source: PackedColorArray = (
 		palette if palette.size() == 4
 		else PackedColorArray([Color.WHITE, Color.WHITE, Color.BLACK, Color.BLACK])

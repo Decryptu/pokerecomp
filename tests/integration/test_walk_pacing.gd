@@ -254,6 +254,23 @@ func test_a_warp_spends_the_setup_script_own_fade() -> void:
 	assert_eq(in_frames, fade_frames, "and the way back in is the same four")
 
 
+## `LoadMapPalettes` in the middle of the door's fade reads the map it loaded:
+## a `PALETTE_DARK` cave walked into from a lit map is drawn from the dark row,
+## the way it is when the game is continued inside it (#824).
+func test_a_door_into_a_dark_cave_draws_it_dark() -> void:
+	_data.world_map(Gen2WorldSpawn.NEW_BARK_GROUP, Gen2WorldSpawn.PLAYERS_HOUSE_2F) \
+		.palette = Gen2WorldPalette.PALETTE_DARK
+	_screen = await _walk_onto_the_door()
+	assert_ne(_screen._renderer._time_of_day, Gen2WorldPalette.TIME_DARK, "lit outside")
+	for _frame: int in WALK_FRAME_CAP:
+		if _screen.map_fade().is_empty():
+			break
+		_screen.advance_frame()
+	assert_eq(_screen._world.map_time_of_day(), Gen2WorldPalette.TIME_DARK)
+	assert_eq(_screen._renderer._time_of_day, Gen2WorldPalette.TIME_DARK, "the map")
+	assert_eq(_screen._draw_list.time_of_day, Gen2WorldPalette.TIME_DARK, "its sprites")
+
+
 ## `RunMapSetupScript` runs with the joypad unread, so nothing the player does
 ## inside those sixteen frames moves anything.
 func test_no_input_is_taken_while_the_warp_fade_runs() -> void:

@@ -72,6 +72,7 @@ const KIND_HELP: Dictionary = {
 	&"spinner": "frames: LoadSpinnerArrowTiles that many frames into the ride the arrow above the cell after the @ starts (`red 0 45 ... spinner@19,12 40`)",
 	&"cycling_road": "none: the walk east into Route 16's gate and back out onto ForcedBikeOrSurfMaps' own cell, with the Bicycle refused behind it (`red 0 27 ... cycling_road@16,10`)",
 	&"field_move": "move, presses: one of `.outOfBattleMovePointers`' rows through the party submenu. Move 0 is CUT, faced up from the cell below the tree, 1 SURF, faced down from the cell above the water, 2 STRENGTH and 3 FLASH; 0 presses is the submenu, 1 the box the row writes and 2 what the acknowledge commits (`red 0 1 ... field_move@8,23 0 1`)",
+	&"incoming_call": "frames, contact: Script_ReceivePhoneCall from that PhoneContacts row (4 is PROF.ELM, 15 YOUNGSTER JOEY, 37 BUENA on Crystal), that many frames in. 60 is the first ring's empty box, 30 its caller box, 260 the call's first page under it",
 	&"dark_cave": "presses: the walk north into ROCK_TUNNEL_1F, which is the one map wMapPalOffset darkens, with Flash behind it. 0 the dark floor, 1 the submenu, 2 the box Flash writes, 3 the floor it lit (`red 0 21 ... dark_cave@8,18 0`)",
 	&"poke_flute": "none: ItemUsePokeFlute over the map, on a cell Route12SnorlaxFluteCoords names (`red 0 23 ... poke_flute@11,62`)",
 	&"script_fade": "special, frames: one of the five fade specials over the map",
@@ -366,7 +367,7 @@ func _build_live(data: GameData, group: int, number: int, cell: Vector2i) -> voi
 		&"battle_transition", &"level_evolution", &"egg_hatch", &"name_rater",
 		&"move_deleter", &"move_tutor", &"day_care", &"unown_puzzle", &"slot_machine",
 		&"card_flip", &"tile_anim", &"ice_slide", &"whiteout", &"gift_nickname",
-		&"magnet_train", &"sight",
+		&"magnet_train", &"sight", &"incoming_call",
 	]:
 		_screen.start_cell = cell
 	## Pinned so two captures of the same map are the same picture: the seed the
@@ -450,7 +451,7 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"pokemon_center_pc", &"start_menu", &"pokedex", &"trainer_card",
 	&"mod_notice", &"mod_page", &"sight", &"map_script",
 	&"reset_question", &"launcher_question", &"surfing", &"printer",
-	&"dungeon_fall", &"warp_pad", &"escape_rope", &"gen1_fly",
+	&"dungeon_fall", &"warp_pad", &"escape_rope", &"gen1_fly", &"incoming_call",
 ]
 
 
@@ -501,6 +502,7 @@ const STAGERS: Dictionary = {
 	&"cycling_road": &"_stage_cycling_road",
 	&"field_move": &"_stage_field_move",
 	&"dark_cave": &"_stage_dark_cave",
+	&"incoming_call": &"_stage_incoming_call",
 	&"door": &"_stage_door",
 	&"ledge": &"_stage_ledge",
 	&"pikachu": &"_stage_pikachu",
@@ -1242,6 +1244,12 @@ func _stage_cycling_road() -> void:
 	_walk_a_warp(_screen.move_right)
 	_walk_a_warp(_screen.move_left)
 	_screen.preview_field_item(Gen1Layout.ITEM_BICYCLE)
+
+
+func _stage_incoming_call() -> void:
+	_screen._show_script_results(_screen._world.request_caller_phone_call(maxi(_cell.y, 1)))
+	for _frame: int in maxi(_cell.x, 0):
+		_screen.advance_frame()
 
 
 ## Steps [param towards] until the map has changed, then spends the fade behind

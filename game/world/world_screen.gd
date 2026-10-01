@@ -112,6 +112,7 @@ var _draw_list: Gen2WorldDrawList = null
 ## is told how the fight ended and nothing else is.
 var _battle_encounter_id: StringName = &""
 var _actor_requests: Array[Dictionary] = []
+var _actor_battle: Dictionary = {}
 ## A field move's tail, spent in order with input held: `{"wait": &"sfx"}` is
 ## `WaitSFX`, `&"sprites"` an animation, `&"fade"` a fade, and `{"call": ...}` runs.
 var _field_move_tail: Array = []
@@ -172,6 +173,9 @@ var _pikapic_pressed: bool = false
 ## `engine/menus/menu_2.asm`'s balance window, up until `closetext` redraws the
 ## map behind it.
 var _money_window: TextureRect = null
+## `RingTwice_StartCall`'s box over the map, and the ring phase it shows.
+var _caller_box: TextureRect = null
+var _caller_box_phase: StringName = &""
 ## `SelectMonFromParty` opened by a special rather than by the start menu: which
 ## request is waiting on the answer, empty when the list belongs to the menu.
 var _party_selection: Dictionary = {}
@@ -719,14 +723,13 @@ func _build_renderer() -> void:
 	_screen.subpixel = Gen2OptionsStore.current().smooth_scroll \
 		and Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
 	_set_renderer_world()
-	_apply_render_time_of_day()
 	_apply_renderer_interface_style()
 
 
 ## The map under the player changed, or the view was created: the renderer and
 ## the mod actors are both told, since an actor is handed the same
 ## [Gen2WorldAPI] a renderer is and has to drop whatever it was following on the
-## map it has just left.
+## map it has just left. A dark cave's palette row is the map's, not the clock's.
 func _set_renderer_world() -> void:
 	if _world == null:
 		return
@@ -736,6 +739,7 @@ func _set_renderer_world() -> void:
 		_actors.set_world(_world)
 	if _encounters != null:
 		_encounters.set_world(_world)
+	_apply_render_time_of_day()
 
 
 ## The text box is the screen's; a native-layer renderer may ask for it drawn
@@ -1110,7 +1114,12 @@ func _advance_waits(map_pass: bool) -> void:
 	if not _trainer_approach.is_empty():
 		_advance_trainer_approach(map_pass)
 	if _world != null and _world.phone_ring_active():
+		var contact: Dictionary = _world.pending_phone_ring().get("contact", {})
 		var ring_results: Array = _world.advance_phone_ring_frame()
+		## The last ring's named box is the one the call is read under.
+		_show_caller_box(contact, StringName(_world.pending_phone_ring().get(
+			"phase", Gen2WorldPhoneRing.PHASE_CALLER_NAME
+		)))
 		if not ring_results.is_empty():
 			_show_script_results(ring_results)
 		_refresh_labels()
@@ -6215,6 +6224,7 @@ func _on_battle_finished(result: Dictionary) -> void:
 	var ended: Dictionary = Gen2WorldBattleAdapter.ended_event(result, _world.map_id())
 	if not ended.is_empty():
 		Gen2ModHost.publish(Gen2ModHost.CHANNEL_BATTLE, ended)
+	_answer_actor_battle(ended)
 	if _data != null and _data.generation != RomRegistry.GEN1:
 		_world.forget_pack_after_battle()
 	_last_battle_outcome = StringName(result.get("outcome", &""))
@@ -8331,8 +8341,7 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 			&"flash_used":
 				# The palette is the whole of what BlindingFlash changed, so the
 				# renderer is told the new row rather than asked to redraw.
-				if _renderer != null:
-					_renderer.set_time_of_day(_render_time_of_day())
+				_apply_render_time_of_day()
 				if _animation != null:
 					_animation.configure(_world, _render_time_of_day())
 			&"headbutt_applied":
@@ -8882,6 +8891,7 @@ func _event_hide_picture(_event: Dictionary) -> void:
 
 func _event_close_text(_event: Dictionary) -> void:
 	_hide_money_window()
+	_hide_caller_box()
 	if _text_box != null:
 		_text_box.visible = false
 
@@ -9218,6 +9228,7 @@ func _settle_after_results(flags: Dictionary) -> void:
 			## A warp redraws the whole tilemap, so a balance window a script
 			## left standing goes with it the way `closetext`'s redraw takes it.
 			_hide_money_window()
+			_hide_caller_box()
 			## A warp has already run `_apply_map`, which is `EnterMap` whole;
 			## re-entering it here would take MAPSETUP_RELOADMAP's own poison
 			## reset on a step that never asked for one.
@@ -9226,7 +9237,6 @@ func _settle_after_results(flags: Dictionary) -> void:
 			_load_map_palettes()
 			_animation.configure(_world, _render_time_of_day())
 			_set_renderer_world()
-			_renderer.set_time_of_day(_render_time_of_day())
 			_play_current_map_music()
 		else:
 			_renderer.refresh()
@@ -9258,8 +9268,6 @@ func _refresh_after_escape(music: bool = true) -> void:
 	_load_map_palettes()
 	_animation.configure(_world, _render_time_of_day())
 	_set_renderer_world()
-	if _renderer != null:
-		_renderer.set_time_of_day(_render_time_of_day())
 	if music:
 		_play_current_map_music()
 	_refresh_labels()
@@ -9383,6 +9391,55 @@ func _hide_money_window() -> void:
 ## otherwise have to read pixels back.
 func money_window_open() -> bool:
 	return _money_window != null
+
+
+## `Phone_StartRinging`'s `SFX_CALL` and each write of the box, once per phase.
+func _show_caller_box(contact: Dictionary, phase: StringName) -> void:
+	if phase == _caller_box_phase:
+		return
+	_caller_box_phase = phase
+	if phase == Gen2WorldPhoneRing.PHASE_RINGING:
+		_play_sfx(Gen2Sfx.SFX_CALL)
+	_drop_caller_box_picture()
+	if phase == Gen2WorldPhoneRing.PHASE_PRE_RING or _text_box == null \
+		or _text_box.font == null:
+		return
+	var pixels: Vector2i = Gen2WorldPhoneRing.CALLER_BOX_SIZE * Gen2Font.TILE
+	var indices := PackedByteArray()
+	indices.resize(pixels.x * pixels.y)
+	var font: Gen2Font = _text_box.font
+	font.draw_box(
+		_text_box.frame_style, indices, pixels.x, 0, 0,
+		Gen2WorldPhoneRing.CALLER_BOX_SIZE.x, Gen2WorldPhoneRing.CALLER_BOX_SIZE.y
+	)
+	for placed: Array in Gen2WorldPhoneRing.caller_box_text(_data, contact, phase):
+		var at: Vector2i = (placed[0] as Vector2i) * Gen2Font.TILE
+		font.draw_text(String(placed[1]), indices, pixels.x, at.x, at.y)
+	_caller_box = TextureRect.new()
+	_caller_box.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	Gen2PicImage.show(_caller_box, Gen2PicImage.from_indices(
+		indices, pixels.x, pixels.y, _text_box.ink_colors()
+	))
+	_caller_box.size = pixels
+	_caller_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_screen.display(_caller_box)
+
+
+func _hide_caller_box() -> void:
+	_caller_box_phase = &""
+	_drop_caller_box_picture()
+
+
+func _drop_caller_box_picture() -> void:
+	if _caller_box == null:
+		return
+	Gen2Screen.drop(_caller_box)
+	_caller_box = null
+
+
+## The caller box's ring phase, or empty, for a test that would read pixels.
+func caller_box_phase() -> StringName:
+	return _caller_box_phase if _caller_box != null else &""
 
 
 ## `HaircutOrGrooming`'s `call ChangeHappiness`: the roll is the runner's, the
@@ -9949,7 +10006,42 @@ func _spend_actor_requests() -> void:
 		if request["kind"] == Gen2WorldActors.REQUEST_POKEMON_GIFT:
 			_complete_pokemon_gift(request)
 		else:
-			_start_battle_request({"kind": &"battle_requested", "values": request["values"]})
+			_start_actor_battle(request)
+
+
+## A `battle` or `catch_demo`: `startbattle` or `catchtutorial`, answered when it ends.
+func _start_actor_battle(request: Dictionary) -> void:
+	_actor_battle = request
+	## Generation 1's old man is an ordinary `battle_requested` carrying his type.
+	var tutorial: bool = request["kind"] == Gen2WorldActors.REQUEST_CATCH_DEMO \
+		and _data.generation != RomRegistry.GEN1
+	_start_battle_request({
+		"kind": &"catch_tutorial_requested" if tutorial else &"battle_requested",
+		"values": request["values"],
+	})
+	if _battle_host == null and _battle_transition == null and _takeover_host == null:
+		_actor_battle = {}
+		_answer_actor(request, {
+			"ok": false, "kind": request["kind"], "reason": &"battle_not_started",
+			"tag": (request["values"] as Dictionary).get("mod_tag", &""),
+		})
+
+
+func _answer_actor_battle(ended: Dictionary) -> void:
+	if _actor_battle.is_empty():
+		return
+	var request: Dictionary = _actor_battle
+	_actor_battle = {}
+	var result: Dictionary = ended.duplicate()
+	result["ok"] = not ended.is_empty()
+	result["kind"] = request["kind"]
+	_answer_actor(request, result)
+
+
+func _answer_actor(request: Dictionary, result: Dictionary) -> void:
+	var actor: Object = request.get("actor")
+	if is_instance_valid(actor) and actor.has_method(Gen2WorldActors.ACTOR_REQUEST_COMPLETED_METHOD):
+		actor.call(Gen2WorldActors.ACTOR_REQUEST_COMPLETED_METHOD, result.duplicate(true))
 
 
 func _complete_pokemon_gift(request: Dictionary) -> void:
@@ -9965,9 +10057,7 @@ func _complete_pokemon_gift(request: Dictionary) -> void:
 		"tag": request.get("tag", &""), "id": request.get("id", &""),
 	})
 	Gen2ModHost.publish(Gen2ModHost.CHANNEL_WORLD, result)
-	var actor: Object = request.get("actor")
-	if is_instance_valid(actor) and actor.has_method(Gen2WorldActors.ACTOR_REQUEST_COMPLETED_METHOD):
-		actor.call(Gen2WorldActors.ACTOR_REQUEST_COMPLETED_METHOD, result.duplicate(true))
+	_answer_actor(request, result)
 
 
 func _mod_inventory() -> Dictionary:
@@ -10542,8 +10632,7 @@ func _refresh_labels() -> void:
 		_hint.text += "    " + _script_prompt
 
 
-## `HangUp`'s writes, driven off the counted wait `hangup` staged; the box is
-## written rather than opened as a page, since no button is read.
+## `HangUp`'s writes off the wait `hangup` staged: written, not paged, no button.
 func _draw_hang_up() -> void:
 	var wait: Dictionary = _world.pending_script_wait()
 	if not bool(wait.get("hang_up", false)) or _data == null \
@@ -10564,17 +10653,11 @@ func _draw_hang_up() -> void:
 
 
 func _phone_contact_label(contact: Dictionary) -> String:
-	if contact.is_empty():
-		return "UNKNOWN CALLER"
-	var caller_label: String = String(contact.get("caller_label", ""))
-	if not caller_label.is_empty():
-		return caller_label
-	var trainer_class: int = int(contact.get("trainer_class", 0))
-	if trainer_class > 0 and _data != null:
-		var trainer_name: String = _data.trainer_name(trainer_class)
-		if not trainer_name.is_empty():
-			return "%s %d" % [trainer_name, int(contact.get("trainer_number", 0))]
-	return "CONTACT %d" % int(contact.get("index", -1))
+	var words: PackedStringArray = []
+	for row: Array in Gen2WorldPhoneHost.caller_name_rows(_data, contact):
+		words.append(String(row[1]).strip_edges())
+	var label: String = " ".join(words).strip_edges()
+	return label if not label.is_empty() else "CONTACT %d" % int(contact.get("index", -1))
 
 
 func _selected_runtime_data() -> GameData:

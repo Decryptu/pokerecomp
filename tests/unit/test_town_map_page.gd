@@ -200,16 +200,23 @@ func test_the_radio_card_prints_only_a_tuned_station() -> void:
 
 
 ## `GetCallerName`: a trainer's own name with a colon and their class on the line
-## below, everyone else on one line, and `.PlacePhoneBars`' fourth tile only
-## where there is service.
+## below, three columns in; everyone else's label, whose `<LF>` puts BUENA's DISC
+## JOCKEY under her name rather than after it; and `.PlacePhoneBars`' fourth tile
+## only where there is service.
 func test_the_phone_card_lists_callers_the_source_way() -> void:
 	var rows: Array = [
-		{"name": "MOM:"}, {"name": "JACK", "class": "SCHOOLBOY"},
-	]
+		{"caller_label": "MOM:"},
+		{"trainer_class": 1, "trainer_number": 1},
+		{"caller_label": "BUENA:\n   DISC JOCKEY"},
+	].map(func(contact: Dictionary) -> Array:
+		return Gen2WorldPhoneHost.caller_name_rows(_data, contact))
 	var map: PackedInt32Array = _page.phone_tilemap([], rows, 1, true, "")
-	assert_eq(_text(map, Vector2i(Gen2TownMapPage.PHONE_NAME_COLUMN, 4), 4), "MOM:")
-	assert_eq(_text(map, Vector2i(Gen2TownMapPage.PHONE_NAME_COLUMN, 6), 5), "JACK:")
-	assert_eq(_text(map, Vector2i(Gen2TownMapPage.PHONE_CLASS_COLUMN, 7), 9), "SCHOOLBOY")
+	var column: int = Gen2TownMapPage.PHONE_NAME_COLUMN
+	assert_eq(_text(map, Vector2i(column, 4), 4), "MOM:")
+	assert_eq(_text(map, Vector2i(column, 6), 6), "RIVAL:")
+	assert_eq(_text(map, Vector2i(column + 3, 7), 6), "LEADER")
+	assert_eq(_text(map, Vector2i(column, 8), 6), "BUENA:")
+	assert_eq(_text(map, Vector2i(column + 3, 9), 11), "DISC JOCKEY")
 	assert_eq(
 		_at(map, Vector2i(Gen2TownMapPage.PHONE_CURSOR_COLUMN, 6)),
 		Gen2TownMapPage.PHONE_CURSOR_CODE

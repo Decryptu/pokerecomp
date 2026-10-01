@@ -173,6 +173,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	verify_special_text,
 	verify_battle_text,
 	verify_map_entry_sign,
+	verify_phone_icon,
 	verify_pack,
 	verify_pc,
 	verify_descriptions,
@@ -3159,6 +3160,24 @@ static func verify_map_entry_sign(rom: RomFile, layout: Dictionary) -> Dictionar
 			],
 		}
 	return {"ok": true, "message": "Map name sign verified."}
+
+
+## `gfx/font.asm` from `Font` to `PokegearPhoneIconGFX` is identical on all three dumps.
+const PHONE_ICON_FONT_GAP: int = 0xD24
+
+
+static func verify_phone_icon(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout.get("phone_icon", -1))
+	if not rom.in_bounds(at, Gen2Layout.TILE_BYTES_2BPP):
+		return {"ok": false, "message": "The phone icon is outside the cartridge."}
+	if at - Gen2Layout.font_offset(layout) != PHONE_ICON_FONT_GAP:
+		return {
+			"ok": false,
+			"message": "The phone icon sits $%X past the font, expected $%X." % [
+				at - Gen2Layout.font_offset(layout), PHONE_ICON_FONT_GAP,
+			],
+		}
+	return {"ok": true, "message": "Phone icon verified."}
 
 
 ## The pack screen's four runs. Both palette sets are checked colour for colour,
@@ -7173,6 +7192,12 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 			"tiles": 1,
 			"first_code": Gen2Text.UP_ARROW_CODE,
 			"bits": int((layout.get("up_arrow", {}) as Dictionary).get("bits", 2)),
+		},
+		"phone_icon": {
+			"offset": int(layout["phone_icon"]),
+			"tiles": 1,
+			"first_code": Gen2Text.PHONE_CODE,
+			"bits": 2,
 		},
 		"enemy_hud": {
 			"offset": int(layout["enemy_hud"]),

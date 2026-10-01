@@ -708,6 +708,58 @@ func test_the_dude_plays_the_catching_tutorial_and_keeps_nothing() -> void:
 	assert_false(_world_screen._world.state.just_battled())
 
 
+## A mod's NPC asking for the same demonstration (#820): `catch_demo` starts
+## `CatchTutorial` on the species it names, keeps nothing, and the actor is
+## answered through `request_completed` with the fight's `ended` event and its tag.
+func test_an_actor_catch_demo_is_the_tutorial_and_answers_the_actor() -> void:
+	await _open_world()
+	var script := GDScript.new()
+	script.source_code = """extends RefCounted
+var requests: Array = []
+var completed: Array = []
+func set_world(_world): pass
+func advance_frame(): pass
+func sprites(): return []
+func take_requests():
+	var out = requests
+	requests = []
+	return out
+func request_completed(result): completed.append(result)
+"""
+	script.reload()
+	var actor: Object = script.new()
+	assert_true(Gen2ModHost.instance().register_world_actor(&"demo", actor)["ok"])
+	_world_screen._actors.set_actors(Gen2ModHost.instance().world_actors())
+	_world_screen._actors.set_world(_world_screen._world)
+	actor.requests.append({
+		"kind": &"catch_demo", "species": Fixture.TRAINER_SPECIES, "level": 5, "tag": &"demo",
+	})
+	_world_screen._spend_actor_requests()
+	var host: Gen2BattleScreen = _battle_child()
+	assert_not_null(host)
+	var party_before: int = _world_screen._active_battle_save.party.size() \
+		if _world_screen._active_battle_save != null else 0
+	var frames: int = 0
+	while _world_screen._battle_host != null and frames < DUDE_FRAME_GUARD:
+		frames += 1
+		host.advance_hardware_frame()
+	await get_tree().process_frame
+	assert_eq(actor.completed.size(), 1)
+	var answer: Dictionary = actor.completed[0]
+	assert_true(answer["ok"])
+	assert_eq(answer["kind"], &"catch_demo")
+	assert_eq(answer["tag"], &"demo")
+	assert_eq(answer["outcome"], Gen2WorldBattleAdapter.OUTCOME_CAUGHT)
+	assert_eq(answer["battle_type"], Gen2Battle.BATTLETYPE_TUTORIAL)
+	assert_eq(int(answer["species"]), Fixture.TRAINER_SPECIES)
+	assert_false(_world_screen._world.state.has_caught_species(Fixture.TRAINER_SPECIES))
+	assert_eq(
+		_world_screen._active_battle_save.party.size() \
+			if _world_screen._active_battle_save != null else 0,
+		party_before
+	)
+
+
 func test_fishing_reaches_the_real_battle_overlay() -> void:
 	await _open_world()
 	_world_screen.start_cell = Vector2i(8, 6)

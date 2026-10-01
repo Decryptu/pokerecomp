@@ -41,6 +41,9 @@ var _extra_first_code: int = Gen2Layout.FONT_EXTRA_FIRST_CODE
 var _extra_loaded_first: int = Gen2Layout.FONT_EXTRA_LOADED_FIRST
 var _extra_loaded_last: int = Gen2Layout.FONT_EXTRA_LOADED_LAST
 
+## `PokegearPhoneIconGFX`, the tile `_LoadFontsExtra1` writes under '☎'.
+var _phone_icon: PackedByteArray = PackedByteArray()
+
 var _generation: int = RomRegistry.GEN2
 
 
@@ -84,6 +87,8 @@ static func from_data(data: GameData) -> Gen2Font:
 	out._extra_width = int(extra.get("width", 0))
 	out._extra_tiles = int(extra.get("tiles", 0))
 	out._extra_first_code = int(extra.get("first_code", Gen2Layout.FONT_EXTRA_FIRST_CODE))
+
+	out._phone_icon = data.tile_indices("phone_icon")
 
 	out._generation = data.generation
 	if out._generation == RomRegistry.GEN1:
@@ -144,6 +149,9 @@ func draw_code(
 		if within < 0 or within >= _battle_extra_tiles:
 			return
 		blit_slot(_battle_extra, _battle_extra_width, within, into, into_width, at_x, at_y)
+		return
+	if code == Gen2Text.PHONE_CODE and _phone_icon.size() >= TILE * TILE:
+		blit_slot(_phone_icon, TILE, 0, into, into_width, at_x, at_y)
 		return
 	# `_LoadFontsExtra1`'s own run, which is under the main font everywhere the
 	# battle's strip is not: a code below the font's $80 draws from FontExtra.

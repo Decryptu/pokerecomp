@@ -1057,6 +1057,7 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 		"dex_nest_icon": [Gen2Layout.DEX_NEST_ICON_TILES, 3],
 		## `'▲'`, the single tile a scrolling menu draws its own arrow from.
 		"up_arrow": [1, 3],
+		"phone_icon": [1, 3],
 		## `Pokedex_LoadGFX`'s two runs, `LoadQuestionMarkPic`'s pic, `UnownFont`
 		## and the footprint grid, at
 		## their real lengths so the dex page can address every tile a layout
@@ -1083,6 +1084,7 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 		"frames": Gen2Layout.FRAME_FIRST_CODE,
 		"copyright": Gen2Layout.COPYRIGHT_FIRST_CODE,
 		"up_arrow": Gen2Text.UP_ARROW_CODE,
+		"phone_icon": Gen2Text.PHONE_CODE,
 	}
 	for name: String in sheet_tiles:
 		var tile_count: int = int(sheet_tiles[name][0])

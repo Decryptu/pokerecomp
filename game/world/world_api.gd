@@ -3107,9 +3107,7 @@ func pending_phone_ring() -> Dictionary:
 	return ring
 
 
-## Advances the source ring timing and starts the imported phone script when
-## both rings have completed. A phone ring is transient runtime state and is
-## intentionally absent from world snapshots.
+## The two rings, then the call's script. A ring is in no snapshot.
 func advance_phone_ring_frame() -> Array:
 	if _phone_ring == null:
 		return []
@@ -3123,8 +3121,7 @@ func advance_phone_ring_frame() -> Array:
 	return run_event_queue(false)
 
 
-## Queues a source-style incoming call after checking the entrance, receive
-## timer, random roll, service map, registration, time and same-map rules.
+## `CheckPhoneCall`, its rules in [method Gen2WorldPhoneHost.resolve_incoming].
 func request_incoming_phone_call(
 	on_entrance: bool = false,
 	timer_ready: bool = true,
@@ -3213,9 +3210,8 @@ func mom_purchase(random_row: int = 0) -> Dictionary:
 	}
 
 
-## `Script_SpecialBillCall`: `LoadCallerScript PHONE_BILL` then
-## `Script_ReceivePhoneCall`'s two rings. [param script_override] is
-## `Mom_GetScriptPointer`'s answer, written before her ring rather than read.
+## `Script_SpecialBillCall`'s `LoadCallerScript` and rings. [param script_override]
+## is `Mom_GetScriptPointer`'s answer, written before her ring.
 func request_caller_phone_call(
 	contact_id: int, script_override: Dictionary = {}
 ) -> Array:
@@ -3244,8 +3240,7 @@ func request_caller_phone_call(
 	})
 
 
-## Queues a source-style special call. The pending call remains in world state
-## until the imported phone script clears VAR_SPECIALPHONECALL.
+## `CheckSpecialPhoneCall`; the script's own `specialphonecall` clears it.
 func request_special_phone_call(call_id: int) -> Array:
 	if phone_ring_active():
 		return [{"ok": true, "status": &"phone_ring", "event": pending_phone_ring()}]
@@ -3271,9 +3266,8 @@ func request_special_phone_call(call_id: int) -> Array:
 	return _start_phone_ring(request, 30)
 
 
-## `CheckSpecialPhoneCall`'s own carry, without starting the call: a pending
-## call whose condition holds ends the step at `CountStep`'s first test, so
-## [method count_step] charges nothing on the step the phone rings.
+## `CheckSpecialPhoneCall`'s carry: a ringing step ends at `CountStep`'s first
+## test, so [method count_step] charges nothing for it.
 func special_phone_call_ready() -> bool:
 	if state == null or current_map == null:
 		return false
