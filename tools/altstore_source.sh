@@ -13,18 +13,19 @@ bundle=$(sed -n 's/^application\/bundle_identifier="\(.*\)"$/\1/p' "$root/export
 min_ios=$(sed -n 's/^application\/min_ios_version="\(.*\)"$/\1/p' "$root/export_presets.cfg" | head -1)
 
 description=$(cat <<'TXT'
-A native Godot 4 reimplementation of the Generation 2 Game Boy Color games: Gold, Silver and Crystal. Written from scratch in GDScript, not an emulator, a static recompilation or a disassembly.
+A native Godot 4 reimplementation of the Generation 1 and 2 games: Red, Blue, Yellow, Gold, Silver and Crystal. Written from scratch in GDScript, not an emulator, a static recompilation or a disassembly.
 
 No game data ships with the app. You supply your own cartridge dump, which is SHA-1 verified, decoded once into a cache, and then released.
 
 Three challenge modes are built in, mods are supported, and the same save works on every platform pokerecomp runs on.
 TXT
 )
+subtitle="Red, Blue, Yellow, Gold, Silver and Crystal, rebuilt in Godot"
 
 gh api "repos/$repo/releases" --paginate --jq '.[]' \
   | jq -s \
       --arg bundle "$bundle" --arg min "$min_ios" --arg icon "$icon" \
-      --arg assets "$assets" --arg description "$description" '
+      --arg assets "$assets" --arg description "$description" --arg subtitle "$subtitle" '
     [ .[]
       | select(.draft | not)
       | . as $r
@@ -41,7 +42,7 @@ gh api "repos/$repo/releases" --paginate --jq '.[]' \
         identifier: $bundle,
         sourceURL: ($assets + "/source.json"),
         fediUsername: "decrypt",
-        subtitle: "Gold, Silver and Crystal, rebuilt in Godot",
+        subtitle: $subtitle,
         description: $description,
         iconURL: $icon,
         headerURL: ($assets + "/banner.jpg"),
@@ -51,7 +52,7 @@ gh api "repos/$repo/releases" --paginate --jq '.[]' \
           { name: "pokerecomp",
             bundleIdentifier: $bundle,
             developerName: "Decryptu",
-            subtitle: "Gold, Silver and Crystal, rebuilt in Godot",
+            subtitle: $subtitle,
             localizedDescription: $description,
             iconURL: $icon,
             tintColor: "#E0A138",

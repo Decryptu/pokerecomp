@@ -3,12 +3,24 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods: API 54 lets an actor's `battle` request carry `hp` and `status`, so a mod roamer comes back with the damage and condition it left with. A wild substitute's answer takes `status` too, and the battle channel's `ended` event now reports the enemy's `status`.
+- Mods: API 55 adds Pokémon gift requests for custom NPCs and mods. Gifts use the normal party and current-box storage, and report whether delivery succeeds. Progress now exposes the originally received starter and retains completion of Red's credits.
+- Mods can activate the GS Ball event in Gold and Silver through the same request used in Crystal. The optional chain runs through Goldenrod, Kurt's one-day examination and the Ilex Forest shrine's level-30 Celebi encounter. Its saved state prevents repeated grants; mods choose their own unlock requirements.
 
 ## Fixed
 
-- A wild Pokemon you knock out or run from is now marked as seen in the Pokedex. The first Pokemon a trainer sends out is marked as seen too. Before this, only a catch or a trainer's later Pokemon counted.
-- Exporting a save slot works on Android. The export used to fail with "the save could not be written" for any location you picked.
+- Visible wild Pokémon stay within terrain reachable from the player, including after same-map warps and one-way crossings. Burned Tower's inaccessible outer floor no longer hosts them.
+- Unown stays absent from visible encounters until a Ruins of Alph puzzle unlocks it.
+- Battle weather, stat stages, types and identification annotations update with the displayed events. Rain Dance no longer reveals the weather before the move runs.
+- AMNESIA and other ordinary letter pairs render correctly without becoming Pokémon symbols. Party, battle, PC and Pokédex labels keep their intended glyphs.
+- Returning after Red's credits runs Mt. Silver's map callbacks and releases player input.
+- Ordinary battles and world transactions preserve the last explicit save. Unsaved Pokédex flags, party changes, gifts, healing, items and PC transfers stay in the current run until SAVE. Nuzlocke changes remain durable.
+- Oak's scripted escort updates the lab's map graphics immediately in Red, Blue and Yellow, and hides his Pallet Town object when the escort ends.
+- Generation 1 overworld Pokémon icons render both halves correctly in both animation frames.
+
+## Updating this release
+
+- Cartridge cache format is now 159. Import each cartridge file again when the launcher requests it. **Saved games are kept separately and remain intact.**
+- Mod API version is now 55. Existing supported mods remain compatible; mods using the new requests require this version.
 
 ## Which file
 
