@@ -3,24 +3,16 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods: API 56 adds catch demonstrations. A custom NPC can ask for the game's own catching tutorial on any species and level: the Dude's fight in Gold, Silver and Crystal, the old man's in Red, Blue and Yellow. It always catches and keeps nothing. The NPC is told when it ends, and battle requests now report back the same way gifts do.
+- Mods: API 57 adds `player_walk_cells()`, the cells the player has still to cross, and lists them in the visible-encounter context's `occupied`.
 
 ## Fixed
 
-- Incoming phone calls ring with their sound and show the caller box at the top of the screen, with the phone icon and the caller's name. The box stays up for the whole call, and every call ends with the hang-up clicks before the text closes.
-- BUENA's DISC JOCKEY line sits under her name in the Pokégear phone list instead of running off the screen.
-- Dark caves are dark when you walk in. Dark Cave and other unlit caves used to stay lit until the game was reloaded inside them.
-- Every menu box is as tall as its rows. The bedroom PC's TURN OFF row was hidden under the text box, and the decoration menus filled the screen.
-- The decoration and mailbox screens stack over the PC menu the way the cartridge draws them. The decoration menu reopens on the category you left, and B goes back to the top menu.
-- Scrolling lists print their last column in full: SURF PIKACHU DOLL, 12-letter apricorns and 10-letter mail authors are no longer cut.
-- Buena's prize counter shows its Points box and the cost column, plays the purchase sound and reopens on the row you left. Four password rows named the wrong items.
-- Kurt in Gold and Silver takes one apricorn from a list with no quantity dial.
-- Quantity dials repeat a held direction. Refusals over the party list print in the full text box, so their second line is no longer off the screen.
+- Visible wild Pokémon stay off every cell you are still walking through when the game moves you along a path, such as a guide's tour, Seafoam's currents or a Waterfall climb. Before, a wild could appear on the cell you were drawn on or step into your path.
 
 ## Updating this release
 
-- Cartridge cache format is now 160. Import each cartridge file again when the launcher requests it. **Saved games are kept separately and remain intact.**
-- Mod API version is now 56. Existing supported mods remain compatible; mods using catch demonstrations require this version.
+- Cartridge cache format is still 160. Coming from 0.1.67 or earlier, import each cartridge file again when the launcher requests it. **Saved games are kept separately and remain intact.**
+- Mod API version is now 57. Existing supported mods remain compatible.
 
 ## Which file
 
