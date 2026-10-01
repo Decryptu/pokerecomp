@@ -72,8 +72,7 @@ static func compose(
 	return out
 
 
-## `GivePokeMail`, which copies a script's own bytes into the mail struct and
-## blanks nothing first: the message is whatever the pointer holds, and the
+## `GivePokeMail`, which copies a script's own bytes into the mail struct: the
 ## author, ID and species are read off the party member rather than the player.
 static func from_script(
 	bytes: PackedByteArray, author_name: String, id: int, held_by: int, mail_item: int
@@ -141,22 +140,6 @@ static func from_dict(raw: Variant) -> Gen2SaveMail:
 	out.species = int(source.get("species", 0))
 	out.item = int(source.get("item", 0))
 	return out
-
-
-## `GetMailboxCount`, which reads `sMailboxCount` and nothing else.
-static func mailbox_count(save: Gen2SaveData) -> int:
-	return save.mailbox.size() if save != null else 0
-
-
-## `IsAnyMonHoldingMail`, the guard `SaveGameData` runs before a link and the
-## day care runs before a deposit.
-static func any_mon_holding_mail(save: Gen2SaveData) -> bool:
-	if save == null:
-		return false
-	for mon: Gen2SaveMon in save.party:
-		if mon != null and mon.mail != null:
-			return true
-	return false
 
 
 ## `SendMailToPC`. The mail leaves the party member, its item goes with it and

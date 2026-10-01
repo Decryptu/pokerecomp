@@ -10183,8 +10183,8 @@ func test_buenas_password_box_answers_yes_no_where_the_routine_puts_it() -> void
 		)
 
 
-## `ld c, 15 / call DelayFrames` and `Buena_ExitMenu`'s own `DelayFrame` are
-## spent between the answer and the branch the script takes on it.
+## `Buena_ExitMenu`'s own `DelayFrame` is spent between the answer and the
+## branch the script takes on it.
 func test_buenas_password_box_spends_its_own_close_frames() -> void:
 	_write_special_script([
 		Gen2WorldScript.SPECIAL,

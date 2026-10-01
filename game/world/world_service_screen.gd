@@ -34,6 +34,7 @@ enum MODE {
 	PC_MON_LIST, PC_MON_ACTION, PC_ASK, PC_ITEM_QUANTITY,
 	ELEVATOR,
 	VENDING, PRIZE, SCRIPT_MENU, SCRIPT_LIST,
+	BUENA_PRIZE,
 }
 
 ## `ElevatorFloorNames`, in `FLOOR_*` order (constants/script_constants.asm).
@@ -204,6 +205,7 @@ var _town_map_from_request: bool = false
 var _pc_rows: Array = []
 var _pc_house: bool = false
 var _pc_action: int = -1
+var _players_pc_row: int = -1  ## The `PLAYERSPCITEM_*` row the windows over it answer.
 var _pc_entries: Array = []
 ## `wSwitchItem` less one: the PC row an earlier SELECT marked, or -1 for none.
 var _pc_switch: int = -1
@@ -214,11 +216,14 @@ var _pc_quantity: int = 1
 var _pc_texts: Array = []
 var _pc_after: StringName = &"top"
 var _pc_label: String = ""
-## `_PlayerDecorationMenu`: which category is open, the row waiting on
-## `DecoAction_AskWhichSide`, and `wChangedDecorations`, which is what makes the
-## machine close so the room can redraw.
-var _deco_slot: StringName = &""
+## `wCurDecorationCategory`, the row `DecoAction_AskWhichSide` answers for, and
+## `wChangedDecorations`, which closes the machine so the room can redraw.
+var _deco_category_row: int = 0
 var _deco_pending: int = -1
+## The category list an action was chosen from, left standing under its boxes.
+var _deco_list: Array = []
+var _deco_list_row: int = 0
+var _deco_list_scroll: int = 0
 var _deco_changed: bool = false
 ## Events this screen produced outside the request it is answering, which the
 ## map's own callbacks are: they belong at the end of the same result list.
@@ -240,9 +245,11 @@ var _box_count: int = 0
 var _pc_box_print: bool = false
 var _naming: Gen2NamingScreenScreen = null
 var _hof_index: int = 0
-## `MailboxPC`: `wCurMessageIndex`, the message a submenu is acting on, the
-## reader `.ReadMail` opens and the party list `.AttachMail` opens.
+## `MailboxPC`'s message, the list left standing under the submenu, and the
+## screens `.ReadMail` and `.AttachMail` open.
 var _mail_index: int = 0
+var _mail_list: Array = []
+var _mail_list_scroll: int = 0
 var _mail_reader: Gen2MailScreen = null
 var _mail_party: Gen2PartyScreen = null
 ## `_ChangeBox_MenuHeader`'s `db 4, 0`: four rows of a scrolling list, and where
@@ -390,6 +397,9 @@ func open_pending(
 	if StringName(request.get("kind", &"")) == &"prize_requested":
 		_open_prizes(request.get("values", {}))
 		return true
+	if StringName(request.get("kind", &"")) == &"buena_prize_requested":
+		_open_buena()
+		return true
 	if StringName(request.get("kind", &"")) == &"gen1_menu_requested":
 		_open_script_menu(request.get("values", {}))
 		return true
@@ -409,7 +419,7 @@ func open_pending(
 			_open_phone(request, resolved.get("data", {}))
 			return true
 		&"apricorn_selection_requested":
-			_open_apricorns()
+			_open_apricorns(String((request.get("values", {}) as Dictionary).get("text", "")))
 			return true
 		&"elevator_requested":
 			_open_elevator(resolved.get("data", {}).get("elevator", {}))
@@ -476,6 +486,7 @@ const MODE_PRESS_HANDLERS: Dictionary = {
 	MODE.ELEVATOR: &"_press_elevator",
 	MODE.VENDING: &"_press_vending",
 	MODE.PRIZE: &"_press_prize",
+	MODE.BUENA_PRIZE: &"_press_buena",
 	MODE.MART: &"_press_mart",
 	MODE.MOM_BANK: &"_press_mom_bank",
 	MODE.PC_ITEM_QUANTITY: &"_press_quantity_prompt",
@@ -627,6 +638,7 @@ func _on_box_redrawn() -> void:
 const BOX_RENDERERS: Dictionary = {
 	MODE.MART: &"_render_mart", MODE.ELEVATOR: &"_render_elevator",
 	MODE.VENDING: &"_render_vending", MODE.PRIZE: &"_render_prizes",
+	MODE.BUENA_PRIZE: &"_render_buena",
 	MODE.SCRIPT_MENU: &"_render_script_menu", MODE.APRICORN: &"_render_apricorns",
 }
 
@@ -823,8 +835,6 @@ func _press_elevator(button: int) -> void:
 		_finish_runtime({"ok": true})
 		return
 	if button == PokeButton.A:
-		if _cursor < 0:
-			return
 		## `Elevator`'s own `cp [hl] / jr z, .quit`: choosing the floor the car
 		## is already on is a cancel, not a ride.
 		if _cursor == int(_elevator.get("current", -1)):
@@ -1284,6 +1294,165 @@ func _render_prizes() -> void:
 	if _prize_asking and image != null:
 		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _prize_yes_no.cursor)
 	Gen2PicImage.show(_mart_view, image)
+
+
+## `BuenaPrize`: every box falls back into `.loop`, which reopens the list on its
+## row and scroll. `.done` closes both windows before `JoyWaitAorB` and a click.
+const BUENA_RUN: String = "buena_prize"
+## `data/items/buena_prizes.asm`: item and cost in Blue Card points.
+const BUENA_PRIZES: Array = [
+	[2, 2], [14, 2], [36, 3], [32, 3], [27, 5], [28, 5], [29, 5], [31, 5], [26, 5],
+]
+## `.MenuData`'s `db 4, 13`: `.PrintPrizePoints` is thirteen columns past the name.
+const BUENA_ROWS: int = 4
+const BUENA_COST_COLUMN: int = 13
+
+var _buena_stage: StringName = &""
+var _buena_listed: bool = false
+var _buena_scroll: int = 0
+var _buena_yes_no: Gen2WorldMenu = Gen2WorldMenu.yes_no()
+
+
+func _open_buena() -> void:
+	_mode = MODE.BUENA_PRIZE
+	_cursor = 0
+	_buena_scroll = 0
+	_buena_listed = false
+	_set_overlay_open(true)
+	_open_map_overlay_view()
+	_ask_buena_prize()
+
+
+func _ask_buena_prize() -> void:
+	_say_buena(_buena_text("ask_which_prize"), &"printing")
+	_box_then = _list_buena_prizes
+
+
+func _list_buena_prizes() -> void:
+	_buena_stage = &"list"
+	_buena_listed = true
+	_render_buena()
+
+
+func _say_buena(text: String, stage: StringName) -> void:
+	_buena_stage = stage
+	_print(text)
+	_render_buena()
+
+
+func _press_buena(button: int) -> void:
+	match _buena_stage:
+		&"list":
+			_press_buena_list(button)
+		&"asking":
+			if _buena_yes_no.press_yes_no(button):
+				_click_if_answered(_buena_yes_no)
+				_render_buena()
+		&"leaving":
+			if button in [PokeButton.A, PokeButton.B]:
+				sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+				_finish_runtime({"ok": true})
+
+
+func _press_buena_list(button: int) -> void:
+	if button == PokeButton.UP or button == PokeButton.DOWN:
+		_cursor = clampi(
+			_cursor + (-1 if button == PokeButton.UP else 1), 0, BUENA_PRIZES.size()
+		)
+		_buena_scroll = clampi(_buena_scroll, _cursor - BUENA_ROWS + 1, _cursor)
+		_render_buena()
+		return
+	if button not in [PokeButton.A, PokeButton.B]:
+		return
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+	if button == PokeButton.B or _cursor >= BUENA_PRIZES.size():
+		_buena_listed = false
+		_say_buena(_buena_text("come_again"), &"leaving")
+		return
+	_say_buena(Gen2TextStream.fill_marker(
+		_buena_text("is_that_right"), Gen2TextStream.RAM_MARKER,
+		_data.item_name(int(BUENA_PRIZES[_cursor][0]))
+	), &"printing")
+	_box_then = _ask_buena_yes_no
+
+
+func _ask_buena_yes_no() -> void:
+	_buena_stage = &"asking"
+	_buena_yes_no = Gen2WorldMenu.yes_no()
+	_render_buena()
+
+
+func _answer_buena(yes: bool) -> void:
+	if not yes:
+		_ask_buena_prize()
+		return
+	_say_buena(_buy_buena_prize(BUENA_PRIZES[_cursor]), &"printing")
+	_box_then = _ask_buena_prize
+
+
+## The balance, then `ReceiveItem`, and only then the cost and `SFX_TRANSACTION`.
+func _buy_buena_prize(prize: Array) -> String:
+	var cost: int = int(prize[1])
+	var balance: int = _world.state.blue_card_balance()
+	if balance < cost:
+		return _buena_text("not_enough_points")
+	var item: int = int(prize[0])
+	var room: Dictionary = Gen2WorldPack.receive_check(_data, _world.state.items(), item, 1)
+	if not bool(room.get("ok", false)):
+		return _buena_text("no_room")
+	_world.state.apply_changes({}, {}, {"items": {item: int(room["quantity"])}})
+	_world.state.set_blue_card_balance(balance - cost)
+	sfx_requested.emit(Gen2Sfx.SFX_TRANSACTION, false)
+	return _buena_text("here_you_go")
+
+
+func _buena_text(slot: String) -> String:
+	return _data.special_text(BUENA_RUN, slot) if _data != null else ""
+
+
+func _render_buena() -> void:
+	if _mart_view == null or _data == null:
+		return
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
+	if _service_page == null:
+		return
+	var message: Variant = ""
+	if _box_up:
+		message = _box
+	var image: Image = _service_page.render(
+		"", "", [], -1, message, null,
+		_buena_points_note() if _buena_listed else {},
+		Gen2WorldServicePage.MESSAGE_BOX, [], [_buena_list_layer()] if _buena_listed else []
+	)
+	if _buena_stage == &"asking" and image != null:
+		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _buena_yes_no.cursor)
+	Gen2PicImage.show(_mart_view, image)
+
+
+## `Buena_PrizeMenu`'s `menu_coords 1, 1, 16, 9`, hollow under a box.
+func _buena_list_layer() -> Dictionary:
+	var rows: Array = []
+	for index: int in range(_buena_scroll, mini(_buena_scroll + BUENA_ROWS, BUENA_PRIZES.size() + 1)):
+		if index >= BUENA_PRIZES.size():
+			rows.append(CANCEL_ROW)
+			continue
+		var prize: Array = BUENA_PRIZES[index]
+		rows.append(_data.item_name(int(prize[0])).rpad(BUENA_COST_COLUMN) + str(int(prize[1])))
+	return {
+		"menu": Gen2MenuBox.scrolling_menu(1, 1, 16, 9).show_scroll(
+			_buena_scroll, BUENA_PRIZES.size(), BUENA_ROWS
+		),
+		"rows": rows, "cursor": _cursor - _buena_scroll, "hollow": _buena_stage != &"list",
+	}
+
+
+## `BlueCardBalanceMenuHeader`'s `menu_coords 0, 11, 11, 13`, over the speech box.
+func _buena_points_note() -> Dictionary:
+	return {"rect": Rect2i(0, 11, 12, 3), "lines": [
+		{"text": "Points", "at": Vector2i(1, 1)},
+		{"text": "%2d" % _world.state.blue_card_balance(), "at": Vector2i(8, 1)},
+	]}
 
 
 func _prize_named_rows() -> Array:
@@ -1941,7 +2110,8 @@ func _mart_description() -> String:
 
 ## `SelectApricornForKurt`'s two boxes. The model owns both cursors and the loop
 ## between them, so this only draws whichever one it is on.
-func _open_apricorns() -> void:
+## Gold and Silver's list prints no question; [param standing] is the script's.
+func _open_apricorns(standing: String = "") -> void:
 	_mode = MODE.APRICORN
 	_apricorns = Gen2WorldApricorn.open(_world.data, _world.state)
 	_title = "APRICORNS"
@@ -1949,7 +2119,10 @@ func _open_apricorns() -> void:
 		## `FindApricornsInBag`'s refusal, a guard Kurt's script never reaches.
 		_finish_apricorns()
 		return
-	_print_apricorn_question()
+	if _apricorns.one_at_a_time:
+		_print(standing, true)
+	else:
+		_print_apricorn_question()
 	_render_apricorns()
 
 
@@ -2386,6 +2559,7 @@ func _confirm_bills_pc_row(row: int) -> void:
 
 
 func _confirm_decoration_row(_row: int) -> void:
+	_deco_category_row = _cursor
 	var slot: StringName = StringName(_pc_rows[_cursor].get("slot", &""))
 	if slot.is_empty():
 		_leave_decorations()
@@ -2405,10 +2579,11 @@ func _confirm_decoration_list_row(_row: int) -> void:
 	_choose_decoration(int(_pc_rows[_cursor].get("deco", 0)))
 
 
+## `DecoAction_AskWhichSide`'s CANCEL and B both end at `.top_loop`.
 func _confirm_decoration_side_row(_row: int) -> void:
 	var side: StringName = StringName(_pc_rows[_cursor].get("side", &""))
 	if side.is_empty():
-		_open_decoration_category(_deco_slot)
+		_open_decorations()
 		return
 	_apply_decoration(_deco_pending, side)
 
@@ -2438,17 +2613,16 @@ func _confirm_pc_menu_row(row: int) -> void:
 
 
 func _confirm_player_pc_row(row: int) -> void:
+	_players_pc_row = row
 	match row:
 		Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM, \
 		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM, \
 		Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM:
 			_open_pc_item_list(row)
 		Gen2WorldPC.PLAYERSPCITEM_MAIL_BOX:
-			## `MailboxPC` writes `wCurMessageIndex` and its scroll on the way in.
-			_mail_index = 0
-			_pc_scroll = 0
-			_open_mailbox()
+			_enter_mailbox()
 		Gen2WorldPC.PLAYERSPCITEM_DECORATION:
+			_deco_category_row = 0
 			_open_decorations()
 		Gen2WorldPC.PLAYERSPCITEM_LOG_OFF:
 			_open_pc(&"pokemon_center")
@@ -2604,11 +2778,10 @@ func _open_oak_closed() -> void:
 ## in, and EXIT.
 func _open_decorations() -> void:
 	_mode = MODE.PC_DECO
-	_cursor = 0
-	_deco_slot = &""
 	_deco_pending = -1
+	_deco_list = []
 	_pc_rows = Gen2WorldDecoration.categories(_data, _world.state)
-	_title = _data.pokecenter_pc_row("decoration", true)
+	_cursor = clampi(_deco_category_row, 0, _pc_rows.size() - 1)
 	_summary = ""
 	_status = ""
 	_render_rows()
@@ -2625,7 +2798,6 @@ func _open_decoration_category(slot: StringName) -> void:
 		return
 	_mode = MODE.PC_DECO_LIST
 	_cursor = 0
-	_deco_slot = slot
 	_pc_rows = rows
 	_summary = ""
 	_status = ""
@@ -2638,6 +2810,9 @@ func _choose_decoration(deco: int) -> void:
 	if deco <= 0:
 		_open_decorations()
 		return
+	_deco_list = _pc_rows.duplicate()
+	_deco_list_row = _cursor
+	_deco_list_scroll = _pc_scroll
 	if not Gen2WorldDecoration.asks_side(_data, deco):
 		_apply_decoration(deco, &"")
 		return
@@ -3608,14 +3783,19 @@ func _refresh_box_counts() -> void:
 			_box_count += 1
 
 
-## BILL'S PC's own two lists. The panel steps aside for the box screen the way it
-## does for the region map. `_PlayerMailBoxMenu`: `InitMail` answers zero when
-## `sMailboxCount` is, and prints `.EmptyMailboxText` instead of a list.
+## `_PlayerMailBoxMenu`: an empty mailbox prints `.EmptyMailboxText` instead.
+func _enter_mailbox() -> void:
+	if Gen2WorldPC.mailbox_entries(_save).is_empty():
+		_open_pc_text([_said(Gen2WorldPC.MAILBOX_EMPTY)], &"pc_items", "")
+		return
+	_mail_index = 0
+	_pc_scroll = 0
+	_open_mailbox()
+
+
+## `MailboxPC.loop` ignores `InitMail`'s answer: an emptied box lists CANCEL alone.
 func _open_mailbox() -> void:
 	_pc_rows = Gen2WorldPC.mailbox_entries(_save)
-	if _pc_rows.is_empty():
-		_open_pc_text([_said(Gen2WorldPC.MAILBOX_EMPTY)], &"pc_items", _title)
-		return
 	_mode = MODE.PC_MAILBOX
 	## `ScrollingMenu`'s own CANCEL, past `wMailboxCount`.
 	_pc_rows.append({"row": -1, "name": CANCEL_ROW})
@@ -3625,7 +3805,6 @@ func _open_mailbox() -> void:
 	)
 	_pc_scroll = at.x
 	_cursor = at.y
-	_title = _data.pokecenter_pc_row("mail_box", true)
 	_summary = ""
 	_status = ""
 	_render_rows()
@@ -3633,6 +3812,8 @@ func _open_mailbox() -> void:
 
 func _open_mail_submenu(index: int) -> void:
 	_mail_index = clampi(index, 0, maxi(0, _save.mailbox.size() - 1))
+	_mail_list = _pc_rows.duplicate()
+	_mail_list_scroll = _pc_scroll
 	_mode = MODE.PC_MAIL_SUBMENU
 	_cursor = 0
 	_pc_rows = []
@@ -3731,18 +3912,23 @@ func _on_mail_attach_selected(party_index: int) -> void:
 				else Gen2WorldPC.MAILBOX_ALREADY_HOLDING
 			)
 			return
-	_close_mail_attach()
 	if party_index < 0:
-		_open_mailbox()
+		_leave_mail_attach()
 		return
 	var applied: Dictionary = Gen2WorldPC.mailbox_attach(
 		_world, _save, _mail_index, party_index, _persist
 	)
 	if not bool(applied.get("ok", false)):
-		_open_mailbox()
+		_leave_mail_attach()
 		_status = "Refused: %s" % String(applied.get("reason", ""))
 		return
-	_open_pc_text([_said(Gen2WorldPC.MAILBOX_MOVED)], &"mailbox", _title)
+	## `.MailMovedFromBoxText` prints over the list, and `CloseSubmenu` follows it.
+	_mail_party.say(Gen2WorldPC.MAILBOX_MOVED, _leave_mail_attach)
+
+
+func _leave_mail_attach() -> void:
+	_close_mail_attach()
+	_open_mailbox()
 
 
 func _close_mail_attach() -> void:
@@ -3983,8 +4169,7 @@ func advance_frame() -> void:
 	if _mode == MODE.MART:
 		_advance_mart_frame()
 		return
-	if _mode == MODE.PRIZE and _prize_yes_no.advance_hold():
-		_answer_prize_confirm(_prize_yes_no.answered_yes())
+	if _advance_prize_hold():
 		return
 	if _pokegear == null:
 		return
@@ -3993,6 +4178,17 @@ func advance_frame() -> void:
 		return
 	if _pokegear != null and _world.advance_radio_frame():
 		_refresh_card()
+
+
+func _advance_prize_hold() -> bool:
+	if _mode == MODE.PRIZE and _prize_yes_no.advance_hold():
+		_answer_prize_confirm(_prize_yes_no.answered_yes())
+		return true
+	if _mode == MODE.BUENA_PRIZE and _buena_stage == &"asking" \
+			and _buena_yes_no.advance_hold():
+		_answer_buena(_buena_yes_no.answered_yes())
+		return true
+	return false
 
 
 func _advance_frame_hold() -> bool:
@@ -4248,8 +4444,11 @@ func _move_cursor(delta: int) -> void:
 	_render_rows()
 
 
-## `hInMenu`: every `ScrollingMenu`, Bill's PC, the Pokegear and Mom's dial.
+## `hInMenu`: every `ScrollingMenu`, Bill's PC, the Pokegear, Mom's dial and
+## every quantity dial, which `JoyTextDelay_ForcehJoyDown` turns it on for.
 func menu_repeats() -> bool:
+	if _pack != null:
+		return _pack.menu_repeats()
 	if _boxes != null or _pokegear != null or _town_map != null or _mom_dial != null:
 		return true
 	match _mode:
@@ -4260,9 +4459,11 @@ func menu_repeats() -> bool:
 		MODE.MENU:
 			return _menu != null and _menu.scrolling_arrows
 		MODE.MART:
-			return _mart_stage == MART_LIST
+			return _mart_stage == MART_LIST or _mart_stage == MART_QUANTITY
 		MODE.APRICORN:
-			return _apricorns != null and _apricorns.phase == Gen2WorldApricorn.SELECT_APRICORN
+			return _apricorns != null and not _apricorns.one_at_a_time
+		MODE.BUENA_PRIZE:
+			return _buena_stage == &"list"
 	return false
 
 
@@ -4384,7 +4585,7 @@ const CANCEL_HANDLERS: Dictionary = {
 	MODE.PC_OAK_ASK: &"_open_oak_closed",
 	MODE.PC_DECO: &"_leave_decorations",
 	MODE.PC_DECO_LIST: &"_open_decorations",
-	MODE.PC_DECO_SIDE: &"_cancel_deco_side",
+	MODE.PC_DECO_SIDE: &"_open_decorations",
 	MODE.PC_SAVE: &"_refuse_save_prompt",
 	MODE.PC_TEXT: &"_advance_pc_text",
 	MODE.PC_MON_LIST: &"_leave_gen1_mon_list",
@@ -4485,10 +4686,6 @@ func _refuse_mail_to_pack() -> void:
 
 func _refuse_save_prompt() -> void:
 	_press_save_prompt(false)
-
-
-func _cancel_deco_side() -> void:
-	_open_decoration_category(_deco_slot)
 
 
 func _cancel_phone() -> void:
@@ -4701,12 +4898,11 @@ func _row_labels(values: Array) -> Array:
 
 
 ## The page's title, prompt and message: the box, or this host's own lines.
-## `_PlayerDecorationMenu`'s list reaches row 16 and prints no box under it.
 func _page_words() -> Array:
-	if _mode == MODE.PC_DECO_LIST:
-		return ["", "", ""]
 	if _box_up:
 		return ["", "", _box]
+	if PC_STACK_MODES.has(_mode):
+		return ["", "", _status]
 	return [_title, _render_summary(), _status]
 
 
@@ -4737,12 +4933,19 @@ const PC_ITEM_WIDTH: int = 8
 const APRICORN_WIDTH: int = 7
 ## `ClearPCItemScreen`'s two boxes.
 const PC_ITEM_SCREEN: Array = [
+	Gen2WorldServicePage.CLEAR_SCREEN,
 	{"rect": Rect2i(0, 0, 20, 12), "lines": []}, {"rect": Rect2i(0, 12, 20, 6), "lines": []},
+]
+## Modes whose speech box is `_PlayersPC`'s question, still standing.
+const PC_STACK_MODES: Array = [
+	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_DECO, MODE.PC_DECO_LIST,
+	MODE.PC_DECO_SIDE,
 ]
 
 
 ## `ClearPCItemScreen` under BILL'S PC and the item PC's lists, and
 ## `BillsPC_ClearTilemap` under CHANGE BOX, whose list keeps a hollow arrow.
+## Everything else stands over the map and the windows opened before it.
 func _backdrop() -> Array:
 	if _gen1_pc:
 		return []
@@ -4752,20 +4955,93 @@ func _backdrop() -> Array:
 		MODE.PC_ITEM_LIST:
 			return PC_ITEM_SCREEN + [_pc_item_list_layer()]
 		MODE.PC_BOX_LIST:
-			return [_current_box_note()]
+			return [Gen2WorldServicePage.CLEAR_SCREEN, _current_box_note()]
 		MODE.PC_BOX_SUBMENU:
-			return [_current_box_note(), _box_list_layer(), _box_count_note()]
+			return [
+				Gen2WorldServicePage.CLEAR_SCREEN, _current_box_note(), _box_list_layer(),
+				_box_count_note(),
+			]
 		MODE.PC_SAVE:
 			if _save_after == &"change_box":
-				return [_current_box_note(), _box_list_layer(), _box_count_note()]
+				return [
+					Gen2WorldServicePage.CLEAR_SCREEN, _current_box_note(), _box_list_layer(),
+					_box_count_note(),
+				]
 			if _save_after == &"move_mons":
 				return PC_ITEM_SCREEN + [_bills_pc_layer()]
 		MODE.PC_TEXT:
-			if _pc_after == &"bills_pc_mail":
-				return PC_ITEM_SCREEN + [_bills_pc_layer()]
-			if _pc_after == &"pc_item_list":
-				return PC_ITEM_SCREEN + [_pc_item_list_layer()]
+			return _pc_text_backdrop()
+		MODE.PC_MAILBOX, MODE.PC_DECO:
+			return _players_pc_layers()
+		MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM:
+			return _players_pc_layers() + [_mail_list_layer()]
+		MODE.PC_DECO_LIST:
+			return _players_pc_layers() + [_deco_category_layer()]
+		MODE.PC_DECO_SIDE:
+			return _players_pc_layers() + [_deco_category_layer(), _deco_list_layer()]
 	return []
+
+
+func _pc_text_backdrop() -> Array:
+	match _pc_after:
+		&"bills_pc_mail":
+			return PC_ITEM_SCREEN + [_bills_pc_layer()]
+		&"pc_item_list":
+			return PC_ITEM_SCREEN + [_pc_item_list_layer()]
+		&"pc_items":
+			return _players_pc_layers()
+		&"mailbox":
+			return _players_pc_layers() + [_mail_list_layer()]
+		&"decoration":
+			var under: Array = _players_pc_layers() + [_deco_category_layer()]
+			return under + [_deco_list_layer()] if not _deco_list.is_empty() else under
+	return []
+
+
+## `_PlayersPC`'s question under its menu, the arrow solid on the row answered.
+func _players_pc_layers() -> Array:
+	var rows: Array = Gen2WorldPC.players_pc_menu(_data, _pc_house)
+	var cursor: int = rows.find_custom(
+		func(row: Dictionary) -> bool: return int(row["row"]) == _players_pc_row
+	)
+	return [
+		Gen2WorldServicePage.textbox_note(_pc_text("ask_what_do")),
+		{
+			"menu": _pc_menu_box(rows.size()), "rows": _row_labels(rows),
+			"cursor": cursor, "hollow": false,
+		},
+	]
+
+
+## `MailboxPC`'s list as the A press left it, arrow hollow, until `.loop`.
+func _mail_list_layer() -> Dictionary:
+	var window: int = SCROLLING_ROWS[MODE.PC_MAILBOX]
+	return {
+		"menu": Gen2MenuBox.scrolling_menu(8, 1, 18, 10).show_scroll(
+			_mail_list_scroll, _mail_list.size() - 1, window
+		),
+		"rows": _row_labels(_mail_list.slice(_mail_list_scroll, _mail_list_scroll + window)),
+		"cursor": _mail_index - _mail_list_scroll,
+	}
+
+
+func _deco_category_layer() -> Dictionary:
+	var rows: Array = Gen2WorldDecoration.categories(_data, _world.state)
+	return {
+		"menu": _deco_top_box(rows.size()), "rows": _row_labels(rows),
+		"cursor": _deco_category_row, "hollow": false,
+	}
+
+
+## `DoNthMenu`'s arrow stays solid under a box, `ScrollingMenu`'s goes hollow.
+func _deco_list_layer() -> Dictionary:
+	var scrolls: bool = Gen2WorldDecoration.category_scrolls(_deco_list)
+	var window: int = SCROLLING_ROWS[MODE.PC_DECO_LIST] if scrolls else _deco_list.size()
+	return {
+		"menu": _deco_list_box_for(_deco_list, _deco_list_scroll),
+		"rows": _row_labels(_deco_list.slice(_deco_list_scroll, _deco_list_scroll + window)),
+		"cursor": _deco_list_row - _deco_list_scroll, "hollow": scrolls,
+	}
 
 
 ## `PCItemsJoypad`'s list as `ScrollingMenu_UpdateDisplay` left it, under `.a_1`'s
@@ -4814,7 +5090,7 @@ func _bills_pc_layer() -> Dictionary:
 		func(row: Dictionary) -> String: return String(row["name"])
 	)
 	return {
-		"menu": Gen2MenuBox.from_coords(0, 0, 19, 11, Gen2MenuBox.STATICMENU_CURSOR),
+		"menu": _bills_pc_box(rows.size()),
 		"rows": rows, "cursor": _bills_pc_cursor, "hollow": false,
 	}
 
@@ -4826,13 +5102,13 @@ func _message_box() -> Rect2i:
 	return Rect2i(0, 14, 20, 4)
 
 
-## `Elevator_GetCurrentFloorText`'s `hlcoord 0, 0 / ld b, 4 / ld c, 8`.
+## `Elevator_GetCurrentFloorText`'s `hlcoord 0, 0 / ld b, 4 / ld c, 8`, behind the question.
 func _service_note() -> Dictionary:
 	if _gen1_pc and (_mode == MODE.PC_BOXES or _mode == MODE.PC_BOX_LIST):
 		return _gen1_box_note()
 	if _mode == MODE.PC_BOX_LIST:
 		return _box_count_note()
-	if _mode != MODE.ELEVATOR:
+	if _mode != MODE.ELEVATOR or _box_printing():
 		return {}
 	var floors: Array = _elevator_floors()
 	var current: int = int(_elevator.get("current", -1))
@@ -5008,8 +5284,7 @@ func _scripted_menu_box() -> Gen2MenuBox:
 	return menu_box
 
 
-## `Elevator_MenuHeader`'s `menu_coords 12, 1, 18, 9`, whose fourth floor only
-## fits without the top row of spacing.
+## `Elevator_MenuHeader`'s `menu_coords 12, 1, 18, 9`.
 func _elevator_box() -> Gen2MenuBox:
 	return Gen2MenuBox.scrolling_menu(12, 1, 18, 9).show_scroll(
 		_elevator_scroll, _elevator_floors().size(), ELEVATOR_ROWS
@@ -5057,14 +5332,22 @@ func _apricorn_box() -> Gen2MenuBox:
 		else _apricorn_select_box()
 
 
-## `PokemonCenterPC.TopMenu` and `PlayersPCMenuData` share this `menu_coords`;
-## BILL'S PC's is the full width with its bottom at 11, and does not wrap.
 func _pc_top_box() -> Gen2MenuBox:
-	if _mode == MODE.PC_BOXES:
-		return Gen2MenuBox.from_coords(0, 0, 19, 11, Gen2MenuBox.STATICMENU_CURSOR)
+	return _bills_pc_box(_pc_rows.size()) if _mode == MODE.PC_BOXES \
+		else _pc_menu_box(_pc_rows.size())
+
+
+## `PokemonCenterPC.TopMenu` and `PlayersPCMenuData`' `menu_coords 0, 0, 15, 12`.
+static func _pc_menu_box(items: int) -> Gen2MenuBox:
 	return Gen2MenuBox.from_coords(
 		0, 0, 15, 12, Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
-	)
+	).fit_items(items)
+
+
+## `.UseBillsPC.MenuHeader`'s whole screen, which does not wrap.
+static func _bills_pc_box(items: int) -> Gen2MenuBox:
+	return Gen2MenuBox.from_coords(0, 0, 19, 17, Gen2MenuBox.STATICMENU_CURSOR) \
+		.fit_items(items)
 
 
 ## `_ChangeBox_MenuHeader`'s `menu_coords 1, 5, 9, 12`, four rows of fourteen.
@@ -5073,12 +5356,15 @@ func _pc_box_list_box() -> Gen2MenuBox:
 	return Gen2MenuBox.scrolling_menu(1, 5, 9, 12, Rect2i(0, 4, 11, 10))
 
 
-## `_PlayerDecorationMenu.MenuHeader`'s `menu_coords 5, 0, SCREEN_WIDTH - 1,
-## SCREEN_HEIGHT - 1`.
 func _deco_category_box() -> Gen2MenuBox:
+	return _deco_top_box(_pc_rows.size())
+
+
+## `_PlayerDecorationMenu.MenuHeader`'s `menu_coords 5, 0, 19, 17`.
+static func _deco_top_box(items: int) -> Gen2MenuBox:
 	return Gen2MenuBox.from_coords(
 		5, 0, 19, 17, Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
-	)
+	).fit_items(items)
 
 
 ## `DecoSideMenuHeader`'s `menu_coords 0, 0, 13, 7`.
@@ -5094,13 +5380,19 @@ func _pc_item_list_box() -> Gen2MenuBox:
 	)
 
 
-## `PopulateDecoCategoryMenu`'s scrolling header, or `DoNthMenu`'s for a short list.
 func _deco_list_box() -> Gen2MenuBox:
-	if not Gen2WorldDecoration.category_scrolls(_pc_rows):
+	return _deco_list_box_for(_pc_rows, _pc_scroll)
+
+
+## `PopulateDecoCategoryMenu`'s `.ScrollingMenuHeader` or `.NonscrollingMenuHeader`.
+static func _deco_list_box_for(rows: Array, scroll: int) -> Gen2MenuBox:
+	if not Gen2WorldDecoration.category_scrolls(rows):
 		return Gen2MenuBox.from_coords(
 			0, 0, 19, 17, Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
-		)
-	return _scrolling_box(Gen2MenuBox.scrolling_menu(1, 1, 18, 16))
+		).fit_items(rows.size())
+	return Gen2MenuBox.scrolling_menu(1, 1, 18, 16).show_scroll(
+		scroll, rows.size() - 1, SCROLLING_ROWS[MODE.PC_DECO_LIST]
+	)
 
 
 ## `SCROLLINGMENU_DISPLAY_ARROWS` and the window this screen's one
@@ -5109,8 +5401,12 @@ func _scrolling_box(box: Gen2MenuBox) -> Gen2MenuBox:
 	return box.show_scroll(_pc_scroll, _option_count() - 1, _scrolling_rows())
 
 
-## `Kurt_SelectApricorn.MenuHeader`'s `menu_coords 1, 1, 13, 10`.
+## `Kurt_SelectApricorn.MenuHeader`: `1, 1, 13, 10`, or Gold and Silver's `0, 0, 14, 17`.
 func _apricorn_select_box() -> Gen2MenuBox:
+	if _apricorns != null and _apricorns.one_at_a_time:
+		return Gen2MenuBox.from_coords(
+			0, 0, 14, 17, Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
+		).fit_items(_apricorns.rows())
 	var box: Gen2MenuBox = Gen2MenuBox.scrolling_menu(1, 1, 13, 10)
 	if _apricorns == null:
 		return box

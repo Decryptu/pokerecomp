@@ -219,22 +219,26 @@ const NUM_TRAINER_CLASSES: int = 67
 
 ## `data/radio/buenas_passwords.asm`. `kind` is the BUENA_* string function and
 ## `values` its three operands: species, item or move numbers, or literals.
+## `width` is the byte it calls points, which only `BuenasPassword`'s box reads.
 const BUENA_MON: StringName = &"mon"
 const BUENA_ITEM: StringName = &"item"
 const BUENA_MOVE: StringName = &"move"
 const BUENA_STRING: StringName = &"string"
 const BUENA_PASSWORDS: Array[Dictionary] = [
-	{"kind": BUENA_MON, "values": [155, 158, 152]},
-	{"kind": BUENA_ITEM, "values": [20, 21, 22]},
-	{"kind": BUENA_ITEM, "values": [17, 12, 14]},
-	{"kind": BUENA_ITEM, "values": [5, 4, 3]},
-	{"kind": BUENA_MON, "values": [25, 19, 74]},
-	{"kind": BUENA_MON, "values": [163, 167, 96]},
-	{"kind": BUENA_STRING, "values": ["NEW BARK TOWN", "CHERRYGROVE CITY", "AZALEA TOWN"]},
-	{"kind": BUENA_STRING, "values": ["FLYING", "BUG", "GRASS"]},
-	{"kind": BUENA_MOVE, "values": [33, 45, 189]},
-	{"kind": BUENA_ITEM, "values": [64, 65, 66]},
-	{"kind": BUENA_STRING, "values": ["#MON Talk", "#MON Music", "Lucky Channel"]},
+	{"kind": BUENA_MON, "width": 10, "values": [155, 158, 152]},
+	{"kind": BUENA_ITEM, "width": 12, "values": [0x2E, 0x2F, 0x30]},
+	{"kind": BUENA_ITEM, "width": 12, "values": [0x12, 0x09, 0x0D]},
+	{"kind": BUENA_ITEM, "width": 12, "values": [0x05, 0x04, 0x02]},
+	{"kind": BUENA_MON, "width": 10, "values": [25, 19, 74]},
+	{"kind": BUENA_MON, "width": 10, "values": [163, 167, 96]},
+	{
+		"kind": BUENA_STRING, "width": 16,
+		"values": ["NEW BARK TOWN", "CHERRYGROVE CITY", "AZALEA TOWN"],
+	},
+	{"kind": BUENA_STRING, "width": 6, "values": ["FLYING", "BUG", "GRASS"]},
+	{"kind": BUENA_MOVE, "width": 12, "values": [33, 45, 189]},
+	{"kind": BUENA_ITEM, "width": 12, "values": [0x31, 0x33, 0x34]},
+	{"kind": BUENA_STRING, "width": 13, "values": ["#MON Talk", "#MON Music", "Lucky Channel"]},
 ]
 const BUENAS_PASSWORD_CHANNEL_NAME: String = "BUENA'S PASSWORD"
 
@@ -966,6 +970,10 @@ static func buenas_password_words(data: GameData, password: int) -> Array[String
 	for word: int in PASSWORDS_PER_CATEGORY:
 		out.append(password_words(data, (password & 0xF0) | word))
 	return out
+
+
+static func buenas_password_width(password: int) -> int:
+	return int(BUENA_PASSWORDS[clampi(password >> 4, 0, BUENA_PASSWORDS.size() - 1)]["width"])
 
 
 ## The word a `wBuenasPassword` byte names, which Buena's own script reads as

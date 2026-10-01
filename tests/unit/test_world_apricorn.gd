@@ -130,3 +130,18 @@ func test_the_cancel_row_answers_with_the_same_zero_a_b_press_does() -> void:
 	selection.press(PokeButton.A)
 	assert_true(selection.is_done())
 	assert_eq(selection.result(), {"item": 0, "quantity": 0})
+
+
+## Gold and Silver's `Kurt_SelectApricorn` is a `DoNthMenu`: it wraps onto its own
+## CANCEL row and an apricorn answers with one, since `SelectApricornForKurt`
+## tosses one and asks for no quantity.
+func test_gold_and_silver_take_one_apricorn_from_a_wrapping_list() -> void:
+	var gold: GameData = Fixture.build(&"gold")
+	var selection: Gen2WorldApricorn = Gen2WorldApricorn.open(gold, _state({RED: 5, BLU: 2}))
+	selection.press(PokeButton.UP)
+	assert_eq(selection.cursor_y, 3, "UP from the first row wraps onto CANCEL")
+	selection.press(PokeButton.DOWN)
+	selection.press(PokeButton.A)
+	assert_true(selection.is_done())
+	assert_eq(selection.result(), {"item": RED, "quantity": 1})
+	RomCache.clear(Fixture.directory(&"gold"))

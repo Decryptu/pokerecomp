@@ -161,6 +161,11 @@ func test_take_returns_to_the_party_list_on_the_member_it_acted_on() -> void:
 	assert_not_null(party, "the took line is over the list")
 	assert_ne(String(party.submenu_snapshot()["message"]), "")
 
+	var box: Gen2TextBox = party.get("_message_box")
+	for _frame: int in 600:
+		if not box.is_revealing():
+			break
+		box.advance_frame()
 	_world_screen.press_button(PokeButton.B)
 	assert_eq(String(party.submenu_snapshot()["message"]), "", "B closed the line")
 	assert_eq(party.get("_member_cursor"), 1, "on the same member")

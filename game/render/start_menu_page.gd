@@ -148,15 +148,12 @@ static func visible_rows(contest: bool = false) -> int:
 	return (ROWS - (LIST_CONTEST_TOP if contest else LIST_TOP) - 1) / 2
 
 
-## `AutomaticGetMenuBottomCoord`: the box grows downward by two rows an entry
-## plus its own border, so the header's bottom coordinate is never read. A list
-## longer than the screen stops at the screen and is scrolled through instead.
+## [method Gen2MenuBox.fit_items]. A list longer than the screen stops at the
+## screen and is scrolled through instead.
 static func list_box(count: int, contest: bool = false) -> Gen2MenuBox:
 	var top: int = LIST_CONTEST_TOP if contest else LIST_TOP
 	var rows: int = mini(maxi(count, 0), visible_rows(contest))
-	return Gen2MenuBox.from_coords(
-		LIST_LEFT, top, LIST_RIGHT, top + 2 * rows + 1, LIST_FLAGS
-	)
+	return Gen2MenuBox.from_coords(LIST_LEFT, top, LIST_RIGHT, top, LIST_FLAGS).fit_items(rows)
 
 
 ## The menu over the map. [param description] is `.MenuDesc`'s two lines,
