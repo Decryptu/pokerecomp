@@ -618,9 +618,9 @@ const SPECIAL_ASK_REMEMBER_PASSWORD: int = 163
 const ASK_REMEMBER_PASSWORD_BOX: Dictionary = {
 	"default": 1, "left": 14, "top": 7, "right": 19, "bottom": 11,
 }
-## `ld c, 15 / call DelayFrames` and `Buena_ExitMenu`'s own `DelayFrame`, spent
-## after the answer and before the script reads it.
-const ASK_REMEMBER_PASSWORD_CLOSE_FRAMES: int = 16
+## `Buena_ExitMenu`'s `DelayFrame`; `.DoMenu`'s `ld c, 15` is the YES/NO's own hold
+## ([constant Gen2WorldMenu.ANSWER_HOLD_FRAMES]).
+const ASK_REMEMBER_PASSWORD_CLOSE_FRAMES: int = 1
 ## `EGG_TICKET`, which `_GiveOddEgg` tosses one of on its way past. The
 ## international cartridges ship no way to hold one, so the toss is a no-op
 ## every time a player reaches it.
@@ -634,7 +634,7 @@ const SPECIAL_BUENAS_PASSWORD: int = 146
 const SPECIAL_BUENA_PRIZE: int = 147
 const SPECIAL_GIVE_DRATINI: int = 148
 const SPECIAL_SAMPLE_KENJI_BREAK_COUNTDOWN: int = 149
-## The three routines whose whole body is `SelectMonFromParty` and a branch on
+## The four routines whose whole body is `SelectMonFromParty` and a branch on
 ## what came back, by the name `_finish_party_selection` reads them under.
 const PARTY_SELECTION_ROUTINE_OF: Dictionary = {
 	SPECIAL_CHECK_MAGIKARP_LENGTH: &"magikarp_length",
@@ -790,8 +790,6 @@ const PENDING_RESUMES: Dictionary = {
 	&"text/item_received": &"_resume_item_received",
 	&"text/pocket_is_full": &"_resume_pocket_is_full",
 	&"text/strength_used": &"_resume_strength_used",
-	&"menu/buena_prize": &"_resume_buena_prize_menu",
-	&"choice/buena_prize_confirm": &"_resume_buena_prize_confirm",
 	&"menu/bank_of_mom_menu": &"_resume_mom_menu",
 	&"choice/bank_of_mom_choice": &"_resume_mom_choice",
 	&"text/field_move_ask": &"_resume_field_move_text",
@@ -811,7 +809,6 @@ const PENDING_CONTINUATIONS: Dictionary = {
 	"next_internal_texts": &"_resume_internal_texts",
 	"bank_of_mom_after_text": &"_resume_mom_after_text",
 	"bank_of_mom_dial": &"_resume_mom_dial",
-	"buena_prize_after_text": &"_resume_buena_after_text",
 	"party_selection_after_text": &"_resume_party_selection",
 	"special_after_text": &"_resume_special_after_text",
 	"npc_trade_after_cable": &"_resume_trade_cable",
@@ -1076,45 +1073,6 @@ func _resume_internal_texts(_choice: int) -> Dictionary:
 	return _waiting_result()
 
 
-func _resume_buena_prize_menu(choice: int) -> Dictionary:
-	var prize_special: int = int(_pending.get("prize_special", 0))
-	if choice < 0 or choice >= BUENA_PRIZES.size():
-		## `Buena_PrizeMenu`'s `.cancel`: B leaves the counter, and both
-		## `CloseWindow`s are behind her own parting box.
-		_pending = {}
-		return _buena_prize_box(prize_special, "come_again", true)
-	var prize_row: int = choice
-	_pending = {}
-	_set_text_buffer(
-		Gen2Layout.STRING_BUFFER_1,
-		data.item_name(int(BUENA_PRIZES[prize_row][0])) if data != null else "",
-		&"buena_prize", {"special": prize_special, "prize": prize_row}
-	)
-	var confirm_box: String = _special_box("buena_prize", "is_that_right")
-	if confirm_box.is_empty():
-		return _fail(&"missing_special_text", {"special": prize_special})
-	_pending = {
-		"type": &"choice",
-		"command": &"buena_prize_confirm",
-		"choices": [&"yes", &"no"],
-		"text": confirm_box,
-		"special": &"buena_prize_confirm",
-		"prize": prize_row,
-		"prize_special": prize_special,
-		"source": _request.duplicate(true),
-	}
-	return _waiting_result()
-
-
-func _resume_buena_prize_confirm(choice: int) -> Dictionary:
-	var confirm_row: int = int(_pending.get("prize", 0))
-	var confirm_special: int = int(_pending.get("prize_special", 0))
-	_pending = {}
-	if choice != 0:
-		return _stage_buena_prize_menu(confirm_special)
-	return _buy_buena_prize(confirm_special, confirm_row)
-
-
 func _resume_mom_menu(choice: int) -> Dictionary:
 	_pending = {}
 	if choice < 0:
@@ -1176,15 +1134,6 @@ func _resume_mom_dial(_choice: int) -> Dictionary:
 		"held": _money_balance(ACCOUNT_YOUR_MONEY),
 	})
 	return _waiting_result()
-
-
-## A box the prize counter printed, which goes back to her list rather than
-## ending: `.print` falls into `.loop`.
-func _resume_buena_after_text(_choice: int) -> Dictionary:
-	var after_special: int = int(_pending["buena_prize_after_text"])
-	_pending = {}
-	_finish_after_pending = false
-	return _stage_buena_prize_menu(after_special)
 
 
 ## `PokeSeer` prints its opening box, waits for a button and only then opens the
@@ -1308,6 +1257,7 @@ const COMPLETION_HANDLERS: Dictionary = {
 	&"slot_machine_requested": &"_complete_coin_game",
 	&"card_flip_requested": &"_complete_coin_game",
 	&"mart_requested": &"_complete_plain_request",
+	&"buena_prize_requested": &"_complete_plain_request",
 	&"audio_requested": &"_complete_plain_request",
 	&"pokemon_requested": &"_complete_plain_request",
 	&"trade_requested": &"_complete_trade",
@@ -1902,7 +1852,7 @@ func complete_wait() -> Dictionary:
 ## `choice` or a `menu` is the cartridge's own command, whose B is the false
 ## answer `cancel_input` writes.
 const CANCEL_OWNED_PENDINGS: Array[StringName] = [
-	&"buena_prize", &"buena_prize_confirm", &"bank_of_mom_menu", &"bank_of_mom_choice",
+	&"bank_of_mom_menu", &"bank_of_mom_choice",
 	&"ask_remember_password",
 	&"strength_ask", &"field_move_ask", &"rock_smash_ask",
 	&"set_day_of_week_confirmation",
@@ -1918,10 +1868,10 @@ func cancel_input() -> Dictionary:
 		}
 	var pending_type: StringName = StringName(_pending.get("type", &""))
 	## A box one of the built-in routines put up answers its own B rather than
-	## resuming: Buena's counter prints her parting line, Mom falls to
-	## `.JustDoWhatYouCan`, and every `YesNoBox` among them reads it as its NO,
-	## which is the carry the routine returns. A `Script_yesorno` or a
-	## `Script_verticalmenu` the cartridge staged is the false answer below.
+	## resuming: Mom falls to `.JustDoWhatYouCan`, and every `YesNoBox` among
+	## them reads it as its NO, which is the carry the routine returns. A
+	## `Script_yesorno` or `Script_verticalmenu` the cartridge staged is the
+	## false answer below.
 	if _pending_tag() in CANCEL_OWNED_PENDINGS:
 		return advance(true, -1)
 	if pending_type == &"choice" and _pending.has("contact"):
@@ -3961,7 +3911,8 @@ func _stage_decoration_description(description: int) -> Dictionary:
 			) if state != null else 0
 			match poster:
 				DECO_TOWN_MAP:
-					_stage_internal_text("It's the TOWN MAP.", false)
+					## `writetext` of a `done` text, then `waitbutton`'s `JoyWaitAorB`.
+					_stage_internal_text("It's the TOWN MAP.", false, {"joy_wait": true})
 					_pending["special_after_text"] = SPECIAL_OVERWORLD_TOWN_MAP
 					_pending["finish_after_special"] = true
 					return {"ok": true}
@@ -4895,11 +4846,10 @@ func _special_move_tutor(special: int) -> Dictionary:
 	})
 
 
-## Both of the special's boxes are the host's; it answers with the chosen apricorn and
-## how many of it, and a backed-out box is the source's own `wScriptVar = 0`.
+## The host answers with the apricorn and how many, and B with `wScriptVar = 0`.
 func _special_select_apricorn_for_kurt(special: int) -> Dictionary:
 	return _stage_runtime_request(&"apricorn_selection_requested", {
-		"special": special,
+		"special": special, "text": _standing_text,
 	})
 
 
@@ -5280,11 +5230,9 @@ func _special_diploma(special: int) -> Dictionary:
 	})
 
 
-## The counter is one loop: the prize list, a yes/no on the row, and whichever of the
-## four boxes the answer reaches. B on the list is the only way out and prints her
-## parting line.
+## A loop with its own windows, run whole by [Gen2WorldServiceScreen].
 func _special_buena_prize(special: int) -> Dictionary:
-	return _stage_buena_prize_menu(special)
+	return _stage_runtime_request(&"buena_prize_requested", {"special": special})
 
 
 ## `PrintSeerText SEER_INTRO`, `JoyWaitAorB`, and only then the list.
@@ -5294,6 +5242,7 @@ func _special_poke_seer(special: int) -> Dictionary:
 		return {"ok": false, "reason": &"missing_special_text", "special": special}
 	return _stage_internal_text(seer_intro, false, {
 		"special": special,
+		"joy_wait": true,
 		"party_selection_after_text": {
 			"special": special,
 			"routine": PARTY_SELECTION_ROUTINE_OF[special],
@@ -5500,77 +5449,6 @@ func _special_box(run: String, name: String) -> String:
 	if not player_name.is_empty():
 		text = Gen2TextStream.fill_all_markers(text, "<PLAYER", player_name)
 	return text
-
-
-## `data/items/buena_prizes.asm`: the item and what it costs in Blue Card
-## points. `.PrintPrizePoints` prints the cost as one character, so no row can
-## cost more than nine.
-const BUENA_PRIZES: Array = [
-	[2, 2], [14, 2], [36, 3], [32, 3], [27, 5], [28, 5], [29, 5], [31, 5], [26, 5],
-]
-
-
-## `Buena_PlacePrizeMenuBox` and `Buena_PrizeMenu`, plus the question that
-## stands over them. The rows are the prize names with their cost beside them,
-## which is what `SCROLLINGMENU_ITEMS_NORMAL` draws in two columns.
-func _stage_buena_prize_menu(special: int) -> Dictionary:
-	var rows: Array[String] = []
-	for prize: Array in BUENA_PRIZES:
-		rows.append("%s %d" % [
-			data.item_name(int(prize[0])) if data != null else "", int(prize[1]),
-		])
-	## `ScrollingMenu`'s CANCEL past `.Prizes`' own `-1`, which A answers as B.
-	rows.append("CANCEL")
-	var asked: String = _special_box("buena_prize", "ask_which_prize")
-	if asked.is_empty():
-		return _fail(&"missing_special_text", {"special": special})
-	_pending = {
-		"type": &"menu",
-		"command": &"buena_prize",
-		"options": rows,
-		## `.MenuHeader`'s `menu_coords 1, 1, 16, 9` and its `db 4, 13`, then
-		## `db 1` for the row the cursor opens on. `ScrollingMenu` always draws
-		## its own cursor and never wraps, which is what the flags stand for.
-		"header": {
-			"default": 1,
-			"data_flags": Gen2MenuBox.STATICMENU_CURSOR,
-			"left": 1, "top": 1, "right": 16, "bottom": 9,
-			"rows": 4, "arrows": true,
-		},
-		"text": asked,
-		"special": &"buena_prize",
-		"prize_special": special,
-		"balance": _blue_card_balance(),
-		"source": _request.duplicate(true),
-	}
-	return _waiting_result()
-
-
-## The three refusals and the one purchase, in the order the routine tests them:
-## the balance first, then the bag, and only then the deduction.
-func _buy_buena_prize(special: int, row: int) -> Dictionary:
-	var item: int = int(BUENA_PRIZES[row][0])
-	var cost: int = int(BUENA_PRIZES[row][1])
-	if _blue_card_balance() < cost:
-		return _buena_prize_box(special, "not_enough_points", false)
-	var received: Dictionary = _stage_item_delta(item, 1)
-	if not bool(received.get("ok", false)):
-		return received
-	if _script_value == 0:
-		return _buena_prize_box(special, "no_room", false)
-	_staged_blue_card_balance = _blue_card_balance() - cost
-	return _buena_prize_box(special, "here_you_go", false)
-
-
-## One of the counter's boxes. Every one of them but her parting line falls back
-## into the list, which is `.print`'s own `jr .loop`.
-func _buena_prize_box(special: int, name: String, closing: bool) -> Dictionary:
-	var box: String = _special_box("buena_prize", name)
-	if box.is_empty():
-		return _fail(&"missing_special_text", {"special": special})
-	return _stage_internal_text(box, closing, {"special": special} if closing else {
-		"special": special, "buena_prize_after_text": special,
-	})
 
 
 ## `BankOfMom`'s jumptable, one index at a time (`engine/events/mom.asm`). Every
@@ -6119,19 +5997,21 @@ func _buenas_password() -> int:
 	return state.buenas_password() if state != null else -1
 
 
-## `BuenasPassword`'s own menu: the five words of today's category in a box ten
-## wide, with B disabled, so a player who has tuned in picks one of them and a
-## player who has not is looking at the same five.
+## `BuenasPassword`'s menu: today's category's three words, with B disabled.
 func _stage_buenas_password_menu(password: int) -> void:
 	var words: Array[String] = Gen2RadioShow.buenas_password_words(data, password)
 	_pending = {
 		"type": &"menu",
 		"command": &"buenas_password",
 		"options": words,
-		## `STATICMENU_CURSOR | STATICMENU_DISABLE_B`, and `db 1` for the row the
-		## cursor opens on.
-		"header": {"default": 1, "data_flags": 0},
-		"disable_b": true,
+		## `.MenuHeader`'s right edge is the category's width plus two.
+		"header": {
+			"default": 1,
+			"data_flags": Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_DISABLE_B,
+			"left": 0, "top": 0,
+			"right": Gen2RadioShow.buenas_password_width(password) + 2,
+			"bottom": Gen2MenuBox.ROW_STEP * words.size() + 1,
+		},
 		"text": _standing_text,
 		"printed": true,
 		"special": &"buenas_password",

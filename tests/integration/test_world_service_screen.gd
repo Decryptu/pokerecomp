@@ -1564,6 +1564,32 @@ func test_the_decoration_row_sets_a_decoration_up_and_closes_the_machine() -> vo
 	assert_false(_world_screen._world.script_input_waiting())
 
 
+## `DecoAction_AskWhichSide`'s B ends `PopulateDecoCategoryMenu` too, and
+## `.top_loop` reopens on `wCurDecorationCategory`, the ORNAMENT row.
+func test_leaving_the_side_menu_lands_on_the_top_menu_row_it_left() -> void:
+	_write_pc_request()
+	await _open_world()
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6190
+	_world_screen._world.state.set_event_flag(676, true)
+	_world_screen._world.state.set_event_flag(695, true)
+	await _queue_service()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	_answer_box(host)
+	for _step: int in 4:
+		host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_eq(int(host._pc_rows[0]["deco"]), Fixture.DECO_PIKACHU_DOLL)
+	host.handle_button(PokeButton.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_DECO_SIDE)
+
+	Fixture.print_out(host)
+	host.handle_button(PokeButton.B)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_DECO)
+	assert_eq(host._cursor, 1)
+
+
 ## `_PlayerMailBoxMenu`: `InitMail` answers zero when the mailbox is empty, so
 ## the row prints `.EmptyMailboxText` instead of opening a list.
 func test_an_empty_mailbox_prints_its_own_line_and_opens_no_list() -> void:
@@ -2022,3 +2048,54 @@ func test_the_generation_1_town_map_item_leaves_on_a() -> void:
 	assert_true(host.handle_button(PokeButton.A))
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
+
+
+## `BuenaPrize` is one loop with its own windows: the Points box beside the
+## list, a purchase that takes the cost and sounds `SFX_TRANSACTION`, and `.loop`
+## reopening the list on the row and scroll it left once the box has printed.
+func test_buenas_prize_counter_charges_points_and_reopens_on_the_row() -> void:
+	var manifest: Dictionary = RomCache.read_json(RomCache.manifest_path(Fixture.directory()))
+	manifest["special_text"] = {"buena_prize": {
+		"ask_which_prize": "Which prize?", "is_that_right": "<RAM_CF6B>?",
+		"here_you_go": "Here you go!", "not_enough_points": "Not enough.",
+		"no_room": "No room.", "come_again": "Come again!",
+	}}
+	RomCache.write_json(RomCache.manifest_path(Fixture.directory()), manifest)
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(Fixture.directory()))
+	scripts["48:6190"] = [
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BUENA_PRIZE, 0,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(Fixture.directory()), scripts)
+	_data = GameData.open_directory(Fixture.directory())
+	await _open_world()
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6190
+	var state: Gen2WorldState = _world_screen._world.state
+	state.set_blue_card_balance(4)
+	await _queue_service()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	var sounds: Array = []
+	host.sfx_requested.connect(func(index: int, _waited: bool) -> void: sounds.append(index))
+	Fixture.print_out(host)
+	host.advance_frame()
+	assert_eq(host._buena_points_note()["lines"][1]["text"], " 4")
+
+	## NUGGET, the third row, at three points.
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	Fixture.print_out(host)
+	host.advance_frame()
+	host.handle_button(PokeButton.A)
+	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES + 1:
+		host.advance_frame()
+	assert_eq(state.item_quantity(36), 1)
+	assert_eq(state.blue_card_balance(), 1)
+	assert_has(sounds, Gen2Sfx.SFX_TRANSACTION)
+
+	Fixture.print_out(host)
+	host.advance_frame()
+	Fixture.print_out(host)
+	host.advance_frame()
+	assert_eq(host._buena_stage, &"list")
+	assert_eq(host._cursor, 2, "the list reopens on the prize just bought")

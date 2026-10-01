@@ -1182,8 +1182,9 @@ func test_the_cancel_row_closes_the_menu_the_way_b_does() -> void:
 	assert_null(_world_screen._party_host)
 
 
-## A refusal stands in the menu's own bottom box and `JoyWaitAorB` holds there:
-## a direction does not answer it and the next A or B does nothing but clear it.
+## A refusal is `PrintText` over the list and its `prompt` holds there: a press
+## while it prints is spent, a direction does not answer it and the next A or B
+## does nothing but clear it.
 ## `.SelectMilkDrinkRecipient`'s `.cant_use` is the one that loops back to the
 ## recipient list rather than closing anything, so the list is still up after it.
 func test_a_refusal_holds_the_menu_until_a_or_b() -> void:
@@ -1199,6 +1200,13 @@ func test_a_refusal_holds_the_menu_until_a_or_b() -> void:
 	assert_eq(String(refused["message"]), Gen2PartyScreen.MESSAGE_CANT_USE_ON_MON)
 	assert_false(party.handle_button(PokeButton.DOWN), "a direction is not one of the two")
 	assert_eq(int(party.submenu_snapshot()["member"]), int(refused["member"]))
+	assert_true(party.handle_button(PokeButton.B))
+	assert_eq(String(party.submenu_snapshot()["message"]), refused["message"], "spent")
+	var box: Gen2TextBox = party.get("_message_box")
+	for _frame: int in 600:
+		if not box.is_revealing():
+			break
+		box.advance_frame()
 	assert_true(party.handle_button(PokeButton.B))
 	assert_eq(String(party.submenu_snapshot()["message"]), "")
 	assert_not_null(_world_screen._party_host, "and the party menu is still up")

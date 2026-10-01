@@ -6,6 +6,9 @@ extends RefCounted
 
 const TILE: int = Gen2Font.TILE
 const MESSAGE_BOX := Rect2i(0, 12, 20, 6)
+## A backdrop layer that blanks the screen, as `ClearPCItemScreen` and
+## `BillsPC_ClearTilemap` do. Without one the layers stand over the map.
+const CLEAR_SCREEN: Dictionary = {"clear": true}
 
 var font: Gen2Font = null
 var menu: Gen2MenuPage = null
@@ -39,9 +42,9 @@ static func _ball_tile(data: GameData) -> Image:
 	)
 
 
-## `MenuTextbox` over the map (`MENU_BACKUP_TILES`), or over the screen
-## [param backdrop] blanks and fills with notes and `{menu, rows, cursor, extras}`
-## menus, arrow hollow. Empty [param rows] draws no box. [param message] is a string or a
+## `MenuTextbox` over the map and the windows [param backdrop] stacks in order:
+## [constant CLEAR_SCREEN], notes and `{menu, rows, cursor, extras}` menus, arrow
+## hollow. Empty [param rows] draws no box. [param message] is a string or a
 ## printing [Gen2TextBox]; [param note] is `{rect, lines}`, each line `{text, at}`
 ## from its own corner; [param message_box] is [constant MESSAGE_BOX] but for
 ## `_ChangeBox`'s `hlcoord 0, 14`; [param marks] are pokeball tiles on the menu.
@@ -52,10 +55,10 @@ func render(title: String, prompt: String, rows: Array, cursor: int,
 	var image := Image.create_empty(
 		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 	)
-	if not backdrop.is_empty():
-		image.fill(_colors()[0])
 	for layer: Dictionary in backdrop:
-		if layer.has("menu"):
+		if layer.has("clear"):
+			image.fill(_colors()[0])
+		elif layer.has("menu"):
 			var under: Gen2MenuBox = layer["menu"]
 			_blit(image, menu.render(
 				under, layer["rows"], int(layer["cursor"]), "", 0, layer.get("extras", []),
@@ -123,14 +126,24 @@ func render_box_print(status: String) -> Image:
 	return Gen2PicImage.from_indices(indices, width, Gen2Screen.HEIGHT, _colors())
 
 
-func _draw_message(indices: PackedByteArray, words: String, message_box: Rect2i) -> void:
+## A printed box left standing under the windows a routine opened after it, as
+## a backdrop note: the first page of [param words], laid out as a message is.
+static func textbox_note(words: String, message_box: Rect2i = MESSAGE_BOX) -> Dictionary:
 	var text_rows: int = (message_box.size.y - 2) / 2
 	var pages: Array = Gen2TextLayout.lay_out(words, message_box.size.x - 2, text_rows)
 	var lines: PackedStringArray = pages[0] if not pages.is_empty() else PackedStringArray()
+	var placed: Array = []
+	for row: int in mini(text_rows, lines.size()):
+		placed.append({"text": lines[row], "at": Vector2i(1, 2 + row * 2)})
+	return {"rect": message_box, "lines": placed}
+
+
+func _draw_message(indices: PackedByteArray, words: String, message_box: Rect2i) -> void:
 	font.draw_box(Gen2OptionsStore.current().textbox_frame, indices,
 		Gen2Screen.WIDTH, 0, 0, message_box.size.x, message_box.size.y)
-	for row: int in mini(text_rows, lines.size()):
-		font.draw_text(lines[row], indices, Gen2Screen.WIDTH, TILE, (2 + row * 2) * TILE)
+	for line: Dictionary in textbox_note(words, message_box)["lines"] as Array:
+		var at: Vector2i = line["at"]
+		font.draw_text(String(line["text"]), indices, Gen2Screen.WIDTH, at.x * TILE, at.y * TILE)
 
 
 func _draw_menu(

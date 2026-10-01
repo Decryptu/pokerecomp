@@ -505,13 +505,13 @@ func test_mail_moves_between_a_member_and_the_mailbox() -> void:
 	mon.mail = Gen2SaveMail.compose(
 		Gen2SaveMail.blank_message(), "GOLD", 0x1234, mon.species, FLOWER_MAIL
 	)
-	assert_true(Gen2SaveMail.any_mon_holding_mail(_save))
+	assert_true(Gen2WorldPC.any_party_mon_holds_mail(_save))
 	var sent: Dictionary = Gen2WorldPC.mailbox_send(_world, _save, 0, false)
 	assert_true(bool(sent["ok"]), str(sent))
 	assert_eq(_save.mailbox.size(), 1)
 	assert_eq((_save.party[0] as Gen2SaveMon).item, 0)
 	assert_null((_save.party[0] as Gen2SaveMon).mail)
-	assert_false(Gen2SaveMail.any_mon_holding_mail(_save))
+	assert_false(Gen2WorldPC.any_party_mon_holds_mail(_save))
 
 	## `.AttachMail` refuses a member already holding an item without moving
 	## anything, which is `.MailAlreadyHoldingItemText`.

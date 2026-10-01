@@ -48,8 +48,8 @@ var more_below: bool = false
 ## is every other menu, whose frame is its own corners.
 var frame: Rect2i = Rect2i()
 ## Whether the routine drew this box after its own `PrintText`, so it stands
-## over the speech box rather than under it. `DisplayDepositWithdrawMenu` is the
-## one that overlaps; every other menu here clears the bottom six rows.
+## over the speech box rather than under it: `DisplayDepositWithdrawMenu`, and
+## every box [method fit_items] sizes.
 var over_textbox: bool = false
 ## `BattleTowerRoomMenu_UpdatePickLevelMenu`, the one menu in the game that
 ## shows a single row between two arrows instead of a list under a cursor. Both
@@ -82,6 +82,14 @@ static func from_coords(x1: int, y1: int, x2: int, y2: int, menu_flags: int) -> 
 	box.bottom = y2
 	box.flags = menu_flags
 	return box
+
+
+## `DrawVariableLengthMenuBox`: `AutomaticGetMenuBottomCoord`'s two rows an item
+## replace the header's bottom, drawn after the routine's own `PrintText`.
+func fit_items(items: int) -> Gen2MenuBox:
+	bottom = top + ROW_STEP * items + 1
+	over_textbox = true
+	return self
 
 
 ## A `ScrollingMenu` header in `InitScrollingMenu`'s frame, or in [param drawn].

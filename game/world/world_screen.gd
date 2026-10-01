@@ -8816,6 +8816,7 @@ const SERVICE_HOST_REQUESTS: Array[StringName] = [
 	&"town_map_requested", &"apricorn_selection_requested", &"pc_requested",
 	&"mom_bank_dial_requested", &"elevator_requested", &"vending_requested",
 	&"prize_requested", &"gen1_menu_requested", &"gen1_list_menu_requested",
+	&"buena_prize_requested",
 ]
 
 
@@ -8979,13 +8980,15 @@ func _apply_text_pause(event: Dictionary, flags: Dictionary) -> StringName:
 	if _text_box == null or _text_box.font == null:
 		return &"none"
 	# A `writetext` whose text ends in `done` reaches no `LoadBlinkingCursor`, so
-	# its last page carries no arrow and the script runs straight on.
-	_text_awaits_press = bool(event.get("prompt", true))
+	# its last page carries no arrow and the script runs straight on. A routine
+	# that holds it with `JoyWaitAorB` waits without loading one, or a click.
+	var joy_wait: bool = bool(event.get("joy_wait", false))
+	_text_awaits_press = joy_wait or bool(event.get("prompt", true))
 	if int(event.get("cry", 0)) > 0:
 		_play_species_cry(int(event["cry"]))
 	if _oak_pc_pages.is_empty():
 		_apply_text_box_options()
-		_text_box.show_text(String(event.get("text", "")), _text_awaits_press)
+		_text_box.show_text(String(event.get("text", "")), _text_awaits_press and not joy_wait)
 		_text_box.visible = true
 	_script_prompt = "A: advance text"
 	flags[&"continue_after_text"] = true

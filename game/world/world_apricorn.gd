@@ -4,8 +4,9 @@ extends RefCounted
 ## `SelectApricornForKurt` (`engine/events/kurt.asm`) as a scene-free state
 ## machine: `FindApricornsInBag`'s list, `Kurt_SelectApricorn`'s scrolling menu,
 ## and the loop that puts the player back on the list when
-## `Kurt_SelectQuantity` is backed out of. The screen owns the two boxes; this
-## owns the cursor and the answer. [Gen2WorldApricornHost] owns the transaction.
+## `Kurt_SelectQuantity` is backed out of; Gold and Silver's is a `DoNthMenu`
+## alone, tossing one. The screen owns the boxes, this the cursor and the
+## answer, and [Gen2WorldApricornHost] the transaction.
 
 ## `data/items/apricorn_balls.asm`. Kurt's list order is this table's, not the
 ## item numbers'. The second column is the ball each apricorn becomes, which is
@@ -39,6 +40,8 @@ var scroll: int = 0
 ## `wMenuCursorY`, the 1-based row inside the window rather than an index.
 var cursor_y: int = 1
 var phase: StringName = DONE
+## Gold and Silver's `DoNthMenu`, which asks for no quantity.
+var one_at_a_time: bool = false
 var prompt: Gen2WorldQuantityPrompt = null
 var selected_item: int = 0
 var selected_quantity: int = 0
@@ -47,6 +50,7 @@ var selected_quantity: int = 0
 static func open(data: GameData, state: Gen2WorldState) -> Gen2WorldApricorn:
 	var selection := Gen2WorldApricorn.new()
 	selection.entries = find_in_bag(data, state)
+	selection.one_at_a_time = data != null and data.id in [&"gold", &"silver"]
 	## `FindApricornsInBag` returns carry on an empty list, which
 	## `Kurt_SelectApricorn` turns into the same zero a B press gives.
 	if not selection.entries.is_empty():
@@ -95,7 +99,9 @@ func is_done() -> bool:
 ## The visible rows `ScrollingMenu_InitFlags` asks `_2DMenu` for: the window's
 ## own height, or the whole list plus the CANCEL row when it is shorter.
 func rows() -> int:
-	return MENU_HEIGHT if MENU_HEIGHT <= entries.size() else entries.size() + 1
+	if one_at_a_time or MENU_HEIGHT > entries.size():
+		return entries.size() + 1
+	return MENU_HEIGHT
 
 
 ## `ScrollingMenu_GetListItemCoordAndFunctionArgs`' index. An index at or past
@@ -125,24 +131,18 @@ func result() -> Dictionary:
 
 func _press_list(button: int) -> void:
 	match button:
-		PokeButton.UP:
-			## `_2DMenu` moves inside the window and hands the edge to
-			## `ScrollingMenuJoyAction`, which scrolls instead of wrapping.
-			if cursor_y > 1:
-				cursor_y -= 1
-			elif scroll > 0:
-				scroll -= 1
-		PokeButton.DOWN:
-			if cursor_y < rows():
-				cursor_y += 1
-			elif scroll + MENU_HEIGHT <= entries.size():
-				scroll += 1
+		PokeButton.UP, PokeButton.DOWN:
+			_move(-1 if button == PokeButton.UP else 1)
 		PokeButton.A:
 			var entry: Dictionary = selected_entry()
 			if entry.is_empty():
 				_cancel()
 				return
 			selected_item = int(entry.get("item", 0))
+			if one_at_a_time:
+				selected_quantity = 1
+				phase = DONE
+				return
 			var available: int = int(entry.get("quantity", 0))
 			## `Kurt_SelectQuantity` leaves without carry when the bag holds
 			## none, which is the same path a backed-out box takes.
@@ -153,6 +153,18 @@ func _press_list(button: int) -> void:
 			phase = SELECT_QUANTITY
 		PokeButton.B:
 			_cancel()
+
+
+## `ScrollingMenuJoyAction` scrolls at an edge; the `DoNthMenu` wraps.
+func _move(step: int) -> void:
+	if one_at_a_time:
+		cursor_y = wrapi(cursor_y - 1 + step, 0, rows()) + 1
+	elif cursor_y + step >= 1 and cursor_y + step <= rows():
+		cursor_y += step
+	elif step < 0 and scroll > 0:
+		scroll -= 1
+	elif step > 0 and scroll + MENU_HEIGHT <= entries.size():
+		scroll += 1
 
 
 func _press_quantity(button: int) -> void:

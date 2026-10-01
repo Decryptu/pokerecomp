@@ -62,7 +62,8 @@ func draw(
 	# Every cartridge label is written to fit its box, so `PlaceVerticalMenuItems`
 	# needs no bound; a label a mod registers can be any length, and unbounded it
 	# is drawn straight through the right-hand border and over the map beside it.
-	var last_column: int = box.left + box.interior().x
+	# The bound is the drawn frame's, a column outside a `ScrollingMenu`'s corners.
+	var last_column: int = at.x + size.x - 2
 	for index: int in options.size():
 		var item: Vector2i = box.item_position(index)
 		font.draw_text(

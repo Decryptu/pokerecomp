@@ -708,9 +708,12 @@ func _move_mod_options(direction: Vector2i) -> void:
 	elif direction.x != 0:
 		_adjust_mod_option(rows, direction.x)
 
-## `hInMenu`: the pack's `ScrollingMenu` and the OPTION screen set it.
+## `hInMenu`: the pack's `ScrollingMenu`, the OPTION screen and the dials'
+## `JoyTextDelay_ForcehJoyDown`.
 func menu_repeats() -> bool:
-	return _mode in [Mode.PACK, Mode.OPTIONS, Mode.MODS, Mode.MOD_OPTIONS]
+	return _mode in [
+		Mode.PACK, Mode.OPTIONS, Mode.MODS, Mode.MOD_OPTIONS, Mode.PACK_TOSS_QUANTITY,
+	]
 
 
 ## `StartMenu.GetInput`'s click on A, the pack's and `PartyMenuSelect`'s on either.
@@ -2626,11 +2629,14 @@ func _play_sale_sound() -> void:
 	_render_pack_result()
 
 
+## `PlaceMoneyAtTopLeftOfTextbox` runs once `MartSellHowManyText` has printed.
 func _money_shown() -> bool:
 	if _deposit_sell == null or not _deposit_sell.shows_money():
 		return false
-	return _sold if _mode == Mode.PACK_RESULT \
-		else _mode in [Mode.PACK_TOSS_QUANTITY, Mode.PACK_TOSS_CONFIRM]
+	if _mode == Mode.PACK_RESULT:
+		return _sold
+	return _mode == Mode.PACK_TOSS_CONFIRM \
+		or (_mode == Mode.PACK_TOSS_QUANTITY and not _box_printing())
 
 
 ## The dial's own joypad read. Its cancel is `cp -1 / scf`, the same carry

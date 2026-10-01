@@ -152,9 +152,11 @@ var _hardware: Gen2Screen = null
 var _view: TextureRect = null
 var _page: Gen2PartyMenuPage = null
 var _menu_page: Gen2MenuPage = null
-## A refusal standing in the menu's own bottom box, which the next A or B
-## clears. See [constant MESSAGE_NOT_ENOUGH_HP].
+## `PrintText` over the list: a refusal's `prompt`, or the heal line
+## `NO_TEXT_SCROLL` prints whole and `JoyWaitAorB` holds.
 var _message: String = ""
+var _message_box: Gen2TextBox = null
+var _message_after: Callable = Callable()
 ## `HealHP_SFX_GFX`'s bars still to fill as `[row, Gen2HpBarAnimation]`.
 var _heal_bars: Array = []
 var _heal_hold: int = 0
@@ -246,6 +248,7 @@ func open_selection(
 	_heal_user = -1
 	_heal_move = 0
 	_message = ""
+	_message_after = Callable()
 	if is_inside_tree():
 		_refresh()
 
@@ -370,20 +373,8 @@ func handle_button(button: int) -> bool:
 		return used_move
 	if not _heal_bars.is_empty() or _heal_hold > 0:
 		return true
-	## `JoyWaitAorB` behind a refusal: the press that clears the box does nothing
-	## else, and a direction is not one of the two it waits for.
 	if not _message.is_empty():
-		if button == PokeButton.A or button == PokeButton.B:
-			_message = ""
-			if _healed_by >= 0:
-				_member_cursor = _healed_by
-				_remember(_healed_by)
-				_healed_by = -1
-				if _page != null:
-					_page.reset(_rows(), _cursor_row())
-			_refresh()
-			return true
-		return false
+		return _press_message(button)
 	if _party_size() == 0:
 		if button == PokeButton.B:
 			_cancel()
@@ -821,6 +812,9 @@ func _process(delta: float) -> void:
 	var frames: int = _frame_clock.tick(delta)
 	if frames == 0:
 		return
+	if _message_box != null and not _message.is_empty():
+		for _text_frame: int in frames:
+			_message_box.advance_frame()
 	if not _heal_bars.is_empty() or _heal_hold > 0:
 		for _bar_frame: int in frames:
 			_advance_heal_transfer()
@@ -956,9 +950,13 @@ func _render_hardware() -> void:
 	for bar: Array in _heal_bars:
 		(rows[int(bar[0])] as Dictionary)["hp"] = (bar[1] as Gen2HpBarAnimation).hp()
 	var arrow: Vector2i = _arrow()
+	var printing: bool = not _message.is_empty() and _message_box != null
+	var prompt: Variant = "" if _read_only else _prompt()
+	if printing:
+		prompt = _message_box
 	var image: Image = _page.render(
-		rows, arrow.x, "" if _read_only else _prompt(),
-		_switch_from < 0 and not _read_only, arrow.y, _quality_column(),
+		rows, arrow.x, prompt,
+		_switch_from < 0 and not _read_only, arrow.y, _quality_column(), printing
 	)
 	if image == null:
 		return
@@ -1158,23 +1156,59 @@ func _advance_heal_transfer() -> void:
 	if not _heal_bars.is_empty():
 		sfx_requested.emit(Gen2Sfx.SFX_POTION, true)
 		return
-	_message = _heal_line
+	_show_message(_heal_line, false, true)
 	_heal_hold = Gen2ItemActionText.HOLD_FRAMES if _gen1() else 0
 
 
 ## A caller's own refusal in this list's box, for a selection the list itself
 ## cannot judge. `_PlayerMailBoxMenu`'s `.AttachMail` is the shape: it prints
 ## `.MailEggText` or `.MailAlreadyHoldingItemText` and jumps back to
-## `.try_again`, which is this list still open behind the box.
-func say(message: String) -> void:
+## `.try_again`, this list behind the box; [param after] runs on its press.
+func say(message: String, after: Callable = Callable()) -> void:
+	_message_after = after
 	_say(message)
 
 
-## A refusal, in whichever box this view has: the menu's own bottom one when it
-## is the cartridge's screen, and the panel's status line when it is not.
+## A press while the box prints is spent, and only A or B clears it.
+func _press_message(button: int) -> bool:
+	if button != PokeButton.A and button != PokeButton.B:
+		return false
+	if _message_box != null and _message_box.advance():
+		return true
+	_message = ""
+	if _healed_by >= 0:
+		_member_cursor = _healed_by
+		_remember(_healed_by)
+		_healed_by = -1
+		if _page != null:
+			_page.reset(_rows(), _cursor_row())
+	_refresh()
+	if _message_after.is_valid():
+		var after: Callable = _message_after
+		_message_after = Callable()
+		after.call()
+	return true
+
+
+func _show_message(text: String, prompt: bool, instant: bool) -> void:
+	_message = text
+	if _data == null:
+		return
+	if _message_box == null:
+		_message_box = Gen2TextBox.for_page(_data)
+		_message_box.prompt_answered.connect(sfx_requested.emit.bind(false))
+		_message_box.redrawn.connect(_render_hardware)
+		add_child(_message_box)
+	_message_box.instant = instant
+	_message_box.reveal_speed = Gen2OptionsStore.current().text_reveal_speed()
+	_message_box.show_text(text, prompt)
+
+
+## A refusal, in whichever box this view has: `PrintText`'s over the list when
+## it is the cartridge's screen, and the panel's status line when it is not.
 func _say(message: String) -> void:
 	if _embedded:
-		_message = message
+		_show_message(message, true, false)
 		_render_hardware()
 		return
 	if _status == null:
