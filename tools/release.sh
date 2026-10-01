@@ -7,7 +7,7 @@
 # The version lives in four files and `tests/unit/test_export_presets.gd` holds
 # three of them to the fourth, so a hand edit that misses one fails a pull
 # request. Everything below fails before a tag exists instead, because a tag
-# costs seven builds and a quarter of an hour to tell you the same thing.
+# costs eight builds and a quarter of an hour to tell you the same thing.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -137,7 +137,7 @@ release: $version written to the four places. What is left:
   git checkout main && git pull
   git tag v$version && git push origin v$version
 
-The workflow builds the seven targets, publishes them with sha256sums.txt,
+The workflow builds the eight targets, publishes them with sha256sums.txt,
 announces the release and opens the AltStore pull request itself. Do not run
 tools/altstore_source.sh by hand and do not open a second one.
 NEXT
