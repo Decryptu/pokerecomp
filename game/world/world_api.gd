@@ -1039,6 +1039,22 @@ func player_step_span() -> Dictionary:
 	}
 
 
+## The cells a step in flight, or a path committed whole, has still to cross.
+func player_walk_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	if _player_step_passes_remaining <= 0 or _player_step_passes_total <= 0:
+		return cells
+	var at: Vector2i = player_cell
+	for index: int in range(_player_queued_steps.size() - 1, -1, -1):
+		at -= _player_queued_steps[index]["direction"] as Vector2i
+		if at != player_cell and not cells.has(at):
+			cells.append(at)
+	at -= _player_step_direction
+	if at != player_cell and not cells.has(at):
+		cells.append(at)
+	return cells
+
+
 ## Which movement the step in flight is, so a renderer draws a waterfall climb as
 ## a climb rather than a walk north: a scripted stream answers the command's own
 ## name, one of [constant SCRIPTED_STEP_PASSES]' keys. Empty while nothing steps.
@@ -3266,8 +3282,7 @@ func request_special_phone_call(call_id: int) -> Array:
 	return _start_phone_ring(request, 30)
 
 
-## `CheckSpecialPhoneCall`'s carry: a ringing step ends at `CountStep`'s first
-## test, so [method count_step] charges nothing for it.
+## `CheckSpecialPhoneCall`'s carry: a ringing step ends at `CountStep`'s first test.
 func special_phone_call_ready() -> bool:
 	if state == null or current_map == null:
 		return false

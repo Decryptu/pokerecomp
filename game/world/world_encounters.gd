@@ -318,7 +318,7 @@ func _occupied_cells() -> PackedVector2Array:
 					seen[cell] = true
 					out.append(cell)
 	## Yellow's own Pikachu is slot fifteen rather than a map object.
-	for cell: Vector2i in _world.gen1_pikachu_cells():
+	for cell: Vector2i in _world.gen1_pikachu_cells() + _world.player_walk_cells():
 		if not seen.has(Vector2(cell)):
 			seen[Vector2(cell)] = true
 			out.append(Vector2(cell))
