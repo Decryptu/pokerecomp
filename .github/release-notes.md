@@ -3,24 +3,24 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods: API 55 adds Pokémon gift requests for custom NPCs and mods. Gifts use the normal party and current-box storage, and report whether delivery succeeds. Progress now exposes the originally received starter and retains completion of Red's credits.
-- Mods can activate the GS Ball event in Gold and Silver through the same request used in Crystal. The optional chain runs through Goldenrod, Kurt's one-day examination and the Ilex Forest shrine's level-30 Celebi encounter. Its saved state prevents repeated grants; mods choose their own unlock requirements.
+- Mods: API 56 adds catch demonstrations. A custom NPC can ask for the game's own catching tutorial on any species and level: the Dude's fight in Gold, Silver and Crystal, the old man's in Red, Blue and Yellow. It always catches and keeps nothing. The NPC is told when it ends, and battle requests now report back the same way gifts do.
 
 ## Fixed
 
-- Visible wild Pokémon stay within terrain reachable from the player, including after same-map warps and one-way crossings. Burned Tower's inaccessible outer floor no longer hosts them.
-- Unown stays absent from visible encounters until a Ruins of Alph puzzle unlocks it.
-- Battle weather, stat stages, types and identification annotations update with the displayed events. Rain Dance no longer reveals the weather before the move runs.
-- AMNESIA and other ordinary letter pairs render correctly without becoming Pokémon symbols. Party, battle, PC and Pokédex labels keep their intended glyphs.
-- Returning after Red's credits runs Mt. Silver's map callbacks and releases player input.
-- Ordinary battles and world transactions preserve the last explicit save. Unsaved Pokédex flags, party changes, gifts, healing, items and PC transfers stay in the current run until SAVE. Nuzlocke changes remain durable.
-- Oak's scripted escort updates the lab's map graphics immediately in Red, Blue and Yellow, and hides his Pallet Town object when the escort ends.
-- Generation 1 overworld Pokémon icons render both halves correctly in both animation frames.
+- Incoming phone calls ring with their sound and show the caller box at the top of the screen, with the phone icon and the caller's name. The box stays up for the whole call, and every call ends with the hang-up clicks before the text closes.
+- BUENA's DISC JOCKEY line sits under her name in the Pokégear phone list instead of running off the screen.
+- Dark caves are dark when you walk in. Dark Cave and other unlit caves used to stay lit until the game was reloaded inside them.
+- Every menu box is as tall as its rows. The bedroom PC's TURN OFF row was hidden under the text box, and the decoration menus filled the screen.
+- The decoration and mailbox screens stack over the PC menu the way the cartridge draws them. The decoration menu reopens on the category you left, and B goes back to the top menu.
+- Scrolling lists print their last column in full: SURF PIKACHU DOLL, 12-letter apricorns and 10-letter mail authors are no longer cut.
+- Buena's prize counter shows its Points box and the cost column, plays the purchase sound and reopens on the row you left. Four password rows named the wrong items.
+- Kurt in Gold and Silver takes one apricorn from a list with no quantity dial.
+- Quantity dials repeat a held direction. Refusals over the party list print in the full text box, so their second line is no longer off the screen.
 
 ## Updating this release
 
-- Cartridge cache format is now 159. Import each cartridge file again when the launcher requests it. **Saved games are kept separately and remain intact.**
-- Mod API version is now 55. Existing supported mods remain compatible; mods using the new requests require this version.
+- Cartridge cache format is now 160. Import each cartridge file again when the launcher requests it. **Saved games are kept separately and remain intact.**
+- Mod API version is now 56. Existing supported mods remain compatible; mods using catch demonstrations require this version.
 
 ## Which file
 
