@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 57 | `Gen2WorldAPI.player_walk_cells()`, and the cells the player still has to cross in a visible-encounter context's `occupied` |
 | 56 | Actor `catch_demo` requests; `request_completed(result)` answering an actor's `battle` and `catch_demo` as well as its gift |
 | 55 | Actor `pokemon_gift` requests and `request_completed(result)`; `request_pokemon_gift()`; lasting `starter_species` and `beat_red` progress; opt-in Gold/Silver GS Ball chain and `gs_ball_stage` |
 | 54 | `hp` and `status` on an actor's `battle` request, `status` on a wild substitute's answer, and `status` on `ended` |
@@ -1801,7 +1802,7 @@ The context is a snapshot, never a live handle:
 |---|---|
 | `map` | `Vector2i(group, number)` |
 | `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on: `CanEncounterWildMon` per cell, limited to the cells the player can reach from where they stand by walking, surfing, hopping a ledge, cutting a tree or climbing a waterfall. A door, staircase, cave mouth, current or arrow tile is left only in the direction it walks the player, so the floor past a map's exit is out, as is floor a cave's walls enclose. A Generation 2 warp cell is out too, since the warp is taken before the roll. Taken again, and pushed, if a script runs `wildoff` or `wildon` or changes a block, or the player changes reachable region through a warp or one-way crossing |
-| `occupied` | The walk cells the map's own objects hold this frame: NPCs, item balls, all four cells of a big object, both cells of one mid-step, and Yellow's Pikachu while it follows. Refreshed with `player`, not with `map`. An entry outside `eligible` is dropped, so the two are deliberately separate. Refusing an occupied cell is the provider's choice. The player's cell is not in it |
+| `occupied` | The walk cells the map's own objects hold this frame: NPCs, item balls, all four cells of a big object, both cells of one mid-step, and Yellow's Pikachu while it follows. Refreshed with `player`, not with `map`. An entry outside `eligible` is dropped, so the two are deliberately separate. Refusing an occupied cell is the provider's choice. The player's cell is not in it, but every cell the player is drawn on or still walking toward it is: the cell a step leaves, and the whole path a script, a current or a climb commits at once (`Gen2WorldAPI.player_walk_cells()`) |
 | `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read now, with swarm and Bug Contest substitutions and the time of day already applied. A slot is `{species, min_level, max_level, chance}`, `chance` its weight in the roll's own units (of 100 on Generation 2, of 256 on Generation 1, the row's own percent in the Bug Contest). Refreshed while the map is up, whenever the hour, a swarm or the Bug Contest moves what a roll would read |
 | `player` | `{cell, facing}` |
 | `run_seed` | The run's seed, so a population is reproducible |

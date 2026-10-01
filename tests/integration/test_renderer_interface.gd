@@ -502,6 +502,21 @@ func test_a_visible_encounter_provider_is_driven_validated_drawn_and_fought() ->
 	assert_true(walking.has(Vector2(6, 3)), "the cell it is committed to")
 	assert_true(walking.has(Vector2(5, 3)), "and the one it is still drawn over")
 
+	## `applymovement` on the player commits the whole path first: the cells it
+	## is still crossing are held as well, the committed one staying in `player`.
+	var world: Gen2WorldAPI = _world_screen._world
+	var start: Vector2i = world.player_cell
+	world.player_cell = start + Vector2i(3, 0)
+	for _step: int in 3:
+		world._queue_player_step(Vector2i.RIGHT, Gen2WorldAPI.STEP_PASSES_WALK)
+	_world_screen._encounters.advance_frame()
+	var path: PackedVector2Array = provider.get("context")["occupied"]
+	for x: int in 3:
+		assert_true(path.has(Vector2(start + Vector2i(x, 0))), "path cell %d" % x)
+	assert_false(path.has(Vector2(world.player_cell)), "the committed cell is in `player`")
+	world._clear_player_step()
+	world.player_cell = start
+
 	## Off the table, so nothing is drawn: the host will not stand a Pokemon the
 	## map cannot produce.
 	provider.set("entry", {
