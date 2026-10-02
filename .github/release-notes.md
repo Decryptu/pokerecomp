@@ -3,16 +3,17 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods: API 57 adds `player_walk_cells()`, the cells the player has still to cross, and lists them in the visible-encounter context's `occupied`.
+- Mods: API 58 lets a custom NPC speak. A `text` request shows the game's own text box, pages on each press, and tells the NPC when the box has closed, so a scene can chain dialogue, a catch demonstration and a gift.
+- Mods: API 58 lets a custom NPC walk. A `step` request moves it one cell at normal NPC speed with the walking animation. Walls, water, map objects, the player and other solid NPCs block it, and the NPC is told where it ended up.
 
 ## Fixed
 
-- Visible wild Pokémon stay off every cell you are still walking through when the game moves you along a path, such as a guide's tour, Seafoam's currents or a Waterfall climb. Before, a wild could appear on the cell you were drawn on or step into your path.
+- The Dude's catching demonstration on Route 29 no longer sends out your first Pokémon. The Dude stays on screen and throws the ball himself, as on the cartridge. The same goes for a mod's catch demonstration.
 
 ## Updating this release
 
 - Cartridge cache format is still 160. Coming from 0.1.67 or earlier, import each cartridge file again when the launcher requests it. **Saved games are kept separately and remain intact.**
-- Mod API version is now 57. Existing supported mods remain compatible.
+- Mod API version is now 58. Existing supported mods remain compatible.
 
 ## Which file
 
