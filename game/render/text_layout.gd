@@ -134,9 +134,16 @@ static func lay_out_pages(
 
 ## Every screen lays text out here, so a host's unfilled marker fails its checks.
 static func _refuse_unfilled(text: String) -> void:
+	var marker: String = unfilled_marker(text)
+	if not marker.is_empty():
+		push_error("Gen2TextLayout: %s reached the screen unfilled: %s" % [marker, text.c_escape()])
+
+
+static func unfilled_marker(text: String) -> String:
 	for marker: String in [Gen2TextStream.RAM_MARKER, Gen2TextStream.NUMBER_MARKER, "<BUFFER_"]:
 		if text.contains(marker):
-			push_error("Gen2TextLayout: %s reached the screen unfilled: %s" % [marker, text.c_escape()])
+			return marker
+	return ""
 
 
 ## What a box is left holding once [param text] has been printed to its end.

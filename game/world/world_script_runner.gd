@@ -476,9 +476,7 @@ const HEADBUTT_ASK_TEXT: String = \
 ## `end` frame still has to sit in the CPU's switchable window for _push_frame,
 ## so it is put at its base; nothing ever reads the address back.
 const FIELD_MOVE_PROMPT_FRAME: int = RomFile.BANK_SIZE
-## A mod's item gift has no source address either, and for a stronger reason: no
-## script anywhere gives that item. Shares the base for the reason above.
-const ITEM_GIFT_FRAME: int = RomFile.BANK_SIZE
+const MOD_REQUEST_FRAME: int = RomFile.BANK_SIZE
 ## `FallIntoMapScript` and its `.SkyfallMovement`, engine code with no map data.
 const PITFALL_FRAME: int = RomFile.BANK_SIZE
 const PITFALL_MOVEMENT: int = RomFile.BANK_SIZE
@@ -725,30 +723,8 @@ static func begin(
 		## (engine/events/trainer_scripts.asm), and only a sight carries a direction.
 		runner._trainer_intro_approach_pending = request.get("direction", Vector2i.ZERO) \
 			in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
-	elif StringName(request.get("kind", &"")) == &"field_move_prompt":
-		## TryTileCollisionEvent's Ask*Scripts are `CallScript`s on link-time
-		## addresses, so a bare `end` stands in for the pointer.
-		started = runner._push_frame(
-			bank, FIELD_MOVE_PROMPT_FRAME, PackedByteArray([
-				Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, runner._crystal_commands())
-			])
-		)
-		if started:
-			runner._stage_field_move_prompt()
-	elif StringName(request.get("kind", &"")) == &"pitfall":
-		started = runner._push_frame(bank, PITFALL_FRAME, runner._pitfall_script())
-	elif StringName(request.get("kind", &"")) in RECEIVED_CALL_KINDS:
-		started = runner._push_frame(bank, RECEIVED_CALL_FRAME, runner._received_call_tail()) \
-			and runner._push_frame(bank, address)
-	elif StringName(request.get("kind", &"")) in [&"gs_ball", &"item_gift"]:
-		started = runner._start_gift_request(bank, StringName(request["kind"]))
-	elif StringName(request.get("kind", &"")) == &"rock_smash_used":
-		## `RockSmashFromMenuScript` past the menu's text, a bare `end` standing in.
-		started = runner._push_frame(bank, FIELD_MOVE_PROMPT_FRAME, PackedByteArray([
-			Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, runner._crystal_commands())
-		]))
-		if started:
-			runner._resume_rock_smash_used(0)
+	elif StringName(request.get("kind", &"")) in SYNTHESIZED_KINDS + RECEIVED_CALL_KINDS:
+		started = runner._start_synthesized(bank, address, StringName(request["kind"]))
 	elif StringName(request.get("kind", &"")) in [&"item_ball", &"hidden_item"]:
 		## Neither pointer is code, so the frame that stands in for it is a bare
 		## `end` and the staging call replays FindItemInBallScript or
@@ -779,6 +755,43 @@ static func begin(
 	else:
 		runner._active = true
 	return runner
+
+
+## The requests with no script of their own to push, a frame standing in.
+const SYNTHESIZED_KINDS: Array[StringName] = [
+	&"field_move_prompt", &"pitfall", &"gs_ball", &"item_gift", &"mod_text",
+	&"rock_smash_used",
+]
+
+
+func _start_synthesized(bank: int, address: int, kind: StringName) -> bool:
+	var bare_end := PackedByteArray([
+		Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, _crystal_commands())
+	])
+	match kind:
+		&"field_move_prompt":
+			## TryTileCollisionEvent's Ask*Scripts are `CallScript`s on link-time
+			## addresses, so a bare `end` stands in for the pointer.
+			if not _push_frame(bank, FIELD_MOVE_PROMPT_FRAME, bare_end):
+				return false
+			_stage_field_move_prompt()
+		&"pitfall":
+			return _push_frame(bank, PITFALL_FRAME, _pitfall_script())
+		&"gs_ball", &"item_gift":
+			return _start_gift_request(bank, kind)
+		&"mod_text":
+			if not _push_frame(bank, MOD_REQUEST_FRAME, bare_end):
+				return false
+			_stage_internal_text(String(_request.get("text", "")), true)
+		&"rock_smash_used":
+			## `RockSmashFromMenuScript` past the menu's text, a bare `end` standing in.
+			if not _push_frame(bank, FIELD_MOVE_PROMPT_FRAME, bare_end):
+				return false
+			_resume_rock_smash_used(0)
+		_:
+			return _push_frame(bank, RECEIVED_CALL_FRAME, _received_call_tail()) \
+				and _push_frame(bank, address)
+	return true
 
 
 ## `_pending`'s type and `special` tag to the method that resumes it, taking the
@@ -7058,7 +7071,7 @@ func _start_gift_request(bank: int, kind: StringName) -> bool:
 	if kind == &"gs_ball":
 		script.append(Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_RELOADMAPAFTERBATTLE, _crystal_commands()))
 	script.append(Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, _crystal_commands()))
-	if not _push_frame(bank, ITEM_GIFT_FRAME, script):
+	if not _push_frame(bank, MOD_REQUEST_FRAME, script):
 		return false
 	if kind == &"gs_ball":
 		_stage_gs_ball()

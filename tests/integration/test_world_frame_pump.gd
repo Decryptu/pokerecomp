@@ -560,3 +560,102 @@ func _drawn_positions(pixels: Array[float]) -> int:
 	for value: float in pixels:
 		seen[value] = true
 	return seen.size()
+
+
+## An actor that queues what a test hands it and keeps every answer, standing
+## where its last answer put it.
+const SPEAKING_ACTOR_SOURCE: String = """extends RefCounted
+
+var cell: Vector2i = Vector2i(6, 3)
+var facing: int = 0
+var requests: Array = []
+var completed: Array = []
+
+func set_world(_world) -> void:
+	pass
+
+func advance_frame() -> void:
+	pass
+
+func sprites() -> Array:
+	return [{
+		"id": &"npc", "sprite": 1, "position_cells": Vector2(cell), "facing": facing,
+		"solid": true,
+	}]
+
+func take_requests() -> Array:
+	var out: Array = requests
+	requests = []
+	return out
+
+func request_completed(result) -> void:
+	completed.append(result)
+	if result["kind"] == &"step":
+		cell = result["cell"]
+		facing = result["facing"]
+"""
+
+
+func _open_world_with_speaking_actor() -> Object:
+	var script := GDScript.new()
+	script.source_code = SPEAKING_ACTOR_SOURCE
+	script.reload()
+	var actor: Object = script.new()
+	assert_true(Gen2ModHost.instance().register_world_actor(&"npc", actor)["ok"])
+	_world_screen = await _open_world()
+	return actor
+
+
+## #832: a `text` is the world's own box, paged on a press, and the actor hears
+## back only once the last press has taken the box down, so a story can chain
+## the next request off the answer.
+func test_an_actor_text_is_read_to_its_last_press_before_it_is_answered() -> void:
+	var actor: Object = await _open_world_with_speaking_actor()
+	actor.requests.append({
+		"kind": &"text", "text": ["There's an old\nlegend here.", "Want to hear it?"],
+		"tag": &"legend",
+	})
+	_world_screen.advance_frame()
+	_settle_text_box(_world_screen)
+	assert_true(_world_screen._text_box.visible)
+	assert_true(_world_screen._world.script_busy())
+
+	_world_screen.press_button(PokeButton.A)
+	_settle_text_box(_world_screen)
+	assert_true(_world_screen._text_box.visible, "the second page is up")
+	assert_eq(actor.completed, [], "nothing is answered while the box is up")
+
+	_world_screen.press_button(PokeButton.A)
+	assert_false(_world_screen._text_box.visible)
+	assert_eq(actor.completed, [{"ok": true, "kind": &"text", "tag": &"legend"}])
+
+
+## #833: a `step` is a map NPC's step. It turns and stays put against an object,
+## and otherwise walks the 16 passes on `Facings`' walking rows rather than
+## sliding, blocks both cells it spans, and is answered where it lands.
+func test_an_actor_step_walks_like_a_map_npc_and_answers_where_it_lands() -> void:
+	var actor: Object = await _open_world_with_speaking_actor()
+	actor.requests.append({"kind": &"step", "id": &"npc", "direction": Vector2i.LEFT})
+	_world_screen.advance_frame()
+	assert_eq(actor.completed.size(), 1)
+	assert_false(actor.completed[0]["ok"], "the trainer stands on 5,3")
+	assert_eq(actor.completed[0]["facing"], Gen2WorldSprite.FACING_LEFT)
+
+	actor.requests.append({"kind": &"step", "id": &"npc", "direction": Vector2i.DOWN})
+	var frames: Array[int] = []
+	var passes: int = 0
+	while actor.completed.size() < 2 and passes < 64:
+		if _world_screen._overworld_delay <= 1:
+			passes += 1
+		_world_screen.advance_frame()
+		var drawn: Dictionary = _world_screen._actors.sprites()[0]
+		frames.append(int(drawn["frame"]))
+		if actor.completed.size() < 2:
+			assert_false(_world_screen._world.can_walk_to(Vector2i(6, 4)), "the cell taken")
+			assert_false(_world_screen._world.can_walk_to(Vector2i(6, 3)), "the cell left")
+	assert_true(actor.completed[1]["ok"], JSON.stringify(actor.completed))
+	assert_eq(actor.completed[1]["cell"], Vector2i(6, 4))
+	assert_eq(passes, Gen2WorldAPI.STEP_PASSES_NPC_WALK)
+	assert_true(frames.any(Gen2WorldSprite.is_walking_frame), "walked: %s" % [frames])
+	assert_eq(_world_screen._actors.sprites()[0]["position_cells"], Vector2(6, 4))
+	assert_true(_world_screen._world.can_walk_to(Vector2i(6, 3)))

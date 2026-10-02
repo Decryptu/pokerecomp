@@ -1,12 +1,9 @@
 class_name Gen2WorldActors
 extends RefCounted
 
-## The sprites a mod puts in the world: a follower or a marker is an actor
-## rather than a renderer, driven by one `advance_frame` per world frame and a
-## `sprites()` read per drawn one. Presentation but for a `solid` entry, which
-## blocks its cell, and a `battle` request. It is seen by nobody and is in no
-## snapshot. A mod names cartridge art
-## and never composes pixels; the strip, palette and rate are resolved here.
+## The sprites a mod puts in the world: one `advance_frame` per world frame, one
+## `sprites()` read per drawn one, in no snapshot. A mod names cartridge art; the
+## strip, palette, rate and a step's walk are resolved here.
 
 ## Checked at registration, where the mod's name is still in hand.
 const ACTOR_METHODS: Array[String] = ["set_world", "advance_frame", "sprites"]
@@ -38,10 +35,14 @@ const REQUEST_CRY: StringName = &"cry"
 const REQUEST_BATTLE: StringName = &"battle"
 const REQUEST_POKEMON_GIFT: StringName = &"pokemon_gift"
 const REQUEST_CATCH_DEMO: StringName = &"catch_demo"
+const REQUEST_TEXT: StringName = &"text"
+const REQUEST_STEP: StringName = &"step"
 const ACTOR_REQUEST_COMPLETED_METHOD: String = "request_completed"
 const REQUEST_KINDS: Array[StringName] = [
-	REQUEST_CRY, REQUEST_BATTLE, REQUEST_POKEMON_GIFT, REQUEST_CATCH_DEMO,
+	REQUEST_CRY, REQUEST_BATTLE, REQUEST_POKEMON_GIFT, REQUEST_CATCH_DEMO, REQUEST_TEXT,
+	REQUEST_STEP,
 ]
+const MAX_QUEUED_STEPS: int = 8
 
 ## `.Frameset_PartyMon`: two OAM sets of eight, nine passes each because
 ## `GetSpriteAnimFrame` returns the entry on the pass that loads the duration
@@ -58,6 +59,7 @@ var _world: Gen2WorldAPI = null
 ## many times the screen redraws and two views agree.
 var _sprites: Array = []
 var _frame: int = 0
+var _walks: Dictionary = {}
 
 
 ## [param actors] is [method Gen2ModHost.world_actors], in registration order,
@@ -81,6 +83,8 @@ func has_actors() -> bool:
 ## The map changed, or the view was created.
 func set_world(world: Gen2WorldAPI) -> void:
 	_world = world
+	for key: String in _walks.keys():
+		_end_walk(key, &"map_changed")
 	for actor: Object in _actors:
 		actor.call("set_world", world)
 	_collect()
@@ -107,6 +111,24 @@ func refresh_pose() -> bool:
 	return _changed(before, _sprites)
 
 
+## One map pass of every walking body. Answers whether anything moved.
+func advance_steps() -> bool:
+	if _walks.is_empty():
+		return false
+	for key: String in _walks.keys():
+		var walk: Dictionary = _walks[key]
+		var body: Gen2WorldObject = walk["body"]
+		body.tick_step()
+		if body.is_stepping():
+			continue
+		var queue: Array = walk["queue"]
+		var landed: Dictionary = _step_result(walk, true)
+		answer(walk["actor"], landed)
+		if queue.is_empty() or not _start_step(key, queue.pop_front()):
+			_walks.erase(key)
+	return refresh_pose()
+
+
 ## A press of A [method Gen2WorldAPI.interact] left unanswered, offered in
 ## registration order; the first actor answering true consumes it.
 func interact(cell: Vector2i, facing: int) -> bool:
@@ -120,7 +142,7 @@ func interact(cell: Vector2i, facing: int) -> bool:
 
 
 ## Each actor's one-shot outbox, validated against [constant REQUEST_KINDS] so
-## the screen is handed only requests it can spend.
+## the screen is handed only requests it can spend. A `step` is spent here.
 func take_requests() -> Array:
 	var out: Array = []
 	for actor: Object in _actors:
@@ -131,10 +153,19 @@ func take_requests() -> Array:
 			continue
 		for entry: Variant in answered as Array:
 			var request: Dictionary = _resolve_request(entry)
-			if not request.is_empty():
-				request["actor"] = actor
+			if request.is_empty():
+				continue
+			request["actor"] = actor
+			if request["kind"] == REQUEST_STEP:
+				_request_step(request)
+			else:
 				out.append(request)
 	return out
+
+
+static func answer(actor: Object, result: Dictionary) -> void:
+	if is_instance_valid(actor) and actor.has_method(ACTOR_REQUEST_COMPLETED_METHOD):
+		actor.call(ACTOR_REQUEST_COMPLETED_METHOD, result.duplicate(true))
 
 
 func _resolve_request(entry: Variant) -> Dictionary:
@@ -157,6 +188,19 @@ func _resolve_request(entry: Variant) -> Dictionary:
 			"kind": kind, "species": species, "level": int(row.get("level", 0)),
 			"tag": StringName(row.get("tag", &"")),
 		}
+	if kind == REQUEST_TEXT:
+		var text: String = _request_text(row.get("text", ""))
+		if text.is_empty():
+			return {}
+		return {"kind": kind, "text": text, "tag": StringName(row.get("tag", &""))}
+	if kind == REQUEST_STEP:
+		var direction: Variant = row.get("direction", null)
+		if direction is not Vector2i or not Gen2WorldEncounters.STEP_DIRECTIONS.has(direction):
+			return {}
+		return {
+			"kind": kind, "id": StringName(row.get("id", &"")), "direction": direction,
+			"tag": StringName(row.get("tag", &"")),
+		}
 	var named: Dictionary = Gen2WorldBattleAdapter.mod_wild(_world.data, row)
 	if named.has("refused"):
 		return {}
@@ -168,11 +212,108 @@ func _resolve_request(entry: Variant) -> Dictionary:
 	return {"kind": kind, "values": values}
 
 
+## A string, or an array of them each opening a new box as `para` does.
+static func _request_text(raw: Variant) -> String:
+	var pages: Array = raw if raw is Array else [raw]
+	var kept: PackedStringArray = PackedStringArray()
+	for page: Variant in pages:
+		if page is not String or (page as String).strip_edges().is_empty():
+			return ""
+		if Gen2TextLayout.unfilled_marker(page as String) != "":
+			return ""
+		kept.append((page as String).strip_edges())
+	return Gen2TextStream.PAGE_BREAK.join(kept)
+
+
 ## The Dude's `catchtutorial BATTLETYPE_TUTORIAL`, or Generation 1's old man.
 func _catch_demo_values() -> Dictionary:
 	if _world.data.generation == RomRegistry.GEN1:
 		return Gen1Layout.battle_type_values(Gen1Layout.BATTLE_TYPE_OLD_MAN)
 	return {"battle_type": Gen2Battle.BATTLETYPE_TUTORIAL, "tutorial": true, "can_lose": false}
+
+
+func _body_key(actor: Object, id: StringName) -> String:
+	return "%d/%s" % [actor.get_instance_id(), id]
+
+
+func _request_step(request: Dictionary) -> void:
+	var actor: Object = request["actor"]
+	var key: String = _body_key(actor, StringName(request["id"]))
+	if _walks.has(key):
+		var queue: Array = _walks[key]["queue"]
+		if queue.size() < MAX_QUEUED_STEPS:
+			queue.append(request)
+		else:
+			answer(actor, _refusal(request, &"step_queue_full"))
+		return
+	var stand: Dictionary = _standing_entry(actor, StringName(request["id"]))
+	if stand.is_empty():
+		answer(actor, _refusal(request, &"unknown_id"))
+		return
+	## A map object no map holds, walked as one is.
+	var body := Gen2WorldObject.new()
+	body.movement = Gen2WorldObject.MOVEMENT_SCRIPTED
+	body.active = true
+	body.cell = Vector2i((stand["position_cells"] as Vector2).round())
+	body.facing = int(stand["facing"])
+	_walks[key] = {"body": body, "actor": actor, "id": request["id"], "queue": []}
+	if not _start_step(key, request):
+		_walks.erase(key)
+
+
+## `InitStep` turns the body before [method Gen2WorldAPI.can_object_walk_to] asks.
+func _start_step(key: String, request: Dictionary) -> bool:
+	var walk: Dictionary = _walks[key]
+	var body: Gen2WorldObject = walk["body"]
+	var direction: Vector2i = request["direction"]
+	walk["tag"] = request["tag"]
+	body.apply_direction(direction)
+	var destination: Vector2i = body.cell + direction
+	if _world == null or not _world.can_object_walk_to(destination, body, direction):
+		answer(walk["actor"], _step_result(walk, false))
+		return false
+	body.cell = destination
+	body.start_step(direction, Gen2WorldAPI.STEP_PASSES_NPC_WALK)
+	_collect()
+	return true
+
+
+func _end_walk(key: String, reason: StringName) -> void:
+	var walk: Dictionary = _walks[key]
+	_walks.erase(key)
+	var result: Dictionary = _step_result(walk, false)
+	result["reason"] = reason
+	answer(walk["actor"], result)
+	for queued: Dictionary in walk["queue"]:
+		answer(walk["actor"], _refusal(queued, reason))
+
+
+func _step_result(walk: Dictionary, ok: bool) -> Dictionary:
+	var body: Gen2WorldObject = walk["body"]
+	var result: Dictionary = {
+		"ok": ok, "kind": REQUEST_STEP, "id": walk["id"], "tag": walk.get("tag", &""),
+		"cell": body.cell, "facing": body.facing,
+	}
+	if not ok:
+		result["reason"] = &"blocked"
+	return result
+
+
+static func _refusal(request: Dictionary, reason: StringName) -> Dictionary:
+	return {
+		"ok": false, "kind": REQUEST_STEP, "reason": reason, "id": request["id"],
+		"tag": request["tag"],
+	}
+
+
+func _standing_entry(actor: Object, id: StringName) -> Dictionary:
+	if id.is_empty():
+		return {}
+	var order: int = _actors.find(actor)
+	for sprite: Dictionary in _sprites:
+		if int(sprite["order"]) == order and sprite["id"] == id:
+			return sprite
+	return {}
 
 
 ## { sprite, facing, frame, position_cells, span, height_offset_pixels, colors,
@@ -194,7 +335,14 @@ func _collect() -> void:
 				_sprites.append(resolved)
 	var solid: Array[Vector2i] = []
 	for sprite: Dictionary in _sprites:
-		if sprite["solid"]:
+		if not sprite["solid"]:
+			continue
+		var walk: Variant = _walks.get(_body_key(_actors[sprite["order"]], sprite["id"]))
+		if walk is Dictionary:
+			## `IsNPCAtCoord` compares both the cell a step leaves and the one it takes.
+			var body: Gen2WorldObject = (walk as Dictionary)["body"]
+			solid.append_array([body.cell, body.vacating_cell()])
+		else:
 			solid.append(Vector2i((sprite["position_cells"] as Vector2).round()))
 	_world.set_actor_cells(solid)
 	if _encounters != null:
@@ -227,13 +375,27 @@ func _resolve(entry: Variant, order: int) -> Dictionary:
 		int(row.get("facing", Gen2WorldSprite.FACING_DOWN)),
 		Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT
 	)
+	var id := StringName(row.get("id", &""))
+	var position := Vector2(row.get("position_cells", Vector2.ZERO))
+	var frame: int = _frame_for(sprite, row)
 	var span: Dictionary = _resolved_span(row)
+	var walk: Variant = _walks.get(_body_key(_actors[order], id)) \
+		if order < _actors.size() and not id.is_empty() else null
+	if walk is Dictionary:
+		var body: Gen2WorldObject = (walk as Dictionary)["body"]
+		var fraction: float = _world.pass_fraction
+		position = Vector2(body.cell) + body.step_offset_cells(fraction)
+		span = body.step_span(fraction)
+		facing = body.drawn_facing()
+		if sprite.sprite_type != Gen2WorldSprite.TYPE_MON_ICON:
+			frame = body.frame
 	return {
 		"sprite": sprite,
 		"facing": facing,
-		"frame": _frame_for(sprite),
-		"position_cells": Vector2(row.get("position_cells", Vector2.ZERO)),
+		"frame": frame,
+		"position_cells": position,
 		"order": order,
+		"id": id,
 		# An overworld sprite wears one of the map's own sprite palettes. A
 		# visible encounter wears the SPECIES' four colours instead, which is the
 		# only way a shiny one is a shiny one before the battle starts. A view
@@ -285,11 +447,10 @@ func _resolve_emote(row: Dictionary) -> int:
 	return emote
 
 
-## A mon icon steps through its two at `.Frameset_PartyMon`'s rate; anything else
-## stands, since `Facings`' walking rows belong to a step this layer never takes.
-func _frame_for(sprite: Gen2WorldSprite) -> int:
+## `.Frameset_PartyMon`'s rate for an icon, or [method Gen2WorldObject.walk_frame]'s.
+func _frame_for(sprite: Gen2WorldSprite, row: Dictionary) -> int:
 	if sprite.sprite_type != Gen2WorldSprite.TYPE_MON_ICON:
-		return 0
+		return clampi(int(row.get("frame", 0)), 0, 3)
 	@warning_ignore("integer_division")
 	# Frame 1 is `Gen2WorldSprite.is_walking_frame`'s, which reads the strip's
 	# second half.

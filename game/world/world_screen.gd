@@ -113,6 +113,8 @@ var _draw_list: Gen2WorldDrawList = null
 var _battle_encounter_id: StringName = &""
 var _actor_requests: Array[Dictionary] = []
 var _actor_battle: Dictionary = {}
+## The actor `text` whose box is up.
+var _actor_text: Dictionary = {}
 ## A field move's tail, spent in order with input held: `{"wait": &"sfx"}` is
 ## `WaitSFX`, `&"sprites"` an animation, `&"fade"` a fade, and `{"call": ...}` runs.
 var _field_move_tail: Array = []
@@ -1082,6 +1084,7 @@ func _advance_population(map_pass: bool) -> void:
 	if not map_pass:
 		return
 	_refresh_if(_objects_may_move() and _world.advance_object_steps_pass(_object_random))
+	_refresh_if(_objects_may_move() and _actors != null and _actors.advance_steps())
 	# Not gated on _objects_may_move(): an applymovement is drawn while the
 	# script that ran it is still going, which is when a script runs one.
 	_refresh_if(_world != null and _world.advance_scripted_steps_pass())
@@ -8956,6 +8959,7 @@ func _apply_result_status(result: Dictionary, flags: Dictionary) -> StringName:
 		if not bool(result.get("ok", false)):
 			flags[&"failed"] = true
 			_script_prompt = "Script stopped: %s" % String(result.get("reason", "unknown"))
+		_answer_actor_text(result)
 		return &"none"
 
 	flags[&"waiting"] = true
@@ -10005,8 +10009,36 @@ func _spend_actor_requests() -> void:
 		var request: Dictionary = _actor_requests.pop_front()
 		if request["kind"] == Gen2WorldActors.REQUEST_POKEMON_GIFT:
 			_complete_pokemon_gift(request)
+		elif request["kind"] == Gen2WorldActors.REQUEST_TEXT:
+			_show_actor_text(request)
 		else:
 			_start_actor_battle(request)
+
+
+func _show_actor_text(request: Dictionary) -> void:
+	var results: Array = _world.show_mod_text(String(request["text"]))
+	if results.is_empty():
+		_answer_actor(request, {
+			"ok": false, "kind": request["kind"], "reason": &"world_busy", "tag": request["tag"],
+		})
+		return
+	_actor_text = request
+	_zero_map_name_sign_timer()
+	_show_script_results(results)
+
+
+func _answer_actor_text(result: Dictionary) -> void:
+	if _actor_text.is_empty() \
+		or StringName((result.get("source", {}) as Dictionary).get("kind", &"")) != &"mod_text":
+		return
+	var request: Dictionary = _actor_text
+	_actor_text = {}
+	var answer: Dictionary = {
+		"ok": bool(result.get("ok", false)), "kind": request["kind"], "tag": request["tag"],
+	}
+	if not answer["ok"]:
+		answer["reason"] = result.get("reason", &"script_failed")
+	_answer_actor(request, answer)
 
 
 ## A `battle` or `catch_demo`: `startbattle` or `catchtutorial`, answered when it ends.
@@ -10039,9 +10071,7 @@ func _answer_actor_battle(ended: Dictionary) -> void:
 
 
 func _answer_actor(request: Dictionary, result: Dictionary) -> void:
-	var actor: Object = request.get("actor")
-	if is_instance_valid(actor) and actor.has_method(Gen2WorldActors.ACTOR_REQUEST_COMPLETED_METHOD):
-		actor.call(Gen2WorldActors.ACTOR_REQUEST_COMPLETED_METHOD, result.duplicate(true))
+	Gen2WorldActors.answer(request.get("actor"), result)
 
 
 func _complete_pokemon_gift(request: Dictionary) -> void:

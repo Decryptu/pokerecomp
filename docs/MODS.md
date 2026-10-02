@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 58 | Actor `text` and `step` requests; `id` and `frame` on an actor entry; the Dude's fight never sends the player's Pokemon out |
 | 57 | `Gen2WorldAPI.player_walk_cells()`, and the cells the player still has to cross in a visible-encounter context's `occupied` |
 | 56 | Actor `catch_demo` requests; `request_completed(result)` answering an actor's `battle` and `catch_demo` as well as its gift |
 | 55 | Actor `pokemon_gift` requests and `request_completed(result)`; `request_pokemon_gift()`; lasting `starter_species` and `beat_red` progress; opt-in Gold/Silver GS Ball chain and `gs_ball_stage` |
@@ -1669,8 +1670,8 @@ player event is spent.
 `take_requests` is where an edge goes; `sprites()` is where a pose goes.
 `{"kind": &"cry", "species": n}` is played through the same player a script's
 `cry` command uses: a mod may not play a sound, so it asks and the host spends
-it. The other kinds are `battle`, `pokemon_gift` and `catch_demo`, below. Anything
-else in the outbox is dropped.
+it. The other kinds are `battle`, `pokemon_gift`, `catch_demo`, `text` and `step`,
+below. Anything else in the outbox is dropped.
 
 Each entry of `sprites()` names cartridge art and nothing else:
 
@@ -1680,6 +1681,8 @@ Each entry of `sprites()` names cartridge art and nothing else:
 | `sprite` | An `OverworldSprites` row instead, for an NPC or object picture |
 | `facing` | `Gen2WorldSprite.FACING_*`. Right is the left picture mirrored |
 | `position_cells` | Where to draw it, in fractional walk cells |
+| `frame` | Optional. `Gen2WorldObject.walk_frame()`'s 0 to 3: 0 and 2 stand, 1 and 3 are `Facings`' walking rows. An `icon` ignores it and animates on its own |
+| `id` | Optional. Names the entry a `step` request moves, below |
 | `colors` | Optional. Four colours instead of the map's sprite palette. What a visible encounter wears, so a shiny one is shiny before the battle starts |
 | `emote` | Optional. `Gen2WorldActors.EMOTE_SHOCK` through `EMOTE_GRASS_RUSTLE`, drawn two rows above the sprite as `SpawnEmote` puts one over a map object. It is state, not an edge: up for as long as the entry keeps asking. An index outside the twelve is no emote |
 | `span` | Optional `{from, to, progress, kind}`, the shape `Gen2WorldObject.step_span()` answers: the two cells this pose runs between. A view whose plan is a grid reads `position_cells` and ignores it; one that folds plan into height puts both ends through its own geometry, which a fractional cell cannot do across a fold. A span missing an end is dropped rather than drawn |
@@ -1754,7 +1757,38 @@ cartridge. It always catches, takes no ball from the bag and adds nothing to the
 party or a box; the Pokedex marks the species seen, as it does for the Dude's.
 `request_completed` receives the fight's `ended` event with `ok`, `kind` and the
 tag, so the actor's own story picks up from there. A request a `battle` would
-have refused is dropped.
+have refused is dropped. The Dude never sends a Pokemon out, as `DoBattle`'s
+`.tutorial_debug` does not: the player's party appears only as the ball row
+`BattleStart_TrainerHuds` draws for every wild fight, and nothing in it changes.
+
+`{"kind": &"text", "text": "There's an old\nlegend here.", "tag": &"legend"}` puts
+the text in the world's own box, revealed at the player's TEXT SPEED and read a
+press at a time as a script's `writetext` and `waitbutton` are. The text wraps to
+the box; `\n` breaks a line, and an array of strings starts each one on a fresh
+box as `para` does. `<PLAYER>` is the player's name. A text naming a marker a
+script fills from RAM (`<RAM_`, `<NUM_`, `<BUFFER_`) is dropped. It waits for an
+idle world like a gift, and `request_completed` receives `ok`, `kind` and `tag`
+once the last press has taken the box down, so a story chains its next request
+off the answer: text, `catch_demo`, text, `pokemon_gift`.
+
+`{"kind": &"step", "id": &"npc", "direction": Vector2i.LEFT, "tag": &"walk"}`
+walks the entry `sprites()` answers with that `id` one cell, as a map NPC steps:
+`InitStep` turns it first, `CanObjectMoveInDirection` and
+`WillObjectBumpIntoSomeoneElse` refuse a wall, a ledge's side, water, a map
+object, the player, the cell the player is walking out of and another actor's
+`solid` cell, and the step takes an NPC's sixteen map passes on the walking
+rows. While it walks the host draws the entry, `position_cells`, `span`,
+`facing` and `frame` together, and a `solid` entry blocks both cells it spans.
+It moves on the frames the map's own objects do, so it stands still behind a
+text box, a menu or a battle.
+
+`request_completed` receives `ok`, `kind`, `id`, `tag`, `cell` and `facing`: on
+the landing pass when it walked, at once with `reason: &"blocked"` when it did
+not. The entry is the mod's again from that answer, so the actor sets its own
+cell and facing from it. A `step` asked while the entry walks waits behind it, up
+to eight; the entry not being drawn answers `unknown_id`, and leaving the map
+answers `map_changed`. Wandering is the mod's choice of when and where; the host
+owns the walk.
 
 `host.request_pokemon_gift(manifest.id, species, level, tag)` queues the same
 transaction without an actor. Its immediate `ok` confirms that the request was queued;
