@@ -9423,9 +9423,7 @@ func _script_address_for_event(event: Dictionary) -> int:
 func _enqueue_script(request: Dictionary) -> void:
 	## The synthesized requests carry no address of their own.
 	if int(request.get("script", 0)) <= 0 \
-		and StringName(request.get("kind", &"")) not in [
-			&"field_move_prompt", &"item_gift", &"pitfall", &"rock_smash_used", &"gs_ball",
-		]:
+		and StringName(request.get("kind", &"")) not in Gen2WorldScriptRunner.SYNTHESIZED_KINDS:
 		return
 	_script_queue.append(_completed_request(request))
 
@@ -12788,18 +12786,27 @@ func take_hidden_item(cell: Vector2i) -> Array:
 ## behind it, queued the way [method take_hidden_item] queues one. Empty for an
 ## item the cartridge does not know or while a script runs.
 func give_item_gift(item: int, quantity: int = 1) -> Array:
-	if current_map == null or _active_script != null or not _script_queue.is_empty():
-		return []
 	if item <= 0 or data == null or data.item_name(item).is_empty():
 		return []
-	_enqueue_script({
-		"kind": &"item_gift",
+	return _run_mod_script({"kind": &"item_gift", "item": item, "quantity": maxi(1, quantity)})
+
+
+## A mod actor's `text`, read to its last press with no script behind it.
+func show_mod_text(text: String) -> Array:
+	if text.is_empty():
+		return []
+	return _run_mod_script({"kind": &"mod_text", "text": text})
+
+
+func _run_mod_script(request: Dictionary) -> Array:
+	if current_map == null or _active_script != null or not _script_queue.is_empty():
+		return []
+	request.merge({
 		"map_group": current_map.group,
 		"map_number": current_map.number,
 		"bank": int(current_map.events.get("bank", 0)),
-		"item": item,
-		"quantity": maxi(1, quantity),
 	})
+	_enqueue_script(request)
 	return run_event_queue(false)
 
 

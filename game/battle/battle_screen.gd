@@ -1695,9 +1695,7 @@ func _build_entrance() -> void:
 		_entrance_stages.append({"apply": ENTRANCE_ENEMY_HUD})
 	# `DoBattle`'s own `ld c, 40`, then `SlideBattlePicOut` and `SendOutMonText`.
 	_entrance_stages.append({"delay": PLAYER_ENTRANCE_FRAMES})
-	## `StartBattle` sends the player out on a normal battle alone; a Safari or
-	## a tutor's fight opens `DisplayBattleMenu` with the back pic still up.
-	if _gen1_special_battle():
+	if _player_stays_back():
 		return
 	_entrance_stages.append({"slide": Gen2Battle.PLAYER})
 	var send_out: Array[String] = GEN1_SEND_OUT_LINES if _generation() == RomRegistry.GEN1 \
@@ -3981,11 +3979,14 @@ func _is_wild_battle() -> bool:
 	return values is Dictionary and StringName((values as Dictionary).get("kind", &"")) == &"wild"
 
 
-## `wBattleType` on a Generation 1 cartridge: every value but zero is a fight
-## the player's own Pokemon never joins.
-func _gen1_special_battle() -> bool:
-	return _generation() == RomRegistry.GEN1 and _battle != null \
-		and _battle.battle_type != Gen2Battle.BATTLETYPE_NORMAL
+## A fight the player's own Pokemon never joins: every Generation 1 special type,
+## and `DoBattle`'s `.tutorial_debug` for the Dude's and the debug one.
+func _player_stays_back() -> bool:
+	if _battle == null:
+		return false
+	if _generation() == RomRegistry.GEN1:
+		return _battle.battle_type != Gen2Battle.BATTLETYPE_NORMAL
+	return _battle.battle_type in [Gen2Battle.BATTLETYPE_TUTORIAL, Gen2Battle.BATTLETYPE_DEBUG]
 
 
 ## `wBattleType` being BATTLETYPE_CONTEST, which is what makes the menu the

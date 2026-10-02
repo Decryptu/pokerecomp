@@ -695,6 +695,14 @@ func test_the_dude_plays_the_catching_tutorial_and_keeps_nothing() -> void:
 	await get_tree().process_frame
 
 	assert_true("DUDE used the\nPOKE BALL." in messages, JSON.stringify(messages))
+	## `.tutorial_debug` opens the menu on the Dude's own back pic: the player's
+	## party never joins the fight it watches (#831).
+	for line: String in Gen2BattleScreen.SEND_OUT_LINES:
+		var opening: String = line.get_slice("%s", 0)
+		assert_false(
+			messages.any(func(shown: String) -> bool: return shown.begins_with(opening)),
+			"nobody is sent out: %s" % JSON.stringify(messages)
+		)
 	assert_true(Gen2BattleScreen.CAUGHT_TEXT % _wild_name() in messages, JSON.stringify(messages))
 	assert_eq(
 		_world_screen._world.state.item_quantity(Gen2WorldPartyHost.ITEM_POKE_BALL),
