@@ -634,6 +634,7 @@ func _build_world() -> void:
 	Gen2ModHost.instance().set_inventory_source(_mod_inventory)
 	Gen2ModHost.instance().set_hidden_items_source(_mod_hidden_items)
 	Gen2ModHost.instance().set_progress_source(_mod_progress)
+	Gen2ModHost.instance().set_party_source(_mod_party)
 	Gen2ModHost.instance().set_roamers_source(_mod_roamers)
 	_encounters.set_world(_world, anim_data)
 	_actors.set_encounters(_encounters)
@@ -685,6 +686,7 @@ func _exit_tree() -> void:
 	if input != null and input.repeat_gate == Callable(self, &"_menu_repeats"):
 		input.repeat_gate = Callable()
 	Gen2ModHost.instance().set_progress_source(Callable())
+	Gen2ModHost.instance().set_party_source(Callable())
 	Gen2ModHost.instance().set_roamers_source(Callable())
 	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
 	if runtime != null:
@@ -10009,14 +10011,16 @@ func _spend_actor_requests() -> void:
 		var request: Dictionary = _actor_requests.pop_front()
 		if request["kind"] == Gen2WorldActors.REQUEST_POKEMON_GIFT:
 			_complete_pokemon_gift(request)
-		elif request["kind"] == Gen2WorldActors.REQUEST_TEXT:
+		elif request["kind"] in [Gen2WorldActors.REQUEST_TEXT, Gen2WorldActors.REQUEST_YES_NO]:
 			_show_actor_text(request)
 		else:
 			_start_actor_battle(request)
 
 
 func _show_actor_text(request: Dictionary) -> void:
-	var results: Array = _world.show_mod_text(String(request["text"]))
+	var results: Array = _world.show_mod_text(
+		String(request["text"]), request["kind"] == Gen2WorldActors.REQUEST_YES_NO
+	)
 	if results.is_empty():
 		_answer_actor(request, {
 			"ok": false, "kind": request["kind"], "reason": &"world_busy", "tag": request["tag"],
@@ -10038,6 +10042,8 @@ func _answer_actor_text(result: Dictionary) -> void:
 	}
 	if not answer["ok"]:
 		answer["reason"] = result.get("reason", &"script_failed")
+	elif request["kind"] == Gen2WorldActors.REQUEST_YES_NO:
+		answer["accepted"] = int(result.get("script_value", 0)) == 1
 	_answer_actor(request, answer)
 
 
@@ -10103,6 +10109,10 @@ func _mod_roamers() -> Array:
 ## world screen is the one place that holds both.
 func _mod_progress() -> Dictionary:
 	return Gen2ModProgress.of(_world, active_save())
+
+
+func _mod_party() -> Array:
+	return Gen2ModProgress.party_of(active_save(), _data.generation)
 
 
 ## What [method Gen2ModHost.request_hidden_item] collapses an ask against: the

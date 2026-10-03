@@ -12791,11 +12791,11 @@ func give_item_gift(item: int, quantity: int = 1) -> Array:
 	return _run_mod_script({"kind": &"item_gift", "item": item, "quantity": maxi(1, quantity)})
 
 
-## A mod actor's `text`, read to its last press with no script behind it.
-func show_mod_text(text: String) -> Array:
+## A mod actor's `text` with no script behind it, or a `yesorno` question.
+func show_mod_text(text: String, yes_no: bool = false) -> Array:
 	if text.is_empty():
 		return []
-	return _run_mod_script({"kind": &"mod_text", "text": text})
+	return _run_mod_script({"kind": &"mod_text", "text": text, "yes_no": yes_no})
 
 
 func _run_mod_script(request: Dictionary) -> Array:

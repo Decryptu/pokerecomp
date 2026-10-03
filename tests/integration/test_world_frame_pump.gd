@@ -630,6 +630,28 @@ func test_an_actor_text_is_read_to_its_last_press_before_it_is_answered() -> voi
 	assert_eq(actor.completed, [{"ok": true, "kind": &"text", "tag": &"legend"}])
 
 
+## #838: a `yes_no` is `writetext` then `yesorno`. The question owes no press,
+## the YES/NO box opens on it, and the actor hears the choice once it is down.
+func test_an_actor_yes_no_opens_on_its_question_and_answers_the_choice() -> void:
+	var actor: Object = await _open_world_with_speaking_actor()
+	for answer: Array in [[PokeButton.B, false], [PokeButton.A, true]]:
+		actor.requests.append({"kind": &"yes_no", "text": "Take this\nCHIKORITA?", "tag": &"offer"})
+		_world_screen.advance_frame()
+		_settle_text_box(_world_screen)
+		await get_tree().process_frame
+		var host: Gen2WorldServiceScreen = _world_screen._service_host
+		assert_not_null(host, "the box opens with no press behind the question")
+		assert_eq(actor.completed.size(), 0 if answer[1] == false else 1)
+		host.handle_button(answer[0])
+		for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
+			host.advance_frame()
+		await get_tree().process_frame
+		assert_eq(actor.completed.back(), {
+			"ok": true, "kind": &"yes_no", "tag": &"offer", "accepted": answer[1],
+		})
+	assert_false(_world_screen._world.script_busy())
+
+
 ## #833: a `step` is a map NPC's step. It turns and stays put against an object,
 ## and otherwise walks the 16 passes on `Facings`' walking rows rather than
 ## sliding, blocks both cells it spans, and is answered where it lands.

@@ -46,6 +46,22 @@ static func of_save(save: Gen2SaveData, data: GameData = null) -> Dictionary:
 	return out
 
 
+## The party in slot order; no `happiness` on an egg (`DoEggStep`'s counter) or Gen 1.
+static func party_of(save: Gen2SaveData, generation: int) -> Array:
+	var rows: Array = []
+	if save == null:
+		return rows
+	for raw: Variant in save.party:
+		var mon: Gen2SaveMon = raw as Gen2SaveMon
+		if mon == null or mon.species <= 0:
+			continue
+		var row: Dictionary = {&"species": mon.species, &"level": mon.level, &"is_egg": mon.is_egg}
+		if not mon.is_egg and generation != RomRegistry.GEN1:
+			row[&"happiness"] = mon.happiness
+		rows.append(row)
+	return rows
+
+
 ## Whether two readings differ in any field either of them carries. What decides
 ## whether [signal Gen2ModHost.progress_changed] is emitted, so a field appearing
 ## or disappearing counts as a move exactly as a field changing value does.

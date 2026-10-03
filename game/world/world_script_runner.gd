@@ -780,9 +780,15 @@ func _start_synthesized(bank: int, address: int, kind: StringName) -> bool:
 		&"gs_ball", &"item_gift":
 			return _start_gift_request(bank, kind)
 		&"mod_text":
-			if not _push_frame(bank, MOD_REQUEST_FRAME, bare_end):
+			## A question is `writetext`, `yesorno`, `end`; its text owes no press.
+			var asks: bool = bool(_request.get("yes_no", false))
+			var script := PackedByteArray([Gen2WorldScript.YESORNO]) if asks else PackedByteArray()
+			script.append_array(bare_end)
+			if not _push_frame(bank, MOD_REQUEST_FRAME, script):
 				return false
-			_stage_internal_text(String(_request.get("text", "")), true)
+			_stage_internal_text(
+				String(_request.get("text", "")), not asks, {"prompt": false} if asks else {}
+			)
 		&"rock_smash_used":
 			## `RockSmashFromMenuScript` past the menu's text, a bare `end` standing in.
 			if not _push_frame(bank, FIELD_MOVE_PROMPT_FRAME, bare_end):
@@ -970,6 +976,7 @@ func _resume_day_of_week_menu(choice: int) -> Dictionary:
 		## `_OakTimeIsItText` carries on from where `PlaceString` left off, so the
 		## two are one line.
 		"text": "%s, is it?" % WEEKDAY_NAMES[selected_day],
+		"prompt": false,
 		"special": &"set_day_of_week_confirmation",
 		"day": selected_day,
 		"source": _request.duplicate(true),
@@ -6674,6 +6681,7 @@ func _stage_strength_boulder() -> Dictionary:
 		"type": &"text",
 		"text": STRENGTH_ASK_TEXT,
 		"internal_text": true,
+		"prompt": false,
 		"special": &"strength_ask",
 		"slot": slot,
 		"source": _request.duplicate(true),
@@ -6897,6 +6905,7 @@ func _stage_field_move_prompt() -> Dictionary:
 		"type": &"text",
 		"text": _field_move_prompt_ask(move),
 		"internal_text": true,
+		"prompt": false,
 		"special": &"field_move_ask",
 		"move": move,
 		"slot": slot,
@@ -6965,6 +6974,7 @@ func _stage_smash_rock() -> Dictionary:
 		"type": &"text",
 		"text": ROCK_SMASH_ASK_TEXT,
 		"internal_text": true,
+		"prompt": false,
 		"special": &"rock_smash_ask",
 		"slot": slot,
 		"source": _request.duplicate(true),
@@ -7097,7 +7107,7 @@ func _stage_gs_ball() -> Dictionary:
 					"The forest is\nrestless! Take the\nGS BALL to its\nshrine.")
 		&"shrine":
 			return _stage_internal_text("Place the GS BALL\nin the shrine?", false, {
-				"gs_ball_choice": true,
+				"gs_ball_choice": true, "prompt": false,
 			})
 	return _stage_internal_text("Take the GS BALL\nto KURT.", true)
 
@@ -7532,6 +7542,7 @@ func _complete_result() -> Dictionary:
 		"warp": _staged_warp.duplicate(true),
 		"commands": _command_count,
 		"deferred": _ran_deferred,
+		"script_value": _script_value,
 	}
 	## `SetDayOfWeek` moves `wStartDay` and leaves `wCurDay`, so no day passes.
 	if _staged_day_of_week >= 0:

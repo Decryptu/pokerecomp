@@ -243,14 +243,12 @@ var _notice_requests: Array[Dictionary] = []
 ## Whether a battle screen is up and printing lines. See
 ## [method set_battle_messages_open].
 var _battle_messages_open: bool = false
-## What [method inventory] reads the live bag through, set by the world screen
-## while a world is open. A Callable rather than a handle on [Gen2WorldAPI]: a
-## mod is given the copy and never the world.
 var _inventory_source: Callable = Callable()
 ## Where [method progress] reads the live run from, and the last reading
 ## [method refresh_progress] compared against.
 var _progress_source: Callable = Callable()
 var _progress: Dictionary = {}
+var _party_source: Callable = Callable()
 ## The open map's `{cell, item, flag, taken}` rows, for the ask that collapses.
 ## See [method set_hidden_items_source].
 var _hidden_items_source: Callable = Callable()
@@ -613,6 +611,18 @@ func progress() -> Dictionary:
 		return {}
 	var reading: Variant = _progress_source.call()
 	return (reading as Dictionary).duplicate(true) if reading is Dictionary else {}
+
+
+func set_party_source(source: Callable) -> void:
+	_party_source = source
+
+
+## A copy of the live [method Gen2ModProgress.party_of], `[]` with no world open.
+func party() -> Array:
+	if not _party_source.is_valid():
+		return []
+	var rows: Variant = _party_source.call()
+	return (rows as Array).duplicate(true) if rows is Array else []
 
 
 ## The same off a save rather than off the world, which is what a
