@@ -3,17 +3,20 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Mods: API 58 lets a custom NPC speak. A `text` request shows the game's own text box, pages on each press, and tells the NPC when the box has closed, so a scene can chain dialogue, a catch demonstration and a gift.
-- Mods: API 58 lets a custom NPC walk. A `step` request moves it one cell at normal NPC speed with the walking animation. Walls, water, map objects, the player and other solid NPCs block it, and the NPC is told where it ended up.
+- Mods: API 59 lets a custom NPC ask a yes/no question. The question appears in the game's text box, the YES/NO box opens on it, and the NPC is told which answer was picked.
+- Mods: API 59 lets a mod read the party: species, level, whether each one is an egg, and happiness.
+- Mods: a Pokémon gift now tells the mod whether it went to the party or a box, which box, and whether the species is new to the Pokédex.
 
 ## Fixed
 
-- The Dude's catching demonstration on Route 29 no longer sends out your first Pokémon. The Dude stays on screen and throws the ball himself, as on the cartridge. The same goes for a mod's catch demonstration.
+- The Strength, Rock Smash, Cut, Surf, Waterfall, Whirlpool and Headbutt questions open their YES/NO box as soon as the text has printed. They used to wait for an extra A press first.
+- The day-of-week confirmation when setting the clock opens its YES/NO box without an extra press.
+- Mods: an Unown given by a mod is now recorded in the Unown dex.
 
 ## Updating this release
 
 - Cartridge cache format is still 160. Coming from 0.1.67 or earlier, import each cartridge file again when the launcher requests it. **Saved games are kept separately and remain intact.**
-- Mod API version is now 58. Existing supported mods remain compatible.
+- Mod API version is now 59. Existing supported mods remain compatible.
 
 ## Which file
 
