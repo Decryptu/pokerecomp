@@ -37,10 +37,11 @@ const REQUEST_POKEMON_GIFT: StringName = &"pokemon_gift"
 const REQUEST_CATCH_DEMO: StringName = &"catch_demo"
 const REQUEST_TEXT: StringName = &"text"
 const REQUEST_STEP: StringName = &"step"
+const REQUEST_YES_NO: StringName = &"yes_no"
 const ACTOR_REQUEST_COMPLETED_METHOD: String = "request_completed"
 const REQUEST_KINDS: Array[StringName] = [
 	REQUEST_CRY, REQUEST_BATTLE, REQUEST_POKEMON_GIFT, REQUEST_CATCH_DEMO, REQUEST_TEXT,
-	REQUEST_STEP,
+	REQUEST_STEP, REQUEST_YES_NO,
 ]
 const MAX_QUEUED_STEPS: int = 8
 
@@ -188,7 +189,7 @@ func _resolve_request(entry: Variant) -> Dictionary:
 			"kind": kind, "species": species, "level": int(row.get("level", 0)),
 			"tag": StringName(row.get("tag", &"")),
 		}
-	if kind == REQUEST_TEXT:
+	if kind == REQUEST_TEXT or kind == REQUEST_YES_NO:
 		var text: String = _request_text(row.get("text", ""))
 		if text.is_empty():
 			return {}

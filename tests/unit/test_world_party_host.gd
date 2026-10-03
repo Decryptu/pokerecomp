@@ -1603,22 +1603,35 @@ func test_generation_one_says_its_own_catch_lines() -> void:
 
 
 ## `GivePokemon`, which the Game Corner's prize counter reaches with a species
-## and `GetPrizeMonLevel`'s level. A full party boxes it; neither having room
-## writes nothing, which is what leaves the coins alone.
+## and `GetPrizeMonLevel`'s level. A full party boxes it in the open box, and a
+## boxed Unown still reaches the Unown dex as `SendMonIntoBox` writes it; neither
+## having room writes nothing, which is what leaves the coins alone.
 func test_a_prize_pokemon_joins_the_party_and_a_full_one_goes_to_a_box() -> void:
+	assert_false(_world.state.has_caught_species(25))
 	var given: Dictionary = Gen2WorldPartyHost.give_pokemon(
 		_world, _save, 25, 9, false, _random
 	)
 	assert_true(bool(given.get("ok", false)), JSON.stringify(given))
+	assert_eq([given["destination"], given["newly_caught"]], [&"party", true])
 	assert_eq(_save.party.size(), 3)
 	assert_eq(_save.party[2].species, 25)
 	assert_eq(_save.party[2].level, 9)
 	while _save.party.size() < Gen2SaveData.MAX_PARTY:
 		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
-	assert_true(bool(Gen2WorldPartyHost.give_pokemon(
+	_save.current_box = 2
+	var boxed: Dictionary = Gen2WorldPartyHost.give_pokemon(
 		_world, _save, 25, 9, false, _random
-	).get("ok", false)), "a full party boxes it")
+	)
+	assert_eq(
+		[boxed["destination"], boxed["box"], boxed["newly_caught"]], [&"box", 2, false],
+		"a full party boxes it"
+	)
 	assert_eq(_save.party.size(), Gen2SaveData.MAX_PARTY)
+	assert_eq(_world.state.unown_caught_count(), 0)
+	assert_true(Gen2WorldPartyHost.give_pokemon(
+		_world, _save, Gen2Layout.UNOWN_SPECIES, 5, false, _random
+	)["ok"])
+	assert_eq(_world.state.unown_caught_count(), 1)
 	assert_eq(
 		StringName(Gen2WorldPartyHost.give_pokemon(
 			_world, _save, 0, 9, false, _random

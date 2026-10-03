@@ -251,6 +251,20 @@ func request_completed(result): completed.append(result)
 	var save: Gen2SaveData = _world_screen.active_save()
 	assert_eq((save.party.back() as Gen2SaveMon).species, 155)
 	assert_true(_world_screen._world.state.has_caught_species(155))
+	assert_eq([actor.completed[0]["destination"], actor.completed[0]["newly_caught"]], [&"party", true])
+	## #839: the mod reads the party the gift landed in, and an egg's happiness
+	## byte, which is its hatch counter, is left out.
+	var egg := Gen2SaveMon.from_dict((save.party.back() as Gen2SaveMon).to_dict())
+	egg.is_egg = true
+	save.party.append(egg)
+	var rows: Array = Gen2ModHost.instance().party()
+	assert_eq(rows.size(), save.party.size())
+	assert_eq(rows[rows.size() - 2], {
+		&"species": 155, &"level": 5, &"is_egg": false,
+		&"happiness": (save.party[rows.size() - 2] as Gen2SaveMon).happiness,
+	})
+	assert_eq(rows.back(), {&"species": 155, &"level": 5, &"is_egg": true})
+	save.party.pop_back()
 	var count: int = save.party.size()
 	actor.requests.append({"kind": &"pokemon_gift", "species": 65535, "level": 5})
 	_world_screen._spend_actor_requests()

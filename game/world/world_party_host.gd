@@ -1689,13 +1689,22 @@ static func give_pokemon(
 	if not bool(applied.get("ok", false)) or not bool(applied.get("accepted", true)):
 		return _failure(StringName(applied.get("reason", &"storage_full")), applied)
 	var before: Gen2WorldSnapshot = world.snapshot()
+	var newly_caught: bool = not world.state.has_caught_species(species)
 	_register_caught(world, int(applied.get("register_caught", 0)))
+	_register_unown(world, int(applied.get("register_unown", 0)))
 	var committed: Dictionary = Gen2WorldTransaction.commit(
 		world, save, candidate, before, persist
 	)
 	if not bool(committed.get("ok", false)):
 		return _failure(StringName(committed["reason"]), committed.get("details", {}))
-	return {"ok": true, "species": species, "level": level}
+	var placed: Dictionary = applied["summary"]["destination"]
+	var given: Dictionary = {
+		"ok": true, "species": species, "level": level, "newly_caught": newly_caught,
+		"destination": StringName(placed.get("destination", &"party")),
+	}
+	if given["destination"] == &"box":
+		given["box"] = int(placed.get("box", 0))
+	return given
 
 
 ## `Script_givepoke` and `Script_giveegg`.

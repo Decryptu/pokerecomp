@@ -133,6 +133,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 59 | Actor `yes_no` requests answering `accepted`; `Gen2ModHost.party()`; `destination`, `box` and `newly_caught` on a `pokemon_gift` answer |
 | 58 | Actor `text` and `step` requests; `id` and `frame` on an actor entry; the Dude's fight never sends the player's Pokemon out |
 | 57 | `Gen2WorldAPI.player_walk_cells()`, and the cells the player still has to cross in a visible-encounter context's `occupied` |
 | 56 | Actor `catch_demo` requests; `request_completed(result)` answering an actor's `battle` and `catch_demo` as well as its gift |
@@ -1670,7 +1671,7 @@ player event is spent.
 `take_requests` is where an edge goes; `sprites()` is where a pose goes.
 `{"kind": &"cry", "species": n}` is played through the same player a script's
 `cry` command uses: a mod may not play a sound, so it asks and the host spends
-it. The other kinds are `battle`, `pokemon_gift`, `catch_demo`, `text` and `step`,
+it. The other kinds are `battle`, `pokemon_gift`, `catch_demo`, `text`, `yes_no` and `step`,
 below. Anything else in the outbox is dropped.
 
 Each entry of `sprites()` names cartridge art and nothing else:
@@ -1744,8 +1745,15 @@ An actor may ask for a gift with
 The host waits for an idle world, creates the Pokemon through the ordinary gift
 transaction and sends it to the party or the current box. Optional
 `request_completed(result: Dictionary)` receives `ok`, `reason` on failure,
-`species`, `level`, and `tag`; an invalid gift or full storage changes nothing.
-Mark a gift claimed only after `ok` is true. The same result is published on the
+`species`, `level`, and `tag`; an invalid gift or full storage changes nothing, and
+full storage answers `reason: &"storage_full"`. A gift that was given also carries
+`destination`, `&"party"` or `&"box"`, with the box's index as `box` for the second,
+so the story can say where it went; and `newly_caught`, true when the Pokedex had
+not marked the species caught before, which is when `caught_species` grew.
+Mark a gift claimed only after `ok` is true, and keep the mark in the save: the
+`save` that [`save_activated`](#holding-a-run-rather-than-an-installation) hands
+over is the slot being played, and `write_save_data` into it is written to disk
+with the next SAVE, as a script's event flag is. The same result is published on the
 world channel as `type: &"pokemon_gift"`.
 
 `{"kind": &"catch_demo", "species": 152, "level": 5, "tag": &"chikorita"}` is the
@@ -1770,6 +1778,13 @@ script fills from RAM (`<RAM_`, `<NUM_`, `<BUFFER_`) is dropped. It waits for an
 idle world like a gift, and `request_completed` receives `ok`, `kind` and `tag`
 once the last press has taken the box down, so a story chains its next request
 off the answer: text, `catch_demo`, text, `pokemon_gift`.
+
+`{"kind": &"yes_no", "text": "Will you take\nthis CHIKORITA?", "tag": &"offer"}` is a
+script's `writetext` and `yesorno`: the question prints in the world's box, which
+owes no press, and the YES/NO box opens on it. It takes the same text a `text`
+request takes and is dropped on the same terms. `request_completed` receives `ok`,
+`kind`, `tag` and `accepted`, true for YES and false for NO or B, once the box is
+down, so the next request in the story can depend on the answer.
 
 `{"kind": &"step", "id": &"npc", "direction": Vector2i.LEFT, "tag": &"walk"}`
 walks the entry `sprites()` answers with that `id` one cell, as a map NPC steps:
@@ -2026,7 +2041,7 @@ It returns `{ok: true}` or a refusal, so a mod may say why nothing was printed.
 `register_event_mutator` rewrites an existing line instead; there is one mutator
 per channel, so adding a line does not cost a mod that seam.
 
-## Reading the bag
+## Reading the bag and the party
 
 `Gen2ModHost.generation()` answers `RomRegistry.GEN1` or `GEN2` for the target
 game, so a policy that only means something on one cartridge (weather, a held
@@ -2037,6 +2052,12 @@ when no world is open. Read only, and a copy.
 
 It is one narrow accessor rather than a handle on `Gen2WorldAPI`, because a
 non-renderer mod is deliberately given no world.
+
+`Gen2ModHost.party()` answers the party in slot order, one row per Pokemon:
+`species`, `level`, `is_egg`, and `happiness`. An egg's row has no `happiness`,
+because that byte is the counter `DoEggStep` spends until it hatches, and a
+Generation 1 row has none since those games have no happiness byte. `[]` when no
+world is open. Read only, and a copy.
 
 ## Reading the run's progress
 

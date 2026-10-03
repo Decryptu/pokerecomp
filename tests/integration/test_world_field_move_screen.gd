@@ -880,6 +880,7 @@ func test_talking_to_a_rock_asks_and_then_smashes_it() -> void:
 	var opened: Array = world.interact()
 	assert_eq(opened[0]["status"], &"waiting", JSON.stringify(opened))
 	assert_string_contains(String(opened[0]["event"]["text"]), "This rock looks")
+	assert_false(opened[0]["event"]["prompt"], "`AskRockSmashText` ends in `done`")
 
 	# opentext, writetext, yesorno: the text is acknowledged, then the choice.
 	var asked: Array = world.run_event_queue(true)
@@ -1011,6 +1012,7 @@ func test_facing_a_cut_tree_asks_before_cutting() -> void:
 	assert_eq(opened[0]["status"], &"waiting", JSON.stringify(opened))
 	assert_string_contains(String(opened[0]["event"]["text"]), "This tree can be")
 	assert_string_contains(String(opened[0]["event"]["text"]), "Want to use CUT?")
+	assert_false(opened[0]["event"]["prompt"], "`AskCutText` ends in `done`")
 
 	var asked: Array = world.run_event_queue(true)
 	assert_eq(asked[0]["event"]["type"], &"choice", JSON.stringify(asked))
