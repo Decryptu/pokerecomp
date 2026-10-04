@@ -64,6 +64,7 @@ enum Phase {
 	CRY,
 	HATCHED,
 	ASK_NICKNAME,
+	CLEARING,
 	NAMING,
 	DONE,
 }
@@ -85,6 +86,7 @@ var _object_colors: PackedColorArray = PackedColorArray()
 var _pic_origin: Vector2i = EGG_AT
 var _pic_pad: Vector2i = Vector2i.ZERO
 var _nickname_forced: bool = false
+var menu_transition: Gen2MenuTransition = null
 var _animation: Gen2PicAnimation = null
 var _animation_pixels: PackedByteArray = PackedByteArray()
 ## `sound_caught_mon`'s `WaitSFX` in front of `text_promptbutton`.
@@ -239,7 +241,7 @@ func _show_text(text: String, prompt: bool = false) -> void:
 
 
 func advance_frame() -> void:
-	if _phase == Phase.DONE or _data == null or _phase == Phase.NAMING:
+	if _phase in [Phase.DONE, Phase.CLEARING, Phase.NAMING] or _data == null:
 		return
 	if _yes_no.is_open():
 		_yes_no.advance_frame()
@@ -481,6 +483,14 @@ func _answer_nickname(yes: bool) -> void:
 	if not yes:
 		_finish_hatch(String(current_hatch().get("nickname", "")))
 		return
+	_phase = Phase.CLEARING
+	if menu_transition == null:
+		_open_naming()
+		return
+	menu_transition.clear_screen(_open_naming, &"naming_screen")
+
+
+func _open_naming() -> void:
 	_naming = Gen2NamingScreenScreen.new()
 	if not _naming.open(
 		_data, Gen2WorldPartyHost.nickname_prompt(

@@ -857,7 +857,6 @@ func _press_elevator(button: int) -> void:
 var question_page: String = ""
 var box_palette: PackedColorArray = PackedColorArray()
 var _no_request: bool = false
-## The world's `FadeToMenu` and `CloseSubmenu`; null opens and closes at once.
 var menu_transition: Gen2MenuTransition = null
 var _fade_order: int = Gen2WorldPalette.FADE_IDENTITY
 ## Whether `BuyMenu` is up behind a `FadeToMenu`, or waiting on one.
@@ -900,6 +899,13 @@ func _fade_to_menu(open: Callable) -> void:
 		open.call()
 		return
 	menu_transition.fade_to_menu(open)
+
+
+func _clear_screen(open: Callable, screen: StringName = &"pc_item_screen") -> void:
+	if menu_transition == null:
+		open.call()
+		return
+	menu_transition.clear_screen(open, screen)
 
 
 func _close_submenu() -> void:
@@ -2430,12 +2436,14 @@ func _refuse_pc() -> void:
 
 
 ## `BillsPC_SeeYa`, and the `.LogOut` behind it: back to the machine's own top
-## menu, or out of the host when nothing opened this but a start-menu action.
+## menu, or out of the host when nothing opened this but a start-menu action, whose
+## `CloseSubmenu` is the world's.
 func _leave_bills_pc() -> void:
 	if _bills_pc_only:
 		_finish([])
 		return
 	_open_pc(&"pokemon_center")
+	_close_submenu()
 
 
 ## `PokemonCenterPC`'s top menu, or `_PlayersHousePC`'s item PC when the script
@@ -2528,11 +2536,16 @@ func _open_pc_item_list(action: int) -> void:
 		_open_pc_text([_said(_pc_text("no_items"))], &"pc_items", _title)
 		return
 	if depositing:
-		_open_deposit_sell_pack(Gen2DepositSellPack.DEPOSIT, _open_pc_items)
+		_open_deposit_sell_pack(Gen2DepositSellPack.DEPOSIT, _leave_pc_deposit)
 		return
 	_mode = MODE.PC_ITEM_LIST
 	_summary = ""
 	_render_rows()
+
+
+func _leave_pc_deposit() -> void:
+	_open_pc_items()
+	_close_submenu()
 
 
 func _pc_list_is_bag() -> bool:
@@ -2677,8 +2690,9 @@ func _confirm_player_pc_row(row: int) -> void:
 	_players_pc_row = row
 	match row:
 		Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM, \
-		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM, \
 		Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM:
+			_clear_screen(_open_pc_item_list.bind(row))
+		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM:
 			_open_pc_item_list(row)
 		Gen2WorldPC.PLAYERSPCITEM_MAIL_BOX:
 			_enter_mailbox()
@@ -3099,7 +3113,7 @@ const PC_TEXT_LANDINGS: Dictionary = {
 	&"pc_oak": &"_open_pc_oak",
 	&"mailbox": &"_open_mailbox",
 	&"decoration": &"_open_decorations",
-	&"bills_pc": &"_open_bills_pc_menu",
+	&"bills_pc": &"_log_in_bills_pc",
 	&"bills_pc_mail": &"_open_bills_pc_menu",
 	&"oak_closed": &"_open_oak_closed",
 	&"gen1_items": &"_open_gen1_items",
@@ -3698,6 +3712,14 @@ func _open_gen1_text(texts: Array, after: StringName) -> void:
 	_open_pc_text(said, after, "")
 
 
+## `.LogIn`'s `ClearPCItemScreen`, which `.CheckCanUsePC`'s refusal comes before.
+func _log_in_bills_pc() -> void:
+	if Gen2WorldPC.can_open(_save):
+		_clear_screen(_open_bills_pc_menu)
+		return
+	_open_bills_pc_menu()
+
+
 ## `_BillsPC`, the top menu the two lists and the box picker sit behind.
 ## `.CheckCanUsePC` is the one refusal it has, and it is the machine's own.
 func _open_bills_pc_menu() -> void:
@@ -4083,8 +4105,7 @@ func _on_boxes_closed(_result: Dictionary) -> void:
 		Gen2Screen.drop(_boxes)
 		_boxes = null
 	_set_overlay_open(false)
-	## Both lists `CloseWindow` back into `.UseBillsPC`'s loop, the top menu.
-	_open_bills_pc_menu()
+	_clear_screen(_open_bills_pc_menu)
 
 
 func _open_phone(request: Dictionary, data: Dictionary) -> void:
@@ -4746,7 +4767,7 @@ func _cancel_pc_items() -> void:
 	_shut_down_pc()
 
 
-## `.b_2`: the mark is dropped and the list stays up.
+## `.b_2`: the mark is dropped and the list stays up; `.quit` is `CloseSubmenu`.
 func _cancel_pc_item_list() -> void:
 	if _pc_switch >= 0:
 		_pc_switch = -1
@@ -4754,6 +4775,7 @@ func _cancel_pc_item_list() -> void:
 		return
 	_save_pc_list_cursor()
 	_open_pc_items()
+	_close_submenu()
 
 
 func _save_pc_list_cursor() -> void:

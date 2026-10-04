@@ -141,15 +141,13 @@ var _poison_flash_frames: int = 0
 var _poison_flash_after: Callable = Callable()
 var _script_fade_order: int = Gen2WorldPalette.FADE_IDENTITY
 var _script_fade_white: bool = false
-## `FadeToMenu`, `CloseSubmenu` and `ExitAllMenus`, shared with the hosts.
 var _menu_transition := Gen2MenuTransition.new()
 ## The screen opened behind `FadeToMenu`, which `CloseSubmenu` then answers.
 var _faded_menu: StringName = &""
 var _text_palette_kept: PackedColorArray = PackedColorArray()
 var _text_fading: bool = false
-## `DoBattleTransition` and the battle it is in front of: the encounter is
-## resolved when the transition starts, and the battle screen is not built until
-## it has finished.
+## `DoBattleTransition` and the battle it is in front of: the encounter is resolved when the
+## transition starts, and the battle screen is not built until it has finished.
 var _battle_transition: Gen2BattleTransition = null
 var _battle_transition_request: Dictionary = {}
 ## `wEnemyMonLevel`, which `ClearBattleRAM` zeroes only behind the transition.
@@ -2307,6 +2305,7 @@ func _open_hatch(hatches: Array, save: Gen2SaveData) -> void:
 		_data.overworld_sprite_palette(0, _render_time_of_day())
 	)
 	host.set_audio_player(_audio_player)
+	host.menu_transition = _menu_transition
 	_hatch_save = save
 	host.named.connect(_on_hatch_named)
 	host.closed.connect(_on_hatch_closed)
@@ -2473,6 +2472,7 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 	_gift_dvs = Gen2WorldPartyHost.boxed_gift_dvs(_data) if destination == &"box" and not gen1 \
 		else Gen2BattleMon.random_dvs(_encounter_random) if _encounter_random != null else -1
 	host.set_species(species, _gift_dvs)
+	host.menu_transition = _menu_transition
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
@@ -2533,6 +2533,7 @@ func _open_contest_nickname(_request: Dictionary = {}) -> bool:
 	var host := Gen2NicknamePromptScreen.new()
 	host.set_context(_data, species_name, "", "", _nuzlocke_names_everything())
 	host.set_species(int(caught.get("species", 0)), int(caught.get("dvs", -1)))
+	host.menu_transition = _menu_transition
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
@@ -2590,10 +2591,10 @@ func _on_hatch_closed() -> void:
 	_hatch_save = null
 	if host != null:
 		Gen2Screen.drop(host)
-	_play_current_map_music()
 	if _renderer != null:
 		_renderer.refresh()
 	_refresh_labels()
+	_menu_transition.close_submenu(_play_current_map_music, &"hatch")
 
 
 ## `special NameRater`. `_NameRater` owns its own boxes and both of the screens
@@ -3980,21 +3981,26 @@ func _fade_to_menu(open: Callable, screen: StringName) -> void:
 	_menu_transition.fade_to_menu(_open_faded_menu.bind(open, screen), screen)
 
 
+func _clear_to_menu(open: Callable, screen: StringName) -> void:
+	_menu_transition.clear_screen(_open_faded_menu.bind(open, screen), screen)
+
+
 func _open_faded_menu(open: Callable, screen: StringName) -> void:
 	_faded_menu = screen
 	open.call()
 
 
 ## `CloseSubmenu` and `ExitAllMenus`: [param done] (a script resuming) runs once
-## the map is back. A menu not opened behind `FadeToMenu` closes at once.
-func _close_faded_menu(done: Callable = Callable()) -> void:
+## the map is back, or at once for a menu not opened behind `FadeToMenu`. [param faded]
+## is false for `ReturnToMapWithSpeechTextbox`.
+func _close_faded_menu(done: Callable = Callable(), faded: bool = true) -> void:
 	var screen: StringName = _faded_menu
 	_faded_menu = &""
 	if screen == &"":
 		if done.is_valid():
 			done.call()
 		return
-	_menu_transition.close_submenu(done, screen)
+	_menu_transition.close_submenu(done, screen, faded)
 
 
 ## Boxes over the map are drawn in `PAL_BG_TEXT`, which a fade walks with the rest.
@@ -4612,10 +4618,9 @@ func preview_unown_printer(slot: int = 0, printing: bool = false) -> void:
 		_unown_printer_host.handle_button(PokeButton.A)
 
 
-## Public screenshot driver for `_Diploma` and `_PrintDiploma`, which no fixture
-## cell reaches: the diploma is one flag deep into the Hall of Fame's own script.
-## [param page] is 1 or 2, and 2 is the page only a printer that answered would
-## have reached.
+## Public screenshot driver for `_Diploma` and `_PrintDiploma`, which no fixture cell
+## reaches: the diploma is one flag deep into the Hall of Fame's own script. [param page] is
+## 1 or 2, and 2 is the page only a printer that answered would have reached.
 func preview_diploma(printing: bool = false, page: int = 1) -> void:
 	if not _open_diploma({"values": {"printing": printing}}):
 		return
@@ -4623,9 +4628,8 @@ func preview_diploma(printing: bool = false, page: int = 1) -> void:
 		_diploma_host.preview_page(page)
 
 
-## Public screenshot driver for `_BillsPC`, whose top menu no preview cell
-## reaches: every PC on a preview map is a script's, and the machine wants a
-## party before it opens at all.
+## Public screenshot driver for `_BillsPC`, whose top menu no preview cell reaches: every PC
+## on a preview map is a script's, and the machine wants a party before it opens at all.
 func preview_bills_pc() -> void:
 	if _world == null or _data == null or _service_host != null:
 		return
@@ -4635,7 +4639,7 @@ func preview_bills_pc() -> void:
 		_refresh_labels()
 		return
 	_injected_save = save
-	_open_bills_pc()
+	_open_service_overlay(&"bills_pc")
 
 
 ## Public screenshot drivers for the two PCs, whose cells no preview map has.
@@ -7464,6 +7468,7 @@ const START_FADED_ROWS: Dictionary = {
 	Gen2WorldStartMenu.ITEM_POKEMON: &"party",
 	Gen2WorldStartMenu.ITEM_POKEGEAR: &"pokegear",
 	Gen2WorldStartMenu.ITEM_PLAYER: &"trainer_card",
+	Gen2WorldStartMenu.ITEM_TOWN_MAP: &"town_map_item",
 }
 
 
@@ -7522,9 +7527,8 @@ var _reopen_party_member: int = -1
 var _field_move_slot: int = -1
 
 
-## `MenuTextboxBackup` or `PrintText` over the party list a handler answering 3
-## goes back to, which is where every ITEM, MAIL and heal result and every
-## refused field move is read.
+## `MenuTextboxBackup` or `PrintText` over the party list a handler answering 3 goes back
+## to, which is where every ITEM, MAIL and heal result and every refused field move is read.
 func _say_over_party(text: String) -> void:
 	_reopen_party_if_due()
 	if _party_host == null:
@@ -8570,12 +8574,18 @@ func _open_pokegear() -> void:
 ## The `OPEN_BILLS_PC` start-menu action: storage on its own, through the host
 ## the Pokemon Center's machine opens. The row is already gated on a party.
 func _open_bills_pc() -> void:
+	_clear_to_menu(_open_cleared_bills_pc, &"pc_item_screen")
+
+
+## `_BillsPC.LogIn` has cleared the screen and its `.LogOut` is a `CloseSubmenu`.
+func _open_cleared_bills_pc() -> void:
 	_open_service_overlay(&"bills_pc")
+	if _service_host == null:
+		_faded_menu = &""
 
 
-## The host's own YES/NO over the map: `Script_yesorno`'s box, through the same
-## overlay a scripted one goes through, answered back in
-## [method _on_service_completed].
+## The host's own YES/NO over the map: `Script_yesorno`'s box, through the same overlay a
+## scripted one goes through, answered back in [method _on_service_completed].
 func _open_host_prompt(text: String) -> bool:
 	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
@@ -8626,15 +8636,15 @@ func _open_town_map_overlay() -> void:
 		return
 	if not host.open_town_map(_world, _data, _overlay_save()):
 		Gen2Screen.drop(host)
+		_faded_menu = &""
 		_script_prompt = "Region map unavailable"
 		_refresh_labels()
 		return
 	_adopt_service_overlay(host, "Town map open")
 
 
-## `_FlyMap` as its own overlay, and the warp its answer asks for. A cancel
-## leaves the player where they were, which is what `.illegal` does with the
-## `-1` a B press writes.
+## `_FlyMap` as its own overlay, and the warp its answer asks for. A cancel leaves the
+## player where they were, which is what `.illegal` does with the `-1` a B press writes.
 func _open_fly_map(request: Dictionary) -> void:
 	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
@@ -8972,6 +8982,19 @@ const FADED_REQUESTS: Dictionary = {
 	&"unown_puzzle_requested": &"unown_puzzle",
 }
 
+const CLEARED_REQUESTS: Dictionary = {
+	&"rival_name_requested": &"rival_naming",
+	&"party_selection_requested": &"party_select",
+}
+
+const GEN1_MENU_REQUESTS: Dictionary = {
+	&"pokedex_entry_requested": &"pokedex_entry",
+	&"slot_machine_requested": &"slot_machine",
+	&"diploma_requested": &"diploma",
+	&"gen1_nickname_requested": &"name_rater_naming",
+	&"party_selection_requested": &"party",
+}
+
 const SERVICE_HOST_REQUESTS: Array[StringName] = [
 	&"mart_requested", &"phone_call_requested", &"special_phone_call_requested",
 	&"town_map_requested", &"apricorn_selection_requested", &"pc_requested",
@@ -9134,9 +9157,8 @@ func _apply_result_status(result: Dictionary, flags: Dictionary) -> StringName:
 	return &"none"
 
 
-## A `writetext` pause. Prof Oak's PC is the one special that draws on its own
-## and whose script runs on past it, so its pages are shown first and this text
-## waits behind them.
+## A `writetext` pause. Prof Oak's PC is the one special that draws on its own and whose
+## script runs on past it, so its pages are shown first and this text waits behind them.
 func _apply_text_pause(event: Dictionary, flags: Dictionary) -> StringName:
 	if event.has("unown_wall") and _open_unown_wall(String(event.get("text", ""))):
 		return &"break"
@@ -9169,7 +9191,7 @@ func _handle_runtime_request(request: Dictionary) -> StringName:
 	elif kind in Gen2WorldHost.UNATTENDED_REQUESTS:
 		return _settle_unattended_request()
 	elif kind in SERVICE_HOST_REQUESTS:
-		if kind == &"town_map_requested" and _data.generation != RomRegistry.GEN1:
+		if kind == &"town_map_requested":
 			_fade_to_menu(_open_faded_service_host, &"town_map")
 		else:
 			_open_service_host()
@@ -9182,10 +9204,16 @@ func _handle_runtime_request(request: Dictionary) -> StringName:
 
 ## Opens [param kind]'s page, or spends its [constant REQUEST_OPENERS] refusal.
 func _open_requested_page(kind: StringName, request: Dictionary) -> StringName:
-	var screen: StringName = FADED_REQUESTS.get(kind, &"")
-	if screen != &"" and _data.generation != RomRegistry.GEN1 and _battle_host == null:
-		_fade_to_menu(_open_faded_page.bind(kind, request), screen)
-		return &"break"
+	if _battle_host == null:
+		var gen1: bool = _data.generation == RomRegistry.GEN1
+		var faded: StringName = (GEN1_MENU_REQUESTS if gen1 else FADED_REQUESTS).get(kind, &"")
+		if faded != &"":
+			_fade_to_menu(_open_faded_page.bind(kind, request), faded)
+			return &"break"
+		var cleared: StringName = &"" if gen1 else CLEARED_REQUESTS.get(kind, &"")
+		if cleared != &"":
+			_clear_to_menu(_open_faded_page.bind(kind, request), cleared)
+			return &"break"
 	return _open_page(kind, request)
 
 
@@ -9243,6 +9271,11 @@ func _on_rival_named(entered: String) -> void:
 		Gen2Screen.drop(host)
 	if _renderer != null:
 		_renderer.refresh()
+	_close_faded_menu(_finish_rival_name.bind(entered), false)
+	_refresh_labels()
+
+
+func _finish_rival_name(entered: String) -> void:
 	if _world != null:
 		_show_script_results(
 			_world.complete_runtime_request({"ok": true, "name": entered})
@@ -9290,6 +9323,11 @@ func _on_gen1_nickname_entered(entered: String) -> void:
 		Gen2WorldPartyHost.rename_party_mon(save, index, nickname)
 	if _renderer != null:
 		_renderer.refresh()
+	_close_faded_menu(_finish_gen1_nickname.bind(nickname))
+	_refresh_labels()
+
+
+func _finish_gen1_nickname(nickname: String) -> void:
 	if _world != null:
 		_show_script_results(
 			_world.complete_runtime_request({"ok": true, "name": nickname})
@@ -9307,9 +9345,8 @@ func _request_battle(request: Dictionary) -> StringName:
 	return &"break"
 
 
-## `_BugContestJudging` scores the player, ranks them against the contestants who
-## turned up and leaves the placing in wScriptVar, which the results script
-## branches on.
+## `_BugContestJudging` scores the player, ranks them against the contestants who turned up
+## and leaves the placing in wScriptVar, which the results script branches on.
 func _request_bug_contest_judging(_request: Dictionary) -> StringName:
 	var judged: Dictionary = _world.judge_bug_contest(_encounter_random)
 	var judged_results: Array = _world.complete_runtime_request({
@@ -9809,6 +9846,11 @@ func _on_party_selection_made(party_index: int) -> void:
 				"caught_location": int(mon.caught_location),
 				"party_fainted": party_fainted,
 			}
+	_close_faded_menu(_finish_party_selection.bind(result), false)
+	_refresh_labels()
+
+
+func _finish_party_selection(result: Dictionary) -> void:
 	_show_script_results(_world.complete_runtime_request(result))
 	_refresh_labels()
 

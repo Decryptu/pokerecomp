@@ -86,9 +86,15 @@ func _spend_answer_hold(host: Gen2WorldServiceScreen) -> void:
 
 ## A PC's `PC_DisplayText` box, printed and answered: the turn-on line, and each
 ## top-menu row's "accessed" line.
+## A PC box pressed through, and the `ClearPCItemScreen` behind it spent.
 func _answer_box(host: Gen2WorldServiceScreen) -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT, "a box stands first")
 	Fixture.press_through(host)
+	Fixture.settle_menu_fade(_world_screen)
+
+
+func _white_frames() -> int:
+	return Fixture.white_frames(_world_screen)
 
 
 func _write_pc_request() -> void:
@@ -154,6 +160,7 @@ func test_players_house_pc_opens_the_item_pc_and_resumes_the_waiting_script() ->
 	assert_null(host._pack)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
 	assert_eq(host._cursor, 0, "the menu is back on WITHDRAW ITEM")
+	Fixture.settle_menu_fade(_world_screen)
 	host.handle_button(PokeButton.B)
 	host.advance_frame()
 	await get_tree().process_frame
@@ -368,6 +375,30 @@ func test_pokemon_center_pc_opens_the_top_menu_and_bills_pc_behind_it() -> void:
 	await _finish_pokemon_center_pc(host)
 
 
+## `.LogIn`'s `ClearPCItemScreen` whites the map out before BILL'S PC's menu is
+## drawn, `ReturnToMapFromSubmenu` and a second one follow a list, and `.LogOut`'s
+## `CloseSubmenu` brings the machine's own menu back through the longer white.
+func test_bills_pc_is_white_while_it_logs_in_and_between_its_lists_and_out() -> void:
+	await _open_pokemon_center_pc()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	host.handle_button(PokeButton.A)
+	Fixture.press_through(host)
+	assert_ne(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES, "drawn behind the white")
+	var cleared: int = Gen2MenuTransition.CLEAR_FRAMES[&"pc_item_screen"][&"crystal"]
+	assert_eq(_white_frames(), cleared)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
+
+	host.handle_button(PokeButton.A)
+	host._boxes.close_embedded()
+	assert_eq(_white_frames(), cleared, "`ReturnToMapFromSubmenu` and `ClearPCItemScreen`")
+	await get_tree().process_frame
+
+	host.handle_button(PokeButton.B)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC, "the top menu is under the white")
+	assert_eq(_white_frames(), Gen2MenuTransition.CLOSE_WHITE_FRAMES[&"crystal"])
+	assert_false(_world_screen._screen._white.visible)
+
+
 ## `.Switch`: `ChangeBoxSaveGame` asks, saves behind its own box, and puts
 ## `wCurBox` between the two halves. Silently switching the box was the defect.
 func test_change_box_asks_and_saves_before_the_box_moves() -> void:
@@ -465,6 +496,7 @@ func test_the_machine_boots_chooses_and_shuts_down_with_its_own_sounds() -> void
 	_answer_box(host)
 	host.handle_button(PokeButton.B)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+	Fixture.settle_menu_fade(_world_screen)
 
 	host._cursor = _pc_row_index(host, Gen2WorldPC.PCPCITEM_TURN_OFF)
 	host.handle_button(PokeButton.A)
@@ -610,10 +642,12 @@ func _finish_pokemon_center_pc(host: Gen2WorldServiceScreen) -> void:
 	boxes.close_embedded()
 	await get_tree().process_frame
 	assert_null(host._boxes)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
 
 	host.handle_button(PokeButton.B)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+	Fixture.settle_menu_fade(_world_screen)
 	host.handle_button(PokeButton.B)
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
@@ -1710,6 +1744,48 @@ func test_putting_a_message_in_the_pack_empties_the_mailbox() -> void:
 	assert_eq(Fixture.box_words(host), Gen2WorldPC.MAILBOX_CLEARED)
 
 
+## `PlayerWithdrawItemMenu` and `PlayerTossItemMenu` open with `ClearPCItemScreen`
+## and leave with `CloseSubmenu`; the deposit's pack is its own screen but leaves
+## through the same `CloseSubmenu`. Each holds the screen white before the menu
+## the player came from is back.
+func test_the_item_pc_lists_clear_the_screen_in_and_close_the_submenu_out() -> void:
+	_write_pc_request()
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {"items": {7: 1}, "pc_items": {7: 1}})
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6190
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(Vector2i(7, 6))
+	)
+	await get_tree().process_frame
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	Fixture.press_through(host)
+	var cleared: int = Gen2MenuTransition.CLEAR_FRAMES[&"pc_item_screen"][&"crystal"]
+	var closed: int = Gen2MenuTransition.CLOSE_WHITE_FRAMES[&"crystal"]
+
+	host.handle_button(PokeButton.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS, "the list is not drawn yet")
+	assert_eq(_white_frames(), cleared)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
+	host.handle_button(PokeButton.B)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS, "back under the white")
+	assert_eq(_white_frames(), closed)
+
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_eq(_white_frames(), cleared, "the toss list clears the same way")
+	host.handle_button(PokeButton.B)
+	assert_eq(_white_frames(), closed)
+
+	## DEPOSIT ITEM has no `ClearPCItemScreen`: its pack builds under no white here.
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_not_null(host._pack)
+	assert_eq(_white_frames(), 0)
+	host.handle_button(PokeButton.B)
+	assert_eq(_white_frames(), closed)
+
+
 ## `PCItemsJoypad`'s `.select_1` and `.moving_stuff_around` (`SwitchItemsInBag`).
 ## The withdraw and toss lists show `wPCItems` and reach it; a deposit is
 ## `DepositSellPack`, whose joypad handler has no SELECT in it.
@@ -1729,6 +1805,7 @@ func test_select_reorders_the_pc_item_list_but_not_the_deposit_list() -> void:
 
 	## WITHDRAW ITEM, which is the PC's own list.
 	host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(_world_screen._world.state.pc_items().keys(), [7, 0x14])
 	host.handle_button(PokeButton.SELECT)
@@ -1742,6 +1819,7 @@ func test_select_reorders_the_pc_item_list_but_not_the_deposit_list() -> void:
 
 	## DEPOSIT ITEM's `DepositSellPack` answers SELECT with nothing.
 	host.handle_button(PokeButton.B)
+	Fixture.settle_menu_fade(_world_screen)
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	assert_not_null(host._pack)

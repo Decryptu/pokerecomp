@@ -14,10 +14,13 @@ signal sfx_requested(sfx: int, waited: bool)
 enum Phase {
 	BEFORE_TEXT,
 	ASK,
+	CLEARING,
 	NAMING,
 	AFTER_TEXT,
 	DONE,
 }
+
+var menu_transition: Gen2MenuTransition = null
 
 var _data: GameData = null
 ## `wStringBuffer1`, the species name `GetPokemonName` left there.
@@ -145,7 +148,7 @@ func naming_screen() -> Gen2NamingScreenScreen:
 
 
 func advance_frame() -> void:
-	if _phase in [Phase.DONE, Phase.NAMING]:
+	if _phase in [Phase.DONE, Phase.CLEARING, Phase.NAMING]:
 		return
 	if _yes_no.is_open():
 		_yes_no.advance_frame()
@@ -225,6 +228,14 @@ func _answer_question(yes: bool) -> void:
 	if not yes:
 		_after_question()
 		return
+	_phase = Phase.CLEARING
+	if menu_transition == null:
+		_open_naming()
+		return
+	menu_transition.clear_screen(_open_naming, &"naming_screen")
+
+
+func _open_naming() -> void:
 	_naming = Gen2NamingScreenScreen.new()
 	if not _naming.open(
 		_data,
@@ -243,13 +254,18 @@ func _answer_question(yes: bool) -> void:
 
 
 ## `InitName`, which keeps the species name when the entry came back empty.
+## `ExitAllMenus` follows, before the box that says where the Pokemon went.
 func _on_named(entered: String) -> void:
 	Gen2Screen.drop(_naming)
 	_naming = null
 	_answer = Gen2NamingScreen.init_name(
 		entered, _answer, _data != null and _data.generation == RomRegistry.GEN1
 	)
-	_after_question()
+	_phase = Phase.CLEARING
+	if menu_transition == null:
+		_after_question()
+		return
+	menu_transition.close_submenu(_after_question, &"naming_screen")
 
 
 func _after_question() -> void:

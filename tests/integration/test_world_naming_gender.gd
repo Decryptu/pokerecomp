@@ -75,6 +75,7 @@ func test_the_hatch_keyboard_shows_the_hatchlings_own_gender() -> void:
 			_world_screen.press_button(PokeButton.A)
 	_world_screen.press_button(PokeButton.A)
 	_spend_answer_hold()
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(screen.phase(), Gen2EggHatchScreen.Phase.NAMING)
 	var gender_sign: int = int(screen.naming_screen().get("_gender"))
 	assert_ne(gender_sign, 0, "a gendered species prints a sign")

@@ -290,9 +290,8 @@ var _using_registered: bool = false
 ## An entry point asked for before the panel was built, run once it is.
 var _pending_entry: Callable = Callable()
 
-## ForgetMove's list and the two yes/no boxes around it. The party index is held
-## because the second teach_tm_hm() call has to name the same Pokémon the first
-## one refused.
+## ForgetMove's list and the two yes/no boxes around it. The party index is held because the
+## second teach_tm_hm() call has to name the same Pokémon the first one refused.
 var _forget_moves: Array = []
 ## `RestorePPEffect`'s own `MoveSelectionScreen`: which item asked and which
 ## party member it is being used on, held while the move list is up.
@@ -351,7 +350,6 @@ var _mail_target: int = -1
 var _mail_swap: bool = false
 var _view: TextureRect = null
 var _page: Gen2StartMenuPage = null
-## The world's `FadeToMenu` and `CloseSubmenu`; null opens and closes at once.
 var menu_transition: Gen2MenuTransition = null
 var _fade_order: int = Gen2WorldPalette.FADE_IDENTITY
 ## `LoadPartyMenuGFX`: the target list is the party menu, so it is drawn by the

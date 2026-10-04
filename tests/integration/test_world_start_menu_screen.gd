@@ -1945,6 +1945,22 @@ func test_a_generation_1_menu_holds_white_and_never_fades() -> void:
 	assert_not_null(_world_screen._start_menu_host)
 
 
+## A screen the world names that the Generation 1 tables do not know opens at once,
+## with no white, and Red and Yellow measure the same screens.
+func test_every_generation_1_screen_the_world_whites_out_has_frames_on_both_builds() -> void:
+	var named: Array = Gen2WorldScreen.GEN1_MENU_REQUESTS.values()
+	named.append_array([
+		Gen2WorldScreen.START_FADED_ROWS[Gen2WorldStartMenu.ITEM_TOWN_MAP], &"town_map",
+		&"naming_screen",
+	])
+	for screen: StringName in named:
+		assert_true(Gen2MenuTransition.GEN1_RED_FRAMES.has(screen), String(screen))
+		assert_true(Gen2MenuTransition.GEN1_YELLOW_FRAMES.has(screen), String(screen))
+	assert_eq(
+		Gen2MenuTransition.GEN1_RED_FRAMES.keys(), Gen2MenuTransition.GEN1_YELLOW_FRAMES.keys()
+	)
+
+
 ## `StartMenu_Pokedex`'s `farcall Pokedex`, as an overlay the world screen owns
 ## the way it owns the trainer card.
 func test_pokedex_opens_from_the_start_menu_and_b_reopens_the_start_menu() -> void:
@@ -2461,6 +2477,7 @@ func test_a_registered_pc_row_opens_storage_and_returns_to_the_menu() -> void:
 	await get_tree().process_frame
 	assert_true(_world_screen._walk_start_menu_to(&"qol"))
 	_world_screen._start_menu_host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	await get_tree().process_frame
 
 	assert_null(_world_screen._start_menu_host)
@@ -2475,6 +2492,7 @@ func test_a_registered_pc_row_opens_storage_and_returns_to_the_menu() -> void:
 	service.handle_button(PokeButton.B)
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_not_null(_world_screen._start_menu_host, "closing returns through the normal flow")
 	Gen2ModHost.reset()
 

@@ -88,6 +88,7 @@ func _open_list(host: Gen2WorldServiceScreen, row: int) -> void:
 	for _step: int in row:
 		host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 
 
@@ -236,12 +237,14 @@ func test_the_list_keeps_its_row_across_the_dial_the_question_and_the_menu() -> 
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(host._cursor, row, "NO on the question")
 	host.handle_button(PokeButton.B)
+	Fixture.settle_menu_fade(_world_screen)
 	## `ExitMenu` reloads the header `_PushWindow` saved, whose `db 1` puts the
 	## menu back on WITHDRAW ITEM: a Crystal dump re-enters `DoNthMenu` with
 	## `wMenuCursorPosition` 1 behind TOSS ITEM.
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
 	assert_eq(host._cursor, 0, "the menu is back on its first row")
 	Fixture.press_through(host)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(host._cursor, row, "the list opened again off the menu")
 

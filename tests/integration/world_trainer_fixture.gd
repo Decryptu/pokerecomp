@@ -1265,6 +1265,17 @@ static func settle_menu_fade(screen: Gen2WorldScreen) -> void:
 		screen.advance_frame()
 
 
+## The frames the screen is all white until the transition in flight is over.
+static func white_frames(screen: Gen2WorldScreen) -> int:
+	var white: int = 0
+	for _frame: int in MENU_FADE_FRAME_CAP:
+		if not screen._menu_transition.active():
+			break
+		white += 1 if screen._screen._white.visible else 0
+		screen.advance_frame()
+	return white
+
+
 ## A service host's `PrintText` spent to where it waits: the frames its letters,
 ## `Paragraph` and scrolls cost, and no press.
 static func print_out(host: Gen2WorldServiceScreen) -> void:

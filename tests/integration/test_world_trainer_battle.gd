@@ -2099,7 +2099,15 @@ func test_yes_opens_the_naming_screen_and_its_entry_becomes_the_nickname() -> vo
 		_world_screen.advance_frame()
 	assert_eq(screen.nickname_cursor(), 0, "YesNoBox opens on YES")
 	_world_screen.press_button(PokeButton.A)
-	_spend_answer_hold()
+	for _frame: int in 2 * Gen2WorldMenu.ANSWER_HOLD_FRAMES:
+		if screen.phase() == Gen2EggHatchScreen.Phase.CLEARING:
+			break
+		_world_screen.advance_frame()
+	assert_eq(
+		Fixture.white_frames(_world_screen),
+		Gen2MenuTransition.CLEAR_FRAMES[&"naming_screen"][&"crystal"],
+		"`NamingScreen` clears the palettes before its keyboard"
+	)
 	assert_eq(screen.phase(), Gen2EggHatchScreen.Phase.NAMING)
 	var model: Gen2NamingScreen = screen.naming_screen().model()
 	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
@@ -2110,6 +2118,9 @@ func test_yes_opens_the_naming_screen_and_its_entry_becomes_the_nickname() -> vo
 
 	await _settle_hatch()
 	assert_null(_world_screen.get("_hatch_host"))
+	assert_true(_world_screen._screen._white.visible, "`ExitAllMenus` is white at once")
+	assert_gt(Fixture.white_frames(_world_screen), 0)
+	assert_false(_world_screen._menu_transition.active(), "and then the map is back")
 	assert_eq(save.party[0].nickname.length(), 1, "the one letter that was entered")
 
 
@@ -2192,7 +2203,15 @@ func test_a_gift_takes_the_name_the_keyboard_stored() -> void:
 	var host: Gen2NicknamePromptScreen = _run_givepoke()
 	_settle_nickname_text()
 	_world_screen.press_button(PokeButton.A)
-	_spend_answer_hold()
+	for _frame: int in 2 * Gen2WorldMenu.ANSWER_HOLD_FRAMES:
+		if host.phase() == Gen2NicknamePromptScreen.Phase.CLEARING:
+			break
+		_world_screen.advance_frame()
+	assert_eq(
+		Fixture.white_frames(_world_screen),
+		Gen2MenuTransition.CLEAR_FRAMES[&"naming_screen"][&"crystal"],
+		"`ClearBGPalettes` holds the screen white while the keyboard loads"
+	)
 	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.NAMING)
 	var model: Gen2NamingScreen = host.naming_screen().model()
 	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
@@ -2200,11 +2219,50 @@ func test_a_gift_takes_the_name_the_keyboard_stored() -> void:
 	model.column = Gen2NamingScreen.LAST_COLUMN
 	model.row = model.command_row()
 	_world_screen.press_button(PokeButton.A)
+	assert_null(host.naming_screen(), "`ExitAllMenus` puts the keyboard away under the white")
+	assert_eq(
+		Fixture.white_frames(_world_screen), Gen2MenuTransition.CLOSE_WHITE_FRAMES[&"crystal"]
+	)
 
 	assert_null(_world_screen.get("_nickname_host"))
 	assert_eq(save.party.size(), before + 1)
 	assert_eq(save.party[before].nickname.length(), 1, "the one letter that was entered")
 	await get_tree().process_frame
+
+
+## Generation 1's `AskName` is `GBPalWhiteOutWithDelay3` into `DisplayNamingScreen`
+## and the same out of `.submitNickname`: no fade, and each end is white for as
+## long as the screen takes to build, which is longer than the Johto keyboard's.
+func test_a_generation_1_keyboard_is_white_while_it_builds_and_while_it_is_put_away() -> void:
+	var transition := Gen2MenuTransition.new()
+	transition.gen1 = true
+	transition.game = &"red"
+	var host := Gen2NicknamePromptScreen.new()
+	host.menu_transition = transition
+	host.set_context(_data, "PIKACHU", "", "", true)
+	add_child_autofree(host)
+	var frames: Vector2i = Gen2MenuTransition.GEN1_RED_FRAMES[&"naming_screen"]
+	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.CLEARING)
+	for _frame: int in frames.x - 1:
+		transition.advance_frame()
+		assert_true(transition.covered())
+	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.CLEARING)
+	transition.advance_frame()
+	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.NAMING)
+	assert_false(transition.active())
+
+	var model: Gen2NamingScreen = host.naming_screen().model()
+	model.press_a()
+	model.column = Gen2NamingScreen.LAST_COLUMN
+	model.row = model.command_row()
+	host.handle_button(PokeButton.A)
+	assert_true(transition.covered())
+	for _frame: int in frames.y:
+		assert_true(transition.covered())
+		assert_eq(transition.order(), Gen2WorldPalette.FADE_IDENTITY, "it never fades")
+		transition.advance_frame()
+	assert_false(transition.active())
+	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.DONE)
 
 
 ## `.failed`'s box branch: `WasSentToBillsPCText` is printed behind the question,
@@ -2248,11 +2306,13 @@ func test_a_boxed_gift_names_the_species_and_stores_the_typed_nickname() -> void
 	_settle_nickname_text()
 	_world_screen.press_button(PokeButton.A)
 	_spend_answer_hold()
+	Fixture.settle_menu_fade(_world_screen)
 	var model: Gen2NamingScreen = host.naming_screen().model()
 	model.press_a()
 	model.column = Gen2NamingScreen.LAST_COLUMN
 	model.row = model.command_row()
 	_world_screen.press_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.AFTER_TEXT)
 	_settle_nickname_text()
 	var species_name: String = String(
