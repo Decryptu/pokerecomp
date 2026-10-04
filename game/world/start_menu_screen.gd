@@ -577,9 +577,10 @@ func handle_button(button: int) -> bool:
 		## `.MenuData`'s STATICMENU_ENABLE_START, which `ContinueGettingMenuJoypad`
 		## answers as B; Generation 1's `RedisplayStartMenu` tests `PAD_B | PAD_START`.
 		PokeButton.START:
-			if _mode != Mode.LIST:
+			if _mode != Mode.LIST and _mode != Mode.OPTIONS:
 				return false
 			_cancel()
+			_render_hardware()
 			return true
 	return false
 
@@ -743,11 +744,12 @@ func _move_mod_options(direction: Vector2i) -> void:
 		_adjust_mod_option(rows, direction.x)
 
 ## `hInMenu`: the pack's `ScrollingMenu`, the OPTION screen and the dials'
-## `JoyTextDelay_ForcehJoyDown`.
-func menu_repeats() -> bool:
-	return _mode in [
-		Mode.PACK, Mode.OPTIONS, Mode.MODS, Mode.MOD_OPTIONS, Mode.PACK_TOSS_QUANTITY,
-	]
+## `JoyTextDelay_ForcehJoyDown`. Only `OptionsControl` reads `hJoyLast`; every
+## `Options_*` handler tests `hJoyPressed`, so a held LEFT or RIGHT acts once.
+func menu_repeats(button: int) -> bool:
+	if _mode == Mode.OPTIONS:
+		return button in [PokeButton.UP, PokeButton.DOWN]
+	return _mode in [Mode.PACK, Mode.MODS, Mode.MOD_OPTIONS, Mode.PACK_TOSS_QUANTITY]
 
 
 ## `StartMenu.GetInput`'s click on A, the pack's and `PartyMenuSelect`'s on either.
@@ -793,7 +795,7 @@ func _confirm_now() -> void:
 		## Options_Cancel is the only handler that reads A.
 		Mode.OPTIONS:
 			if _options_menu.is_cancel():
-				_close_submenu()
+				_exit_options()
 		## The VIEW row is read with left and right, the way a value row is, so
 		## A does nothing on it.
 		Mode.MODS:
@@ -890,7 +892,7 @@ func _cancel_now() -> void:
 			_cancel_save()
 		## `_Option.joypad_loop` exits on PAD_START | PAD_B from any row.
 		Mode.OPTIONS:
-			_close_submenu()
+			_exit_options()
 		Mode.MODS, Mode.FIELD_MOVES:
 			_leave_mods_level()
 		Mode.MOD_OPTIONS:
@@ -1020,6 +1022,20 @@ func _open_options_mode() -> void:
 		Gen2OptionsStore.current(), Gen2WorldOptionsMenu.layout_for(_data)
 	)
 	_render_options_menu()
+
+
+## `_Option.ExitOptions`: Crystal's `SFX_TRANSACTION` and `WaitSFX` (pokegold has
+## none); Red and Blue's `.exitMenu` `SFX_PRESS_AB` (Yellow plays nothing).
+func _exit_options() -> void:
+	match Gen2WorldOptionsMenu.layout_for(_data):
+		Gen2WorldOptionsMenu.Layout.GEN1:
+			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+		Gen2WorldOptionsMenu.Layout.YELLOW:
+			pass
+		_:
+			if Gen2WorldState.is_crystal_profile(_data):
+				sfx_requested.emit(Gen2Sfx.SFX_TRANSACTION, true)
+	_close_submenu()
 
 
 ## Written on every change, matching the launcher card and the cartridge, which

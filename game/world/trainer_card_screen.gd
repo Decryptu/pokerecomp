@@ -48,6 +48,7 @@ var _save: Gen2SaveData = null
 var _world: Gen2WorldAPI = null
 var _page: int = Gen2TrainerCard.PAGE_1
 var _frames: int = 0
+var _drawn_phase: int = -1
 var _background: TextureRect = null
 var _badges: Array = []
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
@@ -110,10 +111,24 @@ func advance_frame() -> void:
 	if _page_renderer != null and _page_renderer.gen1:
 		return
 	_frames += 1
-	if _frames % BADGE_FRAMES == 0 and _page != Gen2TrainerCard.PAGE_1:
+	if _page == Gen2TrainerCard.PAGE_1:
+		if _separator_phase() != _drawn_phase:
+			_refresh_page()
+	elif _badge_phase() != _drawn_phase:
 		_refresh_badges()
-	if _frames % SEPARATOR_FRAMES == 0 and _page == Gen2TrainerCard.PAGE_1:
-		_refresh_page()
+
+
+## `hVBlankCounter`: the world's frame count, or this screen's own without one.
+func _counter() -> int:
+	return _world.frame_number if _world != null else _frames
+
+
+func _separator_phase() -> int:
+	return int(_counter() / SEPARATOR_FRAMES) % 2
+
+
+func _badge_phase() -> int:
+	return int(_counter() / BADGE_FRAMES) % BADGE_CYCLE
 
 
 func _process(delta: float) -> void:
@@ -132,7 +147,6 @@ func _build() -> void:
 ## the badge objects rebuilt from scratch, which is what `ClearSprites` does.
 func _show_page(page: int) -> void:
 	_page = page
-	_frames = 0
 	if not _page_renderer.gen1:
 		_page_renderer.load_page_tiles(_data, page)
 	_refresh_page()
@@ -142,7 +156,8 @@ func _show_page(page: int) -> void:
 func _refresh_page() -> void:
 	if _background == null or _page_renderer == null:
 		return
-	var separator: bool = int(_frames / SEPARATOR_FRAMES) % 2 == 0
+	_drawn_phase = _separator_phase()
+	var separator: bool = _drawn_phase == 0
 	var page: Dictionary = Gen2TrainerCard.gen1_page(_save, _world) \
 		if _page_renderer.gen1 \
 		else Gen2TrainerCard.page(_save, _world, _page, separator)
@@ -189,7 +204,8 @@ func _refresh_badges() -> void:
 		_page,
 		Gen2WorldState.is_crystal_profile(_data),
 	)
-	var frame: int = int(_frames / BADGE_FRAMES) % BADGE_CYCLE
+	_drawn_phase = _badge_phase()
+	var frame: int = _drawn_phase
 	for index: int in BADGE_OAM.size():
 		if index >= set_badges.size() or not bool(set_badges[index]):
 			continue

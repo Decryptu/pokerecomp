@@ -4170,9 +4170,13 @@ func _open_card(card: StringName) -> void:
 		_data, card, owned, text, _data.pokegear_text("ask_delete"),
 		_world.map_time_of_day()
 	):
-		_on_card_closed()
+		_leave_card()
 		return
 	_refresh_card()
+
+
+## What the CLOCK card drew; `.UpdateClock` redraws every frame, here a change.
+var _clock_drawn: Dictionary = {}
 
 
 func _refresh_card() -> void:
@@ -4180,10 +4184,10 @@ func _refresh_card() -> void:
 		return
 	match _pokegear.card():
 		Gen2PokegearScreen.CARD_CLOCK:
-			var clock: Dictionary = _world.world_clock()
+			_clock_drawn = _world.world_clock()
 			_pokegear.set_clock(
-				int(clock.get("day", 0)), int(clock.get("hour", 0)),
-				int(clock.get("minute", 0))
+				int(_clock_drawn.get("day", 0)), int(_clock_drawn.get("hour", 0)),
+				int(_clock_drawn.get("minute", 0))
 			)
 		Gen2PokegearScreen.CARD_RADIO:
 			var tuned: Dictionary = _world.radio_station()
@@ -4198,9 +4202,12 @@ func _refresh_card() -> void:
 				_radio_track = track
 				music_requested.emit(track)
 			var radio_show: Gen2RadioShow = _world.radio_show()
+			var station: String = String(tuned.get("name", "")) \
+				if bool(tuned.get("ok", false)) else ""
+			if station.is_empty() and radio_show != null:
+				station = radio_show.station_name()
 			_pokegear.set_radio(
-				_world.state.radio_knob(),
-				String(tuned.get("name", "")) if bool(tuned.get("ok", false)) else "",
+				_world.state.radio_knob(), station,
 				radio_show.lines() if radio_show != null else PackedStringArray()
 			)
 		Gen2PokegearScreen.CARD_PHONE:
@@ -4248,8 +4255,8 @@ func radio_music_playing() -> int:
 	return _radio_music
 
 
-## One hardware frame of whichever card is open. Only the radio card spends any:
-## `PlayRadioShow` is the one thing the Pokegear runs per frame.
+## One hardware frame of whichever card is open: the radio's `PlayRadioShow` and
+## the clock's `.UpdateClock`.
 func advance_frame() -> void:
 	## `FadeOutToWhite` and `CloseSubmenu` are inside the routine that called them.
 	if menu_transition == null or not menu_transition.active():
@@ -4285,10 +4292,15 @@ func _advance_live_frame() -> void:
 	if _pokegear == null:
 		return
 	_pokegear.advance_frame()
-	if _pokegear != null and _pokegear.card() != Gen2PokegearScreen.CARD_RADIO:
+	if _pokegear == null:
 		return
-	if _pokegear != null and _world.advance_radio_frame():
-		_refresh_card()
+	match _pokegear.card():
+		Gen2PokegearScreen.CARD_CLOCK:
+			if _world.world_clock() != _clock_drawn:
+				_refresh_card()
+		Gen2PokegearScreen.CARD_RADIO:
+			if _world.advance_radio_frame():
+				_refresh_card()
 
 
 func _advance_prize_hold() -> bool:
@@ -4401,7 +4413,13 @@ func _on_card_deleted(contact: int) -> void:
 		_refresh_card()
 
 
+## `PokeGear.done`: `SFX_READ_TEXT_2` and `WaitSFX` behind every card's exit.
 func _on_card_closed() -> void:
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, true)
+	_leave_card()
+
+
+func _leave_card() -> void:
 	if _pokegear != null and _pokegear.card() == Gen2PokegearScreen.CARD_RADIO:
 		_world.close_radio()
 	_close_card()
@@ -4495,7 +4513,7 @@ func _open_town_map(from_request: bool) -> void:
 	_town_map.z_index = 5
 	_town_map.set_screen(_service_hardware)
 	add_child(_town_map)
-	_town_map.closed.connect(_on_town_map_closed)
+	_town_map.closed.connect(_on_town_map_card_closed)
 	_town_map.switched.connect(_on_card_switched)
 	# The Pokegear's own MAP card when the Pokegear opened it, `_TownMap`'s
 	# corner box when `OverworldTownMap` did.
@@ -4515,6 +4533,13 @@ func _open_town_map(from_request: bool) -> void:
 	)
 	if not opened:
 		_on_town_map_closed()
+
+
+## The MAP card leaves through `PokeGear.done` too; the poster and Gen 1's map do not.
+func _on_town_map_card_closed() -> void:
+	if not _town_map_from_request and _data.generation != RomRegistry.GEN1:
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, true)
+	_on_town_map_closed()
 
 
 func _on_town_map_closed() -> void:
@@ -4557,9 +4582,9 @@ func _move_cursor(delta: int) -> void:
 
 ## `hInMenu`: every `ScrollingMenu`, Bill's PC, the Pokegear, Mom's dial and
 ## every quantity dial, which `JoyTextDelay_ForcehJoyDown` turns it on for.
-func menu_repeats() -> bool:
+func menu_repeats(button: int) -> bool:
 	if _pack != null:
-		return _pack.menu_repeats()
+		return _pack.menu_repeats(button)
 	if _boxes != null or _pokegear != null or _town_map != null or _mom_dial != null:
 		return true
 	match _mode:

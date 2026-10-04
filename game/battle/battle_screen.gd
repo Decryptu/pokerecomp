@@ -5153,8 +5153,8 @@ func _open_move_menu() -> void:
 
 
 ## `hInMenu` is clear through the battle's own menus; the pack sets it.
-func menu_repeats() -> bool:
-	return _pack_host != null and _pack_host.visible and _pack_host.menu_repeats()
+func menu_repeats(button: int) -> bool:
+	return _pack_host != null and _pack_host.visible and _pack_host.menu_repeats(button)
 
 
 func _answer_menu(button: int) -> void:

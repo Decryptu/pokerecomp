@@ -6531,7 +6531,7 @@ func _after_battle_evolution_plans(result: Dictionary, save: Gen2SaveData) -> Ar
 
 
 ## `JoyTextDelay` repeats only under `hInMenu`; Generation 1 everywhere.
-func _menu_repeats() -> bool:
+func _menu_repeats(button: int) -> bool:
 	if _data == null or _data.generation == RomRegistry.GEN1:
 		return true
 	for host: Node in [
@@ -6541,11 +6541,11 @@ func _menu_repeats() -> bool:
 		if host != null:
 			return true
 	if _battle_host != null:
-		return _battle_host.menu_repeats()
+		return _battle_host.menu_repeats(button)
 	if _service_host != null:
-		return _service_host.menu_repeats()
+		return _service_host.menu_repeats(button)
 	if _start_menu_host != null:
-		return _start_menu_host.menu_repeats()
+		return _start_menu_host.menu_repeats(button)
 	return _party_host == null
 
 

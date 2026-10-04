@@ -236,7 +236,7 @@ func _show(channel: int, context: Dictionary = {}) -> Gen2RadioShow:
 ## Runs frames until a segment actually prints, rather than until the box moves:
 ## `RadioScroll` clears the bottom row a frame before the next line lands on it.
 func _next_line(show: Gen2RadioShow) -> PackedStringArray:
-	for _frame: int in Gen2RadioShow.LINE_FRAMES + 3:
+	for _frame: int in Gen2RadioShow.LINE_FRAMES + Gen2RadioShow.PAUSE_FRAMES + 3:
 		var before: StringName = show.segment()
 		show.advance_frame()
 		if before != Gen2RadioShow.SCROLL:
@@ -265,6 +265,45 @@ func test_a_line_is_up_for_a_hundred_frames() -> void:
 	assert_false(show.advance_frame())
 	assert_eq(show.segment(), StringName("RocketRadio2"))
 	assert_true(show.advance_frame(), "the next segment did not run on frame 102")
+
+
+## `TextCommand_PAUSE` is 30 frames inside the segment that printed, so the first
+## half is on the box alone and the 100-frame wait starts after the second lands.
+func test_a_text_pause_holds_the_first_half_for_thirty_frames() -> void:
+	var show: Gen2RadioShow = _show(Gen2WorldRadio.ROCKET_RADIO)
+	for _line: int in 6:
+		_next_line(show)
+	assert_eq(_next_line(show)[1], "GIOVANNI! ")
+	for _frame: int in Gen2RadioShow.PAUSE_FRAMES - 1:
+		assert_false(show.advance_frame())
+	assert_true(show.advance_frame(), "the second half did not land on frame 30")
+	assert_eq(show.lines()[1], "GIOVANNI! Can you")
+	for _frame: int in Gen2RadioShow.LINE_FRAMES:
+		assert_false(show.advance_frame(), "the wait ran while the pause did")
+
+
+## pokegold's `_RocketRadioText9` capitalises "Boss"; the first half is empty.
+func test_rocket_radio_asks_for_the_boss_per_profile() -> void:
+	for crystal: bool in [true, false]:
+		var show: Gen2RadioShow = _show(Gen2WorldRadio.ROCKET_RADIO, {"crystal": crystal})
+		for _line: int in 8:
+			_next_line(show)
+		assert_eq(_next_line(show)[1], "")
+		for _frame: int in Gen2RadioShow.PAUSE_FRAMES:
+			show.advance_frame()
+		assert_eq(show.lines()[1], "Where is our %s?" % ("boss" if crystal else "Boss"))
+
+
+## `BuenasPassword1` places the name at (2, 9); `NoRadioName` clears it.
+func test_buena_names_her_station_while_on_the_air() -> void:
+	var show: Gen2RadioShow = _show(Gen2WorldRadio.BUENAS_PASSWORD, {"hour": 20})
+	assert_eq(show.station_name(), "")
+	show.advance_frame()
+	assert_eq(show.station_name(), Gen2RadioShow.BUENAS_PASSWORD_CHANNEL_NAME)
+	show.set_hour(0)
+	for _frame: int in Gen2RadioShow.LINE_FRAMES * 20:
+		show.advance_frame()
+	assert_eq(show.station_name(), "")
 
 
 func test_the_three_music_only_stations_print_nothing_and_stop() -> void:

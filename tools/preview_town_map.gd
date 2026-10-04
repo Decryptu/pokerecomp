@@ -256,4 +256,6 @@ static func _card_text(data: GameData, card: StringName) -> String:
 
 static func _station_name(world: Gen2WorldAPI) -> String:
 	var tuned: Dictionary = world.radio_station()
-	return String(tuned.get("name", "")) if bool(tuned.get("ok", false)) else ""
+	var station: String = String(tuned.get("name", "")) if bool(tuned.get("ok", false)) else ""
+	var show: Gen2RadioShow = world.radio_show()
+	return show.station_name() if station.is_empty() and show != null else station

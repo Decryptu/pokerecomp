@@ -1255,6 +1255,24 @@ func test_pokegear_clock_card_renders_source_time_and_returns_to_cards() -> void
 	assert_null(_world_screen._service_host)
 
 
+## `PokegearClock_Joypad`'s `.UpdateClock` redraws every frame, so a minute that
+## turns over under the open card shows; `PokeGear.done` is the exit sound.
+func test_the_clock_card_follows_the_clock_and_leaves_with_a_click() -> void:
+	await _open_world()
+	_world_screen._world.set_world_clock(3, 0, 7)
+	_world_screen._clock.minute = 7
+	_world_screen._open_pokegear()
+	await get_tree().process_frame
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	_world_screen._world.set_world_clock(3, 0, 8)
+	_world_screen._clock.minute = 8
+	host.advance_frame()
+	assert_eq(_row_text(host._pokegear._tilemap(), Gen2TownMapPage.CLOCK_TIME_AT, 8), "12:08 AM")
+	watch_signals(host)
+	host.handle_button(PokeButton.A)
+	assert_signal_emitted_with_parameters(host, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2, true])
+
+
 func test_only_one_service_layer_is_ever_on_screen() -> void:
 	_write_pc_request()
 	await _open_world()

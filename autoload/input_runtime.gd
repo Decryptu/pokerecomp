@@ -44,6 +44,7 @@ var _repeat_clock: Dictionary = {}
 ## Without it the gate would swallow the very press it emitted.
 var _repeat_open: Dictionary = {}
 ## `hInMenu`, under which alone `JoyTextDelay` repeats; unset always repeats.
+## Takes the [PokeButton] about to repeat.
 var repeat_gate: Callable = Callable()
 ## Frames before a held direction repeats; the world screen sets Generation 1's.
 var repeat_delay_frames: int = REPEAT_DELAY_FRAMES
@@ -355,7 +356,7 @@ func _advance_direction_repeat(delta: float) -> void:
 			_repeat_clock[button] = 0.0
 			continue
 		_repeat_clock[button] = FRAME_SECONDS * float(REPEAT_INTERVAL_FRAMES)
-		if repeat_gate.is_valid() and not bool(repeat_gate.call()):
+		if repeat_gate.is_valid() and not bool(repeat_gate.call(button)):
 			continue
 		_repeat_open[button] = true
 		_push_press(button)

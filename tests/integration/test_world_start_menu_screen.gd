@@ -1941,6 +1941,16 @@ func test_b_returns_to_the_list_from_a_value_row() -> void:
 	assert_not_null(_world_screen._start_menu_host)
 
 
+## `_Option.joypad_loop`'s `PAD_START | PAD_B`, and Crystal's `.ExitOptions`
+## `SFX_TRANSACTION` behind a `WaitSFX`.
+func test_start_leaves_the_option_screen_with_crystals_exit_sound() -> void:
+	var host: Gen2StartMenuScreen = await _open_options_menu()
+	watch_signals(host)
+	host.handle_button(PokeButton.START)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LIST)
+	assert_signal_emitted_with_parameters(host, "sfx_requested", [Gen2Sfx.SFX_TRANSACTION, true])
+
+
 ## `StartMenu_Status`'s `farcall TrainerCard`, as an overlay the world screen
 ## owns the way it owns the party screen.
 func test_player_opens_the_trainer_card_and_b_reopens_the_start_menu() -> void:
