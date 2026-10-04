@@ -1363,7 +1363,7 @@ func _cinnabar_gate_corpus() -> void:
 		var world: Gen2WorldAPI = _r.open_world(0, 166, Vector2i(17, 3), state)
 		if world == null:
 			return
-		var steps: Array = world._gen1_script_steps({"script": callbacks[0]["nodes"]})
+		var steps: Array = Gen1ScriptNodes._gen1_script_steps(world, {"script": callbacks[0]["nodes"]})
 		var writes := PackedStringArray()
 		for step: Dictionary in steps:
 			if step["type"] == &"block":

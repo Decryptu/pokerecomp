@@ -39,6 +39,7 @@ const TELEPORT_PAUSE_FRAMES: int = 120
 const GEN1_TELEPORT_PAUSE_FRAMES: int = 60
 ## `ItemUseEscapeRope`'s `ld c, 30`, which is the whole of what it shows.
 const GEN1_ESCAPE_ROPE_FRAMES: int = 30
+const GEN1_ROD_CAST_FRAMES: int = 80
 
 ## What each Generation 1 field move writes, as its `special_text` run and name.
 ## Fly and Dig write nothing: `.fly` opens the region map and
@@ -659,6 +660,7 @@ func _build_world() -> void:
 	_audio_player.name = "AudioPlayer"
 	add_child(_audio_player)
 	_world.sound_playing = _audio_player.still_waiting
+	_world.channel_playing = _audio_player.still_waiting_on_channel
 	_play_current_map_music()
 	_text_box = Gen2TextBox.new()
 	# The overworld owns the frame, so the reveal is spent in [method
@@ -2019,7 +2021,7 @@ func _spend_poison_steps() -> bool:
 		return false
 	_world.state.clear_poison_step_count()
 	var save: Gen2SaveData = active_save()
-	if save == null:
+	if save == null or _world.gen1_step_effects_skipped():
 		return false
 	var pass_result: Dictionary = Gen2WorldPartyHost.apply_poison_step(_data, save)
 	var texts: PackedStringArray = pass_result.get("texts", PackedStringArray())
@@ -2290,7 +2292,7 @@ func _spend_day_care_steps() -> void:
 	## own gate and behind its `wPartyCount` test, so an empty party counts nothing.
 	if _data.generation == RomRegistry.GEN1:
 		var save: Gen2SaveData = active_save()
-		if save == null or save.party.is_empty():
+		if save == null or save.party.is_empty() or _world.gen1_step_effects_skipped():
 			return
 		for _pass: int in owed:
 			Gen2WorldDayCare.gen1_step(_world.state)
@@ -6322,7 +6324,7 @@ func _on_battle_finished(result: Dictionary) -> void:
 	## battle screen and handed over per account: this is the live state, and the
 	## snapshot that screen wrote already carries the same credit.
 	var awarded: Variant = result.get("money_awarded", {})
-	if awarded is Dictionary and _won_or_caught(result):
+	if awarded is Dictionary:
 		Gen2WorldBattleAdapter.credit_earnings(_world.state, awarded as Dictionary)
 	## `ExitBattle`'s own tail, in its order: `CheckPayDay`, then
 	## `EvolveAfterBattle`, then `GivePokerusAndConvertBerries`, and only then
@@ -6519,13 +6521,12 @@ static func _won_or_caught(result: Dictionary) -> bool:
 
 
 ## `EndOfBattle`'s `.evolution`: any link battle, otherwise `wBattleResult` zero,
-## which a win and a wild mon that left (Teleport, Roar, Poke Doll) both leave.
+## which a win and a wild mon that left (Teleport, Roar, Poke Doll) both leave;
+## a run or a catch writes 2 and a faint nobody avenged 1.
 static func _reaches_mood_update(result: Dictionary) -> bool:
 	if StringName((result.get("request", {}) as Dictionary).get("kind", &"")) == &"link_battle":
 		return true
-	var outcome: StringName = StringName(result.get("outcome", &""))
-	return outcome == Gen2WorldBattleAdapter.OUTCOME_WON \
-		or (outcome == Gen2WorldBattleAdapter.OUTCOME_RAN and bool(result.get("forced_out", false)))
+	return int(result.get("battle_result", -1)) == 0
 
 
 ## `EvolveAfterBattle`'s `wEvolvableFlags`, read only on a battle that was won.
@@ -6710,7 +6711,15 @@ func _on_pack_evolution(plan: Dictionary, after: Callable) -> void:
 	## [method _on_evolution_resolved] has nothing to apply and the dex write was
 	## the pack transaction's.
 	_evolution_transaction = bool(plan.get("apply", false))
-	_open_evolution([plan], _active_party_save() if _evolution_transaction else null, after)
+	var open: Callable = _open_evolution.bind(
+		[plan], _active_party_save() if _evolution_transaction else null, after
+	)
+	if plan.has("pre_sound"):
+		_field_move_tail = [
+			{"call": _play_gen1_sound.bind(int(plan["pre_sound"]))}, {"wait": &"sfx"}, {"call": open},
+		]
+		return
+	open.call()
 
 
 ## `EvolveAfterBattle`'s screen. [param plans] is
@@ -7431,6 +7440,9 @@ func _open_start_menu_host(entry: Callable) -> void:
 	host.evolution_animation_requested.connect(_on_pack_evolution)
 	host.sfx_requested.connect(_play_sfx)
 	host.gen1_sfx_requested.connect(_play_gen1_sound)
+	host.gen1_forget_swap_requested.connect(func() -> void:
+		_audio_player.play_gen1_forget_swap(_data, _audio_assets())
+	)
 	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_start_menu_host = host
 	_script_prompt = "Start menu open"
@@ -7795,9 +7807,7 @@ func _on_field_item_used(request: Dictionary) -> void:
 			else:
 				_show_field_move_text(_field_item_text("escape_rope", "Used an\nESCAPE ROPE."))
 		Gen2WorldPack.FIELD_EFFECT_ROD:
-			var rods: Array[StringName] = _world.available_fishing_rods()
-			select_fishing_rod(rods.find(StringName(request.get("rod", &""))))
-			start_fishing()
+			_on_rod_used(request)
 		Gen2WorldPack.FIELD_EFFECT_ITEMFINDER:
 			## `.Script_FoundSomething` runs `.ItemfinderSound` before its line;
 			## `.Script_FoundNothing` plays nothing at all.
@@ -7817,16 +7827,8 @@ func _on_field_item_used(request: Dictionary) -> void:
 			_show_field_move_text(
 				_field_item_text("sacred_ash", "#MON were all\nhealed!")
 			)
-		## `PlayedFluteHadEffectText`'s own `text_asm` plays SFX_POKEFLUTE and
-		## waits it out; nothing else follows either box in the overworld.
 		Gen2WorldPack.FIELD_EFFECT_POKE_FLUTE:
-			if bool(request.get("pikachu", false)):
-				_show_script_results(_world.gen1_flute_wakes_pikachu())
-			else:
-				_show_field_move_text(_field_item_text(
-					"flute_woke" if bool(request.get("woke", false)) else "flute_no_effect",
-					"Played the #\nFLUTE."
-				))
+			_on_flute_used(request)
 		## `farsjump CardKeySlotScript` and `farsjump BasementDoorScript`, each
 		## `QueueScript`d by its own routine, so both run as any map script does.
 		Gen2WorldPack.FIELD_EFFECT_CARD_KEY, Gen2WorldPack.FIELD_EFFECT_BASEMENT_KEY:
@@ -7841,6 +7843,28 @@ func _on_field_item_used(request: Dictionary) -> void:
 					"squirtbottle", "Sprinkled water.\nBut nothing\nhappened…"
 				))
 	_refresh_labels()
+
+
+## `ItemUsePokeFlute` outside a battle; only `PlayedFluteHadEffectText` has a tune.
+func _on_flute_used(request: Dictionary) -> void:
+	if bool(request.get("woke", false)):
+		_show_script_results(_world.gen1_flute_woke_steps(bool(request.get("pikachu", false))))
+		return
+	_show_field_move_text(_field_item_text("flute_no_effect", "Played the #\nFLUTE."))
+
+
+## Generation 1's `FishingInit`: the text, `SFX_HEAL_AILMENT` and eighty frames before `FishingAnim`.
+func _on_rod_used(request: Dictionary) -> void:
+	var rods: Array[StringName] = _world.available_fishing_rods()
+	select_fishing_rod(rods.find(StringName(request.get("rod", &""))))
+	if _data == null or _data.generation != RomRegistry.GEN1:
+		start_fishing()
+		return
+	_play_sfx(Gen2Sfx.SFX_FULL_HEAL)
+	_player_event_after = start_fishing
+	_show_field_move_text((Gen2StartMenuScreen.GEN1_USED_ITEM % _data.item_name(
+		int(request.get("item", 0))
+	)).replace(Gen2WorldPC.PLAYER_MARKER, _world.player_name()), false, false, GEN1_ROD_CAST_FRAMES)
 
 
 ## `BikeFunction`'s three scripts. Each of the two that say a line has a
@@ -7875,7 +7899,6 @@ func _on_bike_used(request: Dictionary) -> void:
 const GEN1_FIELD_ITEM_TEXTS: Dictionary = {
 	"got_on_bike": ["bicycle", "got_on"],
 	"got_off_bike": ["bicycle", "got_off"],
-	"flute_woke": ["poke_flute", "had_effect"],
 	"flute_no_effect": ["poke_flute", "no_effect"],
 }
 

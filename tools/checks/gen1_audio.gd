@@ -31,6 +31,7 @@ func run(r: RefCounted) -> void:
 		_verify_the_alternate_starts()
 		_verify_the_victory_pieces()
 		_verify_the_pikachu_clips()
+		_verify_the_forget_swap()
 	)
 
 
@@ -122,6 +123,29 @@ func _verify_the_poke_flute() -> void:
 
 
 const POKE_FLUTE_BANK: int = 1
+const SWAP_GUARD_FRAMES: int = 600
+
+
+## `OneTwoAndText`: Yellow plays `SFX_SWAP` from Audio 1, music paused, then restores the bank.
+func _verify_the_forget_swap() -> void:
+	var player := Gen2AudioPlayer.new()
+	var assets: Dictionary = _r.data.audio_assets()
+	player._gen1.set_assets(assets)
+	var map_bank: int = Gen1Layout.AUDIO_BANK_ROM[1]
+	player._gen1.audio_rom_bank = map_bank
+	player.play_gen1_forget_swap(_r.data, assets)
+	var yellow: bool = _r.game_id == RomRegistry.YELLOW
+	var bank: int = player._gen1.audio_rom_bank
+	_r.check(bank == (Gen1Layout.AUDIO_BANK_ROM[0] if yellow else map_bank),
+		"the swap sounded from bank $%02X." % bank)
+	_r.check((player._gen1.mute_audio_and_pause_music != 0) == yellow, "the swap's music pause was wrong.")
+	for _frame: int in SWAP_GUARD_FRAMES:
+		player.advance_driver_frame()
+	_r.check(player._gen1.audio_rom_bank == map_bank and player._gen1.mute_audio_and_pause_music == 0,
+		"the swap left bank $%02X and mute %d." % [
+			player._gen1.audio_rom_bank, player._gen1.mute_audio_and_pause_music,
+		])
+	player.free()
 
 
 ## `SFX_Headers_1` to `_3`, and `_4` on Yellow: the cache carries a whole ROM

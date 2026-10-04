@@ -11014,7 +11014,7 @@ func test_gen1_a_text_box_draws_a_sprite_mid_step_standing() -> void:
 	assert_eq(walker.frame, 1, "the step did not walk on from its own counter")
 	## `UpdateSprites` runs from `OverworldLoop` alone, so `RedrawMapView`'s
 	## `DelayFrame`s hold every sprite still; a movement wait is the loop's own.
-	world.set("_gen1_steps", [world.call("_gen1_redraw_step")])
+	world.set("_gen1_steps", [Gen1MapScripts._gen1_redraw_step()])
 	assert_true(world.script_stops_the_map(), "a routine's own wait let the map run")
 	world.set("_gen1_steps", [{"type": &"wait", "values": {
 		"type": &"wait", "wait": Gen2WorldScriptRunner.WAIT_MOVEMENT,
@@ -11036,7 +11036,7 @@ func test_gen1_script_branches_read_pending_flags_and_scratch_in_each_choice() -
 		{"op": "branch", "snapshot": 0, "then": [{"op": "text", "text": "WAS OPEN"}], "else": []},
 		{"op": "branch", "flag": 683, "then": [], "else": [{"op": "text", "text": "CLOSED"}]},
 	]
-	var steps: Array = world._gen1_script_steps({"script": [
+	var steps: Array = Gen1ScriptNodes._gen1_script_steps(world, {"script": [
 		{"op": "text", "text": "QUESTION"},
 		{"op": "choice", "yes": chosen, "no": [
 			{"op": "branch", "flag": 683, "then": [], "else": [{"op": "text", "text": "NO"}]},
@@ -11113,18 +11113,18 @@ func test_gen1_a_catalogued_site_hands_over_what_a_mod_patched() -> void:
 		int(catalog.rows(Gen2WorldCatalog.KIND_STATIC)[0]["id"]), {"species": 25, "level": 3}
 	)
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 0, 0, Vector2i(1, 2), Gen2WorldState.new())
-	var steps: Array = world._gen1_script_steps(world.current_map.texts[0])
+	var steps: Array = Gen1ScriptNodes._gen1_script_steps(world, world.current_map.texts[0])
 	assert_eq(steps.size(), 3, JSON.stringify(steps))
 	assert_eq(int(steps[0]["value"]), 177, "the store follows the patched species' own index")
 	assert_eq(int(steps[1]["values"]["values"]["pokemon"]), 7, "the give hands over the patch")
 	assert_eq(int(steps[2]["values"]["values"]["pokemon"]), 25)
 	assert_eq(int(steps[2]["values"]["values"]["level"]), 3)
-	var shelf: Array = world._gen1_mart_steps(world.current_map.texts[1], 2)
+	var shelf: Array = Gen1FacilityScripts._gen1_mart_steps(world, world.current_map.texts[1], 2)
 	assert_eq(shelf[0]["values"]["values"]["items"], [{"item": 3, "price": 1}])
 	var picked: Array = []
-	var run: Dictionary = world._gen1_run(world.current_map.events["objects"][0])
+	var run: Dictionary = Gen1ScriptNodes._gen1_run(world, world.current_map.events["objects"][0])
 	run["object"]["object_index"] = 0
-	assert_true(world._gen1_pick_up_item({}, picked, run))
+	assert_true(Gen1ScriptNodes._gen1_pick_up_item(world, {}, picked, run))
 	assert_eq(picked[0]["items"], {1: 1}, "the ball holds the patched item")
 
 	## The Old and Good Rod are two fishing groups above the Super Rod's.
@@ -11147,12 +11147,12 @@ func test_gen1_a_catalogued_site_hands_over_what_a_mod_patched() -> void:
 ## `wBattleType` byte rides the request read across onto Crystal's numbering.
 func test_gen1_a_rows_battle_stands_behind_the_rest_of_the_row() -> void:
 	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 2))
-	world._gen1_steps = world._gen1_script_steps({"script": [
+	world._gen1_steps = Gen1ScriptNodes._gen1_script_steps(world, {"script": [
 		{"op": "wild_battle", "species": 19, "level": 5,
 			"battle_type": Gen1Layout.BATTLE_TYPE_OLD_MAN},
 		{"op": "flag", "flag": 47, "set": true},
 	]})
-	var results: Array = world._gen1_result()
+	var results: Array = Gen1MapScripts._gen1_result(world)
 	assert_true(world.state.is_event_flag_active(47), "the flag behind the store is set first")
 	var request: Dictionary = world.pending_runtime_request()
 	assert_eq(StringName(request.get("kind", &"")), &"battle_requested")
@@ -11268,7 +11268,7 @@ func test_gold_gs_ball_delivery_kurt_wait_and_shrine_are_saved_once() -> void:
 func test_gen1_an_escort_hides_its_original_object_after_a_map_change() -> void:
 	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(1, 8))
 	(world.objects[0] as Gen2WorldObject).toggle_index = 7
-	world._gen1_start_movement_script(Gen1Layout.MOVEMENT_SCRIPT_PALLET, 0)
+	Gen1MapScripts._gen1_start_movement_script(world, Gen1Layout.MOVEMENT_SCRIPT_PALLET, 0)
 	(world.objects[0] as Gen2WorldObject).toggle_index = 9
 	world._gen1_movement_script["function"] = 4
 	world.advance_gen1_movement_script()

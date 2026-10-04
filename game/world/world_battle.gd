@@ -290,8 +290,11 @@ static func takeover_result(
 		"enemy": enemy_record(battle),
 	}
 	var player: Gen2Party = battle.party(Gen2Battle.PLAYER)
-	if won:
+	if not money.is_empty():
 		result["money_awarded"] = money
+	if battle.is_gen1():
+		result["battle_result"] = battle.gen1_battle_result()
+	if won:
 		var grew: Array[int] = []
 		for index: int in mini(levels.size(), player.size()):
 			if player.at(index) != null and player.at(index).level > int(levels[index]):
@@ -330,22 +333,32 @@ static func ended_event(result: Dictionary, map: Vector2i) -> Dictionary:
 	}
 
 
-static func earnings(battle: Gen2Battle, state: Gen2WorldState, won: bool) -> Dictionary:
+## [param won] is the fight won or, in Generation 2, a ball landed (`ExitBattle`'s
+## `and $f / ret nz`). Generation 1's `EndOfBattle` asks
+## [method Gen2Battle.gen1_battle_result] for zero instead: a wild mon that left
+## still pays Pay Day, a run or ball ([param caught]) never does. A link battle
+## reaches neither `CheckPayDay`.
+static func earnings(
+	battle: Gen2Battle, state: Gen2WorldState, won: bool, caught: bool = false
+) -> Dictionary:
 	var result: Dictionary = {
 		"money": {}, "prize_shown": 0, "prize_line": &"", "pay_day": 0,
 	}
-	if battle == null or not won:
+	if battle == null:
 		return result
+	var pays_day: bool = not battle.is_link_battle and (
+		(battle.gen1_battle_result() == 0 and not caught) if battle.is_gen1() else won
+	)
 	var wallet: int = 0
 	var to_mom: int = 0
 	## Generation 1 has no `.CheckMomSavings`: `wAmountMoneyWon` is the whole
 	## prize and `AddBCDPredef` pays it into `wPlayerMoney` as it stands.
-	if battle.battle_reward > 0 and battle.data != null \
+	if won and battle.battle_reward > 0 and battle.data != null \
 		and battle.data.generation == RomRegistry.GEN1:
 		wallet = battle.battle_reward
 		result["prize_shown"] = wallet
 		result["prize_line"] = Gen2Battle.PRIZE_KEPT_IT_ALL
-	elif battle.battle_reward > 0:
+	elif won and battle.battle_reward > 0:
 		var split: Dictionary = Gen2Battle.prize_money_split(
 			battle.battle_reward,
 			battle.amulet_coin,
@@ -359,7 +372,7 @@ static func earnings(battle: Gen2Battle, state: Gen2WorldState, won: bool) -> Di
 		result["prize_line"] = split["line"]
 	## `CheckPayDay` doubles the coins with the same Amulet Coin the prize used,
 	## and does it whether or not there was a trainer to pay a prize.
-	if battle.pay_day_money > 0:
+	if pays_day and battle.pay_day_money > 0:
 		var coins: int = battle.pay_day_money
 		if battle.amulet_coin:
 			coins = Gen2Battle.double_reward(coins)

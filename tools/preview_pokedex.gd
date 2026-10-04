@@ -3,11 +3,11 @@ extends SceneTree
 ## Captures the Pokedex against a real imported cache.
 ##   Godot --headless --path . -s res://tools/preview_pokedex.gd -- \
 ##       crystal /tmp/dex.png [list|entry|option|search|results|unown] [presses]
-## A Generation 1 cartridge answers `list`, `side` and `entry` and none of the
-## other four: `ShowPokedexMenu` has no mode, search or Unown screen.
-## The world behind it is a new game with every species seen and every second one
-## caught, which puts a full listing, both row states and a real entry on screen at
-## once. `f<n>` in [presses] spends n hardware frames, which catches the arrow blink.
+## A Generation 1 cartridge answers `list`, `side` and `entry` only:
+## `ShowPokedexMenu` has no mode, search or Unown screen. The world behind it is a
+## new game with every species seen and every second one caught, which puts a full
+## listing, both row states and a real entry on screen at once. `f<n>` in
+## [presses] spends n hardware frames, which catches the arrow blink.
 
 const NEW_BARK_GROUP: int = 24
 const NEW_BARK_MAP: int = 7

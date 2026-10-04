@@ -216,9 +216,8 @@ const SPECIAL_SELECT_APRICORN_FOR_KURT: int = 86
 ## disagree on, so `special_index()` leaves it alone, and it owns the same shape
 ## `NameRater` does one house further on. Below, the Battle Tower's own six
 ## specials, Crystal's alone: `BattleTowerAction` is one routine reached with a
-## `setval` in front of it, two of them are the menus the receptionist opens, one
-## samples the next opponent and one fights it, and `CheckForBattleTowerRules` is
-## the party check in front of the whole challenge.
+## `setval`, two are the receptionist's menus, one samples the next opponent, one
+## fights it, and `CheckForBattleTowerRules` checks the party before the challenge.
 const SPECIAL_BATTLE_TOWER_ROOM_MENU: int = 116
 const SPECIAL_BATTLE_TOWER_BATTLE: int = 119
 const SPECIAL_LOAD_BATTLE_TOWER_OPPONENT: int = 122
@@ -351,11 +350,9 @@ const MONEY_WINDOW_KIND_OF: Dictionary = {
 
 ## DisplayUnownWords, Crystal's alone: pokegold's table stops well before it and
 ## neither dump ships the words. The four wall patterns are Crystal bg events, two
-## per chamber, where Gold and Silver's cells carry only the puzzle sign. Not to be
-## read as 41, which is `UnownPuzzle` on both. That one is the sliding puzzle each
-## chamber opens, its `setval` naming the picture and its answer read by the
-## `iftrue`; 42 is `SlotMachine`, whose `setval` is what `Slots_InitBias` reads,
-## TRUE picking `.Lucky`'s own bias table. Both are under `special_index`'s split.
+## per chamber. Not 41, which is `UnownPuzzle` on both: the sliding puzzle each
+## chamber opens. 42 is `SlotMachine`, whose `setval` is what `Slots_InitBias`
+## reads, TRUE picking `.Lucky`'s bias table. Both are under `special_index`'s split.
 const SPECIAL_SLOT_MACHINE: int = 42
 ## `CardFlip`, the Game Corner's other machine. Both Game Corners reach it and
 ## neither puts a `setval` in front of it: the routine reads no `wScriptVar` and
@@ -3638,13 +3635,12 @@ func _execute_object_command(source_opcode: int, command: Dictionary) -> Diction
 			})
 			_stage_object_event_flag(int(command.get("object_id", 0)), false)
 		0x6F, 0x76:
-			## `StartFollow` takes the FIRST operand through `SetLeaderIfVisible`
-			## and the second through `SetFollowerIfVisible`, which is the object
-			## that takes SPRITEMOVEDATA_FOLLOWING. So the first leads and the
-			## second follows; the macro's own operand comments say the reverse.
-			## Reading them the other way round leaves the player standing where
-			## `NewBarkTown_TeacherBringsYouBackMovement` should have walked them
-			## and steps the rival out of the cell he pushed the player from.
+			## `StartFollow` takes the FIRST operand through `SetLeaderIfVisible` and the
+			## second through `SetFollowerIfVisible`, the object that takes
+			## SPRITEMOVEDATA_FOLLOWING: the first leads and the second follows, though
+			## the macro's operand comments say the reverse. Read the other way round,
+			## the player stands where `NewBarkTown_TeacherBringsYouBackMovement`
+			## should have walked them and the rival steps out of the cell he pushed them from.
 			_emit_object_event(&"object_follow", {
 				"object_index": _object_index_from_id(int(command.get("object_id_2", 0))),
 				"target_index": _object_index_from_id(int(command.get("object_id", 0))),
@@ -4179,10 +4175,8 @@ func _clock_day() -> int:
 ## `HealMachineAnim`'s sounds and the frame of its own wait each is played on.
 ## `.LoadBallsOntoMachine` plays one effect a ball and then delays thirty frames,
 ## so ball zero sounds on the frame the routine starts. `.PlayHealMusic` starts
-## `MUSIC_HEAL` under `.FlashPalettes8Times` rather than after it; the Hall of
-## Fame's sequence plays one effect there instead and a second once the flashes
-## are done. Its `WaitSFX` between the two is not spent, like the other two the
-## world leaves unspent.
+## `MUSIC_HEAL` under `.FlashPalettes8Times`; the Hall of Fame plays one effect
+## there and a second after the flashes. Its `WaitSFX` between the two is not spent.
 static func heal_machine_sounds(machine_type: int, balls: int) -> Array:
 	if balls <= 0:
 		return []
@@ -4687,12 +4681,11 @@ func _special_palette_fade(special: int) -> Dictionary:
 
 
 ## Sprite reload, palette reload and the dummied trainer-ranking bookkeeping affect
-## presentation or source-only counters rather than scene-free state.
-## `LoadUsedSpritesGFX`, `UpdateSprites`, `UpdatePlayerSprite`,
-## `ReloadSpritesNoPalettes` and `RefreshSprites` reload the sprite set a
-## `variablesprite` just changed; `ClearBGPalettes`, `UpdateTimePals`,
-## `SetPlayerPalette` and `LoadMapPalettes` are the palette pair the day/night scripts
-## open with, and the renderer takes its palettes from the map and the clock.
+## presentation or source-only counters, not scene-free state. `LoadUsedSpritesGFX`,
+## `UpdateSprites`, `UpdatePlayerSprite`, `ReloadSpritesNoPalettes` and
+## `RefreshSprites` reload the sprite set a `variablesprite` changed;
+## `ClearBGPalettes`, `UpdateTimePals`, `SetPlayerPalette` and `LoadMapPalettes`
+## open the day/night scripts, and the renderer takes palettes from the map and clock.
 func _special_presentation_only(special: int) -> Dictionary:
 	_emit_runtime_event(&"presentation_special_applied", {"special": special})
 	return {"ok": true}
@@ -5477,12 +5470,11 @@ func _special_box(run: String, name: String) -> String:
 
 
 ## `BankOfMom`'s jumptable, one index at a time (`engine/events/mom.asm`). Every
-## state either prints a box, opens her menu or opens the dial, so the source's
-## `.loop` is the chain of pendings each of them leaves behind. `DSTChecks` is the
-## one branch not built, and it is a save-format bump: `.nope` asks whether to move
-## the clock an hour, which needs a saved `wDST` bit and the `wStartHour` shift
-## behind it. The branch taken instead is `.JustDoWhatYouCan`, which is what a
-## clock nowhere near a boundary reaches.
+## state prints a box, opens her menu or opens the dial, so the source's `.loop` is
+## the chain of pendings each leaves behind. `DSTChecks` is the one branch not
+## built, being a save-format bump: `.nope` needs a saved `wDST` bit and the
+## `wStartHour` shift. `.JustDoWhatYouCan` is taken instead, as a clock nowhere
+## near a boundary reaches it.
 func _bank_of_mom(index: int) -> Dictionary:
 	match index:
 		MOM_CHECK_INITIALIZED:
@@ -5567,12 +5559,10 @@ func _mom_yes_no(name: String, state_index: int) -> Dictionary:
 
 
 ## `.StoreMoney`'s tail and `.TakeMoney`'s, which differ only in which account is
-## which. Three things the source does that a rewrite loses: `GiveMoney` adds into
-## `wStringBuffer2` rather than into an account, so the ceiling is tested against
+## which. `GiveMoney` adds into `wStringBuffer2`, so the ceiling is tested against
 ## the balance the transaction would leave and nothing is written when it fails;
 ## both refusals `ret` with `wJumptableIndex` unchanged, so her question is asked
-## again and the dial reopens; and a dial left at zero is `.CancelDeposit`, the
-## same branch B takes.
+## again and the dial reopens; and a dial left at zero is `.CancelDeposit`, as B is.
 func _finish_mom_bank_dial(mode: StringName, amount: int) -> Dictionary:
 	var deposit: bool = mode == MOM_DIAL_DEPOSIT
 	var state_index: int = MOM_STORE_MONEY if deposit else MOM_TAKE_MONEY
@@ -6425,11 +6415,10 @@ func _finish_deferred_party_selection(
 
 ## `Script_givepokemail`, which copies the pointer's `db item` and the
 ## `MAIL_MSG_LENGTH` bytes behind it into `wMonMailMessageBuffer`, and
-## `GivePokeMail`, which hangs both on the last party member. Nothing is asked and
-## nothing is answered: the routine writes no wScriptVar and cannot fail, so the
-## write is an event the way a happiness change is. The mail's author, ID and
-## species are the member's own, so the screen reads the first two off the row it
-## is writing and the runner carries the third.
+## `GivePokeMail`, which hangs both on the last party member. It writes no
+## wScriptVar and cannot fail, so the write is an event the way a happiness
+## change is. The mail's author and ID come off the row the screen is writing; the
+## runner carries the species.
 func _give_poke_mail(command: Dictionary) -> Dictionary:
 	var bytes: PackedByteArray = _mail_bytes(int(command.get("address", 0)))
 	if bytes.size() < Gen2SaveMail.MESSAGE_LENGTH + 1:
@@ -6650,11 +6639,9 @@ func _emit_object_event(event_type: StringName, values: Dictionary) -> void:
 
 ## engine/events/overworld.asm's AskStrengthScript, synthesized. StrengthBoulderScript
 ## is `farsjump AskStrengthScript`, whose first command is `callasm TryStrengthOW`;
-## `callasm` has no runner here and its operand is a link-time address absent from
-## the pinned disassemblies, so the seam sits on the standard-script index instead,
-## which is 14 in both pins and verified by the imported table. The synthesized
-## body is the same shape trainer object dispatch takes. Every branch of
-## AskStrengthScript terminates, so this never returns to a caller.
+## that operand is a link-time address absent from the pins, so the seam is the
+## standard-script index, 14 in both and verified by the imported table. Every
+## branch of AskStrengthScript terminates, so this never returns to a caller.
 func _stage_strength_boulder() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():
@@ -6685,12 +6672,11 @@ func _stage_strength_boulder() -> Dictionary:
 
 
 ## engine/events/misc_scripts.asm's FindItemInBallScript, synthesized. An item
-## ball's script pointer is not code but the `itemball` macro's
-## `db item, quantity`, copied into wItemBallData before PLAYEREVENT_ITEMBALL is
-## raised, so the seam is the object type rather than a script address. Source
-## order is receive, `disappear LAST_TALKED`, then the text, so the ball is gone
-## when the box is drawn; its `pause 60` is the acknowledge here. The receive
-## seam preserves the no-room branch without committing anything.
+## ball's script pointer is the `itemball` macro's `db item, quantity`, copied into
+## wItemBallData before PLAYEREVENT_ITEMBALL, so the seam is the object type.
+## Source order is receive, `disappear LAST_TALKED`, then the text, so the ball is
+## gone when the box is drawn; its `pause 60` is the acknowledge here. The receive
+## seam keeps the no-room branch without committing anything.
 func _stage_item_ball() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var quantity: int = maxi(1, int(_request.get("quantity", 1)))
@@ -6780,12 +6766,12 @@ func _fruit_tree_picked(tree_id: int) -> bool:
 
 
 ## HiddenItemScript, the BGEVENT_ITEM half of the same source area. The pointer
-## is the `hiddenitem` macro's `dwb event, item`, handed over the way an item
-## ball's two bytes are. It differs from [method _stage_item_ball] in the flag and
-## the object: nothing is hidden, and the flag `callasm SetMemEvent` writes is the
-## record's rather than the object's. `_PlayerFoundItemText` is `_FoundItemText`'s
-## wording, so the two share a constant. The source writes the text before
-## `giveitem` and sets the flag after it, so a full pocket changes neither.
+## is the `hiddenitem` macro's `dwb event, item`, handed over as an item ball's two
+## bytes are. It differs from [method _stage_item_ball] in the flag and the object:
+## nothing is hidden, and the flag `callasm SetMemEvent` writes is the record's.
+## `_PlayerFoundItemText` is `_FoundItemText`'s wording, so the two share a
+## constant. The text comes before `giveitem` and the flag after, so a full pocket
+## changes neither.
 func _stage_hidden_item() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var flag: int = int(_request.get("flag", -1))
@@ -6866,11 +6852,10 @@ func _stage_strength_used(slot: int) -> Dictionary:
 
 ## engine/overworld/events.asm's TryTileCollisionEvent, from `.cut` on: the five
 ## field-move branches a faced tile can reach, each a `Try*OW` gate and then an
-## `Ask*Script`. Synthesized for the reason AskStrengthScript is, and dispatched
-## on the request kind rather than a standard-script index because these are
-## reached through `CallScript`. Which move the tile offers is [Gen2WorldAPI]'s
-## answer; what is left here is the party and the badge. TryHeadbuttOW and
-## TrySurfOW have no refusal text: they return no carry and nothing is shown.
+## `Ask*Script`. Synthesized as AskStrengthScript is, and dispatched on the request
+## kind because these are reached through `CallScript`. Which move the tile offers
+## is [Gen2WorldAPI]'s answer; what is left here is the party and the badge.
+## TryHeadbuttOW and TrySurfOW have no refusal text: nothing is shown.
 func _stage_field_move_prompt() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():
@@ -6949,13 +6934,12 @@ func _field_move_prompt_refusal(move: int) -> String:
 	return ""
 
 
-## engine/events/overworld.asm's AskRockSmashScript, synthesized for the same
-## reason AskStrengthScript is: SmashRockScript is `farsjump AskRockSmashScript`
-## and its first command is `callasm HasRockSmash`, whose operand is a link-time
-## address absent from the pins, so the seam is the standard-script index, 15 in
-## both. `HasRockSmash` is CheckPartyMove and nothing else, so unlike the boulder
-## there is no badge and no already-active flag to check: the whole gate is whether
-## a party member knows ROCK SMASH.
+## engine/events/overworld.asm's AskRockSmashScript, synthesized as AskStrengthScript
+## is: SmashRockScript is `farsjump AskRockSmashScript` and its first command is
+## `callasm HasRockSmash`, a link-time address absent from the pins, so the seam is
+## the standard-script index, 15 in both. `HasRockSmash` is CheckPartyMove alone, so
+## unlike the boulder there is no badge or already-active flag: the whole gate is
+## whether a party member knows ROCK SMASH.
 func _stage_smash_rock() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():

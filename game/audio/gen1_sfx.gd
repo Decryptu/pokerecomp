@@ -52,6 +52,8 @@ const SFX_PURCHASE: int = 178
 const SFX_COLLISION: int = 180
 const SFX_GO_OUTSIDE: int = 181
 const SFX_SAVE: int = 182
+## Audio 1's `SFX_Pokeflute`; Audio 3's intro table reuses 184 for `SFX_Intro_Lunge`.
+const SFX_POKEFLUTE: int = 184
 const SFX_INTRO_LUNGE: int = 184
 const SFX_INTRO_HIP: int = 185
 const SFX_INTRO_HOP: int = 186

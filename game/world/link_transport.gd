@@ -130,8 +130,12 @@ static func peer_from_save(save: Gen2SaveData, room: int = CABLECLUBROOM_NULL) -
 	if save == null:
 		return {}
 	var party: Array = []
+	var gen1: bool = RomRegistry.generation_for(save.game_id) == RomRegistry.GEN1
 	for mon: Gen2SaveMon in save.party:
-		party.append(mon.to_dict())
+		var row: Dictionary = mon.to_dict()
+		if gen1:
+			row["item"] = mon.catch_rate
+		party.append(row)
 	return {
 		"name": save.player_name,
 		"id": save.player_id,

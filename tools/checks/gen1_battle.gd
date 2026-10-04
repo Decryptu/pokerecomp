@@ -2063,7 +2063,7 @@ func _a_lost_fight_on_the_screen() -> void:
 		elif int(row[1]) == 0:
 			screen.preview_battle_request(SWEEP_ENEMY, FIGHT_LEVELS[0])
 		else:
-			screen._start_battle_request(world._gen1_trainer_request(int(row[1]), 1, {}, -1)["values"])
+			screen._start_battle_request(Gen1ScriptNodes._gen1_trainer_request(world, int(row[1]), 1, {}, -1)["values"])
 		var fought: Dictionary = _drive_loss(screen)
 		var messages: Array = fought["messages"]
 		var black: Array = fought["black"]

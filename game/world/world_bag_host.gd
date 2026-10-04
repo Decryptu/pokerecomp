@@ -52,11 +52,10 @@ static func toss(
 ## `TryGiveItemToPartymon`, which the pack's GIVE and the party submenu's ITEM both
 ## reach. [param swap] is the answer to `PokemonAskSwapItemText`: without it a
 ## Pokemon already holding something is refused with nothing written, which is
-## where the source stops to ask. `ItemIsMail` is read twice here:
-## `.please_remove_mail` refuses in front of the swap, because a message cannot be
-## taken off with the item that carries it, and `GivePartyItem` runs
-## `ComposeMailMessage` when the item given is mail, which is a screen rather than
-## a transaction, so the caller writes it and hands the finished [param mail] in.
+## where the source stops to ask. `ItemIsMail` is read twice: `.please_remove_mail`
+## refuses in front of the swap, and `GivePartyItem` runs `ComposeMailMessage`
+## for mail, a screen rather than a transaction, so the caller writes it and hands
+## the finished [param mail] in.
 static func give_to_party(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,

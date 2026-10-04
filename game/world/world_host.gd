@@ -10,10 +10,10 @@ extends RefCounted
 ## The requests the host settles out of the save alone: `special HealParty`,
 ## `giveegg`, `GiveDratini`, a `givepoke` that names an OT and
 ## `DaycareGentlemanText`'s two `MoveMon` calls each run to completion inside the
-## command that asked. `pokemon_requested` is here for those and no further:
-## `GivePoke`'s `.wildmon` branch reaches `GiveANickname_YesNo`, so a screen that
-## can draw one intercepts it in front of this list and a driver that cannot
-## settles it with the species name, which is what NO answers.
+## command that asked. `pokemon_requested` is here for those only: `GivePoke`'s
+## `.wildmon` branch reaches `GiveANickname_YesNo`, so a screen that can draw one
+## intercepts it first and a driver that cannot settles it with the species name,
+## which is what NO answers.
 const UNATTENDED_REQUESTS: Array[StringName] = [
 	&"party_heal_requested", &"pokemon_requested", &"trade_requested",
 	&"contest_mon_requested", &"dratini_moveset_requested",

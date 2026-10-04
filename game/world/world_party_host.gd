@@ -1734,6 +1734,10 @@ static func _apply_pokemon_request(
 	)
 	if mon == null:
 		return {"ok": false, "reason": &"could_not_create_pokemon"}
+	## Oak's Lab hands Yellow's starter `LIGHT_BALL_GSC` after `AddPartyMon`.
+	if world.data.id == RomRegistry.YELLOW and species == Gen2WorldFieldMove.SPECIES_PIKACHU \
+			and StringName(values.get("routine", &"")) == &"add_party_mon":
+		mon.catch_rate = Gen1Layout.LIGHT_BALL_GSC
 	## `SetCaughtData` or `SetBoxMonCaughtData`: the map the player stands on.
 	set_caught_data(
 		world.data, mon, level, world.object_time_of_day, world.player_female(),
@@ -2918,6 +2922,10 @@ static func _caught_record(wild: Gen2BattleMon) -> Gen2SaveMon:
 	if out == null or not Gen2Substatus.has(wild.substatus, Gen2Substatus.TRANSFORMED):
 		return out
 	out.species = _caught_species(wild)
+	if wild.data.generation == RomRegistry.GEN1:
+		out.catch_rate = Gen1Layout.stored_catch_rate(
+			wild.data.id, out.species, int(wild.data.species(out.species).get("catch_rate", 0))
+		)
 	var moves: Array = wild.data.moves_at_level(out.species, out.level)
 	for slot: int in Gen2SaveMon.MAX_MOVES:
 		out.set_move(wild.data, slot, int(moves[slot]) if slot < moves.size() else 0)

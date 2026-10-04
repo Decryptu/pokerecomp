@@ -3,12 +3,11 @@ extends Control
 
 ## `EvolveAfterBattle`'s `.proceed` and the `EvolutionAnimation` it farcalls, for
 ## one plan at a time out of [method Gen2Evolution.after_battle], or Generation
-## 1's `.doEvolution` and `EvolveMon` over the same plans. Presentation only:
-## nothing here writes a party row, and each plan is announced with [signal
-## resolved] where `.proceed` writes the new species, so the caller applies it in
-## the source's own order. `.PlayEvolvedSFX`'s thirty-two balls of light are
-## sprite-anim objects this project has no layer for, so the screen holds the new
-## picture through their frames.
+## 1's `.doEvolution` and `EvolveMon`. Presentation only: each plan is announced
+## with [signal resolved] where `.proceed` writes the new species, so the caller
+## applies it in the source's own order. `.PlayEvolvedSFX`'s thirty-two balls of
+## light are sprite-anim objects this project has no layer for, so the screen
+## holds the new picture through their frames.
 
 signal resolved(plan: Dictionary, canceled: bool)
 signal closed()

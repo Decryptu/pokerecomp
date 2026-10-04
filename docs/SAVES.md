@@ -25,7 +25,8 @@ Save format version 6 stores:
   the cartridge's RTC keeps running while the machine is off
   (`Gen2WorldClock.catch_up`);
 - imported-save and party-transaction identity fields: OT ID, nickname, OT,
-  happiness, Pokerus and caught data;
+  happiness, Pokerus and caught data, and a Generation 1 member's
+  `MON_CATCH_RATE` byte, which the Time Capsule reads as a held item;
 - the trainer card's own fields: `player_id`, the player's `gender` and the play
   timer;
 - a per-slot, per-mod JSON namespace, and the `run` block naming what produced

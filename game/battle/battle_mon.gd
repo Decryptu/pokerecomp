@@ -48,6 +48,8 @@ var level: int = 1
 var ot_id: int = -1
 ## Yellow's `IsThisPartyMonStarterPikachu`, answered where the save is known.
 var starter_pikachu: bool = false
+## Generation 1's `MON_CATCH_RATE`, which only the Time Capsule reads (as an item).
+var catch_rate: int = 0
 var dvs: int = PERFECT_DVS
 var stat_exp: Dictionary = {}
 
@@ -264,6 +266,10 @@ static func create(
 	out.stat_exp = trained
 	out.moves = known_moves.slice(0, MAX_MOVES)
 	out.item = held_item
+	if game_data.generation == RomRegistry.GEN1:
+		out.catch_rate = Gen1Layout.stored_catch_rate(
+			game_data.id, species_number, int(game_data.species(species_number).get("catch_rate", 0))
+		)
 	out.reset_stages()
 	out.recalculate()
 	out.hp = out.max_hp()

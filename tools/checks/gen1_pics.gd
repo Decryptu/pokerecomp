@@ -3,11 +3,10 @@ extends RefCounted
 ## Every picture [Gen1SpriteCodec] decodes and the two fixed sheets beside them,
 ## swept on Red, Blue and Yellow: 151 front pics, 151 back pics, 47 trainer
 ## classes, two battle back pics, `FontGraphics` and `TextBoxGraphics`. The
-## digests come from a run in which all 906 species pics, all 141 trainer pics
-## and all six back pics matched the PNGs under a pinned checkout's
-## `gfx/pokemon` and `gfx/trainers` pixel for pixel, those being what the
-## cartridge's own `.pic` files are built from. Re-earn them against those
-## rather than by copying whatever this prints.
+## digests come from a run in which all 906 species pics, 141 trainer pics and six
+## back pics matched the PNGs under a pinned checkout's `gfx/pokemon` and
+## `gfx/trainers` pixel for pixel. Re-earn them against those rather than by
+## copying whatever this prints.
 
 const SPECIES_COUNT: int = 151
 const TRAINER_COUNT: int = 47

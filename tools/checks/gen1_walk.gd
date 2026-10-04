@@ -598,7 +598,10 @@ func _check_the_nurse_heals() -> void:
 	if _r.game_id == &"yellow":
 		_check_the_yellow_nurse_waits(world)
 		return
+	var turned: Array[int] = _spend_script_waits(world, true)
 	var request: Dictionary = world.pending_runtime_request()
+	var turn: int = turned[0] if turned.size() == 1 else -1
+	_r.check(turn == Gen1Layout.NURSE_RED_TURN_FRAMES, "her turn to the machine waited %d." % turn)
 	if not _r.check(
 		StringName(request.get("kind", &"")) == &"party_heal_requested",
 		"the nurse asked for %s." % [request.get("kind", &"nothing")]
@@ -616,6 +619,8 @@ func _check_the_nurse_heals() -> void:
 		"the heal machine waited on %s." % [wait]
 	)
 	_r.check(world.party_holder() == &"heal_machine", "the machine held no party.")
+	var nurse: Gen2WorldObject = world.objects[0]
+	_r.check(nurse.facing == Gen2WorldSprite.FACING_LEFT, "the nurse faced %d, not the machine." % nurse.facing)
 	## `.partyLoop`'s `ld c, 30` per ball, and `MUSIC_PKMN_HEALED` behind them.
 	var sounds: Array = machine.get("sounds", [])
 	var wanted: Array = [[0, Gen1SoundEngine.SFX_STOP_ALL_MUSIC]]
@@ -637,11 +642,31 @@ func _check_the_nurse_heals() -> void:
 		world.advance_script_wait_frame()
 		spent += 1
 	_r.check(spent == frames, "the machine ran for %d frames, not %d." % [spent, frames])
-	## `PokemonFightingFitText` and `PokemonCenterFarewellText` behind it.
+	## `PokemonFightingFitText`, the bow on `ld c, $14` and `PokemonCenterFarewellText`.
 	_r.check(world.script_busy(), "nothing was said once the machine had stopped.")
-	world.run_event_queue(true)
-	world.run_event_queue(true)
+	var bows: Array[int] = _spend_script_waits(world, false)
+	_r.check(bows == [Gen1Layout.NURSE_RED_BOW_FRAMES], "the nurse bowed for %s." % [bows])
+	_r.check(nurse.facing == Gen2WorldSprite.FACING_DOWN, "the nurse stayed facing %d." % nurse.facing)
 	_r.check(not world.script_busy(), "the nurse never finished.")
+
+
+## Every counted wait spent from here, stopping at a heal request if asked.
+func _spend_script_waits(world: Gen2WorldAPI, stop_at_heal: bool) -> Array[int]:
+	var waits: Array[int] = []
+	for _step: int in 12:
+		var kind: StringName = StringName(world.pending_runtime_request().get("kind", &""))
+		var wait: Dictionary = world.pending_script_wait()
+		if stop_at_heal and kind == &"party_heal_requested":
+			break
+		if not wait.is_empty():
+			waits.append(int(wait.get("frames", 0)))
+			for _frame: int in int(wait.get("frames", 0)):
+				world.advance_script_wait_frame()
+		elif world.script_busy():
+			world.run_event_queue(true)
+		else:
+			break
+	return waits
 
 
 ## Yellow's nurse with no starter out: `ld c, 64`, her turn (6), `ld c, 30`, the
@@ -1088,6 +1113,10 @@ const GIFT_ROWS: Array = [
 ]
 const GIFT_QUESTION: String = "Do you want to give a nickname to EEVEE?"
 const GIFT_GUARD_FRAMES: int = 2000
+const ROD_SHORE_CELL := Vector2i(6, 13)
+const FLUTE_GUARD_FRAMES: int = 1500
+const FLUTE_PRESS_EVERY: int = 20
+const FLUTE_MIN_FRAMES: int = 100
 
 
 func _check_a_gift_on_the_screen() -> void:
@@ -3946,6 +3975,54 @@ func _check_the_poke_flute() -> void:
 		"the flute woke a Snorlax that had already been beaten."
 	)
 	_r.note("gen1 poke flute set flag %d beside the Snorlax" % SNORLAX_FIGHT_FLAG)
+	_check_the_poke_flute_tune()
+	_check_the_rod_cast()
+
+
+## `FishingInit`: the rod's text and `SFX_HEAL_AILMENT`, then eighty frames, then the cast.
+func _check_the_rod_cast() -> void:
+	var screen: Gen2WorldScreen = _r.open_screen(0, PALLET_TOWN, ROD_SHORE_CELL)
+	screen.world().player_facing = Gen2WorldSprite.FACING_DOWN
+	screen.world().state.apply_changes({}, {}, {"items": {Gen1Layout.ITEM_OLD_ROD: 1}})
+	screen._on_field_item_used({
+		"ok": true, "effect": Gen2WorldPack.FIELD_EFFECT_ROD, "rod": Gen2WorldEncounter.METHOD_OLD_ROD,
+		"item": Gen1Layout.ITEM_OLD_ROD,
+	})
+	var audio: Gen2AudioPlayer = screen.get("_audio_player")
+	var said: bool = audio.effect_playing()
+	var cast_at: int = -1
+	for frame: int in FLUTE_GUARD_FRAMES:
+		screen.advance_frame()
+		if cast_at < 0 and screen.world().fishing_busy():
+			cast_at = frame
+	_r.check(said and cast_at >= Gen2WorldScreen.GEN1_ROD_CAST_FRAMES,
+		"the rod sounded %s and cast on frame %d." % [said, cast_at])
+	_r.close_screen(screen)
+
+
+## `PlayedFluteHadEffectText`'s `text_asm`: `SFX_POKEFLUTE` holds channel 3, then the map's piece returns.
+func _check_the_poke_flute_tune() -> void:
+	var screen: Gen2WorldScreen = _r.open_screen(0, ROUTE_12, SNORLAX_CELL)
+	screen.set_process(false)
+	var audio: Gen2AudioPlayer = screen.get("_audio_player")
+	screen._on_field_item_used({
+		"ok": true, "effect": Gen2WorldPack.FIELD_EFFECT_POKE_FLUTE, "woke": true,
+		"item": Gen1Layout.ITEM_POKE_FLUTE,
+	})
+	var held: int = 0
+	var after: int = 0
+	for frame: int in FLUTE_GUARD_FRAMES:
+		screen.advance_frame()
+		if frame % FLUTE_PRESS_EVERY == 0 and held == 0:
+			screen.press_button(PokeButton.A)
+		if audio._gen1.channel_sound_id(Gen1SoundEngine.CHAN3) == Gen1Sfx.SFX_POKEFLUTE:
+			held += 1
+		elif held > 0:
+			after += 1
+	_r.check(held > FLUTE_MIN_FRAMES, "the flute held channel 3 for %d frames." % held)
+	_r.check(audio.music_playing(), "the map's music did not come back behind the flute.")
+	_r.note("gen1 poke flute held channel 3 for %d frames, %d behind it" % [held, after])
+	_r.close_screen(screen)
 
 
 ## `ItemUseEscapeRope`: refused outdoors and in Agatha's room, taken in a cave,
@@ -4771,8 +4848,8 @@ func _check_aide_gift(caught: int, item: int) -> void:
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	for species: int in range(1, caught + 1):
 		world.state.set_species_caught(species)
-	var event: Dictionary = world._gen1_event_at(world.object_facing_cell(), &"objects")
-	var steps: Array = world._gen1_script_steps(world.gen1_text_at(int(event.get("text", 0))), event)
+	var event: Dictionary = Gen1FacilityScripts._gen1_event_at(world, world.object_facing_cell(), &"objects")
+	var steps: Array = Gen1ScriptNodes._gen1_script_steps(world, world.gen1_text_at(int(event.get("text", 0))), event)
 	var said: String = JSON.stringify(steps)
 	_r.check(not steps.is_empty() and not said.contains("<NUM_") and not said.contains("<RAM_")
 		and said.contains(_r.data.item_name(item)), "the aide with %d caught said %s." % [caught, said])

@@ -134,13 +134,11 @@ class FrameClock extends RefCounted:
 		_rate = {}
 
 	## The last completed second of this pump, as `fps` (host frames drawn),
-	## `hardware` (hardware frames spent, which is 59.7 on a machine keeping up
-	## and whatever GAME SPEED multiplies that by), `worst_ms` (the longest single
-	## host frame in the window, which is the number a stutter shows in and an
-	## average hides) and `lock` (host frames to a hardware one, or 0 while the
-	## clock is measuring time rather than counting them). Empty until the first
-	## window closes, and empty again after a reset, so a pump driven by hand
-	## rather than by a clock reports nothing instead of reporting zero.
+	## `hardware` (hardware frames spent, 59.7 on a machine keeping up, times GAME
+	## SPEED), `worst_ms` (the longest host frame in the window, which an average
+	## hides) and `lock` (host frames to a hardware one, or 0 while the clock
+	## measures time rather than counting). Empty until the first window closes and
+	## after a reset, so a pump driven by hand reports nothing rather than zero.
 	func rate() -> Dictionary:
 		return _rate
 

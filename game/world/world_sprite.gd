@@ -127,13 +127,12 @@ func is_walking() -> bool:
 	return sprite_type == TYPE_WALKING
 
 
-## Returns the first tile of a 4-tile frame in the source strip. A walking
-## sprite's strip is two halves of twelve tiles: down, up and left standing, then
-## the same three walking. `GetUsedSprite` copies the first half to `vTiles0` and
-## the second to `vTiles1`, which is the `$80` the walking rows of `Facings` add to
-## the object's own base tile. `Facings` gives each direction four frames: 0 and 2
-## are the standing drawing, 1 and 3 the walking one. Right reuses left, flipped by
-## the renderer, and so does frame 3 of down and up.
+## Returns the first tile of a 4-tile frame in the source strip: two halves of
+## twelve tiles, down, up and left standing, then the same three walking.
+## `GetUsedSprite` copies the first half to `vTiles0` and the second to `vTiles1`,
+## the `$80` the walking rows of `Facings` add to the object's base tile. Each
+## direction has four frames: 0 and 2 standing, 1 and 3 walking. Right reuses left,
+## flipped by the renderer, and so does frame 3 of down and up.
 func frame_tile_offset(facing: int, frame: int) -> int:
 	if sprite_type == TYPE_MON_ICON:
 		if tiles < MON_ICON_FRAME_TILES * 2:

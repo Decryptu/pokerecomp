@@ -5,9 +5,8 @@ extends SceneTree
 ## the right way round. Each sprite is a four-by-four block: the four facings
 ## across and the four `Facings` frames down, so a correct walking sprite reads
 ## as two poses alternating with the right column mirroring the left. A big
-## object fills its block with the 32x32 picture its bedroom doll draws. Generation
-## 1's sheets read the same way, its `SpriteFacingAndAnimationTable` using the same
-## order and the same $80 offset.
+## object fills its block with the 32x32 picture its bedroom doll draws.
+## Generation 1's sheets read the same way, with the same order and $80 offset.
 
 const CELL: int = 16
 const COLUMNS: int = 8

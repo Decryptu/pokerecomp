@@ -24,6 +24,7 @@ signal evolution_animation_requested(plan: Dictionary, after: Callable)
 ## hosts it owns the player. `SFX_SAVE` is the only one it asks for.
 signal sfx_requested(sfx: int, waited: bool)
 signal gen1_sfx_requested(sound_id: int)
+signal gen1_forget_swap_requested
 ## Yellow's `PlayPikachuSoundClip`, which the refused stone plays.
 signal pikachu_clip_requested(index: int)
 ## A field move chosen off the MOVES row, in the same shape a party member's own
@@ -2214,7 +2215,7 @@ func _confirm_forget() -> void:
 		return
 	var target_name: String = _target_name(_forget_party_index)
 	if _gen1_pack():
-		gen1_sfx_requested.emit(Gen1Sfx.SFX_SWAP)
+		gen1_forget_swap_requested.emit()
 	else:
 		sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, false)
 	_show_pack_result("%s%s%s" % [
@@ -2324,6 +2325,10 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 				_open_pp_move_list.bind(number, party_index)
 			)
 			return
+		## Red and Blue sound the stone before they know it does nothing; Yellow asks the species first.
+		if _gen1_pack() and _data.id != RomRegistry.YELLOW \
+				and number in Gen2Evolution.stone_items(_data):
+			gen1_sfx_requested.emit(Gen1Sfx.SFX_HEAL_AILMENT)
 		## `NoEffectMessage` is `PrintText` over the party list.
 		_show_pack_result(
 			_use_refusal(StringName(result.get("reason", &"")), number), Callable(),
@@ -2353,6 +2358,8 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 			"new_species": int(result.get("new_species", 0)),
 			"evolving_name": String(result.get("evolving_name", "")),
 		}, true)
+		if _gen1_pack():
+			shown["pre_sound"] = Gen1Sfx.SFX_HEAL_AILMENT
 		evolution_animation_requested.emit(shown, _offer_next_evolution_move)
 		return
 	if party_index >= 0:
@@ -2390,13 +2397,19 @@ func _show_party_result(
 		## drawn behind that press with no `DelayFrames` in front.
 		sfx_requested.emit(Gen2Sfx.SFX_DEX_FANFARE_50_79, true)
 		party["stats_after_press"] = _party_stats(party_index)
-	else:
+	elif not _pp_up_is_silent(result):
 		sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, false)
 	if kind != &"" and not party.has("anim") and kind != Gen2ItemActionText.LEVEL:
 		party["hold"] = Gen2ItemActionText.HOLD_FRAMES
 	if bool(result.get("bitter", false)):
 		next = _say_bitter.bind(next)
 	_show_pack_result(_party_result_text(item, result, party_index, kind), next, party)
+
+
+## `.PPNotMaxedOut` is silent in Red and Blue; Yellow added `SFX_HEAL_AILMENT`.
+func _pp_up_is_silent(result: Dictionary) -> bool:
+	return StringName(result.get("effect", &"")) == &"pp_up" \
+		and _data.generation == RomRegistry.GEN1 and _data.id != RomRegistry.YELLOW
 
 
 ## `LooksBitterMessage`, over the list the action line left behind.

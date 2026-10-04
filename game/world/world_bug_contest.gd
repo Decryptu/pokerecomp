@@ -1,13 +1,12 @@
 class_name Gen2WorldBugContest
 extends RefCounted
 
-## The Bug Catching Contest: its own encounter roll, its score, and its judging
+## The Bug Catching Contest: its encounter roll, score and judging
 ## (`engine/events/bug_contest/`, `engine/overworld/events.asm`'s
 ## `TryWildEncounter_BugContest` and `ChooseWildEncounter_BugContest`).
 ## Scene-free and stateless, like [Gen2WorldTreemon]: the tables are the cache's
 ## (`GameData.bug_contest_mons`, `GameData.bug_contestants`), the live counters
-## are [Gen2WorldState]'s, and every roll takes the caller's generator so a
-## contest is reproducible.
+## [Gen2WorldState]'s, and every roll takes the caller's generator.
 
 ## constants/script_constants.asm.
 const BALLS: int = 20
@@ -171,11 +170,10 @@ static func _dv_score(dvs: int) -> int:
 
 ## `BugContest_JudgeContestants`: the AI contestants are scored first and the
 ## player is inserted last, which is why the player takes a place on a tie.
-## [param withdrawn] is the set of contestant indices whose event flag is set,
-## which `SelectRandomBugContestContestants` chose and who therefore do not
-## compete. Answers `{"placings": [...], "player_place": 0..3}` with the placings
-## first to third, each `{"id", "species", "score"}` and an id of
-## [constant PLAYER_ID] for the player.
+## [param withdrawn] is the contestant indices `SelectRandomBugContestContestants`
+## chose, whose event flag is set and who do not compete. Answers
+## `{"placings": [...], "player_place": 0..3}`, first to third, each `{"id",
+## "species", "score"}` with an id of [constant PLAYER_ID] for the player.
 static func judge(
 	player_species: int,
 	player_score: int,

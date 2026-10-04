@@ -90,12 +90,11 @@ const CHANNELS: Array[Dictionary] = [
 ]
 
 ## The strings LoadStation_* leaves in `de` for UpdateRadioStation to place under
-## the dial, identical in both pins. `LoadStation_RocketRadio` really does reuse
-## Let's All Sing's, though only `PlayRadioStationPointers` reaches it and a map
-## radio prints no name. `LoadStation_BuenasPassword` answers with
-## `NotBuenasPasswordName`, an empty string, until Team Rocket takes the tower.
-## `.returnafterstation` places this before `PlayRadioShow` runs, so the name is
-## the station the dial is on and never the Rocket broadcast standing in for it.
+## the dial, identical in both pins. `LoadStation_RocketRadio` reuses Let's All
+## Sing's, though only `PlayRadioStationPointers` reaches it and a map radio prints
+## no name. `LoadStation_BuenasPassword` answers with `NotBuenasPasswordName`, an
+## empty string, until Team Rocket takes the tower. `.returnafterstation` places
+## this before `PlayRadioShow`, so the name is the station the dial is on.
 const STATION_NAMES: Dictionary = {
 	OAKS_POKEMON_TALK: "OAK's <PK><MN> Talk",
 	POKEDEX_SHOW: "#DEX Show",
@@ -192,12 +191,11 @@ static func station_for(knob: int, context: Dictionary = {}) -> Dictionary:
 
 
 ## The knob position a channel is carried on, or -1 where this profile has none.
-## Below, `PlayRadioStationPointers`, the nine `MAPRADIO_*` rows a
-## `special MapRadio` indexes. Only two are reachable: `Radio1Script` names the
-## Pokemon Channel and `Radio2Script` the Lucky Channel, and those two std scripts
-## are every radio on every map. `LoadStation_PokemonChannel` is a branch rather
-## than a station: Kanto reads Places and People, a Johto morning the Pokedex Show,
-## and any other Johto hour Oak's Pokemon Talk.
+## Below, `PlayRadioStationPointers`, the nine `MAPRADIO_*` rows a `special
+## MapRadio` indexes. Only two are reachable: `Radio1Script` names the Pokemon
+## Channel and `Radio2Script` the Lucky Channel, every radio on every map.
+## `LoadStation_PokemonChannel` is a branch: Kanto reads Places and People, a Johto
+## morning the Pokedex Show, any other Johto hour Oak's Pokemon Talk.
 const MAP_RADIO_STATIONS: Array[int] = [
 	-1, OAKS_POKEMON_TALK, POKEDEX_SHOW, POKEMON_MUSIC, LUCKY_CHANNEL,
 	UNOWN_RADIO, PLACES_AND_PEOPLE, LETS_ALL_SING, ROCKET_RADIO,

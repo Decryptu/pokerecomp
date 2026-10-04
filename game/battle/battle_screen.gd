@@ -4826,14 +4826,14 @@ func _finish_world_battle() -> void:
 		"request": _world_battle_request.duplicate(true),
 		"save_written": _save_written,
 		"roamers_move": _battle.roamers_move_on(false),
-		"forced_out": _battle.was_forced_out(),
 	}
+	## `.give_money` and `CheckPayDay`; a wild mon that left can owe Pay Day alone.
+	var earned: Dictionary = _earnings()["money"]
+	if not earned.is_empty():
+		result["money_awarded"] = earned.duplicate()
+	if _battle.is_gen1():
+		result["battle_result"] = _battle.gen1_battle_result()
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_WON:
-		## `.give_money` and `CheckPayDay` as one credit per account, so the
-		## world applies exactly what the save already carries.
-		var earned: Dictionary = _earnings()["money"]
-		if not earned.is_empty():
-			result["money_awarded"] = earned.duplicate()
 		## `ExitBattle`'s `and $f / ret nz`: `wEvolvableFlags` is only ever read
 		## after a battle that was WON, so a fight that was lost or run from
 		## carries nothing for the overworld's own `EvolveAfterBattle` to walk.
@@ -4870,6 +4870,7 @@ func _finish_world_capture(capture: Dictionary) -> void:
 		"enemy": Gen2WorldBattleAdapter.enemy_record(_battle),
 		"roamers_move": _battle != null and _battle.roamers_move_on(true),
 		"money_awarded": (_earnings()["money"] as Dictionary).duplicate(),
+		"battle_result": 2,
 		"evolvable": _battle.evolvable_indices() if _battle != null else [],
 		"player_active": active.species if active != null else 0,
 	})
@@ -4885,7 +4886,8 @@ func _earnings() -> Dictionary:
 			if _source_save != null and _source_save.world != null else null,
 			_battle != null and not _battle.has_fled() \
 				and (_battle.winner() == Gen2Battle.PLAYER \
-					or bool(_capture_result.get("caught", false)))
+					or bool(_capture_result.get("caught", false))),
+			bool(_capture_result.get("caught", false))
 		)
 	return _earnings_computed
 
@@ -5701,6 +5703,9 @@ func _commit_switch(index: int) -> void:
 		&"item":
 			## `StatusHealer_Jumptable`'s way back: the pack is where a used item
 			## leaves the player, and where a cancelled one does too.
+			if index >= 0 and _battle.pp_item_refused(_pack_item, index):
+				_refuse_in_pack(_item_refusal_text(&"item_not_usable_here"), index)
+				return
 			if index >= 0 and Gen2Battle.asks_for_move_slot(_data, _pack_item):
 				_open_pack_move(_pack_item, index)
 				return
@@ -6479,7 +6484,8 @@ func _begin_faint_event(event: Dictionary) -> void:
 
 func _play_move_forgotten(_event: Dictionary) -> void:
 	if _generation() == RomRegistry.GEN1:
-		_play_gen1_sound(Gen1Sfx.SFX_SWAP)
+		if _audio_player != null:
+			_audio_player.play_gen1_forget_swap(_data, _audio_assets())
 	else:
 		_play_sfx(Gen2Sfx.SFX_SWITCH_POKEMON)
 

@@ -45,7 +45,7 @@ const LAPRAS_STEP_FRAME_BUDGET: int = 16384
 ## the cells `IsNextTileShoreOrWater` accepts from land and the maps they sit on,
 ## then the two refusals and one get-on and get-off.
 const GEN1_CENSUS: Dictionary = {
-	&"red": [1701, 46], &"blue": [1701, 46], &"yellow": [1692, 46],
+	&"red": [1701, 46], &"blue": [1701, 46], &"yellow": [1600, 37],
 }
 ## Route 16, whose gate forces the bike, and the cell inside it that does; and
 ## Pallet Town's own shore, which is the first water a Generation 1 walk meets.
@@ -376,7 +376,8 @@ func _gen1_census() -> void:
 						or at.y >= map.collision_height:
 						continue
 					if Gen1Layout.is_shore_or_water(
-						map.tileset, tileset.water, map.collision_at(at.x, at.y)
+						map.tileset, tileset.water, map.collision_at(at.x, at.y),
+						_r.game_id == &"yellow"
 					):
 						cells += 1
 						found = true

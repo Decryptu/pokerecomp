@@ -892,6 +892,9 @@ const NURSE_TURN_FRAMES: int = 6
 const NURSE_BOW_FRAMES: int = 64
 const NURSE_MACHINE_LEAD_FRAMES: int = 30
 const NURSE_FIT_FRAMES: int = 40
+## Red and Blue's `Delay3` after the turn and `ld c, $14` for the bow.
+const NURSE_RED_TURN_FRAMES: int = 3
+const NURSE_RED_BOW_FRAMES: int = 20
 ## `engine/movie/trade.asm`'s eight stubs, each behind the routine that prints
 ## it, so the offsets from `TradeWentToText` are not five apart.
 const TRADE_ANIM_TEXT_AT: Dictionary = {
@@ -1324,8 +1327,11 @@ const CUT_BLOCK_SWAP_SIZE: int = 2
 const CUT_BLOCK_SWAP_END: int = 0xFF
 
 ## `IsNextTileShoreOrWater`'s two shore tiles, which its `cp SHIP_PORT` skips on
-## the Vermilion dock alone.
+## the Vermilion dock.
 const SHORE_TILES: Array[int] = [0x48, 0x32]
+## Yellow's `cp GYM` and `cp DOJO` beside it.
+const TILESET_DOJO: int = 5
+const YELLOW_NO_SHORE_TILESETS: Array[int] = [TILESET_DOJO, TILESET_GYM]
 
 ## `IsSurfingAllowed`'s Seafoam branch and the two events its map script sets.
 const SEAFOAM_B4F_STAIRS := Vector2i(7, 11)
@@ -4379,14 +4385,33 @@ static func cut_block_swap(block: int) -> int:
 	return int(CUT_BLOCK_SWAPS.get(block, -1))
 
 
+## `MON_CATCH_RATE`, a held item to Generation 2 through the Time Capsule.
+## `AddPartyMon` and `SendNewMonToBox` copy the species' header byte; Yellow
+## overwrites a Kadabra's with `TWISTEDSPOON_GSC` and gives its starter `LIGHT_BALL_GSC`.
+const TWISTEDSPOON_GSC: int = 0x60
+const LIGHT_BALL_GSC: int = 0xA3
+const SPECIES_KADABRA: int = 64
+
+
+static func stored_catch_rate(game: StringName, species: int, header_rate: int) -> int:
+	if game == RomRegistry.YELLOW and species == SPECIES_KADABRA:
+		return TWISTEDSPOON_GSC
+	return header_rate
+
+
 ## `IsNextTileShoreOrWater`: a tileset off `WaterTilesets` answers no whatever is
-## in front, and the dock's own $32 is a landing rather than more sea.
-static func is_shore_or_water(tileset: int, water: bool, tile: int) -> bool:
+## in front, and the dock's own $32 is a landing rather than more sea. Yellow's
+## copy skips the shore tiles on the Gym and Dojo tilesets as well.
+static func is_shore_or_water(
+	tileset: int, water: bool, tile: int, yellow: bool = false
+) -> bool:
 	if not water:
 		return false
 	if tile == WATER_TILE:
 		return true
-	return tileset != TILESET_SHIP_PORT and SHORE_TILES.has(tile)
+	if tileset == TILESET_SHIP_PORT or (yellow and tileset in YELLOW_NO_SHORE_TILESETS):
+		return false
+	return SHORE_TILES.has(tile)
 
 
 ## Where `wStatusFlags1`'s two bits sit in the shared engine flag space.
@@ -4537,7 +4562,7 @@ const SFX_ROLES: Dictionary = {
 	Gen2Sfx.SFX_WRONG: Gen1Sfx.SFX_DENIED,
 	Gen2Sfx.SFX_STRENGTH: Gen1Sfx.SFX_PUSH_BOULDER, ## which TryPushingBoulder plays
 	Gen2Sfx.SFX_ENTER_DOOR: Gen1Sfx.SFX_GO_INSIDE,
-	Gen2Sfx.SFX_SWITCH_POKEMON: Gen1Sfx.SFX_SWITCH,
+	Gen2Sfx.SFX_SWITCH_POKEMON: Gen1Sfx.SFX_SWAP, ## SwitchPartyMon_ClearGfx, once a row
 	Gen2Sfx.SFX_TRANSACTION: Gen1Sfx.SFX_PURCHASE,
 	Gen2Sfx.SFX_EXIT_BUILDING: Gen1Sfx.SFX_GO_OUTSIDE,
 	Gen2Sfx.SFX_BUMP: Gen1Sfx.SFX_COLLISION,

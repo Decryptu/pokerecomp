@@ -150,17 +150,11 @@ func test_a_fight_lifts_a_living_starters_mood_to_the_floor() -> void:
 
 
 func test_only_the_endings_that_leave_wbattleresult_zero_reach_the_mood_floor() -> void:
-	var won := {"outcome": Gen2WorldBattleAdapter.OUTCOME_WON}
-	var ran := {"outcome": Gen2WorldBattleAdapter.OUTCOME_RAN}
-	var fled := {"outcome": Gen2WorldBattleAdapter.OUTCOME_RAN, "forced_out": true}
-	var lost := {"outcome": Gen2WorldBattleAdapter.OUTCOME_LOST}
-	var caught := {"outcome": Gen2WorldBattleAdapter.OUTCOME_CAUGHT}
 	var link_loss := {
 		"outcome": Gen2WorldBattleAdapter.OUTCOME_LOST, "request": {"kind": &"link_battle"},
 	}
-	assert_true(Gen2WorldScreen._reaches_mood_update(won))
-	assert_true(Gen2WorldScreen._reaches_mood_update(fled))
+	assert_true(Gen2WorldScreen._reaches_mood_update({"battle_result": 0}))
 	assert_true(Gen2WorldScreen._reaches_mood_update(link_loss))
-	assert_false(Gen2WorldScreen._reaches_mood_update(ran))
-	assert_false(Gen2WorldScreen._reaches_mood_update(lost))
-	assert_false(Gen2WorldScreen._reaches_mood_update(caught))
+	assert_false(Gen2WorldScreen._reaches_mood_update({"battle_result": 2}), "a run or a ball")
+	assert_false(Gen2WorldScreen._reaches_mood_update({"battle_result": 1}), "a loss")
+	assert_false(Gen2WorldScreen._reaches_mood_update({}))

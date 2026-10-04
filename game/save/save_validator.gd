@@ -139,6 +139,8 @@ static func _validate_mon(
 	var moves: Dictionary = _validate_mon_moves(mon, data, subject)
 	if not moves["ok"]:
 		return moves
+	if mon.catch_rate < 0 or mon.catch_rate > 0xFF:
+		return _failure("%s has an invalid catch rate" % subject)
 	if mon.item < 0:
 		return _failure("%s has an invalid item" % subject)
 	if mon.item > 0 and data.item(mon.item).is_empty():

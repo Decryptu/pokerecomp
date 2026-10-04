@@ -1,13 +1,12 @@
 class_name Gen2WorldOptionsMenu
 extends RefCounted
 
-## The in-game OPTION menu (engine/menus/options_menu.asm): seven value rows
-## plus CANCEL, each a left/right cycle over one field of [Gen2Options], edited
-## in place and never written to the file. Byte identical between the pins
-## except pokegold's `.ExitOptions` lacking the `SFX_TRANSACTION` play.
-## `DisplayOptionMenu` (pokered engine/menus/main_menu.asm) is three sections
-## over the same three fields and CANCEL; Yellow's `DisplayOptionMenu_`
-## (pokeyellow engine/menus/options.asm) adds SOUND and PRINT on one page.
+## The in-game OPTION menu (engine/menus/options_menu.asm): seven value rows plus
+## CANCEL, each a left/right cycle over one field of [Gen2Options], edited in
+## place and never written to the file. Byte identical between the pins except
+## pokegold's `.ExitOptions` lacking the `SFX_TRANSACTION` play. Red's
+## `DisplayOptionMenu` is three sections over the same fields and CANCEL;
+## Yellow's `DisplayOptionMenu_` adds SOUND and PRINT on one page.
 
 ## GetOptionPointer.Pointers indexes.
 const OPT_TEXT_SPEED: int = 0

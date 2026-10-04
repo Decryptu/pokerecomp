@@ -544,10 +544,12 @@ const GEN1_DUNGEON_TILESETS: Array[int] = [3, 7, 10, 12, 13, 15, 17, 18, 19, 20,
 ## that keeps `CollisionCheckOnWater` surfing is water and the passable list
 ## answers the rest, which is why $14 is Red's own doormat off a water tileset
 ## and why the Vermilion dock's own $32 is a landing rather than more sea.
-static func gen1_permission(tileset: Gen2WorldTileset, tile: int) -> int:
+static func gen1_permission(
+	tileset: Gen2WorldTileset, tile: int, yellow: bool = false
+) -> int:
 	if tileset == null or tile < 0:
 		return WALL_TILE
-	if Gen1Layout.is_shore_or_water(tileset.number, tileset.water, tile):
+	if Gen1Layout.is_shore_or_water(tileset.number, tileset.water, tile, yellow):
 		return WATER_TILE
 	return LAND_TILE if tileset.tile_passable(tile) else WALL_TILE
 
@@ -628,7 +630,7 @@ static func cell_code(
 ## [constant LAND_TILE], [constant WATER_TILE] or [constant WALL_TILE].
 static func cell_permission(data: GameData, tileset: Gen2WorldTileset, code: int) -> int:
 	if _is_gen1(data):
-		return gen1_permission(tileset, code)
+		return gen1_permission(tileset, code, data.id == RomRegistry.YELLOW)
 	return permission_for(code)
 
 

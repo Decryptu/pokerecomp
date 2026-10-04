@@ -269,13 +269,12 @@ static func _rotated_bit(count: int) -> int:
 
 
 ## `DoMysteryGift` from the exchange down: every refusal in the routine's own
-## order, and the gift behind the last of them. The section is written in place,
-## which is what the cartridge does to SRAM between one box and the next: the
-## partner ID is added and the trainer name saved before the gift is chosen, so a
-## partner who offers a decoration this side already owns still counts against
-## both daily limits. Answers `{ outcome, name, item, deco, retry }`, where
-## `outcome` names one of the eight `text_far` stubs and `retry` is
-## `.CommunicationError`'s own `jp DoMysteryGift`.
+## order, and the gift behind the last of them. The section is written in place, as
+## the cartridge does to SRAM between boxes: the partner ID is added and the name
+## saved before the gift is chosen, so a decoration this side already owns still
+## counts against both daily limits. Answers `{ outcome, name, item, deco, retry }`:
+## `outcome` names one of the eight `text_far` stubs, `retry` is
+## `.CommunicationError`'s `jp DoMysteryGift`.
 static func exchange(
 	section: Dictionary, transport: Gen2MysteryGiftTransport,
 	player: Dictionary, tables: Dictionary, data: GameData = null
