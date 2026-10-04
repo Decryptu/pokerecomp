@@ -152,10 +152,10 @@ func _verify_gen1_menus(data: GameData) -> void:
 		_r.check(top.begins_with("BILL" if met else "SOMEONE"),
 			"the machine's first row reads %s with EVENT_MET_BILL %s." % [top, met])
 	var items: int = Gen2WorldPC.gen1_players_pc_menu().size()
-	var boxes: int = Gen2WorldPC.gen1_bills_pc_menu().size()
+	var boxes: int = Gen2WorldPC.gen1_bills_pc_menu(data.id).size()
 	_r.check(
 		items == Gen2WorldPC.GEN1_PLAYERS_PC_ROWS.size()
-			and boxes == Gen2WorldPC.GEN1_BILLS_PC_ROWS.size(),
+			and boxes == (6 if data.id == RomRegistry.YELLOW else 5),
 		"the item menu reads %d rows and the box menu %d." % [items, boxes]
 	)
 	_r.check(

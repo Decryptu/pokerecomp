@@ -10,6 +10,7 @@ signal completed(results: Array)
 signal music_requested(track: int)
 ## `ExitPokegearRadio_HandleMusic` as another card opens: the map's own piece.
 signal map_music_requested()
+signal gen1_music_requested(song: Array[int])
 ## A Pokegear call placed; the world answers with [method finish_call].
 signal call_placed(results: Array)
 ## The sound this screen asks for, played by the world screen's own driver.
@@ -725,7 +726,8 @@ func _open_elevator(elevator: Dictionary) -> void:
 		_elevator_scroll = 0
 		_set_overlay_open(true)
 		_open_map_overlay_view()
-		_print(_elevator_prompt())
+		## Yellow's `DisplayElevatorFloorMenu` prints with `BIT_NO_TEXT_DELAY` set.
+		_print(_elevator_prompt(), _data.id == RomRegistry.YELLOW)
 		_render_elevator()
 		return
 	if int(_elevator.get("current", -1)) < 0:
@@ -3381,10 +3383,15 @@ func _gen1_item_transaction(item: int) -> Dictionary:
 func _open_gen1_bills() -> void:
 	_mode = MODE.PC_BOXES
 	_cursor = _bills_pc_cursor
-	_pc_rows = Gen2WorldPC.gen1_bills_pc_menu()
+	_pc_rows = Gen2WorldPC.gen1_bills_pc_menu(_data.id)
 	_gen1_quiet()
-	_print(_gen1_box("bills_pc", "what"), _gen1_instant)
+	_print(_gen1_bills_what(), _gen1_instant)
 	_render_rows()
+
+
+## Yellow's `BillsPCMenu` leaves the speech box empty.
+func _gen1_bills_what() -> String:
+	return "" if _data.id == RomRegistry.YELLOW else _gen1_box("bills_pc", "what")
 
 
 func _confirm_gen1_bills_row(row: int) -> void:
@@ -3394,6 +3401,9 @@ func _confirm_gen1_bills_row(row: int) -> void:
 		return
 	if row == Gen2WorldPC.GEN1_BILLS_PC_CHANGE_BOX:
 		_open_gen1_ask(&"change_box", _gen1_box("change_box", "warning"))
+		return
+	if row == Gen2WorldPC.GEN1_BILLS_PC_PRINT_BOX:
+		_print_gen1_box()
 		return
 	var refusal: StringName = Gen2WorldPC.gen1_bills_pc_refusal(_save, row, _box_index)
 	if refusal != &"":
@@ -3434,7 +3444,7 @@ func _reopen_gen1_mon_list() -> void:
 ## `PrintListMenuEntries` clears only `hlcoord 5, 3`: `WhatText` stays.
 func _gen1_mon_box() -> void:
 	_gen1_quiet()
-	_summary = _gen1_box("bills_pc", "what")
+	_summary = _gen1_bills_what()
 
 
 func _confirm_gen1_mon_row() -> void:
@@ -3453,9 +3463,9 @@ func _confirm_gen1_mon_row() -> void:
 			&"release", _gen1_filled_mon("bills_pc_2", "once_released", 1)
 		)
 		return
-	## `BillsPCDeposit`: a starter out on the map answers `SleepingPikachuText2`.
+	## `BillsPCDeposit`: a starter that is not following answers `SleepingPikachuText2`.
 	if _gen1_bills_row == Gen2WorldPC.GEN1_BILLS_PC_DEPOSIT and _gen1_starter(mon) \
-			and _world != null and _world.pikachu != null and _world.pikachu.following():
+			and _world != null and _world.pikachu != null and not _world.pikachu.following():
 		_open_gen1_box_text("bills_pc_sleeping", "no_response", &"gen1_bills")
 		return
 	_mode = MODE.PC_MON_ACTION
@@ -3854,10 +3864,23 @@ func _print_box() -> void:
 	_render_rows()
 
 
+## `BillsPCPrintBox`: `NoPokemonText` over an empty box, else `Printer Error 2` until B.
+func _print_gen1_box() -> void:
+	if Gen2WorldPC.gen1_box_count(_save, _box_index) <= 0:
+		_open_gen1_box_text("print_box", "no_mon", &"gen1_bills")
+		return
+	_pc_box_print = true
+	gen1_music_requested.emit(Gen2DiplomaScreen.GEN1_MUSIC_PRINTER)
+	_render_rows()
+
+
 ## `CheckCancelPrint`'s B, `Printer_ExitPrinter` and `_ChangeBox.loop`.
 func _cancel_box_print() -> void:
 	_pc_box_print = false
 	map_music_requested.emit()
+	if _gen1_pc:
+		_open_gen1_bills()
+		return
 	_open_box_list()
 
 
@@ -5036,9 +5059,7 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 	var labels: Array = [] if _mode in [MODE.PHONE, MODE.PC_TEXT] or _box_printing() \
 		else _row_labels(values)
 	var words: Array = _page_words()
-	var image: Image = _service_page.render_box_print(
-		_data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
-	) if _pc_box_print else _mom_bank_image() if _mode == MODE.MOM_BANK \
+	var image: Image = _box_print_image() if _pc_box_print else _mom_bank_image() if _mode == MODE.MOM_BANK \
 		else _dial_image() if _is_dial() else _service_page.render(
 		String(words[0]), String(words[1]), labels, _cursor if cursor < 0 else cursor,
 		words[2], _service_box(), _service_note(), _message_box(), _gen1_box_marks(),
@@ -5049,6 +5070,20 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		Gen2PicImage.show(_service_view, image)
 	_service_drawn = image != null
 	_apply_layer_visibility()
+
+
+func _box_print_image() -> Image:
+	var status: String = _data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
+	if not _gen1_pc:
+		return _service_page.render_box_print(status)
+	var mons: Array = []
+	for entry: Dictionary in Gen2WorldPC.gen1_box_entries(_save, _box_index):
+		var mon: Gen2SaveMon = entry["mon"]
+		var species: String = String(_data.species(mon.species).get("name", ""))
+		mons.append([species, mon.nickname if not mon.nickname.is_empty() else species])
+	return _service_page.render_gen1_box_print(
+		_box_index, mons, status, _data.printer_status_string("press_b")
+	)
 
 
 func _row_labels(values: Array) -> Array:
@@ -5371,6 +5406,7 @@ const GEN1_PC_BOXES: Dictionary = {
 	MODE.PC_MON_ACTION: Rect2i(9, 10, 19, 17),
 }
 const GEN1_PC_TOP_BOTTOM: Dictionary = {3: 7, 4: 9, 5: 11}
+const GEN1_BILLS_ROW_STEP: int = 2
 ## `DisplayChangeBoxMenu`'s `hlcoord 11, 0 / lb bc, 12, 7`, whose names are one
 ## row apart: `BIT_DOUBLE_SPACED_MENU` names the bit that is set for a
 ## single-row step, and `HandleMenuInput` steps two rows when it is clear.
@@ -5390,13 +5426,16 @@ func _gen1_pc_box() -> Gen2MenuBox:
 	var corners: Rect2i = GEN1_PC_BOXES.get(_mode, Rect2i(
 		0, 0, 15, int(GEN1_PC_TOP_BOTTOM.get(_pc_rows.size(), 9))
 	))
+	if _mode == MODE.PC_BOXES:
+		corners.end.y = 1 + GEN1_BILLS_ROW_STEP * _pc_rows.size()
 	var menu_box: Gen2MenuBox = Gen2MenuBox.from_coords(
 		corners.position.x, corners.position.y, corners.end.x, corners.end.y,
 		Gen2MenuBox.STATICMENU_CURSOR
 	)
 	## `DisplayDepositWithdrawMenu` is drawn after `WhatText`, over the speech
-	## box's own right half.
-	menu_box.over_textbox = _mode == MODE.PC_MON_ACTION
+	## box's own right half, and Yellow's taller BILL'S PC menu over its left.
+	menu_box.over_textbox = _mode == MODE.PC_MON_ACTION \
+		or (_mode == MODE.PC_BOXES and _data.id == RomRegistry.YELLOW)
 	return menu_box
 
 

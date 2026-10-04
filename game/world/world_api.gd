@@ -4613,6 +4613,11 @@ func gen1_pikachu_happiness(kind: int, slot: int = -1) -> void:
 	pikachu.modify_happiness(kind, slot < 0 or int(starter.get("slot", -1)) == slot)
 
 
+## The starter's party slot while it is not following, or -1.
+func gen1_sleeping_starter_slot() -> int:
+	return -1 if pikachu == null or pikachu.following() else gen1_starter_slot()
+
+
 ## `IsThisPartyMonStarterPikachu` by party slot, or -1 with no starter.
 func gen1_starter_slot() -> int:
 	return int((_party_summary.get("starter_pikachu", {}) as Dictionary).get("slot", -1))
@@ -4656,6 +4661,12 @@ func gen1_pikachu_battle_log(party_log: Dictionary) -> void:
 func gen1_pikachu_battle_opened(trainer: bool) -> void:
 	if trainer and bool(_gen1_volatile.get("gym_leader", false)):
 		gen1_pikachu_happiness(Gen1Pikachu.HAPPY_GYMLEADER)
+
+
+## `UpdatePikachuMoodAfterBattle`, behind `EvolutionAfterBattle`.
+func gen1_pikachu_battle_ended(starter_alive: bool) -> void:
+	if pikachu != null and starter_alive:
+		pikachu.raise_mood_after_battle()
 
 
 ## `ApplyOutOfBattlePoisonDamage`'s two Pikachu lines behind a counted step.
@@ -5807,15 +5818,16 @@ func _gen1_bills_house_emotion() -> int:
 ## `DoStarterPikachuEmotions`: one emotion's commands as steps. A bubble and a
 ## redraw are counted waits, a movement waits on the follower, and the clip and
 ## the portrait go out as events for whoever draws them.
-func _gen1_pikachu_talk_steps() -> Array:
+func _gen1_pikachu_talk_steps(emotion: int = -1) -> Array:
 	var steps: Array = []
 	if pikachu == null or data == null:
 		return steps
 	var emotions: Array = data.gen1_pikachu().get("emotions", [])
-	var index: int = _gen1_pikachu_emotion()
+	var index: int = _gen1_pikachu_emotion() if emotion < 0 else emotion
 	if index < 0 or index >= emotions.size():
 		return steps
-	steps.append(_gen1_wait_step(&"text_init", Gen1Layout.TEXT_INIT_FRAMES))
+	if emotion < 0:
+		steps.append(_gen1_wait_step(&"text_init", Gen1Layout.TEXT_INIT_FRAMES))
 	for row: Dictionary in emotions[index]:
 		match String(row["cmd"]):
 			"text":
@@ -7342,29 +7354,101 @@ func _gen1_mart_steps(row: Dictionary, text_id: int) -> Array:
 ## `DisplayPokemonCenterDialogue_`: `ShallWeHealYourPokemonText` is the first
 ## visit's alone, `BIT_USED_POKECENTER` set behind it, and `YesNoChoicePokeCenter`
 ## opens over whichever box was last. `SetLastBlackoutMap` is YES's, ahead of the heal.
+## Yellow's starter, asleep at Pewter's, answers with `LooksContentText` alone.
 func _gen1_nurse_steps() -> Array:
+	if pikachu != null and current_map.number == Gen1Layout.PEWTER_POKECENTER \
+		and not pikachu.following():
+		return [_gen1_facility_box("pokecenter_pikachu", "looks_content")]
 	var used: int = Gen1Layout.status_flag_4(Gen1Layout.USED_POKECENTER_BIT)
 	var asked: bool = state.is_engine_flag_active(used)
 	state.set_engine_flag(used, true)
 	var farewell: Array = [_gen1_pokecenter_box("farewell")]
 	var steps: Array = [] if asked else [_gen1_pokecenter_box("welcome")]
+	var heal: Array = _gen1_yellow_heal_steps() if pikachu != null else [
+		_gen1_pokecenter_box("need_your_pokemon"),
+		{"type": &"request", "values": {"kind": &"party_heal_requested", "values": {}}},
+		_gen1_heal_machine_step(),
+		_gen1_pokecenter_box("fighting_fit"),
+	]
 	return steps + [
 		{
 			"type": &"choice",
 			"text": String(_gen1_pokecenter_box("welcome")["text"]) if asked \
 				else _gen1_pokecenter_text("shall_we_heal"),
-			"yes": [
-				{"type": &"blackout_map"},
-				_gen1_pokecenter_box("need_your_pokemon"),
-				{"type": &"request", "values": {
-					"kind": &"party_heal_requested", "values": {},
-				}},
-				_gen1_heal_machine_step(),
-				_gen1_pokecenter_box("fighting_fit"),
-			] + farewell,
+			"yes": [{"type": &"blackout_map"}] + heal + farewell,
 			"no": farewell,
 		},
 	]
+
+
+## Yellow's YES. `IsStarterPikachuAliveInOurParty` is read before the heal and
+## after it, and `HealParty` follows the animation.
+func _gen1_yellow_heal_steps() -> Array:
+	var following: bool = pikachu.following()
+	var alive: bool = pikachu.starter_alive()
+	var kept: bool = gen1_starter_slot() >= 0
+	var steps: Array = []
+	if alive and following:
+		steps.append(_gen1_nurse_delay(Gen1Layout.PIKACHU_REDRAW_FRAMES))
+		steps.append_array(_gen1_nurse_joy_walk())
+	steps.append(_gen1_pokecenter_box("need_your_pokemon"))
+	steps.append(_gen1_nurse_delay(Gen1Layout.NURSE_BOW_FRAMES))
+	if following:
+		steps.append({"type": &"pikachu", "what": "drawing", "value": false})
+		if alive:
+			steps.append_array(_gen1_nurse_bow())
+	steps.append_array(_gen1_nurse_pose(Vector2i.LEFT))
+	steps.append(_gen1_nurse_delay(Gen1Layout.NURSE_MACHINE_LEAD_FRAMES))
+	steps.append(_gen1_heal_machine_step())
+	steps.append({"type": &"request", "values": {"kind": &"party_heal_requested", "values": {}}})
+	if following:
+		if kept:
+			steps.append_array(_gen1_nurse_bow())
+		steps.append({"type": &"pikachu", "what": "spawn_state", "value": Gen1Pikachu.SPAWN_ABOVE})
+		steps.append({"type": &"pikachu", "what": "drawing", "value": true})
+	steps.append_array(_gen1_nurse_pose(Vector2i.DOWN))
+	steps.append(_gen1_pokecenter_box("fighting_fit"))
+	if kept:
+		steps.append({"type": &"pikachu", "what": "face", "value": Gen1Pikachu.FACING_DOWN})
+		steps.append(_gen1_nurse_delay(Gen1Layout.NURSE_TURN_FRAMES))
+	steps.append(_gen1_nurse_delay(Gen1Layout.PIKACHU_REDRAW_FRAMES))
+	steps.append(_gen1_nurse_delay(Gen1Layout.NURSE_FIT_FRAMES))
+	return steps
+
+
+## `Func_6ebb` on the nurse.
+func _gen1_nurse_pose(direction: Vector2i) -> Array:
+	return [
+		{"type": &"object_facing", "index": 0, "facing": facing_for_direction(direction)},
+		_gen1_nurse_delay(Gen1Layout.NURSE_TURN_FRAMES),
+	]
+
+
+## `Func_6eaa`: her UP image, which bows.
+func _gen1_nurse_bow() -> Array:
+	return [
+		{"type": &"object_facing", "index": 0, "facing": facing_for_direction(Vector2i.UP)},
+		_gen1_nurse_delay(Gen1Layout.NURSE_BOW_FRAMES),
+	]
+
+
+func _gen1_nurse_delay(frames: int) -> Dictionary:
+	return _gen1_wait_step(&"nurse_delay", frames)
+
+
+## `PikachuWalksToNurseJoy.GetMovementData`.
+func _gen1_nurse_joy_walk() -> Array:
+	var scripts: Array = data.gen1_pikachu().get("nurse_movements", []) if data != null else []
+	var at: Vector2i = pikachu.cell
+	var which: int = -1
+	if at.y > player_cell.y:
+		which = 0
+	elif at.y == player_cell.y:
+		which = 2 if at.x > player_cell.x else 1
+	var steps: Array = []
+	if which >= 0 and which < scripts.size():
+		_gen1_node_pikachu_movement({"bytes": scripts[which]}, steps, {})
+	return steps
 
 
 ## `farcall AnimateHealingMachine`, the step behind `predef HealParty`, which the
@@ -8318,6 +8402,8 @@ func _gen1_pikachu_written(what: String, value: Variant) -> void:
 			pikachu.show_emote(int(value))
 		"turn_away":
 			pikachu.face_away_from(gen1_player_facing())
+		"face":
+			pikachu.pose(int(value))
 
 
 ## `PIKACHU_SPRITE_INDEX` is slot fifteen, past any map's own objects.
@@ -12613,11 +12699,10 @@ func warp_to_escape_point(spawn: int, entry: int = MAP_ENTRY_WARP) -> Dictionary
 	return gen1_fly_to(_gen1_last_blackout_map, entry)
 
 
-## `ItemUseEscapeRope`: no map environment is read at all. Agatha's room is
-## refused by name and `EscapeRopeTilesets` is the rest. `DigFunction` is the
-## same routine under the other type byte and asks exactly this.
+## `ItemUseEscapeRope`: Agatha's room (and Bill's house and the Fan Club on
+## Yellow) by name, `EscapeRopeTilesets` the rest. `DigFunction` asks the same.
 func _gen1_check_escape() -> StringName:
-	if current_map.number == Gen1Layout.AGATHAS_ROOM \
+	if current_map.number in Gen1Layout.escape_refused_maps(data.id) \
 		or not data.gen1_special_warp_list(
 			"escape_rope_tilesets"
 		).has(current_map.tileset):
@@ -12632,12 +12717,23 @@ func poke_flute_request() -> Dictionary:
 	var request: Dictionary = {"ok": true, "woke": false}
 	if current_map == null:
 		return request
+	if pikachu != null and current_map.number == Gen1Layout.PEWTER_POKECENTER:
+		request["pikachu"] = not pikachu.following() and pikachu.is_next_to(player_cell)
+		request["woke"] = request["pikachu"]
+		return request
 	var flute: Dictionary = data.gen1_snorlax_flute(current_map.number, player_cell)
 	if flute.is_empty() or state.is_event_flag_active(int(flute["beat"])):
 		return request
 	state.set_event_flag(int(flute["fight"]), true)
 	request["woke"] = true
 	return request
+
+
+## `ItemUsePokeFlute`'s Pewter branch: the text, then `PikachuEmotion26`.
+func gen1_flute_wakes_pikachu() -> Array:
+	_gen1_steps = [_gen1_facility_box("poke_flute", "had_effect")] \
+		+ _gen1_pikachu_talk_steps(Gen1Layout.PIKACHU_EMOTION_PEWTER_ASLEEP)
+	return _gen1_result()
 
 
 ## `EscapeRopeFunction`, which is `EscapeRopeOrDig` with the other type byte: the

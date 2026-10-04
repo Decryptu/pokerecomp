@@ -209,13 +209,11 @@ static func row_description(data: GameData, item: int) -> String:
 
 
 ## `SwitchItemsInBag`, one press of SELECT or of the A that places the held item.
-## [param order] is one pocket's item numbers in list order, [param held] the row
-## an earlier SELECT marked or -1 for none (`wSwitchItem` is row + 1), and
-## [param cursor] the row the press landed on, where a row past the last item is
-## the CANCEL terminator the source reads as -1. `.try_combining_stacks` and
-## `.swapSameItemType` cannot fire: the flat item model has one stack per item.
-## Generation 1's `HandleItemListSwapping` is [param exchange]: the rows trade
-## places and a press on CANCEL or the marked row keeps the mark.
+## [param order] is a pocket's item numbers, [param held] the row an earlier SELECT
+## marked or -1, and [param cursor] the row pressed, where one past the last item
+## is the CANCEL terminator. `.try_combining_stacks` and `.swapSameItemType`
+## cannot fire with one stack per item. Generation 1's `HandleItemListSwapping`
+## is [param exchange]: rows trade places and CANCEL or the marked row keeps the mark.
 static func switch_items(order: Array, held: int, cursor: int, exchange: bool = false) -> Dictionary:
 	var moved: Array[int] = []
 	for entry: Variant in order:

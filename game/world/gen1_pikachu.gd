@@ -323,6 +323,15 @@ const MOOD_WRITES: Dictionary = {
 const THUNDER_MOVES: Array[int] = [85, 87]
 
 
+## `UpdatePikachuMoodAfterBattle` with `EndOfBattle`'s `ld d, $82`.
+const MOOD_AFTER_BATTLE: int = 0x82
+
+
+func raise_mood_after_battle() -> void:
+	if starter_alive() and mood < MOOD_AFTER_BATTLE:
+		mood = MOOD_AFTER_BATTLE
+
+
 func set_mood(kind: StringName) -> void:
 	var write: Array = MOOD_WRITES.get(kind, [])
 	if write.is_empty():
@@ -462,6 +471,12 @@ func on_surf_ended() -> void:
 ## `_AdvancePlayerSprite` clears the bit on the pass a step lands.
 func on_player_step_landed() -> void:
 	flags &= ~FLAG_STEP_HIDDEN
+
+
+## `Func_6ebb` on slot fifteen.
+func pose(direction: int) -> void:
+	facing = direction
+	image = direction
 
 
 ## `StarterPikachuEmotionCommand_turnawayfromplayer`.

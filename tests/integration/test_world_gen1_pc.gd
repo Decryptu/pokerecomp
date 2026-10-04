@@ -15,6 +15,8 @@ const NICKNAMES: Array[String] = ["ALPHA", "BRAVO", "CHARLIE"]
 const SPECIAL_TEXT: Dictionary = {
 	"pc": {"accessed_someones": "Accessed SOMEONE's\nPC.", "accessed_mine": "Accessed my PC."},
 	"bills_pc": {"what": "What?"},
+	"bills_pc_sleeping": {"no_response": "There isn't any\nresponse."},
+	"print_box": {"no_mon": "There are no\n#MON here!"},
 	"bills_pc_2": {
 		"once_released": "Once released,\n<RAM_CF4B> is\ngone forever. OK?",
 		"mon_was_released": "<RAM_CD6D> was\nreleased.",
@@ -129,6 +131,90 @@ func test_bills_pc_lands_on_its_own_menu() -> void:
 	assert_eq(host._cursor, 0)
 	host.handle_button(PokeButton.B)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+
+
+## Yellow's `BillsPCMenu` has PRINT BOX ahead of SEE YA and no `WhatText`. With no
+## printer on the link `PrintPCBox` holds `Printer Error 2` over its first page
+## until B, and an empty box answers `NoPokemonText`.
+func test_yellow_bills_pc_print_box_holds_the_printer_error_until_b() -> void:
+	_data.id = RomRegistry.YELLOW
+	var host: Gen2WorldServiceScreen = await _open_machine()
+	_take_top_row(host, Gen2WorldPC.GEN1_PC_BILLS)
+	assert_eq(host._pc_rows.size(), 6)
+	assert_eq(String(host._pc_rows[4]["name"]), "PRINT BOX")
+	assert_eq(String(host._pc_rows[5]["name"]), "SEE YA!")
+	assert_false(host._box.has_text_left(), "no WhatText")
+	for _step: int in 4:
+		host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_true(host._pc_box_print)
+	host.handle_button(PokeButton.A)
+	assert_true(host._pc_box_print, "only B leaves the printer")
+	host.handle_button(PokeButton.B)
+	assert_false(host._pc_box_print)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
+	assert_eq(host._cursor, 4)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC, "SEE YA is row five now")
+
+
+func test_yellow_print_box_on_an_empty_box_says_there_are_no_mon() -> void:
+	_data.id = RomRegistry.YELLOW
+	var host: Gen2WorldServiceScreen = await _open_machine(0)
+	_take_top_row(host, Gen2WorldPC.GEN1_PC_BILLS)
+	for _step: int in 4:
+		host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_false(host._pc_box_print)
+	assert_eq(Fixture.box_words(host), "There are no\n#MON here!")
+
+
+## `BillsPCDeposit` refuses the starter when `CheckPikachuFollowingPlayer` says it
+## is not following (`jr z` lets a following one through).
+func test_yellow_deposit_refuses_a_starter_that_is_not_following() -> void:
+	var host: Gen2WorldServiceScreen = await _deposit_starter(false)
+	assert_eq(Fixture.box_words(host), "There isn't any\nresponse.")
+	host = await _deposit_starter(true)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_MON_ACTION)
+
+
+## `HandlePartyMenuInput`: A on a starter that is not following prints its line
+## and the menu returns as a cancelled one; `RedrawPartyMenu` draws it no icon.
+func test_yellow_party_menu_answers_a_starter_that_is_not_following() -> void:
+	await _deposit_starter(false)
+	_world_screen._refresh_party_summary()
+	_world_screen._open_embedded_party()
+	var party: Gen2PartyScreen = _world_screen._party_host
+	assert_true(bool(party._rows()[0]["hidden"]))
+	assert_false(bool(party._rows()[1]["hidden"]))
+	party.handle_button(PokeButton.A)
+	assert_eq(String(party.submenu_snapshot()["message"]), "There isn't any\nresponse.")
+	var box: Gen2TextBox = party.get("_message_box")
+	for _frame: int in 600:
+		if not box.is_revealing():
+			break
+		box.advance_frame()
+	party.handle_button(PokeButton.A)
+	assert_null(_world_screen._party_host, "the party menu closed")
+	await get_tree().process_frame
+
+
+func _deposit_starter(following: bool) -> Gen2WorldServiceScreen:
+	if is_instance_valid(_world_screen):
+		_world_screen.free()
+	_data.id = RomRegistry.YELLOW
+	var host: Gen2WorldServiceScreen = await _open_machine()
+	var starter: Gen2SaveMon = host._save.party[0]
+	starter.species = Gen2WorldFieldMove.SPECIES_PIKACHU
+	starter.ot_id = host._save.player_id
+	starter.original_trainer = host._save.player_name
+	host._save.party.append(Gen2SaveMon.from_dict(starter.to_dict()))
+	(host._save.party[1] as Gen2SaveMon).species = 1
+	_world_screen._world.pikachu.set_following(following)
+	_open_mon_list(host, Gen2WorldPC.GEN1_BILLS_PC_DEPOSIT, 0)
+	host.handle_button(PokeButton.A)
+	return host
 
 
 ## `BillsPCRelease`: `OnceReleasedText` names the mon under the cursor, its two

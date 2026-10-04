@@ -284,6 +284,7 @@ func reset(rows: Array, cursor: int = -1) -> void:
 			"strip": data.species_icon_indices(
 				int(member.get("species", 0)), bool(member.get("egg", false))
 			) if data != null else PackedByteArray(),
+			"hidden": bool(member.get("hidden", false)),
 			"item": int(member.get("item", 0)) != 0,
 			"mail": Gen2HeldItem.is_mail(int(member.get("item", 0))),
 			"speed": speed,
@@ -350,7 +351,7 @@ func _blend_icons(pixels: PackedInt32Array, count: int) -> void:
 		var icon: Dictionary = _icons[index]
 		## Shadow OAM holds nothing for a struct `UpdateAnimFrame` has not
 		## reached yet, which is why FRAME opens at -1 rather than at zero.
-		if int(icon["frame"]) < 0:
+		if int(icon["frame"]) < 0 or bool(icon["hidden"]):
 			continue
 		var strip: PackedByteArray = icon["strip"]
 		if strip.is_empty():

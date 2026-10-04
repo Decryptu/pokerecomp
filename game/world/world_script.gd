@@ -480,14 +480,11 @@ static func _later_command_name(opcode: int, crystal_commands: bool) -> StringNa
 	return LATER_COMMAND_NAMES.get(source_opcode(opcode, crystal_commands), &"")
 
 
-## Normalizes a raw command byte onto pokegold's numbering, which every width,
-## name and handler table here is keyed with. Crystal's stream inserts two commands
-## pokegold does not have, `farjumptext` at $52 and `verbosegiveitemvar` at $9f, so
-## Crystal is one ahead from $53 and two ahead from $a0, and the commands Crystal
-## added themselves have no source opcode: callers handle those from the raw byte
-## before asking. The low boundary is $56 rather than $53 because every caller
-## resolves farjumptext, jumptext, waitbutton and promptbutton from the raw opcode
-## first.
+## A raw command byte on pokegold's numbering, which every table here is keyed
+## with. Crystal inserts `farjumptext` at $52 and `verbosegiveitemvar` at $9f, so
+## it is one ahead from $53 and two from $a0; its own commands have no source
+## opcode and callers read them raw. The low boundary is $56 because callers
+## resolve farjumptext, jumptext, waitbutton and promptbutton raw first.
 static func source_opcode(opcode: int, crystal_commands: bool = true) -> int:
 	if not crystal_commands or opcode < 0x56:
 		return opcode

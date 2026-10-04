@@ -199,6 +199,8 @@ var font: Gen2Font = null
 ## layout below that reads it is that generation's; a Crystal cache leaves it
 ## null and takes none of them.
 var gen1_tiles: Gen2BattleTiles = null
+var gen1_side_rows: Array[String] = Gen1Layout.POKEDEX_SIDE_ROWS
+var gen1_column: Dictionary = Gen1Layout.POKEDEX_COLUMN
 var _sheet: PackedByteArray = PackedByteArray()
 var _footprints: PackedByteArray = PackedByteArray()
 var _unown_font: PackedByteArray = PackedByteArray()
@@ -225,6 +227,8 @@ static func from_data(data: GameData) -> Gen2PokedexPage:
 	out.font = glyphs
 	if data.generation == RomRegistry.GEN1:
 		out.gen1_tiles = Gen2BattleTiles.gen1_pokedex_page(data)
+		out.gen1_side_rows = Gen1Layout.pokedex_side_rows(data.id)
+		out.gen1_column = Gen1Layout.pokedex_column(data.id)
 		## `BlkPacket_Pokedex` gives every cell outside the picture box palette
 		## 0, which `PalPacket_Pokedex` fills with PAL_BROWNMON; the box itself
 		## is the species' own and is blitted over this.
@@ -1011,16 +1015,16 @@ const GEN1_LIST_BALL_X: int = 3
 const GEN1_LIST_NAME_X: int = 4
 const GEN1_LIST_DIGITS: int = 3
 
-## `HandlePokedexListMenu`'s furniture: the column, the rule and the labels.
-const GEN1_RULE_AT := Vector2i(15, 8)
+## `HandlePokedexListMenu`'s furniture; [member gen1_column] gives its rows.
+const GEN1_RULE_X: int = 15
 const GEN1_RULE_WIDTH: int = 5
 const GEN1_LINE_X: int = 14
 const GEN1_CONTENTS_AT := Vector2i(1, 1)
-const GEN1_SEEN_AT := Vector2i(16, 2)
-const GEN1_OWN_AT := Vector2i(16, 5)
+const GEN1_COLUMN_X: int = 16
 const GEN1_COUNT_DIGITS: int = 3
-const GEN1_SIDE_MENU_AT := Vector2i(16, 10)
 const GEN1_SIDE_CURSOR_X: int = 15
+const GEN1_STATUS_BOX_INNER := Vector2i(18, 10)
+const GEN1_STATUS_BOX_Y: int = 5
 
 ## `DrawPokedexVerticalLine`, run twice nine rows at a time, the second starting
 ## on the first's last row.
@@ -1092,16 +1096,17 @@ func gen1_list_map(
 				map, GEN1_LINE_X, 1 + run * (GEN1_LINE_HEIGHT - 1) + row,
 				GEN1_LINE_ALT if row % 2 == 1 else GEN1_LINE
 			)
-	_fill(map, GEN1_RULE_AT.x, GEN1_RULE_AT.y, GEN1_RULE_WIDTH, Gen2BattleTiles.GEN1_RULE)
+	var column: Dictionary = gen1_column
+	_fill(map, GEN1_RULE_X, int(column["rule"]), GEN1_RULE_WIDTH, Gen2BattleTiles.GEN1_RULE)
 	_gen1_text(map, GEN1_CONTENTS_AT.x, GEN1_CONTENTS_AT.y, "CONTENTS")
-	_gen1_text(map, GEN1_SEEN_AT.x, GEN1_SEEN_AT.y, "SEEN")
-	_gen1_number(map, GEN1_SEEN_AT.x, GEN1_SEEN_AT.y + 1, seen, GEN1_COUNT_DIGITS)
-	_gen1_text(map, GEN1_OWN_AT.x, GEN1_OWN_AT.y, "OWN")
-	_gen1_number(map, GEN1_OWN_AT.x, GEN1_OWN_AT.y + 1, caught, GEN1_COUNT_DIGITS)
-	for index: int in Gen2Pokedex.GEN1_SIDE_ROWS.size():
+	_gen1_text(map, GEN1_COLUMN_X, int(column["seen"]), "SEEN")
+	_gen1_number(map, GEN1_COLUMN_X, int(column["seen"]) + 1, seen, GEN1_COUNT_DIGITS)
+	_gen1_text(map, GEN1_COLUMN_X, int(column["own"]), "OWN")
+	_gen1_number(map, GEN1_COLUMN_X, int(column["own"]) + 1, caught, GEN1_COUNT_DIGITS)
+	for index: int in gen1_side_rows.size():
 		_gen1_text(
-			map, GEN1_SIDE_MENU_AT.x, GEN1_SIDE_MENU_AT.y + index * GEN1_ROW_STEP,
-			Gen2Pokedex.GEN1_SIDE_ROWS[index]
+			map, GEN1_COLUMN_X, int(column["menu"]) + index * GEN1_ROW_STEP,
+			gen1_side_rows[index]
 		)
 	for index: int in rows.size():
 		_gen1_list_row(map, index, rows[index] as Dictionary)
@@ -1113,9 +1118,21 @@ func gen1_list_map(
 	if side_cursor >= 0:
 		_put(
 			map, GEN1_SIDE_CURSOR_X,
-			GEN1_SIDE_MENU_AT.y + side_cursor * GEN1_ROW_STEP, GEN1_CURSOR
+			int(column["menu"]) + side_cursor * GEN1_ROW_STEP, GEN1_CURSOR
 		)
 	return map
+
+
+## `GBPrinter_UpdateStatusMessage`: the box at (0, 5), the message from (1, 7).
+func gen1_status_box(map: PackedInt32Array, status: String, cancel: String) -> void:
+	var rows: Array = Gen1Text.text_box_rows(GEN1_STATUS_BOX_INNER)
+	for row: int in rows.size():
+		for column: int in (rows[row] as Array).size():
+			_put(map, column, GEN1_STATUS_BOX_Y + row, int(rows[row][column]))
+	var lines: PackedStringArray = status.split(Gen1Layout.MENU_ROW_BREAK)
+	for line: int in lines.size():
+		_gen1_text(map, 1, 7 + GEN1_ROW_STEP * line, lines[line])
+	_gen1_text(map, 2, 15, cancel)
 
 
 func _gen1_list_row(map: PackedInt32Array, index: int, row: Dictionary) -> void:

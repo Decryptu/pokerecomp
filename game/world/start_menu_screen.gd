@@ -784,6 +784,10 @@ func _confirm_now() -> void:
 			## the same way it answers B.
 			if _target_cursor >= _party_targets().size():
 				_open_item_mode()
+			elif _world != null and _target_cursor == _world.gen1_sleeping_starter_slot():
+				_show_pack_result(
+					_data.special_text("bills_pc_sleeping", "no_response"), _open_item_mode
+				)
 			elif _teaching:
 				_teach_selected_item(_target_cursor)
 			elif _giving:
@@ -2021,6 +2025,7 @@ func _party_targets() -> Array:
 			"fainted": not mon.is_egg and mon.hp <= 0,
 			"egg": mon.is_egg,
 			"quality": _target_quality_text(mon),
+			"hidden": _world != null and targets.size() == _world.gen1_sleeping_starter_slot(),
 		})
 	return targets
 

@@ -38,13 +38,11 @@ const DUMMY_INDEX: int = 0
 const POUND_INDEX: int = 1
 
 ## Both shapes the profile split in data/moves/animations.asm takes, as the whole
-## `anim_bgeffect` sequence of the animation that shows each. Neither is reachable
-## without following the animation properly: every one of these sequences opens and
+## `anim_bgeffect` sequence of the animation that shows each; every one opens and
 ## closes inside a subroutine. TACKLE shows the split in which routine is called:
-## Crystal calls `BattleAnim_TargetObj_2Row` and Gold and Silver `..._1Row`, and
-## the two differ only in the effect they run, `..._BATTLEROBJ_2ROW` ($12) against
-## `..._1ROW` ($11). Its own `BATTLE_BG_EFFECT_TACKLE` ($24) and the closing
-## `..._SHOW_MON` ($0a) are shared.
+## Crystal calls `BattleAnim_TargetObj_2Row` and Gold and Silver `..._1Row`, which
+## differ only in `..._BATTLEROBJ_2ROW` ($12) against `..._1ROW` ($11). Its own
+## `BATTLE_BG_EFFECT_TACKLE` ($24) and the closing `..._SHOW_MON` ($0a) are shared.
 const TACKLE_INDEX: int = 0x21
 const TACKLE_BG_EFFECTS: Dictionary = {
 	&"gold": [0x11, 0x24, 0x0A],

@@ -68,14 +68,10 @@ const HIDDEN_ITEMS: Array[Dictionary] = [
 ]
 
 
-## `data/items/fruit_trees.asm`'s whole `FruitTreeItems`, in `FRUITTREE_*` order
-## and byte identical between the two pins, named as `data/items/names.asm` names
-## them. `GetFruitTreeItem` indexes this at the `fruittree` operand less one.
-## Pinned by name rather than by number because the question a player asks about a
-## tree is what the bag then says: `BERRY` really is what four Johto trees and
-## Route 11 bear, Oran and Sitrus being a Gen 3 renaming, and the table has no
-## terminator and no pointer, so nothing but its contents says it decoded at the
-## right offset.
+## `data/items/fruit_trees.asm`'s whole `FruitTreeItems`, in `FRUITTREE_*` order,
+## named as `data/items/names.asm` names them; `GetFruitTreeItem` indexes it at
+## the `fruittree` operand less one. Pinned by name because the table has no
+## terminator and no pointer, so only its contents say it decoded at the right offset.
 const FRUIT_TREE_ITEMS: Array[String] = [
 	"BERRY", "BERRY", "BERRY", "BERRY",
 	"PSNCUREBERRY", "PSNCUREBERRY",
@@ -278,14 +274,10 @@ func _verify_hidden_items(data: GameData, game_id: StringName) -> void:
 		)
 
 
-## `Gen2WorldAPI.hidden_items()` over EVERY map of the cartridge, which is the only
-## thing that can say the public read agrees with the dispatch the two cases above
-## drive one map at a time: each record decodes on a fresh state, none reads as
-## already taken, and the read and the ask agree on the item and the flag. What it
-## does NOT prove, kept so it is not chased again: `_hidden_item_record` addresses
-## the catalog's patch by `event_index` and falls back to the record's own byte, so
-## a wrong index is inert over the whole corpus and bites only where a mod has moved
-## what is in a hidden item.
+## `Gen2WorldAPI.hidden_items()` over every map: each record decodes on a fresh
+## state, none reads as already taken, and the read and the ask agree on the item
+## and the flag. It does not prove `_hidden_item_record`'s `event_index`: a wrong
+## one is inert over the corpus and bites only where a mod moved a hidden item.
 func _sweep_the_public_read(data: GameData, game_id: StringName) -> void:
 	var maps: int = 0
 	var records: int = 0

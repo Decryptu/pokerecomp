@@ -4826,6 +4826,7 @@ func _finish_world_battle() -> void:
 		"request": _world_battle_request.duplicate(true),
 		"save_written": _save_written,
 		"roamers_move": _battle.roamers_move_on(false),
+		"forced_out": _battle.was_forced_out(),
 	}
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_WON:
 		## `.give_money` and `CheckPayDay` as one credit per account, so the

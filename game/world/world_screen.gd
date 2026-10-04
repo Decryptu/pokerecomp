@@ -6518,6 +6518,16 @@ static func _won_or_caught(result: Dictionary) -> bool:
 	]
 
 
+## `EndOfBattle`'s `.evolution`: any link battle, otherwise `wBattleResult` zero,
+## which a win and a wild mon that left (Teleport, Roar, Poke Doll) both leave.
+static func _reaches_mood_update(result: Dictionary) -> bool:
+	if StringName((result.get("request", {}) as Dictionary).get("kind", &"")) == &"link_battle":
+		return true
+	var outcome: StringName = StringName(result.get("outcome", &""))
+	return outcome == Gen2WorldBattleAdapter.OUTCOME_WON \
+		or (outcome == Gen2WorldBattleAdapter.OUTCOME_RAN and bool(result.get("forced_out", false)))
+
+
 ## `EvolveAfterBattle`'s `wEvolvableFlags`, read only on a battle that was won.
 func _after_battle_evolution_plans(result: Dictionary, save: Gen2SaveData) -> Array:
 	if _data == null or save == null or _world == null:
@@ -6576,6 +6586,8 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 		## synced back carries it, so this is where it reaches disk.
 		_persist_after_battle(fought_save)
 	_world.gen1_end_of_battle()
+	if _reaches_mood_update(result):
+		_world.gen1_pikachu_battle_ended(bool(_starter_pikachu(fought_save)["alive"]))
 	var resumed: Array = _world.complete_runtime_request(result)
 	## `AllPokemonFainted`: one `RunMapScript` under LOST_BATTLE, then `HandleBlackOut`.
 	if _world.gen1_blackout_due(fought_save, StringName(result.get("outcome", &""))):
@@ -7585,6 +7597,7 @@ func _open_pokedex() -> void:
 	host.closed.connect(_on_pokedex_closed)
 	host.cry_requested.connect(_on_pokedex_cry_requested)
 	host.sfx_requested.connect(_play_sfx)
+	host.printer_music_requested.connect(_on_pokedex_printer_music)
 	_pokedex_host = host
 	_script_prompt = "Pokedex open"
 	_refresh_labels()
@@ -7594,6 +7607,13 @@ func _open_pokedex() -> void:
 ## _play_species_cry] rather than a path of its own.
 func _on_pokedex_cry_requested(species: int) -> void:
 	_play_species_cry(species)
+
+
+func _on_pokedex_printer_music(on: bool) -> void:
+	if on:
+		_play_gen1_music(Gen2DiplomaScreen.GEN1_MUSIC_PRINTER)
+	else:
+		_play_current_map_music()
 
 
 func _on_pokedex_closed() -> void:
@@ -7800,10 +7820,13 @@ func _on_field_item_used(request: Dictionary) -> void:
 		## `PlayedFluteHadEffectText`'s own `text_asm` plays SFX_POKEFLUTE and
 		## waits it out; nothing else follows either box in the overworld.
 		Gen2WorldPack.FIELD_EFFECT_POKE_FLUTE:
-			_show_field_move_text(_field_item_text(
-				"flute_woke" if bool(request.get("woke", false)) else "flute_no_effect",
-				"Played the #\nFLUTE."
-			))
+			if bool(request.get("pikachu", false)):
+				_show_script_results(_world.gen1_flute_wakes_pikachu())
+			else:
+				_show_field_move_text(_field_item_text(
+					"flute_woke" if bool(request.get("woke", false)) else "flute_no_effect",
+					"Played the #\nFLUTE."
+				))
 		## `farsjump CardKeySlotScript` and `farsjump BasementDoorScript`, each
 		## `QueueScript`d by its own routine, so both run as any map script does.
 		Gen2WorldPack.FIELD_EFFECT_CARD_KEY, Gen2WorldPack.FIELD_EFFECT_BASEMENT_KEY:
@@ -7902,6 +7925,7 @@ func _open_embedded_party() -> void:
 		return
 	host.share_cursor(_world.party_menu_cursor)
 	host.in_link_room = _world.in_link_room()
+	host.sleeping_member = _world.gen1_sleeping_starter_slot()
 	host.set_context(_data, save, true)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20
@@ -8690,6 +8714,7 @@ func _adopt_service_overlay(host: Gen2WorldServiceScreen, prompt: String) -> voi
 	host.map_music_requested.connect(_play_current_map_music)
 	host.sfx_requested.connect(_play_sfx)
 	host.gen1_sfx_requested.connect(_play_gen1_sound)
+	host.gen1_music_requested.connect(_play_gen1_music)
 	host.cry_requested.connect(_play_species_cry)
 	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_service_host = host
@@ -9777,6 +9802,7 @@ func _open_party_selection(request: Dictionary = {}) -> bool:
 		_script_prompt = "Party scene unavailable"
 		return false
 	host.share_cursor(_world.party_menu_cursor)
+	host.sleeping_member = _world.gen1_sleeping_starter_slot()
 	host.set_context(_data, save, true)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20

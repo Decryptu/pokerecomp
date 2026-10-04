@@ -194,8 +194,18 @@ static func read_pikachu(rom: RomFile, layout: Dictionary) -> Dictionary:
 		cries.append(rom.u16le(Gen1Layout.banked(rom.u8(row), rom.u16le(row + 1))))
 	return {
 		"emotions": emotions, "moods": moods, "happiness": happiness, "cries": cries,
-		"pikapic": _read_pikapic(rom, layout),
+		"pikapic": _read_pikapic(rom, layout), "nurse_movements": read_nurse_movements(rom, layout),
 	}
+
+
+static func read_nurse_movements(rom: RomFile, layout: Dictionary) -> Array:
+	var out: Array = []
+	var at: int = int(layout["pikachu_nurse_movements"])
+	for _script: int in Gen1Layout.NURSE_MOVEMENTS:
+		var bytes: Array = _pikachu_movement_bytes(rom, at)
+		out.append(bytes)
+		at += bytes.size()
+	return out
 
 
 ## `PikaPicAnimPointers`' scripts, `PikaPicAnimBGFramesPointers`' frame sets,

@@ -885,6 +885,13 @@ const EVOLUTION_TEXT_AT: Dictionary = {
 	"evolved": 0x00, "into": 0x05, "stopped_evolving": 0x0A, "is_evolving": 0x0F,
 }
 const STONE_REFUSAL_TEXT_AT: Dictionary = {"refusing": 0x00}
+const POKECENTER_PIKACHU_TEXT_AT: Dictionary = {"looks_content": 0x00}
+const NURSE_MOVEMENTS: int = 3
+## Yellow's `DisplayPokemonCenterDialogue_` `ld c` counts.
+const NURSE_TURN_FRAMES: int = 6
+const NURSE_BOW_FRAMES: int = 64
+const NURSE_MACHINE_LEAD_FRAMES: int = 30
+const NURSE_FIT_FRAMES: int = 40
 ## `engine/movie/trade.asm`'s eight stubs, each behind the routine that prints
 ## it, so the offsets from `TradeWentToText` are not five apart.
 const TRADE_ANIM_TEXT_AT: Dictionary = {
@@ -1187,6 +1194,20 @@ const BG_MAP_ATTRIBUTES_DMA_UNIT: int = 16
 const POKEDEX_TILES: int = 18
 const POKEDEX_FIRST_CODE: int = 0x60
 const POKEDEX_BALL_CODE: int = 0x72
+## `BillsPCMenuText` as (action, label).
+const BILLS_PC_ROWS: Array = [
+	[0, "WITHDRAW <PKMN>"], [1, "DEPOSIT <PKMN>"], [2, "RELEASE <PKMN>"],
+	[3, "CHANGE BOX"], [4, "SEE YA!"],
+]
+const BILLS_PC_ROWS_YELLOW: Array = [
+	[0, "WITHDRAW <PKMN>"], [1, "DEPOSIT <PKMN>"], [2, "RELEASE <PKMN>"],
+	[3, "CHANGE BOX"], [5, "PRINT BOX"], [4, "SEE YA!"],
+]
+const PRINT_BOX_TEXT_AT: Dictionary = {"no_mon": 0x00}
+const POKEDEX_SIDE_ROWS: Array[String] = ["DATA", "CRY", "AREA", "QUIT"]
+const POKEDEX_SIDE_ROWS_YELLOW: Array[String] = ["DATA", "CRY", "AREA", "PRNT", "QUIT"]
+const POKEDEX_COLUMN: Dictionary = {"rule": 8, "seen": 2, "own": 5, "menu": 10}
+const POKEDEX_COLUMN_YELLOW: Dictionary = {"rule": 6, "seen": 1, "own": 4, "menu": 8}
 
 ## `LoadTownMap`: `WorldMapTileGraphics` at `vChars2 tile $60` over the text box
 ## sheet, and `CompressedMap`'s runs, each byte a tile nybble from that base and
@@ -1264,8 +1285,7 @@ const SEAFOAM_MOVE_OBJECT: int = 2
 ## Gate 1F's and Route 18 Gate 1F's per-frame scripts open with.
 const ALWAYS_ON_BIKE_BIT: int = 5
 
-## `ItemUsePokeFlute`'s two maps and the events each branch reads. Yellow's third
-## branch is Pikachu at PEWTER_POKECENTER, who does not follow the player here.
+## `ItemUsePokeFlute`'s two maps and the events each branch reads.
 const ROUTE_12: int = 0x17
 const ROUTE_16: int = 0x1B
 const SNORLAX_FLUTE_ROW_SIZE: int = 2
@@ -3180,6 +3200,9 @@ const YELLOW: Dictionary = {
 	"trade_info_text": 0x41C62,
 	"link_enemy_trainer_name": 0xD886,
 	"stone_refusal_text": 0x0D8A2,
+	"pokecenter_pikachu_text": 0x06EEB,
+	"print_box_text": 0xE8E1F,
+	"pikachu_nurse_movements": 0xFD294,
 	"coin_case_text": 0x0E0F4,
 	"party_menu_text": 0x11A38,
 	"toss_text": 0x0E699,
@@ -4065,6 +4088,23 @@ static func flute_counts_wild(id: StringName) -> bool:
 ## `DisplayPlayerBlackedOutText`'s tail: Yellow alone ends the Safari game.
 static func poison_blackout_ends_safari(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
+
+
+static func escape_refused_maps(id: StringName) -> Array[int]:
+	return [AGATHAS_ROOM, BILLS_HOUSE, POKEMON_FAN_CLUB] if id == RomRegistry.YELLOW \
+		else [AGATHAS_ROOM]
+
+
+static func bills_pc_rows(id: StringName) -> Array:
+	return BILLS_PC_ROWS_YELLOW if id == RomRegistry.YELLOW else BILLS_PC_ROWS
+
+
+static func pokedex_side_rows(id: StringName) -> Array[String]:
+	return POKEDEX_SIDE_ROWS_YELLOW if id == RomRegistry.YELLOW else POKEDEX_SIDE_ROWS
+
+
+static func pokedex_column(id: StringName) -> Dictionary:
+	return POKEDEX_COLUMN_YELLOW if id == RomRegistry.YELLOW else POKEDEX_COLUMN
 
 
 static func credits_string_count(id: StringName) -> int:

@@ -265,12 +265,10 @@ static func side_wall_step_blocked(from_code: int, to_code: int, direction: Vect
 
 ## home/map.asm's GetMovementPermissions: the wTilePermissions byte for a player
 ## standing on [param standing_code] with its four neighbours already read. The
-## leave rule is byte identical between the games; the enter rule is not. The pins
-## diverge only in `.ok_down`/`.ok_up`/`.ok_right`/`.ok_left`, where Crystal ORs the
-## matching FACE_* and Gold always sets bit RIGHT, because those four were written
-## with wWalkingDirection's transposed bit layout, so every enter-rule match blocks
-## DOWN alone on Gold and Silver. No shipped map of theirs reaches it; the split
-## stays because a mod-authored map could.
+## enter rule differs only in `.ok_down`/`.ok_up`/`.ok_right`/`.ok_left`: Crystal
+## ORs the matching FACE_* and Gold always sets bit RIGHT (transposed
+## wWalkingDirection layout), so every enter-rule match blocks DOWN alone on Gold
+## and Silver. No shipped map reaches it; a mod-authored one could.
 static func tile_permissions(
 	standing_code: int, up_code: int, down_code: int, left_code: int, right_code: int,
 	is_crystal: bool = true,

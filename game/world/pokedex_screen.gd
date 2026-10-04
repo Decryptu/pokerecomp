@@ -25,7 +25,10 @@ signal cry_requested(species: int)
 ## the way [signal cry_requested] is.
 signal sfx_requested(index: int)
 
-enum Mode { LIST, ENTRY, OPTION, SEARCH, SEARCH_RESULTS, AREA, UNOWN, SIDE }
+## The printer's music for as long as PRNT's error box is up.
+signal printer_music_requested(on: bool)
+
+enum Mode { LIST, ENTRY, OPTION, SEARCH, SEARCH_RESULTS, AREA, UNOWN, SIDE, PRINT }
 
 ## The dex is drawn in hardware pixels and the start menu it opens over is
 ## ordinary UI at window resolution, so it carries a [Gen2Screen] of its own the
@@ -189,6 +192,8 @@ func handle_button(button: int) -> bool:
 			return _handle_gen1_list(button) if _gen1 else _handle_list(button)
 		Mode.SIDE:
 			return _handle_gen1_side(button)
+		Mode.PRINT:
+			return _handle_gen1_print(button)
 		Mode.ENTRY:
 			return _handle_entry(button)
 		Mode.OPTION:
@@ -433,7 +438,6 @@ func _handle_gen1_list(button: int) -> bool:
 	return PokeButton.is_direction(button)
 
 
-## `HandlePokedexSideMenu`'s own four rows, whose watched keys are A and B.
 func _handle_gen1_side(button: int) -> bool:
 	match button:
 		PokeButton.B:
@@ -444,25 +448,48 @@ func _handle_gen1_side(button: int) -> bool:
 			return true
 		PokeButton.UP, PokeButton.DOWN:
 			var next: int = _side_cursor + (1 if button == PokeButton.DOWN else -1)
-			_side_cursor = clampi(next, 0, Gen2Pokedex.GEN1_SIDE_ROWS.size() - 1)
+			_side_cursor = clampi(next, 0, _page.gen1_side_rows.size() - 1)
 			_refresh()
 			return true
 	return false
 
 
-## What each row leaves `b` as: DATA and AREA answer 0 and redraw the listing,
-## QUIT answers 1 and closes the dex, and CRY stays in the menu.
+## What each row leaves `b` as: DATA and AREA redraw the listing, PRNT goes round
+## `.loop`, QUIT closes the dex and CRY stays.
 func _gen1_side_action() -> void:
-	match _side_cursor:
-		Gen2Pokedex.GEN1_SIDE_DATA:
+	match _page.gen1_side_rows[_side_cursor]:
+		"DATA":
 			_dex.open_entry()
 			_open_entry_mode(Mode.LIST)
-		Gen2Pokedex.GEN1_SIDE_CRY:
+		"CRY":
 			cry_requested.emit(_dex.selected_species())
-		Gen2Pokedex.GEN1_SIDE_AREA:
+		"AREA":
 			_open_area()
-		Gen2Pokedex.GEN1_SIDE_QUIT:
+		"PRNT":
+			_open_gen1_print()
+		"QUIT":
 			closed.emit()
+
+
+## `PrintPokedexEntry` with no printer: the listing under `Printer Error 2` until B.
+func _open_gen1_print() -> void:
+	if _gen1_status().is_empty():
+		return
+	_mode = Mode.PRINT
+	printer_music_requested.emit(true)
+	_refresh()
+
+
+func _handle_gen1_print(button: int) -> bool:
+	if button != PokeButton.B:
+		return false
+	printer_music_requested.emit(false)
+	_open_list_mode()
+	return true
+
+
+func _gen1_status() -> String:
+	return _data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
 
 
 func _open_gen1_side() -> void:
@@ -504,10 +531,14 @@ func _gen1_entry_pages() -> int:
 ## `ShowPokedexMenu`'s listing and `ShowPokedexDataInternal`'s page.
 func _render_gen1() -> Image:
 	if _mode != Mode.ENTRY:
-		return _page.image(_page.gen1_list_map(
+		var printing: bool = _mode == Mode.PRINT
+		var map: PackedInt32Array = _page.gen1_list_map(
 			_dex.gen1_rows(), _dex.seen_count(), _dex.caught_count(),
-			_listing_cursor(), _side_cursor
-		))
+			-1 if printing else _listing_cursor(), -1 if printing else _side_cursor
+		)
+		if printing:
+			_page.gen1_status_box(map, _gen1_status(), _data.printer_status_string("press_b"))
+		return _page.image(map)
 	var species: int = _dex.selected_species()
 	var entry: Dictionary = _dex.entry()
 	var page: int = int(entry["page"])

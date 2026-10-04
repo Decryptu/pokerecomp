@@ -687,13 +687,6 @@ func _species_name(species: int) -> String:
 const GEN1_LISTING_HEIGHT: int = 7
 ## `.dashedLine`, drawn in place of the name of a species not yet seen.
 const GEN1_NOT_SEEN_NAME: String = "----------"
-## `PokedexMenuItemsText`, and the `b` each row leaves `HandlePokedexSideMenu`
-## with: DATA and AREA redraw the listing, QUIT closes the dex, and CRY stays.
-const GEN1_SIDE_ROWS: Array[String] = ["DATA", "CRY", "AREA", "QUIT"]
-const GEN1_SIDE_DATA: int = 0
-const GEN1_SIDE_CRY: int = 1
-const GEN1_SIDE_AREA: int = 2
-const GEN1_SIDE_QUIT: int = 3
 
 ## Set by [method open_gen1]. Every listing rule below this line is that
 ## generation's own, and no Generation 2 screen reads it.

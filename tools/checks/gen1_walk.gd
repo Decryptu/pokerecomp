@@ -595,6 +595,9 @@ func _check_the_nurse_heals() -> void:
 	)
 	world.choose_script_input(0)
 	world.run_event_queue(true)
+	if _r.game_id == &"yellow":
+		_check_the_yellow_nurse_waits(world)
+		return
 	var request: Dictionary = world.pending_runtime_request()
 	if not _r.check(
 		StringName(request.get("kind", &"")) == &"party_heal_requested",
@@ -639,6 +642,32 @@ func _check_the_nurse_heals() -> void:
 	world.run_event_queue(true)
 	world.run_event_queue(true)
 	_r.check(not world.script_busy(), "the nurse never finished.")
+
+
+## Yellow's nurse with no starter out: `ld c, 64`, her turn (6), `ld c, 30`, the
+## machine, `HealParty`, her turn back (6), `Delay3` and `ld c, 40`.
+func _check_the_yellow_nurse_waits(world: Gen2WorldAPI) -> void:
+	var machine: int = NURSE_PARTY * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES \
+		+ Gen2WorldEffects.HEAL_MACHINE_FLASHES * Gen2WorldEffects.HEAL_MACHINE_FLASH_INTERVAL
+	var waits: Array[int] = []
+	var heal_after: int = -1
+	for _step: int in 40:
+		var request: Dictionary = world.pending_runtime_request()
+		var wait: Dictionary = world.pending_script_wait()
+		if StringName(request.get("kind", &"")) == &"party_heal_requested":
+			heal_after = waits.size()
+			world.complete_runtime_request({"ok": true})
+		elif not wait.is_empty():
+			var frames: int = int(wait.get("frames", 0))
+			waits.append(frames)
+			for _frame: int in frames:
+				world.advance_script_wait_frame()
+		elif world.script_busy():
+			world.run_event_queue(true)
+		else:
+			break
+	_r.check(waits == [64, 6, 30, machine, 6, 3, 40], "the nurse waited %s." % [waits])
+	_r.check(heal_after == 4, "HealParty came after %d waits, not the animation." % heal_after)
 
 
 ## Every warp on every map: its destination resolves, it fires from some facing,

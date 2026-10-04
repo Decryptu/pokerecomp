@@ -165,6 +165,9 @@ var _heal_line: String = ""
 var _cursor_memory: Dictionary = {"cursor": 0}
 ## `wLinkMode`, set by the world while the player stands in a Cable Club room.
 var in_link_room: bool = false
+## Yellow's starter while `CheckPikachuFollowingPlayer` says it is not following:
+## no icon and no answer to A.
+var sleeping_member: int = -1
 var _read_only: bool = false
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## `OpenPartyStats`' own screen, standing over the whole party menu while it is
@@ -411,6 +414,13 @@ func _click() -> void:
 	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, not _gen1() and not _submenu_open)
 
 
+## Yellow's `HandlePartyMenuInput` on a starter that is not following: its line,
+## then the menu returns as a cancelled one.
+func _say_sleeping_starter() -> void:
+	_message_after = _cancel
+	_say(_data.special_text("bills_pc_sleeping", "no_response"))
+
+
 func _gen1() -> bool:
 	return _data != null and _data.generation == RomRegistry.GEN1
 
@@ -443,6 +453,9 @@ func _on_cancel_row() -> bool:
 
 
 func _confirm() -> void:
+	if _member_cursor == sleeping_member and not _submenu_open and _switch_from < 0:
+		_say_sleeping_starter()
+		return
 	## `PartyMenuSelect` answers CANCEL with the same carry a B press sets, so
 	## the row and the button are one path.
 	if _on_cancel_row() and not _submenu_open:
@@ -898,6 +911,7 @@ func _rows() -> Array:
 			"fainted": not mon.is_egg and mon.hp <= 0,
 			"egg": mon.is_egg,
 			"quality": _row_quality(mon),
+			"hidden": index == sleeping_member,
 		})
 	return out
 

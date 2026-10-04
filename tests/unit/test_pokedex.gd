@@ -863,8 +863,7 @@ func test_the_gen1_listing_stacks_its_number_over_its_name() -> void:
 func test_the_gen1_side_menu_hollows_the_listing_arrow() -> void:
 	var dex: Gen2Pokedex = _gen1_dex([9])
 	var map: PackedInt32Array = _gen1_page().gen1_list_map(
-		dex.gen1_rows(), dex.seen_count(), dex.caught_count(), 0,
-		Gen2Pokedex.GEN1_SIDE_CRY
+		dex.gen1_rows(), dex.seen_count(), dex.caught_count(), 0, 1
 	)
 	assert_eq(
 		_cell(map, Gen2PokedexPage.GEN1_LIST_CURSOR_X, Gen2PokedexPage.GEN1_LIST_TOP),
@@ -873,10 +872,31 @@ func test_the_gen1_side_menu_hollows_the_listing_arrow() -> void:
 	assert_eq(
 		_cell(
 			map, Gen2PokedexPage.GEN1_SIDE_CURSOR_X,
-			Gen2PokedexPage.GEN1_SIDE_MENU_AT.y + Gen2PokedexPage.GEN1_ROW_STEP
+			int(Gen1Layout.POKEDEX_COLUMN["menu"]) + Gen2PokedexPage.GEN1_ROW_STEP
 		),
 		Gen2PokedexPage.GEN1_CURSOR
 	)
+
+
+## Yellow's `Pokedex_DrawInterface` lifts the rule and the menu two rows and the
+## counts one, and `PokedexMenuItemsText` gains PRNT ahead of QUIT.
+func test_the_yellow_listing_lifts_its_right_column_and_adds_prnt() -> void:
+	var data: GameData = _gen1()
+	var original: StringName = data.id
+	data.id = RomRegistry.YELLOW
+	var page: Gen2PokedexPage = Gen2PokedexPage.from_data(data)
+	data.id = original
+	var dex: Gen2Pokedex = _gen1_dex([9])
+	var map: PackedInt32Array = page.gen1_list_map(
+		dex.gen1_rows(), dex.seen_count(), dex.caught_count(), 0, 3
+	)
+	assert_eq(_cell(map, 16, 1), Gen1Text.encode("S")[0], "SEEN is a row up")
+	assert_eq(_cell(map, 16, 4), Gen1Text.encode("O")[0], "OWN is a row up")
+	assert_eq(_cell(map, 15, 6), Gen2BattleTiles.GEN1_RULE, "the rule is two rows up")
+	assert_eq(_cell(map, 16, 8), Gen1Text.encode("D")[0], "DATA opens the menu at row 8")
+	assert_eq(_cell(map, 16, 14), Gen1Text.encode("P")[0], "PRNT is the fourth row")
+	assert_eq(_cell(map, 16, 16), Gen1Text.encode("Q")[0], "QUIT follows it")
+	assert_eq(_cell(map, 15, 14), Gen2PokedexPage.GEN1_CURSOR)
 
 
 ## `ShowPokedexDataInternal` prints the height as feet and inches over

@@ -53,6 +53,7 @@ const GEN1_ROUTES: Dictionary = {
 	"entry": "a,a",
 	# `.choseArea`, which is the side menu's third row.
 	"area": "a,d,d,a",
+	"print": "a,d,d,d,a",
 }
 
 
