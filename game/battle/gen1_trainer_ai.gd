@@ -27,6 +27,7 @@ const SUPER_FANG_EFFECT: int = 0x28
 const SPECIAL_DAMAGE_EFFECT: int = 0x29
 const FLY_EFFECT: int = 0x2B
 const EFFECTIVENESS_INITIAL: int = 0x10
+const DEWGONG_IGNORES_BELOW: int = 0x66
 
 ## Items in Generation 1's numbering.
 const FULL_RESTORE: int = 0x10
@@ -88,7 +89,7 @@ static func select_slot(battle: Gen2Battle, rng: RandomNumberGenerator) -> int:
 	var enemy: Gen2BattleMon = battle.mon(Gen2Battle.ENEMY)
 	if enemy.moves.size() < 2 or int(enemy.moves[1]) == 0:
 		return 0
-	var enabled: Array = enabled_slots(battle) if battle.is_trainer_battle \
+	var enabled: Array = enabled_slots(battle, rng) if battle.is_trainer_battle \
 		else _existing_slots(enemy)
 	for _attempt: int in ROLL_CAP:
 		var slot: int = roll_slot(rng)
@@ -117,14 +118,14 @@ static func _existing_slots(enemy: Gen2BattleMon) -> Array:
 
 
 ## `AIEnemyTrainerChooseMoves`: the slots the layers leave at the lowest score.
-static func enabled_slots(battle: Gen2Battle) -> Array:
+static func enabled_slots(battle: Gen2Battle, rng: RandomNumberGenerator = null) -> Array:
 	var enemy: Gen2BattleMon = battle.mon(Gen2Battle.ENEMY)
 	var layers: Array = _rules(battle).gen1_ai_layers(
 		_attributes(battle).get("ai_layers", [])
 	)
 	if layers.is_empty():
 		return _existing_slots(enemy)
-	var scores: Array = score_slots(battle, layers)
+	var scores: Array = score_slots(battle, layers, rng)
 	var lowest: int = DISABLED_SCORE + 1
 	for slot: int in _move_count(enemy):
 		lowest = mini(lowest, int(scores[slot]))
@@ -134,8 +135,11 @@ static func enabled_slots(battle: Gen2Battle) -> Array:
 	return out
 
 
-## The four scores after every layer in [param layers] has run.
-static func score_slots(battle: Gen2Battle, layers: Array) -> Array:
+## The four scores after every layer in [param layers] has run. [param rng] is
+## layer 3's dice on Yellow, the battle's own when omitted.
+static func score_slots(
+	battle: Gen2Battle, layers: Array, rng: RandomNumberGenerator = null
+) -> Array:
 	var enemy: Gen2BattleMon = battle.mon(Gen2Battle.ENEMY)
 	var scores: Array = [BASE_SCORE, BASE_SCORE, BASE_SCORE, BASE_SCORE]
 	if enemy.disabled_slot >= 0 and enemy.disabled_slot < scores.size():
@@ -147,7 +151,7 @@ static func score_slots(battle: Gen2Battle, layers: Array) -> Array:
 			2:
 				_encourage_setup_moves(battle, scores)
 			3:
-				_weigh_type_matchups(battle, scores)
+				_weigh_type_matchups(battle, scores, rng if rng != null else battle.rng)
 	return scores
 
 
@@ -201,13 +205,15 @@ static func _encourage_setup_moves(battle: Gen2Battle, scores: Array) -> void:
 
 
 ## `AIMoveChoiceModification3`.
-static func _weigh_type_matchups(battle: Gen2Battle, scores: Array) -> void:
+static func _weigh_type_matchups(
+	battle: Gen2Battle, scores: Array, rng: RandomNumberGenerator
+) -> void:
 	var enemy: Gen2BattleMon = battle.mon(Gen2Battle.ENEMY)
 	var player_types: Array = battle.mon(Gen2Battle.PLAYER).types()
 	for slot: int in _move_count(enemy):
 		var move: Dictionary = _move(battle, int(enemy.moves[slot]))
 		var effectiveness: int = battle.data.first_matchup(int(move.get("type", 0)), player_types)
-		if effectiveness < 0:
+		if effectiveness < 0 or _dewgong_ignores_matchup(battle, enemy, rng):
 			effectiveness = EFFECTIVENESS_INITIAL
 		if effectiveness == EFFECTIVENESS_INITIAL:
 			continue
@@ -215,6 +221,17 @@ static func _weigh_type_matchups(battle: Gen2Battle, scores: Array) -> void:
 			scores[slot] = int(scores[slot]) - 1
 		elif _has_better_move(battle, enemy, int(move.get("type", 0))):
 			scores[slot] = int(scores[slot]) + 1
+
+
+## Yellow's `AIGetTypeEffectiveness` `.done`: once a row matched, Lorelei's Dewgong
+## draws and returns on a byte under `$66` before storing it.
+static func _dewgong_ignores_matchup(
+	battle: Gen2Battle, enemy: Gen2BattleMon, rng: RandomNumberGenerator
+) -> bool:
+	if battle.data.id != RomRegistry.YELLOW or battle.enemy_trainer_class != Gen1Layout.LORELEI_CLASS \
+		or enemy.species != Gen1Layout.DEWGONG_DEX:
+		return false
+	return rng.randi_range(0, 255) < DEWGONG_IGNORES_BELOW
 
 
 ## `.loopMoves`, which walks the weighed move too and counts it by effect.

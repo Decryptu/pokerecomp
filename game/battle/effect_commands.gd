@@ -1549,6 +1549,22 @@ static func _gen1_hits_outright(turn: Gen2Turn) -> bool:
 		and Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.RECHARGING)
 
 
+## `MoveHitTest` asks Mist of effect bytes `$12`-`$19` and `$3A`-`$41` alone; a
+## `*_DOWN_SIDE_EFFECT` (`$44`-`$47`) never asks, so Mist does not stop it.
+const GEN1_MIST_EFFECT_RUNS: Array = [[0x12, 0x19], [0x3A, 0x41]]
+
+
+static func _gen1_mist_refuses(turn: Gen2Turn) -> bool:
+	if not turn.battle.is_gen1() \
+		or not Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.MIST):
+		return false
+	var byte: int = turn.gen1_effect()
+	for span: Array in GEN1_MIST_EFFECT_RUNS:
+		if byte >= int(span[0]) and byte <= int(span[1]):
+			return true
+	return false
+
+
 ## `.ThunderRain`, `.XAccuracy` and the perfect-accuracy check, in that order
 ## and all ahead of the stat modifiers: Swift, Faint Attack and Vital Throw
 ## carry `NormalHit`'s list and a stored accuracy of 100.
@@ -1561,6 +1577,9 @@ static func _hits_without_a_roll(turn: Gen2Turn) -> bool:
 
 
 static func _check_hit(turn: Gen2Turn) -> void:
+	if turn.battle.is_gen1() and Gen2MoveEffect.is_stat_down(turn.effect()) \
+		and _gen1_drop_blocked(turn):
+		return
 	# Generation 1's `MoveHitTest` answers an immunity before any of it.
 	if turn.immune and turn.battle.is_gen1() and not SAYS_ITS_OWN_MISS.has(turn.effect()):
 		_miss(turn, Gen2Battle.NO_EFFECT)
@@ -1583,30 +1602,23 @@ static func _hit_gates(turn: Gen2Turn) -> bool:
 	if _gen1_hits_outright(turn):
 		return true
 
-	# `.Protect`, second, and ahead of everything but the Dream Eater question.
-	# One gate for the whole game: 47 of the lists here carry `checkhit`, so a
-	# Protect turns away a damaging move, a status move and a stat drop alike
-	# without any of them knowing about it. Ahead of `.LockOn`, so a Protect
-	# turns a locked-on move away *and* leaves the flag standing for the next one.
+	# `.Protect`, second: one gate for the 47 lists that carry `checkhit`. Ahead of
+	# `.LockOn`, so it turns a locked-on move away and leaves the flag standing.
 	if Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.PROTECT):
 		_delay(turn, PROTECT_DELAY_FRAMES)
 		turn.emit(Gen2Battle.PROTECTING_ITSELF, {"target": turn.target})
 		_delay(turn, PROTECT_DELAY_FRAMES)
 		return false
 
-	# `.DrainSub`, third: nothing drains out of a doll, so the two effects that
-	# heal off what they deal read as a miss rather than a hit healing nothing.
-	# `MoveHitTest`'s own copy is dead code, `CheckTargetSubstitute` having
-	# overwritten the effect byte it compares, so a Generation 1 drain lands.
+	# `.DrainSub`, third: a drain out of a doll reads as a miss. `MoveHitTest`'s own
+	# copy is dead code (`CheckTargetSubstitute` overwrote the byte), so Generation 1 lands.
 	if _substitute_refuses(turn) and turn.effect() in DRAINING_EFFECTS \
 		and not turn.battle.is_gen1():
 		return false
 
-	# `.LockOn`, fourth. The flag is the target's, not the aimer's, and is spent on
-	# every hit check whether set or not (`res SUBSTATUS_LOCK_ON, [hl]` in front of
-	# `ret z`). A locked-on target that is flying is still missed by the three
-	# moves that only reach underground, `CheckHiddenOpponent` having no such
-	# list: `docs/bugs_and_glitches.md`'s entry, mirrored rather than fixed.
+	# `.LockOn`, fourth. The target's flag, spent on every hit check (`res
+	# SUBSTATUS_LOCK_ON` ahead of `ret z`). A flying target is still missed by the
+	# three underground-only moves: `docs/bugs_and_glitches.md`, mirrored.
 	var aimed_at: Gen2BattleMon = turn.defender()
 	var locked_on: bool = Gen2Substatus.has(aimed_at.substatus, Gen2Substatus.LOCK_ON)
 	aimed_at.substatus &= ~Gen2Substatus.LOCK_ON
@@ -1621,17 +1633,21 @@ static func _hit_gates(turn: Gen2Turn) -> bool:
 		and not _can_hit_hidden(turn.move_number, turn.defender().substatus):
 		return false
 
+	# `MoveHitTest`'s mist test sits ahead of X Accuracy and the roll.
+	if _gen1_mist_refuses(turn):
+		return false
+
 	if _hits_without_a_roll(turn):
 		return true
 
-	# `.StatModifiers`, whose Foresight branch returns before multiplying: an
-	# identified target whose evasion is at least the attacker's accuracy skips the
-	# stage block entirely.
+	# `.StatModifiers`: an identified target whose evasion is at least the attacker's
+	# accuracy skips the stage block.
+	var generation: int = turn.data().generation if turn.data() != null else RomRegistry.GEN2
 	var chance: int = Gen2Accuracy.chance(
 		turn.accuracy if turn.accuracy >= 0 \
 			else int(turn.move.get("accuracy", Gen2Accuracy.ALWAYS_HITS)),
 		turn.attacker().stage("accuracy"), turn.defender().stage("evasion"),
-		Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.IDENTIFIED)
+		Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.IDENTIFIED), generation
 	)
 
 	# `.BrightPowder`, after the stat modifiers and before the roll: the parameter
@@ -1641,7 +1657,6 @@ static func _hit_gates(turn: Gen2Turn) -> bool:
 	if Gen2HeldItem.effect_of(turn.data(), powder.item) == Gen2HeldItem.BRIGHTPOWDER:
 		chance = maxi(chance - Gen2HeldItem.parameter_of(turn.data(), powder.item), 0)
 
-	var generation: int = turn.data().generation if turn.data() != null else RomRegistry.GEN2
 	# `.Miss` keeps the worked-out damage for Jump Kick alone, since
 	# `BattleCommand_FailureText` is about to take an eighth of it off the user.
 	return Gen2Accuracy.rolls_hit(turn.rng(), chance, generation)
@@ -1702,11 +1717,10 @@ static func _apply_damage(turn: Gen2Turn) -> void:
 		return
 	var defender: Gen2BattleMon = turn.defender()
 
-	# Ahead of `.damage`, so what Counter remembers, what a drain heals off and
-	# what a recoil costs are all the cut figure. Endure is the front branch and
-	# the band its `else`, which is the source's `jr z, .focus_band`: an enduring
-	# target never reaches the band's roll and draws no randomness there. Endure is
-	# read rather than spent, so every hit of a multi-hit move is clamped.
+	# Ahead of `.damage`, so Counter, a drain and a recoil all see the cut figure.
+	# Endure is the front branch and the band its `else` (`jr z, .focus_band`): an
+	# enduring target never reaches the band's roll. Endure is read rather than
+	# spent, so every hit of a multi-hit move is clamped.
 	var enduring: bool = Gen2Substatus.has(defender.substatus, Gen2Substatus.ENDURE)
 	var band: bool = not enduring \
 		and Gen2HeldItem.effect_of(turn.data(), defender.item) == Gen2HeldItem.FOCUS_BAND \
@@ -2045,6 +2059,43 @@ static func _stopped_by_attract(turn: Gen2Turn, mon: Gen2BattleMon) -> bool:
 	return true
 
 
+## Flame Wheel and Sacred Fire are used through a freeze; the thaw is the
+## `defrost` step behind `applydamage`, so a miss leaves the user frozen.
+static func _frozen_stops(turn: Gen2Turn, mon: Gen2BattleMon) -> bool:
+	if not Gen2Status.has(mon.status, Gen2Status.FREEZE) \
+		or THAWING_MOVES.has(turn.move_number):
+		return false
+	turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"freeze"})
+	_cant_move(turn, mon)
+	turn.end()
+	return true
+
+
+## `.HeldInPlaceCheck` and `HazeEffect_`'s `$ff`: Generation 1's, before the flinch.
+static func _gen1_held_or_hazed(turn: Gen2Turn, mon: Gen2BattleMon) -> bool:
+	if turn.battle.gen1_trapping_move(turn.target) != 0:
+		_cant_move(turn, mon)
+		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"held_in_place"})
+		turn.end()
+		return true
+	if not Gen2Substatus.has(mon.substatus, Gen2Substatus.GEN1_LOST_TURN):
+		return false
+	_cant_move(turn, mon)
+	mon.substatus &= ~Gen2Substatus.GEN1_LOST_TURN
+	turn.end()
+	return true
+
+
+static func _recharge_stops(turn: Gen2Turn, mon: Gen2BattleMon) -> bool:
+	if not Gen2Substatus.has(mon.substatus, Gen2Substatus.RECHARGING):
+		return false
+	mon.substatus &= ~Gen2Substatus.RECHARGING
+	turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"recharge"})
+	_cant_move(turn, mon)
+	turn.end()
+	return true
+
+
 static func _check_sleep(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 	if Gen2Status.is_asleep(mon.status):
@@ -2076,43 +2127,22 @@ static func _check_sleep(turn: Gen2Turn) -> void:
 
 
 ## CheckTurn checks recharge, sleep, freeze, flinch, Disable, confusion, Attract,
-## the disabled move, then paralysis.
+## the disabled move, then paralysis. Generation 1 asks recharge after the flinch.
 static func _check_status(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
+	var gen1: bool = turn.battle.is_gen1()
 
-	if Gen2Substatus.has(mon.substatus, Gen2Substatus.RECHARGING):
-		mon.substatus &= ~Gen2Substatus.RECHARGING
-		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"recharge"})
-		_cant_move(turn, mon)
-		turn.end()
+	if not gen1 and _recharge_stops(turn, mon):
 		return
 
 	_check_sleep(turn)
 	if turn.ended:
 		return
 
-	if Gen2Status.has(mon.status, Gen2Status.FREEZE):
-		# Flame Wheel and Sacred Fire are the only moves used through a freeze.
-		# `CheckPlayerTurn` clears no bit, so the thaw is the `defrost` step in
-		# their own list, behind `applydamage`: a miss leaves the user frozen.
-		if not THAWING_MOVES.has(turn.move_number):
-			turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"freeze"})
-			_cant_move(turn, mon)
-			turn.end()
-			return
-
-	## `.HeldInPlaceCheck` and `HazeEffect_`'s `$ff`, both between the freeze
-	## check and the flinch one, and both Generation 1's alone.
-	if turn.battle.gen1_trapping_move(turn.target) != 0:
-		_cant_move(turn, mon)
-		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"held_in_place"})
-		turn.end()
+	if _frozen_stops(turn, mon):
 		return
 
-	if Gen2Substatus.has(mon.substatus, Gen2Substatus.GEN1_LOST_TURN):
-		_cant_move(turn, mon)
-		mon.substatus &= ~Gen2Substatus.GEN1_LOST_TURN
-		turn.end()
+	if _gen1_held_or_hazed(turn, mon):
 		return
 
 	if Gen2Substatus.has(mon.substatus, Gen2Substatus.FLINCHED):
@@ -2120,6 +2150,9 @@ static func _check_status(turn: Gen2Turn) -> void:
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"flinch"})
 		_cant_move(turn, mon)
 		turn.end()
+		return
+
+	if gen1 and _recharge_stops(turn, mon):
 		return
 
 	if mon.disabled_slot >= 0:
@@ -2163,6 +2196,14 @@ static func _check_status(turn: Gen2Turn) -> void:
 		turn.end()
 
 
+## A fainted target ends `ExecutePlayerMove` before any side effect draws a byte.
+static func _gen1_side_effect_skipped(turn: Gen2Turn) -> bool:
+	if not _substitute_refuses(turn) and turn.damage >= turn.defender().hp:
+		return true
+	return Gen2MoveEffect.in_run(turn.effect(), Gen2MoveEffect.STAT_DOWN_HIT_BASE) \
+		and _gen1_drop_blocked(turn)
+
+
 ## A secondary effect's roll: a byte out of 256 like accuracy, gating only what
 ## comes after it since the damage has landed. A chance of zero never fires, which
 ## is the cartridge's comparison too: never, not "unspecified".
@@ -2170,6 +2211,10 @@ static func _effect_chance(turn: Gen2Turn) -> void:
 	# `xor a / ld [wEffectFailed], a` opens the routine, so a second
 	# `effectchance` clears what the first decided. Only `DefenseDownHit` has two.
 	turn.failed_chance = false
+
+	if turn.battle.is_gen1() and _gen1_side_effect_skipped(turn):
+		turn.failed_chance = true
+		return
 
 	# `CheckSubstituteOpp` next, jumping straight to `.failed`, so a secondary
 	# effect aimed at a doll draws no roll at all.
@@ -2531,11 +2576,9 @@ static func _fixed_damage(turn: Gen2Turn) -> void:
 
 	match turn.effect():
 		Gen2MoveEffect.REVERSAL:
-			# `.reversal` is the one branch that does not hand back a number: it
-			# picks a power off how much health is left and then runs
-			# `PlayerAttackDamage` and `BattleCommand_DamageCalc` itself, so the
-			# hit goes through the ordinary formula. Its list carries no
-			# `critical`, so the hit is never one.
+			# `.reversal` picks a power off the health left and runs `PlayerAttackDamage`
+			# and `BattleCommand_DamageCalc` itself, so the hit takes the ordinary
+			# formula. Its list carries no `critical`: never one.
 			turn.power_override = Gen2Damage.flail_reversal_power(
 				attacker.hp, attacker.max_hp()
 			)
@@ -3746,11 +3789,9 @@ static func _beat_up(turn: Gen2Turn) -> void:
 	var battle: Gen2Battle = turn.battle
 	var mon: Gen2BattleMon = turn.attacker()
 
-	# `.wild`, which has no party to walk: `EnemyAttackDamage` gives the wild
-	# Pokémon one ordinary hit off its own real stats, and `endloop`'s
-	# `.check_ot_beat_up` then falls into `.only_one_beatup`. Nothing on that path
-	# ever set `wBeatUpHitAtLeastOnce`, so the hit lands and "But it failed!" is
-	# printed behind it anyway.
+	# `.wild`, which has no party to walk: `EnemyAttackDamage` gives one ordinary hit
+	# off its real stats, and `endloop` falls into `.only_one_beatup`. Nothing set
+	# `wBeatUpHitAtLeastOnce`, so the hit lands and "But it failed!" prints anyway.
 	if turn.side == Gen2Battle.ENEMY and not battle.is_trainer_battle:
 		turn.emit(Gen2Battle.BEAT_UP_ATTACK, {"index": -1, "species": mon.species, "name": mon.display_name()})
 		_damage_stats(turn)
@@ -4174,6 +4215,15 @@ static func _computer_stat_down_misses(turn: Gen2Turn) -> bool:
 	return _computer_effect_misses(turn)
 
 
+## `StatModifierDownEffect` opens with the enemy's 25% miss and the substitute
+## test, ahead of `MoveHitTest` and a side effect's roll; neither draws after.
+static func _gen1_drop_blocked(turn: Gen2Turn) -> bool:
+	if not turn.drop_gate_asked:
+		turn.drop_gate_asked = true
+		turn.drop_gate_blocked = _computer_effect_misses(turn) or _substitute_refuses(turn)
+	return turn.drop_gate_blocked
+
+
 static func _computer_effect_misses(turn: Gen2Turn) -> bool:
 	if turn.side != Gen2Battle.ENEMY or turn.battle.is_link_battle or turn.battle.in_battle_tower:
 		return false
@@ -4249,9 +4299,10 @@ const STAT_DOWN_REFUSALS: Array = [
 	[&"mist", STAT_MIST], [&"floor", STAT_FLOOR], [&"computer", STAT_FAILED],
 	[&"substitute", STAT_FAILED], [&"missed", STAT_FAILED], [&"hidden", STAT_FAILED],
 ]
+## No Generation 1 mist row: see [method _gen1_mist_refuses].
 const GEN1_STAT_DOWN_REFUSALS: Array = [
-	[&"computer", STAT_FAILED], [&"substitute", STAT_FAILED], [&"mist", STAT_MIST],
-	[&"missed", STAT_FAILED], [&"hidden", STAT_FAILED], [&"floor", STAT_FLOOR],
+	[&"gate", STAT_FAILED], [&"missed", STAT_FAILED], [&"hidden", STAT_FAILED],
+	[&"floor", STAT_FLOOR],
 ]
 
 
@@ -4265,6 +4316,8 @@ static func _stat_down_refusal(turn: Gen2Turn, side: int, stat_key: String, amou
 				holds = Gen2Substatus.has(mon.substatus, Gen2Substatus.MIST)
 			&"floor":
 				holds = not mon.stage_has_room(stat_key, amount)
+			&"gate":
+				holds = _gen1_drop_blocked(turn)
 			&"computer":
 				holds = _computer_stat_down_misses(turn)
 			&"substitute":

@@ -2126,7 +2126,21 @@ static func sequence_for(effect: int, generation: int = RomRegistry.GEN2) -> Arr
 		return _registered_sequences[effect]
 	if generation == RomRegistry.GEN1 and GEN1_SEQUENCES.has(effect):
 		return GEN1_SEQUENCES[effect]
+	# `DefenseDownHit` rolls twice on Crystal; `StatModifierDownEffect` rolls once.
+	if generation == RomRegistry.GEN1 and effect == DEFENSE_DOWN_HIT:
+		return _gen1_defense_down_hit()
 	return _table().get(effect, NORMAL_HIT)
+
+
+static var _gen1_defense_down: Array = []
+
+
+static func _gen1_defense_down_hit() -> Array:
+	if _gen1_defense_down.is_empty():
+		_gen1_defense_down = _secondary([
+			STAT_DOWN_COMMANDS[1], Gen2EffectCommands.STAT_DOWN_MESSAGE,
+		])
+	return _gen1_defense_down
 
 
 ## What a move's effect applies of [param chart]: all of it for a damaging `stab`,

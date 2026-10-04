@@ -1826,14 +1826,28 @@ func mod_type_numbers() -> Array[int]:
 	return _overlay.defined_numbers(Gen2ContentOverlay.KIND_TYPE)
 
 
-## BattleCommand_Stab walks TypeMatchups in table order, not the species' slots.
-func ordered_defending_types(attacking: int, defending: Array) -> Array:
+## The defending types [param attacking] has a chart row against, in table order.
+func matched_defending_types(attacking: int, defending: Array) -> Array:
 	var out: Array = []
-	var keys: Array = _matchups.keys()
-	for key: int in keys:
+	for key: int in _matchups.keys():
 		for kind: int in defending:
 			if key == Gen2ContentOverlay.matchup_number(attacking, kind) and not out.has(kind):
 				out.append(kind)
+	return out
+
+
+## `wDamageMultipliers` after `AdjustDamageForMoveType`: each matched row
+## overwrites it, so the last in table order, not [method type_effectiveness]'s product.
+func last_matched_multiplier(attacking: int, defending: Array) -> int:
+	var matched: Array = matched_defending_types(attacking, defending)
+	if matched.is_empty():
+		return Gen2Layout.MATCHUP_EFFECTIVE
+	return type_matchup(attacking, int(matched[-1]))
+
+
+## BattleCommand_Stab walks TypeMatchups in table order, not the species' slots.
+func ordered_defending_types(attacking: int, defending: Array) -> Array:
+	var out: Array = matched_defending_types(attacking, defending)
 	for kind: int in defending:
 		if not out.has(kind):
 			out.append(kind)

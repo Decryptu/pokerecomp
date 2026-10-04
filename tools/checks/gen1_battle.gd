@@ -45,14 +45,15 @@ const CRITICAL_CHANCES: Array = [
 	[255, 127, 31, 255],
 ]
 
-## `PlayerCalcMoveDamage`'s four routines, against what the cartridges
-## themselves answered: the oracle's `battle/gen1_damage.py` runs them on a
-## real dump and prints `wDamage` and `wMoveMissed` per case, and
-## [method _damage_oracle_sweep] prints the same 5,972 lines. `rand` is what
-## `Random` answers, which `RandomizeDamage` rotates right before it compares.
+## `PlayerCalcMoveDamage`'s four routines against the oracle's `battle/gen1_damage.py`,
+## which prints `wDamage` and `wMoveMissed` per case from a real dump; `rand` is what
+## `Random` answers, rotated right by `RandomizeDamage` before it compares.
 const DAMAGE_ORACLE_HEAD: String = "power type effect level attack defense " \
 	+ "party_attack party_defense screens critical atk_types def_types rand -> damage missed"
 const DAMAGE_ORACLE_DIGEST: String = "b7a2ca24ee9c82d4c6e4f0a6948d9f4704d34189"
+## `gen1_damage.py ... matchup`: the last matched row, which is what is announced.
+const MATCHUP_ORACLE_HEAD: String = "move_type def_types -> multiplier"
+const MATCHUP_ORACLE_DIGEST: String = "06503e9fcbb06a2f99d86cf199b83f0aa8b6b037"
 const DAMAGE_ATTACKS: Array[int] = [1, 50, 130, 255, 256, 300, 600, 999]
 const DAMAGE_DEFENSES: Array[int] = [1, 30, 100, 255, 256, 400, 999]
 const DAMAGE_POWERS: Array[int] = [40, 90, 250]
@@ -95,6 +96,57 @@ const STATS_NEUTRAL_MOD: int = 7
 ## `battle/gen1_turn.py`: `ExecutePlayerMove` whole, one move per effect byte.
 const TURN_ORACLE_HEAD: String = "move variant -> missed rage beyond hits damage"
 const TURN_ORACLE_DIGEST: String = "bf2342f7ecfd64e93ffcdabd95ffb1c6b06e020b"
+## `gen1_turn.py hit`: `CalcHitChance`, then stat drops with and without Mist.
+const HIT_CHANCE_HEAD: String = "turn accuracy accuracy_stage evasion_stage -> chance"
+const HIT_MIST_HEAD: String = "move variant -> missed mods drew texts"
+const HIT_ORACLE_DIGEST: String = "454e6042591bf6a72d10513e4e52012de5ecf31a"
+const HIT_ACCURACIES: Array[int] = [1, 25, 76, 127, 178, 191, 229, 255]
+const HIT_MIST_MOVES: Array[int] = [45, 108, 103, 62, 61, 94]
+const HIT_MIST_VARIANTS: Dictionary = {
+	"plain": {}, "mist": {"mist": true}, "mist_roll": {"mist": true, "roll": true},
+}
+const HIT_SEED_LIMIT: int = 512
+## `gen1_turn.py cantmove`: `CheckPlayerStatusConditions`' order.
+const CANTMOVE_ORACLE_HEAD: String = "state -> status recharge flinch moved texts"
+const CANTMOVE_ORACLE_DIGEST: String = "33d207a34ff6561b596da997f4cb6e71eb17171f"
+const CANTMOVE_STATES: Dictionary = {
+	"none": {}, "recharge": {"recharge": 1}, "flinch": {"flinch": 1},
+	"sleep": {"status": 3}, "wake": {"status": 1}, "frozen": {"status": Gen2Status.FREEZE},
+	"held": {"held": 1},
+	"recharge_flinch": {"recharge": 1, "flinch": 1},
+	"recharge_sleep": {"recharge": 1, "status": 3},
+	"recharge_wake": {"recharge": 1, "status": 1},
+	"recharge_frozen": {"recharge": 1, "status": Gen2Status.FREEZE},
+	"recharge_held": {"recharge": 1, "held": 1},
+}
+## `gen1_turn.py ai`: layer 3 over Lorelei's Dewgong, dice fixed. Enemy: class, internal, dex.
+const AI_ORACLE_HEAD: String = "class species moves player_types rand -> scores draws"
+const AI_ORACLE_DIGESTS: Dictionary = {
+	&"red": "ab3e21c9eff5dafe92979e6c8aab7df7a849aed5",
+	&"blue": "ab3e21c9eff5dafe92979e6c8aab7df7a849aed5",
+	&"yellow": "5dde5b75b30ec6b988d7972b25bdcb3390232b5c",
+}
+const AI_ENEMIES: Array = [[0x2C, 0x78, 87], [0x2C, 0x13, 131], [0x2D, 0x78, 87]]
+const AI_MOVES: Array = [[57, 33], [33, 57]]
+const AI_TYPES: Array = [[0x14, 0x14], [0x16, 0x16], [0x00, 0x00], [0x14, 0x04]]
+const AI_RANDS: Array[int] = [0, 0x65, 0x66, 0xFF]
+const AI_SEED_LIMIT: int = 100000
+## `gen1_turn.py drops`: `StatModifierDownEffect`'s order on both turns, dice scripted.
+const DROPS_ORACLE_HEAD: String = "turn move variant dice -> missed mods draws texts"
+const DROPS_ORACLE_DIGEST: String = "907855a4edf09c08727008228ae54c52c65be834"
+const DROPS_STATUS: Array[int] = [45]
+const DROPS_SIDE: Array[int] = [62, 51, 94]
+const DROPS_TEXTS: Array[String] = ["UsedMoveText", "MonsStatsFellText", "ButItFailedText", "NothingHappenedText"]
+## The bytes each class accepts.
+const DROPS_CLASSES: Dictionary = {
+	"miss": [0, 63], "pass": [64, 255], "land": [0, 84], "fail": [85, 255],
+	"hit": [0, 254], "stop": [255, 255],
+}
+const DROPS_NO_CRITICAL: int = 128
+const CANTMOVE_TEXTS: Dictionary = {
+	&"sleep": "FastAsleepText", &"freeze": "IsFrozenText", &"held_in_place": "CantMoveText",
+	&"flinch": "FlinchedText", &"recharge": "MustRechargeText",
+}
 const STATUS_ORACLE_HEAD: String = "move variant -> missed status seeded sub texts"
 const STATUS_ORACLE_DIGEST: String = "3a62128163c0ef034b92ded2e7f0b0db5b2a30eb"
 const TRANSFORM_ORACLE_HEAD: String = "side sub target_transformed invulnerable -> user after"
@@ -181,9 +233,14 @@ func _one_game() -> void:
 	_created_knowing()
 	_critical_chances()
 	_damage_oracle_sweep()
+	_matchup_oracle_sweep()
 	_stats_oracle_sweep()
 	_turn_oracle_sweep()
 	_status_oracle_sweep()
+	_hit_oracle_sweep()
+	_cantmove_oracle_sweep()
+	_trainer_ai_oracle_sweep()
+	_drops_oracle_sweep()
 	_transform_oracle_sweep()
 	_every_move()
 	_a_wild_fight()
@@ -331,10 +388,7 @@ func _damage_oracle_sweep() -> void:
 					95, DAMAGE_PSYCHIC, 0, 60, attack, defense, attack, defense, screens,
 					0, [DAMAGE_PSYCHIC, DAMAGE_PSYCHIC], [0x01, 0x03], 255,
 				]))
-	var pairs: Array = []
-	for kind: int in DAMAGE_TYPES:
-		pairs.append([kind, kind])
-	pairs.append_array(DAMAGE_PAIRS)
+	var pairs: Array = _damage_pairs()
 	for move_type: int in DAMAGE_TYPES:
 		for pair: Array in pairs:
 			for stab: int in [0, 1]:
@@ -352,6 +406,35 @@ func _damage_oracle_sweep() -> void:
 			]))
 	if _r.digest_matches("damage oracle", lines, DAMAGE_ORACLE_DIGEST):
 		_r.note("gen1 battle %d damage cases answered as the cartridge does" % (lines.size() - 1))
+
+
+func _damage_pairs() -> Array:
+	var pairs: Array = []
+	for kind: int in DAMAGE_TYPES:
+		pairs.append([kind, kind])
+	pairs.append_array(DAMAGE_PAIRS)
+	return pairs
+
+
+func _matchup_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([MATCHUP_ORACLE_HEAD])
+	var pairs: Array = _damage_pairs()
+	for move_type: int in DAMAGE_TYPES:
+		for pair: Array in pairs:
+			var special: bool = move_type >= Gen2Layout.SPECIAL_TYPES_START
+			var attacker: Gen2BattleMon = _stat_mon(
+				30, 120, 120, [ORACLE_NORMAL, ORACLE_NORMAL], special, true
+			)
+			var defender: Gen2BattleMon = _stat_mon(30, 60, 60, pair, special, false)
+			var result: Dictionary = Gen2Damage.calculate_with(
+				attacker, defender,
+				{"number": 1, "type": move_type, "power": 120, "effect": 0}, false, 0xFF
+			)
+			lines.append("%d %d,%d -> %d" % [
+				move_type, pair[0], pair[1], int(result["effectiveness"]),
+			])
+	if _r.digest_matches("matchup oracle", lines, MATCHUP_ORACLE_DIGEST):
+		_r.note("gen1 battle %d announced matchups answered as the cartridge does" % (lines.size() - 1))
 
 
 func _stats_oracle_sweep() -> void:
@@ -608,6 +691,227 @@ func _damage_class(damage: int, lost: int, hits: int) -> String:
 	return str(damage)
 
 
+func _hit_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([HIT_CHANCE_HEAD])
+	for turn: int in [0, 1]:
+		for accuracy: int in HIT_ACCURACIES:
+			for accuracy_stage: int in range(1, 14):
+				for evasion_stage: int in range(1, 14):
+					lines.append("%d %d %d %d -> %d" % [
+						turn, accuracy, accuracy_stage, evasion_stage, Gen2Accuracy.chance(
+							accuracy, accuracy_stage - STATS_NEUTRAL_MOD,
+							evasion_stage - STATS_NEUTRAL_MOD, false, RomRegistry.GEN1
+						),
+					])
+	lines.append(HIT_MIST_HEAD)
+	for move: int in HIT_MIST_MOVES:
+		for variant: String in HIT_MIST_VARIANTS:
+			lines.append(_mist_line(move, variant))
+	if _r.digest_matches("hit oracle", lines, HIT_ORACLE_DIGEST):
+		_r.note("gen1 battle %d hit-chance and Mist cases answered as the cartridge does" % (
+			lines.size() - 2
+		))
+
+
+func _mist_line(move: int, variant: String) -> String:
+	var preset: Dictionary = HIT_MIST_VARIANTS[variant]
+	var rolls: bool = bool(preset.get("roll", false))
+	var played: Dictionary = _mist_run(move, bool(preset.get("mist", false)), rolls, _landing_seed(move, rolls))
+	var battle: Gen2Battle = played["battle"]
+	var texts: PackedStringArray = PackedStringArray()
+	for event: Dictionary in played["events"]:
+		if ORACLE_TEXT_OF.has(StringName(event.get("type", &""))):
+			texts.append(String(ORACLE_TEXT_OF[StringName(event["type"])]))
+	var mods: String = ""
+	for key: String in ORACLE_TRANSFORM_STAGE_KEYS:
+		mods += "%x" % (battle.enemy.stage(key) + STATS_NEUTRAL_MOD)
+	return "%d %s -> missed %d mods %s drew %d texts %s" % [
+		move, variant, _missed(played["events"]), mods, 1 if bool(played["drew"]) else 0,
+		",".join(texts) if not texts.is_empty() else "-",
+	]
+
+
+func _mist_run(move: int, mist: bool, rolls: bool, seed_value: int) -> Dictionary:
+	var battle: Gen2Battle = _oracle_fight(move, ORACLE_FILLER, ORACLE_USER_TYPES)
+	battle.rng.seed = seed_value
+	battle.enemy.substatus &= ~Gen2Substatus.RAGE
+	if not rolls:
+		battle.player.substatus |= Gen2Substatus.X_ACCURACY
+	if mist:
+		battle.enemy.substatus |= Gen2Substatus.MIST
+	var before: int = battle.rng.state
+	var events: Array = []
+	battle._act(Gen2Battle.PLAYER, 0, move, events)
+	return {"battle": battle, "events": events, "drew": battle.rng.state != before}
+
+
+func _landing_seed(move: int, rolls: bool) -> int:
+	for seed_value: int in HIT_SEED_LIMIT:
+		var battle: Gen2Battle = _mist_run(move, false, rolls, seed_value)["battle"]
+		for key: String in ORACLE_TRANSFORM_STAGE_KEYS:
+			if battle.enemy.stage(key) < 0:
+				return seed_value
+	return 0
+
+
+func _cantmove_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([CANTMOVE_ORACLE_HEAD])
+	for state: String in CANTMOVE_STATES:
+		lines.append(_cantmove_line(state))
+	if _r.digest_matches("cantmove oracle", lines, CANTMOVE_ORACLE_DIGEST):
+		_r.note("gen1 battle %d turn-opening states answered as the cartridge does" % (lines.size() - 1))
+
+
+func _trainer_ai_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([AI_ORACLE_HEAD])
+	for enemy: Array in AI_ENEMIES:
+		for moves: Array in AI_MOVES:
+			for types: Array in AI_TYPES:
+				for rand: int in AI_RANDS:
+					lines.append(_trainer_ai_line(enemy, moves, types, rand))
+	if _r.digest_matches("trainer AI oracle", lines, String(AI_ORACLE_DIGESTS[_r.game_id])):
+		_r.note("gen1 battle %d layer-3 move scores answered as the cartridge does" % (lines.size() - 1))
+
+
+func _trainer_ai_line(enemy: Array, moves: Array, types: Array, rand: int) -> String:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _seed_drawing(rand)
+	var start: int = rng.state
+	var battle: Gen2Battle = Gen2Battle.create(
+		_r.data, Gen2BattleMon.create(_r.data, ORACLE_USER, ORACLE_LEVEL, [TACKLE_MOVE]),
+		Gen2BattleMon.create(_r.data, int(enemy[2]), ORACLE_LEVEL, moves), rng
+	)
+	battle.enemy_trainer_class = int(enemy[0])
+	battle.player.battle_types = [int(types[0]), int(types[1])]
+	var scores: Array = Gen1TrainerAI.score_slots(battle, [3], rng)
+	var probe := RandomNumberGenerator.new()
+	probe.state = start
+	var draws: int = 0
+	while probe.state != rng.state and draws < moves.size():
+		probe.randi_range(0, 255)
+		draws += 1
+	return "%d %d %s %d,%d %d -> %s %d" % [
+		enemy[0], enemy[1], ",".join(PackedStringArray(moves.map(str))), types[0], types[1],
+		rand, ",".join(PackedStringArray(scores.slice(0, moves.size()).map(str))), draws,
+	]
+
+
+func _seed_drawing(rand: int) -> int:
+	var rng := RandomNumberGenerator.new()
+	for seed_value: int in AI_SEED_LIMIT:
+		rng.seed = seed_value
+		if rng.randi_range(0, 255) == rand:
+			return seed_value
+	return 0
+
+
+func _drops_oracle_sweep() -> void:
+	var lines: PackedStringArray = PackedStringArray([DROPS_ORACLE_HEAD])
+	for turn: int in [0, 1]:
+		for move: int in DROPS_STATUS + DROPS_SIDE:
+			var side: bool = DROPS_SIDE.has(move)
+			var computers: Array = [["miss"], ["pass"]] if turn == 1 else [[]]
+			var tails: Array = [["land"], ["fail"]] if side else [["hit"], ["stop"]]
+			for variant: String in ["plain", "sub", "ko"] if side else ["plain", "sub"]:
+				for computer: Array in computers:
+					for tail: Array in tails:
+						lines.append(_drops_line(turn, move, variant, computer + tail))
+	if _r.digest_matches("drops oracle", lines, DROPS_ORACLE_DIGEST):
+		_r.note("gen1 battle %d stat-drop cases answered as the cartridge does" % (lines.size() - 1))
+
+
+## The dice: the first seed whose bytes fall in each class, in cartridge order.
+func _drops_line(turn: int, move: int, variant: String, dice: Array) -> String:
+	var side: bool = DROPS_SIDE.has(move)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _classed_seed((["-", ""] if side else []) + dice)
+	var start: int = rng.state
+	var battle: Gen2Battle = _oracle_fight(
+		move if turn == 0 else TACKLE_MOVE,
+		ORACLE_FILLER if turn == 0 else [move] + ORACLE_FILLER.slice(1), ORACLE_USER_TYPES
+	)
+	battle.rng.seed = rng.seed
+	battle.enemy.substatus &= ~Gen2Substatus.RAGE
+	var user: Gen2BattleMon = battle.player if turn == 0 else battle.enemy
+	var target: Gen2BattleMon = battle.enemy if turn == 0 else battle.player
+	if side:
+		user.substatus |= Gen2Substatus.X_ACCURACY
+	if variant == "sub":
+		target.substatus |= Gen2Substatus.SUBSTITUTE
+		target.substitute_hp = ORACLE_SUB_HP
+	if variant == "ko":
+		target.hp = 1
+	var events: Array = []
+	battle._act(Gen2Battle.PLAYER if turn == 0 else Gen2Battle.ENEMY, 0, move, events)
+	var texts: PackedStringArray = PackedStringArray()
+	for event: Dictionary in events:
+		var kind: StringName = StringName(event.get("type", &""))
+		if ORACLE_TEXT_OF.has(kind) and DROPS_TEXTS.has(String(ORACLE_TEXT_OF[kind])):
+			texts.append(String(ORACLE_TEXT_OF[kind]))
+	var mods: String = ""
+	for key: String in ORACLE_TRANSFORM_STAGE_KEYS:
+		mods += "%x" % (target.stage(key) + STATS_NEUTRAL_MOD)
+	var probe := RandomNumberGenerator.new()
+	probe.state = start
+	var draws: int = 0
+	while probe.state != battle.rng.state and draws < 8:
+		probe.randi_range(0, 255)
+		draws += 1
+	return "%d %d %s %s -> missed %d mods %s draws %d texts %s" % [
+		turn, move, variant, ",".join(PackedStringArray(dice)), _missed(events), mods, draws,
+		",".join(texts) if not texts.is_empty() else "-",
+	]
+
+
+## [param classes]: [constant DROPS_CLASSES] keys, "" any byte, "-" no critical.
+func _classed_seed(classes: Array) -> int:
+	var rng := RandomNumberGenerator.new()
+	for seed_value: int in AI_SEED_LIMIT * 4:
+		rng.seed = seed_value
+		var fits: bool = true
+		for kind: String in classes:
+			var byte: int = rng.randi_range(0, 255)
+			if kind == "-":
+				fits = byte >= DROPS_NO_CRITICAL
+			elif kind != "":
+				fits = byte >= int(DROPS_CLASSES[kind][0]) and byte <= int(DROPS_CLASSES[kind][1])
+			if not fits:
+				break
+		if fits:
+			return seed_value
+	return 0
+
+
+func _cantmove_line(state: String) -> String:
+	var preset: Dictionary = CANTMOVE_STATES[state]
+	var battle: Gen2Battle = _oracle_fight(TACKLE_MOVE, ORACLE_FILLER, ORACLE_USER_TYPES)
+	battle.enemy.substatus &= ~Gen2Substatus.RAGE
+	battle.player.substatus |= Gen2Substatus.X_ACCURACY
+	if preset.has("recharge"):
+		battle.player.substatus |= Gen2Substatus.RECHARGING
+	if preset.has("flinch"):
+		battle.player.substatus |= Gen2Substatus.FLINCHED
+	if preset.has("held"):
+		battle.player.trapping_move = WRAP_MOVE
+	battle.player.status = int(preset.get("status", 0))
+	var events: Array = []
+	battle._act(Gen2Battle.PLAYER, 0, TACKLE_MOVE, events)
+	var texts: PackedStringArray = PackedStringArray()
+	for event: Dictionary in events:
+		var kind: StringName = StringName(event.get("type", &""))
+		if kind == Gen2Battle.WOKE_UP:
+			texts.append("WokeUpText")
+		elif kind == Gen2Battle.CANNOT_MOVE and CANTMOVE_TEXTS.has(StringName(event["reason"])):
+			texts.append(String(CANTMOVE_TEXTS[StringName(event["reason"])]))
+	return "%s -> status %02x recharge %d flinch %d moved %d texts %s" % [
+		state, battle.player.status,
+		1 if Gen2Substatus.has(battle.player.substatus, Gen2Substatus.RECHARGING) else 0,
+		1 if Gen2Substatus.has(battle.player.substatus, Gen2Substatus.FLINCHED) else 0,
+		1 if battle.enemy.hp < ORACLE_HP else 0,
+		",".join(texts) if not texts.is_empty() else "-",
+	]
+
+
 func _transform_oracle_sweep() -> void:
 	var lines: PackedStringArray = PackedStringArray([TRANSFORM_ORACLE_HEAD])
 	for side: int in [Gen2Battle.PLAYER, Gen2Battle.ENEMY]:
@@ -708,12 +1012,30 @@ func _damage_line(case: Array) -> String:
 	if int(stats[1]) == 0:
 		return "%s -> HUNG HUNG" % head
 	var rand: int = int(case[12])
+	var spread: int = ((rand >> 1) | ((rand & 1) << 7)) & 0xFF
+	var answer: String = _damage_answer(
+		attacker, defender, move, critical, spread, port_screens
+	)
+	# `AdjustDamageForMoveType` has no Struggle test: it answers as any Normal move.
+	if int(case[1]) == ORACLE_NORMAL:
+		move["number"] = Gen2Damage.STRUGGLE
+		var struggled: String = _damage_answer(
+			attacker, defender, move, critical, spread, port_screens
+		)
+		if struggled != answer:
+			return "%s -> STRUGGLE %s, NORMAL %s" % [head, struggled, answer]
+	return "%s -> %s" % [head, answer]
+
+
+func _damage_answer(
+	attacker: Gen2BattleMon, defender: Gen2BattleMon, move: Dictionary, critical: bool,
+	spread: int, screens: int
+) -> String:
 	var result: Dictionary = Gen2Damage.calculate_with(
-		attacker, defender, move, critical, ((rand >> 1) | ((rand & 1) << 7)) & 0xFF,
-		Gen2Weather.NONE, port_screens
+		attacker, defender, move, critical, spread, Gen2Weather.NONE, screens
 	)
 	var missed: int = 1 if bool(result["missed"]) or bool(result["immune"]) else 0
-	return "%s -> %d %d" % [head, int(result["damage"]), missed]
+	return "%d %d" % [int(result["damage"]), missed]
 
 
 func _stat_mon(

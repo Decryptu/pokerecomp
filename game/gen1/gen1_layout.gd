@@ -2551,6 +2551,9 @@ const CHAMPION_STARTER_MOVES: Array = [
 ]
 const CHAMPION_BIRD_MOVE: int = 0x8F
 const RIVAL3_CLASS: int = 0x2B
+## Yellow's `AIGetTypeEffectiveness` singles out `LORELEI` and `DEWGONG` (dex number).
+const LORELEI_CLASS: int = 0x2C
+const DEWGONG_DEX: int = 87
 
 ## Sides in tiles: `_LoadTrainerPic`'s `ld a, $77`, the widest front pic, and
 ## every back pic, which `ScaleSpriteByTwo` doubles before a battle draws it.

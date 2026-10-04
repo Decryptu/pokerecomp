@@ -6715,7 +6715,6 @@ const GEN1_LINES: Dictionary = {
 	Gen2Battle.UNAFFECTED: ["%s\nis unaffected!", &"name:target"],
 	Gen2Battle.MIST_SET: ["%s's\nshrouded in mist!", &"name:side"],
 	Gen2Battle.FOCUS_ENERGY_SET: ["%s's\ngetting pumped!", &"name:side"],
-	Gen2Battle.MIST_PROTECTED: ["But, it failed!"],
 	Gen2Battle.COINS_SCATTERED: ["Coins scattered\neverywhere!"],
 	Gen2Battle.TRANSFORMED: ["%s\ntransformed into" + SCROLL + "%s!", &"name:side", &"name:target"],
 	Gen2Battle.FLED_FROM_BATTLE: ["%s\nran from battle!", &"name:side"],

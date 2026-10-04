@@ -131,11 +131,9 @@ static func gen1_scale_stats(attack: int, defense: int) -> Array:
 
 
 ## `BattleCommand_DamageCalc`: Selfdestruct's halved defense, the formula, the
-## type-boosting item, the critical multiplier, the cap and the minimum.
-## Its `ret z` on a power of zero is why a status move reaches
-## [method stab_damage] with no damage rather than the minimum two.
-## [param level] is -1 for the attacker's own; `BattleCommand_BeatUp` is the one
-## caller that passes a party member's.
+## type-boosting item, the critical multiplier, the cap and the minimum. Its `ret z`
+## on zero power is why a status move reaches [method stab_damage] with no damage.
+## [param level] is -1 for the attacker's own; only `BattleCommand_BeatUp` passes one.
 static func damage_calc(
 	attacker: Gen2BattleMon,
 	power: int,
@@ -175,10 +173,9 @@ static func damage_calc(
 	return mini(damage, DAMAGE_CAP) + MIN_DAMAGE
 
 
-## `BattleCommand_Stab`: weather, same-type bonus and matchup, in that order,
-## over whatever [method damage_calc] left. It runs for a powerless move too, and
-## has to: `DoPoison` and `DoParalyze` carry `stab` and no `damagecalc`, which is
-## how Thunder Wave learns it does nothing to a Ground type.
+## `BattleCommand_Stab`: weather, same-type bonus and matchup, in that order. It
+## runs for a powerless move too (`DoPoison` and `DoParalyze` carry `stab` and no
+## `damagecalc`), which is how Thunder Wave learns it does nothing to Ground.
 ## Returns { damage, stab, immune, effectiveness }. [param foresight] is
 ## `SUBSTATUS_IDENTIFIED`, which drops the rows past the chart's `-2` marker.
 static func stab_damage(
@@ -195,13 +192,17 @@ static func stab_damage(
 	}
 	if attacker == null or defender == null:
 		return out
-	if int(move.get("number", 0)) == STRUGGLE:
+	var data: GameData = attacker.data
+	var gen1: bool = data.generation == RomRegistry.GEN1
+	if int(move.get("number", 0)) == STRUGGLE and not gen1:
 		return out
 
-	var data: GameData = attacker.data
 	var move_type: int = int(move.get("type", Gen2Layout.TYPE_NORMAL))
 	var defending: Array = defender.types()
 	out["effectiveness"] = data.type_effectiveness(move_type, defending, foresight)
+	if gen1:
+		# `DisplayEffectiveness` reads the last matched row, not the product.
+		out["effectiveness"] = data.last_matched_multiplier(move_type, defending)
 
 	var worked: int = damage
 
@@ -230,9 +231,9 @@ static func stab_damage(
 		if worked > 0:
 			@warning_ignore("integer_division")
 			worked = worked * multiplier / Gen2Layout.MATCHUP_EFFECTIVE
-			if worked == 0 and data.generation == RomRegistry.GEN1:
+			if worked == 0 and gen1:
 				out["missed"] = true
-			worked = maxi(worked, 1) if data.generation != RomRegistry.GEN1 else worked
+			worked = worked if gen1 else maxi(worked, 1)
 
 	out["damage"] = worked
 	return out
@@ -462,12 +463,9 @@ const CONSTANT_DAMAGE_EFFECTS: Array[int] = [
 ]
 
 
-## `BattleCommand_ConstantDamage`'s four listed arms, shared by the hit itself
-## and by `AIDamageCalc`, which routes the same four effects here rather than
-## through the formula. [param defender] is whoever the hit lands on, which is
-## the only mon Super Fang reads.
-## A null [param rng] is a prediction rather than a hit, and answers Psywave with
-## the top of its range the way [constant MAX_VARIATION] does for the formula.
+## `BattleCommand_ConstantDamage`'s four listed arms, shared by the hit and by
+## `AIDamageCalc`. [param defender] is whoever the hit lands on, the only mon Super
+## Fang reads. A null [param rng] is a prediction: Psywave answers its range's top.
 static func constant_damage(
 	effect: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
 	move: Dictionary, rng: RandomNumberGenerator = null
@@ -539,12 +537,10 @@ static func _defense_stat(
 	return out
 
 
-## `DittoMetalPowder`, called at `.done` after `TruncateHL_BC`, so the half again
-## lands on the byte rather than on the stat it was truncated from. Its overflow
-## is reproduced by default: `srl a / add c` carries for a byte over 170 and the
-## recovery halves the *attack* and shifts the carry back into the defence, which
-## is `docs/bugs_and_glitches.md`'s Metal Powder entry. Turning
-## `metal_powder_overflow` off keeps the boosted defence at the byte instead.
+## `DittoMetalPowder`, at `.done` after `TruncateHL_BC`, so the half again lands on
+## the byte. Its overflow is reproduced by default (`docs/bugs_and_glitches.md`):
+## `srl a / add c` carries for a byte over 170 and the recovery halves the *attack*
+## and shifts the carry into the defence. `metal_powder_overflow` off keeps the byte.
 static func metal_powder_pair(defender: Gen2BattleMon, pair: Array) -> Array:
 	if defender == null or not Gen2HeldItem.boosts_defence(defender.persistent_species(), defender.item):
 		return pair

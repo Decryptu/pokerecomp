@@ -2,14 +2,14 @@ class_name Gen2Accuracy
 extends RefCounted
 
 ## Whether a move connects. Accuracy is a byte out of 255, kept as the byte
-## because the roll is against it and a stored 255 never misses. Accuracy and
-## evasion have their own multiplier table, so -1 accuracy and -1 Attack differ.
+## because the roll is against it and a stored 255 never misses.
 
 ## The move accuracy that cannot miss. Anything the stages leave below this rolls.
 const ALWAYS_HITS: int = 255
 
 ## What each stage from -6 to +6 multiplies accuracy by, as the numerator and
-## denominator pair the cartridge stores.
+## denominator pair Crystal's `AccuracyMultipliers` stores; `CalcHitChance` reads
+## `StatModifierRatios` instead ([constant Gen2Stats.STAGE_MULTIPLIERS]).
 const STAGE_MULTIPLIERS: Array = [
 	[33, 100], [36, 100], [43, 100], [50, 100], [60, 100], [75, 100],
 	[1, 1],
@@ -27,22 +27,25 @@ static func chance(
 	move_accuracy: int,
 	accuracy_stage: int = 0,
 	evasion_stage: int = 0,
-	foresight: bool = false
+	foresight: bool = false,
+	generation: int = RomRegistry.GEN2
 ) -> int:
 	var out: int = clampi(move_accuracy, 0, ALWAYS_HITS)
 	if foresight and evasion_stage >= accuracy_stage:
 		return out
 
-	out = apply_stage(out, accuracy_stage)
-	out = apply_stage(out, -evasion_stage)
+	out = apply_stage(out, accuracy_stage, generation)
+	out = apply_stage(out, -evasion_stage, generation)
 	return mini(out, ALWAYS_HITS)
 
 
 ## One multiplication, floored at 1 and deliberately not capped: the cap is
 ## applied once at the end, so an accuracy raised past 255 and then halved by
 ## evasion lands where the arithmetic puts it rather than at 127.
-static func apply_stage(value: int, stage: int) -> int:
-	var ratio: Array = STAGE_MULTIPLIERS[
+static func apply_stage(value: int, stage: int, generation: int = RomRegistry.GEN2) -> int:
+	var table: Array = Gen2Stats.STAGE_MULTIPLIERS if generation == RomRegistry.GEN1 \
+		else STAGE_MULTIPLIERS
+	var ratio: Array = table[
 		clampi(stage, Gen2Stats.MIN_STAGE, Gen2Stats.MAX_STAGE) - Gen2Stats.MIN_STAGE
 	]
 	@warning_ignore("integer_division")
@@ -51,11 +54,9 @@ static func apply_stage(value: int, stage: int) -> int:
 
 
 ## Rolls a hit against a chance out of 255.
-## A chance of exactly 255 connects without rolling. Rolling would miss one time
-## in 256, and Crystal goes out of its way not to. [param generation] is
-## `MoveHitTest`, which does not: pret's own comment there says even the highest
-## accuracy is 255 in 256, and Swift is exempt because the routine returns above
-## the roll rather than because 255 is special.
+## A chance of exactly 255 connects without rolling, which would miss one time in
+## 256: Crystal avoids that, but `MoveHitTest` ([param generation] 1) does not and
+## Swift is exempt only because the routine returns above the roll.
 static func rolls_hit(
 	rng: RandomNumberGenerator, hit_chance: int, generation: int = RomRegistry.GEN2
 ) -> bool:
