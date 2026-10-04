@@ -312,6 +312,83 @@ func test_mod_settings_use_the_hardware_option_screen() -> void:
 	Gen2ModHost.reset()
 
 
+## Mods name categories in `mod.json`. Two independent mods naming the same path
+## share one submenu whatever the case, a mod naming none stays at the top, and B
+## walks back up with the cursor on the row it left.
+func test_mods_naming_the_same_menu_path_share_one_nested_submenu() -> void:
+	var root: String = "user://menu_path_mods"
+	var paths: Dictionary = {
+		"plain": [], "alpha": ["Community Mods"], "beta": ["community mods"],
+		"wild": ["Community Mods", "SIRsparky Mods"],
+	}
+	var host_api: Gen2ModHost = Gen2ModHost.instance()
+	for id: String in paths:
+		var folder: String = "%s/%s" % [root, id]
+		DirAccess.make_dir_recursive_absolute(folder)
+		var file: FileAccess = FileAccess.open("%s/mod.json" % folder, FileAccess.WRITE)
+		file.store_string(JSON.stringify({
+			"id": id, "name": id.capitalize(), "version": "1.0.0", "entry": "mod.gd",
+			"api_version": PokeModManifest.API_VERSION, "menu_path": paths[id],
+		}))
+		file.close()
+	host_api.discover(root)
+	for id: String in paths:
+		assert_true(bool(host_api.register_option(StringName(id), {
+			"key": &"enabled", "label": "ENABLED", "values": [0, 1],
+		})["ok"]))
+	await _open_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_MODS)
+	host.handle_button(PokeButton.A)
+	assert_eq(_mod_labels(host), ["Community Mods", "Plain"])
+
+	host.handle_button(PokeButton.A)
+	assert_eq(_mod_labels(host), ["SIRsparky Mods", "Alpha", "Beta"])
+	host.handle_button(PokeButton.A)
+	assert_eq(_mod_labels(host), ["Wild"])
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.MOD_OPTIONS)
+	host.handle_button(PokeButton.RIGHT)
+	assert_eq(host_api.option(&"wild", &"enabled"), 1)
+
+	host.handle_button(PokeButton.B)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.MODS)
+	assert_eq(_mod_labels(host), ["Wild"])
+	host.handle_button(PokeButton.B)
+	assert_eq(_mod_labels(host), ["SIRsparky Mods", "Alpha", "Beta"])
+	assert_eq(host.get("_mod_cursor"), 0)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mod_id"), &"beta")
+	host.handle_button(PokeButton.B)
+	assert_eq(host.get("_mod_cursor"), 2, "back lands on the mod that was opened")
+	host.handle_button(PokeButton.B)
+	assert_eq(_mod_labels(host), ["Community Mods", "Plain"])
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mod_id"), &"plain")
+	host.handle_button(PokeButton.B)
+	host.handle_button(PokeButton.B)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LIST)
+
+	Gen2ModHost.reset()
+	DirAccess.remove_absolute(PokeModOptions.PATH)
+	for id: String in paths:
+		DirAccess.remove_absolute("%s/%s/mod.json" % [root, id])
+		DirAccess.remove_absolute("%s/%s" % [root, id])
+	DirAccess.remove_absolute(root)
+
+
+func _mod_labels(host: Gen2StartMenuScreen) -> Array:
+	var labels: Array = []
+	for row: Dictionary in host.call("_mod_rows"):
+		labels.append(String(row["label"]))
+	return labels
+
+
 ## R36: `V` is behind `PokeDebugKeys.enabled`, so a shipped build had exactly
 ## one place to change the view and it was the launcher. The row is the host's
 ## own, it is in front of the mods' settings, and the entry is reachable with no
@@ -363,8 +440,8 @@ func test_long_mod_list_scrolls_the_hardware_option_screen() -> void:
 		host.handle_button(PokeButton.DOWN)
 	assert_eq(host.get("_mod_cursor"), 8)
 	var rows: Array = []
-	for id: StringName in host.get("_mod_ids") as Array[StringName]:
-		rows.append({"label": String(id), "value": ""})
+	for row: Dictionary in host.call("_mod_rows"):
+		rows.append({"label": String(row["label"]), "value": ""})
 	var window: Dictionary = host.call("_option_window", rows, 8)
 	assert_eq((window["rows"] as Array).size(), Gen2StartMenuPage.OPTIONS_VISIBLE_ROWS)
 	assert_eq((window["rows"] as Array)[7]["label"], "mod_08")

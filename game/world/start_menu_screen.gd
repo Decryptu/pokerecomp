@@ -329,11 +329,13 @@ var _options_menu: Gen2WorldOptionsMenu = null
 ## The two kinds of row the MODS entry holds: see [method _mod_rows].
 const MOD_ROW_VIEW: StringName = &"view"
 const MOD_ROW_MOD: StringName = &"mod"
+const MOD_ROW_CATEGORY: StringName = &"category"
 
 ## The MODS entry: which mod is being configured and where each cursor sits.
 ## The rows are the host's registrations, read fresh on every render so a value
 ## changed from the launcher is never shown stale; see [method _mod_rows].
-var _mod_ids: Array[StringName] = []
+var _mod_path: Array[String] = []
+var _mod_trail: Array[int] = []
 var _mod_cursor: int = 0
 var _mod_id: StringName = &""
 var _mod_option_cursor: int = 0
@@ -789,9 +791,7 @@ func _confirm_now() -> void:
 		## The VIEW row is read with left and right, the way a value row is, so
 		## A does nothing on it.
 		Mode.MODS:
-			var chosen: Dictionary = _mod_row()
-			if StringName(chosen.get("kind", &"")) == MOD_ROW_MOD:
-				_open_mod_options_mode(StringName(chosen["id"]))
+			_open_mod_row(_mod_row())
 
 
 ## A pack opened over one Pokemon has no menu to go back to; A and B agree.
@@ -886,7 +886,7 @@ func _cancel_now() -> void:
 		Mode.OPTIONS:
 			_close_submenu()
 		Mode.MODS, Mode.FIELD_MOVES:
-			_open_list_mode()
+			_leave_mods_level()
 		Mode.MOD_OPTIONS:
 			_open_mods_mode()
 
@@ -912,7 +912,7 @@ func _confirm_list() -> void:
 		Gen2WorldStartMenu.ITEM_OPTION:
 			_fade_to_menu(_open_options_mode)
 		Gen2WorldStartMenu.ITEM_MODS:
-			_open_mods_mode()
+			_open_mods_root()
 		Gen2WorldStartMenu.ITEM_FIELD_MOVES:
 			_open_field_moves_mode()
 		Gen2WorldStartMenu.ITEM_EXIT:
@@ -1027,25 +1027,51 @@ func _render_options_menu() -> void:
 	_render_hardware()
 
 
+func _open_mods_root() -> void:
+	_mod_path = []
+	if not _mod_trail.is_empty():
+		_mod_cursor = _mod_trail[0]
+	_mod_trail = []
+	_open_mods_mode()
+
+
 ## The MODS entry: the mods that registered a setting, one row each. Only reachable
 ## when there is at least one, which is what puts the entry in the list at all.
 func _open_mods_mode() -> void:
 	_mode = Mode.MODS
-	_mod_ids = Gen2ModHost.instance().option_mod_ids()
 	_mod_cursor = clampi(_mod_cursor, 0, maxi(_mod_rows().size() - 1, 0))
 	_render_mods()
 
 
-## The rows MODS shows: the host's own VIEW row where there is more than one
-## view, then one row per mod that registered a setting. `V` is behind
+## The rows MODS shows: the host's own VIEW row at the top level where there is
+## more than one view, then the host's categories and mods. `V` is behind
 ## [method PokeDebugKeys.enabled], so this is where a shipped build changes it.
 func _mod_rows() -> Array:
 	var rows: Array = []
-	if Gen2ModHost.instance().view_ids().size() > 1:
-		rows.append({"kind": MOD_ROW_VIEW, "id": &""})
-	for id: StringName in _mod_ids:
-		rows.append({"kind": MOD_ROW_MOD, "id": id})
+	if _mod_path.is_empty() and Gen2ModHost.instance().view_ids().size() > 1:
+		rows.append({"kind": MOD_ROW_VIEW, "id": &"", "label": "VIEW"})
+	rows.append_array(Gen2ModHost.instance().option_menu(_mod_path))
 	return rows
+
+
+func _open_mod_row(row: Dictionary) -> void:
+	match StringName(row.get("kind", &"")):
+		MOD_ROW_MOD:
+			_open_mod_options_mode(StringName(row["id"]))
+		MOD_ROW_CATEGORY:
+			_mod_trail.append(_mod_cursor)
+			_mod_path.append(String(row["label"]))
+			_mod_cursor = 0
+			_render_mods()
+
+
+func _leave_mods_level() -> void:
+	if _mode != Mode.MODS or _mod_path.is_empty():
+		_open_list_mode()
+		return
+	_mod_path.pop_back()
+	_mod_cursor = _mod_trail.pop_back()
+	_render_mods()
 
 
 func _mod_row() -> Dictionary:
@@ -1105,15 +1131,6 @@ func _field_move_labels() -> Array:
 	for row: Dictionary in _field_move_rows:
 		out.append(String(_data.move(int(row["move"])).get("name", "")) if _data != null else "")
 	return out
-
-
-## The name the player installed, falling back to the id for a mod registered
-## without a manifest, which is what a test or the built-in host does.
-func _mod_name(id: StringName) -> String:
-	for manifest: PokeModManifest in Gen2ModHost.instance().manifests():
-		if manifest.id == id:
-			return manifest.name
-	return String(id)
 
 
 func _open_mod_options_mode(id: StringName) -> void:
@@ -3286,7 +3303,7 @@ func _mod_rows_image() -> Image:
 			var host: Gen2ModHost = Gen2ModHost.instance()
 			rows.append({"label": "VIEW", "value": host.view_label(host.selected_view())})
 			continue
-		rows.append({"label": _mod_name(StringName(row["id"])), "value": ""})
+		rows.append({"label": String(row["label"]), "value": ""})
 	var window: Dictionary = _option_window(rows, _mod_cursor)
 	return _page.render_options(window["rows"], window["cursor"])
 

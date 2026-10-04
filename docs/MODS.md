@@ -40,6 +40,7 @@ user://mods/<id>/
 | `icon`, `thumbnail` | Optional paths, when the art is not at a conventional name |
 | `dependencies` | Optional map of required mod ids to SemVer ranges |
 | `games` | Optional list of cartridge ids: `red`, `blue`, `yellow`, `gold`, `silver`, `crystal` |
+| `menu_path` | Optional list of up to three category names, outermost first, placing the mod's row in the start menu's MODS entry. See [Nesting a mod in categories](#nesting-a-mod-in-categories) |
 
 Dependency ranges accept an exact version, `*`, wildcards (`1.x`, `1.4.*`),
 comparison chains (`>=1.2.0 <2.0.0`), and caret or tilde ranges. Dependencies
@@ -2720,6 +2721,35 @@ signal to it is safe and a mod does not have to hold itself in a static variable
 The two surfaces are a **MODS** entry in the start menu and rows on that mod's card
 in the launcher. The entry appears only when at least one loaded mod registered a
 setting.
+
+### Nesting a mod in categories
+
+`menu_path` in `mod.json` puts the mod's row in the MODS entry under named
+categories instead of at the top, so an author with several mods, or a community
+with many, is not one long list:
+
+```json
+{ "id": "wild_encounters", "name": "Wild Encounters",
+  "menu_path": ["Community Mods", "SIRsparky Mods"], ... }
+```
+
+MODS then lists `Community Mods`; A opens it to `SIRsparky Mods`, and A again to
+`Wild Encounters`, which opens that mod's settings as it does at the top. B goes up
+one level at a time with the cursor on the row it left.
+
+Categories belong to no mod. Every mod naming the same path, ignoring case, shares
+one category, so independent mods that agree on `["Community Mods"]` land in one
+submenu and none creates a second. A level lists its categories first, then its
+mods, each in registration order, and the host's VIEW row stays at the top level.
+A mod with no `menu_path` is listed at the top, which is what MODS shows when no
+mod names one.
+
+A path is up to `PokeModManifest.MENU_PATH_DEPTH` (3) names, each 1 to
+`PokeModManifest.MENU_NAME_CELLS` (17) characters, the width of the OPTION screen's
+label. Anything else refuses the mod with `invalid_menu_path` when the manifest is
+read. The field is optional and does not change the contract number: a host that
+predates it ignores it and lists the mod at the top. The launcher's cards are not
+nested. `Gen2ModHost.option_menu(path)` answers one level.
 
 A change is committed the moment it is made. With no slot open it lands in
 `user://mod_options.json`, keyed by mod id: that file is the installation's values

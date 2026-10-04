@@ -1583,6 +1583,36 @@ func option_mod_ids() -> Array[StringName]:
 	return ids
 
 
+## One level of the MODS entry: `{kind: &"category" | &"mod", label, id}`, categories first.
+func option_menu(path: Array) -> Array:
+	var categories: Array = []
+	var named: Dictionary = {}
+	var mods: Array = []
+	for id: StringName in option_mod_ids():
+		var manifest: PokeModManifest = _manifests.get(id)
+		var at: Array[String] = []
+		if manifest != null:
+			at = manifest.menu_path
+		if at.size() < path.size() or not _menu_path_under(at, path):
+			continue
+		if at.size() == path.size():
+			mods.append({
+				"kind": &"mod", "label": manifest.name if manifest != null else String(id),
+				"id": id,
+			})
+		elif not named.has(at[path.size()].to_lower()):
+			named[at[path.size()].to_lower()] = true
+			categories.append({"kind": &"category", "label": at[path.size()], "id": &""})
+	return categories + mods
+
+
+static func _menu_path_under(at: Array[String], path: Array) -> bool:
+	for index: int in path.size():
+		if at[index].to_lower() != String(path[index]).to_lower():
+			return false
+	return true
+
+
 ## One mod's settings, in registration order, as
 ## `{key, label, values, labels, default, index, value}` per row. `index` and
 ## `value` are the live choice; the rest is what was registered.

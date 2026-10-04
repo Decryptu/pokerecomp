@@ -5,6 +5,7 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 - Mods: API 59 lets a custom NPC ask a yes/no question. The question appears in the game's text box, the YES/NO box opens on it, and the NPC is told which answer was picked.
 - Mods: API 59 lets a mod read the party: species, level, whether each one is an egg, and happiness.
+- Mods: `menu_path` in `mod.json` puts a mod's settings under named categories in the start menu's MODS entry, for example Community Mods, then SIRsparky Mods, then Wild Encounters. Mods that name the same path share one submenu. Mods without it are listed as before, and the Mod API version is unchanged.
 - Mods: a Pokémon gift now tells the mod whether it went to the party or a box, which box, and whether the species is new to the Pokédex.
 
 ## Fixed

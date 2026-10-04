@@ -154,6 +154,31 @@ func test_manifest_versions_and_dependency_ranges_are_validated_before_code_runs
 	)
 
 
+## `menu_path` places a row on the OPTION screen, whose label is 17 cells wide and
+## whose rows are the only thing a player can read it by, so a path that cannot
+## be drawn is refused where the author sees it rather than clipped in the menu.
+func test_the_menu_path_refuses_what_the_option_screen_cannot_draw() -> void:
+	var source: Dictionary = _valid_manifest()
+	for refused: Variant in [
+		"Community Mods", ["A", "B", "C", "D"], ["Community", ""], ["  "], [3],
+		["A name that is far too long"],
+	]:
+		source["menu_path"] = refused
+		assert_eq(
+			PokeModManifest.from_dictionary(source, _directory)["reason"], &"invalid_menu_path",
+			"refused: %s" % str(refused)
+		)
+	source["menu_path"] = ["  Community Mods ", "SIRsparky Mods"]
+	var read: Dictionary = PokeModManifest.from_dictionary(source, _directory)
+	assert_true(read["ok"])
+	assert_eq((read["manifest"] as PokeModManifest).menu_path, ["Community Mods", "SIRsparky Mods"])
+	source.erase("menu_path")
+	assert_eq(
+		(PokeModManifest.from_dictionary(source, _directory)["manifest"] as PokeModManifest).menu_path,
+		[] as Array[String]
+	)
+
+
 ## `games` is cartridge ids and nothing else. An unknown id is not refused when
 ## the manifest is read, because a mod naming a cartridge a later launcher will
 ## ship has to install today.

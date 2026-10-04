@@ -19,6 +19,8 @@ const MIN_API_VERSION: int = 30
 ## Ids address directories and registry keys, so they stay to a plain lowercase
 ## alphabet. A mod cannot name itself something that escapes its own folder.
 const ID_PATTERN: String = "^[a-z0-9][a-z0-9_-]*$"
+const MENU_PATH_DEPTH: int = 3
+const MENU_NAME_CELLS: int = Gen2StartMenuPage.OPTIONS_LABEL_CELLS
 
 var id: StringName = &""
 var name: String = ""
@@ -47,6 +49,8 @@ var dependencies: Dictionary = {}
 ## when the launcher gains another generation, since a mod naming the three
 ## Generation II cartridges refuses on a fourth without being edited.
 var games: Array[StringName] = []
+## The categories above this mod's row in the MODS entry, outermost first.
+var menu_path: Array[String] = []
 var directory: String = ""
 
 
@@ -106,6 +110,7 @@ static func from_dictionary(source: Dictionary, folder: String) -> Dictionary:
 		if not manifest.games.has(StringName(game)):
 			manifest.games.append(StringName(game))
 	for refusal: Dictionary in [
+		_read_menu_path(manifest, source.get("menu_path", [])),
 		_check_names(manifest, regex),
 		_check_entry(manifest),
 		_check_pack(manifest),
@@ -114,6 +119,17 @@ static func from_dictionary(source: Dictionary, folder: String) -> Dictionary:
 		if not refusal.is_empty():
 			return refusal
 	return {"ok": true, "manifest": manifest}
+
+
+static func _read_menu_path(manifest: PokeModManifest, raw: Variant) -> Dictionary:
+	if raw is not Array or (raw as Array).size() > MENU_PATH_DEPTH:
+		return _refuse(&"invalid_menu_path", String(manifest.id))
+	for raw_name: Variant in raw as Array:
+		var category: String = String(raw_name).strip_edges() if raw_name is String else ""
+		if category.is_empty() or category.length() > MENU_NAME_CELLS:
+			return _refuse(&"invalid_menu_path", String(manifest.id))
+		manifest.menu_path.append(category)
+	return {}
 
 
 static func _check_names(manifest: PokeModManifest, regex: RegEx) -> Dictionary:
