@@ -57,6 +57,7 @@ var _names: PackedStringArray = []
 
 
 func _initialize() -> void:
+	DirAccess.remove_absolute(Gen2OptionsStore.path())
 	var topics: PackedStringArray = _available()
 	_names = _requested(topics)
 	if _names.is_empty():

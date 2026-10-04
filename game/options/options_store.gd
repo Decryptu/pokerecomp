@@ -6,27 +6,30 @@ extends RefCounted
 ## costs a return to defaults.
 
 const PATH: String = "user://options.json"
-## Where a test writes instead. The suite shares `user://` with the game, so
-## without this a headless GUT run would reset the developer's own settings and
-## key bindings; [method use_test_path] is what a test calls to redirect it.
+## Where a script run writes instead: GUT, `tools/validate.gd` and every other
+## `-s` driver share `user://` with the game, and one that opened OPTION and
+## pressed RIGHT rewrote the developer's own settings and key bindings.
 const TEST_PATH: String = "user://options_test.json"
 
 static var _cached: Gen2Options = null
-static var _path: String = PATH
+static var _path: String = TEST_PATH if _runs_under_script() else PATH
 
 
-## The file in use. Tests redirect it; nothing in the game does.
+## The file in use.
 static func path() -> String:
 	return _path
 
 
-## Points the store at [constant TEST_PATH] and drops the shared object, so a
-## test neither reads nor overwrites the real options file. It stays pointed
-## there for the rest of the run on purpose: a later test that forgets to call
-## this then reads the test file rather than the developer's own.
+## Drops the shared object and points at [constant TEST_PATH], which a script
+## run already does; it is how a test starts from a clean read.
 static func use_test_path() -> void:
 	_path = TEST_PATH
 	_cached = null
+
+
+static func _runs_under_script() -> bool:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	return args.has("-s") or args.has("--script")
 
 
 ## The live options. Read once, then shared, so callers can hold the object and

@@ -36,6 +36,8 @@ var _save_root: String = ""
 
 
 func before_each() -> void:
+	Gen2OptionsStore.use_test_path()
+	DirAccess.remove_absolute(Gen2OptionsStore.path())
 	_save_root = Gen2SaveStore.root()
 	_forget_view()
 	_data = Fixture.build()
