@@ -1635,6 +1635,45 @@ func test_smart_ghost_curse_refuses_a_cursed_target() -> void:
 	)
 
 
+## pokegold's `scoring.asm` differs from pokecrystal's in four `AI_Smart` bodies:
+## Selfdestruct has no bench test, a Ghost's Curse reads health before anything
+## and ignores both benches, Psych Up discourages by one and can never
+## encourage, and Hyper Beam skips its discouragement 35% of the time rather
+## than 16%.
+func test_gold_and_silver_score_four_smart_moves_by_their_own_bodies() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.SELFDESTRUCT])
+	var gastly: Gen2BattleMon = _mon(Fixture.GASTLY, 50, [Fixture.CURSE])
+	var psych: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.PSYCH_UP_MOVE])
+	var beam: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.HYPER_BEAM])
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	pikachu.hp = 1
+	gastly.hp = 1
+	var crystal := {
+		"selfdestruct": int(_smart(pikachu, geodude, 1, false, true)[0]),
+		"curse": int(_smart(gastly, geodude, 1, false, true)[0]),
+		"psych_up": int(_smart(psych, geodude)[0]),
+		"hyper_beam": int(_smart_spread(beam, geodude)[1]),
+	}
+	_data.id = &"silver"
+	var gold := {
+		"selfdestruct": int(_smart(pikachu, geodude, 1, false, true)[0]),
+		"curse": int(_smart(gastly, geodude, 1, false, true)[0]),
+		"psych_up": int(_smart(psych, geodude)[0]),
+		"hyper_beam": int(_smart_spread(beam, geodude)[1]),
+	}
+
+	var base: int = Gen2BattleAI.DEFAULT_SCORE
+	assert_eq(crystal["selfdestruct"], base + 3, "Crystal keeps its last mon home")
+	assert_eq(gold["selfdestruct"], base, "pokegold never asks about a bench")
+	assert_eq(crystal["curse"], base + 4)
+	assert_eq(gold["curse"], base + Gen2BattleAI.DISCOURAGE_MOVE, "under a quarter, whatever else")
+	assert_eq(crystal["psych_up"], base + 2)
+	assert_eq(gold["psych_up"], base + 1)
+	assert_gt(int(crystal["hyper_beam"]), 75, "16% skip: nearly always discouraged")
+	assert_lt(int(gold["hyper_beam"]), 75, "35% skip: a third of the time left alone")
+	assert_gt(int(gold["hyper_beam"]), 50)
+
+
 ## `AI_Smart_HiddenPower`: the enemy's own DVs decide the type and the power,
 ## and both have to be worth it.
 func test_smart_hidden_power_reads_the_users_own_dvs() -> void:

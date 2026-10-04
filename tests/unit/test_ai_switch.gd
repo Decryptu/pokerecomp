@@ -292,6 +292,34 @@ func test_perish_song_without_a_good_answer_takes_the_lowest_alive_slot() -> voi
 	assert_eq(int(choice["index"]), 1, "the lowest index alive, hurt or not")
 
 
+## pokegold's `FindEnemyMonsThatResistPlayer` starts at `wOTPartyCount` where
+## Crystal starts at `wOTPartySpecies`, so every bit is set by the species one
+## place back: here the Bulbasaur in slot 1 is what rules out slot 2, not itself.
+func test_gold_and_silver_judge_each_slot_by_the_species_before_it() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.BULBASAUR, [Fixture.EMBER]),
+		[
+			_mon(Fixture.PIKACHU, [Fixture.GROWL]),
+			_mon(Fixture.BULBASAUR, [Fixture.EMBER]),
+			_mon(Fixture.CHARMANDER, [Fixture.EMBER]),
+			_mon(Fixture.PIKACHU, [Fixture.GROWL]),
+		]
+	)
+	battle.player.last_counter_move = Fixture.EMBER
+	battle.enemy.substatus |= Gen2Substatus.PERISH
+	battle.enemy.perish_count = 1
+	for index: int in range(1, 4):
+		battle.party(Gen2Battle.ENEMY).at(index).hp = 1
+
+	assert_eq(int(Gen2AISwitch.evaluate(battle)["index"]), 2, "the Bulbasaur burns, so the Charmander")
+
+	_data.id = &"gold"
+	assert_eq(
+		int(Gen2AISwitch.evaluate(battle)["index"]), 1,
+		"slot 2 is judged by the Bulbasaur before it, and slot 1 by the Pikachu"
+	)
+
+
 ## The flag without the count, and the count without the flag, are both nothing:
 ## the source reads the count only behind `bit SUBSTATUS_PERISH`.
 func test_a_perish_count_without_the_flag_changes_nothing() -> void:

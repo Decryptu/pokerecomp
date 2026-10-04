@@ -194,10 +194,14 @@ const GEN1_TEXT_FALLBACKS: Dictionary = {TEXT_NO_MON: "You don't have\nany #MON!
 
 ## The pack's submenus: `MenuHeader_UsableKeyItem` and its five siblings differ
 ## only in where the box starts, `menu_coords 13, y, SCREEN_WIDTH - 1, TEXTBOX_Y - 1`
-## with y `TEXTBOX_Y - 1 - 2 * items`, so the rows end on the text box.
+## with y `TEXTBOX_Y - 1 - 2 * items`, so the rows end on the text box. pokegold
+## puts them at columns 0 to 6, and gives its five-row header a bottom of `TEXTBOX_Y`.
 const ITEM_MENU_LEFT: int = 13
 const ITEM_MENU_RIGHT: int = 19
 const ITEM_MENU_BOTTOM: int = 11
+const GOLD_ITEM_MENU_LEFT: int = 0
+const GOLD_ITEM_MENU_RIGHT: int = 6
+const USABLE_KEY_ITEM_ROWS: int = 5
 ## [method Gen2MenuBox.yes_no]'s box: left 14, right 19, top 7, bottom 11.
 const YES_NO_AT: Vector2i = Vector2i(14, 7)
 const YES_NO_SPAN: Vector2i = Vector2i(5, 4)
@@ -1450,9 +1454,15 @@ func _pack_yes_no(cursor_index: int) -> Image:
 ## `MenuHeader_UsableKeyItem` and its five siblings, which are one box whose top
 ## is chosen so [param count] rows end on the text box.
 func _item_menu_box(count: int) -> Gen2MenuBox:
+	if Gen2WorldState.is_crystal_profile(_data):
+		return Gen2MenuBox.from_coords(
+			ITEM_MENU_LEFT, ITEM_MENU_BOTTOM - 2 * maxi(count, 0),
+			ITEM_MENU_RIGHT, ITEM_MENU_BOTTOM, SUBMENU_FLAGS
+		)
+	var bottom: int = ITEM_MENU_BOTTOM + int(count == USABLE_KEY_ITEM_ROWS)
 	return Gen2MenuBox.from_coords(
-		ITEM_MENU_LEFT, ITEM_MENU_BOTTOM - 2 * maxi(count, 0),
-		ITEM_MENU_RIGHT, ITEM_MENU_BOTTOM, SUBMENU_FLAGS
+		GOLD_ITEM_MENU_LEFT, bottom - 2 * maxi(count, 0),
+		GOLD_ITEM_MENU_RIGHT, bottom, SUBMENU_FLAGS
 	)
 
 

@@ -7,12 +7,13 @@ extends RefCounted
 ## `scoring.asm`'s decrementing counters are an argmin, which
 ## [method choose_slot] takes directly. Chances use `X * 255 / 100`.
 
-## Everything one scoring layer is allowed to read, which the cartridge reads
-## straight out of WRAM.
+## Everything one scoring layer may read, straight out of WRAM on the cartridge.
 class Context extends RefCounted:
 	var attacker: Gen2BattleMon = null
 	var defender: Gen2BattleMon = null
 	var data: GameData = null
+	## False on Gold and Silver, whose `scoring.asm` has four bodies of its own.
+	var crystal: bool = true
 	var rng: RandomNumberGenerator = null
 	var atk_turns: int = 0
 	var def_turns: int = 0
@@ -32,8 +33,7 @@ class Context extends RefCounted:
 	## including the one that is out.
 	var bench_status_mask: int = Gen2Status.NONE
 
-	## The same argument list [method Gen2BattleAI.score_slots] takes, so one
-	## layer can be run on its own without restating the whole page.
+	## [method Gen2BattleAI.score_slots]'s arguments, to run one layer alone.
 	static func of(
 		p_attacker: Gen2BattleMon,
 		p_defender: Gen2BattleMon,
@@ -55,6 +55,7 @@ class Context extends RefCounted:
 		out.attacker = p_attacker
 		out.defender = p_defender
 		out.data = p_data
+		out.crystal = Gen2WorldState.is_crystal_profile(p_data)
 		out.rng = p_rng
 		out.atk_turns = p_atk_turns
 		out.def_turns = p_def_turns
@@ -70,17 +71,14 @@ class Context extends RefCounted:
 		return out
 
 
-## A move nobody can use, whatever the layers think of it.
 const DEFAULT_SCORE: int = 20
 const UNUSABLE_SCORE: int = 80
 
-## What [code]AIDiscourageMove[/code] adds: a move that is actively a bad idea
-## right now, short of being unusable outright.
+## What [code]AIDiscourageMove[/code] adds: a bad idea, short of unusable.
 const DISCOURAGE_MOVE: int = 10
 
-## The status conditions [constant Gen2Layout.AI_BASIC] will not stack a second
-## of onto a target that already carries one, because the cartridge's own
-## status byte refuses a second status the same way [Gen2Status] does.
+## The statuses [constant Gen2Layout.AI_BASIC] will not stack onto a target that
+## already carries one.
 const STATUS_ONLY_EFFECTS: Array = [
 	Gen2MoveEffect.SLEEP, Gen2MoveEffect.TOXIC, Gen2MoveEffect.POISON, Gen2MoveEffect.PARALYZE,
 ]
@@ -137,19 +135,17 @@ const SCREEN_FOR_EFFECT: Dictionary = {
 	Gen2MoveEffect.SAFEGUARD: Gen2Screens.SAFEGUARD,
 }
 
-## The weather each of the three weather moves would set, which is the whole of
-## `AI_Redundant`'s `.RainDance`, `.SunnyDay` and `.Sandstorm`: a move that would
-## set the weather already up is a wasted turn.
+## The weather each weather move sets, which is `AI_Redundant`'s `.RainDance`,
+## `.SunnyDay` and `.Sandstorm`: setting the weather already up is a wasted turn.
 const WEATHER_FOR_EFFECT: Dictionary = {
 	Gen2MoveEffect.RAIN_DANCE: Gen2Weather.RAIN,
 	Gen2MoveEffect.SUNNY_DAY: Gen2Weather.SUN,
 	Gen2MoveEffect.SANDSTORM: Gen2Weather.SANDSTORM,
 }
 
-## `RainDanceMoves` and `SunnyDayMoves`: what makes each of the two worth
-## setting, by move number. Neither list is what a player would write, and the
-## Sunny Day one is missing Solarbeam, Flame Wheel and Moonlight outright, which
-## `docs/bugs_and_glitches.md` records as a bug rather than a choice.
+## `RainDanceMoves` and `SunnyDayMoves`, by move number. The Sunny Day list is
+## missing Solarbeam, Flame Wheel and Moonlight, which `docs/bugs_and_glitches.md`
+## records as a bug.
 const RAIN_DANCE_MOVE_NUMBERS: Array = [55, 56, 57, 61, 87, 127, 128, 145, 152, 190, 250]
 const SUNNY_DAY_MOVE_NUMBERS: Array = [7, 52, 53, 83, 126, 221, 234, 235]
 
@@ -408,6 +404,9 @@ const AI_90_PERCENT_PLUS_ONE: int = 230
 
 ## `31 percent + 1`, which is 80, and the badly-poisoned arm of the evasion tail.
 const AI_31_PERCENT_PLUS_ONE: int = 80
+
+## `35 percent + 1`, which is 90: pokegold's `AI_Smart_HyperBeam`, not `16 percent`.
+const AI_35_PERCENT_PLUS_ONE: int = 90
 
 ## `EncoreMoves`: what the AI thinks is worth locking the player into, by move
 ## number. `AI_Smart_Encore` reads it only for a move it has already decided is
@@ -1012,7 +1011,9 @@ static func _smart_paralyze(scores: Array, slot: int, c: Context) -> void:
 
 static func _smart_hyper_beam(scores: Array, slot: int, c: Context) -> void:
 	if _above_half(c.attacker):
-		if not _roll(c.rng, 16):
+		var left_alone: bool = _roll(c.rng, 16) if c.crystal \
+			else _rolls_under(c.rng, AI_35_PERCENT_PLUS_ONE)
+		if left_alone:
 			return
 		_discourage(scores, slot, 1)
 		if _skip_50_50(c.rng):
@@ -1346,7 +1347,10 @@ static func _smart_psych_up(scores: Array, slot: int, c: Context) -> void:
 		player_sum += c.defender.stage(key)
 
 	if enemy_sum >= player_sum:
-		_discourage(scores, slot, 2)
+		_discourage(scores, slot, 2 if c.crystal else 1)
+		return
+	# pokegold's two `wPlayerEvaLevel` tests always return before the encourage.
+	if not c.crystal:
 		return
 	if c.defender.stage("accuracy") < -1:
 		return
@@ -1552,7 +1556,7 @@ static func _smart_leech_hit(scores: Array, slot: int, c: Context) -> void:
 static func _smart_selfdestruct(scores: Array, slot: int, c: Context) -> void:
 	# `FindAliveEnemyMons` returning carry is a bench to fall back on, and
 	# `AICheckLastPlayerMon`'s `nz` is a player who still has one too.
-	if not c.has_bench and c.defender_has_bench:
+	if c.crystal and not c.has_bench and c.defender_has_bench:
 		_discourage(scores, slot, 3)
 		return
 	if _above_half(c.attacker):
@@ -1870,6 +1874,9 @@ static func _smart_curse(scores: Array, slot: int, c: Context) -> void:
 ## `.ghost_curse`: never twice, never as the last mon against a player who still
 ## has a bench, and best from full HP on the player's first turn.
 static func _smart_ghost_curse(scores: Array, slot: int, c: Context) -> void:
+	if not c.crystal:
+		_smart_ghost_curse_gold(scores, slot, c)
+		return
 	if Gen2Substatus.has(c.defender.substatus, Gen2Substatus.CURSE):
 		_discourage(scores, slot)
 		return
@@ -1889,6 +1896,21 @@ static func _smart_ghost_curse(scores: Array, slot: int, c: Context) -> void:
 	if not _at_max_hp(c.attacker) or c.def_turns != 0:
 		return
 	if not _skip_50_50(c.rng):
+		_encourage(scores, slot, 2)
+
+
+## pokegold's `.ghost_curse`: no bench test and no `AICheckEnemyMaxHP`.
+static func _smart_ghost_curse_gold(scores: Array, slot: int, c: Context) -> void:
+	if not _above_quarter(c.attacker):
+		_discourage(scores, slot)
+		return
+	if not _above_half(c.attacker):
+		_discourage(scores, slot, 1)
+		return
+	if Gen2Substatus.has(c.defender.substatus, Gen2Substatus.CURSE):
+		_discourage(scores, slot)
+		return
+	if c.def_turns == 0 and not _skip_50_50(c.rng):
 		_encourage(scores, slot, 2)
 
 

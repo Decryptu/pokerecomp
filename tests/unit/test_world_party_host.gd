@@ -2503,6 +2503,22 @@ func test_the_lucky_number_keeps_the_best_match_and_says_where_it_was() -> void:
 	)
 
 
+## `.BoxesLoop` ends at `NUM_BOXES` on Crystal and at `NUM_BOXES_JP` on Gold and
+## Silver, so past the ninth only the open box is read, and it is read first.
+func test_the_lucky_number_show_reads_boxes_to_the_ninth_on_gold_and_silver() -> void:
+	var save := Gen2SaveData.new()
+	save.current_box = 11
+
+	var crystal: Array[Gen2SaveBox] = Gen2WorldPartyHost.lucky_number_boxes(save, true)
+	var gold: Array[Gen2SaveBox] = Gen2WorldPartyHost.lucky_number_boxes(save, false)
+
+	assert_eq(crystal.size(), Gen2SaveData.BOX_COUNT, "every box once, the open one first")
+	assert_eq(crystal[0], save.boxes[11])
+	assert_eq(gold.size(), 10, "boxes 0 to 8 and the open one")
+	assert_eq(gold[0], save.boxes[11])
+	assert_false(gold.has(save.boxes[9]), "an inactive tenth box is never opened")
+
+
 ## MON_DVS for a wanted `bc`, given a zero trainer ID: the routine rotates each
 ## DV byte right twice, so the byte that produces one is the wanted half rotated
 ## left twice.

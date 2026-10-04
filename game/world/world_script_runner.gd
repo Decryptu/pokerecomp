@@ -1686,7 +1686,9 @@ func _complete_rival_name(
 			StringName(result.get("reason", &"runtime_request_failed")), result
 		)
 	var default_name: String = String(
-		(request.get("values", {}) as Dictionary).get("default_name", "SILVER")
+		(request.get("values", {}) as Dictionary).get(
+			"default_name", Gen2PlayerNameChoices.default_rival_name(data)
+		)
 	)
 	## `NameRival`'s `InitName` over `.DefaultName`.
 	_rival_name = Gen2NamingScreen.init_name(String(result.get("name", default_name)), default_name)
@@ -4583,7 +4585,7 @@ func _special_fade_out_music(special: int) -> Dictionary:
 
 func _special_rival_name(special: int) -> Dictionary:
 	return _stage_runtime_request(&"rival_name_requested", {
-		"special": special, "default_name": "SILVER",
+		"special": special, "default_name": Gen2PlayerNameChoices.default_rival_name(data),
 	})
 
 

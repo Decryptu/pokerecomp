@@ -10762,15 +10762,12 @@ static func _is_own_mon(save: Gen2SaveData, mon: Gen2SaveMon) -> bool:
 			== save.player_name.left(OT_NAME_COMPARED)
 
 
-## Every box slot's OT ID and species, in box then slot order. One list rather
-## than fourteen because `CheckForLuckyNumberWinners` walks the open box and
-## then every other box, which is every stored row exactly once.
+## Every slot of [method Gen2WorldPartyHost.lucky_number_boxes], as one list.
 func _stored_id_numbers(save: Gen2SaveData) -> Array:
+	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
 	var out: Array = []
-	for box: Variant in save.boxes:
-		if not box is Gen2SaveBox:
-			continue
-		for slot: Variant in (box as Gen2SaveBox).slots:
+	for box: Gen2SaveBox in Gen2WorldPartyHost.lucky_number_boxes(save, crystal):
+		for slot: Variant in box.slots:
 			if slot is Gen2SaveMon:
 				out.append(int((slot as Gen2SaveMon).ot_id))
 	return out
@@ -10802,11 +10799,10 @@ func _starter_pikachu(save: Gen2SaveData) -> Dictionary:
 
 
 func _stored_species(save: Gen2SaveData) -> Array:
+	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
 	var out: Array = []
-	for box: Variant in save.boxes:
-		if not box is Gen2SaveBox:
-			continue
-		for slot: Variant in (box as Gen2SaveBox).slots:
+	for box: Gen2SaveBox in Gen2WorldPartyHost.lucky_number_boxes(save, crystal):
+		for slot: Variant in box.slots:
 			if slot is Gen2SaveMon:
 				var stored: Gen2SaveMon = slot as Gen2SaveMon
 				out.append(

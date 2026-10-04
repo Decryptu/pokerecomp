@@ -2963,6 +2963,11 @@ func _use_trainer_item(side: int, item: int, events: Array) -> void:
 		return
 	enemy_items.erase(item)
 	var user: Gen2BattleMon = mon(side)
+	if not is_gen1():
+		# `AI_TryItem`'s used-item block; `wLastEnemyCounterMove` is Crystal's alone.
+		_reset_action_counters(side, -1)
+		if Gen2WorldState.is_crystal_profile(data):
+			user.last_counter_move = 0
 	var effect: Dictionary = Gen1TrainerAI.apply_item(self, user, item) if is_gen1() \
 		else Gen2AIItems.apply(user, item)
 	var used: Dictionary = {

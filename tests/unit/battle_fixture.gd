@@ -278,6 +278,7 @@ const AMNESIA: int = 133
 const ICY_WIND: int = 196
 const SPLASH: int = 150
 const SWAGGER: int = 207
+const PSYCH_UP_MOVE: int = 244
 
 ## The last row of the effects table, all nine at their real move numbers with
 ## their real bytes. Lock On and Mind Reader have to be two numbers over one
@@ -782,6 +783,7 @@ static func _moves() -> Array:
 		ICY_WIND: ["ICY WIND", 55, ICE, 242, 15, Gen2MoveEffect.SPEED_DOWN_HIT, 256],
 		SPLASH: ["SPLASH", 0, NORMAL, 255, 40, Gen2MoveEffect.SPLASH, 0],
 		SWAGGER: ["SWAGGER", 0, NORMAL, 229, 15, Gen2MoveEffect.SWAGGER, 255],
+		PSYCH_UP_MOVE: ["PSYCH UP", 0, NORMAL, 255, 10, Gen2MoveEffect.PSYCH_UP, 0],
 		# The last row of the effects table. All nine store an accuracy of 255, so
 		# `checkhit` never rolls one, and Thief's `100 percent` chance is a roll
 		# `effectchance` cannot fail.

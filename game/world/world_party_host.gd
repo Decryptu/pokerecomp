@@ -10,6 +10,7 @@ extends RefCounted
 ## `CAUGHT_EGG_LEVEL`: a hatchling's caught level is 1 whatever level it hatches
 ## at, so the stats page shows the egg rather than the hatch.
 const CAUGHT_EGG_LEVEL: int = 1
+const LUCKY_NUMBER_BOXES_GOLD_SILVER: int = 9
 ## `HatchEggs`' own `ld [hl], $78`, the happiness a hatchling starts on.
 const HATCHED_HAPPINESS: int = 0x78
 ## `BASE_HAPPINESS`, which `GeneratePartyMonStats` writes into every row it
@@ -3253,6 +3254,21 @@ static func magikarp_beats_record(length: Vector2i, record: Dictionary) -> bool:
 	if length.x != best_feet:
 		return length.x > best_feet
 	return length.y > int(record.get("inches", 0))
+
+
+## The boxes `CheckForLuckyNumberWinners` opens: the open one, then `.BoxesLoop`
+## up to `NUM_BOXES`, which pokegold stops at `NUM_BOXES_JP`.
+static func lucky_number_boxes(save: Gen2SaveData, crystal: bool) -> Array[Gen2SaveBox]:
+	var reached: int = Gen2SaveData.BOX_COUNT if crystal else LUCKY_NUMBER_BOXES_GOLD_SILVER
+	var order: Array[int] = [save.current_box]
+	for index: int in mini(reached, save.boxes.size()):
+		if index != save.current_box:
+			order.append(index)
+	var out: Array[Gen2SaveBox] = []
+	for index: int in order:
+		if index < save.boxes.size() and save.boxes[index] is Gen2SaveBox:
+			out.append(save.boxes[index] as Gen2SaveBox)
+	return out
 
 
 ## `CheckForLuckyNumberWinners`. [param stored_ids] and [param stored_species] are

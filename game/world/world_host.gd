@@ -63,7 +63,9 @@ static func complete_runtime_request(
 		for key: Variant in result:
 			completion[key] = result[key]
 		if not completion.has("name"):
-			completion["name"] = String(request.get("values", {}).get("default_name", "SILVER"))
+			completion["name"] = String(request.get("values", {}).get(
+				"default_name", Gen2PlayerNameChoices.default_rival_name(world.data)
+			))
 		var resumed: Array = world.complete_runtime_request(completion)
 		if resumed.is_empty() or not bool(resumed[0].get("ok", false)):
 			return _unavailable(&"rival_name_request_failed", {

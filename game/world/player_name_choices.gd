@@ -15,3 +15,8 @@ static func options(data: GameData, gender: int, rival: bool = false) -> Array[S
 	if data != null and data.id == &"silver":
 		return [NEW_NAME, "SILVER", "KAMON", "OSCAR", "MAX"]
 	return [NEW_NAME, "GOLD", "HIRO", "TAYLOR", "KARL"]
+
+
+## `NameRival.DefaultName`: Gold's rival is SILVER and Silver's is GOLD, Crystal's SILVER.
+static func default_rival_name(data: GameData) -> String:
+	return "GOLD" if data != null and data.id == &"silver" else "SILVER"

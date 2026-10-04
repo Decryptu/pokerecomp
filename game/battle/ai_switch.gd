@@ -10,13 +10,11 @@ extends RefCounted
 ## nudges it.
 const BASE_SCORE: int = 10
 
-## The score at or above which `CheckAbleToSwitch` stops looking: things are
-## going well enough that there is nothing to think about.
+## The score at or above which `CheckAbleToSwitch` stops looking.
 const COMFORTABLE_SCORE: int = 11
 
-## The three tiers `wEnemySwitchMonParam`'s high nibble carries, in rising order
-## of how much the AI wants out. The low nibble is the party index, which is why
-## the cartridge adds them together.
+## The tiers `wEnemySwitchMonParam`'s high nibble carries, rising with how much
+## the AI wants out; its low nibble is the party index.
 const TIER_LOW: int = 1
 const TIER_MID: int = 2
 const TIER_HIGH: int = 3
@@ -31,18 +29,16 @@ const CHANCES: Dictionary = {
 	Gen2Layout.SWITCH_SOMETIMES: {TIER_LOW: 50, TIER_MID: 128, TIER_HIGH: 206},
 }
 
-## `EFFECTIVE + 1`: the cartridge tests "super effective" as "more than neutral"
-## against a tenths figure, so anything above ten counts.
+## `EFFECTIVE + 1`: "super effective" is anything above a tenths figure of ten.
 const SUPER_EFFECTIVE: int = Gen2Layout.MATCHUP_EFFECTIVE + 1
 
-## What `.CheckEnemyMoveMatchups` adds per enemy move, and the figure a single
-## super-effective move jumps straight to.
+## What `.CheckEnemyMoveMatchups` adds per enemy move; one super-effective move
+## jumps straight to the last.
 const WEIGHT_NOT_VERY_EFFECTIVE: int = 1
 const WEIGHT_NEUTRAL: int = 6
 const WEIGHT_SUPER_EFFECTIVE: int = 100
 
-## The bands that figure is read in: nothing that lands at all is worth two off,
-## under five is worth one, and a super-effective move is worth one back.
+## The bands that figure is read in: nothing landing is two off, under five one.
 const THREAT_LOW: int = 5
 
 
@@ -374,9 +370,10 @@ static func _resisting(battle: Gen2Battle, candidates: Array) -> Array:
 		if member == null:
 			continue
 		var safe: bool = true
+		var defending: Array = _species_in_scan(battle, party, int(index), member)
 		for attacking_type: int in attacking:
 			if battle.data.type_effectiveness(
-				attacking_type, member.types(),
+				attacking_type, defending,
 				Gen2Substatus.has(member.substatus, Gen2Substatus.IDENTIFIED)
 			) >= SUPER_EFFECTIVE:
 				safe = false
@@ -384,6 +381,19 @@ static func _resisting(battle: Gen2Battle, candidates: Array) -> Array:
 		if safe:
 			out.append(index)
 	return out
+
+
+## What `FindEnemyMonsThatResistPlayer` judges slot [param index] by. pokegold walks
+## from `wOTPartyCount`, not `wOTPartySpecies`: the species one place back, and
+## for slot 0 the party count read as a species number.
+static func _species_in_scan(
+	battle: Gen2Battle, party: Gen2Party, index: int, member: Gen2BattleMon
+) -> Array:
+	if Gen2WorldState.is_crystal_profile(battle.data):
+		return member.types()
+	var species: int = party.size() if index == 0 else party.at(index - 1).persistent_species()
+	var entry: Array = battle.data.species(species).get("types", [])
+	return [int(entry[0]), int(entry[1])] if entry.size() >= 2 else []
 
 
 ## `FindAliveEnemyMonsWithASuperEffectiveMove`: [code]{"index", "quality"}[/code],

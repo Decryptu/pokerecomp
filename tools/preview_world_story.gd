@@ -8378,7 +8378,7 @@ func _request_soft_reset(world: Gen2WorldAPI, _request: Dictionary, state: Dicti
 
 func _request_rival_name(world: Gen2WorldAPI, _request: Dictionary, state: Dictionary) -> Array:
 	var named: Dictionary = Gen2WorldHost.complete_runtime_request(
-		world, {"ok": true, "name": "SILVER"}, state["save"], false, state["random"]
+		world, {"ok": true}, state["save"], false, state["random"]
 	)
 	if not bool(named.get("ok", false)):
 		return _request_failed(
