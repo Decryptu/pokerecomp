@@ -79,6 +79,7 @@ func _run_script() -> void:
 	_world_screen._show_script_results(
 		_world_screen._world.dispatch_script_events(TALK_CELL)
 	)
+	Fixture.settle_menu_fade(_world_screen)
 
 
 func _host() -> Gen2NameRaterScreen:
@@ -468,6 +469,7 @@ func test_a_learned_move_answers_false_and_costs_happiness() -> void:
 	_run_script()
 	_tutor().party_screen().handle_button(PokeButton.A)
 	assert_null(_tutor())
+	Fixture.settle_menu_fade(_world_screen)
 	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
 	assert_eq(mon.moves, [1, TUTOR_MOVE, 0, 0])
 	assert_eq(mon.happiness, 71)
@@ -481,6 +483,7 @@ func test_backing_out_of_the_list_answers_minus_one() -> void:
 	_run_script()
 	_tutor().party_screen().handle_button(PokeButton.B)
 	assert_null(_tutor())
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(_world_screen.active_save().party[0].moves, [1, 0, 0, 0])
 	assert_eq(_world_screen._world._active_script._script_value, Gen2MoveTutor.SCRIPT_VALUE_CANCELLED)
 
@@ -528,6 +531,7 @@ func test_a_full_moveset_asks_and_refuses_an_hm_without_closing_the_list() -> vo
 	_world_screen.press_button(PokeButton.DOWN)
 	_world_screen.press_button(PokeButton.A)
 	assert_null(_tutor())
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(_world_screen.active_save().party[0].moves[1], TUTOR_MOVE)
 	assert_eq(_world_screen._world._active_script._script_value, Gen2MoveTutor.SCRIPT_VALUE_LEARNED)
 

@@ -1816,7 +1816,9 @@ A world renderer that wants to draw them takes the optional
 ### The map fades
 
 A warp spends `MapSetupScript_Door`'s two fades, sixteen frames in which no input
-is read. A renderer is offered each step through the optional
+is read. A full-screen menu spends `FadeToMenu`'s four rows going in and
+`CloseSubmenu`'s going out, with the host drawing all-white over every renderer
+between the two. A renderer is offered each step through the optional
 `set_fade(order: int, white_fill: bool)`: `order` is the palette order
 `DmgToCgbTimePals` applies to every palette on screen, and `white_fill` is
 `FillWhiteBGColor`, which only the way out runs. The identity order

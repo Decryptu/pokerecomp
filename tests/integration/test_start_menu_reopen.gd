@@ -42,6 +42,7 @@ func _choose(kind: StringName) -> void:
 	_screen._open_start_menu()
 	assert_not_null(_screen._start_menu_host, "the start menu opened")
 	_screen._on_start_menu_action(kind)
+	Fixture.settle_menu_fade(_screen)
 
 
 func test_the_pokegear_returns_to_the_menu() -> void:
@@ -64,6 +65,8 @@ func test_a_pokegear_opened_on_its_own_does_not_open_the_menu() -> void:
 func test_a_field_move_leaves_every_menu() -> void:
 	_choose(Gen2WorldStartMenu.ITEM_POKEMON)
 	_screen._on_party_action({"kind": &"field_move", "move": Gen2WorldFieldMove.MOVE_CUT})
+	assert_not_null(_screen._start_menu_host, "`Call_ExitMenu` puts the box back under the fade")
+	Fixture.settle_menu_fade(_screen)
 	assert_null(_screen._start_menu_host)
 
 

@@ -81,6 +81,7 @@ func _run_script() -> void:
 	_world_screen._show_script_results(
 		_world_screen._world.dispatch_script_events(TALK_CELL)
 	)
+	Fixture.settle_menu_fade(_world_screen)
 
 
 func _host() -> Gen2SlotMachineScreen:
@@ -144,6 +145,7 @@ func test_cancelling_closes_the_machine_and_writes_the_coins_back() -> void:
 			_host().machine().sfx_finished()
 		_host().advance_frame()
 	assert_null(_host(), "saying no must close the machine")
+	Fixture.settle_menu_fade(_world_screen)
 	assert_true(
 		_world_screen._world.state.coins() >= spent,
 		"the balance the machine left must reach the world"
@@ -163,4 +165,5 @@ func test_the_world_moves_again_once_the_machine_closes() -> void:
 			_host().machine().sfx_finished()
 		_host().advance_frame()
 	assert_null(_host(), "cancelling the bet must close the machine")
+	Fixture.settle_menu_fade(_world_screen)
 	assert_true(_world_screen.move_player(Vector2i.RIGHT))

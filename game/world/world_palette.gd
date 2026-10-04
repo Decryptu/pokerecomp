@@ -105,11 +105,10 @@ const PALETTE_ROWS: Array = [
 ]
 
 
-## `.cgbfade`, the seven rows `GetTimePalFade` answers with on a CGB, each
-## packed the way `dc` packs one: colour j of the result is colour
-## `(order >> 2j) & 3` of the palette it is applied to, which is what
-## `DmgToCgbTimePals` does with it. Row 3 is the identity, row 6 is every colour
-## flattened onto colour 0.
+## `.cgbfade`, the seven rows `GetTimePalFade` answers with on a CGB, each packed
+## the way `dc` packs one: colour j of the result is colour `(order >> 2j) & 3` of
+## the palette it is applied to, which is what `DmgToCgbTimePals` does with it. Row
+## 3 is the identity, row 6 is every colour flattened onto colour 0.
 const FADE_ORDERS: Array[int] = [0xFF, 0xFE, 0xF9, 0xE4, 0x90, 0x40, 0x00]
 ## `RotatePalettesRight`'s and the two map fades' own starting rows.
 const FADE_IDENTITY: int = 0xE4
@@ -140,8 +139,6 @@ static func poison_flash_palette() -> PackedColorArray:
 const BATTLE_TOWER_FADE_STEP_FRAMES: int = 7
 
 
-## One step of a palette fade: `CopyPals`' rule, which every `DmgToCgb*Pals`
-## caller shares. The identity order answers the palette it was handed.
 ## Which rBGP a Generation 1 map draws through: `LoadGBPal`'s own row while
 ## nothing is fading, and the fade's row while one is, because the two write the
 ## same register and the fade's landing restores the map's.
@@ -150,6 +147,8 @@ static func gen1_fade_order(fade_order: int, map_pal_offset: int) -> int:
 		if fade_order == FADE_IDENTITY else fade_order
 
 
+## One step of a palette fade: `CopyPals`' rule, which every `DmgToCgb*Pals`
+## caller shares. The identity order answers the palette it was handed.
 static func fade_palette(palette: PackedColorArray, order: int) -> PackedColorArray:
 	if order == FADE_IDENTITY or palette.size() < 4:
 		return palette
@@ -159,6 +158,13 @@ static func fade_palette(palette: PackedColorArray, order: int) -> PackedColorAr
 		out[index] = palette[(order >> (2 * mini(index, 3))) & 3] if index < 4 \
 			else palette[index]
 	return out
+
+
+## `PAL_BG_TEXT` as boxes over the map are drawn, through a fade's order.
+static func text_palette(order: int = FADE_IDENTITY) -> PackedColorArray:
+	return fade_palette(
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])), order
+	)
 
 
 ## `PAL_BG_ROOF`, the one background slot whose colours are not the row's own.
@@ -191,11 +197,10 @@ const ENVIRONMENT_ROUTE: int = 2
 
 
 ## What [method tile_palettes] answers on a Generation 1 cartridge. There are no
-## eight slots:
-## `SetPal_Overworld` names one `SuperPalettes` row and the
-## `BlkPacket_WholeScreen` behind it gives that row every attribute block, so
-## the whole screen draws in the same four colours. [param last_map] is
-## `wLastMap`, which only an indoor map the routine does not name reads.
+## eight slots: `SetPal_Overworld` names one `SuperPalettes` row and the
+## `BlkPacket_WholeScreen` behind it gives that row every attribute block, so the
+## whole screen draws in the same four colours. [param last_map] is `wLastMap`,
+## which only an indoor map the routine does not name reads.
 static func gen1_tile_palettes(
 	data: GameData,
 	map: Gen2WorldMap,

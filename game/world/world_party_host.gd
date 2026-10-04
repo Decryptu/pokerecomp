@@ -65,11 +65,10 @@ const FRIEND_BALL_HAPPINESS: int = 200
 ## The Bug Contest's own ball. It is never in the bag: `wParkBallsRemaining` is
 ## what holds it and `BattleMenu_Pack`'s contest branch loads it by name.
 const ITEM_PARK_BALL: int = 0xB1
-## `StatExpItemPointerOffsets`: the five vitamins and the stat experience each
-## one raises. `MON_HP_EXP` and its four neighbours are words and the offsets
-## name the high byte, so `VitaminEffect` reads and writes that byte alone: it
-## refuses at 100 and adds 10 there, which is 25,600 and 2,560 of the flat value
-## kept here.
+## `StatExpItemPointerOffsets`: the five vitamins and the stat experience each one
+## raises. `MON_HP_EXP` and its four neighbours are words and the offsets name the
+## high byte, so `VitaminEffect` reads and writes that byte alone: it refuses at 100
+## and adds 10 there, which is 25,600 and 2,560 of the flat value kept here.
 const VITAMINS: Dictionary = {
 	0x1A: "hp", 0x1B: "attack", 0x1C: "defense", 0x1D: "speed", 0x1F: "special",
 }
@@ -3001,10 +3000,9 @@ static func rename_party_mon(
 
 
 ## `HatchEggs` for one party slot: the egg becomes the Pokemon it was carrying.
-## Everything here is the source's own order, and every one of the seven writes
-## has a reader in this project, which is why none is left out.
-## Answers the summary the screen shows, or an empty dictionary when the slot is
-## not an egg that is ready.
+## Everything here is the source's own order, and every one of the seven writes has
+## a reader in this project, which is why none is left out. Answers the summary the
+## screen shows, or an empty dictionary when the slot is not an egg that is ready.
 static func hatch_egg(
 	world: Gen2WorldAPI, save: Gen2SaveData, index: int
 ) -> Dictionary:
@@ -3057,11 +3055,10 @@ static func _failure(reason: StringName, details: Dictionary) -> Dictionary:
 
 
 ## `GivePokerusAndConvertBerries`, the line `ExitBattle` runs one after
-## `EvolveAfterBattle`. Both halves are gated on
-## `STATUSFLAGS2_REACHED_GOLDENROD_F`, and both are pure party writes, so the
-## whole routine is one call the world boundary makes on a battle it won.
-## Returns what changed, for a caller that wants to say so: an empty dictionary
-## when neither half did anything.
+## `EvolveAfterBattle`. Both halves are gated on `STATUSFLAGS2_REACHED_GOLDENROD_F`,
+## and both are pure party writes, so the whole routine is one call the world
+## boundary makes on a battle it won. Returns what changed, for a caller that wants
+## to say so: an empty dictionary when neither half did anything.
 static func give_pokerus_and_convert_berries(
 	data: GameData, save: Gen2SaveData, world: Gen2WorldAPI,
 	random: RandomNumberGenerator

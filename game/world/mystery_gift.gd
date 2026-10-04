@@ -190,13 +190,12 @@ static func receive_decoration(section: Dictionary, deco: int) -> bool:
 	return true
 
 
-## `CopyMysteryGiftReceivedDecorationsToPC`, run once per Continue: every flag
-## the array carries becomes the decoration's own event flag, which is where
-## ownership lives ([Gen2WorldDecoration]). The array holds `DECOFLAG_*` indices
-## and the walk is `SetSpecificDecorationFlag`, so `GetDecorationID` maps each
-## one onto a decoration first. The array is not cleared, so the
-## walk is idempotent and a decoration received while a different slot was
-## loaded still arrives.
+## `CopyMysteryGiftReceivedDecorationsToPC`, run once per Continue: every flag the
+## array carries becomes the decoration's own event flag, which is where ownership
+## lives ([Gen2WorldDecoration]). The array holds `DECOFLAG_*` indices and the walk
+## is `SetSpecificDecorationFlag`, so `GetDecorationID` maps each one onto a
+## decoration first. The array is not cleared, so the walk is idempotent and a
+## decoration received while a different slot was loaded still arrives.
 static func copy_decorations_to_pc(
 	section: Dictionary, data: GameData, state: Gen2WorldState
 ) -> int:
@@ -217,10 +216,9 @@ static func gift_at(table: Array, index: int) -> int:
 	return int(table[index]) & 0xFF
 
 
-## `StageDataForMysteryGift`: the twenty bytes this Game Boy holds out to the
-## other one. Every field is read at the moment the window opens, so the item
-## and the decoration a partner offers are rolled here rather than by whoever
-## receives them.
+## `StageDataForMysteryGift`: the twenty bytes this Game Boy holds out to the other
+## one. Every field is read at the moment the window opens, so the item and the
+## decoration a partner offers are rolled here rather than by whoever receives them.
 static func stage_player_data(
 	save: Gen2SaveData, section: Dictionary, dex_caught: int,
 	random: RandomNumberGenerator
@@ -244,11 +242,10 @@ static func stage_player_data(
 	}
 
 
-## `StageDataForMysteryGift.RandomSample`, which is four weighted bands rather
-## than an index: about 90% of the time a row of the table's first sixteen,
-## then eight, then eight, then one of the last two. The player's own ID picks
-## the odd row inside a band, so two players sitting down together do not offer
-## the same thing.
+## `StageDataForMysteryGift.RandomSample`, which is four weighted bands rather than
+## an index: about 90% of the time a row of the table's first sixteen, then eight,
+## then eight, then one of the last two. The player's own ID picks the odd row
+## inside a band, so two players sitting down together do not offer the same thing.
 static func _random_sample(
 	high: int, low: int, random: RandomNumberGenerator
 ) -> int:

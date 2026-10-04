@@ -4676,10 +4676,9 @@ func gen1_pikachu_landed() -> void:
 		pikachu.set_hidden(false)
 
 
-## The follower as the renderer draws an actor, or empty while slot fifteen's
-## image index is `$ff`.
-## `EmotionBubble` reads the slot's pixels whether or not its image is drawn, so
-## a hidden follower still carries its bubble.
+## The follower as the renderer draws an actor, or empty while slot fifteen's image
+## index is `$ff`. `EmotionBubble` reads the slot's pixels whether or not its image
+## is drawn, so a hidden follower still carries its bubble.
 func gen1_pikachu_sprite() -> Dictionary:
 	if pikachu == null or data == null or (not pikachu.visible() and pikachu.emote_frames <= 0):
 		return {}
@@ -6946,9 +6945,8 @@ func _gen1_pc_steps(machine: Array) -> Array:
 	]
 
 
-## `GetPrizeMenuId` subtracts `TEXT_GAMECORNERPRIZEROOM_PRIZE_VENDOR_1` from the
-## id that opened it, so a vendor's list is their place among the map's own
-## prize rows.
+## `GetPrizeMenuId` subtracts `TEXT_GAMECORNERPRIZEROOM_PRIZE_VENDOR_1` from the id
+## that opened it, so a vendor's list is their place among the map's own prize rows.
 func _gen1_prize_steps(text_id: int) -> Array:
 	var menus: Array = data.prize_menus() if data != null else []
 	var first: int = _gen1_first_prize_text()
@@ -11393,9 +11391,8 @@ func player_input_move(direction: Vector2i) -> Dictionary:
 	## turn however the facing sits; move_result owns that branch.
 	var forced: StringName = StringName(forced_movement().get("kind", &"none"))
 	## `.CheckTurning`'s own first test is `wPlayerTurningDirection`, so a turn is
-	## only ever taken from a standstill. On ice that byte stays set between
-	## steps, which is what makes a slide change direction without spending a
-	## turn on it.
+	## only ever taken from a standstill. On ice that byte stays set between steps,
+	## which is what makes a slide change direction without spending a turn on it.
 	if _gen1:
 		if _gen1_turns_on(direction):
 			var shown: int = player_facing
@@ -12010,10 +12007,9 @@ func _apply_map(
 	# temporary map-flag reset. Flagless visibility and movement-level show/hide
 	# are live-map changes, so only those overrides expire on a map load.
 	_clear_transient_object_visibility_overrides()
-	## `EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1` to `_8` are Crystal's first eight
-	## flags; Generation 1's first eight are Pallet Town's own, the lab visit
-	## and the dex rating among them, and nothing on that cartridge clears a
-	## flag on a map load.
+	## `EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1` to `_8` are Crystal's first eight flags;
+	## Generation 1's first eight are Pallet Town's own, the lab visit and the dex
+	## rating among them, and nothing on that cartridge clears a flag on a map load.
 	if not _gen1:
 		state.reset_map_reload_flags()
 	_arm_wild_encounter_cooldown(false)

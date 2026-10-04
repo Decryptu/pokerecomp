@@ -60,6 +60,7 @@ func _queue_service() -> void:
 func _enter_mart_buy(host: Gen2WorldServiceScreen) -> void:
 	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_TOP)
 	assert_true(host.handle_button(PokeButton.A))
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_LIST)
 
 
@@ -69,6 +70,7 @@ func _enter_mart_buy(host: Gen2WorldServiceScreen) -> void:
 func _quit_mart(host: Gen2WorldServiceScreen) -> void:
 	if host._mart_stage != Gen2WorldServiceScreen.MART_TOP:
 		assert_true(host.handle_button(PokeButton.B))
+		Fixture.settle_menu_fade(_world_screen)
 		assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_TOP)
 	assert_true(host.handle_button(PokeButton.B))
 
@@ -333,6 +335,7 @@ func test_the_hall_of_fame_row_walks_the_stored_records() -> void:
 
 	host._cursor = rows.find(Gen2WorldPC.PCPCITEM_HALL_OF_FAME)
 	host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_not_null(host._hof)
 	assert_eq(host._hof.remaining(), host._save.hall_of_fame[0]["mons"].size())
 	assert_eq(
@@ -634,6 +637,7 @@ func test_the_shop_opens_over_the_map_and_the_buy_screen_only_after_buy() -> voi
 	)
 
 	assert_true(host.handle_button(PokeButton.A))
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_LIST)
 	assert_false(host._mart_over_map)
 	var listing: Image = (host._mart_view.texture as ImageTexture).get_image()
@@ -1386,6 +1390,7 @@ func test_town_map_decoration_opens_fullscreen_and_closes_the_script_request() -
 
 	_world_screen._text_box.finish()
 	_world_screen._advance_script_input()
+	Fixture.settle_menu_fade(_world_screen)
 	await get_tree().process_frame
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
@@ -1401,6 +1406,7 @@ func test_town_map_decoration_opens_fullscreen_and_closes_the_script_request() -
 	assert_true(host.handle_button(PokeButton.B))
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_false(_world_screen._world.script_input_waiting())
 
 
@@ -1664,6 +1670,7 @@ func test_the_mailbox_lists_its_authors_and_reads_one() -> void:
 	assert_eq(host._pc_rows.size(), Gen2WorldPC.MAILBOX_ROWS.size())
 
 	host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_not_null(host._mail_reader)
 	## `.loop` returns on A or B and on nothing else.
 	assert_false(host.handle_button(PokeButton.DOWN))

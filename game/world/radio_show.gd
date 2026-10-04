@@ -1,12 +1,11 @@
 class_name Gen2RadioShow
 extends RefCounted
 
-## `engine/pokegear/radio.asm`: `RadioJumptable`, dispatched once a hardware
-## frame the way `PlayRadioShow` is; [Gen2WorldRadio] is the dial. Scene-free
-## with its own generator: a caller hands it the facts the source reads off
-## WRAM. Segments are named after the source's labels because the numbers are
-## profile split: Gold and Silver ship no Buena's Password, so every segment
-## past `$04` sits fifteen lower.
+## `engine/pokegear/radio.asm`: `RadioJumptable`, dispatched once a hardware frame
+## the way `PlayRadioShow` is; [Gen2WorldRadio] is the dial. Scene-free with its own
+## generator: a caller hands it the facts the source reads off WRAM. Segments are
+## named after the source's labels because the numbers are profile split: Gold and
+## Silver ship no Buena's Password, so every segment past `$04` sits fifteen lower.
 
 ## `wCurRadioLine`'s own RADIO_SCROLL entry, which every printing segment leaves
 ## behind it.
@@ -259,16 +258,14 @@ var _random: RandomNumberGenerator = null
 var _context: Dictionary = {}
 var _crystal: bool = true
 
-## `wCurRadioLine`, `wNextRadioLine`, `wNumRadioLinesPrinted` and
-## `wRadioTextDelay`.
+## `wCurRadioLine`, `wNextRadioLine`, `wNumRadioLinesPrinted` and `wRadioTextDelay`.
 var _line: StringName = &""
 var _next_line: StringName = &""
 var _lines_printed: int = 0
 var _delay: int = 0
 
-## The two rows `PrintRadioLine` writes: the first line printed lands on the
-## top one and every line after it on the bottom, which `RadioScroll` then
-## copies up.
+## The two rows `PrintRadioLine` writes: the first line printed lands on the top one
+## and every line after it on the bottom, which `RadioScroll` then copies up.
 var _top: String = ""
 var _bottom: String = ""
 

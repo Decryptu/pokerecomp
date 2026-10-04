@@ -81,6 +81,7 @@ func _run_script() -> void:
 	_world_screen._show_script_results(
 		_world_screen._world.dispatch_script_events(TALK_CELL)
 	)
+	Fixture.settle_menu_fade(_world_screen)
 
 
 func _host() -> Gen2CardFlipScreen:
@@ -141,6 +142,7 @@ func test_saying_no_closes_the_table_and_writes_the_coins_back() -> void:
 			_host().game().sfx_finished()
 		_host().advance_frame()
 	assert_null(_host(), "saying no must close the table")
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(
 		_world_screen._world.state.coins(), COINS,
 		"a game that was never played leaves the balance where it was"
@@ -167,6 +169,7 @@ func test_a_played_round_reaches_the_world_state() -> void:
 			_host().game().sfx_finished()
 		_host().advance_frame()
 	assert_null(_host(), "saying no to another round must close the table")
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(
 		_world_screen._world.state.coins(), walked,
 		"the balance the table left must reach the world"

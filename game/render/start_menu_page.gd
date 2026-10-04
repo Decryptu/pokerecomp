@@ -126,6 +126,7 @@ const SAVE_YES_NO_OPTIONS: Array[String] = ["YES", "NO"]
 var frame_style: int = 0
 var font: Gen2Font = null
 var menu: Gen2MenuPage = null
+var palette: PackedColorArray = PackedColorArray()
 
 
 static func from_data(data: GameData) -> Gen2StartMenuPage:
@@ -183,7 +184,10 @@ func render_list(
 	if not safari.is_empty():
 		## `RedisplayStartMenu` draws it behind `DrawStartMenu`, left of the list.
 		_blit(image, _render_safari_steps(safari), Vector2i.ZERO)
-	_blit(image, menu.render(box, labels, cursor, "", 0, extras), box.border_position())
+	_blit(
+		image, menu.render(box, labels, cursor, "", 0, extras, palette),
+		box.border_position()
+	)
 	if not description.is_empty():
 		_blit(image, _render_account(description), ACCOUNT_AT)
 	return image
@@ -214,7 +218,10 @@ func render_save(state: Dictionary, behind: Image = null) -> Image:
 			SAVE_YES_NO_AT.x + SAVE_YES_NO_SPAN.x,
 			SAVE_YES_NO_AT.y + SAVE_YES_NO_SPAN.y, SAVE_YES_NO_FLAGS
 		)
-		_blit(image, menu.render(box, SAVE_YES_NO_OPTIONS, cursor), SAVE_YES_NO_AT)
+		_blit(
+			image, menu.render(box, SAVE_YES_NO_OPTIONS, cursor, "", 0, [], palette),
+			SAVE_YES_NO_AT
+		)
 	return image
 
 
@@ -248,7 +255,8 @@ func _render_save_info(state: Dictionary) -> Image:
 			"at": SAVE_DEX_AT,
 		})
 	return menu.render(
-		box, ["PLAYER", "BADGES", "#DEX" if dex else " ", "TIME"], -1, "", 0, extras
+		box, ["PLAYER", "BADGES", "#DEX" if dex else " ", "TIME"], -1, "", 0, extras,
+		palette
 	)
 
 
@@ -453,4 +461,4 @@ func _text(
 
 ## `PAL_BG_TEXT`, which is what every one of these boxes is drawn with.
 func _palette() -> PackedColorArray:
-	return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	return palette if palette.size() >= 4 else Gen2WorldPalette.text_palette()

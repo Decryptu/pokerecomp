@@ -1,11 +1,10 @@
 class_name Gen2WorldScriptRunner
 extends RefCounted
 
-## Bounded, scene-free execution of the supported overworld script commands.
-## A runner owns one invocation, reads imported data and commits ordinary
-## command changes at END or ENDCALLBACK.
-## Text and explicit warps are returned as structured pauses for the screen or
-## another caller to acknowledge.
+## Bounded, scene-free execution of the supported overworld script commands. A
+## runner owns one invocation, reads imported data and commits ordinary command
+## changes at END or ENDCALLBACK. Text and explicit warps are returned as structured
+## pauses for the screen or another caller to acknowledge.
 
 var data: GameData = null
 var state: Gen2WorldState = null
@@ -80,11 +79,10 @@ var _staged_warp: Dictionary = {}
 var _script_value: int = 0
 var _command_count: int = 0
 ## `RunScriptCommand`'s own artefact: every command executed, with the
-## `bank:address` the cartridge would have in wScriptBank:wScriptPos when it
-## ran. Collected only while `trace_commands` is on, which
-## `tools/trace_world_script.gd` turns on for every runner a world builds so a
-## walked conversation can be diffed against the same walk taken off a real
-## cartridge.
+## `bank:address` the cartridge would have in wScriptBank:wScriptPos when it ran.
+## Collected only while `trace_commands` is on, which `tools/trace_world_script.gd`
+## turns on for every runner a world builds so a walked conversation can be diffed
+## against the same walk taken off a real cartridge.
 static var trace_commands: bool = false
 var command_trace: Array[Dictionary] = []
 ## `Script_sdefer`'s own `RUN_DEFERRED_SCRIPT`, which is the only thing that
@@ -318,11 +316,10 @@ const DAY_CARE_ROLE_OF: Dictionary = {
 ## the party list `SelectMonFromParty` opens, so the whole routine is one host
 ## request; the map script's own `waitbutton` follows it.
 const SPECIAL_NAME_RATER: int = 87
-## `engine/events/haircut.asm`'s four routines, each of them
-## `SelectMonFromParty` and then a read. `BillsGrandfather` answers the chosen
-## member's *species*, since it names it with `GetPokemonName`; the three
-## grooming routines answer `HappinessData_*`'s own row and name the member with
-## `GetCurNickname`.
+## `engine/events/haircut.asm`'s four routines, each of them `SelectMonFromParty`
+## and then a read. `BillsGrandfather` answers the chosen member's *species*, since
+## it names it with `GetPokemonName`; the three grooming routines answer
+## `HappinessData_*`'s own row and name the member with `GetCurNickname`.
 const SPECIAL_BILLS_GRANDFATHER: int = 77
 const SPECIAL_OLDER_HAIRCUT_BROTHER: int = 97
 const SPECIAL_YOUNGER_HAIRCUT_BROTHER: int = 98
@@ -3340,8 +3337,7 @@ func _command_trade(_source_opcode: int, command: Dictionary, _bank: int) -> Dic
 
 ## `GetTradeMonNames`, run in front of every box: the wanted species into
 ## `wStringBuffer1` with the row's gender symbol on it, the offered one into
-## `wStringBuffer2`, and the wanted name again, plain, into
-## `wMonOrItemNameBuffer`.
+## `wStringBuffer2`, and the wanted name again, plain, into `wMonOrItemNameBuffer`.
 func _set_trade_names(record: Dictionary) -> void:
 	if data == null:
 		return
@@ -3742,11 +3738,10 @@ func _stage_item_delta(item: int, delta: int) -> Dictionary:
 
 
 ## `GiveMoney` and `TakeMoney` (`engine/events/money.asm`). Neither refuses and
-## neither leaves the account alone: a gift past `MAX_MONEY` writes the ceiling
-## and a payment past the balance writes zero, both returning the carry that
-## only `BankOfMom` reads. `Script_givemoney` and `Script_takemoney` write no
-## wScriptVar of their own, so what they answer is the balance rather than a
-## rejection.
+## neither leaves the account alone: a gift past `MAX_MONEY` writes the ceiling and
+## a payment past the balance writes zero, both returning the carry that only
+## `BankOfMom` reads. `Script_givemoney` and `Script_takemoney` write no wScriptVar
+## of their own, so what they answer is the balance rather than a rejection.
 func _stage_money_delta(account: int, amount: int, give: bool) -> Dictionary:
 	if account < 0 or amount < 0:
 		return {"ok": false, "reason": &"invalid_money_command"}
@@ -5719,10 +5714,9 @@ func _battle_tower_random(offset: int) -> RandomNumberGenerator:
 	return random
 
 
-## The item pocket as `BattleTower_GiveReward` walks it, staged rows over the
-## saved ones. A row staged to zero is one the script has just spent and is not
-## in the pack any more.
-## `wNumItems`' own pocket, which `BattleTower_GiveReward` counts.
+## The item pocket as `BattleTower_GiveReward` walks it, staged rows over the saved
+## ones. A row staged to zero is one the script has just spent and is not in the
+## pack any more. `wNumItems`' own pocket, which `BattleTower_GiveReward` counts.
 func _item_pocket() -> Dictionary:
 	var pocket: Dictionary = {}
 	var pack: Dictionary = _pack_items()
@@ -6489,10 +6483,9 @@ func _finish_check_poke_mail(result: Dictionary, values: Dictionary) -> Dictiona
 	if not _mail_message_matches(expected, carried):
 		_script_value = Gen2WorldPartyHost.POKEMAIL_WRONG_MAIL
 		return advance()
-	## `CheckCurPartyMonFainted`: carry when every other slot is fainted, so
-	## handing this one over would black the player out. An egg is HP 0 and
-	## counts as fainted here, which is the routine reading `wPartyMon1HP` and
-	## nothing else.
+	## `CheckCurPartyMonFainted`: carry when every other slot is fainted, so handing
+	## this one over would black the player out. An egg is HP 0 and counts as
+	## fainted here, which is the routine reading `wPartyMon1HP` and nothing else.
 	var fainted: Array = result.get("party_fainted", [])
 	var healthy_elsewhere: bool = false
 	for index: int in fainted.size():
@@ -6532,10 +6525,9 @@ func _byte_array(raw: Variant) -> PackedByteArray:
 	return out
 
 
-## `ReadCaughtData` and `SeerAction`, which are one reading of the row and then
-## the boxes that reading picked.
-## Nothing here writes anything: every branch is a run of `PrintText`s and the
-## five buffers they read, so the whole routine is text.
+## `ReadCaughtData` and `SeerAction`, which are one reading of the row and then the
+## boxes that reading picked. Nothing here writes anything: every branch is a run of
+## `PrintText`s and the five buffers they read, so the whole routine is text.
 func _finish_poke_seer(special: int, result: Dictionary) -> Dictionary:
 	if int(result.get("species", 0)) == SPECIES_EGG:
 		return _seer_boxes(special, ["egg"])
@@ -6722,12 +6714,11 @@ func _stage_item_ball() -> Dictionary:
 	})
 
 
-## `FruitTreeScript` (`engine/events/fruit_trees.asm`). Like an item ball it is
-## a script rather than a host request: `fruittree` is the whole of the object's
-## own script, and the routine below it is text, a flag and a `giveitem`.
-## The first pause is `FruitBearingTreeText`; `TryResetFruitTrees` and
-## `CheckFruitTree` run on its acknowledge, since the source's own `callasm`s sit
-## behind the `promptbutton`.
+## `FruitTreeScript` (`engine/events/fruit_trees.asm`). Like an item ball it is a
+## script rather than a host request: `fruittree` is the whole of the object's own
+## script, and the routine below it is text, a flag and a `giveitem`. The first
+## pause is `FruitBearingTreeText`; `TryResetFruitTrees` and `CheckFruitTree` run on
+## its acknowledge, since the source's own `callasm`s sit behind the `promptbutton`.
 func _stage_fruit_tree(tree_id: int) -> Dictionary:
 	if data == null:
 		return _fail(&"missing_world_data", {"tree_id": tree_id})

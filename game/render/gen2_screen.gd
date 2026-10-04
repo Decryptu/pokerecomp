@@ -146,6 +146,7 @@ var _cover_opening: bool = false
 ## after that point cannot run it twice.
 var _cover_rebuild: Callable = Callable()
 var _cover_clock := Gen2WorldAnimation.FrameClock.new()
+var _white: ColorRect = null
 
 
 func _ready() -> void:
@@ -183,6 +184,12 @@ func _ready() -> void:
 	_cover.visible = false
 	_cover.draw.connect(_draw_cover)
 	add_child(_cover)
+	_white = ColorRect.new()
+	_white.name = "White"
+	_white.color = Color.WHITE
+	_white.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_white.visible = false
+	add_child(_white)
 	set_process(false)
 	apply_screen_fill()
 	_fit()
@@ -538,6 +545,12 @@ func play_view_cover(rebuild: Callable) -> void:
 	set_process(true)
 
 
+## `ClearBGPalettes`' `$ffff`: the drawn screen white over every layer.
+func set_white(on: bool) -> void:
+	if _white != null:
+		_white.visible = on
+
+
 func view_cover_active() -> bool:
 	return _cover != null and _cover.visible
 
@@ -744,6 +757,9 @@ func _fit() -> void:
 	_container.position = ((size - drawn) * 0.5).floor()
 	_native.size = drawn
 	_native.position = _container.position
+	if _white != null:
+		_white.size = drawn
+		_white.position = _container.position
 	if _mask != null:
 		_mask.size = Vector2(view)
 		_mask.queue_redraw()

@@ -857,6 +857,54 @@ func _press_elevator(button: int) -> void:
 var question_page: String = ""
 var box_palette: PackedColorArray = PackedColorArray()
 var _no_request: bool = false
+## The world's `FadeToMenu` and `CloseSubmenu`; null opens and closes at once.
+var menu_transition: Gen2MenuTransition = null
+var _fade_order: int = Gen2WorldPalette.FADE_IDENTITY
+## Whether `BuyMenu` is up behind a `FadeToMenu`, or waiting on one.
+var _buy_faded: bool = false
+var _buy_fading: bool = false
+var _hof_faded: bool = false
+
+## The modes whose boxes stand over the map, which a fade has to redraw.
+const FADE_REDRAWN_MODES: Array = [
+	MODE.MENU, MODE.PC, MODE.PC_ITEMS, MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU,
+	MODE.PC_MAIL_CONFIRM, MODE.PC_ASK, MODE.PC_TEXT,
+]
+
+
+func set_fade_order(order: int) -> void:
+	if order == _fade_order:
+		return
+	_fade_order = order
+	if _box != null:
+		_box.palette = _faded_box_palette()
+	if _service_view == null:
+		return
+	if _mode == MODE.MART:
+		_render_mart()
+	elif FADE_REDRAWN_MODES.has(_mode):
+		_render_rows()
+
+
+func _faded_box_palette() -> PackedColorArray:
+	if _fade_order == Gen2WorldPalette.FADE_IDENTITY:
+		return box_palette
+	return Gen2WorldPalette.fade_palette(
+		box_palette if box_palette.size() >= 4 else Gen2WorldPalette.text_palette(),
+		_fade_order
+	)
+
+
+func _fade_to_menu(open: Callable) -> void:
+	if menu_transition == null:
+		open.call()
+		return
+	menu_transition.fade_to_menu(open)
+
+
+func _close_submenu() -> void:
+	if menu_transition != null:
+		menu_transition.close_submenu()
 
 
 func _open_menu(input: Dictionary) -> void:
@@ -1569,6 +1617,14 @@ func _gen1_mart() -> bool:
 
 ## `BuyMenuLoop` restores its cursor; pokered's loops zero `wCurrentMenuItem`.
 func _return_to_mart_list(stage: StringName) -> void:
+	## `BuyMenu`'s `FadeToMenu`, once a visit: its loop stays on the screen.
+	if stage == MART_LIST and _mart_over_map and not _gen1_mart() and not _buy_fading:
+		_buy_fading = true
+		_fade_to_menu(_return_to_mart_list.bind(stage))
+		return
+	if _buy_fading:
+		_buy_fading = false
+		_buy_faded = menu_transition != null
 	_mart_stage = stage
 	_mart_over_map = false
 	if _gen1_mart():
@@ -1772,10 +1828,15 @@ func _buy_mart_selection() -> void:
 ## B off the buy or sell list: `.Buy` and `.Sell` both fall into `.AnythingElse`;
 ## only `.Quit` and the four single-list shop types print the come-again box.
 func _leave_mart() -> void:
+	## `BuyMenu`'s `CloseSubmenu`; the sell list shares this way out and has none.
+	var faded: bool = _buy_faded
+	_buy_faded = false
 	if _mart_standard():
 		_show_mart_top(_mart_text("ask_more"))
-		return
-	_quit_mart()
+	else:
+		_quit_mart()
+	if faded:
+		_close_submenu()
 
 
 func _quit_mart() -> void:
@@ -2606,7 +2667,7 @@ func _confirm_pc_menu_row(row: int) -> void:
 		Gen2WorldPC.PCPCITEM_OAKS_PC:
 			_open_pc_text([_said(_pc_text("oaks_pc"))], &"pc_oak", "")
 		Gen2WorldPC.PCPCITEM_HALL_OF_FAME:
-			_open_hall_of_fame(0)
+			_fade_to_menu(_open_hall_of_fame_machine)
 		Gen2WorldPC.PCPCITEM_TURN_OFF:
 			## `TurnOffPC` prints and `.shutdown` runs behind it with no press.
 			_open_pc_text([_said(_pc_text("closed"), &"none")], &"pc_shut_down", "")
@@ -3826,11 +3887,11 @@ func _open_mail_submenu(index: int) -> void:
 func _confirm_mail_submenu(row: int) -> void:
 	match row:
 		Gen2WorldPC.MAILBOXITEM_READ:
-			_open_mail_reader()
+			_fade_to_menu(_open_mail_reader)
 		Gen2WorldPC.MAILBOXITEM_PUT_IN_PACK:
 			_open_mail_confirm()
 		Gen2WorldPC.MAILBOXITEM_ATTACH:
-			_open_mail_attach()
+			_fade_to_menu(_open_mail_attach)
 		_:
 			_open_mailbox()
 
@@ -3877,6 +3938,7 @@ func _on_mail_reader_closed() -> void:
 	_set_overlay_open(false)
 	## `.ReadMail` ends in `CloseSubmenu`, which is back into `MailboxPC.loop`.
 	_open_mailbox()
+	_close_submenu()
 
 
 func _open_mail_attach() -> void:
@@ -3929,6 +3991,7 @@ func _on_mail_attach_selected(party_index: int) -> void:
 func _leave_mail_attach() -> void:
 	_close_mail_attach()
 	_open_mailbox()
+	_close_submenu()
 
 
 func _close_mail_attach() -> void:
@@ -3968,6 +4031,18 @@ func _on_boxes_cry(species: int) -> void:
 	cry_requested.emit(species)
 
 
+func _open_hall_of_fame_machine() -> void:
+	_hof_faded = menu_transition != null
+	_open_hall_of_fame(0)
+
+
+func _leave_hall_of_fame_machine() -> void:
+	_open_pc(&"pokemon_center")
+	if _hof_faded:
+		_hof_faded = false
+		_close_submenu()
+
+
 ## `_HallOfFamePC.MasterLoop`: one stored team at a time, newest first, until
 ## the records run out or B leaves; `PKMNLeaguePC` walks them oldest first.
 func _open_hall_of_fame(index: int) -> void:
@@ -3977,7 +4052,7 @@ func _open_hall_of_fame(index: int) -> void:
 	)
 	if pages.is_empty():
 		## `.absent` and `.invalid` both answer carry, back to the machine's menu.
-		_open_pc(&"pokemon_center")
+		_leave_hall_of_fame_machine()
 		return
 	var host := Gen2HallOfFameScreen.new()
 	host.viewer = true
@@ -3998,7 +4073,7 @@ func _on_hall_of_fame_closed() -> void:
 		_hof = null
 	_set_overlay_open(false)
 	if cancelled:
-		_open_pc(&"pokemon_center")
+		_leave_hall_of_fame_machine()
 		return
 	_open_hall_of_fame(_hof_index + 1)
 
@@ -4146,6 +4221,12 @@ func radio_music_playing() -> int:
 ## One hardware frame of whichever card is open. Only the radio card spends any:
 ## `PlayRadioShow` is the one thing the Pokegear runs per frame.
 func advance_frame() -> void:
+	## `FadeOutToWhite` and `CloseSubmenu` are inside the routine that called them.
+	if menu_transition == null or not menu_transition.active():
+		_advance_live_frame()
+
+
+func _advance_live_frame() -> void:
 	_advance_box_frame()
 	if _advance_frame_hold():
 		return
@@ -4867,7 +4948,7 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		_service_drawn = false
 		_apply_layer_visibility()
 		return
-	_service_page.palette = box_palette
+	_service_page.palette = _faded_box_palette()
 	var labels: Array = [] if _mode in [MODE.PHONE, MODE.PC_TEXT] or _box_printing() \
 		else _row_labels(values)
 	var words: Array = _page_words()

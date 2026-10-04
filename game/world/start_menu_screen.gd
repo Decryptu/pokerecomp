@@ -256,9 +256,8 @@ var _box_owes_press: bool = false
 ## What runs when the last page of the box is pressed past, instead of the pack
 ## coming back: the next move an evolution has to offer.
 var _pack_result_next: Callable = Callable()
-## AskTeachTMHM's resolved prompt, held while its yes/no is on screen, and
-## whether the party list that follows is ChooseMonToLearnTMHM's rather than
-## `.Party`'s.
+## AskTeachTMHM's resolved prompt, held while its yes/no is on screen, and whether
+## the party list that follows is ChooseMonToLearnTMHM's rather than `.Party`'s.
 var _teach_prompt: Dictionary = {}
 var _teach_cursor: int = 0
 var _teaching: bool = false
@@ -352,6 +351,9 @@ var _mail_target: int = -1
 var _mail_swap: bool = false
 var _view: TextureRect = null
 var _page: Gen2StartMenuPage = null
+## The world's `FadeToMenu` and `CloseSubmenu`; null opens and closes at once.
+var menu_transition: Gen2MenuTransition = null
+var _fade_order: int = Gen2WorldPalette.FADE_IDENTITY
 ## `LoadPartyMenuGFX`: the target list is the party menu, so it is drawn by the
 ## page that draws the party menu everywhere else.
 var _target_page: Gen2PartyMenuPage = null
@@ -406,6 +408,32 @@ func set_party_context(save: Gen2SaveData, persist: bool = true) -> void:
 ## way the source's wBattleMenuCursorPosition survives a reopen.
 func cursor() -> int:
 	return _menu.cursor if _menu != null else 0
+
+
+func set_fade_order(order: int) -> void:
+	if order == _fade_order:
+		return
+	_fade_order = order
+	if _page != null:
+		_page.palette = Gen2WorldPalette.text_palette(order)
+	_render_hardware()
+
+
+func _fade_to_menu(opening: Callable) -> void:
+	if menu_transition == null:
+		opening.call()
+		return
+	menu_transition.fade_to_menu(opening)
+
+
+## `CloseSubmenu`: the list comes back under the white, [param done] once the map has.
+func _close_submenu(done: Callable = Callable()) -> void:
+	_open_list_mode()
+	if menu_transition == null:
+		if done.is_valid():
+			done.call()
+		return
+	menu_transition.close_submenu(done)
 
 
 ## `GiveTakePartyMonItem`'s GIVE, which opens the pack over a Pokemon the player
@@ -759,7 +787,7 @@ func _confirm_now() -> void:
 		## Options_Cancel is the only handler that reads A.
 		Mode.OPTIONS:
 			if _options_menu.is_cancel():
-				_open_list_mode()
+				_close_submenu()
 		## The VIEW row is read with left and right, the way a value row is, so
 		## A does nothing on it.
 		Mode.MODS:
@@ -823,8 +851,10 @@ func _cancel_now() -> void:
 				battle_item_chosen.emit(0)
 			elif _depositing_or_selling() or _battling:
 				closed.emit()
-			else:
+			elif _give_target >= 0:
 				_open_list_mode()
+			else:
+				_close_submenu()
 		Mode.PACK_ITEM, Mode.PACK_TEACH:
 			_open_pack_mode(false)
 		Mode.PACK_RESULT:
@@ -841,7 +871,11 @@ func _cancel_now() -> void:
 			_open_target_mode()
 		Mode.PACK_TARGET:
 			_remember_target()
-			_open_item_mode()
+			## `UseRegisteredItem.Party` has no item menu behind its list.
+			if _using_registered:
+				closed.emit()
+			else:
+				_open_item_mode()
 		## B at the yes/no is `YesNoBox`'s no, which is the carry `TossMenu`
 		## returns on. The submenu is already closed by then, so it lands back on
 		## the pocket list rather than on the item's own menu.
@@ -851,7 +885,9 @@ func _cancel_now() -> void:
 		Mode.SAVE_FAILED, Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
 			_cancel_save()
 		## `_Option.joypad_loop` exits on PAD_START | PAD_B from any row.
-		Mode.OPTIONS, Mode.MODS, Mode.FIELD_MOVES:
+		Mode.OPTIONS:
+			_close_submenu()
+		Mode.MODS, Mode.FIELD_MOVES:
 			_open_list_mode()
 		Mode.MOD_OPTIONS:
 			_open_mods_mode()
@@ -868,7 +904,7 @@ func _confirm_list() -> void:
 				and _world.gen1_link_state() == Gen1Layout.LINK_STATE_IN_CABLE_CLUB:
 				_show_pack_result(_pack_text(TEXT_CANNOT_USE_ITEMS), _open_list_mode)
 				return
-			_open_pack_mode()
+			_fade_to_menu(_open_pack_mode)
 		Gen2WorldStartMenu.ITEM_SAVE:
 			_open_save_confirm_mode()
 		Gen2WorldStartMenu.ITEM_RESET:
@@ -876,7 +912,7 @@ func _confirm_list() -> void:
 		Gen2WorldStartMenu.ITEM_QUIT:
 			_enter_save_mode(Mode.QUIT_ASK, QUIT_ASK_LINES, 0)
 		Gen2WorldStartMenu.ITEM_OPTION:
-			_open_options_mode()
+			_fade_to_menu(_open_options_mode)
 		Gen2WorldStartMenu.ITEM_MODS:
 			_open_mods_mode()
 		Gen2WorldStartMenu.ITEM_FIELD_MOVES:
@@ -993,9 +1029,8 @@ func _render_options_menu() -> void:
 	_render_hardware()
 
 
-## The MODS entry: the mods that registered a setting, one row each. Only
-## reachable when there is at least one, which is what puts the entry in the list
-## at all.
+## The MODS entry: the mods that registered a setting, one row each. Only reachable
+## when there is at least one, which is what puts the entry in the list at all.
 func _open_mods_mode() -> void:
 	_mode = Mode.MODS
 	_mod_ids = Gen2ModHost.instance().option_mod_ids()
@@ -1842,7 +1877,11 @@ func _use_field_item(item: int) -> void:
 		return
 	## `.CheckIfRegistered`: the Bicycle's two scripts each have a silent copy.
 	request["registered"] = _using_registered
-	field_item_used.emit(request)
+	## `.used_item`'s `ExitAllMenus`, which SELECT and a Generation 1 box never reach.
+	if _using_registered or _gen1_pack():
+		field_item_used.emit(request)
+		return
+	_close_submenu(field_item_used.emit.bind(request))
 
 
 ## One `ItemEffects` entry each, in the order `Gen2WorldPack.FIELD_EFFECTS` names
@@ -3092,11 +3131,18 @@ func _save_text() -> String:
 	]
 
 
+func _new_page() -> Gen2StartMenuPage:
+	var page: Gen2StartMenuPage = Gen2StartMenuPage.from_data(_data)
+	if page != null:
+		page.palette = Gen2WorldPalette.text_palette(_fade_order)
+	return page
+
+
 func _hardware_image() -> Image:
 	if _data == null:
 		return null
 	if _page == null:
-		_page = Gen2StartMenuPage.from_data(_data)
+		_page = _new_page()
 	if _page == null:
 		return null
 	match _mode:

@@ -1,10 +1,9 @@
 class_name Gen2WorldTileset
 extends RefCounted
 
-## Runtime data for one overworld tileset.
-## Graphics are kept in the cache as an indexed tile strip and loaded lazily by
-## GameData. The metatile and collision tables stay here because map expansion
-## needs them without opening the cartridge.
+## Runtime data for one overworld tileset. Graphics are kept in the cache as an
+## indexed tile strip and loaded lazily by GameData. The metatile and collision
+## tables stay here because map expansion needs them without opening the cartridge.
 
 var number: int = 0
 ## The `TILESET_*` constant's own name, stamped by [GameData].
@@ -62,11 +61,10 @@ static func _bookshelves_from_cache(value: Variant) -> Dictionary:
 	return out
 
 
-## Which tile of the strip one of a block's sixteen positions draws, in the
-## metatile byte's own numbering: 0..95 is the first graphics block and 128..223
-## the second. A byte past the strip is an unused block's $FF placeholder and
-## resolves to 0, so a caller can index [method GameData.world_tileset_indices]
-## with the answer.
+## Which tile of the strip one of a block's sixteen positions draws, in the metatile
+## byte's own numbering: 0..95 is the first graphics block and 128..223 the second.
+## A byte past the strip is an unused block's $FF placeholder and resolves to 0, so
+## a caller can index [method GameData.world_tileset_indices] with the answer.
 func tile_index(block: int, tile: int) -> int:
 	if block < 0 or block >= block_count or tile < 0 or tile >= Gen2Layout.MAP_BLOCK_TILE_WIDTH * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
 		return 0

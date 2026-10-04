@@ -21,9 +21,8 @@ const LAUNCHER_SCENE: String = "res://game/main/main.tscn"
 const AUDIO_PLAYER_SCRIPT := preload("res://game/audio/gen2_audio_player.gd")
 ## Where `JUMP_OFFSETS` is at its highest, for [method preview_pet_actor_arc].
 const PREVIEW_ARC_TOP_PROGRESS: float = 0.4
-## How far into a view switch's close [method preview_view_cover] photographs:
-## part way down the scatter, where the wipe is readable and the screen is not
-## yet black.
+## How far into a view switch's close [method preview_view_cover] photographs: part
+## way down the scatter, where the wipe is readable and the screen is not yet black.
 const PREVIEW_COVER_FRAMES: int = 10
 const FIELD_MOVE_TEXT_RUNS_ON: Array[int] = [
 	Gen2WorldFieldMove.MOVE_STRENGTH, Gen2WorldFieldMove.MOVE_FLASH,
@@ -142,6 +141,12 @@ var _poison_flash_frames: int = 0
 var _poison_flash_after: Callable = Callable()
 var _script_fade_order: int = Gen2WorldPalette.FADE_IDENTITY
 var _script_fade_white: bool = false
+## `FadeToMenu`, `CloseSubmenu` and `ExitAllMenus`, shared with the hosts.
+var _menu_transition := Gen2MenuTransition.new()
+## The screen opened behind `FadeToMenu`, which `CloseSubmenu` then answers.
+var _faded_menu: StringName = &""
+var _text_palette_kept: PackedColorArray = PackedColorArray()
+var _text_fading: bool = false
 ## `DoBattleTransition` and the battle it is in front of: the encounter is
 ## resolved when the transition starts, and the battle screen is not built until
 ## it has finished.
@@ -418,6 +423,9 @@ func _ready() -> void:
 	_caption.visible = PokeDebugKeys.enabled()
 	_hint.visible = PokeDebugKeys.enabled()
 	_data = _injected_data if _injected_data != null else _selected_runtime_data()
+	_menu_transition.gen1 = _data != null and _data.generation == RomRegistry.GEN1
+	_menu_transition.game = _data.id if _data != null else &"crystal"
+	_menu_transition.changed.connect(_apply_map_fade_step)
 	_build_world()
 	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
 	if input != null and not input.back_requested.is_connected(_on_back_requested):
@@ -992,6 +1000,7 @@ func _advance_presentation(map_pass: bool) -> void:
 	## and nothing else runs while `RunMapSetupScript` is spending its own.
 	_advance_map_fade()
 	_advance_script_fade()
+	_menu_transition.advance_frame()
 	_advance_poison_flash()
 	## `DoBattleTransition`'s own `.loop`, which owns every frame between the
 	## encounter and the battle screen.
@@ -1411,6 +1420,11 @@ func _any_host_open(host_names: Array[StringName]) -> bool:
 ## Whether any embedded screen is up. The six callers below each need a different
 ## set of the other pauses, but they all need this one.
 func _overlay_open() -> bool:
+	return _menu_transition.active() or _screens_up()
+
+
+## [method _overlay_open] without a fade in flight: the START menu comes back in one.
+func _screens_up() -> bool:
 	## Nor is a map fade or a field move's animation, but nothing may move or be
 	## pressed in one: `RunMapSetupScript` and `FlyFunction` leave the joypad unread.
 	return not _map_fade.is_empty() or _battle_transition != null \
@@ -1636,8 +1650,8 @@ func _advance_pressed_action() -> void:
 
 ## `DoBattleTransition` ignores input until the battle screen opens.
 func _input_locked() -> bool:
-	return not _map_fade.is_empty() or not _trainer_approach.is_empty() \
-		or not _field_move_tail.is_empty() \
+	return not _map_fade.is_empty() or _menu_transition.active() \
+		or not _trainer_approach.is_empty() or not _field_move_tail.is_empty() \
 		or _battle_transition != null or _world.phone_ring_active() \
 		or _pokegear_call_tones > 0 or (_effects != null and _effects.holds_map())
 
@@ -1659,10 +1673,9 @@ func _handle_prompt_button(button: int) -> bool:
 		return true
 	return false
 
-## The two OPTION rows a box reads, applied on every box rather than once:
-## `Textbox` reads wTextboxFrame and `PrintLetterDelay` reads the text speed as
-## each one is drawn, and the OPTION menu commits both on the press that changes
-## them.
+## The two OPTION rows a box reads, applied on every box rather than once: `Textbox`
+## reads wTextboxFrame and `PrintLetterDelay` reads the text speed as each one is
+## drawn, and the OPTION menu commits both on the press that changes them.
 func _apply_text_box_options() -> void:
 	if _text_box == null:
 		return
@@ -2207,10 +2220,9 @@ func _end_nuzlocke_run(save: Gen2SaveData) -> void:
 	var written: Dictionary = Gen2SaveStore.save(save, _data)
 	if not bool(written.get("ok", false)):
 		push_error("Could not save the run's end: %s" % String(written.get("message", "")))
-	## The one place the overworld hands the screen back. There is nothing left
-	## to play here, and the save screen is where the slot's own epitaph is: it
-	## lists what the run caught and what it lost, and it will not open this one
-	## again.
+	## The one place the overworld hands the screen back. There is nothing left to
+	## play here, and the save screen is where the slot's own epitaph is: it lists
+	## what the run caught and what it lost, and it will not open this one again.
 	if is_inside_tree():
 		get_tree().change_scene_to_file.call_deferred(Gen2GameRuntime.SAVE_SCENE)
 
@@ -2686,7 +2698,8 @@ func _on_diploma_closed() -> void:
 		Gen2Screen.drop(host)
 	## `Printer_RestartMapMusic`, and `ExitAllMenus` behind both specials.
 	_play_current_map_music()
-	_show_script_results(_world.complete_runtime_request({"ok": true}))
+	_close_faded_menu(func() -> void:
+		_show_script_results(_world.complete_runtime_request({"ok": true})))
 
 
 ## `_UnownPrinter`'s browser. The dex count comes from the request rather than
@@ -2720,7 +2733,8 @@ func _on_unown_printer_closed() -> void:
 		Gen2Screen.drop(host)
 	## `RestartMapMusic` behind `.pressed_b`, and `ReturnToMapFromSubmenu`.
 	_play_current_map_music()
-	_show_script_results(_world.complete_runtime_request({"ok": true}))
+	_close_faded_menu(func() -> void:
+		_show_script_results(_world.complete_runtime_request({"ok": true})))
 
 
 func _open_unown_puzzle(request: Dictionary) -> bool:
@@ -2755,9 +2769,10 @@ func _on_unown_puzzle_closed(solved: bool) -> void:
 	if host != null:
 		Gen2Screen.drop(host)
 	_script_prompt = ""
-	_show_script_results(_world.complete_runtime_request({
-		"ok": true, "script_value": 1 if solved else 0,
-	}))
+	_close_faded_menu(func() -> void:
+		_show_script_results(_world.complete_runtime_request({
+			"ok": true, "script_value": 1 if solved else 0,
+		})))
 
 
 ## `special SlotMachine`. `reanchormap` in front of it is what redraws the map
@@ -2901,9 +2916,13 @@ func _on_slot_machine_closed(coins: int) -> void:
 	if host != null:
 		Gen2Screen.drop(host)
 	_script_prompt = ""
-	## `_SlotMachine` stops `MUSIC_GAME_CORNER` nowhere, so the map's own track
-	## is started again where `reanchormap` would have; `PromptUserToPlaySlots`
-	## never touched it.
+	_close_faded_menu(_resume_after_slot_machine.bind(coins))
+
+
+## `_SlotMachine` stops `MUSIC_GAME_CORNER` nowhere, so the map's own track
+## is started again where `reanchormap` would have; `PromptUserToPlaySlots`
+## never touched it.
+func _resume_after_slot_machine(coins: int) -> void:
 	if _data.generation != RomRegistry.GEN1:
 		_play_current_map_music()
 	_show_script_results(_world.complete_runtime_request({
@@ -2945,8 +2964,12 @@ func _on_card_flip_closed(coins: int) -> void:
 	if host != null:
 		Gen2Screen.drop(host)
 	_script_prompt = ""
-	## `_CardFlip` starts `MUSIC_GAME_CORNER` and stops it nowhere, so the map's
-	## own track is started again where `reanchormap` would have.
+	_close_faded_menu(_resume_after_card_flip.bind(coins))
+
+
+## `_CardFlip` starts `MUSIC_GAME_CORNER` and stops it nowhere, so the map's own
+## track is started again where `reanchormap` would have.
+func _resume_after_card_flip(coins: int) -> void:
 	_play_current_map_music()
 	_show_script_results(_world.complete_runtime_request({
 		"ok": true, "coins": coins,
@@ -3112,11 +3135,15 @@ func _on_move_tutor_closed() -> void:
 		Gen2Screen.drop(host)
 	if _renderer != null:
 		_renderer.refresh()
+	_close_faded_menu(_resume_after_move_tutor)
+	_refresh_labels()
+
+
+func _resume_after_move_tutor() -> void:
 	if _world != null:
 		_show_script_results(_world.complete_runtime_request({
 			"ok": true, "script_value": _move_tutor_script_value,
 		}))
-	_refresh_labels()
 
 
 ## Public screenshot driver for `special MoveTutor`, the same way
@@ -3607,6 +3634,11 @@ func _advance_map_fade() -> void:
 ## fade out's alone, so the way back in flattens onto whatever the new map's own
 ## palette 0 holds.
 func _apply_map_fade_step() -> void:
+	if _screen != null:
+		_screen.set_white(_menu_transition.covered())
+	if _menu_transition.active():
+		_push_fade(_menu_transition.order(), _menu_transition.white_fill())
+		return
 	if _map_fade.is_empty():
 		## The warp's fade is over; whatever a script fade left standing is what
 		## the screen is drawn with, which is the identity unless one is held.
@@ -3939,6 +3971,48 @@ func _push_fade(order: int, white_fill: bool) -> void:
 		_draw_list.fade_white_fill = white_fill
 	if _renderer != null and _renderer.has_method(Gen2ModHost.RENDERER_FADE_METHOD):
 		_renderer.call(Gen2ModHost.RENDERER_FADE_METHOD, order, white_fill)
+	_push_text_fade(order)
+
+
+## `FadeToMenu`: the map and the boxes on it fade to white, then [param open]
+## puts the menu up. [param screen] names it for `CloseSubmenu` and Generation 1.
+func _fade_to_menu(open: Callable, screen: StringName) -> void:
+	_menu_transition.fade_to_menu(_open_faded_menu.bind(open, screen), screen)
+
+
+func _open_faded_menu(open: Callable, screen: StringName) -> void:
+	_faded_menu = screen
+	open.call()
+
+
+## `CloseSubmenu` and `ExitAllMenus`: [param done] (a script resuming) runs once
+## the map is back. A menu not opened behind `FadeToMenu` closes at once.
+func _close_faded_menu(done: Callable = Callable()) -> void:
+	var screen: StringName = _faded_menu
+	_faded_menu = &""
+	if screen == &"":
+		if done.is_valid():
+			done.call()
+		return
+	_menu_transition.close_submenu(done, screen)
+
+
+## Boxes over the map are drawn in `PAL_BG_TEXT`, which a fade walks with the rest.
+func _push_text_fade(order: int) -> void:
+	for host: Object in [_start_menu_host, _service_host]:
+		if host != null:
+			host.call(&"set_fade_order", order)
+	if _text_box == null:
+		return
+	if order == Gen2WorldPalette.FADE_IDENTITY:
+		if _text_fading:
+			_text_box.palette = _text_palette_kept
+			_text_fading = false
+		return
+	if not _text_fading:
+		_text_palette_kept = _text_box.palette
+		_text_fading = true
+	_text_box.palette = Gen2WorldPalette.text_palette(order)
 
 
 func _push_poison_flash(on: bool) -> void:
@@ -4447,9 +4521,8 @@ func preview_pack_use() -> void:
 	_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(PokeButton.A)
 	_start_menu_host.call("_select_pack_item", potion)
 
 
@@ -4464,8 +4537,7 @@ func preview_pack(rows: Dictionary) -> void:
 	_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
-		_start_menu_host.handle_button(PokeButton.A)
+	_open_start_row(Gen2WorldStartMenu.ITEM_PACK)
 
 
 ## Screenshot driver for a stone evolution, driven twice like the other
@@ -4496,9 +4568,8 @@ func preview_item_evolution_use() -> void:
 	_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(PokeButton.A)
 	var rows: Array = _start_menu_host.call("_current_pocket_items")
 	for index: int in rows.size():
 		if int((rows[index] as Dictionary).get("item", 0)) == int(stone["item"]):
@@ -5153,9 +5224,8 @@ func preview_mod_views() -> void:
 		_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_MODS):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_MODS):
 		return
-	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Screenshot driver for the MOVES entry, with a synthetic field-move source as
@@ -5181,9 +5251,8 @@ func preview_field_moves_menu() -> void:
 		_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_FIELD_MOVES):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_FIELD_MOVES):
 		return
-	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## `GetTMHMItemMove` walked backwards: the HM whose own move is [param move], or
@@ -5245,9 +5314,8 @@ func preview_pokedex() -> void:
 		_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_POKEDEX):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_POKEDEX):
 		return
-	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot driver for `StartMenu_TrainerInfo`, whose row no map cell
@@ -5260,9 +5328,8 @@ func preview_trainer_card() -> void:
 		_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PLAYER):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_PLAYER):
 		return
-	_start_menu_host.handle_button(PokeButton.A)
 
 
 func preview_options() -> void:
@@ -5273,9 +5340,18 @@ func preview_options() -> void:
 		_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_OPTION):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_OPTION):
 		return
+
+
+## A on a START row with its `FadeToMenu` spent, for the drivers below.
+func _open_start_row(kind: StringName) -> bool:
+	if not _walk_start_menu_to(kind):
+		return false
 	_start_menu_host.handle_button(PokeButton.A)
+	while _menu_transition.active():
+		advance_frame()
+	return true
 
 
 ## Walks the start menu's cursor onto [param kind], bounded by the row count
@@ -5313,11 +5389,8 @@ func preview_pokegear() -> void:
 		})
 		_open_start_menu()
 	if _start_menu_host != null:
-		if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_POKEGEAR):
+		if not _open_start_row(Gen2WorldStartMenu.ITEM_POKEGEAR):
 			return
-		## The row opens the overlay through the same signal a press does, so
-		## the card list is up by the time this returns.
-		_start_menu_host.handle_button(PokeButton.A)
 
 
 const PREVIEW_CONTACT_ELM: int = 4
@@ -5410,9 +5483,8 @@ func preview_pack_toss() -> void:
 	_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Screenshot driver for ForgetMove on an injected save: four moves filled, a
@@ -5443,9 +5515,8 @@ func preview_move_forget() -> void:
 	_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(PokeButton.A)
 	# The pack opens on the ITEM pocket, and the granted item is in the TM/HM
 	# one. The guard bounds the walk in case no such pocket is built.
 	var guard: int = Gen2WorldPack.POCKET_ORDER.size() + 1
@@ -5689,9 +5760,8 @@ func preview_field_item(item: int = Gen2WorldPack.ITEM_ITEMFINDER) -> void:
 	_open_start_menu()
 	if _start_menu_host == null:
 		return
-	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
+	if not _open_start_row(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(PokeButton.A)
 	# The row itself, rather than whichever one the pocket opens on: the save may
 	# already own other key items, and a capture has to photograph the named one.
 	if not bool(_start_menu_host.call("_select_pack_item", item)):
@@ -6943,6 +7013,12 @@ func _finish_trainer_approach(ok: bool, reason: StringName, details: Dictionary)
 	_show_script_results(resumed)
 
 
+func _open_faded_service_host() -> void:
+	_open_service_host()
+	if _service_host == null:
+		_faded_menu = &""
+
+
 func _open_service_host() -> void:
 	var host: Gen2WorldServiceScreen = _service_overlay()
 	if host == null:
@@ -7102,7 +7178,8 @@ func _on_link_screen_closed() -> void:
 		Gen2Screen.drop(host)
 		if to_battle and _start_link_battle(battle):
 			return
-	_show_script_results(_world.complete_runtime_request({"ok": true}))
+	_close_faded_menu(func() -> void:
+		_show_script_results(_world.complete_runtime_request({"ok": true})))
 	if _renderer != null:
 		_renderer.refresh()
 	_refresh_labels()
@@ -7146,9 +7223,8 @@ func _link_transport() -> Gen2LinkTransport:
 
 
 ## HallOfFame calls SaveGameData before the animation, so the record is written
-## whether or not the player watches it. This writes at the end instead: the
-## screen owns no save state, and the snapshot it would write mid-sequence is
-## the same one.
+## whether or not the player watches it. This writes at the end instead: the screen
+## owns no save state, and the snapshot it would write mid-sequence is the same one.
 func _on_hall_of_fame_closed() -> void:
 	var host: Gen2HallOfFameScreen = _hall_of_fame_host
 	_hall_of_fame_host = null
@@ -7300,10 +7376,7 @@ func _open_start_menu() -> void:
 ## already hosts, so they share its opener and hand it their own entry point.
 ## [param entry] is called with the host once it is on screen.
 func _open_start_menu_host(entry: Callable) -> void:
-	if _world == null or _data == null or _overlay_open() or _field_move_text \
-		or not _oak_pc_pages.is_empty() \
-		or not _trainer_approach.is_empty() or _world.script_busy() \
-		or _world.phone_ring_active() or _world.fishing_busy():
+	if _start_menu_blocked():
 		return
 	var host: Gen2StartMenuScreen = START_MENU_SCENE.instantiate() as Gen2StartMenuScreen
 	if host == null:
@@ -7325,10 +7398,12 @@ func _open_start_menu_host(entry: Callable) -> void:
 		return
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20
+	host.menu_transition = _menu_transition
 	add_child(host)
 	## `StartMenu`'s box stands over the map, so it is drawn into the screen the
 	## map is already in rather than into one of the host's own.
 	host.set_screen(_screen)
+	host.set_fade_order(_menu_transition.order())
 	host.action_chosen.connect(_on_start_menu_action)
 	host.soft_reset_confirmed.connect(_soft_reset)
 	host.closed.connect(_on_start_menu_closed)
@@ -7345,20 +7420,62 @@ func _open_start_menu_host(entry: Callable) -> void:
 	_refresh_labels()
 
 
+func _start_menu_blocked() -> bool:
+	return _world == null or _data == null or _screens_up() or _field_move_text \
+		or not _oak_pc_pages.is_empty() \
+		or not _trainer_approach.is_empty() or _world.script_busy() \
+		or _world.phone_ring_active() or _world.fishing_busy()
+
+
 ## `SelectMenu`, which is the whole of what the SELECT button does in the
 ## overworld: the registered item, or the text saying one may be registered.
 func open_select_menu() -> void:
+	if _start_menu_blocked():
+		return
+	if _select_opens_the_party():
+		_fade_to_menu(_open_select_party, &"select_party")
+		return
+	_open_select_menu()
+
+
+func _open_select_menu() -> void:
 	_open_start_menu_host(func(host: Gen2StartMenuScreen) -> void:
 		host.open_registered_item()
 	)
 
 
+func _open_select_party() -> void:
+	_open_select_menu()
+	if _start_menu_host == null:
+		_faded_menu = &""
+
+
+func _select_opens_the_party() -> bool:
+	if _data.generation == RomRegistry.GEN1:
+		return false
+	var item: int = Gen2WorldBagHost.registered_item(_world)
+	return item > 0 and Gen2WorldPack.pocket_for(_data, item) != Gen2WorldPack.TYPE_TM_HM \
+		and Gen2WorldPack.field_use_kind(_data, item) == Gen2WorldPack.ITEMMENU_PARTY
+
+
+## The rows `StartMenu_*` opens behind `FadeToMenu`, by the screen they open.
+const START_FADED_ROWS: Dictionary = {
+	Gen2WorldStartMenu.ITEM_POKEDEX: &"pokedex",
+	Gen2WorldStartMenu.ITEM_POKEMON: &"party",
+	Gen2WorldStartMenu.ITEM_POKEGEAR: &"pokegear",
+	Gen2WorldStartMenu.ITEM_PLAYER: &"trainer_card",
+}
+
+
 func _on_start_menu_action(kind: StringName, id: StringName = &"") -> void:
-	var host: Gen2StartMenuScreen = _start_menu_host
-	_start_menu_host = null
-	if host != null:
-		_start_menu_cursor = host.cursor()
-		Gen2Screen.drop(host)
+	if START_FADED_ROWS.has(kind):
+		_fade_to_menu(_enter_start_menu_row.bind(kind, id), START_FADED_ROWS[kind])
+		return
+	_enter_start_menu_row(kind, id)
+
+
+func _enter_start_menu_row(kind: StringName, id: StringName) -> void:
+	_drop_start_menu()
 	_reopen_start_menu = kind in [
 		Gen2WorldStartMenu.ITEM_POKEMON, Gen2WorldStartMenu.ITEM_POKEGEAR,
 		Gen2WorldStartMenu.ITEM_PLAYER, Gen2WorldStartMenu.ITEM_POKEDEX,
@@ -7444,8 +7561,8 @@ func _reopen_start_menu_if_due() -> void:
 	_open_start_menu()
 
 
-## `StartMenu_Pokedex`'s `farcall Pokedex`. Its own B returns to the overworld,
-## which is where DEXSTATE_EXIT lands too.
+## `StartMenu_Pokedex`'s `farcall Pokedex`. Its own B, and DEXSTATE_EXIT, return to
+## the START menu through `CloseSubmenu`.
 func _open_pokedex() -> void:
 	if _pokedex_host != null or _data == null:
 		return
@@ -7479,6 +7596,7 @@ func _on_pokedex_closed() -> void:
 		_pokedex_prev_entry = host.previous_entry()
 		Gen2Screen.drop(host)
 	_script_prompt = "Pokedex closed"
+	_close_faded_menu()
 	_reopen_start_menu_if_due()
 	_refresh_labels()
 
@@ -7552,8 +7670,8 @@ func _close_prof_oaks_pc() -> void:
 	_refresh_labels()
 
 
-## `StartMenu_Status`'s `farcall TrainerCard`. Its own B returns to the
-## overworld, which is where the source's own `ret` lands too.
+## `StartMenu_Status`'s `farcall TrainerCard`. Its own B returns to the START
+## menu through `CloseSubmenu`.
 func _open_trainer_card() -> void:
 	if _trainer_card_host != null or _data == null:
 		return
@@ -7614,17 +7732,15 @@ func _on_trainer_card_closed() -> void:
 	if host != null:
 		Gen2Screen.drop(host)
 	_script_prompt = "Trainer card closed"
+	_close_faded_menu()
 	_reopen_start_menu_if_due()
 	_refresh_labels()
 
 
 func _on_start_menu_closed() -> void:
-	var host: Gen2StartMenuScreen = _start_menu_host
-	_start_menu_host = null
-	if host != null:
-		_start_menu_cursor = host.cursor()
-		Gen2Screen.drop(host)
+	_drop_start_menu()
 	_script_prompt = "Start menu closed"
+	_close_faded_menu()
 	_reopen_party_if_due()
 	_refresh_labels()
 
@@ -7634,11 +7750,7 @@ func _on_start_menu_closed() -> void:
 ## cache by [method _field_item_text]; the host's wording behind it is only what
 ## a cache imported before those texts were carries.
 func _on_field_item_used(request: Dictionary) -> void:
-	var host: Gen2StartMenuScreen = _start_menu_host
-	_start_menu_host = null
-	if host != null:
-		_start_menu_cursor = host.cursor()
-		Gen2Screen.drop(host)
+	_drop_start_menu()
 	## `.Field` reaches `ExitAllMenus`, so nothing reopens behind the effect.
 	_reopen_start_menu = false
 	if _world == null:
@@ -7807,6 +7919,7 @@ func _on_party_closed(_result: Dictionary) -> void:
 	if host != null:
 		Gen2Screen.drop(host)
 	_script_prompt = "Party closed"
+	_close_faded_menu()
 	_reopen_start_menu_if_due()
 	_refresh_labels()
 
@@ -7818,7 +7931,32 @@ func _on_party_action(action: Dictionary) -> void:
 	_party_host = null
 	if host != null:
 		Gen2Screen.drop(host)
+	## `.quit` is the one answer that leaves through `ExitAllMenus`.
+	if StringName(action.get("kind", &"")) == &"field_move":
+		_exit_all_menus(_run_party_action.bind(action))
+		return
 	_run_party_action(action)
+
+
+## `ExitAllMenus`: `Call_ExitMenu` puts the START box back for the fade in and
+## `.ExitMenuRunScript` takes it away once the map is whole.
+func _exit_all_menus(done: Callable) -> void:
+	if _faded_menu == &"" or _data.generation == RomRegistry.GEN1:
+		_faded_menu = &""
+		done.call()
+		return
+	_open_start_menu()
+	_close_faded_menu(func() -> void:
+		_drop_start_menu()
+		done.call())
+
+
+func _drop_start_menu() -> void:
+	var host: Gen2StartMenuScreen = _start_menu_host
+	_start_menu_host = null
+	if host != null:
+		_start_menu_cursor = host.cursor()
+		Gen2Screen.drop(host)
 
 
 ## The start menu's own MOVES row, which offers the HM field moves a registered
@@ -7826,11 +7964,7 @@ func _on_party_action(action: Dictionary) -> void:
 ## drops the menu the way a party submenu's `.quit` does and runs the move
 ## through the one dispatch below.
 func _on_start_menu_field_move(action: Dictionary) -> void:
-	var host: Gen2StartMenuScreen = _start_menu_host
-	_start_menu_host = null
-	if host != null:
-		_start_menu_cursor = host.cursor()
-		Gen2Screen.drop(host)
+	_drop_start_menu()
 	_run_party_action(action)
 
 
@@ -8524,6 +8658,7 @@ func _service_overlay() -> Gen2WorldServiceScreen:
 		return null
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20
+	host.menu_transition = _menu_transition
 	host.set_screen(_screen)
 	add_child(host)
 	return host
@@ -8669,7 +8804,7 @@ func _on_service_completed(results: Array) -> void:
 	# music where it stands, which is what `_TownMap` does with the map poster.
 	if host != null and host.radio_music_playing() != Gen2WorldServiceScreen.RADIO_MUSIC_SILENT:
 		_play_current_map_music()
-	_show_script_results(results)
+	_close_faded_menu(_show_script_results.bind(results))
 	_reopen_start_menu_if_due()
 
 
@@ -8823,6 +8958,18 @@ const REQUEST_OPENERS: Dictionary = {
 	&"magnet_train_requested": [&"_open_magnet_train", &"values", {"ok": true}],
 	&"pokemon_requested": [&"_open_gift_nickname", &"prompt", {}],
 	&"contest_mon_requested": [&"_open_contest_nickname", &"prompt", {}],
+}
+
+## The requests whose special calls `FadeToMenu`, by the screen they open.
+const FADED_REQUESTS: Dictionary = {
+	&"link_record_requested": &"link_record",
+	&"pokedex_entry_requested": &"pokedex_entry",
+	&"move_tutor_requested": &"move_tutor",
+	&"slot_machine_requested": &"slot_machine",
+	&"card_flip_requested": &"card_flip",
+	&"unown_printer_requested": &"unown_printer",
+	&"diploma_requested": &"diploma",
+	&"unown_puzzle_requested": &"unown_puzzle",
 }
 
 const SERVICE_HOST_REQUESTS: Array[StringName] = [
@@ -9022,7 +9169,10 @@ func _handle_runtime_request(request: Dictionary) -> StringName:
 	elif kind in Gen2WorldHost.UNATTENDED_REQUESTS:
 		return _settle_unattended_request()
 	elif kind in SERVICE_HOST_REQUESTS:
-		_open_service_host()
+		if kind == &"town_map_requested" and _data.generation != RomRegistry.GEN1:
+			_fade_to_menu(_open_faded_service_host, &"town_map")
+		else:
+			_open_service_host()
 		return &"break"
 	_script_prompt = "Runtime request: %s, press A to acknowledge" % String(
 		request.get("kind", "effect")
@@ -9032,6 +9182,19 @@ func _handle_runtime_request(request: Dictionary) -> StringName:
 
 ## Opens [param kind]'s page, or spends its [constant REQUEST_OPENERS] refusal.
 func _open_requested_page(kind: StringName, request: Dictionary) -> StringName:
+	var screen: StringName = FADED_REQUESTS.get(kind, &"")
+	if screen != &"" and _data.generation != RomRegistry.GEN1 and _battle_host == null:
+		_fade_to_menu(_open_faded_page.bind(kind, request), screen)
+		return &"break"
+	return _open_page(kind, request)
+
+
+func _open_faded_page(kind: StringName, request: Dictionary) -> void:
+	if _open_page(kind, request) != &"break":
+		_faded_menu = &""
+
+
+func _open_page(kind: StringName, request: Dictionary) -> StringName:
 	var row: Array = REQUEST_OPENERS[kind]
 	if call(row[0], request):
 		return &"break"
@@ -9538,9 +9701,13 @@ func _on_pokedex_entry_closed() -> void:
 		_battle_host.complete_dex_entry()
 		_refresh_labels()
 		return
+	_close_faded_menu(_resume_after_pokedex_entry)
+	_refresh_labels()
+
+
+func _resume_after_pokedex_entry() -> void:
 	if _world != null and not _world.pending_runtime_request().is_empty():
 		_show_script_results(_world.complete_runtime_request({"ok": true, "script_value": 0}))
-	_refresh_labels()
 
 
 func _apply_party_happiness(event: Dictionary) -> void:

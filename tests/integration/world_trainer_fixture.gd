@@ -7,6 +7,7 @@ extends RefCounted
 const BattleFixture := preload("res://tests/unit/battle_fixture.gd")
 ## Longer than any box the fixture prints takes to reach its end.
 const PRINT_FRAME_CAP: int = 2000
+const MENU_FADE_FRAME_CAP: int = 200
 
 const GAME_ID: StringName = &"worldtrainer"
 const SHA1: String = "0123456789abcdef"
@@ -1253,6 +1254,15 @@ static func _text(text: String) -> Array:
 		out.append(byte)
 	out.append(Gen2WorldScript.TEXT_TERMINATOR)
 	return out
+
+
+## The frames of a `FadeToMenu` or a `CloseSubmenu` the world is inside, spent: the
+## white a menu opens and closes behind, which no screen under it can skip.
+static func settle_menu_fade(screen: Gen2WorldScreen) -> void:
+	for _frame: int in MENU_FADE_FRAME_CAP:
+		if not screen._menu_transition.active():
+			return
+		screen.advance_frame()
 
 
 ## A service host's `PrintText` spent to where it waits: the frames its letters,

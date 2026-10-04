@@ -256,10 +256,9 @@ var _contest_mon: Dictionary = {}
 var _contest_second_party_species: int = 0
 ## `wDunsparceMapGroup`/`wDunsparceMapNumber` and `wYanmaMapGroup`/
 ## `wYanmaMapNumber`: Crystal's two swarms are independent, each with its own
-## `wSwarmFlags` bit, and `_SwarmWildmonCheck` tries Dunsparce before Yanma.
-## Gold and Silver hold one `wSwarmMapGroup` and their own
-## `StoreSwarmMapIndices` takes no kind, so only [constant SWARM_DUNSPARCE] is
-## ever written on those two.
+## `wSwarmFlags` bit, and `_SwarmWildmonCheck` tries Dunsparce before Yanma. Gold
+## and Silver hold one `wSwarmMapGroup` and their own `StoreSwarmMapIndices` takes
+## no kind, so only [constant SWARM_DUNSPARCE] is ever written on those two.
 var _swarm_maps: Array[Vector2i] = [Vector2i(-1, -1), Vector2i(-1, -1)]
 var _fishing_swarm_species: int = 0
 var _roaming_mons: Array = []
@@ -272,9 +271,8 @@ var _seen_species: Dictionary = {}
 ## flag survives releasing, trading away or boxing the Pokemon that set it.
 var _caught_species: Dictionary = {}
 ## `wUnownDex`: the Unown forms caught, in catching order rather than by letter.
-## Twenty-six slots on the cartridge,
-## where an empty one is a zero; here the list is as long as it is full, so its
-## size is `.count_unown`'s own answer.
+## Twenty-six slots on the cartridge, where an empty one is a zero; here the list is
+## as long as it is full, so its size is `.count_unown`'s own answer.
 var _unown_dex: Array[int] = []
 ## `wFirstUnownSeen`, the letter every Pokedex entry for UNOWN is drawn with:
 ## `Pokedex_LoadSelectedMonTiles` copies it into `wUnownLetter` before it asks
@@ -355,17 +353,15 @@ var _gen1_bytes: Dictionary = {}
 ## the entry again in its packed pocket array and clears both when the item is
 ## not there, which here is the quantity the item number already answers.
 var _registered_item: int = 0
-## `wLuckyIDNumber`, the five-digit number the Lucky Number Show draws every
-## day, and `sLuckyNumberDay`, which is `wCurDay + 1` on the day it was drawn so
-## that day zero is told from "never drawn"
-## (`LoadOrRegenerateLuckyIDNumber`). Kept together because the pair is what
-## says whether today's number has been rolled yet.
+## `wLuckyIDNumber`, the five-digit number the Lucky Number Show draws every day,
+## and `sLuckyNumberDay`, which is `wCurDay + 1` on the day it was drawn so that day
+## zero is told from "never drawn" (`LoadOrRegenerateLuckyIDNumber`). Kept together
+## because the pair is what says whether today's number has been rolled yet.
 var _lucky_id_number: int = 0
 var _lucky_number_day: int = 0
-## `wLuckyNumberDayTimer`'s own days-remaining byte.
-## `RestartLuckyNumberCountdown` sets it to the days until the next Friday and
-## the day rollover steps it, which is `CheckDayDependentEventHL`'s answer with
-## no absolute day to subtract.
+## `wLuckyNumberDayTimer`'s own days-remaining byte. `RestartLuckyNumberCountdown`
+## sets it to the days until the next Friday and the day rollover steps it, which is
+## `CheckDayDependentEventHL`'s answer with no absolute day to subtract.
 var _lucky_number_days_left: int = 0
 ## `wKenjiBreakTimer`, three to six days between the Route 27 sailor's breaks.
 ## `CheckDailyResetTimer` decrements it on every day that passes and resamples
@@ -742,9 +738,8 @@ static func _restore_deferred(restored: Gen2WorldState, source: Dictionary) -> v
 	restored._buenas_password = int(source.get("buenas_password", 0)) & 0xFF
 
 
-## Restores the mutable state after a host transaction could not be persisted.
-## The state object stays alive so existing world systems keep their signal
-## connection.
+## Restores the mutable state after a host transaction could not be persisted. The
+## state object stays alive so existing world systems keep their signal connection.
 func restore_from_dict(raw: Variant) -> void:
 	var restored: Gen2WorldState = Gen2WorldState.from_dict(raw)
 	if restored == null:
@@ -1222,9 +1217,8 @@ func lucky_number_show_ready() -> bool:
 	return _lucky_number_days_left <= 0
 
 
-## `RestartLuckyNumberCountdown`: `InitNDaysCountdown` with the days until the
-## next Friday, seven on a Friday, so the show never comes round again the day
-## it ran.
+## `RestartLuckyNumberCountdown`: `InitNDaysCountdown` with the days until the next
+## Friday, seven on a Friday, so the show never comes round again the day it ran.
 func restart_lucky_number_countdown(day: int) -> void:
 	var until: int = Gen2WorldClock.FRIDAY - posmod(day, Gen2WorldClock.DAYS_PER_WEEK)
 	if until <= 0:
