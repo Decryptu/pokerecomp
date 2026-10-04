@@ -550,7 +550,9 @@ func handle_button(button: int) -> bool:
 		_render_hardware()
 		return pressed
 	if PokeButton.is_direction(button):
+		var before: Vector2i = _list_position(button)
 		_move(PokeButton.vector(button))
+		Gen2ScrollingMenu.after_press(_gen1_pack(), before, _list_position(button))
 		_render_hardware()
 		return true
 	match button:
@@ -1277,6 +1279,16 @@ func _cycle_pocket(delta: int) -> void:
 	)
 	_remember_pack()
 	_render_pack()
+
+
+## The pack's row and window as [Gen2ScrollingMenu] reads them. The TM/HM pocket
+## runs `StaticMenuJoypad` and left and right change pocket, so neither stalls.
+func _list_position(button: int) -> Vector2i:
+	var sideways: bool = button == PokeButton.LEFT or button == PokeButton.RIGHT
+	if _mode != Mode.PACK or _pack_pockets.is_empty() or sideways \
+			or int(_current_pocket().get("pocket", 0)) == Gen2WorldPack.TYPE_TM_HM:
+		return Gen2ScrollingMenu.NOT_A_LIST
+	return Vector2i(_pack_cursor, _pack_scroll[_pack_pocket_index])
 
 
 ## `ScrollingMenuJoyAction`'s `.d_up` and `.d_down`, which move the cursor

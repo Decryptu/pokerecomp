@@ -6,8 +6,8 @@ extends RefCounted
 ## can go red. The class of bug it exists to catch is a bet that pays the wrong
 ## cell: `CardFlip_CheckWinCondition` is a jumptable of forty-eight, most of whose
 ## entries differ from their neighbour by one bit test, so a cursor read one cell
-## out still pays something. It therefore drives the whole forty-eight by
-## twenty-four grid rather than sampling, and whole games on a pinned seed.
+## out still pays something, so it drives the whole forty-eight by twenty-four
+## grid, and whole games on a pinned seed.
 
 ## `_CardFlip`'s own loads: which run is decompressed to how many tiles.
 const SECTION: Dictionary = {

@@ -5,9 +5,8 @@ extends Control
 ## same shape as [Gen2MoveDeleterScreen]: the routine owns the party list
 ## `ChooseMonToLearnTMHM` opens, its refusals and the `ForgetMove` menu behind
 ## `LearnMove`, and the map script's own `waitbutton` presses the box it leaves
-## standing. The `.loop` is the whole of it: `.didnt_learn` returns carry clear and
-## the routine reopens the list, so only a learned move or a backed-out list ends
-## the special.
+## standing. `.didnt_learn` returns carry clear and the routine reopens the list,
+## so only a learned move or a backed-out list ends the special.
 
 signal finished(script_value: int, party_index: int, ending_text: String)
 signal closed()

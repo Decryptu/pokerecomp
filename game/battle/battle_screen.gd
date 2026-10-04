@@ -7323,12 +7323,25 @@ func _button_pack_action(button: int) -> bool:
 	return true
 
 
+func _step_pack_row(delta: int) -> void:
+	var before: Vector2i = _pack_list_position()
+	select_pack_row(_pack_index + delta)
+	Gen2ScrollingMenu.after_press(true, before, _pack_list_position())
+
+
+func _pack_list_position() -> Vector2i:
+	return Vector2i(_pack_index, Gen2BattleMenu.list_scrolled(
+		int(_list_scroll.get(&"pack", 0)), _pack_index, _pack_rows.size() + 1,
+		Gen2MartPage.GEN1_CURSOR_ROWS
+	))
+
+
 func _button_pack(button: int) -> bool:
 	match button:
 		PokeButton.RIGHT, PokeButton.DOWN:
-			select_pack_row(_pack_index + 1)
+			_step_pack_row(1)
 		PokeButton.LEFT, PokeButton.UP:
-			select_pack_row(_pack_index - 1)
+			_step_pack_row(-1)
 		PokeButton.A:
 			## `DisplayBagMenu` falls straight into `UseBagItem`.
 			if _world_battle_tutorial:

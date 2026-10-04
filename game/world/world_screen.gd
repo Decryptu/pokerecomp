@@ -430,6 +430,8 @@ func _ready() -> void:
 		input.back_requested.connect(_on_back_requested)
 	if input != null:
 		input.repeat_gate = _menu_repeats
+		input.repeat_delay_frames = Gen2InputRuntime.GEN1_REPEAT_DELAY_FRAMES \
+			if _menu_transition.gen1 else Gen2InputRuntime.REPEAT_DELAY_FRAMES
 
 
 ## Why the overworld could not be built, on the two labels the debug readout
@@ -691,6 +693,7 @@ func _exit_tree() -> void:
 	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
 	if input != null and input.repeat_gate == Callable(self, &"_menu_repeats"):
 		input.repeat_gate = Callable()
+		input.repeat_delay_frames = Gen2InputRuntime.REPEAT_DELAY_FRAMES
 	Gen2ModHost.instance().set_progress_source(Callable())
 	Gen2ModHost.instance().set_party_source(Callable())
 	Gen2ModHost.instance().set_roamers_source(Callable())

@@ -6,10 +6,7 @@ var _r: RefCounted = null
 ## imported real caches, for both command profiles. The point of pinning both is
 ## that neither pointer is a script: a ball's addresses `db item, quantity` and a
 ## hidden item's `dwb event, item`, and before these dispatches existed
-## `interact()` handed those bytes to the runner as opcodes. Two of them matter
-## most: Ice Path 1F's HM07, since nothing else in either game gives Waterfall, and
-## Cerulean Gym's MACHINE_PART, since nothing else opens the Power Plant and with
-## it the Cascade Badge.
+## `interact()` handed those bytes to the runner as opcodes.
 
 
 ## data/maps/maps.asm group/number pairs. Crystal's own extra maps push both

@@ -7,8 +7,8 @@ extends Control
 ## nothing here writes a party row, and each plan is announced with [signal
 ## resolved] where `.proceed` writes the new species, so the caller applies it in
 ## the source's own order. `.PlayEvolvedSFX`'s thirty-two balls of light are
-## sprite-anim objects and this project has no such layer outside the intro, so
-## their frames are spent and the screen holds the new picture through them.
+## sprite-anim objects this project has no layer for, so the screen holds the new
+## picture through their frames.
 
 signal resolved(plan: Dictionary, canceled: bool)
 signal closed()

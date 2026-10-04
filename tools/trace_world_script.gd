@@ -6,8 +6,7 @@ extends SceneTree
 ## `frame bank:addr opcode name`, so a branch taken on the wrong side of a flag
 ## shows up as the first differing address. Arguments:
 ## `<game> <group> <map> <x> <y> <dir:count,...> <frames> <out.txt> [new|dev]`.
-## The walk is untraced setup, `a:<count>` pressing A past a scene script in the
-## way, and the save is the new game the oracle's own checkpoints hold.
+## The walk is untraced setup; `a:<count>` presses A past a scene script.
 
 ## The cartridge trace's own pace: slow enough not to press a box twice.
 const PRESS_EVERY: int = 14

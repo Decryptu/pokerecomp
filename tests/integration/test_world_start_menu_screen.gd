@@ -1151,6 +1151,44 @@ func test_the_pack_list_stops_at_both_ends() -> void:
 	assert_eq(host._pack_cursor, last, "CANCEL is the bottom")
 
 
+## Twelve rows in the ITEM pocket and twelve in the TM/HM pocket.
+func _write_long_pockets() -> Dictionary:
+	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
+	var owned: Dictionary = {}
+	for index: int in 24:
+		var number: int = items.size() + 1
+		var pocket: int = Gen2WorldPack.TYPE_ITEM if index < 12 else Gen2WorldPack.TYPE_TM_HM
+		items.append({
+			"number": number, "name": "ROW%d" % number, "permissions": 0, "pocket": pocket,
+			"field_menu": 0, "battle_menu": 0, "status_mask": 0, "heal_amount": 0,
+		})
+		owned[number] = 1
+	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
+	_data = GameData.open_directory(Fixture.directory())
+	return owned
+
+
+## The pack's ITEM pocket is a `ScrollingMenu`, which redraws and reads no pad
+## for five frames and then waits out `WaitBGMap`'s four. The TM/HM pocket runs
+## `StaticMenuJoypad` instead and repeats on `JoyTextDelay`'s own five. PyBoy on
+## Crystal measures nine for the first and the plain five beside it for neither.
+func test_a_held_direction_waits_out_every_move_of_the_pack_but_the_tm_pocket() -> void:
+	var owned: Dictionary = _write_long_pockets()
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {"items": owned})
+	var host: Gen2StartMenuScreen = await _open_pack()
+	var press: Callable = func() -> void: host.handle_button(PokeButton.DOWN)
+	var read: Callable = func() -> int: return host._pack_cursor
+	assert_eq(Fixture.hold_down(press, read, 60), [17, 26, 35, 44, 53])
+	host._pack_cursor = 0
+	host._cycle_pocket(1)
+	host._cycle_pocket(1)
+	host._cycle_pocket(1)
+	assert_eq(int(host._current_pocket()["pocket"]), Gen2WorldPack.TYPE_TM_HM)
+	host._pack_cursor = 0
+	assert_eq(Fixture.hold_down(press, read, 30), [15, 20, 25, 30])
+
+
 ## `InitPackBuffers` reads `wLastPocket` and each pocket's own saved row, which
 ## outlive the menu that was closed; `DepositSellInitPackBuffers` does not read
 ## the pocket.

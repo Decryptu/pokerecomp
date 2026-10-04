@@ -6,8 +6,8 @@ extends RefCounted
 ## are not `UnownFont`, which is the Pokedex's own sheet:
 ## `_DisplayUnownWords_CopyWord` computes a tile number from the character itself
 ## and places a 2x2 block of the *tileset's* own tiles, which is why the chambers
-## ship a tileset holding an alphabet. So this needs no import: the word comes from
-## `UnownWalls` and the tiles from the tileset the chamber is already drawn with.
+## ship a tileset holding an alphabet. This needs no import: the word comes from
+## `UnownWalls`, the tiles from the chamber's tileset.
 
 ## `constants/charmap.asm`'s `unown` charmap, `$10 * (i / 8) + 2 * i` over
 ## "ABCDEFGHIJKLMNOPQRSTUVWXYZ-": eight letters to a row of the sheet, each two

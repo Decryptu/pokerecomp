@@ -317,8 +317,8 @@ static func parse(raw: Variant) -> PokeTouchLayout:
 ## right, A down and left, half [constant FACE_SPACING] from the centre each way,
 ## so the two anchors it becomes are the ones the player already had. The offset
 ## is in points against the portrait phone the layout was arranged on, and
-## [method group_rect] clamps whatever comes out. [param stored] is what the file
-## carried rather than the merged anchors, since every group has a default.
+## [method group_rect] clamps whatever comes out. [param stored] is the file's
+## own content, not the merged anchors.
 func _split_face(orientation: StringName, stored: Dictionary) -> void:
 	var groups: Dictionary = anchors.get(orientation, {})
 	if not stored.has(String(GROUP_FACE)) \

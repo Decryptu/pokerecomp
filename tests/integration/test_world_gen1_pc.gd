@@ -59,7 +59,7 @@ func after_each() -> void:
 
 ## `ActivatePC`'s top menu over the map, with three mons in the current box and
 ## two stacks in the PC.
-func _open_machine() -> Gen2WorldServiceScreen:
+func _open_machine(mons: int = NICKNAMES.size()) -> Gen2WorldServiceScreen:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
 	_world_screen.map_group = Fixture.MAP_GROUP
@@ -72,9 +72,9 @@ func _open_machine() -> Gen2WorldServiceScreen:
 	var save := Gen2SaveStore.create_development_save(_data, 0)
 	save.world = world.snapshot()
 	save.party.resize(1)
-	for slot: int in NICKNAMES.size():
+	for slot: int in mons:
 		var mon: Gen2SaveMon = Gen2SaveMon.from_dict(save.party[0].to_dict())
-		mon.nickname = NICKNAMES[slot]
+		mon.nickname = NICKNAMES[slot] if slot < NICKNAMES.size() else "MON%d" % slot
 		save.boxes[0].slots[slot] = mon
 	_world_screen.set_data(_data)
 	_world_screen.set_save(save)
@@ -182,6 +182,20 @@ func test_withdraw_takes_the_chosen_mon_out() -> void:
 	assert_eq(_box_names(host), ["ALPHA", "BRAVO"])
 	assert_eq(host._save.party.size(), 2)
 	assert_eq((host._save.party[1] as Gen2SaveMon).nickname, "CHARLIE")
+
+
+## `JoypadLowSensitivity` waits thirty frames before the first repeat, and
+## `HandleMenuInput_` repeats every five. A move inside the window waits on
+## nothing else; a scroll reprints through `DisplayListMenuIDLoop`'s `Delay3` and
+## `.loop1`'s, which is six frames. PyBoy on Red measures all three.
+func test_a_held_direction_scrolls_the_mon_list_every_six_frames() -> void:
+	var host: Gen2WorldServiceScreen = await _open_machine(12)
+	_open_mon_list(host, Gen2WorldPC.GEN1_BILLS_PC_WITHDRAW, 0)
+	var moves: Array[int] = Fixture.hold_down(
+		func() -> void: host.handle_button(PokeButton.DOWN),
+		func() -> int: return host._cursor, 62
+	)
+	assert_eq(moves, [30, 35, 41, 47, 53, 59])
 
 
 ## `PlayerPCToss`: `DisplayChooseQuantityMenu`, then `TossItem_`'s

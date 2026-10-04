@@ -7,8 +7,7 @@ extends RefCounted
 ## palette byte rather than a rotation: `CopyPals` reads it two bits at a time and
 ## writes the loaded colour each pair names, so a fade is an index remap of the
 ## palette already loaded. Every count is a `DelayFrames` operand, so a screen
-## stepping this on [Gen2WorldAnimation.FrameClock] spends the frames the cartridge
-## spends.
+## stepping this on [Gen2WorldAnimation.FrameClock] spends the cartridge's frames.
 
 ## A step that writes no palette byte, or that does not move the pic.
 const KEEP: int = -1

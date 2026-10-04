@@ -505,6 +505,15 @@ func handle_button(button: int) -> bool:
 		return false
 	if _pack != null:
 		return _pack.handle_button(button)
+	var before: Vector2i = _list_position(button)
+	var handled: bool = _press_button(button)
+	Gen2ScrollingMenu.after_press(
+		_data != null and _data.generation == RomRegistry.GEN1, before, _list_position(button)
+	)
+	return handled
+
+
+func _press_button(button: int) -> bool:
 	if _press_prompt(button):
 		return true
 	if _pc_box_print:
@@ -4594,6 +4603,34 @@ func _scrolling_rows() -> int:
 		if _mode == MODE.PC_BOX_LIST:
 			return 0
 	return int(SCROLLING_ROWS.get(_mode, 0))
+
+
+## The list a direction press would move, as [Gen2ScrollingMenu] reads it: the
+## cursor's row and the first row shown, in every host of a `ScrollingMenu`
+## (or, in Generation 1, a list menu) this screen has.
+func _list_position(button: int) -> Vector2i:
+	if not PokeButton.is_direction(button):
+		return Gen2ScrollingMenu.NOT_A_LIST
+	match _mode:
+		MODE.PC_ITEM_LIST, MODE.PC_MAILBOX, MODE.PC_BOX_LIST, MODE.PC_DECO_LIST, \
+		MODE.PC_MON_LIST, MODE.MENU:
+			if _scrolling_rows() > 0 and (_mode != MODE.PC_ITEM_LIST or _pc_item_stage == &""):
+				return Vector2i(_cursor, _pc_scroll)
+		MODE.MART:
+			if _mart_stage == MART_LIST or _mart_stage == MART_SELL:
+				return Vector2i(_cursor, _mart_scroll)
+		MODE.ELEVATOR:
+			return Vector2i(_cursor, _elevator_scroll)
+		MODE.SCRIPT_LIST:
+			return Vector2i(_cursor, _script_list_scroll)
+		MODE.BUENA_PRIZE:
+			if _buena_stage == &"list":
+				return Vector2i(_cursor, _buena_scroll)
+		MODE.APRICORN:
+			if _apricorns != null and not _apricorns.one_at_a_time \
+					and _apricorns.phase == Gen2WorldApricorn.SELECT_APRICORN:
+				return Vector2i(_apricorns.cursor_y, _apricorns.scroll)
+	return Gen2ScrollingMenu.NOT_A_LIST
 
 
 func _move_direction(direction: Vector2i) -> void:

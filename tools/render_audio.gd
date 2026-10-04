@@ -5,7 +5,7 @@ extends SceneTree
 ## parity artefact: a faithful implementation of the driver writes the same
 ## registers in the same order on the same frames. Kinds are `music`, `sfx`,
 ## `stereo_sfx`, `cry` and `mon_cry`; the id is the record index, the species for
-## `mon_cry`, `<bank>:<id>` on a Generation 1 cache, or `all`. Last is the panning.
+## `mon_cry`, `<bank>:<id>` on a Generation 1 cache, or `all`; last is the panning.
 ##   ... -s res://tools/render_audio.gd -- crystal music 1 600 /tmp/out
 ##   ... -s res://tools/render_audio.gd -- red music 2:186 600 /tmp/out
 

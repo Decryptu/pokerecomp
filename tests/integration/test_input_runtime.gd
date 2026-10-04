@@ -182,6 +182,40 @@ func test_a_held_direction_repeats_at_the_source_rate_and_not_faster() -> void:
 	await _settle()
 
 
+## A list that has just moved reads no pad for its redraw: a button pressed then
+## is heard at the read if it is still down, which is what the cartridge's one
+## poll per pass does, and is lost if it was let go again before it.
+func test_a_press_inside_a_stall_is_heard_at_the_read_only_if_still_down() -> void:
+	var presses := PressLog.new()
+	add_child_autoqfree(presses)
+	_spend(30)
+	_runtime.stall(9, 4)
+	var a: StringName = PokeButton.action(PokeButton.A)
+	var press := InputEventAction.new()
+	press.action = a
+	press.pressed = true
+	Input.action_press(a)
+	_runtime._input(press)
+	_spend(8)
+	assert_eq(presses.seen, [], "the menu has read nothing yet")
+	_spend(1)
+	assert_eq(presses.seen, [a], "and the read after the redraw hears it")
+
+	_runtime.stall(9, 4)
+	_runtime._input(press)
+	Input.action_release(a)
+	_spend(20)
+	assert_eq(presses.seen, [a], "a tap let go before the read is lost")
+
+
+class PressLog extends Node:
+	var seen: Array[StringName] = []
+
+	func _input(event: InputEvent) -> void:
+		if event is InputEventAction and event.pressed:
+			seen.append(event.action)
+
+
 func _key(pressed: bool) -> InputEventKey:
 	var key := InputEventKey.new()
 	key.physical_keycode = KEY_DOWN

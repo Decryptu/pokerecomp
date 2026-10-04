@@ -103,6 +103,25 @@ func _state() -> Gen2WorldState:
 	return _world_screen._world.state
 
 
+## `_ScrollingMenu.zero` redraws and reads no pad for five frames, and
+## `WaitBGMap` spends four more before the one read a pass allows: a held
+## direction moves the list every nine frames, inside the window or past it, and
+## the first repeat waits for the read after its fifteenth frame. PyBoy on
+## Crystal measures the same 18 and 9 frames for the pack and this list.
+func test_a_held_direction_waits_out_every_move_of_the_list() -> void:
+	var host: Gen2WorldServiceScreen = await _open_item_pc()
+	var more: Dictionary = {}
+	for item: int in range(30, 40):
+		more[item] = 1
+	_state().apply_changes({}, {}, {"pc_items": more})
+	_open_list(host, 0)
+	var moves: Array[int] = Fixture.hold_down(
+		func() -> void: host.handle_button(PokeButton.DOWN),
+		func() -> int: return host._cursor, 100
+	)
+	assert_eq(moves, [17, 26, 35, 44, 53, 62, 71, 80, 89, 98])
+
+
 ## `ScrollingMenu` draws CANCEL past `wPCItems`' terminator, and taking it is
 ## `PCItemsJoypad`'s `.b_1`: back to the item PC's menu with nothing moved. The
 ## box under the list describes the row the cursor is on.

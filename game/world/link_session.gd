@@ -6,8 +6,8 @@ extends RefCounted
 ## `wOtherPlayerLinkMode`, plus the answers `WaitForLinkedFriend`,
 ## `CheckLinkTimeout_Receptionist`, `CheckBothSelectedSameRoom`,
 ## `CheckTimeCapsuleCompatibility` and `ValidateOTTrademon` give from them. Scene
-## free, and WRAM rather than save data: the cartridge keeps none of this across a
-## reset and neither does [Gen2WorldState]. The cable itself is injected.
+## free, and WRAM rather than save data: the cartridge keeps none of this across
+## a reset. The cable itself is injected.
 
 const CONNECTION_NOT_ESTABLISHED: int = Gen2LinkTransport.CONNECTION_NOT_ESTABLISHED
 const USING_EXTERNAL_CLOCK: int = Gen2LinkTransport.USING_EXTERNAL_CLOCK

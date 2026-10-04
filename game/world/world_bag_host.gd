@@ -6,8 +6,7 @@ extends RefCounted
 ## `RegisterItem`. The source routine walks `_TossItem`'s pocket jumptable to find
 ## which packed array the item lives in and calls `RemoveItemFromPocket` on it; the
 ## flat item model has one stack per item and no pocket arrays, so the whole walk
-## is a subtraction and nothing observable differs until a save can hold two
-## stacks. The commit boundary is [Gen2WorldTransaction].
+## is a subtraction. The commit boundary is [Gen2WorldTransaction].
 
 ## `TossItem` with `wCurItemQuantity`, as one validated transaction.
 ## `TossMenu` is only reachable from a submenu that offered TOSS, so the
