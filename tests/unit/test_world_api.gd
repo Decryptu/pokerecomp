@@ -5929,8 +5929,9 @@ func test_crystal_engine_flags_and_hall_of_fame_commit_at_script_end() -> void:
 
 ## Script_credits farcalls RedCredits and falls into the same Script_endall tail
 ## as Script_halloffame (engine/overworld/scripting.asm's ReturnFromCredits), so
-## it commits nothing. maps/SilverCaveRoom3.asm's Red is its one call site.
-func test_credits_is_a_presentation_boundary_that_commits_no_flag() -> void:
+## the cartridge commits no flag. The port records the completion in `beat_red`,
+## which has no cartridge flag. maps/SilverCaveRoom3.asm's Red is its one call site.
+func test_credits_records_beat_red_and_no_cartridge_flag() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	# credits is Crystal $a2: pokegold's $a0 plus farjumptext at $52 and
 	# verbosegiveitemvar at $9f.
@@ -5945,6 +5946,7 @@ func test_credits_is_a_presentation_boundary_that_commits_no_flag() -> void:
 	var result: Dictionary = runner.advance()
 
 	assert_eq(result["status"], &"complete", JSON.stringify(result))
+	assert_eq(state.beat_red, 1)
 	assert_false(state.hall_of_fame())
 	assert_eq(state.engine_flags().size(), 0)
 	assert_eq(result["events"].filter(func(event: Dictionary) -> bool:

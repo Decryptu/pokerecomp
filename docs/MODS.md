@@ -2084,7 +2084,7 @@ readable and the second is gone.
 | `badges` | A sixteen-bit mask, bit `i` being badge `i` in badge order. Crystal's order whichever cartridge is open, so nothing reads the Gold and Silver flag table |
 | `badge_count` | The same mask popcounted, which is `_GetVarAction`'s `.CountBadges` |
 | `hall_of_fame` | `STATUSFLAGS_HALL_OF_FAME_F` |
-| `beat_red` | Red's credits have been reached; remains true after returning to Mt. Silver |
+| `beat_red` | Red's credits have been reached; remains true after returning to Mt. Silver and after a later Hall of Fame brings Red back. A Generation 2 save from before the field was stored reads true once the Hall of Fame has cleared `EVENT_RED_IN_MT_SILVER` and Red's `disappear` has set it again (`Gen2WorldState.has_beaten_red`); Generation 1 reads false |
 | `seen_count`, `caught_count` | The dex counters |
 | `unown_caught` | How many Unown forms have been caught |
 | `party_count`, `kept_count` | The party, and the party plus the boxes |
@@ -2094,7 +2094,7 @@ readable and the second is gone.
 | `money`, `coins` | The wallet and the Game Corner |
 | `step_count`, `phone_contacts` | The step counter and the registered numbers |
 | `play_hours`, `play_minutes` | The play timer the trainer card prints |
-| `starter_species` | Originally received starter, preserved after evolution, trade or release. Zero before choosing; older Generation 2 slots use Elm's choice flags until a stored receipt exists. Patched starters record the received species |
+| `starter_species` | Originally received starter, preserved after evolution, trade or release. Zero before choosing; older Generation 2 slots use Elm's choice flags until a stored receipt exists, and older Generation 1 slots take the species of `wPlayerStarter` when loaded. Patched starters record the received species |
 | `caught_species` | Every species the dex marks caught, ascending |
 | `beasts_released` | Gold, Silver and Crystal: `EVENT_RELEASED_THE_BEASTS`, set in Burned Tower beside `InitRoamMons` |
 | `fought_suicune` | Crystal: `EVENT_FOUGHT_SUICUNE`, set by Tin Tower's battle whether Suicune was caught or knocked out. `caught_species` tells the two apart |

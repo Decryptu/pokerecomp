@@ -191,9 +191,15 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 	var raw_world: Variant = source.get("world", {})
 	if raw_world is Dictionary and not (raw_world as Dictionary).is_empty():
 		out.world = Gen2WorldSnapshot.from_dict(raw_world)
+		_repair_beat_red(out)
 	_read_mods(out, source)
 	_read_run(out, source)
 	return out
+
+
+static func _repair_beat_red(out: Gen2SaveData) -> void:
+	if out.world != null and RomRegistry.generation_for(out.game_id) != RomRegistry.GEN1:
+		out.world.world_state.beat_red = int(out.world.world_state.has_beaten_red())
 
 
 static func _read_header(out: Gen2SaveData, source: Dictionary) -> void:

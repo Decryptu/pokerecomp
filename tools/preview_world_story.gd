@@ -6586,6 +6586,7 @@ func _silver_cave_rooms(
 		"battles": run.get("battles", []),
 		"credits": int(run.get("credits", 0)),
 		"red_hidden_again": world.event_flag_active(EVENT_RED_IN_MT_SILVER),
+		"beat_red": world.state.beat_red,
 		"party_hp_after": _party_hp(save),
 		"encounters": red.get("encounters", []),
 		"run": run,
@@ -6612,6 +6613,8 @@ func _silver_cave_rooms(
 	# behind the walk the way the cartridge closes it.
 	if not world.event_flag_active(EVENT_RED_IN_MT_SILVER):
 		return {"ok": false, "path": path, "reason": "EVENT_RED_IN_MT_SILVER was not set again"}
+	if world.state.beat_red != 1:
+		return {"ok": false, "path": path, "reason": "`credits` did not record beat_red"}
 	return {"ok": true}
 
 
@@ -9985,7 +9988,8 @@ func _gen1_lab_leg(
 		world, ball[0], Gen2WorldSprite.FACING_UP, save, random, data
 	)
 	var stepped: Dictionary = _gen1_step(path, "oaks_lab_starter", world, starter, {
-		"party": _party_species(save)})
+		"party": _party_species(save), "starter_species": world.state.starter_species,
+		"gen1_starter": world.state.gen1_starter("player")})
 	if not bool(stepped["ok"]):
 		return stepped
 	stepped = _gen1_flag_leg(path, "oaks_lab_starter", world, GEN1_EVENT_GOT_STARTER, "EVENT_GOT_STARTER")
@@ -9993,6 +9997,10 @@ func _gen1_lab_leg(
 		return stepped
 	if save.party.is_empty() or int(save.party[0].species) != int(ball[1]):
 		return {"ok": false, "path": path, "reason": "the ball gave %s" % [_party_species(save)]}
+	if world.state.starter_species != int(ball[1]):
+		return {"ok": false, "path": path, "reason": "starter_species is %d, not %d" % [
+			world.state.starter_species, int(ball[1]),
+		]}
 	var leaving: Dictionary = _gen1_warp_walk(world, GEN1_LAB_DOOR, save, random, data)
 	stepped = _gen1_step(path, "oaks_lab_rival_fight", world, leaving, {"party": _party_species(save)})
 	if not bool(stepped["ok"]):

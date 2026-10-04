@@ -47,6 +47,8 @@ const ROAM_SLOTS: int = 3
 ## Beside `InitRoamMons`, and Crystal's Tin Tower battle however it ends.
 const EVENT_RELEASED_THE_BEASTS: int = 123
 const EVENT_FOUGHT_SUICUNE_CRYSTAL: int = 821
+## Hides Red: the Hall of Fame clears it and his `disappear` sets it again.
+const EVENT_RED_IN_MT_SILVER: int = 1890
 ## Both source reroll loops are unbounded; the cap stops a mod's dead-end graph.
 const ROAM_ROLL_ATTEMPTS: int = 128
 ## `StoreSwarmMapIndices`' own two arguments, `constants/script_constants.asm`.
@@ -973,6 +975,11 @@ func engine_flags() -> Dictionary:
 
 func hall_of_fame() -> bool:
 	return is_engine_flag_active(ENGINE_HALL_OF_FAME)
+
+
+## Generation 2 only; saves from before [member beat_red] was stored hold just the flag.
+func has_beaten_red() -> bool:
+	return beat_red != 0 or (hall_of_fame() and is_event_flag_active(EVENT_RED_IN_MT_SILVER))
 
 
 func set_hall_of_fame(active: bool = true) -> void:

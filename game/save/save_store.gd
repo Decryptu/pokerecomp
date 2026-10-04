@@ -468,6 +468,7 @@ static func _load_copy(path: String, slot: int, data: GameData) -> Dictionary:
 	var loaded_save: Gen2SaveData = Gen2SaveData.from_dict(migration["data"])
 	if loaded_save == null:
 		return _failure("save slot %d is not valid JSON data" % (slot + 1))
+	repair_gen1_starter(loaded_save, data)
 	var validation: Dictionary = Gen2SaveValidator.validate(loaded_save, data)
 	if not validation["ok"]:
 		return _failure("save slot %d: %s" % [slot + 1, validation["message"]])
@@ -475,6 +476,15 @@ static func _load_copy(path: String, slot: int, data: GameData) -> Dictionary:
 		"ok": true, "message": "", "save": loaded_save,
 		"migrated": bool(migration.get("migrated", false)),
 	}
+
+
+## A Generation 1 save from before `starter_species` was stored has the internal index.
+static func repair_gen1_starter(loaded: Gen2SaveData, data: GameData) -> void:
+	if data == null or data.generation != RomRegistry.GEN1 or loaded.world == null:
+		return
+	var state: Gen2WorldState = loaded.world.world_state
+	if state.starter_species == 0:
+		state.starter_species = data.gen1_dex_of_index(state.gen1_starter("player"))
 
 
 ## Unsorted: the bag's pockets and the phone list keep their order as keys.
