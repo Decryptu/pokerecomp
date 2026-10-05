@@ -1,5 +1,5 @@
 name: Source accuracy report
-description: The game runs fine but diverges from what the original Gen 2 code does.
+description: The game runs fine but diverges from what the original cartridge code does.
 labels: ["source accuracy"]
 body:
   - type: markdown
@@ -10,9 +10,9 @@ body:
         the wrong number of frames, an encounter rate that feels off.
 
         The useful part of this report is the source reference. Behavior is
-        re-derived from the `pokecrystal` and `pokegold` disassemblies, so a
-        pointer to the routine or table you're comparing against is worth more
-        than any amount of description.
+        re-derived from the `pokered`, `pokeyellow`, `pokegold` and `pokecrystal`
+        disassemblies, so a pointer to the routine or table you're comparing
+        against is worth more than any amount of description.
 
   - type: input
     id: summary
@@ -29,6 +29,9 @@ body:
       label: Which game
       multiple: true
       options:
+        - Red
+        - Blue
+        - Yellow
         - Gold
         - Silver
         - Crystal
@@ -78,7 +81,7 @@ body:
     attributes:
       label: Source reference
       description: >
-        Path plus symbol in `pokecrystal` or `pokegold`, if you have one. This is
+        Path plus symbol in `pokered`, `pokeyellow`, `pokegold` or `pokecrystal`, if you have one. This is
         what makes the report actionable.
       placeholder: engine/battle/effect_commands.asm, BattleCommand_DamageCalc
     validations:
