@@ -2,8 +2,8 @@ extends SceneTree
 
 ## Every hardware frame of a walk on the real world screen: the scroll, the
 ## player's drawn pixel and which of `Facings` is up, after ten standing frames.
-## Diff `screen_x` against the cartridge's OAM slot 0 minus rSCX, not against
-## `wPlayerSpriteX - hSCX`: `HandleMapObjects` writes that two frames early.
+## Diff `screen_x` against OAM slot 0 minus rSCX, not `wPlayerSpriteX - hSCX`,
+## which `HandleMapObjects` writes two frames early.
 ## `<game> <group> <map> <x> <y> <direction> <frames> <out.txt> [facing] [pikachu]`;
 ## `direction` may be `dir:frames,...` (`none` releases) held in turn. `pikachu`
 ## makes the lead the starter and appends slot fifteen's columns:

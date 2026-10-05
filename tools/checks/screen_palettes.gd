@@ -3,22 +3,19 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies `_CGB_StatsScreenHPPals` and `_CGB_MoveList` against freshly imported
-## real caches: every species, every page, on all three cartridges. What a sampled
-## case cannot say: the two screens are drawn in six palettes at once and every one
-## is a different table, and a slot one out still produces a legible screen. So what
-## is checked is CONTAINMENT: the colours a region is drawn in have to come from the
-## palette its attrmap slot names and from no other. `LoadStatsScreenPals` writes
-## the open page's colour over colour 0 of the HP and exp palettes alone, so the
-## tint is checked as an identity as well.
+## real caches: every species, every page, on all three cartridges. Both screens
+## draw in six palettes at once and a slot one out still looks legible, so what is
+## checked is CONTAINMENT: a region's colours come from the palette its attrmap slot
+## names and from no other. `LoadStatsScreenPals` writes the open page's colour over
+## colour 0 of the HP and exp palettes alone, so the tint is checked as an identity.
 
 ## Every screen the source draws a Pokemon's SHINY colours on, by the layout it asks
 ## for: `_CGB_BattleColors`, `_CGB_StatsScreenHPPals`, `_CGB_BillsPC`,
 ## `_CGB_Evolution` (which breeding's hatch asks for too) and
-## `_CGB_PlayerOrMonFrontpicPals` (the Hall of Fame and the trade animation). Every
-## one reaches `GetMonNormalOrShinyPalettePointer`. Named here because the list is
-## the point: `_CGB_Pokedex` and `_CGB_PartyMenu` are NOT on it, so the dex and the
-## party menu's icons are drawn in ordinary colours on the cartridge and must not be
-## "fixed" here.
+## `_CGB_PlayerOrMonFrontpicPals` (the Hall of Fame and the trade animation), each
+## reaching `GetMonNormalOrShinyPalettePointer`. `_CGB_Pokedex` and `_CGB_PartyMenu`
+## are NOT on it: the dex and the party menu's icons are drawn in ordinary colours
+## on the cartridge and must not be "fixed" here.
 const SHINY_LAYOUTS: Array[String] = [
 	"battle", "stats screen", "Bill's PC", "evolution and hatch",
 	"Hall of Fame and trade",

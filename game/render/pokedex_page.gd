@@ -623,12 +623,11 @@ func search_image(map: PackedInt32Array, frame: int) -> Image:
 
 ## The main screen, composed the way the hardware composes it: the background
 ## scrolled left by [constant MAIN_SCX] and the listing window blitted over it at
-## its own `hWX`. Both layers wrap at the background map's 256 pixels, which is
-## why the background is drawn wide and sampled rather than blitted.
-## [param cursor] is `wDexListingCursor`, which the object frame is drawn around,
-## and [param scrollbar] the (position, listing end) pair
-## `Pokedex_PutScrollbarOAM` slides its knob by. A cursor below zero draws
-## neither, which is what `ClearSprites` leaves on a screen being read.
+## its own `hWX`. Both layers wrap at the background map's 256 pixels, so the
+## background is drawn wide and sampled rather than blitted. [param cursor] is
+## `wDexListingCursor`, which the object frame is drawn around, and [param scrollbar]
+## the (position, listing end) pair `Pokedex_PutScrollbarOAM` slides its knob by;
+## a cursor below zero draws neither, as `ClearSprites` leaves a screen being read.
 func image_main(
 	background: PackedInt32Array, window: PackedInt32Array, old_mode: bool,
 	pic: Image = null, window_rows: int = ROWS, cursor: int = -1,

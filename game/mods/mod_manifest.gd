@@ -42,11 +42,9 @@ var thumbnail: String = ""
 var dependencies: Dictionary = {}
 ## Which cartridges the mod is for, as [RomRegistry] ids. Empty means every game
 ## the host knows, which is what a manifest written before this existed says.
-##
-## Cartridge ids rather than a generation number, because ids are what the
-## registry has: a generation is not a fact the host holds about a dump, and a
-## manifest may not declare something nothing can check. A list also stays right
-## when the launcher gains another generation, since a mod naming the three
+## Cartridge ids rather than a generation number: ids are what the registry has,
+## and a manifest may not declare something nothing can check. A list also stays
+## right when the launcher gains a generation, since a mod naming the three
 ## Generation II cartridges refuses on a fourth without being edited.
 var games: Array[StringName] = []
 ## The categories above this mod's row in the MODS entry, outermost first.

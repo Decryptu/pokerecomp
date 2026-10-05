@@ -570,6 +570,8 @@ func _gen1_role(kind: StringName, index: int) -> Dictionary:
 func gen1_sound(bank: int, sound_id: int) -> Dictionary:
 	if sound_id <= 0:
 		return {}
+	if sound_id == Gen1SoundEngine.SFX_STOP_ALL_MUSIC:
+		return {"index": 0, "bank": bank, "sound_id": sound_id}
 	var row: Dictionary = _gen1_audio_row(bank, sound_id)
 	if row.is_empty():
 		return {}

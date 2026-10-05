@@ -2056,8 +2056,19 @@ static func _gen1_node_dex_rating(world: Gen2WorldAPI, _node: Dictionary, steps:
 	var rated: Dictionary = Gen2ProfOaksPC.rate(world.data, world.state)
 	if rated.is_empty():
 		return false
-	for page: String in rated["pages"] as Array:
-		steps.append({"type": &"text", "text": gen1_filled_text(world, page)})
+	var pages: Array = rated["pages"]
+	for index: int in pages.size():
+		var box: Dictionary = {"type": &"text", "text": gen1_filled_text(world, String(pages[index]))}
+		if index == pages.size() - 1:
+			box["press"] = false
+		steps.append(box)
+	## `PlayPokedexRatingSfx` stops the music, plays the row's effect from its own
+	## bank and `PlayDefaultMusic` waits it out, all in front of the last press.
+	var effect: Array[int] = Gen1Sfx.rating_effect(int(rated["caught"]))
+	steps.append(_gen1_sound_step(world, "sound", {"index": Gen1SoundEngine.SFX_STOP_ALL_MUSIC}))
+	steps.append(_gen1_sound_step(world, "music", {"index": effect[1], "bank": effect[0]}))
+	steps.append(_gen1_sound_step(world, "map_music", {"wait": true}))
+	steps.append({"type": &"button", "arrow": true})
 	return true
 
 

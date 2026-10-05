@@ -328,9 +328,11 @@ var _save_frames: int = 0
 var _save_clock := Gen2WorldAnimation.FrameClock.new()
 ## `SaveMenu`'s own sequence while one is up, and null the rest of the time.
 var _save_prompt: Gen2SavePrompt = null
-## `_Option.ExitOptions`' `WaitSFX`.
-var _options_exit_waiting: bool = false
+## `WaitSFX` behind `_Option.ExitOptions` and `PartyMenuSelect`'s click.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
+var _sound_holding: bool = false
 var _sound_watch: Dictionary = {}
+var _sound_then: Callable = Callable()
 
 var _options_menu: Gen2WorldOptionsMenu = null
 
@@ -539,7 +541,7 @@ func _select_pack_item(item: int) -> bool:
 
 
 func handle_button(button: int) -> bool:
-	if _options_exit_waiting:
+	if _sound_holding:
 		return true
 	## The mail keyboard owns all 160x144 while it is up, the way BILL'S PC's
 	## own does over the box screen.
@@ -611,10 +613,10 @@ func _apply_switch_press() -> void:
 	if next_order != order and _world != null:
 		Gen2WorldBagHost.reorder(_world, _pack_save, next_order, false, _pack_persist)
 		_open_pack_mode(false)
-		## `.place_insert` asks for the same effect twice through `WaitPlaySFX`.
+		## `.place_insert`'s two `WaitPlaySFX`: the first ends before the second.
 		if not gen1:
 			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
-			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+			_hold_for_sound(sfx_requested.emit.bind(Gen2Sfx.SFX_SWITCH_POKEMON, true))
 	_pack_switch = int(answer["held"])
 
 
@@ -759,21 +761,23 @@ func menu_repeats(button: int) -> bool:
 
 
 ## `StartMenu.GetInput`'s click on A, the pack's and `PartyMenuSelect`'s on either.
-func _menu_click(button: int) -> void:
+## Whether the click is one `WaitSFX` follows, which is `PartyMenuSelect`'s.
+func _menu_click(button: int) -> bool:
 	if _mode == Mode.PACK_TARGET:
 		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, not _gen1_pack())
-		return
+		return not _gen1_pack()
 	var clicks: bool = _mode in [Mode.PACK, Mode.PACK_ITEM] \
 		or (_mode == Mode.LIST and (button == PokeButton.A or _gen1_pack()))
 	if clicks:
 		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+	return false
 
 
 func _confirm() -> void:
-	_menu_click(PokeButton.A)
-	if _hold_yes_no(_confirm_now):
-		return
-	_confirm_now()
+	if _menu_click(PokeButton.A):
+		_hold_for_sound(_confirm_now)
+	elif not _hold_yes_no(_confirm_now):
+		_confirm_now()
 
 
 func _confirm_now() -> void:
@@ -848,10 +852,10 @@ func _confirm_pack() -> void:
 
 
 func _cancel() -> void:
-	_menu_click(PokeButton.B)
-	if _hold_yes_no(_cancel_now):
-		return
-	_cancel_now()
+	if _menu_click(PokeButton.B):
+		_hold_for_sound(_cancel_now)
+	elif not _hold_yes_no(_cancel_now):
+		_cancel_now()
 
 
 func _cancel_now() -> void:
@@ -1045,18 +1049,27 @@ func _exit_options() -> void:
 		_:
 			if Gen2WorldState.is_crystal_profile(_data):
 				sfx_requested.emit(Gen2Sfx.SFX_TRANSACTION, true)
-				_options_exit_waiting = true
-				_sound_watch = {}
-				_finish_options_exit()
+				_hold_for_sound(_close_submenu)
 				return
 	_close_submenu()
 
 
-func _finish_options_exit() -> void:
-	if not _options_exit_waiting or Gen2AudioPlayer.sound_wait(_sound_watch):
+func _hold_for_sound(then: Callable = Callable()) -> void:
+	_sound_watch = {}
+	_sound_then = then
+	_sound_holding = true
+	_release_sound()
+
+
+func _release_sound() -> void:
+	if not _sound_holding or bool(sound_busy.call(_sound_watch)):
 		return
-	_options_exit_waiting = false
-	_close_submenu()
+	_sound_holding = false
+	var then: Callable = _sound_then
+	_sound_then = Callable()
+	if then.is_valid():
+		then.call()
+	_render_hardware()
 
 
 ## Written on every change, matching the launcher card and the cartridge, which
@@ -1703,6 +1716,7 @@ func _register_selected_item() -> void:
 			"Could not register that (%s)." % String(result.get("reason", ""))
 		)
 		return
+	sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, true)
 	_show_pack_result(Gen2WorldPack.registered_text(String(result.get("name", ""))))
 
 
@@ -2153,6 +2167,12 @@ func _teach_selected_item(party_index: int) -> void:
 				return
 		if reason == &"not_compatible":
 			sfx_requested.emit(Gen2Sfx.SFX_WRONG, false)
+		## `ChooseMonToLearnTMHM.egg`: `SFX_WRONG`, waited out, and the list again.
+		if reason == &"cannot_teach_egg":
+			_teaching = true
+			sfx_requested.emit(Gen2Sfx.SFX_WRONG, false)
+			_hold_for_sound()
+			return
 		## `ItemUseTMHM`'s refusals `jr .chooseMon`; `TeachTMHM`'s `.nope` returns to the pack.
 		var again: Callable = Callable()
 		if _gen1_pack() and (reason == &"not_compatible" or reason == &"already_knows_move"):
@@ -2288,8 +2308,6 @@ func _teach_refusal(reason: StringName, party_index: int) -> String:
 			return Gen2MoveForget.cant_forget_hm_text(_data.generation)
 		&"invalid_forget_slot":
 			return "%s can't forget that move." % target_name
-		&"cannot_teach_egg":
-			return "An EGG can't learn anything."
 	return "Can't teach that: %s" % String(reason)
 
 
@@ -2414,7 +2432,7 @@ func _show_party_result(
 		sfx_requested.emit(Gen2Sfx.SFX_DEX_FANFARE_50_79, true)
 		party["stats_after_press"] = _party_stats(party_index)
 	elif not _pp_up_is_silent(result):
-		sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, false)
+		sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, true)
 	if kind != &"" and not party.has("anim") and kind != Gen2ItemActionText.LEVEL:
 		party["hold"] = Gen2ItemActionText.HOLD_FRAMES
 	if bool(result.get("bitter", false)):
@@ -3032,8 +3050,8 @@ func ask_soft_reset() -> void:
 
 ## One hardware frame of the box, a held YES/NO answer or the save's timed modes.
 func advance_frame() -> void:
-	if _options_exit_waiting:
-		_finish_options_exit()
+	if _sound_holding:
+		_release_sound()
 		return
 	if _box_up:
 		_box.advance_frame()

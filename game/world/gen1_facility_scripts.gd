@@ -359,13 +359,18 @@ static func _gen1_facility_steps(world: Gen2WorldAPI, row: Dictionary, text_id: 
 	return []
 
 
+## `SFX_TURN_ON_PC` starts with the boot line; only `ActivatePC` waits it out.
 static func _gen1_pc_steps(world: Gen2WorldAPI, machine: Array) -> Array:
-	return [
+	var steps: Array = [
+		Gen1ScriptNodes._gen1_sound_step(world, "sound", {"index": Gen1Sfx.SFX_TURN_ON_PC}),
 		_gen1_facility_box(world, String(machine[1]), String(machine[2])),
-		{"type": &"request", "values": {
-			"kind": &"pc_requested", "values": {"mode": StringName(machine[0])},
-		}},
 	]
+	if machine[0] == &"gen1_pokemon_center":
+		steps.append(Gen1ScriptNodes._gen1_sound_step(world, "wait"))
+	steps.append({"type": &"request", "values": {
+		"kind": &"pc_requested", "values": {"mode": StringName(machine[0])},
+	}})
+	return steps
 
 
 ## `GetPrizeMenuId` subtracts `TEXT_GAMECORNERPRIZEROOM_PRIZE_VENDOR_1` from the id

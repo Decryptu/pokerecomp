@@ -24,6 +24,11 @@ var _held: int = -1  ## `wSwappingMove` less one: the row being moved, or -1 whe
 ## `PAD_UP | PAD_DOWN | PAD_A | PAD_B` and nothing else, so there is no cycling
 ## between members and no move to hold: A answers the caller and B is its carry.
 var _deleting: bool = false
+## `WaitSFX` behind every effect: no press is read while [member sound_busy] says one sounds.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
+var _sound_holding: bool = false
+var _sound_watch: Dictionary = {}
+var _sound_then: Callable = Callable()
 
 
 static func create(data: GameData, party: Array, start_cursor: int = 0) -> Gen2MoveScreen:
@@ -55,6 +60,8 @@ func open_deletion() -> void:
 ## `MoveScreenLoop`'s joypad block, which `ScrollingMenuJoypad` has already
 ## narrowed to the control pad, A and B. Returns whether the button was used.
 func handle_button(button: int) -> bool:
+	if _sound_holding:
+		return true
 	match button:
 		PokeButton.B:
 			## `.ChooseMoveToDelete`'s own `.a_button` and `.b_button` reach
@@ -63,25 +70,13 @@ func handle_button(button: int) -> bool:
 			if _deleting:
 				selection_made.emit(-1)
 				return true
-			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, true)
-			## `.b_button`: a held move is put back where it came from and the
-			## screen stays up; nothing held is the way out.
-			if _held >= 0:
-				_row = _held
-				_held = -1
-				return true
-			closed.emit()
+			_play_then(Gen2Sfx.SFX_READ_TEXT_2, _press_b)
 			return true
 		PokeButton.A:
 			if _deleting:
 				selection_made.emit(_row)
 				return true
-			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, true)
-			if _held < 0:
-				_held = _row
-				return true
-			_swap(_held, _row)
-			_held = -1
+			_play_then(Gen2Sfx.SFX_READ_TEXT_2, _press_a)
 			return true
 		PokeButton.UP:
 			return _move_row(-1)
@@ -92,6 +87,43 @@ func handle_button(button: int) -> bool:
 		PokeButton.RIGHT:
 			return _cycle(1)
 	return false
+
+
+## `.b_button` after its click: a held move is put back where it came from and
+## the screen stays up; nothing held is the way out.
+func _press_b() -> void:
+	if _held >= 0:
+		_row = _held
+		_held = -1
+		return
+	closed.emit()
+
+
+## `.a_button` after its click: the first press holds a move, the second places it.
+func _press_a() -> void:
+	if _held < 0:
+		_held = _row
+		return
+	_swap(_held, _row)
+	_held = -1
+
+
+func _play_then(index: int, then: Callable = Callable()) -> void:
+	sfx_requested.emit(index, true)
+	_sound_watch = {}
+	_sound_then = then
+	_sound_holding = true
+	advance_frame()
+
+
+func advance_frame() -> void:
+	if not _sound_holding or bool(sound_busy.call(_sound_watch)):
+		return
+	_sound_holding = false
+	var then: Callable = _sound_then
+	_sound_then = Callable()
+	if then.is_valid():
+		then.call()
 
 
 ## Neither `MoveScreen2DMenuData` nor `DeleteMoveScreen2DMenuData` sets
@@ -156,9 +188,7 @@ func _swap(from: int, to: int) -> void:
 	if from != to:
 		mon.swap_move_slots(from, to)
 	## `.swap_moves` plays the same effect twice, waiting for each.
-	## `SwitchPartyMons` is `WaitPlaySFX`, twice over.
-	sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
-	sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+	_play_then(Gen2Sfx.SFX_SWITCH_POKEMON, _play_then.bind(Gen2Sfx.SFX_SWITCH_POKEMON))
 
 
 ## Everything [Gen2MoveScreenPage] draws.

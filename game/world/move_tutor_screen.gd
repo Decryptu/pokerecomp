@@ -45,6 +45,10 @@ var _menu_page: Gen2MenuPage = null
 var _menu: TextureRect = null
 var _yes_no: Gen2YesNoBox = null
 var _party: Gen2PartyScreen = null
+## `WaitSFX` behind `ChooseMonToLearnTMHM`'s `SFX_WRONG` for an egg.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
+var _sound_holding: bool = false
+var _sound_watch: Dictionary = {}
 
 
 func set_context(
@@ -112,6 +116,8 @@ func box_text() -> String:
 
 
 func handle_button(button: int) -> bool:
+	if _sound_holding:
+		return true
 	if _phase == Phase.SELECT_MON and _party != null:
 		return _party.handle_button(button)
 	if _phase == Phase.FORGET_LIST:
@@ -131,6 +137,11 @@ func handle_button(button: int) -> bool:
 
 
 func advance_frame() -> void:
+	if _sound_holding:
+		_sound_holding = bool(sound_busy.call(_sound_watch))
+		if not _sound_holding:
+			_open_party()
+		return
 	if _yes_no != null and _yes_no.is_open():
 		_yes_no.advance_frame()
 		return
@@ -256,10 +267,12 @@ func _show_refusal(reason: StringName) -> void:
 		&"already_knows_move":
 			_refusal_text = Gen2WorldTMHM.knows_move_text(_mon_name(), _move_name)
 		&"invalid_party_index":
-			## `ChooseMonToLearnTMHM` refuses an egg with SFX_WRONG and reopens
-			## the list without a box, which is what an empty text is here.
+			## `ChooseMonToLearnTMHM` refuses an egg with SFX_WRONG, waits it out
+			## and reopens the list without a box.
 			sfx_requested.emit(Gen2Sfx.SFX_WRONG, false)
-			_open_party()
+			_sound_watch = {}
+			_sound_holding = true
+			advance_frame()
 			return
 		_:
 			_refusal_text = Gen2MoveForget.did_not_learn_text(_mon_name(), _move_name)

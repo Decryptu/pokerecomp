@@ -112,6 +112,36 @@ func test_the_panels_time_out_and_the_last_page_closes_the_overlay() -> void:
 	runtime.free()
 
 
+## `ProfOaksPCRating` ends on `PlaySFX`, `JoyWaitAorB` and `WaitSFX`: the press that
+## ends the last page is answered once the rating's effect has stopped.
+func test_the_press_ending_the_rating_waits_for_its_effect() -> void:
+	await _open_world(1)
+	_world_screen.open_hall_of_fame()
+	await get_tree().process_frame
+	var sounding: Array[bool] = [false]
+	_host().sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	while not _host().current_page().has("sfx"):
+		match StringName(_host().current_page().get("kind", &"")):
+			Gen2HallOfFame.PAGE_SAVING:
+				_host().advance_hold_frames(Gen2SavePrompt.SAVING_RECORD_FRAMES)
+			Gen2HallOfFame.PAGE_MON:
+				_host().advance_hold_frames(Gen2HallOfFame.panel_frames(_data))
+			_:
+				if _host()._printing():
+					_host().advance_hold_frames(1)
+				else:
+					_host().handle_button(PokeButton.A)
+	while _host()._printing():
+		_host().advance_hold_frames(1)
+	sounding[0] = true
+	_host().handle_button(PokeButton.A)
+	assert_not_null(_world_screen._hall_of_fame_host, "the effect is still sounding")
+	assert_true(_host().handle_button(PokeButton.A), "and no press is read behind it")
+	sounding[0] = false
+	_host()._process(0.0)
+	assert_null(_world_screen._hall_of_fame_host)
+
+
 ## A runtime that records what it was asked instead of changing the scene.
 func _recording_runtime() -> Gen2GameRuntime:
 	var script := GDScript.new()

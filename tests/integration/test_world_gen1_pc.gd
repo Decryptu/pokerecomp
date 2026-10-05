@@ -14,6 +14,7 @@ const NICKNAMES: Array[String] = ["ALPHA", "BRAVO", "CHARLIE"]
 ## the fill reads; the words are short stand-ins.
 const SPECIAL_TEXT: Dictionary = {
 	"pc": {"accessed_someones": "Accessed SOMEONE's\nPC.", "accessed_mine": "Accessed my PC."},
+	"oaks_pc": {"accessed": "Accessed OAK's PC.", "get_rated": "Get rated?", "closed": "Closed."},
 	"bills_pc": {"what": "What?"},
 	"bills_pc_sleeping": {"no_response": "There isn't any\nresponse."},
 	"print_box": {"no_mon": "There are no\n#MON here!"},
@@ -332,3 +333,78 @@ func test_the_toss_list_keeps_its_row_across_the_dial() -> void:
 	host.handle_button(PokeButton.B)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
 	assert_eq(host._cursor, Gen2WorldPC.GEN1_PLAYERS_PC_TOSS, "the menu row it was opened from")
+
+
+## `ActivatePC` waits for `SFX_ENTER_PC` before each machine's own box and for
+## `SFX_TURN_OFF_PC` before LOG OFF returns, where neither effect was requested.
+func test_the_top_menu_waits_out_its_enter_and_log_off_effects() -> void:
+	var host: Gen2WorldServiceScreen = await _open_machine()
+	var sounding: Array[bool] = [false]
+	host.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	var played: Array[int] = []
+	host.gen1_sfx_requested.connect(func(sound: int) -> void:
+		played.append(sound)
+		sounding[0] = true)
+	host.handle_button(PokeButton.A)
+	assert_eq(played, [Gen1Sfx.SFX_ENTER_PC])
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC, "the box waits behind the effect")
+	assert_true(host.handle_button(PokeButton.A))
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+	sounding[0] = false
+	host.advance_frame()
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT)
+	Fixture.press_through(host)
+	host.handle_button(PokeButton.B)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+
+	watch_signals(host)
+	host.handle_button(PokeButton.B)
+	assert_eq(played, [Gen1Sfx.SFX_ENTER_PC, Gen1Sfx.SFX_TURN_OFF_PC])
+	assert_signal_not_emitted(host, "completed")
+	sounding[0] = false
+	host.advance_frame()
+	assert_signal_emitted(host, "completed")
+
+
+## `PlayPokedexRatingSfx`: the music stops, the owned count's own effect plays from
+## its own bank, and `PlayDefaultMusic` brings the map's piece back only once it ends.
+func test_oaks_rating_plays_its_effect_and_restores_the_map_music_after_it() -> void:
+	var host: Gen2WorldServiceScreen = await _open_machine()
+	_world_screen._world.state.set_engine_flag(Gen2WorldStartMenu.ENGINE_POKEDEX)
+	host._pc_rows = Gen2WorldPC.gen1_top_menu(_data, _world_screen._world.state, "RED")
+	var sounding: Array[bool] = [false]
+	host.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	watch_signals(host)
+	_take_top_row(host, 2)
+	Fixture.print_out(host)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_OAK_ASK)
+	Fixture.print_out(host)
+	host.handle_button(PokeButton.A)
+	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
+		host.advance_frame()
+	Fixture.press_through(host)
+	sounding[0] = true
+	Fixture.print_out(host)
+	assert_signal_emitted_with_parameters(host, "music_requested", [0])
+	var effect: Array[int] = Gen1Sfx.rating_effect(_world_screen._world.state.caught_count())
+	assert_signal_emitted_with_parameters(host, "gen1_music_requested", [effect])
+	assert_signal_not_emitted(host, "map_music_requested")
+	assert_true(host.handle_button(PokeButton.A), "no press is read behind the effect")
+	sounding[0] = false
+	host.advance_frame()
+	assert_signal_emitted(host, "map_music_requested")
+
+
+## `TextScript_PokemonCenterPC` prints its boot line and hands the world a
+## `pc_requested`; the machine it opens is `ActivatePC`'s, not Crystal's.
+func test_a_scripted_pc_request_opens_activate_pcs_menu() -> void:
+	var host: Gen2WorldServiceScreen = await _open_machine()
+	host._finish([])
+	var world: Gen2WorldAPI = _world_screen._world
+	world._gen1_steps = [{"type": &"request", "values": {
+		"kind": &"pc_requested", "values": {"mode": &"gen1_pokemon_center"},
+	}}]
+	var scripted: Gen2WorldServiceScreen = _world_screen._service_overlay()
+	assert_true(scripted.open_pending(world, _data, _world_screen._injected_save, false))
+	assert_eq(scripted._mode, Gen2WorldServiceScreen.MODE.PC)
+	assert_true(scripted._gen1_pc)

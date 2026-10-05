@@ -69,6 +69,14 @@ func is_finished() -> bool:
 	return _elapsed_frames >= total_frames()
 
 
+## Whether the next frame opens a ring, behind `Phone_StartRinging`'s `WaitSFX`.
+func opens_ring() -> bool:
+	if _elapsed_frames == 0 and _lead_frames == 0:
+		return true
+	var next: int = _elapsed_frames + 1 - _lead_frames
+	return next >= 0 and next < TOTAL_FRAMES and next % RING_FRAMES == 0
+
+
 func elapsed_frames() -> int:
 	return _elapsed_frames
 

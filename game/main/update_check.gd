@@ -1,13 +1,10 @@
 class_name PokeUpdateCheck
 extends RefCounted
 
-## Compares this build against the project's published releases.
-##
-## Everything here is pure: no HTTP and no filesystem, so the version rules and
-## the shape of a release feed are testable without a network. The launcher owns
-## the request itself, the way [PokeModIndex] leaves fetching to its dialog.
-##
-## The check never runs on its own. It reaches a third party and reports that
+## Compares this build against the project's published releases. Everything here
+## is pure: no HTTP and no filesystem, so the version rules and the shape of a
+## release feed are testable without a network. The launcher owns the request, the
+## way [PokeModIndex] leaves fetching to its dialog. The check never runs on its own. It reaches a third party and reports that
 ## this build exists, so it happens when the player asks and not before.
 
 const RELEASES_API: String = "https://api.github.com/repos/Decryptu/pokerecomp/releases/latest"

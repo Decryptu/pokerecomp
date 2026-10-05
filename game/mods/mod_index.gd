@@ -5,10 +5,9 @@ extends RefCounted
 ## naming mods that live wherever their authors put them. Nothing here installs
 ## anything, and a chosen entry hands its download to [Gen2ModInstaller] with the
 ## listed id required to match, so appearing in a feed buys a mod no trust that
-## picking the same file by hand would not. One index ships with the game, this
-## project's own; every other is the player trusting a publisher we did not choose
-## for them. Everything above "fetching" is pure, so the feed format can be tested
-## without a network.
+## picking the same file by hand would not. One index ships with the game; every
+## other is the player trusting a publisher we did not choose for them. Everything
+## above "fetching" is pure, so the feed format is testable without a network.
 
 ## Feeds declare this. A later format may reuse a field name for something else,
 ## so an unknown version is refused rather than parsed hopefully.

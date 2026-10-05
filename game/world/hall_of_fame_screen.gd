@@ -47,6 +47,10 @@ var _pic_rest_x: float = 0.0
 var _hold_frames: int = 0
 var _hold_clock := Gen2WorldAnimation.FrameClock.new()
 var _box: Gen2TextBox = null
+## `ProfOaksPCRating`'s `WaitSFX` behind the press that ends the page.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
+var _sound_holding: bool = false
+var _sound_watch: Dictionary = {}
 
 
 ## [param pages] is [method Gen2HallOfFame.pages]; an empty list closes at once.
@@ -82,6 +86,8 @@ func current_page() -> Dictionary:
 ## is what [member cancelled] says afterwards, and START skips the rest of this
 ## team. `AnimateHallOfFame` reads none of them.
 func handle_button(button: int) -> bool:
+	if _sound_holding:
+		return true
 	if _printing():
 		if button in [PokeButton.A, PokeButton.B]:
 			_box.advance()
@@ -91,7 +97,7 @@ func handle_button(button: int) -> bool:
 		return true
 	## `ProfOaksPCRating`'s `JoyWaitAorB`.
 	if button == PokeButton.A or (button == PokeButton.B and current_page().has("text")):
-		advance()
+		_press_page()
 		return true
 	if not viewer:
 		return false
@@ -104,6 +110,15 @@ func handle_button(button: int) -> bool:
 		closed.emit()
 		return true
 	return false
+
+
+func _press_page() -> void:
+	if current_page().has("sfx") and bool(sound_busy.call({})):
+		_sound_watch = {}
+		_sound_holding = true
+		set_process(true)
+		return
+	advance()
 
 
 func advance() -> void:
@@ -156,6 +171,11 @@ func advance_hold_frames(count: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if _sound_holding:
+		if not bool(sound_busy.call(_sound_watch)):
+			_sound_holding = false
+			advance()
+		return
 	advance_hold_frames(_hold_clock.tick(delta))
 
 

@@ -163,6 +163,7 @@ var _hold_frames: int = 0
 var _hold_then: Callable = Callable()
 var _hold_sound: Dictionary = {}
 var _hold_waits_sound: bool = false
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
 var _mart_after: StringName = MART_LIST
 var _mart_waits: bool = true
 ## `SaveScreenTilesToBuffer1`: a Generation 1 shop photographs the screen behind
@@ -426,7 +427,12 @@ func open_pending(
 			_open_elevator(resolved.get("data", {}).get("elevator", {}))
 			return true
 		&"pc_requested":
-			_boot_pc(StringName(resolved.get("data", {}).get("pc", {}).get("mode", &"")))
+			var machine: StringName = StringName(resolved.get("data", {}).get("pc", {}).get("mode", &""))
+			## Generation 1's boot line is the script's own box, printed before this.
+			if String(machine).begins_with("gen1_"):
+				_open_gen1_pc(machine)
+			else:
+				_boot_pc(machine)
 			return true
 	_show_error("No scene host for %s." % String(request.get("kind", "request")))
 	return false
@@ -589,7 +595,7 @@ func _apply_pc_switch_press() -> void:
 		## `PC_PlaySwapItemsSound`, which is the pack's own pair of effects.
 		if not _gen1_pc:
 			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
-			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+			_hold_for_sound(sfx_requested.emit.bind(Gen2Sfx.SFX_SWITCH_POKEMON, true))
 	_pc_switch = int(answer["held"])
 	_render_rows()
 
@@ -3104,11 +3110,18 @@ func _pc_text_printed() -> void:
 	var said: Dictionary = _pc_texts[0]
 	if int(said["sfx"]) >= 0:
 		sfx_requested.emit(int(said["sfx"]), false)
+	if int(said.get("rating", -1)) >= 0:
+		_play_gen1_rating(int(said["rating"]))
 	if said["end"] == &"none":
 		_advance_pc_text()
 
 
 func _advance_pc_text() -> void:
+	## `ProfOaksPCBoot`'s `WaitSFX` behind the press that ends the rating's `JoyWaitAorB`.
+	if not _pc_texts.is_empty() and int(_pc_texts[0]["sfx"]) >= 0:
+		_pc_texts[0]["sfx"] = -1
+		_hold_for_sound(_advance_pc_text)
+		return
 	if _box != null:
 		_box.advance()
 	_pc_texts.pop_front()
@@ -3180,7 +3193,20 @@ func _open_gen1_top() -> void:
 	_render_rows()
 
 
+## `ActivatePC`'s `SFX_ENTER_PC` and the wait behind it, in front of each machine
+## it opens; LOG OFF has its own sound.
 func _confirm_gen1_top_row(row: int) -> void:
+	if row in [
+		Gen2WorldPC.GEN1_PC_BILLS, Gen2WorldPC.GEN1_PC_PLAYERS,
+		Gen2WorldPC.GEN1_PC_OAKS, Gen2WorldPC.GEN1_PC_LEAGUE,
+	]:
+		gen1_sfx_requested.emit(Gen1Sfx.SFX_ENTER_PC)
+		_hold_for_sound(_enter_gen1_machine.bind(row))
+		return
+	_leave_gen1_machine()
+
+
+func _enter_gen1_machine(row: int) -> void:
 	match row:
 		Gen2WorldPC.GEN1_PC_BILLS:
 			var met: bool = _world.state.is_event_flag_active(
@@ -3195,12 +3221,15 @@ func _confirm_gen1_top_row(row: int) -> void:
 			_open_gen1_box_text("oaks_pc", "accessed", &"gen1_oak_ask")
 		Gen2WorldPC.GEN1_PC_LEAGUE:
 			_open_gen1_box_text("hof_pc", "accessed", &"gen1_league")
-		_:
-			_leave_gen1_machine()
 
 
 ## `LogOff`, and `ExitPlayerPC` and `ExitBillsPC` with no top menu behind them.
 func _leave_gen1_machine() -> void:
+	gen1_sfx_requested.emit(Gen1Sfx.SFX_TURN_OFF_PC)
+	_hold_for_sound(_finish_gen1_machine)
+
+
+func _finish_gen1_machine() -> void:
 	if _bills_pc_only:
 		_finish([])
 		return
@@ -3679,11 +3708,22 @@ func _confirm_gen1_oak(row: int) -> void:
 		return
 	## `DisplayDexRating`: `DexCompletionText`, and the row the count lands on
 	## behind `WaitForTextScrollButtonPress`'s arrow, which plays nothing.
-	var pages: Array = Gen2ProfOaksPC.rate(_data, _world.state).get("pages", [])
+	var rated: Dictionary = Gen2ProfOaksPC.rate(_data, _world.state)
+	var pages: Array = rated.get("pages", [])
 	if pages.size() < 2:
 		_close_gen1_oak()
 		return
-	_open_pc_text([_said(String(pages[0])), _said(String(pages[1]), &"arrow")], &"gen1_oak_closed", "")
+	var rating: Dictionary = _said(String(pages[1]), &"arrow")
+	rating["rating"] = int(rated["caught"])
+	_open_pc_text([_said(String(pages[0])), rating], &"gen1_oak_closed", "")
+
+
+## `PlayPokedexRatingSfx`, and `PlayDefaultMusic`'s wait before the map's piece.
+func _play_gen1_rating(owned: int) -> void:
+	var effect: Array[int] = Gen1Sfx.rating_effect(owned)
+	music_requested.emit(0)
+	gen1_music_requested.emit(effect.duplicate())
+	_hold_for_sound(map_music_requested.emit)
 
 
 func _close_gen1_oak() -> void:
@@ -4355,7 +4395,7 @@ func _advance_frame_hold() -> bool:
 	if not _hold_then.is_valid():
 		return false
 	if _hold_waits_sound:
-		if audio_player != null and audio_player.still_waiting(_hold_sound):
+		if bool(sound_busy.call(_hold_sound)):
 			return true
 		_hold_waits_sound = false
 	_hold_frames -= 1
@@ -4371,6 +4411,13 @@ func _hold(then: Callable, frames: int = 0) -> void:
 	_hold_frames = frames
 	_hold_sound = {}
 	_hold_waits_sound = true
+
+
+func _hold_for_sound(then: Callable) -> void:
+	if bool(sound_busy.call({})):
+		_hold(then)
+		return
+	then.call()
 
 
 func _on_card_tuned(knob: int) -> void:

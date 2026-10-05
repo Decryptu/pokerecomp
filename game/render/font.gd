@@ -167,12 +167,10 @@ func draw_code(
 
 ## Draws a string left to right from [param at_x], advancing eight pixels per
 ## tile. Returns how many tiles were drawn, which is not the string's length when
-## it contains a ligature. [param max_tiles] stops the run short; `PlaceString`
-## has no such bound and needs none, every cartridge string being written to fit
-## its box, but a label a mod supplies is not. A bounded run that does not fit
-## ends in the charmap's own ellipsis rather than stopping mid-word, so a cut
-## value is never read as a whole one. The battle-extra strip has no ellipsis
-## tile under $75, so under that font the run is cut without one.
+## it contains a ligature. [param max_tiles] stops the run short (`PlaceString`
+## needs no bound, but a label a mod supplies does); a run that does not fit ends
+## in the charmap's own ellipsis so a cut value is never read as a whole one. The
+## battle-extra strip has no ellipsis tile under $75, so that font cuts without one.
 func draw_text(
 	text: String, into: PackedByteArray, into_width: int, at_x: int, at_y: int,
 	font: StringName = Gen2Text.FONT_MAIN, max_tiles: int = -1

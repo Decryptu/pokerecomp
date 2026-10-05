@@ -801,9 +801,8 @@ static func _verify_title_run(
 ## names a tile inside `TownMapGFX`'s 48, which no unrelated 360-byte run does,
 ## and each ends on its own `-1`. The palette map is checked the same way and the
 ## palette run by the off-white all six open on. The landmark table checks both
-## ends and every name pointer between: `SPECIAL` sits at (0,0) with the only
-## zeroed record, the last row is the Fast Ship, and a pointer that leaves the
-## table's bank is not a name.
+## ends and every name pointer: `SPECIAL` sits at (0,0) with the only zeroed
+## record, the last row is the Fast Ship, and a pointer leaving the bank is no name.
 static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if (layout.get("town_map", {}) as Dictionary).is_empty():
 		return {"ok": true, "message": "No region map on this cartridge."}
@@ -2535,11 +2534,9 @@ static func read_menu_descriptions(rom: RomFile, layout: Dictionary) -> Array[St
 ## data/text/name_input_chars.asm, pinned by content at both ends of every table:
 ## row 0 has to be the nine letters the table opens with and the last row the
 ## command row, which `NamingScreen_GetCursorPosition` reads by column. A run of
-## text bytes elsewhere passes neither.
-## Below it, `StringBufferPointers` checked against `ram/wram.asm` rather than an
-## address this project chose: `wStringBuffer1..5` are five consecutive
-## `ds STRING_BUFFER_LENGTH` runs, so the five general entries must sit one stride
-## apart in the order `data/text_buffers.asm` lists them.
+## text bytes elsewhere passes neither. Below it, `StringBufferPointers` against
+## `ram/wram.asm`: `wStringBuffer1..5` are five consecutive `ds STRING_BUFFER_LENGTH`
+## runs, so the five general entries sit one stride apart in `data/text_buffers.asm`'s order.
 static func verify_string_buffer_pointers(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("string_buffer_pointers", -1))
 	var bytes: int = Gen2Layout.STRING_BUFFER_POINTER_COUNT * Gen2Layout.STRING_BUFFER_POINTER_SIZE
@@ -2597,10 +2594,9 @@ const MAIL_PALETTE_FIRST: Array[int] = [
 ## `MailItems`' own eleven bytes, the two mail keyboards at both ends, the flat
 ## tiles `gfx/mail.asm` begins and ends on, and `mail.pal`'s first colour per row
 ## with black behind every one. The icon is checked for bounds alone, eight 2bpp
-## tiles with no structure a wrong offset would fail, and `tools/checks/mail.gd`
-## looks at it. Below, the two mystery gift tables resolved through their own
-## constant blocks rather than read back out of a dump, which is what says the
-## pins are the tables and not some other pair of adjacent runs.
+## tiles with no structure a wrong offset would fail; `tools/checks/mail.gd` looks
+## at it. Below, the two mystery gift tables resolved through their own constant
+## blocks, which says the pins are the tables and not some other adjacent runs.
 const MYSTERY_GIFT_ITEM_NUMBERS: Array[int] = [
 	0xAD, 0x4E, 0x54, 0x50, 0x4F, 0x4A, 0x29, 0x33, 0x31, 0x53, 0x2C, 0x35,
 	0x21, 0xB9, 0xBA, 0xBC, 0x6D, 0xAE, 0x27, 0x04, 0x2A, 0x2B, 0x41, 0x3F,
@@ -4323,9 +4319,8 @@ static func _trainer_palette_check(
 ## table, which is the class every gym leader shares ("LEADER") rather than the
 ## trainer inside it ("FALKNER"). Nothing in a class's bytes says where its group
 ## ends, so its span is bounded by the next class's pointer and the last is walked
-## until a byte that cannot open a name. One class per game shares its pointer
-## with the next, the one class never sent into battle, and its honest span is
-## empty: see [constant Gen2Layout.EMPTY_TRAINER_CLASS].
+## until a byte that cannot open a name. One class per game shares its pointer with
+## the next, never being sent into battle: [constant Gen2Layout.EMPTY_TRAINER_CLASS].
 static func read_trainer_parties(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var count: int = Gen2Layout.trainer_class_count(layout)
 	var table: int = int(layout["trainer_parties"])

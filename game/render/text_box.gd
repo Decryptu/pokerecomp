@@ -203,13 +203,11 @@ func place_at_bottom() -> void:
 
 
 ## Lays [param text] out and starts revealing its first page. [param blink_cursor]
-## is whether the *last* page loads the arrow, which is not the same question as
-## whether it waits: `WaitPressAorB_BlinkCursor`'s own comment says the cursor has
-## to be shown before it is called or none is shown at all. Three routines show
-## it, so a page with another behind it always blinks and the last page blinks
-## only if the text ends in `prompt`. Two things therefore draw no arrow: a text
-## ending in `done`, which is why `SendOutMonText` runs on, and a caller that
-## waits with `JoyWaitAorB`, which is every page of `ProfOaksPCBoot`.
+## is whether the *last* page loads the arrow, which is not whether it waits:
+## `WaitPressAorB_BlinkCursor` needs the cursor shown before it is called. A page
+## with another behind it always blinks; the last blinks only if the text ends in
+## `prompt`. So no arrow is drawn for a text ending in `done` (`SendOutMonText`
+## runs on) or a caller that waits with `JoyWaitAorB` (every page of `ProfOaksPCBoot`).
 func show_text(text: String, blink_cursor: bool = true) -> void:
 	_pages = Gen2TextLayout.lay_out_pages(
 		text, text_columns(), text_rows(),

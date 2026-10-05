@@ -1570,3 +1570,71 @@ func test_a_move_down_one_list_lands_in_front_of_the_row_it_points_at() -> void:
 	for mon: Gen2SaveMon in save.party:
 		order.append(mon.nickname)
 	assert_eq(order, ["", "SPARKY", "THIRD", "FOURTH"], "GEODUDE carries no nickname")
+
+
+## `PartyMenuSelect` answers a press only once its click's `WaitSFX` has ended, so a
+## press read behind the click is lost and the answer arrives when the sound stops.
+func test_a_party_press_is_answered_once_its_click_has_ended() -> void:
+	await _open_party_screen(_save_with_two())
+	_party_screen.open_selection(Gen2PartyScreen.PROMPT_CHOOSE)
+	var sounding: Array[bool] = [true]
+	_party_screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	watch_signals(_party_screen)
+	_party_screen.handle_button(PokeButton.A)
+	assert_signal_emitted_with_parameters(
+		_party_screen, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2, true]
+	)
+	assert_signal_not_emitted(_party_screen, "selection_made")
+	assert_true(_party_screen.handle_button(PokeButton.B), "read and lost behind the click")
+	sounding[0] = false
+	_party_screen._process(0.0)
+	assert_signal_emitted_with_parameters(_party_screen, "selection_made", [0])
+
+
+## `.ClearSprite` is `WaitPlaySFX` once per row: the second effect waits the first out.
+func test_a_party_swap_sounds_its_second_effect_after_the_first_has_ended() -> void:
+	await _open_party_screen(_save_with_two())
+	var sounding: Array[bool] = [false]
+	_party_screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	var swaps: Array[int] = []
+	_party_screen.sfx_requested.connect(func(index: int, _waited: bool) -> void:
+		if index == Gen2Sfx.SFX_SWITCH_POKEMON:
+			swaps.append(index)
+			sounding[0] = true)
+	_party_screen._begin_switch()
+	_party_screen._move_cursor(1)
+	_party_screen.handle_button(PokeButton.A)
+	assert_eq(swaps.size(), 1)
+	sounding[0] = false
+	_party_screen._process(0.0)
+	assert_eq(swaps.size(), 2)
+
+
+## `MoveScreenLoop`'s `.a_button` and `.swap_moves`: the click and each of the two
+## effects are waited out before the next press is read.
+func test_the_move_screen_reads_nothing_while_its_click_or_swap_effects_sound() -> void:
+	var screen: Gen2MoveScreen = Gen2MoveScreen.create(_data, _save().party)
+	var sounding: Array[bool] = [true]
+	screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	screen.handle_button(PokeButton.A)
+	assert_eq(int(screen.snapshot()["held"]), -1, "the move is lifted once the click ends")
+	assert_true(screen.handle_button(PokeButton.DOWN))
+	assert_eq(int(screen.snapshot()["cursor"]), 0)
+	sounding[0] = false
+	screen.advance_frame()
+	assert_eq(int(screen.snapshot()["held"]), 0)
+	screen.handle_button(PokeButton.DOWN)
+	assert_eq(int(screen.snapshot()["cursor"]), 1)
+
+	var effects: Array[int] = []
+	screen.sfx_requested.connect(func(index: int, _waited: bool) -> void:
+		effects.append(index)
+		sounding[0] = true)
+	screen.handle_button(PokeButton.A)
+	assert_eq(effects, [Gen2Sfx.SFX_READ_TEXT_2], "the swap waits behind its click")
+	sounding[0] = false
+	screen.advance_frame()
+	assert_eq(effects.size(), 2)
+	sounding[0] = false
+	screen.advance_frame()
+	assert_eq(effects.size(), 3, "the second swap effect follows the first")

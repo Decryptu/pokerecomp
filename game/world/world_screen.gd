@@ -205,6 +205,7 @@ var _pokegear_call_host: Gen2WorldServiceScreen = null
 var _pokegear_call_page: String = ""
 ## `PokegearPhone_MakePhoneCall`'s two `SFX_CALL`s, each behind a `WaitSFX`.
 var _pokegear_call_tones: int = 0
+var _phone_ring_watch: Dictionary = {}
 var _pokegear_call_results: Array = []
 var _pokegear_call_watch: Dictionary = {}
 var _start_menu_host: Gen2StartMenuScreen = null
@@ -1132,7 +1133,7 @@ func _advance_waits(map_pass: bool) -> void:
 	_continue_if_field_move_text_settled()
 	if not _trainer_approach.is_empty():
 		_advance_trainer_approach(map_pass)
-	if _world != null and _world.phone_ring_active():
+	if _world != null and _world.phone_ring_active() and not _phone_ring_waits():
 		var contact: Dictionary = _world.pending_phone_ring().get("contact", {})
 		var ring_results: Array = _world.advance_phone_ring_frame()
 		## The last ring's named box is the one the call is read under.
@@ -1143,6 +1144,14 @@ func _advance_waits(map_pass: bool) -> void:
 			_show_script_results(ring_results)
 		_refresh_labels()
 	_advance_audio_wait()
+
+
+## `Phone_StartRinging`'s `WaitSFX`: a ring opens once the effect before it ends.
+func _phone_ring_waits() -> bool:
+	if _audio_player == null or not _world.phone_ring_opens():
+		_phone_ring_watch = {}
+		return false
+	return _audio_player.still_waiting(_phone_ring_watch)
 
 
 ## `LoadSpinnerArrowTiles`' other half: the tileset's four arrow tiles rewritten
@@ -1692,8 +1701,8 @@ func _apply_text_box_options() -> void:
 
 func _advance_script_pause() -> void:
 	## Except a frame wait, which nothing but frames ends: the source is inside
-	## WaitScriptMovement or a DelayFrames loop and reads no input there.
-	if not _world.pending_script_wait().is_empty():
+	## WaitScriptMovement, a DelayFrames loop or `WaitSFX` and reads no input there.
+	if not _world.pending_script_wait().is_empty() or _audio_waiting:
 		return
 	if _text_box != null and _text_box.visible:
 		_advance_script_input()
@@ -7689,7 +7698,9 @@ func _advance_prof_oaks_pc() -> void:
 		return
 	_oak_pc_pages.remove_at(0)
 	if _oak_pc_pages.is_empty():
-		_close_prof_oaks_pc()
+		## `ProfOaksPCBoot`'s `WaitSFX`, behind the press that ended its last page.
+		_field_move_tail.append({"wait": &"sfx", "call": _close_prof_oaks_pc})
+		_advance_field_move_tail()
 		return
 	_show_prof_oaks_pc_page()
 
@@ -8545,7 +8556,7 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 					_animation.configure(_world, _render_time_of_day())
 			&"headbutt_applied":
 				## `ShakeHeadbuttTree`'s; SFX_HEADBUTT is the battle move's.
-				_play_sfx(Gen2Sfx.SFX_SANDSTORM)
+				_play_sfx(Gen2Sfx.SFX_SANDSTORM, true)
 				if _effects != null:
 					_effects.start_headbutt_tree(applied.get("cell", Vector2i.ZERO))
 			&"cut_applied":
@@ -8553,7 +8564,7 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 					_show_script_results(_world.gen1_cut_animation(applied))
 				else:
 					## `OWCutAnimation`'s, as it starts; SFX_CUT is the battle move's.
-					_play_sfx(Gen2Sfx.SFX_PLACE_PUZZLE_PIECE_DOWN)
+					_play_sfx(Gen2Sfx.SFX_PLACE_PUZZLE_PIECE_DOWN, true)
 					if _effects != null:
 						_effects.start_cut(
 							applied.get("cell", Vector2i.ZERO),
@@ -8832,6 +8843,10 @@ func _advance_fly() -> void:
 	if _effects != null and _effects.sprites_active():
 		return
 	if bool(_pending_fly["arriving"]):
+		## `special WaitSFX` after `FlyToAnim`.
+		var watch: Dictionary = _pending_fly.get_or_add("watch", {})
+		if _audio_player != null and _audio_player.still_waiting(watch):
+			return
 		_finish_fly()
 		_after_map_settled(false)
 		return
@@ -9662,7 +9677,7 @@ func _show_caller_box(contact: Dictionary, phase: StringName) -> void:
 		return
 	_caller_box_phase = phase
 	if phase == Gen2WorldPhoneRing.PHASE_RINGING:
-		_play_sfx(Gen2Sfx.SFX_CALL)
+		_play_sfx(Gen2Sfx.SFX_CALL, true)
 	_drop_caller_box_picture()
 	if phase == Gen2WorldPhoneRing.PHASE_PRE_RING or _text_box == null \
 		or _text_box.font == null:
@@ -10214,8 +10229,11 @@ func _handle_audio_request(request: Dictionary) -> Array:
 	if not bool(playback.get("ok", false)):
 		return _skip_audio_request(StringName(playback.get("reason", &"audio_playback_failed")))
 	var answer: Dictionary = {"ok": true, "audio_played": bool(playback.get("played", false))}
-	## `Script_cry` and `Script_specialsound` end in `WaitSFX`; the answer waits.
-	if kind in [&"cry", &"special_sound"] and _audio_player.effect_playing():
+	## `Script_cry` and `Script_specialsound` end in `WaitSFX`; the answer waits,
+	## and so does a request that names its own (Bank of Mom's `SFX_TRANSACTION`).
+	var waits: bool = kind in [&"cry", &"special_sound"] \
+		or bool(request.get("values", {}).get("wait", false))
+	if waits and _audio_player.effect_playing():
 		_audio_waiting = true
 		_audio_watch = {}
 		_audio_wait_result = answer
@@ -10618,10 +10636,10 @@ func _start_sound_schedule(schedule: Array) -> void:
 func _advance_sound_schedule() -> void:
 	while not _sound_schedule.is_empty():
 		var due: Dictionary = _sound_schedule[0]
-		if bool(due.get("wait", false)):
-			if _audio_player != null and _audio_player.still_waiting(due, bool(due.get("music", false))):
-				break
-		elif int(due.get("frame", 0)) > _sound_schedule_frame:
+		if int(due.get("frame", 0)) > _sound_schedule_frame:
+			break
+		if bool(due.get("wait", false)) and _audio_player != null \
+			and _audio_player.still_waiting(due, bool(due.get("music", false))):
 			break
 		_sound_schedule.pop_front()
 		_play_scheduled(due)

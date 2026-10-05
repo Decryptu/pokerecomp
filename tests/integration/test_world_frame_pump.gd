@@ -275,6 +275,30 @@ func test_a_scroll_landing_on_the_last_page_runs_the_script_on_without_a_press()
 	assert_false(_world_screen._text_box.visible)
 
 
+## `WaitSFX` reads no press. A press landing on a script held behind its `cry` was
+## answered by staging the cry again, which restarted the effect it was waiting on.
+func test_a_press_is_not_read_while_the_script_waits_on_a_sound() -> void:
+	_write_scroll_script()
+	_world_screen = await _open_world()
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(SCRIPT_CELL)
+	)
+	_settle_text_box(_world_screen)
+	_world_screen.press_button(PokeButton.A)
+	_settle_text_box(_world_screen)
+	assert_eq(StringName(_world_screen._world.pending_script_input().get("type", &"")), &"button")
+
+	_world_screen._audio_waiting = true
+	_world_screen.press_button(PokeButton.A)
+	assert_eq(
+		StringName(_world_screen._world.pending_script_input().get("type", &"")), &"button",
+		"the waitbutton is not paid for behind the wait",
+	)
+	_world_screen._audio_waiting = false
+	_world_screen.press_button(PokeButton.A)
+	assert_true(_world_screen._world.pending_script_input().is_empty())
+
+
 ## Vermilion's Snorlax: `writetext`, `pause 15`, `cry`, `closetext`,
 ## `startbattle`. The text owes no press, so the box stands through the pause,
 ## and `closetext`'s redraw is the only thing that takes it down before the

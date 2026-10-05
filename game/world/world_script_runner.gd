@@ -4159,7 +4159,7 @@ func _clock_day() -> int:
 ## `.LoadBallsOntoMachine` plays one effect a ball and then delays thirty frames,
 ## so ball zero sounds on the frame the routine starts. `.PlayHealMusic` starts
 ## `MUSIC_HEAL` under `.FlashPalettes8Times`; the Hall of Fame plays one effect
-## there and a second after the flashes. Its `WaitSFX` between the two is not spent.
+## there and a second after the flashes, once the first has ended (`WaitSFX`).
 static func heal_machine_sounds(machine_type: int, balls: int) -> Array:
 	if balls <= 0:
 		return []
@@ -4175,7 +4175,7 @@ static func heal_machine_sounds(machine_type: int, balls: int) -> Array:
 			"frame": flashes_at, "kind": &"sound", "index": Gen2Sfx.SFX_GAME_FREAK_LOGO_GS,
 		})
 		schedule.append({
-			"frame": flashes_at + HEAL_MACHINE_FLASH_FRAMES,
+			"frame": flashes_at + HEAL_MACHINE_FLASH_FRAMES, "wait": true,
 			"kind": &"sound", "index": Gen2Sfx.SFX_BOOT_PC,
 		})
 	else:
@@ -5563,7 +5563,7 @@ func _finish_mom_bank_dial(mode: StringName, amount: int) -> Dictionary:
 	_move_mom_money(from_account, to_account, amount)
 	_bank_of_mom_after_sound = MOM_EXIT
 	_mom_receipt_box = "stored_money" if deposit else "taken_money"
-	return _stage_audio_request(&"sound", {"address": Gen2Sfx.SFX_TRANSACTION})
+	return _stage_audio_request(&"sound", {"address": Gen2Sfx.SFX_TRANSACTION, "wait": true})
 
 
 ## The `TakeMoney`/`GiveMoney` pair the transaction is, without the wScriptVar

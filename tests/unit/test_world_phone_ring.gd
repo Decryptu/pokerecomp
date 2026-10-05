@@ -30,6 +30,19 @@ func test_special_call_lead_precedes_the_same_two_rings() -> void:
 	assert_eq(ring.snapshot()["ring"], 1)
 
 
+## `Phone_StartRinging` opens each ring on `WaitSFX`, so the frame in front of a ring is
+## the one an effect still sounding can hold: after the lead, and between the two rings.
+func test_a_ring_opens_after_the_lead_and_again_after_sixty_frames() -> void:
+	var ring := Gen2WorldPhoneRing.new(30)
+	var opens: Array[int] = []
+	for frame: int in ring.total_frames():
+		if ring.opens_ring():
+			opens.append(frame)
+		ring.advance_frame()
+	assert_eq(opens, [29, 89])
+	assert_true(Gen2WorldPhoneRing.new().opens_ring(), "an incoming call opens on its first frame")
+
+
 ## `HangUp`: `HangUp_Beep`'s click, then `HangUp_BoopOn` and `HangUp_BoopOff`
 ## three times each, twenty frames apiece and no button anywhere in it.
 func test_hang_up_writes_the_click_then_three_boops() -> void:

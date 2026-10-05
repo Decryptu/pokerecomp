@@ -3109,6 +3109,10 @@ func phone_ring_active() -> bool:
 	return _phone_ring != null and not _phone_ring.is_finished()
 
 
+func phone_ring_opens() -> bool:
+	return _phone_ring != null and _phone_ring.opens_ring()
+
+
 func pending_phone_ring() -> Dictionary:
 	if _phone_ring == null:
 		return {}

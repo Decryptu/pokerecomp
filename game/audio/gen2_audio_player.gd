@@ -258,6 +258,10 @@ func _play_gen1_record(
 	var bank: int = int(record.get("bank", -1))
 	if id <= 0:
 		return {"ok": false, "played": false, "reason": &"audio_record_unplayable"}
+	if id == Gen1SoundEngine.SFX_STOP_ALL_MUSIC:
+		_gen1.play_sound(id)
+		_forget_music()
+		return {"ok": true, "played": true, "stopped": true}
 	if _is_music(request_kind):
 		return _play_gen1_music(record, bank, id, assets, restart, request_kind)
 	## `wFrequencyModifier` and `wTempoModifier`: a cry's own row, or
@@ -279,10 +283,6 @@ func _play_gen1_music(
 	record: Dictionary, bank: int, id: int, assets: Dictionary, restart: bool,
 	request_kind: StringName
 ) -> Dictionary:
-	if id == Gen1SoundEngine.SFX_STOP_ALL_MUSIC:
-		_gen1.play_sound(id)
-		_forget_music()
-		return {"ok": true, "played": true, "stopped": true}
 	var key: String = "%d:%d" % [bank, id]
 	## `Music_RivalAlternateStart` restarts the piece to write its pointers.
 	var pointers: Array = record.get("pointers", [])

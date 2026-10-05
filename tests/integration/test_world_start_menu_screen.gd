@@ -1266,6 +1266,40 @@ func test_tmhm_use_asks_before_teaching_and_a_yes_teaches_the_move() -> void:
 	assert_eq(_world_screen._world.state.item_quantity(HM_ITEM), 1)
 
 
+## `ChooseMonToLearnTMHM.egg`: `SFX_WRONG`, its `WaitSFX`, and the party list again
+## with no box in between, where an egg once ended the USE on an invented line.
+func test_a_tm_on_an_egg_sounds_wrong_and_reopens_the_party_list() -> void:
+	_write_tmhm_item()
+	await _open_world()
+	var host: Gen2StartMenuScreen = await _open_tmhm_pack()
+	var save: Gen2SaveData = _world_screen._injected_save
+	save.party[0].is_egg = true
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	_read_question(host)
+	host.handle_button(PokeButton.A)
+	_spend_answer_hold(host)
+	await get_tree().process_frame
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TARGET)
+
+	var sounding: Array[bool] = [false]
+	host.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	host.sfx_requested.connect(func(index: int, _waited: bool) -> void:
+		sounding[0] = index == Gen2Sfx.SFX_WRONG)
+	var row: int = int(host.get("_target_cursor"))
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TARGET)
+	assert_true(host.handle_button(PokeButton.DOWN), "the list is not read behind the sound")
+	assert_eq(int(host.get("_target_cursor")), row)
+	sounding[0] = false
+	host.advance_frame()
+	host.handle_button(PokeButton.DOWN)
+	assert_ne(int(host.get("_target_cursor")), row)
+	assert_eq(_world_screen._world.state.item_quantity(HM_ITEM), 1)
+
+
 ## The yes/no is a real refusal, not decoration: no leaves the party alone.
 func test_tmhm_use_declined_teaches_nothing() -> void:
 	_write_tmhm_item()
