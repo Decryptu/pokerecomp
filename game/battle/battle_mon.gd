@@ -20,9 +20,9 @@ const SPECIAL_STAGE_TWIN: Dictionary = {
 }
 
 ## Accuracy and evasion are staged like a stat and are not stats: they have their
-## own multiplier table, and there is no number behind them for a stage to
-## multiply. They are kept in the same place because a battle raises and lowers
-## all seven the same way. See [Gen2Accuracy].
+## own multiplier table, and no number behind them for a stage to multiply. They are
+## kept in the same place because a battle raises and lowers all seven alike. See
+## [Gen2Accuracy].
 const STAGED_ODDS: Array = ["accuracy", "evasion"]
 
 const HELD_ENTRANCE: int = 0
@@ -31,10 +31,9 @@ const HELD_STAGED: int = 2
 ## [method hold_stats]'s set, empty while `CalcPlayerStats`' order stands.
 var held_stats: Dictionary = {}
 
-## Every DV at its maximum. A caller that has not said otherwise gets a Pokémon
-## that is as good as its species allows, which is the useful default for a test
-## and for a screen with nothing behind it yet. A wild encounter rolls its own;
-## see [method random_dvs].
+## Every DV at its maximum: a caller that has not said otherwise gets a Pokémon as
+## good as its species allows, the default for a test and a screen with nothing
+## behind it yet. A wild encounter rolls its own; see [method random_dvs].
 const PERFECT_DVS: int = 0xFFFF
 
 ## `BASE_HAPPINESS` (`constants/pokemon_data_constants.asm`), what a Pokémon
@@ -53,10 +52,9 @@ var catch_rate: int = 0
 var dvs: int = PERFECT_DVS
 var stat_exp: Dictionary = {}
 
-## Total experience on this species' growth curve. Seeded at [method create] to
-## what [param at_level] starts with, not zero: a level 7 Pidgey carries level
-## 7's threshold, so the box and party screens agree with its level rather than
-## reading level 1 until its first battle.
+## Total experience on this species' growth curve. Seeded at [method create] to what
+## [param at_level] starts with, not zero: a level 7 Pidgey carries level 7's
+## threshold, so the box and party screens agree with its level from the start.
 @warning_ignore("shadowed_global_identifier")
 var exp: int = 0
 
@@ -159,10 +157,9 @@ var substitute_hp: int = 0
 ## makes "the first turn of this Pokémon" a question the AI can ask.
 var turns_taken: int = 0
 
-## The move this Pokémon last used, by move number, or zero for none: what
-## Disable and Encore both search a target's own move list for. The cartridge's
-## own `wLastPlayerMove`/`wLastEnemyMove` clear on a switch exactly the way this
-## does, since a freshly sent-out Pokémon has not used a move yet.
+## The move this Pokémon last used, by move number, or zero for none: what Disable
+## and Encore both search a target's own move list for. Like the cartridge's
+## `wLastPlayerMove`/`wLastEnemyMove`, it clears on a switch.
 var last_move_used: int = 0
 
 ## The separate `wLast*CounterMove` word used by copied moves, PP-draining
@@ -241,7 +238,6 @@ var pokerus: int = 0
 
 
 ## Builds a Pokémon at a level, at full health, knowing [param known_moves].
-##
 ## Returns null for a species the cache does not have, because a battle with a
 ## Pokémon that has no base stats is not something to paper over.
 static func create(
@@ -539,10 +535,9 @@ func apply_passed_state(state: Dictionary) -> void:
 		set(key, state[key])
 
 
-## Clears everything [Gen2Substatus] holds, and the counters that go with it.
-## Called on a switch, alongside but separately from [method reset_stages]:
-## Haze resets the stages on both sides without touching either one's
-## volatiles, so the two have to stay two calls rather than become one.
+## Clears everything [Gen2Substatus] holds, and the counters that go with it. Called
+## on a switch, alongside but separately from [method reset_stages]: Haze resets the
+## stages on both sides without touching their volatiles, so the two stay two calls.
 func reset_volatile() -> void:
 	restore_transform()
 	restore_mimic()
@@ -768,10 +763,9 @@ func name_text() -> String:
 	return String(data.species(species).get("name", ""))
 
 
-## The curve [Gen2Experience] should read this species on, or medium fast for
-## a species the cache does not have: the same fallback [method recalculate]
-## already makes for a missing base stats entry.
-## Experience reads the party species, which a Transform does not reach.
+## The curve [Gen2Experience] should read this species on, or medium fast for a
+## species the cache does not have, as [method recalculate] does for a missing base
+## stats entry. Experience reads the party species, which a Transform does not reach.
 func growth_rate() -> int:
 	return int(data.species(persistent_species()).get(
 		"growth_rate", Gen2Experience.GROWTH_MEDIUM_FAST

@@ -561,9 +561,8 @@ func _battle_effect_branch(item: int, definition: Dictionary, data: GameData) ->
 		or int(definition.get("status_mask", 0)) != 0
 
 
-## The branches `_apply_item_effect` picks between, read off the host's own
-## tables, so a table that loses a row takes this check red with it. Both
-## generations are swept through the same seam they run through.
+## The branches `_apply_item_effect` picks between, off the host's own tables like
+## [method _battle_effect_branch]; both generations are swept through the same seam.
 func _party_effect_branch(item: int, definition: Dictionary, data: GameData) -> bool:
 	var effects: Dictionary = Gen2WorldPartyHost.item_effects(data)
 	if item == int(effects["rare_candy"]) or item == int(effects["pp_up"]):

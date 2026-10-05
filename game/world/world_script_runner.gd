@@ -78,11 +78,10 @@ var _last_item: int = 0
 var _staged_warp: Dictionary = {}
 var _script_value: int = 0
 var _command_count: int = 0
-## `RunScriptCommand`'s own artefact: every command executed, with the
-## `bank:address` the cartridge would have in wScriptBank:wScriptPos when it ran.
-## Collected only while `trace_commands` is on, which `tools/trace_world_script.gd`
-## turns on for every runner a world builds so a walked conversation can be diffed
-## against the same walk taken off a real cartridge.
+## `RunScriptCommand`'s artefact: every command executed, with the `bank:address`
+## the cartridge would hold in wScriptBank:wScriptPos. Collected only while
+## `trace_commands` is on, which `tools/trace_world_script.gd` turns on so a walked
+## conversation can be diffed against the same walk off a real cartridge.
 static var trace_commands: bool = false
 var command_trace: Array[Dictionary] = []
 ## `Script_sdefer`'s own `RUN_DEFERRED_SCRIPT`, which is the only thing that
@@ -124,10 +123,9 @@ var _rival_name: String = UNNAMED
 ## a trainer.
 var player_name: String = ""
 ## Everything this invocation rolls: the source RANDOM command and the phone
-## routines that pick a caller line or an unseen species. Injected like the rest
-## of the project's randomness, so a caller can reproduce a branch; a runner
-## started without one randomizes its own rather than reaching for the engine's
-## global generator, which no seed can reach.
+## routines that pick a caller line or an unseen species. Injected so a caller can
+## reproduce a branch; a runner started without one randomizes its own rather than
+## reaching for the engine's global generator, which no seed can reach.
 var _random := RandomNumberGenerator.new()
 ## wCurPartySpecies, which is not wScriptVar: `PartyMenuSelect` writes it from
 ## the row the player chose and `pokepic`, `givepoke` and `giveegg` from their
@@ -159,10 +157,9 @@ const SPECIAL_CHECK_PARTY_FULL_AFTER_CONTEST: int = 21
 const SPECIAL_CONTEST_DROP_OFF_MONS: int = 22
 const SPECIAL_CONTEST_RETURN_MONS: int = 23
 ## `WarpToSpawnPoint`, which clears `STATUSFLAGS2_SAFARI_GAME_F` and
-## `STATUSFLAGS2_BUG_CONTEST_TIMER_F` and does no warping at all. The four
-## escape scripts that call it are the port's own
-## ([method Gen2WorldAPI.warp_to_spawn_point]); this is the entry a decoded
-## script reaches it by.
+## `STATUSFLAGS2_BUG_CONTEST_TIMER_F` and does no warping at all. The four escape
+## scripts that call it are the port's own
+## ([method Gen2WorldAPI.warp_to_spawn_point]).
 const SPECIAL_WARP_TO_SPAWN_POINT: int = 0
 const SPECIAL_GIVE_PARK_BALLS: int = 24
 const SPECIAL_SELECT_RANDOM_BUG_CONTESTANTS: int = 71
@@ -231,12 +228,11 @@ const SPECIAL_CHALLENGE_MENU: int = 136
 const SPECIAL_TRY_QUICK_SAVE: int = 4
 const SPECIAL_RESET: int = 126
 
-## The cable club's own block of `SpecialsPointers`, in index order. Three
-## scripts reach it: the trade and battle receptionists on POKECENTER_2F, which
-## share one shape, and the Time Capsule's, which asks for no room at all. The
-## last three are the rooms themselves, reached from the console each one is
-## built around, and `CableClubCheckWhichChris` is the callback that decides
-## which of the two identical friends is standing in it.
+## The cable club's block of `SpecialsPointers`, in index order. Three scripts
+## reach it: the trade and battle receptionists on POKECENTER_2F, which share one
+## shape, and the Time Capsule's, which asks for no room at all. The last three are
+## the rooms, reached from the console each is built around;
+## `CableClubCheckWhichChris` decides which of the two identical friends is in it.
 const SPECIAL_SET_BITS_FOR_LINK_TRADE_REQUEST: int = 1
 const SPECIAL_WAIT_FOR_LINKED_FRIEND: int = 2
 const SPECIAL_CHECK_LINK_TIMEOUT_RECEPTIONIST: int = 3
@@ -291,11 +287,10 @@ const SPECIAL_MOVE_DELETION: int = 33
 ## `ChooseMonToLearnTMHM` opens and the `.loop` behind it, so the whole routine
 ## is one host request; the map script reads wScriptVar afterwards.
 const SPECIAL_MOVE_TUTOR: int = 131
-## The Day-Care's five, in Crystal's numbering (`special_index()` moves Gold's
-## two signs). `DayCareMan` and `DayCareLady` are the two counters;
-## `DayCareManOutside` brings the egg out and is the only one that writes
-## wScriptVar; `DayCareMon1` and `DayCareMon2` are the signs inside, each a line,
-## a cry and the pair's compatibility.
+## The Day-Care's five, in Crystal's numbering (`special_index()` moves Gold's two
+## signs). `DayCareMan` and `DayCareLady` are the counters; `DayCareManOutside`
+## brings the egg out and alone writes wScriptVar; `DayCareMon1` and `DayCareMon2`
+## are the signs inside, each a line, a cry and the pair's compatibility.
 const SPECIAL_DAY_CARE_MAN: int = 30
 const SPECIAL_DAY_CARE_LADY: int = 31
 const SPECIAL_DAY_CARE_MAN_OUTSIDE: int = 32
@@ -510,12 +505,11 @@ const BATTLE_RESULT_WIN: int = 0
 const BATTLE_RESULT_LOSE: int = 1
 const BATTLE_RESULT_DRAW: int = 2
 const TEXT_STRING_BUFFER: int = 0x14
-## The two waits `ScriptEvents` spends frames in rather than asking for anything
-## (`engine/overworld/scripting.asm`). WAIT_MOVEMENT is SCRIPT_WAIT_MOVEMENT,
-## which runs until the stream an `applymovement` started clears
-## SCRIPTED_MOVEMENT_STATE_F; WAIT_FRAMES is the counted delay `Script_pause`,
-## `Script_wait` and `Script_deactivatefacing` spend. Neither takes a button, so
-## both resolve through complete_wait() rather than through advance().
+## The two waits `ScriptEvents` spends frames in (`engine/overworld/scripting.asm`).
+## WAIT_MOVEMENT is SCRIPT_WAIT_MOVEMENT, which runs until the stream an
+## `applymovement` started clears SCRIPTED_MOVEMENT_STATE_F; WAIT_FRAMES is the
+## counted delay `Script_pause`, `Script_wait` and `Script_deactivatefacing` spend.
+## Neither takes a button, so both resolve through complete_wait(), not advance().
 const WAIT_MOVEMENT: StringName = &"movement"
 const WAIT_FRAMES: StringName = &"frames"
 ## SCRIPT_WAIT_MOVEMENT, SCRIPT_WAIT and `StopScript`'s yield run `HandleMap`, so
@@ -703,11 +697,10 @@ static func begin(
 	var trainer: Variant = request.get("trainer", {})
 	var started: bool = false
 	if not trainer_phase.is_empty():
-		## LoadTrainer_continue clears wRunningTrainerBattleScript for every
-		## trainer encounter, talked to or seen (home/trainers.asm), and only
-		## StartBattleWithMapTrainerScript's `loadmem` sets it again. Left set,
-		## `endifjustbattled` ends the after-battle script on every later
-		## conversation, which the hideout's two password grunts depend on.
+		## LoadTrainer_continue clears wRunningTrainerBattleScript for every trainer
+		## encounter (home/trainers.asm), and only StartBattleWithMapTrainerScript's
+		## `loadmem` sets it again. Left set, `endifjustbattled` ends the after-battle
+		## script on every later conversation, which the hideout's password grunts rely on.
 		runner._stage_just_battled(false)
 	if trainer_phase == &"initial" and trainer is Dictionary:
 		started = runner._push_frame(
@@ -978,8 +971,7 @@ func _resume_day_of_week_menu(choice: int) -> Dictionary:
 	return _waiting_result()
 
 
-## `Function17d246`: a row answers its own one-based number and B answers the
-## same 4 the routine writes before it opens the menu.
+## `Function17d246`: see [method _stage_challenge_menu] for the row and B answers.
 func _resume_challenge_menu(choice: int) -> Dictionary:
 	_pending = {}
 	_script_value = CHALLENGE_MENU_CANCEL if choice < 0 else choice + 1
@@ -1259,12 +1251,11 @@ func _stage_yes_or_no(tag: StringName, values: Dictionary) -> Dictionary:
 	return _waiting_result()
 
 
-## What answers each runtime request the host has finished, as the handler that
-## reads it. The key is the pending request's own kind. `_complete_plain_request`
-## puts the host's answer in wScriptVar and runs on, and for most of these that
-## answer is nothing: the routine drew a page, held for a button and wrote
-## nothing a script reads, and the map's own `waitbutton` presses what it left
-## standing. The five that do answer a value say so beside them.
+## What answers each finished runtime request, as the handler that reads it. The
+## key is the pending request's kind. `_complete_plain_request` puts the host's
+## answer in wScriptVar and runs on; for most of these that answer is nothing (the
+## routine drew a page, held for a button and wrote nothing a script reads, and the
+## map's own `waitbutton` presses what it left standing). Five answer a value.
 const COMPLETION_HANDLERS: Dictionary = {
 	&"catch_tutorial_requested": &"_complete_catch_tutorial",
 	&"swarm_requested": &"_complete_swarm",
@@ -1766,10 +1757,8 @@ func _complete_battle(
 		_pending = {}
 		return advance()
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_RAN:
-		## `.can_escape` writes DRAW into wBattleResult, and the script carries
-		## on: `reloadmapafterbattle` only branches on LOSE. The eight corpus
-		## scripts that `iftrue` straight after `startbattle` are asking "did I
-		## not win", and a run answers yes.
+		## `.can_escape` writes DRAW into wBattleResult, and the script carries on:
+		## `reloadmapafterbattle` only branches on LOSE, so an `iftrue` after `startbattle` holds.
 		_stage_just_battled(true)
 		_script_value = BATTLE_RESULT_DRAW
 		_events.append({
@@ -1892,10 +1881,9 @@ func cancel_input() -> Dictionary:
 		}
 	var pending_type: StringName = StringName(_pending.get("type", &""))
 	## A box one of the built-in routines put up answers its own B rather than
-	## resuming: Mom falls to `.JustDoWhatYouCan`, and every `YesNoBox` among
-	## them reads it as its NO, which is the carry the routine returns. A
-	## `Script_yesorno` or `Script_verticalmenu` the cartridge staged is the
-	## false answer below.
+	## resuming: Mom falls to `.JustDoWhatYouCan`, and every `YesNoBox` among them reads
+	## it as its NO, the carry the routine returns. A `Script_yesorno` or
+	## `Script_verticalmenu` the cartridge staged is the false answer below.
 	if _pending_tag() in CANCEL_OWNED_PENDINGS:
 		return advance(true, -1)
 	if pending_type == &"choice" and _pending.has("contact"):
@@ -2515,10 +2503,9 @@ func _command_gettrainername(_opcode: int, command: Dictionary, _bank: int) -> D
 
 
 ## `Script_getstring` is `CopyName1`, which copies a plain character run up to its
-## `@`. It is not a text: the first byte of `PokegearName` is `#`, which the command
-## layer reads as an unknown command and refuses, so decoding this the way `writetext`
-## is decoded leaves every `getstring` buffer empty and prints "<PLAYER> received !"
-## with a hole where the name belongs.
+## `@`, not a text: the first byte of `PokegearName` is `#`, which the command layer
+## refuses as an unknown command, so decoding it as `writetext` does leaves every
+## `getstring` buffer empty and prints "<PLAYER> received !" with a hole in it.
 func _command_getstring(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	var string_text: String = ""
 	if data != null:
@@ -2672,12 +2659,11 @@ func _command_checkpokemail(_opcode: int, command: Dictionary, _bank: int) -> Di
 	return _check_poke_mail(command)
 
 
-## A command whose numbers a mod may have moved, substituted before it runs.
-## The site is addressed by the byte it sits at, `frame.address + offset`, which
-## is exactly the id [Gen2WorldCatalog] gave it. Only the OPERANDS change: the
-## command still runs, its script still sets its own completion flag, prints its
-## own dialogue and takes its own money, and nothing here can replace any of
-## that. A cartridge with no mod patch pays one dictionary read.
+## A command whose numbers a mod may have moved, substituted before it runs. The
+## site is addressed by the byte it sits at, `frame.address + offset`, the id
+## [Gen2WorldCatalog] gave it. Only the OPERANDS change: the command still runs, its
+## script still sets its own completion flag, prints its own dialogue and takes its
+## own money. A cartridge with no mod patch pays one dictionary read.
 func _catalogued(command: Dictionary, frame: Dictionary) -> Dictionary:
 	if data == null or not data.has_content_overlay():
 		return command
@@ -3067,8 +3053,7 @@ func _command_loademote(_source_opcode: int, command: Dictionary, _bank: int) ->
 ## Script_showemote is `ScriptCall ShowEmoteScript`: loademote, an applymovement that
 ## shows the emote, `pause 0` over the delay this command just wrote, and an
 ## applymovement that hides it again. The two one-command movements are folded into
-## the emote event and its hide; the pause is the wait, and it is what the operand
-## measures.
+## the emote event and its hide; the pause is the wait the operand measures.
 func _command_showemote(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	var emote_id: int = int(command.get("value", _loaded_emote))
 	if emote_id == 0xFF:
@@ -3735,11 +3720,10 @@ func _stage_item_delta(item: int, delta: int) -> Dictionary:
 	return {"ok": true}
 
 
-## `GiveMoney` and `TakeMoney` (`engine/events/money.asm`). Neither refuses and
-## neither leaves the account alone: a gift past `MAX_MONEY` writes the ceiling and
-## a payment past the balance writes zero, both returning the carry that only
-## `BankOfMom` reads. `Script_givemoney` and `Script_takemoney` write no wScriptVar
-## of their own, so what they answer is the balance rather than a rejection.
+## `GiveMoney` and `TakeMoney` (`engine/events/money.asm`). Neither refuses: a gift
+## past `MAX_MONEY` writes the ceiling and a payment past the balance writes zero,
+## both returning the carry that only `BankOfMom` reads. `Script_givemoney` and
+## `Script_takemoney` write no wScriptVar, so what they answer is the balance.
 func _stage_money_delta(account: int, amount: int, give: bool) -> Dictionary:
 	if account < 0 or amount < 0:
 		return {"ok": false, "reason": &"invalid_money_command"}
@@ -4079,12 +4063,11 @@ func _var_kenji_break_timer() -> Variant:
 		else (state.kenji_break_timer() if state != null else 0)
 
 
-## `writevar`, which is `_GetVarAction` for a RETVAR_ADDR_DE row and then a
-## store of wScriptVar into the address it answered. Only those rows can be
-## written: every other entry hands back a copy in wStringBuffer2 or runs a
-## routine, so a `writevar` naming one writes nothing the script can read back.
-## Every `writevar` in either game is RadioTower2F's own award of a Blue Card
-## point, which stopped the script here until this existed.
+## `writevar` is `_GetVarAction` for a RETVAR_ADDR_DE row and then a store of
+## wScriptVar into the address it answered. Only those rows can be written: every
+## other entry hands back a copy in wStringBuffer2 or runs a routine. Every
+## `writevar` in either game is RadioTower2F's award of a Blue Card point, which
+## stopped the script here until this existed.
 func _write_runtime_variable(variable: int) -> Dictionary:
 	match variable:
 		0x18: # VAR_BLUECARDBALANCE
@@ -4200,11 +4183,10 @@ static func heal_machine_sounds(machine_type: int, balls: int) -> Array:
 	return schedule
 
 
-## `ItemFinder.ItemfinderSound`, which its found branch runs as a `callasm`
-## before the line: four passes of `WaitPlaySFX SFX_SECOND_PART_OF_ITEMFINDER`
-## and `WaitPlaySFX SFX_TRANSACTION`. Each holds until the four effect channels
-## are free, so the eight are a run rather than eight sounds on one frame, and
-## `.Script_FoundNothing` has none of it.
+## `ItemFinder.ItemfinderSound`, which its found branch runs as a `callasm` before
+## the line: four passes of `WaitPlaySFX SFX_SECOND_PART_OF_ITEMFINDER` and
+## `WaitPlaySFX SFX_TRANSACTION`. Each holds until the four effect channels are
+## free, so the eight are a run, not one frame; `.Script_FoundNothing` has none.
 static func itemfinder_sounds() -> Array:
 	var schedule: Array = []
 	for _pass: int in ITEMFINDER_SFX_PASSES:
@@ -4511,10 +4493,9 @@ func _special_link_room(special: int) -> Dictionary:
 
 
 ## `CheckMobileAdapterStatusSpecial` answers whether a Mobile Adapter GB is plugged
-## in, and none is: there is no such peripheral on any platform this runs on. FALSE is
-## what both Crystal receptionists branch on to reach `.NoMobile`, which is the cable
-## club proper, so this is the answer that opens the room rather than the one that
-## closes it.
+## in, and none is: no platform this runs on has one. FALSE is what both Crystal
+## receptionists branch on to reach `.NoMobile`, the cable club proper, so this
+## answer opens the room.
 func _special_check_mobile_adapter_status(_special: int) -> Dictionary:
 	_script_value = 0
 	return {"ok": true}
@@ -4591,9 +4572,8 @@ func _special_heal_party(special: int) -> Dictionary:
 
 ## wScriptVar selects the machine's screen position: 0 Pokemon Center, 1 Elm's Lab, 2
 ## Hall of Fame. A preceding SETVAL loads it. Nothing here changes state, but the
-## routine is not free: it spends thirty frames a ball and `.FlashPalettes8Times`'
-## eighty, with a sound on each ball, so the script waits for it the way the cartridge
-## does.
+## routine spends thirty frames a ball and `.FlashPalettes8Times`' eighty, with a
+## sound on each ball, so the script waits for it.
 func _special_heal_machine_anim(special: int) -> Dictionary:
 	var machine_type: int = clampi(_script_value, 0, HEAL_MACHINE_HALL_OF_FAME)
 	var balls: int = int((_request.get("party", {}) as Dictionary).get("count", 0))
@@ -6327,9 +6307,8 @@ func _finish_party_selection(request: Dictionary, result: Dictionary) -> Diction
 	return advance()
 
 
-## The four routines whose whole body is `SelectMonFromParty` and a branch on
-## the row it answered with. Each writes wScriptVar, and two of them write
-## something else besides.
+## The four routines of [constant PARTY_SELECTION_ROUTINE_OF]. Each writes
+## wScriptVar, and two of them write something else besides.
 func _finish_deferred_party_selection(
 	routine: StringName, special: int, result: Dictionary, values: Dictionary = {}
 ) -> Dictionary:

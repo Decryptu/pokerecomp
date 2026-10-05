@@ -168,6 +168,8 @@ var _text_box_rect_held: int = 0
 var _clock: Gen2WorldClock = null
 var _audio_player: Gen2AudioPlayer = null
 var _audio_waiting: bool = false
+## What the wait completes its request with: a bare `waitsfx` answers `sound_finished`.
+var _audio_wait_result: Dictionary = {"ok": true, "sound_finished": true}
 var _script_prompt: String = ""
 var _story_picture: TextureRect = null
 var _pikapic: Gen1PikaPicPage = null
@@ -1242,8 +1244,9 @@ func _advance_audio_wait() -> void:
 		return
 	_audio_waiting = false
 	var audio_result: Dictionary = Gen2WorldHost.complete_runtime_request(
-		_world, {"ok": true, "sound_finished": true}
+		_world, _audio_wait_result
 	)
+	_audio_wait_result = {"ok": true, "sound_finished": true}
 	if bool(audio_result.get("ok", false)):
 		_show_script_results(audio_result.get("results", []))
 
@@ -3882,6 +3885,7 @@ func persist_world_snapshot() -> Dictionary:
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	if save == null:
 		return {"ok": false, "reason": &"missing_save"}
+	_world.state.battle_tower().on_save()
 	save.world = _world.snapshot()
 	save.save_file_exists = true
 	## `BackupMysteryGift`, which every one of `SaveGameData`'s three entrances
@@ -7605,11 +7609,11 @@ func _open_pokedex() -> void:
 		return
 	host.z_index = 10
 	host.set_screen(_screen)
-	add_child(host)
 	host.closed.connect(_on_pokedex_closed)
 	host.cry_requested.connect(_on_pokedex_cry_requested)
 	host.sfx_requested.connect(_play_sfx)
 	host.printer_music_requested.connect(_on_pokedex_printer_music)
+	add_child(host)
 	_pokedex_host = host
 	_script_prompt = "Pokedex open"
 	_refresh_labels()
@@ -7622,10 +7626,12 @@ func _on_pokedex_cry_requested(species: int) -> void:
 
 
 func _on_pokedex_printer_music(on: bool) -> void:
-	if on:
+	if not on:
+		_play_current_map_music()
+	elif _data != null and _data.generation == RomRegistry.GEN1:
 		_play_gen1_music(Gen2DiplomaScreen.GEN1_MUSIC_PRINTER)
 	else:
-		_play_current_map_music()
+		_play_music(Gen2DiplomaScreen.MUSIC_PRINTER)
 
 
 func _on_pokedex_closed() -> void:
@@ -9765,10 +9771,11 @@ func _open_pokedex_entry(request: Dictionary) -> bool:
 		host.free()
 		return false
 	host.z_index = 10
-	add_child(host)
+	## The page plays its cry as it opens, so the answer is wired first.
 	host.closed.connect(_on_pokedex_entry_closed)
 	host.cry_requested.connect(_on_pokedex_cry_requested)
 	host.sfx_requested.connect(_play_sfx)
+	add_child(host)
 	_pokedex_host = host
 	_script_prompt = "Pokedex entry open"
 	_refresh_labels()
@@ -10206,9 +10213,14 @@ func _handle_audio_request(request: Dictionary) -> Array:
 	)
 	if not bool(playback.get("ok", false)):
 		return _skip_audio_request(StringName(playback.get("reason", &"audio_playback_failed")))
-	var completed: Dictionary = Gen2WorldHost.complete_runtime_request(
-		_world, {"ok": true, "audio_played": bool(playback.get("played", false))}
-	)
+	var answer: Dictionary = {"ok": true, "audio_played": bool(playback.get("played", false))}
+	## `Script_cry` and `Script_specialsound` end in `WaitSFX`; the answer waits.
+	if kind in [&"cry", &"special_sound"] and _audio_player.effect_playing():
+		_audio_waiting = true
+		_audio_watch = {}
+		_audio_wait_result = answer
+		return []
+	var completed: Dictionary = Gen2WorldHost.complete_runtime_request(_world, answer)
 	if not bool(completed.get("ok", false)):
 		_script_prompt = "Audio completion failed: %s" % String(
 			completed.get("reason", "unknown")

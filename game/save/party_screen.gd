@@ -554,6 +554,7 @@ func _open_stats() -> void:
 	_stats = Gen2MonStatsScreen.create(_data, _save.party, _member_cursor, _save)
 	_stats.closed.connect(_close_stats)
 	_stats.cry_requested.connect(cry_requested.emit)
+	_stats.sfx_requested.connect(func(index: int) -> void: sfx_requested.emit(index, false))
 	_stats.pikachu_clip_requested.connect(pikachu_clip_requested.emit)
 	## `StatsScreenInit` clears the tilemap before it draws, so the submenu is
 	## gone rather than standing behind the screen.

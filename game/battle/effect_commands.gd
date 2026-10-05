@@ -46,8 +46,7 @@ const KICK_COUNTER: StringName = &"kickcounter"
 ## False Swipe, which leaves the target on one hit point rather than none.
 const FALSE_SWIPE: StringName = &"falseswipe"
 
-## `resettypematchup`: the constant-damage moves' immunity check, and why their
-## lists carry no `stab`. A fixed number has no effectiveness to announce.
+## `resettypematchup`: the constant-damage moves' immunity check.
 const RESET_TYPE_MATCHUP: StringName = &"resettypematchup"
 
 const HEAL_BELL: StringName = &"healbell"
@@ -235,13 +234,10 @@ const FIXED_DAMAGE: StringName = &"fixeddamage"
 ## nothing here is [constant CHECK_HIT] or [constant APPLY_DAMAGE].
 const OHKO: StringName = &"ohko"
 
-## Recharge: locks the user out of its next turn, the tail of Hyper Beam's own
-## list rather than anything a target-facing command touches.
+## Recharge: locks the user out of its next turn; see [method _recharge].
 const RECHARGE: StringName = &"recharge"
 
-## `BattleCommand_CheckCharge`, first in every two-turn list: on the release
-## turn it clears the lock and skips over [constant CHARGE], so the rest runs
-## as an ordinary attack; on the charging turn it does nothing.
+## `BattleCommand_CheckCharge`, first in every two-turn list; see [method _check_charge].
 const CHARGE_MOVE: StringName = &"chargemove"
 
 ## `BattleCommand_Charge`: the charging turn's own line in front of
@@ -306,12 +302,10 @@ const DISABLE: StringName = &"disable"
 ## outright: neither Encore itself nor Mirror Move means anything repeated.
 const ENCORE: StringName = &"encore"
 
-## Puts the target in love, given opposite known genders and no love already, and
-## [constant Gen2EffectCommands.CHECK_STATUS] rolls each turn what it costs.
+## Puts the target in love; see [method _attract].
 const ATTRACT: StringName = &"attract"
 
-## Shields the user from the opponent's stat-lowering moves until a switch: a drop
-## aimed at the user, never a rise. A second use fails without re-applying.
+## Shields the user from the opponent's stat-lowering moves until a switch.
 const MIST: StringName = &"mist"
 
 ## Raises the user's own critical-hit rate for the rest of the battle, until a
@@ -4000,8 +3994,6 @@ static func _move_anim(turn: Gen2Turn) -> void:
 			reappears
 		)
 		return
-	# `.triplekick` is jumped to over the clear, so a kick keeps the param
-	# `kickcounter` left and every kick flashes.
 	if effect != Gen2MoveEffect.TRIPLE_KICK:
 		turn.battle.battle_anim_param = 0
 	_play_fx_anim(turn, turn.move_number, _damage_after_anim(turn), reappears)

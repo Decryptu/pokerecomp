@@ -1175,9 +1175,8 @@ func _palette_rotation(sprite: Dictionary) -> int:
 
 
 ## `BattleAnim_Sine` and `..._Cosine` over `BattleAnimSineWave`, which is what
-## `AnimSeqs_Sine` reaches. The table is cartridge data rather than a derivation
-## (entry 16 is $0100), so a caller with no cache draws no leaves rather than
-## drawing them on a table of its own.
+## `AnimSeqs_Sine` reaches. The table is cartridge data, not a derivation (entry 16
+## is $0100), so a caller with no cache draws no leaves rather than use its own.
 var _sine_table: Gen2BattleAnimData = null
 
 

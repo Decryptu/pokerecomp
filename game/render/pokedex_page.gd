@@ -833,6 +833,32 @@ func _place_border(
 	_put(map, x + 1 + width, y + 1 + height, BORDER_BOTTOM_RIGHT)
 
 
+## `PrintDexEntry` with no printer: `ClearTilemap` blanks the screen under the
+## inverted font, so only `PlacePrinterStatusString`'s box shows, white on black.
+func print_image(status: String) -> Image:
+	var indices := PackedByteArray()
+	indices.resize(WIDTH * HEIGHT)
+	var at: Vector2i = Gen2DiplomaPage.STATUS_BOX_AT
+	var size: Vector2i = Gen2DiplomaPage.STATUS_BOX_SIZE
+	font.draw_box(
+		Gen2OptionsStore.current().textbox_frame, indices, WIDTH,
+		at.x * TILE, at.y * TILE, size.x, size.y
+	)
+	var line: int = 0
+	for row: String in status.split("\n"):
+		var text_at: Vector2i = Gen2DiplomaPage.STATUS_TEXT_AT + Vector2i(0, Gen2DiplomaPage.STATUS_LINE_STEP * line)
+		font.draw_text(row, indices, WIDTH, text_at.x * TILE, text_at.y * TILE)
+		line += 1
+	var cancel: Vector2i = Gen2DiplomaPage.CANCEL_AT
+	font.draw_text(
+		Gen2DiplomaPage.CANCEL_STRING, indices, WIDTH, cancel.x * TILE, cancel.y * TILE
+	)
+	var ink: Color = Color8(248, 248, 248)
+	return Gen2PicImage.from_indices(
+		indices, WIDTH, HEIGHT, PackedColorArray([Color.BLACK, Color.BLACK, ink, ink])
+	)
+
+
 ## `Pokedex_PlaceFrontpicAtHL`: the 7x7 run of tile numbers the picture is drawn
 ## through, counted down each column, which is how a pic is stored.
 func _place_pic_corner(map: PackedInt32Array, x: int, y: int) -> void:

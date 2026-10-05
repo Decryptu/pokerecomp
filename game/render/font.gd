@@ -133,7 +133,6 @@ func has_battle_extra() -> bool:
 
 
 ## Draws one character code at a tile position, in pixels from the top left.
-## A code with no tile draws nothing, which is what a space is.
 ##
 ## [param font] says which strip is loaded. Under
 ## [constant Gen2Text.FONT_BATTLE_EXTRA] a code in $60 to $78 comes off the

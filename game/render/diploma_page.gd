@@ -72,6 +72,8 @@ static func from_data(data: GameData) -> Gen2DiplomaPage:
 const STATUS_BOX_AT: Vector2i = Vector2i(0, 5)
 const STATUS_BOX_SIZE: Vector2i = Vector2i(20, 12)
 const STATUS_TEXT_AT: Vector2i = Vector2i(1, 7)
+## `next` in a `GBPrinterString` is two rows.
+const STATUS_LINE_STEP: int = 2
 const CANCEL_AT: Vector2i = Vector2i(2, 15)
 const CANCEL_STRING: String = "Press B to Cancel"
 
@@ -106,7 +108,7 @@ func _draw_status(indices: PackedByteArray, status: String) -> void:
 	)
 	var line: int = 0
 	for row: String in status.split("\n"):
-		_text(indices, row, STATUS_TEXT_AT + Vector2i(0, line))
+		_text(indices, row, STATUS_TEXT_AT + Vector2i(0, STATUS_LINE_STEP * line))
 		line += 1
 	_text(indices, CANCEL_STRING, CANCEL_AT)
 

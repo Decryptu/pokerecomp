@@ -743,7 +743,6 @@ static func _smart_dream_eater(scores: Array, slot: int, c: Context) -> void:
 
 ## `AICheckEnemyMaxHP` and a 10% pass, which is the whole routine.
 static func _smart_bide(scores: Array, slot: int, c: Context) -> void:
-	# `AICheckEnemyMaxHP` and a 10% pass, which is the whole routine.
 	if not _at_max_hp(c.attacker) and not _roll(c.rng, 10):
 		_discourage(scores, slot, 1)
 
@@ -1224,8 +1223,7 @@ static func _smart_mean_look(scores: Array, slot: int, c: Context) -> void:
 		_discourage(scores, slot, 1)
 
 
-## `cp 8 percent; ret c`: the one-in-twelve chance the penalty is not applied, the
-## same roll [constant PROTECT_DISCOURAGE_SKIP_PERCENT] names.
+## `cp 8 percent; ret c`: the same one-in-twelve roll as [constant PROTECT_DISCOURAGE_SKIP_PERCENT].
 const FORESIGHT_DISCOURAGE_SKIP_PERCENT: int = 8
 
 
@@ -1384,7 +1382,6 @@ static func _apply_opportunist(scores: Array, c: Context) -> void:
 ## whichever deals the most, unless it would cost the mon itself
 ## ([constant RECKLESS_EFFECTS]) or does one point of damage that is really a
 ## fixed-damage move ([code]power < 2[/code]).
-## The estimate is [method _estimate_damage], which is `AIDamageCalc` itself.
 static func _apply_aggressive(scores: Array, c: Context) -> void:
 	var attacker: Gen2BattleMon = c.attacker
 	var data: GameData = c.data

@@ -467,6 +467,8 @@ static func _load_copy(path: String, slot: int, data: GameData) -> Dictionary:
 	if loaded_save == null:
 		return _failure("save slot %d is not valid JSON data" % (slot + 1))
 	repair_gen1_starter(loaded_save, data)
+	if loaded_save.world != null:
+		loaded_save.world.world_state.battle_tower().on_load()
 	var validation: Dictionary = Gen2SaveValidator.validate(loaded_save, data)
 	if not validation["ok"]:
 		return _failure("save slot %d: %s" % [slot + 1, validation["message"]])

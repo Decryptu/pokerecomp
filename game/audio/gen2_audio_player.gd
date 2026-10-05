@@ -112,6 +112,12 @@ static func hold_low_volume(low: bool) -> void:
 		_current.set_master_volume(LOW_VOLUME if low else Gen2SoundEngine.MAX_VOLUME)
 
 
+## `WaitSFX` for a screen with no player of its own: [method still_waiting] on
+## whichever is up, silent when none is.
+static func sound_wait(watch: Dictionary) -> bool:
+	return _current != null and _current.still_waiting(watch)
+
+
 func set_master_volume(level: int) -> void:
 	if _generation == RomRegistry.GEN1:
 		_apu.write(Gen1SoundEngine.RAUDVOL, level)

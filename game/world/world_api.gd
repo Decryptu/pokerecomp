@@ -1270,10 +1270,9 @@ func _clear_player_step() -> void:
 	_gen1_pikachu_staged = []
 
 
-## Spends one hardware frame of the player's walk-step offset.
-## This only shrinks a presentation offset that starts and ends at player_cell;
-## it never changes player_cell, collision or event results, and a caller that
-## never starts a step sees no difference.
+## Spends one hardware frame of the player's walk-step offset. It only shrinks a
+## presentation offset that starts and ends at player_cell, never changing
+## player_cell, collision or event results.
 func advance_player_step_pass() -> bool:
 	## The pass after a hop lands, which clears the simulated presses and the
 	## ledge flag, runs a frame over as well.
@@ -2784,8 +2783,6 @@ func encounter_request(
 		if method == &"auto" else method
 	if terrain_method not in [Gen2WorldEncounter.METHOD_GRASS, Gen2WorldEncounter.METHOD_SURF]:
 		return {}
-	## `RandomEncounter`'s Bug Contest branch, which replaces the map's own
-	## tables with `ContestMons` and the rate with the standing tile's own.
 	if bug_contest_active():
 		return _bug_contest_request(random, force_encounter, lead_level, cleanse_tag)
 	var source: StringName = Gen2WorldEncounter.SOURCE_NORMAL
@@ -3564,10 +3561,9 @@ func take_grass_rustles() -> Array:
 	return out
 
 
-## Builds the source trainer approach path. The cartridge's
-## ComputePathToWalkToPlayer routine emits the longer axis first, with the
-## final movement removed by TrainerWalkToPlayer so the trainer stops before
-## the player. This helper keeps that path rule deterministic and scene-free.
+## Builds the source trainer approach path: ComputePathToWalkToPlayer emits the
+## longer axis first, with the final movement removed by TrainerWalkToPlayer so the
+## trainer stops before the player.
 static func trainer_approach_path(start_cell: Vector2i, target_cell: Vector2i) -> Array:
 	var path: Array = []
 	var x_delta: int = target_cell.x - start_cell.x
@@ -4741,8 +4737,7 @@ func events_at(cell: Vector2i = player_cell) -> Array:
 
 ## Public event boundary for the screen and future systems. By default it
 ## reports active decoded records without interpreting cartridge scripts. The
-## optional execution flag keeps the old raw-data call stable while exposing
-## the queued interpreter to callers that are ready for it.
+## optional execution flag exposes the queued interpreter to callers that want it.
 func dispatch_events(cell: Vector2i = player_cell, execute_scripts: bool = false) -> Array:
 	var events: Array = _active_events_at(cell)
 	if execute_scripts:
@@ -4926,10 +4921,9 @@ func pending_script_input() -> Dictionary:
 	return _active_script.pending_input() if _active_script != null else {}
 
 
-## The frame wait a running script is standing in, empty when it is not standing
-## in one. Distinct from [method pending_script_input] and
-## [method pending_runtime_request] because no host answers it: only frames do,
-## through [method advance_script_wait].
+## The frame wait a running script is standing in, empty when it is not. Distinct
+## from [method pending_script_input] and [method pending_runtime_request] because
+## no host answers it: only frames do, through [method advance_script_wait].
 func pending_script_wait() -> Dictionary:
 	var step: Dictionary = Gen1MapScripts._gen1_step(self, &"wait")
 	if not step.is_empty():
@@ -5317,10 +5311,9 @@ func _enqueue_script_events(events: Array) -> void:
 			"script": script_address,
 			"event": event.duplicate(true),
 		}
-		# hLastTalked, which GetFacingObject writes before an object's script
-		# runs. Without it every `disappear LAST_TALKED` in an ordinary object
-		# script resolves to object -1: the trainer and item-ball requests below
-		# carry their own, so only the plain object case was missing one.
+		# hLastTalked, which GetFacingObject writes before an object's script runs.
+		# Without it every `disappear LAST_TALKED` in an ordinary object script resolves
+		# to object -1; the trainer and item-ball requests below carry their own.
 		if event.get("kind", &"") == &"objects" and event.has("object_index"):
 			request["object_index"] = int(event["object_index"])
 		var trainer_request: Dictionary = _trainer_request_for_event(event)
@@ -6160,10 +6153,9 @@ func _apply_object_movement(event: Dictionary) -> Array:
 			if _cell_in_bounds(destination):
 				var vacated: Vector2i = object.cell
 				object.cell = destination
-				# The cell commits here, as it does for every other step in this
-				# runtime; only the drawing trails. A stream applies in one call,
-				# so the whole path is queued and drawn a step at a time by
-				# advance_scripted_steps_pass().
+				# The cell commits here, as for every other step in this runtime; only the
+				# drawing trails. A stream applies in one call, so the whole path is queued and
+				# drawn a step at a time by advance_scripted_steps_pass().
 				object.queue_step(
 					direction * cells, int(SCRIPTED_STEP_PASSES[kind]) * cells, jumping,
 					shown, kind,
@@ -6398,10 +6390,9 @@ func _apply_result_events(result: Dictionary) -> Dictionary:
 	for generated: Dictionary in _apply_script_object_events(result.get("events", [])):
 		result["events"].append(generated)
 	for event: Dictionary in result.get("events", []):
-		## `Script_blackoutmod`'s own two writes. `wLastSpawnMapGroup` and
-		## `wLastSpawnMapNumber` are the pair a Pokemon Center entrance sets and
-		## the pair `GetWhiteoutSpawn` reads, so the command lands on the same
-		## field rather than on a destination of its own.
+		## `Script_blackoutmod`'s own two writes: `wLastSpawnMapGroup` and
+		## `wLastSpawnMapNumber`, the pair a Pokemon Center entrance sets and
+		## `GetWhiteoutSpawn` reads, so the command lands on the same field as they do.
 		if StringName(event.get("type", &"")) == &"blackout_destination_changed":
 			last_spawn_map = Vector2i(
 				int(event.get("map_group", 0)), int(event.get("map_number", 0))
@@ -6843,10 +6834,9 @@ func try_connection(direction: Vector2i) -> Dictionary:
 
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
-	## `.loadNewMap` runs on the pass the step lands, with the follower's
-	## coordinates rewritten around the player then; the step is begun here, so
-	## slot fifteen is carried into the new map's coordinates now and placed
-	## when the step lands.
+	## `.loadNewMap` runs on the pass the step lands, with the follower's coordinates
+	## rewritten around the player then; the step is begun here, so slot fifteen is
+	## carried into the new map's coordinates now and placed when the step lands.
 	if pikachu != null:
 		pikachu.on_connection()
 		var shift: Vector2i = target_cell - (from_cell + direction)
@@ -7214,9 +7204,9 @@ func advance_scripted_steps_pass() -> bool:
 	return changed
 
 
-## Spends the frames a script is waiting on and resumes it the frame its wait
-## ends: `ScriptEvents`'s SCRIPT_WAIT_MOVEMENT and the counted delay `pause`,
-## `wait`, `deactivatefacing` and `showemote` spend. Once per frame beside
+## Spends the frames a script is waiting on and resumes it the frame its wait ends:
+## `ScriptEvents`'s SCRIPT_WAIT_MOVEMENT and the counted delay `pause`, `wait`,
+## `deactivatefacing` and `showemote` spend. Once per frame beside
 ## [method advance_scripted_steps_pass].
 func advance_script_wait_frame() -> Array:
 	var wait: Dictionary = pending_script_wait()
@@ -8151,9 +8141,8 @@ func _apply_map(
 	current_tileset = target_tileset
 	player_cell = _clamp_cell(target_cell)
 	# RefreshPlayerSprite calls CheckWarpFacingDown, then applies a scripted
-	# PLAYERSPRITESETUP_CUSTOM_FACING override last. This makes a staircase entry
-	# face its automatic downward exit instead of retaining the direction used on
-	# the previous map.
+	# PLAYERSPRITESETUP_CUSTOM_FACING override last, so a staircase entry faces its
+	# automatic downward exit instead of the direction used on the previous map.
 	if not custom_facing and Gen2WorldCollision.faces_down_on_spawn(
 		gen2_code_at(player_cell)
 	):
@@ -8879,10 +8868,9 @@ func hidden_items() -> Array:
 		var bg_event: Dictionary = (rows[index] as Dictionary).duplicate(true)
 		if int(bg_event.get("type", -1)) != BGEVENT_ITEM:
 			continue
-		## `event_index` the way [method events_at] stamps it: it is the only
-		## stable name a background event has, and [Gen2WorldCatalog] addresses a
-		## patched item under a tile by it. Without it every record on a map
-		## reads index 0 and a mod is told the wrong item.
+		## `event_index` as [method events_at] stamps it: the only stable name a
+		## background event has, which [Gen2WorldCatalog] addresses a patched item under a
+		## tile by. Without it every record reads index 0 and a mod is told the wrong item.
 		bg_event["event_index"] = index
 		var record: Dictionary = _hidden_item_record(bg_event)
 		if not bool(record.get("ok", false)):
@@ -9044,9 +9032,8 @@ func _watered_weird_tree_script(object_index: int) -> Dictionary:
 
 
 ## Walks a script from [param address] to the first [param opcode]. Answers that
-## command's branch target when [param branch] is set, and otherwise how many
-## bytes in the command after it starts. 0 for a stream that ends or fails to
-## decode first, which is what leaves a caller with no label to jump to.
+## command's branch target when [param branch] is set, and otherwise how many bytes
+## in the command after it starts; 0 for a stream that ends or fails to decode first.
 func _script_command_end(bank: int, address: int, opcode: int, branch: bool) -> int:
 	var crystal: bool = data.id != &"gold" and data.id != &"silver"
 	var raw: PackedByteArray = data.world_script(bank, address)
@@ -9313,10 +9300,10 @@ func _load_objects(carry_presentation: bool = false) -> void:
 	set_object_time(object_hour, object_time_of_day)
 
 
-## The source changeblock macro receives walk-cell coordinates. The cartridge
-## adds four tile coordinates before resolving the padded block buffer. Since
-## one block contains two walk cells and the live map exposes only its interior,
-## the resulting local block is floor((source + 4) / 2) - 2.
+## The source changeblock macro receives walk-cell coordinates. The cartridge adds
+## four tile coordinates before resolving the padded block buffer; a block holds two
+## walk cells and the live map exposes only its interior, so the local block is
+## floor((source + 4) / 2) - 2.
 func _script_block_cell(source_cell: Vector2i) -> Vector2i:
 	return Vector2i(
 		floori(float(source_cell.x + 4) / 2.0) - 2,

@@ -111,9 +111,8 @@ static func _read_story(out: Dictionary, state: Gen2WorldState, game: StringName
 			state.battle_tower().gs_ball_flag == Gen2BattleTower.GS_BALL_AVAILABLE
 
 
-## The party, the boxes and the play timer, which are the save's on both paths:
-## the world screen plays the slot's own party rather than a copy, so the live
-## run and a slot the launcher has only opened are read the same way.
+## The party, the boxes and the play timer, which are the save's on both paths: the
+## world screen plays the slot's own party, so a live run and an opened slot read alike.
 static func _read_save(out: Dictionary, save: Gen2SaveData) -> void:
 	if save == null:
 		return

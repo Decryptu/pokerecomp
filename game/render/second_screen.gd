@@ -544,9 +544,7 @@ func _build_page() -> void:
 
 
 ## What the panel shows with no world on it: the launcher is up, or a game has
-## just been closed. In the launcher's own language, because there may be no
-## cartridge at all; laid out in the panel's own pixels at a whole multiple of
-## the launcher's units, so the type is rasterised at the size it is shown.
+## just been closed. The units are [constant IDLE_UNITS]'s.
 func _build_idle() -> Node:
 	var skin: Gen2LauncherTheme = Gen2LauncherTheme.active()
 	var units: int = idle_scale(panel_size)

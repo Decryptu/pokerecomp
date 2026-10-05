@@ -66,7 +66,8 @@ const LEAVE_ON_FRAMES: int = 20
 const INSERT_SAVED_FRAMES: int = 24
 ## Per kind: the frames the info box stands with no question, the frame
 ## `SaveGameData` lands on, the frame the saved line goes up, the frame
-## `SFX_SAVE` plays and when SAVED ends. `PrintSaveScreenText`'s `ld c, 30` and
+## `SFX_SAVE` plays and when SAVED ends, the frames after it counting from the
+## sound's end ([method _sound_holds]). `PrintSaveScreenText`'s `ld c, 30` and
 ## `SaveMenu.save`'s `ld c, 120`; Yellow adds `ld c, 10` three times.
 const TIMINGS: Dictionary = {
 	Kind.GEN1_MENU: {"hold": 30, "write": 0, "result": 120, "sfx": 0, "done": 30},
@@ -94,6 +95,10 @@ var frames: int = 0
 ## Whether the host has yet to print [member lines]; nothing counts until then.
 var text_pending: bool = false
 var _sfx_taken: bool = false
+## `WaitSFX` behind `SFX_SAVE`: whether the host's effect still sounds, given
+## [member _sound_watch]. Unset, the last frames count from the sound's start.
+var sound_busy: Callable = Callable()
+var _sound_watch: Dictionary = {}
 var result: Dictionary = {}
 var _answer_hold: int = 0
 var _held_yes: bool = false
@@ -204,7 +209,7 @@ func frame() -> void:
 		if _answer_hold == 0:
 			_answer(_held_yes)
 		return
-	if reads_joypad() or finished():
+	if reads_joypad() or finished() or _sound_holds():
 		return
 	frames += 1
 	match step:
@@ -223,14 +228,20 @@ func frame() -> void:
 				_enter(Step.DONE)
 
 
+## `SavedTheGame`'s `WaitSFX`, pokered's `WaitForSoundToFinish`.
+func _sound_holds() -> bool:
+	return step == Step.SAVED and _sfx_taken and sound_busy.is_valid() \
+		and bool(sound_busy.call(_sound_watch))
+
+
 func frames_elapsed(count: int) -> void:
 	for _step: int in count:
 		frame()
 
 
-## The frame the write lands on, where `ChangeBoxSaveGame` switches its box.
-func writing_now() -> bool:
-	return step == Step.SAVING and frames == _timing("write")
+## Where pokegold's `ChangeBoxSaveGame` has already switched the box.
+func saving_begins() -> bool:
+	return step == Step.SAVING and frames == 0
 
 
 ## The frame `SavedTheGame` asks for `SFX_SAVE` through `WaitPlaySFX`, once.
@@ -251,6 +262,7 @@ func _enter(next: Step) -> void:
 	step = next
 	frames = 0
 	_sfx_taken = false
+	_sound_watch = {}
 	match next:
 		Step.ASK:
 			if _timing("hold") > 0:

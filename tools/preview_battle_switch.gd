@@ -144,9 +144,8 @@ class Annotations extends RefCounted:
 	const SUN_ROWS: Array[int] = [0x18, 0x3C, 0x7E, 0xFF, 0xFF, 0x7E, 0x3C, 0x18]
 	## The three marks, as tiles rather than text: the interface font has no `+`
 	## and its `▲` is a code the main font does not carry, so a symbol the
-	## cartridge never printed is supplied here. Eight bytes of 1bpp, one a row,
-	## bit 7 leftmost. A circle with a centre dot for super effective, a triangle
-	## for resisted and an X for no effect at all.
+	## cartridge never printed is supplied here, in the sun's format. A circle with
+	## a centre dot for super effective, a triangle for resisted and an X for no effect.
 	const MARK_SUPER: Array[int] = [0x3C, 0x42, 0x81, 0x99, 0x99, 0x81, 0x42, 0x3C]
 	const MARK_RESISTED: Array[int] = [0x00, 0x10, 0x38, 0x38, 0x7C, 0x7C, 0xFE, 0x00]
 	const MARK_IMMUNE: Array[int] = [0x00, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x00]

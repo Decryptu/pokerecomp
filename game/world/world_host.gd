@@ -163,8 +163,7 @@ static func move_deleter_texts(data: GameData) -> Dictionary:
 	return _stub_run(data, Gen2Layout.MOVE_DELETER_TEXT_ORDER, "move_deleter_text")
 
 ## The Day-Care's own thirty-two, across its four runs, read and refused the same
-## way. Public for the same reason: the screenshot driver opens the routine with
-## no script behind it.
+## way. Public for the same reason as [method name_rater_texts].
 static func day_care_texts(data: GameData) -> Dictionary:
 	var order: Array[String] = []
 	for run: Array in Gen2Layout.DAY_CARE_TEXT_RUNS:

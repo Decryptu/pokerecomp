@@ -31,6 +31,10 @@ var party_cursor: Dictionary = {"cursor": 0}
 ## Every stub `Gen2Layout.MOVE_DELETER_TEXT_ORDER` names, by that name.
 var _texts: Dictionary = {}
 
+## `WaitSFX` behind `SFX_MOVE_DELETED`: the forgot text waits for the sound.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
+var _sound_watch: Dictionary = {}
+var _sound_waiting: bool = false
 var _phase: int = Phase.DONE
 var _party_index: int = -1
 var _move_index: int = -1
@@ -111,6 +115,9 @@ func handle_button(button: int) -> bool:
 
 
 func advance_frame() -> void:
+	if _sound_waiting:
+		_finish_sound_wait()
+		return
 	if _yes_no != null and _yes_no.is_open():
 		_yes_no.advance_frame()
 		return
@@ -251,6 +258,15 @@ func _delete_move() -> void:
 		_end(Gen2MoveDeleter.ENDING_DECLINED)
 		return
 	sfx_requested.emit(Gen2Sfx.SFX_MOVE_DELETED, true)
+	_sound_watch = {}
+	_sound_waiting = true
+	_finish_sound_wait()
+
+
+func _finish_sound_wait() -> void:
+	if not _sound_waiting or bool(sound_busy.call(_sound_watch)):
+		return
+	_sound_waiting = false
 	_end(Gen2MoveDeleter.ENDING_FORGOT)
 
 

@@ -43,6 +43,11 @@ var _repeat_clock: Dictionary = {}
 ## The direction a repeat has just been sent for, cleared by the event arriving.
 ## Without it the gate would swallow the very press it emitted.
 var _repeat_open: Dictionary = {}
+## Whether the direction being delivered is the hardware's repeat (`hJoyLast`)
+## rather than a fresh press (`hJoyPressed`), for the length of that delivery. A
+## screen that ignores repeats alone, as `Pokedex_ArrowCursorDelay` does, reads
+## it while handling the press.
+var press_is_repeat: bool = false
 ## `hInMenu`, under which alone `JoyTextDelay` repeats; unset always repeats.
 ## Takes the [PokeButton] about to repeat.
 var repeat_gate: Callable = Callable()
@@ -252,10 +257,12 @@ func _gate_direction_repeat(event: InputEvent) -> bool:
 		return false
 	if bool(_repeat_open.get(button, false)):
 		_repeat_open[button] = false
+		press_is_repeat = true
 		return false
 	if _repeat_clock.has(button):
 		return true
 	_repeat_clock[button] = FRAME_SECONDS * float(repeat_delay_frames)
+	press_is_repeat = false
 	return false
 
 
@@ -360,6 +367,7 @@ func _advance_direction_repeat(delta: float) -> void:
 			continue
 		_repeat_open[button] = true
 		_push_press(button)
+		press_is_repeat = false
 
 
 ## One repeat or held-back press, pushed into the tree rather than sent through

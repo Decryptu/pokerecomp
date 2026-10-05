@@ -2952,6 +2952,7 @@ func _open_save_prompt(kind: Gen2SavePrompt.Kind, after: StringName) -> void:
 		kind, _save.player_name if _save != null else "", _write_service_save,
 		_save == null or _save.save_file_exists
 	)
+	_save_prompt.sound_busy = Gen2AudioPlayer.sound_wait
 	_save_printed = ""
 	_frame_clock.reset()
 	set_process(true)
@@ -2962,6 +2963,9 @@ func _open_save_prompt(kind: Gen2SavePrompt.Kind, after: StringName) -> void:
 ## behind it answers the same success without touching a file, the way a
 ## transaction with `persist` off does.
 func _write_service_save() -> Dictionary:
+	## Crystal's `ChangeBoxSaveGame` switches after the SAVING text, before the write.
+	if _save_after == &"change_box" and not _gold_silver():
+		_switch_save_box()
 	if not save_action.is_valid():
 		return {"ok": true, "kind": &"not_persisted"}
 	return save_action.call()
@@ -3023,15 +3027,22 @@ const SAVE_MEDIUM_SPEED: float = 1.0 / (Gen2TextBox.FRAME_SECONDS * 3.0)
 
 
 ## A, B and a frame all sync the same way: the prompt decides what its step reads.
+func _gold_silver() -> bool:
+	return _data != null and (_data.id == RomRegistry.GOLD or _data.id == RomRegistry.SILVER)
+
+
+func _switch_save_box() -> void:
+	_box_index = _box_submenu_index
+	if _save != null:
+		_save.current_box = _box_index
+
+
 func _advance_save_prompt() -> void:
 	if _save_prompt == null:
 		return
-	if _save_prompt.writing_now() and _save_after == &"change_box":
-		## `ChangeBoxSaveGame` puts `wCurBox` between the two halves, so the
-		## write switches the box rather than the answer.
-		_box_index = _box_submenu_index
-		if _save != null:
-			_save.current_box = _box_index
+	## pokegold's switches before the text.
+	if _save_prompt.saving_begins() and _save_after == &"change_box" and _gold_silver():
+		_switch_save_box()
 	if _save_prompt.take_sfx():
 		sfx_requested.emit(Gen2Sfx.SFX_SAVE, true)
 	if not _save_prompt.finished():
@@ -4438,8 +4449,8 @@ func _on_card_deleted(contact: int) -> void:
 
 ## `PokeGear.done`: `SFX_READ_TEXT_2` and `WaitSFX` behind every card's exit.
 func _on_card_closed() -> void:
-	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, true)
-	_leave_card()
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+	_hold(_leave_card)
 
 
 func _leave_card() -> void:
@@ -4561,7 +4572,9 @@ func _open_town_map(from_request: bool) -> void:
 ## The MAP card leaves through `PokeGear.done` too; the poster and Gen 1's map do not.
 func _on_town_map_card_closed() -> void:
 	if not _town_map_from_request and _data.generation != RomRegistry.GEN1:
-		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, true)
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+		_hold(_on_town_map_closed)
+		return
 	_on_town_map_closed()
 
 

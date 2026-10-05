@@ -73,6 +73,7 @@ const SFX_GIVE_TRADEMON: int = 0xB7
 const SFX_GET_TRADEMON: int = 0xB8
 const SFX_TRAIN_ARRIVED: int = 0xB9
 const SFX_STOP_SLOT: int = 0xBA
+const SFX_2_BOOPS: int = 0xBB
 const SFX_INTRO_UNOWN_1: int = 0xBE
 const SFX_INTRO_UNOWN_2: int = 0xBF
 const SFX_INTRO_UNOWN_3: int = 0xC0

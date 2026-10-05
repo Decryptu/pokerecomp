@@ -1,11 +1,10 @@
 extends RefCounted
 
 ## Every Generation 1 warp and every ledge, swept on Red, Blue and Yellow. A
-## Generation 1 map's collision grid holds the tile a cell draws, so what is
-## proved here is the six tables [Gen2WorldCollision] carries for it: the
-## tileset's passable list decides a step, `WarpTileIDPointers` and
-## `DoorTileIDPointers` decide whether a warp fires, and `LedgeTiles` decides a
-## hop. Each is swept against the imported corpus rather than one sampled map.
+## Generation 1 map's collision grid holds the tile a cell draws, so what is proved
+## here is the six tables [Gen2WorldCollision] carries for it: the tileset's passable
+## list decides a step, `WarpTileIDPointers` and `DoorTileIDPointers` decide whether
+## a warp fires, and `LedgeTiles` decides a hop, each swept against the imported corpus.
 
 ## `data/maps/objects`' own totals, and the `LAST_MAP` warps inside them.
 const WARP_CENSUS: Dictionary = {

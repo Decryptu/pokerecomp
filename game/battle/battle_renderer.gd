@@ -90,11 +90,10 @@ var _player_pixels: PackedByteArray = PackedByteArray()
 var _enemy_pixels_key: Array = []
 var _player_pixels_key: Array = []
 
-## Everything a pic layer is built out of. A draining bar moves the panels while
-## the map, the species, the palette and the scroll all stand still, so the same
-## two pictures were being rebuilt into a screen-sized buffer and a fresh
-## texture on every frame of it. The layer is kept until one of its own inputs
-## changes.
+## Everything a pic layer is built out of. A draining bar moves the panels while the
+## map, the species, the palette and the scroll stand still, so the layer is kept
+## until one of its own inputs changes rather than rebuilding the same two pictures
+## into a screen-sized buffer and a fresh texture every frame.
 var _enemy_pic_key: Array = []
 var _player_pic_key: Array = []
 ## The same for the four layers above them, by name.
@@ -737,11 +736,10 @@ func _battler_tile(vram: int) -> PackedByteArray:
 	return pic_tile(_enemy_pixels if enemy else _player_pixels, side, vram - base)
 
 
-## One tile of a buffer [method padded_pic] produced, numbered `column * side +
-## row` the way `PlaceGraphic` numbers a picture's own box. Static because the
-## same read is what `tools/checks/pokepic.gd` sweeps a corpus with: it is the
-## one place a battler moved as objects and the same battler drawn as tilemap
-## can disagree.
+## One tile of a buffer [method padded_pic] produced, numbered `column * side + row`
+## the way `PlaceGraphic` numbers a picture's own box. Static because
+## `tools/checks/pokepic.gd` sweeps a corpus with the same read: it is the one place
+## a battler moved as objects and the same battler drawn as tilemap can disagree.
 static func pic_tile(pixels: PackedByteArray, side: int, index: int) -> PackedByteArray:
 	var strip: int = pic_stride(pixels, side)
 	if index < 0 or index >= side * side or strip <= 0:

@@ -294,9 +294,8 @@ var _attr_override: PackedByteArray = PackedByteArray()
 var _grass_frame: int = 0
 ## The one run of BG tiles a `Request2bpp` has written over the scene's own
 ## sheets, as (first tile, count, sheet): `Intro_RustleGrass`'s four at
-## `vTiles2 tile $09`, or the single `IntroGrass4GFX` tile the two Suicune scenes
-## park in `vTiles1`. It lasts until a scene decompresses a sheet over it, which
-## every setup scene does.
+## `vTiles2 tile $09`, or the `IntroGrass4GFX` tile above. It lasts until a scene
+## decompresses a sheet over it.
 var _overlay: Array = []
 
 var _actors: Array[Dictionary] = []
@@ -410,8 +409,7 @@ func sheet_first_tile(part: String) -> int:
 	return int(_vram.get("%s_first" % part, 0))
 
 
-## The BG tiles a bare `Request2bpp` has written over the scene's own sheets, as
-## (first tile, count, sheet name), or empty.
+## The BG tiles a bare `Request2bpp` wrote over the scene's sheets, or empty; see [member _overlay].
 func tile_overlay() -> Array:
 	return _overlay
 

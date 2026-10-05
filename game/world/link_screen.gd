@@ -695,6 +695,7 @@ func _open_stats(list: int, index: int) -> void:
 	_stats = Gen2MonStatsScreen.create(_data, mons, index)
 	_stats.closed.connect(_close_stats)
 	_stats.cry_requested.connect(cry_requested.emit)
+	_stats.sfx_requested.connect(sfx_requested.emit)
 	_stats.announce()
 	_refresh()
 

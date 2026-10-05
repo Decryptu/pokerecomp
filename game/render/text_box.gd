@@ -39,10 +39,9 @@ const CURSOR_COLUMN: int = 18
 const CURSOR_BLINK_FRAMES: int = 16
 const FRAME_SECONDS: float = Gen2WorldAnimation.FRAME_SECONDS
 
-## `TextScroll` shifts the whole interior up one tile row, blanks the row it
-## leaves at the bottom and spends five frames. `_ContText` and
-## `_ContTextNoPause` both call it twice, which is one text line, since a box's
-## lines sit two rows apart.
+## `TextScroll` shifts the whole interior up one tile row, blanks the row it leaves at
+## the bottom and spends five frames. `_ContText` and `_ContTextNoPause` both call it
+## twice, which is one text line, since a box's lines sit two rows apart.
 const SCROLL_STEPS: int = 2
 const SCROLL_STEP_FRAMES: int = 5
 ## `Paragraph`'s cleared box and `DelayFrames 20` before the next page, both
@@ -65,10 +64,9 @@ var _prompted: bool = true
 @export var accelerated: bool = false
 ## Whether a host spends this box's hardware frames itself with
 ## [method advance_frame]. The reveal is a frame count on the cartridge, so a
-## screen that already owns the frame drives the box on the same clock as
-## everything else it draws, and the box never runs a second one of its own.
-## Off leaves the box on real time, which is what a dev viewer with no frame
-## pump wants.
+## screen that already owns the frame drives the box on the same clock as everything
+## else it draws. Off leaves the box on real time, which is what a dev viewer with
+## no frame pump wants.
 var driven: bool = false:
 	set(value):
 		driven = value
@@ -92,12 +90,11 @@ const ACCELERATED_SPEED: float = 60.0
 @export var columns: int = STANDARD_COLUMNS
 @export var rows: int = STANDARD_ROWS
 @export_range(0, 7) var frame_style: int = 0
-## How opaque the box's field is drawn. The cartridge has no alpha and needs
-## none: it draws a box over its own white background. Over a renderer on the
-## screen's native layer that same box is a slab across the map, so a renderer
-## may ask for the field to be drawn through; see
-## [constant Gen2ModHost.RENDERER_INTERFACE_OPACITY_METHOD]. The frame's lines
-## and the glyphs are ink and stay opaque whatever this is.
+## How opaque the box's field is drawn. The cartridge has no alpha: it draws a box
+## over its own white background. Over a renderer on the screen's native layer that
+## same box is a slab across the map, so a renderer may ask for the field to be
+## drawn through; see [constant Gen2ModHost.RENDERER_INTERFACE_OPACITY_METHOD]. The
+## frame's lines and the glyphs are ink and stay opaque whatever this is.
 @export_range(0.0, 1.0) var field_opacity: float = 1.0:
 	set(value):
 		var next: float = clampf(value, 0.0, 1.0)
@@ -236,11 +233,9 @@ func set_blink_cursor(blink: bool) -> void:
 	_redraw()
 
 
-## How many hardware frames the box still owes before it reaches its
-## `PromptButton`: the rest of the page, or the rest of a `TextScroll`. Zero
-## while it is waiting on a press, which is what it is waiting on there.
-##
-## Public so a caller settling a screen by frames settles the text with it. A
+## How many hardware frames the box still owes before it reaches its `PromptButton`:
+## the rest of the page, or the rest of a `TextScroll`. Zero while it is waiting on a
+## press. Public so a caller settling a screen by frames settles the text with it: a
 ## screen that owns the frame has no other way to know a printing text is not
 ## finished, and a press cannot shorten it.
 func frames_left() -> int:
@@ -343,10 +338,9 @@ func set_frame_style(style: int) -> void:
 	_redraw()
 
 
-## The rectangle the box covers, in hardware pixels, and an empty one whenever
-## nothing is drawn. A renderer composing around the box reads this rather than
-## assuming the standard twenty by six at row twelve, since a box can be any
-## size and is not always on screen.
+## The rectangle the box covers, in hardware pixels, and an empty one whenever nothing
+## is drawn. A renderer composing around the box reads this rather than assuming the
+## standard twenty by six at row twelve, since a box can be any size.
 func occupied_rect() -> Rect2i:
 	if not visible or texture == null:
 		return Rect2i()
@@ -519,8 +513,7 @@ func glyphs() -> Array:
 ## rule for drawing it: a page still revealing has not reached its `PromptButton`,
 ## a `scroll_nowait` page turns itself, a last page nothing loaded the cursor for
 ## never shows one, and the blink is the other half of `hVBlankCounter`. Public
-## because it is a rule rather than a drawing step, and because a text that owes
-## no press is easy to draw an arrow over by accident.
+## because it is a rule rather than a drawing step.
 func cursor_visible() -> bool:
 	if _pages.is_empty() or is_revealing() or not _cursor_up():
 		return false

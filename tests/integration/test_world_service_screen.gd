@@ -1270,7 +1270,7 @@ func test_the_clock_card_follows_the_clock_and_leaves_with_a_click() -> void:
 	assert_eq(_row_text(host._pokegear._tilemap(), Gen2TownMapPage.CLOCK_TIME_AT, 8), "12:08 AM")
 	watch_signals(host)
 	host.handle_button(PokeButton.A)
-	assert_signal_emitted_with_parameters(host, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2, true])
+	assert_signal_emitted_with_parameters(host, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2, false])
 
 
 func test_only_one_service_layer_is_ever_on_screen() -> void:

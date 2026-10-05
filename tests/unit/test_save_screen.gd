@@ -447,7 +447,6 @@ func test_the_save_sequence_asks_twice_and_then_spends_its_frames() -> void:
 	assert_eq(written.size(), 0, "the box is up for sixteen frames first")
 	prompt.frames_elapsed(1)
 	assert_eq(written.size(), 1)
-	assert_true(prompt.writing_now())
 	prompt.frames_elapsed(Gen2SavePrompt.WRITE_FRAMES)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVED)
 	assert_eq(prompt.lines[0], "RED saved")
@@ -455,6 +454,11 @@ func test_the_save_sequence_asks_twice_and_then_spends_its_frames() -> void:
 	prompt.text_printed()
 	assert_true(prompt.take_sfx())
 	assert_false(prompt.take_sfx(), "once")
+	var sounding: Array[bool] = [true]
+	prompt.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	prompt.frames_elapsed(Gen2SavePrompt.DONE_FRAMES)
+	assert_false(prompt.finished(), "`WaitSFX` holds the last frames until `SFX_SAVE` ends")
+	sounding[0] = false
 	prompt.frames_elapsed(Gen2SavePrompt.DONE_FRAMES)
 	assert_true(prompt.finished())
 	assert_false(prompt.refused())
@@ -539,7 +543,6 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_SAVING_LINES)
 	assert_eq(prompt.letter_speed(), &"instant", "`NowSavingString` is a `PlaceString`")
 	assert_eq(written.size(), 1, "SaveGameData ran before the string went up")
-	assert_true(prompt.writing_now())
 	prompt.text_printed()
 	prompt.frames_elapsed(119)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
@@ -1431,6 +1434,46 @@ func test_an_egg_is_offered_stats_and_switch_and_no_move_row() -> void:
 	## `EggStatsJoypad` answers A with `.quit` rather than with a page.
 	screen.handle_button(PokeButton.A)
 	assert_signal_emitted(screen, "closed")
+
+
+## `EggStatsScreen` plays `SFX_2_BOOPS` for an egg with fewer than six steps left,
+## and `StatsScreenWaitCry` (`WaitSFX` on Gold) reads no press until it ends.
+func test_an_egg_about_to_hatch_boops_and_holds_input_until_the_boops_end() -> void:
+	var egg := Gen2SaveMon.new()
+	egg.is_egg = true
+	egg.species = Fixture.PIKACHU
+	egg.happiness = 5
+	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, [egg])
+	var sounding: Array[bool] = [true]
+	screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	watch_signals(screen)
+	screen.announce()
+	assert_signal_emitted_with_parameters(screen, "sfx_requested", [Gen2Sfx.SFX_2_BOOPS])
+	assert_true(screen.handle_button(PokeButton.A), "the press is read and lost")
+	assert_signal_not_emitted(screen, "closed")
+	sounding[0] = false
+	screen.handle_button(PokeButton.A)
+	assert_signal_emitted(screen, "closed")
+
+	egg.happiness = 6
+	var quiet: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, [egg])
+	watch_signals(quiet)
+	quiet.announce()
+	assert_signal_not_emitted(quiet, "sfx_requested")
+
+
+func test_a_loaded_mons_cry_holds_the_stats_screens_input_until_it_ends() -> void:
+	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, _save().party)
+	var sounding: Array[bool] = [true]
+	screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	watch_signals(screen)
+	screen.announce()
+	assert_signal_emitted(screen, "cry_requested")
+	screen.handle_button(PokeButton.RIGHT)
+	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.PINK_PAGE)
+	sounding[0] = false
+	screen.handle_button(PokeButton.RIGHT)
+	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.GREEN_PAGE)
 
 
 ## `BillsPCDepositFuncDeposit` ends with `xor a` into both cursor bytes, and

@@ -120,7 +120,7 @@ func render_box_print(status: String) -> Image:
 		Gen2DiplomaPage.STATUS_BOX_SIZE.x, Gen2DiplomaPage.STATUS_BOX_SIZE.y)
 	var line: int = 0
 	for row: String in status.split("\n"):
-		var text_at: Vector2i = Gen2DiplomaPage.STATUS_TEXT_AT + Vector2i(0, line)
+		var text_at: Vector2i = Gen2DiplomaPage.STATUS_TEXT_AT + Vector2i(0, Gen2DiplomaPage.STATUS_LINE_STEP * line)
 		font.draw_text(row, indices, width, text_at.x * TILE, text_at.y * TILE)
 		line += 1
 	var cancel: Vector2i = Gen2DiplomaPage.CANCEL_AT

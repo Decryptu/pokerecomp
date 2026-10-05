@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Captures the Pokedex against a real imported cache.
 ##   Godot --headless --path . -s res://tools/preview_pokedex.gd -- \
-##       crystal /tmp/dex.png [list|entry|option|search|results|unown] [presses]
+##       crystal /tmp/dex.png [list|entry|print|option|search|results|unown] [presses]
 ## A Generation 1 cartridge answers `list`, `side` and `entry` only:
 ## `ShowPokedexMenu` has no mode, search or Unown screen. The world behind it is a
 ## new game with every species seen and every second one caught, which puts a full
@@ -36,6 +36,7 @@ const ROUTES: Dictionary = {
 	# holds it at position 226, which is thirty-two pages down and one row on.
 	"unseen": "r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,d",
 	"entry": "a",
+	"print": "a,r,r,r,a",
 	"option": "sel",
 	"search": "start",
 	# BEGIN SEARCH spends `AnimateDexSearchSlowpoke` before the results open, so
@@ -62,7 +63,7 @@ func _initialize() -> void:
 	if args.size() < 2:
 		push_error(
 			"Usage: preview_pokedex.gd -- <game> <output.png> "
-			+ "[list|entry|option|search|results|unown] [presses]"
+			+ "[list|entry|print|option|search|results|unown] [presses]"
 		)
 		quit(1)
 		return

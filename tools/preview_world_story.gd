@@ -338,8 +338,7 @@ const SHIP_GRANDPA_CABIN_DOOR: Vector2i = Vector2i(2, 19)
 
 ## Vermilion City (12/3) and its gym (12/11), the first Kanto maps the route
 ## walks. `maps/VermilionPortPassage.asm` is two regions joined by its own stair
-## pair ((3,2) to (15,4)), the way Olivine's passage is, so the walk from the
-## dock to the city takes three warps.
+## pair ((3,2) to (15,4)), like Olivine's passage: three warps from the dock to the city.
 const VERMILION_GROUP: int = 12
 const VERMILION_CITY_NUMBER: int = 3
 const VERMILION_GYM_NUMBER: int = 11
@@ -364,8 +363,7 @@ const SURGE_FACE: Vector2i = Vector2i(5, 3)
 const BADGE_THUNDER: int = 10
 const ENGINE_FLYPOINT_VERMILION: int = 58
 ## The gym's own exit, and the tree faced from the yard side. Leaving the gym
-## reloads the city, which regrows the tree behind the player, so the way out is
-## cut a second time exactly as the way in was.
+## reloads the city, which regrows the tree, so the way out is cut a second time.
 const VERMILION_GYM_EXIT: Vector2i = Vector2i(4, 17)
 const VERMILION_GYM_TREE_RETURN: Vector2i = Vector2i(13, 19)
 
@@ -1349,10 +1347,9 @@ func _violet_togepi_egg_leg(
 		return {"ok": false, "path": path, "reason": "Falkner did not arm the assistant call"}
 
 	# data/phone/special_calls.asm gives SPECIALCALL_ASSISTANT the
-	# SpecialCallOnlyWhenOutside condition, so the call resolves on Violet City
-	# and not in the gym it was armed in. ElmPhoneCallerScript's .assistant
-	# branch is the only thing that clears
-	# EVENT_ELMS_AIDE_IN_VIOLET_POKEMON_CENTER, which InitializeEventsScript set.
+	# SpecialCallOnlyWhenOutside condition, so the call resolves on Violet City and
+	# not in the gym it was armed in. ElmPhoneCallerScript's .assistant branch alone
+	# clears EVENT_ELMS_AIDE_IN_VIOLET_POKEMON_CENTER, which InitializeEventsScript set.
 	var call_attempt: Dictionary = world.try_special_phone_call()
 	if not bool(call_attempt.get("attempted", false)):
 		return {
@@ -1797,11 +1794,10 @@ func _ilex_forest_leg(
 	if not bool(cut_gift.get("terminal", false)):
 		return {"ok": false, "path": path, "reason": "HM01 handoff did not finish"}
 
-	# And taught, not just carried. The starter is the only line in this party
-	# that CanLearnTMHMMove accepts for CUT, and HM01 arrives here, one walk
-	# before the first tree, so this is the earliest the route can be honest
-	# about the move. `teach_tm_hm()` is the same transaction the pack's USE
-	# reaches, the way _olivine_cafe_hm04() teaches STRENGTH.
+	# And taught, not just carried. The starter is the only line in this party that
+	# CanLearnTMHMMove accepts for CUT, and HM01 arrives one walk before the first
+	# tree, so this is the earliest the route can be honest about the move.
+	# `teach_tm_hm()` is the same transaction the pack's USE reaches.
 	var taught: Dictionary = _teach_tm_hm(world, save, ITEM_HM_CUT)
 	_mirror_party(world, save)
 	path.append({
@@ -1998,11 +1994,10 @@ func _goldenrod_to_route_36(
 	return {"ok": true}
 
 
-## The flower shop errand, entered from Goldenrod City and left back onto it.
-## The door is the one cell of it the two profiles disagree on, `(29,5)` in
-## pokecrystal and `(33,5)` in pokegold (`maps/GoldenrodCity.asm`). Floria is
-## only spoken to on Crystal, where `FlowerShopTeacherScript` reads the flag
-## that conversation sets.
+## The flower shop errand, entered from Goldenrod City and left back onto it. The
+## door is the one cell of it the two profiles disagree on, `(29,5)` in pokecrystal
+## and `(33,5)` in pokegold (`maps/GoldenrodCity.asm`). Floria is only spoken to on
+## Crystal, where `FlowerShopTeacherScript` reads the flag that conversation sets.
 func _goldenrod_flower_shop(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -2146,11 +2141,10 @@ func _squirtbottle_leg(
 		return _leg_failed(path, "Sudowoodo failed", sudowoodo)
 
 	if not crystal:
-		# `Route36RockSmashGuyScript` stands on (44,9) in both pins and hands
-		# TM08 over once EVENT_FOUGHT_SUDOWOODO is set, which the step above just
-		# did. Only Gold and Silver come back for it, because only their Burned
-		# Tower has a rock in the way; the Crystal route never needs the move and
-		# is left as it was.
+		# `Route36RockSmashGuyScript` stands on (44,9) in both pins and hands TM08 over
+		# once EVENT_FOUGHT_SUDOWOODO is set, which the step above just did. Only Gold and
+		# Silver come back for it, because only their Burned Tower has a rock in the way;
+		# the Crystal route never needs the move and is left as it was.
 		var rock_smash_guy: Dictionary = _talk_to(
 			world, Vector2i(44, 10), Gen2WorldSprite.FACING_UP, save, random, data
 		)
@@ -5728,8 +5722,6 @@ func _magnet_train_ride(
 				],
 			}
 
-		# The arrival coord event is still armed, so it is stepped onto and
-		# drained rather than targeted with a resolving walk.
 		var arrival: Dictionary = _coord_event_step(
 			world, TRAIN_LANDING, TRAIN_ARRIVAL_COORD, save, random, data
 		)
@@ -6231,8 +6223,6 @@ func _seafoam_gym_leg(
 		"cell": _cell_value(world),
 		"volcano_badge": world.state.is_engine_flag_active(badge),
 		"beat_blaine": world.event_flag_active(EVENT_BEAT_BLAINE),
-		# `appear SEAFOAMGYM_GYM_GUIDE` is a clearevent on the guide's own hide
-		# flag, and it sits on the branch only a won battle reaches.
 		"gym_guide_hidden": world.event_flag_active(EVENT_SEAFOAM_GYM_GYM_GUIDE),
 		"encounters": blaine.get("encounters", []),
 		"run": blaine.get("run", {}),
@@ -6546,8 +6536,7 @@ func _silver_cave_heal(
 	return {"ok": true}
 
 
-## The three rooms and Red. Every room is one region, so each ladder is walked
-## to directly; `tools/checks/mt_silver.gd` is what says so.
+## The three rooms and Red, each ladder walked to directly (`tools/checks/mt_silver.gd`).
 func _silver_cave_rooms(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -6728,8 +6717,6 @@ func _power_plant_crossing(
 				],
 			}
 		if leg.has("ashore"):
-			# The far side of a surfed connection is still water. One water-only
-			# walk to a named shore cell ends on .ExitWater.
 			var ashore: Dictionary = _walk_cell_resolving(
 				world, leg["ashore"], save, random, data, true
 			)
@@ -6832,8 +6819,7 @@ func _route_24_and_25(
 	return {"ok": true}
 
 
-## The pool the Route 24 grunt names: a BGEVENT_ITEM whose own cell is water, so
-## it is faced from the bank above rather than stood on.
+## The pool the Route 24 grunt names; see [constant MACHINE_PART_APPROACH].
 func _cerulean_machine_part(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -6896,8 +6882,7 @@ func _coord_event_step(
 ## The gangway. `FastShip1FSailor1Script`'s `.Arrived` branch needs
 ## EVENT_FAST_SHIP_HAS_ARRIVED and DESTINATION_OLIVINE clear, which the Olivine
 ## boarding cleared; it warps to Vermilion Port itself after `setmapscene
-## VERMILION_PORT, SCENE_VERMILIONPORT_LEAVE_SHIP`, so the deferred landfall
-## scene runs inside the same drain.
+## VERMILION_PORT, SCENE_VERMILIONPORT_LEAVE_SHIP`, so the landfall scene runs in the same drain.
 func _ss_aqua_disembark(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -7134,8 +7119,7 @@ func _lighthouse_visit(
 	return {"ok": true}
 
 
-## Walks each cell in [param cells] on the floor it belongs to and takes the
-## warp there, draining the arrival callbacks between floors.
+## [method _warp_chain] over the lighthouse's floors.
 func _lighthouse_shaft(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -7159,10 +7143,9 @@ func _lighthouse_shaft(
 
 
 ## maps/OlivineCafe.asm's sailor at (4,3), who hands over HM04 behind
-## EVENT_GOT_HM04_STRENGTH. The cafe is Olivine City warp 7 at (7,21).
-## The HM is then taught through Gen2WorldPartyHost.teach_tm_hm(), the same
-## transaction the pack's own USE reaches, so the route learns STRENGTH the way a
-## player does rather than writing a move slot behind the game's back.
+## EVENT_GOT_HM04_STRENGTH. The cafe is Olivine City warp 7 at (7,21). The HM is
+## then taught through Gen2WorldPartyHost.teach_tm_hm(), the same transaction the
+## pack's own USE reaches, so the route learns STRENGTH as a player does.
 func _olivine_cafe_hm04(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8716,11 +8699,10 @@ func _reachable_step(
 	if water_only \
 		and world.collision_permission_at(direct) != Gen2WorldCollision.WATER_TILE:
 		return Vector2i(-1, -1)
-	# Stepping onto a warp tile takes it, so a walked route can only cross one
-	# by leaving the map there. The BFS treats it as a wall unless it is the
-	# cell it was asked to reach, which is what makes Ecruteak Gym's thirty
-	# holes a maze instead of open floor. A warp_event on ordinary floor is
-	# inert, as CheckWarpCollision has it, so it is not a wall.
+	# Stepping onto a warp tile takes it, so a walked route can only cross one by
+	# leaving the map there. The BFS treats it as a wall unless it is the cell it was
+	# asked to reach, which makes Ecruteak Gym's thirty holes a maze instead of open
+	# floor. A warp_event on ordinary floor is inert, as CheckWarpCollision has it.
 	if direct != warp_target and (world.warp_pending(direct, step) \
 		or not world.gen1_dungeon_hole_at(direct).is_empty()):
 		return Vector2i(-1, -1)
@@ -8732,11 +8714,10 @@ func _reachable_step(
 		world.gen2_code_at(direct)
 	).get("kind", &"none")) == &"force_turn":
 		return Vector2i(-1, -1)
-	# move_action() calls can_walk_to() with the direction, which reads the
-	# leave/enter wall mask at the player's own cell; from a BFS frontier that
-	# has to be anchored on the frontier cell instead, or the plan crosses walls
-	# the replayed walk then refuses. Route 32's UP_WALL row at y=72 is the
-	# first cell on the walked route where the two disagree.
+	# move_action() calls can_walk_to() with the direction, which reads the leave/enter
+	# wall mask at the player's own cell; from a BFS frontier that has to be anchored
+	# on the frontier cell instead, or the plan crosses walls the replayed walk then
+	# refuses. Route 32's UP_WALL row at y=72 is the first cell where the two disagree.
 	if not world.step_blocked_from(cell, step) and world.can_walk_to(direct):
 		return direct
 	if world.movement_mode == Gen2WorldAPI.MOVEMENT_SURF:

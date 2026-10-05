@@ -2121,6 +2121,86 @@ func test_pokedex_opens_from_the_start_menu_and_b_reopens_the_start_menu() -> vo
 	assert_true(_world_screen._objects_may_move())
 
 
+## `Pokedex_InitDexEntryScreen` and `Pokedex_ReinitDexEntryScreen` each end in
+## `PlayMonCry`, which waits for the sound; `.exit` plays `SFX_READ_TEXT_2` and
+## waits for it too before the dex closes.
+func test_a_dex_entry_cries_on_open_and_on_each_step_and_the_exit_waits_for_its_sound() -> void:
+	await _open_world()
+	var state: Gen2WorldState = _world_screen._world.state
+	state.set_engine_flag(Gen2WorldStartMenu.ENGINE_POKEDEX)
+	state.set_species_seen(Fixture.TRAINER_SPECIES)
+	state.set_species_seen(Fixture.TRAINER_SPECIES + 1)
+	_world_screen._open_pokedex()
+	var dex: Gen2PokedexScreen = _world_screen._pokedex_host
+	var sounding: Array[bool] = [true]
+	dex.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	watch_signals(dex)
+	for _row: int in Gen2Layout.SPECIES_COUNT:
+		if dex.get("_dex").selected_species() == Fixture.TRAINER_SPECIES:
+			break
+		dex.handle_button(PokeButton.DOWN)
+	dex.handle_button(PokeButton.A)
+	assert_signal_emitted_with_parameters(dex, "cry_requested", [Fixture.TRAINER_SPECIES])
+	assert_false(dex.handle_button(PokeButton.RIGHT), "no press is read behind the cry")
+	assert_eq(dex.get("_entry_cursor"), 0)
+	sounding[0] = false
+	dex.advance_frame()
+	assert_true(dex.handle_button(PokeButton.RIGHT))
+	assert_eq(dex.get("_entry_cursor"), 1)
+
+	sounding[0] = true
+	dex.handle_button(PokeButton.DOWN)
+	assert_signal_emit_count(dex, "cry_requested", 2)
+	assert_signal_emitted_with_parameters(
+		dex, "cry_requested", [Fixture.TRAINER_SPECIES + 1], 1
+	)
+	assert_false(dex.handle_button(PokeButton.A), "the next entry's cry holds too")
+	sounding[0] = false
+	dex.advance_frame()
+	dex.handle_button(PokeButton.B)
+	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.LIST)
+
+	sounding[0] = true
+	dex.handle_button(PokeButton.B)
+	assert_signal_emitted_with_parameters(dex, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2])
+	assert_signal_not_emitted(dex, "closed")
+	sounding[0] = false
+	dex.advance_frame()
+	assert_signal_emitted(dex, "closed")
+
+
+## `.Print` with no printer: the connection error under the printer's music until
+## B, and then the entry again with its cry.
+func test_the_dex_entry_screens_prnt_button_shows_the_printer_error_until_b() -> void:
+	await _open_world()
+	var state: Gen2WorldState = _world_screen._world.state
+	state.set_engine_flag(Gen2WorldStartMenu.ENGINE_POKEDEX)
+	state.set_species_seen(Fixture.TRAINER_SPECIES)
+	_world_screen._data.set("_printer_strings", {
+		Gen2DiplomaScreen.STATUS_CONNECTION_ERROR: "Printer Error 2", "press_b": "Press B to Cancel",
+	})
+	_world_screen._open_pokedex()
+	var dex: Gen2PokedexScreen = _world_screen._pokedex_host
+	dex.sound_busy = func(_watch: Dictionary) -> bool: return false
+	for _row: int in Gen2Layout.SPECIES_COUNT:
+		if dex.get("_dex").selected_species() == Fixture.TRAINER_SPECIES:
+			break
+		dex.handle_button(PokeButton.DOWN)
+	dex.handle_button(PokeButton.A)
+	for _step: int in 3:
+		dex.handle_button(PokeButton.RIGHT)
+	watch_signals(dex)
+	dex.handle_button(PokeButton.A)
+	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.PRINT)
+	assert_signal_emitted_with_parameters(dex, "printer_music_requested", [true])
+	assert_false(dex.handle_button(PokeButton.A), "CheckCancelPrint reads B alone")
+
+	dex.handle_button(PokeButton.B)
+	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.ENTRY)
+	assert_signal_emitted_with_parameters(dex, "printer_music_requested", [false], 1)
+	assert_signal_emitted_with_parameters(dex, "cry_requested", [Fixture.TRAINER_SPECIES])
+
+
 ## The entry screen's AREA, which is `Pokedex_GetArea` rather than a panel: it
 ## opens the cartridge's own region map over the dex and A or B hands the entry
 ## back. The world screen carries the release the map's SELECT reads.

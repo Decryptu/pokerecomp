@@ -328,6 +328,9 @@ var _save_frames: int = 0
 var _save_clock := Gen2WorldAnimation.FrameClock.new()
 ## `SaveMenu`'s own sequence while one is up, and null the rest of the time.
 var _save_prompt: Gen2SavePrompt = null
+## `_Option.ExitOptions`' `WaitSFX`.
+var _options_exit_waiting: bool = false
+var _sound_watch: Dictionary = {}
 
 var _options_menu: Gen2WorldOptionsMenu = null
 
@@ -536,6 +539,8 @@ func _select_pack_item(item: int) -> bool:
 
 
 func handle_button(button: int) -> bool:
+	if _options_exit_waiting:
+		return true
 	## The mail keyboard owns all 160x144 while it is up, the way BILL'S PC's
 	## own does over the box screen.
 	if _naming != null:
@@ -1040,6 +1045,17 @@ func _exit_options() -> void:
 		_:
 			if Gen2WorldState.is_crystal_profile(_data):
 				sfx_requested.emit(Gen2Sfx.SFX_TRANSACTION, true)
+				_options_exit_waiting = true
+				_sound_watch = {}
+				_finish_options_exit()
+				return
+	_close_submenu()
+
+
+func _finish_options_exit() -> void:
+	if not _options_exit_waiting or Gen2AudioPlayer.sound_wait(_sound_watch):
+		return
+	_options_exit_waiting = false
 	_close_submenu()
 
 
@@ -2891,6 +2907,7 @@ func _open_save_confirm_mode() -> void:
 		_pack_save.player_name if _pack_save != null else "",
 		_save_action, _pack_save == null or _pack_save.save_file_exists
 	)
+	_save_prompt.sound_busy = Gen2AudioPlayer.sound_wait
 	_sync_save_prompt()
 
 
@@ -2921,8 +2938,7 @@ func _sync_save_prompt() -> void:
 		closed.emit()
 		return
 	if _save_prompt.take_sfx():
-		## `SavedTheGame` reaches it through `WaitPlaySFX`; the wait behind it is
-		## not spent, for the reason the intro cry's is not.
+		## `SavedTheGame`'s `WaitPlaySFX`; [Gen2SavePrompt] spends the `WaitSFX`.
 		sfx_requested.emit(Gen2Sfx.SFX_SAVE, true)
 	_mode = SAVE_PROMPT_MODES[_save_prompt.step]
 	_save_lines = _save_prompt.lines.duplicate()
@@ -3016,6 +3032,9 @@ func ask_soft_reset() -> void:
 
 ## One hardware frame of the box, a held YES/NO answer or the save's timed modes.
 func advance_frame() -> void:
+	if _options_exit_waiting:
+		_finish_options_exit()
+		return
 	if _box_up:
 		_box.advance_frame()
 		if _sale_sfx >= 0 and not _box.has_text_left():

@@ -271,11 +271,10 @@ func draw_backdrop(view: Vector2i, origin: Vector2i) -> Image:
 	return Gen2PicImage.canvas_image(pixels, width, height)
 
 
-## The whole 160x144 screen for one frame of [param scene].
-##
-## The background is built at the BG map's own 256 pixels across and then
-## sampled through the scroll, because that map wraps: a cloud band walking left
-## brings the map's own right-hand columns back round rather than leaving a gap.
+## The whole 160x144 screen for one frame of [param scene]. The background is built
+## at the BG map's own 256 pixels across and then sampled through the scroll, because
+## that map wraps: a cloud band walking left brings the map's own right-hand columns
+## back round rather than leaving a gap.
 func draw(scene: Gen2TitleScene) -> Image:
 	var width: int = COLUMNS * TILE
 	var height: int = ROWS * TILE

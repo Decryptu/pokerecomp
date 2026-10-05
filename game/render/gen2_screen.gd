@@ -74,12 +74,11 @@ var subpixel: bool = false:
 
 var _subpixel_steps: int = 1
 
-## Whether the buffer outside the 160x144 rectangle is filled by this screen.
-## On by default, and the reason a screen written without a thought for the
-## window is still not letterboxed: a screen laid out in 160x144 has nothing of
-## its own to put in a wider buffer, so the surround is its own field and the
-## boxes it draws read as standing in a bigger one. Only a view that fills the
-## whole buffer itself -- the map, a renderer staged on it -- turns this off.
+## Whether the buffer outside the 160x144 rectangle is filled by this screen. On by
+## default, so a screen written without a thought for the window is not letterboxed:
+## a screen laid out in 160x144 has nothing of its own to put in a wider buffer, so
+## the surround is its own field. Only a view that fills the whole buffer itself --
+## the map, a renderer staged on it -- turns this off.
 var interface_masked: bool = true:
 	set(value):
 		if interface_masked == value:
@@ -89,11 +88,10 @@ var interface_masked: bool = true:
 			_mask.visible = value
 
 ## What the surround is painted with: the shown picture's own field, so a screen
-## carries its background out to the window edge wherever it is opened. Followed
-## automatically from [method Gen2PicImage.show], the one place a screen hands a
-## redrawn picture to the node that shows it; a screen with more art than the
-## hardware framed hands [method set_backdrop] the real thing instead. Meaningless
-## until something has said what it is: see [method has_field].
+## carries its background out to the window edge. Followed automatically from
+## [method Gen2PicImage.show], the one place a screen hands a redrawn picture to the
+## node that shows it; a screen with more art than the hardware framed hands
+## [method set_backdrop] the real thing. Meaningless until [method has_field] is true.
 var surround_color: Color = Color.BLACK:
 	set(value):
 		var told: bool = _field_told
@@ -104,12 +102,11 @@ var surround_color: Color = Color.BLACK:
 		if _mask != null:
 			_mask.queue_redraw()
 
-## Whether anything has said what [member surround_color] is.
-## "Not told yet" is not "told it is black", and the difference is a whole class
-## of bug: a screen laid out over another -- a menu box over the map, a question
-## over a picture -- has no field of its own, and painting the default over the
-## surround cuts whatever it is standing on back to 160x144 with bars around it.
-## An untold screen paints no surround at all.
+## Whether anything has said what [member surround_color] is. "Not told yet" is not
+## "told it is black", and the difference is a whole class of bug: a screen laid out
+## over another -- a menu box over the map, a question over a picture -- has no field
+## of its own, and painting the default over the surround cuts whatever it is
+## standing on back to 160x144 with bars around it. An untold screen paints no surround.
 var _field_told: bool = false
 ## Who told it, so the colour goes when that screen does and the next one starts
 ## from untold rather than inheriting a field it never drew.
@@ -214,9 +211,7 @@ func display(node: Node) -> void:
 ## placed. A renderer rebuilt mid-screen would otherwise be appended after a live
 ## text box and paint over it. [param fills_buffer] is a view that draws the whole
 ## expanded surface and gets the buffer's own origin; a view that does not is laid
-## out in the hardware's 160x144 like everything else here and is clipped to it,
-## since in the buffer's corner it would sit off to one side with the boxes above
-## it somewhere else.
+## out in the hardware's 160x144 like everything else here and is clipped to it.
 func display_content(node: Node, fills_buffer: bool = false) -> void:
 	if not fills_buffer:
 		_content.add_child(node)
@@ -241,12 +236,10 @@ func view_size() -> Vector2i:
 
 
 
-## The cartridge's own 160x144 screen, in the native layer's own pixels.
-## A view on that layer is handed a rectangle and told nothing else, and every
-## hardware-pixel number it is given -- the text box's, first -- has to land
-## somewhere inside it. Framed, that mapping was the layer itself, since the
-## rectangle was a whole multiple of 160x144. Expanded it is not, so the screen
-## says where.
+## The cartridge's own 160x144 screen, in the native layer's own pixels. A view on
+## that layer is handed a rectangle and told nothing else, and every hardware-pixel
+## number it is given has to land inside it. Framed, that mapping was the layer
+## itself; expanded it is not, so the screen says where.
 func screen_rect() -> Rect2i:
 	var drawn: Vector2 = Vector2(WIDTH, HEIGHT) * _draw_scale
 	var at: Vector2 = (_interface.position if _interface != null else Vector2.ZERO) \
@@ -307,9 +300,8 @@ func clear() -> void:
 ## Takes a node off the screen now and frees it at the end of the frame.
 ## `queue_free` on its own only does the second half: the node stays in the tree,
 ## and drawn, until the frame it was dropped on is served, so a replacement added
-## on the same frame is composited over its predecessor rather than instead of it.
-## Inside a [Container] the two are laid out side by side. Static, and the one way
-## a screen drops a child it is replacing.
+## on the same frame is composited over its predecessor (side by side inside a
+## [Container]). Static, and the one way a screen drops a child it is replacing.
 static func drop(node: Node) -> void:
 	if node == null or not is_instance_valid(node):
 		return
@@ -321,10 +313,9 @@ static func drop(node: Node) -> void:
 
 ## The same from an [method Node._exit_tree], where the removal above is refused.
 ## A parent is blocked from removing a child while it is already removing one, and
-## every screen that hosts a view it does not own drops that view as it leaves:
-## both hang off the same parent, so the parent is mid-removal when the drop
-## arrives. Hiding is the whole of what the removal was for here, since nothing
-## replaces a view whose screen is going.
+## every screen that hosts a view it does not own drops that view as it leaves: both
+## hang off the same parent, so the parent is mid-removal when the drop arrives.
+## Hiding is the whole of what the removal was for here, since nothing replaces it.
 static func drop_on_exit(node: Node) -> void:
 	if node == null or not is_instance_valid(node):
 		return
@@ -354,18 +345,16 @@ func interface_layer() -> Control:
 	return _interface
 
 
-## Where the hardware's own 160x144 sits inside the buffer, in buffer pixels.
-## What a screen drawing a backdrop has to leave alone: the picture it hands
-## [method set_backdrop] is the buffer's size, and this is the hole its own
-## frame is already filling.
+## Where the hardware's own 160x144 sits inside the buffer, in buffer pixels: the
+## hole a screen drawing a backdrop has to leave alone, since the picture it hands
+## [method set_backdrop] is the buffer's size and its own frame already fills this.
 func interface_origin() -> Vector2i:
 	return Vector2i(_interface.position) if _interface != null else Vector2i.ZERO
 
 
-## The screen [param node] is drawn on, or null outside one.
-## The walk rather than a stored reference: a screen is added to whichever host
-## has one and freed by it, and neither end should have to hold the other.
-## The outermost one, not the nearest, for a node that is somehow inside two.
+## The screen [param node] is drawn on, or null outside one. The walk rather than a
+## stored reference: a screen is added to whichever host has one and freed by it, and
+## neither end should hold the other. The outermost one, for a node somehow inside two.
 static func owner_of(node: Node) -> Gen2Screen:
 	var at: Node = node
 	var found: Gen2Screen = null
@@ -378,11 +367,10 @@ static func owner_of(node: Node) -> Gen2Screen:
 
 ## The screen a host's own 160x144 view belongs in: [param handed] is the one the
 ## opener gave it, failing that the one [param node] is already standing in,
-## failing both a new one over [param node], which is what a host opened on its
-## own really does need. A second screen over a window that already has one is
-## what made the surround ambiguous: two viewports each pick their own scale and
-## their own place for the hardware rectangle, so an overlay meant to sit on the
-## map is drawn at a different size beside it. One window, one screen.
+## failing both a new one over [param node]. A second screen over a window that
+## already has one is what made the surround ambiguous: two viewports each pick
+## their own scale and place for the hardware rectangle, so an overlay meant to sit
+## on the map is drawn at a different size beside it.
 static func host_for(node: Control, handed: Gen2Screen = null) -> Gen2Screen:
 	if handed != null:
 		return handed
@@ -399,12 +387,11 @@ static func host_for(node: Control, handed: Gen2Screen = null) -> Gen2Screen:
 	return built
 
 
-## Real art for the surround, the size of [method view_size], from
-## [param source]. A flat [member surround_color] is what a screen laid out in
-## 160x144 has to offer; a screen whose background is more than one colour draws
-## the whole buffer instead and hands it here. Only the surround is taken from it,
-## so the hardware rectangle stays exactly the picture the cartridge drew. Dropped
-## with [param source], so the screen after it does not inherit its sky.
+## Real art for the surround, the size of [method view_size], from [param source]. A
+## flat [member surround_color] is what a screen laid out in 160x144 has to offer; a
+## screen whose background is more than one colour draws the whole buffer instead
+## and hands it here. Only the surround is taken from it, so the hardware rectangle
+## stays the picture the cartridge drew. Dropped with [param source].
 func set_backdrop(source: Node, image: Image) -> void:
 	if image == null or Vector2i(image.get_width(), image.get_height()) != _view_size:
 		if _backdrop_source == source:
@@ -430,13 +417,12 @@ func _on_backdrop_source_gone() -> void:
 	clear_backdrop()
 
 
-## The 160x144 field a screen stands on when it is a colour rather than a
-## picture: a [ColorRect] that says what colour it is, so the screen around it
-## carries the same one out to the window.
-## [method Gen2PicImage.show] is that seam for a screen drawn as a picture and
-## this is the other half of it. It reports on every draw rather than on a
-## setter, so a fade that recolours the field takes the surround with it without
-## the screen doing the fade knowing this exists.
+## The 160x144 field a screen stands on when it is a colour rather than a picture:
+## a [ColorRect] that says what colour it is, so the screen around it carries the
+## same one out to the window. [method Gen2PicImage.show] is that seam for a screen
+## drawn as a picture and this is the other half of it. It reports on every draw
+## rather than on a setter, so a fade that recolours the field takes the surround
+## with it without the screen doing the fade knowing this exists.
 class Field extends ColorRect:
 	## Quantised the way a picture beside it is: a 15-bit colour kept as a float
 	## is truncated on its way into an image and rounded on its way through a

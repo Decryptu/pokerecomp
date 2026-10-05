@@ -8,11 +8,10 @@ extends RefCounted
 ## commands added to a list rather than branches added to the turn loop.
 
 ## The effect bytes with a list of their own, numbered as the cartridge's move
-## table numbers them.
-## Recoil is here because Struggle needs it: without it two empty Pokémon never
-## finish their battle. The rest are the status conditions in their two shapes, a
-## move whose whole purpose is the status and a move that damages and leaves
-## something behind on a roll.
+## table numbers them. Recoil is here because Struggle needs it: without it two
+## empty Pokémon never finish their battle. The rest are the status conditions in
+## their two shapes, a move whose whole purpose is the status and a move that
+## damages and leaves something behind on a roll.
 const SLEEP: int = 1
 const POISON_HIT: int = 2
 ## Absorb, Mega Drain, Giga Drain and Leech Life: half the calculated hit healed
@@ -156,12 +155,11 @@ const HAZE: int = 25
 const BELLY_DRUM: int = 142
 const PSYCH_UP: int = 143
 
-## Disable, Mist, Focus Energy, Attract and Encore, numbered off the real
-## cartridge with [code]tools/dump_tables.gd -- gold moves[/code], since Gen II
-## does not share Generation 1's numbering. Mist and Focus Energy need nothing
-## new; Disable, Attract and Encore are what
-## [member Gen2BattleMon.disabled_slot], [member Gen2BattleMon.encored_slot] and
-## [method Gen2BattleMon.gender] exist for.
+## Disable, Mist, Focus Energy, Attract and Encore, numbered off the real cartridge
+## with [code]tools/dump_tables.gd -- gold moves[/code], since Gen II does not share
+## Generation 1's numbering. Mist and Focus Energy need nothing new; Disable,
+## Attract and Encore are what [member Gen2BattleMon.disabled_slot],
+## [member Gen2BattleMon.encored_slot] and [method Gen2BattleMon.gender] exist for.
 const DISABLE: int = 86
 const MIST: int = 46
 const FOCUS_ENERGY: int = 47
@@ -324,8 +322,7 @@ const SNORE: int = 92
 const TRI_ATTACK: int = 36
 const SPLASH: int = 85
 
-## Flame Wheel and Sacred Fire, one list: a burn chance with the user's own thaw
-## in front of the faint check.
+## Flame Wheel and Sacred Fire, one list; see [constant FLAME_WHEEL_SEQUENCE].
 const FLAME_WHEEL: int = 108
 const SACRED_FIRE: int = 125
 
@@ -573,10 +570,9 @@ const CONFUSE_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## Hyper Beam: an ordinary attack with the recharge locked in behind the hit,
-## which is why it sits after [constant Gen2EffectCommands.CHECK_HIT] rather
-## than before it. A miss ends the move at [constant Gen2EffectCommands.CHECK_HIT]
-## the way any other miss does, so a missed Hyper Beam costs nothing extra.
+## Hyper Beam: an ordinary attack with the recharge locked in behind the hit, which
+## is why it sits after [constant Gen2EffectCommands.CHECK_HIT] rather than before it.
+## A miss ends the move there as any other miss does, so it costs nothing extra.
 const RECHARGE_HIT_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -595,11 +591,10 @@ const RECHARGE_HIT_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## Razor Wind, Solarbeam, Fly and Dig: a normal attack with the charge in front
-## of it. The first time this runs, [constant Gen2EffectCommands.CHARGE_MOVE]
-## ends the move before [constant Gen2EffectCommands.DAMAGE_CALC] is reached;
-## the second time, it clears the lock and everything after it is
-## [constant NORMAL_HIT] again.
+## Razor Wind, Solarbeam, Fly and Dig: a normal attack with the charge in front of
+## it. The first time this runs, [constant Gen2EffectCommands.CHARGE_MOVE] ends the
+## move before [constant Gen2EffectCommands.DAMAGE_CALC] is reached; the second
+## time it clears the lock and the rest is [constant NORMAL_HIT] again.
 const CHARGE_SEQUENCE: Array = [
 	Gen2EffectCommands.CHARGE_MOVE,
 	Gen2EffectCommands.DO_TURN,
@@ -706,12 +701,10 @@ const DEFENSE_CURL_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## Sky Attack: the same charge, with a flinch chance behind the hit exactly the
-## way [constant FLINCH_HIT] carries one. The real cartridge's own move table
-## gives it a chance of zero, which is never, so this is written the way the
-## disassembly has it rather than left out: a flinch that cannot come up reads
-## the same as no flinch at all, and nothing here should assume that stays true
-## forever.
+## Sky Attack: the same charge, with a flinch chance behind the hit as
+## [constant FLINCH_HIT] carries one. The real cartridge's move table gives it a
+## chance of zero, which is never, so this is written as the disassembly has it: a
+## flinch that cannot come up reads the same as no flinch at all.
 const SKY_ATTACK_SEQUENCE: Array = [
 	Gen2EffectCommands.CHARGE_MOVE,
 	Gen2EffectCommands.DO_TURN,
@@ -798,11 +791,10 @@ const FOCUS_ENERGY_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## Disable, Attract and Encore all roll to connect before they do anything:
-## the cartridge's own sequences for all three are
+## Disable, Attract and Encore all roll to connect before they do anything: the
+## cartridge's own sequences for all three are
 ## [code]usedmovetext, doturn, checkhit, <effect>, endmove[/code], read off
-## [code]data/moves/effects.asm[/code] directly rather than assumed from the
-## shape of the other three above.
+## [code]data/moves/effects.asm[/code], not assumed from the other three above.
 const DISABLE_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -1173,10 +1165,9 @@ const MEAN_LOOK_SEQUENCE: Array = [
 
 ## [constant MULTI_HIT] and [constant DOUBLE_HIT]. `startloop` and `endloop`
 ## bracket the hit and `endloop` rewinds to `critical`, so the accuracy roll and
-## the doll are outside the loop and the damage is worked out again per hit.
-## The count is rolled by `endloop` on its first pass, which is *behind* the
-## first hit's own spread: rolling it in front would take the same seed to a
-## different battle.
+## the doll are outside the loop and the damage is worked out again per hit. The
+## count is rolled by `endloop` on its first pass, which is *behind* the first
+## hit's own spread: rolling it in front would take the same seed to a different battle.
 const MULTI_HIT_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -1225,10 +1216,8 @@ const TWINEEDLE_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
-## [constant LEECH_HIT] and [constant DREAM_EATER]: the same list, since
-## Dream Eater's own "must be asleep" rule lives inside
-## [constant Gen2EffectCommands.CHECK_HIT] rather than in a step of its own,
-## the same place the real cartridge's shared accuracy check puts it.
+## [constant LEECH_HIT] and [constant DREAM_EATER]: the same list, the
+## "must be asleep" rule living inside [constant Gen2EffectCommands.CHECK_HIT].
 const DRAIN_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -1715,9 +1704,8 @@ const DOUBLE_DAMAGE_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 ## Earthquake: Gust's list with an `effectchance` and nothing behind it. It rolls
-## against a chance byte of zero and can only fail, so the whole of what it does
-## is spend one number out of the generator, which is why the two lists are not
-## one here.
+## against a chance byte of zero and can only fail, so all it does is spend one
+## number out of the generator, which is why the two lists are not one here.
 const EARTHQUAKE_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,
@@ -1781,12 +1769,11 @@ const SWAGGER_SEQUENCE: Array = [
 ]
 
 
-## An attack that leaves something behind if its roll comes up. The damage is
-## done either way: the roll sits between the hit and the status, so a failed one
-## costs [param trailing] and nothing else. Most callers leave one command
-## behind; a stat change leaves two, the change and its message, because a
-## secondary effect never carries the fail-text step a status move's own
-## sequence has.
+## An attack that leaves something behind if its roll comes up. The damage is done
+## either way: the roll sits between the hit and the status, so a failed one costs
+## [param trailing] and nothing else. Most callers leave one command behind; a stat
+## change leaves two, the change and its message, because a secondary effect never
+## carries the fail-text step a status move's own sequence has.
 static func _secondary(trailing: Array) -> Array:
 	return [
 		Gen2EffectCommands.USED_MOVE_TEXT,
@@ -1938,10 +1925,9 @@ static func _stat_down_sequence(command: StringName) -> Array:
 
 
 ## The seven-wide runs, walked once into a dictionary rather than written out by
-## hand. A wrong entry here would be a wrong number in a table that self-checks
-## nothing, which is why [code]tools/dump_tables.gd[/code] and the published
-## effect list are what settled the five bases in the first place, not this
-## function.
+## hand. A wrong entry would be a wrong number in a table that self-checks
+## nothing, which is why [code]tools/dump_tables.gd[/code] and the published effect
+## list settled the five bases, not this function.
 static func _stat_sequences() -> Dictionary:
 	var out: Dictionary = {}
 	for offset: int in STAT_RUN_LENGTH:
@@ -1972,10 +1958,9 @@ static func _stat_sequences() -> Dictionary:
 	return out
 
 
-## The cartridge's own table, built once. It is a constant answer to a constant
-## question, and [method sequence_for] is asked it on every move of every turn,
-## so rebuilding forty-odd lists and the five stat runs per attack was work
-## nobody read.
+## The cartridge's own table, built once: [method sequence_for] is asked it on every
+## move of every turn, so rebuilding forty-odd lists and the five stat runs per
+## attack was work nobody read.
 static var _cached_sequences: Dictionary = {}
 ## Effect bytes a mod added, kept apart from the cartridge's so
 ## [method reset_registry] can drop them without rebuilding the table.
@@ -2066,11 +2051,10 @@ static func _sequences() -> Dictionary:
 		STATIC_DAMAGE: FIXED_DAMAGE_SEQUENCE,
 		LEVEL_DAMAGE: FIXED_DAMAGE_SEQUENCE,
 		PSYWAVE: FIXED_DAMAGE_SEQUENCE,
-		# Both of these really are `NormalHit` in `effects_pointers.asm`: what
-		# makes Swift never miss and a Jump Kick hurt to miss lives inside
-		# [method Gen2EffectCommands._check_hit] rather than in a list. They are
-		# named here so [method is_written] can tell a modelled effect from one
-		# still standing in as an ordinary attack.
+		# Both of these really are `NormalHit` in `effects_pointers.asm`: what makes
+		# Swift never miss and a Jump Kick hurt to miss lives inside
+		# [method Gen2EffectCommands._check_hit] rather than in a list. They are named
+		# here so [method is_written] can tell a modelled effect from a stand-in.
 		ALWAYS_HIT: NORMAL_HIT,
 		JUMP_KICK: NORMAL_HIT,
 		RETURN: RETURN_SEQUENCE,
@@ -2163,9 +2147,8 @@ static func is_written(effect: int) -> bool:
 ## Effect bytes whose command reads the byte back off the turn to decide what it
 ## is: the multi-hit count, the four fixed-damage figures, Rollout's multiplier,
 ## Selfdestruct's halved Defense and the three time-based heals' time of day all
-## work that way. Rewriting one would make its own command answer for a list it
-## is no longer in, so these are refused rather than left to fail at the point of
-## use.
+## work that way. Rewriting one would make its own command answer for a list it is
+## no longer in, so these are refused rather than left to fail at the point of use.
 const RESERVED_EFFECTS: Array[int] = [
 	MULTI_HIT, DOUBLE_HIT, TWINEEDLE, SUPER_FANG, STATIC_DAMAGE, LEVEL_DAMAGE,
 	PSYWAVE, ROLLOUT, SELFDESTRUCT, MORNING_SUN, SYNTHESIS, MOONLIGHT,
@@ -2203,11 +2186,10 @@ static func register_effect(id: StringName, effect: int, commands: Array) -> Dic
 	return {"ok": true, "effect": effect}
 
 
-## Registers a step a command list may name, run with the [Gen2Turn] the way
-## every built-in step is.
-## The engine's own commands are tried first, so a registration cannot shadow
-## [constant Gen2EffectCommands.APPLY_DAMAGE] and quietly change what every move
-## in the game does.
+## Registers a step a command list may name, run with the [Gen2Turn] as every
+## built-in step is. The engine's own commands are tried first, so a registration
+## cannot shadow [constant Gen2EffectCommands.APPLY_DAMAGE] and quietly change what
+## every move in the game does.
 static func register_command(
 	id: StringName, command: StringName, handler: Callable
 ) -> Dictionary:

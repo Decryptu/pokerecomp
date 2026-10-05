@@ -5635,6 +5635,7 @@ func _open_battle_stats() -> void:
 	_battle_stats.cry_requested.connect(
 		func(species: int) -> void: _play_entrance_cry(Gen2Battle.PLAYER, species)
 	)
+	_battle_stats.sfx_requested.connect(_play_sfx)
 	_switch_stage = &"stats"
 	_battle_stats.announce()
 	_reopen_menu_layer()

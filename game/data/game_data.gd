@@ -3572,8 +3572,7 @@ func species_pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 ## [param unown_form] is a letter rather than zero: { height, script, idle,
 ## frames }, the scripts and each frame as a [PackedByteArray].
 ## Empty for Gold and Silver, which have no pic animation at all, and for an egg:
-## `AnimateMon_CheckIfPokemon` refuses `EGG` before anything is read, so the
-## cartridge's own egg tables are never reached through here.
+## `AnimateMon_CheckIfPokemon` refuses `EGG`; see [method egg_pic_animation].
 func pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	var section: Dictionary = _pic_anims()
 	if section.is_empty():
@@ -3589,7 +3588,25 @@ func pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	if not value is Dictionary:
 		return {}
 
-	var record: Dictionary = value as Dictionary
+	return _pic_anim_record(value as Dictionary)
+
+
+## `EggAnimation`, `EggAnimationIdle`, `EggFrames` and `EggBitmasks` in
+## [method pic_animation]'s shape: `StatsScreen_AnimateEgg`'s, Crystal only.
+func egg_pic_animation() -> Dictionary:
+	var value: Variant = _pic_anims().get("egg", null)
+	return _pic_anim_record(value as Dictionary) if value is Dictionary else {}
+
+
+func egg_pic_animation_cell() -> Dictionary:
+	var pic: Dictionary = egg_pic()
+	if pic.is_empty() or egg_pic_animation().is_empty() or atlas("egg_front_anim").is_empty():
+		return {}
+	pic["atlas"] = "egg_front_anim"
+	return pic
+
+
+func _pic_anim_record(record: Dictionary) -> Dictionary:
 	var blob: PackedByteArray = _blob("pic_anims")
 	var frames: Array = []
 	for frame: Variant in (record.get("frames", []) as Array):

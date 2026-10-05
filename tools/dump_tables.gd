@@ -150,10 +150,9 @@ func _dump(directory: String, table: String) -> void:
 
 
 ## Every species' level-up moves, in the cartridge's order rather than sorted.
-## Reading them is the check the runtime one cannot be: the levels and move
-## numbers are in range whatever a wrong offset does, but a learnset that reads
-## Tackle at 1 and Growl at 4 for Bulbasaur is right and one that does not is not.
-## The order is worth reading too, since it decides what a fresh Pokémon knows.
+## Reading them is the check the runtime one cannot be: levels and move numbers are
+## in range whatever a wrong offset does, but a learnset that reads Tackle at 1 and
+## Growl at 4 for Bulbasaur is right and one that does not is not.
 func _dump_learnsets(directory: String, rows: Array) -> void:
 	var moves: Array = _names_in(RomCache.moves_path(directory))
 	var total: int = 0
@@ -231,10 +230,9 @@ func _dump_evolutions(directory: String, rows: Array) -> void:
 
 
 ## Every trainer class, and behind it every individual trainer's own party.
-## Reading this is the check the runtime one cannot be: a level, a species and
-## a move number are all in range whatever a wrong pointer does, but a group
-## that reads Falkner's Pidgey and Pidgeotto, or that leaves the one empty
-## class empty, is right and one that does not is not.
+## Reading this is the check the runtime one cannot be: a level, a species and a
+## move number are in range whatever a wrong pointer does, but a group that reads
+## Falkner's Pidgey and Pidgeotto, or leaves the one empty class empty, is right.
 func _dump_trainers(directory: String, rows: Array) -> void:
 	var species: Array = _names_in(RomCache.species_path(directory))
 	var moves: Array = _names_in(RomCache.moves_path(directory))
@@ -257,12 +255,11 @@ func _dump_trainers(directory: String, rows: Array) -> void:
 	print("  %d trainers" % total)
 
 
-## A class's AI: which scoring routines run, how it treats a held item and when
-## it switches, and the reward it pays out. Reading this against
-## `data/trainers/attributes.asm` is the check the runtime one cannot be: the
-## flag words are in range whatever a wrong offset does, but a line that reads
-## Falkner as basic, setup, smart, aggressive, cautious, status, risky is right
-## and one that does not is not.
+## A class's AI: which scoring routines run, how it treats a held item and when it
+## switches, and the reward it pays out. Reading this against
+## `data/trainers/attributes.asm` is the check the runtime one cannot be: the flag
+## words are in range whatever a wrong offset does, but a line that reads Falkner
+## as basic, setup, smart, aggressive, cautious, status, risky is right.
 func _describe_ai(attributes: Dictionary, items: Array) -> String:
 	if attributes.is_empty():
 		return "AI: none"

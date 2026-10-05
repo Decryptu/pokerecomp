@@ -102,6 +102,8 @@ const FAINTED_STRING: String = Gen2PartyMenuPage.FAINTED_STRING
 ## `LoadGreenPage`.
 const ITEM_LABEL: Vector2i = Vector2i(0, 8)
 const ITEM_AT: Vector2i = Vector2i(8, 8)
+## pokegold's `LoadGreenPage` places the name at `hlcoord 6, 8`; Silver shares it.
+const GOLD_ITEM_AT: Vector2i = Vector2i(6, 8)
 const MOVE_LABEL: Vector2i = Vector2i(0, 10)
 const MOVES_AT: Vector2i = Vector2i(8, 10)
 const MOVE_PP_AT: Vector2i = Vector2i(12, 11)
@@ -173,6 +175,7 @@ var hud: Gen2BattleHud = null
 ## Whether this is `StatusScreen`'s two pages rather than `StatsScreenMain`'s
 ## three, which is a different tile page and a different layout.
 var gen1: bool = false
+var item_at: Vector2i = ITEM_AT
 
 
 static func from_data(data: GameData) -> Gen2StatsScreenPage:
@@ -188,6 +191,8 @@ static func from_data(data: GameData) -> Gen2StatsScreenPage:
 	out.tiles = page_tiles
 	out.hud = panels
 	out.gen1 = one
+	if data != null and (data.id == RomRegistry.GOLD or data.id == RomRegistry.SILVER):
+		out.item_at = GOLD_ITEM_AT
 	return out
 
 
@@ -581,7 +586,7 @@ func _draw_pink(page: Dictionary, into: PackedByteArray) -> void:
 func _draw_green(page: Dictionary, into: PackedByteArray) -> void:
 	var width: int = COLUMNS * TILE
 	_text(into, width, ITEM_STRING, ITEM_LABEL)
-	_text(into, width, String(page.get("item_name", THREE_DASHES)), ITEM_AT)
+	_text(into, width, String(page.get("item_name", THREE_DASHES)), item_at)
 	_text(into, width, MOVE_STRING, MOVE_LABEL)
 	draw_move_list(into, width, page.get("moves", []), MOVES_AT, MOVE_PP_AT)
 

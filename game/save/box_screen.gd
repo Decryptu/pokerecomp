@@ -466,6 +466,7 @@ func _open_stats() -> void:
 	_stats = Gen2MonStatsScreen.create(_data, mons, at)
 	_stats.closed.connect(_close_stats)
 	_stats.cry_requested.connect(func(species: int) -> void: cry_requested.emit(species))
+	_stats.sfx_requested.connect(func(index: int) -> void: sfx_requested.emit(index, false))
 	_stats.announce()
 	set_process(true)
 	_refresh()

@@ -107,9 +107,8 @@ var listing_height: int = LISTING_HEIGHT
 var prev_entry: int = 0
 
 ## `wDexSearchMonType1` and `wDexSearchMonType2`, as 1-based positions in
-## [constant SEARCH_TYPES]. `Pokedex_InitSearchScreen` opens on `NORMAL + 1`,
-## which is position 1, and leaves the second row on
-## [constant SEARCH_TYPE_NONE].
+## [constant SEARCH_TYPES]. `Pokedex_InitSearchScreen` opens on `NORMAL + 1`, which
+## is position 1, and leaves the second row on [constant SEARCH_TYPE_NONE].
 var search_type_1: int = 1
 var search_type_2: int = SEARCH_TYPE_NONE
 ## `wDexArrowCursorPosIndex` while the search screen is up.

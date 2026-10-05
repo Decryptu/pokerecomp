@@ -2,13 +2,12 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Where a wild encounter can be rolled at all, against freshly imported real
-## caches on all three cartridges, plus the roaming graph the three beasts walk.
-## The shape comes from RandomEncounter, CanEncounterWildMon,
-## CheckWildEncounterCooldown, CheckGrassCollision and CheckIceTile, and
-## `visible_encounter_cells` has to name the reachable cells the step roll accepts.
-## The census is the point: an encounter cell is a small minority of a map's
-## walkable cells, and the defect this exists to catch was every land cell.
+## Where a wild encounter can be rolled at all, against freshly imported real caches
+## on all three cartridges, plus the roaming graph the three beasts walk. The shape
+## comes from RandomEncounter, CanEncounterWildMon, CheckWildEncounterCooldown,
+## CheckGrassCollision and CheckIceTile, and `visible_encounter_cells` has to name
+## the reachable cells the step roll accepts. An encounter cell is a small minority
+## of a map's walkable cells, and the defect this exists to catch was every land cell.
 
 ## Census of the real caches, pinned so a cache or a rule change is loud.
 ## Per game: encounter cells, maps holding one, ice refusals and unreachable cells.
@@ -133,11 +132,10 @@ func _verify_gen1_tables() -> void:
 	_r.note("gen1 encounters %s" % census)
 
 
-## `TryDoWildEncounter`'s gate over the whole corpus. The census is the point:
-## a cave floor rolls everywhere and a route rolls only on `wGrassTile`, so one
-## number says both branches are live. A left shore is a half block whose bottom
-## right tile is water and whose bottom left is not, which gates on the water
-## rate and then reads the grass table.
+## `TryDoWildEncounter`'s gate over the whole corpus: a cave floor rolls everywhere
+## and a route rolls only on `wGrassTile`, so one number says both branches are live.
+## A left shore is a half block whose bottom right tile is water and whose bottom
+## left is not, which gates on the water rate and then reads the grass table.
 func _gen1_cells() -> void:
 	var pinned: Array = GEN1_CELL_CENSUS[_r.game_id]
 	var cells: int = 0

@@ -345,11 +345,10 @@ func visible_at(hour: int, time_of_day: int) -> bool:
 	return hour >= hour_1 or hour <= hour_2
 
 
-## A zero or negative flag is the cache's default; the source's always-visible
-## $FFFF is imported as -1. Read once, when the object table is built, which is
-## why `appear` and `disappear` exist and why a bare `setevent` on an object's
-## own flag changes nothing until the map is loaded again. See
-## [member flag_hidden].
+## A zero or negative flag is the cache's default; the source's always-visible $FFFF
+## is imported as -1. Read once, when the object table is built, so a bare `setevent`
+## on an object's own flag changes nothing until the map is loaded again, which is
+## why `appear` and `disappear` exist. See [member flag_hidden].
 func visible_with_state(hour: int, time_of_day: int, state: Gen2WorldState) -> bool:
 	return visible_at(hour, time_of_day) and not event_flag_active(state)
 

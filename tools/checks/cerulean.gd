@@ -468,11 +468,10 @@ func _verify_route_9_dead_end(data: GameData, game_id: StringName) -> void:
 	])
 
 
-## The plant's door sits in a region with no map edge and no walkable neighbour.
-## It is not reached from Route 10 North's southern half either: row 14 is a
-## `$b2` buoy line whose own permission walls its north face, so no cell down
-## there can enter the water. The way in is Route 9's river, which the same cut
-## that opens the route also opens the shore of.
+## The plant's door sits in a region with no map edge and no walkable neighbour,
+## and Route 10 North's southern half cannot reach it (see [constant BUOY_ROW]).
+## The way in is Route 9's river, which the same cut that opens the route also
+## opens the shore of.
 func _verify_power_plant_is_reached_by_river(data: GameData, game_id: StringName) -> void:
 	var world: Gen2WorldAPI = _open(data, CERULEAN_GROUP, ROUTE_10_NORTH, ROUTE_10_SOUTH_HALF)
 	if world == null:

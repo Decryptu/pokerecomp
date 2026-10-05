@@ -2501,11 +2501,10 @@ func _tick_weather(events: Array) -> void:
 ## health, the player always first. The turn the counter empties is the release
 ## and costs nothing, so three to six rolled turns are two to five of damage.
 func _tick_wrap(events: Array) -> void:
-	## Generation 1 has no `ResidualDamage` entry for a trapping move: the
-	## counter is spent by `.MultiturnMoveCheck` repeating the move instead, and
-	## `CheckNumAttacksLeft` at the end of the whole turn is what lets go. So the
-	## turn the counter empties still holds the target, whichever side moves
-	## first on it.
+	## Generation 1 has no `ResidualDamage` entry for a trapping move: the counter
+	## is spent by `.MultiturnMoveCheck` repeating the move, and `CheckNumAttacksLeft`
+	## at the end of the whole turn lets go. So the turn the counter empties still holds
+	## the target, whichever side moves first on it.
 	if is_gen1():
 		for side: int in [PLAYER, ENEMY]:
 			if mon(side).trapped_turns <= 0:

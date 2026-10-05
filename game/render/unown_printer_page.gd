@@ -105,7 +105,7 @@ func draw_status(image: Image, status: String) -> void:
 	)
 	var line: int = 0
 	for row: String in status.split("\n"):
-		_text(indices, row, Gen2DiplomaPage.STATUS_TEXT_AT + Vector2i(0, line))
+		_text(indices, row, Gen2DiplomaPage.STATUS_TEXT_AT + Vector2i(0, Gen2DiplomaPage.STATUS_LINE_STEP * line))
 		line += 1
 	_text(indices, Gen2DiplomaPage.CANCEL_STRING, Gen2DiplomaPage.CANCEL_AT)
 	var box: Image = Gen2PicImage.from_indices(indices, WIDTH, HEIGHT, palette)
