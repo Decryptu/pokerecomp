@@ -24,7 +24,6 @@ signal evolution_animation_requested(plan: Dictionary, after: Callable)
 ## hosts it owns the player. `SFX_SAVE` is the only one it asks for.
 signal sfx_requested(sfx: int, waited: bool)
 signal gen1_sfx_requested(sound_id: int)
-signal gen1_forget_swap_requested
 ## Yellow's `PlayPikachuSoundClip`, which the refused stone plays.
 signal pikachu_clip_requested(index: int)
 ## A field move chosen off the MOVES row, in the same shape a party member's own
@@ -2250,12 +2249,13 @@ func _confirm_forget() -> void:
 		)
 		return
 	var target_name: String = _target_name(_forget_party_index)
-	if _gen1_pack():
-		gen1_forget_swap_requested.emit()
-	else:
+	if not _gen1_pack():
 		sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, false)
 	_show_pack_result("%s%s%s" % [
-		Gen2MoveForget.forgot_text(target_name, String(entry.get("name", "")), _data.generation),
+		Gen2MoveForget.forgot_text(
+			target_name, String(entry.get("name", "")), _data.generation,
+			_data.id == RomRegistry.YELLOW
+		),
 		Gen2TextStream.PAGE_BREAK,
 		Gen2MoveForget.learned_text(target_name, _forget_move_name, _data.generation),
 	], _offer_next_evolution_move if _learning_move > 0 else Callable(),
@@ -2429,7 +2429,6 @@ func _show_party_result(
 	elif kind == Gen2ItemActionText.LEVEL:
 		## Both texts end in `text_promptbutton`, and `PrintTempMonStats`' box is
 		## drawn behind that press with no `DelayFrames` in front.
-		sfx_requested.emit(Gen2Sfx.SFX_DEX_FANFARE_50_79, true)
 		party["stats_after_press"] = _party_stats(party_index)
 	elif not _pp_up_is_silent(result):
 		sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, true)

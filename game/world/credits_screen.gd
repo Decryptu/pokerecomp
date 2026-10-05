@@ -14,6 +14,7 @@ signal music_requested(music: int)
 signal music_fade_requested(music: int, frames: int)
 
 var music_outlasts: bool = false
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
 
 var _data: GameData = null
 var _credits: Gen2Credits = null
@@ -21,6 +22,7 @@ var _page: Gen2CreditsPage = null
 var _view: TextureRect = null
 var _held: Array = []
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
+var _sound_watch: Dictionary = {}
 
 
 ## [param skippable] is `STATUSFLAGS_HALL_OF_FAME_F`. False leaves the credits
@@ -80,6 +82,8 @@ func release_button(button: int) -> void:
 
 func advance_frame() -> void:
 	if _credits == null:
+		return
+	if _credits.holds_for_sound() and bool(sound_busy.call(_sound_watch)):
 		return
 	for event: Dictionary in _credits.advance_frame(_held):
 		if StringName(event.get("type", &"")) == &"music_requested":

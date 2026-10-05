@@ -158,6 +158,37 @@ func test_choosing_a_slot_forgets_that_move_and_learns_the_offered_one() -> void
 	assert_false(battle.player.moves.has(BattleFixture.EMBER))
 
 
+## `_LearnedMoveText` ends on `sound_dex_fanfare_50_79`: once the line is printed
+## the effect plays, and the press behind it is not read until it has ended.
+func test_the_learned_move_line_plays_its_fanfare_and_waits_for_it() -> void:
+	await _open_with_full_moveset()
+	await _advance_to_offer()
+	await _step(PokeButton.A)
+	await _step(PokeButton.DOWN)
+	var box: Gen2TextBox = _screen.get("_box")
+	var sounding: Array = [true]
+	var heard: Array = []
+	box.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	box.sound_requested.connect(func(sound: Dictionary) -> void: heard.append(int(sound["id"])))
+	_screen._answer_forget(PokeButton.A)
+	for _frame: int in 600:
+		if not heard.is_empty():
+			break
+		if box.is_revealing():
+			_screen.advance_hardware_frame()
+		else:
+			box.advance()
+	assert_eq(heard, [Gen2Sfx.SFX_DEX_FANFARE_50_79])
+	assert_true(String(_screen.battle_snapshot()["message"]).contains("learned"))
+	for _frame: int in 30:
+		_screen.advance_hardware_frame()
+	assert_true(box.is_revealing(), "the effect is still sounding")
+	sounding[0] = false
+	_screen.advance_hardware_frame()
+	assert_false(box.is_revealing())
+	assert_eq(heard.size(), 1)
+
+
 ## .hmmove prints MoveCantForgetHMText and is `jr .loop`: the list stays open
 ## and the offer is still unanswered.
 func test_an_hm_row_is_refused_and_the_list_stays_open() -> void:

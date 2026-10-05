@@ -164,7 +164,36 @@ func test_generation_1_reads_its_own_command_set() -> void:
 		}
 	)
 	assert_true(decoded["ok"])
-	assert_eq(decoded["text"], "AC", "the three cries draw nothing and $17 is the far pointer")
+	var split: Dictionary = Gen2TextStream.split_sounds(decoded["text"])
+	assert_eq(split["text"], "AC", "the three cries draw nothing and $17 is the far pointer")
+	## Nidorina, Pidgeot and Dewgong, each `PlayCry` and its wait.
+	var cries: Array = (split["sounds"] as Array).map(func(sound: Dictionary) -> Array:
+		return [int(sound["id"]), bool(sound["cry"]), bool(sound["wait"])]
+	)
+	assert_eq(cries, [[30, true, true], [18, true, true], [87, true, true]])
+
+
+## `TextCommand_SOUND` in Crystal and `TextCommandSounds` in Red: the effect each
+## command byte names, left in the text where the printer reached it.
+func test_a_sound_command_leaves_its_effect_where_it_stood() -> void:
+	var crystal: Dictionary = Gen2TextStream.split_sounds(Gen2TextStream.decode(
+		PackedByteArray([0x00, 0x80, 0x50, 0x0F, 0x00, 0x81, 0x50, 0x0B, 0x50])
+	)["text"])
+	assert_eq(crystal["text"], "AB")
+	assert_eq(crystal["sounds"], [
+		{"at": 1, "id": Gen2Sfx.SFX_ITEM, "cry": false, "wait": true},
+		{"at": 2, "id": Gen2Sfx.SFX_DEX_FANFARE_50_79, "cry": false, "wait": true},
+	])
+	var red: Dictionary = Gen2TextStream.split_sounds(Gen2TextStream.decode(
+		PackedByteArray([0x00, 0x80, 0x50, 0x0B, 0x12, 0x50]), 0,
+		{"generation": RomRegistry.GEN1}
+	)["text"])
+	assert_eq(red["sounds"].map(func(sound: Dictionary) -> int: return int(sound["id"])),
+		[Gen1Sfx.SFX_GET_ITEM_1, Gen1Sfx.SFX_CAUGHT_MON])
+	var yellow: Dictionary = Gen2TextStream.split_sounds(Gen2TextStream.decode(
+		PackedByteArray([0x14, 0x50]), 0, {"generation": RomRegistry.GEN1, "yellow": true}
+	)["text"])
+	assert_eq(int(yellow["sounds"][0]["id"]), 25, "`sound_cry_pikachu`, where Red has Nidorina")
 
 
 ## `PlaceNextChar`'s dictionary is not `CheckDict`'s: $49 is `PageChar` there and

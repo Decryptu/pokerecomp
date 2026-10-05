@@ -13,6 +13,8 @@ signal finished
 ## A press answering `Paragraph`, `_ContText` or `PromptText`: `PromptButton`
 ## plays [param sfx], `SFX_READ_TEXT_2`. A caller's `JoyWaitAorB` plays nothing.
 signal prompt_answered(sfx: int)
+## `TextCommand_SOUND` reached: `{id, cry, wait}`, played by [method Gen2AudioPlayer.play_text_sound].
+signal sound_requested(sound: Dictionary)
 signal redrawn
 
 ## The standard box: twenty tiles across, six down, at the foot of the screen.
@@ -62,11 +64,9 @@ var _prompted: bool = true
 ## spends. `PrintLetterDelay` answers either with a single `DelayFrame` whatever
 ## the speed setting says (`home/print_text.asm`): a letter a frame, no more.
 @export var accelerated: bool = false
-## Whether a host spends this box's hardware frames itself with
-## [method advance_frame]. The reveal is a frame count on the cartridge, so a
-## screen that already owns the frame drives the box on the same clock as everything
-## else it draws. Off leaves the box on real time, which is what a dev viewer with
-## no frame pump wants.
+## Whether a host spends this box's frames itself with [method advance_frame], on
+## the clock of everything else it draws: the reveal is a frame count on the
+## cartridge. Off is real time, for a dev viewer with no frame pump.
 var driven: bool = false:
 	set(value):
 		driven = value
@@ -79,10 +79,8 @@ var instant: bool = false
 ## `TEXT_DELAY_FAST` is one frame a letter, which is what a held A or B costs and
 ## also the fastest the speed setting goes.
 const ACCELERATED_SPEED: float = 60.0
-## Per-scanline background offsets for the box's own rows, empty when the
-## background is sitting still. A box is drawn into the background plane like
-## everything else, so a routine that scrolls the plane scrolls the box with it;
-## see [PokeRaster].
+## Per-scanline background offsets for the box's own rows, empty when the background
+## stands still: the box is in the background plane, so a scroll moves it; see [PokeRaster].
 @export var raster_scx: PackedInt32Array = PackedInt32Array():
 	set(value):
 		raster_scx = value
@@ -90,11 +88,10 @@ const ACCELERATED_SPEED: float = 60.0
 @export var columns: int = STANDARD_COLUMNS
 @export var rows: int = STANDARD_ROWS
 @export_range(0, 7) var frame_style: int = 0
-## How opaque the box's field is drawn. The cartridge has no alpha: it draws a box
-## over its own white background. Over a renderer on the screen's native layer that
-## same box is a slab across the map, so a renderer may ask for the field to be
-## drawn through; see [constant Gen2ModHost.RENDERER_INTERFACE_OPACITY_METHOD]. The
-## frame's lines and the glyphs are ink and stay opaque whatever this is.
+## How opaque the box's field is drawn. The cartridge draws a box over its own white
+## background, which over a renderer's native layer is a slab across the map, so a
+## renderer may ask for the field to be drawn through; see
+## [constant Gen2ModHost.RENDERER_INTERFACE_OPACITY_METHOD]. Lines and glyphs stay opaque.
 @export_range(0.0, 1.0) var field_opacity: float = 1.0:
 	set(value):
 		var next: float = clampf(value, 0.0, 1.0)
@@ -129,6 +126,11 @@ var _scroll_elapsed: float = 0.0
 var _scroll_page: int = -1
 ## The clock an undriven box reveals on; see [method _process].
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
+var _sounds: Array = []
+var _sound_hold: bool = false
+var _sound_watch: Dictionary = {}
+## `WaitSFX`'s test, for a caller that owns the audio.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
 
 
 ## A screen's own `PrintText` box, driven by that screen, in the OPTION settings.
@@ -141,6 +143,7 @@ static func for_screen(data: GameData) -> Gen2TextBox:
 	box.reveal_speed = options.text_reveal_speed()
 	box.place_at_bottom()
 	box.visible = false
+	box.play_sounds_from(data)
 	return box
 
 
@@ -148,6 +151,10 @@ static func for_page(data: GameData) -> Gen2TextBox:
 	var box: Gen2TextBox = for_screen(data)
 	box.composed = true
 	return box
+
+
+func play_sounds_from(data: GameData) -> void:
+	sound_requested.connect(Gen2AudioPlayer.play_text_sound.bind(data))
 
 
 func _ready() -> void:
@@ -178,10 +185,14 @@ func _advance() -> void:
 	if _paragraph_frames > 0:
 		_paragraph_frames -= 1
 		return
+	if not _run_sounds():
+		return
 	if _shown < float(_tiles_on_page):
-		var rate: float = _reveal_rate()
-		_shown = minf(_shown + FRAME_SECONDS * rate, float(_tiles_on_page))
+		var reach: float = float(_tiles_on_page) if _sounds.is_empty() \
+			else float(int(_sounds[0]["at"]))
+		_shown = minf(_shown + FRAME_SECONDS * _reveal_rate(), reach)
 		_redraw()
+		_run_sounds()
 		return
 	if _pages.is_empty():
 		set_process(false)
@@ -196,6 +207,28 @@ func _advance() -> void:
 	_blink = fmod(_blink + FRAME_SECONDS, FRAME_SECONDS * float(CURSOR_BLINK_FRAMES) * 2.0)
 	if _cursor_up() != was_up:
 		_redraw()
+
+
+## False while a reached sound holds the text.
+func _run_sounds() -> bool:
+	while true:
+		if _sound_hold and bool(sound_busy.call(_sound_watch)):
+			return false
+		_sound_hold = false
+		if not _sound_reached():
+			return true
+		_play_sound(_sounds.pop_front())
+	return true
+
+
+func _sound_reached() -> bool:
+	return not _sounds.is_empty() and float(int(_sounds[0]["at"])) <= _shown
+
+
+func _play_sound(sound: Dictionary) -> void:
+	sound_requested.emit(sound)
+	_sound_hold = bool(sound.get("wait", true))
+	_sound_watch = {}
 
 
 func place_at_bottom() -> void:
@@ -266,7 +299,8 @@ func _reveal_rate() -> float:
 ## box cleared, or while the box is in the middle of a scroll: none of the three
 ## has reached its `PromptButton` yet.
 func is_revealing() -> bool:
-	return _scroll_page >= 0 or _paragraph_frames > 0 or _shown < float(_tiles_on_page)
+	return _scroll_page >= 0 or _paragraph_frames > 0 or _shown < float(_tiles_on_page) \
+		or _sound_hold or not _sounds.is_empty()
 
 
 func has_text_left() -> bool:
@@ -299,6 +333,8 @@ func finish() -> void:
 		_end_scroll()
 	_paragraph_frames = 0
 	_shown = float(_tiles_on_page)
+	_sounds = []
+	_sound_hold = false
 	set_process(false)
 	_redraw()
 
@@ -372,6 +408,7 @@ func _begin_scroll(next_page: int) -> void:
 	_scroll_elapsed = 0.0
 	_scroll_page = next_page
 	_lines = []
+	_sounds = []
 	_tiles_on_page = 0
 	_shown = 0.0
 	set_process(not driven)
@@ -435,10 +472,15 @@ func _start_page() -> void:
 
 	_shown = float(already)
 	_blink = 0.0
+	_sounds = (_pages[_page].get("sounds", []) as Array).duplicate(true) \
+		if _page < _pages.size() else []
+	_sound_hold = false
 	_paragraph_frames = PARAGRAPH_FRAMES if _page > 0 and _enter_of(_page) == &"page" else 0
-	set_process((_tiles_on_page > 0 or _paragraph_frames > 0) and not driven)
+	set_process((_tiles_on_page > 0 or _paragraph_frames > 0 or not _sounds.is_empty()) and not driven)
 	if reveal_speed <= 0.0 or instant:
 		_shown = float(_tiles_on_page)
+	if _paragraph_frames == 0:
+		_run_sounds()
 	_redraw()
 
 

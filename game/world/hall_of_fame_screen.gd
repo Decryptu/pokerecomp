@@ -51,6 +51,8 @@ var _box: Gen2TextBox = null
 var sound_busy: Callable = Gen2AudioPlayer.sound_wait
 var _sound_holding: bool = false
 var _sound_watch: Dictionary = {}
+## Generation 1's `PlayCry` waits ahead of the `ld c, 80`.
+var _cry_holding: bool = false
 
 
 ## [param pages] is [method Gen2HallOfFame.pages]; an empty list closes at once.
@@ -154,6 +156,9 @@ func _build() -> void:
 ## Hardware frames of the page printing or holding, public so a test owns them.
 func advance_hold_frames(count: int) -> void:
 	for _step: int in count:
+		if _cry_holding:
+			_cry_holding = bool(sound_busy.call(_sound_watch))
+			continue
 		if _printing():
 			_box.advance_frame()
 			if not _box.has_text_left():
@@ -202,6 +207,8 @@ func _refresh() -> void:
 	set_process(_hold_frames > 0 or fresh)
 	if StringName(page.get("kind", &"")) == Gen2HallOfFame.PAGE_MON \
 		and bool(page.get("cry", true)):
+		_cry_holding = _page_renderer.gen1 and not viewer
+		_sound_watch = {}
 		if page.has("pikachu_clip"):
 			pikachu_clip_requested.emit(int(page["pikachu_clip"]))
 		else:

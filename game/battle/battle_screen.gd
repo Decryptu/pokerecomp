@@ -904,6 +904,7 @@ func _ready() -> void:
 	_box.item_rect_changed.connect(_push_text_box_rect)
 	_box.visibility_changed.connect(_push_text_box_rect)
 	_box.prompt_answered.connect(_on_box_prompt_answered)
+	_box.play_sounds_from(_data)
 	_screen.display(_box)
 	_box.place_at_bottom()
 	## Over the text box: `LoadBattleMenu` draws its box after `EmptyBattleTextbox` draws that
@@ -3009,7 +3010,7 @@ func show_message(text: String, prompt: bool = true) -> void:
 	if _intro != null:
 		_intro_message = text
 		return
-	_last_message = text
+	_last_message = Gen2TextStream.strip_sounds(text)
 	## `StdBattleTextbox` blocks on a press for a line it printed; an empty box
 	## is the one a menu is drawn over and owes nothing.
 	_message_awaits_press = prompt and not text.is_empty()
@@ -3758,8 +3759,12 @@ func complete_capture(result: Dictionary) -> Dictionary:
 	## on a ball that broke out.
 	_capture_terminal = bool(result.get("ends_battle", false))
 	if caught:
-		_caught_line = GEN1_CAUGHT_TEXT % [_name_of(_caught_species()), Gen2TextStream.SCROLL_BREAK] \
+		_caught_line = (
+			GEN1_CAUGHT_TEXT % [_name_of(_caught_species()), Gen2TextStream.SCROLL_BREAK]
+			+ Gen2TextStream.sound_token(Gen1Sfx.SFX_CAUGHT_MON)
 			if _generation() == RomRegistry.GEN1 else CAUGHT_TEXT % _name_of(_caught_species())
+			+ Gen2TextStream.sound_token(Gen2Sfx.SFX_CAUGHT_MON)
+		)
 		_box_queue.append(_caught_line)
 		_capture_terminal = true
 		_capture_caught_event = _caught_event(result)
@@ -4075,14 +4080,12 @@ func _open_capture_nickname() -> bool:
 	return true
 
 
-## `Text_GotchaMonWasCaught`: the printed line's `sound_caught_mon`, then a frame of
+## `Text_GotchaMonWasCaught`: behind the line and its `sound_caught_mon`, a frame of
 ## `MUSIC_NONE` and `MUSIC_CAPTURE`. Generation 1's has the sound alone.
 func _queue_caught_sounds() -> void:
-	_sound_queue.append({"after_text": true})
-	_sound_queue.append({"sfx": Gen2Sfx.SFX_CAUGHT_MON})
-	_sound_queue.append({"wait": true})
 	if _generation() == RomRegistry.GEN1:
 		return
+	_sound_queue.append({"after_text": true})
 	_sound_queue.append({"music": Gen2Battle.MUSIC_NONE})
 	_sound_queue.append({"frames": 1})
 	_sound_queue.append({"music": Gen2Battle.MUSIC_CAPTURE})
@@ -4100,11 +4103,12 @@ func _open_new_dex_entry() -> bool:
 		&"":
 			_capture_dex_stage = &"text"
 			var gen1: bool = _generation() == RomRegistry.GEN1
-			show_message((GEN1_NEW_DEX_DATA_TEXT if gen1 else NEW_DEX_DATA_TEXT) % _name_of(_caught_species()))
-			_sound_queue.append({"after_text": true})
-			_sound_queue.append({"index": Gen1Sfx.SFX_DEX_PAGE_ADDED} if gen1
-				else {"sfx": Gen2Sfx.SFX_SLOT_MACHINE_START})
-			_sound_queue.append({"wait": true})
+			show_message(
+				(GEN1_NEW_DEX_DATA_TEXT if gen1 else NEW_DEX_DATA_TEXT) % _name_of(_caught_species())
+				+ Gen2TextStream.sound_token(
+					Gen1Sfx.SFX_DEX_PAGE_ADDED if gen1 else Gen2Sfx.SFX_SLOT_MACHINE_START
+				)
+			)
 			return true
 		&"text":
 			## `call ClearSprites` between the line and the page, which is the
@@ -6484,10 +6488,7 @@ func _begin_faint_event(event: Dictionary) -> void:
 
 
 func _play_move_forgotten(_event: Dictionary) -> void:
-	if _generation() == RomRegistry.GEN1:
-		if _audio_player != null:
-			_audio_player.play_gen1_forget_swap(_data, _audio_assets())
-	else:
+	if _generation() != RomRegistry.GEN1:
 		_play_sfx(Gen2Sfx.SFX_SWITCH_POKEMON)
 
 
@@ -6784,7 +6785,9 @@ func _describe(event: Dictionary) -> String:
 	var kind: Variant = event["type"]
 	var gen1: bool = _generation() == RomRegistry.GEN1
 	if gen1 and GEN1_LINES.has(kind):
-		return _line(GEN1_LINES[kind], event)
+		return _line(GEN1_LINES[kind], event) + (
+			Gen2TextStream.sound_token(Gen1Sfx.SFX_LEVEL_UP) if kind == Gen2Battle.GREW_LEVEL else ""
+		)
 	if LINE_HANDLERS.has(kind):
 		return String(call(LINE_HANDLERS[kind], event))
 	if not gen1 and BATTLE_TEXT.has(kind):
@@ -6892,7 +6895,8 @@ func _move_declined_text(event: Dictionary) -> String:
 func _move_forgotten_text(event: Dictionary) -> String:
 	var learner: String = _event_name(event)
 	return Gen2MoveForget.forgot_text(
-		learner, String(_data.move(int(event["forgot"])).get("name", "")), _generation()
+		learner, String(_data.move(int(event["forgot"])).get("name", "")), _generation(),
+		_data.id == RomRegistry.YELLOW
 	) + PAGE + Gen2MoveForget.learned_text(
 		learner, String(_data.move(int(event["learned"])).get("name", "")), _generation()
 	)

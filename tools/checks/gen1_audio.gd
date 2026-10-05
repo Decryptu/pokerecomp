@@ -32,6 +32,7 @@ func run(r: RefCounted) -> void:
 		_verify_the_victory_pieces()
 		_verify_the_pikachu_clips()
 		_verify_the_forget_swap()
+		_verify_the_text_sounds()
 	)
 
 
@@ -146,6 +147,35 @@ func _verify_the_forget_swap() -> void:
 			player._gen1.audio_rom_bank, player._gen1.mute_audio_and_pause_music,
 		])
 	player.free()
+
+
+## `TextCommandSounds`: every sound a text names plays, in the facility boxes that end on one.
+const TEXT_SOUND_BOXES: Dictionary = {
+	"card_key/card_key_success": [Gen1Sfx.SFX_GET_ITEM_1],
+	"pick_up_item/found": [Gen1Sfx.SFX_GET_ITEM_1],
+	"npc_trade/traded_for": [Gen1Sfx.SFX_GET_KEY_ITEM],
+	"oaks_aide/got_item": [Gen1Sfx.SFX_GET_ITEM_1],
+}
+
+
+func _verify_the_text_sounds() -> void:
+	var yellow: bool = _r.game_id == RomRegistry.YELLOW
+	var wanted: Dictionary = TEXT_SOUND_BOXES.duplicate()
+	wanted["intro/oak_speech_2"] = [Gen2TextStream.GEN1_YELLOW_CRY if yellow else 30]
+	if yellow:
+		wanted["safari_labels/one_ball"] = [Gen1Sfx.SFX_GET_ITEM_1]
+	var found: Dictionary = {}
+	for text_run: StringName in _r.data.text_runs():
+		for name: String in _r.data.text_names(text_run):
+			var ids: Array = []
+			for sound: Dictionary in Gen2TextStream.split_sounds(_r.data.text(text_run, name))["sounds"]:
+				ids.append(int(sound["id"]))
+				var record: Dictionary = _r.data.species_cry(int(sound["id"])) if bool(sound["cry"]) \
+					else _r.data.gen1_sound(-1, int(sound["id"]))
+				_r.check(not record.is_empty(), "%s/%s names a sound that does not play." % [text_run, name])
+			if not ids.is_empty():
+				found["%s/%s" % [text_run, name]] = ids
+	_r.check(found == wanted, "the facility boxes carry the sounds %s." % found)
 
 
 ## `SFX_Headers_1` to `_3`, and `_4` on Yellow: the cache carries a whole ROM

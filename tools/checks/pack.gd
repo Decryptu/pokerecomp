@@ -272,7 +272,7 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 		"%s: the refusal's press landed in mode %d." % [_r.game_id, mode])
 
 
-## `_GrewToLevelText` and `RareCandyText`: three clicks, the line under its waited
+## `_GrewToLevelText` and `RareCandyText`: three clicks, the line ending on its own
 ## sound, the stats box behind the `text_promptbutton`, a press before the pocket.
 func _verify_rare_candy(
 	screen: Gen2WorldScreen, host: Gen2StartMenuScreen, lead_name: String, candy: int
@@ -288,13 +288,18 @@ func _verify_rare_candy(
 	var want: String = String(GREW_LINES[_r.data.generation]).replace(
 		"<MON>", lead_name).replace("<L>", str(level + 1))
 	var party: Dictionary = host.get("_party_result")
-	_r.check(String(host.get("_pack_result")) == want and not party.has("stats")
+	var line: Dictionary = Gen2TextStream.split_sounds(String(host.get("_pack_result")))
+	var fanfare: int = Gen1Sfx.SFX_GET_ITEM_1 if _r.data.generation == RomRegistry.GEN1 \
+		else Gen2Sfx.SFX_DEX_FANFARE_50_79
+	_r.check(line["sounds"].map(func(sound: Dictionary) -> int: return int(sound["id"])) == [fanfare],
+		"%s: the RARE CANDY's line carries %s." % [_r.game_id, line["sounds"]])
+	_r.check(String(line["text"]) == want and not party.has("stats")
 		and party.has("stats_after_press") and not host.party_result_holding(),
 		"%s: the RARE CANDY printed %s over %s with no press owed." % [
 			_r.game_id, host.get("_pack_result"), party.keys()])
 	var click: int = Gen2Sfx.SFX_READ_TEXT_2
 	_r.check(sounds == [[click, false], [click, false],
-		[click, _r.data.generation != RomRegistry.GEN1], [Gen2Sfx.SFX_DEX_FANFARE_50_79, true]],
+		[click, _r.data.generation != RomRegistry.GEN1]],
 		"%s: the RARE CANDY's line sounded %s." % [_r.game_id, sounds])
 	_press_a(host)
 	_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK_RESULT

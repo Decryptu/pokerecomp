@@ -1597,7 +1597,10 @@ func test_generation_one_says_its_own_catch_lines() -> void:
 	)
 	assert_string_contains(Gen2WorldPartyHost.gen1_sent_to_box_format(3), "BOX 3 on PC!")
 	assert_string_contains(Gen2WorldPartyHost.gen1_box_is_full_text(), "Change the BOX at")
-	assert_eq(Gen2WorldPartyHost.gen1_got_mon_text("RED", "EEVEE"), "RED got\nEEVEE!")
+	assert_eq(
+		Gen2TextStream.strip_sounds(Gen2WorldPartyHost.gen1_got_mon_text("RED", "EEVEE")),
+		"RED got\nEEVEE!"
+	)
 	assert_eq(Gen2WorldPartyHost.nickname_prompt("EEVEE", RomRegistry.GEN1), "EEVEE")
 	assert_eq(Gen2WorldPartyHost.nickname_prompt("EEVEE"), "EEVEE'S\nNICKNAME?")
 

@@ -118,6 +118,22 @@ static func sound_wait(watch: Dictionary) -> bool:
 	return _current != null and _current.still_waiting(watch)
 
 
+## Answers [signal Gen2TextBox.sound_requested] out of [param data] on whichever player is up.
+static func play_text_sound(sound: Dictionary, data: GameData) -> void:
+	if _current == null or data == null:
+		return
+	var id: int = int(sound.get("id", 0))
+	var cry: bool = bool(sound.get("cry", false))
+	if id == Gen1Sfx.SFX_SWAP and data.generation == RomRegistry.GEN1:
+		_current.play_gen1_forget_swap(data, data.audio_assets())
+		return
+	var record: Dictionary = data.species_cry(id) if cry else (
+		data.gen1_sound(-1, id) if data.generation == RomRegistry.GEN1
+		else data.world_audio(&"sfx", id)
+	)
+	_current.play_record(record, &"cry" if cry else &"sound", data.audio_assets())
+
+
 func set_master_volume(level: int) -> void:
 	if _generation == RomRegistry.GEN1:
 		_apu.write(Gen1SoundEngine.RAUDVOL, level)
@@ -591,8 +607,10 @@ func music_playing() -> bool:
 		else _engine.music_channels_active()
 
 
-## `_CheckSFX`, which is what `waitsfx` and the battle screen wait on.
+## `_CheckSFX`, which `waitsfx` and the battle screen wait on; a Pikachu clip holds the CPU, so it counts.
 func effect_playing() -> bool:
+	if not _clip.is_empty():
+		return true
 	return _gen1.sound_to_finish() if _generation == RomRegistry.GEN1 else _engine.sfx_active()
 
 

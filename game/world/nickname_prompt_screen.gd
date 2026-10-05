@@ -39,12 +39,8 @@ var _after_name: String = ""
 var _question: String = ""
 ## `GotMonText` in front of the question, its `sound_get_item_1` holding the box.
 var _before_text: String = ""
-var _before_sfx: int = -1
-var _before_sounded: bool = false
 ## `_BoxIsFullText`, the whole routine.
 var _before_alone: bool = false
-var _audio: Gen2AudioPlayer = null
-var _wait_watch: Dictionary = {}
 ## Whether the YES/NO is skipped and the keyboard opened outright, which is the
 ## Nuzlocke's "every Pokemon is nicknamed": a question with one allowed answer
 ## is worse than no question.
@@ -74,14 +70,9 @@ func set_context(
 		else Gen2WorldPartyHost.caught_nickname_question(species_name)
 
 
-func set_before_text(text: String, sfx: int = -1, alone: bool = false) -> void:
+func set_before_text(text: String, alone: bool = false) -> void:
 	_before_text = text
-	_before_sfx = sfx
 	_before_alone = alone
-
-
-func set_audio_player(player: Gen2AudioPlayer) -> void:
-	_audio = player
 
 
 ## `.Pokemon`'s icon. [param dvs] is `GetGender`'s input; -1 leaves the sign off.
@@ -163,18 +154,9 @@ func advance_frame() -> void:
 		_yes_no.open()
 
 
-## `TextCommand_SOUND` and its `WaitForSoundToFinish`.
 func _advance_before_text() -> void:
-	if _text_owes_frames() or _before_alone:
-		return
-	if not _before_sounded:
-		_before_sounded = true
-		if _before_sfx >= 0:
-			sfx_requested.emit(_before_sfx, false)
-		return
-	if _audio != null and _audio.still_waiting(_wait_watch):
-		return
-	_ask()
+	if not _text_owes_frames() and not _before_alone:
+		_ask()
 
 
 func _text_owes_frames() -> bool:

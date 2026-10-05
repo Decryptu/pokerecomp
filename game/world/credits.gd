@@ -203,6 +203,10 @@ func music_outlasts() -> bool:
 	return false
 
 
+func holds_for_sound() -> bool:
+	return false
+
+
 func frame_state() -> Dictionary:
 	return {
 		"map": bg_map(),

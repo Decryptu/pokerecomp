@@ -1808,6 +1808,7 @@ static func _hidden_coord_index(
 
 ## `HiddenItems`: the argument is the item, and `GetItemName` runs in front of
 ## the box, so the receipt reads even when the bag turns the item away.
+## `FoundHiddenItemText`'s `text_asm` plays `SFX_GET_ITEM_2` and waits it out.
 static func _hidden_item_nodes(
 	rom: RomFile, layout: Dictionary, bank: int, map_id: int, item: int, row: Dictionary
 ) -> Array:
@@ -1827,7 +1828,11 @@ static func _hidden_item_nodes(
 		{"op": "name_item", "item": item},
 		{"op": "text", "text": found, "press": false},
 		{"op": "give_item", "item": item, "count": 1, "hidden": index,
-			"ok": [{"op": "flag", "flag": flag, "set": true, "engine": true}],
+			"ok": [
+				{"op": "flag", "flag": flag, "set": true, "engine": true},
+				{"op": "sound", "what": "sound", "index": Gen1Sfx.SFX_GET_ITEM_2, "wait": true},
+				{"op": "sound", "what": "wait", "wait": true},
+			],
 			"full": [{"op": "text", "text": full}]},
 	]}]
 

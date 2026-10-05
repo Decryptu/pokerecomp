@@ -3,12 +3,11 @@ extends RefCounted
 
 ## The Generation 2 character encoding, for the international ROMs. One byte per
 ## character terminated by $50, the alphabet in runs: $80 is "A", $A0 is "a", $F6
-## is "0". Some codes expand to whole words or name the player at print time;
-## those stay bracketed markers so nothing is silently lost. The Japanese
-## cartridges reuse most of this range for kana and are not in [RomRegistry]. A
-## byte does not name a character on its own: `constants/charmap.asm` maps the
-## $60 to $7F run twice and $6e three times, so a byte means whichever strip the
-## hardware last loaded, and every entry point takes the strip.
+## is "0". Codes that expand to whole words or name the player at print time stay
+## bracketed markers. The Japanese cartridges reuse most of this range for kana and
+## are not in [RomRegistry]. `constants/charmap.asm` maps the $60 to $7F run twice
+## and $6e three times, so a byte means whichever strip the hardware last loaded,
+## and every entry point takes the strip.
 
 const TERMINATOR: int = 0x50
 const SPACE: int = 0x7F

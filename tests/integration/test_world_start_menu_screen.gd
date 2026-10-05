@@ -1008,6 +1008,10 @@ func _candy_evolution(cancel: bool) -> void:
 	var host: Gen2StartMenuScreen = await _open_candy_pack()
 	await _use_stone_on_first_member(host)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT, "the level box first")
+	## `_GrewToLevelText` ends on `sound_dex_fanfare_50_79`, which the box plays.
+	var sounds: Array = Gen2TextStream.split_sounds(String(host.get("_pack_result")))["sounds"]
+	assert_eq(sounds.map(func(sound: Dictionary) -> int: return int(sound["id"])),
+		[Gen2Sfx.SFX_DEX_FANFARE_50_79])
 	assert_eq(save.party[0].level, level + 1)
 	assert_eq(save.party[0].species, 155, "nothing evolves behind the level box")
 	assert_null(_world_screen.get("_evolution_host"))

@@ -945,7 +945,7 @@ func _box_text(world: Gen2WorldAPI) -> String:
 	var results: Array = world.interact()
 	if results.is_empty():
 		return ""
-	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+	return _event_text(results)
 
 
 ## `EnterMap`'s first `RunMapScript` pass, whose callback blocks redraw in
@@ -1144,12 +1144,7 @@ func _check_a_gift_on_the_screen() -> void:
 		var opened: String = " ".join(_r.settle_prompt(screen, prompt))
 		var want: String = String(row[2]).replace(Gen2WorldPC.PLAYER_MARKER, save.player_name)
 		_r.check(opened == want, "the EEVEE ball opened on %s rather than %s." % [opened, want])
-		if prompt.phase() == Gen2NicknamePromptScreen.Phase.BEFORE_TEXT and not bool(row[1]):
-			## `sound_get_item_1` holds the box until the jingle ends.
-			for _frame: int in GIFT_GUARD_FRAMES:
-				screen.advance_frame()
-				if prompt.phase() != Gen2NicknamePromptScreen.Phase.BEFORE_TEXT:
-					break
+		if not bool(row[1]):
 			var asked: String = " ".join(_r.settle_prompt(screen, prompt))
 			_r.check(asked == GIFT_QUESTION, "the EEVEE ball asked %s." % asked)
 			screen.press_button(PokeButton.B)
@@ -1557,7 +1552,9 @@ func _after_waits(world: Gen2WorldAPI, results: Array) -> Array:
 
 
 func _event_text(results: Array) -> String:
-	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+	return Gen2TextStream.strip_sounds(
+		String((results[0].get("event", {}) as Dictionary).get("text", ""))
+	)
 
 
 static func _ended(results: Array) -> bool:
@@ -2369,7 +2366,9 @@ func _walk_the_swap(wanted: int) -> void:
 		world.complete_runtime_request({"ok": true, "accepted": true})
 	)
 	_r.check(
-		receipt == _trade_filled(_r.data.special_text("npc_trade", "traded_for")),
+		receipt == Gen2TextStream.strip_sounds(
+			_trade_filled(_r.data.special_text("npc_trade", "traded_for"))
+		),
 		"the movie was followed by %s." % [receipt]
 	)
 	var thanks: String = _event_text(world.run_event_queue(true))
@@ -2948,14 +2947,14 @@ func _check_the_pc_refuses_a_player_beside_it() -> void:
 	)
 
 
-## `HiddenItems`: the receipt names the item `GetItemName` fetched before the
-## bag was asked, and the second visit says nothing at all.
+## `HiddenItems`: the receipt names the item `GetItemName` fetched before the bag
+## was asked, then `SFX_GET_ITEM_2` and its wait draw no box, and the second visit says nothing.
 func _check_a_hidden_item() -> void:
 	var world: Gen2WorldAPI = _facing_up(VIRIDIAN_CITY, HIDDEN_POTION_CELL + Vector2i.DOWN)
 	if world == null:
 		return
 	var said: Array[String] = _spoken(world)
-	_r.check(said.size() == 1 and String(said[0]) == _hidden_item_box(),
+	_r.check(said.size() == 2 and said[0] == _hidden_item_box() and said[1].is_empty(),
 		"the hidden POTION said %s." % [said])
 	_r.check(int(world.state.items().get(HIDDEN_POTION, 0)) == 1,
 		"the bag holds %d POTION." % int(world.state.items().get(HIDDEN_POTION, 0)))

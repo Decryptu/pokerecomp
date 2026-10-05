@@ -677,6 +677,7 @@ func _build_world() -> void:
 	_text_box.item_rect_changed.connect(_push_text_box_rect)
 	_text_box.visibility_changed.connect(_push_text_box_rect)
 	_text_box.prompt_answered.connect(_play_sfx)
+	_text_box.play_sounds_from(_data)
 	_screen.display(_text_box)
 	_apply_renderer_interface_style()
 	var entry_results: Array = _world.dispatch_map_entry()
@@ -2473,7 +2474,7 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 	var host := Gen2NicknamePromptScreen.new()
 	if named_ot:
 		host.set_context(_data, species_name)
-		host.set_before_text(Gen2WorldPartyHost.SENT_TO_BOX_FORMAT % species_name, -1, true)
+		host.set_before_text(Gen2WorldPartyHost.SENT_TO_BOX_FORMAT % species_name, true)
 	elif gen1:
 		_set_gen1_gift_context(
 			host, species_name, destination, save,
@@ -2513,7 +2514,7 @@ func _set_gen1_gift_context(
 ) -> void:
 	if destination == &"full" and not bare:
 		host.set_context(_data, species_name)
-		host.set_before_text(Gen2WorldPartyHost.gen1_box_is_full_text(), -1, true)
+		host.set_before_text(Gen2WorldPartyHost.gen1_box_is_full_text(), true)
 		return
 	host.set_context(
 		_data, species_name,
@@ -2524,11 +2525,7 @@ func _set_gen1_gift_context(
 	)
 	if bare:
 		return
-	host.set_before_text(
-		Gen2WorldPartyHost.gen1_got_mon_text(_player_display_name(), species_name),
-		Gen2Sfx.SFX_ITEM
-	)
-	host.set_audio_player(_audio_player)
+	host.set_before_text(Gen2WorldPartyHost.gen1_got_mon_text(_player_display_name(), species_name))
 
 
 ## `CheckPartyFullAfterContest`'s `GiveANickname_YesNo`, the gift path's own
@@ -7453,9 +7450,6 @@ func _open_start_menu_host(entry: Callable) -> void:
 	host.evolution_animation_requested.connect(_on_pack_evolution)
 	host.sfx_requested.connect(_play_sfx)
 	host.gen1_sfx_requested.connect(_play_gen1_sound)
-	host.gen1_forget_swap_requested.connect(func() -> void:
-		_audio_player.play_gen1_forget_swap(_data, _audio_assets())
-	)
 	host.pikachu_clip_requested.connect(_play_pikachu_clip)
 	_start_menu_host = host
 	_script_prompt = "Start menu open"
@@ -9241,8 +9235,6 @@ func _apply_text_pause(event: Dictionary, flags: Dictionary) -> StringName:
 	# that holds it with `JoyWaitAorB` waits without loading one, or a click.
 	var joy_wait: bool = bool(event.get("joy_wait", false))
 	_text_awaits_press = joy_wait or bool(event.get("prompt", true))
-	if int(event.get("cry", 0)) > 0:
-		_play_species_cry(int(event["cry"]))
 	if _oak_pc_pages.is_empty():
 		_apply_text_box_options()
 		_text_box.show_text(String(event.get("text", "")), _text_awaits_press and not joy_wait)

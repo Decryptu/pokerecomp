@@ -155,7 +155,11 @@ func test_prompts_name_the_pokemon_and_both_moves() -> void:
 		Gen2MoveForget.forgot_text("GEODUDE", "TACKLE"),
 		"1, 2 and… Poof!%sGEODUDE forgot\nTACKLE.%sAnd…" % [para, para]
 	)
-	assert_eq(Gen2MoveForget.learned_text("GEODUDE", "STRENGTH"), "GEODUDE learned\nSTRENGTH!")
+	var learned: Dictionary = Gen2TextStream.split_sounds(
+		Gen2MoveForget.learned_text("GEODUDE", "STRENGTH")
+	)
+	assert_eq(learned["text"], "GEODUDE learned\nSTRENGTH!")
+	assert_eq(int(learned["sounds"][0]["id"]), Gen2Sfx.SFX_DEX_FANFARE_50_79, "`sound_dex_fanfare_50_79`")
 	assert_eq(Gen2MoveForget.cant_forget_hm_text(), "HM moves can't be\nforgotten now.")
 
 
@@ -168,7 +172,17 @@ func test_generation_one_says_its_own_lines() -> void:
 	assert_string_contains(Gen2MoveForget.ask_text("GEODUDE", "STRENGTH", gen1), "But, GEODUDE")
 	assert_eq(Gen2MoveForget.stop_text("STRENGTH", gen1), "Abandon learning\nSTRENGTH?")
 	assert_string_contains(Gen2MoveForget.did_not_learn_text("GEODUDE", "STRENGTH", gen1), "STRENGTH!")
-	assert_string_contains(Gen2MoveForget.forgot_text("GEODUDE", "TACKLE", gen1), "1, 2 and... Poof!")
+	## `OneTwoAndText`'s `text_asm` sounds `SFX_SWAP` between its two halves: Red and
+	## Blue print on over it, Yellow waits it out.
+	for yellow: bool in [false, true]:
+		var forgot: Dictionary = Gen2TextStream.split_sounds(
+			Gen2MoveForget.forgot_text("GEODUDE", "TACKLE", gen1, yellow)
+		)
+		assert_string_contains(forgot["text"], "1, 2 and... Poof!")
+		var swap: Dictionary = forgot["sounds"][0]
+		assert_eq(int(swap["id"]), Gen1Sfx.SFX_SWAP)
+		assert_eq(int(swap["at"]), "1, 2 and...".length())
+		assert_eq(bool(swap["wait"]), yellow, "yellow=%s" % yellow)
 	assert_eq(Gen2MoveForget.cant_forget_hm_text(gen1), "HM techniques\ncan't be deleted!")
 	assert_true(Gen2MoveForget.is_hm_move(0x7F))
 	assert_false(Gen2MoveForget.is_hm_move(0x7F, gen1))

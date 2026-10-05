@@ -1050,9 +1050,11 @@ static func apply_step_happiness(save: Gen2SaveData, times: int = 1) -> Array[in
 const HUH_TEXT: String = "Huh?" + Gen2TextStream.PAGE_BREAK
 
 
-## `_BreedEggHatchText`, whose `wStringBuffer1` is the name the row now carries.
+## `_BreedEggHatchText` and its `sound_caught_mon`; `wStringBuffer1` is the name the row now carries.
 static func hatch_text(nickname: String) -> String:
-	return "%s came\nout of its EGG!" % nickname
+	return "%s came\nout of its EGG!%s" % [
+		nickname, Gen2TextStream.sound_token(Gen2Sfx.SFX_CAUGHT_MON),
+	]
 
 
 ## `_BreedAskNicknameText`, the `YesNoBox` after the hatch.
@@ -1119,9 +1121,11 @@ static func gen1_box_is_full_text() -> String:
 	]
 
 
-## `_GotMonText`, `SetPokedexOwnedFlag`'s own line.
+## `_GotMonText`, `SetPokedexOwnedFlag`'s own line, and its `sound_get_item_1`.
 static func gen1_got_mon_text(player_name: String, species_name: String) -> String:
-	return "%s got\n%s!" % [player_name, species_name]
+	return "%s got\n%s!%s" % [
+		player_name, species_name, Gen2TextStream.sound_token(Gen1Sfx.SFX_GET_ITEM_1),
+	]
 
 
 ## Where `GivePoke` would put one more Pokemon: `TryAddMonToParty` first, then

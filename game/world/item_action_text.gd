@@ -58,7 +58,9 @@ static func kind(data: GameData, item: int, result: Dictionary) -> StringName:
 static func text(row: StringName, target: String, result: Dictionary, gen1: bool) -> String:
 	var line: String = String((GEN1_TEXTS if gen1 else TEXTS)[row])
 	if row == LEVEL:
-		return line % [target, int(result.get("level", 0))]
+		return line % [target, int(result.get("level", 0))] + Gen2TextStream.sound_token(
+			Gen1Sfx.SFX_GET_ITEM_1 if gen1 else Gen2Sfx.SFX_DEX_FANFARE_50_79
+		)
 	if row == HEAL:
 		return line % [target, int(result.get("healed", 0))]
 	return line % target

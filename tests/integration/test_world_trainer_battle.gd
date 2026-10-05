@@ -2045,7 +2045,7 @@ func test_an_egg_hatches_into_the_species_it_was_carrying() -> void:
 			_world_screen.press_button(PokeButton.A)
 	assert_eq(
 		" ".join(screen.text_lines()),
-		Gen2WorldPartyHost.hatch_text(species_name).replace("\n", " ")
+		Gen2TextStream.strip_sounds(Gen2WorldPartyHost.hatch_text(species_name)).replace("\n", " ")
 	)
 
 	await _settle_hatch()

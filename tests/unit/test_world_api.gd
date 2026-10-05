@@ -2528,12 +2528,17 @@ func test_boulder_script_asks_and_a_yes_sets_the_flag() -> void:
 
 	var used: Array = world.run_event_queue(true, 0)
 	assert_eq(String(used[0]["event"]["text"]), "CHIKORITA used\nSTRENGTH!")
-	## `_UseStrengthText` ends in `done` with no `waitbutton` behind it, and the
-	## `cry 0` after it names `wStrengthSpecies`.
+	## `_UseStrengthText` ends in `done` with no `waitbutton` behind it.
 	assert_false(bool(used[0]["event"]["prompt"]), "the first box owes no press")
-	assert_eq(int(used[0]["event"]["cry"]), 25, "the fixture party's own species")
 
-	var boulders: Array = world.run_event_queue(true)
+	## The `cry 0` after it names `wStrengthSpecies`, and `PlayMonCry` waits it out
+	## before the second box.
+	var cry: Array = world.run_event_queue(true)
+	var cry_request: Dictionary = cry[0]["event"]["request"]["values"]
+	assert_eq(cry_request["kind"], &"cry", JSON.stringify(cry))
+	assert_eq(int(cry_request["species"]), 25, "the fixture party's own species")
+
+	var boulders: Array = world.complete_runtime_request({"ok": true})
 	assert_eq(String(boulders[0]["event"]["text"]), "CHIKORITA can\nmove boulders.")
 
 	assert_eq(world.run_event_queue(true)[0]["status"], &"complete")

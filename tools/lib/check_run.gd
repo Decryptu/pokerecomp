@@ -152,7 +152,10 @@ func close_screen(screen: Gen2WorldScreen) -> void:
 func settle_prompt(
 	screen: Gen2WorldScreen, prompt: Gen2NicknamePromptScreen, frames: int = 2000
 ) -> PackedStringArray:
+	var before_question: PackedStringArray = PackedStringArray()
 	for _frame: int in frames:
+		if prompt.phase() == Gen2NicknamePromptScreen.Phase.BEFORE_TEXT:
+			before_question = prompt.text_lines()
 		if prompt.phase() == Gen2NicknamePromptScreen.Phase.ASK and prompt.question_ready():
 			break
 		if prompt.answering():
@@ -165,7 +168,10 @@ func settle_prompt(
 			screen.press_button(PokeButton.A)
 		screen.advance_frame()
 	var out: PackedStringArray = PackedStringArray()
-	for line: String in prompt.text_lines():
+	var shown: PackedStringArray = prompt.text_lines()
+	if not before_question.is_empty() and prompt.phase() != Gen2NicknamePromptScreen.Phase.BEFORE_TEXT:
+		shown = before_question
+	for line: String in shown:
 		if out.is_empty() or out[out.size() - 1] != line:
 			out.append(line)
 	return out

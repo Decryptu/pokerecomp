@@ -99,13 +99,11 @@ var _loaded_emote: int = -1
 ## delay and then calls `ShowEmoteScript`, whose middle command is `pause 0`.
 var _script_delay: int = 0
 var _trainer_intro_approach_pending: bool = false
-## Set while RockSmashScript's `playsound SFX_STRENGTH` is out with the host, so
-## its acknowledge continues into the earthquake, the disappear and the roll.
-## The same shape _trainer_intro_approach_pending has for encounter music.
-var _rock_smash_after_sound: bool = false
+## What the audio request out with the host continues into once answered: Rock
+## Smash's `WaitSFX`, its `playsound` and the earthquake, or Strength's `cry 0` and second box.
+var _audio_then: Callable = Callable()
 ## Set while a receipt's own `specialsound` is out with the host, so its
-## completion continues into `itemnotify`'s box. `{ item, finish }`, the same
-## shape _rock_smash_after_sound has.
+## completion continues into `itemnotify`'s box. `{ item, finish }`.
 var _item_notify_after_sound: Dictionary = {}
 var _battle_setup: Dictionary = {}
 var _loaded_battle_type: int = -1
@@ -482,6 +480,7 @@ const FOUND_ITEM_TEXT: String = "<PLAYER> found\n%s!"
 const NO_SPACE_ITEM_TEXT: String = "<PLAYER> found\n%s!\nBut <PLAYER> has\nno space left…"
 ## `_ReceivedItemText`, `_PutItemInPocketText` and `_PocketIsFullText`.
 const RECEIVED_ITEM_TEXT: String = "<PLAYER> received\n%s."
+const MYSTERY_GIFT_ITEM_TEXT: String = "<PLAYER> received\n%s!%s"
 ## The pocket line's own `cont` is a scroll rather than a page, so the item it
 ## names is still on screen above it.
 const PUT_ITEM_TEXT: String = "<PLAYER> put the\n%s in" + Gen2TextStream.SCROLL_BREAK + "the %s."
@@ -1064,10 +1063,20 @@ func _resume_pocket_is_full(_choice: int) -> Dictionary:
 	return _waiting_result()
 
 
+## `Script_UsedStrength`'s `cry 0`, which `PlayMonCry` waits out, then `MoveBoulderText`.
 func _resume_strength_used(_choice: int) -> Dictionary:
-	_stage_internal_text(
-		Gen2WorldFieldMove.move_boulders_text(String(_pending.get("name", "#MON"))), true
-	)
+	var name: String = String(_pending.get("name", "#MON"))
+	var species: int = int(_pending.get("species", 0))
+	_pending = {}
+	if species <= 0:
+		return _strength_boulders_text(name)
+	_audio_then = _strength_boulders_text.bind(name)
+	_stage_audio_request(&"cry", {"species": species})
+	return _waiting_result()
+
+
+func _strength_boulders_text(name: String) -> Dictionary:
+	_stage_internal_text(Gen2WorldFieldMove.move_boulders_text(name), true)
 	return _waiting_result()
 
 
@@ -1229,9 +1238,20 @@ func _resume_rock_smash_choice(choice: int) -> Dictionary:
 ## on its encounter music.
 func _resume_rock_smash_used(_choice: int) -> Dictionary:
 	_pending = {}
-	_rock_smash_after_sound = true
+	_audio_then = _rock_smash_strike
+	_stage_audio_request(&"sound_wait", {})
+	return _waiting_result()
+
+
+func _rock_smash_strike() -> Dictionary:
+	_audio_then = _rock_smash_shaken
 	_stage_audio_request(&"sound", {"address": Gen2Sfx.SFX_STRENGTH})
 	return _waiting_result()
+
+
+func _rock_smash_shaken() -> Dictionary:
+	_stage_rock_smash_shake()
+	return advance()
 
 
 ## The yesorno an Ask*Script offers behind the box it has just printed, carrying
@@ -1602,9 +1622,9 @@ func _complete_plain_request(
 	var approach_after_audio: bool = kind == &"audio_requested" \
 		and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) \
 		== &"encounter_music" and _trainer_intro_approach_pending
-	var smash_after_sound: bool = kind == &"audio_requested" \
-		and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) \
-		== &"sound" and _rock_smash_after_sound
+	var audio_then: Callable = _audio_then if kind == &"audio_requested" else Callable()
+	if kind == &"audio_requested":
+		_audio_then = Callable()
 	var notify_after_sound: Dictionary = _item_notify_after_sound \
 		if kind == &"audio_requested" else {}
 	var mom_after_sound: int = _bank_of_mom_after_sound \
@@ -1625,9 +1645,8 @@ func _complete_plain_request(
 	if approach_after_audio:
 		_trainer_intro_approach_pending = false
 		_stage_trainer_approach()
-	if smash_after_sound:
-		_rock_smash_after_sound = false
-		_stage_rock_smash_shake()
+	if audio_then.is_valid():
+		return audio_then.call()
 	if not notify_after_sound.is_empty():
 		_item_notify_after_sound = {}
 		_stage_item_notify(
@@ -3623,9 +3642,9 @@ func _execute_object_command(source_opcode: int, command: Dictionary) -> Diction
 			## `StartFollow` takes the FIRST operand through `SetLeaderIfVisible` and the
 			## second through `SetFollowerIfVisible`, the object that takes
 			## SPRITEMOVEDATA_FOLLOWING: the first leads and the second follows, though
-			## the macro's operand comments say the reverse. Read the other way round,
-			## the player stands where `NewBarkTown_TeacherBringsYouBackMovement`
-			## should have walked them and the rival steps out of the cell he pushed them from.
+			## the macro's operand comments say the reverse. Read the other way round, the
+			## player stands where `NewBarkTown_TeacherBringsYouBackMovement` should have
+			## walked them and the rival steps out of the cell he pushed them from.
 			_emit_object_event(&"object_follow", {
 				"object_index": _object_index_from_id(int(command.get("object_id_2", 0))),
 				"target_index": _object_index_from_id(int(command.get("object_id", 0))),
@@ -3681,9 +3700,10 @@ func _stage_mystery_gift_item(special: int) -> Dictionary:
 	_set_text_buffer(
 		Gen2Layout.STRING_BUFFER_4, item_name, &"item_name", {"item": item}
 	)
-	return _stage_internal_text(RECEIVED_ITEM_TEXT % item_name, false, {
-		"special": special, "item": item,
-	})
+	return _stage_internal_text(
+		MYSTERY_GIFT_ITEM_TEXT % [item_name, Gen2TextStream.sound_token(Gen2Sfx.SFX_ITEM)],
+		false, {"special": special, "item": item}
+	)
 
 func _stage_item_delta(item: int, delta: int) -> Dictionary:
 	if item > 0:
@@ -4640,10 +4660,9 @@ func _special_snorlax_awake(_special: int) -> Dictionary:
 
 ## `FadeOutToWhite` is 46 in both pins, since Crystal's inserted `BattleTowerFade`
 ## sits at 47; `FadeInFromWhite` is 49 here and 48 in Gold/Silver, which
-## `special_index()` already normalizes. Each of the five is `GetTimePalFade` and then
-## four rows of the fade table, and none is free: `ConvertTimePals*HL` spends `ld c,
-## 2` on every row, so the script holds for the whole walk the way it does on the
-## cartridge. `FillWhiteBGColor` is the two white fades' alone.
+## `special_index()` normalizes. Each of the five is `GetTimePalFade` and four rows
+## of the fade table, none free: `ConvertTimePals*HL` spends `ld c, 2` on every row,
+## so the script holds for the whole walk. `FillWhiteBGColor` is the white fades' alone.
 func _special_palette_fade(special: int) -> Dictionary:
 	var orders: Array[int] = FADE_ORDERS_OF[special]
 	var step_frames: int = Gen2WorldPalette.BATTLE_TOWER_FADE_STEP_FRAMES \
@@ -4660,12 +4679,12 @@ func _special_palette_fade(special: int) -> Dictionary:
 	})
 
 
-## Sprite reload, palette reload and the dummied trainer-ranking bookkeeping affect
+## Sprite reload, palette reload and the dummied trainer-ranking bookkeeping touch
 ## presentation or source-only counters, not scene-free state. `LoadUsedSpritesGFX`,
-## `UpdateSprites`, `UpdatePlayerSprite`, `ReloadSpritesNoPalettes` and
-## `RefreshSprites` reload the sprite set a `variablesprite` changed;
-## `ClearBGPalettes`, `UpdateTimePals`, `SetPlayerPalette` and `LoadMapPalettes`
-## open the day/night scripts, and the renderer takes palettes from the map and clock.
+## `UpdateSprites`, `UpdatePlayerSprite`, `ReloadSpritesNoPalettes` and `RefreshSprites`
+## reload the sprite set a `variablesprite` changed; `ClearBGPalettes`,
+## `UpdateTimePals`, `SetPlayerPalette` and `LoadMapPalettes` open the day/night
+## scripts, and the renderer takes palettes from the map and clock.
 func _special_presentation_only(special: int) -> Dictionary:
 	_emit_runtime_event(&"presentation_special_applied", {"special": special})
 	return {"ok": true}
@@ -4673,10 +4692,9 @@ func _special_presentation_only(special: int) -> Dictionary:
 
 ## `PlaySlowCry` (95) is `LoadCry` with the record's own pitch lowered by `$140` and
 ## its length raised by `$60`, and `PlayCurMonCry` (100) is `PlayMonCry` straight.
-## Neither writes anything back, so what they owe is the sound and the `WaitSFX` each
-## ends on. They do not read the same byte: 95 is `ld a, [wScriptVar]`, which the
-## `setval` in front of it has just set, and 100 is `ld a, [wCurPartySpecies]`, all
-## four of whose scripts are a grooming routine's.
+## Neither writes anything back, so they owe the sound and the `WaitSFX` each ends
+## on. 95 reads `ld a, [wScriptVar]`, which the `setval` in front of it has just set,
+## and 100 `ld a, [wCurPartySpecies]`, all four of whose scripts are a grooming routine's.
 func _special_cry(special: int) -> Dictionary:
 	return _stage_audio_request(&"cry", {
 		"special": special,
@@ -5451,10 +5469,9 @@ func _special_box(run: String, name: String) -> String:
 
 ## `BankOfMom`'s jumptable, one index at a time (`engine/events/mom.asm`). Every
 ## state prints a box, opens her menu or opens the dial, so the source's `.loop` is
-## the chain of pendings each leaves behind. `DSTChecks` is the one branch not
-## built, being a save-format bump: `.nope` needs a saved `wDST` bit and the
-## `wStartHour` shift. `.JustDoWhatYouCan` is taken instead, as a clock nowhere
-## near a boundary reaches it.
+## the chain of pendings each leaves behind. `DSTChecks` is the one branch not built,
+## being a save-format bump: `.nope` needs a saved `wDST` bit and the `wStartHour`
+## shift. `.JustDoWhatYouCan` is taken, as a clock near no boundary reaches it.
 func _bank_of_mom(index: int) -> Dictionary:
 	match index:
 		MOM_CHECK_INITIALIZED:
@@ -6247,9 +6264,9 @@ func _decode_bcd(bytes: PackedByteArray) -> int:
 ## `engine/events/haircut.asm` past its `farcall SelectMonFromParty`. The carry
 ## the party list answers a B press or its CANCEL row with is `.nope`/`.cancel`,
 ## `xor a` in all four; an EGG is `.egg`'s own 1, tested by the three grooming
-## routines alone, since `BillsGrandfather` answers EGG as a species like any
-## other. `GetCurNickname` names the member for the three and `GetPokemonName`
-## the species for the fourth, both into wStringBuffer3.
+## routines alone, since `BillsGrandfather` answers EGG as a species like any other.
+## `GetCurNickname` names the member for the three and `GetPokemonName` the species
+## for the fourth, both into wStringBuffer3.
 func _finish_party_selection(request: Dictionary, result: Dictionary) -> Dictionary:
 	var values: Dictionary = request.get("values", {})
 	var special: int = int(values.get("special", 0))
@@ -6394,10 +6411,9 @@ func _finish_deferred_party_selection(
 
 ## `Script_givepokemail`, which copies the pointer's `db item` and the
 ## `MAIL_MSG_LENGTH` bytes behind it into `wMonMailMessageBuffer`, and
-## `GivePokeMail`, which hangs both on the last party member. It writes no
-## wScriptVar and cannot fail, so the write is an event the way a happiness
-## change is. The mail's author and ID come off the row the screen is writing; the
-## runner carries the species.
+## `GivePokeMail`, which hangs both on the last party member. It writes no wScriptVar
+## and cannot fail, so the write is an event the way a happiness change is. The
+## author and ID come off the row the screen is writing; the runner carries the species.
 func _give_poke_mail(command: Dictionary) -> Dictionary:
 	var bytes: PackedByteArray = _mail_bytes(int(command.get("address", 0)))
 	if bytes.size() < Gen2SaveMail.MESSAGE_LENGTH + 1:
@@ -6652,10 +6668,10 @@ func _stage_strength_boulder() -> Dictionary:
 
 ## engine/events/misc_scripts.asm's FindItemInBallScript, synthesized. An item
 ## ball's script pointer is the `itemball` macro's `db item, quantity`, copied into
-## wItemBallData before PLAYEREVENT_ITEMBALL, so the seam is the object type.
-## Source order is receive, `disappear LAST_TALKED`, then the text, so the ball is
-## gone when the box is drawn; its `pause 60` is the acknowledge here. The receive
-## seam keeps the no-room branch without committing anything.
+## wItemBallData before PLAYEREVENT_ITEMBALL, so the seam is the object type. Source
+## order is receive, `disappear LAST_TALKED`, then the text, so the ball is gone when
+## the box is drawn; its `pause 60` is the acknowledge here. The receive seam keeps
+## the no-room branch without committing anything.
 func _stage_item_ball() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var quantity: int = maxi(1, int(_request.get("quantity", 1)))
@@ -6744,13 +6760,12 @@ func _fruit_tree_picked(tree_id: int) -> bool:
 	return state.fruit_tree_picked(tree_id)
 
 
-## HiddenItemScript, the BGEVENT_ITEM half of the same source area. The pointer
-## is the `hiddenitem` macro's `dwb event, item`, handed over as an item ball's two
+## HiddenItemScript, the BGEVENT_ITEM half of the same source area. The pointer is
+## the `hiddenitem` macro's `dwb event, item`, handed over as an item ball's two
 ## bytes are. It differs from [method _stage_item_ball] in the flag and the object:
 ## nothing is hidden, and the flag `callasm SetMemEvent` writes is the record's.
-## `_PlayerFoundItemText` is `_FoundItemText`'s wording, so the two share a
-## constant. The text comes before `giveitem` and the flag after, so a full pocket
-## changes neither.
+## `_PlayerFoundItemText` shares `_FoundItemText`'s constant. The text comes before
+## `giveitem` and the flag after, so a full pocket changes neither.
 func _stage_hidden_item() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var flag: int = int(_request.get("flag", -1))
@@ -6820,7 +6835,7 @@ func _stage_strength_used(slot: int) -> Dictionary:
 		),
 		"internal_text": true,
 		"prompt": false,
-		"cry": int(species[slot]) if slot >= 0 and slot < species.size() else 0,
+		"species": int(species[slot]) if slot >= 0 and slot < species.size() else 0,
 		"special": &"strength_used",
 		"name": name,
 		"source": _request.duplicate(true),
@@ -6832,9 +6847,9 @@ func _stage_strength_used(slot: int) -> Dictionary:
 ## engine/overworld/events.asm's TryTileCollisionEvent, from `.cut` on: the five
 ## field-move branches a faced tile can reach, each a `Try*OW` gate and then an
 ## `Ask*Script`. Synthesized as AskStrengthScript is, and dispatched on the request
-## kind because these are reached through `CallScript`. Which move the tile offers
-## is [Gen2WorldAPI]'s answer; what is left here is the party and the badge.
-## TryHeadbuttOW and TrySurfOW have no refusal text: nothing is shown.
+## kind because these are reached through `CallScript`. [Gen2WorldAPI] answers which
+## move the tile offers; the party and the badge are left. TryHeadbuttOW and
+## TrySurfOW have no refusal text: nothing is shown.
 func _stage_field_move_prompt() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():
