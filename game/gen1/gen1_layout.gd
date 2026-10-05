@@ -1921,10 +1921,13 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"safari_low_cost", "safari_nag", "name_rater_check_ot", "name_rater_screen",
 	"display_mon_front_sprite_in_box", "surfing_minigame", "high_score_page",
 	"print_diploma", "print_high_score", "print_portrait",
+	"celadon_elevator_warps", "rocket_elevator_warps", "silph_elevator_warps",
 ]
-## The three of those a `farcall` spends nothing on.
+## The ones a call spends nothing on; `Gen1ScriptNodes._gen1_seed_warp_entry`
+## stores the elevators' warps.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
 	"load_spinner_arrow_tiles", "convert_npc_directions", "pewter_guys",
+	"celadon_elevator_warps", "rocket_elevator_warps", "silph_elevator_warps",
 ]
 ## `Music_RivalAlternateStart` and the three beside it.
 const SCRIPT_ALTERNATE_MUSIC: Array[String] = [
@@ -3095,6 +3098,9 @@ const RED_BLUE: Dictionary = {
 	"is_player_on_dungeon_warp": 0x46981,
 	"load_spinner_arrow_tiles": 0x44FD7,
 	"pewter_guys": 0x37CA1,
+	"celadon_elevator_warps": 0x4861C,
+	"rocket_elevator_warps": 0x4572C,
+	"silph_elevator_warps": 0x457DC,
 	"pewter_guys_coords": 0x37CE6,
 	"convert_npc_directions": 0x0F9A0,
 	"heal_party": 0x0F6A5,
@@ -3724,6 +3730,9 @@ const YELLOW: Dictionary = {
 	"is_player_on_dungeon_warp": 0x46BF3,
 	"load_spinner_arrow_tiles": 0x45077,
 	"pewter_guys": 0x1A6E5,
+	"celadon_elevator_warps": 0x48527,
+	"rocket_elevator_warps": 0x45980,
+	"silph_elevator_warps": 0x45A30,
 	"pewter_guys_coords": 0x1A72A,
 	"convert_npc_directions": 0x0F830,
 	"heal_party": 0x0F52B,

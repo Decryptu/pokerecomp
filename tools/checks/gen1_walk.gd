@@ -1551,6 +1551,11 @@ func _walk_the_receptionist(dex: bool, frames: int, said: String) -> void:
 	_r.check(not world.script_busy(), "the receptionist never finished.")
 
 
+func _after_waits(world: Gen2WorldAPI, results: Array) -> Array:
+	var spent: Array = world.finish_script_waits()
+	return spent if not spent.is_empty() else results
+
+
 func _event_text(results: Array) -> String:
 	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
 
@@ -3176,7 +3181,7 @@ func _check_the_beach_house() -> void:
 		and String(values.get("page", "")) == "high_score" and not bool(values.get("preview", true))
 		and int(values.get("hi_score", 0)) == BEACH_HI_SCORE, "PRINT asked for %s." % [request]):
 		return
-	var cancelled: Array = world.complete_runtime_request({"ok": true, "printed": false})
+	var cancelled: Array = _after_waits(world, world.complete_runtime_request({"ok": true, "printed": false}))
 	_r.check(_event_text(cancelled).begins_with(BEACH_PRINT_ERROR), "a cancelled print said %s." % [cancelled])
 	world = _facing_up(SUMMER_BEACH_HOUSE, BEACH_PRINTER + Vector2i.DOWN, world.state)
 	world.pikachu.set_party(true, true)
@@ -3210,7 +3215,7 @@ func _check_the_chairmans_print() -> void:
 		and String(values.get("page", "")) == "portrait" and int(values.get("party_index", -1)) == 0,
 		"the member opened %s." % [request]):
 		return
-	var cancelled: Array = world.complete_runtime_request({"ok": true, "printed": false})
+	var cancelled: Array = _after_waits(world, world.complete_runtime_request({"ok": true, "printed": false}))
 	_r.check(_event_text(cancelled).begins_with(CHAIRMAN_CANCELLED_BOX), "a cancelled portrait said %s." % [cancelled])
 
 
@@ -3657,7 +3662,7 @@ func _check_a_scripted_player_walk() -> void:
 	while world.gen1_player_movement_running() and passes < SCRIPTED_WALK_PASSES:
 		world.advance_player_step_pass()
 		passes += 1
-	_r.check(_event_text(world.dispatch_sight_events()).begins_with(HALL_OF_FAME_BOX),
+	_r.check(_event_text(_after_waits(world, world.dispatch_sight_events())).begins_with(HALL_OF_FAME_BOX),
 		"Oak said nothing once the walk in had been drawn.")
 	var oak: Gen2WorldObject = world.objects[HALL_OF_FAME_OAK]
 	_r.check(oak.facing == Gen2WorldSprite.FACING_LEFT,
@@ -5123,6 +5128,7 @@ func _check_leaving_early() -> void:
 		and passes < SCRIPTED_WALK_PASSES:
 		world.advance_player_step_pass()
 		world.dispatch_sight_events()
+		world.finish_script_waits()
 		passes += 1
 	world.dispatch_sight_events()
 	_r.check(world.player_cell == SAFARI_SCRIPT_LEAVE_EARLY_LANDING

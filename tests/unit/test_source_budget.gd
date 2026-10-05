@@ -7,7 +7,7 @@ static var PROJECT: String = ProjectSettings.globalize_path("res://")
 
 const MAX_COMPLEXITY: int = 20
 const MAX_COMMENT_BLOCK: int = 8
-const MAX_COMMENT_LINES: int = 41193
+const MAX_COMMENT_LINES: int = 41192
 
 const DANGLING_WORDS: Array[String] = [
 	"so", "and", "the", "which", "that", "of", "to", "with", "for", "but", "since",

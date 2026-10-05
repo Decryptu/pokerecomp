@@ -125,6 +125,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"dex_rating": &"_gen1_node_dex_rating",
 	"set_fossil": &"_gen1_node_set_fossil",
 	"redraw_map_view": &"_gen1_node_redraw",
+	"delay": &"_gen1_node_delay",
 	"copy_name": &"_gen1_node_copy_name",
 	"party_menu": &"_gen1_node_party_menu",
 	"name_mon": &"_gen1_node_name_mon",
@@ -368,6 +369,11 @@ static func _gen1_node_replace_block(_world: Gen2WorldAPI, node: Dictionary, ste
 		"type": &"block", "x": int(node["x"]), "y": int(node["y"]),
 		"block": int(node["block"]), "redraw": bool(node.get("redraw", true)),
 	})
+	return true
+
+
+static func _gen1_node_delay(_world: Gen2WorldAPI, node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	steps.append(Gen1FacilityScripts._gen1_wait_step(&"gen1_delay", int(node["frames"])))
 	return true
 
 

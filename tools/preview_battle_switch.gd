@@ -3,27 +3,24 @@ extends SceneTree
 ## Captures the menus a battle is answered through, against a real imported cache:
 ## `BattleMenu`'s own four rows and the `MoveSelectionScreen` behind FIGHT,
 ## `OfferSwitch`'s yes/no box over the field, `AskUseNextPokemon`'s box in the same
-## place, and the party list they open. The stages are [constant MENU_STAGES] and [constant WORLD_STAGES].
+## place, and the party list they open: [constant MENU_STAGES], [constant WORLD_STAGES].
 ##   Godot --path . -s res://tools/preview_battle_switch.gd -- \
 ##       crystal /tmp/s.png [stage] [presses] [passes]
 
 const WINDOW_SIZE := Vector2i(1152, 648)
-## Enough frames for the scene to lay out and the hardware viewport to hold what
-## the menus were driven to; the intro and the turn are settled by hand below.
+## Frames for the scene to lay out and the viewport to hold the menus.
 const SETTLE_FRAMES: int = 30
 
-## The Pokemon `wContestMon` is holding for the `contest_replace` stage. A
-## CATERPIE in the low levels, which is what a contest is full of.
-## The wild the contest catch is made on, and the one already held.
+## `contest_replace`: the wild the catch is made on, and the low-level CATERPIE
+## `wContestMon` already holds.
 const CONTEST_WILD_SPECIES: int = 13
 const CONTEST_WILD_LEVEL: int = 12
 const CONTEST_STOCK_SPECIES: int = 10
 const CONTEST_STOCK_LEVEL: int = 9
 const CONTEST_STOCK_MAX_HP: int = 27
 
-## `BattlePack`'s rows for the `pack` stage: a potion, a Full Heal and an X
-## Attack, which are one of each of `UseItem`'s three battle branches
-## (constants/item_constants.asm).
+## `BattlePack`'s rows for the `pack` stage: a potion, a Full Heal and an X Attack,
+## one for each of `UseItem`'s three battle branches.
 const PACK_ITEMS: Array[int] = [0x12, 0x26, 0x31]
 const PACK_QUANTITIES: Dictionary = {0x12: 3, 0x26: 1, 0x31: 2}
 
@@ -43,35 +40,29 @@ const PLAYER_SPECIES: Array[int] = [155, 152, 158]
 const GEN1_TRAINER_CLASS: int = 34
 const GEN1_PLAYER_SPECIES: Array[int] = [25, 1, 4]
 const PLAYER_LEVEL: int = 30
-## Four moves on the lead, so `MoveSelectionScreen`'s list is a full one:
-## TACKLE, GROWL, TAIL_WHIP and BITE (constants/move_constants.asm).
+## Four moves on the lead fill `MoveSelectionScreen`'s list: TACKLE, GROWL, TAIL_WHIP, BITE.
 const LEAD_MOVES: Array[int] = [33, 45, 39, 44]
 ## THUNDER WAVE in the first slot for the `status_refused` stage.
 const STATUS_LEAD_MOVES: Array[int] = [86, 45, 39, 44]
-## The `info` stages' own four, one per effectiveness the annotation can mark
-## against Pidgey's NORMAL/FLYING: THUNDERSHOCK is super effective, TACKLE
-## neutral, VINE WHIP resisted and EARTHQUAKE has no effect at all.
+## The `info` stages' four, one per effectiveness against Pidgey's NORMAL/FLYING:
+## THUNDERSHOCK super effective, TACKLE neutral, VINE WHIP resisted, EARTHQUAKE none.
 const INFO_MOVES: Array[int] = [84, 33, 22, 89]
 
-## The `shiny` and `normal` stages' wild: GYARADOS, whose ordinary blue and whose
-## shiny red are the furthest apart of any pair the cartridge draws, and the one
-## the game itself forces (`BATTLETYPE_FORCESHINY` at the Lake of Rage).
+## The `shiny` and `normal` stages' wild: GYARADOS, whose blue and shiny red are
+## the furthest apart the cartridge draws, forced by `BATTLETYPE_FORCESHINY` at the Lake of Rage.
 const SHINY_SPECIES: int = 130
 const SHINY_LEVEL: int = 30
-## The two stages that go through `start_world_battle` rather than a staged
-## `_battle`, because the palette is chosen in `_init_battle_display` and only
-## the world path runs it.
+## The stages that go through `start_world_battle`, since only the world path
+## runs `_init_battle_display`, where the palette is chosen.
 const WORLD_STAGES: Array[String] = [
 	"shiny", "normal", "prize", "fainted_offer", "enemy_sent_out", "contest_replace",
 ]
 
-## The `prize` stage's held item, AMULET_COIN (constants/item_constants.asm).
-## `CheckAmuletCoin` doubles the reward off it, so the figure in the picture is
-## `.DoubleReward`'s rather than the plain one.
+## The `prize` stage's held item: `CheckAmuletCoin` doubles the reward, so the
+## picture shows `.DoubleReward`'s figure.
 const AMULET_COIN: int = 0x5B
 
-## The stages `BattleMenu`'s own first opening leads into with nothing staged
-## behind it, rather than a question a turn has to reach.
+## The stages `BattleMenu`'s first opening leads into, with nothing staged behind it.
 const MENU_STAGES: Array[String] = [
 	"menu", "move", "info", "info_pack", "info_pkmn", "contest", "pack", "balls",
 ]

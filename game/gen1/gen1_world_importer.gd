@@ -885,11 +885,13 @@ static func _read_map(
 	var known: Dictionary = {"mem": {
 		int(layout["audio_rom_bank"]): rom.u8(Gen1Layout.map_song_offset(layout, map_id) + 1),
 	}}
+	_site_map = map_id
 	var texts: Array = _read_texts(rom, layout, bank, rom.u16le(header + 5), events, 0, known)
 	_carry_trainer_headers(events["objects"], texts)
 	_carry_toggleable_objects(rom, layout, events["objects"], map_id)
+	var outside: Array = _states_written_by_engine(map_id)
 	var states: Dictionary = _read_map_states(
-		rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts
+		rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts, outside
 	)
 	## A hidden event's row can sit past every object's, as the Mansion's four
 	## switches do, so the hidden rows are read before the table is grown.
@@ -901,7 +903,7 @@ static func _read_map(
 	## Safari Zone gate's own six are read rather than its first four.
 	while _extend_texts(rom, layout, bank, rom.u16le(header + 5), texts, events, states, known):
 		states = _read_map_states(
-			rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts
+			rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts, outside
 		)
 	for row: Dictionary in hidden:
 		_bind_map_script_byte(row.get("script", []) as Array, int(states["byte"]))
@@ -933,7 +935,9 @@ static func _read_map(
 			"texts_address": rom.u16le(header + 5),
 		},
 		"texts": texts,
-		"alternate_texts": _alternate_texts(rom, layout, bank, states, events, texts.size(), known),
+		"alternate_texts": _alternate_texts(
+			rom, layout, bank, states, events, known, rom.u16le(header + 5), texts.size()
+		),
 		"movement_scripts": _movement_scripts(rom, layout, map_id),
 		"events": {
 			"bank": bank,
@@ -951,16 +955,17 @@ static func _read_map(
 	}
 
 
-## Each swapped-in table is read as far as the map's scripts index one, the
-## way the primary is: `ViridianMartDefaultScript`'s two clerk rows sit past the
-## three its objects name.
+## A swapped-in table is read as far as the objects name it, the primary as far
+## as the scripts index it; `ViridianMart_TextPointers2` lacks two clerk rows.
 static func _alternate_texts(
 	rom: RomFile, layout: Dictionary, bank: int, states: Dictionary, events: Dictionary,
-	rows: int, known: Dictionary
+	known: Dictionary, primary: int, rows: int
 ) -> Dictionary:
 	var out: Dictionary = {}
 	for table: int in _text_tables(states["entry"] as Array):
-		out[str(table)] = _read_texts(rom, layout, bank, table, events, rows, known)
+		out[str(table)] = _read_texts(
+			rom, layout, bank, table, events, rows if table == primary else 0, known
+		)
 	return out
 
 
@@ -1106,11 +1111,19 @@ static func _map_script_stores(nodes: Array) -> Array:
 	return out
 
 
+## `CheckForceBikeOrSurf` writes the Seafoam floors' byte, not their scripts.
+static func _states_written_by_engine(map_id: int) -> Array:
+	if map_id in [Gen1Layout.SEAFOAM_ISLANDS_B3F, Gen1Layout.SEAFOAM_ISLANDS_B4F]:
+		return [Gen1Layout.SEAFOAM_MOVE_OBJECT]
+	return []
+
+
 ## `RunMapScript` jumps to the map's own script every frame. No row records the
 ## state table's length, so the states kept are the ones a store reaches.
 static func _read_map_states(
 	rom: RomFile, layout: Dictionary, bank: int, script: int, texts: Array, seeds: Array = []
 ) -> Dictionary:
+	_site_row = "map script"
 	var entry: Array = decode_script(rom, layout, bank, script)
 	var callbacks: Array = _map_load_walks(rom, layout, bank, script, entry)
 	var dispatch: Dictionary = _map_script_dispatch(entry)
@@ -1120,8 +1133,14 @@ static func _read_map_states(
 	var bodies: Array = _map_script_bodies(rom, layout, bank, int(dispatch["table"]))
 	_bind_map_script_byte(entry, byte)
 	var pending: Array[int] = _map_script_successors(entry, byte)
-	## `CheckFightingMapTrainers` and `StartTrainerBattle` each step the byte by one.
-	pending.append_array(seeds + TRAINER_STATES)
+	## `CheckFightingMapTrainers` and `StartTrainerBattle` step the byte by one;
+	## without a trainer the words past a short table are junk.
+	pending.append_array(seeds)
+	pending.append(0)
+	for row: Dictionary in texts:
+		if row.has("trainer"):
+			pending.append_array(TRAINER_STATES)
+			break
 	for callback: Dictionary in callbacks:
 		_bind_map_script_byte(callback["nodes"] as Array, byte)
 		pending.append_array(_map_script_successors(callback["nodes"] as Array, byte))
@@ -1139,6 +1158,8 @@ static func _read_map_states(
 			pending.append_array(_map_script_successors(bodies[index] as Array, byte))
 	var rows: Array = []
 	for index: int in bodies.size():
+		if reached.has(index) and refusals is Array:
+			(refusals as Array).append_array(_body_refusals[index])
 		if reached.has(index) and bodies[index] != null:
 			rows.append({"id": index, "nodes": bodies[index]})
 	return {"entry": entry, "callbacks": callbacks, "states": rows, "byte": byte}
@@ -1150,6 +1171,7 @@ static func _map_load_walks(
 ) -> Array:
 	var out: Array = []
 	for mask: int in MAP_LOAD_MASKS:
+		_site_row = "load mask %d" % mask
 		var nodes: Array = decode_script(rom, layout, bank, script, {}, mask)
 		if not nodes.is_empty() and nodes != entry:
 			out.append({"mask": mask, "nodes": nodes})
@@ -1162,12 +1184,15 @@ static func _map_script_bodies(
 	rom: RomFile, layout: Dictionary, bank: int, table: int
 ) -> Array:
 	var bodies: Array = []
+	_body_refusals = []
 	while bodies.size() < Gen1Layout.MAP_SCRIPT_STATES:
 		var target: int = rom.u16le(
 			Gen1Layout.banked(bank, table + bodies.size() * Gen1Layout.POINTER_SIZE)
 		)
 		if target < Gen1Layout.SCRIPT_LOWEST or target >= Gen1Layout.SCRIPT_CEILING:
 			break
+		var logged: int = (refusals as Array).size() if refusals is Array else 0
+		_site_row = "state %d" % bodies.size()
 		bodies.append(_walk_script(
 			{
 				"rom": rom, "layout": layout, "bank": bank,
@@ -1175,6 +1200,10 @@ static func _map_script_bodies(
 			},
 			target, {}, 0
 		))
+		if refusals is Array:
+			## A word past the table walks junk: reached bodies keep their log.
+			_body_refusals.append((refusals as Array).slice(logged))
+			(refusals as Array).resize(logged)
 	return bodies
 
 
@@ -1577,6 +1606,7 @@ static func _read_text(
 	known: Dictionary = {}
 ) -> Dictionary:
 	var at: int = Gen1Layout.banked(bank, pointer)
+	_site_row = "text %d" % text_id
 	var decoded: Dictionary = Gen1Text.decode_stream(rom, at)
 	var row: Dictionary = {"command": rom.u8(at), "text": ""}
 	if not bool(decoded.get("ok", false)):
@@ -1604,6 +1634,7 @@ static func _read_text(
 		state["map_text"] = text_id
 	var script: Array = decode_script(rom, layout, bank, code, state)
 	if script.is_empty():
+		_script_logged(Gen1Layout.banked(bank, code), SCRIPT_EMPTY)
 		return row
 	if not String(row["text"]).is_empty():
 		script.push_front({"op": "text", "text": String(row["text"])})
@@ -1672,6 +1703,7 @@ static func _read_hidden_row(
 	rom: RomFile, layout: Dictionary, at: int, map_id: int, names: Array, index: int
 ) -> Dictionary:
 	var row: Dictionary = {"y": rom.u8(at), "x": rom.u8(at + 1)}
+	_site_row = "hidden %d" % index
 	var argument: int = rom.u8(at + 2)
 	var bank: int = rom.u8(at + 3)
 	var address: int = rom.u16le(at + 4)
@@ -1946,11 +1978,10 @@ static func _asm_operand(rom: RomFile, bank: int, at: int, target: int) -> int:
 	return Gen1Layout.banked(bank, rom.u16le(at + 2))
 
 
-## What one walk may read, how deep its branches may nest, and the two answers
-## [method _script_step] gives that are not an address.
 ## A `set_map_script` through `wCurMapScript`, whose byte the dispatch names.
 const MAP_SCRIPT_MIRROR: int = -1
-const TRAINER_STATES: Array = [0, 1, 2]
+const TRAINER_STATES: Array = [1, 2]
+## What one walk may read, and how deep its branches may nest.
 const SCRIPT_BUDGET: int = 4096
 const SCRIPT_DEPTH: int = 16
 ## [Gen2WorldCatalog]'s site nodes, each stamped `at` its instruction's linear
@@ -2035,16 +2066,25 @@ const SCRIPT_STORED_REGISTERS: Dictionary = {
 }
 
 
+## While an [Array], each instruction a walk gave up on is appended as
+## `{map, row, at, op}`; a row that read to nothing has [constant SCRIPT_EMPTY].
+static var refusals: Variant = null
+const SCRIPT_EMPTY: int = 0x100
+static var _site_map: int = -1
+static var _site_row: String = ""
+static var _body_refusals: Array = []
+
+
 ## One `text_asm` row's machine code, as the boxes it prints and the branches
 ## choosing between them; a path reaching anything unread is dropped whole.
 ## [param known] is the argument byte a hidden event's own routine is handed.
 static func decode_script(
 	rom: RomFile, layout: Dictionary, bank: int, at: int, known: Dictionary = {},
-	load_mask: int = 0, unread: Array = []
+	load_mask: int = 0
 ) -> Array:
 	var ctx: Dictionary = {
 		"rom": rom, "layout": layout, "bank": bank,
-		"budget": [SCRIPT_BUDGET], "map_load_mask": load_mask, "unread": unread,
+		"budget": [SCRIPT_BUDGET], "map_load_mask": load_mask,
 	}
 	var walked: Variant = _walk_script(ctx, at, known.duplicate(), 0)
 	return walked as Array if walked is Array else []
@@ -2056,7 +2096,7 @@ static func _walk_script(
 	ctx: Dictionary, pc: int, state: Dictionary, depth: int
 ) -> Variant:
 	if depth > SCRIPT_DEPTH:
-		return null
+		return _script_refused(ctx, pc)
 	var bank: int = int(ctx["bank"])
 	ctx.erase("tail_call")
 	var walked: Variant = _walk_script_in(ctx, pc, state, depth)
@@ -2095,7 +2135,8 @@ static func _walk_script_in(
 		var next: int = _script_step(ctx, pc, state, out, depth)
 		_stamp_sites(ctx, out, emitted, pc)
 		if next == SCRIPT_END:
-			return _script_ended(state, out)
+			var ended: Variant = _script_ended(state, out)
+			return ended if ended != null else _script_refused(ctx, pc)
 		if next == SCRIPT_WALKED:
 			return out
 		if next == SCRIPT_UNREAD:
@@ -2103,7 +2144,7 @@ static func _walk_script_in(
 		if next == SCRIPT_AIDE:
 			return _script_aide_branch(ctx, pc, state, depth, out)
 		pc = next
-	return null
+	return _script_refused(ctx, pc)
 
 
 static func _stamp_sites(ctx: Dictionary, out: Array, from: int, pc: int) -> void:
@@ -3966,10 +4007,23 @@ static func _script_silent_call(routine: String, state: Dictionary, out: Array, 
 	return next
 
 
+## `DelayFrames` waits `c` frames and leaves it zero; `Delay3` loads 3 first.
+static func _script_delay(routine: String, state: Dictionary, out: Array, next: int) -> int:
+	if routine == "delay_3":
+		_script_loaded_register(state, "c", 3)
+	if not state.has("c") or state.has("c_source") or state.has("c_runtime"):
+		return SCRIPT_UNREAD
+	out.append({"op": "delay", "frames": int(state["c"])})
+	_script_loaded_register(state, "c", 0)
+	return next
+
+
 ## A routine spent without being walked: one that does nothing here, or a sound.
 static func _script_spent_call(
 	ctx: Dictionary, routine: String, state: Dictionary, out: Array, next: int
 ) -> int:
+	if routine in ["delay_frames", "delay_3"]:
+		return _script_delay(routine, state, out, next)
 	if routine in Gen1Layout.SCRIPT_SILENT_CALLS:
 		return _script_silent_call(routine, state, out, next)
 	if Gen1Layout.SCRIPT_SOUND_CALLS.has(routine):
@@ -5625,9 +5679,14 @@ static func _script_branch(
 
 
 static func _script_refused(ctx: Dictionary, pc: int) -> Variant:
-	if ctx.has("unread"):
-		(ctx["unread"] as Array).append(pc)
+	var at: int = Gen1Layout.banked(int(ctx["bank"]), pc)
+	_script_logged(at, (ctx["rom"] as RomFile).u8(at))
 	return null
+
+
+static func _script_logged(at: int, op: int) -> void:
+	if refusals is Array:
+		(refusals as Array).append({"map": _site_map, "row": _site_row, "at": at, "op": op})
 
 
 ## A branch whose zero flag the walk already knows: only the side taken is
@@ -6069,8 +6128,6 @@ static func _script_node_exact(
 		"then": fell, "else": taken}
 
 
-## The rest of [method _script_node]'s own rows. A `cp` raises Z on the match,
-## so a match is the side the branch did not take.
 ## `cp` against one byte the run answers, as the node, its key and the walk's
 ## own name for the value. Z is the match, so the taken side is the mismatch;
 ## the dex count's carry is set below it, so that taken side owns fewer.
@@ -6240,6 +6297,7 @@ static func _read_trainer_header(
 	## after-battle one and Yellow's end-battle one.
 	for name: String in ["before", "after", "end"]:
 		var pointer: int = rom.u16le(at + int(offsets[name]))
+		_site_row = "trainer %s" % name
 		out[name] = _read_trainer_text(rom, layout, bank, pointer)
 		var decoded: Dictionary = Gen1Text.decode_stream(rom, Gen1Layout.banked(bank, pointer))
 		var code: int = _text_code_at(decoded)
@@ -6247,6 +6305,7 @@ static func _read_trainer_header(
 			continue
 		var script: Array = decode_script(rom, layout, bank, code)
 		if script.is_empty():
+			_script_logged(Gen1Layout.banked(bank, code), SCRIPT_EMPTY)
 			continue
 		## Lance's `SetEvent EVENT_BEAT_LANCE` stands behind the streamed line.
 		if not String(decoded.get("text", "")).is_empty():
