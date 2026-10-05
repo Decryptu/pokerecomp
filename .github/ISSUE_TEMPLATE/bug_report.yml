@@ -29,6 +29,9 @@ body:
       description: Pick every version you saw the bug in. Use N/A if it isn't game-specific.
       multiple: true
       options:
+        - Red
+        - Blue
+        - Yellow
         - Gold
         - Silver
         - Crystal

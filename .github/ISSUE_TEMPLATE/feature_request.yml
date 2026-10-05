@@ -34,6 +34,9 @@ body:
       description: Pick every version it applies to. Use N/A if it isn't game-specific.
       multiple: true
       options:
+        - Red
+        - Blue
+        - Yellow
         - Gold
         - Silver
         - Crystal

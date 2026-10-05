@@ -33,6 +33,9 @@ body:
       label: Which game is this for
       multiple: true
       options:
+        - Red
+        - Blue
+        - Yellow
         - Gold
         - Silver
         - Crystal
