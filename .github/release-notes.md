@@ -1,4 +1,7 @@
-<!-- Rewrite from the first release heading, `## Added
+<!-- Rewrite from the first release heading, `## Added`, `## Changed` or `## Fixed`, for each release. The text below
+the release changes is standing guidance with a {VERSION} placeholder. -->
+
+## Added
 
 - Red, Blue and Yellow cartridge saves can be imported with Import .sav. Party, boxes, bag, item PC, money, coins, badges, Pokédex, event flags, position, Hall of Fame and Yellow's Pikachu data are carried over.
 - Bug-Catching Contest judging announces third, second and first place with the cartridge's texts, placing jingles and scores.
