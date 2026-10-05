@@ -2,13 +2,9 @@ class_name Gen2MoveScreen
 extends RefCounted
 
 ## The move screen's model (`MoveScreenLoop` in `engine/pokemon/mon_menu.asm`):
-## which member of the party is shown, which of its moves the cursor is on, and
-## which one is being moved. [Gen2MoveScreenPage] draws the answer.
-##
-## `ManagePokemonMoves` is opened over the party menu and hands control back on
-## the way out, so this owns no nodes, exactly like [Gen2MonStatsScreen]. The two
-## moves that trade places trade their PP with them, which is `.place_move`
-## copying `wPartyMon1Moves` and `wPartyMon1PP` in the same shape.
+## which member is shown, which move the cursor is on and which is being moved.
+## [Gen2MoveScreenPage] draws it. Like [Gen2MonStatsScreen] it owns no nodes, and
+## two moves that trade places trade their PP too (`.place_move`).
 
 signal closed  ## `.exit`, which is B with nothing held.
 ## `PlayClickSFX` on every press this screen answers, and `SFX_SWITCH_POKEMON`

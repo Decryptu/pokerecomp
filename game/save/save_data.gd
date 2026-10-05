@@ -43,72 +43,51 @@ var game_time: PokeGameTime = null
 var label: String = ""
 var party: Array = []
 ## The party members `ContestDropOffMons` masks off while the Bug Catching
-## Contest runs. The cartridge leaves them in `wPartyMon` and drops
-## `wPartyCount` to 1; this project moves them here, so nothing that walks the
-## party has to know about the mask. `ContestReturnMons` puts them back. Like
-## `mailbox` it defaults rather than versioning.
+## Contest runs. The cartridge leaves them in `wPartyMon` and drops `wPartyCount`
+## to 1; this project moves them here until `ContestReturnMons`.
 var contest_stashed_party: Array = []
 var boxes: Array = []
 var world: Gen2WorldSnapshot = null
 ## Per-slot, per-mod JSON objects. This namespace travels with the save.
 var mods: Dictionary = {}
-## What names the run beside the state it produced: the seed the world's
-## generators are built from and the mods that were loaded when the slot was
-## last written (`Gen2ModHost.loaded_mods`). Zero and empty read as "not
-## recorded", which is what every slot written before this existed says.
+## The seed the world's generators are built from and the mods loaded when the
+## slot was last written (`Gen2ModHost.loaded_mods`). Zero and empty read as "not
+## recorded", which every older slot says. Fields from here to `reset_count`
+## default rather than version: absent, each is the value a new game holds.
 var run_seed: int = 0
 var run_mods: Array = []
-## The registered mod settings this run was created with, keyed by mod id and
-## option key. The installation-wide options file is only the template for a
-## new run; once a slot exists its effective settings live here so reopening it
-## cannot silently change the state that produced the save.
+## The registered mod settings this run was created with, by mod id and option
+## key. The options file is only the template for a new run, so reopening a slot
+## cannot silently change the state that produced it.
 var run_options: Dictionary = {}
-## The divergence flags and difficulty this run is played under. Its own field
-## rather than a mod's, because it changes what the engine does: a run recorded
-## under one set of rules did not produce the state a different set would.
-## Null reads as "not recorded", which every slot written before it says, and
+## The divergence flags and difficulty this run is played under, its own field
+## because it changes what the engine does. Null reads as "not recorded" and
 ## adopts the installation's once.
 var run_rules: Gen2Rules = null
 var boxes_shape_valid: bool = true
-## `wCurBox`, which is where a deposit lands and which box BILL'S PC's WITHDRAW
-## opens on. Like the `run` block it defaults rather than versioning: a slot
-## written before it existed is one whose current box is the first.
+## `wCurBox`, where a deposit lands and where BILL'S PC's WITHDRAW opens.
 var current_box: int = 0
-## `sHallOfFame`, newest first: `AddHallOfFameEntry` shifts every record down and
-## writes the new team at the front, and the thirtieth falls off. A record is
-## `{ win_count, mons }`, and a mon is what `hof_mon` keeps: species, OT id, DVs,
-## level and nickname. Like `current_box` and the `run` block this defaults
-## rather than versioning; an empty list is the truth about a slot written
-## before it existed.
+## `sHallOfFame`, newest first: `AddHallOfFameEntry` writes the new team at the
+## front and the thirtieth falls off. A record is `{ win_count, mons }`, and a
+## mon is what `hof_mon` keeps: species, OT id, DVs, level and nickname.
 var hall_of_fame: Array = []
-## `sBoxNames`, which is its own array in SRAM rather than part of a box: one
-## eight-character name per box, `BillsPC_ChangeBoxSubmenu`'s NAME row writes
-## one and `SetDefaultBoxNames` fills them all at a new game. Empty is that
-## default, which [method box_name] spells rather than storing.
+## `sBoxNames`, one eight-character name per box, which BILL'S PC's NAME row
+## writes and `SetDefaultBoxNames` fills. Empty is that default, which
+## [method box_name] spells rather than storing.
 var box_names: Array = []
-## `sMailboxCount` and `sMailboxes`: the messages the player has sent to the PC,
-## newest last, at most [constant Gen2SaveMail.CAPACITY]. Like `box_names` this
-## defaults rather than versioning; an empty list is the truth about a slot
-## written before mail existed.
+## `sMailboxCount` and `sMailboxes`: the messages sent to the PC, newest last, at
+## most [constant Gen2SaveMail.CAPACITY].
 var mailbox: Array = []
-## `sLinkBattleStats`: the three totals `_DisplayLinkRecord` prints across the
-## top and the five per-opponent rows under them, kept in the order
-## `AddLastLinkBattleToLinkRecord` sorts them. Like `mailbox` and `box_names`
-## this defaults rather than versioning; a slot written before link play reads
-## as one that has never linked, which is the truth about it.
+## `sLinkBattleStats`: the three totals `_DisplayLinkRecord` prints and the five
+## per-opponent rows under them, in `AddLastLinkBattleToLinkRecord`'s order.
 var link_record: Dictionary = Gen2LinkSession.normalize_record({})
 ## `sMysteryGiftData`: the waiting gift, the day's partners, the decorations
-## already received and the name the Trainer House reads. It sits outside the
-## checksummed save on the cartridge, which is why the exchange can happen from
-## the menu with no file loaded, and it defaults here the way `mailbox` and
-## `box_names` do rather than versioning.
+## received and the Trainer House's name. It sits outside the checksummed save
+## on the cartridge, so the exchange can happen with no file loaded.
 var mystery_gift: Dictionary = Gen2MysteryGift.default_section()
-## What a Nuzlocke run has spent: the areas that have given up their one
-## encounter, the Pokemon it has lost for good, and whether it is over. Only a
-## run whose [member Gen2Rules.challenge] is
-## [constant Gen2Rules.CHALLENGE_NUZLOCKE] ever writes here, and an empty
-## dictionary is the truth about every other slot and about every slot written
-## before the challenge existed. See [Gen2Nuzlocke].
+## What a Nuzlocke run has spent: the areas that gave up their one encounter, the
+## Pokemon lost for good, and whether it is over. Only a
+## [constant Gen2Rules.CHALLENGE_NUZLOCKE] run writes here. See [Gen2Nuzlocke].
 var nuzlocke: Dictionary = {}
 ## How many times the run has been soft reset, which the cartridge has nowhere
 ## to put. Written by [method Gen2SaveStore.bump_reset_count] alone, never
@@ -297,14 +276,11 @@ static func _read_run(out: Gen2SaveData, source: Dictionary) -> void:
 				if _valid_mod_id(id) and options is Dictionary:
 					out.run_options[StringName(id)] = (options as Dictionary).duplicate(true)
 
-## Converts an older project save shape into the current schema, one version step
-## at a time so a version 1 file reaches the current one through every step. Each
-## step adds only what its version lacked. Version 1 had no PC-box field, 2 no
-## slot label, 3 no player trainer ID (which migrates to zero rather than being
-## invented, since a rolled ID would change an existing save's headbutt
-## encounters), 4 neither gender nor a play timer, and 5 no per-mod namespace. The
-## The `run` block and the reset count joined version 6 after it shipped and are
-## not versions of their own: each defaults to nothing.
+## Converts an older project save shape into the current schema one version step
+## at a time. Each step adds only what its version lacked: 1 had no PC-box field,
+## 2 no slot label, 3 no player trainer ID (zero, not a rolled one, which would
+## change a save's headbutt encounters), 4 neither gender nor a play timer, and 5
+## no per-mod namespace.
 static func migrate_dict(raw: Variant) -> Dictionary:
 	if not raw is Dictionary:
 		return {"ok": false, "message": "save data is not an object"}

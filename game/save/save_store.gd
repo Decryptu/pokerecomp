@@ -330,12 +330,10 @@ static func create_development_save(data: GameData, slot: int) -> Gen2SaveData:
 	return development
 
 
-## Creates the source-shaped Crystal new-game save. Crystal initializes an empty
-## party before Elm's Lab and the imported GIVEPOKE script creates the first
-## member later; the fourth argument is accepted and ignored, so a new save
-## cannot skip the story handoff. [param random] rolls wPlayerID, the one roll
-## here that is an identity rather than a game event, so an absent generator
-## randomizes rather than being refused; pass one for a reproducible run.
+## Creates the source-shaped new-game save. Crystal starts with an empty party
+## and GIVEPOKE creates the first member later; the fourth argument is ignored so
+## a new save cannot skip that handoff. [param random] rolls wPlayerID, an identity
+## rather than a game event; pass one for a reproducible run.
 static func create_new_game(
 	data: GameData, slot: int, player_name: String, _starter_species: int = -1,
 	random: RandomNumberGenerator = null

@@ -1,12 +1,10 @@
 class_name Gen2MonStatsScreen
 extends RefCounted
 
-## The stats screen's model: which member of a list is shown, which page is open,
-## and what each page has to say about it. The pages are the cartridge's three plus
-## whatever mods have registered, and [Gen2StatsScreenPage] draws the answer.
-## `StatsScreenInit` is opened over whatever screen asked for it and hands control
-## back on the way out, so this owns no nodes, and the caller redraws after every
-## press. The mons are passed in because `wMonType` picks the party or a box.
+## The stats screen's model: which member is shown, which page is open and what
+## it says. The pages are the cartridge's three plus the mods', and
+## [Gen2StatsScreenPage] draws them. It owns no nodes, the caller redraws after
+## every press, and the mons are passed in because `wMonType` picks party or box.
 
 ## `StatsScreen_Exit`: B, or A on the last page.
 signal closed

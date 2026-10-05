@@ -63,7 +63,8 @@ empty label falls back to the player name.
 | `hall_of_fame` | `sHallOfFame`, the thirty induction records newest first |
 | `save_file_exists` | `wSaveFileExists`: false from New Game until the first in-game save, which therefore asks no overwrite question; true for older and imported slots |
 
-Cartridge SRAM box placement is intentionally outside this model.
+Generation 2 SRAM box placement is outside this model; Generation 1's boxes are
+mapped (see "Generation 1 cartridge SRAM").
 
 Older project saves migrate in memory one version step at a time up to 6, and
 the next successful save writes 6. Migration invents nothing: a missing world
@@ -171,15 +172,16 @@ prize drawn for the run. It also holds `sGSBallFlag`, which sits in the same ban
 and which only a mod's `request_gs_ball()` writes. Gold/Silver's optional GS Ball
 quest and the originally received starter are stored in world state.
 
-Original SRAM also contains player, map, checksum, PC box, Hall of Fame and
-Crystal-specific regions. This model imports only party data; the world snapshot
-is a separate runtime shape and does not claim to reproduce unsupported SRAM
-bytes.
+Original Generation 2 SRAM also contains player, map, checksum, PC box, Hall of
+Fame and Crystal-specific regions. The Generation 2 adapter imports only party
+data; the world snapshot is a separate runtime shape and does not claim to
+reproduce unsupported SRAM bytes.
 
 ## Cartridge SRAM boundary
 
-`Gen2SramAdapter` accepts a raw `PackedByteArray`, supported ROM identity and
-complete 32 KiB SRAM image, with trailing emulator RTC data allowed. Import
+For Gold, Silver and Crystal, `Gen2SramAdapter` accepts a raw `PackedByteArray`,
+supported ROM identity and complete 32 KiB SRAM image, with trailing emulator RTC
+data allowed. Import
 selects the primary copy, then backup, and rejects both if their 99/127 markers
 or checksums fail. Gold/Silver use split backup regions; Crystal uses contiguous
 ranges. A valid backup repairs the primary before patching, and both copies are
@@ -200,9 +202,91 @@ write a different Pokemon into a real cartridge. Crystal's player gender rides i
 | Gold/Silver | `0x2009..0x2D68` | `0x2D69` | `0x288A` | `0x0C6B`, `0x10E8`, `0x15C7`, `0x3D96`, `0x7E39` |
 | Crystal | `0x2009..0x2B82` | `0x2D0D` | `0x2865` | `0x1209..0x1D82`, checksum `0x1F0D` |
 
+## Generation 1 cartridge SRAM
+
+`Gen2SramAdapter` hands Red, Blue and Yellow to `Gen1SramAdapter`, which carries
+the whole game rather than the party alone: the port models the Generation 1
+trainer, so a field the file cannot hold or the model cannot represent is
+refused rather than dropped. The three games place every section identically
+(`ram/sram.asm`), and `wMainData` differs only in the Pikachu fields Yellow keeps
+in padding.
+
+| Section | File offset |
+|---|---|
+| `sGameData`: name, main data, sprite data, party, current box | `0x2598..0x3522`, checksum `0x3523` |
+| Party, `sCurBoxData` | `0x2F2C`, `0x30C0` |
+| `sBox1`..`sBox6`, `sBox7`..`sBox12`, each `0x462` bytes, then a sum over all six and one each | `0x4000`, `0x6000` |
+| `sHallOfFame`, fifty teams of six `0x10`-byte records | `0x0598` |
+
+A file is valid when `CalcCheckSum` over `sGameData` matches `sMainDataCheckSum`;
+there is no second copy. The sums over the box banks are written on export and
+never read, as on the cartridge. Until the first CHANGE BOX the box banks hold
+uninitialised bytes, so `BIT_HAS_CHANGED_BOXES` of `wCurrentBoxNum` decides
+whether anything but the current box is read.
+
+Import carries:
+
+| Cartridge | Model |
+|---|---|
+| `sPlayerName`, `wPlayerID`, `wPlayTime*` | name, `player_id`, `game_time` |
+| `wPartyMons`, `sCurBoxData` and the twelve box rows, `wDayCareMon` | `party`, `boxes` (the current box is `sCurBoxData`; its own row is stale), `current_box`, the Day-Care slot. A Pokemon keeps species, level, experience, HP, status, DVs, stat experience, moves, PP and PP Ups, OT ID and name, nickname and catch rate byte |
+| `wBagItems`, `wBoxItems`, money, coins | bag and item PC stacks in order, `money`, `coins` |
+| `wPokedexOwned`, `wPokedexSeen` | caught and seen species |
+| `wObtainedBadges`, `wBeatGymFlags`, `wStatusFlags1`, `wStatusFlags4`, `wElite4Flags`, hidden item and coin flags, `wTownVisitedFlag`, Pikachu map script flags | the engine flags `Gen1Layout.ENGINE_FLAG_BYTES` numbers, the badge flags and the always-on-bike bit |
+| `wEventFlags`, `wCompletedInGameTradeFlags`, `wToggleableObjectFlags`, `wGameProgressFlags` | event flags, finished trades, the objects a `ShowObject` or `HideObject` has moved, map script states |
+| `wCurMap`, `wYCoord`, `wXCoord`, `wLastMap`, `wLastBlackoutMap`, `wMapPalOffset`, `wWalkBikeSurfState` | the world snapshot's map, cell, last maps, palette offset and movement mode |
+| `wRivalName`, `wRivalStarter`, `wPlayerStarter`, `wFossilItem` and `wFossilMon`, `wNumSafariBalls` and `wSafariSteps`, `wCardKeyDoorY` and `X`, the Vermilion trash can bytes | the same values on the snapshot and its state |
+| `wNumHoFTeams`, `sHallOfFame` | `hall_of_fame` and the Hall of Fame engine flag |
+| Yellow's `wPikachuHappiness`, `wPikachuMood`, `wPikachuEmotionModifier`, two state bits and `wPikachuSpawnState`, `wSurfingMinigameHiScore` | the Pikachu record and the minigame score |
+
+What it does not carry, and why:
+
+- `wOptions`: the options are installation-wide, and the file's byte is left as it
+  is on export.
+- The facing: `SpecialEnterMap` resets the player sprite, so every Continue stands
+  the player facing down.
+- Status flags the cartridge clears or the port derives (`wStatusFlags2`, `3`, `5`,
+  `7`, the rest of `6`), `wMovementFlags`, the map header copied into
+  `wMainData`, `wWarpedFromWhichWarp`, the sprite buffers, the sprite data and
+  `sTileAnimations`. Export leaves every one of these bytes as it found them.
+- A Hall of Fame record's OT ID and DVs, which `HoFRecordMonInfo` never stored.
+- The 152nd Pokedex bit, and a Pokemon caught but not seen, which the model reads
+  as seen.
+
+Import refuses a file whose checksum fails, a Pokemon, Day-Care slot or Hall of
+Fame member whose species has no Pokedex entry, a bag or PC with an item in two
+stacks (the model keeps one stack per item) or a stack of zero or over 99, money
+or coins that are not packed decimal, a list with no end marker, a current box
+past the twelfth, a map the cache does not hold, and anything
+`Gen2SaveValidator` rejects.
+
+Export patches an existing valid image, because OPTION, the Hall of Fame teams
+the model dropped and the unmapped flag bytes cannot be invented. Bytes the
+model decodes to the same value are not rewritten, so an untouched import exports
+byte for byte. A party, box or Hall of Fame that changed is rewritten whole. A
+moved player gets `wCurMap`, the cell, the block coordinates and
+`wCurrentTileBlockMapViewPointer`, which is `wOverworldMap` + (block row + 1) *
+(width in blocks + 6) + block column + 1, as measured in Red's bedroom. The
+first occupied box other than the current one sets `BIT_HAS_CHANGED_BOXES` and
+writes all twelve rows the way `EmptyAllSRAMBoxes` and `CopyBoxToOrFromSRAM`
+would, with their sums. Export refuses mod content, an engine flag, event flag
+(past 2559), trade, map script byte, toggleable object or script byte with no
+byte in the file, a Pokedex entry past 151, more than twenty bag stacks or fifty
+PC ones, a stack over 99, a Pokemon in a thirteenth box, a species with no
+cartridge index, and more than fifty Hall of Fame teams.
+
+The save screen's `Import .sav` calls the import; nothing in the player flow calls
+the export yet.
+
+Verification: `tests/unit/test_gen1_sram.gd` holds the layout, the round trip and
+the refusals on a synthetic cache. `tools/checks/gen1_sram.gd` runs the same
+boundary on saves the real cartridges wrote under PyBoy, through a local script
+named by `GEN1_SAV_ORACLE`, and has the game load an edited export.
+
 Implementation and synthetic fixtures:
 
-- `game/save/sram_adapter.gd`
-- `tests/unit/test_save.gd`
+- `game/save/sram_adapter.gd`, `tests/unit/test_save.gd`
+- `game/save/gen1_sram_adapter.gd`, `gen1_sram_world.gd`, `gen1_sram_mons.gd`,
+  `gen1_sram_context.gd`, `tests/unit/test_gen1_sram.gd`
 
-Layout references: [Gold/Silver SRAM layout](https://raw.githubusercontent.com/pret/pokegold/master/ram/sram.asm), [Gold/Silver save routines](https://raw.githubusercontent.com/pret/pokegold/master/engine/menus/save.asm), [Crystal SRAM layout](https://raw.githubusercontent.com/pret/pokecrystal/master/ram/sram.asm), [Crystal save routines](https://raw.githubusercontent.com/pret/pokecrystal/master/engine/menus/save.asm), [Crystal Pokémon constants](https://raw.githubusercontent.com/pret/pokecrystal/master/constants/pokemon_data_constants.asm), [Crystal bank map](https://github.com/pret/pokecrystal/blob/master/layout.link), [Crystal RAM macros](https://github.com/pret/pokecrystal/blob/master/macros/ram.asm).
+Layout references: [Red/Blue SRAM layout](https://raw.githubusercontent.com/pret/pokered/master/ram/sram.asm), [Red/Blue save routines](https://raw.githubusercontent.com/pret/pokered/master/engine/menus/save.asm), [Gold/Silver SRAM layout](https://raw.githubusercontent.com/pret/pokegold/master/ram/sram.asm), [Gold/Silver save routines](https://raw.githubusercontent.com/pret/pokegold/master/engine/menus/save.asm), [Crystal SRAM layout](https://raw.githubusercontent.com/pret/pokecrystal/master/ram/sram.asm), [Crystal save routines](https://raw.githubusercontent.com/pret/pokecrystal/master/engine/menus/save.asm), [Crystal Pokémon constants](https://raw.githubusercontent.com/pret/pokecrystal/master/constants/pokemon_data_constants.asm), [Crystal bank map](https://github.com/pret/pokecrystal/blob/master/layout.link), [Crystal RAM macros](https://github.com/pret/pokecrystal/blob/master/macros/ram.asm).

@@ -2,12 +2,9 @@ class_name Gen2SaveMail
 extends RefCounted
 
 ## One `mailmsg` struct and the four routines in `engine/pokemon/mail.asm` that
-## move one between a party member and the PC. The cartridge keeps party mail in
-## `sPartyMail` indexed by party slot and the mailbox in `sMailboxes`; the mailbox
-## is kept the same way here, but a party member's mail is kept on the member
-## rather than on its slot, because everything that moves a slot moves its mail
-## with it and nothing can put a mailed Pokemon anywhere else. Scene-free and
-## cache-free, like the rest of `game/save/`.
+## move one between a party member and the PC. The cartridge indexes party mail
+## by slot in `sPartyMail`; here it rides on the member, since everything that
+## moves a slot moves its mail. Scene-free and cache-free.
 
 ## `MAIL_LINE_LENGTH`, `MAIL_MSG_LENGTH` and `MAILBOX_CAPACITY`.
 const LINE_LENGTH: int = Gen2Layout.MAIL_LINE_LENGTH

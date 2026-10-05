@@ -1,12 +1,9 @@
 class_name Gen2SaveScreen
 extends Control
 
-## Player-facing save selection for one imported cartridge revision.
-## The screen only coordinates validated save data. Original SRAM bytes enter
-## through [Gen2SramAdapter], and project slots are written through
-## [Gen2SaveStore], so no control here needs to know a cartridge offset.
-## It is the launcher's second screen and shares its frame: same shell, same
-## soft surfaces, same palette.
+## Player-facing save selection for one imported cartridge revision, on the
+## launcher's own shell. Original SRAM bytes enter through [Gen2SramAdapter] and
+## slots are written through [Gen2SaveStore], so no control knows an offset.
 
 var _palette: Gen2LauncherTheme = null
 var _data: GameData = null
@@ -30,10 +27,8 @@ var _name_input: LineEdit = null
 var _export_dialog: Gen2LauncherFilePicker = null
 var _slot_import_dialog: Gen2LauncherFilePicker = null
 var _file_dialog: Gen2LauncherFilePicker = null
-## `MysteryGift`'s own screen, which is a main-menu row on the cartridge and
-## belongs here for the same reason its SRAM block sits outside the checksummed
-## save: the exchange happens with no file loaded, and the two slots this
-## screen already lists are the only two Mystery Gift blocks on one machine.
+## `MysteryGift`'s own screen, a main-menu row on the cartridge: the exchange
+## happens with no file loaded, like its SRAM block outside the checksummed save.
 var _mystery_gift: Gen2MysteryGiftScreen = null
 var _mystery_gift_hardware: Gen2Screen = null
 var _mystery_gift_clock := Gen2WorldAnimation.FrameClock.new()
@@ -97,11 +92,9 @@ func open_new_slot() -> bool:
 
 
 ## Starts a new game in the selected slot by running the cartridge's own intro.
-## Nothing is written here: `NewGame` reaches `InitializeWorld` only after
-## `PlayerProfileSetup` and `OakSpeech` have returned, so the slot is staged on
-## [GameRuntime] and [Gen2IntroScreen] writes it once the trainer has a name and
-## a gender. [param label] is the file's decorative name and [param challenge]
-## overrides the form's own pick, which is what a driver uses.
+## Nothing is written: `NewGame` reaches `InitializeWorld` only after `OakSpeech`,
+## so the slot is staged on [GameRuntime] and [Gen2IntroScreen] writes it once the
+## trainer is named. [param challenge] overrides the form's pick, for a driver.
 func create_new_game(label: String = "", challenge: StringName = &"") -> bool:
 	if _data == null:
 		_set_status(&"error", "New game unavailable.", "No imported cartridge cache is selected.")
