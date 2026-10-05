@@ -517,6 +517,7 @@ func _one_game() -> void:
 	_check_the_badge_house()
 	_check_the_day_care()
 	_check_the_name_rater()
+	_check_moms_rest()
 	_check_the_town_map_poster()
 	_check_flying()
 	_check_a_dungeon_fall()
@@ -2483,9 +2484,6 @@ func _trade_filled(text: String) -> String:
 	return Gen2TextStream.fill_names(out, {"player": Gen2WorldScriptRunner.UNNAMED})
 
 
-## `DaycareGentlemanText` walked both ways: the offer, the party list and
-## `MoveMon PARTY_TO_DAYCARE`, then the growth, `HasEnoughMoney` and the way
-## back out. `IncrementDayCareMonExp` is what makes the second half possible.
 ## `NameRatersHouseNameRaterText` end to end, and the OT test both ways.
 func _check_the_name_rater() -> void:
 	var boxes: Dictionary = _name_rater_boxes()
@@ -2535,6 +2533,30 @@ func _check_the_name_rater() -> void:
 	_r.note("gen1 walk the NAME RATER: a rename, a traded member and three refusals")
 
 
+## `BIT_GOT_STARTER`, which Mom heals on, and her `object_event 5, 4`.
+const GOT_STARTER_ENGINE_FLAG: int = 259
+const MOM_CELL := Vector2i(5, 4)
+## `GBFadeOutToWhite` and `GBFadeInFromWhite`: three `ld c, 8` steps each.
+const MOM_FADE_FRAMES: int = 24
+
+
+## `RedsHouse1FMomHealScript`: the fade out, `HealParty`, the fade in.
+func _check_moms_rest() -> void:
+	var world: Gen2WorldAPI = _facing_up(REDS_HOUSE_1F, MOM_CELL + Vector2i.DOWN)
+	if world == null:
+		return
+	world.state.set_engine_flag(GOT_STARTER_ENGINE_FLAG, true)
+	world.interact()
+	var out: Array[int] = _spend_script_waits(world, true)
+	_r.check(out == [MOM_FADE_FRAMES], "Mom's fade out waited %s." % [out])
+	_r.check(StringName(world.pending_runtime_request().get("kind", &"")) == &"party_heal_requested",
+		"HealParty did not follow the fade out.")
+	world.complete_runtime_request({"ok": true})
+	var back: Array[int] = _spend_script_waits(world, false)
+	_r.check(back == [MOM_FADE_FRAMES], "Mom's fade in waited %s." % [back])
+	_r.note("gen1 walk Mom's rest fading out and back in")
+
+
 func _check_the_name_rater_refuses(boxes: Dictionary) -> void:
 	var come_again: String = _name_rater_text(boxes, "come_again")
 	var world: Gen2WorldAPI = _name_rater_world()
@@ -2552,7 +2574,7 @@ func _check_the_name_rater_refuses(boxes: Dictionary) -> void:
 		refused.interact()
 		refused.choose_script_input(0)
 		refused.run_event_queue(true)
-		var said: String = _event_text(refused.complete_runtime_request(row))
+		var said: String = _event_text(_after_waits(refused, refused.complete_runtime_request(row)))
 		var wanted: String = come_again if int(row.get("party_index", -1)) < 0 \
 			else _name_rater_text(boxes, "impeccable", NAME_RATER_SPECIES_NAME)
 		_r.check(said == wanted, "the list was answered with %s." % said)
@@ -2563,6 +2585,7 @@ func _check_the_name_rater_refuses(boxes: Dictionary) -> void:
 	blank.choose_script_input(0)
 	blank.run_event_queue(true)
 	blank.complete_runtime_request(_name_rater_row(true))
+	blank.finish_script_waits()
 	blank.choose_script_input(0)
 	blank.run_event_queue(true)
 	_r.check(
@@ -2581,6 +2604,7 @@ func _name_rater_row(mine: bool) -> Dictionary:
 
 ## What the box over a YES/NO says: the pending input's text, not the step's.
 func _name_rater_asked(world: Gen2WorldAPI) -> String:
+	world.finish_script_waits()
 	return String(world.pending_script_input().get("text", ""))
 
 
@@ -2631,6 +2655,8 @@ func _name_rater_text(boxes: Dictionary, name: String, ram: String = "") -> Stri
 	return text
 
 
+## `DaycareGentlemanText` both ways: the offer, the party list and the growth,
+## then `HasEnoughMoney` and the way back out.
 func _check_the_day_care() -> void:
 	_check_the_day_care_refuses()
 	var world: Gen2WorldAPI = _day_care_world(0)
@@ -3204,11 +3230,13 @@ func _check_the_chairmans_print() -> void:
 	var asked: String = String(world.pending_script_input().get("text", ""))
 	_r.check(asked.begins_with(CHAIRMAN_PRINT_BOX), "the chairman asked %s." % asked)
 	world.choose_script_input(0)
+	world.finish_script_waits()
 	var request: Dictionary = world.pending_runtime_request()
 	if not _r.check(StringName(request.get("kind", &"")) == &"party_selection_requested",
 		"YES asked for %s." % [request]):
 		return
 	world.complete_runtime_request(_name_rater_row(true))
+	world.finish_script_waits()
 	request = world.pending_runtime_request()
 	var values: Dictionary = request.get("values", {})
 	if not _r.check(StringName(request.get("kind", &"")) == &"printer_requested"

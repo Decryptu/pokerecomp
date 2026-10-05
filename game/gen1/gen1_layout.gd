@@ -1938,30 +1938,41 @@ const SCRIPT_ALTERNATE_MUSIC: Array[String] = [
 const SCRIPT_SOUND_CALLS: Dictionary = {
 	"play_sound": "sound", "play_sound_wait": "sound", "play_cry": "cry",
 	"play_music": "music", "stop_all_music": "stop_all", "wait_for_sound": "wait",
-	"play_default_music": "map_music",
+	"play_default_music": "map_music", "force_bike_or_surf": "map_music",
 }
-## The routines that spend nothing here: a press already ends every box, and
+## The routines that spend nothing here. A press already ends every box and the
+## printer's preview, as the Hall of Fame's ends `Gen1Credits.END_HOLD_FRAMES`;
 ## `wAutoTextBoxDrawingControl` has no counterpart.
 const SCRIPT_SILENT_CALLS: Array[String] = [
-	"wait_for_button",
-	"auto_textbox_on", "auto_textbox_off", "count_set_bits", "update_sprites",
-	"load_gym_names",
-	"random",
-	## The image index is drawn.
-	"set_sprite_image", "set_sprite_image_2",
-	## A wait is frames of nothing. The three trainer rows every fighting map's
-	## own table opens with are the sight walk
-	## `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
-	"delay_frame", "delay_frames", "delay_3", "check_map_trainers",
-	"start_trainer_battle", "end_trainer_battle",
-	"force_bike_or_surf",
-	"serial_connect", "fade_out_white", "fade_in_white", "fade_out_black",
-	"fade_in_black", "get_sprite_position", "init_battle_enemy",
-	"gb_pal_white_out_delay", "restore_screen_tiles", "load_gb_pal",
-	"save_screen_1", "load_screen_1", "save_screen_2",
-	"load_screen_2", "reload_map_data", "copy_data", "reload_tileset_patterns",
-	"gb_pal_normal", "load_current_map_view",
+	"wait_for_button", "auto_textbox_on", "auto_textbox_off",
+	## Answers the walk reads from RAM, or tables a node carries: `wNumSetBits`,
+	## `Random`, `_gym_statue_nodes`' names, the elevators' and the aide's copies.
+	"count_set_bits", "random", "load_gym_names", "copy_data",
+	## Upkeep and reads with no `DelayFrame` inside; the image index is drawn.
+	"update_sprites", "set_sprite_image", "set_sprite_image_2", "get_sprite_position",
+	## The three trainer rows every fighting map's own table opens with are the
+	## sight walk `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
+	"check_map_trainers", "start_trainer_battle", "end_trainer_battle",
+	"init_battle_enemy", "serial_connect",
+	## `DisableLCD` waits for a scanline, not a frame; the screen buffers are copies.
+	"reload_map_data", "reload_tileset_patterns", "load_current_map_view",
+	"save_screen_1", "load_screen_1", "save_screen_2", "load_screen_2",
 ]
+## The routines that spend a fixed number of `DelayFrame`s: `DelayFrame` and
+## `RestoreScreenTilesAndReloadTilePatterns`' `jr Delay3`.
+const SCRIPT_FIXED_DELAYS: Dictionary = {"delay_frame": 1, "restore_screen_tiles": 3}
+## `SetSpriteFacingDirectionAndDelay`'s `ld c, 6`.
+const SPRITE_FACING_DELAY_FRAMES: int = 6
+## `rBGP` per step and the frames each step holds. `GBFadeOutToWhite` and its
+## three siblings `ld c, 8` a step; `GBPalWhiteOutWithDelay3` is `Delay3` on a
+## white screen, and `LoadGBPal` and `GBPalNormal` put the map's palette back.
+const GB_FADES: Dictionary = {
+	"fade_out_white": [[0x90, 0x40, 0x00], 8], "fade_in_white": [[0x40, 0x90, 0xE4], 8],
+	"fade_out_black": [[0xE4, 0xF9, 0xFE, 0xFF], 8],
+	"fade_in_black": [[0xFF, 0xFE, 0xF9, 0xE4], 8],
+	"gb_pal_white_out_delay": [[0x00], 3], "load_gb_pal": [[0xE4], 0],
+	"gb_pal_normal": [[0xE4], 0],
+}
 const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
 ## The two of them the zero flag answers, `true` calling on a clear one.
 const SCRIPT_ZERO_CALLS: Dictionary = {0xC4: true, 0xCC: false}

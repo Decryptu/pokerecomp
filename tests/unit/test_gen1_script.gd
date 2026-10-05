@@ -355,10 +355,23 @@ func test_the_facing_routine_turns_the_sprite_its_hram_byte_names() -> void:
 	var script: Array = _decode(
 		_store_hram(int(LAYOUT["text_id_hram"]), 2)
 			+ _store_hram(int(LAYOUT["sprite_facing_hram"]), Gen1Layout.FACING_LEFT)
+			+ [Gen1Layout.SCRIPT_CALL, 0xD0, 0x03, Gen1Layout.SCRIPT_RET]
+	)
+	assert_eq(script, [
+		{"op": "object_facing", "object": 1, "facing": Gen1Layout.FACING_LEFT},
+	])
+
+
+## `SetSpriteFacingDirectionAndDelay` is the same turn and then `ld c, 6`.
+func test_the_facing_routine_with_a_delay_waits_six_frames() -> void:
+	var script: Array = _decode(
+		_store_hram(int(LAYOUT["text_id_hram"]), 2)
+			+ _store_hram(int(LAYOUT["sprite_facing_hram"]), Gen1Layout.FACING_LEFT)
 			+ [Gen1Layout.SCRIPT_CALL, 0xE0, 0x03, Gen1Layout.SCRIPT_RET]
 	)
 	assert_eq(script, [
 		{"op": "object_facing", "object": 1, "facing": Gen1Layout.FACING_LEFT},
+		{"op": "delay", "frames": 6},
 	])
 
 

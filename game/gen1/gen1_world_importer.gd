@@ -2070,6 +2070,10 @@ const SCRIPT_STORED_REGISTERS: Dictionary = {
 ## `{map, row, at, op}`; a row that read to nothing has [constant SCRIPT_EMPTY].
 static var refusals: Variant = null
 const SCRIPT_EMPTY: int = 0x100
+## Likewise each routine a walk passed over as spending nothing, as
+## `{map, row, at, routine, how}`, and in [member waited] each one it made a wait.
+static var skipped: Variant = null
+static var waited: Variant = null
 static var _site_map: int = -1
 static var _site_row: String = ""
 static var _body_refusals: Array = []
@@ -2110,9 +2114,13 @@ static func _walk_script_in(
 	## A `jp nc, CheckFightingMapTrainers` lands here rather than on a call, and
 	## a `<Map>_ScriptPointers` row may stand at a routine outright, so a routine
 	## that spends nothing is answered before its machine code is walked at all.
-	if _script_routine(ctx["layout"], pc) in Gen1Layout.SCRIPT_SILENT_CALLS \
-		or _script_banked_routine(ctx["layout"], int(ctx["bank"]), pc) \
-			in Gen1Layout.SCRIPT_SILENT_BANKED_CALLS:
+	var silent: String = _script_routine(ctx["layout"], pc)
+	if silent in Gen1Layout.SCRIPT_SILENT_CALLS:
+		_script_noted(skipped, ctx, pc, silent, "entry")
+		return []
+	silent = _script_banked_routine(ctx["layout"], int(ctx["bank"]), pc)
+	if silent in Gen1Layout.SCRIPT_SILENT_BANKED_CALLS:
+		_script_noted(skipped, ctx, pc, silent, "entry")
 		return []
 	var special: Variant = _script_special_body(ctx, pc, state)
 	if special != null:
@@ -2768,8 +2776,10 @@ static func _script_call_if(
 			!= bool(state["known_zero"])
 		state.erase("known_zero")
 		return _script_call(ctx, pc, target, state, out, depth) if calls else next
-	if not _script_routine(ctx["layout"], target) in Gen1Layout.SCRIPT_SILENT_CALLS:
+	var routine: String = _script_routine(ctx["layout"], target)
+	if not routine in Gen1Layout.SCRIPT_SILENT_CALLS:
 		return SCRIPT_UNREAD
+	_script_noted(skipped, ctx, pc, routine, "call if")
 	_script_untested(state)
 	return next
 
@@ -3870,7 +3880,9 @@ static func _script_call_branch(
 		state.erase("known_zero")
 		return _script_walked_on(ctx, next, state, depth, out) if not calls \
 			else _script_call_walked_on(ctx, pc, target, state, depth, out)
-	if _script_routine(ctx["layout"], target) in Gen1Layout.SCRIPT_SILENT_CALLS:
+	var routine: String = _script_routine(ctx["layout"], target)
+	if routine in Gen1Layout.SCRIPT_SILENT_CALLS:
+		_script_noted(skipped, ctx, pc, routine, "call if")
 		_script_untested(state)
 		return _script_walked_on(ctx, next, state, depth, out)
 	var tests: Variant = state.get("tests", SCRIPT_TESTS_NOTHING)
@@ -4008,23 +4020,66 @@ static func _script_silent_call(routine: String, state: Dictionary, out: Array, 
 
 
 ## `DelayFrames` waits `c` frames and leaves it zero; `Delay3` loads 3 first.
-static func _script_delay(routine: String, state: Dictionary, out: Array, next: int) -> int:
+static func _script_delay(
+	ctx: Dictionary, routine: String, state: Dictionary, out: Array, next: int
+) -> int:
 	if routine == "delay_3":
 		_script_loaded_register(state, "c", 3)
 	if not state.has("c") or state.has("c_source") or state.has("c_runtime"):
 		return SCRIPT_UNREAD
-	out.append({"op": "delay", "frames": int(state["c"])})
+	## `HallOfFamePC` ends on `THE END`, and `Gen1Credits` holds that screen for
+	## the delays behind it.
+	if state.has("credits_hold"):
+		_script_noted(skipped, ctx, next - Gen1Layout.SCRIPT_LONG_SIZE, routine, "credits")
+	else:
+		_script_wait_node(ctx, routine, state, out, next, {"op": "delay", "frames": int(state["c"])})
 	_script_loaded_register(state, "c", 0)
 	return next
+
+
+## The routines that wait on frames: `DelayFrames` and `Delay3` through `c`, the
+## fixed ones, and the palette fades. Every one but `DelayFrame` leaves `c` zero.
+static func _script_frames(
+	ctx: Dictionary, routine: String, state: Dictionary, out: Array, next: int
+) -> int:
+	if routine in ["delay_frames", "delay_3"]:
+		return _script_delay(ctx, routine, state, out, next)
+	if Gen1Layout.SCRIPT_FIXED_DELAYS.has(routine):
+		var frames: int = int(Gen1Layout.SCRIPT_FIXED_DELAYS[routine])
+		_script_wait_node(ctx, routine, state, out, next, {"op": "delay", "frames": frames})
+		if routine != "delay_frame":
+			_script_loaded_register(state, "c", 0)
+		return next
+	if Gen1Layout.GB_FADES.has(routine):
+		_script_wait_node(ctx, routine, state, out, next, {"op": "fade", "fade": routine})
+		_script_loaded_register(state, "c", 0)
+		return next
+	return SCRIPT_NOT_SHAPED
+
+
+## A wait between the `push af` over a menu's carry and the `pop af` that brings
+## it back runs behind the menu, so [method _script_node] moves it there.
+static func _script_wait_node(
+	ctx: Dictionary, routine: String, state: Dictionary, out: Array, next: int, node: Dictionary
+) -> void:
+	var saved: Array = state.get("af", [])
+	if not saved.is_empty() and (saved.back() as Dictionary).has("tests"):
+		node["after_test"] = true
+	out.append(node)
+	_script_noted(waited, ctx, next - Gen1Layout.SCRIPT_LONG_SIZE, routine,
+		"jp" if bool(ctx.get("tail_call", false)) else "call")
 
 
 ## A routine spent without being walked: one that does nothing here, or a sound.
 static func _script_spent_call(
 	ctx: Dictionary, routine: String, state: Dictionary, out: Array, next: int
 ) -> int:
-	if routine in ["delay_frames", "delay_3"]:
-		return _script_delay(routine, state, out, next)
+	var spent: int = _script_frames(ctx, routine, state, out, next)
+	if spent != SCRIPT_NOT_SHAPED:
+		return spent
 	if routine in Gen1Layout.SCRIPT_SILENT_CALLS:
+		_script_noted(skipped, ctx, next - Gen1Layout.SCRIPT_LONG_SIZE, routine,
+			"jp" if bool(ctx.get("tail_call", false)) else "call")
 		return _script_silent_call(routine, state, out, next)
 	if Gen1Layout.SCRIPT_SOUND_CALLS.has(routine):
 		return _script_sound(ctx, routine, state, out, next)
@@ -4437,14 +4492,19 @@ static func _script_sprite_position(state: Dictionary, out: Array, next: int) ->
 
 
 ## The four routines a script moves an object with, and the buffer the fifth
-## fills for the player. The `...AndDelay` row is six frames of nothing more.
+## fills for the player.
 static func _script_sprite_called(
 	ctx: Dictionary, routine: String, target: int, state: Dictionary, out: Array,
 	next: int, depth: int
 ) -> int:
 	match routine:
 		"set_sprite_facing", "set_sprite_facing_delay":
-			return _script_object_facing(state, out, next)
+			var faced: int = _script_object_facing(state, out, next)
+			if faced != SCRIPT_UNREAD and routine == "set_sprite_facing_delay":
+				_script_wait_node(ctx, routine, state, out, next,
+					{"op": "delay", "frames": Gen1Layout.SPRITE_FACING_DELAY_FRAMES})
+				_script_loaded_register(state, "c", 0)
+			return faced
 		"sprite_stay":
 			return _script_object_stay(state, out, next)
 		"move_sprite":
@@ -4796,6 +4856,7 @@ static func _script_routine_call(
 ) -> int:
 	var banked: String = _script_banked_routine(ctx["layout"], bank, target)
 	if banked in Gen1Layout.SCRIPT_SILENT_BANKED_CALLS:
+		_script_noted(skipped, ctx, next - Gen1Layout.SCRIPT_LONG_SIZE, banked, "farcall")
 		return next
 	if banked in Gen1Layout.SCRIPT_ALTERNATE_MUSIC:
 		out.append({"op": "sound", "what": "alternate_music", "name": banked})
@@ -5269,6 +5330,7 @@ static func _script_predef_named(
 			state["npc_path_ready"] = true
 		"hall_of_fame_pc":
 			out.append({"op": "hall_of_fame"})
+			state["credits_hold"] = true
 		"save_game_data":
 			out.append({"op": "save_game"})
 		"heal_party":
@@ -5684,6 +5746,14 @@ static func _script_refused(ctx: Dictionary, pc: int) -> Variant:
 	return null
 
 
+static func _script_noted(
+	sink: Variant, ctx: Dictionary, pc: int, routine: String, how: String
+) -> void:
+	if sink is Array:
+		(sink as Array).append({"map": _site_map, "row": _site_row, "routine": routine, "how": how,
+			"at": Gen1Layout.banked(int(ctx["bank"]), pc)})
+
+
 static func _script_logged(at: int, op: int) -> void:
 	if refusals is Array:
 		(refusals as Array).append({"map": _site_map, "row": _site_row, "at": at, "op": op})
@@ -6057,6 +6127,22 @@ static func _script_reads_flag(state: Dictionary, tests: Variant, carry: bool) -
 ## NO. Every other test reads the other way about: the taken side is the set
 ## one, a set carry or an item the bag holds.
 static func _script_node(
+	tests: Variant, branches: Array, state: Dictionary, out: Array, carry: bool
+) -> Variant:
+	var moved: Array = []
+	while not out.is_empty() and bool((out.back() as Dictionary).get("after_test", false)):
+		var held: Dictionary = out.pop_back()
+		held.erase("after_test")
+		moved.push_front(held)
+	var node: Variant = _script_node_of(tests, branches, state, out, carry)
+	if node is Dictionary and not moved.is_empty():
+		for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
+			if (node as Dictionary).get(key) is Array:
+				node[key] = moved.duplicate(true) + (node[key] as Array)
+	return node
+
+
+static func _script_node_of(
 	tests: Variant, branches: Array, state: Dictionary, out: Array, carry: bool
 ) -> Variant:
 	var taken: Array = branches[0] if branches[0] != null else [{"op": "unknown"}]

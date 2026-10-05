@@ -126,6 +126,7 @@ const GEN1_SCRIPT_NODES: Dictionary = {
 	"set_fossil": &"_gen1_node_set_fossil",
 	"redraw_map_view": &"_gen1_node_redraw",
 	"delay": &"_gen1_node_delay",
+	"fade": &"_gen1_node_fade",
 	"copy_name": &"_gen1_node_copy_name",
 	"party_menu": &"_gen1_node_party_menu",
 	"name_mon": &"_gen1_node_name_mon",
@@ -374,6 +375,19 @@ static func _gen1_node_replace_block(_world: Gen2WorldAPI, node: Dictionary, ste
 
 static func _gen1_node_delay(_world: Gen2WorldAPI, node: Dictionary, steps: Array, _run: Dictionary) -> bool:
 	steps.append(Gen1FacilityScripts._gen1_wait_step(&"gen1_delay", int(node["frames"])))
+	return true
+
+
+## A palette fade a step at a time; `LoadGBPal`'s has no hold.
+static func _gen1_node_fade(_world: Gen2WorldAPI, node: Dictionary, steps: Array, _run: Dictionary) -> bool:
+	var fade: Array = Gen1Layout.GB_FADES[String(node["fade"])]
+	var orders: Array = fade[0]
+	var event: Dictionary = {"orders": orders.duplicate(), "step_frames": maxi(int(fade[1]), 1)}
+	if int(fade[1]) > 0:
+		steps.append(Gen1FacilityScripts._gen1_wait_step(&"palette_fade", orders.size() * int(fade[1]), event))
+		return true
+	event.merge({"type": &"presentation_special_applied", "kind": &"palette_fade"})
+	steps.append({"type": &"event", "event": event})
 	return true
 
 

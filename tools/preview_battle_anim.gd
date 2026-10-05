@@ -1,27 +1,22 @@
 extends SceneTree
 
 ## Captures a battle animation mid-flight against a real imported cache, which
-## `tools/screenshot.gd` cannot drive: an animation needs a turn taken, an event
-## queue walked to the animation it wants, and a counted number of frames spent
-## inside it. The flags and the `catch`, `0`, `miss` and frame-range forms are
-## documented below; `disobey` captures a traded Pokemon ignoring an order.
+## `tools/screenshot.gd` cannot drive: it needs a turn taken, the event queue walked
+## to the animation and a counted number of frames spent inside. `disobey` captures
+## a traded Pokemon ignoring an order.
 ##   Godot --path . -s res://tools/preview_battle_anim.gd -- \
 ##       <game> <output.png> <move> <side> <frames> [scene_off] [matchup=<enemy>,<player>]
 
 const WINDOW_SIZE := Vector2i(1152, 648)
-## Enough frames for the scene to lay out before anything is driven, and enough
-## after it for the viewport to draw what was driven.
+## Frames for the scene to lay out, and for the viewport to draw what was driven.
 const SETTLE_FRAMES: int = 4
 const DRAW_FRAMES: int = 3
-## A runaway guard on the event pump: no turn produces anywhere near this many
-## steps, and a driver that never reaches its animation should say so.
+## A runaway guard on the event pump, far above any turn.
 const MAX_STEPS: int = 4096
-## How long a line that owes a press is left on screen before this driver presses
-## it. A person is what the cartridge waits for; a fixed count is what makes two
-## runs of this tool the same run.
+## Frames a line that owes a press stays up before this driver presses, so two
+## runs are the same run.
 const PRESS_AFTER: int = 40
-## `<move> catch` throws a ball instead of taking a turn. It is not a move
-## number, so it cannot collide with one.
+## `<move> catch` throws a ball instead of taking a turn; no move has this number.
 const CATCH_MOVE: int = -1
 
 ## `matchup=` is what a picture reported against one pair is shot as.
@@ -97,9 +92,8 @@ func _initialize() -> void:
 		quit(1)
 		return
 
-	## The shared object rather than the file: `CheckBattleScene` reads what
-	## `current()` answers, and a capture has no business rewriting the option
-	## the owner of this machine chose.
+	## The shared object rather than the file: `CheckBattleScene` reads `current()`,
+	## and a capture must not rewrite the option its owner chose.
 	Gen2OptionsStore.current().battle_scene = not _scene_off
 
 	root.set_content_scale_size(WINDOW_SIZE)
@@ -109,9 +103,8 @@ func _initialize() -> void:
 	_screen.set_data(data)
 	root.add_child(_screen)
 	current_scene = _screen
-	# The screen counts hardware frames off `_process` deltas. The frames spent
-	# here are counted rather than timed, so nothing drifts while the viewport
-	# catches up with what was driven.
+	# The screen counts hardware frames off `_process` deltas; these are counted, not
+	# timed, so nothing drifts while the viewport catches up.
 	_screen.set_process(false)
 
 
@@ -146,21 +139,16 @@ func _process(_delta: float) -> bool:
 	return true
 
 
-## One frame of the entrance per captured picture, the viewport given
-## [constant DRAW_FRAMES] to catch up with each. The frame numbers are counted
-## from the one the pics stop sliding on, which is what the cartridge trace is
-## aligned to as well.
+## One entrance frame per captured picture, the viewport given [constant DRAW_FRAMES]
+## to catch up; frames count from the one the pics stop sliding on, as the trace does.
 func _shoot_range() -> bool:
-	## Godot turns processing back on for a node whose script has a `_process`,
-	## and the screen counts hardware frames in its own. Taken away again here
-	## rather than once in `_initialize`, or three of its frames are spent
-	## between every two of this driver's.
+	## Godot turns processing back on for a node with a `_process`, and the screen
+	## counts hardware frames in its own, so it is switched off here each time.
 	_screen.set_process(false)
 	if _settle > 0:
 		_settle -= 1
 		return false
-	# `DoBattle`'s first `BattleMenu` is the end of the opening, so a range that
-	# runs past it stops there rather than writing the menu over and over.
+	# `DoBattle`'s first `BattleMenu` ends the opening; a range past it stops there.
 	var done: bool = _cursor > _range_lo and not _screen.entrance_running() \
 		and not _screen.intro_running() and not _screen.frames_running() \
 		and not bool(_screen.battle_snapshot()["awaits_press"])
@@ -171,10 +159,8 @@ func _shoot_range() -> bool:
 		quit(0)
 		return true
 	if _cursor >= _range_lo:
-		# The window is not guaranteed to have been composited between two of
-		# this driver's frames, and an uncomposited one hands back the last
-		# picture that was: a whole capture can come out as one frame repeated.
-		# Drawing on demand is what makes a run of this tool reproducible.
+		# An uncomposited window hands back the last picture that was, so a capture
+		# could repeat one frame; drawing on demand keeps a run reproducible.
 		var image: Image = PokeToolPath.capture(root)
 		if image == null:
 			quit(1)
@@ -191,9 +177,8 @@ func _shoot_range() -> bool:
 	return false
 
 
-## The frame the opening changed on, and what it changed to. The cartridge's own
-## trace is a list of the frames its routines ran on, so this is the artefact the
-## two are diffed as.
+## The frame the opening changed on, and what it changed to: the artefact diffed
+## against the cartridge's trace of the frames its routines ran on.
 func _trace() -> void:
 	var now: Dictionary = _screen.entrance_snapshot()
 	var line: String = JSON.stringify(now)
@@ -207,11 +192,9 @@ func _prefix() -> String:
 	return _output_path.trim_suffix(".png")
 
 
-## One hardware frame of the opening, with the press a person would make.
-## `WildPokemonAppearedText`, `WantsToBattleText` and the `cont` inside
-## `BattleText_EnemySentOut` all wait on a button; this counts
-## [constant PRESS_AFTER] frames of the line standing finished and then presses,
-## so a run of this tool is reproducible where a person is not.
+## One hardware frame of the opening, with the press a person would make:
+## `WildPokemonAppearedText`, `WantsToBattleText` and `BattleText_EnemySentOut`'s
+## `cont` wait on a button, pressed after [constant PRESS_AFTER] finished frames.
 func _entrance_frame() -> void:
 	_screen.advance_frame()
 	if _screen.frames_running():
@@ -241,9 +224,8 @@ func _drive_entrance() -> bool:
 	else:
 		_show_matchup()
 	if _range_lo >= 0:
-		# `InitBattleDisplay` and `BattleIntroSlidingPics` are frames of the
-		# opening like any other; a diff against the cartridge trace wants them
-		# spent first, and a recording wants them in the picture.
+		# `InitBattleDisplay` and `BattleIntroSlidingPics` are opening frames: a trace
+		# diff wants them spent first, and a recording wants them in the picture.
 		if not _with_intro:
 			while _screen.intro_running():
 				_screen.advance_frame()
@@ -278,19 +260,17 @@ func _settle_entrance() -> void:
 		_screen.advance()
 
 
-## `PokeBallEffect`'s own throw, which is not a turn: `ANIM_THROW_POKE_BALL` is
-## played by the item rather than by a move, and `<side>` decides whether the
-## Pokemon is caught or gets out, since only `anim_checkpokeball` tells the two
-## endings apart.
+## `PokeBallEffect`'s throw, which is not a turn: the item plays
+## `ANIM_THROW_POKE_BALL`, and `<side>` picks caught or got out, the two endings
+## only `anim_checkpokeball` tells apart.
 func _drive_capture() -> bool:
 	_show_matchup()
 	while _screen.intro_running():
 		_screen.advance_frame()
 	_settle_entrance()
-	## The ball selector belongs to a wild battle a world screen opened, and this
-	## driver has no world. What is being photographed is the animation the
-	## resolved throw plays, so it is asked for the way `complete_capture` asks
-	## for it: a POKE BALL, three wobbles, and the ending `<side>` names.
+	## This driver has no world to open the ball selector, so the resolved throw's
+	## animation is asked for as `complete_capture` asks: a POKE BALL, three
+	## wobbles and the ending `<side>` names.
 	_screen._begin_capture_animation(
 		Gen2WorldPartyHost.ITEM_POKE_BALL, 3, not _side_is_enemy
 	)
@@ -299,24 +279,19 @@ func _drive_capture() -> bool:
 	return true
 
 
-## Settles the intro, teaches both Pokemon the move, takes the turn and walks the
-## event queue to the first animation on the requested side.
-## A turn that cannot land, drawn to its end. The stages are the whole of the
-## forcing: `.StatModifiers` multiplies the two together, so six down against six
-## up leaves nothing on the dice.
+## A turn that cannot land, drawn to its end: `.StatModifiers` multiplies the two
+## stages, so six down against six up leaves nothing on the dice.
 func _drive_miss(battle: Gen2Battle) -> bool:
 	battle.mon(Gen2Battle.ENEMY if not _side_is_enemy else Gen2Battle.PLAYER) \
 		.change_stage("evasion", 6)
 	battle.mon(Gen2Battle.PLAYER if not _side_is_enemy else Gen2Battle.ENEMY) \
 		.change_stage("accuracy", -6)
-	## A charge move spends its first turn going up, so the miss wanted is the
-	## second one. Nothing else takes two.
+	## A charge move spends its first turn going up, so the miss is the second.
 	for _turn: int in 2:
 		_screen.take_turn_with(0, 0)
 		for _step: int in MAX_STEPS:
 			if _screen.frames_running():
-				# The same emptying `_drive` does: nothing is listening, and
-				# `WaitSFX` would otherwise wait on real time.
+				# Emptied as `_drive` does: `WaitSFX` would wait on real time.
 				if _screen._audio_player != null:
 					_screen._audio_player.stop_all()
 				_screen.advance_frame()
@@ -364,9 +339,8 @@ func _drive() -> bool:
 				_screen.advance_frame()
 			_screen.finish()
 			return true
-		# `_PlayBattleAnim` ends on `WaitSFX`, which waits on real time while this
-		# driver counts frames as fast as it can. Nothing is being listened to, so
-		# the effect player is emptied rather than waited for.
+		# `_PlayBattleAnim` ends on `WaitSFX`, which waits on real time while this driver
+		# counts frames flat out, so the unheard effect player is emptied.
 		if _screen._audio_player != null:
 			_screen._audio_player.stop_all()
 		if _screen.frames_running():
