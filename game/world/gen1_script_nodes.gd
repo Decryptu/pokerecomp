@@ -1914,7 +1914,7 @@ static func _gen1_resolve_gift_pokemon(world: Gen2WorldAPI, node: Dictionary, st
 	return true
 
 
-## `AddItemToInventory` and its carry; only a gift that landed is named.
+## `AddItemToInventory`'s carry; only a landed gift is named. A hidden item's box waits on `WaitForTextScrollButtonPress`.
 static func _gen1_resolve_gift(world: Gen2WorldAPI, node: Dictionary, steps: Array, run: Dictionary) -> bool:
 	var site: Dictionary = {"item": int(node["item"]), "quantity": int(node["count"])}
 	if node.has("hidden"):
@@ -1935,7 +1935,15 @@ static func _gen1_resolve_gift(world: Gen2WorldAPI, node: Dictionary, steps: Arr
 		steps.append({"type": &"items", "items": {item: int(room["quantity"])}})
 	if not node.has("ok"):
 		return true
-	return _gen1_resolve_script(world, node["ok" if taken else "full"] as Array, steps, run)
+	var held: Dictionary = {"type": &"button", "arrow": true}
+	var hidden: bool = node.has("hidden")
+	if hidden and not taken:
+		steps.append(held)
+	if not _gen1_resolve_script(world, node["ok" if taken else "full"] as Array, steps, run):
+		return false
+	if hidden and taken:
+		steps.append(held)
+	return true
 
 
 ## `PickUpItem`: the object's own item, `HideObject` on it, and the receipt

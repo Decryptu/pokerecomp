@@ -406,6 +406,9 @@ const SNES_CELL := Vector2i(3, 5)
 const VIRIDIAN_CITY: int = 0x01
 const HIDDEN_POTION_CELL := Vector2i(14, 4)
 const HIDDEN_POTION: int = 0x14
+const HIDDEN_ITEM_GUARD_FRAMES: int = 2000
+const HIDDEN_ITEM_IDLE_FRAMES: int = 30
+const HIDDEN_ITEM_PRESS_EVERY: int = 8
 
 ## `OpenPokemonCenterPC` at VIRIDIAN_POKECENTER's own cell and `OpenRedsPC` at
 ## the bedroom's: the two hidden events a `TX_SCRIPT_*` PC stands behind, faced
@@ -500,6 +503,7 @@ func _one_game() -> void:
 	_check_a_hidden_object()
 	_check_a_pc_opens()
 	_check_a_hidden_item()
+	_check_a_hidden_item_on_the_screen()
 	_check_the_trash_cans()
 	_check_a_gym_statue()
 	_check_a_bench_guy()
@@ -2962,6 +2966,41 @@ func _check_a_hidden_item() -> void:
 		"the bag holds %d POTION." % int(world.state.items().get(HIDDEN_POTION, 0)))
 	_r.check(world.interact().is_empty(), "the taken POTION answered twice.")
 	_check_hidden_items_are_listed()
+
+
+func _check_a_hidden_item_on_the_screen() -> void:
+	for full: bool in [false, true]:
+		var screen: Gen2WorldScreen = _r.open_screen(0, VIRIDIAN_CITY, HIDDEN_POTION_CELL + Vector2i.DOWN)
+		var label: String = "the hidden POTION with a %s bag" % ("full" if full else "free")
+		screen.world().player_facing = Gen2WorldSprite.FACING_UP
+		if full:
+			var stock: Dictionary = {}
+			for slot: int in Gen1Layout.BAG_ITEM_CAPACITY:
+				stock[HIDDEN_POTION + 1 + slot] = 1
+			screen.world().state.apply_changes({}, {}, {"items": stock})
+		screen.interact()
+		var box: Gen2TextBox = screen.get("_text_box")
+		var idle: int = 0
+		for _frame: int in HIDDEN_ITEM_GUARD_FRAMES:
+			screen.advance_frame()
+			idle = idle + 1 if box.visible and not box.is_revealing() \
+				and screen.world().pending_script_wait().is_empty() else 0
+			if idle > HIDDEN_ITEM_IDLE_FRAMES:
+				break
+		_r.check(box.visible, "%s closed its box without a press." % label)
+		var presses: int = 0
+		for frame: int in HIDDEN_ITEM_GUARD_FRAMES:
+			if frame % HIDDEN_ITEM_PRESS_EVERY == 0 and box.visible and not box.is_revealing():
+				screen.press_button(PokeButton.A)
+				presses += 1
+			screen.advance_frame()
+			if not box.visible and presses > 0:
+				break
+		_r.check(not box.visible and presses > 0, "%s left its box up after %d presses." % [label, presses])
+		var held: int = int(screen.world().state.items().get(HIDDEN_POTION, 0))
+		_r.check(held == (0 if full else 1), "%s left the bag holding %d." % [label, held])
+		_r.close_screen(screen)
+	_r.note("gen1 walk the hidden POTION's box closes on a press on the screen")
 
 
 ## The same POTION through the mod boundary.
